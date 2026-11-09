@@ -180,7 +180,7 @@ static_assert(FM_CF_RULE_TYPE_UNIQUE_VALUES == static_cast<int>(formulon::cf::Ru
               "fm_cf_rule_type_t drift");
 static_assert(FM_CF_VALUE_OBJECT_TYPE_AUTO_MAX == static_cast<int>(formulon::cf::CfvoType::AutoMax),
               "fm_cf_value_object_type_t drift");
-static_assert(FM_ICON_SET_NAME_5_QUARTERS == static_cast<int>(formulon::cf::IconSetName::Five_Quarters),
+static_assert(FM_ICON_SET_NAME_FIVE_QUARTERS == static_cast<int>(formulon::cf::IconSetName::Five_Quarters),
               "fm_icon_set_name_t drift");
 
 fm_color_t color_spec_to_c(const formulon::ColorSpec& src, std::uint32_t fallback_argb) {
@@ -444,12 +444,20 @@ fm_status_t check_guid(const char* text, const char* field) {
 
 namespace {
 
-// Runs `check_enum_domain` over every `fm_cfvo_t` in a threshold array.
+// Checks the `type` and `gte` (`fm_tristate_t`) domains of every `fm_cfvo_t`
+// in a threshold array; `field` names the array in the diagnostic.
 // The array bound is the caller's, so an entry point that has not yet
 // established `count` against its pointer must not reach here.
-fm_status_t check_cfvo_types(const fm_cfvo_t* thresholds, std::uint32_t count, const char* field) {
+fm_status_t check_cfvos(const fm_cfvo_t* thresholds, std::uint32_t count, const char* field) {
+  const std::string type_field = std::string(field) + ".type";
+  const std::string gte_field = std::string(field) + ".gte";
   for (std::uint32_t i = 0; i < count; ++i) {
-    if (auto rc = check_enum_domain(thresholds[i].type, 0, static_cast<std::int64_t>(cf::CfvoType::AutoMax), field);
+    if (auto rc = check_enum_domain(thresholds[i].type, 0, static_cast<std::int64_t>(cf::CfvoType::AutoMax),
+                                    type_field.c_str());
+        rc != 0) {
+      return rc;
+    }
+    if (auto rc = check_enum_domain(thresholds[i].gte, FM_TRISTATE_DEFAULT, FM_TRISTATE_TRUE, gte_field.c_str());
         rc != 0) {
       return rc;
     }
@@ -482,10 +490,10 @@ fm_status_t validate(const fm_cf_rule_t& rule) {
     }
   }
   if (rule.has_data_bar != 0) {
-    if (auto rc = check_cfvo_types(&rule.data_bar_min, 1U, "data_bar_min.type"); rc != 0) {
+    if (auto rc = check_cfvos(&rule.data_bar_min, 1U, "data_bar_min"); rc != 0) {
       return rc;
     }
-    if (auto rc = check_cfvo_types(&rule.data_bar_max, 1U, "data_bar_max.type"); rc != 0) {
+    if (auto rc = check_cfvos(&rule.data_bar_max, 1U, "data_bar_max"); rc != 0) {
       return rc;
     }
     if (rule.has_data_bar_axis_position != 0) {
@@ -505,33 +513,31 @@ fm_status_t validate(const fm_cf_rule_t& rule) {
   // accepts, so a record that declares more thresholds than the schema
   // allows is rejected there rather than scanned here.
   if (rule.color_scale_thresholds != nullptr && rule.color_scale_count >= 2U && rule.color_scale_count <= 3U) {
-    if (auto rc =
-            check_cfvo_types(rule.color_scale_thresholds, rule.color_scale_count, "color_scale_thresholds[].type");
+    if (auto rc = check_cfvos(rule.color_scale_thresholds, rule.color_scale_count, "color_scale_thresholds[]");
         rc != 0) {
       return rc;
     }
   }
   if (rule.has_icon_set != 0) {
-    if (auto rc = check_enum_domain(rule.icon_set_name, 0, static_cast<std::int64_t>(cf::IconSetName::Five_Quarters),
-                                    "icon_set_name");
+    if (auto rc =
+            check_enum_domain(rule.icon_set, 0, static_cast<std::int64_t>(cf::IconSetName::Five_Quarters), "icon_set");
         rc != 0) {
       return rc;
     }
     if (rule.icon_set_thresholds != nullptr) {
-      if (auto rc =
-              check_cfvo_types(rule.icon_set_thresholds, rule.icon_set_threshold_count, "icon_set_thresholds[].type");
+      if (auto rc = check_cfvos(rule.icon_set_thresholds, rule.icon_set_threshold_count, "icon_set_thresholds[]");
           rc != 0) {
         return rc;
       }
     }
     if (rule.has_icon_set_floor != 0) {
-      if (auto rc = check_cfvo_types(&rule.icon_set_floor, 1U, "icon_set_floor.type"); rc != 0) {
+      if (auto rc = check_cfvos(&rule.icon_set_floor, 1U, "icon_set_floor"); rc != 0) {
         return rc;
       }
     }
     if (rule.icon_set_icon_count != 0U) {
       // One icon per level, each naming an icon its source set has.
-      const std::size_t levels = cf::icon_count(static_cast<cf::IconSetName>(rule.icon_set_name));
+      const std::size_t levels = cf::icon_count(static_cast<cf::IconSetName>(rule.icon_set));
       if (rule.icon_set_icons == nullptr || rule.icon_set_icon_count != levels) {
         return invalid_argument(
             "icon_set_icons must hold one icon per level",
@@ -639,8 +645,11 @@ fm_status_t validate(const fm_border_t& border) {
   return 0;
 }
 
-bool num_fmt_id_known(const formulon::StylesTable& styles, std::uint16_t id) {
-  if (formulon::is_builtin_num_fmt_id(id)) {
+bool num_fmt_id_known(const formulon::StylesTable& styles, std::uint32_t id) {
+  if (id > std::numeric_limits<std::uint16_t>::max()) {
+    return false;
+  }
+  if (formulon::is_builtin_num_fmt_id(static_cast<std::uint16_t>(id))) {
     return true;
   }
   for (const formulon::NumFmtRecord& record : styles.num_fmts) {
@@ -745,16 +754,6 @@ const char* pivot_num_fmt_code(const formulon::Workbook& wb, std::string_view id
   return resolved.has_value() ? resolved->data() : nullptr;
 }
 
-fm_status_t validate(const fm_pivot_field_spec_t& spec) {
-  if (spec.source_name == nullptr) {
-    return null_argument("spec->source_name");
-  }
-  if (auto rc = check_utf8({spec.source_name, spec.custom_name}); rc != 0) {
-    return rc;
-  }
-  return check_enum_domain(spec.axis, FM_PIVOT_AXIS_ABSENT, FM_PIVOT_AXIS_PAGE, "axis");
-}
-
 fm_status_t validate(const fm_pivot_data_field_t& spec) {
   if (auto rc = check_utf8({spec.name}); rc != 0) {
     return rc;
@@ -769,7 +768,7 @@ fm_status_t validate(const fm_pivot_filter_t& spec) {
   if (auto rc = check_utf8({spec.value_text, spec.value_high_text}); rc != 0) {
     return rc;
   }
-  return check_enum_domain(spec.type, 0, FM_PIVOT_FILTER_KIND_M12, "type");
+  return check_enum_domain(spec.kind, 0, FM_PIVOT_FILTER_KIND_M12, "kind");
 }
 
 void value_to_fm(const formulon::Value& v, TextStore& store, fm_value_t* out) {

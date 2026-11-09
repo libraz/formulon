@@ -347,7 +347,7 @@ TEST(OoxmlPageMargins, PartialPatchStillWritesEveryRequiredAttribute) {
 
   std::uint8_t* bytes = nullptr;
   std::size_t len = 0;
-  ASSERT_EQ(fm_workbook_save(wb.handle, &bytes, &len), 0);
+  ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &bytes, &len), 0);
   ASSERT_NE(bytes, nullptr);
   const std::vector<std::uint8_t> package(bytes, bytes + len);
   fm_buffer_destroy(bytes);

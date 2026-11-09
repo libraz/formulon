@@ -175,7 +175,7 @@ fm_cfvo_t from_cfvo(const formulon::Workbook& wb, const formulon::cf::CfValueObj
                     BorrowedStringArena& text_arena) {
   fm_cfvo_t out{};
   out.type = static_cast<std::int32_t>(src.type);
-  out.gte = src.gte ? 1 : 0;
+  out.gte = src.gte ? FM_TRISTATE_TRUE : FM_TRISTATE_FALSE;
   if (!src.value.empty()) {
     out.value = text_arena.emplace(
         src.type == formulon::cf::CfvoType::Formula
@@ -293,7 +293,7 @@ void fill_rule(const formulon::Workbook& wb, const formulon::cf::ConditionalForm
       thresholds.push_back(from_cfvo(wb, threshold, text_arena));
     }
     out->has_icon_set = 1;
-    out->icon_set_name = static_cast<std::int32_t>(spec.name);
+    out->icon_set = static_cast<std::int32_t>(spec.name);
     out->icon_set_thresholds = cfvo_arena.adopt(std::move(thresholds));
     out->icon_set_threshold_count = static_cast<std::uint32_t>(spec.thresholds.size());
     out->icon_set_reverse = spec.reverse ? 1 : 0;
@@ -366,13 +366,13 @@ formulon::cf::CfValueObject to_cfvo(const fm_cfvo_t& src) {
   formulon::cf::CfValueObject out;
   out.type = static_cast<formulon::cf::CfvoType>(src.type);
   out.value = text_or_empty(src.value);
-  out.gte = src.gte != 0;
+  out.gte = src.gte != FM_TRISTATE_FALSE;
   return out;
 }
 
 // The three payload copiers below check payload *shape* only - counts,
 // pointers, and the length ordering the bar geometry needs. Every enum
-// domain a payload carries (`fm_cfvo_t::type`, `icon_set_name`,
+// domain a payload carries (`fm_cfvo_t::type`, `icon_set`,
 // `data_bar_axis_position`, `data_bar_direction`) is checked by
 // `validate(rule, ...)`, which
 // `fm_sheet_add_cf_rule` runs before it reaches here.
@@ -433,11 +433,11 @@ bool copy_icon_set_payload(const fm_cf_rule_t& rule, formulon::cf::CFRule* out_r
   // An N-icon set carries exactly its N-1 boundaries; the floor is separate.
   if (rule.has_icon_set == 0 || rule.icon_set_thresholds == nullptr ||
       rule.icon_set_threshold_count + 1U !=
-          formulon::cf::icon_count(static_cast<formulon::cf::IconSetName>(rule.icon_set_name))) {
+          formulon::cf::icon_count(static_cast<formulon::cf::IconSetName>(rule.icon_set))) {
     return false;
   }
   formulon::cf::IconSetSpec spec;
-  spec.name = static_cast<formulon::cf::IconSetName>(rule.icon_set_name);
+  spec.name = static_cast<formulon::cf::IconSetName>(rule.icon_set);
   spec.thresholds.reserve(rule.icon_set_threshold_count);
   for (std::uint32_t i = 0; i < rule.icon_set_threshold_count; ++i) {
     spec.thresholds.push_back(to_cfvo(rule.icon_set_thresholds[i]));
@@ -881,7 +881,7 @@ extern "C" fm_status_t fm_sheet_update_cf_rule(fm_workbook_t* wb, std::size_t sh
       {patch->data_bar_negative_border_op, "data_bar_negative_border", data_bar, false},
       {patch->data_bar_axis_color_op, "data_bar_axis_color", data_bar, false},
       {patch->data_bar_direction_op, "data_bar_direction", data_bar, false},
-      {patch->icon_set_name_op, "icon_set_name", icon_set, false},
+      {patch->icon_set_op, "icon_set", icon_set, false},
       {patch->icon_set_thresholds_op, "icon_set_thresholds", icon_set, false},
       {patch->icon_set_reverse_op, "icon_set_reverse", icon_set, false},
       {patch->icon_set_show_value_op, "icon_set_show_value", icon_set, false},
@@ -1081,8 +1081,8 @@ extern "C" fm_status_t fm_sheet_update_cf_rule(fm_workbook_t* wb, std::size_t sh
   }
   if (icon_set) {
     merged.has_icon_set = 1;
-    if (patch->icon_set_name_op == FM_PATCH_OP_SET) {
-      merged.icon_set_name = patch->icon_set_name;
+    if (patch->icon_set_op == FM_PATCH_OP_SET) {
+      merged.icon_set = patch->icon_set;
     }
     if (patch->icon_set_thresholds_op == FM_PATCH_OP_SET) {
       merged.icon_set_thresholds = patch->icon_set_thresholds;

@@ -65,7 +65,7 @@ fm_status_t SetTopLeft(const WorkbookGuard& wb, std::uint32_t row, std::uint32_t
 
 void SaveAndReload(const WorkbookGuard& wb, std::int32_t format, WorkbookGuard* reloaded) {
   BufferGuard saved;
-  ASSERT_EQ(fm_workbook_save_as(wb.handle, format, &saved.data, &saved.len), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_workbook_save(wb.handle, format, &saved.data, &saved.len), 0) << fm_get_last_error_message();
   ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &reloaded->handle), 0) << fm_get_last_error_message();
 }
 
@@ -305,31 +305,27 @@ TEST(FormulonCApiArgumentRange, CellGettersRejectAnOutOfGridCoordinate) {
     const char* text = nullptr;
     std::size_t count = 0;
     fm_phonetic_run_t run{};
-    std::size_t font = 0;
-    std::int32_t type = 0;
-    std::int32_t alignment = 0;
+    fm_phonetic_properties_t properties = FM_STRUCT_INIT(fm_phonetic_properties_t);
     std::int32_t flag = 0;
     const char* lambda = nullptr;
     fm_spill_info_t spill = FM_STRUCT_INIT(fm_spill_info_t);
     fm_data_table_t table = FM_STRUCT_INIT(fm_data_table_t);
     fm_hyperlink_t link = FM_STRUCT_INIT(fm_hyperlink_t);
-    fm_comment_info_t comment = FM_STRUCT_INIT(fm_comment_info_t);
+    fm_comment_t comment = FM_STRUCT_INIT(fm_comment_t);
     std::uint32_t xf = 0;
     EXPECT_EQ(fm_sheet_get_cell_phonetic(wb.handle, 0, row, col, &flag, &text), kInvalidArgument);
     EXPECT_EQ(fm_sheet_get_cell_phonetic_run_count(wb.handle, 0, row, col, &count), kInvalidArgument);
     EXPECT_EQ(fm_sheet_get_cell_phonetic_run_at(wb.handle, 0, row, col, 0, &run), kInvalidArgument);
-    EXPECT_EQ(fm_sheet_get_cell_phonetic_properties(wb.handle, 0, row, col, &font, &type, &alignment),
-              kInvalidArgument);
-    EXPECT_EQ(fm_sheet_has_cell_phonetic_properties(wb.handle, 0, row, col, &flag), kInvalidArgument);
+    EXPECT_EQ(fm_sheet_get_cell_phonetic_properties(wb.handle, 0, row, col, &properties), kInvalidArgument);
     EXPECT_EQ(fm_sheet_get_cell_show_phonetic(wb.handle, 0, row, col, &flag), kInvalidArgument);
     EXPECT_EQ(fm_sheet_get_lambda_text(wb.handle, 0, row, col, &flag, &lambda), kInvalidArgument);
     EXPECT_EQ(fm_sheet_get_spill(wb.handle, 0, row, col, &flag, &spill), kInvalidArgument);
     EXPECT_EQ(fm_sheet_get_data_table(wb.handle, 0, row, col, &flag, &table), kInvalidArgument);
     EXPECT_EQ(fm_sheet_remove_data_table(wb.handle, 0, row, col), kInvalidArgument);
     EXPECT_EQ(fm_sheet_get_hyperlink(wb.handle, 0, row, col, &flag, &link), kInvalidArgument);
-    EXPECT_EQ(fm_sheet_remove_hyperlink(wb.handle, 0, row, col), kInvalidArgument);
+    EXPECT_EQ(fm_sheet_set_hyperlink(wb.handle, 0, row, col, nullptr), kInvalidArgument);
     EXPECT_EQ(fm_sheet_get_comment(wb.handle, 0, row, col, &flag, &comment), kInvalidArgument);
-    EXPECT_EQ(fm_sheet_remove_comment(wb.handle, 0, row, col), kInvalidArgument);
+    EXPECT_EQ(fm_sheet_set_comment(wb.handle, 0, row, col, nullptr), kInvalidArgument);
     std::int32_t visible = 0;
     EXPECT_EQ(fm_sheet_get_comment_visible(wb.handle, 0, row, col, &flag, &visible), kInvalidArgument);
     EXPECT_EQ(fm_sheet_set_comment_visible(wb.handle, 0, row, col, 1), kInvalidArgument);
@@ -353,20 +349,18 @@ TEST(FormulonCApiArgumentRange, CellGettersAcceptTheLastGridCell) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   const char* text = nullptr;
   std::size_t count = 0;
-  std::size_t font = 0;
-  std::int32_t type = 0;
-  std::int32_t alignment = 0;
+  fm_phonetic_properties_t properties = FM_STRUCT_INIT(fm_phonetic_properties_t);
   std::int32_t flag = 0;
   const char* lambda = nullptr;
   fm_spill_info_t spill = FM_STRUCT_INIT(fm_spill_info_t);
   fm_data_table_t table = FM_STRUCT_INIT(fm_data_table_t);
   fm_hyperlink_t link = FM_STRUCT_INIT(fm_hyperlink_t);
-  fm_comment_info_t comment = FM_STRUCT_INIT(fm_comment_info_t);
+  fm_comment_t comment = FM_STRUCT_INIT(fm_comment_t);
   std::uint32_t xf = 0;
   EXPECT_EQ(fm_sheet_get_cell_phonetic(wb.handle, 0, kLastRow, kLastCol, &flag, &text), 0);
   EXPECT_EQ(fm_sheet_get_cell_phonetic_run_count(wb.handle, 0, kLastRow, kLastCol, &count), 0);
-  EXPECT_EQ(fm_sheet_get_cell_phonetic_properties(wb.handle, 0, kLastRow, kLastCol, &font, &type, &alignment), 0);
-  EXPECT_EQ(fm_sheet_has_cell_phonetic_properties(wb.handle, 0, kLastRow, kLastCol, &flag), 0);
+  EXPECT_EQ(fm_sheet_get_cell_phonetic_properties(wb.handle, 0, kLastRow, kLastCol, &properties), 0);
+  EXPECT_EQ(properties.stated, 0);
   EXPECT_EQ(fm_sheet_get_cell_show_phonetic(wb.handle, 0, kLastRow, kLastCol, &flag), 0);
   EXPECT_EQ(fm_sheet_get_lambda_text(wb.handle, 0, kLastRow, kLastCol, &flag, &lambda), 0);
   EXPECT_EQ(fm_sheet_get_spill(wb.handle, 0, kLastRow, kLastCol, &flag, &spill), 0);
@@ -374,9 +368,9 @@ TEST(FormulonCApiArgumentRange, CellGettersAcceptTheLastGridCell) {
   EXPECT_EQ(fm_sheet_get_data_table(wb.handle, 0, kLastRow, kLastCol, &flag, &table), 0);
   EXPECT_EQ(fm_sheet_remove_data_table(wb.handle, 0, kLastRow, kLastCol), FM_STATUS_NOT_FOUND);
   EXPECT_EQ(fm_sheet_get_hyperlink(wb.handle, 0, kLastRow, kLastCol, &flag, &link), 0);
-  EXPECT_EQ(fm_sheet_remove_hyperlink(wb.handle, 0, kLastRow, kLastCol), FM_STATUS_NOT_FOUND);
+  EXPECT_EQ(fm_sheet_set_hyperlink(wb.handle, 0, kLastRow, kLastCol, nullptr), 0);
   EXPECT_EQ(fm_sheet_get_comment(wb.handle, 0, kLastRow, kLastCol, &flag, &comment), 0);
-  EXPECT_EQ(fm_sheet_remove_comment(wb.handle, 0, kLastRow, kLastCol), FM_STATUS_NOT_FOUND);
+  EXPECT_EQ(fm_sheet_set_comment(wb.handle, 0, kLastRow, kLastCol, nullptr), 0);
   std::int32_t visible = 0;
   EXPECT_EQ(fm_sheet_get_comment_visible(wb.handle, 0, kLastRow, kLastCol, &flag, &visible), 0);
   EXPECT_EQ(flag, 0);
@@ -515,24 +509,23 @@ TEST(FormulonCApiArgumentRange, PivotGrandTotalsPatchKeepsTheOtherBand) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   std::size_t pivot = 0U;
   ASSERT_EQ(BuildScratchPivot(wb.handle, nullptr, &pivot), 0) << fm_get_last_error_message();
-  std::int32_t rows = -1;
-  std::int32_t columns = -1;
-  ASSERT_EQ(fm_sheet_get_pivot_grand_totals(wb.handle, 0, pivot, &rows, &columns), 0);
-  const std::int32_t columns_before = columns;
+  fm_pivot_grand_totals_t totals = FM_STRUCT_INIT(fm_pivot_grand_totals_t);
+  ASSERT_EQ(fm_sheet_get_pivot_grand_totals(wb.handle, 0, pivot, &totals), 0);
+  const std::int32_t columns_before = totals.columns;
 
   fm_pivot_grand_totals_patch_t patch = FM_STRUCT_INIT(fm_pivot_grand_totals_patch_t);
   patch.rows_op = FM_PATCH_OP_SET;
-  patch.rows = rows != 0 ? 0 : 1;
+  patch.rows = totals.rows != 0 ? 0 : 1;
   ASSERT_EQ(fm_sheet_update_pivot_grand_totals(wb.handle, 0, pivot, &patch), 0) << fm_get_last_error_message();
-  ASSERT_EQ(fm_sheet_get_pivot_grand_totals(wb.handle, 0, pivot, &rows, &columns), 0);
-  EXPECT_EQ(rows, patch.rows);
-  EXPECT_EQ(columns, columns_before);
+  ASSERT_EQ(fm_sheet_get_pivot_grand_totals(wb.handle, 0, pivot, &totals), 0);
+  EXPECT_EQ(totals.rows, patch.rows);
+  EXPECT_EQ(totals.columns, columns_before);
 
   fm_pivot_grand_totals_patch_t clear = FM_STRUCT_INIT(fm_pivot_grand_totals_patch_t);
   clear.columns_op = FM_PATCH_OP_CLEAR;
   EXPECT_EQ(fm_sheet_update_pivot_grand_totals(wb.handle, 0, pivot, &clear), kInvalidArgument);
-  ASSERT_EQ(fm_sheet_get_pivot_grand_totals(wb.handle, 0, pivot, &rows, &columns), 0);
-  EXPECT_EQ(columns, columns_before);
+  ASSERT_EQ(fm_sheet_get_pivot_grand_totals(wb.handle, 0, pivot, &totals), 0);
+  EXPECT_EQ(totals.columns, columns_before);
 }
 
 TEST(FormulonCApiArgumentRange, PivotFieldOrderFillsTheCallerBufferAndReportsTheFullCount) {
@@ -680,7 +673,7 @@ TEST(FormulonCApiArgumentRange, FontSizeOutsideOneToFourHundredNineIsRejected) {
   for (const double size : {0.5, 409.5, -1.0}) {
     fm_font_t sized = font;
     sized.size_pt = size;
-    std::size_t index = 99U;
+    std::uint32_t index = 99U;
     EXPECT_EQ(fm_workbook_add_font(wb.handle, &sized, &index), kInvalidArgument) << size;
     EXPECT_EQ(fm_workbook_set_font(wb.handle, 0, &sized), kInvalidArgument) << size;
     fm_dxf_t dxf{};
@@ -694,7 +687,7 @@ TEST(FormulonCApiArgumentRange, FontSizeOutsideOneToFourHundredNineIsRejected) {
   for (const double size : {1.0, 409.0}) {
     fm_font_t sized = font;
     sized.size_pt = size;
-    std::size_t index = 99U;
+    std::uint32_t index = 99U;
     EXPECT_EQ(fm_workbook_add_font(wb.handle, &sized, &index), 0) << size << fm_get_last_error_message();
   }
 }
@@ -742,27 +735,27 @@ TEST(FormulonCApiArgumentRange, FormatDefaultsPatchClearsADefaultAndKeepsTheRest
 TEST(FormulonCApiArgumentRange, TableStyleDefaultsPatchSetsAndClearsEachName) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  const char* table_style = nullptr;
-  const char* pivot_before = nullptr;
-  ASSERT_EQ(fm_workbook_get_table_style_defaults(wb.handle, &table_style, &pivot_before), 0);
-  const std::string pivot_default = pivot_before != nullptr ? pivot_before : "";
+  fm_table_style_defaults_t before = FM_STRUCT_INIT(fm_table_style_defaults_t);
+  ASSERT_EQ(fm_workbook_get_table_style_defaults(wb.handle, &before), 0);
+  const std::string pivot_default = before.pivot_style_name != nullptr ? before.pivot_style_name : "";
   fm_table_style_defaults_patch_t set = FM_STRUCT_INIT(fm_table_style_defaults_patch_t);
-  set.table_style_op = FM_PATCH_OP_SET;
-  set.table_style = "TableStyleLight9";
+  set.table_style_name_op = FM_PATCH_OP_SET;
+  set.table_style_name = "TableStyleLight9";
   ASSERT_EQ(fm_workbook_update_table_style_defaults(wb.handle, &set), 0) << fm_get_last_error_message();
-  const char* pivot_style = "stale";
-  ASSERT_EQ(fm_workbook_get_table_style_defaults(wb.handle, &table_style, &pivot_style), 0);
-  ASSERT_NE(table_style, nullptr);
-  EXPECT_STREQ(table_style, "TableStyleLight9");
-  EXPECT_EQ(pivot_style != nullptr ? std::string(pivot_style) : std::string(), pivot_default);
+  fm_table_style_defaults_t read = FM_STRUCT_INIT(fm_table_style_defaults_t);
+  read.pivot_style_name = "stale";
+  ASSERT_EQ(fm_workbook_get_table_style_defaults(wb.handle, &read), 0);
+  ASSERT_NE(read.table_style_name, nullptr);
+  EXPECT_STREQ(read.table_style_name, "TableStyleLight9");
+  EXPECT_EQ(read.pivot_style_name != nullptr ? std::string(read.pivot_style_name) : std::string(), pivot_default);
 
   fm_table_style_defaults_patch_t null_name = FM_STRUCT_INIT(fm_table_style_defaults_patch_t);
-  null_name.pivot_style_op = FM_PATCH_OP_SET;
+  null_name.pivot_style_name_op = FM_PATCH_OP_SET;
   EXPECT_EQ(fm_workbook_update_table_style_defaults(wb.handle, &null_name), kInvalidArgument);
 
   fm_table_style_defaults_patch_t clear = FM_STRUCT_INIT(fm_table_style_defaults_patch_t);
-  clear.table_style_op = FM_PATCH_OP_CLEAR;
+  clear.table_style_name_op = FM_PATCH_OP_CLEAR;
   ASSERT_EQ(fm_workbook_update_table_style_defaults(wb.handle, &clear), 0) << fm_get_last_error_message();
-  ASSERT_EQ(fm_workbook_get_table_style_defaults(wb.handle, &table_style, &pivot_style), 0);
-  EXPECT_EQ(table_style, nullptr);
+  ASSERT_EQ(fm_workbook_get_table_style_defaults(wb.handle, &read), 0);
+  EXPECT_EQ(read.table_style_name, nullptr);
 }

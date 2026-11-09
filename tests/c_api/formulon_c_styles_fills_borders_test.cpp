@@ -14,7 +14,7 @@ TEST(FormulonCApiStyles, AddFillAndBorderAreIdentityAgainstAFileLoadedTable) {
   for (uint32_t i = 0; i < fills; ++i) {
     fm_fill_t loaded{};
     ASSERT_EQ(fm_workbook_get_fill_at(wb.handle, i, &loaded), 0) << "fill " << i;
-    std::size_t reindex = 0xFFFFFFFFU;
+    std::uint32_t reindex = 0xFFFFFFFFU;
     ASSERT_EQ(fm_workbook_add_fill(wb.handle, &loaded, &reindex), 0) << "fill " << i;
     EXPECT_EQ(reindex, i);
   }
@@ -25,7 +25,7 @@ TEST(FormulonCApiStyles, AddFillAndBorderAreIdentityAgainstAFileLoadedTable) {
   for (uint32_t i = 0; i < borders; ++i) {
     fm_border_t loaded{};
     ASSERT_EQ(fm_workbook_get_border_at(wb.handle, i, &loaded), 0) << "border " << i;
-    std::size_t reindex = 0xFFFFFFFFU;
+    std::uint32_t reindex = 0xFFFFFFFFU;
     ASSERT_EQ(fm_workbook_add_border(wb.handle, &loaded, &reindex), 0) << "border " << i;
     EXPECT_EQ(reindex, i);
   }
@@ -48,7 +48,7 @@ TEST(FormulonCApiStyles, AddFillAndBorderDistinguishColourSpecifications) {
   ASSERT_EQ(themed_fill.foreground.kind, static_cast<uint8_t>(FM_COLOR_KIND_THEME));
   fm_fill_t literal_fill = themed_fill;
   literal_fill.foreground = RgbColor(0xFF112233U);
-  std::size_t fill_index = 0;
+  std::uint32_t fill_index = 0;
   ASSERT_EQ(fm_workbook_add_fill(wb.handle, &literal_fill, &fill_index), 0);
   EXPECT_NE(fill_index, 1U);
 
@@ -57,7 +57,7 @@ TEST(FormulonCApiStyles, AddFillAndBorderDistinguishColourSpecifications) {
   ASSERT_EQ(themed_border.left.color.kind, static_cast<uint8_t>(FM_COLOR_KIND_THEME));
   fm_border_t literal_border = themed_border;
   literal_border.left.color = RgbColor(0xFF112233U);
-  std::size_t border_index = 0;
+  std::uint32_t border_index = 0;
   ASSERT_EQ(fm_workbook_add_border(wb.handle, &literal_border, &border_index), 0);
   EXPECT_NE(border_index, 1U);
 
@@ -82,35 +82,35 @@ TEST(FormulonCApiStyles, SelectorColoursRemainAuthoritativeAcrossGetAddAndSaveLo
 
   fm_font_t font = MakeArial();
   font.color = theme;
-  std::size_t font_index = 0xFFFFFFFFU;
+  std::uint32_t font_index = 0xFFFFFFFFU;
   ASSERT_EQ(fm_workbook_add_font(wb.handle, &font, &font_index), 0);
   fm_font_t got_font{};
   ASSERT_EQ(fm_workbook_get_font_at(wb.handle, font_index, &got_font), 0);
   EXPECT_EQ(got_font.color.kind, static_cast<uint8_t>(FM_COLOR_KIND_THEME));
   EXPECT_EQ(got_font.color.theme, 3U);
   EXPECT_DOUBLE_EQ(got_font.color.tint, 0.5);
-  std::size_t font_again = 0xFFFFFFFFU;
+  std::uint32_t font_again = 0xFFFFFFFFU;
   ASSERT_EQ(fm_workbook_add_font(wb.handle, &got_font, &font_again), 0);
   EXPECT_EQ(font_again, font_index);
 
   fm_fill_t fill = MakeRedFill();
   fill.foreground = indexed;
   fill.background = automatic;
-  std::size_t fill_index = 0xFFFFFFFFU;
+  std::uint32_t fill_index = 0xFFFFFFFFU;
   ASSERT_EQ(fm_workbook_add_fill(wb.handle, &fill, &fill_index), 0);
   fm_fill_t got_fill{};
   ASSERT_EQ(fm_workbook_get_fill_at(wb.handle, fill_index, &got_fill), 0);
   EXPECT_EQ(got_fill.foreground.kind, static_cast<uint8_t>(FM_COLOR_KIND_INDEXED));
   EXPECT_EQ(got_fill.foreground.indexed, 9U);
   EXPECT_EQ(got_fill.background.kind, static_cast<uint8_t>(FM_COLOR_KIND_AUTO));
-  std::size_t fill_again = 0xFFFFFFFFU;
+  std::uint32_t fill_again = 0xFFFFFFFFU;
   ASSERT_EQ(fm_workbook_add_fill(wb.handle, &got_fill, &fill_again), 0);
   EXPECT_EQ(fill_again, fill_index);
 
   fm_border_t border = MakeThinBoxBorder();
   border.left.color = theme;
   border.right.color = indexed;
-  std::size_t border_index = 0xFFFFFFFFU;
+  std::uint32_t border_index = 0xFFFFFFFFU;
   ASSERT_EQ(fm_workbook_add_border(wb.handle, &border, &border_index), 0);
   fm_border_t got_border{};
   ASSERT_EQ(fm_workbook_get_border_at(wb.handle, border_index, &got_border), 0);
@@ -118,7 +118,7 @@ TEST(FormulonCApiStyles, SelectorColoursRemainAuthoritativeAcrossGetAddAndSaveLo
   EXPECT_EQ(got_border.left.color.theme, 3U);
   EXPECT_EQ(got_border.right.color.kind, static_cast<uint8_t>(FM_COLOR_KIND_INDEXED));
   EXPECT_EQ(got_border.right.color.indexed, 9U);
-  std::size_t border_again = 0xFFFFFFFFU;
+  std::uint32_t border_again = 0xFFFFFFFFU;
   ASSERT_EQ(fm_workbook_add_border(wb.handle, &got_border, &border_again), 0);
   EXPECT_EQ(border_again, border_index);
 
@@ -142,7 +142,7 @@ TEST(FormulonCApiStyles, SelectorColoursRemainAuthoritativeAcrossGetAddAndSaveLo
   EXPECT_EQ(dxf_again, dxf_index);
 
   BufferGuard saved;
-  ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0);
+  ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0);
   ASSERT_GT(saved.len, 0U);
   WorkbookGuard reloaded;
   ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &reloaded.handle), 0);
@@ -169,8 +169,8 @@ TEST(FormulonCApiStyles, SelectorColoursRemainAuthoritativeAcrossGetAddAndSaveLo
 TEST(FormulonCApiStyles, AddFillDedupReturnsExistingIndex) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  std::size_t a = 0xFFFFFFFFU;
-  std::size_t b = 0xFFFFFFFFU;
+  std::uint32_t a = 0xFFFFFFFFU;
+  std::uint32_t b = 0xFFFFFFFFU;
   ASSERT_EQ(fm_workbook_add_fill(wb.handle, record_arg(MakeRedFill()), &a), 0);
   ASSERT_EQ(fm_workbook_add_fill(wb.handle, record_arg(MakeRedFill()), &b), 0);
   EXPECT_EQ(a, b);
@@ -179,8 +179,8 @@ TEST(FormulonCApiStyles, AddFillDedupReturnsExistingIndex) {
 TEST(FormulonCApiStyles, AddFillDistinctReturnsNewIndex) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  std::size_t a = 0;
-  std::size_t b = 0;
+  std::uint32_t a = 0;
+  std::uint32_t b = 0;
   fm_fill_t red = MakeRedFill();
   fm_fill_t blue = MakeRedFill();
   blue.foreground = RgbColor(0xFF0000FFU);
@@ -194,7 +194,7 @@ TEST(FormulonCApiStyles, AddFillGrowsTable) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   std::size_t before = 0;
   ASSERT_EQ(fm_workbook_get_fill_count(wb.handle, &before), 0);
-  std::size_t idx = 0;
+  std::uint32_t idx = 0;
   ASSERT_EQ(fm_workbook_add_fill(wb.handle, record_arg(MakeRedFill()), &idx), 0);
   std::size_t after = 0;
   ASSERT_EQ(fm_workbook_get_fill_count(wb.handle, &after), 0);
@@ -212,8 +212,8 @@ TEST(FormulonCApiStyles, AddFillGrowsTable) {
 TEST(FormulonCApiStyles, AddBorderDedupReturnsExistingIndex) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  std::size_t a = 0xFFFFFFFFU;
-  std::size_t b = 0xFFFFFFFFU;
+  std::uint32_t a = 0xFFFFFFFFU;
+  std::uint32_t b = 0xFFFFFFFFU;
   ASSERT_EQ(fm_workbook_add_border(wb.handle, record_arg(MakeThinBoxBorder()), &a), 0);
   ASSERT_EQ(fm_workbook_add_border(wb.handle, record_arg(MakeThinBoxBorder()), &b), 0);
   EXPECT_EQ(a, b);
@@ -222,8 +222,8 @@ TEST(FormulonCApiStyles, AddBorderDedupReturnsExistingIndex) {
 TEST(FormulonCApiStyles, AddBorderDistinctReturnsNewIndex) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  std::size_t a = 0;
-  std::size_t b = 0;
+  std::uint32_t a = 0;
+  std::uint32_t b = 0;
   fm_border_t thin = MakeThinBoxBorder();
   fm_border_t dashed = MakeThinBoxBorder();
   dashed.left.style = 3;  // dashed
@@ -237,7 +237,7 @@ TEST(FormulonCApiStyles, AddBorderGrowsTable) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   std::size_t before = 0;
   ASSERT_EQ(fm_workbook_get_border_count(wb.handle, &before), 0);
-  std::size_t idx = 0;
+  std::uint32_t idx = 0;
   ASSERT_EQ(fm_workbook_add_border(wb.handle, record_arg(MakeThinBoxBorder()), &idx), 0);
   std::size_t after = 0;
   ASSERT_EQ(fm_workbook_get_border_count(wb.handle, &after), 0);
@@ -262,7 +262,7 @@ TEST(FormulonCApiStyles, FontFillAndBorderOrdinalsOutsideTheirEnumerationsAreRej
   ASSERT_EQ(fm_workbook_get_font_count(wb.handle, &fonts_before), 0);
   ASSERT_EQ(fm_workbook_get_fill_count(wb.handle, &fills_before), 0);
   ASSERT_EQ(fm_workbook_get_border_count(wb.handle, &borders_before), 0);
-  std::size_t index = 0;
+  std::uint32_t index = 0;
 
   for (int32_t underline : {-1, FM_UNDERLINE_STYLE_DOUBLE_ACCOUNTING + 1, 256}) {
     fm_font_t font{};
@@ -300,7 +300,7 @@ TEST(FormulonCApiStyles, FontFillAndBorderOrdinalsOutsideTheirEnumerationsAreRej
 TEST(FormulonCApiStyles, SetFillOverwritesTheSlotInPlace) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  std::size_t index = 0;
+  std::uint32_t index = 0;
   ASSERT_EQ(fm_workbook_add_fill(wb.handle, record_arg(MakeRedFill()), &index), 0);
   std::size_t count_before = 0;
   ASSERT_EQ(fm_workbook_get_fill_count(wb.handle, &count_before), 0);
@@ -316,13 +316,14 @@ TEST(FormulonCApiStyles, SetFillOverwritesTheSlotInPlace) {
   ASSERT_EQ(fm_workbook_get_fill_count(wb.handle, &count_after), 0);
   EXPECT_EQ(count_after, count_before);
 
-  EXPECT_EQ(fm_workbook_set_fill(wb.handle, count_after, &blue), FM_STATUS_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(fm_workbook_set_fill(wb.handle, static_cast<std::uint32_t>(count_after), &blue),
+            FM_STATUS_INDEX_OUT_OF_RANGE);
 }
 
 TEST(FormulonCApiStyles, SetBorderOverwritesTheSlotInPlace) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  std::size_t index = 0;
+  std::uint32_t index = 0;
   ASSERT_EQ(fm_workbook_add_border(wb.handle, record_arg(MakeThinBoxBorder()), &index), 0);
   std::size_t count_before = 0;
   ASSERT_EQ(fm_workbook_get_border_count(wb.handle, &count_before), 0);
@@ -339,5 +340,28 @@ TEST(FormulonCApiStyles, SetBorderOverwritesTheSlotInPlace) {
   ASSERT_EQ(fm_workbook_get_border_count(wb.handle, &count_after), 0);
   EXPECT_EQ(count_after, count_before);
 
-  EXPECT_EQ(fm_workbook_set_border(wb.handle, count_after, &read), FM_STATUS_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(fm_workbook_set_border(wb.handle, static_cast<std::uint32_t>(count_after), &read),
+            FM_STATUS_INDEX_OUT_OF_RANGE);
+}
+
+TEST(FormulonCApiStyles, GradientAngleDeg) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  fm_gradient_stop_t stops[2]{};
+  stops[0].position = 0.0;
+  stops[0].color = RgbColor(0xFF000000U);
+  stops[1].position = 1.0;
+  stops[1].color = RgbColor(0xFFFFFFFFU);
+  fm_fill_t fill{};
+  fill.has_gradient = 1;
+  fill.gradient_type = FM_GRADIENT_TYPE_LINEAR;
+  fill.gradient_angle_deg = 45.0;
+  fill.gradient_stops = stops;
+  fill.gradient_stop_count = 2;
+  std::uint32_t index = 0;
+  ASSERT_EQ(fm_workbook_add_fill(wb.handle, &fill, &index), 0) << fm_get_last_error_message();
+  fm_fill_t read{};
+  ASSERT_EQ(fm_workbook_get_fill_at(wb.handle, index, &read), 0);
+  EXPECT_EQ(read.has_gradient, 1);
+  EXPECT_DOUBLE_EQ(read.gradient_angle_deg, 45.0);
 }

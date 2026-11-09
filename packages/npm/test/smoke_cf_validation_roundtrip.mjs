@@ -170,12 +170,12 @@ test('setHyperlink upserts one link per cell and a null link removes it', async 
   assert.equal(links[0].target, 'https://example.com/b');
   assert.equal(links[0].display, null);
 
-  wb.sheet(0).setHyperlinkRange(
-    { firstRow: 3, firstCol: 0, lastRow: 4, lastCol: 1 },
-    { target: 'https://example.com/range' },
-  );
+  wb.sheet(0).setHyperlink(3, 0, {
+    target: 'https://example.com/range',
+    range: { firstRow: 3, firstCol: 0, lastRow: 4, lastCol: 1 },
+  });
   assert.equal(wb.sheet(0).listHyperlinks().length, 2);
-  wb.sheet(0).setHyperlinkRange({ firstRow: 3, firstCol: 0, lastRow: 4, lastCol: 1 }, null);
+  wb.sheet(0).setHyperlink(3, 0, null);
   assert.equal(wb.sheet(0).listHyperlinks().length, 1);
 
   wb.sheet(0).setHyperlink(1, 1, null);
@@ -220,8 +220,7 @@ test('merges, comments and hyperlinks round-trip through save and load', async (
 
     const comments = reloaded.sheet(0).listComments();
     assert.equal(comments.length, 1);
-    assert.equal(comments[0].row, 2);
-    assert.equal(comments[0].col, 1);
+    assert.deepEqual({ ...comments[0].cell }, { row: 2, col: 1 });
     assert.equal(comments[0].text, '要確認');
 
     const links = reloaded.sheet(0).listHyperlinks();

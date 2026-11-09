@@ -23,7 +23,8 @@ void LoadScratchPivot(WorkbookGuard& out) {
   ASSERT_EQ(fm_workbook_create_default(&built.handle), FM_STATUS_OK);
   ASSERT_EQ(BuildScratchPivot(built.handle, nullptr, nullptr), FM_STATUS_OK) << fm_get_last_error_message();
   BufferGuard saved;
-  ASSERT_EQ(fm_workbook_save(built.handle, &saved.data, &saved.len), FM_STATUS_OK) << fm_get_last_error_message();
+  ASSERT_EQ(fm_workbook_save(built.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), FM_STATUS_OK)
+      << fm_get_last_error_message();
   ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &out.handle), FM_STATUS_OK) << fm_get_last_error_message();
 }
 
@@ -484,24 +485,26 @@ fm_status_t BuildDatePivot(fm_workbook_t* wb) {
   if ((st = AddPivot(wb, 0, "PT", cache_id, 0U, 3U, &pivot_index)) != 0) {
     return st;
   }
-  fm_pivot_field_spec_t date_spec = FM_STRUCT_INIT(fm_pivot_field_spec_t);
-  date_spec.source_name = "Date";
-  date_spec.custom_name = "";
-  date_spec.axis = FM_PIVOT_AXIS_ROW;
-  date_spec.subtotal_top = FM_TRISTATE_FALSE;
-  date_spec.number_format = "";
-  std::size_t date_field = 99;
-  if ((st = fm_sheet_add_pivot_field(wb, 0, pivot_index, &date_spec, &date_field)) != 0) {
+  // The pivot carries one field per cache field, in cache order.
+  const std::size_t date_field = date_index;
+  if ((st = fm_sheet_set_pivot_field_axis(wb, 0, pivot_index, date_field, FM_PIVOT_AXIS_ROW)) != 0) {
     return st;
   }
-  fm_pivot_field_spec_t amount_spec = FM_STRUCT_INIT(fm_pivot_field_spec_t);
-  amount_spec.source_name = "Amount";
-  amount_spec.custom_name = "";
-  amount_spec.axis = FM_PIVOT_AXIS_VALUE;
-  amount_spec.subtotal_top = FM_TRISTATE_FALSE;
-  amount_spec.number_format = "";
-  std::size_t amount_field = 99;
-  if ((st = fm_sheet_add_pivot_field(wb, 0, pivot_index, &amount_spec, &amount_field)) != 0) {
+  fm_pivot_field_patch_t date_patch = FM_STRUCT_INIT(fm_pivot_field_patch_t);
+  date_patch.subtotal_top_op = FM_PATCH_OP_SET;
+  date_patch.subtotal_top = 0;
+  if ((st = fm_sheet_update_pivot_field(wb, 0, pivot_index, date_field, &date_patch)) != 0) {
+    return st;
+  }
+  // The pivot carries one field per cache field, in cache order.
+  const std::size_t amount_field = amount_index;
+  if ((st = fm_sheet_set_pivot_field_axis(wb, 0, pivot_index, amount_field, FM_PIVOT_AXIS_VALUE)) != 0) {
+    return st;
+  }
+  fm_pivot_field_patch_t amount_patch = FM_STRUCT_INIT(fm_pivot_field_patch_t);
+  amount_patch.subtotal_top_op = FM_PATCH_OP_SET;
+  amount_patch.subtotal_top = 0;
+  if ((st = fm_sheet_update_pivot_field(wb, 0, pivot_index, amount_field, &amount_patch)) != 0) {
     return st;
   }
   const std::uint32_t row_order[] = {static_cast<std::uint32_t>(date_field)};

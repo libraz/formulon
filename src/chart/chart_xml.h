@@ -27,6 +27,13 @@ Expected<void, Error> parse_chart_part(const std::vector<std::uint8_t>& bytes, p
 /// owning `graphicFrame`; `source` is derived through `chart_template`.
 Expected<ChartModel, Error> read_chart_model(const Workbook& wb, const pugi::xml_document& doc);
 
+/// The fill of a shape-properties element (`c:spPr`, `xdr:spPr`) as the chart
+/// paint record reads it, in the workbook's own colour map.
+ChartFill read_paint_fill(const Workbook& wb, const pugi::xml_node& sp_pr);
+
+/// The `a:ln` outline of a shape-properties element, as `read_paint_fill`.
+ChartLine read_paint_line(const Workbook& wb, const pugi::xml_node& sp_pr);
+
 /// True for a `c15:filtered*Series` extension group (series hidden through the chart filter).
 bool is_filtered_series_group(const pugi::xml_node& node);
 

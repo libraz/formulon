@@ -542,7 +542,7 @@ export function registerFilterValidationComments(Module, test) {
         personId: ALICE,
         created: CREATED,
         text: 'Check this, @Bob',
-        mentions: [{ personId: BOB, mentionId: MENTION, start: 12, length: 4 }],
+        mentions: [{ personId: BOB, mentionId: MENTION, start: 12, end: 16 }],
       });
       wb.addThreadedComment(0, {
         id: REPLY,
@@ -560,7 +560,7 @@ export function registerFilterValidationComments(Module, test) {
       assert.equal(head.col, 1);
       assert.equal(head.done, false);
       assert.equal(head.parentId, null);
-      assert.deepEqual(head.mentions, [{ personId: BOB, mentionId: MENTION, start: 12, length: 4 }]);
+      assert.deepEqual(head.mentions, [{ personId: BOB, mentionId: MENTION, start: 12, end: 16 }]);
       assert.equal(reply.parentId, THREAD);
       assert.deepEqual(reply.mentions, []);
 

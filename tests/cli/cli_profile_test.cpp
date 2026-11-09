@@ -27,7 +27,7 @@ bool write_formula_fixture(const std::string& path, const char* formula) {
   const bool formula_set = fm_sheet_set_formula(workbook, 0, 0, 0, formula) == 0;
   std::uint8_t* bytes = nullptr;
   std::size_t length = 0;
-  const bool saved = formula_set && fm_workbook_save(workbook, &bytes, &length) == 0;
+  const bool saved = formula_set && fm_workbook_save(workbook, FM_WORKBOOK_FORMAT_XLSX, &bytes, &length) == 0;
   bool wrote = false;
   if (saved) {
     std::ofstream output(path, std::ios::binary | std::ios::trunc);

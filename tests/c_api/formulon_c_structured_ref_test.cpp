@@ -340,7 +340,7 @@ TEST(FormulonCApiStructuredRef, RenameColumnRewritesEveryReference) {
 
 std::vector<std::uint8_t> SaveAs(const WorkbookGuard& wb, int32_t format) {
   BufferGuard saved;
-  EXPECT_EQ(fm_workbook_save_as(wb.handle, format, &saved.data, &saved.len), 0) << fm_get_last_error_message();
+  EXPECT_EQ(fm_workbook_save(wb.handle, format, &saved.data, &saved.len), 0) << fm_get_last_error_message();
   return std::vector<std::uint8_t>(saved.data, saved.data + saved.len);
 }
 

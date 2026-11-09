@@ -85,8 +85,9 @@ function addPivot(ws, wb) {
   fillTable(ws);
   const cache = addCache(wb);
   const pivot = ws.addPivot({ name: 'ByRegion', cacheId: cache.cacheId, anchor: 'E1' });
-  pivot.addField({ fieldIndex: 'Region', axis: f.PivotAxis.Row });
-  const amount = pivot.addField({ fieldIndex: 'Amount', axis: f.PivotAxis.Value });
+  pivot.setFieldAxis('Region', f.PivotAxis.Row);
+  pivot.setFieldAxis('Amount', f.PivotAxis.Value);
+  const amount = 1;
   pivot.addDataField({ name: 'Sum of Amount', fieldIndex: amount, aggregation: 0 });
   return { pivot, cache };
 }
@@ -218,14 +219,7 @@ describe('method names', () => {
 
   it('Sheet break and hyperlink upserts are set* and the add*/remove* spellings are gone', () => {
     withSheet((ws) => {
-      present(ws, [
-        'setRowBreak',
-        'setColumnBreak',
-        'listRowBreaks',
-        'listColumnBreaks',
-        'setHyperlink',
-        'setHyperlinkRange',
-      ]);
+      present(ws, ['setRowBreak', 'setColumnBreak', 'listRowBreaks', 'listColumnBreaks', 'setHyperlink']);
       absent(ws, [
         'addRowBreak',
         'addColumnBreak',
@@ -233,6 +227,7 @@ describe('method names', () => {
         'removeColumnBreak',
         'addHyperlink',
         'addHyperlinkRange',
+        'setHyperlinkRange',
       ]);
     });
   });
@@ -348,10 +343,10 @@ describe('update merges and set(null) removes a singleton', () => {
       wb.updateIterative({ maxIterations: 7 });
       assert.equal(wb.getIterative().enabled, true);
       assert.equal(wb.getIterative().maxIterations, 7);
-      wb.updateTableStyleDefaults({ tableStyle: 'TableStyleLight9' });
-      wb.updateTableStyleDefaults({ pivotStyle: 'PivotStyleLight16' });
-      assert.equal(wb.getTableStyleDefaults().tableStyle, 'TableStyleLight9');
-      assert.equal(wb.getTableStyleDefaults().pivotStyle, 'PivotStyleLight16');
+      wb.updateTableStyleDefaults({ tableStyleName: 'TableStyleLight9' });
+      wb.updateTableStyleDefaults({ pivotStyleName: 'PivotStyleLight16' });
+      assert.equal(wb.getTableStyleDefaults().tableStyleName, 'TableStyleLight9');
+      assert.equal(wb.getTableStyleDefaults().pivotStyleName, 'PivotStyleLight16');
     });
   });
 
@@ -394,8 +389,8 @@ describe('update merges and set(null) removes a singleton', () => {
       assert.deepEqual([read.min, read.max], [0, 20]);
       chart.updateDisplay({ plotVisibleOnly: false });
       assert.equal(chart.getProperties().plotVisibleOnly, false);
-      chart.updatePlot(0, { overlap: 10 });
-      assert.equal(chart.getProperties().plots[0].overlap, 10);
+      chart.updatePlot(0, { overlapPct: 10 });
+      assert.equal(chart.getProperties().plots[0].overlapPct, 10);
     });
   });
 
@@ -500,12 +495,12 @@ describe('update merges and set(null) removes a singleton', () => {
     });
   });
 
-  it('setHyperlinkRange links the range from its top-left cell and null removes it', () => {
+  it('setHyperlink with a range links the range from its top-left cell and null removes it', () => {
     withSheet((ws) => {
-      ws.setHyperlinkRange('B1:B2', { target: 'https://example.com/r' });
+      ws.setHyperlink('B1', { target: 'https://example.com/r', range: 'B1:B2' });
       assert.deepEqual({ ...ws.getHyperlink('B1').range }, { firstRow: 0, firstCol: 1, lastRow: 1, lastCol: 1 });
       assert.equal(ws.getHyperlink('B2'), null);
-      ws.setHyperlinkRange('B1:B2', null);
+      ws.setHyperlink('B1', null);
       assert.equal(ws.listHyperlinks().length, 0);
     });
   });
@@ -600,6 +595,7 @@ describe('sheet protection', () => {
 
   it('workbook protection passwords are named legacy password hashes', () => {
     withSheet((_ws, wb) => {
+      wb.setWorkbookProtection({ lockStructure: true });
       const record = wb.getWorkbookProtection();
       hasKeys(record, ['workbookLegacyPasswordHash', 'revisionsLegacyPasswordHash']);
       lacksKeys(record, ['workbookPassword', 'revisionsPassword']);
@@ -905,11 +901,11 @@ describe('unit-suffixed fields', () => {
         presetGeometry: 'rect',
         anchor: { kind: f.AnchorKind.OneCell, fromRow: 2, widthEmu: 9144, heightEmu: 9144 },
         rotationDeg: 45,
-        lineWidthPt: 2,
+        line: { widthPt: 2 },
       });
       const props = shape.getProperties();
       assert.equal(props.rotationDeg, 45);
-      assert.equal(props.lineWidthPt, 2);
+      assert.equal(props.line.widthPt, 2);
       lacksKeys(props, ['rotation', 'lineWidthEmu']);
       shape.update({ rotationDeg: 90 });
       assert.equal(shape.getProperties().rotationDeg, 90);
@@ -1229,7 +1225,7 @@ describe('table lifecycle on the sheet', () => {
 
   it('a new table takes the workbook default table style', () => {
     withSheet((ws, wb) => {
-      wb.updateTableStyleDefaults({ tableStyle: 'TableStyleLight9' });
+      wb.updateTableStyleDefaults({ tableStyleName: 'TableStyleLight9' });
       fillTable(ws);
       assert.equal(ws.addTable({ range: 'A1:B3', name: 'Sales' }).getStyleOptions().styleName, 'TableStyleLight9');
     });
@@ -1259,7 +1255,7 @@ describe('table lifecycle on the sheet', () => {
 
   it('a default pivot style applies to a new pivot', () => {
     withSheet((ws, wb) => {
-      wb.updateTableStyleDefaults({ pivotStyle: 'PivotStyleLight16' });
+      wb.updateTableStyleDefaults({ pivotStyleName: 'PivotStyleLight16' });
       const { pivot } = addPivot(ws, wb);
       assert.equal(pivot.getStyleOptions().styleName, 'PivotStyleLight16');
     });
@@ -1363,13 +1359,13 @@ describe('enum members', () => {
     });
   });
 
-  it('chart data reports unresolved inputs as a list whose source is a ChartRole ordinal', () => {
+  it('chart data reports unresolved inputs as a list whose role is a ChartRole ordinal', () => {
     withSheet((ws) => {
       const chart = addChart(ws);
       const data = chart.getData();
       assert.ok(Array.isArray(data.unresolved));
       for (const entry of data.unresolved) {
-        assert.ok(Object.values(f.ChartRole).includes(entry.source));
+        assert.ok(Object.values(f.ChartRole).includes(entry.role));
       }
     });
   });

@@ -91,8 +91,9 @@ function addCache(wb) {
 
 function addPivot(ws, cache, name = 'ByRegion', anchor = 'E1') {
   const pivot = ws.addPivot({ name, cacheId: cache.cacheId, anchor });
-  pivot.addField({ fieldIndex: 'Region', axis: formulon.PivotAxis.Row });
-  const amount = pivot.addField({ fieldIndex: 'Amount', axis: formulon.PivotAxis.Value });
+  pivot.setFieldAxis('Region', formulon.PivotAxis.Row);
+  pivot.setFieldAxis('Amount', formulon.PivotAxis.Value);
+  const amount = 1;
   pivot.addDataField({ name: 'Sum of Amount', fieldIndex: amount, aggregation: 0 });
   return pivot;
 }
@@ -668,9 +669,9 @@ const DRIVERS = {
       return ws;
     },
     get: (ws) => ws.getHyperlink('A1'),
-    put: (ws, record) => ws.setHyperlink('B1', record),
-    again: (ws) => ws.getHyperlink('B1'),
-    identity: ['range'],
+    // A read link carries its range, which starts at its own cell, so it goes back there.
+    put: (ws, record) => ws.setHyperlink('A1', record),
+    again: (ws) => ws.getHyperlink('A1'),
   },
   validation_update: {
     make: (ws) => {

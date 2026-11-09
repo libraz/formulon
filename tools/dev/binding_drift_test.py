@@ -857,6 +857,11 @@ class ApiConventionRuleTest(unittest.TestCase):
                 "FM_API fm_status_t fm_workbook_remove_table(fm_workbook_t* wb, size_t table_index);\n",
                 [("fm_workbook_remove_table", "table_index")],
             ),
+            "style-id": (
+                "FM_API fm_status_t fm_workbook_set_font(fm_workbook_t* wb, size_t font_index, const fm_font_t* r);\n",
+                "FM_API fm_status_t fm_workbook_set_font(fm_workbook_t* wb, uint32_t font_index, const fm_font_t* r);\n",
+                [("fm_workbook_set_font", "font_index")],
+            ),
             "id": (
                 "FM_API fm_status_t fm_workbook_get_num_fmt(const fm_workbook_t* wb, uint16_t num_fmt_id);\n",
                 "FM_API fm_status_t fm_workbook_get_num_fmt(const fm_workbook_t* wb, uint32_t num_fmt_id);\n",
@@ -1994,11 +1999,13 @@ class FacadeAddressTablesTest(unittest.TestCase):
         text = self.gen.node_scope_inc()
         self.assertIn("constexpr const char* kSheetMethods[] = {\n", text)
         self.assertIn("struct HandleMethod {\n  const char* raw;\n  const char* label;\n  int supplied;\n};\n", text)
-        self.assertIn('    {"addPivotField", "Pivot.addField", 2},\n', text)
+        self.assertIn('    {"addPivotDataField", "Pivot.addDataField", 2},\n', text)
         self.assertIn('    {"setDrawingZOrder", "Drawing.setZOrder", 2},\n', text)
         guards = _load_codegen("gen_wasm_positional_guards")
-        self.assertIn("addPivotField", guards._sheet_methods({"addPivotField", "nope"}, text))
-        self.assertEqual(guards._handle_methods({"addPivotField"}, text), {"addPivotField": ["Pivot.addField", 2]})
+        self.assertIn("addPivotDataField", guards._sheet_methods({"addPivotDataField", "nope"}, text))
+        self.assertEqual(
+            guards._handle_methods({"addPivotDataField"}, text), {"addPivotDataField": ["Pivot.addDataField", 2]}
+        )
         self.assertNotIn("evalFormula", guards.FREE_FUNCTION_GUARDS)
         self.assertIn("evaluateFormula", guards.FREE_FUNCTION_GUARDS)
 

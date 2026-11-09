@@ -101,6 +101,7 @@ struct ColorEnv {
 struct Paint {
   std::optional<ColorSpec> color;
   std::optional<std::uint32_t> alpha;
+  bool approximate = false;  ///< A solid fill whose colour `color` states only approximately, or not at all.
 };
 
 /// Colour of an `a:solidFill`; unresolvable colour kinds read as no colour.
@@ -108,8 +109,10 @@ Paint read_solid(const ColorEnv& env, const xml_node& solid_fill) {
   Paint paint;
   const xml_node clr = kid(solid_fill, "");
   if (!clr) {
+    paint.approximate = static_cast<bool>(solid_fill);
     return paint;
   }
+  paint.approximate = !drawing_color::read_exact(clr, env.remapped).has_value();
   paint.color = drawing_color::read_color(env.wb, clr, env.remapped);
   if (paint.color.has_value()) {
     if (const xml_node alpha = kid(clr, "alpha")) {
@@ -119,11 +122,23 @@ Paint read_solid(const ColorEnv& env, const xml_node& solid_fill) {
   return paint;
 }
 
+// True when `holder` states its paint with a fill element the paint records cannot carry.
+bool has_other_fill(const xml_node& holder) {
+  for (const std::string_view name : {"gradFill", "pattFill", "blipFill", "grpFill"}) {
+    if (kid(holder, name)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 ChartFill read_fill(const ColorEnv& env, const xml_node& sp_pr) {
   const Paint paint = read_solid(env, kid(sp_pr, "solidFill"));
   ChartFill fill;
   fill.color = paint.color;
   fill.alpha = paint.alpha;
+  fill.none = static_cast<bool>(kid(sp_pr, "noFill"));
+  fill.other = has_other_fill(sp_pr) || paint.approximate;
   return fill;
 }
 
@@ -143,6 +158,7 @@ ChartLine read_line(const ColorEnv& env, const xml_node& sp_pr) {
   }
   line.none = static_cast<bool>(kid(ln, "noFill"));
   const Paint paint = read_solid(env, kid(ln, "solidFill"));
+  line.other = has_other_fill(ln) || paint.approximate;
   line.color = paint.color;
   line.alpha = paint.alpha;
   if (const xml_node dash = kid(ln, "prstDash")) {
@@ -937,6 +953,14 @@ Expected<ChartModel, Error> read_chart_model(const Workbook& wb, const pugi::xml
     read_drawingml_chart(wb, root, model);
   }
   return model;
+}
+
+ChartFill read_paint_fill(const Workbook& wb, const pugi::xml_node& sp_pr) {
+  return read_fill(ColorEnv{wb}, sp_pr);
+}
+
+ChartLine read_paint_line(const Workbook& wb, const pugi::xml_node& sp_pr) {
+  return read_line(ColorEnv{wb}, sp_pr);
 }
 
 }  // namespace formulon

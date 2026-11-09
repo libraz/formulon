@@ -394,8 +394,8 @@ constexpr std::uint16_t kLastBuiltinNumFmtId = 163U;
 constexpr std::uint16_t kBuiltinNumFmtIdLimit = kLastBuiltinNumFmtId + 1U;
 
 // Returns whether `id` is a built-in number-format id in some locale or one
-// registered in `styles.num_fmts`.
-bool num_fmt_id_known(const formulon::StylesTable& styles, std::uint16_t id);
+// registered in `styles.num_fmts`; an id past the 16-bit domain is never known.
+bool num_fmt_id_known(const formulon::StylesTable& styles, std::uint32_t id);
 
 // First built-in id (ascending) whose code as `profile` renders it is `code`.
 std::optional<std::uint16_t> builtin_num_fmt_id_for_code(const formulon::StylesTable& styles,
@@ -423,7 +423,7 @@ std::optional<std::string_view> resolve_num_fmt_code(const formulon::Workbook& w
 
 // Validates a conditional-formatting rule record: sqref shape and every
 // rectangle in it, plus the `type` / `op` / `time_period` /
-// `icon_set_name` / `data_bar_axis_position` / `fm_cfvo_t::type` domains
+// `icon_set` / `data_bar_axis_position` / `fm_cfvo_t::type` / `gte` domains
 // the GUID shape of `id` and the UTF-8 of `text`. Checks that need the workbook (the
 // `dxf_id` bound) stay with the entry point.
 fm_status_t validate(const fm_cf_rule_t& rule);
@@ -445,14 +445,11 @@ fm_status_t validate(const fm_fill_t& fill);
 // A border record: every side's style domain.
 fm_status_t validate(const fm_border_t& border);
 
-// Validates a pivot field spec: required and UTF-8 strings and the `axis` domain.
-fm_status_t validate(const fm_pivot_field_spec_t& spec);
-
 // Validates a pivot data-field spec: UTF-8 strings and the
 // `aggregation` / `show_as` domains.
 fm_status_t validate(const fm_pivot_data_field_t& spec);
 
-// Validates a pivot filter spec: UTF-8 strings and the `axis` / `type` domains. The
+// Validates a pivot filter spec: UTF-8 strings and the `axis` / `kind` domains. The
 // payload-variant and data-field checks need the pivot table and stay
 // with the entry point.
 fm_status_t validate(const fm_pivot_filter_t& spec);

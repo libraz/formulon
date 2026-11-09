@@ -29,6 +29,8 @@
 #include "workbook.h"
 
 using formulon::c_api::parts::chart_blanks_as_from_c;
+using formulon::c_api::parts::chart_fill_to_c;
+using formulon::c_api::parts::chart_line_to_c;
 using formulon::c_api::parts::check_enum_domain;
 using formulon::c_api::parts::check_index;
 using formulon::c_api::parts::check_record_size;
@@ -91,11 +93,6 @@ fm_status_t begin_record(T* out) {
   return 0;
 }
 
-// The transparency percentage of an alpha in thousandths of a percent; 0 without one (its has_ flag is 0).
-double transparency_of(const std::optional<std::uint32_t>& alpha) {
-  return alpha ? 100.0 - static_cast<double>(*alpha) / 1000.0 : 0.0;
-}
-
 // Writes an optional model number (NaN when absent) as a has_ flag and its value (0 when absent).
 void put_optional(double value, std::int32_t& has, double& out) {
   has = std::isnan(value) ? 0 : 1;
@@ -113,20 +110,11 @@ fm_chart_title_t to_fm(const formulon::ChartTitle& t) {
 }
 
 fm_chart_fill_t to_fm(const formulon::ChartFill& f) {
-  return fm_chart_fill_t{chart_color_to_c(f.color), f.alpha ? 1 : 0, transparency_of(f.alpha)};
+  return chart_fill_to_c(f);
 }
 
 fm_chart_line_t to_fm(const formulon::ChartLine& l) {
-  fm_chart_line_t out{};
-  out.color = chart_color_to_c(l.color);
-  out.has_transparency_pct = l.alpha ? 1 : 0;
-  out.transparency_pct = transparency_of(l.alpha);
-  out.has_width_pt = l.width_emu ? 1 : 0;
-  out.width_pt = l.width_emu ? static_cast<double>(*l.width_emu) / 12700.0 : 0.0;
-  out.has_dash = l.dash ? 1 : 0;
-  out.dash = l.dash ? static_cast<std::int32_t>(*l.dash) : 0;
-  out.none = l.none ? 1 : 0;
-  return out;
+  return chart_line_to_c(l);
 }
 
 fm_chart_marker_t to_fm(const formulon::ChartMarker& m) {
@@ -413,10 +401,10 @@ extern "C" fm_status_t fm_chart_get_plot_at(const fm_chart_t* chart, size_t plot
   out->vary_colors = tri(p.vary_colors);
   out->has_gap_width_pct = p.gap_width ? 1 : 0;
   out->gap_width_pct = p.gap_width.value_or(0U);
-  out->has_overlap = p.overlap ? 1 : 0;
-  out->overlap = p.overlap.value_or(0);
-  out->has_hole_size = p.hole_size ? 1 : 0;
-  out->hole_size = p.hole_size.value_or(0U);
+  out->has_overlap_pct = p.overlap ? 1 : 0;
+  out->overlap_pct = p.overlap.value_or(0);
+  out->has_hole_size_pct = p.hole_size ? 1 : 0;
+  out->hole_size_pct = p.hole_size.value_or(0U);
   out->has_first_slice_angle_deg = p.first_slice_angle ? 1 : 0;
   out->first_slice_angle_deg = p.first_slice_angle.value_or(0U);
   out->axis_id_count = static_cast<std::uint32_t>(p.axis_ids.size());
@@ -691,7 +679,7 @@ extern "C" fm_status_t fm_chart_data_get_info(const fm_chart_data_t* data, fm_ch
   out->category_label_count = static_cast<std::uint32_t>(d.categories.labels.size());
   out->category_value_count = static_cast<std::uint32_t>(d.categories.values.size());
   out->category_level_count = static_cast<std::uint32_t>(d.categories.levels.size());
-  out->category_format_code = d.categories.format_code.c_str();
+  out->category_number_format = d.categories.format_code.c_str();
   out->categories_generated = d.categories.generated ? 1 : 0;
   out->title_text = opt_cstr(d.title_text);
   out->axis_title_count = static_cast<std::uint32_t>(d.axis_title_texts.size());
@@ -761,8 +749,8 @@ extern "C" fm_status_t fm_chart_data_get_series_at(const fm_chart_data_t* data, 
   out->plot_index = static_cast<std::uint32_t>(s.plot_index);
   out->series_id = s.idx;
   out->name = opt_cstr(s.name);
-  out->format_code = s.format_code.c_str();
-  out->x_format_code = s.x_format_code.c_str();
+  out->number_format = s.format_code.c_str();
+  out->x_number_format = s.x_format_code.c_str();
   out->filtered = s.filtered ? 1 : 0;
   out->point_count = static_cast<std::uint32_t>(data->points[series].values.size());
   out->has_sizes = s.sizes.empty() ? 0 : 1;
@@ -847,7 +835,7 @@ extern "C" fm_status_t fm_chart_data_get_unresolved_at(const fm_chart_data_t* da
     return rc;
   }
   out->series_id = list[idx].series_idx;
-  out->source = unresolved_role(list[idx].source);
+  out->role = unresolved_role(list[idx].source);
   out->axis_id = list[idx].axis_id;
   return 0;
 }

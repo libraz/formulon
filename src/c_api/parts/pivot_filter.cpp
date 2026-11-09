@@ -90,10 +90,10 @@ fm_status_t add_pivot_filter_impl(fm_workbook_t* wb, std::size_t sheet_index, st
   if (auto rc = resolve_pivot_mut(wb, sheet_index, pivot_index, &table); rc != 0) {
     return rc;
   }
-  const formulon::pivot::FilterType type = pivot_filter_type_from_fm(static_cast<fm_pivot_filter_kind_t>(spec->type));
+  const formulon::pivot::FilterType type = pivot_filter_type_from_fm(static_cast<fm_pivot_filter_kind_t>(spec->kind));
   const bool caption = formulon::pivot::is_caption_filter_type(type);
   const bool ranged = formulon::pivot::is_range_filter_type(type);
-  const std::string kind_detail = "type=" + std::to_string(static_cast<int>(spec->type)) +
+  const std::string kind_detail = "kind=" + std::to_string(static_cast<int>(spec->kind)) +
                                   " value_kind=" + std::to_string(static_cast<int>(spec->value_kind));
   if (formulon::pivot::is_operandless_filter_type(type)) {
     if (spec->value_kind != FM_PIVOT_FILTER_OPERAND_KIND_ABSENT) {
@@ -110,7 +110,7 @@ fm_status_t add_pivot_filter_impl(fm_workbook_t* wb, std::size_t sheet_index, st
       text_high != (spec->value_high_kind == FM_PIVOT_FILTER_OPERAND_KIND_TEXT)) {
     return invalid_argument(text_high ? "a label range takes its upper bound in value_high_text"
                                       : "value_high_text is only taken by a label range",
-                            "type=" + std::to_string(static_cast<int>(spec->type)));
+                            "kind=" + std::to_string(static_cast<int>(spec->kind)));
   }
   if (formulon::pivot::is_value_filter_type(type)) {
     if (auto rc = check_index(spec->data_field_index, table->data_fields().size(), "data_field_index"); rc != 0) {
@@ -227,7 +227,7 @@ extern "C" fm_status_t fm_sheet_get_pivot_filter_at(const fm_workbook_t* wb, std
   fm_pivot_filter_t result{};
   result.struct_size = out->struct_size;
   result.field_index = static_cast<std::uint32_t>(*field);
-  result.type = static_cast<fm_pivot_filter_kind_t>(filter.type);
+  result.kind = static_cast<fm_pivot_filter_kind_t>(filter.type);
   result.value_kind = FM_PIVOT_FILTER_OPERAND_KIND_ABSENT;
   result.value_high_kind = FM_PIVOT_FILTER_OPERAND_KIND_ABSENT;
   result.data_field_index = filter.data_field_index;

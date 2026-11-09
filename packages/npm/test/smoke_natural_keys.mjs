@@ -53,7 +53,6 @@ test('hyperlinks, people and threaded comments are read by key', async () => {
     personId: ALICE,
     created: { year: 2026, month: 1, day: 2, hour: 3, minute: 4, second: 5 },
     text: 'Check this',
-    parentId: '',
   });
   const thread = found(wb.sheet(0).getThreadedComment(THREAD));
   assert.deepEqual([thread.cell.row, thread.cell.col, thread.text], [4, 2, 'Check this']);

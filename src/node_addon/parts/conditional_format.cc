@@ -1,7 +1,6 @@
 // Conditional-formatting bindings: the `evaluateCfRange` evaluator plus the
 // read / mutate surface for per-sheet conditional-format rules.
 
-#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <string>
@@ -16,7 +15,7 @@ namespace {
 fm_cfvo_t PullCfvo(CheckedSpecReader& reader, const Napi::Object& spec, formulon::c_api::BorrowedStringArena* strings) {
   fm_cfvo_t out{};
   out.type = reader.I32(spec, "type", 0);
-  out.gte = reader.Bool(spec, "gte", true) ? 1 : 0;
+  out.gte = reader.Tristate(spec, "gte");
   std::string value;
   if (reader.String(spec, "value", &value)) {
     out.value = strings->emplace(value);
@@ -27,7 +26,7 @@ fm_cfvo_t PullCfvo(CheckedSpecReader& reader, const Napi::Object& spec, formulon
 Napi::Object CfvoToJs(Napi::Env env, const fm_cfvo_t& cfvo) {
   Napi::Object out = Napi::Object::New(env);
   out.Set("type", Napi::Number::New(env, static_cast<uint32_t>(cfvo.type)));
-  out.Set("gte", Napi::Boolean::New(env, cfvo.gte != 0));
+  out.Set("gte", Napi::Boolean::New(env, cfvo.gte != FM_TRISTATE_FALSE));
   out.Set("value", cfvo.value != nullptr ? Napi::Value(Napi::String::New(env, cfvo.value)) : env.Null());
   return out;
 }
@@ -47,12 +46,21 @@ Napi::Value Workbook::EvaluateCfRange(const Napi::CallbackInfo& info) {
   if (!ReadCellRect(reader, ArgObject(info, 1), &rect)) {
     return env.Undefined();
   }
-  // NaN is "no today": `timePeriod` rules then match nothing.
-  const double today_serial = ArgDouble(info, 2);
-  const int32_t has_today_serial = std::isnan(today_serial) ? 0 : 1;
+  // `options` is `{ timePeriodRules?, todaySerial? }`; an omitted key is the C default: `timePeriod` rules on,
+  // measured from the pinned clock, else today.
+  fm_cf_range_evaluation_spec_t options = FM_STRUCT_INIT(fm_cf_range_evaluation_spec_t);
+  Napi::Object in;
+  if (reader.Object(info[2], "options", &in)) {
+    options.time_period_rules = reader.Tristate(in, "timePeriodRules");
+    bool has_today = false;
+    options.today_serial = reader.Double(in, "todaySerial", 0.0, &has_today);
+    options.has_today_serial = has_today ? 1 : 0;
+  }
+  if (!reader.ok()) {
+    return env.Undefined();
+  }
   fm_cf_results_t* results = nullptr;
-  fm_status_t rc = fm_sheet_evaluate_cf_range(handle_, sheet, &rect, has_today_serial,
-                                              has_today_serial != 0 ? today_serial : 0.0, &results);
+  fm_status_t rc = fm_sheet_evaluate_cf_range(handle_, sheet, &rect, &options, &results);
   if (rc != 0) {
     return ThrowStatus(env, rc);
   }
@@ -162,7 +170,7 @@ Napi::Object CfRuleToJs(Napi::Env env, const fm_cf_rule_t& rule) {
   item.Set("iconSet", env.Null());
   if (rule.has_icon_set != 0) {
     Napi::Object icon_set = Napi::Object::New(env);
-    icon_set.Set("name", Napi::Number::New(env, static_cast<uint32_t>(rule.icon_set_name)));
+    icon_set.Set("name", Napi::Number::New(env, static_cast<uint32_t>(rule.icon_set)));
     Napi::Array thresholds = Napi::Array::New(env, rule.icon_set_threshold_count);
     for (uint32_t j = 0; j < rule.icon_set_threshold_count; ++j) {
       thresholds.Set(j, CfvoToJs(env, rule.icon_set_thresholds[j]));
@@ -201,13 +209,7 @@ Napi::Value Workbook::GetCfRuleCount(const Napi::CallbackInfo& info) {
 }
 
 Napi::Value Workbook::GetCfRule(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return ThrowInvalidHandle(env);
-  }
-  fm_cf_rule_t rule = FM_STRUCT_INIT(fm_cf_rule_t);
-  const fm_status_t rc = fm_sheet_get_cf_rule_at(handle_, ArgU32(info, 0), ArgU32(info, 1), &rule);
-  return ValueOrThrow(env, rc, rc == 0 ? Napi::Value(CfRuleToJs(env, rule)) : env.Undefined());
+  return SheetKeyedItemResult(info, handle_, &fm_sheet_get_cf_rule_at, &fm_sheet_get_cf_rule, &CfRuleToJs, "cfRule");
 }
 
 Napi::Value Workbook::AddConditionalFormat(const Napi::CallbackInfo& info) {
@@ -405,7 +407,7 @@ Napi::Value Workbook::AddConditionalFormat(const Napi::CallbackInfo& info) {
   Napi::Object is;
   if (reader.Object(v, "iconSet", &is)) {
     rule.has_icon_set = 1;
-    rule.icon_set_name = reader.I32(is, "name", 0);
+    rule.icon_set = reader.I32(is, "name", 0);
     Napi::Array arr;
     if (reader.Array(is, "thresholds", &arr)) {
       icon_set_thresholds.reserve(arr.Length());
@@ -590,7 +592,7 @@ Napi::Value Workbook::UpdateCfRule(const Napi::CallbackInfo& info) {
   }
   Napi::Object icon_set;
   if (reader.Object(in, "iconSet", &icon_set)) {
-    patch.icon_set_name_op = PatchI32(reader, icon_set, "name", &patch.icon_set_name);
+    patch.icon_set_op = PatchI32(reader, icon_set, "name", &patch.icon_set);
     patch.icon_set_thresholds_op = cfvo_list(icon_set, "thresholds", &icon_set_thresholds);
     patch.icon_set_reverse_op = PatchBool(reader, icon_set, "reverse", &patch.icon_set_reverse);
     patch.icon_set_show_value_op = PatchBool(reader, icon_set, "showValue", &patch.icon_set_show_value);

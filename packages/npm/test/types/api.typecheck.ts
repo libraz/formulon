@@ -18,7 +18,6 @@ import createFormulon, {
   PhoneticType,
   PivotShowAsBase,
   PivotSortOrder,
-  ShapePaint,
   SlicerSortOrder,
   TableStyleElementType,
   TableTotalsRowFunction,
@@ -199,7 +198,8 @@ export function tableStyleOptions(): void {
 
 export function sheetTables(): void {
   const created: Table = sheet.addTable({ range: 'A1:B5', name: 'T', columns: ['Item', 'Qty'] });
-  sheet.addTable({ range: rect, name: 'U', styleName: '' });
+  sheet.addTable({ range: rect, name: 'U', styled: false });
+  sheet.addTable({ range: rect, name: 'V', styleName: null });
   const byIndex: Table = sheet.table(0);
   const byName: Table = sheet.table('T');
   const byHandle: Table = sheet.table(created);
@@ -220,7 +220,7 @@ export function sheetTables(): void {
 }
 
 export function slicerPatch(): void {
-  slicer.update({ caption: 'Region', style: null, columnCount: 2 });
+  slicer.update({ caption: 'Region', styleName: null, columnCount: 2 });
   slicer.update({ anchor: { fromRow: 0, fromCol: 0, toRow: 4, toCol: 4 }, description: 'd', hidden: true });
   slicer.update({ anchor: { toCol: 6 } });
   slicer.update(slicerProps);
@@ -237,10 +237,10 @@ export function slicerPatch(): void {
 export function shapePatch(): void {
   shape.update({ text: 'hi', hidden: false });
   shape.update({ name: 'Callout', description: null, anchor: { kind: AnchorKind.TwoCell, toCol: 6 } });
-  // `Default` removes the shape's own paint.
-  shape.update({ fillKind: ShapePaint.Default, lineKind: ShapePaint.Default });
-  // @ts-expect-error a shape patch has no clearable key
-  shape.update({ fillKind: null });
+  // `null` removes the shape's own paint.
+  shape.update({ fill: null, line: null });
+  // @ts-expect-error the text has no cleared form
+  shape.update({ text: null });
   shape.update({ presetGeometry: shapeProps.presetGeometry, rotationDeg: shapeProps.rotationDeg });
   // @ts-expect-error unknown key
   shape.update({ bogus: 1 });
@@ -248,12 +248,12 @@ export function shapePatch(): void {
   shape.update({ anchor: { kind: 'oneCell' } });
   // @ts-expect-error the anchor keys are nested under `anchor`
   shape.update({ anchorKind: AnchorKind.OneCell });
-  const patch: ShapePatch = { rotationDeg: 90, lineWidthPt: 1.5 };
+  const patch: ShapePatch = { rotationDeg: 90, line: { widthPt: 1.5 } };
   void patch;
   // @ts-expect-error rotation is in degrees, `rotationDeg`
   shape.update({ rotation: 90 });
-  // @ts-expect-error line width is in points, `lineWidthPt`
-  shape.update({ lineWidthEmu: 12700 });
+  // @ts-expect-error line width is in points, `line.widthPt`
+  shape.update({ line: { widthEmu: 12700 } });
   const rotation: number = shapeProps.rotationDeg;
   void rotation;
   sheet.addShape({ anchor: { fromRow: 1, fromCol: 1, toRow: 4, toCol: 4 }, presetGeometry: 'rect' });
@@ -352,7 +352,10 @@ export function pivotRefs(): void {
   const byIndex: PivotField = pivot.getField(0);
   const dataField: PivotDataField = pivot.getDataField(0);
   const filter: PivotFilter = pivot.getFilter(0);
-  const recordValue: NativeValue = cache.getRecordValue(0, 1);
+  const recordValue: PivotCacheValue = cache.getRecordValue(0, 1);
+  // @ts-expect-error a record value reads as `{ value, isDate }`
+  const bareRecordValue: NativeValue = cache.getRecordValue(0, 'Item');
+  void bareRecordValue;
   const ref: PivotCacheRef = cache;
   const numberRef: PivotCacheRef = 3;
   const fieldRef: PivotFieldRef = 'Item';
@@ -622,8 +625,8 @@ export function colors(): void {
   const color: Color = font.color;
   // @ts-expect-error the ARGB sibling fields are gone
   void font.colorArgb;
-  shape.update({ fillKind: 1, fillColor: '#336699' });
-  const fill: Color | null = shapeProps.fillColor;
+  shape.update({ fill: { color: '#336699' } });
+  const fill: Color | null | undefined = shapeProps.fill?.color;
   void [tab, color, fill];
 }
 
@@ -707,7 +710,9 @@ export function sheetProtection(): void {
   // @ts-expect-error absent is `null`, not a string
   const rangeHashText: string = range.legacyPasswordHash;
   const book = wb.getWorkbookProtection();
-  const bookHash: string | null = book.workbookLegacyPasswordHash;
+  // @ts-expect-error a workbook without `<workbookProtection>` reads `null`
+  void book.workbookLegacyPasswordHash;
+  const bookHash: string | null = book?.workbookLegacyPasswordHash ?? null;
   void [rangeHash, rangeHashText, bookHash];
 }
 
@@ -773,7 +778,7 @@ export function cfRuleUpdates(): void {
   void [scaleInput, barInput, iconsInput, rule, plain, others, visual];
   const sparklineId: SparklineGroupId = sheet.addSparklineGroup({ sparklines: [] });
   const groupRef: SparklineGroupRef = sparklineId;
-  sheet.updateSparklineGroup(groupRef, { lineWeight: 2 });
+  sheet.updateSparklineGroup(groupRef, { lineWidthPt: 2 });
   sheet.updateSparklineGroup(0, { manualMin: null });
   sheet.removeSparklineGroup(sparklineId);
   sheet.removeSparklineGroup(0);
@@ -868,12 +873,14 @@ export function hyperlinks(): void {
   sheet.setHyperlink('A1', { target: 'https://example.com' });
   sheet.setHyperlink(0, 0, { target: null, location: 'Sheet2!A1' });
   sheet.setHyperlink('A1', null);
-  sheet.setHyperlinkRange('A1:B2', { target: 'https://example.com' });
-  sheet.setHyperlinkRange('A1:B2', null);
+  sheet.setHyperlink('A1', { target: 'https://example.com', range: 'A1:B2' });
+  sheet.setHyperlink(0, 0, { target: 'https://example.com', range: null });
   // @ts-expect-error a hyperlink is set with `setHyperlink`
   sheet.addHyperlink('A1', { target: 'https://example.com' });
-  // @ts-expect-error a hyperlink range is set with `setHyperlinkRange`
-  sheet.addHyperlinkRange('A1:B2', { target: 'https://example.com' });
+  // @ts-expect-error a hyperlink range is the `range` key of `setHyperlink`
+  sheet.setHyperlinkRange('A1:B2', { target: 'https://example.com' });
+  // @ts-expect-error `setHyperlink(..., null)` removes a hyperlink
+  sheet.removeHyperlink('A1');
 }
 
 export function updateMembers(): void {
@@ -885,7 +892,7 @@ export function updateMembers(): void {
   sheet.updateFormatDefaults({ defaultColWidthChars: 10, defaultRowHeightPt: null, baseColWidthChars: 8 });
   sheet.updateCellFormat('A1:C1', { font: { bold: true, sizePt: 12 }, fill: { foreground: '#FF0000' } });
   wb.updateIterative({ enabled: true });
-  wb.updateTableStyleDefaults({ tableStyle: 'TableStyleLight9' });
+  wb.updateTableStyleDefaults({ tableStyleName: 'TableStyleLight9' });
   const setup = sheet.getPageSetup();
   const stated: boolean = setup.scalePctStated;
   const margins = sheet.getPageMargins();
@@ -1011,7 +1018,7 @@ export function chartMembers(chart: Chart): void {
   // @ts-expect-error renamed to `Extended`
   void ChartPlotType.Chartex;
   const data: ChartData = chart.getData();
-  const role: ChartRole = data.unresolved[0].source;
+  const role: ChartRole = data.unresolved[0].role;
   const titled: boolean = role === ChartRole.AxisTitle;
   const format: string = data.series[0].numberFormat;
   void [titled, format, data.categories.numberFormat];
@@ -1023,8 +1030,10 @@ export function chartMembers(chart: Chart): void {
   void [seriesId, unresolvedId];
   // @ts-expect-error the series key is `seriesId`
   void data.series[0].index;
-  // @ts-expect-error the source of an unresolved entry is a `ChartRole`
-  const sourceText: string = data.unresolved[0].source;
+  // @ts-expect-error the role of an unresolved entry is a `ChartRole`
+  const sourceText: string = data.unresolved[0].role;
+  // @ts-expect-error renamed to `role`
+  void data.unresolved[0].source;
   void sourceText;
 }
 
@@ -1325,18 +1334,24 @@ export function writerUnions(): void {
 }
 
 export function pivotFilterOperands(): void {
-  pivot.addFilter({ fieldIndex: 'Item', type: PivotFilterKind.ValueTopCount, value: 10 });
-  pivot.addFilter({ fieldIndex: 'Item', type: PivotFilterKind.LabelContains, value: 'a' });
-  pivot.addFilter({ fieldIndex: 'Item', type: PivotFilterKind.ValueBetween, value: 1, valueHigh: 9 });
-  pivot.addFilter({ fieldIndex: 'Item', type: PivotFilterKind.LabelBetween, value: 'a', valueHigh: null });
+  pivot.addFilter({ fieldIndex: 'Item', kind: PivotFilterKind.ValueTopCount, value: 10 });
+  pivot.addFilter({ fieldIndex: 'Item', kind: PivotFilterKind.LabelContains, value: 'a' });
+  pivot.addFilter({ fieldIndex: 'Item', kind: PivotFilterKind.ValueBetween, value: 1, valueHigh: 9 });
+  pivot.addFilter({ fieldIndex: 'Item', kind: PivotFilterKind.LabelBetween, value: 'a', valueHigh: null });
   // @ts-expect-error the operand discriminator and per-kind payload fields are gone
-  pivot.addFilter({ fieldIndex: 'Item', type: PivotFilterKind.ValueTopCount, valueKind: 0, valueInt: 10 });
+  pivot.addFilter({ fieldIndex: 'Item', kind: PivotFilterKind.ValueTopCount, valueKind: 0, valueInt: 10 });
   // @ts-expect-error the text payload is `value`
-  pivot.addFilter({ fieldIndex: 'Item', type: PivotFilterKind.LabelContains, valueText: 'a' });
-  pivot.addFilter({ fieldIndex: 2, type: PivotFilterKind.LabelContains, value: 'a' });
+  pivot.addFilter({ fieldIndex: 'Item', kind: PivotFilterKind.LabelContains, valueText: 'a' });
+  pivot.addFilter({ fieldIndex: 2, kind: PivotFilterKind.LabelContains, value: 'a' });
   // @ts-expect-error the filter's axis is its field's
-  pivot.addFilter({ axis: 0, fieldIndex: 2, type: PivotFilterKind.LabelContains, value: 'a' });
+  pivot.addFilter({ axis: 0, fieldIndex: 2, kind: PivotFilterKind.LabelContains, value: 'a' });
+  // @ts-expect-error the filter kind is `kind`
+  pivot.addFilter({ fieldIndex: 'Item', type: PivotFilterKind.LabelContains, value: 'a' });
   const filter = pivot.listFilters()[0];
+  const filterKind: PivotFilterKind = filter.kind;
+  // @ts-expect-error the filter kind is `kind`
+  void filter.type;
+  void filterKind;
   const filterField: number = filter.fieldIndex;
   void filterField;
   const value: number | string | null = filter.value;
@@ -1377,7 +1392,7 @@ import {
   type CfValueObject,
   type ChartFilter,
   type ChartFilterInput,
-  type ChartInsertInput,
+  type ChartInput,
   type ChartPointPatch,
   type ChartProperties,
   type ChartSource,
@@ -1399,7 +1414,6 @@ import {
   type PivotDataField,
   type PivotDataFieldInput,
   type PivotField,
-  type PivotFieldInput,
   type PivotFieldPatch,
   type PivotWorksheetSource,
   type PivotWorksheetSourceInput,
@@ -1554,10 +1568,8 @@ export function writableOnlyInputs(): void {
 }
 
 export function requiredInputKeys(): void {
-  // @ts-expect-error the pivot axis is required
-  const noAxis: PivotFieldInput = { fieldIndex: 'Product' };
   sheet.addSlicer(table, 0, { anchor: { fromRow: 1, fromCol: 3, toRow: 9, toCol: 5 } });
-  void [noAxis, PivotAxis.Row, PivotAggregation.Sum];
+  void [PivotAxis.Row, PivotAggregation.Sum];
 }
 
 export function renamedReadFields(): void {
@@ -1602,7 +1614,7 @@ export function renamedReadFields(): void {
 }
 
 export function chartVocabulary(): void {
-  const input: ChartInsertInput = { type: ChartPlotType.Bar, barDirection: ChartBarDirection.Bar, range: 'Sheet1!A1:B3' };
+  const input: ChartInput = { type: ChartPlotType.Bar, barDirection: ChartBarDirection.Bar, range: 'Sheet1!A1:B3' };
   sheet.addChart(input);
   sheet.addChart({ type: ChartPlotType.Line, range: sheetRect });
   chart.setType(0, ChartPlotType.Bar, { barDirection: ChartBarDirection.Bar });
@@ -1637,7 +1649,7 @@ export function patchClearableKeys(): void {
   sheet.updateView({ zoomScale: null });
   // @ts-expect-error a table patch has no clearable key
   table.update({ headerRow: null });
-  slicer.update({ style: null });
+  slicer.update({ styleName: null });
   pivot.updateField(0, { customName: null, numberFormat: null, sortByField: null });
   pivot.updateField(0, { showDetail: false, sortOrder: 1 });
   // @ts-expect-error a field flag has no cleared form
@@ -1672,7 +1684,13 @@ export function matchNarrowing(): void {
     void [bar.lengthPct, bar.isNegative, bar.gradient, bar.direction, border];
   } else if (match.kind === CfMatchKind.IconSet) {
     const icon: CfMatchIcon = match.icon;
-    void [icon.setName, icon.index];
+    const iconSet: IconSetName = icon.iconSet;
+    const iconIndex: number = icon.iconIndex;
+    // @ts-expect-error the set is `iconSet`
+    void icon.setName;
+    // @ts-expect-error the position is `iconIndex`
+    void icon.index;
+    void [iconSet, iconIndex];
   } else if (match.kind === CfMatchKind.ColorScale) {
     const color: import('@libraz/formulon').Color = match.color;
     void color;
@@ -1772,4 +1790,205 @@ export function returnedKeysAndPageOrder(): void {
   // @ts-expect-error the locale error names are read through getLocaleFacts
   void formulon.listLocaleErrorNames;
   void [protectedName, merged, topLeft, personId, itemIndex, pageOrder, column, barColumn];
+}
+
+import {
+  CellShift,
+  PIVOT_VALUES_FIELD,
+  PivotCellKind,
+  WorkbookFormat,
+  type NumberFormat,
+  type PivotCacheValue,
+} from '@libraz/formulon';
+
+export function insertDeleteCells(): void {
+  sheet.insertCells('B2:C3', CellShift.Down);
+  sheet.insertCells(dateRect, CellShift.Right);
+  sheet.deleteCells('B2:C3', CellShift.Up);
+  sheet.deleteCells(dateRect, formulon.CellShift.Left);
+  const left: 3 = CellShift.Left;
+  const shift: CellShift = 2;
+  // @ts-expect-error the shift is a CellShift ordinal
+  sheet.insertCells('B2', 4);
+  // @ts-expect-error the shift is required
+  sheet.deleteCells('B2');
+  void [left, shift];
+}
+
+export function keyedSheetReads(): void {
+  const rule: ConditionalFormat | null = sheet.getCfRule(0);
+  const byRuleId: ConditionalFormat | null = sheet.getCfRule(sheet.listCfRules()[0].id);
+  const validation: DataValidation | null = sheet.getValidation(sheet.listValidations()[0].id);
+  const range: ProtectedRange | null = sheet.getProtectedRange('Edit');
+  const group: SparklineGroup | null = sheet.getSparklineGroup(0);
+  // @ts-expect-error an absent rule reads `null`
+  const required: ConditionalFormat = sheet.getCfRule(0);
+  void [rule, byRuleId, validation, range, group, required];
+}
+
+export function workbookFormatAndStyleTables(): void {
+  const xlsx: 0 = WorkbookFormat.Xlsx;
+  const xlsb: 1 = WorkbookFormat.Xlsb;
+  wb.save(WorkbookFormat.Xlsb);
+  wb.saveWithDiagnostics(formulon.WorkbookFormat.Xlsx);
+  // @ts-expect-error the format has no unknown member
+  void WorkbookFormat.Unknown;
+  // @ts-expect-error the ordinals are 0 and 1
+  wb.save(2);
+  const style: CellStyle = wb.getCellStyle('Normal')!;
+  const level: number = style.outlineLevel;
+  // @ts-expect-error the outline level is `outlineLevel`
+  void style.iLevel;
+  wb.setCellStyle({ name: 'RowLevel_1', builtinId: 1, outlineLevel: 1, hidden: true, customBuiltin: false });
+  // @ts-expect-error the outline level is `outlineLevel`
+  wb.setCellStyle({ name: 'RowLevel_1', iLevel: 1 });
+  wb.ooxml.setCellStyleXf(0, wb.ooxml.getCellStyleXf(0));
+  const formats: readonly NumberFormat[] = wb.ooxml.listNumberFormats();
+  const firstId: number = formats[0].numFmtId;
+  const firstCode: string = formats[0].numberFormat;
+  void [xlsx, xlsb, level, firstId, firstCode];
+}
+
+export function pivotCacheAndFieldRefs(): void {
+  const owning: PivotCache = pivot.cache();
+  // @ts-expect-error the cache handle is `cache()`
+  pivot.getCache();
+  // @ts-expect-error a pivot has one field per cache field; place it with `setFieldAxis`
+  pivot.addField({ fieldIndex: 'Product', axis: PivotAxis.Row });
+  pivot.setFieldAxis('Product', PivotAxis.Row);
+  pivot.setRowFieldOrder(['Product', PIVOT_VALUES_FIELD]);
+  pivot.setColumnFieldOrder([1, 'Region']);
+  pivot.setPageFieldOrder(['Year']);
+  pivot.addDataField({ fieldIndex: 'Sales', showAsBaseField: 'Region' });
+  owning.setCalculatedFieldFormula('Margin', '=Sales-Cost');
+  owning.removeCalculatedField('Margin');
+  owning.addCalculatedItem('Region', 'Both', "=East+West");
+  const shared: readonly PivotCacheValue[] = owning.listFieldSharedItems('Region');
+  const isDate: boolean = shared[0].isDate;
+  owning.addFieldSharedItem('Region', 'North');
+  owning.clearFieldSharedItems('Region');
+  const cell: PivotCacheValue = owning.getRecordValue(0, 'Region');
+  owning.setRecordValue(0, 'Region', 'South');
+  const columnLabel: 2 = PivotCellKind.ColumnLabel;
+  const columnSubtotal: 5 = PivotCellKind.ColumnSubtotal;
+  // @ts-expect-error the member is spelled out
+  void PivotCellKind.ColLabel;
+  // @ts-expect-error the member is spelled out
+  void PivotCellKind.ColSubtotal;
+  void [isDate, cell, columnLabel, columnSubtotal];
+}
+
+export function emptyStringsAreNotClears(): void {
+  table.setColumnTotals(0, { totalsRowLabel: null, totalsRowFormula: null });
+  wb.updateTableStyleDefaults({ tableStyleName: null, pivotStyleName: 'PivotStyleLight16' });
+  sheet.addThreadedComment({ text: 't', personId: 'p', parentId: null });
+}
+
+import {
+  type ChartFill,
+  type ChartLine,
+  type ImageInfo,
+  type Mention,
+  type MentionInput,
+  type PictureProperties,
+  type SheetComment,
+} from '@libraz/formulon';
+
+declare const pictureProps: PictureProperties;
+
+export function commentsPeopleAndLinks(): void {
+  const generated: string = wb.addPerson({ displayName: 'A' });
+  wb.addPerson({ id: '{00000000-0000-4000-8000-000000000002}', displayName: 'B', userId: null, providerId: null });
+  const userId: string | null = person.userId;
+  const providerId: string | null = person.providerId;
+  // @ts-expect-error a display name is required
+  wb.addPerson({ id: '{00000000-0000-4000-8000-000000000003}' });
+  sheet.setComment('A1', { text: 'note' });
+  sheet.setComment('A1', null);
+  sheet.setComment(0, 0, null);
+  // @ts-expect-error `setComment(..., null)` removes a note
+  sheet.removeComment('A1');
+  const noted: SheetComment = sheet.listComments()[0];
+  const notedCell: CellAddress = noted.cell;
+  // @ts-expect-error the anchor is `cell`
+  void noted.row;
+  sheet.setCellPhoneticProperties('A1', null);
+  sheet.setCellPhoneticProperties(0, 0, null);
+  const mentionIn: MentionInput = { personId: generated, start: 0, end: 2 };
+  sheet.addThreadedComment({ text: '@A hi', personId: generated, mentions: [mentionIn] });
+  sheet.updateThreadedComment(threaded.id, { mentions: threaded.mentions });
+  const mention: Mention = threaded.mentions[0];
+  const mentionEnd: number = mention.end;
+  // @ts-expect-error a mention is a `[start, end)` span
+  void mention.length;
+  // @ts-expect-error a mention is a `[start, end)` span
+  sheet.addThreadedComment({ text: 't', personId: generated, mentions: [{ personId: generated, start: 0, length: 2 }] });
+  void [userId, providerId, notedCell, mentionEnd];
+}
+
+export function drawingPaintAndUnits(): void {
+  const shapeFill: ChartFill | null = shapeProps.fill;
+  const shapeLine: ChartLine | null = shapeProps.line;
+  const noFill: boolean | undefined = shapeFill?.none;
+  const otherPaint: boolean | undefined = shapeLine?.other;
+  sheet.addShape({ anchor: { widthEmu: 9525, heightEmu: 9525 }, fill: { none: true }, line: { color: '#FF0000', widthPt: 1 } });
+  shape.update({ fill: { color: '#FF0000', transparencyPct: 50 }, line: { none: true, dash: null } });
+  if (shapeProps.fill !== null) shape.update({ fill: shapeProps.fill });
+  // @ts-expect-error the flat paint keys became `fill` / `line`
+  shape.update({ fillKind: 1 });
+  // @ts-expect-error the flat paint keys became `fill` / `line`
+  void shapeProps.lineWidthPt;
+  // @ts-expect-error the paint enum is gone
+  void formulon.ShapePaint;
+  const series = chartProps.plots[0].series[0];
+  const seriesFill: ChartFill | null = series.fill;
+  const markerLine: ChartLine | null | undefined = series.marker?.line;
+  chart.updateSeries(0, series.seriesId, { fill: null, line: null, marker: { fill: null, line: null } });
+  chart.updatePoint(0, series.seriesId, 0, { fill: { none: true }, line: null });
+  // @ts-expect-error `other` is read only
+  chart.updateSeries(0, series.seriesId, { fill: { other: true } });
+  const plot = chartProps.plots[0];
+  const overlapPct: number | null = plot.overlapPct;
+  const holeSizePct: number | null = plot.holeSizePct;
+  chart.updatePlot(0, { overlapPct: 100, holeSizePct: 50 });
+  // @ts-expect-error renamed to `overlapPct`
+  void plot.overlap;
+  // @ts-expect-error renamed to `holeSizePct`
+  chart.updatePlot(0, { holeSize: 50 });
+  const angleDeg: number | undefined = wb.ooxml.getFill(0).gradient?.angleDeg;
+  wb.ooxml.addFill({ gradient: { angleDeg: 90 } });
+  // @ts-expect-error renamed to `angleDeg`
+  wb.ooxml.addFill({ gradient: { degree: 90 } });
+  const lineWidthPt: number = sparklineGroup.lineWidthPt;
+  // @ts-expect-error renamed to `lineWidthPt`
+  void sparklineGroup.lineWeight;
+  const rowHeightPt: number = slicerProps.rowHeightPt;
+  const slicerStyle: string | null = slicerProps.styleName;
+  slicer.update({ rowHeightPt: 19, styleName: 'SlicerStyleLight1' });
+  // @ts-expect-error the row height is in points, `rowHeightPt`
+  slicer.update({ rowHeightEmu: 241300 });
+  // @ts-expect-error renamed to `styleName`
+  void slicerProps.style;
+  const defaults = wb.getTableStyleDefaults();
+  const defaultTableStyle: string | null = defaults.tableStyleName;
+  // @ts-expect-error renamed to `pivotStyleName`
+  void defaults.pivotStyle;
+  const asImage: ImageInfo = pictureProps;
+  const pictureBytes: Uint8Array = pictureProps.bytes;
+  void [noFill, otherPaint, seriesFill, markerLine, overlapPct, holeSizePct, angleDeg, lineWidthPt];
+  void [rowHeightPt, slicerStyle, defaultTableStyle, asImage, pictureBytes];
+}
+
+export function chartInputPlacement(): void {
+  const input: ChartInput = {
+    type: ChartPlotType.Bar,
+    range: 'Sheet1!A1:B3',
+    name: 'Sales',
+    description: 'd',
+    hidden: false,
+    anchor: { fromRow: 1, fromCol: 1, toRow: 10, toCol: 6 },
+  };
+  sheet.addChart(input);
+  // @ts-expect-error the placement keys are flat
+  sheet.addChart({ type: ChartPlotType.Bar, range: 'Sheet1!A1:B3', placement: { name: 'Sales' } });
 }

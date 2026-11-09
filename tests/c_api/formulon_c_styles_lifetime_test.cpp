@@ -27,20 +27,20 @@ TEST(FormulonCApiStyles, CreateEmptySeedsReservedStyleSlots) {
   fm_font_t font{};
   font.name = "Arial";
   font.size_pt = 12.0;
-  std::size_t font_index = 0;
+  std::uint32_t font_index = 0;
   ASSERT_EQ(fm_workbook_add_font(wb.handle, &font, &font_index), 0);
   EXPECT_GT(font_index, 0U);
 
   fm_fill_t fill{};
   fill.pattern = 1U; /* solid */
   fill.foreground = RgbColor(0xFFFF0000U);
-  std::size_t fill_index = 0;
+  std::uint32_t fill_index = 0;
   ASSERT_EQ(fm_workbook_add_fill(wb.handle, &fill, &fill_index), 0);
   EXPECT_GT(fill_index, 1U);
 
   fm_border_t border{};
   border.left.style = 1U; /* thin */
-  std::size_t border_index = 0;
+  std::uint32_t border_index = 0;
   ASSERT_EQ(fm_workbook_add_border(wb.handle, &border, &border_index), 0);
   EXPECT_GT(border_index, 0U);
 
@@ -53,7 +53,7 @@ TEST(FormulonCApiStyles, CreateEmptySeedsReservedStyleSlots) {
   EXPECT_GT(xf_index, 0U);
 
   BufferGuard saved;
-  ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0);
+  ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0);
   const std::string styles_xml = ExtractStylesXml(saved);
   EXPECT_NE(styles_xml.find("gray125"), std::string::npos);
   EXPECT_NE(styles_xml.find("name=\"Normal\""), std::string::npos);
@@ -81,7 +81,7 @@ TEST(FormulonCApiStyles, DefaultFontDeclaresWhatAnUnstyledCellSavesAs) {
   fm_font_t appended{};
   appended.name = "游ゴシック";
   appended.size_pt = 11.0;
-  std::size_t appended_index = 0;
+  std::uint32_t appended_index = 0;
   ASSERT_EQ(fm_workbook_add_font(wb.handle, &appended, &appended_index), 0);
   EXPECT_GT(appended_index, 0U);
 
@@ -101,7 +101,7 @@ TEST(FormulonCApiStyles, DefaultFontDeclaresWhatAnUnstyledCellSavesAs) {
   EXPECT_EQ(read_back.charset, 128U);
 
   BufferGuard saved;
-  ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0);
+  ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0);
   const std::string styles_xml = ExtractStylesXml(saved);
   const std::size_t fonts_begin = styles_xml.find("<fonts");
   ASSERT_NE(fonts_begin, std::string::npos);
@@ -121,7 +121,7 @@ TEST(FormulonCApiStyles, SetFontOverwritesInPlaceAndRejectsAnAbsentIndex) {
   fm_font_t added{};
   added.name = "Meiryo";
   added.size_pt = 12.0;
-  std::size_t index = 0;
+  std::uint32_t index = 0;
   ASSERT_EQ(fm_workbook_add_font(wb.handle, &added, &index), 0);
   ASSERT_GT(index, 0U);
 
@@ -140,7 +140,7 @@ TEST(FormulonCApiStyles, SetFontOverwritesInPlaceAndRejectsAnAbsentIndex) {
   std::size_t count = 0;
   ASSERT_EQ(fm_workbook_get_font_count(wb.handle, &count), 0);
   EXPECT_EQ(count, index + 1U);
-  EXPECT_NE(fm_workbook_set_font(wb.handle, count, &replacement), 0);
+  EXPECT_NE(fm_workbook_set_font(wb.handle, static_cast<std::uint32_t>(count), &replacement), 0);
   ASSERT_EQ(fm_workbook_get_font_count(wb.handle, &count), 0);
   EXPECT_EQ(count, index + 1U);
 
@@ -169,7 +169,7 @@ TEST(FormulonCApiStyles, FontSchemeSurvivesAReadModifyWriteThroughTheAbi) {
   ASSERT_EQ(fm_workbook_set_font(wb.handle, 0, &read_back), 0);
 
   BufferGuard saved;
-  ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0);
+  ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0);
   const std::string styles_xml = ExtractStylesXml(saved);
   EXPECT_NE(styles_xml.find("<charset val=\"128\"/><scheme val=\"minor\"/>"), std::string::npos);
 
@@ -180,7 +180,7 @@ TEST(FormulonCApiStyles, FontSchemeSurvivesAReadModifyWriteThroughTheAbi) {
   unlinked.size_pt = 12.0;
   unlinked.has_charset = 1;
   unlinked.charset = 128;
-  std::size_t unlinked_index = 0;
+  std::uint32_t unlinked_index = 0;
   ASSERT_EQ(fm_workbook_add_font(wb.handle, &unlinked, &unlinked_index), 0);
   EXPECT_GT(unlinked_index, 0U);
 }

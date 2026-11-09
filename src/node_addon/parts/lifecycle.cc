@@ -37,9 +37,14 @@ Napi::Value SavedBytesOrThrow(Napi::Env env, fm_status_t rc, uint8_t* buf, std::
   return TakeSavedBytes(env, buf, len);
 }
 
-// True when the optional `format` at `info[0]` was omitted.
-bool FormatOmitted(const Napi::CallbackInfo& info) {
-  return info.Length() == 0 || info[0].IsUndefined();
+// The `WorkbookFormat` ordinal at `info[0]`, `Xlsx` when omitted. The guard admits any uint32; an ordinal past
+// the enum, one beyond the int32 range included, reaches the C call as an invalid one.
+int32_t FormatArg(const Napi::CallbackInfo& info) {
+  if (info.Length() == 0 || info[0].IsUndefined()) {
+    return static_cast<int32_t>(FM_WORKBOOK_FORMAT_XLSX);
+  }
+  const uint32_t ordinal = Workbook::ArgU32(info, 0);
+  return ordinal > static_cast<uint32_t>(std::numeric_limits<int32_t>::max()) ? -1 : static_cast<int32_t>(ordinal);
 }
 
 // Reads `threadCount`: a non-number is a TypeError, a fractional, non-finite
@@ -458,8 +463,7 @@ Napi::Value Workbook::Save(const Napi::CallbackInfo& info) {
   }
   uint8_t* buf = nullptr;
   std::size_t len = 0;
-  const fm_status_t rc = FormatOmitted(info) ? fm_workbook_save(handle_, &buf, &len)
-                                             : fm_workbook_save_as(handle_, ArgI32(info, 0), &buf, &len);
+  const fm_status_t rc = fm_workbook_save(handle_, FormatArg(info), &buf, &len);
   return SavedBytesOrThrow(env, rc, buf, len);
 }
 
@@ -468,7 +472,7 @@ Napi::Value Workbook::SaveWithDiagnostics(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return ThrowInvalidHandle(env);
   }
-  const int32_t format = FormatOmitted(info) ? static_cast<int32_t>(FM_WORKBOOK_FORMAT_XLSX) : ArgI32(info, 0);
+  const int32_t format = FormatArg(info);
   uint8_t* buf = nullptr;
   std::size_t len = 0;
   fm_save_diagnostics_info_t d = FM_STRUCT_INIT(fm_save_diagnostics_info_t);

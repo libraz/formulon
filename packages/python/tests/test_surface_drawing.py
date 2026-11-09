@@ -10,7 +10,7 @@ import zlib
 from formulon import (
     AnchorEditAs,
     AnchorKind,
-    ChartInsertInput,
+    ChartInput,
     ChartPlotType,
     DrawingAnchor,
     DrawingAnchorInput,
@@ -136,7 +136,7 @@ class DrawingImageTests(unittest.TestCase):
             ws.set_number(1, 0, 1.0)
             pic = ws.add_picture(_png(2, 2))
             shape = ws.add_shape(ShapeInput(anchor=DrawingAnchorInput(from_row=3, to_row=6, to_col=3)))
-            chart = ws.add_chart(ChartInsertInput(type=ChartPlotType.BAR, range="A1:A2"))
+            chart = ws.add_chart(ChartInput(type=ChartPlotType.BAR, range="A1:A2"))
             self.assertEqual(
                 [d.object_id for d in ws.list_drawings()], [pic.object_id, shape.object_id, chart.object_id]
             )

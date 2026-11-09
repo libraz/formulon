@@ -82,8 +82,9 @@ function addCache(wb, sourceSheet) {
 // A pivot of `cache` on `sheet` anchored at (row, col): Region on rows, Sum of Amount as the data field.
 function addPivot(formulon, sheet, cache, name, anchorRow, anchorCol) {
   const pivot = sheet.addPivot({ name, cacheId: cache.cacheId, anchor: { row: anchorRow, col: anchorCol } });
-  pivot.addField({ fieldIndex: 'Region', axis: formulon.PivotAxis.Row });
-  const amount = pivot.addField({ fieldIndex: 'Amount', axis: formulon.PivotAxis.Value });
+  pivot.setFieldAxis('Region', formulon.PivotAxis.Row);
+  pivot.setFieldAxis('Amount', formulon.PivotAxis.Value);
+  const amount = 1;
   pivot.addDataField({ name: 'Sum of Amount', fieldIndex: amount, aggregation: 0 });
   return { pivot, amount };
 }
@@ -136,7 +137,7 @@ test('identity 1: every way to reach one target returns the same handle', async 
     assert.equal(ws.pivot(0), pivot);
     assert.equal(ws.pivot(pivot), pivot);
     assert.equal(ws.listPivots()[0], pivot);
-    assert.equal(pivot.getCache(), cache);
+    assert.equal(pivot.cache(), cache);
     assert.equal(wb.pivotCache(cache.cacheId), cache);
     assert.equal(wb.pivotCache(cache), cache);
     assert.equal(wb.listPivotCaches()[0], cache);
@@ -204,7 +205,7 @@ test('identity 3: the handle of a removed target throws NotFound', async () => {
     ws.removePivot(pivot);
     expectCode(() => pivot.name, f.StatusCode.NotFound);
     expectCode(() => pivot.getProperties(), f.StatusCode.NotFound);
-    expectCode(() => pivot.addField({ fieldIndex: 'Region', axis: f.PivotAxis.Row }), f.StatusCode.NotFound);
+    expectCode(() => pivot.setFieldAxis('Region', f.PivotAxis.Row), f.StatusCode.NotFound);
     expectCode(() => ws.pivot('P1'), f.StatusCode.NotFound);
 
     const chart = addChart(f, ws);
@@ -275,7 +276,7 @@ test('identity 6: removing a source sheet orphans the pivots and the cache that 
     expectCode(() => pa.getProperties(), f.StatusCode.NotFound);
     expectCode(() => cacheA.getOptions(), f.StatusCode.NotFound);
     assert.equal(pb.getProperties().name, 'PB');
-    assert.equal(pb.getCache(), cacheB);
+    assert.equal(pb.cache(), cacheB);
     assert.equal(cacheB.getWorksheetSource().range.sheet, dataB.index);
     assert.equal(out.listPivots().length, 1);
     assert.equal(out.listPivots()[0], pb);
@@ -659,7 +660,6 @@ test('threaded comments: done on a thread resolves it, on a reply is InvalidArgu
       personId: PERSON,
       created: { year: 2026, month: 1, day: 2, hour: 3, minute: 4, second: 5 },
       text: 'Check',
-      parentId: '',
     });
     ws.addThreadedComment({
       id: REPLY,

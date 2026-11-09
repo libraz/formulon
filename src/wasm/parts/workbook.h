@@ -88,6 +88,10 @@ class JsWorkbook {
   void deleteRows(uint32_t sheet, uint32_t first, uint32_t last);
   void insertColumns(uint32_t sheet, uint32_t first, uint32_t last);
   void deleteColumns(uint32_t sheet, uint32_t first, uint32_t last);
+  /// Inserts / deletes the cells of `range` (a `CellRect`), moving the band
+  /// by `shift` (an `fm_cell_shift_t` ordinal).
+  void insertCells(uint32_t sheet, emscripten::val range, int32_t shift);
+  void deleteCells(uint32_t sheet, emscripten::val range, int32_t shift);
 
   double sheetCount() const;
   std::string sheetName(uint32_t idx) const;
@@ -107,7 +111,7 @@ class JsWorkbook {
   void setText(uint32_t sheet, uint32_t row, uint32_t col, const std::string& text);
   void setCellPhonetic(uint32_t sheet, uint32_t row, uint32_t col, const std::string& phonetic);
   /// Stores a cell's furigana as one `<rPh>` block per element of `runs`,
-  /// each `{ sb, eb, text }`. Unlike `setCellPhonetic`, which annotates the
+  /// each `{ start, end, text }`. Unlike `setCellPhonetic`, which annotates the
   /// whole cell, this preserves which characters each reading covers. See
   /// `fm_sheet_set_cell_phonetic_runs` for the ordering rules.
   void setCellPhoneticRuns(uint32_t sheet, uint32_t row, uint32_t col, emscripten::val runs);
@@ -115,7 +119,8 @@ class JsWorkbook {
   /// Stores how the cell's guide renders: `fontIndex`, `type` (0=halfwidth
   /// katakana, 1=fullwidth katakana, 2=hiragana, 3=no conversion) and
   /// `alignment` (0=no control, 1=left, 2=center, 3=distributed).
-  /// Independent of the readings in both directions.
+  /// Independent of the readings in both directions; `null` resets the
+  /// cell to the unstated triple.
   void setCellPhoneticProperties(uint32_t sheet, uint32_t row, uint32_t col, emscripten::val properties);
   /// The cell's "Show Phonetic" display flag; value writes leave it alone.
   void setCellShowPhonetic(uint32_t sheet, uint32_t row, uint32_t col, bool show);
@@ -252,7 +257,7 @@ class JsWorkbook {
   double pivotCount(uint32_t sheet) const;
   emscripten::val pivotLayout(uint32_t sheet, uint32_t pivotIndex) const;
 
-  emscripten::val evaluateCfRange(uint32_t sheet, emscripten::val range, double todaySerial) const;
+  emscripten::val evaluateCfRange(uint32_t sheet, emscripten::val range, emscripten::val options) const;
 
   /// Computes the printable page grid for one sheet. Returns
   /// `{ printArea, horizontalBreaks, verticalBreaks, pageCount }`.
@@ -397,6 +402,7 @@ class JsWorkbook {
   emscripten::val getFill(uint32_t fill_index) const;
   emscripten::val getBorder(uint32_t border_index) const;
   emscripten::val getNumFmt(uint32_t num_fmt_id) const;
+  emscripten::val listNumberFormats() const;
   emscripten::val getDxf(uint32_t dxf_index) const;
 
   uint32_t addFont(emscripten::val record);
@@ -427,6 +433,7 @@ class JsWorkbook {
   emscripten::val getCellStyle(const std::string& name) const;
   emscripten::val getCellStyleXf(uint32_t index) const;
   uint32_t addCellStyleXf(emscripten::val record);
+  void setCellStyleXf(uint32_t index, emscripten::val record);
   /// Adds or replaces a `<cellStyle>` from `{ name, styleXfIndex, builtinId, iLevel, hidden, customBuiltin }`.
   void setCellStyle(emscripten::val record);
   /// Removes the named style; cell formats that used it fall back to Normal.
@@ -463,37 +470,35 @@ class JsWorkbook {
 
   // ---- Sheet UI features (merges / hyperlinks / comments / validations) --
 
-  void addMerge(uint32_t sheet, emscripten::val range);
+  /// Adds the merge and returns the rectangle as stored.
+  emscripten::val addMerge(uint32_t sheet, emscripten::val range);
   void removeMerge(uint32_t sheet, emscripten::val range);
   void removeMergeAt(uint32_t sheet, uint32_t index);
   void clearMerges(uint32_t sheet);
 
   emscripten::val getComment(uint32_t sheet, uint32_t row, uint32_t col) const;
   emscripten::val getComments(uint32_t sheet) const;
-  void setComment(uint32_t sheet, uint32_t row, uint32_t col, const std::string& author, const std::string& text);
+  /// Writes the note `{ text, author? }` at `(row, col)`; `null` removes it and is a no-op when there is none.
+  void setComment(uint32_t sheet, uint32_t row, uint32_t col, emscripten::val comment);
   /// Whether the note at the cell is shown without hovering, or `null` when there is no note.
-  /// Removes the note at `(row, col)`; a cell without one fails with
-  /// `NotFound`.
-  void removeComment(uint32_t sheet, uint32_t row, uint32_t col);
   emscripten::val getCommentVisible(uint32_t sheet, uint32_t row, uint32_t col) const;
   void setCommentVisible(uint32_t sheet, uint32_t row, uint32_t col, bool visible);
 
-  /// The workbook's `<workbookProtection>`.
+  /// The workbook's `<workbookProtection>`, or `null` when it has none; `null` to the setter removes it.
   emscripten::val getWorkbookProtection() const;
   void setWorkbookProtection(emscripten::val protection);
   /// The sheet's `<protectedRange>` entries, in file order.
   double getProtectedRangeCount(uint32_t sheet) const;
-  emscripten::val getProtectedRange(uint32_t sheet, uint32_t protectedRangeIndex) const;
+  /// A string `protectedRange` is a name (`null` when no range has it); a number is a position.
+  emscripten::val getProtectedRange(uint32_t sheet, emscripten::val protectedRange) const;
   /// Adds the range and returns its name, the key the other calls take.
   emscripten::val addProtectedRange(uint32_t sheet, emscripten::val range);
   void updateProtectedRange(uint32_t sheet, const std::string& name, emscripten::val range);
   void removeProtectedRange(uint32_t sheet, const std::string& name);
 
-  void addHyperlink(uint32_t sheet, uint32_t row, uint32_t col, const std::string& target, const std::string& display,
-                    const std::string& tooltip, const std::string& location);
-  void addHyperlinkRange(uint32_t sheet, emscripten::val range, const std::string& target, const std::string& display,
-                         const std::string& tooltip, const std::string& location);
-  void removeHyperlink(uint32_t sheet, uint32_t row, uint32_t col);
+  /// Sets the hyperlink `{ target, location?, display?, tooltip?, range? }` anchored at `(row, col)`; an omitted
+  /// or `null` `range` is the key cell. `null` removes the link anchored there and is a no-op when there is none.
+  void setHyperlink(uint32_t sheet, uint32_t row, uint32_t col, emscripten::val link);
   void removeHyperlinkAt(uint32_t sheet, uint32_t index);
   void clearHyperlinks(uint32_t sheet);
   emscripten::val getHyperlinks(uint32_t sheet) const;
@@ -546,13 +551,15 @@ class JsWorkbook {
   emscripten::val getSlicer(uint32_t sheet, uint32_t objectId) const;
   uint32_t addSlicer(uint32_t sheet, uint32_t tableSheet, uint32_t table, uint32_t column, emscripten::val spec);
   void updateSlicer(uint32_t sheet, uint32_t objectId, emscripten::val spec);
-  void addDataTable(uint32_t sheet, emscripten::val spec);
+  /// Adds the data table and returns `{ row, col }`, the top-left cell of its result range (the key
+  /// `getDataTable` / `removeDataTable` take).
+  emscripten::val addDataTable(uint32_t sheet, emscripten::val spec);
   emscripten::val getDataTable(uint32_t sheet, uint32_t row, uint32_t col) const;
   void removeDataTable(uint32_t sheet, uint32_t row, uint32_t col);
   void recalcDataTables();
 
   double getSparklineGroupCount(uint32_t sheet) const;
-  emscripten::val getSparklineGroup(uint32_t sheet, uint32_t sparklineGroupIndex) const;
+  emscripten::val getSparklineGroup(uint32_t sheet, emscripten::val sparklineGroup) const;
   emscripten::val addSparklineGroup(uint32_t sheet, emscripten::val spec);
   void updateSparklineGroup(uint32_t sheet, const std::string& groupId, emscripten::val spec);
   void removeSparklineGroup(uint32_t sheet, const std::string& groupId);
@@ -584,8 +591,9 @@ class JsWorkbook {
                       emscripten::val headerRow, emscripten::val headerColumn);
 
   double getValidationCount(uint32_t sheet) const;
-  emscripten::val getValidation(uint32_t sheet, uint32_t validationIndex) const;
-  /// Adds the rule and returns its id; a rule is addressed by id after that (`getValidation` reads by position).
+  /// A string `validation` is an id (`null` when no rule has it); a number is a position.
+  emscripten::val getValidation(uint32_t sheet, emscripten::val validation) const;
+  /// Adds the rule and returns its id; a rule is addressed by id after that.
   emscripten::val addValidation(uint32_t sheet, emscripten::val v);
   void updateValidation(uint32_t sheet, const std::string& validationId, emscripten::val patch);
   void removeValidationAt(uint32_t sheet, const std::string& validationId);
@@ -594,7 +602,8 @@ class JsWorkbook {
   // ---- Conditional formats -----------------------------------------------
 
   double getCfRuleCount(uint32_t sheet) const;
-  emscripten::val getCfRule(uint32_t sheet, uint32_t cfRuleIndex) const;
+  /// A string `cfRule` is an id (`null` when no rule has it); a number is a position.
+  emscripten::val getCfRule(uint32_t sheet, emscripten::val cfRule) const;
   /// Applies the rule patch to the rule with id `cfRuleId`; `colorScale`, `dataBar` and `iconSet` patch their
   /// own keys.
   void updateCfRule(uint32_t sheet, const std::string& cfRuleId, emscripten::val patch);
@@ -675,7 +684,6 @@ class JsWorkbook {
   emscripten::val pivotPageFieldOrder(uint32_t sheet, uint32_t pivotIndex) const;
 
   double pivotFieldCount(uint32_t sheet, uint32_t pivotIndex) const;
-  uint32_t pivotFieldAdd(uint32_t sheet, uint32_t pivotIndex, emscripten::val spec);
   emscripten::val pivotFieldAt(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex) const;
   double pivotFieldItemCount(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex) const;
   emscripten::val pivotFieldItemAt(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex, uint32_t itemIndex) const;
@@ -852,15 +860,34 @@ void set_log_min_level(int32_t level);
 /// call; copy or decode it before returning.
 void set_log_sink(emscripten::val sink);
 
-/// Reads a `DrawingAnchorInput` (`kind`, `editAs`, the `from*` / `to*` cells and EMU offsets, `widthEmu`,
-/// `heightEmu`); an absent key is zero, so an absent `kind` is the operation's default.
-fm_drawing_anchor_t pull_drawing_anchor(JsNarrowNumericReader& reader, const emscripten::val& anchor);
-
 /// Reads a `DrawingPlacementInput` (`name`, `description`, `hidden`, nested `anchor`) from `input`, which is the
-/// placement object itself or a shape / slicer spec that extends it; an absent `input` is all defaults. The stores
-/// own the returned strings.
+/// placement object itself or a chart / shape / slicer input that extends it; an absent `input` is all defaults.
+/// `param` names `input` in a rejection. The stores own the returned strings.
 fm_drawing_placement_spec_t pull_drawing_placement(JsNarrowNumericReader& reader, const emscripten::val& input,
-                                                   std::string& name_store, std::string& description_store);
+                                                   const char* param, std::string& name_store,
+                                                   std::string& description_store);
+
+/// Reads the `DrawingPatch` keys (`name`, `description`, `hidden`, `anchor`) of `patch`, which may also carry the
+/// keys of a kind-specific patch; an omitted key is `KEEP`. The stores own the returned strings.
+fm_drawing_patch_t pull_drawing_patch(JsNarrowNumericReader& reader, const emscripten::val& patch, const char* param,
+                                      std::string& name_store, std::string& description_store);
+
+/// The `ChartFill` / `ChartLine` record of a shape's or chart element's paint, `null` when it states no element of
+/// its own (the all-zero record).
+emscripten::val chart_fill_to_val(const fm_chart_fill_t& fill);
+emscripten::val chart_line_to_val(const fm_chart_line_t& line);
+
+/// Reads `owner.fill` / `owner.line` as a paint patch: omitted keeps every member, `null` clears every member
+/// (the style's paint), an object sets the members it carries.
+void pull_chart_fill_patch(JsNarrowNumericReader& reader, const emscripten::val& owner, const char* param,
+                           fm_chart_fill_patch_t* out);
+void pull_chart_line_patch(JsNarrowNumericReader& reader, const emscripten::val& owner, const char* param,
+                           fm_chart_line_patch_t* out);
+
+/// Reads `owner.fill` / `owner.line` as the paint of a new object: omitted or `null` is the style's paint (the
+/// all-zero record), and a `null` member is an omitted one.
+fm_chart_fill_t pull_chart_fill(JsNarrowNumericReader& reader, const emscripten::val& owner, const char* param);
+fm_chart_line_t pull_chart_line(JsNarrowNumericReader& reader, const emscripten::val& owner, const char* param);
 
 }  // namespace parts
 }  // namespace wasm

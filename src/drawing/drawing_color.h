@@ -40,6 +40,10 @@ std::optional<ColorSpec> read_rendered(const Workbook& wb, const pugi::xml_node&
 /// Theme when representable, else the rendered Rgb.
 std::optional<ColorSpec> read_color(const Workbook& wb, const pugi::xml_node& clr, bool remapped);
 
+/// The colour `write_color` would write back as the same element: the Theme form, or the Rgb of an
+/// `a:srgbClr` whose only transform is `alpha`; unset for a colour `read_color` only approximates.
+std::optional<ColorSpec> read_exact(const pugi::xml_node& clr, bool remapped);
+
 /// The `a:alpha/@val` of a colour element; empty when absent.
 std::string alpha_of(const pugi::xml_node& clr);
 

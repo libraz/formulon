@@ -79,7 +79,9 @@ test('insertChart creates a two-cell chart that getChart and getChartData read b
   try {
     const id = insert(wb, mod, {
       title: 'Sales',
-      placement: { name: 'Revenue', description: 'alt', anchor: { fromRow: 7, fromCol: 2 } },
+      name: 'Revenue',
+      description: 'alt',
+      anchor: { fromRow: 7, fromCol: 2 },
     });
     const listed = drawingsOf(wb);
     assert.equal(listed.length, 1);
@@ -265,10 +267,10 @@ test('typed chart edits are visible through getChart', async () => {
     wb.sheet(0).chart(id).getPreview({ naAsBlank: false });
     assert.equal(chartOf(wb, id).naAsBlank, null);
 
-    wb.sheet(0).chart(id).updatePlot(0, { gapWidthPct: 40, overlap: 10, varyColors: true });
+    wb.sheet(0).chart(id).updatePlot(0, { gapWidthPct: 40, overlapPct: 10, varyColors: true });
     const plot = chartOf(wb, id).plots[0];
     assert.equal(plot.gapWidthPct, 40);
-    assert.equal(plot.overlap, 10);
+    assert.equal(plot.overlapPct, 10);
     assert.equal(plot.varyColors, true);
 
     const valueAxis = chartOf(wb, id).axes.find((a) => a.kind === mod.ChartAxisKind.Value);
@@ -317,8 +319,7 @@ test('typed chart edits are visible through getChart', async () => {
       });
     let series = chartOf(wb, id).plots[0].series[1];
     // A line series takes no fill of its own; its colour is the line's.
-    assert.equal(series.fill.color, null);
-    assert.equal(series.fill.transparencyPct, null);
+    assert.equal(series.fill, null);
     assert.equal(series.line.color.argb, 0xff0000ff);
     assert.equal(series.line.widthPt, 2);
     assert.equal(series.line.dash, mod.ChartLineDash.Dash);
@@ -373,8 +374,8 @@ test('typed chart edits are visible through getChart', async () => {
     assert.equal(chartOf(wb, id).plots[0].grouping, mod.ChartGrouping.Stacked);
 
     const pie = insert(wb, mod, { type: mod.ChartPlotType.Doughnut, range: 'Sheet1!$A$1:$B$5' });
-    wb.sheet(0).chart(pie).updatePlot(0, { holeSize: 60, firstSliceAngleDeg: 90 });
-    assert.equal(chartOf(wb, pie).plots[0].holeSize, 60);
+    wb.sheet(0).chart(pie).updatePlot(0, { holeSizePct: 60, firstSliceAngleDeg: 90 });
+    assert.equal(chartOf(wb, pie).plots[0].holeSizePct, 60);
     assert.equal(chartOf(wb, pie).plots[0].firstSliceAngleDeg, 90);
   } finally {
     wb.dispose();
@@ -456,7 +457,7 @@ test('a chart survives save and load and goes through the drawing operations', a
   const mod = await load();
   const wb = newBook(mod);
   try {
-    const id = insert(wb, mod, { title: 'Kept', placement: { anchor: { fromRow: 3, fromCol: 3 } } });
+    const id = insert(wb, mod, { title: 'Kept', anchor: { fromRow: 3, fromCol: 3 } });
     const other = insert(wb, mod, { type: mod.ChartPlotType.Line, range: 'Sheet1!$A$1:$B$5' });
 
     const saved = wb.save();
@@ -549,7 +550,7 @@ test('chart calls throw on failure and reject malformed arguments', async () => 
         .updateSeries(0, 0, { fill: { color: '#010203' }, marker: { symbol: null } }),
     );
     expectFailure(() => wb.sheet(0).chart(id).updateAxis(12345, {}));
-    expectFailure(() => wb.sheet(0).chart(id).updatePlot(0, { holeSize: 50 }));
+    expectFailure(() => wb.sheet(0).chart(id).updatePlot(0, { holeSizePct: 50 }));
     expectFailure(() => wb.sheet(0).chart(id).setType(0, 99));
     expectFailure(
       () => wb.sheet(0).chart(id).setSource({ range: 'NoSuchSheet!A1:B2', direction: mod.ChartSeriesDirection.Auto }),
@@ -619,32 +620,16 @@ test('a theme colour round-trips through a series fill and is refused when index
     const shape = wb.sheet(0).addShape({
       presetGeometry: 'rect',
       anchor: { kind: mod.AnchorKind.OneCell, fromRow: 2, widthEmu: 9144, heightEmu: 9144 },
-      fillKind: mod.ShapePaint.Solid,
-      fillColor: theme,
+      fill: { color: theme },
     });
-    const paint = shape.getProperties().fillColor;
+    const paint = shape.getProperties().fill.color;
     assert.equal(paint.kind, mod.ColorKind.Theme);
     assert.equal(paint.theme, 4);
     assert.ok(Math.abs(paint.tint - 0.4) < 1e-5);
-    expectFailure(
-      () => shape.update({ fillKind: mod.ShapePaint.Solid, fillColor: indexed }),
-      mod.StatusCode.InvalidArgument,
-    );
-    // A colour is never dropped: without its kind it is a TypeError, with None a status error.
-    assert.throws(() => shape.update({ fillColor: theme }), TypeError);
-    assert.throws(() => shape.update({ lineKind: null, lineColor: theme }), TypeError);
-    assert.throws(
-      () =>
-        wb
-          .sheet(0)
-          .addShape({ anchor: { kind: mod.AnchorKind.OneCell, widthEmu: 9144, heightEmu: 9144 }, lineColor: theme }),
-      TypeError,
-    );
-    expectFailure(
-      () => shape.update({ fillKind: mod.ShapePaint.None, fillColor: theme }),
-      mod.StatusCode.InvalidArgument,
-    );
-    assert.equal(shape.getProperties().fillColor.theme, 4);
+    expectFailure(() => shape.update({ fill: { color: indexed } }), mod.StatusCode.InvalidArgument);
+    // A colour is never dropped: a fill both none and coloured is a status error.
+    expectFailure(() => shape.update({ fill: { none: true, color: theme } }), mod.StatusCode.InvalidArgument);
+    assert.equal(shape.getProperties().fill.color.theme, 4);
   } finally {
     wb.dispose();
   }

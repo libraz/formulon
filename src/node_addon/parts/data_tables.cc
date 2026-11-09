@@ -34,20 +34,33 @@ Napi::Value InputToJs(Napi::Env env, int32_t has, uint32_t row, uint32_t col, in
 
 }  // namespace
 
+// Returns the result range's top-left cell, the key `getDataTable` takes.
 Napi::Value Workbook::AddDataTable(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return ThrowInvalidHandle(env);
+  }
+  const Napi::Object spec = ArgObject(info, 1);
+  CheckedSpecReader reader(env);
   fm_data_table_t table = FM_STRUCT_INIT(fm_data_table_t);
-  return InvokeSheetSpec(
-      info, "addDataTable expects (sheet:number, spec:object)",
-      [&](CheckedSpecReader& reader, const Napi::Object& spec) {
-        Napi::Object rect;
-        if (reader.Object(spec, "rect", &rect)) {
-          ReadCellRect(reader, rect, &table.rect);
-        }
-        PullInput(reader, spec, "rowInput", &table.has_row_input, &table.row_input_row, &table.row_input_col);
-        PullInput(reader, spec, "columnInput", &table.has_column_input, &table.column_input_row,
-                  &table.column_input_col);
-      },
-      [&](fm_workbook_t* handle) { return fm_sheet_add_data_table(handle, ArgU32(info, 0), &table); });
+  Napi::Object rect;
+  if (reader.Object(spec, "rect", &rect)) {
+    ReadCellRect(reader, rect, &table.rect);
+  }
+  PullInput(reader, spec, "rowInput", &table.has_row_input, &table.row_input_row, &table.row_input_col);
+  PullInput(reader, spec, "columnInput", &table.has_column_input, &table.column_input_row, &table.column_input_col);
+  if (!reader.ok()) {
+    return env.Undefined();
+  }
+  fm_cell_address_t cell{};
+  const fm_status_t rc = fm_sheet_add_data_table(handle_, ArgU32(info, 0), &table, &cell);
+  if (rc != 0) {
+    return ThrowStatus(env, rc);
+  }
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("row", JsNumber(env, cell.row));
+  out.Set("col", JsNumber(env, cell.col));
+  return out;
 }
 
 Napi::Value Workbook::GetDataTable(const Napi::CallbackInfo& info) {

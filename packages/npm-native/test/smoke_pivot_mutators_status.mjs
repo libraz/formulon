@@ -33,15 +33,18 @@ function buildPivot(mod) {
     for (const [field, v] of values.entries()) wb.pivotCache(cacheId).setRecordValue(rec, field, v);
   }
   const pivot = wb.sheet(0).addPivot({ name: 'Pivot1', cacheId, anchor: { row: 0, col: 6 } });
-  const addField = (spec) => pivot.addField(spec);
-  const region = addField({ fieldIndex: 'Region', axis: 0 });
+  const region = 0;
+  pivot.setFieldAxis(region, 0);
   pivot.addFieldItem(region, 'East');
   pivot.addFieldItem(region, 'West');
-  const product = addField({ fieldIndex: 'Product', axis: 2 });
+  const product = 1;
+  pivot.setFieldAxis(product, 2);
   pivot.addFieldItem(product, 'Apple');
   pivot.addFieldItem(product, 'Pear');
-  const amount = addField({ fieldIndex: 'Amount', axis: 2 });
-  const date = addField({ fieldIndex: 'Date', axis: 2 });
+  const amount = 2;
+  pivot.setFieldAxis(amount, 2);
+  const date = 3;
+  pivot.setFieldAxis(date, 2);
   pivot.setRowFieldOrder([region]);
   pivot.addDataField({ name: 'Sum of Amount', fieldIndex: amount, aggregation: 0 });
   return { wb, mod, cacheId, pivot, region, product, amount, date };
@@ -83,10 +86,10 @@ const twoLevels = (b) => b.pivot.setRowFieldOrder([b.region, b.product]);
 const dateRows = (b) => b.pivot.setRowFieldOrder([b.date]);
 const hideEast = (b) => b.pivot.updateFieldItem(b.region, 0, { visible: false });
 const WEST_ONLY = ['行ラベル|Sum of Amount', 'West|37', '総計|37'];
-const GREATER_THAN_20 = Object.freeze({ fieldIndex: 'Region', type: 1, value: 20 });
+const GREATER_THAN_20 = Object.freeze({ fieldIndex: 'Region', kind: 1, value: 20 });
 const BETWEEN_10_20 = Object.freeze({
   fieldIndex: 'Region',
-  type: 2,
+  kind: 2,
   value: 10,
   valueHigh: 20,
 });
@@ -130,7 +133,7 @@ const PIVOT_MUTATORS = [
       },
     },
   ],
-  ['Pivot.getCache', { act: (b) => b.pivot.getCache(), expect: (b, r) => assert.equal(r, b.wb.pivotCache(b.cacheId)) }],
+  ['Pivot.cache', { act: (b) => b.pivot.cache(), expect: (b, r) => assert.equal(r, b.wb.pivotCache(b.cacheId)) }],
   [
     'Workbook.removePivotCache',
     {
@@ -412,25 +415,19 @@ const PIVOT_MUTATORS = [
     },
   ],
   [
-    'Pivot.addField',
-    {
-      act: (b) => b.pivot.addField({ fieldIndex: 'Product', customName: 'Fruit', axis: 3 }),
-      expect: (b, r) => {
-        // Product is a cache column the fixture already added, so it is updated in place.
-        assert.equal(r, b.product);
-        assert.deepEqual(pivotGrid(b.wb), ['Fruit|(すべて)', '|', ...BASE_GRID]);
-      },
-    },
-  ],
-  [
     'Pivot.clearFields',
     {
       setup: hideEast,
       act: (b) => b.pivot.clearFields(),
       expect: (b) => {
-        assert.equal(b.pivot.listFields().length, 0);
-        // The row order empties with the fields; East's hidden flag goes too.
-        assert.deepEqual(pivotGrid(b.wb), ['行ラベル|Sum of Amount', '|52']);
+        // Every field leaves its axis and the values area; the fields stay, one per cache field.
+        assert.deepEqual(
+          b.pivot.listFields().map((field) => field.axis),
+          [null, null, null, null],
+        );
+        assert.equal(b.pivot.listDataFields().length, 0);
+        assert.deepEqual(b.pivot.getRowFieldOrder(), []);
+        assert.equal(pivotGrid(b.wb).join('|').includes('Sum of Amount'), false);
       },
     },
   ],
@@ -973,7 +970,7 @@ test('pivot filters and subtotal functions survive save and reload', async () =>
       back.setProfileId('win-365-ja_JP');
       assert.equal(back.sheet(0).pivot(0).listFilters().length, 1);
       const filter = back.sheet(0).pivot(0).listFilters()[0];
-      assert.equal(filter.type, 1);
+      assert.equal(filter.kind, 1);
       assert.equal(filter.fieldIndex, 0);
       assert.equal(filter.value, 20);
       assert.deepEqual(pivotGrid(back), WEST_ONLY);
@@ -1466,19 +1463,19 @@ test('label-between filters carry valueHigh', async () => {
   try {
     const spec = {
       fieldIndex: 'Region',
-      type: mod.PivotFilterKind.LabelBetween,
+      kind: mod.PivotFilterKind.LabelBetween,
       value: 'A',
     };
     // The upper bound is required for the between types.
     assert.throws(() => b.pivot.addFilter(spec), isFormulonError);
     b.pivot.addFilter({ ...spec, valueHigh: 'F' });
     const at = b.pivot.listFilters()[0];
-    assert.equal(at.type, 22);
+    assert.equal(at.kind, 22);
     assert.equal(at.value, 'A');
     assert.equal(at.valueHigh, 'F');
     // And rejected for every other type.
     assert.throws(
-      () => b.pivot.addFilter({ ...spec, type: mod.PivotFilterKind.LabelEqual, valueHigh: 'F' }),
+      () => b.pivot.addFilter({ ...spec, kind: mod.PivotFilterKind.LabelEqual, valueHigh: 'F' }),
       isFormulonError,
     );
     assert.throws(() => b.pivot.addFilter({ ...spec, valueHigh: 5 }), isFormulonError);

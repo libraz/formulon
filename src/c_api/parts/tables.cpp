@@ -411,7 +411,8 @@ extern "C" fm_status_t fm_sheet_add_table(fm_workbook_t* wb, size_t sheet_index,
       return rc;
     }
   }
-  for (const auto& [value, field] : {std::pair<int32_t, const char*>{spec->header_row, "header_row"},
+  for (const auto& [value, field] : {std::pair<int32_t, const char*>{spec->styled, "styled"},
+                                     {spec->header_row, "header_row"},
                                      {spec->totals_row, "totals_row"},
                                      {spec->show_first_column, "show_first_column"},
                                      {spec->show_last_column, "show_last_column"},
@@ -420,6 +421,13 @@ extern "C" fm_status_t fm_sheet_add_table(fm_workbook_t* wb, size_t sheet_index,
     if (auto rc = check_enum_domain(value, FM_TRISTATE_DEFAULT, FM_TRISTATE_TRUE, field); rc != 0) {
       return rc;
     }
+  }
+  if (spec->style_name != nullptr && spec->style_name[0] == '\0') {
+    return invalid_argument("style_name must be NULL or non-empty", "style_name");
+  }
+  const bool styled = spec->styled != FM_TRISTATE_FALSE;
+  if (!styled && spec->style_name != nullptr) {
+    return invalid_argument("an unstyled table takes no style_name", "styled=false");
   }
   const bool header_row = spec->header_row != FM_TRISTATE_FALSE;
   formulon::Workbook& book = wb->workbook();
@@ -443,9 +451,11 @@ extern "C" fm_status_t fm_sheet_add_table(fm_workbook_t* wb, size_t sheet_index,
     column.name = column_name;
     table.columns.push_back(std::move(column));
   }
-  table.style_info =
-      default_style_info(spec->style_name != nullptr ? std::string_view(spec->style_name)
-                                                     : formulon::c_api::parts::default_table_style_name(book));
+  if (styled) {
+    table.style_info =
+        default_style_info(spec->style_name != nullptr ? std::string_view(spec->style_name)
+                                                       : formulon::c_api::parts::default_table_style_name(book));
+  }
   const std::pair<int32_t, bool formulon::TableStyleInfo::*> toggles[] = {
       {spec->show_first_column, &formulon::TableStyleInfo::show_first_column},
       {spec->show_last_column, &formulon::TableStyleInfo::show_last_column},
@@ -810,6 +820,9 @@ extern "C" fm_status_t fm_sheet_set_table_column_totals(fm_workbook_t* wb, size_
   if (auto rc = check_utf8({label}); rc != 0) {
     return rc;
   }
+  if ((label != nullptr && label[0] == '\0') || (formula != nullptr && formula[0] == '\0')) {
+    return invalid_argument("label and formula are NULL or non-empty");
+  }
   if (auto rc = check_enum_domain(function, FM_TABLE_TOTALS_ROW_FUNCTION_NONE, FM_TABLE_TOTALS_ROW_FUNCTION_CUSTOM,
                                   "function");
       rc != 0) {
@@ -818,7 +831,7 @@ extern "C" fm_status_t fm_sheet_set_table_column_totals(fm_workbook_t* wb, size_
   const std::string_view token = token_of(kTotalsRowFunctionTokens, function);
   std::string stored_formula;
   if (token == "custom") {
-    if (formula == nullptr || formula[0] == '\0') {
+    if (formula == nullptr) {
       return invalid_argument("custom function needs a formula");
     }
     // Entered at the column's totals cell, so `[Qty]` and `[@Qty]` bind to this table.

@@ -136,9 +136,6 @@ TEST(FormulonCApiPivot, NullPointerArgumentsRejected) {
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
 
   // spec arguments
-  EXPECT_EQ(fm_sheet_add_pivot_field(wb.handle, 0, 0, nullptr, &pivot_index),
-            static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
-
   EXPECT_EQ(fm_sheet_add_pivot_filter(wb.handle, 0, 0, nullptr, ignored_index()),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
 }
@@ -317,16 +314,17 @@ TEST(FormulonCApiPivot, MutationAndClearExportsCompleteTheirLifecycles) {
 
   fm_pivot_filter_t filter = FM_STRUCT_INIT(fm_pivot_filter_t);
   filter.field_index = 0;
-  filter.type = FM_PIVOT_FILTER_KIND_LABEL_BEGINS_WITH;
+  filter.kind = FM_PIVOT_FILTER_KIND_LABEL_BEGINS_WITH;
   filter.value_kind = FM_PIVOT_FILTER_OPERAND_KIND_TEXT;
   filter.value_text = "N";
   filter.value_high_kind = FM_PIVOT_FILTER_OPERAND_KIND_ABSENT;
   ASSERT_EQ(fm_sheet_add_pivot_filter(wb.handle, 0, pivot_index, &filter, ignored_index()), 0);
   ASSERT_EQ(fm_sheet_clear_pivot_filters(wb.handle, 0, pivot_index), 0);
 
+  // Clearing moves every field off its axis; the fields, one per cache field, stay.
   ASSERT_EQ(fm_sheet_clear_pivot_fields(wb.handle, 0, pivot_index), 0);
   ASSERT_EQ(fm_sheet_get_pivot_field_count(wb.handle, 0, pivot_index, &field_count), 0);
-  EXPECT_EQ(field_count, 0U);
+  EXPECT_EQ(field_count, 2U);
   ASSERT_EQ(fm_workbook_clear_pivot_cache_fields(wb.handle, cache_id), 0);
   ASSERT_EQ(fm_workbook_get_pivot_cache_field_count(wb.handle, cache_id, &field_count), 0);
   EXPECT_EQ(field_count, 0U);
@@ -389,17 +387,9 @@ TEST(FormulonCApiPivot, NumberFormatCodeRoundTripsThroughEveryInput) {
   ASSERT_EQ(SetPivotFieldNumberFormat(wb.handle, 0, pivot_index, 1, "0.0%"), 0) << fm_get_last_error_message();
   EXPECT_EQ(FieldNumberFormat(wb.handle, pivot_index, 1), "0.0%");
 
-  // fm_sheet_add_pivot_field, configuring a cache field in place.
-  fm_pivot_field_spec_t field_spec = FM_STRUCT_INIT(fm_pivot_field_spec_t);
-  field_spec.source_name = "Region";
-  field_spec.custom_name = "";
-  field_spec.axis = FM_PIVOT_AXIS_ROW;
-  field_spec.subtotal_top = FM_TRISTATE_FALSE;
-  field_spec.number_format = "0.0%";
-  std::size_t field_index = 99;
-  ASSERT_EQ(fm_sheet_add_pivot_field(wb.handle, 0, pivot_index, &field_spec, &field_index), 0)
-      << fm_get_last_error_message();
-  EXPECT_EQ(FieldNumberFormat(wb.handle, pivot_index, field_index), "0.0%");
+  // The row field takes the same code.
+  ASSERT_EQ(SetPivotFieldNumberFormat(wb.handle, 0, pivot_index, 0, "0.0%"), 0) << fm_get_last_error_message();
+  EXPECT_EQ(FieldNumberFormat(wb.handle, pivot_index, 0), "0.0%");
 
   // fm_sheet_set_pivot_data_field and fm_sheet_add_pivot_data_field.
   const fm_pivot_data_field_t percent = SumOfAmount("0.0%");
@@ -443,13 +433,6 @@ TEST(FormulonCApiPivot, NumberFormatRejectsMalformedUtf8OnEveryInput) {
   const char* bad = "0.0\xC3";
 
   EXPECT_EQ(SetPivotFieldNumberFormat(wb.handle, 0, pivot_index, 1, bad), FM_STATUS_BINDING_UTF8ENCODING_ERROR);
-  fm_pivot_field_spec_t field_spec = FM_STRUCT_INIT(fm_pivot_field_spec_t);
-  field_spec.source_name = "Amount";
-  field_spec.axis = FM_PIVOT_AXIS_VALUE;
-  field_spec.number_format = bad;
-  std::size_t field_index = 99;
-  EXPECT_EQ(fm_sheet_add_pivot_field(wb.handle, 0, pivot_index, &field_spec, &field_index),
-            FM_STATUS_BINDING_UTF8ENCODING_ERROR);
   const fm_pivot_data_field_t df_spec = SumOfAmount(bad);
   std::size_t df_index = 99;
   EXPECT_EQ(fm_sheet_add_pivot_data_field(wb.handle, 0, pivot_index, &df_spec, &df_index),
@@ -481,7 +464,8 @@ TEST(FormulonCApiPivot, ProfileRenderedBuiltinCodeKeepsItsId) {
 
   // Reload (the profile is not saved), read the code back and write it unchanged: still 27.
   BufferGuard saved;
-  ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0)
+      << fm_get_last_error_message();
   WorkbookGuard reloaded;
   ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &reloaded.handle), 0) << fm_get_last_error_message();
   ASSERT_EQ(fm_workbook_set_profile_id(reloaded.handle, "mac-365-ja_JP"), 0);
@@ -543,7 +527,7 @@ TEST(FormulonCApiPivot, RuntimeIdFollowsThePivotAcrossEditsAndIsNeverReused) {
   EXPECT_EQ(index, 99U);
 
   // A pivot edit the projection refuses is rolled back from a clone; the id stays.
-  ASSERT_EQ(fm_sheet_add_merge(wb.handle, 0U, record_arg(fm_cell_rect_t{0U, 5U, 1U, 5U})), 0)
+  ASSERT_EQ(fm_sheet_add_merge(wb.handle, 0U, record_arg(fm_cell_rect_t{0U, 5U, 1U, 5U}), nullptr), 0)
       << fm_get_last_error_message();
   fm_pivot_data_field_t widen = SumOfAmount("");
   widen.name = "Count of Amount";

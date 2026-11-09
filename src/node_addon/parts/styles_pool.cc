@@ -44,8 +44,7 @@ Napi::Object FontRecordToJs(Napi::Env env, const fm_font_t& f) {
 /// Reads a font record out of a JS object. `name_storage` owns the font
 /// name for the duration of the C ABI call, which borrows the pointer. An
 /// omitted or `null` element is absent from the record.
-void PullFontRecord(CheckedSpecReader& reader, const Napi::Object& record, std::string* name_storage,
-                    fm_font_t* out) {
+void PullFontRecord(CheckedSpecReader& reader, const Napi::Object& record, std::string* name_storage, fm_font_t* out) {
   bool present = false;
   const auto flag = [&](const char* key, int32_t* has, int32_t* value) {
     *value = reader.Bool(record, key, false, &present) ? 1 : 0;
@@ -222,7 +221,7 @@ Napi::Object FillRecordToJs(Napi::Env env, const fm_fill_t& f) {
   if (f.has_gradient != 0) {
     Napi::Object gradient = Napi::Object::New(env);
     gradient.Set("type", Napi::Number::New(env, f.gradient_type));
-    gradient.Set("degree", Napi::Number::New(env, f.gradient_degree));
+    gradient.Set("angleDeg", Napi::Number::New(env, f.gradient_angle_deg));
     gradient.Set("left", Napi::Number::New(env, f.gradient_left));
     gradient.Set("right", Napi::Number::New(env, f.gradient_right));
     gradient.Set("top", Napi::Number::New(env, f.gradient_top));
@@ -243,7 +242,7 @@ Napi::Object FillRecordToJs(Napi::Env env, const fm_fill_t& f) {
 /// Reads a fill record out of a JS object. `stops` owns the gradient stops
 /// for the duration of the C ABI call, which borrows the pointer.
 fm_fill_t PullFillRecord(CheckedSpecReader& reader, const Napi::Object& record,
-                                std::vector<fm_gradient_stop_t>* stops) {
+                         std::vector<fm_gradient_stop_t>* stops) {
   fm_fill_t out{};
   out.pattern = reader.I32(record, "pattern", 0);
   out.foreground = PullColorSpec(reader, record, "foreground");
@@ -252,7 +251,7 @@ fm_fill_t PullFillRecord(CheckedSpecReader& reader, const Napi::Object& record,
   if (reader.Object(record, "gradient", &gradient)) {
     out.has_gradient = 1;
     out.gradient_type = static_cast<int32_t>(reader.U32(gradient, "type", 0U));
-    out.gradient_degree = reader.Double(gradient, "degree", 0.0);
+    out.gradient_angle_deg = reader.Double(gradient, "angleDeg", 0.0);
     out.gradient_left = reader.Double(gradient, "left", 0.0);
     out.gradient_right = reader.Double(gradient, "right", 0.0);
     out.gradient_top = reader.Double(gradient, "top", 0.0);
@@ -334,7 +333,7 @@ Napi::Object CellXfToJs(Napi::Env env, const fm_cell_xf_t& xf) {
   out.Set("fontIndex", Napi::Number::New(env, xf.font_index));
   out.Set("fillIndex", Napi::Number::New(env, xf.fill_index));
   out.Set("borderIndex", Napi::Number::New(env, xf.border_index));
-  out.Set("numFmtId", Napi::Number::New(env, static_cast<uint32_t>(xf.num_fmt_id)));
+  out.Set("numFmtId", Napi::Number::New(env, xf.num_fmt_id));
   out.Set("horizontal", JsNumberOrNull(env, xf.has_horizontal, static_cast<uint32_t>(xf.horizontal)));
   out.Set("vertical", JsNumberOrNull(env, xf.has_vertical, static_cast<uint32_t>(xf.vertical)));
   out.Set("wrapText", JsBoolOrNull(env, xf.has_wrap_text, xf.wrap_text));
@@ -366,7 +365,7 @@ void PullCellXf(CheckedSpecReader& reader, const Napi::Object& record, fm_cell_x
   xf.font_index = reader.U32(record, "fontIndex", 0U);
   xf.fill_index = reader.U32(record, "fillIndex", 0U);
   xf.border_index = reader.U32(record, "borderIndex", 0U);
-  xf.num_fmt_id = reader.U16(record, "numFmtId", 0U);
+  xf.num_fmt_id = reader.U32(record, "numFmtId", 0U);
   bool horizontal_align_present = false;
   bool vertical_align_present = false;
   bool wrap_text_present = false;
@@ -534,8 +533,7 @@ Napi::Value Workbook::GetCellXf(const Napi::CallbackInfo& info) {
 
 Napi::Value Workbook::GetFont(const Napi::CallbackInfo& info) {
   return RecordGetter<fm_font_t>(
-      info,
-      [&](fm_workbook_t* handle, fm_font_t* f) { return fm_workbook_get_font_at(handle, ArgU32(info, 0), f); },
+      info, [&](fm_workbook_t* handle, fm_font_t* f) { return fm_workbook_get_font_at(handle, ArgU32(info, 0), f); },
       FontRecordToJs);
 }
 
@@ -548,8 +546,7 @@ Napi::Value Workbook::GetDefaultFont(const Napi::CallbackInfo& info) {
 
 Napi::Value Workbook::GetFill(const Napi::CallbackInfo& info) {
   return RecordGetter<fm_fill_t>(
-      info,
-      [&](fm_workbook_t* handle, fm_fill_t* f) { return fm_workbook_get_fill_at(handle, ArgU32(info, 0), f); },
+      info, [&](fm_workbook_t* handle, fm_fill_t* f) { return fm_workbook_get_fill_at(handle, ArgU32(info, 0), f); },
       FillRecordToJs);
 }
 
@@ -569,6 +566,24 @@ Napi::Value Workbook::GetNumFmt(const Napi::CallbackInfo& info) {
   const char* s = nullptr;
   const fm_status_t rc = fm_workbook_get_number_format(handle_, ArgU32(info, 0), &present, &s);
   return OptionalOrNull(env, rc, present, rc == 0 && present != 0 ? Napi::Value(JsString(env, s)) : env.Null());
+}
+
+Napi::Value Workbook::ListNumberFormats(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return ThrowInvalidHandle(env);
+  }
+  Napi::Array items = Napi::Array::New(env);
+  const fm_status_t rc = CollectList<fm_number_format_info_t>(
+      items, [&](std::size_t* n) { return fm_workbook_get_number_format_count(handle_, n); },
+      [&](std::size_t i, fm_number_format_info_t* out) { return fm_workbook_get_number_format_at(handle_, i, out); },
+      [&](const fm_number_format_info_t& entry) {
+        Napi::Object out = Napi::Object::New(env);
+        out.Set("numFmtId", Napi::Number::New(env, entry.num_fmt_id));
+        out.Set("numberFormat", JsString(env, entry.number_format));
+        return out;
+      });
+  return ValueOrThrow(env, rc, items);
 }
 
 Napi::Value Workbook::GetDxf(const Napi::CallbackInfo& info) {
@@ -599,9 +614,9 @@ Napi::Value Workbook::GetDxf(const Napi::CallbackInfo& info) {
 Napi::Value Workbook::AddFont(const Napi::CallbackInfo& info) {
   std::string name;
   fm_font_t fr{};
-  return AddStyleRecord(
+  return AddStyleRecord<uint32_t>(
       info, [&](CheckedSpecReader& reader, const Napi::Object& record) { PullFontRecord(reader, record, &name, &fr); },
-      [&](fm_workbook_t* handle, std::size_t* idx) { return fm_workbook_add_font(handle, &fr, idx); });
+      [&](fm_workbook_t* handle, uint32_t* idx) { return fm_workbook_add_font(handle, &fr, idx); });
 }
 
 Napi::Value Workbook::SetFont(const Napi::CallbackInfo& info) {
@@ -625,9 +640,9 @@ Napi::Value Workbook::SetDefaultFont(const Napi::CallbackInfo& info) {
 Napi::Value Workbook::AddFill(const Napi::CallbackInfo& info) {
   fm_fill_t fr{};
   std::vector<fm_gradient_stop_t> stops;
-  return AddStyleRecord(
+  return AddStyleRecord<uint32_t>(
       info, [&](CheckedSpecReader& reader, const Napi::Object& record) { fr = PullFillRecord(reader, record, &stops); },
-      [&](fm_workbook_t* handle, std::size_t* idx) { return fm_workbook_add_fill(handle, &fr, idx); });
+      [&](fm_workbook_t* handle, uint32_t* idx) { return fm_workbook_add_fill(handle, &fr, idx); });
 }
 
 Napi::Value Workbook::SetFill(const Napi::CallbackInfo& info) {
@@ -648,9 +663,9 @@ Napi::Value Workbook::SetBorder(const Napi::CallbackInfo& info) {
 
 Napi::Value Workbook::AddBorder(const Napi::CallbackInfo& info) {
   fm_border_t br{};
-  return AddStyleRecord(
+  return AddStyleRecord<uint32_t>(
       info, [&](CheckedSpecReader& reader, const Napi::Object& record) { br = PullBorderRecord(reader, record); },
-      [&](fm_workbook_t* handle, std::size_t* idx) { return fm_workbook_add_border(handle, &br, idx); });
+      [&](fm_workbook_t* handle, uint32_t* idx) { return fm_workbook_add_border(handle, &br, idx); });
 }
 
 Napi::Value Workbook::AddNumFmt(const Napi::CallbackInfo& info) {
@@ -683,6 +698,13 @@ Napi::Value Workbook::AddCellStyleXf(const Napi::CallbackInfo& info) {
   return AddStyleRecord<uint32_t>(
       info, [&](CheckedSpecReader& reader, const Napi::Object& record) { PullCellXf(reader, record, &xf); },
       [&](fm_workbook_t* handle, uint32_t* idx) { return fm_workbook_add_cell_style_xf(handle, &xf, idx); });
+}
+
+Napi::Value Workbook::SetCellStyleXf(const Napi::CallbackInfo& info) {
+  fm_cell_xf_t xf{};
+  return SetStyleRecord(
+      info, 1, [&](CheckedSpecReader& reader, const Napi::Object& record) { PullCellXf(reader, record, &xf); },
+      [&](fm_workbook_t* handle) { return fm_workbook_set_cell_style_xf(handle, ArgU32(info, 0), &xf); });
 }
 
 Napi::Value Workbook::AddDxf(const Napi::CallbackInfo& info) {

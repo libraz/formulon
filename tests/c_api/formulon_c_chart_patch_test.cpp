@@ -33,8 +33,8 @@ void FillGrid(fm_workbook_t* wb) {
   }
 }
 
-fm_chart_insert_spec_t InsertOptions(int32_t type, int32_t bar_direction) {
-  fm_chart_insert_spec_t o = FM_STRUCT_INIT(fm_chart_insert_spec_t);
+fm_chart_spec_t InsertOptions(int32_t type, int32_t bar_direction) {
+  fm_chart_spec_t o = FM_STRUCT_INIT(fm_chart_spec_t);
   o.type = type;
   o.bar_direction = bar_direction;
   o.source = "Sheet1!$A$1:$D$5";
@@ -48,7 +48,7 @@ fm_chart_insert_spec_t InsertOptions(int32_t type, int32_t bar_direction) {
 
 std::uint32_t InsertChart(fm_workbook_t* wb, int32_t type = FM_CHART_PLOT_TYPE_BAR,
                           int32_t bar_direction = FM_CHART_BAR_DIRECTION_COLUMN) {
-  const fm_chart_insert_spec_t o = InsertOptions(type, bar_direction);
+  const fm_chart_spec_t o = InsertOptions(type, bar_direction);
   std::uint32_t id = 0;
   EXPECT_EQ(fm_sheet_add_chart(wb, 0, &o, &id), FM_STATUS_OK) << fm_get_last_error_message();
   return id;
@@ -108,7 +108,8 @@ fm_chart_axis_info_t Axis(const ChartGuard& chart, std::uint32_t id) {
 
 void SaveAndReload(const WorkbookGuard& source, WorkbookGuard* out) {
   BufferGuard saved;
-  ASSERT_EQ(fm_workbook_save(source.handle, &saved.data, &saved.len), FM_STATUS_OK) << fm_get_last_error_message();
+  ASSERT_EQ(fm_workbook_save(source.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), FM_STATUS_OK)
+      << fm_get_last_error_message();
   ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &out->handle), FM_STATUS_OK) << fm_get_last_error_message();
 }
 
@@ -524,12 +525,12 @@ TEST(FormulonCApiChartPatch, InsertRefusesABarDirectionOnAnotherTypeAndCreatesNo
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), FM_STATUS_OK);
   FillGrid(wb.handle);
-  const fm_chart_insert_spec_t o = InsertOptions(FM_CHART_PLOT_TYPE_PIE, FM_CHART_BAR_DIRECTION_BAR);
+  const fm_chart_spec_t o = InsertOptions(FM_CHART_PLOT_TYPE_PIE, FM_CHART_BAR_DIRECTION_BAR);
   std::uint32_t id = 0;
   EXPECT_EQ(fm_sheet_add_chart(wb.handle, 0, &o, &id), FM_STATUS_INVALID_ARGUMENT);
-  const fm_chart_insert_spec_t zero = InsertOptions(FM_CHART_PLOT_TYPE_PIE, 0);
+  const fm_chart_spec_t zero = InsertOptions(FM_CHART_PLOT_TYPE_PIE, 0);
   EXPECT_EQ(fm_sheet_add_chart(wb.handle, 0, &zero, &id), FM_STATUS_OK) << fm_get_last_error_message();
-  const fm_chart_insert_spec_t stock = InsertOptions(FM_CHART_PLOT_TYPE_STOCK, 0);
+  const fm_chart_spec_t stock = InsertOptions(FM_CHART_PLOT_TYPE_STOCK, 0);
   EXPECT_EQ(fm_sheet_add_chart(wb.handle, 0, &stock, &id), FM_STATUS_INVALID_ARGUMENT);
   std::size_t count = 0;
   ASSERT_EQ(fm_sheet_get_drawing_object_count(wb.handle, 0, &count), FM_STATUS_OK);
@@ -555,6 +556,7 @@ fm_chart_point_patch_t ClearEveryMember() {
   fm_chart_point_patch_t point = FM_STRUCT_INIT(fm_chart_point_patch_t);
   point.fill.color_op = FM_PATCH_OP_CLEAR;
   point.fill.transparency_pct_op = FM_PATCH_OP_CLEAR;
+  point.fill.none_op = FM_PATCH_OP_CLEAR;
   point.line.color_op = FM_PATCH_OP_CLEAR;
   point.line.transparency_pct_op = FM_PATCH_OP_CLEAR;
   point.line.width_pt_op = FM_PATCH_OP_CLEAR;
@@ -639,6 +641,58 @@ TEST(FormulonCApiChartPatch, PointOverrideEmptiedByClearsDisappearsOnlyWhenNothi
   ASSERT_EQ(fm_sheet_update_chart_point(wb.handle, 0, id, 0, 0, 1, &rest), FM_STATUS_OK) << fm_get_last_error_message();
   OpenChart(wb.handle, id, &chart);
   EXPECT_EQ(Series(chart, 0, 0).point_count, 0U);
+}
+
+// ---------------------------------------------------------------------------
+// Series paint
+// ---------------------------------------------------------------------------
+
+TEST(FormulonCApiChartPaintClear, ClearFillToStyle) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), FM_STATUS_OK);
+  FillGrid(wb.handle);
+  const std::uint32_t id = InsertChart(wb.handle);
+
+  // A fresh bar series carries the template's theme fill, as Excel writes it.
+  ChartGuard chart;
+  OpenChart(wb.handle, id, &chart);
+  const fm_chart_series_info_t fresh = Series(chart, 0, 0);
+  EXPECT_EQ(fresh.fill.color.kind, FM_COLOR_KIND_THEME);
+  EXPECT_EQ(fresh.fill.none, 0);
+  EXPECT_EQ(fresh.fill.other, 0);
+
+  fm_chart_series_patch_t no_fill = FM_STRUCT_INIT(fm_chart_series_patch_t);
+  no_fill.fill.none_op = FM_PATCH_OP_SET;
+  no_fill.fill.none = 1;
+  ASSERT_EQ(fm_sheet_update_chart_series(wb.handle, 0, id, 0, 0, &no_fill), FM_STATUS_OK)
+      << fm_get_last_error_message();
+  WorkbookGuard reloaded;
+  SaveAndReload(wb, &reloaded);
+  ChartGuard after;
+  OpenChart(reloaded.handle, id, &after);
+  EXPECT_EQ(Series(after, 0, 0).fill.none, 1);
+
+  // A colour given with no-fill is refused and changes nothing.
+  fm_chart_series_patch_t both = no_fill;
+  both.fill.color_op = FM_PATCH_OP_SET;
+  both.fill.color.kind = FM_COLOR_KIND_RGB;
+  both.fill.color.argb = 0xFF336699U;
+  EXPECT_EQ(fm_sheet_update_chart_series(reloaded.handle, 0, id, 0, 0, &both), FM_STATUS_INVALID_ARGUMENT);
+  OpenChart(reloaded.handle, id, &after);
+  EXPECT_EQ(Series(after, 0, 0).fill.none, 1);
+
+  // Clearing every fill member returns the series to the style's fill.
+  fm_chart_series_patch_t clear = FM_STRUCT_INIT(fm_chart_series_patch_t);
+  clear.fill.color_op = FM_PATCH_OP_CLEAR;
+  clear.fill.transparency_pct_op = FM_PATCH_OP_CLEAR;
+  clear.fill.none_op = FM_PATCH_OP_CLEAR;
+  ASSERT_EQ(fm_sheet_update_chart_series(reloaded.handle, 0, id, 0, 0, &clear), FM_STATUS_OK)
+      << fm_get_last_error_message();
+  OpenChart(reloaded.handle, id, &after);
+  const fm_chart_series_info_t cleared = Series(after, 0, 0);
+  EXPECT_EQ(cleared.fill.none, 0);
+  EXPECT_EQ(cleared.fill.color.kind, FM_COLOR_KIND_NONE);
+  EXPECT_EQ(cleared.fill.has_transparency_pct, 0);
 }
 
 }  // namespace

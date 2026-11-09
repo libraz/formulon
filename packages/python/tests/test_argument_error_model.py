@@ -26,7 +26,6 @@ from formulon import (
     PivotAggregation,
     PivotAxis,
     PivotDataFieldInput,
-    PivotFieldInput,
     PivotInput,
     ShapeInput,
     StatusCode,
@@ -255,8 +254,9 @@ def _add_pivot(wb: Workbook):
         cache.set_record_value(record, 0, region)
         cache.set_record_value(record, 1, amount)
     pivot = ws.add_pivot(PivotInput(name="P1", cache_id=cache.cache_id, anchor=CellAddress(0, 4)))
-    pivot.add_field(PivotFieldInput(field_index="Region", axis=PivotAxis.ROW))
-    amount = pivot.add_field(PivotFieldInput(field_index="Amount", axis=PivotAxis.VALUE))
+    pivot.set_field_axis("Region", PivotAxis.ROW)
+    pivot.set_field_axis("Amount", PivotAxis.VALUE)
+    amount = pivot.get_field("Amount").cache_field_index
     pivot.add_data_field(PivotDataFieldInput(name="Sum", field_index=amount, aggregation=PivotAggregation.SUM))
     return cache, pivot
 

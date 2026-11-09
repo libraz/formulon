@@ -21,8 +21,9 @@ function makePivotWorkbook(Workbook) {
     cache.setRecordValue(rec, 1, amount);
   }
   const pivot = wb.sheet(0).addPivot({ name: 'Pivot1', cacheId, anchor: { row: 0, col: 4 } });
-  pivot.addField({ fieldIndex: 'Region', axis: 0 });
-  const amountField = pivot.addField({ fieldIndex: 'Amount', axis: 2 });
+  pivot.setFieldAxis('Region', 0);
+  pivot.setFieldAxis('Amount', 2);
+  const amountField = 1;
   pivot.addDataField({
     name: 'Sum of Amount',
     fieldIndex: amountField,
@@ -34,7 +35,7 @@ function makePivotWorkbook(Workbook) {
 // greaterThan on a double payload: the shape pivotFilterAt must read back.
 const PIVOT_FILTER = Object.freeze({
   fieldIndex: 'Region',
-  type: 1,
+  kind: 1,
   value: 15,
 });
 
@@ -46,7 +47,7 @@ test('pivotFilterAt reads back an added filter field for field', async () => {
     assert.equal(pivot.listFilters().length, 1);
     const got = pivot.listFilters()[0];
     assert.equal(got.fieldIndex, 0);
-    assert.equal(got.type, PIVOT_FILTER.type);
+    assert.equal(got.kind, PIVOT_FILTER.kind);
     assert.equal(got.value, PIVOT_FILTER.value);
   } finally {
     wb.dispose();
@@ -84,7 +85,7 @@ test('pivot filters survive save/load', async () => {
     assert.equal(reloaded.sheet(0).pivot(0).listFilters().length, 1);
     const got = reloaded.sheet(0).pivot(0).listFilters()[0];
     assert.equal(got.fieldIndex, 0);
-    assert.equal(got.type, PIVOT_FILTER.type);
+    assert.equal(got.kind, PIVOT_FILTER.kind);
     assert.equal(got.value, PIVOT_FILTER.value);
   } finally {
     reloaded.dispose();
@@ -105,11 +106,6 @@ test('a required pivot spec string field left out of the object is rejected, not
   const mod = await getModule();
   const { wb, pivot } = makePivotWorkbook(mod.Workbook);
   try {
-    const fieldCountBefore = pivot.listFields().length;
-    // no `fieldIndex`
-    assert.throws(() => pivot.addField({ axis: 0 }), TypeError);
-    assert.equal(pivot.listFields().length, fieldCountBefore, 'no field must have been added');
-
     // `name` is optional: an omitted one is derived from the workbook profile.
     const dataFieldCountBefore = pivot.listDataFields().length;
     const dataField = pivot.addDataField({ fieldIndex: 0, aggregation: 0 }); // no `name`
@@ -117,7 +113,7 @@ test('a required pivot spec string field left out of the object is rejected, not
     assert.equal(pivot.listDataFields()[dataField].name, 'Sum of Region');
 
     const filterCountBefore = pivot.listFilters().length;
-    assert.throws(() => pivot.addFilter({ type: 1, value: 15 }), TypeError); // no `fieldIndex`
+    assert.throws(() => pivot.addFilter({ kind: 1, value: 15 }), TypeError); // no `fieldIndex`
     assert.equal(pivot.listFilters().length, filterCountBefore, 'no filter must have been added');
   } finally {
     wb.dispose();
@@ -128,7 +124,7 @@ test('pivot definition read-backs report what the setters wrote', async () => {
   const mod = await getModule();
   const { wb, pivot } = makePivotWorkbook(mod.Workbook);
   try {
-    assert.equal(pivot.getCache(), wb.listPivotCaches()[0]);
+    assert.equal(pivot.cache(), wb.listPivotCaches()[0]);
     assert.equal(pivot.name, 'Pivot1');
     assert.deepEqual((({ rows, columns }) => ({ rows, columns }))(pivot.getGrandTotals()), {
       rows: true,
@@ -231,7 +227,7 @@ test('pivot definition read-backs reject out-of-range indices', async () => {
   const { wb, pivot } = makePivotWorkbook(mod.Workbook);
   try {
     for (const read of [
-      () => wb.sheet(0).pivot(9).getCache(),
+      () => wb.sheet(0).pivot(9).cache(),
       () => wb.sheet(0).pivot(9).name,
       () => wb.sheet(9).pivot(pivot).getGrandTotals(),
       () => wb.sheet(0).pivot(9).getRowFieldOrder(),
@@ -287,8 +283,10 @@ test('pivotFieldAdd binds by cache column name and a null axis takes a field off
       for (const [col, value] of [0, 0, sales, 1].entries()) cache.setRecordValue(rec, col, value);
     }
     const pivot = wb.sheet(0).addPivot({ name: 'PT', cacheId, anchor: { row: 0, col: 6 } });
-    const region = pivot.addField({ fieldIndex: 'Region', axis: 0 });
-    const sales = pivot.addField({ fieldIndex: 'Sales', axis: 2 });
+    pivot.setFieldAxis('Region', 0);
+    const region = 0;
+    pivot.setFieldAxis('Sales', 2);
+    const sales = 2;
     assert.equal(region, 0);
     assert.equal(sales, 2);
     assert.equal(pivot.listFields().length, 4);

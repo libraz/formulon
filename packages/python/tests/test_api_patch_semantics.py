@@ -12,7 +12,6 @@ from formulon import (
     ChartPlotType,
     FormulonError,
     PivotAxis,
-    PivotFieldInput,
     PivotInput,
     Workbook,
 )
@@ -29,7 +28,7 @@ def _grid(ws: Any) -> None:
 
 def _chart(wb: Workbook) -> Any:
     _grid(wb.sheet(0))
-    return wb.sheet(0).add_chart(formulon.ChartInsertInput(type=ChartPlotType.BAR, range="Sheet1!A1:C4"))
+    return wb.sheet(0).add_chart(formulon.ChartInput(type=ChartPlotType.BAR, range="Sheet1!A1:C4"))
 
 
 def _pivot(wb: Workbook) -> Any:
@@ -46,11 +45,12 @@ def _pivot(wb: Workbook) -> Any:
     pivot = wb.sheet(0).pivot(
         wb.sheet(0).add_pivot(PivotInput(name="P1", cache_id=cache.cache_id, anchor=CellAddress(0, 6)))
     )
-    region = pivot.add_field(PivotFieldInput(field_index="Region", axis=PivotAxis.ROW))
+    pivot.set_field_axis("Region", PivotAxis.ROW)
+    region = pivot.get_field("Region").cache_field_index
     pivot.add_field_item(region, "East", visible=True)
     pivot.add_field_item(region, "West", visible=True)
-    pivot.add_field(PivotFieldInput(field_index="Product", axis=PivotAxis.ROW))
-    pivot.add_field(PivotFieldInput(field_index="Amount", axis=PivotAxis.VALUE))
+    pivot.set_field_axis("Product", PivotAxis.ROW)
+    pivot.set_field_axis("Amount", PivotAxis.VALUE)
     return pivot
 
 

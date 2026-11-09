@@ -18,8 +18,8 @@ constexpr fm_status_t kIndexOutOfRange = static_cast<fm_status_t>(formulon::Form
 /// Sets the PivotTable style default, or clears it for "".
 fm_status_t SetPivotStyleDefault(fm_workbook_t* wb, const char* pivot_style) {
   fm_table_style_defaults_patch_t patch = FM_STRUCT_INIT(fm_table_style_defaults_patch_t);
-  patch.pivot_style_op = pivot_style[0] == '\0' ? FM_PATCH_OP_CLEAR : FM_PATCH_OP_SET;
-  patch.pivot_style = pivot_style;
+  patch.pivot_style_name_op = pivot_style[0] == '\0' ? FM_PATCH_OP_CLEAR : FM_PATCH_OP_SET;
+  patch.pivot_style_name = pivot_style;
   return fm_workbook_update_table_style_defaults(wb, &patch);
 }
 
@@ -137,34 +137,7 @@ TEST(FormulonCApiPivotReport, NewPivotFallsBackToTheBuiltInStyleWhenTheDefaultIs
   EXPECT_STREQ(style.style_name, "PivotStyleLight16");
 }
 
-TEST(FormulonCApiPivotReport, FieldSpecSubtotalTopDefaultsToTheGroupHead) {
-  const fm_tristate_t values[] = {FM_TRISTATE_DEFAULT, FM_TRISTATE_FALSE, FM_TRISTATE_TRUE};
-  const int32_t expected_read[] = {FM_TRISTATE_TRUE, FM_TRISTATE_FALSE, FM_TRISTATE_TRUE};
-  for (std::size_t i = 0; i < 3U; ++i) {
-    WorkbookGuard wb;
-    ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-    std::uint32_t cache_id = 0;
-    ASSERT_EQ(fm_workbook_add_pivot_cache(wb.handle, 0, &cache_id), 0);
-    std::size_t cache_field = 99;
-    ASSERT_EQ(fm_workbook_add_pivot_cache_field(wb.handle, cache_id, "F", &cache_field), 0);
-    std::size_t pivot_index = 99;
-    ASSERT_EQ(AddPivot(wb.handle, 0, "PT", cache_id, 0U, 0U, &pivot_index), 0);
-
-    fm_pivot_field_spec_t spec = FM_STRUCT_INIT(fm_pivot_field_spec_t);
-    spec.source_name = "F";
-    spec.custom_name = "";
-    spec.axis = FM_PIVOT_AXIS_ROW;
-    spec.subtotal_top = values[i];
-    spec.number_format = "";
-    std::size_t field = 99;
-    ASSERT_EQ(fm_sheet_add_pivot_field(wb.handle, 0, pivot_index, &spec, &field), 0) << fm_get_last_error_message();
-    fm_pivot_field_info_t info = FM_STRUCT_INIT(fm_pivot_field_info_t);
-    ASSERT_EQ(fm_sheet_get_pivot_field_at(wb.handle, 0, pivot_index, field, &info), 0);
-    EXPECT_EQ(info.subtotal_top, expected_read[i]) << "spec value " << values[i];
-  }
-}
-
-TEST(FormulonCApiPivotReport, FieldSpecSubtotalTopOutsideTheTristateIsRejected) {
+TEST(FormulonCApiPivotReport, FieldSubtotalTopStartsAtTheGroupHead) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   std::uint32_t cache_id = 0;
@@ -173,15 +146,26 @@ TEST(FormulonCApiPivotReport, FieldSpecSubtotalTopOutsideTheTristateIsRejected) 
   ASSERT_EQ(fm_workbook_add_pivot_cache_field(wb.handle, cache_id, "F", &cache_field), 0);
   std::size_t pivot_index = 99;
   ASSERT_EQ(AddPivot(wb.handle, 0, "PT", cache_id, 0U, 0U, &pivot_index), 0);
+  ASSERT_EQ(fm_sheet_set_pivot_field_axis(wb.handle, 0, pivot_index, cache_field, FM_PIVOT_AXIS_ROW), 0)
+      << fm_get_last_error_message();
+  fm_pivot_field_info_t info = FM_STRUCT_INIT(fm_pivot_field_info_t);
+  ASSERT_EQ(fm_sheet_get_pivot_field_at(wb.handle, 0, pivot_index, cache_field, &info), 0);
+  EXPECT_EQ(info.subtotal_top, FM_TRISTATE_TRUE);
+  ASSERT_EQ(SetPivotFieldSubtotalTop(wb.handle, 0, pivot_index, cache_field, 0), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_get_pivot_field_at(wb.handle, 0, pivot_index, cache_field, &info), 0);
+  EXPECT_EQ(info.subtotal_top, FM_TRISTATE_FALSE);
+}
 
-  fm_pivot_field_spec_t bad = FM_STRUCT_INIT(fm_pivot_field_spec_t);
-  bad.source_name = "F";
-  bad.custom_name = "";
-  bad.axis = FM_PIVOT_AXIS_ROW;
-  bad.subtotal_top = 3;
-  bad.number_format = "";
-  std::size_t field = 99;
-  EXPECT_EQ(fm_sheet_add_pivot_field(wb.handle, 0, pivot_index, &bad, &field),
+TEST(FormulonCApiPivotReport, FieldPatchSubtotalTopOutsideZeroOneIsRejected) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  std::uint32_t cache_id = 0;
+  ASSERT_EQ(fm_workbook_add_pivot_cache(wb.handle, 0, &cache_id), 0);
+  std::size_t cache_field = 99;
+  ASSERT_EQ(fm_workbook_add_pivot_cache_field(wb.handle, cache_id, "F", &cache_field), 0);
+  std::size_t pivot_index = 99;
+  ASSERT_EQ(AddPivot(wb.handle, 0, "PT", cache_id, 0U, 0U, &pivot_index), 0);
+  EXPECT_EQ(SetPivotFieldSubtotalTop(wb.handle, 0, pivot_index, cache_field, 3),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
 }
 

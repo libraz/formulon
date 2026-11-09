@@ -46,7 +46,8 @@ constexpr fm_status_t kInvalidArgument = static_cast<fm_status_t>(formulon::Form
 void RoundTrip(const WorkbookGuard& wb, WorkbookGuard* out, std::string* part_xml = nullptr,
                const char* part = "xl/worksheets/sheet1.xml") {
   BufferGuard saved;
-  ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0)
+      << fm_get_last_error_message();
   if (part_xml != nullptr) {
     formulon::io::ZipReader zip;
     ASSERT_TRUE(static_cast<bool>(zip.open(formulon::io::ByteSpan{saved.data, saved.len})));
@@ -187,13 +188,13 @@ TEST(FormulonCApiFontToggles, OutlineShadowCondenseExtendRoundTrip) {
   font.condense = 1;
   font.has_extend = 1;
   font.extend = 1;
-  std::size_t index = 0;
+  std::uint32_t index = 0;
   ASSERT_EQ(fm_workbook_add_font(wb.handle, &font, &index), 0);
-  std::size_t same = 0;
+  std::uint32_t same = 0;
   ASSERT_EQ(fm_workbook_add_font(wb.handle, &font, &same), 0);
   EXPECT_EQ(same, index);
   font.extend = 0;
-  std::size_t other = 0;
+  std::uint32_t other = 0;
   ASSERT_EQ(fm_workbook_add_font(wb.handle, &font, &other), 0);
   EXPECT_NE(other, index);
 
@@ -227,7 +228,7 @@ fm_fill_t GradientFill(fm_gradient_stop_t* stops, size_t count) {
   fm_fill_t fill{};
   fill.has_gradient = 1;
   fill.gradient_type = FM_GRADIENT_TYPE_PATH;
-  fill.gradient_degree = 0.0;
+  fill.gradient_angle_deg = 0.0;
   fill.gradient_left = 0.5;
   fill.gradient_right = 0.5;
   fill.gradient_top = 0.25;
@@ -252,13 +253,13 @@ TEST(FormulonCApiGradientFill, AddGetAndDedup) {
   stops[1].color.tint = 0.5;
   fm_fill_t fill = GradientFill(stops, 2);
 
-  std::size_t index = 0;
+  std::uint32_t index = 0;
   ASSERT_EQ(fm_workbook_add_fill(wb.handle, &fill, &index), 0);
-  std::size_t same = 0;
+  std::uint32_t same = 0;
   ASSERT_EQ(fm_workbook_add_fill(wb.handle, &fill, &same), 0);
   EXPECT_EQ(same, index);
   stops[1].position = 0.9;
-  std::size_t other = 0;
+  std::uint32_t other = 0;
   ASSERT_EQ(fm_workbook_add_fill(wb.handle, &fill, &other), 0);
   EXPECT_NE(other, index);
 
@@ -291,12 +292,12 @@ TEST(FormulonCApiGradientFill, NonFiniteNumbersAndNullStopsAreSanitised) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   fm_fill_t fill = GradientFill(nullptr, 5);
-  fill.gradient_degree = std::numeric_limits<double>::infinity();
-  std::size_t index = 0;
+  fill.gradient_angle_deg = std::numeric_limits<double>::infinity();
+  std::uint32_t index = 0;
   ASSERT_EQ(fm_workbook_add_fill(wb.handle, &fill, &index), 0);
   fm_fill_t back{};
   ASSERT_EQ(fm_workbook_get_fill_at(wb.handle, index, &back), 0);
-  EXPECT_EQ(back.gradient_degree, 0.0);
+  EXPECT_EQ(back.gradient_angle_deg, 0.0);
   EXPECT_EQ(back.gradient_stop_count, 0U);
 }
 
@@ -310,7 +311,7 @@ TEST(FormulonCApiGradientFill, SurvivesSaveLoadOnCellsAndDxfs) {
     stops[i].color.argb = 0xFF000000U | (0x40U * static_cast<uint32_t>(i + 1));
   }
   fm_fill_t fill = GradientFill(stops, 3);
-  std::size_t fill_index = 0;
+  std::uint32_t fill_index = 0;
   ASSERT_EQ(fm_workbook_add_fill(wb.handle, &fill, &fill_index), 0);
   fm_cell_xf_t xf{};
   xf.fill_index = static_cast<uint32_t>(fill_index);
@@ -323,7 +324,7 @@ TEST(FormulonCApiGradientFill, SurvivesSaveLoadOnCellsAndDxfs) {
   dxf.has_fill = 1;
   dxf.fill = GradientFill(stops, 3);
   dxf.fill.gradient_type = FM_GRADIENT_TYPE_LINEAR;
-  dxf.fill.gradient_degree = 45.0;
+  dxf.fill.gradient_angle_deg = 45.0;
   dxf.fill.gradient_left = dxf.fill.gradient_right = dxf.fill.gradient_top = dxf.fill.gradient_bottom = 0.0;
   std::uint32_t dxf_index = 0;
   ASSERT_EQ(fm_workbook_add_dxf(wb.handle, &dxf, &dxf_index), 0);
@@ -345,7 +346,7 @@ TEST(FormulonCApiGradientFill, SurvivesSaveLoadOnCellsAndDxfs) {
   ASSERT_EQ(fm_workbook_get_dxf_at(reloaded.handle, dxf_index, &dxf_back), 0);
   ASSERT_EQ(dxf_back.has_fill, 1);
   EXPECT_EQ(dxf_back.fill.has_gradient, 1);
-  EXPECT_EQ(dxf_back.fill.gradient_degree, 45.0);
+  EXPECT_EQ(dxf_back.fill.gradient_angle_deg, 45.0);
   EXPECT_EQ(dxf_back.fill.gradient_stop_count, 3U);
 }
 
@@ -362,13 +363,13 @@ fm_cf_rule_t IconRule(const fm_cell_rect_t* sqref, fm_cfvo_t* thresholds, const 
   rule.ranges = sqref;
   rule.range_count = 1;
   rule.has_icon_set = 1;
-  rule.icon_set_name = 0;  // Three_Arrows
+  rule.icon_set = 0;       // Three_Arrows
   thresholds[0].type = 1;  // Percent
   thresholds[0].value = "33";
-  thresholds[0].gte = 1;
+  thresholds[0].gte = FM_TRISTATE_TRUE;
   thresholds[1].type = 1;
   thresholds[1].value = "67";
-  thresholds[1].gte = 1;
+  thresholds[1].gte = FM_TRISTATE_TRUE;
   rule.icon_set_thresholds = thresholds;
   rule.icon_set_threshold_count = 2;
   rule.icon_set_show_value = 1;
@@ -386,7 +387,7 @@ TEST(FormulonCApiCustomIcons, RoundTripThroughSaveAndLoad) {
   fm_cell_rect_t sqref{0, 0, 9, 0};
   fm_cfvo_t thresholds[2]{};
   const fm_cf_icon_t icons[3] = {
-      {FM_ICON_SET_NAME_3_TRIANGLES, 0}, {FM_ICON_SET_NAME_NO_ICONS, 0}, {FM_ICON_SET_NAME_5_BOXES, 4}};
+      {FM_ICON_SET_NAME_THREE_TRIANGLES, 0}, {FM_ICON_SET_NAME_NO_ICONS, 0}, {FM_ICON_SET_NAME_FIVE_BOXES, 4}};
   ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, record_arg(IconRule(&sqref, thresholds, icons, 3)), ignored_id()), 0)
       << fm_get_last_error_message();
 
@@ -404,9 +405,9 @@ TEST(FormulonCApiCustomIcons, RoundTripThroughSaveAndLoad) {
   fm_cf_rule_t back = FM_STRUCT_INIT(fm_cf_rule_t);
   ASSERT_EQ(fm_sheet_get_cf_rule_at(reloaded.handle, 0, 0, &back), 0);
   ASSERT_EQ(back.icon_set_icon_count, 3U);
-  EXPECT_EQ(back.icon_set_icons[0].icon_set, FM_ICON_SET_NAME_3_TRIANGLES);
+  EXPECT_EQ(back.icon_set_icons[0].icon_set, FM_ICON_SET_NAME_THREE_TRIANGLES);
   EXPECT_EQ(back.icon_set_icons[1].icon_set, FM_ICON_SET_NAME_NO_ICONS);
-  EXPECT_EQ(back.icon_set_icons[2].icon_set, FM_ICON_SET_NAME_5_BOXES);
+  EXPECT_EQ(back.icon_set_icons[2].icon_set, FM_ICON_SET_NAME_FIVE_BOXES);
   EXPECT_EQ(back.icon_set_icons[2].icon_index, 4);
 }
 
@@ -427,18 +428,18 @@ TEST(FormulonCApiCustomIcons, MalformedIconListsAreRejected) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   fm_cell_rect_t sqref{0, 0, 9, 0};
   fm_cfvo_t thresholds[2]{};
-  const fm_cf_icon_t too_few[2] = {{FM_ICON_SET_NAME_3_ARROWS, 0}, {FM_ICON_SET_NAME_3_ARROWS, 1}};
+  const fm_cf_icon_t too_few[2] = {{FM_ICON_SET_NAME_THREE_ARROWS, 0}, {FM_ICON_SET_NAME_THREE_ARROWS, 1}};
   EXPECT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, record_arg(IconRule(&sqref, thresholds, too_few, 2)), ignored_id()),
             kInvalidArgument);
   const fm_cf_icon_t past_last[3] = {
-      {FM_ICON_SET_NAME_3_ARROWS, 0}, {FM_ICON_SET_NAME_NO_ICONS + 1, 1}, {FM_ICON_SET_NAME_3_ARROWS, 2}};
+      {FM_ICON_SET_NAME_THREE_ARROWS, 0}, {FM_ICON_SET_NAME_NO_ICONS + 1, 1}, {FM_ICON_SET_NAME_THREE_ARROWS, 2}};
   EXPECT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, record_arg(IconRule(&sqref, thresholds, past_last, 3)), ignored_id()),
             kInvalidArgument);
-  const fm_cf_icon_t negative[3] = {{FM_ICON_SET_NAME_3_ARROWS, 0}, {-1, 1}, {FM_ICON_SET_NAME_3_ARROWS, 2}};
+  const fm_cf_icon_t negative[3] = {{FM_ICON_SET_NAME_THREE_ARROWS, 0}, {-1, 1}, {FM_ICON_SET_NAME_THREE_ARROWS, 2}};
   EXPECT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, record_arg(IconRule(&sqref, thresholds, negative, 3)), ignored_id()),
             kInvalidArgument);
   const fm_cf_icon_t id_out_of_set[3] = {
-      {FM_ICON_SET_NAME_3_ARROWS, 0}, {FM_ICON_SET_NAME_3_ARROWS, 3}, {FM_ICON_SET_NAME_3_ARROWS, 2}};
+      {FM_ICON_SET_NAME_THREE_ARROWS, 0}, {FM_ICON_SET_NAME_THREE_ARROWS, 3}, {FM_ICON_SET_NAME_THREE_ARROWS, 2}};
   EXPECT_EQ(
       fm_sheet_add_cf_rule(wb.handle, 0, record_arg(IconRule(&sqref, thresholds, id_out_of_set, 3)), ignored_id()),
       kInvalidArgument);

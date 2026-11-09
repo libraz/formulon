@@ -157,8 +157,7 @@ Napi::Value Workbook::SetThemeScriptFont(const Napi::CallbackInfo& info) {
   }
   const std::string script = ArgString(info, 1);
   const std::string typeface = ArgString(info, 2);
-  const fm_status_t rc =
-      fm_workbook_set_theme_script_font(handle_, ArgI32(info, 0), script.c_str(), typeface.c_str());
+  const fm_status_t rc = fm_workbook_set_theme_script_font(handle_, ArgI32(info, 0), script.c_str(), typeface.c_str());
   return ValueOrThrow(env, rc, env.Undefined());
 }
 
@@ -225,14 +224,14 @@ Napi::Value Workbook::GetEffectiveStyle(const Napi::CallbackInfo& info) {
   out.Set("fillIndex", Napi::Number::New(env, es.fill_index));
   out.Set("borderIndex", Napi::Number::New(env, es.border_index));
   out.Set("fontColor", colorOf(es.font_argb, es.font_resolution));
-  out.Set("fillForeground", colorOf(es.fill_fg_argb, es.fill_fg_resolution));
-  out.Set("fillBackground", colorOf(es.fill_bg_argb, es.fill_bg_resolution));
+  out.Set("fillForeground", colorOf(es.fill_foreground_argb, es.fill_foreground_resolution));
+  out.Set("fillBackground", colorOf(es.fill_background_argb, es.fill_background_resolution));
   out.Set("borders", borders);
   Napi::Object protection = Napi::Object::New(env);
   protection.Set("locked", Napi::Boolean::New(env, es.locked != 0));
   protection.Set("hidden", Napi::Boolean::New(env, es.hidden != 0));
   out.Set("protection", protection);
-  out.Set("numberFormat", JsString(env, es.num_fmt_code));
+  out.Set("numberFormat", JsString(env, es.number_format));
   return out;
 }
 

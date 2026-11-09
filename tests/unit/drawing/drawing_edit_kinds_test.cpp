@@ -1,9 +1,13 @@
+#include <algorithm>
 #include <cstdint>
+#include <iterator>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <utility>
 #include <vector>
 
+#include "chart/chart_model.h"
 #include "drawing/drawing_edit.h"
 #include "drawing/shape_edit.h"
 #include "drawing/slicer_edit.h"
@@ -622,47 +626,235 @@ TEST(DrawingEditKinds, WrappedSlicerMovesWithItsFallback) {
   EXPECT_EQ(Ids(reloaded), (std::vector<std::uint32_t>{3, 2, 4}));
 }
 
-// An unset paint removes the shape's own fill and outline fill elements (an emptied `a:ln` goes too, one
-// keeping its width stays), so the style's paint applies; the result survives a save and reload.
-TEST(DrawingEditKinds, ShapeUnsetPaintRemovesItsOwnFillAndOutline) {
-  const std::string outline = "<a:ln w=\"12700\"><a:solidFill><a:srgbClr val=\"00FF00\"/></a:solidFill></a:ln>";
+// The listed shape with `id`, or a default one.
+ShapeInfo ShapeWithId(const Workbook& wb, std::uint32_t id) {
+  auto shapes = list_shapes(wb, 0);
+  EXPECT_TRUE(static_cast<bool>(shapes));
+  if (shapes) {
+    for (const ShapeInfo& shape : shapes.value()) {
+      if (shape.object.object_id == id) {
+        return shape;
+      }
+    }
+  }
+  ADD_FAILURE() << "no shape " << id;
+  return ShapeInfo{};
+}
+
+ShapeSpec OneCellShape(std::string prst) {
+  ShapeSpec spec;
+  spec.fields = shape_field::kAnchor | shape_field::kPrst;
+  spec.prst = std::move(prst);
+  spec.anchor_kind = AnchorKind::kOneCell;
+  spec.from = AnchorPoint{1, 1, 0, 0};
+  spec.cx = 914400;
+  spec.cy = 457200;
+  return spec;
+}
+
+ColorSpec Rgb(std::uint32_t argb) {
+  ColorSpec color;
+  color.kind = ColorSpec::Kind::kRgb;
+  color.rgb = argb;
+  return color;
+}
+
+TEST(ShapeUpdateAtomic, InvalidKindPatchLeavesNameUnchanged) {
+  SlicerBook book = MakeSlicerBook();
+  Workbook& wb = book.wb;
+  const std::string before = ObjectWithId(wb, book.shape).name;
+  DrawingCommonPatch common;
+  common.name = std::string("Renamed");
+  ShapeSpec bad;
+  bad.paint_line.width_pt = ChartPatchField<double>::Set(-1.0);
+  EXPECT_EQ(Code(update_shape(wb, 0, book.shape, &common, &bad)), FormulonErrorCode::kInvalidArgument);
+  EXPECT_EQ(ObjectWithId(wb, book.shape).name, before);
+
+  EXPECT_TRUE(static_cast<bool>(update_shape(wb, 0, book.shape, nullptr, nullptr)));
+  ShapeSpec width;
+  width.paint_line.width_pt = ChartPatchField<double>::Set(1.0);
+  ASSERT_TRUE(static_cast<bool>(update_shape(wb, 0, book.shape, &common, &width)));
+  EXPECT_EQ(ObjectWithId(wb, book.shape).name, "Renamed");
+  EXPECT_EQ(ShapeWithId(wb, book.shape).paint_line.width_emu, std::optional<std::int64_t>(12700));
+}
+
+TEST(SlicerUpdateAtomic, InvalidKindPatchLeavesHiddenUnchanged) {
+  SlicerBook book = MakeSlicerBook();
+  Workbook& wb = book.wb;
+  ASSERT_FALSE(ObjectWithId(wb, book.slicer).hidden);
+  DrawingCommonPatch common;
+  common.hidden = true;
+  SlicerSpec bad;
+  bad.fields = slicer_field::kColumnCount;
+  bad.column_count = 0;
+  EXPECT_EQ(Code(update_slicer(wb, 0, book.slicer, &common, &bad)), FormulonErrorCode::kInvalidArgument);
+  EXPECT_FALSE(ObjectWithId(wb, book.slicer).hidden);
+
+  SlicerSpec columns;
+  columns.fields = slicer_field::kColumnCount;
+  columns.column_count = 2;
+  ASSERT_TRUE(static_cast<bool>(update_slicer(wb, 0, book.slicer, &common, &columns)));
+  EXPECT_TRUE(ObjectWithId(wb, book.slicer).hidden);
+  auto slicers = list_slicers(wb, 0);
+  ASSERT_TRUE(static_cast<bool>(slicers));
+  ASSERT_EQ(slicers.value().size(), 1U);
+  EXPECT_EQ(slicers.value()[0].column_count, 2U);
+  EXPECT_EQ(Code(update_slicer(wb, 0, book.shape, &common, &columns)), FormulonErrorCode::kNotFound);
+}
+
+TEST(ShapePresetGeometryValidation, UnknownPresetInvalidArgument) {
+  Workbook wb = Workbook::create();
+  EXPECT_EQ(Code(insert_shape(wb, 0, OneCellShape("notAShape"))), FormulonErrorCode::kInvalidArgument);
+  EXPECT_EQ(Code(insert_shape(wb, 0, OneCellShape("Rect"))), FormulonErrorCode::kInvalidArgument);
+  auto id = insert_shape(wb, 0, OneCellShape("rect"));
+  ASSERT_TRUE(static_cast<bool>(id));
+  ShapeSpec prst;
+  prst.fields = shape_field::kPrst;
+  prst.prst = "notAShape";
+  EXPECT_EQ(Code(update_shape(wb, 0, id.value(), prst)), FormulonErrorCode::kInvalidArgument);
+  EXPECT_EQ(ShapeWithId(wb, id.value()).prst, "rect");
+}
+
+TEST(ShapePresetGeometryValidation, KnownPresetAccepted) {
+  Workbook wb = Workbook::create();
+  for (const char* name : {"rect", "roundRect", "ellipse", "rightArrow", "flowChartProcess", "wedgeRectCallout"}) {
+    auto id = insert_shape(wb, 0, OneCellShape(name));
+    ASSERT_TRUE(static_cast<bool>(id)) << name;
+    EXPECT_EQ(ShapeWithId(wb, id.value()).prst, name);
+  }
+  auto connector = insert_shape(wb, 0, OneCellShape("straightConnector1"));
+  ASSERT_TRUE(static_cast<bool>(connector));
+  EXPECT_EQ(ShapeWithId(wb, connector.value()).prst, "straightConnector1");
+  auto defaulted = insert_shape(wb, 0, OneCellShape(""));
+  ASSERT_TRUE(static_cast<bool>(defaulted));
+  EXPECT_EQ(ShapeWithId(wb, defaulted.value()).prst, "rect");
+}
+
+// The full `ST_ShapeType` list in byte order: every name is accepted, and near
+// misses on either side of an entry are refused.
+TEST(ShapePresetGeometryValidation, EveryShapeTypeAcceptedInByteOrder) {
+  // clang-format off
+  constexpr std::string_view kAll[] = {
+      "accentBorderCallout1", "accentBorderCallout2", "accentBorderCallout3", "accentCallout1", "accentCallout2",
+      "accentCallout3", "actionButtonBackPrevious", "actionButtonBeginning", "actionButtonBlank",
+      "actionButtonDocument", "actionButtonEnd", "actionButtonForwardNext", "actionButtonHelp", "actionButtonHome",
+      "actionButtonInformation", "actionButtonMovie", "actionButtonReturn", "actionButtonSound", "arc", "bentArrow",
+      "bentConnector2", "bentConnector3", "bentConnector4", "bentConnector5", "bentUpArrow", "bevel", "blockArc",
+      "borderCallout1", "borderCallout2", "borderCallout3", "bracePair", "bracketPair", "callout1", "callout2",
+      "callout3", "can", "chartPlus", "chartStar", "chartX", "chevron", "chord", "circularArrow", "cloud",
+      "cloudCallout", "corner", "cornerTabs", "cube", "curvedConnector2", "curvedConnector3", "curvedConnector4",
+      "curvedConnector5", "curvedDownArrow", "curvedLeftArrow", "curvedRightArrow", "curvedUpArrow", "decagon",
+      "diagStripe", "diamond", "dodecagon", "donut", "doubleWave", "downArrow", "downArrowCallout", "ellipse",
+      "ellipseRibbon", "ellipseRibbon2", "flowChartAlternateProcess", "flowChartCollate", "flowChartConnector",
+      "flowChartDecision", "flowChartDelay", "flowChartDisplay", "flowChartDocument", "flowChartExtract",
+      "flowChartInputOutput", "flowChartInternalStorage", "flowChartMagneticDisk", "flowChartMagneticDrum",
+      "flowChartMagneticTape", "flowChartManualInput", "flowChartManualOperation", "flowChartMerge",
+      "flowChartMultidocument", "flowChartOfflineStorage", "flowChartOffpageConnector", "flowChartOnlineStorage",
+      "flowChartOr", "flowChartPredefinedProcess", "flowChartPreparation", "flowChartProcess", "flowChartPunchedCard",
+      "flowChartPunchedTape", "flowChartSort", "flowChartSummingJunction", "flowChartTerminator", "foldedCorner",
+      "frame", "funnel", "gear6", "gear9", "halfFrame", "heart", "heptagon", "hexagon", "homePlate", "horizontalScroll",
+      "irregularSeal1", "irregularSeal2", "leftArrow", "leftArrowCallout", "leftBrace", "leftBracket",
+      "leftCircularArrow", "leftRightArrow", "leftRightArrowCallout", "leftRightCircularArrow", "leftRightRibbon",
+      "leftRightUpArrow", "leftUpArrow", "lightningBolt", "line", "lineInv", "mathDivide", "mathEqual", "mathMinus",
+      "mathMultiply", "mathNotEqual", "mathPlus", "moon", "noSmoking", "nonIsoscelesTrapezoid", "notchedRightArrow",
+      "octagon", "parallelogram", "pentagon", "pie", "pieWedge", "plaque", "plaqueTabs", "plus", "quadArrow",
+      "quadArrowCallout", "rect", "ribbon", "ribbon2", "rightArrow", "rightArrowCallout", "rightBrace", "rightBracket",
+      "round1Rect", "round2DiagRect", "round2SameRect", "roundRect", "rtTriangle", "smileyFace", "snip1Rect",
+      "snip2DiagRect", "snip2SameRect", "snipRoundRect", "squareTabs", "star10", "star12", "star16", "star24", "star32",
+      "star4", "star5", "star6", "star7", "star8", "straightConnector1", "stripedRightArrow", "sun", "swooshArrow",
+      "teardrop", "trapezoid", "triangle", "upArrow", "upArrowCallout", "upDownArrow", "upDownArrowCallout",
+      "uturnArrow", "verticalScroll", "wave", "wedgeEllipseCallout", "wedgeRectCallout", "wedgeRoundRectCallout",
+  };
+  // clang-format on
+  EXPECT_EQ(std::size(kAll), 187U);
+  EXPECT_TRUE(std::is_sorted(std::begin(kAll), std::end(kAll)));
+  EXPECT_EQ(std::adjacent_find(std::begin(kAll), std::end(kAll)), std::end(kAll));
+  Workbook wb = Workbook::create();
+  auto id = insert_shape(wb, 0, OneCellShape("rect"));
+  ASSERT_TRUE(static_cast<bool>(id));
+  ShapeSpec spec;
+  spec.fields = shape_field::kPrst;
+  for (const std::string_view name : kAll) {
+    spec.prst = std::string(name);
+    EXPECT_TRUE(static_cast<bool>(update_shape(wb, 0, id.value(), spec))) << name;
+    spec.prst = std::string(name) + "x";
+    EXPECT_EQ(Code(update_shape(wb, 0, id.value(), spec)), FormulonErrorCode::kInvalidArgument) << spec.prst;
+  }
+  for (const char* miss : {"accentBorderCallout", "Rect", "aaa", "zzz", "wedgeRoundRectCallou"}) {
+    spec.prst = miss;
+    EXPECT_EQ(Code(update_shape(wb, 0, id.value(), spec)), FormulonErrorCode::kInvalidArgument) << miss;
+  }
+  EXPECT_EQ(ShapeWithId(wb, id.value()).prst, "wedgeRoundRectCallout");
+}
+
+TEST(ShapePaintRecord, SolidNoneTransparencyDashRoundTrip) {
+  Workbook wb = Workbook::create();
+  ShapeSpec spec = OneCellShape("rect");
+  spec.paint_fill.color = ChartPatchField<ColorSpec>::Set(Rgb(0xFF336699U));
+  spec.paint_fill.transparency_pct = ChartPatchField<double>::Set(25.0);
+  spec.paint_line.color = ChartPatchField<ColorSpec>::Set(Rgb(0xFFAA0000U));
+  spec.paint_line.width_pt = ChartPatchField<double>::Set(2.0);
+  spec.paint_line.dash = ChartPatchField<ChartLineDash>::Set(ChartLineDash::kDash);
+  auto id = insert_shape(wb, 0, spec);
+  ASSERT_TRUE(static_cast<bool>(id));
+
+  const ShapeInfo read = ShapeWithId(RoundTrip(wb), id.value());
+  ASSERT_TRUE(read.paint_fill.color.has_value());
+  EXPECT_EQ(read.paint_fill.color->rgb, 0xFF336699U);
+  EXPECT_EQ(read.paint_fill.alpha, std::optional<std::uint32_t>(75000U));
+  EXPECT_FALSE(read.paint_fill.none);
+  EXPECT_FALSE(read.paint_fill.other);
+  ASSERT_TRUE(read.paint_line.color.has_value());
+  EXPECT_EQ(read.paint_line.color->rgb, 0xFFAA0000U);
+  EXPECT_EQ(read.paint_line.width_emu, std::optional<std::int64_t>(25400));
+  EXPECT_EQ(read.paint_line.dash, std::optional<ChartLineDash>(ChartLineDash::kDash));
+  EXPECT_FALSE(read.paint_line.none);
+
+  ShapeSpec none;
+  none.paint_fill.none = true;
+  none.paint_line.none = true;
+  ASSERT_TRUE(static_cast<bool>(update_shape(wb, 0, id.value(), none)));
+  ShapeInfo hidden = ShapeWithId(wb, id.value());
+  EXPECT_TRUE(hidden.paint_fill.none);
+  EXPECT_FALSE(hidden.paint_fill.color.has_value());
+  EXPECT_TRUE(hidden.paint_line.none);
+
+  // Clearing returns both parts to the style's paint.
+  ShapeSpec clear;
+  clear.paint_fill.color = ChartPatchField<ColorSpec>::Clear();
+  clear.paint_fill.none = false;
+  clear.paint_line.color = ChartPatchField<ColorSpec>::Clear();
+  clear.paint_line.none = false;
+  ASSERT_TRUE(static_cast<bool>(update_shape(wb, 0, id.value(), clear)));
+  const ShapeInfo styled = ShapeWithId(wb, id.value());
+  EXPECT_FALSE(styled.paint_fill.none);
+  EXPECT_FALSE(styled.paint_fill.color.has_value());
+  EXPECT_FALSE(styled.paint_line.none);
+  EXPECT_FALSE(styled.paint_line.color.has_value());
+}
+
+TEST(ShapePaintRecord, GradientReadsOther) {
+  const std::string grad =
+      "<a:gradFill><a:gsLst><a:gs pos=\"0\"><a:srgbClr val=\"FF0000\"/></a:gs>"
+      "<a:gs pos=\"100000\"><a:srgbClr val=\"0000FF\"/></a:gs></a:gsLst></a:gradFill>";
   const std::string drawing =
-      std::string(kWsDrOpen) +
-      Anchor(0, Sp(2, "Filled", "", "<a:solidFill><a:srgbClr val=\"FF0000\"/></a:solidFill>" + outline)) +
-      Anchor(5, Sp(3, "Bare outline", "", "<a:noFill/><a:ln><a:noFill/></a:ln>")) + "</xdr:wsDr>";
+      std::string(kWsDrOpen) + Anchor(0, Sp(2, "Gradient", "", grad + "<a:ln w=\"12700\">" + grad + "</a:ln>")) +
+      Anchor(5, Sp(3, "Plain", "", "<a:solidFill><a:srgbClr val=\"00FF00\"/></a:solidFill>")) + "</xdr:wsDr>";
   Workbook wb = Workbook::create();
   ASSERT_TRUE(static_cast<bool>(wb.add_passthrough_part(PassthroughPart(kDrawingPath, kCtDrawing, ToBytes(drawing)))));
   wb.sheet(0).set_drawing_rel_target(kDrawingPath);
 
-  ShapeSpec unset;
-  unset.fields = shape_field::kFill | shape_field::kLine;
-  unset.fill = ShapePaint::kUnset;
-  unset.line = ShapePaint::kUnset;
-  ASSERT_TRUE(static_cast<bool>(update_shape(wb, 0, 2, unset)));
-  ASSERT_TRUE(static_cast<bool>(update_shape(wb, 0, 3, unset)));
+  const ShapeInfo gradient = ShapeWithId(wb, 2);
+  EXPECT_TRUE(gradient.paint_fill.other);
+  EXPECT_FALSE(gradient.paint_fill.none);
+  EXPECT_FALSE(gradient.paint_fill.color.has_value());
+  EXPECT_TRUE(gradient.paint_line.other);
+  EXPECT_EQ(gradient.paint_line.width_emu, std::optional<std::int64_t>(12700));
 
-  const Workbook reloaded = RoundTrip(wb);
-  auto shapes = list_shapes(reloaded, 0);
-  ASSERT_TRUE(static_cast<bool>(shapes));
-  ASSERT_EQ(shapes.value().size(), 2U);
-  for (const ShapeInfo& shape : shapes.value()) {
-    EXPECT_EQ(shape.fill, ShapePaint::kUnset) << shape.object.object_id;
-    EXPECT_EQ(shape.line, ShapePaint::kUnset) << shape.object.object_id;
-  }
-  EXPECT_EQ(shapes.value()[0].line_width_emu, 12700);
-
-  pugi::xml_document doc;
-  ParseDrawing(reloaded, 0, doc);
-  const std::vector<pugi::xml_node> tops = Tops(doc);
-  ASSERT_EQ(tops.size(), 2U);
-  const pugi::xml_node filled = child_local(anchor_content(tops[0]), "spPr");
-  EXPECT_FALSE(child_local(filled, "solidFill"));
-  ASSERT_TRUE(child_local(filled, "ln"));
-  EXPECT_FALSE(child_local(child_local(filled, "ln"), "solidFill"));
-  const pugi::xml_node bare = child_local(anchor_content(tops[1]), "spPr");
-  EXPECT_FALSE(child_local(bare, "noFill"));
-  EXPECT_FALSE(child_local(bare, "ln"));
-  EXPECT_TRUE(child_local(bare, "prstGeom"));
+  const ShapeInfo plain = ShapeWithId(wb, 3);
+  EXPECT_FALSE(plain.paint_fill.other);
+  ASSERT_TRUE(plain.paint_fill.color.has_value());
+  EXPECT_EQ(plain.paint_fill.color->rgb, 0xFF00FF00U);
 }
 
 }  // namespace

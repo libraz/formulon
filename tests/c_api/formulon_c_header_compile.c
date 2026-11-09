@@ -42,7 +42,7 @@ EXPECT_HAS_FLAG(fm_header_footer_t, has_different_first);
 EXPECT_HAS_FLAG(fm_cf_rule_t, has_op);
 EXPECT_HAS_FLAG(fm_cf_rule_t, has_icon_set_floor);
 EXPECT_HAS_FLAG(fm_dxf_t, has_font);
-EXPECT_HAS_FLAG(fm_chart_insert_spec_t, has_title);
+EXPECT_HAS_FLAG(fm_chart_spec_t, has_title);
 EXPECT_FLAGGED_INDEX(fm_function_metadata_info_t, max_arity);
 EXPECT_FLAGGED_INDEX(fm_filter_column_t, dxf_index);
 EXPECT_FLAGGED_INDEX(fm_pivot_cache_options_t, missing_items_limit);
@@ -73,7 +73,15 @@ int main(void) {
   fm_status_t (*save_diagnostics)(const fm_workbook_t*, int32_t, uint8_t**, size_t*, fm_save_diagnostics_info_t*) =
       fm_workbook_save_with_diagnostics;
   fm_status_t (*read_diagnostics)(const fm_workbook_t*, fm_read_diagnostics_info_t*) = fm_workbook_get_diagnostics;
-  fm_status_t (*save_as)(const fm_workbook_t*, int32_t, uint8_t**, size_t*) = fm_workbook_save_as;
+  fm_status_t (*save)(const fm_workbook_t*, int32_t, uint8_t**, size_t*) = fm_workbook_save;
+  _Static_assert(FM_WORKBOOK_FORMAT_XLSX == 0, "a zeroed save format is xlsx");
+  // Insert / Delete Cells take the rectangle by const pointer and the shift as
+  // a raw ordinal; zero is Down, valid for an insert only.
+  fm_status_t (*insert_cells)(fm_workbook_t*, size_t, const fm_cell_rect_t*, int32_t) = fm_sheet_insert_cells;
+  fm_status_t (*delete_cells)(fm_workbook_t*, size_t, const fm_cell_rect_t*, int32_t) = fm_sheet_delete_cells;
+  _Static_assert(FM_CELL_SHIFT_DOWN == 0 && FM_CELL_SHIFT_LEFT == 3, "fm_cell_shift_t ordinals changed");
+  _Static_assert(offsetof(fm_phonetic_run_t, start) == 0 && offsetof(fm_phonetic_run_t, end) == 4,
+                 "fm_phonetic_run_t field layout changed");
   // Written out in full because these are the entry points a third-party C
   // consumer binds by signature: the XF record is read through a const
   // pointer, and the sheet-view record is written through a caller-supplied
@@ -175,10 +183,14 @@ int main(void) {
                  "fm_drawing_patch_t ABI layout changed");
   _Static_assert(FM_ANCHOR_KIND_DEFAULT == 0, "a zeroed anchor kind asks for the operation's default");
   _Static_assert(FM_ANCHOR_EDIT_AS_DEFAULT == 0, "a zeroed editAs asks for the operation's default");
-  _Static_assert(FM_SHAPE_PAINT_DEFAULT == 0, "a zeroed shape paint kind asks for the shape style's paint");
+  // A shape's paint is the chart paint record pair.
+  _Static_assert(sizeof(((fm_shape_info_t*)0)->fill) == sizeof(fm_chart_fill_t),
+                 "fm_shape_info_t.fill is a chart fill");
+  _Static_assert(sizeof(((fm_shape_patch_t*)0)->line) == sizeof(fm_chart_line_patch_t),
+                 "fm_shape_patch_t.line is a chart line patch");
   _Static_assert(FM_DRAWING_RESTORE_NEW_ID == 1u, "FM_DRAWING_RESTORE_NEW_ID changed");
-  _Static_assert(sizeof(fm_shape_info_t) == (sizeof(void*) == 4 ? 104 : 112), "fm_shape_info_t ABI layout changed");
-  _Static_assert(sizeof(fm_shape_spec_t) == (sizeof(void*) == 4 ? 192 : 216), "fm_shape_spec_t ABI layout changed");
+  _Static_assert(sizeof(fm_shape_info_t) == (sizeof(void*) == 4 ? 160 : 168), "fm_shape_info_t ABI layout changed");
+  _Static_assert(sizeof(fm_shape_spec_t) == (sizeof(void*) == 4 ? 240 : 264), "fm_shape_spec_t ABI layout changed");
   _Static_assert(sizeof(fm_slicer_info_t) == (sizeof(void*) == 4 ? 56 : 72), "fm_slicer_info_t ABI layout changed");
   _Static_assert(sizeof(fm_slicer_spec_t) == (sizeof(void*) == 4 ? 128 : 152), "fm_slicer_spec_t ABI layout changed");
   _Static_assert(sizeof(fm_data_table_t) == 60, "fm_data_table_t ABI layout changed");
@@ -186,7 +198,7 @@ int main(void) {
   _Static_assert(sizeof(fm_sparkline_group_t) == (sizeof(void*) == 4 ? 296 : 312),
                  "fm_sparkline_group_t ABI layout changed");
   // The common drawing fields share one patch; each kind's update takes its own fields only.
-  _Static_assert(sizeof(fm_shape_patch_t) == (sizeof(void*) == 4 ? 136 : 152), "fm_shape_patch_t ABI layout changed");
+  _Static_assert(sizeof(fm_shape_patch_t) == (sizeof(void*) == 4 ? 184 : 200), "fm_shape_patch_t ABI layout changed");
   _Static_assert(sizeof(fm_slicer_patch_t) == (sizeof(void*) == 4 ? 56 : 72), "fm_slicer_patch_t ABI layout changed");
   _Static_assert(sizeof(fm_sparkline_group_patch_t) == (sizeof(void*) == 4 ? 432 : 448),
                  "fm_sparkline_group_patch_t ABI layout changed");
@@ -194,8 +206,10 @@ int main(void) {
   fm_status_t (*add_slicer)(fm_workbook_t*, size_t, size_t, size_t, size_t, const fm_slicer_spec_t*, uint32_t*) =
       fm_sheet_add_slicer;
   fm_status_t (*update_drawing)(fm_workbook_t*, size_t, uint32_t, const fm_drawing_patch_t*) = fm_sheet_update_drawing;
-  fm_status_t (*update_shape)(fm_workbook_t*, size_t, uint32_t, const fm_shape_patch_t*) = fm_sheet_update_shape;
-  fm_status_t (*update_slicer)(fm_workbook_t*, size_t, uint32_t, const fm_slicer_patch_t*) = fm_sheet_update_slicer;
+  fm_status_t (*update_shape)(fm_workbook_t*, size_t, uint32_t, const fm_drawing_patch_t*, const fm_shape_patch_t*) =
+      fm_sheet_update_shape;
+  fm_status_t (*update_slicer)(fm_workbook_t*, size_t, uint32_t, const fm_drawing_patch_t*, const fm_slicer_patch_t*) =
+      fm_sheet_update_slicer;
   fm_status_t (*update_sparkline_group)(fm_workbook_t*, size_t, const char*, const fm_sparkline_group_patch_t*) =
       fm_sheet_update_sparkline_group;
   fm_status_t (*add_sparkline_group)(fm_workbook_t*, size_t, const fm_sparkline_group_t*, const fm_sparkline_t*, size_t,
@@ -260,7 +274,7 @@ int main(void) {
   // caller's name is the key.
   fm_status_t (*get_protected_range)(const fm_workbook_t*, size_t, const char*, int32_t*, fm_protected_range_t*) =
       fm_sheet_get_protected_range;
-  fm_status_t (*add_protected_range)(fm_workbook_t*, size_t, const fm_protected_range_t*) =
+  fm_status_t (*add_protected_range)(fm_workbook_t*, size_t, const fm_protected_range_t*, const char**) =
       fm_sheet_add_protected_range;
   fm_status_t (*update_protected_range)(fm_workbook_t*, size_t, const char*, const fm_protected_range_patch_t*) =
       fm_sheet_update_protected_range;
@@ -316,8 +330,8 @@ int main(void) {
       fm_sheet_update_header_footer;
   fm_status_t (*get_print_area)(const fm_workbook_t*, size_t, fm_cell_rect_t*, size_t, size_t*) =
       fm_sheet_get_print_area;
-  fm_status_t (*evaluate_cf_range)(const fm_workbook_t*, size_t, const fm_cell_rect_t*, int32_t, double,
-                                   fm_cf_results_t**) = fm_sheet_evaluate_cf_range;
+  fm_status_t (*evaluate_cf_range)(const fm_workbook_t*, size_t, const fm_cell_rect_t*,
+                                   const fm_cf_range_evaluation_spec_t*, fm_cf_results_t**) = fm_sheet_evaluate_cf_range;
   fm_page_setup_patch_t setup_patch = FM_STRUCT_INIT(fm_page_setup_patch_t);
   setup_patch.orientation_op = FM_PATCH_OP_CLEAR;
   fm_header_footer_patch_t hf_patch = FM_STRUCT_INIT(fm_header_footer_patch_t);
@@ -387,7 +401,7 @@ int main(void) {
   fm_status_t (*remove_cf_rule)(fm_workbook_t*, size_t, const char*) = fm_sheet_remove_cf_rule;
   fm_cf_rule_patch_t cf_patch = FM_STRUCT_INIT(fm_cf_rule_patch_t);
   // A chart's insert title is the setter's record behind `has_title`.
-  fm_chart_insert_spec_t chart_spec = FM_STRUCT_INIT(fm_chart_insert_spec_t);
+  fm_chart_spec_t chart_spec = FM_STRUCT_INIT(fm_chart_spec_t);
   chart_spec.has_title = 1;
   chart_spec.title.kind = FM_CHART_TITLE_KIND_NONE;
   cf_patch.dxf_index_op = FM_PATCH_OP_CLEAR;
@@ -403,10 +417,41 @@ int main(void) {
                  "fm_external_link_info_t ABI layout changed");
   _Static_assert(offsetof(fm_external_link_info_t, book_number) == 4, "fm_external_link_info_t book_number moved");
   // Each style table with an `add` also overwrites a slot in place.
-  fm_status_t (*set_fill)(fm_workbook_t*, size_t, const fm_fill_t*) = fm_workbook_set_fill;
-  fm_status_t (*set_border)(fm_workbook_t*, size_t, const fm_border_t*) = fm_workbook_set_border;
+  fm_status_t (*set_fill)(fm_workbook_t*, uint32_t, const fm_fill_t*) = fm_workbook_set_fill;
+  fm_status_t (*set_border)(fm_workbook_t*, uint32_t, const fm_border_t*) = fm_workbook_set_border;
   fm_status_t (*set_cell_xf)(fm_workbook_t*, uint32_t, const fm_cell_xf_t*) = fm_workbook_set_cell_xf;
   fm_status_t (*set_dxf)(fm_workbook_t*, uint32_t, const fm_dxf_t*) = fm_workbook_set_dxf;
+  fm_status_t (*set_cell_style_xf)(fm_workbook_t*, uint32_t, const fm_cell_xf_t*) = fm_workbook_set_cell_style_xf;
+  // Font, fill and border indices are uint32_t like every other style index,
+  // and a numFmt id is 32 bits wide in the xf record.
+  fm_status_t (*get_font_at)(const fm_workbook_t*, uint32_t, fm_font_t*) = fm_workbook_get_font_at;
+  fm_status_t (*add_font)(fm_workbook_t*, const fm_font_t*, uint32_t*) = fm_workbook_add_font;
+  fm_status_t (*set_font)(fm_workbook_t*, uint32_t, const fm_font_t*) = fm_workbook_set_font;
+  fm_status_t (*get_fill_at)(const fm_workbook_t*, uint32_t, fm_fill_t*) = fm_workbook_get_fill_at;
+  fm_status_t (*add_fill)(fm_workbook_t*, const fm_fill_t*, uint32_t*) = fm_workbook_add_fill;
+  fm_status_t (*get_border_at)(const fm_workbook_t*, uint32_t, fm_border_t*) = fm_workbook_get_border_at;
+  fm_status_t (*add_border)(fm_workbook_t*, const fm_border_t*, uint32_t*) = fm_workbook_add_border;
+  _Static_assert(sizeof(((fm_cell_xf_t*)0)->num_fmt_id) == sizeof(uint32_t), "fm_cell_xf_t.num_fmt_id is 32 bits");
+  // The declared number formats list as records; grand totals and the style
+  // defaults read into records; a cache cell says whether it holds a date.
+  fm_status_t (*number_format_count)(const fm_workbook_t*, size_t*) = fm_workbook_get_number_format_count;
+  fm_status_t (*number_format_at)(const fm_workbook_t*, size_t, fm_number_format_info_t*) =
+      fm_workbook_get_number_format_at;
+  fm_status_t (*get_pivot_grand_totals)(const fm_workbook_t*, size_t, size_t, fm_pivot_grand_totals_t*) =
+      fm_sheet_get_pivot_grand_totals;
+  fm_status_t (*get_table_style_defaults)(const fm_workbook_t*, fm_table_style_defaults_t*) =
+      fm_workbook_get_table_style_defaults;
+  fm_status_t (*cache_record_is_date)(const fm_workbook_t*, uint32_t, size_t, size_t, int32_t*) =
+      fm_workbook_is_pivot_cache_record_value_date;
+  fm_table_style_defaults_patch_t style_defaults_patch = FM_STRUCT_INIT(fm_table_style_defaults_patch_t);
+  style_defaults_patch.pivot_style_name_op = FM_PATCH_OP_CLEAR;
+  fm_pivot_filter_t pivot_filter = FM_STRUCT_INIT(fm_pivot_filter_t);
+  pivot_filter.kind = FM_PIVOT_FILTER_KIND_VALUE_TOP_COUNT;
+  _Static_assert(FM_PIVOT_FILTER_KIND_DATE_BETWEEN == 5, "fm_pivot_filter_kind_t ordinals changed");
+  _Static_assert(FM_ICON_SET_NAME_THREE_ARROWS == 0 && FM_ICON_SET_NAME_FIVE_BOXES == 19,
+                 "fm_icon_set_name_t ordinals changed");
+  _Static_assert(FM_COLOR_CONTEXT_FILL_FOREGROUND == 1 && FM_COLOR_CONTEXT_FILL_BACKGROUND == 2,
+                 "fm_color_context_t ordinals changed");
   (void)add_sheet;
   (void)move_sheet;
   (void)insert_rows;
@@ -433,6 +478,21 @@ int main(void) {
   (void)set_border;
   (void)set_cell_xf;
   (void)set_dxf;
+  (void)set_cell_style_xf;
+  (void)get_font_at;
+  (void)add_font;
+  (void)set_font;
+  (void)get_fill_at;
+  (void)add_fill;
+  (void)get_border_at;
+  (void)add_border;
+  (void)number_format_count;
+  (void)number_format_at;
+  (void)get_pivot_grand_totals;
+  (void)get_table_style_defaults;
+  (void)cache_record_is_date;
+  (void)style_defaults_patch;
+  (void)pivot_filter;
   (void)cells_in_range;
   (void)set_table_style;
   (void)set_column_totals;
@@ -504,7 +564,9 @@ int main(void) {
   (void)reset_theme;
   (void)save_diagnostics;
   (void)read_diagnostics;
-  (void)save_as;
+  (void)save;
+  (void)insert_cells;
+  (void)delete_cells;
   (void)get_cell_xf;
   (void)add_cell_xf;
   (void)get_cell_style_xf;

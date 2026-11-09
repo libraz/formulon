@@ -28,8 +28,7 @@ constexpr std::int32_t kSourceRow = 1;
 constexpr std::int32_t kSourceColumn = 2;
 
 // Synthetic patch: Normal 0 -> 5, row style 1 -> 6, column style 2 -> 7.
-const std::vector<std::uint32_t> kFrom = {0U, 1U, 2U};
-const std::vector<std::uint32_t> kTo = {5U, 6U, 7U};
+const std::vector<fm_xf_remap_t> kPairs = {{0U, 5U}, {1U, 6U}, {2U, 7U}};
 
 void MakeWorkbook(WorkbookGuard& wb) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
@@ -43,8 +42,8 @@ std::pair<std::int32_t, std::uint32_t> Effective(const WorkbookGuard& wb, std::u
 }
 
 fm_status_t Remap(WorkbookGuard& wb, std::uint32_t r1, std::uint32_t c1, std::uint32_t r2, std::uint32_t c2) {
-  return fm_sheet_remap_range_xfs(wb.handle, 0, record_arg(fm_cell_rect_t{r1, c1, r2, c2}), kFrom.data(), kTo.data(),
-                                  kFrom.size());
+  return fm_sheet_remap_range_xfs(wb.handle, 0, record_arg(fm_cell_rect_t{r1, c1, r2, c2}), kPairs.data(),
+                                  kPairs.size());
 }
 
 std::vector<fm_column_layout_info_t> Columns(const WorkbookGuard& wb) {
@@ -139,10 +138,9 @@ TEST(FormulonCApiRangeStyle, RowSelectionRemapsColumnStyleWhenNormalIsUnchanged)
   WorkbookGuard wb;
   MakeWorkbook(wb);
   ASSERT_EQ(fm_sheet_set_column_xf_index(wb.handle, 0, 2U, 2U, 2U), 0);
-  const std::uint32_t from[] = {2U};
-  const std::uint32_t to[] = {7U};
+  const fm_xf_remap_t pairs[] = {{2U, 7U}};
 
-  ASSERT_EQ(fm_sheet_remap_range_xfs(wb.handle, 0, record_arg(fm_cell_rect_t{2U, 0U, 4U, kLastCol}), from, to, 1U), 0);
+  ASSERT_EQ(fm_sheet_remap_range_xfs(wb.handle, 0, record_arg(fm_cell_rect_t{2U, 0U, 4U, kLastCol}), pairs, 1U), 0);
 
   for (std::uint32_t row = 2U; row <= 4U; ++row) {
     EXPECT_EQ(Effective(wb, row, 2U), Eff(kSourceCell, 7U)) << row;
@@ -270,17 +268,15 @@ TEST(FormulonCApiRangeStyle, BasesOmitStylesNoCellResolvesTo) {
 std::vector<std::uint32_t> BasesExcluding(const WorkbookGuard& wb, std::uint32_t first_row, std::uint32_t first_col,
                                           std::uint32_t last_row, std::uint32_t last_col,
                                           const std::vector<std::pair<std::uint32_t, std::uint32_t>>& excluded) {
-  std::vector<std::uint32_t> rows;
-  std::vector<std::uint32_t> cols;
+  std::vector<fm_cell_address_t> cells;
   for (const auto& [row, col] : excluded) {
-    rows.push_back(row);
-    cols.push_back(col);
+    cells.push_back({row, col});
   }
   std::vector<std::uint32_t> xfs(16U);
   size_t len = 0;
   EXPECT_EQ(fm_sheet_get_range_xf_bases_excluding(wb.handle, 0,
                                                   record_arg(fm_cell_rect_t{first_row, first_col, last_row, last_col}),
-                                                  rows.data(), cols.data(), rows.size(), xfs.data(), xfs.size(), &len),
+                                                  cells.data(), cells.size(), xfs.data(), xfs.size(), &len),
             0);
   xfs.resize(len);
   return xfs;
@@ -320,12 +316,12 @@ TEST(FormulonCApiRangeStyle, ExcludingRejectsNullArraysAndBadRects) {
   WorkbookGuard wb;
   MakeWorkbook(wb);
   size_t len = 0;
-  EXPECT_EQ(fm_sheet_get_range_xf_bases_excluding(wb.handle, 0, record_arg(fm_cell_rect_t{0U, 0U, 1U, 1U}), nullptr,
-                                                  nullptr, 1U, nullptr, 0U, &len),
+  EXPECT_EQ(fm_sheet_get_range_xf_bases_excluding(wb.handle, 0, record_arg(fm_cell_rect_t{0U, 0U, 1U, 1U}), nullptr, 1U,
+                                                  nullptr, 0U, &len),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
-  const std::uint32_t one = 0U;
-  EXPECT_EQ(fm_sheet_get_range_xf_bases_excluding(wb.handle, 9, record_arg(fm_cell_rect_t{0U, 0U, 1U, 1U}), &one, &one,
-                                                  1U, nullptr, 0U, &len),
+  const fm_cell_address_t one{0U, 0U};
+  EXPECT_EQ(fm_sheet_get_range_xf_bases_excluding(wb.handle, 9, record_arg(fm_cell_rect_t{0U, 0U, 1U, 1U}), &one, 1U,
+                                                  nullptr, 0U, &len),
             FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
 }
 
@@ -411,7 +407,7 @@ TEST(FormulonCApiRangeStyle, ResultSurvivesSaveLoad) {
 
   for (const std::int32_t format : {FM_WORKBOOK_FORMAT_XLSX, FM_WORKBOOK_FORMAT_XLSB}) {
     BufferGuard saved;
-    ASSERT_EQ(fm_workbook_save_as(wb.handle, format, &saved.data, &saved.len), 0);
+    ASSERT_EQ(fm_workbook_save(wb.handle, format, &saved.data, &saved.len), 0);
     WorkbookGuard reloaded;
     ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &reloaded.handle), 0);
     EXPECT_EQ(Effective(reloaded, 2U, 1U), Eff(kSourceCell, 6U)) << format;
@@ -425,18 +421,15 @@ TEST(FormulonCApiRangeStyle, RejectsBadPairsAndOversizedWritesWithoutMutation) {
   MakeWorkbook(wb);
   ASSERT_EQ(fm_sheet_set_column_xf_index(wb.handle, 0, 2U, 3U, 2U), 0);
 
-  const std::uint32_t repeat_from[] = {0U, 0U};
-  const std::uint32_t repeat_to[] = {5U, 6U};
+  const fm_xf_remap_t repeated[] = {{0U, 5U}, {0U, 6U}};
+  EXPECT_EQ(fm_sheet_remap_range_xfs(wb.handle, 0, record_arg(fm_cell_rect_t{0U, 0U, 3U, 3U}), repeated, 2U),
+            kInvalidArgument);
+  const fm_xf_remap_t past_table[] = {{0U, 10U}};
+  EXPECT_EQ(fm_sheet_remap_range_xfs(wb.handle, 0, record_arg(fm_cell_rect_t{0U, 0U, 3U, 3U}), past_table, 1U),
+            kInvalidArgument);
   EXPECT_EQ(
-      fm_sheet_remap_range_xfs(wb.handle, 0, record_arg(fm_cell_rect_t{0U, 0U, 3U, 3U}), repeat_from, repeat_to, 2U),
+      fm_sheet_remap_range_xfs(wb.handle, 0, record_arg(fm_cell_rect_t{0U, 0U, kLastRow + 1U, 3U}), past_table, 1U),
       kInvalidArgument);
-  const std::uint32_t from[] = {0U};
-  const std::uint32_t past_table[] = {10U};
-  EXPECT_EQ(fm_sheet_remap_range_xfs(wb.handle, 0, record_arg(fm_cell_rect_t{0U, 0U, 3U, 3U}), from, past_table, 1U),
-            kInvalidArgument);
-  EXPECT_EQ(fm_sheet_remap_range_xfs(wb.handle, 0, record_arg(fm_cell_rect_t{0U, 0U, kLastRow + 1U, 3U}), from,
-                                     repeat_to, 1U),
-            kInvalidArgument);
   // Two styled columns crossed by almost every row: over a million writes.
   EXPECT_EQ(Remap(wb, 0U, 0U, kLastRow - 1U, kLastCol), kPreconditionFailed);
   EXPECT_EQ(Remap(wb, 0U, 0U, 2048U, 1023U), kPreconditionFailed);
@@ -589,4 +582,41 @@ TEST(FormulonCApiRangeStyle, RowStyleSpanSetsAndClearsManyRows) {
   EXPECT_EQ(rows, 1U);  // the height override stays
   EXPECT_EQ(fm_sheet_set_row_xf_index(wb.handle, 0, 5U, 4U, 1U), kInvalidArgument);
   EXPECT_EQ(fm_sheet_reset_row_xf_index(wb.handle, 0, 0U, kLastRow + 1U), kInvalidArgument);
+}
+
+TEST(FormulonCApiRangeXfRecords, ExcludedCellAddresses) {
+  WorkbookGuard wb;
+  MakeWorkbook(wb);
+  ASSERT_EQ(fm_sheet_set_cell_xf_index(wb.handle, 0, 0U, 0U, 1U), 0);
+  ASSERT_EQ(fm_sheet_set_cell_xf_index(wb.handle, 0, 1U, 1U, 2U), 0);
+  const fm_cell_address_t excluded[] = {{0U, 0U}};
+  uint32_t xfs[8] = {};
+  size_t len = 0;
+  ASSERT_EQ(fm_sheet_get_range_xf_bases_excluding(wb.handle, 0, record_arg(fm_cell_rect_t{0U, 0U, 1U, 1U}), excluded,
+                                                  1U, xfs, 8U, &len),
+            0);
+  std::vector<std::uint32_t> got(xfs, xfs + len);
+  EXPECT_EQ(got, (std::vector<std::uint32_t>{0U, 2U}));
+  EXPECT_EQ(fm_sheet_get_range_xf_bases_excluding(wb.handle, 0, record_arg(fm_cell_rect_t{0U, 0U, 1U, 1U}), nullptr, 1U,
+                                                  xfs, 8U, &len),
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
+}
+
+TEST(FormulonCApiRangeXfRecords, RemapPairs) {
+  WorkbookGuard wb;
+  MakeWorkbook(wb);
+  ASSERT_EQ(fm_sheet_set_cell_xf_index(wb.handle, 0, 0U, 0U, 1U), 0);
+  const fm_xf_remap_t pairs[] = {{1U, 4U}};
+  ASSERT_EQ(fm_sheet_remap_range_xfs(wb.handle, 0, record_arg(fm_cell_rect_t{0U, 0U, 0U, 0U}), pairs, 1U), 0);
+  EXPECT_EQ(Effective(wb, 0U, 0U), Eff(kSourceCell, 4U));
+  EXPECT_EQ(fm_sheet_remap_range_xfs(wb.handle, 0, record_arg(fm_cell_rect_t{0U, 0U, 0U, 0U}), nullptr, 1U),
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
+}
+
+TEST(FormulonCApiRangeXfRecords, RepeatedFromXfInvalid) {
+  WorkbookGuard wb;
+  MakeWorkbook(wb);
+  const fm_xf_remap_t repeated[] = {{1U, 4U}, {1U, 5U}};
+  EXPECT_EQ(fm_sheet_remap_range_xfs(wb.handle, 0, record_arg(fm_cell_rect_t{0U, 0U, 0U, 0U}), repeated, 2U),
+            kInvalidArgument);
 }

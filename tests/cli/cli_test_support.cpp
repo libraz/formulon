@@ -374,7 +374,7 @@ bool write_fixture_workbook(const std::string& path, std::string_view extra_text
   }
   std::uint8_t* bytes = nullptr;
   std::size_t len = 0;
-  if (fm_workbook_save(wb, &bytes, &len) != 0) {
+  if (fm_workbook_save(wb, FM_WORKBOOK_FORMAT_XLSX, &bytes, &len) != 0) {
     fm_workbook_destroy(wb);
     return false;
   }
@@ -411,7 +411,7 @@ bool write_wide_recalc_fixture(const std::string& path) {
   }
   std::uint8_t* bytes = nullptr;
   std::size_t len = 0U;
-  if (fm_workbook_save(wb, &bytes, &len) != 0) {
+  if (fm_workbook_save(wb, FM_WORKBOOK_FORMAT_XLSX, &bytes, &len) != 0) {
     fm_workbook_destroy(wb);
     return false;
   }
@@ -483,7 +483,7 @@ bool write_lossy_xlsx_fixture(const std::string& path) {
   }
   std::uint8_t* bytes = nullptr;
   std::size_t len = 0;
-  if (fm_workbook_save(wb, &bytes, &len) != 0) {
+  if (fm_workbook_save(wb, FM_WORKBOOK_FORMAT_XLSX, &bytes, &len) != 0) {
     fm_workbook_destroy(wb);
     return false;
   }
@@ -597,7 +597,7 @@ bool write_dropped_xlsb_fixture(const std::string& path) {
     return false;
   std::uint8_t* raw = nullptr;
   std::size_t len = 0;
-  const bool saved = fm_workbook_save_as(wb, FM_WORKBOOK_FORMAT_XLSB, &raw, &len) == 0;
+  const bool saved = fm_workbook_save(wb, FM_WORKBOOK_FORMAT_XLSB, &raw, &len) == 0;
   fm_workbook_destroy(wb);
   if (!saved)
     return false;

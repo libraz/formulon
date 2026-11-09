@@ -19,6 +19,7 @@
 #include <vector>
 
 #include "chart/chart_model.h"
+#include "pugixml.hpp"
 #include "utils/error.h"
 #include "utils/expected.h"
 
@@ -27,6 +28,14 @@ namespace formulon {
 class Workbook;
 
 Expected<ChartModel, Error> get_chart(const Workbook& wb, std::size_t sheet, std::uint32_t object_id);
+
+/// Applies the chart paint patches to the shape-properties element `sp_pr`
+/// (`c:spPr` or `xdr:spPr`), writing DrawingML elements with the `a:` prefix,
+/// which must bind the DrawingML namespace at `sp_pr`. `kInvalidArgument` for
+/// a hidden fill or line given a colour, a transparency without a solid
+/// colour, or a width, dash or transparency out of range.
+Expected<void, Error> write_paint_properties(pugi::xml_node sp_pr, const ChartFillPatch& fill,
+                                             const ChartLinePatch& line);
 
 Expected<ChartData, Error> get_chart_data(const Workbook& wb, std::size_t sheet, std::uint32_t object_id);
 

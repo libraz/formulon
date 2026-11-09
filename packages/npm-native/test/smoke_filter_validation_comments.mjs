@@ -252,7 +252,7 @@ test('threaded comments cover a thread, a reply with a mention, resolution and r
       created: { year: 2026, month: 1, day: 1, hour: 11, minute: 0, second: 0 },
       text: '@Ann done',
       parentId: THREAD,
-      mentions: [{ personId: ANN, mentionId: MENTION, start: 0, length: 4 }],
+      mentions: [{ personId: ANN, mentionId: MENTION, start: 0, end: 4 }],
     });
     const result = wb.sheet(0).listThreadedComments();
     const list = result;
@@ -265,11 +265,11 @@ test('threaded comments cover a thread, a reply with a mention, resolution and r
     assert.equal(list[1].id, REPLY);
     assert.equal(list[1].parentId, THREAD);
     assert.equal(list[1].personId, BOB);
-    assert.deepEqual(list[1].mentions, [{ personId: ANN, mentionId: MENTION, start: 0, length: 4 }]);
+    assert.deepEqual(list[1].mentions, [{ personId: ANN, mentionId: MENTION, start: 0, end: 4 }]);
 
     wb.sheet(0).updateThreadedComment(REPLY, {
       text: '@Ann fixed',
-      mentions: [{ personId: ANN, mentionId: MENTION, start: 0, length: 4 }],
+      mentions: [{ personId: ANN, mentionId: MENTION, start: 0, end: 4 }],
     });
     assert.equal(wb.sheet(0).listThreadedComments()[1].text, '@Ann fixed');
     wb.sheet(0).updateThreadedComment(REPLY, { text: 'plain', mentions: [] });

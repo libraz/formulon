@@ -184,6 +184,10 @@ enum class ChartHeaderMode : std::uint8_t { kAuto = 0, kYes = 1, kNo = 2 };
 struct ChartFill {
   std::optional<ColorSpec> color;
   std::optional<std::uint32_t> alpha;  ///< 0..100000 (`a:alpha/@val`).
+  bool none = false;                   ///< `a:noFill`.
+  /// A gradient, pattern or picture fill, or a solid colour `color` states only approximately (as the rendered Rgb)
+  /// or not at all; the record cannot state it.
+  bool other = false;
 };
 
 /// `a:ln` of a series, point or marker.
@@ -194,6 +198,7 @@ struct ChartLine {
   std::optional<ChartLineDash> dash;
   std::string dash_name;  ///< `a:prstDash/@val` verbatim; empty when absent.
   bool none = false;      ///< `a:ln` holds `a:noFill`.
+  bool other = false;     ///< `a:ln` holds a paint the record cannot state, as `ChartFill::other`.
 };
 
 struct ChartMarker {
@@ -501,6 +506,7 @@ struct ChartDisplayPatch {
 struct ChartFillPatch {
   ChartPatchField<ColorSpec> color;
   ChartPatchField<double> transparency_pct;  ///< 0..100.
+  std::optional<bool> none;                  ///< True writes `a:noFill`; false removes it.
 };
 
 struct ChartLinePatch {

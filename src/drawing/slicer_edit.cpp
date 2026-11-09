@@ -598,20 +598,33 @@ Expected<std::uint32_t, Error> add_slicer(Workbook& wb, std::size_t sheet, std::
   return frame_id;
 }
 
-Expected<void, Error> update_slicer(Workbook& wb, std::size_t sheet, std::size_t index, const SlicerSpec& spec) {
+namespace {
+
+// Every check `update_slicer` makes before it writes; fills `slot`, `drawing` and `frame` for the write.
+Expected<void, Error> check_update(const Workbook& wb, std::size_t sheet, std::size_t index, const SlicerSpec& spec,
+                                   Slot& slot, pugi::xml_document& drawing, pugi::xml_node& frame) {
   using namespace slicer_field;
   RETURN_IF_ERROR(check_spec(spec));
-  Slot slot;
   RETURN_IF_ERROR(slot_at(wb, sheet, index, slot));
   if ((spec.fields & kName) != 0U) {
     return invalid("slicer: a slicer cannot be renamed");
   }
-  pugi::xml_document drawing;
   RETURN_IF_ERROR(load_drawing(wb, sheet, drawing));
-  const pugi::xml_node frame = find_frame(drawing, slot.info.name);
+  frame = find_frame(drawing, slot.info.name);
   if ((spec.fields & kAnchor) != 0U && (!frame || !is_element(frame, "twoCellAnchor"))) {
     return invalid("slicer: the slicer has no two-cell frame to move");
   }
+  return Expected<void, Error>::Ok();
+}
+
+}  // namespace
+
+Expected<void, Error> update_slicer(Workbook& wb, std::size_t sheet, std::size_t index, const SlicerSpec& spec) {
+  using namespace slicer_field;
+  Slot slot;
+  pugi::xml_document drawing;
+  pugi::xml_node frame;
+  RETURN_IF_ERROR(check_update(wb, sheet, index, spec, slot, drawing, frame));
   if ((spec.fields & (kCaption | kStyle | kColumnCount | kRowHeight)) != 0U) {
     pugi::xml_document doc;
     ASSIGN_OR_RETURN(pugi::xml_node node, load_slicer_node(wb, slot, doc));
@@ -627,6 +640,35 @@ Expected<void, Error> update_slicer(Workbook& wb, std::size_t sheet, std::size_t
   if ((spec.fields & kAnchor) != 0U) {
     apply_anchor(wb, sheet, frame, spec);
     RETURN_IF_ERROR(io::ooxml::store_part_dom(wb, wb.sheet(sheet).drawing_rel_target(), drawing));
+  }
+  return Expected<void, Error>::Ok();
+}
+
+Expected<void, Error> update_slicer(Workbook& wb, std::size_t sheet, std::uint32_t object_id,
+                                    const DrawingCommonPatch* common, const SlicerSpec* slicer) {
+  ASSIGN_OR_RETURN(std::vector<SlicerInfo> slicers, list_slicers(wb, sheet));
+  std::size_t index = slicers.size();
+  for (std::size_t i = 0; i < slicers.size(); ++i) {
+    if (slicers[i].object.object_id == object_id && object_id != 0U) {
+      index = i;
+      break;
+    }
+  }
+  if (index == slicers.size()) {
+    return make_error(FormulonErrorCode::kNotFound, "slicer: no slicer frame with that id");
+  }
+  if (slicer != nullptr) {
+    Slot slot;
+    pugi::xml_document drawing;
+    pugi::xml_node frame;
+    RETURN_IF_ERROR(check_update(wb, sheet, index, *slicer, slot, drawing, frame));
+  }
+  // The common half checks itself before it writes; the slicer half, checked above, then only writes.
+  if (common != nullptr) {
+    RETURN_IF_ERROR(update_drawing(wb, sheet, object_id, *common));
+  }
+  if (slicer != nullptr) {
+    RETURN_IF_ERROR(update_slicer(wb, sheet, index, *slicer));
   }
   return Expected<void, Error>::Ok();
 }

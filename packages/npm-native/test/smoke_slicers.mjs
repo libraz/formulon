@@ -58,7 +58,7 @@ test('slicers add, list, update, remove and round-trip', async () => {
   const added = wb.sheet(0).addSlicer('Sales', 0, {
     ...anchor,
     caption: 'Pick a product',
-    style: 'SlicerStyleLight3',
+    styleName: 'SlicerStyleLight3',
     columnCount: 2,
     sortOrder: mod.SlicerSortOrder.Descending,
     crossFilter: mod.SlicerCrossFilter.None,
@@ -82,9 +82,9 @@ test('slicers add, list, update, remove and round-trip', async () => {
   assert.equal(s.cacheName, 'Slicer_Product');
   assert.equal(s.tableName, 'Sales');
   assert.equal(s.columnName, 'Product');
-  assert.equal(s.style, 'SlicerStyleLight3');
+  assert.equal(s.styleName, 'SlicerStyleLight3');
   assert.equal(s.columnCount, 2);
-  assert.equal(s.rowHeightEmu, 241300);
+  assert.equal(s.rowHeightPt, 19);
   assert.equal(s.sortOrder, mod.SlicerSortOrder.Descending);
   assert.equal(s.crossFilter, mod.SlicerCrossFilter.None);
   const common = slicers[0].getDrawingProperties();
@@ -104,7 +104,7 @@ test('slicers add, list, update, remove and round-trip', async () => {
     .slicer(added.objectId)
     .update({
       caption: 'Renamed',
-      style: null,
+      styleName: null,
       columnCount: 1,
       anchor: { fromRow: 0, fromCol: 3, toRow: 8, toCol: 5 },
     });
@@ -115,7 +115,7 @@ test('slicers add, list, update, remove and round-trip', async () => {
   const moved = movedHandle.getProperties();
   const movedAnchor = movedHandle.getDrawingProperties().anchor;
   assert.equal(moved.caption, 'Renamed');
-  assert.equal(moved.style, null);
+  assert.equal(moved.styleName, null);
   assert.equal(moved.columnCount, 1);
   assert.equal(moved.sortOrder, mod.SlicerSortOrder.Descending);
   assert.deepEqual([movedAnchor.fromRow, movedAnchor.fromCol, movedAnchor.toRow, movedAnchor.toCol], [3, 3, 11, 5]);

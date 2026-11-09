@@ -14,6 +14,9 @@
 #define FORMULON_NODE_ADDON_PARTS_WORKBOOK_CLASS_H_
 
 #include <algorithm>
+#include <cstddef>
+#include <cstdint>
+#include <string>
 #include <tuple>
 #include <type_traits>
 #include <utility>
@@ -241,6 +244,9 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value DeleteRows(const Napi::CallbackInfo& info);
   Napi::Value InsertCols(const Napi::CallbackInfo& info);
   Napi::Value DeleteCols(const Napi::CallbackInfo& info);
+  /// Inserts or deletes the cells of a range, shifting the neighbours by a `CellShift`.
+  Napi::Value InsertCells(const Napi::CallbackInfo& info);
+  Napi::Value DeleteCells(const Napi::CallbackInfo& info);
 
   // Iteration / metadata.
   Napi::Value CellCount(const Napi::CallbackInfo& info);
@@ -323,7 +329,6 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value PivotColFieldOrder(const Napi::CallbackInfo& info);
   Napi::Value PivotPageFieldOrder(const Napi::CallbackInfo& info);
   Napi::Value PivotFieldCount(const Napi::CallbackInfo& info);
-  Napi::Value PivotFieldAdd(const Napi::CallbackInfo& info);
   Napi::Value PivotFieldAt(const Napi::CallbackInfo& info);
   Napi::Value PivotFieldItemCount(const Napi::CallbackInfo& info);
   Napi::Value PivotFieldItemAt(const Napi::CallbackInfo& info);
@@ -444,6 +449,7 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value GetFill(const Napi::CallbackInfo& info);
   Napi::Value GetBorder(const Napi::CallbackInfo& info);
   Napi::Value GetNumFmt(const Napi::CallbackInfo& info);
+  Napi::Value ListNumberFormats(const Napi::CallbackInfo& info);
   Napi::Value GetDxf(const Napi::CallbackInfo& info);
   Napi::Value AddFont(const Napi::CallbackInfo& info);
   Napi::Value SetFont(const Napi::CallbackInfo& info);
@@ -458,6 +464,7 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value AddNumFmt(const Napi::CallbackInfo& info);
   Napi::Value AddXf(const Napi::CallbackInfo& info);
   Napi::Value AddCellStyleXf(const Napi::CallbackInfo& info);
+  Napi::Value SetCellStyleXf(const Napi::CallbackInfo& info);
   Napi::Value AddDxf(const Napi::CallbackInfo& info);
   Napi::Value FontCount(const Napi::CallbackInfo& info);
   Napi::Value FillCount(const Napi::CallbackInfo& info);
@@ -501,7 +508,6 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value GetComment(const Napi::CallbackInfo& info);
   Napi::Value GetComments(const Napi::CallbackInfo& info);
   Napi::Value SetComment(const Napi::CallbackInfo& info);
-  Napi::Value RemoveComment(const Napi::CallbackInfo& info);
   Napi::Value GetCommentVisible(const Napi::CallbackInfo& info);
   Napi::Value SetCommentVisible(const Napi::CallbackInfo& info);
   Napi::Value GetWorkbookProtection(const Napi::CallbackInfo& info);
@@ -512,10 +518,8 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value UpdateProtectedRange(const Napi::CallbackInfo& info);
   Napi::Value RemoveProtectedRange(const Napi::CallbackInfo& info);
   Napi::Value SetHyperlink(const Napi::CallbackInfo& info);
-  Napi::Value SetHyperlinkRange(const Napi::CallbackInfo& info);
   Napi::Value GetHyperlinks(const Napi::CallbackInfo& info);
   Napi::Value GetHyperlink(const Napi::CallbackInfo& info);
-  Napi::Value RemoveHyperlink(const Napi::CallbackInfo& info);
   Napi::Value RemoveHyperlinkAt(const Napi::CallbackInfo& info);
   Napi::Value ClearHyperlinks(const Napi::CallbackInfo& info);
   Napi::Value GetValidationCount(const Napi::CallbackInfo& info);
@@ -870,6 +874,39 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   /// against.
   int64_t reported_external_bytes_ = 0;
 };
+
+/// Reads one element of a per-sheet collection by `info[1]`: a number reads by position, a string by id (`null`
+/// when no element has it). `param` names the argument in a rejection.
+template <typename T>
+Napi::Value SheetKeyedItemResult(const Napi::CallbackInfo& info, const fm_workbook_t* handle,
+                                 fm_status_t (*at_fn)(const fm_workbook_t*, std::size_t, std::size_t, T*),
+                                 fm_status_t (*get_fn)(const fm_workbook_t*, std::size_t, const char*, int32_t*, T*),
+                                 Napi::Object (*to_js)(Napi::Env, const T&), const char* param) {
+  Napi::Env env = info.Env();
+  if (handle == nullptr) {
+    return ThrowInvalidHandle(env);
+  }
+  const Napi::Value key = info[1];
+  if (key.IsString()) {
+    const std::string id = Workbook::ArgString(info, 1);
+    T entry = InitOut<T>();
+    int32_t present = 0;
+    const fm_status_t rc = get_fn(handle, Workbook::ArgU32(info, 0), id.c_str(), &present, &entry);
+    return OptionalOrNull(env, rc, present, rc == 0 && present != 0 ? Napi::Value(to_js(env, entry)) : env.Null());
+  }
+  CheckedSpecReader reader(env);
+  if (!key.IsNumber()) {
+    reader.FailType(param, "number or string");
+    return env.Undefined();
+  }
+  const uint32_t index = reader.U32(key, param, 0U);
+  if (!reader.ok()) {
+    return env.Undefined();
+  }
+  T entry = InitOut<T>();
+  const fm_status_t rc = at_fn(handle, Workbook::ArgU32(info, 0), index, &entry);
+  return ValueOrThrow(env, rc, rc == 0 ? Napi::Value(to_js(env, entry)) : env.Undefined());
+}
 
 /// Attaches the module functions that need no workbook (function catalog,
 /// locale text, collation, image probe) to `exports`. Their positional

@@ -24,7 +24,7 @@ Napi::Object CellStyleToJs(Napi::Env env, const fm_cell_style_t& cs) {
   out.Set("name", JsString(env, cs.name));
   out.Set("styleXfIndex", Napi::Number::New(env, cs.style_xf_index));
   out.Set("builtinId", cs.has_builtin_id != 0 ? Napi::Value(Napi::Number::New(env, cs.builtin_id)) : env.Null());
-  out.Set("iLevel", Napi::Number::New(env, cs.i_level));
+  out.Set("outlineLevel", Napi::Number::New(env, cs.outline_level));
   out.Set("hidden", Napi::Boolean::New(env, cs.hidden != 0));
   out.Set("customBuiltin", Napi::Boolean::New(env, cs.custom_builtin != 0));
   return out;
@@ -34,8 +34,8 @@ Napi::Object CellStyleToJs(Napi::Env env, const fm_cell_style_t& cs) {
 Napi::Object TableStyleToJs(Napi::Env env, const fm_table_style_t& style) {
   Napi::Object out = Napi::Object::New(env);
   out.Set("name", JsString(env, style.name));
-  out.Set("pivot", JsBool(env, style.pivot));
-  out.Set("table", JsBool(env, style.table));
+  out.Set("pivot", JsTristate(env, style.pivot));
+  out.Set("table", JsTristate(env, style.table));
   Napi::Array elements = Napi::Array::New(env, style.element_count);
   for (uint32_t i = 0; i < style.element_count; ++i) {
     const fm_table_style_element_t& element = style.elements[i];
@@ -118,7 +118,7 @@ Napi::Value Workbook::SetCellStyle(const Napi::CallbackInfo& info) {
   bool has_builtin_id = false;
   cs.builtin_id = reader.U32(record, "builtinId", 0U, &has_builtin_id);
   cs.has_builtin_id = has_builtin_id ? 1 : 0;
-  cs.i_level = reader.U32(record, "iLevel", 0U);
+  cs.outline_level = reader.U32(record, "outlineLevel", 0U);
   cs.hidden = reader.Bool(record, "hidden", false) ? 1 : 0;
   cs.custom_builtin = reader.Bool(record, "customBuiltin", false) ? 1 : 0;
   if (!reader.ok()) {
@@ -165,8 +165,9 @@ Napi::Value Workbook::SetTableStyle(const Napi::CallbackInfo& info) {
   CheckedSpecReader reader(env);
   std::string name;
   reader.String(record, "name", &name);
-  const bool pivot = reader.Bool(record, "pivot", true);
-  const bool table = reader.Bool(record, "table", true);
+  // An omitted `pivot` / `table` is the tristate default, which the C layer reads as usable.
+  const int32_t pivot = reader.Tristate(record, "pivot");
+  const int32_t table = reader.Tristate(record, "table");
   Napi::Array elements;
   const bool has_elements = reader.Array(record, "elements", &elements);
   std::vector<fm_table_style_element_t> records;
@@ -190,8 +191,8 @@ Napi::Value Workbook::SetTableStyle(const Napi::CallbackInfo& info) {
   }
   fm_table_style_t style = FM_STRUCT_INIT(fm_table_style_t);
   style.name = name.c_str();
-  style.pivot = pivot ? 1 : 0;
-  style.table = table ? 1 : 0;
+  style.pivot = pivot;
+  style.table = table;
   style.elements = records.empty() ? nullptr : records.data();
   style.element_count = static_cast<uint32_t>(records.size());
   return ValueOrThrow(env, fm_workbook_set_table_style(handle_, &style), env.Undefined());
@@ -211,15 +212,14 @@ Napi::Value Workbook::GetTableStyleDefaults(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return ThrowInvalidHandle(env);
   }
-  const char* table = nullptr;
-  const char* pivot = nullptr;
-  const fm_status_t rc = fm_workbook_get_table_style_defaults(handle_, &table, &pivot);
+  fm_table_style_defaults_t defaults = FM_STRUCT_INIT(fm_table_style_defaults_t);
+  const fm_status_t rc = fm_workbook_get_table_style_defaults(handle_, &defaults);
   if (rc != 0) {
     return ThrowStatus(env, rc);
   }
   Napi::Object out = Napi::Object::New(env);
-  out.Set("tableStyle", JsStringOrNull(env, table));
-  out.Set("pivotStyle", JsStringOrNull(env, pivot));
+  out.Set("tableStyleName", JsStringOrNull(env, defaults.table_style_name));
+  out.Set("pivotStyleName", JsStringOrNull(env, defaults.pivot_style_name));
   return out;
 }
 
@@ -250,8 +250,8 @@ Napi::Value Workbook::SetTableStyleDefaults(const Napi::CallbackInfo& info) {
         break;
     }
   };
-  name("tableStyle", &table, &patch.table_style_op, &patch.table_style);
-  name("pivotStyle", &pivot, &patch.pivot_style_op, &patch.pivot_style);
+  name("tableStyleName", &table, &patch.table_style_name_op, &patch.table_style_name);
+  name("pivotStyleName", &pivot, &patch.pivot_style_name_op, &patch.pivot_style_name);
   if (!reader.ok()) {
     return env.Undefined();
   }

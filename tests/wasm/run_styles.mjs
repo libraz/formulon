@@ -466,10 +466,16 @@ export function registerStyles(Module, test) {
       const xfCount = () => wb.getCellXfCount();
       xfCount.before = xfCount();
       assertRejected(
-        'xf.numFmtId=65536',
-        () => wb.addCellXf({ fontIndex: 0, fillIndex: 0, borderIndex: 0, numFmtId: 65536 }),
+        'xf.numFmtId=2**32',
+        () => wb.addCellXf({ fontIndex: 0, fillIndex: 0, borderIndex: 0, numFmtId: 2 ** 32 }),
         xfCount,
       );
+      // A numFmtId the engine cannot store is refused by the engine, not narrowed.
+      expectFailure(
+        () => wb.addCellXf({ fontIndex: 0, fillIndex: 0, borderIndex: 0, numFmtId: 65536 }),
+        StatusCode.InvalidArgument,
+      );
+      assert.equal(xfCount(), xfCount.before);
 
       const dxfCount = () => wb.getDxfCount();
       dxfCount.before = dxfCount();

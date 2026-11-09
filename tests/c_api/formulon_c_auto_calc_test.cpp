@@ -90,7 +90,7 @@ std::vector<Reader> Readers() {
        [](fm_workbook_t* wb) {
          const fm_cell_rect_t rect{0, 0, 1, 0};
          fm_cf_results_t* results = nullptr;
-         const fm_status_t rc = fm_sheet_evaluate_cf_range(wb, 0, &rect, 0, std::nan(""), &results);
+         const fm_status_t rc = fm_sheet_evaluate_cf_range(wb, 0, &rect, nullptr, &results);
          fm_cf_results_destroy(results);
          return rc;
        }},
@@ -224,7 +224,7 @@ TEST(FormulonCApiAutoCalc, SaveFollowsCalcOnSaveInManualMode) {
     ASSERT_EQ(fm_workbook_set_calc_on_save(wb.handle, c.calc_on_save), 0);
     uint8_t* bytes = nullptr;
     size_t len = 0;
-    ASSERT_EQ(fm_workbook_save(wb.handle, &bytes, &len), 0);
+    ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &bytes, &len), 0);
     EXPECT_EQ(HasDirty(wb.handle), !c.computed);
 
     // The file carries the value the save computed, or the blank cache.
@@ -250,7 +250,7 @@ TEST(FormulonCApiAutoCalc, SaveVariantsComputePendingCells) {
     uint8_t* bytes = nullptr;
     size_t len = 0;
     if (which == 0) {
-      ASSERT_EQ(fm_workbook_save_as(wb.handle, FM_WORKBOOK_FORMAT_XLSB, &bytes, &len), 0);
+      ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSB, &bytes, &len), 0);
     } else {
       fm_save_diagnostics_info_t diagnostics = FM_STRUCT_INIT(fm_save_diagnostics_info_t);
       ASSERT_EQ(fm_workbook_save_with_diagnostics(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &bytes, &len, &diagnostics), 0);
@@ -266,7 +266,7 @@ TEST(FormulonCApiAutoCalc, LoadedWorkbookKeepsItsCacheInManualMode) {
   MakePending(&source, FM_CALC_MODE_AUTO);
   uint8_t* bytes = nullptr;
   size_t len = 0;
-  ASSERT_EQ(fm_workbook_save(source.handle, &bytes, &len), 0);
+  ASSERT_EQ(fm_workbook_save(source.handle, FM_WORKBOOK_FORMAT_XLSX, &bytes, &len), 0);
 
   WorkbookGuard automatic;
   ASSERT_EQ(fm_workbook_load(bytes, len, &automatic.handle), 0);

@@ -338,13 +338,16 @@ inline xml_node template_chart(const pugi::xml_document& t) {
 xml_node template_plot(const pugi::xml_document& t);
 
 inline bool fill_empty(const ChartFillPatch& p) {
-  return p.color.is_keep() && p.transparency_pct.is_keep();
+  return p.color.is_keep() && p.transparency_pct.is_keep() && !p.none.has_value();
 }
 
 inline bool line_empty(const ChartLinePatch& p) {
-  return fill_empty(ChartFillPatch{p.color, p.transparency_pct}) && p.width_pt.is_keep() && p.dash.is_keep() &&
+  return p.color.is_keep() && p.transparency_pct.is_keep() && p.width_pt.is_keep() && p.dash.is_keep() &&
          !p.none.has_value();
 }
+
+/// Applies `fill` and `line` to the existing shape-properties element `sp`.
+Expected<void, Error> apply_paint_properties(xml_node sp, const ChartFillPatch& fill, const ChartLinePatch& line);
 
 Expected<void, Error> apply_shape(xml_node owner, Order owner_order, const ChartFillPatch& fill,
                                   const ChartLinePatch& line);

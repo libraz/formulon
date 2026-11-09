@@ -181,8 +181,8 @@ emscripten::val JsWorkbook::getEffectiveStyle(uint32_t sheet, uint32_t row, uint
   o.set("fillIndex", e.fill_index);
   o.set("borderIndex", e.border_index);
   o.set("fontColor", js_resolved_color(e.font_argb, e.font_resolution));
-  o.set("fillForeground", js_resolved_color(e.fill_fg_argb, e.fill_fg_resolution));
-  o.set("fillBackground", js_resolved_color(e.fill_bg_argb, e.fill_bg_resolution));
+  o.set("fillForeground", js_resolved_color(e.fill_foreground_argb, e.fill_foreground_resolution));
+  o.set("fillBackground", js_resolved_color(e.fill_background_argb, e.fill_background_resolution));
   static const char* const kSides[5] = {"left", "right", "top", "bottom", "diagonal"};
   emscripten::val borders = emscripten::val::object();
   for (int i = 0; i < 5; ++i) {
@@ -193,7 +193,7 @@ emscripten::val JsWorkbook::getEffectiveStyle(uint32_t sheet, uint32_t row, uint
   protection.set("locked", e.locked != 0);
   protection.set("hidden", e.hidden != 0);
   o.set("protection", protection);
-  js_set_cstr(o, "numberFormat", e.num_fmt_code);
+  js_set_cstr(o, "numberFormat", e.number_format);
   return o;
 }
 }  // namespace parts

@@ -486,3 +486,108 @@ TEST(FormulonCApi, SetValueRejectsNonLiteralKindsAndBadArguments) {
   EXPECT_EQ(fm_sheet_set_value(wb.handle, 4, 0, 0, &value), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(fm_sheet_set_value(wb.handle, 0, 2000000, 0, &value), FM_STATUS_INVALID_ARGUMENT);
 }
+
+namespace {
+
+// "東京" with one kana run per character.
+void WriteAnnotatedTokyo(fm_workbook_t* wb, std::uint32_t row) {
+  ASSERT_EQ(fm_sheet_set_text(wb, 0, row, 0, "東京"), 0);
+  const fm_phonetic_run_t runs[] = {{0, 1, "トウ"}, {1, 2, "キョウ"}};
+  ASSERT_EQ(fm_sheet_set_cell_phonetic_runs(wb, 0, row, 0, runs, 2), 0) << fm_get_last_error_message();
+}
+
+fm_phonetic_properties_t ReadPhoneticProperties(const fm_workbook_t* wb, std::uint32_t row) {
+  fm_phonetic_properties_t out = FM_STRUCT_INIT(fm_phonetic_properties_t);
+  EXPECT_EQ(fm_sheet_get_cell_phonetic_properties(wb, 0, row, 0, &out), 0) << fm_get_last_error_message();
+  return out;
+}
+
+}  // namespace
+
+TEST(FormulonCApiPhoneticRecord, RunFieldsStartEnd) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  WriteAnnotatedTokyo(wb.handle, 0);
+  fm_phonetic_run_t run{};
+  ASSERT_EQ(fm_sheet_get_cell_phonetic_run_at(wb.handle, 0, 0, 0, 1, &run), 0);
+  EXPECT_EQ(run.start, 1U);
+  EXPECT_EQ(run.end, 2U);
+  EXPECT_STREQ(run.text, "キョウ");
+  const fm_phonetic_run_t inverted[] = {{2, 1, "x"}};
+  EXPECT_EQ(fm_sheet_set_cell_phonetic_runs(wb.handle, 0, 0, 0, inverted, 1), FM_STATUS_INVALID_ARGUMENT);
+}
+
+TEST(FormulonCApiPhoneticRecord, GetSetRecordRoundTrip) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  WriteAnnotatedTokyo(wb.handle, 0);
+  fm_phonetic_properties_t props = FM_STRUCT_INIT(fm_phonetic_properties_t);
+  props.font_index = 0;
+  props.type = FM_PHONETIC_TYPE_HIRAGANA;
+  props.alignment = FM_PHONETIC_ALIGNMENT_CENTER;
+  props.stated = 0;  // ignored on input
+  ASSERT_EQ(fm_sheet_set_cell_phonetic_properties(wb.handle, 0, 0, 0, &props), 0) << fm_get_last_error_message();
+  const fm_phonetic_properties_t read = ReadPhoneticProperties(wb.handle, 0);
+  EXPECT_EQ(read.font_index, 0U);
+  EXPECT_EQ(read.type, FM_PHONETIC_TYPE_HIRAGANA);
+  EXPECT_EQ(read.alignment, FM_PHONETIC_ALIGNMENT_CENTER);
+  EXPECT_EQ(read.stated, 1);
+
+  // The read record feeds back into the setter.
+  WriteAnnotatedTokyo(wb.handle, 1);
+  ASSERT_EQ(fm_sheet_set_cell_phonetic_properties(wb.handle, 0, 1, 0, &read), 0) << fm_get_last_error_message();
+  const fm_phonetic_properties_t copied = ReadPhoneticProperties(wb.handle, 1);
+  EXPECT_EQ(copied.type, read.type);
+  EXPECT_EQ(copied.alignment, read.alignment);
+  EXPECT_EQ(copied.font_index, read.font_index);
+
+  props.type = 4;
+  EXPECT_EQ(fm_sheet_set_cell_phonetic_properties(wb.handle, 0, 0, 0, &props), FM_STATUS_INVALID_ARGUMENT);
+  props.type = FM_PHONETIC_TYPE_HIRAGANA;
+  props.font_index = 0x10000U;
+  EXPECT_EQ(fm_sheet_set_cell_phonetic_properties(wb.handle, 0, 0, 0, &props), FM_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(fm_sheet_get_cell_phonetic_properties(wb.handle, 0, 0, 0, nullptr), FM_STATUS_BINDING_NULL_POINTER);
+}
+
+TEST(FormulonCApiPhoneticRecord, StatedReportsExplicitTriple) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  WriteAnnotatedTokyo(wb.handle, 0);
+  fm_phonetic_properties_t read = ReadPhoneticProperties(wb.handle, 0);
+  EXPECT_EQ(read.stated, 0);
+  EXPECT_EQ(read.type, 0);
+  EXPECT_EQ(read.alignment, 0);
+
+  // An explicit all-zero triple is stated.
+  const fm_phonetic_properties_t zero = FM_STRUCT_INIT(fm_phonetic_properties_t);
+  ASSERT_EQ(fm_sheet_set_cell_phonetic_properties(wb.handle, 0, 0, 0, &zero), 0) << fm_get_last_error_message();
+  read = ReadPhoneticProperties(wb.handle, 0);
+  EXPECT_EQ(read.stated, 1);
+  EXPECT_EQ(read.type, 0);
+
+  // A cell that does not exist reads the unstated triple.
+  read = ReadPhoneticProperties(wb.handle, 9);
+  EXPECT_EQ(read.stated, 0);
+}
+
+TEST(FormulonCApiPhoneticRecord, NullResets) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  WriteAnnotatedTokyo(wb.handle, 0);
+  fm_phonetic_properties_t props = FM_STRUCT_INIT(fm_phonetic_properties_t);
+  props.type = FM_PHONETIC_TYPE_NO_CONVERSION;
+  props.alignment = FM_PHONETIC_ALIGNMENT_DISTRIBUTED;
+  ASSERT_EQ(fm_sheet_set_cell_phonetic_properties(wb.handle, 0, 0, 0, &props), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_set_cell_phonetic_properties(wb.handle, 0, 0, 0, nullptr), 0) << fm_get_last_error_message();
+  const fm_phonetic_properties_t read = ReadPhoneticProperties(wb.handle, 0);
+  EXPECT_EQ(read.stated, 0);
+  EXPECT_EQ(read.font_index, 0U);
+  EXPECT_EQ(read.type, 0);
+  EXPECT_EQ(read.alignment, 0);
+  // The runs stay.
+  std::size_t runs = 0;
+  ASSERT_EQ(fm_sheet_get_cell_phonetic_run_count(wb.handle, 0, 0, 0, &runs), 0);
+  EXPECT_EQ(runs, 2U);
+  // Resetting a cell that does not exist is a no-op.
+  EXPECT_EQ(fm_sheet_set_cell_phonetic_properties(wb.handle, 0, 7, 0, nullptr), 0);
+}

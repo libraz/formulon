@@ -460,9 +460,9 @@ TEST(FormulonCApiPrintSettings, PageSetupRejectsOrientationOutsideTheEnum) {
 TEST(FormulonCApiPrintSettings, BreaksUpsertStaySortedAndReplaceInPlace) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  ASSERT_EQ(SetRowBreak(wb.handle, 40, 1), 0);
-  ASSERT_EQ(SetRowBreak(wb.handle, 10, 1), 0);
-  ASSERT_EQ(SetRowBreak(wb.handle, 25, 0), 0);
+  ASSERT_EQ(SetRowBreak(wb.handle, 40, FM_TRISTATE_TRUE), 0);
+  ASSERT_EQ(SetRowBreak(wb.handle, 10, FM_TRISTATE_TRUE), 0);
+  ASSERT_EQ(SetRowBreak(wb.handle, 25, FM_TRISTATE_FALSE), 0);
   ASSERT_EQ(count_of(fm_sheet_get_row_break_count, wb.handle, 0), 3U);
 
   fm_row_break_t brk = FM_STRUCT_INIT(fm_row_break_t);
@@ -470,19 +470,19 @@ TEST(FormulonCApiPrintSettings, BreaksUpsertStaySortedAndReplaceInPlace) {
   EXPECT_EQ(brk.row, 10U);
   EXPECT_EQ(brk.first, 0U);
   EXPECT_EQ(brk.last, 16383U);
-  EXPECT_EQ(brk.manual, 1);
+  EXPECT_EQ(brk.manual, FM_TRISTATE_TRUE);
   ASSERT_EQ(fm_sheet_get_row_break_at(wb.handle, 0, 1, &brk), 0);
   EXPECT_EQ(brk.row, 25U);
-  EXPECT_EQ(brk.manual, 0);
+  EXPECT_EQ(brk.manual, FM_TRISTATE_FALSE);
   ASSERT_EQ(fm_sheet_get_row_break_at(wb.handle, 0, 2, &brk), 0);
   EXPECT_EQ(brk.row, 40U);
 
   // Re-adding an existing index replaces it rather than duplicating.
-  ASSERT_EQ(SetRowBreak(wb.handle, 25, 1), 0);
+  ASSERT_EQ(SetRowBreak(wb.handle, 25, FM_TRISTATE_TRUE), 0);
   EXPECT_EQ(count_of(fm_sheet_get_row_break_count, wb.handle, 0), 3U);
   ASSERT_EQ(fm_sheet_get_row_break_at(wb.handle, 0, 1, &brk), 0);
   EXPECT_EQ(brk.row, 25U);
-  EXPECT_EQ(brk.manual, 1);
+  EXPECT_EQ(brk.manual, FM_TRISTATE_TRUE);
 }
 
 TEST(FormulonCApiPrintSettings, LoadedBreaksAreNormalisedBeforeTheAbiObservesThem) {
@@ -523,7 +523,7 @@ TEST(FormulonCApiPrintSettings, LoadedBreaksAreNormalisedBeforeTheAbiObservesThe
   // The mutators now find what the enumeration reports.
   EXPECT_EQ(fm_sheet_set_column_break(wb.handle, 0, 12, nullptr), 0);
   EXPECT_EQ(count_of(fm_sheet_get_column_break_count, wb.handle, 0), 2U);
-  ASSERT_EQ(SetColumnBreak(wb.handle, 12, 1), 0);
+  ASSERT_EQ(SetColumnBreak(wb.handle, 12, FM_TRISTATE_TRUE), 0);
   EXPECT_EQ(count_of(fm_sheet_get_column_break_count, wb.handle, 0), 3U);
   ASSERT_EQ(fm_sheet_get_column_break_at(wb.handle, 0, 1, &brk), 0);
   EXPECT_EQ(brk.col, 12U);
@@ -554,8 +554,8 @@ TEST(FormulonCApiPrintSettings, LoadedBreakCountStaysWithinTheAuthoringCap) {
   // accepted at the cap; a new one is what the cap refuses.
   fm_row_break_t brk = FM_STRUCT_INIT(fm_row_break_t);
   ASSERT_EQ(fm_sheet_get_row_break_at(wb.handle, 0, 0, &brk), 0);
-  EXPECT_EQ(SetRowBreak(wb.handle, brk.row, 0), 0);
-  EXPECT_EQ(SetRowBreak(wb.handle, formulon::Sheet::kMaxRows - 1U, 1), kPreconditionFailed);
+  EXPECT_EQ(SetRowBreak(wb.handle, brk.row, FM_TRISTATE_FALSE), 0);
+  EXPECT_EQ(SetRowBreak(wb.handle, formulon::Sheet::kMaxRows - 1U, FM_TRISTATE_TRUE), kPreconditionFailed);
 }
 
 TEST(FormulonCApiPrintSettings, BreakCountReportsARejectedSheetThroughItsStatus) {
@@ -589,7 +589,7 @@ TEST(FormulonCApiPrintSettings, BreakCountReportsARejectedSheetThroughItsStatus)
 
   // A populated axis clears the previous rejection rather than inheriting
   // it, so the empty message stays a trustworthy success signal.
-  ASSERT_EQ(SetRowBreak(wb.handle, 10, 1), 0);
+  ASSERT_EQ(SetRowBreak(wb.handle, 10, FM_TRISTATE_TRUE), 0);
   EXPECT_EQ(count_of(fm_sheet_get_row_break_count, wb.handle, 0), 1U);
   EXPECT_STREQ(fm_get_last_error_message(), "");
 
@@ -603,7 +603,7 @@ TEST(FormulonCApiPrintSettings, BreakCountReportsARejectedSheetThroughItsStatus)
 TEST(FormulonCApiPrintSettings, ColumnBreaksSpanEveryRow) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  ASSERT_EQ(SetColumnBreak(wb.handle, 5, 1), 0);
+  ASSERT_EQ(SetColumnBreak(wb.handle, 5, FM_TRISTATE_TRUE), 0);
   fm_column_break_t brk = FM_STRUCT_INIT(fm_column_break_t);
   ASSERT_EQ(fm_sheet_get_column_break_at(wb.handle, 0, 0, &brk), 0);
   EXPECT_EQ(brk.col, 5U);
@@ -615,7 +615,7 @@ TEST(FormulonCApiPrintSettings, RemovingAnAbsentBreakIsANoOp) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   EXPECT_EQ(fm_sheet_set_row_break(wb.handle, 0, 7, nullptr), 0);
   EXPECT_EQ(count_of(fm_sheet_get_row_break_count, wb.handle, 0), 0U);
-  ASSERT_EQ(SetRowBreak(wb.handle, 7, 1), 0);
+  ASSERT_EQ(SetRowBreak(wb.handle, 7, FM_TRISTATE_TRUE), 0);
   EXPECT_EQ(fm_sheet_set_row_break(wb.handle, 0, 7, nullptr), 0);
   EXPECT_EQ(count_of(fm_sheet_get_row_break_count, wb.handle, 0), 0U);
 }
@@ -623,8 +623,8 @@ TEST(FormulonCApiPrintSettings, RemovingAnAbsentBreakIsANoOp) {
 TEST(FormulonCApiPrintSettings, ClearBreaksEmptiesBothAxes) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  ASSERT_EQ(SetRowBreak(wb.handle, 3, 1), 0);
-  ASSERT_EQ(SetColumnBreak(wb.handle, 4, 1), 0);
+  ASSERT_EQ(SetRowBreak(wb.handle, 3, FM_TRISTATE_TRUE), 0);
+  ASSERT_EQ(SetColumnBreak(wb.handle, 4, FM_TRISTATE_TRUE), 0);
   ASSERT_EQ(fm_sheet_clear_breaks(wb.handle, 0), 0);
   EXPECT_EQ(count_of(fm_sheet_get_row_break_count, wb.handle, 0), 0U);
   EXPECT_EQ(count_of(fm_sheet_get_column_break_count, wb.handle, 0), 0U);
@@ -637,8 +637,8 @@ TEST(FormulonCApiPrintSettings, BreakRemovalChecksTheGridBeforeLookingUpTheBreak
   EXPECT_EQ(fm_sheet_set_column_break(wb.handle, 0, formulon::Sheet::kMaxCols, nullptr), kInvalidArgument);
 
   // The last grid row / column is addressable: added, then removed.
-  ASSERT_EQ(SetRowBreak(wb.handle, formulon::Sheet::kMaxRows - 1U, 1), 0);
-  ASSERT_EQ(SetColumnBreak(wb.handle, formulon::Sheet::kMaxCols - 1U, 1), 0);
+  ASSERT_EQ(SetRowBreak(wb.handle, formulon::Sheet::kMaxRows - 1U, FM_TRISTATE_TRUE), 0);
+  ASSERT_EQ(SetColumnBreak(wb.handle, formulon::Sheet::kMaxCols - 1U, FM_TRISTATE_TRUE), 0);
   EXPECT_EQ(fm_sheet_set_row_break(wb.handle, 0, formulon::Sheet::kMaxRows - 1U, nullptr), 0);
   EXPECT_EQ(fm_sheet_set_column_break(wb.handle, 0, formulon::Sheet::kMaxCols - 1U, nullptr), 0);
   EXPECT_EQ(fm_sheet_set_row_break(wb.handle, 0, formulon::Sheet::kMaxRows - 1U, nullptr), 0);
@@ -647,16 +647,16 @@ TEST(FormulonCApiPrintSettings, BreakRemovalChecksTheGridBeforeLookingUpTheBreak
 TEST(FormulonCApiPrintSettings, BreaksRejectOutOfGridAndOverflow) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  EXPECT_EQ(SetRowBreak(wb.handle, formulon::Sheet::kMaxRows, 1), kInvalidArgument);
-  EXPECT_EQ(SetColumnBreak(wb.handle, formulon::Sheet::kMaxCols, 1), kInvalidArgument);
+  EXPECT_EQ(SetRowBreak(wb.handle, formulon::Sheet::kMaxRows, FM_TRISTATE_TRUE), kInvalidArgument);
+  EXPECT_EQ(SetColumnBreak(wb.handle, formulon::Sheet::kMaxCols, FM_TRISTATE_TRUE), kInvalidArgument);
 
   for (std::uint32_t row = 0; row < 1026U; ++row) {
-    ASSERT_EQ(SetRowBreak(wb.handle, row, 1), 0) << "row " << row;
+    ASSERT_EQ(SetRowBreak(wb.handle, row, FM_TRISTATE_TRUE), 0) << "row " << row;
   }
   // Excel's own ceiling; going past it produces a file Excel truncates.
-  EXPECT_EQ(SetRowBreak(wb.handle, 2000, 1), kPreconditionFailed);
+  EXPECT_EQ(SetRowBreak(wb.handle, 2000, FM_TRISTATE_TRUE), kPreconditionFailed);
   // Replacing an existing break is still allowed at the ceiling.
-  EXPECT_EQ(SetRowBreak(wb.handle, 0, 0), 0);
+  EXPECT_EQ(SetRowBreak(wb.handle, 0, FM_TRISTATE_FALSE), 0);
 }
 
 TEST(FormulonCApiPrintSettings, BreakAtRejectsOutOfRangeIndex) {
@@ -996,7 +996,7 @@ TEST(FormulonCApiPrintSettings, ManualRowBreakAddsAPage) {
   ASSERT_EQ(fm_sheet_set_number(wb.handle, 0, 0, 0, 1.0), 0);
   ASSERT_EQ(fm_sheet_set_number(wb.handle, 0, 9, 0, 1.0), 0);
   const std::uint32_t before = PageCount(wb.handle);
-  ASSERT_EQ(SetRowBreak(wb.handle, 5, 1), 0);
+  ASSERT_EQ(SetRowBreak(wb.handle, 5, FM_TRISTATE_TRUE), 0);
   EXPECT_GT(PageCount(wb.handle), before);
 }
 
@@ -1181,27 +1181,27 @@ TEST(FormulonCApiPrintSettings, HeaderFooterUpdatesMergeAcrossCalls) {
 TEST(FormulonCApiPrintSettings, RowBreakRecordStoresItsSpanAndManualFlag) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  ASSERT_EQ(SetRowBreak(wb.handle, 12, 1, 2, 9), 0);
+  ASSERT_EQ(SetRowBreak(wb.handle, 12, FM_TRISTATE_TRUE, 2, 9), 0);
   fm_row_break_t brk = FM_STRUCT_INIT(fm_row_break_t);
   ASSERT_EQ(fm_sheet_get_row_break_at(wb.handle, 0, 0, &brk), 0);
   EXPECT_EQ(brk.row, 12U);
   EXPECT_EQ(brk.first, 2U);
   EXPECT_EQ(brk.last, 9U);
-  EXPECT_EQ(brk.manual, 1);
+  EXPECT_EQ(brk.manual, FM_TRISTATE_TRUE);
 
   // Upsert replaces the span and the flag in place.
-  ASSERT_EQ(SetRowBreak(wb.handle, 12, 0, 4, 5), 0);
+  ASSERT_EQ(SetRowBreak(wb.handle, 12, FM_TRISTATE_FALSE, 4, 5), 0);
   ASSERT_EQ(count_of(fm_sheet_get_row_break_count, wb.handle, 0), 1U);
   ASSERT_EQ(fm_sheet_get_row_break_at(wb.handle, 0, 0, &brk), 0);
   EXPECT_EQ(brk.first, 4U);
   EXPECT_EQ(brk.last, 5U);
-  EXPECT_EQ(brk.manual, 0);
+  EXPECT_EQ(brk.manual, FM_TRISTATE_FALSE);
 }
 
 TEST(FormulonCApiPrintSettings, RowBreakWithZeroSpanCoversTheWholeSheet) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  ASSERT_EQ(SetRowBreak(wb.handle, 30, 1, 0, 0), 0);
+  ASSERT_EQ(SetRowBreak(wb.handle, 30, FM_TRISTATE_TRUE, 0, 0), 0);
   fm_row_break_t brk = FM_STRUCT_INIT(fm_row_break_t);
   ASSERT_EQ(fm_sheet_get_row_break_at(wb.handle, 0, 0, &brk), 0);
   EXPECT_EQ(brk.first, 0U);
@@ -1213,7 +1213,7 @@ TEST(FormulonCApiPrintSettings, RowBreakPositionComesFromTheRowArgument) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   fm_row_break_t brk = FM_STRUCT_INIT(fm_row_break_t);
   brk.row = 99U;  // ignored
-  brk.manual = 1;
+  brk.manual = FM_TRISTATE_TRUE;
   ASSERT_EQ(fm_sheet_set_row_break(wb.handle, 0, 7, &brk), 0);
   fm_row_break_t read = FM_STRUCT_INIT(fm_row_break_t);
   ASSERT_EQ(fm_sheet_get_row_break_at(wb.handle, 0, 0, &read), 0);
@@ -1224,8 +1224,8 @@ TEST(FormulonCApiPrintSettings, RowBreakPositionComesFromTheRowArgument) {
 TEST(FormulonCApiPrintSettings, RowBreakNullRemovesTheBreakAndIsANoOpWhenAbsent) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  ASSERT_EQ(SetRowBreak(wb.handle, 7, 1), 0);
-  ASSERT_EQ(SetRowBreak(wb.handle, 8, 1), 0);
+  ASSERT_EQ(SetRowBreak(wb.handle, 7, FM_TRISTATE_TRUE), 0);
+  ASSERT_EQ(SetRowBreak(wb.handle, 8, FM_TRISTATE_TRUE), 0);
   EXPECT_EQ(fm_sheet_set_row_break(wb.handle, 0, 7, nullptr), 0);
   ASSERT_EQ(count_of(fm_sheet_get_row_break_count, wb.handle, 0), 1U);
   fm_row_break_t brk = FM_STRUCT_INIT(fm_row_break_t);
@@ -1238,27 +1238,27 @@ TEST(FormulonCApiPrintSettings, RowBreakNullRemovesTheBreakAndIsANoOpWhenAbsent)
 TEST(FormulonCApiPrintSettings, ColumnBreakRecordStoresItsSpanAndManualFlag) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  ASSERT_EQ(SetColumnBreak(wb.handle, 6, 1, 10, 20), 0);
+  ASSERT_EQ(SetColumnBreak(wb.handle, 6, FM_TRISTATE_TRUE, 10, 20), 0);
   fm_column_break_t brk = FM_STRUCT_INIT(fm_column_break_t);
   ASSERT_EQ(fm_sheet_get_column_break_at(wb.handle, 0, 0, &brk), 0);
   EXPECT_EQ(brk.col, 6U);
   EXPECT_EQ(brk.first, 10U);
   EXPECT_EQ(brk.last, 20U);
-  EXPECT_EQ(brk.manual, 1);
+  EXPECT_EQ(brk.manual, FM_TRISTATE_TRUE);
 
-  ASSERT_EQ(SetColumnBreak(wb.handle, 6, 0, 0, 0), 0);
+  ASSERT_EQ(SetColumnBreak(wb.handle, 6, FM_TRISTATE_FALSE, 0, 0), 0);
   ASSERT_EQ(count_of(fm_sheet_get_column_break_count, wb.handle, 0), 1U);
   ASSERT_EQ(fm_sheet_get_column_break_at(wb.handle, 0, 0, &brk), 0);
   EXPECT_EQ(brk.first, 0U);
   EXPECT_EQ(brk.last, formulon::Sheet::kMaxRows - 1U);
-  EXPECT_EQ(brk.manual, 0);
+  EXPECT_EQ(brk.manual, FM_TRISTATE_FALSE);
 }
 
 TEST(FormulonCApiPrintSettings, ColumnBreakNullRemovesTheBreakAndIsANoOpWhenAbsent) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   EXPECT_EQ(fm_sheet_set_column_break(wb.handle, 0, 3, nullptr), 0);
-  ASSERT_EQ(SetColumnBreak(wb.handle, 3, 1), 0);
+  ASSERT_EQ(SetColumnBreak(wb.handle, 3, FM_TRISTATE_TRUE), 0);
   ASSERT_EQ(count_of(fm_sheet_get_column_break_count, wb.handle, 0), 1U);
   EXPECT_EQ(fm_sheet_set_column_break(wb.handle, 0, 3, nullptr), 0);
   EXPECT_EQ(count_of(fm_sheet_get_column_break_count, wb.handle, 0), 0U);
@@ -1267,12 +1267,12 @@ TEST(FormulonCApiPrintSettings, ColumnBreakNullRemovesTheBreakAndIsANoOpWhenAbse
 TEST(FormulonCApiPrintSettings, BreakRecordsRejectInvertedSpansAndBadFlags) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  EXPECT_EQ(SetRowBreak(wb.handle, 5, 1, 9, 2), kInvalidArgument);
-  EXPECT_EQ(SetRowBreak(wb.handle, 5, 2), kInvalidArgument);
-  EXPECT_EQ(SetRowBreak(wb.handle, 5, 1, 0, formulon::Sheet::kMaxCols), kInvalidArgument);
-  EXPECT_EQ(SetColumnBreak(wb.handle, 5, 1, 9, 2), kInvalidArgument);
+  EXPECT_EQ(SetRowBreak(wb.handle, 5, FM_TRISTATE_TRUE, 9, 2), kInvalidArgument);
+  EXPECT_EQ(SetRowBreak(wb.handle, 5, 3), kInvalidArgument);
+  EXPECT_EQ(SetRowBreak(wb.handle, 5, FM_TRISTATE_TRUE, 0, formulon::Sheet::kMaxCols), kInvalidArgument);
+  EXPECT_EQ(SetColumnBreak(wb.handle, 5, FM_TRISTATE_TRUE, 9, 2), kInvalidArgument);
   EXPECT_EQ(SetColumnBreak(wb.handle, 5, -1), kInvalidArgument);
-  EXPECT_EQ(SetColumnBreak(wb.handle, 5, 1, 0, formulon::Sheet::kMaxRows), kInvalidArgument);
+  EXPECT_EQ(SetColumnBreak(wb.handle, 5, FM_TRISTATE_TRUE, 0, formulon::Sheet::kMaxRows), kInvalidArgument);
   EXPECT_EQ(count_of(fm_sheet_get_row_break_count, wb.handle, 0), 0U);
   EXPECT_EQ(count_of(fm_sheet_get_column_break_count, wb.handle, 0), 0U);
 }
@@ -1464,4 +1464,31 @@ TEST(FormulonCApiPrintSettings, GetPrintAreaFillsAtMostCapacityAndReportsTheFull
   EXPECT_EQ(out[0].last_col, 1U);
   // Nothing past the capacity is written.
   EXPECT_EQ(out[1].first_row, 77U);
+}
+
+TEST(FormulonCApiPageBreakManualDefault, ZeroInitBreakIsManual) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  fm_row_break_t row = FM_STRUCT_INIT(fm_row_break_t);
+  ASSERT_EQ(fm_sheet_set_row_break(wb.handle, 0, 7, &row), 0);
+  fm_column_break_t col = FM_STRUCT_INIT(fm_column_break_t);
+  ASSERT_EQ(fm_sheet_set_column_break(wb.handle, 0, 3, &col), 0);
+  fm_row_break_t row_back = FM_STRUCT_INIT(fm_row_break_t);
+  fm_column_break_t col_back = FM_STRUCT_INIT(fm_column_break_t);
+  ASSERT_EQ(fm_sheet_get_row_break_at(wb.handle, 0, 0, &row_back), 0);
+  ASSERT_EQ(fm_sheet_get_column_break_at(wb.handle, 0, 0, &col_back), 0);
+  EXPECT_EQ(row_back.manual, FM_TRISTATE_TRUE);
+  EXPECT_EQ(col_back.manual, FM_TRISTATE_TRUE);
+}
+
+TEST(FormulonCApiPageBreakManualDefault, ReadReturnsTrueOrFalse) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  ASSERT_EQ(SetRowBreak(wb.handle, 4, FM_TRISTATE_FALSE), 0);
+  ASSERT_EQ(SetRowBreak(wb.handle, 9, FM_TRISTATE_DEFAULT), 0);
+  fm_row_break_t brk = FM_STRUCT_INIT(fm_row_break_t);
+  ASSERT_EQ(fm_sheet_get_row_break_at(wb.handle, 0, 0, &brk), 0);
+  EXPECT_EQ(brk.manual, FM_TRISTATE_FALSE);
+  ASSERT_EQ(fm_sheet_get_row_break_at(wb.handle, 0, 1, &brk), 0);
+  EXPECT_EQ(brk.manual, FM_TRISTATE_TRUE);
 }

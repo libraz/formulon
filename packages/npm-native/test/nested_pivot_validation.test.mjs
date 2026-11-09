@@ -17,8 +17,10 @@ function makePivot(Workbook) {
     cache.setRecordValue(record, 1, amount);
   }
   const pivot = wb.sheet(0).addPivot({ name: 'Pivot1', cacheId: cache.cacheId, anchor: { row: 0, col: 4 } });
-  const region = pivot.addField({ fieldIndex: 'Region', axis: 0 });
-  const amount = pivot.addField({ fieldIndex: 'Amount', axis: 2 });
+  pivot.setFieldAxis('Region', 0);
+  const region = 0;
+  pivot.setFieldAxis('Amount', 2);
+  const amount = 1;
   pivot.setRowFieldOrder([region]);
   pivot.addDataField({ name: 'Sum of Amount', fieldIndex: amount, aggregation: 0 });
   return { wb, pivot, region, amount };
@@ -53,14 +55,10 @@ test('pivot nested integer fields reject narrowing before their C mutations', as
 
   for (const value of invalid) {
     withPivot(mod.Workbook, ({ wb, pivot }) => {
-      const before = pivot.listFields().length;
-      // `axis` is required: a value that is no whole number is a TypeError, a whole one past uint32 a RangeError.
-      assert.throws(
-        () => pivot.addField({ fieldIndex: 'Region', axis: value }),
-        Number.isInteger(value) ? RangeError : TypeError,
-        `pivotFieldAdd axis=${String(value)}`,
-      );
-      assert.equal(pivot.listFields().length, before);
+      const before = pivot.getField('Region').axis;
+      // A positional axis that is no int32 is a RangeError.
+      assert.throws(() => pivot.setFieldAxis('Region', value), RangeError, `setFieldAxis axis=${String(value)}`);
+      assert.equal(pivot.getField('Region').axis, before);
     });
 
     withPivot(mod.Workbook, ({ wb, pivot, amount }) => {
@@ -103,9 +101,9 @@ test('pivot nested integer fields reject wrong primitives without changing the p
   const mod = await getModule();
   const symbol = Symbol('pivot numeric');
   withPivot(mod.Workbook, ({ wb, pivot }) => {
-    const fieldCount = pivot.listFields().length;
-    assert.throws(() => pivot.addField({ fieldIndex: 'Region', axis: symbol }), TypeError);
-    assert.equal(pivot.listFields().length, fieldCount);
+    const axis = pivot.getField('Region').axis;
+    assert.throws(() => pivot.setFieldAxis('Region', symbol), TypeError);
+    assert.equal(pivot.getField('Region').axis, axis);
 
     const dataFieldCount = pivot.listDataFields().length;
     assert.throws(() => pivot.addDataField({ name: 'Bad', fieldIndex: symbol, aggregation: 0 }), TypeError);
@@ -116,7 +114,7 @@ test('pivot nested integer fields reject wrong primitives without changing the p
       () =>
         pivot.addFilter({
           fieldIndex: 'Region',
-          type: 1,
+          kind: 1,
           value: symbol,
         }),
       TypeError,
@@ -125,9 +123,9 @@ test('pivot nested integer fields reject wrong primitives without changing the p
   });
 });
 
-test('pivot filters validate field, type, and data-field index before mutation', async () => {
+test('pivot filters validate field, kind, and data-field index before mutation', async () => {
   const mod = await getModule();
-  const invalidSpecs = [{ fieldIndex: 2 ** 32 }, { type: 2 ** 32 }, { dataFieldIndex: 2 ** 32 }];
+  const invalidSpecs = [{ fieldIndex: 2 ** 32 }, { kind: 2 ** 32 }, { dataFieldIndex: 2 ** 32 }];
   for (const override of invalidSpecs) {
     withPivot(mod.Workbook, ({ wb, pivot }) => {
       const before = pivot.listFilters().length;
@@ -135,7 +133,7 @@ test('pivot filters validate field, type, and data-field index before mutation',
         () =>
           pivot.addFilter({
             fieldIndex: 'Region',
-            type: 1,
+            kind: 1,
             value: 15,
             ...override,
           }),
@@ -187,16 +185,16 @@ test('pivot order stops at a throwing array getter before changing the report', 
 test('pivot nested string getters stop before changing the report', async () => {
   const mod = await getModule();
   withPivot(mod.Workbook, ({ wb, pivot }) => {
-    const fieldCount = pivot.listFields().length;
-    const spec = { axis: 0 };
-    Object.defineProperty(spec, 'sourceName', {
+    const field = pivot.getField('Region');
+    const patch = { fillDownLabels: !field.fillDownLabels };
+    Object.defineProperty(patch, 'customName', {
       enumerable: true,
       get() {
         throw new Error('pivot field getter');
       },
     });
-    assert.throws(() => pivot.addField(spec), /pivot field getter/);
-    assert.equal(pivot.listFields().length, fieldCount);
+    assert.throws(() => pivot.updateField('Region', patch), /pivot field getter/);
+    assert.deepEqual(pivot.getField('Region'), field);
     assert.deepEqual(pivotGrid(wb, pivot), BASE_GRID);
   });
 });

@@ -9,17 +9,19 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Dict, List, Optional, Union
 
 from . import _structs as S
-from ._c import LIB, _NoCopy, _sint, _uint, fm_value_t_size
+from ._c import LIB, FormulonError, _NoCopy, _sint, _uint, fm_value_t_size
 from ._inputs import date_serial
+from ._refs import _fold
+from ._status import StatusCode
 from ._workbook import (
     _PATCH_CLEAR,
     _PATCH_SET,
     UNCHANGED,
-    NativeValue,
     PivotCacheField,
     PivotCacheOptions,
-    PivotCacheSharedItem,
+    PivotCacheValue,
     PivotCalculatedItem,
+    PivotFieldRef,
     PivotWorksheetSource,
     PivotWorksheetSourceInput,
     Unchanged,
@@ -47,7 +49,7 @@ class PivotCache(_NoCopy):
 
     Obtain a handle from :meth:`Workbook.pivot_cache`,
     :meth:`Workbook.list_pivot_caches`, :meth:`Workbook.add_pivot_cache` or
-    :meth:`Pivot.get_cache`. A workbook hands out one handle per cache id, so
+    :meth:`Pivot.cache`. A workbook hands out one handle per cache id, so
     every lookup of the same cache returns the same object. Once the cache is
     removed (directly, or with its source sheet), every operation except
     reading :attr:`workbook` and :attr:`cache_id` raises
@@ -173,6 +175,22 @@ class PivotCache(_NoCopy):
             _check(LIB.fm_workbook_update_pivot_cache_options(h, cache_id, ptr))
 
     # -- Fields ------------------------------------------------------------
+    def _field_ref(self, field: PivotFieldRef) -> int:
+        """The cache field index ``field`` names: an index as it is, a name matched case-insensitively.
+
+        Raises:
+          NotFoundError: when no cache field has the name.
+        """
+        if isinstance(field, str):
+            wanted = _fold(field)
+            for index, cache_field in enumerate(self.list_fields()):
+                if _fold(cache_field.name) == wanted:
+                    return index
+            raise FormulonError(StatusCode.NOT_FOUND, f"the cache has no field named {field!r}", "")
+        if isinstance(field, bool):
+            raise TypeError("formulon: field must be an int or a str, got bool")
+        return _uint(field, "field", role="position")
+
     def list_fields(self) -> List[PivotCacheField]:
         """Every field of the cache, in field order; a field's position is its ``field_index``."""
         h, cache_id = self._call()
@@ -225,23 +243,23 @@ class PivotCache(_NoCopy):
             _check(LIB.fm_workbook_add_pivot_cache_calculated_field(h, cache_id, name_ptr, formula_ptr, out))
             return LIB.read_u32(out)
 
-    def set_calculated_field_formula(self, field_index: int, formula: str) -> None:
-        """Replace the formula of calculated field ``field_index``."""
+    def set_calculated_field_formula(self, field: PivotFieldRef, formula: str) -> None:
+        """Replace the formula of calculated field ``field``."""
         h, cache_id = self._call()
         with _ArgScope() as scope:
             formula_ptr = scope.cstr(formula)
             _check(
                 LIB.fm_workbook_set_pivot_cache_calculated_field_formula(
-                    h, cache_id, _uint(field_index, "field_index", role="position"), formula_ptr
+                    h, cache_id, _uint(self._field_ref(field), "field_index", role="position"), formula_ptr
                 )
             )
 
-    def remove_calculated_field(self, field_index: int) -> None:
-        """Remove calculated field ``field_index`` and its data fields in every pivot table."""
+    def remove_calculated_field(self, field: PivotFieldRef) -> None:
+        """Remove calculated field ``field`` and its data fields in every pivot table."""
         h, cache_id = self._call()
         _check(
             LIB.fm_workbook_remove_pivot_cache_calculated_field(
-                h, cache_id, _uint(field_index, "field_index", role="position")
+                h, cache_id, _uint(self._field_ref(field), "field_index", role="position")
             )
         )
 
@@ -270,8 +288,8 @@ class PivotCache(_NoCopy):
                 )
         return items
 
-    def add_calculated_item(self, field_index: int, name: str, formula: str) -> int:
-        """Add calculated item ``name`` to cache field ``field_index``; return its position, last in solve order.
+    def add_calculated_item(self, field: PivotFieldRef, name: str, formula: str) -> int:
+        """Add calculated item ``name`` to cache field ``field``; return its position, last in solve order.
 
         The formula names items of the same field, as ``North``, ``'North East'``,
         ``Region[North]``, ``Region[2]`` or ``Region[-1]``.
@@ -283,7 +301,12 @@ class PivotCache(_NoCopy):
             out = scope.out_ptr()
             _check(
                 LIB.fm_workbook_add_pivot_cache_calculated_item(
-                    h, cache_id, _uint(field_index, "field_index", role="position"), name_ptr, formula_ptr, out
+                    h,
+                    cache_id,
+                    _uint(self._field_ref(field), "field_index", role="position"),
+                    name_ptr,
+                    formula_ptr,
+                    out,
                 )
             )
             return LIB.read_u32(out)
@@ -321,78 +344,96 @@ class PivotCache(_NoCopy):
         )
 
     # -- Shared items ------------------------------------------------------
-    def list_field_shared_items(self, field_index: int) -> List[PivotCacheSharedItem]:
-        """Every shared item of cache field ``field_index``, in item order.
+    def list_field_shared_items(self, field: PivotFieldRef) -> List[PivotCacheValue]:
+        """Every shared item of cache field ``field``, in item order.
 
         A date item holds its serial number as a number and has ``is_date`` set.
         """
         h, cache_id = self._call()
-        field = _uint(field_index, "field_index", role="position")
-        count = _read_count(LIB.fm_workbook_get_pivot_cache_field_shared_item_count, h, cache_id, field)
-        items: List[PivotCacheSharedItem] = []
+        field_index = _uint(self._field_ref(field), "field_index", role="position")
+        count = _read_count(LIB.fm_workbook_get_pivot_cache_field_shared_item_count, h, cache_id, field_index)
+        items: List[PivotCacheValue] = []
         with _ArgScope() as scope:
             value_ptr = scope.alloc(fm_value_t_size)
             date_ptr = scope.out_ptr()
             for i in range(count):
                 item = _uint(i, "item_index", role="position")
-                _check(LIB.fm_workbook_get_pivot_cache_field_shared_item_value(h, cache_id, field, item, value_ptr))
+                _check(
+                    LIB.fm_workbook_get_pivot_cache_field_shared_item_value(h, cache_id, field_index, item, value_ptr)
+                )
                 value = Value._from_wasm(value_ptr)
-                _check(LIB.fm_workbook_is_pivot_cache_field_shared_item_date(h, cache_id, field, item, date_ptr))
-                items.append(PivotCacheSharedItem(value=to_native(value), is_date=LIB.read_i32(date_ptr) != 0))
+                _check(LIB.fm_workbook_is_pivot_cache_field_shared_item_date(h, cache_id, field_index, item, date_ptr))
+                items.append(PivotCacheValue(value=to_native(value), is_date=LIB.read_i32(date_ptr) != 0))
         return items
 
-    def _date_serial(self, value: object) -> float:
-        """The serial of a ``date`` or ``datetime`` cache value in the workbook's date system."""
-        return date_serial(value, date1904=self._workbook.get_date1904())[0]
+    def _typed_value(self, value: object) -> "tuple[str, object]":
+        """The typed C writer for ``value`` and its argument; a date's argument is its serial.
 
-    def add_field_shared_item(self, field_index: int, value: _PivotCacheValue) -> int:
-        """Append a shared item to cache field ``field_index`` and return its index.
+        A :class:`PivotCacheValue` read back stores as it reads: a date keeps its serial and its date flag.
+        """
+        if isinstance(value, PivotCacheValue):
+            if value.is_date and _pivot_cache_value_kind(value.value) == "number":
+                return "date", float(value.value)
+            value = value.value
+        kind = _pivot_cache_value_kind(value)
+        if kind == "date":
+            return kind, date_serial(value, date1904=self._workbook.get_date1904())[0]
+        return kind, value
+
+    def add_field_shared_item(self, field: PivotFieldRef, value: Union[_PivotCacheValue, PivotCacheValue]) -> int:
+        """Append a shared item to cache field ``field`` and return its index.
 
         ``value`` is a number, a ``str``, a ``bool``, ``None`` (blank) or an
         :class:`ExcelError`, or a ``date`` / ``datetime`` (a date item stored as
         its serial in the workbook's date system, saved to the second); a number
         is a number. The index is the field's shared-item count before the call.
 
+        A :class:`PivotCacheValue` read back is accepted.
+
         Raises:
           TypeError: when ``value`` is none of the above.
         """
-        kind = _pivot_cache_value_kind(value)
+        kind, value = self._typed_value(value)
         h, cache_id = self._call()
-        field = _uint(field_index, "field_index", role="position")
+        field_index = _uint(self._field_ref(field), "field_index", role="position")
         with _ArgScope() as scope:
             out = scope.out_ptr()
             if kind == "date":
+                _check(LIB.fm_workbook_add_pivot_cache_field_shared_item_date(h, cache_id, field_index, value, out))
+            elif kind == "number":
                 _check(
-                    LIB.fm_workbook_add_pivot_cache_field_shared_item_date(
-                        h, cache_id, field, self._date_serial(value), out
+                    LIB.fm_workbook_add_pivot_cache_field_shared_item_number(
+                        h, cache_id, field_index, float(value), out
                     )
                 )
-            elif kind == "number":
-                _check(LIB.fm_workbook_add_pivot_cache_field_shared_item_number(h, cache_id, field, float(value), out))
             elif kind == "bool":
                 _check(
-                    LIB.fm_workbook_add_pivot_cache_field_shared_item_bool(h, cache_id, field, 1 if value else 0, out)
+                    LIB.fm_workbook_add_pivot_cache_field_shared_item_bool(
+                        h, cache_id, field_index, 1 if value else 0, out
+                    )
                 )
             elif kind == "blank":
-                _check(LIB.fm_workbook_add_pivot_cache_field_shared_item_blank(h, cache_id, field, out))
+                _check(LIB.fm_workbook_add_pivot_cache_field_shared_item_blank(h, cache_id, field_index, out))
             elif kind == "error":
                 _check(
                     LIB.fm_workbook_add_pivot_cache_field_shared_item_error(
-                        h, cache_id, field, _sint(value.code, "error"), out
+                        h, cache_id, field_index, _sint(value.code, "error"), out
                     )
                 )
             else:
                 _check(
-                    LIB.fm_workbook_add_pivot_cache_field_shared_item_text(h, cache_id, field, scope.cstr(value), out)
+                    LIB.fm_workbook_add_pivot_cache_field_shared_item_text(
+                        h, cache_id, field_index, scope.cstr(value), out
+                    )
                 )
             return LIB.read_u32(out)
 
-    def clear_field_shared_items(self, field_index: int) -> None:
-        """Drop every shared item from cache field ``field_index``."""
+    def clear_field_shared_items(self, field: PivotFieldRef) -> None:
+        """Drop every shared item from cache field ``field``."""
         h, cache_id = self._call()
         _check(
             LIB.fm_workbook_clear_pivot_cache_field_shared_items(
-                h, cache_id, _uint(field_index, "field_index", role="position")
+                h, cache_id, _uint(self._field_ref(field), "field_index", role="position")
             )
         )
 
@@ -415,45 +456,54 @@ class PivotCache(_NoCopy):
         h, cache_id = self._call()
         _check(LIB.fm_workbook_clear_pivot_cache_records(h, cache_id))
 
-    def get_record_value(self, record_index: int, field_index: int) -> NativeValue:
+    def get_record_value(self, record_index: int, field: PivotFieldRef) -> PivotCacheValue:
         """Read cache cell ``(record_index, field_index)`` as a native value.
 
         A cell that indexes a shared item reads the item's value, a cell its record does not reach reads
-        ``None``, and a date reads as its serial number, as a shared item does.
+        ``None``, and a date reads as its serial number with ``is_date`` set, as a shared item does.
 
         Raises:
-          IndexOutOfRangeError: when ``record_index`` is not below the record count or ``field_index`` not
+          IndexOutOfRangeError: when ``record_index`` is not below the record count or ``field`` not
             below the cache's field count.
         """
         h, cache_id = self._call()
         record = _uint(record_index, "record_index", role="position")
-        field = _uint(field_index, "field_index", role="position")
+        field_index = _uint(self._field_ref(field), "field_index", role="position")
         with _ArgScope() as scope:
             value_ptr = scope.alloc(fm_value_t_size)
-            _check(LIB.fm_workbook_get_pivot_cache_record_value(h, cache_id, record, field, value_ptr))
-            return to_native(Value._from_wasm(value_ptr))
+            date_ptr = scope.out_ptr()
+            _check(LIB.fm_workbook_get_pivot_cache_record_value(h, cache_id, record, field_index, value_ptr))
+            value = to_native(Value._from_wasm(value_ptr))
+            _check(LIB.fm_workbook_is_pivot_cache_record_value_date(h, cache_id, record, field_index, date_ptr))
+            return PivotCacheValue(value=value, is_date=LIB.read_i32(date_ptr) != 0)
 
-    def set_record_value(self, record_index: int, field_index: int, value: _PivotCacheValue) -> None:
+    def set_record_value(
+        self, record_index: int, field: PivotFieldRef, value: Union[_PivotCacheValue, PivotCacheValue]
+    ) -> None:
         """Set cache cell ``(record_index, field_index)``; ``value`` as in :meth:`add_field_shared_item`.
 
         Raises:
           TypeError: when ``value`` is not an accepted kind.
         """
-        kind = _pivot_cache_value_kind(value)
+        kind, value = self._typed_value(value)
         h, cache_id = self._call()
         record = _uint(record_index, "record_index", role="position")
-        field = _uint(field_index, "field_index", role="position")
+        field_index = _uint(self._field_ref(field), "field_index", role="position")
         if kind == "date":
-            _check(LIB.fm_workbook_set_pivot_cache_record_date(h, cache_id, record, field, self._date_serial(value)))
+            _check(LIB.fm_workbook_set_pivot_cache_record_date(h, cache_id, record, field_index, value))
         elif kind == "number":
-            _check(LIB.fm_workbook_set_pivot_cache_record_number(h, cache_id, record, field, float(value)))
+            _check(LIB.fm_workbook_set_pivot_cache_record_number(h, cache_id, record, field_index, float(value)))
         elif kind == "bool":
-            _check(LIB.fm_workbook_set_pivot_cache_record_bool(h, cache_id, record, field, 1 if value else 0))
+            _check(LIB.fm_workbook_set_pivot_cache_record_bool(h, cache_id, record, field_index, 1 if value else 0))
         elif kind == "blank":
-            _check(LIB.fm_workbook_set_pivot_cache_record_blank(h, cache_id, record, field))
+            _check(LIB.fm_workbook_set_pivot_cache_record_blank(h, cache_id, record, field_index))
         elif kind == "error":
-            _check(LIB.fm_workbook_set_pivot_cache_record_error(h, cache_id, record, field, _sint(value.code, "error")))
+            _check(
+                LIB.fm_workbook_set_pivot_cache_record_error(
+                    h, cache_id, record, field_index, _sint(value.code, "error")
+                )
+            )
         else:
             with _ArgScope() as scope:
                 text = scope.cstr(value)
-                _check(LIB.fm_workbook_set_pivot_cache_record_text(h, cache_id, record, field, text))
+                _check(LIB.fm_workbook_set_pivot_cache_record_text(h, cache_id, record, field_index, text))

@@ -103,7 +103,7 @@ TEST(FormulonCApiCfMutate, RemovedRuleDoesNotResurfaceThroughSaveLoad) {
   ASSERT_EQ(fm_sheet_remove_cf_rule(wb.handle, 0, CfRuleIdAt(wb.handle, 0, 0).c_str()), 0);
 
   BufferGuard saved;
-  ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0);
+  ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0);
   ASSERT_GT(saved.len, 0U);
 
   WorkbookGuard reloaded;
@@ -139,7 +139,7 @@ TEST(FormulonCApiCfMutate, DataBarExtensionFieldsSurviveSaveAndLoad) {
   ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &rule, &rule_id), 0) << fm_get_last_error_message();
 
   BufferGuard saved;
-  ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0);
+  ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0);
   WorkbookGuard reloaded;
   ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &reloaded.handle), 0);
 
@@ -167,14 +167,14 @@ TEST(FormulonCApiCfMutate, IconSetFloorSurvivesSaveAndLoad) {
   rule.ranges = &sqref;
   rule.range_count = 1;
   rule.has_icon_set = 1;
-  rule.icon_set_name = 2;  // Three_Flags
+  rule.icon_set = 2;  // Three_Flags
   fm_cfvo_t thresholds[2]{};
   thresholds[0].type = 0;  // Number
   thresholds[0].value = "7";
-  thresholds[0].gte = 1;
+  thresholds[0].gte = FM_TRISTATE_TRUE;
   thresholds[1].type = 0;
   thresholds[1].value = "9";
-  thresholds[1].gte = 1;
+  thresholds[1].gte = FM_TRISTATE_TRUE;
   rule.icon_set_thresholds = thresholds;
   rule.icon_set_threshold_count = 2;
   rule.icon_set_show_value = 1;
@@ -182,12 +182,12 @@ TEST(FormulonCApiCfMutate, IconSetFloorSurvivesSaveAndLoad) {
   rule.has_icon_set_floor = 1;
   rule.icon_set_floor.type = 0;  // Number
   rule.icon_set_floor.value = "5";
-  rule.icon_set_floor.gte = 0;
+  rule.icon_set_floor.gte = FM_TRISTATE_FALSE;
   const char* rule_id = nullptr;
   ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &rule, &rule_id), 0) << fm_get_last_error_message();
 
   BufferGuard saved;
-  ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0);
+  ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0);
   WorkbookGuard reloaded;
   ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &reloaded.handle), 0);
   fm_cf_rule_t back = FM_STRUCT_INIT(fm_cf_rule_t);
@@ -195,7 +195,7 @@ TEST(FormulonCApiCfMutate, IconSetFloorSurvivesSaveAndLoad) {
   EXPECT_EQ(back.has_icon_set_floor, 1);
   EXPECT_EQ(back.icon_set_floor.type, 0U);
   EXPECT_STREQ(back.icon_set_floor.value, "5");
-  EXPECT_EQ(back.icon_set_floor.gte, 0);
+  EXPECT_EQ(back.icon_set_floor.gte, FM_TRISTATE_FALSE);
 }
 
 TEST(FormulonCApiCfMutate, UnengagedIconSetFloorIsExcelsDefault) {

@@ -143,7 +143,8 @@ fm_status_t validate_xf_references(const formulon::StylesTable& styles, const fm
   if (auto rc = check_index(record.border_index, styles.borders.size(), "border_index"); rc != 0) {
     return rc;
   }
-  if (!num_fmt_id_known(styles, record.num_fmt_id)) {
+  // Stored ids are 16-bit (XLSB writes a 2-byte ifmt), so a wider id is refused rather than truncated.
+  if (record.num_fmt_id > std::numeric_limits<std::uint16_t>::max() || !num_fmt_id_known(styles, record.num_fmt_id)) {
     return invalid_argument("num_fmt_id not registered", "num_fmt_id=" + std::to_string(record.num_fmt_id));
   }
   return 0;
@@ -177,7 +178,7 @@ formulon::CellXf cell_xf_from_c(const fm_cell_xf_t& record, std::uint32_t xf_id)
   candidate.font_index = record.font_index;
   candidate.fill_index = record.fill_index;
   candidate.border_index = record.border_index;
-  candidate.num_fmt_id = record.num_fmt_id;
+  candidate.num_fmt_id = static_cast<std::uint16_t>(record.num_fmt_id);
   candidate.xf_id = xf_id;
 
   // The record carries explicit presence bits. Keep values for present
@@ -309,7 +310,7 @@ formulon::FillRecord fill_from_c(const fm_fill_t& record) {
     out.bg = formulon::ColorSpec{};
     formulon::GradientFill& gradient = out.gradient;
     gradient.path = record.gradient_type == FM_GRADIENT_TYPE_PATH;
-    gradient.degree = finite_or_zero(record.gradient_degree);
+    gradient.degree = finite_or_zero(record.gradient_angle_deg);
     gradient.left = finite_or_zero(record.gradient_left);
     gradient.right = finite_or_zero(record.gradient_right);
     gradient.top = finite_or_zero(record.gradient_top);
@@ -349,7 +350,7 @@ formulon::BorderRecord border_from_c(const fm_border_t& record) noexcept {
 
 }  // namespace
 
-extern "C" fm_status_t fm_workbook_add_font(fm_workbook_t* wb, const fm_font_t* record, size_t* out_index) {
+extern "C" fm_status_t fm_workbook_add_font(fm_workbook_t* wb, const fm_font_t* record, uint32_t* out_index) {
   clear_last_error();
   if (wb == nullptr || record == nullptr || out_index == nullptr) {
     return null_argument();
@@ -365,7 +366,7 @@ extern "C" fm_status_t fm_workbook_add_font(fm_workbook_t* wb, const fm_font_t* 
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_set_font(fm_workbook_t* wb, size_t font_index, const fm_font_t* record) {
+extern "C" fm_status_t fm_workbook_set_font(fm_workbook_t* wb, uint32_t font_index, const fm_font_t* record) {
   clear_last_error();
   if (wb == nullptr || record == nullptr) {
     return null_argument();
@@ -401,7 +402,7 @@ extern "C" fm_status_t fm_workbook_set_default_font(fm_workbook_t* wb, const fm_
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_add_fill(fm_workbook_t* wb, const fm_fill_t* record, size_t* out_index) {
+extern "C" fm_status_t fm_workbook_add_fill(fm_workbook_t* wb, const fm_fill_t* record, uint32_t* out_index) {
   clear_last_error();
   if (wb == nullptr || record == nullptr || out_index == nullptr) {
     return null_argument();
@@ -417,7 +418,7 @@ extern "C" fm_status_t fm_workbook_add_fill(fm_workbook_t* wb, const fm_fill_t* 
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_set_fill(fm_workbook_t* wb, size_t fill_index, const fm_fill_t* record) {
+extern "C" fm_status_t fm_workbook_set_fill(fm_workbook_t* wb, uint32_t fill_index, const fm_fill_t* record) {
   clear_last_error();
   if (wb == nullptr || record == nullptr) {
     return null_argument();
@@ -433,7 +434,7 @@ extern "C" fm_status_t fm_workbook_set_fill(fm_workbook_t* wb, size_t fill_index
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_add_border(fm_workbook_t* wb, const fm_border_t* record, size_t* out_index) {
+extern "C" fm_status_t fm_workbook_add_border(fm_workbook_t* wb, const fm_border_t* record, uint32_t* out_index) {
   clear_last_error();
   if (wb == nullptr || record == nullptr || out_index == nullptr) {
     return null_argument();
@@ -449,7 +450,7 @@ extern "C" fm_status_t fm_workbook_add_border(fm_workbook_t* wb, const fm_border
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_set_border(fm_workbook_t* wb, size_t border_index, const fm_border_t* record) {
+extern "C" fm_status_t fm_workbook_set_border(fm_workbook_t* wb, uint32_t border_index, const fm_border_t* record) {
   clear_last_error();
   if (wb == nullptr || record == nullptr) {
     return null_argument();
@@ -465,16 +466,16 @@ extern "C" fm_status_t fm_workbook_set_border(fm_workbook_t* wb, size_t border_i
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_add_number_format(fm_workbook_t* wb, const char* format_code,
+extern "C" fm_status_t fm_workbook_add_number_format(fm_workbook_t* wb, const char* number_format,
                                                      uint32_t* out_num_fmt_id) {
   clear_last_error();
   if (wb == nullptr || out_num_fmt_id == nullptr) {
     return null_argument();
   }
-  if (auto rc = check_utf8({format_code}); rc != 0) {
+  if (auto rc = check_utf8({number_format}); rc != 0) {
     return rc;
   }
-  return add_num_fmt_code(wb->workbook(), text_or_empty(format_code), out_num_fmt_id);
+  return add_num_fmt_code(wb->workbook(), text_or_empty(number_format), out_num_fmt_id);
 }
 
 namespace {
@@ -505,8 +506,6 @@ fm_status_t build_cell_xf(const formulon::StylesTable& styles, const fm_cell_xf_
                 "cell xf field fill_index width must match the engine type");
   static_assert(sizeof(record.border_index) == sizeof(formulon::CellXf::border_index),
                 "cell xf field border_index width must match the engine type");
-  static_assert(sizeof(record.num_fmt_id) == sizeof(formulon::CellXf::num_fmt_id),
-                "cell xf field num_fmt_id width must match the engine type");
 
   *out = cell_xf_from_c(record, record.style_xf_index);
   return 0;
@@ -575,6 +574,25 @@ extern "C" fm_status_t fm_workbook_add_cell_style_xf(fm_workbook_t* wb, const fm
   return 0;
 }
 
+extern "C" fm_status_t fm_workbook_set_cell_style_xf(fm_workbook_t* wb, uint32_t cell_style_xf_index,
+                                                     const fm_cell_xf_t* record) {
+  clear_last_error();
+  if (wb == nullptr || record == nullptr) {
+    return null_argument();
+  }
+  formulon::StylesTable& styles = wb->workbook().mutable_styles();
+  if (auto rc = check_index(cell_style_xf_index, styles.cell_style_xfs.size(), "cell_style_xf_index"); rc != 0) {
+    return rc;
+  }
+  if (fm_status_t rc = validate_xf_alignment(*record); rc != 0) {
+    return rc;
+  }
+  if (fm_status_t rc = validate_xf_references(styles, *record); rc != 0) {
+    return rc;
+  }
+  return finish_status(formulon::set_cell_style_xf(styles, cell_style_xf_index, cell_xf_from_c(*record, 0U)));
+}
+
 extern "C" fm_status_t fm_workbook_set_cell_style(fm_workbook_t* wb, const fm_cell_style_t* record) {
   clear_last_error();
   if (wb == nullptr || record == nullptr || record->name == nullptr) {
@@ -595,15 +613,16 @@ extern "C" fm_status_t fm_workbook_set_cell_style(fm_workbook_t* wb, const fm_ce
   const uint32_t builtin_id = builtin ? record->builtin_id : formulon::CellStyleRecord::kBuiltinIdNone;
   // Only RowLevel_n / ColLevel_n carry an outline level.
   const uint32_t max_level = (builtin_id == 1U || builtin_id == 2U) ? 6U : 0U;
-  if (record->i_level > max_level) {
-    return invalid_argument("i_level out of range",
-                            "builtin_id=" + std::to_string(builtin_id) + " i_level=" + std::to_string(record->i_level));
+  if (record->outline_level > max_level) {
+    return invalid_argument(
+        "outline_level out of range",
+        "builtin_id=" + std::to_string(builtin_id) + " outline_level=" + std::to_string(record->outline_level));
   }
   formulon::CellStyleRecord style;
   style.name = record->name;
   style.xf_id = record->style_xf_index;
   style.builtin_id = builtin_id;
-  style.i_level = record->i_level;
+  style.i_level = record->outline_level;
   style.hidden = record->hidden != 0;
   style.custom_builtin = record->custom_builtin != 0;
   // An upsert: the style the name resolves to takes the record, new spelling included.
@@ -684,7 +703,7 @@ extern "C" fm_status_t fm_workbook_add_batch(fm_workbook_t* wb, const fm_styles_
   std::vector<uint32_t> staged_fill_indices(batch->fill_count);
   std::vector<uint32_t> staged_border_indices(batch->border_count);
   std::vector<uint32_t> staged_cell_xf_indices(batch->cell_xf_count);
-  std::vector<uint16_t> staged_num_fmt_ids(batch->num_fmt_count);
+  std::vector<uint32_t> staged_num_fmt_ids(batch->num_fmt_count);
 
   std::unordered_map<std::string, uint32_t> fonts;
   std::unordered_map<std::string, uint32_t> fills;

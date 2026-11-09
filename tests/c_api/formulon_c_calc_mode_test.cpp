@@ -215,7 +215,7 @@ TEST(FormulonCApiCalcMode, ManualModeRoundTripsThroughOoxml) {
   ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
 
   BufferGuard saved;
-  ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0);
+  ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0);
   ASSERT_GT(saved.len, 0U);
 
   WorkbookGuard wb2;
@@ -231,7 +231,7 @@ TEST(FormulonCApiCalcMode, AutoNoTableModeRoundTripsThroughOoxml) {
   ASSERT_EQ(fm_workbook_set_calc_mode(wb.handle, FM_CALC_MODE_AUTO_NO_TABLE), 0);
 
   BufferGuard saved;
-  ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0);
+  ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0);
 
   WorkbookGuard wb2;
   ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &wb2.handle), 0);
@@ -255,7 +255,7 @@ TEST(FormulonCApiCalcMode, IterativeOptionsRoundTripThroughCalcPr) {
   ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
 
   BufferGuard saved;
-  ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0);
+  ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0);
 
   WorkbookGuard wb2;
   ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &wb2.handle), 0);
@@ -283,7 +283,7 @@ TEST(FormulonCApiCalcMode, AutoModeOmitsCalcPrFromOoxml) {
   // No set_calc_mode call → Auto by default.
 
   BufferGuard saved;
-  ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0);
+  ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0);
 
   WorkbookGuard wb2;
   ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &wb2.handle), 0);

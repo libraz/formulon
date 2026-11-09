@@ -111,6 +111,34 @@ Napi::Value Workbook::DeleteCols(const Napi::CallbackInfo& info) {
   return InvokeRowColEdit(info, fm_sheet_delete_columns);
 }
 
+namespace {
+
+using CellShiftEditFn = fm_status_t (*)(fm_workbook_t*, std::size_t, const fm_cell_rect_t*, int32_t);
+
+// `(sheet, range, shift)`: the guard checks the sheet index and the `CellShift` ordinal's type.
+Napi::Value InvokeCellShiftEdit(const Napi::CallbackInfo& info, fm_workbook_t* const& handle, CellShiftEditFn fn) {
+  Napi::Env env = info.Env();
+  if (handle == nullptr) {
+    return ThrowInvalidHandle(env);
+  }
+  CheckedSpecReader reader(env);
+  fm_cell_rect_t range{};
+  if (!CellRectArg(reader, info, 1, &range)) {
+    return env.Undefined();
+  }
+  return ValueOrThrow(env, fn(handle, Workbook::ArgU32(info, 0), &range, Workbook::ArgI32(info, 2)), env.Undefined());
+}
+
+}  // namespace
+
+Napi::Value Workbook::InsertCells(const Napi::CallbackInfo& info) {
+  return InvokeCellShiftEdit(info, handle_, &fm_sheet_insert_cells);
+}
+
+Napi::Value Workbook::DeleteCells(const Napi::CallbackInfo& info) {
+  return InvokeCellShiftEdit(info, handle_, &fm_sheet_delete_cells);
+}
+
 // ---- Iteration / metadata accessors ---------------------------------
 //
 // `CellCount` / `DefinedNameCount` / `TableCount` / `PassthroughCount`
@@ -314,8 +342,8 @@ Napi::Value Workbook::GetTableStyleOptions(const Napi::CallbackInfo& info) {
   }
   fm_table_style_options_t style = FM_STRUCT_INIT(fm_table_style_options_t);
   int32_t present = 0;
-  const fm_status_t rc = fm_sheet_get_table_style_options(
-      handle_, static_cast<std::size_t>(ArgU32(info, 0)), static_cast<std::size_t>(ArgU32(info, 1)), &present, &style);
+  const fm_status_t rc = fm_sheet_get_table_style_options(handle_, static_cast<std::size_t>(ArgU32(info, 0)),
+                                                          static_cast<std::size_t>(ArgU32(info, 1)), &present, &style);
   if (rc != 0 || present == 0) {
     return OptionalOrNull(env, rc, 0, env.Null());
   }
@@ -344,7 +372,7 @@ Napi::Value Workbook::CreateTable(const Napi::CallbackInfo& info) {
   std::string name;
   std::string style_name;
   reader.String(spec, "name", &name);
-  // An omitted style takes the workbook default; an empty one creates no style element.
+  // An omitted style takes the workbook default; `styled: false` creates no style element.
   const bool has_style = reader.String(spec, "styleName", &style_name);
   Napi::Array columns;
   const bool has_columns = reader.Array(spec, "columns", &columns);
@@ -375,6 +403,7 @@ Napi::Value Workbook::CreateTable(const Napi::CallbackInfo& info) {
   table.column_names = pointers.empty() ? nullptr : pointers.data();
   table.column_count = static_cast<uint32_t>(pointers.size());
   table.style_name = has_style ? style_name.c_str() : nullptr;
+  table.styled = reader.Tristate(spec, "styled");
   table.header_row = reader.Tristate(spec, "headerRow");
   table.totals_row = reader.Tristate(spec, "totalsRow");
   table.show_first_column = reader.Tristate(spec, "showFirstColumn");
@@ -472,8 +501,8 @@ Napi::Value Workbook::SetTableColumnTotals(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   const fm_status_t rc =
-      fm_sheet_set_table_column_totals(handle_, sheet, idx, column, function,
-                                       has_label ? label.c_str() : nullptr, has_formula ? formula.c_str() : nullptr);
+      fm_sheet_set_table_column_totals(handle_, sheet, idx, column, function, has_label ? label.c_str() : nullptr,
+                                       has_formula ? formula.c_str() : nullptr);
   return ValueOrThrow(env, rc, env.Undefined());
 }
 

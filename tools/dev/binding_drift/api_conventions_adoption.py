@@ -463,7 +463,7 @@ VALUE_STRUCTS = frozenset(
         "fm_dxf_t", "fm_cell_style_t", "fm_table_style_element_t",
         "fm_chart_data_source_t", "fm_chart_title_t", "fm_chart_line_t", "fm_chart_line_patch_t", "fm_chart_fill_t",
         "fm_chart_fill_patch_t", "fm_chart_marker_t", "fm_chart_marker_patch_t", "fm_chart_labels_t",
-        "fm_chart_labels_patch_t",
+        "fm_chart_labels_patch_t", "fm_cell_address_t", "fm_xf_remap_t",
     }
 )  # fmt: skip
 

@@ -165,7 +165,7 @@ signature fm_workbook_add_person :: parameter type renamed (fm_person -> fm_pers
 removed fm_workbook_calc_mode :: renamed to fm_workbook_get_calc_mode
 removed fm_workbook_cell_at :: renamed to fm_sheet_get_cell_at
 removed fm_workbook_cell_count :: renamed to fm_sheet_get_cell_count
-removed fm_workbook_cf_evaluate_range :: renamed to fm_sheet_evaluate_cf_range, which takes the range as const fm_cell_rect_t* and an int32_t has_today_serial before today_serial in place of the NaN switch
+removed fm_workbook_cf_evaluate_range :: renamed to fm_sheet_evaluate_cf_range, which takes the range as const fm_cell_rect_t* and a const fm_cf_range_evaluation_spec_t* options record in place of the NaN switch; NULL options evaluate TimePeriod rules from the pinned clock, else today
 removed fm_workbook_create :: renamed to fm_workbook_create_default
 removed fm_workbook_defined_name_at :: renamed to fm_workbook_get_defined_name_at
 removed fm_workbook_defined_name_count :: renamed to fm_workbook_get_defined_name_count
@@ -179,7 +179,7 @@ removed fm_workbook_excel_profile_id :: renamed to fm_workbook_get_profile_id
 removed fm_workbook_external_link_at :: renamed to fm_workbook_get_external_link_at
 removed fm_workbook_external_link_count :: renamed to fm_workbook_get_external_link_count
 removed fm_workbook_get_cell_phonetic :: renamed to fm_sheet_get_cell_phonetic
-removed fm_workbook_get_cell_phonetic_properties :: renamed to fm_sheet_get_cell_phonetic_properties; the type and alignment outs are int32_t (fm_phonetic_type_t / fm_phonetic_alignment_t)
+removed fm_workbook_get_cell_phonetic_properties :: renamed to fm_sheet_get_cell_phonetic_properties, which fills an fm_phonetic_properties_t (font_index, type, alignment, stated)
 removed fm_workbook_get_cell_phonetic_run :: renamed to fm_sheet_get_cell_phonetic_run
 removed fm_workbook_get_cell_phonetic_run_count :: renamed to fm_sheet_get_cell_phonetic_run_count
 removed fm_workbook_get_display_text :: renamed to fm_sheet_get_display_text
@@ -230,7 +230,7 @@ removed fm_workbook_pivot_data_field_add :: renamed to fm_sheet_add_pivot_data_f
 removed fm_workbook_pivot_data_field_clear :: renamed to fm_sheet_clear_pivot_data_fields
 removed fm_workbook_pivot_data_field_count :: renamed to fm_sheet_get_pivot_data_field_count
 removed fm_workbook_pivot_data_field_set :: renamed to fm_sheet_set_pivot_data_field
-removed fm_workbook_pivot_field_add :: renamed to fm_sheet_add_pivot_field
+removed fm_workbook_pivot_field_add :: a pivot carries one field per cache field from creation; place a field with fm_sheet_set_pivot_field_axis and configure it with fm_sheet_update_pivot_field (fm_pivot_field_spec_t is gone)
 removed fm_workbook_pivot_field_add_item :: renamed to fm_sheet_add_pivot_field_item
 removed fm_workbook_pivot_field_add_item_at :: renamed to fm_sheet_add_pivot_field_item_by_cache_index
 removed fm_workbook_pivot_field_add_subtotal_fn :: use fm_sheet_set_pivot_field_subtotal_functions, which replaces the whole set
@@ -266,7 +266,7 @@ signature fm_workbook_resolve_color :: parameter type renamed (fm_color_spec -> 
 removed fm_workbook_set_blank :: renamed to fm_sheet_set_blank
 removed fm_workbook_set_bool :: renamed to fm_sheet_set_bool
 removed fm_workbook_set_cell_phonetic :: renamed to fm_sheet_set_cell_phonetic
-removed fm_workbook_set_cell_phonetic_properties :: renamed to fm_sheet_set_cell_phonetic_properties; type and alignment are int32_t (fm_phonetic_type_t / fm_phonetic_alignment_t)
+removed fm_workbook_set_cell_phonetic_properties :: renamed to fm_sheet_set_cell_phonetic_properties, which takes a const fm_phonetic_properties_t*; NULL resets the guide to the unstated all-zero triple
 removed fm_workbook_set_cell_phonetic_runs :: renamed to fm_sheet_set_cell_phonetic_runs
 signature fm_workbook_set_default_font :: parameter type renamed (fm_font_record -> fm_font_record_t); record passed as const pointer
 removed fm_workbook_set_error :: renamed to fm_sheet_set_error
@@ -286,7 +286,7 @@ removed fm_workbook_table_remove :: moved to fm_sheet_remove_table, addressing t
 removed fm_workbook_table_update :: moved to fm_sheet_update_table, addressing the table by sheet_index and a sheet-local table_index
 removed fm_workbook_theme_script_font_at :: renamed to fm_workbook_get_theme_script_font_at; the font set is an fm_font_scheme_t (MAJOR or MINOR) instead of a nonzero-means-major flag
 removed fm_workbook_theme_script_font_count :: renamed to fm_workbook_get_theme_script_font_count; the font set is an fm_font_scheme_t (MAJOR or MINOR) instead of a nonzero-means-major flag
-signature fm_sheet_add_merge :: sheet index widened to size_t sheet_index; range passed as const pointer; parameter type renamed (fm_merge_range -> fm_cell_rect_t)
+signature fm_sheet_add_merge :: sheet index widened to size_t sheet_index; range passed as const pointer; parameter type renamed (fm_merge_range -> fm_cell_rect_t); the stored rectangle is written through fm_cell_rect_t* out_merge, which may be NULL
 signature fm_sheet_clear_hyperlinks :: sheet index widened to size_t sheet_index
 signature fm_sheet_clear_merges :: sheet index widened to size_t sheet_index
 signature fm_sheet_clear_validations :: sheet index widened to size_t sheet_index
@@ -295,12 +295,12 @@ signature fm_sheet_get_hyperlink_count :: sheet index widened to size_t sheet_in
 signature fm_sheet_get_merge_at :: sheet index widened to size_t sheet_index, index widened to size_t, handle is const; parameter type renamed (fm_merge_range -> fm_cell_rect_t)
 signature fm_sheet_get_merge_count :: sheet index widened to size_t sheet_index, count written through size_t* out_count, handle is const
 signature fm_sheet_get_validation_count :: sheet index widened to size_t sheet_index, count written through size_t* out_count, handle is const
-signature fm_sheet_remove_hyperlink :: sheet index widened to size_t sheet_index
+removed fm_sheet_remove_hyperlink :: fm_sheet_set_hyperlink with NULL removes the hyperlink anchored at the cell, and is a no-op when there is none
 signature fm_sheet_remove_hyperlink_at :: sheet index widened to size_t sheet_index, index widened to size_t
 signature fm_sheet_remove_merge :: sheet index widened to size_t sheet_index; range passed as const pointer; parameter type renamed (fm_merge_range -> fm_cell_rect_t)
 signature fm_sheet_remove_merge_at :: sheet index widened to size_t sheet_index, index widened to size_t
 removed fm_sheet_set_column_style :: renamed to fm_sheet_set_column_xf_index, taking a uint32_t xf_index
-signature fm_sheet_set_comment :: sheet index widened to size_t sheet_index
+signature fm_sheet_set_comment :: sheet index widened to size_t sheet_index; takes a const fm_comment_t* in place of author and text, and NULL removes the note
 signature fm_sheet_set_range_xf_index :: sheet index widened to size_t sheet_index; rectangle passed as const fm_cell_rect_t*
 removed fm_sheet_set_row_style :: renamed to fm_sheet_set_row_xf_index, taking a uint32_t xf_index
 signature fm_workbook_move_sheet :: from_index widened to size_t; size_t insert_before (a position in the current list, sheet_count appends) replaces to_index
@@ -310,7 +310,7 @@ signature fm_sheet_set_row_height :: takes the inclusive row span (first, last) 
 signature fm_sheet_set_row_hidden :: takes the inclusive row span (first, last) like fm_sheet_set_column_hidden
 signature fm_sheet_set_row_outline :: takes the inclusive row span (first, last) like fm_sheet_set_column_outline, and a uint32_t level (above 7 is FM_STATUS_INVALID_ARGUMENT)
 removed fm_sheet_clear_row_height :: renamed to fm_sheet_reset_row_height, taking the inclusive row span (first, last)
-removed fm_sheet_remap_range_style :: renamed to fm_sheet_remap_range_xfs, the rectangle passed as const fm_cell_rect_t*
+removed fm_sheet_remap_range_style :: renamed to fm_sheet_remap_range_xfs, the rectangle passed as const fm_cell_rect_t* and the pairs as const fm_xf_remap_t* in place of the parallel from / to arrays
 removed fm_sheet_snapshot_range_style :: renamed to fm_sheet_snapshot_range_xfs, the rectangle passed as const fm_cell_rect_t*
 signature fm_sheet_get_print_area :: copies the print area into a caller buffer (fm_cell_rect_t* out, size_t capacity, size_t* out_count) instead of returning A1 text
 signature fm_sheet_set_print_area :: takes the print area as const fm_cell_rect_t* ranges, size_t range_count instead of A1 text
@@ -342,7 +342,7 @@ removed fm_sheet_set_page_setup :: renamed to fm_sheet_update_page_setup, which 
 removed fm_sheet_set_print_options :: renamed to fm_sheet_update_print_options, which merges a const fm_print_options_patch_t*
 removed fm_sheet_set_show_row_col_headers :: set show_row_column_headers through fm_sheet_update_view
 removed fm_workbook_clear_pinned_now :: fm_workbook_set_pinned_now with NULL releases the pin
-signature fm_workbook_save_with_diagnostics :: parameter type renamed (fm_save_diagnostics_t -> fm_save_diagnostics_info_t)
+signature fm_workbook_save_with_diagnostics :: parameter type renamed (fm_save_diagnostics_t -> fm_save_diagnostics_info_t); format ordinals are FM_WORKBOOK_FORMAT_XLSX 0 and FM_WORKBOOK_FORMAT_XLSB 1, FM_WORKBOOK_FORMAT_UNKNOWN is gone
 signature fm_workbook_get_iterative :: fills an fm_iterative_settings_info_t* out in place of out_enabled, out_max_iterations and out_max_change
 signature fm_sheet_get_view :: parameter type renamed (fm_sheet_view_t -> fm_sheet_view_info_t)
 signature fm_sheet_set_column_outline :: takes a uint32_t level (above 7 is FM_STATUS_INVALID_ARGUMENT) instead of uint8_t
@@ -352,3 +352,5 @@ removed fm_sheet_set_show_grid_lines :: set show_grid_lines through fm_sheet_upd
 removed fm_sheet_set_show_zeros :: set show_zeros through fm_sheet_update_view
 removed fm_sheet_set_right_to_left :: set right_to_left through fm_sheet_update_view
 removed fm_sheet_set_tab_selected :: set tab_selected through fm_sheet_update_view
+signature fm_workbook_save :: takes an int32_t format (fm_workbook_format_t: FM_WORKBOOK_FORMAT_XLSX 0, FM_WORKBOOK_FORMAT_XLSB 1) before out_bytes
+removed fm_workbook_save_as :: fm_workbook_save takes the format

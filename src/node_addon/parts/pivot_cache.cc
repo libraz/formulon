@@ -100,8 +100,7 @@ Napi::Value Workbook::PivotCacheSetWorksheetSource(const Napi::CallbackInfo& inf
   const uint32_t cache_id = ArgU32(info, 0);
   // A null source removes the element.
   if (info[1].IsNull()) {
-    return ValueOrThrow(env, fm_workbook_set_pivot_cache_worksheet_source(handle_, cache_id, nullptr),
-                        env.Undefined());
+    return ValueOrThrow(env, fm_workbook_set_pivot_cache_worksheet_source(handle_, cache_id, nullptr), env.Undefined());
   }
   if (!info[1].IsObject()) {
     Napi::TypeError::New(env, "PivotCache.setWorksheetSource argument 1 must be an object or null")
@@ -183,17 +182,15 @@ Napi::Value Workbook::PivotCacheFieldSharedItemValue(const Napi::CallbackInfo& i
 
 Napi::Value Workbook::PivotCacheFieldAddSharedItemNumber(const Napi::CallbackInfo& info) {
   return IndexCall(info, [&](fm_workbook_t* handle, std::size_t* out) {
-    return fm_workbook_add_pivot_cache_field_shared_item_number(handle, ArgU32(info, 0),
-                                                                static_cast<std::size_t>(ArgU32(info, 1)),
-                                                                ArgDouble(info, 2), out);
+    return fm_workbook_add_pivot_cache_field_shared_item_number(
+        handle, ArgU32(info, 0), static_cast<std::size_t>(ArgU32(info, 1)), ArgDouble(info, 2), out);
   });
 }
 
 Napi::Value Workbook::PivotCacheFieldAddSharedItemDate(const Napi::CallbackInfo& info) {
   return IndexCall(info, [&](fm_workbook_t* handle, std::size_t* out) {
-    return fm_workbook_add_pivot_cache_field_shared_item_date(handle, ArgU32(info, 0),
-                                                              static_cast<std::size_t>(ArgU32(info, 1)),
-                                                              ArgDouble(info, 2), out);
+    return fm_workbook_add_pivot_cache_field_shared_item_date(
+        handle, ArgU32(info, 0), static_cast<std::size_t>(ArgU32(info, 1)), ArgDouble(info, 2), out);
   });
 }
 
@@ -267,9 +264,19 @@ Napi::Value Workbook::PivotCacheRecordGetValue(const Napi::CallbackInfo& info) {
   }
   const CacheRecordArgs record = ReadCacheRecord(info);
   fm_value_t value{};
-  const fm_status_t rc = fm_workbook_get_pivot_cache_record_value(handle_, record.cache_id, record.record_index,
-                                                                  record.field_index, &value);
-  return ValueOrThrow(env, rc, rc == 0 ? ValueToJs(env, value) : env.Undefined());
+  fm_status_t rc = fm_workbook_get_pivot_cache_record_value(handle_, record.cache_id, record.record_index,
+                                                            record.field_index, &value);
+  if (rc != 0) {
+    return ThrowStatus(env, rc);
+  }
+  // Convert before the next call: a text value borrows read scratch.
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("value", ValueToJs(env, value));
+  int32_t is_date = 0;
+  rc = fm_workbook_is_pivot_cache_record_value_date(handle_, record.cache_id, record.record_index, record.field_index,
+                                                    &is_date);
+  out.Set("isDate", Napi::Boolean::New(env, is_date != 0));
+  return ValueOrThrow(env, rc, out);
 }
 
 Napi::Value Workbook::PivotCacheRecordSetNumber(const Napi::CallbackInfo& info) {
@@ -427,8 +434,8 @@ Napi::Value Workbook::PivotCacheCalculatedItemAt(const Napi::CallbackInfo& info)
     return ThrowInvalidHandle(env);
   }
   fm_pivot_calculated_item_info_t item = FM_STRUCT_INIT(fm_pivot_calculated_item_info_t);
-  const fm_status_t rc = fm_workbook_get_pivot_cache_calculated_item_at(handle_, ArgU32(info, 0),
-                                                                     static_cast<std::size_t>(ArgU32(info, 1)), &item);
+  const fm_status_t rc = fm_workbook_get_pivot_cache_calculated_item_at(
+      handle_, ArgU32(info, 0), static_cast<std::size_t>(ArgU32(info, 1)), &item);
   if (rc != 0) {
     return ThrowStatus(env, rc);
   }

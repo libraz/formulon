@@ -35,9 +35,13 @@
       "scope": "sheet",
       "record": "ConditionalFormat",
       "get": {
-        "op": "cf_rule.get_at",
+        "op": "cf_rule.get",
         "js": "getCfRule",
-        "py": "get_cf_rule"
+        "py": "get_cf_rule",
+        "ref_args": [
+          0,
+          "cfRule"
+        ]
       },
       "set": {
         "op": "cf_rule.update",
@@ -370,9 +374,13 @@
       "scope": "sheet",
       "record": "ProtectedRange",
       "get": {
-        "op": "protected_range.get_at",
+        "op": "protected_range.get",
         "js": "getProtectedRange",
-        "py": "get_protected_range"
+        "py": "get_protected_range",
+        "ref_args": [
+          0,
+          "protectedRange"
+        ]
       },
       "set": {
         "op": "protected_range.update",
@@ -494,9 +502,13 @@
       "scope": "sheet",
       "record": "SparklineGroup",
       "get": {
-        "op": "sparkline_group.get_at",
+        "op": "sparkline_group.get",
         "js": "getSparklineGroup",
-        "py": "get_sparkline_group"
+        "py": "get_sparkline_group",
+        "ref_args": [
+          0,
+          "sparklineGroup"
+        ]
       },
       "set": {
         "op": "sparkline_group.update",
@@ -616,9 +628,13 @@
       "scope": "sheet",
       "record": "DataValidation",
       "get": {
-        "op": "validation.get_at",
+        "op": "validation.get",
         "js": "getValidation",
-        "py": "get_validation"
+        "py": "get_validation",
+        "ref_args": [
+          0,
+          "validation"
+        ]
       },
       "set": {
         "op": "validation.update",
@@ -644,9 +660,13 @@
       "scope": "sheet",
       "record": "ConditionalFormat",
       "get": {
-        "op": "cf_rule.get_at",
+        "op": "cf_rule.get",
         "js": "getCfRule",
-        "py": "get_cf_rule"
+        "py": "get_cf_rule",
+        "ref_args": [
+          0,
+          "cfRule"
+        ]
       },
       "set": {
         "op": "cf_rule.add",
@@ -736,9 +756,13 @@
       "scope": "sheet",
       "record": "DataValidation",
       "get": {
-        "op": "validation.get_at",
+        "op": "validation.get",
         "js": "getValidation",
-        "py": "get_validation"
+        "py": "get_validation",
+        "ref_args": [
+          0,
+          "validation"
+        ]
       },
       "set": {
         "op": "validation.add",

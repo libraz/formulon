@@ -78,7 +78,7 @@ fm_status_t remove_sheet_item_at(fm_workbook_t* wb, std::size_t sheet_index, std
   return 0;
 }
 
-void fill_comment(const formulon::CellComment& c, fm_comment_info_t* out) {
+void fill_comment(const formulon::CellComment& c, fm_comment_t* out) {
   out->row = c.row;
   out->col = c.col;
   out->author = c.author.c_str();
@@ -148,25 +148,6 @@ extern "C" fm_status_t fm_sheet_set_hyperlink(fm_workbook_t* wb, std::size_t she
     // A repeated anchor from a loaded file would otherwise survive the replacement.
     hls.erase(std::remove_if(existing + 1, hls.end(), anchored), hls.end());
   }
-  return 0;
-}
-
-extern "C" fm_status_t fm_sheet_remove_hyperlink(fm_workbook_t* wb, std::size_t sheet_index, std::uint32_t row,
-                                                 std::uint32_t col) {
-  clear_last_error();
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_cell_coord(row, col); rc != 0) {
-    return rc;
-  }
-  auto& hls = wb->workbook().sheet(sheet_index).mutable_hyperlinks();
-  const auto removed = std::remove_if(hls.begin(), hls.end(),
-                                      [&](const formulon::Hyperlink& h) { return h.row == row && h.col == col; });
-  if (removed == hls.end()) {
-    return not_found("no hyperlink at that cell", "row=" + std::to_string(row) + " col=" + std::to_string(col));
-  }
-  hls.erase(removed, hls.end());
   return 0;
 }
 
@@ -251,8 +232,12 @@ extern "C" fm_status_t fm_sheet_get_hyperlink_count(const fm_workbook_t* wb, std
 // Merges
 // ---------------------------------------------------------------------------
 
-extern "C" fm_status_t fm_sheet_add_merge(fm_workbook_t* wb, std::size_t sheet_index, const fm_cell_rect_t* merge) {
+extern "C" fm_status_t fm_sheet_add_merge(fm_workbook_t* wb, std::size_t sheet_index, const fm_cell_rect_t* merge,
+                                          fm_cell_rect_t* out_merge) {
   clear_last_error();
+  if (out_merge != nullptr) {
+    *out_merge = fm_cell_rect_t{};
+  }
   if (merge == nullptr) {
     return null_argument("merge");
   }
@@ -262,7 +247,14 @@ extern "C" fm_status_t fm_sheet_add_merge(fm_workbook_t* wb, std::size_t sheet_i
   if (auto rc = check_sheet_rect(*merge); rc != 0) {
     return rc;
   }
-  return finish_status(wb->workbook().add_merge(sheet_index, to_merge_range(*merge)));
+  const formulon::MergeRange range = to_merge_range(*merge);
+  if (auto rc = finish_status(wb->workbook().add_merge(sheet_index, range)); rc != 0) {
+    return rc;
+  }
+  if (out_merge != nullptr) {
+    *out_merge = to_cell_rect(range);
+  }
+  return 0;
 }
 
 extern "C" fm_status_t fm_sheet_remove_merge(fm_workbook_t* wb, std::size_t sheet_index, const fm_cell_rect_t* range) {
@@ -365,7 +357,7 @@ extern "C" fm_status_t fm_sheet_get_merges_in_range(const fm_workbook_t* wb, std
 // ---------------------------------------------------------------------------
 
 extern "C" fm_status_t fm_sheet_get_comment(const fm_workbook_t* wb, std::size_t sheet_index, std::uint32_t row,
-                                            std::uint32_t col, int32_t* out_present, fm_comment_info_t* out) {
+                                            std::uint32_t col, int32_t* out_present, fm_comment_t* out) {
   clear_last_error();
   if (out_present == nullptr) {
     return null_argument("out_present");
@@ -378,7 +370,7 @@ extern "C" fm_status_t fm_sheet_get_comment(const fm_workbook_t* wb, std::size_t
   }
   *out_present = 0;
   const std::uint32_t struct_size = out->struct_size;
-  *out = fm_comment_info_t{};
+  *out = fm_comment_t{};
   out->struct_size = struct_size;
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
@@ -403,7 +395,7 @@ extern "C" fm_status_t fm_sheet_get_comment_count(const fm_workbook_t* wb, std::
 }
 
 extern "C" fm_status_t fm_sheet_get_comment_at(const fm_workbook_t* wb, std::size_t sheet_index, std::size_t index,
-                                               fm_comment_info_t* out) {
+                                               fm_comment_t* out) {
   clear_last_error();
   if (out == nullptr) {
     return null_argument("out");
@@ -442,19 +434,30 @@ formulon::CellComment* FindNote(fm_workbook_t* wb, std::size_t sheet_index, std:
 }  // namespace
 
 extern "C" fm_status_t fm_sheet_set_comment(fm_workbook_t* wb, std::size_t sheet_index, std::uint32_t row,
-                                            std::uint32_t col, const char* author, const char* text) {
+                                            std::uint32_t col, const fm_comment_t* comment) {
   clear_last_error();
+  if (comment != nullptr) {
+    if (auto rc = check_record_size(*comment); rc != 0) {
+      return rc;
+    }
+  }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
   if (auto rc = check_cell_coord(row, col); rc != 0) {
     return rc;
   }
-  if (auto rc = check_utf8({author, text}); rc != 0) {
-    return rc;
-  }
   auto& list = wb->workbook().sheet(sheet_index).mutable_comments();
   formulon::CellComment* existing = FindNote(wb, sheet_index, row, col);
+  if (comment == nullptr) {
+    if (existing != nullptr) {
+      list.erase(list.begin() + (existing - list.data()));
+    }
+    return 0;
+  }
+  if (auto rc = check_utf8({comment->author, comment->text}); rc != 0) {
+    return rc;
+  }
   // A cell holds a note or a threaded comment, never both.
   for (const formulon::ThreadedComment& thread : wb->workbook().sheet(sheet_index).threaded_comments()) {
     if (thread.parent_id.empty() && thread.row == row && thread.col == col) {
@@ -465,8 +468,8 @@ extern "C" fm_status_t fm_sheet_set_comment(fm_workbook_t* wb, std::size_t sheet
   formulon::CellComment c;
   c.row = row;
   c.col = col;
-  c.author = text_or_empty(author);
-  c.text = text_or_empty(text);
+  c.author = text_or_empty(comment->author);
+  c.text = text_or_empty(comment->text);
   if (existing != nullptr) {
     c.uid = std::move(existing->uid);
     c.visible = existing->visible;
@@ -477,24 +480,6 @@ extern "C" fm_status_t fm_sheet_set_comment(fm_workbook_t* wb, std::size_t sheet
   } else {
     list.push_back(std::move(c));
   }
-  return 0;
-}
-
-extern "C" fm_status_t fm_sheet_remove_comment(fm_workbook_t* wb, std::size_t sheet_index, std::uint32_t row,
-                                               std::uint32_t col) {
-  clear_last_error();
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_cell_coord(row, col); rc != 0) {
-    return rc;
-  }
-  formulon::CellComment* existing = FindNote(wb, sheet_index, row, col);
-  if (existing == nullptr) {
-    return not_found("no comment at that cell", "row=" + std::to_string(row) + " col=" + std::to_string(col));
-  }
-  auto& list = wb->workbook().sheet(sheet_index).mutable_comments();
-  list.erase(list.begin() + (existing - list.data()));
   return 0;
 }
 

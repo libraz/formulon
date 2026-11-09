@@ -325,7 +325,7 @@ class ThreadedCommentTests(unittest.TestCase):
                 text="@Alice done",
                 parent_id=THREAD,
                 mentions=[
-                    Mention(person_id=ALICE, mention_id="{55555555-5555-4555-8555-555555555555}", start=0, length=6)
+                    Mention(person_id=ALICE, mention_id="{55555555-5555-4555-8555-555555555555}", start=0, end=6)
                 ],
             )
             wb.sheet(0).add_threaded_comment(reply)

@@ -2457,5 +2457,31 @@ TEST(ChartEdit, ThemeColourWritesPaletteFormAndRoundTrips) {
   }
 }
 
+TEST(ChartFillNoneOther, NoFillRoundTrip) {
+  Workbook wb = LoadFixture("chart_column.xlsx");
+  const Located col = Find(wb, "xl/charts/chart1.xml");
+  ChartSeriesPatch hide;
+  hide.fill.none = true;
+  MustOk(set_chart_series(wb, col.sheet, col.id, 0, 0, hide));
+  EXPECT_NE(PartText(wb, col.path).find("<a:noFill/>"), std::string::npos);
+  ChartSeries s = Must(get_chart(wb, col.sheet, col.id)).plots[0].series[0];
+  EXPECT_TRUE(s.fill.none);
+  EXPECT_FALSE(s.fill.other);
+  EXPECT_FALSE(s.fill.color.has_value());
+
+  const Workbook reloaded = OoxmlRoundTrip(wb);
+  const Located again = Find(reloaded, "xl/charts/chart1.xml");
+  s = Must(get_chart(reloaded, again.sheet, again.id)).plots[0].series[0];
+  EXPECT_TRUE(s.fill.none);
+
+  ChartSeriesPatch show;
+  show.fill.none = false;
+  show.fill.color = ChartPatchField<ColorSpec>::Set(RgbColor(0xFF1F77B4U));
+  MustOk(set_chart_series(wb, col.sheet, col.id, 0, 0, show));
+  s = Must(get_chart(wb, col.sheet, col.id)).plots[0].series[0];
+  EXPECT_FALSE(s.fill.none);
+  EXPECT_EQ(Argb(s.fill.color), std::optional<std::uint32_t>(0xFF1F77B4U));
+}
+
 }  // namespace
 }  // namespace formulon

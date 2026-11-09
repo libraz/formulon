@@ -222,10 +222,8 @@ class LoadSaveTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 wb.save(format=99)  # type: ignore[arg-type]
 
-    def test_save_unknown_format_member_is_invalid_argument(self) -> None:
-        with Workbook.create_default() as wb:
-            with self.assertRaises(InvalidArgumentError):
-                wb.save(format=WorkbookFormat.UNKNOWN)
+    def test_save_has_no_unknown_format_member(self) -> None:
+        self.assertFalse(hasattr(WorkbookFormat, "UNKNOWN"))
 
     def test_save_format_is_keyword_only(self) -> None:
         with Workbook.create_default() as wb:
@@ -880,8 +878,9 @@ def _workbook_with_pivot() -> "tuple[Workbook, int, int]":
         wb.pivot_cache(cache_id).set_record_value(record, 1, amount)
     ws = wb.sheet(0)
     pivot = ws.add_pivot(PivotInput(name="Pivot1", cache_id=cache_id, anchor=CellAddress(0, 4)))
-    ws.pivot(pivot).add_field(formulon.PivotFieldInput(field_index="Region", axis=formulon.PivotAxis.ROW))
-    amount = ws.pivot(pivot).add_field(formulon.PivotFieldInput(field_index="Amount", axis=formulon.PivotAxis.VALUE))
+    ws.pivot(pivot).set_field_axis("Region", formulon.PivotAxis.ROW)
+    ws.pivot(pivot).set_field_axis("Amount", formulon.PivotAxis.VALUE)
+    amount = ws.pivot(pivot).get_field("Amount").cache_field_index
     ws.pivot(pivot).add_data_field(formulon.PivotDataFieldInput(name="Sum of Amount", field_index=amount))
     return wb, pivot, cache_id
 
@@ -920,7 +919,7 @@ class SetterRoundTripTests(unittest.TestCase):
         self.wb.update_iterative(**dataclasses.asdict(before))
         self.assertEqual(self.wb.get_iterative(), before)
 
-        self.wb.update_table_style_defaults(table_style="TableStyleLight1")
+        self.wb.update_table_style_defaults(table_style_name="TableStyleLight1")
         before = self.wb.get_table_style_defaults()
         self.wb.update_table_style_defaults(**dataclasses.asdict(before))
         self.assertEqual(self.wb.get_table_style_defaults(), before)
@@ -1025,7 +1024,7 @@ class AbsentValueTests(unittest.TestCase):
         ws.set_hyperlink(10, 0, formulon.HyperlinkInput(target="https://example.test/"))
         ws.add_validation(formulon.DataValidationInput(ranges=[formulon.CellRect(11, 0, 11, 0)], type=1, formula1="1"))
         table = ws.add_table(
-            formulon.TableInput(range=formulon.CellRect(20, 0, 22, 1), name="T", columns=["A", "B"], style_name="")
+            formulon.TableInput(range=formulon.CellRect(20, 0, 22, 1), name="T", columns=["A", "B"], styled=False)
         )
         wb.set_defined_name(formulon.DefinedNameInput("Rate", "Sheet1!$A$1"))
         chart = _chart_input.add_chart(ws, _chart_input.COLUMN, "Sheet1!$A$1:$B$3", legend=None)
@@ -1072,8 +1071,7 @@ class AbsentValueTests(unittest.TestCase):
         self.assertEqual((field.custom_name, field.group_base_index), (None, None))
         self.assertIsNone(ws.get_page_setup().orientation)
         self.assertEqual(ws.get_view().view_mode, formulon.SheetViewMode.NORMAL)
-        protection = wb.get_workbook_protection()
-        self.assertEqual((protection.workbook_hash_value, protection.workbook_legacy_password_hash), (None, None))
+        self.assertIsNone(wb.get_workbook_protection())
 
     def test_pinned_now_none_releases(self) -> None:
         # A2
@@ -1116,8 +1114,8 @@ class AbsentValueTests(unittest.TestCase):
     def test_patch_omitted_none_and_value(self) -> None:
         # A6
         with Workbook.create_default() as wb:
-            wb.update_table_style_defaults(table_style="TableStyleLight1", pivot_style="PivotStyleLight2")
-            wb.update_table_style_defaults(pivot_style=None)
+            wb.update_table_style_defaults(table_style_name="TableStyleLight1", pivot_style_name="PivotStyleLight2")
+            wb.update_table_style_defaults(pivot_style_name=None)
             self.assertEqual(wb.get_table_style_defaults(), formulon.TableStyleDefaults("TableStyleLight1", None))
             wb.update_iterative(max_iterations=5)
             self.assertEqual(wb.get_iterative().max_iterations, 5)
@@ -1132,10 +1130,11 @@ class AbsentValueTests(unittest.TestCase):
                 wb.set_defined_name(formulon.DefinedNameInput("Rate", ""))
             ws.set_comment(0, 0, Comment("", author="Ann"))
             self.assertEqual(ws.get_comment(0, 0), Comment("", author="Ann"))
-            ws.remove_comment(0, 0)
+            ws.set_comment(0, 0, None)
             self.assertIsNone(ws.get_comment(0, 0))
-            with self.assertRaises(NotFoundError):
-                ws.remove_comment(0, 0)
+            # Removing a note the cell does not have does nothing.
+            ws.set_comment(0, 0, None)
+            self.assertIsNone(ws.get_comment(0, 0))
 
     def test_none_clears_protection_and_phonetic_runs(self) -> None:
         # A10
@@ -1143,7 +1142,7 @@ class AbsentValueTests(unittest.TestCase):
             ws = wb.sheet(0)
             wb.set_workbook_protection(formulon.WorkbookProtection(lock_structure=True))
             wb.set_workbook_protection(None)
-            self.assertEqual(wb.get_workbook_protection(), formulon.WorkbookProtection())
+            self.assertIsNone(wb.get_workbook_protection())
             ws.set_sheet_protection(formulon.SheetProtectionInput())
             self.assertIsNotNone(ws.get_sheet_protection())
             ws.set_sheet_protection(None)
@@ -1266,7 +1265,6 @@ class EnumBoundaryTests(unittest.TestCase):
         for enum, member in (
             (formulon.BlanksAs, "ABSENT"),
             (formulon.ChartAxisCrosses, "ABSENT"),
-            (formulon.ShapePaint, "UNSET"),
             (formulon.ChartTitleKind, "NONE"),
             (formulon.ChartLegendPosition, "NONE"),
         ):

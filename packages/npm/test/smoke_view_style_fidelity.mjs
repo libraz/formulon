@@ -97,7 +97,7 @@ test('gradient fills add, read, dedup and round-trip in cells and dxfs', async (
   const rgb = (argb) => ({ kind: 1, argb: argb, theme: 0, tint: 0, indexed: 0 });
   const gradient = {
     type: 1,
-    degree: 0,
+    angleDeg: 0,
     left: 0.5,
     right: 0.5,
     top: 0.25,
@@ -117,10 +117,10 @@ test('gradient fills add, read, dedup and round-trip in cells and dxfs', async (
   assert.equal(fill.gradient.stops[1].color.theme, 4);
   assert.equal(wb.ooxml.getFill(0).gradient, null);
 
-  const dxf = wb.ooxml.addDxf({ fill: { gradient: { ...gradient, type: 0, degree: 45 } } });
+  const dxf = wb.ooxml.addDxf({ fill: { gradient: { ...gradient, type: 0, angleDeg: 45 } } });
   const loaded = roundTrip(mod, wb);
   assert.equal(loaded.ooxml.getFill(added).gradient.stops.length, 2);
-  assert.equal(loaded.ooxml.getDxf(dxf).fill.gradient.degree, 45);
+  assert.equal(loaded.ooxml.getDxf(dxf).fill.gradient.angleDeg, 45);
   assert.ok(rejected(() => wb.ooxml.addFill({ gradient: { stops: [{ position: 'x' }] } })));
   release(loaded);
   release(wb);

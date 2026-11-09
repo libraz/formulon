@@ -56,7 +56,7 @@ TEST(FormulonCApiUtf8Input, MalformedTextIsRefusedWithTheWorkbookUnchanged) {
     EXPECT_EQ(fm_sheet_set_formula(wb.handle, 0, 0, 1, (std::string("=\"") + bad + "\"").c_str()), kUtf8Error);
     EXPECT_EQ(fm_workbook_rename_sheet(wb.handle, 0, bad), kUtf8Error);
     EXPECT_EQ(fm_workbook_add_sheet(wb.handle, bad, append_position(wb.handle), ignored_index()), kUtf8Error);
-    EXPECT_EQ(fm_sheet_set_comment(wb.handle, 0, 0, 2, "author", bad), kUtf8Error);
+    EXPECT_EQ(SetComment(wb.handle, 0, 0, 2, "author", bad), kUtf8Error);
     EXPECT_EQ(SetDefinedName(wb.handle, bad, "=1"), kUtf8Error);
     EXPECT_EQ(SetDefinedName(wb.handle, "Name", (std::string("=\"") + bad + "\"").c_str()), kUtf8Error);
     // The diagnostic never echoes the rejected bytes.
@@ -134,7 +134,7 @@ TEST(FormulonCApiUtf8Input, FontAndStyleRecordsRefuseAMalformedName) {
     fm_font_t font{};
     font.name = bad;
     font.size_pt = 11.0;
-    std::size_t font_index = 99U;
+    std::uint32_t font_index = 99U;
     EXPECT_EQ(fm_workbook_add_font(wb.handle, &font, &font_index), kUtf8Error);
     EXPECT_EQ(font_index, 99U);
     EXPECT_EQ(fm_workbook_set_font(wb.handle, 0, &font), kUtf8Error);
@@ -154,7 +154,7 @@ TEST(FormulonCApiUtf8Input, WellFormedMultibyteTextPasses) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   ASSERT_EQ(fm_sheet_set_text(wb.handle, 0, 0, 0, kValidMultibyte), 0) << fm_get_last_error_message();
   ASSERT_EQ(fm_workbook_rename_sheet(wb.handle, 0, kValidMultibyte), 0) << fm_get_last_error_message();
-  ASSERT_EQ(fm_sheet_set_comment(wb.handle, 0, 0, 1, "author", kValidMultibyte), 0) << fm_get_last_error_message();
+  ASSERT_EQ(SetComment(wb.handle, 0, 0, 1, "author", kValidMultibyte), 0) << fm_get_last_error_message();
   ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 0, 2, (std::string("=\"") + kValidMultibyte + "\"").c_str()), 0)
       << fm_get_last_error_message();
   std::int32_t order = 99;

@@ -95,9 +95,12 @@ function buildPivot(wb) {
     cache.setRecordValue(rec, 2, date);
   });
   const pivot = ws.addPivot({ name: 'Pivot1', cacheId: cache.cacheId, anchor: { row: 0, col: 6 } });
-  const region = pivot.addField({ fieldIndex: 'Region', axis: f.PivotAxis.Row });
-  const amount = pivot.addField({ fieldIndex: 'Amount', axis: f.PivotAxis.Value });
-  const date = pivot.addField({ fieldIndex: 'Date', axis: f.PivotAxis.Hidden ?? 2 });
+  pivot.setFieldAxis('Region', f.PivotAxis.Row);
+  const region = 0;
+  pivot.setFieldAxis('Amount', f.PivotAxis.Value);
+  const amount = 1;
+  pivot.setFieldAxis('Date', f.PivotAxis.Hidden ?? 2);
+  const date = 2;
   pivot.addDataField({ name: 'Sum of Amount', fieldIndex: amount, aggregation: 0 });
   return { cache, pivot, region, amount, date };
 }
@@ -170,10 +173,10 @@ describe('enum tables list their members at the exact ordinals', () => {
     assertTable('SlicerSortOrder', { Ascending: 0, Descending: 1 });
   });
 
-  it('AnchorKind and AnchorEditAs start at Default, and ShapePaint at Default for no paint of its own', () => {
+  it('AnchorKind and AnchorEditAs start at Default, and ShapePaint is gone', () => {
     assertTable('AnchorKind', { Default: 0, OneCell: 1, TwoCell: 2, Absolute: 3 });
     assertTable('AnchorEditAs', { Default: 0, OneCell: 1, TwoCell: 2, Absolute: 3 });
-    assertTable('ShapePaint', { Default: 0, Solid: 1, None: 2, Other: 3 });
+    assert.equal('ShapePaint' in f, false);
   });
 
   it('an omitted anchor kind takes the operation default and a read reports the stored kind and edit-as', () => {
@@ -194,23 +197,21 @@ describe('enum tables list their members at the exact ordinals', () => {
     });
   });
 
-  it('a shape without its own paint reads ShapePaint.Default and a patch of Default removes the paint', () => {
+  it('a shape without its own paint reads null fill and line, and a null patch removes the paint', () => {
     withSheet((ws) => {
       const anchor = { fromRow: 1, fromCol: 1, toRow: 4, toCol: 4 };
       const plain = ws.addShape({ anchor });
-      assert.equal(plain.getProperties().fillKind, f.ShapePaint.Default);
-      assert.equal(plain.getProperties().lineKind, f.ShapePaint.Default);
+      assert.equal(plain.getProperties().fill, null);
+      assert.equal(plain.getProperties().line, null);
       const painted = ws.addShape({
         anchor,
-        fillKind: f.ShapePaint.Solid,
-        fillColor: '#336699',
-        lineKind: f.ShapePaint.None,
+        fill: { color: '#336699' },
+        line: { none: true },
       });
-      assert.equal(painted.getProperties().fillKind, f.ShapePaint.Solid);
-      painted.update({ fillKind: f.ShapePaint.Default, lineKind: f.ShapePaint.Default });
-      assert.equal(painted.getProperties().fillKind, f.ShapePaint.Default);
-      assert.equal(painted.getProperties().fillColor, null);
-      assert.equal(painted.getProperties().lineKind, f.ShapePaint.Default);
+      assert.equal(painted.getProperties().fill.color.argb, 0xff336699);
+      painted.update({ fill: null, line: null });
+      assert.equal(painted.getProperties().fill, null);
+      assert.equal(painted.getProperties().line, null);
     });
   });
 
@@ -1061,7 +1062,7 @@ describe('pivot filters carry value and valueHigh as number or string', () => {
 
   it('a value filter reads back its numeric operand and no high bound', () => {
     withPivot((pivot) => {
-      pivot.addFilter({ ...region, type: f.PivotFilterKind.ValueGreaterThan, value: 20 });
+      pivot.addFilter({ ...region, kind: f.PivotFilterKind.ValueGreaterThan, value: 20 });
       const filter = pivot.listFilters()[0];
       assert.equal(filter.value, 20);
       assert.equal(filter.valueHigh, null);
@@ -1070,7 +1071,7 @@ describe('pivot filters carry value and valueHigh as number or string', () => {
 
   it('a between filter reads back both numeric bounds', () => {
     withPivot((pivot) => {
-      pivot.addFilter({ ...region, type: f.PivotFilterKind.ValueBetween, value: 10, valueHigh: 20.5 });
+      pivot.addFilter({ ...region, kind: f.PivotFilterKind.ValueBetween, value: 10, valueHigh: 20.5 });
       const filter = pivot.listFilters()[0];
       assert.equal(filter.value, 10);
       assert.equal(filter.valueHigh, 20.5);
@@ -1079,15 +1080,15 @@ describe('pivot filters carry value and valueHigh as number or string', () => {
 
   it('a top-count filter takes an integer count', () => {
     withPivot((pivot) => {
-      pivot.addFilter({ ...region, type: f.PivotFilterKind.ValueTopCount, value: 3 });
+      pivot.addFilter({ ...region, kind: f.PivotFilterKind.ValueTopCount, value: 3 });
       assert.equal(pivot.listFilters()[0].value, 3);
     });
   });
 
   it('label filters read back string operands, the upper bound in valueHigh', () => {
     withPivot((pivot) => {
-      pivot.addFilter({ ...region, type: f.PivotFilterKind.LabelContains, value: 'as' });
-      pivot.addFilter({ ...region, type: f.PivotFilterKind.LabelBetween, value: 'A', valueHigh: 'M' });
+      pivot.addFilter({ ...region, kind: f.PivotFilterKind.LabelContains, value: 'as' });
+      pivot.addFilter({ ...region, kind: f.PivotFilterKind.LabelBetween, value: 'A', valueHigh: 'M' });
       const [contains, between] = pivot.listFilters();
       assert.equal(contains.value, 'as');
       assert.equal(contains.valueHigh, null);
@@ -1098,7 +1099,7 @@ describe('pivot filters carry value and valueHigh as number or string', () => {
 
   it('the operand-kind fields are gone from reads and rejected on input', () => {
     withPivot((pivot) => {
-      pivot.addFilter({ ...region, type: f.PivotFilterKind.ValueGreaterThan, value: 5 });
+      pivot.addFilter({ ...region, kind: f.PivotFilterKind.ValueGreaterThan, value: 5 });
       const filter = pivot.listFilters()[0];
       for (const key of [
         'valueKind',
@@ -1113,7 +1114,7 @@ describe('pivot filters carry value and valueHigh as number or string', () => {
         assert.equal(key in filter, false, key);
       }
       assert.throws(
-        () => pivot.addFilter({ ...region, type: f.PivotFilterKind.ValueGreaterThan, valueKind: 1, valueDouble: 5 }),
+        () => pivot.addFilter({ ...region, kind: f.PivotFilterKind.ValueGreaterThan, valueKind: 1, valueDouble: 5 }),
         TypeError,
       );
     });
@@ -1121,8 +1122,8 @@ describe('pivot filters carry value and valueHigh as number or string', () => {
 
   it('an operand of the wrong type for the filter is rejected', () => {
     withPivot((pivot) => {
-      assert.throws(() => pivot.addFilter({ ...region, type: f.PivotFilterKind.ValueGreaterThan, value: 'big' }));
-      assert.throws(() => pivot.addFilter({ ...region, type: f.PivotFilterKind.LabelContains, value: 5 }));
+      assert.throws(() => pivot.addFilter({ ...region, kind: f.PivotFilterKind.ValueGreaterThan, value: 'big' }));
+      assert.throws(() => pivot.addFilter({ ...region, kind: f.PivotFilterKind.LabelContains, value: 5 }));
     });
   });
 });

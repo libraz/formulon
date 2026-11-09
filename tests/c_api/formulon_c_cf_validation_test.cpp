@@ -37,7 +37,7 @@ TEST(FormulonCApiCfMutate, OutOfGridSqrefRejectedAndLeavesTheModelUnchanged) {
   // reported rather than aborting the process at save time.
   EXPECT_TRUE(wb.handle->workbook().sheet(0).conditional_formats().empty());
   BufferGuard rejected_save;
-  ASSERT_EQ(fm_workbook_save(wb.handle, &rejected_save.data, &rejected_save.len), 0);
+  ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &rejected_save.data, &rejected_save.len), 0);
 
   // The widest legal whole-column range still round-trips.
   fm_cell_rect_t whole_col{0, 0, formulon::Sheet::kMaxRows - 1U, 0};
@@ -45,7 +45,7 @@ TEST(FormulonCApiCfMutate, OutOfGridSqrefRejectedAndLeavesTheModelUnchanged) {
   ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &rule, &rule_id), 0) << fm_get_last_error_message();
 
   BufferGuard saved;
-  ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0);
+  ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0);
   ASSERT_GT(saved.len, 0U);
   WorkbookGuard reloaded;
   ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &reloaded.handle), 0);
@@ -236,10 +236,10 @@ TEST(FormulonCApiCfMutate, AddRuleRejectsEnumOrdinalsPastTheirDomain) {
   fm_cf_rule_t unknown_icon_set = base;
   unknown_icon_set.type = 4;  // IconSet
   unknown_icon_set.has_icon_set = 1;
-  unknown_icon_set.icon_set_name = static_cast<std::uint8_t>(formulon::cf::IconSetName::Five_Quarters) + 1U;
+  unknown_icon_set.icon_set = FM_ICON_SET_NAME_NO_ICONS + 1;
   unknown_icon_set.icon_set_thresholds = legal_thresholds;
   unknown_icon_set.icon_set_threshold_count = 3;
-  expect_rejected(unknown_icon_set, "icon_set_name");
+  expect_rejected(unknown_icon_set, "icon_set");
 
   fm_cfvo_t color_thresholds[2]{};
   fm_color_t colors[2]{};

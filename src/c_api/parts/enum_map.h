@@ -20,7 +20,6 @@
 #include "cf/cf_types.h"
 #include "chart/chart_model.h"
 #include "drawing/drawing_xml.h"
-#include "drawing/shape_edit.h"
 #include "drawing/slicer_edit.h"
 #include "io/sparkline_groups.h"
 
@@ -78,35 +77,6 @@ inline std::int32_t to_c(EditAs value) {
       break;
   }
   return FM_ANCHOR_EDIT_AS_TWO_CELL;
-}
-
-// --- shape paint (`FM_SHAPE_PAINT_DEFAULT` = no element of its own) -----------
-
-inline ShapePaint shape_paint_from_c(std::int32_t value) {
-  switch (value) {
-    case FM_SHAPE_PAINT_SOLID:
-      return ShapePaint::kSolid;
-    case FM_SHAPE_PAINT_NONE:
-      return ShapePaint::kNone;
-    case FM_SHAPE_PAINT_OTHER:
-      return ShapePaint::kOther;
-    default:
-      return ShapePaint::kUnset;
-  }
-}
-
-inline std::int32_t to_c(ShapePaint value) {
-  switch (value) {
-    case ShapePaint::kSolid:
-      return FM_SHAPE_PAINT_SOLID;
-    case ShapePaint::kNone:
-      return FM_SHAPE_PAINT_NONE;
-    case ShapePaint::kOther:
-      return FM_SHAPE_PAINT_OTHER;
-    case ShapePaint::kUnset:
-      break;
-  }
-  return FM_SHAPE_PAINT_DEFAULT;
 }
 
 // --- sort_order family -------------------------------------------------------

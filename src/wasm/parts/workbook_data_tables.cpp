@@ -41,10 +41,10 @@ emscripten::val input_to_val(int32_t has, uint32_t row, uint32_t col, int32_t de
 
 }  // namespace
 
-void JsWorkbook::addDataTable(uint32_t sheet, emscripten::val spec) {
+emscripten::val JsWorkbook::addDataTable(uint32_t sheet, emscripten::val spec) {
   if (handle_ == nullptr) {
     record_invalid_handle();
-    return;
+    return emscripten::val::undefined();
   }
   JsNarrowNumericReader reader("Sheet.addDataTable");
   fm_data_table_t table = FM_STRUCT_INIT(fm_data_table_t);
@@ -54,9 +54,16 @@ void JsWorkbook::addDataTable(uint32_t sheet, emscripten::val spec) {
     pull_input(reader, spec, "columnInput", &table.has_column_input, &table.column_input_row, &table.column_input_col);
   }
   if (!reader.ok()) {
-    return;
+    return emscripten::val::undefined();
   }
-  succeeded(fm_sheet_add_data_table(handle_, sheet, &table));
+  fm_cell_address_t key{};
+  if (!succeeded(fm_sheet_add_data_table(handle_, sheet, &table, &key))) {
+    return emscripten::val::undefined();
+  }
+  emscripten::val cell = emscripten::val::object();
+  cell.set("row", key.row);
+  cell.set("col", key.col);
+  return cell;
 }
 
 emscripten::val JsWorkbook::getDataTable(uint32_t sheet, uint32_t row, uint32_t col) const {

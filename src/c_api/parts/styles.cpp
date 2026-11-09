@@ -4,6 +4,7 @@
 
 #include "styles.h"
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <limits>
@@ -15,10 +16,12 @@
 
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
+#include "c_api/parts/struct_v1_sizes.h"
 #include "cell.h"
 #include "sheet.h"
 #include "sheet_name.h"
 #include "utils/error.h"
+#include "utils/index_sort.h"
 #include "utils/resource_budget.h"
 #include "workbook.h"
 
@@ -26,6 +29,7 @@ using formulon::effective_num_fmt;
 using formulon::c_api::parts::check_cell_coord;
 using formulon::c_api::parts::check_cell_xf_index;
 using formulon::c_api::parts::check_index;
+using formulon::c_api::parts::check_record_size;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::check_sheet_rect;
 using formulon::c_api::parts::check_utf8;
@@ -216,7 +220,7 @@ void fill_to_c(const formulon::FillRecord& f, fm_fill_t* out,
   out->background = formulon::c_api::parts::color_spec_to_c(f.bg, f.bg_argb);
   out->has_gradient = f.has_gradient ? 1 : 0;
   out->gradient_type = f.gradient.path ? FM_GRADIENT_TYPE_PATH : FM_GRADIENT_TYPE_LINEAR;
-  out->gradient_degree = f.gradient.degree;
+  out->gradient_angle_deg = f.gradient.degree;
   out->gradient_left = f.gradient.left;
   out->gradient_right = f.gradient.right;
   out->gradient_top = f.gradient.top;
@@ -255,7 +259,7 @@ void border_to_c(const formulon::BorderRecord& b, fm_border_t* out) noexcept {
 
 }  // namespace
 
-extern "C" fm_status_t fm_workbook_get_font_at(const fm_workbook_t* wb, size_t font_index, fm_font_t* out) {
+extern "C" fm_status_t fm_workbook_get_font_at(const fm_workbook_t* wb, uint32_t font_index, fm_font_t* out) {
   clear_last_error();
   if (wb == nullptr || out == nullptr) {
     return null_argument();
@@ -288,7 +292,56 @@ extern "C" fm_status_t fm_workbook_get_number_format(const fm_workbook_t* wb, ui
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_get_fill_at(const fm_workbook_t* wb, size_t fill_index, fm_fill_t* out) {
+namespace {
+
+// The ids of the workbook's declared `<numFmts>` entries, ascending and
+// each listed once.
+std::vector<std::uint32_t> declared_num_fmt_ids(const formulon::StylesTable& styles) {
+  std::vector<std::uint32_t> ids;
+  ids.reserve(styles.num_fmts.size());
+  for (const formulon::NumFmtRecord& record : styles.num_fmts) {
+    ids.push_back(record.id);
+  }
+  formulon::sort_ascending(ids);
+  ids.erase(std::unique(ids.begin(), ids.end()), ids.end());
+  return ids;
+}
+
+}  // namespace
+
+extern "C" fm_status_t fm_workbook_get_number_format_count(const fm_workbook_t* wb, size_t* out_count) {
+  clear_last_error();
+  if (wb == nullptr || out_count == nullptr) {
+    return null_argument();
+  }
+  *out_count = declared_num_fmt_ids(wb->workbook().styles()).size();
+  return 0;
+}
+
+extern "C" fm_status_t fm_workbook_get_number_format_at(const fm_workbook_t* wb, size_t index,
+                                                        fm_number_format_info_t* out) {
+  clear_last_error();
+  if (wb == nullptr || out == nullptr) {
+    return null_argument();
+  }
+  if (auto rc = check_record_size(*out); rc != 0) {
+    return rc;
+  }
+  const std::vector<std::uint32_t> ids = declared_num_fmt_ids(wb->workbook().styles());
+  if (auto rc = check_index(index, ids.size(), "index"); rc != 0) {
+    return rc;
+  }
+  const std::optional<std::string_view> resolved =
+      resolve_num_fmt_code(wb->workbook(), static_cast<std::uint16_t>(ids[index]));
+  const std::uint32_t struct_size = out->struct_size;
+  *out = fm_number_format_info_t{};
+  out->struct_size = struct_size;
+  out->num_fmt_id = ids[index];
+  out->number_format = resolved.has_value() ? resolved->data() : "";
+  return 0;
+}
+
+extern "C" fm_status_t fm_workbook_get_fill_at(const fm_workbook_t* wb, uint32_t fill_index, fm_fill_t* out) {
   clear_last_error();
   if (wb == nullptr || out == nullptr) {
     return null_argument();
@@ -301,7 +354,7 @@ extern "C" fm_status_t fm_workbook_get_fill_at(const fm_workbook_t* wb, size_t f
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_get_border_at(const fm_workbook_t* wb, size_t border_index, fm_border_t* out) {
+extern "C" fm_status_t fm_workbook_get_border_at(const fm_workbook_t* wb, uint32_t border_index, fm_border_t* out) {
   clear_last_error();
   if (wb == nullptr || out == nullptr) {
     return null_argument();
@@ -391,7 +444,7 @@ extern "C" fm_status_t fm_workbook_get_cell_style_at(const fm_workbook_t* wb, si
   const bool builtin = cs.builtin_id != formulon::CellStyleRecord::kBuiltinIdNone;
   out->has_builtin_id = builtin ? 1 : 0;
   out->builtin_id = builtin ? cs.builtin_id : 0U;
-  out->i_level = cs.i_level;
+  out->outline_level = cs.i_level;
   out->hidden = cs.hidden ? 1 : 0;
   out->custom_builtin = cs.custom_builtin ? 1 : 0;
   return 0;

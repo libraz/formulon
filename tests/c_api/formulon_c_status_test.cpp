@@ -135,6 +135,7 @@ TEST(FormulonCStatus, TakenNamesAndIdsAreAlreadyExists) {
   range.name = "Edit";
   range.ranges = &area;
   range.range_count = 1;
-  ASSERT_EQ(fm_sheet_add_protected_range(wb.handle, 0, &range), 0) << fm_get_last_error_message();
-  EXPECT_EQ(fm_sheet_add_protected_range(wb.handle, 0, &range), FM_STATUS_ALREADY_EXISTS);
+  const char* range_name = nullptr;
+  ASSERT_EQ(fm_sheet_add_protected_range(wb.handle, 0, &range, &range_name), 0) << fm_get_last_error_message();
+  EXPECT_EQ(fm_sheet_add_protected_range(wb.handle, 0, &range, &range_name), FM_STATUS_ALREADY_EXISTS);
 }

@@ -73,9 +73,9 @@ function addCache(ws, wb) {
 function buildPivot(ws, wb) {
   const cache = addCache(ws, wb);
   const pivot = ws.addPivot({ name: 'Pivot1', cacheId: cache.cacheId, anchor: 'F1' });
-  pivot.addField({ fieldIndex: 'Region', axis: PivotAxis.Row });
-  pivot.addField({ fieldIndex: 'Amount', axis: PivotAxis.Value });
-  pivot.addField({ fieldIndex: 'Date', axis: PivotAxis.Row });
+  pivot.setFieldAxis('Region', PivotAxis.Row);
+  pivot.setFieldAxis('Amount', PivotAxis.Value);
+  pivot.setFieldAxis('Date', PivotAxis.Row);
   pivot.setFieldAxis('Date', null);
   pivot.addDataField({ name: 'Sum of Amount', fieldIndex: 'Amount', aggregation: PivotAggregation.Sum });
   return { cache, pivot };
@@ -128,12 +128,12 @@ describe('a pivot field is passed by index or by source name', () => {
   it('a field name and its index filter alike, and the filter reads back the field index', () => {
     withSheet((ws, wb) => {
       const { pivot } = buildPivot(ws, wb);
-      pivot.addFilter({ fieldIndex: 'Region', type: PivotFilterKind.LabelContains, value: 'East' });
-      pivot.addFilter({ fieldIndex: 0, type: PivotFilterKind.LabelContains, value: 'East' });
+      pivot.addFilter({ fieldIndex: 'Region', kind: PivotFilterKind.LabelContains, value: 'East' });
+      pivot.addFilter({ fieldIndex: 0, kind: PivotFilterKind.LabelContains, value: 'East' });
       const [byName, byIndex] = pivot.listFilters();
       assert.deepEqual(byName, byIndex);
       assert.equal(byName.fieldIndex, 0);
-      assert.equal(byName.type, PivotFilterKind.LabelContains);
+      assert.equal(byName.kind, PivotFilterKind.LabelContains);
       assert.equal(byName.value, 'East');
       assert.equal('axis' in byName, false);
       assert.equal('fieldName' in byName, false);
@@ -143,7 +143,7 @@ describe('a pivot field is passed by index or by source name', () => {
   it('a name matches case-insensitively', () => {
     withSheet((ws, wb) => {
       const { pivot } = buildPivot(ws, wb);
-      pivot.addFilter({ fieldIndex: 'rEGION', type: PivotFilterKind.LabelContains, value: 'East' });
+      pivot.addFilter({ fieldIndex: 'rEGION', kind: PivotFilterKind.LabelContains, value: 'East' });
       assert.equal(pivot.listFilters()[0].fieldIndex, 0);
     });
   });
@@ -151,7 +151,7 @@ describe('a pivot field is passed by index or by source name', () => {
   it('the old axis and fieldName keys are refused on a filter', () => {
     withSheet((ws, wb) => {
       const { pivot } = buildPivot(ws, wb);
-      const base = { fieldIndex: 'Region', type: PivotFilterKind.LabelContains, value: 'East' };
+      const base = { fieldIndex: 'Region', kind: PivotFilterKind.LabelContains, value: 'East' };
       expectTypeError(() => pivot.addFilter({ ...base, axis: PivotAxis.Row }));
       expectTypeError(() => pivot.addFilter({ ...base, fieldName: 'Region' }));
       assert.equal(pivot.listFilters().length, 0);
@@ -161,14 +161,14 @@ describe('a pivot field is passed by index or by source name', () => {
   it('a filter without a field is a TypeError', () => {
     withSheet((ws, wb) => {
       const { pivot } = buildPivot(ws, wb);
-      expectTypeError(() => pivot.addFilter({ type: PivotFilterKind.LabelContains, value: 'East' }));
+      expectTypeError(() => pivot.addFilter({ kind: PivotFilterKind.LabelContains, value: 'East' }));
     });
   });
 
   it('a name no field has is NotFound and an index past the last field is IndexOutOfRange', () => {
     withSheet((ws, wb) => {
       const { pivot } = buildPivot(ws, wb);
-      const filter = { type: PivotFilterKind.LabelContains, value: 'East' };
+      const filter = { kind: PivotFilterKind.LabelContains, value: 'East' };
       expectCode(() => pivot.addFilter({ ...filter, fieldIndex: 'Nope' }), StatusCode.NotFound);
       expectCode(() => pivot.addFilter({ ...filter, fieldIndex: 99 }), StatusCode.IndexOutOfRange);
       expectCode(() => pivot.addFilter({ ...filter, fieldIndex: -1 }), StatusCode.IndexOutOfRange);
@@ -180,36 +180,40 @@ describe('a pivot field is passed by index or by source name', () => {
     withSheet((ws, wb) => {
       const { pivot } = buildPivot(ws, wb);
       expectCode(
-        () => pivot.addFilter({ fieldIndex: 'Date', type: PivotFilterKind.LabelContains, value: 'x' }),
+        () => pivot.addFilter({ fieldIndex: 'Date', kind: PivotFilterKind.LabelContains, value: 'x' }),
         StatusCode.InvalidArgument,
       );
       assert.equal(pivot.listFilters().length, 0);
     });
   });
 
-  it('addField places a cache field named by its name or its index', () => {
+  it('setFieldAxis places a cache field named by its name or its index', () => {
     withSheet((ws, wb) => {
       const cache = addCache(ws, wb);
       const pivot = ws.addPivot({ name: 'P', cacheId: cache.cacheId, anchor: 'F1' });
-      assert.equal(pivot.addField({ fieldIndex: 'Region', axis: PivotAxis.Row }), 0);
-      assert.equal(pivot.addField({ fieldIndex: 1, axis: PivotAxis.Value }), 1);
+      pivot.setFieldAxis('Region', PivotAxis.Row);
+      pivot.setFieldAxis(1, PivotAxis.Value);
       assert.deepEqual(
         pivot.listFields().map((x) => [x.sourceName, x.axis]),
         [
           ['Region', PivotAxis.Row],
           ['Amount', PivotAxis.Value],
+          ['Date', null],
         ],
       );
-      expectCode(() => pivot.addField({ fieldIndex: 99, axis: PivotAxis.Row }), StatusCode.IndexOutOfRange);
+      expectCode(() => pivot.setFieldAxis(99, PivotAxis.Row), StatusCode.IndexOutOfRange);
     });
   });
 
-  it('addField refuses the sourceName key', () => {
+  it('a new pivot has one field per cache field and no addField', () => {
     withSheet((ws, wb) => {
       const cache = addCache(ws, wb);
       const pivot = ws.addPivot({ name: 'P', cacheId: cache.cacheId, anchor: 'F1' });
-      expectTypeError(() => pivot.addField({ sourceName: 'Date', axis: PivotAxis.Row }));
-      assert.equal(pivot.listFields().length, 0);
+      assert.equal('addField' in pivot, false);
+      assert.deepEqual(
+        pivot.listFields().map((x) => x.sourceName),
+        ['Region', 'Amount', 'Date'],
+      );
     });
   });
 
@@ -312,15 +316,15 @@ describe('pivot cache records are read back', () => {
     withSheet((ws, wb) => {
       const cache = addCache(ws, wb);
       cache.setRecordValue(0, 1, 42);
-      assert.equal(cache.getRecordValue(0, 1), 42);
+      assert.equal(cache.getRecordValue(0, 1).value, 42);
       cache.setRecordValue(0, 1, 'text');
-      assert.equal(cache.getRecordValue(0, 1), 'text');
+      assert.equal(cache.getRecordValue(0, 1).value, 'text');
       cache.setRecordValue(0, 1, true);
-      assert.equal(cache.getRecordValue(0, 1), true);
+      assert.equal(cache.getRecordValue(0, 1).value, true);
       cache.setRecordValue(0, 1, null);
-      assert.equal(cache.getRecordValue(0, 1), null);
+      assert.equal(cache.getRecordValue(0, 1).value, null);
       cache.setRecordValue(0, 1, { kind: ValueKind.Error, errorCode: f.ErrorCode.NA });
-      const error = cache.getRecordValue(0, 1);
+      const error = cache.getRecordValue(0, 1).value;
       assert.ok(error instanceof f.ExcelError, 'an error value reads as an ExcelError');
       assert.equal(error.code, f.ErrorCode.NA);
     });
@@ -329,9 +333,9 @@ describe('pivot cache records are read back', () => {
   it('a field backed by shared items reads the shared item index', () => {
     withSheet((ws, wb) => {
       const cache = addCache(ws, wb);
-      assert.equal(cache.getRecordValue(0, 0), 0);
-      assert.equal(cache.getRecordValue(1, 0), 1);
-      assert.equal(cache.getRecordValue(2, 2), 45658);
+      assert.equal(cache.getRecordValue(0, 0).value, 0);
+      assert.equal(cache.getRecordValue(1, 0).value, 1);
+      assert.equal(cache.getRecordValue(2, 2).value, 45658);
     });
   });
 
@@ -356,8 +360,8 @@ describe('pivot fields, data fields and filters are read one at a time', () => {
   it('getField, getDataField and getFilter equal the list element at that position', () => {
     withSheet((ws, wb) => {
       const { pivot } = buildPivot(ws, wb);
-      pivot.addFilter({ fieldIndex: 'Region', type: PivotFilterKind.LabelContains, value: 'East' });
-      pivot.addFilter({ fieldIndex: 'Region', type: PivotFilterKind.LabelContains, value: 'a' });
+      pivot.addFilter({ fieldIndex: 'Region', kind: PivotFilterKind.LabelContains, value: 'East' });
+      pivot.addFilter({ fieldIndex: 'Region', kind: PivotFilterKind.LabelContains, value: 'a' });
       for (const [i, field] of pivot.listFields().entries()) assert.deepEqual(pivot.getField(i), field);
       for (const [i, field] of pivot.listDataFields().entries()) assert.deepEqual(pivot.getDataField(i), field);
       for (const [i, filter] of pivot.listFilters().entries()) assert.deepEqual(pivot.getFilter(i), filter);

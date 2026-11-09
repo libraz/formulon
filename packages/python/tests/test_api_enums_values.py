@@ -45,7 +45,6 @@ from formulon import (
     PivotAxis,
     PivotDateGroupInput,
     PivotDatePeriod,
-    PivotFieldInput,
     PivotFilterKind,
     PivotInput,
     PivotSortOrder,
@@ -535,7 +534,7 @@ class EnumRecordFieldTests(unittest.TestCase):
             pivot = sheet.pivot(
                 sheet.add_pivot(PivotInput(name="P", cache_id=cache.cache_id, anchor=CellAddress(0, 4)))
             )
-            pivot.add_field(PivotFieldInput(field_index="Region", axis=PivotAxis.ROW))
+            pivot.set_field_axis("Region", PivotAxis.ROW)
             pivot.update_field(0, sort_order=PivotSortOrder.DESCENDING)
             saved = wb.save()
         with Workbook.load(saved) as reloaded:
@@ -651,7 +650,7 @@ class ValueInputUnionTests(unittest.TestCase):
             pivot = sheet.pivot(
                 sheet.add_pivot(PivotInput(name="P", cache_id=cache.cache_id, anchor=CellAddress(0, 4)))
             )
-            pivot.add_field(PivotFieldInput(field_index="When", axis=PivotAxis.ROW))
+            pivot.set_field_axis("When", PivotAxis.ROW)
             pivot.set_field_date_group(
                 0,
                 PivotDateGroupInput(

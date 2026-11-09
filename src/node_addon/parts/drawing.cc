@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <string>
 
+#include "node_addon/parts/chart_internal.h"
 #include "node_addon/parts/free_funcs.h"
 #include "node_addon/parts/workbook_class.h"
 
@@ -87,6 +88,23 @@ Napi::Value SnapshotBytesOrThrow(Napi::Env env, fm_status_t rc, uint8_t* bytes, 
 }
 
 }  // namespace
+
+namespace detail {
+
+fm_drawing_patch_t PullDrawingPatch(CheckedSpecReader& reader, const Napi::Object& spec, std::string& name_store,
+                                    std::string& description_store) {
+  fm_drawing_patch_t patch = FM_STRUCT_INIT(fm_drawing_patch_t);
+  patch.name_op = PatchString(reader, spec, "name", false, &name_store, &patch.name);
+  patch.description_op = PatchString(reader, spec, "description", true, &description_store, &patch.description);
+  patch.hidden_op = PatchBool(reader, spec, "hidden", &patch.hidden);
+  Napi::Object anchor;
+  if (reader.Object(spec, "anchor", &anchor)) {
+    patch.anchor = PullDrawingAnchorPatch(reader, anchor);
+  }
+  return patch;
+}
+
+}  // namespace detail
 
 Napi::Value ProbeImage(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
@@ -187,22 +205,13 @@ Napi::Value Workbook::UpdateDrawing(const Napi::CallbackInfo& info) {
     return ThrowInvalidHandle(env);
   }
   CheckedSpecReader reader(env);
-  const Napi::Object spec = ArgObject(info, 2);
   std::string name;
   std::string description;
-  fm_drawing_patch_t patch = FM_STRUCT_INIT(fm_drawing_patch_t);
-  patch.name_op = PatchString(reader, spec, "name", false, &name, &patch.name);
-  patch.description_op = PatchString(reader, spec, "description", true, &description, &patch.description);
-  patch.hidden_op = PatchBool(reader, spec, "hidden", &patch.hidden);
-  Napi::Object anchor;
-  if (reader.Object(spec, "anchor", &anchor)) {
-    patch.anchor = PullDrawingAnchorPatch(reader, anchor);
-  }
+  const fm_drawing_patch_t patch = PullDrawingPatch(reader, ArgObject(info, 2), name, description);
   if (!reader.ok()) {
     return env.Undefined();
   }
-  return ValueOrThrow(env, fm_sheet_update_drawing(handle_, ArgU32(info, 0), ArgU32(info, 1), &patch),
-                      env.Undefined());
+  return ValueOrThrow(env, fm_sheet_update_drawing(handle_, ArgU32(info, 0), ArgU32(info, 1), &patch), env.Undefined());
 }
 
 Napi::Value Workbook::SetDrawingZOrder(const Napi::CallbackInfo& info) {

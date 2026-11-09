@@ -23,6 +23,7 @@
 #include <string>
 #include <vector>
 
+#include "drawing/drawing_edit.h"
 #include "drawing/drawing_xml.h"
 #include "utils/error.h"
 #include "utils/expected.h"
@@ -99,6 +100,14 @@ Expected<std::uint32_t, Error> add_slicer(Workbook& wb, std::size_t sheet, std::
 /// Applies the fields `spec.fields` names (all but `kName`) to slicer `index`.
 /// `kIndexOutOfRange` when `index` is past the sheet's slicers.
 Expected<void, Error> update_slicer(Workbook& wb, std::size_t sheet, std::size_t index, const SlicerSpec& spec);
+
+/// Applies `common` (as `update_drawing`) and `slicer` (as the spec overload)
+/// to the slicer whose frame has `object_id` as one edit: both halves are
+/// checked before anything is written, so nothing changes on failure. Either
+/// pointer may be null; both null is a no-op. `kNotFound` for an id that names
+/// no slicer frame.
+Expected<void, Error> update_slicer(Workbook& wb, std::size_t sheet, std::uint32_t object_id,
+                                    const DrawingCommonPatch* common, const SlicerSpec* slicer);
 
 /// Removes slicer `index` with its drawing frame; its cache goes too when no
 /// other slicer uses it. `kIndexOutOfRange` when `index` is past the sheet's

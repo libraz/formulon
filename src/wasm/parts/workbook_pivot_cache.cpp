@@ -272,13 +272,24 @@ void JsWorkbook::pivotCacheRecordClear(uint32_t cacheId) {
 }
 
 emscripten::val JsWorkbook::pivotCacheRecordValue(uint32_t cacheId, uint32_t recordIndex, uint32_t fieldIndex) const {
-  fm_value_t v{};
-  if (!succeeded(handle_ != nullptr
-                     ? fm_workbook_get_pivot_cache_record_value(handle_, cacheId, recordIndex, fieldIndex, &v)
-                     : kBindingInvalidHandle)) {
+  if (handle_ == nullptr) {
+    record_invalid_handle();
     return emscripten::val::undefined();
   }
-  return value_to_val(v);
+  fm_value_t v{};
+  if (!succeeded(fm_workbook_get_pivot_cache_record_value(handle_, cacheId, recordIndex, fieldIndex, &v))) {
+    return emscripten::val::undefined();
+  }
+  // Convert the value first: its text is a read-scratch view the flag call may reuse.
+  emscripten::val value = value_to_val(v);
+  int32_t is_date = 0;
+  if (!succeeded(fm_workbook_is_pivot_cache_record_value_date(handle_, cacheId, recordIndex, fieldIndex, &is_date))) {
+    return emscripten::val::undefined();
+  }
+  emscripten::val o = emscripten::val::object();
+  o.set("value", value);
+  o.set("isDate", is_date != 0);
+  return o;
 }
 
 void JsWorkbook::pivotCacheRecordSetNumber(uint32_t cacheId, uint32_t recordIndex, uint32_t fieldIndex, double value) {

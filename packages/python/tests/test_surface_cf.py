@@ -163,7 +163,7 @@ class ConditionalFormatTests(unittest.TestCase):
         icon_set = by_type[4].icon_set
         return (
             [t.value for t in color_scale.thresholds]
-            + [data_bar.minimum.value, data_bar.maximum.value]
+            + [data_bar.min.value, data_bar.max.value]
             + [t.value for t in icon_set.thresholds]
         )
 

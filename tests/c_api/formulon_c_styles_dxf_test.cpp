@@ -103,7 +103,7 @@ TEST(FormulonCApiStyles, DxfNumberFormatSurvivesSaveAndReload) {
   ASSERT_EQ(fm_workbook_add_dxf(wb.handle, &dxf, &index), 0);
 
   BufferGuard saved;
-  ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0);
+  ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0);
   WorkbookGuard reloaded;
   ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &reloaded.handle), 0);
   fm_dxf_t out{};
@@ -186,7 +186,7 @@ TEST(FormulonCApiStyles, DxfAlignmentAndProtectionPreserveIdentityThroughOoxml) 
   EXPECT_NE(before_save.find("<protection locked=\"0\" hidden=\"1\"/>"), std::string::npos);
 
   BufferGuard saved;
-  ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0);
+  ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0);
   ASSERT_GT(saved.len, 0U);
   WorkbookGuard reloaded;
   ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &reloaded.handle), 0);
@@ -274,7 +274,7 @@ TEST(FormulonCApiStyles, DxfFontWithoutSizeRoundTripsAndCellFontKeepsSize) {
   cell.name = "Arial";
   cell.size_pt = 14.0;
   cell.color = RgbColor(0xFF000000U);
-  std::size_t font_index = 0xFFFFFFFFU;
+  std::uint32_t font_index = 0xFFFFFFFFU;
   ASSERT_EQ(fm_workbook_add_font(wb.handle, &cell, &font_index), 0);
   fm_font_t font_out{};
   ASSERT_EQ(fm_workbook_get_font_at(wb.handle, font_index, &font_out), 0);

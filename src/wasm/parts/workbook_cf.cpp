@@ -7,7 +7,6 @@
 
 #include <emscripten/val.h>
 
-#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <string>
@@ -28,7 +27,7 @@ fm_cfvo_t js_pull_cfvo(emscripten::val v, formulon::c_api::BorrowedStringArena* 
                        JsNarrowNumericReader& reader) {
   fm_cfvo_t out{};
   out.type = reader.u8(v, "type", 0U, "cfvo.type");
-  out.gte = reader.boolean(v, "gte", true, "cfvo.gte") ? 1 : 0;
+  out.gte = reader.boolean(v, "gte", true, "cfvo.gte") ? FM_TRISTATE_TRUE : FM_TRISTATE_FALSE;
   const emscripten::val value = reader.value(v, "value", "cfvo.value");
   if (js_value_present(value)) {
     out.value = strings->emplace(reader.string_value(value, "cfvo.value"));
@@ -39,14 +38,14 @@ fm_cfvo_t js_pull_cfvo(emscripten::val v, formulon::c_api::BorrowedStringArena* 
 emscripten::val cfvo_to_js(const fm_cfvo_t& cfvo) {
   emscripten::val out = emscripten::val::object();
   out.set("type", static_cast<uint32_t>(cfvo.type));
-  out.set("gte", cfvo.gte != 0);
+  out.set("gte", cfvo.gte != FM_TRISTATE_FALSE);
   out.set("value", cfvo.value != nullptr ? emscripten::val(std::string(cfvo.value)) : emscripten::val::null());
   return out;
 }
 
 }  // namespace
 
-emscripten::val JsWorkbook::evaluateCfRange(uint32_t sheet, emscripten::val range, double todaySerial) const {
+emscripten::val JsWorkbook::evaluateCfRange(uint32_t sheet, emscripten::val range, emscripten::val options) const {
   emscripten::val cells = emscripten::val::array();
   if (handle_ == nullptr) {
     record_invalid_handle();
@@ -54,14 +53,25 @@ emscripten::val JsWorkbook::evaluateCfRange(uint32_t sheet, emscripten::val rang
   }
   JsNarrowNumericReader reader("Sheet.evaluateCfRange");
   const fm_cell_rect_t rect = js_pull_range(range, &reader);
+  // `options` is `{ timePeriodRules?, todaySerial? }`; an omitted key is the C default: `timePeriod` rules on,
+  // measured from the pinned clock, else today.
+  fm_cf_range_evaluation_spec_t spec = FM_STRUCT_INIT(fm_cf_range_evaluation_spec_t);
+  if (js_value_present(options) && reader.require_object(options, "options")) {
+    const emscripten::val rules = reader.value(options, "timePeriodRules", "options.timePeriodRules");
+    if (js_value_present(rules)) {
+      spec.time_period_rules = reader.boolean_value(rules, true) ? FM_TRISTATE_TRUE : FM_TRISTATE_FALSE;
+    }
+    const emscripten::val today = reader.value(options, "todaySerial", "options.todaySerial");
+    if (js_value_present(today)) {
+      spec.has_today_serial = 1;
+      spec.today_serial = reader.number_value(today, 0.0, "options.todaySerial");
+    }
+  }
   if (!reader.ok()) {
     return emscripten::val::undefined();
   }
   fm_cf_results_t* results = nullptr;
-  // A NaN `todaySerial` leaves the date to the host clock.
-  const int32_t has_today_serial = std::isnan(todaySerial) ? 0 : 1;
-  fm_status_t rc = fm_sheet_evaluate_cf_range(handle_, sheet, &rect, has_today_serial,
-                                              has_today_serial != 0 ? todaySerial : 0.0, &results);
+  fm_status_t rc = fm_sheet_evaluate_cf_range(handle_, sheet, &rect, &spec, &results);
   if (!succeeded(rc)) {
     return emscripten::val::undefined();
   }
@@ -167,7 +177,7 @@ emscripten::val cf_rule_to_val(const fm_cf_rule_t& rule) {
   }
   if (rule.has_icon_set != 0) {
     emscripten::val icon_set = emscripten::val::object();
-    icon_set.set("name", static_cast<uint32_t>(rule.icon_set_name));
+    icon_set.set("name", static_cast<uint32_t>(rule.icon_set));
     emscripten::val thresholds = emscripten::val::array();
     for (uint32_t j = 0; j < rule.icon_set_threshold_count; ++j) {
       thresholds.set(j, cfvo_to_js(rule.icon_set_thresholds[j]));
@@ -202,11 +212,27 @@ double JsWorkbook::getCfRuleCount(uint32_t sheet) const {
   return js_count(handle_, sheet, &fm_sheet_get_cf_rule_count);
 }
 
-emscripten::val JsWorkbook::getCfRule(uint32_t sheet, uint32_t cfRuleIndex) const {
+emscripten::val JsWorkbook::getCfRule(uint32_t sheet, emscripten::val cfRule) const {
+  if (handle_ == nullptr) {
+    record_invalid_handle();
+    return emscripten::val::undefined();
+  }
   fm_cf_rule_t rule = FM_STRUCT_INIT(fm_cf_rule_t);
-  const fm_status_t rc =
-      handle_ != nullptr ? fm_sheet_get_cf_rule_at(handle_, sheet, cfRuleIndex, &rule) : kBindingInvalidHandle;
-  if (!succeeded(rc)) {
+  if (cfRule.isString()) {
+    const std::string id = cfRule.as<std::string>();
+    int32_t present = 0;
+    const fm_status_t rc = fm_sheet_get_cf_rule(handle_, sheet, id.c_str(), &present, &rule);
+    return optional_or_null(rc, present, rc == 0 && present != 0 ? cf_rule_to_val(rule) : emscripten::val::null());
+  }
+  JsNarrowNumericReader reader("Sheet.getCfRule");
+  if (!cfRule.isNumber()) {
+    reader.fail_type("cfRule", "a number or string");
+  }
+  const uint32_t index = reader.u32_value(cfRule, 0U, "cfRule");
+  if (!reader.ok()) {
+    return emscripten::val::undefined();
+  }
+  if (!succeeded(fm_sheet_get_cf_rule_at(handle_, sheet, index, &rule))) {
     return emscripten::val::undefined();
   }
   return cf_rule_to_val(rule);
@@ -351,7 +377,7 @@ emscripten::val JsWorkbook::addConditionalFormat(uint32_t sheet, emscripten::val
   const emscripten::val icon_set = reader.value(v, "iconSet", "iconSet");
   if (js_value_present(icon_set)) {
     rule.has_icon_set = 1;
-    rule.icon_set_name = reader.u8(icon_set, "name", 0U, "iconSet.name");
+    rule.icon_set = reader.u8(icon_set, "name", 0U, "iconSet.name");
     const emscripten::val thresholds = reader.value(icon_set, "thresholds", "iconSet.thresholds");
     if (reader.is_array(thresholds, "iconSet.thresholds")) {
       const uint32_t n = reader.length(thresholds, "iconSet.thresholds");
@@ -564,7 +590,7 @@ void JsWorkbook::updateCfRule(uint32_t sheet, const std::string& cfRuleId, emscr
   }
   const emscripten::val icon_set = nested("iconSet", "iconSet");
   if (!icon_set.isUndefined()) {
-    u8(icon_set, "name", "iconSet.name", &p.icon_set_name_op, &p.icon_set_name);
+    u8(icon_set, "name", "iconSet.name", &p.icon_set_op, &p.icon_set);
     cfvo_list(icon_set, "thresholds", "iconSet.thresholds", &p.icon_set_thresholds_op, icon_set_thresholds,
               &p.icon_set_thresholds, &p.icon_set_thresholds_count);
     js_patch_flag(reader, icon_set, "reverse", "iconSet.reverse", &p.icon_set_reverse_op, &p.icon_set_reverse);
@@ -573,7 +599,7 @@ void JsWorkbook::updateCfRule(uint32_t sheet, const std::string& cfRuleId, emscr
     js_patch_flag(reader, icon_set, "percent", "iconSet.percent", &p.icon_set_percent_op, &p.icon_set_percent);
     if (reader.value(icon_set, "floor", "iconSet.floor").isNull()) {
       p.icon_set_floor_op = FM_PATCH_OP_SET;
-      p.icon_set_floor = fm_cfvo_t{FM_CF_VALUE_OBJECT_TYPE_PERCENT, 1, nullptr};
+      p.icon_set_floor = fm_cfvo_t{FM_CF_VALUE_OBJECT_TYPE_PERCENT, FM_TRISTATE_TRUE, nullptr};
     } else {
       cfvo(icon_set, "floor", "iconSet.floor", &p.icon_set_floor_op, &p.icon_set_floor);
     }

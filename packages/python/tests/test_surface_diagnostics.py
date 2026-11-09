@@ -65,11 +65,11 @@ def _append_empty_zip_entry(data: bytes, name: str) -> bytes:
 
 
 class PackageDiagnosticsTests(unittest.TestCase):
-    def test_unknown_save_format_raises_formulon_error(self) -> None:
+    def test_unknown_save_format_is_refused(self) -> None:
+        self.assertFalse(hasattr(WorkbookFormat, "UNKNOWN"))
         with Workbook.create_default() as wb:
-            with self.assertRaises(formulon.FormulonError) as ctx:
-                wb.save_with_diagnostics(format=WorkbookFormat.UNKNOWN)
-            self.assertIn("unsupported format", str(ctx.exception))
+            with self.assertRaises(ValueError):
+                wb.save_with_diagnostics(format=99)  # type: ignore[arg-type]
 
     def test_save_and_read_diagnostics_report_every_counter(self) -> None:
         with Workbook.create_default() as wb:

@@ -121,17 +121,15 @@ export function registerMetadataLayout(Module, test) {
     try {
       assert.equal(wb.listHyperlinks(0).length, 0);
       // Three entries with progressively more optional fields populated.
-      wb.setHyperlink(0, 1, 2, 'https://example.com/', '', '', '');
-      wb.setHyperlink(0, 3, 4, 'mailto:hello@example.com', 'Hello', '', '');
-      wb.setHyperlink(0, 5, 6, '', 'See X', 'Internal link', 'Sheet1!A1');
-      wb.setHyperlinkRange(
-        0,
-        { firstRow: 7, firstCol: 8, lastRow: 9, lastCol: 10 },
-        'https://example.com/range',
-        'Range',
-        'Range tip',
-        '',
-      );
+      wb.setHyperlink(0, 1, 2, { target: 'https://example.com/' });
+      wb.setHyperlink(0, 3, 4, { target: 'mailto:hello@example.com', display: 'Hello' });
+      wb.setHyperlink(0, 5, 6, { target: null, display: 'See X', tooltip: 'Internal link', location: 'Sheet1!A1' });
+      wb.setHyperlink(0, 7, 8, {
+        target: 'https://example.com/range',
+        display: 'Range',
+        tooltip: 'Range tip',
+        range: { firstRow: 7, firstCol: 8, lastRow: 9, lastCol: 10 },
+      });
       const list = wb.listHyperlinks(0);
       assert.equal(list.length, 4);
       assert.deepEqual(list[0].rect, { firstRow: 1, firstCol: 2, lastRow: 1, lastCol: 2 });
@@ -159,7 +157,7 @@ export function registerMetadataLayout(Module, test) {
         },
       );
       // Sheet-out-of-range is rejected.
-      expectFailure(() => wb.setHyperlink(999, 0, 0, 'https://x/', '', '', ''));
+      expectFailure(() => wb.setHyperlink(999, 0, 0, { target: 'https://x/' }));
       // clearHyperlinks drops everything.
       wb.clearHyperlinks(0);
       assert.equal(wb.listHyperlinks(0).length, 0);
@@ -171,13 +169,13 @@ export function registerMetadataLayout(Module, test) {
   test('removeHyperlink / removeHyperlinkAt / clearHyperlinks surface on an empty sheet', () => {
     const wb = Module.Workbook.createDefault();
     try {
-      // Clearing an empty list succeeds; removing a hyperlink that is not there does not.
+      // Clearing an empty list succeeds; removing a hyperlink that is not there is a no-op.
       wb.clearHyperlinks(0);
-      expectFailure(() => wb.removeHyperlink(0, 0, 0), StatusCode.NotFound);
+      wb.setHyperlink(0, 0, 0, null);
       // Out-of-range index is rejected.
       expectFailure(() => wb.removeHyperlinkAt(0, 0), StatusCode.IndexOutOfRange);
       // Sheet-index-out-of-range is rejected on every variant.
-      expectFailure(() => wb.removeHyperlink(999, 0, 0));
+      expectFailure(() => wb.setHyperlink(999, 0, 0, null));
       expectFailure(() => wb.removeHyperlinkAt(999, 0));
       expectFailure(() => wb.clearHyperlinks(999));
       // Final list still matches the post-save+load read.
@@ -190,17 +188,17 @@ export function registerMetadataLayout(Module, test) {
   test('setComment / getComment round-trip', () => {
     const wb = Module.Workbook.createDefault();
     try {
-      wb.setComment(0, 1, 1, 'Alice', 'Hello');
+      wb.setComment(0, 1, 1, { author: 'Alice', text: 'Hello' });
       const c = wb.getComment(0, 1, 1);
       assert.ok(c !== null);
       assert.equal(c.author, 'Alice');
       assert.equal(c.text, 'Hello');
       // Empty text writes an empty note; removeComment removes it.
-      wb.setComment(0, 1, 1, 'Alice', '');
+      wb.setComment(0, 1, 1, { author: 'Alice', text: '' });
       assert.deepEqual({ ...wb.getComment(0, 1, 1) }, { author: 'Alice', text: '' });
-      wb.removeComment(0, 1, 1);
+      wb.setComment(0, 1, 1, null);
       assert.equal(wb.getComment(0, 1, 1), null);
-      expectFailure(() => wb.removeComment(0, 1, 1), StatusCode.NotFound);
+      wb.setComment(0, 1, 1, null);
     } finally {
       wb.delete();
     }
@@ -212,7 +210,7 @@ export function registerMetadataLayout(Module, test) {
       const missing = wb.getComment(0, 1, 1);
       assert.equal(missing, null);
       expectFailure(() => wb.getComment(99, 1, 1), StatusCode.SheetIndexOutOfRange);
-      wb.setComment(0, 1, 1, 'libraz', 'hello');
+      wb.setComment(0, 1, 1, { author: 'libraz', text: 'hello' });
       const found = wb.getComment(0, 1, 1);
       assert.equal(found.author, 'libraz');
       assert.equal(found.text, 'hello');
@@ -355,7 +353,7 @@ export function registerMetadataLayout(Module, test) {
   test('CF and sheet-layout lists are plain JS arrays with no delete lifecycle', () => {
     const wb = Module.Workbook.createDefault();
     try {
-      const cf = wb.evaluateCfRange(0, { firstRow: 0, firstCol: 0, lastRow: 1, lastCol: 1 }, Number.NaN);
+      const cf = wb.evaluateCfRange(0, { firstRow: 0, firstCol: 0, lastRow: 1, lastCol: 1 }, {});
       assert.ok(Array.isArray(cf));
 
       wb.setColumnWidth(0, 2, 2, 18);
@@ -456,7 +454,7 @@ export function registerMetadataLayout(Module, test) {
       const expectRejected = (patch, field) => {
         assert.throws(() => wb.updatePageSetup(0, patch), {
           name: 'RangeError',
-          message: new RegExp(`updatePageSetup.*\`${field}\``),
+          message: new RegExp(`updatePageSetup.*${field}`),
         });
         const setup = wb.getPageSetup(0);
         assert.equal(setup.orientation, 1);

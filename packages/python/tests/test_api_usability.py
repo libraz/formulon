@@ -91,10 +91,9 @@ def _pivot_report_book(wb: Workbook, ws: Sheet) -> None:
         wb.pivot_cache(cache).set_record_value(rec, 0, region)
         wb.pivot_cache(cache).set_record_value(rec, 1, amount)
     pivot = ws.add_pivot(PivotInput(name="Pivot1", cache_id=cache, anchor=CellAddress(0, 4)))
-    ws.pivot(pivot).add_field(formulon.PivotFieldInput(field_index="Region", axis=formulon.PivotAxis.ROW))
-    amount_field = ws.pivot(pivot).add_field(
-        formulon.PivotFieldInput(field_index="Amount", axis=formulon.PivotAxis.VALUE)
-    )
+    ws.pivot(pivot).set_field_axis("Region", formulon.PivotAxis.ROW)
+    ws.pivot(pivot).set_field_axis("Amount", formulon.PivotAxis.VALUE)
+    amount_field = ws.pivot(pivot).get_field("Amount").cache_field_index
     ws.pivot(pivot).add_data_field(formulon.PivotDataFieldInput(name="Sum of Amount", field_index=amount_field))
 
 
@@ -167,9 +166,7 @@ CELL_TABLE: Dict[str, Optional[Case]] = {
     "Sheet.get_spill": Case(),
     "Sheet.get_value": Case(),
     "Sheet.get_typed_value": Case(),
-    "Sheet.remove_comment": Case(),
     "Sheet.remove_data_table": Case(),
-    "Sheet.remove_hyperlink": Case(),
     "Sheet.set_blank": Case(),
     "Sheet.set_bool": Case(tail=lambda: (True,)),
     "Sheet.set_cell_phonetic": Case(tail=lambda: ("kana",)),
@@ -194,8 +191,9 @@ CELL_TABLE: Dict[str, Optional[Case]] = {
 }
 
 RECT_TABLE: Dict[str, Case] = {
-    "Sheet.set_hyperlink_range": Case(tail=_hyperlink),
     "Sheet.add_merge": Case(setup=lambda wb, ws: None),
+    "Sheet.delete_cells": Case(tail=lambda: (formulon.CellShift.UP,)),
+    "Sheet.insert_cells": Case(tail=lambda: (formulon.CellShift.DOWN,)),
     "Sheet.evaluate_cf_range": Case(),
     "Sheet.get_cell_rect_pt": Case(),
     "Sheet.get_cells_in_range": Case(),
@@ -754,8 +752,8 @@ class NoCountNamesTests(unittest.TestCase):
             _pivot_book(wb, ws)
             cache = wb.list_pivot_caches()[0]
             pivots = ws.list_pivots()
-            self.assertEqual([(p.name, p.get_cache().cache_id) for p in pivots], [("Pivot1", cache.cache_id)])
-            self.assertIs(pivots[0].get_cache(), cache)
+            self.assertEqual([(p.name, p.cache().cache_id) for p in pivots], [("Pivot1", cache.cache_id)])
+            self.assertIs(pivots[0].cache(), cache)
             fields = cache.list_fields()
             self.assertEqual([(f.name, f.formula) for f in fields], [("Region", None), ("Amount", None)])
             properties = pivots[0].get_properties()
@@ -1024,7 +1022,7 @@ class PivotPatchTests(unittest.TestCase):
         with _open() as wb:
             ws = wb.sheet(0)
             _pivot_book(wb, ws)
-            ws.pivot(0).add_field(formulon.PivotFieldInput(field_index="Region", axis=formulon.PivotAxis.ROW))
+            ws.pivot(0).set_field_axis("Region", formulon.PivotAxis.ROW)
             ws.pivot(0).update_field(0, custom_name="Area", show_all=True)
             field = ws.pivot(0).list_fields()[0]
             self.assertEqual(field.custom_name, "Area")
@@ -1038,7 +1036,7 @@ class PivotPatchTests(unittest.TestCase):
         with _open() as wb:
             ws = wb.sheet(0)
             _pivot_book(wb, ws)
-            ws.pivot(0).add_field(formulon.PivotFieldInput(field_index="Region", axis=formulon.PivotAxis.ROW))
+            ws.pivot(0).set_field_axis("Region", formulon.PivotAxis.ROW)
             with self.assertRaises(TypeError):
                 ws.pivot(0).update_field(0, axis=formulon.PivotAxis.COLUMN)  # type: ignore[call-arg]
 
@@ -1046,7 +1044,7 @@ class PivotPatchTests(unittest.TestCase):
         with _open() as wb:
             ws = wb.sheet(0)
             _pivot_book(wb, ws)
-            ws.pivot(0).add_field(formulon.PivotFieldInput(field_index="Region", axis=formulon.PivotAxis.ROW))
+            ws.pivot(0).set_field_axis("Region", formulon.PivotAxis.ROW)
             ws.pivot(0).add_field_item(0, "East", visible=True)
             ws.pivot(0).update_field_item(0, 0, visible=False, caption="Eastern")
             item = ws.pivot(0).get_field_item(0, 0)
@@ -1170,7 +1168,7 @@ class RefTests(unittest.TestCase):
             for name in ("Dup", "dup"):
                 with self.assertRaises(AlreadyExistsError):
                     ws.add_pivot(PivotInput(name=name, cache_id=second, anchor=CellAddress(0, 10)))
-            self.assertEqual([(p.name, p.get_cache().cache_id) for p in ws.list_pivots()], [("Dup", first)])
+            self.assertEqual([(p.name, p.cache().cache_id) for p in ws.list_pivots()], [("Dup", first)])
             ws.remove_pivot("DUP")
             self.assertEqual(ws.list_pivots(), [])
 

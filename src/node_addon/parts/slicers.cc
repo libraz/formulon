@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <string>
 
+#include "node_addon/parts/chart_internal.h"
 #include "node_addon/parts/workbook_class.h"
 
 namespace formulon_node {
@@ -14,7 +15,7 @@ struct SlicerText {
   std::string name;
   std::string description;
   std::string caption;
-  std::string style;
+  std::string style_name;
 };
 
 // Reads a slicer to add: the common placement keys plus the slicer keys; an omitted key takes the default.
@@ -24,21 +25,21 @@ fm_slicer_spec_t PullSlicerSpec(CheckedSpecReader& reader, const Napi::Object& s
   s.column_count = reader.U32(spec, "columnCount", 0U);
   s.sort_order = reader.I32(spec, "sortOrder", FM_SLICER_SORT_ORDER_ASCENDING);
   s.cross_filter = reader.I32(spec, "crossFilter", FM_SLICER_CROSS_FILTER_SHOW_ITEMS_WITH_DATA_AT_TOP);
-  s.row_height_emu = reader.I64(spec, "rowHeightEmu", 0);
+  s.row_height_pt = reader.Double(spec, "rowHeightPt", 0.0);
   s.caption = reader.String(spec, "caption", &store.caption) ? store.caption.c_str() : nullptr;
-  s.style = reader.String(spec, "style", &store.style) ? store.style.c_str() : nullptr;
+  s.style_name = reader.String(spec, "styleName", &store.style_name) ? store.style_name.c_str() : nullptr;
   return s;
 }
 
-// Reads the slicer fields `spec` carries into a patch: an omitted key keeps, and `null` clears `style`.
+// Reads the slicer fields `spec` carries into a patch: an omitted key keeps, and `null` clears `styleName`.
 fm_slicer_patch_t PullSlicerPatch(CheckedSpecReader& reader, const Napi::Object& spec, SlicerText& store) {
   fm_slicer_patch_t s = FM_STRUCT_INIT(fm_slicer_patch_t);
   s.column_count_op = PatchU32(reader, spec, "columnCount", &s.column_count);
   s.sort_order_op = PatchI32(reader, spec, "sortOrder", &s.sort_order);
   s.cross_filter_op = PatchI32(reader, spec, "crossFilter", &s.cross_filter);
-  s.row_height_emu_op = PatchI64(reader, spec, "rowHeightEmu", &s.row_height_emu);
+  s.row_height_pt_op = PatchDouble(reader, spec, "rowHeightPt", &s.row_height_pt);
   s.caption_op = PatchString(reader, spec, "caption", false, &store.caption, &s.caption);
-  s.style_op = PatchString(reader, spec, "style", true, &store.style, &s.style);
+  s.style_name_op = PatchString(reader, spec, "styleName", true, &store.style_name, &s.style_name);
   return s;
 }
 
@@ -49,12 +50,12 @@ Napi::Object SlicerToJs(Napi::Env env, const fm_slicer_info_t& s) {
   item.Set("columnCount", JsNumber(env, s.column_count));
   item.Set("sortOrder", JsNumber(env, s.sort_order));
   item.Set("crossFilter", JsNumber(env, s.cross_filter));
-  item.Set("rowHeightEmu", JsNumber(env, static_cast<double>(s.row_height_emu)));
+  item.Set("rowHeightPt", JsNumber(env, s.row_height_pt));
   item.Set("caption", JsString(env, s.caption));
   item.Set("cacheName", JsString(env, s.cache_name));
   item.Set("tableName", JsString(env, s.table_name));
   item.Set("columnName", JsString(env, s.column_name));
-  item.Set("style", JsStringOrNull(env, s.style));
+  item.Set("styleName", JsStringOrNull(env, s.style_name));
   return item;
 }
 
@@ -93,13 +94,17 @@ Napi::Value Workbook::UpdateSlicer(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return ThrowInvalidHandle(env);
   }
+  // One patch object carries both halves; the C call checks both before it writes either.
   CheckedSpecReader reader(env);
+  const Napi::Object spec = ArgObject(info, 2);
   SlicerText store;
-  const fm_slicer_patch_t slicer = PullSlicerPatch(reader, ArgObject(info, 2), store);
+  const fm_drawing_patch_t common = PullDrawingPatch(reader, spec, store.name, store.description);
+  const fm_slicer_patch_t slicer = PullSlicerPatch(reader, spec, store);
   if (!reader.ok()) {
     return env.Undefined();
   }
-  return ValueOrThrow(env, fm_sheet_update_slicer(handle_, ArgU32(info, 0), ArgU32(info, 1), &slicer), env.Undefined());
+  return ValueOrThrow(env, fm_sheet_update_slicer(handle_, ArgU32(info, 0), ArgU32(info, 1), &common, &slicer),
+                      env.Undefined());
 }
 
 }  // namespace formulon_node

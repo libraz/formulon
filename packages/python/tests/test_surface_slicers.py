@@ -51,7 +51,7 @@ class SlicerTests(unittest.TestCase):
                 SlicerInput(
                     **ANCHOR,
                     caption="Pick a product",
-                    style="SlicerStyleLight3",
+                    style_name="SlicerStyleLight3",
                     column_count=2,
                     sort_order=SlicerSortOrder.DESCENDING,
                     cross_filter=SlicerCrossFilter.NONE,
@@ -76,7 +76,7 @@ class SlicerTests(unittest.TestCase):
                 found_common = slicers[0].get_drawing_properties()
                 self.assertEqual(found_common.name, "Product")
                 self.assertEqual((s.cache_name, s.table_name, s.column_name), ("Slicer_Product", "Sales", "Product"))
-                self.assertEqual((s.style, s.column_count, s.row_height_emu), ("SlicerStyleLight3", 2, 241300))
+                self.assertEqual((s.style_name, s.column_count, s.row_height_pt), ("SlicerStyleLight3", 2, 19.0))
                 self.assertEqual((s.sort_order, s.cross_filter), (SlicerSortOrder.DESCENDING, SlicerCrossFilter.NONE))
                 anchor = found_common.anchor
                 self.assertEqual(anchor.kind, AnchorKind.TWO_CELL)
@@ -87,7 +87,7 @@ class SlicerTests(unittest.TestCase):
 
                 loaded.sheet(0).slicer(object_id).update(
                     caption="Renamed",
-                    style=None,
+                    style_name=None,
                     column_count=1,
                     anchor=DrawingAnchorInput(from_row=0, from_col=3, to_row=8, to_col=5),
                 )
@@ -98,7 +98,7 @@ class SlicerTests(unittest.TestCase):
                 loaded.sheet(0).insert_rows(0, 2)
                 moved_handle = loaded.sheet(0).list_slicers()[0]
                 moved = moved_handle.get_properties()
-                self.assertEqual((moved.caption, moved.style, moved.column_count), ("Renamed", None, 1))
+                self.assertEqual((moved.caption, moved.style_name, moved.column_count), ("Renamed", None, 1))
                 self.assertEqual(moved.sort_order, SlicerSortOrder.DESCENDING)
                 moved_anchor = moved_handle.get_drawing_properties().anchor
                 self.assertEqual((moved_anchor.from_row, moved_anchor.to_row), (3, 11))

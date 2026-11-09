@@ -273,8 +273,10 @@ TEST(FormulonCApiNaturalKey, IndexKeyedAddsReturnTheirIndex) {
   protected_range.name = "Inputs";
   protected_range.ranges = &range;
   protected_range.range_count = 1;
-  ASSERT_EQ(fm_sheet_add_protected_range(wb.handle, sheet, &protected_range), 0) << fm_get_last_error_message();
-  EXPECT_EQ(fm_sheet_add_protected_range(wb.handle, sheet, nullptr), kBindingNullPointer);
+  const char* protected_name = nullptr;
+  ASSERT_EQ(fm_sheet_add_protected_range(wb.handle, sheet, &protected_range, &protected_name), 0)
+      << fm_get_last_error_message();
+  EXPECT_EQ(fm_sheet_add_protected_range(wb.handle, sheet, nullptr, &protected_name), kBindingNullPointer);
 }
 
 TEST(FormulonCApiNaturalKey, ARejectedAddLeavesItsOutIndexUntouched) {

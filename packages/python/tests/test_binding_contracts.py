@@ -56,7 +56,6 @@ from formulon import (
     PivotAggregation,
     PivotAxis,
     PivotDataFieldInput,
-    PivotFieldInput,
     PivotFilterInput,
     PivotFilterKind,
     PivotGrandTotals,
@@ -648,10 +647,10 @@ class WasmOnlyCapabilityTests(unittest.TestCase):
             self.assertTrue(options.show_row_stripes)
             self.assertFalse(options.show_first_column)
 
-            bare = ws.add_table(TableInput(range=CellRect(0, 3, 2, 4), name="Bare", columns=["C", "D"], style_name=""))
+            bare = ws.add_table(TableInput(range=CellRect(0, 3, 2, 4), name="Bare", columns=["C", "D"], styled=False))
             self.assertIsNone(bare.get_style_options())
 
-            wb.update_table_style_defaults(table_style="TableStyleLight9")
+            wb.update_table_style_defaults(table_style_name="TableStyleLight9")
             styled = ws.add_table(TableInput(range=CellRect(5, 0, 7, 1), name="Styled", columns=["E", "F"]))
             self.assertEqual(styled.get_style_options().style_name, "TableStyleLight9")
 
@@ -712,7 +711,7 @@ class WasmOnlyCapabilityTests(unittest.TestCase):
             self.assertEqual(len(wb.list_table_styles()), 1)
             self.assertEqual(
                 wb.get_table_style_defaults(),
-                TableStyleDefaults(table_style="TableStyleMedium2", pivot_style="PivotStyleLight16"),
+                TableStyleDefaults(table_style_name="TableStyleMedium2", pivot_style_name="PivotStyleLight16"),
             )
             table = wb.sheet(0).add_table(
                 TableInput(range=CellRect(0, 0, 1, 0), name="T", columns=["X"], style_name="Corporate")
@@ -726,11 +725,11 @@ class WasmOnlyCapabilityTests(unittest.TestCase):
                 self.assertEqual(
                     reloaded.sheet(0).list_tables()[table.index].get_style_options().style_name, "Corporate"
                 )
-                reloaded.update_table_style_defaults(table_style="Corporate")
-                self.assertEqual(reloaded.get_table_style_defaults().table_style, "Corporate")
+                reloaded.update_table_style_defaults(table_style_name="Corporate")
+                self.assertEqual(reloaded.get_table_style_defaults().table_style_name, "Corporate")
                 reloaded.remove_table_style("corporate")
                 self.assertEqual(reloaded.list_table_styles(), [])
-                self.assertEqual(reloaded.get_table_style_defaults().table_style, "TableStyleMedium2")
+                self.assertEqual(reloaded.get_table_style_defaults().table_style_name, "TableStyleMedium2")
 
     def test_table_update_none_style_name_removes_the_name_and_keeps_the_toggles(self) -> None:
         with Workbook.create_default() as wb:
@@ -854,8 +853,9 @@ class PivotFilterPersistenceTests(unittest.TestCase):
             wb.pivot_cache(cache_id).set_record_value(rec, 0, region)
             wb.pivot_cache(cache_id).set_record_value(rec, 1, amount)
         pivot = wb.sheet(0).add_pivot(PivotInput(name="Pivot1", cache_id=cache_id, anchor=CellAddress(0, 4)))
-        wb.sheet(0).pivot(pivot).add_field(PivotFieldInput(field_index="Region", axis=PivotAxis.ROW))
-        amount_field = wb.sheet(0).pivot(pivot).add_field(PivotFieldInput(field_index="Amount", axis=PivotAxis.VALUE))
+        wb.sheet(0).pivot(pivot).set_field_axis("Region", PivotAxis.ROW)
+        wb.sheet(0).pivot(pivot).set_field_axis("Amount", PivotAxis.VALUE)
+        amount_field = wb.sheet(0).pivot(pivot).get_field("Amount").cache_field_index
         wb.sheet(0).pivot(pivot).add_data_field(
             PivotDataFieldInput(name="Sum of Amount", field_index=amount_field, aggregation=PivotAggregation.SUM)
         )
@@ -865,7 +865,7 @@ class PivotFilterPersistenceTests(unittest.TestCase):
     def _filter() -> PivotFilterInput:
         return PivotFilterInput(
             field_index="Region",
-            type=PivotFilterKind.VALUE_GREATER_THAN,
+            kind=PivotFilterKind.VALUE_GREATER_THAN,
             value=15.0,
         )
 
@@ -878,7 +878,7 @@ class PivotFilterPersistenceTests(unittest.TestCase):
         finally:
             wb.close()
         self.assertEqual(got.field_index, 0)
-        self.assertEqual(got.type, PivotFilterKind.VALUE_GREATER_THAN)
+        self.assertEqual(got.kind, PivotFilterKind.VALUE_GREATER_THAN)
         self.assertEqual(got.value, 15.0)
 
     def test_count_reports_the_filters_on_the_pivot(self) -> None:
@@ -903,7 +903,7 @@ class PivotFilterPersistenceTests(unittest.TestCase):
             self.assertEqual(len(reloaded.sheet(0).list_pivots()), 1)
             self.assertEqual(len(reloaded.sheet(0).pivot(0).list_filters()), 1)
             got = reloaded.sheet(0).pivot(0).list_filters()[0]
-            self.assertEqual((got.field_index, got.type), (0, PivotFilterKind.VALUE_GREATER_THAN))
+            self.assertEqual((got.field_index, got.kind), (0, PivotFilterKind.VALUE_GREATER_THAN))
             self.assertEqual(got.value, 15.0)
 
     def test_out_of_range_index_is_rejected(self) -> None:
@@ -922,12 +922,12 @@ class PivotDefinitionReadBackTests(unittest.TestCase):
         wb, pivot = PivotFilterPersistenceTests._workbook_with_pivot()
         try:
             wb.sheet(0).pivot(pivot).update_grand_totals(rows=True, columns=False)
-            cache_id = wb.sheet(0).pivot(pivot).get_cache().cache_id
+            cache_id = wb.sheet(0).pivot(pivot).cache().cache_id
             data = wb.save()
         finally:
             wb.close()
         with Workbook.load(data) as reloaded:
-            self.assertEqual(reloaded.sheet(0).pivot(0).get_cache().cache_id, cache_id)
+            self.assertEqual(reloaded.sheet(0).pivot(0).cache().cache_id, cache_id)
             self.assertEqual(reloaded.sheet(0).pivot(0).name, "Pivot1")
             self.assertEqual(reloaded.sheet(0).pivot(0).get_grand_totals(), PivotGrandTotals(rows=True, columns=False))
             self.assertEqual(reloaded.sheet(0).pivot(0).get_row_field_order(), [0])

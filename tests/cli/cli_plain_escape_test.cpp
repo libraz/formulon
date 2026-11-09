@@ -15,7 +15,7 @@ bool write_plain_escape_fixture(const std::string& path) {
             fm_sheet_set_text(wb, 0, 1, 0, "q\"t\tb\\s\r\nz") == 0 && fm_workbook_recalc(wb) == 0;
   std::uint8_t* bytes = nullptr;
   std::size_t len = 0;
-  ok = ok && fm_workbook_save(wb, &bytes, &len) == 0;
+  ok = ok && fm_workbook_save(wb, FM_WORKBOOK_FORMAT_XLSX, &bytes, &len) == 0;
   if (ok) {
     std::ofstream out(path, std::ios::binary | std::ios::trunc);
     out.write(reinterpret_cast<const char*>(bytes), static_cast<std::streamsize>(len));
@@ -72,7 +72,7 @@ TEST(FormulonCli, PaginatePrintAreaUsesA1Notation) {
   ASSERT_EQ(fm_sheet_set_print_area(wb, 0, areas, 2), 0);
   std::uint8_t* bytes = nullptr;
   std::size_t len = 0;
-  ASSERT_EQ(fm_workbook_save(wb, &bytes, &len), 0);
+  ASSERT_EQ(fm_workbook_save(wb, FM_WORKBOOK_FORMAT_XLSX, &bytes, &len), 0);
   {
     std::ofstream out(path, std::ios::binary | std::ios::trunc);
     out.write(reinterpret_cast<const char*>(bytes), static_cast<std::streamsize>(len));

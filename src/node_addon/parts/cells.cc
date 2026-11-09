@@ -82,8 +82,7 @@ Napi::Value Workbook::SetCellPhoneticRuns(const Napi::CallbackInfo& info) {
   const CellAddressArgs address = ReadCellAddress(info);
   Napi::Array runs;
   if (!ArrayArg(info, 3, &runs)) {
-    Napi::TypeError::New(env, "setCellPhoneticRuns: `runs` must be an array of { sb, eb, text }")
-        .ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "Sheet.setCellPhoneticRuns runs must be an array").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   const uint32_t count = runs.Length();
@@ -99,8 +98,7 @@ Napi::Value Workbook::SetCellPhoneticRuns(const Napi::CallbackInfo& info) {
       if (!reader.ok()) {
         return env.Undefined();
       }
-      Napi::TypeError::New(env, "setCellPhoneticRuns: each run must be an object { start, end, text }")
-          .ThrowAsJavaScriptException();
+      Napi::TypeError::New(env, "Sheet.setCellPhoneticRuns runs[] must be an object").ThrowAsJavaScriptException();
       return env.Undefined();
     }
     Napi::Object run;
@@ -108,8 +106,7 @@ Napi::Value Workbook::SetCellPhoneticRuns(const Napi::CallbackInfo& info) {
       if (!reader.ok()) {
         return env.Undefined();
       }
-      Napi::TypeError::New(env, "setCellPhoneticRuns: each run must be an object { start, end, text }")
-          .ThrowAsJavaScriptException();
+      Napi::TypeError::New(env, "Sheet.setCellPhoneticRuns runs[] must be an object").ThrowAsJavaScriptException();
       return env.Undefined();
     }
     std::string text;
@@ -135,19 +132,24 @@ Napi::Value Workbook::SetCellPhoneticProperties(const Napi::CallbackInfo& info) 
   if (handle_ == nullptr) {
     return ThrowInvalidHandle(env);
   }
+  // `null` resets the cell to the unstated triple; `stated` is read-only and ignored.
   const CellAddressArgs address = ReadCellAddress(info);
-  const Napi::Object props = ArgObject(info, 3);
   CheckedSpecReader reader(env);
-  const uint32_t font_id = reader.U32(props, "fontIndex", 0U);
-  const int32_t type = reader.I32(props, "type", 0);
-  const int32_t alignment = reader.I32(props, "alignment", 0);
+  Napi::Object props;
+  const bool present = reader.Object(info[3], "properties", &props);
+  fm_phonetic_properties_t record = FM_STRUCT_INIT(fm_phonetic_properties_t);
+  if (present) {
+    record.font_index = reader.U32(props, "fontIndex", 0U);
+    record.type = reader.I32(props, "type", 0);
+    record.alignment = reader.I32(props, "alignment", 0);
+  }
   if (!reader.ok()) {
     // A malformed field left a pending JS exception: stop before the C ABI
     // call commits a default value for it.
     return env.Undefined();
   }
-  fm_status_t rc =
-      fm_sheet_set_cell_phonetic_properties(handle_, address.sheet, address.row, address.col, font_id, type, alignment);
+  fm_status_t rc = fm_sheet_set_cell_phonetic_properties(handle_, address.sheet, address.row, address.col,
+                                                         present ? &record : nullptr);
   return ValueOrThrow(env, rc, env.Undefined());
 }
 
@@ -208,8 +210,8 @@ Napi::Value Workbook::GetCellPhoneticRun(const Napi::CallbackInfo& info) {
     return ThrowStatus(env, rc);
   }
   Napi::Object item = Napi::Object::New(env);
-  item.Set("start", Napi::Number::New(env, run.sb));
-  item.Set("end", Napi::Number::New(env, run.eb));
+  item.Set("start", Napi::Number::New(env, run.start));
+  item.Set("end", Napi::Number::New(env, run.end));
   item.Set("text", JsString(env, run.text));
   return item;
 }
@@ -220,23 +222,17 @@ Napi::Value Workbook::GetCellPhoneticProperties(const Napi::CallbackInfo& info) 
     return ThrowInvalidHandle(env);
   }
   const CellAddressArgs address = ReadCellAddress(info);
-  size_t font_id = 0;
-  int32_t type = 0;
-  int32_t alignment = 0;
-  int32_t present = 0;
-  fm_status_t rc = fm_sheet_get_cell_phonetic_properties(handle_, address.sheet, address.row, address.col, &font_id,
-                                                         &type, &alignment);
-  if (rc == 0) {
-    rc = fm_sheet_has_cell_phonetic_properties(handle_, address.sheet, address.row, address.col, &present);
-  }
+  fm_phonetic_properties_t record = FM_STRUCT_INIT(fm_phonetic_properties_t);
+  const fm_status_t rc =
+      fm_sheet_get_cell_phonetic_properties(handle_, address.sheet, address.row, address.col, &record);
   if (rc != 0) {
     return ThrowStatus(env, rc);
   }
   Napi::Object out = Napi::Object::New(env);
-  out.Set("fontIndex", Napi::Number::New(env, font_id));
-  out.Set("type", Napi::Number::New(env, type));
-  out.Set("alignment", Napi::Number::New(env, alignment));
-  out.Set("stated", Napi::Boolean::New(env, present != 0));
+  out.Set("fontIndex", Napi::Number::New(env, record.font_index));
+  out.Set("type", Napi::Number::New(env, record.type));
+  out.Set("alignment", Napi::Number::New(env, record.alignment));
+  out.Set("stated", Napi::Boolean::New(env, record.stated != 0));
   return out;
 }
 

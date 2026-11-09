@@ -6,9 +6,8 @@ from typing import Any, Tuple
 
 from formulon import (
     ChartBarDirection,
-    ChartInsertInput,
+    ChartInput,
     ChartPlotType,
-    DrawingPlacementInput,
 )
 
 Kind = Tuple[ChartPlotType, "ChartBarDirection | None"]
@@ -22,17 +21,10 @@ SCATTER: Kind = (ChartPlotType.SCATTER, None)
 DOUGHNUT: Kind = (ChartPlotType.DOUGHNUT, None)
 
 
-def insert(kind: Kind, source: Any, *, anchor: Any = None, **options: Any) -> ChartInsertInput:
-    """The insert record for ``kind`` over ``source``; ``anchor`` becomes the placement."""
+def insert(kind: Kind, source: Any, *, anchor: Any = None, **options: Any) -> ChartInput:
+    """The insert record for ``kind`` over ``source`` placed at ``anchor``."""
     plot, direction = kind
-    name = options.pop("name", "")
-    description = options.pop("description", "")
-    placement = (
-        None
-        if anchor is None and not (name or description)
-        else DrawingPlacementInput(name=name, description=description, anchor=anchor)
-    )
-    return ChartInsertInput(type=plot, range=source, bar_direction=direction, placement=placement, **options)
+    return ChartInput(type=plot, range=source, bar_direction=direction, anchor=anchor, **options)
 
 
 def add_chart(ws: Any, kind: Kind, source: Any, **options: Any) -> Any:

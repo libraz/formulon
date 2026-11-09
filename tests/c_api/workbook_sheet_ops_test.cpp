@@ -253,7 +253,7 @@ TEST(WorkbookSheetOpsCApi, SetDefinedNameDropsTheLeadingEquals) {
 
   uint8_t* bytes = nullptr;
   size_t len = 0;
-  ASSERT_EQ(fm_workbook_save(wb.handle, &bytes, &len), 0);
+  ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &bytes, &len), 0);
   WorkbookGuard reloaded;
   const fm_status_t loaded = fm_workbook_load(bytes, len, &reloaded.handle);
   fm_buffer_destroy(bytes);

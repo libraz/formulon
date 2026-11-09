@@ -62,15 +62,15 @@ fm_pivot_data_field_t DataSpec(std::size_t field, fm_pivot_aggregation_t aggrega
   return spec;
 }
 
+// The pivot carries one field per cache field, in cache order; placing a
+// field is setting its axis.
 void AddField(fm_workbook_t* wb, const char* name, fm_pivot_axis_t axis) {
-  fm_pivot_field_spec_t spec = FM_STRUCT_INIT(fm_pivot_field_spec_t);
-  spec.source_name = name;
-  spec.custom_name = "";
-  spec.axis = axis;
-  spec.subtotal_top = FM_TRISTATE_TRUE;
-  spec.number_format = "";
-  std::size_t index = 99;
-  ASSERT_EQ(fm_sheet_add_pivot_field(wb, 0U, kPivot, &spec, &index), 0) << fm_get_last_error_message();
+  const std::string field_name = name;
+  const std::size_t index = field_name == "Product" ? kProduct
+                            : field_name == "Amt"   ? kAmt
+                            : field_name == "Qty"   ? kQty
+                                                    : kRegion;  // "Region", and a dated cache's "Date"
+  ASSERT_EQ(fm_sheet_set_pivot_field_axis(wb, 0U, kPivot, index, axis), 0) << fm_get_last_error_message();
 }
 
 // The measured source in a ja-JP workbook: Region on rows, Sum of Amt and Sum
@@ -238,7 +238,7 @@ std::int32_t Pending(const fm_workbook_t* wb) {
 
 std::string SavedPart(fm_workbook_t* wb, const char* part) {
   BufferGuard saved;
-  EXPECT_EQ(fm_workbook_save(wb, &saved.data, &saved.len), 0) << fm_get_last_error_message();
+  EXPECT_EQ(fm_workbook_save(wb, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0) << fm_get_last_error_message();
   return ExtractZipEntry(std::vector<std::uint8_t>(saved.data, saved.data + saved.len), part);
 }
 
@@ -323,7 +323,7 @@ TEST(FormulonCApiPivotCalc, CalculatedFieldSavesExcelStrings) {
 
   // The saved file evaluates the same after a reload.
   BufferGuard saved;
-  ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0);
+  ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0);
   WorkbookGuard loaded;
   ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &loaded.handle), 0) << fm_get_last_error_message();
   ASSERT_EQ(fm_workbook_set_profile_id(loaded.handle, "win-365-ja_JP"), 0);

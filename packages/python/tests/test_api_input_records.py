@@ -16,7 +16,6 @@ from formulon import (
     FontScheme,
     FormulonError,
     PivotAxis,
-    PivotFieldInput,
     PivotFilterKind,
     PivotInput,
     SheetRect,
@@ -37,7 +36,7 @@ def _grid(ws: Any) -> None:
 
 def _chart(wb: Workbook) -> Any:
     _grid(wb.sheet(0))
-    return wb.sheet(0).add_chart(formulon.ChartInsertInput(type=ChartPlotType.BAR, range="Sheet1!A1:C4"))
+    return wb.sheet(0).add_chart(formulon.ChartInput(type=ChartPlotType.BAR, range="Sheet1!A1:C4"))
 
 
 def _pivot_cache(wb: Workbook) -> Any:
@@ -74,9 +73,7 @@ class ChartInputTests(unittest.TestCase):
         with Workbook.create_default() as wb:
             _grid(wb.sheet(0))
             chart = wb.sheet(0).add_chart(
-                formulon.ChartInsertInput(
-                    type=ChartPlotType.BAR, range="Sheet1!A1:C4", bar_direction=ChartBarDirection.BAR
-                )
+                formulon.ChartInput(type=ChartPlotType.BAR, range="Sheet1!A1:C4", bar_direction=ChartBarDirection.BAR)
             )
             plot = chart.get_properties().plots[0]
             self.assertEqual(plot.type, ChartPlotType.BAR)
@@ -86,14 +83,14 @@ class ChartInputTests(unittest.TestCase):
         with Workbook.create_default() as wb:
             _grid(wb.sheet(0))
             a = wb.sheet(0).add_chart(
-                formulon.ChartInsertInput(type=ChartPlotType.LINE, range=SheetRect(0, CellRect(0, 0, 3, 2)))
+                formulon.ChartInput(type=ChartPlotType.LINE, range=SheetRect(0, CellRect(0, 0, 3, 2)))
             )
-            b = wb.sheet(0).add_chart(formulon.ChartInsertInput(type=ChartPlotType.LINE, range="Sheet1!A1:C4"))
+            b = wb.sheet(0).add_chart(formulon.ChartInput(type=ChartPlotType.LINE, range="Sheet1!A1:C4"))
             self.assertEqual(a.get_properties().source, b.get_properties().source)
 
     def test_insert_legend_defaults_to_bottom(self) -> None:
         self.assertEqual(
-            formulon.ChartInsertInput(type=ChartPlotType.BAR, range="A1:B2").legend, formulon.ChartLegendPosition.BOTTOM
+            formulon.ChartInput(type=ChartPlotType.BAR, range="A1:B2").legend, formulon.ChartLegendPosition.BOTTOM
         )
 
     def test_old_positional_kind_form_is_refused(self) -> None:
@@ -147,7 +144,7 @@ class ChartInputTests(unittest.TestCase):
             _grid(wb.sheet(0))
             with self.assertRaises(TypeError):
                 wb.sheet(0).add_chart(
-                    formulon.ChartInsertInput(
+                    formulon.ChartInput(
                         type=ChartPlotType.LINE, range="Sheet1!A1:C4", bar_direction=ChartBarDirection.BAR
                     )
                 )
@@ -212,7 +209,7 @@ class PivotInputTests(unittest.TestCase):
             pivot = sheet.pivot(
                 sheet.add_pivot(PivotInput(name="P", cache_id=cache.cache_id, anchor=CellAddress(0, 4)))
             )
-            pivot.add_field(PivotFieldInput(field_index="When", axis=PivotAxis.ROW))
+            pivot.set_field_axis("When", PivotAxis.ROW)
             pivot.set_field_date_group(
                 0,
                 formulon.PivotDateGroupInput(
@@ -236,14 +233,8 @@ class PivotInputTests(unittest.TestCase):
         for cls in (formulon.PivotFilterInput, formulon.PivotFilter):
             with self.assertRaises(TypeError):
                 cls("Product", PivotFilterKind.LABEL_EQUAL)  # type: ignore[call-arg]
-        built = formulon.PivotFilterInput(field_index="Product", type=PivotFilterKind.LABEL_EQUAL)
+        built = formulon.PivotFilterInput(field_index="Product", kind=PivotFilterKind.LABEL_EQUAL)
         self.assertEqual(built.field_index, "Product")
-
-    def test_field_axis_is_required(self) -> None:
-        with self.assertRaises(TypeError):
-            PivotFieldInput(field_index="Product")  # type: ignore[call-arg]
-        with self.assertRaises(TypeError):
-            PivotFieldInput("Product")  # type: ignore[call-arg]
 
     def test_set_column_totals_takes_the_column_record(self) -> None:
         with Workbook.create_default() as wb:

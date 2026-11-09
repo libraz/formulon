@@ -106,7 +106,7 @@ TEST(FormulonCApiExternalLinks, RoundTripPreservesZeroCount) {
 
   uint8_t* saved_data = nullptr;
   size_t saved_len = 0;
-  ASSERT_EQ(fm_workbook_save(wb.handle, &saved_data, &saved_len), 0);
+  ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved_data, &saved_len), 0);
 
   WorkbookGuard wb2;
   ASSERT_EQ(fm_workbook_load(saved_data, saved_len, &wb2.handle), 0);
@@ -407,9 +407,9 @@ TEST(FormulonCApiExternalLinks, FileNameConditionalFormatsStoreAndSpellTheName) 
   fm_cfvo_t thresholds[2]{};
   thresholds[0].type = 5;  // Formula
   thresholds[0].value = "M5.xlsx!LN";
-  thresholds[0].gte = 1;
+  thresholds[0].gte = FM_TRISTATE_TRUE;
   thresholds[1].type = 4;  // Max
-  thresholds[1].gte = 1;
+  thresholds[1].gte = FM_TRISTATE_TRUE;
   fm_color_t colors[2]{{0.0, 0xFFFF0000U, 0U, 0U, FM_COLOR_KIND_RGB}, {0.0, 0xFF00FF00U, 0U, 0U, FM_COLOR_KIND_RGB}};
   fm_cf_rule_t scale = FM_STRUCT_INIT(fm_cf_rule_t);
   scale.type = 2;  // ColorScale
@@ -465,7 +465,7 @@ TEST(FormulonCApiExternalLinks, FileNameChartSeriesStoreAndSpellTheName) {
     ASSERT_EQ(fm_sheet_set_number(wb.handle, 0, r, 2, static_cast<double>(r * 2)), 0);
   }
   ASSERT_EQ(SetDefinedName(wb.handle, "LR", "Sheet1!$C$2:$C$5"), 0) << fm_get_last_error_message();
-  fm_chart_insert_spec_t opts = FM_STRUCT_INIT(fm_chart_insert_spec_t);
+  fm_chart_spec_t opts = FM_STRUCT_INIT(fm_chart_spec_t);
   opts.type = FM_CHART_PLOT_TYPE_BAR;
   opts.bar_direction = FM_CHART_BAR_DIRECTION_COLUMN;
   opts.source = "Sheet1!$A$1:$B$5";

@@ -1577,11 +1577,26 @@ def _js_record_keys(decls: Dict[str, TsDecl], raw: str, name: str) -> Optional[D
     return out
 
 
+def _py_record_fields(classes: Dict[str, PyClass], name: str) -> Set[str]:
+    """Fields of the package class `name`, the ones it inherits from package classes included."""
+    out: Set[str] = set()
+    pending, seen = [name], set()
+    while pending:
+        current = pending.pop()
+        cls = classes.get(current)
+        if cls is None or current in seen:
+            continue
+        seen.add(current)
+        out.update(cls.fields)
+        pending.extend(cls.bases)
+    return out
+
+
 def _record_fields(found: Surfaces, record: dict, surface: str) -> Optional[Tuple[str, Set[str]]]:
     field = _field(surface)
     if surface == "py":
         name = _in_tree(found.py.classes, record, field)
-        return (name, set(found.py.classes[name].fields)) if name else None
+        return (name, _py_record_fields(found.py.classes, name)) if name else None
     js = found.js[surface]
     name = _in_tree(js.decls, record, field)
     if not name:

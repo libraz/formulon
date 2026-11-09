@@ -194,5 +194,95 @@ TEST_F(PivotFieldPatchTest, RefusedItemPatchWritesNoKey) {
   ExpectInvalid(pivot::check_item_patch(wb_, table_, 9U, 0U, PivotItemPatch{}));
 }
 
+// A workbook with cache 1 over Region / Product / Amt and no pivots yet.
+class PivotAuthoringTest : public ::testing::Test {
+ protected:
+  PivotAuthoringTest() : wb_(Workbook::create_for_profile(mac_365_ja_jp_profile())) {
+    auto cache = std::make_unique<pivot::PivotCache>();
+    cache->set_cache_id(1U);
+    cache->mutable_fields().push_back(pivot::PivotCacheField{"Region", {Value::text("North")}});
+    cache->mutable_fields().push_back(pivot::PivotCacheField{"Product", {Value::text("A")}});
+    cache->mutable_fields().push_back(pivot::PivotCacheField{"Amt", {}});
+    wb_.add_pivot_cache(std::move(cache));
+  }
+
+  static std::unique_ptr<PivotTable> NewPivot(const char* name, std::uint32_t row) {
+    auto table = std::make_unique<PivotTable>();
+    table->set_name(name);
+    table->set_pivot_cache_id(1U);
+    table->set_anchor(row, 5U, 1U, 1U);
+    return table;
+  }
+
+  const PivotTable& Pivot(std::size_t i) const { return *wb_.sheet(0).pivot_tables()[i]; }
+
+  const eval::ScopedEvalProfile scope_{mac_365_ja_jp_profile()};
+  Workbook wb_;
+};
+
+using PivotFieldsFromCache = PivotAuthoringTest;
+
+TEST_F(PivotFieldsFromCache, NewPivotHasOneFieldPerCacheField) {
+  ASSERT_TRUE(static_cast<bool>(wb_.add_pivot(0, NewPivot("PivotTable1", 0U))));
+  const PivotTable& table = Pivot(0);
+  ASSERT_EQ(table.fields().size(), wb_.find_pivot_cache(1U)->fields().size());
+  EXPECT_EQ(table.fields()[1].source_name, "Product");
+  EXPECT_EQ(table.fields()[1].axis, pivot::PivotAxis::None);
+
+  auto unbound = NewPivot("PivotTable2", 20U);
+  unbound->set_pivot_cache_id(9U);
+  auto refused = wb_.add_pivot(0, std::move(unbound));
+  ASSERT_FALSE(static_cast<bool>(refused));
+  EXPECT_EQ(refused.error().code, FormulonErrorCode::kNotFound);
+}
+
+TEST_F(PivotFieldsFromCache, CacheAddFieldAppendsToPivots) {
+  ASSERT_TRUE(static_cast<bool>(wb_.add_pivot(0, NewPivot("PivotTable1", 0U))));
+  ASSERT_TRUE(static_cast<bool>(wb_.add_pivot(0, NewPivot("PivotTable2", 20U))));
+  auto index = wb_.add_pivot_cache_field(1U, pivot::PivotCacheField{"Qty", {}});
+  ASSERT_TRUE(static_cast<bool>(index));
+  EXPECT_EQ(index.value(), 3U);
+  for (std::size_t p = 0; p < 2U; ++p) {
+    ASSERT_EQ(Pivot(p).fields().size(), 4U) << p;
+    EXPECT_EQ(Pivot(p).fields()[3].source_name, "Qty");
+    EXPECT_EQ(Pivot(p).fields()[3].axis, pivot::PivotAxis::None);
+  }
+  auto missing = wb_.add_pivot_cache_field(9U, pivot::PivotCacheField{"Qty", {}});
+  ASSERT_FALSE(static_cast<bool>(missing));
+  EXPECT_EQ(missing.error().code, FormulonErrorCode::kNotFound);
+}
+
+using PivotRenameValidation = PivotAuthoringTest;
+
+TEST_F(PivotRenameValidation, EmptyNameInvalidArgument) {
+  ASSERT_TRUE(static_cast<bool>(wb_.add_pivot(0, NewPivot("PivotTable1", 0U))));
+  auto empty = wb_.rename_pivot(0, 0, "");
+  ASSERT_FALSE(static_cast<bool>(empty));
+  EXPECT_EQ(empty.error().code, FormulonErrorCode::kInvalidArgument);
+  EXPECT_EQ(Pivot(0).name(), "PivotTable1");
+  ASSERT_TRUE(static_cast<bool>(wb_.rename_pivot(0, 0, "Sales")));
+  EXPECT_EQ(Pivot(0).name(), "Sales");
+
+  auto unnamed = wb_.add_pivot(0, NewPivot("", 20U));
+  ASSERT_FALSE(static_cast<bool>(unnamed));
+  EXPECT_EQ(unnamed.error().code, FormulonErrorCode::kInvalidArgument);
+}
+
+TEST_F(PivotRenameValidation, DuplicateNameAlreadyExists) {
+  ASSERT_TRUE(static_cast<bool>(wb_.add_pivot(0, NewPivot("PivotTable1", 0U))));
+  ASSERT_TRUE(static_cast<bool>(wb_.add_pivot(0, NewPivot("PivotTable2", 20U))));
+  auto taken = wb_.rename_pivot(0, 1, "pivottable1");
+  ASSERT_FALSE(static_cast<bool>(taken));
+  EXPECT_EQ(taken.error().code, FormulonErrorCode::kAlreadyExists);
+  EXPECT_EQ(Pivot(1).name(), "PivotTable2");
+  // A pivot may take its own name in another letter case.
+  ASSERT_TRUE(static_cast<bool>(wb_.rename_pivot(0, 1, "PIVOTTABLE2")));
+  EXPECT_EQ(Pivot(1).name(), "PIVOTTABLE2");
+
+  auto duplicate = wb_.add_pivot(0, NewPivot("PIVOTTABLE1", 40U));
+  ASSERT_FALSE(static_cast<bool>(duplicate));
+  EXPECT_EQ(duplicate.error().code, FormulonErrorCode::kAlreadyExists);
+}
+
 }  // namespace
 }  // namespace formulon

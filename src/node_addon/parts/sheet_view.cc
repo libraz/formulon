@@ -293,8 +293,7 @@ Napi::Value Workbook::UpdateSheetView(const Napi::CallbackInfo& info) {
         patch.freeze_rows_op = PatchU32(reader, spec, "freezeRows", &patch.freeze_rows);
         patch.freeze_cols_op = PatchU32(reader, spec, "freezeCols", &patch.freeze_cols);
         patch.show_grid_lines_op = PatchBool(reader, spec, "showGridLines", &patch.show_grid_lines);
-        patch.show_row_column_headers_op =
-            PatchBool(reader, spec, "showRowColHeaders", &patch.show_row_column_headers);
+        patch.show_row_column_headers_op = PatchBool(reader, spec, "showRowColHeaders", &patch.show_row_column_headers);
         patch.show_zeros_op = PatchBool(reader, spec, "showZeros", &patch.show_zeros);
         patch.right_to_left_op = PatchBool(reader, spec, "rightToLeft", &patch.right_to_left);
         patch.tab_selected_op = PatchBool(reader, spec, "tabSelected", &patch.tab_selected);
@@ -585,13 +584,13 @@ Napi::Value Workbook::ClearRowStyle(const Napi::CallbackInfo& info) {
 namespace {
 
 Napi::Value RangeStyleBasesResult(Napi::Env env, fm_workbook_t* handle, uint32_t sheet, const fm_cell_rect_t& rect,
-                                  const std::vector<uint32_t>& rows, const std::vector<uint32_t>& cols) {
+                                  const std::vector<fm_cell_address_t>& excluded) {
   size_t len = 0;
-  fm_status_t rc = fm_sheet_get_range_xf_bases_excluding(handle, sheet, &rect, rows.data(), cols.data(), rows.size(),
-                                                         nullptr, 0, &len);
+  fm_status_t rc =
+      fm_sheet_get_range_xf_bases_excluding(handle, sheet, &rect, excluded.data(), excluded.size(), nullptr, 0, &len);
   std::vector<uint32_t> xfs(len);
   if (rc == 0 && len > 0) {
-    rc = fm_sheet_get_range_xf_bases_excluding(handle, sheet, &rect, rows.data(), cols.data(), rows.size(), xfs.data(),
+    rc = fm_sheet_get_range_xf_bases_excluding(handle, sheet, &rect, excluded.data(), excluded.size(), xfs.data(),
                                                xfs.size(), &len);
   }
   if (rc != 0) {
@@ -633,7 +632,7 @@ Napi::Value Workbook::RangeStyleBases(const Napi::CallbackInfo& info) {
   if (!ReadCellRect(reader, ArgObject(info, 1), &rect)) {
     return env.Undefined();
   }
-  return RangeStyleBasesResult(env, handle_, ArgU32(info, 0), rect, {}, {});
+  return RangeStyleBasesResult(env, handle_, ArgU32(info, 0), rect, {});
 }
 
 Napi::Value Workbook::RangeStyleBasesExcluding(const Napi::CallbackInfo& info) {
@@ -648,11 +647,10 @@ Napi::Value Workbook::RangeStyleBasesExcluding(const Napi::CallbackInfo& info) {
   Napi::Array rows_arr;
   Napi::Array cols_arr;
   if (!ArrayArg(info, 2, &rows_arr) || !ArrayArg(info, 3, &cols_arr)) {
-    return refused(
-        "getRangeStyleBasesExcluding expects (sheet, range:CellRect, excludedRows:number[], excludedCols:number[])");
+    return refused("Sheet.getRangeXfBasesExcluding excluded must be an array");
   }
   if (rows_arr.Length() != cols_arr.Length()) {
-    return refused("getRangeStyleBasesExcluding: excludedRows and excludedCols must have the same length");
+    return refused("Sheet.getRangeXfBasesExcluding excluded rows and columns must have the same length");
   }
   CheckedSpecReader reader(env);
   fm_cell_rect_t rect{};
@@ -665,7 +663,11 @@ Napi::Value Workbook::RangeStyleBasesExcluding(const Napi::CallbackInfo& info) {
   if (!reader.ok()) {
     return env.Undefined();
   }
-  return RangeStyleBasesResult(env, handle_, ArgU32(info, 0), rect, rows, cols);
+  std::vector<fm_cell_address_t> excluded(rows.size());
+  for (std::size_t i = 0; i < rows.size(); ++i) {
+    excluded[i] = fm_cell_address_t{rows[i], cols[i]};
+  }
+  return RangeStyleBasesResult(env, handle_, ArgU32(info, 0), rect, excluded);
 }
 
 Napi::Value Workbook::RemapRangeStyle(const Napi::CallbackInfo& info) {
@@ -676,12 +678,11 @@ Napi::Value Workbook::RemapRangeStyle(const Napi::CallbackInfo& info) {
   Napi::Array from_arr;
   Napi::Array to_arr;
   if (!ArrayArg(info, 2, &from_arr) || !ArrayArg(info, 3, &to_arr)) {
-    Napi::TypeError::New(env, "remapRangeStyle expects (sheet, range:CellRect, fromXfs:number[], toXfs:number[])")
-        .ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "Sheet.remapRangeXfs mapping must be an array").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   if (from_arr.Length() != to_arr.Length()) {
-    Napi::TypeError::New(env, "remapRangeStyle: fromXfs and toXfs must have the same length")
+    Napi::TypeError::New(env, "Sheet.remapRangeXfs mapping keys and values must have the same length")
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
@@ -696,8 +697,12 @@ Napi::Value Workbook::RemapRangeStyle(const Napi::CallbackInfo& info) {
   if (!reader.ok()) {
     return env.Undefined();
   }
-  const fm_status_t rc = fm_sheet_remap_range_xfs(handle_, static_cast<std::size_t>(ArgU32(info, 0)), &rect,
-                                                  from.data(), to.data(), from.size());
+  std::vector<fm_xf_remap_t> pairs(from.size());
+  for (std::size_t i = 0; i < from.size(); ++i) {
+    pairs[i] = fm_xf_remap_t{from[i], to[i]};
+  }
+  const fm_status_t rc =
+      fm_sheet_remap_range_xfs(handle_, static_cast<std::size_t>(ArgU32(info, 0)), &rect, pairs.data(), pairs.size());
   return ValueOrThrow(env, rc, env.Undefined());
 }
 

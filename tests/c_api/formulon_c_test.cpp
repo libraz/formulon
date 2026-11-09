@@ -83,7 +83,7 @@ void ExpectOpaqueAutoFilterRefUpdate(std::string raw_xml, std::string expected_x
   EXPECT_EQ(formulon::io::auto_filter_xml(table.auto_filter_xml.get()), expected_xml);
 
   BufferGuard saved;
-  ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0);
+  ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0);
   WorkbookGuard loaded;
   ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &loaded.handle), 0);
   const auto& reloaded = loaded.handle->wb->tables()[index];
@@ -148,7 +148,7 @@ TEST(FormulonCApi, TableCreateUpdateRemoveRoundTripsThroughOoxml) {
   style.style_name = "TableStyleLight9";
   ASSERT_EQ(fm_sheet_update_table_style_options(wb.handle, 0, index, &style), 0) << fm_get_last_error_message();
   BufferGuard saved;
-  ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0);
+  ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0);
   WorkbookGuard loaded;
   ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &loaded.handle), 0);
   ASSERT_EQ(fm_sheet_get_table_at(loaded.handle, 0, 0, &info), 0);
@@ -275,7 +275,7 @@ TEST(FormulonCApi, TableDuplicateColumnAtEndRejectsAtomicallyAndUniqueNamesRound
   EXPECT_EQ(index, 0U);
 
   BufferGuard saved;
-  ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0);
+  ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0);
   WorkbookGuard loaded;
   ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &loaded.handle), 0);
   ASSERT_EQ(loaded.handle->wb->tables().size(), 1U);
@@ -341,7 +341,7 @@ TEST(FormulonCApi, TableUpdatePreservesRawMetadataAcrossSaveLoad) {
             "<extLst><ext uri=\"urn:formulon:test\"><futureTableData value=\"kept\"/></ext></extLst>");
 
   BufferGuard saved;
-  ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0);
+  ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0);
   WorkbookGuard loaded;
   ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &loaded.handle), 0);
   const auto& reloaded = loaded.handle->wb->tables()[0];
@@ -495,12 +495,12 @@ TEST(FormulonCApi, CellPhoneticRunsPreserveTheirSpans) {
 
   fm_phonetic_run_t read{};
   ASSERT_EQ(fm_sheet_get_cell_phonetic_run_at(wb.handle, 0, 0, 0, 0U, &read), 0);
-  EXPECT_EQ(read.sb, 0U);
-  EXPECT_EQ(read.eb, 2U);
+  EXPECT_EQ(read.start, 0U);
+  EXPECT_EQ(read.end, 2U);
   EXPECT_STREQ(read.text, "トウキョウ");
   ASSERT_EQ(fm_sheet_get_cell_phonetic_run_at(wb.handle, 0, 0, 0, 1U, &read), 0);
-  EXPECT_EQ(read.sb, 2U);
-  EXPECT_EQ(read.eb, 3U);
+  EXPECT_EQ(read.start, 2U);
+  EXPECT_EQ(read.end, 3U);
   EXPECT_STREQ(read.text, "ト");
 
   // The flattening getter still reports the concatenation, and feeding that
@@ -550,6 +550,19 @@ TEST(FormulonCApi, CellPhoneticRunsRejectMalformedInput) {
   EXPECT_NE(fm_sheet_get_cell_phonetic_run_at(wb.handle, 0, 0, 0, 0U, nullptr), 0);
   EXPECT_NE(fm_sheet_get_cell_phonetic_run_count(wb.handle, 0, 0, 0, nullptr), 0);
 }
+namespace {
+
+fm_status_t SetPhoneticProperties(fm_workbook_t* wb, std::size_t sheet_index, std::uint32_t row, std::uint32_t col,
+                                  std::uint32_t font_index, std::int32_t type, std::int32_t alignment) {
+  fm_phonetic_properties_t properties = FM_STRUCT_INIT(fm_phonetic_properties_t);
+  properties.font_index = font_index;
+  properties.type = type;
+  properties.alignment = alignment;
+  return fm_sheet_set_cell_phonetic_properties(wb, sheet_index, row, col, &properties);
+}
+
+}  // namespace
+
 TEST(FormulonCApi, CellPhoneticPropertiesAreIndependentOfTheRuns) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
@@ -557,37 +570,31 @@ TEST(FormulonCApi, CellPhoneticPropertiesAreIndependentOfTheRuns) {
 
   // An unannotated cell reads the state Excel infers for a guide written
   // with no `<phoneticPr>` at all.
-  size_t font_id = 9;
-  int32_t type = 9;
-  int32_t alignment = 9;
-  ASSERT_EQ(fm_sheet_get_cell_phonetic_properties(wb.handle, 0, 0, 0, &font_id, &type, &alignment), 0);
-  EXPECT_EQ(font_id, 0U);
-  EXPECT_EQ(type, FM_PHONETIC_TYPE_HALFWIDTH_KATAKANA);
-  EXPECT_EQ(alignment, FM_PHONETIC_ALIGNMENT_NO_CONTROL);
+  fm_phonetic_properties_t read = FM_STRUCT_INIT(fm_phonetic_properties_t);
+  read.font_index = 9U;
+  read.type = 9;
+  read.alignment = 9;
+  ASSERT_EQ(fm_sheet_get_cell_phonetic_properties(wb.handle, 0, 0, 0, &read), 0);
+  EXPECT_EQ(read.font_index, 0U);
+  EXPECT_EQ(read.type, FM_PHONETIC_TYPE_HALFWIDTH_KATAKANA);
+  EXPECT_EQ(read.alignment, FM_PHONETIC_ALIGNMENT_NO_CONTROL);
 
-  ASSERT_EQ(fm_sheet_set_cell_phonetic_properties(wb.handle, 0, 0, 0, 3U, FM_PHONETIC_TYPE_HIRAGANA,
-                                                  FM_PHONETIC_ALIGNMENT_CENTER),
-            0);
+  ASSERT_EQ(SetPhoneticProperties(wb.handle, 0, 0, 0, 3U, FM_PHONETIC_TYPE_HIRAGANA, FM_PHONETIC_ALIGNMENT_CENTER), 0);
   // Writing the readings must not reset the rendering, which is the whole
   // reason the two entry points are separate.
   const fm_phonetic_run_t runs[] = {{0U, 2U, "おおさか"}};
   ASSERT_EQ(fm_sheet_set_cell_phonetic_runs(wb.handle, 0, 0, 0, runs, 1U), 0);
-  ASSERT_EQ(fm_sheet_get_cell_phonetic_properties(wb.handle, 0, 0, 0, &font_id, &type, &alignment), 0);
-  EXPECT_EQ(font_id, 3U);
-  EXPECT_EQ(type, FM_PHONETIC_TYPE_HIRAGANA);
-  EXPECT_EQ(alignment, FM_PHONETIC_ALIGNMENT_CENTER);
-
-  // Each out-parameter is optional.
-  int32_t only_type = 0;
-  ASSERT_EQ(fm_sheet_get_cell_phonetic_properties(wb.handle, 0, 0, 0, nullptr, &only_type, nullptr), 0);
-  EXPECT_EQ(only_type, FM_PHONETIC_TYPE_HIRAGANA);
+  ASSERT_EQ(fm_sheet_get_cell_phonetic_properties(wb.handle, 0, 0, 0, &read), 0);
+  EXPECT_EQ(read.font_index, 3U);
+  EXPECT_EQ(read.type, FM_PHONETIC_TYPE_HIRAGANA);
+  EXPECT_EQ(read.alignment, FM_PHONETIC_ALIGNMENT_CENTER);
 
   // Overwriting the value discards the guide and its rendering together.
   ASSERT_EQ(fm_sheet_set_text(wb.handle, 0, 0, 0, "京都"), 0);
-  ASSERT_EQ(fm_sheet_get_cell_phonetic_properties(wb.handle, 0, 0, 0, &font_id, &type, &alignment), 0);
-  EXPECT_EQ(font_id, 0U);
-  EXPECT_EQ(type, FM_PHONETIC_TYPE_HALFWIDTH_KATAKANA);
-  EXPECT_EQ(alignment, FM_PHONETIC_ALIGNMENT_NO_CONTROL);
+  ASSERT_EQ(fm_sheet_get_cell_phonetic_properties(wb.handle, 0, 0, 0, &read), 0);
+  EXPECT_EQ(read.font_index, 0U);
+  EXPECT_EQ(read.type, FM_PHONETIC_TYPE_HALFWIDTH_KATAKANA);
+  EXPECT_EQ(read.alignment, FM_PHONETIC_ALIGNMENT_NO_CONTROL);
 }
 TEST(FormulonCApi, CellPhoneticPropertiesRejectValuesTheContainerCannotHold) {
   WorkbookGuard wb;
@@ -596,24 +603,23 @@ TEST(FormulonCApi, CellPhoneticPropertiesRejectValuesTheContainerCannotHold) {
   // type and alignment are two bits each in the xlsb trailer, and font_id a
   // u16; a wider value would be truncated into a different, valid-looking
   // one on save.
-  EXPECT_NE(fm_sheet_set_cell_phonetic_properties(wb.handle, 0, 0, 0, 0U, 4, 0), 0);
-  EXPECT_NE(fm_sheet_set_cell_phonetic_properties(wb.handle, 0, 0, 0, 0U, 0, 4), 0);
-  EXPECT_NE(fm_sheet_set_cell_phonetic_properties(wb.handle, 0, 0, 0, 0x10000U, 0, 0), 0);
-  EXPECT_NE(fm_sheet_set_cell_phonetic_properties(wb.handle, 0, formulon::Sheet::kMaxRows, 0, 0U, 0, 0), 0);
-  EXPECT_NE(fm_sheet_set_cell_phonetic_properties(wb.handle, 1U, 0, 0, 0U, 0, 0), 0);
-  EXPECT_NE(fm_sheet_set_cell_phonetic_properties(nullptr, 0, 0, 0, 0U, 0, 0), 0);
-  EXPECT_NE(fm_sheet_get_cell_phonetic_properties(nullptr, 0, 0, 0, nullptr, nullptr, nullptr), 0);
+  EXPECT_NE(SetPhoneticProperties(wb.handle, 0, 0, 0, 0U, 4, 0), 0);
+  EXPECT_NE(SetPhoneticProperties(wb.handle, 0, 0, 0, 0U, 0, 4), 0);
+  EXPECT_NE(SetPhoneticProperties(wb.handle, 0, 0, 0, 0x10000U, 0, 0), 0);
+  EXPECT_NE(SetPhoneticProperties(wb.handle, 0, formulon::Sheet::kMaxRows, 0, 0U, 0, 0), 0);
+  EXPECT_NE(SetPhoneticProperties(wb.handle, 1U, 0, 0, 0U, 0, 0), 0);
+  EXPECT_NE(SetPhoneticProperties(nullptr, 0, 0, 0, 0U, 0, 0), 0);
+  EXPECT_NE(fm_sheet_get_cell_phonetic_properties(nullptr, 0, 0, 0, nullptr), 0);
 
   // A rejected call leaves the stored rendering alone.
-  ASSERT_EQ(fm_sheet_set_cell_phonetic_properties(wb.handle, 0, 0, 0, 1U, FM_PHONETIC_TYPE_NO_CONVERSION,
-                                                  FM_PHONETIC_ALIGNMENT_DISTRIBUTED),
-            0);
-  EXPECT_NE(fm_sheet_set_cell_phonetic_properties(wb.handle, 0, 0, 0, 1U, 7, 0), 0);
-  int32_t type = 0;
-  int32_t alignment = 0;
-  ASSERT_EQ(fm_sheet_get_cell_phonetic_properties(wb.handle, 0, 0, 0, nullptr, &type, &alignment), 0);
-  EXPECT_EQ(type, FM_PHONETIC_TYPE_NO_CONVERSION);
-  EXPECT_EQ(alignment, FM_PHONETIC_ALIGNMENT_DISTRIBUTED);
+  ASSERT_EQ(
+      SetPhoneticProperties(wb.handle, 0, 0, 0, 1U, FM_PHONETIC_TYPE_NO_CONVERSION, FM_PHONETIC_ALIGNMENT_DISTRIBUTED),
+      0);
+  EXPECT_NE(SetPhoneticProperties(wb.handle, 0, 0, 0, 1U, 7, 0), 0);
+  fm_phonetic_properties_t read = FM_STRUCT_INIT(fm_phonetic_properties_t);
+  ASSERT_EQ(fm_sheet_get_cell_phonetic_properties(wb.handle, 0, 0, 0, &read), 0);
+  EXPECT_EQ(read.type, FM_PHONETIC_TYPE_NO_CONVERSION);
+  EXPECT_EQ(read.alignment, FM_PHONETIC_ALIGNMENT_DISTRIBUTED);
 }
 TEST(FormulonCApi, PhoneticEnumerationsKeepTheirOrdinals) {
   EXPECT_EQ(FM_PHONETIC_TYPE_HALFWIDTH_KATAKANA, 0);
@@ -628,8 +634,6 @@ TEST(FormulonCApi, PhoneticEnumerationsKeepTheirOrdinals) {
 TEST(FormulonCApi, CellPhoneticPropertiesRejectANegativeTypeOrAlignment) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  EXPECT_EQ(fm_sheet_set_cell_phonetic_properties(wb.handle, 0, 0, 0, 0U, -1, FM_PHONETIC_ALIGNMENT_LEFT),
-            FM_STATUS_INVALID_ARGUMENT);
-  EXPECT_EQ(fm_sheet_set_cell_phonetic_properties(wb.handle, 0, 0, 0, 0U, FM_PHONETIC_TYPE_HIRAGANA, -1),
-            FM_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(SetPhoneticProperties(wb.handle, 0, 0, 0, 0U, -1, FM_PHONETIC_ALIGNMENT_LEFT), FM_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(SetPhoneticProperties(wb.handle, 0, 0, 0, 0U, FM_PHONETIC_TYPE_HIRAGANA, -1), FM_STATUS_INVALID_ARGUMENT);
 }

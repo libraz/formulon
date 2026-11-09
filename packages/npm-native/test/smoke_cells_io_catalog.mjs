@@ -12,7 +12,7 @@ test('comments round-trip: setComment + getComment', async () => {
   assert.equal(c.author, 'libraz');
   assert.equal(c.text, 'hello world');
   // Removing surfaces null on the next read.
-  wb.sheet(0).removeComment(1, 1);
+  wb.sheet(0).setComment(1, 1, null);
   assert.equal(wb.sheet(0).getComment(1, 1), null);
 });
 
@@ -146,7 +146,7 @@ test('saveWithDiagnostics() reports counters and readDiagnostics keeps a stable 
   const preserved = preservedLoaded.getDiagnostics();
   assert.equal(preserved.undecodedPartCount, 0);
   preservedLoaded.dispose();
-  assert.throws(() => wb.saveWithDiagnostics(0), isFormulonError);
+  assert.throws(() => wb.saveWithDiagnostics(2), isFormulonError);
   assert.ok(wb.save(mod.WorkbookFormat.Xlsb) instanceof Uint8Array);
 });
 

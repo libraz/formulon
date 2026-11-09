@@ -228,6 +228,11 @@ std::string threaded_comment_stub_text(const std::vector<ThreadedComment>& list,
 }
 
 Expected<void, Error> Workbook::add_person(Person person) {
+  if (person.id.empty()) {
+    do {
+      person.id = next_threaded_comment_guid();
+    } while (FindPerson(persons_, person.id) != nullptr);
+  }
   if (!is_threaded_comment_guid(person.id)) {
     return Invalid("id is not a GUID", person.id);
   }
@@ -276,6 +281,14 @@ std::string Workbook::next_threaded_comment_guid() {
   return FormatGuid(high, low);
 }
 
+void Workbook::fill_mention_ids(std::vector<Mention>& mentions) {
+  for (Mention& m : mentions) {
+    if (m.mention_id.empty()) {
+      m.mention_id = next_threaded_comment_guid();
+    }
+  }
+}
+
 Expected<std::string, Error> Workbook::add_threaded_comment(std::size_t sheet_index, ThreadedComment comment) {
   ASSIGN_OR_RETURN(Sheet * target, SheetAt(*this, sheet_index));
   std::vector<ThreadedComment>& list = target->mutable_threaded_comments();
@@ -300,6 +313,7 @@ Expected<std::string, Error> Workbook::add_threaded_comment(std::size_t sheet_in
   if (!is_threaded_comment_timestamp(comment.created)) {
     return Invalid("created is not YYYY-MM-DDTHH:MM:SS.ss", comment.created);
   }
+  fill_mention_ids(comment.mentions);
   RETURN_IF_ERROR(ValidateText(comment.text, comment.mentions, persons_));
 
   std::size_t insert_at = list.size();
@@ -345,6 +359,7 @@ Expected<void, Error> Workbook::edit_threaded_comment(std::size_t sheet_index, s
   if (index == list.size()) {
     return Refuse(FormulonErrorCode::kNotFound, "no such comment", id);
   }
+  fill_mention_ids(mentions);
   RETURN_IF_ERROR(ValidateText(text, mentions, persons_));
   list[index].text = std::move(text);
   list[index].mentions = std::move(mentions);

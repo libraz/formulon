@@ -13,6 +13,8 @@ from formulon import (
     BlanksAs,
     CellAddress,
     CellRect,
+    ChartFill,
+    ChartLine,
     Color,
     ColorKind,
     Comment,
@@ -23,7 +25,6 @@ from formulon import (
     NotFoundError,
     Shape,
     ShapeInput,
-    ShapePaint,
     ShapeProperties,
     SheetRect,
     Sparkline,
@@ -41,9 +42,8 @@ def _box(**overrides):
         name="Box",
         preset_geometry="roundRect",
         text="Hello\nWorld",
-        fill_kind=ShapePaint.SOLID,
-        fill_color="#FF0000",
-        line_kind=ShapePaint.NONE,
+        fill=ChartFill(color="#FF0000"),
+        line=ChartLine(none=True),
         rotation_deg=15.0,
     )
     fields.update(overrides)
@@ -65,9 +65,7 @@ class ShapeTests(unittest.TestCase):
                         height_emu=12700,
                     ),
                     preset_geometry="line",
-                    line_kind=ShapePaint.SOLID,
-                    line_color="#00FF00",
-                    line_width_pt=1.5,
+                    line=ChartLine(color="#00FF00", width_pt=1.5),
                 ),
             )
             self.assertIsInstance(rect, Shape)
@@ -83,29 +81,26 @@ class ShapeTests(unittest.TestCase):
                 self.assertEqual(
                     (common[0].name, shapes[0].preset_geometry, shapes[0].text), ("Box", "roundRect", "Hello\nWorld")
                 )
-                self.assertEqual(
-                    (shapes[0].fill_kind, shapes[0].fill_color),
-                    (ShapePaint.SOLID, Color(ColorKind.RGB, argb=0xFFFF0000)),
-                )
-                self.assertEqual(shapes[0].line_kind, ShapePaint.NONE)
+                self.assertEqual(shapes[0].fill, ChartFill(color=Color(ColorKind.RGB, argb=0xFFFF0000)))
+                self.assertEqual(shapes[0].line, ChartLine(none=True))
                 self.assertEqual((shapes[0].rotation_deg, common[0].hidden, shapes[0].text_box), (15.0, False, False))
                 self.assertEqual(
                     (common[0].anchor.from_row, common[0].anchor.to_row, common[0].anchor.to_col), (1, 5, 4)
                 )
                 self.assertEqual(shapes[1].kind, DrawingObjectKind.CONNECTOR)
                 self.assertEqual(
-                    (common[1].anchor.from_col_offset_emu, common[1].anchor.width_emu, shapes[1].line_color),
+                    (common[1].anchor.from_col_offset_emu, common[1].anchor.width_emu, shapes[1].line.color),
                     (500, 914400, Color(ColorKind.RGB, argb=0xFF00FF00)),
                 )
-                self.assertEqual(shapes[1].line_width_pt, 1.5)
+                self.assertEqual(shapes[1].line.width_pt, 1.5)
 
-                loaded.sheet(0).shape(rect.object_id).update(name="Renamed", hidden=True, fill_kind=ShapePaint.NONE)
+                loaded.sheet(0).shape(rect.object_id).update(name="Renamed", hidden=True, fill=ChartFill(none=True))
                 loaded.sheet(0).insert_rows(0, 2)
                 moved_handle = loaded.sheet(0).list_shapes()[0]
                 moved = moved_handle.get_properties()
                 moved_common = moved_handle.get_drawing_properties()
                 self.assertEqual(
-                    (moved_common.name, moved_common.hidden, moved.fill_kind), ("Renamed", True, ShapePaint.NONE)
+                    (moved_common.name, moved_common.hidden, moved.fill), ("Renamed", True, ChartFill(none=True))
                 )
                 self.assertEqual((moved.preset_geometry, moved.rotation_deg), ("roundRect", 15.0))
                 self.assertEqual((moved_common.anchor.from_row, moved_common.anchor.to_row), (4, 8))
@@ -123,8 +118,8 @@ class ShapeTests(unittest.TestCase):
                 (anchor.kind, anchor.from_row, anchor.from_col, anchor.to_row, anchor.to_col),
                 (AnchorKind.TWO_CELL, 1, 1, 4, 4),
             )
-            self.assertEqual(shape.get_properties().fill_kind, ShapePaint.DEFAULT)
-            self.assertEqual(shape.get_properties().line_kind, ShapePaint.DEFAULT)
+            self.assertIsNone(shape.get_properties().fill)
+            self.assertIsNone(shape.get_properties().line)
             for flat in ("anchor_kind", "from_row", "from_col", "to_row", "to_col", "width_emu", "height_emu"):
                 with self.subTest(key=flat):
                     with self.assertRaises(TypeError):
@@ -162,15 +157,13 @@ class ShapeTests(unittest.TestCase):
                 shape.update(name="M", text=None)  # type: ignore[arg-type]
             self.assertEqual(shape.name, "N")
 
-    def test_a_shape_paint_default_is_a_real_state_and_a_patch_removes_the_own_paint(self) -> None:
+    def test_a_shape_paint_default_is_a_real_state_and_none_removes_the_own_paint(self) -> None:
         with Workbook.create_default() as wb:
             shape = wb.sheet(0).add_shape(ShapeInput(**_box()))
-            self.assertEqual(shape.get_properties().fill_kind, ShapePaint.SOLID)
-            shape.update(fill_kind=ShapePaint.DEFAULT, line_kind=ShapePaint.DEFAULT)
+            self.assertIsNotNone(shape.get_properties().fill)
+            shape.update(fill=None, line=None)
             props = shape.get_properties()
-            self.assertEqual((props.fill_kind, props.line_kind), (ShapePaint.DEFAULT, ShapePaint.DEFAULT))
-            self.assertEqual((props.fill_color, props.line_color), (None, None))
-            self.assertEqual((ShapePaint.DEFAULT, ShapePaint.SOLID, ShapePaint.NONE, ShapePaint.OTHER), (0, 1, 2, 3))
+            self.assertEqual((props.fill, props.line), (None, None))
 
     def test_a_shape_and_a_group_member_are_removed_by_the_one_remover(self) -> None:
         with Workbook.create_default() as wb:
@@ -189,7 +182,7 @@ class ShapeTests(unittest.TestCase):
         with Workbook.create_default() as wb:
             for bad in (
                 _box(anchor=DrawingAnchorInput(kind=9, from_row=1, from_col=1, to_row=5, to_col=4)),
-                _box(fill_kind=ShapePaint.OTHER),
+                _box(fill=ChartFill(other=True)),
                 _box(anchor=DrawingAnchorInput(kind=AnchorKind.TWO_CELL, from_row=1, from_col=1, to_row=0, to_col=4)),
                 _box(preset_geometry='a"/>'),
             ):
@@ -215,7 +208,7 @@ def _group(**overrides) -> SparklineGroupInput:
         display_x_axis=True,
         min_axis_type=SparklineAxisType.CUSTOM,
         manual_min=-1.5,
-        line_weight=1.25,
+        line_width_pt=1.25,
         empty_cells_as=BlanksAs.ZERO,
         sparklines=[SparklineInput("Sheet1!A1:D1", "F1"), SparklineInput("Sheet1!A2:D2", "F2")],
     )
@@ -242,7 +235,7 @@ class SparklineGroupTests(unittest.TestCase):
                 self.assertEqual((first.markers, first.high, first.negative), (True, False, True))
                 self.assertEqual(first.min_axis_type, SparklineAxisType.CUSTOM)
                 self.assertEqual((first.manual_min, first.manual_max), (-1.5, None))
-                self.assertEqual(first.line_weight, 1.25)
+                self.assertEqual(first.line_width_pt, 1.25)
                 self.assertEqual(first.empty_cells_as, BlanksAs.ZERO)
                 self.assertEqual(
                     first.sparklines,
@@ -251,7 +244,7 @@ class SparklineGroupTests(unittest.TestCase):
                         Sparkline(SheetRect(0, CellRect(1, 0, 1, 3)), CellAddress(1, 5)),
                     ],
                 )
-                self.assertEqual((second.type, second.line_weight), (SparklineType.LINE, 0.75))
+                self.assertEqual((second.type, second.line_width_pt), (SparklineType.LINE, 0.75))
 
                 loaded.sheet(0).insert_rows(0, 1)
                 self.assertEqual(
@@ -293,7 +286,7 @@ class SparklineGroupTests(unittest.TestCase):
                 SparklineGroupInput(sparklines=[SparklineInput("Sheet1!A1:D1", "F1:F2")]),
                 SparklineGroupInput(sparklines=[SparklineInput("", "F1")]),
                 SparklineGroupInput(type=7, sparklines=good),
-                SparklineGroupInput(line_weight=-1.0, sparklines=good),
+                SparklineGroupInput(line_width_pt=-1.0, sparklines=good),
             ):
                 with self.assertRaises(FormulonError):
                     wb.sheet(0).add_sparkline_group(bad)

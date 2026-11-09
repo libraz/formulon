@@ -54,7 +54,7 @@ struct RangeGuard {
 
 fm_status_t SetWholeRowBreak(fm_workbook_t* wb, uint32_t row) {
   fm_row_break_t brk = FM_STRUCT_INIT(fm_row_break_t);
-  brk.manual = 1;
+  brk.manual = FM_TRISTATE_TRUE;
   return fm_sheet_set_row_break(wb, 0, row, &brk);
 }
 
@@ -414,9 +414,9 @@ TEST(FormulonCApiCellRange, FormulaGettersReadA1AndR1C1) {
 TEST(FormulonCApiCellRange, MergesInRangeReportsIntersectingMerges) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  ASSERT_EQ(fm_sheet_add_merge(wb.handle, 0, record_arg(fm_cell_rect_t{0U, 0U, 1U, 1U})), 0);
-  ASSERT_EQ(fm_sheet_add_merge(wb.handle, 0, record_arg(fm_cell_rect_t{5U, 5U, 6U, 8U})), 0);
-  ASSERT_EQ(fm_sheet_add_merge(wb.handle, 0, record_arg(fm_cell_rect_t{20U, 0U, 20U, 3U})), 0);
+  ASSERT_EQ(fm_sheet_add_merge(wb.handle, 0, record_arg(fm_cell_rect_t{0U, 0U, 1U, 1U}), nullptr), 0);
+  ASSERT_EQ(fm_sheet_add_merge(wb.handle, 0, record_arg(fm_cell_rect_t{5U, 5U, 6U, 8U}), nullptr), 0);
+  ASSERT_EQ(fm_sheet_add_merge(wb.handle, 0, record_arg(fm_cell_rect_t{20U, 0U, 20U, 3U}), nullptr), 0);
 
   std::size_t total = 0;
   ASSERT_EQ(fm_sheet_get_merges_in_range(wb.handle, 0, record_arg(fm_cell_rect_t{1U, 1U, 6U, 6U}), nullptr, 0U, &total),
@@ -561,8 +561,8 @@ TEST(FormulonCApiPaginationDetail, ManualBreaksAreFlagged) {
   for (size_t i = 0; i < h_count; ++i) {
     fm_row_break_t brk = FM_STRUCT_INIT(fm_row_break_t);
     ASSERT_EQ(fm_pagination_get_row_break_at(p.handle, i, &brk), 0);
-    EXPECT_EQ(brk.manual, brk.row == 10U ? 1 : 0) << "break before row " << brk.row;
-    manual_breaks += static_cast<std::size_t>(brk.manual);
+    EXPECT_EQ(brk.manual, brk.row == 10U ? FM_TRISTATE_TRUE : FM_TRISTATE_FALSE) << "break before row " << brk.row;
+    manual_breaks += brk.manual == FM_TRISTATE_TRUE ? 1U : 0U;
   }
   EXPECT_EQ(manual_breaks, 1U);
 
@@ -570,7 +570,7 @@ TEST(FormulonCApiPaginationDetail, ManualBreaksAreFlagged) {
   for (size_t i = 0; i < v_count; ++i) {
     fm_column_break_t brk = FM_STRUCT_INIT(fm_column_break_t);
     ASSERT_EQ(fm_pagination_get_column_break_at(p.handle, i, &brk), 0);
-    EXPECT_EQ(brk.manual, 0);
+    EXPECT_EQ(brk.manual, FM_TRISTATE_FALSE);
   }
   fm_row_break_t row_out = FM_STRUCT_INIT(fm_row_break_t);
   fm_column_break_t column_out = FM_STRUCT_INIT(fm_column_break_t);
@@ -587,7 +587,7 @@ TEST(FormulonCApiPaginationDetail, ManualBreakReadsItsDeclaredSpanAndAutomaticOn
   fm_row_break_t declared = FM_STRUCT_INIT(fm_row_break_t);
   declared.first = 2U;
   declared.last = 5U;
-  declared.manual = 1;
+  declared.manual = FM_TRISTATE_TRUE;
   ASSERT_EQ(fm_sheet_set_row_break(wb.handle, 0, 10U, &declared), 0);
 
   PaginationGuard p;
@@ -598,7 +598,7 @@ TEST(FormulonCApiPaginationDetail, ManualBreakReadsItsDeclaredSpanAndAutomaticOn
   for (size_t i = 0; i < count; ++i) {
     fm_row_break_t brk = FM_STRUCT_INIT(fm_row_break_t);
     ASSERT_EQ(fm_pagination_get_row_break_at(p.handle, i, &brk), 0);
-    if (brk.manual == 1) {
+    if (brk.manual == FM_TRISTATE_TRUE) {
       EXPECT_EQ(brk.row, 10U);
       EXPECT_EQ(brk.first, 2U);
       EXPECT_EQ(brk.last, 5U);

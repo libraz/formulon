@@ -57,11 +57,12 @@ TEST(FormulonCApiPivot, ReadBackRoundTripsWhatTheSettersWrote) {
   EXPECT_STREQ(name, "Renamed");
 
   ASSERT_EQ(SetGrandTotals(wb.handle, pivot_index, 0, 1), 0);
-  std::int32_t grand_rows = -1;
-  std::int32_t grand_cols = -1;
-  ASSERT_EQ(fm_sheet_get_pivot_grand_totals(wb.handle, 0, pivot_index, &grand_rows, &grand_cols), 0);
-  EXPECT_EQ(grand_rows, 0);
-  EXPECT_EQ(grand_cols, 1);
+  fm_pivot_grand_totals_t grand = FM_STRUCT_INIT(fm_pivot_grand_totals_t);
+  grand.rows = -1;
+  grand.columns = -1;
+  ASSERT_EQ(fm_sheet_get_pivot_grand_totals(wb.handle, 0, pivot_index, &grand), 0);
+  EXPECT_EQ(grand.rows, 0);
+  EXPECT_EQ(grand.columns, 1);
 
   // Field 0 is "Region" (row), field 1 is "Amount" (value).
   ASSERT_EQ(SetPivotFieldSort(wb.handle, 0, pivot_index, 0, FM_PIVOT_SORT_ORDER_DESCENDING, "Sum of Amount"), 0);
@@ -133,12 +134,8 @@ TEST(FormulonCApiPivot, ReadBackRoundTripsWhatTheSettersWrote) {
   EXPECT_EQ(data_field.show_as_base_item, 1U);
 
   // Field orders follow the setters.
-  fm_pivot_field_spec_t extra = FM_STRUCT_INIT(fm_pivot_field_spec_t);
-  extra.source_name = "Amount";
-  extra.axis = FM_PIVOT_AXIS_COLUMN;
-  extra.subtotal_top = FM_TRISTATE_TRUE;
-  std::size_t extra_index = 99;
-  ASSERT_EQ(fm_sheet_add_pivot_field(wb.handle, 0, pivot_index, &extra, &extra_index), 0);
+  const std::size_t extra_index = 1;  // Amount
+  ASSERT_EQ(fm_sheet_set_pivot_field_axis(wb.handle, 0, pivot_index, extra_index, FM_PIVOT_AXIS_COLUMN), 0);
   std::uint32_t order[8] = {};
   std::size_t order_count = 99;
   ASSERT_EQ(fm_sheet_get_pivot_column_field_order(wb.handle, 0, pivot_index, order, 8U, &order_count), 0);
@@ -174,7 +171,8 @@ TEST(FormulonCApiPivot, ReadBackSurvivesSaveAndReload) {
   ASSERT_EQ(SetPivotFieldItemVisible(wb.handle, 0, pivot_index, 0, 1, 0), 0);
 
   BufferGuard saved;
-  ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0)
+      << fm_get_last_error_message();
   WorkbookGuard reloaded;
   ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &reloaded.handle), 0) << fm_get_last_error_message();
 
@@ -183,11 +181,12 @@ TEST(FormulonCApiPivot, ReadBackSurvivesSaveAndReload) {
   const char* name = nullptr;
   ASSERT_EQ(fm_sheet_get_pivot_name(reloaded.handle, 0, 0, &name), 0);
   EXPECT_STREQ(name, "PT");
-  std::int32_t grand_rows = -1;
-  std::int32_t grand_cols = -1;
-  ASSERT_EQ(fm_sheet_get_pivot_grand_totals(reloaded.handle, 0, 0, &grand_rows, &grand_cols), 0);
-  EXPECT_EQ(grand_rows, 1);
-  EXPECT_EQ(grand_cols, 0);
+  fm_pivot_grand_totals_t grand = FM_STRUCT_INIT(fm_pivot_grand_totals_t);
+  grand.rows = -1;
+  grand.columns = -1;
+  ASSERT_EQ(fm_sheet_get_pivot_grand_totals(reloaded.handle, 0, 0, &grand), 0);
+  EXPECT_EQ(grand.rows, 1);
+  EXPECT_EQ(grand.columns, 0);
 
   fm_pivot_field_info_t region = FM_STRUCT_INIT(fm_pivot_field_info_t);
   ASSERT_EQ(fm_sheet_get_pivot_field_at(reloaded.handle, 0, 0, 0, &region), 0);
@@ -270,13 +269,12 @@ TEST(FormulonCApiPivot, DerivedDataFieldNameUsesTheFieldDisplayNameAndSetPath) {
   ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_index), 0) << fm_get_last_error_message();
 
   // A renamed source field is named by its caption.
-  fm_pivot_field_spec_t caption = FM_STRUCT_INIT(fm_pivot_field_spec_t);
-  caption.source_name = "Amount";
+  const std::size_t caption_index = 1;  // Amount
+  fm_pivot_field_patch_t caption = FM_STRUCT_INIT(fm_pivot_field_patch_t);
+  caption.custom_name_op = FM_PATCH_OP_SET;
   caption.custom_name = "Sales";
-  caption.axis = FM_PIVOT_AXIS_VALUE;
-  caption.subtotal_top = FM_TRISTATE_TRUE;
-  std::size_t caption_index = 99;
-  ASSERT_EQ(fm_sheet_add_pivot_field(wb.handle, 0, pivot_index, &caption, &caption_index), 0);
+  ASSERT_EQ(fm_sheet_update_pivot_field(wb.handle, 0, pivot_index, caption_index, &caption), 0);
+  ASSERT_EQ(fm_sheet_set_pivot_field_axis(wb.handle, 0, pivot_index, caption_index, FM_PIVOT_AXIS_VALUE), 0);
 
   fm_pivot_data_field_t spec = FM_STRUCT_INIT(fm_pivot_data_field_t);
   spec.field_index = static_cast<std::uint32_t>(caption_index);
@@ -323,32 +321,22 @@ void BuildWideCachePivot(fm_workbook_t* wb, std::uint32_t* cache_id, std::size_t
   ASSERT_EQ(AddPivot(wb, 0, "PT", *cache_id, 0, 6, pivot_index), 0);
 }
 
-fm_pivot_field_spec_t FieldSpec(const char* name, fm_pivot_axis_t axis) {
-  fm_pivot_field_spec_t spec = FM_STRUCT_INIT(fm_pivot_field_spec_t);
-  spec.source_name = name;
-  spec.axis = axis;
-  spec.subtotal_top = FM_TRISTATE_TRUE;
-  return spec;
-}
-
 }  // namespace
 
-TEST(FormulonCApiPivot, FieldAddBindsToTheCacheColumnByName) {
+TEST(FormulonCApiPivot, FieldAxisBindsToTheCacheColumnPosition) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   std::uint32_t cache_id = 0;
   std::size_t pivot = 0;
   BuildWideCachePivot(wb.handle, &cache_id, &pivot);
 
-  std::size_t region = 99;
-  std::size_t sales = 99;
-  const fm_pivot_field_spec_t region_spec = FieldSpec("Region", FM_PIVOT_AXIS_ROW);
-  const fm_pivot_field_spec_t sales_spec = FieldSpec("Sales", FM_PIVOT_AXIS_VALUE);
-  ASSERT_EQ(fm_sheet_add_pivot_field(wb.handle, 0, pivot, &region_spec, &region), 0) << fm_get_last_error_message();
-  ASSERT_EQ(fm_sheet_add_pivot_field(wb.handle, 0, pivot, &sales_spec, &sales), 0) << fm_get_last_error_message();
-  // The index is the cache column's position, not the order the fields were added in.
-  EXPECT_EQ(region, 0U);
-  EXPECT_EQ(sales, 2U);
+  // The pivot carries one field per cache column, in cache order.
+  const std::size_t region = 0;
+  const std::size_t sales = 2;
+  ASSERT_EQ(fm_sheet_set_pivot_field_axis(wb.handle, 0, pivot, region, FM_PIVOT_AXIS_ROW), 0)
+      << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_set_pivot_field_axis(wb.handle, 0, pivot, sales, FM_PIVOT_AXIS_VALUE), 0)
+      << fm_get_last_error_message();
   std::size_t count = 0;
   ASSERT_EQ(fm_sheet_get_pivot_field_count(wb.handle, 0, pivot, &count), 0);
   EXPECT_EQ(count, 4U);
@@ -376,15 +364,12 @@ TEST(FormulonCApiPivot, FieldAddBindsToTheCacheColumnByName) {
   }
   EXPECT_EQ(grand_total, 600.0);
 
-  // Adding a field again updates it in place.
-  const fm_pivot_field_spec_t renamed = [] {
-    fm_pivot_field_spec_t spec = FieldSpec("Region", FM_PIVOT_AXIS_ROW);
-    spec.custom_name = "Area";
-    return spec;
-  }();
-  std::size_t again = 99;
-  ASSERT_EQ(fm_sheet_add_pivot_field(wb.handle, 0, pivot, &renamed, &again), 0);
-  EXPECT_EQ(again, 0U);
+  // Placing a field again updates it in place.
+  fm_pivot_field_patch_t renamed = FM_STRUCT_INIT(fm_pivot_field_patch_t);
+  renamed.custom_name_op = FM_PATCH_OP_SET;
+  renamed.custom_name = "Area";
+  ASSERT_EQ(fm_sheet_update_pivot_field(wb.handle, 0, pivot, region, &renamed), 0);
+  ASSERT_EQ(fm_sheet_set_pivot_field_axis(wb.handle, 0, pivot, region, FM_PIVOT_AXIS_ROW), 0);
   ASSERT_EQ(fm_sheet_get_pivot_field_count(wb.handle, 0, pivot, &count), 0);
   EXPECT_EQ(count, 4U);
   std::uint32_t order[8] = {};
@@ -392,11 +377,9 @@ TEST(FormulonCApiPivot, FieldAddBindsToTheCacheColumnByName) {
   ASSERT_EQ(fm_sheet_get_pivot_row_field_order(wb.handle, 0, pivot, order, 8U, &order_count), 0);
   EXPECT_EQ(order_count, 1U);
 
-  // A name the cache lacks is appended after the materialised fields.
-  const fm_pivot_field_spec_t extra = FieldSpec("Notes", FM_PIVOT_AXIS_ROW);
-  std::size_t appended = 0;
-  ASSERT_EQ(fm_sheet_add_pivot_field(wb.handle, 0, pivot, &extra, &appended), 0);
-  EXPECT_EQ(appended, 4U);
+  // A position past the cache columns names no field.
+  EXPECT_EQ(fm_sheet_set_pivot_field_axis(wb.handle, 0, pivot, 4, FM_PIVOT_AXIS_ROW),
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kIndexOutOfRange));
 }
 
 TEST(FormulonCApiPivot, FieldAxisNoneTakesTheFieldOffTheReport) {
@@ -406,12 +389,9 @@ TEST(FormulonCApiPivot, FieldAxisNoneTakesTheFieldOffTheReport) {
   std::size_t pivot = 0;
   BuildWideCachePivot(wb.handle, &cache_id, &pivot);
   std::size_t idx = 0;
-  const fm_pivot_field_spec_t region = FieldSpec("Region", FM_PIVOT_AXIS_ROW);
-  const fm_pivot_field_spec_t sales = FieldSpec("Sales", FM_PIVOT_AXIS_VALUE);
-  const fm_pivot_field_spec_t qty = FieldSpec("Qty", FM_PIVOT_AXIS_VALUE);
-  ASSERT_EQ(fm_sheet_add_pivot_field(wb.handle, 0, pivot, &region, &idx), 0);
-  ASSERT_EQ(fm_sheet_add_pivot_field(wb.handle, 0, pivot, &sales, &idx), 0);
-  ASSERT_EQ(fm_sheet_add_pivot_field(wb.handle, 0, pivot, &qty, &idx), 0);
+  ASSERT_EQ(fm_sheet_set_pivot_field_axis(wb.handle, 0, pivot, 0, FM_PIVOT_AXIS_ROW), 0);    // Region
+  ASSERT_EQ(fm_sheet_set_pivot_field_axis(wb.handle, 0, pivot, 2, FM_PIVOT_AXIS_VALUE), 0);  // Sales
+  ASSERT_EQ(fm_sheet_set_pivot_field_axis(wb.handle, 0, pivot, 3, FM_PIVOT_AXIS_VALUE), 0);  // Qty
   for (const std::uint32_t field : {2U, 3U}) {
     fm_pivot_data_field_t df = FM_STRUCT_INIT(fm_pivot_data_field_t);
     df.field_index = field;
@@ -422,7 +402,7 @@ TEST(FormulonCApiPivot, FieldAxisNoneTakesTheFieldOffTheReport) {
   }
   fm_pivot_filter_t filter = FM_STRUCT_INIT(fm_pivot_filter_t);
   filter.field_index = 3;
-  filter.type = FM_PIVOT_FILTER_KIND_VALUE_GREATER_THAN;
+  filter.kind = FM_PIVOT_FILTER_KIND_VALUE_GREATER_THAN;
   filter.value_kind = FM_PIVOT_FILTER_OPERAND_KIND_DOUBLE;
   filter.value_double = 0.0;
   filter.data_field_index = 1;
@@ -469,7 +449,8 @@ TEST(FormulonCApiPivot, SaveDropsPivotCachesNoPivotUses) {
   BuildWideCachePivot(wb.handle, &cache_id, &pivot);
   const auto saved_with_cache = [&] {
     BufferGuard saved;
-    EXPECT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0) << fm_get_last_error_message();
+    EXPECT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0)
+        << fm_get_last_error_message();
     return std::string(reinterpret_cast<const char*>(saved.data), saved.len).find("pivotCacheDefinition1.xml") !=
            std::string::npos;
   };
@@ -526,7 +507,7 @@ std::vector<std::uint8_t> WithPivotTablePart(const std::vector<std::uint8_t>& ar
 // `tail`, and loads the result into `out`.
 void LoadWithPivotTail(fm_workbook_t* wb, const std::string& tail, WorkbookGuard* out) {
   BufferGuard saved;
-  ASSERT_EQ(fm_workbook_save(wb, &saved.data, &saved.len), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_workbook_save(wb, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0) << fm_get_last_error_message();
   const std::vector<std::uint8_t> archive(saved.data, saved.data + saved.len);
   std::string xml = ExtractZipEntry(archive, "xl/pivotTables/pivotTable1.xml");
   const std::size_t cut = xml.find("</dataFields>");
@@ -594,7 +575,8 @@ TEST(FormulonCApiPivot, StyleOptionsRoundTripsThroughSetSaveAndLoad) {
   EXPECT_EQ(style.show_last_column, 0);
 
   BufferGuard saved;
-  ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0)
+      << fm_get_last_error_message();
   WorkbookGuard reloaded;
   ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &reloaded.handle), 0) << fm_get_last_error_message();
   style = ReadStyleOptions(reloaded.handle);
@@ -717,7 +699,8 @@ TEST(FormulonCApiPivot, SettingAWorksheetSourceDropsTheCapturedSourceKind) {
   EXPECT_TRUE(cache->cache_source_children_xml().empty());
 
   BufferGuard saved;
-  ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0)
+      << fm_get_last_error_message();
   const std::string definition = ExtractZipEntry(std::vector<std::uint8_t>(saved.data, saved.data + saved.len),
                                                  "xl/pivotCache/pivotCacheDefinition1.xml");
   EXPECT_NE(definition.find("<cacheSource type=\"worksheet\"><worksheetSource"), std::string::npos) << definition;

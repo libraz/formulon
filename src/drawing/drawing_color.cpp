@@ -197,6 +197,22 @@ std::optional<ColorSpec> read_color(const Workbook& wb, const xml_node& clr, boo
   return read_rendered(wb, clr);
 }
 
+std::optional<ColorSpec> read_exact(const xml_node& clr, bool remapped) {
+  if (io::local_name(clr) != "srgbClr") {
+    return read_theme(clr, remapped);
+  }
+  const std::string_view val = clr.attribute("val").value();
+  if (val.size() != 6U || val.find_first_not_of("0123456789abcdefABCDEF") != std::string_view::npos) {
+    return std::nullopt;
+  }
+  for (xml_node child = clr.first_child(); child; child = child.next_sibling()) {
+    if (child.type() == pugi::node_element && io::local_name(child) != "alpha") {
+      return std::nullopt;
+    }
+  }
+  return rgb_spec(io::parse_rgb_hex(val, 0U) | 0xFF000000U);
+}
+
 std::string alpha_of(const xml_node& clr) {
   return io::child_local(clr, "alpha").attribute("val").value();
 }

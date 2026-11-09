@@ -89,8 +89,9 @@ function pivotWorkbook(wb, formulon) {
     cache.setRecordValue(rec, 1, amount);
   }
   const pivot = ws.addPivot({ name: 'Pivot1', cacheId: cache.cacheId, anchor: { row: 0, col: 4 } });
-  ws.pivot(pivot).addField({ fieldIndex: 'Region', axis: formulon.PivotAxis.Row });
-  const amountField = ws.pivot(pivot).addField({ fieldIndex: 'Amount', axis: formulon.PivotAxis.Value });
+  ws.pivot(pivot).setFieldAxis('Region', formulon.PivotAxis.Row);
+  ws.pivot(pivot).setFieldAxis('Amount', formulon.PivotAxis.Value);
+  const amountField = 1;
   ws.pivot(pivot).addDataField({ name: 'Sum of Amount', fieldIndex: amountField, aggregation: 0 });
   return { cache, cacheId: cache.cacheId, pivot };
 }
@@ -127,9 +128,7 @@ const CELL_METHODS = {
   'Sheet.getSpill': { args: () => [CELL_ROW, CELL_COL] },
   'Sheet.getTypedValue': { args: () => [CELL_ROW, CELL_COL] },
   'Sheet.getValue': { args: () => [CELL_ROW, CELL_COL] },
-  'Sheet.removeComment': { args: () => [CELL_ROW, CELL_COL] },
   'Sheet.removeDataTable': { args: () => [CELL_ROW, CELL_COL] },
-  'Sheet.removeHyperlink': { args: () => [CELL_ROW, CELL_COL] },
   'Sheet.setBlank': {
     args: () => [CELL_ROW, CELL_COL],
     pre: (ws) => ws.setNumber(CELL_ROW, CELL_COL, 7),
@@ -374,7 +373,8 @@ test('edge: setFormula accepts text with or without the leading equals sign', as
 
 const R = rect(1, 1, 2, 2);
 const RECT_METHODS = {
-  'Sheet.setHyperlinkRange': { args: (r) => [r, HYPERLINK], mutates: true },
+  'Sheet.insertCells': { args: (r) => [r, 0], pre: (ws) => ws.setNumber(CELL_ROW, CELL_COL, 5), mutates: true },
+  'Sheet.deleteCells': { args: (r) => [r, 2], pre: (ws) => ws.setNumber(4, CELL_COL, 5), mutates: true },
   'Sheet.addMerge': { args: (r) => [r], mutates: true },
   'Sheet.evaluateCfRange': { args: (r) => [r, 45000] },
   'Sheet.getCellRectPt': { args: (r, f) => [r, f.GeometryMode.Display] },

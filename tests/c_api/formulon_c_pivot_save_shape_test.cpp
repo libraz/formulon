@@ -59,15 +59,8 @@ void BuildHostPivot(fm_workbook_t* wb) {
   ASSERT_EQ(AddPivot(wb, 0, "PT1", cache_id, 2U, 5U, &pivot), 0) << fm_get_last_error_message();
   const fm_pivot_axis_t axes[] = {FM_PIVOT_AXIS_ROW, FM_PIVOT_AXIS_COLUMN, FM_PIVOT_AXIS_VALUE, FM_PIVOT_AXIS_VALUE};
   for (std::size_t i = 0; i < 4; ++i) {
-    fm_pivot_field_spec_t spec = FM_STRUCT_INIT(fm_pivot_field_spec_t);
-    spec.source_name = headers[i];
-    spec.custom_name = "";
-    spec.axis = axes[i];
-    spec.subtotal_top = FM_TRISTATE_TRUE;
-    spec.number_format = "";
-    std::size_t field = 99;
-    ASSERT_EQ(fm_sheet_add_pivot_field(wb, 0, pivot, &spec, &field), 0) << fm_get_last_error_message();
-    ASSERT_EQ(field, i);
+    // The pivot already carries one field per cache field, in cache order.
+    ASSERT_EQ(fm_sheet_set_pivot_field_axis(wb, 0, pivot, i, axes[i]), 0) << fm_get_last_error_message();
   }
   const std::uint32_t rows[] = {0U};
   const std::uint32_t cols[] = {1U};
@@ -131,7 +124,8 @@ TEST(FormulonCApiPivotSaveShape, HostBuiltPivotSavesWithItemsAndSharedItems) {
   ASSERT_FALSE(before.empty());
 
   BufferGuard saved;
-  ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0)
+      << fm_get_last_error_message();
   const std::vector<std::uint8_t> package(saved.data, saved.data + saved.len);
   const std::string table = ExtractZipEntry(package, "xl/pivotTables/pivotTable1.xml");
   const std::string def = ExtractZipEntry(package, "xl/pivotCache/pivotCacheDefinition1.xml");
@@ -234,7 +228,7 @@ bool LayoutHasNumber(fm_workbook_t* wb, double number) {
 
 void Save(fm_workbook_t* wb) {
   BufferGuard saved;
-  ASSERT_EQ(fm_workbook_save(wb, &saved.data, &saved.len), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_workbook_save(wb, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0) << fm_get_last_error_message();
 }
 
 }  // namespace
@@ -260,7 +254,8 @@ TEST(FormulonCApiPivotSaveShape, ApiPivotReportIsInTheCellsAndFormulasReadIt) {
 
   // The saved file holds the cells.
   BufferGuard saved;
-  ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0)
+      << fm_get_last_error_message();
   WorkbookGuard loaded;
   ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &loaded.handle), 0) << fm_get_last_error_message();
   ExpectSheetText(loaded.handle, 1U, kLabelCol, "North");
@@ -273,7 +268,8 @@ TEST(FormulonCApiPivotSaveShape, EditOverlappingAMergeIsRefusedAndUndone) {
   WorkbookGuard wb;
   BuildScratch(wb);
   const formulon::pivot::PivotTable* table = wb.handle->wb->sheet(0U).pivot_tables()[0].get();
-  ASSERT_EQ(fm_sheet_add_merge(wb.handle, 0U, record_arg(fm_cell_rect_t{0U, 5U, 1U, 5U})), 0)
+  fm_cell_rect_t merged{};
+  ASSERT_EQ(fm_sheet_add_merge(wb.handle, 0U, record_arg(fm_cell_rect_t{0U, 5U, 1U, 5U}), &merged), 0)
       << fm_get_last_error_message();
 
   // A second data field widens the report into column F.
@@ -305,7 +301,7 @@ TEST(FormulonCApiPivotSaveShape, EditOverlappingAMergeIsRefusedAndUndone) {
   fm_pivot_options_patch_t grid = FM_STRUCT_INIT(fm_pivot_options_patch_t);
   grid.grid_drop_zones_op = FM_PATCH_OP_SET;
   grid.grid_drop_zones = 1;
-  ASSERT_EQ(fm_sheet_add_merge(wb.handle, 0U, record_arg(fm_cell_rect_t{4U, 3U, 4U, 4U})), 0)
+  ASSERT_EQ(fm_sheet_add_merge(wb.handle, 0U, record_arg(fm_cell_rect_t{4U, 3U, 4U, 4U}), &merged), 0)
       << fm_get_last_error_message();
   EXPECT_EQ(fm_sheet_update_pivot_options(wb.handle, 0U, 0U, &grid), kPreconditionFailed);
   fm_pivot_options_t options = FM_STRUCT_INIT(fm_pivot_options_t);
@@ -392,7 +388,8 @@ TEST(FormulonCApiPivotSaveShape, AProjectionThatWouldOverlapStaysPending) {
   ASSERT_EQ(fm_workbook_add_pivot_cache_record(wb.handle, cache_id, &record), 0);
   ASSERT_EQ(fm_workbook_set_pivot_cache_record_number(wb.handle, cache_id, record, 0U, 2.0), 0);
   ASSERT_EQ(fm_workbook_set_pivot_cache_record_number(wb.handle, cache_id, record, 1U, 500.0), 0);
-  ASSERT_EQ(fm_sheet_add_merge(wb.handle, 0U, record_arg(fm_cell_rect_t{4U, 3U, 4U, 4U})), 0)
+  fm_cell_rect_t merged{};
+  ASSERT_EQ(fm_sheet_add_merge(wb.handle, 0U, record_arg(fm_cell_rect_t{4U, 3U, 4U, 4U}), &merged), 0)
       << fm_get_last_error_message();
 
   EXPECT_EQ(fm_sheet_project_pivot(wb.handle, 0U, 0U), kPreconditionFailed);
@@ -412,7 +409,8 @@ TEST(FormulonCApiPivotSaveShape, ProjectingAPivotWithoutRecordsWritesNothing) {
   options.save_data = 0;
   ASSERT_EQ(fm_workbook_update_pivot_cache_options(wb.handle, cache_id, &options), 0) << fm_get_last_error_message();
   BufferGuard saved;
-  ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0)
+      << fm_get_last_error_message();
 
   WorkbookGuard loaded;
   ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &loaded.handle), 0) << fm_get_last_error_message();

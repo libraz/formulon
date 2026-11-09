@@ -143,7 +143,7 @@ TEST(CApiFontRecord, NegativeSizeNamesTheSizePtField) {
   fm_font_t font{};
   ASSERT_EQ(fm_workbook_get_font_at(g.handle, 0, &font), 0);
   font.size_pt = -1.0;
-  std::size_t index = 0;
+  std::uint32_t index = 0;
   EXPECT_EQ(fm_workbook_add_font(g.handle, &font, &index), kInvalidArgument);
   EXPECT_NE(std::string(fm_get_last_error_context()).find("font.size_pt="), std::string::npos)
       << fm_get_last_error_context();

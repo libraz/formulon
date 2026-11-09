@@ -12,9 +12,10 @@ the WASM argument guards.
 
 A name is *public* on a language when its op lists one of the language's
 binding surfaces, does not drop that name, is not ``internal`` and has no
-``handle:``. A *raw* name also counts a dropped, internal or handle one: the raw
-class still registers it, and the facade calls it. Generated tables are keyed
-``Class.method``.
+``handle:``. A *raw* name also counts a dropped, internal or handle one while
+the entry still names it: the raw class registers it, and the facade calls it.
+A dropped name the entry no longer names has left the raw class too. Generated
+tables are keyed ``Class.method``.
 """
 
 from __future__ import annotations
@@ -86,7 +87,7 @@ def qualified(entry: dict, language: str, collections: Dict[str, dict]) -> List[
         return []
     if entry_handle(entry) is not None:
         dropped = _dropped(entry, language)
-        if dropped is not None and dropped == entry.get(language):
+        if dropped is not None and entry.get(language) in (None, dropped):
             return []
         name = handle_name(entry, language, collections)
         return [f"{cls}.{name}" for cls in handle_classes(entry)] if name else []
@@ -96,13 +97,11 @@ def qualified(entry: dict, language: str, collections: Dict[str, dict]) -> List[
 
 
 def raw_name(entry: dict, language: str) -> Optional[str]:
-    """The name the raw class registers for the entry: the public name, else the dropped one."""
+    """The name the raw class registers for the entry: the one it names, dropped from the facade or not."""
     if not _on_language(entry, language):
         return None
     name = entry.get(language)
-    if isinstance(name, str):
-        return name
-    return _dropped(entry, language)
+    return name if isinstance(name, str) else None
 
 
 def module_members() -> frozenset:

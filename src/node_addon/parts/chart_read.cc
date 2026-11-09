@@ -59,29 +59,47 @@ Napi::Value TitleToJs(Napi::Env env, const fm_chart_title_t& t) {
   return o;
 }
 
-Napi::Object FillToJs(Napi::Env env, const fm_chart_fill_t& f) {
+}  // namespace
+
+namespace detail {
+
+Napi::Value FillOrNull(Napi::Env env, const fm_chart_fill_t& f) {
+  if (f.color.kind == FM_COLOR_KIND_NONE && f.has_transparency_pct == 0 && f.none == 0 && f.other == 0) {
+    return env.Null();
+  }
   Napi::Object o = Napi::Object::New(env);
   o.Set("color", ColorSpecOrNull(env, f.color));
   o.Set("transparencyPct", OptionalNumber(env, f.has_transparency_pct, f.transparency_pct));
+  o.Set("none", JsBool(env, f.none));
+  o.Set("other", JsBool(env, f.other));
   return o;
 }
 
-Napi::Object LineToJs(Napi::Env env, const fm_chart_line_t& l) {
+Napi::Value LineOrNull(Napi::Env env, const fm_chart_line_t& l) {
+  if (l.color.kind == FM_COLOR_KIND_NONE && l.has_transparency_pct == 0 && l.has_width_pt == 0 && l.has_dash == 0 &&
+      l.none == 0 && l.other == 0) {
+    return env.Null();
+  }
   Napi::Object o = Napi::Object::New(env);
   o.Set("color", ColorSpecOrNull(env, l.color));
   o.Set("transparencyPct", OptionalNumber(env, l.has_transparency_pct, l.transparency_pct));
   o.Set("widthPt", OptionalNumber(env, l.has_width_pt, l.width_pt));
   o.Set("dash", OptionalNumber(env, l.has_dash, l.dash));
   o.Set("none", JsBool(env, l.none));
+  o.Set("other", JsBool(env, l.other));
   return o;
 }
+
+}  // namespace detail
+
+namespace {
 
 Napi::Object MarkerToJs(Napi::Env env, const fm_chart_marker_t& m) {
   Napi::Object o = Napi::Object::New(env);
   o.Set("symbol", JsNumber(env, m.symbol));
   o.Set("sizePt", OptionalNumber(env, m.has_size_pt, m.size_pt));
-  o.Set("fill", FillToJs(env, m.fill));
-  o.Set("line", LineToJs(env, m.line));
+  o.Set("fill", FillOrNull(env, m.fill));
+  o.Set("line", LineOrNull(env, m.line));
   return o;
 }
 
@@ -134,8 +152,8 @@ Napi::Object SeriesToJs(Napi::Env env, const fm_chart_t* chart, size_t plot, siz
   o.Set("x", DataSourceToJs(env, chart, plot, index, FM_CHART_ROLE_X, s.x, rc));
   o.Set("y", DataSourceToJs(env, chart, plot, index, FM_CHART_ROLE_Y, s.y, rc));
   o.Set("size", DataSourceToJs(env, chart, plot, index, FM_CHART_ROLE_SIZE, s.size, rc));
-  o.Set("fill", FillToJs(env, s.fill));
-  o.Set("line", LineToJs(env, s.line));
+  o.Set("fill", FillOrNull(env, s.fill));
+  o.Set("line", LineOrNull(env, s.line));
   o.Set("marker", s.has_marker != 0 ? Napi::Value(MarkerToJs(env, s.marker)) : env.Null());
   o.Set("smooth", TriToJs(env, s.smooth));
   Napi::Array points = Napi::Array::New(env);
@@ -146,8 +164,8 @@ Napi::Object SeriesToJs(Napi::Env env, const fm_chart_t* chart, size_t plot, siz
     }
     Napi::Object po = Napi::Object::New(env);
     po.Set("index", JsNumber(env, p.idx));
-    po.Set("fill", FillToJs(env, p.fill));
-    po.Set("line", LineToJs(env, p.line));
+    po.Set("fill", FillOrNull(env, p.fill));
+    po.Set("line", LineOrNull(env, p.line));
     po.Set("marker", p.has_marker != 0 ? Napi::Value(MarkerToJs(env, p.marker)) : env.Null());
     points.Set(static_cast<uint32_t>(i), po);
   }
@@ -163,14 +181,15 @@ Napi::Object PlotToJs(Napi::Env env, const fm_chart_t* chart, size_t index, fm_s
     return o;
   }
   o.Set("type", JsNumber(env, p.type));
-  o.Set("extendedLayout",
-        p.extended_layout == FM_CHART_EXTENDED_LAYOUT_ABSENT ? env.Null() : Napi::Value(JsNumber(env, p.extended_layout)));
+  o.Set("extendedLayout", p.extended_layout == FM_CHART_EXTENDED_LAYOUT_ABSENT
+                              ? env.Null()
+                              : Napi::Value(JsNumber(env, p.extended_layout)));
   o.Set("barDirection", p.bar_direction == FM_CHART_BAR_DIRECTION_ABSENT ? env.Null() : JsNumber(env, p.bar_direction));
   o.Set("grouping", OptionalNumber(env, p.has_grouping, p.grouping));
   o.Set("varyColors", Napi::Boolean::New(env, p.vary_colors == FM_TRISTATE_TRUE));
   o.Set("gapWidthPct", OptionalNumber(env, p.has_gap_width_pct, p.gap_width_pct));
-  o.Set("overlap", OptionalNumber(env, p.has_overlap, p.overlap));
-  o.Set("holeSize", OptionalNumber(env, p.has_hole_size, p.hole_size));
+  o.Set("overlapPct", OptionalNumber(env, p.has_overlap_pct, p.overlap_pct));
+  o.Set("holeSizePct", OptionalNumber(env, p.has_hole_size_pct, p.hole_size_pct));
   o.Set("firstSliceAngleDeg", OptionalNumber(env, p.has_first_slice_angle_deg, p.first_slice_angle_deg));
   Napi::Array axis_ids = Napi::Array::New(env);
   for (size_t i = 0; i < p.axis_id_count && rc == 0; ++i) {
@@ -329,8 +348,8 @@ Napi::Object DataSeriesToJs(Napi::Env env, const fm_chart_data_t* data, size_t i
   o.Set("plotIndex", JsNumber(env, static_cast<double>(s.plot_index)));
   o.Set("seriesId", JsNumber(env, s.series_id));
   o.Set("name", StringOrNull(env, s.name));
-  o.Set("numberFormat", JsString(env, s.format_code));
-  o.Set("xNumberFormat", JsString(env, s.x_format_code));
+  o.Set("numberFormat", JsString(env, s.number_format));
+  o.Set("xNumberFormat", JsString(env, s.x_number_format));
   o.Set("filtered", JsBool(env, s.filtered));
   o.Set("values", CopyDoubles(env, pts.values, pts.count));
   o.Set("states", CopyBytes(env, pts.states, pts.count));
@@ -392,7 +411,7 @@ Napi::Object ChartDataToJs(Napi::Env env, const fm_chart_data_t* data, fm_status
   categories.Set("labels", labels);
   categories.Set("levels", levels);
   categories.Set("values", numeric ? Napi::Value(values) : env.Null());
-  categories.Set("numberFormat", JsString(env, info.category_format_code));
+  categories.Set("numberFormat", JsString(env, info.category_number_format));
   categories.Set("generated", JsBool(env, info.categories_generated));
   o.Set("categories", categories);
 
@@ -420,7 +439,7 @@ Napi::Object ChartDataToJs(Napi::Env env, const fm_chart_data_t* data, fm_status
     if (Step(rc, fm_chart_data_get_unresolved_at(data, i, &u))) {
       Napi::Object item = Napi::Object::New(env);
       item.Set("seriesId", JsNumber(env, u.series_id));
-      item.Set("source", JsNumber(env, u.source));
+      item.Set("role", JsNumber(env, u.role));
       item.Set("axisId", JsNumber(env, u.axis_id));
       unresolved.Set(static_cast<uint32_t>(i), item);
     }

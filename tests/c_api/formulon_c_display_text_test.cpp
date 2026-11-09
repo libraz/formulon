@@ -50,7 +50,7 @@ using Bytes = std::vector<std::uint8_t>;
 Bytes SavePackage(fm_workbook_t* wb) {
   std::uint8_t* data = nullptr;
   std::size_t len = 0;
-  EXPECT_EQ(fm_workbook_save(wb, &data, &len), 0);
+  EXPECT_EQ(fm_workbook_save(wb, FM_WORKBOOK_FORMAT_XLSX, &data, &len), 0);
   Bytes result;
   if (data != nullptr) {
     result.assign(data, data + len);
@@ -114,7 +114,7 @@ Bytes PackageWithColumnPercentSpill(fm_workbook_t* wb, uint32_t column_xf) {
 Bytes SaveXlsbPackage(fm_workbook_t* wb) {
   std::uint8_t* data = nullptr;
   std::size_t len = 0;
-  EXPECT_EQ(fm_workbook_save_as(wb, FM_WORKBOOK_FORMAT_XLSB, &data, &len), 0);
+  EXPECT_EQ(fm_workbook_save(wb, FM_WORKBOOK_FORMAT_XLSB, &data, &len), 0);
   Bytes result;
   if (data != nullptr) {
     result.assign(data, data + len);
@@ -261,13 +261,13 @@ TEST(FormulonCApiDisplayText, SpillPhantomsUseColumnRowAndCellStylePrecedence) {
   fm_effective_style_info_t style = FM_STRUCT_INIT(fm_effective_style_info_t);
   ASSERT_EQ(fm_sheet_get_effective_style(loaded.handle, 0, 0, 1, &style), 0);
   EXPECT_EQ(style.source, 2);  // column
-  EXPECT_STREQ(style.num_fmt_code, "0.00%");
+  EXPECT_STREQ(style.number_format, "0.00%");
   ASSERT_EQ(fm_sheet_get_effective_style(loaded.handle, 0, 1, 1, &style), 0);
   EXPECT_EQ(style.source, 1);  // customFormat row
-  EXPECT_STREQ(style.num_fmt_code, "0.00");
+  EXPECT_STREQ(style.number_format, "0.00");
   ASSERT_EQ(fm_sheet_get_effective_style(loaded.handle, 0, 1, 2, &style), 0);
   EXPECT_EQ(style.source, 0);  // explicit cell
-  EXPECT_STREQ(style.num_fmt_code, "0%");
+  EXPECT_STREQ(style.number_format, "0%");
 }
 
 TEST(FormulonCApiDisplayText, SpillPhantomWithoutLayoutUsesDefaultXfZero) {
@@ -291,7 +291,7 @@ TEST(FormulonCApiDisplayText, SpillPhantomWithoutLayoutUsesDefaultXfZero) {
   fm_effective_style_info_t style = FM_STRUCT_INIT(fm_effective_style_info_t);
   ASSERT_EQ(fm_sheet_get_effective_style(wb.handle, 0, 1, 1, &style), 0);
   EXPECT_EQ(style.source, 3);  // default xf 0
-  EXPECT_STREQ(style.num_fmt_code, "General");
+  EXPECT_STREQ(style.number_format, "General");
 }
 
 TEST(FormulonCApiDisplayText, SpillPhantomUsesNonGeneralDefaultXfZero) {
@@ -315,7 +315,7 @@ TEST(FormulonCApiDisplayText, SpillPhantomUsesNonGeneralDefaultXfZero) {
   fm_effective_style_info_t style = FM_STRUCT_INIT(fm_effective_style_info_t);
   ASSERT_EQ(fm_sheet_get_effective_style(loaded.handle, 0, 1, 1, &style), 0);
   EXPECT_EQ(style.source, 3);  // the non-General default xf 0
-  EXPECT_STREQ(style.num_fmt_code, "0.00");
+  EXPECT_STREQ(style.number_format, "0.00");
 }
 
 TEST(FormulonCApiDisplayText, InvalidRowXfFallsBackToDefaultRecord) {
@@ -341,7 +341,7 @@ TEST(FormulonCApiDisplayText, InvalidRowXfFallsBackToDefaultRecord) {
   ASSERT_EQ(fm_sheet_get_effective_style(loaded.handle, 0, 1, 1, &style), 0);
   EXPECT_EQ(style.source, 1);     // the row override still supplies precedence
   EXPECT_EQ(style.xf_index, 0U);  // its raw index is out of range
-  EXPECT_STREQ(style.num_fmt_code, "0.00");
+  EXPECT_STREQ(style.number_format, "0.00");
 }
 
 TEST(FormulonCApiDisplayText, MaterializedBlankGapDoesNotShadowColumnStyle) {
@@ -377,7 +377,7 @@ TEST(FormulonCApiDisplayText, MaterializedBlankGapDoesNotShadowColumnStyle) {
   fm_effective_style_info_t style = FM_STRUCT_INIT(fm_effective_style_info_t);
   ASSERT_EQ(fm_sheet_get_effective_style(loaded.handle, 0, 0, 1, &style), 0);
   EXPECT_EQ(style.source, 2);  // column, despite the unwritten gap
-  EXPECT_STREQ(style.num_fmt_code, "0.00%");
+  EXPECT_STREQ(style.number_format, "0.00%");
 }
 
 TEST(FormulonCApiDisplayText, ExplicitDefaultCellXfOverridesInheritedColumnFormat) {
@@ -408,7 +408,7 @@ TEST(FormulonCApiDisplayText, ExplicitDefaultCellXfOverridesInheritedColumnForma
   ASSERT_EQ(fm_sheet_get_effective_style(loaded.handle, 0, 0, 1, &style), 0);
   EXPECT_EQ(style.source, 0);  // explicit cell, even though its xf is the default record
   EXPECT_EQ(style.xf_index, 0U);
-  EXPECT_STREQ(style.num_fmt_code, "General");
+  EXPECT_STREQ(style.number_format, "General");
 
   const Bytes saved = SavePackage(loaded.handle);
   ASSERT_FALSE(saved.empty());
@@ -421,7 +421,7 @@ TEST(FormulonCApiDisplayText, ExplicitDefaultCellXfOverridesInheritedColumnForma
   ASSERT_EQ(fm_sheet_get_effective_style(reloaded.handle, 0, 0, 1, &style), 0);
   EXPECT_EQ(style.source, 0);
   EXPECT_EQ(style.xf_index, 0U);
-  EXPECT_STREQ(style.num_fmt_code, "General");
+  EXPECT_STREQ(style.number_format, "General");
 }
 
 TEST(FormulonCApiDisplayText, ExplicitDefaultRangeXfOverridesInheritedColumnFormat) {
@@ -448,7 +448,7 @@ TEST(FormulonCApiDisplayText, ExplicitDefaultRangeXfOverridesInheritedColumnForm
   ASSERT_EQ(fm_sheet_get_effective_style(loaded.handle, 0, 0, 1, &style), 0);
   EXPECT_EQ(style.source, 0);  // explicit range cell
   EXPECT_EQ(style.xf_index, 0U);
-  EXPECT_STREQ(style.num_fmt_code, "General");
+  EXPECT_STREQ(style.number_format, "General");
 }
 
 TEST(FormulonCApiDisplayText, XlsbPreservesNonDefaultXfOnBlankCell) {
@@ -475,7 +475,7 @@ TEST(FormulonCApiDisplayText, XlsbPreservesNonDefaultXfOnBlankCell) {
   ASSERT_EQ(fm_sheet_get_effective_style(loaded.handle, 0, 1, 1, &style), 0);
   EXPECT_EQ(style.source, 0);
   EXPECT_EQ(style.xf_index, cell_xf);
-  EXPECT_STREQ(style.num_fmt_code, "0.00");
+  EXPECT_STREQ(style.number_format, "0.00");
 
   const Bytes saved = SaveXlsbPackage(loaded.handle);
   ASSERT_FALSE(saved.empty());
@@ -484,7 +484,7 @@ TEST(FormulonCApiDisplayText, XlsbPreservesNonDefaultXfOnBlankCell) {
   ASSERT_EQ(fm_sheet_get_effective_style(reloaded.handle, 0, 1, 1, &style), 0);
   EXPECT_EQ(style.source, 0);
   EXPECT_EQ(style.xf_index, cell_xf);
-  EXPECT_STREQ(style.num_fmt_code, "0.00");
+  EXPECT_STREQ(style.number_format, "0.00");
 }
 
 TEST(FormulonCApiDisplayText, XlsbPreservesExplicitDefaultXfOnBlankCell) {
@@ -506,7 +506,7 @@ TEST(FormulonCApiDisplayText, XlsbPreservesExplicitDefaultXfOnBlankCell) {
   ASSERT_EQ(fm_sheet_get_effective_style(loaded.handle, 0, 1, 1, &style), 0);
   EXPECT_EQ(style.source, 0);
   EXPECT_EQ(style.xf_index, 0U);
-  EXPECT_STREQ(style.num_fmt_code, "General");
+  EXPECT_STREQ(style.number_format, "General");
 
   const Bytes saved = SaveXlsbPackage(loaded.handle);
   ASSERT_FALSE(saved.empty());
@@ -515,7 +515,7 @@ TEST(FormulonCApiDisplayText, XlsbPreservesExplicitDefaultXfOnBlankCell) {
   ASSERT_EQ(fm_sheet_get_effective_style(reloaded.handle, 0, 1, 1, &style), 0);
   EXPECT_EQ(style.source, 0);
   EXPECT_EQ(style.xf_index, 0U);
-  EXPECT_STREQ(style.num_fmt_code, "General");
+  EXPECT_STREQ(style.number_format, "General");
 }
 
 TEST(FormulonCApiDisplayText, XlsbKeepsInheritedFormatOnUnstyledSpillPhantom) {
@@ -554,7 +554,7 @@ TEST(FormulonCApiDisplayText, XlsbKeepsInheritedFormatOnUnstyledSpillPhantom) {
   ASSERT_EQ(fm_sheet_get_effective_style(reloaded.handle, 0, 0, 1, &style), 0);
   EXPECT_EQ(style.source, 0);  // serialized effective XF on the phantom cell
   EXPECT_EQ(style.xf_index, column_xf);
-  EXPECT_STREQ(style.num_fmt_code, "0.00%");
+  EXPECT_STREQ(style.number_format, "0.00%");
 }
 
 TEST(FormulonCApiDisplayText, XlsbKeepsExplicitDefaultXfOnSpillPhantom) {
@@ -583,7 +583,7 @@ TEST(FormulonCApiDisplayText, XlsbKeepsExplicitDefaultXfOnSpillPhantom) {
   ASSERT_EQ(fm_sheet_get_effective_style(loaded.handle, 0, 0, 1, &style), 0);
   EXPECT_EQ(style.source, 0);  // explicit cell XF0
   EXPECT_EQ(style.xf_index, 0U);
-  EXPECT_STREQ(style.num_fmt_code, "General");
+  EXPECT_STREQ(style.number_format, "General");
 
   const Bytes saved = SaveXlsbPackage(loaded.handle);
   ASSERT_FALSE(saved.empty());
@@ -598,7 +598,7 @@ TEST(FormulonCApiDisplayText, XlsbKeepsExplicitDefaultXfOnSpillPhantom) {
   ASSERT_EQ(fm_sheet_get_effective_style(reloaded.handle, 0, 0, 1, &style), 0);
   EXPECT_EQ(style.source, 0);  // explicit cell XF0 survived the phantom record
   EXPECT_EQ(style.xf_index, 0U);
-  EXPECT_STREQ(style.num_fmt_code, "General");
+  EXPECT_STREQ(style.number_format, "General");
 }
 
 TEST(FormulonCApiDisplayText, XlsxKeepsInheritedFormatOnUnstyledSpillPhantom) {
@@ -628,7 +628,7 @@ TEST(FormulonCApiDisplayText, XlsxKeepsInheritedFormatOnUnstyledSpillPhantom) {
   ASSERT_EQ(fm_sheet_get_effective_style(reloaded.handle, 0, 0, 1, &style), 0);
   EXPECT_EQ(style.source, 0);  // serialized effective XF on the phantom cell
   EXPECT_EQ(style.xf_index, column_xf);
-  EXPECT_STREQ(style.num_fmt_code, "0.00%");
+  EXPECT_STREQ(style.number_format, "0.00%");
 }
 
 TEST(FormulonCApiDisplayText, XlsxKeepsExplicitDefaultXfOnSpillPhantom) {
@@ -659,7 +659,7 @@ TEST(FormulonCApiDisplayText, XlsxKeepsExplicitDefaultXfOnSpillPhantom) {
   ASSERT_EQ(fm_sheet_get_effective_style(reloaded.handle, 0, 0, 1, &style), 0);
   EXPECT_EQ(style.source, 0);  // explicit cell XF0 survived the phantom cell
   EXPECT_EQ(style.xf_index, 0U);
-  EXPECT_STREQ(style.num_fmt_code, "General");
+  EXPECT_STREQ(style.number_format, "General");
 }
 
 TEST(FormulonCApiDisplayText, ReferencesPreserveValuesAndUseDestinationFormats) {

@@ -958,6 +958,10 @@ def _rule_verb(ctx: Context) -> Iterable[Violation]:
                 yield ctx.c_violation(rule_id, fn.name, NO_DISCRIMINATOR, message, fn.line)
 
 
+# Style-table indices: ids the cells (xf) and the xfs (font, fill, border) store.
+_STYLE_ID_INDEX_SUFFIXES = ("xf_index", "font_index", "fill_index", "border_index")
+
+
 def _param_type_problem(param: CParam, enums: set) -> Optional[str]:
     role = param.role_name
     depth = param.pointer_depth
@@ -966,8 +970,8 @@ def _param_type_problem(param: CParam, enums: set) -> Optional[str]:
         if role != "sheet_index" or param.base_type != "size_t":
             return f"`{param.ctype} {param.name}` is a sheet index; declare it `size_t{'*' * depth} sheet_index`"
         return None
-    if role.removeprefix("out_").endswith("xf_index") or role.removeprefix("out_") == "series_index":
-        # An xf / dxf index is a style id the cells store, and a series index its stored `c:idx`: `uint32_t` ids.
+    if role.removeprefix("out_").endswith(_STYLE_ID_INDEX_SUFFIXES) or role.removeprefix("out_") == "series_index":
+        # A style-table index is an id the cells and xfs store, and a series index its stored `c:idx`: `uint32_t`.
         want = "uint32_t"
     elif role == "index" or role.endswith("_index") or role == "idx" or role.endswith("_idx"):
         want = "size_t"

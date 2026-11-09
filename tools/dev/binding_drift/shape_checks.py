@@ -244,7 +244,7 @@ _STYLE_RECORD_COMPOSITES = {
         "gradient": (
             "has_gradient",
             "gradient_type",
-            "gradient_degree",
+            "gradient_angle_deg",
             "gradient_left",
             "gradient_right",
             "gradient_top",

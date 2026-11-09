@@ -410,7 +410,7 @@ TEST(FormulonCApiFormulaEntry, LoadedUnparseableFormulaIsKeptVerbatim) {
 
   std::uint8_t* bytes = nullptr;
   std::size_t len = 0;
-  ASSERT_EQ(fm_workbook_save(source.handle, &bytes, &len), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_workbook_save(source.handle, FM_WORKBOOK_FORMAT_XLSX, &bytes, &len), 0) << fm_get_last_error_message();
   WorkbookGuard loaded;
   const fm_status_t rc = fm_workbook_load(bytes, len, &loaded.handle);
   fm_buffer_destroy(bytes);
@@ -437,7 +437,7 @@ TEST(FormulonCApiFormulaEntry, LoadedWrongArityFormulaKeepsEvaluatingButIsRefuse
 
   std::uint8_t* bytes = nullptr;
   std::size_t len = 0;
-  ASSERT_EQ(fm_workbook_save(source.handle, &bytes, &len), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_workbook_save(source.handle, FM_WORKBOOK_FORMAT_XLSX, &bytes, &len), 0) << fm_get_last_error_message();
   WorkbookGuard loaded;
   const fm_status_t rc = fm_workbook_load(bytes, len, &loaded.handle);
   fm_buffer_destroy(bytes);

@@ -27,7 +27,10 @@ test('nested style integers reject narrowing before addXf mutates the workbook',
     assertInvalidArgument(mod, () => wb.ooxml.addCellXf({ horizontal: 256 }), 'horizontal=256');
     assert.equal(wb.ooxml.listCellXfs().length, before);
 
-    assert.throws(() => wb.ooxml.addCellXf({ numFmtId: 65536 }), RangeError);
+    // A number format id is a uint32; one no format registers is the engine's refusal.
+    assert.throws(() => wb.ooxml.addCellXf({ numFmtId: 2 ** 32 }), RangeError);
+    assert.equal(wb.ooxml.listCellXfs().length, before);
+    assertInvalidArgument(mod, () => wb.ooxml.addCellXf({ numFmtId: 65536 }), 'numFmtId=65536');
     assert.equal(wb.ooxml.listCellXfs().length, before);
 
     assert.throws(() => wb.ooxml.addCellXf({ fontIndex: 2 ** 32 }), RangeError);

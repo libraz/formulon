@@ -239,14 +239,11 @@ TEST(FormulonCApiPivot, AddingAFieldAfterLoadReprojectsTheLocationRef) {
   const std::vector<std::uint8_t> package = BuildPivotWorkbookBytes();
   ASSERT_EQ(fm_workbook_load(package.data(), package.size(), &wb.handle), 0) << fm_get_last_error_message();
 
-  fm_pivot_field_spec_t region_spec = FM_STRUCT_INIT(fm_pivot_field_spec_t);
-  region_spec.source_name = "Region";
-  region_spec.custom_name = "";
-  region_spec.axis = FM_PIVOT_AXIS_COLUMN;
-  region_spec.subtotal_top = FM_TRISTATE_FALSE;
-  region_spec.number_format = "";
-  std::size_t added = 99;
-  ASSERT_EQ(fm_sheet_add_pivot_field(wb.handle, 1, 0, &region_spec, &added), 0) << fm_get_last_error_message();
+  // Region is pivot field 0, the cache field it mirrors.
+  const std::size_t added = 0;
+  ASSERT_EQ(fm_sheet_set_pivot_field_axis(wb.handle, 1, 0, added, FM_PIVOT_AXIS_COLUMN), 0)
+      << fm_get_last_error_message();
+  ASSERT_EQ(SetPivotFieldSubtotalTop(wb.handle, 1, 0, added, 0), 0) << fm_get_last_error_message();
   const std::uint32_t col_order[] = {static_cast<std::uint32_t>(added)};
   ASSERT_EQ(fm_sheet_set_pivot_column_field_order(wb.handle, 1, 0, col_order, 1), 0) << fm_get_last_error_message();
 
@@ -260,7 +257,8 @@ TEST(FormulonCApiPivot, AddingAFieldAfterLoadReprojectsTheLocationRef) {
   ASSERT_GT(cols, 2U) << "the added column field must widen the report";
 
   BufferGuard saved;
-  ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0)
+      << fm_get_last_error_message();
   const std::vector<std::uint8_t> written(saved.data, saved.data + saved.len);
   const std::string pivot_xml = ExtractZipEntry(written, "xl/pivotTables/pivotTable1.xml");
   ASSERT_FALSE(pivot_xml.empty());
@@ -281,11 +279,10 @@ TEST(FormulonCApiPivot, ReadBackDefinitionOfLoadedPivot) {
   ASSERT_EQ(fm_sheet_get_pivot_name(wb.handle, 1, 0, &name), 0);
   EXPECT_STREQ(name, "PivotTable1");
 
-  std::int32_t grand_rows = -1;
-  std::int32_t grand_cols = -1;
-  ASSERT_EQ(fm_sheet_get_pivot_grand_totals(wb.handle, 1, 0, &grand_rows, &grand_cols), 0);
-  EXPECT_EQ(grand_rows, 1);
-  EXPECT_EQ(grand_cols, 1);
+  fm_pivot_grand_totals_t grand = FM_STRUCT_INIT(fm_pivot_grand_totals_t);
+  ASSERT_EQ(fm_sheet_get_pivot_grand_totals(wb.handle, 1, 0, &grand), 0);
+  EXPECT_EQ(grand.rows, 1);
+  EXPECT_EQ(grand.columns, 1);
 
   fm_pivot_field_info_t region = FM_STRUCT_INIT(fm_pivot_field_info_t);
   ASSERT_EQ(fm_sheet_get_pivot_field_at(wb.handle, 1, 0, 0, &region), 0) << fm_get_last_error_message();
@@ -337,4 +334,59 @@ TEST(FormulonCApiPivot, ReadBackDefinitionOfLoadedPivot) {
   EXPECT_EQ(order[0], 0U);
   ASSERT_EQ(fm_sheet_get_pivot_column_field_order(wb.handle, 1, 0, order, 8U, &order_count), 0);
   EXPECT_EQ(order_count, 0U);
+}
+
+TEST(FormulonCApiPivotRecordDate, DateRecordFlagged) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  std::uint32_t cache_id = 0;
+  ASSERT_EQ(fm_workbook_add_pivot_cache(wb.handle, 0, &cache_id), 0);
+  std::size_t when = 99;
+  std::size_t amount = 99;
+  ASSERT_EQ(fm_workbook_add_pivot_cache_field(wb.handle, cache_id, "When", &when), 0);
+  ASSERT_EQ(fm_workbook_add_pivot_cache_field(wb.handle, cache_id, "Amount", &amount), 0);
+  std::size_t record = 99;
+  ASSERT_EQ(fm_workbook_add_pivot_cache_record(wb.handle, cache_id, &record), 0);
+  ASSERT_EQ(fm_workbook_set_pivot_cache_record_date(wb.handle, cache_id, record, when, 45390.0), 0)
+      << fm_get_last_error_message();
+  ASSERT_EQ(fm_workbook_set_pivot_cache_record_number(wb.handle, cache_id, record, amount, 45390.0), 0);
+
+  // Both read as the same serial; only the flag tells the date apart.
+  fm_value_t value{};
+  ASSERT_EQ(fm_workbook_get_pivot_cache_record_value(wb.handle, cache_id, record, when, &value), 0);
+  EXPECT_EQ(value.kind, FM_VALUE_KIND_NUMBER);
+  EXPECT_DOUBLE_EQ(value.u.number, 45390.0);
+  std::int32_t is_date = -1;
+  ASSERT_EQ(fm_workbook_is_pivot_cache_record_value_date(wb.handle, cache_id, record, when, &is_date), 0);
+  EXPECT_EQ(is_date, 1);
+  ASSERT_EQ(fm_workbook_is_pivot_cache_record_value_date(wb.handle, cache_id, record, amount, &is_date), 0);
+  EXPECT_EQ(is_date, 0);
+
+  EXPECT_EQ(fm_workbook_is_pivot_cache_record_value_date(wb.handle, cache_id, record + 1U, when, &is_date),
+            FM_STATUS_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(fm_workbook_is_pivot_cache_record_value_date(wb.handle, cache_id, record, 2U, &is_date),
+            FM_STATUS_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(fm_workbook_is_pivot_cache_record_value_date(wb.handle, cache_id, record, when, nullptr),
+            FM_STATUS_BINDING_NULL_POINTER);
+}
+
+TEST(FormulonCApiPivotGrandTotalsRecord, ReadsRecord) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  std::uint32_t cache_id = 0;
+  std::size_t pivot_index = 0;
+  ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_index), 0) << fm_get_last_error_message();
+  fm_pivot_grand_totals_patch_t patch = FM_STRUCT_INIT(fm_pivot_grand_totals_patch_t);
+  patch.columns_op = FM_PATCH_OP_SET;
+  patch.columns = 0;
+  ASSERT_EQ(fm_sheet_update_pivot_grand_totals(wb.handle, 0, pivot_index, &patch), 0) << fm_get_last_error_message();
+  fm_pivot_grand_totals_t grand = FM_STRUCT_INIT(fm_pivot_grand_totals_t);
+  ASSERT_EQ(fm_sheet_get_pivot_grand_totals(wb.handle, 0, pivot_index, &grand), 0) << fm_get_last_error_message();
+  EXPECT_EQ(grand.struct_size, sizeof(fm_pivot_grand_totals_t));
+  EXPECT_EQ(grand.rows, 1);
+  EXPECT_EQ(grand.columns, 0);
+  EXPECT_EQ(fm_sheet_get_pivot_grand_totals(wb.handle, 0, pivot_index, nullptr), FM_STATUS_BINDING_NULL_POINTER);
+  fm_pivot_grand_totals_t short_record = FM_STRUCT_INIT(fm_pivot_grand_totals_t);
+  short_record.struct_size = 0U;
+  EXPECT_EQ(fm_sheet_get_pivot_grand_totals(wb.handle, 0, pivot_index, &short_record), FM_STATUS_INVALID_ARGUMENT);
 }

@@ -34,6 +34,7 @@ using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::copy_owned_bytes;
+using formulon::c_api::parts::drawing_patch_from_c;
 using formulon::c_api::parts::edit_as_from_c;
 using formulon::c_api::parts::fill_drawing_anchor;
 using formulon::c_api::parts::finish_status;
@@ -236,6 +237,53 @@ void fill_drawing_anchor(const Workbook& wb, std::size_t sheet, const DrawingObj
   }
   out->width_emu = cx;
   out->height_emu = cy;
+}
+
+fm_status_t drawing_patch_from_c(const fm_drawing_patch_t& patch, formulon::DrawingCommonPatch* out) {
+  if (auto rc = check_record_size(patch); rc != 0) {
+    return rc;
+  }
+  const fm_patch_op_t plain_ops[] = {patch.name_op, patch.hidden_op};
+  for (const fm_patch_op_t op : plain_ops) {
+    if (!patch_op_ok_without_clear(op)) {
+      return invalid_argument(patch_op_ok(op) ? "field cannot be cleared" : "op must be KEEP, CLEAR or SET");
+    }
+  }
+  if (!patch_op_ok(patch.description_op)) {
+    return invalid_argument("op must be KEEP, CLEAR or SET", "field=description");
+  }
+  if (is_set(patch.name_op) && (patch.name == nullptr || patch.name[0] == '\0')) {
+    return invalid_argument("a SET name is not empty", "field=name");
+  }
+  if (is_set(patch.description_op) && patch.description == nullptr) {
+    return invalid_argument("a SET string cannot be NULL", "field=description");
+  }
+  if (auto rc = check_utf8(
+          {is_set(patch.name_op) ? patch.name : nullptr, is_set(patch.description_op) ? patch.description : nullptr});
+      rc != 0) {
+    return rc;
+  }
+  if (is_set(patch.hidden_op)) {
+    if (auto rc = check_enum_domain(patch.hidden, 0, 1, "hidden"); rc != 0) {
+      return rc;
+    }
+  }
+
+  if (is_set(patch.name_op)) {
+    out->name = std::string(patch.name);
+  }
+  if (is_set(patch.description_op)) {
+    out->description = std::string(patch.description);
+  } else if (patch.description_op == FM_PATCH_OP_CLEAR) {
+    out->description = std::string();
+  }
+  if (is_set(patch.hidden_op)) {
+    out->hidden = patch.hidden != 0;
+  }
+  if (auto rc = anchor_patch_from_c(patch.anchor, &out->anchor); rc != 0) {
+    return rc;
+  }
+  return 0;
 }
 
 }  // namespace parts
@@ -443,51 +491,11 @@ extern "C" fm_status_t fm_sheet_update_drawing(fm_workbook_t* wb, size_t sheet_i
   if (wb == nullptr || patch == nullptr) {
     return null_argument();
   }
-  if (auto rc = check_record_size(*patch); rc != 0) {
-    return rc;
-  }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
-  const fm_patch_op_t plain_ops[] = {patch->name_op, patch->hidden_op};
-  for (const fm_patch_op_t op : plain_ops) {
-    if (!patch_op_ok_without_clear(op)) {
-      return invalid_argument(patch_op_ok(op) ? "field cannot be cleared" : "op must be KEEP, CLEAR or SET");
-    }
-  }
-  if (!patch_op_ok(patch->description_op)) {
-    return invalid_argument("op must be KEEP, CLEAR or SET", "field=description");
-  }
-  if (is_set(patch->name_op) && (patch->name == nullptr || patch->name[0] == '\0')) {
-    return invalid_argument("a SET name is not empty", "field=name");
-  }
-  if (is_set(patch->description_op) && patch->description == nullptr) {
-    return invalid_argument("a SET string cannot be NULL", "field=description");
-  }
-  if (auto rc = check_utf8({is_set(patch->name_op) ? patch->name : nullptr,
-                            is_set(patch->description_op) ? patch->description : nullptr});
-      rc != 0) {
-    return rc;
-  }
-  if (is_set(patch->hidden_op)) {
-    if (auto rc = check_enum_domain(patch->hidden, 0, 1, "hidden"); rc != 0) {
-      return rc;
-    }
-  }
-
   formulon::DrawingCommonPatch model;
-  if (is_set(patch->name_op)) {
-    model.name = std::string(patch->name);
-  }
-  if (is_set(patch->description_op)) {
-    model.description = std::string(patch->description);
-  } else if (patch->description_op == FM_PATCH_OP_CLEAR) {
-    model.description = std::string();
-  }
-  if (is_set(patch->hidden_op)) {
-    model.hidden = patch->hidden != 0;
-  }
-  if (auto rc = anchor_patch_from_c(patch->anchor, &model.anchor); rc != 0) {
+  if (auto rc = drawing_patch_from_c(*patch, &model); rc != 0) {
     return rc;
   }
   return finish_status(formulon::update_drawing(wb->workbook(), sheet_index, object_id, model));

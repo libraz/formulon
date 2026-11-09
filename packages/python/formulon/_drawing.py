@@ -56,11 +56,9 @@ from ._workbook import (
     ChartSourceInput,
     ChartTickLabelPosition,
     ChartTitle,
-    ColorInput,
     DrawingAnchorInput,
     DrawingObjectKind,
     ImageFormat,
-    ShapePaint,
     SheetRect,
     SlicerCrossFilter,
     SlicerSortOrder,
@@ -111,14 +109,13 @@ _SHAPE_UPDATE_NAMES = (
     "preset_geometry",
     "text",
     "text_box",
-    "fill_kind",
-    "fill_color",
-    "line_kind",
-    "line_color",
-    "line_width_pt",
+    "fill",
+    "line",
     "rotation_deg",
 )
-_SLICER_UPDATE_NAMES = ("caption", "style", "column_count", "row_height_emu", "sort_order", "cross_filter")
+# The shape keys whose ``None`` clears the field to the style's paint.
+_CLEARABLE_SHAPE_NAMES = ("fill", "line")
+_SLICER_UPDATE_NAMES = ("caption", "style_name", "column_count", "row_height_pt", "sort_order", "cross_filter")
 _SHAPE_KINDS = frozenset({DrawingObjectKind.SHAPE, DrawingObjectKind.CONNECTOR, DrawingObjectKind.GROUP})
 
 
@@ -209,13 +206,21 @@ def _drawing_for(sheet: Sheet, object_id: int) -> Drawing:
     return handle
 
 
-def _fill_patch_of(fill: ChartFill) -> ChartFillPatch:
-    """The patch that makes a fill equal ``fill``: an absent member is cleared."""
-    return {"color": fill.color, "transparency_pct": fill.transparency_pct}
+def _fill_patch_of(fill: Optional[ChartFill]) -> Optional[ChartFillPatch]:
+    """The patch that makes a fill equal ``fill``: ``None`` clears it, an absent member is cleared, ``other`` keeps it."""
+    if fill is None:
+        return None
+    if fill.other:
+        return {}
+    return {"color": fill.color, "transparency_pct": fill.transparency_pct, "none": fill.none}
 
 
-def _line_patch_of(line: ChartLine) -> ChartLinePatch:
-    """The patch that makes an outline equal ``line``: an absent member is cleared."""
+def _line_patch_of(line: Optional[ChartLine]) -> Optional[ChartLinePatch]:
+    """The patch that makes an outline equal ``line``: ``None`` clears it, an absent member is cleared, ``other`` keeps it."""
+    if line is None:
+        return None
+    if line.other:
+        return {}
     return {
         "color": line.color,
         "transparency_pct": line.transparency_pct,
@@ -346,31 +351,49 @@ def _common_patch(scope: _ArgScope, given: Dict[str, Any]) -> int:
     )
 
 
-def _set_z_order(handle: Drawing, z_order_index: int) -> None:
-    """Move the picture, chart, shape or slicer ``handle`` to item ``z_order_index`` of the stacking order."""
-    h, sheet, object_id = handle._at()
-    _check(
-        LIB.fm_sheet_set_drawing_z_order(h, sheet, object_id, _uint(z_order_index, "z_order_index", role="position"))
-    )
+class _ZOrdered(Drawing):
+    """The drawing kinds with a stacking position: pictures, charts, shapes and slicers."""
+
+    __slots__ = ()
+
+    def set_z_order(self, z_order_index: int) -> None:
+        """Make the object item ``z_order_index`` of :meth:`Sheet.list_drawings`.
+
+        That list's order is the stacking order; ``0`` is the back.
+        """
+        h, sheet, object_id = self._at()
+        _check(
+            LIB.fm_sheet_set_drawing_z_order(
+                h, sheet, object_id, _uint(z_order_index, "z_order_index", role="position")
+            )
+        )
 
 
-def _snapshot(handle: Drawing) -> bytes:
-    """Capture the picture, chart or shape ``handle`` as opaque bytes for ``Sheet.restore_drawing``."""
-    h, sheet, object_id = handle._at()
-    with _ArgScope() as scope:
-        bytes_ptr = scope.out_ptr()
-        len_ptr = scope.out_ptr()
-        data_ptr = 0
-        try:
-            _check(LIB.fm_sheet_snapshot_drawing(h, sheet, object_id, bytes_ptr, len_ptr))
-            data_ptr = LIB.read_u32(bytes_ptr)
-            return LIB.read_bytes(data_ptr, LIB.read_u32(len_ptr))
-        finally:
-            if data_ptr:
-                LIB.fm_buffer_destroy(data_ptr)
+class _Snapshotable(_ZOrdered):
+    """The drawing kinds :meth:`Sheet.restore_drawing` can bring back: pictures, charts and shapes."""
+
+    __slots__ = ()
+
+    def snapshot(self) -> bytes:
+        """Capture the object as opaque bytes for :meth:`Sheet.restore_drawing`.
+
+        The capture holds the object's list position, element and every part it reaches.
+        """
+        h, sheet, object_id = self._at()
+        with _ArgScope() as scope:
+            bytes_ptr = scope.out_ptr()
+            len_ptr = scope.out_ptr()
+            data_ptr = 0
+            try:
+                _check(LIB.fm_sheet_snapshot_drawing(h, sheet, object_id, bytes_ptr, len_ptr))
+                data_ptr = LIB.read_u32(bytes_ptr)
+                return LIB.read_bytes(data_ptr, LIB.read_u32(len_ptr))
+            finally:
+                if data_ptr:
+                    LIB.fm_buffer_destroy(data_ptr)
 
 
-class Picture(Drawing):
+class Picture(_Snapshotable):
     """A picture of a sheet's drawing; also has the members of :class:`Drawing`.
 
     Add one with :meth:`Sheet.add_picture`.
@@ -404,22 +427,8 @@ class Picture(Drawing):
                 bytes=LIB.read_bytes(LIB.read_u32(bytes_ptr), LIB.read_u32(len_ptr)),
             )
 
-    def set_z_order(self, z_order_index: int) -> None:
-        """Make the picture item ``z_order_index`` of :meth:`Sheet.list_drawings`.
 
-        That list's order is the stacking order; ``0`` is the back.
-        """
-        _set_z_order(self, z_order_index)
-
-    def snapshot(self) -> bytes:
-        """Capture the picture as opaque bytes for :meth:`Sheet.restore_drawing`.
-
-        The capture holds the picture's list position, element and every part it reaches.
-        """
-        return _snapshot(self)
-
-
-class Chart(Drawing):
+class Chart(_Snapshotable):
     """A chart of a sheet's drawing; also has the members of :class:`Drawing`.
 
     Add one with :meth:`Sheet.add_chart`.
@@ -446,20 +455,6 @@ class Chart(Drawing):
             return cast("ChartProperties", _read_chart(chart, self._sheet._workbook, sheet))
         finally:
             LIB.fm_chart_destroy(chart)
-
-    def set_z_order(self, z_order_index: int) -> None:
-        """Make the chart item ``z_order_index`` of :meth:`Sheet.list_drawings`.
-
-        That list's order is the stacking order; ``0`` is the back.
-        """
-        _set_z_order(self, z_order_index)
-
-    def snapshot(self) -> bytes:
-        """Capture the chart as opaque bytes for :meth:`Sheet.restore_drawing`.
-
-        The capture holds the chart's list position, element and every part it reaches.
-        """
-        return _snapshot(self)
 
     def get_data(self) -> ChartData:
         """Resolve the chart's series against the current cell values by Excel's rules.
@@ -838,14 +833,14 @@ class Chart(Drawing):
         plot: int,
         *,
         gap_width_pct: Union[int, None, Unchanged] = UNCHANGED,
-        overlap: Union[int, None, Unchanged] = UNCHANGED,
+        overlap_pct: Union[int, None, Unchanged] = UNCHANGED,
         first_slice_angle_deg: Union[int, None, Unchanged] = UNCHANGED,
         vary_colors: Union[bool, None, Unchanged] = UNCHANGED,
-        hole_size: Union[int, None, Unchanged] = UNCHANGED,
+        hole_size_pct: Union[int, None, Unchanged] = UNCHANGED,
     ) -> None:
         """Update plot group ``plot``; an omitted argument keeps its value, ``None`` removes the element.
 
-        An argument the plot type does not have is rejected. ``hole_size`` is
+        An argument the plot type does not have is rejected. ``hole_size_pct`` is
         10..90 (doughnut only).
         """
         patch = _given(dict(locals()), ChartPlotPatch)
@@ -935,7 +930,7 @@ class Chart(Drawing):
             )
 
 
-class Shape(Drawing):
+class Shape(_Snapshotable):
     """A shape, connector or group of a sheet's drawing; also has the members of :class:`Drawing`.
 
     Add one with :meth:`Sheet.add_shape`;
@@ -968,62 +963,41 @@ class Shape(Drawing):
         preset_geometry: Union[str, Unchanged] = UNCHANGED,
         text: Union[str, Unchanged] = UNCHANGED,
         text_box: Union[bool, Unchanged] = UNCHANGED,
-        fill_kind: Union[ShapePaint, Unchanged] = UNCHANGED,
-        fill_color: Union[ColorInput, Unchanged] = UNCHANGED,
-        line_kind: Union[ShapePaint, Unchanged] = UNCHANGED,
-        line_color: Union[ColorInput, Unchanged] = UNCHANGED,
-        line_width_pt: Union[float, Unchanged] = UNCHANGED,
+        fill: Union[ChartFill, ChartFillPatch, None, Unchanged] = UNCHANGED,
+        line: Union[ChartLine, ChartLinePatch, None, Unchanged] = UNCHANGED,
         rotation_deg: Union[float, Unchanged] = UNCHANGED,
     ) -> None:
         """Apply the arguments that are given to the shape; the rest of its XML is kept.
 
         An argument left at :data:`UNCHANGED` keeps its value. ``name``, ``description``, ``hidden`` and
         ``anchor`` are those of :meth:`Drawing.update` and apply first; the other arguments are the shape's
-        own. ``fill_kind`` or ``line_kind`` of ``ShapePaint.DEFAULT`` removes the shape's own fill or outline
-        so the one its style names applies. Text applies to a shape only and keeps the first paragraph's
-        properties and first run's formatting. Every argument is checked before anything changes.
-
-        A ``fill_color`` or ``line_color`` of ``None`` beside a given kind other than ``ShapePaint.SOLID`` is how
-        a read reports no colour and is ignored.
+        own. ``fill`` and ``line`` are :class:`ChartFill` / :class:`ChartLine` records or patches; ``None``
+        removes the shape's own paint so the one its style names applies, and a record that reads ``other``
+        keeps the stored paint. Text applies to a shape only and keeps the first paragraph's
+        properties and first run's formatting. Every argument is checked before anything changes, and the
+        call changes everything or nothing.
 
         Raises:
           TypeError: when an argument other than ``description`` is ``None`` or has the wrong type.
         """
         arguments = dict(locals())
-        # A colour of None beside a kind other than SOLID is not specified, so a read record passes back.
-        absent = tuple(
-            color
-            for kind, color in (("fill_kind", "fill_color"), ("line_kind", "line_color"))
-            if arguments[kind] is not UNCHANGED and arguments[kind] is not None and arguments[kind] != ShapePaint.SOLID
+        clear = [key for key in _CLEARABLE_SHAPE_NAMES if arguments[key] is None]
+        given = _present(
+            arguments,
+            _COMMON_UPDATE_NAMES + _SHAPE_UPDATE_NAMES,
+            clearable=_CLEARABLE_COMMON_NAMES + _CLEARABLE_SHAPE_NAMES,
         )
-        given = _present(arguments, _COMMON_UPDATE_NAMES + _SHAPE_UPDATE_NAMES, absent, _CLEARABLE_COMMON_NAMES)
         h, sheet, object_id = self._at()
         with _ArgScope() as scope:
             common = _common_patch(scope, given)
             kind_ptr = 0
-            if any(key in given for key in _SHAPE_UPDATE_NAMES):
-                kind_ptr = _pack_shape_patch(scope, *(given.get(key) for key in _SHAPE_UPDATE_NAMES))
-            if common:
-                _check(LIB.fm_sheet_update_drawing(h, sheet, object_id, common))
-            if kind_ptr:
-                _check(LIB.fm_sheet_update_shape(h, sheet, object_id, kind_ptr))
-
-    def set_z_order(self, z_order_index: int) -> None:
-        """Make the shape item ``z_order_index`` of :meth:`Sheet.list_drawings`.
-
-        That list's order is the stacking order; ``0`` is the back.
-        """
-        _set_z_order(self, z_order_index)
-
-    def snapshot(self) -> bytes:
-        """Capture the shape as opaque bytes for :meth:`Sheet.restore_drawing`.
-
-        The capture holds the shape's list position, element and every part it reaches.
-        """
-        return _snapshot(self)
+            if clear or any(key in given for key in _SHAPE_UPDATE_NAMES):
+                kind_ptr = _pack_shape_patch(scope, *(given.get(key) for key in _SHAPE_UPDATE_NAMES), clear=clear)
+            if common or kind_ptr:
+                _check(LIB.fm_sheet_update_shape(h, sheet, object_id, common, kind_ptr))
 
 
-class Slicer(Drawing):
+class Slicer(_ZOrdered):
     """A table slicer, through its drawing frame; also has the members of :class:`Drawing`.
 
     Add one with :meth:`Sheet.add_slicer`.
@@ -1059,28 +1033,28 @@ class Slicer(Drawing):
         hidden: Union[bool, Unchanged] = UNCHANGED,
         anchor: Union[DrawingAnchorInput, Unchanged] = UNCHANGED,
         caption: Union[str, Unchanged] = UNCHANGED,
-        style: Union[str, None, Unchanged] = UNCHANGED,
+        style_name: Union[str, None, Unchanged] = UNCHANGED,
         column_count: Union[int, Unchanged] = UNCHANGED,
-        row_height_emu: Union[int, Unchanged] = UNCHANGED,
+        row_height_pt: Union[float, Unchanged] = UNCHANGED,
         sort_order: Union[SlicerSortOrder, Unchanged] = UNCHANGED,
         cross_filter: Union[SlicerCrossFilter, Unchanged] = UNCHANGED,
     ) -> None:
         """Apply the arguments that are given to the slicer; the rest of its XML is kept.
 
-        An argument left at :data:`UNCHANGED` keeps its value; ``style=None`` removes the style and
+        An argument left at :data:`UNCHANGED` keeps its value; ``style_name=None`` removes the style and
         ``description=None`` the description.
         ``description``, ``hidden`` and ``anchor`` are those of :meth:`Drawing.update` and apply first; the
         frame stays two-cell. A ``name`` is refused: it keys the frame to the slicer part. Every argument is
         checked before anything changes.
 
         Raises:
-          TypeError: when an argument other than ``style`` or ``description`` is ``None`` or has the wrong type.
+          TypeError: when an argument other than ``style_name`` or ``description`` is ``None`` or has the wrong type.
           FormulonError: with ``PRECONDITION_FAILED`` when ``name`` is given.
         """
         arguments = dict(locals())
-        clear = ["style"] if style is None else []
+        clear = ["style_name"] if style_name is None else []
         given = _present(
-            arguments, _COMMON_UPDATE_NAMES + _SLICER_UPDATE_NAMES, absent=("style",), clearable=_CLEARABLE_COMMON_NAMES
+            arguments, _COMMON_UPDATE_NAMES + _SLICER_UPDATE_NAMES, clearable=_CLEARABLE_COMMON_NAMES + ("style_name",)
         )
         h, sheet, object_id = self._at()
         with _ArgScope() as scope:
@@ -1088,19 +1062,10 @@ class Slicer(Drawing):
             kind_ptr = 0
             if clear or any(key in given for key in _SLICER_UPDATE_NAMES):
                 kind_ptr = _pack_slicer_patch(scope, *(given.get(key) for key in _SLICER_UPDATE_NAMES), clear=clear)
-            if common:
-                _check(LIB.fm_sheet_update_drawing(h, sheet, object_id, common))
-            if kind_ptr:
-                _check(LIB.fm_sheet_update_slicer(h, sheet, object_id, kind_ptr))
-
-    def set_z_order(self, z_order_index: int) -> None:
-        """Make the slicer item ``z_order_index`` of :meth:`Sheet.list_drawings`.
-
-        That list's order is the stacking order; ``0`` is the back.
-        """
-        _set_z_order(self, z_order_index)
+            if common or kind_ptr:
+                _check(LIB.fm_sheet_update_slicer(h, sheet, object_id, common, kind_ptr))
 
 
-for _cls in (Drawing, Picture, Chart, Shape, Slicer):
+for _cls in (Drawing, _ZOrdered, _Snapshotable, Picture, Chart, Shape, Slicer):
     _install_workbook_locks(_cls)
 del _cls

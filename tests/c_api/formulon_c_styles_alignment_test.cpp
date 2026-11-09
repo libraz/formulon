@@ -157,7 +157,7 @@ TEST(FormulonCApiStyles, ZeroInitializedCellXfUsesDefaultAlignment) {
   EXPECT_EQ(got.has_justify_last_line, 0);
 
   BufferGuard saved;
-  ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0);
+  ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0);
   const std::string styles_xml = ExtractStylesXml(saved);
   const std::size_t cell_xfs_begin = styles_xml.find("<cellXfs");
   const std::size_t cell_xfs_end = styles_xml.find("</cellXfs>", cell_xfs_begin);
@@ -203,7 +203,7 @@ TEST(FormulonCApiStyles, CellXfIgnoresPoisonForOmittedAlignmentAttributes) {
   EXPECT_EQ(got.has_justify_last_line, 0);
 
   BufferGuard saved;
-  ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0);
+  ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0);
   const std::string styles_xml = ExtractStylesXml(saved);
   const std::size_t cell_xfs_begin = styles_xml.find("<cellXfs");
   const std::size_t cell_xfs_end = styles_xml.find("</cellXfs>", cell_xfs_begin);
@@ -229,7 +229,7 @@ TEST(FormulonCApiStyles, CellXfExplicitTopAlignmentRemainsPresent) {
   EXPECT_EQ(got.has_vertical, 1);
 
   BufferGuard saved;
-  ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0);
+  ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0);
   const std::string styles_xml = ExtractStylesXml(saved);
   const std::size_t cell_xfs_begin = styles_xml.find("<cellXfs");
   const std::size_t cell_xfs_end = styles_xml.find("</cellXfs>", cell_xfs_begin);
@@ -257,7 +257,7 @@ TEST(FormulonCApiStyles, ZeroInitializedCellStyleXfUsesDefaultAlignment) {
   EXPECT_EQ(got.has_vertical, 0);
 
   BufferGuard saved;
-  ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0);
+  ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0);
   const std::string styles_xml = ExtractStylesXml(saved);
   const std::size_t style_xfs_begin = styles_xml.find("<cellStyleXfs");
   const std::size_t style_xfs_end = styles_xml.find("</cellStyleXfs>", style_xfs_begin);
@@ -295,7 +295,7 @@ TEST(FormulonCApiStyles, CellXfVerticalAlignZeroIsExplicitTopOnlyWithItsPresence
   EXPECT_EQ(got_explicit.has_vertical, 1);
 
   BufferGuard saved;
-  ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0);
+  ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0);
   const std::string styles_xml = ExtractStylesXml(saved);
   const std::size_t cell_xfs_begin = styles_xml.find("<cellXfs");
   const std::size_t cell_xfs_end = styles_xml.find("</cellXfs>", cell_xfs_begin);

@@ -44,24 +44,6 @@ Napi::Value SheetListResult(const Napi::CallbackInfo& info, const fm_workbook_t*
   return arr;
 }
 
-// Reads element `(sheet, index)` of a per-sheet index-keyed collection into
-// its record.
-template <typename T>
-Napi::Value SheetItemResult(const Napi::CallbackInfo& info, const fm_workbook_t* handle,
-                            fm_status_t (*at_fn)(const fm_workbook_t*, std::size_t, std::size_t, T*),
-                            Napi::Object (*to_js)(Napi::Env, const T&)) {
-  Napi::Env env = info.Env();
-  if (handle == nullptr) {
-    return ThrowInvalidHandle(env);
-  }
-  T entry = InitOut<T>();
-  const fm_status_t rc = at_fn(handle, Workbook::ArgU32(info, 0), Workbook::ArgU32(info, 1), &entry);
-  if (rc != 0) {
-    return ThrowStatus(env, rc);
-  }
-  return to_js(env, entry);
-}
-
 // Reads the element count of a per-sheet collection.
 Napi::Value SheetCountResult(const Napi::CallbackInfo& info, const fm_workbook_t* handle,
                              fm_status_t (*count_fn)(const fm_workbook_t*, std::size_t, std::size_t*)) {
@@ -74,12 +56,10 @@ Napi::Value SheetCountResult(const Napi::CallbackInfo& info, const fm_workbook_t
   return ValueOrThrow(env, rc, Napi::Number::New(env, static_cast<double>(count)));
 }
 
-// Shared body of the per-sheet merge add / remove entries taking `(sheet, range)`.
-using MergeEditFn = fm_status_t (*)(fm_workbook_t*, std::size_t, const fm_cell_rect_t*);
-
-// `handle` aliases the wrapper's member, so the C call sees the handle as it
-// is after the range getters ran, not a copy taken before them.
-Napi::Value InvokeMergeEdit(const Napi::CallbackInfo& info, fm_workbook_t* const& handle, MergeEditFn fn) {
+// Reads the `(sheet, range)` arguments of a merge edit and returns what `edit` makes of them. `handle` aliases the
+// wrapper's member, so the C call sees the handle as it is after the range getters ran, not a copy taken before them.
+template <typename Edit>
+Napi::Value InvokeMergeEdit(const Napi::CallbackInfo& info, fm_workbook_t* const& handle, Edit edit) {
   Napi::Env env = info.Env();
   if (handle == nullptr) {
     return ThrowInvalidHandle(env);
@@ -89,19 +69,24 @@ Napi::Value InvokeMergeEdit(const Napi::CallbackInfo& info, fm_workbook_t* const
   if (!CellRectArg(reader, info, 1, &range)) {
     return env.Undefined();
   }
-  const uint32_t sheet = Workbook::ArgU32(info, 0);
-  fm_status_t rc = fn(handle, sheet, &range);
-  return ValueOrThrow(env, rc, env.Undefined());
+  return edit(handle, Workbook::ArgU32(info, 0), range);
 }
 
 }  // namespace
 
+// Returns the merge as stored.
 Napi::Value Workbook::AddMerge(const Napi::CallbackInfo& info) {
-  return InvokeMergeEdit(info, handle_, &fm_sheet_add_merge);
+  return InvokeMergeEdit(info, handle_, [&](fm_workbook_t* handle, uint32_t sheet, const fm_cell_rect_t& range) {
+    fm_cell_rect_t stored{};
+    const fm_status_t rc = fm_sheet_add_merge(handle, sheet, &range, &stored);
+    return ValueOrThrow(info.Env(), rc, rc == 0 ? Napi::Value(RangeToJs(info.Env(), stored)) : info.Env().Undefined());
+  });
 }
 
 Napi::Value Workbook::RemoveMerge(const Napi::CallbackInfo& info) {
-  return InvokeMergeEdit(info, handle_, &fm_sheet_remove_merge);
+  return InvokeMergeEdit(info, handle_, [&](fm_workbook_t* handle, uint32_t sheet, const fm_cell_rect_t& range) {
+    return ValueOrThrow(info.Env(), fm_sheet_remove_merge(handle, sheet, &range), info.Env().Undefined());
+  });
 }
 
 Napi::Value Workbook::RemoveMergeAt(const Napi::CallbackInfo& info) {
@@ -152,7 +137,7 @@ Napi::Value Workbook::GetComment(const Napi::CallbackInfo& info) {
   const uint32_t row = ArgU32(info, 1);
   const uint32_t col = ArgU32(info, 2);
   int32_t present = 0;
-  fm_comment_info_t c = FM_STRUCT_INIT(fm_comment_info_t);
+  fm_comment_t c = FM_STRUCT_INIT(fm_comment_t);
   const fm_status_t rc = fm_sheet_get_comment(handle_, sheet, row, col, &present, &c);
   if (rc != 0 || present == 0) {
     return OptionalOrNull(env, rc, present, env.Null());
@@ -165,10 +150,13 @@ Napi::Value Workbook::GetComment(const Napi::CallbackInfo& info) {
 
 namespace {
 
-Napi::Object CommentToJs(Napi::Env env, const fm_comment_info_t& c) {
+// The JS `SheetComment` record of `c`: the note with its anchor `cell`.
+Napi::Object CommentToJs(Napi::Env env, const fm_comment_t& c) {
+  Napi::Object cell = Napi::Object::New(env);
+  cell.Set("row", Napi::Number::New(env, c.row));
+  cell.Set("col", Napi::Number::New(env, c.col));
   Napi::Object item = Napi::Object::New(env);
-  item.Set("row", Napi::Number::New(env, c.row));
-  item.Set("col", Napi::Number::New(env, c.col));
+  item.Set("cell", cell);
   item.Set("author", JsString(env, c.author));
   item.Set("text", JsString(env, c.text));
   return item;
@@ -185,23 +173,24 @@ Napi::Value Workbook::SetComment(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return ThrowInvalidHandle(env);
   }
-  const uint32_t sheet = ArgU32(info, 0);
-  const uint32_t row = ArgU32(info, 1);
-  const uint32_t col = ArgU32(info, 2);
-  const std::string author = ArgString(info, 3);
-  const std::string text = ArgString(info, 4);
-  // Empty strings turn into NULL in the C ABI to remove an entry,
-  // matching the embind binding's contract.
-  const char* author_c = author.empty() ? nullptr : author.c_str();
-  const char* text_c = text.empty() ? nullptr : text.c_str();
-  fm_status_t rc = fm_sheet_set_comment(handle_, sheet, row, col, author_c, text_c);
+  // `null` removes the note and does nothing when there is none; an omitted `author` is empty.
+  CheckedSpecReader reader(env);
+  Napi::Object in;
+  const bool present = reader.Object(info[3], "comment", &in);
+  std::string author;
+  std::string text;
+  fm_comment_t c = FM_STRUCT_INIT(fm_comment_t);
+  if (present) {
+    c.author = reader.String(in, "author", &author) ? author.c_str() : nullptr;
+    text = reader.RequiredString(in, "text");
+    c.text = text.c_str();
+  }
+  if (!reader.ok()) {
+    return env.Undefined();
+  }
+  const fm_status_t rc =
+      fm_sheet_set_comment(handle_, ArgU32(info, 0), ArgU32(info, 1), ArgU32(info, 2), present ? &c : nullptr);
   return ValueOrThrow(env, rc, env.Undefined());
-}
-
-Napi::Value Workbook::RemoveComment(const Napi::CallbackInfo& info) {
-  return StatusCall(info, [&](fm_workbook_t* handle) {
-    return fm_sheet_remove_comment(handle, ArgU32(info, 0), ArgU32(info, 1), ArgU32(info, 2));
-  });
 }
 
 Napi::Value Workbook::GetCommentVisible(const Napi::CallbackInfo& info) {
@@ -230,9 +219,10 @@ Napi::Value Workbook::GetWorkbookProtection(const Napi::CallbackInfo& info) {
     return ThrowInvalidHandle(env);
   }
   fm_workbook_protection_t p = FM_STRUCT_INIT(fm_workbook_protection_t);
-  const fm_status_t rc = fm_workbook_get_workbook_protection(handle_, &p);
-  if (rc != 0) {
-    return ThrowStatus(env, rc);
+  int32_t present = 0;
+  const fm_status_t rc = fm_workbook_get_workbook_protection(handle_, &present, &p);
+  if (rc != 0 || present == 0) {
+    return OptionalOrNull(env, rc, present, env.Null());
   }
   Napi::Object o = Napi::Object::New(env);
   o.Set("lockStructure", JsBool(env, p.lock_structure));
@@ -256,9 +246,13 @@ Napi::Value Workbook::SetWorkbookProtection(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return ThrowInvalidHandle(env);
   }
-  Napi::Object in = ArgObject(info, 0);
-  // A missing or `null` string is no stored value.
+  // `null` removes `<workbookProtection>`; a missing or `null` string is no stored value.
   CheckedSpecReader reader(env);
+  Napi::Object in;
+  if (!reader.Object(info[0], "protection", &in)) {
+    return reader.ok() ? ValueOrThrow(env, fm_workbook_set_workbook_protection(handle_, nullptr), env.Undefined())
+                       : env.Undefined();
+  }
   std::string text[8];
   const auto optional = [&](const char* key, std::string* store) {
     return reader.String(in, key, store) ? store->c_str() : nullptr;
@@ -347,13 +341,15 @@ Napi::Value Workbook::GetProtectedRangeCount(const Napi::CallbackInfo& info) {
 }
 
 Napi::Value Workbook::GetProtectedRange(const Napi::CallbackInfo& info) {
-  return SheetItemResult(info, handle_, &fm_sheet_get_protected_range_at, &ProtectedRangeToJs);
+  return SheetKeyedItemResult(info, handle_, &fm_sheet_get_protected_range_at, &fm_sheet_get_protected_range,
+                              &ProtectedRangeToJs, "protectedRange");
 }
 
 Napi::Value Workbook::AddProtectedRange(const Napi::CallbackInfo& info) {
   return EditProtectedRange(handle_, info, 1, [&](fm_workbook_t* handle, const fm_protected_range_t& r) {
-    const fm_status_t rc = fm_sheet_add_protected_range(handle, ArgU32(info, 0), &r);
-    return ValueOrThrow(info.Env(), rc, rc == 0 ? JsString(info.Env(), r.name) : info.Env().Undefined());
+    const char* stored_name = nullptr;
+    const fm_status_t rc = fm_sheet_add_protected_range(handle, ArgU32(info, 0), &r, &stored_name);
+    return ValueOrThrow(info.Env(), rc, rc == 0 ? JsString(info.Env(), stored_name) : info.Env().Undefined());
   });
 }
 
@@ -400,68 +396,42 @@ Napi::Value Workbook::RemoveProtectedRange(const Napi::CallbackInfo& info) {
 
 // ---- Hyperlinks -----------------------------------------------------
 
-namespace {
-
-// Sets the hyperlink anchored at the top-left cell of `rect`, replacing the one there, with the already
-// type-checked arguments `(target, display, tooltip, location)` from `text_index` on.
-// Empty strings are forwarded as NULL.
-fm_status_t SetHyperlinkFromArgs(fm_workbook_t* wb, const Napi::CallbackInfo& info, const fm_cell_rect_t& rect,
-                                 std::size_t text_index) {
-  const uint32_t sheet = Workbook::ArgU32(info, 0);
-  // Keep the std::string buffers alive until after the C ABI call so the
-  // borrowed `const char*` pointers in `fm_hyperlink_t` stay valid.
-  const std::string target = Workbook::ArgString(info, text_index);
-  const std::string display = Workbook::ArgString(info, text_index + 1);
-  const std::string tooltip = Workbook::ArgString(info, text_index + 2);
-  const std::string location = Workbook::ArgString(info, text_index + 3);
-  fm_hyperlink_t hl = FM_STRUCT_INIT(fm_hyperlink_t);
-  hl.rect = rect;
-  hl.target = target.empty() ? nullptr : target.c_str();
-  hl.location = location.empty() ? nullptr : location.c_str();
-  hl.display = display.empty() ? nullptr : display.c_str();
-  hl.tooltip = tooltip.empty() ? nullptr : tooltip.c_str();
-  return fm_sheet_set_hyperlink(wb, sheet, rect.first_row, rect.first_col, &hl);
-}
-
-}  // namespace
-
+// `(sheet, row, col, link)`: `link` is a `HyperlinkInput` whose `range` (a `CellRect`, or omitted / `null` for the
+// key cell) must start at `(row, col)`; `null` removes the hyperlink anchored there and does nothing when there
+// is none. A missing or `null` string is no stored value.
 Napi::Value Workbook::SetHyperlink(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
     return ThrowInvalidHandle(env);
   }
-  if (info.Length() < 7 || !info[0].IsNumber() || !info[1].IsNumber() || !info[2].IsNumber() || !info[3].IsString() ||
-      !info[4].IsString() || !info[5].IsString() || !info[6].IsString()) {
-    Napi::TypeError::New(env,
-                         "setHyperlink expects (sheet:number, row:number, col:number, "
-                         "target:string, display:string, tooltip:string, location:string)")
-        .ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
+  const uint32_t sheet = ArgU32(info, 0);
   const uint32_t row = ArgU32(info, 1);
   const uint32_t col = ArgU32(info, 2);
-  return ValueOrThrow(env, SetHyperlinkFromArgs(handle_, info, fm_cell_rect_t{row, col, row, col}, 3), env.Undefined());
-}
-
-Napi::Value Workbook::SetHyperlinkRange(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return ThrowInvalidHandle(env);
-  }
-  if (info.Length() < 6 || !info[0].IsNumber() || !info[1].IsObject() || !info[2].IsString() || !info[3].IsString() ||
-      !info[4].IsString() || !info[5].IsString()) {
-    Napi::TypeError::New(env,
-                         "setHyperlinkRange expects (sheet:number, range:CellRect, target:string, "
-                         "display:string, tooltip:string, location:string)")
-        .ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
   CheckedSpecReader reader(env);
-  fm_cell_rect_t rect{};
-  if (!ReadCellRect(reader, ArgObject(info, 1), &rect)) {
+  Napi::Object in;
+  if (!reader.Object(info[3], "link", &in)) {
+    return reader.ok() ? ValueOrThrow(env, fm_sheet_set_hyperlink(handle_, sheet, row, col, nullptr), env.Undefined())
+                       : env.Undefined();
+  }
+  // The std::string buffers keep the borrowed `const char*` views of `fm_hyperlink_t` alive across the C call.
+  std::string text[4];
+  const auto optional = [&](const char* key, std::string* store) {
+    return reader.String(in, key, store) ? store->c_str() : nullptr;
+  };
+  fm_hyperlink_t hl = FM_STRUCT_INIT(fm_hyperlink_t);
+  hl.target = optional("target", &text[0]);
+  hl.location = optional("location", &text[1]);
+  hl.display = optional("display", &text[2]);
+  hl.tooltip = optional("tooltip", &text[3]);
+  hl.rect = fm_cell_rect_t{row, col, row, col};
+  Napi::Object range;
+  if (reader.Object(in, "range", &range)) {
+    (void)ReadCellRect(reader, range, &hl.rect);
+  }
+  if (!reader.ok()) {
     return env.Undefined();
   }
-  return ValueOrThrow(env, SetHyperlinkFromArgs(handle_, info, rect, 2), env.Undefined());
+  return ValueOrThrow(env, fm_sheet_set_hyperlink(handle_, sheet, row, col, &hl), env.Undefined());
 }
 
 namespace {
@@ -492,10 +462,6 @@ Napi::Value Workbook::GetHyperlink(const Napi::CallbackInfo& info) {
   const fm_status_t rc =
       fm_sheet_get_hyperlink(handle_, ArgU32(info, 0), ArgU32(info, 1), ArgU32(info, 2), &present, &h);
   return OptionalOrNull(env, rc, present, rc == 0 && present != 0 ? Napi::Value(HyperlinkToJs(env, h)) : env.Null());
-}
-
-Napi::Value Workbook::RemoveHyperlink(const Napi::CallbackInfo& info) {
-  return InvokeSheetCall(info, &fm_sheet_remove_hyperlink);
 }
 
 Napi::Value Workbook::RemoveHyperlinkAt(const Napi::CallbackInfo& info) {
@@ -541,7 +507,8 @@ Napi::Value Workbook::GetValidationCount(const Napi::CallbackInfo& info) {
 }
 
 Napi::Value Workbook::GetValidation(const Napi::CallbackInfo& info) {
-  return SheetItemResult(info, handle_, &fm_sheet_get_validation_at, &ValidationToJs);
+  return SheetKeyedItemResult(info, handle_, &fm_sheet_get_validation_at, &fm_sheet_get_validation, &ValidationToJs,
+                              "validation");
 }
 
 Napi::Value Workbook::AddValidation(const Napi::CallbackInfo& info) {
@@ -672,7 +639,7 @@ Napi::Value Workbook::ClearValidations(const Napi::CallbackInfo& info) {
 
 namespace {
 
-// Reads the `Mention[]` at `arr`; `ids` backs the borrowed strings.
+// Reads the `MentionInput[]` at `arr`; `ids` backs the borrowed strings. An omitted `mentionId` is generated.
 bool ReadMentions(CheckedSpecReader& reader, const Napi::Value& arr, std::vector<std::string>& ids,
                   std::vector<fm_mention_t>& out) {
   Napi::Array list;
@@ -700,7 +667,7 @@ bool ReadMentions(CheckedSpecReader& reader, const Napi::Value& arr, std::vector
     c.person_id = ids[ids.size() - 2].c_str();
     c.mention_id = ids.back().c_str();
     c.start = reader.U32(m, "start", 0U);
-    c.length = reader.U32(m, "length", 0U);
+    c.end = reader.U32(m, "end", 0U);
     if (!reader.ok()) {
       break;
     }
@@ -726,7 +693,7 @@ Napi::Object ThreadedCommentToJs(Napi::Env env, const fm_threaded_comment_t& c) 
     mention.Set("personId", JsString(env, c.mentions[m].person_id));
     mention.Set("mentionId", JsString(env, c.mentions[m].mention_id));
     mention.Set("start", JsNumber(env, c.mentions[m].start));
-    mention.Set("length", JsNumber(env, c.mentions[m].length));
+    mention.Set("end", JsNumber(env, c.mentions[m].end));
     mentions.Set(m, mention);
   }
   item.Set("mentions", mentions);
@@ -774,7 +741,8 @@ Napi::Value Workbook::AddThreadedComment(const Napi::CallbackInfo& info) {
   reader.String(spec, "personId", &person_id);
   reader.String(spec, "created", &created);
   const std::string text = reader.RequiredString(spec, "text");
-  reader.String(spec, "parentId", &parent_id);
+  // An omitted or null parentId is NULL, which opens a thread.
+  const bool has_parent = reader.String(spec, "parentId", &parent_id);
   std::vector<std::string> mention_ids;
   std::vector<fm_mention_t> mentions;
   Napi::Array mention_array;
@@ -788,7 +756,7 @@ Napi::Value Workbook::AddThreadedComment(const Napi::CallbackInfo& info) {
   c.person_id = person_id.c_str();
   c.created = created.c_str();
   c.text = text.c_str();
-  c.parent_id = parent_id.c_str();
+  c.parent_id = has_parent ? parent_id.c_str() : nullptr;
   c.done = reader.Bool(spec, "done", false) ? 1 : 0;
   c.mentions = mentions.empty() ? nullptr : mentions.data();
   c.mentions_count = static_cast<uint32_t>(mentions.size());
@@ -884,9 +852,9 @@ Napi::Value Workbook::AddPerson(const Napi::CallbackInfo& info) {
   std::string display_name;
   std::string user_id;
   std::string provider_id;
-  id = reader.RequiredString(spec, "id");
+  // An omitted `id` is generated; an omitted or `null` `userId` / `providerId` is absent.
+  (void)reader.String(spec, "id", &id);
   display_name = reader.RequiredString(spec, "displayName");
-  // An omitted `userId` / `providerId` is the empty string.
   reader.String(spec, "userId", &user_id);
   reader.String(spec, "providerId", &provider_id);
   fm_person_t p = FM_STRUCT_INIT(fm_person_t);

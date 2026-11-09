@@ -215,7 +215,7 @@ TEST(FormulonCli, EvalInSelectsTheSheetByNameOrIndex) {
   ASSERT_EQ(fm_sheet_set_number(wb, second, 0, 0, 5.0), 0);
   std::uint8_t* bytes = nullptr;
   std::size_t len = 0;
-  ASSERT_EQ(fm_workbook_save(wb, &bytes, &len), 0);
+  ASSERT_EQ(fm_workbook_save(wb, FM_WORKBOOK_FORMAT_XLSX, &bytes, &len), 0);
   ASSERT_TRUE(write_bytes(in, std::string_view(reinterpret_cast<const char*>(bytes), len)));
   fm_buffer_destroy(bytes);
   fm_workbook_destroy(wb);

@@ -188,26 +188,39 @@ void ReadSource(CheckedSpecReader& r, const Napi::Object& owner, const char* key
   }
 }
 
-bool ReadChild(CheckedSpecReader& r, const Napi::Object& owner, const char* key, Napi::Object* out) {
-  if (!r.ok()) {
-    return false;
-  }
-  const Napi::Value v = owner.Get(key);
-  return r.ok() && r.Object(v, key, out);
-}
+}  // namespace
+
+namespace detail {
 
 void ReadFillPatch(CheckedSpecReader& r, const Napi::Object& owner, fm_chart_fill_patch_t& out) {
+  const Field f = Probe(r, owner, "fill");
+  if (f.op == FM_PATCH_OP_CLEAR) {
+    out.color_op = FM_PATCH_OP_CLEAR;
+    out.transparency_pct_op = FM_PATCH_OP_CLEAR;
+    out.none_op = FM_PATCH_OP_CLEAR;
+    return;
+  }
   Napi::Object o;
-  if (!ReadChild(r, owner, "fill", &o)) {
+  if (f.op != FM_PATCH_OP_SET || !r.Object(f.value, "fill", &o)) {
     return;
   }
   ReadColorOp(r, o, "color", out.color_op, out.color);
   ReadDoubleOp(r, o, "transparencyPct", out.transparency_pct_op, out.transparency_pct);
+  ReadBoolOp(r, o, "none", out.none_op, out.none);
 }
 
 void ReadLinePatch(CheckedSpecReader& r, const Napi::Object& owner, fm_chart_line_patch_t& out) {
+  const Field f = Probe(r, owner, "line");
+  if (f.op == FM_PATCH_OP_CLEAR) {
+    out.color_op = FM_PATCH_OP_CLEAR;
+    out.transparency_pct_op = FM_PATCH_OP_CLEAR;
+    out.width_pt_op = FM_PATCH_OP_CLEAR;
+    out.dash_op = FM_PATCH_OP_CLEAR;
+    out.none_op = FM_PATCH_OP_CLEAR;
+    return;
+  }
   Napi::Object o;
-  if (!ReadChild(r, owner, "line", &o)) {
+  if (f.op != FM_PATCH_OP_SET || !r.Object(f.value, "line", &o)) {
     return;
   }
   ReadColorOp(r, o, "color", out.color_op, out.color);
@@ -216,6 +229,42 @@ void ReadLinePatch(CheckedSpecReader& r, const Napi::Object& owner, fm_chart_lin
   ReadI32Op(r, o, "dash", out.dash_op, out.dash);
   ReadBoolOp(r, o, "none", out.none_op, out.none);
 }
+
+fm_chart_fill_t ReadFillSpec(CheckedSpecReader& r, const Napi::Object& owner) {
+  fm_chart_fill_t out{};
+  Napi::Object o;
+  if (!r.Object(owner, "fill", &o)) {
+    return out;
+  }
+  bool present = false;
+  out.color = PullColorSpec(r, o, "color");
+  out.transparency_pct = r.Double(o, "transparencyPct", 0.0, &present);
+  out.has_transparency_pct = present ? 1 : 0;
+  out.none = r.Bool(o, "none", false) ? 1 : 0;
+  return out;
+}
+
+fm_chart_line_t ReadLineSpec(CheckedSpecReader& r, const Napi::Object& owner) {
+  fm_chart_line_t out{};
+  Napi::Object o;
+  if (!r.Object(owner, "line", &o)) {
+    return out;
+  }
+  bool present = false;
+  out.color = PullColorSpec(r, o, "color");
+  out.transparency_pct = r.Double(o, "transparencyPct", 0.0, &present);
+  out.has_transparency_pct = present ? 1 : 0;
+  out.width_pt = r.Double(o, "widthPt", 0.0, &present);
+  out.has_width_pt = present ? 1 : 0;
+  out.dash = r.I32(o, "dash", 0, &present);
+  out.has_dash = present ? 1 : 0;
+  out.none = r.Bool(o, "none", false) ? 1 : 0;
+  return out;
+}
+
+}  // namespace detail
+
+namespace {
 
 void ReadMarkerPatch(CheckedSpecReader& r, const Napi::Object& owner, fm_patch_op_t& op, fm_chart_marker_patch_t& out) {
   const Field f = Probe(r, owner, "marker");
@@ -283,6 +332,7 @@ void ClearOmittedMembers(fm_chart_point_patch_t& patch) {
   const auto clear_fill = [&](fm_chart_fill_patch_t& fill) {
     clear(fill.color_op);
     clear(fill.transparency_pct_op);
+    clear(fill.none_op);
   };
   const auto clear_line = [&](fm_chart_line_patch_t& line) {
     clear(line.color_op);
@@ -358,7 +408,7 @@ Napi::Value Workbook::InsertChart(const Napi::CallbackInfo& info) {
   std::string description;
   Arena arena;
   reader.String(spec, "source", &source);
-  fm_chart_insert_spec_t opts = FM_STRUCT_INIT(fm_chart_insert_spec_t);
+  fm_chart_spec_t opts = FM_STRUCT_INIT(fm_chart_spec_t);
   // An omitted title is Excel's automatic title; `null` is no title.
   const Field title = Probe(reader, spec, "title");
   if (title.op == FM_PATCH_OP_SET) {
@@ -379,7 +429,8 @@ Napi::Value Workbook::InsertChart(const Napi::CallbackInfo& info) {
   const Napi::Value legend = reader.Get(spec, "legend");
   opts.legend =
       legend.IsNull() ? FM_CHART_LEGEND_POSITION_ABSENT : reader.I32(legend, "legend", FM_CHART_LEGEND_POSITION_BOTTOM);
-  opts.placement = PullPlacement(reader, reader.Get(spec, "placement"), name, description);
+  // The placement keys sit at the top level, beside the chart keys.
+  opts.placement = PullPlacement(reader, spec, name, description);
   if (!reader.ok()) {
     return env.Undefined();
   }
@@ -642,10 +693,10 @@ Napi::Value Workbook::SetChartPlot(const Napi::CallbackInfo& info) {
   CheckedSpecReader reader(env);
   fm_chart_plot_patch_t patch = FM_STRUCT_INIT(fm_chart_plot_patch_t);
   ReadU32Op(reader, spec, "gapWidthPct", patch.gap_width_pct_op, patch.gap_width_pct);
-  ReadI32Op(reader, spec, "overlap", patch.overlap_op, patch.overlap);
+  ReadI32Op(reader, spec, "overlapPct", patch.overlap_pct_op, patch.overlap_pct);
   ReadU32Op(reader, spec, "firstSliceAngleDeg", patch.first_slice_angle_deg_op, patch.first_slice_angle_deg);
   ReadBoolOp(reader, spec, "varyColors", patch.vary_colors_op, patch.vary_colors);
-  ReadU32Op(reader, spec, "holeSize", patch.hole_size_op, patch.hole_size);
+  ReadU32Op(reader, spec, "holeSizePct", patch.hole_size_pct_op, patch.hole_size_pct);
   if (!reader.ok()) {
     return env.Undefined();
   }

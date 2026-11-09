@@ -7,6 +7,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "c_api/formulon_c.h"
@@ -117,16 +118,25 @@ struct StringPatch {
 
 }  // namespace
 
-extern "C" fm_status_t fm_workbook_get_workbook_protection(const fm_workbook_t* wb, fm_workbook_protection_t* out) {
+extern "C" fm_status_t fm_workbook_get_workbook_protection(const fm_workbook_t* wb, int32_t* out_present,
+                                                           fm_workbook_protection_t* out) {
   clear_last_error();
-  if (wb == nullptr || out == nullptr) {
+  if (wb == nullptr || out_present == nullptr || out == nullptr) {
     return null_argument();
   }
   if (auto rc = check_record_size(*out); rc != 0) {
     return rc;
   }
-  const formulon::WorkbookProtection p =
-      formulon::io::parse_workbook_protection(wb->workbook().workbook_protection_xml());
+  const std::string& xml = wb->workbook().workbook_protection_xml();
+  if (xml.empty()) {
+    const std::uint32_t struct_size = out->struct_size;
+    *out = FM_STRUCT_INIT(fm_workbook_protection_t);
+    out->struct_size = struct_size;
+    *out_present = 0;
+    return 0;
+  }
+  *out_present = 1;
+  const formulon::WorkbookProtection p = formulon::io::parse_workbook_protection(xml);
   TextStore& store = fresh_read_scratch(wb);
   out->lock_structure = p.lock_structure ? 1 : 0;
   out->lock_windows = p.lock_windows ? 1 : 0;
@@ -147,8 +157,12 @@ extern "C" fm_status_t fm_workbook_get_workbook_protection(const fm_workbook_t* 
 extern "C" fm_status_t fm_workbook_set_workbook_protection(fm_workbook_t* wb,
                                                            const fm_workbook_protection_t* protection) {
   clear_last_error();
-  if (wb == nullptr || protection == nullptr) {
+  if (wb == nullptr) {
     return null_argument();
+  }
+  if (protection == nullptr) {
+    wb->workbook().set_workbook_protection_xml(std::string());
+    return 0;
   }
   if (auto rc = check_record_size(*protection); rc != 0) {
     return rc;
@@ -175,7 +189,12 @@ extern "C" fm_status_t fm_workbook_set_workbook_protection(fm_workbook_t* wb,
   p.revisions_salt_value = text_or_empty(protection->revisions_salt_value);
   p.revisions_spin_count = protection->revisions_spin_count;
   formulon::Workbook& book = wb->workbook();
-  book.set_workbook_protection_xml(formulon::io::apply_workbook_protection(book.workbook_protection_xml(), p));
+  std::string xml = formulon::io::apply_workbook_protection(book.workbook_protection_xml(), p);
+  if (xml.empty()) {
+    // An element with every lock off is still present.
+    xml = "<workbookProtection/>";
+  }
+  book.set_workbook_protection_xml(std::move(xml));
   return 0;
 }
 
@@ -242,8 +261,11 @@ extern "C" fm_status_t fm_sheet_get_protected_range(const fm_workbook_t* wb, siz
 }
 
 extern "C" fm_status_t fm_sheet_add_protected_range(fm_workbook_t* wb, size_t sheet_index,
-                                                    const fm_protected_range_t* range) {
+                                                    const fm_protected_range_t* range, const char** out_name) {
   clear_last_error();
+  if (out_name != nullptr) {
+    *out_name = nullptr;
+  }
   if (range == nullptr) {
     return null_argument("range");
   }
@@ -264,6 +286,9 @@ extern "C" fm_status_t fm_sheet_add_protected_range(fm_workbook_t* wb, size_t sh
   }
   ranges.push_back(std::move(added));
   formulon::io::write_protected_ranges(raw, ranges);
+  if (out_name != nullptr) {
+    *out_name = store_cstr(fresh_read_scratch(wb), ranges.back().name);
+  }
   return 0;
 }
 

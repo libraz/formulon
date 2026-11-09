@@ -65,12 +65,12 @@ extern "C" fm_status_t fm_sheet_get_display_text(const fm_workbook_t* wb, size_t
 }
 
 extern "C" fm_status_t fm_workbook_format_value(const fm_workbook_t* wb, const fm_value_t* value,
-                                                const char* format_code, const char** out_text, int32_t* out_status) {
+                                                const char* number_format, const char** out_text, int32_t* out_status) {
   clear_last_error();
-  if (wb == nullptr || value == nullptr || format_code == nullptr || out_text == nullptr || out_status == nullptr) {
+  if (wb == nullptr || value == nullptr || number_format == nullptr || out_text == nullptr || out_status == nullptr) {
     return null_argument();
   }
-  if (auto rc = check_utf8({format_code}); rc != 0) {
+  if (auto rc = check_utf8({number_format}); rc != 0) {
     return rc;
   }
   formulon::Value v = formulon::Value::blank();
@@ -78,7 +78,7 @@ extern "C" fm_status_t fm_workbook_format_value(const fm_workbook_t* wb, const f
     return rc;
   }
   publish(wb,
-          formulon::text_format::format_value_for_display(v, format_code, wb->workbook().date1904(),
+          formulon::text_format::format_value_for_display(v, number_format, wb->workbook().date1904(),
                                                           wb->workbook().excel_profile()),
           out_text, out_status);
   return 0;

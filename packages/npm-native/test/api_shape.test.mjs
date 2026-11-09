@@ -836,7 +836,7 @@ test('round trip: every reshaped setter takes what its getter returns', async ()
       () => wb.getDefinedName('Rate', 0),
       (v) => wb.setDefinedName(v),
     );
-    wb.updateTableStyleDefaults({ tableStyle: 'TableStyleLight1' });
+    wb.updateTableStyleDefaults({ tableStyleName: 'TableStyleLight1' });
     same(
       () => wb.getTableStyleDefaults(),
       (v) => wb.updateTableStyleDefaults(v),
@@ -846,7 +846,7 @@ test('round trip: every reshaped setter takes what its getter returns', async ()
       () => ws.pivot(pivot).getOptions(),
       (v) => ws.pivot(pivot).updateOptions(v),
     );
-    const cacheId = ws.pivot(pivot).getCache();
+    const cacheId = ws.pivot(pivot).cache();
     same(
       () => wb.pivotCache(cacheId).getOptions(),
       (v) => wb.pivotCache(cacheId).updateOptions(v),
@@ -911,7 +911,7 @@ test('A1: a value the workbook does not hold reads as null', async () => {
     assert.deepEqual([dataField.numberFormat, dataField.showAsBaseField, dataField.showAsBaseItem], [null, null, null]);
     const options = ws.pivot(pivot).getOptions();
     assert.deepEqual([options.errorCaption, options.altText, options.grandTotalCaption], [null, null, null]);
-    const cacheId = ws.pivot(pivot).getCache();
+    const cacheId = ws.pivot(pivot).cache();
     assert.equal(wb.pivotCache(cacheId).getOptions().missingItemsLimit, null);
     assert.equal(wb.pivotCache(cacheId).listFields()[0].formula, null);
     assert.equal(wb.pivotCache(wb.addPivotCache()).getWorksheetSource(), null);
@@ -1041,13 +1041,15 @@ test('A7: an empty defined-name formula is refused; an empty comment text writes
   });
 });
 
-test('A8: removeComment removes a note and throws NotFound where there is none', async () => {
-  await withWorkbook((wb, { StatusCode }) => {
+test('A8: setComment with null removes a note and does nothing where there is none', async () => {
+  await withWorkbook((wb) => {
     const ws = wb.sheet(0);
     ws.setComment(1, 1, { author: 'Ann', text: 'x' });
-    ws.removeComment(1, 1);
+    ws.setComment(1, 1, null);
     assert.equal(ws.getComment(1, 1), null);
-    expectFormulonError(() => ws.removeComment(1, 1), StatusCode.NotFound);
+    ws.setComment(1, 1, null);
+    assert.equal(ws.getComment(1, 1), null);
+    assert.equal('removeComment' in ws, false);
   });
 });
 
@@ -1056,7 +1058,7 @@ test('A10: null clears workbook and sheet protection and phonetic runs, as [] do
     const ws = wb.sheet(0);
     wb.setWorkbookProtection({ lockStructure: true });
     wb.setWorkbookProtection(null);
-    assert.equal(wb.getWorkbookProtection().lockStructure, false);
+    assert.equal(wb.getWorkbookProtection(), null);
     ws.setSheetProtection({});
     assert.notEqual(ws.getSheetProtection(), null);
     ws.setSheetProtection(null);
@@ -1178,7 +1180,6 @@ test('N1: enums of one family share their values', async () => {
   for (const [table, member] of [
     ['BlanksAs', 'Absent'],
     ['ChartAxisCrosses', 'Absent'],
-    ['ShapePaint', 'Unset'],
     ['ChartTitleKind', 'None'],
     ['ChartLegendPosition', 'None'],
   ]) {
@@ -1277,8 +1278,9 @@ function pivotWorkbook(formulon) {
     wb.pivotCache(cacheId).setRecordValue(rec, 1, amount);
   }
   const pivot = ws.addPivot({ name: 'Pivot1', cacheId, anchor: { row: 0, col: 4 } });
-  ws.pivot(pivot).addField({ fieldIndex: 'Region', axis: 0 });
-  const amount = ws.pivot(pivot).addField({ fieldIndex: 'Amount', axis: 2 });
+  ws.pivot(pivot).setFieldAxis('Region', 0);
+  ws.pivot(pivot).setFieldAxis('Amount', 2);
+  const amount = 1;
   ws.pivot(pivot).addDataField({ name: 'Sum of Amount', fieldIndex: amount, aggregation: 0 });
   return { wb, pivot };
 }

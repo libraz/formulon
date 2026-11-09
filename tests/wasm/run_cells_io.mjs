@@ -430,7 +430,7 @@ export function registerCellsIo(Module, test) {
         dxfIndex: dxf,
         stopIfTrue: false,
       });
-      const cells = wb.evaluateCfRange(0, { firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }, Number.NaN);
+      const cells = wb.evaluateCfRange(0, { firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }, {});
       const match = cells[0].matches[0];
       assert.deepEqual({ ...match }, { kind: 0, priority: 1, dxfIndex: dxf });
       assert.strictEqual(wb.evaluateCfFormula(0, 0, 0, 0, 0, '=A1>10'), true);
@@ -606,14 +606,14 @@ export function registerCellsIo(Module, test) {
         dxfIndex: dxf,
         stopIfTrue: false,
       });
-      const xlsx = wb.saveWithDiagnostics(1);
+      const xlsx = wb.saveWithDiagnostics(0);
       assert.equal(xlsx.downgradedFormulaCount, 0);
       assert.equal(xlsx.deferredFeatureCount, 0);
       assert.equal(xlsx.droppedPartCount, 0);
       assert.equal(xlsx.droppedRelationshipCount, 0);
       assert.equal(xlsx.renumberedPartCount, 0);
 
-      const xlsb = wb.saveWithDiagnostics(2);
+      const xlsb = wb.saveWithDiagnostics(1);
       assert.equal(xlsb.downgradedFormulaCount, 1);
       assert.equal(xlsb.deferredFeatureCount, 0);
       // The binary writer never reassigns a part id.
@@ -637,8 +637,8 @@ export function registerCellsIo(Module, test) {
       } finally {
         preservedLoaded.delete();
       }
-      expectFailure(() => wb.saveWithDiagnostics(0), StatusCode.InvalidArgument);
-      wb.save(2);
+      expectFailure(() => wb.saveWithDiagnostics(2), StatusCode.InvalidArgument);
+      wb.save(1);
     } finally {
       wb.delete();
     }

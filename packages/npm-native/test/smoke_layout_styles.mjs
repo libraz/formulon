@@ -36,10 +36,12 @@ test('addHyperlink + getHyperlinks round-trip', async () => {
     display: 'See X',
     tooltip: 'Internal link',
   });
-  wb.sheet(0).setHyperlinkRange(
-    { firstRow: 7, firstCol: 8, lastRow: 9, lastCol: 10 },
-    { target: 'https://example.com/range', display: 'Range', tooltip: 'Range tip' },
-  );
+  wb.sheet(0).setHyperlink(7, 8, {
+    target: 'https://example.com/range',
+    display: 'Range',
+    tooltip: 'Range tip',
+    range: { firstRow: 7, firstCol: 8, lastRow: 9, lastCol: 10 },
+  });
   const list = wb.sheet(0).listHyperlinks();
   assert.equal(list.length, 4);
   assert.deepEqual(list[0].range, { firstRow: 1, firstCol: 2, lastRow: 1, lastCol: 2 });
@@ -82,12 +84,12 @@ test('setHyperlink upserts one link per cell and a null link removes it', async 
   assert.equal(links[0].target, 'https://example.com/b');
   assert.equal(links[0].display, null);
 
-  wb.sheet(0).setHyperlinkRange(
-    { firstRow: 3, firstCol: 0, lastRow: 4, lastCol: 1 },
-    { target: 'https://example.com/range' },
-  );
+  wb.sheet(0).setHyperlink(3, 0, {
+    target: 'https://example.com/range',
+    range: { firstRow: 3, firstCol: 0, lastRow: 4, lastCol: 1 },
+  });
   assert.equal(wb.sheet(0).listHyperlinks().length, 2);
-  wb.sheet(0).setHyperlinkRange({ firstRow: 3, firstCol: 0, lastRow: 4, lastCol: 1 }, null);
+  wb.sheet(0).setHyperlink(3, 0, null);
   assert.equal(wb.sheet(0).listHyperlinks().length, 1);
 
   wb.sheet(0).setHyperlink(1, 1, null);
@@ -97,18 +99,15 @@ test('setHyperlink upserts one link per cell and a null link removes it', async 
   assert.equal(wb.sheet(0).listHyperlinks().length, 0);
 });
 
-test('removeHyperlink / clearHyperlinks surface on an empty sheet', async () => {
+test('a null hyperlink / clearHyperlinks surface on an empty sheet', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
-  // Removing by cell reports NotFound when no hyperlink sits there; clearing is a no-op.
-  assert.throws(
-    () => wb.sheet(0).removeHyperlink(0, 0),
-    (e) => isFormulonError(e, mod.StatusCode.NotFound),
-  );
+  // Removing a link that is not there and clearing are no-ops.
+  wb.sheet(0).setHyperlink(0, 0, null);
   wb.sheet(0).clearHyperlinks();
   // Sheet-index-out-of-range is rejected on every variant.
   const sheetRange = (e) => isFormulonError(e, mod.StatusCode.SheetIndexOutOfRange);
-  assert.throws(() => wb.sheet(999).removeHyperlink(0, 0), sheetRange);
+  assert.throws(() => wb.sheet(999).setHyperlink(0, 0, null), sheetRange);
   assert.throws(() => wb.sheet(999).clearHyperlinks(), sheetRange);
   // The hyperlink list is still empty afterwards.
   assert.equal(wb.sheet(0).listHyperlinks().length, 0);

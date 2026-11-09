@@ -34,7 +34,6 @@ from formulon import (
     PivotAggregation,
     PivotAxis,
     PivotDataFieldInput,
-    PivotFieldInput,
     PivotFilterInput,
     PivotFilterKind,
     PivotInput,
@@ -107,15 +106,15 @@ class PivotFieldRefTests(unittest.TestCase):
     def _pivot(wb: Workbook) -> formulon.Pivot:
         cache = _cache(wb)
         pivot = wb.sheet(0).add_pivot(PivotInput(name="P", cache_id=cache, anchor="E1"))
-        pivot.add_field(PivotFieldInput("Region", PivotAxis.ROW))
-        pivot.add_field(PivotFieldInput("Amount", PivotAxis.VALUE))
+        pivot.set_field_axis("Region", PivotAxis.ROW)
+        pivot.set_field_axis("Amount", PivotAxis.VALUE)
         return pivot
 
     def test_a_filter_names_its_field_by_name_or_index_and_reads_back_the_index(self) -> None:
         with _book() as wb:
             pivot = self._pivot(wb)
-            pivot.add_filter(PivotFilterInput(field_index="region", type=PivotFilterKind.LABEL_EQUAL, value="East"))
-            pivot.add_filter(PivotFilterInput(field_index=0, type=PivotFilterKind.LABEL_EQUAL, value="East"))
+            pivot.add_filter(PivotFilterInput(field_index="region", kind=PivotFilterKind.LABEL_EQUAL, value="East"))
+            pivot.add_filter(PivotFilterInput(field_index=0, kind=PivotFilterKind.LABEL_EQUAL, value="East"))
             by_name, by_index = pivot.list_filters()
             self.assertEqual(by_name, by_index)
             self.assertEqual(by_name.field_index, 0)
@@ -124,20 +123,19 @@ class PivotFieldRefTests(unittest.TestCase):
         with _book() as wb:
             pivot = self._pivot(wb)
             with self.assertRaises(NotFoundError):
-                pivot.add_filter(PivotFilterInput(field_index="Nope", type=PivotFilterKind.LABEL_EQUAL, value="x"))
+                pivot.add_filter(PivotFilterInput(field_index="Nope", kind=PivotFilterKind.LABEL_EQUAL, value="x"))
             with self.assertRaises(IndexOutOfRangeError):
-                pivot.add_filter(PivotFilterInput(field_index=9, type=PivotFilterKind.LABEL_EQUAL, value="x"))
+                pivot.add_filter(PivotFilterInput(field_index=9, kind=PivotFilterKind.LABEL_EQUAL, value="x"))
             self.assertEqual(pivot.list_filters(), [])
 
-    def test_field_input_takes_name_or_index_and_a_required_axis(self) -> None:
+    def test_a_field_is_addressed_by_its_cache_field_name(self) -> None:
         with _book() as wb:
             cache = _cache(wb)
             pivot = wb.sheet(0).add_pivot(PivotInput(name="P", cache_id=cache, anchor="E1"))
-            by_name = pivot.add_field(PivotFieldInput("Region", PivotAxis.ROW))
+            pivot.set_field_axis("Region", PivotAxis.ROW)
+            by_name = pivot.get_field("Region").cache_field_index
             self.assertEqual(by_name, 0)
             self.assertIsNone(pivot.get_field(by_name).custom_name)
-            with self.assertRaises(TypeError):
-                PivotFieldInput("Region")  # type: ignore[call-arg]
 
     def test_a_data_field_defaults_to_sum_and_a_derived_name(self) -> None:
         with _book() as wb:
@@ -187,7 +185,7 @@ class PivotReaderTests(unittest.TestCase):
     def _pivot(wb: Workbook) -> formulon.Pivot:
         pivot = PivotFieldRefTests._pivot(wb)
         pivot.add_data_field(PivotDataFieldInput(1, name="Total"))
-        pivot.add_filter(PivotFilterInput(field_index=0, type=PivotFilterKind.LABEL_EQUAL, value="East"))
+        pivot.add_filter(PivotFilterInput(field_index=0, kind=PivotFilterKind.LABEL_EQUAL, value="East"))
         return pivot
 
     def test_each_single_reader_equals_the_list_element_at_its_position(self) -> None:
@@ -249,12 +247,12 @@ class PivotCacheRecordTests(unittest.TestCase):
             record = cache.add_record()
             cache.set_record_value(record, 0, True)
             cache.set_record_value(record, 1, ExcelError(ErrorCode.NA))
-            self.assertEqual(cache.get_record_value(0, 0), "East")
-            self.assertEqual(cache.get_record_value(0, 1), 10.0)
-            self.assertIs(cache.get_record_value(record, 0), True)
-            self.assertEqual(cache.get_record_value(record, 1), ExcelError(ErrorCode.NA))
+            self.assertEqual(cache.get_record_value(0, 0).value, "East")
+            self.assertEqual(cache.get_record_value(0, 1).value, 10.0)
+            self.assertIs(cache.get_record_value(record, 0).value, True)
+            self.assertEqual(cache.get_record_value(record, 1).value, ExcelError(ErrorCode.NA))
             blank = cache.add_record()
-            self.assertIsNone(cache.get_record_value(blank, 0))
+            self.assertIsNone(cache.get_record_value(blank, 0).value)
 
     def test_a_position_past_the_end_is_out_of_range(self) -> None:
         with _book() as wb:

@@ -76,8 +76,9 @@ function addCache(wb, sheetName = 'Sheet1', ref = 'A1:B3') {
 
 function addPivot(sheet, cache, name, anchorRow, anchorCol) {
   const pivot = sheet.addPivot({ name, cacheId: cache.cacheId, anchor: { row: anchorRow, col: anchorCol } });
-  pivot.addField({ fieldIndex: 'Region', axis: 0 });
-  const amount = pivot.addField({ fieldIndex: 'Amount', axis: 2 });
+  pivot.setFieldAxis('Region', 0);
+  pivot.setFieldAxis('Amount', 2);
+  const amount = 1;
   pivot.addDataField({ name: 'Sum of Amount', fieldIndex: amount, aggregation: 0 });
   return pivot;
 }
@@ -121,7 +122,7 @@ test(
     assert.equal(ws.pivot(0), pivot);
     assert.equal(ws.pivot('Pivot1'), pivot);
     assert.equal(ws.listPivots()[0], pivot);
-    assert.equal(pivot.getCache(), cache);
+    assert.equal(pivot.cache(), cache);
 
     const picture = ws.addPicture(makePng(4), { name: 'logo' });
     const chart = ws.addChart({ type: mod.ChartPlotType.Bar, range: 'Sheet1!$A$1:$B$3' });
@@ -243,7 +244,7 @@ test(
     assert.throws(() => bound.getOptions(), notFound(mod));
     assert.equal(ws.listPivots().length, 1);
     assert.equal(ws.listPivots()[0], otherPivot);
-    assert.equal(otherPivot.getCache(), unrelated);
+    assert.equal(otherPivot.cache(), unrelated);
     assert.equal(wb.listPivotCaches().length, 1);
     assert.equal(wb.listPivotCaches()[0], unrelated);
   }),

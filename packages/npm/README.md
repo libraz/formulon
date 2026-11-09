@@ -127,9 +127,8 @@ try {
     cache.setRecordValue(record, 1, amount);
   }
   const pivot = ws.addPivot({ name: 'ByRegion', cacheId: cache.cacheId, anchor: 'E1' });
-  pivot.addField({ fieldIndex: 'Region', axis: formulon.PivotAxis.Row });
-  const amount = pivot.addField({ fieldIndex: 'Amount', axis: formulon.PivotAxis.Value });
-  pivot.addDataField({ name: 'Sum of Amount', fieldIndex: amount, aggregation: formulon.PivotAggregation.Sum });
+  pivot.setFieldAxis('Region', formulon.PivotAxis.Row);
+  pivot.addDataField({ name: 'Sum of Amount', fieldIndex: 'Amount', aggregation: formulon.PivotAggregation.Sum });
   pivot.rename('Totals');
   console.log(ws.pivot('Totals') === pivot); // true
 

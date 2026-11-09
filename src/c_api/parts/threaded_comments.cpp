@@ -37,7 +37,8 @@ using formulon::c_api::parts::text_or_empty;
 
 namespace {
 
-// Copies `count` caller mentions into the model shape.
+// Copies `count` caller mentions into the model shape; a span ending before
+// it starts is refused. An empty mention id is left for the engine to generate.
 fm_status_t mentions_from_fm(const fm_mention_t* mentions, uint32_t count, std::vector<formulon::Mention>* out) {
   if (mentions == nullptr && count != 0U) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "mentions is NULL while count > 0",
@@ -47,11 +48,16 @@ fm_status_t mentions_from_fm(const fm_mention_t* mentions, uint32_t count, std::
     if (auto rc = check_utf8({mentions[i].person_id, mentions[i].mention_id}); rc != 0) {
       return rc;
     }
+    if (mentions[i].end < mentions[i].start) {
+      return invalid_argument("mention ends before it starts", "mentions[" + std::to_string(i) +
+                                                                   "] start=" + std::to_string(mentions[i].start) +
+                                                                   " end=" + std::to_string(mentions[i].end));
+    }
     formulon::Mention m;
     m.person_id = text_or_empty(mentions[i].person_id);
     m.mention_id = text_or_empty(mentions[i].mention_id);
     m.start = mentions[i].start;
-    m.length = mentions[i].length;
+    m.length = mentions[i].end - mentions[i].start;
     out->push_back(std::move(m));
   }
   return 0;
@@ -108,7 +114,7 @@ extern "C" fm_status_t fm_sheet_get_threaded_comment_at(const fm_workbook_t* wb,
   mentions.reserve(c.mentions.size());
   for (const formulon::Mention& m : c.mentions) {
     mentions.push_back(fm_mention_t{store_cstr(scratch->read_scratch, m.person_id),
-                                    store_cstr(scratch->read_scratch, m.mention_id), m.start, m.length});
+                                    store_cstr(scratch->read_scratch, m.mention_id), m.start, m.start + m.length});
   }
   const std::uint32_t struct_size = out->struct_size;
   *out = fm_threaded_comment_t{};
@@ -171,11 +177,15 @@ extern "C" fm_status_t fm_sheet_add_threaded_comment(fm_workbook_t* wb, size_t s
       rc != 0) {
     return rc;
   }
+  // NULL opens a thread; an empty parent id names nothing.
+  if (comment->parent_id != nullptr && comment->parent_id[0] == '\0') {
+    return invalid_argument("parent_id is empty", "field=parent_id");
+  }
   formulon::ThreadedComment model;
   if (auto rc = mentions_from_fm(comment->mentions, comment->mentions_count, &model.mentions); rc != 0) {
     return rc;
   }
-  if (comment->parent_id != nullptr && comment->parent_id[0] != '\0') {
+  if (comment->parent_id != nullptr) {
     const auto& list = wb->workbook().sheet(sheet_index).threaded_comments();
     if (formulon::find_threaded_comment(list, comment->parent_id) == list.size()) {
       return not_found("no threaded comment has that id", "parent_id=" + std::string(comment->parent_id));

@@ -23,12 +23,12 @@ emscripten::val slicer_to_val(const fm_slicer_info_t& s) {
   o.set("columnCount", s.column_count);
   o.set("sortOrder", s.sort_order);
   o.set("crossFilter", s.cross_filter);
-  o.set("rowHeightEmu", static_cast<double>(s.row_height_emu));
+  o.set("rowHeightPt", s.row_height_pt);
   js_set_cstr_fields(o, {{"caption", s.caption},
                          {"cacheName", s.cache_name},
                          {"tableName", s.table_name},
                          {"columnName", s.column_name}});
-  js_set_cstr_or_null(o, "style", s.style);
+  js_set_cstr_or_null(o, "styleName", s.style_name);
   return o;
 }
 
@@ -36,30 +36,33 @@ struct SlicerText {
   std::string name;
   std::string description;
   std::string caption;
-  std::string style;
+  std::string style_name;
 };
 
-/// Reads the slicer fields `spec` carries into a patch; an omitted field is `KEEP`, `null` on `style` is `CLEAR`.
-fm_slicer_patch_t pull_slicer_patch(JsNarrowNumericReader& reader, const emscripten::val& spec, SlicerText& store) {
+/// Reads the slicer fields `patch` carries; an omitted field is `KEEP`, `null` on `styleName` is `CLEAR`.
+fm_slicer_patch_t pull_slicer_patch(JsNarrowNumericReader& reader, const emscripten::val& patch, SlicerText& store) {
   fm_slicer_patch_t s = FM_STRUCT_INIT(fm_slicer_patch_t);
-  js_patch_string(reader, spec, "caption", "slicer.caption", false, store.caption, &s.caption_op, &s.caption);
-  js_patch_string(reader, spec, "style", "slicer.style", true, store.style, &s.style_op, &s.style);
-  const auto has = [&](const char* key) { return reader.ok() && js_value_present(reader.value(spec, key, key)); };
-  if (has("columnCount")) {
+  js_patch_string(reader, patch, "caption", "patch.caption", false, store.caption, &s.caption_op, &s.caption);
+  js_patch_string(reader, patch, "styleName", "patch.styleName", true, store.style_name, &s.style_name_op,
+                  &s.style_name);
+  const auto has = [&](const char* key, const char* field) {
+    return reader.ok() && js_value_present(reader.value(patch, key, field));
+  };
+  if (has("columnCount", "patch.columnCount")) {
     s.column_count_op = FM_PATCH_OP_SET;
-    s.column_count = reader.u32(spec, "columnCount", 1U, "slicer.columnCount");
+    s.column_count = reader.u32(patch, "columnCount", 1U, "patch.columnCount");
   }
-  if (has("rowHeightEmu")) {
-    s.row_height_emu_op = FM_PATCH_OP_SET;
-    s.row_height_emu = reader.i64(spec, "rowHeightEmu", 0, "slicer.rowHeightEmu");
+  if (has("rowHeightPt", "patch.rowHeightPt")) {
+    s.row_height_pt_op = FM_PATCH_OP_SET;
+    s.row_height_pt = reader.number(patch, "rowHeightPt", 0.0, "patch.rowHeightPt");
   }
-  if (has("sortOrder")) {
+  if (has("sortOrder", "patch.sortOrder")) {
     s.sort_order_op = FM_PATCH_OP_SET;
-    s.sort_order = reader.i32(spec, "sortOrder", 0, "slicer.sortOrder");
+    s.sort_order = reader.i32(patch, "sortOrder", 0, "patch.sortOrder");
   }
-  if (has("crossFilter")) {
+  if (has("crossFilter", "patch.crossFilter")) {
     s.cross_filter_op = FM_PATCH_OP_SET;
-    s.cross_filter = reader.i32(spec, "crossFilter", 0, "slicer.crossFilter");
+    s.cross_filter = reader.i32(patch, "crossFilter", 0, "patch.crossFilter");
   }
   return s;
 }
@@ -68,14 +71,14 @@ fm_slicer_patch_t pull_slicer_patch(JsNarrowNumericReader& reader, const emscrip
 /// absent key takes the default of a new slicer.
 fm_slicer_spec_t pull_slicer_spec(JsNarrowNumericReader& reader, const emscripten::val& spec, SlicerText& store) {
   fm_slicer_spec_t s = FM_STRUCT_INIT(fm_slicer_spec_t);
-  s.placement = pull_drawing_placement(reader, spec, store.name, store.description);
-  s.column_count = reader.u32(spec, "columnCount", 0U, "slicer.columnCount");
-  s.sort_order = reader.i32(spec, "sortOrder", FM_SLICER_SORT_ORDER_ASCENDING, "slicer.sortOrder");
+  s.placement = pull_drawing_placement(reader, spec, "spec", store.name, store.description);
+  s.column_count = reader.u32(spec, "columnCount", 0U, "spec.columnCount");
+  s.sort_order = reader.i32(spec, "sortOrder", FM_SLICER_SORT_ORDER_ASCENDING, "spec.sortOrder");
   s.cross_filter =
-      reader.i32(spec, "crossFilter", FM_SLICER_CROSS_FILTER_SHOW_ITEMS_WITH_DATA_AT_TOP, "slicer.crossFilter");
-  s.row_height_emu = reader.i64(spec, "rowHeightEmu", 0, "slicer.rowHeightEmu");
-  s.caption = reader.optional_string(spec, "caption", store.caption, "slicer.caption");
-  s.style = reader.optional_string(spec, "style", store.style, "slicer.style");
+      reader.i32(spec, "crossFilter", FM_SLICER_CROSS_FILTER_SHOW_ITEMS_WITH_DATA_AT_TOP, "spec.crossFilter");
+  s.row_height_pt = reader.number(spec, "rowHeightPt", 0.0, "spec.rowHeightPt");
+  s.caption = reader.optional_string(spec, "caption", store.caption, "spec.caption");
+  s.style_name = reader.optional_string(spec, "styleName", store.style_name, "spec.styleName");
   return s;
 }
 
@@ -116,11 +119,12 @@ void JsWorkbook::updateSlicer(uint32_t sheet, uint32_t objectId, emscripten::val
   JsNarrowNumericReader reader("Slicer.update");
   SlicerText store;
   const emscripten::val options = js_object_or_empty(spec);
+  const fm_drawing_patch_t common = pull_drawing_patch(reader, options, "patch", store.name, store.description);
   const fm_slicer_patch_t slicer = pull_slicer_patch(reader, options, store);
   if (!reader.ok()) {
     return;
   }
-  succeeded(fm_sheet_update_slicer(handle_, sheet, objectId, &slicer));
+  succeeded(fm_sheet_update_slicer(handle_, sheet, objectId, &common, &slicer));
 }
 
 }  // namespace parts

@@ -71,14 +71,14 @@ emscripten::val breaks_array(const fm_workbook_t* handle, uint32_t sheet, bool r
       position = brk.row;
       first = brk.first;
       last = brk.last;
-      manual = brk.manual;
+      manual = brk.manual == FM_TRISTATE_TRUE ? 1 : 0;
     } else {
       fm_column_break_t brk = FM_STRUCT_INIT(fm_column_break_t);
       rc = fm_sheet_get_column_break_at(handle, sheet, i, &brk);
       position = brk.col;
       first = brk.first;
       last = brk.last;
-      manual = brk.manual;
+      manual = brk.manual == FM_TRISTATE_TRUE ? 1 : 0;
     }
     if (!succeeded(rc)) {
       return emscripten::val::undefined();
@@ -253,7 +253,7 @@ void JsWorkbook::setSheetRowBreak(uint32_t sheet, uint32_t row, emscripten::val 
   fm_row_break_t brk = FM_STRUCT_INIT(fm_row_break_t);
   brk.first = reader.u32(input, "first", 0U, "break.first");
   brk.last = reader.u32(input, "last", 0U, "break.last");
-  brk.manual = reader.boolean(input, "manual", true, "break.manual") ? 1 : 0;
+  brk.manual = reader.boolean(input, "manual", true, "break.manual") ? FM_TRISTATE_TRUE : FM_TRISTATE_FALSE;
   if (!reader.ok()) {
     return;
   }
@@ -273,7 +273,7 @@ void JsWorkbook::setSheetColBreak(uint32_t sheet, uint32_t col, emscripten::val 
   fm_column_break_t brk = FM_STRUCT_INIT(fm_column_break_t);
   brk.first = reader.u32(input, "first", 0U, "break.first");
   brk.last = reader.u32(input, "last", 0U, "break.last");
-  brk.manual = reader.boolean(input, "manual", true, "break.manual") ? 1 : 0;
+  brk.manual = reader.boolean(input, "manual", true, "break.manual") ? FM_TRISTATE_TRUE : FM_TRISTATE_FALSE;
   if (!reader.ok()) {
     return;
   }

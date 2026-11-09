@@ -27,8 +27,8 @@ static_assert(offsetof(fm_effective_style_info_t, border_argb) == 48U,
 static_assert(offsetof(fm_effective_style_info_t, border_resolution) == 68U,
               "fm_effective_style_info_t.border_resolution offset changed");
 static_assert(offsetof(fm_effective_style_info_t, hidden) == 92U, "fm_effective_style_info_t.hidden offset changed");
-static_assert(offsetof(fm_effective_style_info_t, num_fmt_code) == 96U,
-              "fm_effective_style_info_t.num_fmt_code offset changed");
+static_assert(offsetof(fm_effective_style_info_t, number_format) == 96U,
+              "fm_effective_style_info_t.number_format offset changed");
 static_assert(sizeof(fm_effective_style_info_t) == (sizeof(void*) == 4U ? 100U : 104U),
               "fm_effective_style_info_t ABI layout changed");
 
@@ -45,7 +45,7 @@ constexpr const char* kYuGothicLight = "\xE6\xB8\xB8\xE3\x82\xB4\xE3\x82\xB7\xE3
 
 Bytes Save(fm_workbook_t* wb) {
   BufferGuard buffer;
-  EXPECT_EQ(fm_workbook_save(wb, &buffer.data, &buffer.len), 0);
+  EXPECT_EQ(fm_workbook_save(wb, FM_WORKBOOK_FORMAT_XLSX, &buffer.data, &buffer.len), 0);
   return Bytes(buffer.data, buffer.data + buffer.len);
 }
 
@@ -330,7 +330,7 @@ TEST(FormulonCApiTheme, ResolveColorReportsResolution) {
   fm_color_t rgb{};
   rgb.kind = FM_COLOR_KIND_RGB;
   rgb.argb = 0xFF123456U;
-  Resolved got = Resolve(wb.handle, rgb, FM_COLOR_CONTEXT_FILL_FG);
+  Resolved got = Resolve(wb.handle, rgb, FM_COLOR_CONTEXT_FILL_FOREGROUND);
   ASSERT_EQ(got.status, 0);
   EXPECT_EQ(got.argb, 0xFF123456U);
   EXPECT_EQ(got.resolution, FM_COLOR_RESOLUTION_EXACT);
@@ -355,10 +355,10 @@ TEST(FormulonCApiTheme, ResolveColorReportsResolution) {
   got = Resolve(wb.handle, ThemeSpec(1, 0.0), FM_COLOR_CONTEXT_FONT);
   EXPECT_EQ(got.argb, 0xFF000000U);
   // Excel's "Accent 1, Lighter 40%" and "Darker 25%".
-  got = Resolve(wb.handle, ThemeSpec(4, 0.4), FM_COLOR_CONTEXT_FILL_FG);
+  got = Resolve(wb.handle, ThemeSpec(4, 0.4), FM_COLOR_CONTEXT_FILL_FOREGROUND);
   EXPECT_EQ(got.argb, 0xFF44B3E1U);
   EXPECT_EQ(got.resolution, FM_COLOR_RESOLUTION_EXACT);
-  got = Resolve(wb.handle, ThemeSpec(4, -0.25), FM_COLOR_CONTEXT_FILL_FG);
+  got = Resolve(wb.handle, ThemeSpec(4, -0.25), FM_COLOR_CONTEXT_FILL_FOREGROUND);
   EXPECT_EQ(got.argb, 0xFF104861U);
 
   got = Resolve(wb.handle, IndexedSpec(2), FM_COLOR_CONTEXT_FONT);
@@ -376,8 +376,8 @@ TEST(FormulonCApiTheme, ResolveColorReportsResolution) {
     uint32_t argb;
   } kContexts[] = {
       {FM_COLOR_CONTEXT_FONT, 0xFF000000U},
-      {FM_COLOR_CONTEXT_FILL_FG, 0xFFFFFFFFU},
-      {FM_COLOR_CONTEXT_FILL_BG, 0xFFFFFFFFU},
+      {FM_COLOR_CONTEXT_FILL_FOREGROUND, 0xFFFFFFFFU},
+      {FM_COLOR_CONTEXT_FILL_BACKGROUND, 0xFFFFFFFFU},
       {FM_COLOR_CONTEXT_BORDER, 0xFF000000U},
   };
   for (const auto& c : kContexts) {
@@ -426,19 +426,19 @@ PrecedenceXfs AddPrecedenceXfs(fm_workbook_t* wb) {
   font.color.kind = FM_COLOR_KIND_THEME;
   font.color.theme = 4;
   font.color.tint = 0.4;
-  std::size_t font_index = 0;
+  std::uint32_t font_index = 0;
   EXPECT_EQ(fm_workbook_add_font(wb, &font, &font_index), 0);
   fm_fill_t fill{};
   fill.pattern = 1;
   fill.foreground.kind = FM_COLOR_KIND_RGB;
   fill.foreground.argb = 0xFFFF0000U;
-  std::size_t fill_index = 0;
+  std::uint32_t fill_index = 0;
   EXPECT_EQ(fm_workbook_add_fill(wb, &fill, &fill_index), 0);
   fm_border_t border{};
   border.left.style = 1;
   border.left.color.kind = FM_COLOR_KIND_INDEXED;
   border.left.color.indexed = 12;
-  std::size_t border_index = 0;
+  std::uint32_t border_index = 0;
   EXPECT_EQ(fm_workbook_add_border(wb, &border, &border_index), 0);
 
   PrecedenceXfs out;
@@ -535,10 +535,10 @@ TEST(FormulonCApiEffectiveStyle, ResolvesColorsFormatAndProtection) {
   // No theme part: the themed font resolves against the default theme.
   EXPECT_EQ(style.font_argb, 0xFF44B3E1U);
   EXPECT_EQ(style.font_resolution, FM_COLOR_RESOLUTION_DEFAULT_THEME);
-  EXPECT_EQ(style.fill_fg_argb, 0xFFFF0000U);
-  EXPECT_EQ(style.fill_fg_resolution, FM_COLOR_RESOLUTION_EXACT);
-  EXPECT_EQ(style.fill_bg_argb, 0xFFFFFFFFU);
-  EXPECT_EQ(style.fill_bg_resolution, FM_COLOR_RESOLUTION_AUTO_CONTEXT);
+  EXPECT_EQ(style.fill_foreground_argb, 0xFFFF0000U);
+  EXPECT_EQ(style.fill_foreground_resolution, FM_COLOR_RESOLUTION_EXACT);
+  EXPECT_EQ(style.fill_background_argb, 0xFFFFFFFFU);
+  EXPECT_EQ(style.fill_background_resolution, FM_COLOR_RESOLUTION_AUTO_CONTEXT);
   EXPECT_EQ(style.border_argb[0], 0xFF0000FFU);  // palette index 12
   EXPECT_EQ(style.border_resolution[0], FM_COLOR_RESOLUTION_EXACT);
   for (std::size_t side = 1; side < 5U; ++side) {
@@ -548,8 +548,8 @@ TEST(FormulonCApiEffectiveStyle, ResolvesColorsFormatAndProtection) {
   EXPECT_EQ(style.locked, 0);
   EXPECT_EQ(style.hidden, 1);
   // Built-in 14 resolves to the default en-US locale's form, not the stored ECMA code.
-  ASSERT_NE(style.num_fmt_code, nullptr);
-  EXPECT_STREQ(style.num_fmt_code, "m/d/yy");
+  ASSERT_NE(style.number_format, nullptr);
+  EXPECT_STREQ(style.number_format, "m/d/yy");
 
   // Once the theme part exists the same font colour is exact.
   fm_theme_colors_t colors = FM_STRUCT_INIT(fm_theme_colors_t);
@@ -563,7 +563,7 @@ TEST(FormulonCApiEffectiveStyle, ResolvesColorsFormatAndProtection) {
   EXPECT_EQ(plain.source, FM_EFFECTIVE_STYLE_SOURCE_DEFAULT);
   EXPECT_EQ(plain.locked, 1);
   EXPECT_EQ(plain.hidden, 0);
-  EXPECT_STREQ(plain.num_fmt_code, "General");
+  EXPECT_STREQ(plain.number_format, "General");
 }
 
 TEST(FormulonCApiEffectiveStyle, SourceOrdinalsNameTheLevelsInPrecedenceOrder) {

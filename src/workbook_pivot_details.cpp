@@ -17,6 +17,7 @@
 
 #include "eval/eval_profile_scope.h"
 #include "new_workbook_defaults.h"
+#include "pivot/calculated.h"
 #include "pivot/filter_engine.h"
 #include "pivot/pivot_cache.h"
 #include "pivot/pivot_evaluator.h"
@@ -36,6 +37,7 @@
 #include "utils/error.h"
 #include "utils/expected.h"
 #include "utils/index_sort.h"
+#include "utils/status_macros.h"
 #include "value.h"
 #include "workbook.h"
 
@@ -263,6 +265,86 @@ Expected<std::size_t, Error> Workbook::show_pivot_details(std::size_t sheet, std
   (void)move_sheet(static_cast<std::uint32_t>(appended), static_cast<std::uint32_t>(sheet));
   set_active_sheet(static_cast<std::uint32_t>(sheet));
   return sheet;
+}
+
+namespace {
+
+// Every pivot table, across all sheets, bound to cache `cache_id`.
+std::vector<pivot::PivotTable*> pivots_of_cache(Workbook& wb, std::uint32_t cache_id) {
+  std::vector<pivot::PivotTable*> tables;
+  for (std::size_t s = 0; s < wb.sheet_count(); ++s) {
+    for (std::unique_ptr<pivot::PivotTable>& table : wb.sheet(s).mutable_pivot_tables()) {
+      if (table != nullptr && table->pivot_cache_id() == cache_id) {
+        tables.push_back(table.get());
+      }
+    }
+  }
+  return tables;
+}
+
+Error unknown_cache(std::uint32_t cache_id) {
+  return make_error(FormulonErrorCode::kNotFound, "pivot: no cache with this id",
+                    "cache_id=" + std::to_string(cache_id));
+}
+
+// Refuses an empty pivot name or one another pivot on `sheet` holds.
+Expected<void, Error> check_pivot_name(const Sheet& sheet, std::string_view name, std::size_t self) {
+  if (name.empty()) {
+    return make_error(FormulonErrorCode::kInvalidArgument, "pivot: empty name");
+  }
+  if (pivot::pivot_name_taken(sheet, name, self)) {
+    return make_error(FormulonErrorCode::kAlreadyExists, "pivot: name already in use", "name=" + std::string(name));
+  }
+  return Expected<void, Error>::Ok();
+}
+
+}  // namespace
+
+Expected<std::size_t, Error> Workbook::add_pivot_cache_field(std::uint32_t cache_id, pivot::PivotCacheField field) {
+  pivot::PivotCache* cache = nullptr;
+  for (std::unique_ptr<pivot::PivotCache>& c : pivot_caches_) {
+    if (c != nullptr && c->cache_id() == cache_id) {
+      cache = c.get();
+      break;
+    }
+  }
+  if (cache == nullptr) {
+    return unknown_cache(cache_id);
+  }
+  cache->mutable_fields().push_back(std::move(field));
+  pivot::sync_table_fields(*cache, pivots_of_cache(*this, cache_id));
+  return cache->fields().size() - 1U;
+}
+
+Expected<std::size_t, Error> Workbook::add_pivot(std::size_t sheet, std::unique_ptr<pivot::PivotTable> table) {
+  if (sheet >= sheet_count() || table == nullptr) {
+    return make_error(FormulonErrorCode::kInvalidArgument, "pivot: bad sheet or table",
+                      "sheet=" + std::to_string(sheet));
+  }
+  Sheet& target = this->sheet(sheet);
+  RETURN_IF_ERROR(check_pivot_name(target, table->name(), target.pivot_tables().size()));
+  const pivot::PivotCache* cache = find_pivot_cache(table->pivot_cache_id());
+  if (cache == nullptr) {
+    return unknown_cache(table->pivot_cache_id());
+  }
+  pivot::sync_table_fields(*cache, {table.get()});
+  target.add_pivot_table(std::move(table));
+  return target.pivot_tables().size() - 1U;
+}
+
+Expected<void, Error> Workbook::rename_pivot(std::size_t sheet, std::size_t pivot, std::string_view name) {
+  if (sheet >= sheet_count()) {
+    return make_error(FormulonErrorCode::kInvalidArgument, "pivot: sheet index out of range",
+                      "sheet=" + std::to_string(sheet));
+  }
+  Sheet& target = this->sheet(sheet);
+  if (pivot >= target.pivot_tables().size()) {
+    return make_error(FormulonErrorCode::kIndexOutOfRange, "pivot: pivot index out of range",
+                      "pivot=" + std::to_string(pivot));
+  }
+  RETURN_IF_ERROR(check_pivot_name(target, name, pivot));
+  target.mutable_pivot_tables()[pivot]->set_name(std::string(name));
+  return Expected<void, Error>::Ok();
 }
 
 }  // namespace formulon

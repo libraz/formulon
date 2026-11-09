@@ -89,7 +89,7 @@ describe('the anchor is one nested record', () => {
     });
   });
 
-  it('a flat anchor key on a shape, a slicer, a picture or a chart placement is a TypeError', () => {
+  it('a flat anchor key on a shape, a slicer, a picture or a chart is a TypeError', () => {
     withSheet((ws) => {
       const table = ws.addTable({ range: 'A1:B3', name: 'Tbl' });
       expectTypeError(() => ws.addShape({ ...box }));
@@ -97,14 +97,14 @@ describe('the anchor is one nested record', () => {
       expectTypeError(() => ws.addSlicer(table, 0, { ...box }));
       expectTypeError(() => ws.addPicture(PNG_1X1, { fromRow: 1 }));
       expectTypeError(() => ws.addPicture(PNG_1X1, { anchor: { row: 1, col: 1 } }));
-      expectTypeError(() => chartOf(ws, { placement: { anchor: { row: 5, col: 1 } } }));
+      expectTypeError(() => chartOf(ws, { anchor: { row: 5, col: 1 } }));
       assert.equal(ws.listDrawings().length, 0);
     });
   });
 
   it('an anchor patch keeps every key it omits and an omitted kind keeps the object kind', () => {
     withSheet((ws) => {
-      const chart = chartOf(ws, { placement: { anchor: { fromRow: 2, fromCol: 2, toRow: 12, toCol: 8 } } });
+      const chart = chartOf(ws, { anchor: { fromRow: 2, fromCol: 2, toRow: 12, toCol: 8 } });
       const before = chart.getDrawingProperties().anchor;
       assert.equal(before.kind, AnchorKind.TwoCell);
       chart.update({ anchor: { fromRow: 3 } });
@@ -121,7 +121,7 @@ describe('the anchor is one nested record', () => {
 
   it('a given kind converts a chart anchor and a key that does not fit the resulting kind is InvalidArgument', () => {
     withSheet((ws) => {
-      const chart = chartOf(ws, { placement: { anchor: { fromRow: 2, fromCol: 2, toRow: 12, toCol: 8 } } });
+      const chart = chartOf(ws, { anchor: { fromRow: 2, fromCol: 2, toRow: 12, toCol: 8 } });
       chart.update({ anchor: { kind: AnchorKind.OneCell, widthEmu: 914400, heightEmu: 457200 } });
       let anchor = chart.getDrawingProperties().anchor;
       assert.equal(anchor.kind, AnchorKind.OneCell);
@@ -179,7 +179,7 @@ describe('the default anchor kind comes from the operation', () => {
 
   it('a chart placed by one cell reads two-cell, and a kind-less anchor with a box needs no kind', () => {
     withSheet((ws) => {
-      const chart = chartOf(ws, { placement: { anchor: { fromRow: 5 } } });
+      const chart = chartOf(ws, { anchor: { fromRow: 5 } });
       const { anchor } = chart.getDrawingProperties();
       assert.equal(anchor.kind, AnchorKind.TwoCell);
       assert.equal(anchor.fromRow, 5);
@@ -191,7 +191,7 @@ describe('the default anchor kind comes from the operation', () => {
 describe('placement input is shared by pictures and charts', () => {
   it('a chart placement carries name and description and a picture carries hidden too', () => {
     withSheet((ws) => {
-      const chart = chartOf(ws, { placement: { name: 'Sales', description: 'Quarterly sales' } });
+      const chart = chartOf(ws, { name: 'Sales', description: 'Quarterly sales' });
       const read = chart.getDrawingProperties();
       assert.equal(read.name, 'Sales');
       assert.equal(read.description, 'Quarterly sales');

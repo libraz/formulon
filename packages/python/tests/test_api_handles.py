@@ -30,7 +30,6 @@ from formulon import (
     PivotAxis,
     PivotCache,
     PivotDataFieldInput,
-    PivotFieldInput,
     PivotInput,
     ShapeInput,
     Sheet,
@@ -75,8 +74,9 @@ def add_cache(wb: Workbook, source_sheet: str) -> PivotCache:
 def add_pivot(sheet: Sheet, cache: PivotCache, name: str, anchor_row: int, anchor_col: int) -> Tuple[Pivot, int]:
     """A pivot of ``cache`` on ``sheet``: Region on rows, Sum of Amount as the data field."""
     pivot = sheet.add_pivot(PivotInput(name=name, cache_id=cache.cache_id, anchor=CellAddress(anchor_row, anchor_col)))
-    pivot.add_field(PivotFieldInput(field_index="Region", axis=PivotAxis.ROW))
-    amount = pivot.add_field(PivotFieldInput(field_index="Amount", axis=PivotAxis.VALUE))
+    pivot.set_field_axis("Region", PivotAxis.ROW)
+    pivot.set_field_axis("Amount", PivotAxis.VALUE)
+    amount = pivot.get_field("Amount").cache_field_index
     pivot.add_data_field(
         PivotDataFieldInput(name="Sum of Amount", field_index=amount, aggregation=PivotAggregation.SUM)
     )
@@ -138,7 +138,7 @@ class IdentityTests(HandleTestCase):
             self.assertIs(ws.pivot(0), pivot)
             self.assertIs(ws.pivot(pivot), pivot)
             self.assertIs(ws.list_pivots()[0], pivot)
-            self.assertIs(pivot.get_cache(), cache)
+            self.assertIs(pivot.cache(), cache)
             self.assertIs(wb.pivot_cache(cache.cache_id), cache)
             self.assertIs(wb.pivot_cache(cache), cache)
             self.assertIs(wb.list_pivot_caches()[0], cache)
@@ -200,7 +200,7 @@ class IdentityTests(HandleTestCase):
             for read in (
                 lambda: pivot.name,
                 pivot.get_properties,
-                lambda: pivot.add_field(PivotFieldInput(field_index="Region", axis=PivotAxis.ROW)),
+                lambda: pivot.set_field_axis("Region", PivotAxis.ROW),
                 lambda: ws.pivot("P1"),
             ):
                 self.assertCode(NotFoundError, read, StatusCode.NOT_FOUND)
@@ -268,7 +268,7 @@ class IdentityTests(HandleTestCase):
             self.assertCode(NotFoundError, pa.get_properties, StatusCode.NOT_FOUND)
             self.assertCode(NotFoundError, cache_a.get_options, StatusCode.NOT_FOUND)
             self.assertEqual(pb.get_properties().name, "PB")
-            self.assertIs(pb.get_cache(), cache_b)
+            self.assertIs(pb.cache(), cache_b)
             self.assertEqual(cache_b.get_worksheet_source().range.sheet, data_b.index)
             self.assertEqual(len(out.list_pivots()), 1)
             self.assertIs(out.list_pivots()[0], pb)

@@ -41,9 +41,9 @@ namespace {
 static_assert(sizeof(fm_theme_colors_t::argb) / sizeof(fm_theme_colors_t::argb[0]) == formulon::kThemeColorCount,
               "fm_theme_colors_t must carry every scheme colour");
 static_assert(FM_COLOR_CONTEXT_FONT == static_cast<int>(formulon::ColorContext::kFont), "colour context drift");
-static_assert(FM_COLOR_CONTEXT_FILL_FG == static_cast<int>(formulon::ColorContext::kFillForeground),
+static_assert(FM_COLOR_CONTEXT_FILL_FOREGROUND == static_cast<int>(formulon::ColorContext::kFillForeground),
               "colour context drift");
-static_assert(FM_COLOR_CONTEXT_FILL_BG == static_cast<int>(formulon::ColorContext::kFillBackground),
+static_assert(FM_COLOR_CONTEXT_FILL_BACKGROUND == static_cast<int>(formulon::ColorContext::kFillBackground),
               "colour context drift");
 static_assert(FM_COLOR_CONTEXT_BORDER == static_cast<int>(formulon::ColorContext::kBorder), "colour context drift");
 static_assert(FM_COLOR_RESOLUTION_EXACT == static_cast<int>(formulon::ColorResolution::kExact),
@@ -303,16 +303,16 @@ extern "C" fm_status_t fm_sheet_get_effective_style(const fm_workbook_t* wb, siz
   out->border_index = style.border_index;
   out->font_argb = style.font_color.argb;
   out->font_resolution = static_cast<int32_t>(style.font_color.resolution);
-  out->fill_fg_argb = style.fill_foreground.argb;
-  out->fill_fg_resolution = static_cast<int32_t>(style.fill_foreground.resolution);
-  out->fill_bg_argb = style.fill_background.argb;
-  out->fill_bg_resolution = static_cast<int32_t>(style.fill_background.resolution);
+  out->fill_foreground_argb = style.fill_foreground.argb;
+  out->fill_foreground_resolution = static_cast<int32_t>(style.fill_foreground.resolution);
+  out->fill_background_argb = style.fill_background.argb;
+  out->fill_background_resolution = static_cast<int32_t>(style.fill_background.resolution);
   for (std::size_t i = 0; i < style.border_colors.size(); ++i) {
     out->border_argb[i] = style.border_colors[i].argb;
     out->border_resolution[i] = static_cast<int32_t>(style.border_colors[i].resolution);
   }
   out->locked = style.locked ? 1 : 0;
   out->hidden = style.hidden ? 1 : 0;
-  out->num_fmt_code = publish_scratch(wb, std::move(style.num_fmt_code));
+  out->number_format = publish_scratch(wb, std::move(style.num_fmt_code));
   return 0;
 }

@@ -139,7 +139,7 @@ TEST(FormulonCApiTabColor, SurvivesSaveLoadInBothContainersAndCopySheet) {
     ASSERT_EQ(fm_sheet_set_tab_color(wb.handle, 0, &color), 0);
     uint8_t* bytes = nullptr;
     size_t len = 0;
-    ASSERT_EQ(fm_workbook_save_as(wb.handle, format, &bytes, &len), 0);
+    ASSERT_EQ(fm_workbook_save(wb.handle, format, &bytes, &len), 0);
     WorkbookGuard loaded;
     ASSERT_EQ(fm_workbook_load(bytes, len, &loaded.handle), 0);
     fm_buffer_destroy(bytes);

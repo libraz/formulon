@@ -100,10 +100,17 @@ const HANDLE_FILES = {
 };
 const DRAWING_SUBCLASSES = new Set(['Picture', 'Chart', 'Shape', 'Slicer']);
 
-/** Members a handle class exposes in Python; Drawing subclasses include the inherited base members. */
-function pythonHandleMembers(cls) {
-  const own = pythonClassMembers(HANDLE_FILES[cls], cls);
-  return DRAWING_SUBCLASSES.has(cls) ? new Set([...own, ...pythonClassMembers('_drawing.py', 'Drawing')]) : own;
+/** Members a handle class exposes in Python, with those of every base class its own file defines. */
+function pythonHandleMembers(cls, file = HANDLE_FILES[cls]) {
+  const text = readFileSync(path.join(pyRoot, file), 'utf8');
+  const bases = text.match(new RegExp(`^class ${cls}\\(([^)]*)\\):`, 'm'))?.[1] ?? '';
+  const out = pythonClassMembers(file, cls);
+  for (const base of bases.split(',').map((name) => name.trim())) {
+    if (new RegExp(`^class ${base}\\b`, 'm').test(text)) {
+      for (const name of pythonHandleMembers(base, file)) out.add(name);
+    }
+  }
+  return out;
 }
 
 const PNG_1X1 = Buffer.from(

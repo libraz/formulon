@@ -197,7 +197,8 @@ TEST(FormulonCApiInputRecords, TableSpecWritesAllFourStyleTogglesInOneCall) {
 
   // The explicit values survive a save and load.
   BufferGuard saved;
-  ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), FM_STATUS_OK) << fm_get_last_error_message();
+  ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), FM_STATUS_OK)
+      << fm_get_last_error_message();
   WorkbookGuard reloaded;
   ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &reloaded.handle), FM_STATUS_OK) << fm_get_last_error_message();
   const fm_table_style_options_t again = TableStyle(reloaded.handle);
@@ -207,7 +208,7 @@ TEST(FormulonCApiInputRecords, TableSpecWritesAllFourStyleTogglesInOneCall) {
   EXPECT_EQ(again.show_column_stripes, 1);
 }
 
-TEST(FormulonCApiInputRecords, TableSpecStatesTheHeaderAndTotalsRowsAndAnEmptyStyle) {
+TEST(FormulonCApiInputRecords, TableSpecStatesTheHeaderAndTotalsRowsAndNoStyle) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), FM_STATUS_OK);
   FillSales(wb.handle);
@@ -215,8 +216,13 @@ TEST(FormulonCApiInputRecords, TableSpecStatesTheHeaderAndTotalsRowsAndAnEmptySt
   spec.range = fm_cell_rect_t{0, 0, 3, 1};
   spec.header_row = FM_TRISTATE_TRUE;
   spec.totals_row = FM_TRISTATE_TRUE;
+  // An empty style name is refused and creates nothing; an unstyled table says so through `styled`.
   spec.style_name = "";
   std::size_t index = 99;
+  EXPECT_EQ(fm_sheet_add_table(wb.handle, 0, &spec, &index), FM_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(TableCount(wb.handle), 0U);
+  spec.style_name = nullptr;
+  spec.styled = FM_TRISTATE_FALSE;
   ASSERT_EQ(fm_sheet_add_table(wb.handle, 0, &spec, &index), FM_STATUS_OK) << fm_get_last_error_message();
   const fm_table_info_t info = TableInfo(wb.handle);
   EXPECT_EQ(info.header_row_count, 1U);

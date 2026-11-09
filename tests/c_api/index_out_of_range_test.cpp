@@ -28,8 +28,8 @@ TEST_F(FormulonCApiIndexOutOfRange, TheIndexEqualToTheCountIsOutOfRangeAndTheLas
   ASSERT_EQ(fm_workbook_get_font_count(wb(), &count), 0);
   ASSERT_GT(count, 0U);
   fm_font_t font{};
-  EXPECT_EQ(fm_workbook_get_font_at(wb(), count - 1U, &font), 0);
-  EXPECT_EQ(fm_workbook_get_font_at(wb(), count, &font), FM_STATUS_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(fm_workbook_get_font_at(wb(), static_cast<uint32_t>(count - 1U), &font), 0);
+  EXPECT_EQ(fm_workbook_get_font_at(wb(), static_cast<uint32_t>(count), &font), FM_STATUS_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(std::string(fm_get_last_error_context()),
             "font_index=" + std::to_string(count) + " count=" + std::to_string(count));
 }

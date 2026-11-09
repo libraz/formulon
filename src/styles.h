@@ -426,6 +426,12 @@ struct StylesTable {
 /// Normal style (`builtin_id == 0`).
 Expected<void, Error> remove_cell_style(StylesTable& styles, std::string_view name);
 
+/// Replaces `cell_style_xfs[index]` with `record`, keeping the index. Returns
+/// `kIndexOutOfRange` past the table and `kInvalidArgument` when the record
+/// names a font, fill or border the table does not have; nothing changes on
+/// failure.
+Expected<void, Error> set_cell_style_xf(StylesTable& styles, std::uint32_t index, const CellXf& record);
+
 /// Dedup identity of a `<cellXfs>` / `<cellStyleXfs>` record: two records
 /// with equal keys are written identically.
 std::string cell_xf_key(const CellXf& value);

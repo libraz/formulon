@@ -33,8 +33,12 @@ formulon::DataTableInput input_of(int32_t has, uint32_t row, uint32_t col) {
 
 }  // namespace
 
-extern "C" fm_status_t fm_sheet_add_data_table(fm_workbook_t* wb, size_t sheet_index, const fm_data_table_t* spec) {
+extern "C" fm_status_t fm_sheet_add_data_table(fm_workbook_t* wb, size_t sheet_index, const fm_data_table_t* spec,
+                                               fm_cell_address_t* out_cell) {
   clear_last_error();
+  if (out_cell != nullptr) {
+    *out_cell = fm_cell_address_t{};
+  }
   if (spec == nullptr) {
     return null_argument("spec");
   }
@@ -50,6 +54,11 @@ extern "C" fm_status_t fm_sheet_add_data_table(fm_workbook_t* wb, size_t sheet_i
       input_of(spec->has_column_input, spec->column_input_row, spec->column_input_col));
   if (!added) {
     return set_last_error(added.error());
+  }
+  if (out_cell != nullptr) {
+    // The engine stores the range normalised; report its top-left cell.
+    const formulon::DataTable* table = wb->workbook().data_table_at(sheet_index, ref.first_row, ref.first_col);
+    *out_cell = fm_cell_address_t{table->ref.first_row, table->ref.first_col};
   }
   return 0;
 }

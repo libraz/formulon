@@ -43,6 +43,8 @@ using formulon::c_api::parts::kTickLabelPositionTokens;
 using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::PatchReader;
 using formulon::c_api::parts::plan_add_anchor;
+using formulon::c_api::parts::read_fill;
+using formulon::c_api::parts::read_line;
 using formulon::c_api::parts::saturate_index;
 using formulon::c_api::parts::set_last_error;
 using formulon::c_api::parts::text_or_empty;
@@ -56,28 +58,6 @@ namespace {
 /// A C title as the model's; `NULL` strings read as empty.
 formulon::ChartTitle title_of(const fm_chart_title_t& t) {
   return formulon::ChartTitle{chart_title_kind_from_c(t.kind), text_or_empty(t.text), text_or_empty(t.formula)};
-}
-
-formulon::ChartFillPatch read_fill(PatchReader& r, const fm_chart_fill_patch_t& p) {
-  formulon::ChartFillPatch out;
-  r.color_field(p.color_op, p.color, out.color, "fill.color_op");
-  r.field(p.transparency_pct_op, p.transparency_pct, out.transparency_pct, "fill.transparency_pct_op");
-  return out;
-}
-
-formulon::ChartLinePatch read_line(PatchReader& r, const fm_chart_line_patch_t& p) {
-  formulon::ChartLinePatch out;
-  r.color_field(p.color_op, p.color, out.color, "line.color_op");
-  r.field(p.transparency_pct_op, p.transparency_pct, out.transparency_pct, "line.transparency_pct_op");
-  r.field(p.width_pt_op, p.width_pt, out.width_pt, "line.width_pt_op");
-  r.enum_field(p.dash_op, p.dash, formulon::ChartLineDash::kOther, out.dash, "line.dash");
-  // CLEAR drops an explicit no-line as SET 0 does, so a patch clearing every member stays valid.
-  if (p.none_op == FM_PATCH_OP_CLEAR) {
-    out.none = false;
-  } else {
-    r.flag(p.none_op, p.none, out.none, "line.none_op");
-  }
-  return out;
 }
 
 formulon::ChartMarkerPatch read_marker(PatchReader& r, const fm_chart_marker_patch_t& p) {
@@ -240,7 +220,7 @@ fm_status_t stored_crosses_at(const fm_workbook_t* wb, std::size_t sheet_index, 
 // Creation and edits
 // ---------------------------------------------------------------------------
 
-extern "C" fm_status_t fm_sheet_add_chart(fm_workbook_t* wb, size_t sheet_index, const fm_chart_insert_spec_t* opts,
+extern "C" fm_status_t fm_sheet_add_chart(fm_workbook_t* wb, size_t sheet_index, const fm_chart_spec_t* opts,
                                           uint32_t* out_object_id) {
   if (out_object_id == nullptr) {
     return null_argument();
@@ -591,11 +571,11 @@ extern "C" fm_status_t fm_sheet_update_chart_plot(fm_workbook_t* wb, size_t shee
   PatchReader r;
   formulon::ChartPlotPatch model;
   r.optional(patch->gap_width_pct_op, patch->gap_width_pct, model.gap_width, "gap_width_pct_op");
-  r.optional(patch->overlap_op, patch->overlap, model.overlap, "overlap_op");
+  r.optional(patch->overlap_pct_op, patch->overlap_pct, model.overlap, "overlap_pct_op");
   r.optional(patch->first_slice_angle_deg_op, patch->first_slice_angle_deg, model.first_slice_angle,
              "first_slice_angle_deg_op");
   r.flag(patch->vary_colors_op, patch->vary_colors, model.vary_colors, "vary_colors_op");
-  r.optional(patch->hole_size_op, patch->hole_size, model.hole_size, "hole_size_op");
+  r.optional(patch->hole_size_pct_op, patch->hole_size_pct, model.hole_size, "hole_size_pct_op");
   if (r.status() != 0) {
     return r.status();
   }

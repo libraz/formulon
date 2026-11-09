@@ -251,16 +251,15 @@ uint32_t JsWorkbook::resolvePivotRuntimeId(uint32_t sheet, uint32_t id) const {
 }
 
 emscripten::val JsWorkbook::pivotGetGrandTotals(uint32_t sheet, uint32_t pivotIndex) const {
-  int32_t rows = 0;
-  int32_t cols = 0;
-  const fm_status_t rc = handle_ != nullptr ? fm_sheet_get_pivot_grand_totals(handle_, sheet, pivotIndex, &rows, &cols)
-                                            : kBindingInvalidHandle;
+  fm_pivot_grand_totals_t totals = FM_STRUCT_INIT(fm_pivot_grand_totals_t);
+  const fm_status_t rc =
+      handle_ != nullptr ? fm_sheet_get_pivot_grand_totals(handle_, sheet, pivotIndex, &totals) : kBindingInvalidHandle;
   if (!succeeded(rc)) {
     return emscripten::val::undefined();
   }
   emscripten::val o = emscripten::val::object();
-  o.set("rows", rows != 0);
-  o.set("columns", cols != 0);
+  o.set("rows", totals.rows != 0);
+  o.set("columns", totals.columns != 0);
   return o;
 }
 
@@ -294,48 +293,6 @@ double JsWorkbook::pivotFieldCount(uint32_t sheet, uint32_t pivotIndex) const {
     return 0.0;
   }
   return static_cast<double>(count);
-}
-
-uint32_t JsWorkbook::pivotFieldAdd(uint32_t sheet, uint32_t pivotIndex, emscripten::val spec) {
-  if (handle_ == nullptr) {
-    record_invalid_handle();
-    return 0U;
-  }
-  std::string source_name;
-  std::string custom_name;
-  std::string number_format;
-  JsNarrowNumericReader reader("Pivot.addField");
-  // Every nested read uses this per-call reader so getter/proxy failures and
-  // lossy integer conversions are reported before the C ABI is called.
-  const char* source_name_ptr = reader.optional_string(spec, "sourceName", source_name, "pivotField.sourceName");
-  const char* custom_name_ptr = reader.optional_string(spec, "customName", custom_name, "pivotField.customName");
-  const emscripten::val subtotal_top = reader.value(spec, "subtotalTop", "pivotField.subtotalTop");
-  const char* number_format_ptr =
-      reader.optional_string(spec, "numberFormat", number_format, "pivotField.numberFormat");
-
-  fm_pivot_field_spec_t c_spec = FM_STRUCT_INIT(fm_pivot_field_spec_t);
-  // `sourceName` is required; an omitted key passes NULL through rather
-  // than `js_pull_string`'s empty-string default, which the C ABI's own
-  // required-field check does not treat the same as a missing argument.
-  c_spec.source_name = source_name_ptr;
-  c_spec.custom_name = custom_name_ptr;
-  c_spec.axis = static_cast<fm_pivot_axis_t>(reader.required_u32(spec, "axis", "pivotField.axis"));
-  // An omitted `subtotalTop` takes the engine default (the group head).
-  c_spec.subtotal_top = !js_value_present(subtotal_top)
-                            ? FM_TRISTATE_DEFAULT
-                            : (reader.boolean_value(subtotal_top, true) ? FM_TRISTATE_TRUE : FM_TRISTATE_FALSE);
-  c_spec.number_format = number_format_ptr;
-
-  if (!reader.ok()) {
-    return 0U;
-  }
-
-  std::size_t out = 0;
-  fm_status_t rc = fm_sheet_add_pivot_field(handle_, sheet, pivotIndex, &c_spec, &out);
-  if (!succeeded(rc)) {
-    return 0U;
-  }
-  return static_cast<uint32_t>(out);
 }
 
 emscripten::val JsWorkbook::pivotFieldAt(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex) const {
@@ -889,13 +846,13 @@ uint32_t JsWorkbook::pivotFilterAdd(uint32_t sheet, uint32_t pivotIndex, emscrip
   }
   JsNarrowNumericReader reader("Pivot.addFilter");
   fm_pivot_filter_t c_spec = FM_STRUCT_INIT(fm_pivot_filter_t);
-  c_spec.field_index = reader.required_u32(spec, "fieldIndex", "pivotFilter.fieldIndex");
-  c_spec.type = static_cast<fm_pivot_filter_kind_t>(reader.required_u32(spec, "type", "pivotFilter.type"));
+  c_spec.field_index = reader.required_u32(spec, "fieldIndex", "spec.fieldIndex");
+  c_spec.kind = static_cast<fm_pivot_filter_kind_t>(reader.required_u32(spec, "kind", "spec.kind"));
   // A count filter takes a whole number; every other numeric operand is a double.
   const bool count_type =
-      c_spec.type == FM_PIVOT_FILTER_KIND_VALUE_TOP_10 || c_spec.type == FM_PIVOT_FILTER_KIND_VALUE_BOTTOM_COUNT;
-  const FilterOperand value = pull_filter_operand(reader, spec, "value", "pivotFilter.value", count_type);
-  const FilterOperand value_high = pull_filter_operand(reader, spec, "valueHigh", "pivotFilter.valueHigh", false);
+      c_spec.kind == FM_PIVOT_FILTER_KIND_VALUE_TOP_COUNT || c_spec.kind == FM_PIVOT_FILTER_KIND_VALUE_BOTTOM_COUNT;
+  const FilterOperand value = pull_filter_operand(reader, spec, "value", "spec.value", count_type);
+  const FilterOperand value_high = pull_filter_operand(reader, spec, "valueHigh", "spec.valueHigh", false);
   c_spec.value_kind = value.kind;
   c_spec.value_int = value.as_int;
   c_spec.value_double = value.as_double;
@@ -904,7 +861,7 @@ uint32_t JsWorkbook::pivotFilterAdd(uint32_t sheet, uint32_t pivotIndex, emscrip
   c_spec.value_high_int = value_high.as_int;
   c_spec.value_high_double = value_high.as_double;
   c_spec.value_high_text = value_high.kind == FM_PIVOT_FILTER_OPERAND_KIND_TEXT ? value_high.text.c_str() : nullptr;
-  c_spec.data_field_index = reader.u32(spec, "dataFieldIndex", 0U, "pivotFilter.dataFieldIndex");
+  c_spec.data_field_index = reader.u32(spec, "dataFieldIndex", 0U, "spec.dataFieldIndex");
 
   if (!reader.ok()) {
     return 0U;
@@ -928,7 +885,7 @@ emscripten::val JsWorkbook::pivotFilterAt(uint32_t sheet, uint32_t pivotIndex, u
   }
   emscripten::val o = emscripten::val::object();
   o.set("fieldIndex", spec.field_index);
-  o.set("type", static_cast<int32_t>(spec.type));
+  o.set("kind", static_cast<int32_t>(spec.kind));
   o.set("dataFieldIndex", spec.data_field_index);
   set_filter_operand(o, "value", spec.value_kind, spec.value_int, spec.value_double, spec.value_text);
   set_filter_operand(o, "valueHigh", spec.value_high_kind, spec.value_high_int, spec.value_high_double,

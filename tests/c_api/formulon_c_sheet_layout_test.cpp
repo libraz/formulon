@@ -227,7 +227,7 @@ TEST(FormulonCApiSheetLayout, AutoFilterXmlSurvivesXlsxSaveLoad) {
   ASSERT_EQ(fm_sheet_set_auto_filter_xml(wb.handle, 0, xml), 0);
 
   BufferGuard saved;
-  ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0);
+  ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0);
   ASSERT_GT(saved.len, 0U);
 
   WorkbookGuard reloaded;
@@ -389,7 +389,7 @@ TEST(FormulonCApiSheetLayout, WidthOverlayPreservesAdjacentStylesAcrossSaveLoad)
   EXPECT_EQ(col1.xf_index, 2U);
 
   BufferGuard saved;
-  ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0);
+  ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0);
   WorkbookGuard reloaded;
   ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &reloaded.handle), 0);
   ASSERT_EQ(fm_sheet_get_column_layout_at(reloaded.handle, 0, 0U, &col0), 0);
@@ -869,7 +869,7 @@ namespace {
 
 fm_row_layout_info_t ReloadedRowOverride(const WorkbookGuard& wb, std::uint32_t row) {
   BufferGuard saved;
-  EXPECT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0);
+  EXPECT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0);
   WorkbookGuard reloaded;
   EXPECT_EQ(fm_workbook_load(saved.data, saved.len, &reloaded.handle), 0);
   return RowOverride(reloaded, row);
@@ -1121,7 +1121,7 @@ TEST(FormulonCApiSheetLayout, StyleOverridesSurviveSaveLoad) {
 
   for (const std::int32_t format : {FM_WORKBOOK_FORMAT_XLSX, FM_WORKBOOK_FORMAT_XLSB}) {
     BufferGuard saved;
-    ASSERT_EQ(fm_workbook_save_as(wb.handle, format, &saved.data, &saved.len), 0) << "format=" << format;
+    ASSERT_EQ(fm_workbook_save(wb.handle, format, &saved.data, &saved.len), 0) << "format=" << format;
     WorkbookGuard reloaded;
     ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &reloaded.handle), 0) << "format=" << format;
 
@@ -1249,7 +1249,7 @@ TEST(FormulonCApiSheetLayout, ClearColumnWidthSurvivesXlsxAndXlsbSaveLoad) {
   for (const int32_t format :
        {static_cast<int32_t>(FM_WORKBOOK_FORMAT_XLSX), static_cast<int32_t>(FM_WORKBOOK_FORMAT_XLSB)}) {
     BufferGuard saved;
-    ASSERT_EQ(fm_workbook_save_as(wb.handle, format, &saved.data, &saved.len), 0) << "format=" << format;
+    ASSERT_EQ(fm_workbook_save(wb.handle, format, &saved.data, &saved.len), 0) << "format=" << format;
     WorkbookGuard reloaded;
     ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &reloaded.handle), 0) << "format=" << format;
     const auto columns = ReadColumns(reloaded.handle);
@@ -1318,7 +1318,7 @@ TEST(FormulonCApiSheetLayout, FormatDefaultsRoundTripThroughSave) {
   ASSERT_EQ(fm_sheet_update_format_defaults(wb.handle, 0, &next), 0);
 
   BufferGuard saved;
-  ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0);
+  ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0);
   WorkbookGuard reloaded;
   ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &reloaded.handle), 0);
   fm_sheet_format_defaults_t got = FM_STRUCT_INIT(fm_sheet_format_defaults_t);

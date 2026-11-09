@@ -1,6 +1,6 @@
 //
 // C ABI - workbook lifecycle, save/load, sheet management, defined names,
-// passthrough parts, structural row/column insertion + deletion. Tables live
+// passthrough parts, structural row/column/cell insertion + deletion. Tables live
 // in `parts/tables.cpp`; recalc and calculation settings in
 // `parts/recalc.cpp`.
 
@@ -37,6 +37,7 @@ using formulon::c_api::parts::check_keeps_visible_sheet;
 using formulon::c_api::parts::check_profile_id;
 using formulon::c_api::parts::check_record_size;
 using formulon::c_api::parts::check_sheet_index;
+using formulon::c_api::parts::check_sheet_rect;
 using formulon::c_api::parts::check_stored_formula;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
@@ -52,6 +53,7 @@ using formulon::c_api::parts::publish_scratch;
 using formulon::c_api::parts::saturate_index;
 using formulon::c_api::parts::set_last_error;
 using formulon::c_api::parts::text_or_empty;
+using formulon::c_api::parts::to_merge_range;
 using formulon::c_api::parts::with_formula_prefix;
 
 namespace {
@@ -61,6 +63,23 @@ fm_status_t check_span(std::uint32_t first, std::uint32_t last, std::uint32_t li
   if (last < first || last >= limit) {
     return invalid_argument("span is empty or past the sheet bound",
                             "first=" + std::to_string(first) + " last=" + std::to_string(last));
+  }
+  return 0;
+}
+
+// The checks Insert / Delete Cells share before the engine call: the sheet,
+// the rectangle and a `shift` inside `fm_cell_shift_t`. The engine refuses
+// the direction an edit does not take.
+fm_status_t check_cell_edit(const fm_workbook_t* wb, std::size_t sheet_index, const fm_cell_rect_t& range,
+                            std::int32_t shift) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_rect(range); rc != 0) {
+    return rc;
+  }
+  if (shift < FM_CELL_SHIFT_DOWN || shift > FM_CELL_SHIFT_LEFT) {
+    return invalid_argument("shift is outside fm_cell_shift_t", "shift=" + std::to_string(shift));
   }
   return 0;
 }
@@ -291,24 +310,6 @@ extern "C" void fm_workbook_destroy(fm_workbook_t* wb) {
 // Save
 // ---------------------------------------------------------------------------
 
-extern "C" fm_status_t fm_workbook_save(const fm_workbook_t* wb, uint8_t** out_bytes, size_t* out_len) {
-  // The whole save family shares one failure-path contract: every out-param
-  // is zeroed before validation and stays zeroed on every non-`kOk` return.
-  // `Workbook::save()` is itself `save_as(Ooxml)`, so the produced bytes are
-  // unchanged.
-  fm_save_diagnostics_info_t diagnostics = FM_STRUCT_INIT(fm_save_diagnostics_info_t);
-  if (auto rc = begin_save(wb, FM_WORKBOOK_FORMAT_XLSX, out_bytes, out_len, &diagnostics); rc != 0) {
-    return rc;
-  }
-  if (auto rc = ensure_calculated(wb); rc != 0) {
-    return rc;
-  }
-  if (auto rc = calculate_on_save(wb); rc != 0) {
-    return rc;
-  }
-  return write_workbook(wb, FM_WORKBOOK_FORMAT_XLSX, out_bytes, out_len, &diagnostics);
-}
-
 extern "C" fm_status_t fm_workbook_save_with_diagnostics(const fm_workbook_t* wb, std::int32_t format,
                                                          uint8_t** out_bytes, size_t* out_len,
                                                          fm_save_diagnostics_info_t* out_diagnostics) {
@@ -324,8 +325,10 @@ extern "C" fm_status_t fm_workbook_save_with_diagnostics(const fm_workbook_t* wb
   return write_workbook(wb, format, out_bytes, out_len, out_diagnostics);
 }
 
-extern "C" fm_status_t fm_workbook_save_as(const fm_workbook_t* wb, std::int32_t format, uint8_t** out_bytes,
-                                           size_t* out_len) {
+// The whole save family shares one failure-path contract: every out-param is
+// zeroed before validation and stays zeroed on every non-`kOk` return.
+extern "C" fm_status_t fm_workbook_save(const fm_workbook_t* wb, std::int32_t format, uint8_t** out_bytes,
+                                        size_t* out_len) {
   fm_save_diagnostics_info_t diagnostics = FM_STRUCT_INIT(fm_save_diagnostics_info_t);
   if (auto rc = begin_save(wb, format, out_bytes, out_len, &diagnostics); rc != 0) {
     return rc;
@@ -633,6 +636,32 @@ extern "C" fm_status_t fm_sheet_delete_columns(fm_workbook_t* wb, size_t sheet_i
     return rc;
   }
   return finish_status(wb->workbook().delete_cols(sheet_index, first, last - first + 1U));
+}
+
+extern "C" fm_status_t fm_sheet_insert_cells(fm_workbook_t* wb, size_t sheet_index, const fm_cell_rect_t* range,
+                                             int32_t shift) {
+  clear_last_error();
+  if (wb == nullptr || range == nullptr) {
+    return null_argument();
+  }
+  if (auto rc = check_cell_edit(wb, sheet_index, *range, shift); rc != 0) {
+    return rc;
+  }
+  return finish_status(
+      wb->workbook().insert_cells(sheet_index, to_merge_range(*range), static_cast<formulon::CellShift>(shift)));
+}
+
+extern "C" fm_status_t fm_sheet_delete_cells(fm_workbook_t* wb, size_t sheet_index, const fm_cell_rect_t* range,
+                                             int32_t shift) {
+  clear_last_error();
+  if (wb == nullptr || range == nullptr) {
+    return null_argument();
+  }
+  if (auto rc = check_cell_edit(wb, sheet_index, *range, shift); rc != 0) {
+    return rc;
+  }
+  return finish_status(
+      wb->workbook().delete_cells(sheet_index, to_merge_range(*range), static_cast<formulon::CellShift>(shift)));
 }
 
 // ---------------------------------------------------------------------------

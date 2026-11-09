@@ -242,7 +242,7 @@ TEST(FormulonCApiCfMutate, ThresholdStringsStayLiveWhileLaterPayloadsArePulled) 
   const char* const kThresholdValues[3] = {"11", "22", "33"};
   for (std::size_t i = 0; i < 3; ++i) {
     thresholds[i].type = 0;  // Number
-    thresholds[i].gte = 1;
+    thresholds[i].gte = FM_TRISTATE_TRUE;
     thresholds[i].value = strings.emplace(kThresholdValues[i]);
   }
   fm_color_t colors[3]{CfRgb(255, 0, 0, 255), CfRgb(255, 255, 0, 255), CfRgb(0, 255, 0, 255)};
@@ -280,7 +280,7 @@ TEST(FormulonCApiCfMutate, ThresholdStringsStayLiveWhileLaterPayloadsArePulled) 
   EXPECT_EQ(stored[2].value, "33");
 
   BufferGuard saved;
-  ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0);
+  ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0);
   ASSERT_GT(saved.len, 0U);
   WorkbookGuard reloaded;
   ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &reloaded.handle), 0);

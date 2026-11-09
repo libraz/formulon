@@ -7,6 +7,7 @@
 #include <string>
 #include <vector>
 
+#include "node_addon/parts/chart_internal.h"
 #include "node_addon/parts/workbook_class.h"
 
 namespace formulon_node {
@@ -18,7 +19,7 @@ constexpr const char* kSparklineColorKeys[] = {"colorSeries", "colorNegative", "
 
 fm_color_t* GroupColor(fm_sparkline_group_t& g, size_t i) {
   fm_color_t* const colors[] = {&g.color_series, &g.color_negative, &g.color_axis, &g.color_markers,
-                                     &g.color_first,  &g.color_last,     &g.color_high, &g.color_low};
+                                &g.color_first,  &g.color_last,     &g.color_high, &g.color_low};
   return colors[i];
 }
 
@@ -29,34 +30,30 @@ struct ShapeText {
   std::string text;
 };
 
-// Reads a shape to add: the common placement keys plus the shape keys; an omitted key takes the default.
+// Reads a shape to add: the common placement keys plus the shape keys; an omitted key takes the default, and an
+// omitted or `null` `fill` / `line` is the shape style's paint.
 fm_shape_spec_t PullShapeSpec(CheckedSpecReader& reader, const Napi::Object& spec, ShapeText& store) {
   fm_shape_spec_t s = FM_STRUCT_INIT(fm_shape_spec_t);
   s.placement = PullPlacement(reader, spec, store.name, store.description);
-  s.fill_kind = reader.I32(spec, "fillKind", FM_SHAPE_PAINT_DEFAULT);
-  s.fill_color = PullColorSpec(reader, spec, "fillColor");
-  s.line_kind = reader.I32(spec, "lineKind", FM_SHAPE_PAINT_DEFAULT);
-  s.line_color = PullColorSpec(reader, spec, "lineColor");
-  s.line_width_pt = reader.Double(spec, "lineWidthPt", 0.0);
+  s.fill = ReadFillSpec(reader, spec);
+  s.line = ReadLineSpec(reader, spec);
   s.rotation_deg = reader.Double(spec, "rotationDeg", 0.0);
   s.text_box = reader.Bool(spec, "textBox", false) ? 1 : 0;
-  s.preset_geometry = reader.String(spec, "presetGeometry", &store.preset_geometry) ? store.preset_geometry.c_str() : nullptr;
+  s.preset_geometry =
+      reader.String(spec, "presetGeometry", &store.preset_geometry) ? store.preset_geometry.c_str() : nullptr;
   s.text = reader.String(spec, "text", &store.text) ? store.text.c_str() : nullptr;
   return s;
 }
 
-// Reads the shape fields `spec` carries into a patch: an omitted key keeps, and no key is clearable.
+// Reads the shape fields `spec` carries into a patch: an omitted key keeps, and `null` on `fill` / `line` clears
+// it to the shape style's paint.
 fm_shape_patch_t PullShapePatch(CheckedSpecReader& reader, const Napi::Object& spec, ShapeText& store) {
   fm_shape_patch_t s = FM_STRUCT_INIT(fm_shape_patch_t);
-  s.fill_kind_op = PatchI32(reader, spec, "fillKind", &s.fill_kind);
-  s.fill_color_op = PatchColor(reader, spec, "fillColor", false, &s.fill_color);
-  s.line_kind_op = PatchI32(reader, spec, "lineKind", &s.line_kind);
-  s.line_color_op = PatchColor(reader, spec, "lineColor", false, &s.line_color);
-  s.line_width_pt_op = PatchDouble(reader, spec, "lineWidthPt", &s.line_width_pt);
+  ReadFillPatch(reader, spec, s.fill);
+  ReadLinePatch(reader, spec, s.line);
   s.rotation_deg_op = PatchDouble(reader, spec, "rotationDeg", &s.rotation_deg);
   s.text_box_op = PatchBool(reader, spec, "textBox", &s.text_box);
-  s.preset_geometry_op =
-      PatchString(reader, spec, "presetGeometry", false, &store.preset_geometry, &s.preset_geometry);
+  s.preset_geometry_op = PatchString(reader, spec, "presetGeometry", false, &store.preset_geometry, &s.preset_geometry);
   s.text_op = PatchString(reader, spec, "text", false, &store.text, &s.text);
   return s;
 }
@@ -87,7 +84,7 @@ fm_sparkline_group_t PullGroup(CheckedSpecReader& reader, const Napi::Object& sp
   if (reader.String(spec, "dateAxisRef", &ref_store)) {
     g.date_axis_ref = ref_store.c_str();
   }
-  g.line_weight = reader.Double(spec, "lineWeight", 0.75);
+  g.line_width_pt = reader.Double(spec, "lineWidthPt", 0.75);
   g.empty_cells_as = reader.I32(spec, "emptyCellsAs", FM_BLANKS_AS_GAP);
   return g;
 }
@@ -117,20 +114,18 @@ bool PullSparklines(CheckedSpecReader& reader, const Napi::Array& array, std::ve
   return reader.ok();
 }
 
-// The JS `Shape` record of `s`: the shape-specific fields only.
+// The JS `ShapeProperties` record of `s`: the shape-specific fields only; a `null` `fill` / `line` is the shape
+// style's paint.
 Napi::Object ShapeToJs(Napi::Env env, const fm_shape_info_t& s) {
   Napi::Object item = Napi::Object::New(env);
   item.Set("objectId", JsNumber(env, s.object_id));
   item.Set("kind", JsNumber(env, s.kind));
-  item.Set("fillKind", JsNumber(env, s.fill_kind));
-  item.Set("fillColor", ColorSpecOrNull(env, s.fill_color));
-  item.Set("lineKind", JsNumber(env, s.line_kind));
-  item.Set("lineColor", ColorSpecOrNull(env, s.line_color));
-  item.Set("lineWidthPt", JsNumber(env, s.line_width_pt));
-  item.Set("rotationDeg", JsNumber(env, s.rotation_deg));
-  item.Set("textBox", Napi::Boolean::New(env, s.text_box != 0));
   item.Set("presetGeometry", JsString(env, s.preset_geometry));
   item.Set("text", JsString(env, s.text));
+  item.Set("textBox", Napi::Boolean::New(env, s.text_box != 0));
+  item.Set("fill", FillOrNull(env, s.fill));
+  item.Set("line", LineOrNull(env, s.line));
+  item.Set("rotationDeg", JsNumber(env, s.rotation_deg));
   return item;
 }
 
@@ -168,13 +163,17 @@ Napi::Value Workbook::UpdateShape(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return ThrowInvalidHandle(env);
   }
+  // One patch object carries both halves; the C call checks both before it writes either.
   CheckedSpecReader reader(env);
+  const Napi::Object spec = ArgObject(info, 2);
   ShapeText store;
-  const fm_shape_patch_t shape = PullShapePatch(reader, ArgObject(info, 2), store);
+  const fm_drawing_patch_t common = PullDrawingPatch(reader, spec, store.name, store.description);
+  const fm_shape_patch_t shape = PullShapePatch(reader, spec, store);
   if (!reader.ok()) {
     return env.Undefined();
   }
-  return ValueOrThrow(env, fm_sheet_update_shape(handle_, ArgU32(info, 0), ArgU32(info, 1), &shape), env.Undefined());
+  return ValueOrThrow(env, fm_sheet_update_shape(handle_, ArgU32(info, 0), ArgU32(info, 1), &common, &shape),
+                      env.Undefined());
 }
 
 Napi::Value Workbook::GetSparklineGroupCount(const Napi::CallbackInfo& info) {
@@ -193,7 +192,41 @@ Napi::Value Workbook::GetSparklineGroup(const Napi::CallbackInfo& info) {
     return ThrowInvalidHandle(env);
   }
   const std::size_t sheet = ArgU32(info, 0);
-  const std::size_t index = ArgU32(info, 1);
+  const Napi::Value key = info[1];
+  std::size_t index = 0;
+  if (key.IsString()) {
+    // A string key is a group id: absent -> null, else its position (the sparklines are read by position).
+    const std::string id = ArgString(info, 1);
+    fm_sparkline_group_t found = FM_STRUCT_INIT(fm_sparkline_group_t);
+    int32_t present = 0;
+    const fm_status_t found_rc = fm_sheet_get_sparkline_group(handle_, sheet, id.c_str(), &present, &found);
+    if (found_rc != 0 || present == 0) {
+      return OptionalOrNull(env, found_rc, present, env.Null());
+    }
+    size_t count = 0;
+    fm_status_t count_rc = fm_sheet_get_sparkline_group_count(handle_, sheet, &count);
+    for (; count_rc == 0 && index < count; ++index) {
+      fm_sparkline_group_t probe = FM_STRUCT_INIT(fm_sparkline_group_t);
+      count_rc = fm_sheet_get_sparkline_group_at(handle_, sheet, index, &probe);
+      if (count_rc == 0 && id == probe.id) {
+        break;
+      }
+    }
+    if (count_rc != 0) {
+      return ThrowStatus(env, count_rc);
+    }
+  } else {
+    CheckedSpecReader key_reader(env);
+    if (!key.IsNumber()) {
+      key_reader.FailType("sparklineGroup", "number or string");
+      return env.Undefined();
+    }
+    const uint32_t position = key_reader.U32(key, "sparklineGroup", 0U);
+    if (!key_reader.ok()) {
+      return env.Undefined();
+    }
+    index = position;
+  }
   fm_sparkline_group_t g = FM_STRUCT_INIT(fm_sparkline_group_t);
   fm_status_t rc = fm_sheet_get_sparkline_group_at(handle_, sheet, index, &g);
   if (rc != 0) {
@@ -219,7 +252,7 @@ Napi::Value Workbook::GetSparklineGroup(const Napi::CallbackInfo& info) {
   item.Set("manualMax", g.has_manual_max != 0 ? JsNumber(env, g.manual_max) : env.Null());
   item.Set("dateAxis", Napi::Boolean::New(env, g.date_axis != 0));
   item.Set("dateAxisRef", JsStringOrNull(env, g.date_axis_ref));
-  item.Set("lineWeight", JsNumber(env, g.line_weight));
+  item.Set("lineWidthPt", JsNumber(env, g.line_width_pt));
   item.Set("emptyCellsAs", JsNumber(env, g.empty_cells_as));
   Napi::Array sparklines = Napi::Array::New(env);
   for (size_t k = 0; rc == 0 && k < g.sparkline_count; ++k) {
@@ -274,9 +307,8 @@ fm_sparkline_group_patch_t PullGroupPatch(CheckedSpecReader& reader, const Napi:
   fm_sparkline_group_patch_t g = FM_STRUCT_INIT(fm_sparkline_group_patch_t);
   fm_color_t* const colors[] = {&g.color_series, &g.color_negative, &g.color_axis, &g.color_markers,
                                 &g.color_first,  &g.color_last,     &g.color_high, &g.color_low};
-  fm_patch_op_t* const color_ops[] = {&g.color_series_op, &g.color_negative_op, &g.color_axis_op,
-                                      &g.color_markers_op, &g.color_first_op,    &g.color_last_op,
-                                      &g.color_high_op,    &g.color_low_op};
+  fm_patch_op_t* const color_ops[] = {&g.color_series_op, &g.color_negative_op, &g.color_axis_op, &g.color_markers_op,
+                                      &g.color_first_op,  &g.color_last_op,     &g.color_high_op, &g.color_low_op};
   for (size_t i = 0; i < 8U; ++i) {
     *color_ops[i] = PatchColor(reader, spec, kSparklineColorKeys[i], false, colors[i]);
   }
@@ -295,7 +327,7 @@ fm_sparkline_group_patch_t PullGroupPatch(CheckedSpecReader& reader, const Napi:
   g.manual_max_op = PatchNullableDouble(reader, spec, "manualMax", &g.manual_max);
   g.date_axis_op = PatchBool(reader, spec, "dateAxis", &g.date_axis);
   g.date_axis_ref_op = PatchString(reader, spec, "dateAxisRef", true, &ref_store, &g.date_axis_ref);
-  g.line_weight_op = PatchDouble(reader, spec, "lineWeight", &g.line_weight);
+  g.line_width_pt_op = PatchDouble(reader, spec, "lineWidthPt", &g.line_width_pt);
   g.empty_cells_as_op = PatchI32(reader, spec, "emptyCellsAs", &g.empty_cells_as);
   Napi::Array array;
   if (reader.Array(spec, "sparklines", &array)) {

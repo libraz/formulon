@@ -129,7 +129,7 @@ fm_status_t break_entry(const fm_pagination_t* pagination, size_t index, Record*
   const std::uint32_t at = positions[index];
   const std::vector<bool>& manual = horizontal ? result.h_break_manual : result.v_break_manual;
   out->*position = at;
-  out->manual = index < manual.size() && manual[index] ? 1 : 0;
+  out->manual = index < manual.size() && manual[index] ? FM_TRISTATE_TRUE : FM_TRISTATE_FALSE;
   const auto& declared = horizontal ? pagination->declared_row_breaks : pagination->declared_col_breaks;
   for (const formulon::ManualBreak& entry : declared) {
     if (entry.id == at) {

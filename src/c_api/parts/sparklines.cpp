@@ -73,7 +73,7 @@ io::SparklineGroup group_from_c(const fm_sparkline_group_t& g) {
   out.manual_max = g.manual_max;
   out.date_axis = g.date_axis != 0;
   out.date_axis_ref = std::string(formulon::strip_formula_prefix(text_or_empty(g.date_axis_ref)));
-  out.line_weight = g.line_weight;
+  out.line_weight = g.line_width_pt;
   out.empty_cells_as = sparkline_empty_cells_from_c(g.empty_cells_as);
   return out;
 }
@@ -120,7 +120,7 @@ fm_status_t apply_patch(const fm_sparkline_group_patch_t& p, io::SparklineGroup&
                     {p.color_low_op, "color_low", true},
                     {p.manual_min_op, "manual_min", true},
                     {p.manual_max_op, "manual_max", true},
-                    {p.line_weight_op, "line_weight", false},
+                    {p.line_width_pt_op, "line_width_pt", false},
                     {p.type_op, "type", false},
                     {p.markers_op, "markers", false},
                     {p.high_op, "high", false},
@@ -202,8 +202,8 @@ fm_status_t apply_patch(const fm_sparkline_group_patch_t& p, io::SparklineGroup&
     }
     g.empty_cells_as = sparkline_empty_cells_from_c(p.empty_cells_as);
   }
-  if (set(p.line_weight_op)) {
-    g.line_weight = p.line_weight;
+  if (set(p.line_width_pt_op)) {
+    g.line_weight = p.line_width_pt;
   }
   if (p.manual_min_op != FM_PATCH_OP_KEEP) {
     g.has_manual_min = set(p.manual_min_op);
@@ -334,7 +334,7 @@ extern "C" fm_status_t fm_sheet_get_sparkline_group_at(const fm_workbook_t* wb, 
   out->color_low = color_spec_to_c(g.color_low);
   out->manual_min = g.manual_min;
   out->manual_max = g.manual_max;
-  out->line_weight = g.line_weight;
+  out->line_width_pt = g.line_weight;
   out->type = static_cast<int32_t>(g.type);
   out->markers = g.markers ? 1 : 0;
   out->high = g.high ? 1 : 0;

@@ -21,6 +21,15 @@ namespace {
 // The one-cell range a validation rule needs.
 const fm_cell_rect_t kA1{0, 0, 0, 0};
 
+// Writes the note `author` / `text` at (row, col) through the record setter.
+fm_status_t SetNote(fm_workbook_t* wb, std::size_t sheet, std::uint32_t row, std::uint32_t col, const char* author,
+                    const char* text) {
+  fm_comment_t note = FM_STRUCT_INIT(fm_comment_t);
+  note.author = author;
+  note.text = text;
+  return fm_sheet_set_comment(wb, sheet, row, col, &note);
+}
+
 class FormulonCApiSheetFeatures : public ::testing::Test {
  protected:
   void SetUp() override { ASSERT_EQ(fm_workbook_create_default(&wb_), 0); }
@@ -34,7 +43,7 @@ TEST_F(FormulonCApiSheetFeatures, MergeAddAndIterate) {
   m.first_col = 0;
   m.last_row = 1;
   m.last_col = 2;
-  ASSERT_EQ(fm_sheet_add_merge(wb_, 0, &m), 0);
+  ASSERT_EQ(fm_sheet_add_merge(wb_, 0, &m, nullptr), 0);
   std::size_t count = 0;
   ASSERT_EQ(fm_sheet_get_merge_count(wb_, 0, &count), 0);
   ASSERT_EQ(count, 1U);
@@ -47,14 +56,14 @@ TEST_F(FormulonCApiSheetFeatures, MergeAddAndIterate) {
 
 TEST_F(FormulonCApiSheetFeatures, MergeIntersectingAnExistingMergeIsRefused) {
   const fm_cell_rect_t first{0, 0, 1, 1};
-  ASSERT_EQ(fm_sheet_add_merge(wb_, 0, &first), 0);
+  ASSERT_EQ(fm_sheet_add_merge(wb_, 0, &first, nullptr), 0);
 
   const fm_cell_rect_t overlapping{1, 1, 2, 2};
-  EXPECT_EQ(fm_sheet_add_merge(wb_, 0, &overlapping), FM_STATUS_ALREADY_EXISTS);
-  EXPECT_EQ(fm_sheet_add_merge(wb_, 0, &first), FM_STATUS_ALREADY_EXISTS);
+  EXPECT_EQ(fm_sheet_add_merge(wb_, 0, &overlapping, nullptr), FM_STATUS_ALREADY_EXISTS);
+  EXPECT_EQ(fm_sheet_add_merge(wb_, 0, &first, nullptr), FM_STATUS_ALREADY_EXISTS);
 
   const fm_cell_rect_t adjacent{0, 2, 1, 3};
-  EXPECT_EQ(fm_sheet_add_merge(wb_, 0, &adjacent), 0);
+  EXPECT_EQ(fm_sheet_add_merge(wb_, 0, &adjacent, nullptr), 0);
   std::size_t count = 0;
   ASSERT_EQ(fm_sheet_get_merge_count(wb_, 0, &count), 0);
   EXPECT_EQ(count, 2U);
@@ -207,20 +216,20 @@ TEST_F(FormulonCApiSheetFeatures, HyperlinkRectangleMustBeAnchoredAtTheGivenCell
 }
 
 TEST_F(FormulonCApiSheetFeatures, CommentSetGetAndRemove) {
-  ASSERT_EQ(fm_sheet_set_comment(wb_, 0, 1, 1, "Alice", "Hello"), 0);
-  fm_comment_info_t got = FM_STRUCT_INIT(fm_comment_info_t);
+  ASSERT_EQ(SetNote(wb_, 0, 1, 1, "Alice", "Hello"), 0);
+  fm_comment_t got = FM_STRUCT_INIT(fm_comment_t);
   int32_t present = 0;
   ASSERT_EQ(fm_sheet_get_comment(wb_, 0, 1, 1, &present, &got), 0);
   EXPECT_EQ(present, 1);
   EXPECT_STREQ(got.author, "Alice");
   EXPECT_STREQ(got.text, "Hello");
   // Replace with new text at the same cell.
-  ASSERT_EQ(fm_sheet_set_comment(wb_, 0, 1, 1, "Bob", "World"), 0);
+  ASSERT_EQ(SetNote(wb_, 0, 1, 1, "Bob", "World"), 0);
   ASSERT_EQ(fm_sheet_get_comment(wb_, 0, 1, 1, &present, &got), 0);
   EXPECT_STREQ(got.author, "Bob");
   EXPECT_STREQ(got.text, "World");
-  // Removing deletes the note.
-  ASSERT_EQ(fm_sheet_remove_comment(wb_, 0, 1, 1), 0);
+  // A NULL record removes the note.
+  ASSERT_EQ(fm_sheet_set_comment(wb_, 0, 1, 1, nullptr), 0);
   ASSERT_EQ(fm_sheet_get_comment(wb_, 0, 1, 1, &present, &got), 0);
   EXPECT_EQ(present, 0);
 }
@@ -228,16 +237,16 @@ TEST_F(FormulonCApiSheetFeatures, CommentSetGetAndRemove) {
 // Excel keeps a note with no text, so an empty text writes one rather than
 // removing the note; the setter never deletes.
 TEST_F(FormulonCApiSheetFeatures, CommentEmptyTextWritesAnEmptyNote) {
-  ASSERT_EQ(fm_sheet_set_comment(wb_, 0, 1, 1, "Alice", "Hello"), 0);
-  ASSERT_EQ(fm_sheet_set_comment(wb_, 0, 1, 1, "Bob", ""), 0);
-  fm_comment_info_t got = FM_STRUCT_INIT(fm_comment_info_t);
+  ASSERT_EQ(SetNote(wb_, 0, 1, 1, "Alice", "Hello"), 0);
+  ASSERT_EQ(SetNote(wb_, 0, 1, 1, "Bob", ""), 0);
+  fm_comment_t got = FM_STRUCT_INIT(fm_comment_t);
   int32_t present = 0;
   ASSERT_EQ(fm_sheet_get_comment(wb_, 0, 1, 1, &present, &got), 0);
   EXPECT_EQ(present, 1);
   EXPECT_STREQ(got.author, "Bob");
   EXPECT_STREQ(got.text, "");
 
-  ASSERT_EQ(fm_sheet_set_comment(wb_, 0, 2, 2, nullptr, nullptr), 0);
+  ASSERT_EQ(SetNote(wb_, 0, 2, 2, nullptr, nullptr), 0);
   ASSERT_EQ(fm_sheet_get_comment(wb_, 0, 2, 2, &present, &got), 0);
   EXPECT_EQ(present, 1);
   EXPECT_STREQ(got.author, "");
@@ -256,25 +265,25 @@ TEST_F(FormulonCApiSheetFeatures, CommentRejectedOnThreadedCell) {
   thread.created = "2026-10-05T10:00:00.00";
   thread.text = "Thread";
   ASSERT_TRUE(static_cast<bool>(wb.add_threaded_comment(0, thread)));
-  EXPECT_EQ(fm_sheet_set_comment(wb_, 0, 2, 3, "Bob", "Note"),
+  EXPECT_EQ(SetNote(wb_, 0, 2, 3, "Bob", "Note"),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kAlreadyExists));
-  fm_comment_info_t got = FM_STRUCT_INIT(fm_comment_info_t);
+  fm_comment_t got = FM_STRUCT_INIT(fm_comment_t);
   int32_t present = 0;
   ASSERT_EQ(fm_sheet_get_comment(wb_, 0, 2, 3, &present, &got), 0);
   EXPECT_EQ(present, 0);
   // A neighbouring cell still takes a note.
-  EXPECT_EQ(fm_sheet_set_comment(wb_, 0, 2, 4, "Bob", "Note"), 0);
+  EXPECT_EQ(SetNote(wb_, 0, 2, 4, "Bob", "Note"), 0);
 }
 
 TEST_F(FormulonCApiSheetFeatures, CommentReplaceKeepsRevisionUid) {
-  ASSERT_EQ(fm_sheet_set_comment(wb_, 0, 1, 1, "Alice", "Hello"), 0);
+  ASSERT_EQ(SetNote(wb_, 0, 1, 1, "Alice", "Hello"), 0);
   wb_->workbook().sheet(0).mutable_comments()[0].uid = "{AAAAAAAA-0000-4000-8000-000000000001}";
-  ASSERT_EQ(fm_sheet_set_comment(wb_, 0, 1, 1, "Bob", "World"), 0);
+  ASSERT_EQ(SetNote(wb_, 0, 1, 1, "Bob", "World"), 0);
   EXPECT_EQ(wb_->workbook().sheet(0).comments()[0].uid, "{AAAAAAAA-0000-4000-8000-000000000001}");
 }
 
 TEST_F(FormulonCApiSheetFeatures, CommentLookupDistinguishesAbsenceFromInvalidSheet) {
-  fm_comment_info_t got = FM_STRUCT_INIT(fm_comment_info_t);
+  fm_comment_t got = FM_STRUCT_INIT(fm_comment_t);
   int32_t present = 0;
   ASSERT_EQ(fm_sheet_get_comment(wb_, 0, 0, 0, &present, &got), 0);
   EXPECT_EQ(present, 0);
@@ -284,19 +293,53 @@ TEST_F(FormulonCApiSheetFeatures, CommentLookupDistinguishesAbsenceFromInvalidSh
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
 }
 
-TEST_F(FormulonCApiSheetFeatures, CommentRemoveReportsAMissingNote) {
-  EXPECT_EQ(fm_sheet_remove_comment(wb_, 0, 0, 0), static_cast<fm_status_t>(formulon::FormulonErrorCode::kNotFound));
-  ASSERT_EQ(fm_sheet_set_comment(wb_, 0, 0, 0, "Alice", "x"), 0);
-  ASSERT_EQ(fm_sheet_remove_comment(wb_, 0, 0, 0), 0);
-  EXPECT_EQ(fm_sheet_remove_comment(wb_, 0, 0, 0), static_cast<fm_status_t>(formulon::FormulonErrorCode::kNotFound));
-  EXPECT_EQ(fm_sheet_remove_comment(wb_, 99, 0, 0),
-            static_cast<fm_status_t>(formulon::FormulonErrorCode::kSheetIndexOutOfRange));
-  EXPECT_EQ(fm_sheet_remove_comment(nullptr, 0, 0, 0),
-            static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
-  fm_comment_info_t got = FM_STRUCT_INIT(fm_comment_info_t);
+class FormulonCApiNoteRecord : public FormulonCApiSheetFeatures {};
+
+TEST_F(FormulonCApiNoteRecord, SetTakesRecordAndNullRemoves) {
+  // The record's own row / col are ignored; the call's cell is the key.
+  fm_comment_t note = FM_STRUCT_INIT(fm_comment_t);
+  note.row = 40;
+  note.col = 40;
+  note.author = "Alice";
+  note.text = "Hello";
+  ASSERT_EQ(fm_sheet_set_comment(wb_, 0, 3, 2, &note), 0);
+  fm_comment_t got = FM_STRUCT_INIT(fm_comment_t);
   int32_t present = 0;
-  ASSERT_EQ(fm_sheet_get_comment(wb_, 0, 0, 0, &present, &got), 0);
+  ASSERT_EQ(fm_sheet_get_comment(wb_, 0, 3, 2, &present, &got), 0);
+  EXPECT_EQ(present, 1);
+  EXPECT_EQ(got.row, 3U);
+  EXPECT_EQ(got.col, 2U);
+  EXPECT_STREQ(got.author, "Alice");
+  EXPECT_STREQ(got.text, "Hello");
+  ASSERT_EQ(fm_sheet_get_comment(wb_, 0, 40, 40, &present, &got), 0);
   EXPECT_EQ(present, 0);
+
+  // A read record feeds back into the setter.
+  ASSERT_EQ(fm_sheet_get_comment(wb_, 0, 3, 2, &present, &got), 0);
+  ASSERT_EQ(fm_sheet_set_comment(wb_, 0, 5, 5, &got), 0);
+  ASSERT_EQ(fm_sheet_get_comment(wb_, 0, 5, 5, &present, &got), 0);
+  EXPECT_EQ(present, 1);
+  EXPECT_STREQ(got.text, "Hello");
+
+  ASSERT_EQ(fm_sheet_set_comment(wb_, 0, 3, 2, nullptr), 0);
+  ASSERT_EQ(fm_sheet_get_comment(wb_, 0, 3, 2, &present, &got), 0);
+  EXPECT_EQ(present, 0);
+  std::size_t count = 9;
+  ASSERT_EQ(fm_sheet_get_comment_count(wb_, 0, &count), 0);
+  EXPECT_EQ(count, 1U);
+}
+
+TEST_F(FormulonCApiNoteRecord, NullOnAbsentNoteIsNoOp) {
+  EXPECT_EQ(fm_sheet_set_comment(wb_, 0, 0, 0, nullptr), 0);
+  ASSERT_EQ(SetNote(wb_, 0, 1, 1, "Alice", "x"), 0);
+  EXPECT_EQ(fm_sheet_set_comment(wb_, 0, 0, 0, nullptr), 0);
+  std::size_t count = 9;
+  ASSERT_EQ(fm_sheet_get_comment_count(wb_, 0, &count), 0);
+  EXPECT_EQ(count, 1U);
+  EXPECT_EQ(fm_sheet_set_comment(wb_, 99, 0, 0, nullptr),
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kSheetIndexOutOfRange));
+  EXPECT_EQ(fm_sheet_set_comment(nullptr, 0, 0, 0, nullptr),
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
 }
 
 TEST_F(FormulonCApiSheetFeatures, CommentEnumerateAllIncludingEmptyCell) {
@@ -304,8 +347,8 @@ TEST_F(FormulonCApiSheetFeatures, CommentEnumerateAllIncludingEmptyCell) {
   // anchored on a cell that never had a value written to it. Both must
   // be discoverable via the count/at-index enumerator without already
   // knowing their (row, col).
-  ASSERT_EQ(fm_sheet_set_comment(wb_, 0, 1, 1, "Alice", "Hello"), 0);
-  ASSERT_EQ(fm_sheet_set_comment(wb_, 0, 5, 3, "Bob", "Empty cell note"), 0);
+  ASSERT_EQ(SetNote(wb_, 0, 1, 1, "Alice", "Hello"), 0);
+  ASSERT_EQ(SetNote(wb_, 0, 5, 3, "Bob", "Empty cell note"), 0);
 
   std::size_t count = 0;
   ASSERT_EQ(fm_sheet_get_comment_count(wb_, 0, &count), 0);
@@ -314,7 +357,7 @@ TEST_F(FormulonCApiSheetFeatures, CommentEnumerateAllIncludingEmptyCell) {
   bool saw_alice = false;
   bool saw_bob = false;
   for (std::uint32_t i = 0; i < count; ++i) {
-    fm_comment_info_t got = FM_STRUCT_INIT(fm_comment_info_t);
+    fm_comment_t got = FM_STRUCT_INIT(fm_comment_t);
     ASSERT_EQ(fm_sheet_get_comment_at(wb_, 0, i, &got), 0);
     if (got.row == 1U && got.col == 1U) {
       EXPECT_STREQ(got.author, "Alice");
@@ -337,14 +380,14 @@ TEST_F(FormulonCApiSheetFeatures, CommentEnumerateCountZeroWhenNone) {
 }
 
 TEST_F(FormulonCApiSheetFeatures, CommentEnumerateOutOfRangeIndex) {
-  ASSERT_EQ(fm_sheet_set_comment(wb_, 0, 0, 0, "Alice", "x"), 0);
-  fm_comment_info_t got = FM_STRUCT_INIT(fm_comment_info_t);
+  ASSERT_EQ(SetNote(wb_, 0, 0, 0, "Alice", "x"), 0);
+  fm_comment_t got = FM_STRUCT_INIT(fm_comment_t);
   EXPECT_NE(fm_sheet_get_comment_at(wb_, 0, 999, &got), 0);
 }
 
 TEST_F(FormulonCApiSheetFeatures, SheetIndexOutOfRange) {
   fm_cell_rect_t m{};
-  EXPECT_NE(fm_sheet_add_merge(wb_, 999, &m), 0);
+  EXPECT_NE(fm_sheet_add_merge(wb_, 999, &m, nullptr), 0);
   std::size_t count = 0;
   EXPECT_NE(fm_sheet_get_merge_count(wb_, 999, &count), 0);
 }
@@ -353,9 +396,9 @@ TEST_F(FormulonCApiSheetFeatures, RemoveMergeByRangeOverlap) {
   fm_cell_rect_t a{0, 0, 1, 1};
   fm_cell_rect_t b{0, 3, 1, 4};
   fm_cell_rect_t c{4, 0, 5, 1};
-  ASSERT_EQ(fm_sheet_add_merge(wb_, 0, &a), 0);
-  ASSERT_EQ(fm_sheet_add_merge(wb_, 0, &b), 0);
-  ASSERT_EQ(fm_sheet_add_merge(wb_, 0, &c), 0);
+  ASSERT_EQ(fm_sheet_add_merge(wb_, 0, &a, nullptr), 0);
+  ASSERT_EQ(fm_sheet_add_merge(wb_, 0, &b, nullptr), 0);
+  ASSERT_EQ(fm_sheet_add_merge(wb_, 0, &c, nullptr), 0);
   fm_cell_rect_t q{0, 0, 1, 4};
   ASSERT_EQ(fm_sheet_remove_merge(wb_, 0, &q), 0);
   std::size_t count = 0;
@@ -371,7 +414,7 @@ TEST_F(FormulonCApiSheetFeatures, RemoveMergeByRangeOverlap) {
 
 TEST_F(FormulonCApiSheetFeatures, RemoveMergeByRangeNoOverlap) {
   fm_cell_rect_t a{0, 0, 1, 1};
-  ASSERT_EQ(fm_sheet_add_merge(wb_, 0, &a), 0);
+  ASSERT_EQ(fm_sheet_add_merge(wb_, 0, &a, nullptr), 0);
   fm_cell_rect_t q{4, 2, 5, 3};
   ASSERT_EQ(fm_sheet_remove_merge(wb_, 0, &q), FM_STATUS_NOT_FOUND);
   std::size_t count = 0;
@@ -382,8 +425,8 @@ TEST_F(FormulonCApiSheetFeatures, RemoveMergeByRangeNoOverlap) {
 TEST_F(FormulonCApiSheetFeatures, RemoveMergeAtValid) {
   fm_cell_rect_t a{0, 0, 1, 1};
   fm_cell_rect_t b{4, 4, 5, 5};
-  ASSERT_EQ(fm_sheet_add_merge(wb_, 0, &a), 0);
-  ASSERT_EQ(fm_sheet_add_merge(wb_, 0, &b), 0);
+  ASSERT_EQ(fm_sheet_add_merge(wb_, 0, &a, nullptr), 0);
+  ASSERT_EQ(fm_sheet_add_merge(wb_, 0, &b, nullptr), 0);
   ASSERT_EQ(fm_sheet_remove_merge_at(wb_, 0, 0), 0);
   std::size_t count = 0;
   ASSERT_EQ(fm_sheet_get_merge_count(wb_, 0, &count), 0);
@@ -398,7 +441,7 @@ TEST_F(FormulonCApiSheetFeatures, RemoveMergeAtValid) {
 
 TEST_F(FormulonCApiSheetFeatures, RemoveMergeAtOutOfRange) {
   fm_cell_rect_t a{0, 0, 1, 1};
-  ASSERT_EQ(fm_sheet_add_merge(wb_, 0, &a), 0);
+  ASSERT_EQ(fm_sheet_add_merge(wb_, 0, &a, nullptr), 0);
   EXPECT_NE(fm_sheet_remove_merge_at(wb_, 0, 99), 0);
   std::size_t count = 0;
   ASSERT_EQ(fm_sheet_get_merge_count(wb_, 0, &count), 0);
@@ -409,9 +452,9 @@ TEST_F(FormulonCApiSheetFeatures, ClearMerges) {
   fm_cell_rect_t a{0, 0, 1, 1};
   fm_cell_rect_t b{2, 2, 3, 3};
   fm_cell_rect_t c{4, 4, 5, 5};
-  ASSERT_EQ(fm_sheet_add_merge(wb_, 0, &a), 0);
-  ASSERT_EQ(fm_sheet_add_merge(wb_, 0, &b), 0);
-  ASSERT_EQ(fm_sheet_add_merge(wb_, 0, &c), 0);
+  ASSERT_EQ(fm_sheet_add_merge(wb_, 0, &a, nullptr), 0);
+  ASSERT_EQ(fm_sheet_add_merge(wb_, 0, &b, nullptr), 0);
+  ASSERT_EQ(fm_sheet_add_merge(wb_, 0, &c, nullptr), 0);
   ASSERT_EQ(fm_sheet_clear_merges(wb_, 0), 0);
   std::size_t count = 0;
   ASSERT_EQ(fm_sheet_get_merge_count(wb_, 0, &count), 0);
@@ -449,8 +492,8 @@ TEST_F(FormulonCApiSheetFeatures, RemoveHyperlinkByRowCol) {
   ASSERT_EQ(fm_sheet_set_hyperlink(wb_, 0, 1, 2, &a), 0);
   ASSERT_EQ(fm_sheet_set_hyperlink(wb_, 0, 3, 4, &b), 0);
   ASSERT_EQ(fm_sheet_set_hyperlink(wb_, 0, 1, 2, &c), 0);
-  // Removes the entry anchored at (1, 2); leaves the (3, 4) entry.
-  ASSERT_EQ(fm_sheet_remove_hyperlink(wb_, 0, 1, 2), 0);
+  // A NULL link removes the entry anchored at (1, 2); leaves the (3, 4) entry.
+  ASSERT_EQ(fm_sheet_set_hyperlink(wb_, 0, 1, 2, nullptr), 0);
   std::size_t count = 0;
   ASSERT_EQ(fm_sheet_get_hyperlink_count(wb_, 0, &count), 0);
   ASSERT_EQ(count, 1U);
@@ -461,7 +504,7 @@ TEST_F(FormulonCApiSheetFeatures, RemoveHyperlinkByRowCol) {
   EXPECT_STREQ(got.target, "https://b.example");
 }
 
-TEST_F(FormulonCApiSheetFeatures, RemoveHyperlinkByRowColNoMatch) {
+TEST_F(FormulonCApiSheetFeatures, RemoveHyperlinkByRowColNoMatchIsNoOp) {
   fm_hyperlink_t a = FM_STRUCT_INIT(fm_hyperlink_t);
   a.rect.first_row = 1;
   a.rect.first_col = 2;
@@ -470,7 +513,7 @@ TEST_F(FormulonCApiSheetFeatures, RemoveHyperlinkByRowColNoMatch) {
   a.target = "https://a.example";
   ASSERT_EQ(fm_sheet_set_hyperlink(wb_, 0, 1, 2, &a), 0);
   // No hyperlink anchored at (5, 5).
-  ASSERT_EQ(fm_sheet_remove_hyperlink(wb_, 0, 5, 5), FM_STATUS_NOT_FOUND);
+  ASSERT_EQ(fm_sheet_set_hyperlink(wb_, 0, 5, 5, nullptr), 0);
   std::size_t count = 0;
   ASSERT_EQ(fm_sheet_get_hyperlink_count(wb_, 0, &count), 0);
   EXPECT_EQ(count, 1U);
@@ -547,7 +590,7 @@ TEST_F(FormulonCApiSheetFeatures, ClearHyperlinks) {
 }
 
 TEST_F(FormulonCApiSheetFeatures, HyperlinkRemovalSheetIndexOutOfRange) {
-  EXPECT_NE(fm_sheet_remove_hyperlink(wb_, 999, 0, 0), 0);
+  EXPECT_NE(fm_sheet_set_hyperlink(wb_, 999, 0, 0, nullptr), 0);
   EXPECT_NE(fm_sheet_remove_hyperlink_at(wb_, 999, 0), 0);
   EXPECT_NE(fm_sheet_clear_hyperlinks(wb_, 999), 0);
 }
@@ -826,11 +869,11 @@ TEST_F(FormulonCApiSheetFeatures, MutatorsRejectOutOfGridCoordinatesBeforeMutati
   EXPECT_EQ(count, 0U);
 
   fm_cell_rect_t merge{0U, 0U, 0U, formulon::Sheet::kMaxCols};
-  EXPECT_EQ(fm_sheet_add_merge(wb_, 0U, &merge), invalid);
+  EXPECT_EQ(fm_sheet_add_merge(wb_, 0U, &merge, nullptr), invalid);
   ASSERT_EQ(fm_sheet_get_merge_count(wb_, 0U, &count), 0);
   EXPECT_EQ(count, 0U);
 
-  EXPECT_EQ(fm_sheet_set_comment(wb_, 0U, 0U, formulon::Sheet::kMaxCols, "Alice", "invalid"), invalid);
+  EXPECT_EQ(SetNote(wb_, 0U, 0U, formulon::Sheet::kMaxCols, "Alice", "invalid"), invalid);
   ASSERT_EQ(fm_sheet_get_comment_count(wb_, 0U, &count), 0);
   EXPECT_EQ(count, 0U);
 
@@ -849,7 +892,7 @@ TEST_F(FormulonCApiSheetFeatures, MutatorsRejectOutOfGridCoordinatesBeforeMutati
   // writer abort. A normal save is the process-survival regression check.
   std::uint8_t* saved = nullptr;
   std::size_t saved_len = 0U;
-  ASSERT_EQ(fm_workbook_save(wb_, &saved, &saved_len), 0);
+  ASSERT_EQ(fm_workbook_save(wb_, FM_WORKBOOK_FORMAT_XLSX, &saved, &saved_len), 0);
   ASSERT_NE(saved, nullptr);
   EXPECT_GT(saved_len, 0U);
   fm_buffer_destroy(saved);
@@ -878,7 +921,7 @@ TEST_F(FormulonCApiSheetFeatures, ValidationStoresFormulasWithoutTheLeadingEqual
 
   std::uint8_t* saved = nullptr;
   std::size_t saved_len = 0U;
-  ASSERT_EQ(fm_workbook_save(wb_, &saved, &saved_len), 0);
+  ASSERT_EQ(fm_workbook_save(wb_, FM_WORKBOOK_FORMAT_XLSX, &saved, &saved_len), 0);
   fm_workbook_t* reloaded = nullptr;
   const fm_status_t loaded = fm_workbook_load(saved, saved_len, &reloaded);
   fm_buffer_destroy(saved);
@@ -925,7 +968,7 @@ TEST_F(FormulonCApiSheetFeatures, CommentVisibleWithoutANoteIsAbsentNotAnError) 
   ASSERT_EQ(fm_sheet_get_comment_visible(wb_, 0, 2, 2, &present, &visible), 0);
   EXPECT_EQ(present, 0);
   EXPECT_EQ(visible, 0);
-  ASSERT_EQ(fm_sheet_set_comment(wb_, 0, 2, 2, "Alice", "note"), 0);
+  ASSERT_EQ(SetNote(wb_, 0, 2, 2, "Alice", "note"), 0);
   ASSERT_EQ(fm_sheet_set_comment_visible(wb_, 0, 2, 2, 1), 0);
   ASSERT_EQ(fm_sheet_get_comment_visible(wb_, 0, 2, 2, &present, &visible), 0);
   EXPECT_EQ(present, 1);
@@ -937,7 +980,7 @@ TEST_F(FormulonCApiSheetFeatures, CommentVisibleWithoutANoteIsAbsentNotAnError) 
 TEST_F(FormulonCApiSheetFeatures, MergesInRangeReportsTheFullCountPastTheCapacity) {
   const fm_cell_rect_t merges[] = {{0, 0, 0, 1}, {2, 0, 2, 1}, {4, 0, 4, 1}};
   for (const fm_cell_rect_t& m : merges) {
-    ASSERT_EQ(fm_sheet_add_merge(wb_, 0, &m), 0);
+    ASSERT_EQ(fm_sheet_add_merge(wb_, 0, &m, nullptr), 0);
   }
   const fm_cell_rect_t query{0, 0, 9, 9};
   std::size_t count = 0;
@@ -948,6 +991,28 @@ TEST_F(FormulonCApiSheetFeatures, MergesInRangeReportsTheFullCountPastTheCapacit
   EXPECT_EQ(count, 3U);
   EXPECT_EQ(out[0].first_row, 0U);
   EXPECT_EQ(out[1].first_row, 2U);
+}
+
+class FormulonCApiMergeAddReturn : public FormulonCApiSheetFeatures {};
+
+TEST_F(FormulonCApiMergeAddReturn, WritesStoredRect) {
+  const fm_cell_rect_t merge{2U, 1U, 4U, 3U};
+  fm_cell_rect_t stored{9U, 9U, 9U, 9U};
+  ASSERT_EQ(fm_sheet_add_merge(wb_, 0, &merge, &stored), 0);
+  EXPECT_EQ(stored.first_row, 2U);
+  EXPECT_EQ(stored.first_col, 1U);
+  EXPECT_EQ(stored.last_row, 4U);
+  EXPECT_EQ(stored.last_col, 3U);
+  fm_cell_rect_t listed{};
+  ASSERT_EQ(fm_sheet_get_merge_at(wb_, 0, 0, &listed), 0);
+  EXPECT_EQ(listed.first_row, stored.first_row);
+  EXPECT_EQ(listed.last_col, stored.last_col);
+
+  // A refused add leaves the out record zeroed.
+  stored = fm_cell_rect_t{9U, 9U, 9U, 9U};
+  EXPECT_EQ(fm_sheet_add_merge(wb_, 0, &merge, &stored), FM_STATUS_ALREADY_EXISTS);
+  EXPECT_EQ(stored.first_row, 0U);
+  EXPECT_EQ(stored.last_col, 0U);
 }
 
 }  // namespace

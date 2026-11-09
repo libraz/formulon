@@ -282,10 +282,12 @@ extern "C" fm_status_t fm_workbook_add_pivot_cache_field(fm_workbook_t* wb, std:
   }
   formulon::pivot::PivotCacheField field;
   field.name = utf8_name;
-  cache->mutable_fields().push_back(std::move(field));
-  *out_field_index = cache->fields().size() - 1U;
-  // Every table keeps one pivot field per cache field.
-  formulon::pivot::sync_table_fields(*cache, cache_tables(wb->workbook(), cache_id));
+  // The engine appends one unplaced field to every pivot drawing from the cache.
+  auto added = wb->workbook().add_pivot_cache_field(cache_id, std::move(field));
+  if (!added) {
+    return set_last_error(added.error());
+  }
+  *out_field_index = added.value();
   invalidate_pivot_results_for_cache(wb->workbook(), cache_id);
   return 0;
 }
@@ -584,6 +586,42 @@ extern "C" fm_status_t fm_workbook_get_pivot_cache_record_value(const fm_workboo
     }
   }
   value_to_fm(value, fresh_read_scratch(wb), out);
+  return 0;
+}
+
+extern "C" fm_status_t fm_workbook_is_pivot_cache_record_value_date(const fm_workbook_t* wb, std::uint32_t cache_id,
+                                                                    std::size_t record_index, std::size_t field_index,
+                                                                    std::int32_t* out_is_date) {
+  clear_last_error();
+  if (wb == nullptr || out_is_date == nullptr) {
+    return null_argument();
+  }
+  const formulon::pivot::PivotCache* cache = nullptr;
+  if (fm_status_t rc = resolve_cache(wb, cache_id, &cache); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_index(record_index, cache->records().size(), "record_index"); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_index(field_index, cache->fields().size(), "field_index"); rc != 0) {
+    return rc;
+  }
+  const formulon::pivot::PivotCacheRecord& record = cache->records()[record_index];
+  bool is_date = false;
+  if (field_index < record.cells.size()) {
+    const formulon::Value& value = record.cells[field_index];
+    const bool indexed = field_index < record.cell_is_index.size() && record.cell_is_index[field_index];
+    if (indexed && value.is_number()) {
+      const formulon::pivot::PivotCacheField& field = cache->fields()[field_index];
+      const double slot = value.as_number();
+      is_date = slot >= 0.0 && slot < static_cast<double>(field.shared_items.size()) &&
+                static_cast<std::size_t>(slot) < field.shared_item_is_date.size() &&
+                field.shared_item_is_date[static_cast<std::size_t>(slot)];
+    } else if (!indexed) {
+      is_date = field_index < record.cell_is_date.size() && record.cell_is_date[field_index];
+    }
+  }
+  *out_is_date = is_date ? 1 : 0;
   return 0;
 }
 

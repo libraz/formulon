@@ -14,6 +14,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <limits>
 #include <string>
 #include <vector>
@@ -256,12 +257,47 @@ emscripten::val optional_or_null(fm_status_t rc, int32_t present, emscripten::va
 JsNarrowNumericReader::JsNarrowNumericReader(const char* operation)
     : operation_(operation != nullptr ? operation : "WASM binding") {}
 
+namespace {
+
+// An operation named `<Class>.<method>` words its errors in the shared public form
+// `<Class>.<method> <field> <constraint>`, with no C integer width in the constraint.
+bool is_public_operation(const std::string& operation) {
+  return operation.find('.') != std::string::npos;
+}
+
+// The C integer widths the readers bound a field by; none is public vocabulary.
+bool is_c_width(const char* range) {
+  static const char* const kWidths[] = {"[0, 255]", "[0, 65535]", "[0, 4294967295]", "[-2147483648, 2147483647]",
+                                        "[-2^63, 2^63)"};
+  for (const char* width : kWidths) {
+    if (std::strcmp(range, width) == 0) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// The public spelling of a reader's expected-type phrase.
+const char* public_expected(const char* expected) {
+  if (std::strcmp(expected, "a Number") == 0) {
+    return "a number";
+  }
+  if (std::strcmp(expected, "a whole Number") == 0) {
+    return "an integer";
+  }
+  return expected;
+}
+
+}  // namespace
+
 void JsNarrowNumericReader::reject_access(const char* key, const char* field) {
   if (!message_.empty()) {
     return;
   }
   const char* name = field != nullptr ? field : key;
-  message_ = operation_ + ": `" + (name != nullptr ? name : "<field>") + "` field access threw";
+  name = name != nullptr ? name : "<field>";
+  message_ = is_public_operation(operation_) ? operation_ + " " + name + " could not be read"
+                                             : operation_ + ": `" + name + "` field access threw";
   fm_wasm_record_argument_error(kArgumentErrorAccess, message_.c_str());
 }
 
@@ -270,7 +306,15 @@ void JsNarrowNumericReader::reject(const char* key, const char* field, const cha
     return;
   }
   const char* name = field != nullptr ? field : key;
-  message_ = operation_ + ": `" + (name != nullptr ? name : "<field>") + "` must be a finite integer in " + range;
+  name = name != nullptr ? name : "<field>";
+  if (is_public_operation(operation_)) {
+    message_ = operation_ + " " + name + " must be an integer";
+    if (!is_c_width(range)) {
+      message_ += std::string(" in ") + range;
+    }
+  } else {
+    message_ = operation_ + ": `" + name + "` must be a finite integer in " + range;
+  }
   fm_wasm_record_argument_error(kArgumentErrorRange, message_.c_str());
 }
 
@@ -278,8 +322,10 @@ void JsNarrowNumericReader::reject_type(const char* field, const char* expected)
   if (!message_.empty()) {
     return;
   }
-  message_ = operation_ + ": `" + (field != nullptr ? field : "<field>") + "` must be " +
-             (expected != nullptr ? expected : "the expected type");
+  const char* name = field != nullptr ? field : "<field>";
+  const char* want = expected != nullptr ? expected : "the expected type";
+  message_ = is_public_operation(operation_) ? operation_ + " " + name + " must be " + public_expected(want)
+                                             : operation_ + ": `" + name + "` must be " + want;
   fm_wasm_record_argument_error(kArgumentErrorType, message_.c_str());
 }
 
@@ -755,8 +801,8 @@ emscripten::val translate_cf_match(const fm_cf_match_info_t& m) {
     }
     case FM_CF_MATCH_KIND_ICON_SET: {
       emscripten::val icon = emscripten::val::object();
-      icon.set("setName", m.icon_set_name);
-      icon.set("index", static_cast<int32_t>(m.icon_index));
+      icon.set("iconSet", m.icon_set);
+      icon.set("iconIndex", static_cast<int32_t>(m.icon_index));
       out.set("icon", icon);
       break;
     }

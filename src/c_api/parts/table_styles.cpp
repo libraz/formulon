@@ -139,8 +139,8 @@ extern "C" fm_status_t fm_workbook_get_table_style_at(const fm_workbook_t* wb, s
   *out = fm_table_style_t{};
   out->struct_size = struct_size;
   out->name = style.name.c_str();
-  out->pivot = style.pivot ? 1 : 0;
-  out->table = style.table ? 1 : 0;
+  out->pivot = style.pivot ? FM_TRISTATE_TRUE : FM_TRISTATE_FALSE;
+  out->table = style.table ? FM_TRISTATE_TRUE : FM_TRISTATE_FALSE;
   out->element_count = static_cast<uint32_t>(elements.size());
   out->elements = element_arena.adopt(std::move(elements));
   return 0;
@@ -187,11 +187,17 @@ extern "C" fm_status_t fm_workbook_set_table_style(fm_workbook_t* wb, const fm_t
   if (name.empty() || is_builtin_style_name(name)) {
     return invalid_argument("name is empty or a built-in style name", "name=" + std::string(name));
   }
+  if (auto rc = check_enum_domain(style->pivot, FM_TRISTATE_DEFAULT, FM_TRISTATE_TRUE, "pivot"); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_enum_domain(style->table, FM_TRISTATE_DEFAULT, FM_TRISTATE_TRUE, "table"); rc != 0) {
+    return rc;
+  }
   formulon::StylesTable& styles = wb->workbook().mutable_styles();
   formulon::CustomTableStyle next;
   next.name = std::string(name);
-  next.pivot = style->pivot != 0;
-  next.table = style->table != 0;
+  next.pivot = style->pivot != FM_TRISTATE_FALSE;
+  next.table = style->table != FM_TRISTATE_FALSE;
   next.elements.reserve(style->element_count);
   for (uint32_t i = 0; i < style->element_count; ++i) {
     const fm_table_style_element_t& in = style->elements[i];
@@ -269,15 +275,20 @@ extern "C" fm_status_t fm_workbook_remove_table_style(fm_workbook_t* wb, const c
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_get_table_style_defaults(const fm_workbook_t* wb, const char** out_table_style,
-                                                            const char** out_pivot_style) {
+extern "C" fm_status_t fm_workbook_get_table_style_defaults(const fm_workbook_t* wb, fm_table_style_defaults_t* out) {
   clear_last_error();
-  if (wb == nullptr || out_table_style == nullptr || out_pivot_style == nullptr) {
+  if (wb == nullptr || out == nullptr) {
     return null_argument();
   }
+  if (auto rc = check_record_size(*out); rc != 0) {
+    return rc;
+  }
   const formulon::TableStylesSection& section = wb->workbook().styles().table_styles;
-  *out_table_style = section.default_table_style.empty() ? nullptr : section.default_table_style.c_str();
-  *out_pivot_style = section.default_pivot_style.empty() ? nullptr : section.default_pivot_style.c_str();
+  const std::uint32_t struct_size = out->struct_size;
+  *out = fm_table_style_defaults_t{};
+  out->struct_size = struct_size;
+  out->table_style_name = section.default_table_style.empty() ? nullptr : section.default_table_style.c_str();
+  out->pivot_style_name = section.default_pivot_style.empty() ? nullptr : section.default_pivot_style.c_str();
   return 0;
 }
 
@@ -291,30 +302,30 @@ extern "C" fm_status_t fm_workbook_update_table_style_defaults(fm_workbook_t* wb
     return rc;
   }
   // The whole patch is checked before anything changes.
-  for (const auto& [op, name, field] :
-       {std::tuple<fm_patch_op_t, const char*, const char*>{patch->table_style_op, patch->table_style, "table_style"},
-        {patch->pivot_style_op, patch->pivot_style, "pivot_style"}}) {
+  for (const auto& [op, name, field] : {std::tuple<fm_patch_op_t, const char*, const char*>{
+                                            patch->table_style_name_op, patch->table_style_name, "table_style_name"},
+                                        {patch->pivot_style_name_op, patch->pivot_style_name, "pivot_style_name"}}) {
     if (!patch_op_ok(op)) {
       return invalid_argument("patch op out of range", std::string("field=") + field);
     }
     if (op == FM_PATCH_OP_SET) {
-      if (name == nullptr) {
-        return invalid_argument("SET needs a style name", std::string("field=") + field);
+      if (name == nullptr || name[0] == '\0') {
+        return invalid_argument("SET needs a non-empty style name", std::string("field=") + field);
       }
       if (auto rc = check_utf8(name, "field", field); rc != 0) {
         return rc;
       }
     }
   }
-  if (patch->table_style_op == FM_PATCH_OP_KEEP && patch->pivot_style_op == FM_PATCH_OP_KEEP) {
+  if (patch->table_style_name_op == FM_PATCH_OP_KEEP && patch->pivot_style_name_op == FM_PATCH_OP_KEEP) {
     return 0;
   }
   formulon::TableStylesSection& section = wb->workbook().mutable_styles().table_styles;
-  if (patch->table_style_op != FM_PATCH_OP_KEEP) {
-    section.default_table_style = patch->table_style_op == FM_PATCH_OP_SET ? patch->table_style : "";
+  if (patch->table_style_name_op != FM_PATCH_OP_KEEP) {
+    section.default_table_style = patch->table_style_name_op == FM_PATCH_OP_SET ? patch->table_style_name : "";
   }
-  if (patch->pivot_style_op != FM_PATCH_OP_KEEP) {
-    section.default_pivot_style = patch->pivot_style_op == FM_PATCH_OP_SET ? patch->pivot_style : "";
+  if (patch->pivot_style_name_op != FM_PATCH_OP_KEEP) {
+    section.default_pivot_style = patch->pivot_style_name_op == FM_PATCH_OP_SET ? patch->pivot_style_name : "";
   }
   section.present = true;
   return 0;

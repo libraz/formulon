@@ -176,7 +176,8 @@ def handle_declaration_problems(
         if isinstance(surfaces, list) and not {"wasm", "native"} & set(surfaces):
             continue
         drop = entry.get("drop")
-        if isinstance(drop, dict) and drop.get("js") is not None and drop.get("js") == entry.get("js"):
+        # Dropped from the facade (the entry still names it) or gone altogether (it names nothing).
+        if isinstance(drop, dict) and drop.get("js") is not None and entry.get("js") in (None, drop.get("js")):
             continue
         name = handle_name(entry, "js", ledger.collections)
         handle = entry_handle(entry) or {}

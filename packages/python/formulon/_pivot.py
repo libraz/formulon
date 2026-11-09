@@ -14,7 +14,6 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Sequence, Tuple, Un
 from . import _structs as S
 from ._c import LIB, FormulonError, _NoCopy, _sint, _uint
 from ._handle_tables import CELL_ARGS
-from ._refs import _fold
 from ._status import StatusCode
 from ._workbook import (
     _PATCH_CLEAR,
@@ -35,7 +34,6 @@ from ._workbook import (
     PivotDateGroupInput,
     PivotDatePeriod,
     PivotField,
-    PivotFieldInput,
     PivotFieldRef,
     PivotFilter,
     PivotFilterInput,
@@ -63,7 +61,6 @@ from ._workbook import (
     _pack_pivot_style_options_patch,
     _read_count,
     _read_cstr_out,
-    _tristate_default,
     to_native,
 )
 
@@ -215,11 +212,7 @@ class Pivot(_NoCopy):
           NotFoundError: when no cache field has the name.
         """
         if isinstance(field, str):
-            wanted = _fold(field)
-            for index, cache_field in enumerate(self.get_cache().list_fields()):
-                if _fold(cache_field.name) == wanted:
-                    return index
-            raise FormulonError(StatusCode.NOT_FOUND, f"the pivot has no field named {field!r}", "")
+            return self.cache()._field_ref(field)
         if isinstance(field, bool):
             raise TypeError("formulon: field_index must be an int or a str, got bool")
         return _uint(field, "field_index", role="position")
@@ -231,7 +224,12 @@ class Pivot(_NoCopy):
             return "Pivot(removed)"
 
     def rename(self, name: str) -> None:
-        """Rename the pivot table."""
+        """Rename the pivot table.
+
+        Raises:
+          InvalidArgumentError: when ``name`` is empty.
+          AlreadyExistsError: when another pivot on the sheet has the name (names compare case-insensitively).
+        """
         h, sheet, pivot_index = self._locate()
         with _ArgScope() as scope:
             name_ptr = scope.cstr(name)
@@ -244,8 +242,8 @@ class Pivot(_NoCopy):
                 )
             )
 
-    def get_cache(self) -> PivotCache:
-        """The handle of the cache the pivot draws from."""
+    def cache(self) -> PivotCache:
+        """The handle of the cache the pivot draws from; the one :meth:`Workbook.pivot_cache` returns for its id."""
         return self._sheet._workbook.pivot_cache(self._cache_id())
 
     # -- Layout ------------------------------------------------------------
@@ -324,18 +322,17 @@ class Pivot(_NoCopy):
         """Return the row and column flags :meth:`update_grand_totals` writes."""
         h, sheet, pivot_index = self._locate()
         with _ArgScope() as scope:
-            rows = scope.out_ptr()
-            cols = scope.out_ptr()
+            ptr = scope.struct(S.PIVOT_GRAND_TOTALS)
             _check(
                 LIB.fm_sheet_get_pivot_grand_totals(
                     h,
                     _uint(sheet, "sheet_index", role="sheet"),
                     _uint(pivot_index, "pivot_index", role="position"),
-                    rows,
-                    cols,
+                    ptr,
                 )
             )
-            return PivotGrandTotals(rows=LIB.read_i32(rows) != 0, columns=LIB.read_i32(cols) != 0)
+            d = S.PIVOT_GRAND_TOTALS.unpack(LIB, ptr)
+            return PivotGrandTotals(rows=d["rows"] != 0, columns=d["columns"] != 0)
 
     def update_grand_totals(
         self, *, rows: Union[bool, Unchanged] = UNCHANGED, columns: Union[bool, Unchanged] = UNCHANGED
@@ -385,7 +382,7 @@ class Pivot(_NoCopy):
                 return None
             d = S.PIVOT_STYLE_OPTIONS.unpack(LIB, ptr)
             return PivotStyleOptions(
-                style_name=LIB.read_cstr(d["style_name"]) or None,
+                style_name=LIB.read_optional_cstr(d["style_name"]),
                 show_row_headers=d["show_row_headers"] != 0,
                 show_column_headers=d["show_column_headers"] != 0,
                 show_row_stripes=d["show_row_stripes"] != 0,
@@ -405,7 +402,7 @@ class Pivot(_NoCopy):
     ) -> None:
         """Update the pivot's table style, making the style element present; an omitted argument keeps its value.
 
-        ``style_name=None`` writes the element without a style name. On a
+        ``style_name=None`` writes the element without a style name; ``""`` raises ``InvalidArgumentError``. On a
         pivot without a style element the arguments left out take the creation
         defaults: the workbook's PivotTable style default (else
         ``PivotStyleLight16``) and row / column headers and last column on.
@@ -721,63 +718,6 @@ class Pivot(_NoCopy):
                 show_all=d["show_all"] != 0,
                 show_detail=d["show_detail"] != 0,
             )
-
-    def add_field(self, spec: PivotFieldInput) -> int:
-        """Place a field on the pivot; return its index.
-
-        A pivot's fields are positional over its cache's fields (field ``i``
-        is cache field ``i``). When ``spec.field_index`` is an index, or a name that
-        a cache field carries, the pivot first gets one bare, axis-less field per
-        cache field and the named one is configured in place, so the index is that
-        cache field's position and adding it again updates it. A name the cache
-        lacks appends a field. A field added on the row or column axis is appended
-        to that axis's field order.
-
-        Raises:
-          IndexOutOfRangeError: when ``spec.field_index`` is an index past the cache's last field.
-        """
-        if isinstance(spec.field_index, str):
-            source_name = spec.field_index
-        else:
-            index = self._field_index(spec.field_index)
-            cache_fields = self.get_cache().list_fields()
-            if index >= len(cache_fields):
-                raise FormulonError(
-                    StatusCode.INDEX_OUT_OF_RANGE, f"field_index {index} is past the cache's last field", ""
-                )
-            source_name = cache_fields[index].name
-        h, sheet, pivot_index = self._locate()
-        with _ArgScope() as scope:
-            ptr = scope.struct(S.PIVOT_FIELD_SPEC)
-            out = scope.out_ptr()
-            S.PIVOT_FIELD_SPEC.pack(
-                LIB,
-                ptr,
-                {
-                    "axis": _sint(spec.axis, "axis"),
-                    "subtotal_top": _tristate_default(spec.subtotal_top),
-                },
-            )
-            S.write_str_field(LIB, ptr, S.PIVOT_FIELD_SPEC, "source_name", source_name, scope)
-            S.write_str_field(LIB, ptr, S.PIVOT_FIELD_SPEC, "custom_name", spec.custom_name, scope)
-            S.write_str_field(
-                LIB,
-                ptr,
-                S.PIVOT_FIELD_SPEC,
-                "number_format",
-                spec.number_format,
-                scope,
-            )
-            _check(
-                LIB.fm_sheet_add_pivot_field(
-                    h,
-                    _uint(sheet, "sheet_index", role="sheet"),
-                    _uint(pivot_index, "pivot_index", role="position"),
-                    ptr,
-                    out,
-                )
-            )
-            return LIB.read_u32(out)
 
     def update_field(
         self,
@@ -1130,7 +1070,8 @@ class Pivot(_NoCopy):
             raw = LIB.read_bytes(buf, 4 * count)
             return [PIVOT_VALUES_FIELD if v == _PIVOT_VALUES_FIELD_C else v for v in struct.unpack("<%dI" % count, raw)]
 
-    def _set_field_order(self, fn, indices: Sequence[int]) -> None:
+    def _set_field_order(self, fn, fields: Sequence[PivotFieldRef]) -> None:
+        indices = [i if i == PIVOT_VALUES_FIELD else self._field_index(i) for i in fields]
         h, sheet, pivot_index = self._locate()
         arr_ptr = 0
         with _ArgScope() as scope:
@@ -1157,33 +1098,33 @@ class Pivot(_NoCopy):
         """Return the row-axis field order (the list :meth:`set_row_field_order` takes)."""
         return self._get_field_order(LIB.fm_sheet_get_pivot_row_field_order)
 
-    def set_row_field_order(self, indices: Sequence[int]) -> None:
-        """Replace the row-axis field order with ``indices``.
+    def set_row_field_order(self, fields: Sequence[PivotFieldRef]) -> None:
+        """Replace the row-axis field order with ``fields``, each a field index or a cache field name.
 
         The list is the axis's whole membership: listed fields move onto the
-        row axis, and fields left out come off it. Each index must be below
+        row axis, and fields left out come off it. Each field must be below
         the pivot's field count and may appear once; pass an empty list to
         clear. ``PIVOT_VALUES_FIELD`` (``-2``) places the Σ Values level.
         """
-        self._set_field_order(LIB.fm_sheet_set_pivot_row_field_order, indices)
+        self._set_field_order(LIB.fm_sheet_set_pivot_row_field_order, fields)
 
     def get_column_field_order(self) -> List[int]:
         """Return the column-axis field order. Same contract as rows."""
         return self._get_field_order(LIB.fm_sheet_get_pivot_column_field_order)
 
-    def set_column_field_order(self, indices: Sequence[int]) -> None:
-        """Replace the column-axis field order with ``indices``.
+    def set_column_field_order(self, fields: Sequence[PivotFieldRef]) -> None:
+        """Replace the column-axis field order with ``fields`` (indices or cache field names).
 
         Same contract as :meth:`set_row_field_order`.
         """
-        self._set_field_order(LIB.fm_sheet_set_pivot_column_field_order, indices)
+        self._set_field_order(LIB.fm_sheet_set_pivot_column_field_order, fields)
 
     def get_page_field_order(self) -> List[int]:
         """Return the page-axis field order (the list :meth:`set_page_field_order` takes)."""
         return self._get_field_order(LIB.fm_sheet_get_pivot_page_field_order)
 
-    def set_page_field_order(self, indices: Sequence[int]) -> None:
-        """Replace the page-axis field order with ``indices``.
+    def set_page_field_order(self, fields: Sequence[PivotFieldRef]) -> None:
+        """Replace the page-axis field order with ``fields``, each a field index or a cache field name.
 
         The list is the axis's whole membership: listed fields move onto the
         page axis, and fields left out come off it. Each index must be below
@@ -1191,7 +1132,7 @@ class Pivot(_NoCopy):
         clear. ``PIVOT_VALUES_FIELD`` is never a page field and raises
         ``InvalidArgumentError``.
         """
-        self._set_field_order(LIB.fm_sheet_set_pivot_page_field_order, indices)
+        self._set_field_order(LIB.fm_sheet_set_pivot_page_field_order, fields)
 
     # -- Data fields -------------------------------------------------------
     def list_data_fields(self) -> List[PivotDataField]:
@@ -1239,8 +1180,7 @@ class Pivot(_NoCopy):
                 show_as_base_item=d["show_as_base_item"] if d["has_show_as_base_item"] else None,
             )
 
-    @staticmethod
-    def _pack_data_field_spec(spec: PivotDataFieldInput, field_index: int, scope: _ArgScope) -> int:
+    def _pack_data_field_spec(self, spec: PivotDataFieldInput, field_index: int, scope: _ArgScope) -> int:
         ptr = scope.struct(S.PIVOT_DATA_FIELD_SPEC)
         S.PIVOT_DATA_FIELD_SPEC.pack(
             LIB,
@@ -1252,7 +1192,7 @@ class Pivot(_NoCopy):
                 "has_show_as_base_field": 0 if spec.show_as_base_field is None else 1,
                 "show_as_base_field": 0
                 if spec.show_as_base_field is None
-                else _uint(spec.show_as_base_field, "show_as_base_field", role="position"),
+                else _uint(self._field_index(spec.show_as_base_field), "show_as_base_field", role="position"),
                 "has_show_as_base_item": 0 if spec.show_as_base_item is None else 1,
                 "show_as_base_item": 0
                 if spec.show_as_base_item is None
@@ -1394,7 +1334,7 @@ class Pivot(_NoCopy):
             d = S.PIVOT_FILTER_SPEC.unpack(LIB, ptr)
             return PivotFilter(
                 field_index=d["field_index"],
-                type=PivotFilterKind(d["type"]),
+                kind=PivotFilterKind(d["kind"]),
                 value=_decode_pivot_filter_operand(d, "value"),
                 value_high=_decode_pivot_filter_operand(d, "value_high"),
                 data_field_index=d["data_field_index"],
@@ -1412,7 +1352,7 @@ class Pivot(_NoCopy):
                 ptr,
                 {
                     "field_index": _uint(field_index, "field_index", role="position"),
-                    "type": _sint(spec.type, "type"),
+                    "kind": _sint(spec.kind, "kind"),
                     "data_field_index": _uint(spec.data_field_index, "data_field_index", role="position"),
                     "value_kind": _sint(operands["value_kind"], "value_kind"),
                     "value_int": _sint(operands.get("value_int", 0), "value_int"),

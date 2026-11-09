@@ -39,7 +39,7 @@ F64 = ("f64", 8, 8)
 # against ``ptr + offset``.
 VALUE_BLOB = ("blob16", 16, 8)
 # Opaque 12-byte, 4-aligned blob: an inline ``fm_cfvo_t`` (``int32_t type;
-# int32_t gte; const char* value;``). Not decoded by
+# fm_tristate_t gte; const char* value;``). Not decoded by
 # :meth:`Struct.unpack`; callers who need the sub-fields read them at
 # ``ptr + offset`` with their own struct.unpack_from calls.
 CFVO_BLOB = ("blob_cfvo", 12, 4)
@@ -69,6 +69,8 @@ RECORD_NAMES = frozenset(
         "fm_auto_filter_t",
         "fm_cell_node_info_t",
         "fm_cf_match_info_t",
+        "fm_cf_range_evaluation_spec_t",
+        "fm_cf_rule_patch_t",
         "fm_cf_rule_t",
         "fm_chart_axis_info_t",
         "fm_chart_axis_patch_t",
@@ -78,7 +80,6 @@ RECORD_NAMES = frozenset(
         "fm_chart_data_series_info_t",
         "fm_chart_display_patch_t",
         "fm_chart_info_t",
-        "fm_chart_insert_spec_t",
         "fm_chart_legend_patch_t",
         "fm_chart_legend_t",
         "fm_chart_literal_info_t",
@@ -89,17 +90,18 @@ RECORD_NAMES = frozenset(
         "fm_chart_preview_overrides_spec_t",
         "fm_chart_series_info_t",
         "fm_chart_series_patch_t",
+        "fm_chart_spec_t",
         "fm_chart_unresolved_info_t",
         "fm_column_break_t",
         "fm_column_layout_info_t",
-        "fm_comment_info_t",
+        "fm_comment_t",
         "fm_data_table_t",
-        "fm_cf_rule_patch_t",
         "fm_data_validation_patch_t",
         "fm_data_validation_t",
         "fm_defined_name_t",
         "fm_drawing_object_info_t",
         "fm_drawing_patch_t",
+        "fm_drawing_placement_spec_t",
         "fm_effective_style_info_t",
         "fm_external_link_info_t",
         "fm_function_metadata_info_t",
@@ -111,6 +113,7 @@ RECORD_NAMES = frozenset(
         "fm_iterative_settings_patch_t",
         "fm_locale_facts_info_t",
         "fm_margins_pt_info_t",
+        "fm_number_format_info_t",
         "fm_page_layout_info_t",
         "fm_page_margins_patch_t",
         "fm_page_margins_t",
@@ -122,7 +125,7 @@ RECORD_NAMES = frozenset(
         "fm_parse_reference_spec_t",
         "fm_parsed_reference_info_t",
         "fm_person_t",
-        "fm_drawing_placement_spec_t",
+        "fm_phonetic_properties_t",
         "fm_pivot_cache_options_patch_t",
         "fm_pivot_cache_options_t",
         "fm_pivot_calculated_item_info_t",
@@ -131,9 +134,9 @@ RECORD_NAMES = frozenset(
         "fm_pivot_date_group_spec_t",
         "fm_pivot_field_info_t",
         "fm_pivot_field_patch_t",
-        "fm_pivot_field_spec_t",
         "fm_pivot_filter_t",
         "fm_pivot_grand_totals_patch_t",
+        "fm_pivot_grand_totals_t",
         "fm_pivot_item_info_t",
         "fm_pivot_item_patch_t",
         "fm_pivot_options_patch_t",
@@ -173,6 +176,7 @@ RECORD_NAMES = frozenset(
         "fm_table_patch_t",
         "fm_table_spec_t",
         "fm_table_style_defaults_patch_t",
+        "fm_table_style_defaults_t",
         "fm_table_style_options_patch_t",
         "fm_table_style_options_t",
         "fm_table_style_t",
@@ -323,7 +327,7 @@ HYPERLINK = Struct(
 )
 
 COMMENT = Struct(
-    "fm_comment_info_t",
+    "fm_comment_t",
     [("row", U32), ("col", U32), ("author", PTR), ("text", PTR)],
 )
 
@@ -491,7 +495,7 @@ CF_MATCH = Struct(
         ("bar_fill", COLOR_SPEC_BLOB),
         ("bar_border", COLOR_SPEC_BLOB),
         ("bar_gradient", I32),
-        ("icon_set_name", I32),
+        ("icon_set", I32),
         ("icon_index", U8),
         ("bar_direction", I32),
     ],
@@ -534,7 +538,7 @@ CF_RULE = Struct(
         ("data_bar_min_length_pct", U8),
         ("data_bar_max_length_pct", U8),
         ("has_icon_set", I32),
-        ("icon_set_name", I32),
+        ("icon_set", I32),
         ("icon_set_thresholds", PTR),
         ("icon_set_threshold_count", U32),
         ("icon_set_reverse", I32),
@@ -626,8 +630,8 @@ CF_RULE_PATCH = Struct(
         ("data_bar_axis_color", COLOR_SPEC_BLOB),
         ("data_bar_direction_op", I32),
         ("data_bar_direction", I32),
-        ("icon_set_name_op", I32),
-        ("icon_set_name", I32),
+        ("icon_set_op", I32),
+        ("icon_set", I32),
         ("icon_set_thresholds_op", I32),
         ("icon_set_thresholds", PTR),
         ("icon_set_thresholds_count", U32),
@@ -660,7 +664,22 @@ PARSE_ERROR = Struct(
 # ``fm_sheet_get_cell_phonetic_run_at``.
 PHONETIC_RUN = Struct(
     "fm_phonetic_run_t",
-    [("sb", U32), ("eb", U32), ("text", PTR)],
+    [("start", U32), ("end", U32), ("text", PTR)],
+)
+
+PHONETIC_PROPERTIES = Struct(
+    "fm_phonetic_properties_t",
+    [("font_index", U32), ("type", I32), ("alignment", I32), ("stated", I32)],
+)
+
+# Frozen value types (no ``struct_size``): array elements of
+# ``fm_sheet_get_range_xf_bases_excluding`` / ``fm_sheet_remap_range_xfs``.
+CELL_ADDRESS = Struct("fm_cell_address_t", [("row", U32), ("col", U32)])
+XF_REMAP = Struct("fm_xf_remap_t", [("from_xf", U32), ("to_xf", U32)])
+
+CF_RANGE_EVALUATION_SPEC = Struct(
+    "fm_cf_range_evaluation_spec_t",
+    [("time_period_rules", I32), ("has_today_serial", I32), ("today_serial", F64)],
 )
 
 # fm_pivot_cell_info_t embeds an fm_value_t (16 bytes, 8-aligned) inline. The
@@ -679,17 +698,6 @@ PIVOT_CELL = Struct(
     ],
 )
 PIVOT_CELL_VALUE_OFFSET = PIVOT_CELL.offsets["value"][1]
-
-PIVOT_FIELD_SPEC = Struct(
-    "fm_pivot_field_spec_t",
-    [
-        ("source_name", PTR),
-        ("custom_name", PTR),
-        ("axis", I32),
-        ("subtotal_top", I32),
-        ("number_format", PTR),
-    ],
-)
 
 PIVOT_DATA_FIELD_SPEC = Struct(
     "fm_pivot_data_field_t",
@@ -767,6 +775,7 @@ TABLE_SPEC = Struct(
         ("column_names", PTR),
         ("column_count", U32),
         ("style_name", PTR),
+        ("styled", I32),
         ("header_row", I32),
         ("totals_row", I32),
         ("show_first_column", I32),
@@ -918,7 +927,7 @@ PIVOT_FILTER_SPEC = Struct(
     "fm_pivot_filter_t",
     [
         ("field_index", U32),
-        ("type", I32),
+        ("kind", I32),
         ("value_kind", I32),
         ("value_int", I32),
         ("value_double", F64),
@@ -1226,7 +1235,7 @@ CELL_XF = Struct(
         ("font_index", U32),
         ("fill_index", U32),
         ("border_index", U32),
-        ("num_fmt_id", U16),
+        ("num_fmt_id", U32),
         ("horizontal", I32),
         ("vertical", I32),
         ("wrap_text", I32),
@@ -1304,7 +1313,7 @@ FILL_RECORD = Struct(
         ("background", COLOR_SPEC_BLOB),
         ("has_gradient", I32),
         ("gradient_type", I32),
-        ("gradient_degree", F64),
+        ("gradient_angle_deg", F64),
         ("gradient_left", F64),
         ("gradient_right", F64),
         ("gradient_top", F64),
@@ -1363,10 +1372,15 @@ CELL_STYLE_RECORD = Struct(
         ("style_xf_index", U32),
         ("has_builtin_id", I32),
         ("builtin_id", U32),
-        ("i_level", U32),
+        ("outline_level", U32),
         ("hidden", I32),
         ("custom_builtin", I32),
     ],
+)
+
+NUMBER_FORMAT_INFO = Struct(
+    "fm_number_format_info_t",
+    [("num_fmt_id", U32), ("number_format", PTR)],
 )
 
 THEME_COLORS = Struct("fm_theme_colors_t", [("argb", ("blob_u32x12", 48, 4))])
@@ -1391,15 +1405,15 @@ EFFECTIVE_STYLE = Struct(
         ("border_index", U32),
         ("font_argb", U32),
         ("font_resolution", I32),
-        ("fill_fg_argb", U32),
-        ("fill_fg_resolution", I32),
-        ("fill_bg_argb", U32),
-        ("fill_bg_resolution", I32),
+        ("fill_foreground_argb", U32),
+        ("fill_foreground_resolution", I32),
+        ("fill_background_argb", U32),
+        ("fill_background_resolution", I32),
         ("border_argb", ("blob_u32x5", 20, 4)),
         ("border_resolution", ("blob_i32x5", 20, 4)),
         ("locked", I32),
         ("hidden", I32),
-        ("num_fmt_code", PTR),
+        ("number_format", PTR),
     ],
 )
 
@@ -1643,7 +1657,7 @@ VALIDATION_OUTCOME = Struct(
 
 MENTION = Struct(
     "fm_mention_t",
-    [("person_id", PTR), ("mention_id", PTR), ("start", U32), ("length", U32)],
+    [("person_id", PTR), ("mention_id", PTR), ("start", U32), ("end", U32)],
 )
 
 THREADED_COMMENT = Struct(
@@ -1777,18 +1791,69 @@ DRAWING_PATCH = Struct(
 )
 
 
+CHART_FILL = Struct(
+    "fm_chart_fill_t",
+    [
+        ("color", COLOR_SPEC_BLOB),
+        ("has_transparency_pct", I32),
+        ("transparency_pct", F64),
+        ("none", I32),
+        ("other", I32),
+    ],
+)
+
+CHART_LINE = Struct(
+    "fm_chart_line_t",
+    [
+        ("color", COLOR_SPEC_BLOB),
+        ("has_transparency_pct", I32),
+        ("transparency_pct", F64),
+        ("has_width_pt", I32),
+        ("width_pt", F64),
+        ("has_dash", I32),
+        ("dash", I32),
+        ("none", I32),
+        ("other", I32),
+    ],
+)
+
+CHART_FILL_PATCH = Struct(
+    "fm_chart_fill_patch_t",
+    [
+        ("color_op", I32),
+        ("color", COLOR_SPEC_BLOB),
+        ("transparency_pct_op", I32),
+        ("transparency_pct", F64),
+        ("none_op", I32),
+        ("none", I32),
+    ],
+)
+
+CHART_LINE_PATCH = Struct(
+    "fm_chart_line_patch_t",
+    [
+        ("color_op", I32),
+        ("color", COLOR_SPEC_BLOB),
+        ("transparency_pct_op", I32),
+        ("transparency_pct", F64),
+        ("width_pt_op", I32),
+        ("width_pt", F64),
+        ("dash_op", I32),
+        ("dash", I32),
+        ("none_op", I32),
+        ("none", I32),
+    ],
+)
+
 SHAPE = Struct(
     "fm_shape_info_t",
     [
         ("object_id", U32),
         ("kind", I32),
-        ("fill_kind", I32),
-        ("fill_color", COLOR_SPEC_BLOB),
-        ("line_kind", I32),
-        ("line_color", COLOR_SPEC_BLOB),
+        ("fill", nested(CHART_FILL)),
+        ("line", nested(CHART_LINE)),
         ("rotation_deg", F64),
         ("text_box", I32),
-        ("line_width_pt", F64),
         ("preset_geometry", PTR),
         ("text", PTR),
     ],
@@ -1798,11 +1863,8 @@ SHAPE_SPEC = Struct(
     "fm_shape_spec_t",
     [
         ("placement", nested(DRAWING_PLACEMENT_SPEC)),
-        ("fill_kind", I32),
-        ("fill_color", COLOR_SPEC_BLOB),
-        ("line_kind", I32),
-        ("line_color", COLOR_SPEC_BLOB),
-        ("line_width_pt", F64),
+        ("fill", nested(CHART_FILL)),
+        ("line", nested(CHART_LINE)),
         ("rotation_deg", F64),
         ("text_box", I32),
         ("preset_geometry", PTR),
@@ -1834,12 +1896,12 @@ SLICER = Struct(
         ("column_count", U32),
         ("sort_order", I32),
         ("cross_filter", I32),
-        ("row_height_emu", I64),
+        ("row_height_pt", F64),
         ("caption", PTR),
         ("cache_name", PTR),
         ("table_name", PTR),
         ("column_name", PTR),
-        ("style", PTR),
+        ("style_name", PTR),
     ],
 )
 
@@ -1850,9 +1912,9 @@ SLICER_SPEC = Struct(
         ("column_count", U32),
         ("sort_order", I32),
         ("cross_filter", I32),
-        ("row_height_emu", I64),
+        ("row_height_pt", F64),
         ("caption", PTR),
-        ("style", PTR),
+        ("style_name", PTR),
     ],
 )
 
@@ -1872,7 +1934,7 @@ SPARKLINE_GROUP = Struct(
         ("color_low", COLOR_SPEC_BLOB),
         ("manual_min", F64),
         ("manual_max", F64),
-        ("line_weight", F64),
+        ("line_width_pt", F64),
         ("type", I32),
         ("markers", I32),
         ("high", I32),
@@ -1899,29 +1961,6 @@ SPARKLINE_GROUP = Struct(
 # ---------------------------------------------------------------------------
 
 CHART_TITLE = Struct("fm_chart_title_t", [("kind", I32), ("text", PTR), ("formula", PTR)])
-
-CHART_FILL = Struct(
-    "fm_chart_fill_t",
-    [
-        ("color", COLOR_SPEC_BLOB),
-        ("has_transparency_pct", I32),
-        ("transparency_pct", F64),
-    ],
-)
-
-CHART_LINE = Struct(
-    "fm_chart_line_t",
-    [
-        ("color", COLOR_SPEC_BLOB),
-        ("has_transparency_pct", I32),
-        ("transparency_pct", F64),
-        ("has_width_pt", I32),
-        ("width_pt", F64),
-        ("has_dash", I32),
-        ("dash", I32),
-        ("none", I32),
-    ],
-)
 
 CHART_MARKER = Struct(
     "fm_chart_marker_t",
@@ -1993,10 +2032,10 @@ CHART_PLOT = Struct(
         ("vary_colors", I32),
         ("has_gap_width_pct", I32),
         ("gap_width_pct", U32),
-        ("has_overlap", I32),
-        ("overlap", I32),
-        ("has_hole_size", I32),
-        ("hole_size", U32),
+        ("has_overlap_pct", I32),
+        ("overlap_pct", I32),
+        ("has_hole_size_pct", I32),
+        ("hole_size_pct", U32),
         ("has_first_slice_angle_deg", I32),
         ("first_slice_angle_deg", U32),
         ("axis_id_count", U32),
@@ -2108,7 +2147,7 @@ CHART_DATA_INFO = Struct(
         ("category_label_count", U32),
         ("category_value_count", U32),
         ("category_level_count", U32),
-        ("category_format_code", PTR),
+        ("category_number_format", PTR),
         ("categories_generated", I32),
         ("title_text", PTR),
         ("axis_title_count", U32),
@@ -2122,12 +2161,12 @@ CHART_DATA_SERIES = Struct(
         ("plot_index", U32),
         ("series_id", U32),
         ("name", PTR),
-        ("format_code", PTR),
+        ("number_format", PTR),
         ("filtered", I32),
         ("point_count", U32),
         ("has_sizes", I32),
         ("range_count", array(U32, 6)),
-        ("x_format_code", PTR),
+        ("x_number_format", PTR),
     ],
 )
 
@@ -2143,11 +2182,11 @@ CHART_AXIS_TITLE_TEXT = Struct(
 
 CHART_UNRESOLVED = Struct(
     "fm_chart_unresolved_info_t",
-    [("series_id", U32), ("source", I32), ("axis_id", U32)],
+    [("series_id", U32), ("role", I32), ("axis_id", U32)],
 )
 
-CHART_INSERT = Struct(
-    "fm_chart_insert_spec_t",
+CHART_SPEC = Struct(
+    "fm_chart_spec_t",
     [
         ("type", I32),
         ("bar_direction", I32),
@@ -2160,32 +2199,6 @@ CHART_INSERT = Struct(
         ("title", nested(CHART_TITLE)),
         ("legend", I32),
         ("placement", nested(DRAWING_PLACEMENT_SPEC)),
-    ],
-)
-
-CHART_FILL_PATCH = Struct(
-    "fm_chart_fill_patch_t",
-    [
-        ("color_op", I32),
-        ("color", COLOR_SPEC_BLOB),
-        ("transparency_pct_op", I32),
-        ("transparency_pct", F64),
-    ],
-)
-
-CHART_LINE_PATCH = Struct(
-    "fm_chart_line_patch_t",
-    [
-        ("color_op", I32),
-        ("color", COLOR_SPEC_BLOB),
-        ("transparency_pct_op", I32),
-        ("transparency_pct", F64),
-        ("width_pt_op", I32),
-        ("width_pt", F64),
-        ("dash_op", I32),
-        ("dash", I32),
-        ("none_op", I32),
-        ("none", I32),
     ],
 )
 
@@ -2279,14 +2292,14 @@ CHART_PLOT_PATCH = Struct(
     [
         ("gap_width_pct_op", I32),
         ("gap_width_pct", U32),
-        ("overlap_op", I32),
-        ("overlap", I32),
+        ("overlap_pct_op", I32),
+        ("overlap_pct", I32),
         ("first_slice_angle_deg_op", I32),
         ("first_slice_angle_deg", U32),
         ("vary_colors_op", I32),
         ("vary_colors", I32),
-        ("hole_size_op", I32),
-        ("hole_size", U32),
+        ("hole_size_pct_op", I32),
+        ("hole_size_pct", U32),
     ],
 )
 
@@ -2450,6 +2463,11 @@ PIVOT_CACHE_OPTIONS_PATCH = Struct(
     ],
 )
 
+PIVOT_GRAND_TOTALS = Struct(
+    "fm_pivot_grand_totals_t",
+    [("rows", I32), ("columns", I32)],
+)
+
 PIVOT_GRAND_TOTALS_PATCH = Struct(
     "fm_pivot_grand_totals_patch_t",
     [
@@ -2558,16 +2576,8 @@ PROTECTED_RANGE_PATCH = Struct(
 SHAPE_PATCH = Struct(
     "fm_shape_patch_t",
     [
-        ("fill_kind_op", I32),
-        ("fill_kind", I32),
-        ("fill_color_op", I32),
-        ("fill_color", COLOR_SPEC_BLOB),
-        ("line_kind_op", I32),
-        ("line_kind", I32),
-        ("line_color_op", I32),
-        ("line_color", COLOR_SPEC_BLOB),
-        ("line_width_pt_op", I32),
-        ("line_width_pt", F64),
+        ("fill", nested(CHART_FILL_PATCH)),
+        ("line", nested(CHART_LINE_PATCH)),
         ("rotation_deg_op", I32),
         ("rotation_deg", F64),
         ("text_box_op", I32),
@@ -2644,12 +2654,12 @@ SLICER_PATCH = Struct(
         ("sort_order", I32),
         ("cross_filter_op", I32),
         ("cross_filter", I32),
-        ("row_height_emu_op", I32),
-        ("row_height_emu", I64),
+        ("row_height_pt_op", I32),
+        ("row_height_pt", F64),
         ("caption_op", I32),
         ("caption", PTR),
-        ("style_op", I32),
-        ("style", PTR),
+        ("style_name_op", I32),
+        ("style_name", PTR),
     ],
 )
 
@@ -2676,8 +2686,8 @@ SPARKLINE_GROUP_PATCH = Struct(
         ("manual_min", F64),
         ("manual_max_op", I32),
         ("manual_max", F64),
-        ("line_weight_op", I32),
-        ("line_weight", F64),
+        ("line_width_pt_op", I32),
+        ("line_width_pt", F64),
         ("type_op", I32),
         ("type", I32),
         ("markers_op", I32),
@@ -2727,9 +2737,14 @@ TABLE_PATCH = Struct(
 TABLE_STYLE_DEFAULTS_PATCH = Struct(
     "fm_table_style_defaults_patch_t",
     [
-        ("table_style_op", I32),
-        ("table_style", PTR),
-        ("pivot_style_op", I32),
-        ("pivot_style", PTR),
+        ("table_style_name_op", I32),
+        ("table_style_name", PTR),
+        ("pivot_style_name_op", I32),
+        ("pivot_style_name", PTR),
     ],
+)
+
+TABLE_STYLE_DEFAULTS = Struct(
+    "fm_table_style_defaults_t",
+    [("table_style_name", PTR), ("pivot_style_name", PTR)],
 )

@@ -87,7 +87,7 @@ std::vector<std::uint32_t> ReadOrder(const fm_workbook_t* wb, bool row) {
 std::string SavedPivotXml(fm_workbook_t* wb) {
   std::uint8_t* data = nullptr;
   std::size_t len = 0;
-  EXPECT_EQ(fm_workbook_save(wb, &data, &len), 0) << fm_get_last_error_message();
+  EXPECT_EQ(fm_workbook_save(wb, FM_WORKBOOK_FORMAT_XLSX, &data, &len), 0) << fm_get_last_error_message();
   const std::string xml = ExtractEntry(data, len, "xl/pivotTables/pivotTable1.xml");
   fm_buffer_destroy(data);
   return xml;

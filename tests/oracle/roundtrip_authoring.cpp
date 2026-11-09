@@ -370,7 +370,7 @@ Expected<void, Error> apply_print_settings(fm_workbook_t* wb, std::uint32_t shee
       // schema; the API takes the 0-based index the break precedes.
       const auto row = static_cast<std::uint32_t>(entry.as_number()) - 1U;
       fm_row_break_t brk = FM_STRUCT_INIT(fm_row_break_t);
-      brk.manual = 1;
+      brk.manual = FM_TRISTATE_TRUE;
       RETURN_IF_ERROR(checked(fm_sheet_set_row_break(wb, sheet, row, &brk), "fm_sheet_set_row_break"));
     }
   }
@@ -382,7 +382,7 @@ Expected<void, Error> apply_print_settings(fm_workbook_t* wb, std::uint32_t shee
         return invalid("col_breaks entries are column letters");
       }
       fm_column_break_t brk = FM_STRUCT_INIT(fm_column_break_t);
-      brk.manual = 1;
+      brk.manual = FM_TRISTATE_TRUE;
       RETURN_IF_ERROR(checked(fm_sheet_set_column_break(wb, sheet, col, &brk), "fm_sheet_set_column_break"));
     }
   }
@@ -669,7 +669,7 @@ Expected<RoundtripObservation, Error> observe_roundtrip_from_spec(const JsonValu
 
   std::uint8_t* bytes = nullptr;
   std::size_t len = 0;
-  RETURN_IF_ERROR(checked(fm_workbook_save_as(wb.get(), FM_WORKBOOK_FORMAT_XLSX, &bytes, &len), "fm_workbook_save_as"));
+  RETURN_IF_ERROR(checked(fm_workbook_save(wb.get(), FM_WORKBOOK_FORMAT_XLSX, &bytes, &len), "fm_workbook_save"));
   BufferHandle buffer(bytes);
 
   return observe_saved_bytes(buffer.get(), len, sheet);

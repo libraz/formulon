@@ -465,11 +465,10 @@ fm_status_t resolve_style_rect(const fm_workbook_t* wb, size_t sheet_index, cons
 }
 
 fm_status_t range_style_bases_into(const fm_workbook_t* wb, size_t sheet_index, const fm_cell_rect_t* range,
-                                   const uint32_t* excluded_rows, const uint32_t* excluded_cols, size_t excluded_count,
-                                   uint32_t* out, size_t capacity, size_t* out_count) {
+                                   const fm_cell_address_t* excluded, size_t excluded_count, uint32_t* out,
+                                   size_t capacity, size_t* out_count) {
   clear_last_error();
-  if (out_count == nullptr || (out == nullptr && capacity > 0U) ||
-      (excluded_count > 0U && (excluded_rows == nullptr || excluded_cols == nullptr))) {
+  if (out_count == nullptr || (out == nullptr && capacity > 0U) || (excluded_count > 0U && excluded == nullptr)) {
     return null_argument();
   }
   *out_count = 0U;
@@ -477,11 +476,11 @@ fm_status_t range_style_bases_into(const fm_workbook_t* wb, size_t sheet_index, 
   if (auto rc = resolve_style_rect(wb, sheet_index, range, &rect); rc != 0) {
     return rc;
   }
-  std::vector<formulon::StyleCell> excluded(excluded_count);
+  std::vector<formulon::StyleCell> skipped(excluded_count);
   for (size_t i = 0; i < excluded_count; ++i) {
-    excluded[i] = {excluded_rows[i], excluded_cols[i]};
+    skipped[i] = {excluded[i].row, excluded[i].col};
   }
-  auto bases = wb->workbook().range_style_bases(sheet_index, rect, std::move(excluded));
+  auto bases = wb->workbook().range_style_bases(sheet_index, rect, std::move(skipped));
   if (!bases) {
     return set_last_error(bases.error());
   }
@@ -495,21 +494,20 @@ fm_status_t range_style_bases_into(const fm_workbook_t* wb, size_t sheet_index, 
 extern "C" fm_status_t fm_sheet_get_range_xf_bases(const fm_workbook_t* wb, size_t sheet_index,
                                                    const fm_cell_rect_t* range, uint32_t* out, size_t capacity,
                                                    size_t* out_count) {
-  return range_style_bases_into(wb, sheet_index, range, nullptr, nullptr, 0U, out, capacity, out_count);
+  return range_style_bases_into(wb, sheet_index, range, nullptr, 0U, out, capacity, out_count);
 }
 
 extern "C" fm_status_t fm_sheet_get_range_xf_bases_excluding(const fm_workbook_t* wb, size_t sheet_index,
-                                                             const fm_cell_rect_t* range, const uint32_t* excluded_rows,
-                                                             const uint32_t* excluded_cols, size_t excluded_count,
+                                                             const fm_cell_rect_t* range,
+                                                             const fm_cell_address_t* excluded, size_t excluded_count,
                                                              uint32_t* out, size_t capacity, size_t* out_count) {
-  return range_style_bases_into(wb, sheet_index, range, excluded_rows, excluded_cols, excluded_count, out, capacity,
-                                out_count);
+  return range_style_bases_into(wb, sheet_index, range, excluded, excluded_count, out, capacity, out_count);
 }
 
 extern "C" fm_status_t fm_sheet_remap_range_xfs(fm_workbook_t* wb, size_t sheet_index, const fm_cell_rect_t* range,
-                                                const uint32_t* from_xfs, const uint32_t* to_xfs, size_t count) {
+                                                const fm_xf_remap_t* pairs, size_t count) {
   clear_last_error();
-  if (count > 0U && (from_xfs == nullptr || to_xfs == nullptr)) {
+  if (count > 0U && pairs == nullptr) {
     return null_argument();
   }
   formulon::StyleRect rect;
@@ -518,7 +516,7 @@ extern "C" fm_status_t fm_sheet_remap_range_xfs(fm_workbook_t* wb, size_t sheet_
   }
   std::vector<formulon::XfRemap> map(count);
   for (size_t i = 0; i < count; ++i) {
-    map[i] = {from_xfs[i], to_xfs[i]};
+    map[i] = {pairs[i].from_xf, pairs[i].to_xf};
   }
   return finish_status(wb->workbook().remap_range_style(sheet_index, rect, std::move(map)));
 }

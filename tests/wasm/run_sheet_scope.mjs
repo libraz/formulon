@@ -84,12 +84,16 @@ export function registerSheetScope(Module, test) {
       assert.equal(wb.getTableStyleOptions(0, styled).styleName, null);
       assert.equal(wb.getTableStyleOptions(0, styled).showColumnStripes, true);
 
-      // An empty style name creates the table without a style element.
-      const bare = wb.addTable(0, { range: rect(5, 0, 7, 1), name: 'Bare', columns: ['C', 'D'], styleName: '' });
+      // `styled: false` creates the table without a style element; an empty style name is refused.
+      const bare = wb.addTable(0, { range: rect(5, 0, 7, 1), name: 'Bare', columns: ['C', 'D'], styled: false });
       assert.equal(wb.getTableStyleOptions(0, bare), null);
+      expectFailure(
+        () => wb.addTable(0, { range: rect(20, 0, 22, 1), name: 'Empty', columns: ['G', 'H'], styleName: '' }),
+        StatusCode.InvalidArgument,
+      );
 
       // The workbook default applies when the name is omitted.
-      wb.updateTableStyleDefaults({ tableStyle: 'TableStyleLight1' });
+      wb.updateTableStyleDefaults({ tableStyleName: 'TableStyleLight1' });
       const defaulted = wb.addTable(0, { range: rect(10, 0, 12, 1), name: 'Defaulted', columns: ['E', 'F'] });
       assert.equal(wb.getTableStyleOptions(0, defaulted).styleName, 'TableStyleLight1');
     });
@@ -177,14 +181,14 @@ export function registerSheetScope(Module, test) {
 
   test('setHyperlink replaces the link anchored at the cell', () => {
     withWorkbook(Module, (wb) => {
-      wb.setHyperlink(0, 1, 1, 'https://example.com/a', '', '', '');
-      wb.setHyperlink(0, 1, 1, 'https://example.com/b', 'B', '', '');
+      wb.setHyperlink(0, 1, 1, { target: 'https://example.com/a' });
+      wb.setHyperlink(0, 1, 1, { target: 'https://example.com/b', display: 'B' });
       const links = wb.listHyperlinks(0);
       assert.equal(links.length, 1);
       assert.equal(links[0].target, 'https://example.com/b');
       assert.equal(links[0].display, 'B');
 
-      wb.setHyperlinkRange(0, rect(1, 1, 2, 2), 'https://example.com/c', '', '', '');
+      wb.setHyperlink(0, 1, 1, { target: 'https://example.com/c', range: rect(1, 1, 2, 2) });
       assert.equal(wb.listHyperlinks(0).length, 1);
       assert.deepEqual(wb.listHyperlinks(0)[0].rect, rect(1, 1, 2, 2));
     });

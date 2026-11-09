@@ -442,10 +442,10 @@ fm_status_t set_break(fm_workbook_t* wb, std::size_t sheet_index, std::uint32_t 
     return invalid_argument("break span is out of range",
                             "first=" + std::to_string(first) + " last=" + std::to_string(last));
   }
-  if (*manual_in != 0 && *manual_in != 1) {
-    return invalid_argument("manual must be 0 or 1", "manual=" + std::to_string(*manual_in));
+  if (*manual_in < FM_TRISTATE_DEFAULT || *manual_in > FM_TRISTATE_TRUE) {
+    return invalid_argument("manual is outside fm_tristate_t", "manual=" + std::to_string(*manual_in));
   }
-  return upsert_break(breaks, index, first, last, *manual_in != 0);
+  return upsert_break(breaks, index, first, last, *manual_in != FM_TRISTATE_FALSE);
 }
 
 // Counts one axis. The `size_t` return has no room for a status, so an
@@ -490,7 +490,7 @@ fm_status_t break_at(const fm_workbook_t* wb, std::size_t sheet_index, std::size
   out->*position = entry.id;
   out->first = entry.min;
   out->last = entry.max;
-  out->manual = entry.manual ? 1 : 0;
+  out->manual = entry.manual ? FM_TRISTATE_TRUE : FM_TRISTATE_FALSE;
   return 0;
 }
 

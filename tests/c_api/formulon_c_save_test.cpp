@@ -156,7 +156,7 @@ TEST(FormulonCApi, SaveLoadRoundTrip) {
   ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
 
   BufferGuard buf;
-  ASSERT_EQ(fm_workbook_save(wb.handle, &buf.data, &buf.len), 0);
+  ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &buf.data, &buf.len), 0);
   ASSERT_NE(buf.data, nullptr);
   EXPECT_GT(buf.len, 0U);
 
@@ -183,7 +183,7 @@ TEST(FormulonCApi, SaveExXlsxMatchesSave) {
   ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
 
   BufferGuard xlsx_buf;
-  ASSERT_EQ(fm_workbook_save_as(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &xlsx_buf.data, &xlsx_buf.len), 0);
+  ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &xlsx_buf.data, &xlsx_buf.len), 0);
   ASSERT_NE(xlsx_buf.data, nullptr);
   EXPECT_GT(xlsx_buf.len, 0U);
 
@@ -200,7 +200,7 @@ TEST(FormulonCApi, SaveExXlsbProducesLoadableXlsbContainer) {
   ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
 
   BufferGuard xlsb_buf;
-  ASSERT_EQ(fm_workbook_save_as(wb.handle, FM_WORKBOOK_FORMAT_XLSB, &xlsb_buf.data, &xlsb_buf.len), 0);
+  ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSB, &xlsb_buf.data, &xlsb_buf.len), 0);
   ASSERT_NE(xlsb_buf.data, nullptr);
   EXPECT_GT(xlsb_buf.len, 0U);
 
@@ -293,7 +293,7 @@ TEST(FormulonCApi, ReadDiagnosticsAreZeroForCleanRoundTrip) {
 
   for (const fm_workbook_format_t format : {FM_WORKBOOK_FORMAT_XLSX, FM_WORKBOOK_FORMAT_XLSB}) {
     BufferGuard bytes;
-    ASSERT_EQ(fm_workbook_save_as(wb.handle, format, &bytes.data, &bytes.len), 0);
+    ASSERT_EQ(fm_workbook_save(wb.handle, format, &bytes.data, &bytes.len), 0);
     WorkbookGuard loaded;
     ASSERT_EQ(fm_workbook_load(bytes.data, bytes.len, &loaded.handle), 0);
 
@@ -320,7 +320,7 @@ TEST(FormulonCApi, DiagnosticsEntryPointsInitializeOutputsOnFailure) {
   uint8_t* bytes = reinterpret_cast<uint8_t*>(static_cast<uintptr_t>(1));
   size_t len = 99U;
   fm_save_diagnostics_info_t save{sizeof(fm_save_diagnostics_info_t), 99U, 99U, 99U, 99U, 99U};
-  EXPECT_NE(fm_workbook_save_with_diagnostics(wb.handle, FM_WORKBOOK_FORMAT_UNKNOWN, &bytes, &len, &save), 0);
+  EXPECT_NE(fm_workbook_save_with_diagnostics(wb.handle, 2, &bytes, &len, &save), 0);
   EXPECT_EQ(bytes, nullptr);
   EXPECT_EQ(len, 0U);
   EXPECT_EQ(save.downgraded_formula_count, 0U);
@@ -341,7 +341,7 @@ TEST(FormulonCApi, ReadDiagnosticsPreservesUnknownPartFromDeterministicFixture) 
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   BufferGuard bytes;
-  ASSERT_EQ(fm_workbook_save_as(wb.handle, FM_WORKBOOK_FORMAT_XLSB, &bytes.data, &bytes.len), 0);
+  ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSB, &bytes.data, &bytes.len), 0);
   const std::vector<std::uint8_t> fixture =
       AppendEmptyZipEntry(std::vector<std::uint8_t>(bytes.data, bytes.data + bytes.len), "xl/dropped.bin");
   ASSERT_FALSE(fixture.empty());
@@ -364,7 +364,7 @@ TEST(FormulonCApi, DiagnosticFailuresReportTheNullArgument) {
 
   uint8_t* bytes = reinterpret_cast<uint8_t*>(static_cast<uintptr_t>(1));
   size_t len = 77U;
-  EXPECT_NE(fm_workbook_save_as(nullptr, FM_WORKBOOK_FORMAT_XLSB, &bytes, &len), 0);
+  EXPECT_NE(fm_workbook_save(nullptr, FM_WORKBOOK_FORMAT_XLSB, &bytes, &len), 0);
   EXPECT_EQ(bytes, nullptr);
   EXPECT_EQ(len, 0U);
   EXPECT_NE(std::string(fm_get_last_error_message()).find("NULL"), std::string::npos);
@@ -388,16 +388,10 @@ TEST(FormulonCApi, EverySaveEntryPointZeroesOutParamsOnFailure) {
 
   uint8_t* bytes = poison;
   size_t len = 77U;
-  EXPECT_NE(fm_workbook_save(nullptr, &bytes, &len), 0);
+  EXPECT_NE(fm_workbook_save(nullptr, FM_WORKBOOK_FORMAT_XLSX, &bytes, &len), 0);
   EXPECT_EQ(bytes, nullptr);
   EXPECT_EQ(len, 0U);
   EXPECT_NE(std::string(fm_get_last_error_message()).find("NULL"), std::string::npos);
-
-  bytes = poison;
-  len = 77U;
-  EXPECT_NE(fm_workbook_save_as(nullptr, FM_WORKBOOK_FORMAT_XLSX, &bytes, &len), 0);
-  EXPECT_EQ(bytes, nullptr);
-  EXPECT_EQ(len, 0U);
 
   bytes = poison;
   len = 77U;
@@ -411,33 +405,41 @@ TEST(FormulonCApi, EverySaveEntryPointZeroesOutParamsOnFailure) {
   EXPECT_EQ(save.dropped_relationship_count, 0U);
   EXPECT_EQ(save.renumbered_part_count, 0U);
 
-  // A NULL out-parameter is rejected without being dereferenced, on the base
-  // entry point as well as the extended ones.
+  // A NULL out-parameter is rejected without being dereferenced.
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   len = 77U;
-  EXPECT_NE(fm_workbook_save(wb.handle, nullptr, &len), 0);
+  EXPECT_NE(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, nullptr, &len), 0);
   EXPECT_EQ(len, 0U);
   bytes = poison;
-  EXPECT_NE(fm_workbook_save(wb.handle, &bytes, nullptr), 0);
+  EXPECT_NE(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &bytes, nullptr), 0);
   EXPECT_EQ(bytes, nullptr);
 }
-TEST(FormulonCApi, BaseSaveProducesTheSameBytesAsTheXlsxFormatSelector) {
-  // The header declares the two equivalent; delegating the base entry point
-  // to the shared implementation is what keeps that true.
+TEST(FormulonCApiSaveFormat, ZeroOrdinalIsXlsx) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 0, 0, "=1+2"), 0);
-  ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
+  ASSERT_EQ(fm_sheet_set_number(wb.handle, 0, 0, 0, 1.0), 0);
 
-  BufferGuard base;
-  ASSERT_EQ(fm_workbook_save(wb.handle, &base.data, &base.len), 0);
-  BufferGuard selected;
-  ASSERT_EQ(fm_workbook_save_as(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &selected.data, &selected.len), 0);
-
-  ASSERT_EQ(base.len, selected.len);
-  ASSERT_GT(base.len, 0U);
-  EXPECT_EQ(std::memcmp(base.data, selected.data, base.len), 0);
+  BufferGuard zero;
+  ASSERT_EQ(fm_workbook_save(wb.handle, 0, &zero.data, &zero.len), 0);
+  EXPECT_EQ(formulon::io::detect_workbook_format(formulon::io::ByteSpan{zero.data, zero.len}),
+            formulon::WorkbookFormat::Ooxml);
+  BufferGuard one;
+  ASSERT_EQ(fm_workbook_save(wb.handle, 1, &one.data, &one.len), 0);
+  EXPECT_EQ(formulon::io::detect_workbook_format(formulon::io::ByteSpan{one.data, one.len}),
+            formulon::WorkbookFormat::Xlsb);
+  EXPECT_EQ(FM_WORKBOOK_FORMAT_XLSX, 0);
+  EXPECT_EQ(FM_WORKBOOK_FORMAT_XLSB, 1);
+}
+TEST(FormulonCApiSaveFormat, UnknownOrdinalIsInvalidArgument) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  for (const std::int32_t raw : {-1, 2}) {
+    BufferGuard buf;
+    EXPECT_EQ(fm_workbook_save(wb.handle, raw, &buf.data, &buf.len), FM_STATUS_INVALID_ARGUMENT) << "format=" << raw;
+    EXPECT_EQ(buf.data, nullptr);
+    EXPECT_EQ(buf.len, 0U);
+  }
 }
 TEST(FormulonCApi, RetiredStatusCodesStayUnassigned) {
   // Codes no shipping path returned were removed rather than kept reserved.
@@ -483,7 +485,7 @@ TEST(FormulonCApi, SaveExRejectsUnknownFormat) {
                                           std::numeric_limits<std::int32_t>::max()};
   for (const std::int32_t raw : invalid_formats) {
     BufferGuard buf;
-    EXPECT_EQ(fm_workbook_save_as(wb.handle, raw, &buf.data, &buf.len),
+    EXPECT_EQ(fm_workbook_save(wb.handle, raw, &buf.data, &buf.len),
               static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
     EXPECT_EQ(buf.data, nullptr);
     EXPECT_EQ(buf.len, 0U);
@@ -527,7 +529,7 @@ TEST(FormulonCApi, SaveLoadFormulaTextResult) {
   ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
 
   BufferGuard buf;
-  ASSERT_EQ(fm_workbook_save(wb.handle, &buf.data, &buf.len), 0);
+  ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &buf.data, &buf.len), 0);
   ASSERT_NE(buf.data, nullptr);
   EXPECT_GT(buf.len, 0U);
 
@@ -547,7 +549,7 @@ TEST(FormulonCApi, SaveLoadFormulaBoolResult) {
   ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
 
   BufferGuard buf;
-  ASSERT_EQ(fm_workbook_save(wb.handle, &buf.data, &buf.len), 0);
+  ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &buf.data, &buf.len), 0);
   ASSERT_NE(buf.data, nullptr);
   EXPECT_GT(buf.len, 0U);
 
@@ -566,7 +568,7 @@ TEST(FormulonCApi, SaveLoadFormulaErrorResult) {
   ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
 
   BufferGuard buf;
-  ASSERT_EQ(fm_workbook_save(wb.handle, &buf.data, &buf.len), 0);
+  ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &buf.data, &buf.len), 0);
   ASSERT_NE(buf.data, nullptr);
   EXPECT_GT(buf.len, 0U);
 

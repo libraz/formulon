@@ -212,7 +212,14 @@ test('setCellStyle round-trips a record and validates its fields', async () => {
   const wb = mod.Workbook.createDefault();
   try {
     const before = wb.listCellStyles().length;
-    const rec = { name: 'Probe Style', styleXfIndex: 0, builtinId: 53, iLevel: 0, hidden: true, customBuiltin: true };
+    const rec = {
+      name: 'Probe Style',
+      styleXfIndex: 0,
+      builtinId: 53,
+      outlineLevel: 0,
+      hidden: true,
+      customBuiltin: true,
+    };
     wb.setCellStyle(rec);
     assert.equal(wb.listCellStyles().length, before + 1);
     const read = wb.listCellStyles()[before];
@@ -225,7 +232,7 @@ test('setCellStyle round-trips a record and validates its fields', async () => {
     assert.equal(wb.listCellStyles().length, before + 1);
     assert.equal(wb.listCellStyles()[before].builtinId, null);
 
-    assert.throws(() => wb.setCellStyle({ name: 'Bad Level', iLevel: 3 }), isFormulonError);
+    assert.throws(() => wb.setCellStyle({ name: 'Bad Level', outlineLevel: 3 }), isFormulonError);
     assert.throws(() => wb.setCellStyle({ name: '' }), isFormulonError);
   } finally {
     wb.dispose();

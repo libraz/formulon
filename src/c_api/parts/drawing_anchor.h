@@ -10,6 +10,7 @@
 #include <cstdint>
 
 #include "c_api/formulon_c.h"
+#include "drawing/drawing_edit.h"
 #include "drawing/drawing_xml.h"
 
 namespace formulon {
@@ -40,6 +41,10 @@ fm_status_t plan_add_anchor(const Workbook& wb, std::size_t sheet, const fm_draw
 /// `with_description`, its non-empty `description`. Returns the status to report.
 fm_status_t apply_placement_extras(Workbook& wb, std::size_t sheet, std::uint32_t object_id,
                                    const fm_drawing_placement_spec_t& placement, bool with_description);
+
+/// Checks the common drawing patch `patch` (its `struct_size`, ops, strings and
+/// anchor merge fields) and converts it into `*out`. Returns the status to report.
+fm_status_t drawing_patch_from_c(const fm_drawing_patch_t& patch, DrawingCommonPatch* out);
 
 /// Fills `*out` with the anchor of `obj` as the reads report it.
 void fill_drawing_anchor(const Workbook& wb, std::size_t sheet, const DrawingObject& obj, fm_drawing_anchor_t* out);

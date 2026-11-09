@@ -142,7 +142,7 @@ emscripten::val pagination_breaks(const fm_pagination_t* pagination, bool rows) 
       entry.set("row", brk.row);
       entry.set("first", brk.first);
       entry.set("last", brk.last);
-      entry.set("manual", brk.manual != 0);
+      entry.set("manual", brk.manual == FM_TRISTATE_TRUE);
     } else {
       fm_column_break_t brk = FM_STRUCT_INIT(fm_column_break_t);
       if (fm_pagination_get_column_break_at(pagination, i, &brk) != 0) {
@@ -151,7 +151,7 @@ emscripten::val pagination_breaks(const fm_pagination_t* pagination, bool rows) 
       entry.set("col", brk.col);
       entry.set("first", brk.first);
       entry.set("last", brk.last);
-      entry.set("manual", brk.manual != 0);
+      entry.set("manual", brk.manual == FM_TRISTATE_TRUE);
     }
     out.call<void>("push", entry);
   }
@@ -539,13 +539,13 @@ void JsWorkbook::clearRowStyle(uint32_t sheet, uint32_t first, uint32_t last) {
 namespace {
 
 emscripten::val range_style_bases_result(fm_workbook_t* handle, uint32_t sheet, const fm_cell_rect_t& rect,
-                                         const std::vector<uint32_t>& rows, const std::vector<uint32_t>& cols) {
+                                         const std::vector<fm_cell_address_t>& excluded) {
   size_t len = 0;
-  fm_status_t rc = fm_sheet_get_range_xf_bases_excluding(handle, sheet, &rect, rows.data(), cols.data(), rows.size(),
-                                                         nullptr, 0, &len);
+  fm_status_t rc =
+      fm_sheet_get_range_xf_bases_excluding(handle, sheet, &rect, excluded.data(), excluded.size(), nullptr, 0, &len);
   std::vector<uint32_t> xfs(len);
   if (rc == 0 && len > 0) {
-    rc = fm_sheet_get_range_xf_bases_excluding(handle, sheet, &rect, rows.data(), cols.data(), rows.size(), xfs.data(),
+    rc = fm_sheet_get_range_xf_bases_excluding(handle, sheet, &rect, excluded.data(), excluded.size(), xfs.data(),
                                                xfs.size(), &len);
   }
   if (!succeeded(rc)) {
@@ -570,7 +570,7 @@ emscripten::val JsWorkbook::rangeStyleBases(uint32_t sheet, emscripten::val rang
   if (!reader.ok()) {
     return emscripten::val::undefined();
   }
-  return range_style_bases_result(handle_, sheet, rect, {}, {});
+  return range_style_bases_result(handle_, sheet, rect, {});
 }
 
 emscripten::val JsWorkbook::rangeStyleBasesExcluding(uint32_t sheet, emscripten::val range,
@@ -595,16 +595,15 @@ emscripten::val JsWorkbook::rangeStyleBasesExcluding(uint32_t sheet, emscripten:
     record_type_error("Sheet.getRangeXfBasesExcluding: `excludedRows` and `excludedCols` must have the same length");
     return emscripten::val::undefined();
   }
-  std::vector<uint32_t> rows(count);
-  std::vector<uint32_t> cols(count);
+  std::vector<fm_cell_address_t> excluded(count);
   for (uint32_t i = 0; reader.ok() && i < count; ++i) {
-    rows[i] = reader.u32_value(reader.array_element(excludedRows, i, "excludedRows[]"), 0U, "excludedRows[]");
-    cols[i] = reader.u32_value(reader.array_element(excludedCols, i, "excludedCols[]"), 0U, "excludedCols[]");
+    excluded[i].row = reader.u32_value(reader.array_element(excludedRows, i, "excludedRows[]"), 0U, "excludedRows[]");
+    excluded[i].col = reader.u32_value(reader.array_element(excludedCols, i, "excludedCols[]"), 0U, "excludedCols[]");
   }
   if (!reader.ok()) {
     return emscripten::val::undefined();
   }
-  return range_style_bases_result(handle_, sheet, rect, rows, cols);
+  return range_style_bases_result(handle_, sheet, rect, excluded);
 }
 
 void JsWorkbook::remapRangeStyle(uint32_t sheet, emscripten::val range, emscripten::val fromXfs,
@@ -627,16 +626,15 @@ void JsWorkbook::remapRangeStyle(uint32_t sheet, emscripten::val range, emscript
     record_type_error("Sheet.remapRangeXfs: `fromXfs` and `toXfs` must have the same length");
     return;
   }
-  std::vector<uint32_t> from(count);
-  std::vector<uint32_t> to(count);
+  std::vector<fm_xf_remap_t> pairs(count);
   for (uint32_t i = 0; reader.ok() && i < count; ++i) {
-    from[i] = reader.u32_value(reader.array_element(fromXfs, i, "fromXfs[]"), 0U, "fromXfs[]");
-    to[i] = reader.u32_value(reader.array_element(toXfs, i, "toXfs[]"), 0U, "toXfs[]");
+    pairs[i].from_xf = reader.u32_value(reader.array_element(fromXfs, i, "fromXfs[]"), 0U, "fromXfs[]");
+    pairs[i].to_xf = reader.u32_value(reader.array_element(toXfs, i, "toXfs[]"), 0U, "toXfs[]");
   }
   if (!reader.ok()) {
     return;
   }
-  succeeded(fm_sheet_remap_range_xfs(handle_, sheet, &rect, from.data(), to.data(), count));
+  succeeded(fm_sheet_remap_range_xfs(handle_, sheet, &rect, pairs.data(), pairs.size()));
 }
 
 emscripten::val JsWorkbook::snapshotRangeStyle(uint32_t sheet, emscripten::val range) const {

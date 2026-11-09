@@ -1,16 +1,20 @@
 #include "drawing/shape_edit.h"
 
 #include <algorithm>
-#include <cctype>
-#include <cstdlib>
+#include <array>
+#include <cstddef>
+#include <cstdint>
+#include <iterator>
 #include <optional>
 #include <string>
 #include <string_view>
 #include <utility>
 #include <vector>
 
+#include "chart/chart_edit.h"
+#include "chart/chart_edit_internal.h"
 #include "chart/chart_ns.h"
-#include "drawing/drawing_color.h"
+#include "chart/chart_xml.h"
 #include "drawing/drawing_edit.h"
 #include "drawing/drawing_edit_internal.h"
 #include "drawing/drawing_geometry.h"
@@ -32,6 +36,85 @@ using chart_ns::kNsXdr;
 constexpr std::int64_t kEmuLimit = std::int64_t{1} << 31;
 constexpr const char* kNoShape = "shape: no shape with that id";
 constexpr std::string_view kFillNames[] = {"noFill", "solidFill", "gradFill", "blipFill", "pattFill", "grpFill"};
+
+// @size-budget: 4 KB
+// ECMA-376 `ST_ShapeType`, each name NUL-terminated, packed in byte order for the binary search.
+// clang-format off
+constexpr char kPresetGeometries[] =
+    "accentBorderCallout1\0" "accentBorderCallout2\0" "accentBorderCallout3\0" "accentCallout1\0" "accentCallout2\0"
+    "accentCallout3\0" "actionButtonBackPrevious\0" "actionButtonBeginning\0" "actionButtonBlank\0"
+    "actionButtonDocument\0" "actionButtonEnd\0" "actionButtonForwardNext\0" "actionButtonHelp\0" "actionButtonHome\0"
+    "actionButtonInformation\0" "actionButtonMovie\0" "actionButtonReturn\0" "actionButtonSound\0" "arc\0"
+    "bentArrow\0" "bentConnector2\0" "bentConnector3\0" "bentConnector4\0" "bentConnector5\0" "bentUpArrow\0"
+    "bevel\0" "blockArc\0" "borderCallout1\0" "borderCallout2\0" "borderCallout3\0" "bracePair\0" "bracketPair\0"
+    "callout1\0" "callout2\0" "callout3\0" "can\0" "chartPlus\0" "chartStar\0" "chartX\0" "chevron\0" "chord\0"
+    "circularArrow\0" "cloud\0" "cloudCallout\0" "corner\0" "cornerTabs\0" "cube\0" "curvedConnector2\0"
+    "curvedConnector3\0" "curvedConnector4\0" "curvedConnector5\0" "curvedDownArrow\0" "curvedLeftArrow\0"
+    "curvedRightArrow\0" "curvedUpArrow\0" "decagon\0" "diagStripe\0" "diamond\0" "dodecagon\0" "donut\0"
+    "doubleWave\0" "downArrow\0" "downArrowCallout\0" "ellipse\0" "ellipseRibbon\0" "ellipseRibbon2\0"
+    "flowChartAlternateProcess\0" "flowChartCollate\0" "flowChartConnector\0" "flowChartDecision\0" "flowChartDelay\0"
+    "flowChartDisplay\0" "flowChartDocument\0" "flowChartExtract\0" "flowChartInputOutput\0"
+    "flowChartInternalStorage\0" "flowChartMagneticDisk\0" "flowChartMagneticDrum\0" "flowChartMagneticTape\0"
+    "flowChartManualInput\0" "flowChartManualOperation\0" "flowChartMerge\0" "flowChartMultidocument\0"
+    "flowChartOfflineStorage\0" "flowChartOffpageConnector\0" "flowChartOnlineStorage\0" "flowChartOr\0"
+    "flowChartPredefinedProcess\0" "flowChartPreparation\0" "flowChartProcess\0" "flowChartPunchedCard\0"
+    "flowChartPunchedTape\0" "flowChartSort\0" "flowChartSummingJunction\0" "flowChartTerminator\0" "foldedCorner\0"
+    "frame\0" "funnel\0" "gear6\0" "gear9\0" "halfFrame\0" "heart\0" "heptagon\0" "hexagon\0" "homePlate\0"
+    "horizontalScroll\0" "irregularSeal1\0" "irregularSeal2\0" "leftArrow\0" "leftArrowCallout\0" "leftBrace\0"
+    "leftBracket\0" "leftCircularArrow\0" "leftRightArrow\0" "leftRightArrowCallout\0" "leftRightCircularArrow\0"
+    "leftRightRibbon\0" "leftRightUpArrow\0" "leftUpArrow\0" "lightningBolt\0" "line\0" "lineInv\0" "mathDivide\0"
+    "mathEqual\0" "mathMinus\0" "mathMultiply\0" "mathNotEqual\0" "mathPlus\0" "moon\0" "noSmoking\0"
+    "nonIsoscelesTrapezoid\0" "notchedRightArrow\0" "octagon\0" "parallelogram\0" "pentagon\0" "pie\0" "pieWedge\0"
+    "plaque\0" "plaqueTabs\0" "plus\0" "quadArrow\0" "quadArrowCallout\0" "rect\0" "ribbon\0" "ribbon2\0"
+    "rightArrow\0" "rightArrowCallout\0" "rightBrace\0" "rightBracket\0" "round1Rect\0" "round2DiagRect\0"
+    "round2SameRect\0" "roundRect\0" "rtTriangle\0" "smileyFace\0" "snip1Rect\0" "snip2DiagRect\0" "snip2SameRect\0"
+    "snipRoundRect\0" "squareTabs\0" "star10\0" "star12\0" "star16\0" "star24\0" "star32\0" "star4\0" "star5\0"
+    "star6\0" "star7\0" "star8\0" "straightConnector1\0" "stripedRightArrow\0" "sun\0" "swooshArrow\0" "teardrop\0"
+    "trapezoid\0" "triangle\0" "upArrow\0" "upArrowCallout\0" "upDownArrow\0" "upDownArrowCallout\0" "uturnArrow\0"
+    "verticalScroll\0" "wave\0" "wedgeEllipseCallout\0" "wedgeRectCallout\0" "wedgeRoundRectCallout\0";
+// clang-format on
+
+constexpr std::size_t preset_count() {
+  std::size_t terminators = 0;
+  for (const char c : kPresetGeometries) {
+    terminators += c == '\0' ? 1U : 0U;
+  }
+  return terminators - 1U;  // The literal's own terminator ends no name.
+}
+constexpr std::size_t kPresetCount = preset_count();
+static_assert(sizeof(kPresetGeometries) <= 0xFFFFU, "preset offsets are 16-bit");
+
+// Start of each name, plus one past the last name's terminator.
+constexpr std::array<std::uint16_t, kPresetCount + 1> preset_offsets() {
+  std::array<std::uint16_t, kPresetCount + 1> out{};
+  std::size_t n = 1;
+  for (std::size_t i = 0; n <= kPresetCount; ++i) {
+    if (kPresetGeometries[i] == '\0') {
+      out[n++] = static_cast<std::uint16_t>(i + 1U);
+    }
+  }
+  return out;
+}
+constexpr std::array<std::uint16_t, kPresetCount + 1> kPresetOffsets = preset_offsets();
+
+std::string_view preset_at(std::size_t i) {
+  const std::size_t length = static_cast<std::size_t>(kPresetOffsets[i + 1] - kPresetOffsets[i]) - 1U;
+  return {kPresetGeometries + kPresetOffsets[i], length};
+}
+
+bool is_preset(std::string_view prst) {
+  std::size_t lo = 0;
+  std::size_t hi = kPresetCount;
+  while (lo < hi) {
+    const std::size_t mid = lo + (hi - lo) / 2U;
+    if (preset_at(mid) < prst) {
+      lo = mid + 1U;
+    } else {
+      hi = mid;
+    }
+  }
+  return lo < kPresetCount && preset_at(lo) == prst;
+}
 
 Error invalid(const char* message) {
   return make_error(FormulonErrorCode::kInvalidArgument, message);
@@ -77,45 +160,8 @@ std::string xdr_prefix(pugi::xml_node node) {
   return bound_prefix(node, kNsXdr).value_or("xdr:");
 }
 
-bool parse_rgb(std::string_view text, std::uint32_t& rgb) {
-  if (text.size() != 6U || text.find_first_not_of("0123456789abcdefABCDEF") != std::string_view::npos) {
-    return false;
-  }
-  rgb = static_cast<std::uint32_t>(std::strtoul(std::string(text).c_str(), nullptr, 16));
-  return true;
-}
-
 pugi::xml_node props_of(pugi::xml_node content) {
   return child_local(content, local_name(content) == "grpSp" ? "grpSpPr" : "spPr");
-}
-
-// The Rgb or Theme colour of an `a:solidFill`; unset for any other colour element.
-std::optional<ColorSpec> solid_color(pugi::xml_node solid_fill) {
-  std::uint32_t rgb = 0;
-  if (parse_rgb(child_local(solid_fill, "srgbClr").attribute("val").value(), rgb)) {
-    ColorSpec spec;
-    spec.kind = ColorSpec::Kind::kRgb;
-    spec.rgb = 0xFF000000U | rgb;
-    return spec;
-  }
-  return drawing_color::read_theme(io::first_element_child(solid_fill), false);
-}
-
-void read_paint(pugi::xml_node parent, ShapePaint& kind, ColorSpec& color) {
-  for (pugi::xml_node child = parent.first_child(); child; child = child.next_sibling()) {
-    if (child.type() != pugi::node_element || !is_fill(child)) {
-      continue;
-    }
-    const std::string_view name = local_name(child);
-    kind = name == "noFill" ? ShapePaint::kNone : ShapePaint::kOther;
-    if (name == "solidFill") {
-      if (const auto solid = solid_color(child)) {
-        kind = ShapePaint::kSolid;
-        color = *solid;
-      }
-    }
-    return;
-  }
 }
 
 std::string read_text(pugi::xml_node content) {
@@ -136,7 +182,7 @@ std::string read_text(pugi::xml_node content) {
   return out;
 }
 
-ShapeInfo read_shape(pugi::xml_node anchor, DrawingObject object) {
+ShapeInfo read_shape(const Workbook& wb, pugi::xml_node anchor, DrawingObject object) {
   ShapeInfo info;
   info.object = std::move(object);
   pugi::xml_node content = anchor_content(anchor);
@@ -144,11 +190,9 @@ ShapeInfo read_shape(pugi::xml_node anchor, DrawingObject object) {
   info.prst = child_local(props, "prstGeom").attribute("prst").value();
   info.text = read_text(content);
   info.text_box = child_local(child_local(content, "nvSpPr"), "cNvSpPr").attribute("txBox").as_bool();
-  read_paint(props, info.fill, info.fill_color);
-  pugi::xml_node ln = child_local(props, "ln");
-  read_paint(ln, info.line, info.line_color);
-  info.line_width_emu = ln.attribute("w").as_llong();
   info.rotation = child_local(props, "xfrm").attribute("rot").as_int();
+  info.paint_fill = read_paint_fill(wb, props);
+  info.paint_line = read_paint_line(wb, props);
   return info;
 }
 
@@ -180,55 +224,6 @@ pugi::xml_node last_leading_child(pugi::xml_node parent, bool past_fill) {
 
 pugi::xml_node insert_after_or_first(pugi::xml_node parent, pugi::xml_node ref, const std::string& qname) {
   return ref ? parent.insert_child_after(qname.c_str(), ref) : parent.prepend_child(qname.c_str());
-}
-
-// Sets the fill element of `parent` (a shape-properties or `a:ln` element).
-void set_paint(pugi::xml_node parent, bool is_line, bool none, const ColorSpec& color) {
-  const std::string ap = a_prefix(parent);
-  pugi::xml_node cur;
-  for (pugi::xml_node child = parent.first_child(); child && !cur; child = child.next_sibling()) {
-    cur = child.type() == pugi::node_element && is_fill(child) ? child : pugi::xml_node();
-  }
-  const bool cur_solid = cur && local_name(cur) == "solidFill";
-  if (cur) {
-    if (none ? local_name(cur) == "noFill" : cur_solid) {
-      if (none) {
-        return;
-      }
-      const auto current = solid_color(cur);
-      if (current && drawing_color::same_color(*current, color)) {
-        return;
-      }
-    }
-  }
-  const std::string alpha = cur_solid ? drawing_color::alpha_of(io::first_element_child(cur)) : std::string();
-  const std::string name = ap + (none ? "noFill" : "solidFill");
-  pugi::xml_node fresh =
-      cur ? parent.insert_child_before(name.c_str(), cur)
-          : insert_after_or_first(parent, is_line ? pugi::xml_node() : last_leading_child(parent, false), name);
-  if (!none) {
-    drawing_color::write_color(fresh, ap, color, alpha);
-  }
-  if (cur) {
-    parent.remove_child(cur);
-  }
-}
-
-// Removes the fill element of `parent` (a shape-properties or `a:ln` element), so the style's paint applies.
-void remove_paint(pugi::xml_node parent) {
-  for (pugi::xml_node child = parent.first_child(); child; child = child.next_sibling()) {
-    if (child.type() == pugi::node_element && is_fill(child)) {
-      parent.remove_child(child);
-      return;
-    }
-  }
-}
-
-pugi::xml_node ensure_ln(pugi::xml_node props) {
-  if (pugi::xml_node ln = child_local(props, "ln")) {
-    return ln;
-  }
-  return insert_after_or_first(props, last_leading_child(props, true), a_prefix(props) + "ln");
 }
 
 pugi::xml_node ensure_xfrm(pugi::xml_node props) {
@@ -381,8 +376,22 @@ void set_text(pugi::xml_node content, const std::string& text) {
   }
 }
 
-bool is_token(const std::string& s) {
-  return !s.empty() && std::all_of(s.begin(), s.end(), [](unsigned char c) { return std::isalnum(c) != 0; });
+// Writes the chart-model fill and outline patches of `spec` into `props`.
+Expected<void, Error> apply_paint_records(pugi::xml_node props, const ShapeSpec& spec) {
+  if (chart_edit::fill_empty(spec.paint_fill) && chart_edit::line_empty(spec.paint_line)) {
+    return Expected<void, Error>::Ok();
+  }
+  // The shared writer spells DrawingML elements `a:`; bind it locally when the part uses another prefix.
+  if (bound_prefix(props, kNsA).value_or(std::string()) != "a:") {
+    props.append_attribute("xmlns:a").set_value(kNsA);
+  }
+  RETURN_IF_ERROR(write_paint_properties(props, spec.paint_fill, spec.paint_line));
+  // An `a:ln` left with nothing in it states nothing.
+  pugi::xml_node ln = child_local(props, "ln");
+  if (ln && !ln.first_child() && !ln.first_attribute()) {
+    props.remove_child(ln);
+  }
+  return Expected<void, Error>::Ok();
 }
 
 // Applies the non-anchor fields of `spec` to `content`; `anchor` names its `cNvPr`.
@@ -394,15 +403,8 @@ Expected<void, Error> apply_fields(pugi::xml_node anchor, pugi::xml_node content
   if (!props) {
     return invalid("shape: no shape properties");
   }
-  const auto paint_ok = [](ShapePaint p) {
-    return p == ShapePaint::kSolid || p == ShapePaint::kNone || p == ShapePaint::kUnset;
-  };
-  if (((f & shape_field::kFill) != 0U && !paint_ok(spec.fill)) ||
-      ((f & shape_field::kLine) != 0U && !paint_ok(spec.line))) {
-    return invalid("shape: a fill or outline is solid, none or unset");
-  }
-  if ((f & shape_field::kPrst) != 0U && (group || !is_token(spec.prst))) {
-    return invalid("shape: preset geometry must be an alphanumeric token on a shape or connector");
+  if ((f & shape_field::kPrst) != 0U && (group || !is_preset(spec.prst))) {
+    return invalid("shape: preset geometry must be a DrawingML shape type on a shape or connector");
   }
   if ((f & (shape_field::kText | shape_field::kTextBox)) != 0U && kind != "sp") {
     return invalid("shape: only a shape holds text");
@@ -443,31 +445,6 @@ Expected<void, Error> apply_fields(pugi::xml_node anchor, pugi::xml_node content
       (geom.attribute("prst") ? geom.attribute("prst") : geom.append_attribute("prst")).set_value(spec.prst.c_str());
     }
   }
-  if ((f & shape_field::kFill) != 0U) {
-    if (spec.fill == ShapePaint::kUnset) {
-      remove_paint(props);
-    } else {
-      set_paint(props, false, spec.fill == ShapePaint::kNone, spec.fill_color);
-    }
-  }
-  if ((f & shape_field::kLine) != 0U) {
-    if (spec.line == ShapePaint::kUnset) {
-      pugi::xml_node ln = child_local(props, "ln");
-      remove_paint(ln);
-      // An `a:ln` left with nothing in it states nothing.
-      if (ln && !ln.first_child() && !ln.first_attribute()) {
-        props.remove_child(ln);
-      }
-    } else {
-      set_paint(ensure_ln(props), true, spec.line == ShapePaint::kNone, spec.line_color);
-    }
-  }
-  if ((f & shape_field::kLineWidth) != 0U) {
-    if (spec.line_width_emu < 0 || spec.line_width_emu >= kEmuLimit) {
-      return invalid("shape: line width out of range");
-    }
-    io::set_attr(ensure_ln(props), "w", spec.line_width_emu);
-  }
   if ((f & shape_field::kRotation) != 0U) {
     pugi::xml_node xfrm = ensure_xfrm(props);
     if (spec.rotation == 0) {
@@ -479,7 +456,7 @@ Expected<void, Error> apply_fields(pugi::xml_node anchor, pugi::xml_node content
   if ((f & shape_field::kText) != 0U) {
     set_text(content, spec.text);
   }
-  return Expected<void, Error>::Ok();
+  return apply_paint_records(props, spec);
 }
 
 bool is_connector_prst(const std::string& prst) {
@@ -507,7 +484,7 @@ Expected<std::vector<ShapeInfo>, Error> list_shapes(const Workbook& wb, std::siz
   for (pugi::xml_node anchor : drawing_anchors(doc.document_element(), false)) {
     DrawingObject obj = read_drawing_object(anchor, {});
     if (is_shape_kind(obj.kind)) {
-      shapes.push_back(read_shape(anchor, std::move(obj)));
+      shapes.push_back(read_shape(wb, anchor, std::move(obj)));
     }
   }
   return shapes;
@@ -518,9 +495,9 @@ Expected<std::uint32_t, Error> insert_shape(Workbook& wb, std::size_t sheet, con
   if ((spec.fields & shape_field::kAnchor) == 0U) {
     return invalid("shape: an anchor is required");
   }
-  const std::string prst = (spec.fields & shape_field::kPrst) != 0U ? spec.prst : "rect";
-  if (!is_token(prst)) {
-    return invalid("shape: preset geometry must be an alphanumeric token");
+  const std::string prst = (spec.fields & shape_field::kPrst) != 0U && !spec.prst.empty() ? spec.prst : "rect";
+  if (!is_preset(prst)) {
+    return invalid("shape: preset geometry must be a DrawingML shape type");
   }
   const bool connector = is_connector_prst(prst);
   const bool fresh = path.empty();
@@ -590,7 +567,12 @@ Expected<std::uint32_t, Error> insert_shape(Workbook& wb, std::size_t sheet, con
   return id;
 }
 
-Expected<void, Error> update_shape(Workbook& wb, std::size_t sheet, std::uint32_t object_id, const ShapeSpec& spec) {
+namespace {
+
+// Applies `spec` to the shape with `object_id` in a parsed copy of the drawing, storing the part only when
+// `store` is set; with it unset the call is the full check of the edit.
+Expected<void, Error> edit_shape(Workbook& wb, std::size_t sheet, std::uint32_t object_id, const ShapeSpec& spec,
+                                 bool store) {
   ASSIGN_OR_RETURN(std::string path, editable_drawing_path(wb, sheet));
   pugi::xml_document doc;
   if (path.empty()) {
@@ -608,7 +590,43 @@ Expected<void, Error> update_shape(Workbook& wb, std::size_t sheet, std::uint32_
   ShapeSpec rest = spec;
   rest.fields &= ~shape_field::kAnchor;
   RETURN_IF_ERROR(apply_fields(anchor, content, rest));
+  if (!store) {
+    return Expected<void, Error>::Ok();
+  }
   return io::ooxml::store_part_dom(wb, path, doc);
+}
+
+}  // namespace
+
+Expected<void, Error> update_shape(Workbook& wb, std::size_t sheet, std::uint32_t object_id, const ShapeSpec& spec) {
+  return edit_shape(wb, sheet, object_id, spec, true);
+}
+
+Expected<void, Error> update_shape(Workbook& wb, std::size_t sheet, std::uint32_t object_id,
+                                   const DrawingCommonPatch* common, const ShapeSpec* shape) {
+  if (shape == nullptr) {
+    return common != nullptr ? update_drawing(wb, sheet, object_id, *common) : Expected<void, Error>::Ok();
+  }
+  RETURN_IF_ERROR(edit_shape(wb, sheet, object_id, *shape, false));
+  if (common == nullptr) {
+    return edit_shape(wb, sheet, object_id, *shape, true);
+  }
+  // The common half checks itself before it writes; the shape half, checked above, then only writes. Should
+  // that write still fail, the drawing goes back to its bytes before the common half.
+  ASSIGN_OR_RETURN(std::string path, editable_drawing_path(wb, sheet));
+  std::vector<std::uint8_t> before;
+  for (const PassthroughPart& part : wb.passthrough_parts()) {
+    if (part.path == path) {
+      before = part.bytes;
+      break;
+    }
+  }
+  RETURN_IF_ERROR(update_drawing(wb, sheet, object_id, *common));
+  if (auto applied = edit_shape(wb, sheet, object_id, *shape, true); !applied) {
+    (void)wb.replace_passthrough_part(path, std::move(before));
+    return applied;
+  }
+  return Expected<void, Error>::Ok();
 }
 
 Expected<void, Error> remove_shape(Workbook& wb, std::size_t sheet, std::uint32_t object_id) {

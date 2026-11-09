@@ -135,7 +135,7 @@ std::set<std::string> RowLabels(fm_workbook_t* wb) {
 
 std::vector<std::uint8_t> Save(fm_workbook_t* wb) {
   BufferGuard saved;
-  EXPECT_EQ(fm_workbook_save(wb, &saved.data, &saved.len), 0) << fm_get_last_error_message();
+  EXPECT_EQ(fm_workbook_save(wb, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0) << fm_get_last_error_message();
   return std::vector<std::uint8_t>(saved.data, saved.data + saved.len);
 }
 
@@ -151,7 +151,7 @@ std::string FiltersBlock(const std::string& xml) {
 fm_pivot_filter_t TextSpec(fm_pivot_filter_kind_t type, std::uint32_t field, const char* text) {
   fm_pivot_filter_t spec = FM_STRUCT_INIT(fm_pivot_filter_t);
   spec.field_index = field;
-  spec.type = type;
+  spec.kind = type;
   spec.value_kind = FM_PIVOT_FILTER_OPERAND_KIND_TEXT;
   spec.value_text = text;
   spec.value_high_kind = FM_PIVOT_FILTER_OPERAND_KIND_ABSENT;
@@ -161,7 +161,7 @@ fm_pivot_filter_t TextSpec(fm_pivot_filter_kind_t type, std::uint32_t field, con
 fm_pivot_filter_t NumberSpec(fm_pivot_filter_kind_t type, std::uint32_t field, double low, double high) {
   fm_pivot_filter_t spec = FM_STRUCT_INIT(fm_pivot_filter_t);
   spec.field_index = field;
-  spec.type = type;
+  spec.kind = type;
   spec.value_kind = FM_PIVOT_FILTER_OPERAND_KIND_DOUBLE;
   spec.value_double = low;
   spec.value_high_kind = std::isnan(high) ? FM_PIVOT_FILTER_OPERAND_KIND_ABSENT : FM_PIVOT_FILTER_OPERAND_KIND_DOUBLE;
@@ -181,7 +181,7 @@ struct FilterCase {
 // the same spec, and filters the reloaded report the same way.
 TEST(FormulonCApiPivotFilterPersistence, EachFilterTypeSurvivesSaveAndReload) {
   const double kNone = std::numeric_limits<double>::quiet_NaN();
-  fm_pivot_filter_t top = NumberSpec(FM_PIVOT_FILTER_KIND_VALUE_TOP_10, 0U, 0.0, kNone);
+  fm_pivot_filter_t top = NumberSpec(FM_PIVOT_FILTER_KIND_VALUE_TOP_COUNT, 0U, 0.0, kNone);
   top.value_kind = FM_PIVOT_FILTER_OPERAND_KIND_INT;
   top.value_int = 1;
   const FilterCase cases[] = {
@@ -190,7 +190,7 @@ TEST(FormulonCApiPivotFilterPersistence, EachFilterTypeSurvivesSaveAndReload) {
       {"top", top, {"North"}},
       {"greater", NumberSpec(FM_PIVOT_FILTER_KIND_VALUE_GREATER_THAN, 0U, 150.0, kNone), {"North", "South"}},
       {"between", NumberSpec(FM_PIVOT_FILTER_KIND_VALUE_BETWEEN, 0U, 100.0, 250.0), {"South"}},
-      {"date", NumberSpec(FM_PIVOT_FILTER_KIND_LABEL_DATE, 1U, 45390.0, 45410.0), {"South"}},
+      {"date", NumberSpec(FM_PIVOT_FILTER_KIND_DATE_BETWEEN, 1U, 45390.0, 45410.0), {"South"}},
   };
   const std::vector<std::uint8_t> package = BuildFilterPackage("", "");
   for (const FilterCase& c : cases) {
@@ -216,7 +216,7 @@ TEST(FormulonCApiPivotFilterPersistence, EachFilterTypeSurvivesSaveAndReload) {
     ASSERT_EQ(count, 1U);
     fm_pivot_filter_t read = FM_STRUCT_INIT(fm_pivot_filter_t);
     ASSERT_EQ(fm_sheet_get_pivot_filter_at(back.handle, 0, 0, 0, &read), 0) << fm_get_last_error_message();
-    EXPECT_EQ(read.type, c.spec.type);
+    EXPECT_EQ(read.kind, c.spec.kind);
     EXPECT_EQ(read.field_index, c.spec.field_index);
     EXPECT_EQ(read.value_kind, c.spec.value_kind);
     EXPECT_EQ(read.value_int, c.spec.value_int);
@@ -282,12 +282,12 @@ TEST(FormulonCApiPivotFilterPersistence, LoadedUnsupportedFiltersAreKeptVerbatim
   std::size_t count = 0;
   ASSERT_EQ(fm_sheet_get_pivot_filter_count(wb.handle, 0, 0, &count), 0);
   ASSERT_EQ(count, 3U);
-  const fm_pivot_filter_kind_t types[] = {FM_PIVOT_FILTER_KIND_LABEL_NOT_EQUAL, FM_PIVOT_FILTER_KIND_VALUE_TOP_10,
+  const fm_pivot_filter_kind_t types[] = {FM_PIVOT_FILTER_KIND_LABEL_NOT_EQUAL, FM_PIVOT_FILTER_KIND_VALUE_TOP_COUNT,
                                           FM_PIVOT_FILTER_KIND_VALUE_TOP_PERCENT};
   for (std::size_t i = 0; i < 3U; ++i) {
     fm_pivot_filter_t read = FM_STRUCT_INIT(fm_pivot_filter_t);
     ASSERT_EQ(fm_sheet_get_pivot_filter_at(wb.handle, 0, 0, i, &read), 0) << fm_get_last_error_message();
-    EXPECT_EQ(read.type, types[i]);
+    EXPECT_EQ(read.kind, types[i]);
     EXPECT_EQ(read.field_index, 0U);
   }
   fm_pivot_filter_t top = FM_STRUCT_INIT(fm_pivot_filter_t);

@@ -220,13 +220,13 @@ namespace {
 
 // The `fm_workbook_format_t` ordinal a save's optional `format` argument
 // names: xlsx when absent. A value past int32 names no format, so it maps to
-// the unknown ordinal for the C layer to reject.
+// -1 for the C layer to reject.
 int32_t save_format(const emscripten::val& format) {
   if (!js_value_present(format)) {
     return FM_WORKBOOK_FORMAT_XLSX;
   }
   const double value = format.as<double>();
-  return value >= 0.0 && value <= 2147483647.0 ? static_cast<int32_t>(value) : FM_WORKBOOK_FORMAT_UNKNOWN;
+  return value >= 0.0 && value <= 2147483647.0 ? static_cast<int32_t>(value) : -1;
 }
 
 }  // namespace
@@ -238,7 +238,7 @@ emscripten::val JsWorkbook::save(emscripten::val format) const {
   }
   uint8_t* out = nullptr;
   std::size_t len = 0;
-  const fm_status_t rc = fm_workbook_save_as(handle_, save_format(format), &out, &len);
+  const fm_status_t rc = fm_workbook_save(handle_, save_format(format), &out, &len);
   return snapshot_bytes(rc, out, len);
 }
 
@@ -406,6 +406,37 @@ void JsWorkbook::insertColumns(uint32_t sheet, uint32_t first, uint32_t last) {
 
 void JsWorkbook::deleteColumns(uint32_t sheet, uint32_t first, uint32_t last) {
   invoke_row_col_edit(fm_sheet_delete_columns, sheet, first, last);
+}
+
+namespace {
+
+// Reads `range` and hands it with `shift` (an `fm_cell_shift_t` ordinal) to
+// `edit`, the insert or delete half of the cell-shift API.
+void edit_cells(fm_workbook_t* wb, uint32_t sheet, const emscripten::val& range, int32_t shift, const char* operation,
+                fm_status_t (*edit)(fm_workbook_t*, std::size_t, const fm_cell_rect_t*, int32_t)) {
+  if (wb == nullptr) {
+    record_invalid_handle();
+    return;
+  }
+  JsNarrowNumericReader reader(operation);
+  if (!reader.require_object(range, "range")) {
+    return;
+  }
+  const fm_cell_rect_t rect = js_pull_range(range, &reader);
+  if (!reader.ok()) {
+    return;
+  }
+  succeeded(edit(wb, sheet, &rect, shift));
+}
+
+}  // namespace
+
+void JsWorkbook::insertCells(uint32_t sheet, emscripten::val range, int32_t shift) {
+  edit_cells(handle_, sheet, range, shift, "Sheet.insertCells", &fm_sheet_insert_cells);
+}
+
+void JsWorkbook::deleteCells(uint32_t sheet, emscripten::val range, int32_t shift) {
+  edit_cells(handle_, sheet, range, shift, "Sheet.deleteCells", &fm_sheet_delete_cells);
 }
 
 // `JsWorkbook::sheetCount` is now emitted by the binding codegen (see

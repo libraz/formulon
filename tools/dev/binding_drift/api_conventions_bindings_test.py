@@ -1149,6 +1149,26 @@ class ResultShapeTest(BindingRuleTestBase):
             ],
         )
 
+    def test_r8_py_field_rename_reads_inherited_fields(self) -> None:
+        ledger = {
+            "entries": {
+                "record.image": {"kind": "record", "py": "PictureProperties", "surfaces": ["py"]},
+                "field.image_width_px": {
+                    "kind": "field", "record": "record.image", "py": "width_px", "surfaces": ["py"],
+                    "was": {"py": "px_width"},
+                },
+            }
+        }  # fmt: skip
+
+        def ctx(info_field: str) -> api_conventions.Context:
+            source = (
+                f"class ImageInfo:\n    {info_field}: int\n\nclass PictureProperties(ImageInfo):\n    bytes: bytes\n"
+            )
+            return self.fixture.context(self.HEADER, ledger, py_workbook=source)
+
+        self.assertIn(("py", "field.image_width_px", "width_px"), hits(ctx("px_width"), "R8.py"))
+        self.assertNotIn(("py", "field.image_width_px", "width_px"), hits(ctx("width_px"), "R8.py"))
+
     def test_r8_flags_quoted_and_unledgered_tuple_returns(self) -> None:
         def ctx(body: str) -> api_conventions.Context:
             return self.fixture.context(self.HEADER, {"entries": {}}, py_workbook=_py_wb(body))

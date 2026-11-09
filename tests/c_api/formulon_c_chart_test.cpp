@@ -30,37 +30,37 @@ using Bytes = std::vector<std::uint8_t>;
 
 constexpr bool kWasm32 = sizeof(void*) == 4U;
 static_assert(sizeof(fm_chart_title_t) == (kWasm32 ? 12U : 24U), "fm_chart_title_t ABI layout changed");
-static_assert(sizeof(fm_chart_fill_t) == 40U, "fm_chart_fill_t ABI layout changed");
+static_assert(sizeof(fm_chart_fill_t) == 48U, "fm_chart_fill_t ABI layout changed");
 static_assert(sizeof(fm_chart_line_t) == 72U, "fm_chart_line_t ABI layout changed");
-static_assert(sizeof(fm_chart_marker_t) == 128U, "fm_chart_marker_t ABI layout changed");
+static_assert(sizeof(fm_chart_marker_t) == 136U, "fm_chart_marker_t ABI layout changed");
 static_assert(sizeof(fm_chart_labels_t) == (kWasm32 ? 88U : 104U), "fm_chart_labels_t ABI layout changed");
 static_assert(sizeof(fm_chart_info_t) == (kWasm32 ? 100U : 120U), "fm_chart_info_t ABI layout changed");
 static_assert(sizeof(fm_chart_plot_info_t) == 68U, "fm_chart_plot_info_t ABI layout changed");
 static_assert(sizeof(fm_chart_data_source_t) == (kWasm32 ? 12U : 24U), "fm_chart_data_source_t ABI layout changed");
-static_assert(sizeof(fm_chart_series_info_t) == (kWasm32 ? 440U : 528U), "fm_chart_series_info_t ABI layout changed");
+static_assert(sizeof(fm_chart_series_info_t) == (kWasm32 ? 456U : 544U), "fm_chart_series_info_t ABI layout changed");
 static_assert(sizeof(fm_chart_literal_info_t) == 32U, "fm_chart_literal_info_t ABI layout changed");
-static_assert(sizeof(fm_chart_point_info_t) == 256U, "fm_chart_point_info_t ABI layout changed");
+static_assert(sizeof(fm_chart_point_info_t) == 272U, "fm_chart_point_info_t ABI layout changed");
 static_assert(sizeof(fm_chart_axis_info_t) == (kWasm32 ? 152U : 176U), "fm_chart_axis_info_t ABI layout changed");
 static_assert(sizeof(fm_chart_preview_overrides_spec_t) == (kWasm32 ? 60U : 64U),
               "fm_chart_preview_overrides_spec_t ABI layout changed");
 static_assert(sizeof(fm_chart_data_info_t) == (kWasm32 ? 48U : 64U), "fm_chart_data_info_t ABI layout changed");
 static_assert(sizeof(fm_chart_data_series_info_t) == (kWasm32 ? 60U : 80U),
               "fm_chart_data_series_info_t ABI layout changed");
-static_assert(offsetof(fm_chart_data_series_info_t, x_format_code) == (kWasm32 ? 56U : 72U),
-              "fm_chart_data_series_info_t x_format_code offset changed");
+static_assert(offsetof(fm_chart_data_series_info_t, x_number_format) == (kWasm32 ? 56U : 72U),
+              "fm_chart_data_series_info_t x_number_format offset changed");
 static_assert(sizeof(fm_chart_data_points_info_t) == (kWasm32 ? 24U : 40U),
               "fm_chart_data_points_info_t ABI layout changed");
 static_assert(sizeof(fm_sheet_rect_t) == 20U, "fm_sheet_rect_t ABI layout changed");
 static_assert(sizeof(fm_chart_axis_title_text_info_t) == (kWasm32 ? 12U : 16U),
               "fm_chart_axis_title_text_info_t ABI layout changed");
 static_assert(sizeof(fm_chart_unresolved_info_t) == 16U, "fm_chart_unresolved_info_t ABI layout changed");
-static_assert(sizeof(fm_chart_insert_spec_t) == (kWasm32 ? 136U : 176U), "fm_chart_insert_spec_t ABI layout changed");
-static_assert(sizeof(fm_chart_fill_patch_t) == 48U, "fm_chart_fill_patch_t ABI layout changed");
+static_assert(sizeof(fm_chart_spec_t) == (kWasm32 ? 144U : 176U), "fm_chart_spec_t ABI layout changed");
+static_assert(sizeof(fm_chart_fill_patch_t) == 56U, "fm_chart_fill_patch_t ABI layout changed");
 static_assert(sizeof(fm_chart_line_patch_t) == 80U, "fm_chart_line_patch_t ABI layout changed");
-static_assert(sizeof(fm_chart_marker_patch_t) == 152U, "fm_chart_marker_patch_t ABI layout changed");
+static_assert(sizeof(fm_chart_marker_patch_t) == 160U, "fm_chart_marker_patch_t ABI layout changed");
 static_assert(sizeof(fm_chart_labels_patch_t) == (kWasm32 ? 128U : 144U), "fm_chart_labels_patch_t ABI layout changed");
-static_assert(sizeof(fm_chart_series_patch_t) == (kWasm32 ? 560U : 688U), "fm_chart_series_patch_t ABI layout changed");
-static_assert(sizeof(fm_chart_point_patch_t) == 296U, "fm_chart_point_patch_t ABI layout changed");
+static_assert(sizeof(fm_chart_series_patch_t) == (kWasm32 ? 576U : 704U), "fm_chart_series_patch_t ABI layout changed");
+static_assert(sizeof(fm_chart_point_patch_t) == 312U, "fm_chart_point_patch_t ABI layout changed");
 static_assert(sizeof(fm_chart_plot_patch_t) == 44U, "fm_chart_plot_patch_t ABI layout changed");
 static_assert(sizeof(fm_chart_axis_patch_t) == (kWasm32 ? 184U : 208U), "fm_chart_axis_patch_t ABI layout changed");
 static_assert(sizeof(fm_chart_legend_patch_t) == (kWasm32 ? 32U : 40U), "fm_chart_legend_patch_t ABI layout changed");
@@ -122,8 +122,8 @@ constexpr InsertKind kPie{FM_CHART_PLOT_TYPE_PIE, FM_CHART_BAR_DIRECTION_COLUMN}
 constexpr InsertKind kScatter{FM_CHART_PLOT_TYPE_SCATTER, FM_CHART_BAR_DIRECTION_COLUMN};
 constexpr InsertKind kDoughnut{FM_CHART_PLOT_TYPE_DOUGHNUT, FM_CHART_BAR_DIRECTION_COLUMN};
 
-fm_chart_insert_spec_t Options(InsertKind kind, const char* source) {
-  fm_chart_insert_spec_t o = FM_STRUCT_INIT(fm_chart_insert_spec_t);
+fm_chart_spec_t Options(InsertKind kind, const char* source) {
+  fm_chart_spec_t o = FM_STRUCT_INIT(fm_chart_spec_t);
   o.type = kind.type;
   o.bar_direction = kind.bar_direction;
   o.source = source;
@@ -136,7 +136,7 @@ fm_chart_insert_spec_t Options(InsertKind kind, const char* source) {
 }
 
 std::uint32_t Insert(fm_workbook_t* wb, InsertKind kind, const char* source = "Sheet1!$A$1:$D$5") {
-  const fm_chart_insert_spec_t o = Options(kind, source);
+  const fm_chart_spec_t o = Options(kind, source);
   uint32_t id = 0;
   EXPECT_EQ(fm_sheet_add_chart(wb, 0, &o, &id), 0) << fm_get_last_error_message();
   return id;
@@ -302,7 +302,7 @@ TEST(FormulonCApiChart, InsertTitleFollowsHasTitle) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   FillGrid(wb.handle);
   const auto insert = [&](int32_t has_title, fm_chart_title_t title, fm_status_t* status) {
-    fm_chart_insert_spec_t o = Options(kLine, "Sheet1!$A$1:$D$5");
+    fm_chart_spec_t o = Options(kLine, "Sheet1!$A$1:$D$5");
     o.has_title = has_title;
     o.title = title;
     uint32_t id = 0;
@@ -343,7 +343,7 @@ TEST(FormulonCApiChart, InsertWithBadReferenceTitleLeavesNoChart) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   FillGrid(wb.handle);
-  fm_chart_insert_spec_t o = Options(kLine, "Sheet1!$A$1:$D$5");
+  fm_chart_spec_t o = Options(kLine, "Sheet1!$A$1:$D$5");
   o.has_title = 1;
   uint32_t id = 0;
   for (const char* bad : {"not a reference", "Sheet1!$A$0", ""}) {
@@ -365,7 +365,7 @@ TEST(FormulonCApiChart, AbsentElementsReadAsMinusOne) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   FillGrid(wb.handle);
-  fm_chart_insert_spec_t o = Options(kLine, "Sheet1!$A$1:$D$5");
+  fm_chart_spec_t o = Options(kLine, "Sheet1!$A$1:$D$5");
   o.legend = FM_CHART_LEGEND_POSITION_ABSENT;
   uint32_t id = 0;
   ASSERT_EQ(fm_sheet_add_chart(wb.handle, 0, &o, &id), 0) << fm_get_last_error_message();
@@ -487,7 +487,7 @@ TEST(FormulonCApiChart, ResolvedDataAccessors) {
   EXPECT_STREQ(s.name, "S1");
   EXPECT_EQ(s.point_count, 4U);
   EXPECT_EQ(s.has_sizes, 0);
-  EXPECT_STREQ(s.x_format_code, "");
+  EXPECT_STREQ(s.x_number_format, "");
   EXPECT_EQ(s.range_count[FM_CHART_ROLE_NAME], 1U);
   EXPECT_EQ(s.range_count[FM_CHART_ROLE_VALUES], 1U);
   EXPECT_EQ(s.range_count[FM_CHART_ROLE_X], 0U);
@@ -570,8 +570,8 @@ TEST(FormulonCApiChart, ScatterDataCarriesX) {
   ASSERT_EQ(p.count, 4U);
   fm_chart_data_series_info_t ds = FM_STRUCT_INIT(fm_chart_data_series_info_t);
   ASSERT_EQ(fm_chart_data_get_series_at(data.handle, 0, &ds), 0);
-  EXPECT_STREQ(ds.x_format_code, "0.00");
-  EXPECT_STREQ(ds.format_code, "General");
+  EXPECT_STREQ(ds.x_number_format, "0.00");
+  EXPECT_STREQ(ds.number_format, "General");
   ASSERT_NE(p.x, nullptr);
   EXPECT_EQ(std::vector<double>(p.x, p.x + p.count), (std::vector<double>{0, 3, 6, 9}));
   EXPECT_EQ(std::vector<double>(p.values, p.values + p.count), (std::vector<double>{0, 1, 4, 9}));
@@ -596,8 +596,8 @@ TEST(FormulonCApiChart, TypeTitleLegendDisplayPlotEdits) {
   fm_chart_plot_patch_t plot = FM_STRUCT_INIT(fm_chart_plot_patch_t);
   plot.gap_width_pct_op = FM_PATCH_OP_SET;
   plot.gap_width_pct = 50;
-  plot.overlap_op = FM_PATCH_OP_SET;
-  plot.overlap = -10;
+  plot.overlap_pct_op = FM_PATCH_OP_SET;
+  plot.overlap_pct = -10;
   plot.vary_colors_op = FM_PATCH_OP_SET;
   plot.vary_colors = 1;
   ASSERT_EQ(fm_sheet_update_chart_plot(wb.handle, 0, id, 0, &plot), 0) << fm_get_last_error_message();
@@ -606,8 +606,8 @@ TEST(FormulonCApiChart, TypeTitleLegendDisplayPlotEdits) {
   ASSERT_EQ(fm_chart_get_plot_at(chart.handle, 0, &p), 0);
   EXPECT_EQ(p.has_gap_width_pct, 1);
   EXPECT_EQ(p.gap_width_pct, 50U);
-  EXPECT_EQ(p.has_overlap, 1);
-  EXPECT_EQ(p.overlap, -10);
+  EXPECT_EQ(p.has_overlap_pct, 1);
+  EXPECT_EQ(p.overlap_pct, -10);
   EXPECT_EQ(p.vary_colors, FM_TRISTATE_TRUE);
   // A plot field cannot be cleared, and an unknown op is rejected.
   fm_chart_plot_patch_t bad = FM_STRUCT_INIT(fm_chart_plot_patch_t);
@@ -616,8 +616,8 @@ TEST(FormulonCApiChart, TypeTitleLegendDisplayPlotEdits) {
   bad.gap_width_pct_op = static_cast<fm_patch_op_t>(3);
   EXPECT_EQ(fm_sheet_update_chart_plot(wb.handle, 0, id, 0, &bad), kInvalidArgument);
   bad = fm_chart_plot_patch_t FM_STRUCT_INIT(fm_chart_plot_patch_t);
-  bad.hole_size_op = FM_PATCH_OP_SET;
-  bad.hole_size = 50;
+  bad.hole_size_pct_op = FM_PATCH_OP_SET;
+  bad.hole_size_pct = 50;
   EXPECT_EQ(fm_sheet_update_chart_plot(wb.handle, 0, id, 0, &bad), kInvalidArgument);  // not a doughnut
   EXPECT_EQ(fm_sheet_update_chart_plot(wb.handle, 0, id, 1, &plot), FM_STATUS_INDEX_OUT_OF_RANGE);
 
@@ -1076,7 +1076,8 @@ TEST(FormulonCApiChart, ThemeColorsRoundTripAndAreValidated) {
   ASSERT_EQ(fm_sheet_update_chart_series(wb.handle, 0, id, 0, 0, &patch), 0) << fm_get_last_error_message();
 
   BufferGuard saved;
-  ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0)
+      << fm_get_last_error_message();
   WorkbookGuard reloaded;
   ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &reloaded.handle), 0) << fm_get_last_error_message();
   ChartGuard chart;
@@ -1181,16 +1182,16 @@ TEST(FormulonCApiChart, DoughnutHoleSize) {
   FillGrid(wb.handle);
   const uint32_t id = Insert(wb.handle, kDoughnut, "Sheet1!$A$1:$B$5");
   fm_chart_plot_patch_t patch = FM_STRUCT_INIT(fm_chart_plot_patch_t);
-  patch.hole_size_op = FM_PATCH_OP_SET;
-  patch.hole_size = 60;
+  patch.hole_size_pct_op = FM_PATCH_OP_SET;
+  patch.hole_size_pct = 60;
   ASSERT_EQ(fm_sheet_update_chart_plot(wb.handle, 0, id, 0, &patch), 0) << fm_get_last_error_message();
   ChartGuard chart;
   Open(wb.handle, id, &chart);
   fm_chart_plot_info_t plot = FM_STRUCT_INIT(fm_chart_plot_info_t);
   ASSERT_EQ(fm_chart_get_plot_at(chart.handle, 0, &plot), 0);
   EXPECT_EQ(plot.type, FM_CHART_PLOT_TYPE_DOUGHNUT);
-  EXPECT_EQ(plot.has_hole_size, 1);
-  EXPECT_EQ(plot.hole_size, 60U);
+  EXPECT_EQ(plot.has_hole_size_pct, 1);
+  EXPECT_EQ(plot.hole_size_pct, 60U);
   EXPECT_EQ(Info(chart).axis_count, 0U);
 }
 
@@ -1255,7 +1256,8 @@ TEST(FormulonCApiChart, CaptureRestoreAndRemoveThroughDrawingOperations) {
 
   // The edited chart survives a save and reload.
   BufferGuard saved;
-  ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0)
+      << fm_get_last_error_message();
   WorkbookGuard reloaded;
   ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &reloaded.handle), 0) << fm_get_last_error_message();
   ChartGuard again;
@@ -1333,7 +1335,7 @@ TEST(FormulonCApiChart, InsertRejectsBadOptions) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   FillGrid(wb.handle);
   uint32_t id = 0;
-  fm_chart_insert_spec_t o = Options(kColumn, "Sheet1!$A$1:$D$5");
+  fm_chart_spec_t o = Options(kColumn, "Sheet1!$A$1:$D$5");
   o.type = 99;
   EXPECT_EQ(fm_sheet_add_chart(wb.handle, 0, &o, &id), kInvalidArgument);
   o = Options(kColumn, "Sheet1!$A$1:$D$5");
@@ -1535,7 +1537,8 @@ TEST(FormulonCApiChart, NaAsBlankReadsFromTemplatesAndExcelFiles) {
   const fm_chart_display_patch_t clear = NaPatch(FM_PATCH_OP_CLEAR, 0);
   ASSERT_EQ(fm_sheet_update_chart_display(wb.handle, 0, id, &clear), 0) << fm_get_last_error_message();
   BufferGuard saved;
-  ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0)
+      << fm_get_last_error_message();
   WorkbookGuard reloaded;
   ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &reloaded.handle), 0) << fm_get_last_error_message();
   EXPECT_EQ(NaAsBlank(reloaded.handle, id), FM_TRISTATE_DEFAULT);
@@ -1579,7 +1582,8 @@ TEST(FormulonCApiChart, BlanksAsWritesItsSchemaTokenAndRoundTrips) {
     EXPECT_NE(xml.find(std::string("dispBlanksAs val=\"") + c.token + "\""), std::string::npos) << c.token;
 
     BufferGuard saved;
-    ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0) << fm_get_last_error_message();
+    ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0)
+        << fm_get_last_error_message();
     WorkbookGuard reloaded;
     ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &reloaded.handle), 0) << fm_get_last_error_message();
     ChartGuard chart;
@@ -1787,7 +1791,8 @@ TEST(FormulonCApiChart, LegendPositionWritesItsSchemaTokenAndRoundTrips) {
     EXPECT_NE(xml.find(std::string("legendPos val=\"") + c.token + "\""), std::string::npos) << c.token;
 
     BufferGuard saved;
-    ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0) << fm_get_last_error_message();
+    ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0)
+        << fm_get_last_error_message();
     WorkbookGuard reloaded;
     ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &reloaded.handle), 0) << fm_get_last_error_message();
     ChartGuard chart;
@@ -1992,7 +1997,7 @@ TEST(FormulonCApiChart, HeaderTristateSelectsHeaderRowAndColumn) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   FillGrid(wb.handle);
-  fm_chart_insert_spec_t o = Options(kColumn, "Sheet1!$A$1:$D$5");
+  fm_chart_spec_t o = Options(kColumn, "Sheet1!$A$1:$D$5");
   o.header_row = FM_TRISTATE_TRUE;
   o.header_column = FM_TRISTATE_TRUE;
   uint32_t id = 0;
@@ -2053,11 +2058,11 @@ TEST(FormulonCApiChart, UnresolvedInputsReportTheirRole) {
   for (size_t i = 0; i < info.unresolved_count; ++i) {
     fm_chart_unresolved_info_t un = FM_STRUCT_INIT(fm_chart_unresolved_info_t);
     ASSERT_EQ(fm_chart_data_get_unresolved_at(data.handle, i, &un), 0);
-    title_seen = title_seen || un.source == FM_CHART_ROLE_TITLE;
-    axis_title_seen = axis_title_seen || un.source == FM_CHART_ROLE_AXIS_TITLE;
-    values_seen = values_seen || un.source == FM_CHART_ROLE_VALUES;
-    EXPECT_GE(un.source, FM_CHART_ROLE_NAME);
-    EXPECT_LE(un.source, FM_CHART_ROLE_AXIS_TITLE);
+    title_seen = title_seen || un.role == FM_CHART_ROLE_TITLE;
+    axis_title_seen = axis_title_seen || un.role == FM_CHART_ROLE_AXIS_TITLE;
+    values_seen = values_seen || un.role == FM_CHART_ROLE_VALUES;
+    EXPECT_GE(un.role, FM_CHART_ROLE_NAME);
+    EXPECT_LE(un.role, FM_CHART_ROLE_AXIS_TITLE);
   }
   EXPECT_TRUE(title_seen);
   EXPECT_TRUE(axis_title_seen);
@@ -2099,6 +2104,78 @@ TEST(FormulonCApiChart, CategoryLevelCountReportsEntriesPerLevel) {
               FM_STATUS_INDEX_OUT_OF_RANGE);
   }
   EXPECT_TRUE(found);
+}
+
+TEST(FormulonCApiChartPlotPercentFields, OverlapAndHoleSize) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  FillGrid(wb.handle);
+  const uint32_t column = Insert(wb.handle, kColumn);
+  fm_chart_plot_patch_t overlap = FM_STRUCT_INIT(fm_chart_plot_patch_t);
+  overlap.overlap_pct_op = FM_PATCH_OP_SET;
+  overlap.overlap_pct = -25;
+  ASSERT_EQ(fm_sheet_update_chart_plot(wb.handle, 0, column, 0, &overlap), 0) << fm_get_last_error_message();
+  const uint32_t doughnut = Insert(wb.handle, kDoughnut, "Sheet1!$A$1:$B$5");
+  fm_chart_plot_patch_t hole = FM_STRUCT_INIT(fm_chart_plot_patch_t);
+  hole.hole_size_pct_op = FM_PATCH_OP_SET;
+  hole.hole_size_pct = 45;
+  ASSERT_EQ(fm_sheet_update_chart_plot(wb.handle, 0, doughnut, 0, &hole), 0) << fm_get_last_error_message();
+
+  ChartGuard bars;
+  Open(wb.handle, column, &bars);
+  fm_chart_plot_info_t bar_plot = FM_STRUCT_INIT(fm_chart_plot_info_t);
+  ASSERT_EQ(fm_chart_get_plot_at(bars.handle, 0, &bar_plot), 0);
+  EXPECT_EQ(bar_plot.has_overlap_pct, 1);
+  EXPECT_EQ(bar_plot.overlap_pct, -25);
+  EXPECT_EQ(bar_plot.has_hole_size_pct, 0);
+  ChartGuard ring;
+  Open(wb.handle, doughnut, &ring);
+  fm_chart_plot_info_t ring_plot = FM_STRUCT_INIT(fm_chart_plot_info_t);
+  ASSERT_EQ(fm_chart_get_plot_at(ring.handle, 0, &ring_plot), 0);
+  EXPECT_EQ(ring_plot.has_hole_size_pct, 1);
+  EXPECT_EQ(ring_plot.hole_size_pct, 45U);
+  EXPECT_EQ(ring_plot.has_overlap_pct, 0);
+}
+
+TEST(FormulonCApiChartSpecAndUnresolvedRole, SpecAddsChart) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  FillGrid(wb.handle);
+  fm_chart_spec_t spec = Options(kColumn, "Sheet1!$A$1:$D$5");
+  uint32_t id = 0;
+  ASSERT_EQ(fm_sheet_add_chart(wb.handle, 0, &spec, &id), 0) << fm_get_last_error_message();
+  EXPECT_NE(id, 0U);
+  ChartGuard chart;
+  Open(wb.handle, id, &chart);
+  EXPECT_GT(Info(chart).plot_count, 0U);
+}
+
+TEST(FormulonCApiChartSpecAndUnresolvedRole, UnresolvedRole) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  FillGrid(wb.handle);
+  size_t second = 0;
+  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Other", append_position(wb.handle), &second), 0)
+      << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_set_text(wb.handle, 1, 0, 0, "T"), 0);
+  ASSERT_EQ(fm_sheet_set_number(wb.handle, 1, 1, 0, 5.0), 0);
+  const uint32_t id = Insert(wb.handle, kColumn, "Sheet1!$A$1:$D$5");
+  const fm_chart_title_t title{FM_CHART_TITLE_KIND_REF, nullptr, "Other!$A$1"};
+  ASSERT_EQ(fm_sheet_set_chart_title(wb.handle, 0, id, &title), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_workbook_remove_sheet(wb.handle, 1), 0) << fm_get_last_error_message();
+
+  DataGuard data;
+  OpenData(wb.handle, id, &data);
+  fm_chart_data_info_t info = FM_STRUCT_INIT(fm_chart_data_info_t);
+  ASSERT_EQ(fm_chart_data_get_info(data.handle, &info), 0);
+  ASSERT_GT(info.unresolved_count, 0U);
+  bool title_seen = false;
+  for (size_t i = 0; i < info.unresolved_count; ++i) {
+    fm_chart_unresolved_info_t un = FM_STRUCT_INIT(fm_chart_unresolved_info_t);
+    ASSERT_EQ(fm_chart_data_get_unresolved_at(data.handle, i, &un), 0);
+    title_seen = title_seen || un.role == FM_CHART_ROLE_TITLE;
+  }
+  EXPECT_TRUE(title_seen);
 }
 
 }  // namespace

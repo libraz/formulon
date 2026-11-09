@@ -29,6 +29,7 @@
 #include "eval/function_registry.h"
 #include "styles.h"
 #include "utils/arena.h"
+#include "utils/date_time.h"
 #include "utils/error.h"
 #include "utils/resource_budget.h"
 #include "value.h"
@@ -105,7 +106,7 @@ void fill_match(const formulon::cf::CFMatch& match, fm_cf_match_info_t* out) {
     case formulon::cf::CFMatchKind::IconSet:
       out->kind = FM_CF_MATCH_KIND_ICON_SET;
       if (match.icon_render.has_value()) {
-        out->icon_set_name = static_cast<std::int32_t>(match.icon_render->set_name);
+        out->icon_set = static_cast<std::int32_t>(match.icon_render->set_name);
         out->icon_index = match.icon_render->icon_index;
       }
       return;
@@ -119,8 +120,8 @@ void fill_match(const formulon::cf::CFMatch& match, fm_cf_match_info_t* out) {
 }  // namespace
 
 extern "C" fm_status_t fm_sheet_evaluate_cf_range(const fm_workbook_t* wb, size_t sheet_index,
-                                                  const fm_cell_rect_t* range, int32_t has_today_serial,
-                                                  double today_serial, fm_cf_results_t** out) {
+                                                  const fm_cell_rect_t* range,
+                                                  const fm_cf_range_evaluation_spec_t* options, fm_cf_results_t** out) {
   clear_last_error();
   if (range == nullptr || out == nullptr) {
     return null_argument();
@@ -138,7 +139,17 @@ extern "C" fm_status_t fm_sheet_evaluate_cf_range(const fm_workbook_t* wb, size_
                                                     std::to_string(first_col) + ") last=(" + std::to_string(last_row) +
                                                     "," + std::to_string(last_col) + ")");
   }
-  if (has_today_serial != 0 && !std::isfinite(today_serial)) {
+  fm_cf_range_evaluation_spec_t spec = FM_STRUCT_INIT(fm_cf_range_evaluation_spec_t);
+  if (options != nullptr) {
+    if (auto rc = check_record_size(*options); rc != 0) {
+      return rc;
+    }
+    spec = *options;
+  }
+  if (spec.time_period_rules < FM_TRISTATE_DEFAULT || spec.time_period_rules > FM_TRISTATE_TRUE) {
+    return invalid_argument("time_period_rules is outside fm_tristate_t");
+  }
+  if (spec.has_today_serial != 0 && !std::isfinite(spec.today_serial)) {
     return invalid_argument("today_serial is not finite");
   }
   if (auto rc = ensure_calculated(wb); rc != 0) {
@@ -152,12 +163,22 @@ extern "C" fm_status_t fm_sheet_evaluate_cf_range(const fm_workbook_t* wb, size_
   // evaluation instead of exhausting the host's memory.
   formulon::Arena arena(formulon::kDefaultArenaChunkBytes, formulon::kMaxEvalArenaBytes);
   formulon::eval::EvalState eval_state;
-  formulon::eval::EvalContext eval_ctx(wb->workbook(), wb->workbook().sheet(sheet_index), eval_state);
+  const formulon::eval::EvalContext eval_ctx =
+      formulon::eval::EvalContext(wb->workbook(), wb->workbook().sheet(sheet_index), eval_state)
+          .with_pinned_now(wb->workbook().pinned_now());
   formulon::cf::CFHost host;
   host.arena = &arena;
   host.registry = &formulon::eval::default_registry();
   host.eval_ctx = &eval_ctx;
-  host.today_serial = has_today_serial != 0 ? std::optional<double>{today_serial} : std::optional<double>{};
+  if (spec.time_period_rules != FM_TRISTATE_FALSE) {
+    if (spec.has_today_serial != 0) {
+      host.today_serial = spec.today_serial;
+    } else {
+      const formulon::date_time::CivilTime now = eval_ctx.wall_clock();
+      host.today_serial =
+          formulon::date_time::serial_from_ymd(now.date.y, now.date.m, now.date.d, wb->workbook().date1904());
+    }
+  }
 
   formulon::cf::CFCellRange cf_range{};
   cf_range.first = formulon::CellAddress{first_row, first_col};

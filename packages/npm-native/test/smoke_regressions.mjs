@@ -276,8 +276,10 @@ test('pivotFieldAddItemAt hides the blank item an empty label cannot name', asyn
     cache.setRecordValue(second, amount, 200);
 
     const pivot = wb.sheet(0).addPivot({ name: 'PT', cacheId: cache.cacheId, anchor: { row: 0, col: 0 } });
-    const regionField = wb.sheet(0).pivot(pivot).addField({ fieldIndex: 'Region', axis: 0 });
-    const amountField = wb.sheet(0).pivot(pivot).addField({ fieldIndex: 'Amount', axis: 2 });
+    wb.sheet(0).pivot(pivot).setFieldAxis('Region', 0);
+    const regionField = 0;
+    wb.sheet(0).pivot(pivot).setFieldAxis('Amount', 2);
+    const amountField = 1;
     wb.sheet(0).pivot(pivot).setRowFieldOrder([regionField]);
     wb.sheet(0).pivot(pivot).addDataField({
       name: 'Sum of Amount',

@@ -67,7 +67,7 @@ std::vector<std::uint8_t> BuildPackage(std::string_view book_views, std::string_
 
 std::vector<std::uint8_t> Save(fm_workbook_t* wb, fm_workbook_format_t format = FM_WORKBOOK_FORMAT_XLSX) {
   BufferGuard saved;
-  EXPECT_EQ(fm_workbook_save_as(wb, format, &saved.data, &saved.len), 0) << fm_get_last_error_message();
+  EXPECT_EQ(fm_workbook_save(wb, format, &saved.data, &saved.len), 0) << fm_get_last_error_message();
   return std::vector<std::uint8_t>(saved.data, saved.data + saved.len);
 }
 
@@ -81,6 +81,14 @@ std::uint32_t ActiveSheet(const fm_workbook_t* wb) {
   return static_cast<std::uint32_t>(index);
 }
 
+}  // namespace
+
+namespace {
+int32_t PhoneticStated(const fm_workbook_t* wb, size_t sheet, uint32_t row, uint32_t col) {
+  fm_phonetic_properties_t props = FM_STRUCT_INIT(fm_phonetic_properties_t);
+  EXPECT_EQ(fm_sheet_get_cell_phonetic_properties(wb, sheet, row, col, &props), 0);
+  return props.stated;
+}
 }  // namespace
 
 TEST(FormulonCApiWorkbookView, ActiveSheetDefaultsToFirstAndSynthesizesBookViews) {
@@ -313,11 +321,8 @@ TEST(FormulonCApiWorkbookView, RowColumnAndCellPhoneticFlagsAreReadAndPreserved)
   EXPECT_EQ(show, 1);
 
   // An absent `<phoneticPr>` is the inferred all-zero triple; an element spelling it out is explicit.
-  int32_t present = -1;
-  ASSERT_EQ(fm_sheet_has_cell_phonetic_properties(wb.handle, 0, 0, 0, &present), 0);
-  EXPECT_EQ(present, 0);
-  ASSERT_EQ(fm_sheet_has_cell_phonetic_properties(wb.handle, 0, 0, 1, &present), 0);
-  EXPECT_EQ(present, 1);
+  EXPECT_EQ(PhoneticStated(wb.handle, 0, 0, 0), 0);
+  EXPECT_EQ(PhoneticStated(wb.handle, 0, 0, 1), 1);
 
   const std::string saved_sheet = ExtractZipEntry(Save(wb.handle), "xl/worksheets/sheet1.xml");
   EXPECT_NE(saved_sheet.find("<row r=\"1\" ph=\"1\""), std::string::npos) << saved_sheet;
@@ -331,39 +336,36 @@ TEST(FormulonCApiWorkbookView, PhoneticPropertiesPresenceTracksExplicitTriples) 
   ASSERT_EQ(fm_sheet_set_text(wb.handle, 0, 0, 0, "漢字"), 0);
   ASSERT_EQ(fm_sheet_set_cell_phonetic(wb.handle, 0, 0, 0, "かんじ"), 0);
 
-  int32_t present = -1;
-  ASSERT_EQ(fm_sheet_has_cell_phonetic_properties(wb.handle, 0, 0, 0, &present), 0);
-  EXPECT_EQ(present, 0);
-  // An absent cell reports "not present" rather than failing.
-  ASSERT_EQ(fm_sheet_has_cell_phonetic_properties(wb.handle, 0, 7, 7, &present), 0);
-  EXPECT_EQ(present, 0);
+  EXPECT_EQ(PhoneticStated(wb.handle, 0, 0, 0), 0);
+  // An absent cell reports "not stated" rather than failing.
+  EXPECT_EQ(PhoneticStated(wb.handle, 0, 7, 7), 0);
 
-  ASSERT_EQ(fm_sheet_set_cell_phonetic_properties(wb.handle, 0, 0, 0, 0, 0, 0), 0);
-  ASSERT_EQ(fm_sheet_has_cell_phonetic_properties(wb.handle, 0, 0, 0, &present), 0);
-  EXPECT_EQ(present, 1);
+  fm_phonetic_properties_t zero = FM_STRUCT_INIT(fm_phonetic_properties_t);
+  ASSERT_EQ(fm_sheet_set_cell_phonetic_properties(wb.handle, 0, 0, 0, &zero), 0);
+  EXPECT_EQ(PhoneticStated(wb.handle, 0, 0, 0), 1);
 
   // The all-zero triple is written out and reads back explicit.
   const std::vector<std::uint8_t> saved = Save(wb.handle);
   WorkbookGuard reloaded;
   Load(saved, reloaded);
-  ASSERT_EQ(fm_sheet_has_cell_phonetic_properties(reloaded.handle, 0, 0, 0, &present), 0);
-  EXPECT_EQ(present, 1);
-  size_t font_id = 9;
-  int32_t type = 9;
-  int32_t alignment = 9;
-  ASSERT_EQ(fm_sheet_get_cell_phonetic_properties(reloaded.handle, 0, 0, 0, &font_id, &type, &alignment), 0);
-  EXPECT_EQ(font_id, 0U);
-  EXPECT_EQ(type, FM_PHONETIC_TYPE_HALFWIDTH_KATAKANA);
-  EXPECT_EQ(alignment, FM_PHONETIC_ALIGNMENT_NO_CONTROL);
+  fm_phonetic_properties_t reread = FM_STRUCT_INIT(fm_phonetic_properties_t);
+  reread.font_index = 9;
+  reread.type = 9;
+  reread.alignment = 9;
+  ASSERT_EQ(fm_sheet_get_cell_phonetic_properties(reloaded.handle, 0, 0, 0, &reread), 0);
+  EXPECT_EQ(reread.stated, 1);
+  EXPECT_EQ(reread.font_index, 0U);
+  EXPECT_EQ(reread.type, FM_PHONETIC_TYPE_HALFWIDTH_KATAKANA);
+  EXPECT_EQ(reread.alignment, FM_PHONETIC_ALIGNMENT_NO_CONTROL);
 
   // A value write drops the guide, the triple and its presence together.
   ASSERT_EQ(fm_sheet_set_text(wb.handle, 0, 0, 0, "漢字"), 0);
-  ASSERT_EQ(fm_sheet_has_cell_phonetic_properties(wb.handle, 0, 0, 0, &present), 0);
-  EXPECT_EQ(present, 0);
+  EXPECT_EQ(PhoneticStated(wb.handle, 0, 0, 0), 0);
 
-  EXPECT_EQ(fm_sheet_has_cell_phonetic_properties(wb.handle, 0, 0, 0, nullptr),
+  fm_phonetic_properties_t probe = FM_STRUCT_INIT(fm_phonetic_properties_t);
+  EXPECT_EQ(fm_sheet_get_cell_phonetic_properties(wb.handle, 0, 0, 0, nullptr),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
-  EXPECT_EQ(fm_sheet_has_cell_phonetic_properties(wb.handle, 5, 0, 0, &present), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(fm_sheet_get_cell_phonetic_properties(wb.handle, 5, 0, 0, &probe), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
 }
 
 TEST(FormulonCApiWorkbookView, SheetViewScrollAndSelectionRoundTripFromAPackage) {

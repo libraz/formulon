@@ -73,7 +73,7 @@ test('PivotAxis spells its column member out and an added field lands on the col
     assert.equal(f.PivotAxis.Column, 1);
     assert.equal('Col' in f.PivotAxis, false);
     const { cache, pv } = pivotOf(wb, f);
-    pv.addField({ fieldIndex: 'Product', axis: f.PivotAxis.Column });
+    pv.setFieldAxis('Product', f.PivotAxis.Column);
     assert.deepEqual(pv.getColumnFieldOrder(), [1]);
     assert.deepEqual(pv.getRowFieldOrder(), []);
     assert.ok(cache.cacheId >= 0);
@@ -109,7 +109,8 @@ test('locale error names are read through getLocaleFacts only', async () => {
 test('unknown keys are refused as TypeError in option objects, civil times, date systems and colours', async () => {
   await withWorkbook((wb, f) => {
     const { pv } = pivotOf(wb, f);
-    const index = pv.addField({ fieldIndex: 'Region', axis: f.PivotAxis.Row });
+    pv.setFieldAxis('Region', f.PivotAxis.Row);
+    const index = 0;
     assert.throws(() => pv.addFieldItem(index, 'East', { visble: false }), TypeError);
 
     const civil = { year: 2024, month: 1, day: 1, hour: 0, minute: 0, second: 0 };
@@ -373,9 +374,12 @@ test('addProtectedRange returns the name and the name addresses the range', asyn
 test('the page field order reads back, moves fields onto the page axis and refuses the Values level', async () => {
   await withWorkbook((wb, f) => {
     const { pv } = pivotOf(wb, f);
-    const region = pv.addField({ fieldIndex: 'Region', axis: f.PivotAxis.Row });
-    const product = pv.addField({ fieldIndex: 'Product', axis: f.PivotAxis.Page });
-    const amount = pv.addField({ fieldIndex: 'Amount', axis: f.PivotAxis.Page });
+    pv.setFieldAxis('Region', f.PivotAxis.Row);
+    const region = 0;
+    pv.setFieldAxis('Product', f.PivotAxis.Page);
+    const product = 1;
+    pv.setFieldAxis('Amount', f.PivotAxis.Page);
+    const amount = 2;
     assert.deepEqual(pv.getPageFieldOrder(), [product, amount]);
     pv.setPageFieldOrder([amount, product]);
     assert.deepEqual(pv.getPageFieldOrder(), [amount, product]);

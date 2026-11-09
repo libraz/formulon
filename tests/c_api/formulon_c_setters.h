@@ -17,6 +17,15 @@ inline fm_status_t SetDefinedName(fm_workbook_t* wb, const char* name, const cha
   return fm_workbook_set_defined_name(wb, &input);
 }
 
+// Sets the note at (`row`, `col`) to `author` and `text`.
+inline fm_status_t SetComment(fm_workbook_t* wb, std::size_t sheet_index, std::uint32_t row, std::uint32_t col,
+                              const char* author, const char* text) {
+  fm_comment_t comment = FM_STRUCT_INIT(fm_comment_t);
+  comment.author = author;
+  comment.text = text;
+  return fm_sheet_set_comment(wb, sheet_index, row, col, &comment);
+}
+
 // Sets the three iterative-calculation settings; an argument of -1 keeps that
 // setting.
 inline fm_status_t SetIterative(fm_workbook_t* wb, std::int32_t enabled, std::int32_t max_iterations,
@@ -39,7 +48,8 @@ inline fm_status_t SetIterative(fm_workbook_t* wb, std::int32_t enabled, std::in
 
 // Creates a table from positional arguments. `header_row` and `totals_row` are
 // 0 or 1 and map onto the explicit tristate values; the four style toggles
-// keep their creation defaults. A null `rect` passes a null spec.
+// keep their creation defaults. An empty `style_name` creates an unstyled
+// table (`styled` false). A null `rect` passes a null spec.
 inline fm_status_t AddTable(fm_workbook_t* wb, std::size_t sheet_index, const fm_cell_rect_t* rect, const char* name,
                             const char* const* column_names, std::size_t column_count, const char* style_name,
                             std::int32_t header_row, std::int32_t totals_row, std::size_t* out_table_index) {
@@ -51,7 +61,9 @@ inline fm_status_t AddTable(fm_workbook_t* wb, std::size_t sheet_index, const fm
   spec.name = name;
   spec.column_names = column_names;
   spec.column_count = static_cast<uint32_t>(column_count);
-  spec.style_name = style_name;
+  const bool unstyled = style_name != nullptr && *style_name == '\0';
+  spec.style_name = unstyled ? nullptr : style_name;
+  spec.styled = unstyled ? FM_TRISTATE_FALSE : FM_TRISTATE_DEFAULT;
   spec.header_row = header_row != 0 ? FM_TRISTATE_TRUE : FM_TRISTATE_FALSE;
   spec.totals_row = totals_row != 0 ? FM_TRISTATE_TRUE : FM_TRISTATE_FALSE;
   return fm_sheet_add_table(wb, sheet_index, &spec, out_table_index);

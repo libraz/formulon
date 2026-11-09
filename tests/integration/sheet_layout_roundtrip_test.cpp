@@ -183,7 +183,7 @@ std::string StateAfterSettingVisibility(const std::vector<std::uint8_t>& bytes, 
   EXPECT_EQ(fm_sheet_set_visibility(handle, 0, visibility), 0);
   std::uint8_t* saved = nullptr;
   std::size_t saved_len = 0;
-  EXPECT_EQ(fm_workbook_save(handle, &saved, &saved_len), 0);
+  EXPECT_EQ(fm_workbook_save(handle, FM_WORKBOOK_FORMAT_XLSX, &saved, &saved_len), 0);
   std::vector<std::uint8_t> package;
   if (saved != nullptr) {
     package.assign(saved, saved + saved_len);

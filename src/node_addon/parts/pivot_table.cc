@@ -230,15 +230,14 @@ Napi::Value Workbook::PivotGetGrandTotals(const Napi::CallbackInfo& info) {
   }
   const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
   const std::size_t pivot_index = static_cast<std::size_t>(ArgU32(info, 1));
-  int32_t rows = 0;
-  int32_t cols = 0;
-  const fm_status_t rc = fm_sheet_get_pivot_grand_totals(handle_, sheet, pivot_index, &rows, &cols);
+  fm_pivot_grand_totals_t totals = FM_STRUCT_INIT(fm_pivot_grand_totals_t);
+  const fm_status_t rc = fm_sheet_get_pivot_grand_totals(handle_, sheet, pivot_index, &totals);
   if (rc != 0) {
     return ThrowStatus(env, rc);
   }
   Napi::Object out = Napi::Object::New(env);
-  out.Set("rows", Napi::Boolean::New(env, rows != 0));
-  out.Set("columns", Napi::Boolean::New(env, cols != 0));
+  out.Set("rows", Napi::Boolean::New(env, totals.rows != 0));
+  out.Set("columns", Napi::Boolean::New(env, totals.columns != 0));
   return out;
 }
 
@@ -254,8 +253,9 @@ Napi::Value GetPivotFieldOrder(const Napi::CallbackInfo& info, const fm_workbook
   const std::size_t sheet = static_cast<std::size_t>(Workbook::ArgU32(info, 0));
   const std::size_t pivot_index = static_cast<std::size_t>(Workbook::ArgU32(info, 1));
   std::vector<uint32_t> data;
-  const fm_status_t rc = FillCallerBuffer(
-      data, [&](uint32_t* out, std::size_t capacity, std::size_t* count) { return fn(handle, sheet, pivot_index, out, capacity, count); });
+  const fm_status_t rc = FillCallerBuffer(data, [&](uint32_t* out, std::size_t capacity, std::size_t* count) {
+    return fn(handle, sheet, pivot_index, out, capacity, count);
+  });
   if (rc != 0) {
     return ThrowStatus(env, rc);
   }
@@ -380,44 +380,6 @@ Napi::Value Workbook::PivotFieldItemAt(const Napi::CallbackInfo& info) {
   return out;
 }
 
-Napi::Value Workbook::PivotFieldAdd(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return ThrowInvalidHandle(env);
-  }
-  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
-  const std::size_t pivot_index = static_cast<std::size_t>(ArgU32(info, 1));
-  Napi::Object spec = ArgObject(info, 2);
-
-  CheckedSpecReader reader(env);
-  std::string source_name;
-  std::string custom_name;
-  std::string number_format;
-  const bool has_source = reader.String(spec, "sourceName", &source_name);
-  const bool has_custom = reader.String(spec, "customName", &custom_name);
-  const bool has_nfmt = reader.String(spec, "numberFormat", &number_format);
-
-  fm_pivot_field_spec_t c_spec = FM_STRUCT_INIT(fm_pivot_field_spec_t);
-  // `sourceName` is required; an omitted key passes NULL through rather
-  // than the coerced literal string "undefined" `.ToString()` would
-  // otherwise produce, so the C ABI's own kBindingNullPointer check is
-  // what rejects the call.
-  c_spec.source_name = has_source ? source_name.c_str() : nullptr;
-  c_spec.custom_name = has_custom ? custom_name.c_str() : nullptr;
-  c_spec.axis = static_cast<fm_pivot_axis_t>(reader.RequiredU32(spec, "axis"));
-  c_spec.subtotal_top = reader.Tristate(spec, "subtotalTop");
-  c_spec.number_format = has_nfmt ? number_format.c_str() : nullptr;
-
-  if (!reader.ok()) {
-    // A malformed nested value left a pending JS exception: stop before the
-    // C ABI call commits a default value for it.
-    return env.Undefined();
-  }
-  std::size_t out = 0;
-  const fm_status_t rc = fm_sheet_add_pivot_field(handle_, sheet, pivot_index, &c_spec, &out);
-  return ValueOrThrow(env, rc, Napi::Number::New(env, static_cast<double>(out)));
-}
-
 Napi::Value Workbook::PivotFieldClear(const Napi::CallbackInfo& info) {
   return InvokeSheetCall(info, &fm_sheet_clear_pivot_fields);
 }
@@ -492,9 +454,9 @@ Napi::Value Workbook::PivotUpdateField(const Napi::CallbackInfo& info) {
   if (!reader.ok()) {
     return env.Undefined();
   }
-  return ValueOrThrow(
-      env, fm_sheet_update_pivot_field(handle_, field.sheet, field.pivot_index, field.field_index, &patch),
-      env.Undefined());
+  return ValueOrThrow(env,
+                      fm_sheet_update_pivot_field(handle_, field.sheet, field.pivot_index, field.field_index, &patch),
+                      env.Undefined());
 }
 
 // Every member is optional: an omitted key keeps the stored value, and `null` clears `caption`.
@@ -515,10 +477,10 @@ Napi::Value Workbook::PivotUpdateFieldItem(const Napi::CallbackInfo& info) {
   if (!reader.ok()) {
     return env.Undefined();
   }
-  return ValueOrThrow(env,
-                      fm_sheet_update_pivot_field_item(handle_, field.sheet, field.pivot_index, field.field_index,
-                                                       item_index, &patch),
-                      env.Undefined());
+  return ValueOrThrow(
+      env,
+      fm_sheet_update_pivot_field_item(handle_, field.sheet, field.pivot_index, field.field_index, item_index, &patch),
+      env.Undefined());
 }
 
 Napi::Value Workbook::PivotFieldClearItems(const Napi::CallbackInfo& info) {
@@ -801,7 +763,8 @@ Napi::Value Workbook::PivotDataFieldAt(const Napi::CallbackInfo& info) {
   }
   const PivotFieldArgs args = ReadPivotField(info);
   fm_pivot_data_field_t spec = FM_STRUCT_INIT(fm_pivot_data_field_t);
-  const fm_status_t rc = fm_sheet_get_pivot_data_field_at(handle_, args.sheet, args.pivot_index, args.field_index, &spec);
+  const fm_status_t rc =
+      fm_sheet_get_pivot_data_field_at(handle_, args.sheet, args.pivot_index, args.field_index, &spec);
   if (rc != 0) {
     return ThrowStatus(env, rc);
   }
@@ -872,8 +835,7 @@ struct FilterOperand {
 
 /// Reads `owner[key]`: absent or null is no operand, a Number is an INT when `integral` and whole, else a
 /// DOUBLE, a String is TEXT; anything else is a TypeError.
-FilterOperand ReadFilterOperand(CheckedSpecReader& reader, const Napi::Object& owner, const char* key,
-                                bool integral) {
+FilterOperand ReadFilterOperand(CheckedSpecReader& reader, const Napi::Object& owner, const char* key, bool integral) {
   FilterOperand out;
   const Napi::Value value = reader.Get(owner, key);
   if (!reader.ok() || value.IsUndefined() || value.IsNull()) {
@@ -917,7 +879,7 @@ Napi::Value Workbook::PivotFilterAt(const Napi::CallbackInfo& info) {
   }
   Napi::Object out = Napi::Object::New(env);
   out.Set("fieldIndex", Napi::Number::New(env, spec.field_index));
-  out.Set("type", Napi::Number::New(env, static_cast<int32_t>(spec.type)));
+  out.Set("kind", Napi::Number::New(env, spec.kind));
   out.Set("dataFieldIndex", Napi::Number::New(env, spec.data_field_index));
   out.Set("value", FilterOperandToJs(env, spec.value_kind, spec.value_int, spec.value_double, spec.value_text));
   out.Set("valueHigh", FilterOperandToJs(env, spec.value_high_kind, spec.value_high_int, spec.value_high_double,
@@ -937,11 +899,11 @@ Napi::Value Workbook::PivotFilterAdd(const Napi::CallbackInfo& info) {
   CheckedSpecReader reader(env);
   fm_pivot_filter_t c_spec = FM_STRUCT_INIT(fm_pivot_filter_t);
   c_spec.field_index = reader.RequiredU32(spec, "fieldIndex");
-  c_spec.type = static_cast<fm_pivot_filter_kind_t>(reader.RequiredU32(spec, "type"));
+  c_spec.kind = static_cast<int32_t>(reader.RequiredU32(spec, "kind"));
   // A count filter takes a whole number; every other numeric operand is a double.
-  const bool count_type =
-      c_spec.type == FM_PIVOT_FILTER_KIND_VALUE_TOP_10 || c_spec.type == FM_PIVOT_FILTER_KIND_VALUE_BOTTOM_COUNT;
-  const FilterOperand value = ReadFilterOperand(reader, spec, "value", count_type);
+  const bool count_kind =
+      c_spec.kind == FM_PIVOT_FILTER_KIND_VALUE_TOP_COUNT || c_spec.kind == FM_PIVOT_FILTER_KIND_VALUE_BOTTOM_COUNT;
+  const FilterOperand value = ReadFilterOperand(reader, spec, "value", count_kind);
   const FilterOperand value_high = ReadFilterOperand(reader, spec, "valueHigh", false);
   c_spec.value_kind = static_cast<fm_pivot_filter_operand_kind_t>(value.kind);
   c_spec.value_int = value.as_int;

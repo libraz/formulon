@@ -7,8 +7,8 @@
 // fields `ShapeSpec::fields` names; the rest of the shape's XML (geometry
 // guides, effects, style references, hyperlinks, text formatting, children of
 // a group) is kept. A shape the model cannot express is listed with its
-// unrepresentable fields reported as `ShapePaint::kOther` or empty and passes
-// through verbatim until it is updated or removed.
+// unrepresentable fields reported as empty and passes through verbatim until
+// it is updated or removed.
 //
 // Only top-level anchors are listed; the children of a group are not. A shape
 // inside an `mc:AlternateContent` is read and updated through its first
@@ -22,6 +22,8 @@
 #include <string>
 #include <vector>
 
+#include "chart/chart_model.h"
+#include "drawing/drawing_edit.h"
 #include "drawing/drawing_xml.h"
 #include "styles.h"
 #include "utils/error.h"
@@ -31,28 +33,19 @@ namespace formulon {
 
 class Workbook;
 
-/// How a shape's fill or outline is specified.
-enum class ShapePaint : std::int32_t {
-  kUnset = 0,  ///< No fill or outline element.
-  kSolid = 1,  ///< `a:solidFill` of an `a:srgbClr`, or of a palette `a:schemeClr` (Theme colour).
-  kNone = 2,   ///< `a:noFill`.
-  kOther = 3,  ///< Gradient, pattern, picture, or a colour element that is not an Rgb or a palette Theme colour.
-};
-
 /// A listed shape. `object` carries id, kind (shape, connector or group),
 /// anchor, size, name, description and hidden flag as `list_drawing_objects`
 /// reports them.
 struct ShapeInfo {
   DrawingObject object;
-  std::string prst;       ///< `a:prstGeom/@prst`; empty for custom geometry or a group.
-  std::string text;       ///< Paragraphs joined with `\n`; empty for connectors and groups.
-  bool text_box = false;  ///< `cNvSpPr/@txBox`.
-  ShapePaint fill = ShapePaint::kUnset;
-  ColorSpec fill_color;  ///< Rgb or Theme when `fill` is `kSolid`.
-  ShapePaint line = ShapePaint::kUnset;
-  ColorSpec line_color;             ///< Rgb or Theme when `line` is `kSolid`.
-  std::int64_t line_width_emu = 0;  ///< `a:ln/@w`; 0 when absent.
-  std::int32_t rotation = 0;        ///< `a:xfrm/@rot` in 60000ths of a degree.
+  std::string prst;           ///< `a:prstGeom/@prst`; empty for custom geometry or a group.
+  std::string text;           ///< Paragraphs joined with `\n`; empty for connectors and groups.
+  bool text_box = false;      ///< `cNvSpPr/@txBox`.
+  std::int32_t rotation = 0;  ///< `a:xfrm/@rot` in 60000ths of a degree.
+  /// The `spPr` fill and outline as the chart paint model reads them; `other`
+  /// marks a gradient, pattern or picture paint the record cannot state.
+  ChartFill paint_fill;
+  ChartLine paint_line;
 };
 
 /// `ShapeSpec::fields` bits: the fields an insert or update applies.
@@ -62,14 +55,9 @@ inline constexpr std::uint32_t kPrst = 1U << 1;
 inline constexpr std::uint32_t kAnchor = 1U << 2;
 inline constexpr std::uint32_t kText = 1U << 3;
 inline constexpr std::uint32_t kTextBox = 1U << 4;
-/// `fill`: `kSolid` with `fill_color`, `kNone`, or `kUnset` to remove the shape's own fill element.
-inline constexpr std::uint32_t kFill = 1U << 5;
-/// `line`: as `kFill` for the outline's fill element inside `a:ln` (an `a:ln` left empty goes too).
-inline constexpr std::uint32_t kLine = 1U << 6;
-inline constexpr std::uint32_t kLineWidth = 1U << 7;  ///< `line_width_emu`.
-inline constexpr std::uint32_t kRotation = 1U << 8;
-inline constexpr std::uint32_t kHidden = 1U << 9;
-inline constexpr std::uint32_t kAll = (1U << 10) - 1U;
+inline constexpr std::uint32_t kRotation = 1U << 5;
+inline constexpr std::uint32_t kHidden = 1U << 6;
+inline constexpr std::uint32_t kAll = (1U << 7) - 1U;
 }  // namespace shape_field
 
 /// Values for an insert or update; fields outside `fields` are ignored.
@@ -89,13 +77,12 @@ struct ShapeSpec {
   AnchorPoint to;
   std::int64_t cx = 0;
   std::int64_t cy = 0;
-  ShapePaint fill = ShapePaint::kNone;
-  ColorSpec fill_color;
-  ShapePaint line = ShapePaint::kNone;
-  ColorSpec line_color;
-  std::int64_t line_width_emu = 0;
   std::int32_t rotation = 0;
   bool hidden = false;
+  /// Fill and outline edits in the chart paint model, applied whatever
+  /// `fields` says; a Clear field returns that part to the style's paint.
+  ChartFillPatch paint_fill;
+  ChartLinePatch paint_line;
 };
 
 /// The shapes, connectors and groups of sheet `sheet`'s drawing in z-order
@@ -104,13 +91,14 @@ struct ShapeSpec {
 Expected<std::vector<ShapeInfo>, Error> list_shapes(const Workbook& wb, std::size_t sheet);
 
 /// Appends a shape on top and returns its `cNvPr` id. `kAnchor` is required;
-/// `prst` defaults to `rect`, the name to `Shape <id>`. A `prst` naming a line
-/// or connector geometry makes an `xdr:cxnSp`, which carries no text. A sheet
-/// without a drawing gets one. Fails with `kInvalidArgument` for a bad sheet,
-/// a missing anchor, a `prst` that is not an alphanumeric token, an
-/// offset or size outside [0, 2^31) EMU, a cell outside the sheet, a
-/// two-cell `to` before `from`, a fill or outline that is not solid, none or unset, or text with
-/// control characters.
+/// an unset or empty `prst` is `rect`, the name defaults to `Shape <id>`. A
+/// `prst` naming a line or connector geometry makes an `xdr:cxnSp`, which
+/// carries no text. A sheet without a drawing gets one. Fails with
+/// `kInvalidArgument` for a bad sheet, a missing anchor, a `prst` that is not
+/// an ECMA-376 `ST_ShapeType` name, a paint patch `write_paint_properties`
+/// refuses, an offset or size outside [0, 2^31) EMU, a cell outside the
+/// sheet, a two-cell `to` before `from`, a fill or outline that is not solid,
+/// none or unset, or text with control characters.
 Expected<std::uint32_t, Error> insert_shape(Workbook& wb, std::size_t sheet, const ShapeSpec& spec);
 
 /// Applies the fields `spec.fields` names to the shape, connector or group
@@ -119,6 +107,13 @@ Expected<std::uint32_t, Error> insert_shape(Workbook& wb, std::size_t sheet, con
 /// formatting. Fails like `insert_shape`, with `kNotFound` for an unknown id,
 /// and with `kInvalidArgument` for an object of another kind.
 Expected<void, Error> update_shape(Workbook& wb, std::size_t sheet, std::uint32_t object_id, const ShapeSpec& spec);
+
+/// Applies `common` (the `cNvPr` fields and anchor, as `update_drawing`) and
+/// `shape` (as the spec overload) to the object with `object_id` as one edit:
+/// both halves are checked before anything is written, so nothing changes on
+/// failure. Either pointer may be null; both null is a no-op.
+Expected<void, Error> update_shape(Workbook& wb, std::size_t sheet, std::uint32_t object_id,
+                                   const DrawingCommonPatch* common, const ShapeSpec* shape);
 
 /// Removes the shape, connector or group (with its children) with `object_id`.
 /// Fails as `update_shape` for an unknown id or an object of another kind.

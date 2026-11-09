@@ -289,7 +289,7 @@ class Table(_NoCopy):
                 return None
             d = S.TABLE_STYLE_OPTIONS.unpack(LIB, ptr)
             return TableStyleOptions(
-                style_name=LIB.read_cstr(d["style_name"]) or None,
+                style_name=LIB.read_optional_cstr(d["style_name"]),
                 show_first_column=d["show_first_column"] != 0,
                 show_last_column=d["show_last_column"] != 0,
                 show_row_stripes=d["show_row_stripes"] != 0,
@@ -307,7 +307,7 @@ class Table(_NoCopy):
     ) -> None:
         """Update the table's style name and toggles; an omitted argument keeps its setting.
 
-        ``style_name=None`` removes the style name; a new ``style_name`` keeps
+        ``style_name=None`` removes the style name, ``""`` raises ``InvalidArgumentError``; a new ``style_name`` keeps
         the four toggles. The update is all-or-nothing.
 
         Raises:
@@ -379,8 +379,8 @@ class Table(_NoCopy):
         """Set column ``column``'s totals-row function, label and formula from a record.
 
         ``totals.totals_row_function`` is a :class:`TableTotalsRowFunction`;
-        ``totals_row_formula`` is required for ``CUSTOM``. An empty or ``None``
-        label or formula means none. A :class:`TableColumn` read back is
+        ``totals_row_formula`` is required for ``CUSTOM``. A ``None``
+        label or formula means none; ``""`` raises ``InvalidArgumentError``. A :class:`TableColumn` read back is
         accepted in place of a :class:`TableColumnTotalsInput`; its ``name`` is
         ignored. While the totals row is shown its cell follows:
         ``SUBTOTAL(109,Table[Column])`` and the other 1xx codes for a built-in
@@ -401,8 +401,8 @@ class Table(_NoCopy):
                     _uint(index, "table_index", role="position"),
                     _uint(column, "column", role="position"),
                     _sint(totals.totals_row_function, "totals_row_function"),
-                    scope.nonempty_cstr(totals.totals_row_label),
-                    scope.nonempty_cstr(totals.totals_row_formula),
+                    0 if totals.totals_row_label is None else scope.cstr(totals.totals_row_label),
+                    0 if totals.totals_row_formula is None else scope.cstr(totals.totals_row_formula),
                 )
             )
 

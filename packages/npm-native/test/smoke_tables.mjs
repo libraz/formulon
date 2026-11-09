@@ -170,8 +170,8 @@ test('custom table styles round-trip and a table can use one', async () => {
     assert.equal(wb.listTableStyles().length, 1);
     wb.sheet(0).table(0).updateStyleOptions({ styleName: 'Corporate' });
     const defaults = wb.getTableStyleDefaults();
-    assert.equal(defaults.tableStyle, 'TableStyleMedium2');
-    assert.equal(defaults.pivotStyle, 'PivotStyleLight16');
+    assert.equal(defaults.tableStyleName, 'TableStyleMedium2');
+    assert.equal(defaults.pivotStyleName, 'PivotStyleLight16');
     const saved = wb.save();
     bytes = saved;
   } finally {
@@ -196,11 +196,11 @@ test('custom table styles round-trip and a table can use one', async () => {
       ],
     );
     assert.equal(reloaded.sheet(0).listTables()[0].getStyleOptions().styleName, 'Corporate');
-    reloaded.updateTableStyleDefaults({ tableStyle: 'Corporate' });
-    assert.equal(reloaded.getTableStyleDefaults().tableStyle, 'Corporate');
+    reloaded.updateTableStyleDefaults({ tableStyleName: 'Corporate' });
+    assert.equal(reloaded.getTableStyleDefaults().tableStyleName, 'Corporate');
     reloaded.removeTableStyle('corporate');
     assert.equal(reloaded.listTableStyles().length, 0);
-    assert.equal(reloaded.getTableStyleDefaults().tableStyle, 'TableStyleMedium2');
+    assert.equal(reloaded.getTableStyleDefaults().tableStyleName, 'TableStyleMedium2');
   } finally {
     release(reloaded);
   }
@@ -221,17 +221,17 @@ test('a table created without a styleName takes the workbook default style with 
       showColumnStripes: false,
     });
 
-    wb.updateTableStyleDefaults({ tableStyle: 'TableStyleLight1' });
+    wb.updateTableStyleDefaults({ tableStyleName: 'TableStyleLight1' });
     wb.sheet(0).setText(0, 3, 'X');
     wb.sheet(0).setText(0, 4, 'Y');
     const light = wb.sheet(0).addTable({ range: 'D1:E3', name: 'Light' });
     assert.equal(light.getStyleOptions().styleName, 'TableStyleLight1');
     assert.equal(light.getStyleOptions().showRowStripes, true);
 
-    // An empty styleName creates the table without a style element.
+    // styled: false creates the table without a style element.
     wb.sheet(0).setText(0, 6, 'X');
     wb.sheet(0).setText(0, 7, 'Y');
-    const bare = wb.sheet(0).addTable({ range: 'G1:H3', name: 'Bare', styleName: '' });
+    const bare = wb.sheet(0).addTable({ range: 'G1:H3', name: 'Bare', styled: false });
     assert.equal(bare.getStyleOptions(), null);
   } finally {
     release(wb);

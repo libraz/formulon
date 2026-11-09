@@ -465,8 +465,9 @@ TEST(FormulonCApiSpill, OccupiedCellBlocksAnchorUntilCleared) {
 TEST(FormulonCApiSpill, MergedCellBlocksAnchor) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  ASSERT_EQ(fm_sheet_add_merge(wb.handle, 0, record_arg(fm_cell_rect_t{3, 3, 3, 4})), 0);  // D4:E4
-  ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 1, 3, "=SEQUENCE(5)"), 0);                  // D2
+  fm_cell_rect_t merged{};
+  ASSERT_EQ(fm_sheet_add_merge(wb.handle, 0, record_arg(fm_cell_rect_t{3, 3, 3, 4}), &merged), 0);  // D4:E4
+  ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 1, 3, "=SEQUENCE(5)"), 0);                           // D2
   ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
 
   ExpectBlocked(SpillAt(wb.handle, 1, 3), 1, 3, 5, 1);

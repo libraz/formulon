@@ -56,8 +56,9 @@ def add_cache(wb: Workbook, source_sheet: str) -> formulon.PivotCache:
 
 def add_pivot(sheet: formulon.Sheet, cache: formulon.PivotCache, name: str = "P1") -> formulon.Pivot:
     pivot = sheet.add_pivot(formulon.PivotInput(name=name, cache_id=cache.cache_id, anchor=formulon.CellAddress(0, 4)))
-    pivot.add_field(formulon.PivotFieldInput(field_index="Region", axis=PivotAxis.ROW))
-    amount = pivot.add_field(formulon.PivotFieldInput(field_index="Amount", axis=PivotAxis.VALUE))
+    pivot.set_field_axis("Region", PivotAxis.ROW)
+    pivot.set_field_axis("Amount", PivotAxis.VALUE)
+    amount = pivot.get_field("Amount").cache_field_index
     pivot.add_data_field(
         formulon.PivotDataFieldInput(
             name="Sum of Amount", field_index=amount, aggregation=formulon.PivotAggregation.SUM
@@ -243,12 +244,13 @@ class RenamedMemberTests(SurfaceTestCase):
     def test_hyperlink_and_break_adders_are_gone(self) -> None:
         with Workbook.create_default() as wb:
             ws = wb.sheet(0)
-            self.assertHasMembers(ws, ("set_hyperlink", "set_hyperlink_range", "set_row_break", "set_column_break"))
+            self.assertHasMembers(ws, ("set_hyperlink", "set_row_break", "set_column_break"))
             self.assertLacksMembers(
                 ws,
                 (
                     "add_hyperlink",
                     "add_hyperlink_range",
+                    "set_hyperlink_range",
                     "add_column_break",
                     "add_col_break",
                     "remove_row_break",
@@ -384,11 +386,11 @@ class UpdateMergeTests(SurfaceTestCase):
 
     def test_update_table_style_defaults_keeps_the_name_left_unchanged(self) -> None:
         with Workbook.create_default() as wb:
-            wb.update_table_style_defaults(table_style="TableStyleLight9", pivot_style="PivotStyleLight16")
-            wb.update_table_style_defaults(pivot_style=None)
+            wb.update_table_style_defaults(table_style_name="TableStyleLight9", pivot_style_name="PivotStyleLight16")
+            wb.update_table_style_defaults(pivot_style_name=None)
             defaults = wb.get_table_style_defaults()
-            self.assertEqual(defaults.table_style, "TableStyleLight9")
-            self.assertIsNone(defaults.pivot_style)
+            self.assertEqual(defaults.table_style_name, "TableStyleLight9")
+            self.assertIsNone(defaults.pivot_style_name)
 
     def test_update_grand_totals_keeps_the_other_band(self) -> None:
         with Workbook.create_default() as wb:
@@ -444,10 +446,10 @@ class UpdateMergeTests(SurfaceTestCase):
             fill_source(ws)
             chart = _chart_input.add_chart(ws, _chart_input.COLUMN, "Sheet1!$A$1:$B$3")
             chart.update_plot(0, gap_width_pct=80)
-            chart.update_plot(0, overlap=10)
+            chart.update_plot(0, overlap_pct=10)
             plot = chart.get_properties().plots[0]
             self.assertEqual(plot.gap_width_pct, 80)
-            self.assertEqual(plot.overlap, 10)
+            self.assertEqual(plot.overlap_pct, 10)
             with self.assertRaises(TypeError):
                 chart.update_plot(0, gap_width=80)  # type: ignore[call-arg]
 
@@ -841,11 +843,8 @@ class UnitSuffixTests(SurfaceTestCase):
         self.assertFieldsRenamed(formulon.ImageInfo, ("width_px", "height_px"), ("px_width", "px_height"))
 
     def test_shape_fields_carry_degrees_and_points(self) -> None:
-        self.assertFieldsRenamed(
-            formulon.ShapeProperties,
-            ("rotation_deg", "line_width_pt"),
-            ("rotation", "line_width_emu"),
-        )
+        self.assertFieldsRenamed(formulon.ShapeProperties, ("rotation_deg",), ("rotation", "line_width_emu"))
+        self.assertFieldsRenamed(formulon.ChartLine, ("width_pt",), ("width_emu",))
 
     def test_shape_update_takes_rotation_degrees(self) -> None:
         with Workbook.create_default() as wb:
@@ -1103,7 +1102,7 @@ class SheetTableLifecycleTests(SurfaceTestCase):
 
     def test_add_table_takes_the_workbook_table_style_default(self) -> None:
         with Workbook.create_default() as wb:
-            wb.update_table_style_defaults(table_style="TableStyleLight9")
+            wb.update_table_style_defaults(table_style_name="TableStyleLight9")
             ws = wb.sheet(0)
             table = ws.add_table(formulon.TableInput(range=table_cells(ws), name="Rev"))
             info = table.get_style_options()

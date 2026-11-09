@@ -29,16 +29,16 @@ const fullProtection = {
 test('workbook protection is absent by default and every field round-trips', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
-  const empty = wb.getWorkbookProtection();
-  assert.equal(empty.lockStructure, false);
-  assert.equal(empty.workbookHashValue, null);
+  assert.equal(wb.getWorkbookProtection(), null);
   wb.setWorkbookProtection(fullProtection);
   assert.deepEqual(wb.getWorkbookProtection(), fullProtection);
   const loaded = roundTrip(mod, wb);
   assert.deepEqual(loaded.getWorkbookProtection(), fullProtection);
-  // An all-empty record removes the element.
+  // A record with every lock off stays present; null removes the element.
   loaded.setWorkbookProtection({});
   assert.equal(roundTrip(mod, loaded).getWorkbookProtection().lockStructure, false);
+  loaded.setWorkbookProtection(null);
+  assert.equal(roundTrip(mod, loaded).getWorkbookProtection(), null);
   release(loaded);
   release(wb);
 });

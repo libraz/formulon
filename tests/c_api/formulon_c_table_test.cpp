@@ -31,7 +31,7 @@ constexpr fm_status_t kAlreadyExists = static_cast<fm_status_t>(formulon::Formul
 
 std::vector<std::uint8_t> Save(fm_workbook_t* wb) {
   BufferGuard saved;
-  EXPECT_EQ(fm_workbook_save(wb, &saved.data, &saved.len), 0);
+  EXPECT_EQ(fm_workbook_save(wb, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0);
   return std::vector<std::uint8_t>(saved.data, saved.data + saved.len);
 }
 
@@ -112,12 +112,12 @@ fm_status_t SetTableStyleName(fm_workbook_t* wb, std::size_t index, const char* 
 fm_status_t UpdateStyleDefaults(fm_workbook_t* wb, const char* table_style, const char* pivot_style) {
   fm_table_style_defaults_patch_t patch = FM_STRUCT_INIT(fm_table_style_defaults_patch_t);
   if (table_style != nullptr) {
-    patch.table_style_op = table_style[0] == '\0' ? FM_PATCH_OP_CLEAR : FM_PATCH_OP_SET;
-    patch.table_style = table_style;
+    patch.table_style_name_op = table_style[0] == '\0' ? FM_PATCH_OP_CLEAR : FM_PATCH_OP_SET;
+    patch.table_style_name = table_style[0] == '\0' ? nullptr : table_style;
   }
   if (pivot_style != nullptr) {
-    patch.pivot_style_op = pivot_style[0] == '\0' ? FM_PATCH_OP_CLEAR : FM_PATCH_OP_SET;
-    patch.pivot_style = pivot_style;
+    patch.pivot_style_name_op = pivot_style[0] == '\0' ? FM_PATCH_OP_CLEAR : FM_PATCH_OP_SET;
+    patch.pivot_style_name = pivot_style[0] == '\0' ? nullptr : pivot_style;
   }
   return fm_workbook_update_table_style_defaults(wb, &patch);
 }
@@ -141,12 +141,13 @@ std::string Formula(fm_workbook_t* wb, std::uint32_t row, std::uint32_t col) {
   return present != 0 && text != nullptr ? text : "";
 }
 
+/// `pivot` / `table` are 0 / 1 here and land as the tristate's FALSE / TRUE.
 fm_table_style_t MakeTableStyle(const char* name, int32_t pivot, int32_t table,
                                 const fm_table_style_element_t* elements, std::uint32_t element_count) {
   fm_table_style_t style = FM_STRUCT_INIT(fm_table_style_t);
   style.name = name;
-  style.pivot = pivot;
-  style.table = table;
+  style.pivot = pivot != 0 ? FM_TRISTATE_TRUE : FM_TRISTATE_FALSE;
+  style.table = table != 0 ? FM_TRISTATE_TRUE : FM_TRISTATE_FALSE;
   style.elements = elements;
   style.element_count = element_count;
   return style;
@@ -707,11 +708,10 @@ TEST(FormulonCApiTableStyles, CustomStyleRoundTripsAndATableUsesIt) {
   std::size_t count = 0;
   ASSERT_EQ(fm_workbook_get_table_style_count(wb.handle, &count), 0);
   EXPECT_EQ(count, 1U);
-  const char* default_table = nullptr;
-  const char* default_pivot = nullptr;
-  ASSERT_EQ(fm_workbook_get_table_style_defaults(wb.handle, &default_table, &default_pivot), 0);
-  EXPECT_STREQ(default_table, "TableStyleMedium2");
-  EXPECT_STREQ(default_pivot, "PivotStyleLight16");
+  fm_table_style_defaults_t defaults = FM_STRUCT_INIT(fm_table_style_defaults_t);
+  ASSERT_EQ(fm_workbook_get_table_style_defaults(wb.handle, &defaults), 0);
+  EXPECT_STREQ(defaults.table_style_name, "TableStyleMedium2");
+  EXPECT_STREQ(defaults.pivot_style_name, "PivotStyleLight16");
   fm_table_style_options_patch_t corporate = FM_STRUCT_INIT(fm_table_style_options_patch_t);
   corporate.style_name_op = FM_PATCH_OP_SET;
   corporate.style_name = "Corporate";
@@ -754,8 +754,8 @@ TEST(FormulonCApiTableStyles, CustomStyleRoundTripsAndATableUsesIt) {
   fm_table_style_t got = FM_STRUCT_INIT(fm_table_style_t);
   ASSERT_EQ(fm_workbook_get_table_style_at(reloaded.handle, 0, &got), 0);
   EXPECT_STREQ(got.name, "Corporate");
-  EXPECT_EQ(got.pivot, 0);
-  EXPECT_EQ(got.table, 1);
+  EXPECT_EQ(got.pivot, FM_TRISTATE_FALSE);
+  EXPECT_EQ(got.table, FM_TRISTATE_TRUE);
   ASSERT_EQ(got.element_count, 4U);
   EXPECT_EQ(got.elements[2].type, FM_TABLE_STYLE_ELEMENT_TYPE_FIRST_ROW_STRIPE);
   EXPECT_EQ(got.elements[2].size, 2U);
@@ -822,7 +822,7 @@ TEST(FormulonCApiTableStyles, SetReplacesByNameAndValidates) {
   fm_table_style_t got = FM_STRUCT_INIT(fm_table_style_t);
   ASSERT_EQ(fm_workbook_get_table_style_at(wb.handle, 0, &got), 0);
   EXPECT_STREQ(got.name, "MINE");
-  EXPECT_EQ(got.table, 0);
+  EXPECT_EQ(got.table, FM_TRISTATE_FALSE);
   ASSERT_EQ(got.element_count, 2U);
   EXPECT_EQ(got.elements[0].type, FM_TABLE_STYLE_ELEMENT_TYPE_PAGE_FIELD_LABELS);
 
@@ -864,16 +864,15 @@ TEST(FormulonCApiTableStyles, DefaultsAndRemove) {
   fm_table_style_t style = MakeTableStyle("Mine", 1, 1, nullptr, 0U);
   ASSERT_EQ(fm_workbook_set_table_style(wb.handle, &style), 0);
   ASSERT_EQ(UpdateStyleDefaults(wb.handle, "Mine", nullptr), 0);
-  const char* table = nullptr;
-  const char* pivot = nullptr;
-  ASSERT_EQ(fm_workbook_get_table_style_defaults(wb.handle, &table, &pivot), 0);
-  EXPECT_STREQ(table, "Mine");
-  EXPECT_STREQ(pivot, "PivotStyleLight16");
+  fm_table_style_defaults_t defaults = FM_STRUCT_INIT(fm_table_style_defaults_t);
+  ASSERT_EQ(fm_workbook_get_table_style_defaults(wb.handle, &defaults), 0);
+  EXPECT_STREQ(defaults.table_style_name, "Mine");
+  EXPECT_STREQ(defaults.pivot_style_name, "PivotStyleLight16");
 
   EXPECT_EQ(fm_workbook_remove_table_style(wb.handle, "Missing"), FM_STATUS_NOT_FOUND);
   ASSERT_EQ(fm_workbook_remove_table_style(wb.handle, "mine"), 0);
-  ASSERT_EQ(fm_workbook_get_table_style_defaults(wb.handle, &table, &pivot), 0);
-  EXPECT_STREQ(table, "TableStyleMedium2");
+  ASSERT_EQ(fm_workbook_get_table_style_defaults(wb.handle, &defaults), 0);
+  EXPECT_STREQ(defaults.table_style_name, "TableStyleMedium2");
 
   ASSERT_EQ(UpdateStyleDefaults(wb.handle, nullptr, ""), 0);
   const std::string styles_xml = ExtractZipEntry(Save(wb.handle), "xl/styles.xml");
@@ -885,22 +884,21 @@ TEST(FormulonCApiTableStyles, DefaultsPatchRefusesABadOpAndChangesNothing) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   ASSERT_EQ(UpdateStyleDefaults(wb.handle, "TableStyleLight1", nullptr), 0);
   fm_table_style_defaults_patch_t patch = FM_STRUCT_INIT(fm_table_style_defaults_patch_t);
-  patch.table_style_op = FM_PATCH_OP_SET;
-  patch.table_style = "TableStyleLight2";
-  patch.pivot_style_op = static_cast<fm_patch_op_t>(3);
-  patch.pivot_style = "PivotStyleLight2";
+  patch.table_style_name_op = FM_PATCH_OP_SET;
+  patch.table_style_name = "TableStyleLight2";
+  patch.pivot_style_name_op = static_cast<fm_patch_op_t>(3);
+  patch.pivot_style_name = "PivotStyleLight2";
   EXPECT_EQ(fm_workbook_update_table_style_defaults(wb.handle, &patch), kInvalidArgument);
-  patch.pivot_style_op = FM_PATCH_OP_SET;
-  patch.pivot_style = "\xff";
+  patch.pivot_style_name_op = FM_PATCH_OP_SET;
+  patch.pivot_style_name = "\xff";
   EXPECT_EQ(fm_workbook_update_table_style_defaults(wb.handle, &patch),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingUtf8EncodingError));
   patch.struct_size = 0U;
   EXPECT_EQ(fm_workbook_update_table_style_defaults(wb.handle, &patch), kInvalidArgument);
   EXPECT_EQ(fm_workbook_update_table_style_defaults(wb.handle, nullptr), kBindingNullPointer);
-  const char* table = nullptr;
-  const char* pivot = nullptr;
-  ASSERT_EQ(fm_workbook_get_table_style_defaults(wb.handle, &table, &pivot), 0);
-  EXPECT_STREQ(table, "TableStyleLight1") << "a refused patch writes nothing";
+  fm_table_style_defaults_t defaults = FM_STRUCT_INIT(fm_table_style_defaults_t);
+  ASSERT_EQ(fm_workbook_get_table_style_defaults(wb.handle, &defaults), 0);
+  EXPECT_STREQ(defaults.table_style_name, "TableStyleLight1") << "a refused patch writes nothing";
 }
 
 /// An `.xlsb` package whose only table `Sales` (id `id`) stays a verbatim
@@ -1070,7 +1068,7 @@ TEST(FormulonCApiTable, TotalsRowOnRefusesAnOccupiedRowAboveAStraddlingMergeAndC
   CreateSalesTable(wb);
   ASSERT_EQ(fm_sheet_set_text(wb.handle, 0, 3, 0, "x"), 0);
   const fm_cell_rect_t merge{4, 1, 4, 2};  // B5:C5 straddles the table's columns A:B.
-  ASSERT_EQ(fm_sheet_add_merge(wb.handle, 0, &merge), 0);
+  ASSERT_EQ(fm_sheet_add_merge(wb.handle, 0, &merge, nullptr), 0);
   fm_table_patch_t patch = TablePatch();
   patch.header_row_op = FM_PATCH_OP_SET;
   patch.header_row = 0;
@@ -1422,6 +1420,104 @@ TEST(FormulonCApiTable, RuntimeIdsAreUniqueAcrossLoadAddCopyAndRemove) {
   const std::uint32_t fresh = TableRuntimeId(wb.handle, 0, count - 1U);
   EXPECT_NE(fresh, removed);
   expect_new(fresh);
+}
+
+TEST(FormulonCApiTableStyleDefaultsRecord, ReadsRecord) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  fm_table_style_defaults_t defaults = FM_STRUCT_INIT(fm_table_style_defaults_t);
+  ASSERT_EQ(UpdateStyleDefaults(wb.handle, "TableStyleLight9", "PivotStyleMedium4"), 0);
+  ASSERT_EQ(fm_workbook_get_table_style_defaults(wb.handle, &defaults), 0);
+  EXPECT_EQ(defaults.struct_size, sizeof(fm_table_style_defaults_t));
+  EXPECT_STREQ(defaults.table_style_name, "TableStyleLight9");
+  EXPECT_STREQ(defaults.pivot_style_name, "PivotStyleMedium4");
+  ASSERT_EQ(UpdateStyleDefaults(wb.handle, "", nullptr), 0);
+  ASSERT_EQ(fm_workbook_get_table_style_defaults(wb.handle, &defaults), 0);
+  EXPECT_EQ(defaults.table_style_name, nullptr) << "a cleared default reads NULL";
+  EXPECT_STREQ(defaults.pivot_style_name, "PivotStyleMedium4");
+  EXPECT_EQ(fm_workbook_get_table_style_defaults(wb.handle, nullptr), kBindingNullPointer);
+}
+
+TEST(FormulonCApiTableStyleUsableDefault, ZeroInitStyleUsableByBoth) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  fm_table_style_t style = FM_STRUCT_INIT(fm_table_style_t);
+  style.name = "ZeroInit";
+  ASSERT_EQ(fm_workbook_set_table_style(wb.handle, &style), 0) << fm_get_last_error_message();
+  fm_table_style_t got = FM_STRUCT_INIT(fm_table_style_t);
+  std::int32_t present = 0;
+  ASSERT_EQ(fm_workbook_get_table_style(wb.handle, "ZeroInit", &present, &got), 0);
+  ASSERT_EQ(present, 1);
+  EXPECT_EQ(got.pivot, FM_TRISTATE_TRUE) << "DEFAULT is usable, and a read states it";
+  EXPECT_EQ(got.table, FM_TRISTATE_TRUE);
+
+  style.pivot = FM_TRISTATE_FALSE;
+  ASSERT_EQ(fm_workbook_set_table_style(wb.handle, &style), 0);
+  ASSERT_EQ(fm_workbook_get_table_style(wb.handle, "ZeroInit", &present, &got), 0);
+  EXPECT_EQ(got.pivot, FM_TRISTATE_FALSE);
+  EXPECT_EQ(got.table, FM_TRISTATE_TRUE);
+
+  style.table = FM_TRISTATE_TRUE + 1;
+  EXPECT_EQ(fm_workbook_set_table_style(wb.handle, &style), kInvalidArgument);
+}
+
+TEST(FormulonCApiEmptyStyleName, TableSpecPivotSlicerDefaultsRefuseEmpty) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  ASSERT_EQ(fm_sheet_set_text(wb.handle, 0, 0, 0, "Product"), 0);
+  ASSERT_EQ(fm_sheet_set_text(wb.handle, 0, 0, 1, "Amount"), 0);
+  const char* columns[] = {"Product", "Amount"};
+  fm_table_spec_t spec = FM_STRUCT_INIT(fm_table_spec_t);
+  spec.range = fm_cell_rect_t{0, 0, 2, 1};
+  spec.name = "Sales";
+  spec.column_names = columns;
+  spec.column_count = 2;
+  spec.style_name = "";
+  std::size_t index = 99;
+  EXPECT_EQ(fm_sheet_add_table(wb.handle, 0, &spec, &index), kInvalidArgument) << "an empty style name is refused";
+  spec.styled = FM_TRISTATE_FALSE;
+  spec.style_name = "TableStyleLight1";
+  EXPECT_EQ(fm_sheet_add_table(wb.handle, 0, &spec, &index), kInvalidArgument)
+      << "an unstyled table takes no style name";
+  EXPECT_EQ(index, 99U);
+
+  // `styled` FALSE with no name creates the table without <tableStyleInfo>.
+  spec.style_name = nullptr;
+  ASSERT_EQ(fm_sheet_add_table(wb.handle, 0, &spec, &index), 0) << fm_get_last_error_message();
+  EXPECT_EQ(Info(wb.handle, index).style_name, nullptr);
+  EXPECT_EQ(StyleOptions(wb.handle, index).present, 0);
+  ASSERT_EQ(fm_sheet_remove_table(wb.handle, 0, index), 0);
+
+  // A zero-initialised spec is styled with the workbook default.
+  spec.styled = FM_TRISTATE_DEFAULT;
+  ASSERT_EQ(fm_sheet_add_table(wb.handle, 0, &spec, &index), 0) << fm_get_last_error_message();
+  EXPECT_STREQ(Info(wb.handle, index).style_name, "TableStyleMedium2");
+
+  EXPECT_EQ(SetTableStyleName(wb.handle, index, ""), kInvalidArgument);
+
+  fm_table_style_defaults_patch_t defaults = FM_STRUCT_INIT(fm_table_style_defaults_patch_t);
+  defaults.table_style_name_op = FM_PATCH_OP_SET;
+  defaults.table_style_name = "";
+  EXPECT_EQ(fm_workbook_update_table_style_defaults(wb.handle, &defaults), kInvalidArgument);
+  defaults = FM_STRUCT_INIT(fm_table_style_defaults_patch_t);
+  defaults.pivot_style_name_op = FM_PATCH_OP_SET;
+  defaults.pivot_style_name = "";
+  EXPECT_EQ(fm_workbook_update_table_style_defaults(wb.handle, &defaults), kInvalidArgument);
+
+  EXPECT_EQ(fm_sheet_set_table_column_totals(wb.handle, 0, index, 0, FM_TABLE_TOTALS_ROW_FUNCTION_NONE, "", nullptr),
+            kInvalidArgument);
+  EXPECT_EQ(fm_sheet_set_table_column_totals(wb.handle, 0, index, 1, FM_TABLE_TOTALS_ROW_FUNCTION_CUSTOM, nullptr, ""),
+            kInvalidArgument);
+
+  WorkbookGuard pivots;
+  ASSERT_EQ(fm_workbook_create_default(&pivots.handle), 0);
+  std::uint32_t cache_id = 0;
+  std::size_t pivot_index = 0;
+  ASSERT_EQ(BuildScratchPivot(pivots.handle, &cache_id, &pivot_index), 0) << fm_get_last_error_message();
+  fm_pivot_style_options_patch_t pivot_patch = FM_STRUCT_INIT(fm_pivot_style_options_patch_t);
+  pivot_patch.style_name_op = FM_PATCH_OP_SET;
+  pivot_patch.style_name = "";
+  EXPECT_EQ(fm_sheet_update_pivot_style_options(pivots.handle, 0, pivot_index, &pivot_patch), kInvalidArgument);
 }
 
 }  // namespace

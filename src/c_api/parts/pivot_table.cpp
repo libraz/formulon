@@ -57,7 +57,6 @@ using formulon::c_api::parts::publish_scratch;
 using formulon::c_api::parts::resolve_cache;
 using formulon::c_api::parts::resolve_pivot_checked;
 using formulon::c_api::parts::resolve_pivot_mut;
-using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::set_last_error;
 using formulon::c_api::parts::set_values_position;
 using formulon::c_api::parts::store_cstr;
@@ -141,13 +140,6 @@ extern "C" fm_status_t fm_sheet_add_pivot(fm_workbook_t* wb, std::size_t sheet_i
   if (auto rc = check_cell_coord(spec->anchor_row, spec->anchor_col); rc != 0) {
     return rc;
   }
-  {
-    const formulon::Sheet& target = wb->workbook().sheet(sheet_index);
-    if (formulon::pivot::pivot_name_taken(target, spec->name, target.pivot_tables().size())) {
-      return set_binding_error(formulon::FormulonErrorCode::kAlreadyExists, "pivot name already in use",
-                               std::string("name=") + spec->name);
-    }
-  }
   auto table = std::make_unique<formulon::pivot::PivotTable>();
   table->set_name(spec->name);
   table->set_pivot_cache_id(spec->cache_id);
@@ -159,9 +151,13 @@ extern "C" fm_status_t fm_sheet_add_pivot(fm_workbook_t* wb, std::size_t sheet_i
   table->set_data_caption(formulon::pivot::pivot_layout_options_for(wb->workbook().excel_profile()).values_label);
   table->set_style_info(new_pivot_style(wb->workbook()));
   table->apply_new_pivot_defaults();
+  // The engine refuses a taken or empty name and gives the pivot one field per cache field.
+  auto added = wb->workbook().add_pivot(sheet_index, std::move(table));
+  if (!added) {
+    return set_last_error(added.error());
+  }
   formulon::Sheet& sheet = wb->workbook().sheet(sheet_index);
-  sheet.add_pivot_table(std::move(table));
-  const std::size_t pivot_index = sheet.pivot_tables().size() - 1U;
+  const std::size_t pivot_index = added.value();
   // A report that cannot be placed is not created.
   if (auto projected = project_pivot(wb->workbook(), sheet_index, pivot_index); !projected) {
     auto& pivots = sheet.mutable_pivot_tables();
@@ -208,12 +204,10 @@ extern "C" fm_status_t fm_sheet_rename_pivot(fm_workbook_t* wb, std::size_t shee
   if (fm_status_t rc = resolve_pivot_checked(wb, sheet_index, pivot_index, &table); rc != 0) {
     return rc;
   }
-  if (formulon::pivot::pivot_name_taken(wb->workbook().sheet(sheet_index), utf8_name, pivot_index)) {
-    return set_binding_error(formulon::FormulonErrorCode::kAlreadyExists, "pivot name already in use",
-                             std::string("name=") + utf8_name);
-  }
   PivotEdit edit(wb->workbook(), sheet_index, pivot_index, *table);
-  table->set_name(utf8_name);
+  if (auto renamed = wb->workbook().rename_pivot(sheet_index, pivot_index, utf8_name); !renamed) {
+    return set_last_error(renamed.error());
+  }
   return edit.commit();
 }
 
@@ -314,8 +308,8 @@ extern "C" fm_status_t fm_sheet_update_pivot_style_options(fm_workbook_t* wb, st
     return invalid_argument("patch op out of range", "field=style_name");
   }
   if (patch->style_name_op == FM_PATCH_OP_SET) {
-    if (patch->style_name == nullptr) {
-      return invalid_argument("style_name must not be NULL under SET", "style_name");
+    if (patch->style_name == nullptr || patch->style_name[0] == '\0') {
+      return invalid_argument("style_name must be a non-empty string under SET", "style_name");
     }
     if (auto rc = check_utf8({patch->style_name}); rc != 0) {
       return rc;
@@ -781,15 +775,20 @@ extern "C" fm_status_t fm_sheet_resolve_pivot_runtime_id(const fm_workbook_t* wb
 }
 
 extern "C" fm_status_t fm_sheet_get_pivot_grand_totals(const fm_workbook_t* wb, std::size_t sheet_index,
-                                                       std::size_t pivot_index, std::int32_t* out_rows,
-                                                       std::int32_t* out_columns) {
+                                                       std::size_t pivot_index, fm_pivot_grand_totals_t* out) {
   clear_last_error();
   const formulon::pivot::PivotTable* table = nullptr;
-  if (auto rc = resolve_pivot_checked(wb, {out_rows, out_columns}, sheet_index, pivot_index, &table); rc != 0) {
+  if (auto rc = resolve_pivot_checked(wb, {out}, sheet_index, pivot_index, &table); rc != 0) {
     return rc;
   }
-  *out_rows = table->grand_totals_rows() ? 1 : 0;
-  *out_columns = table->grand_totals_cols() ? 1 : 0;
+  if (auto rc = check_record_size(*out); rc != 0) {
+    return rc;
+  }
+  const std::uint32_t struct_size = out->struct_size;
+  *out = fm_pivot_grand_totals_t{};
+  out->struct_size = struct_size;
+  out->rows = table->grand_totals_rows() ? 1 : 0;
+  out->columns = table->grand_totals_cols() ? 1 : 0;
   return 0;
 }
 

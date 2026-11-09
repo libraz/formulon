@@ -61,6 +61,8 @@ using IterativeProgressCb = bool (*)(std::uint32_t iteration, double max_residua
 
 namespace pivot {
 class PivotCache;
+class PivotTable;
+struct PivotCacheField;
 }  // namespace pivot
 
 namespace parser {
@@ -985,7 +987,9 @@ class Workbook {
   /// `remove_person`.
   std::vector<Person>& mutable_persons() noexcept { return persons_; }
 
-  /// Appends `person`, its id stored uppercase. Fails with `kInvalidArgument`
+  /// Appends `person`, its id stored uppercase; an empty id takes a generated
+  /// GUID from the threaded-comment generator (reproducible while the clock
+  /// is pinned). Fails with `kInvalidArgument`
   /// when the id is not a brace-wrapped GUID (either letter case) or the
   /// display name is empty, and with `kAlreadyExists` when the id is already
   /// listed. Person ids compare ASCII case-insensitively here and wherever
@@ -1001,8 +1005,8 @@ class Workbook {
   /// opens a new thread at `row`/`col`, which must hold neither a note nor a
   /// thread; a non-empty one appends a reply to that thread, taking its anchor
   /// and ignoring `row`/`col` and `done`. An empty `id` takes a generated
-  /// GUID, reproducible while the clock is pinned (`set_pinned_now`); an
-  /// empty `created` takes the pinned clock, else the host clock. The author
+  /// GUID, reproducible while the clock is pinned (`set_pinned_now`), and so
+  /// does an empty mention id; an empty `created` takes the pinned clock, else the host clock. The author
   /// and mentioned persons and the parent are stored in their listed spelling,
   /// the comment and mention ids uppercase. Fails with `kInvalidArgument` for
   /// an id or mention id that is not a GUID, a malformed timestamp, a mention
@@ -1130,6 +1134,24 @@ class Workbook {
   /// workbooks typically have fewer than ten caches so the cost is
   /// negligible. Returns `nullptr` when no cache matches.
   const pivot::PivotCache* find_pivot_cache(std::uint32_t cache_id) const noexcept;
+
+  /// Appends `field` to cache `cache_id` and one unplaced pivot field to every
+  /// pivot bound to that cache; returns the new cache field index. Fails with
+  /// `kNotFound` for an unknown cache.
+  Expected<std::size_t, Error> add_pivot_cache_field(std::uint32_t cache_id, pivot::PivotCacheField field);
+
+  /// Appends `table` to sheet `sheet` and returns its pivot index. The table
+  /// is bound to its `pivot_cache_id()` cache and gets one unplaced field per
+  /// cache field; its report is not projected. Fails with `kInvalidArgument` for a bad sheet or an empty
+  /// name, `kNotFound` for an unknown cache, and `kAlreadyExists` for a name
+  /// another pivot on the sheet holds under the name identity rule.
+  Expected<std::size_t, Error> add_pivot(std::size_t sheet, std::unique_ptr<pivot::PivotTable> table);
+
+  /// Renames pivot `pivot` on sheet `sheet`. Fails with `kInvalidArgument` for
+  /// a bad sheet or an empty name, `kIndexOutOfRange` for a pivot index past the sheet's
+  /// pivots, and `kAlreadyExists` for a name another pivot on the sheet holds
+  /// under the name identity rule.
+  Expected<void, Error> rename_pivot(std::size_t sheet, std::size_t pivot, std::string_view name);
 
   /// Runs Excel's Show Details on the value cell at absolute (`row`, `col`)
   /// of pivot `pivot` on sheet `sheet`, and returns the new sheet's index.
@@ -1629,6 +1651,8 @@ class Workbook {
   std::optional<std::uint64_t> guid_seed_;
   std::uint64_t guid_sequence_ = 0;
   std::string next_threaded_comment_guid();
+  // Gives every mention with an empty id a generated GUID.
+  void fill_mention_ids(std::vector<Mention>& mentions);
   std::vector<PassthroughPart> passthrough_parts_;
   std::vector<ExternalLinkRecord> external_links_;
   // See `file_name()`.

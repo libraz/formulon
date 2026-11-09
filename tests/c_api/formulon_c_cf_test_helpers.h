@@ -133,9 +133,9 @@ template <typename MutateFn>
   rule.range_count = 1;
   rule.has_data_bar = 1;
   rule.data_bar_min.type = 3;  // Min
-  rule.data_bar_min.gte = 1;
+  rule.data_bar_min.gte = FM_TRISTATE_TRUE;
   rule.data_bar_max.type = 4;  // Max
-  rule.data_bar_max.gte = 1;
+  rule.data_bar_max.gte = FM_TRISTATE_TRUE;
   rule.data_bar_fill = CfRgb(99, 142, 198, 255);
   rule.data_bar_show_value = 1;
   rule.data_bar_min_length_pct = 10;

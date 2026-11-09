@@ -23,11 +23,11 @@ collections:
   fill: { key: index, access: indexed, plural: fills, ops: [fill.add, fill.get, fill.get_count, fill.set] }
   border: { key: index, access: indexed, plural: borders, ops: [border.add, border.get, border.get_count, border.set] }
   cell_xf: { key: index, access: indexed, plural: cell_xfs, ops: [cell_xf.add, cell_xf.get, cell_xf.get_count, cell_xf.set] }
-  cell_style_xf: { key: index, access: indexed, plural: cell_style_xfs, ops: [cell_style_xf.add, cell_style_xf.get, cell_style_xf.get_count] }
+  cell_style_xf: { key: index, access: indexed, plural: cell_style_xfs, ops: [cell_style_xf.add, cell_style_xf.get, cell_style_xf.get_count, cell_style_xf.set] }
   dxf: { key: index, access: indexed, plural: dxfs, ops: [dxf.add, dxf.get, dxf.get_count, dxf.set] }
   table: { key: index, access: handles, handle_class: Table, plural: tables, ops: [table.create, table.get, table.get_count, table.remove, table.rename, table.update, table.list.iter_tables, binding.table, binding.sheet_table] }
   pivot: { key: index, access: handles, handle_class: Pivot, plural: pivots, ops: [pivot.create, pivot.get_count, pivot.remove, pivots.list, binding.pivot] }
-  pivot_field: { key: index, access: list, plural: pivot_fields, ops: [pivot_field.add, pivot_field.clear, pivot_field.get, pivot_field.get_count] }
+  pivot_field: { key: index, access: list, plural: pivot_fields, ops: [pivot_field.clear, pivot_field.get, pivot_field.get_count] }
   pivot_data_field: { key: index, access: list, plural: pivot_data_fields, ops: [pivot_data_field.add, pivot_data_field.clear, pivot_data_field.get, pivot_data_field.get_count, pivot_data_field.set] }
   pivot_filter: { key: index, access: list, plural: pivot_filters, ops: [pivot_filter.add, pivot_filter.clear, pivot_filter.get, pivot_filter.get_count, pivot_filter.remove] }
   pivot_field_item: { key: index, access: indexed, plural: pivot_field_items, ops: [pivot_field_item.add, pivot_field_item.add_at, pivot_field_item.get, pivot_field_item.get_count] }
@@ -43,10 +43,10 @@ collections:
   sparkline: { key: index, access: exempt, plural: sparklines, exempt: "C-only getter; the bindings read sparklines as a SparklineGroup field", ops: [sparkline.get] }
   external_link: { key: index, access: list, plural: external_links, ops: [external_link.get, external_link.get_count] }
   cell_phonetic_run: { key: index, access: property, plural: cell_phonetic_runs, ops: [cell_phonetic_run.get, cell_phonetic_run.get_count] }
-  comment: { key: natural, by: cell, plural: comments, ops: [comment.get, comment.get_at, comment.get_count, comment.remove, comment.set, comment_visible.get] }
+  comment: { key: natural, by: cell, plural: comments, ops: [comment.get, comment.get_at, comment.get_count, comment.set, comment_visible.get] }
   threaded_comment: { key: natural, by: id, plural: threaded_comments, ops: [threaded_comment.add, threaded_comment.get, threaded_comment.get_at, threaded_comment.get_count, threaded_comment.remove, threaded_comment.update] }
   person: { key: natural, by: id, plural: people, ops: [person.add, person.get, person.get_at, person.get_count, person.remove] }
-  hyperlink: { key: natural, by: cell, plural: hyperlinks, ops: [hyperlink.set, hyperlink.get, hyperlink.get_at, hyperlink.get_count, hyperlink.remove, hyperlink.remove_at] }
+  hyperlink: { key: natural, by: cell, plural: hyperlinks, ops: [hyperlink.set, hyperlink.get, hyperlink.get_at, hyperlink.get_count, hyperlink.remove_at] }
   auto_filter_column: { key: natural, by: column_offset, plural: auto_filter_columns, ops: [auto_filter.clear], no_getter: "the columns are read and written as the AutoFilter record's columns; clearing every criterion is the one call of its own" }
   table_auto_filter_column: { key: natural, by: column_offset, plural: table_auto_filter_columns, ops: [table_auto_filter.clear], no_getter: "the columns are read and written as the table AutoFilter record's columns; clearing every criterion is the one call of its own" }
   merge: { key: natural, by: rect, plural: merges, ops: [merge.add, merge.get_at, merge.get_count, merge.remove, merge.remove_at], no_getter: "the element is its rectangle; a lookup by key returns nothing more" }
@@ -54,7 +54,7 @@ collections:
   data_table: { key: natural, by: cell, plural: data_tables, ops: [data_table.add, data_table.get, data_table.remove] }
   lambda_text: { key: natural, by: cell, plural: lambda_texts, ops: [lambda_text.get] }
   pivot_cache: { key: natural, by: cache_id, access: handles, handle_class: PivotCache, plural: pivot_caches, ops: [pivot_cache.create, pivot_cache.get_count, pivot_cache.get_id_at, pivot_cache.remove, pivot_cache_ids.list, binding.pivot_cache], no_getter: "addressed by cache_id through the per-property cache getters" }
-  num_fmt: { key: natural, by: num_fmt_id, plural: num_fmts, ops: [num_fmt.add, num_fmt_string.get] }
+  num_fmt: { key: natural, by: num_fmt_id, plural: number_formats, ops: [num_fmt.add, num_fmt.get_at, num_fmt.get_count, num_fmt_string.get, num_fmts.list] }
   function: { key: natural, by: name, plural: function_names, ops: [function.canonicalize_name, function.get_count, function.get_name_at, function.localize_name, function_metadata.get] }
   locale_error_name: { key: natural, by: "error code", plural: locale_error_names, ops: [locale_error_name.get_at, locale_error_name.get_count, error_display_name.get] }
   row_break: { key: natural, by: row, plural: row_breaks, ops: [row_break.set, row_break.get_at, row_break.get_count, row_break.remove], no_getter: "the element is its row number; a lookup by key returns nothing more" }
@@ -77,6 +77,10 @@ enum_families:
   # reading direction: Context 0, LeftToRight 1, RightToLeft 2 (`readingOrder` / `<x14:dataBar direction>`)
   reading_direction: [enum.reading_order, enum.cf_data_bar_direction]
 enum_distinct:
+  - { enums: [enum.cell_shift, enum.chart_axis_position], reason: "share Left / Right: the direction cells shift vs where a chart axis sits" }
+  - { enums: [enum.cell_shift, enum.chart_label_position], reason: "share Left / Right: the direction cells shift vs where a data label sits" }
+  - { enums: [enum.cell_shift, enum.chart_legend_position], reason: "share Left / Right: the direction cells shift vs where the legend sits" }
+  - { enums: [enum.cell_shift, enum.horizontal_align], reason: "share Left / Right: the direction cells shift vs horizontal text alignment" }
   - { enums: [enum.chart_bar_direction, enum.pivot_axis], reason: "share Absent / Column: bar orientation vs pivot field axis" }
   - { enums: [enum.effective_style_source, enum.pivot_axis], reason: "share Column / Row: where a cell's style came from vs pivot field axis" }
   - { enums: [enum.chart_axis_crosses, enum.pivot_aggregation], reason: "share Min / Max only: axis crossing point vs aggregation function" }
@@ -252,8 +256,8 @@ entries:
     surfaces: [wasm, native, py]
   record.comment:
     kind: record
-    role: result
-    c: fm_comment_info_t
+    role: both
+    c: fm_comment_t
     js: Comment
     py: Comment
     surfaces: [c, wasm, native, py]
@@ -368,7 +372,8 @@ entries:
     kind: record
     role: input
     js: PersonInput
-    surfaces: [wasm, native]
+    py: PersonInput
+    surfaces: [wasm, native, py]
   record.parallel_recalc_stats:
     kind: record
     role: result
@@ -792,11 +797,9 @@ entries:
   record.pivot_field_spec:
     kind: record
     role: input
-    c: fm_pivot_field_spec_t
-    js: PivotFieldInput
-    py: PivotFieldInput
     surfaces: [c, wasm, native, py]
     was: { c: fm_pivot_field_spec_t, js: PivotFieldSpecInput, py: PivotFieldSpecInput }
+    drop: { c: fm_pivot_field_spec_t, js: PivotFieldSpecInput, py: PivotFieldSpecInput, closes: R0.coverage }
   record.pivot_data_field_spec:
     kind: record
     role: input
@@ -1763,11 +1766,9 @@ entries:
     exception: "the anchor every drawing record reads back; C reads and writes the one record, the bindings take DrawingAnchorInput"
   enum.shape_paint:
     kind: enum
-    c: fm_shape_paint_t
-    js: ShapePaint
-    py: ShapePaint
     surfaces: [c, wasm, native, py]
     was: { c: fm_shape_paint_t, js: ShapePaint, py: ShapePaint }
+    drop: { c: fm_shape_paint_t, js: ShapePaint, py: ShapePaint, closes: R0.coverage }
   record.shape:
     kind: record
     role: result
@@ -2478,9 +2479,9 @@ entries:
   record.chart_insert:
     kind: record
     role: input
-    c: fm_chart_insert_spec_t
-    js: ChartInsertInput
-    py: ChartInsertInput
+    c: fm_chart_spec_t
+    js: ChartInput
+    py: ChartInput
     surfaces: [c, wasm, native, py]
     was: { c: fm_chart_insert, js: ChartInsertOptions }
   record.chart_fill_patch:
@@ -2508,7 +2509,7 @@ entries:
     js: ChartMarkerPatch
     py: ChartMarkerPatch
     surfaces: [c, wasm, native, py]
-    clearable: [size_pt]
+    clearable: [size_pt, fill, line]
     was: { c: fm_chart_marker_patch, js: ChartMarkerPatch, py: ChartMarkerPatch }
   record.chart_labels_patch:
     kind: record
@@ -2526,7 +2527,7 @@ entries:
     js: ChartSeriesPatch
     py: ChartSeriesPatch
     surfaces: [c, wasm, native, py]
-    clearable: [name, categories, x, marker, labels]
+    clearable: [name, categories, x, fill, line, marker, labels]
     was: { c: fm_chart_series_patch, js: ChartSeriesPatch, py: ChartSeriesPatch }
   record.chart_point_patch:
     kind: record
@@ -2535,7 +2536,7 @@ entries:
     js: ChartPointPatch
     py: ChartPointPatch
     surfaces: [c, wasm, native, py]
-    clearable: [marker]
+    clearable: [fill, line, marker]
     was: { c: fm_chart_point_patch, js: ChartPointPatch, py: ChartPointPatch }
   record.chart_series_input:
     kind: record
@@ -3249,10 +3250,11 @@ entries:
     drop: { js: PersonsResult, closes: R8.js }
   record.phonetic_properties:
     kind: record
-    role: result
+    role: both
+    c: fm_phonetic_properties_t
     js: PhoneticProperties
     py: PhoneticProperties
-    surfaces: [wasm, native, py]
+    surfaces: [c, wasm, native, py]
     was: { js: PhoneticProperties, py: PhoneticProperties }
   record.phonetic_properties_result:
     kind: record
@@ -3332,7 +3334,8 @@ entries:
     kind: record
     role: result
     js: PivotGrandTotals
-    surfaces: [wasm, native]
+    py: PivotGrandTotals
+    surfaces: [wasm, native, py]
     was: { js: PivotGrandTotalsResult }
   record.pivot_grand_totals_patch:
     kind: record
@@ -3438,9 +3441,10 @@ entries:
   record.cell_address:
     kind: record
     role: both
+    c: fm_cell_address_t
     js: CellAddress
     py: CellAddress
-    surfaces: [wasm, native, py]
+    surfaces: [c, wasm, native, py]
   record.range_style_bases_result:
     kind: record
     role: result
@@ -3704,7 +3708,7 @@ entries:
     c: fm_table_style_defaults_patch_t
     js: TableStyleDefaultsPatch
     surfaces: [c, wasm, native]
-    clearable: [table_style, pivot_style]
+    clearable: [table_style_name, pivot_style_name]
   enum.table_style_element_type:
     kind: enum
     js: TableStyleElementType
@@ -3756,7 +3760,7 @@ entries:
     c: fm_shape_patch_t
     js: ShapePatch
     surfaces: [c, wasm, native]
-    clearable: []
+    clearable: [fill, line]
   record.slicer_patch:
     kind: record
     role: patch
@@ -3764,7 +3768,7 @@ entries:
     js: SlicerPatch
     a1_exempt: { fields: [fromRow, fromCol, toRow, toCol], reason: "a two-cell drawing anchor; each cell pairs with an EMU offset" }
     surfaces: [c, wasm, native]
-    clearable: [style]
+    clearable: [style_name]
   record.theme_result:
     kind: record
     role: result
@@ -4021,8 +4025,9 @@ entries:
   record.pivot_grand_totals:
     kind: record
     role: result
-    py: PivotGrandTotals
-    surfaces: [py]
+    c: fm_pivot_grand_totals_t
+    surfaces: [c]
+    exception: "C read record of the grand-total toggles; the bindings read them as PivotOptions fields"
   record.sheet_print_titles:
     kind: record
     role: result
@@ -4032,8 +4037,9 @@ entries:
   record.table_style_defaults:
     kind: record
     role: result
+    c: fm_table_style_defaults_t
     py: TableStyleDefaults
-    surfaces: [py]
+    surfaces: [c, py]
   record.merged_function_metadata:
     kind: record
     role: result
@@ -4160,6 +4166,7 @@ entries:
     c: fm_workbook_save
     js: save
     py: save
+    params: { format: "enum:workbook_format", fmt: "enum:workbook_format" }
     reads_values: true
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_save, js: save, py: save }
@@ -4167,14 +4174,10 @@ entries:
     kind: op
     scope: workbook
     noun: as
-    c: fm_workbook_save_as
-    js: saveAs
-    py: save_as
     params: { format: "enum:workbook_format", fmt: "enum:workbook_format" }
-    reads_values: true
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_save_as, js: saveAs, py: save_as }
-    drop: { js: saveAs, py: save_as, closes: R5.derive }
+    drop: { c: fm_workbook_save_as, js: saveAs, py: save_as, closes: R5.derive }
     replaced_by: workbook.save
     closes: R5.derive
   with_diagnostics.save:
@@ -4545,12 +4548,11 @@ entries:
     kind: op
     scope: sheet
     noun: cell_phonetic_properties
-    c: fm_sheet_has_cell_phonetic_properties
-    py: has_cell_phonetic_properties
     returns: bool
     surfaces: [c, py]
     was: { c: fm_workbook_has_cell_phonetic_properties, py: has_phonetic_properties }
-    drop: { py: has_cell_phonetic_properties, closes: R0.coverage }
+    drop: { c: fm_workbook_has_cell_phonetic_properties, py: has_phonetic_properties, closes: R0.coverage }
+    replaced_by: cell_phonetic_properties.get
   cell_show_phonetic.get:
     kind: op
     scope: sheet
@@ -4966,23 +4968,19 @@ entries:
     kind: op
     scope: sheet
     noun: hyperlink
-    js: setHyperlinkRange
-    py: set_hyperlink_range
-    rect_args: [0]
     surfaces: [wasm, native, py]
-    exception: "binding form taking a CellRect (R7)"
     was: { js: addHyperlinkRange, py: add_hyperlink_range }
+    drop: { js: addHyperlinkRange, py: add_hyperlink_range, closes: R0.coverage }
+    replaced_by: hyperlink.set
     facade: handwritten
   hyperlink.remove:
     kind: op
     scope: sheet
     noun: hyperlink
-    c: fm_sheet_remove_hyperlink
-    js: removeHyperlink
-    py: remove_hyperlink
-    cell_args: [[0, 1]]
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_remove_hyperlink, js: removeHyperlink, py: remove_hyperlink }
+    drop: { c: fm_sheet_remove_hyperlink, js: removeHyperlink, py: remove_hyperlink, closes: R44.singleton.null }
+    replaced_by: hyperlink.set
   hyperlink.remove_at:
     kind: op
     scope: sheet
@@ -5129,12 +5127,10 @@ entries:
     kind: op
     scope: sheet
     noun: comment
-    c: fm_sheet_remove_comment
-    js: removeComment
-    py: remove_comment
-    cell_args: [[0, 1]]
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_remove_comment }
+    drop: { c: fm_sheet_remove_comment, js: removeComment, py: remove_comment, closes: R44.singleton.null }
+    replaced_by: comment.set
   comment_visible.get:
     kind: op
     scope: sheet
@@ -5192,18 +5188,18 @@ entries:
     scope: sheet
     noun: protected_range
     c: fm_sheet_get_protected_range
-    surfaces: [c]
-    exception: "C reads one range by name; the bindings read the list"
+    js: getProtectedRange
+    py: get_protected_range
+    ref_args: [0, protectedRange]
+    surfaces: [c, wasm, native, py]
+    missing: null
   protected_range.get_at:
     kind: op
     scope: sheet
     noun: protected_range
     c: fm_sheet_get_protected_range_at
-    js: getProtectedRange
-    py: get_protected_range
-    surfaces: [c, wasm, native, py]
+    surfaces: [c]
     exception: "the bindings read by position through get<X>(index); only the C name carries `_at`"
-    drop: { js: getProtectedRange, py: get_protected_range, closes: R23.list }
   protected_range.add:
     kind: op
     scope: sheet
@@ -5252,19 +5248,20 @@ entries:
     scope: sheet
     noun: validation
     c: fm_sheet_get_validation
-    surfaces: [c]
-    exception: "C reads one rule by id; the bindings read the list"
+    js: getValidation
+    py: get_validation
+    ref_args: [0, validation]
+    surfaces: [c, wasm, native, py]
+    missing: null
   validation.get_at:
     kind: op
     scope: sheet
     noun: validation
     c: fm_sheet_get_validation_at
-    js: getValidation
-    py: get_validation
-    surfaces: [c, wasm, native, py]
+    surfaces: [c, py]
     exception: "the bindings read by position through get<X>(index); only the C name carries `_at`"
     was: { c: fm_sheet_get_validation_at, py: get_validation_at }
-    drop: { js: getValidation, py: get_validation, closes: R23.list }
+    drop: { py: get_validation_at, closes: R23.list }
   validation.add:
     kind: op
     scope: sheet
@@ -6181,19 +6178,20 @@ entries:
     scope: sheet
     noun: cf_rule
     c: fm_sheet_get_cf_rule
-    surfaces: [c]
-    exception: "C reads one rule by id; the bindings read the list"
+    js: getCfRule
+    py: get_cf_rule
+    ref_args: [0, cfRule]
+    surfaces: [c, wasm, native, py]
+    missing: null
   cf_rule.get_at:
     kind: op
     scope: sheet
     noun: cf_rule
     c: fm_sheet_get_cf_rule_at
-    js: getCfRule
-    py: get_cf_rule
-    surfaces: [c, wasm, native, py]
+    surfaces: [c, py]
     exception: "the bindings read by position through get<X>(index); only the C name carries `_at`"
     was: { c: fm_sheet_cf_get_at, py: get_conditional_format_at }
-    drop: { js: getCfRule, py: get_cf_rule, closes: R23.list }
+    drop: { py: get_conditional_format_at, closes: R23.list }
   cf_rule.add:
     kind: op
     scope: sheet
@@ -6862,11 +6860,9 @@ entries:
     kind: op
     scope: sheet
     noun: pivot_field
-    c: fm_sheet_add_pivot_field
-    js: addPivotField
-    py: add_pivot_field
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_field_add, js: pivotFieldAdd, py: pivot_field_add }
+    drop: { c: fm_workbook_pivot_field_add, js: pivotFieldAdd, py: pivot_field_add, closes: R0.coverage }
     handle: { class: Pivot, supplies: [sheet, pivot] }
     add_returns: index
   pivot_field.clear:
@@ -7217,7 +7213,7 @@ entries:
     py: get_pivot_cache_id
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_get_cache_id, js: pivotCacheId, py: pivot_cache_id }
-    handle: { class: Pivot, js: getCache, py: get_cache, supplies: [sheet, pivot] }
+    handle: { class: Pivot, js: cache, py: cache, supplies: [sheet, pivot] }
   pivot_name.get:
     kind: op
     scope: sheet
@@ -9153,7 +9149,7 @@ entries:
     c: fm_sheet_update_shape
     js: updateShape
     py: update_shape
-    params: { text_box: bool, fill_kind: "enum:shape_paint", line_kind: "enum:shape_paint" }
+    params: { text_box: bool }
     patch: true
     patch_record: ShapeProperties
     surfaces: [c, wasm, native, py]
@@ -9243,19 +9239,19 @@ entries:
     scope: sheet
     noun: sparkline_group
     c: fm_sheet_get_sparkline_group
-    surfaces: [c]
-    exception: "C reads one group by id; the bindings read the list"
+    js: getSparklineGroup
+    py: get_sparkline_group
+    ref_args: [0, sparklineGroup]
+    surfaces: [c, wasm, native, py]
+    missing: null
   sparkline_group.get_at:
     kind: op
     scope: sheet
     noun: sparkline_group
     c: fm_sheet_get_sparkline_group_at
-    js: getSparklineGroup
-    py: get_sparkline_group
-    surfaces: [c, wasm, native, py]
+    surfaces: [c]
     exception: "the bindings read by position through get<X>(index); only the C name carries `_at`"
     was: { c: fm_sheet_sparkline_group_at }
-    drop: { js: getSparklineGroup, py: get_sparkline_group, closes: R23.list }
   sparkline.get:
     kind: op
     scope: sheet
@@ -9873,7 +9869,7 @@ entries:
   cf_rule.list.get_conditional_formats:
     kind: list
     scope: sheet
-    from: [cf_rule.get_count, cf_rule.get_at]
+    from: [cf_rule.get_count, cf_rule.get]
     js: listCfRules
     py: list_cf_rules
     surfaces: [wasm, native, py]
@@ -9940,7 +9936,7 @@ entries:
   validation.list.get_validations:
     kind: list
     scope: sheet
-    from: [validation.get_count, validation.get_at]
+    from: [validation.get_count, validation.get]
     js: listValidations
     py: list_validations
     surfaces: [wasm, native, py]
@@ -9949,7 +9945,7 @@ entries:
   protected_range.list.get_protected_ranges:
     kind: list
     scope: sheet
-    from: [protected_range.get_count, protected_range.get_at]
+    from: [protected_range.get_count, protected_range.get]
     js: listProtectedRanges
     py: list_protected_ranges
     surfaces: [wasm, native, py]
@@ -9982,7 +9978,7 @@ entries:
   sparkline_group.list.list_sparkline_groups:
     kind: list
     scope: sheet
-    from: [sparkline_group.get_count, sparkline_group.get_at]
+    from: [sparkline_group.get_count, sparkline_group.get]
     js: listSparklineGroups
     py: list_sparkline_groups
     surfaces: [wasm, native, py]
@@ -10146,22 +10142,26 @@ entries:
     was: { c: FM_VAL_LAMBDA }
   constant.fm_workbook_format_unknown:
     kind: constant
-    c: FM_WORKBOOK_FORMAT_UNKNOWN
     enum: enum.workbook_format
-    surfaces: [c]
-    was: { c: FM_WORKBOOK_FORMAT_UNKNOWN }
+    surfaces: [c, wasm, native, py]
+    was: { c: FM_WORKBOOK_FORMAT_UNKNOWN, js: Unknown, py: UNKNOWN }
+    drop: { c: FM_WORKBOOK_FORMAT_UNKNOWN, js: Unknown, py: UNKNOWN, closes: R0.coverage }
   constant.fm_workbook_format_xlsx:
     kind: constant
     c: FM_WORKBOOK_FORMAT_XLSX
     enum: enum.workbook_format
-    surfaces: [c]
-    was: { c: FM_WORKBOOK_FORMAT_XLSX }
+    js: Xlsx
+    py: XLSX
+    surfaces: [c, wasm, native, py]
+    was: { c: FM_WORKBOOK_FORMAT_XLSX, js: Xlsx, py: XLSX }
   constant.fm_workbook_format_xlsb:
     kind: constant
     c: FM_WORKBOOK_FORMAT_XLSB
     enum: enum.workbook_format
-    surfaces: [c]
-    was: { c: FM_WORKBOOK_FORMAT_XLSB }
+    js: Xlsb
+    py: XLSB
+    surfaces: [c, wasm, native, py]
+    was: { c: FM_WORKBOOK_FORMAT_XLSB, js: Xlsb, py: XLSB }
   constant.fm_display_ok:
     kind: constant
     c: FM_DISPLAY_STATUS_OK
@@ -10256,50 +10256,68 @@ entries:
     kind: constant
     c: FM_PIVOT_CELL_KIND_HEADER
     enum: enum.pivot_cell_kind
-    surfaces: [c]
-    was: { c: FM_PIVOT_CELL_HEADER }
+    js: Header
+    py: HEADER
+    surfaces: [c, wasm, native, py]
+    was: { c: FM_PIVOT_CELL_HEADER, js: Header, py: HEADER }
   constant.fm_pivot_cell_row_label:
     kind: constant
     c: FM_PIVOT_CELL_KIND_ROW_LABEL
     enum: enum.pivot_cell_kind
-    surfaces: [c]
-    was: { c: FM_PIVOT_CELL_ROW_LABEL }
+    js: RowLabel
+    py: ROW_LABEL
+    surfaces: [c, wasm, native, py]
+    was: { c: FM_PIVOT_CELL_ROW_LABEL, js: RowLabel, py: ROW_LABEL }
   constant.fm_pivot_cell_col_label:
     kind: constant
     c: FM_PIVOT_CELL_KIND_COLUMN_LABEL
     enum: enum.pivot_cell_kind
-    surfaces: [c]
-    was: { c: FM_PIVOT_CELL_COL_LABEL }
+    js: ColumnLabel
+    py: COLUMN_LABEL
+    surfaces: [c, wasm, native, py]
+    was: { c: FM_PIVOT_CELL_COL_LABEL, js: ColLabel, py: COL_LABEL }
+    closes: R5.derive
   constant.fm_pivot_cell_data:
     kind: constant
     c: FM_PIVOT_CELL_KIND_DATA
     enum: enum.pivot_cell_kind
-    surfaces: [c]
-    was: { c: FM_PIVOT_CELL_DATA }
+    js: Data
+    py: DATA
+    surfaces: [c, wasm, native, py]
+    was: { c: FM_PIVOT_CELL_DATA, js: Data, py: DATA }
   constant.fm_pivot_cell_row_subtotal:
     kind: constant
     c: FM_PIVOT_CELL_KIND_ROW_SUBTOTAL
     enum: enum.pivot_cell_kind
-    surfaces: [c]
-    was: { c: FM_PIVOT_CELL_ROW_SUBTOTAL }
+    js: RowSubtotal
+    py: ROW_SUBTOTAL
+    surfaces: [c, wasm, native, py]
+    was: { c: FM_PIVOT_CELL_ROW_SUBTOTAL, js: RowSubtotal, py: ROW_SUBTOTAL }
   constant.fm_pivot_cell_col_subtotal:
     kind: constant
     c: FM_PIVOT_CELL_KIND_COLUMN_SUBTOTAL
     enum: enum.pivot_cell_kind
-    surfaces: [c]
-    was: { c: FM_PIVOT_CELL_COL_SUBTOTAL }
+    js: ColumnSubtotal
+    py: COLUMN_SUBTOTAL
+    surfaces: [c, wasm, native, py]
+    was: { c: FM_PIVOT_CELL_COL_SUBTOTAL, js: ColSubtotal, py: COL_SUBTOTAL }
+    closes: R5.derive
   constant.fm_pivot_cell_grand_total:
     kind: constant
     c: FM_PIVOT_CELL_KIND_GRAND_TOTAL
     enum: enum.pivot_cell_kind
-    surfaces: [c]
-    was: { c: FM_PIVOT_CELL_GRAND_TOTAL }
+    js: GrandTotal
+    py: GRAND_TOTAL
+    surfaces: [c, wasm, native, py]
+    was: { c: FM_PIVOT_CELL_GRAND_TOTAL, js: GrandTotal, py: GRAND_TOTAL }
   constant.fm_pivot_cell_blank:
     kind: constant
     c: FM_PIVOT_CELL_KIND_BLANK
     enum: enum.pivot_cell_kind
-    surfaces: [c]
-    was: { c: FM_PIVOT_CELL_BLANK }
+    js: Blank
+    py: BLANK
+    surfaces: [c, wasm, native, py]
+    was: { c: FM_PIVOT_CELL_BLANK, js: Blank, py: BLANK }
   constant.fm_pivot_axis_row:
     kind: constant
     c: FM_PIVOT_AXIS_ROW
@@ -10519,223 +10537,293 @@ entries:
     was: { c: FM_PIVOT_SHOW_AS_RANK_DESCENDING }
   constant.fm_pivot_filter_value_top_10:
     kind: constant
-    c: FM_PIVOT_FILTER_KIND_VALUE_TOP_10
+    c: FM_PIVOT_FILTER_KIND_VALUE_TOP_COUNT
     enum: enum.pivot_filter_type
     js: ValueTopCount
     py: VALUE_TOP_COUNT
     surfaces: [c, wasm, native, py]
     was: { c: FM_PIVOT_FILTER_VALUE_TOP_10, js: ValueTop10, py: VALUE_TOP_10 }
+    closes: R5.derive
   constant.fm_pivot_filter_value_greater_than:
     kind: constant
     c: FM_PIVOT_FILTER_KIND_VALUE_GREATER_THAN
     enum: enum.pivot_filter_type
-    surfaces: [c]
-    was: { c: FM_PIVOT_FILTER_VALUE_GREATER_THAN }
+    js: ValueGreaterThan
+    py: VALUE_GREATER_THAN
+    surfaces: [c, wasm, native, py]
+    was: { c: FM_PIVOT_FILTER_VALUE_GREATER_THAN, js: ValueGreaterThan, py: VALUE_GREATER_THAN }
   constant.fm_pivot_filter_value_between:
     kind: constant
     c: FM_PIVOT_FILTER_KIND_VALUE_BETWEEN
     enum: enum.pivot_filter_type
-    surfaces: [c]
-    was: { c: FM_PIVOT_FILTER_VALUE_BETWEEN }
+    js: ValueBetween
+    py: VALUE_BETWEEN
+    surfaces: [c, wasm, native, py]
+    was: { c: FM_PIVOT_FILTER_VALUE_BETWEEN, js: ValueBetween, py: VALUE_BETWEEN }
   constant.fm_pivot_filter_label_contains:
     kind: constant
     c: FM_PIVOT_FILTER_KIND_LABEL_CONTAINS
     enum: enum.pivot_filter_type
-    surfaces: [c]
-    was: { c: FM_PIVOT_FILTER_LABEL_CONTAINS }
+    js: LabelContains
+    py: LABEL_CONTAINS
+    surfaces: [c, wasm, native, py]
+    was: { c: FM_PIVOT_FILTER_LABEL_CONTAINS, js: LabelContains, py: LABEL_CONTAINS }
   constant.fm_pivot_filter_label_begins_with:
     kind: constant
     c: FM_PIVOT_FILTER_KIND_LABEL_BEGINS_WITH
     enum: enum.pivot_filter_type
-    surfaces: [c]
-    was: { c: FM_PIVOT_FILTER_LABEL_BEGINS_WITH }
+    js: LabelBeginsWith
+    py: LABEL_BEGINS_WITH
+    surfaces: [c, wasm, native, py]
+    was: { c: FM_PIVOT_FILTER_LABEL_BEGINS_WITH, js: LabelBeginsWith, py: LABEL_BEGINS_WITH }
   constant.fm_pivot_filter_label_date:
     kind: constant
-    c: FM_PIVOT_FILTER_KIND_LABEL_DATE
+    c: FM_PIVOT_FILTER_KIND_DATE_BETWEEN
     enum: enum.pivot_filter_type
     js: DateBetween
     py: DATE_BETWEEN
     surfaces: [c, wasm, native, py]
     was: { c: FM_PIVOT_FILTER_LABEL_DATE, js: LabelDate, py: LABEL_DATE }
+    closes: R5.derive
   constant.fm_pivot_filter_value_equal:
     kind: constant
     c: FM_PIVOT_FILTER_KIND_VALUE_EQUAL
     enum: enum.pivot_filter_type
-    surfaces: [c]
+    js: ValueEqual
+    py: VALUE_EQUAL
+    surfaces: [c, wasm, native, py]
     was: { c: FM_PIVOT_FILTER_VALUE_EQUAL }
   constant.fm_pivot_filter_value_not_equal:
     kind: constant
     c: FM_PIVOT_FILTER_KIND_VALUE_NOT_EQUAL
     enum: enum.pivot_filter_type
-    surfaces: [c]
+    js: ValueNotEqual
+    py: VALUE_NOT_EQUAL
+    surfaces: [c, wasm, native, py]
     was: { c: FM_PIVOT_FILTER_VALUE_NOT_EQUAL }
   constant.fm_pivot_filter_value_greater_than_or_equal:
     kind: constant
     c: FM_PIVOT_FILTER_KIND_VALUE_GREATER_THAN_OR_EQUAL
     enum: enum.pivot_filter_type
-    surfaces: [c]
+    js: ValueGreaterThanOrEqual
+    py: VALUE_GREATER_THAN_OR_EQUAL
+    surfaces: [c, wasm, native, py]
     was: { c: FM_PIVOT_FILTER_VALUE_GREATER_THAN_OR_EQUAL }
   constant.fm_pivot_filter_value_less_than:
     kind: constant
     c: FM_PIVOT_FILTER_KIND_VALUE_LESS_THAN
     enum: enum.pivot_filter_type
-    surfaces: [c]
+    js: ValueLessThan
+    py: VALUE_LESS_THAN
+    surfaces: [c, wasm, native, py]
     was: { c: FM_PIVOT_FILTER_VALUE_LESS_THAN }
   constant.fm_pivot_filter_value_less_than_or_equal:
     kind: constant
     c: FM_PIVOT_FILTER_KIND_VALUE_LESS_THAN_OR_EQUAL
     enum: enum.pivot_filter_type
-    surfaces: [c]
+    js: ValueLessThanOrEqual
+    py: VALUE_LESS_THAN_OR_EQUAL
+    surfaces: [c, wasm, native, py]
     was: { c: FM_PIVOT_FILTER_VALUE_LESS_THAN_OR_EQUAL }
   constant.fm_pivot_filter_value_not_between:
     kind: constant
     c: FM_PIVOT_FILTER_KIND_VALUE_NOT_BETWEEN
     enum: enum.pivot_filter_type
-    surfaces: [c]
+    js: ValueNotBetween
+    py: VALUE_NOT_BETWEEN
+    surfaces: [c, wasm, native, py]
     was: { c: FM_PIVOT_FILTER_VALUE_NOT_BETWEEN }
   constant.fm_pivot_filter_label_equal:
     kind: constant
     c: FM_PIVOT_FILTER_KIND_LABEL_EQUAL
     enum: enum.pivot_filter_type
-    surfaces: [c]
+    js: LabelEqual
+    py: LABEL_EQUAL
+    surfaces: [c, wasm, native, py]
     was: { c: FM_PIVOT_FILTER_LABEL_EQUAL }
   constant.fm_pivot_filter_label_not_equal:
     kind: constant
     c: FM_PIVOT_FILTER_KIND_LABEL_NOT_EQUAL
     enum: enum.pivot_filter_type
-    surfaces: [c]
+    js: LabelNotEqual
+    py: LABEL_NOT_EQUAL
+    surfaces: [c, wasm, native, py]
     was: { c: FM_PIVOT_FILTER_LABEL_NOT_EQUAL }
   constant.fm_pivot_filter_label_not_begins_with:
     kind: constant
     c: FM_PIVOT_FILTER_KIND_LABEL_NOT_BEGINS_WITH
     enum: enum.pivot_filter_type
-    surfaces: [c]
+    js: LabelNotBeginsWith
+    py: LABEL_NOT_BEGINS_WITH
+    surfaces: [c, wasm, native, py]
     was: { c: FM_PIVOT_FILTER_LABEL_NOT_BEGINS_WITH }
   constant.fm_pivot_filter_label_ends_with:
     kind: constant
     c: FM_PIVOT_FILTER_KIND_LABEL_ENDS_WITH
     enum: enum.pivot_filter_type
-    surfaces: [c]
+    js: LabelEndsWith
+    py: LABEL_ENDS_WITH
+    surfaces: [c, wasm, native, py]
     was: { c: FM_PIVOT_FILTER_LABEL_ENDS_WITH }
   constant.fm_pivot_filter_label_not_ends_with:
     kind: constant
     c: FM_PIVOT_FILTER_KIND_LABEL_NOT_ENDS_WITH
     enum: enum.pivot_filter_type
-    surfaces: [c]
+    js: LabelNotEndsWith
+    py: LABEL_NOT_ENDS_WITH
+    surfaces: [c, wasm, native, py]
     was: { c: FM_PIVOT_FILTER_LABEL_NOT_ENDS_WITH }
   constant.fm_pivot_filter_label_not_contains:
     kind: constant
     c: FM_PIVOT_FILTER_KIND_LABEL_NOT_CONTAINS
     enum: enum.pivot_filter_type
-    surfaces: [c]
+    js: LabelNotContains
+    py: LABEL_NOT_CONTAINS
+    surfaces: [c, wasm, native, py]
     was: { c: FM_PIVOT_FILTER_LABEL_NOT_CONTAINS }
   constant.fm_pivot_filter_label_greater_than:
     kind: constant
     c: FM_PIVOT_FILTER_KIND_LABEL_GREATER_THAN
     enum: enum.pivot_filter_type
-    surfaces: [c]
+    js: LabelGreaterThan
+    py: LABEL_GREATER_THAN
+    surfaces: [c, wasm, native, py]
     was: { c: FM_PIVOT_FILTER_LABEL_GREATER_THAN }
   constant.fm_pivot_filter_label_greater_than_or_equal:
     kind: constant
     c: FM_PIVOT_FILTER_KIND_LABEL_GREATER_THAN_OR_EQUAL
     enum: enum.pivot_filter_type
-    surfaces: [c]
+    js: LabelGreaterThanOrEqual
+    py: LABEL_GREATER_THAN_OR_EQUAL
+    surfaces: [c, wasm, native, py]
     was: { c: FM_PIVOT_FILTER_LABEL_GREATER_THAN_OR_EQUAL }
   constant.fm_pivot_filter_label_less_than:
     kind: constant
     c: FM_PIVOT_FILTER_KIND_LABEL_LESS_THAN
     enum: enum.pivot_filter_type
-    surfaces: [c]
+    js: LabelLessThan
+    py: LABEL_LESS_THAN
+    surfaces: [c, wasm, native, py]
     was: { c: FM_PIVOT_FILTER_LABEL_LESS_THAN }
   constant.fm_pivot_filter_label_less_than_or_equal:
     kind: constant
     c: FM_PIVOT_FILTER_KIND_LABEL_LESS_THAN_OR_EQUAL
     enum: enum.pivot_filter_type
-    surfaces: [c]
+    js: LabelLessThanOrEqual
+    py: LABEL_LESS_THAN_OR_EQUAL
+    surfaces: [c, wasm, native, py]
     was: { c: FM_PIVOT_FILTER_LABEL_LESS_THAN_OR_EQUAL }
   constant.fm_pivot_filter_label_between:
     kind: constant
     c: FM_PIVOT_FILTER_KIND_LABEL_BETWEEN
     enum: enum.pivot_filter_type
-    surfaces: [c]
+    js: LabelBetween
+    py: LABEL_BETWEEN
+    surfaces: [c, wasm, native, py]
     was: { c: FM_PIVOT_FILTER_LABEL_BETWEEN }
   constant.fm_pivot_filter_label_not_between:
     kind: constant
     c: FM_PIVOT_FILTER_KIND_LABEL_NOT_BETWEEN
     enum: enum.pivot_filter_type
-    surfaces: [c]
+    js: LabelNotBetween
+    py: LABEL_NOT_BETWEEN
+    surfaces: [c, wasm, native, py]
     was: { c: FM_PIVOT_FILTER_LABEL_NOT_BETWEEN }
   constant.fm_pivot_filter_value_bottom_count:
     kind: constant
     c: FM_PIVOT_FILTER_KIND_VALUE_BOTTOM_COUNT
     enum: enum.pivot_filter_type
-    surfaces: [c]
+    js: ValueBottomCount
+    py: VALUE_BOTTOM_COUNT
+    surfaces: [c, wasm, native, py]
     was: { c: FM_PIVOT_FILTER_VALUE_BOTTOM_COUNT }
   constant.fm_pivot_filter_value_top_percent:
     kind: constant
     c: FM_PIVOT_FILTER_KIND_VALUE_TOP_PERCENT
     enum: enum.pivot_filter_type
-    surfaces: [c]
+    js: ValueTopPercent
+    py: VALUE_TOP_PERCENT
+    surfaces: [c, wasm, native, py]
     was: { c: FM_PIVOT_FILTER_VALUE_TOP_PERCENT }
   constant.fm_pivot_filter_value_bottom_percent:
     kind: constant
     c: FM_PIVOT_FILTER_KIND_VALUE_BOTTOM_PERCENT
     enum: enum.pivot_filter_type
-    surfaces: [c]
+    js: ValueBottomPercent
+    py: VALUE_BOTTOM_PERCENT
+    surfaces: [c, wasm, native, py]
     was: { c: FM_PIVOT_FILTER_VALUE_BOTTOM_PERCENT }
   constant.fm_pivot_filter_value_top_sum:
     kind: constant
     c: FM_PIVOT_FILTER_KIND_VALUE_TOP_SUM
     enum: enum.pivot_filter_type
-    surfaces: [c]
+    js: ValueTopSum
+    py: VALUE_TOP_SUM
+    surfaces: [c, wasm, native, py]
     was: { c: FM_PIVOT_FILTER_VALUE_TOP_SUM }
   constant.fm_pivot_filter_value_bottom_sum:
     kind: constant
     c: FM_PIVOT_FILTER_KIND_VALUE_BOTTOM_SUM
     enum: enum.pivot_filter_type
-    surfaces: [c]
+    js: ValueBottomSum
+    py: VALUE_BOTTOM_SUM
+    surfaces: [c, wasm, native, py]
     was: { c: FM_PIVOT_FILTER_VALUE_BOTTOM_SUM }
   constant.fm_pivot_filter_date_equal:
     kind: constant
     c: FM_PIVOT_FILTER_KIND_DATE_EQUAL
     enum: enum.pivot_filter_type
-    surfaces: [c]
+    js: DateEqual
+    py: DATE_EQUAL
+    surfaces: [c, wasm, native, py]
     was: { c: FM_PIVOT_FILTER_DATE_EQUAL }
   constant.fm_pivot_filter_date_not_equal:
     kind: constant
     c: FM_PIVOT_FILTER_KIND_DATE_NOT_EQUAL
     enum: enum.pivot_filter_type
-    surfaces: [c]
+    js: DateNotEqual
+    py: DATE_NOT_EQUAL
+    surfaces: [c, wasm, native, py]
     was: { c: FM_PIVOT_FILTER_DATE_NOT_EQUAL }
   constant.fm_pivot_filter_date_older_than:
     kind: constant
     c: FM_PIVOT_FILTER_KIND_DATE_OLDER_THAN
     enum: enum.pivot_filter_type
-    surfaces: [c]
+    js: DateOlderThan
+    py: DATE_OLDER_THAN
+    surfaces: [c, wasm, native, py]
     was: { c: FM_PIVOT_FILTER_DATE_OLDER_THAN }
   constant.fm_pivot_filter_date_older_than_or_equal:
     kind: constant
     c: FM_PIVOT_FILTER_KIND_DATE_OLDER_THAN_OR_EQUAL
     enum: enum.pivot_filter_type
-    surfaces: [c]
+    js: DateOlderThanOrEqual
+    py: DATE_OLDER_THAN_OR_EQUAL
+    surfaces: [c, wasm, native, py]
     was: { c: FM_PIVOT_FILTER_DATE_OLDER_THAN_OR_EQUAL }
   constant.fm_pivot_filter_date_newer_than:
     kind: constant
     c: FM_PIVOT_FILTER_KIND_DATE_NEWER_THAN
     enum: enum.pivot_filter_type
-    surfaces: [c]
+    js: DateNewerThan
+    py: DATE_NEWER_THAN
+    surfaces: [c, wasm, native, py]
     was: { c: FM_PIVOT_FILTER_DATE_NEWER_THAN }
   constant.fm_pivot_filter_date_newer_than_or_equal:
     kind: constant
     c: FM_PIVOT_FILTER_KIND_DATE_NEWER_THAN_OR_EQUAL
     enum: enum.pivot_filter_type
-    surfaces: [c]
+    js: DateNewerThanOrEqual
+    py: DATE_NEWER_THAN_OR_EQUAL
+    surfaces: [c, wasm, native, py]
     was: { c: FM_PIVOT_FILTER_DATE_NEWER_THAN_OR_EQUAL }
   constant.fm_pivot_filter_date_not_between:
     kind: constant
     c: FM_PIVOT_FILTER_KIND_DATE_NOT_BETWEEN
     enum: enum.pivot_filter_type
-    surfaces: [c]
+    js: DateNotBetween
+    py: DATE_NOT_BETWEEN
+    surfaces: [c, wasm, native, py]
     was: { c: FM_PIVOT_FILTER_DATE_NOT_BETWEEN }
   constant.fm_pivot_filter_date_tomorrow:
     kind: constant
@@ -11567,26 +11655,36 @@ entries:
     kind: constant
     c: FM_COLOR_CONTEXT_FONT
     enum: enum.color_context
-    surfaces: [c]
-    was: { c: FM_COLOR_CONTEXT_FONT }
+    js: Font
+    py: FONT
+    surfaces: [c, wasm, native, py]
+    was: { c: FM_COLOR_CONTEXT_FONT, js: Font, py: FONT }
   constant.fm_color_context_fill_fg:
     kind: constant
-    c: FM_COLOR_CONTEXT_FILL_FG
+    c: FM_COLOR_CONTEXT_FILL_FOREGROUND
     enum: enum.color_context
-    surfaces: [c]
-    was: { c: FM_COLOR_CONTEXT_FILL_FG }
+    js: FillForeground
+    py: FILL_FOREGROUND
+    surfaces: [c, wasm, native, py]
+    was: { c: FM_COLOR_CONTEXT_FILL_FG, js: FillForeground, py: FILL_FOREGROUND }
+    closes: R5.derive
   constant.fm_color_context_fill_bg:
     kind: constant
-    c: FM_COLOR_CONTEXT_FILL_BG
+    c: FM_COLOR_CONTEXT_FILL_BACKGROUND
     enum: enum.color_context
-    surfaces: [c]
-    was: { c: FM_COLOR_CONTEXT_FILL_BG }
+    js: FillBackground
+    py: FILL_BACKGROUND
+    surfaces: [c, wasm, native, py]
+    was: { c: FM_COLOR_CONTEXT_FILL_BG, js: FillBackground, py: FILL_BACKGROUND }
+    closes: R5.derive
   constant.fm_color_context_border:
     kind: constant
     c: FM_COLOR_CONTEXT_BORDER
     enum: enum.color_context
-    surfaces: [c]
-    was: { c: FM_COLOR_CONTEXT_BORDER }
+    js: Border
+    py: BORDER
+    surfaces: [c, wasm, native, py]
+    was: { c: FM_COLOR_CONTEXT_BORDER, js: Border, py: BORDER }
   constant.fm_color_resolution_exact:
     kind: constant
     c: FM_COLOR_RESOLUTION_EXACT
@@ -11741,30 +11839,24 @@ entries:
     surfaces: [c]
     was: { c: FM_SHAPE_PAINT_UNSET }
     drop: { c: FM_SHAPE_PAINT_UNSET, closes: R0.coverage }
-    replaced_by: constant.fm_shape_paint_default
-  constant.fm_shape_paint_default:
-    kind: constant
-    c: FM_SHAPE_PAINT_DEFAULT
-    enum: enum.shape_paint
-    surfaces: [c]
   constant.fm_shape_paint_solid:
     kind: constant
-    c: FM_SHAPE_PAINT_SOLID
     enum: enum.shape_paint
     surfaces: [c]
     was: { c: FM_SHAPE_PAINT_SOLID }
+    drop: { c: FM_SHAPE_PAINT_SOLID, closes: R0.coverage }
   constant.fm_shape_paint_none:
     kind: constant
-    c: FM_SHAPE_PAINT_NONE
     enum: enum.shape_paint
     surfaces: [c]
     was: { c: FM_SHAPE_PAINT_NONE }
+    drop: { c: FM_SHAPE_PAINT_NONE, closes: R0.coverage }
   constant.fm_shape_paint_other:
     kind: constant
-    c: FM_SHAPE_PAINT_OTHER
     enum: enum.shape_paint
     surfaces: [c]
     was: { c: FM_SHAPE_PAINT_OTHER }
+    drop: { c: FM_SHAPE_PAINT_OTHER, closes: R0.coverage }
   constant.fm_slicer_sort_ascending:
     kind: constant
     c: FM_SLICER_SORT_ORDER_ASCENDING
@@ -14070,8 +14162,8 @@ entries:
   record.pivot_cache_shared_item:
     kind: record
     role: result
-    js: PivotCacheSharedItem
-    py: PivotCacheSharedItem
+    js: PivotCacheValue
+    py: PivotCacheValue
     surfaces: [wasm, native, py]
   type.sheet:
     kind: typedef
@@ -14750,106 +14842,157 @@ entries:
     drop: { c: FM_VALIDATION_OPERATOR_LESS_THAN_OR_EQUAL, closes: R19.c }
   constant.fm_icon_set_3_arrows:
     kind: constant
-    c: FM_ICON_SET_NAME_3_ARROWS
+    c: FM_ICON_SET_NAME_THREE_ARROWS
     enum: enum.icon_set
-    surfaces: [c]
+    js: ThreeArrows
+    py: THREE_ARROWS
+    surfaces: [c, wasm, native, py]
     was: { c: FM_ICON_SET_3_ARROWS }
+    closes: R5.derive
   constant.fm_icon_set_3_arrows_gray:
     kind: constant
-    c: FM_ICON_SET_NAME_3_ARROWS_GRAY
+    c: FM_ICON_SET_NAME_THREE_ARROWS_GRAY
     enum: enum.icon_set
-    surfaces: [c]
+    js: ThreeArrowsGray
+    py: THREE_ARROWS_GRAY
+    surfaces: [c, wasm, native, py]
     was: { c: FM_ICON_SET_3_ARROWS_GRAY }
+    closes: R5.derive
   constant.fm_icon_set_3_flags:
     kind: constant
-    c: FM_ICON_SET_NAME_3_FLAGS
+    c: FM_ICON_SET_NAME_THREE_FLAGS
     enum: enum.icon_set
-    surfaces: [c]
+    js: ThreeFlags
+    py: THREE_FLAGS
+    surfaces: [c, wasm, native, py]
     was: { c: FM_ICON_SET_3_FLAGS }
+    closes: R5.derive
   constant.fm_icon_set_3_traffic_lights_1:
     kind: constant
-    c: FM_ICON_SET_NAME_3_TRAFFIC_LIGHTS_1
+    c: FM_ICON_SET_NAME_THREE_TRAFFIC_LIGHTS_1
     enum: enum.icon_set
-    surfaces: [c]
+    js: ThreeTrafficLights1
+    py: THREE_TRAFFIC_LIGHTS_1
+    surfaces: [c, wasm, native, py]
     was: { c: FM_ICON_SET_3_TRAFFIC_LIGHTS_1 }
+    closes: R5.derive
   constant.fm_icon_set_3_traffic_lights_2:
     kind: constant
-    c: FM_ICON_SET_NAME_3_TRAFFIC_LIGHTS_2
+    c: FM_ICON_SET_NAME_THREE_TRAFFIC_LIGHTS_2
     enum: enum.icon_set
-    surfaces: [c]
+    js: ThreeTrafficLights2
+    py: THREE_TRAFFIC_LIGHTS_2
+    surfaces: [c, wasm, native, py]
     was: { c: FM_ICON_SET_3_TRAFFIC_LIGHTS_2 }
+    closes: R5.derive
   constant.fm_icon_set_3_signs:
     kind: constant
-    c: FM_ICON_SET_NAME_3_SIGNS
+    c: FM_ICON_SET_NAME_THREE_SIGNS
     enum: enum.icon_set
-    surfaces: [c]
+    js: ThreeSigns
+    py: THREE_SIGNS
+    surfaces: [c, wasm, native, py]
     was: { c: FM_ICON_SET_3_SIGNS }
+    closes: R5.derive
   constant.fm_icon_set_3_symbols:
     kind: constant
-    c: FM_ICON_SET_NAME_3_SYMBOLS
+    c: FM_ICON_SET_NAME_THREE_SYMBOLS
     enum: enum.icon_set
-    surfaces: [c]
+    js: ThreeSymbols
+    py: THREE_SYMBOLS
+    surfaces: [c, wasm, native, py]
     was: { c: FM_ICON_SET_3_SYMBOLS }
+    closes: R5.derive
   constant.fm_icon_set_3_symbols_2:
     kind: constant
-    c: FM_ICON_SET_NAME_3_SYMBOLS_2
+    c: FM_ICON_SET_NAME_THREE_SYMBOLS_2
     enum: enum.icon_set
-    surfaces: [c]
+    js: ThreeSymbols2
+    py: THREE_SYMBOLS_2
+    surfaces: [c, wasm, native, py]
     was: { c: FM_ICON_SET_3_SYMBOLS_2 }
+    closes: R5.derive
   constant.fm_icon_set_4_arrows:
     kind: constant
-    c: FM_ICON_SET_NAME_4_ARROWS
+    c: FM_ICON_SET_NAME_FOUR_ARROWS
     enum: enum.icon_set
-    surfaces: [c]
+    js: FourArrows
+    py: FOUR_ARROWS
+    surfaces: [c, wasm, native, py]
     was: { c: FM_ICON_SET_4_ARROWS }
+    closes: R5.derive
   constant.fm_icon_set_4_arrows_gray:
     kind: constant
-    c: FM_ICON_SET_NAME_4_ARROWS_GRAY
+    c: FM_ICON_SET_NAME_FOUR_ARROWS_GRAY
     enum: enum.icon_set
-    surfaces: [c]
+    js: FourArrowsGray
+    py: FOUR_ARROWS_GRAY
+    surfaces: [c, wasm, native, py]
     was: { c: FM_ICON_SET_4_ARROWS_GRAY }
+    closes: R5.derive
   constant.fm_icon_set_4_red_to_black:
     kind: constant
-    c: FM_ICON_SET_NAME_4_RED_TO_BLACK
+    c: FM_ICON_SET_NAME_FOUR_RED_TO_BLACK
     enum: enum.icon_set
-    surfaces: [c]
+    js: FourRedToBlack
+    py: FOUR_RED_TO_BLACK
+    surfaces: [c, wasm, native, py]
     was: { c: FM_ICON_SET_4_RED_TO_BLACK }
+    closes: R5.derive
   constant.fm_icon_set_4_rating:
     kind: constant
-    c: FM_ICON_SET_NAME_4_RATING
+    c: FM_ICON_SET_NAME_FOUR_RATING
     enum: enum.icon_set
-    surfaces: [c]
+    js: FourRating
+    py: FOUR_RATING
+    surfaces: [c, wasm, native, py]
     was: { c: FM_ICON_SET_4_RATING }
+    closes: R5.derive
   constant.fm_icon_set_4_traffic_lights:
     kind: constant
-    c: FM_ICON_SET_NAME_4_TRAFFIC_LIGHTS
+    c: FM_ICON_SET_NAME_FOUR_TRAFFIC_LIGHTS
     enum: enum.icon_set
-    surfaces: [c]
+    js: FourTrafficLights
+    py: FOUR_TRAFFIC_LIGHTS
+    surfaces: [c, wasm, native, py]
     was: { c: FM_ICON_SET_4_TRAFFIC_LIGHTS }
+    closes: R5.derive
   constant.fm_icon_set_5_arrows:
     kind: constant
-    c: FM_ICON_SET_NAME_5_ARROWS
+    c: FM_ICON_SET_NAME_FIVE_ARROWS
     enum: enum.icon_set
-    surfaces: [c]
+    js: FiveArrows
+    py: FIVE_ARROWS
+    surfaces: [c, wasm, native, py]
     was: { c: FM_ICON_SET_5_ARROWS }
+    closes: R5.derive
   constant.fm_icon_set_5_arrows_gray:
     kind: constant
-    c: FM_ICON_SET_NAME_5_ARROWS_GRAY
+    c: FM_ICON_SET_NAME_FIVE_ARROWS_GRAY
     enum: enum.icon_set
-    surfaces: [c]
+    js: FiveArrowsGray
+    py: FIVE_ARROWS_GRAY
+    surfaces: [c, wasm, native, py]
     was: { c: FM_ICON_SET_5_ARROWS_GRAY }
+    closes: R5.derive
   constant.fm_icon_set_5_rating:
     kind: constant
-    c: FM_ICON_SET_NAME_5_RATING
+    c: FM_ICON_SET_NAME_FIVE_RATING
     enum: enum.icon_set
-    surfaces: [c]
+    js: FiveRating
+    py: FIVE_RATING
+    surfaces: [c, wasm, native, py]
     was: { c: FM_ICON_SET_5_RATING }
+    closes: R5.derive
   constant.fm_icon_set_5_quarters:
     kind: constant
-    c: FM_ICON_SET_NAME_5_QUARTERS
+    c: FM_ICON_SET_NAME_FIVE_QUARTERS
     enum: enum.icon_set
-    surfaces: [c]
+    js: FiveQuarters
+    py: FIVE_QUARTERS
+    surfaces: [c, wasm, native, py]
     was: { c: FM_ICON_SET_5_QUARTERS }
+    closes: R5.derive
   constant.fm_cf_rule_type_expression:
     kind: constant
     c: FM_CF_RULE_TYPE_EXPRESSION
@@ -15857,18 +16000,17 @@ entries:
   field.shape_line_width_pt:
     kind: field
     record: record.shape
-    js: lineWidthPt
-    py: line_width_pt
     surfaces: [c, wasm, native, py]
-    closes: R42.unit.suffix
-    was: { js: lineWidthEmu, py: line_width_emu }
+    was: { c: line_width_emu, js: lineWidthEmu, py: line_width_emu }
+    drop: { c: line_width_emu, js: lineWidthEmu, py: line_width_emu, closes: R8.js }
+    closes: R8.js
   field.shape_input_line_width_pt:
     kind: field
     record: record.shape_input
-    js: lineWidthPt
     surfaces: [wasm, native]
-    closes: R42.unit.suffix
     was: { js: lineWidthEmu }
+    drop: { js: lineWidthEmu, closes: R8.js }
+    closes: R8.js
   field.image_width_px:
     kind: field
     record: record.image
@@ -16341,10 +16483,11 @@ entries:
   field.cf_match_icon_set_name:
     kind: field
     record: record.cf_match
-    surfaces: [wasm, native, py]
-    was: { js: iconSetName, py: icon_set_name }
+    c: icon_set
+    surfaces: [c, wasm, native, py]
+    was: { c: icon_set_name, js: iconSetName, py: icon_set_name }
     drop: { js: iconSetName, py: icon_set_name, closes: R8.js }
-    closes: R8.js
+    closes: R8.c
   field.cf_match_icon_index:
     kind: field
     record: record.cf_match
@@ -16404,15 +16547,15 @@ entries:
   field.cf_match_icon_record_set_name:
     kind: field
     record: record.cf_match_icon
-    js: setName
-    py: set_name
+    js: iconSet
+    py: icon_set
     surfaces: [wasm, native, py]
     closes: R8.js
   field.cf_match_icon_record_index:
     kind: field
     record: record.cf_match_icon
-    js: index
-    py: index
+    js: iconIndex
+    py: icon_index
     surfaces: [wasm, native, py]
     closes: R8.js
   field.cf_rule_dxf_index_engaged:
@@ -17137,10 +17280,11 @@ entries:
   field.effective_style_number_format:
     kind: field
     record: record.effective_style
+    c: number_format
     py: number_format
-    surfaces: [py]
+    surfaces: [c, py]
+    was: { c: num_fmt_code, py: num_fmt_code }
     closes: R8.py
-    was: { py: num_fmt_code }
   field.effective_style_result_locked:
     kind: field
     record: record.effective_style_result
@@ -17214,17 +17358,21 @@ entries:
   field.phonetic_run_start:
     kind: field
     record: record.phonetic_run
+    c: start
     js: start
-    surfaces: [wasm, native, py]
+    py: start
+    surfaces: [c, wasm, native, py]
+    was: { c: sb, js: sb }
     closes: R8.js
-    was: { js: sb }
   field.phonetic_run_end:
     kind: field
     record: record.phonetic_run
+    c: end
     js: end
-    surfaces: [wasm, native, py]
+    py: end
+    surfaces: [c, wasm, native, py]
+    was: { c: eb, js: eb }
     closes: R8.js
-    was: { js: eb }
   field.function_metadata_signature:
     kind: field
     record: record.function_metadata
@@ -17949,25 +18097,28 @@ entries:
     surfaces: [c, wasm, native, py]
   constant.fm_icon_set_3_stars:
     kind: constant
-    c: FM_ICON_SET_NAME_3_STARS
+    c: FM_ICON_SET_NAME_THREE_STARS
     enum: enum.icon_set
     js: ThreeStars
     py: THREE_STARS
     surfaces: [c, wasm, native, py]
+    closes: R5.derive
   constant.fm_icon_set_3_triangles:
     kind: constant
-    c: FM_ICON_SET_NAME_3_TRIANGLES
+    c: FM_ICON_SET_NAME_THREE_TRIANGLES
     enum: enum.icon_set
     js: ThreeTriangles
     py: THREE_TRIANGLES
     surfaces: [c, wasm, native, py]
+    closes: R5.derive
   constant.fm_icon_set_5_boxes:
     kind: constant
-    c: FM_ICON_SET_NAME_5_BOXES
+    c: FM_ICON_SET_NAME_FIVE_BOXES
     enum: enum.icon_set
     js: FiveBoxes
     py: FIVE_BOXES
     surfaces: [c, wasm, native, py]
+    closes: R5.derive
   constant.fm_icon_set_no_icons:
     kind: constant
     c: FM_ICON_SET_NAME_NO_ICONS
@@ -18520,3 +18671,505 @@ entries:
     kind: typedef
     js: BytesInput
     surfaces: [wasm, native]
+
+  cells.insert:
+    kind: op
+    scope: sheet
+    noun: cells
+    c: fm_sheet_insert_cells
+    js: insertCells
+    py: insert_cells
+    params: { shift: "enum:cell_shift" }
+    rect_args: [0]
+    surfaces: [c, wasm, native, py]
+  cells.delete:
+    kind: op
+    scope: sheet
+    noun: cells
+    c: fm_sheet_delete_cells
+    js: deleteCells
+    py: delete_cells
+    params: { shift: "enum:cell_shift" }
+    rect_args: [0]
+    surfaces: [c, wasm, native, py]
+  enum.cell_shift:
+    kind: enum
+    c: fm_cell_shift_t
+    js: CellShift
+    py: CellShift
+    surfaces: [c, wasm, native, py]
+  constant.fm_cell_shift_down:
+    kind: constant
+    c: FM_CELL_SHIFT_DOWN
+    enum: enum.cell_shift
+    js: Down
+    py: DOWN
+    surfaces: [c, wasm, native, py]
+  constant.fm_cell_shift_right:
+    kind: constant
+    c: FM_CELL_SHIFT_RIGHT
+    enum: enum.cell_shift
+    js: Right
+    py: RIGHT
+    surfaces: [c, wasm, native, py]
+  constant.fm_cell_shift_up:
+    kind: constant
+    c: FM_CELL_SHIFT_UP
+    enum: enum.cell_shift
+    js: Up
+    py: UP
+    surfaces: [c, wasm, native, py]
+  constant.fm_cell_shift_left:
+    kind: constant
+    c: FM_CELL_SHIFT_LEFT
+    enum: enum.cell_shift
+    js: Left
+    py: LEFT
+    surfaces: [c, wasm, native, py]
+  record.mention_input:
+    kind: record
+    role: input
+    js: MentionInput
+    py: MentionInput
+    surfaces: [wasm, native, py]
+  field.mention_end:
+    kind: field
+    record: record.mention
+    c: end
+    js: end
+    py: end
+    surfaces: [c, wasm, native, py]
+    was: { c: length, js: length, py: length }
+    closes: R8.js
+  field.sheet_comment_entry_row:
+    kind: field
+    record: record.sheet_comment_entry
+    surfaces: [wasm, native, py]
+    was: { js: row, py: row }
+    drop: { js: row, py: row, closes: R8.js }
+    closes: R8.js
+  field.sheet_comment_entry_col:
+    kind: field
+    record: record.sheet_comment_entry
+    surfaces: [wasm, native, py]
+    was: { js: col, py: col }
+    drop: { js: col, py: col, closes: R8.js }
+    closes: R8.js
+  record.xf_remap:
+    kind: record
+    role: input
+    c: fm_xf_remap_t
+    surfaces: [c]
+    exception: "C form of the remap pairs; the bindings take a map from source XF to target XF"
+  record.cf_range_evaluation_spec:
+    kind: record
+    role: input
+    c: fm_cf_range_evaluation_spec_t
+    surfaces: [c]
+    exception: "C options record of evaluate_cf_range; the bindings take an options object"
+  cell_style_xf.set:
+    kind: op
+    scope: workbook
+    namespace: ooxml
+    noun: cell_style_xf
+    c: fm_workbook_set_cell_style_xf
+    js: setCellStyleXf
+    py: set_cell_style_xf
+    surfaces: [c, wasm, native, py]
+  num_fmt.get_count:
+    kind: op
+    scope: workbook
+    noun: number_format
+    c: fm_workbook_get_number_format_count
+    surfaces: [c]
+  num_fmt.get_at:
+    kind: op
+    scope: workbook
+    noun: number_format
+    c: fm_workbook_get_number_format_at
+    surfaces: [c]
+  num_fmts.list:
+    kind: list
+    scope: workbook
+    namespace: ooxml
+    from: [num_fmt.get_count, num_fmt.get_at]
+    js: listNumberFormats
+    py: list_number_formats
+    surfaces: [wasm, native, py]
+  record.number_format:
+    kind: record
+    role: result
+    c: fm_number_format_info_t
+    js: NumberFormat
+    py: NumberFormat
+    surfaces: [c, wasm, native, py]
+  field.cell_style_record_outline_level:
+    kind: field
+    record: record.cell_style_record
+    c: outline_level
+    js: outlineLevel
+    py: outline_level
+    surfaces: [c, wasm, native, py]
+    was: { c: i_level, js: iLevel, py: i_level }
+    closes: R8.js
+  field.cell_style_input_outline_level:
+    kind: field
+    record: record.cell_style_input
+    js: outlineLevel
+    surfaces: [wasm, native]
+    was: { js: iLevel }
+    closes: R8.js
+  field.fill_record_gradient_angle_deg:
+    kind: field
+    record: record.fill_record
+    c: gradient_angle_deg
+    surfaces: [c, wasm, native, py]
+    was: { c: gradient_degree }
+    closes: R42.unit.suffix
+  field.gradient_fill_angle_deg:
+    kind: field
+    record: record.gradient_fill
+    js: angleDeg
+    py: angle_deg
+    surfaces: [wasm, native, py]
+    was: { js: degree, py: degree }
+    closes: R42.unit.suffix
+  field.gradient_fill_input_angle_deg:
+    kind: field
+    record: record.gradient_fill_input
+    js: angleDeg
+    surfaces: [wasm, native]
+    closes: R42.unit.suffix
+  field.effective_style_fill_foreground_argb:
+    kind: field
+    record: record.effective_style
+    c: fill_foreground_argb
+    surfaces: [c]
+    was: { c: fill_fg_argb }
+    closes: R8.c
+  field.effective_style_fill_background_argb:
+    kind: field
+    record: record.effective_style
+    c: fill_background_argb
+    surfaces: [c]
+    was: { c: fill_bg_argb }
+    closes: R8.c
+  field.effective_style_fill_foreground_resolution:
+    kind: field
+    record: record.effective_style
+    c: fill_foreground_resolution
+    surfaces: [c]
+    was: { c: fill_fg_resolution }
+    closes: R8.c
+  field.effective_style_fill_background_resolution:
+    kind: field
+    record: record.effective_style
+    c: fill_background_resolution
+    surfaces: [c]
+    was: { c: fill_bg_resolution }
+    closes: R8.c
+  field.table_style_defaults_table_style_name:
+    kind: field
+    record: record.table_style_defaults_result
+    c: table_style_name
+    js: tableStyleName
+    py: table_style_name
+    surfaces: [c, wasm, native, py]
+    was: { js: tableStyle }
+    closes: R8.js
+  field.table_style_defaults_pivot_style_name:
+    kind: field
+    record: record.table_style_defaults_result
+    c: pivot_style_name
+    js: pivotStyleName
+    py: pivot_style_name
+    surfaces: [c, wasm, native, py]
+    was: { js: pivotStyle }
+    closes: R8.js
+  field.cf_rule_icon_set:
+    kind: field
+    record: record.cf_rule
+    c: icon_set
+    surfaces: [c]
+    was: { c: icon_set_name }
+    closes: R8.c
+  field.cf_data_bar_min:
+    kind: field
+    record: record.cf_data_bar
+    py: min
+    surfaces: [wasm, native, py]
+    was: { py: minimum }
+    closes: R8.py
+  field.cf_data_bar_max:
+    kind: field
+    record: record.cf_data_bar
+    py: max
+    surfaces: [wasm, native, py]
+    was: { py: maximum }
+    closes: R8.py
+  field.cf_data_bar_input_min:
+    kind: field
+    record: record.cf_data_bar_input
+    py: min
+    surfaces: [wasm, native, py]
+    closes: R8.py
+  field.cf_data_bar_input_max:
+    kind: field
+    record: record.cf_data_bar_input
+    py: max
+    surfaces: [wasm, native, py]
+    closes: R8.py
+  pivot_cache_record_value_date.is:
+    kind: op
+    scope: workbook
+    noun: pivot_cache_record_value_date
+    c: fm_workbook_is_pivot_cache_record_value_date
+    returns: bool
+    surfaces: [c]
+    exception: "C reads the date flag beside the record value; the bindings return both in one record"
+  field.pivot_filter_spec_kind:
+    kind: field
+    record: record.pivot_filter_spec
+    c: kind
+    js: kind
+    py: kind
+    surfaces: [c, wasm, native, py]
+    was: { c: type, js: type, py: type }
+    closes: R8.js
+  field.pivot_filter_result_kind:
+    kind: field
+    record: record.pivot_filter_result
+    js: kind
+    py: kind
+    surfaces: [wasm, native, py]
+    closes: R8.js
+  field.shape_fill_kind:
+    kind: field
+    record: record.shape
+    surfaces: [c, wasm, native, py]
+    was: { c: fill_kind, js: fillKind, py: fill_kind }
+    drop: { c: fill_kind, js: fillKind, py: fill_kind, closes: R8.js }
+    closes: R8.js
+  field.shape_line_kind:
+    kind: field
+    record: record.shape
+    surfaces: [c, wasm, native, py]
+    was: { c: line_kind, js: lineKind, py: line_kind }
+    drop: { c: line_kind, js: lineKind, py: line_kind, closes: R8.js }
+    closes: R8.js
+  field.chart_insert_placement:
+    kind: field
+    record: record.chart_insert
+    surfaces: [wasm, native, py]
+    was: { js: placement, py: placement }
+    drop: { js: placement, py: placement, closes: R8.js }
+    closes: R8.js
+  field.chart_unresolved_role:
+    kind: field
+    record: record.chart_unresolved
+    c: role
+    js: role
+    py: role
+    surfaces: [c, wasm, native, py]
+    was: { c: source, py: source }
+    closes: R8.js
+  field.chart_data_series_number_format:
+    kind: field
+    record: record.chart_data_series
+    c: number_format
+    py: number_format
+    surfaces: [c, wasm, native, py]
+    was: { c: format_code, py: format_code }
+    closes: R8.py
+  field.chart_data_series_x_number_format:
+    kind: field
+    record: record.chart_data_series
+    c: x_number_format
+    py: x_number_format
+    surfaces: [c, wasm, native, py]
+    was: { c: x_format_code, py: x_format_code }
+    closes: R8.py
+  field.chart_data_category_number_format:
+    kind: field
+    record: type.chart_data
+    c: category_number_format
+    surfaces: [c]
+    was: { c: category_format_code }
+    closes: R8.c
+  field.chart_plot_overlap_pct:
+    kind: field
+    record: record.chart_plot
+    c: overlap_pct
+    surfaces: [c]
+    was: { c: overlap }
+    closes: R42.unit.suffix
+  field.chart_plot_has_overlap_pct:
+    kind: field
+    record: record.chart_plot
+    c: has_overlap_pct
+    surfaces: [c]
+    was: { c: has_overlap }
+    closes: R42.unit.suffix
+  field.chart_plot_hole_size_pct:
+    kind: field
+    record: record.chart_plot
+    c: hole_size_pct
+    surfaces: [c]
+    was: { c: hole_size }
+    closes: R42.unit.suffix
+  field.chart_plot_has_hole_size_pct:
+    kind: field
+    record: record.chart_plot
+    c: has_hole_size_pct
+    surfaces: [c]
+    was: { c: has_hole_size }
+    closes: R42.unit.suffix
+  field.chart_plot_info_overlap_pct:
+    kind: field
+    record: record.chart_plot_info
+    js: overlapPct
+    py: overlap_pct
+    surfaces: [wasm, native, py]
+    was: { js: overlap, py: overlap }
+    closes: R42.unit.suffix
+  field.chart_plot_info_hole_size_pct:
+    kind: field
+    record: record.chart_plot_info
+    js: holeSizePct
+    py: hole_size_pct
+    surfaces: [wasm, native, py]
+    was: { js: holeSize, py: hole_size }
+    closes: R42.unit.suffix
+  field.chart_plot_patch_overlap_pct:
+    kind: field
+    record: record.chart_plot_patch
+    c: overlap_pct
+    js: overlapPct
+    py: overlap_pct
+    surfaces: [c, wasm, native, py]
+    was: { c: overlap, js: overlap, py: overlap }
+    closes: R42.unit.suffix
+  field.chart_plot_patch_overlap_pct_op:
+    kind: field
+    record: record.chart_plot_patch
+    c: overlap_pct_op
+    surfaces: [c]
+    was: { c: overlap_op }
+    closes: R42.unit.suffix
+  field.chart_plot_patch_hole_size_pct:
+    kind: field
+    record: record.chart_plot_patch
+    c: hole_size_pct
+    js: holeSizePct
+    py: hole_size_pct
+    surfaces: [c, wasm, native, py]
+    was: { c: hole_size, js: holeSize, py: hole_size }
+    closes: R42.unit.suffix
+  field.chart_plot_patch_hole_size_pct_op:
+    kind: field
+    record: record.chart_plot_patch
+    c: hole_size_pct_op
+    surfaces: [c]
+    was: { c: hole_size_op }
+    closes: R42.unit.suffix
+  field.sparkline_group_line_width_pt:
+    kind: field
+    record: record.sparkline_group
+    c: line_width_pt
+    js: lineWidthPt
+    py: line_width_pt
+    surfaces: [c, wasm, native, py]
+    was: { c: line_weight, js: lineWeight, py: line_weight }
+    closes: R42.unit.suffix
+  field.sparkline_group_input_line_width_pt:
+    kind: field
+    record: record.sparkline_group_input
+    js: lineWidthPt
+    py: line_width_pt
+    surfaces: [wasm, native, py]
+    was: { js: lineWeight }
+    closes: R42.unit.suffix
+  field.sparkline_group_patch_line_width_pt:
+    kind: field
+    record: record.sparkline_group_patch
+    c: line_width_pt
+    js: lineWidthPt
+    surfaces: [c, wasm, native]
+    was: { c: line_weight }
+    closes: R42.unit.suffix
+  field.sparkline_group_patch_line_width_pt_op:
+    kind: field
+    record: record.sparkline_group_patch
+    c: line_width_pt_op
+    surfaces: [c]
+    was: { c: line_weight_op }
+    closes: R42.unit.suffix
+  field.slicer_row_height_pt:
+    kind: field
+    record: record.slicer
+    c: row_height_pt
+    js: rowHeightPt
+    py: row_height_pt
+    surfaces: [c, wasm, native, py]
+    closes: R42.unit.suffix
+  field.slicer_spec_row_height_pt:
+    kind: field
+    record: record.slicer_spec
+    c: row_height_pt
+    surfaces: [c]
+    closes: R42.unit.suffix
+  field.slicer_input_row_height_pt:
+    kind: field
+    record: record.slicer_input
+    js: rowHeightPt
+    py: row_height_pt
+    surfaces: [wasm, native, py]
+    closes: R42.unit.suffix
+  field.slicer_patch_row_height_pt:
+    kind: field
+    record: record.slicer_patch
+    c: row_height_pt
+    js: rowHeightPt
+    surfaces: [c, wasm, native]
+    closes: R42.unit.suffix
+  field.slicer_patch_row_height_pt_op:
+    kind: field
+    record: record.slicer_patch
+    c: row_height_pt_op
+    surfaces: [c]
+    closes: R42.unit.suffix
+  field.slicer_style_name:
+    kind: field
+    record: record.slicer
+    c: style_name
+    js: styleName
+    py: style_name
+    surfaces: [c, wasm, native, py]
+    was: { c: style }
+    closes: R8.js
+  field.slicer_spec_style_name:
+    kind: field
+    record: record.slicer_spec
+    c: style_name
+    surfaces: [c]
+    closes: R8.c
+  field.slicer_input_style_name:
+    kind: field
+    record: record.slicer_input
+    js: styleName
+    py: style_name
+    surfaces: [wasm, native, py]
+    closes: R8.js
+  field.slicer_patch_style_name:
+    kind: field
+    record: record.slicer_patch
+    c: style_name
+    js: styleName
+    surfaces: [c, wasm, native]
+    closes: R8.js
+  field.slicer_patch_style_name_op:
+    kind: field
+    record: record.slicer_patch
+    c: style_name_op
+    surfaces: [c]
+    closes: R8.c

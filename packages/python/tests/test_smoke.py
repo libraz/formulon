@@ -16,6 +16,7 @@ import unittest
 
 import formulon
 from formulon import (
+    CellAddress,
     CellRect,
     Comment,
     DefinedNameInput,
@@ -266,7 +267,9 @@ class WorkbookRoundtripTests(unittest.TestCase):
         with Workbook.create_default() as wb:
             wb.sheet(0).set_comment(2, 3, Comment("review", author="Ada"))
             self.assertEqual(len(wb.sheet(0).list_comments()), 1)
-            self.assertEqual(wb.sheet(0).list_comments(), [SheetComment(row=2, col=3, author="Ada", text="review")])
+            self.assertEqual(
+                wb.sheet(0).list_comments(), [SheetComment(cell=CellAddress(2, 3), author="Ada", text="review")]
+            )
             self.assertTrue(wb.sheet(0).evaluate_cf_formula(0, 0, 0, 0, "=A1=0"))
 
     def test_paginate_returns_resolved_breaks(self) -> None:

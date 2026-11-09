@@ -87,6 +87,52 @@ class InputKeysTest(unittest.TestCase):
         )
 
 
+PATCH_ALIAS_DTS = """
+export type Patch<T, Clearable extends keyof T = never> = { [K in keyof T]?: K extends Clearable ? T[K] | null : T[K] };
+export interface Color { readonly kind: number; readonly argb: string | null; }
+export type ColorInput = string | Color;
+export interface Fill { readonly color: Color | null; readonly none: boolean; readonly other: boolean; }
+export type FillPatch = Patch<{ color: ColorInput; none: boolean }, 'color'>;
+export interface ErrorValue { readonly kind: number; readonly code: number; }
+export interface CacheValue { readonly value: number; readonly isDate: boolean; }
+export interface BoxInput { title: string; fill?: FillPatch | null; }
+export interface BoxPatch { title?: string; fill?: FillPatch | null; }
+export interface Workbook {
+  addBox(input: BoxInput): number;
+  updateBox(index: number, patch: BoxPatch): void;
+  setValue(index: number, value: number | string | null | Date | ErrorValue | CacheValue): void;
+}
+"""
+
+PATCH_ALIAS_OPS = {
+    "box.add": {"kind": "op", "scope": "workbook", "js": "addBox", "surfaces": ["wasm", "native"]},
+    "box.update": {
+        "kind": "op",
+        "scope": "workbook",
+        "js": "updateBox",
+        "patch": True,
+        "surfaces": ["wasm", "native"],
+    },
+    "value.set": {"kind": "op", "scope": "workbook", "js": "setValue", "surfaces": ["wasm", "native"]},
+}
+
+
+class PatchAliasNestingTest(unittest.TestCase):
+    FILL = {"fill": ["color", "none", "other"], "fill.color": ["argb", "kind"]}
+
+    def test_an_input_field_typed_by_a_patch_alias_takes_its_keys_and_its_read_twin(self) -> None:
+        _top, nested = gen.input_keys(_ledger(PATCH_ALIAS_OPS), PATCH_ALIAS_DTS)
+        self.assertEqual(nested, {"Workbook.addBox": self.FILL})
+
+    def test_a_patch_field_typed_by_a_patch_alias_takes_its_keys_and_its_read_twin(self) -> None:
+        nested = gen.patch_nested_keys(_ledger(PATCH_ALIAS_OPS), PATCH_ALIAS_DTS)
+        self.assertEqual(nested, {"Workbook.updateBox": self.FILL})
+
+    def test_a_value_union_with_several_object_alternatives_is_not_a_record_argument(self) -> None:
+        top, _nested = gen.input_keys(_ledger(PATCH_ALIAS_OPS), PATCH_ALIAS_DTS)
+        self.assertNotIn("Workbook.setValue", top)
+
+
 class PatchNullableTest(unittest.TestCase):
     def test_clearable_fields_with_their_typeof_name(self) -> None:
         self.assertEqual(

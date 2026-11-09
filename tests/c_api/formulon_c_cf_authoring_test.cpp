@@ -318,12 +318,12 @@ TEST(FormulonCApiCfMutate, AddsVisualRuleTypesAndPreservesThroughSaveLoad) {
   rule.range_count = 1;
   fm_cfvo_t thresholds[3]{};
   thresholds[0].type = 3;  // Min
-  thresholds[0].gte = 1;
+  thresholds[0].gte = FM_TRISTATE_TRUE;
   thresholds[1].type = 1;  // Percent
   thresholds[1].value = "50";
-  thresholds[1].gte = 1;
+  thresholds[1].gte = FM_TRISTATE_TRUE;
   thresholds[2].type = 4;  // Max
-  thresholds[2].gte = 1;
+  thresholds[2].gte = FM_TRISTATE_TRUE;
   fm_color_t colors[3]{CfRgb(255, 0, 0, 255), CfRgb(255, 255, 0, 255), CfRgb(0, 255, 0, 255)};
   rule.color_scale_thresholds = thresholds;
   rule.color_scale_colors = colors;
@@ -339,9 +339,9 @@ TEST(FormulonCApiCfMutate, AddsVisualRuleTypesAndPreservesThroughSaveLoad) {
   db_rule.range_count = 1;
   db_rule.has_data_bar = 1;
   db_rule.data_bar_min.type = 3;  // Min
-  db_rule.data_bar_min.gte = 1;
+  db_rule.data_bar_min.gte = FM_TRISTATE_TRUE;
   db_rule.data_bar_max.type = 4;  // Max
-  db_rule.data_bar_max.gte = 1;
+  db_rule.data_bar_max.gte = FM_TRISTATE_TRUE;
   db_rule.data_bar_fill = CfRgb(99, 142, 198, 255);
   db_rule.data_bar_show_value = 1;
   db_rule.data_bar_min_length_pct = 10;
@@ -356,14 +356,14 @@ TEST(FormulonCApiCfMutate, AddsVisualRuleTypesAndPreservesThroughSaveLoad) {
   icon_rule.ranges = &icon_sqref;
   icon_rule.range_count = 1;
   icon_rule.has_icon_set = 1;
-  icon_rule.icon_set_name = 0;  // Three_Arrows
+  icon_rule.icon_set = 0;  // Three_Arrows
   fm_cfvo_t icon_thresholds[2]{};
   icon_thresholds[0].type = 1;  // Percent
   icon_thresholds[0].value = "33";
-  icon_thresholds[0].gte = 1;
+  icon_thresholds[0].gte = FM_TRISTATE_TRUE;
   icon_thresholds[1].type = 1;  // Percent
   icon_thresholds[1].value = "67";
-  icon_thresholds[1].gte = 1;
+  icon_thresholds[1].gte = FM_TRISTATE_TRUE;
   icon_rule.icon_set_thresholds = icon_thresholds;
   icon_rule.icon_set_threshold_count = 2;
   icon_rule.icon_set_show_value = 1;
@@ -408,7 +408,7 @@ TEST(FormulonCApiCfMutate, AddsVisualRuleTypesAndPreservesThroughSaveLoad) {
   EXPECT_STREQ(out_icon.icon_set_thresholds[1].value, "67");
 
   BufferGuard saved;
-  ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0);
+  ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0);
   ASSERT_GT(saved.len, 0U);
 
   WorkbookGuard reloaded;
@@ -444,9 +444,9 @@ TEST(FormulonCApiCfMutate, AddRuleStoresFormulasWithoutTheLeadingEquals) {
   fm_cfvo_t thresholds[2]{};
   thresholds[0].type = 5;  // Formula
   thresholds[0].value = "=$D$1";
-  thresholds[0].gte = 1;
+  thresholds[0].gte = FM_TRISTATE_TRUE;
   thresholds[1].type = 4;  // Max
-  thresholds[1].gte = 1;
+  thresholds[1].gte = FM_TRISTATE_TRUE;
   fm_color_t colors[2]{CfRgb(255, 0, 0, 255), CfRgb(0, 255, 0, 255)};
   fm_cf_rule_t scale = FM_STRUCT_INIT(fm_cf_rule_t);
   scale.type = 2;  // ColorScale
@@ -466,7 +466,7 @@ TEST(FormulonCApiCfMutate, AddRuleStoresFormulasWithoutTheLeadingEquals) {
   EXPECT_STREQ(out.color_scale_thresholds[0].value, "=$D$1");
 
   BufferGuard saved;
-  ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0);
+  ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0);
   WorkbookGuard reloaded;
   ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &reloaded.handle), 0);
   ASSERT_EQ(fm_sheet_get_cf_rule_at(reloaded.handle, 0, 0, &out), 0);
@@ -491,10 +491,10 @@ TEST(FormulonCApiCfMutate, FormulaThresholdsReadWithALeadingEquals) {
   fm_cfvo_t thresholds[2]{};
   thresholds[0].type = 5;  // Formula
   thresholds[0].value = "$D$1";
-  thresholds[0].gte = 1;
+  thresholds[0].gte = FM_TRISTATE_TRUE;
   thresholds[1].type = 5;  // Formula
   thresholds[1].value = "=$D$2";
-  thresholds[1].gte = 1;
+  thresholds[1].gte = FM_TRISTATE_TRUE;
   fm_color_t colors[2]{CfRgb(255, 0, 0, 255), CfRgb(0, 255, 0, 255)};
   fm_cf_rule_t scale = FM_STRUCT_INIT(fm_cf_rule_t);
   scale.type = 2;  // ColorScale
@@ -507,7 +507,7 @@ TEST(FormulonCApiCfMutate, FormulaThresholdsReadWithALeadingEquals) {
   ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &scale, &rule_id), 0) << fm_get_last_error_message();
 
   BufferGuard saved;
-  ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0);
+  ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0);
   WorkbookGuard reloaded;
   ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &reloaded.handle), 0);
   for (fm_workbook_t* book : {wb.handle, reloaded.handle}) {
@@ -533,14 +533,14 @@ TEST(FormulonCApiCfMutate, AddRuleRejectsIconThresholdCountsOtherThanIconsMinusO
   for (fm_cfvo_t& t : thresholds) {
     t.type = 1;  // Percent
     t.value = "50";
-    t.gte = 1;
+    t.gte = FM_TRISTATE_TRUE;
   }
   fm_cf_rule_t rule = FM_STRUCT_INIT(fm_cf_rule_t);
   rule.type = 4;  // IconSet
   rule.ranges = &sqref;
   rule.range_count = 1;
   rule.has_icon_set = 1;
-  rule.icon_set_name = 0;  // Three_Arrows
+  rule.icon_set = 0;  // Three_Arrows
   rule.icon_set_thresholds = thresholds;
   const char* rule_id = nullptr;
   for (std::uint32_t count : {0U, 1U, 3U, 4U}) {
@@ -551,11 +551,11 @@ TEST(FormulonCApiCfMutate, AddRuleRejectsIconThresholdCountsOtherThanIconsMinusO
   }
   rule.icon_set_threshold_count = 2;
   EXPECT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &rule, &rule_id), 0) << fm_get_last_error_message();
-  rule.icon_set_name = 8;  // Four_Arrows
+  rule.icon_set = 8;  // Four_Arrows
   EXPECT_NE(fm_sheet_add_cf_rule(wb.handle, 0, &rule, &rule_id), 0);
   rule.icon_set_threshold_count = 3;
   EXPECT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &rule, &rule_id), 0) << fm_get_last_error_message();
-  rule.icon_set_name = 16;  // Five_Quarters
+  rule.icon_set = 16;  // Five_Quarters
   rule.icon_set_threshold_count = 4;
   EXPECT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &rule, &rule_id), 0) << fm_get_last_error_message();
   std::size_t count = 0;
@@ -566,26 +566,26 @@ TEST(FormulonCApiCfMutate, AddRuleRejectsIconThresholdCountsOtherThanIconsMinusO
 // The icon set table is in `ST_IconSetType` order: the 17 built-ins a rule
 // draws, then the x14-only sets a custom icon level can name.
 TEST(FormulonCApiCfMutate, IconSetNameOrdinalsFollowTheSchemaOrder) {
-  EXPECT_EQ(FM_ICON_SET_NAME_3_ARROWS, 0);
-  EXPECT_EQ(FM_ICON_SET_NAME_3_ARROWS_GRAY, 1);
-  EXPECT_EQ(FM_ICON_SET_NAME_3_FLAGS, 2);
-  EXPECT_EQ(FM_ICON_SET_NAME_3_TRAFFIC_LIGHTS_1, 3);
-  EXPECT_EQ(FM_ICON_SET_NAME_3_TRAFFIC_LIGHTS_2, 4);
-  EXPECT_EQ(FM_ICON_SET_NAME_3_SIGNS, 5);
-  EXPECT_EQ(FM_ICON_SET_NAME_3_SYMBOLS, 6);
-  EXPECT_EQ(FM_ICON_SET_NAME_3_SYMBOLS_2, 7);
-  EXPECT_EQ(FM_ICON_SET_NAME_4_ARROWS, 8);
-  EXPECT_EQ(FM_ICON_SET_NAME_4_ARROWS_GRAY, 9);
-  EXPECT_EQ(FM_ICON_SET_NAME_4_RED_TO_BLACK, 10);
-  EXPECT_EQ(FM_ICON_SET_NAME_4_RATING, 11);
-  EXPECT_EQ(FM_ICON_SET_NAME_4_TRAFFIC_LIGHTS, 12);
-  EXPECT_EQ(FM_ICON_SET_NAME_5_ARROWS, 13);
-  EXPECT_EQ(FM_ICON_SET_NAME_5_ARROWS_GRAY, 14);
-  EXPECT_EQ(FM_ICON_SET_NAME_5_RATING, 15);
-  EXPECT_EQ(FM_ICON_SET_NAME_5_QUARTERS, 16);
-  EXPECT_EQ(FM_ICON_SET_NAME_3_STARS, 17);
-  EXPECT_EQ(FM_ICON_SET_NAME_3_TRIANGLES, 18);
-  EXPECT_EQ(FM_ICON_SET_NAME_5_BOXES, 19);
+  EXPECT_EQ(FM_ICON_SET_NAME_THREE_ARROWS, 0);
+  EXPECT_EQ(FM_ICON_SET_NAME_THREE_ARROWS_GRAY, 1);
+  EXPECT_EQ(FM_ICON_SET_NAME_THREE_FLAGS, 2);
+  EXPECT_EQ(FM_ICON_SET_NAME_THREE_TRAFFIC_LIGHTS_1, 3);
+  EXPECT_EQ(FM_ICON_SET_NAME_THREE_TRAFFIC_LIGHTS_2, 4);
+  EXPECT_EQ(FM_ICON_SET_NAME_THREE_SIGNS, 5);
+  EXPECT_EQ(FM_ICON_SET_NAME_THREE_SYMBOLS, 6);
+  EXPECT_EQ(FM_ICON_SET_NAME_THREE_SYMBOLS_2, 7);
+  EXPECT_EQ(FM_ICON_SET_NAME_FOUR_ARROWS, 8);
+  EXPECT_EQ(FM_ICON_SET_NAME_FOUR_ARROWS_GRAY, 9);
+  EXPECT_EQ(FM_ICON_SET_NAME_FOUR_RED_TO_BLACK, 10);
+  EXPECT_EQ(FM_ICON_SET_NAME_FOUR_RATING, 11);
+  EXPECT_EQ(FM_ICON_SET_NAME_FOUR_TRAFFIC_LIGHTS, 12);
+  EXPECT_EQ(FM_ICON_SET_NAME_FIVE_ARROWS, 13);
+  EXPECT_EQ(FM_ICON_SET_NAME_FIVE_ARROWS_GRAY, 14);
+  EXPECT_EQ(FM_ICON_SET_NAME_FIVE_RATING, 15);
+  EXPECT_EQ(FM_ICON_SET_NAME_FIVE_QUARTERS, 16);
+  EXPECT_EQ(FM_ICON_SET_NAME_THREE_STARS, 17);
+  EXPECT_EQ(FM_ICON_SET_NAME_THREE_TRIANGLES, 18);
+  EXPECT_EQ(FM_ICON_SET_NAME_FIVE_BOXES, 19);
   EXPECT_EQ(FM_ICON_SET_NAME_NO_ICONS, 20);
 }
 
@@ -598,14 +598,14 @@ TEST(FormulonCApiCfMutate, RuleRejectsAnIconSetOnlyACustomLevelNames) {
   for (fm_cfvo_t& t : thresholds) {
     t.type = 1;  // Percent
     t.value = "50";
-    t.gte = 1;
+    t.gte = FM_TRISTATE_TRUE;
   }
   const struct {
     int32_t name;
     std::uint32_t threshold_count;
-  } kCases[] = {{FM_ICON_SET_NAME_3_STARS, 2U},
-                {FM_ICON_SET_NAME_3_TRIANGLES, 2U},
-                {FM_ICON_SET_NAME_5_BOXES, 4U},
+  } kCases[] = {{FM_ICON_SET_NAME_THREE_STARS, 2U},
+                {FM_ICON_SET_NAME_THREE_TRIANGLES, 2U},
+                {FM_ICON_SET_NAME_FIVE_BOXES, 4U},
                 {FM_ICON_SET_NAME_NO_ICONS, 2U}};
   for (const auto& c : kCases) {
     fm_cf_rule_t rule = FM_STRUCT_INIT(fm_cf_rule_t);
@@ -613,7 +613,7 @@ TEST(FormulonCApiCfMutate, RuleRejectsAnIconSetOnlyACustomLevelNames) {
     rule.ranges = &sqref;
     rule.range_count = 1;
     rule.has_icon_set = 1;
-    rule.icon_set_name = static_cast<std::uint8_t>(c.name);
+    rule.icon_set = static_cast<std::int32_t>(c.name);
     rule.icon_set_thresholds = thresholds;
     rule.icon_set_threshold_count = c.threshold_count;
     const char* rule_id = nullptr;
@@ -680,7 +680,7 @@ TEST(FormulonCApiCfMutate, AddRuleDerivesExcelsFormulaForSideFieldRules) {
   for (std::int32_t format :
        {static_cast<std::int32_t>(FM_WORKBOOK_FORMAT_XLSX), static_cast<std::int32_t>(FM_WORKBOOK_FORMAT_XLSB)}) {
     BufferGuard saved;
-    ASSERT_EQ(fm_workbook_save_as(wb.handle, format, &saved.data, &saved.len), 0)
+    ASSERT_EQ(fm_workbook_save(wb.handle, format, &saved.data, &saved.len), 0)
         << "format=" << format << ": " << fm_get_last_error_message();
     WorkbookGuard reloaded;
     ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &reloaded.handle), 0);
@@ -1073,4 +1073,74 @@ TEST(FormulonCApiCfMutate, UnknownRuleIdIsNotFound) {
   size_t count = 0;
   ASSERT_EQ(fm_sheet_get_cf_rule_count(wb.handle, 0, &count), 0);
   EXPECT_EQ(count, 1U);
+}
+
+TEST(FormulonCApiCfvoInclusiveDefault, ZeroInitThresholdIsInclusive) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  const fm_cell_rect_t sqref{0, 0, 0, 0};
+  fm_cf_rule_t rule = FM_STRUCT_INIT(fm_cf_rule_t);
+  rule.type = 4;  // IconSet
+  rule.ranges = &sqref;
+  rule.range_count = 1;
+  rule.has_icon_set = 1;
+  rule.icon_set = FM_ICON_SET_NAME_THREE_ARROWS;
+  fm_cfvo_t thresholds[2]{};
+  thresholds[0].type = 1;  // Percent
+  thresholds[0].value = "33";
+  thresholds[1].type = 1;
+  thresholds[1].value = "67";
+  thresholds[1].gte = FM_TRISTATE_FALSE;
+  rule.icon_set_thresholds = thresholds;
+  rule.icon_set_threshold_count = 2;
+  const char* rule_id = nullptr;
+  ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &rule, &rule_id), 0) << fm_get_last_error_message();
+
+  const auto& spec = *wb.handle->workbook().sheet(0).conditional_formats()[0].rules[0].icon_set;
+  EXPECT_TRUE(spec.thresholds[0].gte);
+  EXPECT_FALSE(spec.thresholds[1].gte);
+
+  fm_cf_rule_t back = FM_STRUCT_INIT(fm_cf_rule_t);
+  int32_t present = 0;
+  ASSERT_EQ(fm_sheet_get_cf_rule(wb.handle, 0, rule_id, &present, &back), 0);
+  ASSERT_EQ(present, 1);
+  ASSERT_EQ(back.icon_set_threshold_count, 2U);
+  EXPECT_EQ(back.icon_set_thresholds[0].gte, FM_TRISTATE_TRUE);
+  EXPECT_EQ(back.icon_set_thresholds[1].gte, FM_TRISTATE_FALSE);
+}
+
+TEST(FormulonCApiCfIconSetField, MatchAndRuleUseIconSet) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  const fm_cell_rect_t sqref{0, 0, 0, 0};
+  fm_cf_rule_t rule = FM_STRUCT_INIT(fm_cf_rule_t);
+  rule.type = 4;  // IconSet
+  rule.ranges = &sqref;
+  rule.range_count = 1;
+  rule.has_icon_set = 1;
+  rule.icon_set = FM_ICON_SET_NAME_FOUR_ARROWS;
+  fm_cfvo_t thresholds[3]{};
+  for (fm_cfvo_t& t : thresholds) {
+    t.type = 1;  // Percent
+    t.value = "50";
+  }
+  rule.icon_set_thresholds = thresholds;
+  rule.icon_set_threshold_count = 3;
+  const char* rule_id = nullptr;
+  ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &rule, &rule_id), 0) << fm_get_last_error_message();
+
+  fm_cf_rule_t back = FM_STRUCT_INIT(fm_cf_rule_t);
+  int32_t present = 0;
+  ASSERT_EQ(fm_sheet_get_cf_rule(wb.handle, 0, rule_id, &present, &back), 0);
+  EXPECT_EQ(back.icon_set, FM_ICON_SET_NAME_FOUR_ARROWS);
+
+  fm_cf_rule_patch_t patch = FM_STRUCT_INIT(fm_cf_rule_patch_t);
+  patch.icon_set_op = FM_PATCH_OP_SET;
+  patch.icon_set = FM_ICON_SET_NAME_THREE_FLAGS;
+  patch.icon_set_thresholds_op = FM_PATCH_OP_SET;
+  patch.icon_set_thresholds = thresholds;
+  patch.icon_set_thresholds_count = 2;
+  ASSERT_EQ(fm_sheet_update_cf_rule(wb.handle, 0, rule_id, &patch), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_get_cf_rule(wb.handle, 0, rule_id, &present, &back), 0);
+  EXPECT_EQ(back.icon_set, FM_ICON_SET_NAME_THREE_FLAGS);
 }

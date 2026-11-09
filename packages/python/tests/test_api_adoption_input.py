@@ -17,6 +17,8 @@ from formulon import (
     CellAddress,
     CellRect,
     CfExpressionRuleInput,
+    ChartFill,
+    ChartLine,
     Color,
     ColorKind,
     DataValidationInput,
@@ -29,7 +31,6 @@ from formulon import (
     ParseErrorCode,
     PivotInput,
     ShapeInput,
-    ShapePaint,
     SheetSelectionInput,
     SparklineGroupInput,
     SparklineInput,
@@ -243,29 +244,24 @@ class ColourInputTests(unittest.TestCase):
             shape = ws.add_shape(
                 ShapeInput(
                     anchor=DrawingAnchorInput(kind=AnchorKind.TWO_CELL, to_row=3, to_col=3),
-                    fill_kind=ShapePaint.SOLID,
-                    fill_color="#FF0000",
-                    line_kind=ShapePaint.SOLID,
-                    line_color=Color(kind=ColorKind.RGB, argb=0x800000FF),
+                    fill=ChartFill(color="#FF0000"),  # type: ignore[arg-type]
+                    line=ChartLine(color=Color(kind=ColorKind.RGB, argb=0x800000FF)),
                 ),
             )
             # A shape colour reads back opaque; the alpha of the input is ignored.
             props = shape.get_properties()
-            self.assertEqual(props.fill_color, Color(kind=ColorKind.RGB, argb=0xFFFF0000))
-            self.assertEqual(props.line_color, Color(kind=ColorKind.RGB, argb=0xFF0000FF))
-            shape.update(fill_kind=ShapePaint.SOLID, fill_color="#00FF00")
-            self.assertEqual(shape.get_properties().fill_color, Color(kind=ColorKind.RGB, argb=0xFF00FF00))
+            self.assertEqual(props.fill.color, Color(kind=ColorKind.RGB, argb=0xFFFF0000))
+            self.assertEqual(props.line.color, Color(kind=ColorKind.RGB, argb=0xFF0000FF))
+            shape.update(fill={"color": "#00FF00"})
+            self.assertEqual(shape.get_properties().fill.color, Color(kind=ColorKind.RGB, argb=0xFF00FF00))
             passed_back = {
-                f.name: getattr(props, f.name)
-                for f in dataclasses.fields(props)
-                if f.name in ("fill_kind", "fill_color", "line_kind", "line_color")
+                f.name: getattr(props, f.name) for f in dataclasses.fields(props) if f.name in ("fill", "line")
             }
             shape.update(**passed_back)
-            self.assertEqual(shape.get_properties().fill_color, props.fill_color)
-            shape.update(fill_kind=ShapePaint.DEFAULT)
-            self.assertEqual(shape.get_properties().fill_kind, ShapePaint.DEFAULT)
-            self.assertIsNone(shape.get_properties().fill_color)
-            self.assertEqual(shape.get_properties().line_color, props.line_color)
+            self.assertEqual(shape.get_properties().fill.color, props.fill.color)
+            shape.update(fill=None)
+            self.assertIsNone(shape.get_properties().fill)
+            self.assertEqual(shape.get_properties().line.color, props.line.color)
 
     def test_sparkline_colours_take_text(self) -> None:
         with Workbook.create_default() as wb:

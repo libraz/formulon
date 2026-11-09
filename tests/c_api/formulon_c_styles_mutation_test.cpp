@@ -9,9 +9,9 @@ TEST(FormulonCApiStyles, FullLifecycleSurvivesSaveLoad) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
 
-  std::size_t font_index = 0;
-  std::size_t fill_index = 0;
-  std::size_t border_index = 0;
+  std::uint32_t font_index = 0;
+  std::uint32_t fill_index = 0;
+  std::uint32_t border_index = 0;
   ASSERT_EQ(fm_workbook_add_font(wb.handle, record_arg(MakeArial()), &font_index), 0);
   ASSERT_EQ(fm_workbook_add_fill(wb.handle, record_arg(MakeRedFill()), &fill_index), 0);
   ASSERT_EQ(fm_workbook_add_border(wb.handle, record_arg(MakeThinBoxBorder()), &border_index), 0);
@@ -28,7 +28,7 @@ TEST(FormulonCApiStyles, FullLifecycleSurvivesSaveLoad) {
   ASSERT_EQ(fm_sheet_set_cell_xf_index(wb.handle, 0, 0, 0, xf_index), 0);
 
   BufferGuard saved;
-  ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0);
+  ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0);
   ASSERT_GT(saved.len, 0U);
 
   WorkbookGuard wb2;
@@ -49,8 +49,8 @@ TEST(FormulonCApiStyles, AddXfWithNonDefaultFontFillNumFmtRoundTripsThroughSaveL
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
 
-  std::size_t font_index = 0xFFFFFFFFU;
-  std::size_t fill_index = 0xFFFFFFFFU;
+  std::uint32_t font_index = 0xFFFFFFFFU;
+  std::uint32_t fill_index = 0xFFFFFFFFU;
   uint32_t num_fmt_id = 0;
   ASSERT_EQ(fm_workbook_add_font(wb.handle, record_arg(MakeArial()), &font_index), 0);
   ASSERT_EQ(fm_workbook_add_fill(wb.handle, record_arg(MakeRedFill()), &fill_index), 0);
@@ -60,7 +60,7 @@ TEST(FormulonCApiStyles, AddXfWithNonDefaultFontFillNumFmtRoundTripsThroughSaveL
   xf.font_index = static_cast<uint32_t>(font_index);
   xf.fill_index = static_cast<uint32_t>(fill_index);
   xf.border_index = 0;
-  xf.num_fmt_id = static_cast<uint16_t>(num_fmt_id);
+  xf.num_fmt_id = num_fmt_id;
   std::uint32_t xf_index = 0xFFFFFFFFU;
   ASSERT_EQ(fm_workbook_add_cell_xf(wb.handle, &xf, &xf_index), 0);
   ASSERT_NE(xf_index, 0U) << "non-default font/fill/numFmt must not dedup to the "
@@ -75,7 +75,7 @@ TEST(FormulonCApiStyles, AddXfWithNonDefaultFontFillNumFmtRoundTripsThroughSaveL
   ASSERT_EQ(fm_sheet_set_cell_xf_index(wb.handle, 0, 1, 1, xf_index), 0);
 
   BufferGuard saved;
-  ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0);
+  ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0);
   ASSERT_GT(saved.len, 0U);
 
   WorkbookGuard wb2;
@@ -130,7 +130,7 @@ TEST(FormulonCApiStyles, JustifyLastLineRoundTripsThroughSaveLoad) {
   ASSERT_EQ(fm_sheet_set_cell_xf_index(wb.handle, 0, 0, 0, xf_index), 0);
 
   BufferGuard saved;
-  ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0);
+  ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0);
 
   WorkbookGuard reloaded;
   ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &reloaded.handle), 0);
@@ -168,7 +168,7 @@ TEST(FormulonCApiStyles, NamedCellStyleRoundTripsThroughSaveLoad) {
   ASSERT_EQ(fm_sheet_set_cell_xf_index(wb.handle, 0, 0, 0, cell_xf_id), 0);
 
   BufferGuard saved;
-  ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0);
+  ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0);
   WorkbookGuard loaded;
   ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &loaded.handle), 0);
   std::size_t style_count = 0;
@@ -238,7 +238,7 @@ TEST(FormulonCApiStyles, AddBatchDeduplicatesAllStyleTables) {
   uint32_t fill_indices[2]{};
   uint32_t border_indices[2]{};
   const char* const num_fmt_codes[] = {"0.000%", "0.000%"};
-  uint16_t num_fmt_ids[2]{};
+  uint32_t num_fmt_ids[2]{};
   fm_cell_xf_t xf{};
   xf.font_index = 1U;
   xf.fill_index = 1U;
@@ -277,7 +277,7 @@ TEST(FormulonCApiStyles, AddBatchCommitsNumFmtReferencesTransactionally) {
   const fm_font_t font = MakeArial();
   uint32_t font_index = 0;
   const char* const codes[] = {"0.000%"};
-  uint16_t num_fmt_ids[] = {0xBEEF};
+  uint32_t num_fmt_ids[] = {0xBEEF};
   fm_cell_xf_t xf{};
   xf.font_index = 1U;  // default root plus the staged font
   xf.num_fmt_id = 164U;
@@ -315,7 +315,7 @@ TEST(FormulonCApiStyles, AddBatchFailureLeavesTableAndOutputsUnchanged) {
   const fm_font_t font = MakeArial();
   uint32_t font_index = 0xA1A2A3A4U;
   const char* const codes[] = {"0.000%"};
-  uint16_t num_fmt_ids[] = {0xBEEF};
+  uint32_t num_fmt_ids[] = {0xBEEF};
   fm_cell_xf_t xf{};
   xf.font_index = 1U;    // valid after staging the font
   xf.num_fmt_id = 999U;  // neither built-in nor registered

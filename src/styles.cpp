@@ -276,6 +276,21 @@ Expected<void, Error> remove_cell_style(StylesTable& styles, std::string_view na
   return Expected<void, Error>::Ok();
 }
 
+Expected<void, Error> set_cell_style_xf(StylesTable& styles, std::uint32_t index, const CellXf& record) {
+  if (index >= styles.cell_style_xfs.size()) {
+    return make_error(FormulonErrorCode::kIndexOutOfRange, "cell style xf index past the table",
+                      "index=" + std::to_string(index));
+  }
+  if (record.font_index >= styles.fonts.size() || record.fill_index >= styles.fills.size() ||
+      record.border_index >= styles.borders.size()) {
+    return make_error(FormulonErrorCode::kInvalidArgument, "cell style xf names a missing font, fill or border", "");
+  }
+  styles.cell_style_xfs[index] = record;
+  // A `<cellStyleXfs>` record has no parent style.
+  styles.cell_style_xfs[index].xf_id = 0U;
+  return Expected<void, Error>::Ok();
+}
+
 const char* builtin_num_fmt(std::uint16_t id) {
   if (id >= kBuiltinNumFmts.size()) {
     return "";

@@ -418,5 +418,30 @@ TEST(StylesInternCellXf, ReusesAnEqualRecordAndAppendsADistinctOne) {
   EXPECT_NE(cell_xf_key(dated), cell_xf_key(aligned));
 }
 
+TEST(CellStyleXfSet, ReplacesEntryKeepsIndex) {
+  StylesTable t = BuildDeletionTable();
+  const std::size_t before = t.cell_style_xfs.size();
+  CellXf replacement;
+  replacement.font_index = 2;
+  replacement.fill_index = 3;
+  replacement.num_fmt_id = 14;
+  ASSERT_TRUE(static_cast<bool>(set_cell_style_xf(t, 1U, replacement)));
+  ASSERT_EQ(t.cell_style_xfs.size(), before);
+  EXPECT_EQ(cell_xf_key(t.cell_style_xfs[1]), cell_xf_key(replacement));
+  // The named style keeps pointing at the same index.
+  EXPECT_EQ(t.cell_styles[1].xf_id, 1U);
+
+  auto past_end = set_cell_style_xf(t, static_cast<std::uint32_t>(before), replacement);
+  ASSERT_FALSE(static_cast<bool>(past_end));
+  EXPECT_EQ(past_end.error().code, FormulonErrorCode::kIndexOutOfRange);
+
+  CellXf dangling = replacement;
+  dangling.font_index = 99;
+  auto bad = set_cell_style_xf(t, 1U, dangling);
+  ASSERT_FALSE(static_cast<bool>(bad));
+  EXPECT_EQ(bad.error().code, FormulonErrorCode::kInvalidArgument);
+  EXPECT_EQ(cell_xf_key(t.cell_style_xfs[1]), cell_xf_key(replacement));
+}
+
 }  // namespace
 }  // namespace formulon

@@ -139,7 +139,7 @@ template <typename Enum>
 
 [[maybe_unused]] inline std::string SavedPivotXml(fm_workbook_t* wb) {
   BufferGuard saved;
-  EXPECT_EQ(fm_workbook_save(wb, &saved.data, &saved.len), 0) << fm_get_last_error_message();
+  EXPECT_EQ(fm_workbook_save(wb, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0) << fm_get_last_error_message();
   return ExtractZipEntry(std::vector<std::uint8_t>(saved.data, saved.data + saved.len),
                          "xl/pivotTables/pivotTable1.xml");
 }
@@ -221,15 +221,17 @@ template <typename Enum>
   if (st != 0) {
     return st;
   }
-  // Region (row) + items 0 and 1, plus the OOXML "default" subtotal item.
-  fm_pivot_field_spec_t region_spec = FM_STRUCT_INIT(fm_pivot_field_spec_t);
-  region_spec.source_name = "Region";
-  region_spec.custom_name = "";
-  region_spec.axis = FM_PIVOT_AXIS_ROW;
-  region_spec.subtotal_top = FM_TRISTATE_FALSE;
-  region_spec.number_format = "";
-  std::size_t region_field = 99;
-  st = fm_sheet_add_pivot_field(wb, 0, pivot_index, &region_spec, &region_field);
+  // The pivot carries one field per cache field. Region goes on rows with
+  // items 0 and 1 and bottom subtotals; Amount is the value-axis source.
+  const std::size_t region_field = region_index;
+  st = fm_sheet_set_pivot_field_axis(wb, 0, pivot_index, region_field, FM_PIVOT_AXIS_ROW);
+  if (st != 0) {
+    return st;
+  }
+  fm_pivot_field_patch_t region_patch = FM_STRUCT_INIT(fm_pivot_field_patch_t);
+  region_patch.subtotal_top_op = FM_PATCH_OP_SET;
+  region_patch.subtotal_top = 0;
+  st = fm_sheet_update_pivot_field(wb, 0, pivot_index, region_field, &region_patch);
   if (st != 0) {
     return st;
   }
@@ -241,15 +243,8 @@ template <typename Enum>
   if (st != 0) {
     return st;
   }
-  // Amount (value-axis source field).
-  fm_pivot_field_spec_t amount_spec = FM_STRUCT_INIT(fm_pivot_field_spec_t);
-  amount_spec.source_name = "Amount";
-  amount_spec.custom_name = "";
-  amount_spec.axis = FM_PIVOT_AXIS_VALUE;
-  amount_spec.subtotal_top = FM_TRISTATE_FALSE;
-  amount_spec.number_format = "";
-  std::size_t amount_field = 99;
-  st = fm_sheet_add_pivot_field(wb, 0, pivot_index, &amount_spec, &amount_field);
+  const std::size_t amount_field = amount_index;
+  st = fm_sheet_set_pivot_field_axis(wb, 0, pivot_index, amount_field, FM_PIVOT_AXIS_VALUE);
   if (st != 0) {
     return st;
   }

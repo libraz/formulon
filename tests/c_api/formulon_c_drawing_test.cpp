@@ -111,7 +111,7 @@ fm_drawing_placement_spec_t Defaults() {
 
 void SaveAndReload(fm_workbook_t* wb, WorkbookGuard* out) {
   BufferGuard buf;
-  ASSERT_EQ(fm_workbook_save(wb, &buf.data, &buf.len), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_workbook_save(wb, FM_WORKBOOK_FORMAT_XLSX, &buf.data, &buf.len), 0) << fm_get_last_error_message();
   ASSERT_EQ(fm_workbook_load(buf.data, buf.len, &out->handle), 0) << fm_get_last_error_message();
 }
 

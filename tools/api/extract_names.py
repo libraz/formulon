@@ -405,17 +405,32 @@ def _scan_py(root: Path):
         path = pkg / module
         if not path.is_file():
             continue
-        for node in ast.parse(path.read_text(encoding="utf-8")).body:
-            if not isinstance(node, ast.ClassDef):
+        classes = [n for n in ast.parse(path.read_text(encoding="utf-8")).body if isinstance(n, ast.ClassDef)]
+        by_name = {n.name: n for n in classes}
+
+        def own_and_private_bases(node: ast.ClassDef) -> list:
+            """The class body plus the bodies of its non-public ancestors in this module (a shared
+            implementation an underscore base supplies belongs to each public subclass)."""
+            bodies, todo = [node], [getattr(b, "id", "") for b in node.bases]
+            while todo:
+                base = by_name.get(todo.pop())
+                if base is not None and base.name.startswith("_") and base not in bodies:
+                    bodies.append(base)
+                    todo.extend(getattr(b, "id", "") for b in base.bases)
+            return bodies
+
+        for node in classes:
+            if node.name.startswith("_"):
                 continue
-            for item in node.body:
-                if not isinstance(item, ast.FunctionDef) or item.name.startswith("_"):
-                    continue
-                prop = any(getattr(d, "id", "") == "property" for d in item.decorator_list)
-                name = f"{node.name}.{item.name}"
-                out.setdefault(
-                    name, Member(name, "property" if prop else "method", _py_refs(item)[0], _py_signature(item))
-                )
+            for body_node in own_and_private_bases(node):
+                for item in body_node.body:
+                    if not isinstance(item, ast.FunctionDef) or item.name.startswith("_"):
+                        continue
+                    prop = any(getattr(d, "id", "") == "property" for d in item.decorator_list)
+                    name = f"{node.name}.{item.name}"
+                    out.setdefault(
+                        name, Member(name, "property" if prop else "method", _py_refs(item)[0], _py_signature(item))
+                    )
     init = ast.parse((pkg / "__init__.py").read_text(encoding="utf-8"))
     for node in init.body:
         if isinstance(node, ast.Assign) and getattr(node.targets[0], "id", "") == "__all__":

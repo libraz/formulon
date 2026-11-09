@@ -62,7 +62,7 @@ void JsWorkbook::setCellPhoneticRuns(uint32_t sheet, uint32_t row, uint32_t col,
   }
   JsNarrowNumericReader reader("Sheet.setCellPhoneticRuns");
   if (!reader.is_array(runs, "runs")) {
-    record_type_error("Sheet.setCellPhoneticRuns: `runs` must be an array of { sb, eb, text }");
+    record_type_error("Sheet.setCellPhoneticRuns runs must be an array");
     return;
   }
   const uint32_t count = reader.length(runs, "runs.length");
@@ -76,14 +76,14 @@ void JsWorkbook::setCellPhoneticRuns(uint32_t sheet, uint32_t row, uint32_t col,
   std::vector<fm_phonetic_run_t> records;
   records.reserve(count);
   for (uint32_t i = 0; i < count && reader.ok(); ++i) {
-    const emscripten::val run = reader.array_element(runs, i, "run");
-    const emscripten::val sb_value = reader.value(run, "start", "start");
-    const emscripten::val eb_value = reader.value(run, "end", "end");
-    const emscripten::val text_value = reader.value(run, "text", "text");
-    const uint32_t sb = reader.u32_value(sb_value, 0U, "start");
-    const uint32_t eb = reader.u32_value(eb_value, 0U, "end");
-    texts.push_back(reader.string_value(text_value, "text"));
-    records.push_back(fm_phonetic_run_t{sb, eb, nullptr});
+    const emscripten::val run = reader.array_element(runs, i, "runs[]");
+    const emscripten::val start_value = reader.value(run, "start", "runs[].start");
+    const emscripten::val end_value = reader.value(run, "end", "runs[].end");
+    const emscripten::val text_value = reader.value(run, "text", "runs[].text");
+    const uint32_t start = reader.u32_value(start_value, 0U, "runs[].start");
+    const uint32_t end = reader.u32_value(end_value, 0U, "runs[].end");
+    texts.push_back(reader.string_value(text_value, "runs[].text"));
+    records.push_back(fm_phonetic_run_t{start, end, nullptr});
   }
   if (!reader.ok()) {
     return;
@@ -100,15 +100,23 @@ void JsWorkbook::setCellPhoneticProperties(uint32_t sheet, uint32_t row, uint32_
     record_invalid_handle();
     return;
   }
+  // `null` resets the cell to the unstated triple; `stated` is read-only and ignored.
+  if (properties.isNull()) {
+    succeeded(fm_sheet_set_cell_phonetic_properties(handle_, sheet, row, col, nullptr));
+    return;
+  }
   JsNarrowNumericReader reader("Sheet.setCellPhoneticProperties");
-  const uint32_t font_id = reader.u32(properties, "fontIndex", 0U, "phoneticProperties.fontIndex");
-  const int32_t type = reader.i32(properties, "type", 0, "phoneticProperties.type");
-  const int32_t alignment = reader.i32(properties, "alignment", 0, "phoneticProperties.alignment");
+  if (!reader.require_object(properties, "properties")) {
+    return;
+  }
+  fm_phonetic_properties_t record = FM_STRUCT_INIT(fm_phonetic_properties_t);
+  record.font_index = reader.u32(properties, "fontIndex", 0U, "properties.fontIndex");
+  record.type = reader.i32(properties, "type", 0, "properties.type");
+  record.alignment = reader.i32(properties, "alignment", 0, "properties.alignment");
   if (!reader.ok()) {
     return;
   }
-  const fm_status_t rc = fm_sheet_set_cell_phonetic_properties(handle_, sheet, row, col, font_id, type, alignment);
-  succeeded(rc);
+  succeeded(fm_sheet_set_cell_phonetic_properties(handle_, sheet, row, col, &record));
 }
 
 void JsWorkbook::setBlank(uint32_t sheet, uint32_t row, uint32_t col) {
@@ -156,28 +164,23 @@ emscripten::val JsWorkbook::getCellPhoneticRun(uint32_t sheet, uint32_t row, uin
     return emscripten::val::undefined();
   }
   emscripten::val o = emscripten::val::object();
-  o.set("start", run.sb);
-  o.set("end", run.eb);
+  o.set("start", run.start);
+  o.set("end", run.end);
   js_set_cstr(o, "text", run.text);
   return o;
 }
 
 emscripten::val JsWorkbook::getCellPhoneticProperties(uint32_t sheet, uint32_t row, uint32_t col) const {
-  size_t font_id = 0;
-  int32_t type = 0;
-  int32_t alignment = 0;
-  int32_t present = 0;
-  if (!succeeded(handle_ != nullptr
-                     ? fm_sheet_get_cell_phonetic_properties(handle_, sheet, row, col, &font_id, &type, &alignment)
-                     : kBindingInvalidHandle)) {
+  fm_phonetic_properties_t record = FM_STRUCT_INIT(fm_phonetic_properties_t);
+  if (!succeeded(handle_ != nullptr ? fm_sheet_get_cell_phonetic_properties(handle_, sheet, row, col, &record)
+                                    : kBindingInvalidHandle)) {
     return emscripten::val::undefined();
   }
-  (void)fm_sheet_has_cell_phonetic_properties(handle_, sheet, row, col, &present);
   emscripten::val o = emscripten::val::object();
-  o.set("fontIndex", font_id);
-  o.set("type", type);
-  o.set("alignment", alignment);
-  o.set("stated", present != 0);
+  o.set("fontIndex", record.font_index);
+  o.set("type", record.type);
+  o.set("alignment", record.alignment);
+  o.set("stated", record.stated != 0);
   return o;
 }
 
@@ -461,11 +464,12 @@ uint32_t JsWorkbook::createTable(uint32_t sheet, emscripten::val spec) {
     rect = js_pull_range(range, &reader);
   }
   const std::string name = reader.string(spec, "name", "name");
-  // An omitted `styleName` applies the workbook default; `""` creates the table without a style element.
+  // An omitted `styleName` applies the workbook default; `styled: false` creates no style element.
   std::string style_store;
   const char* style_name = reader.optional_string(spec, "styleName", style_store, "styleName");
   const emscripten::val columns = reader.value(spec, "columns", "columns");
   fm_table_spec_t table = FM_STRUCT_INIT(fm_table_spec_t);
+  table.styled = js_tristate(reader, spec, "styled", "styled");
   table.header_row = js_tristate(reader, spec, "headerRow", "headerRow");
   table.totals_row = js_tristate(reader, spec, "totalsRow", "totalsRow");
   table.show_first_column = js_tristate(reader, spec, "showFirstColumn", "showFirstColumn");

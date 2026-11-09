@@ -91,7 +91,7 @@ describe('an unknown key on an input record is a TypeError', () => {
         sparklines: [{ source: 'Sheet1!A1:D1', location: 'E1', ...x }],
       }),
     addCfRule: (ws, _wb, x) => ws.addCfRule({ type: f.CfRuleType.Expression, ranges: 'A1', formula1: 'TRUE', ...x }),
-    addChart: (ws, _wb, x) => ws.addChart({ type: f.ChartPlotType.Bar, range: 'Sheet1!A1:B3', placement: { ...x } }),
+    addChart: (ws, _wb, x) => ws.addChart({ type: f.ChartPlotType.Bar, range: 'Sheet1!A1:B3', ...x }),
     setDefinedName: (_ws, wb, x) => wb.setDefinedName({ name: 'X', formula: '1', ...x }),
     addPerson: (_ws, wb, x) => wb.addPerson({ id: PERSON, displayName: 'A', ...x }),
     setWorkbookProtection: (_ws, wb, x) => wb.setWorkbookProtection({ lockStructure: true, ...x }),
@@ -111,7 +111,7 @@ describe('an unknown key on an input record is a TypeError', () => {
     });
   }
 
-  it('a nested key of a chart placement and of a CF format is refused', () => {
+  it('a nested key of a CF format is refused', () => {
     withSheet((ws) => {
       fillTable(ws);
       expectTypeError(() =>
@@ -271,12 +271,12 @@ describe('a record a getter returns is accepted by the matching setter', () => {
     });
   });
 
-  it('a person defaults userId and providerId to empty text', () => {
+  it('a person without userId and providerId reads them as null', () => {
     withSheet((_ws, wb) => {
       wb.addPerson({ id: PERSON, displayName: 'A' });
       const person = wb.getPerson(PERSON);
-      assert.equal(person.userId, '');
-      assert.equal(person.providerId, '');
+      assert.equal(person.userId, null);
+      assert.equal(person.providerId, null);
       wb.addPerson({ ...person, id: PERSON2 });
       assert.equal(wb.getPerson(PERSON2).displayName, 'A');
     });
@@ -401,11 +401,10 @@ describe('a record a getter returns is accepted by the matching setter', () => {
 });
 
 describe('required keys are required at runtime', () => {
-  it('a pivot field without an axis, and a pivot filter without a field or type, are TypeErrors', () => {
+  it('a pivot filter without a field is a TypeError', () => {
     withSheet((ws, wb) => {
       const { pivot } = pivotOver(ws, wb);
-      expectTypeError(() => pivot.addField({ fieldIndex: 'Region' }));
-      expectTypeError(() => pivot.addFilter({ type: f.PivotFilterKind.LabelEquals, value: 'East' }));
+      expectTypeError(() => pivot.addFilter({ kind: f.PivotFilterKind.LabelEquals, value: 'East' }));
       expectTypeError(() => pivot.addFilter({ fieldIndex: 'Region', value: 'East' }));
     });
   });
@@ -660,8 +659,9 @@ function pivotOver(ws, wb) {
     cache.setRecordValue(record, 1, amount);
   }
   const pivot = ws.addPivot({ name: 'P', cacheId: cache.cacheId, anchor: 'E1' });
-  pivot.addField({ fieldIndex: 'Region', axis: f.PivotAxis.Row });
-  const amount = pivot.addField({ fieldIndex: 'Amount', axis: f.PivotAxis.Value });
+  pivot.setFieldAxis('Region', f.PivotAxis.Row);
+  pivot.setFieldAxis('Amount', f.PivotAxis.Value);
+  const amount = 1;
   pivot.addDataField({ name: 'Sum of Amount', fieldIndex: amount, aggregation: f.PivotAggregation.Sum });
   return { cache, pivot };
 }

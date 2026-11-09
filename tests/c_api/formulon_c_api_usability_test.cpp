@@ -93,8 +93,8 @@ void FillChartSource(fm_workbook_t* wb) {
   ASSERT_EQ(fm_sheet_set_number(wb, 0, 2, 1, 2.0), 0);
 }
 
-fm_chart_insert_spec_t ChartOptions() {
-  fm_chart_insert_spec_t opts = FM_STRUCT_INIT(fm_chart_insert_spec_t);
+fm_chart_spec_t ChartOptions() {
+  fm_chart_spec_t opts = FM_STRUCT_INIT(fm_chart_spec_t);
   opts.type = FM_CHART_PLOT_TYPE_BAR;
   opts.source = "Sheet1!$A$1:$B$3";
   opts.legend = FM_CHART_LEGEND_POSITION_RIGHT;
@@ -124,7 +124,7 @@ std::int32_t Dirty(const fm_workbook_t* wb) {
 
 void SaveAndReload(const fm_workbook_t* wb, WorkbookGuard* out) {
   BufferGuard buf;
-  ASSERT_EQ(fm_workbook_save(wb, &buf.data, &buf.len), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_workbook_save(wb, FM_WORKBOOK_FORMAT_XLSX, &buf.data, &buf.len), 0) << fm_get_last_error_message();
   ASSERT_EQ(fm_workbook_load(buf.data, buf.len, &out->handle), 0) << fm_get_last_error_message();
 }
 
@@ -367,7 +367,7 @@ TEST(FormulonCApiUsability, PictureOptionsWithoutAStructSizeAreRefused) {
   EXPECT_EQ(fm_sheet_add_picture(wb.handle, 0, png.data(), png.size(), &opts, &id), FM_STATUS_INVALID_ARGUMENT);
 
   FillChartSource(wb.handle);
-  fm_chart_insert_spec_t chart = ChartOptions();
+  fm_chart_spec_t chart = ChartOptions();
   chart.placement.struct_size = 0;
   EXPECT_EQ(fm_sheet_add_chart(wb.handle, 0, &chart, &id), FM_STATUS_INVALID_ARGUMENT);
   std::size_t count = 99;
@@ -387,7 +387,7 @@ TEST(FormulonCApiUsability, AnIdOfAnotherKindOfObjectIsAnInvalidArgument) {
   fm_shape_patch_t patch = FM_STRUCT_INIT(fm_shape_patch_t);
   patch.text_box_op = FM_PATCH_OP_SET;
   patch.text_box = 1;
-  EXPECT_EQ(fm_sheet_update_shape(wb.handle, 0, picture, &patch), FM_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(fm_sheet_update_shape(wb.handle, 0, picture, nullptr, &patch), FM_STATUS_INVALID_ARGUMENT);
   EXPECT_EQ(ReadShape(wb.handle, shape).text_box, 0);
   std::size_t count = 0;
   ASSERT_EQ(fm_sheet_get_drawing_object_count(wb.handle, 0, &count), 0);
@@ -402,7 +402,7 @@ TEST(FormulonCApiUsability, DrawingAndChartPositionsPastTheEndAreOutOfRange) {
   const Bytes png = Png(4, 4);
   const std::uint32_t picture = AddPicture(wb.handle, png);
   FillChartSource(wb.handle);
-  const fm_chart_insert_spec_t opts = ChartOptions();
+  const fm_chart_spec_t opts = ChartOptions();
   std::uint32_t chart = 0;
   ASSERT_EQ(fm_sheet_add_chart(wb.handle, 0, &opts, &chart), 0) << fm_get_last_error_message();
 
@@ -430,7 +430,7 @@ TEST(FormulonCApiUsability, ShapePatchWritesOnlyItsSetFieldsAndRefusesAtomically
   fm_shape_patch_t patch = FM_STRUCT_INIT(fm_shape_patch_t);
   patch.rotation_deg_op = FM_PATCH_OP_SET;
   patch.rotation_deg = 90.0;
-  ASSERT_EQ(fm_sheet_update_shape(wb.handle, 0, id, &patch), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_update_shape(wb.handle, 0, id, nullptr, &patch), 0) << fm_get_last_error_message();
   fm_shape_info_t after = ReadShape(wb.handle, id);
   EXPECT_EQ(after.rotation_deg, 90.0);
   EXPECT_EQ(after.text_box, before.text_box);
@@ -440,40 +440,39 @@ TEST(FormulonCApiUsability, ShapePatchWritesOnlyItsSetFieldsAndRefusesAtomically
   bad.text_box_op = FM_PATCH_OP_SET;
   bad.text_box = 1;
   bad.rotation_deg_op = FM_PATCH_OP_CLEAR;
-  EXPECT_EQ(fm_sheet_update_shape(wb.handle, 0, id, &bad), FM_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(fm_sheet_update_shape(wb.handle, 0, id, nullptr, &bad), FM_STATUS_INVALID_ARGUMENT);
   bad.rotation_deg_op = static_cast<fm_patch_op_t>(3);
-  EXPECT_EQ(fm_sheet_update_shape(wb.handle, 0, id, &bad), FM_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(fm_sheet_update_shape(wb.handle, 0, id, nullptr, &bad), FM_STATUS_INVALID_ARGUMENT);
   after = ReadShape(wb.handle, id);
   EXPECT_EQ(after.text_box, before.text_box);
   EXPECT_EQ(after.rotation_deg, 90.0);
 
   const fm_shape_patch_t keep = FM_STRUCT_INIT(fm_shape_patch_t);
-  EXPECT_EQ(fm_sheet_update_shape(wb.handle, 0, id, &keep), 0) << fm_get_last_error_message();
+  EXPECT_EQ(fm_sheet_update_shape(wb.handle, 0, id, nullptr, &keep), 0) << fm_get_last_error_message();
 }
 
-// A shape's own fill is set with a kind and removed by SET DEFAULT, which
-// returns it to the style's fill; CLEAR is no way to do that.
-TEST(FormulonCApiUsability, ShapeFillSetToDefaultReturnsToTheStylesFill) {
+// A shape's own fill is set to no fill and removed by clearing every fill
+// member, which returns it to the style's fill.
+TEST(FormulonCApiUsability, ShapeFillClearedReturnsToTheStylesFill) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   const std::uint32_t id = AddShape(wb.handle);
 
   fm_shape_patch_t none = FM_STRUCT_INIT(fm_shape_patch_t);
-  none.fill_kind_op = FM_PATCH_OP_SET;
-  none.fill_kind = FM_SHAPE_PAINT_NONE;
-  ASSERT_EQ(fm_sheet_update_shape(wb.handle, 0, id, &none), 0) << fm_get_last_error_message();
-  EXPECT_EQ(ReadShape(wb.handle, id).fill_kind, FM_SHAPE_PAINT_NONE);
-
-  fm_shape_patch_t clear = FM_STRUCT_INIT(fm_shape_patch_t);
-  clear.fill_kind_op = FM_PATCH_OP_CLEAR;
-  EXPECT_EQ(fm_sheet_update_shape(wb.handle, 0, id, &clear), FM_STATUS_INVALID_ARGUMENT);
-  EXPECT_EQ(ReadShape(wb.handle, id).fill_kind, FM_SHAPE_PAINT_NONE);
+  none.fill.none_op = FM_PATCH_OP_SET;
+  none.fill.none = 1;
+  ASSERT_EQ(fm_sheet_update_shape(wb.handle, 0, id, nullptr, &none), 0) << fm_get_last_error_message();
+  EXPECT_EQ(ReadShape(wb.handle, id).fill.none, 1);
 
   fm_shape_patch_t style = FM_STRUCT_INIT(fm_shape_patch_t);
-  style.fill_kind_op = FM_PATCH_OP_SET;
-  style.fill_kind = FM_SHAPE_PAINT_DEFAULT;
-  ASSERT_EQ(fm_sheet_update_shape(wb.handle, 0, id, &style), 0) << fm_get_last_error_message();
-  EXPECT_EQ(ReadShape(wb.handle, id).fill_kind, FM_SHAPE_PAINT_DEFAULT);
+  style.fill.color_op = FM_PATCH_OP_CLEAR;
+  style.fill.transparency_pct_op = FM_PATCH_OP_CLEAR;
+  style.fill.none_op = FM_PATCH_OP_CLEAR;
+  ASSERT_EQ(fm_sheet_update_shape(wb.handle, 0, id, nullptr, &style), 0) << fm_get_last_error_message();
+  const fm_shape_info_t shape = ReadShape(wb.handle, id);
+  EXPECT_EQ(shape.fill.none, 0);
+  EXPECT_EQ(shape.fill.other, 0);
+  EXPECT_EQ(shape.fill.color.kind, FM_COLOR_KIND_NONE);
 }
 
 // A shape added with only its anchor takes Excel's defaults for the rest, and
@@ -484,8 +483,13 @@ TEST(FormulonCApiUsability, ShapeAddedFromASpecTakesTheDefaultsItLeavesOut) {
   const std::uint32_t id = AddShape(wb.handle);
   const fm_shape_info_t shape = ReadShape(wb.handle, id);
   EXPECT_EQ(std::string(shape.preset_geometry), "rect");
-  EXPECT_EQ(shape.fill_kind, FM_SHAPE_PAINT_DEFAULT);
-  EXPECT_EQ(shape.line_kind, FM_SHAPE_PAINT_DEFAULT);
+  // All-zero paint records: the shape draws its style's fill and outline.
+  EXPECT_EQ(shape.fill.color.kind, FM_COLOR_KIND_NONE);
+  EXPECT_EQ(shape.fill.none, 0);
+  EXPECT_EQ(shape.fill.other, 0);
+  EXPECT_EQ(shape.line.color.kind, FM_COLOR_KIND_NONE);
+  EXPECT_EQ(shape.line.has_width_pt, 0);
+  EXPECT_EQ(shape.line.none, 0);
   const fm_drawing_object_info_t object = ReadDrawing(wb.handle, id);
   EXPECT_EQ(std::string(object.name), "Shape " + std::to_string(id));
   EXPECT_EQ(object.anchor.kind, FM_ANCHOR_KIND_TWO_CELL);
@@ -513,7 +517,7 @@ TEST(FormulonCApiUsability, ADefaultAnchorKindTakesEachOperationsDefault) {
   EXPECT_EQ(ReadDrawing(wb.handle, picture).anchor.kind, FM_ANCHOR_KIND_ONE_CELL);
 
   FillChartSource(wb.handle);
-  fm_chart_insert_spec_t chart_opts = ChartOptions();
+  fm_chart_spec_t chart_opts = ChartOptions();
   chart_opts.placement = FM_STRUCT_INIT(fm_drawing_placement_spec_t);
   chart_opts.placement.anchor.from_row = 6;
   std::uint32_t chart = 0;
@@ -537,7 +541,7 @@ TEST(FormulonCApiUsability, DrawingPatchMergesTheAnchorAndSetsTheCommonFields) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   FillChartSource(wb.handle);
-  const fm_chart_insert_spec_t opts = ChartOptions();
+  const fm_chart_spec_t opts = ChartOptions();
   std::uint32_t chart = 0;
   ASSERT_EQ(fm_sheet_add_chart(wb.handle, 0, &opts, &chart), 0) << fm_get_last_error_message();
   const fm_drawing_object_info_t before = ReadDrawing(wb.handle, chart);
@@ -600,7 +604,7 @@ TEST(FormulonCApiUsability, SparklineGroupAddressedByIdClearsAManualBoundAndKeep
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   fm_sparkline_group_t group = FM_STRUCT_INIT(fm_sparkline_group_t);
-  group.line_weight = 0.75;
+  group.line_width_pt = 0.75;
   group.min_axis_type = FM_SPARKLINE_AXIS_TYPE_CUSTOM;
   group.has_manual_min = 1;
   group.manual_min = -5.0;
@@ -623,7 +627,7 @@ TEST(FormulonCApiUsability, SparklineGroupAddressedByIdClearsAManualBoundAndKeep
   EXPECT_EQ(read.date_axis_ref, nullptr);
 
   fm_sparkline_group_patch_t bad = FM_STRUCT_INIT(fm_sparkline_group_patch_t);
-  bad.line_weight_op = FM_PATCH_OP_CLEAR;
+  bad.line_width_pt_op = FM_PATCH_OP_CLEAR;
   EXPECT_EQ(fm_sheet_update_sparkline_group(wb.handle, 0, id.c_str(), &bad), FM_STATUS_INVALID_ARGUMENT);
   bad = FM_STRUCT_INIT(fm_sparkline_group_patch_t);
   bad.items_op = FM_PATCH_OP_SET;
@@ -645,7 +649,7 @@ TEST(FormulonCApiUsability, LegendPatchOfHiddenEntriesKeepsThePositionAndOverlay
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   FillChartSource(wb.handle);
-  fm_chart_insert_spec_t opts = ChartOptions();
+  fm_chart_spec_t opts = ChartOptions();
   opts.legend = FM_CHART_LEGEND_POSITION_TOP;
   std::uint32_t chart = 0;
   ASSERT_EQ(fm_sheet_add_chart(wb.handle, 0, &opts, &chart), 0) << fm_get_last_error_message();
@@ -676,7 +680,7 @@ TEST(FormulonCApiUsability, AbsentChartNumbersReadAsHasFlagsNotNaN) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   FillChartSource(wb.handle);
-  const fm_chart_insert_spec_t opts = ChartOptions();
+  const fm_chart_spec_t opts = ChartOptions();
   std::uint32_t chart = 0;
   ASSERT_EQ(fm_sheet_add_chart(wb.handle, 0, &opts, &chart), 0) << fm_get_last_error_message();
 
@@ -849,9 +853,9 @@ TEST(FormulonCApiUsability, ProtectedRangeIsAddressedByItsName) {
   range.name = "Edit";
   range.ranges = &rect;
   range.range_count = 1;
-  ASSERT_EQ(fm_sheet_add_protected_range(wb.handle, 0, &range), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_add_protected_range(wb.handle, 0, &range, nullptr), 0) << fm_get_last_error_message();
   range.name = "EDIT";
-  EXPECT_EQ(fm_sheet_add_protected_range(wb.handle, 0, &range), FM_STATUS_ALREADY_EXISTS);
+  EXPECT_EQ(fm_sheet_add_protected_range(wb.handle, 0, &range, nullptr), FM_STATUS_ALREADY_EXISTS);
 
   std::int32_t present = 99;
   fm_protected_range_t out = FM_STRUCT_INIT(fm_protected_range_t);
@@ -929,7 +933,7 @@ TEST(FormulonCApiUsability, ChartInsertTitleTakesTheSettersRecord) {
   FillChartSource(wb.handle);
   std::uint32_t id = 0;
 
-  fm_chart_insert_spec_t opts = ChartOptions();
+  fm_chart_spec_t opts = ChartOptions();
   ASSERT_EQ(fm_sheet_add_chart(wb.handle, 0, &opts, &id), 0) << fm_get_last_error_message();
   EXPECT_EQ(ReadChartInfo(wb.handle, id).title.kind, FM_CHART_TITLE_KIND_AUTO);
 

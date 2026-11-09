@@ -24,7 +24,7 @@ emscripten::val cell_style_to_val(const fm_cell_style_t& cs) {
   js_set_cstr(o, "name", cs.name);
   o.set("styleXfIndex", cs.style_xf_index);
   js_set_present_or_null(o, "builtinId", cs.has_builtin_id, cs.builtin_id);
-  o.set("iLevel", cs.i_level);
+  o.set("outlineLevel", cs.outline_level);
   o.set("hidden", cs.hidden != 0);
   o.set("customBuiltin", cs.custom_builtin != 0);
   return o;
@@ -33,8 +33,8 @@ emscripten::val cell_style_to_val(const fm_cell_style_t& cs) {
 emscripten::val table_style_to_val(const fm_table_style_t& style) {
   emscripten::val o = emscripten::val::object();
   js_set_cstr(o, "name", style.name);
-  o.set("pivot", style.pivot != 0);
-  o.set("table", style.table != 0);
+  o.set("pivot", style.pivot == FM_TRISTATE_TRUE);
+  o.set("table", style.table == FM_TRISTATE_TRUE);
   emscripten::val elements = emscripten::val::array();
   for (uint32_t i = 0; i < style.element_count; ++i) {
     const fm_table_style_element_t& element = style.elements[i];
@@ -108,7 +108,7 @@ void JsWorkbook::setCellStyle(emscripten::val record) {
     cs.has_builtin_id = 1;
     cs.builtin_id = reader.u32_value(builtin_id, 0U, "cellStyle.builtinId");
   }
-  cs.i_level = reader.u32(record, "iLevel", 0U, "cellStyle.iLevel");
+  cs.outline_level = reader.u32(record, "outlineLevel", 0U, "cellStyle.outlineLevel");
   cs.hidden = reader.boolean(record, "hidden", false, "cellStyle.hidden") ? 1 : 0;
   cs.custom_builtin = reader.boolean(record, "customBuiltin", false, "cellStyle.customBuiltin") ? 1 : 0;
   if (!reader.ok()) {
@@ -144,8 +144,16 @@ void JsWorkbook::setTableStyle(emscripten::val style) {
   }
   JsNarrowNumericReader reader("Workbook.setTableStyle");
   const std::string name = reader.string(style, "name", "style.name");
-  const bool pivot = reader.boolean(style, "pivot", true, "style.pivot");
-  const bool table = reader.boolean(style, "table", true, "style.table");
+  // An omitted or `null` flag is the default (usable).
+  const auto usable = [&](const char* key, const char* field) -> int32_t {
+    const emscripten::val v = reader.value(style, key, field);
+    if (!reader.ok() || !js_value_present(v)) {
+      return FM_TRISTATE_DEFAULT;
+    }
+    return reader.boolean_value(v, true) ? FM_TRISTATE_TRUE : FM_TRISTATE_FALSE;
+  };
+  const int32_t pivot = usable("pivot", "style.pivot");
+  const int32_t table = usable("table", "style.table");
   const emscripten::val elements = reader.value(style, "elements", "style.elements");
   std::vector<fm_table_style_element_t> records;
   if (reader.ok() && js_value_present(elements)) {
@@ -173,8 +181,8 @@ void JsWorkbook::setTableStyle(emscripten::val style) {
   }
   fm_table_style_t record = FM_STRUCT_INIT(fm_table_style_t);
   record.name = name.c_str();
-  record.pivot = pivot ? 1 : 0;
-  record.table = table ? 1 : 0;
+  record.pivot = pivot;
+  record.table = table;
   record.elements = records.empty() ? nullptr : records.data();
   record.element_count = static_cast<uint32_t>(records.size());
   succeeded(fm_workbook_set_table_style(handle_, &record));
@@ -185,14 +193,14 @@ void JsWorkbook::removeTableStyle(const std::string& name) {
 }
 
 emscripten::val JsWorkbook::getTableStyleDefaults() const {
-  const char* table = nullptr;
-  const char* pivot = nullptr;
-  if (!succeeded(handle_ != nullptr ? fm_workbook_get_table_style_defaults(handle_, &table, &pivot)
+  fm_table_style_defaults_t defaults = FM_STRUCT_INIT(fm_table_style_defaults_t);
+  if (!succeeded(handle_ != nullptr ? fm_workbook_get_table_style_defaults(handle_, &defaults)
                                     : kBindingInvalidHandle)) {
     return emscripten::val::undefined();
   }
   emscripten::val o = emscripten::val::object();
-  js_set_cstr_or_null_fields(o, {{"tableStyle", table}, {"pivotStyle", pivot}});
+  js_set_cstr_or_null_fields(
+      o, {{"tableStyleName", defaults.table_style_name}, {"pivotStyleName", defaults.pivot_style_name}});
   return o;
 }
 
@@ -201,12 +209,14 @@ void JsWorkbook::setTableStyleDefaults(emscripten::val defaults) {
     record_invalid_handle();
     return;
   }
-  JsNarrowNumericReader reader("Workbook.setTableStyleDefaults");
+  JsNarrowNumericReader reader("Workbook.updateTableStyleDefaults");
   std::string table;
   std::string pivot;
   fm_table_style_defaults_patch_t patch = FM_STRUCT_INIT(fm_table_style_defaults_patch_t);
-  js_patch_string(reader, defaults, "tableStyle", "tableStyle", true, table, &patch.table_style_op, &patch.table_style);
-  js_patch_string(reader, defaults, "pivotStyle", "pivotStyle", true, pivot, &patch.pivot_style_op, &patch.pivot_style);
+  js_patch_string(reader, defaults, "tableStyleName", "patch.tableStyleName", true, table, &patch.table_style_name_op,
+                  &patch.table_style_name);
+  js_patch_string(reader, defaults, "pivotStyleName", "patch.pivotStyleName", true, pivot, &patch.pivot_style_name_op,
+                  &patch.pivot_style_name);
   if (!reader.ok()) {
     return;
   }

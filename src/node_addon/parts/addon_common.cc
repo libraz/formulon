@@ -743,7 +743,8 @@ Napi::Object TranslateCfMatch(Napi::Env env, const fm_cf_match_info_t& m) {
       bar.Set("axisPositionPct", Napi::Number::New(env, m.bar_axis_position_pct));
       bar.Set("isNegative", Napi::Boolean::New(env, m.bar_is_negative != 0));
       bar.Set("fill", ColorSpecToJs(env, m.bar_fill));
-      bar.Set("border", m.bar_border.kind != FM_COLOR_KIND_NONE ? Napi::Value(ColorSpecToJs(env, m.bar_border)) : env.Null());
+      bar.Set("border",
+              m.bar_border.kind != FM_COLOR_KIND_NONE ? Napi::Value(ColorSpecToJs(env, m.bar_border)) : env.Null());
       bar.Set("gradient", Napi::Boolean::New(env, m.bar_gradient != 0));
       bar.Set("direction", Napi::Number::New(env, static_cast<int32_t>(m.bar_direction)));
       o.Set("bar", bar);
@@ -751,8 +752,8 @@ Napi::Object TranslateCfMatch(Napi::Env env, const fm_cf_match_info_t& m) {
     }
     case FM_CF_MATCH_KIND_ICON_SET: {
       Napi::Object icon = Napi::Object::New(env);
-      icon.Set("setName", Napi::Number::New(env, m.icon_set_name));
-      icon.Set("index", Napi::Number::New(env, static_cast<int32_t>(m.icon_index)));
+      icon.Set("iconSet", Napi::Number::New(env, m.icon_set));
+      icon.Set("iconIndex", Napi::Number::New(env, static_cast<int32_t>(m.icon_index)));
       o.Set("icon", icon);
       break;
     }
@@ -860,8 +861,7 @@ fm_patch_op_t PatchField(CheckedSpecReader& reader, const Napi::Object& spec, co
 }  // namespace
 
 fm_patch_op_t PatchBool(CheckedSpecReader& reader, const Napi::Object& spec, const char* key, int32_t* out) {
-  return PatchField(reader, spec, key, false,
-                    [&](const Napi::Value& v) { *out = reader.Bool(v, key, false) ? 1 : 0; });
+  return PatchField(reader, spec, key, false, [&](const Napi::Value& v) { *out = reader.Bool(v, key, false) ? 1 : 0; });
 }
 
 fm_patch_op_t PatchI32(CheckedSpecReader& reader, const Napi::Object& spec, const char* key, int32_t* out) {

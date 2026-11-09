@@ -27,13 +27,10 @@ fm_status_t BuildFieldOrderPivot(fm_workbook_t* wb, std::size_t* out_pivot_index
   if (const fm_status_t status = AddPivot(wb, 0U, "FieldOrder", cache_id, 0U, 0U, out_pivot_index); status != 0) {
     return status;
   }
-  for (const char* name : kFieldNames) {
-    fm_pivot_field_spec_t spec = FM_STRUCT_INIT(fm_pivot_field_spec_t);
-    spec.source_name = name;
-    spec.axis = FM_PIVOT_AXIS_VALUE;
-    spec.subtotal_top = FM_TRISTATE_TRUE;
-    std::size_t field_index = 0;
-    if (const fm_status_t status = fm_sheet_add_pivot_field(wb, 0U, *out_pivot_index, &spec, &field_index);
+  // The pivot already carries one field per cache field, in cache order.
+  for (std::size_t field_index = 0; field_index < kFieldCount; ++field_index) {
+    if (const fm_status_t status =
+            fm_sheet_set_pivot_field_axis(wb, 0U, *out_pivot_index, field_index, FM_PIVOT_AXIS_VALUE);
         status != 0) {
       return status;
     }

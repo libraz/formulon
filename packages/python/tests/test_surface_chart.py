@@ -25,7 +25,7 @@ from formulon import (
     ChartFill,
     ChartFilter,
     ChartGrouping,
-    ChartInsertInput,
+    ChartInput,
     ChartLabelPosition,
     ChartLegend,
     ChartLegendPosition,
@@ -46,13 +46,11 @@ from formulon import (
     ColorKind,
     DrawingAnchorInput,
     DrawingObjectKind,
-    DrawingPlacementInput,
     FormulonError,
     IndexOutOfRangeError,
     InvalidArgumentError,
     NotFoundError,
     ShapeInput,
-    ShapePaint,
     SheetRect,
     Workbook,
 )
@@ -244,7 +242,7 @@ class ChartReadTests(unittest.TestCase):
             self.assertEqual(len(data.series), 1)
             self.assertEqual(data.series[0].x, [0.0, 3.0, 6.0, 9.0])
             self.assertEqual(data.series[0].values, [0.0, 1.0, 4.0, 9.0])
-            self.assertEqual((data.series[0].x_format_code, data.series[0].format_code), ("0.00", "General"))
+            self.assertEqual((data.series[0].x_number_format, data.series[0].number_format), ("0.00", "General"))
 
     def test_preview_applies_overrides_without_editing(self) -> None:
         wb, oid = _chart()
@@ -418,24 +416,21 @@ class ChartEditTests(unittest.TestCase):
                 ShapeInput(
                     anchor=DrawingAnchorInput(kind=AnchorKind.ONE_CELL, from_row=2, width_emu=9144, height_emu=9144),
                     preset_geometry="rect",
-                    fill_kind=ShapePaint.SOLID,
-                    fill_color=theme,
+                    fill=ChartFill(color=theme),
                 ),
             )
-            paint = shape.get_properties().fill_color
+            paint = shape.get_properties().fill.color
             self.assertEqual((paint.kind, paint.theme), (ColorKind.THEME, 4))
             self.assertAlmostEqual(paint.tint, 0.4, delta=1e-5)
             with self.assertRaises(InvalidArgumentError):
-                shape.update(fill_kind=ShapePaint.SOLID, fill_color=Color(ColorKind.INDEXED, indexed=5))
-            # A colour on its own applies to the stored kind; with NONE it is a status error, and None is refused.
-            shape.update(fill_color=Color(ColorKind.THEME, theme=5))
-            self.assertEqual(shape.get_properties().fill_color.theme, 5)
-            shape.update(fill_color=theme)
-            with self.assertRaises(TypeError):
-                shape.update(line_kind=None, line_color=theme)
+                shape.update(fill={"color": Color(ColorKind.INDEXED, indexed=5)})
+            # A colour patch keeps the rest of the stored fill; a colour with no-fill is a status error.
+            shape.update(fill={"color": Color(ColorKind.THEME, theme=5)})
+            self.assertEqual(shape.get_properties().fill.color.theme, 5)
+            shape.update(fill={"color": theme})
             with self.assertRaises(InvalidArgumentError):
-                shape.update(fill_kind=ShapePaint.NONE, fill_color=theme)
-            self.assertEqual(shape.get_properties().fill_color.theme, 4)
+                shape.update(fill={"none": True, "color": theme})
+            self.assertEqual(shape.get_properties().fill.color.theme, 4)
 
     def test_series_patch(self) -> None:
         wb, oid = _chart()
@@ -525,18 +520,20 @@ class ChartEditTests(unittest.TestCase):
     def test_plot_patch(self) -> None:
         wb, oid = _chart()
         with wb:
-            wb.sheet(0).chart(oid).update_plot(0, gap_width_pct=80, overlap=-20)
+            wb.sheet(0).chart(oid).update_plot(0, gap_width_pct=80, overlap_pct=-20)
             plot = wb.sheet(0).chart(oid).get_properties().plots[0]
-            self.assertEqual((plot.gap_width_pct, plot.overlap), (80, -20))
+            self.assertEqual((plot.gap_width_pct, plot.overlap_pct), (80, -20))
             with self.assertRaises(FormulonError):
-                wb.sheet(0).chart(oid).update_plot(0, hole_size=50)
+                wb.sheet(0).chart(oid).update_plot(0, hole_size_pct=50)
             with self.assertRaises(FormulonError):
                 wb.sheet(0).chart(oid).update_plot(5, gap_width_pct=80)
         wb, oid = _chart(_chart_input.DOUGHNUT, "Sheet1!$A$1:$B$5")
         with wb:
-            wb.sheet(0).chart(oid).update_plot(0, hole_size=60, first_slice_angle_deg=90, vary_colors=True)
+            wb.sheet(0).chart(oid).update_plot(0, hole_size_pct=60, first_slice_angle_deg=90, vary_colors=True)
             plot = wb.sheet(0).chart(oid).get_properties().plots[0]
-            self.assertEqual((plot.type, plot.hole_size, plot.first_slice_angle_deg), (ChartPlotType.DOUGHNUT, 60, 90))
+            self.assertEqual(
+                (plot.type, plot.hole_size_pct, plot.first_slice_angle_deg), (ChartPlotType.DOUGHNUT, 60, 90)
+            )
             self.assertTrue(plot.vary_colors)
 
     def test_filter(self) -> None:
@@ -660,10 +657,12 @@ class ChartDrawingTests(unittest.TestCase):
         with Workbook.create_default() as wb:
             _grid(wb)
             chart = wb.sheet(0).add_chart(
-                ChartInsertInput(
+                ChartInput(
                     type=ChartPlotType.BAR,
                     range=SOURCE,
-                    placement=DrawingPlacementInput(name="Sales", description="d", hidden=True),
+                    name="Sales",
+                    description="d",
+                    hidden=True,
                 )
             )
             props = chart.get_drawing_properties()
@@ -807,7 +806,7 @@ class ChartErrorTests(unittest.TestCase):
             with self.assertRaises(FormulonError):
                 _chart_input.add_chart(wb.sheet(0), _chart_input.COLUMN, "not a range")
             with self.assertRaises(FormulonError):
-                wb.sheet(0).add_chart(ChartInsertInput(type=99, range=SOURCE))
+                wb.sheet(0).add_chart(ChartInput(type=99, range=SOURCE))
             with self.assertRaises(FormulonError):
                 _chart_input.add_chart(
                     wb.sheet(0), _chart_input.COLUMN, SOURCE, anchor=DrawingAnchorInput(kind=AnchorKind.ABSOLUTE)

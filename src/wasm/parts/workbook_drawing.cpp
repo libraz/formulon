@@ -67,35 +67,80 @@ fm_status_t drawing_object_item(const fm_workbook_t* handle, size_t sheet, size_
   return rc;
 }
 
-}  // namespace
-
-fm_drawing_anchor_t pull_drawing_anchor(JsNarrowNumericReader& reader, const emscripten::val& anchor) {
+/// Reads a `DrawingAnchorInput` (`kind`, `editAs`, the `from*` / `to*` cells and EMU offsets, `widthEmu`,
+/// `heightEmu`); an absent key is zero, so an absent `kind` is the operation's default. `path` names `anchor`.
+fm_drawing_anchor_t pull_drawing_anchor(JsNarrowNumericReader& reader, const emscripten::val& anchor,
+                                        const std::string& path) {
+  const auto label = [&](const char* key) { return path + "." + key; };
   fm_drawing_anchor_t out{};
-  out.kind = reader.i32(anchor, "kind", FM_ANCHOR_KIND_DEFAULT, "anchor.kind");
-  out.edit_as = reader.i32(anchor, "editAs", FM_ANCHOR_EDIT_AS_DEFAULT, "anchor.editAs");
-  out.from_row = reader.u32(anchor, "fromRow", 0U, "anchor.fromRow");
-  out.from_col = reader.u32(anchor, "fromCol", 0U, "anchor.fromCol");
-  out.from_row_offset_emu = reader.i64(anchor, "fromRowOffsetEmu", 0, "anchor.fromRowOffsetEmu");
-  out.from_col_offset_emu = reader.i64(anchor, "fromColOffsetEmu", 0, "anchor.fromColOffsetEmu");
-  out.to_row = reader.u32(anchor, "toRow", 0U, "anchor.toRow");
-  out.to_col = reader.u32(anchor, "toCol", 0U, "anchor.toCol");
-  out.to_row_offset_emu = reader.i64(anchor, "toRowOffsetEmu", 0, "anchor.toRowOffsetEmu");
-  out.to_col_offset_emu = reader.i64(anchor, "toColOffsetEmu", 0, "anchor.toColOffsetEmu");
-  out.width_emu = reader.i64(anchor, "widthEmu", 0, "anchor.widthEmu");
-  out.height_emu = reader.i64(anchor, "heightEmu", 0, "anchor.heightEmu");
+  out.kind = reader.i32(anchor, "kind", FM_ANCHOR_KIND_DEFAULT, label("kind").c_str());
+  out.edit_as = reader.i32(anchor, "editAs", FM_ANCHOR_EDIT_AS_DEFAULT, label("editAs").c_str());
+  out.from_row = reader.u32(anchor, "fromRow", 0U, label("fromRow").c_str());
+  out.from_col = reader.u32(anchor, "fromCol", 0U, label("fromCol").c_str());
+  out.from_row_offset_emu = reader.i64(anchor, "fromRowOffsetEmu", 0, label("fromRowOffsetEmu").c_str());
+  out.from_col_offset_emu = reader.i64(anchor, "fromColOffsetEmu", 0, label("fromColOffsetEmu").c_str());
+  out.to_row = reader.u32(anchor, "toRow", 0U, label("toRow").c_str());
+  out.to_col = reader.u32(anchor, "toCol", 0U, label("toCol").c_str());
+  out.to_row_offset_emu = reader.i64(anchor, "toRowOffsetEmu", 0, label("toRowOffsetEmu").c_str());
+  out.to_col_offset_emu = reader.i64(anchor, "toColOffsetEmu", 0, label("toColOffsetEmu").c_str());
+  out.width_emu = reader.i64(anchor, "widthEmu", 0, label("widthEmu").c_str());
+  out.height_emu = reader.i64(anchor, "heightEmu", 0, label("heightEmu").c_str());
   return out;
 }
 
+}  // namespace
+
 fm_drawing_placement_spec_t pull_drawing_placement(JsNarrowNumericReader& reader, const emscripten::val& input,
-                                                   std::string& name_store, std::string& description_store) {
+                                                   const char* param, std::string& name_store,
+                                                   std::string& description_store) {
+  const std::string path(param);
   const emscripten::val options = js_object_or_empty(input);
   fm_drawing_placement_spec_t placement = FM_STRUCT_INIT(fm_drawing_placement_spec_t);
-  placement.name = reader.optional_string(options, "name", name_store, "name");
-  placement.description = reader.optional_string(options, "description", description_store, "description");
-  placement.hidden = js_tristate(reader, options, "hidden", "hidden");
-  const emscripten::val anchor = reader.value(options, "anchor", "anchor");
-  placement.anchor = pull_drawing_anchor(reader, js_object_or_empty(anchor));
+  placement.name = reader.optional_string(options, "name", name_store, (path + ".name").c_str());
+  placement.description =
+      reader.optional_string(options, "description", description_store, (path + ".description").c_str());
+  placement.hidden = js_tristate(reader, options, "hidden", (path + ".hidden").c_str());
+  const emscripten::val anchor = reader.value(options, "anchor", (path + ".anchor").c_str());
+  placement.anchor = pull_drawing_anchor(reader, js_object_or_empty(anchor), path + ".anchor");
   return placement;
+}
+
+fm_drawing_patch_t pull_drawing_patch(JsNarrowNumericReader& reader, const emscripten::val& patch, const char* param,
+                                      std::string& name_store, std::string& description_store) {
+  const std::string path(param);
+  const auto label = [&](const char* key) { return path + "." + key; };
+  fm_drawing_patch_t p = FM_STRUCT_INIT(fm_drawing_patch_t);
+  js_patch_string(reader, patch, "name", label("name").c_str(), false, name_store, &p.name_op, &p.name);
+  js_patch_string(reader, patch, "description", label("description").c_str(), true, description_store,
+                  &p.description_op, &p.description);
+  js_patch_flag(reader, patch, "hidden", label("hidden").c_str(), &p.hidden_op, &p.hidden);
+  const emscripten::val anchor = js_object_or_empty(reader.value(patch, "anchor", label("anchor").c_str()));
+  fm_drawing_anchor_patch_t& a = p.anchor;
+  // No anchor field can be cleared: `null` is a type error, like any other flag.
+  const auto field = [&](const char* key, fm_patch_op_t* op, auto* value, auto read) {
+    const std::string name = label("anchor") + "." + key;
+    const emscripten::val v = reader.value(anchor, key, name.c_str());
+    if (js_patch_key(reader, v, name.c_str(), false) == JsPatchKey::kSet) {
+      *op = FM_PATCH_OP_SET;
+      *value = read(key, name.c_str());
+    }
+  };
+  const auto u32 = [&](const char* key, const char* name) { return reader.u32(anchor, key, 0U, name); };
+  const auto i32 = [&](const char* key, const char* name) { return reader.i32(anchor, key, 0, name); };
+  const auto i64 = [&](const char* key, const char* name) { return reader.i64(anchor, key, 0, name); };
+  field("kind", &a.kind_op, &a.kind, i32);
+  field("editAs", &a.edit_as_op, &a.edit_as, i32);
+  field("fromRow", &a.from_row_op, &a.from_row, u32);
+  field("fromCol", &a.from_col_op, &a.from_col, u32);
+  field("fromRowOffsetEmu", &a.from_row_offset_emu_op, &a.from_row_offset_emu, i64);
+  field("fromColOffsetEmu", &a.from_col_offset_emu_op, &a.from_col_offset_emu, i64);
+  field("toRow", &a.to_row_op, &a.to_row, u32);
+  field("toCol", &a.to_col_op, &a.to_col, u32);
+  field("toRowOffsetEmu", &a.to_row_offset_emu_op, &a.to_row_offset_emu, i64);
+  field("toColOffsetEmu", &a.to_col_offset_emu_op, &a.to_col_offset_emu, i64);
+  field("widthEmu", &a.width_emu_op, &a.width_emu, i64);
+  field("heightEmu", &a.height_emu_op, &a.height_emu, i64);
+  return p;
 }
 
 emscripten::val probe_image(emscripten::val bytes) {
@@ -157,7 +202,7 @@ uint32_t JsWorkbook::insertImage(uint32_t sheet, emscripten::val bytes, emscript
   if (!val_to_bytes_checked(bytes, &data)) {
     return 0U;
   }
-  const fm_drawing_placement_spec_t ins = pull_drawing_placement(reader, input, name_store, description_store);
+  const fm_drawing_placement_spec_t ins = pull_drawing_placement(reader, input, "input", name_store, description_store);
   if (!reader.ok()) {
     return 0U;
   }
@@ -178,40 +223,10 @@ void JsWorkbook::updateDrawing(uint32_t sheet, uint32_t objectId, emscripten::va
     return;
   }
   JsNarrowNumericReader reader("Drawing.update");
-  const emscripten::val spec = js_object_or_empty(patch);
   std::string name_store;
   std::string description_store;
-  fm_drawing_patch_t p = FM_STRUCT_INIT(fm_drawing_patch_t);
-  js_patch_string(reader, spec, "name", "name", false, name_store, &p.name_op, &p.name);
-  js_patch_string(reader, spec, "description", "description", true, description_store, &p.description_op,
-                  &p.description);
-  js_patch_flag(reader, spec, "hidden", "hidden", &p.hidden_op, &p.hidden);
-  const emscripten::val anchor = js_object_or_empty(reader.value(spec, "anchor", "anchor"));
-  fm_drawing_anchor_patch_t& a = p.anchor;
-  // No anchor field can be cleared: `null` is a type error, like any other flag.
-  const auto field = [&](const char* key, fm_patch_op_t* op, auto* value, auto read) {
-    const std::string name = std::string("anchor.") + key;
-    const emscripten::val v = reader.value(anchor, key, name.c_str());
-    if (js_patch_key(reader, v, name.c_str(), false) == JsPatchKey::kSet) {
-      *op = FM_PATCH_OP_SET;
-      *value = read(key, name.c_str());
-    }
-  };
-  const auto u32 = [&](const char* key, const char* name) { return reader.u32(anchor, key, 0U, name); };
-  const auto i32 = [&](const char* key, const char* name) { return reader.i32(anchor, key, 0, name); };
-  const auto i64 = [&](const char* key, const char* name) { return reader.i64(anchor, key, 0, name); };
-  field("kind", &a.kind_op, &a.kind, i32);
-  field("editAs", &a.edit_as_op, &a.edit_as, i32);
-  field("fromRow", &a.from_row_op, &a.from_row, u32);
-  field("fromCol", &a.from_col_op, &a.from_col, u32);
-  field("fromRowOffsetEmu", &a.from_row_offset_emu_op, &a.from_row_offset_emu, i64);
-  field("fromColOffsetEmu", &a.from_col_offset_emu_op, &a.from_col_offset_emu, i64);
-  field("toRow", &a.to_row_op, &a.to_row, u32);
-  field("toCol", &a.to_col_op, &a.to_col, u32);
-  field("toRowOffsetEmu", &a.to_row_offset_emu_op, &a.to_row_offset_emu, i64);
-  field("toColOffsetEmu", &a.to_col_offset_emu_op, &a.to_col_offset_emu, i64);
-  field("widthEmu", &a.width_emu_op, &a.width_emu, i64);
-  field("heightEmu", &a.height_emu_op, &a.height_emu, i64);
+  const fm_drawing_patch_t p =
+      pull_drawing_patch(reader, js_object_or_empty(patch), "patch", name_store, description_store);
   if (!reader.ok()) {
     return;
   }

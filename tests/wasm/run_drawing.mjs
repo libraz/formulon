@@ -1,13 +1,6 @@
 import assert from 'node:assert/strict';
 import { deflateSync } from 'node:zlib';
-import {
-  AnchorEditAs,
-  AnchorKind,
-  DrawingObjectKind,
-  ImageFormat,
-  ShapePaint,
-  StatusCode,
-} from '../../packages/npm/common.mjs';
+import { AnchorEditAs, AnchorKind, DrawingObjectKind, ImageFormat, StatusCode } from '../../packages/npm/common.mjs';
 import { expectFailure } from './smoke_support.mjs';
 
 const EMU_PER_PX = 9525;
@@ -274,16 +267,17 @@ export function registerDrawing(Module, test) {
       const shape = wb.getShape(0, id);
       assert.equal(shape.presetGeometry, 'rect');
       assert.equal(shape.text, 'hi');
-      assert.equal(shape.fillKind, ShapePaint.Default);
-      assert.equal(shape.lineKind, ShapePaint.Default);
+      assert.equal(shape.fill, null);
+      assert.equal(shape.line, null);
       assert.equal('name' in shape, false);
       assert.equal('fromRow' in shape, false);
 
-      wb.updateShape(0, id, { fillKind: ShapePaint.Solid, fillColor: { kind: 1, argb: 0xffff0000 } });
-      assert.equal(wb.getShape(0, id).fillKind, ShapePaint.Solid);
-      wb.updateShape(0, id, { fillKind: ShapePaint.Default });
-      assert.equal(wb.getShape(0, id).fillKind, ShapePaint.Default);
-      expectFailure(() => wb.updateShape(0, id, { fillKind: null }), StatusCode.InvalidArgument);
+      wb.updateShape(0, id, { fill: { color: { kind: 1, argb: 0xffff0000 } } });
+      const fill = wb.getShape(0, id).fill;
+      assert.equal(fill.none, false);
+      assert.equal(fill.color.argb, 0xffff0000);
+      wb.updateShape(0, id, { fill: null });
+      assert.equal(wb.getShape(0, id).fill, null);
 
       wb.removeDrawingObject(0, id);
       assert.equal(wb.getShape(0, id), null);

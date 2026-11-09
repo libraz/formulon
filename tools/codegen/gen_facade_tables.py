@@ -100,7 +100,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import facade_scope  # noqa: E402
 
 from tools.dev.binding_drift.api_conventions import parse_header  # noqa: E402
-from tools.dev.binding_drift.api_conventions_arguments import _js_fields  # noqa: E402
+from tools.dev.binding_drift.api_conventions_arguments import _js_fields, _patch_keys  # noqa: E402
 from tools.dev.binding_drift.api_conventions_bindings import (  # noqa: E402
     OOXML_CLASSES,
     SHEET_CLASS,
@@ -286,9 +286,36 @@ def _js_key_list(indent: str, name: str, keys: Sequence[str]) -> str:
     return f"{indent}{name}: [\n{rows}{indent}],\n"
 
 
+def patch_nested_keys(
+    ledger: Optional[facade_scope.Ledger] = None, dts: Optional[str] = None
+) -> Dict[str, Dict[str, list]]:
+    """`{Class.method: {path: [key, ...]}}`: the ledger's `patch_nested` paths, joined by the paths into a patch
+    op's patch at and below each field typed by a `Patch<...>` alias (see `_nested_paths`)."""
+    ledger = ledger or facade_scope.load()
+    surface = JsSurface(WASM_DTS.read_text(encoding="utf-8") if dts is None else dts)
+    out = {name: dict(paths) for name, paths in facade_scope.patch_nested_keys(ledger, dts).items()}
+    for _key, entry in facade_scope._ops(ledger, ("op",)):
+        if entry.get("patch") is not True:
+            continue
+        for qualified_name in facade_scope._qualified_js(ledger, entry):
+            cls, name = qualified_name.split(".", 1)
+            member = facade_scope._patch_member(surface, entry, name, cls)
+            root = facade_scope._patch_type(member.params) if member is not None else None
+            if root is None:
+                continue
+            fields = {f: [t] for f, t in (_patch_keys(surface.decls, surface.raw, root) or {}).items()}
+            derived = _nested_paths(surface, fields, (root,), patch_aliases_only=True)
+            if not derived:
+                continue
+            paths = out.setdefault(qualified_name, {})
+            for path, keys in derived.items():
+                paths[path] = sorted(set(paths.get(path, ())) | set(keys))
+    return {name: dict(sorted(paths.items())) for name, paths in sorted(out.items())}
+
+
 def patch_nested_table(ledger: Optional[facade_scope.Ledger] = None, dts: Optional[str] = None) -> str:
     """The JS `PATCH_NESTED_KEYS` table: for each nested patch op, the keys each path into its patch accepts."""
-    entries = facade_scope.patch_nested_keys(ledger or facade_scope.load(), dts)
+    entries = patch_nested_keys(ledger, dts)
     body = []
     for name, paths in entries.items():
         rows = "".join(_js_key_list(_INDENT * 2, _js_bare_key(path), keys) for path, keys in paths.items())
@@ -774,21 +801,69 @@ def _array_element(text: str) -> Optional[str]:
 
 
 def _record_alternative(surface: JsSurface, text: str) -> Optional[str]:
-    """The one input record `text` names, `| null` / `undefined` aside, or None."""
+    """The one input record or `Patch<...>` alias `text` names, `| null` / `undefined` aside, or None."""
     kinds = [k.strip() for k in _strip_null(text, True) if k != "undefined"]
     if len(kinds) != 1:
         return None
     name = kinds[0]
-    return name if _record_fields(surface, name) else None
+    return name if _record_fields(surface, name) or _patch_alias(surface, name) else None
+
+
+def _patch_alias(surface: JsSurface, name: str) -> bool:
+    """Whether `name` is a `type XPatch = Patch<...>` alias."""
+    decl = surface.decls.get(name)
+    return decl is not None and decl.kind == "type" and name.endswith("Patch") and "Patch<" in decl.text
+
+
+def _nested_fields(surface: JsSurface, name: str) -> Dict[str, List[str]]:
+    """Field -> declared types of the nested record `name`; a `Patch<...>` alias `XPatch` has its keys and the
+    fields of its read twin `X`, so a record a getter returned passes back whole."""
+    if not _patch_alias(surface, name):
+        return {f: [t] for f, t in _record_fields(surface, name).items()}
+    out: Dict[str, List[str]] = {}
+    for field, ftype in (_patch_keys(surface.decls, surface.raw, name) or {}).items():
+        out.setdefault(field, []).append(ftype)
+    for field, ftype in _record_fields(surface, name[: -len("Patch")]).items():
+        out.setdefault(field, []).append(ftype)
+    return out
+
+
+def _nested_paths(
+    surface: JsSurface, fields: Dict[str, List[str]], seen: Tuple[str, ...], patch_aliases_only: bool = False
+) -> Dict[str, List[str]]:
+    """`{path: [key, ...]}` of every record nested under `fields` (field -> declared types), sorted by path. With
+    `patch_aliases_only` a top-level field starts a path only when typed by a `Patch<...>` alias."""
+    out: Dict[str, List[str]] = {}
+
+    def walk(current: Dict[str, List[str]], prefix: str, seen: Tuple[str, ...]) -> None:
+        for field, ftypes in current.items():
+            for ftype in ftypes:
+                element = _array_element(ftype)
+                nested = _record_alternative(surface, element if element is not None else ftype)
+                if nested is None or nested in seen:
+                    continue
+                if patch_aliases_only and not prefix and not _patch_alias(surface, nested):
+                    continue
+                path = f"{prefix}{field}{'[]' if element is not None else ''}"
+                inner = _nested_fields(surface, nested)
+                out[path] = sorted(set(out.get(path, ())) | set(inner))
+                walk(inner, path + ".", (*seen, nested))
+
+    walk(fields, "", seen)
+    return dict(sorted(out.items()))
 
 
 def _input_arg(surface: JsSurface, ledger: facade_scope.Ledger, entry: dict, member) -> Optional[Tuple[int, str]]:
-    """`(position, record)` of the argument of `member` that is an input record, None when it takes none."""
+    """`(position, record)` of the argument of `member` that is an input record, None when it takes none. A value
+    union with several object alternatives (`Date | ErrorValue | PivotCacheValue`) is not a record argument."""
     addressed = {p for field in ("cell_args", "rect_args", "span_args", "ref_args") for p in _flat(entry.get(field))}
     for position, (_name, ptype) in enumerate(member.params):
         if position in addressed:
             continue
-        for alternative in _strip_null(ptype, True):
+        alternatives = [a for a in _strip_null(ptype, True) if a != "undefined"]
+        if sum(a not in _PRIMITIVES and a[:1] not in "'\"" for a in alternatives) > 1:
+            continue
+        for alternative in alternatives:
             decl = surface.decls.get(alternative)
             if (
                 decl is not None
@@ -820,20 +895,7 @@ def _input_keys_of(surface: JsSurface, record: str, read: Optional[str]) -> List
 
 def _input_nested(surface: JsSurface, record: str) -> Dict[str, List[str]]:
     """`{path: [key, ...]}` of every record nested in `record`, sorted by path."""
-    out: Dict[str, List[str]] = {}
-
-    def walk(name: str, prefix: str, seen: Tuple[str, ...]) -> None:
-        for field, ftype in _record_fields(surface, name).items():
-            element = _array_element(ftype)
-            nested = _record_alternative(surface, element if element is not None else ftype)
-            if nested is None or nested in seen:
-                continue
-            path = f"{prefix}{field}{'[]' if element is not None else ''}"
-            out[path] = sorted(_record_fields(surface, nested))
-            walk(nested, path + ".", (*seen, nested))
-
-    walk(record, "", (record,))
-    return dict(sorted(out.items()))
+    return _nested_paths(surface, {f: [t] for f, t in _record_fields(surface, record).items()}, (record,))
 
 
 def input_keys(

@@ -51,9 +51,7 @@ using formulon::c_api::parts::resolve_pivot;
 using formulon::c_api::parts::resolve_pivot_checked;
 using formulon::c_api::parts::resolve_pivot_mut;
 using formulon::c_api::parts::set_values_position;
-using formulon::c_api::parts::text_or_empty;
 using formulon::c_api::parts::text_or_null;
-using formulon::c_api::parts::validate;
 
 namespace {
 
@@ -200,74 +198,6 @@ extern "C" fm_status_t fm_sheet_get_pivot_field_count(const fm_workbook_t* wb, s
                      [](const formulon::pivot::PivotTable& table) { return table.fields().size(); });
 }
 
-extern "C" fm_status_t fm_sheet_add_pivot_field(fm_workbook_t* wb, std::size_t sheet_index, std::size_t pivot_index,
-                                                const fm_pivot_field_spec_t* spec, std::size_t* out_field_index) {
-  clear_last_error();
-  if (wb == nullptr || spec == nullptr || out_field_index == nullptr) {
-    return null_argument();
-  }
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_record_size(*spec); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_enum_domain(spec->subtotal_top, FM_TRISTATE_DEFAULT, FM_TRISTATE_TRUE, "subtotal_top"); rc != 0) {
-    return rc;
-  }
-  if (auto rc = validate(*spec); rc != 0) {
-    return rc;
-  }
-  formulon::pivot::PivotTable* table = nullptr;
-  if (auto rc = resolve_pivot_mut(wb, sheet_index, pivot_index, &table); rc != 0) {
-    return rc;
-  }
-  std::string number_format;
-  if (auto rc = pivot_num_fmt_id_text(wb->workbook(), spec->number_format, &number_format); rc != 0) {
-    return rc;
-  }
-  PivotEdit edit(wb->workbook(), sheet_index, pivot_index, *table);
-  // The pivot-field list is positional over the bound cache's fields, so a
-  // field named in the cache is configured in place at the cache field's
-  // position, after materialising a bare field for every cache column. A
-  // name the cache does not carry is appended.
-  std::vector<formulon::pivot::PivotField>& fields = table->mutable_fields();
-  std::size_t index = fields.size();
-  if (const auto* cache = find_cache(wb->workbook(), table->pivot_cache_id()); cache != nullptr) {
-    const auto& cache_fields = cache->fields();
-    for (std::size_t i = 0; i < cache_fields.size(); ++i) {
-      if (cache_fields[i].name == spec->source_name) {
-        index = i;
-        break;
-      }
-    }
-    if (index != fields.size()) {
-      for (std::size_t i = fields.size(); i < cache_fields.size(); ++i) {
-        formulon::pivot::PivotField bare;
-        bare.source_name = cache_fields[i].name;
-        bare.axis = formulon::pivot::PivotAxis::None;
-        fields.push_back(std::move(bare));
-      }
-    }
-  }
-  if (index == fields.size()) {
-    fields.emplace_back();
-  }
-  formulon::pivot::PivotField& field = fields[index];
-  field.source_name = spec->source_name;
-  field.custom_name = text_or_empty(spec->custom_name);
-  field.subtotal_top = spec->subtotal_top != FM_TRISTATE_FALSE;
-  field.number_format = std::move(number_format);
-  table->set_field_axis(static_cast<std::uint32_t>(index),
-                        pivot_axis_from_fm(static_cast<fm_pivot_axis_t>(spec->axis)));
-  sync_field_order(*table, static_cast<std::uint32_t>(index));
-  const fm_status_t status = edit.commit();
-  if (status == 0) {
-    *out_field_index = index;
-  }
-  return status;
-}
-
 extern "C" fm_status_t fm_sheet_clear_pivot_fields(fm_workbook_t* wb, std::size_t sheet_index,
                                                    std::size_t pivot_index) {
   clear_last_error();
@@ -276,7 +206,13 @@ extern "C" fm_status_t fm_sheet_clear_pivot_fields(fm_workbook_t* wb, std::size_
     return rc;
   }
   PivotEdit edit(wb->workbook(), sheet_index, pivot_index, *table);
-  table->mutable_fields().clear();
+  // Excel's Clear All: every field leaves its axis and the values area, and
+  // the filters go with them; the fields themselves stay.
+  for (std::uint32_t i = 0; i < table->fields().size(); ++i) {
+    table->set_field_axis(i, formulon::pivot::PivotAxis::None);
+  }
+  table->mutable_data_fields().clear();
+  table->erase_active_filters_if([](const formulon::pivot::PivotFilter&) { return true; });
   table->mutable_row_field_order().clear();
   table->mutable_col_field_order().clear();
   // A Values marker can only lead an empty order.

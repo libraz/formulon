@@ -1,6 +1,7 @@
 //
 // C ABI - the table slicers of a worksheet: reading, adding and updating them.
 
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <string>
@@ -13,6 +14,8 @@
 #include "c_api/parts/drawing_anchor.h"
 #include "c_api/parts/enum_map.h"
 #include "c_api/parts/struct_v1_sizes.h"
+#include "drawing/drawing_edit.h"
+#include "drawing/drawing_geometry.h"
 #include "drawing/slicer_edit.h"
 #include "utils/error.h"
 #include "workbook.h"
@@ -24,10 +27,10 @@ using formulon::c_api::parts::check_record_size;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
+using formulon::c_api::parts::drawing_patch_from_c;
 using formulon::c_api::parts::finish_status;
 using formulon::c_api::parts::fresh_read_scratch;
 using formulon::c_api::parts::invalid_argument;
-using formulon::c_api::parts::not_found;
 using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::patch_op_ok;
 using formulon::c_api::parts::patch_op_ok_without_clear;
@@ -45,21 +48,21 @@ bool is_set(fm_patch_op_t op) {
   return op == FM_PATCH_OP_SET;
 }
 
-// Converts `p` to the model spec. On add every field may be CLEAR (the default); on update only `style`.
+// Converts `p` to the model spec. On add every field may be CLEAR (the default); on update only `style_name`.
 fm_status_t to_spec(const fm_slicer_patch_t& p, bool add, formulon::SlicerSpec& spec) {
   namespace field = formulon::slicer_field;
   const std::pair<fm_patch_op_t, const char*> ops[] = {
-      {p.column_count_op, "column_count"},     {p.sort_order_op, "sort_order"}, {p.cross_filter_op, "cross_filter"},
-      {p.row_height_emu_op, "row_height_emu"}, {p.caption_op, "caption"},       {p.style_op, "style"}};
+      {p.column_count_op, "column_count"},   {p.sort_order_op, "sort_order"}, {p.cross_filter_op, "cross_filter"},
+      {p.row_height_pt_op, "row_height_pt"}, {p.caption_op, "caption"},       {p.style_name_op, "style_name"}};
   for (const auto& [op, name] : ops) {
-    const bool clearable = add || std::string_view(name) == "style";
+    const bool clearable = add || std::string_view(name) == "style_name";
     if (!(clearable ? patch_op_ok(op) : patch_op_ok_without_clear(op))) {
       return invalid_argument(patch_op_ok(op) ? "field cannot be cleared" : "op must be KEEP, CLEAR or SET",
                               std::string("field=") + name);
     }
   }
-  const std::pair<fm_patch_op_t, const char*> texts[] = {{p.caption_op, p.caption}, {p.style_op, p.style}};
-  const char* const text_names[] = {"caption", "style"};
+  const std::pair<fm_patch_op_t, const char*> texts[] = {{p.caption_op, p.caption}, {p.style_name_op, p.style_name}};
+  const char* const text_names[] = {"caption", "style_name"};
   for (std::size_t i = 0; i < 2; ++i) {
     if (!is_set(texts[i].first)) {
       continue;
@@ -71,23 +74,30 @@ fm_status_t to_spec(const fm_slicer_patch_t& p, bool add, formulon::SlicerSpec& 
       return rc;
     }
   }
+  // No style is spelled CLEAR (or NULL on add), never an empty name.
+  if (is_set(p.style_name_op) && p.style_name[0] == '\0') {
+    return invalid_argument("a style name is not empty", "field=style_name");
+  }
 
   spec.fields = 0;
   if (is_set(p.caption_op)) {
     spec.fields |= field::kCaption;
     spec.caption = p.caption;
   }
-  if (is_set(p.style_op) || (!add && p.style_op == FM_PATCH_OP_CLEAR)) {
+  if (is_set(p.style_name_op) || (!add && p.style_name_op == FM_PATCH_OP_CLEAR)) {
     spec.fields |= field::kStyle;
-    spec.style = is_set(p.style_op) ? std::string(p.style) : std::string();
+    spec.style = is_set(p.style_name_op) ? std::string(p.style_name) : std::string();
   }
   if (is_set(p.column_count_op)) {
     spec.fields |= field::kColumnCount;
     spec.column_count = p.column_count;
   }
-  if (is_set(p.row_height_emu_op)) {
+  if (is_set(p.row_height_pt_op)) {
+    if (!std::isfinite(p.row_height_pt) || p.row_height_pt < 0.0) {
+      return invalid_argument("row height is negative or not finite", "field=row_height_pt");
+    }
     spec.fields |= field::kRowHeight;
-    spec.row_height = p.row_height_emu;
+    spec.row_height = std::llround(p.row_height_pt * static_cast<double>(formulon::kEmuPerPoint));
   }
   if (is_set(p.sort_order_op)) {
     if (auto rc = check_enum_domain(p.sort_order, FM_SLICER_SORT_ORDER_ASCENDING, FM_SLICER_SORT_ORDER_DESCENDING,
@@ -127,18 +137,6 @@ fm_status_t find_slicer(const fm_workbook_t* wb, size_t sheet_index, uint32_t ob
   return 0;
 }
 
-// Resolves `object_id` for a mutator; an id no slicer holds is not found.
-fm_status_t require_slicer(const fm_workbook_t* wb, size_t sheet_index, uint32_t object_id, size_t* index) {
-  bool found = false;
-  if (auto rc = find_slicer(wb, sheet_index, object_id, index, &found); rc != 0) {
-    return rc;
-  }
-  if (!found) {
-    return not_found("no slicer has that object_id", "object_id=" + std::to_string(object_id));
-  }
-  return 0;
-}
-
 }  // namespace
 
 extern "C" fm_status_t fm_sheet_get_slicer(const fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
@@ -172,12 +170,12 @@ extern "C" fm_status_t fm_sheet_get_slicer(const fm_workbook_t* wb, size_t sheet
   out->column_count = info.column_count;
   out->sort_order = to_c(info.sort_order);
   out->cross_filter = static_cast<int32_t>(info.cross_filter);
-  out->row_height_emu = info.row_height;
+  out->row_height_pt = static_cast<double>(info.row_height) / static_cast<double>(formulon::kEmuPerPoint);
   out->caption = store_cstr(store, info.caption);
   out->cache_name = store_cstr(store, info.cache_name);
   out->table_name = store_cstr(store, info.table_name);
   out->column_name = store_cstr(store, info.column_name);
-  out->style = info.style.empty() ? nullptr : store_cstr(store, info.style);
+  out->style_name = info.style.empty() ? nullptr : store_cstr(store, info.style);
   *out_present = 1;
   return 0;
 }
@@ -199,7 +197,7 @@ extern "C" fm_status_t fm_sheet_add_slicer(fm_workbook_t* wb, size_t sheet_index
     return rc;
   }
   const fm_drawing_placement_spec_t& placement = spec->placement;
-  if (auto rc = check_utf8({placement.name, placement.description, spec->caption, spec->style}); rc != 0) {
+  if (auto rc = check_utf8({placement.name, placement.description, spec->caption, spec->style_name}); rc != 0) {
     return rc;
   }
   if (auto rc = check_enum_domain(placement.hidden, FM_TRISTATE_DEFAULT, FM_TRISTATE_TRUE, "placement.hidden");
@@ -230,17 +228,18 @@ extern "C" fm_status_t fm_sheet_add_slicer(fm_workbook_t* wb, size_t sheet_index
   fields.sort_order_op = fields.cross_filter_op = FM_PATCH_OP_SET;
   fields.sort_order = spec->sort_order;
   fields.cross_filter = spec->cross_filter;
-  if (spec->row_height_emu != 0) {
-    fields.row_height_emu_op = FM_PATCH_OP_SET;
-    fields.row_height_emu = spec->row_height_emu;
+  // A zero height is Excel's default; anything else, a negative or NaN included, goes to the range check.
+  if (!(spec->row_height_pt == 0.0)) {
+    fields.row_height_pt_op = FM_PATCH_OP_SET;
+    fields.row_height_pt = spec->row_height_pt;
   }
   if (spec->caption != nullptr && spec->caption[0] != '\0') {
     fields.caption_op = FM_PATCH_OP_SET;
     fields.caption = spec->caption;
   }
-  if (spec->style != nullptr && spec->style[0] != '\0') {
-    fields.style_op = FM_PATCH_OP_SET;
-    fields.style = spec->style;
+  if (spec->style_name != nullptr) {
+    fields.style_name_op = FM_PATCH_OP_SET;
+    fields.style_name = spec->style_name;
   }
   formulon::SlicerSpec model;
   if (auto rc = to_spec(fields, true, model); rc != 0) {
@@ -263,24 +262,30 @@ extern "C" fm_status_t fm_sheet_add_slicer(fm_workbook_t* wb, size_t sheet_index
 }
 
 extern "C" fm_status_t fm_sheet_update_slicer(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
-                                              const fm_slicer_patch_t* patch) {
+                                              const fm_drawing_patch_t* common, const fm_slicer_patch_t* slicer) {
   clear_last_error();
-  if (wb == nullptr || patch == nullptr) {
-    return null_argument();
-  }
-  if (auto rc = check_record_size(*patch); rc != 0) {
-    return rc;
+  if (wb == nullptr) {
+    return null_argument("wb");
   }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
-  size_t idx = 0;
-  if (auto rc = require_slicer(wb, sheet_index, object_id, &idx); rc != 0) {
-    return rc;
+  formulon::DrawingCommonPatch common_model;
+  if (common != nullptr) {
+    if (auto rc = drawing_patch_from_c(*common, &common_model); rc != 0) {
+      return rc;
+    }
   }
-  formulon::SlicerSpec model;
-  if (auto rc = to_spec(*patch, false, model); rc != 0) {
-    return rc;
+  formulon::SlicerSpec slicer_model;
+  if (slicer != nullptr) {
+    if (auto rc = check_record_size(*slicer); rc != 0) {
+      return rc;
+    }
+    if (auto rc = to_spec(*slicer, false, slicer_model); rc != 0) {
+      return rc;
+    }
   }
-  return finish_status(formulon::update_slicer(wb->workbook(), sheet_index, idx, model));
+  return finish_status(formulon::update_slicer(wb->workbook(), sheet_index, object_id,
+                                               common != nullptr ? &common_model : nullptr,
+                                               slicer != nullptr ? &slicer_model : nullptr));
 }

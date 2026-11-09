@@ -46,9 +46,14 @@ Expected<void, Error> apply_paint(xml_node holder, Order order, const ChartPatch
   if (color.is_clear()) {
     drop(holder, "solidFill");
   } else if (color.is_set()) {
-    const std::string alpha = drawing_color::alpha_of(io::first_element_child(child_local(holder, "solidFill")));
-    drop_fills(holder);
-    drawing_color::write_color(ensure(holder, "a:solidFill", order), "a:", color.value, alpha);
+    const xml_node current = io::first_element_child(child_local(holder, "solidFill"));
+    // An unchanged colour keeps its stored element (`lt1` stays `lt1` rather than becoming `bg1`).
+    const auto stored = drawing_color::read_exact(current, false);
+    if (!stored || !drawing_color::same_color(*stored, color.value)) {
+      const std::string alpha = drawing_color::alpha_of(current);
+      drop_fills(holder);
+      drawing_color::write_color(ensure(holder, "a:solidFill", order), "a:", color.value, alpha);
+    }
   }
   if (transparency.is_keep()) {
     return ok();
@@ -71,12 +76,18 @@ Expected<void, Error> apply_paint(xml_node holder, Order order, const ChartPatch
 
 }  // namespace
 
-Expected<void, Error> apply_shape(xml_node owner, Order owner_order, const ChartFillPatch& fill,
-                                  const ChartLinePatch& line) {
-  if (fill_empty(fill) && line_empty(line)) {
-    return ok();
+Expected<void, Error> apply_paint_properties(xml_node sp, const ChartFillPatch& fill, const ChartLinePatch& line) {
+  if (fill.none.has_value()) {
+    if (*fill.none && fill.color.is_set()) {
+      return bad_arg("chart: a hidden fill takes no colour");
+    }
+    if (*fill.none) {
+      drop_fills(sp);
+      ensure(sp, "a:noFill", kShapeOrder);
+    } else {
+      drop(sp, "noFill");
+    }
   }
-  xml_node sp = ensure_shape_properties(owner, owner_order);
   RETURN_IF_ERROR(apply_paint(sp, kShapeOrder, fill.color, fill.transparency_pct));
   if (line_empty(line)) {
     return ok();
@@ -114,6 +125,14 @@ Expected<void, Error> apply_shape(xml_node owner, Order owner_order, const Chart
     put_val(ln, "a:prstDash", kLineOrder, kChartDashTokens[d]);
   }
   return ok();
+}
+
+Expected<void, Error> apply_shape(xml_node owner, Order owner_order, const ChartFillPatch& fill,
+                                  const ChartLinePatch& line) {
+  if (fill_empty(fill) && line_empty(line)) {
+    return ok();
+  }
+  return apply_paint_properties(ensure_shape_properties(owner, owner_order), fill, line);
 }
 
 void link_number_format(xml_node owner, Order order, const std::optional<bool>& linked) {
@@ -338,4 +357,10 @@ Expected<void, Error> apply_labels(xml_node ser, bool pie, const std::string& la
 }
 
 }  // namespace chart_edit
+
+Expected<void, Error> write_paint_properties(pugi::xml_node sp_pr, const ChartFillPatch& fill,
+                                             const ChartLinePatch& line) {
+  return chart_edit::apply_paint_properties(sp_pr, fill, line);
+}
+
 }  // namespace formulon

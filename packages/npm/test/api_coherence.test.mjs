@@ -94,10 +94,8 @@ function addBox(f, ws, name, { anchor, ...extra } = {}) {
     name,
     presetGeometry: 'rect',
     anchor: { kind: f.AnchorKind.TwoCell, fromRow: 1, fromCol: 1, toRow: 5, toCol: 4, ...anchor },
-    fillKind: f.ShapePaint.Solid,
-    fillColor: '#FF0000',
-    lineKind: f.ShapePaint.Solid,
-    lineColor: '#00FF00',
+    fill: { color: '#FF0000' },
+    line: { color: '#00FF00' },
     ...extra,
   });
 }
@@ -105,7 +103,7 @@ function addBox(f, ws, name, { anchor, ...extra } = {}) {
 const SLICER_ANCHOR = { fromRow: 4, fromCol: 3, toRow: 14, toCol: 5 };
 
 function addSlicerOf(wb, ws) {
-  return ws.addSlicer('Sales', 0, { anchor: SLICER_ANCHOR, caption: 'Pick', style: 'SlicerStyleLight3' });
+  return ws.addSlicer('Sales', 0, { anchor: SLICER_ANCHOR, caption: 'Pick', styleName: 'SlicerStyleLight3' });
 }
 
 function sparklineGroup(f) {
@@ -120,7 +118,7 @@ function sparklineGroup(f) {
     minAxisType: f.SparklineAxisType.Custom,
     manualMin: -1.5,
     manualMax: 8.5,
-    lineWeight: 1.25,
+    lineWidthPt: 1.25,
     emptyCellsAs: f.BlanksAs.Zero,
     sparklines: [
       { source: 'Sheet1!A1:D1', location: 'F1' },
@@ -155,7 +153,7 @@ function addPivotOver(wb, f) {
   cache.addFieldSharedItem(0, 'East');
   cache.addFieldSharedItem(0, 'West');
   const pivot = ws.addPivot({ name: 'P1', cacheId: cache.cacheId, anchor: { row: 0, col: 4 } });
-  pivot.addField({ fieldIndex: 'Region', axis: f.PivotAxis.Row });
+  pivot.setFieldAxis('Region', f.PivotAxis.Row);
   return { cache, pivot, ws };
 }
 
@@ -227,7 +225,7 @@ const SUBJECTS = {
     unknown: { top: { bogus: 1 } },
     recordOnly: { top: { objectId: 9999, kind: 12345 } },
     nonNullable: {
-      top: [{ name: null }, { fillKind: null }, { lineKind: null }, { fillColor: null }, { lineColor: null }],
+      top: [{ name: null }, { presetGeometry: null }, { text: null }],
     },
     flatAnchor: [
       { editAs: 2 },
@@ -251,8 +249,8 @@ const SUBJECTS = {
     recordOnly: {
       top: { objectId: 777, cacheName: 'x', tableName: 'x', columnName: 'x' },
     },
-    nullable: { top: { style: null } },
-    cleared: (state) => assert.equal(state.style, null),
+    nullable: { top: { styleName: null } },
+    cleared: (state) => assert.equal(state.styleName, null),
     nonNullable: { top: { caption: null } },
     flatAnchor: [{ toRow: 20 }, { toCol: 9 }, { toRowOffsetEmu: 5 }, { fromColOffsetEmu: 5 }],
   },
@@ -368,28 +366,16 @@ test('patch: an unknown key is a TypeError on every other patch entry point', as
   });
 });
 
-test('patch: Shape.update removes its own fill and line on Default and rejects null on every key', async () => {
+test('patch: Shape.update removes its own fill and line on null and rejects null on every other key', async () => {
   await withWorkbook((wb, f) => {
     const shape = addBox(f, wb.sheet(0), 'S1');
-    shape.update({ fillKind: f.ShapePaint.Default, lineKind: f.ShapePaint.Default, name: 'Renamed' });
+    shape.update({ fill: null, line: null, name: 'Renamed' });
     const props = shape.getProperties();
     assert.equal(shape.getDrawingProperties().name, 'Renamed');
     assert.equal(shape.name, 'Renamed');
-    assert.equal(props.fillKind, f.ShapePaint.Default);
-    assert.equal(props.fillColor, null);
-    assert.equal(props.lineKind, f.ShapePaint.Default);
-    assert.equal(props.lineColor, null);
-    for (const key of [
-      'presetGeometry',
-      'text',
-      'hidden',
-      'rotationDeg',
-      'fillKind',
-      'lineKind',
-      'fillColor',
-      'lineColor',
-      'name',
-    ]) {
+    assert.equal(props.fill, null);
+    assert.equal(props.line, null);
+    for (const key of ['presetGeometry', 'text', 'hidden', 'rotationDeg', 'name']) {
       assertMisuse(() => shape.update({ [key]: null }), TypeError, key);
     }
     assert.equal(shape.name, 'Renamed');
@@ -458,17 +444,17 @@ test('patch: an anchor patch merges per key and an omitted kind keeps the object
   });
 });
 
-test('patch: Slicer.update(style: null) clears the style; an empty patch changes nothing', async () => {
+test('patch: Slicer.update(styleName: null) clears the style; an empty patch changes nothing', async () => {
   await withWorkbook((wb) => {
     const ws = wb.sheet(0);
     addSalesTable(ws);
     const slicer = addSlicerOf(wb, ws);
     const before = plain(slicer.getProperties());
-    assert.equal(before.style, 'SlicerStyleLight3');
+    assert.equal(before.styleName, 'SlicerStyleLight3');
     slicer.update({});
     assert.deepEqual(plain(slicer.getProperties()), before);
-    slicer.update({ style: null });
-    assert.deepEqual(plain(slicer.getProperties()), { ...before, style: null });
+    slicer.update({ styleName: null });
+    assert.deepEqual(plain(slicer.getProperties()), { ...before, styleName: null });
   });
 });
 
@@ -487,7 +473,7 @@ test('patch: updateSparklineGroup is read-modify-write and every omitted field s
       { dateAxis: true, dateAxisRange: { sheet: 0, rect: rect(0, 0, 0, 3) } },
       { dateAxisRange: null },
       { colorSeries: colorGreen },
-      { lineWeight: 2.25 },
+      { lineWidthPt: 2.25 },
       { emptyCellsAs: f.BlanksAs.Gap },
       { sparklines: [{ source: { sheet: 0, rect: rect(0, 1, 4, 1) }, location: { row: 0, col: 7 } }] },
     ];

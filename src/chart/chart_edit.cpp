@@ -136,8 +136,9 @@ Expected<void, Error> patch_source(const Workbook& wb, Chart& c, std::string_vie
 bool clears_all(const ChartPointPatch& patch) {
   const ChartFillPatch& f = patch.fill;
   const ChartLinePatch& l = patch.line;
-  return f.color.is_clear() && f.transparency_pct.is_clear() && l.color.is_clear() && l.transparency_pct.is_clear() &&
-         l.width_pt.is_clear() && l.dash.is_clear() && !l.none.value_or(false) && patch.marker.is_clear();
+  return f.color.is_clear() && f.transparency_pct.is_clear() && !f.none.value_or(false) && l.color.is_clear() &&
+         l.transparency_pct.is_clear() && l.width_pt.is_clear() && l.dash.is_clear() && !l.none.value_or(false) &&
+         patch.marker.is_clear();
 }
 
 /// True when the `c:dPt` `point` holds no fill, line colour, width, dash or marker of its own.
@@ -147,7 +148,8 @@ bool line_patch_sets(const ChartLinePatch& p) {
 }
 
 bool point_patch_sets(const ChartPointPatch& p) {
-  return p.fill.color.is_set() || p.fill.transparency_pct.is_set() || line_patch_sets(p.line) || p.marker.is_set();
+  return p.fill.color.is_set() || p.fill.transparency_pct.is_set() || p.fill.none.value_or(false) ||
+         line_patch_sets(p.line) || p.marker.is_set();
 }
 
 bool point_override_empty(const xml_node& point) {

@@ -39,14 +39,14 @@ def _full_protection() -> WorkbookProtection:
 class WorkbookProtectionTests(unittest.TestCase):
     def test_absent_by_default_and_every_field_round_trips(self) -> None:
         with Workbook.create_default() as wb:
-            self.assertEqual(wb.get_workbook_protection(), WorkbookProtection())
+            self.assertIsNone(wb.get_workbook_protection())
             wb.set_workbook_protection(_full_protection())
             self.assertEqual(wb.get_workbook_protection(), _full_protection())
             with Workbook.load(wb.save()) as reloaded:
                 self.assertEqual(reloaded.get_workbook_protection(), _full_protection())
-                reloaded.set_workbook_protection(WorkbookProtection())
+                reloaded.set_workbook_protection(None)
                 with Workbook.load(reloaded.save()) as cleared:
-                    self.assertEqual(cleared.get_workbook_protection(), WorkbookProtection())
+                    self.assertIsNone(cleared.get_workbook_protection())
 
 
 class ProtectedRangeTests(unittest.TestCase):

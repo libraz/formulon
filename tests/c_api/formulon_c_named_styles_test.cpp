@@ -54,7 +54,7 @@ uint32_t FindStyle(fm_workbook_t* wb, const char* name, fm_cell_style_t* out) {
 }
 
 /// Adds a named-style xf distinct from Normal's (a bold font and a date format).
-uint32_t AddBoldDateStyleXf(fm_workbook_t* wb, std::size_t* out_font) {
+uint32_t AddBoldDateStyleXf(fm_workbook_t* wb, std::uint32_t* out_font) {
   fm_font_t font{};
   font.name = "Calibri";
   font.size_pt = 11.0;
@@ -145,7 +145,7 @@ TEST(FormulonCApiNamedStyles, RoundTripPreservesSeededNamedStyles) {
 
   uint8_t* saved_data = nullptr;
   size_t saved_len = 0;
-  ASSERT_EQ(fm_workbook_save(wb.handle, &saved_data, &saved_len), 0);
+  ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved_data, &saved_len), 0);
 
   WorkbookGuard wb2;
   ASSERT_EQ(fm_workbook_load(saved_data, saved_len, &wb2.handle), 0);
@@ -164,7 +164,7 @@ TEST(FormulonCApiNamedStyles, RoundTripPreservesSeededNamedStyles) {
   EXPECT_STREQ(normal.name, "Normal");
   EXPECT_EQ(normal.style_xf_index, 0U);
   EXPECT_EQ(normal.builtin_id, 0U);
-  EXPECT_EQ(normal.i_level, 0U);
+  EXPECT_EQ(normal.outline_level, 0U);
   EXPECT_EQ(normal.hidden, 0);
   EXPECT_EQ(normal.custom_builtin, 0);
 
@@ -182,14 +182,14 @@ TEST(FormulonCApiNamedStyles, RoundTripPreservesSeededNamedStyles) {
 TEST(FormulonCApiNamedStyles, BuiltinId53RoundTrips) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  std::size_t font = 0;
+  std::uint32_t font = 0;
   const uint32_t xf_id = AddBoldDateStyleXf(wb.handle, &font);
   const fm_cell_style_t record = StyleRecord("Explanatory Text", xf_id, 53U);
   ASSERT_EQ(fm_workbook_set_cell_style(wb.handle, &record), 0);
 
   uint8_t* saved_data = nullptr;
   size_t saved_len = 0;
-  ASSERT_EQ(fm_workbook_save(wb.handle, &saved_data, &saved_len), 0);
+  ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved_data, &saved_len), 0);
   WorkbookGuard loaded;
   ASSERT_EQ(fm_workbook_load(saved_data, saved_len, &loaded.handle), 0);
   fm_buffer_destroy(saved_data);
@@ -202,17 +202,17 @@ TEST(FormulonCApiNamedStyles, BuiltinId53RoundTrips) {
 TEST(FormulonCApiNamedStyles, SetCellStyleCarriesEveryFieldAndReplacesByName) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  std::size_t font = 0;
+  std::uint32_t font = 0;
   const uint32_t xf_id = AddBoldDateStyleXf(wb.handle, &font);
   fm_cell_style_t record = StyleRecord("RowLevel_4", xf_id, 1U);
-  record.i_level = 3;
+  record.outline_level = 3;
   record.hidden = 1;
   record.custom_builtin = 1;
   ASSERT_EQ(fm_workbook_set_cell_style(wb.handle, &record), 0);
 
   uint8_t* saved_data = nullptr;
   size_t saved_len = 0;
-  ASSERT_EQ(fm_workbook_save(wb.handle, &saved_data, &saved_len), 0);
+  ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved_data, &saved_len), 0);
   WorkbookGuard loaded;
   ASSERT_EQ(fm_workbook_load(saved_data, saved_len, &loaded.handle), 0);
   fm_buffer_destroy(saved_data);
@@ -220,7 +220,7 @@ TEST(FormulonCApiNamedStyles, SetCellStyleCarriesEveryFieldAndReplacesByName) {
   ASSERT_NE(FindStyle(loaded.handle, "RowLevel_4", &reread), UINT32_MAX);
   EXPECT_EQ(reread.style_xf_index, xf_id);
   EXPECT_EQ(reread.builtin_id, 1U);
-  EXPECT_EQ(reread.i_level, 3U);
+  EXPECT_EQ(reread.outline_level, 3U);
   EXPECT_EQ(reread.hidden, 1);
   EXPECT_EQ(reread.custom_builtin, 1);
 
@@ -236,7 +236,7 @@ TEST(FormulonCApiNamedStyles, SetCellStyleCarriesEveryFieldAndReplacesByName) {
   EXPECT_EQ(reread.style_xf_index, 0U);
   EXPECT_EQ(reread.has_builtin_id, 0) << "a custom style reads has_builtin_id 0";
   EXPECT_EQ(reread.builtin_id, 0U);
-  EXPECT_EQ(reread.i_level, 0U);
+  EXPECT_EQ(reread.outline_level, 0U);
   EXPECT_EQ(reread.hidden, 0);
   EXPECT_EQ(reread.custom_builtin, 0);
 }
@@ -259,21 +259,21 @@ TEST(FormulonCApiNamedStyles, SetCellStyleRejectsInvalidRecords) {
 
   // An outline level belongs to RowLevel_n / ColLevel_n only, and stops at 6.
   record = StyleRecord("ColLevel_7", 0U, 2U);
-  record.i_level = 6;
+  record.outline_level = 6;
   EXPECT_EQ(fm_workbook_set_cell_style(wb.handle, &record), 0);
-  record.i_level = 7;
+  record.outline_level = 7;
   EXPECT_EQ(fm_workbook_set_cell_style(wb.handle, &record), kInvalidArgument);
   record = StyleRecord("Heading 1", 0U, 16U);
-  record.i_level = 1;
+  record.outline_level = 1;
   EXPECT_EQ(fm_workbook_set_cell_style(wb.handle, &record), kInvalidArgument);
-  record.i_level = 0;
+  record.outline_level = 0;
   EXPECT_EQ(fm_workbook_set_cell_style(wb.handle, &record), 0);
 }
 
 TEST(FormulonCApiNamedStyles, RemoveCellStyleRepointsXfs) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  std::size_t bold = 0;
+  std::uint32_t bold = 0;
   const uint32_t xf_id = AddBoldDateStyleXf(wb.handle, &bold);
   const fm_cell_style_t record = StyleRecord("Dated", xf_id, kCustomStyle);
   ASSERT_EQ(fm_workbook_set_cell_style(wb.handle, &record), 0);
@@ -319,7 +319,7 @@ TEST(FormulonCApiNamedStyles, RemoveCellStyleRepointsXfs) {
 TEST(FormulonCApiNamedStyles, RemoveCellStyleKeepsXfsOfASharedStyleXf) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  std::size_t bold = 0;
+  std::uint32_t bold = 0;
   const uint32_t xf_id = AddBoldDateStyleXf(wb.handle, &bold);
   const fm_cell_style_t first = StyleRecord("First", xf_id, kCustomStyle);
   const fm_cell_style_t second = StyleRecord("Second", xf_id, kCustomStyle);
@@ -365,7 +365,7 @@ TEST(FormulonCApiNamedStyles, CellStyleXfIndexPastTheEndNamesTheParameter) {
 TEST(FormulonCApiNamedStyles, NamesCompareWithUnicodeCaseFolding) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  std::size_t font = 0;
+  std::uint32_t font = 0;
   const uint32_t xf_id = AddBoldDateStyleXf(wb.handle, &font);
   const fm_cell_style_t record = StyleRecord("\xC3\x84pfel", xf_id, kCustomStyle);  // "Äpfel"
   ASSERT_EQ(fm_workbook_set_cell_style(wb.handle, &record), 0);
@@ -388,4 +388,18 @@ TEST(FormulonCApiNamedStyles, NamesCompareWithUnicodeCaseFolding) {
   ASSERT_EQ(fm_workbook_remove_cell_style(wb.handle, "\xC3\x84PFEL"), 0);
   ASSERT_EQ(fm_workbook_get_cell_style(wb.handle, "\xC3\xA4pfel", &present, &read), 0);
   EXPECT_EQ(present, 0);
+}
+
+TEST(FormulonCApiCellStyleOutlineLevel, RoundTripsOutlineLevel) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  fm_cell_style_t record = StyleRecord("ColLevel_5", 0U, 2U);
+  record.outline_level = 4;
+  ASSERT_EQ(fm_workbook_set_cell_style(wb.handle, &record), 0);
+  int32_t present = 0;
+  fm_cell_style_t read{};
+  ASSERT_EQ(fm_workbook_get_cell_style(wb.handle, "ColLevel_5", &present, &read), 0);
+  ASSERT_EQ(present, 1);
+  EXPECT_EQ(read.outline_level, 4U);
+  EXPECT_EQ(read.builtin_id, 2U);
 }

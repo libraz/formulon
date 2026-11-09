@@ -156,11 +156,11 @@ TEST(OoxmlPrintAuthoring, EmptyWorkbookToFullyConfiguredReport) {
   titles.last_row = 1;
   ASSERT_EQ(fm_sheet_set_print_titles(wb.handle, 0, &titles), 0);
   fm_row_break_t row_break = FM_STRUCT_INIT(fm_row_break_t);
-  row_break.manual = 1;
+  row_break.manual = FM_TRISTATE_TRUE;
   ASSERT_EQ(fm_sheet_set_row_break(wb.handle, 0, 39, &row_break), 0);
 
   BufferGuard saved;
-  ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0);
+  ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0);
 
   // --- The package Excel would see -----------------------------------
   std::vector<std::uint8_t> bytes(saved.data, saved.data + saved.len);
@@ -241,7 +241,7 @@ TEST(OoxmlPrintAuthoring, EmptyWorkbookToFullyConfiguredReport) {
   fm_row_break_t brk = FM_STRUCT_INIT(fm_row_break_t);
   ASSERT_EQ(fm_sheet_get_row_break_at(reloaded.handle, 0, 0, &brk), 0);
   EXPECT_EQ(brk.row, 39U);
-  EXPECT_EQ(brk.manual, 1);
+  EXPECT_EQ(brk.manual, FM_TRISTATE_TRUE);
 }
 
 namespace {
@@ -395,7 +395,7 @@ TEST(OoxmlPrintAuthoring, FitToPageOnATemplateKeepsTabColorAndCodeName) {
   ASSERT_EQ(fm_sheet_update_page_setup(wb.handle, 0, &fit), 0);
 
   BufferGuard saved;
-  ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0);
+  ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0);
   std::vector<std::uint8_t> bytes(saved.data, saved.data + saved.len);
   io::ZipReader zip;
   ASSERT_TRUE(static_cast<bool>(zip.open(SpanOf(bytes))));

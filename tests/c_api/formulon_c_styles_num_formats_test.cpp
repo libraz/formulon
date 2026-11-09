@@ -115,7 +115,7 @@ TEST(FormulonCApiStyles, AddBatchNumFmtUsesEffectiveBuiltinMapping) {
   ASSERT_NO_FATAL_FAILURE(LoadNumFmtOverrideStyles(wb.handle));
 
   const char* const codes[] = {"General", "yyyy", "mm-dd-yy", "mm-dd-yy"};
-  uint16_t ids[] = {0xFFFFU, 0xFFFFU, 0xFFFFU, 0xFFFFU};
+  uint32_t ids[] = {0xFFFFU, 0xFFFFU, 0xFFFFU, 0xFFFFU};
   fm_styles_batch_spec_t batch = FM_STRUCT_INIT(fm_styles_batch_spec_t);
   batch.num_fmt_codes = codes;
   batch.num_fmt_count = 4U;
@@ -311,7 +311,7 @@ TEST(FormulonCApiStyles, AddBatchNumFmtExhaustionIsTransactional) {
   styles.num_fmts.push_back(max_record);
   const std::string before_xml = formulon::io::write_styles(styles);
   const char* codes[] = {"first", "second"};
-  uint16_t ids[] = {0xAAAAU, 0xBBBBU};
+  uint32_t ids[] = {0xAAAAU, 0xBBBBU};
   fm_styles_batch_spec_t batch = FM_STRUCT_INIT(fm_styles_batch_spec_t);
   batch.num_fmt_codes = codes;
   batch.num_fmt_count = 2U;
@@ -321,4 +321,48 @@ TEST(FormulonCApiStyles, AddBatchNumFmtExhaustionIsTransactional) {
   EXPECT_EQ(ids[0], 0xAAAAU);
   EXPECT_EQ(ids[1], 0xBBBBU);
   EXPECT_EQ(formulon::io::write_styles(styles), before_xml);
+}
+
+TEST(FormulonCApiNumberFormatList, ListsDeclaredFormatsInIdOrder) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  std::size_t count = 99;
+  ASSERT_EQ(fm_workbook_get_number_format_count(wb.handle, &count), 0);
+  const std::size_t base = count;
+  std::uint32_t first = 0;
+  std::uint32_t second = 0;
+  ASSERT_EQ(fm_workbook_add_number_format(wb.handle, "0.000\"kg\"", &first), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_workbook_add_number_format(wb.handle, "#,##0.0000", &second), 0) << fm_get_last_error_message();
+  ASSERT_LT(first, second);
+  // A built-in code is not declared, so it does not join the list.
+  std::uint32_t builtin = 0;
+  ASSERT_EQ(fm_workbook_add_number_format(wb.handle, "0.00", &builtin), 0);
+  EXPECT_LT(builtin, 164U);
+  ASSERT_EQ(fm_workbook_get_number_format_count(wb.handle, &count), 0);
+  ASSERT_EQ(count, base + 2U);
+
+  std::uint32_t previous = 0;
+  bool saw_first = false;
+  bool saw_second = false;
+  for (std::size_t i = 0; i < count; ++i) {
+    fm_number_format_info_t info = FM_STRUCT_INIT(fm_number_format_info_t);
+    ASSERT_EQ(fm_workbook_get_number_format_at(wb.handle, i, &info), 0) << fm_get_last_error_message();
+    ASSERT_NE(info.number_format, nullptr);
+    if (i > 0) {
+      EXPECT_GT(info.num_fmt_id, previous);
+    }
+    previous = info.num_fmt_id;
+    if (info.num_fmt_id == first) {
+      EXPECT_STREQ(info.number_format, "0.000\"kg\"");
+      saw_first = true;
+    }
+    if (info.num_fmt_id == second) {
+      EXPECT_STREQ(info.number_format, "#,##0.0000");
+      saw_second = true;
+    }
+  }
+  EXPECT_TRUE(saw_first);
+  EXPECT_TRUE(saw_second);
+  fm_number_format_info_t past = FM_STRUCT_INIT(fm_number_format_info_t);
+  EXPECT_EQ(fm_workbook_get_number_format_at(wb.handle, count, &past), FM_STATUS_INDEX_OUT_OF_RANGE);
 }

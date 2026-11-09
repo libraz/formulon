@@ -240,11 +240,11 @@ TEST(ShapeFidelity, ListReportsEveryModelledField) {
   EXPECT_EQ(rect.object.to.col, 3U);
   EXPECT_EQ(rect.prst, "roundRect");
   EXPECT_EQ(rect.text, "Hello\nWorld & more");
-  EXPECT_EQ(rect.fill, ShapePaint::kSolid);
-  EXPECT_EQ(Rgb24(rect.fill_color), 0xFF0000U);
-  EXPECT_EQ(rect.line, ShapePaint::kSolid);
-  EXPECT_EQ(Rgb24(rect.line_color), 0x0000FFU);
-  EXPECT_EQ(rect.line_width_emu, 19050);
+  EXPECT_TRUE(rect.paint_fill.color.has_value());
+  EXPECT_EQ(Rgb24(*rect.paint_fill.color), 0xFF0000U);
+  EXPECT_TRUE(rect.paint_line.color.has_value());
+  EXPECT_EQ(Rgb24(*rect.paint_line.color), 0x0000FFU);
+  EXPECT_EQ(rect.paint_line.width_emu, 19050);
   EXPECT_EQ(rect.rotation, 900000);
   EXPECT_FALSE(rect.object.hidden);
   EXPECT_FALSE(rect.text_box);
@@ -253,11 +253,11 @@ TEST(ShapeFidelity, ListReportsEveryModelledField) {
   EXPECT_TRUE(custom.prst.empty());
   EXPECT_TRUE(custom.object.hidden);
   EXPECT_TRUE(custom.text_box);
-  EXPECT_EQ(custom.fill, ShapePaint::kOther);
-  EXPECT_EQ(custom.line, ShapePaint::kSolid);
-  EXPECT_EQ(custom.line_color.kind, ColorSpec::Kind::kTheme);
-  EXPECT_EQ(custom.line_color.theme, 4U);
-  EXPECT_DOUBLE_EQ(custom.line_color.tint, 0.0);
+  EXPECT_TRUE(custom.paint_fill.other);
+  EXPECT_TRUE(custom.paint_line.color.has_value());
+  EXPECT_EQ(custom.paint_line.color->kind, ColorSpec::Kind::kTheme);
+  EXPECT_EQ(custom.paint_line.color->theme, 4U);
+  EXPECT_DOUBLE_EQ(custom.paint_line.color->tint, 0.0);
 
   EXPECT_EQ(shapes.value()[2].object.kind, DrawingObjectKind::kConnector);
   EXPECT_EQ(shapes.value()[2].prst, "straightConnector1");
@@ -287,13 +287,13 @@ TEST(ShapeColor, PaletteSchemeColoursReadAsTheme) {
       "<a:alpha val=\"50000\"/></a:schemeClr></a:solidFill>"
       "<a:ln><a:solidFill><a:schemeClr val=\"tx1\"><a:lumMod val=\"75000\"/></a:schemeClr></a:solidFill></a:ln>"));
   const ShapeInfo shape = list_shapes(wb, 0).value()[0];
-  EXPECT_EQ(shape.fill, ShapePaint::kSolid);
-  EXPECT_EQ(shape.fill_color.kind, ColorSpec::Kind::kTheme);
-  EXPECT_EQ(shape.fill_color.theme, 4U);
-  EXPECT_NEAR(shape.fill_color.tint, 0.4, 1e-9);
-  EXPECT_EQ(shape.line, ShapePaint::kSolid);
-  EXPECT_EQ(shape.line_color.theme, 1U);
-  EXPECT_NEAR(shape.line_color.tint, -0.25, 1e-9);
+  EXPECT_TRUE(shape.paint_fill.color.has_value());
+  EXPECT_EQ(shape.paint_fill.color->kind, ColorSpec::Kind::kTheme);
+  EXPECT_EQ(shape.paint_fill.color->theme, 4U);
+  EXPECT_NEAR(shape.paint_fill.color->tint, 0.4, 1e-9);
+  EXPECT_TRUE(shape.paint_line.color.has_value());
+  EXPECT_EQ(shape.paint_line.color->theme, 1U);
+  EXPECT_NEAR(shape.paint_line.color->tint, -0.25, 1e-9);
 }
 
 TEST(ShapeColor, UnrepresentableColoursStayOther) {
@@ -302,8 +302,8 @@ TEST(ShapeColor, UnrepresentableColoursStayOther) {
       "<a:solidFill><a:prstClr val=\"red\"/></a:solidFill>"
       "<a:ln><a:solidFill><a:schemeClr val=\"lt1\"><a:shade val=\"50000\"/></a:schemeClr></a:solidFill></a:ln>"));
   const ShapeInfo shape = list_shapes(wb, 0).value()[0];
-  EXPECT_EQ(shape.fill, ShapePaint::kOther);
-  EXPECT_EQ(shape.line, ShapePaint::kOther);
+  EXPECT_TRUE(shape.paint_fill.other);
+  EXPECT_TRUE(shape.paint_line.other);
 }
 
 TEST(ShapeColor, ThemeColourWritesPaletteFormAndKeepsAlpha) {
@@ -311,11 +311,9 @@ TEST(ShapeColor, ThemeColourWritesPaletteFormAndKeepsAlpha) {
       LoadOrDie(OneShapePackage("<a:solidFill><a:srgbClr val=\"FF0000\"><a:alpha val=\"40000\"/></a:srgbClr>"
                                 "</a:solidFill><a:ln><a:noFill/></a:ln>"));
   ShapeSpec spec;
-  spec.fields = shape_field::kFill | shape_field::kLine;
-  spec.fill = ShapePaint::kSolid;
-  spec.fill_color = ThemeColor(4, 0.4);
-  spec.line = ShapePaint::kSolid;
-  spec.line_color = ThemeColor(1, -0.25);
+  spec.fields = 0;
+  spec.paint_fill.color = ChartPatchField<ColorSpec>::Set(ThemeColor(4, 0.4));
+  spec.paint_line.color = ChartPatchField<ColorSpec>::Set(ThemeColor(1, -0.25));
   ASSERT_TRUE(static_cast<bool>(update_shape(wb, 0, 2, spec)));
   const std::string xml = ReadPart(SaveOrDie(wb), "xl/drawings/drawing1.xml");
   EXPECT_TRUE(Has(xml,
@@ -326,13 +324,13 @@ TEST(ShapeColor, ThemeColourWritesPaletteFormAndKeepsAlpha) {
 
   const double tints[] = {0.4, -0.25, 0.123456, 0.123455};
   for (const double tint : tints) {
-    spec.fill_color = ThemeColor(9, tint);
+    spec.paint_fill.color = ChartPatchField<ColorSpec>::Set(ThemeColor(9, tint));
     ASSERT_TRUE(static_cast<bool>(update_shape(wb, 0, 2, spec)));
     Workbook again = LoadOrDie(SaveOrDie(wb));
     const ShapeInfo shape = list_shapes(again, 0).value()[0];
-    EXPECT_EQ(shape.fill_color.kind, ColorSpec::Kind::kTheme);
-    EXPECT_EQ(shape.fill_color.theme, 9U);
-    EXPECT_NEAR(shape.fill_color.tint, tint, 1e-5);
+    EXPECT_EQ(shape.paint_fill.color->kind, ColorSpec::Kind::kTheme);
+    EXPECT_EQ(shape.paint_fill.color->theme, 9U);
+    EXPECT_NEAR(shape.paint_fill.color->tint, tint, 1e-5);
   }
 }
 
@@ -342,11 +340,9 @@ TEST(ShapeColor, SameSchemeColourIsNotRewritten) {
       "<a:lumMod val=\"75000\"/></a:schemeClr></a:solidFill></a:ln>";
   Workbook wb = LoadOrDie(OneShapePackage(paints));
   ShapeSpec spec;
-  spec.fields = shape_field::kFill | shape_field::kLine;
-  spec.fill = ShapePaint::kSolid;
-  spec.fill_color = ThemeColor(0, 0.0);
-  spec.line = ShapePaint::kSolid;
-  spec.line_color = ThemeColor(5, -0.25);
+  spec.fields = 0;
+  spec.paint_fill.color = ChartPatchField<ColorSpec>::Set(ThemeColor(0, 0.0));
+  spec.paint_line.color = ChartPatchField<ColorSpec>::Set(ThemeColor(5, -0.25));
   ASSERT_TRUE(static_cast<bool>(update_shape(wb, 0, 2, spec)));
   const std::string xml = ReadPart(SaveOrDie(wb), "xl/drawings/drawing1.xml");
   EXPECT_TRUE(Has(xml, "<a:schemeClr val=\"lt1\"/>")) << xml;
@@ -402,10 +398,9 @@ TEST(ShapeFidelity, AnchorsShiftWithColumnInsertionAndDeletion) {
 TEST(ShapeFidelity, UpdateChangesOnlyTheNamedFields) {
   Workbook wb = LoadOrDie(ShapesPackage());
   ShapeSpec spec;
-  spec.fields = shape_field::kName | shape_field::kFill | shape_field::kText | shape_field::kRotation;
+  spec.fields = shape_field::kName | shape_field::kText | shape_field::kRotation;
   spec.name = "Renamed";
-  spec.fill = ShapePaint::kSolid;
-  spec.fill_color = RgbColor(0x00AA11);
+  spec.paint_fill.color = ChartPatchField<ColorSpec>::Set(RgbColor(0x00AA11));
   spec.text = "One\nTwo\nThree";
   spec.rotation = 0;
   ASSERT_TRUE(static_cast<bool>(update_shape(wb, 0, 2, spec)));
@@ -429,21 +424,20 @@ TEST(ShapeFidelity, UpdateChangesOnlyTheNamedFields) {
   EXPECT_EQ(shapes.value()[0].text, "One\nTwo\nThree");
   EXPECT_EQ(shapes.value()[0].object.name, "Renamed");
   EXPECT_EQ(shapes.value()[0].rotation, 0);
-  EXPECT_EQ(Rgb24(shapes.value()[0].line_color), 0x0000FFU);
+  EXPECT_EQ(Rgb24(*shapes.value()[0].paint_line.color), 0x0000FFU);
   EXPECT_EQ(shapes.value()[0].prst, "roundRect");
 }
 
 TEST(ShapeFidelity, UpdateMovesTheAnchorAndTheTransform) {
   Workbook wb = LoadOrDie(ShapesPackage());
   ShapeSpec spec;
-  spec.fields =
-      shape_field::kAnchor | shape_field::kPrst | shape_field::kLine | shape_field::kLineWidth | shape_field::kHidden;
+  spec.fields = shape_field::kAnchor | shape_field::kPrst | shape_field::kHidden;
   spec.anchor_kind = AnchorKind::kTwoCell;
   spec.from = AnchorPoint{1, 1, 0, 0};
   spec.to = AnchorPoint{4, 3, 0, 0};
   spec.prst = "ellipse";
-  spec.line = ShapePaint::kNone;
-  spec.line_width_emu = 12700;
+  spec.paint_line.none = true;
+  spec.paint_line.width_pt = ChartPatchField<double>::Set(1.0);
   spec.hidden = true;
   ASSERT_TRUE(static_cast<bool>(update_shape(wb, 0, 2, spec)));
   const ShapeInfo rect = list_shapes(wb, 0).value()[0];
@@ -451,8 +445,8 @@ TEST(ShapeFidelity, UpdateMovesTheAnchorAndTheTransform) {
   EXPECT_EQ(rect.object.to.row, 4U);
   EXPECT_EQ(rect.object.to.col, 3U);
   EXPECT_EQ(rect.prst, "ellipse");
-  EXPECT_EQ(rect.line, ShapePaint::kNone);
-  EXPECT_EQ(rect.line_width_emu, 12700);
+  EXPECT_TRUE(rect.paint_line.none);
+  EXPECT_EQ(rect.paint_line.width_emu, 12700);
   EXPECT_TRUE(rect.object.hidden);
   // A new preset drops guides that belonged to the old one.
   EXPECT_FALSE(Has(ReadPart(SaveOrDie(wb), "xl/drawings/drawing1.xml"), "val 25000"));
@@ -466,8 +460,8 @@ TEST(ShapeFidelity, UpdateMovesTheAnchorAndTheTransform) {
 TEST(ShapeFidelity, InsertAppendsOnTopAndRemoveDeletes) {
   Workbook wb = LoadOrDie(ShapesPackage());
   ShapeSpec spec;
-  spec.fields = shape_field::kAnchor | shape_field::kPrst | shape_field::kText | shape_field::kTextBox |
-                shape_field::kFill | shape_field::kLine | shape_field::kLineWidth | shape_field::kName;
+  spec.fields =
+      shape_field::kAnchor | shape_field::kPrst | shape_field::kText | shape_field::kTextBox | shape_field::kName;
   spec.anchor_kind = AnchorKind::kOneCell;
   spec.from = AnchorPoint{20, 4, 1000, 2000};
   spec.cx = 914400;
@@ -475,11 +469,9 @@ TEST(ShapeFidelity, InsertAppendsOnTopAndRemoveDeletes) {
   spec.prst = "wedgeRectCallout";
   spec.text = "a < b";
   spec.text_box = true;
-  spec.fill = ShapePaint::kSolid;
-  spec.fill_color = RgbColor(0xFFFF00);
-  spec.line = ShapePaint::kSolid;
-  spec.line_color = RgbColor(0x123456);
-  spec.line_width_emu = 25400;
+  spec.paint_fill.color = ChartPatchField<ColorSpec>::Set(RgbColor(0xFFFF00));
+  spec.paint_line.color = ChartPatchField<ColorSpec>::Set(RgbColor(0x123456));
+  spec.paint_line.width_pt = ChartPatchField<double>::Set(2.0);
   spec.name = "Callout";
   auto id = insert_shape(wb, 0, spec);
   ASSERT_TRUE(static_cast<bool>(id));
@@ -498,9 +490,9 @@ TEST(ShapeFidelity, InsertAppendsOnTopAndRemoveDeletes) {
   EXPECT_EQ(added.prst, "wedgeRectCallout");
   EXPECT_EQ(added.text, "a < b");
   EXPECT_TRUE(added.text_box);
-  EXPECT_EQ(Rgb24(added.fill_color), 0xFFFF00U);
-  EXPECT_EQ(Rgb24(added.line_color), 0x123456U);
-  EXPECT_EQ(added.line_width_emu, 25400);
+  EXPECT_EQ(Rgb24(*added.paint_fill.color), 0xFFFF00U);
+  EXPECT_EQ(Rgb24(*added.paint_line.color), 0x123456U);
+  EXPECT_EQ(added.paint_line.width_emu, 25400);
 
   ASSERT_TRUE(static_cast<bool>(remove_shape(again, 0, 5)));
   shapes = list_shapes(again, 0);
@@ -513,14 +505,13 @@ TEST(ShapeFidelity, InsertIntoASheetWithoutADrawingCreatesOne) {
   Workbook wb = LoadOrDie(BuildPackage("<sheetData/>"));
   EXPECT_TRUE(list_shapes(wb, 0).value().empty());
   ShapeSpec spec;
-  spec.fields = shape_field::kAnchor | shape_field::kPrst | shape_field::kLine;
+  spec.fields = shape_field::kAnchor | shape_field::kPrst;
   spec.anchor_kind = AnchorKind::kAbsolute;
   spec.from = AnchorPoint{0, 0, 6000, 5000};
   spec.cx = 100000;
   spec.cy = 0;
   spec.prst = "line";
-  spec.line = ShapePaint::kSolid;
-  spec.line_color = RgbColor(0xFF00FF);
+  spec.paint_line.color = ChartPatchField<ColorSpec>::Set(RgbColor(0xFF00FF));
   auto id = insert_shape(wb, 0, spec);
   ASSERT_TRUE(static_cast<bool>(id));
 

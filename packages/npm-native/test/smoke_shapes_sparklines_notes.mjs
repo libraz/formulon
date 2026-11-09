@@ -40,9 +40,8 @@ const box = (mod) => ({
   presetGeometry: 'roundRect',
   text: 'Hello\nWorld',
   anchor: { kind: mod.AnchorKind.TwoCell, fromRow: 1, fromCol: 1, toRow: 5, toCol: 4 },
-  fillKind: mod.ShapePaint.Solid,
-  fillColor: '#FF0000',
-  lineKind: mod.ShapePaint.None,
+  fill: { color: '#FF0000' },
+  line: { none: true },
   rotationDeg: 15,
 });
 
@@ -60,9 +59,7 @@ test('shapes insert, list, update, remove and round-trip', async () => {
       widthEmu: 914400,
       heightEmu: 12700,
     },
-    lineKind: mod.ShapePaint.Solid,
-    lineColor: '#00FF00',
-    lineWidthPt: 1.5,
+    line: { color: '#00FF00', widthPt: 1.5 },
   });
   assert.notEqual(rect, line);
 
@@ -77,29 +74,31 @@ test('shapes insert, list, update, remove and round-trip', async () => {
   assert.equal(props[0].text, 'Hello\nWorld');
   assert.equal(props[0].anchor.kind, mod.AnchorKind.TwoCell);
   assert.equal(props[0].anchor.toCol, 4);
-  assert.equal(props[0].fillKind, mod.ShapePaint.Solid);
-  assert.equal(props[0].fillColor.argb, 0xffff0000);
-  assert.equal(props[0].lineKind, mod.ShapePaint.None);
+  assert.equal(props[0].fill.none, false);
+  assert.equal(props[0].fill.color.argb, 0xffff0000);
+  assert.equal(props[0].line.none, true);
   assert.equal(props[0].rotationDeg, 15);
   assert.equal(props[0].hidden, false);
   assert.equal(props[1].kind, mod.DrawingObjectKind.Connector);
   assert.equal(props[1].anchor.kind, mod.AnchorKind.OneCell);
   assert.equal(props[1].anchor.fromColOffsetEmu, 500);
   assert.equal(props[1].anchor.widthEmu, 914400);
-  assert.equal(props[1].lineColor.argb, 0xff00ff00);
-  assert.equal(props[1].lineWidthPt, 1.5);
-  assert.equal(props[1].fillKind, mod.ShapePaint.Default);
-  assert.equal(props[1].fillColor, null);
+  assert.equal(props[1].line.color.argb, 0xff00ff00);
+  assert.equal(props[1].line.widthPt, 1.5);
+  assert.equal(props[1].fill, null);
 
   // An update changes the named fields only, and an anchor moves with a row insert.
-  loaded.sheet(0).shape(rect.objectId).update({ name: 'Renamed', hidden: true, fillKind: mod.ShapePaint.None });
+  loaded
+    .sheet(0)
+    .shape(rect.objectId)
+    .update({ name: 'Renamed', hidden: true, fill: { none: true } });
   loaded.sheet(0).insertRows(0, 2);
   const movedHandle = loaded.sheet(0).listShapes()[0];
   const moved = { ...movedHandle.getProperties(), ...movedHandle.getDrawingProperties() };
   assert.equal(movedHandle.name, 'Renamed');
   assert.equal(moved.name, 'Renamed');
   assert.equal(moved.hidden, true);
-  assert.equal(moved.fillKind, mod.ShapePaint.None);
+  assert.equal(moved.fill.none, true);
   assert.equal(moved.presetGeometry, 'roundRect');
   assert.equal(moved.rotationDeg, 15);
   assert.equal(moved.anchor.fromRow, 4);
@@ -122,7 +121,7 @@ test('shape arguments are validated', async () => {
   const wb = mod.Workbook.createDefault();
   assert.throws(() => wb.sheet(0).addShape({ presetGeometry: 'rect' }), isFormulonError);
   assert.throws(() => wb.sheet(0).addShape({ ...box(mod), anchor: { ...box(mod).anchor, kind: 9 } }), isFormulonError);
-  assert.throws(() => wb.sheet(0).addShape({ ...box(mod), fillKind: mod.ShapePaint.Other }), isFormulonError);
+  assert.throws(() => wb.sheet(0).addShape({ ...box(mod), fill: { transparencyPct: 150 } }), isFormulonError);
   assert.throws(() => wb.sheet(0).addShape({ ...box(mod), anchor: { ...box(mod).anchor, toRow: 0 } }), isFormulonError);
   assert.throws(() => wb.sheet(0).addShape({ ...box(mod), presetGeometry: 'a"/>' }), isFormulonError);
   assert.throws(() => wb.sheet(5).addShape(box(mod)), isFormulonError);
@@ -149,7 +148,7 @@ const sparklineGroup = (mod) => ({
   displayXAxis: true,
   minAxisType: mod.SparklineAxisType.Custom,
   manualMin: -1.5,
-  lineWeight: 1.25,
+  lineWidthPt: 1.25,
   emptyCellsAs: mod.BlanksAs.Zero,
   sparklines: [
     { source: 'Sheet1!A1:D1', location: 'F1' },
@@ -180,14 +179,14 @@ test('sparkline groups add, list, update, replace, remove and follow row edits',
   assert.equal(first.minAxisType, mod.SparklineAxisType.Custom);
   assert.equal(first.manualMin, -1.5);
   assert.equal(first.manualMax, null);
-  assert.equal(first.lineWeight, 1.25);
+  assert.equal(first.lineWidthPt, 1.25);
   assert.equal(first.emptyCellsAs, mod.BlanksAs.Zero);
   assert.deepEqual(plainOf(first.sparklines), [
     { source: onSheet1(0, 0, 0, 3), location: { row: 0, col: 5 } },
     { source: onSheet1(1, 0, 1, 3), location: { row: 1, col: 5 } },
   ]);
   assert.equal(second.type, mod.SparklineType.Line);
-  assert.equal(second.lineWeight, 0.75);
+  assert.equal(second.lineWidthPt, 0.75);
 
   loaded.sheet(0).insertRows(0, 1);
   assert.deepEqual(plainOf(loaded.sheet(0).listSparklineGroups()[0].sparklines[1]), {
@@ -221,8 +220,8 @@ test('sparkline groups add, list, update, replace, remove and follow row edits',
   // A patch is partial: omitted keys stay, null clears only the nullable keys, unknown keys are refused.
   loaded.sheet(0).updateSparklineGroup(0, { manualMin: null });
   assert.equal(loaded.sheet(0).listSparklineGroups()[0].manualMin, null);
-  assert.equal(loaded.sheet(0).listSparklineGroups()[0].lineWeight, 1.25);
-  assert.throws(() => loaded.sheet(0).updateSparklineGroup(0, { lineWeight: null }), TypeError);
+  assert.equal(loaded.sheet(0).listSparklineGroups()[0].lineWidthPt, 1.25);
+  assert.throws(() => loaded.sheet(0).updateSparklineGroup(0, { lineWidthPt: null }), TypeError);
   assert.throws(() => loaded.sheet(0).updateSparklineGroup(0, { noSuchKey: 1 }), TypeError);
   assert.throws(
     () =>
@@ -280,7 +279,7 @@ test('sparkline group arguments are validated', async () => {
   );
   assert.throws(() => wb.sheet(0).addSparklineGroup({ sparklines: [{ source: '', location: 'F1' }] }), isFormulonError);
   assert.throws(() => wb.sheet(0).addSparklineGroup({ type: 7, sparklines: good }), isFormulonError);
-  assert.throws(() => wb.sheet(0).addSparklineGroup({ lineWeight: -1, sparklines: good }), isFormulonError);
+  assert.throws(() => wb.sheet(0).addSparklineGroup({ lineWidthPt: -1, sparklines: good }), isFormulonError);
   assert.throws(() => wb.sheet(4).addSparklineGroup({ sparklines: good }), isFormulonError);
   assert.equal(wb.sheet(0).listSparklineGroups().length, 0);
   assert.throws(() => wb.sheet(0).updateSparklineGroup(0, {}), isFormulonError);

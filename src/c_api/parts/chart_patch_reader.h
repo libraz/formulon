@@ -1,6 +1,7 @@
 //
 // Translation of the C chart patch structs into the C++ patch types, keeping
-// the first validation failure (`PatchReader`).
+// the first validation failure (`PatchReader`), and of the model's paint
+// records into the C ones; the chart and shape parts share both.
 
 #ifndef FORMULON_C_API_PARTS_CHART_PATCH_READER_H_
 #define FORMULON_C_API_PARTS_CHART_PATCH_READER_H_
@@ -190,6 +191,73 @@ class PatchReader {
 
   fm_status_t rc_ = 0;
 };
+
+/// The C colour of a model paint colour; None when absent.
+inline fm_color_t paint_color_to_c(const std::optional<formulon::ColorSpec>& color) {
+  return color_spec_to_c(color ? *color : formulon::ColorSpec{});
+}
+
+/// The transparency percentage of an alpha in thousandths of a percent; 0 without one.
+inline double paint_transparency_of(const std::optional<std::uint32_t>& alpha) {
+  return alpha ? 100.0 - static_cast<double>(*alpha) / 1000.0 : 0.0;
+}
+
+/// A model fill as the C record reports it.
+inline fm_chart_fill_t chart_fill_to_c(const formulon::ChartFill& f) {
+  fm_chart_fill_t out{};
+  out.color = paint_color_to_c(f.color);
+  out.has_transparency_pct = f.alpha ? 1 : 0;
+  out.transparency_pct = paint_transparency_of(f.alpha);
+  out.none = f.none ? 1 : 0;
+  out.other = f.other ? 1 : 0;
+  return out;
+}
+
+/// A model outline as the C record reports it.
+inline fm_chart_line_t chart_line_to_c(const formulon::ChartLine& l) {
+  constexpr double kEmuPerPt = 12700.0;
+  fm_chart_line_t out{};
+  out.color = paint_color_to_c(l.color);
+  out.has_transparency_pct = l.alpha ? 1 : 0;
+  out.transparency_pct = paint_transparency_of(l.alpha);
+  out.has_width_pt = l.width_emu ? 1 : 0;
+  out.width_pt = l.width_emu ? static_cast<double>(*l.width_emu) / kEmuPerPt : 0.0;
+  out.has_dash = l.dash ? 1 : 0;
+  out.dash = l.dash ? static_cast<std::int32_t>(*l.dash) : 0;
+  out.none = l.none ? 1 : 0;
+  out.other = l.other ? 1 : 0;
+  return out;
+}
+
+/// A C fill patch as the model's; shared by the chart and shape edits.
+inline formulon::ChartFillPatch read_fill(PatchReader& r, const fm_chart_fill_patch_t& p) {
+  formulon::ChartFillPatch out;
+  r.color_field(p.color_op, p.color, out.color, "fill.color_op");
+  r.field(p.transparency_pct_op, p.transparency_pct, out.transparency_pct, "fill.transparency_pct_op");
+  // CLEAR drops an explicit no-fill as SET 0 does, so a patch clearing every member stays valid.
+  if (p.none_op == FM_PATCH_OP_CLEAR) {
+    out.none = false;
+  } else {
+    r.flag(p.none_op, p.none, out.none, "fill.none_op");
+  }
+  return out;
+}
+
+/// A C outline patch as the model's; shared by the chart and shape edits.
+inline formulon::ChartLinePatch read_line(PatchReader& r, const fm_chart_line_patch_t& p) {
+  formulon::ChartLinePatch out;
+  r.color_field(p.color_op, p.color, out.color, "line.color_op");
+  r.field(p.transparency_pct_op, p.transparency_pct, out.transparency_pct, "line.transparency_pct_op");
+  r.field(p.width_pt_op, p.width_pt, out.width_pt, "line.width_pt_op");
+  r.enum_field(p.dash_op, p.dash, formulon::ChartLineDash::kOther, out.dash, "line.dash");
+  // CLEAR drops an explicit no-line as SET 0 does, so a patch clearing every member stays valid.
+  if (p.none_op == FM_PATCH_OP_CLEAR) {
+    out.none = false;
+  } else {
+    r.flag(p.none_op, p.none, out.none, "line.none_op");
+  }
+  return out;
+}
 
 }  // namespace parts
 }  // namespace c_api
