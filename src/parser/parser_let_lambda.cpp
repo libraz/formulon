@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "parser/ast.h"
+#include "parser/formula_prefix.h"
 #include "parser/parse_error.h"
 #include "parser/parser.h"
 #include "parser/parser_detail.h"
@@ -41,11 +42,8 @@ bool IsLetNameShape(std::string_view name) noexcept {
     return false;
   }
   for (std::size_t i = 1; i < name.size(); ++i) {
-    const auto byte = static_cast<unsigned char>(name[i]);
-    const char c = static_cast<char>(byte);
-    const bool ok =
-        strings::is_ascii_alpha(c) || strings::is_ascii_digit(c) || c == '_' || c == '.' || c == '?' || byte >= 0x80;
-    if (!ok) {
+    const char c = name[i];
+    if (!formula_prefix_is_ident_byte(c) && c != '?') {
       return false;
     }
   }

@@ -23,7 +23,6 @@ namespace detail {
 // `cell_shaped_name_bare`.
 using NameScope = std::vector<std::string_view>;
 
-bool InScope(const NameScope& scope, std::string_view bare);
 bool HasParamPrefix(std::string_view name) noexcept;
 void AppendParamName(std::string_view raw, std::string& out);
 void AppendBindingName(std::string_view raw, bool storage, std::string& out);

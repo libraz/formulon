@@ -71,6 +71,12 @@ inline constexpr std::size_t kMaxDefinedNameUnits = 255;
 inline constexpr std::string_view kIdeographicSpace = "\xE3\x80\x80";
 inline constexpr std::string_view kUtf8Bom = "\xEF\xBB\xBF";
 
+// Directory separators accepted in an external workbook path.
+inline constexpr std::string_view kPathSeparators = "/\\";
+inline bool IsPathSeparator(char c) noexcept {
+  return kPathSeparators.find(c) != std::string_view::npos;
+}
+
 // Book index and `[index]!` spelling of the formula's own workbook in a stored
 // defined-name reference (`[0]!Name`).
 inline constexpr std::string_view kSelfBookIndex = "0";

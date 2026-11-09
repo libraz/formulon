@@ -9,9 +9,11 @@
 #ifndef FORMULON_PARSER_STRUCTURED_REF_SPELLING_H_
 #define FORMULON_PARSER_STRUCTURED_REF_SPELLING_H_
 
+#include <optional>
 #include <string>
 #include <string_view>
 
+#include "parser/ast.h"
 #include "sheet_name.h"
 
 namespace formulon {
@@ -29,6 +31,11 @@ struct BareTableNamePredicate {
 /// display form for a formula in `own_table`'s range; `own_table` is empty
 /// outside every table. A table spelling resolves among `table_list` (the
 /// case fold against `own_table` without one).
+/// Display form of one `StructuredRef` node, or `std::nullopt` when its payload does not parse.
+/// `own_table` / `table_list` decide whether the reference sits inside its own table.
+std::optional<std::string> display_structured_ref_node(const AstNode& node, std::string_view own_table,
+                                                       const sheet_names::NameList* table_list);
+
 std::string display_structured_refs(std::string_view text, std::string_view own_table,
                                     const sheet_names::NameList* table_list = nullptr);
 

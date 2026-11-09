@@ -38,7 +38,6 @@ using detail::AppendParamName;
 using detail::CollectParens;
 using detail::EmitCommaList;
 using detail::HasParamPrefix;
-using detail::InScope;
 using detail::kBpAtPrefix;
 using detail::kBpIntersect;
 using detail::kBpPostfixHash;
@@ -135,11 +134,6 @@ void FormatLiteral(const Value& v, std::string& out, bool parenthesise_negative 
       out.append(display_name(ErrorCode::Value));
       return;
   }
-}
-
-void FormatRef(const Reference& r, std::string& out) {
-  // append_a1 already handles sheet-quoted vs bare and full-col / full-row.
-  append_a1(r, out);
 }
 
 // Appends the sheet-less cell part of a reference tail in A1 notation: a
@@ -536,13 +530,13 @@ void FormatBare(const AstNode& node, std::string& out, const Layout& layout) {
       FormatLiteral(node.as_literal(), out, /*parenthesise_negative=*/false);
       return;
     case NodeKind::Ref:
-      FormatRef(node.as_ref(), out);
+      append_a1(node.as_ref(), out);
       return;
     case NodeKind::SpillRef:
       if (const AstNode* anchor = node.as_spill_ref_anchor_expr(); anchor != nullptr) {
         FormatNode(*anchor, out, layout);
       } else {
-        FormatRef(node.as_spill_ref(), out);
+        append_a1(node.as_spill_ref(), out);
       }
       out.push_back('#');
       return;
@@ -635,7 +629,7 @@ struct StorageEmitter {
 
   // A NameRef spelled in a different case than its binding is still that
   // parameter and must carry the `_xlpm.` prefix.
-  bool in_scope(std::string_view name) const { return InScope(scope, name); }
+  bool in_scope(std::string_view name) const { return detail::ContainsNameIgnoreCase(scope, name); }
 
   void append_function_name(std::string& out, std::string_view canonical) const { out.append(spell(canonical)); }
 
@@ -652,7 +646,7 @@ struct StorageEmitter {
         FormatLiteral(node.as_literal(), out, /*parenthesise_negative=*/false);
         return;
       case NodeKind::Ref:
-        FormatRef(node.as_ref(), out);
+        append_a1(node.as_ref(), out);
         return;
       case NodeKind::SpillRef: {
         // Excel's on-disk spelling of the postfix `#` operator is a call to
@@ -665,7 +659,7 @@ struct StorageEmitter {
         if (const AstNode* anchor = node.as_spill_ref_anchor_expr(); anchor != nullptr) {
           emit(*anchor, out);
         } else {
-          FormatRef(node.as_spill_ref(), out);
+          append_a1(node.as_spill_ref(), out);
         }
         out.push_back(')');
         return;

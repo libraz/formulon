@@ -252,7 +252,7 @@ AstNode* Parser::parse_array_literal_atom() {
     switch (k2) {
       case TokenKind::Number: {
         const Token& nt = advance();
-        const double signed_val = (have_prefix && prefix_op == UnaryOp::Minus) ? -nt.number : nt.number;
+        const double signed_val = prefix_op == UnaryOp::Minus ? -nt.number : nt.number;
         return make_literal_at(arena_, Value::number(signed_val), nt.range);
       }
       case TokenKind::Bool: {
@@ -291,6 +291,16 @@ AstNode* Parser::parse_array_literal_atom() {
     }
   };
 
+  auto append_element = [&]() -> bool {
+    AstNode* el = parse_element();
+    if (el == nullptr) {
+      return false;
+    }
+    elements.push_back(el);
+    ++cur_row_cols;
+    return true;
+  };
+
   AstNode* first = parse_element();
   if (first == nullptr) {
     return nullptr;
@@ -308,12 +318,9 @@ AstNode* Parser::parse_array_literal_atom() {
     }
     if (k == TokenKind::Comma) {
       advance();
-      AstNode* el = parse_element();
-      if (el == nullptr) {
+      if (!append_element()) {
         return nullptr;
       }
-      elements.push_back(el);
-      ++cur_row_cols;
       continue;
     }
     if (k == TokenKind::Semicolon) {
@@ -334,12 +341,9 @@ AstNode* Parser::parse_array_literal_atom() {
       cur_row_cols = 0;
       ++rows;
       advance();
-      AstNode* el = parse_element();
-      if (el == nullptr) {
+      if (!append_element()) {
         return nullptr;
       }
-      elements.push_back(el);
-      ++cur_row_cols;
       continue;
     }
     if (k == TokenKind::Eof) {

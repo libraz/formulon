@@ -3,7 +3,7 @@
 // them are rendered here; leaves that carry no cell reference (literals,
 // stored-form structured references, array constants) are delegated to
 // `format_formula`. A cell-shaped name prints bare: in R1C1 it is no cell.
-// Parenthesis counts come from `collect_parenthesized_nodes`, so grouping
+// Parenthesis counts come from `detail::CollectParens`, so grouping
 // matches the A1 formatter exactly.
 
 #include "parser/ast_format_r1c1.h"
@@ -20,6 +20,7 @@
 #include "parser/formula_prefix.h"
 #include "parser/reference.h"
 #include "parser/structured_ref_payload.h"
+#include "parser/structured_ref_spelling.h"
 #include "sheet_name.h"
 
 namespace formulon {
@@ -170,15 +171,12 @@ struct Emitter {
   // Only reached with `display` set; a payload that does not parse prints as stored.
   void emit_structured_ref(const AstNode& node, std::string& out) const {
     const std::string_view table = node.as_structured_ref_table();
-    const std::optional<StructuredRefPayload> payload =
-        parse_structured_ref_payload_text(node.as_structured_ref_column());
-    if (!payload) {
+    const std::optional<std::string> text = display_structured_ref_node(node, display->own_table, display->table_list);
+    if (!text) {
       out.append(table).append("[").append(node.as_structured_ref_column()).push_back(']');
       return;
     }
-    const bool inside =
-        !display->own_table.empty() && sheet_names::NameList::denotes(display->table_list, table, display->own_table);
-    out.append(display_structured_ref(table, *payload, inside));
+    out.append(*text);
   }
 
   void emit_bare(const AstNode& node, std::string& out) const {
@@ -329,7 +327,7 @@ std::string format_formula_r1c1(const AstNode& node, std::uint32_t anchor_row, s
     return std::string(display_name(ErrorCode::Ref));
   }
   Emitter emitter{{static_cast<std::int64_t>(anchor_row), static_cast<std::int64_t>(anchor_col)}, {}, display};
-  collect_parenthesized_nodes(node, emitter.parens);
+  detail::CollectParens(node, 0, emitter.parens);
   std::string out;
   out.reserve(64);
   emitter.emit(node, out);

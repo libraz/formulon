@@ -16,13 +16,9 @@ namespace {
 
 constexpr std::size_t kMaxIndexDigits = 9;
 
-bool IsSeparator(char c) noexcept {
-  return c == '/' || c == '\\';
-}
-
 // `s` up to and including its last separator; empty when it has none.
 std::string_view DirectoryPrefix(std::string_view s) noexcept {
-  const std::size_t pos = s.find_last_of("/\\");
+  const std::size_t pos = s.find_last_of(detail::kPathSeparators);
   return pos == std::string_view::npos ? std::string_view() : s.substr(0, pos + 1);
 }
 
@@ -224,6 +220,13 @@ std::size_t SelfBookBracketEnd(std::string_view content, std::size_t pos, std::s
   return close + 1;
 }
 
+// Appends the quoted run opening at `i` to `out`; returns the index past it.
+std::size_t CopyQuotedRun(std::string_view text, std::size_t i, char quote, std::string& out) {
+  const std::size_t end = quoted_run_end(text, i, quote);
+  out.append(text.substr(i, end - i));
+  return end;
+}
+
 }  // namespace
 
 std::string percent_decode(std::string_view s) {
@@ -255,9 +258,7 @@ std::string spell_external_books(std::string_view stored, const ExternalBookReso
   while (i < stored.size()) {
     const char c = stored[i];
     if (c == '"') {
-      const std::size_t j = quoted_run_end(stored, i, '"');
-      out.append(stored.substr(i, j - i));
-      i = j;
+      i = CopyQuotedRun(stored, i, '"', out);
       continue;
     }
     if (c == '\'' && depth == 0) {
@@ -269,9 +270,7 @@ std::string spell_external_books(std::string_view stored, const ExternalBookReso
         continue;
       }
       // Copy the quoted name whole so brackets inside it are not scanned.
-      const std::size_t j = quoted_run_end(stored, i, '\'');
-      out.append(stored.substr(i, j - i));
-      i = j;
+      i = CopyQuotedRun(stored, i, '\'', out);
       continue;
     }
     if (c == '[') {
@@ -308,9 +307,7 @@ std::string spell_self_book_names(std::string_view text, std::string_view file_n
   while (i < text.size()) {
     const char c = text[i];
     if (c == '"' || c == '\'') {
-      const std::size_t j = quoted_run_end(text, i, c);
-      out.append(text.substr(i, j - i));
-      i = j;
+      i = CopyQuotedRun(text, i, c, out);
       continue;
     }
     if (text.compare(i, kQualifierLen, detail::kSelfBookQualifier) == 0 && (i == 0 || !ContinuesOperand(text[i - 1])) &&
@@ -338,9 +335,7 @@ std::string bind_self_book_names(std::string_view text, std::string_view file_na
   while (i < text.size()) {
     const char c = text[i];
     if (c == '"') {
-      const std::size_t j = quoted_run_end(text, i, '"');
-      out.append(text.substr(i, j - i));
-      i = j;
+      i = CopyQuotedRun(text, i, '"', out);
       continue;
     }
     if (c == '\'' && depth == 0) {
@@ -411,7 +406,8 @@ std::string display_path_for_link_target(std::string_view target) {
     if (!rest.empty() && rest.front() == '/') {
       // file:///<path>: a drive path or a POSIX absolute path.
       const std::string path = percent_decode(rest.substr(1));
-      const bool drive = path.size() >= 3 && strings::is_ascii_alpha(path[0]) && path[1] == ':' && IsSeparator(path[2]);
+      const bool drive =
+          path.size() >= 3 && strings::is_ascii_alpha(path[0]) && path[1] == ':' && detail::IsPathSeparator(path[2]);
       if (drive) {
         return WithBackslashes(DirectoryPrefix(path));
       }

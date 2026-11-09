@@ -205,7 +205,7 @@ AstNode* Parser::parse_quoted_qualifier_ref(SyncContext ctx) {
   const Token& tok = peek();
   const std::string_view text = tok.text;
   const std::size_t open = text.rfind('[');
-  const bool has_separator = text.find_first_of("/\\") != std::string_view::npos;
+  const bool has_separator = text.find_first_of(detail::kPathSeparators) != std::string_view::npos;
   auto reject = [&]() {
     record_error_with_token(ParseErrorCode::InvalidReference, tok.range, tok.lexeme);
     advance();
@@ -249,7 +249,7 @@ AstNode* Parser::parse_quoted_qualifier_ref(SyncContext ctx) {
   // `'<path>Book.xlsx'!Name`: a book-scope name of another workbook, told
   // apart from a sheet-local name by a directory or a workbook extension.
   if (peek_kind_at(1) == TokenKind::Bang && defined_name_at(2) && (has_separator || HasWorkbookExtension(text))) {
-    const std::size_t split = text.find_last_of("/\\");
+    const std::size_t split = text.find_last_of(detail::kPathSeparators);
     const std::size_t book_begin = split == std::string_view::npos ? 0U : split + 1U;
     if (book_begin == text.size()) {
       return reject();

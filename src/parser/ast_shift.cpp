@@ -736,9 +736,6 @@ FormulaRewriteResult rewrite_formula(std::string_view formula, const RefTransfor
 }
 
 const AstNode* shift_relative_refs(const AstNode& root, Arena& arena, std::int32_t row_delta, std::int32_t col_delta) {
-  if (!ast_depth_within_limit(root, kMaxFormulaAstDepth)) {
-    return MakeRefError(arena);
-  }
   return shift_refs(root, arena, RelativeShiftTransform(row_delta, col_delta));
 }
 

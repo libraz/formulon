@@ -78,10 +78,6 @@ const std::string_view* CopyNameArray(Arena& arena, const std::string_view* src,
   return dst;
 }
 
-}  // namespace
-
-namespace {
-
 std::uint64_t ChildCount(const AstNode& node) {
   switch (node.kind()) {
     case NodeKind::UnaryOp:
@@ -664,7 +660,7 @@ AstNode* make_array_literal(Arena& arena, std::uint32_t rows, std::uint32_t cols
   FM_CHECK(elems_row_major != nullptr, "make_array_literal: elements must be non-null");
   const std::uint32_t total = rows * cols;
   // Overflow guard: if rows * cols overflows uint32 we cannot represent it.
-  FM_CHECK(rows == 0 || total / rows == cols, "make_array_literal: rows*cols overflow");
+  FM_CHECK(total / rows == cols, "make_array_literal: rows*cols overflow");
   const AstNode* const* copied = CopyChildArray(arena, elems_row_major, total);
   if (copied == nullptr) {
     return nullptr;

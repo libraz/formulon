@@ -266,7 +266,7 @@ const std::vector<Token>& Tokenizer::tokens() {
 
     // Mid-input BOM: consume the 3 bytes (or 2 for UTF-16 LE) and record an
     // error. We handle UTF-8 BOM here because the sentinel is unambiguous.
-    if (source_.substr(byte_pos_, detail::kUtf8Bom.size()) == detail::kUtf8Bom) {
+    if (c == 0xEFU && source_.substr(byte_pos_, detail::kUtf8Bom.size()) == detail::kUtf8Bom) {
       const std::size_t err_start = byte_pos_;
       mark_start();
       // `advance_one()` (rather than a manual `byte_pos_ += 3`) is required
@@ -290,7 +290,7 @@ const std::vector<Token>& Tokenizer::tokens() {
     // Non-whitespace "space-like" bytes that Excel doesn't accept. Fullwidth
     // space U+3000 (0xE3 0x80 0x80) falls into this bucket because we must
     // not confuse it with the intersection operator.
-    if (source_.substr(byte_pos_, detail::kIdeographicSpace.size()) == detail::kIdeographicSpace) {
+    if (c == 0xE3U && source_.substr(byte_pos_, detail::kIdeographicSpace.size()) == detail::kIdeographicSpace) {
       const std::size_t err_start = byte_pos_;
       // Mark the range start before advancing past the codepoint, so
       // `start_utf16_` reflects `err_start` rather than the previous token.
@@ -533,6 +533,10 @@ Tokenizer::CodepointInfo Tokenizer::peek_codepoint(std::size_t i) const noexcept
 }
 
 std::size_t Tokenizer::length_capped_end(std::size_t start) const noexcept {
+  // UTF-16 units never exceed the byte count, so a short enough tail cannot hit the cap.
+  if (start <= source_.size() && source_.size() - start <= opts_.max_formula_length_utf16) {
+    return source_.size();
+  }
   std::uint32_t units = 0;
   std::size_t pos = start;
   while (pos < source_.size()) {

@@ -56,11 +56,6 @@ void AppendNameSheetQualifier(const AstNode& node, std::string& out) {
 
 }  // namespace
 
-// Case-insensitive: Excel folds ASCII case on name resolution.
-bool InScope(const NameScope& scope, std::string_view bare) {
-  return detail::ContainsNameIgnoreCase(scope, bare);
-}
-
 bool HasParamPrefix(std::string_view name) noexcept {
   return strings::case_insensitive_starts_with(name, kParamPrefix);
 }
@@ -99,7 +94,7 @@ bool AppendCellShapedName(std::string_view raw, const NameScope& scope, std::str
   if (!is_a1_cell_shaped(bare)) {
     return false;
   }
-  const bool bound = cell_shaped_name_prefix(raw) != kNamePrefix && InScope(scope, bare);
+  const bool bound = cell_shaped_name_prefix(raw) != kNamePrefix && detail::ContainsNameIgnoreCase(scope, bare);
   out.append(bound ? kParamPrefix : kNamePrefix);
   out.append(bare);
   return true;

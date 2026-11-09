@@ -65,15 +65,12 @@ std::string Splice(std::string_view text, std::size_t body_at, const std::vector
 void CollectDisplay(const AstNode& node, std::string_view body, std::string_view own_table,
                     const sheet_names::NameList* table_list, std::vector<Edit>* edits) {
   if (node.kind() == NodeKind::StructuredRef) {
-    const std::optional<StructuredRefPayload> payload =
-        parse_structured_ref_payload_text(node.as_structured_ref_column());
-    if (!payload) {
+    std::optional<std::string> text = display_structured_ref_node(node, own_table, table_list);
+    if (!text) {
       return;
     }
-    const std::string_view table = node.as_structured_ref_table();
-    const bool inside = !own_table.empty() && sheet_names::NameList::denotes(table_list, table, own_table);
     Edit edit = NodeSpan(node, body);
-    edit.text = display_structured_ref(table, *payload, inside);
+    edit.text = std::move(*text);
     if (body.substr(edit.start, edit.end - edit.start) != edit.text) {
       edits->push_back(std::move(edit));
     }
@@ -153,6 +150,18 @@ struct BindWalk {
 };
 
 }  // namespace
+
+std::optional<std::string> display_structured_ref_node(const AstNode& node, std::string_view own_table,
+                                                       const sheet_names::NameList* table_list) {
+  const std::optional<StructuredRefPayload> payload =
+      parse_structured_ref_payload_text(node.as_structured_ref_column());
+  if (!payload) {
+    return std::nullopt;
+  }
+  const std::string_view table = node.as_structured_ref_table();
+  const bool inside = !own_table.empty() && sheet_names::NameList::denotes(table_list, table, own_table);
+  return display_structured_ref(table, *payload, inside);
+}
 
 std::string display_structured_refs(std::string_view text, std::string_view own_table,
                                     const sheet_names::NameList* table_list) {
