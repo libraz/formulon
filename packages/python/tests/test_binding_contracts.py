@@ -130,16 +130,16 @@ class FormulonErrorStatusTests(unittest.TestCase):
     def test_paginate_null_result_raises_formulon_error_with_status(self) -> None:
         """The defensive null-handle path must not raise ValueError."""
         with Workbook.create_default() as wb:
-            # Force `fm_sheet_get_pagination` to report success while leaving
+            # Force `fm_sheet_paginate` to report success while leaving
             # the out-slot at 0, which is the branch under test.
-            real_paginate = _c.LIB.fm_sheet_get_pagination
+            real_paginate = _c.LIB.fm_sheet_paginate
 
             def fake_paginate(handle, sheet, out):
                 real_paginate(handle, sheet, out)
                 _c.LIB.write_bytes(out, b"\x00\x00\x00\x00")
                 return 0
 
-            with mock.patch.object(_c.LIB, "fm_sheet_get_pagination", fake_paginate, create=True):
+            with mock.patch.object(_c.LIB, "fm_sheet_paginate", fake_paginate, create=True):
                 with self.assertRaises(FormulonError) as caught:
                     wb.sheet(0).get_pagination()
         self.assertEqual(caught.exception.code, 7001)
@@ -1224,7 +1224,7 @@ class AbiScratchBlockTests(unittest.TestCase):
             wb.set_defined_name(DefinedNameInput("_xlnm.Print_Area", "Sheet1!$A$1:$C$5", 0))
             out = _c.LIB.alloc(4)
             try:
-                self.assertEqual(_c.LIB.fm_sheet_get_pagination(wb._require(), 0, out), 0)
+                self.assertEqual(_c.LIB.fm_sheet_paginate(wb._require(), 0, out), 0)
                 pagination = _c.LIB.read_u32(out)
                 self.assertNotEqual(pagination, 0)
                 try:

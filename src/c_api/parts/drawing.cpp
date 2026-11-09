@@ -3,7 +3,6 @@
 // objects, reading and inserting pictures, and moving, reordering,
 // capturing, restoring and removing pictures and charts.
 
-#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <string>
@@ -33,7 +32,6 @@ using formulon::c_api::parts::edit_as_from_c;
 using formulon::c_api::parts::fill_anchor;
 using formulon::c_api::parts::finish_status;
 using formulon::c_api::parts::fresh_read_scratch;
-using formulon::c_api::parts::not_found;
 using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::set_last_error;
@@ -86,7 +84,7 @@ extern "C" fm_status_t fm_sheet_get_drawing_object_count(const fm_workbook_t* wb
 }
 
 extern "C" fm_status_t fm_sheet_get_drawing_object_at(const fm_workbook_t* wb, size_t sheet_index, size_t idx,
-                                                      fm_drawing_object_t* out) {
+                                                      fm_drawing_object_info_t* out) {
   clear_last_error();
   if (out == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "out is NULL");
@@ -108,7 +106,7 @@ extern "C" fm_status_t fm_sheet_get_drawing_object_at(const fm_workbook_t* wb, s
   const formulon::DrawingObject& obj = list[idx];
   TextStore& store = fresh_read_scratch(wb);
   const std::uint32_t struct_size = out->struct_size;
-  *out = fm_drawing_object_t{};
+  *out = fm_drawing_object_info_t{};
   out->struct_size = struct_size;
   out->object_id = obj.object_id;
   out->kind = static_cast<int32_t>(obj.kind);
@@ -119,12 +117,12 @@ extern "C" fm_status_t fm_sheet_get_drawing_object_at(const fm_workbook_t* wb, s
   out->image_format = static_cast<int32_t>(obj.image_format);
   out->name = store_cstr(store, obj.name);
   out->description = store_cstr(store, obj.descr);
-  out->media_path = store_cstr(store, obj.media_path);
+  out->media_path = obj.kind == formulon::DrawingObjectKind::kPicture ? store_cstr(store, obj.media_path) : nullptr;
   return 0;
 }
 
 extern "C" fm_status_t fm_sheet_get_drawing_object(const fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
-                                                   int32_t* out_present, fm_drawing_object_t* out) {
+                                                   int32_t* out_present, fm_drawing_object_info_t* out) {
   clear_last_error();
   if (out_present == nullptr || out == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "out is NULL");
@@ -137,7 +135,7 @@ extern "C" fm_status_t fm_sheet_get_drawing_object(const fm_workbook_t* wb, size
   }
   *out_present = 0;
   const std::uint32_t struct_size = out->struct_size;
-  *out = fm_drawing_object_t{};
+  *out = fm_drawing_object_info_t{};
   out->struct_size = struct_size;
   auto objects = formulon::list_drawing_objects(wb->workbook(), sheet_index);
   if (!objects) {
@@ -205,6 +203,9 @@ extern "C" fm_status_t fm_sheet_add_picture(fm_workbook_t* wb, size_t sheet_inde
   if (bytes == nullptr || opts == nullptr || out_object_id == nullptr) {
     return null_argument();
   }
+  if (auto rc = check_record_size(*opts); rc != 0) {
+    return rc;
+  }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
@@ -238,22 +239,6 @@ extern "C" fm_status_t fm_sheet_remove_drawing(fm_workbook_t* wb, size_t sheet_i
   clear_last_error();
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
-  }
-  // A drawing that cannot be edited keeps its own status ahead of the lookup.
-  if (auto path = formulon::editable_drawing_path(wb->workbook(), sheet_index); !path) {
-    return set_last_error(path.error());
-  }
-  auto objects = formulon::list_drawing_objects(wb->workbook(), sheet_index);
-  if (!objects) {
-    return set_last_error(objects.error());
-  }
-  const std::vector<formulon::DrawingObject>& list = objects.value();
-  const bool present = std::any_of(list.begin(), list.end(), [object_id](const formulon::DrawingObject& obj) {
-    return obj.object_id == object_id &&
-           (obj.kind == formulon::DrawingObjectKind::kPicture || obj.kind == formulon::DrawingObjectKind::kChart);
-  });
-  if (!present) {
-    return not_found("no picture or chart with that id", "object_id=" + std::to_string(object_id));
   }
   return finish_status(formulon::remove_drawing(wb->workbook(), sheet_index, object_id));
 }
@@ -298,13 +283,13 @@ extern "C" fm_status_t fm_sheet_set_drawing_name(fm_workbook_t* wb, size_t sheet
 }
 
 extern "C" fm_status_t fm_sheet_set_drawing_z_order(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
-                                                    size_t index) {
+                                                    size_t z_order_index) {
   clear_last_error();
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
   return finish_status(formulon::set_drawing_z_order(wb->workbook(), sheet_index, object_id,
-                                                     formulon::c_api::parts::saturate_index(index)));
+                                                     formulon::c_api::parts::saturate_index(z_order_index)));
 }
 
 extern "C" fm_status_t fm_sheet_snapshot_drawing(const fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,

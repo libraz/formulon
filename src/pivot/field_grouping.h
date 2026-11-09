@@ -135,7 +135,7 @@ Expected<std::size_t, Error> ungroup_cache_field(PivotCache& cache, std::size_t 
 /// pivot on the same cache gains the group fields. On this pivot they take
 /// the base's place on its axis, coarsest outermost; on the others they are
 /// inserted before the base, which stays innermost. Errors as
-/// `group_cache_by_date`, plus `kInvalidArgument` for an index out of range.
+/// `group_cache_by_date`, plus `kSheetIndexOutOfRange` / `kIndexOutOfRange` for an index out of range.
 Expected<void, Error> set_date_group(Workbook& wb, std::size_t sheet, std::size_t pivot, std::size_t field,
                                      std::uint32_t periods, CalendarSystem calendar, std::uint32_t interval_days,
                                      std::optional<double> start, std::optional<double> end);
@@ -143,7 +143,7 @@ Expected<void, Error> set_date_group(Workbook& wb, std::size_t sheet, std::size_
 /// Removes the date grouping of `field` (a base field or one of its group
 /// fields) from every pivot on its cache; the base returns to the axis
 /// position its group fields held. A field without grouping is left as is.
-/// `kInvalidArgument` for an index out of range, `kPreconditionFailed` as
+/// `kSheetIndexOutOfRange` / `kIndexOutOfRange` for an index out of range, `kPreconditionFailed` as
 /// `ungroup_cache_field`.
 Expected<void, Error> clear_date_group(Workbook& wb, std::size_t sheet, std::size_t pivot, std::size_t field);
 

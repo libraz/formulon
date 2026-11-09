@@ -108,41 +108,43 @@ TEST(OoxmlPrintAuthoring, EmptyWorkbookToFullyConfiguredReport) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   ASSERT_EQ(fm_sheet_set_text(wb.handle, 0, 0, 0, "\xE5\xA3\xB2\xE4\xB8\x8A"), 0);  // 売上
 
-  fm_page_setup_t setup = FM_STRUCT_INIT(fm_page_setup_t);
-  setup.paper_size_engaged = 1;
+  fm_page_setup_patch_t setup = FM_STRUCT_INIT(fm_page_setup_patch_t);
+  setup.paper_size_op = FM_PATCH_OP_SET;
   setup.paper_size = 9;  // A4
-  setup.orientation_engaged = 1;
+  setup.orientation_op = FM_PATCH_OP_SET;
   setup.orientation = FM_PAGE_ORIENTATION_PORTRAIT;
-  setup.fit_to_page_engaged = 1;
+  setup.fit_to_page_op = FM_PATCH_OP_SET;
   setup.fit_to_page = 1;
-  setup.fit_to_width_engaged = 1;
+  setup.fit_to_width_op = FM_PATCH_OP_SET;
   setup.fit_to_width = 1;
-  setup.fit_to_height_engaged = 1;
+  setup.fit_to_height_op = FM_PATCH_OP_SET;
   setup.fit_to_height = 0;
   ASSERT_EQ(fm_sheet_update_page_setup(wb.handle, 0, &setup), 0);
 
-  fm_page_margins_t margins = FM_STRUCT_INIT(fm_page_margins_t);
-  margins.left_in_engaged = 1;
+  fm_page_margins_patch_t margins = FM_STRUCT_INIT(fm_page_margins_patch_t);
+  margins.left_in_op = FM_PATCH_OP_SET;
   margins.left_in = 0.5;
-  margins.right_in_engaged = 1;
+  margins.right_in_op = FM_PATCH_OP_SET;
   margins.right_in = 0.5;
-  margins.top_in_engaged = 1;
+  margins.top_in_op = FM_PATCH_OP_SET;
   margins.top_in = 0.8;
-  margins.bottom_in_engaged = 1;
+  margins.bottom_in_op = FM_PATCH_OP_SET;
   margins.bottom_in = 0.8;
-  margins.header_in_engaged = 1;
+  margins.header_in_op = FM_PATCH_OP_SET;
   margins.header_in = 0.3;
-  margins.footer_in_engaged = 1;
+  margins.footer_in_op = FM_PATCH_OP_SET;
   margins.footer_in = 0.3;
   ASSERT_EQ(fm_sheet_update_page_margins(wb.handle, 0, &margins), 0);
 
-  fm_print_options_t options = FM_STRUCT_INIT(fm_print_options_t);
-  options.horizontal_centered_engaged = 1;
+  fm_print_options_patch_t options = FM_STRUCT_INIT(fm_print_options_patch_t);
+  options.horizontal_centered_op = FM_PATCH_OP_SET;
   options.horizontal_centered = 1;
   ASSERT_EQ(fm_sheet_update_print_options(wb.handle, 0, &options), 0);
 
-  fm_header_footer_t hf = FM_STRUCT_INIT(fm_header_footer_t);
+  fm_header_footer_patch_t hf = FM_STRUCT_INIT(fm_header_footer_patch_t);
+  hf.odd_header_op = FM_PATCH_OP_SET;
   hf.odd_header = "&C\xE6\x9C\x88\xE6\xAC\xA1\xE5\xA0\xB1\xE5\x91\x8A";  // "&C月次報告"
+  hf.odd_footer_op = FM_PATCH_OP_SET;
   hf.odd_footer = "&R&P / &N";
   ASSERT_EQ(fm_sheet_update_header_footer(wb.handle, 0, &hf), 0);
 
@@ -219,9 +221,9 @@ TEST(OoxmlPrintAuthoring, EmptyWorkbookToFullyConfiguredReport) {
   EXPECT_DOUBLE_EQ(read_margins.left_in, 0.5);
   EXPECT_DOUBLE_EQ(read_margins.top_in, 0.8);
 
-  const fm_cell_rect_t* ranges = nullptr;
+  fm_cell_rect_t ranges[1] = {};
   std::size_t range_count = 0;
-  ASSERT_EQ(fm_sheet_get_print_area(reloaded.handle, 0, &ranges, &range_count), 0);
+  ASSERT_EQ(fm_sheet_get_print_area(reloaded.handle, 0, ranges, 1, &range_count), 0);
   ASSERT_EQ(range_count, 1U);
   EXPECT_EQ(ranges[0].last_row, 79U);
   EXPECT_EQ(ranges[0].last_col, 5U);
@@ -337,13 +339,13 @@ TEST(OoxmlPrintAuthoring, TypedPatchOnATemplateKeepsEverythingItDoesNotState) {
   ASSERT_EQ(fm_workbook_load(source.data(), source.size(), &wb.handle), 0);
 
   // Change exactly one attribute.
-  fm_page_setup_t patch = FM_STRUCT_INIT(fm_page_setup_t);
-  patch.orientation_engaged = 1;
+  fm_page_setup_patch_t patch = FM_STRUCT_INIT(fm_page_setup_patch_t);
+  patch.orientation_op = FM_PATCH_OP_SET;
   patch.orientation = FM_PAGE_ORIENTATION_LANDSCAPE;
   ASSERT_EQ(fm_sheet_update_page_setup(wb.handle, 0, &patch), 0);
 
   BufferGuard saved;
-  fm_save_diagnostics_t diagnostics = FM_STRUCT_INIT(fm_save_diagnostics_t);
+  fm_save_diagnostics_info_t diagnostics = FM_STRUCT_INIT(fm_save_diagnostics_info_t);
   ASSERT_EQ(
       fm_workbook_save_with_diagnostics(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len, &diagnostics), 0);
   // The consumer-visible contract for the template route: rewriting print
@@ -387,8 +389,8 @@ TEST(OoxmlPrintAuthoring, FitToPageOnATemplateKeepsTabColorAndCodeName) {
   const std::vector<std::uint8_t> source = BuildTemplatePackage();
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_load(source.data(), source.size(), &wb.handle), 0);
-  fm_page_setup_t fit = FM_STRUCT_INIT(fm_page_setup_t);
-  fit.fit_to_page_engaged = 1;
+  fm_page_setup_patch_t fit = FM_STRUCT_INIT(fm_page_setup_patch_t);
+  fit.fit_to_page_op = FM_PATCH_OP_SET;
   fit.fit_to_page = 1;
   ASSERT_EQ(fm_sheet_update_page_setup(wb.handle, 0, &fit), 0);
 

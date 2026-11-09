@@ -53,7 +53,7 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
   // accepted fragment feeds the structured views, and a rejected one must
   // have left them untouched.
   fm_pagination_t* pagination = nullptr;
-  if (fm_sheet_get_pagination(wb, 0, &pagination) == 0) {
+  if (fm_sheet_paginate(wb, 0, &pagination) == 0) {
     fm_pagination_destroy(pagination);
   }
 

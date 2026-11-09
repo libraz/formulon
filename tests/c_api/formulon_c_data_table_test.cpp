@@ -201,13 +201,17 @@ TEST(FormulonCApiDataTable, ResultCellsReportTheTableFormula) {
   const fm_data_table_t spec = SquaresSpec();
   ASSERT_EQ(fm_sheet_add_data_table(wb.handle, 0, &spec), 0);
   ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
+  int32_t present = 0;
   const char* formula = nullptr;
-  ASSERT_EQ(fm_sheet_get_formula(wb.handle, 0, 3, 1, &formula), 0);
+  ASSERT_EQ(fm_sheet_get_formula(wb.handle, 0, 3, 1, &present, &formula), 0);
+  EXPECT_EQ(present, 1);
   EXPECT_STREQ(formula, "=TABLE(,B1)");
-  ASSERT_EQ(fm_sheet_get_formula_r1c1(wb.handle, 0, 3, 1, &formula), 0);
+  ASSERT_EQ(fm_sheet_get_formula_r1c1(wb.handle, 0, 3, 1, &present, &formula), 0);
+  EXPECT_EQ(present, 1);
   EXPECT_STREQ(formula, "=TABLE(,R[-3]C)");
-  ASSERT_EQ(fm_sheet_get_formula(wb.handle, 0, 3, 0, &formula), 0);
-  EXPECT_STREQ(formula, "");  // A header value.
+  ASSERT_EQ(fm_sheet_get_formula(wb.handle, 0, 3, 0, &present, &formula), 0);
+  EXPECT_EQ(present, 0);  // A header value.
+  EXPECT_EQ(formula, nullptr);
 
   fm_cell_range_t* range = nullptr;
   ASSERT_EQ(fm_sheet_get_cells_in_range(wb.handle, 0, record_arg(fm_cell_rect_t{2, 1, 4, 1}), 0, 0, &range), 0);

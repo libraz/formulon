@@ -24,21 +24,21 @@ TEST(FormulonCApiStyles, CreateEmptySeedsReservedStyleSlots) {
   // Excel reserves fill 0 for `none` and fill 1 for `gray125`, so a caller's
   // own fill must never take either slot; the same holds for font 0 and
   // border 0. A non-zero index is what proves the reserved slots survived.
-  fm_font_record_t font{};
+  fm_font_t font{};
   font.name = "Arial";
   font.size_pt = 12.0;
   std::size_t font_index = 0;
   ASSERT_EQ(fm_workbook_add_font(wb.handle, &font, &font_index), 0);
   EXPECT_GT(font_index, 0U);
 
-  fm_fill_record_t fill{};
+  fm_fill_t fill{};
   fill.pattern = 1U; /* solid */
   fill.foreground = RgbColor(0xFFFF0000U);
   std::size_t fill_index = 0;
   ASSERT_EQ(fm_workbook_add_fill(wb.handle, &fill, &fill_index), 0);
   EXPECT_GT(fill_index, 1U);
 
-  fm_border_record_t border{};
+  fm_border_t border{};
   border.left.style = 1U; /* thin */
   std::size_t border_index = 0;
   ASSERT_EQ(fm_workbook_add_border(wb.handle, &border, &border_index), 0);
@@ -48,7 +48,7 @@ TEST(FormulonCApiStyles, CreateEmptySeedsReservedStyleSlots) {
   xf.font_index = static_cast<uint32_t>(font_index);
   xf.fill_index = static_cast<uint32_t>(fill_index);
   xf.border_index = static_cast<uint32_t>(border_index);
-  std::size_t xf_index = 0;
+  std::uint32_t xf_index = 0;
   ASSERT_EQ(fm_workbook_add_cell_xf(wb.handle, &xf, &xf_index), 0);
   EXPECT_GT(xf_index, 0U);
 
@@ -75,17 +75,17 @@ TEST(FormulonCApiStyles, DefaultFontDeclaresWhatAnUnstyledCellSavesAs) {
 
   // The seeded default is Excel's Calibri 11, and `add_font` can only append
   // beside it -- which is exactly why the declaring entry point exists.
-  fm_font_record_t seeded{};
-  ASSERT_EQ(fm_workbook_get_font(wb.handle, 0, &seeded), 0);
+  fm_font_t seeded{};
+  ASSERT_EQ(fm_workbook_get_font_at(wb.handle, 0, &seeded), 0);
   EXPECT_STREQ(seeded.name, "Calibri");
-  fm_font_record_t appended{};
+  fm_font_t appended{};
   appended.name = "游ゴシック";
   appended.size_pt = 11.0;
   std::size_t appended_index = 0;
   ASSERT_EQ(fm_workbook_add_font(wb.handle, &appended, &appended_index), 0);
   EXPECT_GT(appended_index, 0U);
 
-  fm_font_record_t declared{};
+  fm_font_t declared{};
   declared.name = "游ゴシック";
   declared.size_pt = 11.0;
   declared.has_family = 1;
@@ -95,8 +95,8 @@ TEST(FormulonCApiStyles, DefaultFontDeclaresWhatAnUnstyledCellSavesAs) {
   declared.color = RgbColor(0xFF000000U);
   ASSERT_EQ(fm_workbook_set_default_font(wb.handle, &declared), 0);
 
-  fm_font_record_t read_back{};
-  ASSERT_EQ(fm_workbook_get_font(wb.handle, 0, &read_back), 0);
+  fm_font_t read_back{};
+  ASSERT_EQ(fm_workbook_get_font_at(wb.handle, 0, &read_back), 0);
   EXPECT_STREQ(read_back.name, "游ゴシック");
   EXPECT_EQ(read_back.charset, 128U);
 
@@ -118,20 +118,20 @@ TEST(FormulonCApiStyles, SetFontOverwritesInPlaceAndRejectsAnAbsentIndex) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
 
-  fm_font_record_t added{};
+  fm_font_t added{};
   added.name = "Meiryo";
   added.size_pt = 12.0;
   std::size_t index = 0;
   ASSERT_EQ(fm_workbook_add_font(wb.handle, &added, &index), 0);
   ASSERT_GT(index, 0U);
 
-  fm_font_record_t replacement{};
+  fm_font_t replacement{};
   replacement.name = "MS Gothic";
   replacement.size_pt = 9.0;
   ASSERT_EQ(fm_workbook_set_font(wb.handle, index, &replacement), 0);
 
-  fm_font_record_t read_back{};
-  ASSERT_EQ(fm_workbook_get_font(wb.handle, index, &read_back), 0);
+  fm_font_t read_back{};
+  ASSERT_EQ(fm_workbook_get_font_at(wb.handle, index, &read_back), 0);
   EXPECT_STREQ(read_back.name, "MS Gothic");
   EXPECT_DOUBLE_EQ(read_back.size_pt, 9.0);
 
@@ -152,7 +152,7 @@ TEST(FormulonCApiStyles, FontSchemeSurvivesAReadModifyWriteThroughTheAbi) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
 
-  fm_font_record_t body{};
+  fm_font_t body{};
   body.name = "游ゴシック";
   body.size_pt = 11.0;
   body.has_charset = 1;
@@ -162,9 +162,9 @@ TEST(FormulonCApiStyles, FontSchemeSurvivesAReadModifyWriteThroughTheAbi) {
 
   // The link has to come back out of the projection, or a host that reads a
   // font, edits one field and writes it back silently unlinks it.
-  fm_font_record_t read_back{};
-  ASSERT_EQ(fm_workbook_get_font(wb.handle, 0, &read_back), 0);
-  EXPECT_EQ(read_back.scheme, 2U);
+  fm_font_t read_back{};
+  ASSERT_EQ(fm_workbook_get_font_at(wb.handle, 0, &read_back), 0);
+  EXPECT_EQ(read_back.scheme, 2);
   read_back.size_pt = 12.0;
   ASSERT_EQ(fm_workbook_set_font(wb.handle, 0, &read_back), 0);
 
@@ -175,7 +175,7 @@ TEST(FormulonCApiStyles, FontSchemeSurvivesAReadModifyWriteThroughTheAbi) {
 
   // A record left at the default writes no element, so `add_font` sees a
   // distinct entry rather than folding the two together.
-  fm_font_record_t unlinked{};
+  fm_font_t unlinked{};
   unlinked.name = "游ゴシック";
   unlinked.size_pt = 12.0;
   unlinked.has_charset = 1;
@@ -189,15 +189,15 @@ TEST(FormulonCApiStyles, CreateForProfileSeedsTheLocaleDefaults) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_for_profile("mac-365-ja_JP", &wb.handle), 0);
 
-  fm_font_record_t body{};
-  ASSERT_EQ(fm_workbook_get_font(wb.handle, 0, &body), 0);
+  fm_font_t body{};
+  ASSERT_EQ(fm_workbook_get_font_at(wb.handle, 0, &body), 0);
   EXPECT_STREQ(body.name, "游ゴシック");
   EXPECT_EQ(body.size_pt, 12.0);
   EXPECT_EQ(body.charset, 128U);
-  EXPECT_EQ(body.scheme, 2U);
+  EXPECT_EQ(body.scheme, 2);
 
-  fm_font_record_t phonetic{};
-  ASSERT_EQ(fm_workbook_get_font(wb.handle, 1, &phonetic), 0);
+  fm_font_t phonetic{};
+  ASSERT_EQ(fm_workbook_get_font_at(wb.handle, 1, &phonetic), 0);
   EXPECT_EQ(phonetic.size_pt, 6.0);
 
   const char* profile = nullptr;

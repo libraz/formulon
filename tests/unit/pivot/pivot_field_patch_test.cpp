@@ -71,6 +71,12 @@ class PivotFieldPatchTest : public ::testing::Test {
     EXPECT_EQ(got.error().code, FormulonErrorCode::kInvalidArgument);
   }
 
+  template <typename E>
+  static void ExpectTaken(const E& got) {
+    ASSERT_FALSE(static_cast<bool>(got));
+    EXPECT_EQ(got.error().code, FormulonErrorCode::kAlreadyExists);
+  }
+
   const eval::ScopedEvalProfile scope_{mac_365_ja_jp_profile()};
   Workbook wb_;
   PivotTable table_;
@@ -81,13 +87,13 @@ TEST_F(PivotFieldPatchTest, RefusedFieldPatchWritesNoKey) {
   taken.show_all = true;
   taken.insert_blank_row = true;
   taken.custom_name = "Product";
-  ExpectInvalid(pivot::apply_field_patch(wb_, table_, kRegion, taken));
+  ExpectTaken(pivot::apply_field_patch(wb_, table_, kRegion, taken));
   EXPECT_FALSE(Field(kRegion).show_all);
   EXPECT_FALSE(Field(kRegion).insert_blank_row);
   EXPECT_TRUE(Field(kRegion).custom_name.empty());
 
   taken.custom_name = "sum of amt";
-  ExpectInvalid(pivot::apply_field_patch(wb_, table_, kRegion, taken));
+  ExpectTaken(pivot::apply_field_patch(wb_, table_, kRegion, taken));
   EXPECT_FALSE(Field(kRegion).show_all);
 
   // The field's own source name is not taken.
@@ -166,7 +172,7 @@ TEST_F(PivotFieldPatchTest, RefusedItemPatchWritesNoKey) {
   PivotItemPatch p;
   p.visible = false;
   p.caption = "south";
-  ExpectInvalid(pivot::apply_item_patch(wb_, table_, kRegion, 0U, p));
+  ExpectTaken(pivot::apply_item_patch(wb_, table_, kRegion, 0U, p));
   EXPECT_TRUE(Field(kRegion).items[0].visible);
   EXPECT_TRUE(Field(kRegion).items[0].caption.empty());
 
@@ -178,7 +184,7 @@ TEST_F(PivotFieldPatchTest, RefusedItemPatchWritesNoKey) {
   // Another item may not show a caption already shown; the item's own label removes its caption.
   PivotItemPatch clash;
   clash.caption = "up";
-  ExpectInvalid(pivot::apply_item_patch(wb_, table_, kRegion, 1U, clash));
+  ExpectTaken(pivot::apply_item_patch(wb_, table_, kRegion, 1U, clash));
   PivotItemPatch own;
   own.caption = "North";
   ASSERT_TRUE(static_cast<bool>(pivot::apply_item_patch(wb_, table_, kRegion, 0U, own)));

@@ -42,15 +42,19 @@ fm_status_t BuildFieldOrderPivot(fm_workbook_t* wb, std::size_t* out_pivot_index
 }
 
 std::vector<std::uint32_t> ReadFieldOrder(const fm_workbook_t* wb, std::size_t pivot_index, bool row) {
-  const std::uint32_t* indices = nullptr;
+  const auto read = [&](std::uint32_t* out, std::size_t capacity, std::size_t* count) {
+    return row ? fm_sheet_get_pivot_row_field_order(wb, 0U, pivot_index, out, capacity, count)
+               : fm_sheet_get_pivot_column_field_order(wb, 0U, pivot_index, out, capacity, count);
+  };
   std::size_t count = 0;
-  const fm_status_t status = row ? fm_sheet_get_pivot_row_field_order(wb, 0U, pivot_index, &indices, &count)
-                                 : fm_sheet_get_pivot_column_field_order(wb, 0U, pivot_index, &indices, &count);
+  fm_status_t status = read(nullptr, 0U, &count);
   EXPECT_EQ(status, 0) << fm_get_last_error_message();
-  if (status != 0 || count == 0U) {
-    return {};
+  std::vector<std::uint32_t> indices(count);
+  if (status == 0 && count != 0U) {
+    status = read(indices.data(), indices.size(), &count);
+    EXPECT_EQ(status, 0) << fm_get_last_error_message();
   }
-  return {indices, indices + count};
+  return status == 0 ? indices : std::vector<std::uint32_t>{};
 }
 
 formulon::pivot::PivotTable& GetPivot(WorkbookGuard& wb, std::size_t pivot_index) {
@@ -60,7 +64,7 @@ formulon::pivot::PivotTable& GetPivot(WorkbookGuard& wb, std::size_t pivot_index
 void ExpectAxes(const fm_workbook_t* wb, std::size_t pivot_index, const std::array<std::int32_t, kFieldCount>& axes) {
   for (std::size_t i = 0; i < axes.size(); ++i) {
     fm_pivot_field_info_t field = FM_STRUCT_INIT(fm_pivot_field_info_t);
-    ASSERT_EQ(fm_sheet_get_pivot_field(wb, 0U, pivot_index, i, &field), 0) << fm_get_last_error_message();
+    ASSERT_EQ(fm_sheet_get_pivot_field_at(wb, 0U, pivot_index, i, &field), 0) << fm_get_last_error_message();
     EXPECT_EQ(field.axis, axes[i]) << "field=" << i;
   }
 }
@@ -111,19 +115,36 @@ TEST(FormulonCApiPivotFieldOrder, AcceptsGetterOrderAsTheOtherAxisInput) {
   const std::uint32_t original[] = {0U, 1U};
   ASSERT_EQ(fm_sheet_set_pivot_row_field_order(wb.handle, 0U, pivot_index, original, 2U), 0)
       << fm_get_last_error_message();
-  const std::uint32_t* borrowed_row_order = nullptr;
+  std::uint32_t borrowed_row_order[8] = {};
   std::size_t count = 0;
-  ASSERT_EQ(fm_sheet_get_pivot_row_field_order(wb.handle, 0U, pivot_index, &borrowed_row_order, &count), 0);
+  ASSERT_EQ(fm_sheet_get_pivot_row_field_order(wb.handle, 0U, pivot_index, borrowed_row_order, 8U, &count), 0);
   ASSERT_EQ(count, 2U);
 
-  // The getter exposes borrowed storage. Replacing the opposite axis with that
-  // storage is a valid C API call even though the operation removes from it.
+  // The getter's listing is a valid input for the opposite axis, even though
+  // the operation removes those fields from the axis it was read from.
   ASSERT_EQ(fm_sheet_set_pivot_column_field_order(wb.handle, 0U, pivot_index, borrowed_row_order, count), 0)
       << fm_get_last_error_message();
   EXPECT_TRUE(ReadFieldOrder(wb.handle, pivot_index, true).empty());
   EXPECT_EQ(ReadFieldOrder(wb.handle, pivot_index, false), (std::vector<std::uint32_t>{0U, 1U}));
   ExpectAxes(wb.handle, pivot_index,
              {FM_PIVOT_AXIS_COL, FM_PIVOT_AXIS_COL, FM_PIVOT_AXIS_VALUE, FM_PIVOT_AXIS_VALUE, FM_PIVOT_AXIS_VALUE});
+}
+
+TEST(FormulonCApiPivotFieldOrder, ASmallerBufferTakesThePrefixAndReportsTheFullCount) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  std::size_t pivot_index = 0;
+  ASSERT_EQ(BuildFieldOrderPivot(wb.handle, &pivot_index), 0) << fm_get_last_error_message();
+  const std::uint32_t order[] = {1U, 0U};
+  ASSERT_EQ(fm_sheet_set_pivot_row_field_order(wb.handle, 0U, pivot_index, order, 2U), 0)
+      << fm_get_last_error_message();
+
+  std::uint32_t buffer[2] = {77U, 77U};
+  std::size_t count = 0;
+  ASSERT_EQ(fm_sheet_get_pivot_row_field_order(wb.handle, 0U, pivot_index, buffer, 1U, &count), 0);
+  EXPECT_EQ(count, 2U);
+  EXPECT_EQ(buffer[0], 1U);
+  EXPECT_EQ(buffer[1], 77U) << "nothing is written past the capacity";
 }
 
 TEST(FormulonCApiPivotFieldOrder, CompactsOppositeAxisAndAdjustsValuesMarker) {

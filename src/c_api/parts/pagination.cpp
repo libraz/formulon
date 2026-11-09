@@ -33,7 +33,7 @@ struct fm_pagination {
   std::vector<formulon::ManualBreak> declared_col_breaks;
 };
 
-extern "C" fm_status_t fm_sheet_get_pagination(const fm_workbook_t* wb, size_t sheet_index, fm_pagination_t** out) {
+extern "C" fm_status_t fm_sheet_paginate(const fm_workbook_t* wb, size_t sheet_index, fm_pagination_t** out) {
   clear_last_error();
   if (out == nullptr) {
     return null_argument("out");
@@ -187,7 +187,7 @@ extern "C" fm_status_t fm_pagination_get_paper(const fm_pagination_t* pagination
   return 0;
 }
 
-extern "C" fm_status_t fm_pagination_get_margins(const fm_pagination_t* pagination, fm_margins_pt_t* out) {
+extern "C" fm_status_t fm_pagination_get_margins(const fm_pagination_t* pagination, fm_margins_pt_info_t* out) {
   clear_last_error();
   if (pagination == nullptr || out == nullptr) {
     return null_argument();
@@ -205,7 +205,7 @@ extern "C" fm_status_t fm_pagination_get_margins(const fm_pagination_t* paginati
   return 0;
 }
 
-extern "C" fm_status_t fm_pagination_get_printable(const fm_pagination_t* pagination, fm_rect_pt_t* out) {
+extern "C" fm_status_t fm_pagination_get_printable(const fm_pagination_t* pagination, fm_rect_pt_info_t* out) {
   clear_last_error();
   if (pagination == nullptr || out == nullptr) {
     return null_argument();
@@ -261,7 +261,7 @@ extern "C" fm_status_t fm_pagination_get_print_titles(const fm_pagination_t* pag
 }
 
 extern "C" fm_status_t fm_pagination_get_page_at(const fm_pagination_t* pagination, size_t index,
-                                                 fm_page_layout_t* out) {
+                                                 fm_page_layout_info_t* out) {
   clear_last_error();
   if (pagination == nullptr || out == nullptr) {
     return null_argument();

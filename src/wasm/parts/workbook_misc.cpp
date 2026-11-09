@@ -54,7 +54,7 @@ emscripten::val JsWorkbook::trace_to_val(TraceFn fn, uint32_t sheet, uint32_t ro
   std::size_t count = 0;
   fm_status_t rc = fm_cell_nodes_get_node_count(nodes, &count);
   for (std::size_t i = 0; i < count; ++i) {
-    fm_cell_node_t n = FM_STRUCT_INIT(fm_cell_node_t);
+    fm_cell_node_info_t n = FM_STRUCT_INIT(fm_cell_node_info_t);
     rc = fm_cell_nodes_get_node_at(nodes, i, &n);
     if (rc != 0) {
       break;
@@ -84,7 +84,7 @@ emscripten::val JsWorkbook::dependents(uint32_t sheet, uint32_t row, uint32_t co
 
 emscripten::val function_metadata(const std::string& name) {
   int32_t present = 0;
-  fm_function_metadata_t md = FM_STRUCT_INIT(fm_function_metadata_t);
+  fm_function_metadata_info_t md = FM_STRUCT_INIT(fm_function_metadata_info_t);
   const fm_status_t rc = fm_get_function_metadata(name.c_str(), &present, &md);
   if (rc != 0 || present == 0) {
     return optional_or_null(rc, present, emscripten::val::null());
@@ -169,7 +169,7 @@ fm_status_t collect_locale_error_names(const std::string& profile_id, emscripten
 }  // namespace
 
 emscripten::val locale_facts(const std::string& profile_id) {
-  fm_locale_facts_t f = FM_STRUCT_INIT(fm_locale_facts_t);
+  fm_locale_facts_info_t f = FM_STRUCT_INIT(fm_locale_facts_info_t);
   if (!succeeded(fm_get_locale_facts(profile_id.c_str(), &f))) {
     return emscripten::val::undefined();
   }
@@ -222,7 +222,7 @@ emscripten::val JsWorkbook::spillInfo(uint32_t sheet, uint32_t row, uint32_t col
 // ---- Legacy array (CSE) formulas ---------------------------------------
 
 emscripten::val JsWorkbook::getArrayFormula(uint32_t sheet, uint32_t row, uint32_t col) const {
-  fm_array_formula_t info = FM_STRUCT_INIT(fm_array_formula_t);
+  fm_array_formula_info_t info = FM_STRUCT_INIT(fm_array_formula_info_t);
   if (!succeeded(handle_ != nullptr ? fm_sheet_get_array_formula(handle_, sheet, row, col, &info)
                                     : kBindingInvalidHandle)) {
     return emscripten::val::undefined();

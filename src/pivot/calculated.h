@@ -44,20 +44,24 @@ void sync_table_fields(const PivotCache& cache, const std::vector<PivotTable*>& 
 /// Appends calculated field `name` = `formula` (a leading `=` is dropped) and
 /// syncs `tables`. Returns its cache field index.
 ///
-/// Errors: `kInvalidArgument` for an empty, `All` / `Blank`, bracketed or
-/// duplicate name, and for a formula the host rejects or that refers back to
-/// the field through other calculated fields.
+/// Errors: `kInvalidArgument` for an empty, `All` / `Blank` or bracketed
+/// name, and for a formula the host rejects or that refers back to the field
+/// through other calculated fields; `kAlreadyExists` for a name a field
+/// already has.
 Expected<std::size_t, Error> add_calculated_field(PivotCache& cache, const std::vector<PivotTable*>& tables,
                                                   std::string_view name, std::string_view formula,
                                                   PivotFormulaHost& host);
 
-/// Replaces a calculated field's formula. `kInvalidArgument` when `field_index`
-/// is not a calculated field or the formula is rejected as on add.
+/// Replaces a calculated field's formula. `kIndexOutOfRange` for a
+/// `field_index` past the fields; `kInvalidArgument` when it is not a
+/// calculated field or the formula is rejected as on add.
 Expected<void, Error> set_calculated_field_formula(PivotCache& cache, std::size_t field_index, std::string_view formula,
                                                    PivotFormulaHost& host);
 
 /// Removes a calculated field, its data fields in every table, and renumbers
-/// the fields after it. `kPreconditionFailed` while another formula names it.
+/// the fields after it. `kIndexOutOfRange` for a `field_index` past the
+/// fields, `kInvalidArgument` for one that is not calculated,
+/// `kPreconditionFailed` while another formula names it.
 Expected<void, Error> remove_calculated_field(PivotCache& cache, const std::vector<PivotTable*>& tables,
                                               std::size_t field_index, PivotFormulaHost& host);
 
@@ -65,10 +69,10 @@ Expected<void, Error> remove_calculated_field(PivotCache& cache, const std::vect
 /// a calculated shared item, its `<calculatedItem>` entry (last in solve
 /// order) and an item in every table's field. Returns the entry index.
 ///
-/// Errors: `kInvalidArgument` for a bad or duplicate name or a rejected
-/// formula; `kPreconditionFailed` when the field is grouped, calculated, on no
-/// table's axis, or a table summarises with a function that excludes
-/// calculated items.
+/// Errors: `kInvalidArgument` for a bad name or a rejected formula;
+/// `kAlreadyExists` for a name an item already has; `kPreconditionFailed`
+/// when the field is grouped, calculated, on no table's axis, or a table
+/// summarises with a function that excludes calculated items.
 ///
 /// The formula is stored as Excel saves it: bare item names qualified as
 /// `Field[Item]`, everything else as typed.

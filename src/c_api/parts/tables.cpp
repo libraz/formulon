@@ -17,11 +17,9 @@
 #include "c_api/parts/enum_map.h"
 #include "c_api/parts/struct_v1_sizes.h"
 #include "c_api/parts/table_style_defaults.h"
-#include "defined_name.h"
 #include "drawing/slicer_edit.h"
 #include "eval/text_format/display_text.h"
 #include "io/auto_filter_xml.h"
-#include "io/xlsb/table_records.h"
 #include "io/xml_escape.h"
 #include "new_workbook_defaults.h"
 #include "parser/structured_ref_payload.h"
@@ -48,6 +46,8 @@ using formulon::c_api::parts::local_table_index;
 using formulon::c_api::parts::not_found;
 using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::ordinal_of;
+using formulon::c_api::parts::patch_op_ok;
+using formulon::c_api::parts::patch_op_ok_without_clear;
 using formulon::c_api::parts::publish_scratch;
 using formulon::c_api::parts::resolve_sheet_table;
 using formulon::c_api::parts::set_last_error;
@@ -316,34 +316,6 @@ fm_status_t table_column_names(const formulon::Workbook& book, std::size_t sheet
   return 0;
 }
 
-/// True when another table (`self` excepted), a table kept verbatim from an
-/// `.xlsb` file or a defined name of any scope already owns `name`.
-bool table_name_taken(const formulon::Workbook& book, std::string_view name, std::optional<std::size_t> self) {
-  const auto same = [name](std::string_view other) { return formulon::strings::case_insensitive_eq(other, name); };
-  const auto& tables = book.tables();
-  for (std::size_t i = 0; i < tables.size(); ++i) {
-    if (i != self && (same(tables[i].name) || same(tables[i].display_name))) {
-      return true;
-    }
-  }
-  for (const formulon::io::xlsb::XlsbRetainedTable& kept : formulon::io::xlsb::xlsb_retained_tables(book)) {
-    if (same(kept.name) || same(kept.display_name)) {
-      return true;
-    }
-  }
-  for (const formulon::DefinedName& defined : book.defined_names()) {
-    if (same(defined.name)) {
-      return true;
-    }
-  }
-  return false;
-}
-
-fm_status_t already_exists(std::string_view name) {
-  return set_last_error(formulon::make_error(formulon::FormulonErrorCode::kAlreadyExists, "table name already exists",
-                                             "name=" + std::string(name)));
-}
-
 }  // namespace
 
 extern "C" fm_status_t fm_sheet_get_table_count(const fm_workbook_t* wb, size_t sheet_index, size_t* out_count) {
@@ -360,31 +332,46 @@ extern "C" fm_status_t fm_sheet_get_table_count(const fm_workbook_t* wb, size_t 
   return 0;
 }
 
-extern "C" fm_status_t fm_sheet_get_table(const fm_workbook_t* wb, size_t sheet_index, size_t table_index,
-                                          const char** out_name, fm_cell_rect_t* out_rect) {
+extern "C" fm_status_t fm_sheet_get_table_at(const fm_workbook_t* wb, size_t sheet_index, size_t table_index,
+                                             fm_table_info_t* out) {
   clear_last_error();
-  if (wb == nullptr || out_name == nullptr || out_rect == nullptr) {
+  if (wb == nullptr || out == nullptr) {
     return null_argument();
   }
-  std::size_t global = 0;
-  if (auto rc = resolve_sheet_table(wb, sheet_index, table_index, &global); rc != 0) {
+  if (auto rc = check_record_size(*out); rc != 0) {
     return rc;
   }
-  const formulon::TableMetadata& table = wb->workbook().tables()[global];
+  std::size_t index = 0;
+  if (auto rc = resolve_sheet_table(wb, sheet_index, table_index, &index); rc != 0) {
+    return rc;
+  }
+  const formulon::TableMetadata& table = wb->workbook().tables()[index];
   const std::optional<formulon::MergeRange> rect = formulon::parse_a1_rectangle(table.ref);
   if (!rect) {
     return invalid_argument("table ref is not a range", "ref=" + table.ref);
   }
-  *out_name = table.display_name.c_str();
-  *out_rect = to_cell_rect(*rect);
+  const formulon::TableStyleInfo& style = table.style_info;
+  const std::uint32_t struct_size = out->struct_size;
+  *out = fm_table_info_t{};
+  out->struct_size = struct_size;
+  out->name = table.display_name.c_str();
+  out->range = to_cell_rect(*rect);
+  out->style_name = style.present && !style.name.empty() ? style.name.c_str() : nullptr;
+  out->show_first_column = style.present && style.show_first_column ? 1 : 0;
+  out->show_last_column = style.present && style.show_last_column ? 1 : 0;
+  out->show_row_stripes = style.present && style.show_row_stripes ? 1 : 0;
+  out->show_column_stripes = style.present && style.show_column_stripes ? 1 : 0;
+  out->header_row_count = table.header_row ? 1U : 0U;
+  out->totals_row_count = table.totals_row ? 1U : 0U;
+  out->column_count = static_cast<uint32_t>(table.columns.size());
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_find_table(const fm_workbook_t* wb, const char* name, size_t* out_sheet_index,
-                                              size_t* out_table_index, int32_t* out_present) {
+extern "C" fm_status_t fm_workbook_find_table(const fm_workbook_t* wb, const char* name, int32_t* out_present,
+                                              size_t* out_sheet_index, size_t* out_table_index) {
   clear_last_error();
-  if (wb == nullptr || name == nullptr || out_sheet_index == nullptr || out_table_index == nullptr ||
-      out_present == nullptr) {
+  if (wb == nullptr || name == nullptr || out_present == nullptr || out_sheet_index == nullptr ||
+      out_table_index == nullptr) {
     return null_argument();
   }
   if (auto rc = check_utf8({name}); rc != 0) {
@@ -490,9 +477,6 @@ extern "C" fm_status_t fm_sheet_add_table(fm_workbook_t* wb, size_t sheet_index,
       rc != 0) {
     return rc;
   }
-  if (table_name_taken(book, spec->name, std::nullopt)) {
-    return already_exists(spec->name);
-  }
   formulon::TableMetadata table;
   table.sheet_index = sheet_index;
   table.name = spec->name;
@@ -544,78 +528,80 @@ extern "C" fm_status_t fm_sheet_add_table(fm_workbook_t* wb, size_t sheet_index,
 }
 
 extern "C" fm_status_t fm_sheet_update_table(fm_workbook_t* wb, size_t sheet_index, size_t table_index,
-                                             const fm_cell_rect_t* rect, const char* style_name, int32_t header_row,
-                                             int32_t totals_row) {
+                                             const fm_table_patch_t* patch) {
   clear_last_error();
-  if (wb == nullptr || rect == nullptr) {
+  if (wb == nullptr || patch == nullptr) {
     return null_argument();
   }
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
-    return rc;
-  }
-  std::string ref;
-  if (auto rc = table_ref_text(*rect, &ref); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_utf8({style_name}); rc != 0) {
+  if (auto rc = check_record_size(*patch); rc != 0) {
     return rc;
   }
   std::size_t index = 0;
   if (auto rc = resolve_sheet_table(wb, sheet_index, table_index, &index); rc != 0) {
     return rc;
   }
+  // The whole patch is checked before anything changes; no field is clearable.
+  for (const auto& [op, field] : {std::pair<fm_patch_op_t, const char*>{patch->range_op, "range"},
+                                  {patch->header_row_op, "header_row"},
+                                  {patch->totals_row_op, "totals_row"}}) {
+    if (!patch_op_ok_without_clear(op)) {
+      return invalid_argument("patch op out of range or CLEAR", std::string("field=") + field);
+    }
+  }
+  for (const auto& [op, value, field] :
+       {std::tuple<fm_patch_op_t, int32_t, const char*>{patch->header_row_op, patch->header_row, "header_row"},
+        {patch->totals_row_op, patch->totals_row, "totals_row"}}) {
+    if (op == FM_PATCH_OP_SET && value != 0 && value != 1) {
+      return invalid_argument("row flag must be 0 or 1", std::string("field=") + field);
+    }
+  }
   formulon::TableMetadata& table = wb->workbook().mutable_tables()[index];
-  if (!table.columns.empty() && table_ref_column_count(ref) != table.columns.size()) {
-    return invalid_argument("ref width does not match the table's column count",
-                            "ref=" + std::string(ref) + " column_count=" + std::to_string(table.columns.size()));
-  }
-
-  if (const std::optional<formulon::MergeRange> next_rect = formulon::parse_a1_rectangle(ref)) {
-    if (auto checked = wb->workbook().check_table_resize(index, *next_rect); !checked) {
-      return finish_status(checked);
-    }
-  }
-
-  // Compute every replacement before committing any metadata. In
-  // particular, a raw style payload survives a NULL style_name, while an
-  // empty string explicitly removes it.
-  const std::string next_ref = ref;
+  std::string next_ref = table.ref;
   formulon::AutoFilterSlot next_auto_filter = table.auto_filter_xml;
-  const std::optional<formulon::MergeRange> next_range = formulon::parse_a1_rectangle(next_ref);
-  if (formulon::AutoFilter* filter = next_auto_filter.get();
-      filter != nullptr && !filter->is_opaque() && next_range.has_value()) {
-    filter->range = *next_range;
-  } else {
-    next_auto_filter.set(formulon::io::auto_filter_from_xml(
-        table_auto_filter_xml(formulon::io::auto_filter_xml(next_auto_filter.get()), next_ref)));
-  }
-  formulon::TableStyleInfo next_style = table.style_info;
-  if (style_name != nullptr) {
-    if (style_name[0] == '\0') {
-      next_style = formulon::TableStyleInfo{};
-    } else if (next_style.present) {
-      next_style.name = style_name;
+  const bool range_set = patch->range_op == FM_PATCH_OP_SET;
+  if (range_set) {
+    if (auto rc = table_ref_text(patch->range, &next_ref); rc != 0) {
+      return rc;
+    }
+    if (!table.columns.empty() && table_ref_column_count(next_ref) != table.columns.size()) {
+      return invalid_argument("ref width does not match the table's column count",
+                              "ref=" + next_ref + " column_count=" + std::to_string(table.columns.size()));
+    }
+    const std::optional<formulon::MergeRange> next_range = formulon::parse_a1_rectangle(next_ref);
+    if (next_range) {
+      if (auto checked = wb->workbook().check_table_resize(index, *next_range); !checked) {
+        return finish_status(checked);
+      }
+    }
+    if (formulon::AutoFilter* filter = next_auto_filter.get();
+        filter != nullptr && !filter->is_opaque() && next_range.has_value()) {
+      filter->range = *next_range;
     } else {
-      next_style = default_style_info(style_name);
+      next_auto_filter.set(formulon::io::auto_filter_from_xml(
+          table_auto_filter_xml(formulon::io::auto_filter_xml(next_auto_filter.get()), next_ref)));
     }
   }
-  const bool next_header_row = header_row < 0 ? table.header_row : header_row > 0;
-  const bool next_totals_row = totals_row < 0 ? table.totals_row : totals_row > 0;
+  const bool next_header_row = patch->header_row_op == FM_PATCH_OP_SET ? patch->header_row == 1 : table.header_row;
+  const bool next_totals_row = patch->totals_row_op == FM_PATCH_OP_SET ? patch->totals_row == 1 : table.totals_row;
+  if (!range_set && next_header_row == table.header_row && next_totals_row == table.totals_row) {
+    return 0;
+  }
   const bool totals_turned_on = next_totals_row && !table.totals_row;
 
-  table.ref = next_ref;
+  table.ref = std::move(next_ref);
   table.header_row = next_header_row;
   table.totals_row = next_totals_row;
   if (totals_turned_on) {
     // Shown now, so the "never shown" marker no longer applies.
     table.totals_row_shown.reset();
   }
-  table.auto_filter_xml = std::move(next_auto_filter);
-  table.style_info = std::move(next_style);
-  // The `ref` just changed, so every structured reference into this table
-  // resolves to a different rectangle (`eval/dep_extractor.cpp`); reindex
-  // the formulas that name it rather than leave their dep-graph edges and
-  // cached values pointing at the pre-edit extent.
+  if (range_set) {
+    table.auto_filter_xml = std::move(next_auto_filter);
+  }
+  // The table's extent or row layout changed, so every structured reference
+  // into it may resolve differently (`eval/dep_extractor.cpp`); reindex the
+  // formulas that name it rather than leave their dep-graph edges and cached
+  // values pointing at the pre-edit shape.
   wb->workbook().reindex_formulas_for_table_change({table.name, table.display_name});
   wb->workbook().mark_row_visibility_dependents_dirty();
   if (totals_turned_on) {
@@ -657,38 +643,8 @@ extern "C" fm_status_t fm_sheet_remove_table(fm_workbook_t* wb, size_t sheet_ind
   return 0;
 }
 
-extern "C" fm_status_t fm_sheet_get_table_info(const fm_workbook_t* wb, size_t sheet_index, size_t table_index,
-                                               fm_table_info_t* out) {
-  clear_last_error();
-  if (wb == nullptr || out == nullptr) {
-    return null_argument();
-  }
-  if (auto rc = check_record_size(*out); rc != 0) {
-    return rc;
-  }
-  std::size_t index = 0;
-  if (auto rc = resolve_sheet_table(wb, sheet_index, table_index, &index); rc != 0) {
-    return rc;
-  }
-  const formulon::TableMetadata& table = wb->workbook().tables()[index];
-  const formulon::TableStyleInfo& style = table.style_info;
-  const std::uint32_t struct_size = out->struct_size;
-  *out = fm_table_info_t{};
-  out->struct_size = struct_size;
-  out->style_name = style.name.c_str();
-  out->style_present = style.present ? 1 : 0;
-  out->show_first_column = style.present && style.show_first_column ? 1 : 0;
-  out->show_last_column = style.present && style.show_last_column ? 1 : 0;
-  out->show_row_stripes = style.present && style.show_row_stripes ? 1 : 0;
-  out->show_column_stripes = style.present && style.show_column_stripes ? 1 : 0;
-  out->header_row_count = table.header_row ? 1U : 0U;
-  out->totals_row_count = table.totals_row ? 1U : 0U;
-  out->column_count = static_cast<uint32_t>(table.columns.size());
-  return 0;
-}
-
-extern "C" fm_status_t fm_sheet_get_table_column(const fm_workbook_t* wb, size_t sheet_index, size_t table_index,
-                                                 size_t column, fm_table_column_info_t* out) {
+extern "C" fm_status_t fm_sheet_get_table_column_at(const fm_workbook_t* wb, size_t sheet_index, size_t table_index,
+                                                    size_t column_index, fm_table_column_info_t* out) {
   clear_last_error();
   if (wb == nullptr || out == nullptr) {
     return null_argument();
@@ -702,18 +658,18 @@ extern "C" fm_status_t fm_sheet_get_table_column(const fm_workbook_t* wb, size_t
   }
   const auto& tables = wb->workbook().tables();
   const auto& columns = tables[index].columns;
-  if (auto rc = check_index(column, columns.size(), "column"); rc != 0) {
+  if (auto rc = check_index(column_index, columns.size(), "column_index"); rc != 0) {
     return rc;
   }
-  const formulon::TableColumn& col = columns[column];
+  const formulon::TableColumn& col = columns[column_index];
   out->name = col.name.c_str();
   out->totals_row_function =
       ordinal_of(kTotalsRowFunctionTokens, col.totals_function, FM_TABLE_TOTALS_ROW_FUNCTION_NONE);
-  out->totals_row_label = col.totals_label.c_str();
+  out->totals_row_label = col.totals_label.empty() ? nullptr : col.totals_label.c_str();
   // The formula sits in the table's totals row, so it is shown from inside the table.
   out->totals_row_formula =
       col.totals_row_formula.empty()
-          ? col.totals_row_formula.c_str()
+          ? nullptr
           : publish_scratch(wb, with_formula_prefix(display_formula_text(wb->workbook(), col.totals_row_formula,
                                                                          tables[index].display_name)));
   return 0;
@@ -747,19 +703,15 @@ extern "C" fm_status_t fm_sheet_get_table_style_options(const fm_workbook_t* wb,
 
 namespace {
 
-bool patch_op_valid(int32_t op) {
-  return op >= FM_CHART_PATCH_OP_KEEP && op <= FM_CHART_PATCH_OP_SET;
-}
-
 /// Checks one toggle of a table-style patch: a known op, no `CLEAR`, a 0 / 1 value under `SET`.
-fm_status_t check_toggle_patch(int32_t op, int32_t value, const char* field) {
-  if (!patch_op_valid(op)) {
+fm_status_t check_toggle_patch(fm_patch_op_t op, int32_t value, const char* field) {
+  if (!patch_op_ok(op)) {
     return invalid_argument("patch op out of range", field);
   }
-  if (op == FM_CHART_PATCH_OP_CLEAR) {
+  if (op == FM_PATCH_OP_CLEAR) {
     return invalid_argument("CLEAR is not valid for a toggle", field);
   }
-  if (op == FM_CHART_PATCH_OP_SET && value != 0 && value != 1) {
+  if (op == FM_PATCH_OP_SET && value != 0 && value != 1) {
     return invalid_argument("toggle must be 0 or 1", field);
   }
   return 0;
@@ -781,10 +733,10 @@ extern "C" fm_status_t fm_sheet_update_table_style_options(fm_workbook_t* wb, si
     return rc;
   }
   // The whole patch is checked before anything changes.
-  if (!patch_op_valid(patch->style_name_op)) {
+  if (!patch_op_ok(patch->style_name_op)) {
     return invalid_argument("patch op out of range", "style_name");
   }
-  if (patch->style_name_op == FM_CHART_PATCH_OP_SET) {
+  if (patch->style_name_op == FM_PATCH_OP_SET) {
     if (patch->style_name == nullptr || patch->style_name[0] == '\0') {
       return invalid_argument("style_name must be a non-empty string under SET", "style_name");
     }
@@ -793,8 +745,8 @@ extern "C" fm_status_t fm_sheet_update_table_style_options(fm_workbook_t* wb, si
     }
   }
   for (const auto& [op, value, field] :
-       {std::tuple<int32_t, int32_t, const char*>{patch->show_first_column_op, patch->show_first_column,
-                                                  "show_first_column"},
+       {std::tuple<fm_patch_op_t, int32_t, const char*>{patch->show_first_column_op, patch->show_first_column,
+                                                        "show_first_column"},
         {patch->show_last_column_op, patch->show_last_column, "show_last_column"},
         {patch->show_row_stripes_op, patch->show_row_stripes, "show_row_stripes"},
         {patch->show_column_stripes_op, patch->show_column_stripes, "show_column_stripes"}}) {
@@ -802,9 +754,9 @@ extern "C" fm_status_t fm_sheet_update_table_style_options(fm_workbook_t* wb, si
       return rc;
     }
   }
-  if (patch->style_name_op == FM_CHART_PATCH_OP_KEEP && patch->show_first_column_op == FM_CHART_PATCH_OP_KEEP &&
-      patch->show_last_column_op == FM_CHART_PATCH_OP_KEEP && patch->show_row_stripes_op == FM_CHART_PATCH_OP_KEEP &&
-      patch->show_column_stripes_op == FM_CHART_PATCH_OP_KEEP) {
+  if (patch->style_name_op == FM_PATCH_OP_KEEP && patch->show_first_column_op == FM_PATCH_OP_KEEP &&
+      patch->show_last_column_op == FM_PATCH_OP_KEEP && patch->show_row_stripes_op == FM_PATCH_OP_KEEP &&
+      patch->show_column_stripes_op == FM_PATCH_OP_KEEP) {
     return 0;
   }
   formulon::TableStyleInfo& style = wb->workbook().mutable_tables()[index].style_info;
@@ -813,21 +765,21 @@ extern "C" fm_status_t fm_sheet_update_table_style_options(fm_workbook_t* wb, si
     style.present = true;
     style.show_row_stripes = true;
   }
-  if (patch->style_name_op == FM_CHART_PATCH_OP_SET) {
+  if (patch->style_name_op == FM_PATCH_OP_SET) {
     style.name = patch->style_name;
-  } else if (patch->style_name_op == FM_CHART_PATCH_OP_CLEAR) {
+  } else if (patch->style_name_op == FM_PATCH_OP_CLEAR) {
     style.name.clear();
   }
-  if (patch->show_first_column_op == FM_CHART_PATCH_OP_SET) {
+  if (patch->show_first_column_op == FM_PATCH_OP_SET) {
     style.show_first_column = patch->show_first_column != 0;
   }
-  if (patch->show_last_column_op == FM_CHART_PATCH_OP_SET) {
+  if (patch->show_last_column_op == FM_PATCH_OP_SET) {
     style.show_last_column = patch->show_last_column != 0;
   }
-  if (patch->show_row_stripes_op == FM_CHART_PATCH_OP_SET) {
+  if (patch->show_row_stripes_op == FM_PATCH_OP_SET) {
     style.show_row_stripes = patch->show_row_stripes != 0;
   }
-  if (patch->show_column_stripes_op == FM_CHART_PATCH_OP_SET) {
+  if (patch->show_column_stripes_op == FM_PATCH_OP_SET) {
     style.show_column_stripes = patch->show_column_stripes != 0;
   }
   return 0;
@@ -850,9 +802,6 @@ extern "C" fm_status_t fm_sheet_rename_table(fm_workbook_t* wb, size_t sheet_ind
     return rc;
   }
   formulon::Workbook& book = wb->workbook();
-  if (name[0] != '\0' && table_name_taken(book, name, index)) {
-    return already_exists(name);
-  }
   const std::string next_name = name;
   return finish_status(book.rename_table(index, next_name, next_name));
 }

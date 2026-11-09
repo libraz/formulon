@@ -460,7 +460,9 @@ class PivotMutatorTableTests(unittest.TestCase):
             eq(f.wb.pivot_cache(f.cache).list_fields()[4].name, "Double")
             eq(f.wb.pivot_cache(f.cache).list_fields()[4].formula, "=Amount*2")
             eq(f.wb.pivot_cache(f.cache).list_fields()[0].formula, None)
-            rejects(lambda: f.wb.pivot_cache(f.cache).add_calculated_field("Amount", "Amount*2"))
+            rejects(
+                lambda: f.wb.pivot_cache(f.cache).add_calculated_field("Amount", "Amount*2"), StatusCode.ALREADY_EXISTS
+            )
             rejects(lambda: f.wb.pivot_cache(f.cache).add_calculated_field("Other", ""))
             rejects(lambda: f.wb.pivot_cache(f.cache).add_calculated_field("Other", "NoSuchField+1"))
             rejects(lambda: f.wb.pivot_cache(9999).add_calculated_field("Other", "Amount*2"), StatusCode.NOT_FOUND)
@@ -486,7 +488,10 @@ class PivotMutatorTableTests(unittest.TestCase):
             eq(item.formula, "=Region[East]+Region[West]")
             with self.assertRaises(IndexError):
                 f.wb.pivot_cache(f.cache).list_calculated_items()[5]
-            rejects(lambda: f.wb.pivot_cache(f.cache).add_calculated_item(f.region, "East", "East+West"))
+            rejects(
+                lambda: f.wb.pivot_cache(f.cache).add_calculated_item(f.region, "East", "East+West"),
+                StatusCode.ALREADY_EXISTS,
+            )
             rejects(lambda: f.wb.pivot_cache(f.cache).add_calculated_item(f.region, "Other", ""))
             rejects(lambda: f.wb.pivot_cache(f.cache).add_calculated_item(99, "Other", "East+West"), IDX)
             type_rejected(lambda: f.wb.pivot_cache(f.cache).add_calculated_item(f.region, None, "East+West"))
@@ -509,7 +514,10 @@ class PivotMutatorTableTests(unittest.TestCase):
         def custom_name(t: Any, f: _PivotFixture, r: None) -> None:
             eq(f.wb.sheet(0).pivot(f.pivot).list_fields()[f.region].custom_name, "Area")
             rejects(lambda: f.wb.sheet(0).pivot(f.pivot).update_field(99, custom_name="x"), IDX)
-            rejects(lambda: f.wb.sheet(0).pivot(f.pivot).update_field(f.region, custom_name="Product"))
+            rejects(
+                lambda: f.wb.sheet(0).pivot(f.pivot).update_field(f.region, custom_name="Product"),
+                StatusCode.ALREADY_EXISTS,
+            )
             rejects(lambda: f.wb.sheet(0).pivot(f.pivot).update_field(f.region, custom_name="x" * 256))
             type_rejected(lambda: f.wb.sheet(0).pivot(f.pivot).update_field(f.region, custom_name=5))
             eq(f.wb.sheet(0).pivot(f.pivot).list_fields()[f.region].custom_name, "Area")
@@ -1042,7 +1050,10 @@ class PivotMutatorTableTests(unittest.TestCase):
                     f.wb.sheet(0).pivot(f.pivot).update_field_item(f.region, 0, caption=None),
                     eq(f.wb.sheet(0).pivot(f.pivot).get_field_item(f.region, 0).caption, None),
                     rejects(lambda: f.wb.sheet(0).pivot(f.pivot).update_field_item(f.region, 9, caption="x"), IDX),
-                    rejects(lambda: f.wb.sheet(0).pivot(f.pivot).update_field_item(f.region, 0, caption="West")),
+                    rejects(
+                        lambda: f.wb.sheet(0).pivot(f.pivot).update_field_item(f.region, 0, caption="West"),
+                        StatusCode.ALREADY_EXISTS,
+                    ),
                 ),
             ),
             "Pivot.show_details": (

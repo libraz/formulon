@@ -7,7 +7,8 @@
 // not edited (`kIoDrawingUnparseable`), and a pivot chart refuses the series
 // and source edits (`kIoChartUnsupportedKind`). New elements go at their
 // schema position, in the forms Excel writes; reference edits refresh the
-// part's caches. Unknown ids, plots and series are `kInvalidArgument`.
+// part's caches. An unknown chart id, series `c:idx` or axis id is
+// `kNotFound`, a plot position past the last plot `kIndexOutOfRange`.
 
 #ifndef FORMULON_CHART_CHART_EDIT_H_
 #define FORMULON_CHART_CHART_EDIT_H_

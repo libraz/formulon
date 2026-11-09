@@ -1,6 +1,6 @@
 //
 // Stable C ABI tests for the external-links surface
-// (`fm_workbook_get_external_link_count` / `fm_workbook_get_external_link`).
+// (`fm_workbook_get_external_link_count` / `fm_workbook_get_external_link_at`).
 // The reader/writer round-trip lives in the integration suite; these
 // tests exercise the boundary's null / range guards and the empty-
 // workbook behaviour.
@@ -36,15 +36,19 @@ uint32_t LinkCount(fm_workbook_t* wb) {
 constexpr fm_status_t kInvalidArgument = static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
 constexpr fm_status_t kBindingNullPointer = static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer);
 
+// The file name, "" when unset (absent reads NULL with `present == 0`).
 std::string FileName(fm_workbook_t* wb) {
-  const char* name = nullptr;
-  EXPECT_EQ(fm_workbook_get_file_name(wb, &name), 0);
-  return name != nullptr ? name : "<null>";
+  int32_t present = -1;
+  const char* name = "<stale>";
+  EXPECT_EQ(fm_workbook_get_file_name(wb, &present, &name), 0);
+  EXPECT_EQ(present != 0, name != nullptr);
+  return name != nullptr ? name : "";
 }
 
 std::string Formula(fm_workbook_t* wb, uint32_t row, uint32_t col) {
+  int32_t present = 0;
   const char* text = nullptr;
-  EXPECT_EQ(fm_sheet_get_formula(wb, 0, row, col, &text), 0) << fm_get_last_error_message();
+  EXPECT_EQ(fm_sheet_get_formula(wb, 0, row, col, &present, &text), 0) << fm_get_last_error_message();
   return text != nullptr ? text : "<null>";
 }
 
@@ -71,23 +75,25 @@ TEST(FormulonCApiExternalLinks, FreshWorkbookHasZeroLinks) {
 TEST(FormulonCApiExternalLinks, IndexOutOfRangeReturnsInvalidArgument) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  fm_external_link_record_t rec = FM_STRUCT_INIT(fm_external_link_record_t);
-  EXPECT_EQ(fm_workbook_get_external_link(wb.handle, 0, &rec),
+  fm_external_link_info_t rec = FM_STRUCT_INIT(fm_external_link_info_t);
+  EXPECT_EQ(fm_workbook_get_external_link_at(wb.handle, 0, &rec),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kIndexOutOfRange));
+  EXPECT_NE(std::string(fm_get_last_error_context()).find("external_link_index=0"), std::string::npos)
+      << fm_get_last_error_context();
 }
 
 TEST(FormulonCApiExternalLinks, NullArgsReturnBindingNullPointer) {
-  fm_external_link_record_t rec = FM_STRUCT_INIT(fm_external_link_record_t);
+  fm_external_link_info_t rec = FM_STRUCT_INIT(fm_external_link_info_t);
   std::size_t count = 0;
   EXPECT_EQ(fm_workbook_get_external_link_count(nullptr, &count),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
-  EXPECT_EQ(fm_workbook_get_external_link(nullptr, 0, &rec),
+  EXPECT_EQ(fm_workbook_get_external_link_at(nullptr, 0, &rec),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   EXPECT_EQ(fm_workbook_get_external_link_count(wb.handle, nullptr),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
-  EXPECT_EQ(fm_workbook_get_external_link(wb.handle, 0, nullptr),
+  EXPECT_EQ(fm_workbook_get_external_link_at(wb.handle, 0, nullptr),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
 }
 
@@ -168,9 +174,11 @@ TEST(FormulonCApiExternalLinks, ValidationNamingANewBookBindsIt) {
 TEST(FormulonCApiExternalLinks, FileNameNullArgumentsAreRefused) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  int32_t present = 0;
   const char* name = nullptr;
-  EXPECT_EQ(fm_workbook_get_file_name(nullptr, &name), kBindingNullPointer);
-  EXPECT_EQ(fm_workbook_get_file_name(wb.handle, nullptr), kBindingNullPointer);
+  EXPECT_EQ(fm_workbook_get_file_name(nullptr, &present, &name), kBindingNullPointer);
+  EXPECT_EQ(fm_workbook_get_file_name(wb.handle, &present, nullptr), kBindingNullPointer);
+  EXPECT_EQ(fm_workbook_get_file_name(wb.handle, nullptr, &name), kBindingNullPointer);
   EXPECT_EQ(fm_workbook_set_file_name(nullptr, "M5.xlsx"), kBindingNullPointer);
   EXPECT_EQ(fm_workbook_set_file_name(wb.handle, nullptr), kBindingNullPointer);
 }
@@ -300,8 +308,9 @@ TEST(FormulonCApiExternalLinks, FileNameCellGettersSpellTheName) {
     const std::string book = named ? "M5.xlsx!" : "[0]!";
     EXPECT_EQ(Formula(wb.handle, 0, 0), "=" + book + "LN+1");
 
+    int32_t r1c1_present = 0;
     const char* r1c1 = nullptr;
-    ASSERT_EQ(fm_sheet_get_formula_r1c1(wb.handle, 0, 0, 0, &r1c1), 0) << fm_get_last_error_message();
+    ASSERT_EQ(fm_sheet_get_formula_r1c1(wb.handle, 0, 0, 0, &r1c1_present, &r1c1), 0) << fm_get_last_error_message();
     EXPECT_EQ(Str(r1c1), "=" + book + "LN+1");
 
     uint32_t row = 99;
@@ -319,7 +328,7 @@ TEST(FormulonCApiExternalLinks, FileNameCellGettersSpellTheName) {
     EXPECT_EQ(Str(formula), "=" + book + "LN+1");
     fm_cell_range_destroy(range);
 
-    fm_array_formula_t array = FM_STRUCT_INIT(fm_array_formula_t);
+    fm_array_formula_info_t array = FM_STRUCT_INIT(fm_array_formula_info_t);
     ASSERT_EQ(fm_sheet_get_array_formula(wb.handle, 0, 2, 0, &array), 0) << fm_get_last_error_message();
     ASSERT_EQ(array.engaged, 1);
     EXPECT_EQ(Str(array.formula), "=" + book + "LN*2");
@@ -365,7 +374,7 @@ TEST(FormulonCApiExternalLinks, FileNameValidationsStoreAndSpellTheName) {
     ASSERT_EQ(fm_workbook_set_file_name(wb.handle, named ? "M5.xlsx" : ""), 0);
     const std::string book = named ? "M5.xlsx!" : "[0]!";
     fm_data_validation_t out = FM_STRUCT_INIT(fm_data_validation_t);
-    ASSERT_EQ(fm_sheet_get_validation(wb.handle, 0, 0, &out), 0) << fm_get_last_error_message();
+    ASSERT_EQ(fm_sheet_get_validation_at(wb.handle, 0, 0, &out), 0) << fm_get_last_error_message();
     EXPECT_EQ(Str(out.formula1), "=" + book + "LN");
     EXPECT_EQ(Str(out.formula2), "=" + book + "LN*2");
   }
@@ -389,8 +398,7 @@ TEST(FormulonCApiExternalLinks, FileNameConditionalFormatsStoreAndSpellTheName) 
   thresholds[0].gte = 1;
   thresholds[1].type = 4;  // Max
   thresholds[1].gte = 1;
-  fm_color_spec_t colors[2]{{0.0, 0xFFFF0000U, 0U, 0U, FM_COLOR_KIND_RGB},
-                            {0.0, 0xFF00FF00U, 0U, 0U, FM_COLOR_KIND_RGB}};
+  fm_color_t colors[2]{{0.0, 0xFFFF0000U, 0U, 0U, FM_COLOR_KIND_RGB}, {0.0, 0xFF00FF00U, 0U, 0U, FM_COLOR_KIND_RGB}};
   fm_cf_rule_t scale = FM_STRUCT_INIT(fm_cf_rule_t);
   scale.type = 2;  // ColorScale
   scale.ranges = &sqref;
@@ -404,9 +412,9 @@ TEST(FormulonCApiExternalLinks, FileNameConditionalFormatsStoreAndSpellTheName) 
     ASSERT_EQ(fm_workbook_set_file_name(wb.handle, named ? "M5.xlsx" : ""), 0);
     const std::string book = named ? "M5.xlsx!" : "[0]!";
     fm_cf_rule_t out = FM_STRUCT_INIT(fm_cf_rule_t);
-    ASSERT_EQ(fm_sheet_get_cf_rule(wb.handle, 0, 0, &out), 0) << fm_get_last_error_message();
+    ASSERT_EQ(fm_sheet_get_cf_rule_at(wb.handle, 0, 0, &out), 0) << fm_get_last_error_message();
     EXPECT_EQ(Str(out.formula1), "=" + book + "LN>0");
-    ASSERT_EQ(fm_sheet_get_cf_rule(wb.handle, 0, 1, &out), 0) << fm_get_last_error_message();
+    ASSERT_EQ(fm_sheet_get_cf_rule_at(wb.handle, 0, 1, &out), 0) << fm_get_last_error_message();
     ASSERT_EQ(out.color_scale_count, 2U);
     EXPECT_EQ(Str(out.color_scale_thresholds[0].value), "=" + book + "LN");
   }
@@ -429,7 +437,7 @@ TEST(FormulonCApiExternalLinks, FileNameTableTotalsStoreAndSpellTheName) {
     ASSERT_EQ(fm_workbook_set_file_name(wb.handle, named ? "M5.xlsx" : ""), 0);
     const std::string book = named ? "M5.xlsx!" : "[0]!";
     fm_table_column_info_t column = FM_STRUCT_INIT(fm_table_column_info_t);
-    ASSERT_EQ(fm_sheet_get_table_column(wb.handle, 0, table, 0, &column), 0) << fm_get_last_error_message();
+    ASSERT_EQ(fm_sheet_get_table_column_at(wb.handle, 0, table, 0, &column), 0) << fm_get_last_error_message();
     EXPECT_EQ(Str(column.totals_row_formula), "=" + book + "LN+1");
     EXPECT_EQ(Formula(wb.handle, 3, 3), "=" + book + "LN+1");
   }
@@ -445,11 +453,12 @@ TEST(FormulonCApiExternalLinks, FileNameChartSeriesStoreAndSpellTheName) {
     ASSERT_EQ(fm_sheet_set_number(wb.handle, 0, r, 2, static_cast<double>(r * 2)), 0);
   }
   ASSERT_EQ(SetDefinedName(wb.handle, "LR", "Sheet1!$C$2:$C$5"), 0) << fm_get_last_error_message();
-  fm_chart_insert_t opts = FM_STRUCT_INIT(fm_chart_insert_t);
+  fm_chart_insert_spec_t opts = FM_STRUCT_INIT(fm_chart_insert_spec_t);
   opts.type = FM_CHART_PLOT_TYPE_BAR;
   opts.bar_direction = FM_CHART_BAR_DIRECTION_COLUMN;
   opts.source = "Sheet1!$A$1:$B$5";
   opts.legend = FM_CHART_LEGEND_POSITION_RIGHT;
+  opts.placement = FM_STRUCT_INIT(fm_picture_insert_spec_t);
   opts.placement.anchor.anchor_kind = FM_ANCHOR_KIND_TWO_CELL;
   opts.placement.anchor.edit_as = FM_ANCHOR_EDIT_AS_TWO_CELL;
   opts.placement.anchor.row = 6;
@@ -457,7 +466,7 @@ TEST(FormulonCApiExternalLinks, FileNameChartSeriesStoreAndSpellTheName) {
   ASSERT_EQ(fm_sheet_add_chart(wb.handle, 0, &opts, &id), 0) << fm_get_last_error_message();
   ASSERT_EQ(fm_workbook_set_file_name(wb.handle, "M5.xlsx"), 0);
   fm_chart_series_patch_t patch = FM_STRUCT_INIT(fm_chart_series_patch_t);
-  patch.values_op = FM_CHART_PATCH_OP_SET;
+  patch.values_op = FM_PATCH_OP_SET;
   patch.values = fm_chart_data_source_spec_t{FM_CHART_SOURCE_KIND_REF, "M5.xlsx!LR", nullptr, 0};
   ASSERT_EQ(fm_sheet_update_chart_series(wb.handle, 0, id, 0, 0, &patch), 0) << fm_get_last_error_message();
   EXPECT_EQ(LinkCount(wb.handle), 0U);
@@ -467,7 +476,7 @@ TEST(FormulonCApiExternalLinks, FileNameChartSeriesStoreAndSpellTheName) {
     int32_t present = 0;
     ASSERT_EQ(fm_sheet_get_chart(wb.handle, 0, id, &present, &chart), 0) << fm_get_last_error_message();
     ASSERT_EQ(present, 1);
-    fm_chart_series_t series = FM_STRUCT_INIT(fm_chart_series_t);
+    fm_chart_series_info_t series = FM_STRUCT_INIT(fm_chart_series_info_t);
     EXPECT_EQ(fm_chart_get_series_at(chart, 0, 0, &series), 0) << fm_get_last_error_message();
     EXPECT_EQ(Str(series.values.formula), std::string(named ? "M5.xlsx!" : "[0]!") + "LR");
     fm_chart_destroy(chart);

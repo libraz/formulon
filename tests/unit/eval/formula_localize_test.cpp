@@ -63,7 +63,7 @@ TEST(FormulaLocalize, CatalogApiReadsTheSameTable) {
   EXPECT_STREQ(out, "SUM");
   ASSERT_EQ(fm_localize_function_name("DOLLAR", "mac-365-ja_JP", &out), 0);
   EXPECT_STREQ(out, "YEN");
-  fm_function_metadata_t md = FM_STRUCT_INIT(fm_function_metadata_t);
+  fm_function_metadata_info_t md = FM_STRUCT_INIT(fm_function_metadata_info_t);
   EXPECT_EQ(fm_get_function_metadata("SUM", &present, &md), 0);
   EXPECT_EQ(present, 1);
   EXPECT_NE(fm_canonicalize_function_name("SUMME", "mac-365-fr_FR", &out), 0);

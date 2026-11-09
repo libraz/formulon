@@ -10,7 +10,7 @@
 // every one of them would otherwise have to include the reader or writer
 // entry point it ultimately feeds.
 //
-// Field names match `fm_read_diagnostics_t` / `fm_save_diagnostics_t` in
+// Field names match `fm_read_diagnostics_info_t` / `fm_save_diagnostics_info_t` in
 // `src/c_api/formulon_c.h` one-for-one; the C ABI layer copies straight
 // across. Counters are `uint32_t` rather than `size_t` so the C ABI
 // structs have the same layout on native and wasm32.

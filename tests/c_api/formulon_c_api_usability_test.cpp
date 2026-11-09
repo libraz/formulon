@@ -1,8 +1,9 @@
 //
 // C ABI contracts shared by the bindings' usability surface: the dirty-cell
-// query, the process-scope image probe, NotFound for an absent drawing or
-// chart id, the duplicate CF id refusal, and the leading `=` on formula text
-// read back from cells, rules, tables and pivot caches.
+// query, the process-scope image probe, the drawing and chart id statuses
+// (absent, of another kind, past the end), the drawing patches, the chart
+// absence flags, the duplicate CF id refusal, and the leading `=` on formula
+// text read back from cells, rules, tables and pivot caches.
 
 #include <cstddef>
 #include <cstdint>
@@ -29,6 +30,78 @@ Bytes Png(std::uint32_t w, std::uint32_t h) {
   }
   b.insert(b.end(), {8, 6, 0, 0, 0, 0x1F, 0x15, 0xC4, 0x89});
   return b;
+}
+
+fm_picture_insert_spec_t PictureOptions() {
+  fm_picture_insert_spec_t opts = FM_STRUCT_INIT(fm_picture_insert_spec_t);
+  opts.anchor.anchor_kind = FM_ANCHOR_KIND_ONE_CELL;
+  opts.anchor.edit_as = FM_ANCHOR_EDIT_AS_TWO_CELL;
+  return opts;
+}
+
+std::uint32_t AddPicture(fm_workbook_t* wb, const Bytes& png) {
+  const fm_picture_insert_spec_t opts = PictureOptions();
+  std::uint32_t id = 0;
+  EXPECT_EQ(fm_sheet_add_picture(wb, 0, png.data(), png.size(), &opts, &id), 0) << fm_get_last_error_message();
+  return id;
+}
+
+std::uint32_t AddShape(fm_workbook_t* wb) {
+  fm_shape_patch_t spec = FM_STRUCT_INIT(fm_shape_patch_t);
+  spec.anchor_kind_op = FM_PATCH_OP_SET;
+  spec.anchor_kind = FM_ANCHOR_KIND_TWO_CELL;
+  spec.from_row_op = FM_PATCH_OP_SET;
+  spec.from_row = 1;
+  spec.from_col_op = FM_PATCH_OP_SET;
+  spec.from_col = 1;
+  spec.to_row_op = FM_PATCH_OP_SET;
+  spec.to_row = 4;
+  spec.to_col_op = FM_PATCH_OP_SET;
+  spec.to_col = 3;
+  std::uint32_t id = 0;
+  EXPECT_EQ(fm_sheet_add_shape(wb, 0, &spec, &id), 0) << fm_get_last_error_message();
+  return id;
+}
+
+fm_shape_info_t ReadShape(const fm_workbook_t* wb, std::uint32_t id) {
+  fm_shape_info_t shape = FM_STRUCT_INIT(fm_shape_info_t);
+  std::int32_t present = 0;
+  EXPECT_EQ(fm_sheet_get_shape(wb, 0, id, &present, &shape), 0) << fm_get_last_error_message();
+  EXPECT_EQ(present, 1);
+  return shape;
+}
+
+// A1:B3: a header row over two text categories and their numbers.
+void FillChartSource(fm_workbook_t* wb) {
+  ASSERT_EQ(fm_sheet_set_text(wb, 0, 0, 0, "k"), 0);
+  ASSERT_EQ(fm_sheet_set_text(wb, 0, 0, 1, "v"), 0);
+  ASSERT_EQ(fm_sheet_set_text(wb, 0, 1, 0, "a"), 0);
+  ASSERT_EQ(fm_sheet_set_text(wb, 0, 2, 0, "b"), 0);
+  ASSERT_EQ(fm_sheet_set_number(wb, 0, 1, 1, 1.0), 0);
+  ASSERT_EQ(fm_sheet_set_number(wb, 0, 2, 1, 2.0), 0);
+}
+
+fm_chart_insert_spec_t ChartOptions() {
+  fm_chart_insert_spec_t opts = FM_STRUCT_INIT(fm_chart_insert_spec_t);
+  opts.type = FM_CHART_PLOT_TYPE_BAR;
+  opts.source = "Sheet1!$A$1:$B$3";
+  opts.legend = FM_CHART_LEGEND_POSITION_RIGHT;
+  opts.placement = PictureOptions();
+  opts.placement.anchor.anchor_kind = FM_ANCHOR_KIND_TWO_CELL;
+  opts.placement.anchor.row = 6;
+  return opts;
+}
+
+fm_chart_info_t ReadChartInfo(const fm_workbook_t* wb, std::uint32_t id) {
+  fm_chart_info_t info = FM_STRUCT_INIT(fm_chart_info_t);
+  std::int32_t present = 0;
+  fm_chart_t* chart = nullptr;
+  EXPECT_EQ(fm_sheet_get_chart(wb, 0, id, &present, &chart), 0) << fm_get_last_error_message();
+  if (chart != nullptr) {
+    EXPECT_EQ(fm_chart_get_info(chart, &info), 0);
+    fm_chart_destroy(chart);
+  }
+  return info;
 }
 
 std::int32_t Dirty(const fm_workbook_t* wb) {
@@ -236,24 +309,30 @@ TEST(FormulonCApiUsability, AbsentDrawingAndChartIdsAreNotFound) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   fm_chart_data_t* data = nullptr;
-  const fm_chart_preview_overrides_t overrides = FM_STRUCT_INIT(fm_chart_preview_overrides_t);
-  // A sheet with no drawing at all.
+  std::int32_t present = 99;
+  const fm_chart_preview_overrides_spec_t overrides = FM_STRUCT_INIT(fm_chart_preview_overrides_spec_t);
+  // A sheet with no drawing at all: a remove is NotFound, a chart read a miss.
   EXPECT_EQ(fm_sheet_remove_drawing(wb.handle, 0, 42U), FM_STATUS_NOT_FOUND);
-  EXPECT_EQ(fm_sheet_get_chart_data(wb.handle, 0, 42U, &data), FM_STATUS_NOT_FOUND);
+  EXPECT_EQ(fm_sheet_get_chart_data(wb.handle, 0, 42U, &present, &data), 0) << fm_get_last_error_message();
+  EXPECT_EQ(present, 0);
   EXPECT_EQ(data, nullptr);
-  EXPECT_EQ(fm_sheet_get_chart_preview(wb.handle, 0, 42U, &overrides, &data), FM_STATUS_NOT_FOUND);
+  present = 99;
+  EXPECT_EQ(fm_sheet_get_chart_preview(wb.handle, 0, 42U, &overrides, &present, &data), 0)
+      << fm_get_last_error_message();
+  EXPECT_EQ(present, 0);
   EXPECT_EQ(data, nullptr);
 
   // A drawing whose only object is a picture: its id names no chart.
   const Bytes png = Png(4, 4);
-  fm_picture_insert_spec_t opts{};
-  opts.anchor.anchor_kind = FM_ANCHOR_KIND_ONE_CELL;
-  opts.anchor.edit_as = FM_ANCHOR_EDIT_AS_TWO_CELL;
-  std::uint32_t picture = 0;
-  ASSERT_EQ(fm_sheet_add_picture(wb.handle, 0, png.data(), png.size(), &opts, &picture), 0)
+  const std::uint32_t picture = AddPicture(wb.handle, png);
+  present = 99;
+  EXPECT_EQ(fm_sheet_get_chart_data(wb.handle, 0, picture, &present, &data), 0) << fm_get_last_error_message();
+  EXPECT_EQ(present, 0);
+  present = 99;
+  EXPECT_EQ(fm_sheet_get_chart_preview(wb.handle, 0, picture, &overrides, &present, &data), 0)
       << fm_get_last_error_message();
-  EXPECT_EQ(fm_sheet_get_chart_data(wb.handle, 0, picture, &data), FM_STATUS_NOT_FOUND);
-  EXPECT_EQ(fm_sheet_get_chart_preview(wb.handle, 0, picture, &overrides, &data), FM_STATUS_NOT_FOUND);
+  EXPECT_EQ(present, 0);
+  EXPECT_EQ(data, nullptr);
   EXPECT_EQ(fm_sheet_remove_drawing(wb.handle, 0, picture + 100U), FM_STATUS_NOT_FOUND);
   std::size_t count = 0;
   ASSERT_EQ(fm_sheet_get_drawing_object_count(wb.handle, 0, &count), 0);
@@ -264,6 +343,229 @@ TEST(FormulonCApiUsability, AbsentDrawingAndChartIdsAreNotFound) {
   EXPECT_EQ(fm_sheet_remove_drawing(wb.handle, 9, picture), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
 }
 
+// The picture options are a record: a struct_size below its first layout is
+// refused, on its own and embedded in a chart insert, and nothing is inserted.
+TEST(FormulonCApiUsability, PictureOptionsWithoutAStructSizeAreRefused) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  const Bytes png = Png(4, 4);
+  fm_picture_insert_spec_t opts = PictureOptions();
+  opts.struct_size = 0;
+  std::uint32_t id = 0;
+  EXPECT_EQ(fm_sheet_add_picture(wb.handle, 0, png.data(), png.size(), &opts, &id), FM_STATUS_INVALID_ARGUMENT);
+
+  FillChartSource(wb.handle);
+  fm_chart_insert_spec_t chart = ChartOptions();
+  chart.placement.struct_size = 0;
+  EXPECT_EQ(fm_sheet_add_chart(wb.handle, 0, &chart, &id), FM_STATUS_INVALID_ARGUMENT);
+  std::size_t count = 99;
+  ASSERT_EQ(fm_sheet_get_drawing_object_count(wb.handle, 0, &count), 0);
+  EXPECT_EQ(count, 0U);
+}
+
+// An id that exists but belongs to an object of another kind is a wrong
+// argument, not a missing one.
+TEST(FormulonCApiUsability, AnIdOfAnotherKindOfObjectIsAnInvalidArgument) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  const Bytes png = Png(4, 4);
+  const std::uint32_t picture = AddPicture(wb.handle, png);
+  const std::uint32_t shape = AddShape(wb.handle);
+
+  fm_shape_patch_t patch = FM_STRUCT_INIT(fm_shape_patch_t);
+  patch.hidden_op = FM_PATCH_OP_SET;
+  patch.hidden = 1;
+  EXPECT_EQ(fm_sheet_update_shape(wb.handle, 0, picture, &patch), FM_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(fm_sheet_remove_shape(wb.handle, 0, picture), FM_STATUS_INVALID_ARGUMENT);
+  const fm_drawing_anchor_t anchor = PictureOptions().anchor;
+  EXPECT_EQ(fm_sheet_set_drawing_anchor(wb.handle, 0, shape, &anchor), FM_STATUS_INVALID_ARGUMENT);
+  std::size_t count = 0;
+  ASSERT_EQ(fm_sheet_get_drawing_object_count(wb.handle, 0, &count), 0);
+  EXPECT_EQ(count, 2U);
+}
+
+// A position at the object or plot count is out of range; a series c:idx no
+// series holds is a key that matches nothing.
+TEST(FormulonCApiUsability, DrawingAndChartPositionsPastTheEndAreOutOfRange) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  const Bytes png = Png(4, 4);
+  const std::uint32_t picture = AddPicture(wb.handle, png);
+  FillChartSource(wb.handle);
+  const fm_chart_insert_spec_t opts = ChartOptions();
+  std::uint32_t chart = 0;
+  ASSERT_EQ(fm_sheet_add_chart(wb.handle, 0, &opts, &chart), 0) << fm_get_last_error_message();
+
+  EXPECT_EQ(fm_sheet_set_drawing_z_order(wb.handle, 0, picture, 2), FM_STATUS_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(fm_sheet_set_drawing_z_order(wb.handle, 0, picture, 1), 0) << fm_get_last_error_message();
+
+  const fm_chart_plot_patch_t plot = FM_STRUCT_INIT(fm_chart_plot_patch_t);
+  EXPECT_EQ(fm_sheet_update_chart_plot(wb.handle, 0, chart, 1, &plot), FM_STATUS_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(fm_sheet_update_chart_plot(wb.handle, 0, chart, 0, &plot), 0) << fm_get_last_error_message();
+
+  fm_chart_series_patch_t series = FM_STRUCT_INIT(fm_chart_series_patch_t);
+  series.smooth_op = FM_PATCH_OP_SET;
+  EXPECT_EQ(fm_sheet_update_chart_series(wb.handle, 0, chart, 0, 999U, &series), FM_STATUS_NOT_FOUND);
+  EXPECT_EQ(fm_sheet_remove_chart_series(wb.handle, 0, chart, 0, 999U), FM_STATUS_NOT_FOUND);
+}
+
+// A shape patch writes only its SET fields; a refused field (CLEAR outside the
+// paint fields, an op outside 0..2) leaves the whole shape unchanged.
+TEST(FormulonCApiUsability, ShapePatchWritesOnlyItsSetFieldsAndRefusesAtomically) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  const std::uint32_t id = AddShape(wb.handle);
+  const fm_shape_info_t before = ReadShape(wb.handle, id);
+
+  fm_shape_patch_t patch = FM_STRUCT_INIT(fm_shape_patch_t);
+  patch.rotation_deg_op = FM_PATCH_OP_SET;
+  patch.rotation_deg = 90.0;
+  ASSERT_EQ(fm_sheet_update_shape(wb.handle, 0, id, &patch), 0) << fm_get_last_error_message();
+  fm_shape_info_t after = ReadShape(wb.handle, id);
+  EXPECT_EQ(after.rotation_deg, 90.0);
+  EXPECT_EQ(after.hidden, before.hidden);
+  EXPECT_EQ(after.from_row, before.from_row);
+  EXPECT_EQ(std::string(after.name), std::string(before.name));
+
+  fm_shape_patch_t bad = FM_STRUCT_INIT(fm_shape_patch_t);
+  bad.hidden_op = FM_PATCH_OP_SET;
+  bad.hidden = 1;
+  bad.rotation_deg_op = FM_PATCH_OP_CLEAR;
+  EXPECT_EQ(fm_sheet_update_shape(wb.handle, 0, id, &bad), FM_STATUS_INVALID_ARGUMENT);
+  bad.rotation_deg_op = static_cast<fm_patch_op_t>(3);
+  EXPECT_EQ(fm_sheet_update_shape(wb.handle, 0, id, &bad), FM_STATUS_INVALID_ARGUMENT);
+  after = ReadShape(wb.handle, id);
+  EXPECT_EQ(after.hidden, before.hidden);
+  EXPECT_EQ(after.rotation_deg, 90.0);
+
+  const fm_shape_patch_t keep = FM_STRUCT_INIT(fm_shape_patch_t);
+  EXPECT_EQ(fm_sheet_update_shape(wb.handle, 0, id, &keep), 0) << fm_get_last_error_message();
+}
+
+// A shape added with only its anchor takes Excel's defaults for the rest, and
+// an add without an anchor kind is refused.
+TEST(FormulonCApiUsability, ShapeAddedFromAPatchTakesTheDefaultsItLeavesOut) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  const std::uint32_t id = AddShape(wb.handle);
+  const fm_shape_info_t shape = ReadShape(wb.handle, id);
+  EXPECT_EQ(std::string(shape.preset_geometry), "rect");
+  EXPECT_EQ(std::string(shape.name), "Shape " + std::to_string(id));
+  EXPECT_EQ(shape.anchor_kind, FM_ANCHOR_KIND_TWO_CELL);
+  EXPECT_EQ(shape.edit_as, FM_ANCHOR_EDIT_AS_TWO_CELL);
+  EXPECT_EQ(shape.fill_kind, FM_SHAPE_PAINT_ABSENT);
+  EXPECT_EQ(shape.hidden, 0);
+
+  const fm_shape_patch_t no_anchor = FM_STRUCT_INIT(fm_shape_patch_t);
+  std::uint32_t other = 0;
+  EXPECT_EQ(fm_sheet_add_shape(wb.handle, 0, &no_anchor, &other), FM_STATUS_INVALID_ARGUMENT);
+  std::size_t count = 0;
+  ASSERT_EQ(fm_sheet_get_shape_count(wb.handle, 0, &count), 0);
+  EXPECT_EQ(count, 1U);
+}
+
+// A sparkline group patch clears a clearable bound, keeps the sparklines it
+// does not name, and refuses CLEAR on any other field.
+TEST(FormulonCApiUsability, SparklineGroupPatchClearsAManualBoundAndKeepsTheRest) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  fm_sparkline_group_t group = FM_STRUCT_INIT(fm_sparkline_group_t);
+  group.line_weight = 0.75;
+  group.min_axis_type = FM_SPARKLINE_AXIS_TYPE_CUSTOM;
+  group.has_manual_min = 1;
+  group.manual_min = -5.0;
+  const fm_sparkline_t items[] = {{"Sheet1!A1:C1", "D1"}, {"Sheet1!A2:C2", "D2"}};
+  std::size_t index = 99;
+  ASSERT_EQ(fm_sheet_add_sparkline_group(wb.handle, 0, &group, items, 2, &index), 0) << fm_get_last_error_message();
+
+  fm_sparkline_group_patch_t patch = FM_STRUCT_INIT(fm_sparkline_group_patch_t);
+  patch.manual_min_op = FM_PATCH_OP_CLEAR;
+  ASSERT_EQ(fm_sheet_update_sparkline_group(wb.handle, 0, index, &patch), 0) << fm_get_last_error_message();
+  fm_sparkline_group_t read = FM_STRUCT_INIT(fm_sparkline_group_t);
+  ASSERT_EQ(fm_sheet_get_sparkline_group_at(wb.handle, 0, index, &read), 0) << fm_get_last_error_message();
+  EXPECT_EQ(read.has_manual_min, 0);
+  EXPECT_EQ(read.sparkline_count, 2U);
+  EXPECT_EQ(read.date_axis_ref, nullptr);
+
+  fm_sparkline_group_patch_t bad = FM_STRUCT_INIT(fm_sparkline_group_patch_t);
+  bad.line_weight_op = FM_PATCH_OP_CLEAR;
+  EXPECT_EQ(fm_sheet_update_sparkline_group(wb.handle, 0, index, &bad), FM_STATUS_INVALID_ARGUMENT);
+  bad = FM_STRUCT_INIT(fm_sparkline_group_patch_t);
+  bad.items_op = FM_PATCH_OP_SET;
+  EXPECT_EQ(fm_sheet_update_sparkline_group(wb.handle, 0, index, &bad), FM_STATUS_INVALID_ARGUMENT);
+  ASSERT_EQ(fm_sheet_get_sparkline_group_at(wb.handle, 0, index, &read), 0) << fm_get_last_error_message();
+  EXPECT_EQ(read.sparkline_count, 2U);
+}
+
+// A legend patch that only sets the hidden entries keeps the position and the
+// overlay; neither of those can be cleared.
+TEST(FormulonCApiUsability, LegendPatchOfHiddenEntriesKeepsThePositionAndOverlay) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  FillChartSource(wb.handle);
+  fm_chart_insert_spec_t opts = ChartOptions();
+  opts.legend = FM_CHART_LEGEND_POSITION_TOP;
+  std::uint32_t chart = 0;
+  ASSERT_EQ(fm_sheet_add_chart(wb.handle, 0, &opts, &chart), 0) << fm_get_last_error_message();
+
+  const std::uint32_t hidden[] = {0U};
+  fm_chart_legend_patch_t patch = FM_STRUCT_INIT(fm_chart_legend_patch_t);
+  patch.hidden_entries_op = FM_PATCH_OP_SET;
+  patch.hidden_entries = hidden;
+  patch.hidden_entries_count = 1;
+  ASSERT_EQ(fm_sheet_update_chart_legend(wb.handle, 0, chart, &patch), 0) << fm_get_last_error_message();
+  fm_chart_info_t info = ReadChartInfo(wb.handle, chart);
+  EXPECT_EQ(info.legend_position, FM_CHART_LEGEND_POSITION_TOP);
+  EXPECT_EQ(info.legend_overlay, 0);
+  EXPECT_EQ(info.legend_hidden_count, 1U);
+
+  for (int field = 0; field < 2; ++field) {
+    fm_chart_legend_patch_t bad = FM_STRUCT_INIT(fm_chart_legend_patch_t);
+    (field == 0 ? bad.position_op : bad.overlay_op) = FM_PATCH_OP_CLEAR;
+    EXPECT_EQ(fm_sheet_update_chart_legend(wb.handle, 0, chart, &bad), FM_STATUS_INVALID_ARGUMENT) << field;
+  }
+  info = ReadChartInfo(wb.handle, chart);
+  EXPECT_EQ(info.legend_position, FM_CHART_LEGEND_POSITION_TOP);
+}
+
+// An absent optional number reads its has_ flag as 0, never NaN: an axis
+// without a minimum, and a text category that has no value.
+TEST(FormulonCApiUsability, AbsentChartNumbersReadAsHasFlagsNotNaN) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  FillChartSource(wb.handle);
+  const fm_chart_insert_spec_t opts = ChartOptions();
+  std::uint32_t chart = 0;
+  ASSERT_EQ(fm_sheet_add_chart(wb.handle, 0, &opts, &chart), 0) << fm_get_last_error_message();
+
+  std::int32_t present = 0;
+  fm_chart_t* model = nullptr;
+  ASSERT_EQ(fm_sheet_get_chart(wb.handle, 0, chart, &present, &model), 0) << fm_get_last_error_message();
+  ASSERT_EQ(present, 1);
+  fm_chart_info_t info = FM_STRUCT_INIT(fm_chart_info_t);
+  ASSERT_EQ(fm_chart_get_info(model, &info), 0);
+  ASSERT_GT(info.axis_count, 0U);
+  for (std::size_t i = 0; i < info.axis_count; ++i) {
+    fm_chart_axis_info_t axis = FM_STRUCT_INIT(fm_chart_axis_info_t);
+    ASSERT_EQ(fm_chart_get_axis_at(model, i, &axis), 0);
+    EXPECT_EQ(axis.has_min, 0) << i;
+    EXPECT_EQ(axis.has_max, 0) << i;
+  }
+  fm_chart_destroy(model);
+
+  fm_chart_data_t* data = nullptr;
+  ASSERT_EQ(fm_sheet_get_chart_data(wb.handle, 0, chart, &present, &data), 0) << fm_get_last_error_message();
+  ASSERT_EQ(present, 1);
+  const char* label = nullptr;
+  std::int32_t has_value = 99;
+  double value = -1.0;
+  ASSERT_EQ(fm_chart_data_get_category_at(data, 0, &label, &has_value, &value), 0);
+  EXPECT_EQ(std::string(label), "a");
+  EXPECT_EQ(has_value, 0);
+  EXPECT_EQ(value, 0.0);
+  fm_chart_data_destroy(data);
+}
+
 // ---------------------------------------------------------------------------
 // Conditional-format rule ids
 // ---------------------------------------------------------------------------
@@ -271,7 +573,7 @@ TEST(FormulonCApiUsability, AbsentDrawingAndChartIdsAreNotFound) {
 // A read rule re-added to its own sheet collides with itself; the copy takes a fresh GUID.
 std::string CfRuleId(const fm_workbook_t* wb, std::size_t index) {
   fm_cf_rule_t out = FM_STRUCT_INIT(fm_cf_rule_t);
-  EXPECT_EQ(fm_sheet_get_cf_rule(wb, 0, index, &out), 0);
+  EXPECT_EQ(fm_sheet_get_cf_rule_at(wb, 0, index, &out), 0);
   return out.id != nullptr ? std::string(out.id) : std::string();
 }
 
@@ -308,7 +610,7 @@ TEST(FormulonCApiUsability, CfRuleWithAnExistingIdGetsAFreshId) {
   rule.id = kRuleId;
   ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, other, &rule, &index), 0) << fm_get_last_error_message();
   fm_cf_rule_t out = FM_STRUCT_INIT(fm_cf_rule_t);
-  ASSERT_EQ(fm_sheet_get_cf_rule(wb.handle, other, index, &out), 0);
+  ASSERT_EQ(fm_sheet_get_cf_rule_at(wb.handle, other, index, &out), 0);
   ASSERT_NE(out.id, nullptr);
   EXPECT_STREQ(out.id, kRuleId);
 }
@@ -322,12 +624,12 @@ TEST(FormulonCApiUsability, CfRuleReadBackFeedsAddWithoutDoublingTheEquals) {
   ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &rule, &index), 0) << fm_get_last_error_message();
 
   fm_cf_rule_t out = FM_STRUCT_INIT(fm_cf_rule_t);
-  ASSERT_EQ(fm_sheet_get_cf_rule(wb.handle, 0, 0, &out), 0);
+  ASSERT_EQ(fm_sheet_get_cf_rule_at(wb.handle, 0, 0, &out), 0);
   EXPECT_EQ(Str(out.formula1), "=A1>0");
   // The read record goes back in once its own rule is gone.
   ASSERT_EQ(fm_sheet_remove_cf_rule(wb.handle, 0, 0), 0);
   ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &out, &index), 0) << fm_get_last_error_message();
-  ASSERT_EQ(fm_sheet_get_cf_rule(wb.handle, 0, 0, &out), 0);
+  ASSERT_EQ(fm_sheet_get_cf_rule_at(wb.handle, 0, 0, &out), 0);
   EXPECT_EQ(Str(out.formula1), "=A1>0");
   EXPECT_EQ(Str(out.id), kRuleId);
 }
@@ -342,15 +644,21 @@ TEST(FormulonCApiUsability, CellFormulaTextCarriesTheEqualsInBothNotations) {
   ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 0, 0, "1+1"), 0) << fm_get_last_error_message();
   ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 1, 1, "=A1*2"), 0) << fm_get_last_error_message();
   const char* text = nullptr;
-  ASSERT_EQ(fm_sheet_get_formula(wb.handle, 0, 0, 0, &text), 0);
+  std::int32_t present = 0;
+  ASSERT_EQ(fm_sheet_get_formula(wb.handle, 0, 0, 0, &present, &text), 0);
+  EXPECT_EQ(present, 1);
   EXPECT_EQ(Str(text), "=1+1");
-  ASSERT_EQ(fm_sheet_get_formula_r1c1(wb.handle, 0, 0, 0, &text), 0);
+  ASSERT_EQ(fm_sheet_get_formula_r1c1(wb.handle, 0, 0, 0, &present, &text), 0);
   EXPECT_EQ(Str(text), "=1+1");
-  ASSERT_EQ(fm_sheet_get_formula_r1c1(wb.handle, 0, 1, 1, &text), 0);
+  ASSERT_EQ(fm_sheet_get_formula_r1c1(wb.handle, 0, 1, 1, &present, &text), 0);
   EXPECT_EQ(Str(text), "=R[-1]C[-1]*2");
-  // A cell without a formula stays empty.
-  ASSERT_EQ(fm_sheet_get_formula_r1c1(wb.handle, 0, 5, 5, &text), 0);
-  EXPECT_EQ(Str(text), "");
+  // A cell without a formula reports no formula in either notation.
+  ASSERT_EQ(fm_sheet_get_formula(wb.handle, 0, 5, 5, &present, &text), 0);
+  EXPECT_EQ(present, 0);
+  EXPECT_EQ(text, nullptr);
+  ASSERT_EQ(fm_sheet_get_formula_r1c1(wb.handle, 0, 5, 5, &present, &text), 0);
+  EXPECT_EQ(present, 0);
+  EXPECT_EQ(text, nullptr);
 }
 
 TEST(FormulonCApiUsability, ArrayFormulaTextCarriesTheEqualsWhicheverWayItWasEntered) {
@@ -361,7 +669,7 @@ TEST(FormulonCApiUsability, ArrayFormulaTextCarriesTheEqualsWhicheverWayItWasEnt
   }
   const fm_cell_rect_t block{0, 2, 2, 2};
   ASSERT_EQ(fm_sheet_set_array_formula(wb.handle, 0, &block, "A1:A3*2"), 0) << fm_get_last_error_message();
-  fm_array_formula_t info = FM_STRUCT_INIT(fm_array_formula_t);
+  fm_array_formula_info_t info = FM_STRUCT_INIT(fm_array_formula_info_t);
   ASSERT_EQ(fm_sheet_get_array_formula(wb.handle, 0, 1, 2, &info), 0);
   EXPECT_EQ(Str(info.formula), "=A1:A3*2");
   ASSERT_EQ(fm_sheet_set_array_formula(wb.handle, 0, &block, "=A1:A3*3"), 0) << fm_get_last_error_message();
@@ -384,7 +692,7 @@ TEST(FormulonCApiUsability, CfFormulasCarryTheEqualsWhicheverWayTheyWereEntered)
   bare.range_count = 1;
   ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &bare, &index), 0) << fm_get_last_error_message();
   fm_cf_rule_t out = FM_STRUCT_INIT(fm_cf_rule_t);
-  ASSERT_EQ(fm_sheet_get_cf_rule(wb.handle, 0, 0, &out), 0);
+  ASSERT_EQ(fm_sheet_get_cf_rule_at(wb.handle, 0, 0, &out), 0);
   EXPECT_EQ(Str(out.formula1), "=1");
   EXPECT_EQ(Str(out.formula2), "=10");
 
@@ -395,7 +703,7 @@ TEST(FormulonCApiUsability, CfFormulasCarryTheEqualsWhicheverWayTheyWereEntered)
   text.ranges = &sqref;
   text.range_count = 1;
   ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &text, &index), 0) << fm_get_last_error_message();
-  ASSERT_EQ(fm_sheet_get_cf_rule(wb.handle, 0, index, &out), 0);
+  ASSERT_EQ(fm_sheet_get_cf_rule_at(wb.handle, 0, index, &out), 0);
   EXPECT_EQ(Str(out.formula1), "=NOT(ISERROR(SEARCH(\"ab\",A1)))");
 
   // A doubled `=` is still refused.
@@ -411,16 +719,16 @@ TEST(FormulonCApiUsability, ValidationFormulasCarryTheEqualsWhicheverWayTheyWere
   std::size_t index = 99;
   ASSERT_EQ(fm_sheet_add_validation(wb.handle, 0, &v, &index), 0) << fm_get_last_error_message();
   fm_data_validation_t out = FM_STRUCT_INIT(fm_data_validation_t);
-  ASSERT_EQ(fm_sheet_get_validation(wb.handle, 0, index, &out), 0);
+  ASSERT_EQ(fm_sheet_get_validation_at(wb.handle, 0, index, &out), 0);
   EXPECT_EQ(Str(out.formula1), "=1");
   EXPECT_EQ(Str(out.formula2), "=B1*2");
 
-  // An absent formula stays empty.
+  // An absent formula reads NULL.
   const fm_data_validation_t one = WholeBetween(&sqref, "5", nullptr);
   ASSERT_EQ(fm_sheet_add_validation(wb.handle, 0, &one, &index), 0) << fm_get_last_error_message();
-  ASSERT_EQ(fm_sheet_get_validation(wb.handle, 0, index, &out), 0);
+  ASSERT_EQ(fm_sheet_get_validation_at(wb.handle, 0, index, &out), 0);
   EXPECT_EQ(Str(out.formula1), "=5");
-  EXPECT_EQ(Str(out.formula2), "");
+  EXPECT_EQ(out.formula2, nullptr);
 }
 
 TEST(FormulonCApiUsability, TableTotalsFormulaCarriesTheEqualsWhicheverWayItWasEntered) {
@@ -436,20 +744,20 @@ TEST(FormulonCApiUsability, TableTotalsFormulaCarriesTheEqualsWhicheverWayItWasE
   ASSERT_EQ(AddTable(wb.handle, 0, &ref, "Sales", columns, 2, "TableStyleMedium2", 1, 1, &table), 0)
       << fm_get_last_error_message();
   fm_table_column_info_t column = FM_STRUCT_INIT(fm_table_column_info_t);
-  ASSERT_EQ(fm_sheet_get_table_column(wb.handle, 0, table, 1, &column), 0);
-  EXPECT_EQ(Str(column.totals_row_formula), "");
+  ASSERT_EQ(fm_sheet_get_table_column_at(wb.handle, 0, table, 1, &column), 0);
+  EXPECT_EQ(column.totals_row_formula, nullptr);
 
   ASSERT_EQ(fm_sheet_set_table_column_totals(wb.handle, 0, table, 1, FM_TABLE_TOTALS_ROW_FUNCTION_CUSTOM, nullptr,
                                              "SUM(Sales[Amount])*2"),
             0)
       << fm_get_last_error_message();
-  ASSERT_EQ(fm_sheet_get_table_column(wb.handle, 0, table, 1, &column), 0);
+  ASSERT_EQ(fm_sheet_get_table_column_at(wb.handle, 0, table, 1, &column), 0);
   EXPECT_EQ(Str(column.totals_row_formula), "=SUM([Amount])*2");
   ASSERT_EQ(fm_sheet_set_table_column_totals(wb.handle, 0, table, 1, FM_TABLE_TOTALS_ROW_FUNCTION_CUSTOM, nullptr,
                                              "=SUM(Sales[Amount])*3"),
             0)
       << fm_get_last_error_message();
-  ASSERT_EQ(fm_sheet_get_table_column(wb.handle, 0, table, 1, &column), 0);
+  ASSERT_EQ(fm_sheet_get_table_column_at(wb.handle, 0, table, 1, &column), 0);
   EXPECT_EQ(Str(column.totals_row_formula), "=SUM([Amount])*3");
 }
 
@@ -465,16 +773,30 @@ TEST(FormulonCApiUsability, PivotCacheFieldFormulaCarriesTheEqualsWhicheverWayIt
   std::size_t price = 99;
   ASSERT_EQ(fm_workbook_add_pivot_cache_calculated_field(wb.handle, cache, "Price", "Amt/Qty", &price), 0)
       << fm_get_last_error_message();
+  std::int32_t present = 0;
   const char* formula = nullptr;
-  ASSERT_EQ(fm_workbook_get_pivot_cache_field_formula(wb.handle, cache, price, &formula), 0);
+  ASSERT_EQ(fm_workbook_get_pivot_cache_field_formula(wb.handle, cache, price, &present, &formula), 0);
+  EXPECT_EQ(present, 1);
   EXPECT_EQ(Str(formula), "=Amt/Qty");
   ASSERT_EQ(fm_workbook_set_pivot_cache_calculated_field_formula(wb.handle, cache, price, "=Amt*2"), 0)
       << fm_get_last_error_message();
-  ASSERT_EQ(fm_workbook_get_pivot_cache_field_formula(wb.handle, cache, price, &formula), 0);
+  ASSERT_EQ(fm_workbook_get_pivot_cache_field_formula(wb.handle, cache, price, &present, &formula), 0);
+  EXPECT_EQ(present, 1);
   EXPECT_EQ(Str(formula), "=Amt*2");
-  // A database field has no formula.
-  ASSERT_EQ(fm_workbook_get_pivot_cache_field_formula(wb.handle, cache, 0, &formula), 0);
-  EXPECT_EQ(Str(formula), "");
+}
+
+TEST(FormulonCApiUsability, PivotCacheFieldFormulaIsAbsentForADatabaseField) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  std::uint32_t cache = 0;
+  ASSERT_EQ(fm_workbook_add_pivot_cache(wb.handle, 0, &cache), 0) << fm_get_last_error_message();
+  std::size_t field = 99;
+  ASSERT_EQ(fm_workbook_add_pivot_cache_field(wb.handle, cache, "Amt", &field), 0) << fm_get_last_error_message();
+  std::int32_t present = -1;
+  const char* formula = "unchanged";
+  ASSERT_EQ(fm_workbook_get_pivot_cache_field_formula(wb.handle, cache, field, &present, &formula), 0);
+  EXPECT_EQ(present, 0);
+  EXPECT_EQ(formula, nullptr);
 }
 
 TEST(FormulonCApiUsability, SaveAndReloadDoesNotDoubleTheEquals) {
@@ -492,15 +814,16 @@ TEST(FormulonCApiUsability, SaveAndReloadDoesNotDoubleTheEquals) {
   WorkbookGuard reloaded;
   SaveAndReload(wb.handle, &reloaded);
   const char* text = nullptr;
-  ASSERT_EQ(fm_sheet_get_formula(reloaded.handle, 0, 0, 1, &text), 0);
+  std::int32_t present = 0;
+  ASSERT_EQ(fm_sheet_get_formula(reloaded.handle, 0, 0, 1, &present, &text), 0);
   EXPECT_EQ(Str(text), "=A1+1");
-  ASSERT_EQ(fm_sheet_get_formula_r1c1(reloaded.handle, 0, 0, 1, &text), 0);
+  ASSERT_EQ(fm_sheet_get_formula_r1c1(reloaded.handle, 0, 0, 1, &present, &text), 0);
   EXPECT_EQ(Str(text), "=RC[-1]+1");
   fm_cf_rule_t cf = FM_STRUCT_INIT(fm_cf_rule_t);
-  ASSERT_EQ(fm_sheet_get_cf_rule(reloaded.handle, 0, 0, &cf), 0);
+  ASSERT_EQ(fm_sheet_get_cf_rule_at(reloaded.handle, 0, 0, &cf), 0);
   EXPECT_EQ(Str(cf.formula1), "=A1>0");
   fm_data_validation_t dv = FM_STRUCT_INIT(fm_data_validation_t);
-  ASSERT_EQ(fm_sheet_get_validation(reloaded.handle, 0, 0, &dv), 0);
+  ASSERT_EQ(fm_sheet_get_validation_at(reloaded.handle, 0, 0, &dv), 0);
   EXPECT_EQ(Str(dv.formula1), "=1");
   EXPECT_EQ(Str(dv.formula2), "=10");
   fm_defined_name_t name = FM_STRUCT_INIT(fm_defined_name_t);

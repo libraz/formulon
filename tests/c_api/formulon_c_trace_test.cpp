@@ -46,7 +46,7 @@ TEST(FormulonCApiTrace, DirectPrecedentsOfFormula) {
   bool saw_a1 = false;
   bool saw_b1 = false;
   for (std::size_t i = 0; i < 2; ++i) {
-    fm_cell_node_t n = FM_STRUCT_INIT(fm_cell_node_t);
+    fm_cell_node_info_t n = FM_STRUCT_INIT(fm_cell_node_info_t);
     ASSERT_EQ(fm_cell_nodes_get_node_at(nodes.handle, i, &n), 0);
     EXPECT_EQ(n.sheet_index, 0U);
     EXPECT_EQ(n.row, 0U);
@@ -88,8 +88,8 @@ TEST(FormulonCApiTrace, CompactRangeIsVisibleInBothDirections) {
   CellNodesGuard precedents;
   ASSERT_EQ(fm_sheet_get_precedents(wb.handle, 0, 0, 1, 1, &precedents.handle), 0);
   ASSERT_EQ(count_of(fm_cell_nodes_get_node_count, precedents.handle), 2U);
-  fm_cell_node_t first = FM_STRUCT_INIT(fm_cell_node_t);
-  fm_cell_node_t second = FM_STRUCT_INIT(fm_cell_node_t);
+  fm_cell_node_info_t first = FM_STRUCT_INIT(fm_cell_node_info_t);
+  fm_cell_node_info_t second = FM_STRUCT_INIT(fm_cell_node_info_t);
   ASSERT_EQ(fm_cell_nodes_get_node_at(precedents.handle, 0, &first), 0);
   ASSERT_EQ(fm_cell_nodes_get_node_at(precedents.handle, 1, &second), 0);
   EXPECT_EQ(first.row, 0U);
@@ -100,7 +100,7 @@ TEST(FormulonCApiTrace, CompactRangeIsVisibleInBothDirections) {
   CellNodesGuard dependents;
   ASSERT_EQ(fm_sheet_get_dependents(wb.handle, 0, 4999, 0, 1, &dependents.handle), 0);
   ASSERT_EQ(count_of(fm_cell_nodes_get_node_count, dependents.handle), 1U);
-  fm_cell_node_t watcher = FM_STRUCT_INIT(fm_cell_node_t);
+  fm_cell_node_info_t watcher = FM_STRUCT_INIT(fm_cell_node_info_t);
   ASSERT_EQ(fm_cell_nodes_get_node_at(dependents.handle, 0, &watcher), 0);
   EXPECT_EQ(watcher.row, 0U);
   EXPECT_EQ(watcher.col, 1U);
@@ -120,7 +120,7 @@ TEST(FormulonCApiTrace, CompactRangeOverFormulaReportsOnlyCells) {
   ASSERT_EQ(fm_sheet_get_precedents(wb.handle, 0, 0, 1, 2, &precedents.handle), 0);
   ASSERT_EQ(count_of(fm_cell_nodes_get_node_count, precedents.handle), 2U);
   for (std::size_t i = 0; i < 2U; ++i) {
-    fm_cell_node_t n = FM_STRUCT_INIT(fm_cell_node_t);
+    fm_cell_node_info_t n = FM_STRUCT_INIT(fm_cell_node_info_t);
     ASSERT_EQ(fm_cell_nodes_get_node_at(precedents.handle, i, &n), 0);
     EXPECT_EQ(n.sheet_index, 0U);
     EXPECT_EQ(n.col, 0U);
@@ -129,7 +129,7 @@ TEST(FormulonCApiTrace, CompactRangeOverFormulaReportsOnlyCells) {
   CellNodesGuard dependents;
   ASSERT_EQ(fm_sheet_get_dependents(wb.handle, 0, 4999, 0, 2, &dependents.handle), 0);
   ASSERT_EQ(count_of(fm_cell_nodes_get_node_count, dependents.handle), 1U);
-  fm_cell_node_t watcher = FM_STRUCT_INIT(fm_cell_node_t);
+  fm_cell_node_info_t watcher = FM_STRUCT_INIT(fm_cell_node_info_t);
   ASSERT_EQ(fm_cell_nodes_get_node_at(dependents.handle, 0, &watcher), 0);
   EXPECT_EQ(watcher.sheet_index, 0U);
   EXPECT_EQ(watcher.row, 0U);
@@ -198,7 +198,7 @@ TEST(FormulonCApiTrace, NullArgsReturnBindingNullPointer) {
   EXPECT_EQ(out, nullptr);
   fm_cell_nodes_destroy(out);
 
-  fm_cell_node_t node = FM_STRUCT_INIT(fm_cell_node_t);
+  fm_cell_node_info_t node = FM_STRUCT_INIT(fm_cell_node_info_t);
   EXPECT_EQ(fm_cell_nodes_get_node_at(nullptr, 0, &node),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
 }

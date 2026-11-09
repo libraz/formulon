@@ -67,10 +67,10 @@ TEST(FormulonCApiClock, FreshWorkbookFollowsTheHostClock) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   fm_civil_time_t now{1, 1, 1, 1, 1, 1};  // poison
   int32_t pinned = 7;                     // poison
-  ASSERT_EQ(fm_workbook_get_pinned_now(wb.handle, &now, &pinned), 0);
+  ASSERT_EQ(fm_workbook_get_pinned_now(wb.handle, &pinned, &now), 0);
   EXPECT_EQ(pinned, 0);
   // Zero-filled rather than left as the caller wrote it, so a caller that
-  // ignores `out_pinned` at least reads a value that cannot pass for a date.
+  // ignores `out_present` at least reads a value that cannot pass for a date.
   EXPECT_EQ(now.year, 0);
   EXPECT_EQ(now.month, 0);
   EXPECT_EQ(now.day, 0);
@@ -86,7 +86,7 @@ TEST(FormulonCApiClock, APinReadsBackFieldForField) {
 
   fm_civil_time_t now{};
   int32_t pinned = 0;
-  ASSERT_EQ(fm_workbook_get_pinned_now(wb.handle, &now, &pinned), 0);
+  ASSERT_EQ(fm_workbook_get_pinned_now(wb.handle, &pinned, &now), 0);
   EXPECT_EQ(pinned, 1);
   EXPECT_EQ(now.year, kPinned.year);
   EXPECT_EQ(now.month, kPinned.month);
@@ -104,7 +104,7 @@ TEST(FormulonCApiClock, ReleasingThePinRestoresTheHostClock) {
 
   fm_civil_time_t now{};
   int32_t pinned = 1;
-  ASSERT_EQ(fm_workbook_get_pinned_now(wb.handle, &now, &pinned), 0);
+  ASSERT_EQ(fm_workbook_get_pinned_now(wb.handle, &pinned, &now), 0);
   EXPECT_EQ(pinned, 0);
 }
 
@@ -171,7 +171,7 @@ TEST(FormulonCApiClock, ASaveDoesNotCarryThePin) {
   ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &reloaded.handle), 0);
   fm_civil_time_t now{};
   int32_t pinned = 1;
-  ASSERT_EQ(fm_workbook_get_pinned_now(reloaded.handle, &now, &pinned), 0);
+  ASSERT_EQ(fm_workbook_get_pinned_now(reloaded.handle, &pinned, &now), 0);
   EXPECT_EQ(pinned, 0);
 }
 
@@ -193,7 +193,7 @@ TEST(FormulonCApiClock, EveryFieldIsRangeChecked) {
   // None of the rejections left a pin behind.
   fm_civil_time_t now{};
   int32_t pinned = 1;
-  ASSERT_EQ(fm_workbook_get_pinned_now(wb.handle, &now, &pinned), 0);
+  ASSERT_EQ(fm_workbook_get_pinned_now(wb.handle, &pinned, &now), 0);
   EXPECT_EQ(pinned, 0);
 }
 
@@ -220,9 +220,9 @@ TEST(FormulonCApiClock, NullArgumentsAreRejected) {
   fm_civil_time_t now{};
   int32_t pinned = 0;
   const auto null_ptr = static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer);
-  EXPECT_EQ(fm_workbook_get_pinned_now(nullptr, &now, &pinned), null_ptr);
-  EXPECT_EQ(fm_workbook_get_pinned_now(wb.handle, nullptr, &pinned), null_ptr);
-  EXPECT_EQ(fm_workbook_get_pinned_now(wb.handle, &now, nullptr), null_ptr);
+  EXPECT_EQ(fm_workbook_get_pinned_now(nullptr, &pinned, &now), null_ptr);
+  EXPECT_EQ(fm_workbook_get_pinned_now(wb.handle, &pinned, nullptr), null_ptr);
+  EXPECT_EQ(fm_workbook_get_pinned_now(wb.handle, nullptr, &now), null_ptr);
   EXPECT_EQ(fm_workbook_set_pinned_now(nullptr, &kPinned), null_ptr);
   EXPECT_EQ(fm_workbook_set_pinned_now(nullptr, nullptr), null_ptr);
 }

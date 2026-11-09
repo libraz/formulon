@@ -19,7 +19,8 @@
 // pictures and charts (shapes and slicers have their own paths), rename takes
 // shapes too, z-order also takes slicers, and snapshot/restore take pictures,
 // charts and shapes. Groups, connectors and other frames are refused with
-// `kInvalidArgument`.
+// `kInvalidArgument`; an id no object on the sheet holds fails with
+// `kNotFound`.
 //
 // Row/column edits follow Excel's anchor rules: a move-and-size (two-cell)
 // object moves each marker, a marker inside a deleted span collapses to the
@@ -115,22 +116,22 @@ std::int64_t sheet_offset_emu(const Workbook& wb, std::size_t sheet, bool row_ax
 /// picture rotated into [45, 135) or [225, 315) degrees gets an anchor box
 /// with width and height swapped about the same centre. A placement equal to
 /// the current one writes nothing. Fails like `insert_image` for bad input,
-/// and with `kInvalidArgument` when the sheet has no picture or chart with
-/// that id.
+/// with `kNotFound` for an unknown id, and with `kInvalidArgument` for an
+/// object of another kind.
 Expected<void, Error> set_drawing_anchor(Workbook& wb, std::size_t sheet, std::uint32_t object_id,
                                          const DrawingAnchor& anchor);
 
 /// Renames the first picture, chart or shape with `object_id`. Duplicate
-/// names are allowed. Fails with `kInvalidArgument` for an empty `name` or
-/// when the sheet has no picture, chart or shape with that id.
+/// names are allowed. Fails with `kInvalidArgument` for an empty `name` or an
+/// object of another kind, and with `kNotFound` for an unknown id.
 Expected<void, Error> set_drawing_name(Workbook& wb, std::size_t sheet, std::uint32_t object_id, std::string_view name);
 
 /// Moves the first picture, chart, shape or slicer with `object_id` so it becomes item
 /// `index` of `list_drawing_objects`, whose order is the z-order (0 is the
 /// back). The unit moved is the object's top-level element, a whole
-/// `mc:AlternateContent` included. Fails with `kInvalidArgument` for an
-/// unknown id or an `index` past the last item; an unchanged order writes
-/// nothing.
+/// `mc:AlternateContent` included. Fails with `kNotFound` for an unknown id,
+/// `kInvalidArgument` for an object of another kind and `kIndexOutOfRange`
+/// for an `index` past the last item; an unchanged order writes nothing.
 Expected<void, Error> set_drawing_z_order(Workbook& wb, std::size_t sheet, std::uint32_t object_id,
                                           std::uint32_t index);
 
@@ -138,7 +139,8 @@ Expected<void, Error> set_drawing_z_order(Workbook& wb, std::size_t sheet, std::
 /// bytes: its list position, its top-level element, the relationships it
 /// names with their parts, and every part reachable from those parts' rels
 /// (a chart's style, colors, user shapes and embeddings) with the rels parts.
-/// Fails with `kInvalidArgument` for an unknown id.
+/// Fails with `kNotFound` for an unknown id and `kInvalidArgument` for an
+/// object of another kind.
 Expected<std::vector<std::uint8_t>, Error> snapshot_drawing(const Workbook& wb, std::size_t sheet,
                                                             std::uint32_t object_id);
 
@@ -157,8 +159,8 @@ Expected<std::uint32_t, Error> restore_drawing(Workbook& wb, std::size_t sheet, 
 
 /// Removes the picture or chart with `object_id`, plus the relationships it
 /// named and the parts (a chart's part and its dependents) nothing else
-/// references. Fails with `kInvalidArgument` when the sheet has no picture or
-/// chart with that id.
+/// references. Fails with `kNotFound` for an unknown id and
+/// `kInvalidArgument` for an object of another kind.
 Expected<void, Error> remove_drawing(Workbook& wb, std::size_t sheet, std::uint32_t object_id);
 
 /// Moves sheet `sheet`'s anchors for a row (`row_axis`) or column edit of

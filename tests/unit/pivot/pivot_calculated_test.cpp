@@ -246,11 +246,14 @@ TEST_F(PivotCalculated, SyncExtendsTablesToTheCacheFieldCount) {
 
 TEST_F(PivotCalculated, FieldNamesAndFormulasAreChecked) {
   PivotTable table = BuildTable();
-  for (const char* name : {"", "All", "blank", "a[b", "a]", "region"}) {
+  for (const char* name : {"", "All", "blank", "a[b", "a]"}) {
     auto added = add_calculated_field(cache_, {&table}, name, "Amt", host_);
     ASSERT_FALSE(static_cast<bool>(added)) << name;
     EXPECT_EQ(added.error().code, FormulonErrorCode::kInvalidArgument) << name;
   }
+  auto taken = add_calculated_field(cache_, {&table}, "region", "Amt", host_);
+  ASSERT_FALSE(static_cast<bool>(taken));
+  EXPECT_EQ(taken.error().code, FormulonErrorCode::kAlreadyExists);
   auto bad_formula = add_calculated_field(cache_, {&table}, "Price", "Nope*2", host_);
   ASSERT_FALSE(static_cast<bool>(bad_formula));
   EXPECT_EQ(bad_formula.error().code, FormulonErrorCode::kInvalidArgument);
@@ -450,11 +453,14 @@ TEST_F(PivotCalculated, ItemTargetsAndNamesAreChecked) {
   EXPECT_EQ(grouped.error().code, FormulonErrorCode::kPreconditionFailed);
   cache_.mutable_fields()[kRegion].field_group.reset();
 
-  for (const char* name : {"", "All", "a[1]", "north"}) {
+  for (const char* name : {"", "All", "a[1]"}) {
     auto added = add_calculated_item(cache_, {&table}, kRegion, name, "North", host_);
     ASSERT_FALSE(static_cast<bool>(added)) << name;
     EXPECT_EQ(added.error().code, FormulonErrorCode::kInvalidArgument) << name;
   }
+  auto item_taken = add_calculated_item(cache_, {&table}, kRegion, "north", "North", host_);
+  ASSERT_FALSE(static_cast<bool>(item_taken));
+  EXPECT_EQ(item_taken.error().code, FormulonErrorCode::kAlreadyExists);
   for (const char* formula : {"Product[A]", "North+Amt"}) {
     auto added = add_calculated_item(cache_, {&table}, kRegion, "Y", formula, host_);
     ASSERT_FALSE(static_cast<bool>(added)) << formula;

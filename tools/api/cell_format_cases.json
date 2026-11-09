@@ -332,10 +332,10 @@
       "throws": { "js": "TypeError", "py": "TypeError" }
     },
     {
-      "id": "negative-size-is-range-error",
+      "id": "negative-size-is-invalid-argument",
       "range": "A1",
       "patch": { "font": { "sizePt": -1 } },
-      "throws": { "js": "RangeError", "py": "ValueError" }
+      "throws": { "js": "FormulonError:InvalidArgument", "py": "InvalidArgumentError" }
     },
     {
       "id": "fractional-enum-is-range-error",

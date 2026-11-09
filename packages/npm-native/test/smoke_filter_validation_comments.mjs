@@ -235,7 +235,7 @@ test('threaded comments cover a thread, a reply with a mention, resolution and r
       persons.map((p) => [p.id, p.displayName, p.userId, p.providerId]),
       [
         [ANN, 'Ann', 'ann@example.com', 'AD'],
-        [BOB, 'Bob', '', 'None'],
+        [BOB, 'Bob', null, 'None'],
       ],
     );
 
@@ -258,7 +258,7 @@ test('threaded comments cover a thread, a reply with a mention, resolution and r
     const list = result;
     assert.equal(list.length, 2);
     assert.equal(list[0].id, THREAD);
-    assert.equal(list[0].parentId, '');
+    assert.equal(list[0].parentId, null);
     assert.deepEqual({ ...list[0].cell }, { row: 2, col: 3 });
     assert.equal(list[0].done, false);
     assert.deepEqual(list[0].mentions, []);

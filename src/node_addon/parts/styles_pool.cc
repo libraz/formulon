@@ -21,7 +21,7 @@ namespace {
 /// Builds the JS mirror of a font record. Shared by `getFont` and the
 /// `<dxf>` font projection so both surface the same field set. An absent
 /// element reads as `null`.
-Napi::Object FontRecordToJs(Napi::Env env, const fm_font_record_t& f) {
+Napi::Object FontRecordToJs(Napi::Env env, const fm_font_t& f) {
   Napi::Object out = Napi::Object::New(env);
   out.Set("name", JsString(env, f.name));
   out.Set("sizePt", JsNumberOrNull(env, f.has_size_pt, f.size_pt));
@@ -45,7 +45,7 @@ Napi::Object FontRecordToJs(Napi::Env env, const fm_font_record_t& f) {
 /// name for the duration of the C ABI call, which borrows the pointer. An
 /// omitted or `null` element is absent from the record.
 void PullFontRecord(CheckedSpecReader& reader, const Napi::Object& record, std::string* name_storage,
-                    fm_font_record_t* out) {
+                    fm_font_t* out) {
   bool present = false;
   const auto flag = [&](const char* key, int32_t* has, int32_t* value) {
     *value = reader.Bool(record, key, false, &present) ? 1 : 0;
@@ -58,13 +58,13 @@ void PullFontRecord(CheckedSpecReader& reader, const Napi::Object& record, std::
   flag("bold", &out->has_bold, &out->bold);
   flag("italic", &out->has_italic, &out->italic);
   flag("strike", &out->has_strike, &out->strike);
-  out->underline = reader.U8(record, "underline", 0U);
-  out->vert_align = reader.U8(record, "vertAlign", 0U);
-  out->family = reader.U8(record, "family", 0U, &present);
+  out->underline = reader.I32(record, "underline", 0);
+  out->vert_align = reader.I32(record, "vertAlign", 0);
+  out->family = reader.I32(record, "family", 0, &present);
   out->has_family = present ? 1 : 0;
   out->charset = reader.U8(record, "charset", 0U, &present);
   out->has_charset = present ? 1 : 0;
-  out->scheme = reader.U8(record, "scheme", 0U);
+  out->scheme = reader.I32(record, "scheme", 0);
   flag("outline", &out->has_outline, &out->outline);
   flag("shadow", &out->has_shadow, &out->shadow);
   flag("condense", &out->has_condense, &out->condense);
@@ -213,7 +213,7 @@ std::string ProtectionToXml(CheckedSpecReader& reader, const Napi::Object& recor
   return xml + "/>";
 }
 
-Napi::Object FillRecordToJs(Napi::Env env, const fm_fill_record_t& f) {
+Napi::Object FillRecordToJs(Napi::Env env, const fm_fill_t& f) {
   Napi::Object out = Napi::Object::New(env);
   out.Set("pattern", Napi::Number::New(env, static_cast<uint32_t>(f.pattern)));
   out.Set("foreground", ColorSpecToJs(env, f.foreground));
@@ -241,10 +241,10 @@ Napi::Object FillRecordToJs(Napi::Env env, const fm_fill_record_t& f) {
 
 /// Reads a fill record out of a JS object. `stops` owns the gradient stops
 /// for the duration of the C ABI call, which borrows the pointer.
-fm_fill_record_t PullFillRecord(CheckedSpecReader& reader, const Napi::Object& record,
+fm_fill_t PullFillRecord(CheckedSpecReader& reader, const Napi::Object& record,
                                 std::vector<fm_gradient_stop_t>* stops) {
-  fm_fill_record_t out{};
-  out.pattern = reader.U8(record, "pattern", 0U);
+  fm_fill_t out{};
+  out.pattern = reader.I32(record, "pattern", 0);
   out.foreground = PullColorSpec(reader, record, "foreground");
   out.background = PullColorSpec(reader, record, "background");
   Napi::Object gradient;
@@ -288,7 +288,7 @@ Napi::Object BorderSideToJs(Napi::Env env, const fm_border_side_t& s) {
   return out;
 }
 
-Napi::Object BorderRecordToJs(Napi::Env env, const fm_border_record_t& b) {
+Napi::Object BorderRecordToJs(Napi::Env env, const fm_border_t& b) {
   Napi::Object out = Napi::Object::New(env);
   out.Set("left", BorderSideToJs(env, b.left));
   out.Set("right", BorderSideToJs(env, b.right));
@@ -306,13 +306,13 @@ fm_border_side_t PullBorderSide(CheckedSpecReader& reader, const Napi::Object& o
   if (!reader.Object(owner, key, &v)) {
     return s;
   }
-  s.style = reader.U8(v, "style", 0U);
+  s.style = reader.I32(v, "style", 0);
   s.color = PullColorSpec(reader, v, "color");
   return s;
 }
 
-fm_border_record_t PullBorderRecord(CheckedSpecReader& reader, const Napi::Object& record) {
-  fm_border_record_t out{};
+fm_border_t PullBorderRecord(CheckedSpecReader& reader, const Napi::Object& record) {
+  fm_border_t out{};
   out.left = PullBorderSide(reader, record, "left");
   out.right = PullBorderSide(reader, record, "right");
   out.top = PullBorderSide(reader, record, "top");
@@ -380,8 +380,8 @@ void PullCellXf(CheckedSpecReader& reader, const Napi::Object& record, fm_cell_x
   bool vertical_align_present = false;
   bool wrap_text_present = false;
   bool justify_last_line_present = false;
-  xf.horizontal = reader.U8(record, "horizontal", 0U, &horizontal_align_present);
-  xf.vertical = reader.U8(record, "vertical", 2U, &vertical_align_present);
+  xf.horizontal = reader.I32(record, "horizontal", 0, &horizontal_align_present);
+  xf.vertical = reader.I32(record, "vertical", 2, &vertical_align_present);
   xf.wrap_text = reader.Bool(record, "wrapText", false, &wrap_text_present) ? 1 : 0;
   xf.justify_last_line = reader.Bool(record, "justifyLastLine", false, &justify_last_line_present) ? 1 : 0;
   xf.style_xf_index = reader.U32(record, "styleXfIndex", 0U);
@@ -454,7 +454,7 @@ Napi::Value StyleCountResult(const Napi::CallbackInfo& info, const fm_workbook_t
 // ---- Cell-XF index --------------------------------------------------
 
 Napi::Value Workbook::GetCellXfIndex(const Napi::CallbackInfo& info) {
-  return IndexCall(info, [&](fm_workbook_t* handle, std::size_t* xf) {
+  return U32IndexCall(info, [&](fm_workbook_t* handle, uint32_t* xf) {
     const uint32_t sheet = ArgU32(info, 0);
     const uint32_t row = ArgU32(info, 1);
     const uint32_t col = ArgU32(info, 2);
@@ -487,35 +487,35 @@ Napi::Value Workbook::SetRangeXfIndex(const Napi::CallbackInfo& info) {
 Napi::Value Workbook::GetCellXf(const Napi::CallbackInfo& info) {
   return RecordGetter<fm_cell_xf_t>(
       info,
-      [&](fm_workbook_t* handle, fm_cell_xf_t* xf) { return fm_workbook_get_cell_xf(handle, ArgU32(info, 0), xf); },
+      [&](fm_workbook_t* handle, fm_cell_xf_t* xf) { return fm_workbook_get_cell_xf_at(handle, ArgU32(info, 0), xf); },
       CellXfResultToJs);
 }
 
 Napi::Value Workbook::GetFont(const Napi::CallbackInfo& info) {
-  return RecordGetter<fm_font_record_t>(
+  return RecordGetter<fm_font_t>(
       info,
-      [&](fm_workbook_t* handle, fm_font_record_t* f) { return fm_workbook_get_font(handle, ArgU32(info, 0), f); },
+      [&](fm_workbook_t* handle, fm_font_t* f) { return fm_workbook_get_font_at(handle, ArgU32(info, 0), f); },
       FontRecordToJs);
 }
 
 // The workbook default font is font 0, the one `setDefaultFont` writes.
 Napi::Value Workbook::GetDefaultFont(const Napi::CallbackInfo& info) {
-  return RecordGetter<fm_font_record_t>(
-      info, [&](fm_workbook_t* handle, fm_font_record_t* f) { return fm_workbook_get_font(handle, 0U, f); },
+  return RecordGetter<fm_font_t>(
+      info, [&](fm_workbook_t* handle, fm_font_t* f) { return fm_workbook_get_font_at(handle, 0U, f); },
       FontRecordToJs);
 }
 
 Napi::Value Workbook::GetFill(const Napi::CallbackInfo& info) {
-  return RecordGetter<fm_fill_record_t>(
+  return RecordGetter<fm_fill_t>(
       info,
-      [&](fm_workbook_t* handle, fm_fill_record_t* f) { return fm_workbook_get_fill(handle, ArgU32(info, 0), f); },
+      [&](fm_workbook_t* handle, fm_fill_t* f) { return fm_workbook_get_fill_at(handle, ArgU32(info, 0), f); },
       FillRecordToJs);
 }
 
 Napi::Value Workbook::GetBorder(const Napi::CallbackInfo& info) {
-  return RecordGetter<fm_border_record_t>(
+  return RecordGetter<fm_border_t>(
       info,
-      [&](fm_workbook_t* handle, fm_border_record_t* b) { return fm_workbook_get_border(handle, ArgU32(info, 0), b); },
+      [&](fm_workbook_t* handle, fm_border_t* b) { return fm_workbook_get_border_at(handle, ArgU32(info, 0), b); },
       BorderRecordToJs);
 }
 
@@ -536,8 +536,8 @@ Napi::Value Workbook::GetDxf(const Napi::CallbackInfo& info) {
     return ThrowInvalidHandle(env);
   }
   const uint32_t dxf_index = ArgU32(info, 0);
-  fm_dxf_record_t d{};
-  fm_status_t rc = fm_workbook_get_dxf(handle_, dxf_index, &d);
+  fm_dxf_t d{};
+  fm_status_t rc = fm_workbook_get_dxf_at(handle_, dxf_index, &d);
   if (rc != 0) {
     return ThrowStatus(env, rc);
   }
@@ -565,7 +565,7 @@ Napi::Value Workbook::GetDxf(const Napi::CallbackInfo& info) {
 
 Napi::Value Workbook::AddFont(const Napi::CallbackInfo& info) {
   std::string name;
-  fm_font_record_t fr{};
+  fm_font_t fr{};
   return AddStyleRecord(
       info, [&](CheckedSpecReader& reader, const Napi::Object& record) { PullFontRecord(reader, record, &name, &fr); },
       [&](fm_workbook_t* handle, std::size_t* idx) { return fm_workbook_add_font(handle, &fr, idx); });
@@ -573,7 +573,7 @@ Napi::Value Workbook::AddFont(const Napi::CallbackInfo& info) {
 
 Napi::Value Workbook::SetFont(const Napi::CallbackInfo& info) {
   std::string name;
-  fm_font_record_t fr{};
+  fm_font_t fr{};
   return SetStyleRecord(
       info, 1,
       [&](CheckedSpecReader& reader, const Napi::Object& record) { PullFontRecord(reader, record, &name, &fr); },
@@ -582,7 +582,7 @@ Napi::Value Workbook::SetFont(const Napi::CallbackInfo& info) {
 
 Napi::Value Workbook::SetDefaultFont(const Napi::CallbackInfo& info) {
   std::string name;
-  fm_font_record_t fr{};
+  fm_font_t fr{};
   return SetStyleRecord(
       info, 0,
       [&](CheckedSpecReader& reader, const Napi::Object& record) { PullFontRecord(reader, record, &name, &fr); },
@@ -590,7 +590,7 @@ Napi::Value Workbook::SetDefaultFont(const Napi::CallbackInfo& info) {
 }
 
 Napi::Value Workbook::AddFill(const Napi::CallbackInfo& info) {
-  fm_fill_record_t fr{};
+  fm_fill_t fr{};
   std::vector<fm_gradient_stop_t> stops;
   return AddStyleRecord(
       info, [&](CheckedSpecReader& reader, const Napi::Object& record) { fr = PullFillRecord(reader, record, &stops); },
@@ -598,7 +598,7 @@ Napi::Value Workbook::AddFill(const Napi::CallbackInfo& info) {
 }
 
 Napi::Value Workbook::AddBorder(const Napi::CallbackInfo& info) {
-  fm_border_record_t br{};
+  fm_border_t br{};
   return AddStyleRecord(
       info, [&](CheckedSpecReader& reader, const Napi::Object& record) { br = PullBorderRecord(reader, record); },
       [&](fm_workbook_t* handle, std::size_t* idx) { return fm_workbook_add_border(handle, &br, idx); });
@@ -617,16 +617,16 @@ Napi::Value Workbook::AddNumFmt(const Napi::CallbackInfo& info) {
 
 Napi::Value Workbook::AddXf(const Napi::CallbackInfo& info) {
   fm_cell_xf_t xf{};
-  return AddStyleRecord(
+  return AddStyleRecord<uint32_t>(
       info, [&](CheckedSpecReader& reader, const Napi::Object& record) { PullCellXf(reader, record, &xf); },
-      [&](fm_workbook_t* handle, std::size_t* idx) { return fm_workbook_add_cell_xf(handle, &xf, idx); });
+      [&](fm_workbook_t* handle, uint32_t* idx) { return fm_workbook_add_cell_xf(handle, &xf, idx); });
 }
 
 Napi::Value Workbook::AddCellStyleXf(const Napi::CallbackInfo& info) {
   fm_cell_xf_t xf{};
-  return AddStyleRecord(
+  return AddStyleRecord<uint32_t>(
       info, [&](CheckedSpecReader& reader, const Napi::Object& record) { PullCellXf(reader, record, &xf); },
-      [&](fm_workbook_t* handle, std::size_t* idx) { return fm_workbook_add_cell_style_xf(handle, &xf, idx); });
+      [&](fm_workbook_t* handle, uint32_t* idx) { return fm_workbook_add_cell_style_xf(handle, &xf, idx); });
 }
 
 Napi::Value Workbook::AddDxf(const Napi::CallbackInfo& info) {
@@ -635,8 +635,8 @@ Napi::Value Workbook::AddDxf(const Napi::CallbackInfo& info) {
   std::string alignment_xml;
   std::string protection_xml;
   std::vector<fm_gradient_stop_t> fill_stops;
-  fm_dxf_record_t dxf{};
-  return AddStyleRecord(
+  fm_dxf_t dxf{};
+  return AddStyleRecord<uint32_t>(
       info,
       [&](CheckedSpecReader& reader, const Napi::Object& record) {
         Napi::Object font;
@@ -673,7 +673,7 @@ Napi::Value Workbook::AddDxf(const Napi::CallbackInfo& info) {
         dxf.alignment_xml = alignment_xml.c_str();
         dxf.protection_xml = protection_xml.c_str();
       },
-      [&](fm_workbook_t* handle, std::size_t* idx) { return fm_workbook_add_dxf(handle, &dxf, idx); });
+      [&](fm_workbook_t* handle, uint32_t* idx) { return fm_workbook_add_dxf(handle, &dxf, idx); });
 }
 
 // ---- Style pool counts ----------------------------------------------

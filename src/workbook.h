@@ -196,7 +196,8 @@ class Workbook {
   /// Unicode-simple-fold collision with an existing sheet. The name only
   /// Windows Excel's naming UI refuses is left to `add_sheet_entered`. Returns a pointer to the new sheet
   /// on success (owned by the Workbook, invalidated by later structural
-  /// mutations) or `kInvalidSheetName` on any violation.
+  /// mutations), `kAlreadyExists` on a collision, or `kInvalidSheetName` on
+  /// any other violation.
   ///
   /// This is also the append path the OOXML and XLSB readers use, so the
   /// name validation `add_sheet` defers to the I/O boundary is in fact
@@ -206,6 +207,8 @@ class Workbook {
   ///
   /// Errors:
   ///   * `kInvalidSheetName` on any name violation.
+  ///   * `kAlreadyExists` when another sheet holds the name under Unicode
+  ///     simple case folding.
   ///   * `kSheetCountLimitExceeded` when `sheet_count() == kMaxSheets`.
   Expected<Sheet*, Error> add_sheet_validated(std::string name);
 
@@ -232,11 +235,11 @@ class Workbook {
   ///   * `kInvalidSheetName` when `new_name` is malformed UTF-8, empty, exceeds 31
   ///     UTF-16 units, contains a forbidden character (`: \ / ? * [ ]`),
   ///     begins or ends with an apostrophe, is `History` in any case under
-  ///     a Windows profile,
-  ///     or collides under Unicode simple case folding with another sheet's
-  ///     name. A no-op rename to the sheet's existing name under the same
-  ///     fold is accepted: the sheet's stored name is updated to the
-  ///     new casing, no other state changes.
+  ///     a Windows profile.
+  ///   * `kAlreadyExists` when `new_name` collides under Unicode simple case
+  ///     folding with another sheet's name. A no-op rename to the sheet's
+  ///     existing name under the same fold is accepted: the sheet's stored
+  ///     name is updated to the new casing, no other state changes.
   Expected<void, Error> rename_sheet(std::uint32_t index, std::string new_name);
 
   /// Removes the sheet at `index`.
@@ -251,7 +254,7 @@ class Workbook {
   ///
   /// Errors:
   ///   * `kSheetIndexOutOfRange` when `index >= sheet_count()`.
-  ///   * `kCannotRemoveLastSheet` when `sheet_count() == 1` (Excel's
+  ///   * `kPreconditionFailed` when `sheet_count() == 1` (Excel's
   ///     UI rejects the same op; we mirror it so `save()` never lands
   ///     in the empty-sheet-list state Excel refuses to open).
   Expected<void, Error> remove_sheet(std::uint32_t index);
@@ -294,7 +297,8 @@ class Workbook {
   ///     content the copy cannot model: unrecognised relationships, slicers,
   ///     drawing objects other than pictures and charts, pivot charts, or a
   ///     `.xlsb` drawing the reader could not lift.
-  ///   * `kInvalidSheetName` when `new_name` fails validation or collides.
+  ///   * `kInvalidSheetName` when `new_name` fails validation.
+  ///   * `kAlreadyExists` when `new_name` collides with another sheet's name.
   Expected<std::size_t, Error> copy_sheet(std::size_t source, std::size_t insert_before,
                                           std::optional<std::string> new_name);
 
@@ -693,8 +697,9 @@ class Workbook {
   /// the same scope only, matching Excel's name-resolution model. The
   /// formula passes through `bind_self_book_names`.
   ///
-  /// Returns `kInvalidArgument` when `name` is empty or
-  /// `local_sheet_id` names a sheet outside the workbook.
+  /// Returns `kInvalidArgument` when `name` is empty, is not a valid new
+  /// name, or `local_sheet_id` names a sheet outside the workbook, and
+  /// `kAlreadyExists` when a new name equals a table's name.
   Expected<void, Error> set_defined_name_scoped(std::string name, std::string formula, std::int32_t local_sheet_id);
 
   /// Sets the hidden flag of the defined name `name` in `local_sheet_id`
@@ -758,10 +763,11 @@ class Workbook {
   /// `table.ref` must be a single-area A1 range as wide as `table.columns`,
   /// whose names must be non-empty and pairwise distinct (case-insensitive).
   /// Returns `kInvalidArgument` for a bad sheet index, an empty or unparsable
-  /// identity or range, a column mismatch, a display name `is_valid_table_name`
-  /// refuses, a name or display name any existing table (a verbatim-retained
-  /// XLSB table part included) or defined name of any scope already uses, or
-  /// a range that overlaps another table, a PivotTable, a data table or a
+  /// identity or range, a column mismatch, or a display name
+  /// `is_valid_table_name` refuses; `kAlreadyExists` for a name or display
+  /// name any existing table (a verbatim-retained XLSB table part included)
+  /// or defined name of any scope already uses; `kPreconditionFailed` for a
+  /// range that overlaps another table, a PivotTable, a data table or a
   /// multi-cell array formula, or cuts through merged cells. Merges wholly
   /// inside the range are removed. `table.style_info` is kept as given.
   Expected<std::size_t, Error> add_table(TableMetadata table);
@@ -770,7 +776,8 @@ class Workbook {
   /// the first row stays, a table with a header row keeps a data row, and the
   /// range overlaps no other table, PivotTable, data table, multi-cell array
   /// formula or merged cell. The table's current range always passes.
-  /// Returns `kInvalidArgument` on refusal or an out-of-range `index`.
+  /// Returns `kPreconditionFailed` for an overlap and `kInvalidArgument` for
+  /// any other refusal or an out-of-range `index`.
   Expected<void, Error> check_table_resize(std::size_t index, const MergeRange& rect) const;
 
   /// Smallest N >= 1 such that `<word><N>` is not the name or display name
@@ -808,8 +815,9 @@ class Workbook {
   /// old name or display name (case-insensitive) to `display_name`: cell,
   /// defined-name, metadata (CF, DV, calculated-column, totals-row) and chart
   /// formulas, plus a pivot cache sourced from the table by name. Returns
-  /// `kInvalidArgument` for an out-of-range `index` and for a name pair
-  /// `add_table` would refuse, the table's own names excepted.
+  /// `kInvalidArgument` for an out-of-range `index` and refuses a name pair
+  /// as `add_table` would (`kInvalidArgument` / `kAlreadyExists`), the
+  /// table's own names excepted.
   Expected<void, Error> rename_table(std::size_t index, std::string name, std::string display_name);
 
   /// Renames column `column` of table `table` from a typed header and
@@ -900,20 +908,22 @@ class Workbook {
   std::vector<Person>& mutable_persons() noexcept { return persons_; }
 
   /// Appends `person`. Fails with `kThreadedCommentInvalid` when the id is
-  /// not a brace-wrapped uppercase GUID, is already listed, or the display
-  /// name is empty.
+  /// not a brace-wrapped uppercase GUID or the display name is empty, and
+  /// with `kAlreadyExists` when the id is already listed.
   Expected<void, Error> add_person(Person person);
 
-  /// Removes the person with `id`. Fails with `kThreadedCommentInvalid` when
-  /// no such person exists or a threaded comment or mention still names them.
+  /// Removes the person with `id`. Fails with `kNotFound` when no such person
+  /// exists and with `kPreconditionFailed` when a threaded comment or mention
+  /// still names them.
   Expected<void, Error> remove_person(std::string_view id);
 
   /// Adds `comment` to sheet `sheet`. An empty `parent_id` opens a new thread
   /// at `row`/`col`, which must hold neither a note nor a thread; a non-empty
   /// one appends a reply to that thread, taking its anchor and ignoring
   /// `row`/`col` and `done`. Ids, timestamps, persons and mention ranges are
-  /// validated; any violation fails with `kThreadedCommentInvalid` and leaves
-  /// the sheet unchanged.
+  /// validated; any violation fails with `kThreadedCommentInvalid`, an id
+  /// already used on the sheet or a cell already holding a note or thread
+  /// with `kAlreadyExists`. A failure leaves the sheet unchanged.
   Expected<void, Error> add_threaded_comment(std::size_t sheet, ThreadedComment comment);
 
   /// Replaces the text and mentions of the comment with `id`.

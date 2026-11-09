@@ -31,75 +31,41 @@ export type ValueKind = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
  *  code name in PascalCase. */
 export const StatusCode: Readonly<{
   Ok: 0;
-  UnknownError: 1;
   InvalidArgument: 2;
   NotImplemented: 3;
   OutOfMemory: 4;
-  CancelRequested: 5;
   NotFound: 6;
   AlreadyExists: 7;
   InternalError: 8;
   PreconditionFailed: 9;
   ParserUnexpectedToken: 1000;
   ParserUnterminatedString: 1001;
-  ParserUnterminatedComment: 1002;
   ParserInvalidNumber: 1003;
   ParserInvalidReference: 1004;
   ParserInvalidSheetName: 1005;
   ParserMismatchedBrackets: 1006;
   ParserExcessiveNesting: 1007;
-  ParserUnknownFunction: 1008;
   ParserInvalidArrayLiteral: 1009;
   ParserInvalidStructRef: 1010;
-  ParserInvalidR1C1: 1011;
-  ParserInvalidDotNotation: 1012;
   ParserBomNotSupported: 1013;
   ParserTooManyErrors: 1014;
-  EvalStackOverflow: 2000;
-  EvalCircularReference: 2001;
-  EvalLambdaArityMismatch: 2002;
-  EvalInvalidByteCode: 2003;
-  EvalTimeLimit: 2004;
-  EvalMemoryLimit: 2005;
-  EvalInvalidReference: 2006;
-  EvalLambdaNotFound: 2007;
-  EvalSpillCollision: 2008;
   EvalPivotMissing: 2009;
   EvalPivotInvalid: 2010;
-  FnNotRegistered: 3000;
-  FnWrongArgCount: 3001;
-  FnArgTypeMismatch: 3002;
-  FnDomainError: 3003;
   FnOverflow: 3004;
-  FnUnderflow: 3005;
-  FnRegexCompile: 3006;
-  FnRegexMatchLimit: 3007;
-  FnHostNotAvailable: 3008;
-  GraphCycleDetected: 4000;
-  GraphIterativeDiverged: 4001;
-  GraphInvalidNodeRef: 4002;
   GraphScheduleFailed: 4003;
-  GraphThreadPoolError: 4004;
   GraphRecalcReentrant: 4005;
-  GraphIterationAborted: 4006;
   IoFileNotFound: 5000;
-  IoFilePermission: 5001;
   IoFileTooLarge: 5002;
   IoZipCorrupt: 5003;
   IoZipEncrypted: 5004;
   IoZipBomb: 5005;
   IoZipSlip: 5006;
   IoXmlParse: 5007;
-  IoXmlDoctype: 5008;
-  IoXmlEntityExplosion: 5009;
   IoRelationshipBroken: 5010;
   IoContentTypeInvalid: 5011;
   IoSheetCorrupt: 5012;
-  IoUnsupportedVariant: 5013;
   IoXlsbRecordCorrupt: 5014;
-  IoCsvEncodingDetect: 5015;
   IoWriteFailed: 5016;
-  IoCalcChainMismatch: 5017;
   IoXlsbRecordTruncated: 5018;
   IoXlsbUnknownRecord: 5019;
   IoXlsbUnsupportedPtg: 5020;
@@ -110,111 +76,59 @@ export const StatusCode: Readonly<{
   IoChartUnparseable: 5025;
   IoChartInvalidReference: 5026;
   IoChartUnsupportedKind: 5027;
-  CryptoAgileNotSupported: 6000;
-  CryptoStandardNotSupported: 6001;
-  CryptoBadPassword: 6002;
-  CryptoHashMismatch: 6003;
-  CryptoKeyDerivationFailed: 6004;
   SecResourceLimit: 6005;
-  SecExternalNotAllowed: 6006;
-  SecPolicyBlocked: 6007;
   BindingInvalidHandle: 7000;
   BindingNullPointer: 7001;
   BindingUtf8EncodingError: 7002;
   BindingCallbackException: 7003;
-  BindingWasmInitFailed: 7004;
-  PivotSourceInvalid: 8000;
-  PivotFieldNotFound: 8001;
-  PivotAggregationFailed: 8002;
-  SlicerNotConnected: 8003;
-  SparklineInvalid: 8004;
   DataTableInvalid: 8005;
   AutoFilterInvalid: 8006;
-  PrintFontMetricsMissing: 9000;
-  PrintLayoutConvergence: 9001;
   PrintInvalidArea: 9002;
-  UiViewStateInvalid: 9003;
-  UiSnapshotFailed: 9004;
   PrintPageCountOverflow: 9005;
   ThreadedCommentInvalid: 9006;
   SheetIndexOutOfRange: 5050;
   InvalidSheetName: 5051;
-  CannotRemoveLastSheet: 5052;
   SheetCountLimitExceeded: 5053;
   IndexOutOfRange: 5054;
 }>;
 /** Union of the {@link StatusCode} values. */
 export type StatusCode =
   | 0
-  | 1
   | 2
   | 3
   | 4
-  | 5
   | 6
   | 7
   | 8
   | 9
   | 1000
   | 1001
-  | 1002
   | 1003
   | 1004
   | 1005
   | 1006
   | 1007
-  | 1008
   | 1009
   | 1010
-  | 1011
-  | 1012
   | 1013
   | 1014
-  | 2000
-  | 2001
-  | 2002
-  | 2003
-  | 2004
-  | 2005
-  | 2006
-  | 2007
-  | 2008
   | 2009
   | 2010
-  | 3000
-  | 3001
-  | 3002
-  | 3003
   | 3004
-  | 3005
-  | 3006
-  | 3007
-  | 3008
-  | 4000
-  | 4001
-  | 4002
   | 4003
-  | 4004
   | 4005
-  | 4006
   | 5000
-  | 5001
   | 5002
   | 5003
   | 5004
   | 5005
   | 5006
   | 5007
-  | 5008
-  | 5009
   | 5010
   | 5011
   | 5012
-  | 5013
   | 5014
-  | 5015
   | 5016
-  | 5017
   | 5018
   | 5019
   | 5020
@@ -225,36 +139,18 @@ export type StatusCode =
   | 5025
   | 5026
   | 5027
-  | 6000
-  | 6001
-  | 6002
-  | 6003
-  | 6004
   | 6005
-  | 6006
-  | 6007
   | 7000
   | 7001
   | 7002
   | 7003
-  | 7004
-  | 8000
-  | 8001
-  | 8002
-  | 8003
-  | 8004
   | 8005
   | 8006
-  | 9000
-  | 9001
   | 9002
-  | 9003
-  | 9004
   | 9005
   | 9006
   | 5050
   | 5051
-  | 5052
   | 5053
   | 5054;
 // <status-codes:end>
@@ -563,13 +459,13 @@ export const TableTotalsRowFunction: Readonly<{
 /** Union of the {@link TableTotalsRowFunction} ordinals. */
 export type TableTotalsRowFunction = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
 
-/** One column of `TableProperties.columns`. `totalsRowFormula` is the `custom`
- *  function's formula (leading `=` included), empty otherwise. */
+/** One column of `TableProperties.columns`. `totalsRowLabel` is `null` when the column has no totals-row label;
+ *  `totalsRowFormula` is the `custom` function's formula (leading `=` included), `null` otherwise. */
 export interface TableColumn {
   readonly name: string;
   readonly totalsRowFunction: TableTotalsRowFunction;
-  readonly totalsRowLabel: string;
-  readonly totalsRowFormula: string;
+  readonly totalsRowLabel: string | null;
+  readonly totalsRowFormula: string | null;
 }
 
 /** Return type of `Table.getProperties()`. `name` is the table's one name: the name formulas and
@@ -637,12 +533,12 @@ export type TableStyleOptionsPatch = Patch<TableStyleOptions, 'styleName'>;
 
 /** Totals-row settings of one table column (`Table.setColumnTotals`); the `totalsRow*` keys are the ones of
  *  {@link TableColumn}. `totalsRowFunction` defaults to `TableTotalsRowFunction.None`; `totalsRowFormula` is
- *  required for `TableTotalsRowFunction.Custom`. An empty label or formula, what a read gives for none, means
- *  none. `name` is accepted and ignored, so the {@link TableColumn} a read returns passes as is. */
+ *  required for `TableTotalsRowFunction.Custom`. An omitted, `null` or empty label or formula means none, so a
+ *  read passes back as is. `name` is accepted and ignored, so the {@link TableColumn} a read returns passes as is. */
 export interface TableColumnTotalsInput {
   totalsRowFunction?: TableTotalsRowFunction;
-  totalsRowLabel?: string;
-  totalsRowFormula?: string;
+  totalsRowLabel?: string | null;
+  totalsRowFormula?: string | null;
   name?: string;
 }
 
@@ -2119,8 +2015,8 @@ export interface SheetRect {
 export interface Hyperlink {
   /** The cells the hyperlink covers. */
   readonly range: CellRect;
-  /** Absolute or relative target (URL, email, internal ref, …). */
-  readonly target: string;
+  /** Absolute or relative target (URL, email, internal ref, …); `null` for an in-workbook link. */
+  readonly target: string | null;
   /** In-workbook destination; `null` for an external target. */
   readonly location: string | null;
   /** Display text override; `null` when default. */
@@ -2199,11 +2095,12 @@ export interface ProtectedRange {
   readonly ranges: readonly CellRect[];
   /** Legacy 16-bit password hash, as the hex text Excel writes; `null` when absent. */
   readonly legacyPasswordHash: string | null;
-  readonly algorithmName: string;
-  readonly hashValue: string;
-  readonly saltValue: string;
+  /** Each of the four strings is `null` when the range does not state it. */
+  readonly algorithmName: string | null;
+  readonly hashValue: string | null;
+  readonly saltValue: string | null;
   readonly spinCount: number;
-  readonly securityDescriptor: string;
+  readonly securityDescriptor: string | null;
 }
 
 /** Argument of `Sheet.addProtectedRange`: `name` and `ranges` (a {@link CellRect}, an A1 range or a list of
@@ -2214,20 +2111,24 @@ export interface ProtectedRangeInput {
   ranges: readonly (CellRect | string)[] | string;
   /** Legacy 16-bit password hash, as the hex text Excel writes. */
   legacyPasswordHash?: string | null;
-  algorithmName?: string;
-  hashValue?: string;
-  saltValue?: string;
+  algorithmName?: string | null;
+  hashValue?: string | null;
+  saltValue?: string | null;
   spinCount?: number;
-  securityDescriptor?: string;
+  securityDescriptor?: string | null;
 }
 
 /** Argument of `updateProtectedRange`: every {@link ProtectedRangeInput} key, each optional. A key left out is
- *  unchanged; `legacyPasswordHash: null` removes the hash and any other `null` is a `TypeError`. The empty
+ *  unchanged; `null` (or the empty string) clears `legacyPasswordHash`, `algorithmName`, `hashValue`, `saltValue` and
+ *  `securityDescriptor`, and any other `null` is a `TypeError`. The empty
  *  string clears `legacyPasswordHash`, `algorithmName`, `hashValue`, `saltValue` and `securityDescriptor`.
  *  Leaving `ranges` out keeps the stored ranges, including any the engine cannot parse; an empty `ranges` fails
  *  with `StatusCode.InvalidArgument`.
  *  A `ProtectedRange` read back passes as is; any unknown key fails with a `TypeError`. */
-export type ProtectedRangePatch = Patch<ProtectedRangeInput, 'legacyPasswordHash'>;
+export type ProtectedRangePatch = Patch<
+  ProtectedRangeInput,
+  'legacyPasswordHash' | 'algorithmName' | 'hashValue' | 'saltValue' | 'securityDescriptor'
+>;
 
 /** Sheet-wide comment entry returned by `listComments(sheet)`. Extends
  *  `Comment` with the anchor cell so comments on otherwise-empty
@@ -2265,13 +2166,14 @@ export interface DataValidation {
   readonly showErrorMessage: boolean;
   /** The in-cell dropdown arrow is shown (`List` type only). */
   readonly showInCellDropdown: boolean;
-  /** Formula text, leading `=` included. */
-  readonly formula1: string;
-  readonly formula2: string;
-  readonly errorTitle: string;
-  readonly errorMessage: string;
-  readonly promptTitle: string;
-  readonly promptMessage: string;
+  /** Formula text, leading `=` included; `null` when the rule states none. */
+  readonly formula1: string | null;
+  readonly formula2: string | null;
+  /** Each of the four texts is `null` when the rule has none. */
+  readonly errorTitle: string | null;
+  readonly errorMessage: string | null;
+  readonly promptTitle: string | null;
+  readonly promptMessage: string | null;
 }
 
 /** Argument of `Sheet.addValidation(validation)`. Every field except `ranges` and `type` is optional. An omitted
@@ -2292,12 +2194,12 @@ export interface DataValidationInput {
   /** Show the in-cell dropdown arrow (`List` type only); default `true`. */
   showInCellDropdown?: boolean;
   /** Formula text; the leading `=` is optional. */
-  formula1?: string;
-  formula2?: string;
-  errorTitle?: string;
-  errorMessage?: string;
-  promptTitle?: string;
-  promptMessage?: string;
+  formula1?: string | null;
+  formula2?: string | null;
+  errorTitle?: string | null;
+  errorMessage?: string | null;
+  promptTitle?: string | null;
+  promptMessage?: string | null;
 }
 
 /** Workbook-wide cell coordinate used by trace results. `sheet` is the
@@ -3423,8 +3325,8 @@ export interface CellStyle {
   readonly name: string;
   /** Index into the `<cellStyleXfs>` table. */
   readonly styleXfIndex: number;
-  /** OOXML built-in ordinal (`0..53`); `0xFFFFFFFF` for a custom style. */
-  readonly builtinId: number;
+  /** OOXML built-in ordinal (`0..53`); `null` for a custom style. */
+  readonly builtinId: number | null;
   /** Outline level of the `RowLevel_n` / `ColLevel_n` styles. */
   readonly iLevel: number;
   readonly hidden: boolean;
@@ -3438,8 +3340,8 @@ export interface CellStyleInput {
   readonly name: string;
   /** Index into the `<cellStyleXfs>` table; defaults to 0. */
   readonly styleXfIndex?: number;
-  /** OOXML built-in ordinal (`0..53`); defaults to `0xFFFFFFFF` (custom). */
-  readonly builtinId?: number;
+  /** OOXML built-in ordinal (`0..53`); omitted or `null` is a custom style (not built-in). */
+  readonly builtinId?: number | null;
   /** Outline level of the `RowLevel_n` / `ColLevel_n` styles; defaults to 0. */
   readonly iLevel?: number;
   readonly hidden?: boolean;
@@ -4159,8 +4061,7 @@ export interface Mention {
   readonly length: number;
 }
 
-/** One threaded comment: a thread's opening comment, or a reply when
- *  `parentId` is non-empty. Ids are brace-wrapped uppercase GUIDs and
+/** One threaded comment: a thread's opening comment (`parentId` is `null`), or a reply. Ids are brace-wrapped uppercase GUIDs and
  *  `created` is a {@link CivilTime} (whole seconds), `null` when the stamp is absent; the caller supplies both. `done`
  *  is the thread's resolved state, meaningful on the opening comment only. */
 export interface ThreadedComment {
@@ -4170,12 +4071,12 @@ export interface ThreadedComment {
   readonly personId: string;
   readonly created: CivilTime | null;
   readonly text: string;
-  readonly parentId: string;
+  readonly parentId: string | null;
   readonly done: boolean;
   readonly mentions: readonly Mention[];
 }
 
-/** Argument of `Sheet.addThreadedComment`: `id` and `text` are required; an omitted or empty `parentId` opens a
+/** Argument of `Sheet.addThreadedComment`: `id` and `text` are required; an omitted, `null` or empty `parentId` opens a
  *  new thread at `cell` (a {@link CellAddress} or an A1 cell, `'B2'`; A1 when omitted). `cell` is ignored on a
  *  reply. The {@link ThreadedComment} a read returns passes as is. */
 export interface ThreadedCommentInput {
@@ -4184,7 +4085,7 @@ export interface ThreadedCommentInput {
   cell?: CellAddress | string;
   personId?: string;
   created?: DateInput | null;
-  parentId?: string;
+  parentId?: string | null;
   done?: boolean;
   mentions?: readonly Mention[];
 }
@@ -4202,17 +4103,18 @@ export interface ThreadedCommentPatch {
 export interface Person {
   readonly id: string;
   readonly displayName: string;
-  readonly userId: string;
-  readonly providerId: string;
+  /** `null` when the person has none. */
+  readonly userId: string | null;
+  readonly providerId: string | null;
 }
 
-/** Argument of `Workbook.addPerson`. An omitted `userId` or `providerId` is `""`. The {@link Person} a read
+/** Argument of `Workbook.addPerson`. An omitted or `null` `userId` or `providerId` is absent. The {@link Person} a read
  *  returns passes as is. */
 export interface PersonInput {
   id: string;
   displayName: string;
-  userId?: string;
-  providerId?: string;
+  userId?: string | null;
+  providerId?: string | null;
 }
 
 /** Format and pixel size of an image. */
@@ -4348,8 +4250,8 @@ export interface ShapeInput {
 }
 
 /** Argument of `Shape.update`: the {@link ShapeInput} keys, each optional. A key left out is unchanged and no key
- *  accepts `null` to clear, except `fillKind` / `lineKind` / `fillColor` / `lineColor`, where `null` also means
- *  unchanged so that the value {@link ShapeProperties} returns can be passed back as is. Any other `null` fails
+ *  accepts `null` to clear, except `fillKind` / `lineKind` / `fillColor` / `lineColor`, where `null` clears the
+ *  paint (the value {@link ShapeProperties} reads back for a shape that has none). Any other `null` fails
  *  with a `TypeError`. The anchor keys (`editAs`, `from*`, `to*`, `widthEmu`, `heightEmu`) need `anchorKind` in
  *  the same patch, otherwise the call fails with a `TypeError`; an update cannot change the anchor kind.
  *  `objectId` and `kind` of a {@link ShapeProperties} are ignored; any other unknown key fails with a
@@ -5292,7 +5194,12 @@ export type ProtectedRangeRef = number | string;
  *  A method that cannot complete throws {@link FormulonError}, whose `code` is a `StatusCode`; a
  *  "fails with" note below names that code by its `StatusCode` key. An argument of the wrong type or outside its
  *  integer range throws `TypeError` / `RangeError` before any engine work; an argument that is well formed
- *  but that the engine rejects fails with `StatusCode.InvalidArgument`.
+ *  but that the engine rejects fails with `StatusCode.InvalidArgument`; a setter given a value outside an Excel
+ *  limit (row height, column width, font size, zoom, text length) fails the same way. A name or id that is already
+ *  taken fails with `StatusCode.AlreadyExists`, and a refusal caused by the workbook's state (the last sheet, the
+ *  last visible sheet, a table overlapping an object, a pivot cache still in use) with `StatusCode.PreconditionFailed`.
+ *  A sheet position past the end is `StatusCode.SheetIndexOutOfRange`; every other position is
+ *  `StatusCode.IndexOutOfRange`. A handle that belongs to another workbook fails with `StatusCode.InvalidArgument`.
  *
  *  Lookups follow one rule. A getter keyed by a natural key (`getDefinedName`, ...) returns `null` when nothing
  *  has that key. An entry to a handle or a result (`sheet()`, `table()`, `pivot()`, `pivotCache()`, the
@@ -5359,7 +5266,8 @@ export interface Workbook {
   getDiagnostics(): ReadDiagnostics;
   /** The handle of one sheet, by `SheetRef`. The workbook keeps one `Sheet` per sheet, so every lookup of the same
    *  sheet returns the same object. A name no sheet has fails with `StatusCode.NotFound`, an index past the last
-   *  sheet with `StatusCode.SheetIndexOutOfRange`; a negative or fractional index throws `RangeError`.
+   *  sheet with `StatusCode.SheetIndexOutOfRange`, and a `Sheet` handle of another workbook with
+   *  `StatusCode.InvalidArgument`; a negative or fractional index throws `RangeError`.
    *
    *  @example
    *  ```ts
@@ -5369,23 +5277,24 @@ export interface Workbook {
   /** Every sheet's handle, in sheet order; a new array on each call. */
   listSheets(): readonly Sheet[];
   /** Appends a sheet and returns its handle. Fails with `StatusCode.InvalidSheetName` when the name is empty, longer
-   *  than 31 UTF-16 units, contains one of `: \ / ? * [ ]`, begins or ends with an apostrophe, is `History` in any
-   *  case, or collides case-insensitively (Unicode simple case folding) with an existing sheet, and with `StatusCode.SheetCountLimitExceeded` at the maximum sheet count. */
+   *  than 31 UTF-16 units, contains one of `: \ / ? * [ ]`, begins or ends with an apostrophe or is `History` in any
+   *  case, with `StatusCode.AlreadyExists` when it collides case-insensitively (Unicode simple case folding) with an
+   *  existing sheet, and with `StatusCode.SheetCountLimitExceeded` at the maximum sheet count. */
   addSheet(name: string): Sheet;
   /** Removes `sheet`; its handle then throws `StatusCode.NotFound`, and the handles after it move down one place.
    *  References to it are rewritten to `#REF!` at the affected subexpression (cell formulas, defined names,
    *  conditional-format, validation and table formulas); sheet-scoped names and tables owned by the sheet are
    *  dropped, as are pivot caches sourced from it and their pivot tables. Fails with
-   *  `StatusCode.CannotRemoveLastSheet` when only one sheet remains. Removing the only visible sheet fails with
-   *  `StatusCode.InvalidArgument` and leaves the workbook unchanged. */
+   *  `StatusCode.PreconditionFailed` when only one sheet remains or the sheet is the only visible one, and leaves
+   *  the workbook unchanged. */
   removeSheet(sheet: SheetRef): void;
   /** Copies the worksheet `source` into the workbook before the sheet now at `insertBefore` (omitted, `null` or
    *  `listSheets().length` appends, so `copySheet(src, null, 'Copy')` names the copy only) and returns the copy's
    *  handle. Without `newName` the copy
    *  is named `Src (2)`; an explicit name follows the `addSheet` rules. References qualified with the source
    *  sheet are re-pointed at the copy, tables are renamed, and the active sheet does not change. Fails with
-   *  `StatusCode.SheetIndexOutOfRange`, `StatusCode.InvalidSheetName`, `StatusCode.SheetCountLimitExceeded`,
-   *  `StatusCode.PreconditionFailed` (very hidden source) or `StatusCode.NotImplemented` (slicers, shapes, pivot
+   *  `StatusCode.SheetIndexOutOfRange`, `StatusCode.InvalidSheetName`, `StatusCode.AlreadyExists` (the name is taken),
+   *  `StatusCode.SheetCountLimitExceeded`, `StatusCode.PreconditionFailed` (very hidden source) or `StatusCode.NotImplemented` (slicers, shapes, pivot
    *  charts and other content the copy cannot model); the workbook is unchanged when it throws. */
   copySheet(source: SheetRef, insertBefore?: number | null, newName?: string): Sheet;
   /** Returns the sheet the first `<workbookView>` marks active (`activeTab`); without workbook views (an XLSB
@@ -5394,7 +5303,7 @@ export interface Workbook {
   activeSheet(): Sheet;
   /** Marks `sheet` active so a save records it, creating a minimal `<bookViews>` when the workbook has none.
    *  Other `<workbookView>` attributes survive; `firstSheet` is lowered to the sheet's index when larger. The
-   *  sheet becomes the only tab-selected one. A hidden sheet is rejected. */
+   *  sheet becomes the only tab-selected one. A hidden sheet fails with `StatusCode.PreconditionFailed`. */
   setActiveSheet(sheet: SheetRef): void;
   /** Renders `value` (blank, number, boolean, text or error) under the stored-form number format code
    *  `numberFormat`; empty means General. */
@@ -5443,8 +5352,7 @@ export interface Workbook {
   /** Updates the iterative-calculation settings; an omitted key keeps its value. When disabled (the default)
    *  cyclic references surface `#REF!`. `maxIterations` is clamped to `[1, 32767]` (Excel's own limit) and
    *  `getIterative` reports the clamped value, and a fractional one throws `TypeError`; `maxChange` is the absolute
-   *  convergence threshold, and a negative value throws `RangeError` and one that is not finite fails with
-   *  `StatusCode.InvalidArgument`. */
+   *  convergence threshold, and a negative or non-finite value fails with `StatusCode.InvalidArgument`. */
   updateIterative(patch: IterativeSettingsPatch): void;
   /** Reads back the stored iterative-calculation settings. The cap and
    *  threshold are the stored values even while `enabled` is false, so a
@@ -5537,7 +5445,9 @@ export interface Workbook {
   removeDefinedName(name: string, scope?: SheetRef | null): void;
   /** Adds a defined name, or replaces every attribute of an existing one in the same scope: an omitted `comment` /
    *  `hidden` returns to its default. An empty `formula` fails with `StatusCode.InvalidArgument`, and one that does
-   *  not parse with `StatusCode.ParserUnexpectedToken`; `removeDefinedName` removes a name. */
+   *  not parse with a parser status (1000-1014; `FormulonError.parseError` gives the position). A name that matches
+   *  a table fails with `StatusCode.AlreadyExists`, a malformed one with `StatusCode.InvalidArgument`, and a
+   *  `scope` past the last sheet with `StatusCode.SheetIndexOutOfRange`; `removeDefinedName` removes a name. */
   setDefinedName(definedName: DefinedNameInput): void;
   /** The handle of the table named `name` on any sheet, matched case-insensitively; the one workbook-wide table
    *  lookup (tables are added, listed and removed on their `Sheet`). A name no table has fails with
@@ -5545,10 +5455,10 @@ export interface Workbook {
   table(name: string): Table;
   /** Lists the workbook's persons. */
   listPeople(): readonly Person[];
-  /** Appends a person to the workbook's person list. Fails with `StatusCode.ThreadedCommentInvalid` when the id is
-   *  malformed or already listed, or the display name is empty. */
+  /** Appends a person to the workbook's person list. Fails with `StatusCode.AlreadyExists` when the id is already
+   *  listed and with `StatusCode.ThreadedCommentInvalid` when it is malformed or the display name is empty. */
   addPerson(person: PersonInput): void;
-  /** Fails while a threaded comment or mention still names the person. */
+  /** Fails with `StatusCode.PreconditionFailed` while a threaded comment or mention still names the person. */
   removePerson(id: string): void;
   /** Reads the person with `id`; `null` when the list has none. */
   getPerson(id: string): Person | null;
@@ -5572,11 +5482,11 @@ export interface Workbook {
   /** The handle of the pivot cache `cacheId`; `StatusCode.NotFound` when the workbook has no such cache. */
   pivotCache(cacheId: number | PivotCache): PivotCache;
   /** Creates a new empty pivot cache and returns its handle; its id is `requestedId` when given, else one the
-   *  engine assigns. A new cache has no worksheet source, and a workbook containing one cannot be saved: call
+   *  engine assigns; an id already in use fails with `StatusCode.AlreadyExists`. A new cache has no worksheet source, and a workbook containing one cannot be saved: call
    *  `PivotCache.setWorksheetSource` before saving. */
   addPivotCache(requestedId?: number): PivotCache;
   /** Removes the pivot cache `cacheId`; its handle then fails with `StatusCode.NotFound` until a cache with the
-   *  same id is added. Fails if any pivot table still references it. */
+   *  same id is added. Fails with `StatusCode.PreconditionFailed` if any pivot table still references it. */
   removePivotCache(cacheId: number | PivotCache): void;
 
   /** Declares the workbook's default font: font 0, the record an unstyled
@@ -5721,11 +5631,11 @@ export interface Sheet {
   setError(row: number, col: number, error: ErrorCode | ExcelError): void;
   /** `setError` at the A1 address `a1`. */
   setError(a1: string, error: ErrorCode | ExcelError): void;
-  /** Stores a text literal. */
+  /** Stores a text literal. Text above 32,767 UTF-16 units fails with `StatusCode.InvalidArgument`. */
   setText(row: number, col: number, text: string): void;
   /** `setText` at the A1 address `a1`. */
   setText(a1: string, text: string): void;
-  /** Stores the cell's OOXML phonetic guide (`<rPh>`); `null` (or `""`) clears it. */
+  /** Stores the cell's OOXML phonetic guide (`<rPh>`); `null` (or `""`) clears it. Text above 32,767 UTF-16 units fails with `StatusCode.InvalidArgument`. */
   setCellPhonetic(row: number, col: number, phonetic: string | null): void;
   /** `setCellPhonetic` at the A1 address `a1`. */
   setCellPhonetic(a1: string, phonetic: string | null): void;
@@ -5860,7 +5770,7 @@ export interface Sheet {
   getFormula(a1: string): string | null;
   /** The formula in R1C1 notation relative to the cell, leading `=` included; `null` when the cell holds none.
    *  A formula loaded from a file that does not parse is kept verbatim, evaluates to `#NAME?`, and fails here with
-   *  `StatusCode.ParserUnexpectedToken`; `setFormula` never produces that state.
+   *  a parser status (1000-1014; `FormulonError.parseError` gives the position); `setFormula` never produces that state.
    *  Sheet and external qualifiers are quoted as a whole only when the path, book or sheet name needs it. */
   getFormulaR1C1(row: number, col: number): string | null;
   /** `getFormulaR1C1` at the A1 address `a1`. */
@@ -6040,8 +5950,8 @@ export interface Sheet {
   /** `listThreadedComments` of the cell at the A1 address `a1`. */
   listThreadedComments(a1: string): readonly ThreadedComment[];
   /** Adds a threaded comment. A `parentId` that is omitted or `null` opens a new thread at
-   *  `cell`, which must hold neither a note nor a thread (else `StatusCode.ThreadedCommentInvalid`);
-   *  otherwise it replies to that thread. */
+   *  `cell`, which must hold neither a note nor a thread (else `StatusCode.AlreadyExists`);
+   *  otherwise it replies to that thread. An `id` the sheet already uses fails with `StatusCode.AlreadyExists`. */
   addThreadedComment(comment: ThreadedCommentInput): void;
   /** Updates the text, mentions and resolved state of the comment with `id`; an omitted key keeps its value.
    *  `done` applies to a thread's opening comment only. */
@@ -6154,7 +6064,8 @@ export interface Sheet {
    *  `Workbook.table(name)` finds a table on any sheet. */
   table(table: TableRef): Table;
   /** Creates a worksheet table on this sheet and returns its handle. See {@link TableInput} for the defaults; a
-   *  name another table already uses fails with `StatusCode.AlreadyExists`.
+   *  name another table already uses fails with `StatusCode.AlreadyExists`, and a range that overlaps a table,
+   *  pivot table, data table, array formula or merged range with `StatusCode.PreconditionFailed`.
    *
    *  @example
    *  ```ts
@@ -6204,8 +6115,7 @@ export interface Sheet {
 
   /** Applies a partial `<pageSetup>` update. `fitToPage` sets or clears `<sheetPr><pageSetUpPr fitToPage>`
    *  without disturbing anything else `<sheetPr>` carries; `false` removes the attribute. `orientation: null`
-   *  leaves a sheet that states no orientation as it is and fails with `StatusCode.InvalidArgument` on one that
-   *  states it, since a stated orientation cannot be removed. `scalePct` outside `[10, 400]` fails with
+   *  removes the `orientation` attribute. `scalePct` outside `[10, 400]` fails with
    *  `StatusCode.InvalidArgument`. */
   updatePageSetup(patch: PageSetupPatch): void;
   /** Applies a partial `<pageMargins>` update, in inches. */
@@ -6228,12 +6138,13 @@ export interface Sheet {
   getView(): SheetView;
   /** Updates the view with the keys `patch` names; an empty patch changes nothing. A freeze or split key takes
    *  its partner from the current view (`{ freezeRows: 2 }` keeps `freezeCols`), and a non-zero freeze with a
-   *  non-zero split throws `TypeError`. Applied in a fixed order: freeze or split (each replaces the other, and a
-   *  freeze change resets the pane origin), `paneTopLeft*`, `topLeft*`, the display flags, `zoomPct` (clamped to
-   *  `[10, 400]`), `viewMode`, `rightToLeft`, `tabSelected`, `visibility`. The pane origin must lie past the
-   *  frozen rows and columns. Hiding the only visible sheet and a pane origin other than `0, 0` without panes are checked against
-   *  the merged view before anything is written, failing with `StatusCode.InvalidArgument`; another engine
-   *  failure throws with the earlier keys applied. */
+   *  non-zero split fails with `StatusCode.InvalidArgument`. Applied in a fixed order: freeze or split (each replaces the other, and a
+   *  freeze change resets the pane origin), `paneTopLeft*`, `topLeft*`, the display flags, `zoomPct` (outside
+   *  `[10, 400]` is rejected), `viewMode`, `rightToLeft`, `tabSelected`, `visibility`. The pane origin must lie past the
+   *  frozen rows and columns. A `zoomPct` outside `[10, 400]` or a pane origin other than `0, 0` without panes is checked against
+   *  the merged view before anything is written, failing with `StatusCode.InvalidArgument`, and hiding the only
+   *  visible sheet fails with `StatusCode.PreconditionFailed`; another engine failure throws with the earlier keys
+   *  applied. */
   updateView(patch: SheetViewPatch): void;
   /** The sheet's tab colour (`<sheetPr><tabColor>`); `null` when the tab has none. */
   getTabColor(): Color | null;
@@ -6399,7 +6310,7 @@ export interface Sheet {
   setCommentVisible(a1: string, visible: boolean): void;
   /** Lists the sheet's protected ranges; a range's position, or its name, is the `protectedRange` argument of the other protected-range methods. */
   listProtectedRanges(): readonly ProtectedRange[];
-  /** Appends a protected range. `name` must be non-empty and unique on the sheet; `ranges` must hold at least one rectangle. */
+  /** Appends a protected range. `name` must be non-empty (`StatusCode.InvalidArgument`) and unique on the sheet (`StatusCode.AlreadyExists`); `ranges` must hold at least one rectangle. */
   addProtectedRange(range: ProtectedRangeInput): number;
   /** Updates the protected range `protectedRange` with the keys `patch` names; the others keep their value.
    *  Leaving `ranges` out keeps the stored ranges. See {@link ProtectedRangePatch}. */
@@ -6432,7 +6343,7 @@ export interface Sheet {
   /** Lists the sheet's data-validation rules; a rule's position is its `validationIndex`. */
   listValidations(): readonly DataValidation[];
   /** Appends a data-validation rule to the sheet. A non-empty `formula1` / `formula2`
-   *  that does not parse is rejected with `StatusCode.ParserUnexpectedToken`. */
+   *  that does not parse fails with a parser status (1000-1014; `FormulonError.parseError` gives the position). */
   addValidation(validation: DataValidationInput): number;
   /** Removes the validation rule at `validationIndex`. Fails with `StatusCode.IndexOutOfRange`
    *  if `validationIndex` is out of range. */
@@ -6519,12 +6430,13 @@ export interface WorkbookOoxml {
   getDxf(dxfIndex: number): Dxf;
 
   /** Adds a font (deduplicating against existing entries) and returns
-   *  the resolved index. */
+   *  the resolved index. A size outside 1 to 409 points fails with `StatusCode.InvalidArgument`. */
   addFont(record: FontInput): number;
   /** Overwrites the font at `fontIndex` in place. Every `<xf>` naming that
    *  index restyles at once, so this is a bulk change rather than a local
    *  edit; `addFont` is the way to introduce a new appearance. The index
-   *  must already exist -- the table does not auto-grow. */
+   *  must already exist (`StatusCode.IndexOutOfRange`) -- the table does not auto-grow; a size outside 1 to 409
+   *  points fails with `StatusCode.InvalidArgument`. */
   setFont(fontIndex: number, record: FontInput): void;
   /** Adds a fill (deduplicating against existing entries). */
   addFill(record: FillInput): number;
@@ -6622,7 +6534,7 @@ export interface SheetOoxml {
    *  `<sheetPr>`; `null` (or `""`) removes it. */
   setSheetPrXml(xml: string | null): void;
   /** Sets / replaces the cell XF on `[first, last]`; index 0 is the default XF. A value later entered into an
-   *  unstyled cell of the span takes this XF, unless its row has one. */
+   *  unstyled cell of the span takes this XF, unless its row has one. An index not below `Workbook.ooxml.listCellXfs().length` fails with `StatusCode.IndexOutOfRange`. */
   setColumnXfIndex(first: number, last: number, xfIndex: number): void;
   /** `setColumnXfIndex` over the A1 column span `span` (`"B"`, `"B:D"`). */
   setColumnXfIndex(span: string, xfIndex: number): void;
@@ -6632,7 +6544,7 @@ export interface SheetOoxml {
   /** `resetColumnXfIndex` over the A1 column span `span` (`"B"`, `"B:D"`). */
   resetColumnXfIndex(span: string): void;
   /** Sets / replaces the cell XF of the inclusive row span `first..last`; index 0 is the default XF. A value
-   *  later entered into an unstyled cell of a covered row takes this XF. Nothing changes when it throws. */
+   *  later entered into an unstyled cell of a covered row takes this XF. An index not below `Workbook.ooxml.listCellXfs().length` fails with `StatusCode.IndexOutOfRange`. Nothing changes when it throws. */
   setRowXfIndex(first: number, last: number, xfIndex: number): void;
   /** `setRowXfIndex` over the A1 row span `span` (`"3"`, `"3:5"`). */
   setRowXfIndex(span: string, xfIndex: number): void;
@@ -6687,7 +6599,7 @@ export interface SheetOoxml {
   /** `getCellXfIndex` at the A1 address `a1`. */
   getCellXfIndex(a1: string): number;
   /** Persists `xfIndex` on the cell at `(row, col)`. An index not
-   *  below `Workbook.ooxml.listCellXfs().length` fails with `StatusCode.InvalidArgument`. */
+   *  below `Workbook.ooxml.listCellXfs().length` fails with `StatusCode.IndexOutOfRange`. */
   setCellXfIndex(row: number, col: number, xfIndex: number): void;
   /** `setCellXfIndex` at the A1 address `a1`. */
   setCellXfIndex(a1: string, xfIndex: number): void;
@@ -6702,7 +6614,7 @@ export interface SheetOoxml {
   resetCellXfIndex(a1: string): void;
   /** Applies `xfIndex` across the cells of `range`, materialising blank
    *  cells so an empty ruled box renders. Saves one call per cell. An
-   *  index not below `Workbook.ooxml.listCellXfs().length` fails with `StatusCode.InvalidArgument`. */
+   *  index not below `Workbook.ooxml.listCellXfs().length` fails with `StatusCode.IndexOutOfRange`. */
   setRangeXfIndex(range: CellRect | string, xfIndex: number): void;
 }
 
@@ -7348,13 +7260,13 @@ export interface Formulon {
    *  names for that locale; `en_US`, `zh_CN`, `ko_KR` and `th_TH` return the
    *  canonical name unchanged. `ja_JP` renames only `DOLLAR`, `USDOLLAR` and
    *  `DBCS`; `zh_TW` renames only `DBCS`. Fails with `StatusCode.InvalidArgument`
-   *  when `profileId` is unknown or the name does not match a registered
+   *  when `profileId` is unknown and `StatusCode.NotFound` when the name does not match a registered
    *  function. */
   localizeFunctionName(canonicalName: string, profileId: ProfileId): string;
   /** Inverse of `localizeFunctionName`: returns the canonical English
    *  name for the localized function `localizedName` under `profileId`.
    *  Fails with `StatusCode.InvalidArgument` when
-   *  `profileId` is unknown or no function matches. */
+   *  `profileId` is unknown and `StatusCode.NotFound` when no function matches. */
   canonicalizeFunctionName(localizedName: string, profileId: ProfileId): string;
   /** Rewrites stored (en-invariant) formula text into `profileId`'s Excel
    *  spelling: function names, list / array separators, decimal points,

@@ -18,31 +18,31 @@
 #include "sheet.h"
 #include "workbook.h"
 
-static_assert(offsetof(fm_parallel_recalc_stats_t, cells_evaluated) == 8U);
-static_assert(offsetof(fm_parallel_recalc_stats_t, sccs_processed) == 16U);
-static_assert(offsetof(fm_parallel_recalc_stats_t, parallel_steps) == 24U);
-static_assert(offsetof(fm_parallel_recalc_stats_t, serial_fallback_steps) == 32U);
-static_assert(offsetof(fm_parallel_recalc_stats_t, cycle_recoveries) == 40U);
-static_assert(offsetof(fm_parallel_recalc_stats_t, worker_threads_started) == 48U);
-static_assert(offsetof(fm_parallel_recalc_stats_t, worker_threads_used) == 52U);
+static_assert(offsetof(fm_parallel_recalc_stats_info_t, cells_evaluated) == 8U);
+static_assert(offsetof(fm_parallel_recalc_stats_info_t, sccs_processed) == 16U);
+static_assert(offsetof(fm_parallel_recalc_stats_info_t, parallel_steps) == 24U);
+static_assert(offsetof(fm_parallel_recalc_stats_info_t, serial_fallback_steps) == 32U);
+static_assert(offsetof(fm_parallel_recalc_stats_info_t, cycle_recoveries) == 40U);
+static_assert(offsetof(fm_parallel_recalc_stats_info_t, worker_threads_started) == 48U);
+static_assert(offsetof(fm_parallel_recalc_stats_info_t, worker_threads_used) == 52U);
 
 // The two counter structs must have the same layout on native and wasm32,
 // which is the whole reason they use `uint32_t` rather than `size_t`. A
 // binding's hand-written offsets are only safe while this holds.
-static_assert(sizeof(fm_read_diagnostics_t) == 24U);
-static_assert(offsetof(fm_read_diagnostics_t, struct_size) == 0U);
-static_assert(offsetof(fm_read_diagnostics_t, undecoded_formula_count) == 4U);
-static_assert(offsetof(fm_read_diagnostics_t, undecoded_defined_name_count) == 8U);
-static_assert(offsetof(fm_read_diagnostics_t, undecoded_part_count) == 12U);
-static_assert(offsetof(fm_read_diagnostics_t, skipped_feature_count) == 16U);
-static_assert(offsetof(fm_read_diagnostics_t, unknown_content_type_count) == 20U);
-static_assert(sizeof(fm_save_diagnostics_t) == 24U);
-static_assert(offsetof(fm_save_diagnostics_t, downgraded_formula_count) == 4U);
-static_assert(offsetof(fm_save_diagnostics_t, deferred_feature_count) == 8U);
-static_assert(offsetof(fm_save_diagnostics_t, dropped_part_count) == 12U);
-static_assert(offsetof(fm_save_diagnostics_t, dropped_relationship_count) == 16U);
-static_assert(offsetof(fm_save_diagnostics_t, renumbered_part_count) == 20U);
-static_assert(sizeof(fm_parallel_recalc_stats_t) == 56U);
+static_assert(sizeof(fm_read_diagnostics_info_t) == 24U);
+static_assert(offsetof(fm_read_diagnostics_info_t, struct_size) == 0U);
+static_assert(offsetof(fm_read_diagnostics_info_t, undecoded_formula_count) == 4U);
+static_assert(offsetof(fm_read_diagnostics_info_t, undecoded_defined_name_count) == 8U);
+static_assert(offsetof(fm_read_diagnostics_info_t, undecoded_part_count) == 12U);
+static_assert(offsetof(fm_read_diagnostics_info_t, skipped_feature_count) == 16U);
+static_assert(offsetof(fm_read_diagnostics_info_t, unknown_content_type_count) == 20U);
+static_assert(sizeof(fm_save_diagnostics_info_t) == 24U);
+static_assert(offsetof(fm_save_diagnostics_info_t, downgraded_formula_count) == 4U);
+static_assert(offsetof(fm_save_diagnostics_info_t, deferred_feature_count) == 8U);
+static_assert(offsetof(fm_save_diagnostics_info_t, dropped_part_count) == 12U);
+static_assert(offsetof(fm_save_diagnostics_info_t, dropped_relationship_count) == 16U);
+static_assert(offsetof(fm_save_diagnostics_info_t, renumbered_part_count) == 20U);
+static_assert(sizeof(fm_parallel_recalc_stats_info_t) == 56U);
 
 // `fm_value_t` is the most widely passed record on the boundary: every cell
 // read, every ad-hoc evaluation and every pivot cell writes one through a
@@ -79,7 +79,7 @@ void ExpectOpaqueAutoFilterRefUpdate(std::string raw_xml, std::string expected_x
   table.auto_filter_xml.set(formulon::io::auto_filter_from_xml(raw_xml));
   ASSERT_NE(table.auto_filter_xml.get(), nullptr);
   ASSERT_TRUE(table.auto_filter_xml.get()->is_opaque());
-  ASSERT_EQ(fm_sheet_update_table(wb.handle, 0, index, record_arg(fm_cell_rect_t{0, 0, 3, 1}), nullptr, -1, -1), 0);
+  ASSERT_EQ(UpdateTableRange(wb.handle, 0, index, fm_cell_rect_t{0, 0, 3, 1}), 0);
   EXPECT_EQ(formulon::io::auto_filter_xml(table.auto_filter_xml.get()), expected_xml);
 
   BufferGuard saved;
@@ -123,28 +123,38 @@ TEST(FormulonCApi, TableCreateUpdateRemoveRoundTripsThroughOoxml) {
   EXPECT_EQ(index, 0U);
   EXPECT_EQ(count_of(fm_sheet_get_table_count, wb.handle, 0), 1U);
 
-  const char* name = nullptr;
-  fm_cell_rect_t rect{};
-  ASSERT_EQ(fm_sheet_get_table(wb.handle, 0, index, &name, &rect), 0);
-  EXPECT_STREQ(name, "Sales");
-  EXPECT_EQ(rect.last_row, 2U);
-  EXPECT_EQ(rect.last_col, 1U);
+  fm_table_info_t info = FM_STRUCT_INIT(fm_table_info_t);
+  ASSERT_EQ(fm_sheet_get_table_at(wb.handle, 0, index, &info), 0);
+  EXPECT_STREQ(info.name, "Sales");
+  EXPECT_EQ(info.range.last_row, 2U);
+  EXPECT_EQ(info.range.last_col, 1U);
+  EXPECT_STREQ(info.style_name, "TableStyleMedium2");
   size_t sheet = 99;
   size_t found = 99;
   int32_t present = 0;
-  ASSERT_EQ(fm_workbook_find_table(wb.handle, "sales", &sheet, &found, &present), 0);
+  ASSERT_EQ(fm_workbook_find_table(wb.handle, "sales", &present, &sheet, &found), 0);
   EXPECT_EQ(present, 1);
   EXPECT_EQ(sheet, 0U);
   EXPECT_EQ(found, index);
 
-  ASSERT_EQ(
-      fm_sheet_update_table(wb.handle, 0, index, record_arg(fm_cell_rect_t{0, 0, 3, 1}), "TableStyleLight9", 1, 1), 0);
+  fm_table_patch_t patch = FM_STRUCT_INIT(fm_table_patch_t);
+  patch.range_op = FM_PATCH_OP_SET;
+  patch.range = fm_cell_rect_t{0, 0, 3, 1};
+  patch.totals_row_op = FM_PATCH_OP_SET;
+  patch.totals_row = 1;
+  ASSERT_EQ(fm_sheet_update_table(wb.handle, 0, index, &patch), 0) << fm_get_last_error_message();
+  fm_table_style_options_patch_t style = FM_STRUCT_INIT(fm_table_style_options_patch_t);
+  style.style_name_op = FM_PATCH_OP_SET;
+  style.style_name = "TableStyleLight9";
+  ASSERT_EQ(fm_sheet_update_table_style_options(wb.handle, 0, index, &style), 0) << fm_get_last_error_message();
   BufferGuard saved;
   ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0);
   WorkbookGuard loaded;
   ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &loaded.handle), 0);
-  ASSERT_EQ(fm_sheet_get_table(loaded.handle, 0, 0, &name, &rect), 0);
-  EXPECT_EQ(rect.last_row, 3U);
+  ASSERT_EQ(fm_sheet_get_table_at(loaded.handle, 0, 0, &info), 0);
+  EXPECT_EQ(info.range.last_row, 3U);
+  EXPECT_EQ(info.totals_row_count, 1U);
+  EXPECT_STREQ(info.style_name, "TableStyleLight9");
 
   ASSERT_EQ(fm_sheet_remove_table(loaded.handle, 0, 0), 0);
   EXPECT_EQ(count_of(fm_sheet_get_table_count, loaded.handle, 0), 0U);
@@ -178,7 +188,7 @@ TEST(FormulonCApi, TableMutationsReindexStructuredRefDependents) {
   // pinned rectangle must be re-derived from the new `ref`, not left
   // pointing at the pre-update B2:B3.
   ASSERT_EQ(fm_sheet_set_number(wb.handle, 0, 3, 1, 5.0), 0);  // B4
-  ASSERT_EQ(fm_sheet_update_table(wb.handle, 0, index, record_arg(fm_cell_rect_t{0, 0, 3, 1}), "", 1, 0), 0);
+  ASSERT_EQ(UpdateTableRange(wb.handle, 0, index, fm_cell_rect_t{0, 0, 3, 1}), 0);
   ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
   ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, 0, 3, &v), 0);
   ASSERT_EQ(v.kind, FM_VALUE_KIND_NUMBER);
@@ -210,8 +220,8 @@ TEST(FormulonCApi, TableRangeMustMatchTheColumnList) {
 
   ASSERT_EQ(AddTable(wb.handle, 0, record_arg(fm_cell_rect_t{0, 0, 2, 1}), "Sales", columns, 2, "", 1, 0, &index), 0);
   // Growing rows is fine; growing columns would orphan the column list.
-  EXPECT_EQ(fm_sheet_update_table(wb.handle, 0, index, record_arg(fm_cell_rect_t{0, 0, 8, 1}), "", 1, 0), 0);
-  EXPECT_NE(fm_sheet_update_table(wb.handle, 0, index, record_arg(fm_cell_rect_t{0, 0, 8, 2}), "", 1, 0), 0);
+  EXPECT_EQ(UpdateTableRange(wb.handle, 0, index, fm_cell_rect_t{0, 0, 8, 1}), 0);
+  EXPECT_NE(UpdateTableRange(wb.handle, 0, index, fm_cell_rect_t{0, 0, 8, 2}), 0);
 
   const char* duplicate_columns[] = {"Product", "product"};
   EXPECT_NE(
@@ -226,9 +236,8 @@ TEST(FormulonCApi, GetTableRejectsARefThatIsNotARange) {
   size_t index = 99;
   ASSERT_EQ(AddTable(wb.handle, 0, record_arg(fm_cell_rect_t{0, 0, 2, 1}), "Sales", columns, 2, "", 1, 0, &index), 0);
   wb.handle->workbook().mutable_tables()[index].ref = "Sheet1!A1:B3";
-  const char* name = nullptr;
-  fm_cell_rect_t rect{};
-  EXPECT_EQ(fm_sheet_get_table(wb.handle, 0, index, &name, &rect), FM_STATUS_INVALID_ARGUMENT);
+  fm_table_info_t info = FM_STRUCT_INIT(fm_table_info_t);
+  EXPECT_EQ(fm_sheet_get_table_at(wb.handle, 0, index, &info), FM_STATUS_INVALID_ARGUMENT);
 }
 
 TEST(FormulonCApi, TableNamesShareOneCaseInsensitiveNamespace) {
@@ -317,7 +326,7 @@ TEST(FormulonCApi, TableUpdatePreservesRawMetadataAcrossSaveLoad) {
   table.style_info.extra_attrs = " futureFlag=\"kept\"";
   table.ext_lst_xml = "<extLst><ext uri=\"urn:formulon:test\"><futureTableData value=\"kept\"/></ext></extLst>";
 
-  ASSERT_EQ(fm_sheet_update_table(wb.handle, 0, index, record_arg(fm_cell_rect_t{0, 0, 3, 1}), nullptr, -1, -1), 0);
+  ASSERT_EQ(UpdateTableRange(wb.handle, 0, index, fm_cell_rect_t{0, 0, 3, 1}), 0);
   EXPECT_EQ(table.ref, "A1:B4");
   EXPECT_TRUE(table.header_row);
   EXPECT_TRUE(table.totals_row);
@@ -382,7 +391,7 @@ TEST(FormulonCApi, PaginationSnapshotExposesBreaksAndUsedRangeFallback) {
   ASSERT_EQ(fm_sheet_set_number(wb.handle, 0, 199, 0, 2.0), 0);
 
   fm_pagination_t* pagination = nullptr;
-  ASSERT_EQ(fm_sheet_get_pagination(wb.handle, 0, &pagination), 0);
+  ASSERT_EQ(fm_sheet_paginate(wb.handle, 0, &pagination), 0);
   ASSERT_NE(pagination, nullptr);
   // 200 default-height rows in one column: the row axis breaks, the column
   // axis does not. The exact break row follows the geometry model and is
@@ -407,8 +416,8 @@ TEST(FormulonCApi, PaginationSnapshotExposesBreaksAndUsedRangeFallback) {
   EXPECT_NE(fm_pagination_get_row_break_at(pagination, breaks, &row), 0);
   fm_pagination_destroy(pagination);
 
-  EXPECT_NE(fm_sheet_get_pagination(nullptr, 0, &pagination), 0);
-  EXPECT_NE(fm_sheet_get_pagination(wb.handle, 0, nullptr), 0);
+  EXPECT_NE(fm_sheet_paginate(nullptr, 0, &pagination), 0);
+  EXPECT_NE(fm_sheet_paginate(wb.handle, 0, nullptr), 0);
 }
 TEST(FormulonCApi, CellPhoneticCanBeReadClearedAndRejectsInvalidArguments) {
   WorkbookGuard wb;
@@ -417,25 +426,28 @@ TEST(FormulonCApi, CellPhoneticCanBeReadClearedAndRejectsInvalidArguments) {
   ASSERT_EQ(fm_sheet_set_cell_phonetic(wb.handle, 0, 0, 0, "かんじ"), 0);
 
   const char* phonetic = nullptr;
-  ASSERT_EQ(fm_sheet_get_cell_phonetic(wb.handle, 0, 0, 0, &phonetic), 0);
+  int32_t present = 0;
+  ASSERT_EQ(fm_sheet_get_cell_phonetic(wb.handle, 0, 0, 0, &present, &phonetic), 0);
+  EXPECT_EQ(present, 1);
   ASSERT_NE(phonetic, nullptr);
   EXPECT_STREQ(phonetic, "かんじ");
 
   ASSERT_EQ(fm_sheet_set_cell_phonetic(wb.handle, 0, 0, 0, ""), 0);
-  ASSERT_EQ(fm_sheet_get_cell_phonetic(wb.handle, 0, 0, 0, &phonetic), 0);
-  ASSERT_NE(phonetic, nullptr);
-  EXPECT_STREQ(phonetic, "");
+  ASSERT_EQ(fm_sheet_get_cell_phonetic(wb.handle, 0, 0, 0, &present, &phonetic), 0);
+  EXPECT_EQ(present, 0);
+  EXPECT_EQ(phonetic, nullptr);
 
   ASSERT_EQ(fm_sheet_set_cell_phonetic(wb.handle, 0, 0, 0, "かんじ"), 0);
   ASSERT_EQ(fm_sheet_set_text(wb.handle, 0, 0, 0, "文字列"), 0);
-  ASSERT_EQ(fm_sheet_get_cell_phonetic(wb.handle, 0, 0, 0, &phonetic), 0);
-  ASSERT_NE(phonetic, nullptr);
-  EXPECT_STREQ(phonetic, "");
+  ASSERT_EQ(fm_sheet_get_cell_phonetic(wb.handle, 0, 0, 0, &present, &phonetic), 0);
+  EXPECT_EQ(present, 0);
+  EXPECT_EQ(phonetic, nullptr);
 
   EXPECT_NE(fm_sheet_set_cell_phonetic(nullptr, 0, 0, 0, "x"), 0);
   EXPECT_NE(fm_sheet_set_cell_phonetic(wb.handle, 0, 0, 0, nullptr), 0);
   EXPECT_NE(fm_sheet_set_cell_phonetic(wb.handle, 0, formulon::Sheet::kMaxRows, 0, "x"), 0);
-  EXPECT_NE(fm_sheet_get_cell_phonetic(wb.handle, 0, 0, 0, nullptr), 0);
+  EXPECT_NE(fm_sheet_get_cell_phonetic(wb.handle, 0, 0, 0, &present, nullptr), 0);
+  EXPECT_NE(fm_sheet_get_cell_phonetic(wb.handle, 0, 0, 0, nullptr, &phonetic), 0);
 }
 TEST(FormulonCApi, CellPhoneticSettersDirtyPhoneticFormulaDependents) {
   // `PHONETIC(A1)` depends on A1 through the same reference edge any other
@@ -482,11 +494,11 @@ TEST(FormulonCApi, CellPhoneticRunsPreserveTheirSpans) {
   EXPECT_EQ(count, 2U);
 
   fm_phonetic_run_t read{};
-  ASSERT_EQ(fm_sheet_get_cell_phonetic_run(wb.handle, 0, 0, 0, 0U, &read), 0);
+  ASSERT_EQ(fm_sheet_get_cell_phonetic_run_at(wb.handle, 0, 0, 0, 0U, &read), 0);
   EXPECT_EQ(read.sb, 0U);
   EXPECT_EQ(read.eb, 2U);
   EXPECT_STREQ(read.text, "トウキョウ");
-  ASSERT_EQ(fm_sheet_get_cell_phonetic_run(wb.handle, 0, 0, 0, 1U, &read), 0);
+  ASSERT_EQ(fm_sheet_get_cell_phonetic_run_at(wb.handle, 0, 0, 0, 1U, &read), 0);
   EXPECT_EQ(read.sb, 2U);
   EXPECT_EQ(read.eb, 3U);
   EXPECT_STREQ(read.text, "ト");
@@ -495,7 +507,8 @@ TEST(FormulonCApi, CellPhoneticRunsPreserveTheirSpans) {
   // back through the whole-cell setter is exactly the collapse the run API
   // exists to avoid.
   const char* flattened = nullptr;
-  ASSERT_EQ(fm_sheet_get_cell_phonetic(wb.handle, 0, 0, 0, &flattened), 0);
+  int32_t present = 0;
+  ASSERT_EQ(fm_sheet_get_cell_phonetic(wb.handle, 0, 0, 0, &present, &flattened), 0);
   EXPECT_STREQ(flattened, "トウキョウト");
   ASSERT_EQ(fm_sheet_set_cell_phonetic(wb.handle, 0, 0, 0, "トウキョウト"), 0);
   ASSERT_EQ(fm_sheet_get_cell_phonetic_run_count(wb.handle, 0, 0, 0, &count), 0);
@@ -533,8 +546,8 @@ TEST(FormulonCApi, CellPhoneticRunsRejectMalformedInput) {
   EXPECT_EQ(count, 1U);
 
   fm_phonetic_run_t read{};
-  EXPECT_NE(fm_sheet_get_cell_phonetic_run(wb.handle, 0, 0, 0, 1U, &read), 0);
-  EXPECT_NE(fm_sheet_get_cell_phonetic_run(wb.handle, 0, 0, 0, 0U, nullptr), 0);
+  EXPECT_NE(fm_sheet_get_cell_phonetic_run_at(wb.handle, 0, 0, 0, 1U, &read), 0);
+  EXPECT_NE(fm_sheet_get_cell_phonetic_run_at(wb.handle, 0, 0, 0, 0U, nullptr), 0);
   EXPECT_NE(fm_sheet_get_cell_phonetic_run_count(wb.handle, 0, 0, 0, nullptr), 0);
 }
 TEST(FormulonCApi, CellPhoneticPropertiesAreIndependentOfTheRuns) {

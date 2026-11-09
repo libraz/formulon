@@ -36,7 +36,7 @@ fm_status_t emit_read_diagnostics(const fm_workbook_t* wb, std::ostream& err, st
 /// labelled with the container `format` actually written and prefixed with
 /// `subcommand`. Emits nothing when the save lost nothing.
 void emit_write_diagnostics(std::ostream& err, std::string_view subcommand, fm_workbook_format_t format,
-                            const fm_save_diagnostics_t& d);
+                            const fm_save_diagnostics_info_t& d);
 
 /// Writes the most recent `fm_*` diagnostic (message and, when present, its
 /// context) to `err` as one line, prefixed with `subcommand`.

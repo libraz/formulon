@@ -27,7 +27,7 @@ bool present(JsNarrowNumericReader& reader, const emscripten::val& owner, const 
   return reader.ok() && js_value_present(reader.value(owner, key, key));
 }
 
-emscripten::val shape_to_val(const fm_shape_t& s) {
+emscripten::val shape_to_val(const fm_shape_info_t& s) {
   emscripten::val o = emscripten::val::object();
   o.set("objectId", s.object_id);
   o.set("kind", s.kind);
@@ -61,68 +61,69 @@ struct ShapeText {
   std::string text;
 };
 
-/// Reads the fields `spec` carries; the `fields` mask names exactly those.
-fm_shape_t pull_shape(JsNarrowNumericReader& reader, const emscripten::val& spec, ShapeText& store) {
-  fm_shape_t s = FM_STRUCT_INIT(fm_shape_t);
-  if (present(reader, spec, "name")) {
-    s.fields |= FM_SHAPE_FIELD_NAME;
-    s.name = reader.optional_string(spec, "name", store.name, "shape.name");
-  }
-  if (present(reader, spec, "presetGeometry")) {
-    s.fields |= FM_SHAPE_FIELD_PRESET_GEOMETRY;
-    s.preset_geometry = reader.optional_string(spec, "presetGeometry", store.preset_geometry, "shape.presetGeometry");
-  }
-  if (present(reader, spec, "text")) {
-    s.fields |= FM_SHAPE_FIELD_TEXT;
-    s.text = reader.optional_string(spec, "text", store.text, "shape.text");
-  }
-  if (present(reader, spec, "textBox")) {
-    s.fields |= FM_SHAPE_FIELD_TEXT_BOX;
-    s.text_box = reader.boolean(spec, "textBox", false, "shape.textBox") ? 1 : 0;
-  }
-  if (present(reader, spec, "anchorKind")) {
-    s.fields |= FM_SHAPE_FIELD_ANCHOR;
-    s.anchor_kind = reader.i32(spec, "anchorKind", 0, "shape.anchorKind");
-    s.edit_as = reader.i32(spec, "editAs", FM_ANCHOR_EDIT_AS_TWO_CELL, "shape.editAs");
-    s.from_row = reader.u32(spec, "fromRow", 0U, "shape.fromRow");
-    s.from_col = reader.u32(spec, "fromCol", 0U, "shape.fromCol");
-    s.from_row_offset_emu = reader.i64(spec, "fromRowOffsetEmu", 0, "shape.fromRowOffsetEmu");
-    s.from_col_offset_emu = reader.i64(spec, "fromColOffsetEmu", 0, "shape.fromColOffsetEmu");
-    s.to_row = reader.u32(spec, "toRow", 0U, "shape.toRow");
-    s.to_col = reader.u32(spec, "toCol", 0U, "shape.toCol");
-    s.to_row_offset_emu = reader.i64(spec, "toRowOffsetEmu", 0, "shape.toRowOffsetEmu");
-    s.to_col_offset_emu = reader.i64(spec, "toColOffsetEmu", 0, "shape.toColOffsetEmu");
-    s.width_emu = reader.i64(spec, "widthEmu", 0, "shape.widthEmu");
-    s.height_emu = reader.i64(spec, "heightEmu", 0, "shape.heightEmu");
-  }
-  if (present(reader, spec, "fillKind")) {
-    s.fields |= FM_SHAPE_FIELD_FILL;
-    s.fill_kind = reader.i32(spec, "fillKind", 0, "shape.fillKind");
-    s.fill_color = js_pull_color_spec(spec, "fillColor", &reader);
-  }
-  if (present(reader, spec, "lineKind")) {
-    s.fields |= FM_SHAPE_FIELD_LINE;
-    s.line_kind = reader.i32(spec, "lineKind", 0, "shape.lineKind");
-    s.line_color = js_pull_color_spec(spec, "lineColor", &reader);
-  }
-  if (present(reader, spec, "lineWidthPt")) {
-    s.fields |= FM_SHAPE_FIELD_LINE_WIDTH;
-    s.line_width_pt = reader.number(spec, "lineWidthPt", 0.0, "shape.lineWidthPt");
-  }
-  if (present(reader, spec, "rotationDeg")) {
-    s.fields |= FM_SHAPE_FIELD_ROTATION;
-    s.rotation_deg = reader.number(spec, "rotationDeg", 0.0, "shape.rotationDeg");
-  }
-  if (present(reader, spec, "hidden")) {
-    s.fields |= FM_SHAPE_FIELD_HIDDEN;
-    s.hidden = reader.boolean(spec, "hidden", false, "shape.hidden") ? 1 : 0;
-  }
+/// Reads the fields `spec` carries; an omitted field is `KEEP`, `null` is `CLEAR` (accepted on the four paint fields).
+fm_shape_patch_t pull_shape(JsNarrowNumericReader& reader, const emscripten::val& spec, ShapeText& store) {
+  fm_shape_patch_t s = FM_STRUCT_INIT(fm_shape_patch_t);
+  const auto text = [&](const char* key, std::string& storage, fm_patch_op_t* op, const char** value) {
+    const std::string field = std::string("shape.") + key;
+    js_patch_string(reader, spec, key, field.c_str(), false, storage, op, value);
+  };
+  const auto u32 = [&](const char* key, fm_patch_op_t* op, uint32_t* value) {
+    const std::string field = std::string("shape.") + key;
+    js_patch_value(reader, spec, key, field.c_str(), op, value,
+                   [&](const emscripten::val& v) { return reader.u32_value(v, 0U, field.c_str()); });
+  };
+  const auto i32 = [&](const char* key, fm_patch_op_t* op, int32_t* value) {
+    const std::string field = std::string("shape.") + key;
+    js_patch_value(reader, spec, key, field.c_str(), op, value,
+                   [&](const emscripten::val& v) { return reader.i32_value(v, 0, field.c_str()); });
+  };
+  const auto i64 = [&](const char* key, fm_patch_op_t* op, int64_t* value) {
+    const std::string field = std::string("shape.") + key;
+    js_patch_value(reader, spec, key, field.c_str(), op, value,
+                   [&](const emscripten::val&) { return reader.i64(spec, key, 0, field.c_str()); });
+  };
+  const auto f64 = [&](const char* key, fm_patch_op_t* op, double* value) {
+    const std::string field = std::string("shape.") + key;
+    js_patch_value(reader, spec, key, field.c_str(), op, value,
+                   [&](const emscripten::val& v) { return reader.number_value(v, 0.0, field.c_str()); });
+  };
+  const auto color = [&](const char* key, fm_patch_op_t* op, fm_color_t* value) {
+    const std::string field = std::string("shape.") + key;
+    js_patch_value(reader, spec, key, field.c_str(), op, value,
+                   [&](const emscripten::val& v) { return js_pull_color_spec_value(v, field.c_str(), &reader); });
+  };
+  text("name", store.name, &s.name_op, &s.name);
+  text("presetGeometry", store.preset_geometry, &s.preset_geometry_op, &s.preset_geometry);
+  text("text", store.text, &s.text_op, &s.text);
+  js_patch_value(reader, spec, "textBox", "shape.textBox", &s.text_box_op, &s.text_box,
+                 [&](const emscripten::val& v) { return reader.boolean_value(v, false) ? 1 : 0; });
+  i32("anchorKind", &s.anchor_kind_op, &s.anchor_kind);
+  i32("editAs", &s.edit_as_op, &s.edit_as);
+  u32("fromRow", &s.from_row_op, &s.from_row);
+  u32("fromCol", &s.from_col_op, &s.from_col);
+  i64("fromRowOffsetEmu", &s.from_row_offset_emu_op, &s.from_row_offset_emu);
+  i64("fromColOffsetEmu", &s.from_col_offset_emu_op, &s.from_col_offset_emu);
+  u32("toRow", &s.to_row_op, &s.to_row);
+  u32("toCol", &s.to_col_op, &s.to_col);
+  i64("toRowOffsetEmu", &s.to_row_offset_emu_op, &s.to_row_offset_emu);
+  i64("toColOffsetEmu", &s.to_col_offset_emu_op, &s.to_col_offset_emu);
+  i64("widthEmu", &s.width_emu_op, &s.width_emu);
+  i64("heightEmu", &s.height_emu_op, &s.height_emu);
+  i32("fillKind", &s.fill_kind_op, &s.fill_kind);
+  color("fillColor", &s.fill_color_op, &s.fill_color);
+  i32("lineKind", &s.line_kind_op, &s.line_kind);
+  color("lineColor", &s.line_color_op, &s.line_color);
+  f64("lineWidthPt", &s.line_width_pt_op, &s.line_width_pt);
+  f64("rotationDeg", &s.rotation_deg_op, &s.rotation_deg);
+  js_patch_value(reader, spec, "hidden", "shape.hidden", &s.hidden_op, &s.hidden,
+                 [&](const emscripten::val& v) { return reader.boolean_value(v, false) ? 1 : 0; });
   return s;
 }
 
-fm_color_spec_t* group_color(fm_sparkline_group_t& g, std::size_t i) {
-  fm_color_spec_t* const colors[] = {&g.color_series, &g.color_negative, &g.color_axis, &g.color_markers,
-                                     &g.color_first,  &g.color_last,     &g.color_high, &g.color_low};
+fm_color_t* group_color(fm_sparkline_group_t& g, std::size_t i) {
+  fm_color_t* const colors[] = {&g.color_series, &g.color_negative, &g.color_axis, &g.color_markers,
+                                &g.color_first,  &g.color_last,     &g.color_high, &g.color_low};
   return colors[i];
 }
 
@@ -204,7 +205,7 @@ bool pull_sparklines(JsNarrowNumericReader& reader, const emscripten::val& array
 }
 
 fm_status_t shape_item(const fm_workbook_t* handle, size_t sheet, size_t index, emscripten::val* out) {
-  fm_shape_t s = FM_STRUCT_INIT(fm_shape_t);
+  fm_shape_info_t s = FM_STRUCT_INIT(fm_shape_info_t);
   const fm_status_t rc = fm_sheet_get_shape_at(handle, sheet, index, &s);
   if (rc == 0) {
     *out = shape_to_val(s);
@@ -216,14 +217,14 @@ fm_status_t shape_item(const fm_workbook_t* handle, size_t sheet, size_t index, 
 // a failed read leaves `*out` untouched.
 fm_status_t sparkline_group_item(const fm_workbook_t* handle, size_t sheet, size_t index, emscripten::val* out) {
   fm_sparkline_group_t g = FM_STRUCT_INIT(fm_sparkline_group_t);
-  fm_status_t rc = fm_sheet_get_sparkline_group(handle, sheet, index, &g);
+  fm_status_t rc = fm_sheet_get_sparkline_group_at(handle, sheet, index, &g);
   if (rc != 0) {
     return rc;
   }
   emscripten::val group = sparkline_group_to_val(g, emscripten::val::array());
   for (size_t k = 0; rc == 0 && k < g.sparkline_count; ++k) {
     fm_sparkline_t item{};
-    rc = fm_sheet_get_sparkline(handle, sheet, index, k, &item);
+    rc = fm_sheet_get_sparkline_at(handle, sheet, index, k, &item);
     if (rc == 0) {
       emscripten::val o = emscripten::val::object();
       js_set_cstr_fields(o, {{"formula", item.formula}, {"location", item.location}});
@@ -253,7 +254,7 @@ uint32_t JsWorkbook::insertShape(uint32_t sheet, emscripten::val spec) {
   }
   JsNarrowNumericReader reader("addShape");
   ShapeText store;
-  const fm_shape_t shape = pull_shape(reader, spec, store);
+  const fm_shape_patch_t shape = pull_shape(reader, spec, store);
   if (!reader.ok()) {
     return 0U;
   }
@@ -271,7 +272,7 @@ void JsWorkbook::updateShape(uint32_t sheet, uint32_t objectId, emscripten::val 
   }
   JsNarrowNumericReader reader("updateShape");
   ShapeText store;
-  const fm_shape_t shape = pull_shape(reader, spec, store);
+  const fm_shape_patch_t shape = pull_shape(reader, spec, store);
   if (!reader.ok()) {
     return;
   }
@@ -279,7 +280,7 @@ void JsWorkbook::updateShape(uint32_t sheet, uint32_t objectId, emscripten::val 
 }
 
 emscripten::val JsWorkbook::getShape(uint32_t sheet, uint32_t objectId) const {
-  fm_shape_t s = FM_STRUCT_INIT(fm_shape_t);
+  fm_shape_info_t s = FM_STRUCT_INIT(fm_shape_info_t);
   int32_t present = 0;
   const fm_status_t rc =
       handle_ != nullptr ? fm_sheet_get_shape(handle_, sheet, objectId, &present, &s) : kBindingInvalidHandle;
@@ -339,19 +340,59 @@ void JsWorkbook::updateSparklineGroup(uint32_t sheet, uint32_t index, emscripten
   std::string ref_store;
   std::vector<std::string> texts;
   std::vector<fm_sparkline_t> items;
-  const fm_sparkline_group_t group = pull_group(reader, spec, ref_store);
+  fm_sparkline_group_patch_t p = FM_STRUCT_INIT(fm_sparkline_group_patch_t);
+  fm_patch_op_t* const color_ops[] = {&p.color_series_op, &p.color_negative_op, &p.color_axis_op, &p.color_markers_op,
+                                      &p.color_first_op,  &p.color_last_op,     &p.color_high_op, &p.color_low_op};
+  fm_color_t* const colors[] = {&p.color_series, &p.color_negative, &p.color_axis, &p.color_markers,
+                                &p.color_first,  &p.color_last,     &p.color_high, &p.color_low};
+  for (std::size_t i = 0; i < 8U; ++i) {
+    const std::string field = std::string("group.") + kSparklineColorKeys[i];
+    js_patch_value(reader, spec, kSparklineColorKeys[i], field.c_str(), color_ops[i], colors[i],
+                   [&](const emscripten::val& v) { return js_pull_color_spec_value(v, field.c_str(), &reader); });
+  }
+  const auto num = [&](const char* key, fm_patch_op_t* op, double* value) {
+    const std::string field = std::string("group.") + key;
+    js_patch_value(reader, spec, key, field.c_str(), op, value,
+                   [&](const emscripten::val& v) { return reader.number_value(v, 0.0, field.c_str()); });
+  };
+  const auto i32 = [&](const char* key, fm_patch_op_t* op, int32_t* value) {
+    const std::string field = std::string("group.") + key;
+    js_patch_value(reader, spec, key, field.c_str(), op, value,
+                   [&](const emscripten::val& v) { return reader.i32_value(v, 0, field.c_str()); });
+  };
+  const auto flag = [&](const char* key, fm_patch_op_t* op, int32_t* value) {
+    const std::string field = std::string("group.") + key;
+    js_patch_value(reader, spec, key, field.c_str(), op, value,
+                   [&](const emscripten::val& v) { return reader.boolean_value(v, false) ? 1 : 0; });
+  };
+  num("manualMin", &p.manual_min_op, &p.manual_min);
+  num("manualMax", &p.manual_max_op, &p.manual_max);
+  num("lineWeight", &p.line_weight_op, &p.line_weight);
+  i32("type", &p.type_op, &p.type);
+  flag("markers", &p.markers_op, &p.markers);
+  flag("high", &p.high_op, &p.high);
+  flag("low", &p.low_op, &p.low);
+  flag("first", &p.first_op, &p.first);
+  flag("last", &p.last_op, &p.last);
+  flag("negative", &p.negative_op, &p.negative);
+  flag("displayXAxis", &p.display_x_axis_op, &p.display_x_axis);
+  flag("displayHidden", &p.display_hidden_op, &p.display_hidden);
+  i32("minAxisType", &p.min_axis_type_op, &p.min_axis_type);
+  i32("maxAxisType", &p.max_axis_type_op, &p.max_axis_type);
+  flag("dateAxis", &p.date_axis_op, &p.date_axis);
+  i32("emptyCellsAs", &p.empty_cells_as_op, &p.empty_cells_as);
+  js_patch_string(reader, spec, "dateAxisRef", "group.dateAxisRef", true, ref_store, &p.date_axis_ref_op,
+                  &p.date_axis_ref);
   const emscripten::val sparklines = reader.value(spec, "sparklines", "group.sparklines");
-  const bool replace = js_value_present(sparklines);
-  if (reader.ok() && replace) {
-    pull_sparklines(reader, sparklines, texts, items);
+  if (reader.ok() && js_value_present(sparklines) && pull_sparklines(reader, sparklines, texts, items)) {
+    p.items_op = FM_PATCH_OP_SET;
+    p.items = items.data();
+    p.items_count = static_cast<uint32_t>(items.size());
   }
   if (!reader.ok()) {
     return;
   }
-  // Without `sparklines` the group keeps its own; an empty array reaches the core, which rejects it.
-  fm_sparkline_t none{};
-  const fm_sparkline_t* replacement = !replace ? nullptr : items.empty() ? &none : items.data();
-  succeeded(fm_sheet_update_sparkline_group(handle_, sheet, index, &group, replacement, items.size()));
+  succeeded(fm_sheet_update_sparkline_group(handle_, sheet, index, &p));
 }
 
 void JsWorkbook::removeSparklineGroup(uint32_t sheet, uint32_t index) {

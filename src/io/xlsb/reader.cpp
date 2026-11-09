@@ -553,7 +553,8 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
     // format to recognise that condition.
     auto added = wb.add_sheet_validated(b.name);
     if (!added) {
-      if (added.error().code != FormulonErrorCode::kInvalidSheetName) {
+      if (added.error().code != FormulonErrorCode::kInvalidSheetName &&
+          added.error().code != FormulonErrorCode::kAlreadyExists) {
         return std::move(added.error());
       }
       return make_error(FormulonErrorCode::kIoSheetCorrupt,

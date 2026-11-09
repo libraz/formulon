@@ -16,7 +16,7 @@
 namespace {
 
 constexpr bool kWasm32 = sizeof(void*) == 4U;
-static_assert(sizeof(fm_locale_facts_t) == (kWasm32 ? 60U : 104U), "fm_locale_facts_t ABI layout changed");
+static_assert(sizeof(fm_locale_facts_info_t) == (kWasm32 ? 60U : 104U), "fm_locale_facts_info_t ABI layout changed");
 
 constexpr const char* kAllProfiles[] = {
     "mac-365-ja_JP", "win-365-ja_JP", "mac-365-en_US", "win-365-en_US", "mac-365-de_DE",
@@ -119,7 +119,7 @@ TEST(FormulonCApiLocale, FormulaConversionRejectsBadArguments) {
 }
 
 TEST(FormulonCApiLocale, FactsForGermanFrenchAndJapanese) {
-  fm_locale_facts_t de = FM_STRUCT_INIT(fm_locale_facts_t);
+  fm_locale_facts_info_t de = FM_STRUCT_INIT(fm_locale_facts_info_t);
   ASSERT_EQ(fm_get_locale_facts("mac-365-de_DE", &de), 0);
   EXPECT_STREQ(de.decimal_separator, ",");
   EXPECT_STREQ(de.group_separator, ".");
@@ -134,14 +134,14 @@ TEST(FormulonCApiLocale, FactsForGermanFrenchAndJapanese) {
   EXPECT_EQ(de.currency_default_decimals, 2);
   EXPECT_EQ(de.measured, 1);
 
-  fm_locale_facts_t fr = FM_STRUCT_INIT(fm_locale_facts_t);
+  fm_locale_facts_info_t fr = FM_STRUCT_INIT(fm_locale_facts_info_t);
   ASSERT_EQ(fm_get_locale_facts("mac-365-fr_FR", &fr), 0);
   EXPECT_STREQ(fr.decimal_separator, ",");
   EXPECT_STREQ(fr.true_name, "VRAI");
   EXPECT_STREQ(fr.false_name, "FAUX");
   EXPECT_EQ(fr.date_order, FM_DATE_ORDER_DMY);
 
-  fm_locale_facts_t ja = FM_STRUCT_INIT(fm_locale_facts_t);
+  fm_locale_facts_info_t ja = FM_STRUCT_INIT(fm_locale_facts_info_t);
   ASSERT_EQ(fm_get_locale_facts("mac-365-ja_JP", &ja), 0);
   EXPECT_STREQ(ja.decimal_separator, ".");
   EXPECT_STREQ(ja.group_separator, ",");
@@ -154,7 +154,7 @@ TEST(FormulonCApiLocale, FactsForGermanFrenchAndJapanese) {
 }
 
 TEST(FormulonCApiLocale, MeasuredFlagFollowsTheProfile) {
-  fm_locale_facts_t facts = FM_STRUCT_INIT(fm_locale_facts_t);
+  fm_locale_facts_info_t facts = FM_STRUCT_INIT(fm_locale_facts_info_t);
   ASSERT_EQ(fm_get_locale_facts("win-365-de_DE", &facts), 0);
   EXPECT_EQ(facts.measured, 0);
   ASSERT_EQ(fm_get_locale_facts("win-365-ja_JP", &facts), 0);
@@ -169,7 +169,7 @@ TEST(FormulonCApiLocale, MeasuredFlagFollowsTheProfile) {
 }
 
 TEST(FormulonCApiLocale, FactsRejectBadArguments) {
-  fm_locale_facts_t facts = FM_STRUCT_INIT(fm_locale_facts_t);
+  fm_locale_facts_info_t facts = FM_STRUCT_INIT(fm_locale_facts_info_t);
   EXPECT_EQ(fm_get_locale_facts(nullptr, &facts), kNullPtr);
   EXPECT_EQ(fm_get_locale_facts("mac-365-de_DE", nullptr), kNullPtr);
   EXPECT_EQ(fm_get_locale_facts("nope", &facts), kInvalid);
@@ -219,7 +219,7 @@ TEST(FormulonCApiLocale, ErrorNames) {
 }
 
 TEST(FormulonCApiLocale, CollationMeasuredFollowsTheHost) {
-  fm_locale_facts_t facts = FM_STRUCT_INIT(fm_locale_facts_t);
+  fm_locale_facts_info_t facts = FM_STRUCT_INIT(fm_locale_facts_info_t);
   ASSERT_EQ(fm_get_locale_facts("mac-365-ja_JP", &facts), 0);
   EXPECT_EQ(facts.collation_measured, 1);
   ASSERT_EQ(fm_get_locale_facts("win-365-ja_JP", &facts), 0);

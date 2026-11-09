@@ -52,18 +52,18 @@ Napi::Value Workbook::ParseReference(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   const std::string text = ArgString(info, 0);
-  fm_parsed_reference_t ref = FM_STRUCT_INIT(fm_parsed_reference_t);
+  fm_parsed_reference_info_t ref = FM_STRUCT_INIT(fm_parsed_reference_info_t);
   fm_parse_reference_spec_t spec = FM_STRUCT_INIT(fm_parse_reference_spec_t);
   spec.r1c1 = r1c1 ? FM_TRISTATE_TRUE : FM_TRISTATE_FALSE;
   spec.has_base = has_row ? 1 : 0;
   spec.base_row = base_row;
   spec.base_col = base_col;
   const fm_status_t rc = fm_workbook_parse_reference(handle_, text.c_str(), &spec, &ref);
-  if (rc != 0 || ref.valid == 0) {
-    return OptionalOrNull(env, rc, 0, env.Null());
+  if (rc != 0) {
+    return ThrowStatus(env, rc);
   }
   Napi::Object out = Napi::Object::New(env);
-  out.Set("sheetName", ref.has_sheet != 0 ? JsString(env, ref.sheet_name) : env.Null());
+  out.Set("sheetName", JsStringOrNull(env, ref.sheet_name));
   out.Set("rect", RangeToJs(env, ref.rect));
   return out;
 }
@@ -110,7 +110,7 @@ Napi::Value Workbook::GetSheetIndex(const Napi::CallbackInfo& info) {
   const std::string name = ArgString(info, 0);
   std::size_t index = 0;
   int32_t present = 0;
-  const fm_status_t rc = fm_workbook_get_sheet_index(handle_, name.c_str(), &index, &present);
+  const fm_status_t rc = fm_workbook_get_sheet_index(handle_, name.c_str(), &present, &index);
   return OptionalOrNull(env, rc, present, Napi::Number::New(env, static_cast<double>(index)));
 }
 

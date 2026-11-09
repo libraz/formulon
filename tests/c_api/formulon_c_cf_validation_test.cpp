@@ -97,7 +97,7 @@ TEST(FormulonCApiCfMutate, AddRuleRejectsExcessiveSqrefCount) {
 TEST(FormulonCApiCfMutate, GetAtDisengagesADxfIdTheStylesTableCannotResolve) {
   // A package can carry a `dxfId` past the end of its own `<dxfs>`, and
   // the loader keeps the rule. Surfacing that index would hand the caller
-  // a value `fm_workbook_get_dxf` rejects and `fm_sheet_add_cf_rule`
+  // a value `fm_workbook_get_dxf_at` rejects and `fm_sheet_add_cf_rule`
   // refuses, so the get / remove / add-back edit path would not close.
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
@@ -121,7 +121,7 @@ TEST(FormulonCApiCfMutate, GetAtDisengagesADxfIdTheStylesTableCannotResolve) {
   wb.handle->workbook().mutable_styles().dxfs.resize(1);
 
   fm_cf_rule_t out = FM_STRUCT_INIT(fm_cf_rule_t);
-  ASSERT_EQ(fm_sheet_get_cf_rule(wb.handle, 0, 0, &out), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_get_cf_rule_at(wb.handle, 0, 0, &out), 0) << fm_get_last_error_message();
   EXPECT_EQ(out.dxf_index_engaged, 0);
 
   // The record still feeds straight back in, which is what the disengage
@@ -133,7 +133,7 @@ TEST(FormulonCApiCfMutate, GetAtDisengagesADxfIdTheStylesTableCannotResolve) {
 
   // A resolvable index is still reported.
   SeedDxfs(wb.handle, 2);
-  ASSERT_EQ(fm_sheet_get_cf_rule(wb.handle, 0, 0, &out), 0);
+  ASSERT_EQ(fm_sheet_get_cf_rule_at(wb.handle, 0, 0, &out), 0);
   EXPECT_EQ(out.dxf_index_engaged, 1);
   EXPECT_EQ(out.dxf_index, 1U);
 }
@@ -169,14 +169,14 @@ TEST(FormulonCApiCfMutate, AddRuleRejectsNonGuidId) {
   rule.id = "{3B4F1C22-0000-4000-8000-0123456789AB}";
   ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &rule, &rule_index), 0) << fm_get_last_error_message();
   fm_cf_rule_t out = FM_STRUCT_INIT(fm_cf_rule_t);
-  ASSERT_EQ(fm_sheet_get_cf_rule(wb.handle, 0, 0, &out), 0);
+  ASSERT_EQ(fm_sheet_get_cf_rule_at(wb.handle, 0, 0, &out), 0);
   EXPECT_STREQ(out.id, "{3B4F1C22-0000-4000-8000-0123456789AB}");
 
   // An absent id is the "synthesize one for me" request, not a malformed
   // one, and the id it produces is itself GUID-shaped.
   rule.id = "";
   ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &rule, &rule_index), 0) << fm_get_last_error_message();
-  ASSERT_EQ(fm_sheet_get_cf_rule(wb.handle, 0, rule_index, &out), 0);
+  ASSERT_EQ(fm_sheet_get_cf_rule_at(wb.handle, 0, rule_index, &out), 0);
   ASSERT_NE(out.id, nullptr);
   const std::string synthesized(out.id);
   EXPECT_EQ(synthesized.size(), 38U);
@@ -240,7 +240,7 @@ TEST(FormulonCApiCfMutate, AddRuleRejectsEnumOrdinalsPastTheirDomain) {
   expect_rejected(unknown_icon_set, "icon_set_name");
 
   fm_cfvo_t color_thresholds[2]{};
-  fm_color_spec_t colors[2]{};
+  fm_color_t colors[2]{};
   color_thresholds[0].type = static_cast<std::uint8_t>(formulon::cf::CfvoType::AutoMax) + 1U;
   fm_cf_rule_t unknown_color_cfvo = base;
   unknown_color_cfvo.type = 2;  // ColorScale
@@ -278,7 +278,7 @@ TEST(FormulonCApiCfMutate, OutOfRangeIndexReturnsIndexOutOfRange) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   fm_cf_rule_t out = FM_STRUCT_INIT(fm_cf_rule_t);
-  fm_status_t rc = fm_sheet_get_cf_rule(wb.handle, 0, 99, &out);
+  fm_status_t rc = fm_sheet_get_cf_rule_at(wb.handle, 0, 99, &out);
   EXPECT_EQ(rc, FM_STATUS_INDEX_OUT_OF_RANGE);
   rc = fm_sheet_remove_cf_rule(wb.handle, 0, 99);
   EXPECT_EQ(rc, FM_STATUS_INDEX_OUT_OF_RANGE);
@@ -302,7 +302,7 @@ TEST(FormulonCApiCfMutate, PreLoadedRulesEnumerableViaFlatIndex) {
   ASSERT_EQ(fm_sheet_get_cf_rule_count(wb.handle, 0, &count), 0);
   EXPECT_EQ(count, 1U);
   fm_cf_rule_t out = FM_STRUCT_INIT(fm_cf_rule_t);
-  ASSERT_EQ(fm_sheet_get_cf_rule(wb.handle, 0, 0, &out), 0);
+  ASSERT_EQ(fm_sheet_get_cf_rule_at(wb.handle, 0, 0, &out), 0);
   EXPECT_EQ(out.type, 1U);
   ASSERT_NE(out.formula1, nullptr);
   EXPECT_STREQ(out.formula1, "=50");
@@ -359,10 +359,10 @@ TEST(FormulonCApiCfMutate, DuplicatePredicateRulesGetDistinctStableIndices) {
   // The indices returned by add_rule must match what a subsequent
   // flattened readback reports for rule order/position.
   fm_cf_rule_t readback_first = FM_STRUCT_INIT(fm_cf_rule_t);
-  ASSERT_EQ(fm_sheet_get_cf_rule(wb.handle, 0, first_index, &readback_first), 0);
+  ASSERT_EQ(fm_sheet_get_cf_rule_at(wb.handle, 0, first_index, &readback_first), 0);
   EXPECT_EQ(readback_first.priority, 1);  // auto-assigned to the first rule added
 
   fm_cf_rule_t readback_second = FM_STRUCT_INIT(fm_cf_rule_t);
-  ASSERT_EQ(fm_sheet_get_cf_rule(wb.handle, 0, second_index, &readback_second), 0);
+  ASSERT_EQ(fm_sheet_get_cf_rule_at(wb.handle, 0, second_index, &readback_second), 0);
   EXPECT_EQ(readback_second.priority, 2);  // auto-assigned one past the first
 }

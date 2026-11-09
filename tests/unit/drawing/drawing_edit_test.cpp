@@ -1386,7 +1386,7 @@ TEST(DrawingAnchorUpdate, RefusesBadPlacements) {
   DrawingAnchor past_end = ok;
   past_end.row = Sheet::kMaxRows - 1;
   EXPECT_EQ(Code(set_drawing_anchor(wb, 0, 2, past_end)), FormulonErrorCode::kInvalidArgument);
-  EXPECT_EQ(Code(set_drawing_anchor(wb, 0, 9, ok)), FormulonErrorCode::kInvalidArgument);
+  EXPECT_EQ(Code(set_drawing_anchor(wb, 0, 9, ok)), FormulonErrorCode::kNotFound);
   EXPECT_EQ(Code(set_drawing_anchor(wb, 5, 2, ok)), FormulonErrorCode::kInvalidArgument);
   EXPECT_EQ(Part(wb, kDrawingPath)->bytes, before);
 
@@ -1525,12 +1525,12 @@ TEST(DrawingZOrder, UnchangedOrderWritesNothing) {
 TEST(DrawingZOrder, RefusesOutOfRange) {
   Workbook wb = ZOrderFixture();
   const std::vector<Bytes> before = AllBytes(wb);
-  EXPECT_EQ(Code(set_drawing_z_order(wb, 0, 2, 3)), FormulonErrorCode::kInvalidArgument);
-  EXPECT_EQ(Code(set_drawing_z_order(wb, 0, 3, 3)), FormulonErrorCode::kInvalidArgument);
-  EXPECT_EQ(Code(set_drawing_z_order(wb, 0, 7, 0)), FormulonErrorCode::kInvalidArgument);
+  EXPECT_EQ(Code(set_drawing_z_order(wb, 0, 2, 3)), FormulonErrorCode::kIndexOutOfRange);
+  EXPECT_EQ(Code(set_drawing_z_order(wb, 0, 3, 3)), FormulonErrorCode::kIndexOutOfRange);
+  EXPECT_EQ(Code(set_drawing_z_order(wb, 0, 7, 0)), FormulonErrorCode::kNotFound);
   EXPECT_EQ(Code(set_drawing_z_order(wb, 2, 2, 0)), FormulonErrorCode::kInvalidArgument);
   Workbook empty = Workbook::create();
-  EXPECT_EQ(Code(set_drawing_z_order(empty, 0, 2, 0)), FormulonErrorCode::kInvalidArgument);
+  EXPECT_EQ(Code(set_drawing_z_order(empty, 0, 2, 0)), FormulonErrorCode::kNotFound);
   EXPECT_EQ(AllBytes(wb), before);
 }
 

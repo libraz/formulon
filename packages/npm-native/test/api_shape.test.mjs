@@ -712,7 +712,7 @@ test('H10: handles of two workbooks are never the same object', async () => {
   }
 });
 
-test('H12: a SheetRef is a Sheet, an index or a name; a Sheet of another workbook is a TypeError', async () => {
+test('a SheetRef is a Sheet, an index or a name; a Sheet of another workbook is InvalidArgument', async () => {
   const formulon = await getFormulon();
   const wb = threeSheets(formulon);
   const other = formulon.Workbook.createDefault();
@@ -726,8 +726,8 @@ test('H12: a SheetRef is a Sheet, an index or a name; a Sheet of another workboo
     wb.removeSheet('Notes');
     wb.removeSheet(wb.sheet(1));
     assert.equal(wb.listSheets().length, 1);
-    assert.throws(() => wb.removeSheet(other.sheet(0)), TypeError);
-    assert.throws(() => wb.sheet(other.sheet(0)), TypeError);
+    expectFormulonError(() => wb.removeSheet(other.sheet(0)), formulon.StatusCode.InvalidArgument);
+    expectFormulonError(() => wb.sheet(other.sheet(0)), formulon.StatusCode.InvalidArgument);
     assertSheetsInSync(formulon, wb);
   } finally {
     wb.dispose();
@@ -986,7 +986,7 @@ test('A5 / N4: a null pivot axis takes the field off the report; the -1 sentinel
   }
 });
 
-test('A6: a patch keeps omitted and undefined keys and clears only a nullable key on null', async () => {
+test('a patch keeps omitted and undefined keys and clears only a nullable key on null', async () => {
   await withWorkbook((wb, { StatusCode }) => {
     const ws = wb.sheet(0);
     ws.updateFormatDefaults({ defaultColWidthChars: 12, defaultRowHeightPt: 20 });
@@ -1010,13 +1010,15 @@ test('A6: a patch keeps omitted and undefined keys and clears only a nullable ke
     }
     assert.equal(wb.getIterative().enabled, false);
 
-    // Page setup: an omitted or undefined key keeps; `null` on orientation keeps only while none is stated.
+    // Page setup: an omitted or undefined key keeps; `null` on orientation removes the attribute.
     ws.updatePageSetup({ scalePct: 150 });
     ws.updatePageSetup({ scalePct: undefined, orientation: null });
     assert.deepEqual([ws.getPageSetup().scalePct, ws.getPageSetup().orientation], [150, null]);
     ws.updatePageSetup({ orientation: 1 });
-    expectFormulonError(() => ws.updatePageSetup({ orientation: null }), StatusCode.InvalidArgument);
     assert.equal(ws.getPageSetup().orientation, 1);
+    ws.updatePageSetup({ orientation: null });
+    assert.equal(ws.getPageSetup().orientation, null);
+    assert.equal(ws.getPageSetup().scalePct, 150);
     ws.updatePageMargins({ leftIn: 0.5 });
     ws.updatePageMargins({ rightIn: undefined });
     assert.equal(ws.getPageMargins().leftIn, 0.5);
@@ -1110,7 +1112,7 @@ test('P3: a fractional or NaN iteration cap is a TypeError; a non-finite thresho
     for (const maxChange of [Number.POSITIVE_INFINITY, Number.NaN]) {
       expectFormulonError(() => wb.updateIterative({ maxChange }), StatusCode.InvalidArgument);
     }
-    assert.throws(() => wb.updateIterative({ maxChange: -1 }), RangeError);
+    expectFormulonError(() => wb.updateIterative({ maxChange: -1 }), StatusCode.InvalidArgument);
     assert.deepEqual(wb.getIterative(), before);
   });
 });
@@ -1175,11 +1177,12 @@ test('N1: enums of one family share their values', async () => {
   }
 });
 
-test('N2: an enum argument outside its set is refused by type, range or the engine', async () => {
+test('an enum argument outside its set is refused by type, range or the engine', async () => {
   await withWorkbook((wb, { StatusCode, SheetViewMode }) => {
     const ws = wb.sheet(0);
     expectFormulonError(() => ws.updateView({ viewMode: 99 }), StatusCode.InvalidArgument);
-    for (const bad of [-1, 1.5, Number.NaN]) {
+    expectFormulonError(() => ws.updateView({ viewMode: -1 }), StatusCode.InvalidArgument);
+    for (const bad of [1.5, Number.NaN]) {
       assert.throws(() => ws.updateView({ viewMode: bad }), RangeError, String(bad));
     }
     assert.throws(() => ws.updateView({ viewMode: '0' }), TypeError);
@@ -1270,3 +1273,119 @@ function pivotWorkbook(formulon) {
   ws.pivot(pivot).addDataField({ name: 'Sum of Amount', fieldIndex: amount, aggregation: 0 });
   return { wb, pivot };
 }
+
+// ---- Status refusals and Excel limits ------------------------------------
+
+test('activating a hidden or very hidden sheet is PreconditionFailed and keeps the active sheet', async () => {
+  await withWorkbook((wb, { StatusCode, SheetVisibility }) => {
+    wb.addSheet('Second');
+    for (const visibility of [SheetVisibility.Hidden, SheetVisibility.VeryHidden]) {
+      wb.sheet(1).updateView({ visibility });
+      expectFormulonError(() => wb.setActiveSheet(1), StatusCode.PreconditionFailed);
+      assert.equal(wb.activeSheet().index, 0);
+    }
+    wb.sheet(1).updateView({ visibility: SheetVisibility.Visible });
+    wb.setActiveSheet(1);
+    assert.equal(wb.activeSheet().index, 1);
+  });
+});
+
+test('a duplicate threaded comment id is AlreadyExists', async () => {
+  await withWorkbook((wb, { StatusCode }) => {
+    const person = '{00000000-0000-4000-8000-0000000000A1}';
+    const id = '{00000000-0000-4000-8000-000000000001}';
+    wb.addPerson({ id: person, displayName: 'A', userId: 'a', providerId: 'None' });
+    const ws = wb.sheet(0);
+    ws.addThreadedComment({ id, text: 'first', cell: 'A1', personId: person });
+    expectFormulonError(
+      () => ws.addThreadedComment({ id, text: 'second', cell: 'B2', personId: person }),
+      StatusCode.AlreadyExists,
+    );
+    assert.equal(ws.listThreadedComments().length, 1);
+  });
+});
+
+test('an unknown function name is NotFound while an unknown profile stays InvalidArgument', async () => {
+  const formulon = await getFormulon();
+  const { StatusCode } = formulon;
+  expectFormulonError(() => formulon.localizeFunctionName('NOPE', 'mac-365-de_DE'), StatusCode.NotFound);
+  expectFormulonError(() => formulon.canonicalizeFunctionName('NOPE', 'mac-365-de_DE'), StatusCode.NotFound);
+  expectFormulonError(() => formulon.localizeFunctionName('SUM', 'nope'), StatusCode.InvalidArgument);
+  expectFormulonError(() => formulon.canonicalizeFunctionName('SUMME', 'nope'), StatusCode.InvalidArgument);
+});
+
+test('a column outline level above 7 is InvalidArgument and level 7 is stored', async () => {
+  await withWorkbook((wb, { StatusCode }) => {
+    const ws = wb.sheet(0);
+    ws.setColumnOutline('B', 7);
+    expectFormulonError(() => ws.setColumnOutline('B', 8), StatusCode.InvalidArgument);
+    expectFormulonError(() => ws.setColumnOutline(1, 1, 9), StatusCode.InvalidArgument);
+  });
+});
+
+test('an element position past the end is IndexOutOfRange', async () => {
+  await withWorkbook((wb, { StatusCode }) => {
+    const ws = wb.sheet(0);
+    const xfCount = wb.ooxml.listCellXfs().length;
+    ws.ooxml.setRangeXfIndex('A1:B2', xfCount - 1);
+    expectFormulonError(() => ws.ooxml.setRangeXfIndex('A1:B2', xfCount), StatusCode.IndexOutOfRange);
+    expectFormulonError(() => ws.ooxml.setRangeXfIndex('A1:B2', 9999), StatusCode.IndexOutOfRange);
+    expectFormulonError(() => wb.ooxml.getFont(wb.ooxml.listFonts().length), StatusCode.IndexOutOfRange);
+  });
+});
+
+test('a refusal caused by the workbook or a neighbouring object is PreconditionFailed', async () => {
+  await withWorkbook((wb, { StatusCode, SheetVisibility }) => {
+    const ws = wb.sheet(0);
+    expectFormulonError(() => wb.removeSheet(0), StatusCode.PreconditionFailed);
+    expectFormulonError(() => ws.updateView({ visibility: SheetVisibility.Hidden }), StatusCode.PreconditionFailed);
+    assert.equal(wb.listSheets().length, 1);
+    wb.addSheet('Second');
+    wb.sheet(1).updateView({ visibility: SheetVisibility.Hidden });
+    expectFormulonError(() => wb.removeSheet(0), StatusCode.PreconditionFailed);
+    assert.equal(wb.listSheets().length, 2);
+
+    for (let r = 0; r < 4; r += 1) for (let c = 0; c < 3; c += 1) ws.setText(r, c, `v${r}${c}`);
+    ws.addTable({ range: 'A1:B3', name: 'Sales' });
+    expectFormulonError(() => ws.addTable({ range: 'B2:C4', name: 'Costs' }), StatusCode.PreconditionFailed);
+    assert.equal(ws.listTables().length, 1);
+  });
+});
+
+test('setters accept Excel limits and reject one step beyond with InvalidArgument', async () => {
+  await withWorkbook((wb, { StatusCode }) => {
+    const ws = wb.sheet(0);
+    ws.setText('A1', 'x'.repeat(32767));
+    expectFormulonError(() => ws.setText('A2', 'x'.repeat(32768)), StatusCode.InvalidArgument);
+    for (const zoomPct of [10, 400]) ws.updateView({ zoomPct });
+    for (const zoomPct of [9, 401]) {
+      expectFormulonError(() => ws.updateView({ zoomPct }), StatusCode.InvalidArgument);
+    }
+    for (const sizePt of [1, 409]) ws.updateCellFormat('A1', { font: { sizePt } });
+    for (const sizePt of [0.5, 410]) {
+      expectFormulonError(() => ws.updateCellFormat('A1', { font: { sizePt } }), StatusCode.InvalidArgument);
+    }
+    for (const scalePct of [10, 400]) ws.updatePageSetup({ scalePct });
+    for (const scalePct of [9, 401]) {
+      expectFormulonError(() => ws.updatePageSetup({ scalePct }), StatusCode.InvalidArgument);
+    }
+  });
+});
+
+test('a row height above 409 points is InvalidArgument and 409 is stored', async () => {
+  await withWorkbook((wb, { StatusCode }) => {
+    const ws = wb.sheet(0);
+    ws.setRowHeight('1', 409);
+    expectFormulonError(() => ws.setRowHeight('1', 410), StatusCode.InvalidArgument);
+    expectFormulonError(() => ws.setRowHeight('1', 409.5), StatusCode.InvalidArgument);
+  });
+});
+
+test('a column width above 255 characters is InvalidArgument and 255 is stored', async () => {
+  await withWorkbook((wb, { StatusCode }) => {
+    const ws = wb.sheet(0);
+    ws.setColumnWidth('B', 255);
+    expectFormulonError(() => ws.setColumnWidth('B', 256), StatusCode.InvalidArgument);
+    expectFormulonError(() => ws.setColumnWidth('B', 255.5), StatusCode.InvalidArgument);
+  });
+});

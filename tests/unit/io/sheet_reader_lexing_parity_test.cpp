@@ -59,7 +59,7 @@ struct CellSnapshot {
 
 struct LoadResult {
   bool ok = false;
-  FormulonErrorCode code = FormulonErrorCode::kUnknownError;
+  FormulonErrorCode code = FormulonErrorCode::kInternalError;
   std::vector<CellSnapshot> cells;
   std::vector<RowLayout> rows;
   std::string serialized;

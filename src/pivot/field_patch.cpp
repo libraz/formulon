@@ -21,8 +21,8 @@ Error invalid(const char* message) {
   return make_error(FormulonErrorCode::kInvalidArgument, message);
 }
 
-Error invalid(const char* message, std::string context) {
-  return make_error(FormulonErrorCode::kInvalidArgument, message, std::move(context));
+Error name_taken(const char* message, std::string context) {
+  return make_error(FormulonErrorCode::kAlreadyExists, message, std::move(context));
 }
 
 Expected<void, Error> ok() {
@@ -79,12 +79,12 @@ Expected<void, Error> check_field_patch(const Workbook& wb, const PivotTable& ta
     for (std::size_t i = 0; i < table.fields().size(); ++i) {
       const PivotField& other = table.fields()[i];
       if (i != field_index && (taken(other.source_name) || taken(other.custom_name))) {
-        return invalid("pivot: name matches another field", "field_index=" + std::to_string(i));
+        return name_taken("pivot: name matches another field", "field_index=" + std::to_string(i));
       }
     }
     for (std::size_t i = 0; i < table.data_fields().size(); ++i) {
       if (taken(table.data_fields()[i].name)) {
-        return invalid("pivot: name matches a data field", "data_field_index=" + std::to_string(i));
+        return name_taken("pivot: name matches a data field", "data_field_index=" + std::to_string(i));
       }
     }
   }
@@ -164,7 +164,7 @@ Expected<void, Error> check_item_patch(const Workbook& wb, const PivotTable& tab
     const PivotItem& other = field.items[i];
     const std::string shown = !other.caption.empty() ? other.caption : value_label(wb, table, field_index, other);
     if (i != item_index && same_label(wb, caption, shown)) {
-      return invalid("pivot: caption matches another item of the field", "item_index=" + std::to_string(i));
+      return name_taken("pivot: caption matches another item of the field", "item_index=" + std::to_string(i));
     }
   }
   return ok();

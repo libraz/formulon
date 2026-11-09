@@ -45,7 +45,7 @@ inline fm_drawing_anchor_t PullDrawingAnchor(CheckedSpecReader& reader, const Na
 inline fm_picture_insert_spec_t PullImageInsert(CheckedSpecReader& reader, const Napi::Value& input,
                                                 int32_t default_anchor_kind, std::string& name_store,
                                                 std::string& description_store) {
-  fm_picture_insert_spec_t ins{};
+  fm_picture_insert_spec_t ins = FM_STRUCT_INIT(fm_picture_insert_spec_t);
   Napi::Object options = Napi::Object::New(input.Env());
   (void)reader.Object(input, "input", &options);
   ins.name = reader.String(options, "name", &name_store) ? name_store.c_str() : nullptr;
@@ -374,28 +374,12 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value GetSheetProtection(const Napi::CallbackInfo& info);
   Napi::Value SetSheetProtection(const Napi::CallbackInfo& info);
   Napi::Value UpdateSheetProtection(const Napi::CallbackInfo& info);
-  Napi::Value SetSheetZoom(const Napi::CallbackInfo& info);
-  Napi::Value SetSheetFreeze(const Napi::CallbackInfo& info);
-  /// States the whole tab visibility, including `veryHidden`, which the
-  /// bool setter cannot express in either direction.
-  Napi::Value SetSheetVisibility(const Napi::CallbackInfo& info);
-  Napi::Value SetSheetShowGridLines(const Napi::CallbackInfo& info);
-  Napi::Value SetSheetShowRowColHeaders(const Napi::CallbackInfo& info);
-  Napi::Value SetSheetShowZeros(const Napi::CallbackInfo& info);
-  Napi::Value SetSheetShowFormulas(const Napi::CallbackInfo& info);
-  Napi::Value SetSheetShowOutlineSymbols(const Napi::CallbackInfo& info);
-  Napi::Value SetSheetRightToLeft(const Napi::CallbackInfo& info);
-  Napi::Value SetSheetTabSelected(const Napi::CallbackInfo& info);
-  /// Scroll origin of the sheet view, and the first visible cell of a frozen
-  /// view's unfrozen pane (which must lie past the frozen rows and columns).
-  Napi::Value SetSheetTopLeft(const Napi::CallbackInfo& info);
-  Napi::Value SetSheetPaneTopLeft(const Napi::CallbackInfo& info);
-  Napi::Value SetSheetSplit(const Napi::CallbackInfo& info);
+  /// Applies the view fields a patch object names: zoom, freeze, split, scroll origin, tab state and display flags.
+  Napi::Value UpdateSheetView(const Napi::CallbackInfo& info);
   /// The active pane's selection as `{ activeRow, activeCol, ranges }`,
   /// and its setter taking `{ activeRow, activeCol, ranges }`.
   Napi::Value GetSheetSelection(const Napi::CallbackInfo& info);
   Napi::Value SetSheetSelection(const Napi::CallbackInfo& info);
-  Napi::Value SetSheetViewMode(const Napi::CallbackInfo& info);
   Napi::Value GetSheetColumns(const Napi::CallbackInfo& info);
   Napi::Value SetColumnWidth(const Napi::CallbackInfo& info);
   Napi::Value SetColumnHidden(const Napi::CallbackInfo& info);
@@ -674,6 +658,18 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
     return ValueOrThrow(env, rc, Napi::Number::New(env, static_cast<double>(out)));
   }
 
+  /// `IndexCall` for an add whose C function writes a `uint32_t` index.
+  template <typename Call>
+  Napi::Value U32IndexCall(const Napi::CallbackInfo& info, Call&& call) {
+    Napi::Env env = info.Env();
+    if (handle_ == nullptr) {
+      return ThrowInvalidHandle(env);
+    }
+    uint32_t out = 0;
+    const fm_status_t rc = call(handle_, &out);
+    return ValueOrThrow(env, rc, Napi::Number::New(env, out));
+  }
+
   /// Entry returning nothing for a C function `(wb, lead, args...)`: `info[0]`
   /// is the leading index (sheet or cache id) and `info[1...]` convert through
   /// `ArgAs` to the parameter types.
@@ -710,7 +706,7 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   /// Entry adding a style-pool record and returning its index:
   /// `pull(reader, record)` fills the caller's record from the `info[0]`
   /// object, and `add(handle_, &index)` stores it.
-  template <typename Pull, typename Add>
+  template <typename Index = std::size_t, typename Pull, typename Add>
   Napi::Value AddStyleRecord(const Napi::CallbackInfo& info, Pull&& pull, Add&& add) {
     Napi::Env env = info.Env();
     if (handle_ == nullptr) {
@@ -724,7 +720,7 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
       // call commits a default value for it.
       return env.Undefined();
     }
-    std::size_t index = 0;
+    Index index = 0;
     const fm_status_t rc = add(handle_, &index);
     return ValueOrThrow(env, rc, Napi::Number::New(env, static_cast<double>(index)));
   }

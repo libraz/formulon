@@ -320,30 +320,15 @@ class JsWorkbook {
   /// Protects the sheet with the record; `null` unprotects it.
   void setSheetProtection(uint32_t sheet, emscripten::val in);
   void updateSheetProtection(uint32_t sheet, emscripten::val patch);
-  void setSheetZoom(uint32_t sheet, uint32_t zoomScale);
-  void setSheetFreeze(uint32_t sheet, uint32_t freezeRows, uint32_t freezeCols);
-  /// States the whole tab visibility, including `veryHidden`. Takes a raw
-  /// signed ordinal so an unknown value is rejected by the C ABI rather than
-  /// coerced by embind.
-  void setSheetVisibility(uint32_t sheet, int32_t visibility);
-  void setSheetShowGridLines(uint32_t sheet, bool show);
-  void setSheetShowRowColHeaders(uint32_t sheet, bool show);
-  void setSheetShowZeros(uint32_t sheet, bool show);
-  void setSheetShowFormulas(uint32_t sheet, bool show);
-  void setSheetShowOutlineSymbols(uint32_t sheet, bool show);
-  void setSheetRightToLeft(uint32_t sheet, bool rightToLeft);
-  void setSheetTabSelected(uint32_t sheet, bool selected);
-  /// Scroll origin of the sheet view, and the first visible cell of a frozen
-  /// view's unfrozen pane (which must lie past the frozen rows and columns).
-  void setSheetTopLeft(uint32_t sheet, uint32_t row, uint32_t col);
-  void setSheetPaneTopLeft(uint32_t sheet, uint32_t row, uint32_t col);
-  void setSheetSplit(uint32_t sheet, double xTwips, double yTwips);
+  /// Applies the view patch `{ zoomPct?, freezeRows?, freezeCols?, visibility?, showGridLines?,
+  /// showRowColHeaders?, showZeros?, showFormulas?, showOutlineSymbols?, rightToLeft?, tabSelected?, viewMode?,
+  /// topLeftRow?, topLeftCol?, paneTopLeftRow?, paneTopLeftCol?, splitXTwips?, splitYTwips? }`; an omitted key
+  /// keeps the stored value, and no key can be cleared. The cross-field checks run in the C layer.
+  void updateSheetView(uint32_t sheet, emscripten::val patch);
   /// The active pane's selection as `{ activeRow, activeCol, ranges }`,
   /// and its setter taking `{ activeRow, activeCol, ranges }`.
   emscripten::val getSheetSelection(uint32_t sheet) const;
   void setSheetSelection(uint32_t sheet, emscripten::val selection);
-  /// `mode` is an `fm_sheet_view_mode_t` ordinal; the C ABI rejects others.
-  void setSheetViewMode(uint32_t sheet, int32_t mode);
 
   emscripten::val getSheetColumns(uint32_t sheet) const;
   void setColumnWidth(uint32_t sheet, uint32_t first, uint32_t last, double width);

@@ -75,7 +75,7 @@ fm_status_t BuildDaysGroupedPivot(fm_workbook_t* wb, double start_serial, std::s
   if (st != 0) {
     return st;
   }
-  fm_pivot_data_field_spec_t df_spec = FM_STRUCT_INIT(fm_pivot_data_field_spec_t);
+  fm_pivot_data_field_t df_spec = FM_STRUCT_INIT(fm_pivot_data_field_t);
   df_spec.name = "Sum of Amount";
   df_spec.field_index = static_cast<std::uint32_t>(amount_field);
   df_spec.aggregation = FM_PIVOT_AGGREGATION_SUM;
@@ -104,10 +104,10 @@ fm_status_t BuildDaysGroupedPivot(fm_workbook_t* wb, double start_serial, std::s
 // Collects (row label, Sum(Amount)) pairs from a one-row-field,
 // one-data-field pivot's projected grid, in row order.
 std::vector<std::pair<std::string, double>> CollectDaysGroupRows(fm_pivot_report_t* handle) {
-  std::vector<fm_pivot_cell_t> cells = CollectCells(handle);
+  std::vector<fm_pivot_cell_info_t> cells = CollectCells(handle);
   std::vector<std::pair<std::string, double>> labels_by_row;
   std::vector<double> sums_by_row;
-  for (const fm_pivot_cell_t& c : cells) {
+  for (const fm_pivot_cell_info_t& c : cells) {
     if (c.kind == FM_PIVOT_CELL_KIND_ROW_LABEL && c.value.kind == FM_VALUE_KIND_TEXT) {
       labels_by_row.emplace_back(std::string(c.value.u.text), 0.0);
     } else if (c.kind == FM_PIVOT_CELL_KIND_DATA && c.value.kind == FM_VALUE_KIND_NUMBER) {
@@ -195,7 +195,7 @@ fm_status_t BuildBlankItemPivot(fm_workbook_t* wb, std::uint32_t* out_cache_id, 
   if (fm_status_t st = fm_sheet_set_pivot_row_field_order(wb, 0, pivot_index, row_order, 1U); st != 0) {
     return st;
   }
-  fm_pivot_data_field_spec_t df_spec = FM_STRUCT_INIT(fm_pivot_data_field_spec_t);
+  fm_pivot_data_field_t df_spec = FM_STRUCT_INIT(fm_pivot_data_field_t);
   df_spec.name = "Sum of Amount";
   df_spec.field_index = static_cast<std::uint32_t>(amount_field);
   df_spec.aggregation = FM_PIVOT_AGGREGATION_SUM;
@@ -221,7 +221,7 @@ double SumDataCells(fm_pivot_report_t* handle) {
   double total = 0.0;
   const std::size_t n = count_of(fm_pivot_report_get_cell_count, handle);
   for (std::size_t i = 0; i < n; ++i) {
-    fm_pivot_cell_t cell = FM_STRUCT_INIT(fm_pivot_cell_t);
+    fm_pivot_cell_info_t cell = FM_STRUCT_INIT(fm_pivot_cell_info_t);
     EXPECT_EQ(fm_pivot_report_get_cell_at(handle, i, &cell), 0);
     if (cell.kind == FM_PIVOT_CELL_KIND_DATA && cell.value.kind == FM_VALUE_KIND_NUMBER) {
       total += cell.value.u.number;
@@ -315,20 +315,20 @@ TEST(FormulonCApiPivot, DateGroupRegroupsByPeriodsAndClearsThroughAGroupField) {
   ASSERT_EQ(fm_sheet_get_pivot_field_count(wb.handle, 0, pivot_index, &field_count), 0);
   EXPECT_EQ(field_count, 4U);
   fm_pivot_field_info_t date = FM_STRUCT_INIT(fm_pivot_field_info_t);
-  ASSERT_EQ(fm_sheet_get_pivot_field(wb.handle, 0, pivot_index, 0, &date), 0);
+  ASSERT_EQ(fm_sheet_get_pivot_field_at(wb.handle, 0, pivot_index, 0, &date), 0);
   EXPECT_EQ(date.date_periods, FM_PIVOT_PERIOD_MONTHS | FM_PIVOT_PERIOD_YEARS);
   EXPECT_EQ(date.date_calendar, FM_PIVOT_CALENDAR_GREGORIAN);
   EXPECT_EQ(date.group_base_index, -1);
   EXPECT_EQ(date.axis, -1);
   fm_pivot_field_info_t months = FM_STRUCT_INIT(fm_pivot_field_info_t);
-  ASSERT_EQ(fm_sheet_get_pivot_field(wb.handle, 0, pivot_index, 2, &months), 0);
+  ASSERT_EQ(fm_sheet_get_pivot_field_at(wb.handle, 0, pivot_index, 2, &months), 0);
   EXPECT_STREQ(months.source_name, "\xE6\x9C\x88 (Date)");  // 月 (Date)
   EXPECT_EQ(months.group_base_index, 0);
   EXPECT_EQ(months.date_periods, 0U);
   EXPECT_EQ(months.axis, FM_PIVOT_AXIS_ROW);
-  const std::uint32_t* order = nullptr;
+  std::uint32_t order[8] = {};
   std::size_t order_count = 0;
-  ASSERT_EQ(fm_sheet_get_pivot_row_field_order(wb.handle, 0, pivot_index, &order, &order_count), 0);
+  ASSERT_EQ(fm_sheet_get_pivot_row_field_order(wb.handle, 0, pivot_index, order, 8U, &order_count), 0);
   ASSERT_EQ(order_count, 2U);
   EXPECT_EQ(order[0], 3U);
   EXPECT_EQ(order[1], 2U);
@@ -338,10 +338,10 @@ TEST(FormulonCApiPivot, DateGroupRegroupsByPeriodsAndClearsThroughAGroupField) {
   ASSERT_EQ(fm_sheet_clear_pivot_field_date_group(wb.handle, 0, pivot_index, 3), 0) << fm_get_last_error_message();
   ASSERT_EQ(fm_sheet_get_pivot_field_count(wb.handle, 0, pivot_index, &field_count), 0);
   EXPECT_EQ(field_count, 2U);
-  ASSERT_EQ(fm_sheet_get_pivot_field(wb.handle, 0, pivot_index, 0, &date), 0);
+  ASSERT_EQ(fm_sheet_get_pivot_field_at(wb.handle, 0, pivot_index, 0, &date), 0);
   EXPECT_EQ(date.date_periods, 0U);
   EXPECT_EQ(date.axis, FM_PIVOT_AXIS_ROW);
-  ASSERT_EQ(fm_sheet_get_pivot_row_field_order(wb.handle, 0, pivot_index, &order, &order_count), 0);
+  ASSERT_EQ(fm_sheet_get_pivot_row_field_order(wb.handle, 0, pivot_index, order, 8U, &order_count), 0);
   ASSERT_EQ(order_count, 1U);
   EXPECT_EQ(order[0], 0U);
   std::uint32_t cache_id = 0;

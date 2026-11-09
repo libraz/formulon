@@ -25,8 +25,8 @@ extern "C" fm_status_t fm_workbook_get_external_link_count(const fm_workbook_t* 
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_get_external_link(const fm_workbook_t* wb, size_t index,
-                                                     fm_external_link_record_t* out) {
+extern "C" fm_status_t fm_workbook_get_external_link_at(const fm_workbook_t* wb, size_t external_link_index,
+                                                        fm_external_link_info_t* out) {
   clear_last_error();
   if (wb == nullptr || out == nullptr) {
     return null_argument();
@@ -35,14 +35,14 @@ extern "C" fm_status_t fm_workbook_get_external_link(const fm_workbook_t* wb, si
     return rc;
   }
   const auto& links = wb->workbook().external_links();
-  if (auto rc = check_index(index, links.size(), "index"); rc != 0) {
+  if (auto rc = check_index(external_link_index, links.size(), "external_link_index"); rc != 0) {
     return rc;
   }
-  const formulon::ExternalLinkRecord& rec = links[index];
+  const formulon::ExternalLinkRecord& rec = links[external_link_index];
   out->index = rec.index;
   out->rel_id = rec.rel_id.c_str();
   out->part_path = rec.part_path.c_str();
-  out->target = rec.target.c_str();
+  out->target = rec.target.empty() ? nullptr : rec.target.c_str();
   out->target_external = rec.target_external ? 1 : 0;
   switch (rec.kind) {
     case formulon::ExternalLinkRecord::Kind::kExternalBook:

@@ -246,6 +246,9 @@ TEST(DrawingEditKinds, ShapeStillRefusesRemoveAndAnchor) {
   anchor.row = 20;
   EXPECT_EQ(Code(remove_drawing(wb, 0, 3)), FormulonErrorCode::kInvalidArgument);
   EXPECT_EQ(Code(set_drawing_anchor(wb, 0, 3, anchor)), FormulonErrorCode::kInvalidArgument);
+  // An id no object holds is unknown rather than of the wrong kind.
+  EXPECT_EQ(Code(remove_drawing(wb, 0, 99)), FormulonErrorCode::kNotFound);
+  EXPECT_EQ(Code(set_drawing_anchor(wb, 0, 99, anchor)), FormulonErrorCode::kNotFound);
   EXPECT_EQ(AllBytes(wb), before);
 }
 
@@ -481,6 +484,49 @@ TEST(DrawingEditKinds, WrappedSlicerMovesWithItsFallback) {
 
   const Workbook reloaded = RoundTrip(wb);
   EXPECT_EQ(Ids(reloaded), (std::vector<std::uint32_t>{3, 2, 4}));
+}
+
+// An unset paint removes the shape's own fill and outline fill elements (an emptied `a:ln` goes too, one
+// keeping its width stays), so the style's paint applies; the result survives a save and reload.
+TEST(DrawingEditKinds, ShapeUnsetPaintRemovesItsOwnFillAndOutline) {
+  const std::string outline = "<a:ln w=\"12700\"><a:solidFill><a:srgbClr val=\"00FF00\"/></a:solidFill></a:ln>";
+  const std::string drawing =
+      std::string(kWsDrOpen) +
+      Anchor(0, Sp(2, "Filled", "", "<a:solidFill><a:srgbClr val=\"FF0000\"/></a:solidFill>" + outline)) +
+      Anchor(5, Sp(3, "Bare outline", "", "<a:noFill/><a:ln><a:noFill/></a:ln>")) + "</xdr:wsDr>";
+  Workbook wb = Workbook::create();
+  ASSERT_TRUE(static_cast<bool>(wb.add_passthrough_part(PassthroughPart(kDrawingPath, kCtDrawing, ToBytes(drawing)))));
+  wb.sheet(0).set_drawing_rel_target(kDrawingPath);
+
+  ShapeSpec unset;
+  unset.fields = shape_field::kFill | shape_field::kLine;
+  unset.fill = ShapePaint::kUnset;
+  unset.line = ShapePaint::kUnset;
+  ASSERT_TRUE(static_cast<bool>(update_shape(wb, 0, 2, unset)));
+  ASSERT_TRUE(static_cast<bool>(update_shape(wb, 0, 3, unset)));
+
+  const Workbook reloaded = RoundTrip(wb);
+  auto shapes = list_shapes(reloaded, 0);
+  ASSERT_TRUE(static_cast<bool>(shapes));
+  ASSERT_EQ(shapes.value().size(), 2U);
+  for (const ShapeInfo& shape : shapes.value()) {
+    EXPECT_EQ(shape.fill, ShapePaint::kUnset) << shape.object.object_id;
+    EXPECT_EQ(shape.line, ShapePaint::kUnset) << shape.object.object_id;
+  }
+  EXPECT_EQ(shapes.value()[0].line_width_emu, 12700);
+
+  pugi::xml_document doc;
+  ParseDrawing(reloaded, 0, doc);
+  const std::vector<pugi::xml_node> tops = Tops(doc);
+  ASSERT_EQ(tops.size(), 2U);
+  const pugi::xml_node filled = child_local(anchor_content(tops[0]), "spPr");
+  EXPECT_FALSE(child_local(filled, "solidFill"));
+  ASSERT_TRUE(child_local(filled, "ln"));
+  EXPECT_FALSE(child_local(child_local(filled, "ln"), "solidFill"));
+  const pugi::xml_node bare = child_local(anchor_content(tops[1]), "spPr");
+  EXPECT_FALSE(child_local(bare, "noFill"));
+  EXPECT_FALSE(child_local(bare, "ln"));
+  EXPECT_TRUE(child_local(bare, "prstGeom"));
 }
 
 }  // namespace

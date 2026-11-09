@@ -233,7 +233,7 @@ TEST(FormulonCApi, SaveWithDiagnosticsReportsTheXlsbCountersAndLeavesTheXlsxOnes
   // The OOXML writer represents all of the above, so a clean XLSX save
   // reports nothing lost -- including on the two fields both writers own.
   BufferGuard xlsx_buf;
-  fm_save_diagnostics_t xlsx{sizeof(fm_save_diagnostics_t), 99U, 99U, 99U, 99U, 99U};
+  fm_save_diagnostics_info_t xlsx{sizeof(fm_save_diagnostics_info_t), 99U, 99U, 99U, 99U, 99U};
   ASSERT_EQ(fm_workbook_save_with_diagnostics(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &xlsx_buf.data, &xlsx_buf.len, &xlsx),
             0);
   EXPECT_EQ(xlsx.downgraded_formula_count, 0U);
@@ -243,7 +243,7 @@ TEST(FormulonCApi, SaveWithDiagnosticsReportsTheXlsbCountersAndLeavesTheXlsxOnes
   EXPECT_EQ(xlsx.renumbered_part_count, 0U);
 
   BufferGuard xlsb_buf;
-  fm_save_diagnostics_t xlsb = FM_STRUCT_INIT(fm_save_diagnostics_t);
+  fm_save_diagnostics_info_t xlsb = FM_STRUCT_INIT(fm_save_diagnostics_info_t);
   ASSERT_EQ(fm_workbook_save_with_diagnostics(wb.handle, FM_WORKBOOK_FORMAT_XLSB, &xlsb_buf.data, &xlsb_buf.len, &xlsb),
             0);
   EXPECT_EQ(xlsb.downgraded_formula_count, 1U);
@@ -256,7 +256,7 @@ TEST(FormulonCApi, SaveWithDiagnosticsReportsTheXlsbCountersAndLeavesTheXlsxOnes
 }
 TEST(FormulonCApi, SaveWithDiagnosticsCarriesTheOoxmlWriterCountersAcrossTheAbi) {
   // The OOXML writer's own counters are unit-tested at the io layer; this
-  // pins that they survive the projection onto `fm_save_diagnostics_t`
+  // pins that they survive the projection onto `fm_save_diagnostics_info_t`
   // instead of arriving as zero.
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
@@ -277,7 +277,7 @@ TEST(FormulonCApi, SaveWithDiagnosticsCarriesTheOoxmlWriterCountersAcrossTheAbi)
   wb.handle->workbook().set_unknown_workbook_rels({std::move(orphan)});
 
   BufferGuard buf;
-  fm_save_diagnostics_t d{sizeof(fm_save_diagnostics_t), 99U, 99U, 99U, 99U, 99U};
+  fm_save_diagnostics_info_t d{sizeof(fm_save_diagnostics_info_t), 99U, 99U, 99U, 99U, 99U};
   ASSERT_EQ(fm_workbook_save_with_diagnostics(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &buf.data, &buf.len, &d), 0);
   EXPECT_GT(buf.len, 0U);
   EXPECT_EQ(d.dropped_part_count, 1U);
@@ -297,7 +297,7 @@ TEST(FormulonCApi, ReadDiagnosticsAreZeroForCleanRoundTrip) {
     WorkbookGuard loaded;
     ASSERT_EQ(fm_workbook_load(bytes.data, bytes.len, &loaded.handle), 0);
 
-    fm_read_diagnostics_t d{sizeof(fm_read_diagnostics_t), 99U, 99U, 99U, 99U, 99U};
+    fm_read_diagnostics_info_t d{sizeof(fm_read_diagnostics_info_t), 99U, 99U, 99U, 99U, 99U};
     ASSERT_EQ(fm_workbook_get_diagnostics(loaded.handle, &d), 0);
     EXPECT_EQ(d.undecoded_formula_count, 0U) << "format=" << format;
     EXPECT_EQ(d.undecoded_defined_name_count, 0U) << "format=" << format;
@@ -312,14 +312,14 @@ TEST(FormulonCApi, DiagnosticsEntryPointsInitializeOutputsOnFailure) {
 
   // A workbook that was never loaded reports every counter as zero rather
   // than leaving the caller's struct untouched.
-  fm_read_diagnostics_t read{sizeof(fm_read_diagnostics_t), 99U, 99U, 99U, 99U, 99U};
+  fm_read_diagnostics_info_t read{sizeof(fm_read_diagnostics_info_t), 99U, 99U, 99U, 99U, 99U};
   ASSERT_EQ(fm_workbook_get_diagnostics(wb.handle, &read), 0);
   EXPECT_EQ(read.undecoded_formula_count, 0U);
   EXPECT_EQ(read.skipped_feature_count, 0U);
 
   uint8_t* bytes = reinterpret_cast<uint8_t*>(static_cast<uintptr_t>(1));
   size_t len = 99U;
-  fm_save_diagnostics_t save{sizeof(fm_save_diagnostics_t), 99U, 99U, 99U, 99U, 99U};
+  fm_save_diagnostics_info_t save{sizeof(fm_save_diagnostics_info_t), 99U, 99U, 99U, 99U, 99U};
   EXPECT_NE(fm_workbook_save_with_diagnostics(wb.handle, FM_WORKBOOK_FORMAT_UNKNOWN, &bytes, &len, &save), 0);
   EXPECT_EQ(bytes, nullptr);
   EXPECT_EQ(len, 0U);
@@ -329,7 +329,7 @@ TEST(FormulonCApi, DiagnosticsEntryPointsInitializeOutputsOnFailure) {
   EXPECT_EQ(save.dropped_relationship_count, 0U);
   EXPECT_EQ(save.renumbered_part_count, 0U);
 
-  read = fm_read_diagnostics_t{sizeof(fm_read_diagnostics_t), 99U, 99U, 99U, 99U, 99U};
+  read = fm_read_diagnostics_info_t{sizeof(fm_read_diagnostics_info_t), 99U, 99U, 99U, 99U, 99U};
   EXPECT_NE(fm_workbook_get_diagnostics(nullptr, &read), 0);
   EXPECT_EQ(read.undecoded_formula_count, 0U);
   EXPECT_EQ(read.undecoded_defined_name_count, 0U);
@@ -347,7 +347,7 @@ TEST(FormulonCApi, ReadDiagnosticsPreservesUnknownPartFromDeterministicFixture) 
   ASSERT_FALSE(fixture.empty());
   WorkbookGuard loaded;
   ASSERT_EQ(fm_workbook_load(fixture.data(), fixture.size(), &loaded.handle), 0);
-  fm_read_diagnostics_t d = FM_STRUCT_INIT(fm_read_diagnostics_t);
+  fm_read_diagnostics_info_t d = FM_STRUCT_INIT(fm_read_diagnostics_info_t);
   ASSERT_EQ(fm_workbook_get_diagnostics(loaded.handle, &d), 0);
   EXPECT_EQ(d.undecoded_formula_count, 0U);
   EXPECT_EQ(d.undecoded_defined_name_count, 0U);
@@ -356,7 +356,7 @@ TEST(FormulonCApi, ReadDiagnosticsPreservesUnknownPartFromDeterministicFixture) 
   EXPECT_EQ(d.undecoded_part_count, 0U);
 }
 TEST(FormulonCApi, DiagnosticFailuresReportTheNullArgument) {
-  fm_read_diagnostics_t read{sizeof(fm_read_diagnostics_t), 77U, 77U, 77U, 77U, 77U};
+  fm_read_diagnostics_info_t read{sizeof(fm_read_diagnostics_info_t), 77U, 77U, 77U, 77U, 77U};
   EXPECT_NE(fm_workbook_get_diagnostics(nullptr, &read), 0);
   EXPECT_EQ(read.undecoded_formula_count, 0U);
   EXPECT_EQ(read.skipped_feature_count, 0U);
@@ -369,7 +369,7 @@ TEST(FormulonCApi, DiagnosticFailuresReportTheNullArgument) {
   EXPECT_EQ(len, 0U);
   EXPECT_NE(std::string(fm_get_last_error_message()).find("NULL"), std::string::npos);
 
-  fm_save_diagnostics_t save{sizeof(fm_save_diagnostics_t), 77U, 77U, 77U, 77U, 77U};
+  fm_save_diagnostics_info_t save{sizeof(fm_save_diagnostics_info_t), 77U, 77U, 77U, 77U, 77U};
   bytes = reinterpret_cast<uint8_t*>(static_cast<uintptr_t>(1));
   len = 77U;
   EXPECT_NE(fm_workbook_save_with_diagnostics(nullptr, FM_WORKBOOK_FORMAT_XLSB, &bytes, &len, &save), 0);
@@ -401,7 +401,7 @@ TEST(FormulonCApi, EverySaveEntryPointZeroesOutParamsOnFailure) {
 
   bytes = poison;
   len = 77U;
-  fm_save_diagnostics_t save{sizeof(fm_save_diagnostics_t), 77U, 77U, 77U, 77U, 77U};
+  fm_save_diagnostics_info_t save{sizeof(fm_save_diagnostics_info_t), 77U, 77U, 77U, 77U, 77U};
   EXPECT_NE(fm_workbook_save_with_diagnostics(nullptr, FM_WORKBOOK_FORMAT_XLSX, &bytes, &len, &save), 0);
   EXPECT_EQ(bytes, nullptr);
   EXPECT_EQ(len, 0U);
@@ -439,32 +439,17 @@ TEST(FormulonCApi, BaseSaveProducesTheSameBytesAsTheXlsxFormatSelector) {
   ASSERT_GT(base.len, 0U);
   EXPECT_EQ(std::memcmp(base.data, selected.data, base.len), 0);
 }
-TEST(FormulonCApi, ReservedStatusCodesKeepTheirSlotsAndSpelling) {
-  // Some documented codes are allocated but no shipping path builds them.
-  // The header promises numeric identity with `formulon::FormulonErrorCode`,
-  // so those slots must not be reused or renumbered, and `fm_get_status_name`
-  // must keep naming them exactly: only a value outside the enum may fall
-  // back to `"UNRECOGNIZED_STATUS"`.
-  struct Reserved {
-    fm_status_t code;
-    const char* name;
-  };
-  const Reserved reserved[] = {
-      {5008, "IO_XML_DOCTYPE"},
-      {5009, "IO_XML_ENTITY_EXPLOSION"},
-      {5015, "IO_CSV_ENCODING_DETECT"},
-      {6000, "CRYPTO_AGILE_NOT_SUPPORTED"},
-      {6001, "CRYPTO_STANDARD_NOT_SUPPORTED"},
-      {6002, "CRYPTO_BAD_PASSWORD"},
-      {6003, "CRYPTO_HASH_MISMATCH"},
-      {6004, "CRYPTO_KEY_DERIVATION_FAILED"},
-  };
-  for (const Reserved& entry : reserved) {
-    EXPECT_STREQ(fm_get_status_name(entry.code), entry.name) << "code=" << entry.code;
+TEST(FormulonCApi, RetiredStatusCodesStayUnassigned) {
+  // Codes no shipping path returned were removed rather than kept reserved.
+  // Their numbers are not reused, so a status from an older build never
+  // reads as a different failure: each one is unrecognized now.
+  const fm_status_t retired[] = {5008, 5009, 5015, 6000, 6001, 6002, 6003, 6004};
+  for (const fm_status_t code : retired) {
+    EXPECT_STREQ(fm_get_status_name(code), "UNRECOGNIZED_STATUS") << "code=" << code;
   }
 
-  // The reserved crypto band is not what an encrypted package reports; a
-  // binding offering a password prompt must branch on `IO_ZIP_ENCRYPTED`.
+  // An encrypted package reports `IO_ZIP_ENCRYPTED`; a binding offering a
+  // password prompt branches on it.
   EXPECT_STREQ(fm_get_status_name(static_cast<fm_status_t>(formulon::FormulonErrorCode::kIoZipEncrypted)),
                "IO_ZIP_ENCRYPTED");
   EXPECT_STREQ(fm_get_status_name(123456), "UNRECOGNIZED_STATUS");
@@ -502,7 +487,7 @@ TEST(FormulonCApi, SaveExRejectsUnknownFormat) {
               static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
     EXPECT_EQ(buf.data, nullptr);
     EXPECT_EQ(buf.len, 0U);
-    fm_save_diagnostics_t save{sizeof(fm_save_diagnostics_t), 99U, 99U, 99U, 99U, 99U};
+    fm_save_diagnostics_info_t save{sizeof(fm_save_diagnostics_info_t), 99U, 99U, 99U, 99U, 99U};
     EXPECT_EQ(fm_workbook_save_with_diagnostics(wb.handle, raw, &buf.data, &buf.len, &save),
               static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
     EXPECT_EQ(buf.data, nullptr);

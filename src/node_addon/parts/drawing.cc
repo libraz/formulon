@@ -48,7 +48,7 @@ bool ReadBytesWithOpts(const Napi::CallbackInfo& info, const char* usage, BytesW
 }
 
 // The JS `DrawingObject` record of `o`.
-Napi::Object DrawingObjectToJs(Napi::Env env, const fm_drawing_object_t& o) {
+Napi::Object DrawingObjectToJs(Napi::Env env, const fm_drawing_object_info_t& o) {
   Napi::Object item = Napi::Object::New(env);
   item.Set("objectId", JsNumber(env, o.object_id));
   item.Set("kind", JsNumber(env, o.kind));
@@ -108,10 +108,10 @@ Napi::Value Workbook::ListDrawingObjects(const Napi::CallbackInfo& info) {
   }
   Napi::Array arr = Napi::Array::New(env);
   const uint32_t sheet = ArgU32(info, 0);
-  const fm_status_t rc = CollectList<fm_drawing_object_t>(
+  const fm_status_t rc = CollectList<fm_drawing_object_info_t>(
       arr, [&](size_t* n) { return fm_sheet_get_drawing_object_count(handle_, sheet, n); },
-      [&](size_t i, fm_drawing_object_t* o) { return fm_sheet_get_drawing_object_at(handle_, sheet, i, o); },
-      [&](const fm_drawing_object_t& o) { return DrawingObjectToJs(env, o); });
+      [&](size_t i, fm_drawing_object_info_t* o) { return fm_sheet_get_drawing_object_at(handle_, sheet, i, o); },
+      [&](const fm_drawing_object_info_t& o) { return DrawingObjectToJs(env, o); });
   return ValueOrThrow(env, rc, arr);
 }
 
@@ -120,7 +120,7 @@ Napi::Value Workbook::GetDrawingObject(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return ThrowInvalidHandle(env);
   }
-  fm_drawing_object_t o = FM_STRUCT_INIT(fm_drawing_object_t);
+  fm_drawing_object_info_t o = FM_STRUCT_INIT(fm_drawing_object_info_t);
   int32_t present = 0;
   const fm_status_t rc = fm_sheet_get_drawing_object(handle_, ArgU32(info, 0), ArgU32(info, 1), &present, &o);
   return OptionalOrNull(env, rc, present,

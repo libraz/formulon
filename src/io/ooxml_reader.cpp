@@ -185,7 +185,8 @@ static Expected<std::vector<std::string>, Error> ReadSheetList(const pugi::xml_n
     // would be a worse repair than refusing the load.
     auto added = wb.add_sheet_validated(name);
     if (!added) {
-      if (added.error().code != FormulonErrorCode::kInvalidSheetName) {
+      if (added.error().code != FormulonErrorCode::kInvalidSheetName &&
+          added.error().code != FormulonErrorCode::kAlreadyExists) {
         return std::move(added.error());
       }
       std::string ctx("context=ooxml_reader part=");

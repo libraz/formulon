@@ -363,7 +363,7 @@ TEST(ChartEdit, InsertTitleLegendAndRefusals) {
   o.source = "Sheet1!#REF!";
   ExpectCode(insert_chart(wb, 0, o), Code::kIoChartInvalidReference);
   ExpectCode(insert_chart(wb, 9, o), Code::kInvalidArgument);
-  ExpectCode(get_chart(wb, 0, 999), Code::kInvalidArgument);
+  ExpectCode(get_chart(wb, 0, 999), Code::kNotFound);
 
   Workbook xlsb = LoadFixture("chart_xlsb.xlsb");
   const Located x = Find(xlsb);
@@ -463,12 +463,15 @@ TEST(ChartEdit, NoOpAndFailedEditsWriteNothing) {
   ExpectCode(
       set_chart_axis(wb, c.sheet, c.id, m.axes[0].kind == ChartAxisKind::kCategory ? m.axes[0].id : m.axes[1].id, unit),
       Code::kInvalidArgument);
-  ExpectCode(set_chart_axis(wb, c.sheet, c.id, 12345U, unit), Code::kInvalidArgument);
-  ExpectCode(set_chart_filter(wb, c.sheet, c.id, {99}, {}), Code::kInvalidArgument);
+  ExpectCode(set_chart_axis(wb, c.sheet, c.id, 12345U, unit), Code::kNotFound);
+  ExpectCode(set_chart_filter(wb, c.sheet, c.id, {99}, {}), Code::kNotFound);
   ExpectCode(set_chart_filter(wb, c.sheet, c.id, {}, {0, 1, 2, 3}), Code::kInvalidArgument);
   ChartPlotPatch angle;
   angle.first_slice_angle = 10;
   ExpectCode(set_chart_plot(wb, c.sheet, c.id, 0, angle), Code::kInvalidArgument);
+  ExpectCode(set_chart_plot(wb, c.sheet, c.id, m.plots.size(), angle), Code::kIndexOutOfRange);
+  ExpectCode(set_chart_plot(wb, c.sheet, 999U, 0, angle), Code::kNotFound);
+  ExpectCode(set_chart_series(wb, c.sheet, c.id, 0, 99U, marker), Code::kNotFound);
   EXPECT_EQ(Parts(wb), before);
 }
 
@@ -1819,7 +1822,7 @@ TEST(ChartEdit, PointsSeriesAndSource) {
   m = Must(get_chart(wb, 0, id));
   EXPECT_EQ(m.plots[0].series[2].name.kind, ChartDataSource::Kind::kNone);
   EXPECT_EQ(m.plots[0].series[2].val.formula, "Sheet1!$C$2:$C$5");
-  ExpectCode(remove_chart_series(wb, 0, id, 0, 7), Code::kInvalidArgument);
+  ExpectCode(remove_chart_series(wb, 0, id, 0, 7), Code::kNotFound);
 
   // Source rebuild keeps per-series formatting by idx and drops series past the new count.
   ChartSeriesPatch red;

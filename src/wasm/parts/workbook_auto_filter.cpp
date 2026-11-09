@@ -39,15 +39,15 @@ namespace {
 /// every JS method below is written a single time. A table is addressed by
 /// its sheet and sheet-local index; the sheet entry points ignore `table`.
 struct AutoFilterOps {
-  fm_status_t (*get)(const fm_workbook_t*, size_t, size_t, fm_auto_filter_t*, int32_t*);
+  fm_status_t (*get)(const fm_workbook_t*, size_t, size_t, int32_t*, fm_auto_filter_t*);
   fm_status_t (*set)(fm_workbook_t*, size_t, size_t, const fm_auto_filter_t*);
   fm_status_t (*apply)(fm_workbook_t*, size_t, size_t);
   fm_status_t (*clear)(fm_workbook_t*, size_t, size_t);
   fm_status_t (*evaluate)(const fm_workbook_t*, size_t, size_t, uint8_t*, size_t, size_t*, uint32_t*);
 };
 
-fm_status_t sheet_get(const fm_workbook_t* wb, size_t sheet, size_t, fm_auto_filter_t* out, int32_t* present) {
-  return fm_sheet_get_auto_filter(wb, sheet, out, present);
+fm_status_t sheet_get(const fm_workbook_t* wb, size_t sheet, size_t, int32_t* present, fm_auto_filter_t* out) {
+  return fm_sheet_get_auto_filter(wb, sheet, present, out);
 }
 fm_status_t sheet_set(fm_workbook_t* wb, size_t sheet, size_t, const fm_auto_filter_t* filter) {
   return fm_sheet_set_auto_filter(wb, sheet, filter);
@@ -350,7 +350,7 @@ void pull_sort_condition(const emscripten::val& v, std::string& custom_list, fm_
 emscripten::val get_auto_filter(const fm_workbook_t* wb, const AutoFilterOps& ops, uint32_t sheet, uint32_t table) {
   fm_auto_filter_t f = FM_STRUCT_INIT(fm_auto_filter_t);
   int32_t present = 0;
-  const fm_status_t rc = wb != nullptr ? ops.get(wb, sheet, table, &f, &present) : kBindingInvalidHandle;
+  const fm_status_t rc = wb != nullptr ? ops.get(wb, sheet, table, &present, &f) : kBindingInvalidHandle;
   return optional_or_null(rc, present, rc == 0 && present != 0 ? auto_filter_to_val(f) : emscripten::val::null());
 }
 

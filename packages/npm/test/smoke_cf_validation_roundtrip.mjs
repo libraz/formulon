@@ -136,7 +136,7 @@ test('addValidation defaults every omitted boolean to true and keeps an explicit
     assert.equal(rule.operator, 0);
     assert.equal(rule.errorStyle, 0);
     assert.equal(rule.formula1, '="Yes,No"');
-    assert.equal(rule.formula2, '');
+    assert.equal(rule.formula2, null);
     assert.equal(rule.ranges.length, 1);
     assert.equal(rule.ranges[0].lastRow, 2);
 

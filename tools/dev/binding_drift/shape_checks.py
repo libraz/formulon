@@ -185,9 +185,9 @@ def check_dts_shared_shapes() -> List[str]:
 # Public type name -> the C struct it projects.
 _STYLE_RECORD_STRUCTS = {
     "CellXf": "fm_cell_xf_t",
-    "Color": "fm_color_spec_t",
-    "Font": "fm_font_record_t",
-    "Fill": "fm_fill_record_t",
+    "Color": "fm_color_t",
+    "Font": "fm_font_t",
+    "Fill": "fm_fill_t",
     "BorderSide": "fm_border_side_t",
 }
 
@@ -221,7 +221,7 @@ _STYLE_RECORD_PRESENCE_FLAGS = {
         "has_shrink_to_fit": "shrink_to_fit",
         "has_reading_order": "reading_order",
     },
-    "fm_font_record_t": {
+    "fm_font_t": {
         "has_bold": "bold",
         "has_italic": "italic",
         "has_strike": "strike",
@@ -240,7 +240,7 @@ _STYLE_RECORD_PRESENCE_FLAGS = {
 # `gradient` object. Each entry names the binding field and the C fields it
 # replaces, all of which must still exist in the struct.
 _STYLE_RECORD_COMPOSITES = {
-    "fm_fill_record_t": {
+    "fm_fill_t": {
         "gradient": (
             "has_gradient",
             "gradient_type",

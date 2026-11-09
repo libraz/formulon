@@ -223,96 +223,98 @@ Expected<void, Error> apply_layout(fm_workbook_t* wb, const JsonValue& spec) {
   return {};
 }
 
-/// Copies an optional integer field into a C ABI patch slot, engaging it
+/// Copies an optional integer field into a C ABI patch slot, setting it
 /// only when the case states it. "Absent means untouched" is what keeps a
 /// case's file silent about everything it did not ask for.
-void patch_u32(const JsonValue* block, const char* field, std::int32_t* engaged, std::uint32_t* out) {
+void patch_u32(const JsonValue* block, const char* field, fm_patch_op_t* op, std::uint32_t* out) {
   const JsonValue* v = block->find(field);
   if (v != nullptr && v->is_number()) {
-    *engaged = 1;
+    *op = FM_PATCH_OP_SET;
     *out = static_cast<std::uint32_t>(v->as_number());
   }
 }
 
 /// Reads a case `orientation` (Excel's `XlPageOrientation`: 1 = portrait,
 /// 2 = landscape) as an `fm_page_orientation_t`.
-void patch_orientation(const JsonValue* block, std::int32_t* engaged, std::int32_t* out) {
+void patch_orientation(const JsonValue* block, fm_patch_op_t* op, std::int32_t* out) {
   const JsonValue* v = block->find("orientation");
   if (v != nullptr && v->is_number()) {
-    *engaged = 1;
+    *op = FM_PATCH_OP_SET;
     *out = v->as_number() == 2.0 ? FM_PAGE_ORIENTATION_LANDSCAPE : FM_PAGE_ORIENTATION_PORTRAIT;
   }
 }
 
-void patch_bool(const JsonValue* block, const char* field, std::int32_t* engaged, std::int32_t* out) {
+void patch_bool(const JsonValue* block, const char* field, fm_patch_op_t* op, std::int32_t* out) {
   const JsonValue* v = block->find(field);
   if (v != nullptr && v->is_bool()) {
-    *engaged = 1;
+    *op = FM_PATCH_OP_SET;
     *out = v->as_bool() ? 1 : 0;
   }
 }
 
-void patch_double(const JsonValue* block, const char* field, std::int32_t* engaged, double* out) {
+void patch_double(const JsonValue* block, const char* field, fm_patch_op_t* op, double* out) {
   const JsonValue* v = block->find(field);
   if (v != nullptr && v->is_number()) {
-    *engaged = 1;
+    *op = FM_PATCH_OP_SET;
     *out = v->as_number();
   }
 }
 
-/// Returns the string at `field`, or nullptr when absent -- which is the
-/// C ABI's "leave this header/footer section alone".
-const char* optional_text(const JsonValue* block, const char* field) {
+/// Sets a header/footer section from the string at `field`; an absent one keeps the section.
+void patch_text(const JsonValue* block, const char* field, fm_patch_op_t* op, const char** out) {
   const JsonValue* v = block->find(field);
-  return v != nullptr && v->is_string() ? v->as_string().c_str() : nullptr;
+  if (v != nullptr && v->is_string()) {
+    *op = FM_PATCH_OP_SET;
+    *out = v->as_string().c_str();
+  }
 }
 
 /// Drives the print-authoring calls from the `roundtrip` block, in the
 /// same order as tools/oracle/print_roundtrip.py.
 Expected<void, Error> apply_print_settings(fm_workbook_t* wb, std::uint32_t sheet, const JsonValue& rt) {
   if (const JsonValue* block = rt.find("page_setup"); block != nullptr && block->is_object()) {
-    fm_page_setup_t setup = FM_STRUCT_INIT(fm_page_setup_t);
-    patch_orientation(block, &setup.orientation_engaged, &setup.orientation);
-    patch_u32(block, "paper_size", &setup.paper_size_engaged, &setup.paper_size);
-    patch_u32(block, "scale", &setup.scale_pct_engaged, &setup.scale_pct);
-    patch_u32(block, "fit_to_width", &setup.fit_to_width_engaged, &setup.fit_to_width);
-    patch_u32(block, "fit_to_height", &setup.fit_to_height_engaged, &setup.fit_to_height);
-    patch_bool(block, "fit_to_page", &setup.fit_to_page_engaged, &setup.fit_to_page);
+    fm_page_setup_patch_t setup = FM_STRUCT_INIT(fm_page_setup_patch_t);
+    patch_orientation(block, &setup.orientation_op, &setup.orientation);
+    patch_u32(block, "paper_size", &setup.paper_size_op, &setup.paper_size);
+    patch_u32(block, "scale", &setup.scale_pct_op, &setup.scale_pct);
+    patch_u32(block, "fit_to_width", &setup.fit_to_width_op, &setup.fit_to_width);
+    patch_u32(block, "fit_to_height", &setup.fit_to_height_op, &setup.fit_to_height);
+    patch_bool(block, "fit_to_page", &setup.fit_to_page_op, &setup.fit_to_page);
     RETURN_IF_ERROR(checked(fm_sheet_update_page_setup(wb, sheet, &setup), "fm_sheet_update_page_setup"));
   }
 
   if (const JsonValue* block = rt.find("page_margins"); block != nullptr && block->is_object()) {
-    fm_page_margins_t margins = FM_STRUCT_INIT(fm_page_margins_t);
-    patch_double(block, "left", &margins.left_in_engaged, &margins.left_in);
-    patch_double(block, "right", &margins.right_in_engaged, &margins.right_in);
-    patch_double(block, "top", &margins.top_in_engaged, &margins.top_in);
-    patch_double(block, "bottom", &margins.bottom_in_engaged, &margins.bottom_in);
-    patch_double(block, "header", &margins.header_in_engaged, &margins.header_in);
-    patch_double(block, "footer", &margins.footer_in_engaged, &margins.footer_in);
+    fm_page_margins_patch_t margins = FM_STRUCT_INIT(fm_page_margins_patch_t);
+    patch_double(block, "left", &margins.left_in_op, &margins.left_in);
+    patch_double(block, "right", &margins.right_in_op, &margins.right_in);
+    patch_double(block, "top", &margins.top_in_op, &margins.top_in);
+    patch_double(block, "bottom", &margins.bottom_in_op, &margins.bottom_in);
+    patch_double(block, "header", &margins.header_in_op, &margins.header_in);
+    patch_double(block, "footer", &margins.footer_in_op, &margins.footer_in);
     RETURN_IF_ERROR(checked(fm_sheet_update_page_margins(wb, sheet, &margins), "fm_sheet_update_page_margins"));
   }
 
   if (const JsonValue* block = rt.find("print_options"); block != nullptr && block->is_object()) {
-    fm_print_options_t options = FM_STRUCT_INIT(fm_print_options_t);
-    patch_bool(block, "grid_lines", &options.grid_lines_engaged, &options.grid_lines);
-    patch_bool(block, "headings", &options.headings_engaged, &options.headings);
-    patch_bool(block, "horizontal_centered", &options.horizontal_centered_engaged, &options.horizontal_centered);
-    patch_bool(block, "vertical_centered", &options.vertical_centered_engaged, &options.vertical_centered);
+    fm_print_options_patch_t options = FM_STRUCT_INIT(fm_print_options_patch_t);
+    patch_bool(block, "grid_lines", &options.grid_lines_op, &options.grid_lines);
+    patch_bool(block, "headings", &options.headings_op, &options.headings);
+    patch_bool(block, "horizontal_centered", &options.horizontal_centered_op, &options.horizontal_centered);
+    patch_bool(block, "vertical_centered", &options.vertical_centered_op, &options.vertical_centered);
     RETURN_IF_ERROR(checked(fm_sheet_update_print_options(wb, sheet, &options), "fm_sheet_update_print_options"));
   }
 
   if (const JsonValue* block = rt.find("header_footer"); block != nullptr && block->is_object()) {
-    fm_header_footer_t hf = FM_STRUCT_INIT(fm_header_footer_t);
-    hf.odd_header = optional_text(block, "odd_header");
-    hf.odd_footer = optional_text(block, "odd_footer");
-    hf.even_header = optional_text(block, "even_header");
-    hf.even_footer = optional_text(block, "even_footer");
-    hf.first_header = optional_text(block, "first_header");
-    hf.first_footer = optional_text(block, "first_footer");
-    patch_bool(block, "different_odd_even", &hf.different_odd_even_engaged, &hf.different_odd_even);
-    patch_bool(block, "different_first", &hf.different_first_engaged, &hf.different_first);
-    patch_bool(block, "scale_with_doc", &hf.scale_with_doc_engaged, &hf.scale_with_doc);
-    patch_bool(block, "align_with_margins", &hf.align_with_margins_engaged, &hf.align_with_margins);
+    fm_header_footer_patch_t hf = FM_STRUCT_INIT(fm_header_footer_patch_t);
+    patch_text(block, "odd_header", &hf.odd_header_op, &hf.odd_header);
+    patch_text(block, "odd_footer", &hf.odd_footer_op, &hf.odd_footer);
+    patch_text(block, "even_header", &hf.even_header_op, &hf.even_header);
+    patch_text(block, "even_footer", &hf.even_footer_op, &hf.even_footer);
+    patch_text(block, "first_header", &hf.first_header_op, &hf.first_header);
+    patch_text(block, "first_footer", &hf.first_footer_op, &hf.first_footer);
+    patch_bool(block, "different_odd_even", &hf.different_odd_even_op, &hf.different_odd_even);
+    patch_bool(block, "different_first", &hf.different_first_op, &hf.different_first);
+    patch_bool(block, "scale_with_doc", &hf.scale_with_doc_op, &hf.scale_with_doc);
+    patch_bool(block, "align_with_margins", &hf.align_with_margins_op, &hf.align_with_margins);
     RETURN_IF_ERROR(checked(fm_sheet_update_header_footer(wb, sheet, &hf), "fm_sheet_update_header_footer"));
   }
 
@@ -324,12 +326,9 @@ Expected<void, Error> apply_print_settings(fm_workbook_t* wb, std::uint32_t shee
     while (!text.empty()) {
       const std::size_t comma = std::min(text.find(','), text.size());
       const std::string token(text.substr(0, comma));
-      fm_parsed_reference_t ref = FM_STRUCT_INIT(fm_parsed_reference_t);
+      fm_parsed_reference_info_t ref = FM_STRUCT_INIT(fm_parsed_reference_info_t);
       RETURN_IF_ERROR(
           checked(fm_workbook_parse_reference(wb, token.c_str(), nullptr, &ref), "fm_workbook_parse_reference"));
-      if (ref.valid == 0) {
-        return invalid("print_area token is not an A1 range: " + token);
-      }
       rects.push_back(ref.rect);
       text.remove_prefix(comma == text.size() ? comma : comma + 1U);
     }
@@ -339,23 +338,23 @@ Expected<void, Error> apply_print_settings(fm_workbook_t* wb, std::uint32_t shee
   if (const JsonValue* titles = rt.find("print_titles"); titles != nullptr && titles->is_object()) {
     // The case spells each span in A1 (`1:2`, `A:A`).
     fm_print_titles_t spans = FM_STRUCT_INIT(fm_print_titles_t);
-    fm_parsed_reference_t rows = FM_STRUCT_INIT(fm_parsed_reference_t);
-    fm_parsed_reference_t cols = FM_STRUCT_INIT(fm_parsed_reference_t);
-    for (fm_parsed_reference_t* ref : {&rows, &cols}) {
+    fm_parsed_reference_info_t rows = FM_STRUCT_INIT(fm_parsed_reference_info_t);
+    fm_parsed_reference_info_t cols = FM_STRUCT_INIT(fm_parsed_reference_info_t);
+    bool has_rows = false;
+    bool has_cols = false;
+    for (fm_parsed_reference_info_t* ref : {&rows, &cols}) {
       const JsonValue* v = titles->find(ref == &rows ? "repeat_rows" : "repeat_cols");
       if (v == nullptr || !v->is_string() || v->as_string().empty()) {
         continue;
       }
       RETURN_IF_ERROR(checked(fm_workbook_parse_reference(wb, v->as_string().c_str(), nullptr, ref),
                               "fm_workbook_parse_reference"));
-      if (ref->valid == 0) {
-        return invalid("print_titles span is not an A1 range: " + v->as_string());
-      }
+      (ref == &rows ? has_rows : has_cols) = true;
     }
-    spans.has_rows = rows.valid;
+    spans.has_rows = has_rows ? 1 : 0;
     spans.first_row = rows.rect.first_row;
     spans.last_row = rows.rect.last_row;
-    spans.has_columns = cols.valid;
+    spans.has_columns = has_cols ? 1 : 0;
     spans.first_col = cols.rect.first_col;
     spans.last_col = cols.rect.last_col;
     RETURN_IF_ERROR(checked(fm_sheet_set_print_titles(wb, sheet, &spans), "fm_sheet_set_print_titles"));

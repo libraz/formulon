@@ -464,12 +464,13 @@ TEST(ThreadedComments, XlsbSaveReportsDeferral) {
   EXPECT_EQ(result.value().diagnostics.deferred_feature_count, 2U);
 }
 
-TEST(ThreadedComments, RejectsMalformedInput) {
+TEST(ThreadedComments, RefusesMalformedInputCollisionsAndUnknownIds) {
   Workbook wb = WorkbookWithPersons();
   wb.sheet(0).mutable_comments().push_back(CellComment(4, 4, "Carol", "note"));
   const auto invalid = [](const Expected<void, Error>& r) {
     return !r && r.error().code == FormulonErrorCode::kThreadedCommentInvalid;
   };
+  const auto code = [](const Expected<void, Error>& r) { return r ? FormulonErrorCode::kOk : r.error().code; };
   EXPECT_TRUE(
       invalid(wb.add_threaded_comment(0, Comment("{2bd0b1a4-7c3e-4f2a-9d11-6a5e8c0f1b23}", 0, 0, kAlice, "x"))));
   EXPECT_TRUE(invalid(wb.add_threaded_comment(0, Comment("2BD0B1A4-7C3E-4F2A-9D11-6A5E8C0F1B23", 0, 0, kAlice, "x"))));
@@ -478,7 +479,7 @@ TEST(ThreadedComments, RejectsMalformedInput) {
   EXPECT_TRUE(invalid(wb.add_threaded_comment(0, bad_time)));
   EXPECT_TRUE(
       invalid(wb.add_threaded_comment(0, Comment(kThread, 0, 0, "{99999999-9999-4999-8999-999999999999}", "x"))));
-  EXPECT_TRUE(invalid(wb.add_threaded_comment(0, Comment(kThread, 4, 4, kAlice, "x"))));
+  EXPECT_EQ(code(wb.add_threaded_comment(0, Comment(kThread, 4, 4, kAlice, "x"))), FormulonErrorCode::kAlreadyExists);
   EXPECT_TRUE(invalid(wb.add_threaded_comment(0, Comment(kReply, 0, 0, kAlice, "x", kThread))));
 
   // "日本🙂!" is five UTF-16 units: the emoji is a surrogate pair.
@@ -487,14 +488,18 @@ TEST(ThreadedComments, RejectsMalformedInput) {
   EXPECT_TRUE(invalid(wb.add_threaded_comment(0, mentioned)));
   mentioned.mentions[0].length = 3;
   ASSERT_TRUE(static_cast<bool>(wb.add_threaded_comment(0, mentioned)));
-  EXPECT_TRUE(invalid(wb.add_threaded_comment(0, Comment(kReply, 0, 0, kAlice, "x"))));
+  EXPECT_EQ(code(wb.add_threaded_comment(0, Comment(kReply, 0, 0, kAlice, "x"))), FormulonErrorCode::kAlreadyExists);
+  EXPECT_EQ(code(wb.add_threaded_comment(0, Comment(kThread, 1, 1, kAlice, "x"))), FormulonErrorCode::kAlreadyExists);
 
-  EXPECT_TRUE(invalid(wb.remove_person(kBob)));
+  EXPECT_EQ(code(wb.remove_person(kBob)), FormulonErrorCode::kPreconditionFailed);
   EXPECT_TRUE(invalid(wb.edit_threaded_comment(0, kThread, "", mentioned.mentions)));
   ASSERT_TRUE(static_cast<bool>(wb.edit_threaded_comment(0, kThread, "plain", {})));
   ASSERT_TRUE(static_cast<bool>(wb.remove_person(kBob)));
-  EXPECT_TRUE(invalid(wb.add_person(Person{std::string(kAlice), "Again", "", ""})));
-  EXPECT_TRUE(invalid(wb.remove_threaded_comment(0, kReply)));
+  EXPECT_EQ(code(wb.add_person(Person{std::string(kAlice), "Again", "", ""})), FormulonErrorCode::kAlreadyExists);
+  EXPECT_EQ(code(wb.remove_person(kBob)), FormulonErrorCode::kNotFound);
+  EXPECT_EQ(code(wb.remove_threaded_comment(0, kReply)), FormulonErrorCode::kNotFound);
+  EXPECT_EQ(code(wb.edit_threaded_comment(0, kReply, "x", {})), FormulonErrorCode::kNotFound);
+  EXPECT_EQ(code(wb.set_thread_resolved(0, kReply, true)), FormulonErrorCode::kNotFound);
   ASSERT_EQ(wb.sheet(0).threaded_comments().size(), 1U);
   EXPECT_EQ(wb.sheet(0).threaded_comments()[0].text, "plain");
 }

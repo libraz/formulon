@@ -86,7 +86,7 @@ Expected<void, Error> check_table_identity(const Workbook& wb, std::string_view 
                          "name=" + std::string(name) + " display_name=" + std::string(display_name));
   }
   if (name_in_use(wb.tables(), io::xlsb::xlsb_retained_tables(wb), wb.defined_names(), name, display_name, self)) {
-    return invalid_table("table name already exists", "reason=table name already exists name=" + std::string(name));
+    return make_error(FormulonErrorCode::kAlreadyExists, "table name already exists", "name=" + std::string(name));
   }
   return Expected<void, Error>::Ok();
 }
@@ -99,7 +99,7 @@ Expected<void, Error> check_table_range_free(const Workbook& wb, std::size_t she
   const auto refuse = [&](const char* what) {
     std::string ref;
     append_a1_rectangle(ref, rect);
-    return invalid_table(what, "ref=" + ref);
+    return make_error(FormulonErrorCode::kPreconditionFailed, what, "ref=" + ref);
   };
   for (std::size_t i = 0; i < wb.tables().size(); ++i) {
     const std::optional<MergeRange> other_rect = detail::table_rect_on_sheet(wb.tables()[i], sheet_index);

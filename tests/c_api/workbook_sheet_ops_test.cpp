@@ -75,7 +75,7 @@ TEST(WorkbookSheetOpsCApi, UnicodeSimpleFoldAddRejectsDuplicateAndRenameWorks) {
   EXPECT_NE(fm_workbook_add_sheet(wb.handle, "\xC3\xA4", ignored_index()), 0);        // ä
   const fm_status_t collision = fm_workbook_rename_sheet(wb.handle, 1U, "\xC3\xA4");  // ä
   EXPECT_NE(collision, 0);
-  EXPECT_STREQ(fm_get_status_name(collision), "INVALID_SHEET_NAME");
+  EXPECT_EQ(collision, FM_STATUS_ALREADY_EXISTS);
   EXPECT_STREQ(SheetName(wb.handle, 0U), "\xC3\x84");  // Ä
   EXPECT_STREQ(SheetName(wb.handle, 1U), "\xC3\x96");  // Ö
   ASSERT_EQ(fm_workbook_rename_sheet(wb.handle, 0U, "\xC3\xA4"), 0);
@@ -311,7 +311,7 @@ TEST(WorkbookSheetOpsCApi, SetDefinedNameReplacesCommentAndHidden) {
   ASSERT_EQ(fm_workbook_get_defined_name_at(wb.handle, 0, &dn), 0);
   EXPECT_STREQ(dn.formula, "=0.2");
   EXPECT_EQ(dn.local_sheet_id, -1);
-  EXPECT_STREQ(dn.comment, "");
+  EXPECT_EQ(dn.comment, nullptr);
   EXPECT_EQ(dn.hidden, 0);
 }
 
@@ -370,9 +370,8 @@ TEST(WorkbookSheetOpsCApi, EmptyMetadataListsExposeTheirCAbiContracts) {
   EXPECT_EQ(count_of(fm_sheet_get_table_count, wb.handle, std::size_t{0}), 0U);
   EXPECT_EQ(count_of(fm_workbook_get_passthrough_count, wb.handle), 0U);
 
-  const char* name = nullptr;
-  fm_cell_rect_t rect{};
-  EXPECT_NE(fm_sheet_get_table(wb.handle, 0, 0, &name, &rect), 0);
+  fm_table_info_t table = FM_STRUCT_INIT(fm_table_info_t);
+  EXPECT_NE(fm_sheet_get_table_at(wb.handle, 0, 0, &table), 0);
 
   const char* path = nullptr;
   EXPECT_NE(fm_workbook_get_passthrough_at(wb.handle, 0, &path), 0);

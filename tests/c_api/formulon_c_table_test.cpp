@@ -90,8 +90,35 @@ void CreateSalesTable(WorkbookGuard& wb, const char* style = "TableStyleMedium2"
 
 fm_table_info_t Info(fm_workbook_t* wb, std::size_t index = 0U, std::size_t sheet = 0U) {
   fm_table_info_t info = FM_STRUCT_INIT(fm_table_info_t);
-  EXPECT_EQ(fm_sheet_get_table_info(wb, sheet, index, &info), 0);
+  EXPECT_EQ(fm_sheet_get_table_at(wb, sheet, index, &info), 0);
   return info;
+}
+
+/// Patch with every op at KEEP.
+fm_table_patch_t TablePatch() {
+  return FM_STRUCT_INIT(fm_table_patch_t);
+}
+
+/// Sets the table's style name, leaving its toggles.
+fm_status_t SetTableStyleName(fm_workbook_t* wb, std::size_t index, const char* style_name) {
+  fm_table_style_options_patch_t patch = FM_STRUCT_INIT(fm_table_style_options_patch_t);
+  patch.style_name_op = FM_PATCH_OP_SET;
+  patch.style_name = style_name;
+  return fm_sheet_update_table_style_options(wb, 0, index, &patch);
+}
+
+/// Patches the table / PivotTable style defaults: `nullptr` keeps a name, "" clears it, anything else sets it.
+fm_status_t UpdateStyleDefaults(fm_workbook_t* wb, const char* table_style, const char* pivot_style) {
+  fm_table_style_defaults_patch_t patch = FM_STRUCT_INIT(fm_table_style_defaults_patch_t);
+  if (table_style != nullptr) {
+    patch.table_style_op = table_style[0] == '\0' ? FM_PATCH_OP_CLEAR : FM_PATCH_OP_SET;
+    patch.table_style = table_style;
+  }
+  if (pivot_style != nullptr) {
+    patch.pivot_style_op = pivot_style[0] == '\0' ? FM_PATCH_OP_CLEAR : FM_PATCH_OP_SET;
+    patch.pivot_style = pivot_style;
+  }
+  return fm_workbook_update_table_style_defaults(wb, &patch);
 }
 
 fm_table_style_options_t StyleOptions(const fm_workbook_t* wb, std::size_t index = 0U, std::size_t sheet = 0U) {
@@ -102,8 +129,9 @@ fm_table_style_options_t StyleOptions(const fm_workbook_t* wb, std::size_t index
 
 std::string Formula(fm_workbook_t* wb, std::uint32_t row, std::uint32_t col) {
   const char* text = nullptr;
-  EXPECT_EQ(fm_sheet_get_formula(wb, 0, row, col, &text), 0);
-  return text != nullptr ? text : "";
+  std::int32_t present = 0;
+  EXPECT_EQ(fm_sheet_get_formula(wb, 0, row, col, &present, &text), 0);
+  return present != 0 && text != nullptr ? text : "";
 }
 
 fm_table_style_t MakeTableStyle(const char* name, int32_t pivot, int32_t table,
@@ -127,8 +155,12 @@ TEST(FormulonCApiTable, CreateDefaultsAndReadBack) {
   WorkbookGuard wb;
   CreateSalesTable(wb);
   const fm_table_info_t info = Info(wb.handle);
+  EXPECT_STREQ(info.name, "Sales");
+  EXPECT_EQ(info.range.first_row, 0U);
+  EXPECT_EQ(info.range.first_col, 0U);
+  EXPECT_EQ(info.range.last_row, 2U);
+  EXPECT_EQ(info.range.last_col, 1U);
   EXPECT_STREQ(info.style_name, "TableStyleMedium2");
-  EXPECT_EQ(info.style_present, 1);
   EXPECT_EQ(info.show_first_column, 0);
   EXPECT_EQ(info.show_last_column, 0);
   EXPECT_EQ(info.show_row_stripes, 1);
@@ -138,23 +170,25 @@ TEST(FormulonCApiTable, CreateDefaultsAndReadBack) {
   EXPECT_EQ(info.column_count, 2U);
 
   fm_table_column_info_t column = FM_STRUCT_INIT(fm_table_column_info_t);
-  ASSERT_EQ(fm_sheet_get_table_column(wb.handle, 0, 0, 1, &column), 0);
+  ASSERT_EQ(fm_sheet_get_table_column_at(wb.handle, 0, 0, 1, &column), 0);
   EXPECT_STREQ(column.name, "Amount");
   EXPECT_EQ(column.totals_row_function, FM_TABLE_TOTALS_ROW_FUNCTION_NONE);
-  EXPECT_STREQ(column.totals_row_label, "");
-  EXPECT_STREQ(column.totals_row_formula, "");
-  EXPECT_EQ(fm_sheet_get_table_column(wb.handle, 0, 0, 2, &column), FM_STATUS_INDEX_OUT_OF_RANGE);
-  EXPECT_EQ(fm_sheet_get_table_info(wb.handle, 0, 1, nullptr), kBindingNullPointer);
+  EXPECT_EQ(column.totals_row_label, nullptr) << "no label reads NULL";
+  EXPECT_EQ(column.totals_row_formula, nullptr) << "no custom formula reads NULL";
+  EXPECT_EQ(fm_sheet_get_table_column_at(wb.handle, 0, 0, 2, &column), FM_STATUS_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(fm_sheet_get_table_at(wb.handle, 0, 1, nullptr), kBindingNullPointer);
   fm_table_info_t ignored = FM_STRUCT_INIT(fm_table_info_t);
-  EXPECT_EQ(fm_sheet_get_table_info(wb.handle, 0, 1, &ignored), FM_STATUS_INDEX_OUT_OF_RANGE);
-  EXPECT_EQ(fm_sheet_get_table_info(wb.handle, 7, 0, &ignored), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(fm_sheet_get_table_at(wb.handle, 0, 1, &ignored), FM_STATUS_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(fm_sheet_get_table_at(wb.handle, 7, 0, &ignored), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
+  ignored.struct_size = 0U;
+  EXPECT_EQ(fm_sheet_get_table_at(wb.handle, 0, 0, &ignored), kInvalidArgument) << "struct_size is checked";
 
   WorkbookGuard plain;
   CreateSalesTable(plain, "");
   const fm_table_info_t unstyled = Info(plain.handle);
-  EXPECT_EQ(unstyled.style_present, 0);
   EXPECT_EQ(unstyled.show_row_stripes, 0);
-  EXPECT_STREQ(unstyled.style_name, "");
+  EXPECT_EQ(unstyled.style_name, nullptr) << "a table without a style reads NULL";
+  EXPECT_EQ(StyleOptions(plain.handle).present, 0);
 }
 
 TEST(FormulonCApiTable, LoadedStyleTogglesSurviveAStyleNameChange) {
@@ -177,8 +211,7 @@ TEST(FormulonCApiTable, LoadedStyleTogglesSurviveAStyleNameChange) {
   EXPECT_EQ(info.show_row_stripes, 0);
   EXPECT_EQ(info.show_column_stripes, 1);
 
-  ASSERT_EQ(fm_sheet_update_table(wb.handle, 0, 0, record_arg(fm_cell_rect_t{0, 0, 2, 1}), "TableStyleMedium4", -1, -1),
-            0);
+  ASSERT_EQ(SetTableStyleName(wb.handle, 0, "TableStyleMedium4"), 0);
   info = Info(wb.handle);
   EXPECT_STREQ(info.style_name, "TableStyleMedium4");
   EXPECT_EQ(info.show_first_column, 1);
@@ -207,15 +240,15 @@ TEST(FormulonCApiTable, UpdateStyleOptionsWritesTheElementInSchemaPosition) {
   WorkbookGuard wb;
   CreateSalesTable(wb, "");
   fm_table_style_options_patch_t patch = StylePatch();
-  patch.style_name_op = FM_CHART_PATCH_OP_SET;
+  patch.style_name_op = FM_PATCH_OP_SET;
   patch.style_name = "TableStyleDark1";
-  patch.show_first_column_op = FM_CHART_PATCH_OP_SET;
+  patch.show_first_column_op = FM_PATCH_OP_SET;
   patch.show_first_column = 1;
-  patch.show_last_column_op = FM_CHART_PATCH_OP_SET;
+  patch.show_last_column_op = FM_PATCH_OP_SET;
   patch.show_last_column = 0;
-  patch.show_row_stripes_op = FM_CHART_PATCH_OP_SET;
+  patch.show_row_stripes_op = FM_PATCH_OP_SET;
   patch.show_row_stripes = 0;
-  patch.show_column_stripes_op = FM_CHART_PATCH_OP_SET;
+  patch.show_column_stripes_op = FM_PATCH_OP_SET;
   patch.show_column_stripes = 1;
   ASSERT_EQ(fm_sheet_update_table_style_options(wb.handle, 0, 0, &patch), 0);
   fm_table_info_t info = Info(wb.handle);
@@ -225,11 +258,11 @@ TEST(FormulonCApiTable, UpdateStyleOptionsWritesTheElementInSchemaPosition) {
 
   // Clearing the style name keeps the element and its toggles, as the "None" style does.
   patch = StylePatch();
-  patch.style_name_op = FM_CHART_PATCH_OP_CLEAR;
+  patch.style_name_op = FM_PATCH_OP_CLEAR;
   ASSERT_EQ(fm_sheet_update_table_style_options(wb.handle, 0, 0, &patch), 0);
   info = Info(wb.handle);
-  EXPECT_EQ(info.style_present, 1);
-  EXPECT_STREQ(info.style_name, "");
+  EXPECT_EQ(StyleOptions(wb.handle).present, 1);
+  EXPECT_EQ(info.style_name, nullptr);
   EXPECT_EQ(info.show_first_column, 1);
   EXPECT_EQ(info.show_column_stripes, 1);
   const std::string xml = ExtractZipEntry(Save(wb.handle), "xl/tables/table1.xml");
@@ -241,12 +274,8 @@ TEST(FormulonCApiTable, UpdateStyleOptionsWritesTheElementInSchemaPosition) {
   ASSERT_NE(style, std::string::npos);
   EXPECT_LT(columns_end, style);
 
-  // An empty style through update still removes the element.
-  ASSERT_EQ(fm_sheet_update_table(wb.handle, 0, 0, record_arg(fm_cell_rect_t{0, 0, 2, 1}), "", -1, -1), 0);
-  EXPECT_EQ(Info(wb.handle).style_present, 0);
-
   patch = StylePatch();
-  patch.style_name_op = FM_CHART_PATCH_OP_SET;
+  patch.style_name_op = FM_PATCH_OP_SET;
   patch.style_name = "X";
   EXPECT_EQ(fm_sheet_update_table_style_options(wb.handle, 0, 3, &patch), FM_STATUS_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(fm_sheet_update_table_style_options(wb.handle, 4, 0, &patch), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
@@ -290,7 +319,7 @@ TEST(FormulonCApiTable, UpdateStyleOptionsMergesOnlyTheSetFields) {
   WorkbookGuard wb;
   CreateSalesTable(wb, "TableStyleLight9");
   fm_table_style_options_patch_t patch = StylePatch();
-  patch.show_last_column_op = FM_CHART_PATCH_OP_SET;
+  patch.show_last_column_op = FM_PATCH_OP_SET;
   patch.show_last_column = 1;
   ASSERT_EQ(fm_sheet_update_table_style_options(wb.handle, 0, 0, &patch), 0);
   const fm_table_style_options_t info = StyleOptions(wb.handle);
@@ -304,7 +333,7 @@ TEST(FormulonCApiTable, UpdateStyleOptionsOnAnUnstyledTableCreatesTheElementWith
   WorkbookGuard wb;
   CreateSalesTable(wb, "");
   fm_table_style_options_patch_t patch = StylePatch();
-  patch.show_first_column_op = FM_CHART_PATCH_OP_SET;
+  patch.show_first_column_op = FM_PATCH_OP_SET;
   patch.show_first_column = 1;
   ASSERT_EQ(fm_sheet_update_table_style_options(wb.handle, 0, 0, &patch), 0);
   const fm_table_style_options_t info = StyleOptions(wb.handle);
@@ -321,24 +350,24 @@ TEST(FormulonCApiTable, InvalidStylePatchIsRejectedBeforeAnythingChanges) {
   const std::string before = ExtractZipEntry(Save(wb.handle), "xl/tables/table1.xml");
 
   fm_table_style_options_patch_t bad_op = StylePatch();
-  bad_op.show_first_column_op = 3;
+  bad_op.show_first_column_op = static_cast<fm_patch_op_t>(3);
   EXPECT_EQ(fm_sheet_update_table_style_options(wb.handle, 0, 0, &bad_op), kInvalidArgument);
 
   // CLEAR is only meaningful on the style name.
   fm_table_style_options_patch_t clear_toggle = StylePatch();
-  clear_toggle.style_name_op = FM_CHART_PATCH_OP_SET;
+  clear_toggle.style_name_op = FM_PATCH_OP_SET;
   clear_toggle.style_name = "TableStyleDark1";
-  clear_toggle.show_row_stripes_op = FM_CHART_PATCH_OP_CLEAR;
+  clear_toggle.show_row_stripes_op = FM_PATCH_OP_CLEAR;
   EXPECT_EQ(fm_sheet_update_table_style_options(wb.handle, 0, 0, &clear_toggle), kInvalidArgument);
 
   fm_table_style_options_patch_t null_name = StylePatch();
-  null_name.style_name_op = FM_CHART_PATCH_OP_SET;
-  null_name.show_last_column_op = FM_CHART_PATCH_OP_SET;
+  null_name.style_name_op = FM_PATCH_OP_SET;
+  null_name.show_last_column_op = FM_PATCH_OP_SET;
   null_name.show_last_column = 1;
   EXPECT_EQ(fm_sheet_update_table_style_options(wb.handle, 0, 0, &null_name), kInvalidArgument);
 
   fm_table_style_options_patch_t bad_toggle = StylePatch();
-  bad_toggle.show_first_column_op = FM_CHART_PATCH_OP_SET;
+  bad_toggle.show_first_column_op = FM_PATCH_OP_SET;
   bad_toggle.show_first_column = 2;
   EXPECT_EQ(fm_sheet_update_table_style_options(wb.handle, 0, 0, &bad_toggle), kInvalidArgument);
 
@@ -363,7 +392,7 @@ TEST(FormulonCApiTable, AddWithoutAStyleNameTakesTheWorkbookDefault) {
   EXPECT_EQ(info.show_last_column, 0);
   EXPECT_EQ(info.show_column_stripes, 0);
 
-  ASSERT_EQ(fm_workbook_update_table_style_defaults(wb.handle, "TableStyleLight9", nullptr), 0);
+  ASSERT_EQ(UpdateStyleDefaults(wb.handle, "TableStyleLight9", nullptr), 0);
   ASSERT_EQ(fm_sheet_set_text(wb.handle, 0, 5, 0, "A"), 0);
   ASSERT_EQ(fm_sheet_set_text(wb.handle, 0, 5, 1, "B"), 0);
   ASSERT_EQ(AddTable(wb.handle, 0, record_arg(fm_cell_rect_t{5, 0, 7, 1}), "Later", columns, 2, nullptr, 1, 0, &index),
@@ -381,7 +410,7 @@ TEST(FormulonCApiTable, AddWithoutAStyleNameTakesTheWorkbookDefault) {
 TEST(FormulonCApiTable, AddWithAnEmptyStyleNameCreatesNoStyleElement) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  ASSERT_EQ(fm_workbook_update_table_style_defaults(wb.handle, "TableStyleLight9", nullptr), 0);
+  ASSERT_EQ(UpdateStyleDefaults(wb.handle, "TableStyleLight9", nullptr), 0);
   CreateSalesTable(wb, "");
   const fm_table_style_options_t info = StyleOptions(wb.handle);
   EXPECT_EQ(info.present, 0);
@@ -415,10 +444,10 @@ TEST(FormulonCApiTable, ColumnTotalsWriteTheTotalsRowCells) {
   WorkbookGuard reloaded;
   Load(saved, reloaded);
   fm_table_column_info_t column = FM_STRUCT_INIT(fm_table_column_info_t);
-  ASSERT_EQ(fm_sheet_get_table_column(reloaded.handle, 0, 0, 0, &column), 0);
+  ASSERT_EQ(fm_sheet_get_table_column_at(reloaded.handle, 0, 0, 0, &column), 0);
   EXPECT_STREQ(column.totals_row_label, "Total");
   EXPECT_EQ(column.totals_row_function, FM_TABLE_TOTALS_ROW_FUNCTION_NONE);
-  ASSERT_EQ(fm_sheet_get_table_column(reloaded.handle, 0, 0, 1, &column), 0);
+  ASSERT_EQ(fm_sheet_get_table_column_at(reloaded.handle, 0, 0, 1, &column), 0);
   EXPECT_EQ(column.totals_row_function, FM_TABLE_TOTALS_ROW_FUNCTION_SUM);
   EXPECT_EQ(Info(reloaded.handle).totals_row_count, 1U);
   EXPECT_EQ(Formula(reloaded.handle, 3, 1), "=SUBTOTAL(109,[Amount])");
@@ -469,7 +498,7 @@ TEST(FormulonCApiTable, ColumnTotalsRejectAFunctionOutsideTheEnumeration) {
       fm_sheet_set_table_column_totals(wb.handle, 0, 0, 1, FM_TABLE_TOTALS_ROW_FUNCTION_CUSTOM + 1, nullptr, nullptr),
       kInvalidArgument);
   fm_table_column_info_t column = FM_STRUCT_INIT(fm_table_column_info_t);
-  ASSERT_EQ(fm_sheet_get_table_column(wb.handle, 0, 0, 1, &column), 0);
+  ASSERT_EQ(fm_sheet_get_table_column_at(wb.handle, 0, 0, 1, &column), 0);
   EXPECT_EQ(column.totals_row_function, FM_TABLE_TOTALS_ROW_FUNCTION_SUM);
 }
 
@@ -483,8 +512,8 @@ TEST(FormulonCApiTable, ColumnTotalsRefuseAnOutOfRangeTableSheetOrColumn) {
   EXPECT_EQ(fm_sheet_set_table_column_totals(wb.handle, 6, 0, 0, FM_TABLE_TOTALS_ROW_FUNCTION_SUM, nullptr, nullptr),
             FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
   fm_table_column_info_t column = FM_STRUCT_INIT(fm_table_column_info_t);
-  EXPECT_EQ(fm_sheet_get_table_column(wb.handle, 6, 0, 0, &column), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
-  EXPECT_EQ(fm_sheet_get_table_column(wb.handle, 0, 1, 0, &column), FM_STATUS_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(fm_sheet_get_table_column_at(wb.handle, 6, 0, 0, &column), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(fm_sheet_get_table_column_at(wb.handle, 0, 1, 0, &column), FM_STATUS_INDEX_OUT_OF_RANGE);
 }
 
 TEST(FormulonCApiTable, CustomTotalsFormulaRoundTrips) {
@@ -498,7 +527,7 @@ TEST(FormulonCApiTable, CustomTotalsFormulaRoundTrips) {
                                              "=SUM(Sales[Amount])*2"),
             0);
   fm_table_column_info_t column = FM_STRUCT_INIT(fm_table_column_info_t);
-  ASSERT_EQ(fm_sheet_get_table_column(wb.handle, 0, 0, 1, &column), 0);
+  ASSERT_EQ(fm_sheet_get_table_column_at(wb.handle, 0, 0, 1, &column), 0);
   EXPECT_EQ(column.totals_row_function, FM_TABLE_TOTALS_ROW_FUNCTION_CUSTOM);
   EXPECT_STREQ(column.totals_row_formula, "=SUM([Amount])*2");
   EXPECT_EQ(Formula(wb.handle, 3, 1), "=SUM([Amount])*2");
@@ -511,7 +540,7 @@ TEST(FormulonCApiTable, CustomTotalsFormulaRoundTrips) {
             std::string::npos);
   WorkbookGuard reloaded;
   Load(saved, reloaded);
-  ASSERT_EQ(fm_sheet_get_table_column(reloaded.handle, 0, 0, 1, &column), 0);
+  ASSERT_EQ(fm_sheet_get_table_column_at(reloaded.handle, 0, 0, 1, &column), 0);
   EXPECT_EQ(column.totals_row_function, FM_TABLE_TOTALS_ROW_FUNCTION_CUSTOM);
   EXPECT_STREQ(column.totals_row_formula, "=SUM([Amount])*2");
   ASSERT_EQ(fm_workbook_recalc(reloaded.handle), 0);
@@ -537,7 +566,12 @@ TEST(FormulonCApiTable, TurningTheTotalsRowOnRestoresItsCells) {
       });
   WorkbookGuard wb;
   Load(patched, wb);
-  ASSERT_EQ(fm_sheet_update_table(wb.handle, 0, 0, record_arg(fm_cell_rect_t{0, 0, 3, 1}), nullptr, -1, 1), 0);
+  fm_table_patch_t show_totals = TablePatch();
+  show_totals.range_op = FM_PATCH_OP_SET;
+  show_totals.range = fm_cell_rect_t{0, 0, 3, 1};
+  show_totals.totals_row_op = FM_PATCH_OP_SET;
+  show_totals.totals_row = 1;
+  ASSERT_EQ(fm_sheet_update_table(wb.handle, 0, 0, &show_totals), 0);
   EXPECT_EQ(Formula(wb.handle, 3, 1), "=SUBTOTAL(104,[Amount])");
   const fm_value_t label = Value(wb.handle, 3, 0);
   ASSERT_EQ(label.kind, FM_VALUE_KIND_TEXT);
@@ -604,10 +638,7 @@ TEST(FormulonCApiTable, RenameRewritesStructuredReferences) {
   ASSERT_EQ(fm_sheet_rename_table(wb.handle, 0, 0, "SALES"), 0);
   ASSERT_EQ(fm_sheet_rename_table(wb.handle, 0, 0, "Revenue"), 0);
 
-  const char* name = nullptr;
-  fm_cell_rect_t rect{};
-  ASSERT_EQ(fm_sheet_get_table(wb.handle, 0, 0, &name, &rect), 0);
-  EXPECT_STREQ(name, "Revenue");
+  EXPECT_STREQ(Info(wb.handle).name, "Revenue");
   EXPECT_EQ(Formula(wb.handle, 0, 3), "=SUM(Revenue[Amount])+COUNTA(Revenue[Product])");
   EXPECT_EQ(Formula(wb.handle, 1, 3), "=Revenue") << "an entered bare table name binds to the whole table";
   fm_defined_name_t dn = FM_STRUCT_INIT(fm_defined_name_t);
@@ -632,16 +663,15 @@ TEST(FormulonCApiTable, RenameRewritesStructuredReferences) {
   EXPECT_NE(table_xml.find(" displayName=\"RevenueShown\""), std::string::npos) << table_xml;
   WorkbookGuard reloaded;
   Load(saved, reloaded);
-  ASSERT_EQ(fm_sheet_get_table(reloaded.handle, 0, 0, &name, &rect), 0);
-  EXPECT_STREQ(name, "RevenueShown");
+  EXPECT_STREQ(Info(reloaded.handle).name, "RevenueShown");
   ASSERT_EQ(fm_workbook_recalc(reloaded.handle), 0);
   v = Value(reloaded.handle, 0, 3);
   ASSERT_EQ(v.kind, FM_VALUE_KIND_NUMBER);
   EXPECT_DOUBLE_EQ(v.u.number, 32.0);
 }
 
-fm_dxf_record_t FillDxf() {
-  fm_dxf_record_t dxf{};
+fm_dxf_t FillDxf() {
+  fm_dxf_t dxf{};
   dxf.fill_engaged = 1;
   dxf.fill.pattern = 1;
   dxf.fill.foreground.kind = FM_COLOR_KIND_RGB;
@@ -652,7 +682,7 @@ fm_dxf_record_t FillDxf() {
 TEST(FormulonCApiTableStyles, CustomStyleRoundTripsAndATableUsesIt) {
   WorkbookGuard wb;
   CreateSalesTable(wb);
-  std::size_t dxf = 99;
+  std::uint32_t dxf = 99;
   ASSERT_EQ(fm_workbook_add_dxf(wb.handle, record_arg(FillDxf()), &dxf), 0);
 
   const fm_table_style_element_t elements[] = {
@@ -672,15 +702,15 @@ TEST(FormulonCApiTableStyles, CustomStyleRoundTripsAndATableUsesIt) {
   EXPECT_STREQ(default_table, "TableStyleMedium2");
   EXPECT_STREQ(default_pivot, "PivotStyleLight16");
   fm_table_style_options_patch_t corporate = FM_STRUCT_INIT(fm_table_style_options_patch_t);
-  corporate.style_name_op = FM_CHART_PATCH_OP_SET;
+  corporate.style_name_op = FM_PATCH_OP_SET;
   corporate.style_name = "Corporate";
-  corporate.show_first_column_op = FM_CHART_PATCH_OP_SET;
+  corporate.show_first_column_op = FM_PATCH_OP_SET;
   corporate.show_first_column = 0;
-  corporate.show_last_column_op = FM_CHART_PATCH_OP_SET;
+  corporate.show_last_column_op = FM_PATCH_OP_SET;
   corporate.show_last_column = 0;
-  corporate.show_row_stripes_op = FM_CHART_PATCH_OP_SET;
+  corporate.show_row_stripes_op = FM_PATCH_OP_SET;
   corporate.show_row_stripes = 1;
-  corporate.show_column_stripes_op = FM_CHART_PATCH_OP_SET;
+  corporate.show_column_stripes_op = FM_PATCH_OP_SET;
   corporate.show_column_stripes = 0;
   ASSERT_EQ(fm_sheet_update_table_style_options(wb.handle, 0, 0, &corporate), 0);
 
@@ -721,8 +751,8 @@ TEST(FormulonCApiTableStyles, CustomStyleRoundTripsAndATableUsesIt) {
   EXPECT_EQ(got.elements[2].has_dxf_index, 1);
   EXPECT_EQ(got.elements[2].dxf_index, dxf);
   EXPECT_EQ(got.elements[3].has_dxf_index, 0);
-  fm_dxf_record_t reloaded_dxf{};
-  ASSERT_EQ(fm_workbook_get_dxf(reloaded.handle, got.elements[0].dxf_index, &reloaded_dxf), 0);
+  fm_dxf_t reloaded_dxf{};
+  ASSERT_EQ(fm_workbook_get_dxf_at(reloaded.handle, got.elements[0].dxf_index, &reloaded_dxf), 0);
   EXPECT_EQ(reloaded_dxf.fill_engaged, 1);
 
   // Setting the record a get returned, views and all, leaves the part as it was.
@@ -766,7 +796,7 @@ TEST(FormulonCApiTableStyles, ElementTypeOrdinalsFollowTheSchemaOrder) {
 TEST(FormulonCApiTableStyles, SetReplacesByNameAndValidates) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  std::size_t dxf = 0;
+  std::uint32_t dxf = 0;
   ASSERT_EQ(fm_workbook_add_dxf(wb.handle, record_arg(FillDxf()), &dxf), 0);
   const fm_table_style_element_t one[] = {{FM_TABLE_STYLE_ELEMENT_TYPE_WHOLE_TABLE, 1U, 1, static_cast<uint32_t>(dxf)}};
   fm_table_style_t style = MakeTableStyle("Mine", 1, 1, one, 1U);
@@ -822,7 +852,7 @@ TEST(FormulonCApiTableStyles, DefaultsAndRemove) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   fm_table_style_t style = MakeTableStyle("Mine", 1, 1, nullptr, 0U);
   ASSERT_EQ(fm_workbook_set_table_style(wb.handle, &style), 0);
-  ASSERT_EQ(fm_workbook_update_table_style_defaults(wb.handle, "Mine", nullptr), 0);
+  ASSERT_EQ(UpdateStyleDefaults(wb.handle, "Mine", nullptr), 0);
   const char* table = nullptr;
   const char* pivot = nullptr;
   ASSERT_EQ(fm_workbook_get_table_style_defaults(wb.handle, &table, &pivot), 0);
@@ -834,9 +864,32 @@ TEST(FormulonCApiTableStyles, DefaultsAndRemove) {
   ASSERT_EQ(fm_workbook_get_table_style_defaults(wb.handle, &table, &pivot), 0);
   EXPECT_STREQ(table, "TableStyleMedium2");
 
-  ASSERT_EQ(fm_workbook_update_table_style_defaults(wb.handle, nullptr, ""), 0);
+  ASSERT_EQ(UpdateStyleDefaults(wb.handle, nullptr, ""), 0);
   const std::string styles_xml = ExtractZipEntry(Save(wb.handle), "xl/styles.xml");
   EXPECT_NE(styles_xml.find("<tableStyles count=\"0\" defaultTableStyle=\"TableStyleMedium2\"/>"), std::string::npos);
+}
+
+TEST(FormulonCApiTableStyles, DefaultsPatchRefusesABadOpAndChangesNothing) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  ASSERT_EQ(UpdateStyleDefaults(wb.handle, "TableStyleLight1", nullptr), 0);
+  fm_table_style_defaults_patch_t patch = FM_STRUCT_INIT(fm_table_style_defaults_patch_t);
+  patch.table_style_op = FM_PATCH_OP_SET;
+  patch.table_style = "TableStyleLight2";
+  patch.pivot_style_op = static_cast<fm_patch_op_t>(3);
+  patch.pivot_style = "PivotStyleLight2";
+  EXPECT_EQ(fm_workbook_update_table_style_defaults(wb.handle, &patch), kInvalidArgument);
+  patch.pivot_style_op = FM_PATCH_OP_SET;
+  patch.pivot_style = "\xff";
+  EXPECT_EQ(fm_workbook_update_table_style_defaults(wb.handle, &patch),
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingUtf8EncodingError));
+  patch.struct_size = 0U;
+  EXPECT_EQ(fm_workbook_update_table_style_defaults(wb.handle, &patch), kInvalidArgument);
+  EXPECT_EQ(fm_workbook_update_table_style_defaults(wb.handle, nullptr), kBindingNullPointer);
+  const char* table = nullptr;
+  const char* pivot = nullptr;
+  ASSERT_EQ(fm_workbook_get_table_style_defaults(wb.handle, &table, &pivot), 0);
+  EXPECT_STREQ(table, "TableStyleLight1") << "a refused patch writes nothing";
 }
 
 /// An `.xlsb` package whose only table `Sales` (id `id`) stays a verbatim
@@ -907,20 +960,73 @@ TEST(FormulonCApiTable, AddUpdateAndRenameRefuseWhatExcelRefuses) {
   std::size_t index = 0;
   EXPECT_EQ(AddTable(wb.handle, 0, record_arg(fm_cell_rect_t{0, 4, 2, 5}), "T1", columns, 2, nullptr, 1, 0, &index),
             kInvalidArgument);
-  EXPECT_EQ(AddTable(wb.handle, 0, record_arg(fm_cell_rect_t{2, 1, 4, 2}), "Other", columns, 2, nullptr, 1, 0, &index),
-            kInvalidArgument);
+  EXPECT_EQ(AddTable(wb.handle, 0, record_arg(fm_cell_rect_t{2, 1, 4, 2}), "Other", nullptr, 0, nullptr, 1, 0, &index),
+            FM_STATUS_PRECONDITION_FAILED)
+      << "overlaps Sales";
   ASSERT_EQ(AddTable(wb.handle, 0, record_arg(fm_cell_rect_t{0, 4, 2, 5}), "Other", columns, 2, nullptr, 1, 0, &index),
             0);
-  EXPECT_EQ(fm_sheet_update_table(wb.handle, 0, index, record_arg(fm_cell_rect_t{0, 1, 2, 2}), nullptr, -1, -1),
-            kInvalidArgument);
+  EXPECT_EQ(UpdateTableRange(wb.handle, 0, index, fm_cell_rect_t{0, 1, 2, 2}), FM_STATUS_PRECONDITION_FAILED)
+      << "overlaps Sales";
   // A resize keeps the first row and, under a header row, one data row.
-  EXPECT_EQ(fm_sheet_update_table(wb.handle, 0, index, record_arg(fm_cell_rect_t{1, 4, 3, 5}), nullptr, -1, -1),
-            kInvalidArgument);
-  EXPECT_EQ(fm_sheet_update_table(wb.handle, 0, index, record_arg(fm_cell_rect_t{0, 4, 0, 5}), nullptr, -1, -1),
-            kInvalidArgument);
-  EXPECT_EQ(fm_sheet_update_table(wb.handle, 0, index, record_arg(fm_cell_rect_t{0, 4, 3, 5}), nullptr, -1, -1), 0);
+  EXPECT_EQ(UpdateTableRange(wb.handle, 0, index, fm_cell_rect_t{1, 4, 3, 5}), kInvalidArgument);
+  EXPECT_EQ(UpdateTableRange(wb.handle, 0, index, fm_cell_rect_t{0, 4, 0, 5}), kInvalidArgument);
+  EXPECT_EQ(UpdateTableRange(wb.handle, 0, index, fm_cell_rect_t{0, 4, 3, 5}), 0);
   EXPECT_EQ(fm_sheet_rename_table(wb.handle, 0, index, "R2D2"), kInvalidArgument);
   EXPECT_EQ(count_of(fm_sheet_get_table_count, wb.handle, std::size_t{0}), 2U);
+}
+
+TEST(FormulonCApiTable, UpdateWritesOnlyTheFieldsItSets) {
+  WorkbookGuard wb;
+  CreateSalesTable(wb);
+  fm_table_patch_t patch = TablePatch();
+  ASSERT_EQ(fm_sheet_update_table(wb.handle, 0, 0, &patch), 0) << "an all-KEEP patch is a no-op";
+  fm_table_info_t info = Info(wb.handle);
+  EXPECT_EQ(info.range.last_row, 2U);
+  EXPECT_EQ(info.header_row_count, 1U);
+  EXPECT_EQ(info.totals_row_count, 0U);
+
+  patch.totals_row_op = FM_PATCH_OP_SET;
+  patch.totals_row = 1;
+  ASSERT_EQ(fm_sheet_update_table(wb.handle, 0, 0, &patch), 0) << fm_get_last_error_message();
+  info = Info(wb.handle);
+  EXPECT_EQ(info.totals_row_count, 1U);
+  EXPECT_EQ(info.header_row_count, 1U) << "KEEP leaves the header row";
+  EXPECT_EQ(info.range.last_row, 2U) << "KEEP leaves the range";
+  EXPECT_STREQ(info.style_name, "TableStyleMedium2");
+}
+
+TEST(FormulonCApiTable, UpdateRefusesABadPatchAndChangesNothing) {
+  WorkbookGuard wb;
+  CreateSalesTable(wb);
+  fm_table_patch_t clear_range = TablePatch();
+  clear_range.range_op = FM_PATCH_OP_CLEAR;
+  fm_table_patch_t clear_header = TablePatch();
+  clear_header.header_row_op = FM_PATCH_OP_CLEAR;
+  fm_table_patch_t bad_op = TablePatch();
+  bad_op.totals_row_op = static_cast<fm_patch_op_t>(3);
+  bad_op.totals_row = 1;
+  fm_table_patch_t bad_flag = TablePatch();
+  bad_flag.header_row_op = FM_PATCH_OP_SET;
+  bad_flag.header_row = 2;
+  // A valid totals-row SET beside a range of another width: nothing is written.
+  fm_table_patch_t bad_width = TablePatch();
+  bad_width.totals_row_op = FM_PATCH_OP_SET;
+  bad_width.totals_row = 1;
+  bad_width.range_op = FM_PATCH_OP_SET;
+  bad_width.range = fm_cell_rect_t{0, 0, 3, 2};
+  for (const fm_table_patch_t* rejected : {&clear_range, &clear_header, &bad_op, &bad_flag, &bad_width}) {
+    EXPECT_EQ(fm_sheet_update_table(wb.handle, 0, 0, rejected), kInvalidArgument);
+  }
+  fm_table_patch_t unsized = TablePatch();
+  unsized.struct_size = 0U;
+  EXPECT_EQ(fm_sheet_update_table(wb.handle, 0, 0, &unsized), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_update_table(wb.handle, 0, 0, nullptr), kBindingNullPointer);
+  EXPECT_EQ(fm_sheet_update_table(wb.handle, 0, 4, &bad_flag), FM_STATUS_INDEX_OUT_OF_RANGE);
+  const fm_table_info_t info = Info(wb.handle);
+  EXPECT_EQ(info.range.last_row, 2U);
+  EXPECT_EQ(info.range.last_col, 1U);
+  EXPECT_EQ(info.header_row_count, 1U);
+  EXPECT_EQ(info.totals_row_count, 0U);
 }
 
 TEST(FormulonCApiTable, CreateAvoidsTheIdOfAVerbatimXlsbTable) {
@@ -943,10 +1049,9 @@ std::uint32_t TableRuntimeId(const fm_workbook_t* wb, std::size_t sheet, std::si
 }
 
 std::string TableName(const fm_workbook_t* wb, std::size_t sheet, std::size_t index) {
-  const char* name = nullptr;
-  fm_cell_rect_t rect{};
-  EXPECT_EQ(fm_sheet_get_table(wb, sheet, index, &name, &rect), 0) << fm_get_last_error_message();
-  return name != nullptr ? name : "";
+  fm_table_info_t info = FM_STRUCT_INIT(fm_table_info_t);
+  EXPECT_EQ(fm_sheet_get_table_at(wb, sheet, index, &info), 0) << fm_get_last_error_message();
+  return info.name != nullptr ? info.name : "";
 }
 
 /// The name of the table `id` resolves to, or "" when it resolves to none.
@@ -985,10 +1090,9 @@ TEST(FormulonCApiTable, TableIndexIsLocalToItsSheet) {
   EXPECT_EQ(TableName(wb.handle, 0, 0), "Sales");
   EXPECT_EQ(TableName(wb.handle, other, 0), "OnOther");
 
-  const char* name = nullptr;
-  fm_cell_rect_t rect{};
-  EXPECT_EQ(fm_sheet_get_table(wb.handle, 0, 1, &name, &rect), FM_STATUS_INDEX_OUT_OF_RANGE);
-  EXPECT_EQ(fm_sheet_get_table(wb.handle, 9, 0, &name, &rect), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
+  fm_table_info_t info = FM_STRUCT_INIT(fm_table_info_t);
+  EXPECT_EQ(fm_sheet_get_table_at(wb.handle, 0, 1, &info), FM_STATUS_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(fm_sheet_get_table_at(wb.handle, 9, 0, &info), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
   std::size_t count = 7;
   EXPECT_EQ(fm_sheet_get_table_count(wb.handle, 9, &count), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(fm_sheet_get_table_count(wb.handle, 0, nullptr), kBindingNullPointer);
@@ -1026,28 +1130,28 @@ TEST(FormulonCApiTable, FindTableLooksUpByNameAcrossTheWorkbook) {
   std::size_t sheet = 99;
   std::size_t index = 99;
   int32_t present = -1;
-  ASSERT_EQ(fm_workbook_find_table(wb.handle, "Sales", &sheet, &index, &present), 0);
+  ASSERT_EQ(fm_workbook_find_table(wb.handle, "Sales", &present, &sheet, &index), 0);
   EXPECT_EQ(present, 1);
   EXPECT_EQ(sheet, 0U);
   EXPECT_EQ(index, 0U);
 
-  ASSERT_EQ(fm_workbook_find_table(wb.handle, "later", &sheet, &index, &present), 0) << "case-insensitive";
+  ASSERT_EQ(fm_workbook_find_table(wb.handle, "later", &present, &sheet, &index), 0) << "case-insensitive";
   EXPECT_EQ(present, 1);
   EXPECT_EQ(sheet, other);
   EXPECT_EQ(index, 1U);
 
   sheet = 99;
   index = 99;
-  ASSERT_EQ(fm_workbook_find_table(wb.handle, "Nope", &sheet, &index, &present), 0);
+  ASSERT_EQ(fm_workbook_find_table(wb.handle, "Nope", &present, &sheet, &index), 0);
   EXPECT_EQ(present, 0);
   EXPECT_EQ(sheet, 99U) << "the indices are left unchanged when absent";
   EXPECT_EQ(index, 99U);
 
-  EXPECT_EQ(fm_workbook_find_table(wb.handle, nullptr, &sheet, &index, &present), kBindingNullPointer);
-  EXPECT_EQ(fm_workbook_find_table(wb.handle, "Sales", nullptr, &index, &present), kBindingNullPointer);
-  EXPECT_EQ(fm_workbook_find_table(wb.handle, "Sales", &sheet, nullptr, &present), kBindingNullPointer);
-  EXPECT_EQ(fm_workbook_find_table(wb.handle, "Sales", &sheet, &index, nullptr), kBindingNullPointer);
-  EXPECT_EQ(fm_workbook_find_table(nullptr, "Sales", &sheet, &index, &present), kBindingNullPointer);
+  EXPECT_EQ(fm_workbook_find_table(wb.handle, nullptr, &present, &sheet, &index), kBindingNullPointer);
+  EXPECT_EQ(fm_workbook_find_table(wb.handle, "Sales", &present, nullptr, &index), kBindingNullPointer);
+  EXPECT_EQ(fm_workbook_find_table(wb.handle, "Sales", &present, &sheet, nullptr), kBindingNullPointer);
+  EXPECT_EQ(fm_workbook_find_table(wb.handle, "Sales", nullptr, &sheet, &index), kBindingNullPointer);
+  EXPECT_EQ(fm_workbook_find_table(nullptr, "Sales", &present, &sheet, &index), kBindingNullPointer);
 }
 
 TEST(FormulonCApiTable, AddRefusesATakenNameWithAlreadyExists) {

@@ -16,7 +16,7 @@
 #include "utils/error.h"
 #include "workbook.h"
 
-using formulon::c_api::parts::check_finite;
+using formulon::c_api::parts::check_finite_non_negative;
 using formulon::c_api::parts::check_profile_id;
 using formulon::c_api::parts::check_record_size;
 using formulon::c_api::parts::check_sheet_index;
@@ -24,6 +24,7 @@ using formulon::c_api::parts::check_sheet_rect;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::invalid_argument;
 using formulon::c_api::parts::null_argument;
+using formulon::c_api::parts::patch_op_ok_without_clear;
 using formulon::c_api::parts::publish_scratch;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::set_last_error;
@@ -80,14 +81,14 @@ extern "C" fm_status_t fm_workbook_has_dirty_cells(const fm_workbook_t* wb, int3
 }
 
 extern "C" fm_status_t fm_workbook_recalc_parallel(fm_workbook_t* wb, uint32_t thread_count,
-                                                   fm_parallel_recalc_stats_t* out_stats) {
+                                                   fm_parallel_recalc_stats_info_t* out_stats) {
   clear_last_error();
   if (out_stats != nullptr) {
     if (auto rc = check_record_size(*out_stats); rc != 0) {
       return rc;
     }
     const std::uint32_t struct_size = out_stats->struct_size;
-    *out_stats = FM_STRUCT_INIT(fm_parallel_recalc_stats_t);
+    *out_stats = FM_STRUCT_INIT(fm_parallel_recalc_stats_info_t);
     out_stats->struct_size = struct_size;
   }
   if (wb == nullptr) {
@@ -131,40 +132,59 @@ extern "C" fm_status_t fm_workbook_update_iterative(fm_workbook_t* wb, const fm_
   if (auto rc = check_record_size(*patch); rc != 0) {
     return rc;
   }
-  if (const fm_status_t st = check_finite(patch->max_change, "max_change")) {
-    return st;
+  // No field can be cleared; every check runs before the write.
+  if (!patch_op_ok_without_clear(patch->enabled_op)) {
+    return invalid_argument("invalid enabled_op", "enabled_op=" + std::to_string(patch->enabled_op));
+  }
+  if (!patch_op_ok_without_clear(patch->max_iterations_op)) {
+    return invalid_argument("invalid max_iterations_op",
+                            "max_iterations_op=" + std::to_string(patch->max_iterations_op));
+  }
+  if (!patch_op_ok_without_clear(patch->max_change_op)) {
+    return invalid_argument("invalid max_change_op", "max_change_op=" + std::to_string(patch->max_change_op));
+  }
+  if (patch->max_iterations_op == FM_PATCH_OP_SET && patch->max_iterations == 0U) {
+    return invalid_argument("max_iterations must be at least 1", "max_iterations=0");
+  }
+  if (patch->max_change_op == FM_PATCH_OP_SET) {
+    if (auto rc = check_finite_non_negative(patch->max_change, "max_change"); rc != 0) {
+      return rc;
+    }
   }
   formulon::IterativeOptions opts = wb->workbook().iterative_options();
-  if (patch->enabled >= 0) {
+  if (patch->enabled_op == FM_PATCH_OP_SET) {
     opts.enabled = patch->enabled != 0;
   }
   // Clamped into Excel's own dialog range rather than rejected: a binding
   // author who passes a large cap wants a long solve, not an error. The upper
   // bound is what keeps that from becoming a hang the host cannot cancel
   // without a progress callback.
-  if (patch->max_iterations >= 0) {
-    opts.max_iterations = patch->max_iterations < 1 ? 1U
-                          : static_cast<std::uint32_t>(patch->max_iterations) > formulon::kMaxIterationsCap
-                              ? formulon::kMaxIterationsCap
-                              : static_cast<std::uint32_t>(patch->max_iterations);
+  if (patch->max_iterations_op == FM_PATCH_OP_SET) {
+    opts.max_iterations =
+        patch->max_iterations > formulon::kMaxIterationsCap ? formulon::kMaxIterationsCap : patch->max_iterations;
   }
-  if (patch->max_change >= 0.0) {
+  if (patch->max_change_op == FM_PATCH_OP_SET) {
     opts.max_change = patch->max_change;
   }
   wb->workbook().set_iterative_options(opts);
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_get_iterative(const fm_workbook_t* wb, int32_t* out_enabled,
-                                                 uint32_t* out_max_iterations, double* out_max_change) {
+extern "C" fm_status_t fm_workbook_get_iterative(const fm_workbook_t* wb, fm_iterative_settings_info_t* out) {
   clear_last_error();
-  if (wb == nullptr || out_enabled == nullptr || out_max_iterations == nullptr || out_max_change == nullptr) {
+  if (wb == nullptr || out == nullptr) {
     return null_argument();
   }
+  if (auto rc = check_record_size(*out); rc != 0) {
+    return rc;
+  }
   const formulon::IterativeOptions& opts = wb->workbook().iterative_options();
-  *out_enabled = opts.enabled ? 1 : 0;
-  *out_max_iterations = opts.max_iterations;
-  *out_max_change = opts.max_change;
+  const std::uint32_t struct_size = out->struct_size;
+  *out = FM_STRUCT_INIT(fm_iterative_settings_info_t);
+  out->struct_size = struct_size;
+  out->enabled = opts.enabled ? 1 : 0;
+  out->max_iterations = opts.max_iterations;
+  out->max_change = opts.max_change;
   return 0;
 }
 
@@ -283,15 +303,15 @@ extern "C" fm_status_t fm_workbook_set_date1904(fm_workbook_t* wb, std::int32_t 
   return write_workbook_flag(wb, [date1904](formulon::Workbook& w) { w.set_date1904(date1904 != 0); });
 }
 
-extern "C" fm_status_t fm_workbook_get_pinned_now(const fm_workbook_t* wb, fm_civil_time_t* out_now,
-                                                  std::int32_t* out_pinned) {
+extern "C" fm_status_t fm_workbook_get_pinned_now(const fm_workbook_t* wb, std::int32_t* out_present,
+                                                  fm_civil_time_t* out_now) {
   clear_last_error();
-  if (wb == nullptr || out_now == nullptr || out_pinned == nullptr) {
+  if (wb == nullptr || out_present == nullptr || out_now == nullptr) {
     return null_argument();
   }
   *out_now = fm_civil_time_t{};
   const auto& pinned = wb->workbook().pinned_now();
-  *out_pinned = pinned.has_value() ? 1 : 0;
+  *out_present = pinned.has_value() ? 1 : 0;
   if (pinned.has_value()) {
     out_now->year = pinned->date.y;
     out_now->month = static_cast<std::int32_t>(pinned->date.m);
@@ -361,11 +381,18 @@ extern "C" fm_status_t fm_workbook_set_profile_id(fm_workbook_t* wb, const char*
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_get_file_name(const fm_workbook_t* wb, const char** out_name) {
+extern "C" fm_status_t fm_workbook_get_file_name(const fm_workbook_t* wb, std::int32_t* out_present,
+                                                 const char** out_name) {
   clear_last_error();
-  if (wb == nullptr || out_name == nullptr) {
+  if (wb == nullptr || out_present == nullptr || out_name == nullptr) {
     return null_argument();
   }
+  *out_present = 0;
+  *out_name = nullptr;
+  if (wb->workbook().file_name().empty()) {
+    return 0;
+  }
+  *out_present = 1;
   *out_name = publish_scratch(wb, wb->workbook().file_name());
   return 0;
 }

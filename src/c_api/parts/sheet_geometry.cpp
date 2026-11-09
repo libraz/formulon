@@ -45,7 +45,7 @@ formulon::ColumnWidthModel width_model_for(const fm_workbook_t* wb, int32_t mode
 }  // namespace
 
 extern "C" fm_status_t fm_sheet_get_cell_rect_pt(const fm_workbook_t* wb, size_t sheet_index,
-                                                 const fm_cell_rect_t* range, int32_t mode, fm_rect_pt_t* out) {
+                                                 const fm_cell_rect_t* range, int32_t mode, fm_rect_pt_info_t* out) {
   clear_last_error();
   if (range == nullptr || out == nullptr) {
     return null_argument();
@@ -71,7 +71,7 @@ extern "C" fm_status_t fm_sheet_get_cell_rect_pt(const fm_workbook_t* wb, size_t
   }
   const double y = formulon::print::row_offset_pt(sheet, first_row);
   const std::uint32_t struct_size = out->struct_size;
-  *out = fm_rect_pt_t{};
+  *out = fm_rect_pt_info_t{};
   out->struct_size = struct_size;
   out->x = formulon::print::column_offset_pt(sheet, first_col, model);
   out->y = y;
@@ -112,7 +112,7 @@ extern "C" fm_status_t fm_sheet_get_row_height_pt(const fm_workbook_t* wb, size_
 }
 
 extern "C" fm_status_t fm_sheet_get_width_model(const fm_workbook_t* wb, size_t sheet_index, int32_t mode,
-                                                fm_width_model_t* out) {
+                                                fm_width_model_info_t* out) {
   clear_last_error();
   if (out == nullptr) {
     return null_argument();
@@ -125,7 +125,7 @@ extern "C" fm_status_t fm_sheet_get_width_model(const fm_workbook_t* wb, size_t 
   }
   const formulon::ColumnWidthModel model = width_model_for(wb, mode);
   const std::uint32_t struct_size = out->struct_size;
-  *out = fm_width_model_t{};
+  *out = fm_width_model_info_t{};
   out->struct_size = struct_size;
   out->points_per_char = model.points_per_char;
   out->padding_pt = model.padding_pt;
@@ -136,8 +136,8 @@ extern "C" fm_status_t fm_sheet_get_width_model(const fm_workbook_t* wb, size_t 
   return 0;
 }
 
-extern "C" fm_status_t fm_sheet_convert_column_chars_to_pt(const fm_workbook_t* wb, size_t sheet_index, int32_t mode,
-                                                           double chars, double* out_pt) {
+extern "C" fm_status_t fm_sheet_convert_column_chars_to_pt(const fm_workbook_t* wb, size_t sheet_index, double chars,
+                                                           int32_t mode, double* out_pt) {
   clear_last_error();
   if (out_pt == nullptr) {
     return null_argument();
@@ -152,8 +152,8 @@ extern "C" fm_status_t fm_sheet_convert_column_chars_to_pt(const fm_workbook_t* 
   return 0;
 }
 
-extern "C" fm_status_t fm_sheet_convert_column_pt_to_chars(const fm_workbook_t* wb, size_t sheet_index, int32_t mode,
-                                                           double pt, double* out_chars) {
+extern "C" fm_status_t fm_sheet_convert_column_pt_to_chars(const fm_workbook_t* wb, size_t sheet_index, double pt,
+                                                           int32_t mode, double* out_chars) {
   clear_last_error();
   if (out_chars == nullptr) {
     return null_argument();

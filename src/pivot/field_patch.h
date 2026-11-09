@@ -58,7 +58,7 @@ struct PivotItemPatch {
 bool field_show_detail(const PivotField& field) noexcept;
 
 /// Checks `patch` against field `field_index` of `table` without changing it. `kInvalidArgument` for a field
-/// index out of range, a name too long or taken, or a manual order with a by-field.
+/// index out of range, a name too long, or a manual order with a by-field; `kAlreadyExists` for a name taken.
 Expected<void, Error> check_field_patch(const Workbook& wb, const PivotTable& table, std::size_t field_index,
                                         const PivotFieldPatch& patch);
 
@@ -67,7 +67,7 @@ Expected<void, Error> apply_field_patch(const Workbook& wb, PivotTable& table, s
                                         const PivotFieldPatch& patch);
 
 /// Checks `patch` against item `item_index` of field `field_index` without changing it. `kInvalidArgument` for
-/// an index out of range or a caption too long or shown by another item.
+/// an index out of range or a caption too long; `kAlreadyExists` for a caption shown by another item.
 Expected<void, Error> check_item_patch(const Workbook& wb, const PivotTable& table, std::size_t field_index,
                                        std::size_t item_index, const PivotItemPatch& patch);
 

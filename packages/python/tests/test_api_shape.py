@@ -773,7 +773,7 @@ class SheetHandleTests(unittest.TestCase):
         with Workbook.create_default() as single:
             with self.assertRaises(FormulonError) as cm:
                 single.remove_sheet(0)
-            self.assertEqual(cm.exception.code, StatusCode.CANNOT_REMOVE_LAST_SHEET)
+            self.assertEqual(cm.exception.code, StatusCode.PRECONDITION_FAILED)
             self.assertEqual(len(single.list_sheets()), 1)
 
     def test_index_after_removal_names_the_next_sheet(self) -> None:
@@ -817,9 +817,9 @@ class SheetHandleTests(unittest.TestCase):
         self.wb.set_active_sheet(0)
         self.assertIs(self.wb.active_sheet(), self.wb.sheet(0))
         with Workbook.create_default() as other:
-            with self.assertRaises(TypeError):
+            with self.assertRaises(InvalidArgumentError):
                 self.wb.remove_sheet(other.sheet(0))
-            with self.assertRaises(TypeError):
+            with self.assertRaises(InvalidArgumentError):
                 self.wb.sheet(other.sheet(0))
 
     def test_add_sheet_returns_handle(self) -> None:
@@ -1299,6 +1299,115 @@ class PivotDetailsHandleTests(unittest.TestCase):
             self.assertIs(wb.sheet(0), details)
             self.assertIs(wb.active_sheet(), details)
             self.assertEqual([s.name for s in wb.list_sheets()], [wb._sheet_name(i) for i in range(len(wb))])
+
+
+class StatusRefusalTests(unittest.TestCase):
+    def test_activating_a_hidden_or_very_hidden_sheet_is_precondition_failed(self) -> None:
+        with Workbook.create_default() as wb:
+            wb.add_sheet("Second")
+            for visibility in (formulon.SheetVisibility.HIDDEN, formulon.SheetVisibility.VERY_HIDDEN):
+                with self.subTest(visibility=visibility):
+                    wb.sheet(1).update_view(visibility=visibility)
+                    with self.assertRaises(FormulonError) as cm:
+                        wb.set_active_sheet(1)
+                    self.assertEqual(cm.exception.code, StatusCode.PRECONDITION_FAILED)
+                    self.assertEqual(wb.active_sheet().index, 0)
+            wb.sheet(1).update_view(visibility=formulon.SheetVisibility.VISIBLE)
+            wb.set_active_sheet(1)
+            self.assertEqual(wb.active_sheet().index, 1)
+
+    def test_unknown_function_name_is_not_found_and_unknown_profile_is_invalid(self) -> None:
+        with self.assertRaises(NotFoundError):
+            formulon.localize_function_name("NOPE", "mac-365-de_DE")
+        with self.assertRaises(NotFoundError):
+            formulon.canonicalize_function_name("NOPE", "mac-365-de_DE")
+        with self.assertRaises(InvalidArgumentError):
+            formulon.localize_function_name("SUM", "nope")
+        with self.assertRaises(InvalidArgumentError):
+            formulon.canonicalize_function_name("SUMME", "nope")
+
+    def test_column_outline_level_above_seven_is_invalid_argument(self) -> None:
+        with Workbook.create_default() as wb:
+            ws = wb.sheet(0)
+            ws.set_column_outline("B", 7)
+            with self.assertRaises(InvalidArgumentError):
+                ws.set_column_outline("B", 8)
+            with self.assertRaises(InvalidArgumentError):
+                ws.set_column_outline(1, 1, 9)
+
+    def test_element_position_past_the_end_is_index_out_of_range(self) -> None:
+        with Workbook.create_default() as wb:
+            ws = wb.sheet(0)
+            count = len(wb.ooxml.list_cell_xfs())
+            ws.ooxml.set_range_xf_index("A1:B2", count - 1)
+            with self.assertRaises(IndexOutOfRangeError):
+                ws.ooxml.set_range_xf_index("A1:B2", count)
+            with self.assertRaises(IndexOutOfRangeError):
+                ws.ooxml.set_range_xf_index("A1:B2", 9999)
+
+    def test_refusal_caused_by_a_dependent_object_is_precondition_failed(self) -> None:
+        with Workbook.create_default() as wb:
+            ws = wb.sheet(0)
+            with self.assertRaises(FormulonError) as cm:
+                wb.remove_sheet(0)
+            self.assertEqual(cm.exception.code, StatusCode.PRECONDITION_FAILED)
+            with self.assertRaises(FormulonError) as cm:
+                ws.update_view(visibility=formulon.SheetVisibility.HIDDEN)
+            self.assertEqual(cm.exception.code, StatusCode.PRECONDITION_FAILED)
+            self.assertEqual(len(wb.list_sheets()), 1)
+            for r in range(4):
+                for c in range(3):
+                    ws.set_text(r, c, f"v{r}{c}")
+            ws.add_table(formulon.TableInput(range="A1:B3", name="Sales"))
+            with self.assertRaises(FormulonError) as cm:
+                ws.add_table(formulon.TableInput(range="B2:C4", name="Costs"))
+            self.assertEqual(cm.exception.code, StatusCode.PRECONDITION_FAILED)
+            self.assertEqual(len(ws.list_tables()), 1)
+
+    def test_iterative_iteration_cap_takes_the_full_unsigned_range(self) -> None:
+        with Workbook.create_default() as wb:
+            wb.update_iterative(max_iterations=2**32 - 1)
+            self.assertEqual(wb.get_iterative().max_iterations, 32767)
+            with self.assertRaises(ValueError):
+                wb.update_iterative(max_iterations=2**32)
+
+
+class ExcelLimitTests(unittest.TestCase):
+    def test_setters_accept_excel_limits_and_reject_one_step_beyond(self) -> None:
+        with Workbook.create_default() as wb:
+            ws = wb.sheet(0)
+            ws.set_text("A1", "x" * 32767)
+            with self.assertRaises(InvalidArgumentError):
+                ws.set_text("A2", "x" * 32768)
+            for zoom in (10, 400):
+                ws.update_view(zoom_pct=zoom)
+            for zoom in (9, 401):
+                with self.subTest(zoom=zoom), self.assertRaises(InvalidArgumentError):
+                    ws.update_view(zoom_pct=zoom)
+            for size in (1, 409):
+                ws.update_cell_format("A1", font={"size_pt": size})
+            for size in (0.5, 410):
+                with self.subTest(size=size), self.assertRaises(InvalidArgumentError):
+                    ws.update_cell_format("A1", font={"size_pt": size})
+            for scale in (10, 400):
+                ws.update_page_setup(scale_pct=scale)
+            for scale in (9, 401):
+                with self.subTest(scale=scale), self.assertRaises(InvalidArgumentError):
+                    ws.update_page_setup(scale_pct=scale)
+
+    def test_row_height_above_409_points_is_invalid_argument(self) -> None:
+        with Workbook.create_default() as wb:
+            ws = wb.sheet(0)
+            ws.set_row_height("1", 409)
+            with self.assertRaises(InvalidArgumentError):
+                ws.set_row_height("1", 410)
+
+    def test_column_width_above_255_characters_is_invalid_argument(self) -> None:
+        with Workbook.create_default() as wb:
+            ws = wb.sheet(0)
+            ws.set_column_width("B", 255)
+            with self.assertRaises(InvalidArgumentError):
+                ws.set_column_width("B", 256)
 
 
 if __name__ == "__main__":

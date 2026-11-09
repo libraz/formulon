@@ -36,7 +36,7 @@ TEST(FormulonCApiPivot, CreatePivotFromScratch) {
   PivotCellsGuard projected;
   ASSERT_EQ(fm_sheet_get_pivot_layout(wb.handle, 0, pivot_index, &projected.handle), 0) << fm_get_last_error_message();
 
-  const std::vector<fm_pivot_cell_t> cells = CollectCells(projected.handle);
+  const std::vector<fm_pivot_cell_info_t> cells = CollectCells(projected.handle);
   ASSERT_FALSE(cells.empty());
 
   // North (regions 0, 2) sum = 400; South (regions 1, 3) sum = 600.
@@ -44,7 +44,7 @@ TEST(FormulonCApiPivot, CreatePivotFromScratch) {
   bool saw_north = false;
   bool saw_south = false;
   bool saw_grand = false;
-  for (const fm_pivot_cell_t& c : cells) {
+  for (const fm_pivot_cell_info_t& c : cells) {
     if (c.kind == FM_PIVOT_CELL_KIND_DATA && c.value.kind == FM_VALUE_KIND_NUMBER) {
       if (c.value.u.number == 400.0) {
         saw_north = true;
@@ -156,7 +156,7 @@ TEST(FormulonCApiPivot, PivotCacheMutationInvalidatesMemoisedLayout) {
   ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_index), 0) << fm_get_last_error_message();
 
   auto has_data_value = [](fm_pivot_report_t* handle, double want) -> bool {
-    for (const fm_pivot_cell_t& c : CollectCells(handle)) {
+    for (const fm_pivot_cell_info_t& c : CollectCells(handle)) {
       if (c.kind == FM_PIVOT_CELL_KIND_DATA && c.value.kind == FM_VALUE_KIND_NUMBER && c.value.u.number == want) {
         return true;
       }
@@ -215,7 +215,7 @@ TEST(FormulonCApiPivot, PivotMutationsInvalidateGetPivotDataFormula) {
   ASSERT_EQ(value.kind, FM_VALUE_KIND_NUMBER);
   EXPECT_DOUBLE_EQ(value.u.number, 1400.0);
 
-  fm_pivot_data_field_spec_t average_spec = FM_STRUCT_INIT(fm_pivot_data_field_spec_t);
+  fm_pivot_data_field_t average_spec = FM_STRUCT_INIT(fm_pivot_data_field_t);
   average_spec.name = "Sum of Amount";
   average_spec.field_index = 1U;
   average_spec.aggregation = FM_PIVOT_AGGREGATION_AVERAGE;
@@ -384,7 +384,7 @@ TEST(FormulonCApiPivot, PivotCacheSharedItemIndexToleratesOutOfDomainNumbers) {
   PivotCellsGuard projected;
   ASSERT_EQ(fm_sheet_get_pivot_layout(wb.handle, 0, pivot_index, &projected.handle), 0) << fm_get_last_error_message();
   bool saw_north_total = false;
-  for (const fm_pivot_cell_t& c : CollectCells(projected.handle)) {
+  for (const fm_pivot_cell_info_t& c : CollectCells(projected.handle)) {
     if (c.kind == FM_PIVOT_CELL_KIND_DATA && c.value.kind == FM_VALUE_KIND_NUMBER && c.value.u.number == 400.0) {
       saw_north_total = true;
     }
@@ -501,7 +501,7 @@ std::vector<std::string> RowLabels(fm_workbook_t* wb, std::size_t pivot_index) {
   PivotCellsGuard projected;
   EXPECT_EQ(fm_sheet_get_pivot_layout(wb, 0, pivot_index, &projected.handle), 0) << fm_get_last_error_message();
   std::vector<std::string> labels;
-  for (const fm_pivot_cell_t& cell : CollectCells(projected.handle)) {
+  for (const fm_pivot_cell_info_t& cell : CollectCells(projected.handle)) {
     if (cell.kind == FM_PIVOT_CELL_KIND_ROW_LABEL && cell.value.kind == FM_VALUE_KIND_TEXT) {
       labels.emplace_back(cell.value.u.text);
     }
@@ -644,7 +644,7 @@ void BuildDatePivot(fm_workbook_t* wb, bool date1904, std::uint32_t* out_cache_i
   std::size_t amount_field = 99;
   ASSERT_EQ(fm_sheet_add_pivot_field(wb, 0, pivot_index, &amount_spec, &amount_field), 0)
       << fm_get_last_error_message();
-  fm_pivot_data_field_spec_t data_spec = FM_STRUCT_INIT(fm_pivot_data_field_spec_t);
+  fm_pivot_data_field_t data_spec = FM_STRUCT_INIT(fm_pivot_data_field_t);
   data_spec.name = "Sum of Amount";
   data_spec.field_index = static_cast<std::uint32_t>(amount_field);
   data_spec.aggregation = FM_PIVOT_AGGREGATION_SUM;
@@ -732,7 +732,7 @@ TEST(FormulonCApiPivot, DateGroupRejectsInvalidSerialBoundsWithoutMutation) {
         << fm_get_last_error_message();
 
     auto has_data_value = [&](fm_pivot_report_t* cells, double want) {
-      for (const fm_pivot_cell_t& cell : CollectCells(cells)) {
+      for (const fm_pivot_cell_info_t& cell : CollectCells(cells)) {
         if (cell.kind == FM_PIVOT_CELL_KIND_DATA && cell.value.kind == FM_VALUE_KIND_NUMBER &&
             cell.value.u.number == want) {
           return true;
@@ -816,7 +816,7 @@ TEST(FormulonCApiPivot, StructEnumMutatorsRejectRawValuesWithoutMutation) {
   std::size_t field_index = 99U;
   EXPECT_EQ(fm_sheet_add_pivot_field(wb.handle, 0, pivot_index, &field_spec, &field_index), expected);
 
-  fm_pivot_data_field_spec_t df_spec = FM_STRUCT_INIT(fm_pivot_data_field_spec_t);
+  fm_pivot_data_field_t df_spec = FM_STRUCT_INIT(fm_pivot_data_field_t);
   df_spec.name = "Total";
   df_spec.field_index = 1;
   df_spec.aggregation = RawEnumValue<fm_pivot_aggregation_t>(99);
@@ -856,7 +856,7 @@ TEST(FormulonCApiPivot, PivotProjectionUsesWorkbookLocaleAndReportLayout) {
   bool saw_japanese_total = false;
   const std::size_t cell_count = count_of(fm_pivot_report_get_cell_count, projected.handle);
   for (std::size_t i = 0; i < cell_count; ++i) {
-    fm_pivot_cell_t cell = FM_STRUCT_INIT(fm_pivot_cell_t);
+    fm_pivot_cell_info_t cell = FM_STRUCT_INIT(fm_pivot_cell_info_t);
     ASSERT_EQ(fm_pivot_report_get_cell_at(projected.handle, i, &cell), 0);
     if (cell.value.kind == FM_VALUE_KIND_TEXT && cell.value.u.text != nullptr &&
         std::string_view(cell.value.u.text) == "総計") {
@@ -1007,7 +1007,7 @@ void BuildDatePivot(fm_workbook_t* wb, std::uint32_t* out_cache_id) {
   }
   const std::uint32_t rows[] = {0U};
   ASSERT_EQ(fm_sheet_set_pivot_row_field_order(wb, 0, pivot, rows, 1U), 0);
-  fm_pivot_data_field_spec_t df = FM_STRUCT_INIT(fm_pivot_data_field_spec_t);
+  fm_pivot_data_field_t df = FM_STRUCT_INIT(fm_pivot_data_field_t);
   df.name = "Sum of Amt";
   df.field_index = 1U;
   df.aggregation = FM_PIVOT_AGGREGATION_SUM;

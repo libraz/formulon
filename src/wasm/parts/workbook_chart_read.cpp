@@ -9,6 +9,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <limits>
 #include <memory>
 #include <string>
 #include <vector>
@@ -62,7 +63,7 @@ enum class Rd : uint8_t {
   kStrOrNull,
   kTextOrNull,
   kEnumOrNull,
-  kNanNull,
+  kOptF64,
   kOptI32,
   kOptU32,
   kTri,
@@ -99,15 +100,15 @@ constexpr RdField kTitleRd[] = {
 
 constexpr RdField kFillRd[] = {
     RD("color", fm_chart_fill_t, color, kColor),
-    RD("transparencyPct", fm_chart_fill_t, transparency_pct, kNanNull),
+    RD_OPT("transparencyPct", fm_chart_fill_t, has_transparency_pct, transparency_pct, kOptF64),
     RD_END,
 };
 
 // clang-format off
 constexpr RdField kLineRd[] = {
     RD("color", fm_chart_line_t, color, kColor),
-    RD("transparencyPct", fm_chart_line_t, transparency_pct, kNanNull),
-    RD("widthPt", fm_chart_line_t, width_pt, kNanNull),
+    RD_OPT("transparencyPct", fm_chart_line_t, has_transparency_pct, transparency_pct, kOptF64),
+    RD_OPT("widthPt", fm_chart_line_t, has_width_pt, width_pt, kOptF64),
     RD_OPT("dash", fm_chart_line_t, has_dash, dash, kOptI32),
     RD("none", fm_chart_line_t, none, kBool),
     RD_END,
@@ -133,60 +134,60 @@ constexpr RdField kLabelsRd[] = {
     RD("numberFormat", fm_chart_labels_t, number_format, kStrOrNull),
     RD("sourceLinked", fm_chart_labels_t, source_linked, kBool),
     RD("fontColor", fm_chart_labels_t, font_color, kColor),
-    RD("fontSizePt", fm_chart_labels_t, font_size_pt, kNanNull),
+    RD_OPT("fontSizePt", fm_chart_labels_t, has_font_size_pt, font_size_pt, kOptF64),
     RD("deleted", fm_chart_labels_t, deleted, kBool),
     RD_END,
 };
 
 constexpr RdField kPointRd[] = {
-    RD("index", fm_chart_point_t, idx, kU32),
-    RD_OBJ("fill", fm_chart_point_t, fill, kFillRd),
-    RD_OBJ("line", fm_chart_point_t, line, kLineRd),
-    RD_OBJ_OPT("marker", fm_chart_point_t, has_marker, marker, kMarkerRd),
+    RD("index", fm_chart_point_info_t, idx, kU32),
+    RD_OBJ("fill", fm_chart_point_info_t, fill, kFillRd),
+    RD_OBJ("line", fm_chart_point_info_t, line, kLineRd),
+    RD_OBJ_OPT("marker", fm_chart_point_info_t, has_marker, marker, kMarkerRd),
     RD_END,
 };
 
 constexpr RdField kSeriesRd[] = {
-    RD("index", fm_chart_series_t, idx, kU32),
-    RD("order", fm_chart_series_t, order, kU32),
-    RD("filtered", fm_chart_series_t, filtered, kBool),
-    RD_OBJ("fill", fm_chart_series_t, fill, kFillRd),
-    RD_OBJ("line", fm_chart_series_t, line, kLineRd),
-    RD_OBJ_OPT("marker", fm_chart_series_t, has_marker, marker, kMarkerRd),
-    RD("smooth", fm_chart_series_t, smooth, kTri),
-    RD_OBJ_OPT("labels", fm_chart_series_t, has_labels, labels, kLabelsRd),
+    RD("index", fm_chart_series_info_t, idx, kU32),
+    RD("order", fm_chart_series_info_t, order, kU32),
+    RD("filtered", fm_chart_series_info_t, filtered, kBool),
+    RD_OBJ("fill", fm_chart_series_info_t, fill, kFillRd),
+    RD_OBJ("line", fm_chart_series_info_t, line, kLineRd),
+    RD_OBJ_OPT("marker", fm_chart_series_info_t, has_marker, marker, kMarkerRd),
+    RD("smooth", fm_chart_series_info_t, smooth, kTri),
+    RD_OBJ_OPT("labels", fm_chart_series_info_t, has_labels, labels, kLabelsRd),
     RD_END,
 };
 
 constexpr RdField kPlotRd[] = {
-    RD("type", fm_chart_plot_t, type, kI32),
-    RD_OPT("grouping", fm_chart_plot_t, has_grouping, grouping, kOptI32),
-    RD_OPT("gapWidthPct", fm_chart_plot_t, has_gap_width_pct, gap_width_pct, kOptU32),
-    RD_OPT("overlap", fm_chart_plot_t, has_overlap, overlap, kOptI32),
-    RD_OPT("holeSize", fm_chart_plot_t, has_hole_size, hole_size, kOptU32),
-    RD_OPT("firstSliceAngleDeg", fm_chart_plot_t, has_first_slice_angle_deg, first_slice_angle_deg, kOptU32),
+    RD("type", fm_chart_plot_info_t, type, kI32),
+    RD_OPT("grouping", fm_chart_plot_info_t, has_grouping, grouping, kOptI32),
+    RD_OPT("gapWidthPct", fm_chart_plot_info_t, has_gap_width_pct, gap_width_pct, kOptU32),
+    RD_OPT("overlap", fm_chart_plot_info_t, has_overlap, overlap, kOptI32),
+    RD_OPT("holeSize", fm_chart_plot_info_t, has_hole_size, hole_size, kOptU32),
+    RD_OPT("firstSliceAngleDeg", fm_chart_plot_info_t, has_first_slice_angle_deg, first_slice_angle_deg, kOptU32),
     RD_END,
 };
 
 constexpr RdField kAxisRd[] = {
-    RD("id", fm_chart_axis_t, id, kU32),
-    RD("kind", fm_chart_axis_t, kind, kI32),
-    RD("visible", fm_chart_axis_t, visible, kBool),
-    RD("crossAxis", fm_chart_axis_t, cross_axis, kU32),
-    RD("crosses", fm_chart_axis_t, crosses, kEnumOrNull),
-    RD("crossesAt", fm_chart_axis_t, crosses_at, kNanNull),
-    RD("min", fm_chart_axis_t, min, kNanNull),
-    RD("max", fm_chart_axis_t, max, kNanNull),
-    RD("majorUnit", fm_chart_axis_t, major_unit, kNanNull),
-    RD("minorUnit", fm_chart_axis_t, minor_unit, kNanNull),
-    RD("logBase", fm_chart_axis_t, log_base, kNanNull),
-    RD("reversed", fm_chart_axis_t, reversed, kBool),
-    RD("numberFormat", fm_chart_axis_t, number_format, kStrOrNull),
-    RD("sourceLinked", fm_chart_axis_t, source_linked, kBool),
-    RD_TITLE("title", fm_chart_axis_t, title, kTitleRd),
-    RD("majorGridlines", fm_chart_axis_t, major_gridlines, kBool),
-    RD("minorGridlines", fm_chart_axis_t, minor_gridlines, kBool),
-    RD("tickLabelPosition", fm_chart_axis_t, tick_label_position, kEnumOrNull),
+    RD("id", fm_chart_axis_info_t, id, kU32),
+    RD("kind", fm_chart_axis_info_t, kind, kI32),
+    RD("visible", fm_chart_axis_info_t, visible, kBool),
+    RD("crossAxis", fm_chart_axis_info_t, cross_axis, kU32),
+    RD("crosses", fm_chart_axis_info_t, crosses, kEnumOrNull),
+    RD_OPT("crossesAt", fm_chart_axis_info_t, has_crosses_at, crosses_at, kOptF64),
+    RD_OPT("min", fm_chart_axis_info_t, has_min, min, kOptF64),
+    RD_OPT("max", fm_chart_axis_info_t, has_max, max, kOptF64),
+    RD_OPT("majorUnit", fm_chart_axis_info_t, has_major_unit, major_unit, kOptF64),
+    RD_OPT("minorUnit", fm_chart_axis_info_t, has_minor_unit, minor_unit, kOptF64),
+    RD_OPT("logBase", fm_chart_axis_info_t, has_log_base, log_base, kOptF64),
+    RD("reversed", fm_chart_axis_info_t, reversed, kBool),
+    RD("numberFormat", fm_chart_axis_info_t, number_format, kStrOrNull),
+    RD("sourceLinked", fm_chart_axis_info_t, source_linked, kBool),
+    RD_TITLE("title", fm_chart_axis_info_t, title, kTitleRd),
+    RD("majorGridlines", fm_chart_axis_info_t, major_gridlines, kBool),
+    RD("minorGridlines", fm_chart_axis_info_t, minor_gridlines, kBool),
+    RD("tickLabelPosition", fm_chart_axis_info_t, tick_label_position, kEnumOrNull),
     RD_END,
 };
 
@@ -240,9 +241,9 @@ val fields_to_val(const void* base, const RdField* f) {
           v = val(e);
         }
         break;
-      case Rd::kNanNull:
-        if (const double d = load<double>(base, f->off); !std::isnan(d)) {
-          v = val(d);
+      case Rd::kOptF64:
+        if (load<int32_t>(base, f->has) != 0) {
+          v = val(load<double>(base, f->off));
         }
         break;
       case Rd::kOptI32:
@@ -261,7 +262,7 @@ val fields_to_val(const void* base, const RdField* f) {
         }
         break;
       case Rd::kColor:
-        v = js_color_spec_or_null(load<fm_color_spec_t>(base, f->off));
+        v = js_color_spec_or_null(load<fm_color_t>(base, f->off));
         break;
       case Rd::kObj:
         v = fields_to_val(static_cast<const char*>(base) + f->off, f->sub);
@@ -295,7 +296,7 @@ val source_to_val(const fm_chart_t* chart, size_t plot, size_t series, int32_t r
   o.set("formula", val(string_from_cstr(src.formula)));
   val literal = val::array();
   for (size_t i = 0; i < src.literal_count; ++i) {
-    fm_chart_literal_t lit = FM_STRUCT_INIT(fm_chart_literal_t);
+    fm_chart_literal_info_t lit = FM_STRUCT_INIT(fm_chart_literal_info_t);
     if (!step(rc, fm_chart_get_series_literal_at(chart, plot, series, role, i, &lit))) {
       break;
     }
@@ -306,7 +307,7 @@ val source_to_val(const fm_chart_t* chart, size_t plot, size_t series, int32_t r
 }
 
 val series_to_val(const fm_chart_t* chart, size_t plot, size_t index, fm_status_t& rc) {
-  fm_chart_series_t s = FM_STRUCT_INIT(fm_chart_series_t);
+  fm_chart_series_info_t s = FM_STRUCT_INIT(fm_chart_series_info_t);
   if (!step(rc, fm_chart_get_series_at(chart, plot, index, &s))) {
     return val::object();
   }
@@ -317,7 +318,7 @@ val series_to_val(const fm_chart_t* chart, size_t plot, size_t index, fm_status_
   }
   val points = val::array();
   for (size_t i = 0; i < s.point_count; ++i) {
-    fm_chart_point_t p = FM_STRUCT_INIT(fm_chart_point_t);
+    fm_chart_point_info_t p = FM_STRUCT_INIT(fm_chart_point_info_t);
     if (!step(rc, fm_chart_get_series_point_at(chart, plot, index, i, &p))) {
       break;
     }
@@ -328,7 +329,7 @@ val series_to_val(const fm_chart_t* chart, size_t plot, size_t index, fm_status_
 }
 
 val plot_to_val(const fm_chart_t* chart, size_t index, fm_status_t& rc) {
-  fm_chart_plot_t p = FM_STRUCT_INIT(fm_chart_plot_t);
+  fm_chart_plot_info_t p = FM_STRUCT_INIT(fm_chart_plot_info_t);
   if (!step(rc, fm_chart_get_plot_at(chart, index, &p))) {
     return val::object();
   }
@@ -375,7 +376,7 @@ val chart_to_val(const fm_chart_t* chart, fm_status_t& rc) {
   val o = fields_to_val(&info, kInfoRd);
 
   val legend = val::null();
-  if (info.legend_position != FM_CHART_LEGEND_POSITION_NONE) {
+  if (info.legend_position != FM_CHART_LEGEND_POSITION_ABSENT) {
     legend = val::object();
     legend.set("position", val(info.legend_position));
     legend.set("overlay", val(info.legend_overlay != 0));
@@ -392,7 +393,7 @@ val chart_to_val(const fm_chart_t* chart, fm_status_t& rc) {
   o.set("plots", plots);
   val axes = val::array();
   for (size_t i = 0; i < info.axis_count; ++i) {
-    fm_chart_axis_t axis = FM_STRUCT_INIT(fm_chart_axis_t);
+    fm_chart_axis_info_t axis = FM_STRUCT_INIT(fm_chart_axis_info_t);
     if (!step(rc, fm_chart_get_axis_at(chart, i, &axis))) {
       break;
     }
@@ -405,12 +406,12 @@ val chart_to_val(const fm_chart_t* chart, fm_status_t& rc) {
   val filter = val::object();
   val hidden_series = val::array();
   for (size_t i = 0; i < info.plot_count && rc == 0; ++i) {
-    fm_chart_plot_t plot = FM_STRUCT_INIT(fm_chart_plot_t);
+    fm_chart_plot_info_t plot = FM_STRUCT_INIT(fm_chart_plot_info_t);
     if (!step(rc, fm_chart_get_plot_at(chart, i, &plot))) {
       break;
     }
     for (size_t j = 0; j < plot.series_count; ++j) {
-      fm_chart_series_t series = FM_STRUCT_INIT(fm_chart_series_t);
+      fm_chart_series_info_t series = FM_STRUCT_INIT(fm_chart_series_info_t);
       if (!step(rc, fm_chart_get_series_at(chart, i, j, &series))) {
         break;
       }
@@ -454,8 +455,8 @@ val range_to_val(const fm_sheet_rect_t& r) {
 }
 
 val data_series_to_val(const fm_chart_data_t* data, size_t index, fm_status_t& rc) {
-  fm_chart_data_series_t s = FM_STRUCT_INIT(fm_chart_data_series_t);
-  fm_chart_data_points_t pts = FM_STRUCT_INIT(fm_chart_data_points_t);
+  fm_chart_data_series_info_t s = FM_STRUCT_INIT(fm_chart_data_series_info_t);
+  fm_chart_data_points_info_t pts = FM_STRUCT_INIT(fm_chart_data_points_info_t);
   if (!step(rc, fm_chart_data_get_series_at(data, index, &s)) ||
       !step(rc, fm_chart_data_get_series_points(data, index, &pts))) {
     return val::object();
@@ -501,12 +502,14 @@ val chart_data_to_val(const fm_chart_data_t* data, fm_status_t& rc) {
   val labels = val::array();
   for (size_t i = 0; i < info.category_label_count; ++i) {
     const char* label = nullptr;
+    int32_t has_value = 0;
     double value = 0.0;
-    if (!step(rc, fm_chart_data_get_category_at(data, i, &label, &value))) {
+    if (!step(rc, fm_chart_data_get_category_at(data, i, &label, &has_value, &value))) {
       break;
     }
     push(labels, val(string_from_cstr(label)));
-    numbers.push_back(value);
+    // A text category among numeric ones reads as NaN in the values array.
+    numbers.push_back(has_value != 0 ? value : std::numeric_limits<double>::quiet_NaN());
   }
   val levels = val::array();
   for (size_t level = 0; level < info.category_level_count && rc == 0; ++level) {
@@ -539,7 +542,7 @@ val chart_data_to_val(const fm_chart_data_t* data, fm_status_t& rc) {
 
   val axis_titles = val::array();
   for (size_t i = 0; i < info.axis_title_count; ++i) {
-    fm_chart_axis_title_text_t t = FM_STRUCT_INIT(fm_chart_axis_title_text_t);
+    fm_chart_axis_title_text_info_t t = FM_STRUCT_INIT(fm_chart_axis_title_text_info_t);
     if (!step(rc, fm_chart_data_get_axis_title_at(data, i, &t))) {
       break;
     }
@@ -551,7 +554,7 @@ val chart_data_to_val(const fm_chart_data_t* data, fm_status_t& rc) {
   o.set("axisTitleTexts", axis_titles);
   val unresolved = val::array();
   for (size_t i = 0; i < info.unresolved_count; ++i) {
-    fm_chart_unresolved_t u = FM_STRUCT_INIT(fm_chart_unresolved_t);
+    fm_chart_unresolved_info_t u = FM_STRUCT_INIT(fm_chart_unresolved_info_t);
     if (!step(rc, fm_chart_data_get_unresolved_at(data, i, &u))) {
       break;
     }
@@ -565,10 +568,13 @@ val chart_data_to_val(const fm_chart_data_t* data, fm_status_t& rc) {
   return o;
 }
 
-val open_chart_data_val(fm_status_t rc, fm_chart_data_t* raw) {
+val open_chart_data_val(fm_status_t rc, int32_t present, fm_chart_data_t* raw) {
   const std::unique_ptr<fm_chart_data_t, ChartDataDeleter> data(raw);
   if (!succeeded(rc)) {
     return val::undefined();
+  }
+  if (present == 0) {
+    return val::null();
   }
   const val out = chart_data_to_val(data.get(), rc);
   if (!succeeded(rc)) {
@@ -600,8 +606,9 @@ val JsWorkbook::getChartData(uint32_t sheet, uint32_t objectId) const {
     return val::undefined();
   }
   fm_chart_data_t* raw = nullptr;
-  const fm_status_t rc = fm_sheet_get_chart_data(handle_, sheet, objectId, &raw);
-  return open_chart_data_val(rc, raw);
+  int32_t present = 0;
+  const fm_status_t rc = fm_sheet_get_chart_data(handle_, sheet, objectId, &present, &raw);
+  return open_chart_data_val(rc, present, raw);
 }
 
 val JsWorkbook::previewChartData(uint32_t sheet, uint32_t objectId, val overrides) const {
@@ -612,13 +619,17 @@ val JsWorkbook::previewChartData(uint32_t sheet, uint32_t objectId, val override
   JsNarrowNumericReader reader("getChartPreview");
   const val spec = js_object_or_empty(overrides);
   std::string source_store;
-  fm_chart_preview_overrides_t o = FM_STRUCT_INIT(fm_chart_preview_overrides_t);
-  o.source = reader.optional_string(spec, "source", source_store, "source");
+  fm_chart_preview_overrides_spec_t o = FM_STRUCT_INIT(fm_chart_preview_overrides_spec_t);
   // A `null` or omitted override stays unset.
-  const auto set = [&](const char* key, int32_t& op, int32_t& out, bool is_bool) {
+  const val source = reader.value(spec, "source", "source");
+  if (reader.ok() && js_value_present(source)) {
+    o.source_op = FM_PATCH_OP_SET;
+    o.source = reader.optional_string_value(source, source_store, "source");
+  }
+  const auto set = [&](const char* key, fm_patch_op_t& op, int32_t& out, bool is_bool) {
     const val v = reader.value(spec, key, key);
     if (js_value_present(v)) {
-      op = FM_CHART_PATCH_OP_SET;
+      op = FM_PATCH_OP_SET;
       out = is_bool ? (reader.boolean_value(v, false) ? 1 : 0) : reader.i32_value(v, 0, key);
     }
   };
@@ -632,8 +643,9 @@ val JsWorkbook::previewChartData(uint32_t sheet, uint32_t objectId, val override
     return val::undefined();
   }
   fm_chart_data_t* raw = nullptr;
-  const fm_status_t rc = fm_sheet_get_chart_preview(handle_, sheet, objectId, &o, &raw);
-  return open_chart_data_val(rc, raw);
+  int32_t present = 0;
+  const fm_status_t rc = fm_sheet_get_chart_preview(handle_, sheet, objectId, &o, &present, &raw);
+  return open_chart_data_val(rc, present, raw);
 }
 
 }  // namespace parts

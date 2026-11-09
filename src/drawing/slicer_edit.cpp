@@ -193,7 +193,7 @@ Expected<bool, Error> scan(const Workbook& wb, std::size_t sheet, std::size_t wa
 Expected<void, Error> slot_at(const Workbook& wb, std::size_t sheet, std::size_t index, Slot& slot) {
   ASSIGN_OR_RETURN(const bool found, scan(wb, sheet, index, &slot, nullptr));
   if (!found) {
-    return invalid("slicer: index out of range");
+    return make_error(FormulonErrorCode::kIndexOutOfRange, "slicer: index out of range");
   }
   return Expected<void, Error>::Ok();
 }

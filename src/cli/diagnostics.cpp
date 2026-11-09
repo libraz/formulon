@@ -23,7 +23,7 @@ void emit_counter(std::ostream& err, const char* name, std::uint32_t value) {
 
 // The XLSB half of the load counters: lossy Ptg recovery and parts the
 // reader could not decode. Zero for every `.xlsx` load.
-void emit_xlsb_read_diagnostics(std::ostream& err, std::string_view subcommand, const fm_read_diagnostics_t& d) {
+void emit_xlsb_read_diagnostics(std::ostream& err, std::string_view subcommand, const fm_read_diagnostics_info_t& d) {
   if (d.undecoded_formula_count == 0U && d.undecoded_defined_name_count == 0U && d.undecoded_part_count == 0U) {
     return;
   }
@@ -37,7 +37,7 @@ void emit_xlsb_read_diagnostics(std::ostream& err, std::string_view subcommand, 
 // The OOXML half of the same load counters: presentation-overlay entries
 // dropped for an unusable reference, and an unrecognised workbook content
 // type. Zero for every `.xlsb` load.
-void emit_ooxml_read_diagnostics(std::ostream& err, std::string_view subcommand, const fm_read_diagnostics_t& d) {
+void emit_ooxml_read_diagnostics(std::ostream& err, std::string_view subcommand, const fm_read_diagnostics_info_t& d) {
   if (d.skipped_feature_count == 0U && d.unknown_content_type_count == 0U) {
     return;
   }
@@ -50,7 +50,7 @@ void emit_ooxml_read_diagnostics(std::ostream& err, std::string_view subcommand,
 }  // namespace
 
 fm_status_t emit_read_diagnostics(const fm_workbook_t* wb, std::ostream& err, std::string_view subcommand) {
-  fm_read_diagnostics_t diagnostics = FM_STRUCT_INIT(fm_read_diagnostics_t);
+  fm_read_diagnostics_info_t diagnostics = FM_STRUCT_INIT(fm_read_diagnostics_info_t);
   if (auto rc = fm_workbook_get_diagnostics(wb, &diagnostics); rc != 0) {
     return rc;
   }
@@ -60,7 +60,7 @@ fm_status_t emit_read_diagnostics(const fm_workbook_t* wb, std::ostream& err, st
 }
 
 void emit_write_diagnostics(std::ostream& err, std::string_view subcommand, fm_workbook_format_t format,
-                            const fm_save_diagnostics_t& d) {
+                            const fm_save_diagnostics_info_t& d) {
   if (d.downgraded_formula_count == 0U && d.deferred_feature_count == 0U && d.dropped_part_count == 0U &&
       d.dropped_relationship_count == 0U && d.renumbered_part_count == 0U) {
     return;

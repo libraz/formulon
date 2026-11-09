@@ -37,6 +37,7 @@
 // NOLINTNEXTLINE(misc-include-cleaner): napi.h is the canonical entry point.
 #include <napi.h>
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <limits>
@@ -151,20 +152,37 @@ fm_status_t CollectList(Napi::Array& items, CountFn count_fn, AtFn at_fn, ToJs t
   return rc;
 }
 
+/// Fills `items` from a caller-buffer C getter `call(T* out, size_t capacity, size_t* out_count)`: a sizing call
+/// with capacity 0, then one call with a buffer of that size. Returns the first failing status.
+template <typename T, typename Call>
+fm_status_t FillCallerBuffer(std::vector<T>& items, Call&& call) {
+  std::size_t count = 0;
+  fm_status_t rc = call(static_cast<T*>(nullptr), static_cast<std::size_t>(0), &count);
+  if (rc != 0 || count == 0) {
+    items.clear();
+    return rc;
+  }
+  items.assign(count, InitOut<T>());
+  std::size_t written = 0;
+  rc = call(items.data(), items.size(), &written);
+  items.resize(rc == 0 ? std::min(written, items.size()) : 0);
+  return rc;
+}
+
 /// The largest uint32 value as a JS Number, the upper bound of uint32 checks.
 constexpr double kUint32MaxNumber = static_cast<double>(std::numeric_limits<std::uint32_t>::max());
 
-/// Translates an `fm_pivot_cell_t` into the JS shape.
-Napi::Object TranslatePivotCell(Napi::Env env, const fm_pivot_cell_t& cell);
+/// Translates an `fm_pivot_cell_info_t` into the JS shape.
+Napi::Object TranslatePivotCell(Napi::Env env, const fm_pivot_cell_info_t& cell);
 
-/// Translates an `fm_cf_match_t` into the JS shape used by embind.
-Napi::Object TranslateCfMatch(Napi::Env env, const fm_cf_match_t& m);
+/// Translates an `fm_cf_match_info_t` into the JS shape used by embind.
+Napi::Object TranslateCfMatch(Napi::Env env, const fm_cf_match_info_t& m);
 
-/// Translates an `fm_color_spec_t` into `{ kind, rgb, theme, tint, indexed }`.
-Napi::Object ColorSpecToJs(Napi::Env env, const fm_color_spec_t& spec);
+/// Translates an `fm_color_t` into `{ kind, rgb, theme, tint, indexed }`.
+Napi::Object ColorSpecToJs(Napi::Env env, const fm_color_t& spec);
 
 /// `ColorSpecToJs(spec)`, or `null` when `spec.kind` is `FM_COLOR_KIND_NONE`.
-Napi::Value ColorSpecOrNull(Napi::Env env, const fm_color_spec_t& spec);
+Napi::Value ColorSpecOrNull(Napi::Env env, const fm_color_t& spec);
 
 /// Builds a `CellRect` `{ firstRow, firstCol, lastRow, lastCol }`.
 Napi::Object RangeToJs(Napi::Env env, const fm_cell_rect_t& r);
@@ -289,6 +307,23 @@ enum class PatchKey : int32_t {
 /// false a `null` records a TypeError on `reader` and reads as `kKeep`.
 PatchKey ClassifyPatchKey(CheckedSpecReader& reader, const Napi::Value& value, const char* key, bool nullable);
 
+/// Reads `spec[key]` as one patch field and returns its op: an absent key keeps, `null` clears (a TypeError when
+/// the field is not clearable), any other value is read into `*out` and sets. The string form copies into `*store`
+/// and points `*out` at it, so the storage must outlive the C call.
+fm_patch_op_t PatchBool(CheckedSpecReader& reader, const Napi::Object& spec, const char* key, int32_t* out);
+fm_patch_op_t PatchI32(CheckedSpecReader& reader, const Napi::Object& spec, const char* key, int32_t* out);
+fm_patch_op_t PatchU32(CheckedSpecReader& reader, const Napi::Object& spec, const char* key, uint32_t* out);
+fm_patch_op_t PatchI64(CheckedSpecReader& reader, const Napi::Object& spec, const char* key, int64_t* out);
+fm_patch_op_t PatchColor(CheckedSpecReader& reader, const Napi::Object& spec, const char* key, bool nullable,
+                         fm_color_t* out);
+/// `PatchDouble` for a field `null` clears.
+fm_patch_op_t PatchNullableDouble(CheckedSpecReader& reader, const Napi::Object& spec, const char* key, double* out);
+/// `PatchI32` for a field `null` clears.
+fm_patch_op_t PatchNullableI32(CheckedSpecReader& reader, const Napi::Object& spec, const char* key, int32_t* out);
+fm_patch_op_t PatchDouble(CheckedSpecReader& reader, const Napi::Object& spec, const char* key, double* out);
+fm_patch_op_t PatchString(CheckedSpecReader& reader, const Napi::Object& spec, const char* key, bool nullable,
+                          std::string* store, const char** out);
+
 /// Reads a `CellRect` `{ firstRow, firstCol, lastRow, lastCol }` object; every
 /// field is required.
 bool ReadCellRect(CheckedSpecReader& reader, const Napi::Object& range, fm_cell_rect_t* out);
@@ -297,10 +332,10 @@ bool ReadCellRect(CheckedSpecReader& reader, const Napi::Object& range, fm_cell_
 /// of `owner[key]`. An absent object leaves `kind` at `FM_COLOR_KIND_NONE` (no
 /// colour). A supplied selector is authoritative; this binding does not
 /// resolve theme/indexed / auto colours.
-fm_color_spec_t PullColorSpec(CheckedSpecReader& reader, const Napi::Object& owner, const char* key);
+fm_color_t PullColorSpec(CheckedSpecReader& reader, const Napi::Object& owner, const char* key);
 
 /// `PullColorSpec` for a value already in hand; `key` names it in a rejection.
-fm_color_spec_t ReadColorSpec(CheckedSpecReader& reader, const Napi::Value& value, const char* key);
+fm_color_t ReadColorSpec(CheckedSpecReader& reader, const Napi::Value& value, const char* key);
 
 /// Reads the `CellRect` array `value`; `key` names it in a rejection. A
 /// missing array, or a missing element, reads as nothing.
@@ -332,10 +367,10 @@ bool FunctionArg(const Napi::CallbackInfo& info, size_t idx, Napi::Function* out
 /// `info[idx]` when it is a `Uint8Array` (not merely another typed array).
 bool BytesArg(const Napi::CallbackInfo& info, size_t idx, Napi::Uint8Array* out);
 
-/// Builds an `fm_pivot_data_field_spec_t` from a JS spec object. The
+/// Builds an `fm_pivot_data_field_t` from a JS spec object. The
 /// `name_buf` / `nfmt_buf` strings keep the borrowed `const char*`
 /// pointers alive for the caller.
-void BuildDataFieldSpec(CheckedSpecReader& reader, const Napi::Object& spec, fm_pivot_data_field_spec_t& out,
+void BuildDataFieldSpec(CheckedSpecReader& reader, const Napi::Object& spec, fm_pivot_data_field_t& out,
                         std::string& name_buf, std::string& nfmt_buf);
 
 }  // namespace formulon_node

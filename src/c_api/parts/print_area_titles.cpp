@@ -31,7 +31,6 @@ using formulon::c_api::parts::check_record_size;
 using formulon::c_api::parts::check_row_span;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::clear_last_error;
-using formulon::c_api::parts::fresh_read_scratch;
 using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::set_last_error;
 
@@ -86,11 +85,14 @@ extern "C" fm_status_t fm_sheet_set_print_area(fm_workbook_t* wb, size_t sheet_i
   return 0;
 }
 
-extern "C" fm_status_t fm_sheet_get_print_area(const fm_workbook_t* wb, size_t sheet_index,
-                                               const fm_cell_rect_t** out_ranges, size_t* out_range_count) {
+extern "C" fm_status_t fm_sheet_get_print_area(const fm_workbook_t* wb, size_t sheet_index, fm_cell_rect_t* out,
+                                               size_t capacity, size_t* out_count) {
   clear_last_error();
-  if (out_ranges == nullptr || out_range_count == nullptr) {
-    return null_argument("out_ranges");
+  if (out_count == nullptr) {
+    return null_argument("out_count");
+  }
+  if (out == nullptr && capacity > 0U) {
+    return null_argument("out");
   }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
@@ -99,14 +101,12 @@ extern "C" fm_status_t fm_sheet_get_print_area(const fm_workbook_t* wb, size_t s
   if (!areas) {
     return set_last_error(areas.error());
   }
-  std::vector<formulon::MergeRange> rects;
-  rects.reserve(areas.value().size());
-  for (const formulon::print::CellRange& range : areas.value()) {
-    rects.push_back({range.first_row, range.first_col, range.last_row, range.last_col});
+  const std::vector<formulon::print::CellRange>& ranges = areas.value();
+  const std::size_t written = ranges.size() < capacity ? ranges.size() : capacity;
+  for (std::size_t i = 0; i < written; ++i) {
+    out[i] = fm_cell_rect_t{ranges[i].first_row, ranges[i].first_col, ranges[i].last_row, ranges[i].last_col};
   }
-  fresh_read_scratch(wb);
-  *out_ranges = formulon::c_api::parts::publish_rects(wb, rects);
-  *out_range_count = rects.size();
+  *out_count = ranges.size();
   return 0;
 }
 

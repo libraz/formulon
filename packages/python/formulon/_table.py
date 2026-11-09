@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Optional, Tuple, Union
 
 from . import _structs as S
 from ._c import LIB, FormulonError, _sint, _uint
-from ._sheet import _normalize_auto_filter
+from ._sheet import _normalize_auto_filter, _read_auto_filter
 from ._status import StatusCode
 from ._workbook import (
     _PATCH_CLEAR,
@@ -30,7 +30,6 @@ from ._workbook import (
     _check,
     _decode_cell_rect_at,
     _pack_cell_rect_at,
-    _tristate,
 )
 
 if TYPE_CHECKING:
@@ -128,12 +127,9 @@ class Table:
     def _name(h: int, sheet: int, index: int) -> str:
         """The name of the table at ``(sheet, index)``."""
         with _ArgScope() as scope:
-            name_ptr = scope.out_ptr()
-            rect_ptr = scope.struct(S.CELL_RECT)
-            _check(
-                LIB.fm_sheet_get_table(h, _uint(sheet, "sheet_index"), _uint(index, "table_index"), name_ptr, rect_ptr)
-            )
-            return LIB.read_cstr(LIB.read_u32(name_ptr))
+            info_ptr = scope.struct(S.TABLE_INFO)
+            _check(LIB.fm_sheet_get_table_at(h, _uint(sheet, "sheet_index"), _uint(index, "table_index"), info_ptr))
+            return LIB.read_cstr(S.TABLE_INFO.unpack(LIB, info_ptr)["name"])
 
     # -- Properties --------------------------------------------------------
     def get_properties(self) -> TableProperties:
@@ -143,19 +139,16 @@ class Table:
         h, sheet, index = self._locate()
         sheet_arg, index_arg = _uint(sheet, "sheet_index"), _uint(index, "table_index")
         with _ArgScope() as scope:
-            name_ptr = scope.out_ptr()
-            rect_ptr = scope.struct(S.CELL_RECT)
             info_ptr = scope.struct(S.TABLE_INFO)
             column_ptr = scope.struct(S.TABLE_COLUMN_INFO)
-            _check(LIB.fm_sheet_get_table(h, sheet_arg, index_arg, name_ptr, rect_ptr))
-            name = LIB.read_cstr(LIB.read_u32(name_ptr))
-            rect = _decode_cell_rect_at(rect_ptr)
-            _check(LIB.fm_sheet_get_table_info(h, sheet_arg, index_arg, info_ptr))
+            _check(LIB.fm_sheet_get_table_at(h, sheet_arg, index_arg, info_ptr))
             info = S.TABLE_INFO.unpack(LIB, info_ptr)
+            name = LIB.read_cstr(info["name"])
+            rect = _decode_cell_rect_at(info_ptr + S.TABLE_INFO.offsets["range"][1])
             columns = []
             for c in range(info["column_count"]):
                 S.zero_struct(LIB, S.TABLE_COLUMN_INFO, column_ptr)
-                _check(LIB.fm_sheet_get_table_column(h, sheet_arg, index_arg, _uint(c, "column"), column_ptr))
+                _check(LIB.fm_sheet_get_table_column_at(h, sheet_arg, index_arg, _uint(c, "column"), column_ptr))
                 col = S.TABLE_COLUMN_INFO.unpack(LIB, column_ptr)
                 columns.append(
                     TableColumn(
@@ -203,25 +196,21 @@ class Table:
                 f"formulon: range must be an A1 string, a CellRect or a SheetRect, got {type(range).__name__}"
             )
         h, sheet, index = self._locate()
-        if range is UNCHANGED:
-            rect = self.get_properties().range.rect
-        else:
-            rect = self._range_rect(range, sheet)
+        values = {}
+        if range is not UNCHANGED:
+            values["range_op"] = _PATCH_SET
+        for key, flag in (("header_row", header_row), ("totals_row", totals_row)):
+            if flag is not UNCHANGED:
+                values[key + "_op"] = _PATCH_SET
+                values[key] = 1 if flag else 0
         with _ArgScope() as scope:
-            rect_ptr = scope.struct(S.CELL_RECT)
-            _pack_cell_rect_at(rect_ptr, rect)
-            # A NULL style name keeps the style; a negative flag keeps the flag.
-            _check(
-                LIB.fm_sheet_update_table(
-                    h,
-                    _uint(sheet, "sheet_index"),
-                    _uint(index, "table_index"),
-                    rect_ptr,
-                    0,
-                    _tristate(None if header_row is UNCHANGED else header_row),
-                    _tristate(None if totals_row is UNCHANGED else totals_row),
-                )
-            )
+            ptr = scope.struct(S.TABLE_PATCH)
+            if range is not UNCHANGED:
+                _pack_cell_rect_at(ptr + S.TABLE_PATCH.offsets["range"][1], self._range_rect(range, sheet))
+            raw = bytearray(LIB.read_bytes(ptr, S.TABLE_PATCH.size))
+            S.TABLE_PATCH.pack_into(raw, 0, values)
+            LIB.write_bytes(ptr, bytes(raw))
+            _check(LIB.fm_sheet_update_table(h, _uint(sheet, "sheet_index"), _uint(index, "table_index"), ptr))
 
     def _range_rect(self, range: Union[SheetRect, CellRect, str], sheet: int) -> CellRect:
         """The rectangle ``range`` names, which must lie on sheet index ``sheet``."""
@@ -387,7 +376,7 @@ class Table:
     def get_auto_filter(self) -> Optional[AutoFilter]:
         """Return the table's AutoFilter, or ``None`` when it has none."""
         _, sheet, index = self._locate()
-        return self._workbook._read_auto_filter(LIB.fm_sheet_get_table_auto_filter, sheet, index)
+        return _read_auto_filter(self._workbook, LIB.fm_sheet_get_table_auto_filter, sheet, index)
 
     def set_auto_filter(self, auto_filter: Optional[Union[AutoFilterInput, AutoFilter]]) -> None:
         """Replace the table's AutoFilter, or remove it with ``None`` (no-op without one). Row visibility is unchanged.

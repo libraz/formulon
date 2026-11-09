@@ -112,7 +112,7 @@ TEST(FormulonCApiProtection, DefaultRecordAllowsSelectionAndNothingElse) {
   EXPECT_EQ(out.allow_sort, 0);
 }
 
-TEST(FormulonCApiProtection, NullStringsTreatedAsEmpty) {
+TEST(FormulonCApiProtection, NullStringsReadAbsent) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
 
@@ -124,10 +124,8 @@ TEST(FormulonCApiProtection, NullStringsTreatedAsEmpty) {
   fm_sheet_protection_t out = FM_STRUCT_INIT(fm_sheet_protection_t);
   ASSERT_EQ(fm_sheet_get_sheet_protection(wb.handle, 0, &present, &out), 0);
   EXPECT_EQ(present, 1);
-  ASSERT_NE(out.algorithm_name, nullptr);
-  EXPECT_STREQ(out.algorithm_name, "");
-  ASSERT_NE(out.hash_value, nullptr);
-  EXPECT_STREQ(out.hash_value, "");
+  EXPECT_EQ(out.algorithm_name, nullptr);
+  EXPECT_EQ(out.hash_value, nullptr);
 }
 
 TEST(FormulonCApiProtection, SetWithNullRecordUnprotects) {
@@ -161,7 +159,7 @@ TEST(FormulonCApiProtection, UpdateOnUnprotectedSheetProtectsWithDefaults) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   fm_sheet_protection_patch_t patch = FM_STRUCT_INIT(fm_sheet_protection_patch_t);
-  patch.allow_sort_op = FM_CHART_PATCH_OP_SET;
+  patch.allow_sort_op = FM_PATCH_OP_SET;
   patch.allow_sort = 1;
   ASSERT_EQ(fm_sheet_update_sheet_protection(wb.handle, 0, &patch), 0);
 
@@ -192,10 +190,10 @@ TEST(FormulonCApiProtection, UpdateMergesIntoExistingRecord) {
   ASSERT_EQ(fm_sheet_set_sheet_protection(wb.handle, 0, &in), 0);
 
   fm_sheet_protection_patch_t patch = FM_STRUCT_INIT(fm_sheet_protection_patch_t);
-  patch.allow_sort_op = FM_CHART_PATCH_OP_SET;
+  patch.allow_sort_op = FM_PATCH_OP_SET;
   patch.allow_sort = 1;
-  patch.spin_count_op = FM_CHART_PATCH_OP_CLEAR;
-  patch.algorithm_name_op = FM_CHART_PATCH_OP_KEEP;
+  patch.spin_count_op = FM_PATCH_OP_CLEAR;
+  patch.algorithm_name_op = FM_PATCH_OP_KEEP;
   ASSERT_EQ(fm_sheet_update_sheet_protection(wb.handle, 0, &patch), 0);
 
   int32_t present = 0;
@@ -215,7 +213,7 @@ TEST(FormulonCApiProtection, UpdateTakesSelectFlagsAsPlainBooleans) {
   ASSERT_EQ(fm_sheet_set_sheet_protection(wb.handle, 0, &in), 0);
 
   fm_sheet_protection_patch_t patch = FM_STRUCT_INIT(fm_sheet_protection_patch_t);
-  patch.allow_select_locked_cells_op = FM_CHART_PATCH_OP_SET;
+  patch.allow_select_locked_cells_op = FM_PATCH_OP_SET;
   patch.allow_select_locked_cells = 0;
   ASSERT_EQ(fm_sheet_update_sheet_protection(wb.handle, 0, &patch), 0);
   int32_t present = 0;
@@ -236,24 +234,24 @@ TEST(FormulonCApiProtection, UpdateValidatesWholePatchBeforeChanging) {
 
   // CLEAR is only valid on strings and the spin count.
   fm_sheet_protection_patch_t clear_flag = FM_STRUCT_INIT(fm_sheet_protection_patch_t);
-  clear_flag.allow_sort_op = FM_CHART_PATCH_OP_SET;
+  clear_flag.allow_sort_op = FM_PATCH_OP_SET;
   clear_flag.allow_sort = 1;
-  clear_flag.allow_format_cells_op = FM_CHART_PATCH_OP_CLEAR;
+  clear_flag.allow_format_cells_op = FM_PATCH_OP_CLEAR;
   EXPECT_EQ(fm_sheet_update_sheet_protection(wb.handle, 0, &clear_flag), kInvalid);
 
   fm_sheet_protection_patch_t null_string = FM_STRUCT_INIT(fm_sheet_protection_patch_t);
-  null_string.allow_sort_op = FM_CHART_PATCH_OP_SET;
+  null_string.allow_sort_op = FM_PATCH_OP_SET;
   null_string.allow_sort = 1;
-  null_string.hash_value_op = FM_CHART_PATCH_OP_SET;
+  null_string.hash_value_op = FM_PATCH_OP_SET;
   null_string.hash_value = nullptr;
   EXPECT_EQ(fm_sheet_update_sheet_protection(wb.handle, 0, &null_string), kInvalid);
 
   fm_sheet_protection_patch_t bad_op = FM_STRUCT_INIT(fm_sheet_protection_patch_t);
-  bad_op.allow_sort_op = 3;
+  bad_op.allow_sort_op = static_cast<fm_patch_op_t>(3);
   EXPECT_EQ(fm_sheet_update_sheet_protection(wb.handle, 0, &bad_op), kInvalid);
 
   fm_sheet_protection_patch_t bad_flag = FM_STRUCT_INIT(fm_sheet_protection_patch_t);
-  bad_flag.allow_sort_op = FM_CHART_PATCH_OP_SET;
+  bad_flag.allow_sort_op = FM_PATCH_OP_SET;
   bad_flag.allow_sort = 5;
   EXPECT_EQ(fm_sheet_update_sheet_protection(wb.handle, 0, &bad_flag), kInvalid);
 

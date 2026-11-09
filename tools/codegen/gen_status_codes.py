@@ -176,6 +176,13 @@ def render_dts_region(codes: List[Code]) -> str:
     return "\n".join(lines)
 
 
+def _frozenset_lines(var: str, names: list) -> list:
+    """A `frozenset` of status members in the layout the formatter keeps (one member stays on one line)."""
+    if len(names) == 1:
+        return [f"{var} = frozenset((StatusCode.{names[0]},))"]
+    return [f"{var} = frozenset(", "    ("] + [f"        StatusCode.{n}," for n in names] + ["    )", ")"]
+
+
 def render_py_ranges(ranges: List[Range]) -> List[str]:
     lines = [
         RANGES_BEGIN,
@@ -222,21 +229,13 @@ def render_py(codes: List[Code], ranges: Optional[List[Range]] = None) -> str:
         "",
         "",
         "# Codes raised as `NotFoundError`.",
-        "NOT_FOUND_CODES = frozenset(",
-        "    (",
     ]
-    lines += [f"        StatusCode.{name}," for _, name, _ in codes if name in not_found]
-    lines += [
-        "    )",
-        ")",
-        "",
-        "",
-        "# Codes raised as `IndexOutOfRangeError`.",
-        "INDEX_OUT_OF_RANGE_CODES = frozenset(",
-        "    (",
-    ]
-    lines += [f"        StatusCode.{name}," for _, name, _ in codes if name in INDEX_OUT_OF_RANGE_NAMES]
-    lines += ["    )", ")", "", ""]
+    lines += _frozenset_lines("NOT_FOUND_CODES", [name for _, name, _ in codes if name in not_found])
+    lines += ["", "", "# Codes raised as `IndexOutOfRangeError`."]
+    lines += _frozenset_lines(
+        "INDEX_OUT_OF_RANGE_CODES", [name for _, name, _ in codes if name in INDEX_OUT_OF_RANGE_NAMES]
+    )
+    lines += ["", ""]
     lines += render_py_ranges(parse_ranges() if ranges is None else ranges)
     lines.append("")
     return "\n".join(lines)

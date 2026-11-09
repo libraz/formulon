@@ -89,7 +89,7 @@ class AdoptionCRuleTest(unittest.TestCase):
         )
 
     def test_r31_c_colours_are_colour_specs(self) -> None:
-        spec = "typedef struct {\n  int32_t kind;\n  uint32_t rgb;\n} fm_color_spec_t;\n"
+        spec = "typedef struct {\n  int32_t kind;\n  uint32_t rgb;\n} fm_color_t;\n"
         cf = "typedef struct {\n  uint8_t r;\n} fm_cf_color_t;\n"
         bad = (
             spec
@@ -101,10 +101,10 @@ class AdoptionCRuleTest(unittest.TestCase):
             )
         )
         good = spec + (
-            "typedef struct {\n  fm_color_spec_t color;\n  fm_color_spec_t fill;\n  fm_color_spec_t font_color;\n"
+            "typedef struct {\n  fm_color_t color;\n  fm_color_t fill;\n  fm_color_t font_color;\n"
             "  int32_t color_op;\n} fm_look_t;\n"
             "FM_API fm_status_t fm_sheet_set_tab_color(fm_workbook_t* wb, size_t sheet_index,"
-            " const fm_color_spec_t* color);\n"
+            " const fm_color_t* color);\n"
         )
         self.assert_c_rule(
             "R31.color",

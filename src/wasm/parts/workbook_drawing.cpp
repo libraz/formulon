@@ -30,7 +30,7 @@ emscripten::val image_info_to_val(const fm_image_info_t& info) {
   return o;
 }
 
-emscripten::val drawing_object_to_val(const fm_drawing_object_t& d) {
+emscripten::val drawing_object_to_val(const fm_drawing_object_info_t& d) {
   emscripten::val o = emscripten::val::object();
   o.set("objectId", d.object_id);
   o.set("kind", d.kind);
@@ -52,7 +52,7 @@ emscripten::val drawing_object_to_val(const fm_drawing_object_t& d) {
 }
 
 fm_status_t drawing_object_item(const fm_workbook_t* handle, size_t sheet, size_t index, emscripten::val* out) {
-  fm_drawing_object_t d = FM_STRUCT_INIT(fm_drawing_object_t);
+  fm_drawing_object_info_t d = FM_STRUCT_INIT(fm_drawing_object_info_t);
   const fm_status_t rc = fm_sheet_get_drawing_object_at(handle, sheet, index, &d);
   if (rc == 0) {
     *out = drawing_object_to_val(d);
@@ -80,7 +80,7 @@ fm_picture_insert_spec_t pull_image_insert(JsNarrowNumericReader& reader, const 
                                            int32_t default_anchor_kind, std::string& name_store,
                                            std::string& description_store) {
   const emscripten::val options = js_object_or_empty(input);
-  fm_picture_insert_spec_t ins{};
+  fm_picture_insert_spec_t ins = FM_STRUCT_INIT(fm_picture_insert_spec_t);
   ins.name = reader.optional_string(options, "name", name_store, "name");
   ins.description = reader.optional_string(options, "description", description_store, "description");
   const emscripten::val anchor = reader.value(options, "anchor", "anchor");
@@ -109,7 +109,7 @@ emscripten::val JsWorkbook::listDrawingObjects(uint32_t sheet) const {
 }
 
 emscripten::val JsWorkbook::getDrawingObject(uint32_t sheet, uint32_t objectId) const {
-  fm_drawing_object_t d = FM_STRUCT_INIT(fm_drawing_object_t);
+  fm_drawing_object_info_t d = FM_STRUCT_INIT(fm_drawing_object_info_t);
   int32_t present = 0;
   const fm_status_t rc =
       handle_ != nullptr ? fm_sheet_get_drawing_object(handle_, sheet, objectId, &present, &d) : kBindingInvalidHandle;

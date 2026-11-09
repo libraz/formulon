@@ -398,7 +398,7 @@ test('sheet-layout setters refuse coordinates and metrics Excel cannot open', as
     );
     assert.throws(
       () => wb.sheet(0).setRowHeight(1, 1, Number.NaN),
-      (e) => /height=/.test(e.context),
+      (e) => /height_pt=/.test(e.context),
     );
 
     // Zero is a real width and a real height, not a rejected one.
@@ -424,16 +424,16 @@ test('setVisibility states every tab visibility, veryHidden included', async () 
   try {
     const read = () => wb.sheet(0).getView();
     assert.equal(read().visibility, mod.SheetVisibility.Visible);
-    // The only visible sheet cannot be hidden: kInvalidArgument, sheet left alone.
+    // The only visible sheet cannot be hidden: PreconditionFailed, sheet left alone.
     assert.throws(
       () => wb.sheet(0).updateView({ visibility: mod.SheetVisibility.Hidden }),
-      (e) => isFormulonError(e, 2),
+      (e) => isFormulonError(e, mod.StatusCode.PreconditionFailed),
     );
     assert.equal(read().visibility, mod.SheetVisibility.Visible);
-    // The last sheet keeps its own refusal (kCannotRemoveLastSheet).
+    // The last sheet cannot be removed either.
     assert.throws(
       () => wb.removeSheet(0),
-      (e) => isFormulonError(e, 5052),
+      (e) => isFormulonError(e, mod.StatusCode.PreconditionFailed),
     );
     assert.equal(wb.listSheets().length, 1);
     // A second sheet lets the first one change state, but removing the first
@@ -442,7 +442,7 @@ test('setVisibility states every tab visibility, veryHidden included', async () 
     wb.sheet(1).updateView({ visibility: mod.SheetVisibility.Hidden });
     assert.throws(
       () => wb.removeSheet(0),
-      (e) => isFormulonError(e, 2),
+      (e) => isFormulonError(e, mod.StatusCode.PreconditionFailed),
     );
     assert.equal(wb.listSheets().length, 2);
     wb.sheet(1).updateView({ visibility: mod.SheetVisibility.Visible });

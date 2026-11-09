@@ -27,6 +27,10 @@ inline Error invalid(const char* message) {
   return make_error(FormulonErrorCode::kInvalidArgument, message);
 }
 
+inline Error not_found(const char* message) {
+  return make_error(FormulonErrorCode::kNotFound, message);
+}
+
 inline Error unparseable(const char* message, std::string_view detail) {
   return make_error(FormulonErrorCode::kIoDrawingUnparseable, message, std::string(detail));
 }
@@ -45,8 +49,13 @@ inline constexpr const char* kNoObject = "drawing: no picture or chart with that
 inline constexpr const char* kNoShapeOrObject = "drawing: no picture, chart or shape with that id";
 inline constexpr const char* kNoOrderable = "drawing: no picture, chart, shape or slicer with that id";
 
+// The refusal of `object_id` by an edit whose kinds exclude it:
+// `kInvalidArgument` when an object of another kind holds the id under `root`,
+// `kNotFound` when none does.
+Error refuse_object(const pugi::xml_node& root, std::uint32_t object_id, const char* message);
+
 // Loads sheet `sheet`'s editable drawing into `doc` and returns its path; a
-// sheet with no drawing holds no object.
+// sheet with no drawing holds no object (`kNotFound`).
 Expected<std::string, Error> load_object_drawing(const Workbook& wb, std::size_t sheet, pugi::xml_document& doc);
 
 // The id for a new object on `sheet`: the first id not used by a `cNvPr` in

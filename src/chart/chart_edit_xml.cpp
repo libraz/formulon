@@ -69,7 +69,7 @@ Expected<void, Error> open_chart(const Workbook& wb, std::size_t sheet, std::uin
   const auto it =
       std::find_if(parts.begin(), parts.end(), [&](const ChartPartRef& p) { return p.object_id == object_id; });
   if (it == parts.end()) {
-    return bad_arg("chart: no chart with that id");
+    return no_such("chart: no chart with that id");
   }
   const PassthroughPart* part = it->part_path.empty() ? nullptr : io::ooxml::find_passthrough_part(wb, it->part_path);
   if (part == nullptr) {
@@ -159,7 +159,7 @@ Expected<xml_node, Error> series_at(const xml_node& plot, std::uint32_t idx) {
       return s;
     }
   }
-  return bad_arg("chart: no series with that idx");
+  return no_such("chart: no series with that idx");
 }
 
 xml_node find_ext(const xml_node& ext_list, std::string_view uri) {

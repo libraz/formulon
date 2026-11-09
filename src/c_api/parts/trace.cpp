@@ -163,7 +163,8 @@ extern "C" fm_status_t fm_cell_nodes_get_node_count(const fm_cell_nodes_t* nodes
   return 0;
 }
 
-extern "C" fm_status_t fm_cell_nodes_get_node_at(const fm_cell_nodes_t* nodes, std::size_t idx, fm_cell_node_t* out) {
+extern "C" fm_status_t fm_cell_nodes_get_node_at(const fm_cell_nodes_t* nodes, std::size_t idx,
+                                                 fm_cell_node_info_t* out) {
   clear_last_error();
   if (nodes == nullptr || out == nullptr) {
     return null_argument();

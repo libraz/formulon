@@ -6,13 +6,14 @@ A :class:`~formulon.Workbook` hands out one :class:`PivotCache` per cache id; se
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, List, Optional, Union
+from typing import TYPE_CHECKING, Dict, List, Optional, Union
 
 from . import _structs as S
-from ._c import LIB, FormulonError, _sint, _uint, fm_value_t_size
+from ._c import LIB, _sint, _uint, fm_value_t_size
 from ._inputs import date_serial
-from ._status import StatusCode
 from ._workbook import (
+    _PATCH_CLEAR,
+    _PATCH_SET,
     UNCHANGED,
     PivotCacheField,
     PivotCacheOptions,
@@ -30,6 +31,7 @@ from ._workbook import (
     _PivotCacheValue,
     _read_count,
     _read_cstr_out,
+    _read_optional_cstr_out,
     to_native,
 )
 
@@ -87,12 +89,7 @@ class PivotCache:
           NotFoundError: when the workbook no longer has a cache with this id.
           WorkbookClosedError: when the workbook is closed.
         """
-        h = self._workbook._require()
-        # The raw calls report a missing cache id as an invalid argument, so look it up first.
-        for index in range(_read_count(LIB.fm_workbook_get_pivot_cache_count, h)):
-            if _read_count(LIB.fm_workbook_get_pivot_cache_id_at, h, _uint(index, "idx")) == self._cache_id:
-                return h, _uint(self._cache_id, "cache_id")
-        raise FormulonError(StatusCode.NOT_FOUND, _diagnostic_override=("the pivot cache was removed", ""))
+        return self._workbook._require(), _uint(self._cache_id, "cache_id")
 
     # -- Source and options ------------------------------------------------
     def get_worksheet_source(self) -> Optional[PivotWorksheetSource]:
@@ -138,12 +135,13 @@ class PivotCache:
         self,
         *,
         save_data: Union[bool, Unchanged] = UNCHANGED,
-        missing_items_limit: Union[int, Unchanged] = UNCHANGED,
+        missing_items_limit: Union[int, None, Unchanged] = UNCHANGED,
         refresh_on_load: Union[bool, Unchanged] = UNCHANGED,
     ) -> None:
         """Update the options of the cache; an omitted argument keeps its setting.
 
-        See :class:`PivotCacheOptions` for the members.
+        See :class:`PivotCacheOptions` for the members. ``missing_items_limit``
+        given as ``None`` (or ``-1``) makes the limit automatic.
 
         Raises:
           TypeError: when ``save_data`` or ``refresh_on_load`` is not a ``bool``.
@@ -151,24 +149,21 @@ class PivotCache:
         for flag in (save_data, refresh_on_load):
             if flag is not UNCHANGED and not isinstance(flag, bool):
                 raise TypeError(f"formulon: a pivot cache flag must be a bool, got {type(flag).__name__}")
-        current = self.get_options()
+        values: Dict[str, object] = {}
+        for name, flag in (("save_data", save_data), ("refresh_on_load", refresh_on_load)):
+            if flag is not UNCHANGED:
+                values[name + "_op"] = _PATCH_SET
+                values[name] = 1 if flag else 0
+        if missing_items_limit is not UNCHANGED:
+            if missing_items_limit is None or missing_items_limit == -1:
+                values["missing_items_limit_op"] = _PATCH_CLEAR
+            else:
+                values["missing_items_limit_op"] = _PATCH_SET
+                values["missing_items_limit"] = _sint(missing_items_limit, "missing_items_limit")
         h, cache_id = self._call()
         with _ArgScope() as scope:
-            ptr = scope.struct(S.PIVOT_CACHE_OPTIONS)
-            S.PIVOT_CACHE_OPTIONS.pack(
-                LIB,
-                ptr,
-                {
-                    "save_data": 1 if (current.save_data if save_data is UNCHANGED else save_data) else 0,
-                    "missing_items_limit": _sint(
-                        current.missing_items_limit if missing_items_limit is UNCHANGED else missing_items_limit,
-                        "missing_items_limit",
-                    ),
-                    "refresh_on_load": 1
-                    if (current.refresh_on_load if refresh_on_load is UNCHANGED else refresh_on_load)
-                    else 0,
-                },
-            )
+            ptr = scope.struct(S.PIVOT_CACHE_OPTIONS_PATCH)
+            S.PIVOT_CACHE_OPTIONS_PATCH.pack(LIB, ptr, values)
             _check(LIB.fm_workbook_update_pivot_cache_options(h, cache_id, ptr))
 
     # -- Fields ------------------------------------------------------------
@@ -182,10 +177,9 @@ class PivotCache:
                     name=_read_cstr_out(
                         LIB.fm_workbook_get_pivot_cache_field_name, h, cache_id, _uint(i, "field_index")
                     ),
-                    formula=_read_cstr_out(
+                    formula=_read_optional_cstr_out(
                         LIB.fm_workbook_get_pivot_cache_field_formula, h, cache_id, _uint(i, "field_index")
-                    )
-                    or None,
+                    ),
                 )
             )
         return fields
@@ -244,7 +238,7 @@ class PivotCache:
             ptr = scope.struct(S.PIVOT_CALCULATED_ITEM)
             for i in range(count):
                 S.zero_struct(LIB, S.PIVOT_CALCULATED_ITEM, ptr)
-                _check(LIB.fm_workbook_get_pivot_cache_calculated_item(h, cache_id, _uint(i, "item_index"), ptr))
+                _check(LIB.fm_workbook_get_pivot_cache_calculated_item_at(h, cache_id, _uint(i, "item_index"), ptr))
                 d = S.PIVOT_CALCULATED_ITEM.unpack(LIB, ptr)
                 items.append(
                     PivotCalculatedItem(

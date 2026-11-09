@@ -842,11 +842,11 @@ test('criterion 7: updateView merges freeze rows and columns from the current vi
   });
 });
 
-test('criterion 7: updateView rejects a freeze together with a split', async () => {
-  await withWorkbook((wb) => {
+test('updateView rejects a freeze together with a split', async () => {
+  await withWorkbook((wb, f) => {
     const ws = wb.sheet(0);
     const before = plain(ws.getView());
-    assert.throws(() => ws.updateView({ freezeRows: 1, splitXTwips: 100 }), TYPE_ERROR);
+    expectCode(() => ws.updateView({ freezeRows: 1, splitXTwips: 100 }), f.StatusCode.InvalidArgument);
     assert.deepEqual(plain(ws.getView()), before);
   });
 });
@@ -1381,8 +1381,8 @@ test('criterion 13: setPivotFieldSort and addPivotFieldItem take an options obje
 });
 
 test('criterion 13: updateIterative validates maxChange and maxIterations up front', async () => {
-  await withWorkbook((wb) => {
-    assert.throws(() => wb.updateIterative({ maxChange: -1 }), RangeError);
+  await withWorkbook((wb, f) => {
+    expectCode(() => wb.updateIterative({ maxChange: -1 }), f.StatusCode.InvalidArgument);
     assert.throws(() => wb.updateIterative({ maxIterations: 1.5 }), TYPE_ERROR);
   });
 });

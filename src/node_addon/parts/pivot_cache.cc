@@ -306,21 +306,23 @@ Napi::Value Workbook::PivotCacheUpdateOptions(const Napi::CallbackInfo& info) {
   }
   const uint32_t cache_id = ArgU32(info, 0);
   const Napi::Object spec = ArgObject(info, 1);
-  fm_pivot_cache_options_t o = FM_STRUCT_INIT(fm_pivot_cache_options_t);
-  const fm_status_t read_rc = fm_workbook_get_pivot_cache_options(handle_, cache_id, &o);
-  if (read_rc != 0) {
-    return ThrowStatus(env, read_rc);
-  }
+  fm_pivot_cache_options_patch_t o = FM_STRUCT_INIT(fm_pivot_cache_options_patch_t);
   CheckedSpecReader reader(env);
-  o.save_data = reader.Bool(spec, "saveData", o.save_data != 0) ? 1 : 0;
+  bool present = false;
+  const bool save_data = reader.Bool(spec, "saveData", false, &present);
+  if (present) {
+    o.save_data_op = FM_PATCH_OP_SET;
+    o.save_data = save_data ? 1 : 0;
+  }
   // `null` is the automatic limit (no attribute).
   const Napi::Value limit = reader.Get(spec, "missingItemsLimit");
   switch (ClassifyPatchKey(reader, limit, "missingItemsLimit", true)) {
     case PatchKey::kClear:
-      o.missing_items_limit = -1;
+      o.missing_items_limit_op = FM_PATCH_OP_CLEAR;
       break;
     case PatchKey::kSet:
-      o.missing_items_limit = reader.I32(limit, "missingItemsLimit", -1);
+      o.missing_items_limit_op = FM_PATCH_OP_SET;
+      o.missing_items_limit = reader.I32(limit, "missingItemsLimit", 0);
       if (reader.ok() && o.missing_items_limit < 0) {
         reader.FailRange("missingItemsLimit", "[0, 2147483647]");
       }
@@ -328,7 +330,11 @@ Napi::Value Workbook::PivotCacheUpdateOptions(const Napi::CallbackInfo& info) {
     case PatchKey::kKeep:
       break;
   }
-  o.refresh_on_load = reader.Bool(spec, "refreshOnLoad", o.refresh_on_load != 0) ? 1 : 0;
+  const bool refresh_on_load = reader.Bool(spec, "refreshOnLoad", false, &present);
+  if (present) {
+    o.refresh_on_load_op = FM_PATCH_OP_SET;
+    o.refresh_on_load = refresh_on_load ? 1 : 0;
+  }
   if (!reader.ok()) {
     return env.Undefined();
   }
@@ -363,10 +369,11 @@ Napi::Value Workbook::PivotCacheFieldFormula(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return ThrowInvalidHandle(env);
   }
+  int32_t present = 0;
   const char* formula = nullptr;
-  const fm_status_t rc = fm_workbook_get_pivot_cache_field_formula(handle_, ArgU32(info, 0),
-                                                                   static_cast<std::size_t>(ArgU32(info, 1)), &formula);
-  return ValueOrThrow(env, rc, JsStringOrNull(env, formula));
+  const fm_status_t rc = fm_workbook_get_pivot_cache_field_formula(
+      handle_, ArgU32(info, 0), static_cast<std::size_t>(ArgU32(info, 1)), &present, &formula);
+  return ValueOrThrow(env, rc, present != 0 ? JsString(env, formula) : env.Null());
 }
 
 Napi::Value Workbook::PivotCacheCalculatedItemAdd(const Napi::CallbackInfo& info) {
@@ -393,8 +400,8 @@ Napi::Value Workbook::PivotCacheCalculatedItemAt(const Napi::CallbackInfo& info)
   if (handle_ == nullptr) {
     return ThrowInvalidHandle(env);
   }
-  fm_pivot_calculated_item_t item = FM_STRUCT_INIT(fm_pivot_calculated_item_t);
-  const fm_status_t rc = fm_workbook_get_pivot_cache_calculated_item(handle_, ArgU32(info, 0),
+  fm_pivot_calculated_item_info_t item = FM_STRUCT_INIT(fm_pivot_calculated_item_info_t);
+  const fm_status_t rc = fm_workbook_get_pivot_cache_calculated_item_at(handle_, ArgU32(info, 0),
                                                                      static_cast<std::size_t>(ArgU32(info, 1)), &item);
   if (rc != 0) {
     return ThrowStatus(env, rc);

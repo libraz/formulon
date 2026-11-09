@@ -271,15 +271,17 @@ def _rule_structure_tracking(ctx: Context) -> Iterable[Violation]:
 ACCESS_MODES = ("handles", "list", "indexed", "property", "exempt")
 
 
-def _collection_names(ctx: Context, ops: Sequence[str], field: str) -> Tuple[List[str], List[str]]:
-    """Ledger keys of the count op and of the element getters among `ops` (C verb `get`, no `_at`)."""
+def _collection_names(ctx: Context, ops: Sequence[str], key_kind: str) -> Tuple[List[str], List[str]]:
+    """Ledger keys of the count op and of the element getters among `ops` (C verb `get`). An index-keyed
+    collection's element getter is its `_at`; elsewhere an `_at` is a positional enumeration, not the getter.
+    """
     counts, getters = [], []
     for op in ops:
         entry = ctx.ledger.entry(op)
         target = entry.get("c")
         if not isinstance(target, str):
             continue
-        if c_verb(target) != "get" or target.endswith("_at"):
+        if c_verb(target) != "get" or (target.endswith("_at") and key_kind != "index"):
             continue
         (counts if target.endswith("_count") else getters).append(op)
     return counts, getters
@@ -324,7 +326,7 @@ def _rule_collection_access(ctx: Context) -> Iterable[Violation]:
             ops = coll.get("ops") or []
             if not any(surface in (_entry_surfaces(ctx.ledger.entry(op)) or ()) for op in ops):
                 continue
-            counts, getters = _collection_names(ctx, ops, field)
+            counts, getters = _collection_names(ctx, ops, str(coll.get("key", "")))
             present = _tree_names(ctx, counts + getters, field, pool)
             pascal = _pascal(plural)
             if access in ("handles", "list"):

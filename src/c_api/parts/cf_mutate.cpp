@@ -3,7 +3,7 @@
 //
 // Each rule lives inside a `<conditionalFormatting>` block. The mutation
 // API exposes a flattened, per-rule view: `fm_sheet_get_cf_rule_count` totals
-// rules across all blocks, `fm_sheet_get_cf_rule` reaches into the
+// rules across all blocks, `fm_sheet_get_cf_rule_at` reaches into the
 // containing block to surface its sqref. Adds always create a fresh
 // single-rule block to keep insertion order deterministic and avoid
 // merging with semantically distinct sqref unions; removes prune the
@@ -104,14 +104,14 @@ fm_status_t resolve_flat_index(const std::vector<formulon::cf::ConditionalFormat
 // model. Pointing at the model would tie the record's lifetime to the
 // block, and the ABI's only edit path removes that block while the caller
 // still holds the record. Copying costs one pass over a rule's strings and
-// ranges; it buys a record that only the next `fm_sheet_get_cf_rule`
+// ranges; it buys a record that only the next `fm_sheet_get_cf_rule_at`
 // invalidates. Each array is adopted as one finished block whose address
 // does not move as later payloads are adopted, so a rule engaging more
 // than one visual payload cannot invalidate a pointer already written
 // into `*out`.
 // A theme / indexed / auto colour keeps its kind; a literal one reads as
 // `FM_COLOR_KIND_RGB`, or `FM_COLOR_KIND_NONE` when all four channels are zero.
-fm_color_spec_t cf_color_to_c(const formulon::cf::Color& color) {
+fm_color_t cf_color_to_c(const formulon::cf::Color& color) {
   if (color.is_symbolic()) {
     return color_spec_to_c(color.spec);
   }
@@ -124,7 +124,7 @@ fm_color_spec_t cf_color_to_c(const formulon::cf::Color& color) {
 fm_cfvo_t from_cfvo(const formulon::Workbook& wb, const formulon::cf::CfValueObject& src,
                     BorrowedStringArena& text_arena) {
   fm_cfvo_t out{};
-  out.type = static_cast<std::uint8_t>(src.type);
+  out.type = static_cast<std::int32_t>(src.type);
   out.gte = src.gte ? 1 : 0;
   if (!src.value.empty()) {
     out.value = text_arena.emplace(
@@ -138,19 +138,19 @@ fm_cfvo_t from_cfvo(const formulon::Workbook& wb, const formulon::cf::CfValueObj
 void fill_rule(const formulon::Workbook& wb, const formulon::cf::ConditionalFormat& block,
                const formulon::cf::CFRule& rule, std::size_t dxf_count, BorrowedStringArena& text_arena,
                BorrowedArrayArena<fm_cell_rect_t>& range_arena, BorrowedArrayArena<fm_cfvo_t>& cfvo_arena,
-               BorrowedArrayArena<fm_color_spec_t>& color_arena, BorrowedArrayArena<fm_cf_icon_t>& icon_arena,
+               BorrowedArrayArena<fm_color_t>& color_arena, BorrowedArrayArena<fm_cf_icon_t>& icon_arena,
                fm_cf_rule_t* out) {
   const std::uint32_t struct_size = out->struct_size;
   *out = fm_cf_rule_t{};
   out->struct_size = struct_size;
   out->id = text_arena.emplace(rule.id);
-  out->type = static_cast<std::uint8_t>(rule.type);
+  out->type = static_cast<std::int32_t>(rule.type);
   out->priority = rule.priority;
   out->stop_if_true = rule.stop_if_true ? 1 : 0;
   // A `dxf_id` the styles table cannot resolve is reported as absent
   // rather than handed out. The header calls this field an index into
   // `styles.dxfs[]`, so surfacing an unresolvable one would give the
-  // caller a value `fm_workbook_get_dxf` rejects and break the only edit
+  // caller a value `fm_workbook_get_dxf_at` rejects and break the only edit
   // path the ABI offers - get a rule, remove it, add the amended record
   // back - since `fm_sheet_add_cf_rule` refuses the same index.
   if (rule.dxf_id.has_value() && static_cast<std::size_t>(*rule.dxf_id) < dxf_count) {
@@ -174,7 +174,7 @@ void fill_rule(const formulon::Workbook& wb, const formulon::cf::ConditionalForm
                       : nullptr;
   if (rule.op.has_value()) {
     out->op_engaged = 1;
-    out->op = static_cast<std::uint8_t>(to_c(*rule.op));
+    out->op = static_cast<std::int32_t>(to_c(*rule.op));
   }
   if (rule.rank.has_value()) {
     out->rank_engaged = 1;
@@ -191,13 +191,13 @@ void fill_rule(const formulon::Workbook& wb, const formulon::cf::ConditionalForm
   out->text = rule.text.has_value() ? text_arena.emplace(*rule.text) : nullptr;
   if (rule.time_period.has_value()) {
     out->time_period_engaged = 1;
-    out->time_period = static_cast<std::uint8_t>(to_c(*rule.time_period));
+    out->time_period = static_cast<std::int32_t>(to_c(*rule.time_period));
   }
   if (rule.color_scale.has_value()) {
     const auto& spec = *rule.color_scale;
     const std::size_t count = std::min(spec.thresholds.size(), spec.colors.size());
     std::vector<fm_cfvo_t> thresholds;
-    std::vector<fm_color_spec_t> colors;
+    std::vector<fm_color_t> colors;
     thresholds.reserve(count);
     colors.reserve(count);
     for (std::size_t i = 0; i < count; ++i) {
@@ -247,7 +247,7 @@ void fill_rule(const formulon::Workbook& wb, const formulon::cf::ConditionalForm
       thresholds.push_back(from_cfvo(wb, threshold, text_arena));
     }
     out->icon_set_engaged = 1;
-    out->icon_set_name = static_cast<std::uint8_t>(spec.name);
+    out->icon_set_name = static_cast<std::int32_t>(spec.name);
     out->icon_set_thresholds = cfvo_arena.adopt(std::move(thresholds));
     out->icon_set_threshold_count = static_cast<std::uint32_t>(spec.thresholds.size());
     out->icon_set_reverse = spec.reverse ? 1 : 0;
@@ -267,7 +267,7 @@ void fill_rule(const formulon::Workbook& wb, const formulon::cf::ConditionalForm
 
 // Inverse of `cf_color_to_c`: `FM_COLOR_KIND_NONE` is the literal colour with all
 // four channels zero. The kind is checked by `check_payload_colors`.
-formulon::cf::Color cf_color_from_c(const fm_color_spec_t& src) {
+formulon::cf::Color cf_color_from_c(const fm_color_t& src) {
   std::uint32_t argb = 0;
   const formulon::ColorSpec spec = color_spec_from_c(src, &argb);
   formulon::cf::Color out;
@@ -283,7 +283,7 @@ formulon::cf::Color cf_color_from_c(const fm_color_spec_t& src) {
   return out;
 }
 
-fm_status_t check_color_kind(const fm_color_spec_t& color, const char* field) {
+fm_status_t check_color_kind(const fm_color_t& color, const char* field) {
   return check_enum_domain(color.kind, FM_COLOR_KIND_NONE, FM_COLOR_KIND_AUTO, field);
 }
 
@@ -480,8 +480,8 @@ extern "C" fm_status_t fm_sheet_get_cf_rule_count(const fm_workbook_t* wb, std::
   return 0;
 }
 
-extern "C" fm_status_t fm_sheet_get_cf_rule(const fm_workbook_t* wb, std::size_t sheet_index, std::size_t idx,
-                                            fm_cf_rule_t* out) {
+extern "C" fm_status_t fm_sheet_get_cf_rule_at(const fm_workbook_t* wb, std::size_t sheet_index, std::size_t idx,
+                                               fm_cf_rule_t* out) {
   clear_last_error();
   if (out == nullptr) {
     return null_argument();

@@ -55,6 +55,14 @@
       "source_linked"
     ]
   },
+  "ChartLegendPatch": {
+    "clearable": [],
+    "non_clearable": [
+      "hidden_entries",
+      "overlay",
+      "position"
+    ]
+  },
   "ChartLinePatch": {
     "clearable": [
       "color",
@@ -74,6 +82,16 @@
       "fill",
       "line",
       "symbol"
+    ]
+  },
+  "ChartPlotPatch": {
+    "clearable": [],
+    "non_clearable": [
+      "first_slice_angle_deg",
+      "gap_width_pct",
+      "hole_size",
+      "overlap",
+      "vary_colors"
     ]
   },
   "ChartPointPatch": {
@@ -149,6 +167,25 @@
       "scale_with_doc"
     ]
   },
+  "IterativeSettingsPatch": {
+    "clearable": [],
+    "non_clearable": [
+      "enabled",
+      "max_change",
+      "max_iterations"
+    ]
+  },
+  "PageMarginsPatch": {
+    "clearable": [],
+    "non_clearable": [
+      "bottom_in",
+      "footer_in",
+      "header_in",
+      "left_in",
+      "right_in",
+      "top_in"
+    ]
+  },
   "PageSetupPatch": {
     "clearable": [
       "orientation"
@@ -184,6 +221,13 @@
       "show_detail",
       "sort_order",
       "subtotal_top"
+    ]
+  },
+  "PivotGrandTotalsPatch": {
+    "clearable": [],
+    "non_clearable": [
+      "columns",
+      "rows"
     ]
   },
   "PivotItemPatch": {
@@ -239,17 +283,26 @@
       "show_row_stripes"
     ]
   },
+  "PrintOptionsPatch": {
+    "clearable": [],
+    "non_clearable": [
+      "grid_lines",
+      "headings",
+      "horizontal_centered",
+      "vertical_centered"
+    ]
+  },
   "ProtectedRangePatch": {
     "clearable": [
-      "legacy_password_hash"
-    ],
-    "non_clearable": [
       "algorithm_name",
       "hash_value",
+      "legacy_password_hash",
+      "salt_value",
+      "security_descriptor"
+    ],
+    "non_clearable": [
       "name",
       "ranges",
-      "salt_value",
-      "security_descriptor",
       "spin_count"
     ]
   },
@@ -319,6 +372,27 @@
       "allow_sort"
     ]
   },
+  "SheetViewPatch": {
+    "clearable": [],
+    "non_clearable": [
+      "freeze_cols",
+      "freeze_rows",
+      "pane_top_left",
+      "right_to_left",
+      "show_formulas",
+      "show_grid_lines",
+      "show_outline_symbols",
+      "show_row_col_headers",
+      "show_zeros",
+      "split_xtwips",
+      "split_ytwips",
+      "tab_selected",
+      "top_left",
+      "view_mode",
+      "visibility",
+      "zoom_pct"
+    ]
+  },
   "SlicerPatch": {
     "clearable": [
       "style"
@@ -371,6 +445,14 @@
       "type"
     ]
   },
+  "TablePatch": {
+    "clearable": [],
+    "non_clearable": [
+      "header_row",
+      "range",
+      "totals_row"
+    ]
+  },
   "TableStyleDefaultsPatch": {
     "clearable": [
       "pivot_style",
@@ -387,6 +469,14 @@
       "show_first_column",
       "show_last_column",
       "show_row_stripes"
+    ]
+  },
+  "ThreadedCommentPatch": {
+    "clearable": [],
+    "non_clearable": [
+      "done",
+      "mentions",
+      "text"
     ]
   }
 }

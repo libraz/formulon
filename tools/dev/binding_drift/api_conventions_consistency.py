@@ -396,7 +396,9 @@ def _patch_field_problems(fields: Sequence[CParam]) -> Iterator[Tuple[str, str]]
             yield f"has:{name}", f"`{name}` keeps a field; give it a `<field>_op`"
         elif name.endswith("_engaged"):
             yield f"engaged:{name}", f"`{name}` keeps a field; give it a `<field>_op`"
-        elif name.endswith("_count") and name[: -len("_count")] in names:
+        elif name.endswith("_count") and (
+            name[: -len("_count")] in names or name == "range_count" and "ranges" in names
+        ):
             continue
         elif f"{name}_op" not in names:
             yield f"op:{name}", f"`{name}` has no `{name}_op`"

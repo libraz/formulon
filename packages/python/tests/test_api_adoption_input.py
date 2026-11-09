@@ -264,7 +264,7 @@ class ColourInputTests(unittest.TestCase):
                 if f.name in ("fill_kind", "fill_color", "line_kind", "line_color")
             }
             shape.update(**{**passed_back, "fill_kind": None, "fill_color": None})
-            self.assertEqual(shape.get_properties().fill_color, Color(kind=ColorKind.RGB, argb=0xFF00FF00))
+            self.assertIsNone(shape.get_properties().fill_color)
             self.assertEqual(shape.get_properties().line_color, props.line_color)
 
     def test_sparkline_colours_take_text(self) -> None:
@@ -307,7 +307,7 @@ class TypedErrorTests(unittest.TestCase):
             with self.subTest(status=status.name):
                 error = FormulonError(status, _diagnostic_override=("bad", ""))
                 self.assertIs(type(error), InvalidFileError)
-        for status in (StatusCode.IO_UNSUPPORTED_VARIANT, StatusCode.NOT_FOUND):
+        for status in (StatusCode.IO_WRITE_FAILED, StatusCode.NOT_FOUND):
             with self.subTest(status=status.name):
                 self.assertNotIsInstance(FormulonError(status, _diagnostic_override=("x", "")), InvalidFileError)
         with self.assertRaises(InvalidFileError):

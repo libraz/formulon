@@ -6,6 +6,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <deque>
 #include <limits>
 #include <string>
 #include <utility>
@@ -43,56 +44,6 @@ Napi::Value PivotCountResult(const Napi::CallbackInfo& info, const fm_workbook_t
   return ValueOrThrow(env, rc, Napi::Number::New(env, static_cast<double>(count)));
 }
 
-// The pivot options with their strings copied out of the model, so the
-// struct stays valid across the `set_options` call that rewrites them.
-struct OptionsSnapshot {
-  fm_pivot_options_t c = FM_STRUCT_INIT(fm_pivot_options_t);
-  std::string error_caption;
-  std::string missing_caption;
-  std::string alt_text;
-  std::string alt_text_summary;
-  std::string grand_total_caption;
-
-  void Pin() {
-    const auto pin = [](const char*& field, std::string& store) {
-      store = field != nullptr ? field : "";
-      field = store.c_str();
-    };
-    pin(c.error_caption, error_caption);
-    pin(c.missing_caption, missing_caption);
-    pin(c.alt_text, alt_text);
-    pin(c.alt_text_summary, alt_text_summary);
-    pin(c.grand_total_caption, grand_total_caption);
-  }
-};
-
-fm_status_t ReadOptions(const fm_workbook_t* handle, std::size_t sheet, std::size_t pivot_index, OptionsSnapshot* out) {
-  if (handle == nullptr) {
-    return kBindingInvalidHandle;
-  }
-  const fm_status_t rc = fm_sheet_get_pivot_options(handle, sheet, pivot_index, &out->c);
-  if (rc == 0) {
-    out->Pin();
-  }
-  return rc;
-}
-
-// A string member: an omitted key keeps the current value, '' clears it.
-// An omitted caption keeps the stored one; `null` removes it.
-void MergeString(CheckedSpecReader& reader, const Napi::Object& spec, const char* key, const char*& field,
-                 std::string& store) {
-  const Napi::Value raw = reader.Get(spec, key);
-  if (!reader.ok() || raw.IsUndefined()) {
-    return;
-  }
-  std::string value;
-  if (!raw.IsNull() && !reader.String(raw, key, &value)) {
-    return;
-  }
-  store = std::move(value);
-  field = store.c_str();
-}
-
 // A date-group bound: absent, `null` or NaN takes the field's own first / last value.
 double ReadOptionalBound(CheckedSpecReader& reader, const Napi::Value& value, const char* key, bool* present) {
   const double bound = reader.Double(value, key, std::numeric_limits<double>::quiet_NaN());
@@ -105,21 +56,21 @@ Napi::Value OptionsFlag(Napi::Env env, int32_t v) {
 }
 
 // One flag member of a patch: an omitted key keeps, any other value sets; `null` is a TypeError.
-void ReadPatchFlag(CheckedSpecReader& reader, const Napi::Object& patch, const char* key, int32_t* op,
+void ReadPatchFlag(CheckedSpecReader& reader, const Napi::Object& patch, const char* key, fm_patch_op_t* op,
                    int32_t* value) {
   const Napi::Value v = reader.Get(patch, key);
-  *op = static_cast<int32_t>(ClassifyPatchKey(reader, v, key, false));
-  if (*op == FM_CHART_PATCH_OP_SET) {
+  *op = static_cast<fm_patch_op_t>(ClassifyPatchKey(reader, v, key, false));
+  if (*op == FM_PATCH_OP_SET) {
     *value = reader.Bool(v, key, false) ? 1 : 0;
   }
 }
 
 // One string member of a patch: an omitted key keeps, `null` clears when `nullable`, any other value sets.
-void ReadPatchString(CheckedSpecReader& reader, const Napi::Object& patch, const char* key, bool nullable, int32_t* op,
-                     const char** field, std::string* store) {
+void ReadPatchString(CheckedSpecReader& reader, const Napi::Object& patch, const char* key, bool nullable,
+                     fm_patch_op_t* op, const char** field, std::string* store) {
   const Napi::Value v = reader.Get(patch, key);
-  *op = static_cast<int32_t>(ClassifyPatchKey(reader, v, key, nullable));
-  if (*op == FM_CHART_PATCH_OP_SET && reader.String(v, key, store)) {
+  *op = static_cast<fm_patch_op_t>(ClassifyPatchKey(reader, v, key, nullable));
+  if (*op == FM_PATCH_OP_SET && reader.String(v, key, store)) {
     *field = store->c_str();
   }
 }
@@ -176,9 +127,12 @@ Napi::Value Workbook::PivotUpdateGrandTotals(const Napi::CallbackInfo& info) {
   return StatusCall(info, [&](fm_workbook_t* handle) {
     const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
     const std::size_t pivot_index = static_cast<std::size_t>(ArgU32(info, 1));
-    const int32_t rows_enabled = ArgFlag(info, 2);
-    const int32_t columns_enabled = ArgFlag(info, 3);
-    return fm_sheet_update_pivot_grand_totals(handle, sheet, pivot_index, rows_enabled, columns_enabled);
+    fm_pivot_grand_totals_patch_t patch = FM_STRUCT_INIT(fm_pivot_grand_totals_patch_t);
+    patch.rows_op = FM_PATCH_OP_SET;
+    patch.rows = ArgFlag(info, 2);
+    patch.columns_op = FM_PATCH_OP_SET;
+    patch.columns = ArgFlag(info, 3);
+    return fm_sheet_update_pivot_grand_totals(handle, sheet, pivot_index, &patch);
   });
 }
 
@@ -290,7 +244,7 @@ Napi::Value Workbook::PivotGetGrandTotals(const Napi::CallbackInfo& info) {
 
 namespace {
 
-using PivotFieldOrderGetter = fm_status_t (*)(const fm_workbook_t*, size_t, size_t, const uint32_t**, size_t*);
+using PivotFieldOrderGetter = fm_status_t (*)(const fm_workbook_t*, size_t, size_t, uint32_t*, size_t, size_t*);
 
 Napi::Value GetPivotFieldOrder(const Napi::CallbackInfo& info, const fm_workbook_t* handle, PivotFieldOrderGetter fn) {
   Napi::Env env = info.Env();
@@ -299,14 +253,14 @@ Napi::Value GetPivotFieldOrder(const Napi::CallbackInfo& info, const fm_workbook
   }
   const std::size_t sheet = static_cast<std::size_t>(Workbook::ArgU32(info, 0));
   const std::size_t pivot_index = static_cast<std::size_t>(Workbook::ArgU32(info, 1));
-  const uint32_t* data = nullptr;
-  std::size_t count = 0;
-  const fm_status_t rc = fn(handle, sheet, pivot_index, &data, &count);
+  std::vector<uint32_t> data;
+  const fm_status_t rc = FillCallerBuffer(
+      data, [&](uint32_t* out, std::size_t capacity, std::size_t* count) { return fn(handle, sheet, pivot_index, out, capacity, count); });
   if (rc != 0) {
     return ThrowStatus(env, rc);
   }
   Napi::Array indices = Napi::Array::New(env);
-  for (std::size_t i = 0; i < count; ++i) {
+  for (std::size_t i = 0; i < data.size(); ++i) {
     const double index = data[i] == FM_PIVOT_VALUES_FIELD ? -2.0 : static_cast<double>(data[i]);
     indices.Set(static_cast<uint32_t>(i), Napi::Number::New(env, index));
   }
@@ -356,7 +310,7 @@ Napi::Value Workbook::PivotFieldAt(const Napi::CallbackInfo& info) {
   }
   const PivotFieldArgs args = ReadPivotField(info);
   fm_pivot_field_info_t field = FM_STRUCT_INIT(fm_pivot_field_info_t);
-  const fm_status_t rc = fm_sheet_get_pivot_field(handle_, args.sheet, args.pivot_index, args.field_index, &field);
+  const fm_status_t rc = fm_sheet_get_pivot_field_at(handle_, args.sheet, args.pivot_index, args.field_index, &field);
   if (rc != 0) {
     return ThrowStatus(env, rc);
   }
@@ -408,7 +362,7 @@ Napi::Value Workbook::PivotFieldItemAt(const Napi::CallbackInfo& info) {
   const std::size_t item_index = static_cast<std::size_t>(ArgU32(info, 3));
   fm_pivot_item_info_t item = FM_STRUCT_INIT(fm_pivot_item_info_t);
   const fm_status_t rc =
-      fm_sheet_get_pivot_field_item(handle_, args.sheet, args.pivot_index, args.field_index, item_index, &item);
+      fm_sheet_get_pivot_field_item_at(handle_, args.sheet, args.pivot_index, args.field_index, item_index, &item);
   if (rc != 0) {
     return ThrowStatus(env, rc);
   }
@@ -523,8 +477,8 @@ Napi::Value Workbook::PivotUpdateField(const Napi::CallbackInfo& info) {
   ReadPatchFlag(reader, spec, "subtotalTop", &patch.subtotal_top_op, &patch.subtotal_top);
   {
     const Napi::Value order = reader.Get(spec, "sortOrder");
-    patch.sort_order_op = static_cast<int32_t>(ClassifyPatchKey(reader, order, "sortOrder", false));
-    if (patch.sort_order_op == FM_CHART_PATCH_OP_SET) {
+    patch.sort_order_op = static_cast<fm_patch_op_t>(ClassifyPatchKey(reader, order, "sortOrder", false));
+    if (patch.sort_order_op == FM_PATCH_OP_SET) {
       patch.sort_order = reader.I32(order, "sortOrder", 0);
     }
   }
@@ -608,8 +562,7 @@ Napi::Value Workbook::PivotGetOptions(const Napi::CallbackInfo& info) {
   return out;
 }
 
-// Every member is optional: an omitted key keeps the pivot's current value,
-// and a string member set to '' clears it.
+// Every member is optional: an omitted key keeps the pivot's current value, and `null` clears a caption.
 Napi::Value Workbook::PivotUpdateOptions(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
@@ -618,40 +571,49 @@ Napi::Value Workbook::PivotUpdateOptions(const Napi::CallbackInfo& info) {
   const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
   const std::size_t pivot_index = static_cast<std::size_t>(ArgU32(info, 1));
   const Napi::Object spec = ArgObject(info, 2);
-  OptionsSnapshot cur;
-  const fm_status_t read_rc = ReadOptions(handle_, sheet, pivot_index, &cur);
-  if (read_rc != 0) {
-    return ThrowStatus(env, read_rc);
-  }
-  fm_pivot_options_t& o = cur.c;
+  fm_pivot_options_patch_t o = FM_STRUCT_INIT(fm_pivot_options_patch_t);
   CheckedSpecReader reader(env);
-  const auto flag = [&](const char* key, int32_t& field) { field = reader.Bool(spec, key, field != 0) ? 1 : 0; };
-  flag("showError", o.show_error);
-  MergeString(reader, spec, "errorCaption", o.error_caption, cur.error_caption);
-  flag("showMissing", o.show_missing);
-  MergeString(reader, spec, "missingCaption", o.missing_caption, cur.missing_caption);
-  flag("showHeaders", o.show_headers);
-  flag("showDrill", o.show_drill);
-  flag("showDataTips", o.show_data_tips);
-  flag("gridDropZones", o.grid_drop_zones);
-  flag("showEmptyRow", o.show_empty_row);
-  flag("showEmptyColumn", o.show_empty_column);
-  flag("showDataDropDown", o.show_data_drop_down);
-  flag("printDrill", o.print_drill);
-  flag("fieldPrintTitles", o.field_print_titles);
-  flag("itemPrintTitles", o.item_print_titles);
-  flag("mergeItem", o.merge_item);
-  o.indent = reader.U32(spec, "indent", o.indent);
-  flag("pageOverThenDown", o.page_over_then_down);
-  o.page_wrap = reader.U32(spec, "pageWrap", o.page_wrap);
-  flag("multipleFieldFilters", o.multiple_field_filters);
-  flag("preserveFormatting", o.preserve_formatting);
-  flag("customListSort", o.custom_list_sort);
-  MergeString(reader, spec, "altText", o.alt_text, cur.alt_text);
-  MergeString(reader, spec, "altTextSummary", o.alt_text_summary, cur.alt_text_summary);
-  MergeString(reader, spec, "grandTotalCaption", o.grand_total_caption, cur.grand_total_caption);
-  flag("autoFormatting", o.auto_formatting);
-  flag("enableDrill", o.enable_drill);
+  std::deque<std::string> strings;
+  const auto flag = [&](const char* key, fm_patch_op_t& op, int32_t& field) {
+    ReadPatchFlag(reader, spec, key, &op, &field);
+  };
+  const auto text = [&](const char* key, fm_patch_op_t& op, const char*& field) {
+    strings.emplace_back();
+    ReadPatchString(reader, spec, key, true, &op, &field, &strings.back());
+  };
+  const auto count = [&](const char* key, fm_patch_op_t& op, uint32_t& field) {
+    const Napi::Value v = reader.Get(spec, key);
+    op = static_cast<fm_patch_op_t>(ClassifyPatchKey(reader, v, key, false));
+    if (op == FM_PATCH_OP_SET) {
+      field = reader.U32(v, key, 0U);
+    }
+  };
+  flag("showError", o.show_error_op, o.show_error);
+  text("errorCaption", o.error_caption_op, o.error_caption);
+  flag("showMissing", o.show_missing_op, o.show_missing);
+  text("missingCaption", o.missing_caption_op, o.missing_caption);
+  flag("showHeaders", o.show_headers_op, o.show_headers);
+  flag("showDrill", o.show_drill_op, o.show_drill);
+  flag("showDataTips", o.show_data_tips_op, o.show_data_tips);
+  flag("gridDropZones", o.grid_drop_zones_op, o.grid_drop_zones);
+  flag("showEmptyRow", o.show_empty_row_op, o.show_empty_row);
+  flag("showEmptyColumn", o.show_empty_column_op, o.show_empty_column);
+  flag("showDataDropDown", o.show_data_drop_down_op, o.show_data_drop_down);
+  flag("printDrill", o.print_drill_op, o.print_drill);
+  flag("fieldPrintTitles", o.field_print_titles_op, o.field_print_titles);
+  flag("itemPrintTitles", o.item_print_titles_op, o.item_print_titles);
+  flag("mergeItem", o.merge_item_op, o.merge_item);
+  count("indent", o.indent_op, o.indent);
+  flag("pageOverThenDown", o.page_over_then_down_op, o.page_over_then_down);
+  count("pageWrap", o.page_wrap_op, o.page_wrap);
+  flag("multipleFieldFilters", o.multiple_field_filters_op, o.multiple_field_filters);
+  flag("preserveFormatting", o.preserve_formatting_op, o.preserve_formatting);
+  flag("customListSort", o.custom_list_sort_op, o.custom_list_sort);
+  text("altText", o.alt_text_op, o.alt_text);
+  text("altTextSummary", o.alt_text_summary_op, o.alt_text_summary);
+  text("grandTotalCaption", o.grand_total_caption_op, o.grand_total_caption);
+  flag("autoFormatting", o.auto_formatting_op, o.auto_formatting);
+  flag("enableDrill", o.enable_drill_op, o.enable_drill);
   if (!reader.ok()) {
     return env.Undefined();
   }
@@ -787,7 +749,7 @@ Napi::Value Workbook::PivotDataFieldAdd(const Napi::CallbackInfo& info) {
   const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
   const std::size_t pivot_index = static_cast<std::size_t>(ArgU32(info, 1));
   Napi::Object spec = ArgObject(info, 2);
-  fm_pivot_data_field_spec_t c_spec = FM_STRUCT_INIT(fm_pivot_data_field_spec_t);
+  fm_pivot_data_field_t c_spec = FM_STRUCT_INIT(fm_pivot_data_field_t);
   std::string name_buf;
   std::string nfmt_buf;
   CheckedSpecReader reader(env);
@@ -808,8 +770,8 @@ Napi::Value Workbook::PivotDataFieldAt(const Napi::CallbackInfo& info) {
     return ThrowInvalidHandle(env);
   }
   const PivotFieldArgs args = ReadPivotField(info);
-  fm_pivot_data_field_spec_t spec = FM_STRUCT_INIT(fm_pivot_data_field_spec_t);
-  const fm_status_t rc = fm_sheet_get_pivot_data_field(handle_, args.sheet, args.pivot_index, args.field_index, &spec);
+  fm_pivot_data_field_t spec = FM_STRUCT_INIT(fm_pivot_data_field_t);
+  const fm_status_t rc = fm_sheet_get_pivot_data_field_at(handle_, args.sheet, args.pivot_index, args.field_index, &spec);
   if (rc != 0) {
     return ThrowStatus(env, rc);
   }
@@ -837,7 +799,7 @@ Napi::Value Workbook::PivotDataFieldSet(const Napi::CallbackInfo& info) {
   const std::size_t pivot_index = static_cast<std::size_t>(ArgU32(info, 1));
   const std::size_t data_field_index = static_cast<std::size_t>(ArgU32(info, 2));
   Napi::Object spec = ArgObject(info, 3);
-  fm_pivot_data_field_spec_t c_spec = FM_STRUCT_INIT(fm_pivot_data_field_spec_t);
+  fm_pivot_data_field_t c_spec = FM_STRUCT_INIT(fm_pivot_data_field_t);
   std::string name_buf;
   std::string nfmt_buf;
   CheckedSpecReader reader(env);
@@ -872,7 +834,7 @@ Napi::Value FilterOperandToJs(Napi::Env env, int32_t kind, int32_t as_int, doubl
 
 /// One pivot filter operand read from a JS `number | string | null` slot.
 struct FilterOperand {
-  int32_t kind = FM_PIVOT_FILTER_OPERAND_KIND_NONE;
+  int32_t kind = FM_PIVOT_FILTER_OPERAND_KIND_ABSENT;
   int32_t as_int = 0;
   double as_double = 0.0;
   std::string text;
@@ -918,8 +880,8 @@ Napi::Value Workbook::PivotFilterAt(const Napi::CallbackInfo& info) {
   const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
   const std::size_t pivot_index = static_cast<std::size_t>(ArgU32(info, 1));
   const std::size_t filter_index = static_cast<std::size_t>(ArgU32(info, 2));
-  fm_pivot_filter_spec_t spec = FM_STRUCT_INIT(fm_pivot_filter_spec_t);
-  const fm_status_t rc = fm_sheet_get_pivot_filter(handle_, sheet, pivot_index, filter_index, &spec);
+  fm_pivot_filter_t spec = FM_STRUCT_INIT(fm_pivot_filter_t);
+  const fm_status_t rc = fm_sheet_get_pivot_filter_at(handle_, sheet, pivot_index, filter_index, &spec);
   if (rc != 0) {
     return ThrowStatus(env, rc);
   }
@@ -947,7 +909,7 @@ Napi::Value Workbook::PivotFilterAdd(const Napi::CallbackInfo& info) {
   std::string field_name;
   const bool has_field = reader.String(spec, "fieldName", &field_name);
 
-  fm_pivot_filter_spec_t c_spec = FM_STRUCT_INIT(fm_pivot_filter_spec_t);
+  fm_pivot_filter_t c_spec = FM_STRUCT_INIT(fm_pivot_filter_t);
   c_spec.axis = static_cast<fm_pivot_axis_t>(reader.RequiredU32(spec, "axis"));
   // `fieldName` is required; see the `sourceName` comment in
   // `PivotFieldAdd` above -- an omitted key must reach the C ABI as NULL,

@@ -36,7 +36,7 @@ class StatusCodeTest(unittest.TestCase):
 
     def test_boundary_spelling(self) -> None:
         self.assertEqual(StatusCode.SHEET_INDEX_OUT_OF_RANGE, 5050)
-        self.assertEqual(StatusCode.PARSER_INVALID_R1C1, 1011)
+        self.assertEqual(StatusCode.PARSER_BOM_NOT_SUPPORTED, 1013)
         self.assertEqual(StatusCode.OK, 0)
 
     def test_c_status_string_uses_the_same_names(self) -> None:
@@ -68,22 +68,19 @@ class ExceptionFamilyTest(unittest.TestCase):
         self.assertIs(formulon.InvalidArgumentError, InvalidArgumentError)
 
     def test_code_is_the_enum_member(self) -> None:
-        err = FormulonError(StatusCode.PARSER_INVALID_R1C1)
-        self.assertIs(err.code, StatusCode.PARSER_INVALID_R1C1)
-        self.assertEqual(err.code.name, "PARSER_INVALID_R1C1")
+        err = FormulonError(StatusCode.PARSER_INVALID_REFERENCE)
+        self.assertIs(err.code, StatusCode.PARSER_INVALID_REFERENCE)
+        self.assertEqual(err.code.name, "PARSER_INVALID_REFERENCE")
         self.assertFalse(hasattr(err, "status"))
         self.assertFalse(hasattr(err, "status_name"))
         self.assertEqual(str(err), err.message)
 
     def test_dedicated_subclass_per_code(self) -> None:
         self.assertIs(type(FormulonError(StatusCode.INVALID_ARGUMENT)), InvalidArgumentError)
-        for member in (
-            StatusCode.NOT_FOUND,
-            StatusCode.PIVOT_FIELD_NOT_FOUND,
-            StatusCode.EVAL_LAMBDA_NOT_FOUND,
-        ):
+        for member in (StatusCode.NOT_FOUND,):
             with self.subTest(member=member.name):
                 self.assertIs(type(FormulonError(member)), NotFoundError)
+        self.assertIs(type(FormulonError(StatusCode.ALREADY_EXISTS)), formulon.AlreadyExistsError)
         self.assertIs(type(FormulonError(StatusCode.SHEET_INDEX_OUT_OF_RANGE)), IndexOutOfRangeError)
         self.assertIs(type(FormulonError(StatusCode.INDEX_OUT_OF_RANGE)), IndexOutOfRangeError)
         self.assertIs(type(FormulonError(StatusCode.BINDING_INVALID_HANDLE)), formulon.WorkbookClosedError)

@@ -148,7 +148,7 @@ Napi::Value Workbook::ResolveColor(const Napi::CallbackInfo& info) {
     return ThrowInvalidHandle(env);
   }
   CheckedSpecReader reader(env);
-  fm_color_spec_t spec{};
+  fm_color_t spec{};
   if (info.Length() > 0 && info[0].IsObject()) {
     Napi::Object holder = Napi::Object::New(env);
     holder.Set("spec", info[0]);
@@ -174,7 +174,7 @@ Napi::Value Workbook::GetEffectiveStyle(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return ThrowInvalidHandle(env);
   }
-  fm_effective_style_t es = FM_STRUCT_INIT(fm_effective_style_t);
+  fm_effective_style_info_t es = FM_STRUCT_INIT(fm_effective_style_info_t);
   const fm_status_t rc = fm_sheet_get_effective_style(handle_, ArgU32(info, 0), ArgU32(info, 1), ArgU32(info, 2), &es);
   if (rc != 0) {
     return ThrowStatus(env, rc);

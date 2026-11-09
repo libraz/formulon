@@ -458,7 +458,7 @@ Expected<void, Error> set_chart_axis(Workbook& wb, std::size_t sheet, std::uint3
   RETURN_IF_ERROR(open_edit(wb, sheet, object_id, c, false));
   const std::vector<xml_node> found = axes_of(c, {axis_id});
   if (found.empty()) {
-    return bad_arg("chart: no axis with that id");
+    return no_such("chart: no axis with that id");
   }
   xml_node ax = found[0];
   const std::string_view kind = local_name(ax);
@@ -718,7 +718,7 @@ Expected<void, Error> set_chart_filter(Workbook& wb, std::size_t sheet, std::uin
   const std::set<std::uint32_t> hidden(hidden_series_idx.begin(), hidden_series_idx.end());
   for (const std::uint32_t idx : hidden) {
     if (all.count(idx) == 0) {
-      return bad_arg("chart: no series with that idx");
+      return no_such("chart: no series with that idx");
     }
   }
   patch_series_filter(c, hidden);

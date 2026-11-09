@@ -81,7 +81,6 @@ from ._workbook import (
     _pack_slicer,
     _read_chart,
     _read_chart_data,
-    _read_count,
     _title_fields,
 )
 
@@ -301,11 +300,8 @@ class Drawing:
     def _at(self) -> Tuple[int, int, int]:
         """``(workbook handle, sheet index, object id)`` for a raw call.
 
-        Raises ``NotFoundError`` once the sheet or the object is removed; the raw
-        calls refuse a missing object id as an invalid argument instead.
+        The raw calls raise ``NotFoundError`` once the object is removed.
         """
-        if _raw_kind(self._sheet, self._object_id) is None:
-            raise _removed()
         sheet = self._sheet._index()
         h = self._sheet._workbook._require()
         return h, _uint(sheet, "sheet_index"), _uint(self._object_id, "object_id")
@@ -516,7 +512,13 @@ class Chart(Drawing):
           NotFoundError: when the chart or its sheet was removed.
         """
         h, sheet, object_id = self._at()
-        data = _read_count(LIB.fm_sheet_get_chart_data, h, sheet, object_id)
+        with _ArgScope() as scope:
+            present = scope.out_ptr()
+            out = scope.out_ptr()
+            _check(LIB.fm_sheet_get_chart_data(h, sheet, object_id, present, out))
+            if LIB.read_i32(present) == 0:
+                raise _removed()
+            data = LIB.read_u32(out)
         try:
             return _read_chart_data(data)
         finally:
@@ -549,10 +551,16 @@ class Chart(Drawing):
         with _ArgScope() as scope:
             fields = _encode_patch(_PREVIEW_OVERRIDE_SPEC, given, ("range",), "preview override", scope)
             if "range" in given:
+                fields["source_op"] = _PATCH_SET
                 fields["source"] = scope.cstr(_chart_range_text(self._sheet._workbook, given["range"], sheet, "range"))
             ptr = scope.struct(S.CHART_PREVIEW_OVERRIDES)
             S.CHART_PREVIEW_OVERRIDES.pack(LIB, ptr, fields)
-            data = _read_count(LIB.fm_sheet_get_chart_preview, h, sheet, object_id, ptr)
+            present = scope.out_ptr()
+            out = scope.out_ptr()
+            _check(LIB.fm_sheet_get_chart_preview(h, sheet, object_id, ptr, present, out))
+            if LIB.read_i32(present) == 0:
+                raise _removed()
+            data = LIB.read_u32(out)
         try:
             return _read_chart_data(data)
         finally:
@@ -629,7 +637,7 @@ class Chart(Drawing):
                         "position": _sint(legend.position, "position"),
                         "overlay": 1 if legend.overlay else 0,
                         "hidden_entries": _id_array(legend.hidden_entries, "hidden_entries", scope),
-                        "hidden_entry_count": _uint(len(legend.hidden_entries), "hidden_entry_count"),
+                        "hidden_entries_count": _uint(len(legend.hidden_entries), "hidden_entries_count"),
                     },
                 )
             _check(LIB.fm_sheet_set_chart_legend(h, sheet, object_id, ptr))
@@ -665,18 +673,19 @@ class Chart(Drawing):
         if not given:
             return
         h, sheet, object_id = self._at()
-        current = self.get_properties().legend
-        if position is UNCHANGED:
-            position = current.position if current is not None else ChartLegendPosition.RIGHT
-        if overlay is UNCHANGED:
-            overlay = current.overlay if current is not None else False
-        fields: Dict[str, object] = {"position": _sint(position, "position"), "overlay": 1 if overlay else 0}
+        fields: Dict[str, object] = {}
+        if position is not UNCHANGED:
+            fields["position_op"] = _PATCH_SET
+            fields["position"] = _sint(position, "position")
+        if overlay is not UNCHANGED:
+            fields["overlay_op"] = _PATCH_SET
+            fields["overlay"] = 1 if overlay else 0
         with _ArgScope() as scope:
             ptr = scope.struct_array(S.CHART_LEGEND_PATCH, 1)
             if hidden_entries is not UNCHANGED:
                 fields["hidden_entries_op"] = _PATCH_SET
                 fields["hidden_entries"] = _id_array(hidden_entries, "hidden_entries", scope)
-                fields["hidden_entry_count"] = _uint(len(hidden_entries), "hidden_entry_count")
+                fields["hidden_entries_count"] = _uint(len(hidden_entries), "hidden_entries_count")
             S.CHART_LEGEND_PATCH.pack(LIB, ptr, fields)
             _check(LIB.fm_sheet_update_chart_legend(h, sheet, object_id, ptr))
 
@@ -1012,9 +1021,9 @@ class Shape(Drawing):
         """Apply the arguments that are given to the shape, the name and anchor included; the rest of its XML is kept.
 
         An argument left at :data:`UNCHANGED` keeps its value. ``fill_kind``,
-        ``line_kind``, ``fill_color`` and ``line_color`` also take ``None`` (a
-        shape without that element reads ``None``), which keeps the value too, so the properties
-        :meth:`get_properties` returns can be passed back. The anchor is
+        ``line_kind``, ``fill_color`` and ``line_color`` also take ``None``, which
+        removes the shape's own fill or outline so the one its style names applies;
+        such a shape reads ``None`` for them. The anchor is
         applied as a whole when ``anchor_kind`` is given, and its kind cannot
         change. Text applies to a shape only and keeps the first paragraph's
         properties and first run's formatting.
@@ -1025,9 +1034,10 @@ class Shape(Drawing):
             ``to_*``, ``width_emu``, ``height_emu``) is given without ``anchor_kind``, or
             ``fill_color`` / ``line_color`` without ``fill_kind`` / ``line_kind``.
         """
-        given = _present(
-            dict(locals()), _SHAPE_UPDATE_NAMES, absent=("fill_kind", "line_kind", "fill_color", "line_color")
-        )
+        arguments = dict(locals())
+        paint = ("fill_kind", "line_kind", "fill_color", "line_color")
+        cleared = [key for key in paint if arguments[key] is None]
+        given = _present(arguments, _SHAPE_UPDATE_NAMES, absent=paint)
         if "anchor_kind" not in given:
             stray = [key for key in _SHAPE_ANCHOR_NAMES if key in given]
             if stray:
@@ -1040,7 +1050,7 @@ class Shape(Drawing):
             if values[key] is None:
                 values[key] = 0
         with _ArgScope() as scope:
-            ptr = _pack_shape(scope, **values)
+            ptr = _pack_shape(scope, **values, clear=cleared)
             _check(LIB.fm_sheet_update_shape(h, sheet, object_id, ptr))
 
     def rename(self, name: str) -> None:

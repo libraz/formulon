@@ -2,6 +2,7 @@
 // C ABI - sheet view state (zoom, freeze, split, selection, visibility, and
 // the per-sheet display flags). Bridges `Sheet::view()` over the stable C ABI.
 
+#include <cmath>
 #include <cstdint>
 #include <string>
 #include <string_view>
@@ -20,49 +21,18 @@
 using formulon::c_api::parts::check_cell_coord;
 using formulon::c_api::parts::check_enum_domain;
 using formulon::c_api::parts::check_keeps_visible_sheet;
-using formulon::c_api::parts::check_limit;
 using formulon::c_api::parts::check_record_size;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::invalid_argument;
 using formulon::c_api::parts::null_argument;
-
-extern "C" fm_status_t fm_sheet_set_zoom(fm_workbook_t* wb, size_t sheet_index, uint32_t zoom_scale) {
-  clear_last_error();
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
-    return rc;
-  }
-  // Clamp to the OOXML-valid `[10, 400]` interval; out-of-range values
-  // are rounded to the nearest endpoint rather than rejected so JS
-  // callers do not have to mirror the bound.
-  std::uint32_t clamped = zoom_scale;
-  if (clamped < 10U) {
-    clamped = 10U;
-  } else if (clamped > 400U) {
-    clamped = 400U;
-  }
-  wb->workbook().sheet(sheet_index).mutable_view().zoom_scale = clamped;
-  return 0;
-}
-
-extern "C" fm_status_t fm_sheet_set_freeze(fm_workbook_t* wb, size_t sheet_index, uint32_t freeze_rows,
-                                           uint32_t freeze_cols) {
-  clear_last_error();
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_limit(freeze_rows, formulon::Sheet::kMaxRows, "freeze_rows"); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_limit(freeze_cols, formulon::Sheet::kMaxCols, "freeze_cols"); rc != 0) {
-    return rc;
-  }
-  formulon::SheetView& view = wb->workbook().sheet(sheet_index).mutable_view();
-  view.set_freeze(freeze_rows, freeze_cols);
-  return 0;
-}
+using formulon::c_api::parts::patch_op_ok_without_clear;
 
 namespace {
+
+// `<sheetView zoomScale>` is a percentage Excel accepts only inside this band.
+constexpr std::uint32_t kMinZoomPercent = 10U;
+constexpr std::uint32_t kMaxZoomPercent = 400U;
 
 // `<sheetView view>` text of an `fm_sheet_view_mode_t`; the normal view is
 // the absent attribute.
@@ -102,27 +72,7 @@ void activate_successor_if_hidden(formulon::Workbook& workbook, std::uint32_t in
 
 }  // namespace
 
-extern "C" fm_status_t fm_sheet_set_visibility(fm_workbook_t* wb, size_t sheet_index, int32_t visibility) {
-  clear_last_error();
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
-    return rc;
-  }
-  if (visibility < static_cast<int32_t>(FM_SHEET_VISIBILITY_VISIBLE) ||
-      visibility > static_cast<int32_t>(FM_SHEET_VISIBILITY_VERY_HIDDEN)) {
-    return invalid_argument("unknown visibility", "visibility=" + std::to_string(visibility));
-  }
-  if (visibility != static_cast<int32_t>(FM_SHEET_VISIBILITY_VISIBLE)) {
-    if (auto rc = check_keeps_visible_sheet(wb->workbook(), static_cast<std::uint32_t>(sheet_index)); rc != 0) {
-      return rc;
-    }
-  }
-  formulon::SheetView& view = wb->workbook().sheet(sheet_index).mutable_view();
-  view.set_visibility(static_cast<formulon::SheetVisibility>(visibility));
-  activate_successor_if_hidden(wb->workbook(), static_cast<std::uint32_t>(sheet_index));
-  return 0;
-}
-
-extern "C" fm_status_t fm_sheet_get_view(const fm_workbook_t* wb, size_t sheet_index, fm_sheet_view_t* out) {
+extern "C" fm_status_t fm_sheet_get_view(const fm_workbook_t* wb, size_t sheet_index, fm_sheet_view_info_t* out) {
   clear_last_error();
   if (out == nullptr) {
     return null_argument();
@@ -157,56 +107,177 @@ extern "C" fm_status_t fm_sheet_get_view(const fm_workbook_t* wb, size_t sheet_i
   return 0;
 }
 
-extern "C" fm_status_t fm_sheet_set_top_left(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col) {
-  clear_last_error();
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_cell_coord(row, col); rc != 0) {
-    return rc;
-  }
-  wb->workbook().sheet(sheet_index).mutable_view().top_left_cell =
-      row == 0U && col == 0U ? std::string() : formulon::a1::encode_a1(row, col);
-  return 0;
+namespace {
+
+// One 0/1 display flag of `fm_sheet_view_patch_t` and its model member.
+struct ViewFlag {
+  fm_patch_op_t op;
+  std::int32_t value;
+  bool formulon::SheetView::*member;
+};
+
+// Whether a stated value of `op` / `value` is non-zero.
+template <typename T>
+bool states_non_zero(fm_patch_op_t op, T value) {
+  return op == FM_PATCH_OP_SET && value != T{};
 }
 
-extern "C" fm_status_t fm_sheet_set_pane_top_left(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col) {
-  clear_last_error();
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
-    return rc;
-  }
-  formulon::SheetView& view = wb->workbook().sheet(sheet_index).mutable_view();
-  // A pane-less view has one scrolled region, so its default origin is accepted.
-  if (!view.divides_rows() && !view.divides_cols() && row == view.freeze_rows && col == view.freeze_cols) {
-    view.pane_top_left_cell.clear();
-    return 0;
-  }
-  if ((!view.divides_rows() && !view.divides_cols()) || row < view.freeze_rows || col < view.freeze_cols ||
-      !formulon::Sheet::coord_in_grid(row, col)) {
-    return invalid_argument("cell is not in the unfrozen area");
-  }
-  view.pane_top_left_cell =
-      row == view.freeze_rows && col == view.freeze_cols ? std::string() : formulon::a1::encode_a1(row, col);
-  return 0;
+// The patched value of one field: `value` on SET, `current` otherwise.
+template <typename T>
+T patched(fm_patch_op_t op, T value, T current) {
+  return op == FM_PATCH_OP_SET ? value : current;
 }
 
-extern "C" fm_status_t fm_sheet_set_split(fm_workbook_t* wb, size_t sheet_index, double x_twips, double y_twips) {
+}  // namespace
+
+extern "C" fm_status_t fm_sheet_update_view(fm_workbook_t* wb, size_t sheet_index, const fm_sheet_view_patch_t* patch) {
   clear_last_error();
+  if (patch == nullptr) {
+    return null_argument("patch");
+  }
+  if (auto rc = check_record_size(*patch); rc != 0) {
+    return rc;
+  }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
-  if (!wb->workbook().sheet(sheet_index).mutable_view().set_split(x_twips, y_twips)) {
-    return invalid_argument("split must be finite and non-negative");
+  const ViewFlag flags[] = {
+      {patch->show_grid_lines_op, patch->show_grid_lines, &formulon::SheetView::show_grid_lines},
+      {patch->show_row_column_headers_op, patch->show_row_column_headers, &formulon::SheetView::show_row_col_headers},
+      {patch->show_zeros_op, patch->show_zeros, &formulon::SheetView::show_zeros},
+      {patch->show_formulas_op, patch->show_formulas, &formulon::SheetView::show_formulas},
+      {patch->show_outline_symbols_op, patch->show_outline_symbols, &formulon::SheetView::show_outline_symbols},
+      {patch->right_to_left_op, patch->right_to_left, &formulon::SheetView::right_to_left},
+      {patch->tab_selected_op, patch->tab_selected, &formulon::SheetView::tab_selected},
+  };
+  const fm_patch_op_t ops[] = {
+      patch->zoom_pct_op,          patch->freeze_rows_op,  patch->freeze_cols_op,  patch->visibility_op,
+      patch->view_mode_op,         patch->top_left_row_op, patch->top_left_col_op, patch->pane_top_left_row_op,
+      patch->pane_top_left_col_op, patch->split_x_op,      patch->split_y_op,
+  };
+  for (const fm_patch_op_t op : ops) {
+    if (!patch_op_ok_without_clear(op)) {
+      return invalid_argument("view patch op out of range or not clearable", "op=" + std::to_string(op));
+    }
   }
+  for (const ViewFlag& flag : flags) {
+    if (!patch_op_ok_without_clear(flag.op)) {
+      return invalid_argument("view patch op out of range or not clearable", "op=" + std::to_string(flag.op));
+    }
+  }
+  if (patch->zoom_pct_op == FM_PATCH_OP_SET &&
+      (patch->zoom_pct < kMinZoomPercent || patch->zoom_pct > kMaxZoomPercent)) {
+    return invalid_argument("zoom out of range", "zoom_pct=" + std::to_string(patch->zoom_pct));
+  }
+  if (patch->view_mode_op == FM_PATCH_OP_SET) {
+    if (auto rc = check_enum_domain(patch->view_mode, 0, FM_SHEET_VIEW_MODE_PAGE_LAYOUT, "view_mode"); rc != 0) {
+      return rc;
+    }
+  }
+  if (patch->visibility_op == FM_PATCH_OP_SET) {
+    if (auto rc = check_enum_domain(patch->visibility, FM_SHEET_VISIBILITY_VISIBLE, FM_SHEET_VISIBILITY_VERY_HIDDEN,
+                                    "visibility");
+        rc != 0) {
+      return rc;
+    }
+  }
+  // A freeze replaces a split and a split a freeze, so one patch states one.
+  if ((states_non_zero(patch->freeze_rows_op, patch->freeze_rows) ||
+       states_non_zero(patch->freeze_cols_op, patch->freeze_cols)) &&
+      (states_non_zero(patch->split_x_op, patch->split_x) || states_non_zero(patch->split_y_op, patch->split_y))) {
+    return invalid_argument("a patch cannot freeze and split the view at once");
+  }
+
+  formulon::Workbook& workbook = wb->workbook();
+  const formulon::SheetView& current = workbook.sheet(sheet_index).view();
+  formulon::SheetView next = current;
+
+  const std::uint32_t freeze_rows = patched(patch->freeze_rows_op, patch->freeze_rows, current.freeze_rows);
+  const std::uint32_t freeze_cols = patched(patch->freeze_cols_op, patch->freeze_cols, current.freeze_cols);
+  if (patch->freeze_rows_op == FM_PATCH_OP_SET || patch->freeze_cols_op == FM_PATCH_OP_SET) {
+    // The first unfrozen cell must lie inside the grid.
+    if (!formulon::Sheet::coord_in_grid(freeze_rows, freeze_cols)) {
+      return invalid_argument("freeze past the grid", "freeze_rows=" + std::to_string(freeze_rows) +
+                                                          " freeze_cols=" + std::to_string(freeze_cols));
+    }
+    next.set_freeze(freeze_rows, freeze_cols);
+  }
+  if (patch->split_x_op == FM_PATCH_OP_SET || patch->split_y_op == FM_PATCH_OP_SET) {
+    // The split a frozen view reports is (0, 0).
+    const double split_x = patched(patch->split_x_op, patch->split_x, current.is_frozen() ? 0.0 : current.split_x);
+    const double split_y = patched(patch->split_y_op, patch->split_y, current.is_frozen() ? 0.0 : current.split_y);
+    if (!std::isfinite(split_x) || !std::isfinite(split_y) || split_x < 0.0 || split_y < 0.0) {
+      return invalid_argument("split must be finite and non-negative");
+    }
+    // Clearing the split leaves a freeze in place; any other split replaces it.
+    if (!(next.is_frozen() && split_x == 0.0 && split_y == 0.0)) {
+      next.set_split(split_x, split_y);
+    }
+  }
+  if (patch->pane_top_left_row_op == FM_PATCH_OP_SET || patch->pane_top_left_col_op == FM_PATCH_OP_SET) {
+    std::uint32_t origin_row = 0;
+    std::uint32_t origin_col = 0;
+    formulon::io::pane_origin(next, &origin_row, &origin_col);
+    const std::uint32_t row = patched(patch->pane_top_left_row_op, patch->pane_top_left_row, origin_row);
+    const std::uint32_t col = patched(patch->pane_top_left_col_op, patch->pane_top_left_col, origin_col);
+    const bool has_panes = next.divides_rows() || next.divides_cols();
+    // A pane-less view has one scrolled region, so only its default origin is accepted.
+    if (!has_panes) {
+      if (row != next.freeze_rows || col != next.freeze_cols) {
+        return invalid_argument("pane origin on a view without panes");
+      }
+      next.pane_top_left_cell.clear();
+    } else {
+      if (row < next.freeze_rows || col < next.freeze_cols || !formulon::Sheet::coord_in_grid(row, col)) {
+        return invalid_argument("cell is not in the unfrozen area");
+      }
+      next.pane_top_left_cell =
+          row == next.freeze_rows && col == next.freeze_cols ? std::string() : formulon::a1::encode_a1(row, col);
+    }
+  }
+  if (patch->top_left_row_op == FM_PATCH_OP_SET || patch->top_left_col_op == FM_PATCH_OP_SET) {
+    std::uint32_t current_row = 0;
+    std::uint32_t current_col = 0;
+    (void)formulon::a1::parse_a1_ref(current.top_left_cell, &current_row, &current_col);
+    const std::uint32_t row = patched(patch->top_left_row_op, patch->top_left_row, current_row);
+    const std::uint32_t col = patched(patch->top_left_col_op, patch->top_left_col, current_col);
+    if (auto rc = check_cell_coord(row, col); rc != 0) {
+      return rc;
+    }
+    next.top_left_cell = row == 0U && col == 0U ? std::string() : formulon::a1::encode_a1(row, col);
+  }
+  if (patch->visibility_op == FM_PATCH_OP_SET && patch->visibility != FM_SHEET_VISIBILITY_VISIBLE) {
+    if (auto rc = check_keeps_visible_sheet(workbook, static_cast<std::uint32_t>(sheet_index)); rc != 0) {
+      return rc;
+    }
+  }
+
+  // Every check passed; nothing below can fail.
+  if (patch->zoom_pct_op == FM_PATCH_OP_SET) {
+    next.zoom_scale = patch->zoom_pct;
+  }
+  if (patch->view_mode_op == FM_PATCH_OP_SET) {
+    next.view_mode = std::string(view_mode_from_c(patch->view_mode));
+  }
+  for (const ViewFlag& flag : flags) {
+    if (flag.op == FM_PATCH_OP_SET) {
+      next.*flag.member = flag.value != 0;
+    }
+  }
+  if (patch->visibility_op == FM_PATCH_OP_SET) {
+    next.set_visibility(static_cast<formulon::SheetVisibility>(patch->visibility));
+  }
+  workbook.sheet(sheet_index).mutable_view() = std::move(next);
+  activate_successor_if_hidden(workbook, static_cast<std::uint32_t>(sheet_index));
   return 0;
 }
 
 extern "C" fm_status_t fm_sheet_get_selection(const fm_workbook_t* wb, size_t sheet_index, uint32_t* out_active_row,
-                                              uint32_t* out_active_col, fm_cell_rect_t* out_ranges, size_t capacity,
-                                              size_t* out_total) {
+                                              uint32_t* out_active_col, fm_cell_rect_t* out, size_t capacity,
+                                              size_t* out_count) {
   clear_last_error();
-  if (out_active_row == nullptr || out_active_col == nullptr || out_total == nullptr ||
-      (out_ranges == nullptr && capacity != 0U)) {
+  if (out_active_row == nullptr || out_active_col == nullptr || out_count == nullptr ||
+      (out == nullptr && capacity != 0U)) {
     return null_argument();
   }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
@@ -225,9 +296,9 @@ extern "C" fm_status_t fm_sheet_get_selection(const fm_workbook_t* wb, size_t sh
   *out_active_row = selection->active_row;
   *out_active_col = selection->active_col;
   const std::vector<formulon::MergeRange>& ranges = selection->ranges;
-  *out_total = ranges.size();
+  *out_count = ranges.size();
   for (std::size_t i = 0; i < ranges.size() && i < capacity; ++i) {
-    out_ranges[i] = {ranges[i].first_row, ranges[i].first_col, ranges[i].last_row, ranges[i].last_col};
+    out[i] = {ranges[i].first_row, ranges[i].first_col, ranges[i].last_row, ranges[i].last_col};
   }
   return 0;
 }
@@ -265,64 +336,5 @@ extern "C" fm_status_t fm_sheet_set_selection(fm_workbook_t* wb, size_t sheet_in
     }
   }
   view.selections.push_back(std::move(replacement));
-  return 0;
-}
-
-namespace {
-
-fm_status_t set_view_flag(fm_workbook_t* wb, size_t sheet_index, bool formulon::SheetView::*member, int32_t value) {
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
-    return rc;
-  }
-  wb->workbook().sheet(sheet_index).mutable_view().*member = (value != 0);
-  return 0;
-}
-
-}  // namespace
-
-extern "C" fm_status_t fm_sheet_set_show_grid_lines(fm_workbook_t* wb, size_t sheet_index, int32_t show) {
-  clear_last_error();
-  return set_view_flag(wb, sheet_index, &formulon::SheetView::show_grid_lines, show);
-}
-
-extern "C" fm_status_t fm_sheet_set_show_row_column_headers(fm_workbook_t* wb, size_t sheet_index, int32_t show) {
-  clear_last_error();
-  return set_view_flag(wb, sheet_index, &formulon::SheetView::show_row_col_headers, show);
-}
-
-extern "C" fm_status_t fm_sheet_set_show_zeros(fm_workbook_t* wb, size_t sheet_index, int32_t show) {
-  clear_last_error();
-  return set_view_flag(wb, sheet_index, &formulon::SheetView::show_zeros, show);
-}
-
-extern "C" fm_status_t fm_sheet_set_show_formulas(fm_workbook_t* wb, size_t sheet_index, int32_t show) {
-  clear_last_error();
-  return set_view_flag(wb, sheet_index, &formulon::SheetView::show_formulas, show);
-}
-
-extern "C" fm_status_t fm_sheet_set_show_outline_symbols(fm_workbook_t* wb, size_t sheet_index, int32_t show) {
-  clear_last_error();
-  return set_view_flag(wb, sheet_index, &formulon::SheetView::show_outline_symbols, show);
-}
-
-extern "C" fm_status_t fm_sheet_set_right_to_left(fm_workbook_t* wb, size_t sheet_index, int32_t right_to_left) {
-  clear_last_error();
-  return set_view_flag(wb, sheet_index, &formulon::SheetView::right_to_left, right_to_left);
-}
-
-extern "C" fm_status_t fm_sheet_set_tab_selected(fm_workbook_t* wb, size_t sheet_index, int32_t selected) {
-  clear_last_error();
-  return set_view_flag(wb, sheet_index, &formulon::SheetView::tab_selected, selected);
-}
-
-extern "C" fm_status_t fm_sheet_set_view_mode(fm_workbook_t* wb, size_t sheet_index, int32_t mode) {
-  clear_last_error();
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_enum_domain(mode, 0, FM_SHEET_VIEW_MODE_PAGE_LAYOUT, "mode"); rc != 0) {
-    return rc;
-  }
-  wb->workbook().sheet(sheet_index).mutable_view().view_mode = std::string(view_mode_from_c(mode));
   return 0;
 }

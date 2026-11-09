@@ -189,9 +189,9 @@ TEST(FormulonCApiReadScratch, AllScratchProducersStayBoundedWhenAlternated) {
   thresholds[1].type = 1;  // Percent.
   thresholds[1].value = "50";
   thresholds[2].type = 4;  // Max.
-  fm_color_spec_t colors[3]{{0.0, 0xFFFF0000U, 0U, 0U, FM_COLOR_KIND_RGB},
-                            {0.0, 0xFFFFFF00U, 0U, 0U, FM_COLOR_KIND_RGB},
-                            {0.0, 0xFF00FF00U, 0U, 0U, FM_COLOR_KIND_RGB}};
+  fm_color_t colors[3]{{0.0, 0xFFFF0000U, 0U, 0U, FM_COLOR_KIND_RGB},
+                       {0.0, 0xFFFFFF00U, 0U, 0U, FM_COLOR_KIND_RGB},
+                       {0.0, 0xFF00FF00U, 0U, 0U, FM_COLOR_KIND_RGB}};
   fm_cf_rule_t cf_input = FM_STRUCT_INIT(fm_cf_rule_t);
   cf_input.type = 2;  // ColorScale.
   cf_input.ranges = &cf_range;
@@ -209,8 +209,9 @@ TEST(FormulonCApiReadScratch, AllScratchProducersStayBoundedWhenAlternated) {
     fm_value_t cell_value{};
     ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, 0, 0, &cell_value), 0);
 
+    int32_t phonetic_present = 0;
     const char* phonetic = nullptr;
-    ASSERT_EQ(fm_sheet_get_cell_phonetic(wb.handle, 0, 0, 0, &phonetic), 0);
+    ASSERT_EQ(fm_sheet_get_cell_phonetic(wb.handle, 0, 0, 0, &phonetic_present, &phonetic), 0);
 
     const char* lambda_text = nullptr;
     int32_t lambda_present = 0;
@@ -227,7 +228,7 @@ TEST(FormulonCApiReadScratch, AllScratchProducersStayBoundedWhenAlternated) {
     ASSERT_EQ(fm_sheet_get_auto_filter_xml(wb.handle, 0, &auto_filter), 0);
 
     fm_cf_rule_t cf_value = FM_STRUCT_INIT(fm_cf_rule_t);
-    ASSERT_EQ(fm_sheet_get_cf_rule(wb.handle, 0, 0, &cf_value), 0);
+    ASSERT_EQ(fm_sheet_get_cf_rule_at(wb.handle, 0, 0, &cf_value), 0);
 
     EXPECT_LE(wb.handle->read_scratch.size(), 3U);
     EXPECT_LE(wb.handle->cfvo_scratch.size(), 3U);

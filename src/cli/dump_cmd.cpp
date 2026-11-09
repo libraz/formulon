@@ -258,11 +258,12 @@ fm_status_t dump_metadata(const fm_workbook_t* wb, bool json, std::ostream& out)
       return rc;
     }
     for (std::size_t i = 0; i < n_tables; ++i) {
-      const char* name = nullptr;
-      fm_cell_rect_t rect{};
-      if (auto rc = fm_sheet_get_table(wb, sheet_index, i, &name, &rect); rc != 0) {
+      fm_table_info_t info = FM_STRUCT_INIT(fm_table_info_t);
+      if (auto rc = fm_sheet_get_table_at(wb, sheet_index, i, &info); rc != 0) {
         return rc;
       }
+      const char* name = info.name;
+      const fm_cell_rect_t rect = info.range;
       // The ref as the table part stores it: a single cell is one address.
       std::string ref = format_a1(rect.first_row, rect.first_col);
       if (rect.first_row != rect.last_row || rect.first_col != rect.last_col) {
@@ -406,9 +407,9 @@ int run_dump(const ArgList& args, std::ostream& out, std::ostream& err) {
     scope.sheet = sheet;
   }
   if (range_spec.has_value()) {
-    fm_parsed_reference_t ref = FM_STRUCT_INIT(fm_parsed_reference_t);
+    fm_parsed_reference_info_t ref = FM_STRUCT_INIT(fm_parsed_reference_info_t);
     const fm_status_t parsed = fm_workbook_parse_reference(wb.handle, range_spec->c_str(), nullptr, &ref);
-    if (parsed != 0 || ref.valid == 0 || ref.has_sheet != 0) {
+    if (parsed != 0 || ref.sheet_name != nullptr) {
       err << "formulon: dump: --range requires an A1 range without a sheet name, such as A1:B2\n";
       return kExitUsage;
     }

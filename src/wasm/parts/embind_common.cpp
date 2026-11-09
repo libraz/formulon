@@ -151,7 +151,7 @@ EM_JS_DEPS(fm_wasm_argument_error, "$UTF8ToString");
 // syntax error. Any failure already recorded in the call is kept.
 // clang-format off
 EM_JS(void, fm_wasm_record_status_error,
-      (int32_t code, const char* message, const char* context, const fm_parse_error_t* parse_error), {
+      (int32_t code, const char* message, const char* context, const fm_parse_error_info_t* parse_error), {
   var errors = Module[Symbol.for('formulon.argumentErrors')];
   if (!errors || errors.depth === 0 || errors.pending !== undefined) {
     return;
@@ -228,8 +228,10 @@ void record_failure(fm_status_t rc) {
     return;
   }
   // The parse-error record first, then message and context, before any other `fm_*` call.
-  fm_parse_error_t parse_error = FM_STRUCT_INIT(fm_parse_error_t);
-  const bool has_parse_error = fm_get_last_parse_error(&parse_error) == 0;
+  fm_parse_error_info_t parse_error = FM_STRUCT_INIT(fm_parse_error_info_t);
+  int32_t parse_error_present = 0;
+  const bool has_parse_error =
+      fm_get_last_parse_error(&parse_error_present, &parse_error) == 0 && parse_error_present != 0;
   const char* message = fm_get_last_error_message();
   const char* context = fm_get_last_error_context();
   fm_wasm_record_status_error(rc, message != nullptr ? message : "", context != nullptr ? context : "",
@@ -727,7 +729,7 @@ emscripten::val value_array_to_val(const fm_value_array_t* array) {
   return out;
 }
 
-emscripten::val translate_cf_match(const fm_cf_match_t& m) {
+emscripten::val translate_cf_match(const fm_cf_match_info_t& m) {
   emscripten::val out = emscripten::val::object();
   out.set("kind", static_cast<int32_t>(m.kind));
   out.set("priority", m.priority);
@@ -780,7 +782,7 @@ emscripten::val cell_rects_to_val(const fm_cell_rect_t* rects, std::size_t count
   return arr;
 }
 
-emscripten::val pivot_cell_to_val(const fm_pivot_cell_t& cell) {
+emscripten::val pivot_cell_to_val(const fm_pivot_cell_info_t& cell) {
   emscripten::val item = emscripten::val::object();
   item.set("row", cell.row);
   item.set("col", cell.col);
@@ -901,16 +903,16 @@ std::vector<fm_cell_rect_t> js_pull_range_array(const emscripten::val& array, co
   return out;
 }
 
-fm_color_spec_t js_pull_color_spec(const emscripten::val& v, const char* key, JsNarrowNumericReader* reader) {
+fm_color_t js_pull_color_spec(const emscripten::val& v, const char* key, JsNarrowNumericReader* reader) {
   if (reader == nullptr) {
-    return fm_color_spec_t{};
+    return fm_color_t{};
   }
   const emscripten::val f = reader->value(v, key, key);
   return js_pull_color_spec_value(f, key, reader);
 }
 
-fm_color_spec_t js_pull_color_spec_value(const emscripten::val& f, const char* field, JsNarrowNumericReader* reader) {
-  fm_color_spec_t spec{};
+fm_color_t js_pull_color_spec_value(const emscripten::val& f, const char* field, JsNarrowNumericReader* reader) {
+  fm_color_t spec{};
   if (reader == nullptr || !reader->ok() || !js_value_present(f)) {
     return spec;
   }
@@ -964,24 +966,24 @@ JsPatchKey js_patch_key(JsNarrowNumericReader& reader, const emscripten::val& va
 }
 
 void js_patch_flag(JsNarrowNumericReader& reader, const emscripten::val& owner, const char* key, const char* field,
-                   int32_t* op, int32_t* value) {
+                   fm_patch_op_t* op, int32_t* value) {
   const emscripten::val v = reader.value(owner, key, field);
   if (js_patch_key(reader, v, field, false) != JsPatchKey::kSet) {
     return;
   }
-  *op = FM_CHART_PATCH_OP_SET;
+  *op = FM_PATCH_OP_SET;
   *value = reader.boolean_value(v, false) ? 1 : 0;
 }
 
 void js_patch_string(JsNarrowNumericReader& reader, const emscripten::val& owner, const char* key, const char* field,
-                     bool nullable, std::string& storage, int32_t* op, const char** value) {
+                     bool nullable, std::string& storage, fm_patch_op_t* op, const char** value) {
   const emscripten::val v = reader.value(owner, key, field);
   switch (js_patch_key(reader, v, field, nullable)) {
     case JsPatchKey::kClear:
-      *op = FM_CHART_PATCH_OP_CLEAR;
+      *op = FM_PATCH_OP_CLEAR;
       break;
     case JsPatchKey::kSet:
-      *op = FM_CHART_PATCH_OP_SET;
+      *op = FM_PATCH_OP_SET;
       *value = reader.optional_string_value(v, storage, field);
       break;
     case JsPatchKey::kKeep:
@@ -990,14 +992,14 @@ void js_patch_string(JsNarrowNumericReader& reader, const emscripten::val& owner
 }
 
 void js_patch_number(JsNarrowNumericReader& reader, const emscripten::val& owner, const char* key, const char* field,
-                     bool nullable, int32_t* op, double* value) {
+                     bool nullable, fm_patch_op_t* op, double* value) {
   const emscripten::val v = reader.value(owner, key, field);
   switch (js_patch_key(reader, v, field, nullable)) {
     case JsPatchKey::kClear:
-      *op = FM_CHART_PATCH_OP_CLEAR;
+      *op = FM_PATCH_OP_CLEAR;
       break;
     case JsPatchKey::kSet:
-      *op = FM_CHART_PATCH_OP_SET;
+      *op = FM_PATCH_OP_SET;
       *value = reader.number_value(v, 0.0, field);
       break;
     case JsPatchKey::kKeep:
@@ -1006,14 +1008,14 @@ void js_patch_number(JsNarrowNumericReader& reader, const emscripten::val& owner
 }
 
 void js_patch_int(JsNarrowNumericReader& reader, const emscripten::val& owner, const char* key, const char* field,
-                  bool nullable, int32_t* op, int32_t* value) {
+                  bool nullable, fm_patch_op_t* op, int32_t* value) {
   const emscripten::val v = reader.value(owner, key, field);
   switch (js_patch_key(reader, v, field, nullable)) {
     case JsPatchKey::kClear:
-      *op = FM_CHART_PATCH_OP_CLEAR;
+      *op = FM_PATCH_OP_CLEAR;
       break;
     case JsPatchKey::kSet:
-      *op = FM_CHART_PATCH_OP_SET;
+      *op = FM_PATCH_OP_SET;
       *value = reader.i32_value(v, 0, field);
       break;
     case JsPatchKey::kKeep:
@@ -1070,7 +1072,7 @@ void js_set_index_or_null(emscripten::val& o, const char* key, int32_t value) {
   }
 }
 
-emscripten::val js_color_spec(const fm_color_spec_t& spec) {
+emscripten::val js_color_spec(const fm_color_t& spec) {
   emscripten::val o = emscripten::val::object();
   o.set("kind", static_cast<uint32_t>(spec.kind));
   o.set("argb", spec.argb);
@@ -1080,7 +1082,7 @@ emscripten::val js_color_spec(const fm_color_spec_t& spec) {
   return o;
 }
 
-emscripten::val js_color_spec_or_null(const fm_color_spec_t& spec) {
+emscripten::val js_color_spec_or_null(const fm_color_t& spec) {
   return spec.kind != FM_COLOR_KIND_NONE ? js_color_spec(spec) : emscripten::val::null();
 }
 

@@ -15,9 +15,9 @@ TEST(FormulonCApiCf, EvaluateRangeOnEmptyCfWorkbookReturnsZero) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
 
   CfResultsGuard results;
-  ASSERT_EQ(
-      fm_sheet_evaluate_cf_range(wb.handle, 0, record_arg(fm_cell_rect_t{0, 0, 9, 9}), std::nan(""), &results.handle),
-      0);
+  ASSERT_EQ(fm_sheet_evaluate_cf_range(wb.handle, 0, record_arg(fm_cell_rect_t{0, 0, 9, 9}), 0, std::nan(""),
+                                       &results.handle),
+            0);
   ASSERT_NE(results.handle, nullptr);
   EXPECT_EQ(count_of(fm_cf_results_get_cell_count, results.handle), 0U);
 }
@@ -46,9 +46,9 @@ TEST(FormulonCApiCf, EvaluateRangeWithCellIsRule) {
   ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
 
   CfResultsGuard results;
-  ASSERT_EQ(
-      fm_sheet_evaluate_cf_range(wb.handle, 0, record_arg(fm_cell_rect_t{0, 0, 2, 0}), std::nan(""), &results.handle),
-      0);
+  ASSERT_EQ(fm_sheet_evaluate_cf_range(wb.handle, 0, record_arg(fm_cell_rect_t{0, 0, 2, 0}), 0, std::nan(""),
+                                       &results.handle),
+            0);
   ASSERT_NE(results.handle, nullptr);
   ASSERT_EQ(count_of(fm_cf_results_get_cell_count, results.handle), 2U);
 
@@ -60,7 +60,7 @@ TEST(FormulonCApiCf, EvaluateRangeWithCellIsRule) {
   EXPECT_EQ(row, 1U);
   EXPECT_EQ(col, 0U);
   ASSERT_EQ(match_count, 1U);
-  fm_cf_match_t m = FM_STRUCT_INIT(fm_cf_match_t);
+  fm_cf_match_info_t m = FM_STRUCT_INIT(fm_cf_match_info_t);
   ASSERT_EQ(fm_cf_results_get_match_at(results.handle, 0, 0, &m), 0);
   EXPECT_EQ(m.kind, FM_CF_MATCH_KIND_DIFFERENTIAL_FORMAT);
   EXPECT_EQ(m.priority, 1);
@@ -85,7 +85,7 @@ TEST(FormulonCApiCf, EvaluateRangeRejectsRequestPastViewportCeiling) {
   // the binding must surface the refusal instead of returning a handle.
   CfResultsGuard results;
   EXPECT_EQ(fm_sheet_evaluate_cf_range(wb.handle, 0, record_arg(fm_cell_rect_t{0, 0, formulon::cf::kCfMaxRows - 1U, 1}),
-                                       std::nan(""), &results.handle),
+                                       0, std::nan(""), &results.handle),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kSecResourceLimit));
   EXPECT_EQ(results.handle, nullptr);
 }
@@ -114,7 +114,7 @@ TEST(FormulonCApiCf, EvaluateWholeColumnRangeReturnsBlockMatches) {
   // block, not from the column's million rows.
   CfResultsGuard results;
   ASSERT_EQ(fm_sheet_evaluate_cf_range(wb.handle, 0, record_arg(fm_cell_rect_t{0, 0, formulon::cf::kCfMaxRows - 1U, 0}),
-                                       std::nan(""), &results.handle),
+                                       0, std::nan(""), &results.handle),
             0)
       << fm_get_last_error_message();
   ASSERT_EQ(count_of(fm_cf_results_get_cell_count, results.handle), 1U);
@@ -126,7 +126,7 @@ TEST(FormulonCApiCf, EvaluateWholeColumnRangeReturnsBlockMatches) {
   EXPECT_EQ(row, 1U);
   EXPECT_EQ(col, 0U);
   ASSERT_EQ(match_count, 1U);
-  fm_cf_match_t m = FM_STRUCT_INIT(fm_cf_match_t);
+  fm_cf_match_info_t m = FM_STRUCT_INIT(fm_cf_match_info_t);
   ASSERT_EQ(fm_cf_results_get_match_at(results.handle, 0, 0, &m), 0);
   EXPECT_EQ(m.dxf_index_engaged, 1);
   EXPECT_EQ(m.dxf_index, 7U);
@@ -162,9 +162,9 @@ TEST(FormulonCApiCf, EvaluateRangeWithColorScale) {
   ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
 
   CfResultsGuard results;
-  ASSERT_EQ(
-      fm_sheet_evaluate_cf_range(wb.handle, 0, record_arg(fm_cell_rect_t{0, 0, 2, 0}), std::nan(""), &results.handle),
-      0);
+  ASSERT_EQ(fm_sheet_evaluate_cf_range(wb.handle, 0, record_arg(fm_cell_rect_t{0, 0, 2, 0}), 0, std::nan(""),
+                                       &results.handle),
+            0);
   ASSERT_EQ(count_of(fm_cf_results_get_cell_count, results.handle), 3U);
 
   const std::vector<std::tuple<std::uint8_t, std::uint8_t, std::uint8_t>> expected = {
@@ -179,7 +179,7 @@ TEST(FormulonCApiCf, EvaluateRangeWithColorScale) {
     std::size_t match_count = 0;
     ASSERT_EQ(fm_cf_results_get_cell_at(results.handle, i, &row, &col, &match_count), 0);
     ASSERT_EQ(match_count, 1U) << "i=" << i;
-    fm_cf_match_t m = FM_STRUCT_INIT(fm_cf_match_t);
+    fm_cf_match_info_t m = FM_STRUCT_INIT(fm_cf_match_info_t);
     ASSERT_EQ(fm_cf_results_get_match_at(results.handle, i, 0, &m), 0) << "i=" << i;
     EXPECT_EQ(m.kind, FM_CF_MATCH_KIND_COLOR_SCALE) << "i=" << i;
     const auto& [er, eg, eb] = expected[i];
@@ -200,9 +200,9 @@ TEST(FormulonCApiCf, OutOfRangeIndicesReturnIndexOutOfRange) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
 
   CfResultsGuard results;
-  ASSERT_EQ(
-      fm_sheet_evaluate_cf_range(wb.handle, 0, record_arg(fm_cell_rect_t{0, 0, 0, 0}), std::nan(""), &results.handle),
-      0);
+  ASSERT_EQ(fm_sheet_evaluate_cf_range(wb.handle, 0, record_arg(fm_cell_rect_t{0, 0, 0, 0}), 0, std::nan(""),
+                                       &results.handle),
+            0);
   ASSERT_EQ(count_of(fm_cf_results_get_cell_count, results.handle), 0U);
 
   std::uint32_t row = 0;
@@ -211,14 +211,15 @@ TEST(FormulonCApiCf, OutOfRangeIndicesReturnIndexOutOfRange) {
   fm_status_t rc = fm_cf_results_get_cell_at(results.handle, 0, &row, &col, &match_count);
   EXPECT_EQ(rc, FM_STATUS_INDEX_OUT_OF_RANGE);
 
-  fm_cf_match_t m = FM_STRUCT_INIT(fm_cf_match_t);
+  fm_cf_match_info_t m = FM_STRUCT_INIT(fm_cf_match_info_t);
   rc = fm_cf_results_get_match_at(results.handle, 0, 0, &m);
   EXPECT_EQ(rc, FM_STATUS_INDEX_OUT_OF_RANGE);
 }
 
 TEST(FormulonCApiCf, NullWorkbookSetsBindingError) {
   fm_cf_results_t* out = reinterpret_cast<fm_cf_results_t*>(static_cast<std::uintptr_t>(1));
-  fm_status_t rc = fm_sheet_evaluate_cf_range(nullptr, 0, record_arg(fm_cell_rect_t{0, 0, 0, 0}), std::nan(""), &out);
+  fm_status_t rc =
+      fm_sheet_evaluate_cf_range(nullptr, 0, record_arg(fm_cell_rect_t{0, 0, 0, 0}), 0, std::nan(""), &out);
   EXPECT_EQ(rc, static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
   EXPECT_EQ(out, nullptr);
   fm_cf_results_destroy(out);
@@ -229,7 +230,7 @@ TEST(FormulonCApiCf, OutOfRangeSheetIndexReturnsSheetIndexOutOfRange) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   fm_cf_results_t* out = reinterpret_cast<fm_cf_results_t*>(static_cast<std::uintptr_t>(1));
   fm_status_t rc =
-      fm_sheet_evaluate_cf_range(wb.handle, 99, record_arg(fm_cell_rect_t{0, 0, 0, 0}), std::nan(""), &out);
+      fm_sheet_evaluate_cf_range(wb.handle, 99, record_arg(fm_cell_rect_t{0, 0, 0, 0}), 0, std::nan(""), &out);
   EXPECT_EQ(rc, static_cast<fm_status_t>(formulon::FormulonErrorCode::kSheetIndexOutOfRange));
   EXPECT_EQ(out, nullptr);
   fm_cf_results_destroy(out);
@@ -240,12 +241,12 @@ TEST(FormulonCApiCf, OutOfGridOrReversedRectReturnsInvalidArgument) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   fm_cf_results_t* out = reinterpret_cast<fm_cf_results_t*>(static_cast<std::uintptr_t>(1));
   // A reversed rectangle (last < first) would wrap the iteration span.
-  EXPECT_EQ(fm_sheet_evaluate_cf_range(wb.handle, 0, record_arg(fm_cell_rect_t{5, 5, 0, 0}), std::nan(""), &out),
+  EXPECT_EQ(fm_sheet_evaluate_cf_range(wb.handle, 0, record_arg(fm_cell_rect_t{5, 5, 0, 0}), 0, std::nan(""), &out),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
   EXPECT_EQ(out, nullptr);
   // A corner past the grid ceiling would materialize billions of cells.
   out = reinterpret_cast<fm_cf_results_t*>(static_cast<std::uintptr_t>(1));
-  EXPECT_EQ(fm_sheet_evaluate_cf_range(wb.handle, 0, record_arg(fm_cell_rect_t{0, 0, formulon::Sheet::kMaxRows, 0}),
+  EXPECT_EQ(fm_sheet_evaluate_cf_range(wb.handle, 0, record_arg(fm_cell_rect_t{0, 0, formulon::Sheet::kMaxRows, 0}), 0,
                                        std::nan(""), &out),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
   EXPECT_EQ(out, nullptr);
@@ -273,13 +274,13 @@ TEST(FormulonCApiCf, ExpressionRuleEvaluatesFunctionsAndQualifiedRefs) {
   EXPECT_EQ(rule_index, 0U);
 
   CfResultsGuard results;
-  ASSERT_EQ(
-      fm_sheet_evaluate_cf_range(wb.handle, 0, record_arg(fm_cell_rect_t{0, 0, 0, 0}), std::nan(""), &results.handle),
-      0)
+  ASSERT_EQ(fm_sheet_evaluate_cf_range(wb.handle, 0, record_arg(fm_cell_rect_t{0, 0, 0, 0}), 0, std::nan(""),
+                                       &results.handle),
+            0)
       << fm_get_last_error_message();
   ASSERT_EQ(count_of(fm_cf_results_get_cell_count, results.handle), 1U);
 
-  fm_cf_match_t match = FM_STRUCT_INIT(fm_cf_match_t);
+  fm_cf_match_info_t match = FM_STRUCT_INIT(fm_cf_match_info_t);
   ASSERT_EQ(fm_cf_results_get_match_at(results.handle, 0, 0, &match), 0);
   EXPECT_EQ(match.kind, FM_CF_MATCH_KIND_DIFFERENTIAL_FORMAT);
   EXPECT_EQ(match.dxf_index_engaged, 1);
@@ -309,13 +310,13 @@ TEST(FormulonCApiCf, ExpressionRuleRecursivelyEvaluatesFormulaCells) {
   // No explicit recalc: CF evaluation should use a recursive EvalState
   // instead of reading the formula cell's stale blank cached value.
   CfResultsGuard results;
-  ASSERT_EQ(
-      fm_sheet_evaluate_cf_range(wb.handle, 0, record_arg(fm_cell_rect_t{0, 0, 0, 0}), std::nan(""), &results.handle),
-      0)
+  ASSERT_EQ(fm_sheet_evaluate_cf_range(wb.handle, 0, record_arg(fm_cell_rect_t{0, 0, 0, 0}), 0, std::nan(""),
+                                       &results.handle),
+            0)
       << fm_get_last_error_message();
   ASSERT_EQ(count_of(fm_cf_results_get_cell_count, results.handle), 1U);
 
-  fm_cf_match_t match = FM_STRUCT_INIT(fm_cf_match_t);
+  fm_cf_match_info_t match = FM_STRUCT_INIT(fm_cf_match_info_t);
   ASSERT_EQ(fm_cf_results_get_match_at(results.handle, 0, 0, &match), 0);
   EXPECT_EQ(match.kind, FM_CF_MATCH_KIND_DIFFERENTIAL_FORMAT);
   EXPECT_EQ(match.dxf_index_engaged, 1);
@@ -336,7 +337,7 @@ std::uint32_t ResolvedArgb(const formulon::Workbook& wb, const formulon::cf::Col
   return formulon::resolve_color(wb, c.spec, context).argb;
 }
 
-std::uint32_t PackArgb(const fm_color_spec_t& c) {
+std::uint32_t PackArgb(const fm_color_t& c) {
   return c.argb;
 }
 
@@ -385,9 +386,9 @@ TEST(FormulonCApiCf, ThemeColorScalePayloadIsResolvedNotBlack) {
   ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
 
   CfResultsGuard results;
-  ASSERT_EQ(
-      fm_sheet_evaluate_cf_range(wb.handle, 0, record_arg(fm_cell_rect_t{0, 0, 2, 0}), std::nan(""), &results.handle),
-      0);
+  ASSERT_EQ(fm_sheet_evaluate_cf_range(wb.handle, 0, record_arg(fm_cell_rect_t{0, 0, 2, 0}), 0, std::nan(""),
+                                       &results.handle),
+            0);
   ASSERT_EQ(count_of(fm_cf_results_get_cell_count, results.handle), 3U);
   const auto& block = wb.handle->workbook().sheet(0).conditional_formats()[0];
   const std::uint32_t low = ResolvedArgb(wb.handle->workbook(), block.rules[0].color_scale->colors[0],
@@ -399,7 +400,7 @@ TEST(FormulonCApiCf, ThemeColorScalePayloadIsResolvedNotBlack) {
   std::uint32_t row = 0;
   std::uint32_t col = 0;
   std::size_t match_count = 0;
-  fm_cf_match_t m = FM_STRUCT_INIT(fm_cf_match_t);
+  fm_cf_match_info_t m = FM_STRUCT_INIT(fm_cf_match_info_t);
   ASSERT_EQ(fm_cf_results_get_cell_at(results.handle, 0, &row, &col, &match_count), 0);
   ASSERT_EQ(fm_cf_results_get_match_at(results.handle, 0, 0, &m), 0);
   EXPECT_EQ(PackArgb(m.color), low);
@@ -415,9 +416,9 @@ TEST(FormulonCApiCf, ThemeColorDataBarEvaluatedPayloadIsResolvedNotBlack) {
   ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
 
   CfResultsGuard results;
-  ASSERT_EQ(
-      fm_sheet_evaluate_cf_range(wb.handle, 0, record_arg(fm_cell_rect_t{0, 1, 2, 1}), std::nan(""), &results.handle),
-      0);
+  ASSERT_EQ(fm_sheet_evaluate_cf_range(wb.handle, 0, record_arg(fm_cell_rect_t{0, 1, 2, 1}), 0, std::nan(""),
+                                       &results.handle),
+            0);
   ASSERT_GT(count_of(fm_cf_results_get_cell_count, results.handle), 0U);
   const auto& bar = *wb.handle->workbook().sheet(0).conditional_formats()[1].rules[0].data_bar;
   const std::uint32_t expected = ResolvedArgb(wb.handle->workbook(), bar.fill, formulon::ColorContext::kFillForeground);
@@ -426,7 +427,7 @@ TEST(FormulonCApiCf, ThemeColorDataBarEvaluatedPayloadIsResolvedNotBlack) {
   std::uint32_t row = 0;
   std::uint32_t col = 0;
   std::size_t match_count = 0;
-  fm_cf_match_t m = FM_STRUCT_INIT(fm_cf_match_t);
+  fm_cf_match_info_t m = FM_STRUCT_INIT(fm_cf_match_info_t);
   ASSERT_EQ(fm_cf_results_get_cell_at(results.handle, 0, &row, &col, &match_count), 0);
   ASSERT_EQ(fm_cf_results_get_match_at(results.handle, 0, 0, &m), 0);
   EXPECT_EQ(m.kind, FM_CF_MATCH_KIND_DATA_BAR);
@@ -443,13 +444,13 @@ TEST(FormulonCApiCf, ThemeColorRuleReadbackReportsTheThemeSelector) {
   ASSERT_EQ(bar_fill.kind, formulon::ColorSpec::Kind::kTheme);
 
   fm_cf_rule_t rule = FM_STRUCT_INIT(fm_cf_rule_t);
-  ASSERT_EQ(fm_sheet_get_cf_rule(wb.handle, 0, 0, &rule), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_get_cf_rule_at(wb.handle, 0, 0, &rule), 0) << fm_get_last_error_message();
   ASSERT_GE(rule.color_scale_count, 2U);
   EXPECT_EQ(rule.color_scale_colors[0].kind, FM_COLOR_KIND_THEME);
   EXPECT_EQ(rule.color_scale_colors[0].theme, scale_low.theme);
   EXPECT_DOUBLE_EQ(rule.color_scale_colors[0].tint, scale_low.tint);
 
-  ASSERT_EQ(fm_sheet_get_cf_rule(wb.handle, 0, 1, &rule), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_get_cf_rule_at(wb.handle, 0, 1, &rule), 0) << fm_get_last_error_message();
   EXPECT_EQ(rule.data_bar_fill.kind, FM_COLOR_KIND_THEME);
   EXPECT_EQ(rule.data_bar_fill.theme, bar_fill.theme);
   EXPECT_DOUBLE_EQ(rule.data_bar_fill.tint, bar_fill.tint);
@@ -476,4 +477,56 @@ TEST(FormulonCApiCf, ThemeColorSurvivesXlsbSaveAndLoad) {
   const auto& fill = blocks[1].rules[0].data_bar->fill;
   EXPECT_EQ(fill.spec.kind, formulon::ColorSpec::Kind::kTheme);
   EXPECT_EQ(fill.spec.theme, 8U);
+}
+
+namespace {
+
+// A1 holds serial 45000 under a "today" TimePeriod rule.
+WorkbookGuard TodayRuleWorkbook() {
+  return WorkbookFromMutator([](formulon::Workbook& w) {
+    auto& sheet = w.sheet(0);
+    sheet.set_cell_value(0, 0, formulon::Value::number(45000.0));
+    formulon::cf::ConditionalFormat block{};
+    block.sqref.push_back(MakeRange(0, 0, 0, 0));
+    formulon::cf::CFRule rule;
+    rule.type = formulon::cf::RuleType::TimePeriod;
+    rule.priority = 1;
+    rule.time_period = formulon::cf::TimePeriod::Today;
+    block.rules.push_back(std::move(rule));
+    sheet.mutable_conditional_formats().push_back(std::move(block));
+  });
+}
+
+std::size_t TodayMatchCount(const WorkbookGuard& wb, std::int32_t has_today_serial, double today_serial) {
+  CfResultsGuard results;
+  EXPECT_EQ(fm_sheet_evaluate_cf_range(wb.handle, 0, record_arg(fm_cell_rect_t{0, 0, 0, 0}), has_today_serial,
+                                       today_serial, &results.handle),
+            0)
+      << fm_get_last_error_message();
+  return results.handle != nullptr ? count_of(fm_cf_results_get_cell_count, results.handle) : 0U;
+}
+
+}  // namespace
+
+TEST(FormulonCApiCf, TodaySerialAppliesOnlyWithItsFlag) {
+  WorkbookGuard wb = TodayRuleWorkbook();
+  ASSERT_NE(wb.handle, nullptr);
+  ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
+  EXPECT_EQ(TodayMatchCount(wb, 1, 45000.5), 1U);
+  EXPECT_EQ(TodayMatchCount(wb, 1, 45001.0), 0U);
+  // Without the flag the serial is ignored, even a finite one that would match.
+  EXPECT_EQ(TodayMatchCount(wb, 0, 45000.0), 0U);
+  EXPECT_EQ(TodayMatchCount(wb, 0, std::nan("")), 0U);
+}
+
+TEST(FormulonCApiCf, NonFiniteTodaySerialWithItsFlagIsRejected) {
+  WorkbookGuard wb = TodayRuleWorkbook();
+  ASSERT_NE(wb.handle, nullptr);
+  for (const double serial : {std::nan(""), HUGE_VAL, -HUGE_VAL}) {
+    fm_cf_results_t* out = reinterpret_cast<fm_cf_results_t*>(static_cast<std::uintptr_t>(1));
+    EXPECT_EQ(fm_sheet_evaluate_cf_range(wb.handle, 0, record_arg(fm_cell_rect_t{0, 0, 0, 0}), 1, serial, &out),
+              FM_STATUS_INVALID_ARGUMENT)
+        << serial;
+    EXPECT_EQ(out, nullptr);
+  }
 }

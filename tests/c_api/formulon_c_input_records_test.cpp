@@ -43,7 +43,7 @@ fm_table_style_options_t TableStyle(const fm_workbook_t* wb, std::size_t table =
 
 fm_table_info_t TableInfo(const fm_workbook_t* wb, std::size_t table = 0) {
   fm_table_info_t info = FM_STRUCT_INIT(fm_table_info_t);
-  EXPECT_EQ(fm_sheet_get_table_info(wb, 0, table, &info), FM_STATUS_OK);
+  EXPECT_EQ(fm_sheet_get_table_at(wb, 0, table, &info), FM_STATUS_OK);
   return info;
 }
 
@@ -88,7 +88,8 @@ TEST(FormulonCApiInputRecords, DefinedNameByNameFillsTheRecordTheIndexedReadFill
   fm_defined_name_t by_index = FM_STRUCT_INIT(fm_defined_name_t);
   ASSERT_EQ(fm_workbook_get_defined_name_at(wb.handle, 0, &by_index), FM_STATUS_OK);
   const std::string index_formula = by_index.formula;
-  const std::string index_comment = by_index.comment;
+  // An empty comment is no comment, which reads NULL.
+  EXPECT_EQ(by_index.comment, nullptr);
 
   std::int32_t present = 0;
   fm_defined_name_t by_name = FM_STRUCT_INIT(fm_defined_name_t);
@@ -96,7 +97,7 @@ TEST(FormulonCApiInputRecords, DefinedNameByNameFillsTheRecordTheIndexedReadFill
   ASSERT_EQ(present, 1);
   EXPECT_STREQ(by_name.name, "Rate");
   EXPECT_EQ(index_formula, by_name.formula);
-  EXPECT_EQ(index_comment, by_name.comment);
+  EXPECT_EQ(by_name.comment, nullptr);
   EXPECT_EQ(by_name.local_sheet_id, by_index.local_sheet_id);
   EXPECT_EQ(by_name.hidden, by_index.hidden);
 
@@ -128,9 +129,9 @@ TEST(FormulonCApiInputRecords, DefinedNameSetterRejectsMalformedRecords) {
   EXPECT_EQ(fm_workbook_set_defined_name(wb.handle, &name), FM_STATUS_INVALID_ARGUMENT);
   name.formula = "1";
   name.local_sheet_id = 5;
-  EXPECT_EQ(fm_workbook_set_defined_name(wb.handle, &name), FM_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(fm_workbook_set_defined_name(wb.handle, &name), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
   name.local_sheet_id = -2;
-  EXPECT_EQ(fm_workbook_set_defined_name(wb.handle, &name), FM_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(fm_workbook_set_defined_name(wb.handle, &name), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
   std::size_t count = 9;
   ASSERT_EQ(fm_workbook_get_defined_name_count(wb.handle, &count), FM_STATUS_OK);
   EXPECT_EQ(count, 0U);
@@ -401,7 +402,7 @@ TEST(FormulonCApiInputRecords, CustomFilterReadsBackOneOrTwoConditions) {
 
     fm_auto_filter_t out = FM_STRUCT_INIT(fm_auto_filter_t);
     std::int32_t present = 0;
-    ASSERT_EQ(fm_sheet_get_auto_filter(wb.handle, 0, &out, &present), FM_STATUS_OK);
+    ASSERT_EQ(fm_sheet_get_auto_filter(wb.handle, 0, &present, &out), FM_STATUS_OK);
     ASSERT_EQ(present, 1);
     ASSERT_EQ(out.column_count, 1U);
     const fm_filter_column_t& read = out.columns[0];
@@ -440,7 +441,7 @@ TEST(FormulonCApiInputRecords, CustomFilterRefusesZeroOrThreeConditionsAndARange
   }
   std::int32_t present = 0;
   fm_auto_filter_t out = FM_STRUCT_INIT(fm_auto_filter_t);
-  ASSERT_EQ(fm_sheet_get_auto_filter(wb.handle, 0, &out, &present), FM_STATUS_OK);
+  ASSERT_EQ(fm_sheet_get_auto_filter(wb.handle, 0, &present, &out), FM_STATUS_OK);
   EXPECT_EQ(present, 0);
 }
 
@@ -459,7 +460,7 @@ TEST(FormulonCApiInputRecords, ColumnsOfOtherKindsReadNoConditions) {
   ASSERT_EQ(fm_sheet_set_auto_filter(wb.handle, 0, &filter), FM_STATUS_OK) << fm_get_last_error_message();
   fm_auto_filter_t out = FM_STRUCT_INIT(fm_auto_filter_t);
   std::int32_t present = 0;
-  ASSERT_EQ(fm_sheet_get_auto_filter(wb.handle, 0, &out, &present), FM_STATUS_OK);
+  ASSERT_EQ(fm_sheet_get_auto_filter(wb.handle, 0, &present, &out), FM_STATUS_OK);
   ASSERT_EQ(present, 1);
   ASSERT_EQ(out.column_count, 1U);
   EXPECT_EQ(out.columns[0].kind, 1);

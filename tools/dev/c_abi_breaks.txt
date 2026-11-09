@@ -98,7 +98,7 @@ removed fm_sheet_column_width_pt :: renamed to fm_sheet_get_column_width_pt
 removed fm_sheet_drawing_object_at :: renamed to fm_sheet_get_drawing_object_at
 removed fm_sheet_drawing_object_count :: renamed to fm_sheet_get_drawing_object_count
 removed fm_sheet_edit_threaded_comment :: renamed to fm_sheet_update_threaded_comment
-retyped fm_sheet_get_auto_filter :: parameter type renamed (fm_auto_filter -> fm_auto_filter_t)
+signature fm_sheet_get_auto_filter :: takes int32_t* out_present before the record, whose type is renamed (fm_auto_filter -> fm_auto_filter_t)
 removed fm_sheet_get_column :: renamed to fm_sheet_get_column_layout_at
 removed fm_sheet_get_column_count :: renamed to fm_sheet_get_column_layout_count
 signature fm_sheet_get_comment_at :: the name now reads a comment by position; the cell lookup is fm_sheet_get_comment; sheet index widened to size_t sheet_index, index widened to size_t, handle is const
@@ -109,7 +109,7 @@ signature fm_sheet_get_hyperlink_at :: parameter type renamed (fm_hyperlink -> f
 removed fm_sheet_get_image :: renamed to fm_sheet_get_picture; takes int32_t* out_present before the outputs (a missing picture is FM_STATUS_OK with *out_present = 0 instead of FM_STATUS_INVALID_ARGUMENT), and the info parameter type is fm_image_info_t
 removed fm_sheet_get_protection :: renamed to fm_sheet_get_sheet_protection
 removed fm_sheet_get_row_override :: renamed to fm_sheet_get_row_layout_at
-removed fm_sheet_get_validation_at :: renamed to fm_sheet_get_validation
+signature fm_sheet_get_validation_at :: sheet index and validation index widened to size_t, handle is const; parameter type renamed (fm_data_validation -> fm_data_validation_t)
 removed fm_sheet_insert_image :: renamed to fm_sheet_add_picture, taking fm_picture_insert_spec_t
 removed fm_sheet_list_invalid_cells :: renamed to fm_sheet_get_invalid_cells
 removed fm_sheet_merges_in_range :: renamed to fm_sheet_get_merges_in_range
@@ -120,7 +120,7 @@ removed fm_sheet_row_break_at :: renamed to fm_sheet_get_row_break_at
 removed fm_sheet_row_break_count :: renamed to fm_sheet_get_row_break_count
 removed fm_sheet_row_height_pt :: renamed to fm_sheet_get_row_height_pt
 retyped fm_sheet_set_auto_filter :: parameter type renamed (fm_auto_filter -> fm_auto_filter_t)
-removed fm_sheet_set_format_defaults :: renamed to fm_sheet_update_format_defaults (a merge), taking fm_sheet_format_defaults_t
+removed fm_sheet_set_format_defaults :: renamed to fm_sheet_update_format_defaults, which merges a const fm_sheet_format_defaults_patch_t*
 removed fm_sheet_set_protection :: renamed to fm_sheet_set_sheet_protection
 removed fm_sheet_threaded_comment_at :: renamed to fm_sheet_get_threaded_comment_at
 removed fm_sheet_threaded_comment_count :: renamed to fm_sheet_get_threaded_comment_count
@@ -135,19 +135,19 @@ removed fm_styles_add_dxf :: renamed to fm_workbook_add_dxf
 removed fm_styles_add_fill :: renamed to fm_workbook_add_fill
 removed fm_styles_add_font :: renamed to fm_workbook_add_font
 removed fm_styles_add_num_fmt :: renamed to fm_workbook_add_number_format
-removed fm_styles_get_border :: renamed to fm_workbook_get_border
+removed fm_styles_get_border :: renamed to fm_workbook_get_border_at
 removed fm_styles_get_border_count :: renamed to fm_workbook_get_border_count
 removed fm_styles_get_cell_style :: renamed to fm_workbook_get_cell_style_at
 removed fm_styles_get_cell_style_count :: renamed to fm_workbook_get_cell_style_count
-removed fm_styles_get_cell_style_xf :: renamed to fm_workbook_get_cell_style_xf
+removed fm_styles_get_cell_style_xf :: renamed to fm_workbook_get_cell_style_xf_at, taking a uint32_t cell_style_xf_index
 removed fm_styles_get_cell_style_xf_count :: renamed to fm_workbook_get_cell_style_xf_count
-removed fm_styles_get_cell_xf :: renamed to fm_workbook_get_cell_xf
+removed fm_styles_get_cell_xf :: renamed to fm_workbook_get_cell_xf_at, taking a uint32_t xf_index
 removed fm_styles_get_cell_xf_count :: renamed to fm_workbook_get_cell_xf_count
-removed fm_styles_get_dxf :: renamed to fm_workbook_get_dxf
+removed fm_styles_get_dxf :: renamed to fm_workbook_get_dxf_at, taking a uint32_t dxf_index
 removed fm_styles_get_dxf_count :: renamed to fm_workbook_get_dxf_count
-removed fm_styles_get_fill :: renamed to fm_workbook_get_fill
+removed fm_styles_get_fill :: renamed to fm_workbook_get_fill_at
 removed fm_styles_get_fill_count :: renamed to fm_workbook_get_fill_count
-removed fm_styles_get_font :: renamed to fm_workbook_get_font
+removed fm_styles_get_font :: renamed to fm_workbook_get_font_at
 removed fm_styles_get_font_count :: renamed to fm_workbook_get_font_count
 removed fm_styles_get_num_fmt_string :: renamed to fm_workbook_get_number_format
 removed fm_styles_remove_cell_style :: renamed to fm_workbook_remove_cell_style
@@ -165,7 +165,7 @@ retyped fm_workbook_add_person :: parameter type renamed (fm_person -> fm_person
 removed fm_workbook_calc_mode :: renamed to fm_workbook_get_calc_mode
 removed fm_workbook_cell_at :: renamed to fm_sheet_get_cell_at
 removed fm_workbook_cell_count :: renamed to fm_sheet_get_cell_count
-removed fm_workbook_cf_evaluate_range :: renamed to fm_sheet_evaluate_cf_range
+removed fm_workbook_cf_evaluate_range :: renamed to fm_sheet_evaluate_cf_range, which takes the range as const fm_cell_rect_t* and an int32_t has_today_serial before today_serial in place of the NaN switch
 removed fm_workbook_create :: renamed to fm_workbook_create_default
 removed fm_workbook_defined_name_at :: renamed to fm_workbook_get_defined_name_at
 removed fm_workbook_defined_name_count :: renamed to fm_workbook_get_defined_name_count
@@ -176,7 +176,7 @@ removed fm_workbook_evaluate_cf_formula :: renamed to fm_sheet_evaluate_cf_formu
 removed fm_workbook_evaluate_formula :: removed; fm_sheet_evaluate_formula_array evaluates the same formula and returns the whole result, a scalar as a 1 x 1 array
 removed fm_workbook_evaluate_formula_array :: renamed to fm_sheet_evaluate_formula_array
 removed fm_workbook_excel_profile_id :: renamed to fm_workbook_get_profile_id
-removed fm_workbook_external_link_at :: renamed to fm_workbook_get_external_link
+removed fm_workbook_external_link_at :: renamed to fm_workbook_get_external_link_at
 removed fm_workbook_external_link_count :: renamed to fm_workbook_get_external_link_count
 removed fm_workbook_get_cell_phonetic :: renamed to fm_sheet_get_cell_phonetic
 removed fm_workbook_get_cell_phonetic_properties :: renamed to fm_sheet_get_cell_phonetic_properties; the type and alignment outs are int32_t (fm_phonetic_type_t / fm_phonetic_alignment_t)
@@ -245,7 +245,7 @@ removed fm_workbook_pivot_field_set_number_format :: folded into fm_sheet_update
 removed fm_workbook_pivot_field_set_sort :: folded into fm_sheet_update_pivot_field (fm_pivot_field_patch_t.sort_order and sort_by_field)
 removed fm_workbook_pivot_field_set_subtotal_top :: folded into fm_sheet_update_pivot_field (fm_pivot_field_patch_t.subtotal_top)
 removed fm_workbook_pivot_filter_add :: renamed to fm_sheet_add_pivot_filter
-removed fm_workbook_pivot_filter_at :: renamed to fm_sheet_get_pivot_filter
+removed fm_workbook_pivot_filter_at :: renamed to fm_sheet_get_pivot_filter_at
 removed fm_workbook_pivot_filter_clear :: renamed to fm_sheet_clear_pivot_filters
 removed fm_workbook_pivot_filter_count :: renamed to fm_sheet_get_pivot_filter_count
 removed fm_workbook_pivot_filter_remove_at :: renamed to fm_sheet_remove_pivot_filter
@@ -254,7 +254,7 @@ removed fm_workbook_pivot_layout :: renamed to fm_sheet_get_pivot_layout
 removed fm_workbook_pivot_remove :: renamed to fm_sheet_remove_pivot
 removed fm_workbook_pivot_set_anchor :: replaced by fm_sheet_set_pivot_anchor, which takes the anchor cell (anchor_row, anchor_col) instead of a rectangle
 removed fm_workbook_pivot_set_col_field_order :: renamed to fm_sheet_set_pivot_column_field_order
-removed fm_workbook_pivot_set_grand_totals :: renamed to fm_sheet_update_pivot_grand_totals
+removed fm_workbook_pivot_set_grand_totals :: renamed to fm_sheet_update_pivot_grand_totals, which takes const fm_pivot_grand_totals_patch_t* in place of rows_enabled and columns_enabled
 removed fm_workbook_pivot_set_layout :: renamed to fm_sheet_set_pivot_report_layout
 removed fm_workbook_pivot_set_name :: renamed to fm_sheet_rename_pivot
 removed fm_workbook_pivot_set_row_field_order :: renamed to fm_sheet_set_pivot_row_field_order
@@ -299,32 +299,32 @@ signature fm_sheet_remove_hyperlink :: sheet index widened to size_t sheet_index
 signature fm_sheet_remove_hyperlink_at :: sheet index widened to size_t sheet_index, index widened to size_t
 signature fm_sheet_remove_merge :: sheet index widened to size_t sheet_index; range passed as const pointer; parameter type renamed (fm_merge_range -> fm_cell_rect_t)
 signature fm_sheet_remove_merge_at :: sheet index widened to size_t sheet_index, index widened to size_t
-removed fm_sheet_set_column_style :: renamed to fm_sheet_set_column_xf_index; xf_index widened to size_t
+removed fm_sheet_set_column_style :: renamed to fm_sheet_set_column_xf_index, taking a uint32_t xf_index
 signature fm_sheet_set_comment :: sheet index widened to size_t sheet_index
-signature fm_sheet_set_range_xf_index :: sheet index widened to size_t sheet_index, xf_index widened to size_t; rectangle passed as const fm_cell_rect_t*
-removed fm_sheet_set_row_style :: renamed to fm_sheet_set_row_xf_index; xf_index widened to size_t
+signature fm_sheet_set_range_xf_index :: sheet index widened to size_t sheet_index; rectangle passed as const fm_cell_rect_t*
+removed fm_sheet_set_row_style :: renamed to fm_sheet_set_row_xf_index, taking a uint32_t xf_index
 signature fm_workbook_move_sheet :: from_index / to_index widened to size_t
 signature fm_workbook_remove_sheet :: index widened to size_t
 signature fm_workbook_rename_sheet :: index widened to size_t
 signature fm_sheet_set_row_height :: takes the inclusive row span (first, last) like fm_sheet_set_column_width
 signature fm_sheet_set_row_hidden :: takes the inclusive row span (first, last) like fm_sheet_set_column_hidden
-signature fm_sheet_set_row_outline :: takes the inclusive row span (first, last) like fm_sheet_set_column_outline
+signature fm_sheet_set_row_outline :: takes the inclusive row span (first, last) like fm_sheet_set_column_outline, and a uint32_t level (above 7 is FM_STATUS_INVALID_ARGUMENT)
 removed fm_sheet_clear_row_height :: renamed to fm_sheet_reset_row_height, taking the inclusive row span (first, last)
 removed fm_sheet_remap_range_style :: renamed to fm_sheet_remap_range_xfs, the rectangle passed as const fm_cell_rect_t*
 removed fm_sheet_snapshot_range_style :: renamed to fm_sheet_snapshot_range_xfs, the rectangle passed as const fm_cell_rect_t*
-signature fm_sheet_get_print_area :: reports the print area as a read-scratch-backed fm_cell_rect_t array and its count instead of A1 text
+signature fm_sheet_get_print_area :: copies the print area into a caller buffer (fm_cell_rect_t* out, size_t capacity, size_t* out_count) instead of returning A1 text
 signature fm_sheet_set_print_area :: takes the print area as const fm_cell_rect_t* ranges, size_t range_count instead of A1 text
 signature fm_workbook_add_sheet :: returns the new sheet's index through size_t* out_sheet_index
 removed fm_workbook_evaluate_formula_array_cell :: fm_sheet_evaluate_formula_array returns an owned fm_value_array_t read with fm_value_array_get_value_at
-removed fm_sheet_set_tab_hidden :: fm_sheet_set_visibility states every tab state, very hidden included
+removed fm_sheet_set_tab_hidden :: set visibility through fm_sheet_update_view (fm_sheet_view_patch_t), which states every tab state, very hidden included
 removed fm_workbook_set_defined_name_scoped :: fm_workbook_set_defined_name takes the scope in fm_defined_name_t.local_sheet_id
-removed fm_workbook_set_iterative_enabled :: fm_workbook_update_iterative takes an fm_iterative_settings_patch_t whose negative fields keep the stored value
+removed fm_workbook_set_iterative_enabled :: fm_workbook_update_iterative sets it through fm_iterative_settings_patch_t (enabled_op, enabled)
 signature fm_sheet_get_print_titles :: fills an fm_print_titles_t (per-axis has_* flags and 0-based spans) instead of A1 text
 signature fm_sheet_set_print_titles :: takes const fm_print_titles_t* (NULL clears) instead of A1 text
-signature fm_sheet_set_view_mode :: takes an int32_t fm_sheet_view_mode_t instead of the `view` attribute text
+removed fm_sheet_set_view_mode :: set view_mode (an int32_t fm_sheet_view_mode_t) through fm_sheet_update_view
 signature fm_workbook_set_defined_name :: takes const fm_defined_name_t* (the record fm_workbook_get_defined_name_at returns: name, formula, scope, comment, hidden); an empty formula is INVALID_ARGUMENT instead of a removal
 removed fm_workbook_set_iterative :: renamed to fm_workbook_update_iterative, taking const fm_iterative_settings_patch_t* instead of three scalars
-removed fm_sheet_set_fit_to_page :: fm_sheet_update_page_setup sets and clears fitToPage through fm_page_setup_t.fit_to_page_engaged / fit_to_page
+removed fm_sheet_set_fit_to_page :: fm_sheet_update_page_setup sets and clears fitToPage through fm_page_setup_patch_t (fit_to_page_op, fit_to_page)
 removed fm_sheet_set_thread_resolved :: fm_sheet_update_threaded_comment sets the resolved state through fm_threaded_comment_patch_t.done
 removed fm_pivot_cells_destroy :: renamed to fm_pivot_report_destroy; the handle type is fm_pivot_report_t
 removed fm_sheet_add_row_break :: replaced by fm_sheet_set_row_break(wb, sheet_index, row, const fm_row_break_t*), which upserts the break with its span and removes it with NULL
@@ -336,9 +336,20 @@ removed fm_sheet_clear_row_style :: renamed to fm_sheet_reset_row_xf_index
 removed fm_sheet_clear_column_width :: renamed to fm_sheet_reset_column_width
 removed fm_sheet_get_row_override_count :: renamed to fm_sheet_get_row_layout_count
 removed fm_sheet_restore_range_style :: renamed to fm_sheet_restore_range_xfs
-removed fm_sheet_set_header_footer :: renamed to fm_sheet_update_header_footer (a merge)
-removed fm_sheet_set_page_margins :: renamed to fm_sheet_update_page_margins (a merge); the fields are inches with an _in suffix
-removed fm_sheet_set_page_setup :: renamed to fm_sheet_update_page_setup (a merge); the scale field is scale_pct
-removed fm_sheet_set_print_options :: renamed to fm_sheet_update_print_options (a merge)
-removed fm_sheet_set_show_row_col_headers :: renamed to fm_sheet_set_show_row_column_headers
+removed fm_sheet_set_header_footer :: renamed to fm_sheet_update_header_footer, which merges a const fm_header_footer_patch_t*
+removed fm_sheet_set_page_margins :: renamed to fm_sheet_update_page_margins, which merges a const fm_page_margins_patch_t*; the fields are inches with an _in suffix
+removed fm_sheet_set_page_setup :: renamed to fm_sheet_update_page_setup, which merges a const fm_page_setup_patch_t*; the scale field is scale_pct
+removed fm_sheet_set_print_options :: renamed to fm_sheet_update_print_options, which merges a const fm_print_options_patch_t*
+removed fm_sheet_set_show_row_col_headers :: set show_row_column_headers through fm_sheet_update_view
 removed fm_workbook_clear_pinned_now :: fm_workbook_set_pinned_now with NULL releases the pin
+signature fm_workbook_save_with_diagnostics :: parameter type renamed (fm_save_diagnostics_t -> fm_save_diagnostics_info_t)
+signature fm_workbook_get_iterative :: fills an fm_iterative_settings_info_t* out in place of out_enabled, out_max_iterations and out_max_change
+signature fm_sheet_get_view :: parameter type renamed (fm_sheet_view_t -> fm_sheet_view_info_t)
+signature fm_sheet_set_column_outline :: takes a uint32_t level (above 7 is FM_STATUS_INVALID_ARGUMENT) instead of uint8_t
+removed fm_sheet_set_zoom :: set zoom_pct through fm_sheet_update_view (fm_sheet_view_patch_t); a value outside 10..400 is FM_STATUS_INVALID_ARGUMENT instead of clamped
+removed fm_sheet_set_freeze :: set the frozen rows and columns through fm_sheet_update_view
+removed fm_sheet_set_show_grid_lines :: set show_grid_lines through fm_sheet_update_view
+removed fm_sheet_set_show_zeros :: set show_zeros through fm_sheet_update_view
+removed fm_sheet_set_right_to_left :: set right_to_left through fm_sheet_update_view
+removed fm_sheet_set_tab_selected :: set tab_selected through fm_sheet_update_view
+removed fm_sheet_set_visibility :: set visibility through fm_sheet_update_view (hiding the only visible sheet is FM_STATUS_PRECONDITION_FAILED)

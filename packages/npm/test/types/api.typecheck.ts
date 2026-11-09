@@ -184,7 +184,7 @@ export function slicerPatch(): void {
 
 export function shapePatch(): void {
   shape.update({ text: 'hi', hidden: false });
-  // `null` on fillKind / lineKind means unchanged, so a read-back value passes as is.
+  // `null` on fillKind / lineKind clears the paint.
   shape.update({ fillKind: null, lineKind: null });
   shape.update(shapeProps);
   // @ts-expect-error unknown key

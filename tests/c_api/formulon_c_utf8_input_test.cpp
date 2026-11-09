@@ -89,6 +89,62 @@ TEST(FormulonCApiUtf8Input, MalformedTextIsRefusedByReadOnlyEntryPoints) {
   }
 }
 
+TEST(FormulonCApiUtf8Input, KeyedGettersRefuseAMalformedKey) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  for (const char* bad : {kLoneSurrogate, kTruncated, "\xff"}) {
+    std::int32_t present = 99;
+    fm_defined_name_t name = FM_STRUCT_INIT(fm_defined_name_t);
+    EXPECT_EQ(fm_workbook_get_defined_name(wb.handle, bad, -1, &present, &name), kUtf8Error);
+    EXPECT_EQ(fm_workbook_has_passthrough(wb.handle, bad, &present), kUtf8Error);
+    fm_threaded_comment_t comment = FM_STRUCT_INIT(fm_threaded_comment_t);
+    EXPECT_EQ(fm_sheet_get_threaded_comment(wb.handle, 0, bad, &present, &comment), kUtf8Error);
+    fm_person_t person = FM_STRUCT_INIT(fm_person_t);
+    EXPECT_EQ(fm_workbook_get_person(wb.handle, bad, &present, &person), kUtf8Error);
+    fm_table_style_t table_style = FM_STRUCT_INIT(fm_table_style_t);
+    EXPECT_EQ(fm_workbook_get_table_style(wb.handle, bad, &present, &table_style), kUtf8Error);
+    fm_cell_style_t cell_style{};
+    EXPECT_EQ(fm_workbook_get_cell_style(wb.handle, bad, &present, &cell_style), kUtf8Error);
+    const char* typeface = nullptr;
+    EXPECT_EQ(fm_workbook_get_theme_script_font(wb.handle, FM_FONT_SCHEME_MINOR, bad, &present, &typeface), kUtf8Error);
+    EXPECT_EQ(present, 99);
+  }
+}
+
+// A drawing rename checks its text before it looks up the id, so even an id
+// no object holds reports the encoding.
+TEST(FormulonCApiUtf8Input, DrawingRenameRefusesAMalformedName) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  for (const char* bad : {kLoneSurrogate, kTruncated, "\xff"}) {
+    EXPECT_EQ(fm_sheet_set_drawing_name(wb.handle, 0, 42U, bad), kUtf8Error);
+  }
+}
+
+TEST(FormulonCApiUtf8Input, FontAndStyleRecordsRefuseAMalformedName) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  const std::size_t fonts = count_of(fm_workbook_get_font_count, wb.handle);
+  const std::size_t dxfs = count_of(fm_workbook_get_dxf_count, wb.handle);
+  for (const char* bad : kMalformed) {
+    fm_font_t font{};
+    font.name = bad;
+    font.size_pt = 11.0;
+    std::size_t font_index = 99U;
+    EXPECT_EQ(fm_workbook_add_font(wb.handle, &font, &font_index), kUtf8Error);
+    EXPECT_EQ(font_index, 99U);
+    EXPECT_EQ(fm_workbook_set_font(wb.handle, 0, &font), kUtf8Error);
+    fm_dxf_t dxf{};
+    dxf.font_engaged = 1;
+    dxf.font = font;
+    std::uint32_t dxf_index = 99U;
+    EXPECT_EQ(fm_workbook_add_dxf(wb.handle, &dxf, &dxf_index), kUtf8Error);
+    EXPECT_EQ(dxf_index, 99U);
+  }
+  EXPECT_EQ(count_of(fm_workbook_get_font_count, wb.handle), fonts);
+  EXPECT_EQ(count_of(fm_workbook_get_dxf_count, wb.handle), dxfs);
+}
+
 TEST(FormulonCApiUtf8Input, WellFormedMultibyteTextPasses) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);

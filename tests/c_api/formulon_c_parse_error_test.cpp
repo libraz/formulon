@@ -114,7 +114,7 @@ bool CallEntry(fm_workbook_t* wb, const std::string& entry, const std::string& f
     input.local_sheet_id = -1;
     *status = fm_workbook_set_defined_name(wb, &input);
   } else if (entry == "parse_reference") {
-    fm_parsed_reference_t out = FM_STRUCT_INIT(fm_parsed_reference_t);
+    fm_parsed_reference_info_t out = FM_STRUCT_INIT(fm_parsed_reference_info_t);
     *status = fm_workbook_parse_reference(wb, text, nullptr, &out);
   } else {
     return false;
@@ -140,10 +140,12 @@ TEST(FormulonCApiParseError, CaseTable) {
     // The context is read first: the parse record is the one read that leaves it alone.
     const std::string context = fm_get_last_error_context();
 
-    fm_parse_error_t error = FM_STRUCT_INIT(fm_parse_error_t);
-    const fm_status_t read = fm_get_last_parse_error(&error);
+    fm_parse_error_info_t error = FM_STRUCT_INIT(fm_parse_error_info_t);
+    int32_t present = 0;
+    const fm_status_t read = fm_get_last_parse_error(&present, &error);
     EXPECT_EQ(read, 0);
-    if (read != 0) {
+    EXPECT_EQ(present, 1);
+    if (read != 0 || present == 0) {
       continue;
     }
     bool code_listed = false;
@@ -173,12 +175,20 @@ TEST(FormulonCApiParseError, RecordIsClearedByTheNextCall) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   ASSERT_NE(fm_sheet_set_formula(wb.handle, 0, 0, 0, "=(1+2"), 0);
-  fm_parse_error_t error = FM_STRUCT_INIT(fm_parse_error_t);
-  ASSERT_EQ(fm_get_last_parse_error(&error), 0);
+  fm_parse_error_info_t error = FM_STRUCT_INIT(fm_parse_error_info_t);
+  int32_t present = 0;
+  ASSERT_EQ(fm_get_last_parse_error(&present, &error), 0);
+  EXPECT_EQ(present, 1);
   EXPECT_EQ(error.code, FM_PARSE_ERROR_CODE_EXPECTED_CLOSE_PAREN);
 
+  // Without a record the read succeeds, reports absence and zeroes the fields.
   ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 0, 0, "=1+2"), 0);
-  EXPECT_EQ(fm_get_last_parse_error(&error), FM_STATUS_NOT_FOUND);
+  EXPECT_EQ(fm_get_last_parse_error(&present, &error), 0);
+  EXPECT_EQ(present, 0);
+  EXPECT_EQ(error.code, 0);
+  EXPECT_EQ(error.start, 0U);
+  EXPECT_EQ(error.end, 0U);
+  EXPECT_EQ(error.struct_size, sizeof(fm_parse_error_info_t));
 }
 
 TEST(FormulonCApiParseError, ReadersLeaveEachOtherUntouched) {
@@ -189,22 +199,26 @@ TEST(FormulonCApiParseError, ReadersLeaveEachOtherUntouched) {
   const std::string context = fm_get_last_error_context();
   EXPECT_EQ(context, "row=2 col=3");
 
-  fm_parse_error_t first = FM_STRUCT_INIT(fm_parse_error_t);
-  ASSERT_EQ(fm_get_last_parse_error(&first), 0);
+  fm_parse_error_info_t first = FM_STRUCT_INIT(fm_parse_error_info_t);
+  int32_t present = 0;
+  ASSERT_EQ(fm_get_last_parse_error(&present, &first), 0);
+  ASSERT_EQ(present, 1);
   // A record too small to hold the answer fails without touching any state.
-  fm_parse_error_t small = FM_STRUCT_INIT(fm_parse_error_t);
+  fm_parse_error_info_t small = FM_STRUCT_INIT(fm_parse_error_info_t);
   small.struct_size = 4;
-  EXPECT_EQ(fm_get_last_parse_error(&small), FM_STATUS_INVALID_ARGUMENT);
-  EXPECT_EQ(fm_get_last_parse_error(nullptr), FM_STATUS_BINDING_NULL_POINTER);
+  EXPECT_EQ(fm_get_last_parse_error(&present, &small), FM_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(fm_get_last_parse_error(&present, nullptr), FM_STATUS_BINDING_NULL_POINTER);
+  EXPECT_EQ(fm_get_last_parse_error(nullptr, &small), FM_STATUS_BINDING_NULL_POINTER);
 
   EXPECT_EQ(message, fm_get_last_error_message());
   EXPECT_EQ(context, fm_get_last_error_context());
-  fm_parse_error_t second = FM_STRUCT_INIT(fm_parse_error_t);
-  ASSERT_EQ(fm_get_last_parse_error(&second), 0);
+  fm_parse_error_info_t second = FM_STRUCT_INIT(fm_parse_error_info_t);
+  ASSERT_EQ(fm_get_last_parse_error(&present, &second), 0);
+  ASSERT_EQ(present, 1);
   EXPECT_EQ(second.code, first.code);
   EXPECT_EQ(second.start, first.start);
   EXPECT_EQ(second.end, first.end);
-  EXPECT_EQ(second.struct_size, sizeof(fm_parse_error_t));
+  EXPECT_EQ(second.struct_size, sizeof(fm_parse_error_info_t));
 }
 
 TEST(FormulonCApiParseError, FailedEntryLeavesTheCellUntouched) {

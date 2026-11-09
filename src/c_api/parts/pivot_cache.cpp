@@ -54,9 +54,12 @@ using formulon::c_api::parts::kMaxPivotNameUnits;
 using formulon::c_api::parts::mark_cache_pivots_pending;
 using formulon::c_api::parts::not_found;
 using formulon::c_api::parts::null_argument;
+using formulon::c_api::parts::patch_op_ok;
+using formulon::c_api::parts::patch_op_ok_without_clear;
 using formulon::c_api::parts::publish_scratch;
 using formulon::c_api::parts::resolve_cache;
 using formulon::c_api::parts::resolve_cache_mut;
+using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::set_last_error;
 using formulon::c_api::parts::store_cstr;
 using formulon::c_api::parts::text_or_empty;
@@ -134,7 +137,8 @@ extern "C" fm_status_t fm_workbook_add_pivot_cache(fm_workbook_t* wb, std::uint3
     assigned = any ? (max_id + 1U) : 1U;
   } else {
     if (find_cache(wb->workbook(), requested_id) != nullptr) {
-      return invalid_argument("requested_id already in use", "requested_id=" + std::to_string(requested_id));
+      return set_binding_error(formulon::FormulonErrorCode::kAlreadyExists, "requested_id already in use",
+                               "requested_id=" + std::to_string(requested_id));
     }
   }
   auto cache = std::make_unique<formulon::pivot::PivotCache>();
@@ -155,8 +159,9 @@ extern "C" fm_status_t fm_workbook_remove_pivot_cache(fm_workbook_t* wb, std::ui
     const formulon::Sheet& sheet = book.sheet(s);
     for (const auto& pt : sheet.pivot_tables()) {
       if (pt != nullptr && pt->pivot_cache_id() == cache_id) {
-        return invalid_argument("cache still referenced by a pivot table",
-                                "cache_id=" + std::to_string(cache_id) + " sheet_index=" + std::to_string(s));
+        return set_binding_error(formulon::FormulonErrorCode::kPreconditionFailed,
+                                 "cache still referenced by a pivot table",
+                                 "cache_id=" + std::to_string(cache_id) + " sheet_index=" + std::to_string(s));
       }
     }
   }
@@ -739,32 +744,50 @@ extern "C" fm_status_t fm_workbook_get_pivot_cache_options(const fm_workbook_t* 
 }
 
 extern "C" fm_status_t fm_workbook_update_pivot_cache_options(fm_workbook_t* wb, std::uint32_t cache_id,
-                                                              const fm_pivot_cache_options_t* options) {
+                                                              const fm_pivot_cache_options_patch_t* patch) {
   clear_last_error();
-  if (wb == nullptr || options == nullptr) {
+  if (wb == nullptr || patch == nullptr) {
     return null_argument();
   }
   formulon::pivot::PivotCache* cache = nullptr;
   if (fm_status_t rc = resolve_cache_mut(wb, cache_id, &cache); rc != 0) {
     return rc;
   }
-  if (auto rc = check_record_size(*options); rc != 0) {
+  if (auto rc = check_record_size(*patch); rc != 0) {
     return rc;
   }
-  // -1 is automatic; a loaded value outside the settable range survives a
-  // get / set round trip unchanged.
-  const std::int32_t limit = options->missing_items_limit;
-  if (limit != kAutomaticMissingItemsLimit && (limit < 0 || limit > kMaxMissingItemsLimit) &&
-      limit != missing_items_limit_to_fm(cache->missing_items_limit())) {
+  // The whole patch is checked before anything changes; only the limit is clearable.
+  if (!patch_op_ok_without_clear(patch->save_data_op)) {
+    return invalid_argument("patch op out of range or CLEAR", "field=save_data");
+  }
+  if (!patch_op_ok(patch->missing_items_limit_op)) {
+    return invalid_argument("patch op out of range", "field=missing_items_limit");
+  }
+  if (!patch_op_ok_without_clear(patch->refresh_on_load_op)) {
+    return invalid_argument("patch op out of range or CLEAR", "field=refresh_on_load");
+  }
+  const std::int32_t held = missing_items_limit_to_fm(cache->missing_items_limit());
+  // A loaded value outside the settable range survives a get / set round trip unchanged.
+  const std::int32_t limit = patch->missing_items_limit;
+  if (patch->missing_items_limit_op == FM_PATCH_OP_SET && (limit < 0 || limit > kMaxMissingItemsLimit) &&
+      limit != held) {
     return invalid_argument("missing_items_limit out of range", "missing_items_limit=" + std::to_string(limit));
   }
-  cache->set_save_data(options->save_data != 0);
-  if (limit != missing_items_limit_to_fm(cache->missing_items_limit())) {
-    cache->set_missing_items_limit(limit == kAutomaticMissingItemsLimit
-                                       ? std::nullopt
-                                       : std::optional<std::uint32_t>(static_cast<std::uint32_t>(limit)));
+  if (patch->save_data_op == FM_PATCH_OP_KEEP && patch->missing_items_limit_op == FM_PATCH_OP_KEEP &&
+      patch->refresh_on_load_op == FM_PATCH_OP_KEEP) {
+    return 0;
   }
-  cache->set_refresh_on_load(options->refresh_on_load != 0);
+  if (patch->save_data_op == FM_PATCH_OP_SET) {
+    cache->set_save_data(patch->save_data != 0);
+  }
+  if (patch->missing_items_limit_op == FM_PATCH_OP_CLEAR) {
+    cache->set_missing_items_limit(std::nullopt);
+  } else if (patch->missing_items_limit_op == FM_PATCH_OP_SET && limit != held) {
+    cache->set_missing_items_limit(std::optional<std::uint32_t>(static_cast<std::uint32_t>(limit)));
+  }
+  if (patch->refresh_on_load_op == FM_PATCH_OP_SET) {
+    cache->set_refresh_on_load(patch->refresh_on_load != 0);
+  }
   mark_cache_pivots_pending(wb->workbook(), cache_id);
   return 0;
 }
@@ -948,9 +971,10 @@ extern "C" fm_status_t fm_workbook_remove_pivot_cache_calculated_field(fm_workbo
 }
 
 extern "C" fm_status_t fm_workbook_get_pivot_cache_field_formula(const fm_workbook_t* wb, std::uint32_t cache_id,
-                                                                 std::size_t field_index, const char** out_utf8) {
+                                                                 std::size_t field_index, std::int32_t* out_present,
+                                                                 const char** out_formula) {
   clear_last_error();
-  if (wb == nullptr || out_utf8 == nullptr) {
+  if (wb == nullptr || out_present == nullptr || out_formula == nullptr) {
     return null_argument();
   }
   fm_status_t status = 0;
@@ -959,9 +983,11 @@ extern "C" fm_status_t fm_workbook_get_pivot_cache_field_formula(const fm_workbo
     return status;
   }
   if (!field->formula.has_value() || field->formula->empty()) {
-    *out_utf8 = "";
+    *out_present = 0;
+    *out_formula = nullptr;
   } else {
-    *out_utf8 = publish_scratch(wb, with_formula_prefix(display_formula_text(wb->workbook(), *field->formula, {})));
+    *out_present = 1;
+    *out_formula = publish_scratch(wb, with_formula_prefix(display_formula_text(wb->workbook(), *field->formula, {})));
   }
   return 0;
 }
@@ -1001,8 +1027,9 @@ extern "C" fm_status_t fm_workbook_get_pivot_cache_calculated_item_count(const f
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_get_pivot_cache_calculated_item(const fm_workbook_t* wb, std::uint32_t cache_id,
-                                                                   std::size_t idx, fm_pivot_calculated_item_t* out) {
+extern "C" fm_status_t fm_workbook_get_pivot_cache_calculated_item_at(const fm_workbook_t* wb, std::uint32_t cache_id,
+                                                                      std::size_t idx,
+                                                                      fm_pivot_calculated_item_info_t* out) {
   clear_last_error();
   if (wb == nullptr || out == nullptr) {
     return null_argument();
@@ -1011,7 +1038,7 @@ extern "C" fm_status_t fm_workbook_get_pivot_cache_calculated_item(const fm_work
   if (fm_status_t rc = resolve_cache(wb, cache_id, &cache); rc != 0) {
     return rc;
   }
-  if (fm_status_t rc = check_index(idx, cache->calculated_items().size(), "index"); rc != 0) {
+  if (fm_status_t rc = check_index(idx, cache->calculated_items().size(), "item_index"); rc != 0) {
     return rc;
   }
   if (auto rc = check_record_size(*out); rc != 0) {
@@ -1037,10 +1064,10 @@ extern "C" fm_status_t fm_workbook_get_pivot_cache_calculated_item(const fm_work
     }
   }
   formulon::c_api::parts::TextStore& store = fresh_read_scratch(wb);
-  fm_pivot_calculated_item_t result{};
+  fm_pivot_calculated_item_info_t result{};
   result.struct_size = out->struct_size;
   result.field_index = entry.cache_field_index;
-  result.name = store_cstr(store, name);
+  result.name = name.empty() ? nullptr : store_cstr(store, name);
   result.formula = store_cstr(store, with_formula_prefix(entry.formula));
   result.scoped = entry.has_area && scoped ? 1 : 0;
   *out = result;

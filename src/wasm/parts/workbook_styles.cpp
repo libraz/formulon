@@ -252,9 +252,9 @@ constexpr BorderFieldNames kDxfBorderFields{"dxf.border.left",        "dxf.borde
                                             "dxf.border.bottom",      "dxf.border.diagonal", "dxf.border.diagonalUp",
                                             "dxf.border.diagonalDown"};
 
-fm_border_record_t js_pull_border_record(const emscripten::val& record, const BorderFieldNames& names,
-                                         JsNarrowNumericReader& reader) {
-  fm_border_record_t br{};
+fm_border_t js_pull_border_record(const emscripten::val& record, const BorderFieldNames& names,
+                                  JsNarrowNumericReader& reader) {
+  fm_border_t br{};
   br.left = js_pull_border_side(reader.value(record, "left", names.left), &reader);
   br.right = js_pull_border_side(reader.value(record, "right", names.right), &reader);
   br.top = js_pull_border_side(reader.value(record, "top", names.top), &reader);
@@ -268,7 +268,7 @@ fm_border_record_t js_pull_border_record(const emscripten::val& record, const Bo
 /// Builds the JS mirror of a font record. Shared by `getFont` and the
 /// `<dxf>` font projection so both surface the same field set. An absent
 /// element reads as `null`.
-emscripten::val js_font_record(const fm_font_record_t& f) {
+emscripten::val js_font_record(const fm_font_t& f) {
   emscripten::val o = emscripten::val::object();
   js_set_cstr(o, "name", f.name);
   js_set_present_or_null(o, "sizePt", f.has_size_pt, f.size_pt);
@@ -291,7 +291,7 @@ emscripten::val js_font_record(const fm_font_record_t& f) {
 /// Reads a font record out of a JS object. `name_storage` owns the font
 /// name for the duration of the C ABI call, which borrows the pointer. An
 /// omitted or `null` element is absent from the record.
-void js_pull_font_record(const emscripten::val& record, std::string* name_storage, fm_font_record_t* out,
+void js_pull_font_record(const emscripten::val& record, std::string* name_storage, fm_font_t* out,
                          JsNarrowNumericReader& reader) {
   const auto flag = [&](const char* key, const char* field, int32_t* has, int32_t* value) {
     const emscripten::val v = reader.value(record, key, field);
@@ -322,7 +322,7 @@ void js_pull_font_record(const emscripten::val& record, std::string* name_storag
   out->color = js_pull_color_spec(record, "color", &reader);
 }
 
-emscripten::val js_fill_record(const fm_fill_record_t& f) {
+emscripten::val js_fill_record(const fm_fill_t& f) {
   emscripten::val o = emscripten::val::object();
   o.set("pattern", static_cast<std::uint32_t>(f.pattern));
   o.set("foreground", js_color_spec(f.foreground));
@@ -350,9 +350,9 @@ emscripten::val js_fill_record(const fm_fill_record_t& f) {
 
 /// Reads a fill record out of a JS object. `stops` owns the gradient stops
 /// for the duration of the C ABI call, which borrows the pointer.
-fm_fill_record_t js_pull_fill_record(const emscripten::val& record, std::vector<fm_gradient_stop_t>* stops,
-                                     JsNarrowNumericReader& reader) {
-  fm_fill_record_t fr{};
+fm_fill_t js_pull_fill_record(const emscripten::val& record, std::vector<fm_gradient_stop_t>* stops,
+                              JsNarrowNumericReader& reader) {
+  fm_fill_t fr{};
   fr.pattern = reader.u8(record, "pattern", 0U, "fill.pattern");
   fr.foreground = js_pull_color_spec(record, "foreground", &reader);
   fr.background = js_pull_color_spec(record, "background", &reader);
@@ -383,7 +383,7 @@ fm_fill_record_t js_pull_fill_record(const emscripten::val& record, std::vector<
   return fr;
 }
 
-emscripten::val js_border_record(const fm_border_record_t& b) {
+emscripten::val js_border_record(const fm_border_t& b) {
   emscripten::val o = emscripten::val::object();
   o.set("left", js_border_side(b.left));
   o.set("right", js_border_side(b.right));
@@ -457,7 +457,7 @@ emscripten::val js_cell_xf_result(fm_status_t rc, const fm_cell_xf_t& xf) {
 // ---- Per-cell xf index get/set -----------------------------------------
 
 double JsWorkbook::getCellXfIndex(uint32_t sheet, uint32_t row, uint32_t col) const {
-  std::size_t xf = 0;
+  uint32_t xf = 0;
   if (!succeeded(handle_ != nullptr ? fm_sheet_get_cell_xf_index(handle_, sheet, row, col, &xf)
                                     : kBindingInvalidHandle)) {
     return 0.0;
@@ -491,21 +491,22 @@ void JsWorkbook::setRangeXfIndex(uint32_t sheet, emscripten::val range, uint32_t
 
 emscripten::val JsWorkbook::getCellXf(uint32_t xf_index) const {
   fm_cell_xf_t xf{};
-  const fm_status_t rc = handle_ != nullptr ? fm_workbook_get_cell_xf(handle_, xf_index, &xf) : kBindingInvalidHandle;
+  const fm_status_t rc =
+      handle_ != nullptr ? fm_workbook_get_cell_xf_at(handle_, xf_index, &xf) : kBindingInvalidHandle;
   return js_cell_xf_result(rc, xf);
 }
 
 emscripten::val JsWorkbook::getFont(uint32_t font_index) const {
-  fm_font_record_t f{};
-  if (!succeeded(handle_ != nullptr ? fm_workbook_get_font(handle_, font_index, &f) : kBindingInvalidHandle)) {
+  fm_font_t f{};
+  if (!succeeded(handle_ != nullptr ? fm_workbook_get_font_at(handle_, font_index, &f) : kBindingInvalidHandle)) {
     return emscripten::val::undefined();
   }
   return js_font_record(f);
 }
 
 emscripten::val JsWorkbook::getFill(uint32_t fill_index) const {
-  fm_fill_record_t f{};
-  if (!succeeded(handle_ != nullptr ? fm_workbook_get_fill(handle_, fill_index, &f) : kBindingInvalidHandle)) {
+  fm_fill_t f{};
+  if (!succeeded(handle_ != nullptr ? fm_workbook_get_fill_at(handle_, fill_index, &f) : kBindingInvalidHandle)) {
     return emscripten::val::undefined();
   }
   return js_fill_record(f);
@@ -516,8 +517,8 @@ emscripten::val JsWorkbook::getDefaultFont() const {
 }
 
 emscripten::val JsWorkbook::getBorder(uint32_t border_index) const {
-  fm_border_record_t b{};
-  if (!succeeded(handle_ != nullptr ? fm_workbook_get_border(handle_, border_index, &b) : kBindingInvalidHandle)) {
+  fm_border_t b{};
+  if (!succeeded(handle_ != nullptr ? fm_workbook_get_border_at(handle_, border_index, &b) : kBindingInvalidHandle)) {
     return emscripten::val::undefined();
   }
   return js_border_record(b);
@@ -533,8 +534,8 @@ emscripten::val JsWorkbook::getNumFmt(uint32_t num_fmt_id) const {
 }
 
 emscripten::val JsWorkbook::getDxf(uint32_t dxf_index) const {
-  fm_dxf_record_t d{};
-  if (!succeeded(handle_ != nullptr ? fm_workbook_get_dxf(handle_, dxf_index, &d) : kBindingInvalidHandle)) {
+  fm_dxf_t d{};
+  if (!succeeded(handle_ != nullptr ? fm_workbook_get_dxf_at(handle_, dxf_index, &d) : kBindingInvalidHandle)) {
     return emscripten::val::undefined();
   }
   emscripten::val o = emscripten::val::object();
@@ -559,6 +560,19 @@ emscripten::val JsWorkbook::getDxf(uint32_t dxf_index) const {
 }
 
 // ---- Style record adders -----------------------------------------------
+
+namespace {
+
+/// Calls an adder whose out-parameter is `uint32_t` and widens the index to the caller's `size_t`.
+template <typename Fn, typename Record>
+fm_status_t add_indexed(Fn fn, fm_workbook_t* handle, const Record* record, std::size_t* idx) {
+  uint32_t out = 0;
+  const fm_status_t rc = fn(handle, record, &out);
+  *idx = out;
+  return rc;
+}
+
+}  // namespace
 
 template <typename Pull, typename Add>
 uint32_t JsWorkbook::add_style_record(const char* op, const emscripten::val& record, Pull&& pull, Add&& add) {
@@ -594,7 +608,7 @@ void JsWorkbook::set_style_record(const char* op, const emscripten::val& record,
 
 uint32_t JsWorkbook::addFont(emscripten::val record) {
   std::string name;
-  fm_font_record_t fr{};
+  fm_font_t fr{};
   return add_style_record(
       "addFont", record,
       [&](JsNarrowNumericReader& reader, const emscripten::val& rec) { js_pull_font_record(rec, &name, &fr, reader); },
@@ -603,7 +617,7 @@ uint32_t JsWorkbook::addFont(emscripten::val record) {
 
 void JsWorkbook::setFont(uint32_t font_index, emscripten::val record) {
   std::string name;
-  fm_font_record_t fr{};
+  fm_font_t fr{};
   set_style_record(
       "setFont", record,
       [&](JsNarrowNumericReader& reader, const emscripten::val& rec) { js_pull_font_record(rec, &name, &fr, reader); },
@@ -612,7 +626,7 @@ void JsWorkbook::setFont(uint32_t font_index, emscripten::val record) {
 
 void JsWorkbook::setDefaultFont(emscripten::val record) {
   std::string name;
-  fm_font_record_t fr{};
+  fm_font_t fr{};
   set_style_record(
       "setDefaultFont", record,
       [&](JsNarrowNumericReader& reader, const emscripten::val& rec) { js_pull_font_record(rec, &name, &fr, reader); },
@@ -621,7 +635,7 @@ void JsWorkbook::setDefaultFont(emscripten::val record) {
 
 uint32_t JsWorkbook::addFill(emscripten::val record) {
   std::vector<fm_gradient_stop_t> stops;
-  fm_fill_record_t fr{};
+  fm_fill_t fr{};
   return add_style_record(
       "addFill", record,
       [&](JsNarrowNumericReader& reader, const emscripten::val& rec) { fr = js_pull_fill_record(rec, &stops, reader); },
@@ -629,7 +643,7 @@ uint32_t JsWorkbook::addFill(emscripten::val record) {
 }
 
 uint32_t JsWorkbook::addBorder(emscripten::val record) {
-  fm_border_record_t br{};
+  fm_border_t br{};
   return add_style_record(
       "addBorder", record,
       [&](JsNarrowNumericReader& reader, const emscripten::val& rec) {
@@ -652,7 +666,7 @@ uint32_t JsWorkbook::addXf(emscripten::val record) {
   return add_style_record(
       "addCellXf", record,
       [&](JsNarrowNumericReader& reader, const emscripten::val& rec) { js_pull_cell_xf(rec, &xf, reader); },
-      [&](fm_workbook_t* handle, std::size_t* idx) { return fm_workbook_add_cell_xf(handle, &xf, idx); });
+      [&](fm_workbook_t* handle, std::size_t* idx) { return add_indexed(fm_workbook_add_cell_xf, handle, &xf, idx); });
 }
 
 uint32_t JsWorkbook::addDxf(emscripten::val record) {
@@ -661,7 +675,7 @@ uint32_t JsWorkbook::addDxf(emscripten::val record) {
   std::string alignment_xml;
   std::string protection_xml;
   std::vector<fm_gradient_stop_t> fill_stops;
-  fm_dxf_record_t dxf{};
+  fm_dxf_t dxf{};
   return add_style_record(
       "addDxf", record,
       [&](JsNarrowNumericReader& reader, const emscripten::val& rec) {
@@ -696,7 +710,7 @@ uint32_t JsWorkbook::addDxf(emscripten::val record) {
         dxf.alignment_xml = alignment_xml.c_str();
         dxf.protection_xml = protection_xml.c_str();
       },
-      [&](fm_workbook_t* handle, std::size_t* idx) { return fm_workbook_add_dxf(handle, &dxf, idx); });
+      [&](fm_workbook_t* handle, std::size_t* idx) { return add_indexed(fm_workbook_add_dxf, handle, &dxf, idx); });
 }
 
 // ---- Style count accessors ---------------------------------------------
@@ -725,7 +739,7 @@ double JsWorkbook::cellStyleXfCount() const {
 emscripten::val JsWorkbook::getCellStyleXf(uint32_t index) const {
   fm_cell_xf_t xf{};
   const fm_status_t rc =
-      handle_ != nullptr ? fm_workbook_get_cell_style_xf(handle_, index, &xf) : kBindingInvalidHandle;
+      handle_ != nullptr ? fm_workbook_get_cell_style_xf_at(handle_, index, &xf) : kBindingInvalidHandle;
   return js_cell_xf_result(rc, xf);
 }
 
@@ -734,7 +748,9 @@ uint32_t JsWorkbook::addCellStyleXf(emscripten::val record) {
   return add_style_record(
       "addCellStyleXf", record,
       [&](JsNarrowNumericReader& reader, const emscripten::val& rec) { js_pull_cell_xf(rec, &xf, reader); },
-      [&](fm_workbook_t* handle, std::size_t* idx) { return fm_workbook_add_cell_style_xf(handle, &xf, idx); });
+      [&](fm_workbook_t* handle, std::size_t* idx) {
+        return add_indexed(fm_workbook_add_cell_style_xf, handle, &xf, idx);
+      });
 }
 
 }  // namespace parts

@@ -19,11 +19,11 @@ using detail::StyleCountResult;
 namespace {
 
 // The JS `CellStyleRecord` record of `cs`.
-Napi::Object CellStyleToJs(Napi::Env env, const fm_cell_style_record_t& cs) {
+Napi::Object CellStyleToJs(Napi::Env env, const fm_cell_style_t& cs) {
   Napi::Object out = Napi::Object::New(env);
   out.Set("name", JsString(env, cs.name));
   out.Set("styleXfIndex", Napi::Number::New(env, cs.style_xf_index));
-  out.Set("builtinId", Napi::Number::New(env, cs.builtin_id));
+  out.Set("builtinId", cs.has_builtin_id != 0 ? Napi::Value(Napi::Number::New(env, cs.builtin_id)) : env.Null());
   out.Set("iLevel", Napi::Number::New(env, cs.i_level));
   out.Set("hidden", Napi::Boolean::New(env, cs.hidden != 0));
   out.Set("customBuiltin", Napi::Boolean::New(env, cs.custom_builtin != 0));
@@ -86,7 +86,7 @@ Napi::Value Workbook::GetCellStyle(const Napi::CallbackInfo& info) {
     return ThrowInvalidHandle(env);
   }
   const std::string name = ArgString(info, 0);
-  fm_cell_style_record_t cs{};
+  fm_cell_style_t cs{};
   int32_t present = 0;
   const fm_status_t rc = fm_workbook_get_cell_style(handle_, name.c_str(), &present, &cs);
   return OptionalOrNull(env, rc, present, rc == 0 && present != 0 ? Napi::Value(CellStyleToJs(env, cs)) : env.Null());
@@ -99,7 +99,7 @@ Napi::Value Workbook::GetCellStyleXf(const Napi::CallbackInfo& info) {
   }
   const uint32_t index = ArgU32(info, 0);
   fm_cell_xf_t xf{};
-  const fm_status_t rc = fm_workbook_get_cell_style_xf(handle_, index, &xf);
+  const fm_status_t rc = fm_workbook_get_cell_style_xf_at(handle_, index, &xf);
   return rc == 0 ? Napi::Value(CellXfResultToJs(env, xf)) : ThrowStatus(env, rc);
 }
 
@@ -112,10 +112,12 @@ Napi::Value Workbook::SetCellStyle(const Napi::CallbackInfo& info) {
   CheckedSpecReader reader(env);
   std::string name;
   reader.String(record, "name", &name);
-  fm_cell_style_record_t cs{};
+  fm_cell_style_t cs{};
   cs.name = name.c_str();
   cs.style_xf_index = reader.U32(record, "styleXfIndex", 0U);
-  cs.builtin_id = reader.U32(record, "builtinId", FM_CELL_STYLE_BUILTIN_ID_NONE);
+  bool has_builtin_id = false;
+  cs.builtin_id = reader.U32(record, "builtinId", 0U, &has_builtin_id);
+  cs.has_builtin_id = has_builtin_id ? 1 : 0;
   cs.i_level = reader.U32(record, "iLevel", 0U);
   cs.hidden = reader.Bool(record, "hidden", false) ? 1 : 0;
   cs.custom_builtin = reader.Bool(record, "customBuiltin", false) ? 1 : 0;
@@ -227,28 +229,33 @@ Napi::Value Workbook::SetTableStyleDefaults(const Napi::CallbackInfo& info) {
     return ThrowInvalidHandle(env);
   }
   const Napi::Object defaults = ArgObject(info, 0);
-  // An omitted name keeps the default (NULL); `null` removes it ("").
+  // An omitted name keeps the default; `null` removes it.
   CheckedSpecReader reader(env);
   std::string table;
   std::string pivot;
-  const auto name = [&](const char* key, std::string* store) -> const char* {
+  fm_table_style_defaults_patch_t patch = FM_STRUCT_INIT(fm_table_style_defaults_patch_t);
+  const auto name = [&](const char* key, std::string* store, fm_patch_op_t* op, const char** field) {
     const Napi::Value v = reader.Get(defaults, key);
     switch (ClassifyPatchKey(reader, v, key, true)) {
       case PatchKey::kClear:
-        return "";
+        *op = FM_PATCH_OP_CLEAR;
+        break;
       case PatchKey::kSet:
-        return reader.String(v, key, store) ? store->c_str() : nullptr;
+        if (reader.String(v, key, store)) {
+          *op = FM_PATCH_OP_SET;
+          *field = store->c_str();
+        }
+        break;
       case PatchKey::kKeep:
         break;
     }
-    return nullptr;
   };
-  const char* table_ptr = name("tableStyle", &table);
-  const char* pivot_ptr = name("pivotStyle", &pivot);
+  name("tableStyle", &table, &patch.table_style_op, &patch.table_style);
+  name("pivotStyle", &pivot, &patch.pivot_style_op, &patch.pivot_style);
   if (!reader.ok()) {
     return env.Undefined();
   }
-  const fm_status_t rc = fm_workbook_update_table_style_defaults(handle_, table_ptr, pivot_ptr);
+  const fm_status_t rc = fm_workbook_update_table_style_defaults(handle_, &patch);
   return ValueOrThrow(env, rc, env.Undefined());
 }
 

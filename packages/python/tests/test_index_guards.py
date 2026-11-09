@@ -307,7 +307,8 @@ def _is_non_integer(node: ast.AST) -> bool:
     """
     if isinstance(node, ast.Constant) and isinstance(node.value, float):
         return True
-    if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "float":
+    if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id in ("float", "_finite"):
+        # `_finite` range-checks and returns a float.
         return True
     if isinstance(node, ast.IfExp):
         return _is_non_integer(node.body) and _is_non_integer(node.orelse)
@@ -610,6 +611,7 @@ class ArgumentSweepTests(unittest.TestCase):
             'LIB.fm_sheet_set_number(h, _uint(sheet, "sheet_index"), 0, 0, 1.0)',
             '_read_count(LIB.fm_sheet_get_merge_count, h, _uint(sheet, "sheet"))',
             'S.COMMENT.pack(LIB, ptr, {"row": _uint(row, "row")})',
+            "def f(name, value):\n    values = {}\n    values[name] = 0.0 if value is None else _finite(value, name)\n    S.COMMENT.pack(LIB, ptr, values)\n",
         ):
             with self.subTest(source=source):
                 self.assertEqual(_sweep_source(source, functions), [])

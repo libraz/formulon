@@ -15,6 +15,14 @@ namespace {
 constexpr fm_status_t kBindingNullPointer = static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer);
 constexpr fm_status_t kIndexOutOfRange = static_cast<fm_status_t>(formulon::FormulonErrorCode::kIndexOutOfRange);
 
+/// Sets the PivotTable style default, or clears it for "".
+fm_status_t SetPivotStyleDefault(fm_workbook_t* wb, const char* pivot_style) {
+  fm_table_style_defaults_patch_t patch = FM_STRUCT_INIT(fm_table_style_defaults_patch_t);
+  patch.pivot_style_op = pivot_style[0] == '\0' ? FM_PATCH_OP_CLEAR : FM_PATCH_OP_SET;
+  patch.pivot_style = pivot_style;
+  return fm_workbook_update_table_style_defaults(wb, &patch);
+}
+
 TEST(FormulonCApiPivotReport, BoundsCoverTheProjectedCells) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
@@ -37,7 +45,7 @@ TEST(FormulonCApiPivotReport, BoundsCoverTheProjectedCells) {
   EXPECT_EQ(rect.first_col, 3U) << "the scratch pivot is anchored at D1";
 
   for (std::size_t i = 0; i < count; ++i) {
-    fm_pivot_cell_t cell = FM_STRUCT_INIT(fm_pivot_cell_t);
+    fm_pivot_cell_info_t cell = FM_STRUCT_INIT(fm_pivot_cell_info_t);
     ASSERT_EQ(fm_pivot_report_get_cell_at(report.handle, i, &cell), 0);
     EXPECT_GE(cell.row, rect.first_row);
     EXPECT_LE(cell.row, rect.last_row);
@@ -57,7 +65,7 @@ TEST(FormulonCApiPivotReport, ReadsRefuseNullAndOutOfRangeArguments) {
   std::size_t count = 0;
   int32_t present = 0;
   fm_cell_rect_t rect{};
-  fm_pivot_cell_t cell = FM_STRUCT_INIT(fm_pivot_cell_t);
+  fm_pivot_cell_info_t cell = FM_STRUCT_INIT(fm_pivot_cell_info_t);
   EXPECT_EQ(fm_pivot_report_get_cell_count(nullptr, &count), kBindingNullPointer);
   EXPECT_EQ(fm_pivot_report_get_cell_count(report.handle, nullptr), kBindingNullPointer);
   EXPECT_EQ(fm_pivot_report_get_bounds(nullptr, &present, &rect), kBindingNullPointer);
@@ -101,7 +109,7 @@ TEST(FormulonCApiPivotReport, AnchorRefusesBadIndices) {
 TEST(FormulonCApiPivotReport, NewPivotTakesThePivotStyleDefault) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  ASSERT_EQ(fm_workbook_update_table_style_defaults(wb.handle, nullptr, "PivotStyleMedium5"), 0);
+  ASSERT_EQ(SetPivotStyleDefault(wb.handle, "PivotStyleMedium5"), 0);
   std::size_t pivot_index = 0;
   ASSERT_EQ(BuildScratchPivot(wb.handle, nullptr, &pivot_index), 0) << fm_get_last_error_message();
   fm_pivot_style_options_t style = FM_STRUCT_INIT(fm_pivot_style_options_t);
@@ -118,8 +126,8 @@ TEST(FormulonCApiPivotReport, NewPivotTakesThePivotStyleDefault) {
 TEST(FormulonCApiPivotReport, NewPivotFallsBackToTheBuiltInStyleWhenTheDefaultIsRemoved) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  ASSERT_EQ(fm_workbook_update_table_style_defaults(wb.handle, nullptr, "PivotStyleMedium5"), 0);
-  ASSERT_EQ(fm_workbook_update_table_style_defaults(wb.handle, nullptr, ""), 0);
+  ASSERT_EQ(SetPivotStyleDefault(wb.handle, "PivotStyleMedium5"), 0);
+  ASSERT_EQ(SetPivotStyleDefault(wb.handle, ""), 0);
   std::size_t pivot_index = 0;
   ASSERT_EQ(BuildScratchPivot(wb.handle, nullptr, &pivot_index), 0) << fm_get_last_error_message();
   fm_pivot_style_options_t style = FM_STRUCT_INIT(fm_pivot_style_options_t);
@@ -149,7 +157,7 @@ TEST(FormulonCApiPivotReport, FieldSpecSubtotalTopDefaultsToTheGroupHead) {
     std::size_t field = 99;
     ASSERT_EQ(fm_sheet_add_pivot_field(wb.handle, 0, pivot_index, &spec, &field), 0) << fm_get_last_error_message();
     fm_pivot_field_info_t info = FM_STRUCT_INIT(fm_pivot_field_info_t);
-    ASSERT_EQ(fm_sheet_get_pivot_field(wb.handle, 0, pivot_index, field, &info), 0);
+    ASSERT_EQ(fm_sheet_get_pivot_field_at(wb.handle, 0, pivot_index, field, &info), 0);
     EXPECT_EQ(info.subtotal_top, expected_read[i]) << "spec value " << values[i];
   }
 }

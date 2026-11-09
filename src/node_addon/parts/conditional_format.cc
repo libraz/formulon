@@ -1,6 +1,7 @@
 // Conditional-formatting bindings: the `evaluateCfRange` evaluator plus the
 // read / mutate surface for per-sheet conditional-format rules.
 
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <string>
@@ -14,7 +15,7 @@ namespace {
 
 fm_cfvo_t PullCfvo(CheckedSpecReader& reader, const Napi::Object& spec, formulon::c_api::BorrowedStringArena* strings) {
   fm_cfvo_t out{};
-  out.type = reader.U8(spec, "type", 0U);
+  out.type = reader.I32(spec, "type", 0);
   out.gte = reader.Bool(spec, "gte", true) ? 1 : 0;
   std::string value;
   if (reader.String(spec, "value", &value)) {
@@ -46,11 +47,12 @@ Napi::Value Workbook::EvaluateCfRange(const Napi::CallbackInfo& info) {
   if (!ReadCellRect(reader, ArgObject(info, 1), &rect)) {
     return env.Undefined();
   }
-  // The registration guard requires a serial; NaN disables
-  // `timePeriod` rules, as the C ABI documents.
+  // NaN is "no today": `timePeriod` rules then match nothing.
   const double today_serial = ArgDouble(info, 2);
+  const int32_t has_today_serial = std::isnan(today_serial) ? 0 : 1;
   fm_cf_results_t* results = nullptr;
-  fm_status_t rc = fm_sheet_evaluate_cf_range(handle_, sheet, &rect, today_serial, &results);
+  fm_status_t rc = fm_sheet_evaluate_cf_range(handle_, sheet, &rect, has_today_serial,
+                                              has_today_serial != 0 ? today_serial : 0.0, &results);
   if (rc != 0) {
     return ThrowStatus(env, rc);
   }
@@ -73,7 +75,7 @@ Napi::Value Workbook::EvaluateCfRange(const Napi::CallbackInfo& info) {
     Napi::Array matches = Napi::Array::New(env, match_count);
     std::size_t mj = 0;
     for (std::size_t j = 0; j < match_count; ++j) {
-      fm_cf_match_t m = FM_STRUCT_INIT(fm_cf_match_t);
+      fm_cf_match_info_t m = FM_STRUCT_INIT(fm_cf_match_info_t);
       if (fm_cf_results_get_match_at(results, i, j, &m) != 0) {
         continue;
       }
@@ -232,7 +234,7 @@ Napi::Value Workbook::GetCfRule(const Napi::CallbackInfo& info) {
     return ThrowInvalidHandle(env);
   }
   fm_cf_rule_t rule = FM_STRUCT_INIT(fm_cf_rule_t);
-  const fm_status_t rc = fm_sheet_get_cf_rule(handle_, ArgU32(info, 0), ArgU32(info, 1), &rule);
+  const fm_status_t rc = fm_sheet_get_cf_rule_at(handle_, ArgU32(info, 0), ArgU32(info, 1), &rule);
   return ValueOrThrow(env, rc, rc == 0 ? Napi::Value(CfRuleToJs(env, rule)) : env.Undefined());
 }
 
@@ -252,7 +254,7 @@ Napi::Value Workbook::AddConditionalFormat(const Napi::CallbackInfo& info) {
   // the earlier strings as the later branches add theirs.
   std::vector<fm_cell_rect_t> ranges_buf;
   std::vector<fm_cfvo_t> color_scale_thresholds;
-  std::vector<fm_color_spec_t> color_scale_colors;
+  std::vector<fm_color_t> color_scale_colors;
   std::vector<fm_cfvo_t> icon_set_thresholds;
   std::vector<fm_cf_icon_t> icon_set_icons;
   formulon::c_api::BorrowedStringArena cfvo_strings;
@@ -297,7 +299,7 @@ Napi::Value Workbook::AddConditionalFormat(const Napi::CallbackInfo& info) {
 
   fm_cf_rule_t rule = FM_STRUCT_INIT(fm_cf_rule_t);
   rule.id = id.empty() ? nullptr : id.c_str();
-  rule.type = reader.U8(v, "type", 0U);
+  rule.type = reader.I32(v, "type", 0);
   rule.priority = reader.I32(v, "priority", 0);
   rule.stop_if_true = reader.Bool(v, "stopIfTrue", false) ? 1 : 0;
   bool dxf_index_present = false;
@@ -310,7 +312,7 @@ Napi::Value Workbook::AddConditionalFormat(const Napi::CallbackInfo& info) {
   rule.formula1 = formula1.empty() ? nullptr : formula1.c_str();
   rule.formula2 = formula2.empty() ? nullptr : formula2.c_str();
   bool op_present = false;
-  rule.op = reader.U8(v, "operator", 0U, &op_present);
+  rule.op = reader.I32(v, "operator", 0, &op_present);
   if (op_present) {
     rule.op_engaged = 1;
   }
@@ -330,7 +332,7 @@ Napi::Value Workbook::AddConditionalFormat(const Napi::CallbackInfo& info) {
   }
   rule.text = text.empty() ? nullptr : text.c_str();
   bool time_period_present = false;
-  rule.time_period = reader.U8(v, "timePeriod", 0U, &time_period_present);
+  rule.time_period = reader.I32(v, "timePeriod", 0, &time_period_present);
   if (time_period_present) {
     rule.time_period_engaged = 1;
   }
@@ -406,7 +408,7 @@ Napi::Value Workbook::AddConditionalFormat(const Napi::CallbackInfo& info) {
       rule.data_bar_gradient = gradient ? 1 : 0;
     }
     bool axis_position_present = false;
-    rule.data_bar_axis_position = reader.U8(db, "axisPosition", 0U, &axis_position_present);
+    rule.data_bar_axis_position = reader.I32(db, "axisPosition", 0, &axis_position_present);
     if (axis_position_present) {
       rule.data_bar_axis_position_engaged = 1;
     }
@@ -430,12 +432,12 @@ Napi::Value Workbook::AddConditionalFormat(const Napi::CallbackInfo& info) {
       rule.data_bar_axis_color_engaged = 1;
       rule.data_bar_axis_color = ReadColorSpec(reader, axis_color, "axisColor");
     }
-    rule.data_bar_direction = reader.U8(db, "direction", 0U);
+    rule.data_bar_direction = reader.I32(db, "direction", 0);
   }
   Napi::Object is;
   if (reader.Object(v, "iconSet", &is)) {
     rule.icon_set_engaged = 1;
-    rule.icon_set_name = reader.U8(is, "name", 0U);
+    rule.icon_set_name = reader.I32(is, "name", 0);
     Napi::Array arr;
     if (reader.Array(is, "thresholds", &arr)) {
       icon_set_thresholds.reserve(arr.Length());

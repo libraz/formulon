@@ -39,6 +39,7 @@ collections:
   validation: { key: index, access: list, plural: validations, ops: [validation.add, validation.get, validation.get_count, validation.remove] }
   protected_range: { key: index, access: list, plural: protected_ranges, ops: [protected_range.add, protected_range.get, protected_range.get_count, protected_range.remove, protected_range.update] }
   sparkline_group: { key: index, access: list, plural: sparkline_groups, ops: [sparkline_group.add, sparkline_group.get, sparkline_group.get_count, sparkline_group.remove, sparkline_group.update] }
+  table_column: { key: index, access: exempt, plural: table_columns, exempt: "C-only getter; the bindings read columns as a Table field", ops: [table_column.get] }
   sparkline: { key: index, access: exempt, plural: sparklines, exempt: "C-only getter; the bindings read sparklines as a SparklineGroup field", ops: [sparkline.get] }
   external_link: { key: index, access: list, plural: external_links, ops: [external_link.get, external_link.get_count] }
   cell_phonetic_run: { key: index, access: property, plural: cell_phonetic_runs, ops: [cell_phonetic_run.get, cell_phonetic_run.get_count] }
@@ -93,6 +94,7 @@ enum_distinct:
   - { enums: [enum.border_style, enum.pivot_filter_value_kind], reason: "share None / Double: border line style vs filter operand kind; values follow the OOXML vocabulary order" }
   - { enums: [enum.border_style, enum.underline_style], reason: "share None / Double: border line style vs font underline; values follow the OOXML vocabulary order" }
   - { enums: [enum.pivot_filter_value_kind, enum.underline_style], reason: "share None / Double: filter operand kind vs font underline; values follow the OOXML vocabulary order" }
+  - { enums: [enum.chart_tick_label_position, enum.shape_paint], reason: "share Absent / None: tick-label placement vs shape fill paint; Absent is the not-set value both carry" }
   - { enums: [enum.fill_pattern, enum.shape_paint], reason: "share None / Solid: cell fill pattern vs shape fill paint; values follow the OOXML vocabulary order" }
   - { enums: [enum.cf_match_kind, enum.cf_rule_type], reason: "share ColorScale / DataBar / IconSet: kind of a matched rule's result vs kind of the rule" }
   - { enums: [enum.chart_label_position, enum.phonetic_alignment], reason: "share Left / Center: data-label placement vs furigana alignment; values follow the OOXML vocabulary order" }
@@ -163,7 +165,7 @@ entries:
   record.read_diagnostics:
     kind: record
     role: result
-    c: fm_read_diagnostics_t
+    c: fm_read_diagnostics_info_t
     py: ReadDiagnostics
     surfaces: [c, py]
     was: { c: fm_read_diagnostics_t, py: ReadDiagnostics }
@@ -177,7 +179,7 @@ entries:
   record.save_diagnostics:
     kind: record
     role: result
-    c: fm_save_diagnostics_t
+    c: fm_save_diagnostics_info_t
     py: SaveDiagnostics
     surfaces: [c, py]
     was: { c: fm_save_diagnostics_t, py: SaveDiagnostics }
@@ -192,12 +194,12 @@ entries:
   record.reference:
     kind: record
     role: result
-    c: fm_parsed_reference_t
+    c: fm_parsed_reference_info_t
     js: ParsedReference
     py: ParsedReference
     surfaces: [c, wasm, native, py]
     exception: "sheetName is a text qualifier that may name no sheet of the workbook, not a workbook sheet"
-    was: { c: fm_reference_t, js: ParsedReference, py: ParsedReference }
+    was: { js: ParsedReference, py: ParsedReference }
   type.cell_range:
     kind: typedef
     c: fm_cell_range_t
@@ -246,7 +248,7 @@ entries:
   record.comment:
     kind: record
     role: result
-    c: fm_comment_t
+    c: fm_comment_info_t
     js: Comment
     py: Comment
     surfaces: [c, wasm, native, py]
@@ -316,7 +318,7 @@ entries:
   record.validation_outcome:
     kind: record
     role: result
-    c: fm_validation_outcome_t
+    c: fm_validation_outcome_info_t
     py: ValidationOutcome
     surfaces: [c, py]
     was: { c: fm_validation_outcome, py: ValidationOutcome }
@@ -348,6 +350,7 @@ entries:
     c: fm_threaded_comment_patch_t
     js: ThreadedCommentPatch
     surfaces: [c, wasm, native]
+    clearable: []
   record.person:
     kind: record
     role: result
@@ -364,7 +367,7 @@ entries:
   record.parallel_recalc_stats:
     kind: record
     role: result
-    c: fm_parallel_recalc_stats_t
+    c: fm_parallel_recalc_stats_info_t
     js: ParallelRecalcStats
     surfaces: [c, wasm, native]
     was: { c: fm_parallel_recalc_stats, js: ParallelRecalcStats }
@@ -478,7 +481,7 @@ entries:
   record.cf_match:
     kind: record
     role: result
-    c: fm_cf_match_t
+    c: fm_cf_match_info_t
     js: CfMatch
     py: CfMatch
     surfaces: [c, wasm, native, py]
@@ -518,7 +521,7 @@ entries:
   record.rect_pt:
     kind: record
     role: result
-    c: fm_rect_pt_t
+    c: fm_rect_pt_info_t
     js: RectPt
     py: RectPt
     surfaces: [c, wasm, native, py]
@@ -533,7 +536,7 @@ entries:
   record.margins_pt:
     kind: record
     role: result
-    c: fm_margins_pt_t
+    c: fm_margins_pt_info_t
     py: MarginsPt
     surfaces: [c, py]
     was: { c: fm_margins_pt, py: MarginsPt }
@@ -560,7 +563,7 @@ entries:
   record.page_layout:
     kind: record
     role: result
-    c: fm_page_layout_t
+    c: fm_page_layout_info_t
     py: PageLayout
     surfaces: [c, py]
     was: { c: fm_page_layout, py: PageLayout }
@@ -600,8 +603,9 @@ entries:
   record.page_setup_patch:
     kind: record
     role: patch
+    c: fm_page_setup_patch_t
     js: PageSetupPatch
-    surfaces: [wasm, native]
+    surfaces: [c, wasm, native]
     clearable: [orientation]
   record.page_margins:
     kind: record
@@ -619,8 +623,10 @@ entries:
   record.page_margins_patch:
     kind: record
     role: patch
+    c: fm_page_margins_patch_t
     js: PageMarginsPatch
-    surfaces: [wasm, native]
+    surfaces: [c, wasm, native]
+    clearable: []
   record.print_options:
     kind: record
     role: result
@@ -632,8 +638,10 @@ entries:
   record.print_options_patch:
     kind: record
     role: patch
+    c: fm_print_options_patch_t
     js: PrintOptionsPatch
-    surfaces: [wasm, native]
+    surfaces: [c, wasm, native]
+    clearable: []
     was: { js: PrintOptionsInput }
   record.header_footer:
     kind: record
@@ -646,8 +654,9 @@ entries:
   record.header_footer_patch:
     kind: record
     role: patch
+    c: fm_header_footer_patch_t
     js: HeaderFooterPatch
-    surfaces: [wasm, native]
+    surfaces: [c, wasm, native]
     clearable: [odd_header, odd_footer, even_header, even_footer, first_header, first_footer]
     was: { js: HeaderFooterInput }
   type.cf_results:
@@ -680,7 +689,7 @@ entries:
   record.cell_node:
     kind: record
     role: result
-    c: fm_cell_node_t
+    c: fm_cell_node_info_t
     js: CellNode
     py: CellNode
     surfaces: [c, wasm, native, py]
@@ -700,7 +709,7 @@ entries:
   record.pivot_cell:
     kind: record
     role: result
-    c: fm_pivot_cell_t
+    c: fm_pivot_cell_info_t
     js: PivotCell
     py: PivotCell
     surfaces: [c, wasm, native, py]
@@ -785,7 +794,7 @@ entries:
   record.pivot_data_field_spec:
     kind: record
     role: input
-    c: fm_pivot_data_field_spec_t
+    c: fm_pivot_data_field_t
     js: PivotDataFieldInput
     py: PivotDataFieldInput
     surfaces: [c, wasm, native, py]
@@ -831,7 +840,7 @@ entries:
   record.pivot_filter_spec:
     kind: record
     role: input
-    c: fm_pivot_filter_spec_t
+    c: fm_pivot_filter_t
     js: PivotFilterInput
     py: PivotFilterInput
     surfaces: [c, wasm, native, py]
@@ -847,8 +856,9 @@ entries:
   record.pivot_options_patch:
     kind: record
     role: patch
+    c: fm_pivot_options_patch_t
     js: PivotOptionsPatch
-    surfaces: [wasm, native]
+    surfaces: [c, wasm, native]
     clearable: [alt_text, alt_text_summary, error_caption, grand_total_caption, missing_caption]
   record.pivot_date_group_input:
     kind: record
@@ -868,16 +878,17 @@ entries:
   record.pivot_cache_options_patch:
     kind: record
     role: patch
+    c: fm_pivot_cache_options_patch_t
     js: PivotCacheOptionsPatch
-    surfaces: [wasm, native]
+    surfaces: [c, wasm, native]
     clearable: [missing_items_limit]
   record.pivot_calculated_item:
     kind: record
     role: result
-    c: fm_pivot_calculated_item_t
+    c: fm_pivot_calculated_item_info_t
     py: PivotCalculatedItem
     surfaces: [c, py]
-    was: { c: fm_pivot_calculated_item_t, py: PivotCalculatedItem }
+    was: { py: PivotCalculatedItem }
   record.spill_info:
     kind: record
     role: result
@@ -889,11 +900,11 @@ entries:
   record.array_formula:
     kind: record
     role: result
-    c: fm_array_formula_t
+    c: fm_array_formula_info_t
     js: ArrayFormula
     py: ArrayFormula
     surfaces: [c, wasm, native, py]
-    was: { c: fm_array_formula_t, js: ArrayFormula, py: ArrayFormula }
+    was: { js: ArrayFormula, py: ArrayFormula }
   record.array_formula_input:
     kind: record
     role: input
@@ -909,7 +920,7 @@ entries:
   record.function_metadata:
     kind: record
     role: result
-    c: fm_function_metadata_t
+    c: fm_function_metadata_info_t
     js: FunctionMetadata
     py: FunctionMetadata
     surfaces: [c, wasm, native, py]
@@ -925,7 +936,7 @@ entries:
   record.locale_facts:
     kind: record
     role: result
-    c: fm_locale_facts_t
+    c: fm_locale_facts_info_t
     js: LocaleFacts
     py: LocaleFacts
     surfaces: [c, wasm, native, py]
@@ -947,7 +958,7 @@ entries:
   record.sheet_view:
     kind: record
     role: result
-    c: fm_sheet_view_t
+    c: fm_sheet_view_info_t
     js: SheetView
     py: SheetView
     surfaces: [c, wasm, native, py]
@@ -955,7 +966,7 @@ entries:
   record.column_layout:
     kind: record
     role: result
-    c: fm_column_layout_t
+    c: fm_column_layout_info_t
     js: ColumnLayout
     py: ColumnLayout
     surfaces: [c, wasm, native, py]
@@ -963,7 +974,7 @@ entries:
   record.row_layout:
     kind: record
     role: result
-    c: fm_row_layout_t
+    c: fm_row_layout_info_t
     js: RowLayout
     py: RowLayout
     surfaces: [c, wasm, native, py]
@@ -1052,8 +1063,9 @@ entries:
   record.sheet_format_defaults_patch:
     kind: record
     role: patch
+    c: fm_sheet_format_defaults_patch_t
     js: SheetFormatDefaultsPatch
-    surfaces: [wasm, native]
+    surfaces: [c, wasm, native]
     clearable: [default_col_width_chars, default_row_height_pt]
   enum.geometry_mode:
     kind: enum
@@ -1065,7 +1077,7 @@ entries:
   record.width_model:
     kind: record
     role: result
-    c: fm_width_model_t
+    c: fm_width_model_info_t
     py: WidthModel
     surfaces: [c, py]
     was: { c: fm_width_model, py: WidthModel }
@@ -1094,7 +1106,7 @@ entries:
   record.color_spec:
     kind: record
     role: result
-    c: fm_color_spec_t
+    c: fm_color_t
     js: Color
     py: Color
     surfaces: [c, wasm, native, py]
@@ -1102,7 +1114,7 @@ entries:
   record.font_record:
     kind: record
     role: result
-    c: fm_font_record_t
+    c: fm_font_t
     js: Font
     py: Font
     surfaces: [c, wasm, native, py]
@@ -1128,7 +1140,7 @@ entries:
   record.fill_record:
     kind: record
     role: result
-    c: fm_fill_record_t
+    c: fm_fill_t
     js: Fill
     py: Fill
     surfaces: [c, wasm, native, py]
@@ -1154,7 +1166,7 @@ entries:
   record.border_record:
     kind: record
     role: result
-    c: fm_border_record_t
+    c: fm_border_t
     js: Border
     py: Border
     surfaces: [c, wasm, native, py]
@@ -1167,7 +1179,7 @@ entries:
   record.styles_batch:
     kind: record
     role: input
-    c: fm_styles_batch_t
+    c: fm_styles_batch_spec_t
     surfaces: [c]
     was: { c: fm_styles_batch }
   record.style_batch_indices:
@@ -1187,7 +1199,7 @@ entries:
   record.dxf_record:
     kind: record
     role: result
-    c: fm_dxf_record_t
+    c: fm_dxf_t
     js: Dxf
     py: Dxf
     surfaces: [c, wasm, native, py]
@@ -1195,7 +1207,7 @@ entries:
   record.cell_style_record:
     kind: record
     role: result
-    c: fm_cell_style_record_t
+    c: fm_cell_style_t
     js: CellStyle
     py: CellStyle
     surfaces: [c, wasm, native, py]
@@ -1271,7 +1283,7 @@ entries:
   record.effective_style:
     kind: record
     role: result
-    c: fm_effective_style_t
+    c: fm_effective_style_info_t
     py: EffectiveStyle
     color: resolved
     surfaces: [c, py]
@@ -1279,7 +1291,7 @@ entries:
   record.external_link_record:
     kind: record
     role: result
-    c: fm_external_link_record_t
+    c: fm_external_link_info_t
     js: ExternalLink
     py: ExternalLink
     surfaces: [c, wasm, native, py]
@@ -1720,7 +1732,7 @@ entries:
   record.drawing_object:
     kind: record
     role: result
-    c: fm_drawing_object_t
+    c: fm_drawing_object_info_t
     js: DrawingProperties
     py: DrawingProperties
     surfaces: [c, wasm, native, py]
@@ -1753,7 +1765,7 @@ entries:
   record.shape:
     kind: record
     role: result
-    c: fm_shape_t
+    c: fm_shape_info_t
     js: ShapeProperties
     py: ShapeProperties
     surfaces: [c, wasm, native, py]
@@ -1775,7 +1787,7 @@ entries:
   record.slicer:
     kind: record
     role: result
-    c: fm_slicer_t
+    c: fm_slicer_info_t
     js: SlicerProperties
     py: SlicerProperties
     surfaces: [c, wasm, native, py]
@@ -2296,7 +2308,7 @@ entries:
     was: { c: fm_chart_role_t }
   enum.chart_patch_op:
     kind: enum
-    c: fm_chart_patch_op_t
+    c: fm_patch_op_t
     surfaces: [c]
     was: { c: fm_chart_patch_op_t }
   type.chart:
@@ -2347,7 +2359,7 @@ entries:
   record.chart_plot:
     kind: record
     role: result
-    c: fm_chart_plot_t
+    c: fm_chart_plot_info_t
     surfaces: [c]
     was: { c: fm_chart_plot_t }
   enum.chart_source_kind:
@@ -2373,25 +2385,25 @@ entries:
   record.chart_series:
     kind: record
     role: result
-    c: fm_chart_series_t
+    c: fm_chart_series_info_t
     surfaces: [c]
     was: { c: fm_chart_series_t }
   record.chart_literal:
     kind: record
     role: result
-    c: fm_chart_literal_t
+    c: fm_chart_literal_info_t
     surfaces: [c]
     was: { c: fm_chart_literal_t }
   record.chart_point:
     kind: record
     role: result
-    c: fm_chart_point_t
+    c: fm_chart_point_info_t
     surfaces: [c]
     was: { c: fm_chart_point_t }
   record.chart_axis:
     kind: record
     role: result
-    c: fm_chart_axis_t
+    c: fm_chart_axis_info_t
     surfaces: [c]
     was: { c: fm_chart_axis_t }
   type.chart_data:
@@ -2404,7 +2416,7 @@ entries:
   record.chart_preview_overrides:
     kind: record
     role: input
-    c: fm_chart_preview_overrides_t
+    c: fm_chart_preview_overrides_spec_t
     js: ChartPreviewOverridesInput
     surfaces: [c, wasm, native]
     was: { c: fm_chart_preview_overrides, js: ChartPreviewOverrides, py: ChartPreviewOverrides }
@@ -2418,7 +2430,7 @@ entries:
   record.chart_data_series:
     kind: record
     role: result
-    c: fm_chart_data_series_t
+    c: fm_chart_data_series_info_t
     js: ChartDataSeries
     py: ChartDataSeries
     surfaces: [c, wasm, native, py]
@@ -2426,7 +2438,7 @@ entries:
   record.chart_data_points:
     kind: record
     role: result
-    c: fm_chart_data_points_t
+    c: fm_chart_data_points_info_t
     surfaces: [c]
     was: { c: fm_chart_data_points_t }
   record.chart_sheet_range:
@@ -2439,21 +2451,21 @@ entries:
   record.chart_axis_title_text:
     kind: record
     role: result
-    c: fm_chart_axis_title_text_t
+    c: fm_chart_axis_title_text_info_t
     py: ChartAxisTitleText
     surfaces: [c, py]
     was: { c: fm_chart_axis_title_text_t, py: ChartAxisTitleText }
   record.chart_unresolved:
     kind: record
     role: result
-    c: fm_chart_unresolved_t
+    c: fm_chart_unresolved_info_t
     py: ChartUnresolved
     surfaces: [c, py]
     was: { c: fm_chart_unresolved_t, py: ChartUnresolved }
   record.chart_insert:
     kind: record
     role: input
-    c: fm_chart_insert_t
+    c: fm_chart_insert_spec_t
     js: ChartInsertInput
     py: ChartInsertInput
     surfaces: [c, wasm, native, py]
@@ -2525,6 +2537,7 @@ entries:
     js: ChartPlotPatch
     py: ChartPlotPatch
     surfaces: [c, wasm, native, py]
+    clearable: []
     was: { c: fm_chart_plot_patch, js: ChartPlotPatch, py: ChartPlotPatch }
   record.chart_axis_patch:
     kind: record
@@ -2541,6 +2554,7 @@ entries:
     c: fm_chart_legend_patch_t
     js: ChartLegendPatch
     surfaces: [c, wasm, native]
+    clearable: []
     was: { c: fm_chart_legend_patch }
   record.chart_display_patch:
     kind: record
@@ -3310,8 +3324,10 @@ entries:
   record.pivot_grand_totals_patch:
     kind: record
     role: patch
+    c: fm_pivot_grand_totals_patch_t
     js: PivotGrandTotalsPatch
-    surfaces: [wasm, native]
+    surfaces: [c, wasm, native]
+    clearable: []
   record.pivot_item_result:
     kind: record
     role: result
@@ -3672,8 +3688,9 @@ entries:
   record.table_style_defaults_patch:
     kind: record
     role: patch
+    c: fm_table_style_defaults_patch_t
     js: TableStyleDefaultsPatch
-    surfaces: [wasm, native]
+    surfaces: [c, wasm, native]
     clearable: [table_style, pivot_style]
   enum.table_style_element_type:
     kind: enum
@@ -3702,32 +3719,38 @@ entries:
   record.table_patch:
     kind: record
     role: patch
+    c: fm_table_patch_t
     js: TablePatch
-    surfaces: [wasm, native]
+    surfaces: [c, wasm, native]
+    clearable: []
   record.sparkline_group_patch:
     kind: record
     role: patch
+    c: fm_sparkline_group_patch_t
     js: SparklineGroupPatch
-    surfaces: [wasm, native]
+    surfaces: [c, wasm, native]
     clearable: [manual_min, manual_max, date_axis_range]
   record.protected_range_patch:
     kind: record
     role: patch
+    c: fm_protected_range_patch_t
     js: ProtectedRangePatch
-    surfaces: [wasm, native]
-    clearable: [legacy_password_hash]
+    surfaces: [c, wasm, native]
+    clearable: [legacy_password_hash, algorithm_name, hash_value, salt_value, security_descriptor]
   record.shape_patch:
     kind: record
     role: patch
+    c: fm_shape_patch_t
     js: ShapePatch
-    surfaces: [wasm, native]
+    surfaces: [c, wasm, native]
     clearable: [fill_kind, line_kind, fill_color, line_color]
   record.slicer_patch:
     kind: record
     role: patch
+    c: fm_slicer_patch_t
     js: SlicerPatch
     a1_exempt: { fields: [fromRow, fromCol, toRow, toCol], reason: "a two-cell drawing anchor; each cell pairs with an EMU offset" }
-    surfaces: [wasm, native]
+    surfaces: [c, wasm, native]
     clearable: [style]
   record.theme_result:
     kind: record
@@ -3944,8 +3967,9 @@ entries:
   record.iterative_settings:
     kind: record
     role: result
+    c: fm_iterative_settings_info_t
     py: IterativeSettings
-    surfaces: [py]
+    surfaces: [c, py]
     was: { py: IterativeSettings }
   record.pivot_grand_totals:
     kind: record
@@ -3975,6 +3999,10 @@ entries:
     py: NotFoundError
     surfaces: [py]
     was: { py: NotFoundError }
+  type.already_exists_error:
+    kind: typedef
+    py: AlreadyExistsError
+    surfaces: [py]
   record.passthrough_part:
     kind: record
     role: result
@@ -4445,10 +4473,11 @@ entries:
     kind: op
     scope: sheet
     noun: cell_phonetic_run
-    c: fm_sheet_get_cell_phonetic_run
+    c: fm_sheet_get_cell_phonetic_run_at
     js: getCellPhoneticRun
     py: get_cell_phonetic_run
     surfaces: [c, wasm, native, py]
+    exception: "the bindings read by position through get<X>(index); only the C name carries `_at`"
     was: { c: fm_workbook_get_cell_phonetic_run }
     drop: { js: getCellPhoneticRun, py: get_cell_phonetic_run, closes: R23.list }
   cell_phonetic_properties.get:
@@ -4718,10 +4747,11 @@ entries:
     kind: op
     scope: sheet
     noun: table
-    c: fm_sheet_get_table
+    c: fm_sheet_get_table_at
     js: getTable
     py: get_table
     surfaces: [c, wasm, native, py]
+    exception: "the bindings read by position through get<X>(index); only the C name carries `_at`"
     was: { c: fm_workbook_table_at, js: tableAt }
     handle: { class: Table, supplies: [sheet, table] }
   table.find:
@@ -4793,11 +4823,12 @@ entries:
     c: fm_sheet_get_table_info
     surfaces: [c]
     was: { c: fm_workbook_table_get_info }
+    drop: { c: fm_sheet_get_table_info, closes: R0.coverage }
   table_column.get:
     kind: op
     scope: sheet
     noun: table_column
-    c: fm_sheet_get_table_column
+    c: fm_sheet_get_table_column_at
     surfaces: [c]
     was: { c: fm_workbook_table_get_column }
   table_style_info.set:
@@ -5107,10 +5138,11 @@ entries:
     kind: op
     scope: sheet
     noun: protected_range
-    c: fm_sheet_get_protected_range
+    c: fm_sheet_get_protected_range_at
     js: getProtectedRange
     py: get_protected_range
     surfaces: [c, wasm, native, py]
+    exception: "the bindings read by position through get<X>(index); only the C name carries `_at`"
     was: { c: fm_sheet_get_protected_range }
     drop: { js: getProtectedRange, py: get_protected_range, closes: R23.list }
   protected_range.add:
@@ -5159,10 +5191,11 @@ entries:
     kind: op
     scope: sheet
     noun: validation
-    c: fm_sheet_get_validation
+    c: fm_sheet_get_validation_at
     js: getValidation
     py: get_validation
     surfaces: [c, wasm, native, py]
+    exception: "the bindings read by position through get<X>(index); only the C name carries `_at`"
     was: { c: fm_sheet_get_validation_at, py: get_validation_at }
     drop: { js: getValidation, py: get_validation, closes: R23.list }
   validation.add:
@@ -5565,11 +5598,12 @@ entries:
     kind: op
     scope: sheet
     noun: pagination
-    c: fm_sheet_get_pagination
+    c: fm_sheet_paginate
     js: getPagination
     py: get_pagination
     reads_values: true
     surfaces: [c, wasm, native, py]
+    exception: "C names the operation (`paginate`, an owned result); the bindings read it with get"
     was: { c: fm_workbook_paginate, js: paginate, py: paginate }
   pagination.destroy:
     kind: op
@@ -6074,10 +6108,11 @@ entries:
     kind: op
     scope: sheet
     noun: cf_rule
-    c: fm_sheet_get_cf_rule
+    c: fm_sheet_get_cf_rule_at
     js: getCfRule
     py: get_cf_rule
     surfaces: [c, wasm, native, py]
+    exception: "the bindings read by position through get<X>(index); only the C name carries `_at`"
     was: { c: fm_sheet_cf_get_at, py: get_conditional_format_at }
     drop: { js: getCfRule, py: get_cf_rule, closes: R23.list }
   cf_rule.add:
@@ -6578,10 +6613,11 @@ entries:
     kind: op
     scope: workbook
     noun: pivot_cache_calculated_item
-    c: fm_workbook_get_pivot_cache_calculated_item
+    c: fm_workbook_get_pivot_cache_calculated_item_at
     js: getPivotCacheCalculatedItem
     py: get_pivot_cache_calculated_item
     surfaces: [c, wasm, native, py]
+    exception: "the bindings read by position through get<X>(index); only the C name carries `_at`"
     was: { c: fm_workbook_pivot_cache_calculated_item_at, js: pivotCacheCalculatedItemAt, py: pivot_cache_calculated_item_at }
     drop: { js: getPivotCacheCalculatedItem, py: get_pivot_cache_calculated_item, closes: R23.list }
   pivot_cache_calculated_item_formula.set:
@@ -7160,10 +7196,11 @@ entries:
     kind: op
     scope: sheet
     noun: pivot_field
-    c: fm_sheet_get_pivot_field
+    c: fm_sheet_get_pivot_field_at
     js: getPivotField
     py: get_pivot_field
     surfaces: [c, wasm, native, py]
+    exception: "the bindings read by position through get<X>(index); only the C name carries `_at`"
     was: { c: fm_workbook_pivot_field_at, js: pivotFieldAt, py: pivot_field_at }
     drop: { js: getPivotField, py: get_pivot_field, closes: R23.list }
   pivot_field_item.get_count:
@@ -7180,20 +7217,22 @@ entries:
     kind: op
     scope: sheet
     noun: pivot_field_item
-    c: fm_sheet_get_pivot_field_item
+    c: fm_sheet_get_pivot_field_item_at
     js: getPivotFieldItem
     py: get_pivot_field_item
     surfaces: [c, wasm, native, py]
+    exception: "the bindings read by position through get<X>(index); only the C name carries `_at`"
     was: { c: fm_workbook_pivot_field_item_at, js: pivotFieldItemAt, py: pivot_field_item_at }
     handle: { class: Pivot, supplies: [sheet, pivot] }
   pivot_data_field.get:
     kind: op
     scope: sheet
     noun: pivot_data_field
-    c: fm_sheet_get_pivot_data_field
+    c: fm_sheet_get_pivot_data_field_at
     js: getPivotDataField
     py: get_pivot_data_field
     surfaces: [c, wasm, native, py]
+    exception: "the bindings read by position through get<X>(index); only the C name carries `_at`"
     was: { c: fm_workbook_pivot_data_field_at, js: pivotDataFieldAt, py: pivot_data_field_at }
     drop: { js: getPivotDataField, py: get_pivot_data_field, closes: R23.list }
   pivot_row_field_order.get:
@@ -7230,10 +7269,11 @@ entries:
     kind: op
     scope: sheet
     noun: pivot_filter
-    c: fm_sheet_get_pivot_filter
+    c: fm_sheet_get_pivot_filter_at
     js: getPivotFilter
     py: get_pivot_filter
     surfaces: [c, wasm, native, py]
+    exception: "the bindings read by position through get<X>(index); only the C name carries `_at`"
     was: { c: fm_workbook_pivot_filter_at, js: pivotFilterAt, py: pivot_filter_at }
     drop: { js: getPivotFilter, py: get_pivot_filter, closes: R23.list }
   pivot_filter.add:
@@ -7452,7 +7492,7 @@ entries:
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_set_top_left, js: setSheetTopLeft, py: set_sheet_top_left }
     exception: "a coordinate pair; after the Sheet move, two numbers"
-    drop: { js: setTopLeft, py: set_top_left, closes: R18.all }
+    drop: { c: fm_sheet_set_top_left, js: setTopLeft, py: set_top_left, closes: R18.all }
   pane_top_left.set:
     kind: op
     scope: sheet
@@ -7463,7 +7503,7 @@ entries:
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_set_pane_top_left, js: setSheetPaneTopLeft, py: set_sheet_pane_top_left }
     exception: "a coordinate pair; after the Sheet move, two numbers"
-    drop: { js: setPaneTopLeft, py: set_pane_top_left, closes: R18.all }
+    drop: { c: fm_sheet_set_pane_top_left, js: setPaneTopLeft, py: set_pane_top_left, closes: R18.all }
   split.set:
     kind: op
     scope: sheet
@@ -7474,7 +7514,7 @@ entries:
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_set_split, js: setSheetSplit, py: set_sheet_split }
     exception: "a pair of offsets; after the Sheet move, two numbers"
-    drop: { js: setSplit, py: set_split, closes: R18.all }
+    drop: { c: fm_sheet_set_split, js: setSplit, py: set_split, closes: R18.all }
   selection.get:
     kind: op
     scope: sheet
@@ -7935,7 +7975,7 @@ entries:
     py: set_zoom
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_set_zoom, js: setSheetZoom, py: set_sheet_zoom }
-    drop: { js: setZoom, py: set_zoom, closes: R18.all }
+    drop: { c: fm_sheet_set_zoom, js: setZoom, py: set_zoom, closes: R18.all }
   freeze.set:
     kind: op
     scope: sheet
@@ -7946,7 +7986,7 @@ entries:
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_set_freeze, js: setSheetFreeze, py: set_sheet_freeze }
     exception: "a pair of row and column counts; after the Sheet move, two numbers"
-    drop: { js: setFreeze, py: set_freeze, closes: R18.all }
+    drop: { c: fm_sheet_set_freeze, js: setFreeze, py: set_freeze, closes: R18.all }
   tab_hidden.set:
     kind: op
     scope: sheet
@@ -7967,7 +8007,7 @@ entries:
     params: { visibility: "enum:sheet_visibility" }
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_set_visibility, js: setSheetVisibility, py: set_sheet_visibility }
-    drop: { js: setVisibility, py: set_visibility, closes: R18.all }
+    drop: { c: fm_sheet_set_visibility, js: setVisibility, py: set_visibility, closes: R18.all }
   show_grid_lines.set:
     kind: op
     scope: sheet
@@ -7978,7 +8018,7 @@ entries:
     params: { show: bool }
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_set_show_grid_lines, js: setSheetShowGridLines, py: set_sheet_show_grid_lines }
-    drop: { js: setShowGridLines, py: set_show_grid_lines, closes: R18.all }
+    drop: { c: fm_sheet_set_show_grid_lines, js: setShowGridLines, py: set_show_grid_lines, closes: R18.all }
   show_row_col_headers.set:
     kind: op
     scope: sheet
@@ -7990,7 +8030,7 @@ entries:
     surfaces: [c, wasm, native, py]
     exception: "C only: the bindings set it through the sheet view update"
     was: { c: fm_sheet_set_show_row_col_headers, js: setSheetShowRowColHeaders, py: set_sheet_show_row_col_headers }
-    drop: { js: setShowRowColHeaders, py: set_show_row_col_headers, closes: R18.all }
+    drop: { c: fm_sheet_set_show_row_column_headers, js: setShowRowColHeaders, py: set_show_row_col_headers, closes: R18.all }
   show_zeros.set:
     kind: op
     scope: sheet
@@ -8001,7 +8041,7 @@ entries:
     params: { show: bool }
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_set_show_zeros, js: setSheetShowZeros, py: set_sheet_show_zeros }
-    drop: { js: setShowZeros, py: set_show_zeros, closes: R18.all }
+    drop: { c: fm_sheet_set_show_zeros, js: setShowZeros, py: set_show_zeros, closes: R18.all }
   show_formulas.set:
     kind: op
     scope: sheet
@@ -8012,7 +8052,7 @@ entries:
     params: { show: bool }
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_set_show_formulas, js: setSheetShowFormulas, py: set_sheet_show_formulas }
-    drop: { js: setShowFormulas, py: set_show_formulas, closes: R18.all }
+    drop: { c: fm_sheet_set_show_formulas, js: setShowFormulas, py: set_show_formulas, closes: R18.all }
   show_outline_symbols.set:
     kind: op
     scope: sheet
@@ -8023,7 +8063,7 @@ entries:
     params: { show: bool }
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_set_show_outline_symbols, js: setSheetShowOutlineSymbols, py: set_sheet_show_outline_symbols }
-    drop: { js: setShowOutlineSymbols, py: set_show_outline_symbols, closes: R18.all }
+    drop: { c: fm_sheet_set_show_outline_symbols, js: setShowOutlineSymbols, py: set_show_outline_symbols, closes: R18.all }
   right_to_left.set:
     kind: op
     scope: sheet
@@ -8034,7 +8074,7 @@ entries:
     params: { right_to_left: bool }
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_set_right_to_left, js: setSheetRightToLeft, py: set_sheet_right_to_left }
-    drop: { js: setRightToLeft, py: set_right_to_left, closes: R18.all }
+    drop: { c: fm_sheet_set_right_to_left, js: setRightToLeft, py: set_right_to_left, closes: R18.all }
   tab_selected.set:
     kind: op
     scope: sheet
@@ -8045,7 +8085,7 @@ entries:
     params: { selected: bool }
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_set_tab_selected, js: setSheetTabSelected, py: set_sheet_tab_selected }
-    drop: { js: setTabSelected, py: set_tab_selected, closes: R18.all }
+    drop: { c: fm_sheet_set_tab_selected, js: setTabSelected, py: set_tab_selected, closes: R18.all }
   view_mode.set:
     kind: op
     scope: sheet
@@ -8055,7 +8095,7 @@ entries:
     py: set_view_mode
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_set_view_mode, js: setSheetViewMode, py: set_sheet_view_mode }
-    drop: { js: setViewMode, py: set_view_mode, closes: R18.all }
+    drop: { c: fm_sheet_set_view_mode, js: setViewMode, py: set_view_mode, closes: R18.all }
   last_error_message.get:
     kind: op
     scope: process
@@ -8083,7 +8123,7 @@ entries:
   record.parse_error:
     kind: record
     role: result
-    c: fm_parse_error_t
+    c: fm_parse_error_info_t
     js: ParseError
     py: ParseError
     surfaces: [c, wasm, native, py]
@@ -8364,20 +8404,22 @@ entries:
     scope: workbook
     namespace: ooxml
     noun: cell_xf
-    c: fm_workbook_get_cell_xf
+    c: fm_workbook_get_cell_xf_at
     js: getCellXf
     py: get_cell_xf
     surfaces: [c, wasm, native, py]
+    exception: "the bindings read by position through get<X>(index); only the C name carries `_at`"
     was: { c: fm_styles_get_cell_xf, js: getCellXf, py: get_cell_xf }
   font.get:
     kind: op
     scope: workbook
     namespace: ooxml
     noun: font
-    c: fm_workbook_get_font
+    c: fm_workbook_get_font_at
     js: getFont
     py: get_font
     surfaces: [c, wasm, native, py]
+    exception: "the bindings read by position through get<X>(index); only the C name carries `_at`"
     was: { c: fm_styles_get_font, js: getFont, py: get_font }
   num_fmt_string.get:
     kind: op
@@ -8395,20 +8437,22 @@ entries:
     scope: workbook
     namespace: ooxml
     noun: fill
-    c: fm_workbook_get_fill
+    c: fm_workbook_get_fill_at
     js: getFill
     py: get_fill
     surfaces: [c, wasm, native, py]
+    exception: "the bindings read by position through get<X>(index); only the C name carries `_at`"
     was: { c: fm_styles_get_fill, js: getFill, py: get_fill }
   border.get:
     kind: op
     scope: workbook
     namespace: ooxml
     noun: border
-    c: fm_workbook_get_border
+    c: fm_workbook_get_border_at
     js: getBorder
     py: get_border
     surfaces: [c, wasm, native, py]
+    exception: "the bindings read by position through get<X>(index); only the C name carries `_at`"
     was: { c: fm_styles_get_border, js: getBorder, py: get_border }
   dxf.get_count:
     kind: op
@@ -8425,10 +8469,11 @@ entries:
     scope: workbook
     namespace: ooxml
     noun: dxf
-    c: fm_workbook_get_dxf
+    c: fm_workbook_get_dxf_at
     js: getDxf
     py: get_dxf
     surfaces: [c, wasm, native, py]
+    exception: "the bindings read by position through get<X>(index); only the C name carries `_at`"
     was: { c: fm_styles_get_dxf, js: getDxf, py: get_dxf }
   dxf.add:
     kind: op
@@ -8570,10 +8615,11 @@ entries:
     scope: workbook
     namespace: ooxml
     noun: cell_style_xf
-    c: fm_workbook_get_cell_style_xf
+    c: fm_workbook_get_cell_style_xf_at
     js: getCellStyleXf
     py: get_cell_style_xf
     surfaces: [c, wasm, native, py]
+    exception: "the bindings read by position through get<X>(index); only the C name carries `_at`"
     was: { c: fm_styles_get_cell_style_xf, js: getCellStyleXf, py: get_cell_style_xf }
   font.add:
     kind: op
@@ -8807,10 +8853,11 @@ entries:
     kind: op
     scope: workbook
     noun: external_link
-    c: fm_workbook_get_external_link
+    c: fm_workbook_get_external_link_at
     js: getExternalLink
     py: get_external_link
     surfaces: [c, wasm, native, py]
+    exception: "the bindings read by position through get<X>(index); only the C name carries `_at`"
     was: { c: fm_workbook_external_link_at, py: get_external_link_at }
     drop: { js: getExternalLink, py: get_external_link, closes: R23.list }
   image_info.get:
@@ -9040,17 +9087,18 @@ entries:
     kind: op
     scope: sheet
     noun: sparkline_group
-    c: fm_sheet_get_sparkline_group
+    c: fm_sheet_get_sparkline_group_at
     js: getSparklineGroup
     py: get_sparkline_group
     surfaces: [c, wasm, native, py]
+    exception: "the bindings read by position through get<X>(index); only the C name carries `_at`"
     was: { c: fm_sheet_sparkline_group_at }
     drop: { js: getSparklineGroup, py: get_sparkline_group, closes: R23.list }
   sparkline.get:
     kind: op
     scope: sheet
     noun: sparkline
-    c: fm_sheet_get_sparkline
+    c: fm_sheet_get_sparkline_at
     surfaces: [c]
     was: { c: fm_sheet_sparkline_at }
   sparkline_group.add:
@@ -10795,7 +10843,7 @@ entries:
     was: { c: FM_PIVOT_LAYOUT_OUTLINE }
   constant.fm_pivot_filter_value_none:
     kind: constant
-    c: FM_PIVOT_FILTER_OPERAND_KIND_NONE
+    c: FM_PIVOT_FILTER_OPERAND_KIND_ABSENT
     enum: enum.pivot_filter_value_kind
     surfaces: [c]
     was: { c: FM_PIVOT_FILTER_VALUE_NONE }
@@ -11497,7 +11545,7 @@ entries:
     was: { c: FM_ANCHOR_EDIT_AS_ABSOLUTE }
   constant.fm_shape_paint_unset:
     kind: constant
-    c: FM_SHAPE_PAINT_UNSET
+    c: FM_SHAPE_PAINT_ABSENT
     enum: enum.shape_paint
     surfaces: [c]
     was: { c: FM_SHAPE_PAINT_UNSET }
@@ -11968,7 +12016,7 @@ entries:
     was: { c: FM_CHART_HEADER_NO }
   constant.fm_chart_legend_none:
     kind: constant
-    c: FM_CHART_LEGEND_POSITION_NONE
+    c: FM_CHART_LEGEND_POSITION_ABSENT
     enum: enum.chart_legend_position
     surfaces: [c]
     was: { c: FM_CHART_LEGEND_NONE }
@@ -12242,19 +12290,19 @@ entries:
     surfaces: [c]
   constant.fm_chart_patch_keep:
     kind: constant
-    c: FM_CHART_PATCH_OP_KEEP
+    c: FM_PATCH_OP_KEEP
     enum: enum.chart_patch_op
     surfaces: [c]
     was: { c: FM_CHART_PATCH_KEEP }
   constant.fm_chart_patch_clear:
     kind: constant
-    c: FM_CHART_PATCH_OP_CLEAR
+    c: FM_PATCH_OP_CLEAR
     enum: enum.chart_patch_op
     surfaces: [c]
     was: { c: FM_CHART_PATCH_CLEAR }
   constant.fm_chart_patch_set:
     kind: constant
-    c: FM_CHART_PATCH_OP_SET
+    c: FM_PATCH_OP_SET
     enum: enum.chart_patch_op
     surfaces: [c]
     was: { c: FM_CHART_PATCH_SET }
@@ -12399,6 +12447,7 @@ entries:
     c: FM_CELL_STYLE_BUILTIN_ID_NONE
     surfaces: [c]
     was: { c: FM_CELL_STYLE_BUILTIN_ID_NONE }
+    drop: { c: FM_CELL_STYLE_BUILTIN_ID_NONE, closes: R0.coverage }
   constant.fm_external_link_kind_unknown:
     kind: constant
     c: FM_EXTERNAL_LINK_KIND_UNKNOWN
@@ -12429,91 +12478,109 @@ entries:
     c: FM_SHAPE_FIELD_NAME
     surfaces: [c]
     was: { c: FM_SHAPE_FIELD_NAME }
+    drop: { c: FM_SHAPE_FIELD_NAME, closes: R0.coverage }
   constant.fm_shape_field_preset_geometry:
     kind: constant
     c: FM_SHAPE_FIELD_PRESET_GEOMETRY
     surfaces: [c]
     was: { c: FM_SHAPE_FIELD_PRST }
+    drop: { c: FM_SHAPE_FIELD_PRESET_GEOMETRY, closes: R0.coverage }
   constant.fm_shape_field_anchor:
     kind: constant
     c: FM_SHAPE_FIELD_ANCHOR
     surfaces: [c]
     was: { c: FM_SHAPE_FIELD_ANCHOR }
+    drop: { c: FM_SHAPE_FIELD_ANCHOR, closes: R0.coverage }
   constant.fm_shape_field_text:
     kind: constant
     c: FM_SHAPE_FIELD_TEXT
     surfaces: [c]
     was: { c: FM_SHAPE_FIELD_TEXT }
+    drop: { c: FM_SHAPE_FIELD_TEXT, closes: R0.coverage }
   constant.fm_shape_field_text_box:
     kind: constant
     c: FM_SHAPE_FIELD_TEXT_BOX
     surfaces: [c]
     was: { c: FM_SHAPE_FIELD_TEXT_BOX }
+    drop: { c: FM_SHAPE_FIELD_TEXT_BOX, closes: R0.coverage }
   constant.fm_shape_field_fill:
     kind: constant
     c: FM_SHAPE_FIELD_FILL
     surfaces: [c]
     was: { c: FM_SHAPE_FIELD_FILL }
+    drop: { c: FM_SHAPE_FIELD_FILL, closes: R0.coverage }
   constant.fm_shape_field_line:
     kind: constant
     c: FM_SHAPE_FIELD_LINE
     surfaces: [c]
     was: { c: FM_SHAPE_FIELD_LINE }
+    drop: { c: FM_SHAPE_FIELD_LINE, closes: R0.coverage }
   constant.fm_shape_field_line_width:
     kind: constant
     c: FM_SHAPE_FIELD_LINE_WIDTH
     surfaces: [c]
     was: { c: FM_SHAPE_FIELD_LINE_WIDTH }
+    drop: { c: FM_SHAPE_FIELD_LINE_WIDTH, closes: R0.coverage }
   constant.fm_shape_field_rotation:
     kind: constant
     c: FM_SHAPE_FIELD_ROTATION
     surfaces: [c]
     was: { c: FM_SHAPE_FIELD_ROTATION }
+    drop: { c: FM_SHAPE_FIELD_ROTATION, closes: R0.coverage }
   constant.fm_shape_field_hidden:
     kind: constant
     c: FM_SHAPE_FIELD_HIDDEN
     surfaces: [c]
     was: { c: FM_SHAPE_FIELD_HIDDEN }
+    drop: { c: FM_SHAPE_FIELD_HIDDEN, closes: R0.coverage }
   constant.fm_slicer_field_name:
     kind: constant
     c: FM_SLICER_FIELD_NAME
     surfaces: [c]
     was: { c: FM_SLICER_FIELD_NAME }
+    drop: { c: FM_SLICER_FIELD_NAME, closes: R0.coverage }
   constant.fm_slicer_field_caption:
     kind: constant
     c: FM_SLICER_FIELD_CAPTION
     surfaces: [c]
     was: { c: FM_SLICER_FIELD_CAPTION }
+    drop: { c: FM_SLICER_FIELD_CAPTION, closes: R0.coverage }
   constant.fm_slicer_field_style:
     kind: constant
     c: FM_SLICER_FIELD_STYLE
     surfaces: [c]
     was: { c: FM_SLICER_FIELD_STYLE }
+    drop: { c: FM_SLICER_FIELD_STYLE, closes: R0.coverage }
   constant.fm_slicer_field_column_count:
     kind: constant
     c: FM_SLICER_FIELD_COLUMN_COUNT
     surfaces: [c]
     was: { c: FM_SLICER_FIELD_COLUMN_COUNT }
+    drop: { c: FM_SLICER_FIELD_COLUMN_COUNT, closes: R0.coverage }
   constant.fm_slicer_field_row_height:
     kind: constant
     c: FM_SLICER_FIELD_ROW_HEIGHT
     surfaces: [c]
     was: { c: FM_SLICER_FIELD_ROW_HEIGHT }
+    drop: { c: FM_SLICER_FIELD_ROW_HEIGHT, closes: R0.coverage }
   constant.fm_slicer_field_anchor:
     kind: constant
     c: FM_SLICER_FIELD_ANCHOR
     surfaces: [c]
     was: { c: FM_SLICER_FIELD_ANCHOR }
+    drop: { c: FM_SLICER_FIELD_ANCHOR, closes: R0.coverage }
   constant.fm_slicer_field_sort_order:
     kind: constant
     c: FM_SLICER_FIELD_SORT_ORDER
     surfaces: [c]
     was: { c: FM_SLICER_FIELD_SORT_ORDER }
+    drop: { c: FM_SLICER_FIELD_SORT_ORDER, closes: R0.coverage }
   constant.fm_slicer_field_cross_filter:
     kind: constant
     c: FM_SLICER_FIELD_CROSS_FILTER
     surfaces: [c]
     was: { c: FM_SLICER_FIELD_CROSS_FILTER }
+    drop: { c: FM_SLICER_FIELD_CROSS_FILTER, closes: R0.coverage }
   constant.fm_status_ok:
     kind: constant
     c: FM_STATUS_OK
@@ -12526,6 +12593,7 @@ entries:
     enum: enum.status_code
     surfaces: [c]
     was: { c: FM_STATUS_UNKNOWN_ERROR }
+    drop: { c: FM_STATUS_UNKNOWN_ERROR, closes: R0.coverage }
   constant.fm_status_invalid_argument:
     kind: constant
     c: FM_STATUS_INVALID_ARGUMENT
@@ -12550,6 +12618,7 @@ entries:
     enum: enum.status_code
     surfaces: [c]
     was: { c: FM_STATUS_CANCEL_REQUESTED }
+    drop: { c: FM_STATUS_CANCEL_REQUESTED, closes: R0.coverage }
   constant.fm_status_not_found:
     kind: constant
     c: FM_STATUS_NOT_FOUND
@@ -12592,6 +12661,7 @@ entries:
     enum: enum.status_code
     surfaces: [c]
     was: { c: FM_STATUS_PARSER_UNTERMINATED_COMMENT }
+    drop: { c: FM_STATUS_PARSER_UNTERMINATED_COMMENT, closes: R0.coverage }
   constant.fm_status_parser_invalid_number:
     kind: constant
     c: FM_STATUS_PARSER_INVALID_NUMBER
@@ -12628,6 +12698,7 @@ entries:
     enum: enum.status_code
     surfaces: [c]
     was: { c: FM_STATUS_PARSER_UNKNOWN_FUNCTION }
+    drop: { c: FM_STATUS_PARSER_UNKNOWN_FUNCTION, closes: R0.coverage }
   constant.fm_status_parser_invalid_array_literal:
     kind: constant
     c: FM_STATUS_PARSER_INVALID_ARRAY_LITERAL
@@ -12646,12 +12717,14 @@ entries:
     enum: enum.status_code
     surfaces: [c]
     was: { c: FM_STATUS_PARSER_INVALID_R1C1 }
+    drop: { c: FM_STATUS_PARSER_INVALID_R1C1, closes: R0.coverage }
   constant.fm_status_parser_invalid_dot_notation:
     kind: constant
     c: FM_STATUS_PARSER_INVALID_DOT_NOTATION
     enum: enum.status_code
     surfaces: [c]
     was: { c: FM_STATUS_PARSER_INVALID_DOT_NOTATION }
+    drop: { c: FM_STATUS_PARSER_INVALID_DOT_NOTATION, closes: R0.coverage }
   constant.fm_status_parser_bom_not_supported:
     kind: constant
     c: FM_STATUS_PARSER_BOM_NOT_SUPPORTED
@@ -12670,54 +12743,63 @@ entries:
     enum: enum.status_code
     surfaces: [c]
     was: { c: FM_STATUS_EVAL_STACK_OVERFLOW }
+    drop: { c: FM_STATUS_EVAL_STACK_OVERFLOW, closes: R0.coverage }
   constant.fm_status_eval_circular_reference:
     kind: constant
     c: FM_STATUS_EVAL_CIRCULAR_REFERENCE
     enum: enum.status_code
     surfaces: [c]
     was: { c: FM_STATUS_EVAL_CIRCULAR_REFERENCE }
+    drop: { c: FM_STATUS_EVAL_CIRCULAR_REFERENCE, closes: R0.coverage }
   constant.fm_status_eval_lambda_arity_mismatch:
     kind: constant
     c: FM_STATUS_EVAL_LAMBDA_ARITY_MISMATCH
     enum: enum.status_code
     surfaces: [c]
     was: { c: FM_STATUS_EVAL_LAMBDA_ARITY_MISMATCH }
+    drop: { c: FM_STATUS_EVAL_LAMBDA_ARITY_MISMATCH, closes: R0.coverage }
   constant.fm_status_eval_invalid_byte_code:
     kind: constant
     c: FM_STATUS_EVAL_INVALID_BYTE_CODE
     enum: enum.status_code
     surfaces: [c]
     was: { c: FM_STATUS_EVAL_INVALID_BYTE_CODE }
+    drop: { c: FM_STATUS_EVAL_INVALID_BYTE_CODE, closes: R0.coverage }
   constant.fm_status_eval_time_limit:
     kind: constant
     c: FM_STATUS_EVAL_TIME_LIMIT
     enum: enum.status_code
     surfaces: [c]
     was: { c: FM_STATUS_EVAL_TIME_LIMIT }
+    drop: { c: FM_STATUS_EVAL_TIME_LIMIT, closes: R0.coverage }
   constant.fm_status_eval_memory_limit:
     kind: constant
     c: FM_STATUS_EVAL_MEMORY_LIMIT
     enum: enum.status_code
     surfaces: [c]
     was: { c: FM_STATUS_EVAL_MEMORY_LIMIT }
+    drop: { c: FM_STATUS_EVAL_MEMORY_LIMIT, closes: R0.coverage }
   constant.fm_status_eval_invalid_reference:
     kind: constant
     c: FM_STATUS_EVAL_INVALID_REFERENCE
     enum: enum.status_code
     surfaces: [c]
     was: { c: FM_STATUS_EVAL_INVALID_REFERENCE }
+    drop: { c: FM_STATUS_EVAL_INVALID_REFERENCE, closes: R0.coverage }
   constant.fm_status_eval_lambda_not_found:
     kind: constant
     c: FM_STATUS_EVAL_LAMBDA_NOT_FOUND
     enum: enum.status_code
     surfaces: [c]
     was: { c: FM_STATUS_EVAL_LAMBDA_NOT_FOUND }
+    drop: { c: FM_STATUS_EVAL_LAMBDA_NOT_FOUND, closes: R0.coverage }
   constant.fm_status_eval_spill_collision:
     kind: constant
     c: FM_STATUS_EVAL_SPILL_COLLISION
     enum: enum.status_code
     surfaces: [c]
     was: { c: FM_STATUS_EVAL_SPILL_COLLISION }
+    drop: { c: FM_STATUS_EVAL_SPILL_COLLISION, closes: R0.coverage }
   constant.fm_status_eval_pivot_missing:
     kind: constant
     c: FM_STATUS_EVAL_PIVOT_MISSING
@@ -12736,24 +12818,28 @@ entries:
     enum: enum.status_code
     surfaces: [c]
     was: { c: FM_STATUS_FN_NOT_REGISTERED }
+    drop: { c: FM_STATUS_FN_NOT_REGISTERED, closes: R0.coverage }
   constant.fm_status_fn_wrong_arg_count:
     kind: constant
     c: FM_STATUS_FN_WRONG_ARG_COUNT
     enum: enum.status_code
     surfaces: [c]
     was: { c: FM_STATUS_FN_WRONG_ARG_COUNT }
+    drop: { c: FM_STATUS_FN_WRONG_ARG_COUNT, closes: R0.coverage }
   constant.fm_status_fn_arg_type_mismatch:
     kind: constant
     c: FM_STATUS_FN_ARG_TYPE_MISMATCH
     enum: enum.status_code
     surfaces: [c]
     was: { c: FM_STATUS_FN_ARG_TYPE_MISMATCH }
+    drop: { c: FM_STATUS_FN_ARG_TYPE_MISMATCH, closes: R0.coverage }
   constant.fm_status_fn_domain_error:
     kind: constant
     c: FM_STATUS_FN_DOMAIN_ERROR
     enum: enum.status_code
     surfaces: [c]
     was: { c: FM_STATUS_FN_DOMAIN_ERROR }
+    drop: { c: FM_STATUS_FN_DOMAIN_ERROR, closes: R0.coverage }
   constant.fm_status_fn_overflow:
     kind: constant
     c: FM_STATUS_FN_OVERFLOW
@@ -12766,42 +12852,49 @@ entries:
     enum: enum.status_code
     surfaces: [c]
     was: { c: FM_STATUS_FN_UNDERFLOW }
+    drop: { c: FM_STATUS_FN_UNDERFLOW, closes: R0.coverage }
   constant.fm_status_fn_regex_compile:
     kind: constant
     c: FM_STATUS_FN_REGEX_COMPILE
     enum: enum.status_code
     surfaces: [c]
     was: { c: FM_STATUS_FN_REGEX_COMPILE }
+    drop: { c: FM_STATUS_FN_REGEX_COMPILE, closes: R0.coverage }
   constant.fm_status_fn_regex_match_limit:
     kind: constant
     c: FM_STATUS_FN_REGEX_MATCH_LIMIT
     enum: enum.status_code
     surfaces: [c]
     was: { c: FM_STATUS_FN_REGEX_MATCH_LIMIT }
+    drop: { c: FM_STATUS_FN_REGEX_MATCH_LIMIT, closes: R0.coverage }
   constant.fm_status_fn_host_not_available:
     kind: constant
     c: FM_STATUS_FN_HOST_NOT_AVAILABLE
     enum: enum.status_code
     surfaces: [c]
     was: { c: FM_STATUS_FN_HOST_NOT_AVAILABLE }
+    drop: { c: FM_STATUS_FN_HOST_NOT_AVAILABLE, closes: R0.coverage }
   constant.fm_status_graph_cycle_detected:
     kind: constant
     c: FM_STATUS_GRAPH_CYCLE_DETECTED
     enum: enum.status_code
     surfaces: [c]
     was: { c: FM_STATUS_GRAPH_CYCLE_DETECTED }
+    drop: { c: FM_STATUS_GRAPH_CYCLE_DETECTED, closes: R0.coverage }
   constant.fm_status_graph_iterative_diverged:
     kind: constant
     c: FM_STATUS_GRAPH_ITERATIVE_DIVERGED
     enum: enum.status_code
     surfaces: [c]
     was: { c: FM_STATUS_GRAPH_ITERATIVE_DIVERGED }
+    drop: { c: FM_STATUS_GRAPH_ITERATIVE_DIVERGED, closes: R0.coverage }
   constant.fm_status_graph_invalid_node_ref:
     kind: constant
     c: FM_STATUS_GRAPH_INVALID_NODE_REF
     enum: enum.status_code
     surfaces: [c]
     was: { c: FM_STATUS_GRAPH_INVALID_NODE_REF }
+    drop: { c: FM_STATUS_GRAPH_INVALID_NODE_REF, closes: R0.coverage }
   constant.fm_status_graph_schedule_failed:
     kind: constant
     c: FM_STATUS_GRAPH_SCHEDULE_FAILED
@@ -12814,6 +12907,7 @@ entries:
     enum: enum.status_code
     surfaces: [c]
     was: { c: FM_STATUS_GRAPH_THREAD_POOL_ERROR }
+    drop: { c: FM_STATUS_GRAPH_THREAD_POOL_ERROR, closes: R0.coverage }
   constant.fm_status_graph_recalc_reentrant:
     kind: constant
     c: FM_STATUS_GRAPH_RECALC_REENTRANT
@@ -12826,6 +12920,7 @@ entries:
     enum: enum.status_code
     surfaces: [c]
     was: { c: FM_STATUS_GRAPH_ITERATION_ABORTED }
+    drop: { c: FM_STATUS_GRAPH_ITERATION_ABORTED, closes: R0.coverage }
   constant.fm_status_io_file_not_found:
     kind: constant
     c: FM_STATUS_IO_FILE_NOT_FOUND
@@ -12838,6 +12933,7 @@ entries:
     enum: enum.status_code
     surfaces: [c]
     was: { c: FM_STATUS_IO_FILE_PERMISSION }
+    drop: { c: FM_STATUS_IO_FILE_PERMISSION, closes: R0.coverage }
   constant.fm_status_io_file_too_large:
     kind: constant
     c: FM_STATUS_IO_FILE_TOO_LARGE
@@ -12880,12 +12976,14 @@ entries:
     enum: enum.status_code
     surfaces: [c]
     was: { c: FM_STATUS_IO_XML_DOCTYPE }
+    drop: { c: FM_STATUS_IO_XML_DOCTYPE, closes: R0.coverage }
   constant.fm_status_io_xml_entity_explosion:
     kind: constant
     c: FM_STATUS_IO_XML_ENTITY_EXPLOSION
     enum: enum.status_code
     surfaces: [c]
     was: { c: FM_STATUS_IO_XML_ENTITY_EXPLOSION }
+    drop: { c: FM_STATUS_IO_XML_ENTITY_EXPLOSION, closes: R0.coverage }
   constant.fm_status_io_relationship_broken:
     kind: constant
     c: FM_STATUS_IO_RELATIONSHIP_BROKEN
@@ -12910,6 +13008,7 @@ entries:
     enum: enum.status_code
     surfaces: [c]
     was: { c: FM_STATUS_IO_UNSUPPORTED_VARIANT }
+    drop: { c: FM_STATUS_IO_UNSUPPORTED_VARIANT, closes: R0.coverage }
   constant.fm_status_io_xlsb_record_corrupt:
     kind: constant
     c: FM_STATUS_IO_XLSB_RECORD_CORRUPT
@@ -12922,6 +13021,7 @@ entries:
     enum: enum.status_code
     surfaces: [c]
     was: { c: FM_STATUS_IO_CSV_ENCODING_DETECT }
+    drop: { c: FM_STATUS_IO_CSV_ENCODING_DETECT, closes: R0.coverage }
   constant.fm_status_io_write_failed:
     kind: constant
     c: FM_STATUS_IO_WRITE_FAILED
@@ -12934,6 +13034,7 @@ entries:
     enum: enum.status_code
     surfaces: [c]
     was: { c: FM_STATUS_IO_CALC_CHAIN_MISMATCH }
+    drop: { c: FM_STATUS_IO_CALC_CHAIN_MISMATCH, closes: R0.coverage }
   constant.fm_status_io_xlsb_record_truncated:
     kind: constant
     c: FM_STATUS_IO_XLSB_RECORD_TRUNCATED
@@ -13000,30 +13101,35 @@ entries:
     enum: enum.status_code
     surfaces: [c]
     was: { c: FM_STATUS_CRYPTO_AGILE_NOT_SUPPORTED }
+    drop: { c: FM_STATUS_CRYPTO_AGILE_NOT_SUPPORTED, closes: R0.coverage }
   constant.fm_status_crypto_standard_not_supported:
     kind: constant
     c: FM_STATUS_CRYPTO_STANDARD_NOT_SUPPORTED
     enum: enum.status_code
     surfaces: [c]
     was: { c: FM_STATUS_CRYPTO_STANDARD_NOT_SUPPORTED }
+    drop: { c: FM_STATUS_CRYPTO_STANDARD_NOT_SUPPORTED, closes: R0.coverage }
   constant.fm_status_crypto_bad_password:
     kind: constant
     c: FM_STATUS_CRYPTO_BAD_PASSWORD
     enum: enum.status_code
     surfaces: [c]
     was: { c: FM_STATUS_CRYPTO_BAD_PASSWORD }
+    drop: { c: FM_STATUS_CRYPTO_BAD_PASSWORD, closes: R0.coverage }
   constant.fm_status_crypto_hash_mismatch:
     kind: constant
     c: FM_STATUS_CRYPTO_HASH_MISMATCH
     enum: enum.status_code
     surfaces: [c]
     was: { c: FM_STATUS_CRYPTO_HASH_MISMATCH }
+    drop: { c: FM_STATUS_CRYPTO_HASH_MISMATCH, closes: R0.coverage }
   constant.fm_status_crypto_key_derivation_failed:
     kind: constant
     c: FM_STATUS_CRYPTO_KEY_DERIVATION_FAILED
     enum: enum.status_code
     surfaces: [c]
     was: { c: FM_STATUS_CRYPTO_KEY_DERIVATION_FAILED }
+    drop: { c: FM_STATUS_CRYPTO_KEY_DERIVATION_FAILED, closes: R0.coverage }
   constant.fm_status_sec_resource_limit:
     kind: constant
     c: FM_STATUS_SEC_RESOURCE_LIMIT
@@ -13036,12 +13142,14 @@ entries:
     enum: enum.status_code
     surfaces: [c]
     was: { c: FM_STATUS_SEC_EXTERNAL_NOT_ALLOWED }
+    drop: { c: FM_STATUS_SEC_EXTERNAL_NOT_ALLOWED, closes: R0.coverage }
   constant.fm_status_sec_policy_blocked:
     kind: constant
     c: FM_STATUS_SEC_POLICY_BLOCKED
     enum: enum.status_code
     surfaces: [c]
     was: { c: FM_STATUS_SEC_POLICY_BLOCKED }
+    drop: { c: FM_STATUS_SEC_POLICY_BLOCKED, closes: R0.coverage }
   constant.fm_status_binding_invalid_handle:
     kind: constant
     c: FM_STATUS_BINDING_INVALID_HANDLE
@@ -13072,6 +13180,7 @@ entries:
     enum: enum.status_code
     surfaces: [c]
     was: { c: FM_STATUS_BINDING_WASM_INIT_FAILED }
+    drop: { c: FM_STATUS_BINDING_WASM_INIT_FAILED, closes: R0.coverage }
   constant.fm_status_cli_invalid_args:
     kind: constant
     enum: enum.status_code
@@ -13096,30 +13205,35 @@ entries:
     enum: enum.status_code
     surfaces: [c]
     was: { c: FM_STATUS_PIVOT_SOURCE_INVALID }
+    drop: { c: FM_STATUS_PIVOT_SOURCE_INVALID, closes: R0.coverage }
   constant.fm_status_pivot_field_not_found:
     kind: constant
     c: FM_STATUS_PIVOT_FIELD_NOT_FOUND
     enum: enum.status_code
     surfaces: [c]
     was: { c: FM_STATUS_PIVOT_FIELD_NOT_FOUND }
+    drop: { c: FM_STATUS_PIVOT_FIELD_NOT_FOUND, closes: R0.coverage }
   constant.fm_status_pivot_aggregation_failed:
     kind: constant
     c: FM_STATUS_PIVOT_AGGREGATION_FAILED
     enum: enum.status_code
     surfaces: [c]
     was: { c: FM_STATUS_PIVOT_AGGREGATION_FAILED }
+    drop: { c: FM_STATUS_PIVOT_AGGREGATION_FAILED, closes: R0.coverage }
   constant.fm_status_slicer_not_connected:
     kind: constant
     c: FM_STATUS_SLICER_NOT_CONNECTED
     enum: enum.status_code
     surfaces: [c]
     was: { c: FM_STATUS_SLICER_NOT_CONNECTED }
+    drop: { c: FM_STATUS_SLICER_NOT_CONNECTED, closes: R0.coverage }
   constant.fm_status_sparkline_invalid:
     kind: constant
     c: FM_STATUS_SPARKLINE_INVALID
     enum: enum.status_code
     surfaces: [c]
     was: { c: FM_STATUS_SPARKLINE_INVALID }
+    drop: { c: FM_STATUS_SPARKLINE_INVALID, closes: R0.coverage }
   constant.fm_status_data_table_invalid:
     kind: constant
     c: FM_STATUS_DATA_TABLE_INVALID
@@ -13138,12 +13252,14 @@ entries:
     enum: enum.status_code
     surfaces: [c]
     was: { c: FM_STATUS_PRINT_FONT_METRICS_MISSING }
+    drop: { c: FM_STATUS_PRINT_FONT_METRICS_MISSING, closes: R0.coverage }
   constant.fm_status_print_layout_convergence:
     kind: constant
     c: FM_STATUS_PRINT_LAYOUT_CONVERGENCE
     enum: enum.status_code
     surfaces: [c]
     was: { c: FM_STATUS_PRINT_LAYOUT_CONVERGENCE }
+    drop: { c: FM_STATUS_PRINT_LAYOUT_CONVERGENCE, closes: R0.coverage }
   constant.fm_status_print_invalid_area:
     kind: constant
     c: FM_STATUS_PRINT_INVALID_AREA
@@ -13156,12 +13272,14 @@ entries:
     enum: enum.status_code
     surfaces: [c]
     was: { c: FM_STATUS_UI_VIEW_STATE_INVALID }
+    drop: { c: FM_STATUS_UI_VIEW_STATE_INVALID, closes: R0.coverage }
   constant.fm_status_ui_snapshot_failed:
     kind: constant
     c: FM_STATUS_UI_SNAPSHOT_FAILED
     enum: enum.status_code
     surfaces: [c]
     was: { c: FM_STATUS_UI_SNAPSHOT_FAILED }
+    drop: { c: FM_STATUS_UI_SNAPSHOT_FAILED, closes: R0.coverage }
   constant.fm_status_print_page_count_overflow:
     kind: constant
     c: FM_STATUS_PRINT_PAGE_COUNT_OVERFLOW
@@ -13192,6 +13310,7 @@ entries:
     enum: enum.status_code
     surfaces: [c]
     was: { c: FM_STATUS_CANNOT_REMOVE_LAST_SHEET }
+    drop: { c: FM_STATUS_CANNOT_REMOVE_LAST_SHEET, closes: R0.coverage }
   constant.fm_status_sheet_count_limit_exceeded:
     kind: constant
     c: FM_STATUS_SHEET_COUNT_LIMIT_EXCEEDED
@@ -13402,12 +13521,12 @@ entries:
   binding.set_view:
     kind: op
     scope: sheet
+    c: fm_sheet_update_view
     js: updateView
     py: update_view
     patch: true
     patch_record: SheetView
-    surfaces: [wasm, native, py]
-    exception: "binding convenience: applies a partial update of the sheet view through the per-property setters"
+    surfaces: [c, wasm, native, py]
     facade: handwritten
   binding.get_cell_format:
     kind: op
@@ -13678,8 +13797,10 @@ entries:
   record.sheet_view_patch:
     kind: record
     role: patch
+    c: fm_sheet_view_patch_t
     js: SheetViewPatch
-    surfaces: [wasm, native]
+    surfaces: [c, wasm, native]
+    clearable: []
   record.pivot_field_patch:
     kind: record
     role: patch
@@ -14194,6 +14315,7 @@ entries:
     c: fm_iterative_settings_patch_t
     js: IterativeSettingsPatch
     surfaces: [c, wasm, native]
+    clearable: []
     was: { c: fm_iterative_settings_patch_t }
   enum.page_orientation:
     kind: enum
@@ -15760,7 +15882,7 @@ entries:
   field.chart_legend_hidden_entry_count:
     kind: field
     record: record.chart_legend_info
-    c: hidden_entry_count
+    c: hidden_entries_count
     surfaces: [c]
     was: { c: hidden_series_count }
     closes: R8.c
@@ -15775,7 +15897,7 @@ entries:
   field.chart_legend_patch_hidden_entry_count:
     kind: field
     record: record.chart_legend_patch
-    c: hidden_entry_count
+    c: hidden_entries_count
     surfaces: [c]
     was: { c: hidden_series_count }
     closes: R8.c
@@ -15786,6 +15908,26 @@ entries:
     surfaces: [c]
     was: { c: hidden_series_op }
     closes: R8.c
+  field.chart_labels_patch_font_size_pt_op:
+    kind: field
+    record: record.chart_labels_patch
+    c: font_size_pt_op
+    surfaces: [c]
+    was: { c: font_size_op }
+    closes: R40.c.patch_op
+  field.threaded_comment_mentions_count:
+    kind: field
+    record: record.threaded_comment
+    c: mentions_count
+    surfaces: [c]
+    was: { c: mention_count }
+    closes: R40.c.patch_op
+  field.threaded_comment_patch_mentions_count:
+    kind: field
+    record: record.threaded_comment_patch
+    c: mentions_count
+    surfaces: [c]
+    closes: R40.c.patch_op
   field.chart_info_hidden_categories:
     kind: field
     record: record.chart_info

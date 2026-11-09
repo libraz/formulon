@@ -25,7 +25,7 @@ const upperSnake = (key) => key.replace(/([a-z])([A-Z])/g, '$1_$2').toUpperCase(
 test('StatusCode mirrors the C status defines', async () => {
   const mod = await loadStagedModule();
   const expected = await headerCodes();
-  assert.equal(expected.size, 112);
+  assert.equal(expected.size, 60);
   assert.ok(Object.isFrozen(mod.StatusCode));
   const actual = new Map(Object.entries(mod.StatusCode).map(([key, value]) => [upperSnake(key), value]));
   assert.deepEqual([...actual].sort(), [...expected].sort());
@@ -36,7 +36,7 @@ test('StatusCode keys are PascalCase code names', async () => {
   const { StatusCode } = await getModule();
   assert.equal(StatusCode.Ok, 0);
   assert.equal(StatusCode.InvalidArgument, 2);
-  assert.equal(StatusCode.ParserInvalidR1C1, 1011);
+  assert.equal(StatusCode.ParserInvalidReference, 1004);
   assert.equal(StatusCode.SheetIndexOutOfRange, 5050);
   assert.equal(StatusCode.BindingInvalidHandle, 7000);
   for (const key of Object.keys(StatusCode)) {

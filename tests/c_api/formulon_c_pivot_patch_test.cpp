@@ -78,7 +78,7 @@ struct FieldSnapshot {
 
 FieldSnapshot Field(const fm_workbook_t* wb, std::size_t field = kRegionField) {
   fm_pivot_field_info_t info = FM_STRUCT_INIT(fm_pivot_field_info_t);
-  EXPECT_EQ(fm_sheet_get_pivot_field(wb, 0, kPivot, field, &info), FM_STATUS_OK);
+  EXPECT_EQ(fm_sheet_get_pivot_field_at(wb, 0, kPivot, field, &info), FM_STATUS_OK);
   return FieldSnapshot{info.custom_name != nullptr ? info.custom_name : "",
                        info.number_format != nullptr ? info.number_format : "",
                        info.sort_by_field != nullptr ? info.sort_by_field : "",
@@ -103,7 +103,7 @@ struct ItemSnapshot {
 
 ItemSnapshot Item(const fm_workbook_t* wb, std::size_t item) {
   fm_pivot_item_info_t info = FM_STRUCT_INIT(fm_pivot_item_info_t);
-  EXPECT_EQ(fm_sheet_get_pivot_field_item(wb, 0, kPivot, kRegionField, item, &info), FM_STATUS_OK);
+  EXPECT_EQ(fm_sheet_get_pivot_field_item_at(wb, 0, kPivot, kRegionField, item, &info), FM_STATUS_OK);
   return ItemSnapshot{info.visible, info.show_detail, info.caption != nullptr ? info.caption : ""};
 }
 
@@ -118,7 +118,7 @@ TEST(FormulonCApiPivotPatch, StylePatchChangesOnlyTheMembersItSets) {
   ASSERT_EQ(before.present, 1);
 
   fm_pivot_style_options_patch_t patch = FM_STRUCT_INIT(fm_pivot_style_options_patch_t);
-  patch.show_row_stripes_op = FM_CHART_PATCH_OP_SET;
+  patch.show_row_stripes_op = FM_PATCH_OP_SET;
   patch.show_row_stripes = before.row_stripes == 0 ? 1 : 0;
   ASSERT_EQ(fm_sheet_update_pivot_style_options(wb.handle, 0, kPivot, &patch), FM_STATUS_OK)
       << fm_get_last_error_message();
@@ -128,9 +128,9 @@ TEST(FormulonCApiPivotPatch, StylePatchChangesOnlyTheMembersItSets) {
 
   // A style name and a header toggle together.
   patch = FM_STRUCT_INIT(fm_pivot_style_options_patch_t);
-  patch.style_name_op = FM_CHART_PATCH_OP_SET;
+  patch.style_name_op = FM_PATCH_OP_SET;
   patch.style_name = "PivotStyleMedium9";
-  patch.show_row_headers_op = FM_CHART_PATCH_OP_SET;
+  patch.show_row_headers_op = FM_PATCH_OP_SET;
   patch.show_row_headers = 0;
   ASSERT_EQ(fm_sheet_update_pivot_style_options(wb.handle, 0, kPivot, &patch), FM_STATUS_OK)
       << fm_get_last_error_message();
@@ -143,7 +143,7 @@ TEST(FormulonCApiPivotPatch, StylePatchClearOnTheNameKeepsTheElementWithoutAStyl
   WorkbookGuard wb;
   LoadScratchPivot(wb);
   fm_pivot_style_options_patch_t patch = FM_STRUCT_INIT(fm_pivot_style_options_patch_t);
-  patch.style_name_op = FM_CHART_PATCH_OP_SET;
+  patch.style_name_op = FM_PATCH_OP_SET;
   patch.style_name = "PivotStyleMedium9";
   ASSERT_EQ(fm_sheet_update_pivot_style_options(wb.handle, 0, kPivot, &patch), FM_STATUS_OK)
       << fm_get_last_error_message();
@@ -151,7 +151,7 @@ TEST(FormulonCApiPivotPatch, StylePatchClearOnTheNameKeepsTheElementWithoutAStyl
   ASSERT_EQ(named.style_name, "PivotStyleMedium9");
 
   patch = FM_STRUCT_INIT(fm_pivot_style_options_patch_t);
-  patch.style_name_op = FM_CHART_PATCH_OP_CLEAR;
+  patch.style_name_op = FM_PATCH_OP_CLEAR;
   ASSERT_EQ(fm_sheet_update_pivot_style_options(wb.handle, 0, kPivot, &patch), FM_STATUS_OK)
       << fm_get_last_error_message();
   StyleSnapshot expected = named;
@@ -178,29 +178,29 @@ TEST(FormulonCApiPivotPatch, StylePatchWithABadMemberChangesNothing) {
   const StyleSnapshot before = Style(wb.handle);
   const auto set_style = [] {
     fm_pivot_style_options_patch_t patch = FM_STRUCT_INIT(fm_pivot_style_options_patch_t);
-    patch.style_name_op = FM_CHART_PATCH_OP_SET;
+    patch.style_name_op = FM_PATCH_OP_SET;
     patch.style_name = "PivotStyleLight16";
     return patch;
   };
 
   // CLEAR on a toggle.
   fm_pivot_style_options_patch_t patch = set_style();
-  patch.show_column_stripes_op = FM_CHART_PATCH_OP_CLEAR;
+  patch.show_column_stripes_op = FM_PATCH_OP_CLEAR;
   EXPECT_EQ(fm_sheet_update_pivot_style_options(wb.handle, 0, kPivot, &patch), FM_STATUS_INVALID_ARGUMENT);
   // A toggle outside 0 / 1.
   patch = set_style();
-  patch.show_last_column_op = FM_CHART_PATCH_OP_SET;
+  patch.show_last_column_op = FM_PATCH_OP_SET;
   patch.show_last_column = 2;
   EXPECT_EQ(fm_sheet_update_pivot_style_options(wb.handle, 0, kPivot, &patch), FM_STATUS_INVALID_ARGUMENT);
   // SET with no style name.
   patch = FM_STRUCT_INIT(fm_pivot_style_options_patch_t);
-  patch.style_name_op = FM_CHART_PATCH_OP_SET;
-  patch.show_row_headers_op = FM_CHART_PATCH_OP_SET;
+  patch.style_name_op = FM_PATCH_OP_SET;
+  patch.show_row_headers_op = FM_PATCH_OP_SET;
   patch.show_row_headers = 0;
   EXPECT_EQ(fm_sheet_update_pivot_style_options(wb.handle, 0, kPivot, &patch), FM_STATUS_INVALID_ARGUMENT);
   // An op outside the enumeration.
   patch = set_style();
-  patch.show_row_stripes_op = 9;
+  patch.show_row_stripes_op = static_cast<fm_patch_op_t>(9);
   EXPECT_EQ(fm_sheet_update_pivot_style_options(wb.handle, 0, kPivot, &patch), FM_STATUS_INVALID_ARGUMENT);
 
   EXPECT_EQ(Style(wb.handle), before);
@@ -217,46 +217,46 @@ TEST(FormulonCApiPivotPatch, FieldPatchWithABadMemberChangesNothingEvenWhenAnEar
 
   // A custom name another field already carries, beside a valid show_all.
   fm_pivot_field_patch_t patch = FM_STRUCT_INIT(fm_pivot_field_patch_t);
-  patch.show_all_op = FM_CHART_PATCH_OP_SET;
+  patch.show_all_op = FM_PATCH_OP_SET;
   patch.show_all = before.show_all == 0 ? 1 : 0;
-  patch.custom_name_op = FM_CHART_PATCH_OP_SET;
+  patch.custom_name_op = FM_PATCH_OP_SET;
   patch.custom_name = "Amount";
-  EXPECT_EQ(fm_sheet_update_pivot_field(wb.handle, 0, kPivot, kRegionField, &patch), FM_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(fm_sheet_update_pivot_field(wb.handle, 0, kPivot, kRegionField, &patch), FM_STATUS_ALREADY_EXISTS);
   EXPECT_EQ(Field(wb.handle), before);
 
   // CLEAR on a flag.
   patch = FM_STRUCT_INIT(fm_pivot_field_patch_t);
-  patch.insert_blank_row_op = FM_CHART_PATCH_OP_SET;
+  patch.insert_blank_row_op = FM_PATCH_OP_SET;
   patch.insert_blank_row = 1;
-  patch.default_subtotal_op = FM_CHART_PATCH_OP_CLEAR;
+  patch.default_subtotal_op = FM_PATCH_OP_CLEAR;
   EXPECT_EQ(fm_sheet_update_pivot_field(wb.handle, 0, kPivot, kRegionField, &patch), FM_STATUS_INVALID_ARGUMENT);
   EXPECT_EQ(Field(wb.handle), before);
 
   // A flag outside 0 / 1.
   patch = FM_STRUCT_INIT(fm_pivot_field_patch_t);
-  patch.show_all_op = FM_CHART_PATCH_OP_SET;
+  patch.show_all_op = FM_PATCH_OP_SET;
   patch.show_all = 2;
   EXPECT_EQ(fm_sheet_update_pivot_field(wb.handle, 0, kPivot, kRegionField, &patch), FM_STATUS_INVALID_ARGUMENT);
   EXPECT_EQ(Field(wb.handle), before);
 
   // A sort order outside the enumeration, and MANUAL with a by-field key.
   patch = FM_STRUCT_INIT(fm_pivot_field_patch_t);
-  patch.fill_down_labels_op = FM_CHART_PATCH_OP_SET;
+  patch.fill_down_labels_op = FM_PATCH_OP_SET;
   patch.fill_down_labels = 1;
-  patch.sort_order_op = FM_CHART_PATCH_OP_SET;
+  patch.sort_order_op = FM_PATCH_OP_SET;
   patch.sort_order = 99;
   EXPECT_EQ(fm_sheet_update_pivot_field(wb.handle, 0, kPivot, kRegionField, &patch), FM_STATUS_INVALID_ARGUMENT);
   patch.sort_order = FM_PIVOT_SORT_ORDER_MANUAL;
-  patch.sort_by_field_op = FM_CHART_PATCH_OP_SET;
+  patch.sort_by_field_op = FM_PATCH_OP_SET;
   patch.sort_by_field = "Sum of Amount";
   EXPECT_EQ(fm_sheet_update_pivot_field(wb.handle, 0, kPivot, kRegionField, &patch), FM_STATUS_INVALID_ARGUMENT);
   EXPECT_EQ(Field(wb.handle), before);
 
   // SET with a string member left NULL.
   patch = FM_STRUCT_INIT(fm_pivot_field_patch_t);
-  patch.show_all_op = FM_CHART_PATCH_OP_SET;
+  patch.show_all_op = FM_PATCH_OP_SET;
   patch.show_all = 1;
-  patch.custom_name_op = FM_CHART_PATCH_OP_SET;
+  patch.custom_name_op = FM_PATCH_OP_SET;
   patch.custom_name = nullptr;
   EXPECT_EQ(fm_sheet_update_pivot_field(wb.handle, 0, kPivot, kRegionField, &patch), FM_STATUS_INVALID_ARGUMENT);
   EXPECT_EQ(Field(wb.handle), before);
@@ -266,19 +266,19 @@ TEST(FormulonCApiPivotPatch, FieldPatchAppliesEveryMemberTogether) {
   WorkbookGuard wb;
   LoadScratchPivot(wb);
   fm_pivot_field_patch_t patch = FM_STRUCT_INIT(fm_pivot_field_patch_t);
-  patch.custom_name_op = FM_CHART_PATCH_OP_SET;
+  patch.custom_name_op = FM_PATCH_OP_SET;
   patch.custom_name = "Area";
-  patch.number_format_op = FM_CHART_PATCH_OP_SET;
+  patch.number_format_op = FM_PATCH_OP_SET;
   patch.number_format = "0.00";
-  patch.default_subtotal_op = FM_CHART_PATCH_OP_SET;
+  patch.default_subtotal_op = FM_PATCH_OP_SET;
   patch.default_subtotal = 0;
-  patch.insert_blank_row_op = FM_CHART_PATCH_OP_SET;
+  patch.insert_blank_row_op = FM_PATCH_OP_SET;
   patch.insert_blank_row = 1;
-  patch.fill_down_labels_op = FM_CHART_PATCH_OP_SET;
+  patch.fill_down_labels_op = FM_PATCH_OP_SET;
   patch.fill_down_labels = 1;
-  patch.show_all_op = FM_CHART_PATCH_OP_SET;
+  patch.show_all_op = FM_PATCH_OP_SET;
   patch.show_all = 1;
-  patch.subtotal_top_op = FM_CHART_PATCH_OP_SET;
+  patch.subtotal_top_op = FM_PATCH_OP_SET;
   patch.subtotal_top = 1;
   ASSERT_EQ(fm_sheet_update_pivot_field(wb.handle, 0, kPivot, kRegionField, &patch), FM_STATUS_OK)
       << fm_get_last_error_message();
@@ -293,8 +293,8 @@ TEST(FormulonCApiPivotPatch, FieldPatchAppliesEveryMemberTogether) {
 
   // CLEAR restores the source name and removes the format; the flags stay.
   patch = FM_STRUCT_INIT(fm_pivot_field_patch_t);
-  patch.custom_name_op = FM_CHART_PATCH_OP_CLEAR;
-  patch.number_format_op = FM_CHART_PATCH_OP_CLEAR;
+  patch.custom_name_op = FM_PATCH_OP_CLEAR;
+  patch.number_format_op = FM_PATCH_OP_CLEAR;
   ASSERT_EQ(fm_sheet_update_pivot_field(wb.handle, 0, kPivot, kRegionField, &patch), FM_STATUS_OK)
       << fm_get_last_error_message();
   FieldSnapshot cleared = Field(wb.handle);
@@ -308,9 +308,9 @@ TEST(FormulonCApiPivotPatch, FieldPatchSortAndShowDetailRoundTrip) {
   WorkbookGuard wb;
   LoadScratchPivot(wb);
   fm_pivot_field_patch_t patch = FM_STRUCT_INIT(fm_pivot_field_patch_t);
-  patch.sort_order_op = FM_CHART_PATCH_OP_SET;
+  patch.sort_order_op = FM_PATCH_OP_SET;
   patch.sort_order = FM_PIVOT_SORT_ORDER_DESCENDING;
-  patch.sort_by_field_op = FM_CHART_PATCH_OP_SET;
+  patch.sort_by_field_op = FM_PATCH_OP_SET;
   patch.sort_by_field = "Sum of Amount";
   ASSERT_EQ(fm_sheet_update_pivot_field(wb.handle, 0, kPivot, kRegionField, &patch), FM_STATUS_OK)
       << fm_get_last_error_message();
@@ -320,7 +320,7 @@ TEST(FormulonCApiPivotPatch, FieldPatchSortAndShowDetailRoundTrip) {
 
   // CLEAR on the by-field key sorts by label and keeps the direction.
   patch = FM_STRUCT_INIT(fm_pivot_field_patch_t);
-  patch.sort_by_field_op = FM_CHART_PATCH_OP_CLEAR;
+  patch.sort_by_field_op = FM_PATCH_OP_CLEAR;
   ASSERT_EQ(fm_sheet_update_pivot_field(wb.handle, 0, kPivot, kRegionField, &patch), FM_STATUS_OK)
       << fm_get_last_error_message();
   field = Field(wb.handle);
@@ -329,7 +329,7 @@ TEST(FormulonCApiPivotPatch, FieldPatchSortAndShowDetailRoundTrip) {
 
   // MANUAL takes no by-field key.
   patch = FM_STRUCT_INIT(fm_pivot_field_patch_t);
-  patch.sort_order_op = FM_CHART_PATCH_OP_SET;
+  patch.sort_order_op = FM_PATCH_OP_SET;
   patch.sort_order = FM_PIVOT_SORT_ORDER_MANUAL;
   ASSERT_EQ(fm_sheet_update_pivot_field(wb.handle, 0, kPivot, kRegionField, &patch), FM_STATUS_OK)
       << fm_get_last_error_message();
@@ -337,7 +337,7 @@ TEST(FormulonCApiPivotPatch, FieldPatchSortAndShowDetailRoundTrip) {
 
   // Show detail collapses every item and reads back on the field.
   patch = FM_STRUCT_INIT(fm_pivot_field_patch_t);
-  patch.show_detail_op = FM_CHART_PATCH_OP_SET;
+  patch.show_detail_op = FM_PATCH_OP_SET;
   patch.show_detail = 0;
   ASSERT_EQ(fm_sheet_update_pivot_field(wb.handle, 0, kPivot, kRegionField, &patch), FM_STATUS_OK)
       << fm_get_last_error_message();
@@ -378,30 +378,29 @@ TEST(FormulonCApiPivotPatch, ItemPatchWithABadMemberChangesNothingEvenWhenAnEarl
 
   // A caption the other item already shows, beside a valid visibility change.
   fm_pivot_item_patch_t patch = FM_STRUCT_INIT(fm_pivot_item_patch_t);
-  patch.visible_op = FM_CHART_PATCH_OP_SET;
+  patch.visible_op = FM_PATCH_OP_SET;
   patch.visible = 0;
-  patch.caption_op = FM_CHART_PATCH_OP_SET;
+  patch.caption_op = FM_PATCH_OP_SET;
   patch.caption = "South";
-  EXPECT_EQ(fm_sheet_update_pivot_field_item(wb.handle, 0, kPivot, kRegionField, 0, &patch),
-            FM_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(fm_sheet_update_pivot_field_item(wb.handle, 0, kPivot, kRegionField, 0, &patch), FM_STATUS_ALREADY_EXISTS);
   EXPECT_EQ(Item(wb.handle, 0), before);
 
   // CLEAR on a flag, and a flag outside 0 / 1.
   patch = FM_STRUCT_INIT(fm_pivot_item_patch_t);
-  patch.caption_op = FM_CHART_PATCH_OP_SET;
+  patch.caption_op = FM_PATCH_OP_SET;
   patch.caption = "Nord";
-  patch.visible_op = FM_CHART_PATCH_OP_CLEAR;
+  patch.visible_op = FM_PATCH_OP_CLEAR;
   EXPECT_EQ(fm_sheet_update_pivot_field_item(wb.handle, 0, kPivot, kRegionField, 0, &patch),
             FM_STATUS_INVALID_ARGUMENT);
-  patch.visible_op = FM_CHART_PATCH_OP_SET;
+  patch.visible_op = FM_PATCH_OP_SET;
   patch.visible = 2;
   EXPECT_EQ(fm_sheet_update_pivot_field_item(wb.handle, 0, kPivot, kRegionField, 0, &patch),
             FM_STATUS_INVALID_ARGUMENT);
   // SET with a NULL caption.
   patch = FM_STRUCT_INIT(fm_pivot_item_patch_t);
-  patch.visible_op = FM_CHART_PATCH_OP_SET;
+  patch.visible_op = FM_PATCH_OP_SET;
   patch.visible = 0;
-  patch.caption_op = FM_CHART_PATCH_OP_SET;
+  patch.caption_op = FM_PATCH_OP_SET;
   patch.caption = nullptr;
   EXPECT_EQ(fm_sheet_update_pivot_field_item(wb.handle, 0, kPivot, kRegionField, 0, &patch),
             FM_STATUS_INVALID_ARGUMENT);
@@ -412,11 +411,11 @@ TEST(FormulonCApiPivotPatch, ItemPatchSetsVisibilityDetailAndCaptionTogether) {
   WorkbookGuard wb;
   LoadScratchPivot(wb);
   fm_pivot_item_patch_t patch = FM_STRUCT_INIT(fm_pivot_item_patch_t);
-  patch.visible_op = FM_CHART_PATCH_OP_SET;
+  patch.visible_op = FM_PATCH_OP_SET;
   patch.visible = 0;
-  patch.show_detail_op = FM_CHART_PATCH_OP_SET;
+  patch.show_detail_op = FM_PATCH_OP_SET;
   patch.show_detail = 0;
-  patch.caption_op = FM_CHART_PATCH_OP_SET;
+  patch.caption_op = FM_PATCH_OP_SET;
   patch.caption = "Nord";
   ASSERT_EQ(fm_sheet_update_pivot_field_item(wb.handle, 0, kPivot, kRegionField, 0, &patch), FM_STATUS_OK)
       << fm_get_last_error_message();
@@ -430,7 +429,7 @@ TEST(FormulonCApiPivotPatch, ItemPatchSetsVisibilityDetailAndCaptionTogether) {
 
   // CLEAR removes the caption and leaves the flags.
   patch = FM_STRUCT_INIT(fm_pivot_item_patch_t);
-  patch.caption_op = FM_CHART_PATCH_OP_CLEAR;
+  patch.caption_op = FM_PATCH_OP_CLEAR;
   ASSERT_EQ(fm_sheet_update_pivot_field_item(wb.handle, 0, kPivot, kRegionField, 0, &patch), FM_STATUS_OK)
       << fm_get_last_error_message();
   item = Item(wb.handle, 0);
@@ -508,7 +507,7 @@ fm_status_t BuildDatePivot(fm_workbook_t* wb) {
   if ((st = fm_sheet_set_pivot_row_field_order(wb, 0, pivot_index, row_order, 1U)) != 0) {
     return st;
   }
-  fm_pivot_data_field_spec_t data_spec = FM_STRUCT_INIT(fm_pivot_data_field_spec_t);
+  fm_pivot_data_field_t data_spec = FM_STRUCT_INIT(fm_pivot_data_field_t);
   data_spec.name = "Sum of Amount";
   data_spec.field_index = static_cast<std::uint32_t>(amount_field);
   data_spec.aggregation = FM_PIVOT_AGGREGATION_SUM;
@@ -532,7 +531,7 @@ std::vector<std::string> RowLabels(const fm_workbook_t* wb) {
   PivotCellsGuard projected;
   EXPECT_EQ(fm_sheet_get_pivot_layout(wb, 0, kPivot, &projected.handle), FM_STATUS_OK) << fm_get_last_error_message();
   std::vector<std::string> labels;
-  for (const fm_pivot_cell_t& cell : CollectCells(projected.handle)) {
+  for (const fm_pivot_cell_info_t& cell : CollectCells(projected.handle)) {
     if (cell.kind == FM_PIVOT_CELL_KIND_ROW_LABEL && cell.value.kind == FM_VALUE_KIND_TEXT) {
       labels.emplace_back(cell.value.u.text);
     }
@@ -542,7 +541,7 @@ std::vector<std::string> RowLabels(const fm_workbook_t* wb) {
 
 std::uint32_t DatePeriods(const fm_workbook_t* wb) {
   fm_pivot_field_info_t info = FM_STRUCT_INIT(fm_pivot_field_info_t);
-  EXPECT_EQ(fm_sheet_get_pivot_field(wb, 0, kPivot, 0, &info), FM_STATUS_OK);
+  EXPECT_EQ(fm_sheet_get_pivot_field_at(wb, 0, kPivot, 0, &info), FM_STATUS_OK);
   return info.date_periods;
 }
 
@@ -616,6 +615,19 @@ TEST(FormulonCApiPivotPatch, DateGroupRefusesABadBoundFlagOrNaNAndGroupsNothing)
   EXPECT_EQ(fm_sheet_set_pivot_field_date_group(wb.handle, 0, kPivot, 0, &group), FM_STATUS_INVALID_ARGUMENT);
   EXPECT_EQ(fm_sheet_set_pivot_field_date_group(wb.handle, 0, kPivot, 0, nullptr), FM_STATUS_BINDING_NULL_POINTER);
 
+  EXPECT_EQ(DatePeriods(wb.handle), 0U);
+}
+
+TEST(FormulonCApiPivotPatch, DateGroupOfAPivotOrFieldPastTheEndIsOutOfRange) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), FM_STATUS_OK);
+  ASSERT_EQ(BuildDatePivot(wb.handle), FM_STATUS_OK) << fm_get_last_error_message();
+  const fm_pivot_date_group_spec_t group = WeekGroup();
+  EXPECT_EQ(fm_sheet_set_pivot_field_date_group(wb.handle, 0, kPivot + 1U, 0, &group), FM_STATUS_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(fm_sheet_set_pivot_field_date_group(wb.handle, 0, kPivot, 99U, &group), FM_STATUS_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(fm_sheet_clear_pivot_field_date_group(wb.handle, 0, kPivot + 1U, 0), FM_STATUS_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(fm_sheet_clear_pivot_field_date_group(wb.handle, 0, kPivot, 99U), FM_STATUS_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(fm_sheet_set_pivot_field_date_group(wb.handle, 9, kPivot, 0, &group), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(DatePeriods(wb.handle), 0U);
 }
 

@@ -16,6 +16,8 @@ from ._c import LIB, FormulonError, _sint, _uint
 from ._handle_tables import CELL_ARGS
 from ._status import StatusCode
 from ._workbook import (
+    _PATCH_CLEAR,
+    _PATCH_SET,
     _PIVOT_NO_DATA_FIELD,
     _PIVOT_VALUES_FIELD_C,
     _STATUS_NOT_FOUND,
@@ -293,23 +295,23 @@ class Pivot:
         Raises:
           TypeError: when a given flag is not a ``bool``.
         """
-        if rows is UNCHANGED or columns is UNCHANGED:
-            current = self.get_grand_totals()
-            rows = current.rows if rows is UNCHANGED else rows
-            columns = current.columns if columns is UNCHANGED else columns
         for name, value in (("rows", rows), ("columns", columns)):
-            if not isinstance(value, bool):
+            if value is not UNCHANGED and not isinstance(value, bool):
                 raise TypeError(f"formulon: {name} must be a bool, got {type(value).__name__}")
+        values: Dict[str, object] = {}
+        for name, value in (("rows", rows), ("columns", columns)):
+            if value is not UNCHANGED:
+                values[name + "_op"] = _PATCH_SET
+                values[name] = 1 if value else 0
         h, sheet, pivot_index = self._locate()
-        _check(
-            LIB.fm_sheet_update_pivot_grand_totals(
-                h,
-                _uint(sheet, "sheet_index"),
-                _uint(pivot_index, "pivot_index"),
-                1 if rows else 0,
-                1 if columns else 0,
+        with _ArgScope() as scope:
+            ptr = scope.struct(S.PIVOT_GRAND_TOTALS_PATCH)
+            S.PIVOT_GRAND_TOTALS_PATCH.pack(LIB, ptr, values)
+            _check(
+                LIB.fm_sheet_update_pivot_grand_totals(
+                    h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index"), ptr
+                )
             )
-        )
 
     def get_style_options(self) -> Optional[PivotStyleOptions]:
         """Return the table style :meth:`update_style_options` writes, or ``None`` without a style element."""
@@ -483,8 +485,8 @@ class Pivot:
           TypeError: when a flag is not a ``bool``, ``indent`` or
             ``page_wrap`` is not an integer, or a string argument is neither a
             ``str`` nor ``None``.
-          PreconditionFailedError: when the report would overlap another
-            structure.
+          FormulonError: with ``code == StatusCode.PRECONDITION_FAILED`` when the
+            report would overlap another structure.
         """
         arguments = dict(locals())
         given = {name: arguments[name] for name in _PIVOT_OPTION_NAMES if arguments[name] is not UNCHANGED}
@@ -496,20 +498,22 @@ class Pivot:
                 _flag(value, name)
             elif value is None:
                 raise TypeError(f"formulon: {name} cannot be None")
-        current = self.get_options()
-
-        def pick(name: str) -> Any:
-            return given[name] if name in given else getattr(current, name)
-
         h, sheet, pivot_index = self._locate()
+        values: Dict[str, object] = {}
         with _ArgScope() as scope:
-            ptr = scope.struct(S.PIVOT_OPTIONS)
-            values: Dict[str, object] = {name: 1 if pick(name) else 0 for name in _PIVOT_OPTION_FLAGS}
-            values["indent"] = _uint(pick("indent"), "indent")
-            values["page_wrap"] = _uint(pick("page_wrap"), "page_wrap")
-            S.PIVOT_OPTIONS.pack(LIB, ptr, values)
-            for name in _PIVOT_OPTION_TEXTS:
-                S.write_str_field(LIB, ptr, S.PIVOT_OPTIONS, name, pick(name), scope)
+            for name, value in given.items():
+                if name in _PIVOT_OPTION_TEXTS:
+                    if value is None:
+                        values[name + "_op"] = _PATCH_CLEAR
+                        continue
+                    values[name] = scope.cstr(value)
+                elif name in _PIVOT_OPTION_FLAGS:
+                    values[name] = 1 if value else 0
+                else:
+                    values[name] = _uint(value, name)
+                values[name + "_op"] = _PATCH_SET
+            ptr = scope.struct(S.PIVOT_OPTIONS_PATCH)
+            S.PIVOT_OPTIONS_PATCH.pack(LIB, ptr, values)
             _check(
                 LIB.fm_sheet_update_pivot_options(
                     h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index"), ptr
@@ -591,7 +595,7 @@ class Pivot:
         with _ArgScope() as scope:
             ptr = scope.struct(S.PIVOT_FIELD_INFO)
             _check(
-                LIB.fm_sheet_get_pivot_field(
+                LIB.fm_sheet_get_pivot_field_at(
                     h,
                     _uint(sheet, "sheet_index"),
                     _uint(pivot_index, "pivot_index"),
@@ -803,8 +807,8 @@ class Pivot:
         position they held; a field that is not grouped is left as it is.
 
         Raises:
-          PreconditionFailedError: when the group fields are not the last
-            fields of the cache.
+          FormulonError: with ``code == StatusCode.PRECONDITION_FAILED`` when the
+            group fields are not the last fields of the cache.
         """
         h, sheet, pivot_index = self._locate()
         _check(
@@ -836,7 +840,7 @@ class Pivot:
         with _ArgScope() as scope:
             ptr = scope.struct(S.PIVOT_ITEM_INFO)
             _check(
-                LIB.fm_sheet_get_pivot_field_item(
+                LIB.fm_sheet_get_pivot_field_item_at(
                     h,
                     _uint(sheet, "sheet_index"),
                     _uint(pivot_index, "pivot_index"),
@@ -983,14 +987,17 @@ class Pivot:
     # -- Axis orders -------------------------------------------------------
     def _get_field_order(self, fn) -> List[int]:
         h, sheet, pivot_index = self._locate()
+        head = (h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index"))
         with _ArgScope() as scope:
-            out_ptr = scope.out_ptr()
             out_count = scope.out_ptr()
-            _check(fn(h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index"), out_ptr, out_count))
+            # Size the buffer first, then fetch.
+            _check(fn(*head, 0, 0, out_count))
             count = LIB.read_u32(out_count)
             if count == 0:
                 return []
-            raw = LIB.read_bytes(LIB.read_u32(out_ptr), 4 * count)
+            buf = scope.alloc(4 * count)
+            _check(fn(*head, buf, count, out_count))
+            raw = LIB.read_bytes(buf, 4 * count)
             return [PIVOT_VALUES_FIELD if v == _PIVOT_VALUES_FIELD_C else v for v in struct.unpack("<%dI" % count, raw)]
 
     def _set_field_order(self, fn, indices: Sequence[int]) -> None:
@@ -1055,7 +1062,7 @@ class Pivot:
         with _ArgScope() as scope:
             ptr = scope.struct(S.PIVOT_DATA_FIELD_SPEC)
             _check(
-                LIB.fm_sheet_get_pivot_data_field(
+                LIB.fm_sheet_get_pivot_data_field_at(
                     h,
                     _uint(sheet, "sheet_index"),
                     _uint(pivot_index, "pivot_index"),
@@ -1194,7 +1201,7 @@ class Pivot:
         with _ArgScope() as scope:
             ptr = scope.struct(S.PIVOT_FILTER_SPEC)
             _check(
-                LIB.fm_sheet_get_pivot_filter(
+                LIB.fm_sheet_get_pivot_filter_at(
                     h,
                     _uint(sheet, "sheet_index"),
                     _uint(pivot_index, "pivot_index"),

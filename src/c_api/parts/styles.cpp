@@ -44,7 +44,7 @@ namespace {
 /// `*out_xf_index` and returns `kOk`. The `xf_index` defaults to `0`
 /// (the default xf) when no cell exists at the address.
 fm_status_t resolve_xf(const fm_workbook_t* wb, std::size_t sheet_index, std::uint32_t row, std::uint32_t col,
-                       std::size_t* out_xf_index) {
+                       std::uint32_t* out_xf_index) {
   if (out_xf_index == nullptr) {
     return null_argument();
   }
@@ -62,13 +62,13 @@ fm_status_t resolve_xf(const fm_workbook_t* wb, std::size_t sheet_index, std::ui
 }  // namespace
 
 extern "C" fm_status_t fm_sheet_get_cell_xf_index(const fm_workbook_t* wb, size_t sheet_index, uint32_t row,
-                                                  uint32_t col, size_t* out_xf_index) {
+                                                  uint32_t col, uint32_t* out_xf_index) {
   clear_last_error();
   return resolve_xf(wb, sheet_index, row, col, out_xf_index);
 }
 
 extern "C" fm_status_t fm_sheet_set_cell_xf_index(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
-                                                  size_t xf_index) {
+                                                  uint32_t xf_index) {
   clear_last_error();
   if (wb == nullptr) {
     return null_argument("wb");
@@ -79,7 +79,7 @@ extern "C" fm_status_t fm_sheet_set_cell_xf_index(fm_workbook_t* wb, size_t shee
   if (auto rc = check_cell_xf_index(wb, xf_index); rc != 0) {
     return rc;
   }
-  return finish_status(wb->workbook().set_cell_xf_index(sheet_index, row, col, static_cast<std::uint32_t>(xf_index)));
+  return finish_status(wb->workbook().set_cell_xf_index(sheet_index, row, col, xf_index));
 }
 
 extern "C" fm_status_t fm_sheet_reset_cell_xf_index(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col) {
@@ -94,7 +94,7 @@ extern "C" fm_status_t fm_sheet_reset_cell_xf_index(fm_workbook_t* wb, size_t sh
 }
 
 extern "C" fm_status_t fm_sheet_set_range_xf_index(fm_workbook_t* wb, size_t sheet_index, const fm_cell_rect_t* range,
-                                                   size_t xf_index) {
+                                                   uint32_t xf_index) {
   clear_last_error();
   if (range == nullptr) {
     return null_argument("range");
@@ -121,7 +121,7 @@ extern "C" fm_status_t fm_sheet_set_range_xf_index(fm_workbook_t* wb, size_t she
   }
   for (std::uint32_t row = row_lo; row <= row_hi; ++row) {
     for (std::uint32_t col = col_lo; col <= col_hi; ++col) {
-      auto r = wb->workbook().set_cell_xf_index(sheet_index, row, col, static_cast<std::uint32_t>(xf_index));
+      auto r = wb->workbook().set_cell_xf_index(sheet_index, row, col, xf_index);
       if (!r) {
         return set_last_error(r.error());
       }
@@ -174,7 +174,7 @@ void cell_xf_to_c(const formulon::CellXf& xf, fm_cell_xf_t* out) {
 
 }  // namespace
 
-extern "C" fm_status_t fm_workbook_get_cell_xf(const fm_workbook_t* wb, size_t xf_index, fm_cell_xf_t* out) {
+extern "C" fm_status_t fm_workbook_get_cell_xf_at(const fm_workbook_t* wb, uint32_t xf_index, fm_cell_xf_t* out) {
   clear_last_error();
   if (wb == nullptr || out == nullptr) {
     return null_argument();
@@ -193,7 +193,7 @@ namespace {
 /// writer can observe is carried, including the presence flags and the
 /// round-trip colour specification, so `fm_workbook_add_font(out)` names the
 /// record it was read from instead of appending a lossy copy of it.
-void font_to_c(const formulon::FontRecord& f, fm_font_record_t* out) noexcept {
+void font_to_c(const formulon::FontRecord& f, fm_font_t* out) noexcept {
   out->name = f.name.c_str();
   out->size_pt = f.size;
   out->bold = f.bold ? 1 : 0;
@@ -221,7 +221,7 @@ void font_to_c(const formulon::FontRecord& f, fm_font_record_t* out) noexcept {
   out->color = formulon::c_api::parts::color_spec_to_c(f.color, f.color_argb);
 }
 
-void fill_to_c(const formulon::FillRecord& f, fm_fill_record_t* out,
+void fill_to_c(const formulon::FillRecord& f, fm_fill_t* out,
                formulon::c_api::BorrowedArrayArena<fm_gradient_stop_t>& stop_arena) {
   out->pattern = f.pattern;
   out->foreground = formulon::c_api::parts::color_spec_to_c(f.fg, f.fg_argb);
@@ -255,7 +255,7 @@ void border_side_to_c(const formulon::BorderSide& src, fm_border_side_t* out) no
   out->color = formulon::c_api::parts::color_spec_to_c(src.color, src.color_argb);
 }
 
-void border_to_c(const formulon::BorderRecord& b, fm_border_record_t* out) noexcept {
+void border_to_c(const formulon::BorderRecord& b, fm_border_t* out) noexcept {
   border_side_to_c(b.left, &out->left);
   border_side_to_c(b.right, &out->right);
   border_side_to_c(b.top, &out->top);
@@ -267,7 +267,7 @@ void border_to_c(const formulon::BorderRecord& b, fm_border_record_t* out) noexc
 
 }  // namespace
 
-extern "C" fm_status_t fm_workbook_get_font(const fm_workbook_t* wb, size_t font_index, fm_font_record_t* out) {
+extern "C" fm_status_t fm_workbook_get_font_at(const fm_workbook_t* wb, size_t font_index, fm_font_t* out) {
   clear_last_error();
   if (wb == nullptr || out == nullptr) {
     return null_argument();
@@ -300,7 +300,7 @@ extern "C" fm_status_t fm_workbook_get_number_format(const fm_workbook_t* wb, ui
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_get_fill(const fm_workbook_t* wb, size_t fill_index, fm_fill_record_t* out) {
+extern "C" fm_status_t fm_workbook_get_fill_at(const fm_workbook_t* wb, size_t fill_index, fm_fill_t* out) {
   clear_last_error();
   if (wb == nullptr || out == nullptr) {
     return null_argument();
@@ -313,7 +313,7 @@ extern "C" fm_status_t fm_workbook_get_fill(const fm_workbook_t* wb, size_t fill
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_get_border(const fm_workbook_t* wb, size_t border_index, fm_border_record_t* out) {
+extern "C" fm_status_t fm_workbook_get_border_at(const fm_workbook_t* wb, size_t border_index, fm_border_t* out) {
   clear_last_error();
   if (wb == nullptr || out == nullptr) {
     return null_argument();
@@ -335,7 +335,7 @@ extern "C" fm_status_t fm_workbook_get_dxf_count(const fm_workbook_t* wb, size_t
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_get_dxf(const fm_workbook_t* wb, size_t dxf_index, fm_dxf_record_t* out) {
+extern "C" fm_status_t fm_workbook_get_dxf_at(const fm_workbook_t* wb, uint32_t dxf_index, fm_dxf_t* out) {
   clear_last_error();
   if (wb == nullptr || out == nullptr) {
     return null_argument();
@@ -344,7 +344,7 @@ extern "C" fm_status_t fm_workbook_get_dxf(const fm_workbook_t* wb, size_t dxf_i
   if (auto rc = check_index(dxf_index, styles.dxfs.size(), "dxf_index"); rc != 0) {
     return rc;
   }
-  *out = fm_dxf_record_t{};
+  *out = fm_dxf_t{};
   formulon::c_api::BorrowedArrayArena<fm_gradient_stop_t>& stops =
       fresh_arena(wb, &fm_workbook_t::gradient_stop_scratch);
   const formulon::DifferentialFormat& dxf = styles.dxfs[dxf_index];
@@ -388,8 +388,7 @@ extern "C" fm_status_t fm_workbook_get_cell_style_count(const fm_workbook_t* wb,
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_get_cell_style_at(const fm_workbook_t* wb, size_t index,
-                                                     fm_cell_style_record_t* out) {
+extern "C" fm_status_t fm_workbook_get_cell_style_at(const fm_workbook_t* wb, size_t index, fm_cell_style_t* out) {
   clear_last_error();
   if (wb == nullptr || out == nullptr) {
     return null_argument();
@@ -401,7 +400,9 @@ extern "C" fm_status_t fm_workbook_get_cell_style_at(const fm_workbook_t* wb, si
   const formulon::CellStyleRecord& cs = styles.cell_styles[index];
   out->name = cs.name.c_str();
   out->style_xf_index = cs.xf_id;
-  out->builtin_id = cs.builtin_id;
+  const bool builtin = cs.builtin_id != formulon::CellStyleRecord::kBuiltinIdNone;
+  out->has_builtin_id = builtin ? 1 : 0;
+  out->builtin_id = builtin ? cs.builtin_id : 0U;
   out->i_level = cs.i_level;
   out->hidden = cs.hidden ? 1 : 0;
   out->custom_builtin = cs.custom_builtin ? 1 : 0;
@@ -409,7 +410,7 @@ extern "C" fm_status_t fm_workbook_get_cell_style_at(const fm_workbook_t* wb, si
 }
 
 extern "C" fm_status_t fm_workbook_get_cell_style(const fm_workbook_t* wb, const char* name, int32_t* out_present,
-                                                  fm_cell_style_record_t* out) {
+                                                  fm_cell_style_t* out) {
   clear_last_error();
   if (wb == nullptr || name == nullptr || out_present == nullptr || out == nullptr) {
     return null_argument();
@@ -418,7 +419,7 @@ extern "C" fm_status_t fm_workbook_get_cell_style(const fm_workbook_t* wb, const
     return rc;
   }
   *out_present = 0;
-  *out = fm_cell_style_record_t{};
+  *out = fm_cell_style_t{};
   const auto& styles = wb->workbook().styles().cell_styles;
   for (std::size_t i = 0; i < styles.size(); ++i) {
     if (styles[i].name == name) {
@@ -438,16 +439,17 @@ extern "C" fm_status_t fm_workbook_get_cell_style_xf_count(const fm_workbook_t* 
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_get_cell_style_xf(const fm_workbook_t* wb, size_t index, fm_cell_xf_t* out) {
+extern "C" fm_status_t fm_workbook_get_cell_style_xf_at(const fm_workbook_t* wb, uint32_t cell_style_xf_index,
+                                                        fm_cell_xf_t* out) {
   clear_last_error();
   if (wb == nullptr || out == nullptr) {
     return null_argument();
   }
   const formulon::StylesTable& styles = wb->workbook().styles();
-  if (auto rc = check_index(index, styles.cell_style_xfs.size(), "index"); rc != 0) {
+  if (auto rc = check_index(cell_style_xf_index, styles.cell_style_xfs.size(), "cell_style_xf_index"); rc != 0) {
     return rc;
   }
-  cell_xf_to_c(styles.cell_style_xfs[index], out);
+  cell_xf_to_c(styles.cell_style_xfs[cell_style_xf_index], out);
   // A named-style xf is itself the parent, so it never carries an `xfId`.
   out->style_xf_index = 0;
   return 0;

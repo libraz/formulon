@@ -223,7 +223,7 @@ test('setCellStyle round-trips a record and validates its fields', async () => {
 
     wb.setCellStyle({ name: 'Probe Style' });
     assert.equal(wb.listCellStyles().length, before + 1);
-    assert.equal(wb.listCellStyles()[before].builtinId, 0xffffffff);
+    assert.equal(wb.listCellStyles()[before].builtinId, null);
 
     assert.throws(() => wb.setCellStyle({ name: 'Bad Level', iLevel: 3 }), isFormulonError);
     assert.throws(() => wb.setCellStyle({ name: '' }), isFormulonError);

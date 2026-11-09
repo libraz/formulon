@@ -179,8 +179,13 @@ Expected<GroupTarget, Error> resolve_group_target(Workbook& wb, std::size_t shee
                                                   std::size_t field) {
   const std::string where =
       "sheet=" + std::to_string(sheet) + " pivot=" + std::to_string(pivot) + " field=" + std::to_string(field);
-  if (sheet >= wb.sheet_count() || pivot >= wb.sheet(sheet).pivot_tables().size() ||
-      wb.sheet(sheet).pivot_tables()[pivot] == nullptr) {
+  if (sheet >= wb.sheet_count()) {
+    return group_error(FormulonErrorCode::kSheetIndexOutOfRange, "no such sheet", where);
+  }
+  if (pivot >= wb.sheet(sheet).pivot_tables().size()) {
+    return group_error(FormulonErrorCode::kIndexOutOfRange, "no such pivot table", where);
+  }
+  if (wb.sheet(sheet).pivot_tables()[pivot] == nullptr) {
     return group_error(FormulonErrorCode::kInvalidArgument, "no such pivot table", where);
   }
   GroupTarget target;
@@ -190,8 +195,11 @@ Expected<GroupTarget, Error> resolve_group_target(Workbook& wb, std::size_t shee
       target.cache = cache.get();
     }
   }
-  if (target.cache == nullptr || field >= target.table->fields().size() || field >= target.cache->fields().size()) {
-    return group_error(FormulonErrorCode::kInvalidArgument, "no such pivot field", where);
+  if (target.cache == nullptr) {
+    return group_error(FormulonErrorCode::kInvalidArgument, "the pivot table has no cache", where);
+  }
+  if (field >= target.table->fields().size() || field >= target.cache->fields().size()) {
+    return group_error(FormulonErrorCode::kIndexOutOfRange, "no such pivot field", where);
   }
   target.base = group_base_index(*target.cache, field);
   return target;

@@ -868,29 +868,26 @@ def _collections(ctx: Context) -> Iterator[Tuple[str, str, List[str]]]:
             yield name, str(coll.get("key", "")), ops
 
 
+def _is_position(role_name: str) -> bool:
+    return role_name in ("index", "idx") or role_name.endswith("_index")
+
+
 @_owned("R3.suffix")
 def _rule_suffix(ctx: Context) -> Iterable[Violation]:
-    """`_at` and `_count` belong to collections: an index-keyed collection addresses by `<thing>_index` with no
-    `_at`; an `_at` elsewhere is an enumeration position taking `size_t index`; every `_at` / `_count` function
-    is an op of a ledger collection, or enumerates the elements of a result handle.
+    """`_at` and `_count` belong to collections: an `_at` is a position whose last by-value parameter is an
+    `index` / `<thing>_index`;
+    every `_at` / `_count` function is an op of a ledger collection, or enumerates the elements of a result handle.
     """
     by_key = _functions_by_key(ctx)
     member_of: Dict[str, str] = {}
-    for name, key_kind, ops in _collections(ctx):
+    for name, _key_kind, ops in _collections(ctx):
         for op in ops:
             member_of.setdefault(op, name)
             fn = by_key.get(op)
             if fn is None or not fn.name.endswith("_at"):
                 continue
-            if key_kind == "index":
-                yield ctx.c_violation(
-                    "R3.suffix",
-                    fn.name,
-                    "at",
-                    f"{fn.name}: `{name}` is index-keyed; address it by `<thing>_index` without `_at`",
-                    fn.line,
-                )
-            elif not any(p.role_name in ("index", "idx") and p.pointer_depth == 0 for p in fn.params):
+            values = [p for p in fn.params if p.pointer_depth == 0]
+            if not values or not _is_position(values[-1].role_name):
                 yield ctx.c_violation(
                     "R3.suffix",
                     fn.name,

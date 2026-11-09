@@ -38,7 +38,8 @@ using formulon::c_api::parts::publish_scratch;
 using formulon::c_api::parts::store_cstr;
 
 extern "C" fm_status_t fm_workbook_parse_reference(const fm_workbook_t* wb, const char* text,
-                                                   const fm_parse_reference_spec_t* spec, fm_parsed_reference_t* out) {
+                                                   const fm_parse_reference_spec_t* spec,
+                                                   fm_parsed_reference_info_t* out) {
   clear_last_error();
   if (wb == nullptr || text == nullptr || out == nullptr) {
     return null_argument();
@@ -71,7 +72,7 @@ extern "C" fm_status_t fm_workbook_parse_reference(const fm_workbook_t* wb, cons
     }
   }
   const std::uint32_t struct_size = out->struct_size;
-  *out = FM_STRUCT_INIT(fm_parsed_reference_t);
+  *out = FM_STRUCT_INIT(fm_parsed_reference_info_t);
   out->struct_size = struct_size;
   namespace refs = formulon::eval::refs_internal;
   refs::A1Parse parsed;
@@ -97,12 +98,10 @@ extern "C" fm_status_t fm_workbook_parse_reference(const fm_workbook_t* wb, cons
   }
   const std::uint32_t row2 = parsed.is_range ? parsed.row2 : parsed.row;
   const std::uint32_t col2 = parsed.is_range ? parsed.col2 : parsed.col;
-  out->valid = 1;
   out->rect = fm_cell_rect_t{std::min(parsed.row, row2), std::min(parsed.col, col2), std::max(parsed.row, row2),
                              std::max(parsed.col, col2)};
   if (!parsed.sheet.empty()) {
     // The parser's view points at thread-local scratch the next parse reuses.
-    out->has_sheet = 1;
     out->sheet_name = store_cstr(fresh_read_scratch(wb), parsed.sheet);
   }
   return 0;

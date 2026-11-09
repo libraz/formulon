@@ -551,7 +551,7 @@ test('localizeFunctionName / canonicalizeFunctionName round-trip', async () => {
   // An unknown name is refused.
   assert.throws(
     () => mod.canonicalizeFunctionName('NOPE_XYZ', 'win-365-en_US'),
-    (e) => isFormulonError(e, mod.StatusCode.InvalidArgument),
+    (e) => isFormulonError(e, mod.StatusCode.NotFound),
   );
 });
 

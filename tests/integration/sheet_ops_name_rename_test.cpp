@@ -80,7 +80,7 @@ TEST(WorkbookSheetOps, RenameRejectsCaseInsensitiveCollision) {
   // `BETA` collides with the existing `Beta`.
   auto r = wb.rename_sheet(0, "BETA");
   ASSERT_FALSE(static_cast<bool>(r));
-  EXPECT_EQ(r.error().code, FormulonErrorCode::kInvalidSheetName);
+  EXPECT_EQ(r.error().code, FormulonErrorCode::kAlreadyExists);
 }
 
 TEST(WorkbookSheetOps, RenameAcceptsCaseChangeOfOwnName) {
@@ -147,7 +147,7 @@ TEST(WorkbookSheetOps, AddSheetValidatedRejectsDuplicateCaseInsensitively) {
   Workbook wb = ThreeSheetWorkbook();
   auto r = wb.add_sheet_validated("beta");  // collides with "Beta"
   ASSERT_FALSE(static_cast<bool>(r));
-  EXPECT_EQ(r.error().code, FormulonErrorCode::kInvalidSheetName);
+  EXPECT_EQ(r.error().code, FormulonErrorCode::kAlreadyExists);
   EXPECT_EQ(wb.sheet_count(), 3U);
 }
 
@@ -162,11 +162,15 @@ TEST(WorkbookSheetOps, AddSheetValidatedRejectsEmptyForbiddenAndTooLong) {
 TEST(WorkbookSheetOps, AddSheetEnteredRejectsWhatRenameRejects) {
   Workbook wb = ThreeSheetWorkbook();
   wb.set_excel_profile(win_365_en_us_profile());
-  for (const char* bad : {"'abc", "abc'", "History", "hIsToRy", "", "a/b", "beta"}) {
+  for (const char* bad : {"'abc", "abc'", "History", "hIsToRy", "", "a/b"}) {
     auto r = wb.add_sheet_entered(bad);
     ASSERT_FALSE(static_cast<bool>(r)) << "expected rejection of " << bad;
     EXPECT_EQ(r.error().code, FormulonErrorCode::kInvalidSheetName);
   }
+  // A name an existing sheet already holds is a collision, not an invalid name.
+  auto duplicate = wb.add_sheet_entered("beta");
+  ASSERT_FALSE(static_cast<bool>(duplicate));
+  EXPECT_EQ(duplicate.error().code, FormulonErrorCode::kAlreadyExists);
   EXPECT_EQ(wb.sheet_count(), 3U);
   ASSERT_TRUE(static_cast<bool>(wb.add_sheet_entered("a'b")));
   // A file may carry History, which Excel opens; an edge apostrophe it does not.
@@ -200,14 +204,14 @@ TEST(WorkbookSheetOps, UnicodeSimpleFoldRejectsDuplicateAndResolvesLookup) {
 
   auto duplicate = wb.add_sheet_validated("\xC3\xA4");
   ASSERT_FALSE(static_cast<bool>(duplicate));
-  EXPECT_EQ(duplicate.error().code, FormulonErrorCode::kInvalidSheetName);
+  EXPECT_EQ(duplicate.error().code, FormulonErrorCode::kAlreadyExists);
   EXPECT_EQ(wb.sheet_count(), 1U);
 
   auto distinct = wb.add_sheet_validated("\xC3\x96");  // Ö
   ASSERT_TRUE(static_cast<bool>(distinct));
   auto rename_collision = wb.rename_sheet(1U, "\xC3\xA4");  // ä
   ASSERT_FALSE(static_cast<bool>(rename_collision));
-  EXPECT_EQ(rename_collision.error().code, FormulonErrorCode::kInvalidSheetName);
+  EXPECT_EQ(rename_collision.error().code, FormulonErrorCode::kAlreadyExists);
   EXPECT_EQ(wb.sheet(0).name(), "\xC3\x84");  // Ä
   EXPECT_EQ(wb.sheet(1).name(), "\xC3\x96");  // Ö
 }

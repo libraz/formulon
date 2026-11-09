@@ -216,16 +216,15 @@ int run_recalc(const ArgList& args, std::ostream& out, std::ostream& err) {
 
   if (iterative) {
     fm_iterative_settings_patch_t enable = FM_STRUCT_INIT(fm_iterative_settings_patch_t);
+    enable.enabled_op = FM_PATCH_OP_SET;
     enable.enabled = 1;
-    enable.max_iterations = -1;
-    enable.max_change = -1.0;
     if (auto rc = fm_workbook_update_iterative(wb.handle, &enable); rc != 0) {
       emit_last_error(err, "recalc");
       return rc;
     }
   }
 
-  fm_parallel_recalc_stats_t parallel_stats = FM_STRUCT_INIT(fm_parallel_recalc_stats_t);
+  fm_parallel_recalc_stats_info_t parallel_stats = FM_STRUCT_INIT(fm_parallel_recalc_stats_info_t);
   if (parallel) {
     if (auto rc = fm_workbook_recalc_parallel(wb.handle, thread_count, &parallel_stats); rc != 0) {
       emit_last_error(err, "recalc");
@@ -239,7 +238,7 @@ int run_recalc(const ArgList& args, std::ostream& out, std::ostream& err) {
   }
 
   SaveBuffer buf;
-  fm_save_diagnostics_t save_diagnostics = FM_STRUCT_INIT(fm_save_diagnostics_t);
+  fm_save_diagnostics_info_t save_diagnostics = FM_STRUCT_INIT(fm_save_diagnostics_info_t);
   if (auto rc = fm_workbook_save_with_diagnostics(wb.handle, format, &buf.data, &buf.len, &save_diagnostics); rc != 0) {
     emit_last_error(err, "recalc");
     return rc;

@@ -804,7 +804,7 @@ class NoCountNamesTests(unittest.TestCase):
 
     def test_iterative_validation(self) -> None:
         with _open() as wb:
-            with self.assertRaises(ValueError):
+            with self.assertRaises(InvalidArgumentError):
                 wb.update_iterative(max_change=-1.0)
             with self.assertRaises(TypeError):
                 wb.update_iterative(max_iterations=1.5)  # type: ignore[arg-type]
@@ -920,7 +920,7 @@ class SetViewTests(unittest.TestCase):
 
     def test_freeze_and_split_conflict(self) -> None:
         with _open() as wb:
-            with self.assertRaises(TypeError):
+            with self.assertRaises(InvalidArgumentError):
                 wb.sheet(0).update_view(freeze_rows=1, split_x_twips=100)
 
     def test_pane_corner_is_checked_after_the_merge(self) -> None:

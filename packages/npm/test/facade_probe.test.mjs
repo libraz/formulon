@@ -336,7 +336,7 @@ test('H9: Pivot.showDetails returns the new sheet and shifts the handles after i
   assertInSync(wb, raw);
 });
 
-test('H12: SheetRef accepts a Sheet, an index or a name; a foreign Sheet is a TypeError', () => {
+test('SheetRef accepts a Sheet, an index or a name; a foreign Sheet is InvalidArgument', () => {
   const { wb, raw, Workbook } = loaded();
   const added = wb.addSheet('Extra');
   assert.equal(added.index, 3);
@@ -348,8 +348,8 @@ test('H12: SheetRef accepts a Sheet, an index or a name; a foreign Sheet is a Ty
   assert.equal(wb.activeSheet(), wb.sheet('Calc'));
   assert.equal(raw.active, 1);
   const other = Workbook.createDefault();
-  assert.throws(() => wb.removeSheet(other.sheet(0)), TypeError);
-  assert.throws(() => wb.sheet(other.sheet(0)), TypeError);
+  expectCode(() => wb.removeSheet(other.sheet(0)), StatusCode.InvalidArgument);
+  expectCode(() => wb.sheet(other.sheet(0)), StatusCode.InvalidArgument);
 });
 
 test('H13 / H7: after dispose, Sheet members throw BindingInvalidHandle', () => {

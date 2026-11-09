@@ -338,10 +338,10 @@ TEST(OoxmlPageMargins, PartialPatchStillWritesEveryRequiredAttribute) {
 
   // Engage two of the six. ECMA-376 makes all six required, so the other
   // four have to be filled from the schema defaults rather than omitted.
-  fm_page_margins_t margins = FM_STRUCT_INIT(fm_page_margins_t);
-  margins.left_in_engaged = 1;
+  fm_page_margins_patch_t margins = FM_STRUCT_INIT(fm_page_margins_patch_t);
+  margins.left_in_op = FM_PATCH_OP_SET;
   margins.left_in = 1.25;
-  margins.footer_in_engaged = 1;
+  margins.footer_in_op = FM_PATCH_OP_SET;
   margins.footer_in = 0.5;
   ASSERT_EQ(fm_sheet_update_page_margins(wb.handle, 0, &margins), 0);
 

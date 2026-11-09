@@ -30,7 +30,7 @@ emscripten::val entry_list(const fm_workbook_t* handle, uint32_t sheet, JsListCo
 }
 
 fm_status_t column_entry(const fm_workbook_t* handle, size_t sheet, size_t index, emscripten::val* out) {
-  fm_column_layout_t entry = FM_STRUCT_INIT(fm_column_layout_t);
+  fm_column_layout_info_t entry = FM_STRUCT_INIT(fm_column_layout_info_t);
   if (const fm_status_t rc = fm_sheet_get_column_layout_at(handle, sheet, index, &entry); rc != 0) {
     return rc;
   }
@@ -46,7 +46,7 @@ fm_status_t column_entry(const fm_workbook_t* handle, size_t sheet, size_t index
 }
 
 fm_status_t row_entry(const fm_workbook_t* handle, size_t sheet, size_t index, emscripten::val* out) {
-  fm_row_layout_t entry = FM_STRUCT_INIT(fm_row_layout_t);
+  fm_row_layout_info_t entry = FM_STRUCT_INIT(fm_row_layout_info_t);
   if (const fm_status_t rc = fm_sheet_get_row_layout_at(handle, sheet, index, &entry); rc != 0) {
     return rc;
   }
@@ -61,11 +61,7 @@ fm_status_t row_entry(const fm_workbook_t* handle, size_t sheet, size_t index, e
   return 0;
 }
 
-uint8_t clamp_outline_level(uint32_t level) {
-  return static_cast<uint8_t>(level > 255U ? 255U : level);
-}
-
-emscripten::val js_rect_pt(const fm_rect_pt_t& r) {
+emscripten::val js_rect_pt(const fm_rect_pt_info_t& r) {
   emscripten::val o = emscripten::val::object();
   o.set("x", r.x);
   o.set("y", r.y);
@@ -77,8 +73,8 @@ emscripten::val js_rect_pt(const fm_rect_pt_t& r) {
 /// Writes the pagination detail keys onto `result`.
 void set_pagination_detail(emscripten::val* result, const fm_pagination_t* pagination) {
   fm_paper_info_t paper = FM_STRUCT_INIT(fm_paper_info_t);
-  fm_margins_pt_t margins = FM_STRUCT_INIT(fm_margins_pt_t);
-  fm_rect_pt_t printable = FM_STRUCT_INIT(fm_rect_pt_t);
+  fm_margins_pt_info_t margins = FM_STRUCT_INIT(fm_margins_pt_info_t);
+  fm_rect_pt_info_t printable = FM_STRUCT_INIT(fm_rect_pt_info_t);
   double scale = 0.0;
   int32_t page_order = 0;
   fm_print_titles_t titles = FM_STRUCT_INIT(fm_print_titles_t);
@@ -110,7 +106,7 @@ void set_pagination_detail(emscripten::val* result, const fm_pagination_t* pagin
   result->set("printTitles", print_titles_to_val(titles));
   emscripten::val pages = emscripten::val::array();
   for (std::size_t i = 0; i < page_count; ++i) {
-    fm_page_layout_t page = FM_STRUCT_INIT(fm_page_layout_t);
+    fm_page_layout_info_t page = FM_STRUCT_INIT(fm_page_layout_info_t);
     if (fm_pagination_get_page_at(pagination, i, &page) != 0) {
       continue;
     }
@@ -168,7 +164,7 @@ emscripten::val JsWorkbook::paginate(uint32_t sheet) const {
   emscripten::val result = emscripten::val::object();
   emscripten::val print_area = emscripten::val::array();
   fm_pagination_t* pagination = nullptr;
-  if (!succeeded(handle_ != nullptr ? fm_sheet_get_pagination(handle_, sheet, &pagination) : kBindingInvalidHandle)) {
+  if (!succeeded(handle_ != nullptr ? fm_sheet_paginate(handle_, sheet, &pagination) : kBindingInvalidHandle)) {
     return emscripten::val::undefined();
   }
   std::size_t area_count = 0;
@@ -193,7 +189,7 @@ emscripten::val JsWorkbook::paginate(uint32_t sheet) const {
 
 JsSheetView JsWorkbook::getSheetView(uint32_t sheet) const {
   JsSheetView r;
-  fm_sheet_view_t v = FM_STRUCT_INIT(fm_sheet_view_t);
+  fm_sheet_view_info_t v = FM_STRUCT_INIT(fm_sheet_view_info_t);
   if (!succeeded(handle_ != nullptr ? fm_sheet_get_view(handle_, sheet, &v) : kBindingInvalidHandle)) {
     return r;
   }
@@ -336,19 +332,8 @@ void JsWorkbook::updateSheetProtection(uint32_t sheet, emscripten::val patch) {
   JsNarrowNumericReader reader("Sheet.updateSheetProtection");
   fm_sheet_protection_patch_t p = FM_STRUCT_INIT(fm_sheet_protection_patch_t);
   std::string text[4];
-  const auto string_key = [&](const char* key, std::string& storage, int32_t* op, const char** value) {
-    const emscripten::val v = reader.value(patch, key, key);
-    switch (js_patch_key(reader, v, key, true)) {
-      case JsPatchKey::kClear:
-        *op = FM_CHART_PATCH_OP_CLEAR;
-        break;
-      case JsPatchKey::kSet:
-        *op = FM_CHART_PATCH_OP_SET;
-        *value = reader.optional_string_value(v, storage, key);
-        break;
-      case JsPatchKey::kKeep:
-        break;
-    }
+  const auto string_key = [&](const char* key, std::string& storage, fm_patch_op_t* op, const char** value) {
+    js_patch_string(reader, patch, key, key, true, storage, op, value);
   };
   string_key("algorithmName", text[0], &p.algorithm_name_op, &p.algorithm_name);
   string_key("hashValue", text[1], &p.hash_value_op, &p.hash_value);
@@ -357,10 +342,10 @@ void JsWorkbook::updateSheetProtection(uint32_t sheet, emscripten::val patch) {
   const emscripten::val spin = reader.value(patch, "spinCount", "spinCount");
   switch (js_patch_key(reader, spin, "spinCount", true)) {
     case JsPatchKey::kClear:
-      p.spin_count_op = FM_CHART_PATCH_OP_CLEAR;
+      p.spin_count_op = FM_PATCH_OP_CLEAR;
       break;
     case JsPatchKey::kSet:
-      p.spin_count_op = FM_CHART_PATCH_OP_SET;
+      p.spin_count_op = FM_PATCH_OP_SET;
       p.spin_count = reader.u32_value(spin, 0U, "spinCount");
       break;
     case JsPatchKey::kKeep:
@@ -369,7 +354,7 @@ void JsWorkbook::updateSheetProtection(uint32_t sheet, emscripten::val patch) {
   for (const ProtectionFlag& flag : kProtectionFlags) {
     const emscripten::val v = reader.value(patch, flag.key, flag.key);
     if (js_patch_key(reader, v, flag.key, false) == JsPatchKey::kSet) {
-      set_field_at<int32_t>(&p, flag.patch_op, FM_CHART_PATCH_OP_SET);
+      set_field_at<int32_t>(&p, flag.patch_op, FM_PATCH_OP_SET);
       const bool allowed = reader.boolean_value(v, false);
       // A patch value is a plain 0 / 1; only the record's select flags carry a tristate.
       set_field_at<int32_t>(&p, flag.patch_value, allowed ? 1 : 0);
@@ -381,55 +366,51 @@ void JsWorkbook::updateSheetProtection(uint32_t sheet, emscripten::val patch) {
   succeeded(fm_sheet_update_sheet_protection(handle_, sheet, &p));
 }
 
-void JsWorkbook::setSheetZoom(uint32_t sheet, uint32_t zoomScale) {
-  succeeded(handle_ != nullptr ? fm_sheet_set_zoom(handle_, sheet, zoomScale) : kBindingInvalidHandle);
-}
-
-void JsWorkbook::setSheetFreeze(uint32_t sheet, uint32_t freezeRows, uint32_t freezeCols) {
-  succeeded(handle_ != nullptr ? fm_sheet_set_freeze(handle_, sheet, freezeRows, freezeCols) : kBindingInvalidHandle);
-}
-
-void JsWorkbook::setSheetVisibility(uint32_t sheet, int32_t visibility) {
-  succeeded(handle_ != nullptr ? fm_sheet_set_visibility(handle_, sheet, visibility) : kBindingInvalidHandle);
-}
-
-void JsWorkbook::setSheetShowGridLines(uint32_t sheet, bool show) {
-  succeeded(handle_ != nullptr ? fm_sheet_set_show_grid_lines(handle_, sheet, show ? 1 : 0) : kBindingInvalidHandle);
-}
-
-void JsWorkbook::setSheetShowRowColHeaders(uint32_t sheet, bool show) {
-  succeeded(handle_ != nullptr ? fm_sheet_set_show_row_column_headers(handle_, sheet, show ? 1 : 0)
-                               : kBindingInvalidHandle);
-}
-
-void JsWorkbook::setSheetShowZeros(uint32_t sheet, bool show) {
-  succeeded(handle_ != nullptr ? fm_sheet_set_show_zeros(handle_, sheet, show ? 1 : 0) : kBindingInvalidHandle);
-}
-
-void JsWorkbook::setSheetShowFormulas(uint32_t sheet, bool show) {
-  succeeded(handle_ != nullptr ? fm_sheet_set_show_formulas(handle_, sheet, show ? 1 : 0) : kBindingInvalidHandle);
-}
-
-void JsWorkbook::setSheetShowOutlineSymbols(uint32_t sheet, bool show) {
-  succeeded(handle_ != nullptr ? fm_sheet_set_show_outline_symbols(handle_, sheet, show ? 1 : 0)
-                               : kBindingInvalidHandle);
-}
-
-void JsWorkbook::setSheetRightToLeft(uint32_t sheet, bool rightToLeft) {
-  succeeded(handle_ != nullptr ? fm_sheet_set_right_to_left(handle_, sheet, rightToLeft ? 1 : 0)
-                               : kBindingInvalidHandle);
-}
-
-void JsWorkbook::setSheetTopLeft(uint32_t sheet, uint32_t row, uint32_t col) {
-  succeeded(handle_ != nullptr ? fm_sheet_set_top_left(handle_, sheet, row, col) : kBindingInvalidHandle);
-}
-
-void JsWorkbook::setSheetPaneTopLeft(uint32_t sheet, uint32_t row, uint32_t col) {
-  succeeded(handle_ != nullptr ? fm_sheet_set_pane_top_left(handle_, sheet, row, col) : kBindingInvalidHandle);
-}
-
-void JsWorkbook::setSheetSplit(uint32_t sheet, double xTwips, double yTwips) {
-  succeeded(handle_ != nullptr ? fm_sheet_set_split(handle_, sheet, xTwips, yTwips) : kBindingInvalidHandle);
+void JsWorkbook::updateSheetView(uint32_t sheet, emscripten::val patch) {
+  if (handle_ == nullptr) {
+    record_invalid_handle();
+    return;
+  }
+  JsNarrowNumericReader reader("updateView");
+  fm_sheet_view_patch_t p = FM_STRUCT_INIT(fm_sheet_view_patch_t);
+  const auto u32 = [&](const char* key, fm_patch_op_t* op, uint32_t* value) {
+    js_patch_value(reader, patch, key, key, op, value,
+                   [&](const emscripten::val& v) { return reader.u32_value(v, 0U, key); });
+  };
+  const auto i32 = [&](const char* key, fm_patch_op_t* op, int32_t* value) {
+    js_patch_value(reader, patch, key, key, op, value,
+                   [&](const emscripten::val& v) { return reader.i32_value(v, 0, key); });
+  };
+  const auto f64 = [&](const char* key, fm_patch_op_t* op, double* value) {
+    js_patch_value(reader, patch, key, key, op, value,
+                   [&](const emscripten::val& v) { return reader.number_value(v, 0.0, key); });
+  };
+  const auto flag = [&](const char* key, fm_patch_op_t* op, int32_t* value) {
+    js_patch_value(reader, patch, key, key, op, value,
+                   [&](const emscripten::val& v) { return reader.boolean_value(v, false) ? 1 : 0; });
+  };
+  u32("zoomPct", &p.zoom_pct_op, &p.zoom_pct);
+  u32("freezeRows", &p.freeze_rows_op, &p.freeze_rows);
+  u32("freezeCols", &p.freeze_cols_op, &p.freeze_cols);
+  i32("visibility", &p.visibility_op, &p.visibility);
+  flag("showGridLines", &p.show_grid_lines_op, &p.show_grid_lines);
+  flag("showRowColHeaders", &p.show_row_column_headers_op, &p.show_row_column_headers);
+  flag("showZeros", &p.show_zeros_op, &p.show_zeros);
+  flag("rightToLeft", &p.right_to_left_op, &p.right_to_left);
+  flag("tabSelected", &p.tab_selected_op, &p.tab_selected);
+  i32("viewMode", &p.view_mode_op, &p.view_mode);
+  u32("topLeftRow", &p.top_left_row_op, &p.top_left_row);
+  u32("topLeftCol", &p.top_left_col_op, &p.top_left_col);
+  u32("paneTopLeftRow", &p.pane_top_left_row_op, &p.pane_top_left_row);
+  u32("paneTopLeftCol", &p.pane_top_left_col_op, &p.pane_top_left_col);
+  f64("splitXTwips", &p.split_x_op, &p.split_x);
+  f64("splitYTwips", &p.split_y_op, &p.split_y);
+  flag("showFormulas", &p.show_formulas_op, &p.show_formulas);
+  flag("showOutlineSymbols", &p.show_outline_symbols_op, &p.show_outline_symbols);
+  if (!reader.ok()) {
+    return;
+  }
+  succeeded(fm_sheet_update_view(handle_, sheet, &p));
 }
 
 emscripten::val JsWorkbook::getSheetSelection(uint32_t sheet) const {
@@ -473,14 +454,6 @@ void JsWorkbook::setSheetSelection(uint32_t sheet, emscripten::val selection) {
   succeeded(fm_sheet_set_selection(handle_, sheet, row, col, ranges.data(), ranges.size()));
 }
 
-void JsWorkbook::setSheetTabSelected(uint32_t sheet, bool selected) {
-  succeeded(handle_ != nullptr ? fm_sheet_set_tab_selected(handle_, sheet, selected ? 1 : 0) : kBindingInvalidHandle);
-}
-
-void JsWorkbook::setSheetViewMode(uint32_t sheet, int32_t mode) {
-  succeeded(handle_ != nullptr ? fm_sheet_set_view_mode(handle_, sheet, mode) : kBindingInvalidHandle);
-}
-
 // ---- Column layout overrides --------------------------------------------
 
 emscripten::val JsWorkbook::getSheetColumns(uint32_t sheet) const {
@@ -497,7 +470,7 @@ void JsWorkbook::setColumnHidden(uint32_t sheet, uint32_t first, uint32_t last, 
 }
 
 void JsWorkbook::setColumnOutline(uint32_t sheet, uint32_t first, uint32_t last, uint32_t level) {
-  succeeded(handle_ != nullptr ? fm_sheet_set_column_outline(handle_, sheet, first, last, clamp_outline_level(level))
+  succeeded(handle_ != nullptr ? fm_sheet_set_column_outline(handle_, sheet, first, last, level)
                                : kBindingInvalidHandle);
 }
 
@@ -536,8 +509,7 @@ void JsWorkbook::setRowHidden(uint32_t sheet, uint32_t first, uint32_t last, boo
 }
 
 void JsWorkbook::setRowOutline(uint32_t sheet, uint32_t first, uint32_t last, uint32_t level) {
-  succeeded(handle_ != nullptr ? fm_sheet_set_row_outline(handle_, sheet, first, last, clamp_outline_level(level))
-                               : kBindingInvalidHandle);
+  succeeded(handle_ != nullptr ? fm_sheet_set_row_outline(handle_, sheet, first, last, level) : kBindingInvalidHandle);
 }
 
 void JsWorkbook::setRowCollapsed(uint32_t sheet, uint32_t first, uint32_t last, bool collapsed) {
@@ -716,53 +688,31 @@ void JsWorkbook::setSheetFormatDefaults(uint32_t sheet, emscripten::val defaults
     record_invalid_handle();
     return;
   }
-  // A patch: an omitted key keeps the stored value, `null` clears a nullable one.
+  // An omitted key keeps the stored value, `null` clears a nullable one.
   JsNarrowNumericReader reader("Sheet.updateFormatDefaults");
   if (!reader.require_object(defaults, "defaults")) {
     return;
   }
-  fm_sheet_format_defaults_t d = FM_STRUCT_INIT(fm_sheet_format_defaults_t);
-  if (!succeeded(fm_sheet_get_format_defaults(handle_, sheet, &d))) {
-    return;
-  }
-  const emscripten::val col_width = reader.value(defaults, "defaultColWidthChars", "defaultColWidthChars");
-  switch (js_patch_key(reader, col_width, "defaultColWidthChars", true)) {
-    case JsPatchKey::kClear:
-      d.has_default_column_width_chars = 0;
-      d.default_column_width_chars = 0.0;
-      break;
-    case JsPatchKey::kSet:
-      d.has_default_column_width_chars = 1;
-      d.default_column_width_chars = reader.number_value(col_width, 0.0, "defaultColWidthChars");
-      break;
-    case JsPatchKey::kKeep:
-      break;
-  }
-  const emscripten::val row_height = reader.value(defaults, "defaultRowHeightPt", "defaultRowHeightPt");
-  switch (js_patch_key(reader, row_height, "defaultRowHeightPt", true)) {
-    case JsPatchKey::kClear:
-      d.has_default_row_height_pt = 0;
-      d.default_row_height_pt = 0.0;
-      break;
-    case JsPatchKey::kSet:
-      d.has_default_row_height_pt = 1;
-      d.default_row_height_pt = reader.number_value(row_height, 0.0, "defaultRowHeightPt");
-      break;
-    case JsPatchKey::kKeep:
-      break;
-  }
-  const emscripten::val base = reader.value(defaults, "baseColWidthChars", "baseColWidthChars");
-  if (js_patch_key(reader, base, "baseColWidthChars", false) == JsPatchKey::kSet) {
-    d.base_column_width_chars = reader.number_value(base, d.base_column_width_chars, "baseColWidthChars");
-  }
-  const emscripten::val custom_height = reader.value(defaults, "customHeight", "customHeight");
-  if (js_patch_key(reader, custom_height, "customHeight", false) == JsPatchKey::kSet) {
-    d.custom_height = reader.boolean_value(custom_height, false) ? 1 : 0;
-  }
-  const emscripten::val zero_height = reader.value(defaults, "zeroHeight", "zeroHeight");
-  if (js_patch_key(reader, zero_height, "zeroHeight", false) == JsPatchKey::kSet) {
-    d.zero_height = reader.boolean_value(zero_height, false) ? 1 : 0;
-  }
+  fm_sheet_format_defaults_patch_t d = FM_STRUCT_INIT(fm_sheet_format_defaults_patch_t);
+  const auto num = [&](const char* key, bool nullable, fm_patch_op_t* op, double* value) {
+    const emscripten::val v = reader.value(defaults, key, key);
+    switch (js_patch_key(reader, v, key, nullable)) {
+      case JsPatchKey::kClear:
+        *op = FM_PATCH_OP_CLEAR;
+        break;
+      case JsPatchKey::kSet:
+        *op = FM_PATCH_OP_SET;
+        *value = reader.number_value(v, 0.0, key);
+        break;
+      case JsPatchKey::kKeep:
+        break;
+    }
+  };
+  num("defaultColWidthChars", true, &d.default_column_width_chars_op, &d.default_column_width_chars);
+  num("defaultRowHeightPt", true, &d.default_row_height_pt_op, &d.default_row_height_pt);
+  num("baseColWidthChars", false, &d.base_column_width_chars_op, &d.base_column_width_chars);
+  js_patch_flag(reader, defaults, "customHeight", "customHeight", &d.custom_height_op, &d.custom_height);
+  js_patch_flag(reader, defaults, "zeroHeight", "zeroHeight", &d.zero_height_op, &d.zero_height);
   if (!reader.ok()) {
     return;
   }
@@ -779,7 +729,7 @@ emscripten::val JsWorkbook::getCellRectPt(uint32_t sheet, emscripten::val range,
   if (!reader.ok()) {
     return emscripten::val::undefined();
   }
-  fm_rect_pt_t r = FM_STRUCT_INIT(fm_rect_pt_t);
+  fm_rect_pt_info_t r = FM_STRUCT_INIT(fm_rect_pt_info_t);
   if (!succeeded(fm_sheet_get_cell_rect_pt(handle_, sheet, &b, mode, &r))) {
     return emscripten::val::undefined();
   }
@@ -804,7 +754,7 @@ double JsWorkbook::getRowHeightPt(uint32_t sheet, uint32_t row) const {
 }
 
 emscripten::val JsWorkbook::getWidthModel(uint32_t sheet, int32_t mode) const {
-  fm_width_model_t m = FM_STRUCT_INIT(fm_width_model_t);
+  fm_width_model_info_t m = FM_STRUCT_INIT(fm_width_model_info_t);
   if (!succeeded(handle_ != nullptr ? fm_sheet_get_width_model(handle_, sheet, mode, &m) : kBindingInvalidHandle)) {
     return emscripten::val::undefined();
   }
@@ -820,7 +770,7 @@ emscripten::val JsWorkbook::getWidthModel(uint32_t sheet, int32_t mode) const {
 
 double JsWorkbook::columnCharsToPt(uint32_t sheet, int32_t mode, double chars) const {
   double pt = 0.0;
-  if (!succeeded(handle_ != nullptr ? fm_sheet_convert_column_chars_to_pt(handle_, sheet, mode, chars, &pt)
+  if (!succeeded(handle_ != nullptr ? fm_sheet_convert_column_chars_to_pt(handle_, sheet, chars, mode, &pt)
                                     : kBindingInvalidHandle)) {
     return 0.0;
   }
@@ -829,7 +779,7 @@ double JsWorkbook::columnCharsToPt(uint32_t sheet, int32_t mode, double chars) c
 
 double JsWorkbook::columnPtToChars(uint32_t sheet, int32_t mode, double pt) const {
   double chars = 0.0;
-  if (!succeeded(handle_ != nullptr ? fm_sheet_convert_column_pt_to_chars(handle_, sheet, mode, pt, &chars)
+  if (!succeeded(handle_ != nullptr ? fm_sheet_convert_column_pt_to_chars(handle_, sheet, pt, mode, &chars)
                                     : kBindingInvalidHandle)) {
     return 0.0;
   }

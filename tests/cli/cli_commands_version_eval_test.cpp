@@ -127,8 +127,10 @@ TEST(FormulonCli, EvalMalformedSyntaxMatchesTheAdHocCApiEntryPoint) {
   ASSERT_EQ(fm_workbook_add_sheet(wb, "Sheet1", &sheet), 0);
   fm_value_array_t* result = nullptr;
   EXPECT_NE(fm_sheet_evaluate_formula_array(wb, sheet, 0, 0, "=1+", &result), 0);
-  fm_parse_error_t position = FM_STRUCT_INIT(fm_parse_error_t);
-  ASSERT_EQ(fm_get_last_parse_error(&position), 0);
+  fm_parse_error_info_t position = FM_STRUCT_INIT(fm_parse_error_info_t);
+  int32_t present = 0;
+  ASSERT_EQ(fm_get_last_parse_error(&present, &position), 0);
+  ASSERT_EQ(present, 1);
   const std::string expected = std::string("formulon: eval: ") + fm_get_last_error_message() + " at " +
                                std::to_string(position.line) + ":" + std::to_string(position.column) + "\n";
   fm_value_array_destroy(result);

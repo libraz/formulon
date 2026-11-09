@@ -96,10 +96,12 @@ Expected<std::uint32_t, Error> add_slicer(Workbook& wb, std::size_t sheet, std::
                                           const SlicerSpec& spec);
 
 /// Applies the fields `spec.fields` names (all but `kName`) to slicer `index`.
+/// `kIndexOutOfRange` when `index` is past the sheet's slicers.
 Expected<void, Error> update_slicer(Workbook& wb, std::size_t sheet, std::size_t index, const SlicerSpec& spec);
 
 /// Removes slicer `index` with its drawing frame; its cache goes too when no
-/// other slicer uses it.
+/// other slicer uses it. `kIndexOutOfRange` when `index` is past the sheet's
+/// slicers.
 Expected<void, Error> remove_slicer(Workbook& wb, std::size_t sheet, std::size_t index);
 
 /// Removes every slicer and cache bound to the table with `table_id`. Call

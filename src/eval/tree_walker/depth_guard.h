@@ -49,8 +49,7 @@ namespace eval {
 //
 // On overflow the offending sub-expression returns `#CALC!` (the same
 // Excel-visible code Mac Excel surfaces for indeterminate / runaway lambda
-// recursion). The internal `kEvalStackOverflow` code is reserved for the
-// `Expected<T, Error>` plumbing (currently unused on this path).
+// recursion).
 constexpr std::uint32_t kMaxEvalDepth = 2U * parser::kMaxFormulaAstDepth;
 constexpr std::uint32_t kMaxLambdaDepth = 256;
 

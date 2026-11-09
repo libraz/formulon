@@ -44,6 +44,10 @@ Error out_of_range(std::string_view field, std::size_t index, std::size_t count)
                     std::string(field) + "=" + i + " count=" + n);
 }
 
+Error name_taken(std::string message, std::string_view name) {
+  return make_error(FormulonErrorCode::kAlreadyExists, std::move(message), std::string(name));
+}
+
 Error precondition(std::string message) {
   return make_error(FormulonErrorCode::kPreconditionFailed, std::move(message));
 }
@@ -254,13 +258,13 @@ Expected<std::size_t, Error> add_calculated_field(PivotCache& cache, const std::
   RETURN_IF_ERROR(check_name(name));
   for (const PivotCacheField& field : cache.fields()) {
     if (same_name(field.name, name)) {
-      return invalid("calculated field name is already a field", name);
+      return name_taken("calculated field name is already a field", name);
     }
   }
   for (const PivotTable* table : tables) {
     for (const PivotField& field : table->fields()) {
       if (!field.custom_name.empty() && same_name(field.custom_name, name)) {
-        return invalid("calculated field name is already a field", name);
+        return name_taken("calculated field name is already a field", name);
       }
     }
   }
@@ -277,7 +281,10 @@ Expected<std::size_t, Error> add_calculated_field(PivotCache& cache, const std::
 
 Expected<void, Error> set_calculated_field_formula(PivotCache& cache, std::size_t field_index, std::string_view formula,
                                                    PivotFormulaHost& host) {
-  if (field_index >= cache.fields().size() || !cache.fields()[field_index].formula.has_value()) {
+  if (field_index >= cache.fields().size()) {
+    return out_of_range("field_index", field_index, cache.fields().size());
+  }
+  if (!cache.fields()[field_index].formula.has_value()) {
     return invalid("not a calculated field");
   }
   ASSIGN_OR_RETURN(std::vector<FormulaRef> refs, compile_refs(host, cache, std::nullopt, formula));
@@ -290,7 +297,10 @@ Expected<void, Error> set_calculated_field_formula(PivotCache& cache, std::size_
 
 Expected<void, Error> remove_calculated_field(PivotCache& cache, const std::vector<PivotTable*>& tables,
                                               std::size_t field_index, PivotFormulaHost& host) {
-  if (field_index >= cache.fields().size() || !cache.fields()[field_index].formula.has_value()) {
+  if (field_index >= cache.fields().size()) {
+    return out_of_range("field_index", field_index, cache.fields().size());
+  }
+  if (!cache.fields()[field_index].formula.has_value()) {
     return invalid("not a calculated field");
   }
   for (std::size_t f = 0; f < cache.fields().size(); ++f) {
@@ -386,7 +396,7 @@ Expected<std::size_t, Error> add_calculated_item(PivotCache& cache, const std::v
   RETURN_IF_ERROR(check_name(name));
   for (const Value& item : cache_field.shared_items) {
     if (same_name(display_string(item), name)) {
-      return invalid("calculated item name is already an item", name);
+      return name_taken("calculated item name is already an item", name);
     }
   }
   std::string canonical;

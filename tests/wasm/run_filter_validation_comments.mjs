@@ -521,7 +521,7 @@ export function registerFilterValidationComments(Module, test) {
       assert.equal(head.row, 2);
       assert.equal(head.col, 1);
       assert.equal(head.done, false);
-      assert.equal(head.parentId, '');
+      assert.equal(head.parentId, null);
       assert.deepEqual(head.mentions, [{ personId: BOB, mentionId: MENTION, start: 12, length: 4 }]);
       assert.equal(reply.parentId, THREAD);
       assert.deepEqual(reply.mentions, []);

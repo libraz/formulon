@@ -18,7 +18,8 @@
 namespace {
 
 constexpr bool kWasm32 = sizeof(void*) == 4U;
-static_assert(sizeof(fm_slicer_t) == (kWasm32 ? 112U : 136U), "fm_slicer_t ABI layout changed");
+static_assert(sizeof(fm_slicer_info_t) == (kWasm32 ? 104U : 128U), "fm_slicer_info_t ABI layout changed");
+static_assert(sizeof(fm_slicer_patch_t) == (kWasm32 ? 160U : 184U), "fm_slicer_patch_t ABI layout changed");
 
 constexpr fm_status_t kInvalidArgument = static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
 constexpr fm_status_t kBindingNullPointer = static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer);
@@ -61,23 +62,36 @@ void CreateSalesTable(WorkbookGuard& wb) {
             0);
 }
 
-fm_slicer_t Anchored(std::uint32_t fields) {
-  fm_slicer_t s = FM_STRUCT_INIT(fm_slicer_t);
-  s.fields = fields | FM_SLICER_FIELD_ANCHOR;
-  s.from_row = 4;
-  s.from_col = 3;
-  s.to_row = 14;
-  s.to_col = 5;
+template <typename T, typename V>
+void Set(fm_patch_op_t& op, T& field, V value) {
+  op = FM_PATCH_OP_SET;
+  field = value;
+}
+
+/// A patch with the four anchor cells SET to D5:F15 and every other field KEEP.
+fm_slicer_patch_t Anchored() {
+  fm_slicer_patch_t s = FM_STRUCT_INIT(fm_slicer_patch_t);
+  Set(s.from_row_op, s.from_row, 4U);
+  Set(s.from_col_op, s.from_col, 3U);
+  Set(s.to_row_op, s.to_row, 14U);
+  Set(s.to_col_op, s.to_col, 5U);
   return s;
 }
 
-TEST(FormulonCApiSlicers, EnumOrdinalsAndFieldBits) {
+fm_slicer_info_t Read(const fm_workbook_t* wb, std::uint32_t id) {
+  fm_slicer_info_t out = FM_STRUCT_INIT(fm_slicer_info_t);
+  int32_t present = 0;
+  EXPECT_EQ(fm_sheet_get_slicer(wb, 0, id, &present, &out), 0) << fm_get_last_error_message();
+  EXPECT_EQ(present, 1);
+  return out;
+}
+
+TEST(FormulonCApiSlicers, EnumOrdinals) {
   // Zero is the OOXML default `ascending`.
   EXPECT_EQ(FM_SLICER_SORT_ORDER_ASCENDING, 0);
   EXPECT_EQ(FM_SLICER_SORT_ORDER_DESCENDING, 1);
   EXPECT_EQ(FM_SLICER_CROSS_FILTER_SHOW_ITEMS_WITH_NO_DATA, 1);
   EXPECT_EQ(FM_SLICER_CROSS_FILTER_NONE, 2);
-  EXPECT_EQ(FM_SLICER_FIELD_CROSS_FILTER, 0x80u);
 }
 
 TEST(FormulonCApiSlicers, AddListUpdateRemoveAndReload) {
@@ -87,13 +101,12 @@ TEST(FormulonCApiSlicers, AddListUpdateRemoveAndReload) {
   ASSERT_EQ(fm_sheet_get_slicer_count(wb.handle, 0, &count), 0);
   EXPECT_EQ(count, 0U);
 
-  fm_slicer_t spec = Anchored(FM_SLICER_FIELD_CAPTION | FM_SLICER_FIELD_STYLE | FM_SLICER_FIELD_COLUMN_COUNT |
-                              FM_SLICER_FIELD_SORT_ORDER | FM_SLICER_FIELD_CROSS_FILTER);
-  spec.caption = "Pick a product";
-  spec.style = "SlicerStyleLight3";
-  spec.column_count = 2;
-  spec.sort_order = FM_SLICER_SORT_ORDER_DESCENDING;
-  spec.cross_filter = FM_SLICER_CROSS_FILTER_NONE;
+  fm_slicer_patch_t spec = Anchored();
+  Set(spec.caption_op, spec.caption, "Pick a product");
+  Set(spec.style_op, spec.style, "SlicerStyleLight3");
+  Set(spec.column_count_op, spec.column_count, 2U);
+  Set(spec.sort_order_op, spec.sort_order, FM_SLICER_SORT_ORDER_DESCENDING);
+  Set(spec.cross_filter_op, spec.cross_filter, FM_SLICER_CROSS_FILTER_NONE);
   uint32_t id = 0;
   ASSERT_EQ(fm_sheet_add_slicer(wb.handle, 0, 0, 0, 0, &spec, &id), 0) << fm_get_last_error_message();
   EXPECT_EQ(id, 2U);
@@ -102,9 +115,8 @@ TEST(FormulonCApiSlicers, AddListUpdateRemoveAndReload) {
   Load(Save(wb.handle), again);
   ASSERT_EQ(fm_sheet_get_slicer_count(again.handle, 0, &count), 0);
   ASSERT_EQ(count, 1U);
-  fm_slicer_t out = FM_STRUCT_INIT(fm_slicer_t);
+  fm_slicer_info_t out = FM_STRUCT_INIT(fm_slicer_info_t);
   ASSERT_EQ(fm_sheet_get_slicer_at(again.handle, 0, 0, &out), 0);
-  EXPECT_EQ(out.fields, 0U);
   EXPECT_EQ(out.object_id, 2U);
   EXPECT_STREQ(out.name, "Product");
   EXPECT_STREQ(out.caption, "Pick a product");
@@ -128,10 +140,10 @@ TEST(FormulonCApiSlicers, AddListUpdateRemoveAndReload) {
   ASSERT_EQ(fm_sheet_get_drawing_object_count(again.handle, 0, &objects), 0);
   EXPECT_EQ(objects, 1U);
 
-  fm_slicer_t update = Anchored(FM_SLICER_FIELD_CAPTION | FM_SLICER_FIELD_STYLE | FM_SLICER_FIELD_COLUMN_COUNT);
-  update.caption = "Renamed";
-  update.style = "";
-  update.column_count = 1;
+  fm_slicer_patch_t update = Anchored();
+  Set(update.caption_op, update.caption, "Renamed");
+  Set(update.style_op, update.style, "");
+  Set(update.column_count_op, update.column_count, 1U);
   update.from_row = 0;
   update.to_row = 8;
   ASSERT_EQ(fm_sheet_update_slicer(again.handle, 0, id, &update), 0) << fm_get_last_error_message();
@@ -140,17 +152,15 @@ TEST(FormulonCApiSlicers, AddListUpdateRemoveAndReload) {
   ASSERT_EQ(present, 1);
   EXPECT_EQ(out.object_id, id);
   EXPECT_STREQ(out.caption, "Renamed");
-  EXPECT_STREQ(out.style, "");
+  EXPECT_EQ(out.style, nullptr);  // a SET empty style removes it
   EXPECT_EQ(out.column_count, 1U);
   EXPECT_EQ(out.sort_order, FM_SLICER_SORT_ORDER_DESCENDING);
   EXPECT_EQ(out.from_row, 0U);
   EXPECT_EQ(out.to_row, 8U);
 
   // Ascending, the schema default, is accepted as well.
-  fm_slicer_t ascending = Anchored(FM_SLICER_FIELD_SORT_ORDER);
-  ascending.sort_order = FM_SLICER_SORT_ORDER_ASCENDING;
-  ascending.from_row = 0;
-  ascending.to_row = 8;
+  fm_slicer_patch_t ascending = FM_STRUCT_INIT(fm_slicer_patch_t);
+  Set(ascending.sort_order_op, ascending.sort_order, FM_SLICER_SORT_ORDER_ASCENDING);
   ASSERT_EQ(fm_sheet_update_slicer(again.handle, 0, id, &ascending), 0) << fm_get_last_error_message();
   ASSERT_EQ(fm_sheet_get_slicer(again.handle, 0, id, &present, &out), 0);
   EXPECT_EQ(out.sort_order, FM_SLICER_SORT_ORDER_ASCENDING);
@@ -173,7 +183,7 @@ TEST(FormulonCApiSlicers, AddListUpdateRemoveAndReload) {
 TEST(FormulonCApiSlicers, RemovingTheTableRemovesItsSlicers) {
   WorkbookGuard wb;
   CreateSalesTable(wb);
-  fm_slicer_t spec = Anchored(0);
+  fm_slicer_patch_t spec = Anchored();
   uint32_t id = 0;
   ASSERT_EQ(fm_sheet_add_slicer(wb.handle, 0, 0, 0, 0, &spec, &id), 0);
   ASSERT_EQ(fm_sheet_add_slicer(wb.handle, 0, 0, 0, 1, &spec, &id), 0);
@@ -200,7 +210,7 @@ TEST(FormulonCApiSlicers, RemovingTheSheetRemovesTheSlicersItHostsAndTheirCaches
   CreateSalesTable(wb);
   ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Dash", ignored_index()), 0);
   const size_t sheet = 1;
-  fm_slicer_t spec = Anchored(0);
+  fm_slicer_patch_t spec = Anchored();
   uint32_t id = 0;
   // The slicer lives on the second sheet, over the first sheet's table.
   ASSERT_EQ(fm_sheet_add_slicer(wb.handle, sheet, 0, 0, 0, &spec, &id), 0) << fm_get_last_error_message();
@@ -228,7 +238,7 @@ TEST(FormulonCApiSlicers, TableIsAddressedBySheetAndSheetLocalIndex) {
   WorkbookGuard wb;
   CreateSalesTable(wb);
   ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Dash", ignored_index()), 0);
-  fm_slicer_t spec = Anchored(0);
+  fm_slicer_patch_t spec = Anchored();
   uint32_t id = 0;
   // The table lives on sheet 0; sheet 1 has none, so its index 0 is past the end.
   EXPECT_EQ(fm_sheet_add_slicer(wb.handle, 1, 1, 0, 0, &spec, &id), FM_STATUS_INDEX_OUT_OF_RANGE);
@@ -240,10 +250,10 @@ TEST(FormulonCApiSlicers, TableIsAddressedBySheetAndSheetLocalIndex) {
 TEST(FormulonCApiSlicers, RejectsBadArguments) {
   WorkbookGuard wb;
   CreateSalesTable(wb);
-  fm_slicer_t spec = Anchored(0);
+  fm_slicer_patch_t spec = Anchored();
   uint32_t id = 0;
   size_t count = 0;
-  fm_slicer_t out = FM_STRUCT_INIT(fm_slicer_t);
+  fm_slicer_info_t out = FM_STRUCT_INIT(fm_slicer_info_t);
   EXPECT_EQ(fm_sheet_get_slicer_count(wb.handle, 0, nullptr), kBindingNullPointer);
   EXPECT_EQ(fm_sheet_get_slicer_count(wb.handle, 7, &count), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(fm_sheet_get_slicer_at(wb.handle, 0, 0, &out), FM_STATUS_INDEX_OUT_OF_RANGE);
@@ -254,19 +264,30 @@ TEST(FormulonCApiSlicers, RejectsBadArguments) {
   EXPECT_EQ(fm_sheet_add_slicer(wb.handle, 0, 0, 1, 0, &spec, &id), FM_STATUS_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(fm_sheet_add_slicer(wb.handle, 0, 7, 0, 0, &spec, &id), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(fm_sheet_add_slicer(wb.handle, 0, 0, 0, 2, &spec, &id), kInvalidArgument);
-  fm_slicer_t no_anchor = FM_STRUCT_INIT(fm_slicer_t);
+  fm_slicer_patch_t no_anchor = FM_STRUCT_INIT(fm_slicer_patch_t);
   EXPECT_EQ(fm_sheet_add_slicer(wb.handle, 0, 0, 0, 0, &no_anchor, &id), kInvalidArgument);
-  fm_slicer_t bad_bit = Anchored(0x4000u);
-  EXPECT_EQ(fm_sheet_add_slicer(wb.handle, 0, 0, 0, 0, &bad_bit, &id), kInvalidArgument);
-  fm_slicer_t bad_sort = Anchored(FM_SLICER_FIELD_SORT_ORDER);
-  bad_sort.sort_order = 2;
+  fm_slicer_patch_t three_cells = Anchored();
+  three_cells.to_col_op = FM_PATCH_OP_KEEP;
+  EXPECT_EQ(fm_sheet_add_slicer(wb.handle, 0, 0, 0, 0, &three_cells, &id), kInvalidArgument);
+  fm_slicer_patch_t bad_op = Anchored();
+  bad_op.caption_op = static_cast<fm_patch_op_t>(3);
+  EXPECT_EQ(fm_sheet_add_slicer(wb.handle, 0, 0, 0, 0, &bad_op, &id), kInvalidArgument);
+  fm_slicer_patch_t null_caption = Anchored();
+  Set(null_caption.caption_op, null_caption.caption, nullptr);
+  EXPECT_EQ(fm_sheet_add_slicer(wb.handle, 0, 0, 0, 0, &null_caption, &id), kInvalidArgument);
+  fm_slicer_patch_t bad_utf8 = Anchored();
+  Set(bad_utf8.caption_op, bad_utf8.caption, "\xC3");
+  EXPECT_EQ(fm_sheet_add_slicer(wb.handle, 0, 0, 0, 0, &bad_utf8, &id), FM_STATUS_BINDING_UTF8ENCODING_ERROR);
+  fm_slicer_patch_t bad_sort = Anchored();
+  Set(bad_sort.sort_order_op, bad_sort.sort_order, 2);
   EXPECT_EQ(fm_sheet_add_slicer(wb.handle, 0, 0, 0, 0, &bad_sort, &id), kInvalidArgument);
-  fm_slicer_t bad_cross = Anchored(FM_SLICER_FIELD_CROSS_FILTER);
-  bad_cross.cross_filter = 3;
+  fm_slicer_patch_t bad_cross = Anchored();
+  Set(bad_cross.cross_filter_op, bad_cross.cross_filter, 3);
   EXPECT_EQ(fm_sheet_add_slicer(wb.handle, 0, 0, 0, 0, &bad_cross, &id), kInvalidArgument);
-  fm_slicer_t bad_count = Anchored(FM_SLICER_FIELD_COLUMN_COUNT);
+  fm_slicer_patch_t bad_count = Anchored();
+  Set(bad_count.column_count_op, bad_count.column_count, 0U);
   EXPECT_EQ(fm_sheet_add_slicer(wb.handle, 0, 0, 0, 0, &bad_count, &id), kInvalidArgument);
-  fm_slicer_t backwards = Anchored(0);
+  fm_slicer_patch_t backwards = Anchored();
   backwards.to_row = 1;
   EXPECT_EQ(fm_sheet_add_slicer(wb.handle, 0, 0, 0, 0, &backwards, &id), kInvalidArgument);
   ASSERT_EQ(fm_sheet_get_slicer_count(wb.handle, 0, &count), 0);
@@ -274,10 +295,10 @@ TEST(FormulonCApiSlicers, RejectsBadArguments) {
 
   ASSERT_EQ(fm_sheet_add_slicer(wb.handle, 0, 0, 0, 0, &spec, &id), 0);
   EXPECT_EQ(fm_sheet_update_slicer(wb.handle, 0, id, nullptr), kBindingNullPointer);
-  EXPECT_EQ(fm_sheet_update_slicer(wb.handle, 0, id + 1U, &spec), kInvalidArgument);
-  EXPECT_EQ(fm_sheet_update_slicer(wb.handle, 0, 0U, &spec), kInvalidArgument);
-  fm_slicer_t rename = Anchored(FM_SLICER_FIELD_NAME);
-  rename.name = "Other";
+  EXPECT_EQ(fm_sheet_update_slicer(wb.handle, 0, id + 1U, &spec), FM_STATUS_NOT_FOUND);
+  EXPECT_EQ(fm_sheet_update_slicer(wb.handle, 0, 0U, &spec), FM_STATUS_NOT_FOUND);
+  fm_slicer_patch_t rename = FM_STRUCT_INIT(fm_slicer_patch_t);
+  Set(rename.name_op, rename.name, "Other");
   EXPECT_EQ(fm_sheet_update_slicer(wb.handle, 0, id, &rename), kInvalidArgument);
   EXPECT_EQ(fm_sheet_remove_slicer(wb.handle, 0, id + 1U), FM_STATUS_NOT_FOUND);
   EXPECT_EQ(fm_sheet_remove_slicer(wb.handle, 7, id), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
@@ -286,6 +307,70 @@ TEST(FormulonCApiSlicers, RejectsBadArguments) {
   EXPECT_EQ(fm_sheet_get_slicer(wb.handle, 7, id, &present, &out), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
   ASSERT_EQ(fm_sheet_get_slicer(wb.handle, 0, id + 1U, &present, &out), 0);
   EXPECT_EQ(present, 0);
+}
+
+// A slicer patch writes only its SET fields: an offset alone moves within the
+// current cells, CLEAR removes the style, and a refused field (CLEAR outside
+// `style`, a partial set of anchor cells) leaves the whole slicer unchanged.
+TEST(FormulonCApiSlicers, PatchWritesOnlyItsSetFieldsAndRefusesAtomically) {
+  WorkbookGuard wb;
+  CreateSalesTable(wb);
+  fm_slicer_patch_t spec = Anchored();
+  Set(spec.style_op, spec.style, "SlicerStyleLight3");
+  uint32_t id = 0;
+  ASSERT_EQ(fm_sheet_add_slicer(wb.handle, 0, 0, 0, 0, &spec, &id), 0) << fm_get_last_error_message();
+  const fm_slicer_info_t added = Read(wb.handle, id);
+  EXPECT_STREQ(added.name, "Product");
+  EXPECT_STREQ(added.caption, "Product");
+  EXPECT_EQ(added.column_count, 1U);
+  EXPECT_EQ(added.row_height_emu, 241300);
+  EXPECT_EQ(added.sort_order, FM_SLICER_SORT_ORDER_ASCENDING);
+  EXPECT_EQ(added.cross_filter, FM_SLICER_CROSS_FILTER_SHOW_ITEMS_WITH_DATA_AT_TOP);
+  EXPECT_EQ(added.from_row_offset_emu, 0);
+
+  fm_slicer_patch_t caption = FM_STRUCT_INIT(fm_slicer_patch_t);
+  Set(caption.caption_op, caption.caption, "Pick one");
+  ASSERT_EQ(fm_sheet_update_slicer(wb.handle, 0, id, &caption), 0) << fm_get_last_error_message();
+  fm_slicer_info_t out = Read(wb.handle, id);
+  EXPECT_STREQ(out.caption, "Pick one");
+  EXPECT_STREQ(out.style, "SlicerStyleLight3");
+  EXPECT_EQ(out.from_row, 4U);
+  EXPECT_EQ(out.to_col, 5U);
+
+  fm_slicer_patch_t offset = FM_STRUCT_INIT(fm_slicer_patch_t);
+  Set(offset.from_col_offset_emu_op, offset.from_col_offset_emu, 12700);
+  ASSERT_EQ(fm_sheet_update_slicer(wb.handle, 0, id, &offset), 0) << fm_get_last_error_message();
+  out = Read(wb.handle, id);
+  EXPECT_EQ(out.from_col_offset_emu, 12700);
+  EXPECT_EQ(out.from_row, 4U);
+  EXPECT_EQ(out.from_col, 3U);
+  EXPECT_EQ(out.to_row, 14U);
+
+  fm_slicer_patch_t clear = FM_STRUCT_INIT(fm_slicer_patch_t);
+  clear.style_op = FM_PATCH_OP_CLEAR;
+  ASSERT_EQ(fm_sheet_update_slicer(wb.handle, 0, id, &clear), 0) << fm_get_last_error_message();
+  EXPECT_EQ(Read(wb.handle, id).style, nullptr);
+
+  fm_slicer_patch_t bad = FM_STRUCT_INIT(fm_slicer_patch_t);
+  Set(bad.column_count_op, bad.column_count, 3U);
+  bad.caption_op = FM_PATCH_OP_CLEAR;
+  EXPECT_EQ(fm_sheet_update_slicer(wb.handle, 0, id, &bad), kInvalidArgument);
+  bad.caption_op = FM_PATCH_OP_KEEP;
+  Set(bad.from_row_op, bad.from_row, 0U);  // one anchor cell without the other three
+  EXPECT_EQ(fm_sheet_update_slicer(wb.handle, 0, id, &bad), kInvalidArgument);
+  bad.from_row_op = FM_PATCH_OP_KEEP;
+  bad.sort_order_op = static_cast<fm_patch_op_t>(3);
+  EXPECT_EQ(fm_sheet_update_slicer(wb.handle, 0, id, &bad), kInvalidArgument);
+  out = Read(wb.handle, id);
+  EXPECT_EQ(out.column_count, 1U);
+  EXPECT_STREQ(out.caption, "Pick one");
+  EXPECT_EQ(out.from_row, 4U);
+
+  const fm_slicer_patch_t keep = FM_STRUCT_INIT(fm_slicer_patch_t);
+  EXPECT_EQ(fm_sheet_update_slicer(wb.handle, 0, id, &keep), 0) << fm_get_last_error_message();
+  fm_slicer_patch_t short_size = FM_STRUCT_INIT(fm_slicer_patch_t);
+  short_size.struct_size = 0;
+  EXPECT_EQ(fm_sheet_update_slicer(wb.handle, 0, id, &short_size), kInvalidArgument);
 }
 
 }  // namespace

@@ -113,11 +113,11 @@ emscripten::val JsWorkbook::getMergesInRange(uint32_t sheet, emscripten::val ran
   if (!reader.ok()) {
     return emscripten::val::undefined();
   }
-  uint32_t total = 0;
+  size_t total = 0;
   fm_status_t rc = fm_sheet_get_merges_in_range(handle_, sheet, &query, nullptr, 0, &total);
   std::vector<fm_cell_rect_t> found(rc == 0 ? total : 0);
   if (rc == 0 && total > 0) {
-    uint32_t written = 0;
+    size_t written = 0;
     rc = fm_sheet_get_merges_in_range(handle_, sheet, &query, found.data(), total, &written);
     found.resize(rc == 0 ? written : 0);
   }
@@ -131,7 +131,7 @@ emscripten::val JsWorkbook::getMergesInRange(uint32_t sheet, emscripten::val ran
 
 emscripten::val JsWorkbook::getComment(uint32_t sheet, uint32_t row, uint32_t col) const {
   int32_t present = 0;
-  fm_comment_t c = FM_STRUCT_INIT(fm_comment_t);
+  fm_comment_info_t c = FM_STRUCT_INIT(fm_comment_info_t);
   const fm_status_t rc =
       handle_ != nullptr ? fm_sheet_get_comment(handle_, sheet, row, col, &present, &c) : kBindingInvalidHandle;
   if (rc != 0 || present == 0) {
@@ -145,7 +145,7 @@ emscripten::val JsWorkbook::getComment(uint32_t sheet, uint32_t row, uint32_t co
 namespace {
 
 fm_status_t comment_item(const fm_workbook_t* wb, uint32_t sheet, std::size_t index, emscripten::val* out) {
-  fm_comment_t c = FM_STRUCT_INIT(fm_comment_t);
+  fm_comment_info_t c = FM_STRUCT_INIT(fm_comment_info_t);
   const fm_status_t rc = fm_sheet_get_comment_at(wb, sheet, index, &c);
   if (rc != 0) {
     return rc;
@@ -181,12 +181,11 @@ void JsWorkbook::removeComment(uint32_t sheet, uint32_t row, uint32_t col) {
 }
 
 emscripten::val JsWorkbook::getCommentVisible(uint32_t sheet, uint32_t row, uint32_t col) const {
+  int32_t present = 0;
   int32_t visible = 0;
-  const fm_status_t rc =
-      handle_ != nullptr ? fm_sheet_get_comment_visible(handle_, sheet, row, col, &visible) : kBindingInvalidHandle;
-  const bool absent = rc == FM_STATUS_NOT_FOUND;
-  return optional_or_null(absent ? 0 : rc, absent ? 0 : 1,
-                          rc == 0 ? emscripten::val(visible != 0) : emscripten::val::null());
+  const fm_status_t rc = handle_ != nullptr ? fm_sheet_get_comment_visible(handle_, sheet, row, col, &present, &visible)
+                                            : kBindingInvalidHandle;
+  return optional_or_null(rc, present, rc == 0 ? emscripten::val(visible != 0) : emscripten::val::null());
 }
 
 void JsWorkbook::setCommentVisible(uint32_t sheet, uint32_t row, uint32_t col, bool visible) {
@@ -261,10 +260,10 @@ emscripten::val protected_range_to_val(const fm_protected_range_t& r) {
   o.set("ranges", cell_rects_to_val(r.ranges, r.range_count));
   js_set_cstr(o, "name", r.name);
   js_set_cstr_or_null(o, "legacyPasswordHash", r.legacy_password_hash);
-  js_set_cstr_fields(o, {{"algorithmName", r.algorithm_name},
-                         {"hashValue", r.hash_value},
-                         {"saltValue", r.salt_value},
-                         {"securityDescriptor", r.security_descriptor}});
+  js_set_cstr_or_null_fields(o, {{"algorithmName", r.algorithm_name},
+                                 {"hashValue", r.hash_value},
+                                 {"saltValue", r.salt_value},
+                                 {"securityDescriptor", r.security_descriptor}});
   return o;
 }
 
@@ -276,7 +275,7 @@ double JsWorkbook::getProtectedRangeCount(uint32_t sheet) const {
 
 emscripten::val JsWorkbook::getProtectedRange(uint32_t sheet, uint32_t protectedRangeIndex) const {
   fm_protected_range_t r = FM_STRUCT_INIT(fm_protected_range_t);
-  if (!succeeded(handle_ != nullptr ? fm_sheet_get_protected_range(handle_, sheet, protectedRangeIndex, &r)
+  if (!succeeded(handle_ != nullptr ? fm_sheet_get_protected_range_at(handle_, sheet, protectedRangeIndex, &r)
                                     : kBindingInvalidHandle)) {
     return emscripten::val::undefined();
   }
@@ -286,21 +285,17 @@ emscripten::val JsWorkbook::getProtectedRange(uint32_t sheet, uint32_t protected
 namespace {
 
 // Reads the protected range described by `range` into `*out`, with `text` owning its strings and
-// `ranges` its rectangles. With `optional_ranges`, an absent `ranges` leaves the list NULL (the stored ranges
-// are kept) and an empty array yields the non-NULL `empty_sentinel`. False after the reader has recorded its
-// rejection.
+// `ranges` its rectangles. False after the reader has recorded its rejection.
 bool pull_protected_range(const emscripten::val& range, const char* operation, std::string (&text)[6],
-                          std::vector<fm_cell_rect_t>& ranges, fm_protected_range_t* out, bool optional_ranges = false,
-                          const fm_cell_rect_t* empty_sentinel = nullptr) {
+                          std::vector<fm_cell_rect_t>& ranges, fm_protected_range_t* out) {
   JsNarrowNumericReader reader(operation);
   out->spin_count = reader.u32(range, "spinCount", 0U, "range.spinCount");
   out->name = reader.optional_string(range, "name", text[0], "range.name");
   const emscripten::val ranges_value = reader.value(range, "ranges", "range.ranges");
-  const bool ranges_given = !optional_ranges || js_value_present(ranges_value);
-  if (ranges_given && reader.require_array(ranges_value, "range.ranges")) {
+  if (reader.require_array(ranges_value, "range.ranges")) {
     ranges = js_pull_range_array(ranges_value, "range.ranges", &reader);
   }
-  out->ranges = ranges_given && optional_ranges && ranges.empty() ? empty_sentinel : ranges.data();
+  out->ranges = ranges.data();
   out->range_count = ranges.size();
   out->legacy_password_hash = reader.optional_string(range, "legacyPasswordHash", text[1], "range.legacyPasswordHash");
   out->algorithm_name = reader.optional_string(range, "algorithmName", text[2], "range.algorithmName");
@@ -335,14 +330,35 @@ void JsWorkbook::updateProtectedRange(uint32_t sheet, uint32_t index, emscripten
     record_invalid_handle();
     return;
   }
+  JsNarrowNumericReader reader("updateProtectedRange");
   std::string text[6];
   std::vector<fm_cell_rect_t> ranges;
-  fm_protected_range_t r = FM_STRUCT_INIT(fm_protected_range_t);
-  const fm_cell_rect_t empty_sentinel{};
-  if (!pull_protected_range(range, "updateProtectedRange", text, ranges, &r, true, &empty_sentinel)) {
+  fm_protected_range_patch_t p = FM_STRUCT_INIT(fm_protected_range_patch_t);
+  const emscripten::val spin_count = reader.value(range, "spinCount", "range.spinCount");
+  if (reader.ok() && js_value_present(spin_count)) {
+    p.spin_count_op = FM_PATCH_OP_SET;
+    p.spin_count = reader.u32_value(spin_count, 0U, "range.spinCount");
+  }
+  js_patch_string(reader, range, "name", "range.name", false, text[0], &p.name_op, &p.name);
+  const emscripten::val ranges_value = reader.value(range, "ranges", "range.ranges");
+  if (reader.ok() && js_value_present(ranges_value) && reader.require_array(ranges_value, "range.ranges")) {
+    ranges = js_pull_range_array(ranges_value, "range.ranges", &reader);
+    p.ranges_op = FM_PATCH_OP_SET;
+    p.ranges = ranges.data();
+    p.range_count = ranges.size();
+  }
+  js_patch_string(reader, range, "legacyPasswordHash", "range.legacyPasswordHash", true, text[1],
+                  &p.legacy_password_hash_op, &p.legacy_password_hash);
+  js_patch_string(reader, range, "algorithmName", "range.algorithmName", true, text[2], &p.algorithm_name_op,
+                  &p.algorithm_name);
+  js_patch_string(reader, range, "hashValue", "range.hashValue", true, text[3], &p.hash_value_op, &p.hash_value);
+  js_patch_string(reader, range, "saltValue", "range.saltValue", true, text[4], &p.salt_value_op, &p.salt_value);
+  js_patch_string(reader, range, "securityDescriptor", "range.securityDescriptor", true, text[5],
+                  &p.security_descriptor_op, &p.security_descriptor);
+  if (!reader.ok()) {
     return;
   }
-  succeeded(fm_sheet_update_protected_range(handle_, sheet, index, &r));
+  succeeded(fm_sheet_update_protected_range(handle_, sheet, index, &p));
 }
 
 void JsWorkbook::removeProtectedRange(uint32_t sheet, uint32_t index) {
@@ -451,12 +467,12 @@ emscripten::val validation_to_val(const fm_data_validation_t& v) {
   item.set("showInputMessage", v.show_input_message == FM_TRISTATE_TRUE);
   item.set("showErrorMessage", v.show_error_message == FM_TRISTATE_TRUE);
   item.set("showInCellDropdown", v.show_in_cell_dropdown == FM_TRISTATE_TRUE);
-  js_set_cstr_fields(item, {{"formula1", v.formula1},
-                            {"formula2", v.formula2},
-                            {"errorTitle", v.error_title},
-                            {"errorMessage", v.error_message},
-                            {"promptTitle", v.prompt_title},
-                            {"promptMessage", v.prompt_message}});
+  js_set_cstr_or_null_fields(item, {{"formula1", v.formula1},
+                                    {"formula2", v.formula2},
+                                    {"errorTitle", v.error_title},
+                                    {"errorMessage", v.error_message},
+                                    {"promptTitle", v.prompt_title},
+                                    {"promptMessage", v.prompt_message}});
   return item;
 }
 
@@ -468,7 +484,7 @@ double JsWorkbook::getValidationCount(uint32_t sheet) const {
 
 emscripten::val JsWorkbook::getValidation(uint32_t sheet, uint32_t validationIndex) const {
   fm_data_validation_t v = FM_STRUCT_INIT(fm_data_validation_t);
-  if (!succeeded(handle_ != nullptr ? fm_sheet_get_validation(handle_, sheet, validationIndex, &v)
+  if (!succeeded(handle_ != nullptr ? fm_sheet_get_validation_at(handle_, sheet, validationIndex, &v)
                                     : kBindingInvalidHandle)) {
     return emscripten::val::undefined();
   }
@@ -594,11 +610,11 @@ emscripten::val threaded_comment_to_val(const fm_threaded_comment_t& c) {
   o.set("row", c.row);
   o.set("col", c.col);
   o.set("done", c.done != 0);
-  js_set_cstr_fields(
-      o,
-      {{"id", c.id}, {"personId", c.person_id}, {"created", c.created}, {"text", c.text}, {"parentId", c.parent_id}});
+  js_set_cstr_fields(o, {{"id", c.id}, {"personId", c.person_id}, {"text", c.text}});
+  js_set_cstr_or_null(o, "parentId", c.parent_id);
+  js_set_cstr_or_null(o, "created", c.created);
   emscripten::val mentions = emscripten::val::array();
-  for (uint32_t i = 0; i < c.mention_count; ++i) {
+  for (uint32_t i = 0; i < c.mentions_count; ++i) {
     mentions.set(i, mention_to_val(c.mentions[i]));
   }
   o.set("mentions", mentions);
@@ -681,7 +697,7 @@ void JsWorkbook::addThreadedComment(uint32_t sheet, emscripten::val comment) {
   c.parent_id = parent_id.c_str();
   c.done = reader.boolean(comment, "done", false, "done") ? 1 : 0;
   c.mentions = mentions.items.empty() ? nullptr : mentions.items.data();
-  c.mention_count = static_cast<uint32_t>(mentions.items.size());
+  c.mentions_count = static_cast<uint32_t>(mentions.items.size());
   succeeded(fm_sheet_add_threaded_comment(handle_, sheet, &c));
 }
 
@@ -692,24 +708,20 @@ void JsWorkbook::editThreadedComment(uint32_t sheet, const std::string& id, emsc
   }
   JsNarrowNumericReader reader("updateThreadedComment");
   fm_threaded_comment_patch_t out = FM_STRUCT_INIT(fm_threaded_comment_patch_t);
-  out.done = -1;
   std::string text;
-  out.text = reader.optional_string(patch, "text", text, "patch.text");
+  js_patch_string(reader, patch, "text", "patch.text", false, text, &out.text_op, &out.text);
   MentionStore store;
   const emscripten::val mentions = reader.value(patch, "mentions", "patch.mentions");
-  if (js_value_present(mentions)) {
-    out.mentions_engaged = 1;
+  if (reader.ok() && js_value_present(mentions)) {
+    out.mentions_op = FM_PATCH_OP_SET;
     pull_mentions(mentions, store, reader);
   }
-  const emscripten::val done = reader.value(patch, "done", "patch.done");
-  if (js_value_present(done)) {
-    out.done = reader.boolean_value(done, false) ? 1 : 0;
-  }
+  js_patch_flag(reader, patch, "done", "patch.done", &out.done_op, &out.done);
   if (!reader.ok()) {
     return;
   }
   out.mentions = store.items.empty() ? nullptr : store.items.data();
-  out.mention_count = static_cast<uint32_t>(store.items.size());
+  out.mentions_count = static_cast<uint32_t>(store.items.size());
   succeeded(fm_sheet_update_threaded_comment(handle_, sheet, id.c_str(), &out));
 }
 

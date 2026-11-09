@@ -196,9 +196,14 @@ class CellFormatShapeTests(unittest.TestCase):
     def test_edge_values(self) -> None:
         with Workbook.create_default() as wb:
             ws = wb.sheet(0)
-            ws.update_cell_format("A1", font={"size_pt": 0})
-            self.assertEqual(ws.get_cell_format("A1").font.size_pt, 0)
-            ws.update_cell_format("A1", font={"size_pt": -0.0}, alignment={"indent": 0})
+            for size in (1, 409):
+                with self.subTest(size=size):
+                    ws.update_cell_format("A1", font={"size_pt": size})
+                    self.assertEqual(ws.get_cell_format("A1").font.size_pt, size)
+            for size in (0, -0.0, -1, 410):
+                with self.subTest(size=size), self.assertRaises(InvalidArgumentError):
+                    ws.update_cell_format("A1", font={"size_pt": size})
+            ws.update_cell_format("A1", alignment={"indent": 0})
             self.assertEqual(ws.get_cell_format("A1").alignment.indent, 0)
             ws.update_cell_format("A1", alignment={"indent": 255, "text_rotation": 180})
             self.assertEqual(ws.get_cell_format("A1").alignment.indent, 255)

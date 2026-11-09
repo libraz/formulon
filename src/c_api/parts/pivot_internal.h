@@ -160,6 +160,11 @@ fm_status_t pivot_count(const fm_workbook_t* wb, std::size_t sheet_index, std::s
 // match the cache reader's behaviour for short rows.
 void grow_record_cells(formulon::pivot::PivotCacheRecord& rec, std::size_t field_index);
 
+// `text` as a read-record string: `NULL` when it is empty (absent).
+inline const char* text_or_null(const char* text) noexcept {
+  return text != nullptr && text[0] != '\0' ? text : nullptr;
+}
+
 }  // namespace parts
 }  // namespace c_api
 }  // namespace formulon

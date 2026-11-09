@@ -35,10 +35,6 @@ bool Step(fm_status_t& rc, fm_status_t next) {
   return rc == 0;
 }
 
-Napi::Value NumberOrNull(Napi::Env env, double v) {
-  return std::isnan(v) ? env.Null() : JsNumber(env, v);
-}
-
 Napi::Value OptionalNumber(Napi::Env env, int32_t has, double v) {
   return has != 0 ? JsNumber(env, v) : env.Null();
 }
@@ -66,15 +62,15 @@ Napi::Value TitleToJs(Napi::Env env, const fm_chart_title_t& t) {
 Napi::Object FillToJs(Napi::Env env, const fm_chart_fill_t& f) {
   Napi::Object o = Napi::Object::New(env);
   o.Set("color", ColorSpecOrNull(env, f.color));
-  o.Set("transparencyPct", NumberOrNull(env, f.transparency_pct));
+  o.Set("transparencyPct", OptionalNumber(env, f.has_transparency_pct, f.transparency_pct));
   return o;
 }
 
 Napi::Object LineToJs(Napi::Env env, const fm_chart_line_t& l) {
   Napi::Object o = Napi::Object::New(env);
   o.Set("color", ColorSpecOrNull(env, l.color));
-  o.Set("transparencyPct", NumberOrNull(env, l.transparency_pct));
-  o.Set("widthPt", NumberOrNull(env, l.width_pt));
+  o.Set("transparencyPct", OptionalNumber(env, l.has_transparency_pct, l.transparency_pct));
+  o.Set("widthPt", OptionalNumber(env, l.has_width_pt, l.width_pt));
   o.Set("dash", OptionalNumber(env, l.has_dash, l.dash));
   o.Set("none", JsBool(env, l.none));
   return o;
@@ -101,7 +97,7 @@ Napi::Object LabelsToJs(Napi::Env env, const fm_chart_labels_t& l) {
   o.Set("numberFormat", StringOrNull(env, l.number_format));
   o.Set("sourceLinked", JsBool(env, l.source_linked));
   o.Set("fontColor", ColorSpecOrNull(env, l.font_color));
-  o.Set("fontSizePt", NumberOrNull(env, l.font_size_pt));
+  o.Set("fontSizePt", OptionalNumber(env, l.has_font_size_pt, l.font_size_pt));
   o.Set("deleted", JsBool(env, l.deleted));
   return o;
 }
@@ -113,7 +109,7 @@ Napi::Object DataSourceToJs(Napi::Env env, const fm_chart_t* chart, size_t plot,
   o.Set("formula", JsString(env, src.formula));
   Napi::Array literal = Napi::Array::New(env);
   for (size_t i = 0; i < src.literal_count && rc == 0; ++i) {
-    fm_chart_literal_t lit = FM_STRUCT_INIT(fm_chart_literal_t);
+    fm_chart_literal_info_t lit = FM_STRUCT_INIT(fm_chart_literal_info_t);
     if (!Step(rc, fm_chart_get_series_literal_at(chart, plot, series, role, i, &lit))) {
       break;
     }
@@ -125,7 +121,7 @@ Napi::Object DataSourceToJs(Napi::Env env, const fm_chart_t* chart, size_t plot,
 
 Napi::Object SeriesToJs(Napi::Env env, const fm_chart_t* chart, size_t plot, size_t index, fm_status_t& rc) {
   Napi::Object o = Napi::Object::New(env);
-  fm_chart_series_t s = FM_STRUCT_INIT(fm_chart_series_t);
+  fm_chart_series_info_t s = FM_STRUCT_INIT(fm_chart_series_info_t);
   if (!Step(rc, fm_chart_get_series_at(chart, plot, index, &s))) {
     return o;
   }
@@ -144,7 +140,7 @@ Napi::Object SeriesToJs(Napi::Env env, const fm_chart_t* chart, size_t plot, siz
   o.Set("smooth", TriToJs(env, s.smooth));
   Napi::Array points = Napi::Array::New(env);
   for (size_t i = 0; i < s.point_count && rc == 0; ++i) {
-    fm_chart_point_t p = FM_STRUCT_INIT(fm_chart_point_t);
+    fm_chart_point_info_t p = FM_STRUCT_INIT(fm_chart_point_info_t);
     if (!Step(rc, fm_chart_get_series_point_at(chart, plot, index, i, &p))) {
       break;
     }
@@ -162,7 +158,7 @@ Napi::Object SeriesToJs(Napi::Env env, const fm_chart_t* chart, size_t plot, siz
 
 Napi::Object PlotToJs(Napi::Env env, const fm_chart_t* chart, size_t index, fm_status_t& rc) {
   Napi::Object o = Napi::Object::New(env);
-  fm_chart_plot_t p = FM_STRUCT_INIT(fm_chart_plot_t);
+  fm_chart_plot_info_t p = FM_STRUCT_INIT(fm_chart_plot_info_t);
   if (!Step(rc, fm_chart_get_plot_at(chart, index, &p))) {
     return o;
   }
@@ -191,7 +187,7 @@ Napi::Object PlotToJs(Napi::Env env, const fm_chart_t* chart, size_t index, fm_s
   return o;
 }
 
-Napi::Object AxisToJs(Napi::Env env, const fm_chart_axis_t& a) {
+Napi::Object AxisToJs(Napi::Env env, const fm_chart_axis_info_t& a) {
   Napi::Object o = Napi::Object::New(env);
   o.Set("id", JsNumber(env, a.id));
   o.Set("kind", JsNumber(env, a.kind));
@@ -199,12 +195,12 @@ Napi::Object AxisToJs(Napi::Env env, const fm_chart_axis_t& a) {
   o.Set("visible", JsBool(env, a.visible));
   o.Set("crossAxis", JsNumber(env, a.cross_axis));
   o.Set("crosses", JsIndexOrNull(env, a.crosses));
-  o.Set("crossesAt", NumberOrNull(env, a.crosses_at));
-  o.Set("min", NumberOrNull(env, a.min));
-  o.Set("max", NumberOrNull(env, a.max));
-  o.Set("majorUnit", NumberOrNull(env, a.major_unit));
-  o.Set("minorUnit", NumberOrNull(env, a.minor_unit));
-  o.Set("logBase", NumberOrNull(env, a.log_base));
+  o.Set("crossesAt", OptionalNumber(env, a.has_crosses_at, a.crosses_at));
+  o.Set("min", OptionalNumber(env, a.has_min, a.min));
+  o.Set("max", OptionalNumber(env, a.has_max, a.max));
+  o.Set("majorUnit", OptionalNumber(env, a.has_major_unit, a.major_unit));
+  o.Set("minorUnit", OptionalNumber(env, a.has_minor_unit, a.minor_unit));
+  o.Set("logBase", OptionalNumber(env, a.has_log_base, a.log_base));
   o.Set("reversed", JsBool(env, a.reversed));
   o.Set("numberFormat", StringOrNull(env, a.number_format));
   o.Set("sourceLinked", JsBool(env, a.source_linked));
@@ -230,7 +226,7 @@ Napi::Object ChartToJs(Napi::Env env, const fm_chart_t* chart, fm_status_t& rc) 
   o.Set("title", TitleToJs(env, info.title));
   o.Set("autoTitleDeleted", TriToJs(env, info.auto_title_deleted));
 
-  if (info.legend_position == FM_CHART_LEGEND_POSITION_NONE) {
+  if (info.legend_position == FM_CHART_LEGEND_POSITION_ABSENT) {
     o.Set("legend", env.Null());
   } else {
     Napi::Object legend = Napi::Object::New(env);
@@ -260,7 +256,7 @@ Napi::Object ChartToJs(Napi::Env env, const fm_chart_t* chart, fm_status_t& rc) 
   o.Set("plots", plots);
   Napi::Array axes = Napi::Array::New(env);
   for (size_t i = 0; i < info.axis_count && rc == 0; ++i) {
-    fm_chart_axis_t axis = FM_STRUCT_INIT(fm_chart_axis_t);
+    fm_chart_axis_info_t axis = FM_STRUCT_INIT(fm_chart_axis_info_t);
     if (Step(rc, fm_chart_get_axis_at(chart, i, &axis))) {
       axes.Set(static_cast<uint32_t>(i), AxisToJs(env, axis));
     }
@@ -269,12 +265,12 @@ Napi::Object ChartToJs(Napi::Env env, const fm_chart_t* chart, fm_status_t& rc) 
   // The filter: the `idx` of every filtered series across the plots, and the hidden category positions.
   Napi::Array hidden_series = Napi::Array::New(env);
   for (size_t i = 0; i < info.plot_count && rc == 0; ++i) {
-    fm_chart_plot_t plot = FM_STRUCT_INIT(fm_chart_plot_t);
+    fm_chart_plot_info_t plot = FM_STRUCT_INIT(fm_chart_plot_info_t);
     if (!Step(rc, fm_chart_get_plot_at(chart, i, &plot))) {
       break;
     }
     for (size_t j = 0; j < plot.series_count && rc == 0; ++j) {
-      fm_chart_series_t series = FM_STRUCT_INIT(fm_chart_series_t);
+      fm_chart_series_info_t series = FM_STRUCT_INIT(fm_chart_series_info_t);
       if (Step(rc, fm_chart_get_series_at(chart, i, j, &series)) && series.filtered != 0) {
         hidden_series.Set(hidden_series.Length(), JsNumber(env, series.idx));
       }
@@ -325,8 +321,8 @@ Napi::Object DataSeriesToJs(Napi::Env env, const fm_chart_data_t* data, size_t i
   constexpr int32_t kRoleCount = FM_CHART_ROLE_SIZE + 1;
   static_assert(sizeof(kRoleKeys) / sizeof(kRoleKeys[0]) == kRoleCount, "role keys must cover every fm_chart_role_t");
   Napi::Object o = Napi::Object::New(env);
-  fm_chart_data_series_t s = FM_STRUCT_INIT(fm_chart_data_series_t);
-  fm_chart_data_points_t pts = FM_STRUCT_INIT(fm_chart_data_points_t);
+  fm_chart_data_series_info_t s = FM_STRUCT_INIT(fm_chart_data_series_info_t);
+  fm_chart_data_points_info_t pts = FM_STRUCT_INIT(fm_chart_data_points_info_t);
   if (!Step(rc, fm_chart_data_get_series_at(data, index, &s)) ||
       !Step(rc, fm_chart_data_get_series_points(data, index, &pts))) {
     return o;
@@ -372,7 +368,8 @@ Napi::Object ChartDataToJs(Napi::Env env, const fm_chart_data_t* data, fm_status
   for (size_t i = 0; i < info.category_label_count && rc == 0; ++i) {
     const char* label = nullptr;
     double value = 0.0;
-    if (Step(rc, fm_chart_data_get_category_at(data, i, &label, &value))) {
+    int32_t has_value = 0;
+    if (Step(rc, fm_chart_data_get_category_at(data, i, &label, &has_value, &value))) {
       labels.Set(static_cast<uint32_t>(i), JsString(env, label));
       if (numeric) {
         values[i] = value;
@@ -409,7 +406,7 @@ Napi::Object ChartDataToJs(Napi::Env env, const fm_chart_data_t* data, fm_status
 
   Napi::Array axis_titles = Napi::Array::New(env);
   for (size_t i = 0; i < info.axis_title_count && rc == 0; ++i) {
-    fm_chart_axis_title_text_t t = FM_STRUCT_INIT(fm_chart_axis_title_text_t);
+    fm_chart_axis_title_text_info_t t = FM_STRUCT_INIT(fm_chart_axis_title_text_info_t);
     if (Step(rc, fm_chart_data_get_axis_title_at(data, i, &t))) {
       Napi::Object item = Napi::Object::New(env);
       item.Set("axisId", JsNumber(env, t.axis_id));
@@ -420,7 +417,7 @@ Napi::Object ChartDataToJs(Napi::Env env, const fm_chart_data_t* data, fm_status
   o.Set("axisTitleTexts", axis_titles);
   Napi::Array unresolved = Napi::Array::New(env);
   for (size_t i = 0; i < info.unresolved_count && rc == 0; ++i) {
-    fm_chart_unresolved_t u = FM_STRUCT_INIT(fm_chart_unresolved_t);
+    fm_chart_unresolved_info_t u = FM_STRUCT_INIT(fm_chart_unresolved_info_t);
     if (Step(rc, fm_chart_data_get_unresolved_at(data, i, &u))) {
       Napi::Object item = Napi::Object::New(env);
       item.Set("seriesIndex", JsNumber(env, u.series_index));
@@ -453,14 +450,15 @@ Napi::Value Workbook::GetChart(const Napi::CallbackInfo& info) {
   return OptionalOrNull(env, rc, present, value);
 }
 
-// Takes ownership of an opened chart data handle and reads it into the resolved data.
-static Napi::Value ReadOpenedChartData(Napi::Env env, fm_chart_data_t* raw, fm_status_t rc) {
+// Takes ownership of an opened chart data handle and reads it into the resolved data; `null` when
+// the sheet has no chart with that id.
+static Napi::Value ReadOpenedChartData(Napi::Env env, fm_chart_data_t* raw, int32_t present, fm_status_t rc) {
   const ChartDataHandle data(raw);
-  Napi::Value value = env.Undefined();
-  if (rc == 0) {
+  Napi::Value value = env.Null();
+  if (rc == 0 && present != 0) {
     value = ChartDataToJs(env, data.get(), rc);
   }
-  return ValueOrThrow(env, rc, value);
+  return OptionalOrNull(env, rc, present, value);
 }
 
 Napi::Value Workbook::GetChartData(const Napi::CallbackInfo& info) {
@@ -468,9 +466,10 @@ Napi::Value Workbook::GetChartData(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return ThrowInvalidHandle(env);
   }
+  int32_t present = 0;
   fm_chart_data_t* raw = nullptr;
-  const fm_status_t rc = fm_sheet_get_chart_data(handle_, ArgU32(info, 0), ArgU32(info, 1), &raw);
-  return ReadOpenedChartData(env, raw, rc);
+  const fm_status_t rc = fm_sheet_get_chart_data(handle_, ArgU32(info, 0), ArgU32(info, 1), &present, &raw);
+  return ReadOpenedChartData(env, raw, present, rc);
 }
 
 Napi::Value Workbook::PreviewChartData(const Napi::CallbackInfo& info) {
@@ -485,16 +484,17 @@ Napi::Value Workbook::PreviewChartData(const Napi::CallbackInfo& info) {
   CheckedSpecReader reader(env);
   std::string source;
   const bool has_source = reader.String(spec, "source", &source);
-  fm_chart_preview_overrides_t overrides = FM_STRUCT_INIT(fm_chart_preview_overrides_t);
+  fm_chart_preview_overrides_spec_t overrides = FM_STRUCT_INIT(fm_chart_preview_overrides_spec_t);
+  overrides.source_op = has_source ? FM_PATCH_OP_SET : FM_PATCH_OP_KEEP;
   overrides.source = has_source ? source.c_str() : nullptr;
-  const auto set = [&](const char* key, int32_t& op, int32_t& out, bool is_bool) {
+  const auto set = [&](const char* key, fm_patch_op_t& op, int32_t& out, bool is_bool) {
     const Field f = Probe(reader, spec, key);
-    if (f.op == FM_CHART_PATCH_OP_CLEAR) {
+    if (f.op == FM_PATCH_OP_CLEAR) {
       // `null` leaves the override unset, as `undefined` does.
       return;
     }
-    if (f.op == FM_CHART_PATCH_OP_SET) {
-      op = FM_CHART_PATCH_OP_SET;
+    if (f.op == FM_PATCH_OP_SET) {
+      op = FM_PATCH_OP_SET;
       out = is_bool ? (reader.Bool(f.value, key, false) ? 1 : 0) : reader.I32(f.value, key, 0);
     }
   };
@@ -507,9 +507,11 @@ Napi::Value Workbook::PreviewChartData(const Napi::CallbackInfo& info) {
   if (!reader.ok()) {
     return env.Undefined();
   }
+  int32_t present = 0;
   fm_chart_data_t* raw = nullptr;
-  const fm_status_t rc = fm_sheet_get_chart_preview(handle_, ArgU32(info, 0), ArgU32(info, 1), &overrides, &raw);
-  return ReadOpenedChartData(env, raw, rc);
+  const fm_status_t rc =
+      fm_sheet_get_chart_preview(handle_, ArgU32(info, 0), ArgU32(info, 1), &overrides, &present, &raw);
+  return ReadOpenedChartData(env, raw, present, rc);
 }
 
 }  // namespace formulon_node

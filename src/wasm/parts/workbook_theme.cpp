@@ -84,8 +84,7 @@ void JsWorkbook::setThemeColors(emscripten::val colors) {
     return;
   }
   for (uint32_t i = 0; i < std::size(tc.argb); ++i) {
-    const fm_color_spec_t color =
-        js_pull_color_spec_value(reader.array_element(colors, i, "colors[]"), "colors[]", &reader);
+    const fm_color_t color = js_pull_color_spec_value(reader.array_element(colors, i, "colors[]"), "colors[]", &reader);
     if (!reader.ok()) {
       return;
     }
@@ -136,7 +135,7 @@ emscripten::val JsWorkbook::resolveColor(emscripten::val spec, int32_t context) 
   emscripten::val holder = emscripten::val::object();
   holder.set("c", spec);
   JsNarrowNumericReader reader("resolveColor");
-  const fm_color_spec_t color = js_pull_color_spec(holder, "c", &reader);
+  const fm_color_t color = js_pull_color_spec(holder, "c", &reader);
   if (!reader.ok()) {
     return emscripten::val::undefined();
   }
@@ -149,7 +148,7 @@ emscripten::val JsWorkbook::resolveColor(emscripten::val spec, int32_t context) 
 }
 
 emscripten::val JsWorkbook::getEffectiveStyle(uint32_t sheet, uint32_t row, uint32_t col) const {
-  fm_effective_style_t e = FM_STRUCT_INIT(fm_effective_style_t);
+  fm_effective_style_info_t e = FM_STRUCT_INIT(fm_effective_style_info_t);
   if (!succeeded(handle_ != nullptr ? fm_sheet_get_effective_style(handle_, sheet, row, col, &e)
                                     : kBindingInvalidHandle)) {
     return emscripten::val::undefined();

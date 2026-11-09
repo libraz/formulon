@@ -333,7 +333,11 @@ namespace detail {
 
 Expected<GroupBounds, Error> resolve_date_group_bounds(const PivotCache& cache, std::size_t base,
                                                        const DateGroupSpec& spec, bool date1904) {
-  if (base >= cache.fields().size() || !cache.fields()[base].is_database_field) {
+  if (base >= cache.fields().size()) {
+    return group_error(FormulonErrorCode::kIndexOutOfRange, "no such cache field",
+                       "field=" + std::to_string(base) + " count=" + std::to_string(cache.fields().size()));
+  }
+  if (!cache.fields()[base].is_database_field) {
     return group_error(FormulonErrorCode::kInvalidArgument, "date grouping needs a database field",
                        "field=" + std::to_string(base));
   }

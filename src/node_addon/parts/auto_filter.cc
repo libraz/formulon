@@ -195,7 +195,7 @@ void ReadFilterColumn(CheckedSpecReader& reader, const Napi::Object& spec, AutoF
       item.hour = reader.U8(g, "hour", 0U);
       item.minute = reader.U8(g, "minute", 0U);
       item.second = reader.U8(g, "second", 0U);
-      item.grouping = reader.U8(g, "grouping", 0U);
+      item.grouping = reader.I32(g, "grouping", 0);
       if (!reader.ok()) {
         break;
       }
@@ -346,8 +346,8 @@ Napi::Value GetAutoFilterImpl(const Napi::CallbackInfo& info, const fm_workbook_
   const size_t table_index = table ? Workbook::ArgU32(info, 1) : 0;
   fm_auto_filter_t af = FM_STRUCT_INIT(fm_auto_filter_t);
   int32_t present = 0;
-  const fm_status_t rc = table ? fm_sheet_get_table_auto_filter(wb, sheet, table_index, &af, &present)
-                               : fm_sheet_get_auto_filter(wb, sheet, &af, &present);
+  const fm_status_t rc = table ? fm_sheet_get_table_auto_filter(wb, sheet, table_index, &present, &af)
+                               : fm_sheet_get_auto_filter(wb, sheet, &present, &af);
   const bool has = rc == 0 && present != 0;
   return OptionalOrNull(env, rc, present, has ? static_cast<Napi::Value>(AutoFilterToJs(env, af)) : env.Null());
 }

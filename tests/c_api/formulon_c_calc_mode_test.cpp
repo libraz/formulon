@@ -31,6 +31,12 @@ struct BufferGuard {
   BufferGuard& operator=(const BufferGuard&) = delete;
 };
 
+fm_iterative_settings_info_t ReadIterative(const fm_workbook_t* wb) {
+  fm_iterative_settings_info_t info = FM_STRUCT_INIT(fm_iterative_settings_info_t);
+  EXPECT_EQ(fm_workbook_get_iterative(wb, &info), 0);
+  return info;
+}
+
 }  // namespace
 
 TEST(FormulonCApiCalcMode, FreshWorkbookDefaultsToAuto) {
@@ -65,13 +71,10 @@ TEST(FormulonCApiCalcMode, IterativeEnabledTogglePreservesConfiguredLimits) {
   ASSERT_EQ(SetIterative(wb.handle, 0, 42, 0.25), 0);
   ASSERT_EQ(SetIterative(wb.handle, 1, -1, -1.0), 0);
 
-  int32_t enabled = 0;
-  uint32_t max_iterations = 0;
-  double max_change = 0.0;
-  ASSERT_EQ(fm_workbook_get_iterative(wb.handle, &enabled, &max_iterations, &max_change), 0);
-  EXPECT_EQ(enabled, 1);
-  EXPECT_EQ(max_iterations, 42U);
-  EXPECT_DOUBLE_EQ(max_change, 0.25);
+  const fm_iterative_settings_info_t info = ReadIterative(wb.handle);
+  EXPECT_EQ(info.enabled, 1);
+  EXPECT_EQ(info.max_iterations, 42U);
+  EXPECT_DOUBLE_EQ(info.max_change, 0.25);
 }
 
 // The reader clamps `iterateCount` on its own path; this pins the setter's,
@@ -89,11 +92,7 @@ TEST(FormulonCApiCalcMode, IterativeMaxIterationsSaturatesAtExcelsLimit) {
     ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
     ASSERT_EQ(SetIterative(wb.handle, 1, requested, 0.001), 0) << requested;
 
-    int32_t enabled = 0;
-    uint32_t max_iterations = 0;
-    double max_change = 0.0;
-    ASSERT_EQ(fm_workbook_get_iterative(wb.handle, &enabled, &max_iterations, &max_change), 0) << requested;
-    EXPECT_EQ(max_iterations, kExcelLimit) << requested;
+    EXPECT_EQ(ReadIterative(wb.handle).max_iterations, kExcelLimit) << requested;
   }
 }
 
@@ -103,17 +102,11 @@ TEST(FormulonCApiCalcMode, IterativeMaxIterationsKeepsInRangeValues) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
 
-  int32_t enabled = 0;
-  uint32_t max_iterations = 0;
-  double max_change = 0.0;
   ASSERT_EQ(SetIterative(wb.handle, 1, static_cast<std::int32_t>(kExcelLimit), 0.001), 0);
-  ASSERT_EQ(fm_workbook_get_iterative(wb.handle, &enabled, &max_iterations, &max_change), 0);
-  EXPECT_EQ(max_iterations, kExcelLimit);
+  EXPECT_EQ(ReadIterative(wb.handle).max_iterations, kExcelLimit);
 
-  // The lower clamp: 0 is read as 1 (a negative value keeps the stored cap).
-  ASSERT_EQ(SetIterative(wb.handle, 1, 0, 0.001), 0);
-  ASSERT_EQ(fm_workbook_get_iterative(wb.handle, &enabled, &max_iterations, &max_change), 0);
-  EXPECT_EQ(max_iterations, 1U);
+  ASSERT_EQ(SetIterative(wb.handle, 1, 1, 0.001), 0);
+  EXPECT_EQ(ReadIterative(wb.handle).max_iterations, 1U);
 }
 
 TEST(FormulonCApiCalcMode, UnknownModeRejected) {

@@ -36,7 +36,7 @@ TEST(ExpectedTest, ErrorHeldOnFailure) {
 
 TEST(ExpectedTest, BoolConversionReflectsState) {
   Expected<int> ok = 1;
-  Expected<int> err = make_error(FormulonErrorCode::kUnknownError, "x");
+  Expected<int> err = make_error(FormulonErrorCode::kInternalError, "x");
   EXPECT_TRUE(static_cast<bool>(ok));
   EXPECT_FALSE(static_cast<bool>(err));
 }
@@ -108,7 +108,7 @@ TEST(ExpectedTest, VoidErr) {
 
 TEST(ExpectedTest, FactoryOkAndErr) {
   Expected<int> ok = Expected<int>::Ok(5);
-  Expected<int> err = Expected<int>::Err(make_error(FormulonErrorCode::kUnknownError, "x"));
+  Expected<int> err = Expected<int>::Err(make_error(FormulonErrorCode::kInternalError, "x"));
   EXPECT_TRUE(ok.has_value());
   EXPECT_FALSE(err.has_value());
   EXPECT_EQ(5, ok.value());

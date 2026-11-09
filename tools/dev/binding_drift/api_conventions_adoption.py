@@ -7,7 +7,7 @@ R29.record_a1      An input / patch record field typed `CellRect`, `SheetRect` o
 R30.ooxml_namespace
                    An op the ledger marks `namespace: ooxml` is not a direct `Workbook` / `Sheet` member, and
                    no direct member exposes an XF index or an XML fragment unless marked `resolved: true`.
-R31.color          A colour is a `fm_color_spec_t` / `Color` (an input a `ColorInput`); a record or op the
+R31.color          A colour is a `fm_color_t` / `Color` (an input a `ColorInput`); a record or op the
                    ledger marks `color: resolved` is exempt.
 R32.struct_size    A C struct passed by pointer that is not a frozen value type starts with
                    `uint32_t struct_size`.
@@ -325,7 +325,7 @@ def _rule_ooxml_namespace(ctx: Context) -> Iterable[Violation]:
 # R31.color
 # ---------------------------------------------------------------------------
 
-COLOR_SPEC = {"c": "fm_color_spec_t", "js": "Color", "py": "Color"}
+COLOR_SPEC = {"c": "fm_color_t", "js": "Color", "py": "Color"}
 COLOR_INPUT = "ColorInput"
 RETIRED_COLOR = {"c": "fm_cf_color_t", "js": "CfColor", "py": "CfColor"}
 RESOLVED = "resolved"
@@ -434,7 +434,7 @@ def _binding_color_violations(ctx: Context, surface: str) -> Iterator[Violation]
 
 @rule("R31.color")
 def _rule_color(ctx: Context) -> Iterable[Violation]:
-    """A colour crosses every surface as a colour spec: `fm_color_spec_t` in C, `Color` in the bindings, and a
+    """A colour crosses every surface as a colour spec: `fm_color_t` in C, `Color` in the bindings, and a
     `ColorInput` where an input record field or a method argument takes one. No `fm_cf_color_t` / `CfColor`,
     no `*_argb` / `*_rgb` / `*Argb` / `*Rgb` sibling, no `has_*color` flag, no colour held as a bare number.
     A record or op the ledger marks `color: resolved` (a rendered result) is exempt.
@@ -456,15 +456,14 @@ STRUCT_SIZE = CParam("uint32_t", "struct_size")
 VALUE_STRUCTS = frozenset(
     {
         "fm_cell_rect_t", "fm_sheet_rect_t", "fm_value_t", "fm_civil_time_t",
-        "fm_color_spec_t", "fm_phonetic_run_t", "fm_gradient_stop_t", "fm_mention_t", "fm_date_group_item_t",
+        "fm_color_t", "fm_phonetic_run_t", "fm_gradient_stop_t", "fm_mention_t", "fm_date_group_item_t",
         "fm_filter_column_t", "fm_sort_condition_t", "fm_sparkline_t", "fm_cfvo_t", "fm_cf_icon_t",
         "fm_drawing_anchor_t",
-        "fm_font_record_t", "fm_fill_record_t", "fm_border_record_t", "fm_border_side_t", "fm_cell_xf_t",
-        "fm_dxf_record_t", "fm_cell_style_record_t", "fm_table_style_element_t",
+        "fm_font_t", "fm_fill_t", "fm_border_t", "fm_border_side_t", "fm_cell_xf_t",
+        "fm_dxf_t", "fm_cell_style_t", "fm_table_style_element_t",
         "fm_chart_data_source_t", "fm_chart_title_t", "fm_chart_line_t", "fm_chart_line_patch_t", "fm_chart_fill_t",
         "fm_chart_fill_patch_t", "fm_chart_marker_t", "fm_chart_marker_patch_t", "fm_chart_labels_t",
         "fm_chart_labels_patch_t",
-        "fm_image_insert_t",
     }
 )  # fmt: skip
 

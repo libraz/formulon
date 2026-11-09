@@ -24,7 +24,7 @@ namespace io {
 /// Result of `write_ooxml_with_result`: the package bytes plus the loss /
 /// fallback counters this write accumulated. Mirrors
 /// `xlsb::XlsbWriteResult` so the C ABI can project either onto the same
-/// `fm_save_diagnostics_t`.
+/// `fm_save_diagnostics_info_t`.
 struct OoxmlWriteResult {
   std::vector<std::uint8_t> bytes;
   WriteDiagnostics diagnostics;

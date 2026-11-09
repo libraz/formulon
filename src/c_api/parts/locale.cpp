@@ -74,7 +74,7 @@ extern "C" fm_status_t fm_canonicalize_formula(const char* formula, const char* 
   return convert_formula(formula, profile_id, /*localize=*/false, out_formula);
 }
 
-extern "C" fm_status_t fm_get_locale_facts(const char* profile_id, fm_locale_facts_t* out) {
+extern "C" fm_status_t fm_get_locale_facts(const char* profile_id, fm_locale_facts_info_t* out) {
   clear_last_error();
   if (profile_id == nullptr || out == nullptr) {
     return null_argument();

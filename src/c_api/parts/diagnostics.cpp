@@ -7,6 +7,7 @@
 // `c_api::status_name` table.
 
 #include <cstddef>
+#include <cstdint>
 #include <mutex>
 #include <string>
 #include <string_view>
@@ -27,19 +28,24 @@ extern "C" const char* fm_get_last_error_context(void) {
   return formulon::c_api::parts::last_error_context();
 }
 
-extern "C" fm_status_t fm_get_last_parse_error(fm_parse_error_t* out) {
+extern "C" fm_status_t fm_get_last_parse_error(int32_t* out_present, fm_parse_error_info_t* out) {
   // Reads error state, so it reports its own failures by status alone and
   // leaves the message, context and parse record untouched.
-  if (out == nullptr) {
+  if (out_present == nullptr || out == nullptr) {
     return FM_STATUS_BINDING_NULL_POINTER;
   }
-  if (out->struct_size < formulon::c_api::parts::StructV1<fm_parse_error_t>::kSize) {
+  if (out->struct_size < formulon::c_api::parts::StructV1<fm_parse_error_info_t>::kSize) {
     return FM_STATUS_INVALID_ARGUMENT;
   }
+  const std::uint32_t struct_size = out->struct_size;
+  *out = FM_STRUCT_INIT(fm_parse_error_info_t);
+  out->struct_size = struct_size;
+  *out_present = 0;
   const formulon::c_api::parts::ParseErrorRecord* record = formulon::c_api::parts::last_parse_error();
   if (record == nullptr) {
-    return FM_STATUS_NOT_FOUND;
+    return 0;
   }
+  *out_present = 1;
   out->code = record->code;
   out->start = record->start;
   out->end = record->end;

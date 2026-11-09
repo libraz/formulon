@@ -17,6 +17,7 @@
 #include "eval/function_registry.h"
 #include "eval/recalc_engine.h"
 #include "formulon_c_out_index.h"
+#include "formulon_c_sheet_view_patch.h"
 #include "gtest/gtest.h"
 #include "pugixml.hpp"
 #include "sheet.h"
@@ -25,25 +26,25 @@
 
 namespace {
 
-static_assert(offsetof(fm_column_layout_t, has_width_chars) == 36U);
-static_assert(offsetof(fm_column_layout_t, has_xf_index) == 40U);
-static_assert(offsetof(fm_column_layout_t, xf_index) == 44U);
-static_assert(sizeof(fm_column_layout_t) == 48U);
-static_assert(offsetof(fm_row_layout_t, has_xf_index) == 28U);
-static_assert(offsetof(fm_row_layout_t, xf_index) == 32U);
-static_assert(offsetof(fm_row_layout_t, has_height_pt) == 36U);
-static_assert(offsetof(fm_row_layout_t, custom_height) == 40U);
-static_assert(sizeof(fm_row_layout_t) == 48U);
+static_assert(offsetof(fm_column_layout_info_t, has_width_chars) == 36U);
+static_assert(offsetof(fm_column_layout_info_t, has_xf_index) == 40U);
+static_assert(offsetof(fm_column_layout_info_t, xf_index) == 44U);
+static_assert(sizeof(fm_column_layout_info_t) == 48U);
+static_assert(offsetof(fm_row_layout_info_t, has_xf_index) == 28U);
+static_assert(offsetof(fm_row_layout_info_t, xf_index) == 32U);
+static_assert(offsetof(fm_row_layout_info_t, has_height_pt) == 36U);
+static_assert(offsetof(fm_row_layout_info_t, custom_height) == 40U);
+static_assert(sizeof(fm_row_layout_info_t) == 48U);
 // `fm_sheet_get_view` writes through a caller-supplied pointer, so a caller
 // compiled against a narrower definition of this struct is overwritten past
 // the end of its own storage rather than getting a diagnosable error. Pin the
 // size here: changing the struct must break the build and be acknowledged,
 // not merely be reflected in the bindings afterwards.
-static_assert(sizeof(fm_sheet_view_t) == 88U);
-static_assert(offsetof(fm_sheet_view_t, visibility) == 16U);
-static_assert(offsetof(fm_sheet_view_t, tab_selected) == 36U);
-static_assert(offsetof(fm_sheet_view_t, view_mode) == 40U);
-static_assert(offsetof(fm_sheet_view_t, top_left_row) == 44U);
+static_assert(sizeof(fm_sheet_view_info_t) == 88U);
+static_assert(offsetof(fm_sheet_view_info_t, visibility) == 16U);
+static_assert(offsetof(fm_sheet_view_info_t, tab_selected) == 36U);
+static_assert(offsetof(fm_sheet_view_info_t, view_mode) == 40U);
+static_assert(offsetof(fm_sheet_view_info_t, top_left_row) == 44U);
 
 /// The status every documented rejection on this surface returns. Pinning
 /// the value rather than "non-zero" is what makes the assertions below
@@ -76,11 +77,11 @@ struct BufferGuard {
   BufferGuard& operator=(const BufferGuard&) = delete;
 };
 
-fm_row_layout_t RowOverride(const WorkbookGuard& wb, std::uint32_t row) {
+fm_row_layout_info_t RowOverride(const WorkbookGuard& wb, std::uint32_t row) {
   size_t count = 0;
   EXPECT_EQ(fm_sheet_get_row_layout_count(wb.handle, 0, &count), 0);
   for (size_t i = 0; i < count; ++i) {
-    fm_row_layout_t entry = FM_STRUCT_INIT(fm_row_layout_t);
+    fm_row_layout_info_t entry = FM_STRUCT_INIT(fm_row_layout_info_t);
     EXPECT_EQ(fm_sheet_get_row_layout_at(wb.handle, 0, i, &entry), 0);
     if (entry.row == row) {
       return entry;
@@ -94,7 +95,7 @@ fm_row_layout_t RowOverride(const WorkbookGuard& wb, std::uint32_t row) {
 TEST(FormulonCApiSheetLayout, GetViewDefaults) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  fm_sheet_view_t v = FM_STRUCT_INIT(fm_sheet_view_t);
+  fm_sheet_view_info_t v = FM_STRUCT_INIT(fm_sheet_view_info_t);
   ASSERT_EQ(fm_sheet_get_view(wb.handle, 0, &v), 0);
   EXPECT_EQ(v.zoom_pct, 100U);
   EXPECT_EQ(v.freeze_rows, 0U);
@@ -108,15 +109,15 @@ TEST(FormulonCApiSheetLayout, GetViewDefaults) {
   EXPECT_EQ(v.view_mode, FM_SHEET_VIEW_MODE_NORMAL);
 }
 
-TEST(FormulonCApiSheetLayout, SetViewSetters) {
+TEST(FormulonCApiSheetLayout, ViewPatchSetsZoomFreezeAndVisibility) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   // A workbook keeps one visible sheet, so sheet 0 can only be hidden beside another.
   ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Visible", ignored_index()), 0);
-  ASSERT_EQ(fm_sheet_set_zoom(wb.handle, 0, 175U), 0);
-  ASSERT_EQ(fm_sheet_set_freeze(wb.handle, 0, 4U, 2U), 0);
-  ASSERT_EQ(fm_sheet_set_visibility(wb.handle, 0, FM_SHEET_VISIBILITY_HIDDEN), 0);
-  fm_sheet_view_t v = FM_STRUCT_INIT(fm_sheet_view_t);
+  ASSERT_EQ(SetViewZoom(wb.handle, 0, 175U), 0);
+  ASSERT_EQ(SetViewFreeze(wb.handle, 0, 4U, 2U), 0);
+  ASSERT_EQ(SetViewVisibility(wb.handle, 0, FM_SHEET_VISIBILITY_HIDDEN), 0);
+  fm_sheet_view_info_t v = FM_STRUCT_INIT(fm_sheet_view_info_t);
   ASSERT_EQ(fm_sheet_get_view(wb.handle, 0, &v), 0);
   EXPECT_EQ(v.zoom_pct, 175U);
   EXPECT_EQ(v.freeze_rows, 4U);
@@ -129,18 +130,18 @@ TEST(FormulonCApiSheetLayout, SetVisibilityStatesAllThreeTabStates) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   // A workbook keeps one visible sheet, so sheet 0 can only be hidden beside another.
   ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Visible", ignored_index()), 0);
-  fm_sheet_view_t v = FM_STRUCT_INIT(fm_sheet_view_t);
+  fm_sheet_view_info_t v = FM_STRUCT_INIT(fm_sheet_view_info_t);
 
-  ASSERT_EQ(fm_sheet_set_visibility(wb.handle, 0, FM_SHEET_VISIBILITY_VERY_HIDDEN), 0);
+  ASSERT_EQ(SetViewVisibility(wb.handle, 0, FM_SHEET_VISIBILITY_VERY_HIDDEN), 0);
   ASSERT_EQ(fm_sheet_get_view(wb.handle, 0, &v), 0);
   EXPECT_EQ(v.visibility, FM_SHEET_VISIBILITY_VERY_HIDDEN);
 
   // Demotion to plain hidden.
-  ASSERT_EQ(fm_sheet_set_visibility(wb.handle, 0, FM_SHEET_VISIBILITY_HIDDEN), 0);
+  ASSERT_EQ(SetViewVisibility(wb.handle, 0, FM_SHEET_VISIBILITY_HIDDEN), 0);
   ASSERT_EQ(fm_sheet_get_view(wb.handle, 0, &v), 0);
   EXPECT_EQ(v.visibility, FM_SHEET_VISIBILITY_HIDDEN);
 
-  ASSERT_EQ(fm_sheet_set_visibility(wb.handle, 0, FM_SHEET_VISIBILITY_VISIBLE), 0);
+  ASSERT_EQ(SetViewVisibility(wb.handle, 0, FM_SHEET_VISIBILITY_VISIBLE), 0);
   ASSERT_EQ(fm_sheet_get_view(wb.handle, 0, &v), 0);
   EXPECT_EQ(v.visibility, FM_SHEET_VISIBILITY_VISIBLE);
 }
@@ -150,27 +151,33 @@ TEST(FormulonCApiSheetLayout, SetVisibilityRejectsUnknownStateAndLeavesTheSheet)
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   // A workbook keeps one visible sheet, so sheet 0 can only be hidden beside another.
   ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Visible", ignored_index()), 0);
-  ASSERT_EQ(fm_sheet_set_visibility(wb.handle, 0, FM_SHEET_VISIBILITY_VERY_HIDDEN), 0);
+  ASSERT_EQ(SetViewVisibility(wb.handle, 0, FM_SHEET_VISIBILITY_VERY_HIDDEN), 0);
 
-  EXPECT_EQ(fm_sheet_set_visibility(wb.handle, 0, 3), kInvalidArgument);
-  EXPECT_EQ(fm_sheet_set_visibility(wb.handle, 0, -1), kInvalidArgument);
-  EXPECT_EQ(fm_sheet_set_visibility(wb.handle, 99U, FM_SHEET_VISIBILITY_HIDDEN), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(SetViewVisibility(wb.handle, 0, 3), kInvalidArgument);
+  EXPECT_EQ(SetViewVisibility(wb.handle, 0, -1), kInvalidArgument);
+  EXPECT_EQ(SetViewVisibility(wb.handle, 99U, FM_SHEET_VISIBILITY_HIDDEN), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
 
-  fm_sheet_view_t v = FM_STRUCT_INIT(fm_sheet_view_t);
+  fm_sheet_view_info_t v = FM_STRUCT_INIT(fm_sheet_view_info_t);
   ASSERT_EQ(fm_sheet_get_view(wb.handle, 0, &v), 0);
   EXPECT_EQ(v.visibility, FM_SHEET_VISIBILITY_VERY_HIDDEN);
 }
 
-TEST(FormulonCApiSheetLayout, SetViewDisplayFlagSetters) {
+TEST(FormulonCApiSheetLayout, ViewPatchSetsDisplayFlags) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  ASSERT_EQ(fm_sheet_set_show_grid_lines(wb.handle, 0, 0), 0);
-  ASSERT_EQ(fm_sheet_set_show_row_column_headers(wb.handle, 0, 0), 0);
-  ASSERT_EQ(fm_sheet_set_show_zeros(wb.handle, 0, 0), 0);
-  ASSERT_EQ(fm_sheet_set_right_to_left(wb.handle, 0, 1), 0);
-  ASSERT_EQ(fm_sheet_set_tab_selected(wb.handle, 0, 1), 0);
-  ASSERT_EQ(fm_sheet_set_view_mode(wb.handle, 0, FM_SHEET_VIEW_MODE_PAGE_BREAK_PREVIEW), 0);
-  fm_sheet_view_t v = FM_STRUCT_INIT(fm_sheet_view_t);
+  ASSERT_EQ(
+      SetViewFlag(wb.handle, 0, &fm_sheet_view_patch_t::show_grid_lines_op, &fm_sheet_view_patch_t::show_grid_lines, 0),
+      0);
+  ASSERT_EQ(SetViewFlag(wb.handle, 0, &fm_sheet_view_patch_t::show_row_column_headers_op,
+                        &fm_sheet_view_patch_t::show_row_column_headers, 0),
+            0);
+  ASSERT_EQ(SetViewFlag(wb.handle, 0, &fm_sheet_view_patch_t::show_zeros_op, &fm_sheet_view_patch_t::show_zeros, 0), 0);
+  ASSERT_EQ(
+      SetViewFlag(wb.handle, 0, &fm_sheet_view_patch_t::right_to_left_op, &fm_sheet_view_patch_t::right_to_left, 1), 0);
+  ASSERT_EQ(SetViewFlag(wb.handle, 0, &fm_sheet_view_patch_t::tab_selected_op, &fm_sheet_view_patch_t::tab_selected, 1),
+            0);
+  ASSERT_EQ(SetViewMode(wb.handle, 0, FM_SHEET_VIEW_MODE_PAGE_BREAK_PREVIEW), 0);
+  fm_sheet_view_info_t v = FM_STRUCT_INIT(fm_sheet_view_info_t);
   ASSERT_EQ(fm_sheet_get_view(wb.handle, 0, &v), 0);
   EXPECT_EQ(v.show_grid_lines, 0);
   EXPECT_EQ(v.show_row_column_headers, 0);
@@ -260,28 +267,16 @@ TEST(FormulonCApiSheetLayout, AutoFilterXmlFailureIncludesParseContext) {
 TEST(FormulonCApiSheetLayout, SetViewModeRejectsUnknownModeAndKeepsTheView) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  ASSERT_EQ(fm_sheet_set_view_mode(wb.handle, 0, FM_SHEET_VIEW_MODE_PAGE_LAYOUT), 0);
-  EXPECT_EQ(fm_sheet_set_view_mode(wb.handle, 0, -1), kInvalidArgument);
-  EXPECT_EQ(fm_sheet_set_view_mode(wb.handle, 0, 3), kInvalidArgument);
-  fm_sheet_view_t v = FM_STRUCT_INIT(fm_sheet_view_t);
+  ASSERT_EQ(SetViewMode(wb.handle, 0, FM_SHEET_VIEW_MODE_PAGE_LAYOUT), 0);
+  EXPECT_EQ(SetViewMode(wb.handle, 0, -1), kInvalidArgument);
+  EXPECT_EQ(SetViewMode(wb.handle, 0, 3), kInvalidArgument);
+  fm_sheet_view_info_t v = FM_STRUCT_INIT(fm_sheet_view_info_t);
   ASSERT_EQ(fm_sheet_get_view(wb.handle, 0, &v), 0);
   EXPECT_EQ(v.view_mode, FM_SHEET_VIEW_MODE_PAGE_LAYOUT);
 
-  ASSERT_EQ(fm_sheet_set_view_mode(wb.handle, 0, FM_SHEET_VIEW_MODE_NORMAL), 0);
+  ASSERT_EQ(SetViewMode(wb.handle, 0, FM_SHEET_VIEW_MODE_NORMAL), 0);
   ASSERT_EQ(fm_sheet_get_view(wb.handle, 0, &v), 0);
   EXPECT_EQ(v.view_mode, FM_SHEET_VIEW_MODE_NORMAL);
-}
-
-TEST(FormulonCApiSheetLayout, ZoomClampedToBounds) {
-  WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  ASSERT_EQ(fm_sheet_set_zoom(wb.handle, 0, 5U), 0);
-  fm_sheet_view_t v = FM_STRUCT_INIT(fm_sheet_view_t);
-  ASSERT_EQ(fm_sheet_get_view(wb.handle, 0, &v), 0);
-  EXPECT_EQ(v.zoom_pct, 10U);
-  ASSERT_EQ(fm_sheet_set_zoom(wb.handle, 0, 9999U), 0);
-  ASSERT_EQ(fm_sheet_get_view(wb.handle, 0, &v), 0);
-  EXPECT_EQ(v.zoom_pct, 400U);
 }
 
 TEST(FormulonCApiSheetLayout, ColumnWidthAndOutline) {
@@ -296,10 +291,10 @@ TEST(FormulonCApiSheetLayout, ColumnWidthAndOutline) {
   ASSERT_EQ(fm_sheet_get_column_layout_count(wb.handle, 0, &count), 0);
   EXPECT_EQ(count, 4U);
 
-  fm_column_layout_t a = FM_STRUCT_INIT(fm_column_layout_t);
-  fm_column_layout_t b = FM_STRUCT_INIT(fm_column_layout_t);
-  fm_column_layout_t c = FM_STRUCT_INIT(fm_column_layout_t);
-  fm_column_layout_t d = FM_STRUCT_INIT(fm_column_layout_t);
+  fm_column_layout_info_t a = FM_STRUCT_INIT(fm_column_layout_info_t);
+  fm_column_layout_info_t b = FM_STRUCT_INIT(fm_column_layout_info_t);
+  fm_column_layout_info_t c = FM_STRUCT_INIT(fm_column_layout_info_t);
+  fm_column_layout_info_t d = FM_STRUCT_INIT(fm_column_layout_info_t);
   ASSERT_EQ(fm_sheet_get_column_layout_at(wb.handle, 0, 0, &a), 0);
   ASSERT_EQ(fm_sheet_get_column_layout_at(wb.handle, 0, 1, &b), 0);
   ASSERT_EQ(fm_sheet_get_column_layout_at(wb.handle, 0, 2, &c), 0);
@@ -350,8 +345,8 @@ TEST(FormulonCApiSheetLayout, WidthOverlayPreservesAdjacentStylesAcrossSaveLoad)
   size_t count = 0;
   ASSERT_EQ(fm_sheet_get_column_layout_count(wb.handle, 0, &count), 0);
   ASSERT_EQ(count, 2U);
-  fm_column_layout_t col0 = FM_STRUCT_INIT(fm_column_layout_t);
-  fm_column_layout_t col1 = FM_STRUCT_INIT(fm_column_layout_t);
+  fm_column_layout_info_t col0 = FM_STRUCT_INIT(fm_column_layout_info_t);
+  fm_column_layout_info_t col1 = FM_STRUCT_INIT(fm_column_layout_info_t);
   ASSERT_EQ(fm_sheet_get_column_layout_at(wb.handle, 0, 0U, &col0), 0);
   ASSERT_EQ(fm_sheet_get_column_layout_at(wb.handle, 0, 1U, &col1), 0);
   EXPECT_EQ(col0.first, 0U);
@@ -424,7 +419,7 @@ TEST(FormulonCApiSheetLayout, WidthOverlayDoesNotSmearAttributesIntoTargetGaps) 
   ASSERT_EQ(fm_sheet_get_column_layout_count(wb.handle, 0, &count), 0);
   ASSERT_EQ(count, 4U);
   for (size_t i = 0; i < count; ++i) {
-    fm_column_layout_t column = FM_STRUCT_INIT(fm_column_layout_t);
+    fm_column_layout_info_t column = FM_STRUCT_INIT(fm_column_layout_info_t);
     ASSERT_EQ(fm_sheet_get_column_layout_at(wb.handle, 0, i, &column), 0);
     EXPECT_EQ(column.first, static_cast<std::uint32_t>(i));
     EXPECT_EQ(column.last, static_cast<std::uint32_t>(i));
@@ -461,7 +456,7 @@ TEST(FormulonCApiSheetLayout, GetterNormalizesLegacyNonZeroWidthPresence) {
 
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_load(source_bytes.value().data(), source_bytes.value().size(), &wb.handle), 0);
-  fm_column_layout_t column = FM_STRUCT_INIT(fm_column_layout_t);
+  fm_column_layout_info_t column = FM_STRUCT_INIT(fm_column_layout_info_t);
   ASSERT_EQ(fm_sheet_get_column_layout_at(wb.handle, 0, 0U, &column), 0);
   EXPECT_EQ(column.first, 4U);
   EXPECT_EQ(column.last, 4U);
@@ -483,8 +478,8 @@ TEST(FormulonCApiSheetLayout, RowOverridesUpsert) {
   EXPECT_EQ(count, 2U);
 
   // Row overrides are listed in row order.
-  fm_row_layout_t row4 = FM_STRUCT_INIT(fm_row_layout_t);
-  fm_row_layout_t row9 = FM_STRUCT_INIT(fm_row_layout_t);
+  fm_row_layout_info_t row4 = FM_STRUCT_INIT(fm_row_layout_info_t);
+  fm_row_layout_info_t row9 = FM_STRUCT_INIT(fm_row_layout_info_t);
   ASSERT_EQ(fm_sheet_get_row_layout_at(wb.handle, 0, 0, &row4), 0);
   ASSERT_EQ(fm_sheet_get_row_layout_at(wb.handle, 0, 1, &row9), 0);
   EXPECT_EQ(row4.row, 4U);
@@ -521,7 +516,7 @@ TEST(FormulonCApiSheetLayout, RowSettersTakeAnInclusiveSpan) {
   ASSERT_EQ(fm_sheet_get_row_layout_count(wb.handle, 0, &count), 0);
   ASSERT_EQ(count, std::size(expected));
   for (size_t i = 0; i < count; ++i) {
-    fm_row_layout_t row = FM_STRUCT_INIT(fm_row_layout_t);
+    fm_row_layout_info_t row = FM_STRUCT_INIT(fm_row_layout_info_t);
     ASSERT_EQ(fm_sheet_get_row_layout_at(wb.handle, 0, i, &row), 0);
     EXPECT_EQ(row.row, expected[i].row);
     EXPECT_EQ(row.has_height_pt, expected[i].has_height_pt) << row.row;
@@ -548,7 +543,7 @@ TEST(FormulonCApiSheetLayout, RowSettersTakeAnInclusiveSpan) {
   // height over 1..5 then leaves only the hidden and outline state behind.
   ASSERT_EQ(fm_sheet_set_row_auto_height(wb.handle, 0, 4U, 5U, 18.0), 0);
   for (size_t i = 3; i < 5; ++i) {
-    fm_row_layout_t row = FM_STRUCT_INIT(fm_row_layout_t);
+    fm_row_layout_info_t row = FM_STRUCT_INIT(fm_row_layout_info_t);
     ASSERT_EQ(fm_sheet_get_row_layout_at(wb.handle, 0, i, &row), 0);
     EXPECT_EQ(row.has_height_pt, 1) << row.row;
     EXPECT_EQ(row.custom_height, 0) << row.row;
@@ -557,7 +552,7 @@ TEST(FormulonCApiSheetLayout, RowSettersTakeAnInclusiveSpan) {
   ASSERT_EQ(fm_sheet_get_row_layout_count(wb.handle, 0, &count), 0);
   ASSERT_EQ(count, 5U);
   for (size_t i = 0; i < count; ++i) {
-    fm_row_layout_t row = FM_STRUCT_INIT(fm_row_layout_t);
+    fm_row_layout_info_t row = FM_STRUCT_INIT(fm_row_layout_info_t);
     ASSERT_EQ(fm_sheet_get_row_layout_at(wb.handle, 0, i, &row), 0);
     EXPECT_EQ(row.has_height_pt, 0) << row.row;
   }
@@ -606,7 +601,7 @@ TEST(FormulonCApiSheetLayout, ZeroHeightSettersAndClearsPreserveEffectiveVisibil
   ASSERT_EQ(fm_sheet_reset_row_height(wb.handle, 0, 7U, 7U), 0);
   ASSERT_EQ(fm_sheet_reset_row_xf_index(wb.handle, 0, 7U, 7U), 0);
 
-  const fm_row_layout_t visible = RowOverride(wb, 7U);
+  const fm_row_layout_info_t visible = RowOverride(wb, 7U);
   EXPECT_EQ(visible.row, 7U);
   EXPECT_EQ(visible.hidden, 0);
   EXPECT_EQ(visible.has_height_pt, 0);
@@ -651,11 +646,11 @@ TEST(FormulonCApiSheetLayout, ZeroHeightVisibilitySetterDirtiesOnlyEffectiveTran
 TEST(FormulonCApiSheetLayout, InvalidSheetIndexRejected) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  fm_sheet_view_t v = FM_STRUCT_INIT(fm_sheet_view_t);
+  fm_sheet_view_info_t v = FM_STRUCT_INIT(fm_sheet_view_info_t);
   EXPECT_EQ(fm_sheet_get_view(wb.handle, 99U, &v), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
-  EXPECT_EQ(fm_sheet_set_zoom(wb.handle, 99U, 100U), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
-  EXPECT_EQ(fm_sheet_set_freeze(wb.handle, 99U, 1U, 1U), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
-  EXPECT_EQ(fm_sheet_set_visibility(wb.handle, 99U, FM_SHEET_VISIBILITY_HIDDEN), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(SetViewZoom(wb.handle, 99U, 100U), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(SetViewFreeze(wb.handle, 99U, 1U, 1U), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(SetViewVisibility(wb.handle, 99U, FM_SHEET_VISIBILITY_HIDDEN), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(fm_sheet_set_column_width(wb.handle, 99U, 0U, 1U, 10.0), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
 }
 
@@ -700,7 +695,7 @@ TEST(FormulonCApiSheetLayout, RejectedColumnSpanLeavesTheLayoutUntouched) {
   size_t count = 0;
   ASSERT_EQ(fm_sheet_get_column_layout_count(wb.handle, 0, &count), 0);
   ASSERT_EQ(count, 1U) << "a refused span still created or split an entry";
-  fm_column_layout_t only = FM_STRUCT_INIT(fm_column_layout_t);
+  fm_column_layout_info_t only = FM_STRUCT_INIT(fm_column_layout_info_t);
   ASSERT_EQ(fm_sheet_get_column_layout_at(wb.handle, 0, 0U, &only), 0);
   EXPECT_EQ(only.first, 1U);
   EXPECT_EQ(only.last, 2U);
@@ -727,7 +722,7 @@ TEST(FormulonCApiSheetLayout, ColumnWidthRejectsNonFiniteOrNegativeWidth) {
   size_t count = 0;
   ASSERT_EQ(fm_sheet_get_column_layout_count(wb.handle, 0, &count), 0);
   ASSERT_EQ(count, 1U) << "a refused width still created or split an entry";
-  fm_column_layout_t only = FM_STRUCT_INIT(fm_column_layout_t);
+  fm_column_layout_info_t only = FM_STRUCT_INIT(fm_column_layout_info_t);
   ASSERT_EQ(fm_sheet_get_column_layout_at(wb.handle, 0, 0U, &only), 0);
   EXPECT_EQ(only.first, 1U);
   EXPECT_EQ(only.last, 2U);
@@ -750,7 +745,7 @@ TEST(FormulonCApiSheetLayout, RowHeightRejectsNonFiniteOrNegativeHeight) {
   size_t count = 0;
   ASSERT_EQ(fm_sheet_get_row_layout_count(wb.handle, 0, &count), 0);
   ASSERT_EQ(count, 1U) << "a refused height still created an override";
-  fm_row_layout_t only = FM_STRUCT_INIT(fm_row_layout_t);
+  fm_row_layout_info_t only = FM_STRUCT_INIT(fm_row_layout_info_t);
   ASSERT_EQ(fm_sheet_get_row_layout_at(wb.handle, 0, 0U, &only), 0);
   EXPECT_EQ(only.row, 3U);
   EXPECT_DOUBLE_EQ(only.height_pt, 22.0);
@@ -778,7 +773,7 @@ TEST(FormulonCApiSheetLayout, ColumnSettersRejectSpanPastTheGrid) {
   size_t count = 0;
   ASSERT_EQ(fm_sheet_get_column_layout_count(wb.handle, 0, &count), 0);
   ASSERT_EQ(count, 1U) << "a refused span still created or split an entry";
-  fm_column_layout_t only = FM_STRUCT_INIT(fm_column_layout_t);
+  fm_column_layout_info_t only = FM_STRUCT_INIT(fm_column_layout_info_t);
   ASSERT_EQ(fm_sheet_get_column_layout_at(wb.handle, 0, 0U, &only), 0);
   EXPECT_EQ(only.first, 1U);
   EXPECT_EQ(only.last, 2U);
@@ -798,7 +793,7 @@ TEST(FormulonCApiSheetLayout, RowSettersRejectRowPastTheGrid) {
   size_t count = 0;
   ASSERT_EQ(fm_sheet_get_row_layout_count(wb.handle, 0, &count), 0);
   ASSERT_EQ(count, 1U) << "a refused row index still created an override";
-  fm_row_layout_t only = FM_STRUCT_INIT(fm_row_layout_t);
+  fm_row_layout_info_t only = FM_STRUCT_INIT(fm_row_layout_info_t);
   ASSERT_EQ(fm_sheet_get_row_layout_at(wb.handle, 0, 0U, &only), 0);
   EXPECT_EQ(only.row, 3U);
   EXPECT_DOUBLE_EQ(only.height_pt, 22.0);
@@ -817,7 +812,7 @@ TEST(FormulonCApiSheetLayout, LastGridCoordinateIsStillAccepted) {
   ASSERT_EQ(fm_sheet_set_row_hidden(wb.handle, 0, kLastRow, kLastRow, 1), 0);
   ASSERT_EQ(fm_sheet_set_row_outline(wb.handle, 0, kLastRow, kLastRow, 2U), 0);
 
-  fm_column_layout_t column = FM_STRUCT_INIT(fm_column_layout_t);
+  fm_column_layout_info_t column = FM_STRUCT_INIT(fm_column_layout_info_t);
   ASSERT_EQ(fm_sheet_get_column_layout_at(wb.handle, 0, 0U, &column), 0);
   EXPECT_EQ(column.first, kLastColumn);
   EXPECT_EQ(column.last, kLastColumn);
@@ -825,7 +820,7 @@ TEST(FormulonCApiSheetLayout, LastGridCoordinateIsStillAccepted) {
   EXPECT_EQ(column.hidden, 1);
   EXPECT_EQ(column.outline_level, 2U);
 
-  fm_row_layout_t row = FM_STRUCT_INIT(fm_row_layout_t);
+  fm_row_layout_info_t row = FM_STRUCT_INIT(fm_row_layout_info_t);
   ASSERT_EQ(fm_sheet_get_row_layout_at(wb.handle, 0, 0U, &row), 0);
   EXPECT_EQ(row.row, kLastRow);
   EXPECT_DOUBLE_EQ(row.height_pt, 33.0);
@@ -852,7 +847,7 @@ TEST(FormulonCApiSheetLayout, RowOverrideReportsHeightPresenceAndCustomFlag) {
   ASSERT_EQ(fm_sheet_get_row_layout_count(wb.handle, 0, &count), 0);
   ASSERT_EQ(count, 2U);
   for (size_t i = 0; i < count; ++i) {
-    fm_row_layout_t r = FM_STRUCT_INIT(fm_row_layout_t);
+    fm_row_layout_info_t r = FM_STRUCT_INIT(fm_row_layout_info_t);
     ASSERT_EQ(fm_sheet_get_row_layout_at(wb.handle, 0, i, &r), 0);
     EXPECT_EQ(r.has_height_pt, 1);
     EXPECT_EQ(r.custom_height, r.row == 5U ? 1 : 0) << "row " << r.row;
@@ -861,7 +856,7 @@ TEST(FormulonCApiSheetLayout, RowOverrideReportsHeightPresenceAndCustomFlag) {
 
 namespace {
 
-fm_row_layout_t ReloadedRowOverride(const WorkbookGuard& wb, std::uint32_t row) {
+fm_row_layout_info_t ReloadedRowOverride(const WorkbookGuard& wb, std::uint32_t row) {
   BufferGuard saved;
   EXPECT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0);
   WorkbookGuard reloaded;
@@ -893,16 +888,16 @@ TEST(FormulonCApiSheetLayout, AutoRowHeightRefreshesTheCacheAndStaysAutomatic) {
   ASSERT_EQ(fm_sheet_set_row_collapsed(wb.handle, 0, 6U, 6U, 1), 0);
   ASSERT_EQ(fm_sheet_set_row_auto_height(wb.handle, 0, 6U, 6U, 40.0), 0);
 
-  for (const fm_row_layout_t& r : {RowOverride(wb, 2U), ReloadedRowOverride(wb, 2U)}) {
+  for (const fm_row_layout_info_t& r : {RowOverride(wb, 2U), ReloadedRowOverride(wb, 2U)}) {
     EXPECT_EQ(r.has_height_pt, 1);
     EXPECT_EQ(r.custom_height, 0);
     EXPECT_DOUBLE_EQ(r.height_pt, 31.5);
   }
-  for (const fm_row_layout_t& r : {RowOverride(wb, 4U), ReloadedRowOverride(wb, 4U)}) {
+  for (const fm_row_layout_info_t& r : {RowOverride(wb, 4U), ReloadedRowOverride(wb, 4U)}) {
     EXPECT_EQ(r.has_height_pt, 1);
     EXPECT_EQ(r.custom_height, 1);
   }
-  for (const fm_row_layout_t& r : {RowOverride(wb, 6U), ReloadedRowOverride(wb, 6U)}) {
+  for (const fm_row_layout_info_t& r : {RowOverride(wb, 6U), ReloadedRowOverride(wb, 6U)}) {
     EXPECT_EQ(r.custom_height, 0);
     EXPECT_DOUBLE_EQ(r.height_pt, 40.0);
     EXPECT_EQ(r.has_xf_index, 1);
@@ -914,7 +909,7 @@ TEST(FormulonCApiSheetLayout, AutoRowHeightRefreshesTheCacheAndStaysAutomatic) {
 
   // Dropping the height keeps the row's other attributes.
   ASSERT_EQ(fm_sheet_reset_row_height(wb.handle, 0, 6U, 6U), 0);
-  const fm_row_layout_t cleared = RowOverride(wb, 6U);
+  const fm_row_layout_info_t cleared = RowOverride(wb, 6U);
   EXPECT_EQ(cleared.has_height_pt, 0);
   EXPECT_EQ(cleared.has_xf_index, 1);
   EXPECT_EQ(cleared.hidden, 1);
@@ -939,7 +934,7 @@ TEST(FormulonCApiSheetLayout, ClearRowHeightDropsBareOverride) {
   size_t count = 0;
   ASSERT_EQ(fm_sheet_get_row_layout_count(wb.handle, 0, &count), 0);
   ASSERT_EQ(count, 1U);
-  fm_row_layout_t r = FM_STRUCT_INIT(fm_row_layout_t);
+  fm_row_layout_info_t r = FM_STRUCT_INIT(fm_row_layout_info_t);
   ASSERT_EQ(fm_sheet_get_row_layout_at(wb.handle, 0, 0, &r), 0);
   EXPECT_EQ(r.row, 4U);
   EXPECT_EQ(r.hidden, 1);
@@ -952,10 +947,10 @@ TEST(FormulonCApiSheetLayout, ClearRowHeightDropsBareOverride) {
 
 namespace {
 
-std::vector<fm_column_layout_t> ReadColumns(const fm_workbook_t* wb) {
+std::vector<fm_column_layout_info_t> ReadColumns(const fm_workbook_t* wb) {
   size_t count = 0;
   EXPECT_EQ(fm_sheet_get_column_layout_count(wb, 0, &count), 0);
-  std::vector<fm_column_layout_t> columns(count, FM_STRUCT_INIT(fm_column_layout_t));
+  std::vector<fm_column_layout_info_t> columns(count, FM_STRUCT_INIT(fm_column_layout_info_t));
   for (size_t i = 0; i < count; ++i) {
     EXPECT_EQ(fm_sheet_get_column_layout_at(wb, 0, i, &columns[i]), 0);
   }
@@ -1077,7 +1072,7 @@ TEST(FormulonCApiSheetLayout, RowStyleUpsertAndClearPreserveOtherAttributes) {
   ASSERT_EQ(fm_sheet_get_row_layout_count(wb.handle, 0, &count), 0);
   ASSERT_EQ(count, 1U);
 
-  fm_row_layout_t row = FM_STRUCT_INIT(fm_row_layout_t);
+  fm_row_layout_info_t row = FM_STRUCT_INIT(fm_row_layout_info_t);
   ASSERT_EQ(fm_sheet_get_row_layout_at(wb.handle, 0, 0U, &row), 0);
   EXPECT_EQ(row.row, 4U);
   EXPECT_DOUBLE_EQ(row.height_pt, 22.0);
@@ -1130,7 +1125,7 @@ TEST(FormulonCApiSheetLayout, StyleOverridesSurviveSaveLoad) {
     size_t row_count = 0;
     ASSERT_EQ(fm_sheet_get_row_layout_count(reloaded.handle, 0, &row_count), 0);
     ASSERT_EQ(row_count, 1U) << "format=" << format;
-    fm_row_layout_t row = FM_STRUCT_INIT(fm_row_layout_t);
+    fm_row_layout_info_t row = FM_STRUCT_INIT(fm_row_layout_info_t);
     ASSERT_EQ(fm_sheet_get_row_layout_at(reloaded.handle, 0, 0U, &row), 0);
     EXPECT_EQ(row.row, 3U);
     EXPECT_DOUBLE_EQ(row.height_pt, 24.0);
@@ -1158,7 +1153,7 @@ TEST(FormulonCApiSheetLayout, EnteredValuesTakeTheAxisStyle) {
   ASSERT_EQ(fm_sheet_set_blank(wb.handle, 0, 7U, 1U), 0);
 
   const auto xf_at = [&](uint32_t row, uint32_t col) {
-    std::size_t xf = 99U;
+    std::uint32_t xf = 99U;
     EXPECT_EQ(fm_sheet_get_cell_xf_index(wb.handle, 0, row, col, &xf), 0);
     return xf;
   };
@@ -1220,10 +1215,9 @@ TEST(FormulonCApiSheetLayout, ClearColumnWidthRejectsBadArgumentsAndLeavesTheLay
 TEST(FormulonCApiSheetLayout, ClearedColumnFollowsALaterSheetDefaultChange) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  fm_sheet_format_defaults_t d = FM_STRUCT_INIT(fm_sheet_format_defaults_t);
-  d.has_default_column_width_chars = 1;
+  fm_sheet_format_defaults_patch_t d = FM_STRUCT_INIT(fm_sheet_format_defaults_patch_t);
+  d.default_column_width_chars_op = FM_PATCH_OP_SET;
   d.default_column_width_chars = 10.0;
-  d.base_column_width_chars = 8.0;
   ASSERT_EQ(fm_sheet_update_format_defaults(wb.handle, 0, &d), 0);
   ASSERT_EQ(fm_sheet_set_column_width(wb.handle, 0, 0U, 0U, 10.0), 0);
   ASSERT_EQ(fm_sheet_reset_column_width(wb.handle, 0, 0U, 0U), 0);
@@ -1277,22 +1271,18 @@ TEST(FormulonCApiSheetLayout, EffectiveFormatDefaultsFollowTheStatedValues) {
   EXPECT_DOUBLE_EQ(d.effective_default_row_height_pt, 0.0);
   wb.handle->workbook().sheet(0).mutable_format_defaults().zero_height = false;
 
-  fm_sheet_format_defaults_t next = FM_STRUCT_INIT(fm_sheet_format_defaults_t);
-  next.has_default_column_width_chars = 1;
+  fm_sheet_format_defaults_patch_t next = FM_STRUCT_INIT(fm_sheet_format_defaults_patch_t);
+  next.default_column_width_chars_op = FM_PATCH_OP_SET;
   next.default_column_width_chars = 12.5;
-  next.has_default_row_height_pt = 1;
+  next.default_row_height_pt_op = FM_PATCH_OP_SET;
   next.default_row_height_pt = 20.25;
-  next.base_column_width_chars = 8.0;
-  // The effective fields are read-only: whatever the caller leaves in them is ignored.
-  next.effective_default_column_width_chars = 99.0;
-  next.effective_default_row_height_pt = 99.0;
   ASSERT_EQ(fm_sheet_update_format_defaults(wb.handle, 0, &next), 0);
   ASSERT_EQ(fm_sheet_get_format_defaults(wb.handle, 0, &d), 0);
   EXPECT_DOUBLE_EQ(d.effective_default_column_width_chars, 12.5);
   EXPECT_DOUBLE_EQ(d.effective_default_row_height_pt, 20.25);
 
-  next.has_default_column_width_chars = 0;
-  next.has_default_row_height_pt = 0;
+  next.default_column_width_chars_op = FM_PATCH_OP_CLEAR;
+  next.default_row_height_pt_op = FM_PATCH_OP_CLEAR;
   ASSERT_EQ(fm_sheet_update_format_defaults(wb.handle, 0, &next), 0);
   ASSERT_EQ(fm_sheet_get_format_defaults(wb.handle, 0, &d), 0);
   EXPECT_DOUBLE_EQ(d.effective_default_column_width_chars, 2340.0 / 256.0);  // Base 8: 64 px, shown as 8.43.
@@ -1306,12 +1296,13 @@ TEST(FormulonCApiSheetLayout, FormatDefaultsRoundTripThroughSave) {
   ASSERT_EQ(fm_sheet_get_format_defaults(wb.handle, 0, &d), 0);
   EXPECT_EQ(d.base_column_width_chars, 8.0);
 
-  fm_sheet_format_defaults_t next = FM_STRUCT_INIT(fm_sheet_format_defaults_t);
+  fm_sheet_format_defaults_patch_t next = FM_STRUCT_INIT(fm_sheet_format_defaults_patch_t);
+  next.default_column_width_chars_op = FM_PATCH_OP_SET;
   next.default_column_width_chars = 12.5;
+  next.default_row_height_pt_op = FM_PATCH_OP_SET;
   next.default_row_height_pt = 20.25;
+  next.base_column_width_chars_op = FM_PATCH_OP_SET;
   next.base_column_width_chars = 10.0;
-  next.has_default_column_width_chars = 1;
-  next.has_default_row_height_pt = 1;
   ASSERT_EQ(fm_sheet_update_format_defaults(wb.handle, 0, &next), 0);
 
   BufferGuard saved;
@@ -1327,26 +1318,30 @@ TEST(FormulonCApiSheetLayout, FormatDefaultsRoundTripThroughSave) {
   EXPECT_EQ(got.has_default_row_height_pt, 1);
 }
 
-TEST(FormulonCApiSheetLayout, FormatDefaultsIgnoreUnstatedValuesAndRejectBadNumbers) {
+TEST(FormulonCApiSheetLayout, FormatDefaultsIgnoreKeptValuesAndRejectBadNumbers) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  fm_sheet_format_defaults_t unstated = FM_STRUCT_INIT(fm_sheet_format_defaults_t);
-  unstated.default_column_width_chars = kNaN;  // ignored: has flag is zero
-  unstated.base_column_width_chars = 8.0;
+  fm_sheet_format_defaults_patch_t unstated = FM_STRUCT_INIT(fm_sheet_format_defaults_patch_t);
+  unstated.default_column_width_chars = kNaN;  // ignored: the op is KEEP
   ASSERT_EQ(fm_sheet_update_format_defaults(wb.handle, 0, &unstated), 0);
   fm_sheet_format_defaults_t got = FM_STRUCT_INIT(fm_sheet_format_defaults_t);
   ASSERT_EQ(fm_sheet_get_format_defaults(wb.handle, 0, &got), 0);
   EXPECT_EQ(got.has_default_column_width_chars, 0);
   EXPECT_EQ(got.default_column_width_chars, 0.0);
 
-  fm_sheet_format_defaults_t bad = FM_STRUCT_INIT(fm_sheet_format_defaults_t);
-  bad.has_default_row_height_pt = 1;
+  fm_sheet_format_defaults_patch_t bad = FM_STRUCT_INIT(fm_sheet_format_defaults_patch_t);
+  bad.default_row_height_pt_op = FM_PATCH_OP_SET;
   bad.default_row_height_pt = -1.0;
-  bad.base_column_width_chars = 8.0;
   EXPECT_EQ(fm_sheet_update_format_defaults(wb.handle, 0, &bad), kInvalidArgument);
   bad.default_row_height_pt = 15.0;
+  bad.base_column_width_chars_op = FM_PATCH_OP_SET;
   bad.base_column_width_chars = kInfinity;
   EXPECT_EQ(fm_sheet_update_format_defaults(wb.handle, 0, &bad), kInvalidArgument);
+  bad.base_column_width_chars = 8.0;
+  for (const fm_patch_op_t op : {FM_PATCH_OP_CLEAR, static_cast<fm_patch_op_t>(3)}) {
+    bad.base_column_width_chars_op = op;
+    EXPECT_EQ(fm_sheet_update_format_defaults(wb.handle, 0, &bad), kInvalidArgument) << op;
+  }
   ASSERT_EQ(fm_sheet_get_format_defaults(wb.handle, 0, &got), 0);
   EXPECT_EQ(got.has_default_row_height_pt, 0);
   EXPECT_NE(fm_sheet_update_format_defaults(wb.handle, 0, nullptr), 0);
@@ -1379,12 +1374,12 @@ TEST(FormulonCApiSheetLayout, ResetColumnXfIndexKeepsTheWidthAndResetRowXfIndexK
   ASSERT_EQ(fm_sheet_reset_column_xf_index(wb.handle, 0, 1U, 1U), 0);
   ASSERT_EQ(fm_sheet_reset_row_xf_index(wb.handle, 0, 2U, 2U), 0);
 
-  fm_column_layout_t col = FM_STRUCT_INIT(fm_column_layout_t);
+  fm_column_layout_info_t col = FM_STRUCT_INIT(fm_column_layout_info_t);
   ASSERT_EQ(fm_sheet_get_column_layout_at(wb.handle, 0, 0U, &col), 0);
   EXPECT_EQ(col.has_xf_index, 0);
   EXPECT_EQ(col.has_width_chars, 1);
   EXPECT_DOUBLE_EQ(col.width_chars, 17.0);
-  const fm_row_layout_t row = RowOverride(wb, 2U);
+  const fm_row_layout_info_t row = RowOverride(wb, 2U);
   EXPECT_EQ(row.has_xf_index, 0);
   EXPECT_EQ(row.has_height_pt, 1);
   EXPECT_DOUBLE_EQ(row.height_pt, 31.5);
@@ -1401,11 +1396,11 @@ TEST(FormulonCApiSheetLayout, ResetRowHeightAndColumnWidthKeepHiddenAndOutline) 
   ASSERT_EQ(fm_sheet_reset_column_width(wb.handle, 0, 4U, 4U), 0);
   ASSERT_EQ(fm_sheet_reset_row_height(wb.handle, 0, 5U, 5U), 0);
 
-  fm_column_layout_t col = FM_STRUCT_INIT(fm_column_layout_t);
+  fm_column_layout_info_t col = FM_STRUCT_INIT(fm_column_layout_info_t);
   ASSERT_EQ(fm_sheet_get_column_layout_at(wb.handle, 0, 0U, &col), 0);
   EXPECT_EQ(col.has_width_chars, 0);
   EXPECT_EQ(col.hidden, 1);
-  const fm_row_layout_t row = RowOverride(wb, 5U);
+  const fm_row_layout_info_t row = RowOverride(wb, 5U);
   EXPECT_EQ(row.has_height_pt, 0);
   EXPECT_EQ(row.outline_level, 2U);
 }
@@ -1415,11 +1410,11 @@ TEST(FormulonCApiSheetLayout, ColumnWidthCharsAndRowHeightPtRoundTripThroughTheL
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   ASSERT_EQ(fm_sheet_set_column_width(wb.handle, 0, 0U, 1U, 13.5), 0);
   ASSERT_EQ(fm_sheet_set_row_height(wb.handle, 0, 7U, 7U, 18.75), 0);
-  fm_column_layout_t col = FM_STRUCT_INIT(fm_column_layout_t);
+  fm_column_layout_info_t col = FM_STRUCT_INIT(fm_column_layout_info_t);
   ASSERT_EQ(fm_sheet_get_column_layout_at(wb.handle, 0, 0U, &col), 0);
   EXPECT_DOUBLE_EQ(col.width_chars, 13.5);
   EXPECT_EQ(col.collapsed, 0);
-  const fm_row_layout_t row = RowOverride(wb, 7U);
+  const fm_row_layout_info_t row = RowOverride(wb, 7U);
   EXPECT_DOUBLE_EQ(row.height_pt, 18.75);
   EXPECT_EQ(row.custom_height, 1);
   EXPECT_EQ(row.collapsed, 0);
@@ -1428,11 +1423,12 @@ TEST(FormulonCApiSheetLayout, ColumnWidthCharsAndRowHeightPtRoundTripThroughTheL
 TEST(FormulonCApiSheetLayout, FormatDefaultsUseUnitSuffixedFieldsAndReportEffectiveValues) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  fm_sheet_format_defaults_t defaults = FM_STRUCT_INIT(fm_sheet_format_defaults_t);
-  defaults.has_default_column_width_chars = 1;
+  fm_sheet_format_defaults_patch_t defaults = FM_STRUCT_INIT(fm_sheet_format_defaults_patch_t);
+  defaults.default_column_width_chars_op = FM_PATCH_OP_SET;
   defaults.default_column_width_chars = 11.0;
-  defaults.has_default_row_height_pt = 1;
+  defaults.default_row_height_pt_op = FM_PATCH_OP_SET;
   defaults.default_row_height_pt = 19.5;
+  defaults.base_column_width_chars_op = FM_PATCH_OP_SET;
   defaults.base_column_width_chars = 9.0;
   ASSERT_EQ(fm_sheet_update_format_defaults(wb.handle, 0, &defaults), 0);
 
@@ -1450,9 +1446,93 @@ TEST(FormulonCApiSheetLayout, FormatDefaultsUseUnitSuffixedFieldsAndReportEffect
 TEST(FormulonCApiSheetLayout, ZoomPctRoundTripsThroughTheView) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  ASSERT_EQ(fm_sheet_set_zoom(wb.handle, 0, 150U), 0);
-  fm_sheet_view_t view = FM_STRUCT_INIT(fm_sheet_view_t);
+  ASSERT_EQ(SetViewZoom(wb.handle, 0, 150U), 0);
+  fm_sheet_view_info_t view = FM_STRUCT_INIT(fm_sheet_view_info_t);
   ASSERT_EQ(fm_sheet_get_view(wb.handle, 0, &view), 0);
   EXPECT_EQ(view.zoom_pct, 150U);
   EXPECT_EQ(view.show_row_column_headers, 1);
+}
+
+namespace {
+
+fm_sheet_view_info_t ReadView(const WorkbookGuard& wb) {
+  fm_sheet_view_info_t v = FM_STRUCT_INIT(fm_sheet_view_info_t);
+  EXPECT_EQ(fm_sheet_get_view(wb.handle, 0, &v), 0);
+  return v;
+}
+
+}  // namespace
+
+TEST(FormulonCApiSheetLayout, ViewPatchPaneOriginAppliesAfterThePanesChange) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  fm_sheet_view_patch_t patch = FM_STRUCT_INIT(fm_sheet_view_patch_t);
+  patch.freeze_rows_op = FM_PATCH_OP_SET;
+  patch.freeze_rows = 2U;
+  patch.freeze_cols_op = FM_PATCH_OP_SET;
+  patch.freeze_cols = 1U;
+  patch.pane_top_left_row_op = FM_PATCH_OP_SET;
+  patch.pane_top_left_row = 40U;
+  patch.pane_top_left_col_op = FM_PATCH_OP_SET;
+  patch.pane_top_left_col = 6U;
+  ASSERT_EQ(fm_sheet_update_view(wb.handle, 0, &patch), 0) << fm_get_last_error_message();
+  const fm_sheet_view_info_t v = ReadView(wb);
+  EXPECT_EQ(v.freeze_rows, 2U);
+  EXPECT_EQ(v.freeze_cols, 1U);
+  EXPECT_EQ(v.pane_top_left_row, 40U);
+  EXPECT_EQ(v.pane_top_left_col, 6U);
+
+  // Re-stating the current freeze is a no-op and keeps the origin.
+  ASSERT_EQ(SetViewFreeze(wb.handle, 0, 2U, 1U), 0);
+  EXPECT_EQ(ReadView(wb).pane_top_left_row, 40U);
+}
+
+TEST(FormulonCApiSheetLayout, ViewPatchPaneOriginInsideTheNewFreezeWritesNothing) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  fm_sheet_view_patch_t patch = FM_STRUCT_INIT(fm_sheet_view_patch_t);
+  patch.zoom_pct_op = FM_PATCH_OP_SET;
+  patch.zoom_pct = 150U;
+  patch.freeze_rows_op = FM_PATCH_OP_SET;
+  patch.freeze_rows = 2U;
+  patch.pane_top_left_row_op = FM_PATCH_OP_SET;
+  patch.pane_top_left_row = 1U;
+  EXPECT_EQ(fm_sheet_update_view(wb.handle, 0, &patch), kInvalidArgument);
+  const fm_sheet_view_info_t v = ReadView(wb);
+  EXPECT_EQ(v.freeze_rows, 0U);
+  EXPECT_EQ(v.zoom_pct, 100U);
+}
+
+TEST(FormulonCApiSheetLayout, ViewPatchSplitWithAZeroFreezeReplacesTheFreeze) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  ASSERT_EQ(SetViewFreeze(wb.handle, 0, 2U, 1U), 0);
+  fm_sheet_view_patch_t patch = FM_STRUCT_INIT(fm_sheet_view_patch_t);
+  patch.freeze_rows_op = FM_PATCH_OP_SET;
+  patch.freeze_rows = 0U;
+  patch.split_x_op = FM_PATCH_OP_SET;
+  patch.split_x = 1200.0;
+  ASSERT_EQ(fm_sheet_update_view(wb.handle, 0, &patch), 0) << fm_get_last_error_message();
+  const fm_sheet_view_info_t v = ReadView(wb);
+  EXPECT_EQ(v.freeze_rows, 0U);
+  EXPECT_EQ(v.freeze_cols, 0U);
+  EXPECT_EQ(v.split_x, 1200.0);
+
+  // Clearing the split of a frozen view leaves the freeze.
+  ASSERT_EQ(SetViewFreeze(wb.handle, 0, 3U, 0U), 0);
+  ASSERT_EQ(SetViewSplit(wb.handle, 0, 0.0, 0.0), 0);
+  EXPECT_EQ(ReadView(wb).freeze_rows, 3U);
+}
+
+TEST(FormulonCApiSheetLayout, ViewPatchRejectsAFreezePastTheGrid) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  ASSERT_EQ(SetViewFreeze(wb.handle, 0, 2U, 0U), 0);
+  // The unstated axis keeps its value, so the first unfrozen cell is (2, 16384).
+  fm_sheet_view_patch_t patch = FM_STRUCT_INIT(fm_sheet_view_patch_t);
+  patch.freeze_cols_op = FM_PATCH_OP_SET;
+  patch.freeze_cols = formulon::Sheet::kMaxCols;
+  EXPECT_EQ(fm_sheet_update_view(wb.handle, 0, &patch), kInvalidArgument);
+  EXPECT_EQ(ReadView(wb).freeze_cols, 0U);
+  EXPECT_EQ(fm_sheet_update_view(wb.handle, 0, nullptr), FM_STATUS_BINDING_NULL_POINTER);
 }

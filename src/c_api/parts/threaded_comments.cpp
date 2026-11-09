@@ -28,6 +28,7 @@ using formulon::c_api::parts::fresh_read_scratch;
 using formulon::c_api::parts::invalid_argument;
 using formulon::c_api::parts::not_found;
 using formulon::c_api::parts::null_argument;
+using formulon::c_api::parts::patch_op_ok_without_clear;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::set_last_error;
 using formulon::c_api::parts::store_cstr;
@@ -38,7 +39,8 @@ namespace {
 // Copies `count` caller mentions into the model shape.
 fm_status_t mentions_from_fm(const fm_mention_t* mentions, uint32_t count, std::vector<formulon::Mention>* out) {
   if (mentions == nullptr && count != 0U) {
-    return invalid_argument("NULL mentions with a non-zero count", "mention_count=" + std::to_string(count));
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "mentions is NULL while count > 0",
+                             "mentions_count=" + std::to_string(count));
   }
   for (uint32_t i = 0; i < count; ++i) {
     if (auto rc = check_utf8({mentions[i].person_id, mentions[i].mention_id}); rc != 0) {
@@ -61,6 +63,11 @@ fm_workbook_t* reset_scratch(const fm_workbook_t* wb) {
   fresh_read_scratch(wb);
   scratch->mention_scratch.clear();
   return scratch;
+}
+
+// `text` as a read-scratch-backed view, or NULL when it is empty (an absent optional string).
+const char* store_optional_cstr(fm_workbook_t* scratch, const std::string& text) {
+  return text.empty() ? nullptr : store_cstr(scratch->read_scratch, text);
 }
 
 }  // namespace
@@ -109,11 +116,11 @@ extern "C" fm_status_t fm_sheet_get_threaded_comment_at(const fm_workbook_t* wb,
   out->row = c.row;
   out->col = c.col;
   out->person_id = store_cstr(scratch->read_scratch, c.person_id);
-  out->created = store_cstr(scratch->read_scratch, c.created);
+  out->created = store_optional_cstr(scratch, c.created);
   out->text = store_cstr(scratch->read_scratch, c.text);
-  out->parent_id = store_cstr(scratch->read_scratch, c.parent_id);
+  out->parent_id = store_optional_cstr(scratch, c.parent_id);
   out->done = c.done ? 1 : 0;
-  out->mention_count = static_cast<uint32_t>(mentions.size());
+  out->mentions_count = static_cast<uint32_t>(mentions.size());
   out->mentions = scratch->mention_scratch.adopt(std::move(mentions));
   return 0;
 }
@@ -163,7 +170,7 @@ extern "C" fm_status_t fm_sheet_add_threaded_comment(fm_workbook_t* wb, size_t s
     return rc;
   }
   formulon::ThreadedComment model;
-  if (auto rc = mentions_from_fm(comment->mentions, comment->mention_count, &model.mentions); rc != 0) {
+  if (auto rc = mentions_from_fm(comment->mentions, comment->mentions_count, &model.mentions); rc != 0) {
     return rc;
   }
   model.id = text_or_empty(comment->id);
@@ -192,29 +199,52 @@ extern "C" fm_status_t fm_sheet_update_threaded_comment(fm_workbook_t* wb, size_
   if (auto rc = check_record_size(*patch); rc != 0) {
     return rc;
   }
-  if (auto rc = check_utf8({id, patch->text}); rc != 0) {
+  // No field can be cleared; the whole patch is checked before anything is written.
+  if (!patch_op_ok_without_clear(patch->text_op)) {
+    return invalid_argument("invalid text_op", "text_op=" + std::to_string(patch->text_op));
+  }
+  if (!patch_op_ok_without_clear(patch->mentions_op)) {
+    return invalid_argument("invalid mentions_op", "mentions_op=" + std::to_string(patch->mentions_op));
+  }
+  if (!patch_op_ok_without_clear(patch->done_op)) {
+    return invalid_argument("invalid done_op", "done_op=" + std::to_string(patch->done_op));
+  }
+  const bool set_text = patch->text_op == FM_PATCH_OP_SET;
+  const bool set_mentions = patch->mentions_op == FM_PATCH_OP_SET;
+  const bool set_done = patch->done_op == FM_PATCH_OP_SET;
+  if (set_text && patch->text == nullptr) {
+    return invalid_argument("SET text is NULL", "field=text");
+  }
+  if (auto rc = check_utf8({id, set_text ? patch->text : nullptr}); rc != 0) {
     return rc;
   }
-  if (auto rc = check_enum_domain(patch->done, -1, 1, "done"); rc != 0) {
-    return rc;
+  if (set_done) {
+    if (auto rc = check_enum_domain(patch->done, 0, 1, "done"); rc != 0) {
+      return rc;
+    }
   }
   std::vector<formulon::Mention> mentions;
-  if (patch->mentions_engaged != 0) {
-    if (auto rc = mentions_from_fm(patch->mentions, patch->mention_count, &mentions); rc != 0) {
+  if (set_mentions) {
+    if (patch->mentions == nullptr && patch->mentions_count != 0U) {
+      return null_argument("mentions");
+    }
+    if (auto rc = mentions_from_fm(patch->mentions, patch->mentions_count, &mentions); rc != 0) {
       return rc;
     }
   }
   formulon::Workbook& book = wb->workbook();
   const auto& comments = book.sheet(sheet_index).threaded_comments();
   const std::size_t index = formulon::find_threaded_comment(comments, id);
-  if (index == comments.size() || (patch->done != -1 && !comments[index].parent_id.empty())) {
-    return set_binding_error(formulon::FormulonErrorCode::kThreadedCommentInvalid,
-                             index == comments.size() ? "no threaded comment has that id" : "done is set on a reply",
+  if (index == comments.size()) {
+    return not_found("no threaded comment has that id", std::string("id=") + id);
+  }
+  if (set_done && !comments[index].parent_id.empty()) {
+    return set_binding_error(formulon::FormulonErrorCode::kThreadedCommentInvalid, "done is set on a reply",
                              std::string("id=") + id);
   }
-  if (patch->text != nullptr || patch->mentions_engaged != 0) {
-    std::string text = patch->text != nullptr ? std::string(patch->text) : comments[index].text;
-    if (patch->mentions_engaged == 0) {
+  if (set_text || set_mentions) {
+    std::string text = set_text ? std::string(patch->text) : comments[index].text;
+    if (!set_mentions) {
       mentions = comments[index].mentions;
     }
     if (auto rc = finish_status(book.edit_threaded_comment(sheet_index, id, std::move(text), std::move(mentions)));
@@ -222,7 +252,7 @@ extern "C" fm_status_t fm_sheet_update_threaded_comment(fm_workbook_t* wb, size_
       return rc;
     }
   }
-  if (patch->done != -1) {
+  if (set_done) {
     return finish_status(book.set_thread_resolved(sheet_index, id, patch->done != 0));
   }
   return 0;
@@ -271,8 +301,8 @@ extern "C" fm_status_t fm_workbook_get_person_at(const fm_workbook_t* wb, size_t
   fm_workbook_t* scratch = reset_scratch(wb);
   out->id = store_cstr(scratch->read_scratch, p.id);
   out->display_name = store_cstr(scratch->read_scratch, p.display_name);
-  out->user_id = store_cstr(scratch->read_scratch, p.user_id);
-  out->provider_id = store_cstr(scratch->read_scratch, p.provider_id);
+  out->user_id = store_optional_cstr(scratch, p.user_id);
+  out->provider_id = store_optional_cstr(scratch, p.provider_id);
   return 0;
 }
 

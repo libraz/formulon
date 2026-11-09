@@ -21,6 +21,7 @@
 #include "cf/cf_types.h"
 #include "drawing/drawing_xml.h"
 #include "eval/builtin_names.h"
+#include "eval/coerce.h"
 #include "eval/formula_entry_r1c1.h"
 #include "eval/function_registry.h"
 #include "num_fmt_locale.h"
@@ -182,8 +183,8 @@ static_assert(FM_CF_VALUE_OBJECT_TYPE_AUTO_MAX == static_cast<int>(formulon::cf:
 static_assert(FM_ICON_SET_NAME_5_QUARTERS == static_cast<int>(formulon::cf::IconSetName::Five_Quarters),
               "fm_icon_set_name_t drift");
 
-fm_color_spec_t color_spec_to_c(const formulon::ColorSpec& src, std::uint32_t fallback_argb) {
-  fm_color_spec_t out{};
+fm_color_t color_spec_to_c(const formulon::ColorSpec& src, std::uint32_t fallback_argb) {
+  fm_color_t out{};
   if (src.kind == formulon::ColorSpec::Kind::kNone) {
     if (fallback_argb != 0U) {
       out.kind = FM_COLOR_KIND_RGB;
@@ -199,7 +200,7 @@ fm_color_spec_t color_spec_to_c(const formulon::ColorSpec& src, std::uint32_t fa
   return out;
 }
 
-formulon::ColorSpec color_spec_from_c(const fm_color_spec_t& src, std::uint32_t* out_argb) {
+formulon::ColorSpec color_spec_from_c(const fm_color_t& src, std::uint32_t* out_argb) {
   if (out_argb != nullptr) {
     *out_argb = src.kind == FM_COLOR_KIND_RGB ? src.argb : 0U;
   }
@@ -592,11 +593,50 @@ fm_status_t validate(const fm_data_validation_t& v) {
   return check_utf8({v.error_title, v.error_message, v.prompt_title, v.prompt_message});
 }
 
-fm_status_t validate(const fm_font_record_t& font) {
-  if (fm_status_t rc = check_finite_non_negative(font.size_pt, "font.size"); rc != 0) {
+fm_status_t validate(const fm_font_t& font) {
+  if (fm_status_t rc = check_finite_non_negative(font.size_pt, "font.size_pt"); rc != 0) {
+    return rc;
+  }
+  if (fm_status_t rc = check_font_enums(font); rc != 0) {
     return rc;
   }
   return check_utf8({font.name});
+}
+
+fm_status_t check_font_enums(const fm_font_t& font) {
+  if (fm_status_t rc = check_enum_domain(font.underline, 0, FM_UNDERLINE_STYLE_DOUBLE_ACCOUNTING, "font.underline");
+      rc != 0) {
+    return rc;
+  }
+  if (fm_status_t rc = check_enum_domain(font.vert_align, 0, FM_FONT_VERTICAL_ALIGN_SUBSCRIPT, "font.vert_align");
+      rc != 0) {
+    return rc;
+  }
+  if (fm_status_t rc = check_enum_domain(font.family, 0, FM_FONT_FAMILY_DECORATIVE, "font.family"); rc != 0) {
+    return rc;
+  }
+  return check_enum_domain(font.scheme, 0, FM_FONT_SCHEME_MINOR, "font.scheme");
+}
+
+fm_status_t validate(const fm_fill_t& fill) {
+  if (fm_status_t rc = check_enum_domain(fill.pattern, 0, FM_FILL_PATTERN_GRAY0625, "fill.pattern"); rc != 0) {
+    return rc;
+  }
+  return check_enum_domain(fill.gradient_type, 0, FM_GRADIENT_TYPE_PATH, "fill.gradient_type");
+}
+
+fm_status_t validate(const fm_border_t& border) {
+  const std::pair<const fm_border_side_t*, const char*> sides[] = {{&border.left, "border.left.style"},
+                                                                   {&border.right, "border.right.style"},
+                                                                   {&border.top, "border.top.style"},
+                                                                   {&border.bottom, "border.bottom.style"},
+                                                                   {&border.diagonal, "border.diagonal.style"}};
+  for (const auto& [side, field] : sides) {
+    if (fm_status_t rc = check_enum_domain(side->style, 0, FM_BORDER_STYLE_SLANT_DASH_DOT, field); rc != 0) {
+      return rc;
+    }
+  }
+  return 0;
 }
 
 bool num_fmt_id_known(const formulon::StylesTable& styles, std::uint16_t id) {
@@ -689,20 +729,20 @@ std::optional<std::string_view> resolve_num_fmt_code(const formulon::Workbook& w
 
 const char* pivot_num_fmt_code(const formulon::Workbook& wb, std::string_view id_text) {
   if (id_text.empty()) {
-    return "";
+    return nullptr;
   }
   std::uint32_t id = 0;
   for (const char c : id_text) {
     if (c < '0' || c > '9') {
-      return "";
+      return nullptr;
     }
     id = id * 10U + static_cast<std::uint32_t>(c - '0');
     if (id > std::numeric_limits<std::uint16_t>::max()) {
-      return "";
+      return nullptr;
     }
   }
   const std::optional<std::string_view> resolved = resolve_num_fmt_code(wb, static_cast<std::uint16_t>(id));
-  return resolved.has_value() ? resolved->data() : "";
+  return resolved.has_value() ? resolved->data() : nullptr;
 }
 
 fm_status_t validate(const fm_pivot_field_spec_t& spec) {
@@ -715,7 +755,7 @@ fm_status_t validate(const fm_pivot_field_spec_t& spec) {
   return check_enum_domain(spec.axis, 0, FM_PIVOT_AXIS_PAGE, "axis");
 }
 
-fm_status_t validate(const fm_pivot_data_field_spec_t& spec) {
+fm_status_t validate(const fm_pivot_data_field_t& spec) {
   if (auto rc = check_utf8({spec.name}); rc != 0) {
     return rc;
   }
@@ -725,7 +765,7 @@ fm_status_t validate(const fm_pivot_data_field_spec_t& spec) {
   return check_enum_domain(spec.show_as, 0, FM_PIVOT_SHOW_VALUES_AS_RANK_DESCENDING, "show_as");
 }
 
-fm_status_t validate(const fm_pivot_filter_spec_t& spec) {
+fm_status_t validate(const fm_pivot_filter_t& spec) {
   if (auto rc = check_utf8({spec.field_name, spec.value_text, spec.value_high_text}); rc != 0) {
     return rc;
   }
@@ -864,6 +904,10 @@ fm_status_t not_found(const char* what, std::string context) {
   return set_binding_error(formulon::FormulonErrorCode::kNotFound, what, std::move(context));
 }
 
+fm_status_t precondition_failed(const char* what, std::string context) {
+  return set_binding_error(formulon::FormulonErrorCode::kPreconditionFailed, what, std::move(context));
+}
+
 fm_status_t check_sheet_row(const fm_workbook_t* wb, std::size_t sheet_index, std::uint32_t row) {
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
@@ -904,6 +948,20 @@ fm_status_t check_utf8(std::string_view text, std::string_view key, std::size_t 
   return formulon::sheet_names::valid_utf8(text) ? 0 : utf8_error(std::string(key) + "=" + std::to_string(index));
 }
 
+fm_status_t check_cell_text_length(std::string_view text, const char* field) {
+  constexpr std::uint64_t kCap = formulon::eval::kExcelTextCapUnits;
+  // A UTF-8 sequence of at most 4 bytes yields at least one unit, so a longer
+  // byte string is over the cap without walking it (or wrapping the count).
+  if (text.size() <= kCap) {
+    return 0;
+  }
+  const std::uint64_t units = text.size() > 4U * kCap ? (text.size() + 3U) / 4U : formulon::utf16_units_in(text);
+  if (units <= kCap) {
+    return 0;
+  }
+  return invalid_argument("text exceeds 32767 UTF-16 units", std::string(field) + "_units=" + std::to_string(units));
+}
+
 fm_status_t check_utf8(std::initializer_list<const char*> texts) {
   std::size_t index = 0;
   for (const char* text : texts) {
@@ -926,7 +984,7 @@ fm_status_t check_keeps_visible_sheet(const formulon::Workbook& workbook, std::u
       workbook.nearest_visible_sheet(index) != index) {
     return 0;
   }
-  return invalid_argument("workbook needs a visible sheet", "index=" + std::to_string(index));
+  return precondition_failed("workbook needs a visible sheet", "sheet_index=" + std::to_string(index));
 }
 
 namespace {

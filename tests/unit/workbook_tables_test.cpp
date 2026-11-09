@@ -53,7 +53,7 @@ TEST(WorkbookTables, AddTableRejectsNameClashCaseInsensitively) {
   ASSERT_TRUE(wb.add_table(make_table("Sales", "A1:B5", 2)).has_value());
   auto clash = wb.add_table(make_table("SALES", "D1:E5", 2));
   ASSERT_FALSE(clash.has_value());
-  EXPECT_EQ(clash.error().code, FormulonErrorCode::kInvalidArgument);
+  EXPECT_EQ(clash.error().code, FormulonErrorCode::kAlreadyExists);
   EXPECT_EQ(clash.error().message, "table name already exists");
   EXPECT_EQ(wb.tables().size(), 1U);
 }
@@ -128,6 +128,7 @@ TEST(WorkbookTables, AddTableRejectsAnOverlappingRange) {
   ASSERT_TRUE(wb.add_table(make_table("One", "A1:B4", 2)).has_value());
   auto overlap = wb.add_table(make_table("Two", "B3:C6", 2));
   ASSERT_FALSE(overlap.has_value());
+  EXPECT_EQ(overlap.error().code, FormulonErrorCode::kPreconditionFailed);
   EXPECT_EQ(overlap.error().message, "table range overlaps another table");
   EXPECT_TRUE(wb.add_table(make_table("Two", "C1:D4", 2)).has_value());
   wb.add_sheet("Sheet2");
@@ -155,6 +156,11 @@ TEST(WorkbookTables, AddTableRefusesWhatExcelKeepsATableOffAndUnmergesTheRest) {
   EXPECT_EQ(refused("A20:B22"), "table range cuts through merged cells");
   EXPECT_EQ(refused("B43:C44"), "table range overlaps a data table");
   EXPECT_EQ(refused("B52:C53"), "table range overlaps a PivotTable");
+  for (const char* ref : {"A9:B11", "A20:B22", "B43:C44", "B52:C53"}) {
+    auto r = wb.add_table(make_table("T_x", ref, 2));
+    ASSERT_FALSE(r.has_value()) << ref;
+    EXPECT_EQ(r.error().code, FormulonErrorCode::kPreconditionFailed) << ref;
+  }
   EXPECT_EQ(wb.sheet(0).merges().size(), 2U);
 
   EXPECT_TRUE(wb.add_table(make_table("Single", "A12:B14", 2)).has_value());
@@ -178,6 +184,8 @@ TEST(WorkbookTables, ResizeChecksWhatExcelsResizeRefuses) {
   EXPECT_EQ(resized(0U, 0U, 1U), "table range has no data row");
   EXPECT_EQ(resized(0U, 3U, 3U), "table range overlaps another table");
   EXPECT_EQ(resized(0U, 6U, 1U), "table range overlaps merged cells");
+  EXPECT_EQ(wb.check_table_resize(0, MergeRange{0U, 0U, 3U, 3U}).error().code, FormulonErrorCode::kPreconditionFailed);
+  EXPECT_EQ(wb.check_table_resize(0, MergeRange{1U, 0U, 4U, 1U}).error().code, FormulonErrorCode::kInvalidArgument);
   EXPECT_EQ(resized(0U, 4U, 1U), "accepted");
   ASSERT_TRUE(wb.remove_merges_intersecting(0, MergeRange{5U, 0U, 5U, 1U}).has_value());
   EXPECT_EQ(resized(0U, 11U, 1U), "accepted");
@@ -190,8 +198,8 @@ TEST(WorkbookTables, RenameTableChecksTheNewNames) {
   ASSERT_TRUE(wb.add_table(make_table("Two", "D1:E4", 2)).has_value());
   ASSERT_TRUE(wb.set_defined_name("Taken", "Sheet1!$D$1").has_value());
   EXPECT_FALSE(wb.rename_table(0, "A1", "A1").has_value());
-  EXPECT_FALSE(wb.rename_table(0, "two", "two").has_value());
-  EXPECT_FALSE(wb.rename_table(0, "Fresh", "taken").has_value());
+  EXPECT_EQ(wb.rename_table(0, "two", "two").error().code, FormulonErrorCode::kAlreadyExists);
+  EXPECT_EQ(wb.rename_table(0, "Fresh", "taken").error().code, FormulonErrorCode::kAlreadyExists);
   EXPECT_FALSE(wb.rename_table(0, "", "Fresh").has_value());
   EXPECT_TRUE(wb.rename_table(0, "ONE", "ONE").has_value());
   EXPECT_EQ(wb.tables()[0].display_name, "ONE");
@@ -200,11 +208,14 @@ TEST(WorkbookTables, RenameTableChecksTheNewNames) {
 TEST(WorkbookTables, NewDefinedNameFollowsNameSyntaxAndAvoidsTables) {
   Workbook wb = Workbook::create();
   ASSERT_TRUE(wb.add_table(make_table("Sales", "A1:B4", 2)).has_value());
-  for (const char* name : {"A1", "R1C1", "\\a", "sales"}) {
+  for (const char* name : {"A1", "R1C1", "\\a"}) {
     auto bad = wb.set_defined_name(name, "Sheet1!$D$1");
     ASSERT_FALSE(bad.has_value()) << name;
     EXPECT_EQ(bad.error().code, FormulonErrorCode::kInvalidArgument);
   }
+  auto taken = wb.set_defined_name("sales", "Sheet1!$D$1");
+  ASSERT_FALSE(taken.has_value());
+  EXPECT_EQ(taken.error().code, FormulonErrorCode::kAlreadyExists);
   EXPECT_TRUE(wb.defined_names().empty());
   // A loaded entry Excel would refuse to create still updates and removes.
   wb.set_defined_names({DefinedName("A1", "Sheet1!$D$1", -1, false, "")});

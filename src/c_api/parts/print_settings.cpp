@@ -10,8 +10,8 @@
 // Three surfaces, narrowing as they go:
 //   - raw XML per element, for a caller that already has an Excel-authored
 //     fragment to splice in;
-//   - typed patch structs, which touch only the attributes the caller
-//     engaged and leave every other one (including ones this engine does
+//   - typed patch structs, which touch only the attributes the patch
+//     sets or clears and leave every other one (including ones this engine does
 //     not model) where the file put them;
 //   - named helpers for the two settings that are not worksheet elements at
 //     all - the print area and print titles live in workbook-scope defined
@@ -30,6 +30,8 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
+#include <initializer_list>
+#include <iterator>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -61,6 +63,8 @@ using formulon::c_api::parts::fresh_read_scratch;
 using formulon::c_api::parts::invalid_argument;
 using formulon::c_api::parts::not_found;
 using formulon::c_api::parts::null_argument;
+using formulon::c_api::parts::patch_op_ok;
+using formulon::c_api::parts::patch_op_ok_without_clear;
 using formulon::c_api::parts::publish_scratch;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::store_cstr;
@@ -191,17 +195,63 @@ void set_attr_bool(pugi::xml_node node, const char* name, bool value) {
   set_attr(node, name, value ? "true" : "false");
 }
 
-/// One `(attribute, engaged, value)` triple of a partial boolean update.
+/// The status of a patch op outside 0..2, or a CLEAR on a field that cannot be cleared.
+fm_status_t invalid_patch_op() {
+  return invalid_argument("patch op out of range or not clearable");
+}
+
+/// True when every op of `ops` is KEEP or SET.
+bool ops_without_clear(std::initializer_list<fm_patch_op_t> ops) {
+  return std::all_of(ops.begin(), ops.end(), patch_op_ok_without_clear);
+}
+
+/// One `(attribute, op, value)` triple of a patched boolean attribute.
 struct BoolAttr {
   const char* attr;
-  std::int32_t engaged;
+  fm_patch_op_t op;
   std::int32_t value;
 };
 
-/// Applies every engaged entry of `attrs` through `set_attr_bool`.
-void set_engaged_bools(pugi::xml_node node, const BoolAttr* attrs, std::size_t count) {
+/// One `(attribute, op, value)` triple of a patched unsigned attribute.
+struct U32Attr {
+  const char* attr;
+  fm_patch_op_t op;
+  std::uint32_t value;
+};
+
+/// Writes the `<pageSetup>` half of a page-setup patch and re-derives the view.
+void write_page_setup(SheetPrintSettings& print, const fm_page_setup_patch_t& patch, const U32Attr* attrs,
+                      std::size_t count) {
+  pugi::xml_document doc;
+  pugi::xml_node root = load_or_create_root(doc, print.page_setup_xml, "pageSetup");
+  if (patch.orientation_op == FM_PATCH_OP_SET) {
+    set_attr(root, "orientation", patch.orientation == FM_PAGE_ORIENTATION_LANDSCAPE ? "landscape" : "portrait");
+  } else if (patch.orientation_op == FM_PATCH_OP_CLEAR) {
+    root.remove_attribute("orientation");
+  }
   for (std::size_t i = 0; i < count; ++i) {
-    if (attrs[i].engaged != 0) {
+    if (attrs[i].op == FM_PATCH_OP_SET) {
+      set_attr_u32(root, attrs[i].attr, attrs[i].value);
+    }
+  }
+  print.page_setup_xml = raw_xml(root);
+  refresh_structured_views("pageSetup", print.page_setup_xml, print);
+}
+
+/// True when no entry of `attrs` carries an op other than KEEP or SET.
+bool bool_ops_ok(const BoolAttr* attrs, std::size_t count) {
+  return std::all_of(attrs, attrs + count, [](const BoolAttr& a) { return patch_op_ok_without_clear(a.op); });
+}
+
+/// True when some entry of `attrs` is SET.
+bool any_bool_set(const BoolAttr* attrs, std::size_t count) {
+  return std::any_of(attrs, attrs + count, [](const BoolAttr& a) { return a.op == FM_PATCH_OP_SET; });
+}
+
+/// Applies every SET entry of `attrs` through `set_attr_bool`.
+void set_bools(pugi::xml_node node, const BoolAttr* attrs, std::size_t count) {
+  for (std::size_t i = 0; i < count; ++i) {
+    if (attrs[i].op == FM_PATCH_OP_SET) {
       set_attr_bool(node, attrs[i].attr, attrs[i].value != 0);
     }
   }
@@ -571,63 +621,62 @@ extern "C" fm_status_t fm_sheet_get_column_break_at(const fm_workbook_t* wb, siz
 /* Typed patch setters                                                        */
 /* -------------------------------------------------------------------------- */
 
-extern "C" fm_status_t fm_sheet_update_page_setup(fm_workbook_t* wb, size_t sheet_index, const fm_page_setup_t* setup) {
+extern "C" fm_status_t fm_sheet_update_page_setup(fm_workbook_t* wb, size_t sheet_index,
+                                                  const fm_page_setup_patch_t* patch) {
   clear_last_error();
-  if (setup == nullptr) {
-    return null_argument("setup");
+  if (patch == nullptr) {
+    return null_argument("patch");
   }
-  if (auto rc = check_record_size(*setup); rc != 0) {
+  if (auto rc = check_record_size(*patch); rc != 0) {
     return rc;
   }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
-  if (setup->orientation_engaged != 0) {
-    if (auto rc = check_enum_domain(setup->orientation, 0, FM_PAGE_ORIENTATION_LANDSCAPE, "orientation"); rc != 0) {
+  if (!patch_op_ok(patch->orientation_op) ||
+      !ops_without_clear({patch->paper_size_op, patch->scale_pct_op, patch->fit_to_width_op, patch->fit_to_height_op,
+                          patch->fit_to_page_op})) {
+    return invalid_patch_op();
+  }
+  if (patch->orientation_op == FM_PATCH_OP_SET) {
+    if (auto rc = check_enum_domain(patch->orientation, 0, FM_PAGE_ORIENTATION_LANDSCAPE, "orientation"); rc != 0) {
       return rc;
     }
   }
-  if (setup->scale_pct_engaged != 0 &&
-      (setup->scale_pct < kMinPrintScalePercent || setup->scale_pct > kMaxPrintScalePercent)) {
-    return invalid_argument("scale is out of range", "scale=" + std::to_string(setup->scale_pct));
+  if (patch->scale_pct_op == FM_PATCH_OP_SET &&
+      (patch->scale_pct < kMinPrintScalePercent || patch->scale_pct > kMaxPrintScalePercent)) {
+    return invalid_argument("scale is out of range", "scale=" + std::to_string(patch->scale_pct));
   }
 
   SheetPrintSettings& print = wb->workbook().sheet(sheet_index).mutable_print_settings();
-  pugi::xml_document doc;
-  pugi::xml_node root = load_or_create_root(doc, print.page_setup_xml, "pageSetup");
-  if (setup->orientation_engaged != 0) {
-    set_attr(root, "orientation", setup->orientation == FM_PAGE_ORIENTATION_LANDSCAPE ? "landscape" : "portrait");
+  const U32Attr attrs[] = {
+      {"paperSize", patch->paper_size_op, patch->paper_size},
+      {"scale", patch->scale_pct_op, patch->scale_pct},
+      {"fitToWidth", patch->fit_to_width_op, patch->fit_to_width},
+      {"fitToHeight", patch->fit_to_height_op, patch->fit_to_height},
+  };
+  const bool touches_page_setup =
+      patch->orientation_op != FM_PATCH_OP_KEEP ||
+      std::any_of(std::begin(attrs), std::end(attrs), [](const U32Attr& a) { return a.op != FM_PATCH_OP_KEEP; });
+  if (touches_page_setup) {
+    write_page_setup(print, *patch, attrs, std::size(attrs));
   }
-  if (setup->paper_size_engaged != 0) {
-    set_attr_u32(root, "paperSize", setup->paper_size);
-  }
-  if (setup->scale_pct_engaged != 0) {
-    set_attr_u32(root, "scale", setup->scale_pct);
-  }
-  if (setup->fit_to_width_engaged != 0) {
-    set_attr_u32(root, "fitToWidth", setup->fit_to_width);
-  }
-  if (setup->fit_to_height_engaged != 0) {
-    set_attr_u32(root, "fitToHeight", setup->fit_to_height);
-  }
-  print.page_setup_xml = raw_xml(root);
-  refresh_structured_views("pageSetup", print.page_setup_xml, print);
 
   // `fitToPage` is not a `<pageSetup>` attribute; it rides along on this
-  // struct because callers think of it as part of one page-setup decision.
-  if (setup->fit_to_page_engaged != 0) {
-    set_fit_to_page(print, setup->fit_to_page != 0);
+  // patch because callers think of it as part of one page-setup decision.
+  if (patch->fit_to_page_op == FM_PATCH_OP_SET) {
+    set_fit_to_page(print, patch->fit_to_page != 0);
   }
   return 0;
 }
 
 extern "C" fm_status_t fm_sheet_update_page_margins(fm_workbook_t* wb, size_t sheet_index,
-                                                    const fm_page_margins_t* margins) {
+                                                    const fm_page_margins_patch_t* patch) {
   clear_last_error();
-  if (margins == nullptr) {
-    return null_argument("margins");
+  if (patch == nullptr) {
+    return null_argument("patch");
   }
-  if (auto rc = check_record_size(*margins); rc != 0) {
+  if (auto rc = check_record_size(*patch); rc != 0) {
     return rc;
   }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
@@ -635,38 +684,41 @@ extern "C" fm_status_t fm_sheet_update_page_margins(fm_workbook_t* wb, size_t sh
   }
   struct MarginField {
     const char* attr;
-    int32_t engaged;
+    fm_patch_op_t op;
     double value;
   };
-  // Only the engaged fields are stored. ECMA-376 requires all six on the
+  // Only the SET fields are stored. ECMA-376 requires all six on the
   // saved element, but completing it here would report every margin as
   // engaged on the next read and erase the caller's ability to tell a
   // stated margin from a defaulted one. The OOXML writer fills the gap
   // when it emits the element instead.
   const MarginField fields[] = {
-      {"left", margins->left_in_engaged, margins->left_in},
-      {"right", margins->right_in_engaged, margins->right_in},
-      {"top", margins->top_in_engaged, margins->top_in},
-      {"bottom", margins->bottom_in_engaged, margins->bottom_in},
-      {"header", margins->header_in_engaged, margins->header_in},
-      {"footer", margins->footer_in_engaged, margins->footer_in},
+      {"left", patch->left_in_op, patch->left_in},       {"right", patch->right_in_op, patch->right_in},
+      {"top", patch->top_in_op, patch->top_in},          {"bottom", patch->bottom_in_op, patch->bottom_in},
+      {"header", patch->header_in_op, patch->header_in}, {"footer", patch->footer_in_op, patch->footer_in},
   };
   for (const MarginField& field : fields) {
-    if (field.engaged == 0) {
-      continue;
+    if (!patch_op_ok_without_clear(field.op)) {
+      return invalid_patch_op();
     }
+  }
+  for (const MarginField& field : fields) {
     // The paginator subtracts these from the paper; a negative, infinite or
     // NaN one produces a printable body that is not a rectangle.
-    if (!std::isfinite(field.value) || field.value < 0.0) {
+    if (field.op == FM_PATCH_OP_SET && (!std::isfinite(field.value) || field.value < 0.0)) {
       return invalid_argument("margin must be finite and non-negative", std::string(field.attr) + "=invalid");
     }
   }
 
+  if (std::all_of(std::begin(fields), std::end(fields),
+                  [](const MarginField& field) { return field.op == FM_PATCH_OP_KEEP; })) {
+    return 0;
+  }
   SheetPrintSettings& print = wb->workbook().sheet(sheet_index).mutable_print_settings();
   pugi::xml_document doc;
   pugi::xml_node root = load_or_create_root(doc, print.page_margins_xml, "pageMargins");
   for (const MarginField& field : fields) {
-    if (field.engaged != 0) {
+    if (field.op == FM_PATCH_OP_SET) {
       set_attr_double(root, field.attr, field.value);
     }
   }
@@ -676,65 +728,99 @@ extern "C" fm_status_t fm_sheet_update_page_margins(fm_workbook_t* wb, size_t sh
 }
 
 extern "C" fm_status_t fm_sheet_update_print_options(fm_workbook_t* wb, size_t sheet_index,
-                                                     const fm_print_options_t* options) {
+                                                     const fm_print_options_patch_t* patch) {
   clear_last_error();
-  if (options == nullptr) {
-    return null_argument("options");
+  if (patch == nullptr) {
+    return null_argument("patch");
   }
-  if (auto rc = check_record_size(*options); rc != 0) {
+  if (auto rc = check_record_size(*patch); rc != 0) {
     return rc;
   }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
+  const BoolAttr attrs[] = {
+      {"gridLines", patch->grid_lines_op, patch->grid_lines},
+      {"headings", patch->headings_op, patch->headings},
+      {"horizontalCentered", patch->horizontal_centered_op, patch->horizontal_centered},
+      {"verticalCentered", patch->vertical_centered_op, patch->vertical_centered},
+  };
+  if (!bool_ops_ok(attrs, std::size(attrs))) {
+    return invalid_patch_op();
+  }
+  if (!any_bool_set(attrs, std::size(attrs))) {
+    return 0;
+  }
   SheetPrintSettings& print = wb->workbook().sheet(sheet_index).mutable_print_settings();
   pugi::xml_document doc;
   pugi::xml_node root = load_or_create_root(doc, print.print_options_xml, "printOptions");
-  const BoolAttr attrs[] = {
-      {"gridLines", options->grid_lines_engaged, options->grid_lines},
-      {"headings", options->headings_engaged, options->headings},
-      {"horizontalCentered", options->horizontal_centered_engaged, options->horizontal_centered},
-      {"verticalCentered", options->vertical_centered_engaged, options->vertical_centered},
-  };
-  set_engaged_bools(root, attrs, std::size(attrs));
+  set_bools(root, attrs, std::size(attrs));
   print.print_options_xml = raw_xml(root);
   return 0;
 }
 
 extern "C" fm_status_t fm_sheet_update_header_footer(fm_workbook_t* wb, size_t sheet_index,
-                                                     const fm_header_footer_t* hf) {
+                                                     const fm_header_footer_patch_t* patch) {
   clear_last_error();
-  if (hf == nullptr) {
-    return null_argument("hf");
+  if (patch == nullptr) {
+    return null_argument("patch");
   }
-  if (auto rc = check_record_size(*hf); rc != 0) {
+  if (auto rc = check_record_size(*patch); rc != 0) {
     return rc;
   }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
-  if (auto rc = check_utf8(
-          {hf->odd_header, hf->odd_footer, hf->even_header, hf->even_footer, hf->first_header, hf->first_footer});
-      rc != 0) {
-    return rc;
+  const BoolAttr attrs[] = {
+      {"differentOddEven", patch->different_odd_even_op, patch->different_odd_even},
+      {"differentFirst", patch->different_first_op, patch->different_first},
+      {"scaleWithDoc", patch->scale_with_doc_op, patch->scale_with_doc},
+      {"alignWithMargins", patch->align_with_margins_op, patch->align_with_margins},
+  };
+  if (!bool_ops_ok(attrs, std::size(attrs))) {
+    return invalid_patch_op();
+  }
+  struct Section {
+    fm_patch_op_t op;
+    const char* text;
+  };
+  // In `kHeaderFooterSections` order.
+  const Section sections[] = {
+      {patch->odd_header_op, patch->odd_header},     {patch->odd_footer_op, patch->odd_footer},
+      {patch->even_header_op, patch->even_header},   {patch->even_footer_op, patch->even_footer},
+      {patch->first_header_op, patch->first_header}, {patch->first_footer_op, patch->first_footer},
+  };
+  for (const Section& section : sections) {
+    if (!patch_op_ok(section.op)) {
+      return invalid_patch_op();
+    }
+    if (section.op == FM_PATCH_OP_SET && section.text == nullptr) {
+      return invalid_argument("SET section is NULL");
+    }
+  }
+  for (const Section& section : sections) {
+    if (section.op == FM_PATCH_OP_SET) {
+      if (auto rc = check_utf8({section.text}); rc != 0) {
+        return rc;
+      }
+    }
+  }
+  if (!any_bool_set(attrs, std::size(attrs)) &&
+      std::all_of(std::begin(sections), std::end(sections),
+                  [](const Section& section) { return section.op == FM_PATCH_OP_KEEP; })) {
+    return 0;
   }
   SheetPrintSettings& print = wb->workbook().sheet(sheet_index).mutable_print_settings();
   pugi::xml_document doc;
   pugi::xml_node root = load_or_create_root(doc, print.header_footer_xml, "headerFooter");
-  const BoolAttr attrs[] = {
-      {"differentOddEven", hf->different_odd_even_engaged, hf->different_odd_even},
-      {"differentFirst", hf->different_first_engaged, hf->different_first},
-      {"scaleWithDoc", hf->scale_with_doc_engaged, hf->scale_with_doc},
-      {"alignWithMargins", hf->align_with_margins_engaged, hf->align_with_margins},
-  };
-  set_engaged_bools(root, attrs, std::size(attrs));
-  const char* const sections[] = {hf->odd_header,  hf->odd_footer,   hf->even_header,
-                                  hf->even_footer, hf->first_header, hf->first_footer};
+  set_bools(root, attrs, std::size(attrs));
   for (std::size_t i = 0; i < std::size(sections); ++i) {
-    if (sections[i] == nullptr) {
-      continue;
+    if (sections[i].op == FM_PATCH_OP_SET) {
+      // An empty section removes the child, as CLEAR does.
+      set_header_footer_section(root, i, sections[i].text);
+    } else if (sections[i].op == FM_PATCH_OP_CLEAR) {
+      set_header_footer_section(root, i, std::string_view());
     }
-    set_header_footer_section(root, i, sections[i]);
   }
   print.header_footer_xml = raw_xml(root);
   return 0;
@@ -905,7 +991,7 @@ extern "C" fm_status_t fm_sheet_get_header_footer(const fm_workbook_t* wb, size_
 /* Sheet tab colour                                                           */
 /* -------------------------------------------------------------------------- */
 
-extern "C" fm_status_t fm_sheet_get_tab_color(const fm_workbook_t* wb, size_t sheet_index, fm_color_spec_t* out) {
+extern "C" fm_status_t fm_sheet_get_tab_color(const fm_workbook_t* wb, size_t sheet_index, fm_color_t* out) {
   clear_last_error();
   if (wb == nullptr || out == nullptr) {
     return null_argument();
@@ -918,7 +1004,7 @@ extern "C" fm_status_t fm_sheet_get_tab_color(const fm_workbook_t* wb, size_t sh
   return 0;
 }
 
-extern "C" fm_status_t fm_sheet_set_tab_color(fm_workbook_t* wb, size_t sheet_index, const fm_color_spec_t* color) {
+extern "C" fm_status_t fm_sheet_set_tab_color(fm_workbook_t* wb, size_t sheet_index, const fm_color_t* color) {
   clear_last_error();
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;

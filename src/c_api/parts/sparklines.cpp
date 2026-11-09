@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "c_api/formulon_c.h"
@@ -25,7 +26,10 @@ using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::color_spec_from_c;
 using formulon::c_api::parts::color_spec_to_c;
 using formulon::c_api::parts::fresh_read_scratch;
+using formulon::c_api::parts::invalid_argument;
 using formulon::c_api::parts::null_argument;
+using formulon::c_api::parts::patch_op_ok;
+using formulon::c_api::parts::patch_op_ok_without_clear;
 using formulon::c_api::parts::set_last_error;
 using formulon::c_api::parts::sparkline_empty_cells_from_c;
 using formulon::c_api::parts::store_cstr;
@@ -95,6 +99,128 @@ std::vector<io::SparklineItem> items_from_c(const fm_sparkline_t* items, size_t 
   return out;
 }
 
+// Merges the SET and CLEAR fields of `p` into `g`, checking every op first.
+fm_status_t apply_patch(const fm_sparkline_group_patch_t& p, io::SparklineGroup& g) {
+  struct Op {
+    fm_patch_op_t op;
+    const char* name;
+    bool clearable;
+  };
+  const Op ops[] = {{p.color_series_op, "color_series", false},
+                    {p.color_negative_op, "color_negative", false},
+                    {p.color_axis_op, "color_axis", false},
+                    {p.color_markers_op, "color_markers", false},
+                    {p.color_first_op, "color_first", false},
+                    {p.color_last_op, "color_last", false},
+                    {p.color_high_op, "color_high", false},
+                    {p.color_low_op, "color_low", false},
+                    {p.manual_min_op, "manual_min", true},
+                    {p.manual_max_op, "manual_max", true},
+                    {p.line_weight_op, "line_weight", false},
+                    {p.type_op, "type", false},
+                    {p.markers_op, "markers", false},
+                    {p.high_op, "high", false},
+                    {p.low_op, "low", false},
+                    {p.first_op, "first", false},
+                    {p.last_op, "last", false},
+                    {p.negative_op, "negative", false},
+                    {p.display_x_axis_op, "display_x_axis", false},
+                    {p.display_hidden_op, "display_hidden", false},
+                    {p.min_axis_type_op, "min_axis_type", false},
+                    {p.max_axis_type_op, "max_axis_type", false},
+                    {p.date_axis_op, "date_axis", false},
+                    {p.empty_cells_as_op, "empty_cells_as", false},
+                    {p.date_axis_ref_op, "date_axis_ref", true},
+                    {p.items_op, "items", false}};
+  for (const Op& f : ops) {
+    if (!(f.clearable ? patch_op_ok(f.op) : patch_op_ok_without_clear(f.op))) {
+      return invalid_argument(patch_op_ok(f.op) ? "field cannot be cleared" : "op must be KEEP, CLEAR or SET",
+                              std::string("field=") + f.name);
+    }
+  }
+  const auto set = [](fm_patch_op_t op) { return op == FM_PATCH_OP_SET; };
+  const std::pair<fm_patch_op_t, const fm_color_t*> colors[] = {
+      {p.color_series_op, &p.color_series}, {p.color_negative_op, &p.color_negative},
+      {p.color_axis_op, &p.color_axis},     {p.color_markers_op, &p.color_markers},
+      {p.color_first_op, &p.color_first},   {p.color_last_op, &p.color_last},
+      {p.color_high_op, &p.color_high},     {p.color_low_op, &p.color_low}};
+  formulon::ColorSpec* const targets[] = {&g.color_series, &g.color_negative, &g.color_axis, &g.color_markers,
+                                          &g.color_first,  &g.color_last,     &g.color_high, &g.color_low};
+  for (std::size_t i = 0; i < 8; ++i) {
+    if (set(colors[i].first)) {
+      *targets[i] = color_spec_from_c(*colors[i].second);
+    }
+  }
+  const std::pair<fm_patch_op_t, std::int32_t> flags[] = {{p.markers_op, p.markers},
+                                                          {p.high_op, p.high},
+                                                          {p.low_op, p.low},
+                                                          {p.first_op, p.first},
+                                                          {p.last_op, p.last},
+                                                          {p.negative_op, p.negative},
+                                                          {p.display_x_axis_op, p.display_x_axis},
+                                                          {p.display_hidden_op, p.display_hidden},
+                                                          {p.date_axis_op, p.date_axis}};
+  bool* const flag_targets[] = {&g.markers,        &g.high,           &g.low,      &g.first, &g.last, &g.negative,
+                                &g.display_x_axis, &g.display_hidden, &g.date_axis};
+  for (std::size_t i = 0; i < 9; ++i) {
+    if (set(flags[i].first)) {
+      *flag_targets[i] = flags[i].second != 0;
+    }
+  }
+  if (set(p.type_op)) {
+    if (auto rc = check_enum_domain(p.type, FM_SPARKLINE_TYPE_LINE, FM_SPARKLINE_TYPE_STACKED, "type"); rc != 0) {
+      return rc;
+    }
+    g.type = static_cast<io::SparklineType>(p.type);
+  }
+  if (set(p.min_axis_type_op)) {
+    if (auto rc = check_enum_domain(p.min_axis_type, FM_SPARKLINE_AXIS_TYPE_INDIVIDUAL, FM_SPARKLINE_AXIS_TYPE_CUSTOM,
+                                    "min_axis_type");
+        rc != 0) {
+      return rc;
+    }
+    g.min_axis_type = static_cast<io::SparklineAxisType>(p.min_axis_type);
+  }
+  if (set(p.max_axis_type_op)) {
+    if (auto rc = check_enum_domain(p.max_axis_type, FM_SPARKLINE_AXIS_TYPE_INDIVIDUAL, FM_SPARKLINE_AXIS_TYPE_CUSTOM,
+                                    "max_axis_type");
+        rc != 0) {
+      return rc;
+    }
+    g.max_axis_type = static_cast<io::SparklineAxisType>(p.max_axis_type);
+  }
+  if (set(p.empty_cells_as_op)) {
+    if (auto rc = check_enum_domain(p.empty_cells_as, FM_BLANKS_AS_ZERO, FM_BLANKS_AS_SPAN, "empty_cells_as");
+        rc != 0) {
+      return rc;
+    }
+    g.empty_cells_as = sparkline_empty_cells_from_c(p.empty_cells_as);
+  }
+  if (set(p.line_weight_op)) {
+    g.line_weight = p.line_weight;
+  }
+  if (p.manual_min_op != FM_PATCH_OP_KEEP) {
+    g.has_manual_min = set(p.manual_min_op);
+    g.manual_min = set(p.manual_min_op) ? p.manual_min : 0.0;
+  }
+  if (p.manual_max_op != FM_PATCH_OP_KEEP) {
+    g.has_manual_max = set(p.manual_max_op);
+    g.manual_max = set(p.manual_max_op) ? p.manual_max : 0.0;
+  }
+  if (set(p.date_axis_ref_op)) {
+    if (p.date_axis_ref == nullptr) {
+      return invalid_argument("a SET string cannot be NULL", "field=date_axis_ref");
+    }
+    if (auto rc = check_utf8(p.date_axis_ref, "field", "date_axis_ref"); rc != 0) {
+      return rc;
+    }
+    g.date_axis_ref = std::string(formulon::strip_formula_prefix(p.date_axis_ref));
+  } else if (p.date_axis_ref_op == FM_PATCH_OP_CLEAR) {
+    g.date_axis_ref.clear();
+  }
+  return 0;
+}
+
 // Sheet `sheet_index` for a write. Sparkline groups of an `.xlsb` sheet are read into the
 // extension XML; groups the reader could not decode stay binary and are kept beside it.
 fm_status_t writable_sheet(fm_workbook_t* wb, size_t sheet_index, formulon::Sheet** sheet) {
@@ -110,7 +236,8 @@ fm_status_t check_group_index(const fm_workbook_t* wb, size_t sheet_index, size_
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
-  return check_index(idx, io::read_sparkline_groups(wb->workbook().sheet(sheet_index).ext_lst_xml()).size(), "index");
+  return check_index(idx, io::read_sparkline_groups(wb->workbook().sheet(sheet_index).ext_lst_xml()).size(),
+                     "group_index");
 }
 
 // Runs `edit` on a copy of the sheet's extension list and keeps it on success.
@@ -144,8 +271,8 @@ extern "C" fm_status_t fm_sheet_get_sparkline_group_count(const fm_workbook_t* w
   return 0;
 }
 
-extern "C" fm_status_t fm_sheet_get_sparkline_group(const fm_workbook_t* wb, size_t sheet_index, size_t idx,
-                                                    fm_sparkline_group_t* out) {
+extern "C" fm_status_t fm_sheet_get_sparkline_group_at(const fm_workbook_t* wb, size_t sheet_index, size_t idx,
+                                                       fm_sparkline_group_t* out) {
   clear_last_error();
   if (out == nullptr) {
     return null_argument("out");
@@ -158,7 +285,7 @@ extern "C" fm_status_t fm_sheet_get_sparkline_group(const fm_workbook_t* wb, siz
   }
   const std::vector<io::SparklineGroup> groups =
       io::read_sparkline_groups(wb->workbook().sheet(sheet_index).ext_lst_xml());
-  if (auto rc = check_index(idx, groups.size(), "index"); rc != 0) {
+  if (auto rc = check_index(idx, groups.size(), "group_index"); rc != 0) {
     return rc;
   }
   const io::SparklineGroup& g = groups[idx];
@@ -192,13 +319,13 @@ extern "C" fm_status_t fm_sheet_get_sparkline_group(const fm_workbook_t* wb, siz
   out->has_manual_max = g.has_manual_max ? 1 : 0;
   out->date_axis = g.date_axis ? 1 : 0;
   out->empty_cells_as = to_c(g.empty_cells_as);
-  out->date_axis_ref = store_cstr(store, with_formula_prefix(g.date_axis_ref));
+  out->date_axis_ref = g.date_axis_ref.empty() ? nullptr : store_cstr(store, with_formula_prefix(g.date_axis_ref));
   out->sparkline_count = static_cast<std::uint32_t>(g.items.size());
   return 0;
 }
 
-extern "C" fm_status_t fm_sheet_get_sparkline(const fm_workbook_t* wb, size_t sheet_index, size_t group_index,
-                                              size_t idx, fm_sparkline_t* out) {
+extern "C" fm_status_t fm_sheet_get_sparkline_at(const fm_workbook_t* wb, size_t sheet_index, size_t group_index,
+                                                 size_t idx, fm_sparkline_t* out) {
   clear_last_error();
   if (out == nullptr) {
     return null_argument("out");
@@ -211,7 +338,7 @@ extern "C" fm_status_t fm_sheet_get_sparkline(const fm_workbook_t* wb, size_t sh
   if (auto rc = check_index(group_index, groups.size(), "group_index"); rc != 0) {
     return rc;
   }
-  if (auto rc = check_index(idx, groups[group_index].items.size(), "index"); rc != 0) {
+  if (auto rc = check_index(idx, groups[group_index].items.size(), "sparkline_index"); rc != 0) {
     return rc;
   }
   const io::SparklineItem& item = groups[group_index].items[idx];
@@ -254,45 +381,48 @@ extern "C" fm_status_t fm_sheet_add_sparkline_group(fm_workbook_t* wb, size_t sh
   });
 }
 
-extern "C" fm_status_t fm_sheet_update_sparkline_group(fm_workbook_t* wb, size_t sheet_index, size_t idx,
-                                                       const fm_sparkline_group_t* group, const fm_sparkline_t* items,
-                                                       size_t count) {
+extern "C" fm_status_t fm_sheet_update_sparkline_group(fm_workbook_t* wb, size_t sheet_index, size_t group_index,
+                                                       const fm_sparkline_group_patch_t* patch) {
   clear_last_error();
-  if (group == nullptr) {
-    return null_argument("group");
+  if (patch == nullptr) {
+    return null_argument("patch");
   }
-  if (auto rc = check_record_size(*group); rc != 0) {
+  if (auto rc = check_record_size(*patch); rc != 0) {
     return rc;
   }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
-  if (auto rc = check_utf8({group->date_axis_ref}); rc != 0) {
+  const std::vector<io::SparklineGroup> groups =
+      io::read_sparkline_groups(wb->workbook().sheet(sheet_index).ext_lst_xml());
+  if (auto rc = check_index(group_index, groups.size(), "group_index"); rc != 0) {
     return rc;
   }
-  if (auto rc = check_group_enums(*group); rc != 0) {
+  io::SparklineGroup model = groups[group_index];
+  if (auto rc = apply_patch(*patch, model); rc != 0) {
     return rc;
   }
-  if (items != nullptr) {
-    if (auto rc = check_items_utf8(items, count); rc != 0) {
+  const bool replace_items = patch->items_op == FM_PATCH_OP_SET;
+  std::vector<io::SparklineItem> replacement;
+  if (replace_items) {
+    if (patch->items == nullptr && patch->items_count > 0U) {
+      return null_argument("items");
+    }
+    if (patch->items_count == 0U) {
+      return invalid_argument("a SET items needs at least one sparkline", "field=items");
+    }
+    if (auto rc = check_items_utf8(patch->items, patch->items_count); rc != 0) {
       return rc;
     }
-  }
-  if (auto rc = check_group_index(wb, sheet_index, idx); rc != 0) {
-    return rc;
-  }
-  const io::SparklineGroup model = group_from_c(*group);
-  std::vector<io::SparklineItem> replacement;
-  if (items != nullptr) {
-    replacement = items_from_c(items, count);
+    replacement = items_from_c(patch->items, patch->items_count);
   }
   return edit_ext_lst(wb, sheet_index, [&](std::string& xml) -> formulon::Expected<void, formulon::Error> {
-    if (items != nullptr) {
-      if (auto replaced = io::set_group_sparklines(xml, idx, replacement); !replaced) {
+    if (replace_items) {
+      if (auto replaced = io::set_group_sparklines(xml, group_index, replacement); !replaced) {
         return replaced;
       }
     }
-    return io::update_sparkline_group(xml, idx, model);
+    return io::update_sparkline_group(xml, group_index, model);
   });
 }
 

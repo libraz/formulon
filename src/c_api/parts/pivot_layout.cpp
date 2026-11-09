@@ -49,7 +49,7 @@ struct fm_pivot_cells {
   std::uint32_t left = 0;
   std::uint32_t rows = 0;
   std::uint32_t cols = 0;
-  std::vector<fm_pivot_cell_t> cells;
+  std::vector<fm_pivot_cell_info_t> cells;
   TextStore text_store;
 };
 
@@ -140,20 +140,22 @@ extern "C" fm_status_t fm_sheet_get_pivot_layout(const fm_workbook_t* wb, std::s
   handle->cols = projected.cols;
   handle->cells.reserve(projected.cells.size());
   for (const formulon::pivot::PivotCell& src : projected.cells) {
-    fm_pivot_cell_t dst = FM_STRUCT_INIT(fm_pivot_cell_t);
+    fm_pivot_cell_info_t dst = FM_STRUCT_INIT(fm_pivot_cell_info_t);
     dst.row = src.row;
     dst.col = src.col;
     value_to_fm(src.value, handle->text_store, &dst.value);
     dst.kind = pivot_cell_kind_to_fm(src.kind);
     dst.depth = src.depth;
-    dst.field_name = store_cstr(handle->text_store, src.field_name);
+    dst.field_name = src.field_name.empty() ? nullptr : store_cstr(handle->text_store, src.field_name);
     // Value cells carry their data field's numFmtId text; label cells already carry a format code.
     const bool value_cell = src.role == formulon::pivot::PivotCellRole::DataValue ||
                             src.role == formulon::pivot::PivotCellRole::SubtotalValue ||
                             src.role == formulon::pivot::PivotCellRole::GrandTotalValue;
-    dst.number_format =
-        store_cstr(handle->text_store, value_cell ? pivot_num_fmt_code(wb->workbook(), src.number_format)
-                                                  : std::string_view(src.number_format));
+    const char* value_code = value_cell ? pivot_num_fmt_code(wb->workbook(), src.number_format) : nullptr;
+    const std::string_view number_format =
+        value_cell ? (value_code != nullptr ? std::string_view(value_code) : std::string_view())
+                   : std::string_view(src.number_format);
+    dst.number_format = number_format.empty() ? nullptr : store_cstr(handle->text_store, number_format);
     handle->cells.push_back(dst);
   }
 
@@ -191,7 +193,7 @@ extern "C" fm_status_t fm_pivot_report_get_bounds(const fm_pivot_report_t* cells
 }
 
 extern "C" fm_status_t fm_pivot_report_get_cell_at(const fm_pivot_report_t* cells, std::size_t idx,
-                                                   fm_pivot_cell_t* out) {
+                                                   fm_pivot_cell_info_t* out) {
   clear_last_error();
   if (cells == nullptr || out == nullptr) {
     return null_argument();

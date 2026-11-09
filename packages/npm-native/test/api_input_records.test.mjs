@@ -269,12 +269,12 @@ describe('a record a getter returns is accepted by the matching setter', () => {
     });
   });
 
-  it('a person defaults userId and providerId to empty text', () => {
+  it('a person without userId and providerId reads them as null', () => {
     withSheet((_ws, wb) => {
       wb.addPerson({ id: PERSON, displayName: 'A' });
       const person = wb.getPerson(PERSON);
-      assert.equal(person.userId, '');
-      assert.equal(person.providerId, '');
+      assert.equal(person.userId, null);
+      assert.equal(person.providerId, null);
       wb.addPerson({ ...person, id: PERSON2 });
       assert.equal(wb.getPerson(PERSON2).displayName, 'A');
     });
@@ -414,8 +414,8 @@ describe('required keys are required at runtime', () => {
     withSheet((ws) => {
       fillTable(ws);
       const table = ws.addTable({ range: 'A1:B3', name: 'T' });
-      expectTypeError(() => ws.addSlicer(table, 0, { fromRow: 1 }));
-      expectTypeError(() => ws.addSlicer(table, 0, { fromRow: 1, fromCol: 3, toRow: 9 }));
+      expectInvalid(() => ws.addSlicer(table, 0, { fromRow: 1 }));
+      expectInvalid(() => ws.addSlicer(table, 0, { fromRow: 1, fromCol: 3, toRow: 9 }));
       const slicer = ws.addSlicer(table, 0, { fromRow: 1, fromCol: 3, toRow: 9, toCol: 5 });
       const read = slicer.getProperties();
       assert.deepEqual([read.fromRow, read.fromCol, read.toRow, read.toCol], [1, 3, 9, 5]);
@@ -427,7 +427,8 @@ describe('required keys are required at runtime', () => {
       fillTable(ws);
       const table = ws.addTable({ range: 'A1:B3', name: 'T' });
       const slicer = ws.addSlicer(table, 0, { fromRow: 1, fromCol: 3, toRow: 9, toCol: 5 });
-      expectTypeError(() => slicer.update({ fromRow: 2 }));
+      expectInvalid(() => slicer.update({ fromRow: 2 }));
+      assert.equal(slicer.getProperties().fromRow, 1);
       slicer.update({ fromRow: 2, fromCol: 3, toRow: 10, toCol: 5 });
       assert.equal(slicer.getProperties().fromRow, 2);
     });

@@ -80,7 +80,6 @@ __all__ = [
     "CalcMode",
     "canonicalize_formula",
     "canonicalize_function_name",
-    "CELL_STYLE_BUILTIN_ID_NONE",
     "CellAddress",
     "CellFormat",
     "CellNode",
@@ -1873,10 +1872,6 @@ PIVOT_VALUES_FIELD = -2
 _PIVOT_VALUES_FIELD_C = 0xFFFFFFFE
 _PIVOT_NO_DATA_FIELD = 0xFFFFFFFF
 
-# Sentinel for ``CellStyle.builtin_id`` meaning "custom (no builtinId)".
-CELL_STYLE_BUILTIN_ID_NONE = S.CELL_STYLE_BUILTIN_ID_NONE
-
-
 # ---------------------------------------------------------------------------
 # Structured value / input dataclasses
 # ---------------------------------------------------------------------------
@@ -3014,7 +3009,7 @@ class ChartCategories:
 
     labels: List[str]
     levels: List[List[str]]
-    values: Optional[List[float]]
+    values: Optional[List[Optional[float]]]
     format_code: str
     generated: bool
 
@@ -4669,7 +4664,7 @@ class CellStyle:
 
     name: str
     style_xf_index: int
-    builtin_id: int = CELL_STYLE_BUILTIN_ID_NONE
+    builtin_id: Optional[int] = None
     i_level: int = 0
     hidden: bool = False
     custom_builtin: bool = False
@@ -5335,7 +5330,7 @@ def _pack_pivot_worksheet_source(
 
 
 def _cf_match_from(d: Dict[str, Any]) -> CfMatch:
-    """Build a :class:`CfMatch` from a decoded ``fm_cf_match_t``, keeping the members of its ``kind`` only."""
+    """Build a :class:`CfMatch` from a decoded ``fm_cf_match_info_t``, keeping the members of its ``kind`` only."""
     kind = _enum(CfMatchKind, d["kind"])
     match = {"kind": kind, "priority": d["priority"]}
     if kind == CfMatchKind.DIFFERENTIAL_FORMAT:
@@ -5580,20 +5575,6 @@ def _finite(value: Any, name: str) -> float:
     return x
 
 
-_SHAPE_FIELDS = {
-    "name": 0x1,
-    "preset_geometry": 0x2,
-    "anchor": 0x4,
-    "text": 0x8,
-    "text_box": 0x10,
-    "fill": 0x20,
-    "line": 0x40,
-    "line_width": 0x80,
-    "rotation": 0x100,
-    "hidden": 0x200,
-}
-
-
 def _pack_shape(
     scope: _ArgScope,
     name,
@@ -5619,8 +5600,9 @@ def _pack_shape(
     line_width_pt,
     rotation_deg,
     hidden,
+    clear: Sequence[str] = (),
 ) -> int:
-    """Build a shape input struct; a ``None`` argument is a field left out of the mask.
+    """Build an ``fm_shape_patch_t``; a ``None`` argument is a field left ``KEEP``, a name in ``clear`` is ``CLEAR``.
 
     ``fill_color`` / ``line_color`` are the ``ColorInput`` of a solid kind, ``None`` for any other;
     a colour without its kind raises ``TypeError``. ``line_width_pt`` is in points and
@@ -5632,14 +5614,11 @@ def _pack_shape(
     ):
         if kind is None and color is not None:
             raise TypeError(f"formulon: {color_name} needs {kind_name}")
-    ptr = scope.struct_array(S.SHAPE, 1)
-    mask = 0
+    ptr = scope.struct_array(S.SHAPE_PATCH, 1)
     values: Dict[str, Any] = {}
     if text_box is not None:
-        mask |= _SHAPE_FIELDS["text_box"]
         values["text_box"] = 1 if text_box else 0
     if anchor_kind is not None:
-        mask |= _SHAPE_FIELDS["anchor"]
         values.update(
             anchor_kind=_sint(anchor_kind, "anchor_kind"),
             edit_as=_sint(edit_as, "edit_as"),
@@ -5655,44 +5634,30 @@ def _pack_shape(
             height_emu=_sint(height_emu, "height_emu", 64),
         )
     if fill_kind is not None:
-        mask |= _SHAPE_FIELDS["fill"]
         values.update(fill_kind=_sint(fill_kind, "fill_kind"))
         values["fill_color"] = _color_fields(optional_color_input(fill_color, "fill_color"))
     if line_kind is not None:
-        mask |= _SHAPE_FIELDS["line"]
         values.update(line_kind=_sint(line_kind, "line_kind"))
         values["line_color"] = _color_fields(optional_color_input(line_color, "line_color"))
     if line_width_pt is not None:
-        mask |= _SHAPE_FIELDS["line_width"]
         values["line_width_pt"] = _finite(line_width_pt, "line_width_pt")
     if rotation_deg is not None:
-        mask |= _SHAPE_FIELDS["rotation"]
         values["rotation_deg"] = _finite(rotation_deg, "rotation_deg")
     if hidden is not None:
-        mask |= _SHAPE_FIELDS["hidden"]
         values["hidden"] = 1 if hidden else 0
     for key, text_value in (("name", name), ("preset_geometry", preset_geometry), ("text", text)):
         if text_value is not None:
-            mask |= _SHAPE_FIELDS[key]
-            S.write_str_field(LIB, ptr, S.SHAPE, key, text_value, scope, allow_empty=True)
-    values["fields"] = mask
+            S.write_str_field(LIB, ptr, S.SHAPE_PATCH, key, text_value, scope, allow_empty=True)
+            values[key + "_op"] = _PATCH_SET
+    for key in [k for k in values if not k.endswith("_op")]:
+        values[key + "_op"] = _PATCH_SET
+    for key in clear:
+        values[key + "_op"] = _PATCH_CLEAR
     # `write_str_field` patched the pointer slots in place; pack the scalars around them.
-    raw = bytearray(LIB.read_bytes(ptr, S.SHAPE.size))
-    S.SHAPE.pack_into(raw, 0, values)
+    raw = bytearray(LIB.read_bytes(ptr, S.SHAPE_PATCH.size))
+    S.SHAPE_PATCH.pack_into(raw, 0, values)
     LIB.write_bytes(ptr, bytes(raw))
     return ptr
-
-
-_SLICER_FIELDS = {
-    "name": 0x1,
-    "caption": 0x2,
-    "style": 0x4,
-    "column_count": 0x8,
-    "row_height_emu": 0x10,
-    "anchor": 0x20,
-    "sort_order": 0x40,
-    "cross_filter": 0x80,
-}
 
 
 def _pack_slicer(
@@ -5706,22 +5671,18 @@ def _pack_slicer(
     sort_order,
     cross_filter,
 ) -> int:
-    """Build a slicer input struct; a ``None`` argument is a field left out of the mask.
+    """Build an ``fm_slicer_patch_t``; a ``None`` argument is a field left ``KEEP``.
 
     ``anchor`` is ``None`` or ``(from_row, from_col, to_row, to_col)`` followed by
     ``(from_row_offset_emu, from_col_offset_emu, to_row_offset_emu, to_col_offset_emu)``.
     """
-    ptr = scope.struct_array(S.SLICER, 1)
-    mask = 0
+    ptr = scope.struct_array(S.SLICER_PATCH, 1)
     values: Dict[str, int] = {}
     if column_count is not None:
-        mask |= _SLICER_FIELDS["column_count"]
         values["column_count"] = _uint(column_count, "column_count")
     if row_height_emu is not None:
-        mask |= _SLICER_FIELDS["row_height_emu"]
         values["row_height_emu"] = _sint(row_height_emu, "row_height_emu", 64)
     if anchor is not None:
-        mask |= _SLICER_FIELDS["anchor"]
         corner, offsets = tuple(anchor[:4]), tuple(anchor[4:]) or (0, 0, 0, 0)
         if len(corner) != 4 or len(offsets) != 4:
             raise TypeError("anchor must be (from_row, from_col, to_row, to_col) plus optional EMU offsets")
@@ -5736,19 +5697,18 @@ def _pack_slicer(
             to_col_offset_emu=_sint(offsets[3], "to_col_offset_emu", 64),
         )
     if sort_order is not None:
-        mask |= _SLICER_FIELDS["sort_order"]
         values["sort_order"] = _sint(sort_order, "sort_order")
     if cross_filter is not None:
-        mask |= _SLICER_FIELDS["cross_filter"]
         values["cross_filter"] = _sint(cross_filter, "cross_filter")
     for key, text_value in (("name", name), ("caption", caption), ("style", style)):
         if text_value is not None:
-            mask |= _SLICER_FIELDS[key]
-            S.write_str_field(LIB, ptr, S.SLICER, key, text_value, scope, allow_empty=True)
-    values["fields"] = mask
+            S.write_str_field(LIB, ptr, S.SLICER_PATCH, key, text_value, scope, allow_empty=True)
+            values[key + "_op"] = _PATCH_SET
+    for key in [k for k in values if not k.endswith("_op")]:
+        values[key + "_op"] = _PATCH_SET
     # `write_str_field` patched the pointer slots in place; pack the scalars around them.
-    raw = bytearray(LIB.read_bytes(ptr, S.SLICER.size))
-    S.SLICER.pack_into(raw, 0, values)
+    raw = bytearray(LIB.read_bytes(ptr, S.SLICER_PATCH.size))
+    S.SLICER_PATCH.pack_into(raw, 0, values)
     LIB.write_bytes(ptr, bytes(raw))
     return ptr
 
@@ -5911,14 +5871,14 @@ def _image_anchor_fields(
 # Chart marshalling
 # ---------------------------------------------------------------------------
 
-# `fm_chart_patch_op_t`: a zeroed patch field keeps, so only CLEAR and SET are written.
+# `fm_patch_op_t`: a zeroed patch field keeps, so only CLEAR and SET are written.
 _PATCH_CLEAR = 1
 _PATCH_SET = 2
 
 # The C "no title" / "no legend" members; the binding reports them as a ``None`` record.
 _CHART_TITLE_NONE = 0
 _CHART_LEGEND_NONE = -1
-# The series roles of `fm_chart_role_t` in order, which is also the order of `fm_chart_data_series_t.range_count`.
+# The series roles of `fm_chart_role_t` in order, which is also the order of `fm_chart_data_series_info_t.range_count`.
 _CHART_ROLES = ("name", "categories", "values", "x", "y", "size")
 
 # (patch key, C field, scalar kind) per patch struct.
@@ -5969,8 +5929,6 @@ _AXIS_PATCH_SPEC = (
     ("position", "position", "i32"),
     ("source_linked", "source_linked", "bool"),
 )
-# Patch fields whose `_op` companion drops the unit suffix of the value field.
-_PATCH_OP_PREFIX = {"font_size_pt": "font_size"}
 _PREVIEW_OVERRIDE_SPEC = (
     ("direction", "direction", "i32"),
     ("header_row", "header_row", "bool"),
@@ -6001,10 +5959,6 @@ def _enum_or_none(cls, value: int):
     return None if value == -1 else _enum(cls, value)
 
 
-def _nan_none(value: float) -> Optional[float]:
-    return None if value != value else value
-
-
 def _tri(value: int) -> Optional[bool]:
     """Decode a chart tri-state (absent / false / true)."""
     return None if value == 0 else value == 2
@@ -6031,14 +5985,17 @@ def _read_chart_title(d: Dict[str, object]) -> Optional[ChartTitle]:
 
 
 def _read_chart_fill(d: Dict[str, object]) -> ChartFill:
-    return ChartFill(color=_optional_color_from(d["color"]), transparency_pct=_nan_none(d["transparency_pct"]))
+    return ChartFill(
+        color=_optional_color_from(d["color"]),
+        transparency_pct=d["transparency_pct"] if d["has_transparency_pct"] else None,
+    )
 
 
 def _read_chart_line(d: Dict[str, object]) -> ChartLine:
     return ChartLine(
         color=_optional_color_from(d["color"]),
-        transparency_pct=_nan_none(d["transparency_pct"]),
-        width_pt=_nan_none(d["width_pt"]),
+        transparency_pct=d["transparency_pct"] if d["has_transparency_pct"] else None,
+        width_pt=d["width_pt"] if d["has_width_pt"] else None,
         dash=_enum(ChartLineDash, d["dash"]) if d["has_dash"] else None,
         none=bool(d["none"]),
     )
@@ -6065,7 +6022,7 @@ def _read_chart_labels(d: Dict[str, object]) -> ChartLabels:
         number_format=_opt_cstr(d["number_format"]),
         source_linked=bool(d["source_linked"]),
         font_color=_optional_color_from(d["font_color"]),
-        font_size_pt=_nan_none(d["font_size_pt"]),
+        font_size_pt=d["font_size_pt"] if d["has_font_size_pt"] else None,
         deleted=bool(d["deleted"]),
     )
 
@@ -6137,12 +6094,12 @@ def _read_chart_axis(chart: int, idx: int) -> ChartAxis:
         visible=bool(d["visible"]),
         cross_axis=d["cross_axis"],
         crosses=_enum_or_none(ChartAxisCrosses, d["crosses"]),
-        crosses_at=_nan_none(d["crosses_at"]),
-        min=_nan_none(d["min"]),
-        max=_nan_none(d["max"]),
-        major_unit=_nan_none(d["major_unit"]),
-        minor_unit=_nan_none(d["minor_unit"]),
-        log_base=_nan_none(d["log_base"]),
+        crosses_at=d["crosses_at"] if d["has_crosses_at"] else None,
+        min=d["min"] if d["has_min"] else None,
+        max=d["max"] if d["has_max"] else None,
+        major_unit=d["major_unit"] if d["has_major_unit"] else None,
+        minor_unit=d["minor_unit"] if d["has_minor_unit"] else None,
+        log_base=d["log_base"] if d["has_log_base"] else None,
         reversed=bool(d["reversed"]),
         number_format=_opt_cstr(d["number_format"]),
         source_linked=bool(d["source_linked"]),
@@ -6217,14 +6174,15 @@ def _read_chart_data(data: int) -> ChartData:
     """Decode an open chart-data handle."""
     info = _read_struct(LIB.fm_chart_data_get_info, S.CHART_DATA_INFO, data)
     labels: List[str] = []
-    values: List[float] = []
+    values: List[Optional[float]] = []
     with _ArgScope() as scope:
         label_out = scope.out_ptr()
+        has_value_out = scope.out_ptr()
         value_out = scope.alloc(8)
         for i in range(info["category_label_count"]):
-            _check(LIB.fm_chart_data_get_category_at(data, _uint(i, "idx"), label_out, value_out))
+            _check(LIB.fm_chart_data_get_category_at(data, _uint(i, "idx"), label_out, has_value_out, value_out))
             labels.append(LIB.read_cstr(LIB.read_u32(label_out)))
-            values.append(LIB.read_f64(value_out))
+            values.append(LIB.read_f64(value_out) if LIB.read_i32(has_value_out) else None)
         levels: List[List[str]] = []
         for level in range(info["category_level_count"]):
             size = _read_count(LIB.fm_chart_data_get_category_level_count, data, _uint(level, "level"))
@@ -6335,7 +6293,7 @@ def _encode_patch(
         if key not in patch:
             continue
         value = patch[key]
-        op_field = _PATCH_OP_PREFIX.get(field_name, field_name) + "_op"
+        op_field = field_name + "_op"
         if value is None:
             out[op_field] = _PATCH_CLEAR
         else:
@@ -6452,6 +6410,7 @@ def _encode_point_patch(patch: Optional[Mapping], scope: _ArgScope) -> Dict[str,
 def _encode_axis_patch(patch: Mapping, scope: _ArgScope) -> Dict[str, object]:
     out = _encode_patch(_AXIS_PATCH_SPEC, patch, ("crosses_at",), "axis patch", scope)
     if "crosses_at" in patch:
+        out["crosses_at_op"] = _PATCH_SET
         out["crosses_at"] = float(patch["crosses_at"])
     return out
 
@@ -6489,7 +6448,7 @@ def _chart_source_fields(
 def _encode_chart_insert(
     scope: _ArgScope, workbook: Workbook, sheet: int, insert: ChartInsertInput, placement: Dict[str, object]
 ) -> int:
-    """Pack ``insert`` into an ``fm_chart_insert_t`` and return its pointer.
+    """Pack ``insert`` into an ``fm_chart_insert_spec_t`` and return its pointer.
 
     ``placement`` holds the ``fm_picture_insert_spec_t`` fields (name, description, anchor) the caller builds
     from ``insert.placement``. ``bar_direction`` on a plot type other than ``BAR`` is a ``TypeError``.
@@ -6607,9 +6566,9 @@ def _pack_mentions(mentions: Sequence[Mention], scope: _ArgScope) -> int:
 
 
 def _write_mentions(struct_ptr: int, layout: S.Struct, mentions: Sequence[Mention], scope: _ArgScope) -> None:
-    """Store a mention array and its count into the ``mentions`` / ``mention_count`` fields."""
+    """Store a mention array and its count into the ``mentions`` / ``mentions_count`` fields."""
     LIB.write_bytes(struct_ptr + layout.offsets["mentions"][1], struct.pack("<I", _pack_mentions(mentions, scope)))
-    LIB.write_bytes(struct_ptr + layout.offsets["mention_count"][1], struct.pack("<I", len(mentions)))
+    LIB.write_bytes(struct_ptr + layout.offsets["mentions_count"][1], struct.pack("<I", len(mentions)))
 
 
 def _decode_mentions(base: int, count: int) -> List[Mention]:
@@ -6684,7 +6643,7 @@ def _threaded_comment_from(d: Dict[str, Any]) -> ThreadedComment:
         text=LIB.read_cstr(d["text"]),
         parent_id=LIB.read_cstr(d["parent_id"]) or None,
         done=bool(d["done"]),
-        mentions=_decode_mentions(d["mentions"], d["mention_count"]),
+        mentions=_decode_mentions(d["mentions"], d["mentions_count"]),
     )
 
 
@@ -6778,7 +6737,7 @@ def _cell_style_from(d: Dict[str, Any]) -> CellStyle:
     return CellStyle(
         name=LIB.read_cstr(d["name"]),
         style_xf_index=d["style_xf_index"],
-        builtin_id=d["builtin_id"],
+        builtin_id=d["builtin_id"] if d["has_builtin_id"] else None,
         i_level=d["i_level"],
         hidden=bool(d["hidden"]),
         custom_builtin=bool(d["custom_builtin"]),
@@ -7388,7 +7347,7 @@ class Workbook:
         with _ArgScope() as scope:
             out = scope.out_ptr()
             present = scope.out_ptr()
-            _check(LIB.fm_workbook_get_sheet_index(h, scope.cstr(name), out, present))
+            _check(LIB.fm_workbook_get_sheet_index(h, scope.cstr(name), present, out))
             if not LIB.read_i32(present):
                 return None
             return LIB.read_u32(out)
@@ -7431,8 +7390,9 @@ class Workbook:
             removed sheet.
           IndexOutOfRangeError: when ``key`` is an index ``>=`` the sheet count.
           ValueError: when ``key`` is a negative index or does not fit 64 bits.
-          TypeError: when ``key`` is none of the above, or a :class:`Sheet` of
-            another workbook.
+          InvalidArgumentError: when ``key`` is a :class:`Sheet` of another
+            workbook.
+          TypeError: when ``key`` is none of the above.
 
         Example::
 
@@ -7444,7 +7404,9 @@ class Workbook:
         self._require()
         if isinstance(key, Sheet):
             if key._workbook is not self:
-                raise TypeError("formulon: the sheet belongs to another workbook")
+                raise FormulonError(
+                    StatusCode.INVALID_ARGUMENT, _diagnostic_override=("the sheet belongs to another workbook", "")
+                )
             key._index()
             return key
         if isinstance(key, str):
@@ -7521,7 +7483,10 @@ class Workbook:
         Creates a minimal ``<bookViews>`` when the workbook has none; other
         ``<workbookView>`` attributes survive, and ``firstSheet`` is lowered
         to the sheet's index when larger. The sheet becomes the only
-        tab-selected one. A hidden sheet raises.
+        tab-selected one.
+
+        Raises:
+          FormulonError: with ``StatusCode.PRECONDITION_FAILED`` when ``sheet`` is hidden.
         """
         index = self.sheet(sheet).index
         h = self._require()
@@ -7531,13 +7496,13 @@ class Workbook:
         """Append a new sheet with the given UTF-8 display name and return its handle.
 
         Raises:
+          AlreadyExistsError: when the name collides case-insensitively
+            (Unicode simple case folding) with an existing sheet.
           FormulonError: ``StatusCode.INVALID_SHEET_NAME`` when the name is
             empty, longer than 31 UTF-16 units, contains one of ``:``,
             backslash, ``/``, ``?``, ``*``, ``[`` or ``]``, begins or ends
-            with an apostrophe, is ``History`` in any case, or collides
-            case-insensitively (Unicode simple case folding) with an existing
-            sheet; ``StatusCode.SHEET_COUNT_LIMIT_EXCEEDED`` at the maximum
-            sheet count.
+            with an apostrophe, or is ``History`` in any case;
+            ``StatusCode.SHEET_COUNT_LIMIT_EXCEEDED`` at the maximum sheet count.
         """
         h = self._require()
         handles = self._sheet_handles()
@@ -7631,22 +7596,21 @@ class Workbook:
     ) -> None:
         """Update the iterative-calculation settings; an omitted argument keeps its setting.
 
-        ``max_iterations`` of 0 is treated as 1 and values above 32767
-        (Excel's limit) as 32767; :meth:`get_iterative` reports the clamped
-        value.
+        A ``max_iterations`` above 32767 (Excel's limit) is stored as 32767;
+        :meth:`get_iterative` reports the clamped value.
 
         Raises:
           TypeError: when ``enabled`` is not a ``bool`` or ``max_iterations``
             is not an integer.
-          ValueError: when ``max_iterations`` or ``max_change`` is negative.
-          InvalidArgumentError: when ``max_change`` is NaN or infinite.
+          ValueError: when ``max_iterations`` is negative.
+          InvalidArgumentError: when ``max_iterations`` is 0, or ``max_change``
+            is negative, NaN or infinite.
         """
-        # A negative field keeps its setting.
-        fields: Dict[str, object] = {"enabled": _sint(-1, "enabled"), "max_iterations": _sint(-1, "max_iterations")}
-        fields["max_change"] = -1.0
+        fields: Dict[str, object] = {}
         if enabled is not UNCHANGED:
             if not isinstance(enabled, bool):
                 raise TypeError(f"formulon: enabled must be a bool, got {type(enabled).__name__}")
+            fields["enabled_op"] = _PATCH_SET
             fields["enabled"] = 1 if enabled else 0
         if max_iterations is not UNCHANGED:
             if (
@@ -7656,12 +7620,12 @@ class Workbook:
                 or max_iterations != int(max_iterations)
             ):
                 raise TypeError(f"formulon: max_iterations must be an integer, got {max_iterations!r}")
-            fields["max_iterations"] = _uint(max_iterations, "max_iterations", bits=31)
+            fields["max_iterations_op"] = _PATCH_SET
+            fields["max_iterations"] = _uint(max_iterations, "max_iterations")
         if max_change is not UNCHANGED:
             if isinstance(max_change, bool) or not isinstance(max_change, numbers.Real):
                 raise TypeError(f"formulon: max_change must be a number, got {type(max_change).__name__}")
-            if max_change < 0:
-                raise ValueError(f"formulon: max_change must be non-negative, got {max_change!r}")
+            fields["max_change_op"] = _PATCH_SET
             fields["max_change"] = float(max_change)
         h = self._require()
         with _ArgScope() as scope:
@@ -7676,17 +7640,12 @@ class Workbook:
         the stored values even when ``enabled`` is ``False``.
         """
         h = self._require()
-        with _ArgScope() as scope:
-            enabled_ptr = scope.out_ptr()
-            iterations_ptr = scope.out_ptr()
-            change_ptr = scope.alloc(8)
-            LIB.write_bytes(change_ptr, b"\x00" * 8)
-            _check(LIB.fm_workbook_get_iterative(h, enabled_ptr, iterations_ptr, change_ptr))
-            return IterativeSettings(
-                enabled=bool(LIB.read_i32(enabled_ptr)),
-                max_iterations=LIB.read_u32(iterations_ptr),
-                max_change=LIB.read_f64(change_ptr),
-            )
+        d = _read_struct(LIB.fm_workbook_get_iterative, S.ITERATIVE_SETTINGS, h)
+        return IterativeSettings(
+            enabled=bool(d["enabled"]),
+            max_iterations=d["max_iterations"],
+            max_change=d["max_change"],
+        )
 
     # -- Save --------------------------------------------------------------
     @overload
@@ -7836,7 +7795,7 @@ class Workbook:
             sheet_ptr = scope.out_ptr()
             index_ptr = scope.out_ptr()
             present = scope.out_ptr()
-            _check(LIB.fm_workbook_find_table(h, name_ptr, sheet_ptr, index_ptr, present))
+            _check(LIB.fm_workbook_find_table(h, name_ptr, present, sheet_ptr, index_ptr))
             if LIB.read_i32(present) == 0:
                 raise FormulonError(
                     StatusCode.NOT_FOUND, _diagnostic_override=(f'no table is named "{name}"', f"name={name}")
@@ -7929,6 +7888,7 @@ class Workbook:
         The active sheet does not change.
 
         Raises:
+          AlreadyExistsError: when ``new_name`` collides with an existing sheet.
           FormulonError: ``StatusCode.SHEET_INDEX_OUT_OF_RANGE``, ``StatusCode.INVALID_SHEET_NAME``,
             ``StatusCode.SHEET_COUNT_LIMIT_EXCEEDED``, ``StatusCode.PRECONDITION_FAILED`` (very hidden
             source) or ``StatusCode.NOT_IMPLEMENTED`` (content the copy cannot model).
@@ -7951,9 +7911,9 @@ class Workbook:
         """Remove ``sheet``; its handle raises :class:`NotFoundError` from then on.
 
         Raises:
-          FormulonError: with ``StatusCode.CANNOT_REMOVE_LAST_SHEET`` when it is the
-            workbook's only sheet, and with ``StatusCode.INVALID_ARGUMENT`` when it is
-            the only visible one; a workbook keeps at least one visible sheet.
+          FormulonError: with ``StatusCode.PRECONDITION_FAILED`` when it is the
+            workbook's only sheet or its only visible one; a workbook keeps at
+            least one visible sheet.
         """
         removed = self.sheet(sheet)
         index = removed.index
@@ -7975,7 +7935,9 @@ class Workbook:
 
         Raises:
           InvalidArgumentError: when ``formula`` is empty (remove a name with
-            :meth:`remove_defined_name`).
+            :meth:`remove_defined_name`), or the name is malformed.
+          AlreadyExistsError: when the name equals a table's name.
+          IndexOutOfRangeError: when ``scope`` is a sheet index past the sheet count.
         """
         local_sheet_id = _local_sheet_id(None if defined_name.scope is None else self.sheet(defined_name.scope).index)
         h = self._require()
@@ -8014,6 +7976,9 @@ class Workbook:
         """Return the defined name ``name`` (ASCII case-insensitive) in ``scope``, or ``None``.
 
         ``scope`` is ``None`` for workbook scope, else the sheet the name is local to.
+
+        Raises:
+          IndexOutOfRangeError: when ``scope`` is a sheet index past the sheet count.
         """
         sheet = None if scope is None else self.sheet(scope).index
         h = self._require()
@@ -8035,6 +8000,7 @@ class Workbook:
 
         Raises:
           NotFoundError: when the scope has no such name.
+          IndexOutOfRangeError: when ``scope`` is a sheet index past the sheet count.
         """
         sheet = None if scope is None else self.sheet(scope).index
         h = self._require()
@@ -8115,7 +8081,7 @@ class Workbook:
         with _ArgScope() as scope:
             ptr = scope.struct(S.CIVIL_TIME)
             flag = scope.out_ptr()
-            _check(LIB.fm_workbook_get_pinned_now(h, ptr, flag))
+            _check(LIB.fm_workbook_get_pinned_now(h, flag, ptr))
             if LIB.read_i32(flag) == 0:
                 return None
             d = S.CIVIL_TIME.unpack(LIB, ptr)
@@ -8197,9 +8163,10 @@ class Workbook:
         """
         h = self._require()
         with _ArgScope() as scope:
+            present = scope.out_ptr()
             out = scope.out_ptr()
-            _check(LIB.fm_workbook_get_file_name(h, out))
-            return LIB.read_cstr(LIB.read_u32(out)) or None
+            _check(LIB.fm_workbook_get_file_name(h, present, out))
+            return LIB.read_cstr(LIB.read_u32(out)) if LIB.read_i32(present) else None
 
     def set_file_name(self, name: Optional[str]) -> None:
         """Set :meth:`get_file_name`, extension included and without a directory; ``None`` (or ``""``) unsets it.
@@ -8277,16 +8244,6 @@ class Workbook:
     # ``indices`` are the leading ``size_t`` arguments that address the filter:
     # ``(sheet_index,)`` for a sheet filter, ``(sheet_index, table_index)`` for
     # a table's.
-    def _read_auto_filter(self, fn, *indices: int) -> Optional[AutoFilter]:
-        h = self._require()
-        with _ArgScope() as scope:
-            ptr = scope.struct(S.AUTO_FILTER)
-            present = scope.out_ptr()
-            _check(fn(h, *(_uint(i, "index") for i in indices), ptr, present))
-            if LIB.read_u32(present) == 0:
-                return None
-            return _decode_auto_filter(ptr)
-
     def _write_auto_filter(self, fn, auto_filter: Optional[AutoFilter], *indices: int) -> None:
         """Replace the filter; ``None`` removes it (a no-op without one)."""
         h = self._require()
@@ -8348,7 +8305,11 @@ class Workbook:
         return out
 
     def add_person(self, person: Person) -> None:
-        """Append a person to the workbook's person list."""
+        """Append a person to the workbook's person list.
+
+        Raises:
+          AlreadyExistsError: when the id is already listed.
+        """
         h = self._require()
         with _ArgScope() as scope:
             ptr = scope.struct_array(S.PERSON, 1)
@@ -8361,7 +8322,12 @@ class Workbook:
         return self._lookup(LIB.fm_workbook_get_person, (person_id,), S.PERSON, _person_from)
 
     def remove_person(self, person_id: str) -> None:
-        """Remove the person ``person_id`` (refused while a comment or mention still names them)."""
+        """Remove the person ``person_id``.
+
+        Raises:
+          NotFoundError: when no person has the id.
+          FormulonError: with ``StatusCode.PRECONDITION_FAILED`` while a comment or mention still names them.
+        """
         h = self._require()
         with _ArgScope() as scope:
             id_ptr = scope.cstr(person_id)
@@ -8483,8 +8449,8 @@ class Workbook:
 
         ``record.style_xf_index`` must reference an existing named-style xf --
         register one with :meth:`WorkbookOoxml.add_cell_style_xf` first.
-        ``builtin_id`` is an Excel built-in style ordinal (0..53); leave it at
-        ``CELL_STYLE_BUILTIN_ID_NONE`` for a custom style.
+        ``builtin_id`` is an Excel built-in style ordinal (0..53); ``None`` marks a
+        custom style.
         """
         h = self._require()
         with _ArgScope() as scope:
@@ -8494,7 +8460,8 @@ class Workbook:
                 ptr,
                 {
                     "style_xf_index": _uint(record.style_xf_index, "style_xf_index"),
-                    "builtin_id": _uint(record.builtin_id, "builtin_id"),
+                    "has_builtin_id": 0 if record.builtin_id is None else 1,
+                    "builtin_id": 0 if record.builtin_id is None else _uint(record.builtin_id, "builtin_id"),
                     "i_level": _uint(record.i_level, "i_level"),
                     "hidden": 1 if record.hidden else 0,
                     "custom_builtin": 1 if record.custom_builtin else 0,
@@ -8597,8 +8564,8 @@ class Workbook:
             pivot_ptr = scope.out_ptr()
             _check(LIB.fm_workbook_get_table_style_defaults(h, table_ptr, pivot_ptr))
             return TableStyleDefaults(
-                table_style=LIB.read_cstr(LIB.read_u32(table_ptr)) or None,
-                pivot_style=LIB.read_cstr(LIB.read_u32(pivot_ptr)) or None,
+                table_style=_opt_cstr(LIB.read_u32(table_ptr)),
+                pivot_style=_opt_cstr(LIB.read_u32(pivot_ptr)),
             )
 
     def update_table_style_defaults(
@@ -8607,12 +8574,21 @@ class Workbook:
         table_style: Union[str, Unchanged, None] = UNCHANGED,
         pivot_style: Union[str, Unchanged, None] = UNCHANGED,
     ) -> None:
-        """Set the default style names; an omitted argument keeps its name and ``None`` (or ``""``) removes it."""
+        """Set the default style names; an omitted argument keeps its name and ``None`` removes it."""
+        fields: Dict[str, object] = {}
         h = self._require()
         with _ArgScope() as scope:
-            # The C call keeps a NULL name and removes an empty one.
-            ptrs = [0 if value is UNCHANGED else scope.cstr(value or "") for value in (table_style, pivot_style)]
-            _check(LIB.fm_workbook_update_table_style_defaults(h, ptrs[0], ptrs[1]))
+            for key, value in (("table_style", table_style), ("pivot_style", pivot_style)):
+                if value is UNCHANGED:
+                    continue
+                if value is None:
+                    fields[key + "_op"] = _PATCH_CLEAR
+                else:
+                    fields[key + "_op"] = _PATCH_SET
+                    fields[key] = scope.cstr(value)
+            ptr = scope.struct(S.TABLE_STYLE_DEFAULTS_PATCH)
+            S.TABLE_STYLE_DEFAULTS_PATCH.pack(LIB, ptr, fields)
+            _check(LIB.fm_workbook_update_table_style_defaults(h, ptr))
 
     def get_theme_fonts(self) -> ThemeFonts:
         """Read the theme's major (heading) and minor (body) typefaces.
@@ -8809,10 +8785,11 @@ class Workbook:
         """Remove the pivot cache ``cache_id``.
 
         Its handle raises :class:`NotFoundError` until a cache with the same id
-        is added. Fails while a pivot table still references the cache.
+        is added.
 
         Raises:
           InvalidArgumentError: when ``cache_id`` is a :class:`PivotCache` of another workbook.
+          FormulonError: with ``StatusCode.PRECONDITION_FAILED`` while a pivot table still references the cache.
         """
         wanted = _uint(self._pivot_cache_id(cache_id), "cache_id")
         h = self._require()
@@ -8853,7 +8830,7 @@ class Workbook:
             _check(LIB.fm_workbook_parse_reference(h, scope.cstr(text), spec, ptr))
             d = S.REFERENCE.unpack(LIB, ptr)
             return ParsedReference(
-                sheet_name=LIB.read_cstr(d["sheet_name"]) if d["has_sheet"] else None,
+                sheet_name=_opt_cstr(d["sheet_name"]),
                 range=_cell_rect_from(d["rect"]),
             )
 
@@ -8916,7 +8893,7 @@ class Workbook:
         h = self._require()
         with _ArgScope() as scope:
             ptr = scope.struct(S.EXTERNAL_LINK_RECORD)
-            _check(LIB.fm_workbook_get_external_link(h, _uint(index, "index"), ptr))
+            _check(LIB.fm_workbook_get_external_link_at(h, _uint(index, "index"), ptr))
             d = S.EXTERNAL_LINK_RECORD.unpack(LIB, ptr)
             return ExternalLink(
                 index=d["index"],
@@ -9057,7 +9034,7 @@ class WorkbookOoxml:
     def get_cell_xf(self, xf_index: int) -> CellXf:
         """Return the resolved ``<xf>`` record at ``xf_index``."""
         return self._workbook._get_style_record(
-            LIB.fm_workbook_get_cell_xf,
+            LIB.fm_workbook_get_cell_xf_at,
             S.CELL_XF,
             xf_index,
             "xf_index",
@@ -9067,19 +9044,19 @@ class WorkbookOoxml:
     def get_font(self, font_index: int) -> Font:
         """Return the font record at ``font_index``."""
         return self._workbook._get_style_record(
-            LIB.fm_workbook_get_font, S.FONT_RECORD, font_index, "font_index", _decode_font
+            LIB.fm_workbook_get_font_at, S.FONT_RECORD, font_index, "font_index", _decode_font
         )
 
     def get_fill(self, fill_index: int) -> Fill:
         """Return the fill record at ``fill_index``."""
         return self._workbook._get_style_record(
-            LIB.fm_workbook_get_fill, S.FILL_RECORD, fill_index, "fill_index", _decode_fill
+            LIB.fm_workbook_get_fill_at, S.FILL_RECORD, fill_index, "fill_index", _decode_fill
         )
 
     def get_border(self, border_index: int) -> Border:
         """Return the border record at ``border_index``."""
         return self._workbook._get_style_record(
-            LIB.fm_workbook_get_border,
+            LIB.fm_workbook_get_border_at,
             S.BORDER_RECORD,
             border_index,
             "border_index",
@@ -9091,7 +9068,7 @@ class WorkbookOoxml:
         h = self._workbook._require()
         with _ArgScope() as scope:
             ptr = scope.struct(S.DXF_RECORD)
-            _check(LIB.fm_workbook_get_dxf(h, _uint(dxf_index, "dxf_index"), ptr))
+            _check(LIB.fm_workbook_get_dxf_at(h, _uint(dxf_index, "dxf_index"), ptr))
             d = S.DXF_RECORD.unpack(LIB, ptr)
             offsets = S.DXF_RECORD.offsets
             font = _decode_font(ptr + offsets["font"][1]) if d["font_engaged"] else None
@@ -9255,7 +9232,7 @@ class WorkbookOoxml:
         h = self._workbook._require()
         with _ArgScope() as scope:
             ptr = scope.struct(S.CELL_XF)
-            _check(LIB.fm_workbook_get_cell_style_xf(h, _uint(cell_style_xf_index, "cell_style_xf_index"), ptr))
+            _check(LIB.fm_workbook_get_cell_style_xf_at(h, _uint(cell_style_xf_index, "cell_style_xf_index"), ptr))
             return self._workbook._decode_cell_xf(ptr)
 
 
@@ -9350,13 +9327,23 @@ def list_function_names() -> List[str]:
 
 @_lock_workbook_method
 def localize_function_name(canonical_name: str, profile_id: ProfileId) -> str:
-    """Return the display name of ``canonical_name`` under ``profile_id``."""
+    """Return the display name of ``canonical_name`` under ``profile_id``.
+
+    Raises:
+      NotFoundError: when ``canonical_name`` is not a registered function.
+      InvalidArgumentError: when ``profile_id`` is not a documented profile.
+    """
     return _map_profile_text("fm_localize_function_name", canonical_name, profile_id)
 
 
 @_lock_workbook_method
 def canonicalize_function_name(localized_name: str, profile_id: ProfileId) -> str:
-    """Return the canonical English name for ``localized_name`` under ``profile_id``."""
+    """Return the canonical English name for ``localized_name`` under ``profile_id``.
+
+    Raises:
+      NotFoundError: when ``localized_name`` matches no function under the profile.
+      InvalidArgumentError: when ``profile_id`` is not a documented profile.
+    """
     return _map_profile_text("fm_canonicalize_function_name", localized_name, profile_id)
 
 

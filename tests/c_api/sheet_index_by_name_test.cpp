@@ -19,7 +19,7 @@ struct Found {
 
 Found Lookup(const fm_workbook_t* wb, const char* name) {
   Found found{0, 77U, -1};
-  found.rc = fm_workbook_get_sheet_index(wb, name, &found.index, &found.present);
+  found.rc = fm_workbook_get_sheet_index(wb, name, &found.present, &found.index);
   return found;
 }
 
@@ -84,10 +84,10 @@ TEST(FormulonCApiSheetIndexByName, RejectsBadArguments) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   size_t index = 0;
   int32_t present = 0;
-  EXPECT_EQ(fm_workbook_get_sheet_index(nullptr, "Sheet1", &index, &present), FM_STATUS_BINDING_NULL_POINTER);
-  EXPECT_EQ(fm_workbook_get_sheet_index(wb.handle, "Sheet1", nullptr, &present), FM_STATUS_BINDING_NULL_POINTER);
-  EXPECT_EQ(fm_workbook_get_sheet_index(wb.handle, "Sheet1", &index, nullptr), FM_STATUS_BINDING_NULL_POINTER);
-  EXPECT_EQ(fm_workbook_get_sheet_index(wb.handle, nullptr, &index, &present), FM_STATUS_BINDING_NULL_POINTER);
+  EXPECT_EQ(fm_workbook_get_sheet_index(nullptr, "Sheet1", &present, &index), FM_STATUS_BINDING_NULL_POINTER);
+  EXPECT_EQ(fm_workbook_get_sheet_index(wb.handle, "Sheet1", &present, nullptr), FM_STATUS_BINDING_NULL_POINTER);
+  EXPECT_EQ(fm_workbook_get_sheet_index(wb.handle, "Sheet1", nullptr, &index), FM_STATUS_BINDING_NULL_POINTER);
+  EXPECT_EQ(fm_workbook_get_sheet_index(wb.handle, nullptr, &present, &index), FM_STATUS_BINDING_NULL_POINTER);
   EXPECT_EQ(present, 0);
-  EXPECT_EQ(fm_workbook_get_sheet_index(wb.handle, "\xFF\xFE", &index, &present), FM_STATUS_BINDING_UTF8ENCODING_ERROR);
+  EXPECT_EQ(fm_workbook_get_sheet_index(wb.handle, "\xFF\xFE", &present, &index), FM_STATUS_BINDING_UTF8ENCODING_ERROR);
 }

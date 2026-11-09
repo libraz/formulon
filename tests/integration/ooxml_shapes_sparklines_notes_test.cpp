@@ -459,7 +459,7 @@ TEST(ShapeFidelity, UpdateMovesTheAnchorAndTheTransform) {
 
   spec.anchor_kind = AnchorKind::kOneCell;
   EXPECT_FALSE(static_cast<bool>(update_shape(wb, 0, 2, spec)));
-  EXPECT_FALSE(static_cast<bool>(update_shape(wb, 0, 99, spec)));
+  EXPECT_EQ(update_shape(wb, 0, 99, spec).error().code, FormulonErrorCode::kNotFound);
 }
 
 TEST(ShapeFidelity, InsertAppendsOnTopAndRemoveDeletes) {

@@ -117,7 +117,7 @@ inline std::int32_t to_c(ShapePaint value) {
     case ShapePaint::kUnset:
       break;
   }
-  return FM_SHAPE_PAINT_UNSET;
+  return FM_SHAPE_PAINT_ABSENT;
 }
 
 // --- sort_order family -------------------------------------------------------
@@ -198,7 +198,7 @@ inline std::int32_t to_c(ChartAxisPosition value) {
   return FM_CHART_AXIS_POSITION_BOTTOM;
 }
 
-// `FM_CHART_LEGEND_POSITION_NONE` is the patch instruction that removes the legend.
+// `FM_CHART_LEGEND_POSITION_ABSENT` is the patch instruction that removes the legend.
 inline ChartLegendPosition chart_legend_position_from_c(std::int32_t value) {
   switch (value) {
     case FM_CHART_LEGEND_POSITION_BOTTOM:
@@ -231,7 +231,7 @@ inline std::int32_t to_c(ChartLegendPosition value) {
     case ChartLegendPosition::kNone:
       break;
   }
-  return FM_CHART_LEGEND_POSITION_NONE;
+  return FM_CHART_LEGEND_POSITION_ABSENT;
 }
 
 // --- chart enums with an absent member ----------------------------------------

@@ -54,7 +54,7 @@ using formulon::c_api::parts::check_profile_id;
 using formulon::c_api::parts::check_record_size;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
-using formulon::c_api::parts::invalid_argument;
+using formulon::c_api::parts::not_found;
 using formulon::c_api::parts::null_argument;
 
 namespace {
@@ -115,7 +115,8 @@ const std::vector<std::string>& sorted_function_names() {
 
 }  // namespace
 
-extern "C" fm_status_t fm_get_function_metadata(const char* name, int32_t* out_present, fm_function_metadata_t* out) {
+extern "C" fm_status_t fm_get_function_metadata(const char* name, int32_t* out_present,
+                                                fm_function_metadata_info_t* out) {
   clear_last_error();
   if (name == nullptr || out_present == nullptr || out == nullptr) {
     return null_argument();
@@ -125,7 +126,7 @@ extern "C" fm_status_t fm_get_function_metadata(const char* name, int32_t* out_p
   }
   *out_present = 0;
   const std::uint32_t struct_size = out->struct_size;
-  *out = fm_function_metadata_t{};
+  *out = fm_function_metadata_info_t{};
   out->struct_size = struct_size;
   if (auto rc = check_utf8({name}); rc != 0) {
     return rc;
@@ -191,7 +192,7 @@ fm_status_t resolve_function_name(const char* name_field, const char* name, cons
   }
   const char* canonical = formulon::eval::resolve_builtin_function_name(lookup);
   if (canonical == nullptr) {
-    return invalid_argument("unknown function", std::string(name_field) + "=" + name);
+    return not_found("unknown function", std::string(name_field) + "=" + name);
   }
   const char* localized = localize ? formulon::eval::localized_function_name(locale, canonical) : nullptr;
   *out = localized != nullptr ? localized : canonical;

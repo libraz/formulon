@@ -33,6 +33,7 @@ from __future__ import annotations
 # `_workbook` loads before the handle modules so each module it imports in turn finds its definitions bound.
 from . import _workbook  # noqa: F401
 from ._c import (
+    AlreadyExistsError,
     FormulaSyntaxError,
     IndexOutOfRangeError,
     InvalidArgumentError,
@@ -420,6 +421,7 @@ __version__ = _resolve_version()
 # The public exceptions report the package, not the module that defines them.
 for _exception in (
     FormulonError,
+    AlreadyExistsError,
     InvalidArgumentError,
     FormulaSyntaxError,
     NotFoundError,
@@ -432,6 +434,7 @@ del _exception
 
 __all__ = [
     "__version__",
+    "AlreadyExistsError",
     "Alignment",
     "AlignmentPatch",
     "AnchorEditAs",

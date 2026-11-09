@@ -9,9 +9,14 @@
 namespace {
 
 constexpr fm_status_t kInvalidArgument = static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
-constexpr std::array<double, 4> kInvalidFontSizes = {std::numeric_limits<double>::quiet_NaN(),
+constexpr std::array<double, 8> kInvalidFontSizes = {std::numeric_limits<double>::quiet_NaN(),
                                                      std::numeric_limits<double>::infinity(),
-                                                     -std::numeric_limits<double>::infinity(), -1.0};
+                                                     -std::numeric_limits<double>::infinity(),
+                                                     -1.0,
+                                                     0.0,
+                                                     -0.0,
+                                                     0.5,
+                                                     410.0};
 
 std::string StylesXml(fm_workbook_t* wb) {
   return formulon::io::write_styles(wb->workbook().styles());
@@ -34,8 +39,8 @@ TEST(FormulonCApiStyles, AddFontDistinctReturnsNewIndex) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   std::size_t a = 0;
   std::size_t b = 0;
-  fm_font_record_t arial = MakeArial();
-  fm_font_record_t calibri = MakeArial();
+  fm_font_t arial = MakeArial();
+  fm_font_t calibri = MakeArial();
   calibri.name = "Calibri";
   ASSERT_EQ(fm_workbook_add_font(wb.handle, &arial, &a), 0);
   ASSERT_EQ(fm_workbook_add_font(wb.handle, &calibri, &b), 0);
@@ -57,8 +62,8 @@ TEST(FormulonCApiStyles, AddFontGrowsTable) {
   EXPECT_EQ(after, 2U);
   EXPECT_EQ(idx, 1U);
   // Round-trip: the freshly added font should read back equal.
-  fm_font_record_t out{};
-  ASSERT_EQ(fm_workbook_get_font(wb.handle, idx, &out), 0);
+  fm_font_t out{};
+  ASSERT_EQ(fm_workbook_get_font_at(wb.handle, idx, &out), 0);
   EXPECT_STREQ(out.name, "Arial");
   EXPECT_DOUBLE_EQ(out.size_pt, 12.0);
   EXPECT_EQ(out.color.argb, 0xFF112233U);
@@ -69,15 +74,15 @@ TEST(FormulonCApiStyles, GetFontRoundTripIsIdentityForSuperscript) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
 
-  fm_font_record_t superscript = MakeArial();
+  fm_font_t superscript = MakeArial();
   superscript.vert_align = 1;
   std::size_t idx = 0;
   ASSERT_EQ(fm_workbook_add_font(wb.handle, &superscript, &idx), 0);
 
-  fm_font_record_t loaded{};
-  ASSERT_EQ(fm_workbook_get_font(wb.handle, idx, &loaded), 0);
+  fm_font_t loaded{};
+  ASSERT_EQ(fm_workbook_get_font_at(wb.handle, idx, &loaded), 0);
   EXPECT_STREQ(loaded.name, "Arial");
-  EXPECT_EQ(loaded.vert_align, 1U);
+  EXPECT_EQ(loaded.vert_align, 1);
 
   std::size_t count_before = 0;
   ASSERT_EQ(fm_workbook_get_font_count(wb.handle, &count_before), 0);
@@ -93,7 +98,7 @@ TEST(FormulonCApiStyles, GetEditAddFontPreservesTheUneditedFields) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
 
-  fm_font_record_t superscript = MakeArial();
+  fm_font_t superscript = MakeArial();
   superscript.vert_align = 1;
   superscript.has_family = 1;
   superscript.family = 2;
@@ -102,19 +107,19 @@ TEST(FormulonCApiStyles, GetEditAddFontPreservesTheUneditedFields) {
   std::size_t idx = 0;
   ASSERT_EQ(fm_workbook_add_font(wb.handle, &superscript, &idx), 0);
 
-  fm_font_record_t edited{};
-  ASSERT_EQ(fm_workbook_get_font(wb.handle, idx, &edited), 0);
+  fm_font_t edited{};
+  ASSERT_EQ(fm_workbook_get_font_at(wb.handle, idx, &edited), 0);
   edited.color = RgbColor(0xFF00FF00U);
   std::size_t recolored = 0;
   ASSERT_EQ(fm_workbook_add_font(wb.handle, &edited, &recolored), 0);
   EXPECT_NE(recolored, idx);
 
-  fm_font_record_t reread{};
-  ASSERT_EQ(fm_workbook_get_font(wb.handle, recolored, &reread), 0);
+  fm_font_t reread{};
+  ASSERT_EQ(fm_workbook_get_font_at(wb.handle, recolored, &reread), 0);
   EXPECT_EQ(reread.color.argb, 0xFF00FF00U);
-  EXPECT_EQ(reread.vert_align, 1U);
+  EXPECT_EQ(reread.vert_align, 1);
   EXPECT_EQ(reread.has_family, 1);
-  EXPECT_EQ(reread.family, 2U);
+  EXPECT_EQ(reread.family, 2);
   EXPECT_EQ(reread.has_charset, 1);
   EXPECT_EQ(reread.charset, 128U);
 }
@@ -128,8 +133,8 @@ TEST(FormulonCApiStyles, AddFontIsIdentityAgainstAFileLoadedTable) {
   ASSERT_EQ(fm_workbook_get_font_count(wb.handle, &count), 0);
   ASSERT_EQ(count, 3U);
   for (uint32_t i = 0; i < count; ++i) {
-    fm_font_record_t loaded{};
-    ASSERT_EQ(fm_workbook_get_font(wb.handle, i, &loaded), 0) << "font " << i;
+    fm_font_t loaded{};
+    ASSERT_EQ(fm_workbook_get_font_at(wb.handle, i, &loaded), 0) << "font " << i;
     std::size_t reindex = 0xFFFFFFFFU;
     ASSERT_EQ(fm_workbook_add_font(wb.handle, &loaded, &reindex), 0) << "font " << i;
     EXPECT_EQ(reindex, i);
@@ -147,11 +152,11 @@ TEST(FormulonCApiStyles, AddFontDoesNotAliasAThemeColourOntoLiteralRgb) {
   // Font 0 is `<color theme="1"/>`; folding it together with a caller's
   // literal RGB record would lose the selector and change the template's
   // body text semantics.
-  fm_font_record_t themed{};
-  ASSERT_EQ(fm_workbook_get_font(wb.handle, 0U, &themed), 0);
+  fm_font_t themed{};
+  ASSERT_EQ(fm_workbook_get_font_at(wb.handle, 0U, &themed), 0);
   ASSERT_EQ(themed.color.kind, static_cast<uint8_t>(FM_COLOR_KIND_THEME));
 
-  fm_font_record_t literal_rgb = themed;
+  fm_font_t literal_rgb = themed;
   literal_rgb.color = RgbColor(0xFF112233U);
   std::size_t index = 0xFFFFFFFFU;
   ASSERT_EQ(fm_workbook_add_font(wb.handle, &literal_rgb, &index), 0);
@@ -167,10 +172,10 @@ TEST(FormulonCApiStyles, AddFontDistinguishesAnExplicitOffToggleFromAnAbsentOne)
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
 
-  fm_font_record_t absent = MakeArial();
+  fm_font_t absent = MakeArial();
   absent.bold = 0;
   absent.has_bold = 0;
-  fm_font_record_t explicit_off = absent;
+  fm_font_t explicit_off = absent;
   explicit_off.has_bold = 1;
 
   std::size_t absent_index = 0;
@@ -187,7 +192,7 @@ TEST(FormulonCApiStyles, AddFontRejectsInvalidSizesWithoutMutation) {
     const std::string before_xml = StylesXml(wb.handle);
     const std::size_t before_count = wb.handle->workbook().styles().fonts.size();
 
-    fm_font_record_t font = MakeArial();
+    fm_font_t font = MakeArial();
     font.size_pt = size;
     font.has_size_pt = 0;  // Cell-font APIs validate size even when this bit is clear.
     std::size_t out_index = 0xA1A2A3A4U;
@@ -205,7 +210,7 @@ TEST(FormulonCApiStyles, SetFontRejectsInvalidSizesWithoutMutationAndKeepsIndexP
     const std::string before_xml = StylesXml(wb.handle);
     const std::size_t before_count = wb.handle->workbook().styles().fonts.size();
 
-    fm_font_record_t font = MakeArial();
+    fm_font_t font = MakeArial();
     font.size_pt = size;
     font.has_size_pt = 0;
     EXPECT_EQ(fm_workbook_set_font(wb.handle, 0U, &font), kInvalidArgument);
@@ -215,7 +220,7 @@ TEST(FormulonCApiStyles, SetFontRejectsInvalidSizesWithoutMutationAndKeepsIndexP
 
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  fm_font_record_t invalid = MakeArial();
+  fm_font_t invalid = MakeArial();
   invalid.size_pt = std::numeric_limits<double>::quiet_NaN();
   EXPECT_EQ(fm_workbook_set_font(wb.handle, std::numeric_limits<uint32_t>::max(), &invalid),
             FM_STATUS_INDEX_OUT_OF_RANGE);
@@ -231,7 +236,7 @@ TEST(FormulonCApiStyles, SetDefaultFontRejectsInvalidSizesWithoutMutation) {
     const std::string before_xml = StylesXml(wb.handle);
     const std::size_t before_count = wb.handle->workbook().styles().fonts.size();
 
-    fm_font_record_t font = MakeArial();
+    fm_font_t font = MakeArial();
     font.size_pt = size;
     font.has_size_pt = 0;
     EXPECT_EQ(fm_workbook_set_default_font(wb.handle, &font), kInvalidArgument);
@@ -247,11 +252,11 @@ TEST(FormulonCApiStyles, AddBatchRejectsInvalidFontsTransactionally) {
     const std::string before_xml = StylesXml(wb.handle);
     const std::size_t before_count = wb.handle->workbook().styles().fonts.size();
 
-    fm_font_record_t fonts[] = {MakeArial(), MakeArial()};
+    fm_font_t fonts[] = {MakeArial(), MakeArial()};
     fonts[1].size_pt = size;
     fonts[1].has_size_pt = 0;
     uint32_t font_indices[] = {0xA1A2A3A4U, 0xB1B2B3B4U};
-    fm_styles_batch_t batch = FM_STRUCT_INIT(fm_styles_batch_t);
+    fm_styles_batch_spec_t batch = FM_STRUCT_INIT(fm_styles_batch_spec_t);
     batch.fonts = fonts;
     batch.font_count = 2U;
     batch.font_indices = font_indices;
@@ -271,12 +276,12 @@ TEST(FormulonCApiStyles, AddDxfRejectsInvalidPresentFontSizesWithoutMutation) {
     const std::string before_xml = StylesXml(wb.handle);
     const std::size_t before_count = wb.handle->workbook().styles().dxfs.size();
 
-    fm_dxf_record_t dxf{};
+    fm_dxf_t dxf{};
     dxf.font_engaged = 1;
     dxf.font = MakeArial();
     dxf.font.size_pt = size;
     dxf.font.has_size_pt = 1;
-    std::size_t out_index = 0xA1A2A3A4U;
+    std::uint32_t out_index = 0xA1A2A3A4U;
     EXPECT_EQ(fm_workbook_add_dxf(wb.handle, &dxf, &out_index), kInvalidArgument);
     EXPECT_EQ(out_index, 0xA1A2A3A4U);
     EXPECT_EQ(wb.handle->workbook().styles().dxfs.size(), before_count);
@@ -285,8 +290,8 @@ TEST(FormulonCApiStyles, AddDxfRejectsInvalidPresentFontSizesWithoutMutation) {
 }
 
 TEST(FormulonCApiStyles, AddDxfIgnoresAbsentFontSizePayloads) {
-  const std::array<fm_dxf_record_t, 2> dxfs = [] {
-    std::array<fm_dxf_record_t, 2> records{};
+  const std::array<fm_dxf_t, 2> dxfs = [] {
+    std::array<fm_dxf_t, 2> records{};
     records[0].font_engaged = 0;
     records[0].font.has_size_pt = 1;
     records[0].font.size_pt = std::numeric_limits<double>::quiet_NaN();
@@ -296,22 +301,22 @@ TEST(FormulonCApiStyles, AddDxfIgnoresAbsentFontSizePayloads) {
     return records;
   }();
 
-  for (const fm_dxf_record_t& dxf : dxfs) {
+  for (const fm_dxf_t& dxf : dxfs) {
     WorkbookGuard wb;
     ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-    std::size_t out_index = 0xA1A2A3A4U;
+    std::uint32_t out_index = 0xA1A2A3A4U;
     EXPECT_EQ(fm_workbook_add_dxf(wb.handle, &dxf, &out_index), 0) << fm_get_last_error_message();
     EXPECT_EQ(out_index, 0U);
     EXPECT_EQ(wb.handle->workbook().styles().dxfs.size(), 1U);
   }
 }
 
-TEST(FormulonCApiStyles, CellAndDifferentialFontsAcceptPositiveAndNegativeZeroSizes) {
-  for (const double size : std::array<double, 2>{0.0, -0.0}) {
+TEST(FormulonCApiStyles, CellAndDifferentialFontsAcceptTheBoundarySizes) {
+  for (const double size : std::array<double, 2>{1.0, 409.0}) {
     WorkbookGuard wb;
     ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
 
-    fm_font_record_t font = MakeArial();
+    fm_font_t font = MakeArial();
     font.size_pt = size;
     font.has_size_pt = 0;
     std::size_t index = 0xFFFFFFFFU;
@@ -321,18 +326,18 @@ TEST(FormulonCApiStyles, CellAndDifferentialFontsAcceptPositiveAndNegativeZeroSi
 
     const uint32_t batch_sentinel = 0xB1B2B3B4U;
     uint32_t batch_index = batch_sentinel;
-    fm_styles_batch_t batch = FM_STRUCT_INIT(fm_styles_batch_t);
+    fm_styles_batch_spec_t batch = FM_STRUCT_INIT(fm_styles_batch_spec_t);
     batch.fonts = &font;
     batch.font_count = 1U;
     batch.font_indices = &batch_index;
     EXPECT_EQ(fm_workbook_add_batch(wb.handle, &batch), 0) << fm_get_last_error_message();
     EXPECT_NE(batch_index, batch_sentinel);
 
-    fm_dxf_record_t dxf{};
+    fm_dxf_t dxf{};
     dxf.font_engaged = 1;
     dxf.font = font;
     dxf.font.has_size_pt = 1;
-    std::size_t dxf_index = 0xFFFFFFFFU;
+    std::uint32_t dxf_index = 0xFFFFFFFFU;
     EXPECT_EQ(fm_workbook_add_dxf(wb.handle, &dxf, &dxf_index), 0) << fm_get_last_error_message();
     EXPECT_EQ(dxf_index, 0U);
   }

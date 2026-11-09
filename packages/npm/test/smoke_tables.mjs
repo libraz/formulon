@@ -47,8 +47,8 @@ test('table properties and style options read the style toggles, header and tota
     assert.deepEqual(
       table.columns.map((c) => [c.name, c.totalsRowFunction, c.totalsRowLabel, c.totalsRowFormula]),
       [
-        ['Product', mod.TableTotalsRowFunction.None, '', ''],
-        ['Amount', mod.TableTotalsRowFunction.None, '', ''],
+        ['Product', mod.TableTotalsRowFunction.None, null, null],
+        ['Amount', mod.TableTotalsRowFunction.None, null, null],
       ],
     );
   } finally {

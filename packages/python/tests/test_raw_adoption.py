@@ -84,13 +84,12 @@ class StructSizePackingTest(unittest.TestCase):
     def test_a_record_the_engine_checks_accepts_the_packed_block(self) -> None:
         # fm_get_last_parse_error rejects a record whose struct_size is below
         # its layout, so a successful read proves the packer's value is right.
-        status_ptr = LIB.alloc(S.PARSE_ERROR.size)
+        status_ptr = LIB.alloc(4 + S.PARSE_ERROR.size)
         try:
-            S.PARSE_ERROR.pack(LIB, status_ptr, {})
-            status = LIB.fm_get_last_parse_error(status_ptr)
-            self.assertNotEqual(status, 2)  # FM_STATUS_INVALID_ARGUMENT
-            # OK when an earlier call on this thread recorded a parse error, else NOT_FOUND.
-            self.assertIn(status, (0, 6))
+            LIB.write_bytes(status_ptr, bytes(4))
+            S.PARSE_ERROR.pack(LIB, status_ptr + 4, {})
+            status = LIB.fm_get_last_parse_error(status_ptr, status_ptr + 4)
+            self.assertEqual(status, 0)  # not FM_STATUS_INVALID_ARGUMENT
         finally:
             LIB.free(status_ptr)
 
@@ -142,17 +141,19 @@ class ParseErrorPositionTest(unittest.TestCase):
     def test_fm_get_last_parse_error_reads_the_record_directly(self) -> None:
         with _RawWorkbook() as wb:
             formula = _cstr("=SUM(")
-            out = LIB.alloc(S.PARSE_ERROR.size)
+            out = LIB.alloc(4 + S.PARSE_ERROR.size)
             try:
                 status = LIB.fm_sheet_set_formula(wb, 0, 0, 0, formula)
                 self.assertTrue(1000 <= status <= 1014, status)
-                S.PARSE_ERROR.pack(LIB, out, {})
-                self.assertEqual(LIB.fm_get_last_parse_error(out), 0)
-                decoded = S.PARSE_ERROR.unpack(LIB, out)
+                S.PARSE_ERROR.pack(LIB, out + 4, {})
+                self.assertEqual(LIB.fm_get_last_parse_error(out, out + 4), 0)
+                self.assertEqual(LIB.read_u32(out), 1)
+                decoded = S.PARSE_ERROR.unpack(LIB, out + 4)
                 # The record survives the read: a second read returns the same.
-                S.PARSE_ERROR.pack(LIB, out, {})
-                self.assertEqual(LIB.fm_get_last_parse_error(out), 0)
-                self.assertEqual(S.PARSE_ERROR.unpack(LIB, out), decoded)
+                S.PARSE_ERROR.pack(LIB, out + 4, {})
+                self.assertEqual(LIB.fm_get_last_parse_error(out, out + 4), 0)
+                self.assertEqual(LIB.read_u32(out), 1)
+                self.assertEqual(S.PARSE_ERROR.unpack(LIB, out + 4), decoded)
             finally:
                 LIB.free(out)
                 LIB.free(formula)
@@ -163,12 +164,14 @@ class ParseErrorPositionTest(unittest.TestCase):
     def test_a_later_call_clears_the_record(self) -> None:
         with _RawWorkbook() as wb:
             formula = _cstr("=1+")
-            out = LIB.alloc(S.PARSE_ERROR.size)
+            out = LIB.alloc(4 + S.PARSE_ERROR.size)
             try:
                 LIB.fm_sheet_set_formula(wb, 0, 0, 0, formula)
                 LIB.fm_workbook_recalc(wb)
-                S.PARSE_ERROR.pack(LIB, out, {})
-                self.assertEqual(LIB.fm_get_last_parse_error(out), 6)  # FM_STATUS_NOT_FOUND
+                LIB.write_bytes(out, bytes(4))
+                S.PARSE_ERROR.pack(LIB, out + 4, {})
+                self.assertEqual(LIB.fm_get_last_parse_error(out, out + 4), 0)
+                self.assertEqual(LIB.read_u32(out), 0)
             finally:
                 LIB.free(out)
                 LIB.free(formula)

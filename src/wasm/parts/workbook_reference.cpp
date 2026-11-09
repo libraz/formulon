@@ -84,20 +84,20 @@ emscripten::val JsWorkbook::parseReference(const std::string& text, emscripten::
   if (has_row != has_col) {
     return reject(kReferenceTypeError, "parseReference: `baseRow` and `baseCol` must be given together");
   }
-  fm_parsed_reference_t ref = FM_STRUCT_INIT(fm_parsed_reference_t);
+  fm_parsed_reference_info_t ref = FM_STRUCT_INIT(fm_parsed_reference_info_t);
   fm_parse_reference_spec_t spec = FM_STRUCT_INIT(fm_parse_reference_spec_t);
   spec.r1c1 = r1c1 ? FM_TRISTATE_TRUE : FM_TRISTATE_FALSE;
   spec.has_base = has_row ? 1 : 0;
   spec.base_row = base_row;
   spec.base_col = base_col;
   const fm_status_t rc = fm_workbook_parse_reference(handle_, text.c_str(), &spec, &ref);
-  if (rc != 0 || ref.valid == 0) {
-    return optional_or_null(rc, 0, val::null());
+  if (!succeeded(rc)) {
+    return val::undefined();
   }
   val out = val::object();
-  out.set("sheetName", ref.has_sheet != 0 ? val(std::string(ref.sheet_name)) : val::null());
+  out.set("sheetName", ref.sheet_name != nullptr ? val(std::string(ref.sheet_name)) : val::null());
   out.set("rect", cell_rect_to_val(ref.rect));
-  return optional_or_null(rc, 1, out);
+  return out;
 }
 
 std::string JsWorkbook::formatReference(emscripten::val range, emscripten::val options) const {
@@ -137,7 +137,7 @@ emscripten::val JsWorkbook::getSheetIndex(const std::string& name) const {
   }
   std::size_t index = 0;
   int32_t present = 0;
-  const fm_status_t rc = fm_workbook_get_sheet_index(handle_, name.c_str(), &index, &present);
+  const fm_status_t rc = fm_workbook_get_sheet_index(handle_, name.c_str(), &present, &index);
   return optional_or_null(rc, present, emscripten::val(static_cast<uint32_t>(index)));
 }
 

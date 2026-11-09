@@ -184,20 +184,25 @@ test('failing calls throw a FormulonError and succeeding ones return a payload w
   }
 });
 
-test('iterative caps use the signed int32 contract', async () => {
+test('iterative caps use the unsigned int32 contract', async () => {
   const Module = await getModule();
   const wb = Module.Workbook.createDefault();
   try {
-    wb.updateIterative({ enabled: true, maxIterations: 2 ** 31 - 1, maxChange: 0.1 });
-    wb.updateIterative({ enabled: false, maxIterations: 0 });
-    assert.equal(wb.getIterative().maxIterations, 1, 'a zero cap is the native clamp of 1');
-    for (const value of [2 ** 31, -1]) {
+    wb.updateIterative({ enabled: true, maxIterations: 2 ** 32 - 1, maxChange: 0.1 });
+    const accepted = wb.getIterative();
+    assert.throws(
+      () => wb.updateIterative({ enabled: false, maxIterations: 0 }),
+      (e) => e.name === 'FormulonError' && e.code === Module.StatusCode.InvalidArgument,
+      'a zero cap is rejected, not clamped',
+    );
+    assert.deepEqual({ ...wb.getIterative() }, { ...accepted }, 'a rejected patch changes no key');
+    for (const value of [2 ** 32, -1]) {
       assert.throws(() => wb.updateIterative({ maxIterations: value }), RangeError, `maxIterations=${String(value)}`);
     }
     for (const value of [1.5, Number.NaN, Number.POSITIVE_INFINITY, '5', null]) {
       assert.throws(() => wb.updateIterative({ maxIterations: value }), TypeError, `maxIterations=${String(value)}`);
     }
-    assert.equal(wb.getIterative().maxIterations, 1);
+    assert.equal(wb.getIterative().maxIterations, accepted.maxIterations);
   } finally {
     wb.dispose();
   }

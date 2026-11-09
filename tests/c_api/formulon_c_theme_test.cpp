@@ -20,14 +20,17 @@ namespace {
 
 static_assert(sizeof(fm_theme_colors_t) == 52U, "fm_theme_colors_t ABI layout changed");
 static_assert(sizeof(fm_theme_fonts_t) == 5U * sizeof(void*), "fm_theme_fonts_t ABI layout changed");
-static_assert(offsetof(fm_effective_style_t, font_argb) == 24U, "fm_effective_style_t.font_argb offset changed");
-static_assert(offsetof(fm_effective_style_t, border_argb) == 48U, "fm_effective_style_t.border_argb offset changed");
-static_assert(offsetof(fm_effective_style_t, border_resolution) == 68U,
-              "fm_effective_style_t.border_resolution offset changed");
-static_assert(offsetof(fm_effective_style_t, hidden) == 92U, "fm_effective_style_t.hidden offset changed");
-static_assert(offsetof(fm_effective_style_t, num_fmt_code) == 96U, "fm_effective_style_t.num_fmt_code offset changed");
-static_assert(sizeof(fm_effective_style_t) == (sizeof(void*) == 4U ? 100U : 104U),
-              "fm_effective_style_t ABI layout changed");
+static_assert(offsetof(fm_effective_style_info_t, font_argb) == 24U,
+              "fm_effective_style_info_t.font_argb offset changed");
+static_assert(offsetof(fm_effective_style_info_t, border_argb) == 48U,
+              "fm_effective_style_info_t.border_argb offset changed");
+static_assert(offsetof(fm_effective_style_info_t, border_resolution) == 68U,
+              "fm_effective_style_info_t.border_resolution offset changed");
+static_assert(offsetof(fm_effective_style_info_t, hidden) == 92U, "fm_effective_style_info_t.hidden offset changed");
+static_assert(offsetof(fm_effective_style_info_t, num_fmt_code) == 96U,
+              "fm_effective_style_info_t.num_fmt_code offset changed");
+static_assert(sizeof(fm_effective_style_info_t) == (sizeof(void*) == 4U ? 100U : 104U),
+              "fm_effective_style_info_t ABI layout changed");
 
 using Bytes = std::vector<std::uint8_t>;
 
@@ -91,16 +94,16 @@ std::string EntryText(const Bytes& package, const std::string& name) {
   return body ? std::string(body.value().begin(), body.value().end()) : std::string();
 }
 
-fm_color_spec_t ThemeSpec(uint32_t index, double tint) {
-  fm_color_spec_t spec{};
+fm_color_t ThemeSpec(uint32_t index, double tint) {
+  fm_color_t spec{};
   spec.kind = FM_COLOR_KIND_THEME;
   spec.theme = index;
   spec.tint = tint;
   return spec;
 }
 
-fm_color_spec_t IndexedSpec(uint32_t index) {
-  fm_color_spec_t spec{};
+fm_color_t IndexedSpec(uint32_t index) {
+  fm_color_t spec{};
   spec.kind = FM_COLOR_KIND_INDEXED;
   spec.indexed = index;
   return spec;
@@ -112,7 +115,7 @@ struct Resolved {
   int32_t resolution = -1;
 };
 
-Resolved Resolve(fm_workbook_t* wb, fm_color_spec_t spec, int32_t context) {
+Resolved Resolve(fm_workbook_t* wb, fm_color_t spec, int32_t context) {
   Resolved out;
   out.status = fm_workbook_resolve_color(wb, &spec, context, &out.argb, &out.resolution);
   return out;
@@ -324,7 +327,7 @@ TEST(FormulonCApiTheme, ResolveColorReportsResolution) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
 
-  fm_color_spec_t rgb{};
+  fm_color_t rgb{};
   rgb.kind = FM_COLOR_KIND_RGB;
   rgb.argb = 0xFF123456U;
   Resolved got = Resolve(wb.handle, rgb, FM_COLOR_CONTEXT_FILL_FG);
@@ -366,7 +369,7 @@ TEST(FormulonCApiTheme, ResolveColorReportsResolution) {
   EXPECT_EQ(got.resolution, FM_COLOR_RESOLUTION_INDEX_OUT_OF_RANGE);
 
   // System foreground (64) and automatic colours depend on the context.
-  fm_color_spec_t automatic{};
+  fm_color_t automatic{};
   automatic.kind = FM_COLOR_KIND_AUTO;
   const struct {
     int32_t context;
@@ -398,7 +401,7 @@ TEST(FormulonCApiTheme, ResolveColorRejectsInvalidArguments) {
   EXPECT_EQ(fm_workbook_resolve_color(wb.handle, record_arg(ThemeSpec(4, 0.0)), 0, &argb, nullptr), kNullPointer);
   EXPECT_EQ(Resolve(wb.handle, ThemeSpec(4, 0.0), 4).status, kInvalidArgument);
   EXPECT_EQ(Resolve(wb.handle, ThemeSpec(4, 0.0), -1).status, kInvalidArgument);
-  fm_color_spec_t unknown{};
+  fm_color_t unknown{};
   unknown.kind = 5;
   EXPECT_EQ(Resolve(wb.handle, unknown, FM_COLOR_CONTEXT_FONT).status, kInvalidArgument);
   EXPECT_EQ(Resolve(wb.handle, ThemeSpec(4, std::numeric_limits<double>::quiet_NaN()), FM_COLOR_CONTEXT_FONT).status,
@@ -411,13 +414,13 @@ namespace {
 /// one carrying a themed font, a solid literal fill, an indexed left border,
 /// a date format and explicit protection.
 struct PrecedenceXfs {
-  std::size_t cell = 0;
-  std::size_t row = 0;
-  std::size_t column = 0;
+  std::uint32_t cell = 0;
+  std::uint32_t row = 0;
+  std::uint32_t column = 0;
 };
 
 PrecedenceXfs AddPrecedenceXfs(fm_workbook_t* wb) {
-  fm_font_record_t font{};
+  fm_font_t font{};
   font.name = "Calibri";
   font.size_pt = 11.0;
   font.color.kind = FM_COLOR_KIND_THEME;
@@ -425,13 +428,13 @@ PrecedenceXfs AddPrecedenceXfs(fm_workbook_t* wb) {
   font.color.tint = 0.4;
   std::size_t font_index = 0;
   EXPECT_EQ(fm_workbook_add_font(wb, &font, &font_index), 0);
-  fm_fill_record_t fill{};
+  fm_fill_t fill{};
   fill.pattern = 1;
   fill.foreground.kind = FM_COLOR_KIND_RGB;
   fill.foreground.argb = 0xFFFF0000U;
   std::size_t fill_index = 0;
   EXPECT_EQ(fm_workbook_add_fill(wb, &fill, &fill_index), 0);
-  fm_border_record_t border{};
+  fm_border_t border{};
   border.left.style = 1;
   border.left.color.kind = FM_COLOR_KIND_INDEXED;
   border.left.color.indexed = 12;
@@ -476,8 +479,8 @@ Bytes PrecedencePackage(fm_workbook_t* wb, const PrecedenceXfs& xfs) {
   return ReplaceEntries(Save(wb), {{"xl/worksheets/sheet1.xml", sheet}});
 }
 
-fm_effective_style_t Effective(fm_workbook_t* wb, uint32_t row, uint32_t col) {
-  fm_effective_style_t style = FM_STRUCT_INIT(fm_effective_style_t);
+fm_effective_style_info_t Effective(fm_workbook_t* wb, uint32_t row, uint32_t col) {
+  fm_effective_style_info_t style = FM_STRUCT_INIT(fm_effective_style_info_t);
   EXPECT_EQ(fm_sheet_get_effective_style(wb, 0, row, col, &style), 0);
   return style;
 }
@@ -507,12 +510,12 @@ TEST(FormulonCApiEffectiveStyle, CellRowColumnDefaultPrecedence) {
       {0, 0, FM_EFFECTIVE_STYLE_SOURCE_DEFAULT, 0U},  // A1: nothing applies
   };
   for (const auto& c : kCases) {
-    const fm_effective_style_t style = Effective(loaded.handle, c.row, c.col);
+    const fm_effective_style_info_t style = Effective(loaded.handle, c.row, c.col);
     EXPECT_EQ(style.source, c.source) << c.row << "," << c.col;
     EXPECT_EQ(style.xf_index, c.xf) << c.row << "," << c.col;
   }
   // An existing cell without its own style still reads as the cell level.
-  const fm_effective_style_t d7 = Effective(loaded.handle, 6, 3);
+  const fm_effective_style_info_t d7 = Effective(loaded.handle, 6, 3);
   EXPECT_EQ(d7.source, FM_EFFECTIVE_STYLE_SOURCE_CELL);
   EXPECT_EQ(d7.xf_index, 0U);
 }
@@ -523,9 +526,9 @@ TEST(FormulonCApiEffectiveStyle, ResolvesColorsFormatAndProtection) {
   const PrecedenceXfs xfs = AddPrecedenceXfs(wb.handle);
   ASSERT_EQ(fm_sheet_set_cell_xf_index(wb.handle, 0, 0, 0, xfs.cell), 0);
 
-  const fm_effective_style_t style = Effective(wb.handle, 0, 0);
+  const fm_effective_style_info_t style = Effective(wb.handle, 0, 0);
   fm_cell_xf_t xf{};
-  ASSERT_EQ(fm_workbook_get_cell_xf(wb.handle, xfs.cell, &xf), 0);
+  ASSERT_EQ(fm_workbook_get_cell_xf_at(wb.handle, xfs.cell, &xf), 0);
   EXPECT_EQ(style.font_index, xf.font_index);
   EXPECT_EQ(style.fill_index, xf.fill_index);
   EXPECT_EQ(style.border_index, xf.border_index);
@@ -556,7 +559,7 @@ TEST(FormulonCApiEffectiveStyle, ResolvesColorsFormatAndProtection) {
   ASSERT_EQ(fm_workbook_set_theme_colors(wb.handle, &colors), 0);
   EXPECT_EQ(Effective(wb.handle, 0, 0).font_resolution, FM_COLOR_RESOLUTION_EXACT);
 
-  const fm_effective_style_t plain = Effective(wb.handle, 3, 3);
+  const fm_effective_style_info_t plain = Effective(wb.handle, 3, 3);
   EXPECT_EQ(plain.source, FM_EFFECTIVE_STYLE_SOURCE_DEFAULT);
   EXPECT_EQ(plain.locked, 1);
   EXPECT_EQ(plain.hidden, 0);
@@ -573,7 +576,7 @@ TEST(FormulonCApiEffectiveStyle, SourceOrdinalsNameTheLevelsInPrecedenceOrder) {
 TEST(FormulonCApiEffectiveStyle, RejectsInvalidArguments) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  fm_effective_style_t style = FM_STRUCT_INIT(fm_effective_style_t);
+  fm_effective_style_info_t style = FM_STRUCT_INIT(fm_effective_style_info_t);
   EXPECT_EQ(fm_sheet_get_effective_style(nullptr, 0, 0, 0, &style), kNullPointer);
   EXPECT_EQ(fm_sheet_get_effective_style(wb.handle, 0, 0, 0, nullptr), kNullPointer);
   EXPECT_EQ(fm_sheet_get_effective_style(wb.handle, 9, 0, 0, &style), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);

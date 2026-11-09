@@ -266,7 +266,7 @@ TEST(WorkbookSheetOps, RemoveRejectsLastSheet) {
   Workbook wb = Workbook::create();  // single Sheet1
   auto r = wb.remove_sheet(0);
   ASSERT_FALSE(static_cast<bool>(r));
-  EXPECT_EQ(r.error().code, FormulonErrorCode::kCannotRemoveLastSheet);
+  EXPECT_EQ(r.error().code, FormulonErrorCode::kPreconditionFailed);
   EXPECT_EQ(wb.sheet_count(), 1U);
 }
 

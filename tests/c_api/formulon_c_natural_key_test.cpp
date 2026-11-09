@@ -96,7 +96,7 @@ TEST(FormulonCApiNaturalKey, TableAndCellStyleByName) {
   EXPECT_EQ(present, 0);
   EXPECT_EQ(table_style.name, nullptr);
 
-  fm_cell_style_record_t cell_style{};
+  fm_cell_style_t cell_style{};
   ASSERT_EQ(fm_workbook_get_cell_style(wb.handle, "Normal", &present, &cell_style), 0);
   ASSERT_EQ(present, 1);
   EXPECT_STREQ(cell_style.name, "Normal");
@@ -160,18 +160,22 @@ TEST(FormulonCApiNaturalKey, PersonAndThreadedCommentById) {
 TEST(FormulonCApiNaturalKey, ShapeAndDrawingObjectByObjectId) {
   WorkbookGuard wb;
   CreateDefault(wb);
-  fm_shape_t spec = FM_STRUCT_INIT(fm_shape_t);
-  spec.fields = FM_SHAPE_FIELD_PRESET_GEOMETRY | FM_SHAPE_FIELD_ANCHOR;
+  fm_shape_patch_t spec = FM_STRUCT_INIT(fm_shape_patch_t);
+  spec.preset_geometry_op = FM_PATCH_OP_SET;
   spec.preset_geometry = "rect";
+  spec.anchor_kind_op = FM_PATCH_OP_SET;
   spec.anchor_kind = FM_ANCHOR_KIND_ONE_CELL;
+  spec.from_row_op = FM_PATCH_OP_SET;
   spec.from_row = 2;
+  spec.width_emu_op = FM_PATCH_OP_SET;
   spec.width_emu = 914400;
+  spec.height_emu_op = FM_PATCH_OP_SET;
   spec.height_emu = 457200;
   uint32_t id = 0;
   ASSERT_EQ(fm_sheet_add_shape(wb.handle, 0, &spec, &id), 0) << fm_get_last_error_message();
 
   int32_t present = 0;
-  fm_shape_t shape = FM_STRUCT_INIT(fm_shape_t);
+  fm_shape_info_t shape = FM_STRUCT_INIT(fm_shape_info_t);
   ASSERT_EQ(fm_sheet_get_shape(wb.handle, 0, id, &present, &shape), 0);
   ASSERT_EQ(present, 1);
   EXPECT_EQ(shape.object_id, id);
@@ -179,7 +183,7 @@ TEST(FormulonCApiNaturalKey, ShapeAndDrawingObjectByObjectId) {
   ASSERT_EQ(fm_sheet_get_shape(wb.handle, 0, id + 1U, &present, &shape), 0);
   EXPECT_EQ(present, 0);
 
-  fm_drawing_object_t object = FM_STRUCT_INIT(fm_drawing_object_t);
+  fm_drawing_object_info_t object = FM_STRUCT_INIT(fm_drawing_object_info_t);
   ASSERT_EQ(fm_sheet_get_drawing_object(wb.handle, 0, id, &present, &object), 0);
   ASSERT_EQ(present, 1);
   EXPECT_EQ(object.object_id, id);

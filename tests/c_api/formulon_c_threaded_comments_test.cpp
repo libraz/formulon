@@ -17,13 +17,15 @@ constexpr bool kWasm32 = sizeof(void*) == 4U;
 static_assert(sizeof(fm_mention_t) == (kWasm32 ? 16U : 24U), "fm_mention_t ABI layout changed");
 static_assert(sizeof(fm_threaded_comment_t) == (kWasm32 ? 44U : 80U), "fm_threaded_comment_t ABI layout changed");
 static_assert(sizeof(fm_person_t) == (kWasm32 ? 20U : 40U), "fm_person_t ABI layout changed");
-static_assert(sizeof(fm_threaded_comment_patch_t) == (kWasm32 ? 24U : 40U),
+static_assert(sizeof(fm_threaded_comment_patch_t) == (kWasm32 ? 32U : 48U),
               "fm_threaded_comment_patch_t ABI layout changed");
 
 constexpr fm_status_t kInvalidArgument = static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
 constexpr fm_status_t kBindingNullPointer = static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer);
 constexpr fm_status_t kThreadedCommentInvalid =
     static_cast<fm_status_t>(formulon::FormulonErrorCode::kThreadedCommentInvalid);
+constexpr fm_status_t kAlreadyExists = static_cast<fm_status_t>(formulon::FormulonErrorCode::kAlreadyExists);
+constexpr fm_status_t kPreconditionFailed = static_cast<fm_status_t>(formulon::FormulonErrorCode::kPreconditionFailed);
 
 constexpr const char* kAlice = "{0A1B2C3D-0000-4000-8000-000000000001}";
 constexpr const char* kBob = "{0A1B2C3D-0000-4000-8000-000000000002}";
@@ -49,10 +51,22 @@ void SaveAndReload(fm_workbook_t* wb, WorkbookGuard* out) {
   ASSERT_EQ(rc, 0) << fm_get_last_error_message();
 }
 
-/// A patch that keeps everything; callers engage the fields they test.
+/// A patch that keeps everything; callers SET the fields they test.
 fm_threaded_comment_patch_t KeepAll() {
-  fm_threaded_comment_patch_t patch = FM_STRUCT_INIT(fm_threaded_comment_patch_t);
-  patch.done = -1;
+  return FM_STRUCT_INIT(fm_threaded_comment_patch_t);
+}
+
+fm_threaded_comment_patch_t SetDone(int32_t done) {
+  fm_threaded_comment_patch_t patch = KeepAll();
+  patch.done_op = FM_PATCH_OP_SET;
+  patch.done = done;
+  return patch;
+}
+
+fm_threaded_comment_patch_t SetText(const char* text) {
+  fm_threaded_comment_patch_t patch = KeepAll();
+  patch.text_op = FM_PATCH_OP_SET;
+  patch.text = text;
   return patch;
 }
 
@@ -90,7 +104,7 @@ std::vector<CommentCopy> ReadComments(const fm_workbook_t* wb) {
     copy.row = c.row;
     copy.col = c.col;
     copy.done = c.done;
-    for (std::uint32_t m = 0; m < c.mention_count; ++m) {
+    for (std::uint32_t m = 0; m < c.mentions_count; ++m) {
       copy.mentions.push_back(
           {Str(c.mentions[m].person_id), Str(c.mentions[m].mention_id), c.mentions[m].start, c.mentions[m].length});
     }
@@ -145,7 +159,7 @@ void AddThread(fm_workbook_t* wb) {
   const fm_mention_t mention{kBob, kMention, 0, 4};
   fm_threaded_comment_t opening = Comment(kThread, 1, 1, kAlice, "@Bob please check", nullptr);
   opening.mentions = &mention;
-  opening.mention_count = 1;
+  opening.mentions_count = 1;
   ASSERT_EQ(fm_sheet_add_threaded_comment(wb, 0, &opening), 0) << fm_get_last_error_message();
   // A reply takes the thread's anchor, whatever coordinates it carries.
   const fm_threaded_comment_t reply = Comment(kReply, 7, 7, kBob, "Done", kThread);
@@ -165,7 +179,7 @@ TEST(FormulonCApiThreadedComments, PersonsAddListAndRemove) {
   EXPECT_EQ(fm_workbook_get_person_at(wb.handle, 2, &p), FM_STATUS_INDEX_OUT_OF_RANGE);
 
   const fm_person_t duplicate = MakePerson(kAlice, "Again", nullptr, nullptr);
-  EXPECT_EQ(fm_workbook_add_person(wb.handle, &duplicate), kThreadedCommentInvalid);
+  EXPECT_EQ(fm_workbook_add_person(wb.handle, &duplicate), kAlreadyExists);
   const fm_person_t lowercase = MakePerson("{0a1b2c3d-0000-4000-8000-000000000009}", "Low", nullptr, nullptr);
   EXPECT_EQ(fm_workbook_add_person(wb.handle, &lowercase), kThreadedCommentInvalid);
   EXPECT_EQ(fm_workbook_add_person(wb.handle, nullptr), kBindingNullPointer);
@@ -180,17 +194,15 @@ TEST(FormulonCApiThreadedComments, ThreadRepliesAndMentionsRoundTrip) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   AddPeople(wb.handle);
   AddThread(wb.handle);
-  fm_threaded_comment_patch_t resolve = KeepAll();
-  resolve.done = 1;
+  const fm_threaded_comment_patch_t resolve = SetDone(1);
   ASSERT_EQ(fm_sheet_update_threaded_comment(wb.handle, 0, kThread, &resolve), 0) << fm_get_last_error_message();
   EXPECT_EQ(fm_sheet_update_threaded_comment(wb.handle, 0, kReply, &resolve), kThreadedCommentInvalid);
 
   const fm_mention_t edited_mention{kAlice, kMention, 5, 6};
-  fm_threaded_comment_patch_t edit = KeepAll();
-  edit.text = "Done @Alice";
+  fm_threaded_comment_patch_t edit = SetText("Done @Alice");
+  edit.mentions_op = FM_PATCH_OP_SET;
   edit.mentions = &edited_mention;
-  edit.mention_count = 1;
-  edit.mentions_engaged = 1;
+  edit.mentions_count = 1;
   ASSERT_EQ(fm_sheet_update_threaded_comment(wb.handle, 0, kReply, &edit), 0) << fm_get_last_error_message();
 
   WorkbookGuard reloaded;
@@ -206,7 +218,7 @@ TEST(FormulonCApiThreadedComments, ThreadRepliesAndMentionsRoundTrip) {
   EXPECT_EQ(opening.person_id, kAlice);
   EXPECT_EQ(opening.created, kCreated);
   EXPECT_EQ(opening.text, "@Bob please check");
-  EXPECT_EQ(opening.parent_id, "");
+  EXPECT_EQ(opening.parent_id, "");  // read NULL
   EXPECT_EQ(opening.done, 1);
   ASSERT_EQ(opening.mentions.size(), 1U);
   EXPECT_EQ(opening.mentions[0].person_id, kBob);
@@ -235,7 +247,7 @@ TEST(FormulonCApiThreadedComments, RemovingTheOpeningCommentRemovesTheThread) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   AddPeople(wb.handle);
   AddThread(wb.handle);
-  EXPECT_EQ(fm_workbook_remove_person(wb.handle, kBob), kThreadedCommentInvalid);
+  EXPECT_EQ(fm_workbook_remove_person(wb.handle, kBob), kPreconditionFailed);
 
   ASSERT_EQ(fm_sheet_remove_threaded_comment(wb.handle, 0, kReply), 0);
   EXPECT_EQ(ReadComments(wb.handle).size(), 1U);
@@ -255,12 +267,12 @@ TEST(FormulonCApiThreadedComments, CellCarriesNoteOrThreadNotBoth) {
   AddPeople(wb.handle);
   ASSERT_EQ(fm_sheet_set_comment(wb.handle, 0, 4, 2, "Alice", "a note"), 0);
   const fm_threaded_comment_t on_note = Comment(kThread, 4, 2, kAlice, "hi", nullptr);
-  EXPECT_EQ(fm_sheet_add_threaded_comment(wb.handle, 0, &on_note), kThreadedCommentInvalid);
+  EXPECT_EQ(fm_sheet_add_threaded_comment(wb.handle, 0, &on_note), kAlreadyExists);
 
   AddThread(wb.handle);
-  EXPECT_EQ(fm_sheet_set_comment(wb.handle, 0, 1, 1, "Alice", "a note"), kThreadedCommentInvalid);
+  EXPECT_EQ(fm_sheet_set_comment(wb.handle, 0, 1, 1, "Alice", "a note"), kAlreadyExists);
   const fm_threaded_comment_t second = Comment("{6F1E0D2C-1111-4111-8111-000000000003}", 1, 1, kAlice, "x", nullptr);
-  EXPECT_EQ(fm_sheet_add_threaded_comment(wb.handle, 0, &second), kThreadedCommentInvalid);
+  EXPECT_EQ(fm_sheet_add_threaded_comment(wb.handle, 0, &second), kAlreadyExists);
 }
 
 TEST(FormulonCApiThreadedComments, RejectsMalformedInput) {
@@ -274,27 +286,27 @@ TEST(FormulonCApiThreadedComments, RejectsMalformedInput) {
   c.person_id = "{0A1B2C3D-0000-4000-8000-0000000000FF}";
   EXPECT_EQ(fm_sheet_add_threaded_comment(wb.handle, 0, &c), kThreadedCommentInvalid);
   c.person_id = kAlice;
-  c.mention_count = 1;
-  EXPECT_EQ(fm_sheet_add_threaded_comment(wb.handle, 0, &c), kInvalidArgument);
+  c.mentions_count = 1;
+  EXPECT_EQ(fm_sheet_add_threaded_comment(wb.handle, 0, &c), kBindingNullPointer);
   const fm_mention_t beyond{kBob, kMention, 2, 10};
   c.mentions = &beyond;
   EXPECT_EQ(fm_sheet_add_threaded_comment(wb.handle, 0, &c), kThreadedCommentInvalid);
   c.mentions = nullptr;
-  c.mention_count = 0;
+  c.mentions_count = 0;
   EXPECT_EQ(fm_sheet_add_threaded_comment(wb.handle, 3, &c), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
   ASSERT_EQ(fm_sheet_add_threaded_comment(wb.handle, 0, &c), 0) << fm_get_last_error_message();
-  EXPECT_EQ(fm_sheet_add_threaded_comment(wb.handle, 0, &c), kThreadedCommentInvalid);
+  EXPECT_EQ(fm_sheet_add_threaded_comment(wb.handle, 0, &c), kAlreadyExists);
 
-  fm_threaded_comment_patch_t patch = KeepAll();
-  patch.text = "x";
+  fm_threaded_comment_patch_t patch = SetText("x");
   EXPECT_EQ(fm_sheet_update_threaded_comment(wb.handle, 0, nullptr, &patch), kBindingNullPointer);
   EXPECT_EQ(fm_sheet_update_threaded_comment(wb.handle, 0, kThread, nullptr), kBindingNullPointer);
-  patch.mentions_engaged = 1;
-  patch.mention_count = 2;
-  EXPECT_EQ(fm_sheet_update_threaded_comment(wb.handle, 0, kThread, &patch), kInvalidArgument);
-  patch.mentions_engaged = 0;
-  patch.mention_count = 0;
-  EXPECT_EQ(fm_sheet_update_threaded_comment(wb.handle, 0, kReply, &patch), kThreadedCommentInvalid);
+  patch.mentions_op = FM_PATCH_OP_SET;
+  patch.mentions_count = 2;
+  EXPECT_EQ(fm_sheet_update_threaded_comment(wb.handle, 0, kThread, &patch), kBindingNullPointer);
+  patch.mentions_op = FM_PATCH_OP_KEEP;
+  patch.mentions_count = 0;
+  EXPECT_EQ(fm_sheet_update_threaded_comment(wb.handle, 0, kReply, &patch), FM_STATUS_NOT_FOUND);
+  patch.done_op = FM_PATCH_OP_SET;
   patch.done = 2;
   EXPECT_EQ(fm_sheet_update_threaded_comment(wb.handle, 0, kThread, &patch), kInvalidArgument);
   EXPECT_EQ(fm_sheet_remove_threaded_comment(wb.handle, 0, nullptr), kBindingNullPointer);
@@ -312,8 +324,7 @@ TEST(FormulonCApiThreadedComments, UpdatePatchKeepsWhatItDoesNotEngage) {
   AddThread(wb.handle);
 
   // `done` alone keeps the text and mentions.
-  fm_threaded_comment_patch_t resolve = KeepAll();
-  resolve.done = 1;
+  const fm_threaded_comment_patch_t resolve = SetDone(1);
   ASSERT_EQ(fm_sheet_update_threaded_comment(wb.handle, 0, kThread, &resolve), 0) << fm_get_last_error_message();
   std::vector<CommentCopy> comments = ReadComments(wb.handle);
   ASSERT_EQ(comments.size(), 2U);
@@ -322,43 +333,98 @@ TEST(FormulonCApiThreadedComments, UpdatePatchKeepsWhatItDoesNotEngage) {
   ASSERT_EQ(comments[0].mentions.size(), 1U);
 
   // Text alone keeps the mentions, which must still fit the new text.
-  fm_threaded_comment_patch_t retext = KeepAll();
-  retext.text = "@Bob look again";
+  const fm_threaded_comment_patch_t retext = SetText("@Bob look again");
   ASSERT_EQ(fm_sheet_update_threaded_comment(wb.handle, 0, kThread, &retext), 0) << fm_get_last_error_message();
   comments = ReadComments(wb.handle);
   EXPECT_EQ(comments[0].text, "@Bob look again");
   ASSERT_EQ(comments[0].mentions.size(), 1U);
   EXPECT_EQ(comments[0].mentions[0].person_id, kBob);
   EXPECT_EQ(comments[0].done, 1);
-  fm_threaded_comment_patch_t too_short = KeepAll();
-  too_short.text = "@B";
+  const fm_threaded_comment_patch_t too_short = SetText("@B");
   EXPECT_EQ(fm_sheet_update_threaded_comment(wb.handle, 0, kThread, &too_short), kThreadedCommentInvalid);
 
-  // Engaged mentions alone replace the list and keep the text; an empty list clears it.
+  // SET mentions alone replace the list and keep the text; an empty list clears it.
   fm_threaded_comment_patch_t unmention = KeepAll();
-  unmention.mentions_engaged = 1;
+  unmention.mentions_op = FM_PATCH_OP_SET;
   ASSERT_EQ(fm_sheet_update_threaded_comment(wb.handle, 0, kThread, &unmention), 0) << fm_get_last_error_message();
   comments = ReadComments(wb.handle);
   EXPECT_EQ(comments[0].text, "@Bob look again");
   EXPECT_TRUE(comments[0].mentions.empty());
 
   // `done` on a reply fails as a whole: the text in the same patch does not land.
-  fm_threaded_comment_patch_t reply_done = KeepAll();
-  reply_done.text = "changed";
+  fm_threaded_comment_patch_t reply_done = SetText("changed");
+  reply_done.done_op = FM_PATCH_OP_SET;
   reply_done.done = 0;
   EXPECT_EQ(fm_sheet_update_threaded_comment(wb.handle, 0, kReply, &reply_done), kThreadedCommentInvalid);
   comments = ReadComments(wb.handle);
   EXPECT_EQ(comments[1].text, "Done");
 
-  fm_threaded_comment_patch_t reopen = KeepAll();
-  reopen.done = 0;
+  const fm_threaded_comment_patch_t reopen = SetDone(0);
   ASSERT_EQ(fm_sheet_update_threaded_comment(wb.handle, 0, kThread, &reopen), 0) << fm_get_last_error_message();
   EXPECT_EQ(ReadComments(wb.handle)[0].done, 0);
 
-  // An unknown id fails even when the patch engages nothing.
+  // An unknown id fails even when the patch sets nothing.
   const fm_threaded_comment_patch_t nothing = KeepAll();
   EXPECT_EQ(fm_sheet_update_threaded_comment(wb.handle, 0, "{6F1E0D2C-1111-4111-8111-0000000000FF}", &nothing),
-            kThreadedCommentInvalid);
+            FM_STATUS_NOT_FOUND);
+}
+
+// No threaded-comment field can be cleared, an op outside 0..2 is refused,
+// and SET with a NULL text is refused; each refusal leaves the comment as it was.
+TEST(FormulonCApiThreadedComments, UpdateRejectsClearUnknownOpsAndNullSetText) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  AddPeople(wb.handle);
+  AddThread(wb.handle);
+  for (const int32_t raw_op : {static_cast<int32_t>(FM_PATCH_OP_CLEAR), 3}) {
+    const auto op = static_cast<fm_patch_op_t>(raw_op);
+    fm_threaded_comment_patch_t text = SetText("changed");
+    text.text_op = op;
+    EXPECT_EQ(fm_sheet_update_threaded_comment(wb.handle, 0, kThread, &text), kInvalidArgument) << raw_op;
+    fm_threaded_comment_patch_t mentions = SetText("changed");
+    mentions.mentions_op = op;
+    EXPECT_EQ(fm_sheet_update_threaded_comment(wb.handle, 0, kThread, &mentions), kInvalidArgument) << raw_op;
+    fm_threaded_comment_patch_t done = SetText("changed");
+    done.done_op = op;
+    done.done = 1;
+    EXPECT_EQ(fm_sheet_update_threaded_comment(wb.handle, 0, kThread, &done), kInvalidArgument) << raw_op;
+  }
+  const fm_threaded_comment_patch_t null_text = SetText(nullptr);
+  EXPECT_EQ(fm_sheet_update_threaded_comment(wb.handle, 0, kThread, &null_text), kInvalidArgument);
+
+  const std::vector<CommentCopy> comments = ReadComments(wb.handle);
+  ASSERT_EQ(comments.size(), 2U);
+  EXPECT_EQ(comments[0].text, "@Bob please check");
+  EXPECT_EQ(comments[0].done, 0);
+  EXPECT_EQ(comments[0].mentions.size(), 1U);
+
+  // An all-KEEP patch on a known id is a successful no-op.
+  const fm_threaded_comment_patch_t keep = KeepAll();
+  EXPECT_EQ(fm_sheet_update_threaded_comment(wb.handle, 0, kThread, &keep), 0);
+  EXPECT_EQ(ReadComments(wb.handle)[0].text, "@Bob please check");
+}
+
+// Optional strings read NULL when absent: an opening comment's parent id, a
+// comment with no time, and a person without user or provider id.
+TEST(FormulonCApiThreadedComments, AbsentOptionalStringsReadNull) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  const fm_person_t bare = MakePerson(kAlice, "Alice", nullptr, "");
+  ASSERT_EQ(fm_workbook_add_person(wb.handle, &bare), 0) << fm_get_last_error_message();
+  fm_person_t p = FM_STRUCT_INIT(fm_person_t);
+  ASSERT_EQ(fm_workbook_get_person_at(wb.handle, 0, &p), 0);
+  EXPECT_STREQ(p.display_name, "Alice");
+  EXPECT_EQ(p.user_id, nullptr);
+  EXPECT_EQ(p.provider_id, nullptr);
+
+  fm_threaded_comment_t c = Comment(kThread, 0, 0, kAlice, "text", nullptr);
+  c.created = nullptr;
+  ASSERT_EQ(fm_sheet_add_threaded_comment(wb.handle, 0, &c), 0) << fm_get_last_error_message();
+  fm_threaded_comment_t out = FM_STRUCT_INIT(fm_threaded_comment_t);
+  ASSERT_EQ(fm_sheet_get_threaded_comment_at(wb.handle, 0, 0, &out), 0);
+  EXPECT_STREQ(out.text, "text");
+  EXPECT_EQ(out.parent_id, nullptr);
+  EXPECT_EQ(out.created, nullptr);
 }
 
 }  // namespace

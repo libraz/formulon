@@ -106,9 +106,9 @@ template <typename Enum>
   return body;
 }
 
-[[maybe_unused]] inline std::vector<fm_pivot_cell_t> CollectCells(fm_pivot_report_t* handle) {
+[[maybe_unused]] inline std::vector<fm_pivot_cell_info_t> CollectCells(fm_pivot_report_t* handle) {
   const std::size_t n = count_of(fm_pivot_report_get_cell_count, handle);
-  std::vector<fm_pivot_cell_t> out(n, FM_STRUCT_INIT(fm_pivot_cell_t));
+  std::vector<fm_pivot_cell_info_t> out(n, FM_STRUCT_INIT(fm_pivot_cell_info_t));
   for (std::size_t i = 0; i < n; ++i) {
     EXPECT_EQ(fm_pivot_report_get_cell_at(handle, i, &out[i]), 0);
   }
@@ -148,7 +148,7 @@ template <typename Enum>
 [[maybe_unused]] inline bool LayoutHasText(fm_workbook_t* wb, std::size_t pivot_index, std::string_view text) {
   PivotCellsGuard projected;
   EXPECT_EQ(fm_sheet_get_pivot_layout(wb, 0, pivot_index, &projected.handle), 0) << fm_get_last_error_message();
-  for (const fm_pivot_cell_t& cell : CollectCells(projected.handle)) {
+  for (const fm_pivot_cell_info_t& cell : CollectCells(projected.handle)) {
     if (cell.value.kind == FM_VALUE_KIND_TEXT && cell.value.u.text != nullptr && text == cell.value.u.text) {
       return true;
     }
@@ -260,7 +260,7 @@ template <typename Enum>
     return st;
   }
   // Data field: Sum of Amount.
-  fm_pivot_data_field_spec_t df_spec = FM_STRUCT_INIT(fm_pivot_data_field_spec_t);
+  fm_pivot_data_field_t df_spec = FM_STRUCT_INIT(fm_pivot_data_field_t);
   df_spec.name = "Sum of Amount";
   df_spec.field_index = static_cast<std::uint32_t>(amount_field);
   df_spec.aggregation = FM_PIVOT_AGGREGATION_SUM;

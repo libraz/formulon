@@ -5,7 +5,7 @@ import { createRequire } from 'node:module';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { FormulonError } from '../dist/common.mjs';
+import { FormulonError, StatusCode } from '../dist/common.mjs';
 
 const testDir = path.dirname(fileURLToPath(import.meta.url));
 const addonPath =
@@ -119,19 +119,24 @@ test('integer positional arguments reject wrapping and non-finite values', () =>
   }
 });
 
-test('iterative caps use the signed int32 contract', () => {
+test('iterative caps use the unsigned int32 contract', () => {
   const wb = addon.Workbook.createDefault();
   try {
-    wb.updateIterative({ enabled: true, maxIterations: 2 ** 31 - 1, maxChange: 0.1 });
-    wb.updateIterative({ enabled: false, maxIterations: 0 });
-    assert.equal(wb.getIterative().maxIterations, 1, 'a zero cap is the native clamp of 1');
-    for (const value of [2 ** 31, -1]) {
+    wb.updateIterative({ enabled: true, maxIterations: 2 ** 32 - 1, maxChange: 0.1 });
+    const accepted = wb.getIterative();
+    assert.throws(
+      () => wb.updateIterative({ enabled: false, maxIterations: 0 }),
+      (e) => e instanceof FormulonError && e.code === StatusCode.InvalidArgument,
+      'a zero cap is rejected, not clamped',
+    );
+    assert.deepEqual({ ...wb.getIterative() }, { ...accepted }, 'a rejected patch changes no key');
+    for (const value of [2 ** 32, -1]) {
       assert.throws(() => wb.updateIterative({ maxIterations: value }), RangeError, `maxIterations=${String(value)}`);
     }
     for (const value of [1.5, Number.NaN, Number.POSITIVE_INFINITY, '5', null]) {
       assert.throws(() => wb.updateIterative({ maxIterations: value }), TypeError, `maxIterations=${String(value)}`);
     }
-    assert.equal(wb.getIterative().maxIterations, 1);
+    assert.equal(wb.getIterative().maxIterations, accepted.maxIterations);
   } finally {
     wb.dispose();
   }

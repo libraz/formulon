@@ -123,8 +123,9 @@ int render_eval_result(const fm_value_array_t* result, bool want_json, std::ostr
 // Reports a failed evaluation. A formula syntax error is exit 65 with its
 // position; anything else is the engine's message and the generic failure.
 int report_eval_failure(std::ostream& err) {
-  fm_parse_error_t position = FM_STRUCT_INIT(fm_parse_error_t);
-  if (fm_get_last_parse_error(&position) == 0) {
+  fm_parse_error_info_t position = FM_STRUCT_INIT(fm_parse_error_info_t);
+  std::int32_t present = 0;
+  if (fm_get_last_parse_error(&present, &position) == 0 && present != 0) {
     err << "formulon: eval: " << fm_get_last_error_message() << " at " << position.line << ':' << position.column
         << '\n';
     return kExitDataErr;

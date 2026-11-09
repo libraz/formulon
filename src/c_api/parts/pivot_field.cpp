@@ -37,6 +37,8 @@ using formulon::c_api::parts::finish_status;
 using formulon::c_api::parts::invalid_argument;
 using formulon::c_api::parts::mark_cache_pivots_pending;
 using formulon::c_api::parts::null_argument;
+using formulon::c_api::parts::patch_op_ok;
+using formulon::c_api::parts::patch_op_ok_without_clear;
 using formulon::c_api::parts::pivot_axis_from_fm;
 using formulon::c_api::parts::pivot_axis_to_fm;
 using formulon::c_api::parts::pivot_calendar_from_fm;
@@ -50,6 +52,7 @@ using formulon::c_api::parts::resolve_pivot_checked;
 using formulon::c_api::parts::resolve_pivot_mut;
 using formulon::c_api::parts::set_values_position;
 using formulon::c_api::parts::text_or_empty;
+using formulon::c_api::parts::text_or_null;
 using formulon::c_api::parts::validate;
 
 namespace {
@@ -277,28 +280,28 @@ class FieldPatchReader {
  public:
   fm_status_t status() const { return rc_; }
 
-  bool accepts(std::int32_t op, bool clearable, const char* name) {
-    if (rc_ == 0) {
-      rc_ = check_enum_domain(op, FM_CHART_PATCH_OP_KEEP, FM_CHART_PATCH_OP_SET, name);
+  bool accepts(fm_patch_op_t op, bool clearable, const char* name) {
+    if (rc_ == 0 && !patch_op_ok(op)) {
+      rc_ = invalid_argument("patch op out of range", name);
     }
-    if (rc_ == 0 && op == FM_CHART_PATCH_OP_CLEAR && !clearable) {
+    if (rc_ == 0 && !clearable && !patch_op_ok_without_clear(op)) {
       rc_ = invalid_argument("CLEAR is not valid for this field", name);
     }
-    return rc_ == 0 && op != FM_CHART_PATCH_OP_KEEP;
+    return rc_ == 0 && op != FM_PATCH_OP_KEEP;
   }
 
-  void flag(std::int32_t op, std::int32_t value, std::optional<bool>& out, const char* name) {
+  void flag(fm_patch_op_t op, std::int32_t value, std::optional<bool>& out, const char* name) {
     if (accepts(op, false, name) && (rc_ = check_enum_domain(value, 0, 1, name)) == 0) {
       out = value == 1;
     }
   }
 
   // A clearable text key: CLEAR writes the empty string, which the engine reads as removal.
-  void text(std::int32_t op, const char* value, std::optional<std::string>& out, const char* name) {
+  void text(fm_patch_op_t op, const char* value, std::optional<std::string>& out, const char* name) {
     if (!accepts(op, true, name)) {
       return;
     }
-    if (op == FM_CHART_PATCH_OP_CLEAR) {
+    if (op == FM_PATCH_OP_CLEAR) {
       out = std::string();
       return;
     }
@@ -639,9 +642,9 @@ extern "C" fm_status_t fm_sheet_clear_pivot_field_date_group(fm_workbook_t* wb, 
       formulon::pivot::clear_date_group(wb->workbook(), sheet_index, pivot_index, field_index));
 }
 
-extern "C" fm_status_t fm_sheet_get_pivot_field(const fm_workbook_t* wb, std::size_t sheet_index,
-                                                std::size_t pivot_index, std::size_t field_index,
-                                                fm_pivot_field_info_t* out) {
+extern "C" fm_status_t fm_sheet_get_pivot_field_at(const fm_workbook_t* wb, std::size_t sheet_index,
+                                                   std::size_t pivot_index, std::size_t field_index,
+                                                   fm_pivot_field_info_t* out) {
   clear_last_error();
   if (wb == nullptr || out == nullptr) {
     return null_argument();
@@ -657,18 +660,18 @@ extern "C" fm_status_t fm_sheet_get_pivot_field(const fm_workbook_t* wb, std::si
   fm_pivot_field_info_t result{};
   result.struct_size = out->struct_size;
   result.source_name = field->source_name.c_str();
-  result.custom_name = field->custom_name.c_str();
+  result.custom_name = text_or_null(field->custom_name.c_str());
   const auto axis = pivot_axis_to_fm(field->axis);
   result.axis = axis.has_value() ? static_cast<std::int32_t>(*axis) : -1;
   result.subtotal_top = field->subtotal_top ? FM_TRISTATE_TRUE : FM_TRISTATE_FALSE;
-  result.number_format = pivot_num_fmt_code(wb->workbook(), field->number_format);
+  result.number_format = text_or_null(pivot_num_fmt_code(wb->workbook(), field->number_format));
   const auto* cache = find_cache(wb->workbook(), table->pivot_cache_id());
   result.cache_field_index =
       cache != nullptr && field_index < cache->fields().size() ? static_cast<std::int32_t>(field_index) : -1;
   result.sort_order = field->sort.manual      ? FM_PIVOT_SORT_ORDER_MANUAL
                       : field->sort.ascending ? FM_PIVOT_SORT_ORDER_ASCENDING
                                               : FM_PIVOT_SORT_ORDER_DESCENDING;
-  result.sort_by_field = field->sort.by_field.c_str();
+  result.sort_by_field = text_or_null(field->sort.by_field.c_str());
   result.group_base_index = -1;
   if (result.cache_field_index >= 0) {
     const bool date1904 = wb->workbook().date1904();
@@ -710,9 +713,9 @@ extern "C" fm_status_t fm_sheet_get_pivot_field_item_count(const fm_workbook_t* 
   return 0;
 }
 
-extern "C" fm_status_t fm_sheet_get_pivot_field_item(const fm_workbook_t* wb, std::size_t sheet_index,
-                                                     std::size_t pivot_index, std::size_t field_index,
-                                                     std::size_t item_index, fm_pivot_item_info_t* out) {
+extern "C" fm_status_t fm_sheet_get_pivot_field_item_at(const fm_workbook_t* wb, std::size_t sheet_index,
+                                                        std::size_t pivot_index, std::size_t field_index,
+                                                        std::size_t item_index, fm_pivot_item_info_t* out) {
   clear_last_error();
   if (wb == nullptr || out == nullptr) {
     return null_argument();
@@ -730,7 +733,7 @@ extern "C" fm_status_t fm_sheet_get_pivot_field_item(const fm_workbook_t* wb, st
   const formulon::pivot::PivotItem& item = field->items[item_index];
   fm_pivot_item_info_t result{};
   result.struct_size = out->struct_size;
-  result.name = item.name.c_str();
+  result.name = text_or_null(item.name.c_str());
   result.cache_index = item.has_cache_index ? static_cast<std::int32_t>(item.cache_index) : -1;
   result.visible = item.visible ? 1 : 0;
   result.caption = item.caption.empty() ? nullptr : item.caption.c_str();

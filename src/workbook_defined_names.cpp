@@ -160,8 +160,11 @@ Expected<void, Error> Workbook::set_defined_name_scoped(std::string name, std::s
   const bool retained_table = std::any_of(retained.begin(), retained.end(), [&name](const auto& table) {
     return strings::case_insensitive_eq(table.name, name) || strings::case_insensitive_eq(table.display_name, name);
   });
-  if (!is_valid_defined_name(name) || is_table_name(name) || retained_table) {
-    return make_error(FormulonErrorCode::kInvalidArgument, "set_defined_name_scoped: invalid or taken name",
+  if (!is_valid_defined_name(name)) {
+    return make_error(FormulonErrorCode::kInvalidArgument, "set_defined_name_scoped: invalid name", "name=" + name);
+  }
+  if (is_table_name(name) || retained_table) {
+    return make_error(FormulonErrorCode::kAlreadyExists, "set_defined_name_scoped: name is taken by a table",
                       "name=" + name);
   }
   DefinedName entry;

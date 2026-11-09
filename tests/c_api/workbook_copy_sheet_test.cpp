@@ -11,6 +11,7 @@
 #include "formulon_c_out_index.h"
 #include "formulon_c_pivot_test_helpers.h"
 #include "formulon_c_record_arg.h"
+#include "formulon_c_sheet_view_patch.h"
 #include "gtest/gtest.h"
 #include "utils/error.h"
 #include "workbook.h"
@@ -112,7 +113,7 @@ TEST(CApiCopySheet, SheetNameValidation) {
   MakeSingleSheet(wb);
   const fm_status_t invalid = Code(FormulonErrorCode::kInvalidSheetName);
   ExpectCopyStatus(wb.handle, 0, 1, "", invalid);
-  ExpectCopyStatus(wb.handle, 0, 1, "SHEET1", invalid);
+  ExpectCopyStatus(wb.handle, 0, 1, "SHEET1", FM_STATUS_ALREADY_EXISTS);
   ExpectCopyStatus(wb.handle, 0, 1, "a:b", invalid);
   ExpectCopyStatus(wb.handle, 0, 1, std::string(32U, 'x').c_str(), invalid);
   ExpectCopyStatus(wb.handle, 0, 1, std::string(31U, 'x').c_str(), 0);
@@ -163,7 +164,7 @@ TEST(CApiCopySheet, VeryHiddenSourceRefused) {
   WorkbookGuard wb;
   MakeSingleSheet(wb);
   ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Visible", ignored_index()), 0);
-  ASSERT_EQ(fm_sheet_set_visibility(wb.handle, 0, FM_SHEET_VISIBILITY_VERY_HIDDEN), 0) << fm_get_last_error_message();
+  ASSERT_EQ(SetViewVisibility(wb.handle, 0, FM_SHEET_VISIBILITY_VERY_HIDDEN), 0) << fm_get_last_error_message();
   ExpectCopyStatus(wb.handle, 0, 2, nullptr, Code(FormulonErrorCode::kPreconditionFailed));
 }
 
@@ -179,11 +180,14 @@ TEST(CApiCopySheet, SlicerSourceRefusedWithoutChange) {
   ASSERT_EQ(AddTable(wb.handle, 0, record_arg(fm_cell_rect_t{0, 0, 1, 1}), "Sales", columns, 2, "TableStyleMedium2", 1,
                      0, &table),
             0);
-  fm_slicer_t spec = FM_STRUCT_INIT(fm_slicer_t);
-  spec.fields = FM_SLICER_FIELD_ANCHOR;
+  fm_slicer_patch_t spec = FM_STRUCT_INIT(fm_slicer_patch_t);
+  spec.from_row_op = FM_PATCH_OP_SET;
   spec.from_row = 4;
+  spec.from_col_op = FM_PATCH_OP_SET;
   spec.from_col = 3;
+  spec.to_row_op = FM_PATCH_OP_SET;
   spec.to_row = 14;
+  spec.to_col_op = FM_PATCH_OP_SET;
   spec.to_col = 5;
   std::uint32_t id = 0;
   ASSERT_EQ(fm_sheet_add_slicer(wb.handle, 0, 0, 0, 0, &spec, &id), 0) << fm_get_last_error_message();

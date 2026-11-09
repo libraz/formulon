@@ -83,7 +83,7 @@ C_VERBS = frozenset(
         "copy", "move", "rename", "reset", "load", "save", "recalc", "evaluate",
         "parse", "format", "convert", "resolve", "find",
         "snapshot", "restore", "remap", "apply", "refresh", "validate", "match", "next",
-        "localize", "canonicalize", "compare", "group", "ungroup", "project", "show",
+        "localize", "canonicalize", "compare", "group", "ungroup", "project", "show", "paginate",
     }
 )  # fmt: skip
 # Verbs that exist only on the binding surfaces.
@@ -966,7 +966,10 @@ def _param_type_problem(param: CParam, enums: set) -> Optional[str]:
         if role != "sheet_index" or param.base_type != "size_t":
             return f"`{param.ctype} {param.name}` is a sheet index; declare it `size_t{'*' * depth} sheet_index`"
         return None
-    if role == "index" or role.endswith("_index") or role == "idx" or role.endswith("_idx"):
+    if role.removeprefix("out_").endswith("xf_index") or role.removeprefix("out_") == "series_index":
+        # An xf / dxf index is a style id the cells store, and a series index its stored `c:idx`: `uint32_t` ids.
+        want = "uint32_t"
+    elif role == "index" or role.endswith("_index") or role == "idx" or role.endswith("_idx"):
         want = "size_t"
     elif role in _ID_PARAMS:
         want = "uint32_t"
@@ -1029,7 +1032,9 @@ def _rule_c_types(ctx: Context) -> Iterable[Violation]:
             )
     for typedef in ctx.typedefs:
         for member in typedef.fields:
-            if member.base_type in ctx.enum_names:
+            # A patch's `<field>_op` is typed `fm_patch_op_t` (R40); its 4-byte size is pinned in struct_layout.cpp.
+            is_patch_op = member.base_type == "fm_patch_op_t" and member.name.endswith("_op")
+            if member.base_type in ctx.enum_names and not is_patch_op:
                 yield ctx.c_violation(
                     "R6.c",
                     typedef.name,

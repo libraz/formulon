@@ -9,7 +9,15 @@ test('validation and merge range integers reject narrowing before mutation', asy
   const wb = mod.Workbook.createDefault();
   try {
     const before = wb.sheet(0).listValidations().length;
-    for (const value of [256, Number.NaN, Number.POSITIVE_INFINITY, 1.5, -1]) {
+    for (const value of [256, -1]) {
+      assert.throws(
+        () => wb.sheet(0).addValidation({ ranges: [RANGE], type: value }),
+        (e) => e instanceof mod.FormulonError && e.code === mod.StatusCode.InvalidArgument,
+        `validation type=${String(value)}`,
+      );
+      assert.equal(wb.sheet(0).listValidations().length, before);
+    }
+    for (const value of [Number.NaN, Number.POSITIVE_INFINITY, 1.5]) {
       assert.throws(
         () => wb.sheet(0).addValidation({ ranges: [RANGE], type: value }),
         RangeError,

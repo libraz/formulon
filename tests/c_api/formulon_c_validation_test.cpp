@@ -15,7 +15,7 @@
 
 namespace {
 
-static_assert(sizeof(fm_validation_outcome_t) == 20U, "fm_validation_outcome_t ABI layout changed");
+static_assert(sizeof(fm_validation_outcome_info_t) == 20U, "fm_validation_outcome_info_t ABI layout changed");
 
 constexpr fm_status_t kInvalidArgument = static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
 constexpr fm_status_t kBindingNullPointer = static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer);
@@ -76,8 +76,8 @@ void AddWholeBetween(fm_workbook_t* wb, fm_cell_rect_t range, const char* low, c
   ASSERT_EQ(fm_sheet_add_validation(wb, 0, &v, ignored_index()), 0) << fm_get_last_error_message();
 }
 
-fm_validation_outcome_t Validate(const fm_workbook_t* wb, std::uint32_t row, std::uint32_t col, fm_value_t value) {
-  fm_validation_outcome_t out = FM_STRUCT_INIT(fm_validation_outcome_t);
+fm_validation_outcome_info_t Validate(const fm_workbook_t* wb, std::uint32_t row, std::uint32_t col, fm_value_t value) {
+  fm_validation_outcome_info_t out = FM_STRUCT_INIT(fm_validation_outcome_info_t);
   EXPECT_EQ(fm_sheet_validate_value(wb, 0, row, col, &value, &out), 0) << fm_get_last_error_message();
   return out;
 }
@@ -117,17 +117,17 @@ void BuildRules(fm_workbook_t* wb) {
 }
 
 void ExpectVerdicts(const fm_workbook_t* wb) {
-  const fm_validation_outcome_t free_cell = Validate(wb, 0, 0, Number(99));
+  const fm_validation_outcome_info_t free_cell = Validate(wb, 0, 0, Number(99));
   EXPECT_EQ(free_cell.has_rule, 0);
   EXPECT_EQ(free_cell.valid, 1);
 
-  const fm_validation_outcome_t ok = Validate(wb, 1, 0, Number(5));
+  const fm_validation_outcome_info_t ok = Validate(wb, 1, 0, Number(5));
   EXPECT_EQ(ok.has_rule, 1);
   EXPECT_EQ(ok.valid, 1);
   EXPECT_EQ(ok.rule_index, 0U);
   EXPECT_EQ(ok.error_style, 1);
 
-  const fm_validation_outcome_t too_big = Validate(wb, 1, 0, Number(20));
+  const fm_validation_outcome_info_t too_big = Validate(wb, 1, 0, Number(20));
   EXPECT_EQ(too_big.has_rule, 1);
   EXPECT_EQ(too_big.valid, 0);
 
@@ -135,7 +135,7 @@ void ExpectVerdicts(const fm_workbook_t* wb) {
   EXPECT_EQ(Validate(wb, 1, 0, Text("5")).valid, 0);
   EXPECT_EQ(Validate(wb, 1, 0, Number(2.5)).valid, 0);
 
-  const fm_validation_outcome_t second = Validate(wb, 4, 1, Number(7));
+  const fm_validation_outcome_info_t second = Validate(wb, 4, 1, Number(7));
   EXPECT_EQ(second.has_rule, 1);
   EXPECT_EQ(second.valid, 0);
   EXPECT_EQ(second.rule_index, 1U);
@@ -201,10 +201,10 @@ TEST(FormulonCApiValidation, OverlappingRulesApplyTheFirst) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   AddWholeBetween(wb.handle, fm_cell_rect_t{0, 0, 4, 0}, "1", "3", 0);
   AddWholeBetween(wb.handle, fm_cell_rect_t{0, 0, 9, 0}, "1", "100", 2);
-  const fm_validation_outcome_t overlap = Validate(wb.handle, 2, 0, Number(50));
+  const fm_validation_outcome_info_t overlap = Validate(wb.handle, 2, 0, Number(50));
   EXPECT_EQ(overlap.rule_index, 0U);
   EXPECT_EQ(overlap.valid, 0);
-  const fm_validation_outcome_t tail = Validate(wb.handle, 7, 0, Number(50));
+  const fm_validation_outcome_info_t tail = Validate(wb.handle, 7, 0, Number(50));
   EXPECT_EQ(tail.rule_index, 1U);
   EXPECT_EQ(tail.valid, 1);
   EXPECT_EQ(tail.error_style, 2);
@@ -280,7 +280,7 @@ TEST(FormulonCApiValidation, UnsetTristatesReadBackAsExcelDefaults) {
   ASSERT_EQ(fm_sheet_add_validation(wb.handle, 0, &v, ignored_index()), 0) << fm_get_last_error_message();
 
   fm_data_validation_t got = FM_STRUCT_INIT(fm_data_validation_t);
-  ASSERT_EQ(fm_sheet_get_validation(wb.handle, 0, 0, &got), 0);
+  ASSERT_EQ(fm_sheet_get_validation_at(wb.handle, 0, 0, &got), 0);
   EXPECT_EQ(got.allow_blank, FM_TRISTATE_TRUE);
   EXPECT_EQ(got.show_in_cell_dropdown, FM_TRISTATE_TRUE);
   EXPECT_EQ(got.show_input_message, FM_TRISTATE_TRUE);
@@ -301,7 +301,7 @@ TEST(FormulonCApiValidation, ExplicitFalseTristatesRoundTripThroughSave) {
   WorkbookGuard reloaded;
   SaveAndReload(wb.handle, &reloaded);
   fm_data_validation_t got = FM_STRUCT_INIT(fm_data_validation_t);
-  ASSERT_EQ(fm_sheet_get_validation(reloaded.handle, 0, 0, &got), 0);
+  ASSERT_EQ(fm_sheet_get_validation_at(reloaded.handle, 0, 0, &got), 0);
   EXPECT_EQ(got.allow_blank, FM_TRISTATE_FALSE);
   EXPECT_EQ(got.show_in_cell_dropdown, FM_TRISTATE_FALSE);
   EXPECT_EQ(got.show_input_message, FM_TRISTATE_FALSE);
@@ -317,7 +317,7 @@ TEST(FormulonCApiValidation, ExplicitTrueTristatesReadBackAsTrue) {
   v.show_in_cell_dropdown = FM_TRISTATE_TRUE;
   ASSERT_EQ(fm_sheet_add_validation(wb.handle, 0, &v, ignored_index()), 0) << fm_get_last_error_message();
   fm_data_validation_t got = FM_STRUCT_INIT(fm_data_validation_t);
-  ASSERT_EQ(fm_sheet_get_validation(wb.handle, 0, 0, &got), 0);
+  ASSERT_EQ(fm_sheet_get_validation_at(wb.handle, 0, 0, &got), 0);
   EXPECT_EQ(got.allow_blank, FM_TRISTATE_TRUE);
   EXPECT_EQ(got.show_in_cell_dropdown, FM_TRISTATE_TRUE);
 }
@@ -342,7 +342,7 @@ TEST(FormulonCApiValidation, TristateOutsideDomainIsRejectedWithoutStoringTheRul
 TEST(FormulonCApiValidation, RejectsBadArguments) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  fm_validation_outcome_t out = FM_STRUCT_INIT(fm_validation_outcome_t);
+  fm_validation_outcome_info_t out = FM_STRUCT_INIT(fm_validation_outcome_info_t);
   fm_value_t value = Number(1);
   EXPECT_EQ(fm_sheet_validate_value(wb.handle, 3, 0, 0, &value, &out), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(fm_sheet_validate_value(wb.handle, 0, 0, 0, nullptr, &out), kBindingNullPointer);

@@ -456,7 +456,7 @@ Expected<std::vector<std::uint8_t>, Error> snapshot_drawing(const Workbook& wb, 
   const pugi::xml_node root = doc.document_element();
   const pugi::xml_node target = find_drawing_object(root, object_id, is_snapshot_kind);
   if (!target) {
-    return invalid(kNoShapeOrObject);
+    return refuse_object(root, object_id, kNoShapeOrObject);
   }
   const pugi::xml_node top = top_of(root, target);
   const std::vector<pugi::xml_node> items = drawing_anchors(root, false);

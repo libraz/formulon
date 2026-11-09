@@ -95,7 +95,7 @@ struct JsReadDiagnostics {
   uint32_t unknownContentTypeCount = 0;
 };
 
-/// JS-side mirror of `fm_sheet_view_t`.
+/// JS-side mirror of `fm_sheet_view_info_t`.
 struct JsSheetView {
   uint32_t zoomPct = 100U;
   uint32_t freezeRows = 0U;
@@ -263,21 +263,40 @@ JsPatchKey js_patch_key(JsNarrowNumericReader& reader, const emscripten::val& va
 /// Reads the boolean `owner[key]` of a patch into an `_op` / value pair: an omitted key leaves `KEEP`, a
 /// boolean writes `SET`; `null` records a type error (a flag cannot be cleared).
 void js_patch_flag(JsNarrowNumericReader& reader, const emscripten::val& owner, const char* key, const char* field,
-                   int32_t* op, int32_t* value);
+                   fm_patch_op_t* op, int32_t* value);
 
 /// Reads the string `owner[key]` of a patch into an `_op` / pointer pair: an omitted key leaves `KEEP`, a
 /// string writes `SET` (the pointer views `storage`); `null` writes `CLEAR` when `nullable`, else records a type error.
 void js_patch_string(JsNarrowNumericReader& reader, const emscripten::val& owner, const char* key, const char* field,
-                     bool nullable, std::string& storage, int32_t* op, const char** value);
+                     bool nullable, std::string& storage, fm_patch_op_t* op, const char** value);
 
 /// Reads the number `owner[key]` of a patch into an `_op` / value pair: an omitted key leaves `KEEP`, a number writes
 /// `SET`; `null` writes `CLEAR` when `nullable`, else records a type error.
 void js_patch_number(JsNarrowNumericReader& reader, const emscripten::val& owner, const char* key, const char* field,
-                     bool nullable, int32_t* op, double* value);
+                     bool nullable, fm_patch_op_t* op, double* value);
 
 /// As `js_patch_number` for an integer-valued key.
 void js_patch_int(JsNarrowNumericReader& reader, const emscripten::val& owner, const char* key, const char* field,
-                  bool nullable, int32_t* op, int32_t* value);
+                  bool nullable, fm_patch_op_t* op, int32_t* value);
+
+/// Reads `owner[key]` into an `_op` / value pair for any value type: an omitted key keeps, `null` is `CLEAR` (the C
+/// layer refuses it on a field that cannot be cleared), anything else is `SET` with the value `read` extracts.
+template <class T, class Read>
+void js_patch_value(JsNarrowNumericReader& reader, const emscripten::val& owner, const char* key, const char* field,
+                    fm_patch_op_t* op, T* value, Read read) {
+  const emscripten::val v = reader.value(owner, key, field);
+  switch (js_patch_key(reader, v, field, true)) {
+    case JsPatchKey::kClear:
+      *op = FM_PATCH_OP_CLEAR;
+      break;
+    case JsPatchKey::kSet:
+      *op = FM_PATCH_OP_SET;
+      *value = read(v);
+      break;
+    case JsPatchKey::kKeep:
+      break;
+  }
+}
 
 /// Reads the optional boolean `owner[key]` as an `fm_tristate_t`: an omitted or `null` value is
 /// `FM_TRISTATE_DEFAULT`, `true` / `false` are `FM_TRISTATE_TRUE` / `FM_TRISTATE_FALSE`.
@@ -354,9 +373,9 @@ bool val_to_value(const emscripten::val& in, fm_value_t* out, std::string& text)
 /// array of `Value` objects. Does not take ownership of `array`.
 emscripten::val value_array_to_val(const fm_value_array_t* array);
 
-/// Translates an `fm_cf_match_t` POD into the embind value-object
+/// Translates an `fm_cf_match_info_t` POD into the embind value-object
 /// mirror.
-emscripten::val translate_cf_match(const fm_cf_match_t& m);
+emscripten::val translate_cf_match(const fm_cf_match_info_t& m);
 
 /// Builds a `CellRect` `{firstRow, firstCol, lastRow, lastCol}` JS object.
 emscripten::val cell_rect_to_val(const fm_cell_rect_t& m);
@@ -368,9 +387,9 @@ emscripten::val print_titles_to_val(const fm_print_titles_t& titles);
 /// Builds a JS array of `CellRect` objects from `count` rectangles.
 emscripten::val cell_rects_to_val(const fm_cell_rect_t* rects, std::size_t count);
 
-/// Translates one `fm_pivot_cell_t` into a JS object suitable for
+/// Translates one `fm_pivot_cell_info_t` into a JS object suitable for
 /// inclusion in the pivotLayout `cells` array.
-emscripten::val pivot_cell_to_val(const fm_pivot_cell_t& cell);
+emscripten::val pivot_cell_to_val(const fm_pivot_cell_info_t& cell);
 
 /// Copies a caller-supplied Uint8Array into `*out` through the JS try/catch
 /// boundary. A non-Uint8Array records a TypeError, and a throwing proxy or
@@ -416,12 +435,11 @@ std::vector<fm_cell_rect_t> js_pull_range_array(const emscripten::val& array, co
 /// of `v[key]`. An absent object leaves `kind` at `FM_COLOR_KIND_NONE` (no
 /// colour). A supplied selector is authoritative; the binding does not
 /// resolve theme/indexed / auto colours.
-fm_color_spec_t js_pull_color_spec(const emscripten::val& v, const char* key, JsNarrowNumericReader* reader);
+fm_color_t js_pull_color_spec(const emscripten::val& v, const char* key, JsNarrowNumericReader* reader);
 
 /// `js_pull_color_spec` for a value already in hand; `field` names it in a
 /// rejection. A missing value reads as `FM_COLOR_KIND_NONE`.
-fm_color_spec_t js_pull_color_spec_value(const emscripten::val& value, const char* field,
-                                         JsNarrowNumericReader* reader);
+fm_color_t js_pull_color_spec_value(const emscripten::val& value, const char* field, JsNarrowNumericReader* reader);
 
 /// Pulls a `{style, color}` border-side record out of `v`, defaulting every
 /// absent field to zero.
@@ -479,10 +497,10 @@ inline void js_set_present_or_null(emscripten::val& o, const char* key, int32_t 
 /// Builds the JS mirror of a colour specification. Reads emit it
 /// unconditionally so a get / edit / add cycle passes the theme or
 /// indexed colour straight back and keeps hitting style-table dedup.
-emscripten::val js_color_spec(const fm_color_spec_t& spec);
+emscripten::val js_color_spec(const fm_color_t& spec);
 
 /// `js_color_spec(spec)`, or `null` when `spec.kind` is `FM_COLOR_KIND_NONE`.
-emscripten::val js_color_spec_or_null(const fm_color_spec_t& spec);
+emscripten::val js_color_spec_or_null(const fm_color_t& spec);
 
 /// Builds the JS mirror of a border side.
 emscripten::val js_border_side(const fm_border_side_t& s);

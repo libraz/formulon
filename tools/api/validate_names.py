@@ -402,8 +402,8 @@ def _adoption_schema(where: str, entry: dict) -> List[str]:
     if "clearable" in entry:
         if kind not in ("record", "typedef"):
             problems.append(f"{where}: clearable belongs to a record or a typedef")
-        if not _names_list(entry["clearable"]):
-            problems.append(f"{where}: clearable lists distinct field names")
+        if entry["clearable"] != [] and not _names_list(entry["clearable"]):
+            problems.append(f"{where}: clearable lists distinct field names, or is `[]` for a patch with none")
         elif any(_snake_case(f) != f for f in entry["clearable"]):
             problems.append(f"{where}: clearable names fields in snake_case")
     if "reads_values" in entry and (entry["reads_values"] is not True or kind != "op" or "c" not in entry):
@@ -629,7 +629,7 @@ def check_clearable(entries: Dict[str, dict], dts_text: str) -> List[str]:
     problems: List[str] = []
     surface = JsSurface(dts_text)
     for key, entry in sorted(entries.items()):
-        if not isinstance(entry, dict) or not _names_list(entry.get("clearable")):
+        if not isinstance(entry, dict) or not (entry.get("clearable") == [] or _names_list(entry.get("clearable"))):
             continue
         name = entry.get("js")
         keys = _patch_keys(surface.decls, surface.raw, name) if isinstance(name, str) else None

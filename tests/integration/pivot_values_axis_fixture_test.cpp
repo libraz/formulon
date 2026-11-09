@@ -69,15 +69,19 @@ std::string ElementBody(const std::string& xml, const std::string& tag) {
 }
 
 std::vector<std::uint32_t> ReadOrder(const fm_workbook_t* wb, bool row) {
-  const std::uint32_t* indices = nullptr;
+  const auto read = [&](std::uint32_t* out, std::size_t capacity, std::size_t* count) {
+    return row ? fm_sheet_get_pivot_row_field_order(wb, 0U, 0U, out, capacity, count)
+               : fm_sheet_get_pivot_column_field_order(wb, 0U, 0U, out, capacity, count);
+  };
   std::size_t count = 0;
-  const fm_status_t status = row ? fm_sheet_get_pivot_row_field_order(wb, 0U, 0U, &indices, &count)
-                                 : fm_sheet_get_pivot_column_field_order(wb, 0U, 0U, &indices, &count);
+  fm_status_t status = read(nullptr, 0U, &count);
   EXPECT_EQ(status, 0) << fm_get_last_error_message();
-  if (status != 0 || count == 0U) {
-    return {};
+  std::vector<std::uint32_t> indices(count);
+  if (status == 0 && count != 0U) {
+    status = read(indices.data(), indices.size(), &count);
+    EXPECT_EQ(status, 0) << fm_get_last_error_message();
   }
-  return {indices, indices + count};
+  return status == 0 ? indices : std::vector<std::uint32_t>{};
 }
 
 std::string SavedPivotXml(fm_workbook_t* wb) {

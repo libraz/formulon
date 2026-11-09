@@ -92,9 +92,29 @@ fm_status_t invalid_error_code(fm_error_code_t error);
 // natural key (name, id, cell) that names nothing.
 fm_status_t not_found(const char* what, std::string context = std::string());
 
+// kPreconditionFailed binding error with the sentence `what`, carrying
+// `context`: a refusal the workbook's state causes (a hidden sheet, the only
+// visible sheet), which the same arguments pass in another state.
+fm_status_t precondition_failed(const char* what, std::string context = std::string());
+
+// A patch `<field>_op` is KEEP, CLEAR or SET; anything else is FM_STATUS_INVALID_ARGUMENT.
+inline bool patch_op_ok(fm_patch_op_t op) noexcept {
+  return op == FM_PATCH_OP_KEEP || op == FM_PATCH_OP_CLEAR || op == FM_PATCH_OP_SET;
+}
+
+// A field its record does not list as clearable takes KEEP or SET only.
+inline bool patch_op_ok_without_clear(fm_patch_op_t op) noexcept {
+  return op == FM_PATCH_OP_KEEP || op == FM_PATCH_OP_SET;
+}
+
 // `text` as an owned string; NULL reads as empty.
 inline std::string text_or_empty(const char* text) {
   return text != nullptr ? std::string(text) : std::string();
+}
+
+// Read side of an optional string: `text`'s own view, or NULL when it is empty (absent).
+inline const char* c_str_or_null(const std::string& text) noexcept {
+  return text.empty() ? nullptr : text.c_str();
 }
 
 // Rejects `text` that is not well-formed UTF-8 (`sheet_names::valid_utf8`:
@@ -109,6 +129,11 @@ fm_status_t check_utf8(std::string_view text, std::string_view key, std::size_t 
 // `check_utf8` of every non-NULL entry of `texts`, context `text_index=<i>`.
 // NULL entries are left to the caller's own NULL rule.
 fm_status_t check_utf8(std::initializer_list<const char*> texts);
+
+// Rejects cell text longer than Excel's 32,767 UTF-16 code units
+// (`eval::kExcelTextCapUnits`) as kInvalidArgument, context
+// `<field>_units=<n>`. Run after `check_utf8`.
+fm_status_t check_cell_text_length(std::string_view text, const char* field);
 
 // Entry form of formula text stored outside a cell (CF, DV, defined name, CF
 // threshold): a non-empty `formula` must pass the entry parse check
@@ -232,12 +257,12 @@ constexpr std::uint32_t kMaxRangesPerCApiCall = 16384U;
 // Projects an engine colour onto the C spec. A `kNone` colour with a
 // nonzero `fallback_argb` (a style record's legacy ARGB field) reads as
 // `FM_COLOR_KIND_RGB` carrying that value.
-fm_color_spec_t color_spec_to_c(const formulon::ColorSpec& src, std::uint32_t fallback_argb = 0U);
+fm_color_t color_spec_to_c(const formulon::ColorSpec& src, std::uint32_t fallback_argb = 0U);
 
 // Inverse of `color_spec_to_c`. When `out_argb` is non-NULL it receives the
 // legacy ARGB field the record keeps beside the spec: `rgb` for
 // `FM_COLOR_KIND_RGB`, otherwise 0. The kind is not range-checked here.
-formulon::ColorSpec color_spec_from_c(const fm_color_spec_t& src, std::uint32_t* out_argb = nullptr);
+formulon::ColorSpec color_spec_from_c(const fm_color_t& src, std::uint32_t* out_argb = nullptr);
 
 // Validates a required `const fm_cell_rect_t* ranges, size_t range_count`
 // list: at least one entry (`kInvalidArgument`), `ranges` non-NULL
@@ -380,7 +405,7 @@ fm_status_t add_num_fmt_code(formulon::Workbook& wb, const std::string& code, st
 fm_status_t pivot_num_fmt_id_text(formulon::Workbook& wb, const char* code, std::string* out);
 
 // Format code of a pivot model numFmtId text, resolved as
-// `fm_workbook_get_num_fmt_string` does; `""` for none or an unregistered id.
+// `fm_workbook_get_num_fmt_string` does; NULL for none or an unregistered id.
 // The view is static or styles-owned, valid until the next mutation.
 const char* pivot_num_fmt_code(const formulon::Workbook& wb, std::string_view id_text);
 
@@ -400,20 +425,30 @@ fm_status_t validate(const fm_cf_rule_t& rule);
 // `type` / `op` / `error_style` domains, and the UTF-8 of the four messages.
 fm_status_t validate(const fm_data_validation_t& v);
 
-// A font record: `size` finite and non-negative, `name` well-formed UTF-8.
-fm_status_t validate(const fm_font_record_t& font);
+// A font record: `size_pt` finite and non-negative, `name` well-formed UTF-8,
+// and `check_font_enums`.
+fm_status_t validate(const fm_font_t& font);
+
+// The underline / vertical-align / family / scheme domains of a font record alone.
+fm_status_t check_font_enums(const fm_font_t& font);
+
+// A fill record: the pattern and gradient-type domains.
+fm_status_t validate(const fm_fill_t& fill);
+
+// A border record: every side's style domain.
+fm_status_t validate(const fm_border_t& border);
 
 // Validates a pivot field spec: required and UTF-8 strings and the `axis` domain.
 fm_status_t validate(const fm_pivot_field_spec_t& spec);
 
 // Validates a pivot data-field spec: UTF-8 strings and the
 // `aggregation` / `show_as` domains.
-fm_status_t validate(const fm_pivot_data_field_spec_t& spec);
+fm_status_t validate(const fm_pivot_data_field_t& spec);
 
 // Validates a pivot filter spec: UTF-8 strings and the `axis` / `type` domains. The
 // payload-variant and data-field checks need the pivot table and stay
 // with the entry point.
-fm_status_t validate(const fm_pivot_filter_spec_t& spec);
+fm_status_t validate(const fm_pivot_filter_t& spec);
 
 // Translates a `Value` into a C-side `fm_value_t`. For text variants the
 // payload is appended to `store` and the returned pointer is a stable,
@@ -489,7 +524,7 @@ fm_status_t check_cell_xf_index(const fm_workbook_t* wb, std::size_t xf_index);
 
 // Rejects hiding or removing sheet `index` when it is the workbook's only
 // visible sheet: Excel repairs a file whose sheets are all hidden. Returns
-// `kInvalidArgument` ("workbook needs a visible sheet") or 0.
+// `kPreconditionFailed` ("workbook needs a visible sheet") or 0.
 fm_status_t check_keeps_visible_sheet(const formulon::Workbook& workbook, std::uint32_t index);
 
 }  // namespace parts
@@ -514,7 +549,7 @@ struct fm_workbook {
   // for either container format. They stay attached to the handle so callers
   // can inspect what the load cost after `fm_workbook_load` returns
   // successfully. A workbook built in memory leaves every counter zero.
-  fm_read_diagnostics_t read_diagnostics{};
+  fm_read_diagnostics_info_t read_diagnostics{};
 
   // Scratch storage for strings handed back to the caller on the read path.
   // After argument/model validation, each successful text-producing read
@@ -541,9 +576,9 @@ struct fm_workbook {
 
   void clear_cell_enumeration_cache() noexcept { cell_enumeration_cache = {}; }
 
-  // Storage behind every borrowed field `fm_sheet_get_cf_rule` fills. They are
+  // Storage behind every borrowed field `fm_sheet_get_cf_rule_at` fills. They are
   // separate from `read_scratch` on purpose: only a successful
-  // `fm_sheet_get_cf_rule` clears and refreshes them, so neither an unrelated
+  // `fm_sheet_get_cf_rule_at` clears and refreshes them, so neither an unrelated
   // read nor a CF mutation can invalidate a rule the caller is still holding.
   // That is what makes the ABI's only edit path - get, remove, add back -
   // safe to execute as documented. Validation-rejected CF calls leave them
@@ -558,7 +593,7 @@ struct fm_workbook {
   formulon::c_api::BorrowedStringArena cf_text_scratch;
   formulon::c_api::BorrowedArrayArena<fm_cell_rect_t> cf_range_scratch;
   formulon::c_api::BorrowedArrayArena<fm_cfvo_t> cfvo_scratch;
-  formulon::c_api::BorrowedArrayArena<fm_color_spec_t> cf_color_scratch;
+  formulon::c_api::BorrowedArrayArena<fm_color_t> cf_color_scratch;
   formulon::c_api::BorrowedArrayArena<fm_cf_icon_t> cf_icon_scratch;
 
   // Arrays behind the borrowed `const T*` fields of the typed AutoFilter,
@@ -572,8 +607,8 @@ struct fm_workbook {
   formulon::c_api::BorrowedArrayArena<fm_sort_condition_t> sort_condition_scratch;
   formulon::c_api::BorrowedArrayArena<fm_mention_t> mention_scratch;
   formulon::c_api::BorrowedArrayArena<fm_table_style_element_t> table_style_element_scratch;
-  // Stops behind the `gradient_stops` view of `fm_workbook_get_fill` /
-  // `fm_workbook_get_dxf`; refreshed by each of those calls.
+  // Stops behind the `gradient_stops` view of `fm_workbook_get_fill_at` /
+  // `fm_workbook_get_dxf_at`; refreshed by each of those calls.
   formulon::c_api::BorrowedArrayArena<fm_gradient_stop_t> gradient_stop_scratch;
   // Rectangles behind the `const fm_cell_rect_t*` outputs of the print-area,
   // protected-range and table getters (`publish_rects`); each call replaces

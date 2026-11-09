@@ -90,7 +90,7 @@ std::vector<Reader> Readers() {
        [](fm_workbook_t* wb) {
          const fm_cell_rect_t rect{0, 0, 1, 0};
          fm_cf_results_t* results = nullptr;
-         const fm_status_t rc = fm_sheet_evaluate_cf_range(wb, 0, &rect, std::nan(""), &results);
+         const fm_status_t rc = fm_sheet_evaluate_cf_range(wb, 0, &rect, 0, std::nan(""), &results);
          fm_cf_results_destroy(results);
          return rc;
        }},
@@ -115,7 +115,7 @@ std::vector<Reader> Readers() {
       {"get_pagination",
        [](fm_workbook_t* wb) {
          fm_pagination_t* pagination = nullptr;
-         const fm_status_t rc = fm_sheet_get_pagination(wb, 0, &pagination);
+         const fm_status_t rc = fm_sheet_paginate(wb, 0, &pagination);
          fm_pagination_destroy(pagination);
          return rc;
        }},
@@ -251,9 +251,9 @@ TEST(FormulonCApiAutoCalc, SaveVariantsComputePendingCells) {
     if (which == 0) {
       ASSERT_EQ(fm_workbook_save_as(wb.handle, FM_WORKBOOK_FORMAT_XLSB, &bytes, &len), 0);
     } else {
-      fm_save_diagnostics_t diagnostics = FM_STRUCT_INIT(fm_save_diagnostics_t);
+      fm_save_diagnostics_info_t diagnostics = FM_STRUCT_INIT(fm_save_diagnostics_info_t);
       ASSERT_EQ(fm_workbook_save_with_diagnostics(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &bytes, &len, &diagnostics), 0);
-      EXPECT_EQ(diagnostics.struct_size, sizeof(fm_save_diagnostics_t));
+      EXPECT_EQ(diagnostics.struct_size, sizeof(fm_save_diagnostics_info_t));
     }
     fm_buffer_destroy(bytes);
     EXPECT_FALSE(HasDirty(wb.handle));
@@ -297,8 +297,11 @@ TEST(FormulonCApiAutoCalc, ReadFromAProgressCallbackIsReentrant) {
   ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 0, 0, "=B1+1"), 0);
   ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 0, 1, "=A1/2"), 0);
   fm_iterative_settings_patch_t patch = FM_STRUCT_INIT(fm_iterative_settings_patch_t);
+  patch.enabled_op = FM_PATCH_OP_SET;
   patch.enabled = 1;
+  patch.max_iterations_op = FM_PATCH_OP_SET;
   patch.max_iterations = 2;
+  patch.max_change_op = FM_PATCH_OP_SET;
   patch.max_change = 0.001;
   ASSERT_EQ(fm_workbook_update_iterative(wb.handle, &patch), 0);
 

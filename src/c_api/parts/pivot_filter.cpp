@@ -75,7 +75,7 @@ void payload_to_fm(const FilterPayload& payload, std::int32_t* kind, std::int32_
 }
 
 fm_status_t add_pivot_filter_impl(fm_workbook_t* wb, std::size_t sheet_index, std::size_t pivot_index,
-                                  const fm_pivot_filter_spec_t* spec, std::size_t* out_index) {
+                                  const fm_pivot_filter_t* spec, std::size_t* out_index) {
   if (wb == nullptr || spec == nullptr || out_index == nullptr) {
     return null_argument();
   }
@@ -101,10 +101,10 @@ fm_status_t add_pivot_filter_impl(fm_workbook_t* wb, std::size_t sheet_index, st
   const std::string kind_detail = "type=" + std::to_string(static_cast<int>(spec->type)) +
                                   " value_kind=" + std::to_string(static_cast<int>(spec->value_kind));
   if (formulon::pivot::is_operandless_filter_type(type)) {
-    if (spec->value_kind != FM_PIVOT_FILTER_OPERAND_KIND_NONE) {
+    if (spec->value_kind != FM_PIVOT_FILTER_OPERAND_KIND_ABSENT) {
       return invalid_argument("this filter type takes no value", kind_detail);
     }
-  } else if (spec->value_kind == FM_PIVOT_FILTER_OPERAND_KIND_NONE) {
+  } else if (spec->value_kind == FM_PIVOT_FILTER_OPERAND_KIND_ABSENT) {
     return invalid_argument("spec->value_kind is unset", kind_detail);
   } else if (caption != (spec->value_kind == FM_PIVOT_FILTER_OPERAND_KIND_TEXT)) {
     return invalid_argument(caption ? "a label filter takes a text value" : "this filter type takes a number",
@@ -146,7 +146,7 @@ fm_status_t add_pivot_filter_impl(fm_workbook_t* wb, std::size_t sheet_index, st
       }
       filter.value = std::string(spec->value_text);
       break;
-    case FM_PIVOT_FILTER_OPERAND_KIND_NONE:
+    case FM_PIVOT_FILTER_OPERAND_KIND_ABSENT:
       break;
     default:
       return invalid_argument("spec->value_kind is out of range", kind_detail);
@@ -163,7 +163,7 @@ fm_status_t add_pivot_filter_impl(fm_workbook_t* wb, std::size_t sheet_index, st
     case FM_PIVOT_FILTER_OPERAND_KIND_TEXT:
       filter.value_high = std::string(spec->value_high_text);
       break;
-    case FM_PIVOT_FILTER_OPERAND_KIND_NONE:
+    case FM_PIVOT_FILTER_OPERAND_KIND_ABSENT:
       // Leave default monostate.
       break;
     default:
@@ -201,9 +201,9 @@ extern "C" fm_status_t fm_sheet_get_pivot_filter_count(const fm_workbook_t* wb, 
                      [](const formulon::pivot::PivotTable& table) { return table.active_filters().size(); });
 }
 
-extern "C" fm_status_t fm_sheet_get_pivot_filter(const fm_workbook_t* wb, std::size_t sheet_index,
-                                                 std::size_t pivot_index, std::size_t filter_index,
-                                                 fm_pivot_filter_spec_t* out) {
+extern "C" fm_status_t fm_sheet_get_pivot_filter_at(const fm_workbook_t* wb, std::size_t sheet_index,
+                                                    std::size_t pivot_index, std::size_t filter_index,
+                                                    fm_pivot_filter_t* out) {
   clear_last_error();
   const formulon::pivot::PivotTable* table = nullptr;
   if (auto rc = resolve_pivot_checked(wb, {out}, sheet_index, pivot_index, &table); rc != 0) {
@@ -226,13 +226,13 @@ extern "C" fm_status_t fm_sheet_get_pivot_filter(const fm_workbook_t* wb, std::s
     return invalid_argument("model filter type is not representable");
   }
 
-  fm_pivot_filter_spec_t result{};
+  fm_pivot_filter_t result{};
   result.struct_size = out->struct_size;
   result.axis = *axis;
   result.field_name = filter.field_name.c_str();
   result.type = static_cast<fm_pivot_filter_kind_t>(filter.type);
-  result.value_kind = FM_PIVOT_FILTER_OPERAND_KIND_NONE;
-  result.value_high_kind = FM_PIVOT_FILTER_OPERAND_KIND_NONE;
+  result.value_kind = FM_PIVOT_FILTER_OPERAND_KIND_ABSENT;
+  result.value_high_kind = FM_PIVOT_FILTER_OPERAND_KIND_ABSENT;
   result.data_field_index = filter.data_field_index;
 
   payload_to_fm(filter.value, &result.value_kind, &result.value_int, &result.value_double, &result.value_text);
@@ -243,7 +243,7 @@ extern "C" fm_status_t fm_sheet_get_pivot_filter(const fm_workbook_t* wb, std::s
 }
 
 extern "C" fm_status_t fm_sheet_add_pivot_filter(fm_workbook_t* wb, std::size_t sheet_index, std::size_t pivot_index,
-                                                 const fm_pivot_filter_spec_t* spec, std::size_t* out_index) {
+                                                 const fm_pivot_filter_t* spec, std::size_t* out_index) {
   clear_last_error();
   return add_pivot_filter_impl(wb, sheet_index, pivot_index, spec, out_index);
 }

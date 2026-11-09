@@ -7,6 +7,7 @@
 
 #include <emscripten/val.h>
 
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <string>
@@ -57,7 +58,10 @@ emscripten::val JsWorkbook::evaluateCfRange(uint32_t sheet, emscripten::val rang
     return emscripten::val::undefined();
   }
   fm_cf_results_t* results = nullptr;
-  fm_status_t rc = fm_sheet_evaluate_cf_range(handle_, sheet, &rect, todaySerial, &results);
+  // A NaN `todaySerial` leaves the date to the host clock.
+  const int32_t has_today_serial = std::isnan(todaySerial) ? 0 : 1;
+  fm_status_t rc = fm_sheet_evaluate_cf_range(handle_, sheet, &rect, has_today_serial,
+                                              has_today_serial != 0 ? todaySerial : 0.0, &results);
   if (!succeeded(rc)) {
     return emscripten::val::undefined();
   }
@@ -81,7 +85,7 @@ emscripten::val JsWorkbook::evaluateCfRange(uint32_t sheet, emscripten::val rang
     emscripten::val matches = emscripten::val::array();
     std::size_t emitted_matches = 0;
     for (std::size_t j = 0; j < match_count; ++j) {
-      fm_cf_match_t m = FM_STRUCT_INIT(fm_cf_match_t);
+      fm_cf_match_info_t m = FM_STRUCT_INIT(fm_cf_match_info_t);
       if (fm_cf_results_get_match_at(results, i, j, &m) != 0) {
         continue;
       }
@@ -226,7 +230,7 @@ double JsWorkbook::getCfRuleCount(uint32_t sheet) const {
 emscripten::val JsWorkbook::getCfRule(uint32_t sheet, uint32_t cfRuleIndex) const {
   fm_cf_rule_t rule = FM_STRUCT_INIT(fm_cf_rule_t);
   const fm_status_t rc =
-      handle_ != nullptr ? fm_sheet_get_cf_rule(handle_, sheet, cfRuleIndex, &rule) : kBindingInvalidHandle;
+      handle_ != nullptr ? fm_sheet_get_cf_rule_at(handle_, sheet, cfRuleIndex, &rule) : kBindingInvalidHandle;
   if (!succeeded(rc)) {
     return emscripten::val::undefined();
   }
@@ -245,7 +249,7 @@ uint32_t JsWorkbook::addConditionalFormat(uint32_t sheet, emscripten::val v) {
   // below all feed the same store, and a vector would relocate the
   // earlier strings as the later branches add theirs.
   std::vector<fm_cfvo_t> color_scale_thresholds;
-  std::vector<fm_color_spec_t> color_scale_colors;
+  std::vector<fm_color_t> color_scale_colors;
   std::vector<fm_cfvo_t> icon_set_thresholds;
   std::vector<fm_cf_icon_t> icon_set_icons;
   formulon::c_api::BorrowedStringArena cfvo_strings;

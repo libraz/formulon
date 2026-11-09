@@ -78,7 +78,7 @@ void BuildHostPivot(fm_workbook_t* wb) {
     std::uint32_t field;
   } values[] = {{"Amt sum", 3U}, {"Qty sum", 2U}};
   for (const auto& value : values) {
-    fm_pivot_data_field_spec_t df = FM_STRUCT_INIT(fm_pivot_data_field_spec_t);
+    fm_pivot_data_field_t df = FM_STRUCT_INIT(fm_pivot_data_field_t);
     df.name = value.name;
     df.field_index = value.field;
     df.aggregation = FM_PIVOT_AGGREGATION_SUM;
@@ -109,7 +109,7 @@ std::vector<Cell> ProjectedCells(fm_workbook_t* wb) {
   PivotCellsGuard projected;
   EXPECT_EQ(fm_sheet_get_pivot_layout(wb, 0, 0, &projected.handle), 0) << fm_get_last_error_message();
   std::vector<Cell> out;
-  for (const fm_pivot_cell_t& c : CollectCells(projected.handle)) {
+  for (const fm_pivot_cell_info_t& c : CollectCells(projected.handle)) {
     Cell cell{c.row, c.col, c.kind, c.value.kind, {}, 0.0};
     if (c.value.kind == FM_VALUE_KIND_TEXT && c.value.u.text != nullptr) {
       cell.text = c.value.u.text;
@@ -224,7 +224,7 @@ std::int32_t Pending(const fm_workbook_t* wb) {
 bool LayoutHasNumber(fm_workbook_t* wb, double number) {
   PivotCellsGuard projected;
   EXPECT_EQ(fm_sheet_get_pivot_layout(wb, 0U, 0U, &projected.handle), 0) << fm_get_last_error_message();
-  for (const fm_pivot_cell_t& cell : CollectCells(projected.handle)) {
+  for (const fm_pivot_cell_info_t& cell : CollectCells(projected.handle)) {
     if (cell.value.kind == FM_VALUE_KIND_NUMBER && cell.value.u.number == number) {
       return true;
     }
@@ -277,7 +277,7 @@ TEST(FormulonCApiPivotSaveShape, EditOverlappingAMergeIsRefusedAndUndone) {
       << fm_get_last_error_message();
 
   // A second data field widens the report into column F.
-  fm_pivot_data_field_spec_t spec = FM_STRUCT_INIT(fm_pivot_data_field_spec_t);
+  fm_pivot_data_field_t spec = FM_STRUCT_INIT(fm_pivot_data_field_t);
   spec.name = "Count of Amount";
   spec.field_index = 1U;
   spec.aggregation = FM_PIVOT_AGGREGATION_COUNT;
@@ -302,12 +302,13 @@ TEST(FormulonCApiPivotSaveShape, EditOverlappingAMergeIsRefusedAndUndone) {
   EXPECT_EQ(Pending(wb.handle), 0);
 
   // Options edits roll back the same way.
-  fm_pivot_options_t options = FM_STRUCT_INIT(fm_pivot_options_t);
-  ASSERT_EQ(fm_sheet_get_pivot_options(wb.handle, 0U, 0U, &options), 0);
-  options.grid_drop_zones = 1;
+  fm_pivot_options_patch_t grid = FM_STRUCT_INIT(fm_pivot_options_patch_t);
+  grid.grid_drop_zones_op = FM_PATCH_OP_SET;
+  grid.grid_drop_zones = 1;
   ASSERT_EQ(fm_sheet_add_merge(wb.handle, 0U, record_arg(fm_cell_rect_t{4U, 3U, 4U, 4U})), 0)
       << fm_get_last_error_message();
-  EXPECT_EQ(fm_sheet_update_pivot_options(wb.handle, 0U, 0U, &options), kPreconditionFailed);
+  EXPECT_EQ(fm_sheet_update_pivot_options(wb.handle, 0U, 0U, &grid), kPreconditionFailed);
+  fm_pivot_options_t options = FM_STRUCT_INIT(fm_pivot_options_t);
   ASSERT_EQ(fm_sheet_get_pivot_options(wb.handle, 0U, 0U, &options), 0);
   EXPECT_EQ(options.grid_drop_zones, 0);
 }
@@ -406,8 +407,8 @@ TEST(FormulonCApiPivotSaveShape, ProjectingAPivotWithoutRecordsWritesNothing) {
   WorkbookGuard wb;
   std::uint32_t cache_id = 0;
   BuildScratch(wb, &cache_id);
-  fm_pivot_cache_options_t options = FM_STRUCT_INIT(fm_pivot_cache_options_t);
-  ASSERT_EQ(fm_workbook_get_pivot_cache_options(wb.handle, cache_id, &options), 0);
+  fm_pivot_cache_options_patch_t options = FM_STRUCT_INIT(fm_pivot_cache_options_patch_t);
+  options.save_data_op = FM_PATCH_OP_SET;
   options.save_data = 0;
   ASSERT_EQ(fm_workbook_update_pivot_cache_options(wb.handle, cache_id, &options), 0) << fm_get_last_error_message();
   BufferGuard saved;

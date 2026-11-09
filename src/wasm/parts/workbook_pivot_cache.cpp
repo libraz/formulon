@@ -284,19 +284,25 @@ void JsWorkbook::pivotCacheSetOptions(uint32_t cacheId, emscripten::val options)
     record_type_error("setPivotCacheOptions: `options` must be an object");
     return;
   }
-  fm_pivot_cache_options_t opt = FM_STRUCT_INIT(fm_pivot_cache_options_t);
-  if (!succeeded(fm_workbook_get_pivot_cache_options(handle_, cacheId, &opt))) {
-    return;
-  }
+  fm_pivot_cache_options_patch_t opt = FM_STRUCT_INIT(fm_pivot_cache_options_patch_t);
   JsNarrowNumericReader reader("setPivotCacheOptions");
-  opt.save_data = reader.boolean(options, "saveData", opt.save_data != 0, "pivotCacheOptions.saveData") ? 1 : 0;
+  // An omitted or `null` flag keeps the stored value.
+  const auto flag = [&](const char* key, const char* field, fm_patch_op_t* op, int32_t* value) {
+    const emscripten::val v = reader.value(options, key, field);
+    if (reader.ok() && js_value_present(v)) {
+      *op = FM_PATCH_OP_SET;
+      *value = reader.boolean_value(v, false) ? 1 : 0;
+    }
+  };
+  flag("saveData", "pivotCacheOptions.saveData", &opt.save_data_op, &opt.save_data);
   // `null` is the automatic limit (no attribute).
   const emscripten::val limit = reader.value(options, "missingItemsLimit", "pivotCacheOptions.missingItemsLimit");
   switch (js_patch_key(reader, limit, "pivotCacheOptions.missingItemsLimit", true)) {
     case JsPatchKey::kClear:
-      opt.missing_items_limit = -1;
+      opt.missing_items_limit_op = FM_PATCH_OP_CLEAR;
       break;
     case JsPatchKey::kSet:
+      opt.missing_items_limit_op = FM_PATCH_OP_SET;
       opt.missing_items_limit = reader.i32_value(limit, -1, "pivotCacheOptions.missingItemsLimit");
       if (reader.ok() && opt.missing_items_limit < 0) {
         reader.fail_range("pivotCacheOptions.missingItemsLimit", "[0, 2147483647]");
@@ -305,8 +311,7 @@ void JsWorkbook::pivotCacheSetOptions(uint32_t cacheId, emscripten::val options)
     case JsPatchKey::kKeep:
       break;
   }
-  opt.refresh_on_load =
-      reader.boolean(options, "refreshOnLoad", opt.refresh_on_load != 0, "pivotCacheOptions.refreshOnLoad") ? 1 : 0;
+  flag("refreshOnLoad", "pivotCacheOptions.refreshOnLoad", &opt.refresh_on_load_op, &opt.refresh_on_load);
   if (!reader.ok()) {
     return;
   }
@@ -338,11 +343,13 @@ void JsWorkbook::pivotCacheCalculatedFieldRemove(uint32_t cacheId, uint32_t fiel
 
 emscripten::val JsWorkbook::pivotCacheFieldFormula(uint32_t cacheId, uint32_t fieldIndex) const {
   const char* formula = nullptr;
-  if (!succeeded(handle_ != nullptr ? fm_workbook_get_pivot_cache_field_formula(handle_, cacheId, fieldIndex, &formula)
-                                    : kBindingInvalidHandle)) {
+  int32_t present = 0;
+  if (!succeeded(handle_ != nullptr
+                     ? fm_workbook_get_pivot_cache_field_formula(handle_, cacheId, fieldIndex, &present, &formula)
+                     : kBindingInvalidHandle)) {
     return emscripten::val::undefined();
   }
-  return cstr_or_null(formula);
+  return present != 0 ? cstr_or_null(formula) : emscripten::val::null();
 }
 
 uint32_t JsWorkbook::pivotCacheCalculatedItemAdd(uint32_t cacheId, uint32_t fieldIndex, const std::string& name,
@@ -366,8 +373,8 @@ double JsWorkbook::pivotCacheCalculatedItemCount(uint32_t cacheId) const {
 }
 
 emscripten::val JsWorkbook::pivotCacheCalculatedItemAt(uint32_t cacheId, uint32_t idx) const {
-  fm_pivot_calculated_item_t item = FM_STRUCT_INIT(fm_pivot_calculated_item_t);
-  if (!succeeded(handle_ != nullptr ? fm_workbook_get_pivot_cache_calculated_item(handle_, cacheId, idx, &item)
+  fm_pivot_calculated_item_info_t item = FM_STRUCT_INIT(fm_pivot_calculated_item_info_t);
+  if (!succeeded(handle_ != nullptr ? fm_workbook_get_pivot_cache_calculated_item_at(handle_, cacheId, idx, &item)
                                     : kBindingInvalidHandle)) {
     return emscripten::val::undefined();
   }

@@ -140,7 +140,7 @@ def _flatten_for_python(
 
     Python keeps one flat field map per struct, so an embedded POD appears in
     it one of two ways and both have to be accepted: as a single opaque blob
-    under the C member's own name (`fm_pivot_cell_t.value`), or spread into
+    under the C member's own name (`fm_pivot_cell_info_t.value`), or spread into
     the parent's map (`fm_cf_color_t color` contributing `color_r`). Which one
     applies is read off the Python layout, so a struct that switches
     representation needs no edit here -- only the nesting depth Python
@@ -663,7 +663,7 @@ _PYTHON_SIZE_CONSTANTS = (
 # `static_assert` tripwire in tests/c_api instead; listing them here keeps the
 # absence deliberate, and `python-call-signatures` fails if a binding starts
 # passing one an unmeasurable block.
-_UNMODELLED_C_STRUCTS = {"fm_styles_batch_t"}
+_UNMODELLED_C_STRUCTS = {"fm_styles_batch_spec_t"}
 
 _STRUCT_FORMAT_WIDTHS = {"b": 1, "B": 1, "h": 2, "H": 2, "i": 4, "I": 4, "q": 8, "Q": 8, "f": 4, "d": 8}
 

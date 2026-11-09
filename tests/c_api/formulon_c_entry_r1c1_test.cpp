@@ -161,8 +161,10 @@ void BuildProbeSheet(WorkbookGuard* wb, const ProbeRow (&rows)[N], bool with_b1,
     status->push_back(fm_sheet_set_formula(wb->handle, 0, row0, kColE, r.formula));
     if (status->back() != 0) {
       // A refusal carries the parser status of the parse error it records.
-      fm_parse_error_t err = FM_STRUCT_INIT(fm_parse_error_t);
-      ASSERT_EQ(fm_get_last_parse_error(&err), 0) << r.formula;
+      fm_parse_error_info_t err = FM_STRUCT_INIT(fm_parse_error_info_t);
+      int32_t present = 0;
+      ASSERT_EQ(fm_get_last_parse_error(&present, &err), 0) << r.formula;
+      ASSERT_EQ(present, 1) << r.formula;
       EXPECT_EQ(status->back(), static_cast<fm_status_t>(formulon::parser::parse_error_status(
                                     static_cast<formulon::parser::ParseErrorCode>(err.code))))
           << r.formula;
@@ -177,9 +179,10 @@ void BuildProbeSheet(WorkbookGuard* wb, const ProbeRow (&rows)[N], bool with_b1,
 }
 
 std::string FormulaAt(const fm_workbook_t* wb, std::uint32_t row0, std::uint32_t col) {
+  int32_t present = 0;
   const char* text = nullptr;
-  EXPECT_EQ(fm_sheet_get_formula(wb, 0, row0, col, &text), 0) << fm_get_last_error_message();
-  return text != nullptr ? text : "<null>";
+  EXPECT_EQ(fm_sheet_get_formula(wb, 0, row0, col, &present, &text), 0) << fm_get_last_error_message();
+  return text != nullptr ? text : "";
 }
 
 fm_value_t ValueAt(const fm_workbook_t* wb, std::uint32_t row0, std::uint32_t col) {
@@ -304,7 +307,7 @@ TEST(FormulonCApiEntryR1C1, ArrayFormulaReadsR1C1AtItsTopLeft) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   const fm_cell_rect_t rect{2, 4, 3, 4};
   ASSERT_EQ(fm_sheet_set_array_formula(wb.handle, 0, &rect, "=RC[-1]"), 0) << fm_get_last_error_message();
-  fm_array_formula_t info = FM_STRUCT_INIT(fm_array_formula_t);
+  fm_array_formula_info_t info = FM_STRUCT_INIT(fm_array_formula_info_t);
   ASSERT_EQ(fm_sheet_get_array_formula(wb.handle, 0, 3, 4, &info), 0);
   ASSERT_EQ(info.engaged, 1);
   EXPECT_STREQ(info.formula, "=D3");

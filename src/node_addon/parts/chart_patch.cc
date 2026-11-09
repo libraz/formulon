@@ -25,10 +25,10 @@ Field Probe(CheckedSpecReader& reader, const Napi::Object& owner, const char* ke
     return f;
   }
   if (v.IsNull()) {
-    f.op = FM_CHART_PATCH_OP_CLEAR;
+    f.op = FM_PATCH_OP_CLEAR;
     return f;
   }
-  f.op = FM_CHART_PATCH_OP_SET;
+  f.op = FM_PATCH_OP_SET;
   f.value = v;
   return f;
 }
@@ -53,38 +53,38 @@ namespace {
 
 /// Probes `key` and, when it is set, stores `read(f.value)` into `out`.
 template <typename T, typename Read>
-void ReadOp(CheckedSpecReader& r, const Napi::Object& owner, const char* key, int32_t& op, T& out, Read&& read) {
+void ReadOp(CheckedSpecReader& r, const Napi::Object& owner, const char* key, fm_patch_op_t& op, T& out, Read&& read) {
   const Field f = Probe(r, owner, key);
   op = f.op;
-  if (f.op == FM_CHART_PATCH_OP_SET) {
+  if (f.op == FM_PATCH_OP_SET) {
     out = read(f.value);
   }
 }
 
-void ReadU32Op(CheckedSpecReader& r, const Napi::Object& owner, const char* key, int32_t& op, uint32_t& out) {
+void ReadU32Op(CheckedSpecReader& r, const Napi::Object& owner, const char* key, fm_patch_op_t& op, uint32_t& out) {
   ReadOp(r, owner, key, op, out, [&](const Napi::Value& v) { return r.U32(v, key, 0U); });
 }
 
-void ReadColorOp(CheckedSpecReader& r, const Napi::Object& owner, const char* key, int32_t& op, fm_color_spec_t& out) {
+void ReadColorOp(CheckedSpecReader& r, const Napi::Object& owner, const char* key, fm_patch_op_t& op, fm_color_t& out) {
   ReadOp(r, owner, key, op, out, [&](const Napi::Value& v) { return ReadColorSpec(r, v, key); });
 }
 
-void ReadI32Op(CheckedSpecReader& r, const Napi::Object& owner, const char* key, int32_t& op, int32_t& out) {
+void ReadI32Op(CheckedSpecReader& r, const Napi::Object& owner, const char* key, fm_patch_op_t& op, int32_t& out) {
   ReadOp(r, owner, key, op, out, [&](const Napi::Value& v) { return r.I32(v, key, 0); });
 }
 
-void ReadDoubleOp(CheckedSpecReader& r, const Napi::Object& owner, const char* key, int32_t& op, double& out) {
+void ReadDoubleOp(CheckedSpecReader& r, const Napi::Object& owner, const char* key, fm_patch_op_t& op, double& out) {
   ReadOp(r, owner, key, op, out, [&](const Napi::Value& v) { return r.Double(v, key, 0.0); });
 }
 
-void ReadBoolOp(CheckedSpecReader& r, const Napi::Object& owner, const char* key, int32_t& op, int32_t& out) {
+void ReadBoolOp(CheckedSpecReader& r, const Napi::Object& owner, const char* key, fm_patch_op_t& op, int32_t& out) {
   ReadOp(r, owner, key, op, out, [&](const Napi::Value& v) { return r.Bool(v, key, false) ? 1 : 0; });
 }
 
 /// Keeps the std::string bytes and literal point lists behind the pointer fields of a patch alive.
 struct Arena {
   std::deque<std::string> strings;
-  std::deque<std::vector<fm_chart_literal_t>> literals;
+  std::deque<std::vector<fm_chart_literal_info_t>> literals;
 };
 
 const char* Intern(Arena& arena, std::string text) {
@@ -92,11 +92,11 @@ const char* Intern(Arena& arena, std::string text) {
   return arena.strings.back().c_str();
 }
 
-void ReadStringOp(CheckedSpecReader& r, const Napi::Object& owner, const char* key, Arena& arena, int32_t& op,
+void ReadStringOp(CheckedSpecReader& r, const Napi::Object& owner, const char* key, Arena& arena, fm_patch_op_t& op,
                   const char*& out) {
   const Field f = Probe(r, owner, key);
   op = f.op;
-  if (f.op == FM_CHART_PATCH_OP_SET) {
+  if (f.op == FM_PATCH_OP_SET) {
     std::string text;
     r.String(f.value, key, &text);
     out = Intern(arena, std::move(text));
@@ -131,13 +131,13 @@ void ReadLiteral(CheckedSpecReader& r, const Napi::Value& value, const char* key
     return;
   }
   arena.literals.emplace_back();
-  std::vector<fm_chart_literal_t>& points = arena.literals.back();
+  std::vector<fm_chart_literal_info_t>& points = arena.literals.back();
   for (uint32_t i = 0; i < list.Length() && r.ok(); ++i) {
     Napi::Value element;
     if (!r.ArrayElement(list, i, &element)) {
       continue;
     }
-    fm_chart_literal_t point = FM_STRUCT_INIT(fm_chart_literal_t);
+    fm_chart_literal_info_t point = FM_STRUCT_INIT(fm_chart_literal_info_t);
     point.idx = i;
     if (element.IsString()) {
       std::string text;
@@ -155,11 +155,11 @@ void ReadLiteral(CheckedSpecReader& r, const Napi::Value& value, const char* key
 
 /// A series input: absent keeps, `null` removes, a string is a reference (an empty one removes), and an object is
 /// the read-back shape `{ kind, formula, literal }`.
-void ReadSource(CheckedSpecReader& r, const Napi::Object& owner, const char* key, Arena& arena, int32_t& op,
+void ReadSource(CheckedSpecReader& r, const Napi::Object& owner, const char* key, Arena& arena, fm_patch_op_t& op,
                 fm_chart_data_source_spec_t& out) {
   const Field f = Probe(r, owner, key);
   op = f.op;
-  if (f.op != FM_CHART_PATCH_OP_SET) {
+  if (f.op != FM_PATCH_OP_SET) {
     return;
   }
   if (f.value.IsString()) {
@@ -217,11 +217,11 @@ void ReadLinePatch(CheckedSpecReader& r, const Napi::Object& owner, fm_chart_lin
   ReadBoolOp(r, o, "none", out.none_op, out.none);
 }
 
-void ReadMarkerPatch(CheckedSpecReader& r, const Napi::Object& owner, int32_t& op, fm_chart_marker_patch_t& out) {
+void ReadMarkerPatch(CheckedSpecReader& r, const Napi::Object& owner, fm_patch_op_t& op, fm_chart_marker_patch_t& out) {
   const Field f = Probe(r, owner, "marker");
   op = f.op;
   Napi::Object o;
-  if (f.op != FM_CHART_PATCH_OP_SET || !r.Object(f.value, "marker", &o)) {
+  if (f.op != FM_PATCH_OP_SET || !r.Object(f.value, "marker", &o)) {
     return;
   }
   ReadI32Op(r, o, "symbol", out.symbol_op, out.symbol);
@@ -230,12 +230,12 @@ void ReadMarkerPatch(CheckedSpecReader& r, const Napi::Object& owner, int32_t& o
   ReadLinePatch(r, o, out.line);
 }
 
-void ReadLabelsPatch(CheckedSpecReader& r, const Napi::Object& owner, Arena& arena, int32_t& op,
+void ReadLabelsPatch(CheckedSpecReader& r, const Napi::Object& owner, Arena& arena, fm_patch_op_t& op,
                      fm_chart_labels_patch_t& out) {
   const Field f = Probe(r, owner, "labels");
   op = f.op;
   Napi::Object o;
-  if (f.op != FM_CHART_PATCH_OP_SET || !r.Object(f.value, "labels", &o)) {
+  if (f.op != FM_PATCH_OP_SET || !r.Object(f.value, "labels", &o)) {
     return;
   }
   ReadBoolOp(r, o, "showValue", out.show_value_op, out.show_value);
@@ -247,7 +247,7 @@ void ReadLabelsPatch(CheckedSpecReader& r, const Napi::Object& owner, Arena& are
   ReadI32Op(r, o, "position", out.position_op, out.position);
   ReadStringOp(r, o, "numberFormat", arena, out.number_format_op, out.number_format);
   ReadColorOp(r, o, "fontColor", out.font_color_op, out.font_color);
-  ReadDoubleOp(r, o, "fontSizePt", out.font_size_op, out.font_size_pt);
+  ReadDoubleOp(r, o, "fontSizePt", out.font_size_pt_op, out.font_size_pt);
   ReadBoolOp(r, o, "sourceLinked", out.source_linked_op, out.source_linked);
   ReadBoolOp(r, o, "deleted", out.deleted_op, out.deleted);
 }
@@ -275,9 +275,9 @@ void ReadPointPatch(CheckedSpecReader& r, const Napi::Object& spec, fm_chart_poi
 /// Turns every member a replacement record left out (KEEP) into CLEAR. A marker symbol cannot be cleared, so it
 /// stays KEEP.
 void ClearOmittedMembers(fm_chart_point_patch_t& patch) {
-  const auto clear = [](int32_t& op) {
-    if (op == FM_CHART_PATCH_OP_KEEP) {
-      op = FM_CHART_PATCH_OP_CLEAR;
+  const auto clear = [](fm_patch_op_t& op) {
+    if (op == FM_PATCH_OP_KEEP) {
+      op = FM_PATCH_OP_CLEAR;
     }
   };
   const auto clear_fill = [&](fm_chart_fill_patch_t& fill) {
@@ -294,7 +294,7 @@ void ClearOmittedMembers(fm_chart_point_patch_t& patch) {
   clear_fill(patch.fill);
   clear_line(patch.line);
   clear(patch.marker_op);
-  if (patch.marker_op == FM_CHART_PATCH_OP_SET) {
+  if (patch.marker_op == FM_PATCH_OP_SET) {
     clear(patch.marker.size_pt_op);
     clear_fill(patch.marker.fill);
     clear_line(patch.marker.line);
@@ -361,12 +361,12 @@ Napi::Value Workbook::InsertChart(const Napi::CallbackInfo& info) {
   bool has_title = false;
   {
     const Field f = Probe(reader, spec, "title");
-    if (f.op == FM_CHART_PATCH_OP_SET) {
+    if (f.op == FM_PATCH_OP_SET) {
       reader.String(f.value, "title", &title);
       has_title = true;
     }
   }
-  fm_chart_insert_t opts = FM_STRUCT_INIT(fm_chart_insert_t);
+  fm_chart_insert_spec_t opts = FM_STRUCT_INIT(fm_chart_insert_spec_t);
   opts.type = reader.I32(spec, "type", FM_CHART_PLOT_TYPE_BAR);
   opts.bar_direction = reader.I32(spec, "barDirection", FM_CHART_BAR_DIRECTION_COLUMN);
   opts.grouping = reader.I32(spec, "grouping", FM_CHART_GROUPING_CLUSTERED);
@@ -378,7 +378,7 @@ Napi::Value Workbook::InsertChart(const Napi::CallbackInfo& info) {
   // An omitted legend is Excel's default bottom legend; `null` is none.
   const Napi::Value legend = reader.Get(spec, "legend");
   opts.legend =
-      legend.IsNull() ? FM_CHART_LEGEND_POSITION_NONE : reader.I32(legend, "legend", FM_CHART_LEGEND_POSITION_BOTTOM);
+      legend.IsNull() ? FM_CHART_LEGEND_POSITION_ABSENT : reader.I32(legend, "legend", FM_CHART_LEGEND_POSITION_BOTTOM);
   opts.placement = PullImageInsert(reader, reader.Get(spec, "placement"), FM_ANCHOR_KIND_TWO_CELL, name, description);
   if (!reader.ok()) {
     return env.Undefined();
@@ -461,7 +461,7 @@ Napi::Value Workbook::SetChartLegend(const Napi::CallbackInfo& info) {
   legend.position = reader.I32(spec, "position", FM_CHART_LEGEND_POSITION_RIGHT);
   legend.overlay = reader.Bool(spec, "overlay", false) ? 1 : 0;
   legend.hidden_entries = hidden.empty() ? nullptr : hidden.data();
-  legend.hidden_entry_count = static_cast<uint32_t>(hidden.size());
+  legend.hidden_entries_count = static_cast<uint32_t>(hidden.size());
   if (!reader.ok()) {
     return env.Undefined();
   }
@@ -480,43 +480,17 @@ Napi::Value Workbook::UpdateChartLegend(const Napi::CallbackInfo& info) {
   }
   CheckedSpecReader reader(env);
   fm_chart_legend_patch_t patch = FM_STRUCT_INIT(fm_chart_legend_patch_t);
-  // The C patch always carries a position and an overlay, so an omitted key
-  // takes the chart's current value, or Excel's default for a chart without a legend.
-  patch.position = FM_CHART_LEGEND_POSITION_RIGHT;
-  patch.overlay = 0;
-  fm_chart_t* chart = nullptr;
-  int32_t present = 0;
-  fm_status_t rc = fm_sheet_get_chart(handle_, ArgU32(info, 0), ArgU32(info, 1), &present, &chart);
-  if (rc == 0 && present != 0) {
-    fm_chart_info_t current = FM_STRUCT_INIT(fm_chart_info_t);
-    if (fm_chart_get_info(chart, &current) == 0 && current.legend_position != FM_CHART_LEGEND_POSITION_NONE) {
-      patch.position = current.legend_position;
-      patch.overlay = current.legend_overlay;
-    }
-  }
-  if (chart != nullptr) {
-    fm_chart_destroy(chart);
-  }
-  if (rc != 0) {
-    return ThrowStatus(env, rc);
-  }
-  const Field position = Probe(reader, spec, "position");
-  if (position.op == FM_CHART_PATCH_OP_SET) {
-    patch.position = reader.I32(position.value, "position", patch.position);
-  }
-  const Field overlay = Probe(reader, spec, "overlay");
-  if (overlay.op == FM_CHART_PATCH_OP_SET) {
-    patch.overlay = reader.Bool(overlay.value, "overlay", false) ? 1 : 0;
-  }
+  ReadI32Op(reader, spec, "position", patch.position_op, patch.position);
+  ReadBoolOp(reader, spec, "overlay", patch.overlay_op, patch.overlay);
   std::vector<uint32_t> hidden;
   const Field hidden_field = Probe(reader, spec, "hiddenEntries");
-  if (hidden_field.op == FM_CHART_PATCH_OP_SET) {
+  if (hidden_field.op == FM_PATCH_OP_SET) {
     ReadUint32List(reader, hidden_field.value, "hiddenEntries", &hidden);
-    patch.hidden_entries_op = FM_CHART_PATCH_OP_SET;
+    patch.hidden_entries_op = FM_PATCH_OP_SET;
     patch.hidden_entries = hidden.empty() ? nullptr : hidden.data();
-    patch.hidden_entry_count = static_cast<uint32_t>(hidden.size());
-  } else if (hidden_field.op == FM_CHART_PATCH_OP_CLEAR) {
-    reader.FailType("hiddenEntries", "value (null cannot clear this field)");
+    patch.hidden_entries_count = static_cast<uint32_t>(hidden.size());
+  } else {
+    patch.hidden_entries_op = hidden_field.op;
   }
   if (!reader.ok()) {
     return env.Undefined();
@@ -540,7 +514,7 @@ Napi::Value Workbook::SetChartAxis(const Napi::CallbackInfo& info) {
   ReadBoolOp(reader, spec, "visible", patch.visible_op, patch.visible);
   const Field title = Probe(reader, spec, "title");
   patch.title_op = title.op;
-  if (title.op == FM_CHART_PATCH_OP_SET) {
+  if (title.op == FM_PATCH_OP_SET) {
     patch.title = ReadTitle(reader, title.value, "title", arena);
   }
   ReadDoubleOp(reader, spec, "min", patch.min_op, patch.min);
@@ -551,7 +525,7 @@ Napi::Value Workbook::SetChartAxis(const Napi::CallbackInfo& info) {
   ReadBoolOp(reader, spec, "reversed", patch.reversed_op, patch.reversed);
   ReadDoubleOp(reader, spec, "logBase", patch.log_base_op, patch.log_base);
   ReadI32Op(reader, spec, "crosses", patch.crosses_op, patch.crosses);
-  patch.crosses_at = reader.Double(spec, "crossesAt", 0.0);
+  ReadDoubleOp(reader, spec, "crossesAt", patch.crosses_at_op, patch.crosses_at);
   ReadI32Op(reader, spec, "tickLabelPosition", patch.tick_label_position_op, patch.tick_label_position);
   ReadDoubleOp(reader, spec, "minorUnit", patch.minor_unit_op, patch.minor_unit);
   ReadBoolOp(reader, spec, "minorGridlines", patch.minor_gridlines_op, patch.minor_gridlines);
@@ -715,7 +689,7 @@ Napi::Value Workbook::AddChartSeries(const Napi::CallbackInfo& info) {
   if (!reader.ok()) {
     return env.Undefined();
   }
-  std::size_t series_index = 0;
+  uint32_t series_index = 0;
   const fm_status_t rc =
       fm_sheet_add_chart_series(handle_, ArgU32(info, 0), ArgU32(info, 1), ArgU32(info, 2), &patch, &series_index);
   return ValueOrThrow(env, rc, Napi::Number::New(env, static_cast<double>(series_index)));

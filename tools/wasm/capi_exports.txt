@@ -60,7 +60,7 @@ fm_sheet_set_cell_phonetic_properties
 fm_sheet_get_value
 fm_sheet_get_cell_phonetic
 fm_sheet_get_cell_phonetic_run_count
-fm_sheet_get_cell_phonetic_run
+fm_sheet_get_cell_phonetic_run_at
 fm_sheet_get_cell_phonetic_properties
 fm_sheet_has_cell_phonetic_properties
 fm_sheet_get_cell_show_phonetic
@@ -95,14 +95,13 @@ fm_workbook_get_defined_name
 fm_workbook_remove_defined_name
 fm_sheet_get_table_count
 fm_workbook_find_table
-fm_sheet_get_table
+fm_sheet_get_table_at
 fm_sheet_get_table_runtime_id
 fm_workbook_resolve_table_runtime_id
 fm_sheet_add_table
 fm_sheet_update_table
 fm_sheet_remove_table
-fm_sheet_get_table_info
-fm_sheet_get_table_column
+fm_sheet_get_table_column_at
 fm_sheet_update_table_style_options
 fm_sheet_get_table_style_options
 fm_sheet_rename_table
@@ -177,7 +176,7 @@ fm_workbook_remove_person
 
 # -- Data validations ------------------------------------------------------------
 fm_sheet_get_validation_count
-fm_sheet_get_validation
+fm_sheet_get_validation_at
 fm_sheet_add_validation
 fm_sheet_remove_validation
 fm_sheet_clear_validations
@@ -191,7 +190,7 @@ fm_sheet_update_sheet_protection
 fm_workbook_get_workbook_protection
 fm_workbook_set_workbook_protection
 fm_sheet_get_protected_range_count
-fm_sheet_get_protected_range
+fm_sheet_get_protected_range_at
 fm_sheet_add_protected_range
 fm_sheet_update_protected_range
 fm_sheet_remove_protected_range
@@ -210,24 +209,11 @@ fm_sheet_apply_table_auto_filter
 fm_sheet_clear_table_auto_filter_criteria
 fm_sheet_evaluate_table_auto_filter
 fm_sheet_get_view
-fm_sheet_set_zoom
-fm_sheet_set_freeze
-fm_sheet_set_visibility
+fm_sheet_update_view
 fm_sheet_get_tab_color
 fm_sheet_set_tab_color
-fm_sheet_set_show_grid_lines
-fm_sheet_set_show_row_column_headers
-fm_sheet_set_show_zeros
-fm_sheet_set_show_formulas
-fm_sheet_set_show_outline_symbols
-fm_sheet_set_right_to_left
-fm_sheet_set_tab_selected
-fm_sheet_set_top_left
-fm_sheet_set_pane_top_left
-fm_sheet_set_split
 fm_sheet_get_selection
 fm_sheet_set_selection
-fm_sheet_set_view_mode
 fm_sheet_get_column_layout_count
 fm_sheet_get_column_layout_at
 fm_sheet_set_column_width
@@ -268,7 +254,7 @@ fm_cf_results_get_cell_count
 fm_cf_results_get_cell_at
 fm_cf_results_get_match_at
 fm_sheet_get_cf_rule_count
-fm_sheet_get_cf_rule
+fm_sheet_get_cf_rule_at
 fm_sheet_add_cf_rule
 fm_sheet_remove_cf_rule
 fm_sheet_clear_cf_rules
@@ -291,12 +277,12 @@ fm_sheet_set_array_formula
 fm_sheet_get_cell_xf_index
 fm_sheet_set_cell_xf_index
 fm_sheet_reset_cell_xf_index
-fm_workbook_get_cell_xf
-fm_workbook_get_font
-fm_workbook_get_fill
-fm_workbook_get_border
+fm_workbook_get_cell_xf_at
+fm_workbook_get_font_at
+fm_workbook_get_fill_at
+fm_workbook_get_border_at
 fm_workbook_get_dxf_count
-fm_workbook_get_dxf
+fm_workbook_get_dxf_at
 fm_workbook_get_number_format
 fm_workbook_get_font_count
 fm_workbook_get_fill_count
@@ -306,7 +292,7 @@ fm_workbook_get_cell_style_count
 fm_workbook_get_cell_style_at
 fm_workbook_get_cell_style
 fm_workbook_get_cell_style_xf_count
-fm_workbook_get_cell_style_xf
+fm_workbook_get_cell_style_xf_at
 fm_workbook_add_font
 fm_workbook_add_fill
 fm_workbook_add_border
@@ -397,9 +383,9 @@ fm_sheet_get_pivot_row_field_order
 fm_sheet_get_pivot_column_field_order
 fm_sheet_get_pivot_field_count
 fm_sheet_add_pivot_field
-fm_sheet_get_pivot_field
+fm_sheet_get_pivot_field_at
 fm_sheet_get_pivot_field_item_count
-fm_sheet_get_pivot_field_item
+fm_sheet_get_pivot_field_item_at
 fm_sheet_clear_pivot_fields
 fm_sheet_set_pivot_field_axis
 fm_sheet_update_pivot_field
@@ -415,11 +401,11 @@ fm_sheet_set_pivot_row_field_order
 fm_sheet_set_pivot_column_field_order
 fm_sheet_get_pivot_data_field_count
 fm_sheet_add_pivot_data_field
-fm_sheet_get_pivot_data_field
+fm_sheet_get_pivot_data_field_at
 fm_sheet_clear_pivot_data_fields
 fm_sheet_set_pivot_data_field
 fm_sheet_get_pivot_filter_count
-fm_sheet_get_pivot_filter
+fm_sheet_get_pivot_filter_at
 fm_sheet_add_pivot_filter
 fm_sheet_clear_pivot_filters
 fm_sheet_remove_pivot_filter
@@ -431,7 +417,7 @@ fm_workbook_remove_pivot_cache_calculated_field
 fm_workbook_get_pivot_cache_field_formula
 fm_workbook_add_pivot_cache_calculated_item
 fm_workbook_get_pivot_cache_calculated_item_count
-fm_workbook_get_pivot_cache_calculated_item
+fm_workbook_get_pivot_cache_calculated_item_at
 fm_workbook_set_pivot_cache_calculated_item_formula
 fm_workbook_move_pivot_cache_calculated_item
 fm_workbook_remove_pivot_cache_calculated_item
@@ -457,7 +443,7 @@ fm_get_locale_error_name_at
 
 # -- External links --------------------------------------------------------------
 fm_workbook_get_external_link_count
-fm_workbook_get_external_link
+fm_workbook_get_external_link_at
 
 # -- Diagnostics -----------------------------------------------------------------
 fm_workbook_get_diagnostics
@@ -472,7 +458,7 @@ fm_set_log_min_level
 fm_set_log_sink
 
 # -- Print settings / pagination ---------------------------------------------------
-fm_sheet_get_pagination
+fm_sheet_paginate
 fm_pagination_destroy
 fm_pagination_get_page_count
 fm_pagination_get_print_area_count
@@ -586,8 +572,8 @@ fm_sheet_add_slicer
 fm_sheet_update_slicer
 fm_sheet_remove_slicer
 fm_sheet_get_sparkline_group_count
-fm_sheet_get_sparkline_group
-fm_sheet_get_sparkline
+fm_sheet_get_sparkline_group_at
+fm_sheet_get_sparkline_at
 fm_sheet_add_sparkline_group
 fm_sheet_update_sparkline_group
 fm_sheet_remove_sparkline_group

@@ -4,6 +4,7 @@
 
 #include "formulon_c_out_index.h"
 #include "formulon_c_pivot_test_helpers.h"
+#include "formulon_c_sheet_view_patch.h"
 
 namespace {
 
@@ -132,10 +133,11 @@ TEST(FormulonCApiWorkbookView, SetActiveSheetMovesTabSelectionAndSurvivesXlsb) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Second", ignored_index()), 0);
   ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Third", ignored_index()), 0);
-  ASSERT_EQ(fm_sheet_set_tab_selected(wb.handle, 0, 1), 0);
+  ASSERT_EQ(SetViewFlag(wb.handle, 0, &fm_sheet_view_patch_t::tab_selected_op, &fm_sheet_view_patch_t::tab_selected, 1),
+            0);
   ASSERT_EQ(fm_workbook_set_active_sheet(wb.handle, 2), 0) << fm_get_last_error_message();
   for (std::size_t i = 0; i < 3; ++i) {
-    fm_sheet_view_t view = FM_STRUCT_INIT(fm_sheet_view_t);
+    fm_sheet_view_info_t view = FM_STRUCT_INIT(fm_sheet_view_info_t);
     ASSERT_EQ(fm_sheet_get_view(wb.handle, i, &view), 0);
     EXPECT_EQ(view.tab_selected != 0, i == 2U) << "sheet " << i;
   }
@@ -150,10 +152,10 @@ TEST(FormulonCApiWorkbookView, SetActiveSheetRejectsHiddenSheets) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Hidden", ignored_index()), 0);
   ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "VeryHidden", ignored_index()), 0);
-  ASSERT_EQ(fm_sheet_set_visibility(wb.handle, 1, FM_SHEET_VISIBILITY_HIDDEN), 0);
-  ASSERT_EQ(fm_sheet_set_visibility(wb.handle, 2, FM_SHEET_VISIBILITY_VERY_HIDDEN), 0);
-  EXPECT_EQ(fm_workbook_set_active_sheet(wb.handle, 1), kInvalidArgument);
-  EXPECT_EQ(fm_workbook_set_active_sheet(wb.handle, 2), kInvalidArgument);
+  ASSERT_EQ(SetViewVisibility(wb.handle, 1, FM_SHEET_VISIBILITY_HIDDEN), 0);
+  ASSERT_EQ(SetViewVisibility(wb.handle, 2, FM_SHEET_VISIBILITY_VERY_HIDDEN), 0);
+  EXPECT_EQ(fm_workbook_set_active_sheet(wb.handle, 1), FM_STATUS_PRECONDITION_FAILED);
+  EXPECT_EQ(fm_workbook_set_active_sheet(wb.handle, 2), FM_STATUS_PRECONDITION_FAILED);
   EXPECT_EQ(ActiveSheet(wb.handle), 0U);
 }
 
@@ -167,16 +169,16 @@ TEST(FormulonCApiWorkbookView, HidingOrRemovingTheActiveSheetActivatesTheNextVis
     }
   };
   const auto tab_selected = [](const WorkbookGuard& wb, std::size_t sheet) {
-    fm_sheet_view_t view = FM_STRUCT_INIT(fm_sheet_view_t);
+    fm_sheet_view_info_t view = FM_STRUCT_INIT(fm_sheet_view_info_t);
     EXPECT_EQ(fm_sheet_get_view(wb.handle, sheet, &view), 0);
     return view.tab_selected != 0;
   };
   {
     WorkbookGuard wb;
     five_sheets(wb);
-    ASSERT_EQ(fm_sheet_set_visibility(wb.handle, 2, FM_SHEET_VISIBILITY_HIDDEN), 0);
+    ASSERT_EQ(SetViewVisibility(wb.handle, 2, FM_SHEET_VISIBILITY_HIDDEN), 0);
     ASSERT_EQ(fm_workbook_set_active_sheet(wb.handle, 1), 0);
-    ASSERT_EQ(fm_sheet_set_visibility(wb.handle, 1, FM_SHEET_VISIBILITY_HIDDEN), 0);
+    ASSERT_EQ(SetViewVisibility(wb.handle, 1, FM_SHEET_VISIBILITY_HIDDEN), 0);
     EXPECT_EQ(ActiveSheet(wb.handle), 3U);
     EXPECT_TRUE(tab_selected(wb, 3));
     EXPECT_FALSE(tab_selected(wb, 1));
@@ -184,16 +186,16 @@ TEST(FormulonCApiWorkbookView, HidingOrRemovingTheActiveSheetActivatesTheNextVis
   {
     WorkbookGuard wb;
     five_sheets(wb);
-    ASSERT_EQ(fm_sheet_set_visibility(wb.handle, 4, FM_SHEET_VISIBILITY_VERY_HIDDEN), 0);
+    ASSERT_EQ(SetViewVisibility(wb.handle, 4, FM_SHEET_VISIBILITY_VERY_HIDDEN), 0);
     ASSERT_EQ(fm_workbook_set_active_sheet(wb.handle, 3), 0);
-    ASSERT_EQ(fm_sheet_set_visibility(wb.handle, 3, FM_SHEET_VISIBILITY_HIDDEN), 0);
+    ASSERT_EQ(SetViewVisibility(wb.handle, 3, FM_SHEET_VISIBILITY_HIDDEN), 0);
     EXPECT_EQ(ActiveSheet(wb.handle), 2U);
     EXPECT_TRUE(tab_selected(wb, 2));
   }
   {
     WorkbookGuard wb;
     five_sheets(wb);
-    ASSERT_EQ(fm_sheet_set_visibility(wb.handle, 2, FM_SHEET_VISIBILITY_HIDDEN), 0);
+    ASSERT_EQ(SetViewVisibility(wb.handle, 2, FM_SHEET_VISIBILITY_HIDDEN), 0);
     ASSERT_EQ(fm_workbook_set_active_sheet(wb.handle, 1), 0);
     ASSERT_EQ(fm_workbook_remove_sheet(wb.handle, 1), 0);
     // Old S3 (now index 2) became active; hidden old S2 (now index 1) was skipped.
@@ -203,7 +205,7 @@ TEST(FormulonCApiWorkbookView, HidingOrRemovingTheActiveSheetActivatesTheNextVis
   {
     WorkbookGuard wb;
     five_sheets(wb);
-    ASSERT_EQ(fm_sheet_set_visibility(wb.handle, 4, FM_SHEET_VISIBILITY_HIDDEN), 0);
+    ASSERT_EQ(SetViewVisibility(wb.handle, 4, FM_SHEET_VISIBILITY_HIDDEN), 0);
     ASSERT_EQ(fm_workbook_set_active_sheet(wb.handle, 3), 0);
     ASSERT_EQ(fm_workbook_remove_sheet(wb.handle, 3), 0);
     EXPECT_EQ(ActiveSheet(wb.handle), 2U);
@@ -258,9 +260,11 @@ TEST(FormulonCApiWorkbookView, ShowPhoneticSurvivesValueWritesAndRoundTrips) {
 
   // Re-entering the value clears the readings but not the display flag.
   ASSERT_EQ(fm_sheet_set_text(wb.handle, 0, 0, 0, "漢字"), 0);
-  const char* phonetic = nullptr;
-  ASSERT_EQ(fm_sheet_get_cell_phonetic(wb.handle, 0, 0, 0, &phonetic), 0);
-  EXPECT_STREQ(phonetic, "");
+  int32_t present = -1;
+  const char* phonetic = "<stale>";
+  ASSERT_EQ(fm_sheet_get_cell_phonetic(wb.handle, 0, 0, 0, &present, &phonetic), 0);
+  EXPECT_EQ(present, 0);
+  EXPECT_EQ(phonetic, nullptr);
   ASSERT_EQ(fm_sheet_get_cell_show_phonetic(wb.handle, 0, 0, 0, &show), 0);
   EXPECT_EQ(show, 1);
 
@@ -375,7 +379,7 @@ TEST(FormulonCApiWorkbookView, SheetViewScrollAndSelectionRoundTripFromAPackage)
   WorkbookGuard wb;
   Load(BuildPackage("", sheet), wb);
 
-  fm_sheet_view_t view = FM_STRUCT_INIT(fm_sheet_view_t);
+  fm_sheet_view_info_t view = FM_STRUCT_INIT(fm_sheet_view_info_t);
   ASSERT_EQ(fm_sheet_get_view(wb.handle, 0, &view), 0);
   EXPECT_EQ(view.top_left_row, 3U);
   EXPECT_EQ(view.top_left_col, 2U);
@@ -457,11 +461,11 @@ TEST(FormulonCApiWorkbookView, UnfrozenSplitViewSavesEveryPaneSelectionTheExcelW
   ASSERT_EQ(fm_sheet_get_selection(wb.handle, 0, &row, &col, nullptr, 0, &total), 0);
   EXPECT_EQ(row, 11U);
   EXPECT_EQ(col, 4U);
-  fm_sheet_view_t view = FM_STRUCT_INIT(fm_sheet_view_t);
+  fm_sheet_view_info_t view = FM_STRUCT_INIT(fm_sheet_view_info_t);
   ASSERT_EQ(fm_sheet_get_view(wb.handle, 0, &view), 0);
   EXPECT_EQ(view.pane_top_left_row, 9U);
   EXPECT_EQ(view.pane_top_left_col, 3U);
-  ASSERT_EQ(fm_sheet_set_pane_top_left(wb.handle, 0, 9, 3), 0) << fm_get_last_error_message();
+  ASSERT_EQ(SetViewPaneTopLeft(wb.handle, 0, 9, 3), 0) << fm_get_last_error_message();
   for (const fm_workbook_format_t format : {FM_WORKBOOK_FORMAT_XLSX, FM_WORKBOOK_FORMAT_XLSB}) {
     WorkbookGuard reloaded;
     Load(Save(wb.handle, format), reloaded);
@@ -480,7 +484,7 @@ TEST(FormulonCApiWorkbookView, UnfrozenSplitViewSavesEveryPaneSelectionTheExcelW
 TEST(FormulonCApiWorkbookView, FreezeWithoutASelectionSelectsThePaneOrigin) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  ASSERT_EQ(fm_sheet_set_freeze(wb.handle, 0, 2, 1), 0);
+  ASSERT_EQ(SetViewFreeze(wb.handle, 0, 2, 1), 0);
   uint32_t row = 0;
   uint32_t col = 0;
   size_t total = 0;
@@ -553,17 +557,17 @@ TEST(FormulonCApiWorkbookView, AFileDropsTheShowPhoneticFlagOfFormulaCells) {
 TEST(FormulonCApiWorkbookView, SettersWriteTheFrozenPaneTheDesktopWayAndRoundTrip) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  ASSERT_EQ(fm_sheet_set_freeze(wb.handle, 0, 2, 1), 0);
+  ASSERT_EQ(SetViewFreeze(wb.handle, 0, 2, 1), 0);
   // Without a stored pane origin the first unfrozen cell is reported and written.
-  fm_sheet_view_t view = FM_STRUCT_INIT(fm_sheet_view_t);
+  fm_sheet_view_info_t view = FM_STRUCT_INIT(fm_sheet_view_info_t);
   ASSERT_EQ(fm_sheet_get_view(wb.handle, 0, &view), 0);
   EXPECT_EQ(view.pane_top_left_row, 2U);
   EXPECT_EQ(view.pane_top_left_col, 1U);
 
-  ASSERT_EQ(fm_sheet_set_top_left(wb.handle, 0, 5, 0), 0);
-  ASSERT_EQ(fm_sheet_set_pane_top_left(wb.handle, 0, 40, 6), 0);
-  EXPECT_EQ(fm_sheet_set_pane_top_left(wb.handle, 0, 1, 6), kInvalidArgument);  // inside the frozen rows
-  EXPECT_EQ(fm_sheet_set_pane_top_left(wb.handle, 0, 4, 0), kInvalidArgument);  // inside the frozen columns
+  ASSERT_EQ(SetViewTopLeft(wb.handle, 0, 5, 0), 0);
+  ASSERT_EQ(SetViewPaneTopLeft(wb.handle, 0, 40, 6), 0);
+  EXPECT_EQ(SetViewPaneTopLeft(wb.handle, 0, 1, 6), kInvalidArgument);  // inside the frozen rows
+  EXPECT_EQ(SetViewPaneTopLeft(wb.handle, 0, 4, 0), kInvalidArgument);  // inside the frozen columns
   const fm_cell_rect_t ranges[] = {{41, 7, 43, 8}, {50, 9, 50, 9}};
   ASSERT_EQ(fm_sheet_set_selection(wb.handle, 0, 41, 7, ranges, 2), 0) << fm_get_last_error_message();
   EXPECT_EQ(fm_sheet_set_selection(wb.handle, 0, 0, 0, ranges, 0), 0);  // replaces: active cell alone
@@ -603,7 +607,7 @@ TEST(FormulonCApiWorkbookView, SettersWriteTheFrozenPaneTheDesktopWayAndRoundTri
   }
 
   // Changing the freeze re-derives the pane and carries the active selection along.
-  ASSERT_EQ(fm_sheet_set_freeze(wb.handle, 0, 0, 3), 0);
+  ASSERT_EQ(SetViewFreeze(wb.handle, 0, 0, 3), 0);
   ASSERT_EQ(fm_sheet_get_view(wb.handle, 0, &view), 0);
   EXPECT_EQ(view.pane_top_left_row, 0U);
   EXPECT_EQ(view.pane_top_left_col, 3U);
@@ -613,22 +617,22 @@ TEST(FormulonCApiWorkbookView, SettersWriteTheFrozenPaneTheDesktopWayAndRoundTri
   ASSERT_EQ(fm_sheet_get_selection(wb.handle, 0, &row, &col, nullptr, 0, &count), 0);
   EXPECT_EQ(row, 41U);
   EXPECT_EQ(count, 2U);
-  ASSERT_EQ(fm_sheet_set_freeze(wb.handle, 0, 0, 0), 0);
+  ASSERT_EQ(SetViewFreeze(wb.handle, 0, 0, 0), 0);
   // Without a pane only the default origin is accepted, so a read view writes back unchanged.
-  EXPECT_EQ(fm_sheet_set_pane_top_left(wb.handle, 0, 0, 0), 0);
-  EXPECT_EQ(fm_sheet_set_pane_top_left(wb.handle, 0, 1, 1), kInvalidArgument);
-  EXPECT_EQ(fm_sheet_set_top_left(wb.handle, 9, 0, 0), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(SetViewPaneTopLeft(wb.handle, 0, 0, 0), 0);
+  EXPECT_EQ(SetViewPaneTopLeft(wb.handle, 0, 1, 1), kInvalidArgument);
+  EXPECT_EQ(SetViewTopLeft(wb.handle, 9, 0, 0), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
 }
 
 TEST(FormulonCApiWorkbookView, SetSplitReadsBackRoundTripsAndExchangesWithFreeze) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  fm_sheet_view_t view = FM_STRUCT_INIT(fm_sheet_view_t);
+  fm_sheet_view_info_t view = FM_STRUCT_INIT(fm_sheet_view_info_t);
   ASSERT_EQ(fm_sheet_get_view(wb.handle, 0, &view), 0);
   EXPECT_EQ(view.split_x, 0.0);
   EXPECT_EQ(view.split_y, 0.0);
 
-  ASSERT_EQ(fm_sheet_set_split(wb.handle, 0, 2000.0, 1500.0), 0) << fm_get_last_error_message();
+  ASSERT_EQ(SetViewSplit(wb.handle, 0, 2000.0, 1500.0), 0) << fm_get_last_error_message();
   ASSERT_EQ(fm_sheet_get_view(wb.handle, 0, &view), 0);
   EXPECT_EQ(view.split_x, 2000.0);
   EXPECT_EQ(view.split_y, 1500.0);
@@ -644,7 +648,7 @@ TEST(FormulonCApiWorkbookView, SetSplitReadsBackRoundTripsAndExchangesWithFreeze
     }
     WorkbookGuard reloaded;
     Load(bytes, reloaded);
-    fm_sheet_view_t got = FM_STRUCT_INIT(fm_sheet_view_t);
+    fm_sheet_view_info_t got = FM_STRUCT_INIT(fm_sheet_view_info_t);
     ASSERT_EQ(fm_sheet_get_view(reloaded.handle, 0, &got), 0);
     EXPECT_EQ(got.split_x, 2000.0) << "format " << format;
     EXPECT_EQ(got.split_y, 1500.0) << "format " << format;
@@ -653,14 +657,14 @@ TEST(FormulonCApiWorkbookView, SetSplitReadsBackRoundTripsAndExchangesWithFreeze
   }
 
   // A freeze replaces the split.
-  ASSERT_EQ(fm_sheet_set_freeze(wb.handle, 0, 2, 1), 0);
+  ASSERT_EQ(SetViewFreeze(wb.handle, 0, 2, 1), 0);
   ASSERT_EQ(fm_sheet_get_view(wb.handle, 0, &view), 0);
   EXPECT_EQ(view.split_x, 0.0);
   EXPECT_EQ(view.split_y, 0.0);
   EXPECT_EQ(view.freeze_rows, 2U);
 
   // A split replaces the freeze.
-  ASSERT_EQ(fm_sheet_set_split(wb.handle, 0, 0.0, 900.0), 0);
+  ASSERT_EQ(SetViewSplit(wb.handle, 0, 0.0, 900.0), 0);
   ASSERT_EQ(fm_sheet_get_view(wb.handle, 0, &view), 0);
   EXPECT_EQ(view.split_x, 0.0);
   EXPECT_EQ(view.split_y, 900.0);
@@ -668,7 +672,7 @@ TEST(FormulonCApiWorkbookView, SetSplitReadsBackRoundTripsAndExchangesWithFreeze
   EXPECT_EQ(view.freeze_cols, 0U);
 
   // (0, 0) removes the split.
-  ASSERT_EQ(fm_sheet_set_split(wb.handle, 0, 0.0, 0.0), 0);
+  ASSERT_EQ(SetViewSplit(wb.handle, 0, 0.0, 0.0), 0);
   ASSERT_EQ(fm_sheet_get_view(wb.handle, 0, &view), 0);
   EXPECT_EQ(view.split_y, 0.0);
 }
@@ -676,13 +680,13 @@ TEST(FormulonCApiWorkbookView, SetSplitReadsBackRoundTripsAndExchangesWithFreeze
 TEST(FormulonCApiWorkbookView, SetSplitRehomesTheActiveSelectionAndKeepsTheViewOnInvalidInput) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  ASSERT_EQ(fm_sheet_set_freeze(wb.handle, 0, 2, 1), 0);
-  ASSERT_EQ(fm_sheet_set_pane_top_left(wb.handle, 0, 40, 6), 0);
+  ASSERT_EQ(SetViewFreeze(wb.handle, 0, 2, 1), 0);
+  ASSERT_EQ(SetViewPaneTopLeft(wb.handle, 0, 40, 6), 0);
   const fm_cell_rect_t ranges[] = {{41, 7, 43, 8}};
   ASSERT_EQ(fm_sheet_set_selection(wb.handle, 0, 41, 7, ranges, 1), 0);
 
-  ASSERT_EQ(fm_sheet_set_split(wb.handle, 0, 1800.0, 1200.0), 0);
-  fm_sheet_view_t view = FM_STRUCT_INIT(fm_sheet_view_t);
+  ASSERT_EQ(SetViewSplit(wb.handle, 0, 1800.0, 1200.0), 0);
+  fm_sheet_view_info_t view = FM_STRUCT_INIT(fm_sheet_view_info_t);
   ASSERT_EQ(fm_sheet_get_view(wb.handle, 0, &view), 0);
   EXPECT_EQ(view.pane_top_left_row, 0U);  // origin re-derived
   EXPECT_EQ(view.pane_top_left_col, 0U);
@@ -696,17 +700,17 @@ TEST(FormulonCApiWorkbookView, SetSplitRehomesTheActiveSelectionAndKeepsTheViewO
 
   const double nan = std::numeric_limits<double>::quiet_NaN();
   const double inf = std::numeric_limits<double>::infinity();
-  EXPECT_EQ(fm_sheet_set_split(wb.handle, 0, -1.0, 0.0), kInvalidArgument);
-  EXPECT_EQ(fm_sheet_set_split(wb.handle, 0, 0.0, nan), kInvalidArgument);
-  EXPECT_EQ(fm_sheet_set_split(wb.handle, 0, inf, 0.0), kInvalidArgument);
-  EXPECT_EQ(fm_sheet_set_split(wb.handle, 9, 1.0, 1.0), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(SetViewSplit(wb.handle, 0, -1.0, 0.0), kInvalidArgument);
+  EXPECT_EQ(SetViewSplit(wb.handle, 0, 0.0, nan), kInvalidArgument);
+  EXPECT_EQ(SetViewSplit(wb.handle, 0, inf, 0.0), kInvalidArgument);
+  EXPECT_EQ(SetViewSplit(wb.handle, 9, 1.0, 1.0), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
   ASSERT_EQ(fm_sheet_get_view(wb.handle, 0, &view), 0);
   EXPECT_EQ(view.split_x, 1800.0);
   EXPECT_EQ(view.split_y, 1200.0);
 
   // Re-stating the current split keeps the pane origin a host scrolled to.
-  ASSERT_EQ(fm_sheet_set_pane_top_left(wb.handle, 0, 9, 3), 0);
-  ASSERT_EQ(fm_sheet_set_split(wb.handle, 0, 1800.0, 1200.0), 0);
+  ASSERT_EQ(SetViewPaneTopLeft(wb.handle, 0, 9, 3), 0);
+  ASSERT_EQ(SetViewSplit(wb.handle, 0, 1800.0, 1200.0), 0);
   ASSERT_EQ(fm_sheet_get_view(wb.handle, 0, &view), 0);
   EXPECT_EQ(view.pane_top_left_row, 9U);
   EXPECT_EQ(view.pane_top_left_col, 3U);

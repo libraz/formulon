@@ -30,6 +30,7 @@ using chart_ns::kCtDrawing;
 using chart_ns::kNsA;
 using chart_ns::kNsXdr;
 constexpr std::int64_t kEmuLimit = std::int64_t{1} << 31;
+constexpr const char* kNoShape = "shape: no shape with that id";
 constexpr std::string_view kFillNames[] = {"noFill", "solidFill", "gradFill", "blipFill", "pattFill", "grpFill"};
 
 Error invalid(const char* message) {
@@ -217,6 +218,16 @@ void set_paint(pugi::xml_node parent, bool is_line, bool none, const ColorSpec& 
   }
 }
 
+// Removes the fill element of `parent` (a shape-properties or `a:ln` element), so the style's paint applies.
+void remove_paint(pugi::xml_node parent) {
+  for (pugi::xml_node child = parent.first_child(); child; child = child.next_sibling()) {
+    if (child.type() == pugi::node_element && is_fill(child)) {
+      parent.remove_child(child);
+      return;
+    }
+  }
+}
+
 pugi::xml_node ensure_ln(pugi::xml_node props) {
   if (pugi::xml_node ln = child_local(props, "ln")) {
     return ln;
@@ -356,10 +367,12 @@ Expected<void, Error> apply_fields(pugi::xml_node anchor, pugi::xml_node content
   if (!props) {
     return invalid("shape: no shape properties");
   }
-  const auto paint_ok = [](ShapePaint p) { return p == ShapePaint::kSolid || p == ShapePaint::kNone; };
+  const auto paint_ok = [](ShapePaint p) {
+    return p == ShapePaint::kSolid || p == ShapePaint::kNone || p == ShapePaint::kUnset;
+  };
   if (((f & shape_field::kFill) != 0U && !paint_ok(spec.fill)) ||
       ((f & shape_field::kLine) != 0U && !paint_ok(spec.line))) {
-    return invalid("shape: a fill or outline is solid or none");
+    return invalid("shape: a fill or outline is solid, none or unset");
   }
   if ((f & shape_field::kPrst) != 0U && (group || !is_token(spec.prst))) {
     return invalid("shape: preset geometry must be an alphanumeric token on a shape or connector");
@@ -408,10 +421,23 @@ Expected<void, Error> apply_fields(pugi::xml_node anchor, pugi::xml_node content
     }
   }
   if ((f & shape_field::kFill) != 0U) {
-    set_paint(props, false, spec.fill == ShapePaint::kNone, spec.fill_color);
+    if (spec.fill == ShapePaint::kUnset) {
+      remove_paint(props);
+    } else {
+      set_paint(props, false, spec.fill == ShapePaint::kNone, spec.fill_color);
+    }
   }
   if ((f & shape_field::kLine) != 0U) {
-    set_paint(ensure_ln(props), true, spec.line == ShapePaint::kNone, spec.line_color);
+    if (spec.line == ShapePaint::kUnset) {
+      pugi::xml_node ln = child_local(props, "ln");
+      remove_paint(ln);
+      // An `a:ln` left with nothing in it states nothing.
+      if (ln && !ln.first_child() && !ln.first_attribute()) {
+        props.remove_child(ln);
+      }
+    } else {
+      set_paint(ensure_ln(props), true, spec.line == ShapePaint::kNone, spec.line_color);
+    }
   }
   if ((f & shape_field::kLineWidth) != 0U) {
     if (spec.line_width_emu < 0 || spec.line_width_emu >= kEmuLimit) {
@@ -545,12 +571,12 @@ Expected<void, Error> update_shape(Workbook& wb, std::size_t sheet, std::uint32_
   ASSIGN_OR_RETURN(std::string path, editable_drawing_path(wb, sheet));
   pugi::xml_document doc;
   if (path.empty()) {
-    return invalid("shape: no shape with that id");
+    return drawing_edit::not_found(kNoShape);
   }
   RETURN_IF_ERROR(load_drawing_part(wb, path, doc));
   pugi::xml_node anchor = find_shape(doc.document_element(), object_id);
   if (!anchor) {
-    return invalid("shape: no shape with that id");
+    return drawing_edit::refuse_object(doc.document_element(), object_id, kNoShape);
   }
   pugi::xml_node content = anchor_content(anchor);
   if ((spec.fields & shape_field::kAnchor) != 0U) {
@@ -566,13 +592,13 @@ Expected<void, Error> remove_shape(Workbook& wb, std::size_t sheet, std::uint32_
   ASSIGN_OR_RETURN(std::string path, editable_drawing_path(wb, sheet));
   pugi::xml_document doc;
   if (path.empty()) {
-    return invalid("shape: no shape with that id");
+    return drawing_edit::not_found(kNoShape);
   }
   RETURN_IF_ERROR(load_drawing_part(wb, path, doc));
   pugi::xml_node root = doc.document_element();
   pugi::xml_node top = find_shape(root, object_id);
   if (!top) {
-    return invalid("shape: no shape with that id");
+    return drawing_edit::refuse_object(root, object_id, kNoShape);
   }
   while (top.parent() != root) {
     top = top.parent();

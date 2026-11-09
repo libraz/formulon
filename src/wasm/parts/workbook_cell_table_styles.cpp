@@ -19,11 +19,11 @@ namespace parts {
 
 namespace {
 
-emscripten::val cell_style_to_val(const fm_cell_style_record_t& cs) {
+emscripten::val cell_style_to_val(const fm_cell_style_t& cs) {
   emscripten::val o = emscripten::val::object();
   js_set_cstr(o, "name", cs.name);
   o.set("styleXfIndex", cs.style_xf_index);
-  o.set("builtinId", cs.builtin_id);
+  js_set_present_or_null(o, "builtinId", cs.has_builtin_id, cs.builtin_id);
   o.set("iLevel", cs.i_level);
   o.set("hidden", cs.hidden != 0);
   o.set("customBuiltin", cs.custom_builtin != 0);
@@ -54,7 +54,7 @@ fm_status_t count_cell_styles(const fm_workbook_t* handle, size_t, size_t* out) 
 }
 
 fm_status_t cell_style_item(const fm_workbook_t* handle, size_t, size_t index, emscripten::val* out) {
-  fm_cell_style_record_t cs{};
+  fm_cell_style_t cs{};
   const fm_status_t rc = fm_workbook_get_cell_style_at(handle, index, &cs);
   if (rc == 0) {
     *out = cell_style_to_val(cs);
@@ -86,7 +86,7 @@ emscripten::val JsWorkbook::listCellStyles() const {
 }
 
 emscripten::val JsWorkbook::getCellStyle(const std::string& name) const {
-  fm_cell_style_record_t cs{};
+  fm_cell_style_t cs{};
   int32_t present = 0;
   const fm_status_t rc =
       handle_ != nullptr ? fm_workbook_get_cell_style(handle_, name.c_str(), &present, &cs) : kBindingInvalidHandle;
@@ -100,10 +100,14 @@ void JsWorkbook::setCellStyle(emscripten::val record) {
   }
   JsNarrowNumericReader reader("setCellStyle");
   const std::string name = reader.string(record, "name", "cellStyle.name");
-  fm_cell_style_record_t cs{};
+  fm_cell_style_t cs{};
   cs.name = name.c_str();
   cs.style_xf_index = reader.u32(record, "styleXfIndex", 0U, "cellStyle.styleXfIndex");
-  cs.builtin_id = reader.u32(record, "builtinId", FM_CELL_STYLE_BUILTIN_ID_NONE, "cellStyle.builtinId");
+  const emscripten::val builtin_id = reader.value(record, "builtinId", "cellStyle.builtinId");
+  if (reader.ok() && js_value_present(builtin_id)) {
+    cs.has_builtin_id = 1;
+    cs.builtin_id = reader.u32_value(builtin_id, 0U, "cellStyle.builtinId");
+  }
   cs.i_level = reader.u32(record, "iLevel", 0U, "cellStyle.iLevel");
   cs.hidden = reader.boolean(record, "hidden", false, "cellStyle.hidden") ? 1 : 0;
   cs.custom_builtin = reader.boolean(record, "customBuiltin", false, "cellStyle.customBuiltin") ? 1 : 0;
@@ -197,28 +201,16 @@ void JsWorkbook::setTableStyleDefaults(emscripten::val defaults) {
     record_invalid_handle();
     return;
   }
-  // An omitted name keeps the default (NULL); `null` removes it ("").
   JsNarrowNumericReader reader("Workbook.setTableStyleDefaults");
   std::string table;
   std::string pivot;
-  const auto name = [&](const char* key, std::string& storage) -> const char* {
-    const emscripten::val v = reader.value(defaults, key, key);
-    switch (js_patch_key(reader, v, key, true)) {
-      case JsPatchKey::kClear:
-        return "";
-      case JsPatchKey::kSet:
-        return reader.optional_string_value(v, storage, key);
-      case JsPatchKey::kKeep:
-        break;
-    }
-    return nullptr;
-  };
-  const char* table_ptr = name("tableStyle", table);
-  const char* pivot_ptr = name("pivotStyle", pivot);
+  fm_table_style_defaults_patch_t patch = FM_STRUCT_INIT(fm_table_style_defaults_patch_t);
+  js_patch_string(reader, defaults, "tableStyle", "tableStyle", true, table, &patch.table_style_op, &patch.table_style);
+  js_patch_string(reader, defaults, "pivotStyle", "pivotStyle", true, pivot, &patch.pivot_style_op, &patch.pivot_style);
   if (!reader.ok()) {
     return;
   }
-  succeeded(fm_workbook_update_table_style_defaults(handle_, table_ptr, pivot_ptr));
+  succeeded(fm_workbook_update_table_style_defaults(handle_, &patch));
 }
 }  // namespace parts
 }  // namespace wasm

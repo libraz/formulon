@@ -178,9 +178,10 @@ Napi::Value Workbook::GetCellPhonetic(const Napi::CallbackInfo& info) {
     return ThrowInvalidHandle(env);
   }
   const CellAddressArgs address = ReadCellAddress(info);
+  int32_t present = 0;
   const char* text = nullptr;
-  fm_status_t rc = fm_sheet_get_cell_phonetic(handle_, address.sheet, address.row, address.col, &text);
-  return ValueOrThrow(env, rc, JsStringOrNull(env, text));
+  fm_status_t rc = fm_sheet_get_cell_phonetic(handle_, address.sheet, address.row, address.col, &present, &text);
+  return ValueOrThrow(env, rc, present != 0 ? JsString(env, text) : env.Null());
 }
 
 Napi::Value Workbook::GetCellPhoneticRunCount(const Napi::CallbackInfo& info) {
@@ -202,7 +203,7 @@ Napi::Value Workbook::GetCellPhoneticRun(const Napi::CallbackInfo& info) {
   const CellAddressArgs address = ReadCellAddress(info);
   fm_phonetic_run_t run{};
   const fm_status_t rc =
-      fm_sheet_get_cell_phonetic_run(handle_, address.sheet, address.row, address.col, ArgU32(info, 3), &run);
+      fm_sheet_get_cell_phonetic_run_at(handle_, address.sheet, address.row, address.col, ArgU32(info, 3), &run);
   if (rc != 0) {
     return ThrowStatus(env, rc);
   }
@@ -308,8 +309,8 @@ Napi::Value Workbook::GetLambdaText(const Napi::CallbackInfo& info) {
 
 namespace {
 
-// Shared body of the A1 / R1C1 formula-text getters. An empty C string is "no formula".
-using FormulaTextFn = fm_status_t (*)(const fm_workbook_t*, size_t, uint32_t, uint32_t, const char**);
+// Shared body of the A1 / R1C1 formula-text getters; `null` when the cell has no formula.
+using FormulaTextFn = fm_status_t (*)(const fm_workbook_t*, size_t, uint32_t, uint32_t, int32_t*, const char**);
 
 Napi::Value FormulaTextResult(const Napi::CallbackInfo& info, const fm_workbook_t* handle, FormulaTextFn fn) {
   Napi::Env env = info.Env();
@@ -318,9 +319,9 @@ Napi::Value FormulaTextResult(const Napi::CallbackInfo& info, const fm_workbook_
   }
   const CellAddressArgs address = ReadCellAddress(info);
   const char* formula = nullptr;
-  const fm_status_t rc = fn(handle, address.sheet, address.row, address.col, &formula);
-  const bool present = formula != nullptr && formula[0] != '\0';
-  return OptionalOrNull(env, rc, present ? 1 : 0, JsString(env, formula));
+  int32_t present = 0;
+  const fm_status_t rc = fn(handle, address.sheet, address.row, address.col, &present, &formula);
+  return OptionalOrNull(env, rc, present, JsString(env, formula));
 }
 
 // Builds `{ text, displayStatus }`.
@@ -429,7 +430,7 @@ Napi::Value Workbook::ValidateValue(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   const CellAddressArgs address = ReadCellAddress(info);
-  fm_validation_outcome_t outcome = FM_STRUCT_INIT(fm_validation_outcome_t);
+  fm_validation_outcome_info_t outcome = FM_STRUCT_INIT(fm_validation_outcome_info_t);
   const fm_status_t rc = fm_sheet_validate_value(handle_, address.sheet, address.row, address.col, &value, &outcome);
   if (rc != 0) {
     return ThrowStatus(env, rc);

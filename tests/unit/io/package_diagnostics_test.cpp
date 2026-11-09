@@ -1,6 +1,6 @@
 //
 // Reachability tests for the save/load loss counters that reach callers
-// through `fm_read_diagnostics_t` / `fm_save_diagnostics_t`.
+// through `fm_read_diagnostics_info_t` / `fm_save_diagnostics_info_t`.
 //
 // The events these count are also emitted as structured-log records, but
 // the shipping default for that log is off, so the counters are the only

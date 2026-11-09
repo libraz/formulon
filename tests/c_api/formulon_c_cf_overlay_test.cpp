@@ -148,7 +148,7 @@ TEST(FormulonCApiCfMutate, DataBarExtensionFieldsSurviveSaveAndLoad) {
   ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &reloaded.handle), 0);
 
   fm_cf_rule_t back = FM_STRUCT_INIT(fm_cf_rule_t);
-  ASSERT_EQ(fm_sheet_get_cf_rule(reloaded.handle, 0, 0, &back), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_get_cf_rule_at(reloaded.handle, 0, 0, &back), 0) << fm_get_last_error_message();
   EXPECT_EQ(back.data_bar_gradient, 0);
   EXPECT_EQ(back.data_bar_axis_position, 1U);
   EXPECT_EQ(CfR(back.data_bar_negative_fill), 255U);
@@ -195,7 +195,7 @@ TEST(FormulonCApiCfMutate, IconSetFloorSurvivesSaveAndLoad) {
   WorkbookGuard reloaded;
   ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &reloaded.handle), 0);
   fm_cf_rule_t back = FM_STRUCT_INIT(fm_cf_rule_t);
-  ASSERT_EQ(fm_sheet_get_cf_rule(reloaded.handle, 0, 0, &back), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_get_cf_rule_at(reloaded.handle, 0, 0, &back), 0) << fm_get_last_error_message();
   EXPECT_EQ(back.icon_set_floor_engaged, 1);
   EXPECT_EQ(back.icon_set_floor.type, 0U);
   EXPECT_STREQ(back.icon_set_floor.value, "5");

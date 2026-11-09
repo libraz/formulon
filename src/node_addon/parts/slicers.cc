@@ -17,57 +17,30 @@ struct SlicerText {
   std::string style;
 };
 
-// Reads the fields `spec` carries; the `fields` mask names exactly those.
-fm_slicer_t PullSlicer(CheckedSpecReader& reader, const Napi::Object& spec, SlicerText& store) {
-  fm_slicer_t s = FM_STRUCT_INIT(fm_slicer_t);
-  bool present = false;
-  if (reader.String(spec, "name", &store.name)) {
-    s.fields |= FM_SLICER_FIELD_NAME;
-    s.name = store.name.c_str();
-  }
-  if (reader.String(spec, "caption", &store.caption)) {
-    s.fields |= FM_SLICER_FIELD_CAPTION;
-    s.caption = store.caption.c_str();
-  }
-  // `null` removes the style, as the empty string does.
-  const Napi::Value style = reader.Get(spec, "style");
-  if (reader.ok() && !style.IsUndefined()) {
-    s.fields |= FM_SLICER_FIELD_STYLE;
-    s.style = style.IsNull() ? "" : (reader.String(style, "style", &store.style) ? store.style.c_str() : "");
-  }
-  s.column_count = reader.U32(spec, "columnCount", 1U, &present);
-  s.fields |= present ? FM_SLICER_FIELD_COLUMN_COUNT : 0U;
-  s.row_height_emu = reader.I64(spec, "rowHeightEmu", 0, &present);
-  s.fields |= present ? FM_SLICER_FIELD_ROW_HEIGHT : 0U;
-  // The two-cell anchor is all or nothing: any of its four cells makes the other three required.
-  bool has_from_row = false;
-  bool has_from_col = false;
-  bool has_to_row = false;
-  bool has_to_col = false;
-  (void)reader.U32(spec, "fromRow", 0U, &has_from_row);
-  (void)reader.U32(spec, "fromCol", 0U, &has_from_col);
-  (void)reader.U32(spec, "toRow", 0U, &has_to_row);
-  (void)reader.U32(spec, "toCol", 0U, &has_to_col);
-  if (has_from_row || has_from_col || has_to_row || has_to_col) {
-    s.fields |= FM_SLICER_FIELD_ANCHOR;
-    s.from_row = reader.RequiredU32(spec, "fromRow");
-    s.from_col = reader.RequiredU32(spec, "fromCol");
-    s.from_row_offset_emu = reader.I64(spec, "fromRowOffsetEmu", 0);
-    s.from_col_offset_emu = reader.I64(spec, "fromColOffsetEmu", 0);
-    s.to_row = reader.RequiredU32(spec, "toRow");
-    s.to_col = reader.RequiredU32(spec, "toCol");
-    s.to_row_offset_emu = reader.I64(spec, "toRowOffsetEmu", 0);
-    s.to_col_offset_emu = reader.I64(spec, "toColOffsetEmu", 0);
-  }
-  s.sort_order = reader.I32(spec, "sortOrder", 0, &present);
-  s.fields |= present ? FM_SLICER_FIELD_SORT_ORDER : 0U;
-  s.cross_filter = reader.I32(spec, "crossFilter", 0, &present);
-  s.fields |= present ? FM_SLICER_FIELD_CROSS_FILTER : 0U;
+// Reads the fields `spec` carries into a patch: an omitted key keeps, and `null` clears `style`. The C ABI
+// requires the four anchor cells together.
+fm_slicer_patch_t PullSlicer(CheckedSpecReader& reader, const Napi::Object& spec, SlicerText& store) {
+  fm_slicer_patch_t s = FM_STRUCT_INIT(fm_slicer_patch_t);
+  s.name_op = PatchString(reader, spec, "name", false, &store.name, &s.name);
+  s.caption_op = PatchString(reader, spec, "caption", false, &store.caption, &s.caption);
+  s.style_op = PatchString(reader, spec, "style", true, &store.style, &s.style);
+  s.column_count_op = PatchU32(reader, spec, "columnCount", &s.column_count);
+  s.row_height_emu_op = PatchI64(reader, spec, "rowHeightEmu", &s.row_height_emu);
+  s.from_row_op = PatchU32(reader, spec, "fromRow", &s.from_row);
+  s.from_col_op = PatchU32(reader, spec, "fromCol", &s.from_col);
+  s.from_row_offset_emu_op = PatchI64(reader, spec, "fromRowOffsetEmu", &s.from_row_offset_emu);
+  s.from_col_offset_emu_op = PatchI64(reader, spec, "fromColOffsetEmu", &s.from_col_offset_emu);
+  s.to_row_op = PatchU32(reader, spec, "toRow", &s.to_row);
+  s.to_col_op = PatchU32(reader, spec, "toCol", &s.to_col);
+  s.to_row_offset_emu_op = PatchI64(reader, spec, "toRowOffsetEmu", &s.to_row_offset_emu);
+  s.to_col_offset_emu_op = PatchI64(reader, spec, "toColOffsetEmu", &s.to_col_offset_emu);
+  s.sort_order_op = PatchI32(reader, spec, "sortOrder", &s.sort_order);
+  s.cross_filter_op = PatchI32(reader, spec, "crossFilter", &s.cross_filter);
   return s;
 }
 
 // The JS `Slicer` record of `s`.
-Napi::Object SlicerToJs(Napi::Env env, const fm_slicer_t& s) {
+Napi::Object SlicerToJs(Napi::Env env, const fm_slicer_info_t& s) {
   Napi::Object item = Napi::Object::New(env);
   item.Set("objectId", JsNumber(env, s.object_id));
   item.Set("columnCount", JsNumber(env, s.column_count));
@@ -101,10 +74,10 @@ Napi::Value Workbook::ListSlicers(const Napi::CallbackInfo& info) {
   }
   Napi::Array arr = Napi::Array::New(env);
   const uint32_t sheet = ArgU32(info, 0);
-  const fm_status_t rc = CollectList<fm_slicer_t>(
+  const fm_status_t rc = CollectList<fm_slicer_info_t>(
       arr, [&](size_t* n) { return fm_sheet_get_slicer_count(handle_, sheet, n); },
-      [&](size_t i, fm_slicer_t* s) { return fm_sheet_get_slicer_at(handle_, sheet, i, s); },
-      [&](const fm_slicer_t& s) { return SlicerToJs(env, s); });
+      [&](size_t i, fm_slicer_info_t* s) { return fm_sheet_get_slicer_at(handle_, sheet, i, s); },
+      [&](const fm_slicer_info_t& s) { return SlicerToJs(env, s); });
   return ValueOrThrow(env, rc, arr);
 }
 
@@ -113,7 +86,7 @@ Napi::Value Workbook::GetSlicer(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return ThrowInvalidHandle(env);
   }
-  fm_slicer_t s = FM_STRUCT_INIT(fm_slicer_t);
+  fm_slicer_info_t s = FM_STRUCT_INIT(fm_slicer_info_t);
   int32_t present = 0;
   const fm_status_t rc = fm_sheet_get_slicer(handle_, ArgU32(info, 0), ArgU32(info, 1), &present, &s);
   return OptionalOrNull(env, rc, present, rc == 0 && present != 0 ? Napi::Value(SlicerToJs(env, s)) : env.Null());
@@ -126,7 +99,7 @@ Napi::Value Workbook::AddSlicer(const Napi::CallbackInfo& info) {
   }
   CheckedSpecReader reader(env);
   SlicerText store;
-  const fm_slicer_t slicer = PullSlicer(reader, ArgObject(info, 4), store);
+  const fm_slicer_patch_t slicer = PullSlicer(reader, ArgObject(info, 4), store);
   if (!reader.ok()) {
     return env.Undefined();
   }
@@ -143,7 +116,7 @@ Napi::Value Workbook::UpdateSlicer(const Napi::CallbackInfo& info) {
   }
   CheckedSpecReader reader(env);
   SlicerText store;
-  const fm_slicer_t slicer = PullSlicer(reader, ArgObject(info, 2), store);
+  const fm_slicer_patch_t slicer = PullSlicer(reader, ArgObject(info, 2), store);
   if (!reader.ok()) {
     return env.Undefined();
   }

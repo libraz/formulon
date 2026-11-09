@@ -461,7 +461,7 @@ TEST(DrawingSnapshot, RefusesWhatItCannotCaptureOrPlace) {
     return result ? FormulonErrorCode::kOk : result.error().code;
   };
   EXPECT_EQ(snap_code(3), FormulonErrorCode::kOk);
-  EXPECT_EQ(snap_code(9), FormulonErrorCode::kInvalidArgument);
+  EXPECT_EQ(snap_code(9), FormulonErrorCode::kNotFound);
   EXPECT_EQ(snapshot_drawing(wb, 4, 2).error().code, FormulonErrorCode::kInvalidArgument);
   const Bytes snap4 = Snapshot(wb, 4);
 

@@ -161,25 +161,24 @@ function addPivotOver(wb, f) {
 //
 // Parameter model (pairwise, strength 2, generated with coverwise pairwise_generate, seed 7):
 //   method   : updateCellFormat | Shape.update | Slicer.update | Table.update | Table.updateStyleOptions | updateSparklineGroup | updateProtectedRange
-//   keyKind  : unknown | recordOnly | nullable | absent | nonNullable | anchorNoTrigger
+//   keyKind  : unknown | recordOnly | nullable | nonNullable | anchorNoTrigger
 //   depth    : top | nested
 //   valueKind: valid | null
 // Constraints:
-//   absent          -> method = Shape.update, valueKind = null
 //   anchorNoTrigger -> method in {Shape.update, Slicer.update}, valueKind = valid
 //   recordOnly      -> method in {Shape.update, Slicer.update, Table.update}, valueKind = valid
-//   nullable        -> method in {Slicer.update, Table.updateStyleOptions, updateSparklineGroup, updateCellFormat}, valueKind = null
+//   nullable        -> method in {Shape.update, Slicer.update, Table.updateStyleOptions, updateSparklineGroup, updateCellFormat}, valueKind = null
 //   updateCellFormat & nullable -> depth = nested
 //   depth = nested  -> method = updateCellFormat and keyKind in {unknown, nullable, nonNullable}
 //   unknown -> valid; nonNullable -> null
 // The 23 rows below are the generated suite; the expectation of a row follows from keyKind alone:
-//   unknown / nonNullable -> TypeError and nothing changed; anchorNoTrigger -> TypeError and nothing changed;
-//   recordOnly / absent -> accepted and nothing changed; nullable -> accepted and the key is cleared.
+//   unknown / nonNullable / anchorNoTrigger -> TypeError and nothing changed;
+//   recordOnly -> accepted and nothing changed; nullable -> accepted and the key is cleared.
 const PATCH_ROWS = [
   ['Shape.update', 'recordOnly', 'top', 'valid'],
   ['updateCellFormat', 'unknown', 'nested', 'valid'],
   ['Slicer.update', 'anchorNoTrigger', 'top', 'valid'],
-  ['Shape.update', 'absent', 'top', 'null'],
+  ['Shape.update', 'nullable', 'top', 'null'],
   ['updateSparklineGroup', 'nullable', 'top', 'null'],
   ['Shape.update', 'anchorNoTrigger', 'top', 'valid'],
   ['Table.update', 'unknown', 'top', 'valid'],
@@ -226,7 +225,13 @@ const SUBJECTS = {
     read: (t) => plain(t.getProperties()),
     unknown: { top: { bogus: 1 } },
     recordOnly: { top: { objectId: 9999, kind: 12345 } },
-    absent: { top: { fillKind: null, lineKind: null } },
+    nullable: { top: { fillKind: null, lineKind: null, fillColor: null, lineColor: null } },
+    cleared: (state) => {
+      assert.equal(state.fillKind, null);
+      assert.equal(state.fillColor, null);
+      assert.equal(state.lineKind, null);
+      assert.equal(state.lineColor, null);
+    },
     nonNullable: { top: { name: null } },
     anchorNoTrigger: [
       { editAs: 1 },
@@ -319,7 +324,6 @@ for (const [method, keyKind, depth, valueKind] of PATCH_ROWS) {
             assert.deepEqual(subject.read(target), before, `${label} left the state unchanged`);
             break;
           case 'recordOnly':
-          case 'absent':
             assert.doesNotThrow(() => subject.apply(target, patch), label);
             assert.deepEqual(subject.read(target), before, `${label} is ignored`);
             break;
@@ -368,15 +372,16 @@ test('patch: an unknown key is a TypeError on every other patch entry point', as
   });
 });
 
-test('patch: Shape.update treats fill and line kind and colour null as "unchanged" and rejects null elsewhere', async () => {
+test('patch: Shape.update clears fill and line kind and colour on null and rejects null elsewhere', async () => {
   await withWorkbook((wb, f) => {
     const shape = addBox(f, wb.sheet(0), 'S1');
     shape.update({ fillKind: null, lineKind: null, fillColor: null, lineColor: null, name: 'Renamed' });
     const props = shape.getProperties();
     assert.equal(props.name, 'Renamed');
-    assert.equal(props.fillKind, f.ShapePaint.Solid);
-    assert.equal(props.fillColor.argb, 0xffff0000);
-    assert.equal(props.lineKind, f.ShapePaint.Solid);
+    assert.equal(props.fillKind, null);
+    assert.equal(props.fillColor, null);
+    assert.equal(props.lineKind, null);
+    assert.equal(props.lineColor, null);
     for (const key of ['presetGeometry', 'text', 'hidden', 'rotationDeg', 'anchorKind']) {
       assertMisuse(() => shape.update({ [key]: null }), TypeError, key);
     }
@@ -491,7 +496,7 @@ test('patch: updateProtectedRange is read-modify-write and every omitted field s
       {},
       { name: 'Renamed' },
       { spinCount: 5 },
-      { securityDescriptor: '' },
+      { securityDescriptor: null },
       { ranges: [rect(3, 3, 4, 4)] },
     ]) {
       ws.updateProtectedRange(0, patch);
@@ -513,21 +518,22 @@ test('patch: updateProtectedRange with ranges: [] is InvalidArgument; an omitted
     assert.deepEqual(plain(ws.listProtectedRanges()[0]), before);
     ws.updateProtectedRange(0, { spinCount: 7 });
     assert.deepEqual(plain(ws.listProtectedRanges()[0].ranges), before.ranges);
-    // A null is a misuse on every key except legacyPasswordHash.
-    for (const key of [
-      'name',
-      'ranges',
-      'algorithmName',
-      'hashValue',
-      'saltValue',
-      'spinCount',
-      'securityDescriptor',
-    ]) {
+    // A null is a misuse on name, ranges and spinCount.
+    for (const key of ['name', 'ranges', 'spinCount']) {
       assertMisuse(() => ws.updateProtectedRange(0, { [key]: null }), TypeError, key);
     }
-    // `legacyPasswordHash` is the one nullable key: null removes the hash.
-    ws.updateProtectedRange(0, { legacyPasswordHash: null });
-    assert.equal(ws.listProtectedRanges()[0].legacyPasswordHash, null);
+    // The five password and descriptor strings are clearable: null removes them.
+    ws.updateProtectedRange(0, {
+      legacyPasswordHash: null,
+      algorithmName: null,
+      hashValue: null,
+      saltValue: null,
+      securityDescriptor: null,
+    });
+    const cleared = ws.listProtectedRanges()[0];
+    for (const key of ['legacyPasswordHash', 'algorithmName', 'hashValue', 'saltValue', 'securityDescriptor']) {
+      assert.equal(cleared[key], null, key);
+    }
     assert.equal(ws.listProtectedRanges()[0].spinCount, 7);
   });
 });
@@ -791,7 +797,7 @@ test('Shape.rename, setZOrder and snapshot work and Sheet.restoreDrawing brings 
     assert.deepEqual(orderOf(ws), [c.objectId, b.objectId, a.objectId]);
     assertMisuse(() => a.setZOrder(1.5), RangeError, 'fractional index');
     assertMisuse(() => a.setZOrder('0'), TypeError, 'string index');
-    assertFormulonError(() => a.setZOrder(3), f.StatusCode.InvalidArgument);
+    assertFormulonError(() => a.setZOrder(3), f.StatusCode.IndexOutOfRange);
     assert.deepEqual(orderOf(ws), [c.objectId, b.objectId, a.objectId]);
 
     b.rename('Renamed');
@@ -876,7 +882,7 @@ test('Slicer.setZOrder reorders the drawing and survives save and load; Slicer h
     assert.equal(orderOf(ws)[0], shape.objectId);
     slicer.setZOrder(0);
     assert.equal(orderOf(ws)[0], slicer.objectId);
-    assertFormulonError(() => slicer.setZOrder(9), f.StatusCode.InvalidArgument);
+    assertFormulonError(() => slicer.setZOrder(9), f.StatusCode.IndexOutOfRange);
 
     const loaded = f.Workbook.load(wb.save());
     try {

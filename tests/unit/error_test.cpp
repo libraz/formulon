@@ -32,15 +32,16 @@ TEST(ErrorTest, ErrorCodeNameRoundTrip) {
   };
   const Sample samples[] = {
       {FormulonErrorCode::kOk, "kOk"},
+      {FormulonErrorCode::kAlreadyExists, "kAlreadyExists"},
       {FormulonErrorCode::kParserUnexpectedToken, "kParserUnexpectedToken"},
-      {FormulonErrorCode::kEvalCircularReference, "kEvalCircularReference"},
-      {FormulonErrorCode::kFnNotRegistered, "kFnNotRegistered"},
-      {FormulonErrorCode::kGraphCycleDetected, "kGraphCycleDetected"},
+      {FormulonErrorCode::kEvalPivotInvalid, "kEvalPivotInvalid"},
+      {FormulonErrorCode::kFnOverflow, "kFnOverflow"},
+      {FormulonErrorCode::kGraphRecalcReentrant, "kGraphRecalcReentrant"},
       {FormulonErrorCode::kIoZipSlip, "kIoZipSlip"},
-      {FormulonErrorCode::kCryptoBadPassword, "kCryptoBadPassword"},
+      {FormulonErrorCode::kSecResourceLimit, "kSecResourceLimit"},
       {FormulonErrorCode::kBindingInvalidHandle, "kBindingInvalidHandle"},
-      {FormulonErrorCode::kPivotSourceInvalid, "kPivotSourceInvalid"},
-      {FormulonErrorCode::kPrintLayoutConvergence, "kPrintLayoutConvergence"},
+      {FormulonErrorCode::kAutoFilterInvalid, "kAutoFilterInvalid"},
+      {FormulonErrorCode::kPrintPageCountOverflow, "kPrintPageCountOverflow"},
   };
   for (const auto& s : samples) {
     EXPECT_STREQ(s.name, to_cstring(s.code)) << "code=" << static_cast<int>(s.code);
@@ -48,19 +49,19 @@ TEST(ErrorTest, ErrorCodeNameRoundTrip) {
 }
 
 TEST(ErrorTest, ErrorCodesAreWithinDocumentedRanges) {
-  // Band boundaries per the documented error-code ranges.
+  // Each code lies in its module's 1000-wide band.
+  constexpr auto band = [](FormulonErrorCode code) { return static_cast<int32_t>(code) / 1000; };
   static_assert(static_cast<int32_t>(FormulonErrorCode::kOk) == 0, "kOk must be zero");
-  static_assert(static_cast<int32_t>(FormulonErrorCode::kUnknownError) == 1, "kUnknownError must be 1");
-  static_assert(static_cast<int32_t>(FormulonErrorCode::kParserUnexpectedToken) == 1000, "parser band starts at 1000");
-  static_assert(static_cast<int32_t>(FormulonErrorCode::kEvalStackOverflow) == 2000, "evaluator band starts at 2000");
-  static_assert(static_cast<int32_t>(FormulonErrorCode::kFnNotRegistered) == 3000, "functions band starts at 3000");
-  static_assert(static_cast<int32_t>(FormulonErrorCode::kGraphCycleDetected) == 4000, "graph band starts at 4000");
-  static_assert(static_cast<int32_t>(FormulonErrorCode::kIoFileNotFound) == 5000, "I/O band starts at 5000");
-  static_assert(static_cast<int32_t>(FormulonErrorCode::kCryptoAgileNotSupported) == 6000,
-                "crypto band starts at 6000");
-  static_assert(static_cast<int32_t>(FormulonErrorCode::kBindingInvalidHandle) == 7000, "bindings band starts at 7000");
-  static_assert(static_cast<int32_t>(FormulonErrorCode::kPivotSourceInvalid) == 8000, "pivot band starts at 8000");
-  static_assert(static_cast<int32_t>(FormulonErrorCode::kPrintFontMetricsMissing) == 9000, "print band starts at 9000");
+  static_assert(band(FormulonErrorCode::kPreconditionFailed) == 0, "general band is 0-999");
+  static_assert(band(FormulonErrorCode::kParserUnexpectedToken) == 1, "parser band is 1000-1999");
+  static_assert(band(FormulonErrorCode::kEvalPivotMissing) == 2, "evaluator band is 2000-2999");
+  static_assert(band(FormulonErrorCode::kFnOverflow) == 3, "functions band is 3000-3999");
+  static_assert(band(FormulonErrorCode::kGraphScheduleFailed) == 4, "graph band is 4000-4999");
+  static_assert(band(FormulonErrorCode::kIoFileNotFound) == 5, "I/O band is 5000-5999");
+  static_assert(band(FormulonErrorCode::kSecResourceLimit) == 6, "security band is 6000-6999");
+  static_assert(band(FormulonErrorCode::kBindingInvalidHandle) == 7, "bindings band is 7000-7999");
+  static_assert(band(FormulonErrorCode::kDataTableInvalid) == 8, "pivot band is 8000-8999");
+  static_assert(band(FormulonErrorCode::kPrintInvalidArea) == 9, "print band is 9000-9999");
   SUCCEED();
 }
 

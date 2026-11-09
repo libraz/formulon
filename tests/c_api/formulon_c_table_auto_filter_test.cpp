@@ -25,7 +25,7 @@ std::set<std::uint32_t> HiddenRows(const fm_workbook_t* wb, std::size_t sheet = 
   std::size_t count = 0;
   EXPECT_EQ(fm_sheet_get_row_layout_count(wb, sheet, &count), 0);
   for (std::size_t i = 0; i < count; ++i) {
-    fm_row_layout_t layout = FM_STRUCT_INIT(fm_row_layout_t);
+    fm_row_layout_info_t layout = FM_STRUCT_INIT(fm_row_layout_info_t);
     EXPECT_EQ(fm_sheet_get_row_layout_at(wb, sheet, i, &layout), 0);
     if (layout.hidden != 0) {
       rows.insert(layout.row);
@@ -68,15 +68,15 @@ TEST(FormulonCApiTableAutoFilter, SetNullRemovesTheFilterAndIsANoOpWhenAbsent) {
   CreateNumbersTable(wb);
   fm_auto_filter_t out = FM_STRUCT_INIT(fm_auto_filter_t);
   int32_t present = 0;
-  ASSERT_EQ(fm_sheet_get_table_auto_filter(wb.handle, 0, 0, &out, &present), 0);
+  ASSERT_EQ(fm_sheet_get_table_auto_filter(wb.handle, 0, 0, &present, &out), 0);
   EXPECT_EQ(present, 1) << "a created table carries its filter definition";
 
   ASSERT_EQ(fm_sheet_set_table_auto_filter(wb.handle, 0, 0, nullptr), 0) << fm_get_last_error_message();
-  ASSERT_EQ(fm_sheet_get_table_auto_filter(wb.handle, 0, 0, &out, &present), 0);
+  ASSERT_EQ(fm_sheet_get_table_auto_filter(wb.handle, 0, 0, &present, &out), 0);
   EXPECT_EQ(present, 0);
 
   EXPECT_EQ(fm_sheet_set_table_auto_filter(wb.handle, 0, 0, nullptr), 0) << "no-op when the table has none";
-  ASSERT_EQ(fm_sheet_get_table_auto_filter(wb.handle, 0, 0, &out, &present), 0);
+  ASSERT_EQ(fm_sheet_get_table_auto_filter(wb.handle, 0, 0, &present, &out), 0);
   EXPECT_EQ(present, 0);
 }
 
@@ -106,7 +106,7 @@ TEST(FormulonCApiTableAutoFilter, ClearCriteriaShowsTheRowsAndKeepsTheFilter) {
   EXPECT_TRUE(HiddenRows(wb.handle).empty());
   fm_auto_filter_t out = FM_STRUCT_INIT(fm_auto_filter_t);
   int32_t present = 0;
-  ASSERT_EQ(fm_sheet_get_table_auto_filter(wb.handle, 0, 0, &out, &present), 0);
+  ASSERT_EQ(fm_sheet_get_table_auto_filter(wb.handle, 0, 0, &present, &out), 0);
   EXPECT_EQ(present, 1);
   EXPECT_EQ(out.column_count, 0U);
 }
@@ -119,7 +119,7 @@ TEST(FormulonCApiTableAutoFilter, ClearCriteriaIsANoOpOnAFilterWithoutCriteria) 
   EXPECT_TRUE(HiddenRows(wb.handle).empty());
   fm_auto_filter_t out = FM_STRUCT_INIT(fm_auto_filter_t);
   int32_t present = 0;
-  ASSERT_EQ(fm_sheet_get_table_auto_filter(wb.handle, 0, 0, &out, &present), 0);
+  ASSERT_EQ(fm_sheet_get_table_auto_filter(wb.handle, 0, 0, &present, &out), 0);
   EXPECT_EQ(present, 1);
 }
 
@@ -141,7 +141,7 @@ TEST(FormulonCApiTableAutoFilter, TableFailuresAreSheetThenTableIndexOutOfRange)
   std::size_t count = 0;
   std::uint32_t first_row = 0;
 
-  EXPECT_EQ(fm_sheet_get_table_auto_filter(wb.handle, 0, 4, &out, &present), FM_STATUS_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(fm_sheet_get_table_auto_filter(wb.handle, 0, 4, &present, &out), FM_STATUS_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(fm_sheet_set_table_auto_filter(wb.handle, 0, 4, &filter), FM_STATUS_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(fm_sheet_set_table_auto_filter(wb.handle, 0, 4, nullptr), FM_STATUS_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(fm_sheet_apply_table_auto_filter(wb.handle, 0, 4), FM_STATUS_INDEX_OUT_OF_RANGE);
@@ -149,7 +149,7 @@ TEST(FormulonCApiTableAutoFilter, TableFailuresAreSheetThenTableIndexOutOfRange)
   EXPECT_EQ(fm_sheet_evaluate_table_auto_filter(wb.handle, 0, 4, nullptr, 0, &count, &first_row),
             FM_STATUS_INDEX_OUT_OF_RANGE);
 
-  EXPECT_EQ(fm_sheet_get_table_auto_filter(wb.handle, 9, 0, &out, &present), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(fm_sheet_get_table_auto_filter(wb.handle, 9, 0, &present, &out), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(fm_sheet_set_table_auto_filter(wb.handle, 9, 0, &filter), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(fm_sheet_apply_table_auto_filter(wb.handle, 9, 0), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(fm_sheet_clear_table_auto_filter_criteria(wb.handle, 9, 0), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);

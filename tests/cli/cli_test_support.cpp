@@ -354,8 +354,11 @@ bool write_fixture_workbook(const std::string& path, std::string_view extra_text
     return false;
   }
   fm_iterative_settings_patch_t settings = FM_STRUCT_INIT(fm_iterative_settings_patch_t);
+  settings.enabled_op = FM_PATCH_OP_SET;
   settings.enabled = 1;
-  settings.max_iterations = max_iterations;
+  settings.max_iterations_op = FM_PATCH_OP_SET;
+  settings.max_iterations = static_cast<uint32_t>(max_iterations);
+  settings.max_change_op = FM_PATCH_OP_SET;
   settings.max_change = max_change;
   if (iterative && fm_workbook_update_iterative(wb, &settings) != 0) {
     fm_workbook_destroy(wb);

@@ -37,7 +37,7 @@ void MakeWorkbook(WorkbookGuard& wb) {
 }
 
 std::pair<std::int32_t, std::uint32_t> Effective(const WorkbookGuard& wb, std::uint32_t row, std::uint32_t col) {
-  fm_effective_style_t style = FM_STRUCT_INIT(fm_effective_style_t);
+  fm_effective_style_info_t style = FM_STRUCT_INIT(fm_effective_style_info_t);
   EXPECT_EQ(fm_sheet_get_effective_style(wb.handle, 0, row, col, &style), 0);
   return {style.source, style.xf_index};
 }
@@ -47,10 +47,10 @@ fm_status_t Remap(WorkbookGuard& wb, std::uint32_t r1, std::uint32_t c1, std::ui
                                   kFrom.size());
 }
 
-std::vector<fm_column_layout_t> Columns(const WorkbookGuard& wb) {
+std::vector<fm_column_layout_info_t> Columns(const WorkbookGuard& wb) {
   size_t count = 0;
   EXPECT_EQ(fm_sheet_get_column_layout_count(wb.handle, 0, &count), 0);
-  std::vector<fm_column_layout_t> out(count, FM_STRUCT_INIT(fm_column_layout_t));
+  std::vector<fm_column_layout_info_t> out(count, FM_STRUCT_INIT(fm_column_layout_info_t));
   for (size_t i = 0; i < count; ++i) {
     EXPECT_EQ(fm_sheet_get_column_layout_at(wb.handle, 0, i, &out[i]), 0);
   }

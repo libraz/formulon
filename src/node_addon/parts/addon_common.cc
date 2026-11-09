@@ -481,8 +481,9 @@ constexpr const char* kMissingErrorClassMessage = "FormulonError was not provide
 // The `parseError` argument of a failure: `{ code, start, end, line, column }`
 // when the failing call recorded a formula syntax error, else `undefined`.
 Napi::Value LastParseErrorToJs(Napi::Env env) {
-  fm_parse_error_t record = FM_STRUCT_INIT(fm_parse_error_t);
-  if (fm_get_last_parse_error(&record) != 0) {
+  fm_parse_error_info_t record = FM_STRUCT_INIT(fm_parse_error_info_t);
+  int32_t present = 0;
+  if (fm_get_last_parse_error(&present, &record) != 0 || present == 0) {
     return env.Undefined();
   }
   Napi::Object out = Napi::Object::New(env);
@@ -688,7 +689,7 @@ bool JsToValue(Napi::Env env, Napi::Value in, fm_value_t* out, std::string* text
   return true;
 }
 
-Napi::Object TranslatePivotCell(Napi::Env env, const fm_pivot_cell_t& cell) {
+Napi::Object TranslatePivotCell(Napi::Env env, const fm_pivot_cell_info_t& cell) {
   Napi::Object out = Napi::Object::New(env);
   out.Set("row", Napi::Number::New(env, cell.row));
   out.Set("col", Napi::Number::New(env, cell.col));
@@ -700,7 +701,7 @@ Napi::Object TranslatePivotCell(Napi::Env env, const fm_pivot_cell_t& cell) {
   return out;
 }
 
-Napi::Object TranslateCfMatch(Napi::Env env, const fm_cf_match_t& m) {
+Napi::Object TranslateCfMatch(Napi::Env env, const fm_cf_match_info_t& m) {
   Napi::Object o = Napi::Object::New(env);
   o.Set("kind", Napi::Number::New(env, static_cast<int32_t>(m.kind)));
   o.Set("priority", Napi::Number::New(env, m.priority));
@@ -737,7 +738,7 @@ Napi::Object TranslateCfMatch(Napi::Env env, const fm_cf_match_t& m) {
   return o;
 }
 
-Napi::Object ColorSpecToJs(Napi::Env env, const fm_color_spec_t& spec) {
+Napi::Object ColorSpecToJs(Napi::Env env, const fm_color_t& spec) {
   Napi::Object out = Napi::Object::New(env);
   out.Set("kind", Napi::Number::New(env, static_cast<uint32_t>(spec.kind)));
   out.Set("argb", Napi::Number::New(env, spec.argb));
@@ -747,7 +748,7 @@ Napi::Object ColorSpecToJs(Napi::Env env, const fm_color_spec_t& spec) {
   return out;
 }
 
-Napi::Value ColorSpecOrNull(Napi::Env env, const fm_color_spec_t& spec) {
+Napi::Value ColorSpecOrNull(Napi::Env env, const fm_color_t& spec) {
   return spec.kind != FM_COLOR_KIND_NONE ? Napi::Value(ColorSpecToJs(env, spec)) : env.Null();
 }
 
@@ -811,21 +812,73 @@ Napi::Value PrintTitlesToJs(Napi::Env env, const fm_print_titles_t& titles) {
   return out;
 }
 
-PatchKey ClassifyPatchKey(CheckedSpecReader& reader, const Napi::Value& value, const char* key, bool nullable) {
+PatchKey ClassifyPatchKey(CheckedSpecReader& reader, const Napi::Value& value, const char* /*key*/, bool /*nullable*/) {
   if (!reader.ok() || value.IsUndefined()) {
     return PatchKey::kKeep;
   }
-  if (value.IsNull()) {
-    if (nullable) {
-      return PatchKey::kClear;
-    }
-    reader.FailType(key, "value (null cannot clear this field)");
-    return PatchKey::kKeep;
-  }
-  return PatchKey::kSet;
+  // `null` always packs as CLEAR; the C ABI refuses it on a field that cannot be cleared.
+  return value.IsNull() ? PatchKey::kClear : PatchKey::kSet;
 }
 
-void BuildDataFieldSpec(CheckedSpecReader& reader, const Napi::Object& spec, fm_pivot_data_field_spec_t& out,
+namespace {
+
+template <typename Read>
+fm_patch_op_t PatchField(CheckedSpecReader& reader, const Napi::Object& spec, const char* key, bool nullable,
+                         Read&& read) {
+  const Napi::Value value = reader.Get(spec, key);
+  const PatchKey state = ClassifyPatchKey(reader, value, key, nullable);
+  if (state == PatchKey::kSet) {
+    read(value);
+  }
+  return static_cast<fm_patch_op_t>(state);
+}
+
+}  // namespace
+
+fm_patch_op_t PatchBool(CheckedSpecReader& reader, const Napi::Object& spec, const char* key, int32_t* out) {
+  return PatchField(reader, spec, key, false,
+                    [&](const Napi::Value& v) { *out = reader.Bool(v, key, false) ? 1 : 0; });
+}
+
+fm_patch_op_t PatchI32(CheckedSpecReader& reader, const Napi::Object& spec, const char* key, int32_t* out) {
+  return PatchField(reader, spec, key, false, [&](const Napi::Value& v) { *out = reader.I32(v, key, 0); });
+}
+
+fm_patch_op_t PatchU32(CheckedSpecReader& reader, const Napi::Object& spec, const char* key, uint32_t* out) {
+  return PatchField(reader, spec, key, false, [&](const Napi::Value& v) { *out = reader.U32(v, key, 0U); });
+}
+
+fm_patch_op_t PatchI64(CheckedSpecReader& reader, const Napi::Object& spec, const char* key, int64_t* out) {
+  return PatchField(reader, spec, key, false, [&](const Napi::Value& v) { *out = reader.I64(v, key, 0); });
+}
+
+fm_patch_op_t PatchColor(CheckedSpecReader& reader, const Napi::Object& spec, const char* key, bool nullable,
+                         fm_color_t* out) {
+  return PatchField(reader, spec, key, nullable, [&](const Napi::Value& v) { *out = ReadColorSpec(reader, v, key); });
+}
+
+fm_patch_op_t PatchNullableDouble(CheckedSpecReader& reader, const Napi::Object& spec, const char* key, double* out) {
+  return PatchField(reader, spec, key, true, [&](const Napi::Value& v) { *out = reader.Double(v, key, 0.0); });
+}
+
+fm_patch_op_t PatchNullableI32(CheckedSpecReader& reader, const Napi::Object& spec, const char* key, int32_t* out) {
+  return PatchField(reader, spec, key, true, [&](const Napi::Value& v) { *out = reader.I32(v, key, 0); });
+}
+
+fm_patch_op_t PatchDouble(CheckedSpecReader& reader, const Napi::Object& spec, const char* key, double* out) {
+  return PatchField(reader, spec, key, false, [&](const Napi::Value& v) { *out = reader.Double(v, key, 0.0); });
+}
+
+fm_patch_op_t PatchString(CheckedSpecReader& reader, const Napi::Object& spec, const char* key, bool nullable,
+                          std::string* store, const char** out) {
+  return PatchField(reader, spec, key, nullable, [&](const Napi::Value& v) {
+    if (reader.String(v, key, store)) {
+      *out = store->c_str();
+    }
+  });
+}
+
+void BuildDataFieldSpec(CheckedSpecReader& reader, const Napi::Object& spec, fm_pivot_data_field_t& out,
                         std::string& name_buf, std::string& nfmt_buf) {
   // An omitted `name` passes NULL through rather than the coerced literal
   // string "undefined" `.ToString()` would otherwise produce, so the C ABI
@@ -873,9 +926,9 @@ bool ReadCellRects(CheckedSpecReader& reader, const Napi::Value& value, const ch
 
 namespace {
 
-fm_color_spec_t ColorSpecFields(CheckedSpecReader& reader, const Napi::Object& v) {
-  fm_color_spec_t spec{};
-  spec.kind = reader.U8(v, "kind", 0U);
+fm_color_t ColorSpecFields(CheckedSpecReader& reader, const Napi::Object& v) {
+  fm_color_t spec{};
+  spec.kind = reader.I32(v, "kind", 0);
   spec.argb = reader.U32(v, "argb", 0U);
   spec.theme = reader.U32(v, "theme", 0U);
   spec.tint = reader.Double(v, "tint", 0.0);
@@ -885,14 +938,14 @@ fm_color_spec_t ColorSpecFields(CheckedSpecReader& reader, const Napi::Object& v
 
 }  // namespace
 
-fm_color_spec_t PullColorSpec(CheckedSpecReader& reader, const Napi::Object& owner, const char* key) {
+fm_color_t PullColorSpec(CheckedSpecReader& reader, const Napi::Object& owner, const char* key) {
   Napi::Object v;
-  return reader.Object(owner, key, &v) ? ColorSpecFields(reader, v) : fm_color_spec_t{};
+  return reader.Object(owner, key, &v) ? ColorSpecFields(reader, v) : fm_color_t{};
 }
 
-fm_color_spec_t ReadColorSpec(CheckedSpecReader& reader, const Napi::Value& value, const char* key) {
+fm_color_t ReadColorSpec(CheckedSpecReader& reader, const Napi::Value& value, const char* key) {
   Napi::Object v;
-  return reader.Object(value, key, &v) ? ColorSpecFields(reader, v) : fm_color_spec_t{};
+  return reader.Object(value, key, &v) ? ColorSpecFields(reader, v) : fm_color_t{};
 }
 
 // Reads the range at `info[idx]`; a missing/nullish argument reads as all

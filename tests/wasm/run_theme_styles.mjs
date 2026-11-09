@@ -278,7 +278,7 @@ export function registerThemeStyles(Module, test) {
       }
       assert.ok(found, 'Dated is listed');
       assert.equal(found.styleXfIndex, styleXf);
-      assert.equal(found.builtinId, 0xffffffff);
+      assert.equal(found.builtinId, null);
       assert.equal(found.hidden, false);
 
       // Replacing by name keeps one entry and takes the new flags.

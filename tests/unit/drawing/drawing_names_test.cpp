@@ -223,7 +223,7 @@ TEST(DrawingNames, SetDrawingNameRenamesAndRejectsBadInput) {
   EXPECT_EQ(empty.error().code, FormulonErrorCode::kInvalidArgument);
   auto missing = set_drawing_name(book.wb(), 0, 99, "X");
   ASSERT_FALSE(static_cast<bool>(missing));
-  EXPECT_EQ(missing.error().code, FormulonErrorCode::kInvalidArgument);
+  EXPECT_EQ(missing.error().code, FormulonErrorCode::kNotFound);
   EXPECT_EQ(book.Items(0), (Items{{id, "Revenue"}}));
 }
 

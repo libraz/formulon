@@ -383,6 +383,7 @@ class ValidateNamesVocabularyTest(unittest.TestCase):
             "rule.add": {"kind": "op", "scope": "sheet", "js": "addRule", "surfaces": ["wasm"], "add_returns": "index"},
             "record.legend": {"kind": "record", "role": "result", "js": "ChartLegend", "surfaces": ["wasm"],
                               "clearable": ["position", "hidden_series"]},
+            "record.plot_patch": {"kind": "record", "js": "ChartPlotPatch", "surfaces": ["wasm"], "clearable": []},
             "enum.sort_order": {"kind": "enum", "js": "SortOrder", "py": "SortOrder", "surfaces": ["wasm", "py"]},
             "constant.sort_order_ascending": {"kind": "constant", "enum": "enum.sort_order", "js": "Ascending",
                                               "py": "ASCENDING", "surfaces": ["wasm", "py"],

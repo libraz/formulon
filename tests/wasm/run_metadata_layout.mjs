@@ -346,7 +346,7 @@ export function registerMetadataLayout(Module, test) {
       // portability trap across the platforms the prebuilds target.
       assert.throws(
         () => wb.setRowHeight(0, 1, 1, Number.NaN),
-        (e) => e.name === 'FormulonError' && /height=/.test(e.context),
+        (e) => e.name === 'FormulonError' && /height_pt=/.test(e.context),
       );
 
       // Zero is a real width and a real height, not a rejected one.
@@ -386,12 +386,18 @@ export function registerMetadataLayout(Module, test) {
       expectRejected({ scalePct: Number.POSITIVE_INFINITY }, 'pageSetup.scalePct');
       expectRejected({ orientation: 1.5 }, 'pageSetup.orientation');
 
-      // Nullish values keep the old patch meaning: the attribute is omitted
-      // from this update and the prior value remains in force.
-      wb.updatePageSetup(0, { scalePct: null, orientation: undefined });
+      // `undefined` leaves the attribute alone; `null` is refused on a key that cannot be cleared.
+      wb.updatePageSetup(0, { scalePct: undefined, orientation: undefined });
       const unchanged = wb.getPageSetup(0);
       assert.equal(unchanged.orientation, 1);
       assert.equal(unchanged.scalePct, 125);
+      expectFailure(() => wb.updatePageSetup(0, { scalePct: null }), StatusCode.InvalidArgument);
+      assert.equal(wb.getPageSetup(0).scalePct, 125);
+
+      // `null` on orientation removes the attribute and keeps the rest.
+      wb.updatePageSetup(0, { orientation: null });
+      assert.equal(wb.getPageSetup(0).orientation, null);
+      assert.equal(wb.getPageSetup(0).scalePct, 125);
     } finally {
       wb.delete();
     }
@@ -453,30 +459,31 @@ export function registerMetadataLayout(Module, test) {
       const read = () => wb.getView(0).visibility;
       assert.equal(read(), 0);
       assert.equal('tabHidden' in wb.getView(0), false);
-      // The only visible sheet cannot be hidden: kInvalidArgument, sheet left alone.
-      expectFailure(() => wb.setVisibility(0, 1), StatusCode.InvalidArgument);
+      const setVisibility = (sheet, visibility) => wb.updateView(sheet, { visibility });
+      // The only visible sheet cannot be hidden: PreconditionFailed, sheet left alone.
+      expectFailure(() => setVisibility(0, 1), StatusCode.PreconditionFailed);
       assert.equal(read(), 0);
-      // The last sheet keeps its own refusal (kCannotRemoveLastSheet).
-      expectFailure(() => wb.removeSheet(0), StatusCode.CannotRemoveLastSheet);
+      // The last sheet cannot be removed either.
+      expectFailure(() => wb.removeSheet(0), StatusCode.PreconditionFailed);
       assert.equal(wb.getSheetCount(), 1);
       // A second sheet lets the first one change state, but removing the first
       // while the second is hidden would leave no visible sheet.
       wb.addSheet('Second');
-      wb.setVisibility(1, 1);
-      expectFailure(() => wb.removeSheet(0), StatusCode.InvalidArgument);
+      setVisibility(1, 1);
+      expectFailure(() => wb.removeSheet(0), StatusCode.PreconditionFailed);
       assert.equal(wb.getSheetCount(), 2);
-      wb.setVisibility(1, 0);
+      setVisibility(1, 0);
 
-      wb.setVisibility(0, 2);
+      setVisibility(0, 2);
       assert.equal(read(), 2);
-      wb.setVisibility(0, 1);
+      setVisibility(0, 1);
       assert.equal(read(), 1);
-      wb.setVisibility(0, 0);
+      setVisibility(0, 0);
       assert.equal(read(), 0);
 
       // An unknown ordinal is refused and leaves the sheet alone.
-      wb.setVisibility(0, 2);
-      expectFailure(() => wb.setVisibility(0, 3));
+      setVisibility(0, 2);
+      expectFailure(() => setVisibility(0, 3), StatusCode.InvalidArgument);
       assert.equal(read(), 2);
     } finally {
       wb.delete();

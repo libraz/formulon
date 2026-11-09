@@ -52,8 +52,8 @@ TEST(FormulonCApiErrorText, FontIndexOutOfRangeNamesTheFieldTheIndexAndTheCount)
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   size_t font_count = 0;
   ASSERT_EQ(fm_workbook_get_font_count(wb.handle, &font_count), 0);
-  fm_font_record_t record{};
-  ASSERT_EQ(fm_workbook_get_font(wb.handle, 999, &record), FM_STATUS_INDEX_OUT_OF_RANGE);
+  fm_font_t record{};
+  ASSERT_EQ(fm_workbook_get_font_at(wb.handle, 999, &record), FM_STATUS_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(Message(), "font_index 999 is out of range (" + std::to_string(font_count) + " items)");
   EXPECT_EQ(Context(), "font_index=999 count=" + std::to_string(font_count));
   ExpectNoInternalNames(Message());
@@ -113,7 +113,7 @@ TEST(FormulonCApiErrorText, MissingSheetNameLeavesNoErrorText) {
   EXPECT_EQ(fm_workbook_remove_defined_name(wb.handle, "nope", -1), FM_STATUS_NOT_FOUND);
   size_t index = 99;
   int32_t present = -1;
-  ASSERT_EQ(fm_workbook_get_sheet_index(wb.handle, "No such sheet", &index, &present), 0);
+  ASSERT_EQ(fm_workbook_get_sheet_index(wb.handle, "No such sheet", &present, &index), 0);
   EXPECT_EQ(present, 0);
   EXPECT_EQ(Message(), "");
   EXPECT_EQ(Context(), "");

@@ -62,6 +62,7 @@ __all__ = [
     "FormulonError",
     "IndexOutOfRangeError",
     "FormulaSyntaxError",
+    "AlreadyExistsError",
     "InvalidArgumentError",
     "InvalidFileError",
     "NotFoundError",
@@ -198,7 +199,7 @@ class ParseErrorCode(IntEnum):
 
 @dataclass(frozen=True)
 class ParseError:
-    """Position of a formula syntax failure (``fm_parse_error_t``).
+    """Position of a formula syntax failure (``fm_parse_error_info_t``).
 
     ``start`` / ``end`` are UTF-16 code units into the text the caller passed;
     ``line`` and ``column`` are 1-based.
@@ -222,8 +223,6 @@ _INVALID_FILE_CODES = frozenset(
         StatusCode.IO_ZIP_BOMB,
         StatusCode.IO_ZIP_SLIP,
         StatusCode.IO_XML_PARSE,
-        StatusCode.IO_XML_DOCTYPE,
-        StatusCode.IO_XML_ENTITY_EXPLOSION,
         StatusCode.IO_RELATIONSHIP_BROKEN,
         StatusCode.IO_CONTENT_TYPE_INVALID,
         StatusCode.IO_SHEET_CORRUPT,
@@ -242,8 +241,8 @@ class FormulonError(Exception):
 
     Constructing ``FormulonError`` with a status that has a dedicated
     subclass yields that subclass (:class:`IndexOutOfRangeError`,
-    :class:`InvalidArgumentError`, :class:`FormulaSyntaxError`,
-    :class:`InvalidFileError`, :class:`NotFoundError`,
+    :class:`InvalidArgumentError`, :class:`AlreadyExistsError`,
+    :class:`FormulaSyntaxError`, :class:`InvalidFileError`, :class:`NotFoundError`,
     :class:`WorkbookClosedError`), so ``except IndexError`` / ``except
     ValueError`` / ``except KeyError`` also catch the matching failures.
 
@@ -278,6 +277,8 @@ class FormulonError(Exception):
                 cls = IndexOutOfRangeError
             elif status == StatusCode.INVALID_ARGUMENT:
                 cls = InvalidArgumentError
+            elif status == StatusCode.ALREADY_EXISTS:
+                cls = AlreadyExistsError
             elif status in NOT_FOUND_CODES:
                 cls = NotFoundError
             elif status == StatusCode.BINDING_INVALID_HANDLE:
@@ -326,6 +327,10 @@ class InvalidArgumentError(FormulonError, ValueError):
     """The engine refused an argument (``StatusCode.INVALID_ARGUMENT``)."""
 
 
+class AlreadyExistsError(FormulonError, ValueError):
+    """A name or id is already taken (``StatusCode.ALREADY_EXISTS``)."""
+
+
 class FormulaSyntaxError(InvalidArgumentError):
     """A formula or reference text failed to parse (statuses 1000 to 1014).
 
@@ -360,7 +365,11 @@ class NotFoundError(FormulonError, KeyError):
 
 
 class IndexOutOfRangeError(FormulonError, IndexError):
-    """An index is past the end of its collection (``SHEET_INDEX_OUT_OF_RANGE``, ``INDEX_OUT_OF_RANGE``)."""
+    """An index is past the end of its collection.
+
+    A sheet position past the end is ``StatusCode.SHEET_INDEX_OUT_OF_RANGE``; every
+    other position is ``StatusCode.INDEX_OUT_OF_RANGE``.
+    """
 
 
 class WorkbookClosedError(FormulonError, ValueError):
@@ -372,8 +381,7 @@ class InvalidFileError(FormulonError):
 
     Raised for a corrupt or hostile archive, unparsable XML, broken
     relationships or content types, and corrupt XLSB records. A damaged part
-    the workbook still opens without (a drawing, a chart) is not one, nor is
-    an unsupported variant (``StatusCode.IO_UNSUPPORTED_VARIANT``).
+    the workbook still opens without (a drawing, a chart) is not one.
     """
 
 
@@ -451,7 +459,7 @@ _STATUS_RETURNING_EXPORT_NAMES = (
     "fm_sheet_add_cf_rule",
     "fm_sheet_clear_cf_rules",
     "fm_sheet_get_cf_rule_count",
-    "fm_sheet_get_cf_rule",
+    "fm_sheet_get_cf_rule_at",
     "fm_sheet_remove_cf_rule",
     "fm_sheet_remove_comment",
     "fm_sheet_get_chart_data",
@@ -502,15 +510,16 @@ _STATUS_RETURNING_EXPORT_NAMES = (
     "fm_sheet_get_print_area",
     "fm_sheet_get_print_options_xml",
     "fm_sheet_get_print_titles",
-    "fm_sheet_get_protected_range",
+    "fm_sheet_get_protected_range_at",
     "fm_sheet_get_sheet_protection",
     "fm_sheet_get_row_layout_at",
     "fm_sheet_get_row_layout_count",
     "fm_sheet_get_selection",
     "fm_sheet_get_sheet_pr_xml",
-    "fm_sheet_get_validation",
+    "fm_sheet_get_validation_at",
     "fm_sheet_get_validation_count",
     "fm_sheet_get_view",
+    "fm_sheet_update_view",
     "fm_sheet_add_chart",
     "fm_sheet_add_shape",
     "fm_sheet_get_invalid_cells",
@@ -559,21 +568,18 @@ _STATUS_RETURNING_EXPORT_NAMES = (
     "fm_sheet_set_drawing_name",
     "fm_sheet_set_drawing_z_order",
     "fm_sheet_update_format_defaults",
-    "fm_sheet_set_freeze",
     "fm_sheet_update_header_footer",
     "fm_sheet_set_header_footer_xml",
     "fm_sheet_update_page_margins",
     "fm_sheet_set_page_margins_xml",
     "fm_sheet_update_page_setup",
     "fm_sheet_set_page_setup_xml",
-    "fm_sheet_set_pane_top_left",
     "fm_sheet_set_print_area",
     "fm_sheet_update_print_options",
     "fm_sheet_set_print_options_xml",
     "fm_sheet_set_print_titles",
     "fm_sheet_set_sheet_protection",
     "fm_sheet_set_range_xf_index",
-    "fm_sheet_set_right_to_left",
     "fm_sheet_set_row_auto_height",
     "fm_sheet_set_row_collapsed",
     "fm_sheet_set_row_height",
@@ -582,17 +588,6 @@ _STATUS_RETURNING_EXPORT_NAMES = (
     "fm_sheet_set_row_xf_index",
     "fm_sheet_set_selection",
     "fm_sheet_set_sheet_pr_xml",
-    "fm_sheet_set_show_formulas",
-    "fm_sheet_set_show_grid_lines",
-    "fm_sheet_set_show_outline_symbols",
-    "fm_sheet_set_show_row_column_headers",
-    "fm_sheet_set_show_zeros",
-    "fm_sheet_set_split",
-    "fm_sheet_set_tab_selected",
-    "fm_sheet_set_top_left",
-    "fm_sheet_set_view_mode",
-    "fm_sheet_set_visibility",
-    "fm_sheet_set_zoom",
     "fm_sheet_get_shape_at",
     "fm_sheet_get_shape",
     "fm_sheet_get_shape_count",
@@ -601,8 +596,8 @@ _STATUS_RETURNING_EXPORT_NAMES = (
     "fm_sheet_get_slicer_count",
     "fm_sheet_snapshot_drawing",
     "fm_sheet_snapshot_range_xfs",
-    "fm_sheet_get_sparkline",
-    "fm_sheet_get_sparkline_group",
+    "fm_sheet_get_sparkline_at",
+    "fm_sheet_get_sparkline_group_at",
     "fm_sheet_get_sparkline_group_count",
     "fm_sheet_get_threaded_comment_at",
     "fm_sheet_get_threaded_comment",
@@ -621,20 +616,20 @@ _STATUS_RETURNING_EXPORT_NAMES = (
     "fm_workbook_add_fill",
     "fm_workbook_add_font",
     "fm_workbook_add_number_format",
-    "fm_workbook_get_border",
+    "fm_workbook_get_border_at",
     "fm_workbook_get_border_count",
     "fm_workbook_get_cell_style_at",
     "fm_workbook_get_cell_style",
     "fm_workbook_get_cell_style_count",
-    "fm_workbook_get_cell_style_xf",
+    "fm_workbook_get_cell_style_xf_at",
     "fm_workbook_get_cell_style_xf_count",
-    "fm_workbook_get_cell_xf",
+    "fm_workbook_get_cell_xf_at",
     "fm_workbook_get_cell_xf_count",
-    "fm_workbook_get_dxf",
+    "fm_workbook_get_dxf_at",
     "fm_workbook_get_dxf_count",
-    "fm_workbook_get_fill",
+    "fm_workbook_get_fill_at",
     "fm_workbook_get_fill_count",
-    "fm_workbook_get_font",
+    "fm_workbook_get_font_at",
     "fm_workbook_get_font_count",
     "fm_workbook_get_number_format",
     "fm_workbook_get_table_style_at",
@@ -672,7 +667,7 @@ _STATUS_RETURNING_EXPORT_NAMES = (
     "fm_value_array_get_value_count",
     "fm_value_array_get_value_at",
     "fm_workbook_get_profile_id",
-    "fm_workbook_get_external_link",
+    "fm_workbook_get_external_link_at",
     "fm_workbook_get_external_link_count",
     "fm_workbook_get_file_name",
     "fm_workbook_format_reference",
@@ -682,7 +677,7 @@ _STATUS_RETURNING_EXPORT_NAMES = (
     "fm_sheet_get_array_formula",
     "fm_sheet_get_cell_phonetic",
     "fm_sheet_get_cell_phonetic_properties",
-    "fm_sheet_get_cell_phonetic_run",
+    "fm_sheet_get_cell_phonetic_run_at",
     "fm_sheet_get_cell_phonetic_run_count",
     "fm_sheet_get_cell_show_phonetic",
     "fm_sheet_get_display_text",
@@ -700,7 +695,7 @@ _STATUS_RETURNING_EXPORT_NAMES = (
     "fm_workbook_load",
     "fm_workbook_get_memory_usage",
     "fm_workbook_move_sheet",
-    "fm_sheet_get_pagination",
+    "fm_sheet_paginate",
     "fm_workbook_parse_reference",
     "fm_sheet_recalc_viewport",
     "fm_workbook_get_passthrough_at",
@@ -713,7 +708,7 @@ _STATUS_RETURNING_EXPORT_NAMES = (
     "fm_workbook_remove_pivot_cache_calculated_field",
     "fm_workbook_set_pivot_cache_calculated_field_formula",
     "fm_workbook_add_pivot_cache_calculated_item",
-    "fm_workbook_get_pivot_cache_calculated_item",
+    "fm_workbook_get_pivot_cache_calculated_item_at",
     "fm_workbook_get_pivot_cache_calculated_item_count",
     "fm_workbook_move_pivot_cache_calculated_item",
     "fm_workbook_remove_pivot_cache_calculated_item",
@@ -753,7 +748,7 @@ _STATUS_RETURNING_EXPORT_NAMES = (
     "fm_sheet_get_pivot_count",
     "fm_sheet_add_pivot",
     "fm_sheet_add_pivot_data_field",
-    "fm_sheet_get_pivot_data_field",
+    "fm_sheet_get_pivot_data_field_at",
     "fm_sheet_clear_pivot_data_fields",
     "fm_sheet_get_pivot_data_field_count",
     "fm_sheet_get_pivot_data_field_default_name",
@@ -762,20 +757,20 @@ _STATUS_RETURNING_EXPORT_NAMES = (
     "fm_sheet_add_pivot_field_item",
     "fm_sheet_add_pivot_field_item_by_cache_index",
     "fm_sheet_add_pivot_field_subtotal_function",
-    "fm_sheet_get_pivot_field",
+    "fm_sheet_get_pivot_field_at",
     "fm_sheet_clear_pivot_fields",
     "fm_sheet_clear_pivot_field_date_group",
     "fm_sheet_clear_pivot_field_items",
     "fm_sheet_clear_pivot_field_subtotal_functions",
     "fm_sheet_get_pivot_field_count",
-    "fm_sheet_get_pivot_field_item",
+    "fm_sheet_get_pivot_field_item_at",
     "fm_sheet_get_pivot_field_item_count",
     "fm_sheet_set_pivot_field_axis",
     "fm_sheet_set_pivot_field_date_group",
     "fm_sheet_update_pivot_field",
     "fm_sheet_update_pivot_field_item",
     "fm_sheet_add_pivot_filter",
-    "fm_sheet_get_pivot_filter",
+    "fm_sheet_get_pivot_filter_at",
     "fm_sheet_clear_pivot_filters",
     "fm_sheet_get_pivot_filter_count",
     "fm_sheet_remove_pivot_filter",
@@ -873,11 +868,10 @@ _STATUS_RETURNING_EXPORT_NAMES = (
     "fm_sheet_apply_table_auto_filter",
     "fm_sheet_clear_table_auto_filter_criteria",
     "fm_sheet_evaluate_table_auto_filter",
-    "fm_sheet_get_table",
+    "fm_sheet_get_table_at",
     "fm_sheet_get_table_auto_filter",
-    "fm_sheet_get_table_column",
+    "fm_sheet_get_table_column_at",
     "fm_sheet_get_table_count",
-    "fm_sheet_get_table_info",
     "fm_sheet_get_table_runtime_id",
     "fm_sheet_get_table_style_options",
     "fm_sheet_remove_table",
@@ -1238,17 +1232,21 @@ class _WasmInstance:
         getter = self._exports.get("fm_get_last_parse_error")
         if getter is None:
             return None
-        ptr = self._call_or_poison(self._exports["malloc"], "malloc", PARSE_ERROR.size)
+        ptr = self._call_or_poison(self._exports["malloc"], "malloc", 4 + PARSE_ERROR.size)
         if ptr == 0:
             return None
         try:
             assert self._memory is not None
-            self._memory.write(self._store, PARSE_ERROR.blank(), ptr)
-            if self._call_or_poison(getter, "fm_get_last_parse_error", ptr) != 0:
+            # One block: the `out_present` slot, then the record.
+            self._memory.write(self._store, bytes(4) + bytes(PARSE_ERROR.blank()), ptr)
+            if self._call_or_poison(getter, "fm_get_last_parse_error", ptr, ptr + 4) != 0:
                 return None
-            raw = bytes(self._memory.read(self._store, ptr, ptr + PARSE_ERROR.size))
+            raw = bytes(self._memory.read(self._store, ptr, ptr + 4 + PARSE_ERROR.size))
         finally:
             self._call_or_poison(self._exports["free"], "free", ptr)
+        if struct.unpack_from("<i", raw, 0)[0] == 0:
+            return None
+        raw = raw[4:]
         d = PARSE_ERROR.unpack_from(raw)
         return ParseError(ParseErrorCode(d["code"]), d["start"], d["end"], d["line"], d["column"])
 

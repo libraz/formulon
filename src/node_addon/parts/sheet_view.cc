@@ -49,7 +49,7 @@ Napi::Value SheetLayoutList(const Napi::CallbackInfo& info, const fm_workbook_t*
   return arr;
 }
 
-Napi::Object ColumnLayoutToJs(Napi::Env env, const fm_column_layout_t& entry) {
+Napi::Object ColumnLayoutToJs(Napi::Env env, const fm_column_layout_info_t& entry) {
   Napi::Object col = Napi::Object::New(env);
   col.Set("first", Napi::Number::New(env, entry.first));
   col.Set("last", Napi::Number::New(env, entry.last));
@@ -61,7 +61,7 @@ Napi::Object ColumnLayoutToJs(Napi::Env env, const fm_column_layout_t& entry) {
   return col;
 }
 
-Napi::Object RowLayoutToJs(Napi::Env env, const fm_row_layout_t& entry) {
+Napi::Object RowLayoutToJs(Napi::Env env, const fm_row_layout_info_t& entry) {
   Napi::Object row = Napi::Object::New(env);
   row.Set("row", Napi::Number::New(env, entry.row));
   row.Set("heightPt", JsNumberOrNull(env, entry.has_height_pt, entry.height_pt));
@@ -73,18 +73,8 @@ Napi::Object RowLayoutToJs(Napi::Env env, const fm_row_layout_t& entry) {
   return row;
 }
 
-// Shared body of the per-sheet boolean view setters.
-using SheetFlagFn = fm_status_t (*)(fm_workbook_t*, size_t, int32_t);
-
-Napi::Value InvokeSheetFlag(Workbook& wb, const Napi::CallbackInfo& info, SheetFlagFn fn) {
-  return wb.StatusCall(info, [&](fm_workbook_t* handle) {
-    const std::size_t sheet = static_cast<std::size_t>(Workbook::ArgU32(info, 0));
-    return fn(handle, sheet, Workbook::ArgFlag(info, 1));
-  });
-}
-
 // Shared body of the column width unit converters (chars <-> points).
-using ColumnUnitFn = fm_status_t (*)(const fm_workbook_t*, size_t, int32_t, double, double*);
+using ColumnUnitFn = fm_status_t (*)(const fm_workbook_t*, size_t, double, int32_t, double*);
 
 Napi::Value ConvertColumnUnit(const Napi::CallbackInfo& info, const fm_workbook_t* handle, ColumnUnitFn fn) {
   Napi::Env env = info.Env();
@@ -92,7 +82,7 @@ Napi::Value ConvertColumnUnit(const Napi::CallbackInfo& info, const fm_workbook_
     return ThrowInvalidHandle(env);
   }
   double out = 0.0;
-  const fm_status_t rc = fn(handle, Workbook::ArgU32(info, 0), ArgMode(info, 1), Workbook::ArgDouble(info, 2), &out);
+  const fm_status_t rc = fn(handle, Workbook::ArgU32(info, 0), Workbook::ArgDouble(info, 2), ArgMode(info, 1), &out);
   return ValueOrThrow(env, rc, Napi::Number::New(env, out));
 }
 
@@ -104,7 +94,7 @@ Napi::Value Workbook::GetSheetView(const Napi::CallbackInfo& info) {
     return ThrowInvalidHandle(env);
   }
   const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
-  fm_sheet_view_t v = FM_STRUCT_INIT(fm_sheet_view_t);
+  fm_sheet_view_info_t v = FM_STRUCT_INIT(fm_sheet_view_info_t);
   fm_status_t rc = fm_sheet_get_view(handle_, sheet, &v);
   if (rc != 0) {
     return ThrowStatus(env, rc);
@@ -233,18 +223,18 @@ Napi::Value Workbook::UpdateSheetProtection(const Napi::CallbackInfo& info) {
   CheckedSpecReader reader(env);
   std::string text[4];
   fm_sheet_protection_patch_t p = FM_STRUCT_INIT(fm_sheet_protection_patch_t);
-  const auto text_field = [&](const char* key, std::string* store, int32_t* op, const char** out) {
+  const auto text_field = [&](const char* key, std::string* store, fm_patch_op_t* op, const char** out) {
     const Napi::Value v = reader.Get(in, key);
-    *op = static_cast<int32_t>(ClassifyPatchKey(reader, v, key, true));
-    if (*op == FM_CHART_PATCH_OP_SET && reader.String(v, key, store)) {
+    *op = static_cast<fm_patch_op_t>(ClassifyPatchKey(reader, v, key, true));
+    if (*op == FM_PATCH_OP_SET && reader.String(v, key, store)) {
       *out = store->c_str();
     }
   };
   // `tristate` fields take FM_TRISTATE_FALSE / TRUE, the others 0 / 1.
-  const auto flag_field = [&](const char* key, int32_t* op, int32_t* out) {
+  const auto flag_field = [&](const char* key, fm_patch_op_t* op, int32_t* out) {
     const Napi::Value v = reader.Get(in, key);
-    *op = static_cast<int32_t>(ClassifyPatchKey(reader, v, key, false));
-    if (*op == FM_CHART_PATCH_OP_SET) {
+    *op = static_cast<fm_patch_op_t>(ClassifyPatchKey(reader, v, key, false));
+    if (*op == FM_PATCH_OP_SET) {
       *out = reader.Bool(v, key, false) ? 1 : 0;
     }
   };
@@ -254,8 +244,8 @@ Napi::Value Workbook::UpdateSheetProtection(const Napi::CallbackInfo& info) {
   text_field("legacyPasswordHash", &text[3], &p.legacy_password_hash_op, &p.legacy_password_hash);
   {
     const Napi::Value v = reader.Get(in, "spinCount");
-    p.spin_count_op = static_cast<int32_t>(ClassifyPatchKey(reader, v, "spinCount", true));
-    if (p.spin_count_op == FM_CHART_PATCH_OP_SET) {
+    p.spin_count_op = static_cast<fm_patch_op_t>(ClassifyPatchKey(reader, v, "spinCount", true));
+    if (p.spin_count_op == FM_PATCH_OP_SET) {
       p.spin_count = reader.U32(v, "spinCount", 0U);
     }
   }
@@ -280,54 +270,33 @@ Napi::Value Workbook::UpdateSheetProtection(const Napi::CallbackInfo& info) {
   return ValueOrThrow(env, fm_sheet_update_sheet_protection(handle_, sheet, &p), env.Undefined());
 }
 
-Napi::Value Workbook::SetSheetZoom(const Napi::CallbackInfo& info) {
-  return InvokeSheetCall(info, &fm_sheet_set_zoom);
-}
-
-Napi::Value Workbook::SetSheetFreeze(const Napi::CallbackInfo& info) {
-  return InvokeSheetCall(info, &fm_sheet_set_freeze);
-}
-
-Napi::Value Workbook::SetSheetVisibility(const Napi::CallbackInfo& info) {
-  // Raw ordinal: the C ABI rejects an unknown value, so coercing it to a
-  // narrower type here would turn a caller's mistake into a silent state.
-  return InvokeSheetCall(info, &fm_sheet_set_visibility);
-}
-
-Napi::Value Workbook::SetSheetShowGridLines(const Napi::CallbackInfo& info) {
-  return InvokeSheetFlag(*this, info, &fm_sheet_set_show_grid_lines);
-}
-
-Napi::Value Workbook::SetSheetShowRowColHeaders(const Napi::CallbackInfo& info) {
-  return InvokeSheetFlag(*this, info, &fm_sheet_set_show_row_column_headers);
-}
-
-Napi::Value Workbook::SetSheetShowZeros(const Napi::CallbackInfo& info) {
-  return InvokeSheetFlag(*this, info, &fm_sheet_set_show_zeros);
-}
-
-Napi::Value Workbook::SetSheetShowFormulas(const Napi::CallbackInfo& info) {
-  return InvokeSheetFlag(*this, info, &fm_sheet_set_show_formulas);
-}
-
-Napi::Value Workbook::SetSheetShowOutlineSymbols(const Napi::CallbackInfo& info) {
-  return InvokeSheetFlag(*this, info, &fm_sheet_set_show_outline_symbols);
-}
-
-Napi::Value Workbook::SetSheetRightToLeft(const Napi::CallbackInfo& info) {
-  return InvokeSheetFlag(*this, info, &fm_sheet_set_right_to_left);
-}
-
-Napi::Value Workbook::SetSheetTopLeft(const Napi::CallbackInfo& info) {
-  return InvokeSheetCall(info, &fm_sheet_set_top_left);
-}
-
-Napi::Value Workbook::SetSheetPaneTopLeft(const Napi::CallbackInfo& info) {
-  return InvokeSheetCall(info, &fm_sheet_set_pane_top_left);
-}
-
-Napi::Value Workbook::SetSheetSplit(const Napi::CallbackInfo& info) {
-  return InvokeSheetCall(info, &fm_sheet_set_split);
+// Every member is optional: an omitted key keeps the stored value, and no member can be cleared.
+Napi::Value Workbook::UpdateSheetView(const Napi::CallbackInfo& info) {
+  fm_sheet_view_patch_t patch = FM_STRUCT_INIT(fm_sheet_view_patch_t);
+  return InvokeSheetSpec(
+      info, "updateView expects (sheet:number, view:object)",
+      [&](CheckedSpecReader& reader, const Napi::Object& spec) {
+        patch.zoom_pct_op = PatchU32(reader, spec, "zoomPct", &patch.zoom_pct);
+        patch.freeze_rows_op = PatchU32(reader, spec, "freezeRows", &patch.freeze_rows);
+        patch.freeze_cols_op = PatchU32(reader, spec, "freezeCols", &patch.freeze_cols);
+        patch.visibility_op = PatchI32(reader, spec, "visibility", &patch.visibility);
+        patch.show_grid_lines_op = PatchBool(reader, spec, "showGridLines", &patch.show_grid_lines);
+        patch.show_row_column_headers_op =
+            PatchBool(reader, spec, "showRowColHeaders", &patch.show_row_column_headers);
+        patch.show_zeros_op = PatchBool(reader, spec, "showZeros", &patch.show_zeros);
+        patch.right_to_left_op = PatchBool(reader, spec, "rightToLeft", &patch.right_to_left);
+        patch.tab_selected_op = PatchBool(reader, spec, "tabSelected", &patch.tab_selected);
+        patch.view_mode_op = PatchI32(reader, spec, "viewMode", &patch.view_mode);
+        patch.top_left_row_op = PatchU32(reader, spec, "topLeftRow", &patch.top_left_row);
+        patch.top_left_col_op = PatchU32(reader, spec, "topLeftCol", &patch.top_left_col);
+        patch.pane_top_left_row_op = PatchU32(reader, spec, "paneTopLeftRow", &patch.pane_top_left_row);
+        patch.pane_top_left_col_op = PatchU32(reader, spec, "paneTopLeftCol", &patch.pane_top_left_col);
+        patch.split_x_op = PatchDouble(reader, spec, "splitXTwips", &patch.split_x);
+        patch.split_y_op = PatchDouble(reader, spec, "splitYTwips", &patch.split_y);
+        patch.show_formulas_op = PatchBool(reader, spec, "showFormulas", &patch.show_formulas);
+        patch.show_outline_symbols_op = PatchBool(reader, spec, "showOutlineSymbols", &patch.show_outline_symbols);
+      },
+      [&](fm_workbook_t* handle) { return fm_sheet_update_view(handle, ArgU32(info, 0), &patch); });
 }
 
 Napi::Value Workbook::GetSheetSelection(const Napi::CallbackInfo& info) {
@@ -394,20 +363,6 @@ Napi::Value Workbook::SetSheetSelection(const Napi::CallbackInfo& info) {
   }
   return ValueOrThrow(env, fm_sheet_set_selection(handle_, sheet, row, col, ranges.data(), ranges.size()),
                       env.Undefined());
-}
-
-Napi::Value Workbook::SetSheetTabSelected(const Napi::CallbackInfo& info) {
-  return InvokeSheetFlag(*this, info, &fm_sheet_set_tab_selected);
-}
-
-Napi::Value Workbook::SetSheetViewMode(const Napi::CallbackInfo& info) {
-  return StatusCall(info, [&](fm_workbook_t* handle) {
-    const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
-    // An ordinal past int32 reaches the C ABI as -1, which it rejects like any unknown mode.
-    const uint32_t mode = ArgU32(info, 1);
-    return fm_sheet_set_view_mode(handle, sheet,
-                                  mode > static_cast<uint32_t>(INT32_MAX) ? -1 : static_cast<int32_t>(mode));
-  });
 }
 
 Napi::Value Workbook::GetSheetColumns(const Napi::CallbackInfo& info) {
@@ -497,38 +452,14 @@ Napi::Value Workbook::UpdateSheetFormatDefaults(const Napi::CallbackInfo& info) 
   }
   // A patch: an omitted key keeps the stored value, `null` clears a nullable one.
   const Napi::Object spec = ArgObject(info, 1);
-  fm_sheet_format_defaults_t d = FM_STRUCT_INIT(fm_sheet_format_defaults_t);
-  const fm_status_t read_rc = fm_sheet_get_format_defaults(handle_, ArgU32(info, 0), &d);
-  if (read_rc != 0) {
-    return ThrowStatus(env, read_rc);
-  }
   CheckedSpecReader reader(env);
-  const auto optional_number = [&](const char* key, int32_t* has, double* value) {
-    const Napi::Value v = reader.Get(spec, key);
-    switch (ClassifyPatchKey(reader, v, key, true)) {
-      case PatchKey::kClear:
-        *has = 0;
-        *value = 0.0;
-        break;
-      case PatchKey::kSet:
-        *has = 1;
-        *value = reader.Double(v, key, 0.0);
-        break;
-      case PatchKey::kKeep:
-        break;
-    }
-  };
-  optional_number("defaultColWidthChars", &d.has_default_column_width_chars, &d.default_column_width_chars);
-  optional_number("defaultRowHeightPt", &d.has_default_row_height_pt, &d.default_row_height_pt);
-  if (ClassifyPatchKey(reader, reader.Get(spec, "baseColWidthChars"), "baseColWidthChars", false) == PatchKey::kSet) {
-    d.base_column_width_chars = reader.Double(spec, "baseColWidthChars", d.base_column_width_chars);
-  }
-  if (ClassifyPatchKey(reader, reader.Get(spec, "customHeight"), "customHeight", false) == PatchKey::kSet) {
-    d.custom_height = reader.Bool(spec, "customHeight", false) ? 1 : 0;
-  }
-  if (ClassifyPatchKey(reader, reader.Get(spec, "zeroHeight"), "zeroHeight", false) == PatchKey::kSet) {
-    d.zero_height = reader.Bool(spec, "zeroHeight", false) ? 1 : 0;
-  }
+  fm_sheet_format_defaults_patch_t d = FM_STRUCT_INIT(fm_sheet_format_defaults_patch_t);
+  d.default_column_width_chars_op =
+      PatchNullableDouble(reader, spec, "defaultColWidthChars", &d.default_column_width_chars);
+  d.default_row_height_pt_op = PatchNullableDouble(reader, spec, "defaultRowHeightPt", &d.default_row_height_pt);
+  d.base_column_width_chars_op = PatchDouble(reader, spec, "baseColWidthChars", &d.base_column_width_chars);
+  d.custom_height_op = PatchBool(reader, spec, "customHeight", &d.custom_height);
+  d.zero_height_op = PatchBool(reader, spec, "zeroHeight", &d.zero_height);
   if (!reader.ok()) {
     return env.Undefined();
   }
@@ -548,7 +479,7 @@ Napi::Value Workbook::GetCellRectPt(const Napi::CallbackInfo& info) {
   if (!ReadCellRect(reader, range, &cells)) {
     return env.Undefined();
   }
-  fm_rect_pt_t rect = FM_STRUCT_INIT(fm_rect_pt_t);
+  fm_rect_pt_info_t rect = FM_STRUCT_INIT(fm_rect_pt_info_t);
   const fm_status_t rc = fm_sheet_get_cell_rect_pt(handle_, ArgU32(info, 0), &cells, ArgMode(info, 2), &rect);
   if (rc != 0) {
     return ThrowStatus(env, rc);
@@ -586,7 +517,7 @@ Napi::Value Workbook::GetWidthModel(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return ThrowInvalidHandle(env);
   }
-  fm_width_model_t model = FM_STRUCT_INIT(fm_width_model_t);
+  fm_width_model_info_t model = FM_STRUCT_INIT(fm_width_model_info_t);
   const fm_status_t rc = fm_sheet_get_width_model(handle_, ArgU32(info, 0), ArgMode(info, 1), &model);
   if (rc != 0) {
     return ThrowStatus(env, rc);

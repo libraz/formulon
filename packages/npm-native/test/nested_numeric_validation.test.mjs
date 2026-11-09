@@ -15,12 +15,16 @@ function dataBarRule(overrides = {}) {
   };
 }
 
+function assertInvalidArgument(mod, fn, label) {
+  assert.throws(fn, (e) => e instanceof mod.FormulonError && e.code === mod.StatusCode.InvalidArgument, label);
+}
+
 test('nested style integers reject narrowing before addXf mutates the workbook', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   try {
     const before = wb.ooxml.listCellXfs().length;
-    assert.throws(() => wb.ooxml.addCellXf({ horizontal: 256 }), RangeError);
+    assertInvalidArgument(mod, () => wb.ooxml.addCellXf({ horizontal: 256 }), 'horizontal=256');
     assert.equal(wb.ooxml.listCellXfs().length, before);
 
     assert.throws(() => wb.ooxml.addCellXf({ numFmtId: 65536 }), RangeError);
@@ -29,25 +33,35 @@ test('nested style integers reject narrowing before addXf mutates the workbook',
     assert.throws(() => wb.ooxml.addCellXf({ fontIndex: 2 ** 32 }), RangeError);
     assert.equal(wb.ooxml.listCellXfs().length, before);
 
-    const beforeFonts = wb.ooxml.listFonts().length;
-    assert.throws(() => wb.ooxml.addFont({ underline: 256 }), RangeError);
-    assert.equal(wb.ooxml.listFonts().length, beforeFonts);
-
-    const beforeFills = wb.ooxml.listFills().length;
-    assert.throws(() => wb.ooxml.addFill({ pattern: 256 }), RangeError);
-    assert.equal(wb.ooxml.listFills().length, beforeFills);
-
-    const beforeBorders = wb.ooxml.listBorders().length;
-    assert.throws(() => wb.ooxml.addBorder({ left: { style: 256 } }), RangeError);
-    assert.equal(wb.ooxml.listBorders().length, beforeBorders);
-
-    for (const value of [Number.NaN, Number.POSITIVE_INFINITY, 1.5, -1]) {
+    for (const value of [Number.NaN, Number.POSITIVE_INFINITY, 1.5]) {
       assert.throws(() => wb.ooxml.addCellXf({ horizontal: value }), RangeError, `horizontal=${String(value)}`);
       assert.equal(wb.ooxml.listCellXfs().length, before);
     }
+    assertInvalidArgument(mod, () => wb.ooxml.addCellXf({ horizontal: -1 }), 'horizontal=-1');
+    assert.equal(wb.ooxml.listCellXfs().length, before);
 
     wb.ooxml.addCellXf({ horizontal: null, vertical: undefined });
     assert.equal(wb.ooxml.listCellXfs().length, before);
+  } finally {
+    wb.dispose();
+  }
+});
+
+test('a font underline, fill pattern and border style outside their enumerations are InvalidArgument', async () => {
+  const mod = await getModule();
+  const wb = mod.Workbook.createDefault();
+  try {
+    const beforeFonts = wb.ooxml.listFonts().length;
+    assertInvalidArgument(mod, () => wb.ooxml.addFont({ underline: 256 }), 'underline=256');
+    assert.equal(wb.ooxml.listFonts().length, beforeFonts);
+
+    const beforeFills = wb.ooxml.listFills().length;
+    assertInvalidArgument(mod, () => wb.ooxml.addFill({ pattern: 256 }), 'pattern=256');
+    assert.equal(wb.ooxml.listFills().length, beforeFills);
+
+    const beforeBorders = wb.ooxml.listBorders().length;
+    assertInvalidArgument(mod, () => wb.ooxml.addBorder({ left: { style: 256 } }), 'border style=256');
+    assert.equal(wb.ooxml.listBorders().length, beforeBorders);
   } finally {
     wb.dispose();
   }

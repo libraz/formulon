@@ -24,7 +24,7 @@ namespace parts {
 
 /// Why `value` cannot be a chart or shape colour (None, Rgb or Theme with a tint in [-1, 1] and an
 /// index below 12); NULL when it can.
-inline const char* color_spec_problem(const fm_color_spec_t& value) {
+inline const char* color_spec_problem(const fm_color_t& value) {
   constexpr std::uint32_t kThemeCount = 12U;
   if (value.kind == FM_COLOR_KIND_THEME) {
     if (value.theme >= kThemeCount) {
@@ -51,16 +51,16 @@ class PatchReader {
     if (!op_ok(op, name)) {
       return;
     }
-    if (op == FM_CHART_PATCH_OP_CLEAR) {
+    if (op == FM_PATCH_OP_CLEAR) {
       out = ChartPatchField<T>::Clear();
-    } else if (op == FM_CHART_PATCH_OP_SET) {
+    } else if (op == FM_PATCH_OP_SET) {
       out = ChartPatchField<T>::Set(std::move(value));
     }
   }
 
   template <typename E>
   void enum_field(std::int32_t op, std::int32_t value, E max, ChartPatchField<E>& out, const char* name) {
-    if (op == FM_CHART_PATCH_OP_SET && !enum_ok(value, max, name)) {
+    if (op == FM_PATCH_OP_SET && !enum_ok(value, max, name)) {
       return;
     }
     field(op, static_cast<E>(value), out, name);
@@ -71,7 +71,7 @@ class PatchReader {
   template <typename E>
   void enum_field(std::int32_t op, std::int32_t value, std::int64_t min, std::int64_t max, E (*from_c)(std::int32_t),
                   ChartPatchField<E>& out, const char* name) {
-    if (op == FM_CHART_PATCH_OP_SET && !enum_ok(value, min, max, name)) {
+    if (op == FM_PATCH_OP_SET && !enum_ok(value, min, max, name)) {
       return;
     }
     field(op, from_c(value), out, name);
@@ -79,16 +79,16 @@ class PatchReader {
 
   // A removable boolean; a `SET` value other than 0/1 is rejected.
   void bool_field(std::int32_t op, std::int32_t value, ChartPatchField<bool>& out, const char* name) {
-    if (op == FM_CHART_PATCH_OP_SET && !enum_ok(value, 1, name)) {
+    if (op == FM_PATCH_OP_SET && !enum_ok(value, 1, name)) {
       return;
     }
     field(op, value == 1, out, name);
   }
 
   // A colour patch: a `SET` value must be None, Rgb or a valid Theme colour.
-  void color_field(std::int32_t op, const fm_color_spec_t& value, ChartPatchField<formulon::ColorSpec>& out,
+  void color_field(std::int32_t op, const fm_color_t& value, ChartPatchField<formulon::ColorSpec>& out,
                    const char* name) {
-    if (op == FM_CHART_PATCH_OP_SET) {
+    if (op == FM_PATCH_OP_SET) {
       if (const char* why = color_spec_problem(value); why != nullptr) {
         fail(name, why);
         return;
@@ -102,11 +102,10 @@ class PatchReader {
   template <std::size_t N>
   void token_field(std::int32_t op, std::int32_t value, const std::array<std::string_view, N>& tokens,
                    ChartPatchField<std::string>& out, const char* name) {
-    if (op == FM_CHART_PATCH_OP_SET && !enum_ok(value, 0, static_cast<std::int64_t>(N) - 1, name)) {
+    if (op == FM_PATCH_OP_SET && !enum_ok(value, 0, static_cast<std::int64_t>(N) - 1, name)) {
       return;
     }
-    field(op, op == FM_CHART_PATCH_OP_SET ? std::string(tokens[static_cast<std::size_t>(value)]) : std::string(), out,
-          name);
+    field(op, op == FM_PATCH_OP_SET ? std::string(tokens[static_cast<std::size_t>(value)]) : std::string(), out, name);
   }
 
   void text_field(std::int32_t op, const char* value, ChartPatchField<std::string>& out, const char* name) {
@@ -128,9 +127,9 @@ class PatchReader {
     if (!op_ok(op, name)) {
       return;
     }
-    if (op == FM_CHART_PATCH_OP_CLEAR) {
+    if (op == FM_PATCH_OP_CLEAR) {
       fail(name, "cannot be cleared");
-    } else if (op == FM_CHART_PATCH_OP_SET) {
+    } else if (op == FM_PATCH_OP_SET) {
       out = std::move(value);
     }
   }
@@ -141,7 +140,7 @@ class PatchReader {
 
   template <typename E>
   void enum_optional(std::int32_t op, std::int32_t value, E max, std::optional<E>& out, const char* name) {
-    if (op == FM_CHART_PATCH_OP_SET && !enum_ok(value, max, name)) {
+    if (op == FM_PATCH_OP_SET && !enum_ok(value, max, name)) {
       return;
     }
     optional(op, static_cast<E>(value), out, name);
@@ -150,7 +149,7 @@ class PatchReader {
   template <typename E>
   void enum_optional(std::int32_t op, std::int32_t value, std::int64_t min, std::int64_t max, E (*from_c)(std::int32_t),
                      std::optional<E>& out, const char* name) {
-    if (op == FM_CHART_PATCH_OP_SET && !enum_ok(value, min, max, name)) {
+    if (op == FM_PATCH_OP_SET && !enum_ok(value, min, max, name)) {
       return;
     }
     optional(op, from_c(value), out, name);
@@ -186,7 +185,7 @@ class PatchReader {
 
  private:
   bool op_ok(std::int32_t op, const char* name) {
-    return enum_ok(op, static_cast<std::int64_t>(FM_CHART_PATCH_OP_SET), name);
+    return enum_ok(op, static_cast<std::int64_t>(FM_PATCH_OP_SET), name);
   }
 
   fm_status_t rc_ = 0;

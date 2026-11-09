@@ -124,7 +124,7 @@ std::set<std::string> RowLabels(fm_workbook_t* wb) {
   PivotCellsGuard projected;
   EXPECT_EQ(fm_sheet_get_pivot_layout(wb, 0, 0, &projected.handle), 0) << fm_get_last_error_message();
   std::set<std::string> out;
-  for (const fm_pivot_cell_t& cell : CollectCells(projected.handle)) {
+  for (const fm_pivot_cell_info_t& cell : CollectCells(projected.handle)) {
     if (cell.kind == FM_PIVOT_CELL_KIND_ROW_LABEL && cell.value.kind == FM_VALUE_KIND_TEXT &&
         cell.value.u.text != nullptr) {
       out.insert(cell.value.u.text);
@@ -148,32 +148,32 @@ std::string FiltersBlock(const std::string& xml) {
   return xml.substr(begin, end + std::string_view("</filters>").size() - begin);
 }
 
-fm_pivot_filter_spec_t TextSpec(fm_pivot_filter_kind_t type, const char* field, const char* text) {
-  fm_pivot_filter_spec_t spec = FM_STRUCT_INIT(fm_pivot_filter_spec_t);
+fm_pivot_filter_t TextSpec(fm_pivot_filter_kind_t type, const char* field, const char* text) {
+  fm_pivot_filter_t spec = FM_STRUCT_INIT(fm_pivot_filter_t);
   spec.axis = FM_PIVOT_AXIS_ROW;
   spec.field_name = field;
   spec.type = type;
   spec.value_kind = FM_PIVOT_FILTER_OPERAND_KIND_TEXT;
   spec.value_text = text;
-  spec.value_high_kind = FM_PIVOT_FILTER_OPERAND_KIND_NONE;
+  spec.value_high_kind = FM_PIVOT_FILTER_OPERAND_KIND_ABSENT;
   return spec;
 }
 
-fm_pivot_filter_spec_t NumberSpec(fm_pivot_filter_kind_t type, const char* field, double low, double high) {
-  fm_pivot_filter_spec_t spec = FM_STRUCT_INIT(fm_pivot_filter_spec_t);
+fm_pivot_filter_t NumberSpec(fm_pivot_filter_kind_t type, const char* field, double low, double high) {
+  fm_pivot_filter_t spec = FM_STRUCT_INIT(fm_pivot_filter_t);
   spec.axis = FM_PIVOT_AXIS_ROW;
   spec.field_name = field;
   spec.type = type;
   spec.value_kind = FM_PIVOT_FILTER_OPERAND_KIND_DOUBLE;
   spec.value_double = low;
-  spec.value_high_kind = std::isnan(high) ? FM_PIVOT_FILTER_OPERAND_KIND_NONE : FM_PIVOT_FILTER_OPERAND_KIND_DOUBLE;
+  spec.value_high_kind = std::isnan(high) ? FM_PIVOT_FILTER_OPERAND_KIND_ABSENT : FM_PIVOT_FILTER_OPERAND_KIND_DOUBLE;
   spec.value_high_double = std::isnan(high) ? 0.0 : high;
   return spec;
 }
 
 struct FilterCase {
   const char* label;
-  fm_pivot_filter_spec_t spec;
+  fm_pivot_filter_t spec;
   std::set<std::string> kept;
 };
 
@@ -183,7 +183,7 @@ struct FilterCase {
 // the same spec, and filters the reloaded report the same way.
 TEST(FormulonCApiPivotFilterPersistence, EachFilterTypeSurvivesSaveAndReload) {
   const double kNone = std::numeric_limits<double>::quiet_NaN();
-  fm_pivot_filter_spec_t top = NumberSpec(FM_PIVOT_FILTER_KIND_VALUE_TOP_10, "Region", 0.0, kNone);
+  fm_pivot_filter_t top = NumberSpec(FM_PIVOT_FILTER_KIND_VALUE_TOP_10, "Region", 0.0, kNone);
   top.value_kind = FM_PIVOT_FILTER_OPERAND_KIND_INT;
   top.value_int = 1;
   const FilterCase cases[] = {
@@ -211,8 +211,8 @@ TEST(FormulonCApiPivotFilterPersistence, EachFilterTypeSurvivesSaveAndReload) {
     std::size_t count = 0;
     ASSERT_EQ(fm_sheet_get_pivot_filter_count(back.handle, 0, 0, &count), 0);
     ASSERT_EQ(count, 1U);
-    fm_pivot_filter_spec_t read = FM_STRUCT_INIT(fm_pivot_filter_spec_t);
-    ASSERT_EQ(fm_sheet_get_pivot_filter(back.handle, 0, 0, 0, &read), 0) << fm_get_last_error_message();
+    fm_pivot_filter_t read = FM_STRUCT_INIT(fm_pivot_filter_t);
+    ASSERT_EQ(fm_sheet_get_pivot_filter_at(back.handle, 0, 0, 0, &read), 0) << fm_get_last_error_message();
     EXPECT_EQ(read.type, c.spec.type);
     EXPECT_STREQ(read.field_name, c.spec.field_name);
     EXPECT_EQ(read.axis, FM_PIVOT_AXIS_ROW);
@@ -239,7 +239,7 @@ TEST(FormulonCApiPivotFilterPersistence, ScratchPivotFilterSurvivesSaveAndReload
   std::uint32_t cache_id = 0;
   std::size_t pivot_index = 0;
   ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_index), 0) << fm_get_last_error_message();
-  const fm_pivot_filter_spec_t spec = TextSpec(FM_PIVOT_FILTER_KIND_LABEL_BEGINS_WITH, "Region", "N");
+  const fm_pivot_filter_t spec = TextSpec(FM_PIVOT_FILTER_KIND_LABEL_BEGINS_WITH, "Region", "N");
   ASSERT_EQ(fm_sheet_add_pivot_filter(wb.handle, 0, pivot_index, &spec, ignored_index()), 0)
       << fm_get_last_error_message();
   const std::vector<std::uint8_t> saved = Save(wb.handle);
@@ -283,13 +283,13 @@ TEST(FormulonCApiPivotFilterPersistence, LoadedUnsupportedFiltersAreKeptVerbatim
   const fm_pivot_filter_kind_t types[] = {FM_PIVOT_FILTER_KIND_LABEL_NOT_EQUAL, FM_PIVOT_FILTER_KIND_VALUE_TOP_10,
                                           FM_PIVOT_FILTER_KIND_VALUE_TOP_PERCENT};
   for (std::size_t i = 0; i < 3U; ++i) {
-    fm_pivot_filter_spec_t read = FM_STRUCT_INIT(fm_pivot_filter_spec_t);
-    ASSERT_EQ(fm_sheet_get_pivot_filter(wb.handle, 0, 0, i, &read), 0) << fm_get_last_error_message();
+    fm_pivot_filter_t read = FM_STRUCT_INIT(fm_pivot_filter_t);
+    ASSERT_EQ(fm_sheet_get_pivot_filter_at(wb.handle, 0, 0, i, &read), 0) << fm_get_last_error_message();
     EXPECT_EQ(read.type, types[i]);
     EXPECT_STREQ(read.field_name, "Region");
   }
-  fm_pivot_filter_spec_t top = FM_STRUCT_INIT(fm_pivot_filter_spec_t);
-  ASSERT_EQ(fm_sheet_get_pivot_filter(wb.handle, 0, 0, 1, &top), 0) << fm_get_last_error_message();
+  fm_pivot_filter_t top = FM_STRUCT_INIT(fm_pivot_filter_t);
+  ASSERT_EQ(fm_sheet_get_pivot_filter_at(wb.handle, 0, 0, 1, &top), 0) << fm_get_last_error_message();
   EXPECT_EQ(top.value_kind, FM_PIVOT_FILTER_OPERAND_KIND_INT);
   EXPECT_EQ(top.value_int, 2);
   // not-East, then top 2 of North 400 / South 200, then the top 50% of 600.
@@ -324,13 +324,13 @@ TEST(FormulonCApiPivotFilterPersistence, SubtotalFunctionsReadBack) {
   std::size_t pivot_index = 0;
   ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_index), 0) << fm_get_last_error_message();
   fm_pivot_field_info_t info = FM_STRUCT_INIT(fm_pivot_field_info_t);
-  ASSERT_EQ(fm_sheet_get_pivot_field(wb.handle, 0, pivot_index, 0, &info), 0);
+  ASSERT_EQ(fm_sheet_get_pivot_field_at(wb.handle, 0, pivot_index, 0, &info), 0);
   EXPECT_EQ(info.default_subtotal, 1);
   EXPECT_EQ(info.subtotal_functions, 0U);
 
   ASSERT_EQ(fm_sheet_add_pivot_field_subtotal_function(wb.handle, 0, pivot_index, 0, FM_PIVOT_AGGREGATION_COUNT), 0);
   ASSERT_EQ(fm_sheet_add_pivot_field_subtotal_function(wb.handle, 0, pivot_index, 0, FM_PIVOT_AGGREGATION_SUM), 0);
-  ASSERT_EQ(fm_sheet_get_pivot_field(wb.handle, 0, pivot_index, 0, &info), 0);
+  ASSERT_EQ(fm_sheet_get_pivot_field_at(wb.handle, 0, pivot_index, 0, &info), 0);
   const std::uint32_t sum_count = (1U << FM_PIVOT_AGGREGATION_SUM) | (1U << FM_PIVOT_AGGREGATION_COUNT);
   EXPECT_EQ(info.default_subtotal, 0);
   EXPECT_EQ(info.subtotal_functions, sum_count);
@@ -338,11 +338,11 @@ TEST(FormulonCApiPivotFilterPersistence, SubtotalFunctionsReadBack) {
   const std::vector<std::uint8_t> saved = Save(wb.handle);
   WorkbookGuard back;
   ASSERT_EQ(fm_workbook_load(saved.data(), saved.size(), &back.handle), 0) << fm_get_last_error_message();
-  ASSERT_EQ(fm_sheet_get_pivot_field(back.handle, 0, 0, 0, &info), 0);
+  ASSERT_EQ(fm_sheet_get_pivot_field_at(back.handle, 0, 0, 0, &info), 0);
   EXPECT_EQ(info.default_subtotal, 0);
   EXPECT_EQ(info.subtotal_functions, sum_count);
   // The value field carries the default.
-  ASSERT_EQ(fm_sheet_get_pivot_field(back.handle, 0, 0, 1, &info), 0);
+  ASSERT_EQ(fm_sheet_get_pivot_field_at(back.handle, 0, 0, 1, &info), 0);
   EXPECT_EQ(info.default_subtotal, 1);
   EXPECT_EQ(info.subtotal_functions, 0U);
 
@@ -355,7 +355,7 @@ TEST(FormulonCApiPivotFilterPersistence, SubtotalFunctionsReadBack) {
     const std::vector<std::uint8_t> package = BuildFilterPackage(attrs, "");
     WorkbookGuard loaded;
     ASSERT_EQ(fm_workbook_load(package.data(), package.size(), &loaded.handle), 0) << fm_get_last_error_message();
-    ASSERT_EQ(fm_sheet_get_pivot_field(loaded.handle, 0, 0, 0, &info), 0);
+    ASSERT_EQ(fm_sheet_get_pivot_field_at(loaded.handle, 0, 0, 0, &info), 0);
     EXPECT_EQ(info.default_subtotal, want_default);
     EXPECT_EQ(info.subtotal_functions, want_fns);
   }

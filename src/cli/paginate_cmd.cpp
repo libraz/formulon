@@ -78,7 +78,7 @@ int run_paginate(const ArgList& args, std::ostream& out, std::ostream& err) {
     return rc;
   }
   PaginationGuard pagination;
-  if (const auto status = fm_sheet_get_pagination(workbook.handle, sheet_index, &pagination.handle); status != 0) {
+  if (const auto status = fm_sheet_paginate(workbook.handle, sheet_index, &pagination.handle); status != 0) {
     emit_last_error(err, "paginate");
     return status;
   }
@@ -97,7 +97,7 @@ int run_paginate(const ArgList& args, std::ostream& out, std::ostream& err) {
     std::string doc =
         "{\"format\":1,\"sheets\":[{\"name\":" + render_json_string(view_or_empty(sheet_name)) + ",\"pages\":[";
     for (std::size_t i = 0; i < page_count; ++i) {
-      fm_page_layout_t page = FM_STRUCT_INIT(fm_page_layout_t);
+      fm_page_layout_info_t page = FM_STRUCT_INIT(fm_page_layout_info_t);
       if (const auto status = fm_pagination_get_page_at(pagination.handle, i, &page); status != 0) {
         emit_last_error(err, "paginate");
         return status;

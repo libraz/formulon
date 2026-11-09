@@ -62,8 +62,10 @@ inline constexpr std::uint32_t kPrst = 1U << 1;
 inline constexpr std::uint32_t kAnchor = 1U << 2;
 inline constexpr std::uint32_t kText = 1U << 3;
 inline constexpr std::uint32_t kTextBox = 1U << 4;
-inline constexpr std::uint32_t kFill = 1U << 5;       ///< `fill`: `kSolid` with `fill_color`, or `kNone`.
-inline constexpr std::uint32_t kLine = 1U << 6;       ///< `line`: `kSolid` with `line_color`, or `kNone`.
+/// `fill`: `kSolid` with `fill_color`, `kNone`, or `kUnset` to remove the shape's own fill element.
+inline constexpr std::uint32_t kFill = 1U << 5;
+/// `line`: as `kFill` for the outline's fill element inside `a:ln` (an `a:ln` left empty goes too).
+inline constexpr std::uint32_t kLine = 1U << 6;
 inline constexpr std::uint32_t kLineWidth = 1U << 7;  ///< `line_width_emu`.
 inline constexpr std::uint32_t kRotation = 1U << 8;
 inline constexpr std::uint32_t kHidden = 1U << 9;
@@ -107,18 +109,19 @@ Expected<std::vector<ShapeInfo>, Error> list_shapes(const Workbook& wb, std::siz
 /// without a drawing gets one. Fails with `kInvalidArgument` for a bad sheet,
 /// a missing anchor, a `prst` that is not an alphanumeric token, an
 /// offset or size outside [0, 2^31) EMU, a cell outside the sheet, a
-/// two-cell `to` before `from`, a fill or outline that is neither solid nor none, or text with
+/// two-cell `to` before `from`, a fill or outline that is not solid, none or unset, or text with
 /// control characters.
 Expected<std::uint32_t, Error> insert_shape(Workbook& wb, std::size_t sheet, const ShapeSpec& spec);
 
 /// Applies the fields `spec.fields` names to the shape, connector or group
 /// with `object_id`. The anchor kind cannot change. Text applies to a shape
 /// only and keeps the first paragraph's properties and first run's
-/// formatting. Fails like `insert_shape`, and with `kInvalidArgument` for an
-/// unknown id.
+/// formatting. Fails like `insert_shape`, with `kNotFound` for an unknown id,
+/// and with `kInvalidArgument` for an object of another kind.
 Expected<void, Error> update_shape(Workbook& wb, std::size_t sheet, std::uint32_t object_id, const ShapeSpec& spec);
 
 /// Removes the shape, connector or group (with its children) with `object_id`.
+/// Fails as `update_shape` for an unknown id or an object of another kind.
 Expected<void, Error> remove_shape(Workbook& wb, std::size_t sheet, std::uint32_t object_id);
 
 }  // namespace formulon

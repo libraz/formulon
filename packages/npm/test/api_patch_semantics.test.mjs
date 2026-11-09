@@ -394,7 +394,10 @@ describe('a pivot field or item patch is validated whole and applied atomically'
     withSheet((ws, wb) => {
       const { pivot } = pivotOver(ws, wb);
       assert.equal(pivot.listFields()[0].insertBlankRow, false);
-      expectInvalid(() => pivot.updateField(0, { insertBlankRow: true, customName: 'Amount' }));
+      expectCode(
+        () => pivot.updateField(0, { insertBlankRow: true, customName: 'Amount' }),
+        f.StatusCode.AlreadyExists,
+      );
       assert.equal(pivot.listFields()[0].insertBlankRow, false);
       assert.equal(pivot.listFields()[0].customName, null);
     });

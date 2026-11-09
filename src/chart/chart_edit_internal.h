@@ -126,6 +126,10 @@ inline Error bad_arg(const char* message) {
   return make_error(FormulonErrorCode::kInvalidArgument, message);
 }
 
+inline Error no_such(const char* message) {
+  return make_error(FormulonErrorCode::kNotFound, message);
+}
+
 inline Error unsupported(const char* message) {
   return make_error(FormulonErrorCode::kIoChartUnsupportedKind, message);
 }
@@ -212,7 +216,7 @@ std::vector<xml_node> plots_of(const Chart& c);
 inline Expected<xml_node, Error> plot_at(const Chart& c, std::size_t index) {
   const std::vector<xml_node> plots = plots_of(c);
   if (index >= plots.size()) {
-    return bad_arg("chart: plot index out of range");
+    return make_error(FormulonErrorCode::kIndexOutOfRange, "chart: plot index out of range");
   }
   return plots[index];
 }

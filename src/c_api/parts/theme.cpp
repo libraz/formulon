@@ -243,7 +243,7 @@ extern "C" fm_status_t fm_workbook_reset_theme(fm_workbook_t* wb) {
   return finish_status(wb->workbook().reset_theme());
 }
 
-extern "C" fm_status_t fm_workbook_resolve_color(const fm_workbook_t* wb, const fm_color_spec_t* spec, int32_t context,
+extern "C" fm_status_t fm_workbook_resolve_color(const fm_workbook_t* wb, const fm_color_t* spec, int32_t context,
                                                  uint32_t* out_argb, int32_t* out_resolution) {
   clear_last_error();
   if (wb == nullptr || spec == nullptr || out_argb == nullptr || out_resolution == nullptr) {
@@ -277,7 +277,7 @@ extern "C" fm_status_t fm_workbook_resolve_color(const fm_workbook_t* wb, const 
 }
 
 extern "C" fm_status_t fm_sheet_get_effective_style(const fm_workbook_t* wb, size_t sheet_index, uint32_t row,
-                                                    uint32_t col, fm_effective_style_t* out) {
+                                                    uint32_t col, fm_effective_style_info_t* out) {
   clear_last_error();
   if (out == nullptr) {
     return null_argument();
@@ -294,7 +294,7 @@ extern "C" fm_status_t fm_sheet_get_effective_style(const fm_workbook_t* wb, siz
   const formulon::Workbook& workbook = wb->workbook();
   formulon::EffectiveStyle style = formulon::effective_style(workbook, workbook.sheet(sheet_index), row, col);
   const std::uint32_t struct_size = out->struct_size;
-  *out = fm_effective_style_t{};
+  *out = fm_effective_style_info_t{};
   out->struct_size = struct_size;
   out->xf_index = style.xf_index;
   out->source = static_cast<int32_t>(style.source);

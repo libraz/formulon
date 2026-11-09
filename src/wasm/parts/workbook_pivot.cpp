@@ -28,7 +28,7 @@ namespace parts {
 namespace {
 
 bool build_data_field_spec_checked(JsNarrowNumericReader& reader, const emscripten::val& spec,
-                                   fm_pivot_data_field_spec_t& out, std::string& name_buf, std::string& nfmt_buf) {
+                                   fm_pivot_data_field_t& out, std::string& name_buf, std::string& nfmt_buf) {
   // Read the optional strings before the numeric fields. Once the reader
   // rejects a numeric value, no further access to the caller's object is
   // allowed before returning the binding error.
@@ -49,7 +49,7 @@ bool build_data_field_spec_checked(JsNarrowNumericReader& reader, const emscript
 
 /// One pivot filter operand pulled from a JS `number | string | null` slot.
 struct FilterOperand {
-  int32_t kind = FM_PIVOT_FILTER_OPERAND_KIND_NONE;
+  int32_t kind = FM_PIVOT_FILTER_OPERAND_KIND_ABSENT;
   int32_t as_int = 0;
   double as_double = 0.0;
   std::string text;
@@ -152,9 +152,12 @@ void JsWorkbook::pivotSetGrandTotals(uint32_t sheet, uint32_t pivotIndex, bool r
     record_invalid_handle();
     return;
   }
-  fm_status_t rc =
-      fm_sheet_update_pivot_grand_totals(handle_, sheet, pivotIndex, rowsEnabled ? 1 : 0, colsEnabled ? 1 : 0);
-  succeeded(rc);
+  fm_pivot_grand_totals_patch_t patch = FM_STRUCT_INIT(fm_pivot_grand_totals_patch_t);
+  patch.rows_op = FM_PATCH_OP_SET;
+  patch.rows = rowsEnabled ? 1 : 0;
+  patch.columns_op = FM_PATCH_OP_SET;
+  patch.columns = colsEnabled ? 1 : 0;
+  succeeded(fm_sheet_update_pivot_grand_totals(handle_, sheet, pivotIndex, &patch));
 }
 
 void JsWorkbook::pivotUpdateStyleOptions(uint32_t sheet, uint32_t pivotIndex, emscripten::val patch) {
@@ -169,10 +172,10 @@ void JsWorkbook::pivotUpdateStyleOptions(uint32_t sheet, uint32_t pivotIndex, em
   const emscripten::val name_value = reader.value(patch, "styleName", "patch.styleName");
   switch (js_patch_key(reader, name_value, "patch.styleName", true)) {
     case JsPatchKey::kClear:
-      p.style_name_op = FM_CHART_PATCH_OP_CLEAR;
+      p.style_name_op = FM_PATCH_OP_CLEAR;
       break;
     case JsPatchKey::kSet:
-      p.style_name_op = FM_CHART_PATCH_OP_SET;
+      p.style_name_op = FM_PATCH_OP_SET;
       p.style_name = reader.optional_string_value(name_value, style_name, "patch.styleName");
       break;
     case JsPatchKey::kKeep:
@@ -331,7 +334,7 @@ uint32_t JsWorkbook::pivotFieldAdd(uint32_t sheet, uint32_t pivotIndex, emscript
 
 emscripten::val JsWorkbook::pivotFieldAt(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex) const {
   fm_pivot_field_info_t info = FM_STRUCT_INIT(fm_pivot_field_info_t);
-  const fm_status_t rc = handle_ != nullptr ? fm_sheet_get_pivot_field(handle_, sheet, pivotIndex, fieldIndex, &info)
+  const fm_status_t rc = handle_ != nullptr ? fm_sheet_get_pivot_field_at(handle_, sheet, pivotIndex, fieldIndex, &info)
                                             : kBindingInvalidHandle;
   if (!succeeded(rc)) {
     return emscripten::val::undefined();
@@ -378,9 +381,9 @@ double JsWorkbook::pivotFieldItemCount(uint32_t sheet, uint32_t pivotIndex, uint
 emscripten::val JsWorkbook::pivotFieldItemAt(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex,
                                              uint32_t itemIndex) const {
   fm_pivot_item_info_t info = FM_STRUCT_INIT(fm_pivot_item_info_t);
-  const fm_status_t rc = handle_ != nullptr
-                             ? fm_sheet_get_pivot_field_item(handle_, sheet, pivotIndex, fieldIndex, itemIndex, &info)
-                             : kBindingInvalidHandle;
+  const fm_status_t rc =
+      handle_ != nullptr ? fm_sheet_get_pivot_field_item_at(handle_, sheet, pivotIndex, fieldIndex, itemIndex, &info)
+                         : kBindingInvalidHandle;
   if (!succeeded(rc)) {
     return emscripten::val::undefined();
   }
@@ -504,68 +507,65 @@ void JsWorkbook::pivotSetOptions(uint32_t sheet, uint32_t pivotIndex, emscripten
     record_type_error("setPivotOptions: `options` must be an object");
     return;
   }
-  // The C call writes every member, so members the caller omits keep the
-  // pivot's current value.
-  fm_pivot_options_t opt = FM_STRUCT_INIT(fm_pivot_options_t);
-  if (!succeeded(fm_sheet_get_pivot_options(handle_, sheet, pivotIndex, &opt))) {
-    return;
-  }
-  std::string error_caption = string_from_cstr(opt.error_caption);
-  std::string missing_caption = string_from_cstr(opt.missing_caption);
-  std::string alt_text = string_from_cstr(opt.alt_text);
-  std::string alt_summary = string_from_cstr(opt.alt_text_summary);
-  std::string grand_total = string_from_cstr(opt.grand_total_caption);
-
+  fm_pivot_options_patch_t p = FM_STRUCT_INIT(fm_pivot_options_patch_t);
   JsNarrowNumericReader reader("setPivotOptions");
-  const auto flag = [&](const char* key, int32_t current) {
+  // An omitted or `null` flag keeps the stored value.
+  const auto flag = [&](const char* key, fm_patch_op_t* op, int32_t* value) {
     const std::string field = std::string("pivotOptions.") + key;
-    return reader.boolean(options, key, current != 0, field.c_str()) ? 1 : 0;
+    const emscripten::val v = reader.value(options, key, field.c_str());
+    if (reader.ok() && js_value_present(v)) {
+      *op = FM_PATCH_OP_SET;
+      *value = reader.boolean_value(v, false) ? 1 : 0;
+    }
+  };
+  const auto count = [&](const char* key, fm_patch_op_t* op, uint32_t* value) {
+    const std::string field = std::string("pivotOptions.") + key;
+    const emscripten::val v = reader.value(options, key, field.c_str());
+    if (reader.ok() && js_value_present(v)) {
+      *op = FM_PATCH_OP_SET;
+      *value = reader.u32_value(v, 0U, field.c_str());
+    }
   };
   // An omitted caption keeps the stored one; `null` removes it.
-  const auto text = [&](const char* key, std::string& storage) {
+  std::string error_caption;
+  std::string missing_caption;
+  std::string alt_text;
+  std::string alt_summary;
+  std::string grand_total;
+  const auto text = [&](const char* key, std::string& storage, fm_patch_op_t* op, const char** value) {
     const std::string field = std::string("pivotOptions.") + key;
-    const emscripten::val value = reader.value(options, key, field.c_str());
-    if (!reader.ok() || value.isUndefined()) {
-      return;
-    }
-    storage = value.isNull() ? std::string() : reader.string_value(value, field.c_str());
+    js_patch_string(reader, options, key, field.c_str(), true, storage, op, value);
   };
-  opt.show_error = flag("showError", opt.show_error);
-  text("errorCaption", error_caption);
-  opt.show_missing = flag("showMissing", opt.show_missing);
-  text("missingCaption", missing_caption);
-  opt.show_headers = flag("showHeaders", opt.show_headers);
-  opt.show_drill = flag("showDrill", opt.show_drill);
-  opt.show_data_tips = flag("showDataTips", opt.show_data_tips);
-  opt.grid_drop_zones = flag("gridDropZones", opt.grid_drop_zones);
-  opt.show_empty_row = flag("showEmptyRow", opt.show_empty_row);
-  opt.show_empty_column = flag("showEmptyColumn", opt.show_empty_column);
-  opt.show_data_drop_down = flag("showDataDropDown", opt.show_data_drop_down);
-  opt.print_drill = flag("printDrill", opt.print_drill);
-  opt.field_print_titles = flag("fieldPrintTitles", opt.field_print_titles);
-  opt.item_print_titles = flag("itemPrintTitles", opt.item_print_titles);
-  opt.merge_item = flag("mergeItem", opt.merge_item);
-  opt.indent = reader.u32(options, "indent", opt.indent, "pivotOptions.indent");
-  opt.page_over_then_down = flag("pageOverThenDown", opt.page_over_then_down);
-  opt.page_wrap = reader.u32(options, "pageWrap", opt.page_wrap, "pivotOptions.pageWrap");
-  opt.multiple_field_filters = flag("multipleFieldFilters", opt.multiple_field_filters);
-  opt.preserve_formatting = flag("preserveFormatting", opt.preserve_formatting);
-  opt.custom_list_sort = flag("customListSort", opt.custom_list_sort);
-  text("altText", alt_text);
-  text("altTextSummary", alt_summary);
-  text("grandTotalCaption", grand_total);
-  opt.auto_formatting = flag("autoFormatting", opt.auto_formatting);
-  opt.enable_drill = flag("enableDrill", opt.enable_drill);
+  flag("showError", &p.show_error_op, &p.show_error);
+  text("errorCaption", error_caption, &p.error_caption_op, &p.error_caption);
+  flag("showMissing", &p.show_missing_op, &p.show_missing);
+  text("missingCaption", missing_caption, &p.missing_caption_op, &p.missing_caption);
+  flag("showHeaders", &p.show_headers_op, &p.show_headers);
+  flag("showDrill", &p.show_drill_op, &p.show_drill);
+  flag("showDataTips", &p.show_data_tips_op, &p.show_data_tips);
+  flag("gridDropZones", &p.grid_drop_zones_op, &p.grid_drop_zones);
+  flag("showEmptyRow", &p.show_empty_row_op, &p.show_empty_row);
+  flag("showEmptyColumn", &p.show_empty_column_op, &p.show_empty_column);
+  flag("showDataDropDown", &p.show_data_drop_down_op, &p.show_data_drop_down);
+  flag("printDrill", &p.print_drill_op, &p.print_drill);
+  flag("fieldPrintTitles", &p.field_print_titles_op, &p.field_print_titles);
+  flag("itemPrintTitles", &p.item_print_titles_op, &p.item_print_titles);
+  flag("mergeItem", &p.merge_item_op, &p.merge_item);
+  count("indent", &p.indent_op, &p.indent);
+  flag("pageOverThenDown", &p.page_over_then_down_op, &p.page_over_then_down);
+  count("pageWrap", &p.page_wrap_op, &p.page_wrap);
+  flag("multipleFieldFilters", &p.multiple_field_filters_op, &p.multiple_field_filters);
+  flag("preserveFormatting", &p.preserve_formatting_op, &p.preserve_formatting);
+  flag("customListSort", &p.custom_list_sort_op, &p.custom_list_sort);
+  text("altText", alt_text, &p.alt_text_op, &p.alt_text);
+  text("altTextSummary", alt_summary, &p.alt_text_summary_op, &p.alt_text_summary);
+  text("grandTotalCaption", grand_total, &p.grand_total_caption_op, &p.grand_total_caption);
+  flag("autoFormatting", &p.auto_formatting_op, &p.auto_formatting);
+  flag("enableDrill", &p.enable_drill_op, &p.enable_drill);
   if (!reader.ok()) {
     return;
   }
-  const auto view = [](const std::string& s) { return s.empty() ? nullptr : s.c_str(); };
-  opt.error_caption = view(error_caption);
-  opt.missing_caption = view(missing_caption);
-  opt.alt_text = view(alt_text);
-  opt.alt_text_summary = view(alt_summary);
-  opt.grand_total_caption = view(grand_total);
-  succeeded(fm_sheet_update_pivot_options(handle_, sheet, pivotIndex, &opt));
+  succeeded(fm_sheet_update_pivot_options(handle_, sheet, pivotIndex, &p));
 }
 
 std::string JsWorkbook::pivotDataFieldDefaultName(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex,
@@ -735,17 +735,25 @@ void JsWorkbook::pivotSetColFieldOrder(uint32_t sheet, uint32_t pivotIndex, emsc
 namespace {
 
 // Shared body of `pivotRowFieldOrder` / `pivotColFieldOrder`.
-using PivotFieldOrderGetter = fm_status_t (*)(const fm_workbook_t*, size_t, size_t, const uint32_t**, size_t*);
+using PivotFieldOrderGetter = fm_status_t (*)(const fm_workbook_t*, size_t, size_t, uint32_t*, size_t, size_t*);
 
 emscripten::val get_pivot_field_order(const fm_workbook_t* wb, uint32_t sheet, uint32_t pivotIndex,
                                       PivotFieldOrderGetter fn) {
   emscripten::val indices = emscripten::val::array();
-  const uint32_t* data = nullptr;
-  std::size_t count = 0;
-  if (!succeeded(wb != nullptr ? fn(wb, sheet, pivotIndex, &data, &count) : kBindingInvalidHandle)) {
+  if (wb == nullptr) {
+    record_invalid_handle();
     return emscripten::val::undefined();
   }
-  for (std::size_t i = 0; i < count; ++i) {
+  std::size_t count = 0;
+  fm_status_t rc = fn(wb, sheet, pivotIndex, nullptr, 0, &count);
+  std::vector<uint32_t> data(count);
+  if (rc == 0 && count > 0) {
+    rc = fn(wb, sheet, pivotIndex, data.data(), data.size(), &count);
+  }
+  if (!succeeded(rc)) {
+    return emscripten::val::undefined();
+  }
+  for (std::size_t i = 0; i < data.size() && i < count; ++i) {
     indices.call<void>("push", data[i] == FM_PIVOT_VALUES_FIELD ? kPivotValuesFieldJs : static_cast<int32_t>(data[i]));
   }
   return indices;
@@ -776,7 +784,7 @@ uint32_t JsWorkbook::pivotDataFieldAdd(uint32_t sheet, uint32_t pivotIndex, emsc
     record_invalid_handle();
     return 0U;
   }
-  fm_pivot_data_field_spec_t c_spec = FM_STRUCT_INIT(fm_pivot_data_field_spec_t);
+  fm_pivot_data_field_t c_spec = FM_STRUCT_INIT(fm_pivot_data_field_t);
   std::string name_buf;
   std::string nfmt_buf;
   JsNarrowNumericReader reader("addPivotDataField");
@@ -792,9 +800,9 @@ uint32_t JsWorkbook::pivotDataFieldAdd(uint32_t sheet, uint32_t pivotIndex, emsc
 }
 
 emscripten::val JsWorkbook::pivotDataFieldAt(uint32_t sheet, uint32_t pivotIndex, uint32_t dataFieldIndex) const {
-  fm_pivot_data_field_spec_t spec = FM_STRUCT_INIT(fm_pivot_data_field_spec_t);
+  fm_pivot_data_field_t spec = FM_STRUCT_INIT(fm_pivot_data_field_t);
   const fm_status_t rc = handle_ != nullptr
-                             ? fm_sheet_get_pivot_data_field(handle_, sheet, pivotIndex, dataFieldIndex, &spec)
+                             ? fm_sheet_get_pivot_data_field_at(handle_, sheet, pivotIndex, dataFieldIndex, &spec)
                              : kBindingInvalidHandle;
   if (!succeeded(rc)) {
     return emscripten::val::undefined();
@@ -819,7 +827,7 @@ void JsWorkbook::pivotDataFieldSet(uint32_t sheet, uint32_t pivotIndex, uint32_t
     record_invalid_handle();
     return;
   }
-  fm_pivot_data_field_spec_t c_spec = FM_STRUCT_INIT(fm_pivot_data_field_spec_t);
+  fm_pivot_data_field_t c_spec = FM_STRUCT_INIT(fm_pivot_data_field_t);
   std::string name_buf;
   std::string nfmt_buf;
   JsNarrowNumericReader reader("setPivotDataField");
@@ -852,7 +860,7 @@ uint32_t JsWorkbook::pivotFilterAdd(uint32_t sheet, uint32_t pivotIndex, emscrip
   JsNarrowNumericReader reader("addPivotFilter");
   const char* field_name_ptr = reader.optional_string(spec, "fieldName", field_name, "pivotFilter.fieldName");
 
-  fm_pivot_filter_spec_t c_spec = FM_STRUCT_INIT(fm_pivot_filter_spec_t);
+  fm_pivot_filter_t c_spec = FM_STRUCT_INIT(fm_pivot_filter_t);
   c_spec.axis = static_cast<fm_pivot_axis_t>(reader.required_u32(spec, "axis", "pivotFilter.axis"));
   c_spec.field_name = field_name_ptr;
   c_spec.type = static_cast<fm_pivot_filter_kind_t>(reader.required_u32(spec, "type", "pivotFilter.type"));
@@ -884,9 +892,10 @@ uint32_t JsWorkbook::pivotFilterAdd(uint32_t sheet, uint32_t pivotIndex, emscrip
 }
 
 emscripten::val JsWorkbook::pivotFilterAt(uint32_t sheet, uint32_t pivotIndex, uint32_t filterIndex) const {
-  fm_pivot_filter_spec_t spec = FM_STRUCT_INIT(fm_pivot_filter_spec_t);
-  const fm_status_t rc = handle_ != nullptr ? fm_sheet_get_pivot_filter(handle_, sheet, pivotIndex, filterIndex, &spec)
-                                            : kBindingInvalidHandle;
+  fm_pivot_filter_t spec = FM_STRUCT_INIT(fm_pivot_filter_t);
+  const fm_status_t rc = handle_ != nullptr
+                             ? fm_sheet_get_pivot_filter_at(handle_, sheet, pivotIndex, filterIndex, &spec)
+                             : kBindingInvalidHandle;
   if (!succeeded(rc)) {
     return emscripten::val::undefined();
   }

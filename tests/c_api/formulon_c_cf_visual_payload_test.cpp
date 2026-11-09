@@ -105,7 +105,7 @@ TEST(FormulonCApiCfMutate, DataBarRuleSurvivesGetAtFedBackIntoAddRule) {
 
   // Read it back, change one unrelated field, and write it out again.
   fm_cf_rule_t round_trip = FM_STRUCT_INIT(fm_cf_rule_t);
-  ASSERT_EQ(fm_sheet_get_cf_rule(wb.handle, 0, 0, &round_trip), 0);
+  ASSERT_EQ(fm_sheet_get_cf_rule_at(wb.handle, 0, 0, &round_trip), 0);
   EXPECT_EQ(round_trip.data_bar_gradient_engaged, 1);
   EXPECT_EQ(round_trip.data_bar_gradient, 0);
   EXPECT_EQ(round_trip.data_bar_axis_position_engaged, 1);
@@ -157,7 +157,7 @@ TEST(FormulonCApiCfMutate, GetAtRecordStaysReadableUntilTheNextGet) {
   thresholds[0].value = "11";
   thresholds[1].type = 0;
   thresholds[1].value = "33";
-  fm_color_spec_t colors[2]{CfRgb(255, 0, 0, 255), CfRgb(0, 255, 0, 255)};
+  fm_color_t colors[2]{CfRgb(255, 0, 0, 255), CfRgb(0, 255, 0, 255)};
   seed.color_scale_thresholds = thresholds;
   seed.color_scale_colors = colors;
   seed.color_scale_count = 2;
@@ -165,7 +165,7 @@ TEST(FormulonCApiCfMutate, GetAtRecordStaysReadableUntilTheNextGet) {
   ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &seed, &seed_index), 0) << fm_get_last_error_message();
 
   fm_cf_rule_t held = FM_STRUCT_INIT(fm_cf_rule_t);
-  ASSERT_EQ(fm_sheet_get_cf_rule(wb.handle, 0, 0, &held), 0);
+  ASSERT_EQ(fm_sheet_get_cf_rule_at(wb.handle, 0, 0, &held), 0);
   ASSERT_NE(held.ranges, nullptr);
   ASSERT_EQ(held.range_count, 2U);
   ASSERT_EQ(held.color_scale_count, 2U);
@@ -250,7 +250,7 @@ TEST(FormulonCApiCfMutate, ThresholdStringsStayLiveWhileLaterPayloadsArePulled) 
     thresholds[i].gte = 1;
     thresholds[i].value = strings.emplace(kThresholdValues[i]);
   }
-  fm_color_spec_t colors[3]{CfRgb(255, 0, 0, 255), CfRgb(255, 255, 0, 255), CfRgb(0, 255, 0, 255)};
+  fm_color_t colors[3]{CfRgb(255, 0, 0, 255), CfRgb(255, 255, 0, 255), CfRgb(0, 255, 0, 255)};
   rule.color_scale_thresholds = thresholds;
   rule.color_scale_colors = colors;
   rule.color_scale_count = 3;
@@ -333,7 +333,7 @@ TEST(FormulonCApiCfMutate, RuleEngagingSeveralVisualPayloadsSurfacesLivePointers
   sheet.mutable_conditional_formats().push_back(std::move(block));
 
   fm_cf_rule_t out = FM_STRUCT_INIT(fm_cf_rule_t);
-  ASSERT_EQ(fm_sheet_get_cf_rule(wb.handle, 0, 0, &out), 0);
+  ASSERT_EQ(fm_sheet_get_cf_rule_at(wb.handle, 0, 0, &out), 0);
   ASSERT_EQ(out.color_scale_count, 3U);
   ASSERT_NE(out.color_scale_thresholds, nullptr);
   ASSERT_NE(out.color_scale_colors, nullptr);

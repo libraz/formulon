@@ -17,10 +17,23 @@ inline fm_status_t SetDefinedName(fm_workbook_t* wb, const char* name, const cha
   return fm_workbook_set_defined_name(wb, &input);
 }
 
-// Sets all three iterative-calculation settings.
+// Sets the three iterative-calculation settings; an argument of -1 keeps that
+// setting.
 inline fm_status_t SetIterative(fm_workbook_t* wb, std::int32_t enabled, std::int32_t max_iterations,
                                 double max_change) {
-  const fm_iterative_settings_patch_t patch{sizeof(fm_iterative_settings_patch_t), enabled, max_iterations, max_change};
+  fm_iterative_settings_patch_t patch = FM_STRUCT_INIT(fm_iterative_settings_patch_t);
+  if (enabled != -1) {
+    patch.enabled_op = FM_PATCH_OP_SET;
+    patch.enabled = enabled;
+  }
+  if (max_iterations != -1) {
+    patch.max_iterations_op = FM_PATCH_OP_SET;
+    patch.max_iterations = static_cast<std::uint32_t>(max_iterations);
+  }
+  if (max_change != -1.0) {
+    patch.max_change_op = FM_PATCH_OP_SET;
+    patch.max_change = max_change;
+  }
   return fm_workbook_update_iterative(wb, &patch);
 }
 
@@ -44,6 +57,15 @@ inline fm_status_t AddTable(fm_workbook_t* wb, std::size_t sheet_index, const fm
   return fm_sheet_add_table(wb, sheet_index, &spec, out_table_index);
 }
 
+// Patches table `table_index`'s range, leaving its header and totals rows.
+inline fm_status_t UpdateTableRange(fm_workbook_t* wb, std::size_t sheet_index, std::size_t table_index,
+                                    const fm_cell_rect_t& range) {
+  fm_table_patch_t patch = FM_STRUCT_INIT(fm_table_patch_t);
+  patch.range_op = FM_PATCH_OP_SET;
+  patch.range = range;
+  return fm_sheet_update_table(wb, sheet_index, table_index, &patch);
+}
+
 // Creates a pivot table named `name` over cache `cache_id`, anchored at
 // (`anchor_row`, `anchor_col`).
 inline fm_status_t AddPivot(fm_workbook_t* wb, std::size_t sheet_index, const char* name, std::uint32_t cache_id,
@@ -61,8 +83,8 @@ inline fm_status_t AddPivot(fm_workbook_t* wb, std::size_t sheet_index, const ch
 // had; an empty or null string where a setter accepts one means CLEAR.
 namespace pivot_patch_detail {
 
-inline std::int32_t StringOp(const char* text) {
-  return text == nullptr || *text == '\0' ? FM_CHART_PATCH_OP_CLEAR : FM_CHART_PATCH_OP_SET;
+inline fm_patch_op_t StringOp(const char* text) {
+  return text == nullptr || *text == '\0' ? FM_PATCH_OP_CLEAR : FM_PATCH_OP_SET;
 }
 
 }  // namespace pivot_patch_detail
@@ -71,7 +93,7 @@ inline std::int32_t StringOp(const char* text) {
   inline fm_status_t Name(fm_workbook_t* wb, std::size_t sheet_index, std::size_t pivot_index, \
                           std::size_t field_index, std::int32_t on) {                          \
     fm_pivot_field_patch_t patch = FM_STRUCT_INIT(fm_pivot_field_patch_t);                     \
-    patch.member##_op = FM_CHART_PATCH_OP_SET;                                                 \
+    patch.member##_op = FM_PATCH_OP_SET;                                                       \
     patch.member = on;                                                                         \
     return fm_sheet_update_pivot_field(wb, sheet_index, pivot_index, field_index, &patch);     \
   }
@@ -90,7 +112,7 @@ FORMULON_PIVOT_FIELD_FLAG_SETTER(SetPivotFieldShowDetail, show_detail)
 inline fm_status_t SetPivotFieldSort(fm_workbook_t* wb, std::size_t sheet_index, std::size_t pivot_index,
                                      std::size_t field_index, std::int32_t order, const char* by_field) {
   fm_pivot_field_patch_t patch = FM_STRUCT_INIT(fm_pivot_field_patch_t);
-  patch.sort_order_op = FM_CHART_PATCH_OP_SET;
+  patch.sort_order_op = FM_PATCH_OP_SET;
   patch.sort_order = order;
   patch.sort_by_field_op = pivot_patch_detail::StringOp(by_field);
   patch.sort_by_field = by_field;
@@ -118,7 +140,7 @@ inline fm_status_t SetPivotFieldNumberFormat(fm_workbook_t* wb, std::size_t shee
 inline fm_status_t SetPivotFieldItemVisible(fm_workbook_t* wb, std::size_t sheet_index, std::size_t pivot_index,
                                             std::size_t field_index, std::size_t item_index, std::int32_t visible) {
   fm_pivot_item_patch_t patch = FM_STRUCT_INIT(fm_pivot_item_patch_t);
-  patch.visible_op = FM_CHART_PATCH_OP_SET;
+  patch.visible_op = FM_PATCH_OP_SET;
   patch.visible = visible;
   return fm_sheet_update_pivot_field_item(wb, sheet_index, pivot_index, field_index, item_index, &patch);
 }
@@ -126,7 +148,7 @@ inline fm_status_t SetPivotFieldItemVisible(fm_workbook_t* wb, std::size_t sheet
 inline fm_status_t SetPivotFieldItemShowDetail(fm_workbook_t* wb, std::size_t sheet_index, std::size_t pivot_index,
                                                std::size_t field_index, std::size_t item_index, std::int32_t on) {
   fm_pivot_item_patch_t patch = FM_STRUCT_INIT(fm_pivot_item_patch_t);
-  patch.show_detail_op = FM_CHART_PATCH_OP_SET;
+  patch.show_detail_op = FM_PATCH_OP_SET;
   patch.show_detail = on;
   return fm_sheet_update_pivot_field_item(wb, sheet_index, pivot_index, field_index, item_index, &patch);
 }
@@ -149,15 +171,15 @@ inline fm_status_t UpdatePivotStyleOptions(fm_workbook_t* wb, std::size_t sheet_
   fm_pivot_style_options_patch_t patch = FM_STRUCT_INIT(fm_pivot_style_options_patch_t);
   patch.style_name_op = pivot_patch_detail::StringOp(style_name);
   patch.style_name = style_name;
-  patch.show_row_headers_op = FM_CHART_PATCH_OP_SET;
+  patch.show_row_headers_op = FM_PATCH_OP_SET;
   patch.show_row_headers = show_row_headers;
-  patch.show_column_headers_op = FM_CHART_PATCH_OP_SET;
+  patch.show_column_headers_op = FM_PATCH_OP_SET;
   patch.show_column_headers = show_column_headers;
-  patch.show_row_stripes_op = FM_CHART_PATCH_OP_SET;
+  patch.show_row_stripes_op = FM_PATCH_OP_SET;
   patch.show_row_stripes = show_row_stripes;
-  patch.show_column_stripes_op = FM_CHART_PATCH_OP_SET;
+  patch.show_column_stripes_op = FM_PATCH_OP_SET;
   patch.show_column_stripes = show_column_stripes;
-  patch.show_last_column_op = FM_CHART_PATCH_OP_SET;
+  patch.show_last_column_op = FM_PATCH_OP_SET;
   patch.show_last_column = show_last_column;
   return fm_sheet_update_pivot_style_options(wb, sheet_index, pivot_index, &patch);
 }

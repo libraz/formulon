@@ -56,7 +56,7 @@ fm_status_t resolve_sheet(const fm_workbook_t* wb, std::string_view spec, std::s
   const std::string name(spec);
   std::size_t index = 0;
   std::int32_t present = 0;
-  if (auto rc = fm_workbook_get_sheet_index(wb, name.c_str(), &index, &present); rc != 0) {
+  if (auto rc = fm_workbook_get_sheet_index(wb, name.c_str(), &present, &index); rc != 0) {
     emit_last_error(err, subcommand);
     return rc;
   }

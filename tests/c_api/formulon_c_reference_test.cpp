@@ -37,24 +37,26 @@ struct Parsed {
 
 // Calls the parser with an explicit spec; `r1c1` is an fm_tristate_t value.
 fm_status_t ParseSpec(const fm_workbook_t* wb, const char* text, int32_t r1c1, int32_t has_base, uint32_t base_row,
-                      uint32_t base_col, fm_parsed_reference_t* out) {
+                      uint32_t base_col, fm_parsed_reference_info_t* out) {
   const fm_parse_reference_spec_t spec{sizeof(fm_parse_reference_spec_t), r1c1, has_base, base_row, base_col};
   return fm_workbook_parse_reference(wb, text, &spec, out);
 }
 
 // `r1c1` is 0 for A1 and 1 for R1C1 here; it maps onto the tristate.
 fm_status_t ParseMode(const fm_workbook_t* wb, const char* text, int32_t r1c1, int32_t has_base, uint32_t base_row,
-                      uint32_t base_col, fm_parsed_reference_t* out) {
+                      uint32_t base_col, fm_parsed_reference_info_t* out) {
   return ParseSpec(wb, text, r1c1 != 0 ? FM_TRISTATE_TRUE : FM_TRISTATE_FALSE, has_base, base_row, base_col, out);
 }
 
 // Text that is not a reference fails with the whole text as the parse-error range.
 void ExpectNotReference(fm_workbook_t* wb, const char* text, int32_t r1c1 = 0) {
-  fm_parsed_reference_t out = FM_STRUCT_INIT(fm_parsed_reference_t);
+  fm_parsed_reference_info_t out = FM_STRUCT_INIT(fm_parsed_reference_info_t);
   EXPECT_EQ(ParseMode(wb, text, r1c1, 0, 0, 0, &out), FM_STATUS_PARSER_INVALID_REFERENCE) << text;
-  EXPECT_EQ(out.valid, 0) << text;
-  fm_parse_error_t error = FM_STRUCT_INIT(fm_parse_error_t);
-  ASSERT_EQ(fm_get_last_parse_error(&error), 0) << text;
+  EXPECT_EQ(out.sheet_name, nullptr) << text;
+  fm_parse_error_info_t error = FM_STRUCT_INIT(fm_parse_error_info_t);
+  int32_t present = 0;
+  ASSERT_EQ(fm_get_last_parse_error(&present, &error), 0) << text;
+  ASSERT_EQ(present, 1) << text;
   EXPECT_EQ(error.code, FM_PARSE_ERROR_CODE_INVALID_REFERENCE) << text;
   EXPECT_EQ(error.start, 0U) << text;
   EXPECT_EQ(error.end, static_cast<uint32_t>(std::string(text).size())) << text;
@@ -62,24 +64,18 @@ void ExpectNotReference(fm_workbook_t* wb, const char* text, int32_t r1c1 = 0) {
 
 Parsed Parse(fm_workbook_t* wb, const char* text, int32_t r1c1 = 0, int32_t has_base = 0, uint32_t base_row = 0,
              uint32_t base_col = 0) {
-  fm_parsed_reference_t out = FM_STRUCT_INIT(fm_parsed_reference_t);
-  EXPECT_EQ(ParseMode(wb, text, r1c1, has_base, base_row, base_col, &out), 0)
-      << text << ": " << fm_get_last_error_message();
+  fm_parsed_reference_info_t out = FM_STRUCT_INIT(fm_parsed_reference_info_t);
+  const fm_status_t rc = ParseMode(wb, text, r1c1, has_base, base_row, base_col, &out);
+  EXPECT_EQ(rc, 0) << text << ": " << fm_get_last_error_message();
   Parsed p;
-  p.valid = out.valid == 1;
-  p.has_sheet = out.has_sheet == 1;
-  if (out.valid == 0) {
-    EXPECT_EQ(out.has_sheet, 0) << text;
+  p.valid = rc == 0;
+  p.has_sheet = out.sheet_name != nullptr;
+  if (rc != 0) {
     EXPECT_EQ(out.sheet_name, nullptr) << text;
     EXPECT_EQ(out.rect.first_row | out.rect.first_col | out.rect.last_row | out.rect.last_col, 0U) << text;
   }
-  if (out.has_sheet == 1) {
-    EXPECT_NE(out.sheet_name, nullptr) << text;
-    if (out.sheet_name != nullptr) {
-      p.sheet = out.sheet_name;
-    }
-  } else {
-    EXPECT_EQ(out.sheet_name, nullptr) << text;
+  if (out.sheet_name != nullptr) {
+    p.sheet = out.sheet_name;
   }
   p.row0 = out.rect.first_row;
   p.col0 = out.rect.first_col;
@@ -191,9 +187,9 @@ TEST(FormulonCApiReference, ParsesR1C1UnderTheWorkbookProfile) {
 TEST(FormulonCApiReference, SheetNameOutlivesTheNextParserCall) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  fm_parsed_reference_t out = FM_STRUCT_INIT(fm_parsed_reference_t);
+  fm_parsed_reference_info_t out = FM_STRUCT_INIT(fm_parsed_reference_info_t);
   ASSERT_EQ(fm_workbook_parse_reference(wb.handle, "'My Sheet'!A1", nullptr, &out), 0);
-  ASSERT_EQ(out.has_sheet, 1);
+  ASSERT_NE(out.sheet_name, nullptr);
   // The parser's own sheet view lives in thread-local scratch the next parse reuses.
   const auto other = formulon::eval::refs_internal::parse_a1_ref("'Other one'!B2");
   ASSERT_TRUE(other.valid);
@@ -203,7 +199,7 @@ TEST(FormulonCApiReference, SheetNameOutlivesTheNextParserCall) {
 TEST(FormulonCApiReference, ParseRejectsBadArguments) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  fm_parsed_reference_t out = FM_STRUCT_INIT(fm_parsed_reference_t);
+  fm_parsed_reference_info_t out = FM_STRUCT_INIT(fm_parsed_reference_info_t);
   EXPECT_EQ(fm_workbook_parse_reference(nullptr, "A1", nullptr, &out), kBindingNullPointer);
   EXPECT_EQ(fm_workbook_parse_reference(wb.handle, nullptr, nullptr, &out), kBindingNullPointer);
   EXPECT_EQ(fm_workbook_parse_reference(wb.handle, "A1", nullptr, nullptr), kBindingNullPointer);
@@ -219,11 +215,10 @@ TEST(FormulonCApiReference, ParseRejectsBadArguments) {
 TEST(FormulonCApiReference, NullSpecParsesPlainA1WithoutBase) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  fm_parsed_reference_t out = FM_STRUCT_INIT(fm_parsed_reference_t);
+  fm_parsed_reference_info_t out = FM_STRUCT_INIT(fm_parsed_reference_info_t);
   ASSERT_EQ(fm_workbook_parse_reference(wb.handle, "B2:C3", nullptr, &out), FM_STATUS_OK)
       << fm_get_last_error_message();
-  EXPECT_EQ(out.valid, 1);
-  EXPECT_EQ(out.has_sheet, 0);
+  EXPECT_EQ(out.sheet_name, nullptr);
   EXPECT_EQ(out.rect.first_row, 1U);
   EXPECT_EQ(out.rect.first_col, 1U);
   EXPECT_EQ(out.rect.last_row, 2U);
@@ -234,12 +229,12 @@ TEST(FormulonCApiReference, DefaultAndFalseTristateParseA1AndTrueParsesR1C1) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   for (const int32_t a1_mode : {static_cast<int32_t>(FM_TRISTATE_DEFAULT), static_cast<int32_t>(FM_TRISTATE_FALSE)}) {
-    fm_parsed_reference_t out = FM_STRUCT_INIT(fm_parsed_reference_t);
+    fm_parsed_reference_info_t out = FM_STRUCT_INIT(fm_parsed_reference_info_t);
     ASSERT_EQ(ParseSpec(wb.handle, "B2", a1_mode, 0, 0, 0, &out), FM_STATUS_OK) << fm_get_last_error_message();
     EXPECT_EQ(out.rect.first_row, 1U);
     EXPECT_EQ(out.rect.first_col, 1U);
   }
-  fm_parsed_reference_t r1c1 = FM_STRUCT_INIT(fm_parsed_reference_t);
+  fm_parsed_reference_info_t r1c1 = FM_STRUCT_INIT(fm_parsed_reference_info_t);
   ASSERT_EQ(ParseSpec(wb.handle, "R2C3", FM_TRISTATE_TRUE, 0, 0, 0, &r1c1), FM_STATUS_OK)
       << fm_get_last_error_message();
   EXPECT_EQ(r1c1.rect.first_row, 1U);
@@ -249,7 +244,7 @@ TEST(FormulonCApiReference, DefaultAndFalseTristateParseA1AndTrueParsesR1C1) {
 TEST(FormulonCApiReference, R1c1RelativeAxisWithoutBaseIsNotAReference) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  fm_parsed_reference_t out = FM_STRUCT_INIT(fm_parsed_reference_t);
+  fm_parsed_reference_info_t out = FM_STRUCT_INIT(fm_parsed_reference_info_t);
   EXPECT_EQ(ParseSpec(wb.handle, "R[1]C[1]", FM_TRISTATE_TRUE, 0, 0, 0, &out), FM_STATUS_PARSER_INVALID_REFERENCE);
   ASSERT_EQ(ParseSpec(wb.handle, "R[1]C[1]", FM_TRISTATE_TRUE, 1, 4, 4, &out), FM_STATUS_OK)
       << fm_get_last_error_message();

@@ -116,7 +116,7 @@ TEST(FormulonCApiStyles, AddBatchNumFmtUsesEffectiveBuiltinMapping) {
 
   const char* const codes[] = {"General", "yyyy", "mm-dd-yy", "mm-dd-yy"};
   uint16_t ids[] = {0xFFFFU, 0xFFFFU, 0xFFFFU, 0xFFFFU};
-  fm_styles_batch_t batch = FM_STRUCT_INIT(fm_styles_batch_t);
+  fm_styles_batch_spec_t batch = FM_STRUCT_INIT(fm_styles_batch_spec_t);
   batch.num_fmt_codes = codes;
   batch.num_fmt_count = 4U;
   batch.num_fmt_ids = ids;
@@ -312,7 +312,7 @@ TEST(FormulonCApiStyles, AddBatchNumFmtExhaustionIsTransactional) {
   const std::string before_xml = formulon::io::write_styles(styles);
   const char* codes[] = {"first", "second"};
   uint16_t ids[] = {0xAAAAU, 0xBBBBU};
-  fm_styles_batch_t batch = FM_STRUCT_INIT(fm_styles_batch_t);
+  fm_styles_batch_spec_t batch = FM_STRUCT_INIT(fm_styles_batch_spec_t);
   batch.num_fmt_codes = codes;
   batch.num_fmt_count = 2U;
   batch.num_fmt_ids = ids;

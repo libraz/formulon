@@ -250,7 +250,7 @@ JsSaveDiagnostics JsWorkbook::saveWithDiagnostics(emscripten::val format) const 
   }
   uint8_t* out = nullptr;
   std::size_t len = 0;
-  fm_save_diagnostics_t d = FM_STRUCT_INIT(fm_save_diagnostics_t);
+  fm_save_diagnostics_info_t d = FM_STRUCT_INIT(fm_save_diagnostics_info_t);
   const fm_status_t rc = fm_workbook_save_with_diagnostics(handle_, save_format(format), &out, &len, &d);
   r.bytes = snapshot_bytes(rc, out, len);
   if (rc != 0) {
@@ -270,7 +270,7 @@ JsReadDiagnostics JsWorkbook::readDiagnostics() const {
     record_invalid_handle();
     return r;
   }
-  fm_read_diagnostics_t d = FM_STRUCT_INIT(fm_read_diagnostics_t);
+  fm_read_diagnostics_info_t d = FM_STRUCT_INIT(fm_read_diagnostics_info_t);
   if (!succeeded(fm_workbook_get_diagnostics(handle_, &d))) {
     return r;
   }
@@ -453,7 +453,7 @@ JsParallelRecalcStats JsWorkbook::recalcParallel(emscripten::val threadCount) {
     return r;
   }
 
-  fm_parallel_recalc_stats_t stats = FM_STRUCT_INIT(fm_parallel_recalc_stats_t);
+  fm_parallel_recalc_stats_info_t stats = FM_STRUCT_INIT(fm_parallel_recalc_stats_info_t);
   const uint32_t native_thread_count = static_cast<uint32_t>(requested);
   progress_callback_threw_ = false;
   const fm_status_t rc = fm_workbook_recalc_parallel(handle_, native_thread_count, &stats);
@@ -500,14 +500,12 @@ void JsWorkbook::setIterative(emscripten::val patch) {
     return;
   }
   fm_iterative_settings_patch_t p = FM_STRUCT_INIT(fm_iterative_settings_patch_t);
-  p.enabled = -1;
-  p.max_iterations = -1;
-  p.max_change = -1.0;
   const emscripten::val enabled = reader.value(patch, "enabled", "enabled");
   if (reader.ok() && !enabled.isUndefined()) {
     if (enabled.isNull() || !(enabled.isTrue() || enabled.isFalse())) {
       reader.fail_type("enabled", "a boolean");
     }
+    p.enabled_op = FM_PATCH_OP_SET;
     p.enabled = enabled.isTrue() ? 1 : 0;
   }
   const emscripten::val cap = reader.value(patch, "maxIterations", "maxIterations");
@@ -517,10 +515,12 @@ void JsWorkbook::setIterative(emscripten::val patch) {
       reader.fail_type("maxIterations", "an integer Number");
     } else {
       const double requested = cap.as<double>();
-      if (requested < 0.0 || requested > 2147483647.0) {
-        reader.fail_range("maxIterations", "[0, 2147483647]");
+      if (requested < 0.0 || requested > 4294967295.0) {
+        reader.fail_range("maxIterations", "[0, 4294967295]");
+      } else {
+        p.max_iterations_op = FM_PATCH_OP_SET;
+        p.max_iterations = static_cast<uint32_t>(requested);
       }
-      p.max_iterations = static_cast<int32_t>(requested);
     }
   }
   const emscripten::val change = reader.value(patch, "maxChange", "maxChange");
@@ -528,6 +528,7 @@ void JsWorkbook::setIterative(emscripten::val patch) {
     if (!change.isNumber()) {
       reader.fail_type("maxChange", "a Number");
     } else {
+      p.max_change_op = FM_PATCH_OP_SET;
       p.max_change = change.as<double>();
     }
   }
@@ -538,17 +539,14 @@ void JsWorkbook::setIterative(emscripten::val patch) {
 }
 
 emscripten::val JsWorkbook::getIterative() const {
-  int32_t enabled = 0;
-  uint32_t max_iterations = 0;
-  double max_change = 0.0;
-  if (!succeeded(handle_ != nullptr ? fm_workbook_get_iterative(handle_, &enabled, &max_iterations, &max_change)
-                                    : kBindingInvalidHandle)) {
+  fm_iterative_settings_info_t info = FM_STRUCT_INIT(fm_iterative_settings_info_t);
+  if (!succeeded(handle_ != nullptr ? fm_workbook_get_iterative(handle_, &info) : kBindingInvalidHandle)) {
     return emscripten::val::undefined();
   }
   emscripten::val o = emscripten::val::object();
-  o.set("enabled", enabled != 0);
-  o.set("maxIterations", max_iterations);
-  o.set("maxChange", max_change);
+  o.set("enabled", info.enabled != 0);
+  o.set("maxIterations", info.max_iterations);
+  o.set("maxChange", info.max_change);
   return o;
 }
 
@@ -612,7 +610,7 @@ void JsWorkbook::setDate1904(bool date1904) {
 emscripten::val JsWorkbook::pinnedNow() const {
   fm_civil_time_t now{};
   std::int32_t pinned = 0;
-  if (!succeeded(handle_ != nullptr ? fm_workbook_get_pinned_now(handle_, &now, &pinned) : kBindingInvalidHandle)) {
+  if (!succeeded(handle_ != nullptr ? fm_workbook_get_pinned_now(handle_, &pinned, &now) : kBindingInvalidHandle)) {
     return emscripten::val::undefined();
   }
   if (pinned == 0) {
@@ -677,10 +675,11 @@ double JsWorkbook::memoryUsage() const {
 
 emscripten::val JsWorkbook::fileName() const {
   const char* name = nullptr;
-  if (!succeeded(handle_ != nullptr ? fm_workbook_get_file_name(handle_, &name) : kBindingInvalidHandle)) {
+  int32_t present = 0;
+  if (!succeeded(handle_ != nullptr ? fm_workbook_get_file_name(handle_, &present, &name) : kBindingInvalidHandle)) {
     return emscripten::val::undefined();
   }
-  return cstr_or_null(name);
+  return present != 0 ? cstr_or_null(name) : emscripten::val::null();
 }
 
 void JsWorkbook::setFileName(const std::string& name) {

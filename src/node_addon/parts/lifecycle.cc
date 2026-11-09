@@ -13,7 +13,7 @@ namespace formulon_node {
 
 namespace {
 
-Napi::Object ParallelRecalcStatsToJs(Napi::Env env, const fm_parallel_recalc_stats_t& stats) {
+Napi::Object ParallelRecalcStatsToJs(Napi::Env env, const fm_parallel_recalc_stats_info_t& stats) {
   Napi::Object stats_obj = Napi::Object::New(env);
   // The C ABI counters are uint64_t. The engine's counters are bounded well
   // below Number.MAX_SAFE_INTEGER for a single call, so this conversion is
@@ -145,7 +145,7 @@ Napi::Value Workbook::PinnedNow(const Napi::CallbackInfo& info) {
   }
   fm_civil_time_t now{};
   std::int32_t pinned = 0;
-  const fm_status_t rc = fm_workbook_get_pinned_now(handle_, &now, &pinned);
+  const fm_status_t rc = fm_workbook_get_pinned_now(handle_, &pinned, &now);
   if (rc != 0 || pinned == 0) {
     return OptionalOrNull(env, rc, 0, env.Null());
   }
@@ -216,9 +216,10 @@ Napi::Value Workbook::FileName(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return ThrowInvalidHandle(env);
   }
+  int32_t present = 0;
   const char* name = nullptr;
-  const fm_status_t rc = fm_workbook_get_file_name(handle_, &name);
-  return ValueOrThrow(env, rc, JsStringOrNull(env, name));
+  const fm_status_t rc = fm_workbook_get_file_name(handle_, &present, &name);
+  return ValueOrThrow(env, rc, present != 0 ? JsString(env, name) : env.Null());
 }
 
 Napi::Value Workbook::SetFileName(const Napi::CallbackInfo& info) {
@@ -259,7 +260,7 @@ Napi::Value Workbook::RecalcParallel(const Napi::CallbackInfo& info) {
   if (!ReadThreadCount(info, thread_count)) {
     return env.Undefined();
   }
-  fm_parallel_recalc_stats_t stats = FM_STRUCT_INIT(fm_parallel_recalc_stats_t);
+  fm_parallel_recalc_stats_info_t stats = FM_STRUCT_INIT(fm_parallel_recalc_stats_info_t);
   const fm_status_t rc = fm_workbook_recalc_parallel(handle_, thread_count, &stats);
   const Napi::Value result =
       rc == 0 && !env.IsExceptionPending() ? Napi::Value(ParallelRecalcStatsToJs(env, stats)) : ThrowStatus(env, rc);
@@ -299,14 +300,12 @@ Napi::Value Workbook::SetIterative(const Napi::CallbackInfo& info) {
   const Napi::Object patch = ArgObject(info, 0);
   CheckedSpecReader reader(env);
   fm_iterative_settings_patch_t p = FM_STRUCT_INIT(fm_iterative_settings_patch_t);
-  p.enabled = -1;
-  p.max_iterations = -1;
-  p.max_change = -1.0;
   const Napi::Value enabled = reader.Get(patch, "enabled");
   if (reader.ok() && !enabled.IsUndefined()) {
     if (!enabled.IsBoolean()) {
       reader.FailType("enabled", "boolean");
     } else {
+      p.enabled_op = FM_PATCH_OP_SET;
       p.enabled = enabled.As<Napi::Boolean>().Value() ? 1 : 0;
     }
   }
@@ -315,10 +314,11 @@ Napi::Value Workbook::SetIterative(const Napi::CallbackInfo& info) {
     const double requested = cap.IsNumber() ? cap.As<Napi::Number>().DoubleValue() : 0.0;
     if (!cap.IsNumber() || !std::isfinite(requested) || std::trunc(requested) != requested) {
       reader.FailType("maxIterations", "whole number");
-    } else if (requested < 0.0 || requested > static_cast<double>(std::numeric_limits<int32_t>::max())) {
-      reader.FailRange("maxIterations", "[0, 2147483647]");
+    } else if (requested < 0.0 || requested > kUint32MaxNumber) {
+      reader.FailRange("maxIterations", "[0, 4294967295]");
     } else {
-      p.max_iterations = static_cast<int32_t>(requested);
+      p.max_iterations_op = FM_PATCH_OP_SET;
+      p.max_iterations = static_cast<uint32_t>(requested);
     }
   }
   const Napi::Value change = reader.Get(patch, "maxChange");
@@ -326,6 +326,7 @@ Napi::Value Workbook::SetIterative(const Napi::CallbackInfo& info) {
     if (!change.IsNumber()) {
       reader.FailType("maxChange", "number");
     } else {
+      p.max_change_op = FM_PATCH_OP_SET;
       p.max_change = change.As<Napi::Number>().DoubleValue();
     }
   }
@@ -340,17 +341,15 @@ Napi::Value Workbook::GetIterative(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return ThrowInvalidHandle(env);
   }
-  int32_t enabled = 0;
-  uint32_t max_iterations = 0;
-  double max_change = 0.0;
-  const fm_status_t rc = fm_workbook_get_iterative(handle_, &enabled, &max_iterations, &max_change);
+  fm_iterative_settings_info_t settings = FM_STRUCT_INIT(fm_iterative_settings_info_t);
+  const fm_status_t rc = fm_workbook_get_iterative(handle_, &settings);
   if (rc != 0) {
     return ThrowStatus(env, rc);
   }
   Napi::Object out = Napi::Object::New(env);
-  out.Set("enabled", Napi::Boolean::New(env, enabled != 0));
-  out.Set("maxIterations", Napi::Number::New(env, max_iterations));
-  out.Set("maxChange", Napi::Number::New(env, max_change));
+  out.Set("enabled", Napi::Boolean::New(env, settings.enabled != 0));
+  out.Set("maxIterations", Napi::Number::New(env, settings.max_iterations));
+  out.Set("maxChange", Napi::Number::New(env, settings.max_change));
   return out;
 }
 
@@ -465,7 +464,7 @@ Napi::Value Workbook::SaveWithDiagnostics(const Napi::CallbackInfo& info) {
   const int32_t format = FormatOmitted(info) ? static_cast<int32_t>(FM_WORKBOOK_FORMAT_XLSX) : ArgI32(info, 0);
   uint8_t* buf = nullptr;
   std::size_t len = 0;
-  fm_save_diagnostics_t d = FM_STRUCT_INIT(fm_save_diagnostics_t);
+  fm_save_diagnostics_info_t d = FM_STRUCT_INIT(fm_save_diagnostics_info_t);
   const fm_status_t rc = fm_workbook_save_with_diagnostics(handle_, format, &buf, &len, &d);
   if (rc != 0) {
     fm_buffer_destroy(buf);
@@ -486,7 +485,7 @@ Napi::Value Workbook::ReadDiagnostics(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return ThrowInvalidHandle(env);
   }
-  fm_read_diagnostics_t d = FM_STRUCT_INIT(fm_read_diagnostics_t);
+  fm_read_diagnostics_info_t d = FM_STRUCT_INIT(fm_read_diagnostics_info_t);
   const fm_status_t rc = fm_workbook_get_diagnostics(handle_, &d);
   if (rc != 0) {
     return ThrowStatus(env, rc);

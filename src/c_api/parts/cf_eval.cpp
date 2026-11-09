@@ -4,7 +4,7 @@
 // Bridges the engine-side `cf::evaluate_cf_for_range` walker into the
 // stable C ABI. The opaque `fm_cf_results_t` owns the per-cell match
 // list returned by the evaluator; index accessors copy the relevant
-// fields out into the `fm_cf_match_t` POD so JS / Python / CLI consumers
+// fields out into the `fm_cf_match_info_t` POD so JS / Python / CLI consumers
 // never see the internal `cf::CFMatch` layout.
 
 #include <cmath>
@@ -56,7 +56,7 @@ struct fm_cf_results {
 namespace {
 
 // A resolved engine-side `cf::Color` as an RGB colour spec.
-fm_color_spec_t to_c_color(formulon::cf::Color c) {
+fm_color_t to_c_color(formulon::cf::Color c) {
   formulon::ColorSpec spec;
   spec.kind = formulon::ColorSpec::Kind::kRgb;
   spec.rgb = (static_cast<std::uint32_t>(c.a) << 24U) | (static_cast<std::uint32_t>(c.r) << 16U) |
@@ -64,13 +64,13 @@ fm_color_spec_t to_c_color(formulon::cf::Color c) {
   return color_spec_to_c(spec);
 }
 
-// Projects a single `cf::CFMatch` into the wire-format `fm_cf_match_t`.
+// Projects a single `cf::CFMatch` into the wire-format `fm_cf_match_info_t`.
 // The output is zero-initialised first, keeping the caller's
 // `struct_size`, so non-active fields are deterministic (the public ABI
 // promises default-zero for all kind-irrelevant payload).
-void fill_match(const formulon::cf::CFMatch& match, fm_cf_match_t* out) {
+void fill_match(const formulon::cf::CFMatch& match, fm_cf_match_info_t* out) {
   const std::uint32_t struct_size = out->struct_size;
-  *out = FM_STRUCT_INIT(fm_cf_match_t);
+  *out = FM_STRUCT_INIT(fm_cf_match_info_t);
   out->struct_size = struct_size;
   out->priority = match.priority;
   switch (match.kind) {
@@ -120,8 +120,8 @@ void fill_match(const formulon::cf::CFMatch& match, fm_cf_match_t* out) {
 }  // namespace
 
 extern "C" fm_status_t fm_sheet_evaluate_cf_range(const fm_workbook_t* wb, size_t sheet_index,
-                                                  const fm_cell_rect_t* range, double today_serial,
-                                                  fm_cf_results_t** out) {
+                                                  const fm_cell_rect_t* range, int32_t has_today_serial,
+                                                  double today_serial, fm_cf_results_t** out) {
   clear_last_error();
   if (range == nullptr || out == nullptr) {
     return null_argument();
@@ -139,6 +139,9 @@ extern "C" fm_status_t fm_sheet_evaluate_cf_range(const fm_workbook_t* wb, size_
                                                     std::to_string(first_col) + ") last=(" + std::to_string(last_row) +
                                                     "," + std::to_string(last_col) + ")");
   }
+  if (has_today_serial != 0 && !std::isfinite(today_serial)) {
+    return invalid_argument("today_serial is not finite");
+  }
   if (auto rc = ensure_calculated(wb); rc != 0) {
     return rc;
   }
@@ -155,7 +158,7 @@ extern "C" fm_status_t fm_sheet_evaluate_cf_range(const fm_workbook_t* wb, size_
   host.arena = &arena;
   host.registry = &formulon::eval::default_registry();
   host.eval_ctx = &eval_ctx;
-  host.today_serial = std::isnan(today_serial) ? std::optional<double>{} : std::optional<double>{today_serial};
+  host.today_serial = has_today_serial != 0 ? std::optional<double>{today_serial} : std::optional<double>{};
 
   formulon::cf::CFCellRange cf_range{};
   cf_range.first = formulon::CellAddress{first_row, first_col};
@@ -203,7 +206,7 @@ extern "C" fm_status_t fm_cf_results_get_cell_at(const fm_cf_results_t* results,
 }
 
 extern "C" fm_status_t fm_cf_results_get_match_at(const fm_cf_results_t* results, size_t cell_index, size_t match_index,
-                                                  fm_cf_match_t* out) {
+                                                  fm_cf_match_info_t* out) {
   clear_last_error();
   if (results == nullptr || out == nullptr) {
     return null_argument();

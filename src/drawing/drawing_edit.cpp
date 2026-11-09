@@ -40,10 +40,15 @@ constexpr std::int64_t kEmuLimit = std::int64_t{1} << 31;
 
 }  // namespace
 
+Error refuse_object(const pugi::xml_node& root, std::uint32_t object_id, const char* message) {
+  const auto any_kind = [](DrawingObjectKind) { return true; };
+  return find_drawing_object(root, object_id, +any_kind) ? invalid(message) : not_found(message);
+}
+
 Expected<std::string, Error> load_object_drawing(const Workbook& wb, std::size_t sheet, pugi::xml_document& doc) {
   ASSIGN_OR_RETURN(std::string path, editable_drawing_path(wb, sheet));
   if (path.empty()) {
-    return invalid(kNoObject);
+    return not_found(kNoObject);
   }
   RETURN_IF_ERROR(load_drawing_part(wb, path, doc));
   return path;
@@ -581,7 +586,7 @@ Expected<void, Error> remove_drawing(Workbook& wb, std::size_t sheet, std::uint3
   const pugi::xml_node root = doc.document_element();
   const pugi::xml_node target = find_drawing_object(root, object_id, is_editable);
   if (!target) {
-    return invalid(kNoObject);
+    return refuse_object(root, object_id, kNoObject);
   }
   return drop_objects(wb, path, doc, {top_of(root, target)});
 }
@@ -657,7 +662,7 @@ Expected<void, Error> set_drawing_name(Workbook& wb, std::size_t sheet, std::uin
   ASSIGN_OR_RETURN(std::string path, load_object_drawing(wb, sheet, doc));
   const pugi::xml_node target = find_drawing_object(doc.document_element(), object_id, is_nameable);
   if (!target) {
-    return invalid(kNoShapeOrObject);
+    return refuse_object(doc.document_element(), object_id, kNoShapeOrObject);
   }
   pugi::xml_node cnvpr = anchor_cnvpr(target);
   if (!cnvpr) {
@@ -678,13 +683,13 @@ Expected<void, Error> set_drawing_anchor(Workbook& wb, std::size_t sheet, std::u
   }
   pugi::xml_document doc;
   if (path.empty()) {
-    return invalid(kNoObject);
+    return not_found(kNoObject);
   }
   RETURN_IF_ERROR(load_drawing_part(wb, path, doc));
   const pugi::xml_node root = doc.document_element();
   const pugi::xml_node target = find_drawing_object(root, object_id, is_editable);
   if (!target) {
-    return invalid(kNoObject);
+    return refuse_object(root, object_id, kNoObject);
   }
   const Geometry geo(wb, wb.sheet(sheet));
   const DrawingObject obj = read_drawing_object(target, {});
@@ -741,11 +746,11 @@ Expected<void, Error> set_drawing_z_order(Workbook& wb, std::size_t sheet, std::
   pugi::xml_node root = doc.document_element();
   const pugi::xml_node target = find_drawing_object(root, object_id, is_orderable);
   if (!target) {
-    return invalid(kNoOrderable);
+    return refuse_object(root, object_id, kNoOrderable);
   }
   const std::vector<pugi::xml_node> items = drawing_anchors(root, false);
   if (index >= items.size()) {
-    return invalid("drawing: z-order position out of range");
+    return make_error(FormulonErrorCode::kIndexOutOfRange, "drawing: z-order position out of range");
   }
   const pugi::xml_node top = top_of(root, target);
   std::size_t current = 0;

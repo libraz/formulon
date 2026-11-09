@@ -318,23 +318,23 @@ class CollectionTest(BindingRuleTestBase):
     def test_r3_suffix(self) -> None:
         ledger = {
             "collections": {
-                "table": {"key": "index", "ops": ["table.get", "table.get_count"]},
+                "table": {"key": "index", "ops": ["table.get_at", "table.get_count"]},
                 "comment": {"key": "natural", "ops": ["comment.get_at", "comment.get"]},
             },
             "entries": {
-                "table.get": {"kind": "op", "c": "fm_workbook_get_table", "was": {"c": "fm_workbook_get_table_at"}},
+                "table.get_at": {"kind": "op", "c": "fm_workbook_get_table_at"},
                 "comment.get_at": {"kind": "op", "c": "fm_sheet_get_comment_at"},
                 "note.get_count": {"kind": "op", "c": "fm_sheet_get_note_count"},
             },
         }
         bad = self.fixture.context(
-            "FM_API fm_status_t fm_workbook_get_table_at(const fm_workbook_t* wb, size_t index);\n"
+            "FM_API fm_status_t fm_workbook_get_table_at(const fm_workbook_t* wb, size_t table_id);\n"
             "FM_API fm_status_t fm_sheet_get_comment_at(const fm_workbook_t* wb, size_t sheet_index, size_t position);\n"
             "FM_API fm_status_t fm_sheet_get_note_count(const fm_workbook_t* wb, size_t sheet_index, size_t* out_count);\n",
             ledger,
         )
         good = self.fixture.context(
-            "FM_API fm_status_t fm_workbook_get_table(const fm_workbook_t* wb, size_t table_index);\n"
+            "FM_API fm_status_t fm_workbook_get_table_at(const fm_workbook_t* wb, size_t table_index);\n"
             "FM_API fm_status_t fm_sheet_get_comment_at(const fm_workbook_t* wb, size_t sheet_index, size_t index);\n",
             ledger,
         )
@@ -342,7 +342,7 @@ class CollectionTest(BindingRuleTestBase):
             "R3.suffix",
             bad,
             good,
-            [("c", "comment.get_at", "at"), ("c", "note.get_count", "collection"), ("c", "table.get", "at")],
+            [("c", "comment.get_at", "at"), ("c", "note.get_count", "collection"), ("c", "table.get_at", "at")],
         )
 
     def test_r3_keys(self) -> None:

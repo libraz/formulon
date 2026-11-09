@@ -64,14 +64,16 @@ void BuildSales(WorkbookGuard& wb, const char* profile = nullptr) {
 }
 
 std::string Formula(const WorkbookGuard& wb, std::size_t sheet, std::uint32_t row, std::uint32_t col) {
+  int32_t present = 0;
   const char* text = nullptr;
-  EXPECT_EQ(fm_sheet_get_formula(wb.handle, sheet, row, col, &text), 0) << fm_get_last_error_message();
+  EXPECT_EQ(fm_sheet_get_formula(wb.handle, sheet, row, col, &present, &text), 0) << fm_get_last_error_message();
   return text != nullptr ? text : "";
 }
 
 std::string FormulaR1C1(const WorkbookGuard& wb, std::size_t sheet, std::uint32_t row, std::uint32_t col) {
+  int32_t present = 0;
   const char* text = nullptr;
-  EXPECT_EQ(fm_sheet_get_formula_r1c1(wb.handle, sheet, row, col, &text), 0) << fm_get_last_error_message();
+  EXPECT_EQ(fm_sheet_get_formula_r1c1(wb.handle, sheet, row, col, &present, &text), 0) << fm_get_last_error_message();
   return text != nullptr ? text : "";
 }
 
@@ -118,7 +120,7 @@ std::string Stored(const WorkbookGuard& wb, std::size_t sheet, std::uint32_t row
 
 std::string ColumnName(const WorkbookGuard& wb, std::size_t column) {
   fm_table_column_info_t info = FM_STRUCT_INIT(fm_table_column_info_t);
-  EXPECT_EQ(fm_sheet_get_table_column(wb.handle, 0, 0, column, &info), 0);
+  EXPECT_EQ(fm_sheet_get_table_column_at(wb.handle, 0, 0, column, &info), 0);
   return info.name != nullptr ? info.name : "";
 }
 
@@ -211,7 +213,7 @@ TEST(FormulonCApiStructuredRef, ArrayFormulaReadsAtItsAnchor) {
                 record_arg(fm_cell_rect_t{kOutsideRow, kOutsideCol, kOutsideRow + 1 - 1U, kOutsideCol + 1 - 1U}),
                 "=SUM(tblSales[Qty])"),
             0);
-  fm_array_formula_t info = FM_STRUCT_INIT(fm_array_formula_t);
+  fm_array_formula_info_t info = FM_STRUCT_INIT(fm_array_formula_info_t);
   ASSERT_EQ(fm_sheet_get_array_formula(wb.handle, 0, kInsideRow, kInsideCol, &info), 0);
   ASSERT_EQ(info.engaged, 1);
   EXPECT_STREQ(info.formula, "=SUM([Qty])");
@@ -234,7 +236,7 @@ TEST(FormulonCApiStructuredRef, TotalsRowShowsTheInsideForm) {
             0)
       << fm_get_last_error_message();
   fm_table_column_info_t column = FM_STRUCT_INIT(fm_table_column_info_t);
-  ASSERT_EQ(fm_sheet_get_table_column(wb.handle, 0, 0, 3, &column), 0);
+  ASSERT_EQ(fm_sheet_get_table_column_at(wb.handle, 0, 0, 3, &column), 0);
   EXPECT_STREQ(column.totals_row_formula, "=SUM([Price])*2");
   EXPECT_EQ(wb.handle->workbook().tables()[0].columns[3].totals_row_formula, "SUM(tblSales[Price])*2");
   EXPECT_EQ(Stored(wb, 0, 4, 3), "=SUM(tblSales[Price])*2");

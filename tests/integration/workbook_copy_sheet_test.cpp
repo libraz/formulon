@@ -673,7 +673,7 @@ TEST(WorkbookCopySheet, ArgumentsValidated) {
   EXPECT_EQ(code(2, 0, std::nullopt), FormulonErrorCode::kSheetIndexOutOfRange);
   EXPECT_EQ(code(0, 3, std::nullopt), FormulonErrorCode::kSheetIndexOutOfRange);
   EXPECT_EQ(code(0, 0, std::string()), FormulonErrorCode::kInvalidSheetName);
-  EXPECT_EQ(code(0, 0, std::string("o")), FormulonErrorCode::kInvalidSheetName);
+  EXPECT_EQ(code(0, 0, std::string("o")), FormulonErrorCode::kAlreadyExists);
   EXPECT_EQ(code(0, 0, std::string(32, 'x')), FormulonErrorCode::kInvalidSheetName);
   EXPECT_EQ(wb.sheet_count(), 2U);
   EXPECT_EQ(code(0, 0, std::string(31, 'x')), FormulonErrorCode::kOk);

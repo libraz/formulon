@@ -182,13 +182,11 @@ TEST(FormulonCli, RecalcIterativePreservesExistingIterationSettings) {
 
   fm_workbook_t* wb = nullptr;
   ASSERT_EQ(fm_workbook_load(bytes.data(), bytes.size(), &wb), 0);
-  int32_t enabled = 0;
-  uint32_t max_iterations = 0;
-  double max_change = 0.0;
-  ASSERT_EQ(fm_workbook_get_iterative(wb, &enabled, &max_iterations, &max_change), 0);
-  EXPECT_EQ(enabled, 1);
-  EXPECT_EQ(max_iterations, 500U);
-  EXPECT_DOUBLE_EQ(max_change, 0.01);
+  fm_iterative_settings_info_t settings = FM_STRUCT_INIT(fm_iterative_settings_info_t);
+  ASSERT_EQ(fm_workbook_get_iterative(wb, &settings), 0);
+  EXPECT_EQ(settings.enabled, 1);
+  EXPECT_EQ(settings.max_iterations, 500U);
+  EXPECT_DOUBLE_EQ(settings.max_change, 0.01);
   fm_workbook_destroy(wb);
 }
 

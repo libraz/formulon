@@ -40,7 +40,7 @@ Napi::Value TraceToArray(const Napi::CallbackInfo& info, const fm_workbook_t* ha
   rc = fm_cell_nodes_get_node_count(nodes, &count);
   std::size_t emitted = 0;
   for (std::size_t i = 0; i < count; ++i) {
-    fm_cell_node_t n = FM_STRUCT_INIT(fm_cell_node_t);
+    fm_cell_node_info_t n = FM_STRUCT_INIT(fm_cell_node_info_t);
     rc = fm_cell_nodes_get_node_at(nodes, i, &n);
     if (rc != 0) {
       break;
@@ -113,7 +113,7 @@ Napi::Value Workbook::GetArrayFormula(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return ThrowInvalidHandle(env);
   }
-  fm_array_formula_t array = FM_STRUCT_INIT(fm_array_formula_t);
+  fm_array_formula_info_t array = FM_STRUCT_INIT(fm_array_formula_info_t);
   const fm_status_t rc = fm_sheet_get_array_formula(handle_, ArgU32(info, 0), ArgU32(info, 1), ArgU32(info, 2), &array);
   if (rc != 0 || array.engaged == 0) {
     return OptionalOrNull(env, rc, 0, env.Null());
@@ -154,8 +154,8 @@ Napi::Value Workbook::GetExternalLink(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return ThrowInvalidHandle(env);
   }
-  fm_external_link_record_t rec = FM_STRUCT_INIT(fm_external_link_record_t);
-  const fm_status_t rc = fm_workbook_get_external_link(handle_, ArgU32(info, 0), &rec);
+  fm_external_link_info_t rec = FM_STRUCT_INIT(fm_external_link_info_t);
+  const fm_status_t rc = fm_workbook_get_external_link_at(handle_, ArgU32(info, 0), &rec);
   if (rc != 0) {
     return ThrowStatus(env, rc);
   }
@@ -175,7 +175,7 @@ Napi::Value FunctionMetadata(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   const std::string name = Workbook::ArgString(info, 0);
   int32_t present = 0;
-  fm_function_metadata_t md = FM_STRUCT_INIT(fm_function_metadata_t);
+  fm_function_metadata_info_t md = FM_STRUCT_INIT(fm_function_metadata_info_t);
   fm_status_t rc = fm_get_function_metadata(name.c_str(), &present, &md);
   if (rc != 0 || present == 0) {
     return OptionalOrNull(env, rc, present, env.Null());
@@ -254,7 +254,7 @@ fm_status_t CollectLocaleErrorNames(Napi::Env env, const std::string& profile_id
 Napi::Value LocaleFacts(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   const std::string profile_id = Workbook::ArgString(info, 0);
-  fm_locale_facts_t f = FM_STRUCT_INIT(fm_locale_facts_t);
+  fm_locale_facts_info_t f = FM_STRUCT_INIT(fm_locale_facts_info_t);
   fm_status_t rc = fm_get_locale_facts(profile_id.c_str(), &f);
   if (rc != 0) {
     return ThrowStatus(env, rc);
