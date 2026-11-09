@@ -35,11 +35,15 @@ struct BytesWithOpts {
 
 // Reads the `(sheet, bytes, opts?)` tail shared by `insertImage` and `restoreDrawing`;
 // a rejected argument list throws a TypeError and returns false.
-bool ReadBytesWithOpts(const Napi::CallbackInfo& info, const char* usage, BytesWithOpts& args) {
+bool ReadBytesWithOpts(const Napi::CallbackInfo& info, BytesWithOpts& args) {
   Napi::Env env = info.Env();
   const bool has_opts = ObjectArg(info, 2, &args.spec);
-  if (!ReadImageBytes(info, 1, args.data, args.len) || (!info[2].IsUndefined() && !has_opts)) {
-    Napi::TypeError::New(env, usage).ThrowAsJavaScriptException();
+  if (!ReadImageBytes(info, 1, args.data, args.len)) {
+    ThrowArgumentTypeError(env, "bytes", "must be a Uint8Array");
+    return false;
+  }
+  if (!info[2].IsUndefined() && !has_opts) {
+    ThrowArgumentTypeError(env, "", "must be an object");
     return false;
   }
   if (!has_opts) {
@@ -111,7 +115,7 @@ Napi::Value ProbeImage(const Napi::CallbackInfo& info) {
   const uint8_t* data = nullptr;
   size_t len = 0;
   if (!ReadImageBytes(info, 0, data, len)) {
-    Napi::TypeError::New(env, "getImageInfo expects (bytes:Uint8Array)").ThrowAsJavaScriptException();
+    ThrowArgumentTypeError(env, "bytes", "must be a Uint8Array");
     return env.Undefined();
   }
   fm_image_info_t img = FM_STRUCT_INIT(fm_image_info_t);
@@ -180,7 +184,7 @@ Napi::Value Workbook::InsertImage(const Napi::CallbackInfo& info) {
     return ThrowInvalidHandle(env);
   }
   BytesWithOpts args;
-  if (!ReadBytesWithOpts(info, "addImage expects (sheet:number, bytes:Uint8Array, input?:object)", args)) {
+  if (!ReadBytesWithOpts(info, args)) {
     return env.Undefined();
   }
   CheckedSpecReader reader(env);
@@ -235,7 +239,7 @@ Napi::Value Workbook::RestoreDrawing(const Napi::CallbackInfo& info) {
     return ThrowInvalidHandle(env);
   }
   BytesWithOpts args;
-  if (!ReadBytesWithOpts(info, "restoreDrawing expects (sheet:number, bytes:Uint8Array, opts?:object)", args)) {
+  if (!ReadBytesWithOpts(info, args)) {
     return env.Undefined();
   }
   CheckedSpecReader reader(env);

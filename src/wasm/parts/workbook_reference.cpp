@@ -13,6 +13,7 @@
 #include <cstdint>
 #include <string>
 
+#include "c_api/binding_message.h"
 #include "c_api/formulon_c.h"
 #include "wasm/parts/embind_common.h"
 #include "wasm/parts/workbook.h"
@@ -54,7 +55,8 @@ bool options_object(const emscripten::val& options, const char* api, emscripten:
   if (out->typeOf().strictlyEquals(emscripten::val("object"))) {
     return true;
   }
-  reject(kReferenceTypeError, std::string(api) + " expects an options object");
+  reject(kReferenceTypeError,
+         binding::argument_message(std::string("Workbook.") + api, "options", "must be an object"));
   return false;
 }
 
@@ -82,7 +84,9 @@ emscripten::val JsWorkbook::parseReference(const std::string& text, emscripten::
     return val::undefined();
   }
   if (has_row != has_col) {
-    return reject(kReferenceTypeError, "parseReference: `baseRow` and `baseCol` must be given together");
+    return reject(kReferenceTypeError,
+                  binding::argument_message("Workbook.parseReference", "options.baseRow and options.baseCol",
+                                            "must be given together"));
   }
   fm_parsed_reference_info_t ref = FM_STRUCT_INIT(fm_parsed_reference_info_t);
   fm_parse_reference_spec_t spec = FM_STRUCT_INIT(fm_parse_reference_spec_t);
@@ -115,7 +119,7 @@ std::string JsWorkbook::formatReference(emscripten::val range, emscripten::val o
   const char* sheet_name = reader.optional_string(range, "sheetName", sheet_store, "sheetName");
   const val rect_value = reader.value(range, "rect", "rect");
   if (reader.ok() && !js_value_present(rect_value)) {
-    reject(kReferenceTypeError, "formatReference: `rect` is required");
+    reject(kReferenceTypeError, binding::argument_message("Workbook.formatReference", "range.rect", "is required"));
     return std::string();
   }
   const fm_cell_rect_t rect = js_pull_range(rect_value, &reader);

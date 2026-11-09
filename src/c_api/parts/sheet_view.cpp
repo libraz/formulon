@@ -97,8 +97,8 @@ extern "C" fm_status_t fm_sheet_get_view(const fm_workbook_t* wb, size_t sheet_i
   out->top_left_col = 0;
   (void)formulon::a1::parse_a1_ref(v.top_left_cell, &out->top_left_row, &out->top_left_col);
   formulon::io::pane_origin(v, &out->pane_top_left_row, &out->pane_top_left_col);
-  out->split_x = v.is_frozen() ? 0.0 : v.split_x;
-  out->split_y = v.is_frozen() ? 0.0 : v.split_y;
+  out->split_x_twips = v.is_frozen() ? 0.0 : v.split_x;
+  out->split_y_twips = v.is_frozen() ? 0.0 : v.split_y;
   out->show_formulas = v.show_formulas ? 1 : 0;
   out->show_outline_symbols = v.show_outline_symbols ? 1 : 0;
   return 0;
@@ -148,23 +148,25 @@ extern "C" fm_status_t fm_sheet_update_view(fm_workbook_t* wb, size_t sheet_inde
       {patch->tab_selected_op, patch->tab_selected, &formulon::SheetView::tab_selected},
   };
   const fm_patch_op_t ops[] = {
-      patch->zoom_pct_op,     patch->freeze_rows_op,  patch->freeze_cols_op,       patch->view_mode_op,
-      patch->top_left_row_op, patch->top_left_col_op, patch->pane_top_left_row_op, patch->pane_top_left_col_op,
-      patch->split_x_op,      patch->split_y_op,
+      patch->zoom_pct_op,      patch->freeze_rows_op,   patch->freeze_cols_op,       patch->view_mode_op,
+      patch->top_left_row_op,  patch->top_left_col_op,  patch->pane_top_left_row_op, patch->pane_top_left_col_op,
+      patch->split_x_twips_op, patch->split_y_twips_op,
   };
   for (const fm_patch_op_t op : ops) {
     if (!patch_op_ok_without_clear(op)) {
-      return invalid_argument("view patch op out of range or not clearable", "op=" + std::to_string(op));
+      return invalid_argument("op is not a patch op", "op=" + std::to_string(op));
     }
   }
   for (const ViewFlag& flag : flags) {
     if (!patch_op_ok_without_clear(flag.op)) {
-      return invalid_argument("view patch op out of range or not clearable", "op=" + std::to_string(flag.op));
+      return invalid_argument("op is not a patch op", "op=" + std::to_string(flag.op));
     }
   }
   if (patch->zoom_pct_op == FM_PATCH_OP_SET &&
       (patch->zoom_pct < kMinZoomPercent || patch->zoom_pct > kMaxZoomPercent)) {
-    return invalid_argument("zoom out of range", "zoom_pct=" + std::to_string(patch->zoom_pct));
+    return invalid_argument(
+        ("zoom_pct must be in " + std::to_string(kMinZoomPercent) + ".." + std::to_string(kMaxZoomPercent)).c_str(),
+        "zoom_pct=" + std::to_string(patch->zoom_pct));
   }
   if (patch->view_mode_op == FM_PATCH_OP_SET) {
     if (auto rc = check_enum_domain(patch->view_mode, 0, FM_SHEET_VIEW_MODE_PAGE_LAYOUT, "view_mode"); rc != 0) {
@@ -174,8 +176,9 @@ extern "C" fm_status_t fm_sheet_update_view(fm_workbook_t* wb, size_t sheet_inde
   // A freeze replaces a split and a split a freeze, so one patch states one.
   if ((states_non_zero(patch->freeze_rows_op, patch->freeze_rows) ||
        states_non_zero(patch->freeze_cols_op, patch->freeze_cols)) &&
-      (states_non_zero(patch->split_x_op, patch->split_x) || states_non_zero(patch->split_y_op, patch->split_y))) {
-    return invalid_argument("a patch cannot freeze and split the view at once");
+      (states_non_zero(patch->split_x_twips_op, patch->split_x_twips) ||
+       states_non_zero(patch->split_y_twips_op, patch->split_y_twips))) {
+    return invalid_argument("split_x_twips cannot be combined with freeze_rows");
   }
 
   formulon::Workbook& workbook = wb->workbook();
@@ -192,12 +195,14 @@ extern "C" fm_status_t fm_sheet_update_view(fm_workbook_t* wb, size_t sheet_inde
     }
     next.set_freeze(freeze_rows, freeze_cols);
   }
-  if (patch->split_x_op == FM_PATCH_OP_SET || patch->split_y_op == FM_PATCH_OP_SET) {
+  if (patch->split_x_twips_op == FM_PATCH_OP_SET || patch->split_y_twips_op == FM_PATCH_OP_SET) {
     // The split a frozen view reports is (0, 0).
-    const double split_x = patched(patch->split_x_op, patch->split_x, current.is_frozen() ? 0.0 : current.split_x);
-    const double split_y = patched(patch->split_y_op, patch->split_y, current.is_frozen() ? 0.0 : current.split_y);
+    const double split_x =
+        patched(patch->split_x_twips_op, patch->split_x_twips, current.is_frozen() ? 0.0 : current.split_x);
+    const double split_y =
+        patched(patch->split_y_twips_op, patch->split_y_twips, current.is_frozen() ? 0.0 : current.split_y);
     if (!std::isfinite(split_x) || !std::isfinite(split_y) || split_x < 0.0 || split_y < 0.0) {
-      return invalid_argument("split must be finite and non-negative");
+      return invalid_argument("split_x_twips and split_y_twips must be finite and not negative");
     }
     // Clearing the split leaves a freeze in place; any other split replaces it.
     if (!(next.is_frozen() && split_x == 0.0 && split_y == 0.0)) {
@@ -214,12 +219,12 @@ extern "C" fm_status_t fm_sheet_update_view(fm_workbook_t* wb, size_t sheet_inde
     // A pane-less view has one scrolled region, so only its default origin is accepted.
     if (!has_panes) {
       if (row != next.freeze_rows || col != next.freeze_cols) {
-        return invalid_argument("pane origin on a view without panes");
+        return invalid_argument("pane_top_left_row and pane_top_left_col must be the default on a view without panes");
       }
       next.pane_top_left_cell.clear();
     } else {
       if (row < next.freeze_rows || col < next.freeze_cols || !formulon::Sheet::coord_in_grid(row, col)) {
-        return invalid_argument("cell is not in the unfrozen area");
+        return invalid_argument("pane_top_left_row and pane_top_left_col must be in the unfrozen area");
       }
       next.pane_top_left_cell =
           row == next.freeze_rows && col == next.freeze_cols ? std::string() : formulon::a1::encode_a1(row, col);
@@ -338,7 +343,7 @@ extern "C" fm_status_t fm_sheet_set_selection(fm_workbook_t* wb, size_t sheet_in
     if (!formulon::Sheet::coord_in_grid(r.first_row, r.first_col) ||
         !formulon::Sheet::coord_in_grid(r.last_row, r.last_col) || r.first_row > r.last_row ||
         r.first_col > r.last_col) {
-      return invalid_argument("range out of grid or inverted");
+      return invalid_argument(("ranges[" + std::to_string(i) + "] is outside the grid or inverted").c_str());
     }
     selected.push_back({r.first_row, r.first_col, r.last_row, r.last_col});
   }

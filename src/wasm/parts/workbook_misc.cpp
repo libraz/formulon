@@ -266,12 +266,12 @@ double convert_civil_to_serial(emscripten::val civil, bool date1904) {
     return 0.0;
   }
   fm_civil_time_t value{};
-  value.year = reader.i32(civil, "year", 0, "civil.year");
-  value.month = reader.i32(civil, "month", 0, "civil.month");
-  value.day = reader.i32(civil, "day", 0, "civil.day");
-  value.hour = reader.i32(civil, "hour", 0, "civil.hour");
-  value.minute = reader.i32(civil, "minute", 0, "civil.minute");
-  value.second = reader.i32(civil, "second", 0, "civil.second");
+  value.year = reader.i32(civil, "year", 0, "year");
+  value.month = reader.i32(civil, "month", 0, "month");
+  value.day = reader.i32(civil, "day", 0, "day");
+  value.hour = reader.i32(civil, "hour", 0, "hour");
+  value.minute = reader.i32(civil, "minute", 0, "minute");
+  value.second = reader.i32(civil, "second", 0, "second");
   if (!reader.ok()) {
     return 0.0;
   }
@@ -301,7 +301,7 @@ emscripten::val collation_classes(emscripten::val values, int32_t strength, cons
   JsNarrowNumericReader reader("Formulon.getCollationClasses");
   if (!reader.is_array(values, "values")) {
     if (reader.ok()) {
-      record_type_error("Formulon.getCollationClasses: values must be an array");
+      record_type_error("Formulon.getCollationClasses values must be an array");
     }
     return emscripten::val::undefined();
   }

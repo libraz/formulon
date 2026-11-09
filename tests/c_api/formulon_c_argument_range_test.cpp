@@ -495,9 +495,11 @@ TEST(FormulonCApiArgumentRange, PivotOptionsPatchClearsACaptionAndRefusesAnUncle
   bad_indent.show_error = before.show_error != 0 ? 0 : 1;
   bad_indent.indent_op = FM_PATCH_OP_SET;
   bad_indent.indent = 127U;
-  for (const fm_pivot_options_patch_t* rejected : {&clear_indent, &null_caption, &bad_indent}) {
+  for (const fm_pivot_options_patch_t* rejected : {&clear_indent, &bad_indent}) {
     EXPECT_EQ(fm_sheet_update_pivot_options(wb.handle, 0, pivot, rejected), kInvalidArgument);
   }
+  EXPECT_EQ(fm_sheet_update_pivot_options(wb.handle, 0, pivot, &null_caption), FM_STATUS_INVALID_ARGUMENT);
+  EXPECT_STREQ(fm_get_last_error_message(), "alt_text must not be NULL");
   after = PivotOptions(wb, pivot);
   EXPECT_EQ(after.show_error, before.show_error);
   EXPECT_EQ(after.indent, before.indent);
@@ -603,8 +605,8 @@ TEST(FormulonCApiArgumentRange, ViewPatchRefusingOneFieldWritesNothing) {
   freeze_and_split.zoom_pct = 150U;
   freeze_and_split.freeze_rows_op = FM_PATCH_OP_SET;
   freeze_and_split.freeze_rows = 1U;
-  freeze_and_split.split_x_op = FM_PATCH_OP_SET;
-  freeze_and_split.split_x = 1200.0;
+  freeze_and_split.split_x_twips_op = FM_PATCH_OP_SET;
+  freeze_and_split.split_x_twips = 1200.0;
   fm_sheet_view_patch_t clear = FM_STRUCT_INIT(fm_sheet_view_patch_t);
   clear.zoom_pct_op = FM_PATCH_OP_CLEAR;
   fm_sheet_view_patch_t bad_op = FM_STRUCT_INIT(fm_sheet_view_patch_t);
@@ -623,7 +625,7 @@ TEST(FormulonCApiArgumentRange, ViewPatchRefusingOneFieldWritesNothing) {
   const fm_sheet_view_info_t after = View(wb, 0);
   EXPECT_EQ(after.zoom_pct, before.zoom_pct);
   EXPECT_EQ(after.freeze_rows, 0U);
-  EXPECT_EQ(after.split_x, 0.0);
+  EXPECT_EQ(after.split_x_twips, 0.0);
   EXPECT_EQ(after.view_mode, before.view_mode);
 }
 
@@ -751,11 +753,31 @@ TEST(FormulonCApiArgumentRange, TableStyleDefaultsPatchSetsAndClearsEachName) {
 
   fm_table_style_defaults_patch_t null_name = FM_STRUCT_INIT(fm_table_style_defaults_patch_t);
   null_name.pivot_style_name_op = FM_PATCH_OP_SET;
-  EXPECT_EQ(fm_workbook_update_table_style_defaults(wb.handle, &null_name), kInvalidArgument);
+  EXPECT_EQ(fm_workbook_update_table_style_defaults(wb.handle, &null_name), FM_STATUS_INVALID_ARGUMENT);
 
   fm_table_style_defaults_patch_t clear = FM_STRUCT_INIT(fm_table_style_defaults_patch_t);
   clear.table_style_name_op = FM_PATCH_OP_CLEAR;
   ASSERT_EQ(fm_workbook_update_table_style_defaults(wb.handle, &clear), 0) << fm_get_last_error_message();
   ASSERT_EQ(fm_workbook_get_table_style_defaults(wb.handle, &read), 0);
   EXPECT_EQ(read.table_style_name, nullptr);
+}
+
+TEST(FormulonCApiArgumentRange, IterationCapAboveExcelLimitIsInvalidArgument) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+
+  for (const std::uint32_t rejected : {40000U, 0U}) {
+    fm_iterative_settings_patch_t patch = FM_STRUCT_INIT(fm_iterative_settings_patch_t);
+    patch.max_iterations_op = FM_PATCH_OP_SET;
+    patch.max_iterations = rejected;
+    EXPECT_EQ(fm_workbook_update_iterative(wb.handle, &patch), kInvalidArgument) << rejected;
+  }
+
+  fm_iterative_settings_patch_t limit = FM_STRUCT_INIT(fm_iterative_settings_patch_t);
+  limit.max_iterations_op = FM_PATCH_OP_SET;
+  limit.max_iterations = 32767U;
+  EXPECT_EQ(fm_workbook_update_iterative(wb.handle, &limit), 0) << fm_get_last_error_message();
+  fm_iterative_settings_info_t info = FM_STRUCT_INIT(fm_iterative_settings_info_t);
+  ASSERT_EQ(fm_workbook_get_iterative(wb.handle, &info), 0) << fm_get_last_error_message();
+  EXPECT_EQ(info.max_iterations, 32767U);
 }

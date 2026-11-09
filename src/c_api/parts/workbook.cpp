@@ -61,7 +61,7 @@ namespace {
 // An inclusive span `[first, last]` inside a sheet with `limit` lines.
 fm_status_t check_span(std::uint32_t first, std::uint32_t last, std::uint32_t limit) {
   if (last < first || last >= limit) {
-    return invalid_argument("span is empty or past the sheet bound",
+    return invalid_argument("span is outside the grid",
                             "first=" + std::to_string(first) + " last=" + std::to_string(last));
   }
   return 0;
@@ -79,15 +79,18 @@ fm_status_t check_cell_edit(const fm_workbook_t* wb, std::size_t sheet_index, co
     return rc;
   }
   if (shift < FM_CELL_SHIFT_DOWN || shift > FM_CELL_SHIFT_LEFT) {
-    return invalid_argument("shift is outside fm_cell_shift_t", "shift=" + std::to_string(shift));
+    return invalid_argument(("shift " + std::to_string(shift) + " is not a CellShift").c_str(),
+                            "shift=" + std::to_string(shift));
   }
   return 0;
 }
 
-fm_status_t sheet_index_out_of_range(std::size_t position, const char* what) {
-  return formulon::c_api::parts::set_binding_error(formulon::FormulonErrorCode::kSheetIndexOutOfRange,
-                                                   "sheet position is out of range",
-                                                   std::string(what) + "=" + std::to_string(position));
+fm_status_t sheet_index_out_of_range(std::size_t position, std::size_t count, const char* what) {
+  return formulon::c_api::parts::set_binding_error(
+      formulon::FormulonErrorCode::kSheetIndexOutOfRange,
+      (std::string(what) + " " + std::to_string(position) + " is out of range (" + std::to_string(count) + " sheets)")
+          .c_str(),
+      std::string(what) + "=" + std::to_string(position));
 }
 
 // Projects the io layer's `WriteDiagnostics` onto the C ABI struct. Both
@@ -128,7 +131,8 @@ fm_status_t begin_save(const fm_workbook_t* wb, std::int32_t format, uint8_t** o
     return null_argument();
   }
   if (format != FM_WORKBOOK_FORMAT_XLSX && format != FM_WORKBOOK_FORMAT_XLSB) {
-    return invalid_argument("unsupported format", "format=" + std::to_string(static_cast<int>(format)));
+    return invalid_argument(("format " + std::to_string(static_cast<int>(format)) + " is not a WorkbookFormat").c_str(),
+                            "format=" + std::to_string(static_cast<int>(format)));
   }
   return 0;
 }
@@ -233,7 +237,7 @@ extern "C" fm_status_t fm_workbook_load(const uint8_t* bytes, size_t len, fm_wor
     return null_argument("bytes");
   }
   if (len == 0) {
-    return invalid_argument("input is empty", "len=0");
+    return invalid_argument("bytes must not be empty", "len=0");
   }
   formulon::io::ByteSpan span;
   span.data = bytes;
@@ -403,7 +407,7 @@ extern "C" fm_status_t fm_workbook_add_sheet(fm_workbook_t* wb, const char* utf8
   formulon::Workbook& book = wb->workbook();
   const std::size_t count = book.sheet_count();
   if (insert_before > count) {
-    return sheet_index_out_of_range(insert_before, "insert_before");
+    return sheet_index_out_of_range(insert_before, count, "insert_before");
   }
   auto r = book.add_sheet_entered(utf8_name != nullptr ? std::string(utf8_name) : book.next_default_sheet_name());
   if (!r) {
@@ -425,10 +429,10 @@ extern "C" fm_status_t fm_workbook_move_sheet(fm_workbook_t* wb, size_t from_ind
   }
   const std::size_t count = wb->workbook().sheet_count();
   if (from_index >= count) {
-    return sheet_index_out_of_range(from_index, "from_index");
+    return sheet_index_out_of_range(from_index, count, "from_index");
   }
   if (insert_before > count) {
-    return sheet_index_out_of_range(insert_before, "insert_before");
+    return sheet_index_out_of_range(insert_before, count, "insert_before");
   }
   // The engine's target index is a position in the list after the sheet is lifted out.
   const std::size_t to_index = insert_before > from_index ? insert_before - 1U : insert_before;
@@ -568,7 +572,7 @@ extern "C" fm_status_t fm_workbook_set_defined_name(fm_workbook_t* wb, const fm_
   }
   // The model reads an empty formula as a removal; a name always has one.
   if (stored.empty()) {
-    return invalid_argument("formula is empty", "name=" + std::string(input->name));
+    return invalid_argument("formula must not be empty", "name=" + std::string(input->name));
   }
   auto& book = wb->workbook();
   const std::int32_t scope = input->local_sheet_id;

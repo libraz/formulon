@@ -371,10 +371,10 @@ describe('updateCfRule changes the named keys of one rule', () => {
     });
   });
 
-  it('a dxf index past the table is InvalidArgument', () => {
+  it('a dxf index past the table is IndexOutOfRange', () => {
     withSheet((ws) => {
       ws.addCfRule(expression);
-      expectCode(() => ws.updateCfRule(0, { dxfIndex: 50 }), StatusCode.InvalidArgument);
+      expectCode(() => ws.updateCfRule(0, { dxfIndex: 50 }), StatusCode.IndexOutOfRange);
     });
   });
 

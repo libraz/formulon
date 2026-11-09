@@ -2,6 +2,9 @@ import assert from 'node:assert/strict';
 import { StatusCode } from '../../packages/npm/common.mjs';
 import { expectFailure } from './smoke_support.mjs';
 
+// A symbol is a TypeError; a fraction, NaN, infinity and 2^32 are RangeErrors.
+const nestedErrorClass = (value) => (typeof value === 'symbol' ? TypeError : RangeError);
+
 const RANGE_A1_F6 = { firstRow: 0, firstCol: 0, lastRow: 5, lastCol: 5 };
 
 function withWorkbook(Module, fn) {
@@ -16,10 +19,10 @@ function withWorkbook(Module, fn) {
 export function registerCellGeometryDisplay(Module, test) {
   test('clearColumnWidth returns a column to the sheet default and follows later default changes', () => {
     withWorkbook(Module, (wb) => {
-      wb.updateFormatDefaults(0, { defaultColWidthChars: 10 });
+      wb.updateFormatDefaults(0, { defaultColumnWidthChars: 10 });
       wb.setColumnWidth(0, 0, 0, 10);
       wb.resetColumnWidth(0, 0, 0);
-      wb.updateFormatDefaults(0, { defaultColWidthChars: 20 });
+      wb.updateFormatDefaults(0, { defaultColumnWidthChars: 20 });
       assert.equal(wb.getColumnWidthPt(0, 0, 0), wb.getColumnWidthPt(0, 1, 0));
       assert.equal(wb.listColumnOverrides(0).length, 0);
     });
@@ -52,12 +55,12 @@ export function registerCellGeometryDisplay(Module, test) {
   test('getSheetFormatDefaults reports the effective default width and height', () => {
     withWorkbook(Module, (wb) => {
       let d = wb.getFormatDefaults(0);
-      assert.equal(d.defaultColWidthChars, null);
-      assert.equal(d.effectiveDefaultColWidthChars, 2340 / 256); // Base-8 Calibri 11 default, shown as 8.43.
+      assert.equal(d.defaultColumnWidthChars, null);
+      assert.equal(d.effectiveDefaultColumnWidthChars, 2340 / 256); // Base-8 Calibri 11 default, shown as 8.43.
       assert.equal(d.effectiveDefaultRowHeightPt, 102 / 7);
-      wb.updateFormatDefaults(0, { defaultColWidthChars: 12.5, defaultRowHeightPt: 20.25 });
+      wb.updateFormatDefaults(0, { defaultColumnWidthChars: 12.5, defaultRowHeightPt: 20.25 });
       d = wb.getFormatDefaults(0);
-      assert.equal(d.effectiveDefaultColWidthChars, 12.5);
+      assert.equal(d.effectiveDefaultColumnWidthChars, 12.5);
       assert.equal(d.effectiveDefaultRowHeightPt, 20.25);
     });
   });
@@ -101,7 +104,7 @@ export function registerCellGeometryDisplay(Module, test) {
       }
       assert.deepEqual(seen, ['0,0', '0,1', '1,0']);
 
-      assert.throws(() => wb.getCellsInRange(0, RANGE_A1_F6, -1), RangeError);
+      expectFailure(() => wb.getCellsInRange(0, RANGE_A1_F6, -1), StatusCode.InvalidArgument);
       const unchanged = wb.getCellsInRange(0, RANGE_A1_F6);
       assert.deepEqual(unchanged.cells, all.cells);
       assert.equal(unchanged.nextCursor, null);
@@ -123,7 +126,7 @@ export function registerCellGeometryDisplay(Module, test) {
                 lastCol: 4,
                 [key]: value,
               }),
-            value === 2 ** 32 ? RangeError : TypeError,
+            nestedErrorClass(value),
             `getCellsInRange ${key}=${String(value)} accepted`,
           );
         }
@@ -238,21 +241,21 @@ export function registerCellGeometryDisplay(Module, test) {
   test('sheet format defaults round-trip, an absent value reading as null', () => {
     withWorkbook(Module, (wb) => {
       const initial = wb.getFormatDefaults(0);
-      assert.equal(initial.defaultColWidthChars, null);
+      assert.equal(initial.defaultColumnWidthChars, null);
       assert.equal(initial.defaultRowHeightPt, null);
-      assert.equal(initial.baseColWidthChars, 8);
+      assert.equal(initial.baseColumnWidthChars, 8);
 
-      wb.updateFormatDefaults(0, { defaultColWidthChars: 10, defaultRowHeightPt: 18, baseColWidthChars: 9 });
+      wb.updateFormatDefaults(0, { defaultColumnWidthChars: 10, defaultRowHeightPt: 18, baseColumnWidthChars: 9 });
       const set = wb.getFormatDefaults(0);
-      assert.equal(set.defaultColWidthChars, 10);
+      assert.equal(set.defaultColumnWidthChars, 10);
       assert.equal(set.defaultRowHeightPt, 18);
-      assert.equal(set.baseColWidthChars, 9);
+      assert.equal(set.baseColumnWidthChars, 9);
       wb.updateFormatDefaults(0, { defaultRowHeightPt: null });
       assert.equal(wb.getFormatDefaults(0).defaultRowHeightPt, null);
-      assert.equal(wb.getFormatDefaults(0).defaultColWidthChars, 10);
+      assert.equal(wb.getFormatDefaults(0).defaultColumnWidthChars, 10);
 
-      expectFailure(() => wb.updateFormatDefaults(0, { defaultColWidthChars: -1 }));
-      assert.equal(wb.getFormatDefaults(0).defaultColWidthChars, 10);
+      expectFailure(() => wb.updateFormatDefaults(0, { defaultColumnWidthChars: -1 }));
+      assert.equal(wb.getFormatDefaults(0).defaultColumnWidthChars, 10);
       expectFailure(() => wb.getFormatDefaults(9));
     });
   });

@@ -14,7 +14,8 @@ const registry = new FinalizationRegistry((raw) => raw.delete());
 /**
  * Loads the engine and resolves to the frozen `Formulon` object.
  *
- * @param {object} [options] `FormulonOptions`: `locateFile`, `print`, `printErr`, `wasm`.
+ * @param {object} [options] `FormulonOptions`: `locateFile`, `print`, `printErr`, `wasm`; any other key, or a
+ *   key of the wrong type, rejects with a `TypeError`.
  * @returns {Promise<object>}
  */
 export function createFormulon(options) {

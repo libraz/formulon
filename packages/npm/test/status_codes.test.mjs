@@ -51,10 +51,7 @@ test('renamed and renumbered codes: the old names are gone and every workbook-st
   }
 });
 
-test('getStatusName names a code without its prefix and flags unknown values', async () => {
-  const mod = await loadStagedModule();
+test('getStatusName is no longer part of the module', async () => {
   const Module = await getModule();
-  assert.equal(Module.getStatusName(mod.StatusCode.Ok), 'OK');
-  assert.equal(Module.getStatusName(mod.StatusCode.SheetIndexOutOfRange), 'SHEET_INDEX_OUT_OF_RANGE');
-  assert.equal(Module.getStatusName(123456), 'UNRECOGNIZED_STATUS');
+  assert.equal(Module.getStatusName, undefined);
 });

@@ -32,6 +32,7 @@ using formulon::c_api::parts::invalid_argument;
 using formulon::c_api::parts::kTableStyleElementTypeTokens;
 using formulon::c_api::parts::not_found;
 using formulon::c_api::parts::null_argument;
+using formulon::c_api::parts::null_field;
 using formulon::c_api::parts::ordinal_of;
 using formulon::c_api::parts::patch_op_ok;
 using formulon::c_api::parts::set_binding_error;
@@ -184,8 +185,11 @@ extern "C" fm_status_t fm_workbook_set_table_style(fm_workbook_t* wb, const fm_t
     return rc;
   }
   const std::string_view name = style->name;
-  if (name.empty() || is_builtin_style_name(name)) {
-    return invalid_argument("name is empty or a built-in style name", "name=" + std::string(name));
+  if (name.empty()) {
+    return invalid_argument("name must not be empty", "name=");
+  }
+  if (is_builtin_style_name(name)) {
+    return invalid_argument("name must not be a built-in style name", "name=" + std::string(name));
   }
   if (auto rc = check_enum_domain(style->pivot, FM_TRISTATE_DEFAULT, FM_TRISTATE_TRUE, "pivot"); rc != 0) {
     return rc;
@@ -210,14 +214,18 @@ extern "C" fm_status_t fm_workbook_set_table_style(fm_workbook_t* wb, const fm_t
     const std::string context = "element=" + std::to_string(i) + " type=" + std::string(type);
     for (const formulon::TableStyleElement& earlier : next.elements) {
       if (earlier.type == type) {
-        return invalid_argument("element type repeated", context);
+        return invalid_argument(("elements[" + std::to_string(i) + "].type must not repeat an earlier element").c_str(),
+                                context);
       }
     }
     if (in.size == 0U) {
-      return invalid_argument("element size must be at least 1", context);
+      return invalid_argument(("elements[" + std::to_string(i) + "].size must be at least 1").c_str(), context);
     }
     if (in.has_dxf_index != 0 && in.dxf_index >= styles.dxfs.size()) {
-      return invalid_argument("dxf_index out of range", context + " dxf_index=" + std::to_string(in.dxf_index));
+      return invalid_argument(("elements[" + std::to_string(i) + "].dxf_index " + std::to_string(in.dxf_index) +
+                               " is out of range (" + std::to_string(styles.dxfs.size()) + " items)")
+                                  .c_str(),
+                              context + " dxf_index=" + std::to_string(in.dxf_index));
     }
     formulon::TableStyleElement element;
     element.type = std::string(type);
@@ -260,7 +268,8 @@ extern "C" fm_status_t fm_workbook_remove_table_style(fm_workbook_t* wb, const c
   formulon::TableStylesSection& section = wb->workbook().mutable_styles().table_styles;
   const std::size_t index = find_style(section, name);
   if (index >= section.styles.size()) {
-    return not_found("no custom table style has that name", "name=" + std::string(name));
+    return not_found(("name " + std::string(name) + " names no custom table style").c_str(),
+                     "name=" + std::string(name));
   }
   // A default naming the removed style falls back to the built-in one.
   const bool table_default = find_style(section, section.default_table_style) == index;
@@ -306,11 +315,15 @@ extern "C" fm_status_t fm_workbook_update_table_style_defaults(fm_workbook_t* wb
                                             patch->table_style_name_op, patch->table_style_name, "table_style_name"},
                                         {patch->pivot_style_name_op, patch->pivot_style_name, "pivot_style_name"}}) {
     if (!patch_op_ok(op)) {
-      return invalid_argument("patch op out of range", std::string("field=") + field);
+      return invalid_argument((std::string(field) + "_op is not a patch op").c_str(),
+                              std::string(field) + "_op=" + std::to_string(op));
     }
     if (op == FM_PATCH_OP_SET) {
-      if (name == nullptr || name[0] == '\0') {
-        return invalid_argument("SET needs a non-empty style name", std::string("field=") + field);
+      if (name == nullptr) {
+        return null_field(field);
+      }
+      if (name[0] == '\0') {
+        return invalid_argument((std::string(field) + " must not be empty").c_str(), std::string(field) + "=");
       }
       if (auto rc = check_utf8(name, "field", field); rc != 0) {
         return rc;

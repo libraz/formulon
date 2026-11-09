@@ -1951,6 +1951,25 @@ class SetterSymmetryTest(BindingRuleTestBase):
             [("wasm", "setActiveSheet", "shape")],
         )
 
+    def test_r18_js_reads_an_input_through_its_alias(self) -> None:
+        records = "export interface Stamp {\n  readonly a: number;\n}\nexport interface StampInput {\n  a: number;\n}\n"
+        bad = (
+            records
+            + "export type StampLike = Date | string;\n"
+            + _wb("  getStamp(): Stamp;\n  setStamp(time: StampLike | null): void;\n")
+        )
+        good = (
+            records
+            + "export type StampLike = StampInput | Date;\n"
+            + _wb("  getStamp(): Stamp;\n  setStamp(time: StampLike | null): void;\n")
+        )
+        self.assert_rule(
+            "R18.js",
+            self.fixture.context("", None, wasm=bad),
+            self.fixture.context("", None, wasm=good),
+            [("wasm", "setStamp", "shape")],
+        )
+
     def test_r18_py(self) -> None:
         records = "@dataclass(frozen=True)\nclass IterativeSettings:\n    enabled: bool\n    max_iterations: int\n\n"
         bad = records + _py_wb(
@@ -3003,6 +3022,26 @@ class HandleRuleTest(BindingRuleTestBase):
             [("py", "rows.insert", "span"), ("wasm", "column_width.set", "span")],
         )
 
+    def test_r25_span_single(self) -> None:
+        ledger = {
+            "entries": {
+                "column_width_pt.get": {"kind": "op", "scope": "sheet", "js": "getColumnWidthPt",
+                                        "py": "get_column_width_pt", "surfaces": ["wasm", "native", "py"],
+                                        "span_args": [[0, "col", "single"]]},
+            }
+        }  # fmt: skip
+        number = "  getColumnWidthPt(col: number, mode?: number): number;\n"
+        good_js = _sheet(number + "  getColumnWidthPt(a1: string, mode?: number): number;\n")
+        bad_js = _sheet(number)
+        good_py = _py_sheet("    def get_column_width_pt(self, col: Union[int, str], mode: int = 0) -> float: ...\n")
+        bad_py = good_py.replace("col: Union[int, str]", "col: int")
+        self.assert_rule(
+            "R25.span",
+            self.fixture.context("", ledger, wasm=bad_js, native=good_js, py_sheet=bad_py),
+            self.fixture.context("", ledger, wasm=good_js, native=good_js, py_sheet=good_py),
+            [("py", "column_width_pt.get", "single"), ("wasm", "column_width_pt.get", "span")],
+        )
+
 
 class RefArgTest(BindingRuleTestBase):
     def test_r26_ref(self) -> None:
@@ -3148,6 +3187,18 @@ class AdoptedShapeTest(BindingRuleTestBase):
             self.fixture.context("", _cell_ledger(), wasm=bad_js, native=good_js, py_sheet=bad_py),
             self.fixture.context("", _cell_ledger(), wasm=good_js, native=good_js, py_sheet=good_py),
             [("py", "print_area.set", "arg0"), ("wasm", "print_area.set", "arg0")],
+        )
+
+    def test_r25_rect_accepts_a_parsed_reference_besides(self) -> None:
+        good_js = _sheet("  addMerge(range: ParsedReference | CellRect | string): void;\n")
+        bad_js = _sheet("  addMerge(range: ParsedReference | string): void;\n")
+        good_py = _py_sheet("    def add_merge(self, cell_range: Union[ParsedReference, CellRect, str]) -> None: ...\n")
+        bad_py = _py_sheet("    def add_merge(self, cell_range: Union[ParsedReference, str]) -> None: ...\n")
+        self.assert_rule(
+            "R25.rect",
+            self.fixture.context("", _cell_ledger(), wasm=bad_js, native=good_js, py_sheet=bad_py),
+            self.fixture.context("", _cell_ledger(), wasm=good_js, native=good_js, py_sheet=good_py),
+            [("py", "merge.add", "arg0"), ("wasm", "merge.add", "arg0")],
         )
 
     def test_r18_all_accepts_the_input_alias_of_a_record_type(self) -> None:

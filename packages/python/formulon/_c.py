@@ -44,11 +44,13 @@ from __future__ import annotations
 
 import operator
 import struct
+import sys
 import threading
 from dataclasses import dataclass
 from enum import IntEnum
 from pathlib import Path
-from typing import Optional, Tuple, Union
+from types import FrameType
+from typing import Any, Optional, Tuple, Union
 
 import wasmtime
 
@@ -84,6 +86,59 @@ __all__ = [
 fm_value_t_size = 16
 
 
+# The serializing wrappers around public methods; they are never the call a failure belongs to.
+_LOCK_WRAPPERS = frozenset({"locked", "locked_generator", "locked_finalizer"})
+
+
+def _public_call() -> Tuple[str, Optional[FrameType]]:
+    """The public call on the stack as ``(label, frame)``.
+
+    The frame is the outermost one inside the ``formulon`` package whose function is a method of a public handle
+    class (named after ``type(self)`` / ``cls``) or a module function; the label is ``Class.method`` or
+    ``formulon.function``. Runs on the error path only. No such frame gives ``("", None)``.
+    """
+    label = ""
+    found: Optional[FrameType] = None
+    seen_package = False
+    frame: Optional[FrameType] = sys._getframe(1)
+    while frame is not None:
+        module = frame.f_globals.get("__name__", "")
+        if module == "formulon" or module.startswith("formulon."):
+            seen_package = True
+            code = frame.f_code
+            name = code.co_name
+            if name and not name.startswith(("_", "<")) and name not in _LOCK_WRAPPERS:
+                first = code.co_varnames[0] if code.co_argcount > 0 else ""
+                if first in ("self", "cls"):
+                    owner = frame.f_locals.get(first)
+                    owner_type = owner if isinstance(owner, type) else type(owner)
+                    if not owner_type.__name__.startswith("_"):
+                        label, found = f"{owner_type.__name__}.{name}", frame
+                else:
+                    label, found = f"formulon.{name}", frame
+        elif seen_package:
+            break
+        frame = frame.f_back
+    return label, found
+
+
+def _call_label() -> str:
+    """The public call a failure belongs to: ``Class.method`` or ``formulon.function`` (empty when none)."""
+    return _public_call()[0]
+
+
+def _argument_message(path: str, constraint: str) -> str:
+    """``<Class>.<method> <path> <constraint>`` for the public call on the stack; the call is omitted when none."""
+    return " ".join(part for part in (_call_label(), path, constraint) if part)
+
+
+def _require_bool(value: Any, path: str) -> bool:
+    """Return ``value`` when it is a ``bool``; an ``int``, ``None``, ``str`` or anything else is a ``TypeError``."""
+    if not isinstance(value, bool):
+        raise TypeError(_argument_message(path, "must be a boolean"))
+    return value
+
+
 def _coerce_integral(value: int, name: str) -> int:
     """Convert an integer, or an object with ``__index__``, to ``int``.
 
@@ -92,11 +147,11 @@ def _coerce_integral(value: int, name: str) -> int:
     """
 
     if isinstance(value, (bool, float)):
-        raise TypeError(f"formulon: {name} must be an integer, got {type(value).__name__}")
+        raise TypeError(_argument_message(name, "must be an integer"))
     try:
         return operator.index(value)
     except TypeError:
-        raise TypeError(f"formulon: {name} must be an integer, got {type(value).__name__}") from None
+        raise TypeError(_argument_message(name, "must be an integer")) from None
 
 
 #: How an unsigned argument is classified when it is negative: a sheet position, any other
@@ -151,16 +206,33 @@ def _uint(value: int, name: str, bits: int = 32, role: str = "quantity") -> int:
     if ivalue < 0:
         if role == "sheet":
             raise FormulonError(
-                StatusCode.SHEET_INDEX_OUT_OF_RANGE, f"{name} {ivalue} is out of range", f"{name}={ivalue}"
+                StatusCode.SHEET_INDEX_OUT_OF_RANGE,
+                _argument_message(f"{name} {ivalue}", "is out of range"),
+                f"{name}={ivalue}",
             )
         if role == "position":
-            raise FormulonError(StatusCode.INDEX_OUT_OF_RANGE, f"{name} {ivalue} is out of range", f"{name}={ivalue}")
-        what = "outside the grid" if role == "coordinate" else "negative"
-        raise FormulonError(StatusCode.INVALID_ARGUMENT, f"{name} {ivalue} is {what}", f"{name}={ivalue}")
+            raise FormulonError(
+                StatusCode.INDEX_OUT_OF_RANGE,
+                _argument_message(f"{name} {ivalue}", "is out of range"),
+                f"{name}={ivalue}",
+            )
+        if role == "coordinate":
+            raise FormulonError(
+                StatusCode.INVALID_ARGUMENT,
+                _argument_message(f"{name} {ivalue}", "is outside the grid"),
+                f"{name}={ivalue}",
+            )
+        raise FormulonError(
+            StatusCode.INVALID_ARGUMENT, _argument_message(name, "must not be negative"), f"{name}={ivalue}"
+        )
     if role == "coordinate" and ivalue >= _COORDINATE_LIMIT:
-        raise FormulonError(StatusCode.INVALID_ARGUMENT, f"{name} {ivalue} is outside the grid", f"{name}={ivalue}")
+        raise FormulonError(
+            StatusCode.INVALID_ARGUMENT,
+            _argument_message(f"{name} {ivalue}", "is outside the grid"),
+            f"{name}={ivalue}",
+        )
     if ivalue >= (1 << bits):
-        raise ValueError(f"formulon: {name} out of range for uint{bits}: {ivalue}")
+        raise ValueError(_argument_message(name, "is too large"))
     return ivalue
 
 
@@ -179,7 +251,7 @@ def _sint(value: int, name: str, bits: int = 32) -> int:
     ivalue = _coerce_integral(value, name)
     limit = 1 << (bits - 1)
     if ivalue < -limit or ivalue >= limit:
-        raise ValueError(f"formulon: {name} out of range for int{bits}: {ivalue}")
+        raise ValueError(_argument_message(name, "is too large"))
     return ivalue
 
 
@@ -1022,7 +1094,7 @@ def _locate_wasm() -> Path:
     if override:
         tried.append(f"{override} (from FORMULON_WASM_PATH)")
     raise FileNotFoundError(
-        "formulon: failed to locate formulon_capi.wasm. "
+        "failed to locate formulon_capi.wasm. "
         f"Tried: {', '.join(tried)}. "
         "Run `make python-package` to stage the artifact, install a "
         "wheel that ships it under formulon/_wasm/, or point "
@@ -1350,7 +1422,7 @@ class _WasmInstance:
         with self._call_lock:
             ptr = self._call_or_poison(self._exports["malloc"], "malloc", size)
         if ptr == 0:
-            raise MemoryError(f"formulon: WASM malloc({size}) returned NULL")
+            raise MemoryError(f"WASM malloc({size}) returned NULL")
         return ptr
 
     def free(self, ptr: int) -> None:

@@ -218,7 +218,7 @@ Napi::Value Workbook::GetSparklineGroup(const Napi::CallbackInfo& info) {
   } else {
     CheckedSpecReader key_reader(env);
     if (!key.IsNumber()) {
-      key_reader.FailType("sparklineGroup", "number or string");
+      key_reader.FailType("sparklineGroup", "a number or a string");
       return env.Undefined();
     }
     const uint32_t position = key_reader.U32(key, "sparklineGroup", 0U);

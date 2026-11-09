@@ -41,6 +41,7 @@ using formulon::c_api::parts::finish_status;
 using formulon::c_api::parts::ingest_entered_formula;
 using formulon::c_api::parts::kTickLabelPositionTokens;
 using formulon::c_api::parts::null_argument;
+using formulon::c_api::parts::null_field;
 using formulon::c_api::parts::PatchReader;
 using formulon::c_api::parts::plan_add_anchor;
 using formulon::c_api::parts::read_fill;
@@ -109,7 +110,7 @@ void read_source(PatchReader& r, std::int32_t op, const fm_chart_data_source_spe
     }
     return;
   }
-  if (spec.literal == nullptr && spec.literal_count != 0 && !r.check(null_argument())) {
+  if (spec.literal == nullptr && spec.literal_count != 0 && !r.check(null_field("literal"))) {
     return;
   }
   std::vector<formulon::ChartValue> points(spec.literal_count);
@@ -266,7 +267,7 @@ extern "C" fm_status_t fm_sheet_add_chart(fm_workbook_t* wb, size_t sheet_index,
     ref_title = title_of(opts->title);
     ingest_title_ref(wb, *ref_title);
     if (ref_title->ref_formula.empty()) {
-      return formulon::c_api::parts::invalid_argument("title.formula must not be empty");
+      return formulon::c_api::parts::invalid_argument("title.formula must not be empty", "title.formula=");
     }
     auto resolved = formulon::resolve_chart_source(wb->workbook(), sheet_index, ref_title->ref_formula,
                                                    formulon::eval::default_registry());
@@ -505,7 +506,7 @@ extern "C" fm_status_t fm_sheet_update_chart_display(fm_workbook_t* wb, size_t s
   PatchReader r;
   formulon::ChartDisplayPatch model;
   if (patch->blanks_as_op == FM_PATCH_OP_SET && patch->blanks_as == FM_BLANKS_AS_ABSENT) {
-    r.fail("blanks_as", "cannot be set to ABSENT");
+    r.fail("blanks_as", (std::to_string(patch->blanks_as) + " is not a ChartBlanksAs").c_str());
   }
   r.enum_field(patch->blanks_as_op, patch->blanks_as, FM_BLANKS_AS_ABSENT, FM_BLANKS_AS_SPAN, chart_blanks_as_from_c,
                model.blanks_as, "blanks_as");

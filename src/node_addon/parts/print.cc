@@ -178,7 +178,7 @@ Napi::Value Workbook::SetSheetPrintTitles(const Napi::CallbackInfo& info) {
   }
   CheckedSpecReader reader(env);
   Napi::Object titles;
-  if (!reader.Object(info[1], "titles", &titles)) {
+  if (!reader.Object(info[1], "", &titles)) {
     return env.Undefined();
   }
   fm_print_titles_t in = FM_STRUCT_INIT(fm_print_titles_t);
@@ -213,7 +213,7 @@ Napi::Value Workbook::SetRowBreak(const Napi::CallbackInfo& info) {
   }
   CheckedSpecReader reader(env);
   Napi::Object spec;
-  if (!reader.Object(info[2], "break", &spec)) {
+  if (!reader.Object(info[2], "", &spec)) {
     return env.Undefined();
   }
   const BreakSpan span = ReadBreakSpan(reader, spec);
@@ -240,7 +240,7 @@ Napi::Value Workbook::SetColumnBreak(const Napi::CallbackInfo& info) {
   }
   CheckedSpecReader reader(env);
   Napi::Object spec;
-  if (!reader.Object(info[2], "break", &spec)) {
+  if (!reader.Object(info[2], "", &spec)) {
     return env.Undefined();
   }
   const BreakSpan span = ReadBreakSpan(reader, spec);
@@ -313,7 +313,7 @@ Napi::Value Workbook::GetSheetColBreaks(const Napi::CallbackInfo& info) {
 Napi::Value Workbook::UpdateSheetPageSetup(const Napi::CallbackInfo& info) {
   fm_page_setup_patch_t out = FM_STRUCT_INIT(fm_page_setup_patch_t);
   return InvokeSheetSpec(
-      info, "updatePageSetup expects (sheet:number, setup:object)",
+      info,
       [&](CheckedSpecReader& reader, const Napi::Object& spec) {
         out.orientation_op = PatchI32(reader, spec, "orientation", &out.orientation);
         out.paper_size_op = PatchU32(reader, spec, "paperSize", &out.paper_size);
@@ -328,7 +328,7 @@ Napi::Value Workbook::UpdateSheetPageSetup(const Napi::CallbackInfo& info) {
 Napi::Value Workbook::UpdateSheetPageMargins(const Napi::CallbackInfo& info) {
   fm_page_margins_patch_t out = FM_STRUCT_INIT(fm_page_margins_patch_t);
   return InvokeSheetSpec(
-      info, "updatePageMargins expects (sheet:number, margins:object)",
+      info,
       [&](CheckedSpecReader& reader, const Napi::Object& spec) {
         out.left_in_op = PatchDouble(reader, spec, "leftIn", &out.left_in);
         out.right_in_op = PatchDouble(reader, spec, "rightIn", &out.right_in);
@@ -343,7 +343,7 @@ Napi::Value Workbook::UpdateSheetPageMargins(const Napi::CallbackInfo& info) {
 Napi::Value Workbook::UpdateSheetPrintOptions(const Napi::CallbackInfo& info) {
   fm_print_options_patch_t out = FM_STRUCT_INIT(fm_print_options_patch_t);
   return InvokeSheetSpec(
-      info, "updatePrintOptions expects (sheet:number, options:object)",
+      info,
       [&](CheckedSpecReader& reader, const Napi::Object& spec) {
         out.grid_lines_op = PatchBool(reader, spec, "gridLines", &out.grid_lines);
         out.headings_op = PatchBool(reader, spec, "headings", &out.headings);
@@ -364,7 +364,7 @@ Napi::Value Workbook::UpdateSheetHeaderFooter(const Napi::CallbackInfo& info) {
   std::string first_footer;
   fm_header_footer_patch_t out = FM_STRUCT_INIT(fm_header_footer_patch_t);
   return InvokeSheetSpec(
-      info, "updateHeaderFooter expects (sheet:number, headerFooter:object)",
+      info,
       [&](CheckedSpecReader& reader, const Napi::Object& spec) {
         out.odd_header_op = PatchString(reader, spec, "oddHeader", true, &odd_header, &out.odd_header);
         out.odd_footer_op = PatchString(reader, spec, "oddFooter", true, &odd_footer, &out.odd_footer);
@@ -509,7 +509,7 @@ Napi::Value Workbook::Paginate(const Napi::CallbackInfo& info) {
     return ThrowInvalidHandle(env);
   }
   if (info.Length() < 1 || !info[0].IsNumber()) {
-    Napi::TypeError::New(env, "getPagination expects (sheet:number)").ThrowAsJavaScriptException();
+    ThrowArgumentTypeError(env, "sheet", "must be a number");
     return env.Undefined();
   }
   fm_pagination_t* pagination = nullptr;

@@ -18,6 +18,7 @@
 #include "drawing/drawing_geometry.h"
 #include "drawing/slicer_edit.h"
 #include "utils/error.h"
+#include "utils/number_text.h"
 #include "workbook.h"
 
 using formulon::c_api::parts::AnchorPlan;
@@ -32,8 +33,10 @@ using formulon::c_api::parts::finish_status;
 using formulon::c_api::parts::fresh_read_scratch;
 using formulon::c_api::parts::invalid_argument;
 using formulon::c_api::parts::null_argument;
+using formulon::c_api::parts::null_field;
 using formulon::c_api::parts::patch_op_ok;
 using formulon::c_api::parts::patch_op_ok_without_clear;
+using formulon::c_api::parts::patch_op_refusal;
 using formulon::c_api::parts::plan_add_anchor;
 using formulon::c_api::parts::resolve_sheet_table;
 using formulon::c_api::parts::set_last_error;
@@ -57,8 +60,7 @@ fm_status_t to_spec(const fm_slicer_patch_t& p, bool add, formulon::SlicerSpec& 
   for (const auto& [op, name] : ops) {
     const bool clearable = add || std::string_view(name) == "style_name";
     if (!(clearable ? patch_op_ok(op) : patch_op_ok_without_clear(op))) {
-      return invalid_argument(patch_op_ok(op) ? "field cannot be cleared" : "op must be KEEP, CLEAR or SET",
-                              std::string("field=") + name);
+      return patch_op_refusal(op, name);
     }
   }
   const std::pair<fm_patch_op_t, const char*> texts[] = {{p.caption_op, p.caption}, {p.style_name_op, p.style_name}};
@@ -68,7 +70,7 @@ fm_status_t to_spec(const fm_slicer_patch_t& p, bool add, formulon::SlicerSpec& 
       continue;
     }
     if (texts[i].second == nullptr) {
-      return invalid_argument("a SET string cannot be NULL", std::string("field=") + text_names[i]);
+      return null_field(text_names[i]);
     }
     if (auto rc = check_utf8(texts[i].second, "field", text_names[i]); rc != 0) {
       return rc;
@@ -76,7 +78,7 @@ fm_status_t to_spec(const fm_slicer_patch_t& p, bool add, formulon::SlicerSpec& 
   }
   // No style is spelled CLEAR (or NULL on add), never an empty name.
   if (is_set(p.style_name_op) && p.style_name[0] == '\0') {
-    return invalid_argument("a style name is not empty", "field=style_name");
+    return invalid_argument("style_name must not be empty", "style_name=");
   }
 
   spec.fields = 0;
@@ -94,7 +96,8 @@ fm_status_t to_spec(const fm_slicer_patch_t& p, bool add, formulon::SlicerSpec& 
   }
   if (is_set(p.row_height_pt_op)) {
     if (!std::isfinite(p.row_height_pt) || p.row_height_pt < 0.0) {
-      return invalid_argument("row height is negative or not finite", "field=row_height_pt");
+      return invalid_argument("row_height_pt must be finite and not negative",
+                              "row_height_pt=" + formulon::fixed_string(p.row_height_pt, 6));
     }
     spec.fields |= field::kRowHeight;
     spec.row_height = std::llround(p.row_height_pt * static_cast<double>(formulon::kEmuPerPoint));
@@ -216,7 +219,7 @@ extern "C" fm_status_t fm_sheet_add_slicer(fm_workbook_t* wb, size_t sheet_index
     return rc;
   }
   if (plan.kind != formulon::AnchorKind::kTwoCell) {
-    return invalid_argument("a slicer frame is two-cell", "field=placement.anchor.kind");
+    return invalid_argument("placement.anchor.kind must be two-cell", "field=placement.anchor.kind");
   }
   // A zero field takes the default; the sort order and cross filter are plain values.
   fm_slicer_patch_t fields{};

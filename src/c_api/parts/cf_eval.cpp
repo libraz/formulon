@@ -135,9 +135,9 @@ extern "C" fm_status_t fm_sheet_evaluate_cf_range(const fm_workbook_t* wb, size_
   const std::uint32_t last_row = range->last_row;
   const std::uint32_t last_col = range->last_col;
   if (!formulon::Sheet::rect_in_grid(first_row, first_col, last_row, last_col)) {
-    return invalid_argument("rect out of grid", "first=(" + std::to_string(first_row) + "," +
-                                                    std::to_string(first_col) + ") last=(" + std::to_string(last_row) +
-                                                    "," + std::to_string(last_col) + ")");
+    return invalid_argument("range is outside the grid",
+                            "first=(" + std::to_string(first_row) + "," + std::to_string(first_col) + ") last=(" +
+                                std::to_string(last_row) + "," + std::to_string(last_col) + ")");
   }
   fm_cf_range_evaluation_spec_t spec = FM_STRUCT_INIT(fm_cf_range_evaluation_spec_t);
   if (options != nullptr) {
@@ -147,10 +147,12 @@ extern "C" fm_status_t fm_sheet_evaluate_cf_range(const fm_workbook_t* wb, size_
     spec = *options;
   }
   if (spec.time_period_rules < FM_TRISTATE_DEFAULT || spec.time_period_rules > FM_TRISTATE_TRUE) {
-    return invalid_argument("time_period_rules is outside fm_tristate_t");
+    return invalid_argument(
+        ("time_period_rules " + std::to_string(spec.time_period_rules) + " is not a tristate").c_str(),
+        "time_period_rules=" + std::to_string(spec.time_period_rules));
   }
   if (spec.has_today_serial != 0 && !std::isfinite(spec.today_serial)) {
-    return invalid_argument("today_serial is not finite");
+    return invalid_argument("today_serial must be finite", "today_serial=invalid");
   }
   if (auto rc = ensure_calculated(wb); rc != 0) {
     return rc;

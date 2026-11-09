@@ -48,7 +48,11 @@ Napi::Value Workbook::SetNumber(const Napi::CallbackInfo& info) {
 Napi::Value Workbook::SetBool(const Napi::CallbackInfo& info) {
   return StatusCall(info, [&](fm_workbook_t* handle) {
     const CellAddressArgs address = ReadCellAddress(info);
-    return fm_sheet_set_bool(handle, address.sheet, address.row, address.col, ArgFlag(info, 3));
+    const int32_t value = ArgFlag(info, 3);
+    if (info.Env().IsExceptionPending()) {
+      return FM_STATUS_INVALID_ARGUMENT;
+    }
+    return fm_sheet_set_bool(handle, address.sheet, address.row, address.col, value);
   });
 }
 
@@ -82,7 +86,7 @@ Napi::Value Workbook::SetCellPhoneticRuns(const Napi::CallbackInfo& info) {
   const CellAddressArgs address = ReadCellAddress(info);
   Napi::Array runs;
   if (!ArrayArg(info, 3, &runs)) {
-    Napi::TypeError::New(env, "Sheet.setCellPhoneticRuns runs must be an array").ThrowAsJavaScriptException();
+    ThrowArgumentTypeError(env, "runs", "must be an array");
     return env.Undefined();
   }
   const uint32_t count = runs.Length();
@@ -136,7 +140,7 @@ Napi::Value Workbook::SetCellPhoneticProperties(const Napi::CallbackInfo& info) 
   const CellAddressArgs address = ReadCellAddress(info);
   CheckedSpecReader reader(env);
   Napi::Object props;
-  const bool present = reader.Object(info[3], "properties", &props);
+  const bool present = reader.Object(info[3], "", &props);
   fm_phonetic_properties_t record = FM_STRUCT_INIT(fm_phonetic_properties_t);
   if (present) {
     record.font_index = reader.U32(props, "fontIndex", 0U);
@@ -250,7 +254,11 @@ Napi::Value Workbook::GetCellShowPhonetic(const Napi::CallbackInfo& info) {
 Napi::Value Workbook::SetCellShowPhonetic(const Napi::CallbackInfo& info) {
   return StatusCall(info, [&](fm_workbook_t* handle) {
     const CellAddressArgs address = ReadCellAddress(info);
-    return fm_sheet_set_cell_show_phonetic(handle, address.sheet, address.row, address.col, ArgFlag(info, 3));
+    const int32_t value = ArgFlag(info, 3);
+    if (info.Env().IsExceptionPending()) {
+      return FM_STATUS_INVALID_ARGUMENT;
+    }
+    return fm_sheet_set_cell_show_phonetic(handle, address.sheet, address.row, address.col, value);
   });
 }
 

@@ -1,6 +1,6 @@
-"""Engine metadata: version, status names, logging, date-serial conversion and the function-metadata seam.
+"""Engine metadata: version, logging, date-serial conversion and the function-metadata seam.
 
-:func:`get_version`, :func:`get_status_name`, :func:`set_log_min_level`,
+:func:`get_version`, :func:`set_log_min_level`,
 :func:`convert_civil_to_serial` and :func:`convert_serial_to_civil` are
 process-level calls into the engine. The rest of this module is the
 host-injected function-metadata provider seam.
@@ -27,9 +27,8 @@ from dataclasses import dataclass
 from typing import Dict, Mapping, Optional, TypedDict, Union
 
 from . import _structs as S
-from ._c import LIB, _sint
+from ._c import LIB, _require_bool, _sint
 from ._c import decode_cstr as _decode_cstr
-from ._status import StatusCode
 from ._workbook import FunctionAvailability, FunctionMetadata, LogLevel, _ArgScope, _check
 
 __all__ = [
@@ -39,7 +38,6 @@ __all__ = [
     "MergedFunctionMetadata",
     "convert_civil_to_serial",
     "convert_serial_to_civil",
-    "get_status_name",
     "get_version",
     "merge_function_metadata",
     "set_log_min_level",
@@ -52,14 +50,6 @@ def get_version() -> str:
     Always non-empty.
     """
     return _decode_cstr(LIB.fm_get_version())
-
-
-def get_status_name(status: StatusCode) -> str:
-    """Return the name of a status code (``"INVALID_ARGUMENT"``).
-
-    An unknown code returns ``"UNRECOGNIZED_STATUS"``.
-    """
-    return _decode_cstr(LIB.fm_get_status_name(_sint(status, "status")))
 
 
 def set_log_min_level(level: LogLevel) -> None:
@@ -88,11 +78,10 @@ def set_log_min_level(level: LogLevel) -> None:
 
 
 def _check_date1904(date1904: object) -> None:
-    if not isinstance(date1904, bool):
-        raise TypeError(f"formulon: date1904 must be a bool, got {type(date1904).__name__}")
+    _require_bool(date1904, "date1904")
 
 
-def convert_civil_to_serial(value: Union[datetime.date, datetime.datetime], *, date1904: bool = False) -> float:
+def convert_civil_to_serial(date: Union[datetime.date, datetime.datetime], *, date1904: bool = False) -> float:
     """Convert a calendar date and time to an Excel serial number.
 
     The engine's own date rules apply, so the result equals
@@ -101,16 +90,16 @@ def convert_civil_to_serial(value: Union[datetime.date, datetime.datetime], *, d
     accepts only years 1900 to 9999 and the 1904 system only 1904 to 9999.
 
     Args:
-      value: a naive ``datetime.datetime`` or a ``datetime.date``.
+      date: a naive ``datetime.datetime`` or a ``datetime.date``.
       date1904: ``True`` for the 1904 date system.
 
     Returns:
       The serial number, with the time of day as the fraction.
 
     Raises:
-      TypeError: when ``value`` is not a ``date`` or ``datetime`` (a
+      TypeError: when ``date`` is not a ``date`` or ``datetime`` (a
         ``datetime.time`` included), or ``date1904`` is not a ``bool``.
-      ValueError: when ``value`` carries a time zone, or rounding carries
+      ValueError: when ``date`` carries a time zone, or rounding carries
         it past the largest ``datetime``.
       InvalidArgumentError: when the date lies outside the date system.
 
@@ -119,20 +108,20 @@ def convert_civil_to_serial(value: Union[datetime.date, datetime.datetime], *, d
         convert_civil_to_serial(datetime.datetime(2024, 1, 15, 12, 0))  # 45306.5
     """
     _check_date1904(date1904)
-    if isinstance(value, datetime.datetime):
-        if value.tzinfo is not None:
-            raise ValueError("formulon: value must be naive; it is a wall-clock reading")
-        rounded = value.replace(microsecond=0)
-        if value.microsecond >= 500000:
+    if isinstance(date, datetime.datetime):
+        if date.tzinfo is not None:
+            raise ValueError("date must be naive; it is a wall-clock reading")
+        rounded = date.replace(microsecond=0)
+        if date.microsecond >= 500000:
             try:
                 rounded += datetime.timedelta(seconds=1)
             except OverflowError:
-                raise ValueError("formulon: value rounds past the largest datetime") from None
+                raise ValueError("date rounds past the largest datetime") from None
         civil = rounded
-    elif isinstance(value, datetime.date):
-        civil = datetime.datetime(value.year, value.month, value.day)
+    elif isinstance(date, datetime.date):
+        civil = datetime.datetime(date.year, date.month, date.day)
     else:
-        raise TypeError(f"formulon: value must be a datetime.date or datetime.datetime, got {type(value).__name__}")
+        raise TypeError(f"date must be a datetime.date or datetime.datetime, got {type(date).__name__}")
     with _ArgScope() as scope:
         civil_ptr = scope.struct(S.CIVIL_TIME)
         S.CIVIL_TIME.pack(
@@ -178,14 +167,12 @@ def convert_serial_to_civil(serial: float, *, date1904: bool = False) -> datetim
     """
     _check_date1904(date1904)
     if isinstance(serial, bool) or not isinstance(serial, numbers.Real):
-        raise TypeError(f"formulon: serial must be a number, got {type(serial).__name__}")
+        raise TypeError(f"serial must be a number, got {type(serial).__name__}")
     number = float(serial)
     if not math.isfinite(number):
-        raise ValueError(f"formulon: serial must be finite, got {serial!r}")
+        raise ValueError(f"serial must be finite, got {serial!r}")
     if not date1904 and 60.0 <= number < 61.0:
-        raise ValueError(
-            "formulon: serial 60 is Excel's 1900-02-29 in the 1900 date system, which datetime cannot represent"
-        )
+        raise ValueError("serial 60 is Excel's 1900-02-29 in the 1900 date system, which datetime cannot represent")
     with _ArgScope() as scope:
         out_ptr = scope.struct(S.CIVIL_TIME)
         _check(LIB.fm_convert_serial_to_civil(number, 1 if date1904 else 0, out_ptr))

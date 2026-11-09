@@ -7,8 +7,10 @@
 
 #include <cstdint>
 #include <string>
+#include <string_view>
 #include <vector>
 
+#include "c_api/binding_message.h"
 #include "c_api/formulon_c.h"
 #include "wasm/parts/embind_common.h"
 #include "wasm/parts/workbook.h"
@@ -175,67 +177,76 @@ struct FilterColumnStore {
   std::string max_val_iso;
 };
 
+// Every reader below takes `path`, the path of `v` under the filter record (`columns[2]`, `sort`), and names a
+// rejected field by it.
+
 /// Reads the JS array `v[key]`; absent or non-array reads as empty. Property
 /// access and Array.isArray both go through the reader's JS try/catch path.
-emscripten::val js_pull_array(const emscripten::val& v, const char* key, JsNarrowNumericReader& reader) {
+emscripten::val js_pull_array(const emscripten::val& v, std::string_view path, const char* key,
+                              JsNarrowNumericReader& reader) {
   if (!js_value_present(v)) {
     return emscripten::val::array();
   }
-  const emscripten::val a = reader.value(v, key, key);
+  const std::string field = binding::field_path(path, key);
+  const emscripten::val a = reader.value(v, key, field.c_str());
   if (!reader.ok() || !js_value_present(a)) {
     return emscripten::val::array();
   }
-  return reader.is_array(a, key) ? a : emscripten::val::array();
+  return reader.is_array(a, field.c_str()) ? a : emscripten::val::array();
 }
 
-fm_date_group_item_t pull_date_group(const emscripten::val& v, JsNarrowNumericReader& reader) {
+fm_date_group_item_t pull_date_group(const emscripten::val& v, std::string_view path, JsNarrowNumericReader& reader) {
+  const auto at = [&](const char* key) { return binding::field_path(path, key); };
   fm_date_group_item_t d{};
-  d.year = reader.u16(v, "year", 0U, "dateGroups[].year");
-  d.month = reader.u8(v, "month", 0U, "dateGroups[].month");
-  d.day = reader.u8(v, "day", 0U, "dateGroups[].day");
-  d.hour = reader.u8(v, "hour", 0U, "dateGroups[].hour");
-  d.minute = reader.u8(v, "minute", 0U, "dateGroups[].minute");
-  d.second = reader.u8(v, "second", 0U, "dateGroups[].second");
-  d.grouping = reader.u8(v, "grouping", 0U, "dateGroups[].grouping");
+  d.year = reader.u16(v, "year", 0U, at("year").c_str());
+  d.month = reader.u8(v, "month", 0U, at("month").c_str());
+  d.day = reader.u8(v, "day", 0U, at("day").c_str());
+  d.hour = reader.u8(v, "hour", 0U, at("hour").c_str());
+  d.minute = reader.u8(v, "minute", 0U, at("minute").c_str());
+  d.second = reader.u8(v, "second", 0U, at("second").c_str());
+  d.grouping = reader.u8(v, "grouping", 0U, at("grouping").c_str());
   return d;
 }
 
-int32_t pull_flag(const emscripten::val& v, const char* key, JsNarrowNumericReader& reader, bool dflt = false) {
-  return reader.boolean(v, key, dflt, key) ? 1 : 0;
+int32_t pull_flag(const emscripten::val& v, std::string_view path, const char* key, JsNarrowNumericReader& reader,
+                  bool dflt = false) {
+  return reader.boolean(v, key, dflt, binding::field_path(path, key).c_str()) ? 1 : 0;
 }
 
-void pull_filter_column(const emscripten::val& v, FilterColumnStore& st, fm_filter_column_t& c,
+void pull_filter_column(const emscripten::val& v, std::string_view path, FilterColumnStore& st, fm_filter_column_t& c,
                         JsNarrowNumericReader& reader) {
+  const auto at = [&](const char* key) { return binding::field_path(path, key); };
   c = fm_filter_column_t{};
-  c.column_offset = reader.u32(v, "columnOffset", 0U, "filterColumn.columnOffset");
+  c.column_offset = reader.u32(v, "columnOffset", 0U, at("columnOffset").c_str());
   if (!reader.ok()) {
     return;
   }
-  c.hidden_button = pull_flag(v, "hiddenButton", reader);
-  c.show_button = pull_flag(v, "showButton", reader, true);
+  c.hidden_button = pull_flag(v, path, "hiddenButton", reader);
+  c.show_button = pull_flag(v, path, "showButton", reader, true);
   if (!reader.ok()) {
     return;
   }
-  c.kind = reader.i32(v, "kind", 0, "filterColumn.kind");
+  c.kind = reader.i32(v, "kind", 0, at("kind").c_str());
   if (!reader.ok()) {
     return;
   }
-  c.filter_blank = pull_flag(v, "filterBlank", reader);
+  c.filter_blank = pull_flag(v, path, "filterBlank", reader);
   if (!reader.ok()) {
     return;
   }
-  const emscripten::val values = js_pull_array(v, "values", reader);
-  const uint32_t value_count = reader.length(values, "filterColumn.values.length");
+  const emscripten::val values = js_pull_array(v, path, "values", reader);
+  const uint32_t value_count = reader.length(values, at("values").c_str());
   if (!reader.ok()) {
     return;
   }
   st.values.reserve(value_count);
   for (uint32_t i = 0; i < value_count; ++i) {
-    const emscripten::val value = reader.array_element(values, i, "filterColumn.values[]");
+    const std::string element = binding::element_path(at("values"), i);
+    const emscripten::val value = reader.array_element(values, i, element.c_str());
     if (!reader.ok()) {
       return;
     }
-    st.values.push_back(reader.string_value(value, "filterColumn.values[]"));
+    st.values.push_back(reader.string_value(value, element.c_str()));
     if (!reader.ok()) {
       return;
     }
@@ -245,8 +256,8 @@ void pull_filter_column(const emscripten::val& v, FilterColumnStore& st, fm_filt
   }
   c.values = st.value_ptrs.empty() ? nullptr : st.value_ptrs.data();
   c.value_count = static_cast<uint32_t>(st.value_ptrs.size());
-  const emscripten::val groups = js_pull_array(v, "dateGroups", reader);
-  const uint32_t group_count = reader.length(groups, "filterColumn.dateGroups.length");
+  const emscripten::val groups = js_pull_array(v, path, "dateGroups", reader);
+  const uint32_t group_count = reader.length(groups, at("dateGroups").c_str());
   if (!reader.ok()) {
     return;
   }
@@ -254,36 +265,38 @@ void pull_filter_column(const emscripten::val& v, FilterColumnStore& st, fm_filt
     if (!reader.ok()) {
       return;
     }
-    const emscripten::val group = reader.array_element(groups, i, "dateGroups[]");
+    const std::string element = binding::element_path(at("dateGroups"), i);
+    const emscripten::val group = reader.array_element(groups, i, element.c_str());
     if (!reader.ok()) {
       return;
     }
     if (!js_value_present(group)) {
       continue;
     }
-    st.date_groups.push_back(pull_date_group(group, reader));
+    st.date_groups.push_back(pull_date_group(group, element, reader));
   }
   if (!reader.ok()) {
     return;
   }
   c.date_groups = st.date_groups.empty() ? nullptr : st.date_groups.data();
   c.date_group_count = static_cast<uint32_t>(st.date_groups.size());
-  c.custom_and = pull_flag(v, "customAnd", reader);
-  const emscripten::val conditions = js_pull_array(v, "conditions", reader);
-  const uint32_t condition_count = reader.length(conditions, "filterColumn.conditions.length");
+  c.custom_and = pull_flag(v, path, "customAnd", reader);
+  const emscripten::val conditions = js_pull_array(v, path, "conditions", reader);
+  const uint32_t condition_count = reader.length(conditions, at("conditions").c_str());
   if (!reader.ok()) {
     return;
   }
   st.conditions.reserve(condition_count);
   st.condition_values.reserve(condition_count);
   for (uint32_t i = 0; i < condition_count; ++i) {
-    const emscripten::val condition = reader.array_element(conditions, i, "filterColumn.conditions[]");
+    const std::string element = binding::element_path(at("conditions"), i);
+    const emscripten::val condition = reader.array_element(conditions, i, element.c_str());
     if (!reader.ok()) {
       return;
     }
     fm_filter_condition_t entry{};
-    entry.op = reader.i32(condition, "operator", 0, "filterColumn.conditions[].operator");
-    st.condition_values.push_back(reader.string(condition, "value", "filterColumn.conditions[].value"));
+    entry.op = reader.i32(condition, "operator", 0, binding::field_path(element, "operator").c_str());
+    st.condition_values.push_back(reader.string(condition, "value", binding::field_path(element, "value").c_str()));
     if (!reader.ok()) {
       return;
     }
@@ -295,63 +308,64 @@ void pull_filter_column(const emscripten::val& v, FilterColumnStore& st, fm_filt
   }
   c.conditions = st.conditions.empty() ? nullptr : st.conditions.data();
   c.condition_count = condition_count;
-  st.val_iso = reader.string(v, "valueIso", "filterColumn.valueIso");
-  st.max_val_iso = reader.string(v, "maxValueIso", "filterColumn.maxValueIso");
+  st.val_iso = reader.string(v, "valueIso", at("valueIso").c_str());
+  st.max_val_iso = reader.string(v, "maxValueIso", at("maxValueIso").c_str());
   if (!reader.ok()) {
     return;
   }
   c.val_iso = st.val_iso.c_str();
   c.max_val_iso = st.max_val_iso.c_str();
-  c.top = pull_flag(v, "top", reader, true);
-  c.percent = pull_flag(v, "percent", reader);
-  c.top_val = reader.number(v, "topValue", 0.0, "filterColumn.topValue");
-  const emscripten::val filter_val = reader.value(v, "filterValue", "filterColumn.filterValue");
+  c.top = pull_flag(v, path, "top", reader, true);
+  c.percent = pull_flag(v, path, "percent", reader);
+  c.top_val = reader.number(v, "topValue", 0.0, at("topValue").c_str());
+  const emscripten::val filter_val = reader.value(v, "filterValue", at("filterValue").c_str());
   c.has_filter_val = js_value_present(filter_val) ? 1 : 0;
-  c.filter_val = reader.number_value(filter_val, 0.0, "filterColumn.filterValue");
-  c.dynamic_type = reader.i32(v, "dynamicType", 0, "filterColumn.dynamicType");
+  c.filter_val = reader.number_value(filter_val, 0.0, at("filterValue").c_str());
+  c.dynamic_type = reader.i32(v, "dynamicType", 0, at("dynamicType").c_str());
   if (!reader.ok()) {
     return;
   }
-  const emscripten::val dyn_val = reader.value(v, "dynamicValue", "filterColumn.dynamicValue");
+  const emscripten::val dyn_val = reader.value(v, "dynamicValue", at("dynamicValue").c_str());
   c.has_dyn_val = js_value_present(dyn_val) ? 1 : 0;
-  c.dyn_val = reader.number_value(dyn_val, 0.0, "filterColumn.dynamicValue");
-  const emscripten::val dyn_max_val = reader.value(v, "dynamicMaxValue", "filterColumn.dynamicMaxValue");
+  c.dyn_val = reader.number_value(dyn_val, 0.0, at("dynamicValue").c_str());
+  const emscripten::val dyn_max_val = reader.value(v, "dynamicMaxValue", at("dynamicMaxValue").c_str());
   c.has_dyn_max_val = js_value_present(dyn_max_val) ? 1 : 0;
-  c.dyn_max_val = reader.number_value(dyn_max_val, 0.0, "filterColumn.dynamicMaxValue");
-  const emscripten::val dxf_index = reader.value(v, "dxfIndex", "filterColumn.dxfIndex");
+  c.dyn_max_val = reader.number_value(dyn_max_val, 0.0, at("dynamicMaxValue").c_str());
+  const emscripten::val dxf_index = reader.value(v, "dxfIndex", at("dxfIndex").c_str());
   c.has_dxf_index = js_value_present(dxf_index) ? 1 : 0;
-  c.dxf_index = reader.u32_value(dxf_index, 0U, "filterColumn.dxfIndex");
+  c.dxf_index = reader.u32_value(dxf_index, 0U, at("dxfIndex").c_str());
   if (!reader.ok()) {
     return;
   }
-  c.cell_color = pull_flag(v, "cellColor", reader);
-  c.icon_set = reader.i32(v, "iconSet", 0, "filterColumn.iconSet");
-  const emscripten::val icon_index = reader.value(v, "iconIndex", "filterColumn.iconIndex");
+  c.cell_color = pull_flag(v, path, "cellColor", reader);
+  c.icon_set = reader.i32(v, "iconSet", 0, at("iconSet").c_str());
+  const emscripten::val icon_index = reader.value(v, "iconIndex", at("iconIndex").c_str());
   c.has_icon_index = js_value_present(icon_index) ? 1 : 0;
-  c.icon_index = reader.i32_value(icon_index, 0, "filterColumn.iconIndex");
+  c.icon_index = reader.i32_value(icon_index, 0, at("iconIndex").c_str());
 }
 
-void pull_sort_condition(const emscripten::val& v, std::string& custom_list, fm_sort_condition_t& c,
-                         JsNarrowNumericReader& reader) {
+void pull_sort_condition(const emscripten::val& v, std::string_view path, std::string& custom_list,
+                         fm_sort_condition_t& c, JsNarrowNumericReader& reader) {
+  const auto at = [&](const char* key) { return binding::field_path(path, key); };
   c = fm_sort_condition_t{};
-  c.ref = js_pull_range(reader.value(v, "ref", "sortCondition.ref"), &reader);
+  c.ref = js_pull_range(reader.value(v, "ref", at("ref").c_str()), &reader, at("ref"));
   if (!reader.ok()) {
     return;
   }
-  c.descending = pull_flag(v, "descending", reader);
-  c.sort_by = reader.i32(v, "sortBy", 0, "sortCondition.sortBy");
+  c.descending = pull_flag(v, path, "descending", reader);
+  c.sort_by = reader.i32(v, "sortBy", 0, at("sortBy").c_str());
   if (!reader.ok()) {
     return;
   }
-  custom_list = reader.string(v, "customList", "sortCondition.customList");
+  custom_list = reader.string(v, "customList", at("customList").c_str());
   c.custom_list = custom_list.c_str();
-  const emscripten::val dxf_index = reader.value(v, "dxfIndex", "sortCondition.dxfIndex");
+  const emscripten::val dxf_index = reader.value(v, "dxfIndex", at("dxfIndex").c_str());
   c.has_dxf_index = js_value_present(dxf_index) ? 1 : 0;
-  c.dxf_index = reader.u32_value(dxf_index, 0U, "sortCondition.dxfIndex");
-  c.icon_set = reader.i32(v, "iconSet", 0, "sortCondition.iconSet");
-  const emscripten::val icon_index = reader.value(v, "iconIndex", "sortCondition.iconIndex");
+  c.dxf_index = reader.u32_value(dxf_index, 0U, at("dxfIndex").c_str());
+  c.icon_set = reader.i32(v, "iconSet", 0, at("iconSet").c_str());
+  const emscripten::val icon_index = reader.value(v, "iconIndex", at("iconIndex").c_str());
   c.has_icon_index = js_value_present(icon_index) ? 1 : 0;
-  c.icon_index = reader.i32_value(icon_index, 0, "sortCondition.iconIndex");
+  c.icon_index = reader.i32_value(icon_index, 0, at("iconIndex").c_str());
 }
 
 emscripten::val get_auto_filter(const fm_workbook_t* wb, const AutoFilterOps& ops, uint32_t sheet, uint32_t table) {
@@ -374,12 +388,12 @@ void set_auto_filter(fm_workbook_t* wb, const AutoFilterOps& ops, uint32_t sheet
   }
   JsNarrowNumericReader reader(ops.label);
   fm_auto_filter_t f = FM_STRUCT_INIT(fm_auto_filter_t);
-  f.range = js_pull_range(reader.value(filter, "range", "autoFilter.range"), &reader);
+  f.range = js_pull_range(reader.value(filter, "range", "range"), &reader, "range");
   if (!reader.ok()) {
     return;
   }
-  const emscripten::val columns = js_pull_array(filter, "columns", reader);
-  const uint32_t column_count = reader.length(columns, "autoFilter.columns.length");
+  const emscripten::val columns = js_pull_array(filter, {}, "columns", reader);
+  const uint32_t column_count = reader.length(columns, "columns");
   if (!reader.ok()) {
     return;
   }
@@ -389,37 +403,38 @@ void set_auto_filter(fm_workbook_t* wb, const AutoFilterOps& ops, uint32_t sheet
     if (!reader.ok()) {
       break;
     }
-    const emscripten::val column = reader.array_element(columns, i, "columns[]");
+    const std::string element = binding::element_path("columns", i);
+    const emscripten::val column = reader.array_element(columns, i, element.c_str());
     if (!reader.ok()) {
       break;
     }
     if (!js_value_present(column)) {
       continue;
     }
-    pull_filter_column(column, stores[i], cols[i], reader);
+    pull_filter_column(column, element, stores[i], cols[i], reader);
   }
   if (!reader.ok()) {
     return;
   }
   f.columns = cols.empty() ? nullptr : cols.data();
   f.column_count = column_count;
-  const emscripten::val sort = reader.value(filter, "sort", "autoFilter.sort");
+  const emscripten::val sort = reader.value(filter, "sort", "sort");
   std::vector<std::string> custom_lists;
   std::vector<fm_sort_condition_t> conditions;
   if (js_value_present(sort)) {
     f.has_sort = 1;
-    f.sort_ref = js_pull_range(reader.value(sort, "ref", "sort.ref"), &reader);
+    f.sort_ref = js_pull_range(reader.value(sort, "ref", "sort.ref"), &reader, "sort.ref");
     if (!reader.ok()) {
       return;
     }
-    f.column_sort = pull_flag(sort, "columnSort", reader);
-    f.case_sensitive = pull_flag(sort, "caseSensitive", reader);
+    f.column_sort = pull_flag(sort, "sort", "columnSort", reader);
+    f.case_sensitive = pull_flag(sort, "sort", "caseSensitive", reader);
     f.sort_method = reader.i32(sort, "sortMethod", 0, "sort.sortMethod");
     if (!reader.ok()) {
       return;
     }
-    const emscripten::val list = js_pull_array(sort, "conditions", reader);
-    const uint32_t n = reader.length(list, "sort.conditions.length");
+    const emscripten::val list = js_pull_array(sort, "sort", "conditions", reader);
+    const uint32_t n = reader.length(list, "sort.conditions");
     if (!reader.ok()) {
       return;
     }
@@ -429,14 +444,15 @@ void set_auto_filter(fm_workbook_t* wb, const AutoFilterOps& ops, uint32_t sheet
       if (!reader.ok()) {
         break;
       }
-      const emscripten::val condition = reader.array_element(list, i, "conditions[]");
+      const std::string element = binding::element_path("sort.conditions", i);
+      const emscripten::val condition = reader.array_element(list, i, element.c_str());
       if (!reader.ok()) {
         break;
       }
       if (!js_value_present(condition)) {
         continue;
       }
-      pull_sort_condition(condition, custom_lists[i], conditions[i], reader);
+      pull_sort_condition(condition, element, custom_lists[i], conditions[i], reader);
     }
     if (!reader.ok()) {
       return;

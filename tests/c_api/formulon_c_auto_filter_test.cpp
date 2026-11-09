@@ -451,7 +451,7 @@ TEST(FormulonCApiAutoFilter, RejectsMalformedRecords) {
 
   column.kind = 1;
   column.values = nullptr;
-  EXPECT_EQ(fm_sheet_set_auto_filter(wb.handle, 0, &filter), kBindingNullPointer);
+  EXPECT_EQ(fm_sheet_set_auto_filter(wb.handle, 0, &filter), kInvalidArgument);
 
   column.kind = 2;
   fm_filter_condition_t conditions[3] = {
@@ -485,7 +485,7 @@ TEST(FormulonCApiAutoFilter, RejectsMalformedRecords) {
   filter.columns = nullptr;
   filter.column_count = 1;
   filter.has_sort = 0;
-  EXPECT_EQ(fm_sheet_set_auto_filter(wb.handle, 0, &filter), kBindingNullPointer);
+  EXPECT_EQ(fm_sheet_set_auto_filter(wb.handle, 0, &filter), kInvalidArgument);
   fm_auto_filter_t out = FM_STRUCT_INIT(fm_auto_filter_t);
   int32_t present = 1;
   ASSERT_EQ(fm_sheet_get_auto_filter(wb.handle, 0, &present, &out), 0);

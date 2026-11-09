@@ -81,7 +81,7 @@ TEST(FormulonCli, PaginatePrintAreaUsesA1Notation) {
   fm_workbook_destroy(wb);
   CliRun r = run_cli({"paginate", path});
   ASSERT_EQ(r.exit_code, 0) << r.stderr_text;
-  EXPECT_NE(r.stdout_text.find("print_area=B2:D5,F1:G3\n"), std::string::npos) << r.stdout_text;
+  EXPECT_NE(r.stdout_text.find("printArea=B2:D5,F1:G3\n"), std::string::npos) << r.stdout_text;
 }
 
 TEST(FormulonCli, EvalMissingFormulaMessage) {

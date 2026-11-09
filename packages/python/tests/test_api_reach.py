@@ -212,7 +212,7 @@ class CellFormatShapeTests(unittest.TestCase):
                 with self.subTest(size=bad), self.assertRaises(ValueError):
                     ws.update_cell_format("A1", font={"size_pt": bad})
             for field in ("indent", "text_rotation", "relative_indent"):
-                with self.subTest(field=field), self.assertRaises(ValueError):
+                with self.subTest(field=field), self.assertRaises(TypeError):
                     ws.update_cell_format("A1", alignment={field: float("nan")})
             for value in (2**32, 2**31):
                 with self.subTest(indent=value), self.assertRaises(InvalidArgumentError):
@@ -306,7 +306,12 @@ class ToNativeCaseTests(unittest.TestCase):
 # Spans: span_args of tools/api/address_args.json
 # ---------------------------------------------------------------------------
 
-SPAN_ARGS: Dict[str, List[List[Any]]] = _read_json("tools/api/address_args.json")["py"]["span_args"]
+# Single-axis getters ("single" form) take one column or row and are covered by the getter tests.
+SPAN_ARGS: Dict[str, List[List[Any]]] = {
+    key: positions
+    for key, positions in _read_json("tools/api/address_args.json")["py"]["span_args"].items()
+    if all(position[2] != "single" for position in positions)
+}
 
 
 def _xf_of(ws: Sheet) -> int:

@@ -386,7 +386,7 @@ Napi::Value EvaluateAutoFilterImpl(const Napi::CallbackInfo& info, const fm_work
 // `handle` aliases the wrapper's member, so the C call sees the handle as it
 // is after the spec getters ran, not a copy taken before them.
 Napi::Value SetAutoFilterImpl(const Napi::CallbackInfo& info, fm_workbook_t* const& handle, size_t filter_idx,
-                              bool table, const char* usage) {
+                              bool table) {
   Napi::Env env = info.Env();
   if (handle == nullptr) {
     return ThrowInvalidHandle(env);
@@ -405,7 +405,7 @@ Napi::Value SetAutoFilterImpl(const Napi::CallbackInfo& info, fm_workbook_t* con
     if (!reader.ok()) {
       return env.Undefined();
     }
-    Napi::TypeError::New(env, usage).ThrowAsJavaScriptException();
+    ThrowArgumentTypeError(env, "", "must be an object");
     return env.Undefined();
   }
   if (!reader.ok()) {
@@ -428,12 +428,11 @@ Napi::Value Workbook::GetTableAutoFilter(const Napi::CallbackInfo& info) {
 }
 
 Napi::Value Workbook::SetAutoFilter(const Napi::CallbackInfo& info) {
-  return SetAutoFilterImpl(info, handle_, 1, false, "setAutoFilter expects (sheet:number, autoFilter:object|null)");
+  return SetAutoFilterImpl(info, handle_, 1, false);
 }
 
 Napi::Value Workbook::SetTableAutoFilter(const Napi::CallbackInfo& info) {
-  return SetAutoFilterImpl(info, handle_, 2, true,
-                           "setTableAutoFilter expects (sheet:number, tableIndex:number, autoFilter:object|null)");
+  return SetAutoFilterImpl(info, handle_, 2, true);
 }
 
 Napi::Value Workbook::ApplyAutoFilter(const Napi::CallbackInfo& info) {

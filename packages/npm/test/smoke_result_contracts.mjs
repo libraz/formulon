@@ -184,11 +184,11 @@ test('failing calls throw a FormulonError and succeeding ones return a payload w
   }
 });
 
-test('iterative caps use the unsigned int32 contract', async () => {
+test('iterative caps accept 1..32767 and refuse the rest by class', async () => {
   const Module = await getModule();
   const wb = Module.Workbook.createDefault();
   try {
-    wb.updateIterative({ enabled: true, maxIterations: 2 ** 32 - 1, maxChange: 0.1 });
+    wb.updateIterative({ enabled: true, maxIterations: 32767, maxChange: 0.1 });
     const accepted = wb.getIterative();
     assert.throws(
       () => wb.updateIterative({ enabled: false, maxIterations: 0 }),
@@ -196,10 +196,17 @@ test('iterative caps use the unsigned int32 contract', async () => {
       'a zero cap is rejected, not clamped',
     );
     assert.deepEqual({ ...wb.getIterative() }, { ...accepted }, 'a rejected patch changes no key');
-    for (const value of [2 ** 32, -1]) {
+    for (const value of [32768, 2 ** 32 - 1, -1]) {
+      assert.throws(
+        () => wb.updateIterative({ maxIterations: value }),
+        (e) => e.name === 'FormulonError' && e.code === Module.StatusCode.InvalidArgument,
+        `maxIterations=${String(value)}`,
+      );
+    }
+    for (const value of [2 ** 32, 1.5, Number.NaN, Number.POSITIVE_INFINITY]) {
       assert.throws(() => wb.updateIterative({ maxIterations: value }), RangeError, `maxIterations=${String(value)}`);
     }
-    for (const value of [1.5, Number.NaN, Number.POSITIVE_INFINITY, '5', null]) {
+    for (const value of ['5', null]) {
       assert.throws(() => wb.updateIterative({ maxIterations: value }), TypeError, `maxIterations=${String(value)}`);
     }
     assert.equal(wb.getIterative().maxIterations, accepted.maxIterations);

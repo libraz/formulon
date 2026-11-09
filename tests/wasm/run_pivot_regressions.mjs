@@ -13,8 +13,8 @@ function caught(fn) {
 }
 
 const nestedErrorClass = (value) => (typeof value === 'symbol' ? TypeError : RangeError);
-// A required whole-number field: a value that is no whole number is a TypeError, one past uint32 a RangeError.
-const requiredErrorClass = (value) => (typeof value === 'number' && Number.isInteger(value) ? RangeError : TypeError);
+// A required whole-number field: a symbol is a TypeError, any other unusable number a RangeError.
+const requiredErrorClass = nestedErrorClass;
 
 function makeCheckedPivot(Module) {
   const wb = Module.Workbook.createDefault();
@@ -437,7 +437,7 @@ export function registerPivotRegressions(Module, test) {
       const rect = wb.getPivotLayout(0, pivot).rect;
       assert.equal(rect.firstRow, 12);
       assert.equal(rect.firstCol, 6);
-      assert.throws(() => wb.setPivotAnchor(0, pivot, { row: 1.5, col: 0 }), TypeError);
+      assert.throws(() => wb.setPivotAnchor(0, pivot, { row: 1.5, col: 0 }), RangeError);
 
       wb.updatePivotGrandTotals(0, pivot, false, true);
       assert.deepEqual({ ...wb.getPivotGrandTotals(0, pivot) }, { rows: false, columns: true });

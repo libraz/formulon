@@ -332,7 +332,7 @@ class JsWorkbook {
   void setSheetProtection(uint32_t sheet, emscripten::val in);
   void updateSheetProtection(uint32_t sheet, emscripten::val patch);
   /// Applies the view patch `{ zoomPct?, freezeRows?, freezeCols?, showGridLines?,
-  /// showRowColHeaders?, showZeros?, showFormulas?, showOutlineSymbols?, rightToLeft?, tabSelected?, viewMode?,
+  /// showRowColumnHeaders?, showZeros?, showFormulas?, showOutlineSymbols?, rightToLeft?, tabSelected?, viewMode?,
   /// topLeftRow?, topLeftCol?, paneTopLeftRow?, paneTopLeftCol?, splitXTwips?, splitYTwips? }`; an omitted key
   /// keeps the stored value, and no key can be cleared. The cross-field checks run in the C layer.
   void updateSheetView(uint32_t sheet, emscripten::val patch);
@@ -813,7 +813,6 @@ emscripten::val evaluate_formula(const std::string& formula);
 std::string version_string();
 
 /// Returns the static C string for `status`.
-std::string status_string(int32_t status);
 
 /// The catalog record of a built-in, or `null`. See `fm_get_function_metadata`.
 emscripten::val function_metadata(const std::string& name);

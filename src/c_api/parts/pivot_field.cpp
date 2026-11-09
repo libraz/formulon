@@ -37,6 +37,7 @@ using formulon::c_api::parts::finish_status;
 using formulon::c_api::parts::invalid_argument;
 using formulon::c_api::parts::mark_cache_pivots_pending;
 using formulon::c_api::parts::null_argument;
+using formulon::c_api::parts::null_field;
 using formulon::c_api::parts::patch_op_ok;
 using formulon::c_api::parts::patch_op_ok_without_clear;
 using formulon::c_api::parts::pivot_axis_from_fm;
@@ -136,13 +137,13 @@ extern "C" fm_status_t fm_sheet_set_pivot_page_field_order(fm_workbook_t* wb, st
   requested_order.reserve(count);
   for (std::size_t i = 0; i < count; ++i) {
     if (indices[i] == FM_PIVOT_VALUES_FIELD) {
-      return invalid_argument("the Values field is never a page field", "i=" + std::to_string(i));
+      return invalid_argument("indices must not list the Values field", "i=" + std::to_string(i));
     }
     if (auto rc = check_index(indices[i], field_count, "indices[i]"); rc != 0) {
       return rc;
     }
     if (requested_field[indices[i]]) {
-      return invalid_argument("indices lists a field twice",
+      return invalid_argument("indices must not list a field twice",
                               "i=" + std::to_string(i) + " value=" + std::to_string(indices[i]));
     }
     requested_field[indices[i]] = true;
@@ -293,10 +294,12 @@ class FieldPatchReader {
 
   bool accepts(fm_patch_op_t op, bool clearable, const char* name) {
     if (rc_ == 0 && !patch_op_ok(op)) {
-      rc_ = invalid_argument("patch op out of range", name);
+      rc_ = invalid_argument((std::string(name) + "_op is not a patch op").c_str(),
+                             std::string(name) + "_op=" + std::to_string(op));
     }
     if (rc_ == 0 && !clearable && !patch_op_ok_without_clear(op)) {
-      rc_ = invalid_argument("CLEAR is not valid for this field", name);
+      rc_ = invalid_argument((std::string(name) + " must not be null").c_str(),
+                             std::string(name) + "_op=" + std::to_string(op));
     }
     return rc_ == 0 && op != FM_PATCH_OP_KEEP;
   }
@@ -317,7 +320,7 @@ class FieldPatchReader {
       return;
     }
     if (value == nullptr) {
-      rc_ = invalid_argument("string must not be NULL under SET", name);
+      rc_ = null_field(name);
       return;
     }
     if ((rc_ = check_utf8(value, "field", name)) == 0) {
@@ -590,7 +593,7 @@ extern "C" fm_status_t fm_sheet_set_pivot_field_subtotal_functions(fm_workbook_t
     }
     const std::uint32_t bit = 1U << static_cast<unsigned>(aggregations[i]);
     if ((seen & bit) != 0U) {
-      return invalid_argument("aggregations lists one function twice", "index=" + std::to_string(i));
+      return invalid_argument("aggregations must not list a function twice", "index=" + std::to_string(i));
     }
     seen |= bit;
     functions.push_back(pivot_subtotal_from_fm(static_cast<fm_pivot_aggregation_t>(aggregations[i])));

@@ -1522,13 +1522,13 @@ TEST(FormulonCApiSheetLayout, ViewPatchSplitWithAZeroFreezeReplacesTheFreeze) {
   fm_sheet_view_patch_t patch = FM_STRUCT_INIT(fm_sheet_view_patch_t);
   patch.freeze_rows_op = FM_PATCH_OP_SET;
   patch.freeze_rows = 0U;
-  patch.split_x_op = FM_PATCH_OP_SET;
-  patch.split_x = 1200.0;
+  patch.split_x_twips_op = FM_PATCH_OP_SET;
+  patch.split_x_twips = 1200.0;
   ASSERT_EQ(fm_sheet_update_view(wb.handle, 0, &patch), 0) << fm_get_last_error_message();
   const fm_sheet_view_info_t v = ReadView(wb);
   EXPECT_EQ(v.freeze_rows, 0U);
   EXPECT_EQ(v.freeze_cols, 0U);
-  EXPECT_EQ(v.split_x, 1200.0);
+  EXPECT_EQ(v.split_x_twips, 1200.0);
 
   // Clearing the split of a frozen view leaves the freeze.
   ASSERT_EQ(SetViewFreeze(wb.handle, 0, 3U, 0U), 0);

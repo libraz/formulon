@@ -69,24 +69,35 @@ void LogSinkTrampoline(const char* record, std::size_t len, void* /*user_data*/)
   }
 }
 
-// Same contract and wording as the Workbook registration guard: the first
-// argument of `name`, required, an integer in int32 range.
-bool ReadInt32(const Napi::CallbackInfo& info, const char* name, std::int32_t* out) {
+// The first argument of the module function `call`, named `param`, required, an integer in int32 range.
+bool ReadInt32(const Napi::CallbackInfo& info, const char* call, const char* param, std::int32_t* out) {
   const Napi::Value value = info[0];
   if (!value.IsNumber()) {
-    Napi::TypeError::New(info.Env(), std::string(name) + " argument 1 must be a primitive number")
+    Napi::TypeError::New(info.Env(), formulon::binding::argument_message(call, param, "must be a number"))
         .ThrowAsJavaScriptException();
     return false;
   }
   const double number = NumberValue(value, 0.0);
-  if (!std::isfinite(number) || std::trunc(number) != number ||
-      number < static_cast<double>(std::numeric_limits<std::int32_t>::min()) ||
+  const double min_value = static_cast<double>(std::numeric_limits<std::int32_t>::min());
+  if (!std::isfinite(number) || std::trunc(number) != number || number < min_value ||
       number > static_cast<double>(std::numeric_limits<std::int32_t>::max())) {
-    Napi::RangeError::New(info.Env(), std::string(name) + " argument 1 is outside int32 range")
-        .ThrowAsJavaScriptException();
+    ThrowIntegerRefusal(info.Env(), call, param, number, min_value);
     return false;
   }
   *out = static_cast<std::int32_t>(number);
+  return true;
+}
+
+// The boolean at `info[1]` (the date system flag); anything but true / false is a TypeError.
+bool ReadDate1904(const Napi::CallbackInfo& info, int32_t* out) {
+  const Napi::Value value = info[1];
+  if (!value.IsBoolean()) {
+    Napi::TypeError::New(info.Env(), formulon::binding::argument_message(CurrentCallLabel(), "date1904",
+                                                                           "must be a boolean"))
+        .ThrowAsJavaScriptException();
+    return false;
+  }
+  *out = value.As<Napi::Boolean>().Value() ? 1 : 0;
   return true;
 }
 
@@ -100,7 +111,7 @@ bool ReadInt32(const Napi::CallbackInfo& info, const char* name, std::int32_t* o
 Napi::Value EvaluateFormula(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (!info[0].IsString()) {
-    Napi::TypeError::New(env, "evaluateFormula argument 1 must be a primitive string").ThrowAsJavaScriptException();
+    ThrowArgumentTypeError(env, "formula", "must be a string");
     return env.Undefined();
   }
   const std::string formula = StringArg(info, 0);
@@ -140,16 +151,23 @@ Napi::Value ConvertCivilToSerial(const Napi::CallbackInfo& info) {
   if (!reader.ok()) {
     return env.Undefined();
   }
+  int32_t date1904 = 0;
+  if (!ReadDate1904(info, &date1904)) {
+    return env.Undefined();
+  }
   double serial = 0.0;
-  const fm_status_t rc = fm_convert_civil_to_serial(&value, info[1].ToBoolean().Value() ? 1 : 0, &serial);
+  const fm_status_t rc = fm_convert_civil_to_serial(&value, date1904, &serial);
   return ValueOrThrow(env, rc, Napi::Number::New(env, serial));
 }
 
 Napi::Value ConvertSerialToCivil(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   fm_civil_time_t value{};
-  const fm_status_t rc =
-      fm_convert_serial_to_civil(info[0].As<Napi::Number>().DoubleValue(), info[1].ToBoolean().Value() ? 1 : 0, &value);
+  int32_t date1904 = 0;
+  if (!ReadDate1904(info, &date1904)) {
+    return env.Undefined();
+  }
+  const fm_status_t rc = fm_convert_serial_to_civil(info[0].As<Napi::Number>().DoubleValue(), date1904, &value);
   if (rc != 0) {
     return ThrowStatus(env, rc);
   }
@@ -167,20 +185,10 @@ Napi::Value Version(const Napi::CallbackInfo& info) {
   return JsString(info.Env(), fm_get_version());
 }
 
-Napi::Value StatusString(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  int32_t code = 0;
-  if (!ReadInt32(info, "getStatusName", &code)) {
-    return env.Undefined();
-  }
-  const char* s = fm_get_status_name(static_cast<fm_status_t>(code));
-  return JsString(env, s);
-}
-
 Napi::Value SetLogMinLevel(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   int32_t level = 0;
-  if (!ReadInt32(info, "setLogMinLevel", &level)) {
+  if (!ReadInt32(info, "Formulon.setLogMinLevel", "level", &level)) {
     return env.Undefined();
   }
   return ValueOrThrow(env, fm_set_log_min_level(level), env.Undefined());
@@ -191,7 +199,7 @@ Napi::Value SetLogSink(const Napi::CallbackInfo& info) {
   const bool clearing = info[0].IsNull() || info[0].IsUndefined();
   Napi::Function sink;
   if (!clearing && !FunctionArg(info, 0, &sink)) {
-    Napi::TypeError::New(env, "sink must be a function or null").ThrowAsJavaScriptException();
+    ThrowArgumentTypeError(env, "sink", "must be a function or null");
     return env.Undefined();
   }
 

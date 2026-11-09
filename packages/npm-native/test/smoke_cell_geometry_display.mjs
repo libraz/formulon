@@ -75,10 +75,10 @@ test('setRowAutoHeight caches the height and keeps the row automatic', async () 
 test('resetColumnWidth follows later default changes and keeps hidden / outline state', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
-  wb.sheet(0).updateFormatDefaults({ defaultColWidthChars: 10 });
+  wb.sheet(0).updateFormatDefaults({ defaultColumnWidthChars: 10 });
   wb.sheet(0).setColumnWidth(0, 0, 10);
   wb.sheet(0).resetColumnWidth(0, 0);
-  wb.sheet(0).updateFormatDefaults({ defaultColWidthChars: 20 });
+  wb.sheet(0).updateFormatDefaults({ defaultColumnWidthChars: 20 });
   assert.equal(wb.sheet(0).getColumnWidthPt(0, 0), wb.sheet(0).getColumnWidthPt(1, 0));
   assert.equal(wb.sheet(0).listColumnOverrides().length, 0);
 
@@ -106,23 +106,23 @@ test('getSheetFormatDefaults reports the effective default width and height', as
   const wb = mod.Workbook.createDefault();
   let d = wb.sheet(0).getFormatDefaults();
   // Stored width of the base-8 Calibri 11 default (64 px, shown as 8.43).
-  assert.equal(d.effectiveDefaultColWidthChars, 2340 / 256);
+  assert.equal(d.effectiveDefaultColumnWidthChars, 2340 / 256);
   assert.equal(d.effectiveDefaultRowHeightPt, 102 / 7);
-  wb.sheet(0).updateFormatDefaults({ defaultColWidthChars: 12.5, defaultRowHeightPt: 20.25 });
+  wb.sheet(0).updateFormatDefaults({ defaultColumnWidthChars: 12.5, defaultRowHeightPt: 20.25 });
   d = wb.sheet(0).getFormatDefaults();
-  assert.equal(d.effectiveDefaultColWidthChars, 12.5);
+  assert.equal(d.effectiveDefaultColumnWidthChars, 12.5);
   assert.equal(d.effectiveDefaultRowHeightPt, 20.25);
 });
 
 test('sheet format defaults round-trip', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
-  wb.sheet(0).updateFormatDefaults({ defaultColWidthChars: 12.5, defaultRowHeightPt: 18, baseColWidthChars: 10 });
+  wb.sheet(0).updateFormatDefaults({ defaultColumnWidthChars: 12.5, defaultRowHeightPt: 18, baseColumnWidthChars: 10 });
   const d = wb.sheet(0).getFormatDefaults();
-  assert.equal(d.defaultColWidthChars, 12.5);
+  assert.equal(d.defaultColumnWidthChars, 12.5);
   assert.equal(d.defaultRowHeightPt, 18);
-  assert.equal(d.baseColWidthChars, 10);
-  assert.throws(() => wb.sheet(0).updateFormatDefaults({ defaultColWidthChars: -1 }), isFormulonError);
+  assert.equal(d.baseColumnWidthChars, 10);
+  assert.throws(() => wb.sheet(0).updateFormatDefaults({ defaultColumnWidthChars: -1 }), isFormulonError);
   assert.throws(() => wb.sheet(99).getFormatDefaults(), isFormulonError);
 });
 
@@ -224,10 +224,10 @@ test('getCellsInRange pages through populated cells with a cursor', async () => 
   assert.equal(all.cells[1].value, 'x');
   assert.equal(all.cells[2].formula, '=A1+1');
 
-  const first = wb.sheet(0).getCellsInRange(range, 0, 2);
+  const first = wb.sheet(0).getCellsInRange(range, { limit: 2 });
   assert.equal(first.cells.length, 2);
   assert.equal(typeof first.nextCursor, 'number');
-  const rest = wb.sheet(0).getCellsInRange(range, first.nextCursor, 2);
+  const rest = wb.sheet(0).getCellsInRange(range, { cursor: first.nextCursor, limit: 2 });
   assert.deepEqual(
     [...first.cells, ...rest.cells].map((c) => [c.row, c.col]),
     all.cells.map((c) => [c.row, c.col]),
@@ -287,7 +287,7 @@ test('getDisplayText and formatValue render through the number format', async ()
   assert.throws(() => wb.formatValue({ kind: 99 }, ''), TypeError);
   assert.throws(
     () => wb.formatValue({ number: 0.5 }, '0.0%'),
-    (e) => e instanceof TypeError && /requires a `kind`|kind/.test(e.message),
+    (e) => e instanceof TypeError && /^Workbook\.formatValue value must be a cell value$/.test(e.message),
     'a value without `kind` is rejected, not read as blank',
   );
 });

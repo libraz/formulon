@@ -177,6 +177,7 @@ const READERS = [
 function ownerOf(key, ws, ctx) {
   const [cls, method] = key.split('.');
   if (cls === 'Pivot') return { target: ctx.pivot, method };
+  if (cls === 'Workbook') return { target: ws.workbook, method };
   return { target: method in ws ? ws : ws.ooxml, method };
 }
 
@@ -381,6 +382,7 @@ const RECT_METHODS = {
   'Sheet.addMerge': { args: (r) => [r], mutates: true },
   'Sheet.evaluateCfRange': { args: (r) => [r, 45000] },
   'Sheet.getCellRectPt': { args: (r, f) => [r, f.GeometryMode.Display] },
+  'Workbook.formatReference': { args: (r) => [r, { absolute: true }] },
   'Sheet.getCellsInRange': { args: (r) => [r] },
   'Sheet.getMergesInRange': { args: (r) => [r] },
   'Sheet.getRangeXfBases': { args: (r) => [r] },
@@ -1411,7 +1413,7 @@ test('criterion 13: setPivotFieldSort and addPivotFieldItem take an options obje
 test('criterion 13: updateIterative validates maxChange and maxIterations up front', async () => {
   await withWorkbook((wb, f) => {
     expectCode(() => wb.updateIterative({ maxChange: -1 }), f.StatusCode.InvalidArgument);
-    assert.throws(() => wb.updateIterative({ maxIterations: 1.5 }), TYPE_ERROR);
+    assert.throws(() => wb.updateIterative({ maxIterations: 1.5 }), RangeError);
   });
 });
 

@@ -398,8 +398,8 @@ test('A6: a patch leaves omitted and undefined keys unchanged, and refuses null 
 test('the hand-written guards count arguments as the facade method sees them', () => {
   const { wb } = loaded();
   const ws = wb.sheet(0);
-  assert.throws(() => ws.setValue(0, 0, []), /^TypeError: Sheet\.setValue argument 3 /);
-  assert.throws(() => wb.sheet({}), /^TypeError: Workbook\.sheet argument 1 /);
+  assert.throws(() => ws.setValue(0, 0, []), /^TypeError: Sheet\.setValue value must be a cell value/);
+  assert.throws(() => wb.sheet({}), /^TypeError: Workbook\.sheet key /);
 });
 
 test('list families assemble the raw count and element getter', () => {

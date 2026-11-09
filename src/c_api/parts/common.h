@@ -73,11 +73,15 @@ fm_status_t finish_status(const formulon::Expected<void, formulon::Error>& r);
 fm_status_t set_binding_error(formulon::FormulonErrorCode code, const char* message, std::string context);
 fm_status_t set_binding_error(formulon::FormulonErrorCode code, const char* message);
 
-// Binding error for a NULL required argument: "a required argument is NULL".
+// Binding error for a NULL required argument: "a required argument must not be NULL".
 fm_status_t null_argument();
 
-// Binding error for a NULL required argument: "<what> is NULL".
+// Binding error for a NULL required argument: "<what> must not be NULL".
 fm_status_t null_argument(const char* what);
+
+// kInvalidArgument binding error "<field> must not be NULL" (context
+// "<field>=NULL"): a record or patch field that is required is NULL.
+fm_status_t null_field(const std::string& field);
 
 // kInvalidArgument binding error with the sentence `what`, carrying `context`.
 fm_status_t invalid_argument(const char* what, std::string context = std::string());
@@ -106,6 +110,13 @@ inline bool patch_op_ok(fm_patch_op_t op) noexcept {
 inline bool patch_op_ok_without_clear(fm_patch_op_t op) noexcept {
   return op == FM_PATCH_OP_KEEP || op == FM_PATCH_OP_SET;
 }
+
+// The refusal of `<field>_op`: `<field> must not be null` for a CLEAR on a field
+// that cannot be cleared, `<field>_op is not a patch op` for an ordinal outside 0..2.
+fm_status_t patch_op_refusal(fm_patch_op_t op, const std::string& field);
+
+// 0 when `op` is KEEP or SET, or CLEAR on a `clearable` field; else `patch_op_refusal`.
+fm_status_t check_patch_op(fm_patch_op_t op, const char* field, bool clearable);
 
 // `text` as an owned string; NULL reads as empty.
 inline std::string text_or_empty(const char* text) {

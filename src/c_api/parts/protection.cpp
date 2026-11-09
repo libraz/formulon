@@ -29,6 +29,7 @@ using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::fresh_read_scratch;
 using formulon::c_api::parts::invalid_argument;
 using formulon::c_api::parts::null_argument;
+using formulon::c_api::parts::null_field;
 using formulon::c_api::parts::patch_op_ok;
 using formulon::c_api::parts::patch_op_ok_without_clear;
 using formulon::c_api::parts::publish_rects;
@@ -66,7 +67,7 @@ fm_status_t CheckRange(const std::vector<formulon::ProtectedRange>& ranges, cons
     return rc;
   }
   if (range.name.empty()) {
-    return invalid_argument("empty name");
+    return invalid_argument("name must not be empty");
   }
   for (std::size_t i = 0; i < ranges.size(); ++i) {
     if (formulon::sheet_names::write_collides(ranges[i].name, range.name)) {
@@ -114,6 +115,7 @@ struct StringPatch {
   const char* value;
   std::string formulon::ProtectedRange::*member;
   bool clearable;
+  const char* name;
 };
 
 }  // namespace
@@ -306,20 +308,22 @@ extern "C" fm_status_t fm_sheet_update_protected_range(fm_workbook_t* wb, size_t
   }
   using formulon::ProtectedRange;
   const StringPatch strings[] = {
-      {patch->name_op, patch->name, &ProtectedRange::name, false},
-      {patch->legacy_password_hash_op, patch->legacy_password_hash, &ProtectedRange::password, true},
-      {patch->algorithm_name_op, patch->algorithm_name, &ProtectedRange::algorithm_name, true},
-      {patch->hash_value_op, patch->hash_value, &ProtectedRange::hash_value, true},
-      {patch->salt_value_op, patch->salt_value, &ProtectedRange::salt_value, true},
-      {patch->security_descriptor_op, patch->security_descriptor, &ProtectedRange::security_descriptor, true},
+      {patch->name_op, patch->name, &ProtectedRange::name, false, "name"},
+      {patch->legacy_password_hash_op, patch->legacy_password_hash, &ProtectedRange::password, true,
+       "legacy_password_hash"},
+      {patch->algorithm_name_op, patch->algorithm_name, &ProtectedRange::algorithm_name, true, "algorithm_name"},
+      {patch->hash_value_op, patch->hash_value, &ProtectedRange::hash_value, true, "hash_value"},
+      {patch->salt_value_op, patch->salt_value, &ProtectedRange::salt_value, true, "salt_value"},
+      {patch->security_descriptor_op, patch->security_descriptor, &ProtectedRange::security_descriptor, true,
+       "security_descriptor"},
   };
   for (const StringPatch& f : strings) {
     if (!(f.clearable ? patch_op_ok(f.op) : patch_op_ok_without_clear(f.op))) {
-      return invalid_argument("protected range patch op out of range", "op=" + std::to_string(f.op));
+      return invalid_argument("op is not a patch op", "op=" + std::to_string(f.op));
     }
     if (f.op == FM_PATCH_OP_SET) {
       if (f.value == nullptr) {
-        return invalid_argument("SET string is NULL");
+        return null_field(f.name);
       }
       if (auto rc = check_utf8({f.value}); rc != 0) {
         return rc;
@@ -327,10 +331,10 @@ extern "C" fm_status_t fm_sheet_update_protected_range(fm_workbook_t* wb, size_t
     }
   }
   if (patch->name_op == FM_PATCH_OP_SET && patch->name[0] == '\0') {
-    return invalid_argument("empty name");
+    return invalid_argument("name must not be empty");
   }
   if (!patch_op_ok_without_clear(patch->spin_count_op) || !patch_op_ok_without_clear(patch->ranges_op)) {
-    return invalid_argument("protected range patch op out of range");
+    return invalid_argument("op is not a patch op");
   }
   if (patch->ranges_op == FM_PATCH_OP_SET) {
     if (auto rc = check_rect_list(patch->ranges, patch->range_count); rc != 0) {

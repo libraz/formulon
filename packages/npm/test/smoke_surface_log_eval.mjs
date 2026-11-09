@@ -70,7 +70,7 @@ test('a registered sink receives records only once the threshold admits them', a
   const Module = await getModule();
   const mod = await loadStagedModule();
   const records = [];
-  Module.setLogSink((record) => records.push(new Uint8Array(record)));
+  Module.setLogSink((record) => records.push(record));
   try {
     // Default threshold is Off: the same save must produce nothing.
     emitXlsbWarning(Module, mod.WorkbookFormat.Xlsb);
@@ -79,17 +79,9 @@ test('a registered sink receives records only once the threshold admits them', a
     Module.setLogMinLevel(mod.LogLevel.Warn);
     emitXlsbWarning(Module, mod.WorkbookFormat.Xlsb);
     assert.ok(records.length > 0, 'expected at least one record');
-    for (const r of records) {
-      // The sink must receive a copy, never a live view into the WASM
-      // instance's own memory: the /threads build backs that memory with
-      // a `SharedArrayBuffer`, over which most browsers' `TextDecoder`
-      // refuses to operate -- a failure this suite cannot reproduce under
-      // Node, so the buffer identity is what it checks instead.
-      assert.ok(!(r.buffer instanceof SharedArrayBuffer), 'log sink record must not be SharedArrayBuffer-backed');
-    }
-    const text = records.map((r) => new TextDecoder().decode(r)).join('');
-    assert.match(text, /xlsb\.writer\.formula_downgraded/);
-    assert.match(text, /"level":"warn"/);
+    assert.ok(records.every((r) => typeof r === 'object' && r !== null));
+    assert.ok(records.some((r) => r.event === 'xlsb.writer.formula_downgraded'));
+    assert.ok(records.every((r) => r.level === mod.LogLevel.Warn));
   } finally {
     Module.setLogMinLevel(mod.LogLevel.Off);
     Module.setLogSink(null);

@@ -9,7 +9,7 @@ test('the Formulon object exposes Workbook + evaluateFormula + getVersion', asyn
   assert.equal(typeof mod.Workbook, 'function');
   assert.equal(typeof mod.evaluateFormula, 'function');
   assert.equal(typeof mod.getVersion, 'function');
-  assert.equal(typeof mod.getStatusName, 'function');
+  assert.equal(mod.getStatusName, undefined);
   assert.equal(typeof mod.ValueKind, 'object');
   assert.equal(typeof mod.PivotCellKind, 'object');
 });
@@ -90,7 +90,7 @@ test('setLogSink accepts a function and null, and rejects a non-function', async
   const mod = await getModule();
   mod.setLogSink(() => {});
   mod.setLogSink(null);
-  mod.setLogSink();
+  assert.throws(() => mod.setLogSink(), TypeError);
   assert.throws(() => mod.setLogSink(42), TypeError);
   mod.setLogSink(null);
 });
@@ -108,7 +108,7 @@ async function waitForRecords(records, wanted) {
   return records;
 }
 
-test('a registered sink receives the record as raw bytes', async () => {
+test('a registered sink receives each record as a parsed object', async () => {
   const mod = await getModule();
   const records = [];
   mod.setLogSink((record) => records.push(record));
@@ -124,11 +124,10 @@ test('a registered sink receives the record as raw bytes', async () => {
     await waitForRecords(records, 1);
     assert.ok(records.length > 0, 'expected at least one record');
     for (const record of records) {
-      assert.ok(ArrayBuffer.isView(record), 'record must be a byte view');
+      assert.equal(typeof record, 'object', 'record must be an object');
+      assert.equal(record.level, mod.LogLevel.Warn);
     }
-    const text = records.map((r) => new TextDecoder().decode(r)).join('');
-    assert.match(text, /xlsb\.writer\.formula_downgraded/);
-    assert.match(text, /"level":"warn"/);
+    assert.ok(records.some((record) => record.event === 'xlsb.writer.formula_downgraded'));
   } finally {
     mod.setLogMinLevel(mod.LogLevel.Off);
     mod.setLogSink(null);

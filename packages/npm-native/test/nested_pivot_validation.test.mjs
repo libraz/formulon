@@ -65,7 +65,7 @@ test('pivot nested integer fields reject narrowing before their C mutations', as
       const before = pivot.listDataFields().length;
       assert.throws(
         () => pivot.addDataField({ name: 'Bad', fieldIndex: value, aggregation: 0 }),
-        Number.isInteger(value) ? RangeError : TypeError,
+        RangeError,
         `pivotDataFieldAdd fieldIndex=${String(value)}`,
       );
       assert.equal(pivot.listDataFields().length, before);

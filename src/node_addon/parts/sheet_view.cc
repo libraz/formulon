@@ -104,7 +104,7 @@ Napi::Value Workbook::GetSheetView(const Napi::CallbackInfo& info) {
   view.Set("freezeRows", Napi::Number::New(env, v.freeze_rows));
   view.Set("freezeCols", Napi::Number::New(env, v.freeze_cols));
   view.Set("showGridLines", JsBool(env, v.show_grid_lines));
-  view.Set("showRowColHeaders", JsBool(env, v.show_row_column_headers));
+  view.Set("showRowColumnHeaders", JsBool(env, v.show_row_column_headers));
   view.Set("showZeros", JsBool(env, v.show_zeros));
   view.Set("rightToLeft", JsBool(env, v.right_to_left));
   view.Set("tabSelected", JsBool(env, v.tab_selected));
@@ -113,8 +113,8 @@ Napi::Value Workbook::GetSheetView(const Napi::CallbackInfo& info) {
   view.Set("topLeftCol", Napi::Number::New(env, v.top_left_col));
   view.Set("paneTopLeftRow", Napi::Number::New(env, v.pane_top_left_row));
   view.Set("paneTopLeftCol", Napi::Number::New(env, v.pane_top_left_col));
-  view.Set("splitXTwips", Napi::Number::New(env, v.split_x));
-  view.Set("splitYTwips", Napi::Number::New(env, v.split_y));
+  view.Set("splitXTwips", Napi::Number::New(env, v.split_x_twips));
+  view.Set("splitYTwips", Napi::Number::New(env, v.split_y_twips));
   view.Set("showFormulas", JsBool(env, v.show_formulas));
   view.Set("showOutlineSymbols", JsBool(env, v.show_outline_symbols));
   return view;
@@ -287,13 +287,14 @@ Napi::Value Workbook::UpdateSheetProtection(const Napi::CallbackInfo& info) {
 Napi::Value Workbook::UpdateSheetView(const Napi::CallbackInfo& info) {
   fm_sheet_view_patch_t patch = FM_STRUCT_INIT(fm_sheet_view_patch_t);
   return InvokeSheetSpec(
-      info, "updateView expects (sheet:number, view:object)",
+      info,
       [&](CheckedSpecReader& reader, const Napi::Object& spec) {
         patch.zoom_pct_op = PatchU32(reader, spec, "zoomPct", &patch.zoom_pct);
         patch.freeze_rows_op = PatchU32(reader, spec, "freezeRows", &patch.freeze_rows);
         patch.freeze_cols_op = PatchU32(reader, spec, "freezeCols", &patch.freeze_cols);
         patch.show_grid_lines_op = PatchBool(reader, spec, "showGridLines", &patch.show_grid_lines);
-        patch.show_row_column_headers_op = PatchBool(reader, spec, "showRowColHeaders", &patch.show_row_column_headers);
+        patch.show_row_column_headers_op =
+            PatchBool(reader, spec, "showRowColumnHeaders", &patch.show_row_column_headers);
         patch.show_zeros_op = PatchBool(reader, spec, "showZeros", &patch.show_zeros);
         patch.right_to_left_op = PatchBool(reader, spec, "rightToLeft", &patch.right_to_left);
         patch.tab_selected_op = PatchBool(reader, spec, "tabSelected", &patch.tab_selected);
@@ -302,8 +303,8 @@ Napi::Value Workbook::UpdateSheetView(const Napi::CallbackInfo& info) {
         patch.top_left_col_op = PatchU32(reader, spec, "topLeftCol", &patch.top_left_col);
         patch.pane_top_left_row_op = PatchU32(reader, spec, "paneTopLeftRow", &patch.pane_top_left_row);
         patch.pane_top_left_col_op = PatchU32(reader, spec, "paneTopLeftCol", &patch.pane_top_left_col);
-        patch.split_x_op = PatchDouble(reader, spec, "splitXTwips", &patch.split_x);
-        patch.split_y_op = PatchDouble(reader, spec, "splitYTwips", &patch.split_y);
+        patch.split_x_twips_op = PatchDouble(reader, spec, "splitXTwips", &patch.split_x_twips);
+        patch.split_y_twips_op = PatchDouble(reader, spec, "splitYTwips", &patch.split_y_twips);
         patch.show_formulas_op = PatchBool(reader, spec, "showFormulas", &patch.show_formulas);
         patch.show_outline_symbols_op = PatchBool(reader, spec, "showOutlineSymbols", &patch.show_outline_symbols);
       },
@@ -390,7 +391,11 @@ Napi::Value Workbook::SetColumnHidden(const Napi::CallbackInfo& info) {
     const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
     const uint32_t first = ArgU32(info, 1);
     const uint32_t last = ArgU32(info, 2);
-    return fm_sheet_set_column_hidden(handle, sheet, first, last, ArgFlag(info, 3));
+    const int32_t value = ArgFlag(info, 3);
+    if (info.Env().IsExceptionPending()) {
+      return FM_STATUS_INVALID_ARGUMENT;
+    }
+    return fm_sheet_set_column_hidden(handle, sheet, first, last, value);
   });
 }
 
@@ -403,7 +408,11 @@ Napi::Value Workbook::SetColumnCollapsed(const Napi::CallbackInfo& info) {
     const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
     const uint32_t first = ArgU32(info, 1);
     const uint32_t last = ArgU32(info, 2);
-    return fm_sheet_set_column_collapsed(handle, sheet, first, last, ArgFlag(info, 3));
+    const int32_t value = ArgFlag(info, 3);
+    if (info.Env().IsExceptionPending()) {
+      return FM_STATUS_INVALID_ARGUMENT;
+    }
+    return fm_sheet_set_column_collapsed(handle, sheet, first, last, value);
   });
 }
 
@@ -446,12 +455,13 @@ Napi::Value Workbook::GetSheetFormatDefaults(const Napi::CallbackInfo& info) {
     return ThrowStatus(env, rc);
   }
   Napi::Object out = Napi::Object::New(env);
-  out.Set("defaultColWidthChars", JsNumberOrNull(env, d.has_default_column_width_chars, d.default_column_width_chars));
+  out.Set("defaultColumnWidthChars",
+          JsNumberOrNull(env, d.has_default_column_width_chars, d.default_column_width_chars));
   out.Set("defaultRowHeightPt", JsNumberOrNull(env, d.has_default_row_height_pt, d.default_row_height_pt));
-  out.Set("baseColWidthChars", Napi::Number::New(env, d.base_column_width_chars));
+  out.Set("baseColumnWidthChars", Napi::Number::New(env, d.base_column_width_chars));
   out.Set("customHeight", Napi::Boolean::New(env, d.custom_height != 0));
   out.Set("zeroHeight", Napi::Boolean::New(env, d.zero_height != 0));
-  out.Set("effectiveDefaultColWidthChars", Napi::Number::New(env, d.effective_default_column_width_chars));
+  out.Set("effectiveDefaultColumnWidthChars", Napi::Number::New(env, d.effective_default_column_width_chars));
   out.Set("effectiveDefaultRowHeightPt", Napi::Number::New(env, d.effective_default_row_height_pt));
   return out;
 }
@@ -466,9 +476,9 @@ Napi::Value Workbook::UpdateSheetFormatDefaults(const Napi::CallbackInfo& info) 
   CheckedSpecReader reader(env);
   fm_sheet_format_defaults_patch_t d = FM_STRUCT_INIT(fm_sheet_format_defaults_patch_t);
   d.default_column_width_chars_op =
-      PatchNullableDouble(reader, spec, "defaultColWidthChars", &d.default_column_width_chars);
+      PatchNullableDouble(reader, spec, "defaultColumnWidthChars", &d.default_column_width_chars);
   d.default_row_height_pt_op = PatchNullableDouble(reader, spec, "defaultRowHeightPt", &d.default_row_height_pt);
-  d.base_column_width_chars_op = PatchDouble(reader, spec, "baseColWidthChars", &d.base_column_width_chars);
+  d.base_column_width_chars_op = PatchDouble(reader, spec, "baseColumnWidthChars", &d.base_column_width_chars);
   d.custom_height_op = PatchBool(reader, spec, "customHeight", &d.custom_height);
   d.zero_height_op = PatchBool(reader, spec, "zeroHeight", &d.zero_height);
   if (!reader.ok()) {
@@ -556,7 +566,11 @@ Napi::Value Workbook::SetRowHidden(const Napi::CallbackInfo& info) {
     const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
     const uint32_t first = ArgU32(info, 1);
     const uint32_t last = ArgU32(info, 2);
-    return fm_sheet_set_row_hidden(handle, sheet, first, last, ArgFlag(info, 3));
+    const int32_t value = ArgFlag(info, 3);
+    if (info.Env().IsExceptionPending()) {
+      return FM_STATUS_INVALID_ARGUMENT;
+    }
+    return fm_sheet_set_row_hidden(handle, sheet, first, last, value);
   });
 }
 
@@ -569,7 +583,11 @@ Napi::Value Workbook::SetRowCollapsed(const Napi::CallbackInfo& info) {
     const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
     const uint32_t first = ArgU32(info, 1);
     const uint32_t last = ArgU32(info, 2);
-    return fm_sheet_set_row_collapsed(handle, sheet, first, last, ArgFlag(info, 3));
+    const int32_t value = ArgFlag(info, 3);
+    if (info.Env().IsExceptionPending()) {
+      return FM_STATUS_INVALID_ARGUMENT;
+    }
+    return fm_sheet_set_row_collapsed(handle, sheet, first, last, value);
   });
 }
 
@@ -640,17 +658,17 @@ Napi::Value Workbook::RangeStyleBasesExcluding(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return ThrowInvalidHandle(env);
   }
-  const auto refused = [&env](const char* message) {
-    Napi::TypeError::New(env, message).ThrowAsJavaScriptException();
+  const auto refused = [&env](const char* path, const char* constraint) {
+    ThrowArgumentTypeError(env, path, constraint);
     return env.Undefined();
   };
   Napi::Array rows_arr;
   Napi::Array cols_arr;
   if (!ArrayArg(info, 2, &rows_arr) || !ArrayArg(info, 3, &cols_arr)) {
-    return refused("Sheet.getRangeXfBasesExcluding excluded must be an array");
+    return refused("excludedRows and excludedCols", "must be an array");
   }
   if (rows_arr.Length() != cols_arr.Length()) {
-    return refused("Sheet.getRangeXfBasesExcluding excluded rows and columns must have the same length");
+    return refused("excludedRows and excludedCols", "must have the same length");
   }
   CheckedSpecReader reader(env);
   fm_cell_rect_t rect{};
@@ -678,12 +696,11 @@ Napi::Value Workbook::RemapRangeStyle(const Napi::CallbackInfo& info) {
   Napi::Array from_arr;
   Napi::Array to_arr;
   if (!ArrayArg(info, 2, &from_arr) || !ArrayArg(info, 3, &to_arr)) {
-    Napi::TypeError::New(env, "Sheet.remapRangeXfs mapping must be an array").ThrowAsJavaScriptException();
+    ThrowArgumentTypeError(env, "fromXfs and toXfs", "must be an array");
     return env.Undefined();
   }
   if (from_arr.Length() != to_arr.Length()) {
-    Napi::TypeError::New(env, "Sheet.remapRangeXfs mapping keys and values must have the same length")
-        .ThrowAsJavaScriptException();
+    ThrowArgumentTypeError(env, "fromXfs and toXfs", "must have the same length");
     return env.Undefined();
   }
   CheckedSpecReader reader(env);
@@ -735,8 +752,7 @@ Napi::Value Workbook::RestoreRangeStyle(const Napi::CallbackInfo& info) {
   }
   Napi::Uint8Array u8;
   if (!BytesArg(info, 1, &u8)) {
-    Napi::TypeError::New(env, "restoreRangeStyle expects (sheet:number, bytes:Uint8Array)")
-        .ThrowAsJavaScriptException();
+    ThrowArgumentTypeError(env, "bytes", "must be a Uint8Array");
     return env.Undefined();
   }
   const fm_status_t rc =

@@ -14,6 +14,7 @@
 #include <string>
 #include <vector>
 
+#include "c_api/binding_message.h"
 #include "c_api/formulon_c.h"
 #include "wasm/parts/embind_common.h"
 #include "wasm/parts/workbook.h"
@@ -106,21 +107,21 @@ emscripten::val dxf_protection_to_val(const std::string& xml) {
 
 /// `<alignment .../>` for an `Alignment` record; attributes at their default are left out.
 std::string dxf_alignment_xml(JsNarrowNumericReader& reader, const emscripten::val& a) {
-  const uint8_t horizontal = reader.u8(a, "horizontal", 0U, "dxf.alignment.horizontal");
-  const uint8_t vertical = reader.u8(a, "vertical", 2U, "dxf.alignment.vertical");
+  const uint8_t horizontal = reader.u8(a, "horizontal", 0U, "alignment.horizontal");
+  const uint8_t vertical = reader.u8(a, "vertical", 2U, "alignment.vertical");
   if (horizontal >= std::size(kHorizontalNames)) {
-    reader.fail_range("dxf.alignment.horizontal", "[0, 7]");
+    reader.fail_range("alignment.horizontal", "[0, 7]");
   }
   if (vertical >= std::size(kVerticalNames)) {
-    reader.fail_range("dxf.alignment.vertical", "[0, 4]");
+    reader.fail_range("alignment.vertical", "[0, 4]");
   }
-  const bool wrap = reader.boolean(a, "wrapText", false, "dxf.alignment.wrapText");
-  const bool shrink = reader.boolean(a, "shrinkToFit", false, "dxf.alignment.shrinkToFit");
-  const bool justify = reader.boolean(a, "justifyLastLine", false, "dxf.alignment.justifyLastLine");
-  const int32_t indent = reader.i32(a, "indent", 0, "dxf.alignment.indent");
-  const int32_t rotation = reader.i32(a, "textRotation", 0, "dxf.alignment.textRotation");
-  const int32_t order = reader.i32(a, "readingOrder", 0, "dxf.alignment.readingOrder");
-  const int32_t relative = reader.i32(a, "relativeIndent", 0, "dxf.alignment.relativeIndent");
+  const bool wrap = reader.boolean(a, "wrapText", false, "alignment.wrapText");
+  const bool shrink = reader.boolean(a, "shrinkToFit", false, "alignment.shrinkToFit");
+  const bool justify = reader.boolean(a, "justifyLastLine", false, "alignment.justifyLastLine");
+  const int32_t indent = reader.i32(a, "indent", 0, "alignment.indent");
+  const int32_t rotation = reader.i32(a, "textRotation", 0, "alignment.textRotation");
+  const int32_t order = reader.i32(a, "readingOrder", 0, "alignment.readingOrder");
+  const int32_t relative = reader.i32(a, "relativeIndent", 0, "alignment.relativeIndent");
   if (!reader.ok()) {
     return std::string();
   }
@@ -160,8 +161,8 @@ std::string dxf_alignment_xml(JsNarrowNumericReader& reader, const emscripten::v
 
 /// `<protection .../>` for a `CellProtection` record.
 std::string dxf_protection_xml(JsNarrowNumericReader& reader, const emscripten::val& p) {
-  const bool locked = reader.boolean(p, "locked", true, "dxf.protection.locked");
-  const bool hidden = reader.boolean(p, "hidden", false, "dxf.protection.hidden");
+  const bool locked = reader.boolean(p, "locked", true, "protection.locked");
+  const bool hidden = reader.boolean(p, "hidden", false, "protection.hidden");
   std::string xml = "<protection";
   if (!locked) {
     xml += " locked=\"0\"";
@@ -173,42 +174,42 @@ std::string dxf_protection_xml(JsNarrowNumericReader& reader, const emscripten::
 }
 
 void js_pull_cell_xf(const emscripten::val& record, fm_cell_xf_t* xf, JsNarrowNumericReader& reader) {
-  xf->font_index = reader.u32(record, "fontIndex", 0U, "xf.fontIndex");
-  xf->fill_index = reader.u32(record, "fillIndex", 0U, "xf.fillIndex");
-  xf->border_index = reader.u32(record, "borderIndex", 0U, "xf.borderIndex");
-  xf->num_fmt_id = reader.u32(record, "numFmtId", 0U, "xf.numFmtId");
-  const emscripten::val horizontal_align = reader.value(record, "horizontal", "xf.horizontal");
-  const emscripten::val vertical_align = reader.value(record, "vertical", "xf.vertical");
-  const emscripten::val wrap_text = reader.value(record, "wrapText", "xf.wrapText");
-  const emscripten::val justify_last_line = reader.value(record, "justifyLastLine", "xf.justifyLastLine");
+  xf->font_index = reader.u32(record, "fontIndex", 0U, "fontIndex");
+  xf->fill_index = reader.u32(record, "fillIndex", 0U, "fillIndex");
+  xf->border_index = reader.u32(record, "borderIndex", 0U, "borderIndex");
+  xf->num_fmt_id = reader.u32(record, "numFmtId", 0U, "numFmtId");
+  const emscripten::val horizontal_align = reader.value(record, "horizontal", "horizontal");
+  const emscripten::val vertical_align = reader.value(record, "vertical", "vertical");
+  const emscripten::val wrap_text = reader.value(record, "wrapText", "wrapText");
+  const emscripten::val justify_last_line = reader.value(record, "justifyLastLine", "justifyLastLine");
   const bool horizontal_align_present = js_value_present(horizontal_align);
   const bool vertical_align_present = js_value_present(vertical_align);
   const bool wrap_text_present = js_value_present(wrap_text);
   const bool justify_last_line_present = js_value_present(justify_last_line);
-  xf->horizontal = reader.u8_value(horizontal_align, 0U, "xf.horizontal");
-  xf->vertical = reader.u8_value(vertical_align, 2U, "xf.vertical");
-  xf->wrap_text = reader.boolean_value(wrap_text, false) ? 1 : 0;
-  xf->justify_last_line = reader.boolean_value(justify_last_line, false) ? 1 : 0;
-  xf->style_xf_index = reader.u32(record, "styleXfIndex", 0U, "xf.styleXfIndex");
+  xf->horizontal = reader.u8_value(horizontal_align, 0U, "horizontal");
+  xf->vertical = reader.u8_value(vertical_align, 2U, "vertical");
+  xf->wrap_text = reader.boolean_value(wrap_text, false, "wrapText") ? 1 : 0;
+  xf->justify_last_line = reader.boolean_value(justify_last_line, false, "justifyLastLine") ? 1 : 0;
+  xf->style_xf_index = reader.u32(record, "styleXfIndex", 0U, "styleXfIndex");
   xf->has_horizontal = horizontal_align_present ? 1 : 0;
   xf->has_vertical = vertical_align_present ? 1 : 0;
   xf->has_wrap_text = wrap_text_present ? 1 : 0;
   xf->has_justify_last_line = justify_last_line_present ? 1 : 0;
-  const emscripten::val text_rotation = reader.value(record, "textRotation", "xf.textRotation");
-  const emscripten::val indent = reader.value(record, "indent", "xf.indent");
-  const emscripten::val relative_indent = reader.value(record, "relativeIndent", "xf.relativeIndent");
-  const emscripten::val shrink_to_fit = reader.value(record, "shrinkToFit", "xf.shrinkToFit");
-  const emscripten::val reading_order = reader.value(record, "readingOrder", "xf.readingOrder");
+  const emscripten::val text_rotation = reader.value(record, "textRotation", "textRotation");
+  const emscripten::val indent = reader.value(record, "indent", "indent");
+  const emscripten::val relative_indent = reader.value(record, "relativeIndent", "relativeIndent");
+  const emscripten::val shrink_to_fit = reader.value(record, "shrinkToFit", "shrinkToFit");
+  const emscripten::val reading_order = reader.value(record, "readingOrder", "readingOrder");
   const bool text_rotation_present = js_value_present(text_rotation);
   const bool indent_present = js_value_present(indent);
   const bool relative_indent_present = js_value_present(relative_indent);
   const bool shrink_to_fit_present = js_value_present(shrink_to_fit);
   const bool reading_order_present = js_value_present(reading_order);
-  xf->text_rotation = reader.u32_value(text_rotation, 0U, "xf.textRotation");
-  xf->indent = reader.u32_value(indent, 0U, "xf.indent");
-  xf->relative_indent = reader.i32_value(relative_indent, 0, "xf.relativeIndent");
-  xf->shrink_to_fit = reader.boolean_value(shrink_to_fit, false) ? 1 : 0;
-  xf->reading_order = reader.i32_value(reading_order, 0, "xf.readingOrder");
+  xf->text_rotation = reader.u32_value(text_rotation, 0U, "textRotation");
+  xf->indent = reader.u32_value(indent, 0U, "indent");
+  xf->relative_indent = reader.i32_value(relative_indent, 0, "relativeIndent");
+  xf->shrink_to_fit = reader.boolean_value(shrink_to_fit, false, "shrinkToFit") ? 1 : 0;
+  xf->reading_order = reader.i32_value(reading_order, 0, "readingOrder");
   xf->has_text_rotation = text_rotation_present ? 1 : 0;
   xf->has_indent = indent_present ? 1 : 0;
   xf->has_relative_indent = relative_indent_present ? 1 : 0;
@@ -219,49 +220,38 @@ void js_pull_cell_xf(const emscripten::val& record, fm_cell_xf_t* xf, JsNarrowNu
                                       relative_indent_present || shrink_to_fit_present || reading_order_present;
   xf->has_alignment = has_supplied_alignment ? 1 : 0;
 
-  xf->apply_number_format = reader.boolean(record, "applyNumberFormat", false, "xf.applyNumberFormat") ? 1 : 0;
-  xf->apply_font = reader.boolean(record, "applyFont", false, "xf.applyFont") ? 1 : 0;
-  xf->apply_fill = reader.boolean(record, "applyFill", false, "xf.applyFill") ? 1 : 0;
-  xf->apply_border = reader.boolean(record, "applyBorder", false, "xf.applyBorder") ? 1 : 0;
-  xf->apply_alignment = reader.boolean(record, "applyAlignment", false, "xf.applyAlignment") ? 1 : 0;
-  xf->apply_protection = reader.boolean(record, "applyProtection", false, "xf.applyProtection") ? 1 : 0;
-  xf->quote_prefix = reader.boolean(record, "quotePrefix", false, "xf.quotePrefix") ? 1 : 0;
-  const emscripten::val locked = reader.value(record, "locked", "xf.locked");
-  const emscripten::val hidden = reader.value(record, "hidden", "xf.hidden");
+  xf->apply_number_format = reader.boolean(record, "applyNumberFormat", false, "applyNumberFormat") ? 1 : 0;
+  xf->apply_font = reader.boolean(record, "applyFont", false, "applyFont") ? 1 : 0;
+  xf->apply_fill = reader.boolean(record, "applyFill", false, "applyFill") ? 1 : 0;
+  xf->apply_border = reader.boolean(record, "applyBorder", false, "applyBorder") ? 1 : 0;
+  xf->apply_alignment = reader.boolean(record, "applyAlignment", false, "applyAlignment") ? 1 : 0;
+  xf->apply_protection = reader.boolean(record, "applyProtection", false, "applyProtection") ? 1 : 0;
+  xf->quote_prefix = reader.boolean(record, "quotePrefix", false, "quotePrefix") ? 1 : 0;
+  const emscripten::val locked = reader.value(record, "locked", "locked");
+  const emscripten::val hidden = reader.value(record, "hidden", "hidden");
   const bool locked_present = js_value_present(locked);
   const bool hidden_present = js_value_present(hidden);
   xf->has_protection = (locked_present || hidden_present) ? 1 : 0;
-  xf->locked = reader.boolean_value(locked, true) ? 1 : 0;
-  xf->hidden = reader.boolean_value(hidden, false) ? 1 : 0;
+  xf->locked = reader.boolean_value(locked, true, "locked") ? 1 : 0;
+  xf->hidden = reader.boolean_value(hidden, false, "hidden") ? 1 : 0;
 }
 
-/// Diagnostic field names for the members of one border record.
-struct BorderFieldNames {
-  const char* left;
-  const char* right;
-  const char* top;
-  const char* bottom;
-  const char* diagonal;
-  const char* diagonal_up;
-  const char* diagonal_down;
-};
-
-constexpr BorderFieldNames kBorderFields{"border.left",     "border.right",      "border.top",         "border.bottom",
-                                         "border.diagonal", "border.diagonalUp", "border.diagonalDown"};
-constexpr BorderFieldNames kDxfBorderFields{"dxf.border.left",        "dxf.border.right",    "dxf.border.top",
-                                            "dxf.border.bottom",      "dxf.border.diagonal", "dxf.border.diagonalUp",
-                                            "dxf.border.diagonalDown"};
-
-fm_border_t js_pull_border_record(const emscripten::val& record, const BorderFieldNames& names,
+fm_border_t js_pull_border_record(const emscripten::val& record, std::string_view parent,
                                   JsNarrowNumericReader& reader) {
+  const auto side = [&](const char* key) {
+    const std::string field = binding::field_path(parent, key);
+    return js_pull_border_side(reader.value(record, key, field.c_str()), field, &reader);
+  };
   fm_border_t br{};
-  br.left = js_pull_border_side(reader.value(record, "left", names.left), &reader);
-  br.right = js_pull_border_side(reader.value(record, "right", names.right), &reader);
-  br.top = js_pull_border_side(reader.value(record, "top", names.top), &reader);
-  br.bottom = js_pull_border_side(reader.value(record, "bottom", names.bottom), &reader);
-  br.diagonal = js_pull_border_side(reader.value(record, "diagonal", names.diagonal), &reader);
-  br.diagonal_up = reader.boolean(record, "diagonalUp", false, names.diagonal_up) ? 1 : 0;
-  br.diagonal_down = reader.boolean(record, "diagonalDown", false, names.diagonal_down) ? 1 : 0;
+  br.left = side("left");
+  br.right = side("right");
+  br.top = side("top");
+  br.bottom = side("bottom");
+  br.diagonal = side("diagonal");
+  br.diagonal_up =
+      reader.boolean(record, "diagonalUp", false, binding::field_path(parent, "diagonalUp").c_str()) ? 1 : 0;
+  br.diagonal_down =
+      reader.boolean(record, "diagonalDown", false, binding::field_path(parent, "diagonalDown").c_str()) ? 1 : 0;
   return br;
 }
 
@@ -292,34 +282,36 @@ emscripten::val js_font_record(const fm_font_t& f) {
 /// name for the duration of the C ABI call, which borrows the pointer. An
 /// omitted or `null` element is absent from the record.
 void js_pull_font_record(const emscripten::val& record, std::string* name_storage, fm_font_t* out,
-                         JsNarrowNumericReader& reader) {
-  const auto flag = [&](const char* key, const char* field, int32_t* has, int32_t* value) {
-    const emscripten::val v = reader.value(record, key, field);
+                         JsNarrowNumericReader& reader, std::string_view parent) {
+  const auto at = [&](const char* key) { return binding::field_path(parent, key); };
+  const auto flag = [&](const char* key, int32_t* has, int32_t* value) {
+    const std::string field = at(key);
+    const emscripten::val v = reader.value(record, key, field.c_str());
     *has = js_value_present(v) ? 1 : 0;
-    *value = reader.boolean_value(v, false) ? 1 : 0;
+    *value = reader.boolean_value(v, false, field.c_str()) ? 1 : 0;
   };
-  *name_storage = reader.string(record, "name", "font.name");
+  *name_storage = reader.string(record, "name", at("name").c_str());
   out->name = name_storage->c_str();
-  const emscripten::val size = reader.value(record, "sizePt", "font.sizePt");
+  const emscripten::val size = reader.value(record, "sizePt", at("sizePt").c_str());
   out->has_size_pt = js_value_present(size) ? 1 : 0;
-  out->size_pt = reader.number_value(size, 11.0, "font.sizePt");
-  flag("bold", "font.bold", &out->has_bold, &out->bold);
-  flag("italic", "font.italic", &out->has_italic, &out->italic);
-  flag("strike", "font.strike", &out->has_strike, &out->strike);
-  out->underline = reader.u8(record, "underline", 0U, "font.underline");
-  out->vert_align = reader.u8(record, "vertAlign", 0U, "font.vertAlign");
-  const emscripten::val family = reader.value(record, "family", "font.family");
+  out->size_pt = reader.number_value(size, 11.0, at("sizePt").c_str());
+  flag("bold", &out->has_bold, &out->bold);
+  flag("italic", &out->has_italic, &out->italic);
+  flag("strike", &out->has_strike, &out->strike);
+  out->underline = reader.u8(record, "underline", 0U, at("underline").c_str());
+  out->vert_align = reader.u8(record, "vertAlign", 0U, at("vertAlign").c_str());
+  const emscripten::val family = reader.value(record, "family", at("family").c_str());
   out->has_family = js_value_present(family) ? 1 : 0;
-  out->family = reader.u8_value(family, 0U, "font.family");
-  const emscripten::val charset = reader.value(record, "charset", "font.charset");
+  out->family = reader.u8_value(family, 0U, at("family").c_str());
+  const emscripten::val charset = reader.value(record, "charset", at("charset").c_str());
   out->has_charset = js_value_present(charset) ? 1 : 0;
-  out->charset = reader.u8_value(charset, 0U, "font.charset");
-  out->scheme = reader.u8(record, "scheme", 0U, "font.scheme");
-  flag("outline", "font.outline", &out->has_outline, &out->outline);
-  flag("shadow", "font.shadow", &out->has_shadow, &out->shadow);
-  flag("condense", "font.condense", &out->has_condense, &out->condense);
-  flag("extend", "font.extend", &out->has_extend, &out->extend);
-  out->color = js_pull_color_spec(record, "color", &reader);
+  out->charset = reader.u8_value(charset, 0U, at("charset").c_str());
+  out->scheme = reader.u8(record, "scheme", 0U, at("scheme").c_str());
+  flag("outline", &out->has_outline, &out->outline);
+  flag("shadow", &out->has_shadow, &out->shadow);
+  flag("condense", &out->has_condense, &out->condense);
+  flag("extend", &out->has_extend, &out->extend);
+  out->color = js_pull_color_spec(record, "color", &reader, parent);
 }
 
 emscripten::val js_fill_record(const fm_fill_t& f) {
@@ -353,29 +345,31 @@ emscripten::val js_fill_record(const fm_fill_t& f) {
 /// Reads a fill record out of a JS object. `stops` owns the gradient stops
 /// for the duration of the C ABI call, which borrows the pointer.
 fm_fill_t js_pull_fill_record(const emscripten::val& record, std::vector<fm_gradient_stop_t>* stops,
-                              JsNarrowNumericReader& reader) {
+                              JsNarrowNumericReader& reader, std::string_view parent) {
+  const auto at = [&](const char* key) { return binding::field_path(parent, key); };
   fm_fill_t fr{};
-  fr.pattern = reader.u8(record, "pattern", 0U, "fill.pattern");
-  fr.foreground = js_pull_color_spec(record, "foreground", &reader);
-  fr.background = js_pull_color_spec(record, "background", &reader);
-  const emscripten::val gradient = reader.value(record, "gradient", "fill.gradient");
+  fr.pattern = reader.u8(record, "pattern", 0U, at("pattern").c_str());
+  fr.foreground = js_pull_color_spec(record, "foreground", &reader, parent);
+  fr.background = js_pull_color_spec(record, "background", &reader, parent);
+  const emscripten::val gradient = reader.value(record, "gradient", at("gradient").c_str());
   if (js_value_present(gradient)) {
     fr.has_gradient = 1;
-    fr.gradient_type = static_cast<std::int32_t>(reader.u32(gradient, "type", 0U, "fill.gradient.type"));
-    fr.gradient_angle_deg = reader.number(gradient, "angleDeg", 0.0, "fill.gradient.angleDeg");
-    fr.gradient_left = reader.number(gradient, "left", 0.0, "fill.gradient.left");
-    fr.gradient_right = reader.number(gradient, "right", 0.0, "fill.gradient.right");
-    fr.gradient_top = reader.number(gradient, "top", 0.0, "fill.gradient.top");
-    fr.gradient_bottom = reader.number(gradient, "bottom", 0.0, "fill.gradient.bottom");
-    const emscripten::val list = reader.value(gradient, "stops", "fill.gradient.stops");
-    if (reader.is_array(list, "fill.gradient.stops")) {
-      const uint32_t n = reader.length(list, "fill.gradient.stops");
+    fr.gradient_type = static_cast<std::int32_t>(reader.u32(gradient, "type", 0U, at("gradient.type").c_str()));
+    fr.gradient_angle_deg = reader.number(gradient, "angleDeg", 0.0, at("gradient.angleDeg").c_str());
+    fr.gradient_left = reader.number(gradient, "left", 0.0, at("gradient.left").c_str());
+    fr.gradient_right = reader.number(gradient, "right", 0.0, at("gradient.right").c_str());
+    fr.gradient_top = reader.number(gradient, "top", 0.0, at("gradient.top").c_str());
+    fr.gradient_bottom = reader.number(gradient, "bottom", 0.0, at("gradient.bottom").c_str());
+    const emscripten::val list = reader.value(gradient, "stops", at("gradient.stops").c_str());
+    if (reader.is_array(list, at("gradient.stops").c_str())) {
+      const uint32_t n = reader.length(list, at("gradient.stops").c_str());
       stops->reserve(n);
       for (uint32_t i = 0; i < n; ++i) {
-        const emscripten::val item = reader.array_element(list, i, "fill.gradient.stops[]");
+        const std::string element = binding::element_path(at("gradient.stops"), i);
+        const emscripten::val item = reader.array_element(list, i, element.c_str());
         fm_gradient_stop_t stop{};
-        stop.position = reader.number(item, "position", 0.0, "fill.gradient.stops[].position");
-        stop.color = js_pull_color_spec(item, "color", &reader);
+        stop.position = reader.number(item, "position", 0.0, binding::field_path(element, "position").c_str());
+        stop.color = js_pull_color_spec(item, "color", &reader, element);
         stops->push_back(stop);
       }
     }
@@ -625,8 +619,10 @@ uint32_t JsWorkbook::addFont(emscripten::val record) {
   std::string name;
   fm_font_t fr{};
   return add_style_record(
-      "addFont", record,
-      [&](JsNarrowNumericReader& reader, const emscripten::val& rec) { js_pull_font_record(rec, &name, &fr, reader); },
+      "Workbook.addFont", record,
+      [&](JsNarrowNumericReader& reader, const emscripten::val& rec) {
+        js_pull_font_record(rec, &name, &fr, reader, {});
+      },
       [&](fm_workbook_t* handle, std::size_t* idx) { return add_indexed(fm_workbook_add_font, handle, &fr, idx); });
 }
 
@@ -634,8 +630,10 @@ void JsWorkbook::setFont(uint32_t font_index, emscripten::val record) {
   std::string name;
   fm_font_t fr{};
   set_style_record(
-      "setFont", record,
-      [&](JsNarrowNumericReader& reader, const emscripten::val& rec) { js_pull_font_record(rec, &name, &fr, reader); },
+      "Workbook.setFont", record,
+      [&](JsNarrowNumericReader& reader, const emscripten::val& rec) {
+        js_pull_font_record(rec, &name, &fr, reader, {});
+      },
       [&](fm_workbook_t* handle) { return fm_workbook_set_font(handle, font_index, &fr); });
 }
 
@@ -643,8 +641,10 @@ void JsWorkbook::setDefaultFont(emscripten::val record) {
   std::string name;
   fm_font_t fr{};
   set_style_record(
-      "setDefaultFont", record,
-      [&](JsNarrowNumericReader& reader, const emscripten::val& rec) { js_pull_font_record(rec, &name, &fr, reader); },
+      "Workbook.setDefaultFont", record,
+      [&](JsNarrowNumericReader& reader, const emscripten::val& rec) {
+        js_pull_font_record(rec, &name, &fr, reader, {});
+      },
       [&](fm_workbook_t* handle) { return fm_workbook_set_default_font(handle, &fr); });
 }
 
@@ -652,8 +652,10 @@ uint32_t JsWorkbook::addFill(emscripten::val record) {
   std::vector<fm_gradient_stop_t> stops;
   fm_fill_t fr{};
   return add_style_record(
-      "addFill", record,
-      [&](JsNarrowNumericReader& reader, const emscripten::val& rec) { fr = js_pull_fill_record(rec, &stops, reader); },
+      "Workbook.addFill", record,
+      [&](JsNarrowNumericReader& reader, const emscripten::val& rec) {
+        fr = js_pull_fill_record(rec, &stops, reader, {});
+      },
       [&](fm_workbook_t* handle, std::size_t* idx) { return add_indexed(fm_workbook_add_fill, handle, &fr, idx); });
 }
 
@@ -661,28 +663,26 @@ void JsWorkbook::setFill(uint32_t fill_index, emscripten::val record) {
   std::vector<fm_gradient_stop_t> stops;
   fm_fill_t fr{};
   set_style_record(
-      "setFill", record,
-      [&](JsNarrowNumericReader& reader, const emscripten::val& rec) { fr = js_pull_fill_record(rec, &stops, reader); },
+      "Workbook.setFill", record,
+      [&](JsNarrowNumericReader& reader, const emscripten::val& rec) {
+        fr = js_pull_fill_record(rec, &stops, reader, {});
+      },
       [&](fm_workbook_t* handle) { return fm_workbook_set_fill(handle, fill_index, &fr); });
 }
 
 uint32_t JsWorkbook::addBorder(emscripten::val record) {
   fm_border_t br{};
   return add_style_record(
-      "addBorder", record,
-      [&](JsNarrowNumericReader& reader, const emscripten::val& rec) {
-        br = js_pull_border_record(rec, kBorderFields, reader);
-      },
+      "Workbook.addBorder", record,
+      [&](JsNarrowNumericReader& reader, const emscripten::val& rec) { br = js_pull_border_record(rec, {}, reader); },
       [&](fm_workbook_t* handle, std::size_t* idx) { return add_indexed(fm_workbook_add_border, handle, &br, idx); });
 }
 
 void JsWorkbook::setBorder(uint32_t border_index, emscripten::val record) {
   fm_border_t br{};
   set_style_record(
-      "setBorder", record,
-      [&](JsNarrowNumericReader& reader, const emscripten::val& rec) {
-        br = js_pull_border_record(rec, kBorderFields, reader);
-      },
+      "Workbook.setBorder", record,
+      [&](JsNarrowNumericReader& reader, const emscripten::val& rec) { br = js_pull_border_record(rec, {}, reader); },
       [&](fm_workbook_t* handle) { return fm_workbook_set_border(handle, border_index, &br); });
 }
 
@@ -698,7 +698,7 @@ uint32_t JsWorkbook::addNumFmt(const std::string& number_format) {
 uint32_t JsWorkbook::addXf(emscripten::val record) {
   fm_cell_xf_t xf{};
   return add_style_record(
-      "addCellXf", record,
+      "Workbook.addCellXf", record,
       [&](JsNarrowNumericReader& reader, const emscripten::val& rec) { js_pull_cell_xf(rec, &xf, reader); },
       [&](fm_workbook_t* handle, std::size_t* idx) { return add_indexed(fm_workbook_add_cell_xf, handle, &xf, idx); });
 }
@@ -706,7 +706,7 @@ uint32_t JsWorkbook::addXf(emscripten::val record) {
 void JsWorkbook::setXf(uint32_t xf_index, emscripten::val record) {
   fm_cell_xf_t xf{};
   set_style_record(
-      "setCellXf", record,
+      "Workbook.setCellXf", record,
       [&](JsNarrowNumericReader& reader, const emscripten::val& rec) { js_pull_cell_xf(rec, &xf, reader); },
       [&](fm_workbook_t* handle) { return fm_workbook_set_cell_xf(handle, xf_index, &xf); });
 }
@@ -723,31 +723,31 @@ struct DxfStore {
 };
 
 void pull_dxf(JsNarrowNumericReader& reader, const emscripten::val& rec, DxfStore& store, fm_dxf_t& dxf) {
-  emscripten::val font = reader.value(rec, "font", "dxf.font");
+  emscripten::val font = reader.value(rec, "font", "font");
   if (js_value_present(font)) {
     dxf.has_font = 1;
-    js_pull_font_record(font, &store.font_name, &dxf.font, reader);
+    js_pull_font_record(font, &store.font_name, &dxf.font, reader, "font");
   }
 
-  emscripten::val fill = reader.value(rec, "fill", "dxf.fill");
+  emscripten::val fill = reader.value(rec, "fill", "fill");
   if (js_value_present(fill)) {
     dxf.has_fill = 1;
-    dxf.fill = js_pull_fill_record(fill, &store.fill_stops, reader);
+    dxf.fill = js_pull_fill_record(fill, &store.fill_stops, reader, "fill");
   }
 
-  emscripten::val border = reader.value(rec, "border", "dxf.border");
+  emscripten::val border = reader.value(rec, "border", "border");
   if (js_value_present(border)) {
     dxf.has_border = 1;
-    dxf.border = js_pull_border_record(border, kDxfBorderFields, reader);
+    dxf.border = js_pull_border_record(border, "border", reader);
   }
 
-  dxf.number_format = reader.optional_string(rec, "numberFormat", store.num_fmt_code, "dxf.numberFormat");
+  dxf.number_format = reader.optional_string(rec, "numberFormat", store.num_fmt_code, "numberFormat");
 
-  const emscripten::val alignment = reader.value(rec, "alignment", "dxf.alignment");
+  const emscripten::val alignment = reader.value(rec, "alignment", "alignment");
   if (js_value_present(alignment)) {
     store.alignment_xml = dxf_alignment_xml(reader, alignment);
   }
-  const emscripten::val protection = reader.value(rec, "protection", "dxf.protection");
+  const emscripten::val protection = reader.value(rec, "protection", "protection");
   if (js_value_present(protection)) {
     store.protection_xml = dxf_protection_xml(reader, protection);
   }
@@ -761,7 +761,7 @@ uint32_t JsWorkbook::addDxf(emscripten::val record) {
   DxfStore store;
   fm_dxf_t dxf{};
   return add_style_record(
-      "addDxf", record,
+      "Workbook.addDxf", record,
       [&](JsNarrowNumericReader& reader, const emscripten::val& rec) { pull_dxf(reader, rec, store, dxf); },
       [&](fm_workbook_t* handle, std::size_t* idx) { return add_indexed(fm_workbook_add_dxf, handle, &dxf, idx); });
 }
@@ -770,7 +770,7 @@ void JsWorkbook::setDxf(uint32_t dxf_index, emscripten::val record) {
   DxfStore store;
   fm_dxf_t dxf{};
   set_style_record(
-      "setDxf", record,
+      "Workbook.setDxf", record,
       [&](JsNarrowNumericReader& reader, const emscripten::val& rec) { pull_dxf(reader, rec, store, dxf); },
       [&](fm_workbook_t* handle) { return fm_workbook_set_dxf(handle, dxf_index, &dxf); });
 }
@@ -816,7 +816,7 @@ void JsWorkbook::setCellStyleXf(uint32_t index, emscripten::val record) {
 uint32_t JsWorkbook::addCellStyleXf(emscripten::val record) {
   fm_cell_xf_t xf{};
   return add_style_record(
-      "addCellStyleXf", record,
+      "Workbook.addCellStyleXf", record,
       [&](JsNarrowNumericReader& reader, const emscripten::val& rec) { js_pull_cell_xf(rec, &xf, reader); },
       [&](fm_workbook_t* handle, std::size_t* idx) {
         return add_indexed(fm_workbook_add_cell_style_xf, handle, &xf, idx);

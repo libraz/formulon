@@ -42,7 +42,7 @@ export function registerLayoutValidation(Module, test) {
       assert.deepEqual(protection(wb), beforeProtection);
 
       const beforeFormat = wb.getFormatDefaults(0);
-      const formatInput = { defaultColWidthChars: 12.5 };
+      const formatInput = { defaultColumnWidthChars: 12.5 };
       Object.defineProperty(formatInput, 'defaultRowHeightPt', {
         enumerable: true,
         get() {
@@ -56,7 +56,7 @@ export function registerLayoutValidation(Module, test) {
 
   test('geometry and partial recalc throw on invalid nested coordinates before C calls', () => {
     withWorkbook(Module, (wb) => {
-      assert.throws(() => wb.getCellRectPt(0, { ...RANGE, firstRow: 1.5 }, 0), TypeError);
+      assert.throws(() => wb.getCellRectPt(0, { ...RANGE, firstRow: 1.5 }, 0), RangeError);
 
       const throwingRange = {};
       Object.defineProperty(throwingRange, 'firstRow', {
@@ -69,7 +69,7 @@ export function registerLayoutValidation(Module, test) {
 
       wb.setNumber(0, 0, 0, 1);
       wb.setFormula(0, 0, 1, '=A1+1');
-      assert.throws(() => wb.recalcViewport(0, { ...RANGE, firstRow: 1.5 }), TypeError);
+      assert.throws(() => wb.recalcViewport(0, { ...RANGE, firstRow: 1.5 }), RangeError);
 
       const throwingViewport = { firstRow: 0, lastRow: 0, firstCol: 0 };
       Object.defineProperty(throwingViewport, 'lastCol', {

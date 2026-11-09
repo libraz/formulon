@@ -43,6 +43,7 @@ using formulon::c_api::parts::invalid_argument;
 using formulon::c_api::parts::kTickLabelPositionTokens;
 using formulon::c_api::parts::not_found;
 using formulon::c_api::parts::null_argument;
+using formulon::c_api::parts::null_field;
 using formulon::c_api::parts::ordinal_of;
 using formulon::c_api::parts::PatchReader;
 using formulon::c_api::parts::set_last_error;
@@ -623,7 +624,7 @@ extern "C" fm_status_t fm_sheet_get_chart_preview(const fm_workbook_t* wb, size_
     return rc;
   }
   if (overrides->source_op == FM_PATCH_OP_SET && overrides->source == nullptr) {
-    return invalid_argument("SET source is NULL", "field=source");
+    return null_field("source");
   }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;

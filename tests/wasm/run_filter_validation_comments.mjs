@@ -213,11 +213,10 @@ export function registerFilterValidationComments(Module, test) {
       assert.equal(before.length, 1);
 
       for (const value of [256, Number.NaN, Number.POSITIVE_INFINITY, 1.5, -1, Symbol('type')]) {
-        assert.throws(
-          () => wb.addValidation(0, { ...base, type: value }),
-          typeof value === 'symbol' ? TypeError : RangeError,
-          `type=${String(value)}`,
-        );
+        // A symbol is a TypeError, a negative value an InvalidArgument FormulonError, the rest a RangeError.
+        const refusal = () => wb.addValidation(0, { ...base, type: value });
+        if (value === -1) expectFailure(refusal, StatusCode.InvalidArgument);
+        else assert.throws(refusal, typeof value === 'symbol' ? TypeError : RangeError, `type=${String(value)}`);
         assert.equal(
           readAll(
             () => wb.getValidationCount(0),
@@ -479,7 +478,7 @@ export function registerFilterValidationComments(Module, test) {
       assert.equal(rest.nextCursor, null);
 
       expectFailure(() => wb.getInvalidCells(99));
-      assert.throws(() => wb.getInvalidCells(0, -1), RangeError);
+      expectFailure(() => wb.getInvalidCells(0, -1), StatusCode.InvalidArgument);
     });
   });
 

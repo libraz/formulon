@@ -102,7 +102,8 @@
  *
  * Message text is for display only: it is an English sentence meant for a
  * person, not a contract. Branch on the status code; read the context for the
- * offending argument values (`key=value` pairs).
+ * offending argument values (`key=value` pairs). An argument error's message
+ * leads with the parameter or field (`zoom_pct must be in 10..400`).
  *
  * Text input: every caller-supplied string (argument or struct field) must be
  * well-formed UTF-8. A lone surrogate, overlong form or truncated sequence
@@ -3858,8 +3859,8 @@ typedef struct {
  *        (Patches, above). No field can be cleared.
  *
  *   * `enabled`        — `SET` `0` disables iterative calc, any other value enables it.
- *   * `max_iterations` — `SET` writes the iteration cap; it must be at least 1, and
- *                        a value above 32767 (Excel's limit) is stored as 32767.
+ *   * `max_iterations` — `SET` writes the iteration cap, 1..32767; 0 or above 32767 is
+ *                        `FM_STATUS_INVALID_ARGUMENT`.
  *   * `max_change`     — `SET` writes the absolute convergence threshold, finite
  *                        and non-negative.
  */
@@ -3878,13 +3879,10 @@ typedef struct {
  *        workbook's recalc engine. The whole patch is checked before anything
  *        changes.
  *
- * `fm_workbook_get_iterative` reports a clamped `max_iterations`, not the
- * requested one.
- *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `patch` is `NULL`;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when an op is outside 0..2 or `CLEAR`, a `SET`
- *           `max_iterations` is 0, or a `SET` `max_change` is negative, NaN or infinite.
+ *           `max_iterations` is 0 or above 32767, or a `SET` `max_change` is negative, NaN or infinite.
  */
 FM_API fm_status_t fm_workbook_update_iterative(fm_workbook_t* wb, const fm_iterative_settings_patch_t* patch);
 
@@ -8846,8 +8844,8 @@ typedef enum {
  * frozen rows and columns until a host scrolls it; `0, 0` when nothing is
  * frozen.
  *
- * `split_x` / `split_y` are an unfrozen split's position in twips (`<pane
- * xSplit ySplit>`); `0` for no split on that axis, and always `0` while the
+ * `split_x_twips` / `split_y_twips` are an unfrozen split's position in twips
+ * (`<pane xSplit ySplit>`); `0` for no split on that axis, and always `0` while the
  * view is frozen.
  *
  * `view_mode` is an `fm_sheet_view_mode_t`; a `view` value outside the
@@ -8868,8 +8866,8 @@ typedef struct {
   uint32_t top_left_col;
   uint32_t pane_top_left_row; /* first visible cell of a frozen or split view's lower-right pane */
   uint32_t pane_top_left_col;
-  double split_x; /* unfrozen split position in twips; 0 = none on that axis */
-  double split_y;
+  double split_x_twips; /* unfrozen split position in twips; 0 = none on that axis */
+  double split_y_twips;
   int32_t show_formulas;        /* 0/1; OOXML default 0 */
   int32_t show_outline_symbols; /* 0/1; OOXML default 1 */
 } fm_sheet_view_info_t;
@@ -8883,7 +8881,7 @@ typedef struct {
  *   * `freeze_rows` / `freeze_cols` -- `0` removes that axis; the first
  *     unfrozen cell `(freeze_rows, freeze_cols)` must lie inside the grid
  *     (`freeze_rows` at most 1048575, `freeze_cols` at most 16383).
- *   * `split_x` / `split_y` -- an unfrozen split in twips (`<pane xSplit
+ *   * `split_x_twips` / `split_y_twips` -- an unfrozen split in twips (`<pane xSplit
  *     ySplit>`), finite and non-negative; `0` for no split on that axis, and
  *     `(0, 0)` removes the split.
  *   * `top_left_*` -- the scroll origin (`<sheetView topLeftCell>`), a cell
@@ -8934,10 +8932,10 @@ typedef struct {
   uint32_t pane_top_left_row;
   fm_patch_op_t pane_top_left_col_op;
   uint32_t pane_top_left_col;
-  fm_patch_op_t split_x_op;
-  double split_x;
-  fm_patch_op_t split_y_op;
-  double split_y;
+  fm_patch_op_t split_x_twips_op;
+  double split_x_twips;
+  fm_patch_op_t split_y_twips_op;
+  double split_y_twips;
   fm_patch_op_t show_formulas_op;
   int32_t show_formulas;
   fm_patch_op_t show_outline_symbols_op;

@@ -253,7 +253,8 @@ TEST(FormulonCApiNamedStyles, SetCellStyleRejectsInvalidRecords) {
   EXPECT_EQ(fm_workbook_set_cell_style(wb.handle, &record), kInvalidArgument);
 
   record = StyleRecord("Styled", 1U, kCustomStyle);
-  EXPECT_EQ(fm_workbook_set_cell_style(wb.handle, &record), kInvalidArgument);
+  EXPECT_EQ(fm_workbook_set_cell_style(wb.handle, &record),
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kIndexOutOfRange));
   record = StyleRecord("Styled", 0U, 54U);
   EXPECT_EQ(fm_workbook_set_cell_style(wb.handle, &record), kInvalidArgument);
 

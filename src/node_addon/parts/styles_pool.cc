@@ -165,7 +165,7 @@ void AppendEnumAttribute(CheckedSpecReader& reader, const Napi::Object& record, 
     return;
   }
   if (ordinal >= N) {
-    reader.FailRange(key, "enumeration");
+    reader.FailInteger(key, static_cast<double>(ordinal), 0.0);
     return;
   }
   *xml += std::string(" ") + key + "=\"" + names[ordinal] + "\"";

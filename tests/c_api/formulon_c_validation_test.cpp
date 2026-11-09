@@ -375,7 +375,7 @@ TEST(FormulonCApiValidation, RejectsBadArguments) {
   value.kind = FM_VALUE_KIND_ARRAY;
   EXPECT_EQ(fm_sheet_validate_value(wb.handle, 0, 0, 0, &value, &out), kInvalidArgument);
   value = Text(nullptr);
-  EXPECT_EQ(fm_sheet_validate_value(wb.handle, 0, 0, 0, &value, &out), kBindingNullPointer);
+  EXPECT_EQ(fm_sheet_validate_value(wb.handle, 0, 0, 0, &value, &out), kInvalidArgument);
   value = Number(std::numeric_limits<double>::infinity());
   EXPECT_EQ(fm_sheet_validate_value(wb.handle, 0, 0, 0, &value, &out), kInvalidArgument);
 

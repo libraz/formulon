@@ -70,7 +70,7 @@ static_assert(FM_THEME_SOURCE_UNPARSEABLE == static_cast<int>(formulon::ThemeSou
 // The script-font calls name a font set; `FM_FONT_SCHEME_NONE` names none.
 fm_status_t check_font_set(int32_t scheme) {
   if (scheme != FM_FONT_SCHEME_MAJOR && scheme != FM_FONT_SCHEME_MINOR) {
-    return invalid_argument("scheme must be FM_FONT_SCHEME_MAJOR or FM_FONT_SCHEME_MINOR",
+    return invalid_argument(("scheme " + std::to_string(scheme) + " is not a FontScheme").c_str(),
                             "scheme=" + std::to_string(scheme));
   }
   return 0;

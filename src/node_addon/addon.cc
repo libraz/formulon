@@ -36,7 +36,7 @@
 //   * `parts/reference.cc`         -- parseReference / formatReference /
 //     getSheetIndex.
 //   * `parts/free_funcs.{h,cc}`    -- evaluateFormula / getVersion /
-//     getStatusName / the process-wide structured-log controls /
+//     the process-wide structured-log controls /
 //     `__setErrorClass`; the workbook-independent locale, function and
 //     image helpers attach through `RegisterModuleFunctions`.
 //
@@ -86,7 +86,6 @@ Napi::Object Init(Napi::Env env, Napi::Object exports) {
   exports.Set("Workbook", formulon_node::Workbook::GetClass(env));
   exports.Set("evaluateFormula", Napi::Function::New(env, &formulon_node::EvaluateFormula, "evaluateFormula"));
   exports.Set("getVersion", Napi::Function::New(env, &formulon_node::Version, "getVersion"));
-  exports.Set("getStatusName", Napi::Function::New(env, &formulon_node::StatusString, "getStatusName"));
   exports.Set("setLogMinLevel", Napi::Function::New(env, &formulon_node::SetLogMinLevel, "setLogMinLevel"));
   exports.Set("setLogSink", Napi::Function::New(env, &formulon_node::SetLogSink, "setLogSink"));
   exports.Set("__setErrorClass", Napi::Function::New(env, &formulon_node::SetErrorClass, "__setErrorClass"));

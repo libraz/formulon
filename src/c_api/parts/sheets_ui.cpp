@@ -34,6 +34,7 @@ using formulon::c_api::parts::fresh_read_scratch;
 using formulon::c_api::parts::ingest_entered_formula;
 using formulon::c_api::parts::not_found;
 using formulon::c_api::parts::null_argument;
+using formulon::c_api::parts::null_field;
 using formulon::c_api::parts::patch_op_ok;
 using formulon::c_api::parts::patch_op_ok_without_clear;
 using formulon::c_api::parts::publish_scratch;
@@ -125,7 +126,7 @@ extern "C" fm_status_t fm_sheet_set_hyperlink(fm_workbook_t* wb, std::size_t she
     return rc;
   }
   if (hl->rect.first_row != row || hl->rect.first_col != col) {
-    return formulon::c_api::parts::invalid_argument("hyperlink rectangle is not anchored at (row, col)");
+    return formulon::c_api::parts::invalid_argument("hyperlink.rect must start at row and col");
   }
   if (auto rc = check_utf8({hl->target, hl->location, hl->display, hl->tooltip}); rc != 0) {
     return rc;
@@ -729,7 +730,7 @@ fm_status_t check_validation_patch(const fm_data_validation_patch_t& p, std::arr
       !formulon::c_api::parts::patch_op_ok_without_clear(p.show_input_message_op) ||
       !formulon::c_api::parts::patch_op_ok_without_clear(p.show_error_message_op) ||
       !formulon::c_api::parts::patch_op_ok_without_clear(p.show_in_cell_dropdown_op)) {
-    return formulon::c_api::parts::invalid_argument("patch op is not KEEP or SET for a field that cannot be cleared");
+    return formulon::c_api::parts::invalid_argument("a patch op is not allowed for a field that cannot be cleared");
   }
   if (p.ranges_op == FM_PATCH_OP_SET) {
     if (auto rc = formulon::c_api::parts::check_rect_list(p.ranges, p.range_count); rc != 0) {
@@ -768,13 +769,14 @@ fm_status_t check_validation_patch(const fm_data_validation_patch_t& p, std::arr
              {p.prompt_message_op, p.prompt_message, "field=prompt_message", false, {}}}};
   for (PatchedText& t : *texts) {
     if (!formulon::c_api::parts::patch_op_ok(t.op)) {
-      return formulon::c_api::parts::invalid_argument("patch op is outside KEEP, CLEAR and SET", t.field);
+      return formulon::c_api::parts::invalid_argument((std::string(t.field + 6) + "_op is not a patch op").c_str(),
+                                                      t.field);
     }
     if (t.op != FM_PATCH_OP_SET) {
       continue;
     }
     if (t.text == nullptr) {
-      return formulon::c_api::parts::invalid_argument("SET needs a non-NULL string", t.field);
+      return formulon::c_api::parts::null_field(t.field + 6);
     }
     if (auto rc = check_utf8({t.text}); rc != 0) {
       return rc;
@@ -899,11 +901,16 @@ struct AllowFlag {
   fm_patch_op_t fm_sheet_protection_patch_t::*patch_op;
   std::int32_t fm_sheet_protection_patch_t::*patch_value;
   bool is_select;  // fm_tristate_t instead of 0 / 1
+  const char* name;
 };
 
-#define FM_ALLOW_FLAG(field, member, select)                                                          \
-  {&SheetProtection::member, &fm_sheet_protection_t::field, &fm_sheet_protection_patch_t::field##_op, \
-   &fm_sheet_protection_patch_t::field, select}
+#define FM_ALLOW_FLAG(field, member, select) \
+  {&SheetProtection::member,                 \
+   &fm_sheet_protection_t::field,            \
+   &fm_sheet_protection_patch_t::field##_op, \
+   &fm_sheet_protection_patch_t::field,      \
+   select,                                   \
+   #field}
 
 const AllowFlag kAllowFlags[] = {
     FM_ALLOW_FLAG(allow_edit_objects, objects, false),
@@ -1014,7 +1021,7 @@ extern "C" fm_status_t fm_sheet_set_sheet_protection(fm_workbook_t* wb, std::siz
   }
   for (const AllowFlag& flag : kAllowFlags) {
     if (!flag_in_domain(flag, in->*flag.value)) {
-      return formulon::c_api::parts::invalid_argument("protection flag out of range");
+      return formulon::c_api::parts::invalid_argument((std::string(flag.name) + " is out of range").c_str());
     }
   }
   wb->workbook().sheet(sheet_index).mutable_protection() = protection_from_record(*in);
@@ -1037,17 +1044,22 @@ extern "C" fm_status_t fm_sheet_update_sheet_protection(fm_workbook_t* wb, std::
     fm_patch_op_t op;
     const char* value;
     std::string SheetProtection::*member;
+    const char* name;
   };
   const StringField strings[] = {
-      {patch->algorithm_name_op, patch->algorithm_name, &SheetProtection::algorithm_name},
-      {patch->hash_value_op, patch->hash_value, &SheetProtection::hash_value},
-      {patch->salt_value_op, patch->salt_value, &SheetProtection::salt_value},
-      {patch->legacy_password_hash_op, patch->legacy_password_hash, &SheetProtection::legacy_password},
+      {patch->algorithm_name_op, patch->algorithm_name, &SheetProtection::algorithm_name, "algorithm_name"},
+      {patch->hash_value_op, patch->hash_value, &SheetProtection::hash_value, "hash_value"},
+      {patch->salt_value_op, patch->salt_value, &SheetProtection::salt_value, "salt_value"},
+      {patch->legacy_password_hash_op, patch->legacy_password_hash, &SheetProtection::legacy_password,
+       "legacy_password_hash"},
   };
   bool any_change = false;
   for (const StringField& f : strings) {
-    if (!patch_op_ok(f.op) || (f.op == FM_PATCH_OP_SET && f.value == nullptr)) {
-      return formulon::c_api::parts::invalid_argument("invalid protection patch string field");
+    if (!patch_op_ok(f.op)) {
+      return formulon::c_api::parts::invalid_argument((std::string(f.name) + "_op is not a patch op").c_str());
+    }
+    if (f.op == FM_PATCH_OP_SET && f.value == nullptr) {
+      return formulon::c_api::parts::null_field(f.name);
     }
     if (f.op == FM_PATCH_OP_SET) {
       if (auto rc = check_utf8(f.value, "patch string"); rc != 0) {
@@ -1057,17 +1069,17 @@ extern "C" fm_status_t fm_sheet_update_sheet_protection(fm_workbook_t* wb, std::
     any_change = any_change || f.op != FM_PATCH_OP_KEEP;
   }
   if (!patch_op_ok(patch->spin_count_op)) {
-    return formulon::c_api::parts::invalid_argument("invalid protection patch spin_count op");
+    return formulon::c_api::parts::invalid_argument("spin_count_op is not a patch op");
   }
   any_change = any_change || patch->spin_count_op != FM_PATCH_OP_KEEP;
   for (const AllowFlag& flag : kAllowFlags) {
     const fm_patch_op_t op = patch->*flag.patch_op;
     if (!patch_op_ok_without_clear(op)) {
-      return formulon::c_api::parts::invalid_argument("invalid protection patch flag op");
+      return formulon::c_api::parts::invalid_argument((std::string(flag.name) + "_op is not a patch op").c_str());
     }
     // A patch value is a plain 0 / 1; only the record's select flags carry a tristate.
     if (op == FM_PATCH_OP_SET && patch->*flag.patch_value != 0 && patch->*flag.patch_value != 1) {
-      return formulon::c_api::parts::invalid_argument("protection flag out of range");
+      return formulon::c_api::parts::invalid_argument((std::string(flag.name) + " must be in 0..1").c_str());
     }
     any_change = any_change || op != FM_PATCH_OP_KEEP;
   }

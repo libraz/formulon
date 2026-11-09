@@ -32,7 +32,7 @@ TEST(FormulonCApiErrorText, SheetIndexOutOfRangeNamesTheIndexAndTheSheetCount) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   std::size_t count = 0;
   ASSERT_EQ(fm_sheet_get_cell_count(wb.handle, 5, &count), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
-  EXPECT_EQ(Message(), "sheet index 5 is out of range (1 sheet)");
+  EXPECT_EQ(Message(), "sheet_index 5 is out of range (1 sheets)");
   EXPECT_EQ(Context(), "sheet_index=5 sheet_count=1");
   ExpectNoInternalNames(Message());
   ExpectNoInternalNames(Context());
@@ -40,12 +40,12 @@ TEST(FormulonCApiErrorText, SheetIndexOutOfRangeNamesTheIndexAndTheSheetCount) {
   size_t added = 0;
   ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Second", append_position(wb.handle), &added), 0);
   ASSERT_EQ(fm_sheet_get_cell_count(wb.handle, 7, &count), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
-  EXPECT_EQ(Message(), "sheet index 7 is out of range (2 sheets)");
+  EXPECT_EQ(Message(), "sheet_index 7 is out of range (2 sheets)");
   EXPECT_EQ(Context(), "sheet_index=7 sheet_count=2");
 
   const char* name = nullptr;
   ASSERT_EQ(fm_workbook_get_sheet_name(wb.handle, 2, &name), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
-  EXPECT_EQ(Message(), "sheet index 2 is out of range (2 sheets)");
+  EXPECT_EQ(Message(), "sheet_index 2 is out of range (2 sheets)");
 }
 
 TEST(FormulonCApiErrorText, FontIndexOutOfRangeNamesTheFieldTheIndexAndTheCount) {
@@ -72,9 +72,9 @@ TEST(FormulonCApiErrorText, NullArgumentMessagesNameTheArgument) {
   fm_workbook_t* loaded = nullptr;
   const uint8_t byte = 0;
   EXPECT_EQ(fm_workbook_load(nullptr, 4, &loaded), FM_STATUS_BINDING_NULL_POINTER);
-  EXPECT_EQ(Message(), "bytes is NULL");
+  EXPECT_EQ(Message(), "bytes must not be NULL");
   EXPECT_EQ(fm_workbook_load(&byte, 1, nullptr), FM_STATUS_BINDING_NULL_POINTER);
-  EXPECT_EQ(Message(), "out is NULL");
+  EXPECT_EQ(Message(), "out must not be NULL");
 }
 
 TEST(FormulonCApiErrorText, InvalidArgumentMessagesAreSentences) {

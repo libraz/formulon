@@ -537,12 +537,11 @@ export type TableStyleOptionsPatch = Patch<TableStyleOptions, 'styleName'>;
 /** Totals-row settings of one table column (`Table.setColumnTotals`); the `totalsRow*` keys are the ones of
  *  {@link TableColumn}. `totalsRowFunction` defaults to `TableTotalsRowFunction.None`; `totalsRowFormula` is
  *  required for `TableTotalsRowFunction.Custom`. An omitted or `null` label or formula means none, so a read
- *  passes back as is; `''` is `StatusCode.InvalidArgument`. `name` is accepted and ignored, so the {@link TableColumn} a read returns passes as is. */
+ *  passes back as is; `''` is `StatusCode.InvalidArgument`. The {@link TableColumn} a read returns passes as is; its `name` is ignored. */
 export interface TableColumnTotalsInput {
   totalsRowFunction?: TableTotalsRowFunction;
   totalsRowLabel?: string | null;
   totalsRowFormula?: string | null;
-  name?: string;
 }
 
 /** A region of a custom table style, in `ST_TableStyleType` order. The PivotTable
@@ -1227,7 +1226,7 @@ export interface PivotFilterInput {
   readonly kind: PivotFilterKind;
   /** Data-field aggregate scored by value filters. Defaults to 0. */
   readonly dataFieldIndex?: number;
-  readonly value?: number | string;
+  readonly value?: number | string | null;
   readonly valueHigh?: number | string | null;
 }
 
@@ -1400,8 +1399,7 @@ export interface CivilTime {
   readonly second: number;
 }
 
-/** Argument of `Formulon.convertCivilToSerial`: a {@link CivilTime} whose time of day may be left out; an
- *  omitted `hour`, `minute` or `second` is 0. */
+/** A {@link CivilTime} whose time of day may be left out; an omitted `hour`, `minute` or `second` is 0. */
 export interface CivilTimeInput {
   readonly year: number;
   readonly month: number;
@@ -1417,10 +1415,11 @@ export interface DateSystemOptions {
   date1904?: boolean;
 }
 
-/** A date-time input: a {@link CivilTime} or a `Date`. A `Date` is read through its local getters
- *  (year through seconds, milliseconds dropped), as Python reads a naive `datetime`; an Invalid Date
- *  is a `RangeError`. */
-export type DateInput = CivilTime | Date;
+/** A date-time input: a {@link CivilTimeInput} (`hour`, `minute` and `second` are 0 when omitted) or a `Date`. A
+ *  `Date` is read through its local getters (year through seconds, milliseconds dropped), as Python reads a naive
+ *  `datetime`, except in `ThreadedCommentInput.created`, which reads its UTC getters; an Invalid Date is a
+ *  `RangeError`. */
+export type DateInput = CivilTimeInput | Date;
 
 /** The kind of a conditional-format rule (`<cfRule type>`). */
 export const CfRuleType: Readonly<{
@@ -1725,15 +1724,15 @@ export interface WidthModel {
   readonly platform: WidthPlatform;
 }
 
-/** Sheet default column / row metrics (`<sheetFormatPr>`). `defaultColWidthChars` and `defaultRowHeightPt`
+/** Sheet default column / row metrics (`<sheetFormatPr>`). `defaultColumnWidthChars` and `defaultRowHeightPt`
  *  are `null` when the sheet stores none; on update, `null` clears the stored value and an omitted key keeps it. */
 export interface SheetFormatDefaultsInput {
   /** Characters, 0 to 255. */
-  readonly defaultColWidthChars: number | null;
+  readonly defaultColumnWidthChars: number | null;
   /** Points, 0 to 409. */
   readonly defaultRowHeightPt: number | null;
   /** Characters; OOXML default 8. */
-  readonly baseColWidthChars: number;
+  readonly baseColumnWidthChars: number;
   /** `<sheetFormatPr customHeight>`: `defaultRowHeightPt` is an explicit override that stays as
    *  written, rather than a cached figure Excel recomputes from the Normal font. An omitted key
    *  on set keeps the stored flag. */
@@ -1743,16 +1742,19 @@ export interface SheetFormatDefaultsInput {
   readonly zeroHeight: boolean;
 }
 
-/** Argument of `Sheet.updateFormatDefaults`. `null` clears `defaultColWidthChars` and `defaultRowHeightPt`; the
+/** Argument of `Sheet.updateFormatDefaults`. `null` clears `defaultColumnWidthChars` and `defaultRowHeightPt`; the
  *  other keys have no cleared form. */
-export type SheetFormatDefaultsPatch = Patch<SheetFormatDefaultsInput, 'defaultColWidthChars' | 'defaultRowHeightPt'>;
+export type SheetFormatDefaultsPatch = Patch<
+  SheetFormatDefaultsInput,
+  'defaultColumnWidthChars' | 'defaultRowHeightPt'
+>;
 
 /** Return type of `Sheet.getFormatDefaults()`. The effective
  *  values are read-only and ignored by `updateFormatDefaults`. */
 export interface SheetFormatDefaults extends SheetFormatDefaultsInput {
-  /** Stored width in characters the sheet lays columns out with: `defaultColWidthChars` when set, else the column
-   *  Excel derives from `baseColWidthChars` and the Normal font (Calibri 11, base 8: 9.140625, shown as 8.43). */
-  readonly effectiveDefaultColWidthChars: number;
+  /** Stored width in characters the sheet lays columns out with: `defaultColumnWidthChars` when set, else the column
+   *  Excel derives from `baseColumnWidthChars` and the Normal font (Calibri 11, base 8: 9.140625, shown as 8.43). */
+  readonly effectiveDefaultColumnWidthChars: number;
   /** Points the sheet lays rows out with: `defaultRowHeightPt` when set, else 102/7 (about 14.57); 0 when `zeroHeight` hides rows by default. */
   readonly effectiveDefaultRowHeightPt: number;
 }
@@ -1765,6 +1767,14 @@ export interface RangeCell {
   readonly formula: string | null;
   readonly value: NativeValue;
   readonly kind: ValueKind;
+}
+
+/** Paging options of `Sheet.getCellsInRange` and `Sheet.getInvalidCells`. */
+export interface PageOptions {
+  /** The `nextCursor` of the previous page; omitted or `null` starts at the first. */
+  cursor?: number | null;
+  /** Page size; omitted, `null` or 0 is the engine maximum. */
+  limit?: number | null;
 }
 
 /** Return type of `Sheet.getCellsInRange(...)`. */
@@ -1824,8 +1834,8 @@ export interface SheetView {
   readonly freezeCols: number;
   /** `showGridLines`; default true. */
   readonly showGridLines: boolean;
-  /** `showRowColHeaders`; default true. */
-  readonly showRowColHeaders: boolean;
+  /** `showRowColumnHeaders`; default true. */
+  readonly showRowColumnHeaders: boolean;
   /** `showZeros`; default true. */
   readonly showZeros: boolean;
   /** `rightToLeft`; default false. */
@@ -2381,7 +2391,8 @@ export function toNative(value: ArrayValue): readonly (readonly NativeValue[])[]
 export function toNative(value: Value): NativeValue;
 
 /** The key `value` has in the ordinal table `enumType` (`enumName(CfRuleType, 3)` is `'DataBar'`); `null` when
- *  no key has it. A pure host-side helper, reached as `Formulon.enumName` and as a named export of both packages. */
+ *  no key has it (`enumName(StatusCode, 2)` is the status spelling, `'InvalidArgument'`). A pure host-side helper, reached
+ *  as `Formulon.enumName` and as a named export of both packages. */
 export function enumName<T extends Readonly<Record<string, number>>>(
   enumType: T,
   value: number,
@@ -2433,15 +2444,20 @@ export interface ParseReferenceOptions {
   baseCol?: number;
 }
 
-/** The rectangle `formatReference` writes; `sheetName` `null`, omitted or `""` writes no qualifier. */
-export interface ReferenceRangeInput {
-  sheetName?: string | null;
-  range: CellRect | string;
-}
-
 /** Options for `formatReference`. */
 export interface FormatReferenceOptions {
+  /** The qualifier to write; it overrides the `sheetName` of a {@link ParsedReference}. Omitted, `null` or `""`
+   *  writes no qualifier. */
+  sheetName?: string | null;
   absolute?: boolean;
+}
+
+/** Options of `Sheet.evaluateCfRange`. */
+export interface CfRangeEvaluationOptions {
+  /** The date basis for `TimePeriod` rules (default: the pinned clock, else today). */
+  today?: DateInput;
+  /** `false` passes no date, so no `TimePeriod` rule matches; default `true`. */
+  timePeriodRules?: boolean;
 }
 
 /** One CF rule, an element of `Sheet.listCfRules()`.
@@ -3352,6 +3368,13 @@ export const LogLevel: Readonly<{
 /** Union of the {@link LogLevel} ordinals. */
 export type LogLevel = 0 | 1 | 2 | 3 | 4;
 
+/** One engine log event, as `Formulon.setLogSink` delivers it: `level` and `event` plus the event's own fields. */
+export interface LogEvent {
+  readonly level: LogLevel;
+  readonly event: string;
+  readonly [field: string]: string | number | boolean | null;
+}
+
 /** External-link kinds. Mirrors
  *  `formulon::io::ExternalLink::Kind`. */
 export const ExternalLinkKind: Readonly<{
@@ -3939,7 +3962,7 @@ export interface EffectiveStyle {
 export interface IterativeSettings {
   /** Whether iterative calculation is switched on. */
   readonly enabled: boolean;
-  /** Stored iteration cap; meaningful even while `enabled` is false. */
+  /** Stored iteration cap, 1..32767; meaningful even while `enabled` is false. */
   readonly maxIterations: number;
   /** Stored convergence threshold; meaningful even while `enabled` is false. */
   readonly maxChange: number;
@@ -4148,7 +4171,7 @@ export interface MentionInput {
 }
 
 /** One threaded comment: a thread's opening comment (`parentId` is `null`), or a reply. Ids are brace-wrapped GUIDs,
- *  taken in either letter case, matched across it and stored uppercase; `created` is a {@link CivilTime} (whole
+ *  taken in either letter case, matched across it and stored uppercase; `created` is a UTC {@link CivilTime} (whole
  *  seconds), `null` when the stamp is absent; the caller supplies both. `done` is the thread's resolved state,
  *  meaningful on the opening comment only. */
 export interface ThreadedComment {
@@ -4172,6 +4195,7 @@ export interface ThreadedCommentInput {
   text: string;
   cell?: CellAddress | string;
   personId: string;
+  /** A `Date` is read through its UTC getters, a {@link CivilTimeInput} is UTC. */
   created?: DateInput | null;
   parentId?: string | null;
   done?: boolean;
@@ -5476,9 +5500,10 @@ export interface Workbook {
    *  Other `<workbookView>` attributes survive; `firstSheet` is lowered to the sheet's index when larger. The
    *  sheet becomes the only tab-selected one. A hidden sheet fails with `StatusCode.PreconditionFailed`. */
   setActiveSheet(sheet: SheetRef): void;
-  /** Renders `value` (blank, number, boolean, text or error) under the stored-form number format code
-   *  `numberFormat`; empty means General. */
-  formatValue(value: Value, numberFormat: string): DisplayText;
+  /** Renders `value` under the stored-form number format code `numberFormat`; empty means General. `value` is a
+   *  native value (`null` is blank), a `Date` (read through its local getters under the workbook's date system), an
+   *  {@link ExcelError} or a tagged {@link Value}; `undefined` or an array throws `TypeError`. */
+  formatValue(value: CellValueInput, numberFormat: string): DisplayText;
 
   /** Computes every dirty cell now, serially on the caller thread, whatever the calc mode. Under
    *  `CalcMode.Auto` a read does this on its own; call it to choose when the work happens, or under
@@ -5520,8 +5545,8 @@ export interface Workbook {
   hasDirtyCells(): boolean;
 
   /** Updates the iterative-calculation settings; an omitted key keeps its value. When disabled (the default)
-   *  cyclic references surface `#REF!`. `maxIterations` is clamped to `[1, 32767]` (Excel's own limit) and
-   *  `getIterative` reports the clamped value, and a fractional one throws `TypeError`; `maxChange` is the absolute
+   *  cyclic references surface `#REF!`. `maxIterations` is `1..32767` (Excel's own limit): 0 or a larger value fails with
+   *  `StatusCode.InvalidArgument`, and a fractional one throws `RangeError`; `maxChange` is the absolute
    *  convergence threshold, and a negative or non-finite value fails with `StatusCode.InvalidArgument`. */
   updateIterative(patch: IterativeSettingsPatch): void;
   /** Reads back the stored iterative-calculation settings. The cap and
@@ -5745,8 +5770,9 @@ export interface Workbook {
   parseReference(text: string, options?: ParseReferenceOptions): ParsedReference;
   /** Writes the inclusive rectangle as A1 reference text: `A1`, `$A$1:$B$2`, `B:D` (every row), `2:11`
    *  (every column), with the sheet name quoted as a stored formula quotes it. A coordinate outside the
-   *  grid or an unordered rectangle fails with `StatusCode.InvalidArgument`. */
-  formatReference(range: ReferenceRangeInput, options?: FormatReferenceOptions): string;
+   *  grid or an unordered rectangle fails with `StatusCode.InvalidArgument`. `range` is an A1 range, a
+   *  {@link CellRect} or a {@link ParsedReference} (which brings its `sheetName`). */
+  formatReference(range: ParsedReference | CellRect | string, options?: FormatReferenceOptions): string;
 }
 
 /** One worksheet: the sheet-scope operations, addressed without a sheet argument, and the `Pivot` and `Drawing`
@@ -5957,10 +5983,10 @@ export interface Sheet {
   /** `getFormulaR1C1` at the A1 address `a1`. */
   getFormulaR1C1(a1: string): string | null;
   /** One page of the populated cells (formula or non-blank value, spill phantoms included) inside
-   *  `range`, row-major, each a {@link RangeCell}. `cursor` is the `nextCursor` of the previous page (omit for the first);
-   *  `limit` caps the page (omit or 0 for the maximum, 65536). `range` defaults as for
+   *  `range`, row-major, each a {@link RangeCell}. `options.cursor` is the `nextCursor` of the previous page (omit for the
+   *  first); `options.limit` caps the page (omit, `null` or 0 for the maximum, 65536). `range` defaults as for
    *  {@link Sheet.getUsedRange}; an empty sheet gives an empty page with `nextCursor: null`. */
-  getCellsInRange(range?: CellRect | string | null, cursor?: number | null, limit?: number | null): CellsInRange;
+  getCellsInRange(range?: CellRect | string | null, options?: PageOptions): CellsInRange;
   /** Lists every populated cell (formula or non-blank value, spill phantoms included) inside `range`, row-major.
    *  `range` defaults as for {@link Sheet.getUsedRange}. */
   listCells(range?: CellRect | string | null): readonly RangeCell[];
@@ -6137,7 +6163,7 @@ export interface Sheet {
   validateValue(a1: string, value: CellValueInput): ValidationOutcome;
   /** Enumerates populated cells whose value fails their validation rule, in
    *  row-major order, one page at a time; paging as `getCellsInRange`. */
-  getInvalidCells(cursor?: number | null, limit?: number | null): CellsInRange;
+  getInvalidCells(options?: PageOptions): CellsInRange;
 
   /** Lists the sheet's threaded comments in file order: each thread's opening comment followed by its replies. */
   listThreadedComments(): readonly ThreadedComment[];
@@ -6282,10 +6308,7 @@ export interface Sheet {
    *  produced at least one match. `options.today` pins the date basis for `TimePeriod` rules (default: the pinned
    *  clock, else today), a {@link DateInput}. With `options.timePeriodRules` `false` (default `true`) no date is
    *  passed, so no `TimePeriod` rule matches. */
-  evaluateCfRange(
-    range: CellRect | string,
-    options?: { today?: DateInput; timePeriodRules?: boolean },
-  ): readonly CfCell[];
+  evaluateCfRange(range: CellRect | string, options?: CfRangeEvaluationOptions): readonly CfCell[];
 
   /** Computes print-area page breaks and physical page count for the sheet. */
   getPagination(): Pagination;
@@ -6434,7 +6457,7 @@ export interface Sheet {
   /** Reads the sheet's default column / row metrics. */
   getFormatDefaults(): SheetFormatDefaults;
   /** Updates the sheet's default column / row metrics; an omitted key keeps its value and `null` clears
-   *  `defaultColWidthChars` / `defaultRowHeightPt`. */
+   *  `defaultColumnWidthChars` / `defaultRowHeightPt`. */
   updateFormatDefaults(patch: SheetFormatDefaultsPatch): void;
 
   /** Rectangle covering the inclusive cell range, in points from the top-left of A1.
@@ -6444,8 +6467,13 @@ export interface Sheet {
   /** Effective column width in points under `mode` (default `Display`); zero when hidden. A `mode` outside
    *  `GeometryMode` fails with `StatusCode.InvalidArgument` and a non-number throws `TypeError`. */
   getColumnWidthPt(col: number, mode?: GeometryMode): number;
+  /** `getColumnWidthPt` for the A1 column `a1` (`"B"`); a span of several columns fails with
+   *  `StatusCode.InvalidArgument`. */
+  getColumnWidthPt(a1: string, mode?: GeometryMode): number;
   /** Effective row height in points; zero when hidden. */
   getRowHeightPt(row: number): number;
+  /** `getRowHeightPt` for the A1 row `a1` (`"3"`); a span of several rows fails with `StatusCode.InvalidArgument`. */
+  getRowHeightPt(a1: string): number;
   /** The character-unit to point conversion model for the workbook's Normal font under `mode` (default
    *  `Display`). A `mode` outside `GeometryMode` fails with `StatusCode.InvalidArgument` and a non-number
    *  throws `TypeError`. */
@@ -6520,7 +6548,7 @@ export interface Sheet {
   /** Reads the protected range `protectedRange`; `null` when the sheet has none. */
   getProtectedRange(protectedRange: ProtectedRangeRef): ProtectedRange | null;
   /** Appends a protected range and returns its name. `name` must be non-empty (`StatusCode.InvalidArgument`) and unique on the sheet (`StatusCode.AlreadyExists`); `ranges` must hold at least one rectangle. */
-  addProtectedRange(range: ProtectedRangeInput): string;
+  addProtectedRange(input: ProtectedRangeInput): string;
   /** Updates the protected range `protectedRange` with the keys `patch` names; the others keep their value.
    *  Leaving `ranges` out keeps the stored ranges. See {@link ProtectedRangePatch}. */
   updateProtectedRange(protectedRange: ProtectedRangeRef, patch: ProtectedRangePatch): void;
@@ -6724,9 +6752,14 @@ export interface WorkbookOoxml {
 export interface SheetOoxml {
   /** The cell XF index the columns of `col` carry (`setColumnXfIndex`); `null` when the column has none. */
   getColumnXfIndex(col: number): number | null;
+  /** `getColumnXfIndex` for the A1 column `a1` (`"B"`); a span of several columns fails with
+   *  `StatusCode.InvalidArgument`. */
+  getColumnXfIndex(a1: string): number | null;
   /** The cell XF index row `row` makes effective (OOXML `customFormat="1"`, `setRowXfIndex`); `null` when
    *  the row has none. */
   getRowXfIndex(row: number): number | null;
+  /** `getRowXfIndex` for the A1 row `a1` (`"3"`); a span of several rows fails with `StatusCode.InvalidArgument`. */
+  getRowXfIndex(a1: string): number | null;
 
   /** OOXML fragment for round trips; normally use `getAutoFilter`. Reads the complete worksheet-level
    *  `<autoFilter>` element; `null` when the sheet has no AutoFilter definition. */
@@ -6923,7 +6956,8 @@ export interface Pivot {
   readonly name: string;
   /** Reads the pivot's definition: name, cache id, report layout, grand totals and style options. */
   getProperties(): PivotProperties;
-  /** Renames the pivot table. */
+  /** Renames the pivot table. `StatusCode.InvalidArgument` for an empty name; `StatusCode.AlreadyExists` for a name
+   *  another pivot table on the sheet has under the name identity rule. */
   rename(name: string): void;
   /** The handle of the cache the pivot draws from, the same object `Workbook.pivotCache(cacheId)` returns. */
   cache(): PivotCache;
@@ -7319,10 +7353,10 @@ export interface WorkbookCtor {
   load(bytes: BytesInput): Workbook;
 }
 
-/** Options for {@link createFormulon}. Keys other than these four are ignored, and a key set to `null` is
- *  treated as omitted.
+/** Options for {@link createFormulon}. Any other key, or a key of the wrong type, rejects with a `TypeError`; a
+ *  key set to `null` is omitted.
  *
- *  `@libraz/formulon` (WASM) passes them to the module loader. `@libraz/formulon-native` accepts them and
+ *  `@libraz/formulon` (WASM) passes them to the module loader. `@libraz/formulon-native` validates them, then
  *  does not use them: the addon loads no files at run time and writes nothing to stdout or stderr. */
 export interface FormulonOptions {
   /** WASM: maps a file the module loads (`formulon.wasm`) and the directory it would load it from to the
@@ -7474,7 +7508,7 @@ export interface Formulon {
    *  formulon.convertCivilToSerial({ year: 2024, month: 3, day: 1, hour: 12, minute: 0, second: 0 }); // 45352.5
    *  formulon.convertCivilToSerial({ year: 1904, month: 1, day: 2 }, { date1904: true }); // 1
    *  ``` */
-  convertCivilToSerial(civil: CivilTimeInput, options?: DateSystemOptions): number;
+  convertCivilToSerial(date: DateInput, options?: DateSystemOptions): number;
   /** Converts a serial number to civil fields, as `YEAR` ... `SECOND` read it. The fraction is rounded to the
    *  nearest whole second, carrying into the next day. `serial` must be finite, at least 1 (0 in the 1904
    *  system) and below the last serial of the date system plus one; otherwise the call fails with
@@ -7489,9 +7523,6 @@ export interface Formulon {
 
   /** Library version string (UTF-8). */
   getVersion(): string;
-
-  /** Name of `status` (e.g. `"OK"`). */
-  getStatusName(status: StatusCode): string;
 
   /** Returns metadata for the function `name` (case-insensitive); `null` when no function
    *  matches. The result is locale-invariant: the description / signature fields are always `undefined`
@@ -7574,9 +7605,8 @@ export interface Formulon {
    *  the default threshold) stderr fallback when `sink` is `null`.
    *  **Process-wide** state, not per `Workbook`.
    *
-   *  `sink` receives one complete JSON record as raw bytes. The view is only valid for the duration of
-   *  the call; copy it (`new Uint8Array(record)`) or decode it (`new TextDecoder().decode(
-   *  record)`) before returning.
+   *  `sink` receives one {@link LogEvent} per event: a fresh object the sink owns. `level` is the
+   *  {@link LogLevel} ordinal; the other keys are the event's fields as the engine writes them.
    *
    *  A sink that throws has its exception dropped and the record lost;
    *  the call that emitted it is unaffected. Records come from arbitrary
@@ -7587,7 +7617,7 @@ export interface Formulon {
    *  the native call that produced it returns. A value that is neither a
    *  function nor `null` throws `TypeError` and leaves
    *  the installed sink in place. */
-  setLogSink(sink: ((record: Uint8Array) => void) | null): void;
+  setLogSink(sink: ((record: LogEvent) => void) | null): void;
 }
 
 /**

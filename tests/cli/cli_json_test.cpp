@@ -56,11 +56,13 @@ TEST(FormulonCli, PaginateJsonListsOneA1RangePerPage) {
   const CliRun r = run_cli({"paginate", "--json", path});
   ASSERT_EQ(r.exit_code, 0) << r.stderr_text;
   // The fixture fills A1:B1 only, so the used range fits on a single page.
-  EXPECT_EQ(r.stdout_text, "{\"format\":1,\"sheets\":[{\"name\":\"Sheet1\",\"pages\":[{\"range\":\"A1:B1\"}]}]}\n");
+  EXPECT_EQ(r.stdout_text,
+            "{\"format\":1,\"sheets\":[{\"name\":\"Sheet1\",\"pageCount\":1,\"printArea\":[],\"rowBreaks\":[],"
+            "\"columnBreaks\":[],\"pages\":[{\"range\":\"A1:B1\"}]}]}\n");
 
   const CliRun plain = run_cli({"paginate", path});
   ASSERT_EQ(plain.exit_code, 0) << plain.stderr_text;
-  EXPECT_NE(plain.stdout_text.find("pages=1\n"), std::string::npos) << plain.stdout_text;
+  EXPECT_NE(plain.stdout_text.find("pageCount=1\n"), std::string::npos) << plain.stdout_text;
 }
 
 TEST(FormulonCli, PaginateJsonFailureLeavesStdoutEmpty) {
@@ -105,11 +107,11 @@ TEST(FormulonCli, JsonEnvelopeDumpMetadataListsNamesTablesAndParts) {
   const CliRun r = run_cli({"dump", "--view", "metadata", "--json", path});
   ASSERT_EQ(r.exit_code, 0) << r.stderr_text;
   EXPECT_EQ(r.stdout_text,
-            "{\"format\":1,\"defined_names\":["
+            "{\"format\":1,\"definedNames\":["
             "{\"name\":\"Before\",\"formula\":\"=1\",\"scope\":null},"
             "{\"name\":\"Bad\",\"formula\":\"=Sheet1!$A$1\",\"scope\":\"#99\"},"
             "{\"name\":\"After\",\"formula\":\"=2\",\"scope\":null}],"
-            "\"tables\":[],\"passthrough_parts\":[]}\n");
+            "\"tables\":[],\"passthroughParts\":[]}\n");
 }
 
 TEST(FormulonCli, JsonEnvelopeEveryStdoutFormStartsWithFormatOne) {

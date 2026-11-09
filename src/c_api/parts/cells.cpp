@@ -43,6 +43,7 @@ using formulon::c_api::parts::check_cell_text_length;
 using formulon::c_api::parts::check_entered_cell_formula;
 using formulon::c_api::parts::check_finite;
 using formulon::c_api::parts::check_index;
+using formulon::c_api::parts::check_limit;
 using formulon::c_api::parts::check_record_size;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::check_sheet_rect;
@@ -57,6 +58,7 @@ using formulon::c_api::parts::invalid_argument;
 using formulon::c_api::parts::invalid_error_code;
 using formulon::c_api::parts::is_valid_error_code;
 using formulon::c_api::parts::null_argument;
+using formulon::c_api::parts::null_field;
 using formulon::c_api::parts::publish_scratch;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::set_last_error;
@@ -263,8 +265,7 @@ extern "C" fm_status_t fm_sheet_set_cell_phonetic_runs(fm_workbook_t* wb, size_t
   for (size_t i = 0; i < count; ++i) {
     const fm_phonetic_run_t& run = runs[i];
     if (run.text == nullptr) {
-      return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "run text is NULL",
-                               "run_index=" + std::to_string(i));
+      return null_field("text");
     }
     if (auto rc = check_utf8(run.text, "run_index", i); rc != 0) {
       return rc;
@@ -274,13 +275,13 @@ extern "C" fm_status_t fm_sheet_set_cell_phonetic_runs(fm_workbook_t* wb, size_t
     }
     if (run.end < run.start) {
       return invalid_argument(
-          "run ends before it starts",
+          ("runs[" + std::to_string(i) + "].end must not be before start").c_str(),
           "run_index=" + std::to_string(i) + " start=" + std::to_string(run.start) + " end=" + std::to_string(run.end));
     }
     if (i != 0U && run.start < previous_end) {
-      return invalid_argument("runs overlap or are out of order", "run_index=" + std::to_string(i) +
-                                                                      " start=" + std::to_string(run.start) +
-                                                                      " previous_end=" + std::to_string(previous_end));
+      return invalid_argument(("runs[" + std::to_string(i) + "].start must not be before the previous end").c_str(),
+                              "run_index=" + std::to_string(i) + " start=" + std::to_string(run.start) +
+                                  " previous_end=" + std::to_string(previous_end));
     }
     previous_end = run.end;
     parsed.push_back(formulon::PhoneticRun{run.start, run.end, std::string(run.text)});
@@ -320,14 +321,16 @@ extern "C" fm_status_t fm_sheet_set_cell_phonetic_properties(fm_workbook_t* wb, 
   // an out-of-range value would not survive an `.xlsb` save intact. Reject
   // it here rather than truncate it into a different, valid-looking form.
   if (type < FM_PHONETIC_TYPE_HALFWIDTH_KATAKANA || type > FM_PHONETIC_TYPE_NO_CONVERSION) {
-    return invalid_argument("type out of range", "type=" + std::to_string(type));
+    return invalid_argument(("type " + std::to_string(type) + " is not a PhoneticType").c_str(),
+                            "type=" + std::to_string(type));
   }
   if (alignment < FM_PHONETIC_ALIGNMENT_NO_CONTROL || alignment > FM_PHONETIC_ALIGNMENT_DISTRIBUTED) {
-    return invalid_argument("alignment out of range", "alignment=" + std::to_string(alignment));
+    return invalid_argument(("alignment " + std::to_string(alignment) + " is not a PhoneticAlignment").c_str(),
+                            "alignment=" + std::to_string(alignment));
   }
   constexpr std::uint32_t kMaxFontIndex = 0xFFFFU;
-  if (font_index > kMaxFontIndex) {
-    return invalid_argument("font_index out of range", "font_index=" + std::to_string(font_index));
+  if (auto rc = check_limit(font_index, kMaxFontIndex + 1U, "font_index"); rc != 0) {
+    return rc;
   }
 
   sheet.set_cell_phonetic_props(
@@ -577,7 +580,7 @@ extern "C" fm_status_t fm_sheet_get_lambda_text(const fm_workbook_t* wb, size_t 
   }
   const formulon::eval::LambdaValue* lv = cell->cached_value.as_lambda();
   if (lv == nullptr) {
-    return invalid_argument("lambda payload is NULL");
+    return null_field("lambda");
   }
   std::string formatted =
       with_formula_prefix(wb->workbook().spell_self_book_names(formulon::eval::format_lambda_value(*lv)));

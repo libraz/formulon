@@ -25,12 +25,15 @@ plumbing.
 
 from __future__ import annotations
 
+import builtins
+import dataclasses
 import datetime
 import enum
 import math
 import numbers
 import operator
 import os
+import re
 import struct
 from dataclasses import dataclass, field
 from enum import IntEnum, IntFlag
@@ -54,6 +57,7 @@ from typing import (
 )
 from xml.etree import ElementTree
 
+from . import _handle_tables
 from . import _structs as S
 from ._c import (
     LIB,
@@ -62,11 +66,13 @@ from ._c import (
     InvalidFileError,
     ValueKind,
     _NoCopy,
+    _public_call,
+    _require_bool,
     _sint,
     _uint,
     fm_value_t_size,
 )
-from ._status import StatusCode
+from ._status import INDEX_OUT_OF_RANGE_CODES, StatusCode
 
 __all__ = [
     "Alignment",
@@ -273,6 +279,7 @@ __all__ = [
     "PrintTitlesInput",
     "ProtectedRangeInput",
     "ProtectedRangeRef",
+    "PageBreakInput",
     "RowBreak",
     "PaginationPage",
     "PageMargins",
@@ -551,10 +558,48 @@ class ReadDiagnostics:
     unknown_content_type_count: int
 
 
+# C field names a record publishes under another name; the generated table lists the others.
+_C_FIELD_RENAMES = _handle_tables.C_FIELD_NAMES
+_PATH_TOKEN = re.compile(r"[a-z_][a-z0-9_]*(?:\.[a-z_][a-z0-9_]*|\[\d+\])*")
+_IDENTIFIER = re.compile(r"[a-z_][a-z0-9_]*")
+
+
+def _relabel_engine_error(error: FormulonError) -> FormulonError:
+    """Rewrite an engine argument error ``<c_path> <rest>`` as ``<Class.method> <public_path> <rest>``."""
+    if error.code != StatusCode.INVALID_ARGUMENT and error.code not in INDEX_OUT_OF_RANGE_CODES:
+        return error
+    label, frame = _public_call()
+    path, _, rest = error.message.partition(" ")
+    if frame is None or not rest or not _PATH_TOKEN.fullmatch(path):
+        return error
+    code = frame.f_code
+    first = 1 if code.co_varnames[:1] in (("self",), ("cls",)) else 0
+    names = code.co_varnames[first : code.co_argcount + code.co_kwonlyargcount]
+    path = _IDENTIFIER.sub(lambda m: _C_FIELD_RENAMES.get(m.group(0), m.group(0)), path)
+    root = _IDENTIFIER.match(path).group(0)  # type: ignore[union-attr]
+    tail = path[len(root) :]
+    stem = root[: -len("_index")] if root.endswith("_index") else root
+    for candidate in (root, stem):
+        if candidate in names:
+            path = candidate + tail
+            break
+    else:
+        records = [
+            n
+            for n in names
+            if dataclasses.is_dataclass(frame.f_locals.get(n)) and not isinstance(frame.f_locals.get(n), type)
+        ]
+        if len(records) == 1:
+            path = f"{records[0]}.{path}"
+    error.message = f"{label} {path} {rest}"
+    error.args = (error.message,)
+    return error
+
+
 def _check(status: int) -> None:
     """Raise :class:`FormulonError` (or its subclass for ``status``) if ``status`` is non-zero."""
     if status != 0:
-        raise FormulonError._from_engine(status)
+        raise _relabel_engine_error(FormulonError._from_engine(status))
 
 
 # `_uint` / `_sint` live in `formulon._c` (imported above) alongside
@@ -588,7 +633,7 @@ class ExcelError:
 
     def __post_init__(self) -> None:
         if isinstance(self.code, bool):
-            raise TypeError("formulon: ExcelError.code must be an ErrorCode, got bool")
+            raise TypeError("ExcelError.code must be an ErrorCode, got bool")
         object.__setattr__(self, "code", ErrorCode(_sint(self.code, "code")))
 
     def __str__(self) -> str:
@@ -628,22 +673,22 @@ class Value:
         required = _VALUE_PAYLOAD_FIELD.get(kind)
         for name in _VALUE_PAYLOAD_FIELD.values():
             if name != required and getattr(self, name) is not None:
-                raise ValueError(f"formulon: Value(kind={kind.name}) takes no {name}")
+                raise ValueError(f"Value(kind={kind.name}) takes no {name}")
         if required is None:
             return
         payload = getattr(self, required)
         if payload is None:
-            raise ValueError(f"formulon: Value(kind={kind.name}) requires {required}")
+            raise ValueError(f"Value(kind={kind.name}) requires {required}")
         if kind == ValueKind.NUMBER:
             if isinstance(payload, bool) or not isinstance(payload, numbers.Real):
-                raise TypeError(f"formulon: Value.number must be a real number, got {type(payload).__name__}")
+                raise TypeError(f"Value.number must be a real number, got {type(payload).__name__}")
             object.__setattr__(self, "number", float(payload))
         elif kind == ValueKind.BOOL:
             if not isinstance(payload, bool):
-                raise TypeError(f"formulon: Value.boolean must be a bool, got {type(payload).__name__}")
+                raise TypeError(f"Value.boolean must be a bool, got {type(payload).__name__}")
         elif kind == ValueKind.TEXT:
             if not isinstance(payload, str):
-                raise TypeError(f"formulon: Value.text must be a str, got {type(payload).__name__}")
+                raise TypeError(f"Value.text must be a str, got {type(payload).__name__}")
         elif kind == ValueKind.ERROR:
             object.__setattr__(self, "error_code", ErrorCode(_sint(payload, "error_code")))
         else:
@@ -720,16 +765,16 @@ def to_native(value: Value) -> NativeValue:
 def _array_payload(rows: object) -> Tuple[Tuple[Value, ...], ...]:
     """``rows`` as a non-empty rectangle of scalar :class:`Value` cells, rows and cells as tuples."""
     if isinstance(rows, (str, bytes)) or not isinstance(rows, (list, tuple)):
-        raise TypeError(f"formulon: Value.array must be a sequence of rows, got {type(rows).__name__}")
+        raise TypeError(f"Value.array must be a sequence of rows, got {type(rows).__name__}")
     grid = tuple(tuple(row) if isinstance(row, (list, tuple)) else row for row in rows)
     if not grid or not all(isinstance(row, tuple) and row for row in grid):
-        raise ValueError("formulon: Value.array must hold at least one non-empty row")
+        raise ValueError("Value.array must hold at least one non-empty row")
     if any(len(row) != len(grid[0]) for row in grid):
-        raise ValueError("formulon: Value.array rows must all have the same length")
+        raise ValueError("Value.array rows must all have the same length")
     for row in grid:
         for cell in row:
             if not isinstance(cell, Value) or cell.kind is ValueKind.ARRAY:
-                raise TypeError(f"formulon: Value.array cells must be scalar Values, got {cell!r}")
+                raise TypeError(f"Value.array cells must be scalar Values, got {cell!r}")
     return grid
 
 
@@ -1298,7 +1343,7 @@ def enum_name(enum_type: "type[enum.Enum]", value: int) -> Optional[str]:
         enum_name(CfRuleType, 3)  # "DATA_BAR"
     """
     if not (isinstance(enum_type, type) and issubclass(enum_type, enum.Enum)):
-        raise TypeError(f"formulon: enum_type must be an enum class, got {enum_type!r}")
+        raise TypeError(f"enum_type must be an enum class, got {enum_type!r}")
     try:
         return enum_type(value).name
     except ValueError:
@@ -2288,7 +2333,7 @@ class ThreadedComment:
     #: The anchor cell.
     cell: CellAddress
     person_id: str
-    #: The local wall-clock time it was created; whole seconds. ``None`` when the comment states none.
+    #: The UTC time it was created, as a naive ``datetime``; whole seconds. ``None`` when the comment states none.
     created: Optional[datetime.datetime]
     text: str
     parent_id: Optional[str]
@@ -2302,9 +2347,8 @@ class ThreadedCommentInput:
 
     ``parent_id`` ``None`` opens a new thread at ``cell`` (``A1`` when
     omitted); otherwise the comment replies to that thread, taking its anchor
-    and ignoring ``cell`` and ``done``. An empty ``parent_id`` is an ``InvalidArgumentError``. ``created`` is a ``datetime`` (a naive
-    local wall clock; an aware one is a ValueError) or a ``date`` (midnight);
-    fractions of a second are dropped. An omitted ``id`` is generated
+    and ignoring ``cell`` and ``done``. An empty ``parent_id`` is an ``InvalidArgumentError``. ``created`` is UTC: a naive ``datetime`` is
+    read as UTC, an aware one is converted to UTC, and a ``date`` is midnight UTC; fractions of a second are dropped. An omitted ``id`` is generated
     (``{XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX}``) and an omitted ``created`` is the pinned clock if one is
     set, else now.
     """
@@ -2973,7 +3017,7 @@ def _resolve_chart_axis(axis: ChartAxisRef, properties: ChartProperties) -> int:
       NotFoundError: when the plot group has no axis of that kind.
     """
     if isinstance(axis, bool) or not isinstance(axis, (int, ChartAxisKey)):
-        raise TypeError(f"formulon: axis must be an int, a ChartAxisKind or a ChartAxisKey, got {type(axis).__name__}")
+        raise TypeError(f"axis must be an int, a ChartAxisKind or a ChartAxisKey, got {type(axis).__name__}")
     if isinstance(axis, int) and not isinstance(axis, ChartAxisKind):
         return axis
     key = axis if isinstance(axis, ChartAxisKey) else ChartAxisKey(axis)
@@ -3652,22 +3696,22 @@ class PaginationPage:
 class SheetFormatDefaults:
     """Sheet default column / row metrics (``<sheetFormatPr>``).
 
-    ``default_col_width_chars`` is a stored width (characters with the column
+    ``default_column_width_chars`` is a stored width (characters with the column
     padding included) and ``default_row_height_pt`` in points; each is ``None``
     when the sheet stores none. ``Sheet.update_format_defaults`` takes these
     fields as keyword arguments: ``None`` clears the stored value and
     :data:`UNCHANGED` (the default) keeps it.
-    ``effective_default_col_width_chars`` / ``effective_default_row_height_pt``
+    ``effective_default_column_width_chars`` / ``effective_default_row_height_pt``
     are read-only values the sheet lays out with: the stated default, else the
-    column Excel derives from ``base_col_width_chars`` and the Normal font
+    column Excel derives from ``base_column_width_chars`` and the Normal font
     (Calibri 11, base 8: 9.140625, shown as 8.43) and 102/7 pt; the row height is 0 when
     ``zero_height`` hides rows by default. They are ignored when setting.
     """
 
-    default_col_width_chars: Optional[float] = None
+    default_column_width_chars: Optional[float] = None
     default_row_height_pt: Optional[float] = None
-    base_col_width_chars: float = 8.0
-    effective_default_col_width_chars: float = 0.0
+    base_column_width_chars: float = 8.0
+    effective_default_column_width_chars: float = 0.0
     effective_default_row_height_pt: float = 0.0
     #: ``customHeight``: ``default_row_height_pt`` is an explicit override rather
     #: than a cached figure Excel recomputes from the Normal font. ``None``
@@ -3711,6 +3755,19 @@ class RowBreak:
     """
 
     row: int
+    first: int = 0
+    last: int = 0
+    manual: bool = True
+
+
+@dataclass
+class PageBreakInput:
+    """The break :meth:`Sheet.set_row_break` / :meth:`Sheet.set_column_break` write.
+
+    It covers the cross-axis span ``first..last``; ``first == last == 0`` covers the whole row or column.
+    ``manual`` is False for a break Excel would compute rather than one a user placed.
+    """
+
     first: int = 0
     last: int = 0
     manual: bool = True
@@ -4734,7 +4791,7 @@ def _pack_font(ptr: int, record: Font, scope: _ArgScope) -> None:
     }
     for name in _FONT_TOGGLES:
         value = getattr(record, name)
-        fields[name] = 1 if value else 0
+        fields[name] = 0 if value is None else int(_require_bool(value, name))
         fields[f"has_{name}"] = 0 if value is None else 1
     S.FONT_RECORD.pack(LIB, ptr, fields)
     _pack_color(ptr + S.FONT_RECORD.offsets["color"][1], record.color, "Font.color")
@@ -4815,11 +4872,14 @@ def _decode_border_record(ptr: int) -> Border:
 
 def _pack_border_record(ptr: int, border: Border) -> None:
     if not isinstance(border, Border):
-        raise TypeError(f"formulon: expected a Border, got {type(border).__name__}")
+        raise TypeError(f"expected a Border, got {type(border).__name__}")
     S.BORDER_RECORD.pack(
         LIB,
         ptr,
-        {"diagonal_up": 1 if border.diagonal_up else 0, "diagonal_down": 1 if border.diagonal_down else 0},
+        {
+            "diagonal_up": _require_bool(border.diagonal_up, "diagonal_up"),
+            "diagonal_down": _require_bool(border.diagonal_down, "diagonal_down"),
+        },
     )
     for side in _BORDER_SIDES:
         spec: BorderSide = getattr(border, side)
@@ -4884,7 +4944,7 @@ def _alignment_to_xml(alignment: Optional[Alignment]) -> Optional[str]:
     if alignment is None:
         return None
     if not isinstance(alignment, Alignment):
-        raise TypeError(f"formulon: Dxf.alignment must be an Alignment, got {type(alignment).__name__}")
+        raise TypeError(f"Dxf.alignment must be an Alignment, got {type(alignment).__name__}")
     default = Alignment()
     attrs: List[str] = []
     if alignment.horizontal != default.horizontal:
@@ -4919,8 +4979,10 @@ def _protection_to_xml(protection: Optional[CellProtection]) -> Optional[str]:
     if protection is None:
         return None
     if not isinstance(protection, CellProtection):
-        raise TypeError(f"formulon: Dxf.protection must be a CellProtection, got {type(protection).__name__}")
-    return f'<protection locked="{1 if protection.locked else 0}" hidden="{1 if protection.hidden else 0}"/>'
+        raise TypeError(f"Dxf.protection must be a CellProtection, got {type(protection).__name__}")
+    locked = int(_require_bool(protection.locked, "locked"))
+    hidden = int(_require_bool(protection.hidden, "hidden"))
+    return f'<protection locked="{locked}" hidden="{hidden}"/>'
 
 
 @dataclass(frozen=True)
@@ -5408,7 +5470,7 @@ def _operand_fields(value: object, name: str, *, count_filter: bool) -> Dict[str
     if isinstance(value, str):
         return {name + "_kind": _OPERAND_TEXT, name + "_text": value}
     if isinstance(value, bool) or not isinstance(value, numbers.Real):
-        raise TypeError(f"formulon: {name} must be a number, a str or None, got {type(value).__name__}")
+        raise TypeError(f"{name} must be a number, a str or None, got {type(value).__name__}")
     if count_filter and math.isfinite(value) and value == int(value) and abs(value) < (1 << 31):
         return {name + "_kind": _OPERAND_INT, name + "_int": int(value)}
     return {name + "_kind": _OPERAND_DOUBLE, name + "_double": float(value)}
@@ -5475,7 +5537,7 @@ def _encode_clearable_patch(
     """Encode a flat patch: a key left out keeps, ``None`` clears a ``clearable`` key, else is a ``TypeError``."""
     for key, value in patch.items():
         if value is None and key not in clearable:
-            raise TypeError(f"formulon: {key} cannot be None in a {what}")
+            raise TypeError(f"{key} cannot be None in a {what}")
     return _encode_patch(spec, patch, (), what, scope)
 
 
@@ -5537,7 +5599,7 @@ def _pack_pivot_date_group(scope: _ArgScope, group: PivotDateGroupInput, *, date
     ``date1904`` is the workbook's date system, which turns ``start`` / ``end`` into serials.
     """
     if not isinstance(group, PivotDateGroupInput):
-        raise TypeError(f"formulon: expected a PivotDateGroupInput, got {type(group).__name__}")
+        raise TypeError(f"expected a PivotDateGroupInput, got {type(group).__name__}")
     from ._inputs import civil_datetime, date_serial
 
     fields: Dict[str, object] = {
@@ -5577,7 +5639,7 @@ def _pack_pivot_worksheet_source(
     The range's sheet is written as a name and the A1 text unqualified, as the element stores them.
     """
     if not isinstance(source, (PivotWorksheetSourceInput, PivotWorksheetSource)):
-        raise TypeError(f"formulon: expected a PivotWorksheetSourceInput, got {type(source).__name__}")
+        raise TypeError(f"expected a PivotWorksheetSourceInput, got {type(source).__name__}")
     given = getattr(source, "sheet", None)
     given_name = None if given is None else (given if isinstance(given, str) else workbook.sheet(given).name)
     value = source.range
@@ -5592,7 +5654,7 @@ def _pack_pivot_worksheet_source(
         if parsed.sheet_name is not None:
             sheet_name = parsed.sheet_name
     elif value is not None:
-        raise TypeError(f"formulon: range must be a SheetRect, an A1 string or None, got {type(value).__name__}")
+        raise TypeError(f"range must be a SheetRect, an A1 string or None, got {type(value).__name__}")
     if given_name is not None and sheet_name is not None and given_name.casefold() != sheet_name.casefold():
         raise FormulonError(
             StatusCode.INVALID_ARGUMENT,
@@ -5643,7 +5705,7 @@ def _cell_xf_fields(record: Union[CellXfInput, CellXf]) -> Dict[str, object]:
     lives in one place.
     """
     if not isinstance(record, (CellXfInput, CellXf)):
-        raise TypeError(f"formulon: expected a CellXfInput, got {type(record).__name__}")
+        raise TypeError(f"expected a CellXfInput, got {type(record).__name__}")
 
     return {
         "font_index": _uint(record.font_index, "font_index", role="position"),
@@ -5654,9 +5716,11 @@ def _cell_xf_fields(record: Union[CellXfInput, CellXf]) -> Dict[str, object]:
         "has_horizontal": 0 if record.horizontal is None else 1,
         "vertical": _uint(record.vertical or 0, "vertical", 8),
         "has_vertical": 0 if record.vertical is None else 1,
-        "wrap_text": 1 if record.wrap_text else 0,
+        "wrap_text": _require_bool(record.wrap_text, "wrap_text") if record.wrap_text is not None else 0,
         "has_wrap_text": 0 if record.wrap_text is None else 1,
-        "justify_last_line": 1 if record.justify_last_line else 0,
+        "justify_last_line": (
+            _require_bool(record.justify_last_line, "justify_last_line") if record.justify_last_line is not None else 0
+        ),
         "has_justify_last_line": 0 if record.justify_last_line is None else 1,
         "has_alignment": 1
         if any(
@@ -5682,19 +5746,21 @@ def _cell_xf_fields(record: Union[CellXfInput, CellXf]) -> Dict[str, object]:
         "has_relative_indent": 1 if record.relative_indent is not None else 0,
         "relative_indent": _sint(record.relative_indent or 0, "relative_indent"),
         "has_shrink_to_fit": 1 if record.shrink_to_fit is not None else 0,
-        "shrink_to_fit": 1 if record.shrink_to_fit else 0,
+        "shrink_to_fit": (
+            _require_bool(record.shrink_to_fit, "shrink_to_fit") if record.shrink_to_fit is not None else 0
+        ),
         "has_reading_order": 1 if record.reading_order is not None else 0,
         "reading_order": _sint(record.reading_order or 0, "reading_order"),
-        "apply_number_format": 1 if record.apply_number_format else 0,
-        "apply_font": 1 if record.apply_font else 0,
-        "apply_fill": 1 if record.apply_fill else 0,
-        "apply_border": 1 if record.apply_border else 0,
-        "apply_alignment": 1 if record.apply_alignment else 0,
-        "apply_protection": 1 if record.apply_protection else 0,
-        "quote_prefix": 1 if record.quote_prefix else 0,
+        "apply_number_format": _require_bool(record.apply_number_format, "apply_number_format"),
+        "apply_font": _require_bool(record.apply_font, "apply_font"),
+        "apply_fill": _require_bool(record.apply_fill, "apply_fill"),
+        "apply_border": _require_bool(record.apply_border, "apply_border"),
+        "apply_alignment": _require_bool(record.apply_alignment, "apply_alignment"),
+        "apply_protection": _require_bool(record.apply_protection, "apply_protection"),
+        "quote_prefix": _require_bool(record.quote_prefix, "quote_prefix"),
         "has_protection": 1 if record.locked is not None or record.hidden is not None else 0,
         "locked": 0 if record.locked is False else 1,
-        "hidden": 1 if record.hidden else 0,
+        "hidden": _require_bool(record.hidden, "hidden") if record.hidden is not None else 0,
     }
 
 
@@ -5788,9 +5854,9 @@ class _ArgScope:
         return self.alloc(fm_value_t_size * count)
 
     def buffer(self, data: bytes) -> int:
-        """Copy ``data`` into engine memory; 0 when it is empty."""
-        ptr = self._take(len(data))
-        if ptr:
+        """Copy ``data`` into engine memory; an empty ``data`` still gets a 1-byte block, so the pointer is never 0."""
+        ptr = self._take(max(len(data), 1))
+        if data:
             LIB.write_bytes(ptr, data)
         return ptr
 
@@ -5852,7 +5918,7 @@ def _read_optional_cstr_out(fn, *args) -> Optional[str]:
 def _finite(value: Any, name: str) -> float:
     """``value`` as a finite ``float``; ``TypeError`` for a non-number, ``InvalidArgumentError`` for NaN / infinity."""
     if isinstance(value, bool) or not isinstance(value, numbers.Real):
-        raise TypeError(f"formulon: {name} must be a number, got {type(value).__name__}")
+        raise TypeError(f"{name} must be a number, got {type(value).__name__}")
     x = float(value)
     if not math.isfinite(x):
         raise FormulonError(StatusCode.INVALID_ARGUMENT, f"{name} must be finite", f"{name}={x!r}")
@@ -5878,7 +5944,7 @@ def _anchor_input(anchor: Optional[DrawingAnchorInput]) -> DrawingAnchorInput:
     if anchor is None:
         return DrawingAnchorInput()
     if not isinstance(anchor, DrawingAnchorInput):
-        raise TypeError(f"formulon: anchor must be a DrawingAnchorInput or None, got {type(anchor).__name__}")
+        raise TypeError(f"anchor must be a DrawingAnchorInput or None, got {type(anchor).__name__}")
     return anchor
 
 
@@ -5919,22 +5985,15 @@ def _placement_fields(scope: _ArgScope, placement: Optional[DrawingPlacementInpu
     if placement is None:
         placement = DrawingPlacementInput()
     elif not isinstance(placement, DrawingPlacementInput):
-        raise TypeError(f"formulon: placement must be a DrawingPlacementInput or None, got {type(placement).__name__}")
+        raise TypeError(f"placement must be a DrawingPlacementInput or None, got {type(placement).__name__}")
     fields: Dict[str, Any] = {
         "name": scope.nonempty_cstr(placement.name),
         "description": scope.nonempty_cstr(placement.description),
         "anchor": _anchor_fields(placement.anchor),
     }
     if placement.hidden is not None:
-        fields["hidden"] = _tristate_default(_flag_value(placement.hidden, "hidden"))
+        fields["hidden"] = _tristate_default(_require_bool(placement.hidden, "hidden"))
     return fields
-
-
-def _flag_value(value: Any, name: str) -> bool:
-    """``value`` as a ``bool``; ``TypeError`` for any other type."""
-    if not isinstance(value, bool):
-        raise TypeError(f"formulon: {name} must be a bool, got {type(value).__name__}")
-    return value
 
 
 def _chart_fill_fields(fill: Optional[ChartFill], scope: _ArgScope) -> Dict[str, Any]:
@@ -5942,8 +6001,8 @@ def _chart_fill_fields(fill: Optional[ChartFill], scope: _ArgScope) -> Dict[str,
     if fill is None:
         return {}
     if not isinstance(fill, ChartFill):
-        raise TypeError(f"formulon: fill must be a ChartFill or None, got {type(fill).__name__}")
-    fields: Dict[str, Any] = {"none": 1 if fill.none else 0, "other": 1 if fill.other else 0}
+        raise TypeError(f"fill must be a ChartFill or None, got {type(fill).__name__}")
+    fields: Dict[str, Any] = {"none": _require_bool(fill.none, "none"), "other": _require_bool(fill.other, "other")}
     if fill.color is not None:
         fields["color"] = _color_fields(color_input(fill.color, "fill.color"))
     if fill.transparency_pct is not None:
@@ -5957,8 +6016,8 @@ def _chart_line_fields(line: Optional[ChartLine], scope: _ArgScope) -> Dict[str,
     if line is None:
         return {}
     if not isinstance(line, ChartLine):
-        raise TypeError(f"formulon: line must be a ChartLine or None, got {type(line).__name__}")
-    fields: Dict[str, Any] = {"none": 1 if line.none else 0, "other": 1 if line.other else 0}
+        raise TypeError(f"line must be a ChartLine or None, got {type(line).__name__}")
+    fields: Dict[str, Any] = {"none": _require_bool(line.none, "none"), "other": _require_bool(line.other, "other")}
     if line.color is not None:
         fields["color"] = _color_fields(color_input(line.color, "line.color"))
     if line.transparency_pct is not None:
@@ -5992,16 +6051,14 @@ def _shape_paint_patch(name: str, value: object, scope: _ArgScope, *, clear: boo
             return {}
         value = {key: getattr(value, key) for key, _, _ in spec}
     elif not isinstance(value, Mapping):
-        raise TypeError(
-            f"formulon: {name} must be a {record_type.__name__}, a patch or None, got {type(value).__name__}"
-        )
+        raise TypeError(f"{name} must be a {record_type.__name__}, a patch or None, got {type(value).__name__}")
     return _encode_patch(spec, value, (), f"{name} patch", scope)
 
 
 def _pack_shape_spec(scope: _ArgScope, spec: ShapeInput) -> int:
     """Build an ``fm_shape_spec_t`` from a :class:`ShapeInput`; a ``None`` field is left at its zero default."""
     if not isinstance(spec, ShapeInput):
-        raise TypeError(f"formulon: input must be a ShapeInput, got {type(spec).__name__}")
+        raise TypeError(f"input must be a ShapeInput, got {type(spec).__name__}")
     ptr = scope.struct(S.SHAPE_SPEC)
     values: Dict[str, Any] = {
         "placement": _placement_fields(scope, spec),
@@ -6011,7 +6068,7 @@ def _pack_shape_spec(scope: _ArgScope, spec: ShapeInput) -> int:
     if spec.rotation_deg is not None:
         values["rotation_deg"] = _finite(spec.rotation_deg, "rotation_deg")
     if spec.text_box is not None:
-        values["text_box"] = 1 if _flag_value(spec.text_box, "text_box") else 0
+        values["text_box"] = _require_bool(spec.text_box, "text_box")
     values["preset_geometry"] = scope.nonempty_cstr(spec.preset_geometry)
     values["text"] = scope.nonempty_cstr(spec.text)
     S.SHAPE_SPEC.pack(LIB, ptr, values)
@@ -6044,7 +6101,7 @@ def _pack_shape_patch(
         values["rotation_deg"] = _finite(rotation_deg, "rotation_deg")
     if text_box is not None:
         values["text_box_op"] = _PATCH_SET
-        values["text_box"] = 1 if _flag_value(text_box, "text_box") else 0
+        values["text_box"] = _require_bool(text_box, "text_box")
     if preset_geometry is not None:
         values["preset_geometry_op"] = _PATCH_SET
         values["preset_geometry"] = scope.cstr(preset_geometry)
@@ -6058,7 +6115,7 @@ def _pack_shape_patch(
 def _pack_slicer_spec(scope: _ArgScope, spec: SlicerInput) -> int:
     """Build an ``fm_slicer_spec_t`` from a :class:`SlicerInput`; a ``None`` field is left at its zero default."""
     if not isinstance(spec, SlicerInput):
-        raise TypeError(f"formulon: input must be a SlicerInput, got {type(spec).__name__}")
+        raise TypeError(f"input must be a SlicerInput, got {type(spec).__name__}")
     ptr = scope.struct(S.SLICER_SPEC)
     values: Dict[str, Any] = {"placement": _placement_fields(scope, spec)}
     if spec.column_count is not None:
@@ -6121,7 +6178,7 @@ def _pack_drawing_patch(scope: _ArgScope, name, description, hidden, anchor, cle
         values["description"] = scope.cstr(description)
         values["description_op"] = _PATCH_SET
     if hidden is not None:
-        values["hidden"] = 1 if _flag_value(hidden, "hidden") else 0
+        values["hidden"] = _require_bool(hidden, "hidden")
         values["hidden_op"] = _PATCH_SET
     for key in clear:
         values[key + "_op"] = _PATCH_CLEAR
@@ -6204,21 +6261,21 @@ def _pack_sparkline_group(
         ptr,
         {
             "type": _sint(group.type, "type"),
-            "markers": 1 if group.markers else 0,
-            "high": 1 if group.high else 0,
-            "low": 1 if group.low else 0,
-            "first": 1 if group.first else 0,
-            "last": 1 if group.last else 0,
-            "negative": 1 if group.negative else 0,
-            "display_x_axis": 1 if group.display_x_axis else 0,
-            "display_hidden": 1 if group.display_hidden else 0,
+            "markers": _require_bool(group.markers, "markers"),
+            "high": _require_bool(group.high, "high"),
+            "low": _require_bool(group.low, "low"),
+            "first": _require_bool(group.first, "first"),
+            "last": _require_bool(group.last, "last"),
+            "negative": _require_bool(group.negative, "negative"),
+            "display_x_axis": _require_bool(group.display_x_axis, "display_x_axis"),
+            "display_hidden": _require_bool(group.display_hidden, "display_hidden"),
             "min_axis_type": _sint(group.min_axis_type, "min_axis_type"),
             "max_axis_type": _sint(group.max_axis_type, "max_axis_type"),
             "has_manual_min": 0 if group.manual_min is None else 1,
             "has_manual_max": 0 if group.manual_max is None else 1,
             "manual_min": float(group.manual_min or 0.0),
             "manual_max": float(group.manual_max or 0.0),
-            "date_axis": 1 if group.date_axis else 0,
+            "date_axis": _require_bool(group.date_axis, "date_axis"),
             "line_width_pt": float(group.line_width_pt),
             "empty_cells_as": _sint(group.empty_cells_as, "empty_cells_as"),
         },
@@ -6675,7 +6732,7 @@ def _patch_scalar(kind: str, value, key: str, scope: _ArgScope):
     if kind == "i32":
         return _sint(value, key)
     if kind == "bool":
-        return 1 if value else 0
+        return _require_bool(value, key)
     if kind == "f64":
         return float(value)
     if kind == "title":
@@ -6686,7 +6743,7 @@ def _patch_scalar(kind: str, value, key: str, scope: _ArgScope):
 def _check_patch_keys(patch: Mapping, spec: Sequence, extra: Sequence[str], what: str) -> None:
     unknown = set(patch) - {key for key, _, _ in spec} - set(extra)
     if unknown:
-        raise TypeError(f"formulon: unknown {what} key(s): {sorted(unknown)}")
+        raise TypeError(f"unknown {what} key(s): {sorted(unknown)}")
 
 
 def _encode_patch(
@@ -6745,7 +6802,7 @@ def _data_source_spec(value: object, key: str, scope: _ArgScope) -> Dict[str, ob
     if isinstance(value, str):
         return {"kind": ChartSourceKind.REF, "formula": scope.cstr(value)}
     if not isinstance(value, ChartDataSource):
-        raise TypeError(f"formulon: {key} must be a str, a ChartDataSource or None, got {type(value).__name__}")
+        raise TypeError(f"{key} must be a str, a ChartDataSource or None, got {type(value).__name__}")
     kind = _enum(ChartSourceKind, value.kind)
     if kind == ChartSourceKind.REF:
         return {"kind": int(kind), "formula": scope.cstr(value.formula)}
@@ -6756,7 +6813,7 @@ def _data_source_spec(value: object, key: str, scope: _ArgScope) -> Dict[str, ob
     for i, point in enumerate(points):
         is_text = isinstance(point, str)
         if not is_text and (isinstance(point, bool) or not isinstance(point, numbers.Real)):
-            raise TypeError(f"formulon: {key} literal points must be numbers or strings, got {type(point).__name__}")
+            raise TypeError(f"{key} literal points must be numbers or strings, got {type(point).__name__}")
         S.CHART_LITERAL.pack(
             LIB,
             array + i * S.CHART_LITERAL.size,
@@ -6773,7 +6830,7 @@ def _data_source_spec(value: object, key: str, scope: _ArgScope) -> Dict[str, ob
 def _encode_series_patch(patch: Mapping, scope: _ArgScope) -> Dict[str, object]:
     unknown = set(patch) - set(_SERIES_REF_KEYS) - {"fill", "line", "marker", "smooth", "labels"}
     if unknown:
-        raise TypeError(f"formulon: unknown series patch key(s): {sorted(unknown)}")
+        raise TypeError(f"unknown series patch key(s): {sorted(unknown)}")
     out: Dict[str, object] = {}
     for key in _SERIES_REF_KEYS:
         if key not in patch:
@@ -6788,7 +6845,7 @@ def _encode_series_patch(patch: Mapping, scope: _ArgScope) -> Dict[str, object]:
     _encode_optional_patch(out, "labels", patch, _encode_labels_patch, scope)
     if "smooth" in patch:
         out["smooth_op"] = _PATCH_CLEAR if patch["smooth"] is None else _PATCH_SET
-        out["smooth"] = 1 if patch["smooth"] else 0
+        out["smooth"] = 0 if patch["smooth"] is None else _require_bool(patch["smooth"], "smooth")
     return out
 
 
@@ -6801,7 +6858,7 @@ def _encode_point_patch(patch: Optional[Mapping], scope: _ArgScope) -> Dict[str,
         patch = {"fill": None, "line": None, "marker": None}
     unknown = set(patch) - {"fill", "line", "marker"}
     if unknown:
-        raise TypeError(f"formulon: unknown point patch key(s): {sorted(unknown)}")
+        raise TypeError(f"unknown point patch key(s): {sorted(unknown)}")
     out: Dict[str, object] = {}
     _encode_paint_patches(out, patch, scope)
     _encode_optional_patch(out, "marker", patch, _encode_marker_patch, scope)
@@ -6825,7 +6882,7 @@ def _chart_range_text(workbook: Workbook, value: Union[SheetRect, str], sheet: i
     """The sheet-qualified A1 text of a chart range; an unqualified string resolves on sheet index ``sheet``."""
     text = _qualified_range_text(workbook, value, sheet, label)
     if text is None:
-        raise TypeError(f"formulon: {label} must be a SheetRect or an A1 string")
+        raise TypeError(f"{label} must be a SheetRect or an A1 string")
     return text
 
 
@@ -6837,7 +6894,7 @@ def _chart_source_fields(
     A :class:`ChartSource` read back passes as is; its headers are explicit.
     """
     if not isinstance(source, (ChartSourceInput, ChartSource)):
-        raise TypeError(f"formulon: expected a ChartSourceInput, got {type(source).__name__}")
+        raise TypeError(f"expected a ChartSourceInput, got {type(source).__name__}")
     return (
         _chart_range_text(workbook, source.range, sheet, "ChartSourceInput.range"),
         _sint(_enum(ChartSeriesDirection, source.direction), "direction"),
@@ -6853,10 +6910,10 @@ def _encode_chart_insert(scope: _ArgScope, workbook: Workbook, sheet: int, inser
     ``fm_drawing_placement_spec_t``. ``bar_direction`` on a plot type other than ``BAR`` is a ``TypeError``.
     """
     if not isinstance(insert, ChartInput):
-        raise TypeError(f"formulon: expected a ChartInput, got {type(insert).__name__}")
+        raise TypeError(f"expected a ChartInput, got {type(insert).__name__}")
     plot_type = _enum(ChartPlotType, insert.type)
     if insert.bar_direction is not None and plot_type != ChartPlotType.BAR:
-        raise TypeError(f"formulon: bar_direction applies to a BAR chart only, not {plot_type.name}")
+        raise TypeError(f"bar_direction applies to a BAR chart only, not {plot_type.name}")
     title = insert.title
     auto_title = isinstance(title, ChartTitle) and title.kind == ChartTitleKind.AUTO
     if title is None:
@@ -6936,7 +6993,7 @@ def _decode_cell_rect_array(ptr: int, count: int) -> List[CellRect]:
 def _check_value(value: Value) -> Value:
     """Reject anything but a :class:`Value`, whose constructor validated its payload."""
     if not isinstance(value, Value):
-        raise TypeError(f"formulon: expected a Value, got {type(value).__name__}")
+        raise TypeError(f"expected a Value, got {type(value).__name__}")
     return value
 
 
@@ -6968,7 +7025,7 @@ def _pack_mentions(mentions: Sequence[Union[MentionInput, Mention]], scope: _Arg
     base = scope.struct_array(S.MENTION, len(mentions))
     for i, m in enumerate(mentions):
         if not isinstance(m, (MentionInput, Mention)):
-            raise TypeError(f"formulon: expected a MentionInput, got {type(m).__name__}")
+            raise TypeError(f"expected a MentionInput, got {type(m).__name__}")
         ptr = base + i * S.MENTION.size
         S.MENTION.pack(LIB, ptr, {"start": _uint(m.start, "start"), "end": _uint(m.end, "end")})
         S.write_str_field(LIB, ptr, S.MENTION, "person_id", m.person_id, scope)
@@ -7001,7 +7058,7 @@ def _decode_mentions(base: int, count: int) -> List[Mention]:
 
 def _require_cell_rect(r: object) -> CellRect:
     if not isinstance(r, CellRect):
-        raise TypeError(f"formulon: expected a CellRect, got {type(r).__name__}")
+        raise TypeError(f"expected a CellRect, got {type(r).__name__}")
     return r
 
 
@@ -7044,6 +7101,8 @@ def _format_created(value: Optional[Union[datetime.datetime, datetime.date]]) ->
     """The C stamp of a threaded comment's ``created`` input; ``""`` for ``None``."""
     if value is None:
         return ""
+    if isinstance(value, datetime.datetime) and value.tzinfo is not None:
+        value = value.astimezone(datetime.timezone.utc).replace(tzinfo=None)
     return civil_datetime(value, "created").strftime("%Y-%m-%dT%H:%M:%S") + ".00"
 
 
@@ -7222,7 +7281,7 @@ def _pack_filter_column(ptr: int, col: AutoFilterColumn, scope: _ArgScope) -> No
         "dxf_index": _uint(0 if col.dxf_index is None else col.dxf_index, "dxf_index", role="position"),
     }
     for name in _FILTER_COLUMN_BOOLS:
-        fields[name] = 1 if getattr(col, name) else 0
+        fields[name] = int(_require_bool(getattr(col, name), name))
     for name, c_name in _FILTER_COLUMN_INTS:
         fields[c_name] = _sint(getattr(col, name), name)
     for name, c_name in _FILTER_COLUMN_DOUBLES:
@@ -7284,7 +7343,7 @@ def _pack_sort_condition(ptr: int, cond: AutoFilterSortCondition, scope: _ArgSco
         LIB,
         ptr,
         {
-            "descending": 1 if cond.descending else 0,
+            "descending": _require_bool(cond.descending, "descending"),
             "sort_by": _sint(cond.sort_by, "sort_by"),
             "dxf_index": _uint(cond.dxf_index or 0, "dxf_index", role="position"),
             "has_dxf_index": 0 if cond.dxf_index is None else 1,
@@ -7318,8 +7377,8 @@ def _pack_auto_filter(ptr: int, af: AutoFilter, scope: _ArgScope) -> None:
         return
     fields = {
         "has_sort": 1,
-        "column_sort": 1 if sort.column_sort else 0,
-        "case_sensitive": 1 if sort.case_sensitive else 0,
+        "column_sort": _require_bool(sort.column_sort, "column_sort"),
+        "case_sensitive": _require_bool(sort.case_sensitive, "case_sensitive"),
         "sort_method": _sint(sort.sort_method, "sort_method"),
         "condition_count": _uint(len(sort.conditions), "condition_count"),
     }
@@ -7434,7 +7493,7 @@ def _save_format(dest: object, format: Optional[WorkbookFormat]) -> WorkbookForm
             return implied
         if isinstance(dest, (str, os.PathLike)):
             raise ValueError(
-                f"formulon: cannot infer the workbook format from {os.fspath(dest)!r}; "
+                f"cannot infer the workbook format from {os.fspath(dest)!r}; "
                 "use a .xlsx or .xlsb extension or pass format=WorkbookFormat.XLSX or WorkbookFormat.XLSB"
             )
         return WorkbookFormat.XLSX
@@ -7481,7 +7540,7 @@ def _pivot_cache_value_kind(value: object) -> str:
     if isinstance(value, ExcelError):
         return "error"
     raise TypeError(
-        "formulon: a pivot cache value must be a number, a str, a bool, None, an ExcelError, "
+        "a pivot cache value must be a number, a str, a bool, None, an ExcelError, "
         f"a date or a datetime, got {type(value).__name__}"
     )
 
@@ -7766,7 +7825,7 @@ class Workbook(_NoCopy):
     def _find_sheet(self, name: str) -> Optional[int]:
         """Index of the sheet named ``name`` (case-insensitive, as sheet names are unique), or ``None``."""
         if not isinstance(name, str):
-            raise TypeError(f"formulon: name must be a str, got {type(name).__name__}")
+            raise TypeError(f"name must be a str, got {type(name).__name__}")
         h = self._require()
         with _ArgScope() as scope:
             out = scope.out_ptr()
@@ -7838,11 +7897,11 @@ class Workbook(_NoCopy):
                 raise FormulonError(StatusCode.NOT_FOUND, f"no sheet is named {key!r}", "")
             return self._sheet_handles()[index]
         if isinstance(key, bool):
-            raise TypeError("formulon: sheet key must be a str, an int or a Sheet, got bool")
+            raise TypeError("sheet key must be a str, an int or a Sheet, got bool")
         try:
             index = operator.index(key)
         except TypeError:
-            raise TypeError(f"formulon: sheet key must be a str, an int or a Sheet, got {type(key).__name__}") from None
+            raise TypeError(f"sheet key must be a str, an int or a Sheet, got {type(key).__name__}") from None
         index = _uint(index, "sheet_index", bits=64, role="sheet")
         handles = self._sheet_handles()
         count = len(handles)
@@ -7961,7 +8020,7 @@ class Workbook(_NoCopy):
     def _evaluate_typed_formula(self, sheet: int, row: int, col: int, formula: str) -> Value:
         """Evaluate as :meth:`Sheet.evaluate_typed_formula`: a 1x1 result is its cell, any other an ``ARRAY``."""
         if not isinstance(formula, str):
-            raise TypeError(f"formulon: formula must be a str, got {type(formula).__name__}")
+            raise TypeError(f"formula must be a str, got {type(formula).__name__}")
         return _folded(self._evaluate_formula_cells(sheet, row, col, formula, top_left_only=False))
 
     def _evaluate_formula_cells(
@@ -8050,35 +8109,22 @@ class Workbook(_NoCopy):
     ) -> None:
         """Update the iterative-calculation settings; an omitted argument keeps its setting.
 
-        A ``max_iterations`` above 32767 (Excel's limit) is stored as 32767;
-        :meth:`get_iterative` reports the clamped value.
-
         Raises:
           TypeError: when ``enabled`` is not a ``bool`` or ``max_iterations``
             is not an integer.
-          ValueError: when ``max_iterations`` is negative.
-          InvalidArgumentError: when ``max_iterations`` is 0, or ``max_change``
-            is negative, NaN or infinite.
+          InvalidArgumentError: when ``max_iterations`` is negative, 0 or above
+            32767 (Excel's limit), or ``max_change`` is negative, NaN or infinite.
         """
         fields: Dict[str, object] = {}
         if enabled is not UNCHANGED:
-            if not isinstance(enabled, bool):
-                raise TypeError(f"formulon: enabled must be a bool, got {type(enabled).__name__}")
             fields["enabled_op"] = _PATCH_SET
-            fields["enabled"] = 1 if enabled else 0
+            fields["enabled"] = int(_require_bool(enabled, "enabled"))
         if max_iterations is not UNCHANGED:
-            if (
-                isinstance(max_iterations, bool)
-                or not isinstance(max_iterations, numbers.Real)
-                or not math.isfinite(max_iterations)
-                or max_iterations != int(max_iterations)
-            ):
-                raise TypeError(f"formulon: max_iterations must be an integer, got {max_iterations!r}")
             fields["max_iterations_op"] = _PATCH_SET
             fields["max_iterations"] = _uint(max_iterations, "max_iterations")
         if max_change is not UNCHANGED:
             if isinstance(max_change, bool) or not isinstance(max_change, numbers.Real):
-                raise TypeError(f"formulon: max_change must be a number, got {type(max_change).__name__}")
+                raise TypeError(f"max_change must be a number, got {type(max_change).__name__}")
             fields["max_change_op"] = _PATCH_SET
             fields["max_change"] = float(max_change)
         h = self._require()
@@ -8240,7 +8286,7 @@ class Workbook(_NoCopy):
           NotFoundError: when no table has the name ``name``.
         """
         if not isinstance(name, str):
-            raise TypeError(f"formulon: table name must be a str, got {type(name).__name__}")
+            raise TypeError(f"table name must be a str, got {type(name).__name__}")
         h = self._require()
         with _ArgScope() as scope:
             name_ptr = scope.cstr(name)
@@ -8281,7 +8327,7 @@ class Workbook(_NoCopy):
         The body of :meth:`Sheet.add_table`; see there for the contract.
         """
         if not isinstance(table, TableInput):
-            raise TypeError(f"formulon: expected a TableInput, got {type(table).__name__}")
+            raise TypeError(f"expected a TableInput, got {type(table).__name__}")
         rect = cell_rect(self, table.range, "TableInput.range")
         if isinstance(table.name, str) and self._names_a_cell(table.name):
             raise FormulonError(
@@ -8406,7 +8452,7 @@ class Workbook(_NoCopy):
                     "formula": scope.cstr(defined_name.formula),
                     "local_sheet_id": _sint(local_sheet_id, "local_sheet_id"),
                     "comment": scope.nonempty_cstr(defined_name.comment),
-                    "hidden": 1 if defined_name.hidden else 0,
+                    "hidden": _require_bool(defined_name.hidden, "hidden"),
                 },
             )
             _check(LIB.fm_workbook_set_defined_name(h, ptr))
@@ -8496,7 +8542,7 @@ class Workbook(_NoCopy):
     def set_full_precision(self, full_precision: bool) -> None:  # noqa: FBT001 -- a single-boolean setter takes its flag positionally
         """Set ``<calcPr fullPrecision>``."""
         h = self._require()
-        _check(LIB.fm_workbook_set_full_precision(h, 1 if full_precision else 0))
+        _check(LIB.fm_workbook_set_full_precision(h, int(_require_bool(full_precision, "full_precision"))))
 
     def get_calc_on_save(self) -> bool:
         """Return ``<calcPr calcOnSave>`` (default true)."""
@@ -8505,7 +8551,7 @@ class Workbook(_NoCopy):
     def set_calc_on_save(self, calc_on_save: bool) -> None:  # noqa: FBT001 -- a single-boolean setter takes its flag positionally
         """Set ``<calcPr calcOnSave>``."""
         h = self._require()
-        _check(LIB.fm_workbook_set_calc_on_save(h, 1 if calc_on_save else 0))
+        _check(LIB.fm_workbook_set_calc_on_save(h, int(_require_bool(calc_on_save, "calc_on_save"))))
 
     def get_ref_mode(self) -> RefMode:
         """Return ``<calcPr refMode>``: the reference notation formulas are shown in."""
@@ -8527,7 +8573,7 @@ class Workbook(_NoCopy):
     def set_date1904(self, date1904: bool) -> None:  # noqa: FBT001 -- a single-boolean setter takes its flag positionally
         """Switch the date system. Stored serials keep their numbers, so every date shifts by 1462 days."""
         h = self._require()
-        _check(LIB.fm_workbook_set_date1904(h, 1 if date1904 else 0))
+        _check(LIB.fm_workbook_set_date1904(h, int(_require_bool(date1904, "date1904"))))
 
     def get_pinned_now(self) -> Optional[datetime.datetime]:
         """Return the pinned wall-clock reading as a naive ``datetime``, or
@@ -8542,8 +8588,8 @@ class Workbook(_NoCopy):
             d = S.CIVIL_TIME.unpack(LIB, ptr)
             return datetime.datetime(d["year"], d["month"], d["day"], d["hour"], d["minute"], d["second"])
 
-    def set_pinned_now(self, t: Optional[Union[datetime.datetime, datetime.date]]) -> None:
-        """Pin every clock-dependent result to the local time ``t``; ``None`` releases the pin.
+    def set_pinned_now(self, time: Optional[Union[datetime.datetime, datetime.date]]) -> None:
+        """Pin every clock-dependent result to the local time ``time``; ``None`` releases the pin.
 
         A ``date`` pins midnight and a naive ``datetime`` is read as the local
         wall clock; an aware ``datetime`` is a ``ValueError``.
@@ -8561,26 +8607,26 @@ class Workbook(_NoCopy):
         ``CalcMode.MANUAL`` :meth:`recalc` does.
 
         Raises:
-          TypeError: when ``t`` is not a ``datetime.date`` or ``datetime.datetime``.
+          TypeError: when ``time`` is not a ``datetime.date`` or ``datetime.datetime``.
           InvalidArgumentError: unless the year is in ``[1900, 9999]``.
         """
         h = self._require()
-        if t is None:
+        if time is None:
             _check(LIB.fm_workbook_set_pinned_now(h, 0))
             return
-        t = civil_datetime(t, "the pinned time")
+        pinned = civil_datetime(time, "the pinned time")
         with _ArgScope() as scope:
             ptr = scope.struct(S.CIVIL_TIME)
             S.CIVIL_TIME.pack(
                 LIB,
                 ptr,
                 {
-                    "year": _sint(t.year, "year"),
-                    "month": _sint(t.month, "month"),
-                    "day": _sint(t.day, "day"),
-                    "hour": _sint(t.hour, "hour"),
-                    "minute": _sint(t.minute, "minute"),
-                    "second": _sint(t.second, "second"),
+                    "year": _sint(pinned.year, "year"),
+                    "month": _sint(pinned.month, "month"),
+                    "day": _sint(pinned.day, "day"),
+                    "hour": _sint(pinned.hour, "hour"),
+                    "minute": _sint(pinned.minute, "minute"),
+                    "second": _sint(pinned.second, "second"),
                 },
             )
             _check(LIB.fm_workbook_set_pinned_now(h, ptr))
@@ -8683,7 +8729,7 @@ class Workbook(_NoCopy):
             _check(LIB.fm_workbook_set_workbook_protection(self._require(), 0))
             return
         if not isinstance(protection, (WorkbookProtectionInput, WorkbookProtection)):
-            raise TypeError(f"formulon: expected a WorkbookProtectionInput, got {type(protection).__name__}")
+            raise TypeError(f"expected a WorkbookProtectionInput, got {type(protection).__name__}")
         h = self._require()
         with _ArgScope() as scope:
             ptr = scope.struct(S.WORKBOOK_PROTECTION)
@@ -8691,9 +8737,9 @@ class Workbook(_NoCopy):
                 LIB,
                 ptr,
                 {
-                    "lock_structure": 1 if protection.lock_structure else 0,
-                    "lock_windows": 1 if protection.lock_windows else 0,
-                    "lock_revision": 1 if protection.lock_revision else 0,
+                    "lock_structure": _require_bool(protection.lock_structure, "lock_structure"),
+                    "lock_windows": _require_bool(protection.lock_windows, "lock_windows"),
+                    "lock_revision": _require_bool(protection.lock_revision, "lock_revision"),
                     "workbook_spin_count": _uint(protection.workbook_spin_count, "workbook_spin_count"),
                     "revisions_spin_count": _uint(protection.revisions_spin_count, "revisions_spin_count"),
                 },
@@ -8777,7 +8823,7 @@ class Workbook(_NoCopy):
           InvalidArgumentError: for an id that is not a GUID, or an empty ``display_name``.
         """
         if not isinstance(person, (PersonInput, Person)):
-            raise TypeError(f"formulon: expected a PersonInput, got {type(person).__name__}")
+            raise TypeError(f"expected a PersonInput, got {type(person).__name__}")
         h = self._require()
         with _ArgScope() as scope:
             ptr = scope.struct_array(S.PERSON, 1)
@@ -8787,12 +8833,12 @@ class Workbook(_NoCopy):
             _check(LIB.fm_workbook_add_person(h, ptr, out))
             return LIB.read_cstr(LIB.read_u32(out))
 
-    def get_person(self, person_id: str) -> Optional[Person]:
-        """Return the person ``person_id``, or ``None`` when the list has none."""
-        return self._lookup(LIB.fm_workbook_get_person, (person_id,), S.PERSON, _person_from)
+    def get_person(self, id: str) -> Optional[Person]:  # noqa: A002 -- named after the declaration
+        """Return the person ``id``, or ``None`` when the list has none."""
+        return self._lookup(LIB.fm_workbook_get_person, (id,), S.PERSON, _person_from)
 
-    def remove_person(self, person_id: str) -> None:
-        """Remove the person ``person_id``.
+    def remove_person(self, id: str) -> None:  # noqa: A002 -- named after the declaration
+        """Remove the person ``id``.
 
         Raises:
           NotFoundError: when no person has the id.
@@ -8800,12 +8846,24 @@ class Workbook(_NoCopy):
         """
         h = self._require()
         with _ArgScope() as scope:
-            id_ptr = scope.cstr(person_id)
+            id_ptr = scope.cstr(id)
             _check(LIB.fm_workbook_remove_person(h, id_ptr))
 
-    def format_value(self, value: Value, number_format: str) -> DisplayText:
-        """Render ``value`` under the number format ``number_format`` (empty means General)."""
+    def format_value(self, value: "CellValueInput", number_format: str) -> DisplayText:
+        """Render ``value`` under the number format ``number_format`` (empty means General).
+
+        ``value`` is any cell input: a native number, ``str`` or ``bool``, a ``date`` / ``datetime`` (read as a
+        serial under the workbook's date system), an :class:`ExcelError` or a :class:`Value`.
+
+        Raises:
+          TypeError: when ``value`` is not a cell value (a ``list`` included).
+        """
+        from ._sheet import _value_of_input
+
         h = self._require()
+        # The date system is read only for a date, so a value of the wrong type is refused before any call.
+        date1904 = self.get_date1904() if isinstance(value, (datetime.date, datetime.time)) else False
+        value = _value_of_input(value, date1904=date1904)
         _check_value(value)
         with _ArgScope() as scope:
             value_ptr = scope.alloc(fm_value_t_size)
@@ -8933,8 +8991,8 @@ class Workbook(_NoCopy):
                     "has_builtin_id": 0 if record.builtin_id is None else 1,
                     "builtin_id": 0 if record.builtin_id is None else _uint(record.builtin_id, "builtin_id"),
                     "outline_level": _uint(record.outline_level, "outline_level"),
-                    "hidden": 1 if record.hidden else 0,
-                    "custom_builtin": 1 if record.custom_builtin else 0,
+                    "hidden": _require_bool(record.hidden, "hidden") if record.hidden is not None else 0,
+                    "custom_builtin": _require_bool(record.custom_builtin, "custom_builtin"),
                 },
             )
             S.write_str_field(LIB, ptr, S.CELL_STYLE_RECORD, "name", record.name, scope, allow_empty=True)
@@ -9102,11 +9160,11 @@ class Workbook(_NoCopy):
         A :class:`ThemeColors` read back is accepted; its ``source`` is ignored.
         """
         if not isinstance(colors, (ThemeColorsInput, ThemeColors)):
-            raise TypeError(f"formulon: expected a ThemeColorsInput, got {type(colors).__name__}")
+            raise TypeError(f"expected a ThemeColorsInput, got {type(colors).__name__}")
         h = self._require()
         values = [_uint(c, "colors") for c in colors.colors]
         if len(values) != 12:
-            raise ValueError(f"formulon: colors must hold 12 entries, got {len(values)}")
+            raise ValueError(f"colors must hold 12 entries, got {len(values)}")
         with _ArgScope() as scope:
             ptr = scope.struct(S.THEME_COLORS)
             LIB.write_bytes(ptr + S.THEME_COLORS.offsets["argb"][1], struct.pack("<12I", *values))
@@ -9180,7 +9238,7 @@ class Workbook(_NoCopy):
         arguments raise ``FormulonError``.
         """
         if not isinstance(font, ThemeScriptFont):
-            raise TypeError(f"formulon: expected a ThemeScriptFont, got {type(font).__name__}")
+            raise TypeError(f"expected a ThemeScriptFont, got {type(font).__name__}")
         h = self._require()
         with _ArgScope() as scope:
             script_ptr = scope.cstr(font.script)
@@ -9286,11 +9344,11 @@ class Workbook(_NoCopy):
                 )
             return cache.cache_id
         if isinstance(cache, bool):
-            raise TypeError("formulon: cache_id must be an int or a PivotCache, got bool")
+            raise TypeError("cache_id must be an int or a PivotCache, got bool")
         try:
             return operator.index(cache)
         except TypeError:
-            raise TypeError(f"formulon: cache_id must be an int or a PivotCache, got {type(cache).__name__}") from None
+            raise TypeError(f"cache_id must be an int or a PivotCache, got {type(cache).__name__}") from None
 
     def remove_pivot_cache(self, cache_id: PivotCacheRef) -> None:
         """Remove the pivot cache ``cache_id``.
@@ -9324,7 +9382,7 @@ class Workbook(_NoCopy):
           TypeError: when only one of ``base_row`` and ``base_col`` is given.
         """
         if (base_row is None) != (base_col is None):
-            raise TypeError("formulon: base_row and base_col must be given together")
+            raise TypeError("base_row and base_col must be given together")
         h = self._require()
         with _ArgScope() as scope:
             ptr = scope.struct(S.REFERENCE)
@@ -9333,7 +9391,7 @@ class Workbook(_NoCopy):
                 LIB,
                 spec,
                 {
-                    "r1c1": _tristate_default(bool(r1c1)),
+                    "r1c1": _tristate_default(_require_bool(r1c1, "r1c1")),
                     "has_base": 0 if base_row is None else 1,
                     "base_row": _uint(base_row or 0, "base_row", role="coordinate"),
                     "base_col": _uint(base_col or 0, "base_col", role="coordinate"),
@@ -9365,7 +9423,7 @@ class Workbook(_NoCopy):
         """
         if isinstance(range, ParsedReference):
             if sheet_name is not None:
-                raise TypeError("formulon: sheet_name cannot be given with a ParsedReference")
+                raise TypeError("sheet_name cannot be given with a ParsedReference")
             sheet_name, rect = range.sheet_name, range.range
         else:
             from ._inputs import cell_rect
@@ -9381,7 +9439,7 @@ class Workbook(_NoCopy):
                     h,
                     scope.cstr(sheet_name) if sheet_name else 0,
                     rp,
-                    _sint(1 if absolute else 0, "absolute"),
+                    int(_require_bool(absolute, "absolute")),
                     out,
                 )
             )
@@ -9764,31 +9822,31 @@ class WorkbookOoxml(_NoCopy):
         """
         return self._workbook._add_xf_record(record, LIB.fm_workbook_add_cell_style_xf)
 
-    def add_dxf(self, record: Union[DxfInput, Dxf]) -> int:
+    def add_dxf(self, input: Union[DxfInput, Dxf]) -> int:  # noqa: A002 -- named after the declaration
         """Add (dedup) a differential format and return its index.
 
         Accepts a :class:`DxfInput` or the :class:`Dxf` :meth:`get_dxf` returns.
         A ``number_format`` is registered as :meth:`add_number_format` does.
         """
-        if not isinstance(record, (DxfInput, Dxf)):
-            raise TypeError(f"formulon: expected a DxfInput, got {type(record).__name__}")
+        if not isinstance(input, (DxfInput, Dxf)):
+            raise TypeError(f"expected a DxfInput, got {type(input).__name__}")
         h = self._workbook._require()
         with _ArgScope() as scope:
             ptr = scope.struct(S.DXF_RECORD)
             out = scope.out_ptr()
-            _pack_dxf(ptr, record, scope)
+            _pack_dxf(ptr, input, scope)
             _check(LIB.fm_workbook_add_dxf(h, ptr, out))
             return LIB.read_u32(out)
 
-    def set_dxf(self, dxf_index: int, record: Union[DxfInput, Dxf]) -> None:
+    def set_dxf(self, dxf_index: int, input: Union[DxfInput, Dxf]) -> None:  # noqa: A002 -- named after the declaration
         """Overwrite an existing differential format in place, as :meth:`set_font` does for a font: every
         conditional format naming ``dxf_index`` restyles at once. Accepts what :meth:`add_dxf` accepts."""
-        if not isinstance(record, (DxfInput, Dxf)):
-            raise TypeError(f"formulon: expected a DxfInput, got {type(record).__name__}")
+        if not isinstance(input, (DxfInput, Dxf)):
+            raise TypeError(f"expected a DxfInput, got {type(input).__name__}")
         h = self._workbook._require()
         with _ArgScope() as scope:
             ptr = scope.struct(S.DXF_RECORD)
-            _pack_dxf(ptr, record, scope)
+            _pack_dxf(ptr, input, scope)
             _check(LIB.fm_workbook_set_dxf(h, _uint(dxf_index, "dxf_index", role="position"), ptr))
 
     def get_cell_style_xf(self, cell_style_xf_index: int) -> CellXf:
@@ -9836,14 +9894,16 @@ _install_workbook_locks(Workbook)
 
 # -- Images (process-wide) ---------------------------------------------------
 @_lock_workbook_method
-def get_image_info(data: Union[bytes, bytearray, memoryview]) -> ImageInfo:
+def get_image_info(
+    bytes: Union[bytes, bytearray, memoryview],  # noqa: A002 -- named after the declaration
+) -> ImageInfo:
     """Sniff the format and pixel size of PNG, JPEG, GIF or BMP bytes from the header alone.
 
     Raises:
       IoError: with ``StatusCode.IO_IMAGE_UNSUPPORTED`` when the bytes are
         not a recognised image, the header is truncated, or a dimension is zero.
     """
-    raw = bytes(data)
+    raw = builtins.bytes(bytes)
     with _ArgScope() as scope:
         buf = scope.buffer(raw)
         info = scope.struct(S.IMAGE_INFO)
@@ -10084,5 +10144,5 @@ def get_collation_classes(
 from ._inputs import cell_rect, civil_datetime, color_input  # noqa: E402
 from ._pivot import Pivot  # noqa: E402
 from ._pivot_cache import PivotCache  # noqa: E402
-from ._sheet import Sheet  # noqa: E402
+from ._sheet import CellValueInput, Sheet  # noqa: E402
 from ._table import Table  # noqa: E402

@@ -443,7 +443,7 @@ uint32_t JsWorkbook::insertChart(uint32_t sheet, val options) {
     return 0U;
   }
   if (!options.typeOf().strictlyEquals(val("object"))) {
-    record_type_error("addChart expects (sheet:number, options:object)");
+    record_type_error("Sheet.addChart input must be an object");
     return 0U;
   }
   JsNarrowNumericReader reader("Sheet.addChart");

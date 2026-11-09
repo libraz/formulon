@@ -491,15 +491,16 @@ JsParallelRecalcStats JsWorkbook::recalcParallel(emscripten::val threadCount) {
   const emscripten::val number = emscripten::val::global("Number");
   const double requested = threadCount.as<double>();
   if (!number.call<bool>("isInteger", threadCount)) {
-    record_range_error("Workbook.recalcParallel threadCount must be a finite integer");
+    record_range_error("Workbook.recalcParallel threadCount must be an integer");
     return r;
   }
   if (requested < 0.0) {
-    record_binding_failure(FM_STATUS_INVALID_ARGUMENT, "Workbook.recalcParallel threadCount is negative");
+    record_binding_failure(FM_STATUS_INVALID_ARGUMENT, "Workbook.recalcParallel threadCount must not be negative",
+                           ("threadCount=" + std::to_string(static_cast<long long>(requested))).c_str());
     return r;
   }
   if (requested > 4294967295.0) {
-    record_binding_failure(FM_STATUS_INVALID_ARGUMENT, "Workbook.recalcParallel threadCount is above 8");
+    record_range_error("Workbook.recalcParallel threadCount is too large");
     return r;
   }
 
@@ -543,43 +544,43 @@ void JsWorkbook::setIterative(emscripten::val patch) {
     record_invalid_handle();
     return;
   }
-  // Every field is non-nullable: an omitted or `undefined` key keeps the stored
-  // value, `null` and a non-integer cap are type errors.
-  JsNarrowNumericReader reader("Workbook.setIterative");
+  // Every field is non-nullable: an omitted or `undefined` key keeps the stored value.
+  JsNarrowNumericReader reader("Workbook.updateIterative");
   if (!reader.require_object(patch, "patch")) {
     return;
   }
   fm_iterative_settings_patch_t p = FM_STRUCT_INIT(fm_iterative_settings_patch_t);
   const emscripten::val enabled = reader.value(patch, "enabled", "enabled");
   if (reader.ok() && !enabled.isUndefined()) {
-    if (enabled.isNull() || !(enabled.isTrue() || enabled.isFalse())) {
-      reader.fail_type("enabled", "a boolean");
+    if (enabled.isNull()) {
+      reader.fail_null("enabled");
+    } else {
+      p.enabled = reader.boolean_value(enabled, false, "enabled") ? 1 : 0;
+      p.enabled_op = FM_PATCH_OP_SET;
     }
-    p.enabled_op = FM_PATCH_OP_SET;
-    p.enabled = enabled.isTrue() ? 1 : 0;
   }
   const emscripten::val cap = reader.value(patch, "maxIterations", "maxIterations");
   if (reader.ok() && !cap.isUndefined()) {
-    const emscripten::val number = emscripten::val::global("Number");
-    if (!cap.isNumber() || !number.call<bool>("isInteger", cap)) {
-      reader.fail_type("maxIterations", "an integer Number");
+    if (cap.isNull()) {
+      reader.fail_null("maxIterations");
     } else {
-      const double requested = cap.as<double>();
-      if (requested < 0.0 || requested > 4294967295.0) {
-        reader.fail_range("maxIterations", "[0, 4294967295]");
-      } else {
+      const uint32_t requested = reader.u32_value(cap, 0U, "maxIterations");
+      if (reader.ok()) {
         p.max_iterations_op = FM_PATCH_OP_SET;
-        p.max_iterations = static_cast<uint32_t>(requested);
+        p.max_iterations = requested;
       }
     }
   }
   const emscripten::val change = reader.value(patch, "maxChange", "maxChange");
   if (reader.ok() && !change.isUndefined()) {
-    if (!change.isNumber()) {
-      reader.fail_type("maxChange", "a Number");
+    if (change.isNull()) {
+      reader.fail_null("maxChange");
     } else {
-      p.max_change_op = FM_PATCH_OP_SET;
-      p.max_change = change.as<double>();
+      const double requested = reader.number_value(change, 0.0, "maxChange");
+      if (reader.ok()) {
+        p.max_change_op = FM_PATCH_OP_SET;
+        p.max_change = requested;
+      }
     }
   }
   if (!reader.ok()) {
@@ -693,7 +694,7 @@ void JsWorkbook::setPinnedNow(uint32_t year, uint32_t month, uint32_t day, uint3
 
 void JsWorkbook::releasePinnedNow(emscripten::val now) {
   if (!now.isNull()) {
-    record_type_error("setPinnedNow: a single argument must be null");
+    record_type_error("Workbook.setPinnedNow time must be a date or null");
     return;
   }
   if (handle_ == nullptr) {
@@ -814,7 +815,7 @@ void JsWorkbook::setIterativeProgress(emscripten::val cb) {
   }
   // Rejected at install, as on the Node surface; the installed callback stays.
   if (!is_js_function(cb)) {
-    record_type_error("setIterativeProgress: `callback` must be a function or null");
+    record_type_error("Workbook.setIterativeProgress callback must be a function or null");
     return;
   }
   progress_callback_ = cb;
@@ -841,10 +842,6 @@ emscripten::val evaluate_formula(const std::string& formula) {
 
 std::string version_string() {
   return string_from_cstr(fm_get_version());
-}
-
-std::string status_string(int32_t status) {
-  return string_from_cstr(fm_get_status_name(static_cast<fm_status_t>(status)));
 }
 
 // ---- Structured logging (process-wide, not per handle) --------------------
@@ -886,7 +883,7 @@ void set_log_sink(emscripten::val sink) {
     return;
   }
   if (!is_js_function(sink)) {
-    record_type_error("setLogSink: `sink` must be a function or null");
+    record_type_error("Formulon.setLogSink sink must be a function");
     return;
   }
   js_log_sink() = sink;

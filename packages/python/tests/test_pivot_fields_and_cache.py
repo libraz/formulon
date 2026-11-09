@@ -9,7 +9,10 @@ import unittest
 import formulon
 from formulon import (
     PIVOT_VALUES_FIELD,
+    ArrayFormula,
     CellAddress,
+    DataTableInput,
+    FormulonError,
     InvalidArgumentError,
     NotFoundError,
     Pivot,
@@ -22,6 +25,8 @@ from formulon import (
     PivotFilterKind,
     PivotInput,
     PivotWorksheetSourceInput,
+    StatusCode,
+    TableInput,
     Workbook,
 )
 
@@ -100,6 +105,21 @@ class PivotFieldTests(unittest.TestCase):
                 pivot.rename("other")
             self.assertEqual(pivot.name, "Pivot1")
 
+    def test_rename_duplicate_already_exists(self) -> None:
+        with Workbook.create_default() as wb:
+            cache = _cache(wb)
+            pivot = _pivot(wb, cache)
+            _pivot(wb, cache, "Other", col=12)
+            for taken in ("Other", "OTHER"):
+                with self.assertRaises(formulon.AlreadyExistsError) as caught:
+                    pivot.rename(taken)
+                self.assertEqual(caught.exception.code, StatusCode.ALREADY_EXISTS)
+                self.assertEqual(pivot.name, "Pivot1")
+            with self.assertRaises(InvalidArgumentError):
+                pivot.rename("")
+            pivot.rename("Pivot1")
+            self.assertEqual(pivot.name, "Pivot1")
+
 
 class PivotCacheTests(unittest.TestCase):
     def test_get_record_value_is_date(self) -> None:
@@ -159,6 +179,105 @@ class PivotCacheTests(unittest.TestCase):
             pivot = _pivot(wb, cache)
             self.assertIs(pivot.cache(), wb.pivot_cache(cache.cache_id))
             self.assertFalse(hasattr(Pivot, "get_cache"))
+
+    def test_calculated_item_index_keyword(self) -> None:
+        with Workbook.create_default() as wb:
+            cache = _cache(wb)
+            _pivot(wb, cache).set_field_axis("Region", PivotAxis.ROW)
+            first = cache.add_calculated_item("Region", "Both", "East+West")
+            second = cache.add_calculated_item("Region", "Diff", "East-West")
+            self.assertEqual(len(cache.list_calculated_items()), 2)
+            cache.set_calculated_item_formula(calculated_item_index=first, formula="East*2")
+            self.assertIn("*", cache.list_calculated_items()[first].formula)
+            cache.move_calculated_item(calculated_item_index=second, new_index=first)
+            self.assertEqual(cache.list_calculated_items()[first].name, "Diff")
+            cache.remove_calculated_item(calculated_item_index=first)
+            self.assertEqual([i.name for i in cache.list_calculated_items()], ["Both"])
+            for call in (
+                lambda: cache.set_calculated_item_formula(item_index=0, formula="1"),  # type: ignore[call-arg]
+                lambda: cache.move_calculated_item(item_index=0, new_index=0),  # type: ignore[call-arg]
+                lambda: cache.remove_calculated_item(item_index=0),  # type: ignore[call-arg]
+            ):
+                with self.assertRaises(TypeError):
+                    call()
+
+
+class PivotPlacementTests(unittest.TestCase):
+    """A report that would land on another structure is refused and the sheet stays as it was.
+
+    A pivot with no fields spans no cell, so each case moves a populated report onto the structure.
+    """
+
+    FREE = "A11"
+
+    def _report(self, wb: Workbook, cache: PivotCache, name: str, anchor: str) -> Pivot:
+        pivot = wb.sheet(0).add_pivot(PivotInput(name=name, cache_id=cache.cache_id, anchor=anchor))
+        pivot.set_field_axis("Region", PivotAxis.ROW)
+        pivot.add_data_field(PivotDataFieldInput(field_index="Amount", name="Sum of Amount"))
+        return pivot
+
+    def _assert_refused(self, wb: Workbook, pivot: Pivot, target: str) -> None:
+        ws = wb.sheet(0)
+        before_cells = ws.get_values("A1:L20")
+        before_range = pivot.get_layout().range
+        self.assertIsNotNone(before_range)
+        before_pivots = len(ws.list_pivots())
+        before_merges = ws.list_merges()
+        with self.assertRaises(FormulonError) as caught:
+            pivot.set_anchor(target)
+        self.assertEqual(caught.exception.code, StatusCode.PRECONDITION_FAILED)
+        self.assertEqual(pivot.get_layout().range, before_range)
+        self.assertEqual(ws.get_values("A1:L20"), before_cells)
+        self.assertEqual(len(ws.list_pivots()), before_pivots)
+        self.assertEqual(ws.list_merges(), before_merges)
+
+    def _setup(self, wb: Workbook) -> Pivot:
+        return self._report(wb, _cache(wb), "Moving", "G1")
+
+    def test_over_merge(self) -> None:
+        with Workbook.create_default() as wb:
+            pivot = self._setup(wb)
+            wb.sheet(0).add_merge("A11:B12")
+            self._assert_refused(wb, pivot, self.FREE)
+            self._assert_refused(wb, pivot, "B10")
+
+    def test_over_array_formula(self) -> None:
+        with Workbook.create_default() as wb:
+            pivot = self._setup(wb)
+            wb.sheet(0).set_array_formula(ArrayFormula(range="A11:A12", formula="=SEQUENCE(2)"))
+            self._assert_refused(wb, pivot, self.FREE)
+
+    def test_over_data_table(self) -> None:
+        with Workbook.create_default() as wb:
+            pivot = self._setup(wb)
+            wb.sheet(0).add_data_table(DataTableInput(range="B12:C14", row_input=CellAddress(0, 0)))
+            self._assert_refused(wb, pivot, "B12")
+            self._assert_refused(wb, pivot, "A13")
+
+    def test_over_table(self) -> None:
+        with Workbook.create_default() as wb:
+            pivot = self._setup(wb)
+            ws = wb.sheet(0)
+            ws.set_text(10, 0, "Head1")
+            ws.set_text(10, 1, "Head2")
+            ws.add_table(TableInput(range="A11:B13", name="Blocked"))
+            self._assert_refused(wb, pivot, self.FREE)
+            self._assert_refused(wb, pivot, "B13")
+
+    def test_over_pivot(self) -> None:
+        with Workbook.create_default() as wb:
+            cache = _cache(wb)
+            moving = self._report(wb, cache, "Moving", "G1")
+            self._report(wb, cache, "Fixed", self.FREE)
+            self._assert_refused(wb, moving, self.FREE)
+            self._assert_refused(wb, moving, "A12")
+
+    def test_free_target_is_accepted(self) -> None:
+        with Workbook.create_default() as wb:
+            pivot = self._setup(wb)
+            wb.sheet(0).add_merge("A11:B12")
+            pivot.set_anchor("D15")
+            self.assertEqual((pivot.get_layout().range.first_row, pivot.get_layout().range.first_col), (14, 3))
 
 
 class PivotFilterTests(unittest.TestCase):

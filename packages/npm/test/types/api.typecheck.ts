@@ -889,7 +889,7 @@ export function updateMembers(): void {
   sheet.updatePrintOptions({ gridLines: true });
   sheet.updateHeaderFooter({ oddHeader: '&CReport' });
   sheet.updateView({ zoomPct: 120, splitXTwips: 0 });
-  sheet.updateFormatDefaults({ defaultColWidthChars: 10, defaultRowHeightPt: null, baseColWidthChars: 8 });
+  sheet.updateFormatDefaults({ defaultColumnWidthChars: 10, defaultRowHeightPt: null, baseColumnWidthChars: 8 });
   sheet.updateCellFormat('A1:C1', { font: { bold: true, sizePt: 12 }, fill: { foreground: '#FF0000' } });
   wb.updateIterative({ enabled: true });
   wb.updateTableStyleDefaults({ tableStyleName: 'TableStyleLight9' });
@@ -902,7 +902,7 @@ export function updateMembers(): void {
   const zoom: number = view.zoomPct;
   const split: number = view.splitYTwips;
   const defaults = sheet.getFormatDefaults();
-  const width: number = defaults.effectiveDefaultColWidthChars;
+  const width: number = defaults.effectiveDefaultColumnWidthChars;
   const height: number = defaults.effectiveDefaultRowHeightPt;
   void [stated, left, leftStated, zoom, split, width, height];
   // @ts-expect-error renamed to `updatePageSetup`
@@ -921,9 +921,9 @@ export function updateMembers(): void {
   sheet.setFormatDefaults({});
   // @ts-expect-error the default row height is in points, `defaultRowHeightPt`
   sheet.updateFormatDefaults({ defaultRowHeight: 18 });
-  // @ts-expect-error the default column width is in characters, `defaultColWidthChars`
+  // @ts-expect-error the default column width is in characters, `defaultColumnWidthChars`
   sheet.updateFormatDefaults({ defaultColWidth: 10 });
-  // @ts-expect-error the base column width is in characters, `baseColWidthChars`
+  // @ts-expect-error the base column width is in characters, `baseColumnWidthChars`
   sheet.updateFormatDefaults({ baseColWidth: 8 });
 }
 
@@ -1755,7 +1755,7 @@ export function xfRemapAndRangeDefaults(): void {
   sheet.getValues(null);
   sheet.getTypedValues();
   sheet.getCellsInRange();
-  sheet.getCellsInRange(null, null, 10);
+  sheet.getCellsInRange(null, { limit: 10 });
   sheet.listCells();
   sheet.listCells(null);
   [...sheet.iterRows(null)];
@@ -1892,6 +1892,14 @@ import {
   type MentionInput,
   type PictureProperties,
   type SheetComment,
+  type CfRangeEvaluationOptions,
+  type DisplayText,
+  type FormatReferenceOptions,
+  type LogLevel,
+  type LogEvent,
+  type PageOptions,
+  // @ts-expect-error the formatted range is a ParsedReference, a CellRect or an A1 string
+  type ReferenceRangeInput,
 } from '@libraz/formulon';
 
 declare const pictureProps: PictureProperties;
@@ -1991,4 +1999,66 @@ export function chartInputPlacement(): void {
   sheet.addChart(input);
   // @ts-expect-error the placement keys are flat
   sheet.addChart({ type: ChartPlotType.Bar, range: 'Sheet1!A1:B3', placement: { name: 'Sales' } });
+}
+
+export function inputsAndOptions(): void {
+  const display: DisplayText = wb.formatValue(1.5, '0.00');
+  wb.formatValue(new Date(2024, 0, 31), 'yyyy-mm-dd');
+  wb.formatValue(null, 'General');
+  // @ts-expect-error a cell value is required
+  wb.formatValue(undefined, 'General');
+  void display;
+
+  const d: DateInput = { year: 2026, month: 1, day: 2 };
+  formulon.convertCivilToSerial(d);
+  formulon.convertCivilToSerial(new Date(2026, 0, 2), { date1904: true });
+  wb.setPinnedNow(d);
+
+  // @ts-expect-error the status spelling is `enumName(StatusCode, n)`
+  formulon.getStatusName(0);
+
+  const pageOptions: PageOptions = { cursor: null, limit: 100 };
+  sheet.getCellsInRange('A1:B2', pageOptions);
+  sheet.getInvalidCells({ cursor: 5 });
+  // @ts-expect-error paging goes through `options`
+  sheet.getCellsInRange(null, null, 100);
+  // @ts-expect-error paging goes through `options`
+  sheet.getInvalidCells(5, 100);
+
+  const cfOptions: CfRangeEvaluationOptions = { timePeriodRules: false };
+  sheet.evaluateCfRange('A1', cfOptions);
+
+  const formatOptions: FormatReferenceOptions = { sheetName: 'Data', absolute: true };
+  wb.formatReference('A1:B2', formatOptions);
+  wb.formatReference(rect);
+  wb.formatReference(wb.parseReference('Sheet1!A1:B2'), { absolute: true });
+  // @ts-expect-error the range is not an object with a `range` key
+  wb.formatReference({ range: 'A1', sheetName: 'S' });
+
+  const sink: (record: LogEvent) => void = (record) => {
+    const level: LogLevel = record.level;
+    const event: string = record.event;
+    void [level, event];
+  };
+  formulon.setLogSink(sink);
+  formulon.setLogSink(null);
+  // @ts-expect-error the sink receives a parsed record, not bytes
+  formulon.setLogSink((record: Uint8Array) => void record);
+
+  // @ts-expect-error the options object has four known keys
+  const unknownOption: FormulonOptions = { bogus: 1 };
+  void unknownOption;
+
+  sheet.getColumnWidthPt('B');
+  sheet.getRowHeightPt('3');
+  sheet.ooxml.getColumnXfIndex('B');
+  sheet.ooxml.getRowXfIndex('3');
+
+  pivot.addFilter(pivot.listFilters()[0]);
+  table.setColumnTotals(0, table.getProperties().columns[0]);
+  // @ts-expect-error a totals column has no `name`
+  table.setColumnTotals(0, { name: 'x' });
+
+  sheet.addProtectedRange({ name: 'p', ranges: 'A1' });
+  sheet.addThreadedComment({ text: 't', personId: 'p', created: new Date(Date.UTC(2024, 0, 31)) });
 }

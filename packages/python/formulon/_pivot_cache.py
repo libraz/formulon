@@ -9,7 +9,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Dict, List, Optional, Union
 
 from . import _structs as S
-from ._c import LIB, FormulonError, _NoCopy, _sint, _uint, fm_value_t_size
+from ._c import LIB, FormulonError, _argument_message, _NoCopy, _require_bool, _sint, _uint, fm_value_t_size
 from ._inputs import date_serial
 from ._refs import _fold
 from ._status import StatusCode
@@ -154,14 +154,11 @@ class PivotCache(_NoCopy):
           TypeError: when ``save_data`` or ``refresh_on_load`` is not a ``bool``.
           InvalidArgumentError: for a negative ``missing_items_limit``.
         """
-        for flag in (save_data, refresh_on_load):
-            if flag is not UNCHANGED and not isinstance(flag, bool):
-                raise TypeError(f"formulon: a pivot cache flag must be a bool, got {type(flag).__name__}")
         values: Dict[str, object] = {}
         for name, flag in (("save_data", save_data), ("refresh_on_load", refresh_on_load)):
             if flag is not UNCHANGED:
                 values[name + "_op"] = _PATCH_SET
-                values[name] = 1 if flag else 0
+                values[name] = int(_require_bool(flag, name))
         if missing_items_limit is not UNCHANGED:
             if missing_items_limit is None:
                 values["missing_items_limit_op"] = _PATCH_CLEAR
@@ -188,7 +185,7 @@ class PivotCache(_NoCopy):
                     return index
             raise FormulonError(StatusCode.NOT_FOUND, f"the cache has no field named {field!r}", "")
         if isinstance(field, bool):
-            raise TypeError("formulon: field must be an int or a str, got bool")
+            raise TypeError(_argument_message("field", "must be an integer or a string"))
         return _uint(field, "field", role="position")
 
     def list_fields(self) -> List[PivotCacheField]:
@@ -264,7 +261,7 @@ class PivotCache(_NoCopy):
         )
 
     def list_calculated_items(self) -> List[PivotCalculatedItem]:
-        """Every calculated item of the cache, in solve order; an item's position is its ``item_index``."""
+        """Every calculated item of the cache, in solve order; its position is the ``calculated_item_index``."""
         h, cache_id = self._call()
         count = _read_count(LIB.fm_workbook_get_pivot_cache_calculated_item_count, h, cache_id)
         items: List[PivotCalculatedItem] = []
@@ -274,7 +271,7 @@ class PivotCache(_NoCopy):
                 S.zero_struct(LIB, S.PIVOT_CALCULATED_ITEM, ptr)
                 _check(
                     LIB.fm_workbook_get_pivot_cache_calculated_item_at(
-                        h, cache_id, _uint(i, "item_index", role="position"), ptr
+                        h, cache_id, _uint(i, "calculated_item_index", role="position"), ptr
                     )
                 )
                 d = S.PIVOT_CALCULATED_ITEM.unpack(LIB, ptr)
@@ -311,35 +308,35 @@ class PivotCache(_NoCopy):
             )
             return LIB.read_u32(out)
 
-    def set_calculated_item_formula(self, item_index: int, formula: str) -> None:
-        """Replace the formula of calculated item ``item_index``."""
+    def set_calculated_item_formula(self, calculated_item_index: int, formula: str) -> None:
+        """Replace the formula of calculated item ``calculated_item_index``."""
         h, cache_id = self._call()
         with _ArgScope() as scope:
             formula_ptr = scope.cstr(formula)
             _check(
                 LIB.fm_workbook_set_pivot_cache_calculated_item_formula(
-                    h, cache_id, _uint(item_index, "item_index", role="position"), formula_ptr
+                    h, cache_id, _uint(calculated_item_index, "calculated_item_index", role="position"), formula_ptr
                 )
             )
 
-    def move_calculated_item(self, item_index: int, new_index: int) -> None:
-        """Move calculated item ``item_index`` to position ``new_index`` in solve order."""
+    def move_calculated_item(self, calculated_item_index: int, new_index: int) -> None:
+        """Move calculated item ``calculated_item_index`` to position ``new_index`` in solve order."""
         h, cache_id = self._call()
         _check(
             LIB.fm_workbook_move_pivot_cache_calculated_item(
                 h,
                 cache_id,
-                _uint(item_index, "item_index", role="position"),
+                _uint(calculated_item_index, "calculated_item_index", role="position"),
                 _uint(new_index, "new_index", role="position"),
             )
         )
 
-    def remove_calculated_item(self, item_index: int) -> None:
-        """Remove calculated item ``item_index``, its item in the cache field and in every pivot table."""
+    def remove_calculated_item(self, calculated_item_index: int) -> None:
+        """Remove calculated item ``calculated_item_index``, its item in the cache field and in every pivot table."""
         h, cache_id = self._call()
         _check(
             LIB.fm_workbook_remove_pivot_cache_calculated_item(
-                h, cache_id, _uint(item_index, "item_index", role="position")
+                h, cache_id, _uint(calculated_item_index, "calculated_item_index", role="position")
             )
         )
 
@@ -357,7 +354,7 @@ class PivotCache(_NoCopy):
             value_ptr = scope.alloc(fm_value_t_size)
             date_ptr = scope.out_ptr()
             for i in range(count):
-                item = _uint(i, "item_index", role="position")
+                item = _uint(i, "calculated_item_index", role="position")
                 _check(
                     LIB.fm_workbook_get_pivot_cache_field_shared_item_value(h, cache_id, field_index, item, value_ptr)
                 )
@@ -409,7 +406,7 @@ class PivotCache(_NoCopy):
             elif kind == "bool":
                 _check(
                     LIB.fm_workbook_add_pivot_cache_field_shared_item_bool(
-                        h, cache_id, field_index, 1 if value else 0, out
+                        h, cache_id, field_index, int(_require_bool(value, "value")), out
                     )
                 )
             elif kind == "blank":
@@ -494,7 +491,8 @@ class PivotCache(_NoCopy):
         elif kind == "number":
             _check(LIB.fm_workbook_set_pivot_cache_record_number(h, cache_id, record, field_index, float(value)))
         elif kind == "bool":
-            _check(LIB.fm_workbook_set_pivot_cache_record_bool(h, cache_id, record, field_index, 1 if value else 0))
+            flag = int(_require_bool(value, "value"))
+            _check(LIB.fm_workbook_set_pivot_cache_record_bool(h, cache_id, record, field_index, flag))
         elif kind == "blank":
             _check(LIB.fm_workbook_set_pivot_cache_record_blank(h, cache_id, record, field_index))
         elif kind == "error":

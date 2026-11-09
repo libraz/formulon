@@ -58,6 +58,7 @@ using formulon::c_api::parts::ingest_entered_formula;
 using formulon::c_api::parts::invalid_argument;
 using formulon::c_api::parts::kIconSetNameTokens;
 using formulon::c_api::parts::null_argument;
+using formulon::c_api::parts::null_field;
 using formulon::c_api::parts::ordinal_of;
 using formulon::c_api::parts::patch_op_ok;
 using formulon::c_api::parts::patch_op_ok_without_clear;
@@ -609,7 +610,8 @@ fm_status_t assign_priority(const fm_cf_rule_t& rule, const formulon::Sheet& she
     }
   }
   if (max_priority == std::numeric_limits<std::int32_t>::max()) {
-    return invalid_argument("auto-assignment would overflow", "max_existing_priority=" + std::to_string(max_priority));
+    return invalid_argument("priority cannot be auto-assigned past the maximum",
+                            "max_existing_priority=" + std::to_string(max_priority));
   }
   out->priority = max_priority + 1;
   return 0;
@@ -643,13 +645,13 @@ void assign_id(const fm_cf_rule_t& rule, const formulon::Sheet& sheet, std::size
 // The colour-scale, data-bar or icon-set payload the rule's type carries.
 fm_status_t copy_payloads(const fm_cf_rule_t& rule, formulon::cf::CFRule* out) {
   if (out->type == formulon::cf::RuleType::ColorScale && !copy_color_scale_payload(rule, out)) {
-    return invalid_argument("invalid colorScale payload");
+    return invalid_argument("colour scale thresholds or colours are invalid");
   }
   if (out->type == formulon::cf::RuleType::DataBar && !copy_data_bar_payload(rule, out)) {
-    return invalid_argument("invalid dataBar payload");
+    return invalid_argument("data bar fields are invalid");
   }
   if (out->type == formulon::cf::RuleType::IconSet && !copy_icon_set_payload(rule, out)) {
-    return invalid_argument("invalid iconSet payload");
+    return invalid_argument("icon set fields are invalid");
   }
   return 0;
 }
@@ -667,9 +669,8 @@ fm_status_t build_rule(fm_workbook_t* wb, const fm_cf_rule_t& rule, const std::v
     // unresolvable `dxfId`, but rejecting it here tells the caller at set
     // time which index was wrong instead of silently losing the format.
     const std::size_t dxf_count = wb->workbook().styles().dxfs.size();
-    if (static_cast<std::size_t>(rule.dxf_index) >= dxf_count) {
-      return invalid_argument("dxf_index out of range", "dxf_index=" + std::to_string(rule.dxf_index) +
-                                                            " dxfs_count=" + std::to_string(dxf_count));
+    if (auto rc = check_index(rule.dxf_index, dxf_count, "dxf_index"); rc != 0) {
+      return rc;
     }
     out_rule->dxf_id = rule.dxf_index;
   }
@@ -802,7 +803,7 @@ bool has_derived_formula(formulon::cf::RuleType type) {
 // A SET array must be present when its count is non-zero.
 fm_status_t check_set_array(fm_patch_op_t op, const void* data, std::size_t count, const char* field) {
   if (op == FM_PATCH_OP_SET && count != 0U && data == nullptr) {
-    return null_argument(field);
+    return null_field(field);
   }
   return 0;
 }
@@ -810,7 +811,7 @@ fm_status_t check_set_array(fm_patch_op_t op, const void* data, std::size_t coun
 // A SET string must be present.
 fm_status_t check_set_string(fm_patch_op_t op, const char* value, const char* field) {
   if (op == FM_PATCH_OP_SET && value == nullptr) {
-    return invalid_argument("SET string is NULL", std::string("field=") + field);
+    return null_field(field);
   }
   return 0;
 }
@@ -891,11 +892,12 @@ extern "C" fm_status_t fm_sheet_update_cf_rule(fm_workbook_t* wb, std::size_t sh
   };
   for (const PatchField& f : fields) {
     if (!(f.clearable ? patch_op_ok(f.op) : patch_op_ok_without_clear(f.op))) {
-      return invalid_argument("cf rule patch op out of range or not clearable",
+      return invalid_argument((std::string(f.name) + " op is not a patch op").c_str(),
                               std::string("field=") + f.name + " op=" + std::to_string(f.op));
     }
     if (f.op != FM_PATCH_OP_KEEP && !f.used) {
-      return invalid_argument("field is not used by the rule's type", std::string("field=") + f.name);
+      return invalid_argument((std::string(f.name) + " is not used by the rule type").c_str(),
+                              std::string("field=") + f.name);
     }
   }
   if (auto rc = check_set_string(patch->formula1_op, patch->formula1, "formula1"); rc != 0) {
@@ -938,15 +940,15 @@ extern "C" fm_status_t fm_sheet_update_cf_rule(fm_workbook_t* wb, std::size_t sh
     const std::size_t colors =
         patch->color_scale_colors_op == FM_PATCH_OP_SET ? patch->color_scale_colors_count : stored_colors;
     if (thresholds != colors) {
-      return invalid_argument("color scale thresholds and colors differ in count");
+      return invalid_argument("color_scale_thresholds and color_scale_colors must have the same count");
     }
   }
   if (data_bar) {
     if (patch->data_bar_min_length_pct_op == FM_PATCH_OP_SET && patch->data_bar_min_length_pct > 100U) {
-      return invalid_argument("data bar length above 100", "field=data_bar_min_length_pct");
+      return invalid_argument("data_bar_min_length_pct must be in 0..100", "data_bar_min_length_pct=invalid");
     }
     if (patch->data_bar_max_length_pct_op == FM_PATCH_OP_SET && patch->data_bar_max_length_pct > 100U) {
-      return invalid_argument("data bar length above 100", "field=data_bar_max_length_pct");
+      return invalid_argument("data_bar_max_length_pct must be in 0..100", "data_bar_max_length_pct=invalid");
     }
   }
 

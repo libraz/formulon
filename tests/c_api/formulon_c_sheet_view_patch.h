@@ -39,8 +39,9 @@ inline fm_status_t SetViewFreeze(fm_workbook_t* wb, std::size_t sheet, std::uint
 }
 
 inline fm_status_t SetViewSplit(fm_workbook_t* wb, std::size_t sheet, double x_twips, double y_twips) {
-  return UpdateViewPair(wb, sheet, &fm_sheet_view_patch_t::split_x_op, &fm_sheet_view_patch_t::split_x, x_twips,
-                        &fm_sheet_view_patch_t::split_y_op, &fm_sheet_view_patch_t::split_y, y_twips);
+  return UpdateViewPair(wb, sheet, &fm_sheet_view_patch_t::split_x_twips_op, &fm_sheet_view_patch_t::split_x_twips,
+                        x_twips, &fm_sheet_view_patch_t::split_y_twips_op, &fm_sheet_view_patch_t::split_y_twips,
+                        y_twips);
 }
 
 inline fm_status_t SetViewTopLeft(fm_workbook_t* wb, std::size_t sheet, std::uint32_t row, std::uint32_t col) {

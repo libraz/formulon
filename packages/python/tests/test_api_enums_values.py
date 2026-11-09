@@ -585,15 +585,14 @@ class ValueInputUnionTests(unittest.TestCase):
             )
             self.assertEqual(wb.sheet(0).list_threaded_comments()[0].created, datetime.datetime(2026, 3, 4))
 
-    def test_threaded_comment_created_refuses_an_aware_datetime(self) -> None:
+    def test_threaded_comment_created_accepts_an_aware_datetime(self) -> None:
         aware = datetime.datetime(2026, 6, 1, 12, 0, 0, tzinfo=datetime.timezone.utc)
         with Workbook.create_default() as wb:
             wb.add_person(Person(id=ALICE, display_name="Alice"))
-            with self.assertRaises(ValueError):
-                wb.sheet(0).add_threaded_comment(
-                    ThreadedCommentInput(id=THREAD, cell=CellAddress(0, 0), person_id=ALICE, created=aware, text="z")
-                )
-            self.assertEqual(wb.sheet(0).list_threaded_comments(), [])
+            wb.sheet(0).add_threaded_comment(
+                ThreadedCommentInput(id=THREAD, cell=CellAddress(0, 0), person_id=ALICE, created=aware, text="z")
+            )
+            self.assertEqual(wb.sheet(0).list_threaded_comments()[0].created, datetime.datetime(2026, 6, 1, 12, 0, 0))
 
     def test_pinned_now_round_trips_a_naive_datetime(self) -> None:
         with Workbook.create_default() as wb:

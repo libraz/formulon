@@ -36,7 +36,7 @@ TEST(FormulonCli, StdinDashFeedsEveryInputSubcommand) {
 
   const CliRun paginate = run_cli({"paginate", "-"}, false, false, path);
   EXPECT_EQ(paginate.exit_code, 0) << paginate.stderr_text;
-  EXPECT_EQ(paginate.stdout_text, "sheet=0\npages=1\nprint_area=\nhorizontal_breaks=\nvertical_breaks=\n");
+  EXPECT_EQ(paginate.stdout_text, "name=Sheet1\npageCount=1\nprintArea=\nrowBreaks=\ncolumnBreaks=\npages=A1:B1\n");
 
   const std::string output = temp_path("stdin_dash_out.xlsx");
   PathGuard output_guard(output);

@@ -209,7 +209,7 @@ JsSheetView JsWorkbook::getSheetView(uint32_t sheet) const {
   r.freezeRows = v.freeze_rows;
   r.freezeCols = v.freeze_cols;
   r.showGridLines = v.show_grid_lines != 0;
-  r.showRowColHeaders = v.show_row_column_headers != 0;
+  r.showRowColumnHeaders = v.show_row_column_headers != 0;
   r.showZeros = v.show_zeros != 0;
   r.rightToLeft = v.right_to_left != 0;
   r.tabSelected = v.tab_selected != 0;
@@ -218,8 +218,8 @@ JsSheetView JsWorkbook::getSheetView(uint32_t sheet) const {
   r.topLeftCol = v.top_left_col;
   r.paneTopLeftRow = v.pane_top_left_row;
   r.paneTopLeftCol = v.pane_top_left_col;
-  r.splitXTwips = v.split_x;
-  r.splitYTwips = v.split_y;
+  r.splitXTwips = v.split_x_twips;
+  r.splitYTwips = v.split_y_twips;
   r.showFormulas = v.show_formulas != 0;
   r.showOutlineSymbols = v.show_outline_symbols != 0;
   return r;
@@ -366,7 +366,7 @@ void JsWorkbook::updateSheetProtection(uint32_t sheet, emscripten::val patch) {
     const emscripten::val v = reader.value(patch, flag.key, flag.key);
     if (js_patch_key(reader, v, flag.key, false) == JsPatchKey::kSet) {
       set_field_at<int32_t>(&p, flag.patch_op, FM_PATCH_OP_SET);
-      const bool allowed = reader.boolean_value(v, false);
+      const bool allowed = reader.boolean_value(v, false, flag.key);
       // A patch value is a plain 0 / 1; only the record's select flags carry a tristate.
       set_field_at<int32_t>(&p, flag.patch_value, allowed ? 1 : 0);
     }
@@ -398,13 +398,13 @@ void JsWorkbook::updateSheetView(uint32_t sheet, emscripten::val patch) {
   };
   const auto flag = [&](const char* key, fm_patch_op_t* op, int32_t* value) {
     js_patch_value(reader, patch, key, key, op, value,
-                   [&](const emscripten::val& v) { return reader.boolean_value(v, false) ? 1 : 0; });
+                   [&](const emscripten::val& v) { return reader.boolean_value(v, false, key) ? 1 : 0; });
   };
   u32("zoomPct", &p.zoom_pct_op, &p.zoom_pct);
   u32("freezeRows", &p.freeze_rows_op, &p.freeze_rows);
   u32("freezeCols", &p.freeze_cols_op, &p.freeze_cols);
   flag("showGridLines", &p.show_grid_lines_op, &p.show_grid_lines);
-  flag("showRowColHeaders", &p.show_row_column_headers_op, &p.show_row_column_headers);
+  flag("showRowColumnHeaders", &p.show_row_column_headers_op, &p.show_row_column_headers);
   flag("showZeros", &p.show_zeros_op, &p.show_zeros);
   flag("rightToLeft", &p.right_to_left_op, &p.right_to_left);
   flag("tabSelected", &p.tab_selected_op, &p.tab_selected);
@@ -413,8 +413,8 @@ void JsWorkbook::updateSheetView(uint32_t sheet, emscripten::val patch) {
   u32("topLeftCol", &p.top_left_col_op, &p.top_left_col);
   u32("paneTopLeftRow", &p.pane_top_left_row_op, &p.pane_top_left_row);
   u32("paneTopLeftCol", &p.pane_top_left_col_op, &p.pane_top_left_col);
-  f64("splitXTwips", &p.split_x_op, &p.split_x);
-  f64("splitYTwips", &p.split_y_op, &p.split_y);
+  f64("splitXTwips", &p.split_x_twips_op, &p.split_x_twips);
+  f64("splitYTwips", &p.split_y_twips_op, &p.split_y_twips);
   flag("showFormulas", &p.show_formulas_op, &p.show_formulas);
   flag("showOutlineSymbols", &p.show_outline_symbols_op, &p.show_outline_symbols);
   if (!reader.ok()) {
@@ -585,14 +585,12 @@ emscripten::val JsWorkbook::rangeStyleBasesExcluding(uint32_t sheet, emscripten:
     return emscripten::val::undefined();
   }
   if (!reader.is_array(excludedRows, "excludedRows") || !reader.is_array(excludedCols, "excludedCols")) {
-    record_type_error(
-        "Sheet.getRangeXfBasesExcluding: `excludedRows` and `excludedCols` must be arrays "
-        "of numbers");
+    record_type_error("Sheet.getRangeXfBasesExcluding excludedRows and excludedCols must be arrays of numbers");
     return emscripten::val::undefined();
   }
   const uint32_t count = reader.length(excludedRows, "excludedRows");
   if (reader.ok() && count != reader.length(excludedCols, "excludedCols")) {
-    record_type_error("Sheet.getRangeXfBasesExcluding: `excludedRows` and `excludedCols` must have the same length");
+    record_type_error("Sheet.getRangeXfBasesExcluding excludedRows and excludedCols must have the same length");
     return emscripten::val::undefined();
   }
   std::vector<fm_cell_address_t> excluded(count);
@@ -618,12 +616,12 @@ void JsWorkbook::remapRangeStyle(uint32_t sheet, emscripten::val range, emscript
     return;
   }
   if (!reader.is_array(fromXfs, "fromXfs") || !reader.is_array(toXfs, "toXfs")) {
-    record_type_error("Sheet.remapRangeXfs: `fromXfs` and `toXfs` must be arrays of numbers");
+    record_type_error("Sheet.remapRangeXfs fromXfs and toXfs must be arrays of numbers");
     return;
   }
   const uint32_t count = reader.length(fromXfs, "fromXfs");
   if (reader.ok() && count != reader.length(toXfs, "toXfs")) {
-    record_type_error("Sheet.remapRangeXfs: `fromXfs` and `toXfs` must have the same length");
+    record_type_error("Sheet.remapRangeXfs fromXfs and toXfs must have the same length");
     return;
   }
   std::vector<fm_xf_remap_t> pairs(count);
@@ -681,12 +679,12 @@ emscripten::val JsWorkbook::getSheetFormatDefaults(uint32_t sheet) const {
     return emscripten::val::undefined();
   }
   emscripten::val o = emscripten::val::object();
-  js_set_present_or_null(o, "defaultColWidthChars", d.has_default_column_width_chars, d.default_column_width_chars);
+  js_set_present_or_null(o, "defaultColumnWidthChars", d.has_default_column_width_chars, d.default_column_width_chars);
   js_set_present_or_null(o, "defaultRowHeightPt", d.has_default_row_height_pt, d.default_row_height_pt);
-  o.set("baseColWidthChars", d.base_column_width_chars);
+  o.set("baseColumnWidthChars", d.base_column_width_chars);
   o.set("customHeight", d.custom_height != 0);
   o.set("zeroHeight", d.zero_height != 0);
-  o.set("effectiveDefaultColWidthChars", d.effective_default_column_width_chars);
+  o.set("effectiveDefaultColumnWidthChars", d.effective_default_column_width_chars);
   o.set("effectiveDefaultRowHeightPt", d.effective_default_row_height_pt);
   return o;
 }
@@ -716,9 +714,9 @@ void JsWorkbook::setSheetFormatDefaults(uint32_t sheet, emscripten::val defaults
         break;
     }
   };
-  num("defaultColWidthChars", true, &d.default_column_width_chars_op, &d.default_column_width_chars);
+  num("defaultColumnWidthChars", true, &d.default_column_width_chars_op, &d.default_column_width_chars);
   num("defaultRowHeightPt", true, &d.default_row_height_pt_op, &d.default_row_height_pt);
-  num("baseColWidthChars", false, &d.base_column_width_chars_op, &d.base_column_width_chars);
+  num("baseColumnWidthChars", false, &d.base_column_width_chars_op, &d.base_column_width_chars);
   js_patch_flag(reader, defaults, "customHeight", "customHeight", &d.custom_height_op, &d.custom_height);
   js_patch_flag(reader, defaults, "zeroHeight", "zeroHeight", &d.zero_height_op, &d.zero_height);
   if (!reader.ok()) {

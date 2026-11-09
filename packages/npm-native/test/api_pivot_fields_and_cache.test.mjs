@@ -220,4 +220,16 @@ describe('a pivot hands out its cache and refuses bad names', () => {
       assert.equal(pivot.name, 'Pivot1');
     });
   });
+
+  it("rename to another pivot's name is AlreadyExists", () => {
+    withSheet((ws, wb) => {
+      const { cache, pivot } = newPivot(ws, wb);
+      const other = ws.addPivot({ name: 'Pivot2', cacheId: cache.cacheId, anchor: 'K1' });
+      expectCode(() => other.rename('Pivot1'), StatusCode.AlreadyExists);
+      assert.equal(other.name, 'Pivot2');
+      assert.equal(pivot.name, 'Pivot1');
+      other.rename('Pivot3');
+      assert.equal(other.name, 'Pivot3');
+    });
+  });
 });

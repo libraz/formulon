@@ -51,21 +51,14 @@ int32_t FormatArg(const Napi::CallbackInfo& info) {
 // or too-large number a RangeError and a negative integer InvalidArgument.
 // The C ABI rejects a count past its scheduler limit.
 bool ReadThreadCount(const Napi::CallbackInfo& info, uint32_t& thread_count) {
-  constexpr const char* kLabel = "Workbook.recalcParallel threadCount";
   const Napi::Value value = info[0];
   if (!value.IsNumber()) {
-    Napi::TypeError::New(info.Env(), std::string(kLabel) + " must be a number").ThrowAsJavaScriptException();
+    ThrowArgumentTypeError(info.Env(), "threadCount", "must be a number");
     return false;
   }
   const double number = NumberValue(value, 0.0);
-  if (!std::isfinite(number) || std::trunc(number) != number || number > kUint32MaxNumber) {
-    Napi::RangeError::New(info.Env(), std::string(kLabel) + " must be an integer within range")
-        .ThrowAsJavaScriptException();
-    return false;
-  }
-  if (number < 0.0) {
-    ThrowBindingStatus(info.Env(), FM_STATUS_INVALID_ARGUMENT,
-                       std::string(kLabel) + " " + std::to_string(static_cast<int64_t>(number)) + " is negative");
+  if (!std::isfinite(number) || std::trunc(number) != number || number < 0.0 || number > kUint32MaxNumber) {
+    ThrowIntegerRefusal(info.Env(), "Workbook.recalcParallel", "threadCount", number, 0.0);
     return false;
   }
   thread_count = static_cast<uint32_t>(number);
@@ -115,8 +108,13 @@ Napi::Value Workbook::FullPrecision(const Napi::CallbackInfo& info) {
 }
 
 Napi::Value Workbook::SetFullPrecision(const Napi::CallbackInfo& info) {
-  return StatusCall(info,
-                    [&](fm_workbook_t* handle) { return fm_workbook_set_full_precision(handle, ArgFlag(info, 0)); });
+  return StatusCall(info, [&](fm_workbook_t* handle) {
+    const int32_t value = ArgFlag(info, 0);
+    if (info.Env().IsExceptionPending()) {
+      return FM_STATUS_INVALID_ARGUMENT;
+    }
+    return fm_workbook_set_full_precision(handle, value);
+  });
 }
 
 Napi::Value Workbook::CalcOnSave(const Napi::CallbackInfo& info) {
@@ -124,8 +122,13 @@ Napi::Value Workbook::CalcOnSave(const Napi::CallbackInfo& info) {
 }
 
 Napi::Value Workbook::SetCalcOnSave(const Napi::CallbackInfo& info) {
-  return StatusCall(info,
-                    [&](fm_workbook_t* handle) { return fm_workbook_set_calc_on_save(handle, ArgFlag(info, 0)); });
+  return StatusCall(info, [&](fm_workbook_t* handle) {
+    const int32_t value = ArgFlag(info, 0);
+    if (info.Env().IsExceptionPending()) {
+      return FM_STATUS_INVALID_ARGUMENT;
+    }
+    return fm_workbook_set_calc_on_save(handle, value);
+  });
 }
 
 Napi::Value Workbook::RefMode(const Napi::CallbackInfo& info) {
@@ -147,7 +150,13 @@ Napi::Value Workbook::Date1904(const Napi::CallbackInfo& info) {
 }
 
 Napi::Value Workbook::SetDate1904(const Napi::CallbackInfo& info) {
-  return StatusCall(info, [&](fm_workbook_t* handle) { return fm_workbook_set_date1904(handle, ArgFlag(info, 0)); });
+  return StatusCall(info, [&](fm_workbook_t* handle) {
+    const int32_t value = ArgFlag(info, 0);
+    if (info.Env().IsExceptionPending()) {
+      return FM_STATUS_INVALID_ARGUMENT;
+    }
+    return fm_workbook_set_date1904(handle, value);
+  });
 }
 
 Napi::Value Workbook::PinnedNow(const Napi::CallbackInfo& info) {
@@ -184,18 +193,21 @@ Napi::Value Workbook::SetPinnedNow(const Napi::CallbackInfo& info) {
   // The calendar domain is validated in exactly one place, the C layer.
   fm_civil_time_t now{};
   std::int32_t* const fields[] = {&now.year, &now.month, &now.day, &now.hour, &now.minute, &now.second};
+  static constexpr const char* kPinnedNowFields[] = {"year", "month", "day", "hour", "minute", "second"};
   for (std::size_t index = 0; index < 6; ++index) {
     const Napi::Value value = info[index];
-    const std::string label = "Workbook.setPinnedNow argument " + std::to_string(index + 1);
+    const std::string call = CurrentCallLabel();
+    const std::string path = formulon::binding::field_path("time", kPinnedNowFields[index]);
     if (!value.IsNumber()) {
-      Napi::TypeError::New(env, label + " must be a primitive number").ThrowAsJavaScriptException();
+      Napi::TypeError::New(env, formulon::binding::argument_message(call, path, "must be a number"))
+          .ThrowAsJavaScriptException();
       return env.Undefined();
     }
     const double number = NumberValue(value, 0.0);
     if (!std::isfinite(number) || std::trunc(number) != number ||
         number < static_cast<double>(std::numeric_limits<std::int32_t>::min()) ||
         number > static_cast<double>(std::numeric_limits<std::int32_t>::max())) {
-      Napi::RangeError::New(env, label + " is outside int32 range").ThrowAsJavaScriptException();
+      ThrowIntegerRefusal(env, call, path, number, static_cast<double>(std::numeric_limits<std::int32_t>::min()));
       return env.Undefined();
     }
     *fields[index] = static_cast<std::int32_t>(number);
@@ -315,7 +327,7 @@ Napi::Value Workbook::SetIterative(const Napi::CallbackInfo& info) {
   const Napi::Value enabled = reader.Get(patch, "enabled");
   if (reader.ok() && !enabled.IsUndefined()) {
     if (!enabled.IsBoolean()) {
-      reader.FailType("enabled", "boolean");
+      reader.FailType("enabled", "a boolean");
     } else {
       p.enabled_op = FM_PATCH_OP_SET;
       p.enabled = enabled.As<Napi::Boolean>().Value() ? 1 : 0;
@@ -324,10 +336,11 @@ Napi::Value Workbook::SetIterative(const Napi::CallbackInfo& info) {
   const Napi::Value cap = reader.Get(patch, "maxIterations");
   if (reader.ok() && !cap.IsUndefined()) {
     const double requested = cap.IsNumber() ? cap.As<Napi::Number>().DoubleValue() : 0.0;
-    if (!cap.IsNumber() || !std::isfinite(requested) || std::trunc(requested) != requested) {
-      reader.FailType("maxIterations", "whole number");
-    } else if (requested < 0.0 || requested > kUint32MaxNumber) {
-      reader.FailRange("maxIterations", "[0, 4294967295]");
+    if (!cap.IsNumber()) {
+      reader.FailType("maxIterations", "a number");
+    } else if (!std::isfinite(requested) || std::trunc(requested) != requested || requested < 0.0 ||
+               requested > kUint32MaxNumber) {
+      reader.FailInteger("maxIterations", requested, 0.0);
     } else {
       p.max_iterations_op = FM_PATCH_OP_SET;
       p.max_iterations = static_cast<uint32_t>(requested);
@@ -336,7 +349,7 @@ Napi::Value Workbook::SetIterative(const Napi::CallbackInfo& info) {
   const Napi::Value change = reader.Get(patch, "maxChange");
   if (reader.ok() && !change.IsUndefined()) {
     if (!change.IsNumber()) {
-      reader.FailType("maxChange", "number");
+      reader.FailType("maxChange", "a number");
     } else {
       p.max_change_op = FM_PATCH_OP_SET;
       p.max_change = change.As<Napi::Number>().DoubleValue();
@@ -378,7 +391,7 @@ Napi::Value Workbook::SetIterativeProgress(const Napi::CallbackInfo& info) {
     return ValueOrThrow(env, fm_workbook_set_iterative_progress(handle_, nullptr, nullptr), env.Undefined());
   }
   if (!FunctionArg(info, 0, &callback)) {
-    Napi::TypeError::New(env, "callback must be a function or null").ThrowAsJavaScriptException();
+    ThrowArgumentTypeError(env, "callback", "must be a function or null");
     return env.Undefined();
   }
   // The function lives on this wrapper, and the C ABI hands the trampoline

@@ -29,15 +29,15 @@ inline const char* color_spec_problem(const fm_color_t& value) {
   constexpr std::uint32_t kThemeCount = 12U;
   if (value.kind == FM_COLOR_KIND_THEME) {
     if (value.theme >= kThemeCount) {
-      return "theme index must be below 12";
+      return "theme must be in 0..11";
     }
     if (!(value.tint >= -1.0 && value.tint <= 1.0)) {
-      return "tint must be within [-1, 1]";
+      return "tint must be in -1..1";
     }
     return nullptr;
   }
   if (value.kind != FM_COLOR_KIND_NONE && value.kind != FM_COLOR_KIND_RGB) {
-    return "must be a None, Rgb or Theme colour";
+    return "must be a colour";
   }
   return nullptr;
 }
@@ -129,7 +129,7 @@ class PatchReader {
       return;
     }
     if (op == FM_PATCH_OP_CLEAR) {
-      fail(name, "cannot be cleared");
+      fail(name, "must not be null");
     } else if (op == FM_PATCH_OP_SET) {
       out = std::move(value);
     }
@@ -158,7 +158,7 @@ class PatchReader {
 
   bool enum_ok(std::int64_t value, std::int64_t min, std::int64_t max, const char* name) {
     if (rc_ == 0) {
-      rc_ = check_enum_domain(value, min, max, name);
+      rc_ = check_enum_domain(value, min, max, public_name(name).c_str());
     }
     return rc_ == 0;
   }
@@ -172,7 +172,7 @@ class PatchReader {
 
   void fail(const char* name, const char* why) {
     if (rc_ == 0) {
-      rc_ = invalid_argument((std::string(name) + " " + why).c_str());
+      rc_ = invalid_argument((public_name(name) + " " + why).c_str());
     }
   }
 
@@ -185,8 +185,25 @@ class PatchReader {
   }
 
  private:
+  /// The C field `name` as a binding sees it: without the patch-op suffix.
+  static std::string public_name(const char* name) {
+    std::string out(name);
+    constexpr std::string_view kOpSuffix = "_op";
+    if (out.size() > kOpSuffix.size() && out.compare(out.size() - kOpSuffix.size(), kOpSuffix.size(), kOpSuffix) == 0) {
+      out.resize(out.size() - kOpSuffix.size());
+    }
+    return out;
+  }
+
   bool op_ok(std::int32_t op, const char* name) {
-    return enum_ok(op, static_cast<std::int64_t>(FM_PATCH_OP_SET), name);
+    if (op >= 0 && op <= static_cast<std::int32_t>(FM_PATCH_OP_SET)) {
+      return rc_ == 0;
+    }
+    if (rc_ == 0) {
+      rc_ = invalid_argument((std::string(name) + " is not a patch op").c_str(),
+                             std::string(name) + "=" + std::to_string(op));
+    }
+    return false;
   }
 
   fm_status_t rc_ = 0;

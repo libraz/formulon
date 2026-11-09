@@ -972,7 +972,7 @@ TEST(FormulonCApiSparklines, UpdateWithItemsIsAllOrNothing) {
   patch.items_count = 1;
   EXPECT_EQ(fm_sheet_update_sparkline_group(wb.handle, 0, gid.c_str(), &patch), kInvalidArgument);
   patch.items = nullptr;
-  EXPECT_EQ(fm_sheet_update_sparkline_group(wb.handle, 0, gid.c_str(), &patch), kBindingNullPointer);
+  EXPECT_EQ(fm_sheet_update_sparkline_group(wb.handle, 0, gid.c_str(), &patch), kInvalidArgument);
   // An invalid field with valid items does not replace the items either.
   const fm_sparkline_t one[] = {{"Sheet1!B1:B5", "H1"}};
   patch.items = one;

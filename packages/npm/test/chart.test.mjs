@@ -577,7 +577,8 @@ test('chart calls throw on failure and reject malformed arguments', async () => 
     );
     assert.throws(() => wb.sheet(0).chart(id).updateSeries(0, 0, { values: 5 }), TypeError);
     assert.throws(() => wb.sheet(0).chart(id).updateSeries(0, 0, 'nope'), TypeError);
-    assert.throws(() => wb.sheet(0).chart(id).updateAxis(1, { min: 'low' }), TypeError);
+    const axisId = chartOf(wb, id).axes.find((a) => a.kind === mod.ChartAxisKind.Value).id;
+    assert.throws(() => wb.sheet(0).chart(id).updateAxis(axisId, { min: 'low' }), TypeError);
     assert.throws(
       () =>
         wb

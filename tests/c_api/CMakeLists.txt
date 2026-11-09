@@ -7,6 +7,7 @@ set(FORMULON_C_API_TEST_SOURCES
   formulon_c_adhoc_arena_cap_test.cpp
   formulon_c_api_usability_test.cpp
   formulon_c_argument_range_test.cpp
+  formulon_c_argument_messages_test.cpp
   formulon_c_auto_calc_test.cpp
   formulon_c_auto_filter_test.cpp
   formulon_c_calc_mode_test.cpp

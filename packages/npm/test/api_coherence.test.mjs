@@ -1055,7 +1055,8 @@ test('createFormulon({ wasm }) refuses an empty buffer and anything that is neit
   }
 });
 
-test('createFormulon ignores unknown option keys', async () => {
+test('createFormulon refuses unknown option keys', async () => {
   const mod = await loadPackage();
-  checkEvaluates(await mod.createFormulon({ bogus: 1 }));
+  await assert.rejects(mod.createFormulon({ bogus: 1 }), TypeError);
+  checkEvaluates(await mod.createFormulon({}));
 });

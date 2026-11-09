@@ -28,12 +28,8 @@ export function registerSurfaceRecalc(Module, test, threadsBuild) {
     }
   });
 
-  test('getStatusName covers known codes', () => {
-    assert.equal(Module.getStatusName(0), 'OK');
-    // Unknown / out-of-band codes still return a non-null string.
-    const unknown = Module.getStatusName(123456);
-    assert.equal(typeof unknown, 'string');
-    assert.ok(unknown.length > 0);
+  test('the status name is no longer a module function', () => {
+    assert.equal(Module.getStatusName, undefined);
   });
 
   test('the display name of an error is no longer a module function', () => {
@@ -228,7 +224,7 @@ export function registerSurfaceRecalc(Module, test, threadsBuild) {
 
       expectFailure(() => wb.recalcParallel(9), StatusCode.InvalidArgument);
       expectFailure(() => wb.recalcParallel(-1), StatusCode.InvalidArgument);
-      expectFailure(() => wb.recalcParallel(2 ** 32 + 1), StatusCode.InvalidArgument);
+      assert.throws(() => wb.recalcParallel(2 ** 32 + 1), RangeError);
 
       for (const invalidThreadCount of [
         -0.5,

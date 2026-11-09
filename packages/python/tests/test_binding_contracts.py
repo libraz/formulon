@@ -1387,7 +1387,7 @@ class ArgumentScopeTests(unittest.TestCase):
 
     def test_a_value_of_the_wrong_type_is_rejected_before_any_allocation(self) -> None:
         with Workbook.create_default() as wb:
-            allocations = self._assert_rejected_without_leak(lambda: wb.format_value("abc", "General"), TypeError)
+            allocations = self._assert_rejected_without_leak(lambda: wb.format_value([1], "General"), TypeError)  # type: ignore[arg-type]
             self.assertEqual(allocations, 0)
 
 

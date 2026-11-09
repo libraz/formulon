@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import dataclasses
+import inspect
 import struct
 import unittest
 import zlib
@@ -11,6 +12,7 @@ import formulon
 from formulon import (
     AnchorKind,
     CellRect,
+    Chart,
     ChartBarDirection,
     ChartFill,
     ChartInput,
@@ -24,8 +26,12 @@ from formulon import (
     GradientFill,
     ImageFormat,
     ImageInfo,
+    InvalidArgumentError,
+    Picture,
     PictureProperties,
+    Shape,
     ShapeInput,
+    Slicer,
     SlicerInput,
     SparklineGroupInput,
     SparklineInput,
@@ -173,6 +179,74 @@ class SlicerTests(unittest.TestCase):
                 slicer.update(row_height_pt=-1.0)
             with self.assertRaises(TypeError):
                 slicer.update(row_height_emu=1)  # type: ignore[call-arg]
+
+    def test_update_has_no_name_keyword(self) -> None:
+        self.assertNotIn("name", inspect.signature(Slicer.update).parameters)
+        with Workbook.create_default() as wb:
+            wb.sheet(0).set_text(0, 0, "Product")
+            wb.sheet(0).set_text(0, 1, "Amount")
+            wb.sheet(0).set_number(1, 1, 10.0)
+            wb.sheet(0).add_table(TableInput(range=CellRect(0, 0, 1, 1), name="Sales", columns=["Product", "Amount"]))
+            slicer = wb.sheet(0).add_slicer(
+                "Sales", 0, SlicerInput(anchor=DrawingAnchorInput(from_row=4, from_col=3, to_row=14, to_col=5))
+            )
+            with self.assertRaises(TypeError):
+                slicer.update(name="X")  # type: ignore[call-arg]
+            self.assertEqual(slicer.name, "Product")
+
+
+class DrawingHandleTests(unittest.TestCase):
+    def test_restore_drawing_empty_bytes_is_invalid_argument(self) -> None:
+        with Workbook.create_default() as wb:
+            for empty in (b"", bytearray(), memoryview(b"")):
+                with self.assertRaises(InvalidArgumentError):
+                    wb.sheet(0).restore_drawing(empty)
+            self.assertEqual(wb.sheet(0).list_drawings(), [])
+
+    def test_z_order_and_snapshot_are_inherited(self) -> None:
+        for cls in (Picture, Chart, Shape):
+            self.assertNotIn("set_z_order", vars(cls))
+            self.assertNotIn("snapshot", vars(cls))
+            self.assertTrue(callable(getattr(cls, "set_z_order")))
+            self.assertTrue(callable(getattr(cls, "snapshot")))
+        self.assertNotIn("set_z_order", vars(Slicer))
+        self.assertTrue(callable(getattr(Slicer, "set_z_order")))
+        with Workbook.create_default() as wb:
+            _grid(wb)
+            ws = wb.sheet(0)
+            pic = ws.add_picture(_png(2, 2), DrawingPlacementInput(name="logo"))
+            chart = ws.add_chart(ChartInput(type=ChartPlotType.BAR, range=SOURCE))
+            shape = ws.add_shape(ShapeInput(**_box()))
+            self.assertEqual(
+                [d.object_id for d in ws.list_drawings()], [pic.object_id, chart.object_id, shape.object_id]
+            )
+            shape.set_z_order(0)
+            self.assertEqual(
+                [d.object_id for d in ws.list_drawings()], [shape.object_id, pic.object_id, chart.object_id]
+            )
+            pic.set_z_order(2)
+            self.assertEqual(
+                [d.object_id for d in ws.list_drawings()], [shape.object_id, chart.object_id, pic.object_id]
+            )
+            for handle in (pic, chart, shape):
+                captured = handle.snapshot()
+                self.assertIsInstance(captured, bytes)
+                self.assertGreater(len(captured), 0)
+            captured = shape.snapshot()
+            ws.remove_drawing(shape)
+            restored = ws.restore_drawing(captured)
+            self.assertIsInstance(restored, Shape)
+            self.assertEqual(restored.object_id, shape.object_id)
+
+            ws.set_text(20, 0, "Product")
+            ws.set_text(20, 1, "Amount")
+            ws.set_number(21, 1, 10.0)
+            ws.add_table(TableInput(range=CellRect(20, 0, 21, 1), name="Sales", columns=["Product", "Amount"]))
+            slicer = ws.add_slicer(
+                "Sales", 0, SlicerInput(anchor=DrawingAnchorInput(from_row=4, from_col=9, to_row=14, to_col=11))
+            )
+            slicer.set_z_order(0)
+            self.assertEqual(ws.list_drawings()[0].object_id, slicer.object_id)
 
 
 class ChartInputTests(unittest.TestCase):

@@ -605,7 +605,7 @@ TEST(FormulonCApiProtectedRangePatch, RejectedPatchesChangeNothing) {
   add("clear on the spin count", kInvalidArgument,
       [](fm_protected_range_patch_t& p) { p.spin_count_op = FM_PATCH_OP_CLEAR; });
   add("clear on the ranges", kInvalidArgument, [](fm_protected_range_patch_t& p) { p.ranges_op = FM_PATCH_OP_CLEAR; });
-  add("set with a NULL string", kInvalidArgument, [](fm_protected_range_patch_t& p) {
+  add("set with a NULL string", FM_STATUS_INVALID_ARGUMENT, [](fm_protected_range_patch_t& p) {
     p.algorithm_name_op = FM_PATCH_OP_SET;
     p.algorithm_name = nullptr;
   });

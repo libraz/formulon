@@ -20,12 +20,14 @@
 #include "pivot/pivot_table.h"
 #include "utils/error.h"
 
+using formulon::c_api::parts::check_finite;
 using formulon::c_api::parts::check_index;
 using formulon::c_api::parts::check_record_size;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::invalid_argument;
 using formulon::c_api::parts::null_argument;
+using formulon::c_api::parts::null_field;
 using formulon::c_api::parts::pivot_count;
 using formulon::c_api::parts::pivot_filter_type_from_fm;
 using formulon::c_api::parts::PivotEdit;
@@ -49,8 +51,8 @@ fm_status_t numeric_payload(std::int32_t kind, std::int32_t as_int, double as_do
     out = static_cast<int>(as_int);
     return 0;
   }
-  if (!std::isfinite(as_double)) {
-    return invalid_argument((std::string(field) + " is not finite").c_str());
+  if (auto rc = check_finite(as_double, field); rc != 0) {
+    return rc;
   }
   out = as_double;
   return 0;
@@ -97,19 +99,20 @@ fm_status_t add_pivot_filter_impl(fm_workbook_t* wb, std::size_t sheet_index, st
                                   " value_kind=" + std::to_string(static_cast<int>(spec->value_kind));
   if (formulon::pivot::is_operandless_filter_type(type)) {
     if (spec->value_kind != FM_PIVOT_FILTER_OPERAND_KIND_ABSENT) {
-      return invalid_argument("this filter type takes no value", kind_detail);
+      return invalid_argument("value_kind must be absent for this filter type", kind_detail);
     }
   } else if (spec->value_kind == FM_PIVOT_FILTER_OPERAND_KIND_ABSENT) {
-    return invalid_argument("spec->value_kind is unset", kind_detail);
+    return invalid_argument("value_kind is required for this filter type", kind_detail);
   } else if (caption != (spec->value_kind == FM_PIVOT_FILTER_OPERAND_KIND_TEXT)) {
-    return invalid_argument(caption ? "a label filter takes a text value" : "this filter type takes a number",
-                            kind_detail);
+    return invalid_argument(
+        caption ? "value_kind must be text for a label filter" : "value_kind must be a number for this filter type",
+        kind_detail);
   }
   const bool text_high = caption && ranged;
   if (text_high != (spec->value_high_text != nullptr) ||
       text_high != (spec->value_high_kind == FM_PIVOT_FILTER_OPERAND_KIND_TEXT)) {
-    return invalid_argument(text_high ? "a label range takes its upper bound in value_high_text"
-                                      : "value_high_text is only taken by a label range",
+    return invalid_argument(text_high ? "value_high_text is required for a label range"
+                                      : "value_high_text must be absent unless the filter is a label range",
                             "kind=" + std::to_string(static_cast<int>(spec->kind)));
   }
   if (formulon::pivot::is_value_filter_type(type)) {
@@ -123,7 +126,8 @@ fm_status_t add_pivot_filter_impl(fm_workbook_t* wb, std::size_t sheet_index, st
   // The filter takes its field's axis; a field on no axis would leave it a silent no-op.
   const formulon::pivot::PivotField& target = table->fields()[spec->field_index];
   if (target.axis == formulon::pivot::PivotAxis::None) {
-    return invalid_argument("field_index names a field on no axis", "field_index=" + std::to_string(spec->field_index));
+    return invalid_argument(("field_index " + std::to_string(spec->field_index) + " names a field on no axis").c_str(),
+                            "field_index=" + std::to_string(spec->field_index));
   }
   formulon::pivot::PivotFilter filter;
   filter.axis = target.axis;
@@ -140,14 +144,16 @@ fm_status_t add_pivot_filter_impl(fm_workbook_t* wb, std::size_t sheet_index, st
       break;
     case FM_PIVOT_FILTER_OPERAND_KIND_TEXT:
       if (spec->value_text == nullptr) {
-        return null_argument("spec->value_text");
+        return null_field("value_text");
       }
       filter.value = std::string(spec->value_text);
       break;
     case FM_PIVOT_FILTER_OPERAND_KIND_ABSENT:
       break;
     default:
-      return invalid_argument("spec->value_kind is out of range", kind_detail);
+      return invalid_argument(
+          ("value_kind " + std::to_string(static_cast<int>(spec->value_kind)) + " is not a FilterOperandKind").c_str(),
+          kind_detail);
   }
   switch (spec->value_high_kind) {
     case FM_PIVOT_FILTER_OPERAND_KIND_INT:
@@ -165,8 +171,10 @@ fm_status_t add_pivot_filter_impl(fm_workbook_t* wb, std::size_t sheet_index, st
       // Leave default monostate.
       break;
     default:
-      return invalid_argument("spec->value_high_kind not supported",
-                              "value_high_kind=" + std::to_string(static_cast<int>(spec->value_high_kind)));
+      return invalid_argument(
+          ("value_high_kind " + std::to_string(static_cast<int>(spec->value_high_kind)) + " is not a FilterOperandKind")
+              .c_str(),
+          "value_high_kind=" + std::to_string(static_cast<int>(spec->value_high_kind)));
   }
   // The top / bottom amounts: a percent within 0..100, a count or sum above 0.
   if (formulon::pivot::is_value_filter_type(type)) {
@@ -176,8 +184,11 @@ fm_status_t add_pivot_filter_impl(fm_workbook_t* wb, std::size_t sheet_index, st
     const bool count_or_sum =
         type == formulon::pivot::FilterType::ValueTop10 || type == formulon::pivot::FilterType::ValueBottomCount ||
         type == formulon::pivot::FilterType::ValueTopSum || type == formulon::pivot::FilterType::ValueBottomSum;
-    if ((percent && (amount < 0.0 || amount > 100.0)) || (count_or_sum && amount <= 0.0)) {
-      return invalid_argument("value is out of range for this filter type", kind_detail);
+    if (percent && (amount < 0.0 || amount > 100.0)) {
+      return invalid_argument("value must be in 0..100 for a percent filter", kind_detail);
+    }
+    if (count_or_sum && amount <= 0.0) {
+      return invalid_argument("value must be above 0 for this filter type", kind_detail);
     }
   }
   PivotEdit edit(wb->workbook(), sheet_index, pivot_index, *table);
@@ -218,10 +229,10 @@ extern "C" fm_status_t fm_sheet_get_pivot_filter_at(const fm_workbook_t* wb, std
   const auto& filter = filters[filter_index];
   const auto field = formulon::pivot::resolve_field_by_any_name(*table, filter.field_name);
   if (!field.has_value()) {
-    return invalid_argument("filter field does not name a pivot field", "field_name=" + filter.field_name);
+    return invalid_argument("field_name names no pivot field", "field_name=" + filter.field_name);
   }
   if (filter.type > formulon::pivot::FilterType::DateM12) {
-    return invalid_argument("model filter type is not representable");
+    return invalid_argument("kind is not a representable filter kind");
   }
 
   fm_pivot_filter_t result{};

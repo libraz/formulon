@@ -100,9 +100,9 @@ class NativeReadTests(unittest.TestCase):
                 RangeCell(row=0, col=1, formula="=A1*2", value=2.0, kind=ValueKind.NUMBER),
             ],
         )
-        page = self.ws.get_cells_in_range("A1:B1", None, 1)
+        page = self.ws.get_cells_in_range("A1:B1", limit=1)
         self.assertEqual(page.cells, cells[:1])
-        rest = self.ws.get_cells_in_range("A1:B1", page.next_cursor)
+        rest = self.ws.get_cells_in_range("A1:B1", cursor=page.next_cursor)
         self.assertEqual(rest.cells, cells[1:])
         self.assertIsNone(rest.next_cursor)
 

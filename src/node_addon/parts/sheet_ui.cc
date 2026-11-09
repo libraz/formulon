@@ -176,7 +176,7 @@ Napi::Value Workbook::SetComment(const Napi::CallbackInfo& info) {
   // `null` removes the note and does nothing when there is none; an omitted `author` is empty.
   CheckedSpecReader reader(env);
   Napi::Object in;
-  const bool present = reader.Object(info[3], "comment", &in);
+  const bool present = reader.Object(info[3], "", &in);
   std::string author;
   std::string text;
   fm_comment_t c = FM_STRUCT_INIT(fm_comment_t);
@@ -207,7 +207,11 @@ Napi::Value Workbook::GetCommentVisible(const Napi::CallbackInfo& info) {
 
 Napi::Value Workbook::SetCommentVisible(const Napi::CallbackInfo& info) {
   return StatusCall(info, [&](fm_workbook_t* handle) {
-    return fm_sheet_set_comment_visible(handle, ArgU32(info, 0), ArgU32(info, 1), ArgU32(info, 2), ArgFlag(info, 3));
+    const int32_t visible = ArgFlag(info, 3);
+    if (info.Env().IsExceptionPending()) {
+      return FM_STATUS_INVALID_ARGUMENT;
+    }
+    return fm_sheet_set_comment_visible(handle, ArgU32(info, 0), ArgU32(info, 1), ArgU32(info, 2), visible);
   });
 }
 
@@ -249,7 +253,7 @@ Napi::Value Workbook::SetWorkbookProtection(const Napi::CallbackInfo& info) {
   // `null` removes `<workbookProtection>`; a missing or `null` string is no stored value.
   CheckedSpecReader reader(env);
   Napi::Object in;
-  if (!reader.Object(info[0], "protection", &in)) {
+  if (!reader.Object(info[0], "", &in)) {
     return reader.ok() ? ValueOrThrow(env, fm_workbook_set_workbook_protection(handle_, nullptr), env.Undefined())
                        : env.Undefined();
   }
@@ -409,7 +413,7 @@ Napi::Value Workbook::SetHyperlink(const Napi::CallbackInfo& info) {
   const uint32_t col = ArgU32(info, 2);
   CheckedSpecReader reader(env);
   Napi::Object in;
-  if (!reader.Object(info[3], "link", &in)) {
+  if (!reader.Object(info[3], "", &in)) {
     return reader.ok() ? ValueOrThrow(env, fm_sheet_set_hyperlink(handle_, sheet, row, col, nullptr), env.Undefined())
                        : env.Undefined();
   }

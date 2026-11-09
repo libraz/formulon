@@ -376,7 +376,7 @@ TEST(FormulonCApiTable, InvalidStylePatchIsRejectedBeforeAnythingChanges) {
   null_name.style_name_op = FM_PATCH_OP_SET;
   null_name.show_last_column_op = FM_PATCH_OP_SET;
   null_name.show_last_column = 1;
-  EXPECT_EQ(fm_sheet_update_table_style_options(wb.handle, 0, 0, &null_name), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_update_table_style_options(wb.handle, 0, 0, &null_name), FM_STATUS_INVALID_ARGUMENT);
 
   fm_table_style_options_patch_t bad_toggle = StylePatch();
   bad_toggle.show_first_column_op = FM_PATCH_OP_SET;

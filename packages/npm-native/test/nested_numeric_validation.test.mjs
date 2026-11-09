@@ -78,7 +78,7 @@ test('nested conditional-format integers reject narrowing before addConditionalF
     assert.throws(() => wb.sheet(0).addCfRule(dataBarRule({ minLengthPct: 256 })), RangeError);
     assert.equal(wb.sheet(0).listCfRules().length, 0);
 
-    for (const value of [Number.NaN, Number.POSITIVE_INFINITY, 1.5, -1]) {
+    for (const value of [Number.NaN, Number.POSITIVE_INFINITY, 1.5]) {
       assert.throws(
         () => wb.sheet(0).addCfRule(dataBarRule({ minLengthPct: value })),
         RangeError,
@@ -86,6 +86,11 @@ test('nested conditional-format integers reject narrowing before addConditionalF
       );
       assert.equal(wb.sheet(0).listCfRules().length, 0);
     }
+    assert.throws(
+      () => wb.sheet(0).addCfRule(dataBarRule({ minLengthPct: -1 })),
+      (e) => e.name === 'FormulonError' && e.code === mod.StatusCode.InvalidArgument,
+    );
+    assert.equal(wb.sheet(0).listCfRules().length, 0);
 
     wb.sheet(0).addCfRule(dataBarRule({ minLengthPct: null, maxLengthPct: undefined }));
     const stored = wb.sheet(0).listCfRules();
@@ -222,10 +227,15 @@ test('named-style and theme integer fields reject before their C mutations', asy
   const wb = mod.Workbook.createDefault();
   try {
     const styleCount = wb.listCellStyles().length;
-    for (const value of [2 ** 32, Number.NaN, 1.5, -1]) {
+    for (const value of [2 ** 32, Number.NaN, 1.5]) {
       assert.throws(() => wb.setCellStyle({ name: 'invalid', styleXfIndex: value }), RangeError);
       assert.equal(wb.listCellStyles().length, styleCount);
     }
+    assert.throws(
+      () => wb.setCellStyle({ name: 'invalid', styleXfIndex: -1 }),
+      (e) => e.name === 'FormulonError' && e.code === mod.StatusCode.InvalidArgument,
+    );
+    assert.equal(wb.listCellStyles().length, styleCount);
 
     const before = wb.getThemeColors().colors;
     for (const value of [Symbol('theme'), Number.NaN, 1.5, -1, 2 ** 32]) {

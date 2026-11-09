@@ -99,18 +99,18 @@ void JsWorkbook::setCellStyle(emscripten::val record) {
     return;
   }
   JsNarrowNumericReader reader("Workbook.setCellStyle");
-  const std::string name = reader.string(record, "name", "cellStyle.name");
+  const std::string name = reader.string(record, "name", "name");
   fm_cell_style_t cs{};
   cs.name = name.c_str();
-  cs.style_xf_index = reader.u32(record, "styleXfIndex", 0U, "cellStyle.styleXfIndex");
-  const emscripten::val builtin_id = reader.value(record, "builtinId", "cellStyle.builtinId");
+  cs.style_xf_index = reader.u32(record, "styleXfIndex", 0U, "styleXfIndex");
+  const emscripten::val builtin_id = reader.value(record, "builtinId", "builtinId");
   if (reader.ok() && js_value_present(builtin_id)) {
     cs.has_builtin_id = 1;
-    cs.builtin_id = reader.u32_value(builtin_id, 0U, "cellStyle.builtinId");
+    cs.builtin_id = reader.u32_value(builtin_id, 0U, "builtinId");
   }
-  cs.outline_level = reader.u32(record, "outlineLevel", 0U, "cellStyle.outlineLevel");
-  cs.hidden = reader.boolean(record, "hidden", false, "cellStyle.hidden") ? 1 : 0;
-  cs.custom_builtin = reader.boolean(record, "customBuiltin", false, "cellStyle.customBuiltin") ? 1 : 0;
+  cs.outline_level = reader.u32(record, "outlineLevel", 0U, "outlineLevel");
+  cs.hidden = reader.boolean(record, "hidden", false, "hidden") ? 1 : 0;
+  cs.custom_builtin = reader.boolean(record, "customBuiltin", false, "customBuiltin") ? 1 : 0;
   if (!reader.ok()) {
     return;
   }
@@ -158,7 +158,7 @@ void JsWorkbook::setTableStyle(emscripten::val style) {
   std::vector<fm_table_style_element_t> records;
   if (reader.ok() && js_value_present(elements)) {
     if (!reader.is_array(elements, "style.elements")) {
-      record_type_error("Workbook.setTableStyle: `elements` must be an array");
+      record_type_error("Workbook.setTableStyle elements must be an array");
       return;
     }
     const uint32_t count = reader.length(elements, "style.elements.length");

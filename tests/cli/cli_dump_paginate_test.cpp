@@ -11,7 +11,65 @@ TEST(FormulonCli, PaginatePrintsResolvedGeometry) {
 
   CliRun r = run_cli({"paginate", path});
   EXPECT_EQ(r.exit_code, 0) << "stderr=" << r.stderr_text;
-  EXPECT_EQ(r.stdout_text, "sheet=0\npages=1\nprint_area=\nhorizontal_breaks=\nvertical_breaks=\n");
+  EXPECT_EQ(r.stdout_text, "name=Sheet1\npageCount=1\nprintArea=\nrowBreaks=\ncolumnBreaks=\npages=A1:B1\n");
+}
+
+namespace {
+
+// Sheet1 with print area B2:D5 and a manual row break before 0-based row 3, so it prints as two pages.
+void write_print_area_fixture(const std::string& path) {
+  fm_workbook_t* wb = nullptr;
+  ASSERT_EQ(fm_workbook_create_default(&wb), 0);
+  const fm_cell_rect_t area = {1, 1, 4, 3};
+  ASSERT_EQ(fm_sheet_set_print_area(wb, 0, &area, 1), 0) << fm_get_last_error_message();
+  fm_row_break_t brk = FM_STRUCT_INIT(fm_row_break_t);
+  brk.manual = FM_TRISTATE_TRUE;
+  ASSERT_EQ(fm_sheet_set_row_break(wb, 0, 3, &brk), 0) << fm_get_last_error_message();
+  std::uint8_t* bytes = nullptr;
+  std::size_t len = 0;
+  ASSERT_EQ(fm_workbook_save(wb, FM_WORKBOOK_FORMAT_XLSX, &bytes, &len), 0);
+  ASSERT_TRUE(write_bytes(path, std::string_view(reinterpret_cast<const char*>(bytes), len)));
+  fm_buffer_destroy(bytes);
+  fm_workbook_destroy(wb);
+}
+
+}  // namespace
+
+TEST(FormulonCli, PaginateJsonCarriesCountAreaBreaksAndPages) {
+  const std::string path = temp_path("paginate_json_geometry.xlsx");
+  PathGuard guard(path);
+  write_print_area_fixture(path);
+
+  const CliRun r = run_cli({"paginate", "--json", path});
+  EXPECT_EQ(r.exit_code, 0) << "stderr=" << r.stderr_text;
+  EXPECT_EQ(r.stdout_text,
+            "{\"format\":1,\"sheets\":[{\"name\":\"Sheet1\",\"pageCount\":2,\"printArea\":[\"B2:D5\"],"
+            "\"rowBreaks\":[3],\"columnBreaks\":[],\"pages\":[{\"range\":\"B2:D3\"},{\"range\":\"B4:D5\"}]}]}\n");
+}
+
+TEST(FormulonCli, PaginatePlainPrintsTheJsonKeys) {
+  const std::string path = temp_path("paginate_plain_geometry.xlsx");
+  PathGuard guard(path);
+  write_print_area_fixture(path);
+
+  const CliRun r = run_cli({"paginate", path});
+  EXPECT_EQ(r.exit_code, 0) << "stderr=" << r.stderr_text;
+  EXPECT_EQ(r.stdout_text,
+            "name=Sheet1\npageCount=2\nprintArea=B2:D5\nrowBreaks=3\ncolumnBreaks=\npages=B2:D3,B4:D5\n");
+}
+
+TEST(FormulonCli, PaginateHelpDescribesTheJsonSchema) {
+  const CliRun r = run_cli({"paginate", "--help"});
+  EXPECT_EQ(r.exit_code, 0);
+  EXPECT_NE(r.stdout_text.find("{\"format\":1,\"sheets\":[...]}"), std::string::npos) << r.stdout_text;
+  EXPECT_NE(r.stdout_text.find("\"format\" is the schema version"), std::string::npos) << r.stdout_text;
+}
+
+TEST(FormulonCli, DumpHelpDescribesTheJsonCells) {
+  const CliRun r = run_cli({"dump", "--help"});
+  EXPECT_EQ(r.exit_code, 0);
+  EXPECT_NE(r.stdout_text.find("--view formulas reports cached values"), std::string::npos) << r.stdout_text;
+  EXPECT_NE(r.stdout_text.find("\"format\" is the schema version"), std::string::npos) << r.stdout_text;
 }
 
 TEST(FormulonCli, PaginateWriteFailureReturnsOutputError) {
@@ -93,15 +151,28 @@ TEST(FormulonCli, DumpFormulasListsFormulaCells) {
   EXPECT_EQ(r.stdout_text.find("Sheet1!A1"), std::string::npos) << "literal A1 must not appear in the formulas view";
 }
 
+TEST(FormulonCli, DumpMetadataKeysAreCamelCase) {
+  const std::string in = temp_path("dump_metadata_keys.xlsx");
+  PathGuard guard(in);
+  ASSERT_TRUE(write_fixture_workbook(in));
+
+  const CliRun json = run_cli({"dump", "--view", "metadata", "--json", in});
+  EXPECT_EQ(json.exit_code, 0) << "stderr=" << json.stderr_text;
+  EXPECT_NE(json.stdout_text.find("\"definedNames\":"), std::string::npos) << json.stdout_text;
+  EXPECT_NE(json.stdout_text.find("\"passthroughParts\":"), std::string::npos) << json.stdout_text;
+  EXPECT_EQ(json.stdout_text.find("defined_names"), std::string::npos) << json.stdout_text;
+  EXPECT_EQ(json.stdout_text.find("passthrough_parts"), std::string::npos) << json.stdout_text;
+}
+
 TEST(FormulonCli, DumpMetadataPrintsSectionHeaders) {
   std::string in = temp_path("dump_metadata.xlsx");
   PathGuard g_in(in);
   ASSERT_TRUE(write_fixture_workbook(in));
   CliRun r = run_cli({"dump", "--view", "metadata", in});
   EXPECT_EQ(r.exit_code, 0) << "stderr=" << r.stderr_text;
-  EXPECT_NE(r.stdout_text.find("[defined_names]"), std::string::npos);
+  EXPECT_NE(r.stdout_text.find("[definedNames]"), std::string::npos);
   EXPECT_NE(r.stdout_text.find("[tables]"), std::string::npos);
-  EXPECT_NE(r.stdout_text.find("[passthrough_parts]"), std::string::npos);
+  EXPECT_NE(r.stdout_text.find("[passthroughParts]"), std::string::npos);
 }
 
 TEST(FormulonCli, DumpWriteFailureReturnsOutputError) {
@@ -209,12 +280,12 @@ TEST(FormulonCli, DumpMetadataRecoversFromOutOfRangeDefinedNameScope) {
   EXPECT_EQ(r.exit_code, 0) << "stderr=" << r.stderr_text;
   EXPECT_TRUE(r.stderr_text.empty());
   EXPECT_EQ(r.stdout_text,
-            "[defined_names]\n"
+            "[definedNames]\n"
             "Before =1\n"
             "#99!Bad =Sheet1!$A$1\n"
             "After =2\n"
             "[tables]\n"
-            "[passthrough_parts]\n");
+            "[passthroughParts]\n");
 }
 
 TEST(FormulonCli, PaginateOptionTerminatorAcceptsDashLeadingRelativePath) {
@@ -227,7 +298,8 @@ TEST(FormulonCli, PaginateOptionTerminatorAcceptsDashLeadingRelativePath) {
 
   const CliRun with_terminator = run_cli({"paginate", "--sheet", "0", "--", input});
   EXPECT_EQ(with_terminator.exit_code, 0) << with_terminator.stderr_text;
-  EXPECT_EQ(with_terminator.stdout_text, "sheet=0\npages=1\nprint_area=\nhorizontal_breaks=\nvertical_breaks=\n");
+  EXPECT_EQ(with_terminator.stdout_text,
+            "name=Sheet1\npageCount=1\nprintArea=\nrowBreaks=\ncolumnBreaks=\npages=A1:B1\n");
 }
 
 TEST(FormulonCli, PaginatePostTerminatorHelpIsAnInputPath) {
@@ -337,7 +409,7 @@ TEST(FormulonCli, PaginateSheetTakesANameOrAnIndex) {
   const CliRun by_name = run_cli({"paginate", "--sheet", "Sheet2", in});
   ASSERT_EQ(by_name.exit_code, 0) << by_name.stderr_text;
   EXPECT_EQ(by_name.stdout_text, run_cli({"paginate", "--sheet", "1", in}).stdout_text);
-  EXPECT_NE(by_name.stdout_text.find("sheet=1\n"), std::string::npos) << by_name.stdout_text;
+  EXPECT_NE(by_name.stdout_text.find("name=Sheet2\n"), std::string::npos) << by_name.stdout_text;
 }
 
 TEST(FormulonCli, PaginateUnknownSheetFailsAsDumpDoes) {

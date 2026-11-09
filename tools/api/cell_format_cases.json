@@ -341,7 +341,7 @@
       "id": "fractional-enum-is-range-error",
       "range": "A1",
       "patch": { "font": { "underline": 1.5 } },
-      "throws": { "js": "RangeError", "py": "ValueError" }
+      "throws": { "js": "RangeError", "py": "TypeError" }
     },
     {
       "id": "enum-out-of-range",

@@ -18,7 +18,6 @@ from formulon import (
     SlicerInput,
     SlicerProperties,
     SlicerSortOrder,
-    StatusCode,
     TableInput,
     Workbook,
 )
@@ -139,7 +138,7 @@ class SlicerTests(unittest.TestCase):
             with self.assertRaises(TypeError):
                 wb.sheet(0).add_slicer(SALES, 1.5, SlicerInput(**ANCHOR))  # type: ignore[arg-type]
 
-    def test_common_update_keys_apply_to_a_slicer_and_a_name_is_refused(self) -> None:
+    def test_common_update_keys_apply_to_a_slicer_and_a_name_is_not_a_keyword(self) -> None:
         with _sales() as wb:
             slicer = wb.sheet(0).add_slicer(SALES, 0, SlicerInput(**ANCHOR))
             slicer.update(description="pick one", hidden=True, caption="Cap", anchor=DrawingAnchorInput(to_col=6))
@@ -150,9 +149,8 @@ class SlicerTests(unittest.TestCase):
             )
             self.assertEqual(slicer.get_properties().caption, "Cap")
             self.assertEqual(slicer.name, "Product")
-            with self.assertRaises(FormulonError) as refused:
-                slicer.update(name="other")
-            self.assertEqual(refused.exception.code, StatusCode.PRECONDITION_FAILED)
+            with self.assertRaises(TypeError):
+                slicer.update(name="other")  # type: ignore[call-arg]
             self.assertEqual(slicer.name, "Product")
             self.assertEqual(slicer.get_drawing_properties().description, "pick one")
 

@@ -631,13 +631,13 @@ TEST(FormulonCApiWorkbookView, SetSplitReadsBackRoundTripsAndExchangesWithFreeze
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   fm_sheet_view_info_t view = FM_STRUCT_INIT(fm_sheet_view_info_t);
   ASSERT_EQ(fm_sheet_get_view(wb.handle, 0, &view), 0);
-  EXPECT_EQ(view.split_x, 0.0);
-  EXPECT_EQ(view.split_y, 0.0);
+  EXPECT_EQ(view.split_x_twips, 0.0);
+  EXPECT_EQ(view.split_y_twips, 0.0);
 
   ASSERT_EQ(SetViewSplit(wb.handle, 0, 2000.0, 1500.0), 0) << fm_get_last_error_message();
   ASSERT_EQ(fm_sheet_get_view(wb.handle, 0, &view), 0);
-  EXPECT_EQ(view.split_x, 2000.0);
-  EXPECT_EQ(view.split_y, 1500.0);
+  EXPECT_EQ(view.split_x_twips, 2000.0);
+  EXPECT_EQ(view.split_y_twips, 1500.0);
   EXPECT_EQ(view.freeze_rows, 0U);
   EXPECT_EQ(view.freeze_cols, 0U);
 
@@ -652,8 +652,8 @@ TEST(FormulonCApiWorkbookView, SetSplitReadsBackRoundTripsAndExchangesWithFreeze
     Load(bytes, reloaded);
     fm_sheet_view_info_t got = FM_STRUCT_INIT(fm_sheet_view_info_t);
     ASSERT_EQ(fm_sheet_get_view(reloaded.handle, 0, &got), 0);
-    EXPECT_EQ(got.split_x, 2000.0) << "format " << format;
-    EXPECT_EQ(got.split_y, 1500.0) << "format " << format;
+    EXPECT_EQ(got.split_x_twips, 2000.0) << "format " << format;
+    EXPECT_EQ(got.split_y_twips, 1500.0) << "format " << format;
     EXPECT_EQ(got.freeze_rows, 0U) << "format " << format;
     EXPECT_EQ(got.freeze_cols, 0U) << "format " << format;
   }
@@ -661,22 +661,39 @@ TEST(FormulonCApiWorkbookView, SetSplitReadsBackRoundTripsAndExchangesWithFreeze
   // A freeze replaces the split.
   ASSERT_EQ(SetViewFreeze(wb.handle, 0, 2, 1), 0);
   ASSERT_EQ(fm_sheet_get_view(wb.handle, 0, &view), 0);
-  EXPECT_EQ(view.split_x, 0.0);
-  EXPECT_EQ(view.split_y, 0.0);
+  EXPECT_EQ(view.split_x_twips, 0.0);
+  EXPECT_EQ(view.split_y_twips, 0.0);
   EXPECT_EQ(view.freeze_rows, 2U);
 
   // A split replaces the freeze.
   ASSERT_EQ(SetViewSplit(wb.handle, 0, 0.0, 900.0), 0);
   ASSERT_EQ(fm_sheet_get_view(wb.handle, 0, &view), 0);
-  EXPECT_EQ(view.split_x, 0.0);
-  EXPECT_EQ(view.split_y, 900.0);
+  EXPECT_EQ(view.split_x_twips, 0.0);
+  EXPECT_EQ(view.split_y_twips, 900.0);
   EXPECT_EQ(view.freeze_rows, 0U);
   EXPECT_EQ(view.freeze_cols, 0U);
 
   // (0, 0) removes the split.
   ASSERT_EQ(SetViewSplit(wb.handle, 0, 0.0, 0.0), 0);
   ASSERT_EQ(fm_sheet_get_view(wb.handle, 0, &view), 0);
-  EXPECT_EQ(view.split_y, 0.0);
+  EXPECT_EQ(view.split_y_twips, 0.0);
+}
+
+TEST(FormulonCApiSheetViewSplitTwips, SplitFieldsRoundTrip) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  fm_sheet_view_patch_t patch = FM_STRUCT_INIT(fm_sheet_view_patch_t);
+  patch.split_x_twips_op = FM_PATCH_OP_SET;
+  patch.split_x_twips = 2400.0;
+  patch.split_y_twips_op = FM_PATCH_OP_SET;
+  patch.split_y_twips = 1350.0;
+  ASSERT_EQ(fm_sheet_update_view(wb.handle, 0, &patch), 0) << fm_get_last_error_message();
+  fm_sheet_view_info_t view = FM_STRUCT_INIT(fm_sheet_view_info_t);
+  ASSERT_EQ(fm_sheet_get_view(wb.handle, 0, &view), 0);
+  EXPECT_EQ(view.split_x_twips, 2400.0);
+  EXPECT_EQ(view.split_y_twips, 1350.0);
+  EXPECT_EQ(view.freeze_rows, 0U);
+  EXPECT_EQ(view.freeze_cols, 0U);
 }
 
 TEST(FormulonCApiWorkbookView, SetSplitRehomesTheActiveSelectionAndKeepsTheViewOnInvalidInput) {
@@ -707,8 +724,8 @@ TEST(FormulonCApiWorkbookView, SetSplitRehomesTheActiveSelectionAndKeepsTheViewO
   EXPECT_EQ(SetViewSplit(wb.handle, 0, inf, 0.0), kInvalidArgument);
   EXPECT_EQ(SetViewSplit(wb.handle, 9, 1.0, 1.0), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
   ASSERT_EQ(fm_sheet_get_view(wb.handle, 0, &view), 0);
-  EXPECT_EQ(view.split_x, 1800.0);
-  EXPECT_EQ(view.split_y, 1200.0);
+  EXPECT_EQ(view.split_x_twips, 1800.0);
+  EXPECT_EQ(view.split_y_twips, 1200.0);
 
   // Re-stating the current split keeps the pane origin a host scrolled to.
   ASSERT_EQ(SetViewPaneTopLeft(wb.handle, 0, 9, 3), 0);

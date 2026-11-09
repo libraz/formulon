@@ -39,7 +39,7 @@ void JsWorkbook::setError(uint32_t sheet, uint32_t row, uint32_t col, emscripten
   // `emscripten::val` keeps a missing argument distinguishable from `0`
   // here as well.
   if (!js_value_present(errorCode)) {
-    record_type_error("setError: `errorCode` is required");
+    record_type_error("Sheet.setError error is required");
     return;
   }
   fm_status_t rc = fm_sheet_set_error(handle_, sheet, row, col, static_cast<fm_error_code_t>(errorCode.as<int32_t>()));
@@ -480,7 +480,7 @@ uint32_t JsWorkbook::createTable(uint32_t sheet, emscripten::val spec) {
     return 0U;
   }
   if (!reader.is_array(columns, "columns")) {
-    record_type_error("Sheet.addTable: `columns` must be an array of column names");
+    record_type_error("Sheet.addTable input.columns must be an array of column names");
     return 0U;
   }
   const uint32_t count = reader.length(columns, "columns.length");
@@ -764,9 +764,12 @@ emscripten::val JsWorkbook::getCellsInRange(uint32_t sheet, emscripten::val rang
   }
   double cursor_value = 0.0;
   double limit_value = 0.0;
-  if (!js_optional_index(cursor, 0.0, kMaxSafeInteger, &cursor_value) ||
-      !js_optional_index(limit, 0.0, kMaxU32, &limit_value)) {
-    record_range_error("Sheet.getCellsInRange: `cursor` and `limit` must be non-negative integers");
+  if (!js_optional_index(cursor, 0.0, kMaxSafeInteger, &cursor_value)) {
+    record_range_error("Sheet.getCellsInRange options.cursor must be an integer");
+    return emscripten::val::undefined();
+  }
+  if (!js_optional_index(limit, 0.0, kMaxU32, &limit_value)) {
+    record_range_error("Sheet.getCellsInRange options.limit must be an integer");
     return emscripten::val::undefined();
   }
   JsNarrowNumericReader reader("Sheet.getCellsInRange");
@@ -789,9 +792,12 @@ emscripten::val JsWorkbook::listInvalidCells(uint32_t sheet, emscripten::val cur
   }
   double cursor_value = 0.0;
   double limit_value = 0.0;
-  if (!js_optional_index(cursor, 0.0, kMaxSafeInteger, &cursor_value) ||
-      !js_optional_index(limit, 0.0, kMaxU32, &limit_value)) {
-    record_range_error("getInvalidCells: `cursor` and `limit` must be non-negative integers");
+  if (!js_optional_index(cursor, 0.0, kMaxSafeInteger, &cursor_value)) {
+    record_range_error("Sheet.getInvalidCells options.cursor must be an integer");
+    return emscripten::val::undefined();
+  }
+  if (!js_optional_index(limit, 0.0, kMaxU32, &limit_value)) {
+    record_range_error("Sheet.getInvalidCells options.limit must be an integer");
     return emscripten::val::undefined();
   }
   fm_cell_range_t* page = nullptr;

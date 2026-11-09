@@ -199,7 +199,7 @@ test('validateValue and listInvalidCells follow the rule covering a cell', async
     wb.sheet(0).setNumber(2, 1, 70);
     const page = wb.sheet(0).getInvalidCells();
     assert.deepEqual(
-      page.cells.map((c) => [c.row, c.col, c.value.number]),
+      page.cells.map((c) => [c.row, c.col, c.value]),
       [
         [1, 1, 50],
         [2, 1, 70],
@@ -207,10 +207,10 @@ test('validateValue and listInvalidCells follow the rule covering a cell', async
     );
     assert.equal(page.nextCursor, null);
 
-    const first = wb.sheet(0).getInvalidCells(0, 1);
+    const first = wb.sheet(0).getInvalidCells({ limit: 1 });
     assert.equal(first.cells.length, 1);
     assert.equal(typeof first.nextCursor, 'number');
-    const second = wb.sheet(0).getInvalidCells(first.nextCursor, 1);
+    const second = wb.sheet(0).getInvalidCells({ cursor: first.nextCursor, limit: 1 });
     assert.deepEqual(
       second.cells.map((c) => c.row),
       [2],

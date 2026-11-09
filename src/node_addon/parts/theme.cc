@@ -58,7 +58,7 @@ Napi::Value Workbook::SetThemeColors(const Napi::CallbackInfo& info) {
   }
   Napi::Array arr;
   if (!ArrayArg(info, 0, &arr) || arr.Length() != 12) {
-    Napi::TypeError::New(env, "setThemeColors expects an array of 12 colors").ThrowAsJavaScriptException();
+    ThrowArgumentTypeError(env, "colors", "must be an array of 12 colors");
     return env.Undefined();
   }
   // Each scheme colour is a `Color` record; only its `argb` is stored.

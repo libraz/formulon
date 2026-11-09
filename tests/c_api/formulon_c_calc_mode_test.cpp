@@ -77,10 +77,9 @@ TEST(FormulonCApiCalcMode, IterativeEnabledTogglePreservesConfiguredLimits) {
   EXPECT_DOUBLE_EQ(info.max_change, 0.25);
 }
 
-// The reader clamps `iterateCount` on its own path; this pins the setter's,
-// which a host reaches without any file being involved. The getter must
-// report the clamped value so a caller can see what it actually got.
-TEST(FormulonCApiCalcMode, IterativeMaxIterationsSaturatesAtExcelsLimit) {
+// The reader clamps `iterateCount` on its own path; the setter a host reaches
+// without any file refuses a count above Excel's limit and keeps the stored one.
+TEST(FormulonCApiCalcMode, IterativeMaxIterationsAboveExcelsLimitIsRefused) {
   constexpr uint32_t kExcelLimit = 32767U;
   const std::int32_t oversized[] = {
       32768,
@@ -90,13 +89,18 @@ TEST(FormulonCApiCalcMode, IterativeMaxIterationsSaturatesAtExcelsLimit) {
   for (const std::int32_t requested : oversized) {
     WorkbookGuard wb;
     ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-    ASSERT_EQ(SetIterative(wb.handle, 1, requested, 0.001), 0) << requested;
-
-    EXPECT_EQ(ReadIterative(wb.handle).max_iterations, kExcelLimit) << requested;
+    const std::uint32_t before = ReadIterative(wb.handle).max_iterations;
+    EXPECT_EQ(SetIterative(wb.handle, 1, requested, 0.001), FM_STATUS_INVALID_ARGUMENT) << requested;
+    EXPECT_STREQ(fm_get_last_error_message(), "max_iterations must be in 1..32767") << requested;
+    EXPECT_EQ(ReadIterative(wb.handle).max_iterations, before) << requested;
   }
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  ASSERT_EQ(SetIterative(wb.handle, 1, static_cast<std::int32_t>(kExcelLimit), 0.001), 0);
+  EXPECT_EQ(ReadIterative(wb.handle).max_iterations, kExcelLimit);
 }
 
-// Neither end of the accepted range may be moved by the clamp.
+// Both ends of the accepted range are stored unchanged.
 TEST(FormulonCApiCalcMode, IterativeMaxIterationsKeepsInRangeValues) {
   constexpr uint32_t kExcelLimit = 32767U;
   WorkbookGuard wb;

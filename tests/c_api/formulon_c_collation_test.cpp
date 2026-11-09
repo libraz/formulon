@@ -125,8 +125,8 @@ TEST(FormulonCApiCollation, RejectsBadInput) {
   EXPECT_EQ(fm_get_collation_classes(ok, 2, static_cast<fm_collation_strength_t>(3), profile, ids, &classes), kInvalid);
 
   const fm_value_t null_text[] = {number(1.0), text(nullptr)};
-  // value_from_fm reports a NULL text pointer as a null-pointer error.
-  EXPECT_EQ(fm_get_collation_classes(null_text, 2, FM_COLLATION_STRENGTH_COMPARE, profile, ids, &classes), kNullPtr);
+  // value_from_fm reports a NULL text pointer as an invalid-argument error.
+  EXPECT_EQ(fm_get_collation_classes(null_text, 2, FM_COLLATION_STRENGTH_COMPARE, profile, ids, &classes), kInvalid);
   const fm_value_t infinite[] = {number(std::numeric_limits<double>::infinity())};
   EXPECT_EQ(fm_get_collation_classes(infinite, 1, FM_COLLATION_STRENGTH_COMPARE, profile, ids, &classes), kInvalid);
   const fm_value_t nan_value[] = {number(std::numeric_limits<double>::quiet_NaN())};

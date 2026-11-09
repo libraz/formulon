@@ -105,9 +105,10 @@ test('named exports are the value tables, FormulonError, toNative, mergeFunction
   for (const name of [...tables, ...helpers]) assert.equal(mod[name], formulon[name], name);
 });
 
-test('createFormulon ignores unknown option keys', async () => {
+test('createFormulon refuses unknown option keys', async () => {
   const { mod, common } = await loaded;
-  const formulon = await mod.createFormulon({ foo: 1, noExitRuntime: false });
+  await assert.rejects(mod.createFormulon({ foo: 1 }), TypeError);
+  const formulon = await mod.createFormulon({});
   assert.deepEqual(Object.keys(formulon).sort(), [...common.FORMULON_MEMBERS].sort());
 });
 
@@ -260,10 +261,16 @@ test('a FormulonError raised inside a progress callback reaches the caller uncha
         throw e;
       }
     });
-    assert.throws(
-      () => wb.recalc(),
-      (caught) => caught === raised && caught.code === formulon.StatusCode.IndexOutOfRange,
-    );
+    let caught;
+    try {
+      wb.recalc();
+    } catch (e) {
+      caught = e;
+    }
+    assert.strictEqual(caught, raised);
+    assert.ok(caught instanceof formulon.FormulonError);
+    assert.strictEqual(caught.code, formulon.StatusCode.IndexOutOfRange);
+    assert.ok(!caught.message.startsWith('Workbook.recalc'));
     wb.setIterativeProgress(null);
     assert.equal(other.listSheets().length, 1);
   } finally {
@@ -745,24 +752,24 @@ test('E1: a positional guard names the facade method and counts its arguments', 
     const ws = wb.sheet(0);
     assert.throws(() => ws.setNumber(true, 0, 1), {
       name: 'TypeError',
-      message: 'Sheet.setNumber argument 1 must be a primitive number',
+      message: 'Sheet.setNumber row must be a number',
     });
     expectFormulonError(() => ws.setNumber(0, -1, 1), StatusCode.InvalidArgument);
     assert.throws(() => ws.setNumber(0, 1.5, 1), RangeError);
     assert.throws(() => ws.setNumber(0, 0), {
       name: 'TypeError',
-      message: 'Sheet.setNumber argument 3 must be a primitive number',
+      message: 'Sheet.setNumber value must be a number',
     });
     assert.throws(
       () => ws.setPrintTitles(),
-      (e) => e instanceof TypeError && /^Sheet\.setPrintTitles argument 1 /.test(e.message),
+      (e) => e instanceof TypeError && /^Sheet\.setPrintTitles titles /.test(e.message),
     );
     assert.throws(() => wb.addSheet(5), {
       name: 'TypeError',
-      message: 'Workbook.addSheet argument 1 must be a primitive string',
+      message: 'Workbook.addSheet name must be a string',
     });
-    assert.throws(() => ws.setValue(0, 0, []), /^TypeError: Sheet\.setValue argument 3 /);
-    assert.throws(() => wb.sheet({}), /^TypeError: Workbook\.sheet argument 1 /);
+    assert.throws(() => ws.setValue(0, 0, []), /^TypeError: Sheet\.setValue value must be a cell value/);
+    assert.throws(() => wb.sheet({}), /^TypeError: Workbook\.sheet key /);
   });
 });
 
@@ -853,7 +860,7 @@ test('round trip: every reshaped setter takes what its getter returns', async ()
       () => cache.getOptions(),
       (v) => cache.updateOptions(v),
     );
-    ws.updateFormatDefaults({ defaultColWidthChars: 12 });
+    ws.updateFormatDefaults({ defaultColumnWidthChars: 12 });
     same(
       () => ws.getFormatDefaults(),
       (v) => ws.updateFormatDefaults(v),
@@ -997,15 +1004,15 @@ test('A5 / N4: a null pivot axis takes the field off the report; the -1 sentinel
 test('a patch keeps omitted and undefined keys and clears only a nullable key on null', async () => {
   await withWorkbook((wb, { StatusCode }) => {
     const ws = wb.sheet(0);
-    ws.updateFormatDefaults({ defaultColWidthChars: 12, defaultRowHeightPt: 20 });
+    ws.updateFormatDefaults({ defaultColumnWidthChars: 12, defaultRowHeightPt: 20 });
     ws.updateFormatDefaults({ defaultRowHeightPt: undefined });
     assert.deepEqual(
-      [ws.getFormatDefaults().defaultColWidthChars, ws.getFormatDefaults().defaultRowHeightPt],
+      [ws.getFormatDefaults().defaultColumnWidthChars, ws.getFormatDefaults().defaultRowHeightPt],
       [12, 20],
     );
-    ws.updateFormatDefaults({ defaultColWidthChars: null });
+    ws.updateFormatDefaults({ defaultColumnWidthChars: null });
     assert.deepEqual(
-      [ws.getFormatDefaults().defaultColWidthChars, ws.getFormatDefaults().defaultRowHeightPt],
+      [ws.getFormatDefaults().defaultColumnWidthChars, ws.getFormatDefaults().defaultRowHeightPt],
       [null, 20],
     );
     for (const call of [
@@ -1113,11 +1120,11 @@ test('P1: an empty patch changes nothing', async () => {
   });
 });
 
-test('P3: a fractional or NaN iteration cap is a TypeError; a non-finite threshold is InvalidArgument', async () => {
+test('P3: a fractional or NaN iteration cap is a RangeError; a non-finite threshold is InvalidArgument', async () => {
   await withWorkbook((wb, { StatusCode }) => {
     const before = wb.getIterative();
     for (const maxIterations of [1.5, Number.NaN]) {
-      assert.throws(() => wb.updateIterative({ maxIterations }), TypeError, String(maxIterations));
+      assert.throws(() => wb.updateIterative({ maxIterations }), RangeError, String(maxIterations));
     }
     for (const maxChange of [Number.POSITIVE_INFINITY, Number.NaN]) {
       expectFormulonError(() => wb.updateIterative({ maxChange }), StatusCode.InvalidArgument);

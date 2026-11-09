@@ -532,7 +532,7 @@ def _address_positions(entry: dict) -> Set[int]:
         out.update(int(i) for i in pair)
     out.update(int(i) for i in entry.get("rect_args") or [])
     for span in entry.get("span_args") or []:
-        out.update((int(span[0]), int(span[0]) + 1))
+        out.update((int(span[0]),) if span[2] == "single" else (int(span[0]), int(span[0]) + 1))
     return out
 
 
@@ -574,8 +574,11 @@ def _rule_js_symmetry(ctx: Context) -> Iterable[Violation]:
             ]
             accepted = {record, f"{record}Input"}
             kinds = _strip_null(values[0][1], True) if len(values) == 1 else []
-            if len(values) == 1 and record in _alias_alternatives(decls, values[0][1]):
+            alternatives = _alias_alternatives(decls, values[0][1]) if len(values) == 1 else []
+            if record in alternatives:
                 continue
+            if f"{record}Input" in alternatives:
+                kinds = [f"{record}Input"]
             if len(kinds) == 1 and kinds[0] in (f"{record}Patch", f"Patch<{record}>"):
                 yield _violation(
                     ctx,

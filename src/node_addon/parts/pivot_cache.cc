@@ -103,7 +103,7 @@ Napi::Value Workbook::PivotCacheSetWorksheetSource(const Napi::CallbackInfo& inf
     return ValueOrThrow(env, fm_workbook_set_pivot_cache_worksheet_source(handle_, cache_id, nullptr), env.Undefined());
   }
   if (!info[1].IsObject()) {
-    Napi::TypeError::New(env, "PivotCache.setWorksheetSource argument 1 must be an object or null")
+    Napi::TypeError::New(env, "PivotCache.setWorksheetSource source must be an object or null")
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
@@ -219,7 +219,11 @@ Napi::Value Workbook::PivotCacheFieldAddSharedItemBool(const Napi::CallbackInfo&
   return IndexCall(info, [&](fm_workbook_t* handle, std::size_t* out) {
     const uint32_t cache_id = ArgU32(info, 0);
     const std::size_t field_index = static_cast<std::size_t>(ArgU32(info, 1));
-    return fm_workbook_add_pivot_cache_field_shared_item_bool(handle, cache_id, field_index, ArgFlag(info, 2), out);
+    const int32_t value = ArgFlag(info, 2);
+    if (info.Env().IsExceptionPending()) {
+      return FM_STATUS_INVALID_ARGUMENT;
+    }
+    return fm_workbook_add_pivot_cache_field_shared_item_bool(handle, cache_id, field_index, value, out);
   });
 }
 
@@ -299,8 +303,12 @@ Napi::Value Workbook::PivotCacheRecordSetText(const Napi::CallbackInfo& info) {
 Napi::Value Workbook::PivotCacheRecordSetBool(const Napi::CallbackInfo& info) {
   return StatusCall(info, [&](fm_workbook_t* handle) {
     const CacheRecordArgs record = ReadCacheRecord(info);
+    const int32_t value = ArgFlag(info, 3);
+    if (info.Env().IsExceptionPending()) {
+      return FM_STATUS_INVALID_ARGUMENT;
+    }
     return fm_workbook_set_pivot_cache_record_bool(handle, record.cache_id, record.record_index, record.field_index,
-                                                   ArgFlag(info, 3));
+                                                   value);
   });
 }
 

@@ -66,7 +66,8 @@ const formulon::pivot::PivotCache* find_cache(const formulon::Workbook& wb, std:
 }
 
 fm_status_t cache_not_found(std::uint32_t cache_id) {
-  return not_found("no pivot cache has that cache_id", "cache_id=" + std::to_string(cache_id));
+  return not_found(("cache_id " + std::to_string(cache_id) + " names no pivot cache").c_str(),
+                   "cache_id=" + std::to_string(cache_id));
 }
 
 // Resolves `cache_id` to its cache, writing the binding error and returning

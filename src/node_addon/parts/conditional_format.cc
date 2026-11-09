@@ -50,7 +50,7 @@ Napi::Value Workbook::EvaluateCfRange(const Napi::CallbackInfo& info) {
   // measured from the pinned clock, else today.
   fm_cf_range_evaluation_spec_t options = FM_STRUCT_INIT(fm_cf_range_evaluation_spec_t);
   Napi::Object in;
-  if (reader.Object(info[2], "options", &in)) {
+  if (reader.Object(info[2], "", &in)) {
     options.time_period_rules = reader.Tristate(in, "timePeriodRules");
     bool has_today = false;
     options.today_serial = reader.Double(in, "todaySerial", 0.0, &has_today);

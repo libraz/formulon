@@ -357,23 +357,23 @@ class UpdateMergeTests(SurfaceTestCase):
     def test_update_format_defaults_uses_unit_suffixed_keywords(self) -> None:
         with Workbook.create_default() as wb:
             ws = wb.sheet(0)
-            ws.update_format_defaults(default_col_width_chars=12.0, base_col_width_chars=9.0)
+            ws.update_format_defaults(default_column_width_chars=12.0, base_column_width_chars=9.0)
             ws.update_format_defaults(default_row_height_pt=20.0)
             defaults = ws.get_format_defaults()
-            self.assertAlmostEqual(defaults.default_col_width_chars, 12.0)
-            self.assertAlmostEqual(defaults.base_col_width_chars, 9.0)
+            self.assertAlmostEqual(defaults.default_column_width_chars, 12.0)
+            self.assertAlmostEqual(defaults.base_column_width_chars, 9.0)
             self.assertAlmostEqual(defaults.default_row_height_pt, 20.0)
-            self.assertGreater(defaults.effective_default_col_width_chars, 0.0)
+            self.assertGreater(defaults.effective_default_column_width_chars, 0.0)
             self.assertGreater(defaults.effective_default_row_height_pt, 0.0)
 
     def test_update_format_defaults_none_clears_the_stored_value(self) -> None:
         with Workbook.create_default() as wb:
             ws = wb.sheet(0)
-            ws.update_format_defaults(default_row_height_pt=20.0, default_col_width_chars=12.0)
+            ws.update_format_defaults(default_row_height_pt=20.0, default_column_width_chars=12.0)
             ws.update_format_defaults(default_row_height_pt=None)
             defaults = ws.get_format_defaults()
             self.assertIsNone(defaults.default_row_height_pt)
-            self.assertAlmostEqual(defaults.default_col_width_chars, 12.0)
+            self.assertAlmostEqual(defaults.default_column_width_chars, 12.0)
 
     def test_update_iterative_keeps_the_settings_left_unchanged(self) -> None:
         with Workbook.create_default() as wb:
@@ -791,9 +791,9 @@ class UnitSuffixTests(SurfaceTestCase):
         self.assertFieldsRenamed(
             formulon.SheetFormatDefaults,
             (
-                "default_col_width_chars",
-                "base_col_width_chars",
-                "effective_default_col_width_chars",
+                "default_column_width_chars",
+                "base_column_width_chars",
+                "effective_default_column_width_chars",
                 "default_row_height_pt",
                 "effective_default_row_height_pt",
             ),

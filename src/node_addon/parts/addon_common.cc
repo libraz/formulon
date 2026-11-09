@@ -25,19 +25,45 @@ Napi::Uint8Array TakeSavedBytes(Napi::Env env, uint8_t* bytes, std::size_t len) 
 
 namespace {
 thread_local ScopedReaderLabel::Describe g_label_describe = nullptr;
+thread_local ScopedReaderLabel::Name g_label_name = nullptr;
 thread_local const void* g_label_data = nullptr;
 }  // namespace
 
-ScopedReaderLabel::ScopedReaderLabel(Describe describe, const void* data) noexcept
-    : previous_describe_(g_label_describe), previous_data_(g_label_data) {
+ScopedReaderLabel::ScopedReaderLabel(Describe describe, Name name, const void* data) noexcept
+    : previous_describe_(g_label_describe), previous_name_(g_label_name), previous_data_(g_label_data) {
   g_label_describe = describe;
+  g_label_name = name;
   g_label_data = data;
 }
 
 ScopedReaderLabel::~ScopedReaderLabel() {
   g_label_describe = previous_describe_;
+  g_label_name = previous_name_;
   g_label_data = previous_data_;
 }
+
+std::string CurrentCallLabel() {
+  return g_label_describe != nullptr ? g_label_describe(g_label_data) : std::string();
+}
+
+std::string CurrentArgumentName(std::size_t raw_index) {
+  return g_label_name != nullptr ? g_label_name(g_label_data, raw_index) : std::string();
+}
+
+namespace {
+// `parent.segment`, or `parent[i]` when the segment is an element index.
+std::string JoinPath(const std::string& parent, const std::string& segment) {
+  if (parent.empty() || segment.empty()) {
+    return parent.empty() ? segment : parent;
+  }
+  return segment.front() == '[' ? parent + segment : formulon::binding::field_path(parent, segment);
+}
+
+bool EndsWithElementMark(const char* key) {
+  const std::size_t length = std::strlen(key);
+  return length >= 2 && std::strcmp(key + length - 2, "[]") == 0;
+}
+}  // namespace
 
 // FORMULON-ALLOW: N-API uses JavaScript exceptions for argument validation.
 void CheckedSpecReader::ObservePending() {
@@ -46,23 +72,106 @@ void CheckedSpecReader::ObservePending() {
   }
 }
 
+void CheckedSpecReader::Enter(const Napi::Value& owner) {
+  prefix_.clear();
+  element_ = false;
+  for (const auto& entry : paths_) {
+    if (entry.first.StrictEquals(owner)) {
+      prefix_ = entry.second;
+      return;
+    }
+  }
+}
+
+std::string CheckedSpecReader::PathOf(const char* key) const {
+  return element_ || EndsWithElementMark(key) ? prefix_ : JoinPath(prefix_, key);
+}
+
+void CheckedSpecReader::Register(const Napi::Value& value, const char* key) {
+  paths_.emplace_back(value, PathOf(key));
+}
+
 template <typename ErrorType>
-void CheckedSpecReader::ReportFailure(const std::string& message) {
+void CheckedSpecReader::ReportFailure(const char* key, const std::string& constraint) {
   if (failed_ || env_.IsExceptionPending()) {
     failed_ = true;
     return;
   }
-  const std::string label = g_label_describe != nullptr ? g_label_describe(g_label_data) + " " : std::string();
-  ErrorType::New(env_, label + message).ThrowAsJavaScriptException();
+  const std::string call = CurrentCallLabel();
+  const std::string path = formulon::binding::record_path(call, PathOf(key));
+  const std::string message = call.empty() ? (path.empty() ? constraint : path + " " + constraint)
+                                           : formulon::binding::argument_message(call, path, constraint);
+  ErrorType::New(env_, message).ThrowAsJavaScriptException();
   failed_ = true;
 }
 
-void CheckedSpecReader::ReportType(const char* key, const char* expected) {
-  ReportFailure<Napi::TypeError>(std::string(key) + " must be a " + expected);
+void CheckedSpecReader::FailType(const char* key, const char* expected) {
+  ReportFailure<Napi::TypeError>(key, std::string("must be ") + expected);
 }
 
-void CheckedSpecReader::ReportRange(const char* key, const char* range_name) {
-  ReportFailure<Napi::RangeError>(std::string(key) + " is outside " + range_name + " range");
+void CheckedSpecReader::ReportNegative(const char* key) {
+  if (failed_ || env_.IsExceptionPending()) {
+    failed_ = true;
+    return;
+  }
+  const std::string call = CurrentCallLabel();
+  const std::string path = formulon::binding::record_path(call, PathOf(key));
+  ThrowBindingStatus(env_, FM_STATUS_INVALID_ARGUMENT,
+                     call.empty() ? path + " must not be negative"
+                                  : formulon::binding::argument_message(call, path, "must not be negative"));
+  failed_ = true;
+}
+
+void ThrowArgumentTypeError(Napi::Env env, const std::string& path, const std::string& constraint) {
+  if (env.IsExceptionPending()) {
+    return;
+  }
+  const std::string call = CurrentCallLabel();
+  const std::string where = path.empty() ? std::string(formulon::binding::record_param(call)) : path;
+  Napi::TypeError::New(env, call.empty() ? (where.empty() ? constraint : where + " " + constraint)
+                                         : formulon::binding::argument_message(call, where, constraint))
+      .ThrowAsJavaScriptException();
+}
+
+void ThrowIntegerRefusal(Napi::Env env, const std::string& call, const std::string& path, double number,
+                         double min_value) {
+  if (env.IsExceptionPending()) {
+    return;
+  }
+  const auto message = [&](const char* constraint) {
+    return call.empty() ? (path.empty() ? std::string(constraint) : path + " " + constraint)
+                        : formulon::binding::argument_message(call, path, constraint);
+  };
+  if (!std::isfinite(number) || std::trunc(number) != number) {
+    Napi::RangeError::New(env, message("must be an integer")).ThrowAsJavaScriptException();
+  } else if (number < 0.0 && min_value >= 0.0) {
+    ThrowBindingStatus(env, FM_STATUS_INVALID_ARGUMENT, message("must not be negative"));
+  } else {
+    Napi::RangeError::New(env, message("is too large")).ThrowAsJavaScriptException();
+  }
+}
+
+void ThrowPositionalTypeError(Napi::Env env, std::size_t raw_index, const std::string& constraint) {
+  if (env.IsExceptionPending()) {
+    return;
+  }
+  Napi::TypeError::New(
+      env, formulon::binding::argument_message(CurrentCallLabel(), CurrentArgumentName(raw_index), constraint))
+      .ThrowAsJavaScriptException();
+}
+
+void ThrowPositionalIntegerRefusal(Napi::Env env, std::size_t raw_index, double number, double min_value) {
+  ThrowIntegerRefusal(env, CurrentCallLabel(), CurrentArgumentName(raw_index), number, min_value);
+}
+
+void CheckedSpecReader::FailInteger(const char* key, double number, double min_value) {
+  if (!std::isfinite(number) || std::trunc(number) != number) {
+    ReportFailure<Napi::RangeError>(key, "must be an integer");
+  } else if (number < 0.0 && min_value >= 0.0) {
+    ReportNegative(key);
+  } else {
+    ReportFailure<Napi::RangeError>(key, "is too large");
+  }
 }
 
 bool CheckedSpecReader::ReadOptional(const Napi::Object& owner, const char* key, Napi::Value* out, bool* present) {
@@ -72,6 +181,7 @@ bool CheckedSpecReader::ReadOptional(const Napi::Object& owner, const char* key,
   if (!ok()) {
     return false;
   }
+  Enter(owner);
   const bool has_property = owner.Has(key);
   ObservePending();
   if (!ok() || !has_property) {
@@ -110,6 +220,9 @@ bool CheckedSpecReader::ArrayElement(const Napi::Array& owner, uint32_t index, N
   if (!ok()) {
     return false;
   }
+  Enter(owner);
+  prefix_ = JoinPath(prefix_, "[" + std::to_string(index) + "]");
+  element_ = true;
   return Value(*out, "array element", out);
 }
 
@@ -127,7 +240,7 @@ bool CheckedSpecReader::ReadNumber(const Napi::Value& value, const char* key, do
     return ok();
   }
   if (!present.IsNumber()) {
-    ReportType(key, "number");
+    FailType(key, "a number");
     return false;
   }
   *out = present.As<Napi::Number>().DoubleValue();
@@ -136,21 +249,21 @@ bool CheckedSpecReader::ReadNumber(const Napi::Value& value, const char* key, do
 }
 
 bool CheckedSpecReader::ReadInteger(const Napi::Object& owner, const char* key, double* out, double min_value,
-                                    double max_value, const char* range_name, bool* present) {
+                                    double max_value, bool* present) {
   Napi::Value value;
   if (!ReadOptional(owner, key, &value, present)) {
     return ok();
   }
-  return ReadInteger(value, key, out, min_value, max_value, range_name);
+  return ReadInteger(value, key, out, min_value, max_value);
 }
 
 bool CheckedSpecReader::ReadInteger(const Napi::Value& value, const char* key, double* out, double min_value,
-                                    double max_value, const char* range_name) {
+                                    double max_value) {
   if (!ReadNumber(value, key, out)) {
     return false;
   }
   if (!std::isfinite(*out) || std::trunc(*out) != *out || *out < min_value || *out > max_value) {
-    ReportRange(key, range_name);
+    FailInteger(key, *out, min_value);
     return false;
   }
   return true;
@@ -188,7 +301,7 @@ bool CheckedSpecReader::String(const Napi::Value& value, const char* key, std::s
     out->assign(data, view.ByteLength());
   } else {
     out->clear();
-    ReportType(key, "string or one-byte buffer");
+    FailType(key, "a string");
     return false;
   }
   ObservePending();
@@ -209,11 +322,12 @@ bool CheckedSpecReader::Object(const Napi::Value& value, const char* key, Napi::
     return false;
   }
   if (!present.IsObject()) {
-    ReportType(key, "object");
+    FailType(key, "an object");
     return false;
   }
   *out = present.As<Napi::Object>();
   ObservePending();
+  Register(*out, key);
   return ok();
 }
 
@@ -231,11 +345,12 @@ bool CheckedSpecReader::Array(const Napi::Value& value, const char* key, Napi::A
     return false;
   }
   if (!present.IsArray()) {
-    ReportType(key, "array");
+    FailType(key, "an array");
     return false;
   }
   *out = present.As<Napi::Array>();
   ObservePending();
+  Register(*out, key);
   return ok();
 }
 
@@ -252,7 +367,11 @@ bool CheckedSpecReader::Bool(const Napi::Value& value, const char* key, bool dfl
   if (!Value(value, key, &present)) {
     return dflt;
   }
-  const bool result = present.ToBoolean().Value();
+  if (!present.IsBoolean()) {
+    FailType(key, "a boolean");
+    return dflt;
+  }
+  const bool result = present.As<Napi::Boolean>().Value();
   ObservePending();
   return result;
 }
@@ -289,56 +408,55 @@ double CheckedSpecReader::Double(const Napi::Value& value, const char* key, doub
 }
 
 template <typename T>
-T CheckedSpecReader::ReadIntegral(const Napi::Object& owner, const char* key, T dflt, const char* range_name,
-                                  bool* present) {
+T CheckedSpecReader::ReadIntegral(const Napi::Object& owner, const char* key, T dflt, bool* present) {
   double value = static_cast<double>(dflt);
   if (!ReadInteger(owner, key, &value, static_cast<double>(std::numeric_limits<T>::min()),
-                   static_cast<double>(std::numeric_limits<T>::max()), range_name, present)) {
+                   static_cast<double>(std::numeric_limits<T>::max()), present)) {
     return dflt;
   }
   return static_cast<T>(value);
 }
 
 template <typename T>
-T CheckedSpecReader::ReadIntegral(const Napi::Value& value, const char* key, T dflt, const char* range_name) {
+T CheckedSpecReader::ReadIntegral(const Napi::Value& value, const char* key, T dflt) {
   double result = static_cast<double>(dflt);
   if (!ReadInteger(value, key, &result, static_cast<double>(std::numeric_limits<T>::min()),
-                   static_cast<double>(std::numeric_limits<T>::max()), range_name)) {
+                   static_cast<double>(std::numeric_limits<T>::max()))) {
     return dflt;
   }
   return static_cast<T>(result);
 }
 
 uint8_t CheckedSpecReader::U8(const Napi::Object& owner, const char* key, uint8_t dflt, bool* present) {
-  return ReadIntegral<uint8_t>(owner, key, dflt, "uint8", present);
+  return ReadIntegral<uint8_t>(owner, key, dflt, present);
 }
 
 uint8_t CheckedSpecReader::U8(const Napi::Value& value, const char* key, uint8_t dflt) {
-  return ReadIntegral<uint8_t>(value, key, dflt, "uint8");
+  return ReadIntegral<uint8_t>(value, key, dflt);
 }
 
 uint16_t CheckedSpecReader::U16(const Napi::Object& owner, const char* key, uint16_t dflt, bool* present) {
-  return ReadIntegral<uint16_t>(owner, key, dflt, "uint16", present);
+  return ReadIntegral<uint16_t>(owner, key, dflt, present);
 }
 
 uint16_t CheckedSpecReader::U16(const Napi::Value& value, const char* key, uint16_t dflt) {
-  return ReadIntegral<uint16_t>(value, key, dflt, "uint16");
+  return ReadIntegral<uint16_t>(value, key, dflt);
 }
 
 uint32_t CheckedSpecReader::U32(const Napi::Object& owner, const char* key, uint32_t dflt, bool* present) {
-  return ReadIntegral<uint32_t>(owner, key, dflt, "uint32", present);
+  return ReadIntegral<uint32_t>(owner, key, dflt, present);
 }
 
 uint32_t CheckedSpecReader::U32(const Napi::Value& value, const char* key, uint32_t dflt) {
-  return ReadIntegral<uint32_t>(value, key, dflt, "uint32");
+  return ReadIntegral<uint32_t>(value, key, dflt);
 }
 
 int32_t CheckedSpecReader::I32(const Napi::Object& owner, const char* key, int32_t dflt, bool* present) {
-  return ReadIntegral<int32_t>(owner, key, dflt, "int32", present);
+  return ReadIntegral<int32_t>(owner, key, dflt, present);
 }
 
 int32_t CheckedSpecReader::I32(const Napi::Value& value, const char* key, int32_t dflt) {
-  return ReadIntegral<int32_t>(value, key, dflt, "int32");
+  return ReadIntegral<int32_t>(value, key, dflt);
 }
 
 bool CheckedSpecReader::RequiredObject(const Napi::Object& owner, const char* key, Napi::Object* out) {
@@ -346,7 +464,7 @@ bool CheckedSpecReader::RequiredObject(const Napi::Object& owner, const char* ke
     return true;
   }
   if (ok()) {
-    ReportType(key, "object");
+    FailType(key, "an object");
   }
   return false;
 }
@@ -356,7 +474,7 @@ bool CheckedSpecReader::RequiredArray(const Napi::Object& owner, const char* key
     return true;
   }
   if (ok()) {
-    ReportType(key, "array");
+    FailType(key, "an array");
   }
   return false;
 }
@@ -367,7 +485,7 @@ std::string CheckedSpecReader::RequiredString(const Napi::Object& owner, const c
     return std::string();
   }
   if (!value.IsString()) {
-    ReportType(key, "string");
+    FailType(key, "a string");
     return std::string();
   }
   std::string out;
@@ -379,6 +497,7 @@ Napi::Value CheckedSpecReader::Get(const Napi::Object& owner, const char* key) {
   if (!ok()) {
     return env_.Undefined();
   }
+  Enter(owner);
   const Napi::Value value = owner.Get(key);
   ObservePending();
   return ok() ? value : env_.Undefined();
@@ -388,17 +507,17 @@ uint32_t CheckedSpecReader::RequiredU32(const Napi::Object& owner, const char* k
   Napi::Value value;
   if (!ReadOptional(owner, key, &value)) {
     if (ok()) {
-      ReportType(key, "whole number");
+      FailType(key, "a number");
     }
     return 0U;
   }
-  const double number = value.IsNumber() ? value.As<Napi::Number>().DoubleValue() : 0.5;
-  if (!std::isfinite(number) || std::trunc(number) != number) {
-    ReportType(key, "whole number");
+  if (!value.IsNumber()) {
+    FailType(key, "a number");
     return 0U;
   }
-  if (number < 0.0 || number > kUint32MaxNumber) {
-    ReportRange(key, "uint32");
+  const double number = value.As<Napi::Number>().DoubleValue();
+  if (!std::isfinite(number) || std::trunc(number) != number || number < 0.0 || number > kUint32MaxNumber) {
+    FailInteger(key, number, 0.0);
     return 0U;
   }
   return static_cast<uint32_t>(number);
@@ -406,7 +525,7 @@ uint32_t CheckedSpecReader::RequiredU32(const Napi::Object& owner, const char* k
 
 int64_t CheckedSpecReader::NarrowI64(double number, const char* key, int64_t dflt) {
   if (!std::isfinite(number) || std::trunc(number) != number || number < -0x1p63 || number >= 0x1p63) {
-    ReportRange(key, "int64");
+    FailInteger(key, number, -0x1p63);
     return dflt;
   }
   if (number == -0x1p63) {
@@ -429,7 +548,7 @@ int64_t CheckedSpecReader::I64(const Napi::Value& value, const char* key, int64_
     return dflt;
   }
   if (!present.IsNumber()) {
-    ReportType(key, "number");
+    FailType(key, "a number");
     return dflt;
   }
   const double number = present.As<Napi::Number>().DoubleValue();
@@ -533,8 +652,8 @@ Napi::Value ThrowFormulonError(Napi::Env env, fm_status_t code, const char* mess
 }
 
 // Rejects a malformed input `Value`.
-bool RejectValue(Napi::Env env, const char* message) {
-  Napi::TypeError::New(env, message).ThrowAsJavaScriptException();
+bool RejectValue(Napi::Env env, const char* path, const char* constraint) {
+  ThrowArgumentTypeError(env, path, constraint);
   return false;
 }
 
@@ -656,7 +775,7 @@ bool JsToValue(Napi::Env env, Napi::Value in, fm_value_t* out, std::string* text
     return false;
   }
   if (!in.IsObject()) {
-    return RejectValue(env, "value must be an object");
+    return RejectValue(env, "value", "must be an object");
   }
   const Napi::Object object = in.As<Napi::Object>();
   Napi::Value kind;
@@ -664,7 +783,7 @@ bool JsToValue(Napi::Env env, Napi::Value in, fm_value_t* out, std::string* text
     return false;
   }
   if (!IsIntegerIn(kind, static_cast<double>(FM_VALUE_KIND_BLANK), static_cast<double>(FM_VALUE_KIND_LAMBDA))) {
-    return RejectValue(env, "value.kind must be a ValueKind");
+    return RejectValue(env, "value.kind", "must be a ValueKind");
   }
   out->kind = static_cast<int32_t>(kind.As<Napi::Number>().DoubleValue());
   Napi::Value field;
@@ -674,7 +793,7 @@ bool JsToValue(Napi::Env env, Napi::Value in, fm_value_t* out, std::string* text
         return false;
       }
       if (!field.IsNumber()) {
-        return RejectValue(env, "value.number must be a number");
+        return RejectValue(env, "value.number", "must be a number");
       }
       out->u.number = field.As<Napi::Number>().DoubleValue();
       break;
@@ -683,7 +802,7 @@ bool JsToValue(Napi::Env env, Napi::Value in, fm_value_t* out, std::string* text
         return false;
       }
       if (!field.IsBoolean()) {
-        return RejectValue(env, "value.boolean must be a boolean");
+        return RejectValue(env, "value.boolean", "must be a boolean");
       }
       out->u.boolean = field.As<Napi::Boolean>().Value() ? 1 : 0;
       break;
@@ -692,7 +811,7 @@ bool JsToValue(Napi::Env env, Napi::Value in, fm_value_t* out, std::string* text
         return false;
       }
       if (!field.IsString()) {
-        return RejectValue(env, "value.text must be a string");
+        return RejectValue(env, "value.text", "must be a string");
       }
       *text = field.As<Napi::String>().Utf8Value();
       out->u.text = text->c_str();
@@ -703,7 +822,7 @@ bool JsToValue(Napi::Env env, Napi::Value in, fm_value_t* out, std::string* text
       }
       if (!IsIntegerIn(field, static_cast<double>(std::numeric_limits<int32_t>::min()),
                        static_cast<double>(std::numeric_limits<int32_t>::max()))) {
-        return RejectValue(env, "value.errorCode must be an ErrorCode");
+        return RejectValue(env, "value.errorCode", "must be an ErrorCode");
       }
       out->u.error_code = static_cast<int32_t>(field.As<Napi::Number>().DoubleValue());
       break;

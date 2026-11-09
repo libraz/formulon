@@ -31,9 +31,11 @@ using formulon::c_api::parts::fresh_read_scratch;
 using formulon::c_api::parts::invalid_argument;
 using formulon::c_api::parts::not_found;
 using formulon::c_api::parts::null_argument;
+using formulon::c_api::parts::null_field;
 using formulon::c_api::parts::parse_runtime_id;
 using formulon::c_api::parts::patch_op_ok;
 using formulon::c_api::parts::patch_op_ok_without_clear;
+using formulon::c_api::parts::patch_op_refusal;
 using formulon::c_api::parts::set_last_error;
 using formulon::c_api::parts::sparkline_empty_cells_from_c;
 using formulon::c_api::parts::store_cstr;
@@ -138,8 +140,7 @@ fm_status_t apply_patch(const fm_sparkline_group_patch_t& p, io::SparklineGroup&
                     {p.items_op, "items", false}};
   for (const Op& f : ops) {
     if (!(f.clearable ? patch_op_ok(f.op) : patch_op_ok_without_clear(f.op))) {
-      return invalid_argument(patch_op_ok(f.op) ? "field cannot be cleared" : "op must be KEEP, CLEAR or SET",
-                              std::string("field=") + f.name);
+      return patch_op_refusal(f.op, f.name);
     }
   }
   const auto set = [](fm_patch_op_t op) { return op == FM_PATCH_OP_SET; };
@@ -215,7 +216,7 @@ fm_status_t apply_patch(const fm_sparkline_group_patch_t& p, io::SparklineGroup&
   }
   if (set(p.date_axis_ref_op)) {
     if (p.date_axis_ref == nullptr) {
-      return invalid_argument("a SET string cannot be NULL", "field=date_axis_ref");
+      return null_field("date_axis_ref");
     }
     if (auto rc = check_utf8(p.date_axis_ref, "field", "date_axis_ref"); rc != 0) {
       return rc;
@@ -456,10 +457,10 @@ extern "C" fm_status_t fm_sheet_update_sparkline_group(fm_workbook_t* wb, size_t
   std::vector<io::SparklineItem> replacement;
   if (replace_items) {
     if (patch->items == nullptr && patch->items_count > 0U) {
-      return null_argument("items");
+      return null_field("items");
     }
     if (patch->items_count == 0U) {
-      return invalid_argument("a SET items needs at least one sparkline", "field=items");
+      return invalid_argument("items needs at least one sparkline", "items_count=0");
     }
     if (auto rc = check_items_utf8(patch->items, patch->items_count); rc != 0) {
       return rc;

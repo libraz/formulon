@@ -46,6 +46,7 @@
 #include <utility>
 #include <vector>
 
+#include "c_api/binding_message.h"
 #include "c_api/binding_status.h"
 #include "c_api/formulon_c.h"
 
@@ -223,19 +224,47 @@ Napi::Value PrintTitlesToJs(Napi::Env env, const fm_print_titles_t& titles);
 // ---------------------------------------------------------------------
 /// Names the public method whose arguments the readers are parsing, so a
 /// reader failure reads `Class.method <field> ...`. Scopes nest: the previous
-/// label returns when the scope ends. `describe` runs only on a failure.
+/// label returns when the scope ends. `describe` and `name` run only on a
+/// failure; `name` gives the public parameter name of a raw positional index.
 class ScopedReaderLabel final {
  public:
   using Describe = std::string (*)(const void* data);
-  ScopedReaderLabel(Describe describe, const void* data) noexcept;
+  using Name = std::string (*)(const void* data, std::size_t raw_index);
+  ScopedReaderLabel(Describe describe, Name name, const void* data) noexcept;
   ~ScopedReaderLabel();
   ScopedReaderLabel(const ScopedReaderLabel&) = delete;
   ScopedReaderLabel& operator=(const ScopedReaderLabel&) = delete;
 
  private:
   Describe previous_describe_;
+  Name previous_name_;
   const void* previous_data_;
 };
+
+/// The `Class.method` label of the innermost `ScopedReaderLabel`, or an empty string outside one.
+std::string CurrentCallLabel();
+
+/// The d.ts name of the raw positional argument `raw_index` of the call being served, or an empty string when it has
+/// none: an argument the facade supplies, or a raw layout the d.ts signature does not describe.
+std::string CurrentArgumentName(std::size_t raw_index);
+
+/// Throws a TypeError `<call> <name> <constraint>` for the raw positional argument `raw_index` of the call being
+/// served (see `CurrentArgumentName`); an unnamed argument words it `<call> <constraint>`.
+void ThrowPositionalTypeError(Napi::Env env, std::size_t raw_index, const std::string& constraint);
+
+/// `ThrowIntegerRefusal` for the raw positional argument `raw_index` of the call being served.
+void ThrowPositionalIntegerRefusal(Napi::Env env, std::size_t raw_index, double number, double min_value);
+
+/// Throws a TypeError `<call> <path> <constraint>` for the call being served (see `ScopedReaderLabel`); an empty
+/// `path` names the call's record parameter, when it takes one.
+void ThrowArgumentTypeError(Napi::Env env, const std::string& path, const std::string& constraint);
+
+/// Throws the refusal of the number `number` given for the integer parameter `path` of `call`: a non-integral value
+/// is a RangeError "must be an integer"; a negative one for a parameter whose smallest value is `min_value >= 0` is an
+/// InvalidArgument FormulonError "must not be negative"; any other value is a RangeError "is too large". An empty
+/// `path` words the message `<call> <constraint>`.
+void ThrowIntegerRefusal(Napi::Env env, const std::string& call, const std::string& path, double number,
+                         double min_value);
 
 /// Per-call reader for nested binding object fields. Its failures are
 /// prefixed with the label of the innermost `ScopedReaderLabel`, if any.
@@ -279,8 +308,8 @@ class CheckedSpecReader final {
   /// a wider unsigned intermediate. The valid interval is [-2^63, 2^63).
   int64_t I64(const Napi::Object& owner, const char* key, int64_t dflt, bool* present = nullptr);
   int64_t I64(const Napi::Value& value, const char* key, int64_t dflt);
-  /// Reads a required uint32 field: absent, non-number or non-integer is a
-  /// TypeError, a negative or too-large integer a RangeError.
+  /// Reads a required uint32 field: absent or a non-number is a TypeError, a
+  /// non-integer or too-large value a RangeError, a negative one an InvalidArgument error.
   uint32_t RequiredU32(const Napi::Object& owner, const char* key);
   /// `Object` / `Array` for a required field: an absent one is a TypeError.
   bool RequiredObject(const Napi::Object& owner, const char* key, Napi::Object* out);
@@ -290,30 +319,38 @@ class CheckedSpecReader final {
   /// `owner[key]` as stored, `undefined` when absent; unlike the typed
   /// readers it keeps `null` apart from `undefined`.
   Napi::Value Get(const Napi::Object& owner, const char* key);
-  /// Records a TypeError for `key` ("must be a `expected`") unless one is recorded already.
-  void FailType(const char* key, const char* expected) { ReportType(key, expected); }
-  /// Records a RangeError for `key` ("is outside `range_name` range").
-  void FailRange(const char* key, const char* range_name) { ReportRange(key, range_name); }
+  /// Records a TypeError for `key`: "must be `expected`", `expected` a full phrase such as "a number" or "an object".
+  void FailType(const char* key, const char* expected);
+  /// Records the refusal of the number `number` read for the integer field `key`: a non-integral value is a
+  /// RangeError "must be an integer"; a negative one for a field whose smallest value is `min_value >= 0` is an
+  /// InvalidArgument FormulonError "must not be negative"; any other value is a RangeError "is too large".
+  void FailInteger(const char* key, double number, double min_value);
 
  private:
   bool ReadOptional(const Napi::Object& owner, const char* key, Napi::Value* out, bool* present = nullptr);
   bool ReadNumber(const Napi::Object& owner, const char* key, double* out, bool* present = nullptr);
   bool ReadNumber(const Napi::Value& value, const char* key, double* out);
   bool ReadInteger(const Napi::Object& owner, const char* key, double* out, double min_value, double max_value,
-                   const char* range_name, bool* present = nullptr);
-  bool ReadInteger(const Napi::Value& value, const char* key, double* out, double min_value, double max_value,
-                   const char* range_name);
+                   bool* present = nullptr);
+  bool ReadInteger(const Napi::Value& value, const char* key, double* out, double min_value, double max_value);
   template <typename T>
-  T ReadIntegral(const Napi::Object& owner, const char* key, T dflt, const char* range_name, bool* present = nullptr);
+  T ReadIntegral(const Napi::Object& owner, const char* key, T dflt, bool* present = nullptr);
   template <typename T>
-  T ReadIntegral(const Napi::Value& value, const char* key, T dflt, const char* range_name);
+  T ReadIntegral(const Napi::Value& value, const char* key, T dflt);
   int64_t NarrowI64(double number, const char* key, int64_t dflt);
   void ObservePending();
   template <typename ErrorType>
-  void ReportFailure(const std::string& message);
-  void ReportType(const char* key, const char* expected);
-  void ReportRange(const char* key, const char* range_name);
+  void ReportFailure(const char* key, const std::string& constraint);
+  void ReportNegative(const char* key);
+  /// Makes the fields read next belong to `owner`: the path it was reached by, or the root.
+  void Enter(const Napi::Value& owner);
+  /// Names `value` by the path of `key` under the current owner, for the fields read from it later.
+  void Register(const Napi::Value& value, const char* key);
+  std::string PathOf(const char* key) const;
 
+  std::vector<std::pair<Napi::Value, std::string>> paths_;
+  std::string prefix_;
+  bool element_ = false;
   Napi::Env env_;
   bool failed_ = false;
 };

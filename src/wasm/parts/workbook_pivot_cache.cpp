@@ -93,9 +93,9 @@ void JsWorkbook::pivotCacheSetWorksheetSource(uint32_t cacheId, emscripten::val 
   if (!reader.require_object(source, "source")) {
     return;
   }
-  const char* ref_ptr = reader.optional_string(source, "ref", ref, "pivotCacheSource.ref");
-  const char* sheet_ptr = reader.optional_string(source, "sheet", sheet, "pivotCacheSource.sheet");
-  const char* name_ptr = reader.optional_string(source, "name", name, "pivotCacheSource.name");
+  const char* ref_ptr = reader.optional_string(source, "ref", ref, "ref");
+  const char* sheet_ptr = reader.optional_string(source, "sheet", sheet, "sheet");
+  const char* name_ptr = reader.optional_string(source, "name", name, "name");
   if (!reader.ok()) {
     return;
   }
@@ -348,7 +348,7 @@ void JsWorkbook::pivotCacheSetOptions(uint32_t cacheId, emscripten::val options)
     return;
   }
   if (!js_value_present(options)) {
-    record_type_error("PivotCache.updateOptions: `options` must be an object");
+    record_type_error("PivotCache.updateOptions patch must be an object");
     return;
   }
   fm_pivot_cache_options_patch_t opt = FM_STRUCT_INIT(fm_pivot_cache_options_patch_t);
@@ -361,21 +361,21 @@ void JsWorkbook::pivotCacheSetOptions(uint32_t cacheId, emscripten::val options)
       *value = reader.boolean_value(v, false) ? 1 : 0;
     }
   };
-  flag("saveData", "pivotCacheOptions.saveData", &opt.save_data_op, &opt.save_data);
+  flag("saveData", "saveData", &opt.save_data_op, &opt.save_data);
   // `null` is the automatic limit (no attribute).
-  const emscripten::val limit = reader.value(options, "missingItemsLimit", "pivotCacheOptions.missingItemsLimit");
-  switch (js_patch_key(reader, limit, "pivotCacheOptions.missingItemsLimit", true)) {
+  const emscripten::val limit = reader.value(options, "missingItemsLimit", "missingItemsLimit");
+  switch (js_patch_key(reader, limit, "missingItemsLimit", true)) {
     case JsPatchKey::kClear:
       opt.missing_items_limit_op = FM_PATCH_OP_CLEAR;
       break;
     case JsPatchKey::kSet:
       opt.missing_items_limit_op = FM_PATCH_OP_SET;
-      opt.missing_items_limit = reader.u32_value(limit, 0U, "pivotCacheOptions.missingItemsLimit");
+      opt.missing_items_limit = reader.u32_value(limit, 0U, "missingItemsLimit");
       break;
     case JsPatchKey::kKeep:
       break;
   }
-  flag("refreshOnLoad", "pivotCacheOptions.refreshOnLoad", &opt.refresh_on_load_op, &opt.refresh_on_load);
+  flag("refreshOnLoad", "refreshOnLoad", &opt.refresh_on_load_op, &opt.refresh_on_load);
   if (!reader.ok()) {
     return;
   }

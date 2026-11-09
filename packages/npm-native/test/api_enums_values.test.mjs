@@ -833,6 +833,8 @@ describe('records return native booleans', () => {
 describe('date inputs accept a Date wherever a civil time goes', () => {
   const local = new Date(2024, 0, 31, 9, 30, 15, 750);
   const civil = { year: 2024, month: 1, day: 31, hour: 9, minute: 30, second: 15 };
+  // A threaded comment's `created` reads the UTC getters of a `Date`.
+  const utc = new Date(Date.UTC(2024, 0, 31, 9, 30, 15, 750));
 
   it('setPinnedNow reads a Date through its local fields and drops milliseconds', () => {
     withSheet((_ws, wb) => {
@@ -872,7 +874,7 @@ describe('date inputs accept a Date wherever a civil time goes', () => {
       wb.addPerson({ id: PERSON, displayName: 'A', userId: 'a', providerId: 'None' });
       const a = '{00000000-0000-4000-8000-000000000001}';
       const b = '{00000000-0000-4000-8000-000000000002}';
-      ws.addThreadedComment({ id: a, text: 'one', cell: { row: 0, col: 0 }, personId: PERSON, created: local });
+      ws.addThreadedComment({ id: a, text: 'one', cell: { row: 0, col: 0 }, personId: PERSON, created: utc });
       ws.addThreadedComment({ id: b, text: 'two', cell: { row: 1, col: 0 }, personId: PERSON, created: civil });
       assert.deepEqual({ ...ws.getThreadedComment(a).created }, civil);
       assert.deepEqual({ ...ws.getThreadedComment(b).created }, civil);

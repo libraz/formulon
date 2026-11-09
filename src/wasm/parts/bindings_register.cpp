@@ -58,7 +58,7 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .field("freezeRows", &JsSheetView::freezeRows)
       .field("freezeCols", &JsSheetView::freezeCols)
       .field("showGridLines", &JsSheetView::showGridLines)
-      .field("showRowColHeaders", &JsSheetView::showRowColHeaders)
+      .field("showRowColumnHeaders", &JsSheetView::showRowColumnHeaders)
       .field("showZeros", &JsSheetView::showZeros)
       .field("rightToLeft", &JsSheetView::rightToLeft)
       .field("tabSelected", &JsSheetView::tabSelected)
@@ -592,7 +592,6 @@ EMSCRIPTEN_BINDINGS(formulon) {
   // ---- Free functions ------------------------------------------------------
   function("evaluateFormula", &evaluate_formula);
   function("getVersion", &version_string);
-  function("getStatusName", &status_string);
   function("setLogMinLevel", &set_log_min_level);
   function("setLogSink", &set_log_sink);
   function("canonicalizeFormula", &canonicalize_formula);

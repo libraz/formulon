@@ -37,6 +37,7 @@
 using formulon::c_api::parts::cache_tables;
 using formulon::c_api::parts::check_finite;
 using formulon::c_api::parts::check_index;
+using formulon::c_api::parts::check_patch_op;
 using formulon::c_api::parts::check_record_size;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
@@ -132,7 +133,8 @@ extern "C" fm_status_t fm_workbook_add_pivot_cache(fm_workbook_t* wb, std::uint3
       }
     }
     if (any && max_id == std::numeric_limits<std::uint32_t>::max()) {
-      return invalid_argument("auto-assignment would overflow", "max_existing_id=" + std::to_string(max_id));
+      return invalid_argument("requested_id must be given because no cache id is left to assign",
+                              "max_existing_id=" + std::to_string(max_id));
     }
     assigned = any ? (max_id + 1U) : 1U;
   } else {
@@ -172,7 +174,8 @@ extern "C" fm_status_t fm_workbook_remove_pivot_cache(fm_workbook_t* wb, std::ui
       return 0;
     }
   }
-  return not_found("no pivot cache has that cache_id", "cache_id=" + std::to_string(cache_id));
+  return not_found(("cache_id " + std::to_string(cache_id) + " names no pivot cache").c_str(),
+                   "cache_id=" + std::to_string(cache_id));
 }
 
 extern "C" fm_status_t fm_workbook_get_pivot_cache_worksheet_source(const fm_workbook_t* wb, std::uint32_t cache_id,
@@ -370,7 +373,7 @@ fm_status_t check_date_serial(const fm_workbook_t* wb, double serial) {
     return null_argument("wb");
   }
   if (!formulon::pivot::is_valid_date_serial(serial, wb->workbook().date1904())) {
-    return invalid_argument("serial is not a valid date");
+    return invalid_argument("serial is not a valid date serial");
   }
   return 0;
 }
@@ -849,20 +852,21 @@ extern "C" fm_status_t fm_workbook_update_pivot_cache_options(fm_workbook_t* wb,
     return rc;
   }
   // The whole patch is checked before anything changes; only the limit is clearable.
-  if (!patch_op_ok_without_clear(patch->save_data_op)) {
-    return invalid_argument("patch op out of range or CLEAR", "field=save_data");
+  if (auto rc = check_patch_op(patch->save_data_op, "save_data", false); rc != 0) {
+    return rc;
   }
-  if (!patch_op_ok(patch->missing_items_limit_op)) {
-    return invalid_argument("patch op out of range", "field=missing_items_limit");
+  if (auto rc = check_patch_op(patch->missing_items_limit_op, "missing_items_limit", true); rc != 0) {
+    return rc;
   }
-  if (!patch_op_ok_without_clear(patch->refresh_on_load_op)) {
-    return invalid_argument("patch op out of range or CLEAR", "field=refresh_on_load");
+  if (auto rc = check_patch_op(patch->refresh_on_load_op, "refresh_on_load", false); rc != 0) {
+    return rc;
   }
   const std::optional<std::uint32_t> held = cache->missing_items_limit();
   // A loaded value outside the settable range survives a get / set round trip unchanged.
   const std::uint32_t limit = patch->missing_items_limit;
   if (patch->missing_items_limit_op == FM_PATCH_OP_SET && limit > kMaxMissingItemsLimit && held != limit) {
-    return invalid_argument("missing_items_limit out of range", "missing_items_limit=" + std::to_string(limit));
+    return invalid_argument(("missing_items_limit must be in 0.." + std::to_string(kMaxMissingItemsLimit)).c_str(),
+                            "missing_items_limit=" + std::to_string(limit));
   }
   if (patch->save_data_op == FM_PATCH_OP_KEEP && patch->missing_items_limit_op == FM_PATCH_OP_KEEP &&
       patch->refresh_on_load_op == FM_PATCH_OP_KEEP) {
@@ -902,10 +906,11 @@ fm_status_t check_calculated_text(const char* text, const char* what, std::uint3
     return rc;
   }
   if (text[0] == '\0') {
-    return invalid_argument((std::string(what) + " is empty").c_str());
+    return invalid_argument((std::string(what) + " must not be empty").c_str());
   }
   if (formulon::utf16_units_in(text) > max_units) {
-    return invalid_argument((std::string(what) + " is too long").c_str());
+    return invalid_argument(
+        (std::string(what) + " must be at most " + std::to_string(max_units) + " UTF-16 units").c_str());
   }
   return 0;
 }

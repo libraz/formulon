@@ -338,19 +338,19 @@ namespace {
 bool pull_protected_range(const emscripten::val& range, const char* operation, std::string (&text)[6],
                           std::vector<fm_cell_rect_t>& ranges, fm_protected_range_t* out) {
   JsNarrowNumericReader reader(operation);
-  out->spin_count = reader.u32(range, "spinCount", 0U, "range.spinCount");
-  out->name = reader.optional_string(range, "name", text[0], "range.name");
-  const emscripten::val ranges_value = reader.value(range, "ranges", "range.ranges");
-  if (reader.require_array(ranges_value, "range.ranges")) {
-    ranges = js_pull_range_array(ranges_value, "range.ranges", &reader);
+  out->spin_count = reader.u32(range, "spinCount", 0U, "spinCount");
+  out->name = reader.optional_string(range, "name", text[0], "name");
+  const emscripten::val ranges_value = reader.value(range, "ranges", "ranges");
+  if (reader.require_array(ranges_value, "ranges")) {
+    ranges = js_pull_range_array(ranges_value, "ranges", &reader);
   }
   out->ranges = ranges.data();
   out->range_count = ranges.size();
-  out->legacy_password_hash = reader.optional_string(range, "legacyPasswordHash", text[1], "range.legacyPasswordHash");
-  out->algorithm_name = reader.optional_string(range, "algorithmName", text[2], "range.algorithmName");
-  out->hash_value = reader.optional_string(range, "hashValue", text[3], "range.hashValue");
-  out->salt_value = reader.optional_string(range, "saltValue", text[4], "range.saltValue");
-  out->security_descriptor = reader.optional_string(range, "securityDescriptor", text[5], "range.securityDescriptor");
+  out->legacy_password_hash = reader.optional_string(range, "legacyPasswordHash", text[1], "legacyPasswordHash");
+  out->algorithm_name = reader.optional_string(range, "algorithmName", text[2], "algorithmName");
+  out->hash_value = reader.optional_string(range, "hashValue", text[3], "hashValue");
+  out->salt_value = reader.optional_string(range, "saltValue", text[4], "saltValue");
+  out->security_descriptor = reader.optional_string(range, "securityDescriptor", text[5], "securityDescriptor");
   return reader.ok();
 }
 
@@ -383,27 +383,27 @@ void JsWorkbook::updateProtectedRange(uint32_t sheet, const std::string& name, e
   std::string text[6];
   std::vector<fm_cell_rect_t> ranges;
   fm_protected_range_patch_t p = FM_STRUCT_INIT(fm_protected_range_patch_t);
-  const emscripten::val spin_count = reader.value(range, "spinCount", "range.spinCount");
+  const emscripten::val spin_count = reader.value(range, "spinCount", "spinCount");
   if (reader.ok() && js_value_present(spin_count)) {
     p.spin_count_op = FM_PATCH_OP_SET;
-    p.spin_count = reader.u32_value(spin_count, 0U, "range.spinCount");
+    p.spin_count = reader.u32_value(spin_count, 0U, "spinCount");
   }
-  js_patch_string(reader, range, "name", "range.name", false, text[0], &p.name_op, &p.name);
-  const emscripten::val ranges_value = reader.value(range, "ranges", "range.ranges");
-  if (reader.ok() && js_value_present(ranges_value) && reader.require_array(ranges_value, "range.ranges")) {
-    ranges = js_pull_range_array(ranges_value, "range.ranges", &reader);
+  js_patch_string(reader, range, "name", "name", false, text[0], &p.name_op, &p.name);
+  const emscripten::val ranges_value = reader.value(range, "ranges", "ranges");
+  if (reader.ok() && js_value_present(ranges_value) && reader.require_array(ranges_value, "ranges")) {
+    ranges = js_pull_range_array(ranges_value, "ranges", &reader);
     p.ranges_op = FM_PATCH_OP_SET;
     p.ranges = ranges.data();
     p.range_count = ranges.size();
   }
-  js_patch_string(reader, range, "legacyPasswordHash", "range.legacyPasswordHash", true, text[1],
-                  &p.legacy_password_hash_op, &p.legacy_password_hash);
-  js_patch_string(reader, range, "algorithmName", "range.algorithmName", true, text[2], &p.algorithm_name_op,
+  js_patch_string(reader, range, "legacyPasswordHash", "legacyPasswordHash", true, text[1], &p.legacy_password_hash_op,
+                  &p.legacy_password_hash);
+  js_patch_string(reader, range, "algorithmName", "algorithmName", true, text[2], &p.algorithm_name_op,
                   &p.algorithm_name);
-  js_patch_string(reader, range, "hashValue", "range.hashValue", true, text[3], &p.hash_value_op, &p.hash_value);
-  js_patch_string(reader, range, "saltValue", "range.saltValue", true, text[4], &p.salt_value_op, &p.salt_value);
-  js_patch_string(reader, range, "securityDescriptor", "range.securityDescriptor", true, text[5],
-                  &p.security_descriptor_op, &p.security_descriptor);
+  js_patch_string(reader, range, "hashValue", "hashValue", true, text[3], &p.hash_value_op, &p.hash_value);
+  js_patch_string(reader, range, "saltValue", "saltValue", true, text[4], &p.salt_value_op, &p.salt_value);
+  js_patch_string(reader, range, "securityDescriptor", "securityDescriptor", true, text[5], &p.security_descriptor_op,
+                  &p.security_descriptor);
   if (!reader.ok()) {
     return;
   }
@@ -611,10 +611,10 @@ void JsWorkbook::updateValidation(uint32_t sheet, const std::string& validationI
   JsNarrowNumericReader reader("Sheet.updateValidation");
   fm_data_validation_patch_t p = FM_STRUCT_INIT(fm_data_validation_patch_t);
   std::vector<fm_cell_rect_t> ranges;
-  const emscripten::val ranges_value = reader.value(patch, "ranges", "validation.ranges");
-  if (reader.ok() && js_patch_key(reader, ranges_value, "validation.ranges", false) == JsPatchKey::kSet &&
-      reader.require_array(ranges_value, "validation.ranges")) {
-    ranges = js_pull_range_array(ranges_value, "validation.ranges", &reader);
+  const emscripten::val ranges_value = reader.value(patch, "ranges", "ranges");
+  if (reader.ok() && js_patch_key(reader, ranges_value, "ranges", false) == JsPatchKey::kSet &&
+      reader.require_array(ranges_value, "ranges")) {
+    ranges = js_pull_range_array(ranges_value, "ranges", &reader);
     p.ranges_op = FM_PATCH_OP_SET;
     p.ranges = ranges.data();
     p.range_count = ranges.size();
@@ -634,23 +634,20 @@ void JsWorkbook::updateValidation(uint32_t sheet, const std::string& validationI
       *value = reader.boolean_value(v, false) ? FM_TRISTATE_TRUE : FM_TRISTATE_FALSE;
     }
   };
-  u8("type", "validation.type", &p.type_op, &p.type);
-  u8("operator", "validation.operator", &p.op_op, &p.op);
-  u8("errorStyle", "validation.errorStyle", &p.error_style_op, &p.error_style);
-  flag("allowBlank", "validation.allowBlank", &p.allow_blank_op, &p.allow_blank);
-  flag("showInputMessage", "validation.showInputMessage", &p.show_input_message_op, &p.show_input_message);
-  flag("showErrorMessage", "validation.showErrorMessage", &p.show_error_message_op, &p.show_error_message);
-  flag("showInCellDropdown", "validation.showInCellDropdown", &p.show_in_cell_dropdown_op, &p.show_in_cell_dropdown);
+  u8("type", "type", &p.type_op, &p.type);
+  u8("operator", "operator", &p.op_op, &p.op);
+  u8("errorStyle", "errorStyle", &p.error_style_op, &p.error_style);
+  flag("allowBlank", "allowBlank", &p.allow_blank_op, &p.allow_blank);
+  flag("showInputMessage", "showInputMessage", &p.show_input_message_op, &p.show_input_message);
+  flag("showErrorMessage", "showErrorMessage", &p.show_error_message_op, &p.show_error_message);
+  flag("showInCellDropdown", "showInCellDropdown", &p.show_in_cell_dropdown_op, &p.show_in_cell_dropdown);
   std::string text[6];
-  js_patch_string(reader, patch, "formula1", "validation.formula1", true, text[0], &p.formula1_op, &p.formula1);
-  js_patch_string(reader, patch, "formula2", "validation.formula2", true, text[1], &p.formula2_op, &p.formula2);
-  js_patch_string(reader, patch, "errorTitle", "validation.errorTitle", true, text[2], &p.error_title_op,
-                  &p.error_title);
-  js_patch_string(reader, patch, "errorMessage", "validation.errorMessage", true, text[3], &p.error_message_op,
-                  &p.error_message);
-  js_patch_string(reader, patch, "promptTitle", "validation.promptTitle", true, text[4], &p.prompt_title_op,
-                  &p.prompt_title);
-  js_patch_string(reader, patch, "promptMessage", "validation.promptMessage", true, text[5], &p.prompt_message_op,
+  js_patch_string(reader, patch, "formula1", "formula1", true, text[0], &p.formula1_op, &p.formula1);
+  js_patch_string(reader, patch, "formula2", "formula2", true, text[1], &p.formula2_op, &p.formula2);
+  js_patch_string(reader, patch, "errorTitle", "errorTitle", true, text[2], &p.error_title_op, &p.error_title);
+  js_patch_string(reader, patch, "errorMessage", "errorMessage", true, text[3], &p.error_message_op, &p.error_message);
+  js_patch_string(reader, patch, "promptTitle", "promptTitle", true, text[4], &p.prompt_title_op, &p.prompt_title);
+  js_patch_string(reader, patch, "promptMessage", "promptMessage", true, text[5], &p.prompt_message_op,
                   &p.prompt_message);
   if (!reader.ok()) {
     return;

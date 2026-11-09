@@ -18,6 +18,7 @@
 #include "drawing/drawing_edit.h"
 #include "drawing/shape_edit.h"
 #include "utils/error.h"
+#include "utils/number_text.h"
 #include "workbook.h"
 
 using formulon::c_api::parts::AnchorPlan;
@@ -34,8 +35,10 @@ using formulon::c_api::parts::finish_status;
 using formulon::c_api::parts::fresh_read_scratch;
 using formulon::c_api::parts::invalid_argument;
 using formulon::c_api::parts::null_argument;
+using formulon::c_api::parts::null_field;
 using formulon::c_api::parts::patch_op_ok;
 using formulon::c_api::parts::patch_op_ok_without_clear;
+using formulon::c_api::parts::patch_op_refusal;
 using formulon::c_api::parts::PatchReader;
 using formulon::c_api::parts::plan_add_anchor;
 using formulon::c_api::parts::read_fill;
@@ -61,8 +64,7 @@ fm_status_t check_patch(const fm_shape_patch_t& p) {
       {{p.rotation_deg_op, "rotation_deg"}, {p.text_box_op, "text_box"}}};
   for (const auto& [op, name] : plain) {
     if (!patch_op_ok_without_clear(op)) {
-      return invalid_argument(patch_op_ok(op) ? "field cannot be cleared" : "op must be KEEP or SET",
-                              std::string("field=") + name);
+      return patch_op_refusal(op, name);
     }
   }
   const std::array<std::pair<fm_patch_op_t, const char*>, 2> texts = {
@@ -70,14 +72,13 @@ fm_status_t check_patch(const fm_shape_patch_t& p) {
   const char* const names[] = {"preset_geometry", "text"};
   for (std::size_t i = 0; i < texts.size(); ++i) {
     if (!patch_op_ok_without_clear(texts[i].first)) {
-      return invalid_argument(patch_op_ok(texts[i].first) ? "field cannot be cleared" : "op must be KEEP or SET",
-                              std::string("field=") + names[i]);
+      return patch_op_refusal(texts[i].first, names[i]);
     }
     if (!is_set(texts[i].first)) {
       continue;
     }
     if (texts[i].second == nullptr) {
-      return invalid_argument("a SET string cannot be NULL", std::string("field=") + names[i]);
+      return null_field(names[i]);
     }
     if (auto rc = check_utf8(texts[i].second, "field", names[i]); rc != 0) {
       return rc;
@@ -119,7 +120,8 @@ fm_status_t to_spec(const fm_shape_patch_t& p, formulon::ShapeSpec& spec) {
   }
   if (is_set(p.rotation_deg_op)) {
     if (!std::isfinite(p.rotation_deg) || std::fabs(p.rotation_deg) > kMaxRotationDeg) {
-      return invalid_argument("rotation is outside its range", "field=rotation_deg");
+      return invalid_argument("rotation_deg must be in -3600..3600",
+                              "rotation_deg=" + formulon::fixed_string(p.rotation_deg, 6));
     }
     double turned = std::fmod(p.rotation_deg, kFullTurnDeg);
     if (turned < 0.0) {
@@ -136,7 +138,7 @@ fm_status_t to_spec(const fm_shape_patch_t& p, formulon::ShapeSpec& spec) {
 // The fill record of a spec as the patch that writes it: each stated member is SET; all-zero states nothing.
 fm_status_t fill_patch_of(const fm_chart_fill_t& f, fm_chart_fill_patch_t& out) {
   if (f.other != 0) {
-    return invalid_argument("other is a read-only fill state", "field=fill.other");
+    return invalid_argument("fill.other must be 0", "fill.other=" + std::to_string(f.other));
   }
   if (auto rc = check_flag(f.has_transparency_pct, "fill.has_transparency_pct"); rc != 0) {
     return rc;
@@ -163,7 +165,7 @@ fm_status_t fill_patch_of(const fm_chart_fill_t& f, fm_chart_fill_patch_t& out) 
 // The outline record of a spec as the patch that writes it, as `fill_patch_of`.
 fm_status_t line_patch_of(const fm_chart_line_t& l, fm_chart_line_patch_t& out) {
   if (l.other != 0) {
-    return invalid_argument("other is a read-only outline state", "field=line.other");
+    return invalid_argument("line.other must be 0", "line.other=" + std::to_string(l.other));
   }
   const std::array<std::pair<std::int32_t, const char*>, 4> flags = {
       {{l.has_transparency_pct, "line.has_transparency_pct"},

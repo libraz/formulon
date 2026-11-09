@@ -63,6 +63,7 @@ using formulon::c_api::parts::fresh_read_scratch;
 using formulon::c_api::parts::invalid_argument;
 using formulon::c_api::parts::not_found;
 using formulon::c_api::parts::null_argument;
+using formulon::c_api::parts::null_field;
 using formulon::c_api::parts::patch_op_ok;
 using formulon::c_api::parts::patch_op_ok_without_clear;
 using formulon::c_api::parts::publish_scratch;
@@ -149,7 +150,7 @@ fm_status_t set_fragment(fm_workbook_t* wb, std::size_t sheet_index, const Fragm
     }
     const FragmentValidation validation = validate_single_element_fragment(fragment, slot.element);
     if (!validation.valid) {
-      return invalid_argument("invalid XML fragment",
+      return invalid_argument("xml fragment is not a valid element",
                               "element=" + std::string(slot.element) + " " + validation.context);
     }
   }
@@ -197,7 +198,7 @@ void set_attr_bool(pugi::xml_node node, const char* name, bool value) {
 
 /// The status of a patch op outside 0..2, or a CLEAR on a field that cannot be cleared.
 fm_status_t invalid_patch_op() {
-  return invalid_argument("patch op out of range or not clearable");
+  return invalid_argument("op is not a patch op");
 }
 
 /// True when every op of `ops` is KEEP or SET.
@@ -439,11 +440,12 @@ fm_status_t set_break(fm_workbook_t* wb, std::size_t sheet_index, std::uint32_t 
     last = span_max;
   }
   if (first > last || last > span_max) {
-    return invalid_argument("break span is out of range",
+    return invalid_argument("first and last must be within the break span",
                             "first=" + std::to_string(first) + " last=" + std::to_string(last));
   }
   if (*manual_in < FM_TRISTATE_DEFAULT || *manual_in > FM_TRISTATE_TRUE) {
-    return invalid_argument("manual is outside fm_tristate_t", "manual=" + std::to_string(*manual_in));
+    return invalid_argument(("manual " + std::to_string(*manual_in) + " is not a tristate").c_str(),
+                            "manual=" + std::to_string(*manual_in));
   }
   return upsert_break(breaks, index, first, last, *manual_in != FM_TRISTATE_FALSE);
 }
@@ -520,7 +522,7 @@ extern "C" fm_status_t fm_sheet_set_page_setup_xml(fm_workbook_t* wb, size_t she
   const std::string_view fragment(xml);
   if (fragment.find("r:id") != std::string_view::npos &&
       wb->workbook().sheet(sheet_index).print_settings().printer_settings_path.empty()) {
-    return invalid_argument("printer settings relationship has no part");
+    return invalid_argument("xml references a printer settings part that does not exist");
   }
   return set_fragment(wb, sheet_index, kPageSetupSlot, xml);
 }
@@ -645,7 +647,10 @@ extern "C" fm_status_t fm_sheet_update_page_setup(fm_workbook_t* wb, size_t shee
   }
   if (patch->scale_pct_op == FM_PATCH_OP_SET &&
       (patch->scale_pct < kMinPrintScalePercent || patch->scale_pct > kMaxPrintScalePercent)) {
-    return invalid_argument("scale is out of range", "scale=" + std::to_string(patch->scale_pct));
+    return invalid_argument(
+        ("scale_pct must be in " + std::to_string(kMinPrintScalePercent) + ".." + std::to_string(kMaxPrintScalePercent))
+            .c_str(),
+        "scale_pct=" + std::to_string(patch->scale_pct));
   }
 
   SheetPrintSettings& print = wb->workbook().sheet(sheet_index).mutable_print_settings();
@@ -706,7 +711,8 @@ extern "C" fm_status_t fm_sheet_update_page_margins(fm_workbook_t* wb, size_t sh
     // The paginator subtracts these from the paper; a negative, infinite or
     // NaN one produces a printable body that is not a rectangle.
     if (field.op == FM_PATCH_OP_SET && (!std::isfinite(field.value) || field.value < 0.0)) {
-      return invalid_argument("margin must be finite and non-negative", std::string(field.attr) + "=invalid");
+      return invalid_argument((std::string(field.attr) + " margin must be finite and not negative").c_str(),
+                              std::string(field.attr) + "=invalid");
     }
   }
 
@@ -783,19 +789,23 @@ extern "C" fm_status_t fm_sheet_update_header_footer(fm_workbook_t* wb, size_t s
   struct Section {
     fm_patch_op_t op;
     const char* text;
+    const char* name;
   };
   // In `kHeaderFooterSections` order.
   const Section sections[] = {
-      {patch->odd_header_op, patch->odd_header},     {patch->odd_footer_op, patch->odd_footer},
-      {patch->even_header_op, patch->even_header},   {patch->even_footer_op, patch->even_footer},
-      {patch->first_header_op, patch->first_header}, {patch->first_footer_op, patch->first_footer},
+      {patch->odd_header_op, patch->odd_header, "odd_header"},
+      {patch->odd_footer_op, patch->odd_footer, "odd_footer"},
+      {patch->even_header_op, patch->even_header, "even_header"},
+      {patch->even_footer_op, patch->even_footer, "even_footer"},
+      {patch->first_header_op, patch->first_header, "first_header"},
+      {patch->first_footer_op, patch->first_footer, "first_footer"},
   };
   for (const Section& section : sections) {
     if (!patch_op_ok(section.op)) {
       return invalid_patch_op();
     }
     if (section.op == FM_PATCH_OP_SET && section.text == nullptr) {
-      return invalid_argument("SET section is NULL");
+      return null_field(section.name);
     }
   }
   for (const Section& section : sections) {
@@ -1015,7 +1025,7 @@ extern "C" fm_status_t fm_sheet_set_tab_color(fm_workbook_t* wb, size_t sheet_in
       return rc;
     }
     if (color->kind == FM_COLOR_KIND_THEME && !std::isfinite(color->tint)) {
-      return invalid_argument("theme tint must be finite", "field=tint");
+      return invalid_argument("tint must be finite", "field=tint");
     }
     spec = formulon::c_api::parts::color_spec_from_c(*color);
   }

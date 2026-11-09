@@ -377,8 +377,8 @@ export function registerCellsIo(Module, test) {
               name: 'BadTable',
               columns: ['Product', 'Amount'],
             }),
-          // A non-integer coordinate (fraction, NaN, infinity) is a type error; 2^32 is a range error.
-          typeof value === 'number' && !Number.isInteger(value) ? TypeError : nestedErrorClass(value),
+          // A symbol is a type error; a fraction, NaN, infinity and 2^32 are range errors.
+          nestedErrorClass(value),
           `addTable range.firstRow=${String(value)} accepted`,
         );
         assert.equal(wb.getTableCount(0), 0);
@@ -495,7 +495,7 @@ export function registerCellsIo(Module, test) {
       assert.throws(() => wb.updateCfRule(0, ruleId, { stopIfTrue: null }), TypeError);
       assert.throws(() => wb.updateCfRule(0, ruleId, { dxfIndex: 1.5 }), RangeError);
       expectFailure(() => wb.updateCfRule(0, ruleId, { rank: 3 }), StatusCode.InvalidArgument);
-      expectFailure(() => wb.updateCfRule(0, ruleId, { dxfIndex: 99 }), StatusCode.InvalidArgument);
+      expectFailure(() => wb.updateCfRule(0, ruleId, { dxfIndex: 99 }), StatusCode.IndexOutOfRange);
       expectFailure(() => wb.updateCfRule(0, '{00000000-0000-0000-0000-000000000000}', {}), StatusCode.NotFound);
       expectFailure(() => wb.updateCfRule(9, ruleId, {}), StatusCode.SheetIndexOutOfRange);
     } finally {
@@ -696,7 +696,7 @@ export function registerCellsIo(Module, test) {
     assert.equal(ab, -1);
     assert.equal(ba, 1);
     expectFailure(() => Module.compareText('a', 'b', 0, 'nope'), StatusCode.InvalidArgument);
-    assert.throws(() => Module.compareText('a', 'b', -1, profile), RangeError);
+    expectFailure(() => Module.compareText('a', 'b', -1, profile), StatusCode.InvalidArgument);
     expectFailure(() => Module.compareText('a', 'b', 3, profile));
   });
 
@@ -773,7 +773,7 @@ export function registerCellsIo(Module, test) {
     assert.throws(() => Module.getCollationClasses([{ number: 1 }], 1, 'mac-365-en_US'), TypeError);
     assert.throws(() => Module.getCollationClasses({}, 1, 'mac-365-en_US'), TypeError);
     expectFailure(() => Module.getCollationClasses([{ kind: 1, number: 1 }], 1, 'nope'));
-    assert.throws(() => Module.getCollationClasses(values, -1, 'mac-365-en_US'), RangeError);
+    expectFailure(() => Module.getCollationClasses(values, -1, 'mac-365-en_US'), StatusCode.InvalidArgument);
   });
 
   test('getCollationClasses timing on 100k mixed CJK/ASCII texts', () => {

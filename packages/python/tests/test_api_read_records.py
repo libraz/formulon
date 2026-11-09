@@ -97,12 +97,13 @@ class ThreadedCommentCellTests(unittest.TestCase):
         with Workbook.create_default() as wb:
             ws = self._threads(wb)
             self.assertEqual(len(ws.list_threaded_comments()), 3)
-            by_a1 = ws.list_threaded_comments(cell="B2")
+            by_a1 = ws.list_threaded_comments("B2")
             self.assertEqual({c.id for c in by_a1}, {_T1, _R1})
-            self.assertEqual(by_a1, ws.list_threaded_comments(cell=CellAddress(1, 1)))
-            self.assertEqual(by_a1, ws.list_threaded_comments(cell=(1, 1)))
-            self.assertEqual([c.id for c in ws.list_threaded_comments(cell="C3")], [_T3])
-            self.assertEqual(ws.list_threaded_comments(cell="F9"), [])
+            self.assertEqual(by_a1, ws.list_threaded_comments(1, 1))
+            self.assertEqual([c.id for c in ws.list_threaded_comments("C3")], [_T3])
+            self.assertEqual(ws.list_threaded_comments("F9"), [])
+            with self.assertRaises(TypeError):
+                ws.list_threaded_comments(cell="B2")  # type: ignore[call-overload]
 
     def test_input_rejects_the_old_row_and_column_fields(self) -> None:
         with self.assertRaises(TypeError):

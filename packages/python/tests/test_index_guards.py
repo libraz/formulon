@@ -107,6 +107,11 @@ _BOUNDED_ENCODERS = {"_tristate", "_tristate_default"}
 _PATCH_OP_CONSTANTS = {"_PATCH_SET", "_PATCH_CLEAR"}
 
 
+def _is_bool_check(node: ast.AST) -> bool:
+    """True for a ``_require_bool(...)`` call, which returns its argument only when it is a ``bool``."""
+    return isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "_require_bool"
+
+
 def _is_guarded(node: ast.AST, known: "frozenset[str]" = frozenset()) -> bool:
     """True when ``node`` cannot reach WASM with an out-of-range value.
 
@@ -120,10 +125,13 @@ def _is_guarded(node: ast.AST, known: "frozenset[str]" = frozenset()) -> bool:
         return _is_guarded(node.body, known) and _is_guarded(node.orelse, known)
     if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and f"{node.func.id}()" in known:
         return True
+    if _is_int_call(node) and len(node.args) == 1 and _is_bool_check(node.args[0]):
+        # `int(True)` is 1: the flag was verified to be a `bool` before it widened.
+        return True
     return (
         isinstance(node, ast.Call)
         and isinstance(node.func, ast.Name)
-        and node.func.id in ("_uint", "_sint", "_flag", *_BOUNDED_ENCODERS)
+        and node.func.id in ("_uint", "_sint", "_require_bool", *_BOUNDED_ENCODERS)
         and not (node.args and _is_int_call(node.args[0]))
     ) or (
         # `_ArgScope.cstr` hands back a pointer into the scope, not a caller's integer.

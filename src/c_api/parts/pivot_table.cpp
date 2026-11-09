@@ -33,6 +33,7 @@
 using formulon::c_api::parts::check_cell_coord;
 using formulon::c_api::parts::check_enum_domain;
 using formulon::c_api::parts::check_index;
+using formulon::c_api::parts::check_patch_op;
 using formulon::c_api::parts::check_record_size;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::check_sheet_rect;
@@ -44,6 +45,7 @@ using formulon::c_api::parts::invalid_argument;
 using formulon::c_api::parts::kMaxPivotNameUnits;
 using formulon::c_api::parts::not_found;
 using formulon::c_api::parts::null_argument;
+using formulon::c_api::parts::null_field;
 using formulon::c_api::parts::patch_op_ok;
 using formulon::c_api::parts::patch_op_ok_without_clear;
 using formulon::c_api::parts::pivot_agg_from_fm;
@@ -248,11 +250,11 @@ extern "C" fm_status_t fm_sheet_update_pivot_grand_totals(fm_workbook_t* wb, std
     return rc;
   }
   // Neither band can be cleared; the whole patch is checked before anything changes.
-  if (!patch_op_ok_without_clear(patch->rows_op)) {
-    return invalid_argument("patch op out of range or CLEAR", "field=rows");
+  if (auto rc = check_patch_op(patch->rows_op, "rows", false); rc != 0) {
+    return rc;
   }
-  if (!patch_op_ok_without_clear(patch->columns_op)) {
-    return invalid_argument("patch op out of range or CLEAR", "field=columns");
+  if (auto rc = check_patch_op(patch->columns_op, "columns", false); rc != 0) {
+    return rc;
   }
   if (patch->rows_op == FM_PATCH_OP_KEEP && patch->columns_op == FM_PATCH_OP_KEEP) {
     return 0;
@@ -304,12 +306,15 @@ extern "C" fm_status_t fm_sheet_update_pivot_style_options(fm_workbook_t* wb, st
     return rc;
   }
   // The whole patch is checked before anything changes.
-  if (!patch_op_ok(patch->style_name_op)) {
-    return invalid_argument("patch op out of range", "field=style_name");
+  if (auto rc = check_patch_op(patch->style_name_op, "style_name", true); rc != 0) {
+    return rc;
   }
   if (patch->style_name_op == FM_PATCH_OP_SET) {
-    if (patch->style_name == nullptr || patch->style_name[0] == '\0') {
-      return invalid_argument("style_name must be a non-empty string under SET", "style_name");
+    if (patch->style_name == nullptr) {
+      return null_field("style_name");
+    }
+    if (patch->style_name[0] == '\0') {
+      return invalid_argument("style_name must not be empty", "style_name=");
     }
     if (auto rc = check_utf8({patch->style_name}); rc != 0) {
       return rc;
@@ -328,8 +333,8 @@ extern "C" fm_status_t fm_sheet_update_pivot_style_options(fm_workbook_t* wb, st
        "show_last_column"}};
   bool changes = patch->style_name_op != FM_PATCH_OP_KEEP;
   for (const auto& [op, value, member, field] : toggles) {
-    if (!patch_op_ok_without_clear(op)) {
-      return invalid_argument("patch op out of range or CLEAR", std::string("field=") + field);
+    if (auto rc = check_patch_op(op, field, false); rc != 0) {
+      return rc;
     }
     if (op == FM_PATCH_OP_SET) {
       if (auto rc = check_enum_domain(value, 0, 1, field); rc != 0) {
@@ -376,7 +381,8 @@ extern "C" fm_status_t fm_sheet_set_pivot_report_layout(fm_workbook_t* wb, std::
   }
   if (layout != FM_PIVOT_REPORT_LAYOUT_COMPACT && layout != FM_PIVOT_REPORT_LAYOUT_TABULAR &&
       layout != FM_PIVOT_REPORT_LAYOUT_OUTLINE) {
-    return invalid_argument("layout out of range", "layout=" + std::to_string(static_cast<int>(layout)));
+    return invalid_argument(("layout " + std::to_string(static_cast<int>(layout)) + " is not a ReportLayout").c_str(),
+                            "layout=" + std::to_string(static_cast<int>(layout)));
   }
   formulon::pivot::PivotTable* table = nullptr;
   if (fm_status_t rc = resolve_pivot_checked(wb, sheet_index, pivot_index, &table); rc != 0) {
@@ -429,7 +435,7 @@ fm_status_t set_field_order(fm_workbook_t* wb, std::size_t sheet_index, std::siz
   for (std::size_t i = 0; i < count; ++i) {
     if (indices[i] == FM_PIVOT_VALUES_FIELD) {
       if (values_slot.has_value()) {
-        return invalid_argument("indices lists the Values field twice", "i=" + std::to_string(i));
+        return invalid_argument("indices must not list the Values field twice", "i=" + std::to_string(i));
       }
       values_slot = requested_order.size();
       continue;
@@ -438,7 +444,7 @@ fm_status_t set_field_order(fm_workbook_t* wb, std::size_t sheet_index, std::siz
       return rc;
     }
     if (requested_field[indices[i]] != kNotRequested) {
-      return invalid_argument("indices lists a field twice",
+      return invalid_argument("indices must not list a field twice",
                               "i=" + std::to_string(i) + " value=" + std::to_string(indices[i]));
     }
     requested_field[indices[i]] = kRequested;
@@ -446,11 +452,11 @@ fm_status_t set_field_order(fm_workbook_t* wb, std::size_t sheet_index, std::siz
   }
   const bool holds_values = has_values_level(*table) && values_on_rows(*table) == row;
   if (values_slot.has_value() && !has_values_level(*table)) {
-    return invalid_argument("the Values field needs at least two data fields",
+    return invalid_argument("indices lists the Values field, which needs at least two data fields",
                             "data_fields=" + std::to_string(table->data_fields().size()));
   }
   if (holds_values && !values_slot.has_value()) {
-    return invalid_argument("the Values field is on this axis and must stay listed");
+    return invalid_argument("indices must list the Values field that is on this axis");
   }
   // The list is the axis's whole membership: a field left out comes off the
   // axis, and a listed field moves onto it from wherever it was.
@@ -770,7 +776,7 @@ extern "C" fm_status_t fm_sheet_resolve_pivot_runtime_id(const fm_workbook_t* wb
       return 0;
     }
   }
-  return not_found("no pivot on the sheet has that runtime id",
+  return not_found(("id " + std::to_string(id) + " names no pivot on the sheet").c_str(),
                    "sheet_index=" + std::to_string(sheet_index) + " id=" + std::to_string(id));
 }
 
@@ -884,7 +890,7 @@ fm_status_t check_option_range(std::uint32_t value, std::uint32_t current, std::
   if (value <= max || value == current) {
     return 0;
   }
-  return invalid_argument((std::string(field) + " out of range").c_str(),
+  return invalid_argument((std::string(field) + " must be in 0.." + std::to_string(max)).c_str(),
                           std::string(field) + "=" + std::to_string(value));
 }
 
@@ -995,24 +1001,24 @@ extern "C" fm_status_t fm_sheet_update_pivot_options(fm_workbook_t* wb, std::siz
   // The whole patch is checked before anything changes; only the five strings are clearable.
   bool changes = false;
   for (const FlagField& flag : flags) {
-    if (!patch_op_ok_without_clear(flag.op)) {
-      return invalid_argument("patch op out of range or CLEAR", std::string("field=") + flag.field);
+    if (auto rc = check_patch_op(flag.op, flag.field, false); rc != 0) {
+      return rc;
     }
     changes = changes || flag.op == FM_PATCH_OP_SET;
   }
   for (const TextField& text : texts) {
-    if (!patch_op_ok(text.op)) {
-      return invalid_argument("patch op out of range", std::string("field=") + text.field);
+    if (auto rc = check_patch_op(text.op, text.field, true); rc != 0) {
+      return rc;
     }
     if (text.op == FM_PATCH_OP_SET) {
       if (text.value == nullptr) {
-        return invalid_argument("SET needs a string", std::string("field=") + text.field);
+        return null_field(text.field);
       }
       if (auto rc = check_utf8(text.value, "field", text.field); rc != 0) {
         return rc;
       }
       if (text.capped && formulon::utf16_units_in(text.value) > kMaxPivotNameUnits) {
-        return invalid_argument((std::string(text.field) + " longer than 255 UTF-16 code units").c_str());
+        return invalid_argument((std::string(text.field) + " must be at most 255 UTF-16 units").c_str());
       }
     }
     changes = changes || text.op != FM_PATCH_OP_KEEP;
@@ -1021,8 +1027,8 @@ extern "C" fm_status_t fm_sheet_update_pivot_options(fm_workbook_t* wb, std::siz
        {std::tuple<fm_patch_op_t, std::uint32_t, std::uint32_t, std::uint32_t, const char*>{
             o.indent_op, o.indent, table->indent(), kMaxIndent, "indent"},
         {o.page_wrap_op, o.page_wrap, table->page_wrap(), kMaxPageWrap, "page_wrap"}}) {
-    if (!patch_op_ok_without_clear(op)) {
-      return invalid_argument("patch op out of range or CLEAR", std::string("field=") + field);
+    if (auto rc = check_patch_op(op, field, false); rc != 0) {
+      return rc;
     }
     if (op == FM_PATCH_OP_SET) {
       if (auto rc = check_option_range(value, current, max, field); rc != 0) {

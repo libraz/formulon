@@ -32,22 +32,22 @@ bool build_data_field_spec_checked(JsNarrowNumericReader& reader, const emscript
   // Read the optional strings before the numeric fields. Once the reader
   // rejects a numeric value, no further access to the caller's object is
   // allowed before returning the binding error.
-  out.name = reader.optional_string(spec, "name", name_buf, "pivotDataField.name");
+  out.name = reader.optional_string(spec, "name", name_buf, "name");
   // `null` is an absent format, as the `listDataFields()` read gives it.
-  out.number_format = reader.optional_string(spec, "numberFormat", nfmt_buf, "pivotDataField.numberFormat");
+  out.number_format = reader.optional_string(spec, "numberFormat", nfmt_buf, "numberFormat");
   if (!reader.ok()) {
     return false;
   }
-  out.field_index = reader.required_u32(spec, "fieldIndex", "pivotDataField.fieldIndex");
-  out.aggregation = static_cast<fm_pivot_aggregation_t>(
-      reader.u32(spec, "aggregation", FM_PIVOT_AGGREGATION_SUM, "pivotDataField.aggregation"));
-  out.show_as = static_cast<fm_pivot_show_values_as_t>(reader.u32(spec, "showAs", 0U, "pivotDataField.showAs"));
-  const emscripten::val base_field = reader.value(spec, "showAsBaseField", "pivotDataField.showAsBaseField");
+  out.field_index = reader.required_u32(spec, "fieldIndex", "fieldIndex");
+  out.aggregation =
+      static_cast<fm_pivot_aggregation_t>(reader.u32(spec, "aggregation", FM_PIVOT_AGGREGATION_SUM, "aggregation"));
+  out.show_as = static_cast<fm_pivot_show_values_as_t>(reader.u32(spec, "showAs", 0U, "showAs"));
+  const emscripten::val base_field = reader.value(spec, "showAsBaseField", "showAsBaseField");
   out.has_show_as_base_field = js_value_present(base_field) ? 1 : 0;
-  out.show_as_base_field = reader.u32_value(base_field, 0U, "pivotDataField.showAsBaseField");
-  const emscripten::val base_item = reader.value(spec, "showAsBaseItem", "pivotDataField.showAsBaseItem");
+  out.show_as_base_field = reader.u32_value(base_field, 0U, "showAsBaseField");
+  const emscripten::val base_item = reader.value(spec, "showAsBaseItem", "showAsBaseItem");
   out.has_show_as_base_item = js_value_present(base_item) ? 1 : 0;
-  out.show_as_base_item = reader.u32_value(base_item, 0U, "pivotDataField.showAsBaseItem");
+  out.show_as_base_item = reader.u32_value(base_item, 0U, "showAsBaseItem");
   return reader.ok();
 }
 
@@ -81,7 +81,7 @@ FilterOperand pull_filter_operand(JsNarrowNumericReader& reader, const emscripte
     out.kind = FM_PIVOT_FILTER_OPERAND_KIND_TEXT;
     out.text = reader.string_value(value, field);
   } else {
-    reader.fail_type(field, "a Number or a String");
+    reader.fail_type(field, "a number or a string");
   }
   return out;
 }
@@ -143,8 +143,8 @@ void JsWorkbook::pivotSetAnchor(uint32_t sheet, uint32_t pivotIndex, emscripten:
     return;
   }
   JsNarrowNumericReader reader("Pivot.setAnchor");
-  const uint32_t row = reader.required_u32(cell, "row", "anchor.row");
-  const uint32_t col = reader.required_u32(cell, "col", "anchor.col");
+  const uint32_t row = reader.required_u32(cell, "row", "cell.row");
+  const uint32_t col = reader.required_u32(cell, "col", "cell.col");
   if (!reader.ok()) {
     return;
   }
@@ -467,26 +467,24 @@ void JsWorkbook::pivotSetOptions(uint32_t sheet, uint32_t pivotIndex, emscripten
     return;
   }
   if (!js_value_present(options)) {
-    record_type_error("Pivot.updateOptions: `options` must be an object");
+    record_type_error("Pivot.updateOptions patch must be an object");
     return;
   }
   fm_pivot_options_patch_t p = FM_STRUCT_INIT(fm_pivot_options_patch_t);
   JsNarrowNumericReader reader("Pivot.updateOptions");
   // An omitted or `null` flag keeps the stored value.
   const auto flag = [&](const char* key, fm_patch_op_t* op, int32_t* value) {
-    const std::string field = std::string("pivotOptions.") + key;
-    const emscripten::val v = reader.value(options, key, field.c_str());
+    const emscripten::val v = reader.value(options, key, key);
     if (reader.ok() && js_value_present(v)) {
       *op = FM_PATCH_OP_SET;
       *value = reader.boolean_value(v, false) ? 1 : 0;
     }
   };
   const auto count = [&](const char* key, fm_patch_op_t* op, uint32_t* value) {
-    const std::string field = std::string("pivotOptions.") + key;
-    const emscripten::val v = reader.value(options, key, field.c_str());
+    const emscripten::val v = reader.value(options, key, key);
     if (reader.ok() && js_value_present(v)) {
       *op = FM_PATCH_OP_SET;
-      *value = reader.u32_value(v, 0U, field.c_str());
+      *value = reader.u32_value(v, 0U, key);
     }
   };
   // An omitted caption keeps the stored one; `null` removes it.
@@ -496,8 +494,7 @@ void JsWorkbook::pivotSetOptions(uint32_t sheet, uint32_t pivotIndex, emscripten
   std::string alt_summary;
   std::string grand_total;
   const auto text = [&](const char* key, std::string& storage, fm_patch_op_t* op, const char** value) {
-    const std::string field = std::string("pivotOptions.") + key;
-    js_patch_string(reader, options, key, field.c_str(), true, storage, op, value);
+    js_patch_string(reader, options, key, key, true, storage, op, value);
   };
   flag("showError", &p.show_error_op, &p.show_error);
   text("errorCaption", error_caption, &p.error_caption_op, &p.error_caption);
@@ -613,7 +610,7 @@ void JsWorkbook::pivotFieldSetSubtotalFns(uint32_t sheet, uint32_t pivotIndex, u
   }
   JsNarrowNumericReader reader("Pivot.setFieldSubtotalFunctions");
   if (!reader.is_array(aggregations, "aggregations")) {
-    record_type_error("subtotal functions must be an array");
+    record_type_error("Pivot.setFieldSubtotalFunctions aggregations must be an array");
     return;
   }
   const uint32_t length = reader.length(aggregations, "aggregations");
@@ -676,7 +673,7 @@ void set_pivot_field_order(fm_workbook_t* wb, uint32_t sheet, uint32_t pivotInde
   }
   JsNarrowNumericReader reader(label);
   if (!reader.is_array(indices, "indices")) {
-    record_type_error("pivot field order must be an array");
+    record_type_error((std::string(label) + " fields must be an array").c_str());
     return;
   }
   const uint32_t length = reader.length(indices, "indices");

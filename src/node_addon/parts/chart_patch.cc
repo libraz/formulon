@@ -35,13 +35,16 @@ Field Probe(CheckedSpecReader& reader, const Napi::Object& owner, const char* ke
 
 /// Reads the patch object argument `info[idx]`; absent reads as `{}`. False after
 /// throwing when a value other than a plain object was supplied.
-bool PatchObjectArg(const Napi::CallbackInfo& info, size_t idx, const char* api, Napi::Object* out) {
+bool PatchObjectArg(const Napi::CallbackInfo& info, size_t idx, Napi::Object* out) {
   if (info[idx].IsUndefined()) {
     *out = Napi::Object::New(info.Env());
     return true;
   }
   if (info[idx].IsArray() || !ObjectArg(info, idx, out)) {
-    Napi::TypeError::New(info.Env(), std::string(api) + " expects an object argument").ThrowAsJavaScriptException();
+    const std::string call = CurrentCallLabel();
+    Napi::TypeError::New(info.Env(), formulon::binding::argument_message(
+                                         call, std::string(formulon::binding::record_param(call)), "must be an object"))
+        .ThrowAsJavaScriptException();
     return false;
   }
   return true;
@@ -175,7 +178,7 @@ void ReadSource(CheckedSpecReader& r, const Napi::Object& owner, const char* key
   }
   Napi::Object spec;
   if (!r.Object(f.value, key, &spec)) {
-    r.FailType(key, "string, null or an object");
+    r.FailType(key, "a string, null or an object");
     return;
   }
   out.kind = r.I32(spec, "kind", FM_CHART_SOURCE_KIND_NONE);
@@ -385,7 +388,7 @@ bool ReadIndexList(CheckedSpecReader& r, const Napi::CallbackInfo& info, size_t 
     if (r.ArrayElement(list, i, &v)) {
       out->push_back(r.U32(v, key, 0U));
     } else if (r.ok()) {
-      Napi::TypeError::New(info.Env(), std::string(key) + " must contain numbers").ThrowAsJavaScriptException();
+      ThrowArgumentTypeError(info.Env(), formulon::binding::element_path(key, i), "must be a number");
       return false;
     }
   }
@@ -449,7 +452,7 @@ Napi::Value Workbook::SetChartType(const Napi::CallbackInfo& info) {
   int32_t grouping = FM_CHART_GROUPING_CLUSTERED;
   if (info.Length() > 4 && !info[4].IsUndefined() && !info[4].IsNull()) {
     Napi::Object options;
-    if (!PatchObjectArg(info, 4, "setChartType", &options)) {
+    if (!PatchObjectArg(info, 4, &options)) {
       return env.Undefined();
     }
     CheckedSpecReader reader(env);
@@ -474,7 +477,7 @@ Napi::Value Workbook::SetChartTitle(const Napi::CallbackInfo& info) {
   // reader does.
   const Napi::Value arg = info[2];
   if (!arg.IsNull() && !arg.IsString() && !arg.IsObject()) {
-    Napi::TypeError::New(env, "title must be a string, null or an object").ThrowAsJavaScriptException();
+    ThrowArgumentTypeError(env, "title", "must be a string, null or an object");
     return env.Undefined();
   }
   CheckedSpecReader reader(env);
@@ -502,7 +505,7 @@ Napi::Value Workbook::SetChartLegend(const Napi::CallbackInfo& info) {
                         env.Undefined());
   }
   Napi::Object spec;
-  if (!PatchObjectArg(info, 2, "setChartLegend", &spec)) {
+  if (!PatchObjectArg(info, 2, &spec)) {
     return env.Undefined();
   }
   CheckedSpecReader reader(env);
@@ -526,7 +529,7 @@ Napi::Value Workbook::UpdateChartLegend(const Napi::CallbackInfo& info) {
     return ThrowInvalidHandle(env);
   }
   Napi::Object spec;
-  if (!PatchObjectArg(info, 2, "updateChartLegend", &spec)) {
+  if (!PatchObjectArg(info, 2, &spec)) {
     return env.Undefined();
   }
   CheckedSpecReader reader(env);
@@ -556,7 +559,7 @@ Napi::Value Workbook::SetChartAxis(const Napi::CallbackInfo& info) {
     return ThrowInvalidHandle(env);
   }
   Napi::Object spec;
-  if (!PatchObjectArg(info, 3, "setChartAxis", &spec)) {
+  if (!PatchObjectArg(info, 3, &spec)) {
     return env.Undefined();
   }
   CheckedSpecReader reader(env);
@@ -596,7 +599,7 @@ Napi::Value Workbook::SetChartDisplay(const Napi::CallbackInfo& info) {
     return ThrowInvalidHandle(env);
   }
   Napi::Object spec;
-  if (!PatchObjectArg(info, 2, "setChartDisplay", &spec)) {
+  if (!PatchObjectArg(info, 2, &spec)) {
     return env.Undefined();
   }
   CheckedSpecReader reader(env);
@@ -618,7 +621,7 @@ Napi::Value Workbook::SetChartSeries(const Napi::CallbackInfo& info) {
     return ThrowInvalidHandle(env);
   }
   Napi::Object spec;
-  if (!PatchObjectArg(info, 4, "setChartSeries", &spec)) {
+  if (!PatchObjectArg(info, 4, &spec)) {
     return env.Undefined();
   }
   CheckedSpecReader reader(env);
@@ -640,7 +643,7 @@ Napi::Value Workbook::UpdateChartPoint(const Napi::CallbackInfo& info) {
     return ThrowInvalidHandle(env);
   }
   Napi::Object spec;
-  if (!PatchObjectArg(info, 5, "updateChartPoint", &spec)) {
+  if (!PatchObjectArg(info, 5, &spec)) {
     return env.Undefined();
   }
   CheckedSpecReader reader(env);
@@ -665,7 +668,7 @@ Napi::Value Workbook::SetChartPoint(const Napi::CallbackInfo& info) {
   fm_chart_point_patch_t patch = FM_STRUCT_INIT(fm_chart_point_patch_t);
   if (!info[5].IsNull()) {
     Napi::Object spec;
-    if (!PatchObjectArg(info, 5, "setChartPoint", &spec)) {
+    if (!PatchObjectArg(info, 5, &spec)) {
       return env.Undefined();
     }
     CheckedSpecReader reader(env);
@@ -687,7 +690,7 @@ Napi::Value Workbook::SetChartPlot(const Napi::CallbackInfo& info) {
     return ThrowInvalidHandle(env);
   }
   Napi::Object spec;
-  if (!PatchObjectArg(info, 3, "setChartPlot", &spec)) {
+  if (!PatchObjectArg(info, 3, &spec)) {
     return env.Undefined();
   }
   CheckedSpecReader reader(env);
@@ -730,7 +733,7 @@ Napi::Value Workbook::AddChartSeries(const Napi::CallbackInfo& info) {
     return ThrowInvalidHandle(env);
   }
   Napi::Object spec;
-  if (!PatchObjectArg(info, 3, "addChartSeries", &spec)) {
+  if (!PatchObjectArg(info, 3, &spec)) {
     return env.Undefined();
   }
   CheckedSpecReader reader(env);

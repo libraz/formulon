@@ -2012,7 +2012,7 @@ class FacadeAddressTablesTest(unittest.TestCase):
     def test_only_node_scope_writes_the_inc_alone(self) -> None:
         self.assertEqual([path for path, _ in self.gen.outputs("node-scope")], [self.gen.NODE_SCOPE_INC])
 
-    def test_patch_keys_are_the_patch_type_and_the_getter_record(self) -> None:
+    def test_patch_keys_are_the_patch_type_and_its_read_only_keys(self) -> None:
         dts = (
             "export type Patch<T> = { [K in keyof T]?: T[K] | null };\n"
             "export interface Margins { left: number; right: number; readonly leftStated: boolean; }\n"
@@ -2031,17 +2031,23 @@ class FacadeAddressTablesTest(unittest.TestCase):
                                     "patch": True, "patch_record": "Margins"},
                     "wide.set": {"kind": "op", "scope": "sheet", "js": "setWide", "surfaces": ["wasm"],
                                  "patch": True, "patch_record": "none", "patch_reason": "x"},
+                    "record.margins_patch": {"kind": "record", "role": "patch", "js": "MarginsPatch",
+                                             "surfaces": ["wasm"], "read_only_keys": ["left_stated"]},
                 },
             }
         )  # fmt: skip
         keys = self.gen.facade_scope.patch_keys(ledger, dts)
         self.assertEqual(keys["Sheet.setMargins"], [1, ["left", "leftStated", "right"]])
+        del ledger.entries["record.margins_patch"]["read_only_keys"]
+        # Without `read_only_keys` the patch takes its own keys only, not every field of the getter's record.
+        self.assertEqual(self.gen.facade_scope.patch_keys(ledger, dts)["Sheet.setMargins"], [1, ["left", "right"]])
+        ledger.entries["record.margins_patch"]["read_only_keys"] = ["left_stated"]
         table = self.gen.patch_table(ledger, dts)
         self.assertIn("  'Sheet.setMargins': [1, ['left', 'leftStated', 'right']],\n", table)
         self.assertIn("  'Sheet.setWide': [\n    0,\n    [\n      'k00',\n", table)
         self.assertTrue(all(len(line) <= 120 for line in table.splitlines()))
 
-    def test_patch_nested_keys_are_each_level_and_its_record(self) -> None:
+    def test_patch_nested_keys_are_each_level_and_its_read_only_keys(self) -> None:
         dts = (
             "export interface Font { readonly bold: boolean; readonly family: number | null; }\n"
             "export interface BorderSide { readonly style: number; readonly color: Color | null; }\n"
@@ -2062,6 +2068,8 @@ class FacadeAddressTablesTest(unittest.TestCase):
                     "binding.set_cell_format": {"kind": "op", "scope": "sheet", "js": "setCellFormat",
                                                 "surfaces": ["wasm"], "patch": True, "patch_record": "CellFormat",
                                                 "patch_nested": nested},
+                    "record.font_patch": {"kind": "record", "role": "patch", "js": "FontPatch",
+                                          "surfaces": ["wasm"], "read_only_keys": ["family"]},
                 },
             }
         )  # fmt: skip
@@ -2224,6 +2232,95 @@ class LedgerAddressArgsTest(unittest.TestCase):
         self.assertTrue(problems(patch_nested=nested))
         self.assertTrue(problems(patch=True, patch_record="CellFormat", patch_nested={"border.left": "BorderSide"}))
         self.assertTrue(problems(patch=True, patch_record="CellFormat", patch_nested={"font": 1}))
+        self.assertEqual(problems(span_args=[[0, "col", "single"]]), [])
+
+    def test_a_lone_axis_argument_with_an_a1_sibling_is_a_single_span(self) -> None:
+        validate = LedgerRenameChainTest._validate_names()
+        dts = self.DTS.replace(
+            "}\n",
+            "  getColumnWidthPt(col: number, mode?: number): number;\n"
+            "  getColumnWidthPt(a1: string, mode?: number): number;\n"
+            "  getRowHeightPt(row: number): number;\n"
+            "  isRowHidden(row: number): boolean;\n"
+            "}\n",
+            1,
+        )
+        entries = self.entries()
+        entries["column_width_pt.get"] = {"kind": "op", "js": "getColumnWidthPt"}
+        entries["row_height_pt.get"] = {"kind": "op", "js": "getRowHeightPt", "span_args": [[0, "row", "single"]]}
+        entries["row_hidden.is"] = {"kind": "op", "js": "isRowHidden"}
+        problems = validate.check_address_args(entries, dts)
+        self.assertEqual(len(problems), 2, problems)
+        self.assertTrue(any("column_width_pt.get" in p and "'col', 'single'" in p for p in problems), problems)
+        self.assertTrue(any("row_height_pt.get" in p and "declares none" in p for p in problems), problems)
+        entries["column_width_pt.get"]["span_args"] = [[0, "col", "single"]]
+        del entries["row_height_pt.get"]["span_args"]
+        self.assertEqual(validate.check_address_args(entries, dts), [])
+
+
+class LedgerReadOnlyKeysTest(unittest.TestCase):
+    DTS = (
+        "export interface CellAddress { row: number; col: number; }\n"
+        "export interface DataTableInputCell { readonly row: number; readonly col: number; "
+        "readonly deleted: boolean; }\n"
+        "export interface DataTable { readonly range: string; readonly rowInput: DataTableInputCell | null; "
+        "readonly twoDimensional: boolean; }\n"
+        "export interface DataTableInput { range: string; rowInput?: CellAddress | string | null; }\n"
+        "export interface PageBreakInput { first?: number; last?: number; }\n"
+        "export interface Box { readonly id: number; title: string; }\n"
+        "export interface BoxPatch { title?: string; }\n"
+        "export interface Sheet {\n"
+        "  addDataTable(spec: DataTableInput): void;\n"
+        "  setRowBreak(row: number, input: PageBreakInput | null): void;\n"
+        "  updateBox(index: number, patch: BoxPatch): void;\n"
+        "}\n"
+    )
+
+    @staticmethod
+    def entries(**read_only: list) -> dict:
+        base = {
+            "record.data_table_spec": {"kind": "record", "role": "input", "js": "DataTableInput"},
+            "record.page_break_input": {"kind": "record", "role": "input", "js": "PageBreakInput"},
+            "record.box_patch": {"kind": "record", "role": "patch", "js": "BoxPatch"},
+            "box.update": {"kind": "op", "scope": "sheet", "js": "updateBox", "patch": True, "patch_record": "Box"},
+        }
+        for key, keys in read_only.items():
+            base[f"record.{key}"]["read_only_keys"] = keys
+        return base
+
+    def test_read_only_keys_of_the_read_twin_pass(self) -> None:
+        validate = LedgerRenameChainTest._validate_names()
+        entries = self.entries(
+            data_table_spec=["two_dimensional", "row_input.deleted"], page_break_input=["row"], box_patch=["id"]
+        )
+        self.assertEqual(validate.check_read_only_keys(entries, self.DTS), [])
+
+    def test_a_declared_field_or_one_no_twin_reads_is_reported(self) -> None:
+        validate = LedgerRenameChainTest._validate_names()
+        entries = self.entries(data_table_spec=["range", "row_input.row", "missing"], box_patch=["title"])
+        problems = validate.check_read_only_keys(entries, self.DTS)
+        self.assertEqual(len(problems), 4, problems)
+        self.assertTrue(any("range is a field of DataTableInput" in p for p in problems), problems)
+        self.assertTrue(any("row_input.row is a field of DataTableInput" in p for p in problems), problems)
+        self.assertTrue(any("missing is a field of no read twin (DataTable)" in p for p in problems), problems)
+        self.assertTrue(any("title is a field of BoxPatch" in p for p in problems), problems)
+
+    def test_schema_shapes(self) -> None:
+        validate = LedgerRenameChainTest._validate_names()
+
+        def problems(entry: dict) -> list:
+            entry = {"surfaces": ["wasm"], "exception": "x", **entry}
+            return validate.check_schema({"schema": 1, "collections": {}, "entries": {"record.x": entry}})
+
+        record = {"kind": "record", "role": "input", "js": "XInput"}
+        self.assertEqual(problems({**record, "read_only_keys": ["row", "row_input.deleted", "date1904"]}), [])
+        self.assertEqual(problems({**record, "role": "patch", "read_only_keys": ["id"]}), [])
+        self.assertTrue(problems({**record, "role": "result", "read_only_keys": ["id"]}))
+        self.assertTrue(problems({"kind": "op", "scope": "sheet", "js": "x", "read_only_keys": ["id"]}))
+        self.assertTrue(problems({**record, "read_only_keys": []}))
+        self.assertTrue(problems({**record, "read_only_keys": ["id", "id"]}))
+        self.assertTrue(problems({**record, "read_only_keys": ["objectId"]}))
+        self.assertTrue(problems({**record, "read_only_keys": ["row_input."]}))
 
 
 if __name__ == "__main__":

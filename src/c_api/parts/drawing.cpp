@@ -41,8 +41,10 @@ using formulon::c_api::parts::finish_status;
 using formulon::c_api::parts::fresh_read_scratch;
 using formulon::c_api::parts::invalid_argument;
 using formulon::c_api::parts::null_argument;
+using formulon::c_api::parts::null_field;
 using formulon::c_api::parts::patch_op_ok;
 using formulon::c_api::parts::patch_op_ok_without_clear;
+using formulon::c_api::parts::patch_op_refusal;
 using formulon::c_api::parts::plan_add_anchor;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::set_last_error;
@@ -110,13 +112,13 @@ fm_status_t anchor_patch_from_c(const fm_drawing_anchor_patch_t& p, formulon::Dr
                          {p.height_emu_op, "height_emu"}};
   for (const OpField& f : ops) {
     if (!patch_op_ok_without_clear(f.op)) {
-      return invalid_argument(patch_op_ok(f.op) ? "field cannot be cleared" : "op must be KEEP, CLEAR or SET",
-                              std::string("field=anchor.") + f.name);
+      return patch_op_refusal(f.op, std::string("anchor.") + f.name);
     }
   }
   if (is_set(p.kind_op)) {
     if (p.kind != FM_ANCHOR_KIND_ONE_CELL && p.kind != FM_ANCHOR_KIND_TWO_CELL) {
-      return invalid_argument("an anchor kind is converted to one-cell or two-cell", "field=anchor.kind");
+      return invalid_argument("anchor.kind is not a one-cell or two-cell kind",
+                              "anchor.kind=" + std::to_string(p.kind));
     }
     out->kind = formulon::c_api::parts::anchor_kind_from_c(p.kind, formulon::AnchorKind::kOneCell);
   }
@@ -163,17 +165,17 @@ fm_status_t plan_add_anchor(const Workbook& wb, std::size_t sheet, const fm_draw
   AnchorPlan plan;
   plan.kind = anchor_kind_from_c(a.kind, default_kind);
   if (plan.kind == AnchorKind::kAbsolute) {
-    return invalid_argument("a new object is anchored one-cell or two-cell", "field=anchor.kind");
+    return invalid_argument("anchor.kind must be one-cell or two-cell", "anchor.kind=" + std::to_string(a.kind));
   }
   plan.edit_as = edit_as_from_c(a.edit_as);
   plan.from = AnchorPoint{a.from_row, a.from_col, a.from_row_offset_emu, a.from_col_offset_emu};
   plan.to = AnchorPoint{a.to_row, a.to_col, a.to_row_offset_emu, a.to_col_offset_emu};
   if (!in_emu_range(plan.from.row_off) || !in_emu_range(plan.from.col_off) || !in_emu_range(plan.to.row_off) ||
       !in_emu_range(plan.to.col_off) || !in_emu_range(a.width_emu) || !in_emu_range(a.height_emu)) {
-    return invalid_argument("an anchor offset or size is outside [0, 2^31) EMU", "field=anchor");
+    return invalid_argument("anchor offset or size is out of range (maximum 2147483647)", "field=anchor");
   }
   if (cell_outside_sheet(plan.from) || cell_outside_sheet(plan.to)) {
-    return invalid_argument("the anchor lies outside the sheet", "field=anchor");
+    return invalid_argument("anchor is outside the grid", "field=anchor");
   }
   const Geometry geo(wb, wb.sheet(sheet));
   plan.cx = a.width_emu;
@@ -183,20 +185,20 @@ fm_status_t plan_add_anchor(const Workbook& wb, std::size_t sheet, const fm_draw
       plan.cx = geo.span(false, plan.from, plan.to);
       plan.cy = geo.span(true, plan.from, plan.to);
       if (plan.to.row < plan.from.row || plan.to.col < plan.from.col || plan.cx < 0 || plan.cy < 0) {
-        return invalid_argument("the anchor's to marker lies before its from marker", "field=anchor.to_row");
+        return invalid_argument("anchor.to_row must not lie before anchor.from_row", "field=anchor.to_row");
       }
     } else {
       plan.to = plan.from;
       if (!geo.advance(true, plan.to.row, plan.to.row_off, plan.cy) ||
           !geo.advance(false, plan.to.col, plan.to.col_off, plan.cx)) {
-        return invalid_argument("the object extends past the sheet", "field=anchor");
+        return invalid_argument("anchor extends past the grid", "field=anchor");
       }
     }
   } else {
     plan.to = AnchorPoint{};
   }
   if (size_required && plan.cx <= 0 && plan.cy <= 0) {
-    return invalid_argument("the object needs a size", "field=anchor");
+    return invalid_argument("anchor needs a width or a height", "field=anchor");
   }
   *out = plan;
   return 0;
@@ -246,17 +248,18 @@ fm_status_t drawing_patch_from_c(const fm_drawing_patch_t& patch, formulon::Draw
   const fm_patch_op_t plain_ops[] = {patch.name_op, patch.hidden_op};
   for (const fm_patch_op_t op : plain_ops) {
     if (!patch_op_ok_without_clear(op)) {
-      return invalid_argument(patch_op_ok(op) ? "field cannot be cleared" : "op must be KEEP, CLEAR or SET");
+      return patch_op_refusal(op, op == patch.name_op ? "name" : "hidden");
     }
   }
   if (!patch_op_ok(patch.description_op)) {
-    return invalid_argument("op must be KEEP, CLEAR or SET", "field=description");
+    return invalid_argument("description_op is not a patch op",
+                            "description_op=" + std::to_string(patch.description_op));
   }
   if (is_set(patch.name_op) && (patch.name == nullptr || patch.name[0] == '\0')) {
-    return invalid_argument("a SET name is not empty", "field=name");
+    return invalid_argument("name must not be empty", "name=");
   }
   if (is_set(patch.description_op) && patch.description == nullptr) {
-    return invalid_argument("a SET string cannot be NULL", "field=description");
+    return null_field("description");
   }
   if (auto rc = check_utf8(
           {is_set(patch.name_op) ? patch.name : nullptr, is_set(patch.description_op) ? patch.description : nullptr});
@@ -310,7 +313,7 @@ extern "C" fm_status_t fm_sheet_get_drawing_object_count(const fm_workbook_t* wb
                                                          size_t* out_count) {
   clear_last_error();
   if (out_count == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "out_count is NULL");
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "out_count must not be NULL");
   }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
@@ -327,7 +330,7 @@ extern "C" fm_status_t fm_sheet_get_drawing_object_at(const fm_workbook_t* wb, s
                                                       fm_drawing_object_info_t* out) {
   clear_last_error();
   if (out == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "out is NULL");
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "out must not be NULL");
   }
   if (auto rc = check_record_size(*out); rc != 0) {
     return rc;
@@ -362,7 +365,7 @@ extern "C" fm_status_t fm_sheet_get_drawing_object(const fm_workbook_t* wb, size
                                                    int32_t* out_present, fm_drawing_object_info_t* out) {
   clear_last_error();
   if (out_present == nullptr || out == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "out is NULL");
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "out_present and out must not be NULL");
   }
   if (auto rc = check_record_size(*out); rc != 0) {
     return rc;
@@ -393,7 +396,8 @@ extern "C" fm_status_t fm_sheet_get_picture(const fm_workbook_t* wb, size_t shee
                                             fm_image_info_t* out_info) {
   clear_last_error();
   if (out_present == nullptr || out_bytes == nullptr || out_len == nullptr || out_info == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "output pointer is NULL");
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             "out_present, out_bytes, out_len and out_info must not be NULL");
   }
   if (auto rc = check_record_size(*out_info); rc != 0) {
     return rc;

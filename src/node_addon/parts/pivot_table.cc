@@ -113,7 +113,10 @@ Napi::Value Workbook::PivotSetAnchor(const Napi::CallbackInfo& info) {
   }
   // The anchor is one cell, `{ row, col }`.
   CheckedSpecReader reader(env);
-  const Napi::Object anchor = ArgObject(info, 2);
+  Napi::Object anchor;
+  if (!reader.Object(info[2], "cell", &anchor)) {
+    return env.Undefined();
+  }
   const uint32_t row = reader.RequiredU32(anchor, "row");
   const uint32_t col = reader.RequiredU32(anchor, "col");
   if (!reader.ok()) {
@@ -132,6 +135,9 @@ Napi::Value Workbook::PivotUpdateGrandTotals(const Napi::CallbackInfo& info) {
     patch.rows = ArgFlag(info, 2);
     patch.columns_op = FM_PATCH_OP_SET;
     patch.columns = ArgFlag(info, 3);
+    if (info.Env().IsExceptionPending()) {
+      return FM_STATUS_INVALID_ARGUMENT;
+    }
     return fm_sheet_update_pivot_grand_totals(handle, sheet, pivot_index, &patch);
   });
 }
@@ -396,6 +402,9 @@ Napi::Value Workbook::PivotFieldAddItem(const Napi::CallbackInfo& info) {
   }
   const PivotFieldArgs field = ReadPivotField(info);
   const int32_t visible = ArgFlag(info, 4);
+  if (env.IsExceptionPending()) {
+    return env.Undefined();
+  }
   std::size_t item_index = 0;
   fm_status_t rc = 0;
   if (info[3].IsString()) {
@@ -407,7 +416,7 @@ Napi::Value Workbook::PivotFieldAddItem(const Napi::CallbackInfo& info) {
     Napi::Object item;
     if (!reader.Object(info[3], "item", &item)) {
       if (reader.ok()) {
-        Napi::TypeError::New(env, "addPivotFieldItem expects a name or { cacheIndex }").ThrowAsJavaScriptException();
+        ThrowArgumentTypeError(env, "item", "must be a string or an object");
       }
       return env.Undefined();
     }
@@ -696,7 +705,7 @@ Napi::Value Workbook::InvokePivotFieldOrder(const Napi::CallbackInfo& info, Pivo
   const std::size_t pivot_index = static_cast<std::size_t>(ArgU32(info, 1));
   Napi::Array array;
   if (!ArrayArg(info, 2, &array)) {
-    Napi::TypeError::New(env, "pivot field order must be an array").ThrowAsJavaScriptException();
+    ThrowArgumentTypeError(env, "order", "must be an array");
     return env.Undefined();
   }
   CheckedSpecReader reader(env);
@@ -857,7 +866,7 @@ FilterOperand ReadFilterOperand(CheckedSpecReader& reader, const Napi::Object& o
     reader.String(owner, key, &out.text);
     out.kind = FM_PIVOT_FILTER_OPERAND_KIND_TEXT;
   } else {
-    reader.FailType(key, "a Number or a String");
+    reader.FailType(key, "a number or a string");
   }
   return out;
 }

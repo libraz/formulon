@@ -28,9 +28,11 @@ from typing import Iterable
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
-# The sheet-scope method list and the handle-method table gen_facade_tables.py writes from the ledger;
-# reading the generated copy keeps the WASM build free of a YAML parser.
+# The sheet-scope method list and the handle-method table gen_facade_tables.py writes from the ledger, and the
+# d.ts parameter names it writes for the positional refusals; reading the generated copies keeps the WASM build
+# free of a YAML parser.
 FACADE_SCOPE_INC = REPO_ROOT / "src/node_addon/generated/facade_scope.inc"
+PARAM_NAMES_INC = REPO_ROOT / "src/c_api/generated/binding_param_names.inc"
 DEFAULT_NODE_SOURCE = REPO_ROOT / "src/node_addon/parts/workbook_class.cc"
 DEFAULT_WASM_SOURCE = REPO_ROOT / "src/wasm/parts/bindings_register.cpp"
 EXPECTED_NODE_REGISTRATIONS = 412
@@ -63,7 +65,6 @@ NODE_ONLY_METHODS: frozenset[str] = frozenset()
 # other registered free function is still wrapped, with an empty spec.
 FREE_FUNCTION_GUARDS = {
     "evaluateFormula": {"string": 0x1},
-    "getStatusName": {"i32": 0x1},
     "setLogMinLevel": {"i32": 0x1},
     "canonicalizeFormula": {"string": 0x3},
     "canonicalizeFunctionName": {"string": 0x3},
@@ -257,12 +258,13 @@ def _check_surface(specs: dict[str, dict[str, int]], wasm_methods: set[str]) -> 
 
 _INC_ARRAY = r"\b%s\[\]\s*=\s*\{(.*?)\n\};"
 _HANDLE_ROW = re.compile(r'^\s*\{"([A-Za-z0-9_]+)",\s*"([A-Za-z0-9_.]+)",\s*(\d+)\},$', re.MULTILINE)
+_PARAM_NAMES_ROW = re.compile(r'^\s*\{"([A-Za-z0-9_.]+)",\s*"([A-Za-z0-9_ ]*)"\},$', re.MULTILINE)
 
 
-def _inc_block(name: str, text: str) -> str:
+def _inc_block(name: str, text: str, path: Path = FACADE_SCOPE_INC) -> str:
     found = re.search(_INC_ARRAY % name, text, re.S)
     if found is None:
-        raise GuardGenerationError(f"{FACADE_SCOPE_INC}: no `{name}` table")
+        raise GuardGenerationError(f"{path}: no `{name}` table")
     return found.group(1)
 
 
@@ -281,6 +283,46 @@ def _handle_methods(wasm_methods: set[str], text: str | None = None) -> dict[str
     return {raw: [label, int(supplied)] for raw, label, supplied in sorted(rows) if raw in wasm_methods}
 
 
+def _param_names(text: str | None = None) -> dict[str, list[str]]:
+    """`{call: [name, ...]}`: the d.ts positional parameter names of each call (`kParamNames`)."""
+    text = PARAM_NAMES_INC.read_text(encoding="utf-8") if text is None else text
+    rows = _PARAM_NAMES_ROW.findall(_inc_block("kParamNames", text, PARAM_NAMES_INC))
+    return {call: names.split() for call, names in rows}
+
+
+def _call(label: str, supplied: int, names: dict[str, list[str]]) -> list[object]:
+    """`[label, [name per raw argument]]` of one registered function, as the Node addon's `PublicArgumentName`
+    resolves it: the arguments the facade supplies have no name. The table already leaves out a call whose raw
+    layout is not its d.ts signature."""
+    return [label, [""] * supplied + names.get(label, [])]
+
+
+def _calls(
+    specs: dict[str, dict[str, int]],
+    sheet: list[str],
+    handle: dict[str, list[object]],
+    static: set[str],
+    free: set[str],
+    names: dict[str, list[str]],
+) -> dict[str, dict[str, list[object]]]:
+    """The call label and argument names of every wrapped function, per `workbook` / `static` / `free` table."""
+    sheet_set = set(sheet)
+    workbook = {}
+    for name in sorted(specs):
+        if name in handle:
+            label, supplied = handle[name]
+        elif name in sheet_set:
+            label, supplied = f"Sheet.{name}", 1
+        else:
+            label, supplied = f"Workbook.{name}", 0
+        workbook[name] = _call(str(label), int(supplied), names)
+    return {
+        "workbook": workbook,
+        "static": {name: _call(f"Workbook.{name}", 0, names) for name in sorted(static)},
+        "free": {name: _call(f"Formulon.{name}", 0, names) for name in sorted(free)},
+    }
+
+
 def _build_metadata(
     node: list[Registration],
     specs: dict[str, dict[str, int]],
@@ -288,12 +330,12 @@ def _build_metadata(
     free: set[str],
     static: set[str],
     handle: dict[str, list[object]] | None = None,
+    names: dict[str, list[str]] | None = None,
 ) -> dict[str, object]:
     return {
         "nodeRegistrationCount": len(node),
         "workbook": dict(sorted(specs.items())),
-        "sheet": sheet,
-        "handle": dict(sorted((handle or {}).items())),
+        "calls": _calls(specs, sheet, handle or {}, static, free, names or {}),
         "static": {name: dict(STATIC_FUNCTION_GUARDS[name]) for name in sorted(static)},
         "free": {name: dict(FREE_FUNCTION_GUARDS.get(name, {})) for name in sorted(free)},
         "wasmExcluded": sorted(NODE_ONLY_METHODS),
@@ -339,61 +381,47 @@ def _render(metadata: dict[str, object]) -> str:
     return new TypeError(pending.message);
   }}
 
-  // The raw methods the `Sheet` facade calls with the sheet index first. Their
-  // errors name the facade method and count arguments as it sees them; the
-  // sheet index itself only reaches a guard through a direct raw call.
-  const sheetMethods = new Set(metadata.sheet);
-  // The raw methods a handle class calls: `[label, supplied]`, the `Class.method` its errors name and the
-  // count of leading arguments the handle supplies. A handle method takes precedence over a sheet method.
-  const handleMethods = new Map(Object.entries(metadata.handle));
+  // `call` is `[label, names]`: the `Class.method` a refusal names and the d.ts name of each raw argument, '' for
+  // one without (an argument the facade supplies). The message is binding_message.h's `argument_message`.
+  function argumentMessage(call, index, constraint) {{
+    const name = call[1][index] ?? '';
+    return call[0] + (name === '' ? '' : ' ' + name) + ' ' + constraint;
+  }}
 
-  // `owner` is 'Workbook' for the class and its statics, null for a free function.
-  function argumentLabel(owner, name, index) {{
-    if (owner === null) return name + ' argument ' + (index + 1);
-    const handle = owner === 'Workbook' ? handleMethods.get(name) : undefined;
-    if (handle !== undefined) {{
-      const [label, supplied] = handle;
-      return index < supplied
-        ? label + ' supplied argument ' + (index + 1)
-        : label + ' argument ' + (index - supplied + 1);
+  function argumentType(call, index, expected) {{
+    throw new TypeError(argumentMessage(call, index, 'must be ' + expected));
+  }}
+
+  function argumentRequired(call, index) {{
+    throw new TypeError(argumentMessage(call, index, 'is required'));
+  }}
+
+  // A non-integral number is a RangeError, a negative one for an unsigned
+  // kind an InvalidArgument FormulonError, any other out-of-range one a
+  // RangeError, as the Node addon's `ThrowIntegerRefusal` words them.
+  function argumentInteger(call, index, value, kind) {{
+    if (!Number.isInteger(value)) throw new RangeError(argumentMessage(call, index, 'must be an integer'));
+    if (value < 0 && kind !== 'int32') {{
+      // Code 2 is InvalidArgument.
+      throw pendingError({{ kind: 3, code: 2, context: '',
+        message: argumentMessage(call, index, 'must not be negative') }});
     }}
-    if (owner === 'Workbook' && sheetMethods.has(name)) {{
-      return index === 0 ? 'Sheet.' + name + ' sheet index' : 'Sheet.' + name + ' argument ' + index;
-    }}
-    return owner + '.' + name + ' argument ' + (index + 1);
+    throw new RangeError(argumentMessage(call, index, 'is too large'));
   }}
 
-  function argumentType(label, expected) {{
-    throw new TypeError(label + ' must be a primitive ' + expected);
-  }}
-
-  function argumentRequired(label) {{
-    throw new TypeError(label + ' is required');
-  }}
-
-  function argumentRange(label, expected) {{
-    throw new RangeError(label + ' is outside ' + expected + ' range');
-  }}
-
-  function validateNumber(value, label, kind) {{
+  function validateNumber(value, call, index, kind) {{
     if (typeof value !== 'number') {{
-      argumentType(label, 'number');
+      argumentType(call, index, 'a number');
     }}
-    if (!Number.isInteger(value)) {{
-      argumentRange(label, kind);
-    }}
-    if (kind === 'uint32' && (value < 0 || value > UINT32_MAX)) {{
-      argumentRange(label, kind);
-    }}
-    if (kind === 'int32' && (value < INT32_MIN || value > INT32_MAX)) {{
-      argumentRange(label, kind);
-    }}
-    if (kind === 'uint64' && (value < 0 || value > UINT64_MAX_EXACT)) {{
-      argumentRange(label, kind);
+    if (!Number.isInteger(value) ||
+        (kind === 'uint32' && (value < 0 || value > UINT32_MAX)) ||
+        (kind === 'int32' && (value < INT32_MIN || value > INT32_MAX)) ||
+        (kind === 'uint64' && (value < 0 || value > UINT64_MAX_EXACT))) {{
+      argumentInteger(call, index, value, kind);
     }}
   }}
 
-  function validateArguments(owner, name, args, spec) {{
+  function validateArguments(call, args, spec) {{
     const masks = [
       ['u32', spec.u32 ?? 0, 'uint32'],
       ['i32', spec.i32 ?? 0, 'int32'],
@@ -414,24 +442,23 @@ def _render(metadata: dict[str, object]) -> str:
     for (let index = 0; index < checked; index += 1) {{
       const bit = 2 ** index;
       const value = args[index];
-      const label = () => argumentLabel(owner, name, index);
       if ((objectMask & bit) !== 0 &&
           (value === null || (typeof value !== 'object' && typeof value !== 'function'))) {{
-        argumentType(label(), 'object');
+        argumentType(call, index, 'an object');
       }}
-      if ((requiredMask & bit) !== 0 && value === undefined) argumentRequired(label());
+      if ((requiredMask & bit) !== 0 && value === undefined) argumentRequired(call, index);
       for (const [kind, mask, numericKind] of masks) {{
         if ((mask & bit) === 0) continue;
         if (kind === 'double') {{
-          if (typeof value !== 'number') argumentType(label(), 'number');
+          if (typeof value !== 'number') argumentType(call, index, 'a number');
         }} else if (kind === 'string') {{
-          if (typeof value !== 'string') argumentType(label(), 'string');
+          if (typeof value !== 'string') argumentType(call, index, 'a string');
         }} else if (kind === 'optionalU32' || kind === 'optionalU64') {{
           if (value === undefined || (value === null && (optionalNull & bit) !== 0)) continue;
-          if (value === null) argumentType(label(), 'number');
-          validateNumber(value, label(), numericKind);
+          if (value === null) argumentType(call, index, 'a number');
+          validateNumber(value, call, index, numericKind);
         }} else {{
-          validateNumber(value, label(), numericKind);
+          validateNumber(value, call, index, numericKind);
         }}
       }}
     }}
@@ -468,9 +495,9 @@ def _render(metadata: dict[str, object]) -> str:
     return receiver;
   }}
 
-  function makeCallableWrapper(owner, name, original, spec, trackWorkbookCall) {{
+  function makeCallableWrapper(call, original, spec, trackWorkbookCall) {{
     const wrapped = function (...args) {{
-      validateArguments(owner, name, args, spec);
+      validateArguments(call, args, spec);
       const receiverKey = trackWorkbookCall ? receiverStateKey(this) : null;
       const busy = module[progressCallbackKey];
       if (busy !== undefined && busy.size > 0 && receiverKey !== null && busy.has(receiverKey.ptr)) {{
@@ -508,7 +535,7 @@ def _render(metadata: dict[str, object]) -> str:
     return wrapped;
   }}
 
-  function guardOverloadTable(owner, name, original, table, spec, trackWorkbookCall) {{
+  function guardOverloadTable(call, name, original, table, spec, trackWorkbookCall) {{
     if (!Array.isArray(table)) {{
       throw new TypeError('cannot guard non-array overload table ' + name);
     }}
@@ -525,26 +552,26 @@ def _render(metadata: dict[str, object]) -> str:
       // Leaf wrappers intentionally do not copy or inspect another
       // overloadTable. Current embind leaves are terminal functions; keeping
       // this non-recursive makes cycles fail closed at the dispatcher edge.
-      guarded[index] = makeCallableWrapper(owner, name, entry, spec, trackWorkbookCall);
+      guarded[index] = makeCallableWrapper(call, entry, spec, trackWorkbookCall);
     }}
     return guarded;
   }}
 
-  function wrap(owner, target, name, spec, trackWorkbookCall = false) {{
+  function wrap(call, target, name, spec, trackWorkbookCall = false) {{
     const descriptor = Object.getOwnPropertyDescriptor(target, name);
     if (!descriptor) return false;
     if (typeof descriptor.value !== 'function') {{
       throw new TypeError('cannot guard non-function binding ' + name);
     }}
     const original = descriptor.value;
-    const wrapped = makeCallableWrapper(owner, name, original, spec, trackWorkbookCall);
+    const wrapped = makeCallableWrapper(call, original, spec, trackWorkbookCall);
     const overloadDescriptor = Object.getOwnPropertyDescriptor(original, 'overloadTable');
     if (overloadDescriptor) {{
       if (!Object.prototype.hasOwnProperty.call(overloadDescriptor, 'value')) {{
         throw new TypeError('cannot guard accessor overload table ' + name);
       }}
       const guardedTable =
-        guardOverloadTable(owner, name, original, overloadDescriptor.value, spec, trackWorkbookCall);
+        guardOverloadTable(call, name, original, overloadDescriptor.value, spec, trackWorkbookCall);
       Object.defineProperty(wrapped, 'overloadTable', {{ ...overloadDescriptor, value: guardedTable }});
     }}
     Object.defineProperty(target, name, {{ ...descriptor, value: wrapped }});
@@ -569,16 +596,20 @@ def _render(metadata: dict[str, object]) -> str:
     if (!workbook || !workbook.prototype) return;
     const wrappedMethods = new Set();
     for (const [name, spec] of Object.entries(metadata.workbook)) {{
-      if (wrap('Workbook', workbook.prototype, name, spec, true)) wrappedMethods.add(name);
+      if (wrap(metadata.calls.workbook[name], workbook.prototype, name, spec, true)) wrappedMethods.add(name);
       else if (!metadata.wasmExcluded.includes(name)) throw new Error('missing positional binding ' + name);
     }}
     requireWrapped(workbook.prototype, wrappedMethods, 'Workbook method');
     for (const [name, spec] of Object.entries(metadata.static)) {{
-      if (!wrap('Workbook', workbook, name, spec)) throw new Error('missing Workbook static function ' + name);
+      if (!wrap(metadata.calls.static[name], workbook, name, spec)) {{
+        throw new Error('missing Workbook static function ' + name);
+      }}
     }}
     requireWrapped(workbook, new Set(Object.keys(metadata.static)), 'Workbook static function');
     for (const [name, spec] of Object.entries(metadata.free)) {{
-      if (!wrap(null, module, name, spec)) throw new Error('missing positional free function ' + name);
+      if (!wrap(metadata.calls.free[name], module, name, spec)) {{
+        throw new Error('missing positional free function ' + name);
+      }}
     }}
     const lifecycleKeys = ['dispose', 'delete', 'deleteLater'];
     if (typeof Symbol.dispose === 'symbol') lifecycleKeys.push(Symbol.dispose);
@@ -684,7 +715,7 @@ def generate(node_source: Path, wasm_source: Path, output: Path) -> None:
     _check_surface(specs, wasm)
     free = _parse_free_functions(wasm_source)
     static = _parse_static_functions(wasm_source)
-    metadata = _build_metadata(node, specs, _sheet_methods(wasm), free, static, _handle_methods(wasm))
+    metadata = _build_metadata(node, specs, _sheet_methods(wasm), free, static, _handle_methods(wasm), _param_names())
     rendered = _render(metadata)
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(rendered, encoding="utf-8")

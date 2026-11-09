@@ -211,7 +211,116 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   backslash, so a value pastes back as written. `paginate` prints print-area ranges in A1 notation. `eval` with no formula
   exits with status 64, and an engine failure exits with status 1. `dump` and
   `paginate` accept `--json`, and `profiles --json` lists the profile ids as
-  JSON; the usage text no longer lists the profile ids.
+  JSON; the usage text no longer lists the profile ids. `paginate` prints
+  `name`, `pageCount`, `printArea`, `rowBreaks`, `columnBreaks` and `pages`,
+  one per line in plain output and as the same keys in `--json`
+  (`{"format":1,"sheets":[{"name":...,"pageCount":N,"printArea":[...],
+  "rowBreaks":[...],"columnBreaks":[...],"pages":[{"range":...}]}]}`); the
+  former `sheet=`, `pages=<count>`, `print_area`, `horizontal_breaks` and
+  `vertical_breaks` keys are gone, and a `--sheet` run prints the sheet name
+  instead of an index. `dump --view metadata` names its sections and JSON keys
+  `definedNames`, `tables` and `passthroughParts` (they were `defined_names` and
+  `passthrough_parts`). `dump --json` prints cells as `{"format":1,"sheets":[
+  {"name":...,"cells":[{"ref","kind","value","formula"?}]}]}`, and `"format"` is
+  the schema version.
+- **JavaScript, Python, C ABI:** an argument error reads
+  `<Class>.<method> <param>[.<field>] <constraint>` in WebAssembly, native and
+  Python alike, for example `Sheet.updateView patch.zoomPct must be an integer`
+  and `Sheet.remove_validation validation 99 is out of range (0 items)`. The
+  class is the one the call was made on (`WorkbookOoxml`, `PivotCache`,
+  `Picture`, `Chart`, `Workbook.load` for a static, `Formulon.<fn>` for a
+  module function), a record field is named by its path (`patch.sparklines[2].location`),
+  and the constraint comes from a fixed vocabulary: `must be a boolean` /
+  `a number` / `a string` / `an object` / `an array`, `must be an integer`,
+  `is required`, `has no field <key>`, `must not be null`, `is too large`,
+  `must not be negative`, `must be in <lo>..<hi>`, `must not be empty`,
+  `<v> is out of range (<n> items)` and `takes at most <n> arguments`. The
+  Python `formulon: ` prefix, the `argument <n>` wording and C type names
+  (`uint32`, `[0, 4294967295]`) no longer appear. Error classes follow the
+  constraint: a wrong type is `TypeError`; a fractional, NaN or infinite number
+  is `RangeError` (Python `TypeError`); a negative value for an unsigned field
+  or a coordinate is `InvalidArgument` instead of `RangeError`; a value beyond
+  32 bits is `RangeError` (Python `ValueError`); an index past the end is
+  `IndexOutOfRange`.
+- **JavaScript, Python:** a boolean argument or field takes `true` or `false`
+  only. `setDate1904('yes')`, `setCalcOnSave(null)`, `parseReference(text,
+  { r1c1: 1 })`, `updateView({ showGridLines: 1 })` and the Python counterparts
+  (`set_date1904(1)`, `format_reference(range, absolute=1)`) throw `TypeError`;
+  they used to be read as truthy or falsy. `Workbook.setIterative` errors are
+  labelled `Workbook.updateIterative`, and `PivotCache` errors name
+  `PivotCache.<method>`. A static factory (`Workbook.createDefault`,
+  `Workbook.load`) and a module function refuse extra arguments with `takes at
+  most <n> arguments`.
+- **C ABI:** the message of an argument error leads with the C parameter or
+  field (`max_iterations must be in 1..32767`), without a function name. A NULL
+  top-level pointer returns `FM_STATUS_BINDING_NULL_POINTER`; a NULL pointer or
+  string inside a record where a value is required returns
+  `FM_STATUS_INVALID_ARGUMENT` (the AutoFilter arrays, threaded-comment text
+  and mentions, validation, sparkline items and collation fields returned
+  `FM_STATUS_BINDING_NULL_POINTER` before).
+  `fm_iterative_settings_patch_t.max_iterations` must be 1..32767 when set;
+  0 or a larger value is `FM_STATUS_INVALID_ARGUMENT` and is no longer stored
+  as 32767 (`updateIterative`, `update_iterative`). A `dxf_index` or
+  `style_xf_index` past the end of its table returns
+  `FM_STATUS_INDEX_OUT_OF_RANGE`. `fm_sheet_view_info_t` and
+  `fm_sheet_view_patch_t` name their split fields `split_x_twips` and
+  `split_y_twips` (with the `_op` companions); sizes and layout are
+  unchanged.
+- **JavaScript, Python:** `Formulon.getStatusName` and the Python
+  `get_status_name` are removed; `enumName(StatusCode, code)` names a status.
+  `SheetView.showRowColHeaders` is `showRowColumnHeaders`, and
+  `SheetFormatDefaults`, `SheetFormatDefaultsInput` and their patch spell
+  `defaultColumnWidthChars`, `baseColumnWidthChars` and
+  `effectiveDefaultColumnWidthChars` (Python `default_column_width_chars` and
+  so on, also as `update_format_defaults` keywords).
+  `ReferenceRangeInput` is removed: `formatReference(range, { sheetName,
+  absolute })` takes an A1 string, a `CellRect` or a `ParsedReference` as
+  `range`.
+- **JavaScript, Python:** `formatValue(value, numberFormat)` takes a native
+  cell value (a number, string, boolean, `Date`, `ExcelError` or tagged
+  `Value`) and converts it as `setValue` does; `undefined` and an array are
+  `TypeError`. Python `format_value` converts the same way. A `DateInput` is a
+  `CivilTimeInput` (`hour`, `minute` and `second` default to 0) or a `Date`, in
+  every slot including `convertCivilToSerial`. `ThreadedCommentInput.created`
+  reads a `Date` through its UTC getters and a civil object as UTC; Python
+  converts an aware `datetime` to UTC, treats a naive one and a `date` as UTC,
+  and returns `created` as naive UTC. `setPinnedNow` keeps the local getters.
+- **JavaScript:** `getCellsInRange(range, { cursor, limit })` and
+  `getInvalidCells({ cursor, limit })` take a `PageOptions` object instead of
+  positional `cursor` and `limit`; a third positional argument is `TypeError`.
+  `getColumnWidthPt`, `getRowHeightPt` and `SheetOoxml.getColumnXfIndex` /
+  `getRowXfIndex` accept an A1 column or row (`'B'`, `'3'`) as well as an
+  index; a span such as `'B:D'` is `InvalidArgument` (Python `col` / `row`
+  take an `int` or `str` alike). `setLogSink` receives a `LogEvent`
+  (`{ level, event, ...fields }`, with `level` a `LogLevel`) that it owns,
+  decoded from the engine's JSON line. `createFormulon(options)` validates its options in both packages and
+  rejects with `TypeError` for a non-object, an unknown key, a `locateFile`,
+  `print` or `printErr` that is not a function, or an empty or non-binary
+  `wasm`; the native package then ignores the values.
+- **TypeScript:** `evaluateCfRange(range, options?: CfRangeEvaluationOptions)`,
+  `PivotFilterInput.value` and `valueHigh` accept `null` for absent, so a read
+  filter passes back to `addFilter`, and `TableColumnTotalsInput` carries the
+  totals fields only, so a read `TableColumn` passes to `setColumnTotals`
+  (its `name` is ignored). `Sheet.addProtectedRange(input)` names its
+  parameter `input`.
+- **Python:** parameter names follow the declarations: `set_pinned_now(time)`
+  (was `t`), `get_person(id)` / `remove_person(id)`, `add_dxf(input)`,
+  `set_dxf(dxf_index, input)`, `set_auto_filter(filter)`,
+  `set_cell_phonetic(row, col, phonetic)`, `get_threaded_comment(id)`,
+  `update_threaded_comment(id, ...)`, `remove_threaded_comment(id)`,
+  `set_row_break(row, input)`, `set_column_break(col, input)`,
+  `add_picture(bytes, input=None)`, `restore_drawing(bytes, ...)`,
+  `add_shape(spec)`, `add_slicer(table, column, spec)`,
+  `add_sparkline_group(spec)`, `add_protected_range(input)`,
+  `Chart.set_point(plot, series_id, point_index, point)` and
+  `Chart.add_series(plot, input)`. The calculated-item methods of
+  `PivotCache` take `calculated_item_index`. `Slicer.update` no longer takes
+  `name`, because a slicer's name is fixed by its cache.
+  `Sheet.update_cell_format` drops its `source` parameter; copy a format with
+  `ws.update_cell_format("B1", **vars(ws.get_cell_format("A1")))`.
+  `Sheet.set_row_break` and `set_column_break` take a `PageBreakInput`
+  (`first`, `last`, `manual`) or a read break; `list_threaded_comments` takes
+  `(row, col)` or one A1 string.
 - **C ABI:** `fm_sheet_set_pivot_field_date_group` (`Pivot.setFieldDateGroup`,
   `Pivot.set_field_date_group`) takes a mask of `FM_PIVOT_PERIOD_*` bits, a
   calendar, an interval in days and start and end serials (NaN for automatic)
@@ -335,8 +444,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `PivotCache.set_worksheet_source(None)` clears the source and the keywords
   `ref`, `sheet` and `name` set it.
 - **Python:** `formulon.LIB` is no longer re-exported from the package. The
-  engine functions that used it (`get_version`, `get_status_name`,
-  `set_log_min_level`) are module-level functions of `formulon`.
+  engine functions that used it (`get_version`, `set_log_min_level`) are
+  module-level functions of `formulon`.
 
 - **C ABI:** every input and output record starts with `uint32_t struct_size`.
   Set it with `FM_STRUCT_INIT(T)` (`{.struct_size = sizeof(T)}` in C,
@@ -430,8 +539,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and converted at the boundary. Row heights are points (`heightPt`,
   `setRowHeight(rows, heightPt)`, `setRowAutoHeight(rows, heightPt)`,
   `defaultRowHeightPt`, `effectiveDefaultRowHeightPt`), column widths are
-  characters (`widthChars`, `defaultColWidthChars`, `baseColWidthChars`,
-  `effectiveDefaultColWidthChars`), page margins are inches (`leftIn`,
+  characters (`widthChars`, `defaultColumnWidthChars`, `baseColumnWidthChars`,
+  `effectiveDefaultColumnWidthChars`), page margins are inches (`leftIn`,
   `rightIn`, `topIn`, `bottomIn`, `headerIn`, `footerIn`), and the print scale
   is a percentage (`scalePct` on page setup and pagination). Other renames:
   `zoomScale` is `zoomPct`, `transparency` is `transparencyPct`, `rotation` is
@@ -583,7 +692,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   dropped), as Python reads a naive `datetime`; `setValue(Date)` and
   `setPinnedNow(Date)` used its UTC fields. An Invalid Date throws
   `RangeError`. The slots are `setValue`, `setPinnedNow`,
-  `ThreadedCommentInput.created`, `PivotCache.setRecordValue`,
+  `ThreadedCommentInput.created` (read through its UTC getters),
+  `PivotCache.setRecordValue`,
   `PivotCache.addFieldSharedItem` (the `{ date: true }` option is gone: a
   `Date` is a date and a number is a number), the `start` and `end` of
   `PivotDateGroupInput`, and `evaluateCfRange(range, { today })` (Python
@@ -594,7 +704,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   be parsed, and `getDate` returns a `Date` whose local fields carry the
   serial, so `ws.setValue(r, c, ws.getDate(r, c))` round-trips. C keeps
   serials and `fm_civil_time_t`. Python refuses an aware `datetime` with
-  `ValueError` in every one of these slots, as a cell write already did.
+  `ValueError` in every one of these slots, as a cell write already did,
+  except `ThreadedCommentInput.created`, which converts it to UTC.
 - **JavaScript, Python:** `evaluateCfFormula` returns a `boolean`, as
   `evaluate_cf_formula` does in Python. `Value.to_python()` is removed;
   `formulon.to_native(value)` is the counterpart of `toNative`. `setError`
@@ -626,7 +737,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   run time; an empty patch changes nothing.
 - **JavaScript, Python:** a key that holds a cell rectangle is `range`, and one
   that holds several is `ranges`. `rect` is `range` on `ArrayFormula`,
-  `Spill`, `ParsedReference`, `ReferenceRangeInput`, `DataTable` and
+  `Spill`, `ParsedReference`, `DataTable` and
   `PivotWorksheetSource` (which also replaces `ref`), `ref` is `range` on
   `AutoFilterSortCondition` and `AutoFilterSortState`, and `source` is `range`
   on `ChartSourceInput`, `ChartInsertInput` and `ChartPreviewOverridesInput`.
@@ -2901,8 +3012,7 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
 | `recomputed` | `value` |
 | `RectPt.height` | `RectPt.heightPt` |
 | `RectPt.width` | `RectPt.widthPt` |
-| `ReferenceRange` | `ReferenceRangeInput` |
-| `ReferenceRangeInput.rect` | `ReferenceRangeInput.range` |
+| `ReferenceRange` | removed; `formatReference` takes an A1 string, a `CellRect` or a `ParsedReference` |
 | `refMode()` | `getRefMode()` |
 | `remapRangeStyle()` | `remapRangeXfs()` |
 | `removeAutoFilter()` | removed; use `setAutoFilter()` |
@@ -2991,13 +3101,13 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
 | `ShapeProperties.rotation` | `ShapeProperties.rotationDeg` |
 | `SheetAutoFilterXmlResult` | folded into `StringResult` |
 | `SheetCommentEntry` | `SheetComment` |
-| `SheetFormatDefaults.baseColWidth` | `SheetFormatDefaults.baseColWidthChars` |
-| `SheetFormatDefaults.defaultColWidth` | `SheetFormatDefaults.defaultColWidthChars` |
+| `SheetFormatDefaults.baseColWidth` | `SheetFormatDefaults.baseColumnWidthChars` |
+| `SheetFormatDefaults.defaultColWidth` | `SheetFormatDefaults.defaultColumnWidthChars` |
 | `SheetFormatDefaults.defaultRowHeight` | `SheetFormatDefaults.defaultRowHeightPt` |
-| `SheetFormatDefaults.effectiveDefaultColWidth` | `SheetFormatDefaults.effectiveDefaultColWidthChars` |
+| `SheetFormatDefaults.effectiveDefaultColWidth` | `SheetFormatDefaults.effectiveDefaultColumnWidthChars` |
 | `SheetFormatDefaults.effectiveDefaultRowHeight` | `SheetFormatDefaults.effectiveDefaultRowHeightPt` |
-| `SheetFormatDefaultsInput.baseColWidth` | `SheetFormatDefaultsInput.baseColWidthChars` |
-| `SheetFormatDefaultsInput.defaultColWidth` | `SheetFormatDefaultsInput.defaultColWidthChars` |
+| `SheetFormatDefaultsInput.baseColWidth` | `SheetFormatDefaultsInput.baseColumnWidthChars` |
+| `SheetFormatDefaultsInput.defaultColWidth` | `SheetFormatDefaultsInput.defaultColumnWidthChars` |
 | `SheetFormatDefaultsInput.defaultRowHeight` | `SheetFormatDefaultsInput.defaultRowHeightPt` |
 | `SheetFormatDefaultsResult` | folded into `SheetFormatDefaults` |
 | `sheetName()` | removed |
@@ -3027,6 +3137,7 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
 | `SheetSelection.activeRow` | `SheetSelection.active` |
 | `SheetSelectionResult` | folded into `SheetSelection` |
 | `SheetView.paneTopLeftRow` | `SheetView.paneTopLeft` |
+| `SheetView.showRowColHeaders` | `SheetView.showRowColumnHeaders` |
 | `SheetView.splitX` | `SheetView.splitXTwips` |
 | `SheetView.splitY` | `SheetView.splitYTwips` |
 | `SheetView.topLeftRow` | `SheetView.topLeft` |
@@ -3046,7 +3157,7 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
 | `SpillInfo` | `Spill` |
 | `Status.status` | `Status.code` |
 | `Status` | removed |
-| `statusString()` | `getStatusName()` |
+| `statusString()` | removed; `enumName(StatusCode, code)` names a status |
 | `StringResult` | removed |
 | `tableAt()` | `ws.table(...).getProperties()` |
 | `TableColumnEntry` | `TableColumn` |
@@ -3519,10 +3630,10 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
 | `ShapeProperties.rotation` | `ShapeProperties.rotation_deg` |
 | `sheet_count()` | removed |
 | `sheet_name()` | removed |
-| `SheetFormatDefaults.base_col_width` | `SheetFormatDefaults.base_col_width_chars` |
-| `SheetFormatDefaults.default_col_width` | `SheetFormatDefaults.default_col_width_chars` |
+| `SheetFormatDefaults.base_col_width` | `SheetFormatDefaults.base_column_width_chars` |
+| `SheetFormatDefaults.default_col_width` | `SheetFormatDefaults.default_column_width_chars` |
 | `SheetFormatDefaults.default_row_height` | `SheetFormatDefaults.default_row_height_pt` |
-| `SheetFormatDefaults.effective_default_col_width` | `SheetFormatDefaults.effective_default_col_width_chars` |
+| `SheetFormatDefaults.effective_default_col_width` | `SheetFormatDefaults.effective_default_column_width_chars` |
 | `SheetFormatDefaults.effective_default_row_height` | `SheetFormatDefaults.effective_default_row_height_pt` |
 | `SheetPrintTitles` | removed |
 | `SheetProtection.auto_filter` | `SheetProtection.allow_auto_filter` |

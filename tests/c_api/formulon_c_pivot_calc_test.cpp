@@ -498,7 +498,7 @@ TEST(FormulonCApiPivotCalc, CalculatedFieldArgumentBoundaries) {
   // 8192 units of formula fit, however many names they hold; 8193 do not.
   EXPECT_EQ(add("Long", ("Amt" + Repeat("+Amt", 2046) + "+1+11").c_str()), 0) << fm_get_last_error_message();
   EXPECT_EQ(add("Longer", ("Amt" + Repeat("+Amt", 2046) + "+1+111").c_str()), kInvalidArgument);
-  EXPECT_NE(std::string(fm_get_last_error_message()).find("too long"), std::string::npos);
+  EXPECT_NE(std::string(fm_get_last_error_message()).find("must be at most 8192 UTF-16 units"), std::string::npos);
 
   // A database field is not a calculated one; an index past the fields is out of range.
   EXPECT_EQ(fm_workbook_set_pivot_cache_calculated_field_formula(wb.handle, cache, kAmt, "Qty"), kInvalidArgument);

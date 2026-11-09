@@ -193,6 +193,10 @@ test('slicer arguments are validated', async () => {
   assert.throws(() => wb.sheet(0).slicer(added).update({ caption: null }), TypeError);
   expectFailure(() => wb.sheet(0).removeDrawing(added.objectId + 1));
   expectFailure(() => wb.sheet(5).slicer(added).getProperties());
-  assert.throws(() => wb.sheet(0).addSlicer('Sales', 0, { anchor: { ...box, fromRow: -1 } }), RangeError);
+  assert.throws(
+    () => wb.sheet(0).addSlicer('Sales', 0, { anchor: { ...box, fromRow: -1 } }),
+    (e) => e.name === 'FormulonError' && e.code === mod.StatusCode.InvalidArgument,
+  );
+  assert.throws(() => wb.sheet(0).addSlicer('Sales', 0, { anchor: { ...box, fromRow: 1.5 } }), RangeError);
   release(wb);
 });

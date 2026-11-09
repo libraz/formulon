@@ -73,23 +73,6 @@ const HandleMethod* FindHandleMethod(const char* name) {
   return found != std::end(kHandleMethods) ? &*found : nullptr;
 }
 
-// Names the argument at `idx` as the facade method sees it: a handle method
-// counts after the arguments its handle supplies, and a sheet-scoped method's
-// first argument is the sheet index, which the facade supplies.
-std::string ArgumentLabel(const GuardedMethodData& method, std::size_t idx) {
-  if (method.handle != nullptr) {
-    const auto supplied = static_cast<std::size_t>(method.handle->supplied);
-    return idx < supplied ? std::string(method.handle->label) + " supplied argument " + std::to_string(idx + 1)
-                          : std::string(method.handle->label) + " argument " + std::to_string(idx - supplied + 1);
-  }
-  if (method.sheet_scoped) {
-    return idx == 0 ? std::string("Sheet.") + method.name + " sheet index"
-                    : std::string("Sheet.") + method.name + " argument " + std::to_string(idx);
-  }
-  const std::string qualified = method.owner == nullptr ? method.name : std::string(method.owner) + "." + method.name;
-  return qualified + " argument " + std::to_string(idx + 1);
-}
-
 // The public `Class.method` name of a registered method, for reader failures.
 std::string PublicMethodLabel(const void* data) {
   const auto& method = *static_cast<const GuardedMethodData*>(data);
@@ -99,22 +82,7 @@ std::string PublicMethodLabel(const void* data) {
   if (method.sheet_scoped) {
     return std::string("Sheet.") + method.name;
   }
-  return method.owner == nullptr ? std::string(method.name) : std::string(method.owner) + "." + method.name;
-}
-
-bool RejectArgumentType(const Napi::CallbackInfo& info, const std::string& label, const char* expected) {
-  Napi::TypeError::New(info.Env(), label + " must be a primitive " + expected).ThrowAsJavaScriptException();
-  return false;
-}
-
-bool RejectArgumentRequired(const Napi::CallbackInfo& info, const std::string& label) {
-  Napi::TypeError::New(info.Env(), label + " is required").ThrowAsJavaScriptException();
-  return false;
-}
-
-bool RejectArgumentRange(const Napi::CallbackInfo& info, const std::string& label, const char* kind) {
-  Napi::RangeError::New(info.Env(), label + " is outside " + kind + " range").ThrowAsJavaScriptException();
-  return false;
+  return std::string(method.owner == nullptr ? "Formulon" : method.owner) + "." + method.name;
 }
 
 // One past the highest set bit of `mask`.
@@ -127,30 +95,58 @@ std::size_t MaskWidth(std::uint64_t mask) {
   return width;
 }
 
+// The d.ts name of raw argument `raw_index` of a registered method, for its positional refusals. The arguments the
+// facade supplies have none; the generated table leaves out a call whose raw layout is not its d.ts signature.
+std::string PublicArgumentName(const void* data, std::size_t raw_index) {
+  const auto& method = *static_cast<const GuardedMethodData*>(data);
+  const std::size_t supplied =
+      method.handle != nullptr ? static_cast<std::size_t>(method.handle->supplied) : (method.sheet_scoped ? 1U : 0U);
+  if (raw_index < supplied) {
+    return {};
+  }
+  return std::string(formulon::binding::param_name(PublicMethodLabel(data), raw_index - supplied));
+}
+
+// The positional refusals below word their message for the call `ScopedReaderLabel` names.
+bool RejectArgumentType(const Napi::CallbackInfo& info, std::size_t idx, const char* expected) {
+  ThrowPositionalTypeError(info.Env(), idx, std::string("must be ") + expected);
+  return false;
+}
+
+bool RejectArgumentRequired(const Napi::CallbackInfo& info, std::size_t idx) {
+  ThrowPositionalTypeError(info.Env(), idx, "is required");
+  return false;
+}
+
+bool RejectArgumentInteger(const Napi::CallbackInfo& info, std::size_t idx, double number, double min_value) {
+  ThrowPositionalIntegerRefusal(info.Env(), idx, number, min_value);
+  return false;
+}
+
 bool ValidatePositionalArgs(const Napi::CallbackInfo& info, const GuardedMethodData& method) {
   const PositionalArgSpec& spec = method.spec;
   // A number that is an integer in [min_value, max_value].
-  const auto validate_integer = [&](std::size_t idx, double min_value, double max_value, const char* kind) {
+  const auto validate_integer = [&](std::size_t idx, double min_value, double max_value) {
     const Napi::Value value = info[idx];
     if (!value.IsNumber()) {
-      return RejectArgumentType(info, ArgumentLabel(method, idx), "number");
+      return RejectArgumentType(info, idx, "a number");
     }
     const double number = NumberValue(value, 0.0);
     if (!std::isfinite(number) || std::trunc(number) != number || number < min_value || number > max_value) {
-      return RejectArgumentRange(info, ArgumentLabel(method, idx), kind);
+      return RejectArgumentInteger(info, idx, number, min_value);
     }
     return true;
   };
   // An optional position may be absent or `undefined`; `null` only when its bit is in `optional_null_mask`.
-  const auto validate_optional_integer = [&](std::size_t idx, std::uint64_t bit, double max_value, const char* kind) {
+  const auto validate_optional_integer = [&](std::size_t idx, std::uint64_t bit, double max_value) {
     if (idx >= info.Length()) {
       return true;
     }
     const Napi::Value value = info[idx];
     if (value.IsNull() && (spec.optional_null_mask & bit) == 0) {
-      return RejectArgumentType(info, ArgumentLabel(method, idx), "number");
+      return RejectArgumentType(info, idx, "a number");
     }
-    return value.IsUndefined() || value.IsNull() || validate_integer(idx, 0.0, max_value, kind);
+    return value.IsUndefined() || value.IsNull() || validate_integer(idx, 0.0, max_value);
   };
 
   // Required positions are checked even past the supplied arguments, where
@@ -162,32 +158,32 @@ bool ValidatePositionalArgs(const Napi::CallbackInfo& info, const GuardedMethodD
   for (std::size_t idx = 0; idx < positional_count; ++idx) {
     const std::uint64_t bit = std::uint64_t{1} << idx;
     if ((spec.object_mask & bit) != 0 && !info[idx].IsObject()) {
-      return RejectArgumentType(info, ArgumentLabel(method, idx), "object");
+      return RejectArgumentType(info, idx, "an object");
     }
     if ((spec.required_mask & bit) != 0 && info[idx].IsUndefined()) {
-      return RejectArgumentRequired(info, ArgumentLabel(method, idx));
+      return RejectArgumentRequired(info, idx);
     }
-    if ((spec.u32_mask & bit) != 0 && !validate_integer(idx, 0.0, kUint32MaxNumber, "uint32")) {
+    if ((spec.u32_mask & bit) != 0 && !validate_integer(idx, 0.0, kUint32MaxNumber)) {
       return false;
     }
     if ((spec.i32_mask & bit) != 0 &&
         !validate_integer(idx, static_cast<double>(std::numeric_limits<std::int32_t>::min()),
-                          static_cast<double>(std::numeric_limits<std::int32_t>::max()), "int32")) {
+                          static_cast<double>(std::numeric_limits<std::int32_t>::max()))) {
       return false;
     }
-    if ((spec.u64_mask & bit) != 0 && !validate_integer(idx, 0.0, kMaxSafeInteger, "uint64")) {
+    if ((spec.u64_mask & bit) != 0 && !validate_integer(idx, 0.0, kMaxSafeInteger)) {
       return false;
     }
     if ((spec.double_mask & bit) != 0 && !info[idx].IsNumber()) {
-      return RejectArgumentType(info, ArgumentLabel(method, idx), "number");
+      return RejectArgumentType(info, idx, "a number");
     }
     if ((spec.string_mask & bit) != 0 && !info[idx].IsString()) {
-      return RejectArgumentType(info, ArgumentLabel(method, idx), "string");
+      return RejectArgumentType(info, idx, "a string");
     }
-    if ((spec.optional_u32_mask & bit) != 0 && !validate_optional_integer(idx, bit, kUint32MaxNumber, "uint32")) {
+    if ((spec.optional_u32_mask & bit) != 0 && !validate_optional_integer(idx, bit, kUint32MaxNumber)) {
       return false;
     }
-    if ((spec.optional_u64_mask & bit) != 0 && !validate_optional_integer(idx, bit, kMaxSafeInteger, "uint64")) {
+    if ((spec.optional_u64_mask & bit) != 0 && !validate_optional_integer(idx, bit, kMaxSafeInteger)) {
       return false;
     }
   }
@@ -201,11 +197,14 @@ napi_value GuardedInstanceMethodCallback(napi_env raw_env, napi_callback_info ra
   return Napi::details::WrapCallback(raw_env, [&] {
     Napi::CallbackInfo info(raw_env, raw_info);
     const auto* const data = static_cast<const GuardedMethodData*>(info.Data());
-    if (data == nullptr || !ValidatePositionalArgs(info, *data)) {
+    if (data == nullptr) {
+      return info.Env().Undefined();
+    }
+    const ScopedReaderLabel label(&PublicMethodLabel, &PublicArgumentName, data);
+    if (!ValidatePositionalArgs(info, *data)) {
       return info.Env().Undefined();
     }
     Workbook* const instance = Workbook::Unwrap(info.This().As<Napi::Object>());
-    const ScopedReaderLabel label(&PublicMethodLabel, data);
     return instance == nullptr ? Napi::Value() : instance->RunActive(method, info);
   });
 }
@@ -250,10 +249,10 @@ void SetGuardedModuleFunction(Napi::Env env, Napi::Object exports, const char* n
   exports.Set(name, Napi::Function::New(
                         env,
                         [](const Napi::CallbackInfo& info) -> Napi::Value {
+                          const ScopedReaderLabel label(&PublicMethodLabel, &PublicArgumentName, &data);
                           if (!ValidatePositionalArgs(info, data)) {
                             return info.Env().Undefined();
                           }
-                          const ScopedReaderLabel label(&PublicMethodLabel, &data);
                           return function(info);
                         },
                         name));
@@ -333,10 +332,14 @@ std::string Workbook::ArgString(const Napi::CallbackInfo& info, size_t idx) {
 }
 
 bool Workbook::ArgBool(const Napi::CallbackInfo& info, size_t idx) {
-  if (idx >= info.Length()) {
+  if (idx >= info.Length() || info[idx].IsUndefined()) {
     return false;
   }
-  return info[idx].ToBoolean().Value();
+  if (!info[idx].IsBoolean()) {
+    ThrowPositionalTypeError(info.Env(), idx, "must be a boolean");
+    return false;
+  }
+  return info[idx].As<Napi::Boolean>().Value();
 }
 
 Napi::Object Workbook::ArgObject(const Napi::CallbackInfo& info, size_t idx) {
@@ -384,7 +387,9 @@ Napi::Value Workbook::CreateEmpty(const Napi::CallbackInfo& info) {
 Napi::Value Workbook::CreateForProfile(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (!info[0].IsString()) {
-    Napi::TypeError::New(env, "Workbook.createForProfile argument 1 must be a primitive string")
+    Napi::TypeError::New(env, formulon::binding::argument_message(
+                                  "Workbook.createForProfile",
+                                  formulon::binding::param_name("Workbook.createForProfile", 0), "must be a string"))
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
@@ -397,12 +402,12 @@ Napi::Value Workbook::CreateForProfile(const Napi::CallbackInfo& info) {
 Napi::Value Workbook::LoadBytes(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (!info[0].IsObject()) {
-    Napi::TypeError::New(env, "Workbook.load argument 1 must be a primitive object").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "Workbook.load bytes must be an object").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   Napi::Uint8Array u8;
   if (!BytesArg(info, 0, &u8)) {
-    Napi::TypeError::New(env, "bytes must be a Uint8Array").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "Workbook.load bytes must be a Uint8Array").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   Napi::Object jsobj = GetClass(env).New({});

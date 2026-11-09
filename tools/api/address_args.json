@@ -69,11 +69,16 @@
       "Sheet.setPrintArea": [0],
       "Sheet.setRangeXfIndex": [0],
       "Sheet.snapshotRangeXfs": [0],
-      "Sheet.updateCellFormat": [0]
+      "Sheet.updateCellFormat": [0],
+      "Workbook.formatReference": [0]
     },
     "span_args": {
       "Sheet.deleteColumns": [[0, "col", "span"]],
       "Sheet.deleteRows": [[0, "row", "span"]],
+      "Sheet.getColumnWidthPt": [[0, "col", "single"]],
+      "Sheet.getColumnXfIndex": [[0, "col", "single"]],
+      "Sheet.getRowHeightPt": [[0, "row", "single"]],
+      "Sheet.getRowXfIndex": [[0, "row", "single"]],
       "Sheet.insertColumns": [[0, "col", "span"]],
       "Sheet.insertRows": [[0, "row", "span"]],
       "Sheet.resetColumnWidth": [[0, "col", "span"]],
@@ -163,11 +168,16 @@
       "Sheet.set_print_area": [0],
       "Sheet.set_range_xf_index": [0],
       "Sheet.snapshot_range_xfs": [0],
-      "Sheet.update_cell_format": [0]
+      "Sheet.update_cell_format": [0],
+      "Workbook.format_reference": [0]
     },
     "span_args": {
       "Sheet.delete_columns": [[0, "col", "span"]],
       "Sheet.delete_rows": [[0, "row", "span"]],
+      "Sheet.get_column_width_pt": [[0, "col", "single"]],
+      "Sheet.get_column_xf_index": [[0, "col", "single"]],
+      "Sheet.get_row_height_pt": [[0, "row", "single"]],
+      "Sheet.get_row_xf_index": [[0, "row", "single"]],
       "Sheet.insert_columns": [[0, "col", "span"]],
       "Sheet.insert_rows": [[0, "row", "span"]],
       "Sheet.reset_column_width": [[0, "col", "span"]],

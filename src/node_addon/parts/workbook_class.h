@@ -67,8 +67,8 @@ inline fm_drawing_anchor_patch_t PullDrawingAnchorPatch(CheckedSpecReader& reade
 inline fm_drawing_placement_spec_t PullPlacement(CheckedSpecReader& reader, const Napi::Value& input,
                                                  std::string& name_store, std::string& description_store) {
   fm_drawing_placement_spec_t ins = FM_STRUCT_INIT(fm_drawing_placement_spec_t);
-  Napi::Object options = Napi::Object::New(input.Env());
-  (void)reader.Object(input, "input", &options);
+  // The placement keys sit at the top level of the caller's record, so they share its path.
+  const Napi::Object options = input.IsObject() ? input.As<Napi::Object>() : Napi::Object::New(input.Env());
   ins.name = reader.String(options, "name", &name_store) ? name_store.c_str() : nullptr;
   ins.description = reader.String(options, "description", &description_store) ? description_store.c_str() : nullptr;
   ins.hidden = reader.Tristate(options, "hidden");
@@ -707,18 +707,18 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   }
 
   /// Entry returning nothing for `(sheet, spec:object)`. A missing or
-  /// non-object spec throws a `TypeError` carrying `usage`;
+  /// non-object spec throws a TypeError;
   /// `pull(reader, spec)` fills the caller's record, and `apply(handle_)`
   /// runs only if every field read.
   template <typename Pull, typename Apply>
-  Napi::Value InvokeSheetSpec(const Napi::CallbackInfo& info, const char* usage, Pull&& pull, Apply&& apply) {
+  Napi::Value InvokeSheetSpec(const Napi::CallbackInfo& info, Pull&& pull, Apply&& apply) {
     Napi::Env env = info.Env();
     if (handle_ == nullptr) {
       return ThrowInvalidHandle(env);
     }
     Napi::Object spec;
     if (!ObjectArg(info, 1, &spec)) {
-      Napi::TypeError::New(env, usage).ThrowAsJavaScriptException();
+      ThrowArgumentTypeError(env, "", "must be an object");
       return env.Undefined();
     }
     CheckedSpecReader reader(env);
@@ -896,7 +896,7 @@ Napi::Value SheetKeyedItemResult(const Napi::CallbackInfo& info, const fm_workbo
   }
   CheckedSpecReader reader(env);
   if (!key.IsNumber()) {
-    reader.FailType(param, "number or string");
+    reader.FailType(param, "a number or a string");
     return env.Undefined();
   }
   const uint32_t index = reader.U32(key, param, 0U);

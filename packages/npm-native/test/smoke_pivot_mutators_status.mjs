@@ -1308,10 +1308,15 @@ test('pivot options reject out-of-range values and wrong types without changing 
       assert.throws(() => b.pivot.updateOptions(bad), TypeError, JSON.stringify(bad));
       unchanged();
     }
-    for (const bad of [{ indent: 1.5 }, { indent: -1 }, { pageWrap: Number.NaN }]) {
+    for (const bad of [{ indent: 1.5 }, { pageWrap: Number.NaN }]) {
       assert.throws(() => b.pivot.updateOptions(bad), RangeError, JSON.stringify(bad));
       unchanged();
     }
+    assert.throws(
+      () => b.pivot.updateOptions({ indent: -1 }),
+      (e) => isFormulonError(e, mod.StatusCode.InvalidArgument),
+    );
+    unchanged();
     assert.throws(() => b.pivot.updateOptions('x'), TypeError);
     assert.throws(() => b.pivot.updateOptions(), TypeError);
     // A string is a pivot name, even one that reads as a number.
@@ -1333,9 +1338,13 @@ test('pivot options reject out-of-range values and wrong types without changing 
     const cacheBase = b.wb.pivotCache(b.cacheId).getOptions();
     assert.throws(() => b.wb.pivotCache(b.cacheId).updateOptions({ missingItemsLimit: 1048577 }), isFormulonError);
     assert.throws(() => b.wb.pivotCache(b.cacheId).updateOptions({ missingItemsLimit: 'a' }), TypeError);
-    for (const bad of [{ missingItemsLimit: 1.5 }, { missingItemsLimit: Number.NaN }, { missingItemsLimit: -2 }]) {
+    for (const bad of [{ missingItemsLimit: 1.5 }, { missingItemsLimit: Number.NaN }]) {
       assert.throws(() => b.wb.pivotCache(b.cacheId).updateOptions(bad), RangeError, JSON.stringify(bad));
     }
+    assert.throws(
+      () => b.wb.pivotCache(b.cacheId).updateOptions({ missingItemsLimit: -2 }),
+      (e) => isFormulonError(e, mod.StatusCode.InvalidArgument),
+    );
     assert.throws(() => b.wb.pivotCache(b.cacheId).updateOptions(null), TypeError);
     assert.throws(() => b.wb.pivotCache('1').updateOptions({}), TypeError);
     assert.deepEqual(b.wb.pivotCache(b.cacheId).getOptions(), cacheBase);

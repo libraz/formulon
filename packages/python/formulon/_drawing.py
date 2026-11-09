@@ -16,7 +16,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Dict, Optional, Sequence, Tuple, Type, Union, cast
 
 from . import _structs as S
-from ._c import LIB, FormulonError, _NoCopy, _sint, _uint
+from ._c import LIB, FormulonError, _argument_message, _NoCopy, _require_bool, _sint, _uint
 from ._status import StatusCode
 from ._workbook import (
     _CHART_TITLE_NONE,
@@ -103,6 +103,7 @@ _PREVIEW_OVERRIDE_NAMES = (
     "na_as_blank",
 )
 _COMMON_UPDATE_NAMES = ("name", "description", "hidden", "anchor")
+_SLICER_COMMON_UPDATE_NAMES = ("description", "hidden", "anchor")
 # The common keys whose ``None`` clears the field.
 _CLEARABLE_COMMON_NAMES = ("description",)
 _SHAPE_UPDATE_NAMES = (
@@ -138,7 +139,7 @@ def _present(
         if value is UNCHANGED or (value is None and key in absent):
             continue
         if value is None and key not in clearable:
-            raise TypeError(f"formulon: {key} cannot be None")
+            raise TypeError(_argument_message(key, "must not be null"))
         out[key] = value
     return out
 
@@ -536,7 +537,7 @@ class Chart(_Snapshotable):
           InvalidArgumentError: for a ``type`` that cannot be written.
         """
         if bar_direction is not None and _enum(ChartPlotType, type) != ChartPlotType.BAR:
-            raise TypeError("formulon: bar_direction applies to a BAR chart only")
+            raise TypeError(_argument_message("bar_direction", "applies to a BAR chart only"))
         h, sheet, object_id = self._at()
         _check(
             LIB.fm_sheet_set_chart_type(
@@ -579,7 +580,7 @@ class Chart(_Snapshotable):
           InvalidArgumentError: when ``legend.position`` is not a :class:`ChartLegendPosition`.
         """
         if legend is not None and not isinstance(legend, ChartLegend):
-            raise TypeError(f"formulon: legend must be a ChartLegend or None, got {type(legend).__name__}")
+            raise TypeError(_argument_message("legend", "must be a ChartLegend"))
         h, sheet, object_id = self._at()
         with _ArgScope() as scope:
             ptr = 0
@@ -590,7 +591,7 @@ class Chart(_Snapshotable):
                     ptr,
                     {
                         "position": _sint(legend.position, "position"),
-                        "overlay": 1 if legend.overlay else 0,
+                        "overlay": int(_require_bool(legend.overlay, "legend.overlay")),
                         "hidden_entries": _id_array(legend.hidden_entries, "hidden_entries", scope),
                         "hidden_entries_count": _uint(len(legend.hidden_entries), "hidden_entries_count"),
                     },
@@ -622,9 +623,9 @@ class Chart(_Snapshotable):
         }
         for key, value in given.items():
             if value is None:
-                raise TypeError(f"formulon: {key} cannot be None")
-        if overlay is not UNCHANGED and not isinstance(overlay, bool):
-            raise TypeError(f"formulon: overlay must be a bool, got {type(overlay).__name__}")
+                raise TypeError(_argument_message(key, "must not be null"))
+        if overlay is not UNCHANGED:
+            _require_bool(overlay, "overlay")
         if not given:
             return
         h, sheet, object_id = self._at()
@@ -634,7 +635,7 @@ class Chart(_Snapshotable):
             fields["position"] = _sint(position, "position")
         if overlay is not UNCHANGED:
             fields["overlay_op"] = _PATCH_SET
-            fields["overlay"] = 1 if overlay else 0
+            fields["overlay"] = int(_require_bool(overlay, "overlay"))
         with _ArgScope() as scope:
             ptr = scope.struct_array(S.CHART_LEGEND_PATCH, 1)
             if hidden_entries is not UNCHANGED:
@@ -684,7 +685,7 @@ class Chart(_Snapshotable):
         patch = _given(dict(locals()), ChartAxisPatch)
         for key in ("minor_gridlines", "position", "source_linked"):
             if key in patch and patch[key] is None:
-                raise TypeError(f"formulon: {key} cannot be None")
+                raise TypeError(_argument_message(key, "must not be null"))
         if isinstance(axis, int) and not isinstance(axis, (bool, ChartAxisKind)):
             axis_id = axis
         else:
@@ -694,7 +695,14 @@ class Chart(_Snapshotable):
             ptr = scope.struct_array(S.CHART_AXIS_PATCH, 1)
             fields = _encode_axis_patch(patch, scope)
             S.CHART_AXIS_PATCH.pack(LIB, ptr, fields)
-            _check(LIB.fm_sheet_update_chart_axis(h, sheet, object_id, _uint(axis_id, "axis_id"), ptr))
+            try:
+                _check(LIB.fm_sheet_update_chart_axis(h, sheet, object_id, _uint(axis_id, "axis_id"), ptr))
+            except FormulonError as error:
+                if error.code != StatusCode.NOT_FOUND:
+                    raise
+                raise FormulonError(
+                    StatusCode.NOT_FOUND, _argument_message("axis", f"has no axis with id {axis_id}"), ""
+                ) from None
 
     def update_display(
         self,
@@ -751,29 +759,29 @@ class Chart(_Snapshotable):
                 )
             )
 
-    def set_point(self, plot: int, series_id: int, point_index: int, value: Optional[ChartPoint]) -> None:
-        """Replace the formatting of data point ``point_index`` with ``value``, or remove it with ``None``.
+    def set_point(self, plot: int, series_id: int, point_index: int, point: Optional[ChartPoint]) -> None:
+        """Replace the formatting of data point ``point_index`` with ``point``, or remove it with ``None``.
 
-        ``value`` is a :class:`ChartPoint` as :meth:`get_properties` reads it;
+        ``point`` is a :class:`ChartPoint` as :meth:`get_properties` reads it;
         its ``index`` is ignored. Removing a point that has no formatting does
         nothing.
 
         Raises:
-          TypeError: when ``value`` is neither a :class:`ChartPoint` nor ``None``.
+          TypeError: when ``point`` is neither a :class:`ChartPoint` nor ``None``.
         """
-        if value is None:
+        if point is None:
             self._patch_point(plot, series_id, point_index, None)
             return
-        if not isinstance(value, ChartPoint):
-            raise TypeError(f"formulon: value must be a ChartPoint or None, got {type(value).__name__}")
+        if not isinstance(point, ChartPoint):
+            raise TypeError(_argument_message("point", "must be a ChartPoint"))
         # An absent member is written as ``None``, which clears whatever the point has there; a marker is
         # cleared only where the point has one, as plots without markers reject any marker key.
-        if value.marker is not None:
+        if point.marker is not None:
             marker: Union[ChartMarkerPatch, None, Unchanged] = {
-                "symbol": value.marker.symbol,
-                "size_pt": value.marker.size_pt,
-                "fill": _fill_patch_of(value.marker.fill),
-                "line": _line_patch_of(value.marker.line),
+                "symbol": point.marker.symbol,
+                "size_pt": point.marker.size_pt,
+                "fill": _fill_patch_of(point.marker.fill),
+                "line": _line_patch_of(point.marker.line),
             }
         else:
             marker = UNCHANGED
@@ -787,8 +795,8 @@ class Chart(_Snapshotable):
             plot,
             series_id,
             point_index,
-            fill=_fill_patch_of(value.fill),
-            line=_line_patch_of(value.line),
+            fill=_fill_patch_of(point.fill),
+            line=_line_patch_of(point.line),
             marker=marker,
         )
 
@@ -860,7 +868,7 @@ class Chart(_Snapshotable):
           TypeError: when ``filter`` is not a :class:`ChartFilter`.
         """
         if not isinstance(filter, ChartFilter):
-            raise TypeError(f"formulon: filter must be a ChartFilter, got {type(filter).__name__}")
+            raise TypeError(_argument_message("filter", "must be a ChartFilter"))
         h, sheet, object_id = self._at()
         with _ArgScope() as scope:
             _check(
@@ -875,16 +883,16 @@ class Chart(_Snapshotable):
                 )
             )
 
-    def add_series(self, plot: int, series: ChartSeriesInput) -> int:
-        """Append ``series`` to plot group ``plot`` and return its series id (``c:idx``).
+    def add_series(self, plot: int, input: ChartSeriesInput) -> int:
+        """Append ``input`` to plot group ``plot`` and return its series id (``c:idx``).
 
-        ``series.values`` is required (``y`` for a scatter plot); the other fields read as in
+        ``input.values`` is required (``y`` for a scatter plot); the other fields read as in
         :meth:`update_series`, and a field left ``None`` is not written.
         """
-        if not isinstance(series, ChartSeriesInput):
-            raise TypeError(f"Chart.add_series: series must be a ChartSeriesInput, got {type(series).__name__}")
+        if not isinstance(input, ChartSeriesInput):
+            raise TypeError(_argument_message("input", "must be a ChartSeriesInput"))
         patch = {
-            key: getattr(series, key) for key in ChartSeriesPatch.__annotations__ if getattr(series, key) is not None
+            key: getattr(input, key) for key in ChartSeriesPatch.__annotations__ if getattr(input, key) is not None
         }
         h, sheet, object_id = self._at()
         with _ArgScope() as scope:
@@ -1028,7 +1036,6 @@ class Slicer(_ZOrdered):
     def update(
         self,
         *,
-        name: Union[str, Unchanged] = UNCHANGED,
         description: Union[str, None, Unchanged] = UNCHANGED,
         hidden: Union[bool, Unchanged] = UNCHANGED,
         anchor: Union[DrawingAnchorInput, Unchanged] = UNCHANGED,
@@ -1044,17 +1051,18 @@ class Slicer(_ZOrdered):
         An argument left at :data:`UNCHANGED` keeps its value; ``style_name=None`` removes the style and
         ``description=None`` the description.
         ``description``, ``hidden`` and ``anchor`` are those of :meth:`Drawing.update` and apply first; the
-        frame stays two-cell. A ``name`` is refused: it keys the frame to the slicer part. Every argument is
-        checked before anything changes.
+        frame stays two-cell. A slicer's name is fixed by its cache. Every argument is checked before
+        anything changes.
 
         Raises:
           TypeError: when an argument other than ``style_name`` or ``description`` is ``None`` or has the wrong type.
-          FormulonError: with ``PRECONDITION_FAILED`` when ``name`` is given.
         """
         arguments = dict(locals())
         clear = ["style_name"] if style_name is None else []
         given = _present(
-            arguments, _COMMON_UPDATE_NAMES + _SLICER_UPDATE_NAMES, clearable=_CLEARABLE_COMMON_NAMES + ("style_name",)
+            arguments,
+            _SLICER_COMMON_UPDATE_NAMES + _SLICER_UPDATE_NAMES,
+            clearable=_CLEARABLE_COMMON_NAMES + ("style_name",),
         )
         h, sheet, object_id = self._at()
         with _ArgScope() as scope:

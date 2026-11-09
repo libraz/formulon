@@ -59,6 +59,8 @@ PATCH_RECORD_NONE = "none"
 _A1_NAMES = ("a1", "anchor")
 _PY_RECT = frozenset({"CellRect", "str"})
 _JS_RECT = frozenset({"CellRect", "string"})
+# A parsed reference passes back whole where a rectangle is taken: its `range` is the rectangle.
+_RECT_PASSBACK = frozenset({"ParsedReference"})
 _RECT_RECORDS = frozenset({"CellRect", "SheetRect", "CellAddress"})
 _JS_UPDATE_RE = re.compile(r"update(?:[A-Z]\w*)?")
 _PY_UPDATE_RE = re.compile(r"update(?:_\w+)?")
@@ -243,7 +245,7 @@ def _py_union(text: str) -> List[str]:
 def _rule_rect_a1(ctx: Context) -> Iterable[Violation]:
     """An op's `rect_args` argument takes a rectangle or an A1 range: `CellRect | string` in JS,
     `Union[CellRect, str]` in Python, as the element type when the argument is an array (which may also take
-    one A1 string in place of the array).
+    one A1 string in place of the array). A `ParsedReference` may be taken besides.
     """
     for key, entry in _ledger_ops(ctx, "rect_args"):
         for surface in BINDING_SURFACES:
@@ -254,7 +256,7 @@ def _rule_rect_a1(ctx: Context) -> Iterable[Violation]:
                 params = [(p, t) for p, t in member.params if js or p not in member.kwonly]
                 for position in entry.get("rect_args") or []:
                     ptype = params[position][1] if position < len(params) else ""
-                    kinds = set(_element(_strip_null(ptype, js), js))
+                    kinds = set(_element(_strip_null(ptype, js), js)) - _RECT_PASSBACK
                     if kinds != (_JS_RECT if js else _PY_RECT):
                         want = "CellRect | string" if js else "Union[CellRect, str]"
                         yield _violation(
@@ -610,15 +612,29 @@ def _rule_sheet_params(ctx: Context) -> Iterable[Violation]:
 # ---------------------------------------------------------------------------
 
 
+_SINGLE_SPAN = "single"
+
+
 def _js_span_problems(overloads: Sequence, spans: Sequence[Sequence]) -> Iterator[Tuple[str, str]]:
     first = overloads[0]
     starts = [int(span[0]) for span in spans]
-    if any(i + 1 >= len(first.params) for i in starts):
+    # A `single` span is one argument, a row or column number or an A1 string naming one.
+    pairs = [int(span[0]) for span in spans if span[2] != _SINGLE_SPAN]
+    if any(i >= len(first.params) for i in starts) or any(i + 1 >= len(first.params) for i in pairs):
         yield "span", f"`{first.name}` has fewer arguments than its `span_args` name"
         return
-    want = ["string" if i in starts else _norm(t) for i, (_, t) in enumerate(first.params) if i - 1 not in starts]
+    want = ["string" if i in starts else _norm(t) for i, (_, t) in enumerate(first.params) if i - 1 not in pairs]
     if not any([_norm(t) for _, t in m.params] == want for m in overloads[1:]):
         yield "span", f"`{first.name}` lacks the overload taking the span as one string ({', '.join(want)})"
+
+
+def _py_single_problems(name: str, member, spans: Sequence[Sequence]) -> Iterator[Tuple[str, str]]:
+    """A `single` span is one `Union[int, str]` argument: a row or column number, or an A1 string naming one."""
+    params = [(p, t) for p, t in member.params if p not in member.kwonly]
+    for span in spans:
+        i = int(span[0])
+        if i >= len(params) or set(_alternatives(params[i][1], False)) != {"int", "str"}:
+            yield "single", f"`{name}` takes `Union[int, str]` at the `single` span position {i}"
 
 
 def _py_span_problems(name: str, stubs: Sequence, spans: Sequence[Sequence]) -> Iterator[Tuple[str, str]]:
@@ -643,7 +659,8 @@ def _py_span_problems(name: str, stubs: Sequence, spans: Sequence[Sequence]) -> 
 def _rule_span(ctx: Context) -> Iterable[Violation]:
     """An op with `span_args` takes each span as its number pair or as one span string (`"B:D"`, `"3:5"`): the JS
     declaration has the number signature first and the signature with the pair replaced by a `string`; the Python
-    method has the same two `@overload` stubs, the span one naming the argument `span`.
+    method has the same two `@overload` stubs, the span one naming the argument `span`. A `single` span (one row or
+    column) is replaced by a `string` in JS without losing an argument, and is one `Union[int, str]` in Python.
     """
     for key, entry in _ledger_ops(ctx, "span_args"):
         spans = entry.get("span_args") or []
@@ -652,7 +669,11 @@ def _rule_span(ctx: Context) -> Iterable[Violation]:
                 continue
             for target in _targets(ctx, entry, surface):
                 if surface == "py":
-                    problems = _py_span_problems(target.name, target.overloads, spans)
+                    single = [s for s in spans if s[2] == _SINGLE_SPAN]
+                    pairs = [s for s in spans if s[2] != _SINGLE_SPAN]
+                    problems = list(_py_single_problems(target.name, target.member, single))
+                    if pairs:
+                        problems += list(_py_span_problems(target.name, target.overloads, pairs))
                 else:
                     problems = _js_span_problems(target.overloads, spans)
                 for disc, message in problems:

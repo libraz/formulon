@@ -350,7 +350,7 @@ class WorkbookEntryTests(unittest.TestCase):
                 wb.save(target)
             self.assertEqual(
                 str(caught.exception),
-                f"formulon: cannot infer the workbook format from {str(target)!r}; use a .xlsx or .xlsb extension "
+                f"cannot infer the workbook format from {str(target)!r}; use a .xlsx or .xlsb extension "
                 "or pass format=WorkbookFormat.XLSX or WorkbookFormat.XLSB",
             )
             self.assertFalse(target.exists())

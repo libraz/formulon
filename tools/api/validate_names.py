@@ -17,7 +17,9 @@ of its first signature in src/wasm/formulon.d.ts, and an op's or list's
 the named arguments off `*Ref`); an op whose first signature takes a row or
 column span (`(first, last)` or `(row | col, count)`) carries `span_args`. The
 positions of an op with `handle:` are those of the handle method, checked
-against `interface <handle.class>`. `patch: true` names its getter's record in
+against `interface <handle.class>`. A lone `row` / `col` argument that a
+sibling overload takes as `a1: string` is the span form `single` (one row or
+column). `patch: true` names its getter's record in
 `patch_record`, never `none`. A public name is unique per scope (or handle
 class), a raw name per scope.
 
@@ -35,8 +37,13 @@ against the collection by the R37 rule). `clearable: [field, ...]` on a record
 or typedef lists the snake_case fields a patch may clear (`null` / `None` /
 `*_op = CLEAR`); each names a field of the record's JS interface, and
 `tools/api/gen_patch_clear_cases.py` derives the shared clear-case table from
-it. The top-level `unitless: [name, ...]` lists the field and parameter names
-(any casing; compared in snake_case) that carry a dimension without a unit
+it. `read_only_keys: [field, ...]` on an input, patch or both record lists the
+snake_case fields (a dotted path for a nested one) of the read record that
+passes back into it which the record itself does not declare; each is a field
+of a read twin (the `patch_record` of a patch op taking it, `X` of `XInput` /
+`XPatch`, `XProperties`) and none of the record. The top-level
+`unitless: [name, ...]` lists the field and parameter names (any casing;
+compared in snake_case) that carry a dimension without a unit
 suffix (R42). A `kind: constant` entry with `enum:` and a `js` / `py` name is
 an enum member (`Enum.Member`), renamed through `was: {js, py}`; its names are
 unique within its enum. After every rename, no two entries take the same new
@@ -82,7 +89,8 @@ from binding_drift.api_conventions import (  # noqa: E402
     split_c_name,
 )
 from binding_drift.api_conventions_arguments import _patch_keys  # noqa: E402
-from binding_drift.api_conventions_bindings import JsSurface  # noqa: E402
+from binding_drift.api_conventions_bindings import JsSurface, _js_record_keys  # noqa: E402
+from binding_drift.api_conventions_shapes import _strip_null  # noqa: E402
 
 KINDS = frozenset({"op", "list", "free", "factory", "record", "field", "typedef", "enum", "constant"})
 FIELDS = frozenset(
@@ -91,7 +99,7 @@ FIELDS = frozenset(
         "params", "surfaces", "exception", "replaced_by", "closes", "was", "drop", "flag", "sheet_arg", "total",
         "missing", "facade", "review", "note", "cell_args", "rect_args", "ref_args", "ref_exempt", "patch",
         "patch_record", "patch_reason", "patch_nested", "span_args", "internal", "handle", "reads_values", "resolved",
-        "color", "namespace", "a1_exempt", "add_returns", "clearable",
+        "color", "namespace", "a1_exempt", "add_returns", "clearable", "read_only_keys",
     }
 )  # fmt: skip
 HANDLE_FIELDS = frozenset({"class", "js", "py", "supplies", "property"})
@@ -99,7 +107,7 @@ COLLECTION_FIELDS = frozenset(
     {"key", "by", "access", "plural", "ops", "no_getter", "exempt", "flag", "handle_class", "handle_base"}
 )
 SPAN_AXES = frozenset({"row", "col"})
-SPAN_FORMS = frozenset({"span", "start_count"})
+SPAN_FORMS = frozenset({"span", "start_count", "single"})
 # Reference types of the JS surface, by the `ref_args` kind that names them.
 JS_REF_KINDS = {
     "TableRef": "table",
@@ -126,6 +134,8 @@ COLOR_MODES = frozenset({"resolved"})
 # Defaults the binding computes rather than spells: `today` is the pinned clock, else the current date.
 DYNAMIC_DEFAULTS = frozenset({"today"})
 A1_EXEMPT_ROLES = frozenset({"input", "patch", "both"})
+INPUT_ROLES = A1_EXEMPT_ROLES
+_SNAKE_PATH_RE = re.compile(r"[a-z][a-z0-9]*(?:_[a-z0-9]+)*(?:\.[a-z][a-z0-9]*(?:_[a-z0-9]+)*)*")
 ADD_RETURNS = frozenset({"handle", "key", "index"})
 WASM_DTS = REPO_ROOT / "src" / "wasm" / "formulon.d.ts"
 PATCH_RECORD_NONE = "none"
@@ -378,7 +388,7 @@ def _address_and_patch_schema(where: str, entry: dict) -> List[str]:
                 for s in spans
             )
         ):
-            problems.append(f"{where}: span_args lists `[position, row|col, span|start_count]` triples")
+            problems.append(f"{where}: span_args lists `[position, row|col, span|start_count|single]` triples")
     return problems
 
 
@@ -414,6 +424,14 @@ def _adoption_schema(where: str, entry: dict) -> List[str]:
             problems.append(f"{where}: clearable lists distinct field names, or is `[]` for a patch with none")
         elif any(_snake_case(f) != f for f in entry["clearable"]):
             problems.append(f"{where}: clearable names fields in snake_case")
+    if "read_only_keys" in entry:
+        keys = entry["read_only_keys"]
+        if kind != "record" or entry.get("role") not in INPUT_ROLES:
+            problems.append(f"{where}: read_only_keys belongs to an input, patch or both record")
+        if not _names_list(keys):
+            problems.append(f"{where}: read_only_keys lists distinct field names")
+        elif any(not _SNAKE_PATH_RE.fullmatch(k) for k in keys):
+            problems.append(f"{where}: read_only_keys names fields in snake_case, nested ones as a dotted path")
     if "reads_values" in entry and (entry["reads_values"] is not True or kind != "op" or "c" not in entry):
         problems.append(f"{where}: reads_values is `true` on an op with a C name")
     if "resolved" in entry and (entry["resolved"] is not True or kind != "op"):
@@ -651,6 +669,80 @@ def check_clearable(entries: Dict[str, dict], dts_text: str) -> List[str]:
     return problems
 
 
+def _camel_path(path: str) -> List[str]:
+    return [_list_js(segment) for segment in path.split(".")]
+
+
+def _path_resolves(surface: JsSurface, type_name: str, segments: Sequence[str]) -> bool:
+    """Whether `segments` name a field of `type_name`, each earlier one typed by one nested record (an array of
+    one too); `string` and absent alternatives aside."""
+    keys = _js_record_keys(surface.decls, surface.raw, type_name)
+    if keys is None or segments[0] not in keys:
+        return False
+    if len(segments) == 1:
+        return True
+    kinds = [k for k in _strip_null(keys[segments[0]], True) if k not in ("string", "undefined")]
+    if len(kinds) != 1:
+        return False
+    nested = re.fullmatch(r"(?:readonly\s+)?\(?([\w$]+)\)?\[\]|ReadonlyArray<([\w$]+)>|([\w$]+)", kinds[0].strip())
+    return nested is not None and _path_resolves(surface, next(g for g in nested.groups() if g), segments[1:])
+
+
+def _patch_records_by_type(entries: Dict[str, dict], surface: JsSurface, collections: Dict[str, dict]) -> dict:
+    """`{type name: {patch_record, ...}}`: the records each type named in a patch op's patch argument is the
+    patch of."""
+    out: Dict[str, set] = defaultdict(set)
+    scope_classes = {"workbook": ["Workbook", "WorkbookOoxml"], "sheet": ["Sheet", "SheetOoxml"]}
+    for entry in entries.values():
+        record = entry.get("patch_record") if isinstance(entry, dict) and entry.get("patch") is True else None
+        if not isinstance(record, str) or record == PATCH_RECORD_NONE:
+            continue
+        if entry_handle(entry) is not None:
+            name = handle_name(entry, "js", collections)
+            classes = handle_classes(entry)
+        else:
+            name = entry.get("js")
+            classes = scope_classes.get(entry.get("scope"), [])
+        for cls in classes:
+            member = surface.interface_members(cls).get(name) if isinstance(name, str) else None
+            if member is not None and member.is_method and member.params:
+                for token in re.findall(r"[A-Za-z_$][\w$]*", member.params[-1][1]):
+                    out[token].add(record)
+    return out
+
+
+def check_read_only_keys(
+    entries: Dict[str, dict], dts_text: str, collections: Optional[Dict[str, dict]] = None
+) -> List[str]:
+    """Each `read_only_keys` path is no field of the record and a field of one of its read twins: the
+    `patch_record` of a patch op taking the record, `X` of `XInput` / `XPatch` and `XProperties`. A record with
+    no read twin in the d.ts (a read of another name, such as `RowBreak` for `PageBreakInput`) is held to the
+    first half only."""
+    surface = JsSurface(dts_text)
+    patched = _patch_records_by_type(entries, surface, collections or {})
+    problems: List[str] = []
+    for key, entry in sorted(entries.items()):
+        if not isinstance(entry, dict) or not _names_list(entry.get("read_only_keys")):
+            continue
+        name = entry.get("js")
+        if not isinstance(name, str) or _js_record_keys(surface.decls, surface.raw, name) is None:
+            problems.append(f"entries.{key}: read_only_keys needs the record's `js` type in the d.ts")
+            continue
+        base = re.sub(r"(Input|Patch)$", "", name)
+        twins = sorted(
+            t
+            for t in {*patched.get(name, ()), base, f"{base}Properties"} - {name}
+            if _js_record_keys(surface.decls, surface.raw, t) is not None
+        )
+        for path in entry["read_only_keys"]:
+            segments = _camel_path(path)
+            if _path_resolves(surface, name, segments):
+                problems.append(f"entries.{key}: read_only_keys {path} is a field of {name}; it is not read-only")
+            elif twins and not any(_path_resolves(surface, t, segments) for t in twins):
+                problems.append(f"entries.{key}: read_only_keys {path} is a field of no read twin ({', '.join(twins)})")
+    return problems
+
+
 def _list_js(py_name: str) -> str:
     return py_name.split("_")[0] + "".join(w[:1].upper() + w[1:] for w in py_name.split("_")[1:])
 
@@ -755,13 +847,15 @@ def _js_ref_arg(params) -> List:
 _SPAN_AXIS_WORDS = (("Column", "col"), ("Row", "row"))
 
 
-def _js_span_args(name: str, params) -> List[List]:
-    """`[position, axis, form]` of each `(first, last)` or `(row | col, count)` pair of arguments.
+def _js_span_args(name: str, params, overloads: Sequence = ()) -> List[List]:
+    """`[position, axis, form]` of each `(first, last)` or `(row | col, count)` pair of arguments, and of each
+    lone `row` / `col` argument a sibling overload takes as `a1: string` at the same position (`single`).
 
     A `(first, last)` pair takes its axis from the method name (`setColumnWidth` -> `col`), a `(row | col,
-    count)` pair from its first argument.
+    count)` pair and a `single` argument from the argument's name.
     """
     out: List[List] = []
+    paired = set()
     for i in range(len(params) - 1):
         a, b = params[i][0], params[i + 1][0]
         if (a, b) == ("first", "last"):
@@ -769,7 +863,25 @@ def _js_span_args(name: str, params) -> List[List]:
             out.append([i, axis or "?", "span"])
         elif a in ("row", "col") and b == "count":
             out.append([i, a, "start_count"])
-    return out
+        elif a == "row" and b == "col":
+            paired.add(i)
+        else:
+            continue
+        paired.update((i, i + 1))
+    for i, (pname, _ptype) in enumerate(params):
+        if pname not in ("row", "col") or i in paired:
+            continue
+        if any(len(o.params) > i and o.params[i] == ("a1", "string") for o in overloads):
+            out.append([i, pname, "single"])
+    return sorted(out, key=lambda span: span[0])
+
+
+def _overloads(surface: JsSurface, member) -> List:
+    """Every signature of `member`'s method in the interface that declares `member`."""
+    for decl in surface.decls.values():
+        if decl.kind == "interface" and member in decl.members:
+            return [m for m in decl.members if m.name == member.name and m.is_method]
+    return [member]
 
 
 def _handle_members(dts_text: str, entry: dict, collections: Dict[str, dict]) -> List[tuple]:
@@ -816,7 +928,7 @@ def check_address_args(
                 "cell_args": lambda: _js_cell_pairs(member.params),
                 "rect_args": lambda: _js_rect_positions(member.params),
                 "ref_args": lambda: _js_ref_arg(member.params),
-                "span_args": lambda: _js_span_args(member.name, member.params),
+                "span_args": lambda: _js_span_args(member.name, member.params, _overloads(surface, member)),
             }
             for field, want in ((f, derived[f]()) for f in fields):
                 have = entry.get(field) or []
@@ -902,6 +1014,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             dts_text = WASM_DTS.read_text(encoding="utf-8")
             problems += check_address_args(entries, dts_text, data["collections"])
             problems += check_clearable(entries, dts_text)
+            problems += check_read_only_keys(entries, dts_text, data["collections"])
         if args.coverage:
             problems += check_coverage(entries, surfaces, data["collections"])
         flagged = [(f"entries.{k}", e["flag"]) for k, e in entries.items() if isinstance(e, dict) and "flag" in e]

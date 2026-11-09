@@ -49,13 +49,14 @@ function loadNative() {
 /**
  * Resolves to a new frozen `Formulon` object, whose `Workbook` is a class of
  * its own, as each `@libraz/formulon` call yields. Rejects with a plain `Error`
- * when no prebuild matches the host. `options` is accepted for parity with
- * `@libraz/formulon` and not used.
+ * when no prebuild matches the host. `options` is validated as
+ * `@libraz/formulon` validates it, then not used.
  *
- * @param {object} [_options] `FormulonOptions`.
+ * @param {object} [options] `FormulonOptions`.
  * @returns {Promise<object>}
  */
-export async function createFormulon(_options) {
+export async function createFormulon(options) {
+  common.checkFormulonOptions(options);
   return common.buildFormulon(loadNative(), common);
 }
 export default createFormulon;

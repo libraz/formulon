@@ -1,4 +1,4 @@
-"""Tests for the `INPUT_KEYS`, `INPUT_NESTED_KEYS` and `PATCH_NULLABLE` tables.
+"""Tests for the `INPUT_KEYS`, `INPUT_NESTED_KEYS`, `READ_ONLY_KEYS` and `PATCH_NULLABLE` tables.
 
 Run: `python3 -m unittest tools/codegen/gen_facade_tables_input_test.py`
 """
@@ -54,6 +54,13 @@ OPS = {
         "surfaces": ["wasm", "native"],
         "clearable": ["style", "note"],
     },
+    "record.box_input": {
+        "kind": "record",
+        "role": "input",
+        "js": "BoxInput",
+        "surfaces": ["wasm", "native"],
+        "read_only_keys": ["id"],
+    },
 }
 
 
@@ -64,7 +71,7 @@ def _ledger(entries: dict) -> facade_scope.Ledger:
 class InputKeysTest(unittest.TestCase):
     def test_input_record_keys_and_nested_paths(self) -> None:
         top, nested = gen.input_keys(_ledger(OPS), DTS)
-        # `BoxInput` also accepts the `Box` a read returns, so the read-only `id` is a known key.
+        # `BoxInput` lists the read-only `id` of the `Box` a read returns, so it is a known key.
         self.assertEqual(
             top,
             {"Workbook.addBox": [0, ["columns", "frame", "id", "title"]], "Workbook.setBox": [1, ["id", "title"]]},
@@ -80,10 +87,18 @@ class InputKeysTest(unittest.TestCase):
             "  'Workbook.addBox': {\n    'columns[]': ['name', 'width'],\n    frame: ['name', 'width'],\n  },\n", text
         )
 
+    def test_a_record_without_read_only_keys_takes_its_own_keys_only(self) -> None:
+        entries = {k: dict(v) for k, v in OPS.items()}
+        del entries["record.box_input"]["read_only_keys"]
+        top, _nested = gen.input_keys(_ledger(entries), DTS)
+        self.assertEqual(top["Workbook.addBox"], [0, ["columns", "frame", "title"]])
+
     def test_no_input_ops_emit_empty_tables(self) -> None:
         text = gen.input_keys_region(_ledger({}), DTS)
         self.assertEqual(
-            text, "const INPUT_KEYS = Object.freeze({\n});\nconst INPUT_NESTED_KEYS = Object.freeze({\n});\n"
+            text,
+            "const INPUT_KEYS = Object.freeze({\n});\nconst INPUT_NESTED_KEYS = Object.freeze({\n});\n"
+            "const READ_ONLY_KEYS = Object.freeze({});\n",
         )
 
 
@@ -96,6 +111,7 @@ export type FillPatch = Patch<{ color: ColorInput; none: boolean }, 'color'>;
 export interface ErrorValue { readonly kind: number; readonly code: number; }
 export interface CacheValue { readonly value: number; readonly isDate: boolean; }
 export interface BoxInput { title: string; fill?: FillPatch | null; }
+export interface Box { readonly title: string; readonly fill: Fill | null; }
 export interface BoxPatch { title?: string; fill?: FillPatch | null; }
 export interface Workbook {
   addBox(input: BoxInput): number;
@@ -114,19 +130,33 @@ PATCH_ALIAS_OPS = {
         "surfaces": ["wasm", "native"],
     },
     "value.set": {"kind": "op", "scope": "workbook", "js": "setValue", "surfaces": ["wasm", "native"]},
+    "record.fill_patch": {
+        "kind": "record",
+        "role": "patch",
+        "js": "FillPatch",
+        "surfaces": ["wasm", "native"],
+        "read_only_keys": ["other"],
+    },
 }
 
 
 class PatchAliasNestingTest(unittest.TestCase):
-    FILL = {"fill": ["color", "none", "other"], "fill.color": ["argb", "kind"]}
+    # `color` is a `ColorInput` (a string or a `Color`), so no nested path checks the object a read passes.
+    FILL = {"fill": ["color", "none", "other"]}
 
-    def test_an_input_field_typed_by_a_patch_alias_takes_its_keys_and_its_read_twin(self) -> None:
+    def test_an_input_field_typed_by_a_patch_alias_takes_its_keys_and_its_read_only_keys(self) -> None:
         _top, nested = gen.input_keys(_ledger(PATCH_ALIAS_OPS), PATCH_ALIAS_DTS)
         self.assertEqual(nested, {"Workbook.addBox": self.FILL})
 
-    def test_a_patch_field_typed_by_a_patch_alias_takes_its_keys_and_its_read_twin(self) -> None:
+    def test_a_patch_field_typed_by_a_patch_alias_takes_its_keys_and_its_read_only_keys(self) -> None:
         nested = gen.patch_nested_keys(_ledger(PATCH_ALIAS_OPS), PATCH_ALIAS_DTS)
         self.assertEqual(nested, {"Workbook.updateBox": self.FILL})
+
+    def test_without_read_only_keys_a_patch_alias_takes_its_own_keys(self) -> None:
+        entries = {k: dict(v) for k, v in PATCH_ALIAS_OPS.items()}
+        del entries["record.fill_patch"]
+        nested = gen.patch_nested_keys(_ledger(entries), PATCH_ALIAS_DTS)
+        self.assertEqual(nested, {"Workbook.updateBox": {"fill": ["color", "none"]}})
 
     def test_a_value_union_with_several_object_alternatives_is_not_a_record_argument(self) -> None:
         top, _nested = gen.input_keys(_ledger(PATCH_ALIAS_OPS), PATCH_ALIAS_DTS)

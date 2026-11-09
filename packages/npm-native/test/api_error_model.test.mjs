@@ -161,7 +161,7 @@ test('byte inputs accept Uint8Array, ArrayBuffer and views, and refuse anything 
     assert.throws(() => f.Workbook.load([1, 2, 3]), TypeError);
     rejectsWith(() => f.Workbook.load(new ArrayBuffer(0)), f.StatusCode.InvalidArgument, 'empty input');
     rejectsWith(() => f.Workbook.load(new Uint8Array([1, 2, 3])), f.StatusCode.IoZipCorrupt, 'not a ZIP');
-    assert.throws(() => wb.formatValue(1234.5, '0.0'), TypeError);
+    assert.throws(() => wb.formatValue(undefined, '0.0'), TypeError);
   });
 });
 

@@ -82,9 +82,6 @@ test('module-level numeric and string positions reject coercion and overflow', (
         if (!(error instanceof expected)) failures.push(label + ':' + error.name);
       }
     }
-    probe('status-symbol', TypeError, () => addon.getStatusName(Symbol('status')));
-    probe('status-fraction', RangeError, () => addon.getStatusName(1.5));
-    probe('status-overflow', RangeError, () => addon.getStatusName(2 ** 31));
     probe('log-symbol', TypeError, () => addon.setLogMinLevel(Symbol('log')));
     probe('log-underflow', RangeError, () => addon.setLogMinLevel(-(2 ** 31) - 1));
     probe('formula-symbol', TypeError, () => addon.evaluateFormula(Symbol('formula')));
@@ -106,10 +103,15 @@ test('integer positional arguments reject wrapping and non-finite values', () =>
   const wb = addon.Workbook.createDefault();
   try {
     wb.setNumber(0, 0, 0, 42);
-    for (const value of [2 ** 32, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY]) {
+    for (const value of [2 ** 32, 1.5, Number.NaN, Number.POSITIVE_INFINITY]) {
       assert.throws(() => wb.setNumber(value, 0, 0, 7), RangeError, `sheet=${String(value)}`);
       assert.equal(cellNumber(wb), 42, `invalid sheet changed A1 for ${String(value)}`);
     }
+    assert.throws(
+      () => wb.setNumber(-1, 0, 0, 7),
+      (e) => e instanceof FormulonError && e.code === StatusCode.InvalidArgument,
+    );
+    assert.equal(cellNumber(wb), 42, 'a negative sheet changed A1');
     for (const value of [2 ** 32, 2 ** 31, -(2 ** 31) - 1, 1.5, Number.NaN, Number.POSITIVE_INFINITY]) {
       assert.throws(() => wb.setError(0, 0, 0, value), RangeError, `errorCode=${String(value)}`);
       assert.equal(cellNumber(wb), 42, `invalid error code changed A1 for ${String(value)}`);
@@ -119,10 +121,10 @@ test('integer positional arguments reject wrapping and non-finite values', () =>
   }
 });
 
-test('iterative caps use the unsigned int32 contract', () => {
+test('iterative caps accept 1..32767 and refuse the rest by class', () => {
   const wb = addon.Workbook.createDefault();
   try {
-    wb.updateIterative({ enabled: true, maxIterations: 2 ** 32 - 1, maxChange: 0.1 });
+    wb.updateIterative({ enabled: true, maxIterations: 32767, maxChange: 0.1 });
     const accepted = wb.getIterative();
     assert.throws(
       () => wb.updateIterative({ enabled: false, maxIterations: 0 }),
@@ -130,10 +132,17 @@ test('iterative caps use the unsigned int32 contract', () => {
       'a zero cap is rejected, not clamped',
     );
     assert.deepEqual({ ...wb.getIterative() }, { ...accepted }, 'a rejected patch changes no key');
-    for (const value of [2 ** 32, -1]) {
+    for (const value of [32768, 2 ** 32 - 1, -1]) {
+      assert.throws(
+        () => wb.updateIterative({ maxIterations: value }),
+        (e) => e instanceof FormulonError && e.code === StatusCode.InvalidArgument,
+        `maxIterations=${String(value)}`,
+      );
+    }
+    for (const value of [2 ** 32, 1.5, Number.NaN, Number.POSITIVE_INFINITY]) {
       assert.throws(() => wb.updateIterative({ maxIterations: value }), RangeError, `maxIterations=${String(value)}`);
     }
-    for (const value of [1.5, Number.NaN, Number.POSITIVE_INFINITY, '5', null]) {
+    for (const value of ['5', null]) {
       assert.throws(() => wb.updateIterative({ maxIterations: value }), TypeError, `maxIterations=${String(value)}`);
     }
     assert.equal(wb.getIterative().maxIterations, accepted.maxIterations);
@@ -164,14 +173,19 @@ test('paging cursor and limit reject values outside native integer ranges', () =
   const wb = addon.Workbook.createDefault();
   const range = { firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 };
   try {
-    for (const value of [-1, 1.5, Number.NaN, Number.POSITIVE_INFINITY, 2 ** 53, 2 ** 64]) {
+    const negative = (e) => e instanceof FormulonError && e.code === StatusCode.InvalidArgument;
+    for (const value of [1.5, Number.NaN, Number.POSITIVE_INFINITY, 2 ** 53, 2 ** 64]) {
       assert.throws(() => wb.getCellsInRange(0, range, value), RangeError, `get cursor=${String(value)}`);
       assert.throws(() => wb.getInvalidCells(0, value), RangeError, `invalid cursor=${String(value)}`);
     }
-    for (const value of [2 ** 32, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY]) {
+    assert.throws(() => wb.getCellsInRange(0, range, -1), negative, 'get cursor=-1');
+    assert.throws(() => wb.getInvalidCells(0, -1), negative, 'invalid cursor=-1');
+    for (const value of [2 ** 32, 1.5, Number.NaN, Number.POSITIVE_INFINITY]) {
       assert.throws(() => wb.getCellsInRange(0, range, undefined, value), RangeError, `get limit=${String(value)}`);
       assert.throws(() => wb.getInvalidCells(0, undefined, value), RangeError, `invalid limit=${String(value)}`);
     }
+    assert.throws(() => wb.getCellsInRange(0, range, undefined, -1), negative, 'get limit=-1');
+    assert.throws(() => wb.getInvalidCells(0, undefined, -1), negative, 'invalid limit=-1');
     const refusedByHost = (e) => e instanceof FormulonError && e.code === 2;
     assert.throws(() => wb.getCellsInRange(0, range, Number.MAX_SAFE_INTEGER), refusedByHost);
     assert.throws(() => wb.getInvalidCells(0, Number.MAX_SAFE_INTEGER), refusedByHost);

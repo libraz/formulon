@@ -21,25 +21,25 @@ class GeometryTests(unittest.TestCase):
     def test_format_defaults_roundtrip(self) -> None:
         with Workbook.create_default() as wb:
             wb.sheet(0).update_format_defaults(
-                default_col_width_chars=12.5, default_row_height_pt=18.0, base_col_width_chars=9.0
+                default_column_width_chars=12.5, default_row_height_pt=18.0, base_column_width_chars=9.0
             )
             d = wb.sheet(0).get_format_defaults()
-            self.assertEqual(d.default_col_width_chars, 12.5)
+            self.assertEqual(d.default_column_width_chars, 12.5)
             self.assertEqual(d.default_row_height_pt, 18.0)
-            self.assertEqual(d.base_col_width_chars, 9.0)
-            wb.sheet(0).update_format_defaults(default_col_width_chars=None, default_row_height_pt=None)
+            self.assertEqual(d.base_column_width_chars, 9.0)
+            wb.sheet(0).update_format_defaults(default_column_width_chars=None, default_row_height_pt=None)
             d = wb.sheet(0).get_format_defaults()
-            self.assertIsNone(d.default_col_width_chars)
+            self.assertIsNone(d.default_column_width_chars)
             self.assertIsNone(d.default_row_height_pt)
             with self.assertRaises(FormulonError):
-                wb.sheet(0).update_format_defaults(default_col_width_chars=-1.0)
+                wb.sheet(0).update_format_defaults(default_column_width_chars=-1.0)
 
     def test_clear_column_width_follows_default_and_keeps_state(self) -> None:
         with Workbook.create_default() as wb:
-            wb.sheet(0).update_format_defaults(default_col_width_chars=10.0, base_col_width_chars=8.0)
+            wb.sheet(0).update_format_defaults(default_column_width_chars=10.0, base_column_width_chars=8.0)
             wb.sheet(0).set_column_width(0, 0, 10.0)
             wb.sheet(0).reset_column_width(0, 0)
-            wb.sheet(0).update_format_defaults(default_col_width_chars=20.0, base_col_width_chars=8.0)
+            wb.sheet(0).update_format_defaults(default_column_width_chars=20.0, base_column_width_chars=8.0)
             self.assertEqual(wb.sheet(0).get_column_width_pt(0), wb.sheet(0).get_column_width_pt(1))
             self.assertEqual(wb.sheet(0).list_column_overrides(), [])
 
@@ -130,13 +130,13 @@ class GeometryTests(unittest.TestCase):
         with Workbook.create_default() as wb:
             d = wb.sheet(0).get_format_defaults()
             # Stored width of the base-8 Calibri 11 default (64 px, shown as 8.43).
-            self.assertEqual(d.effective_default_col_width_chars, 2340 / 256)
+            self.assertEqual(d.effective_default_column_width_chars, 2340 / 256)
             self.assertEqual(d.effective_default_row_height_pt, 102 / 7)
             wb.sheet(0).update_format_defaults(
-                default_col_width_chars=12.5, default_row_height_pt=20.25, base_col_width_chars=8.0
+                default_column_width_chars=12.5, default_row_height_pt=20.25, base_column_width_chars=8.0
             )
             d = wb.sheet(0).get_format_defaults()
-            self.assertEqual(d.effective_default_col_width_chars, 12.5)
+            self.assertEqual(d.effective_default_column_width_chars, 12.5)
             self.assertEqual(d.effective_default_row_height_pt, 20.25)
 
     def test_row_height_override_and_clear(self) -> None:
@@ -228,7 +228,7 @@ class FormulaAndRangeTests(unittest.TestCase):
             seen = []
             cursor = None
             while True:
-                got = wb.sheet(0).get_cells_in_range(full, cursor, 2)
+                got = wb.sheet(0).get_cells_in_range(full, cursor=cursor, limit=2)
                 page, cursor = got.cells, got.next_cursor
                 self.assertLessEqual(len(page), 2)
                 seen.extend((c.row, c.col) for c in page)

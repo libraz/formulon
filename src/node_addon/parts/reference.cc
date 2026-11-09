@@ -13,14 +13,14 @@ namespace formulon_node {
 namespace {
 
 /// Reads the optional `options` object at `info[idx]`; false after throwing for a non-object.
-bool OptionsArg(const Napi::CallbackInfo& info, size_t idx, const char* api, Napi::Object* out) {
+bool OptionsArg(const Napi::CallbackInfo& info, size_t idx, Napi::Object* out) {
   const Napi::Env env = info.Env();
   if (info.Length() <= idx || info[idx].IsUndefined() || info[idx].IsNull()) {
     *out = Napi::Object::New(env);
     return true;
   }
   if (info[idx].IsArray() || !ObjectArg(info, idx, out)) {
-    Napi::TypeError::New(env, std::string(api) + " expects an options object").ThrowAsJavaScriptException();
+    ThrowArgumentTypeError(env, "options", "must be an object");
     return false;
   }
   return true;
@@ -34,7 +34,7 @@ Napi::Value Workbook::ParseReference(const Napi::CallbackInfo& info) {
     return ThrowInvalidHandle(env);
   }
   Napi::Object options;
-  if (!OptionsArg(info, 1, "parseReference", &options)) {
+  if (!OptionsArg(info, 1, &options)) {
     return env.Undefined();
   }
   CheckedSpecReader reader(env);
@@ -47,8 +47,7 @@ Napi::Value Workbook::ParseReference(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   if (has_row != has_col) {
-    Napi::TypeError::New(env, "parseReference: `baseRow` and `baseCol` must be given together")
-        .ThrowAsJavaScriptException();
+    ThrowArgumentTypeError(env, "options.baseRow and options.baseCol", "must be given together");
     return env.Undefined();
   }
   const std::string text = ArgString(info, 0);
@@ -74,7 +73,7 @@ Napi::Value Workbook::FormatReference(const Napi::CallbackInfo& info) {
     return ThrowInvalidHandle(env);
   }
   Napi::Object options;
-  if (!OptionsArg(info, 1, "formatReference", &options)) {
+  if (!OptionsArg(info, 1, &options)) {
     return env.Undefined();
   }
   const Napi::Object range = ArgObject(info, 0);
@@ -85,7 +84,7 @@ Napi::Value Workbook::FormatReference(const Napi::CallbackInfo& info) {
   Napi::Object rect_object;
   if (!reader.Object(range, "rect", &rect_object)) {
     if (reader.ok()) {
-      Napi::TypeError::New(env, "formatReference: `rect` is required").ThrowAsJavaScriptException();
+      ThrowArgumentTypeError(env, "range.rect", "is required");
     }
     return env.Undefined();
   }

@@ -128,7 +128,11 @@ test('shape arguments are validated', async () => {
   assert.equal(wb.sheet(0).listShapes().length, 0);
   assert.throws(() => wb.sheet(0).shape(99).update({ name: 'x' }), isFormulonError);
   assert.throws(() => wb.sheet(0).removeDrawing(99), isFormulonError);
-  assert.throws(() => wb.sheet(0).addShape({ ...box(mod), anchor: { ...box(mod).anchor, fromRow: -1 } }), RangeError);
+  assert.throws(
+    () => wb.sheet(0).addShape({ ...box(mod), anchor: { ...box(mod).anchor, fromRow: -1 } }),
+    (e) => e.name === 'FormulonError' && e.code === mod.StatusCode.InvalidArgument,
+  );
+  assert.throws(() => wb.sheet(0).addShape({ ...box(mod), anchor: { ...box(mod).anchor, fromRow: 1.5 } }), RangeError);
   release(wb);
 });
 

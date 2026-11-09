@@ -92,6 +92,7 @@ const TWO_LEVEL_GRID = [
 ];
 const DATE_SERIAL_GRID = ['行ラベル|Sum of Amount', '45292|10', '45323|30', '45658|5', '45689|7', '総計|52'];
 const wrongKind = (err) => err instanceof TypeError || err instanceof RangeError;
+const negative = (err) => err?.name === 'FormulonError' && err.code === 2;
 const addNet = (b) => b.wb.pivotCache(b.cacheId).addCalculatedField('Net', 'Amount*2');
 const addEw = (b) => b.wb.pivotCache(b.cacheId).addCalculatedItem(b.region, 'EW', 'East+West');
 const twoLevels = (b) => b.wb.sheet(0).pivot(b.pivot).setRowFieldOrder([b.region, b.product]);
@@ -1399,7 +1400,8 @@ test('pivotSetOptions merges onto the current options and rejects bad values wit
     }
     // A value of the wrong kind throws before anything is written.
     for (const bad of [{ indent: '3' }, { indent: 1.5 }, { indent: -1 }, { pageWrap: Number.NaN }]) {
-      assert.throws(() => wb.sheet(0).pivot(pivot).updateOptions(bad), wrongKind, JSON.stringify(bad));
+      const expected = bad.indent === -1 ? negative : wrongKind;
+      assert.throws(() => wb.sheet(0).pivot(pivot).updateOptions(bad), expected, JSON.stringify(bad));
       assert.deepEqual(wb.sheet(0).pivot(pivot).getOptions(), kept, JSON.stringify(bad));
     }
     wb.sheet(0).pivot(pivot).updateOptions({ errorCaption: null });
@@ -1432,7 +1434,11 @@ test('pivotCacheSetOptions merges, bounds the missing-items limit and survives s
     expectFailure(() => wb.pivotCache(cacheId).updateOptions({ missingItemsLimit: 1048577 }));
     assert.deepEqual(wb.pivotCache(cacheId).getOptions(), kept);
     for (const bad of [-1, -2, 1.5, Number.NaN, '7']) {
-      assert.throws(() => wb.pivotCache(cacheId).updateOptions({ missingItemsLimit: bad }), wrongKind, String(bad));
+      assert.throws(
+        () => wb.pivotCache(cacheId).updateOptions({ missingItemsLimit: bad }),
+        typeof bad === 'number' && bad < 0 ? negative : wrongKind,
+        String(bad),
+      );
       assert.deepEqual(wb.pivotCache(cacheId).getOptions(), kept, String(bad));
     }
     assert.throws(() => wb.pivotCache(cacheId).updateOptions(), TypeError);

@@ -74,7 +74,7 @@ extern "C" fm_status_t fm_workbook_has_dirty_cells(const fm_workbook_t* wb, int3
   // A recalc on this thread holds the engine and is mid-way through the dirty set.
   if (formulon::eval::detail::g_in_recalc) {
     return set_binding_error(formulon::FormulonErrorCode::kGraphRecalcReentrant,
-                             "fm_workbook_has_dirty_cells called from inside a recalc");
+                             "dirty cells cannot be read inside a recalc");
   }
   *out_has_dirty = wb->workbook().recalc_engine().dirty().size() != 0U ? 1 : 0;
   return 0;
@@ -95,8 +95,10 @@ extern "C" fm_status_t fm_workbook_recalc_parallel(fm_workbook_t* wb, uint32_t t
     return null_argument("wb");
   }
   if (thread_count > formulon::eval::kMaxSchedulerThreads) {
-    return invalid_argument("thread_count must be 0..8", "thread_count=" + std::to_string(thread_count) + " max=" +
-                                                             std::to_string(formulon::eval::kMaxSchedulerThreads));
+    return invalid_argument(
+        ("thread_count must be in 0.." + std::to_string(formulon::eval::kMaxSchedulerThreads)).c_str(),
+        "thread_count=" + std::to_string(thread_count) +
+            " max=" + std::to_string(formulon::eval::kMaxSchedulerThreads));
   }
 
   formulon::eval::SchedulerConfig config;
@@ -134,17 +136,19 @@ extern "C" fm_status_t fm_workbook_update_iterative(fm_workbook_t* wb, const fm_
   }
   // No field can be cleared; every check runs before the write.
   if (!patch_op_ok_without_clear(patch->enabled_op)) {
-    return invalid_argument("invalid enabled_op", "enabled_op=" + std::to_string(patch->enabled_op));
+    return invalid_argument("enabled_op is not a patch op", "enabled_op=" + std::to_string(patch->enabled_op));
   }
   if (!patch_op_ok_without_clear(patch->max_iterations_op)) {
-    return invalid_argument("invalid max_iterations_op",
+    return invalid_argument("max_iterations_op is not a patch op",
                             "max_iterations_op=" + std::to_string(patch->max_iterations_op));
   }
   if (!patch_op_ok_without_clear(patch->max_change_op)) {
-    return invalid_argument("invalid max_change_op", "max_change_op=" + std::to_string(patch->max_change_op));
+    return invalid_argument("max_change_op is not a patch op", "max_change_op=" + std::to_string(patch->max_change_op));
   }
-  if (patch->max_iterations_op == FM_PATCH_OP_SET && patch->max_iterations == 0U) {
-    return invalid_argument("max_iterations must be at least 1", "max_iterations=0");
+  if (patch->max_iterations_op == FM_PATCH_OP_SET &&
+      (patch->max_iterations == 0U || patch->max_iterations > formulon::kMaxIterationsCap)) {
+    return invalid_argument(("max_iterations must be in 1.." + std::to_string(formulon::kMaxIterationsCap)).c_str(),
+                            "max_iterations=" + std::to_string(patch->max_iterations));
   }
   if (patch->max_change_op == FM_PATCH_OP_SET) {
     if (auto rc = check_finite_non_negative(patch->max_change, "max_change"); rc != 0) {
@@ -155,13 +159,8 @@ extern "C" fm_status_t fm_workbook_update_iterative(fm_workbook_t* wb, const fm_
   if (patch->enabled_op == FM_PATCH_OP_SET) {
     opts.enabled = patch->enabled != 0;
   }
-  // Clamped into Excel's own dialog range rather than rejected: a binding
-  // author who passes a large cap wants a long solve, not an error. The upper
-  // bound is what keeps that from becoming a hang the host cannot cancel
-  // without a progress callback.
   if (patch->max_iterations_op == FM_PATCH_OP_SET) {
-    opts.max_iterations =
-        patch->max_iterations > formulon::kMaxIterationsCap ? formulon::kMaxIterationsCap : patch->max_iterations;
+    opts.max_iterations = patch->max_iterations;
   }
   if (patch->max_change_op == FM_PATCH_OP_SET) {
     opts.max_change = patch->max_change;
@@ -224,7 +223,7 @@ extern "C" fm_status_t fm_workbook_set_calc_mode(fm_workbook_t* wb, std::int32_t
       resolved = formulon::Workbook::CalcMode::kAutoNoTable;
       break;
     default:
-      return invalid_argument("unknown mode");
+      return invalid_argument(("mode " + std::to_string(mode) + " is not a CalcMode").c_str());
   }
   wb->workbook().set_calc_mode(resolved);
   return 0;
@@ -288,7 +287,7 @@ extern "C" fm_status_t fm_workbook_set_ref_mode(fm_workbook_t* wb, std::int32_t 
     return null_argument("wb");
   }
   if (mode != FM_REF_MODE_A1 && mode != FM_REF_MODE_R1C1) {
-    return invalid_argument("unknown mode");
+    return invalid_argument(("mode " + std::to_string(mode) + " is not a RefMode").c_str());
   }
   wb->workbook().mutable_calc_options().ref_mode =
       mode == FM_REF_MODE_R1C1 ? formulon::RefMode::kR1C1 : formulon::RefMode::kA1;
@@ -342,7 +341,7 @@ extern "C" fm_status_t fm_workbook_set_pinned_now(fm_workbook_t* wb, const fm_ci
       now->hour >= 0 && now->hour <= 23 && now->minute >= 0 && now->minute <= 59 && now->second >= 0 &&
       now->second <= 59;
   if (!in_range) {
-    return invalid_argument("field out of range");
+    return invalid_argument("now must be a date and time between 1900-01-01 and 9999-12-31");
   }
   wb->workbook().set_pinned_now(formulon::date_time::CivilTime{
       {now->year, static_cast<unsigned>(now->month), static_cast<unsigned>(now->day)},
@@ -433,7 +432,8 @@ extern "C" fm_status_t fm_sheet_recalc_viewport(fm_workbook_t* wb, size_t sheet_
   // `SheetCellRange::sheet_id` is 16-bit; refuse an index it cannot hold
   // rather than recalculating a different sheet.
   if (sheet_index > 0xFFFFU) {
-    return invalid_argument("sheet_index exceeds 16-bit sheet id range", "sheet_index=" + std::to_string(sheet_index));
+    return invalid_argument(("sheet_index " + std::to_string(sheet_index) + " is out of range (maximum 65535)").c_str(),
+                            "sheet_index=" + std::to_string(sheet_index));
   }
   formulon::eval::SheetCellRange range;
   range.sheet_id = static_cast<std::uint16_t>(sheet_index);

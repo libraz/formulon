@@ -308,7 +308,7 @@ TEST(FormulonCApiThreadedComments, RejectsMalformedInput) {
   EXPECT_EQ(fm_sheet_add_threaded_comment(wb.handle, 0, &c, ignored_id()), FM_STATUS_NOT_FOUND);
   c.person_id = kAlice;
   c.mentions_count = 1;
-  EXPECT_EQ(fm_sheet_add_threaded_comment(wb.handle, 0, &c, ignored_id()), kBindingNullPointer);
+  EXPECT_EQ(fm_sheet_add_threaded_comment(wb.handle, 0, &c, ignored_id()), kInvalidArgument);
   const fm_mention_t beyond{kBob, kMention, 2, 10};
   c.mentions = &beyond;
   EXPECT_EQ(fm_sheet_add_threaded_comment(wb.handle, 0, &c, ignored_id()), kInvalidArgument);
@@ -323,7 +323,7 @@ TEST(FormulonCApiThreadedComments, RejectsMalformedInput) {
   EXPECT_EQ(fm_sheet_update_threaded_comment(wb.handle, 0, kThread, nullptr), kBindingNullPointer);
   patch.mentions_op = FM_PATCH_OP_SET;
   patch.mentions_count = 2;
-  EXPECT_EQ(fm_sheet_update_threaded_comment(wb.handle, 0, kThread, &patch), kBindingNullPointer);
+  EXPECT_EQ(fm_sheet_update_threaded_comment(wb.handle, 0, kThread, &patch), kInvalidArgument);
   patch.mentions_op = FM_PATCH_OP_KEEP;
   patch.mentions_count = 0;
   EXPECT_EQ(fm_sheet_update_threaded_comment(wb.handle, 0, kReply, &patch), FM_STATUS_NOT_FOUND);

@@ -20,8 +20,11 @@ Every table is keyed ``Class.method`` (``Sheet.setColumnWidth``,
   ``rect_args`` / ``span_args`` / ``ref_args``, positions as the class method
   sees them; ``PATCH_KEYS`` (``{method: [position, [key, ...]]}``) of the
   ``patch: true`` ops and ``PATCH_NESTED_KEYS`` (``{method: {path: [key,
-  ...]}}``) of the ``patch_nested`` ones: the keys of the patch type and of
-  the getter's record in src/wasm/formulon.d.ts. Once an op carries
+  ...]}}``) of the ``patch_nested`` ones: the keys of the patch type in
+  src/wasm/formulon.d.ts and the ledger ``read_only_keys`` of its record, a
+  dotted one at its path. ``SPAN_ARGS`` forms are ``span`` (``first, last``),
+  ``start_count`` and ``single`` (one row or column, or an A1 string naming
+  one). Once an op carries
   ``namespace: ooxml``, ``OOXML_WORKBOOK_METHODS`` and ``OOXML_SHEET_METHODS``
   list the names published under ``.ooxml``, which leave the two class lists.
 * ``packages/python/formulon/_sheet.py``: the ``Workbook`` / ``Sheet`` tables but
@@ -41,8 +44,9 @@ Every table is keyed ``Class.method`` (``Sheet.setColumnWidth``,
   (``{Class.method: [[position, type], ...]}``) in the ``<method-signatures>``
   region of ``common.mjs``, read from the facade interfaces of
   src/wasm/formulon.d.ts: the most positional parameters any overload
-  declares, and the parameters typed by an address record or a range type
-  other than a plain ``CellRect``; ``DEFAULT_ARGS`` (``{Class.method:
+  declares (``Workbook.<static>`` and ``Formulon.<fn>`` included), and the
+  parameters typed by an address record or a range type other than a plain
+  ``CellRect``; ``DEFAULT_ARGS`` (``{Class.method:
   [[position, default], ...]}``), the ledger's ``params`` defaults at their
   positions in the longest overload; ``ARG_ROLES`` (``{Class.method:
   [[position, role], ...]}``), the role of each integer parameter of the
@@ -57,10 +61,22 @@ Every table is keyed ``Class.method`` (``Sheet.setColumnWidth``,
   ``INPUT_NESTED_KEYS`` (``{Class.method: {path: [key, ...]}}``) in the
   ``<input-keys>`` region of ``common.mjs``: for each non-patch op whose
   argument is a d.ts input record, the position of that argument and, sorted,
-  the keys it accepts (the record's, plus those of the read record named by
-  ``patch_record``). Nested paths are
+  the keys it accepts (the record's, plus its ledger ``read_only_keys``, the
+  read-record fields a passed-back read carries and the binding ignores).
+  Nested paths are
   dotted field names; a segment ending in ``[]`` descends into each element of
   an array field. A discriminated input has the keys of every alternative.
+  ``READ_ONLY_KEYS`` (``{Class.method: [key, ...]}``) in the same region lists
+  the ``read_only_keys`` of each op's input or patch record, camelCase, a
+  nested one as a dotted path.
+* ``PARAM_NAMES`` (``{Call: [name, ...]}``), ``BOOLEAN_ARGS`` (``{Call:
+  [position, ...]}``) and ``C_FIELD_NAMES`` (``{c_field: {js, py}}``) in the
+  ``<param-names>``, ``<boolean-args>`` and ``<c-field-names>`` regions of
+  ``common.mjs``: the parameter names and the plain ``boolean`` parameters of
+  each facade method's first signature, keyed by the class a consumer calls
+  (``SheetOoxml.getColumnXfIndex``, ``Picture.update``, ``Workbook.load``,
+  ``Formulon.evaluateFormula``), and the ledger fields whose JS name is not
+  the camelCase of the C name. Same rule for an absent or empty region.
 * ``PATCH_NULLABLE`` (``{Class.method: {key: type}}``) in the
   ``<patch-nullable>`` region of ``common.mjs``: the ledger's ``clearable:``
   fields (snake_case, emitted camelCase) of each patch op's patch record, with
@@ -68,7 +84,21 @@ Every table is keyed ``Class.method`` (``Sheet.setColumnWidth``,
   ``array``, else ``object``). An op without a clearable field has no entry.
   Same rule for an absent or empty region.
 * ``packages/python/formulon/_handle_tables.py``: the same tables for the handle
-  classes, the whole file generated.
+  classes, ``READ_ONLY_KEYS`` of every class (snake_case) and ``C_FIELD_NAMES``
+  (``{c_field: py_name}`` where the two differ), the whole file generated.
+* ``src/c_api/generated/binding_record_params.inc``: ``kRecordParams``, the
+  name of the record parameter of each call taking an input record or a patch
+  (``{"Sheet.updateView", "patch"}``), which the WASM and native readers root
+  a field path at. A parameter typed by a union of object types, one a d.ts
+  record (``date: DateInput``), roots the record it carries at its own name.
+* ``src/c_api/generated/binding_param_names.inc``: ``kParamNames``, the
+  ``PARAM_NAMES`` rows plus the label a binding words a handle's raw method
+  with (``Drawing.setZOrder``), each call's names space-separated, which the
+  WASM and native positional guards name a refused argument with. A call
+  whose raw registration (the Node masks in ``workbook_class.cc``, after the
+  arguments the facade supplies) has more checked positions than the d.ts
+  signature, or a checked position the d.ts parameter's type cannot hold, is
+  left out, so a refused raw argument is never given another one's name.
 * ``src/node_addon/generated/facade_scope.inc``: ``kSheetMethods``, the sorted
   raw names of the sheet-scope methods (the addon words their argument guards
   as ``Sheet.<name>``), and ``kHandleMethods``, a ``HandleMethod`` per raw
@@ -83,6 +113,10 @@ Modes:
   --only node-scope
             limit either mode to ``facade_scope.inc``, which needs neither the
             d.ts nor the facade sources
+  --only record-params
+            limit either mode to ``binding_record_params.inc``
+  --only param-names
+            limit either mode to ``binding_param_names.inc``
 """
 
 from __future__ import annotations
@@ -98,6 +132,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import facade_scope  # noqa: E402
+import gen_wasm_positional_guards as positional_guards  # noqa: E402
 
 from tools.dev.binding_drift.api_conventions import parse_header  # noqa: E402
 from tools.dev.binding_drift.api_conventions_arguments import _js_fields, _patch_keys  # noqa: E402
@@ -114,6 +149,8 @@ from tools.dev.binding_drift.surface_files import PYTHON_SHEET  # noqa: E402
 NPM_COMMON = REPO_ROOT / "packages/npm/common.mjs"
 PYTHON_HANDLE_TABLES = REPO_ROOT / "packages/python/formulon/_handle_tables.py"
 NODE_SCOPE_INC = REPO_ROOT / "src/node_addon/generated/facade_scope.inc"
+RECORD_PARAMS_INC = REPO_ROOT / "src/c_api/generated/binding_record_params.inc"
+PARAM_NAMES_INC = REPO_ROOT / "src/c_api/generated/binding_param_names.inc"
 ADDRESS_ARGS_JSON = REPO_ROOT / "tools/api/address_args.json"
 PYTHON_INPUTS = REPO_ROOT / "packages/python/formulon/_inputs.py"
 WASM_DTS = REPO_ROOT / "src/wasm/formulon.d.ts"
@@ -129,6 +166,9 @@ _RANGE_REGION = {"js": _region_re("//", "record-range-fields"), "py": _region_re
 _SIGNATURE_REGION = _region_re("//", "method-signatures")
 _INPUT_REGION = _region_re("//", "input-keys")
 _NULLABLE_REGION = _region_re("//", "patch-nullable")
+_PARAM_NAMES_REGION = _region_re("//", "param-names")
+_BOOLEAN_ARGS_REGION = _region_re("//", "boolean-args")
+_C_FIELD_NAMES_REGION = _region_re("//", "c-field-names")
 OOXML_NAMESPACE = "ooxml"
 # The d.ts types a record field holds an address in; the facade also takes an A1 string for each.
 RANGE_TYPES = ("CellRect", "SheetRect", "CellAddress")
@@ -137,7 +177,7 @@ _NOT_INPUT_RECORDS = frozenset({"CellRect", "SheetRect", "CellAddress", "CellRef
 INPUT_ROLES = frozenset({"input", "patch", "both"})
 _INDENT = "  "
 _FACADE_CLASSES = ("Workbook.", "Sheet.")
-ONLY_TARGETS = ("node-scope",)
+ONLY_TARGETS = ("node-scope", "record-params", "param-names")
 
 
 class GenError(ValueError):
@@ -304,13 +344,55 @@ def patch_nested_keys(
             if root is None:
                 continue
             fields = {f: [t] for f, t in (_patch_keys(surface.decls, surface.raw, root) or {}).items()}
-            derived = _nested_paths(surface, fields, (root,), patch_aliases_only=True)
+            derived = _nested_paths(surface, ledger, fields, (root,), patch_aliases_only=True)
+            derived = _with_read_only_paths(surface, ledger, root, fields, derived)
             if not derived:
                 continue
             paths = out.setdefault(qualified_name, {})
             for path, keys in derived.items():
                 paths[path] = sorted(set(paths.get(path, ())) | set(keys))
     return {name: dict(sorted(paths.items())) for name, paths in sorted(out.items())}
+
+
+def _with_read_only_paths(
+    surface: JsSurface,
+    ledger: facade_scope.Ledger,
+    record: str,
+    fields: Dict[str, List[str]],
+    paths: Dict[str, List[str]],
+) -> Dict[str, List[str]]:
+    """`paths` with the dotted `read_only_keys` of `record` added at their paths. A path no table row covers yet
+    (a nested record a string alternative keeps out of `_nested_paths`) takes its record's fields as well."""
+    out = {path: list(keys) for path, keys in paths.items()}
+    for dotted, keys in facade_scope.read_only_keys(ledger, record)[1].items():
+        found = next((p for p in out if p.replace("[]", "") == dotted), None)
+        if found is None:
+            found, nested = _resolve_path(surface, fields, dotted.split("."))
+            if found is None:
+                raise GenError(f"{record}: read_only_keys path {dotted} names no nested record")
+            out[found] = sorted(_record_fields(surface, nested))
+        out[found] = sorted(set(out[found]) | set(keys))
+    return dict(sorted(out.items()))
+
+
+def _resolve_path(
+    surface: JsSurface, fields: Dict[str, List[str]], segments: Sequence[str]
+) -> Tuple[Optional[str], Optional[str]]:
+    """`(table path, record)` of the nested record `segments` lead to from `fields`, `string` alternatives aside;
+    `(None, None)` when a segment is no field typed by one record."""
+    path, record = "", None
+    for segment in segments:
+        types = fields.get(segment)
+        if not types:
+            return None, None
+        element = _array_element(types[0])
+        kinds = [k.strip() for k in _strip_null(element or types[0], True) if k not in ("string", "undefined")]
+        if len(kinds) != 1 or not _record_fields(surface, kinds[0]):
+            return None, None
+        record = kinds[0]
+        path = f"{path}{'.' if path else ''}{segment}{'[]' if element is not None else ''}"
+        fields = {f: [t] for f, t in _record_fields(surface, record).items()}
+    return path, record
 
 
 def patch_nested_table(ledger: Optional[facade_scope.Ledger] = None, dts: Optional[str] = None) -> str:
@@ -386,6 +468,15 @@ def js_region(ledger: Optional[facade_scope.Ledger] = None) -> str:
     return "".join(out)
 
 
+def _py_tuple_row(name: str, values: Sequence[str]) -> str:
+    """`"name": (...),` as the formatter lays it out: one value per line once the inline form passes the width."""
+    one_line = f'    "{name}": {_py_value(list(values))},'
+    if len(one_line) <= _LINE_WIDTH:
+        return one_line + "\n"
+    rows = "".join(f"        {json.dumps(v)},\n" for v in values)
+    return f'    "{name}": (\n{rows}    ),\n'
+
+
 def _py_tuple(name: str, values: Sequence[str]) -> str:
     body = "".join(f'    "{v}",\n' for v in values)
     return f"{name} = (\n{body})\n"
@@ -419,6 +510,10 @@ def py_handle_tables() -> str:
     out = [head, handle_tables("py", ledger)]
     out.append(_list_families("py", _select(families, False)))
     out.append(address_tables("py", ledger, facade=False))
+    body = "".join(_py_tuple_row(k, v) for k, v in read_only_table("py", ledger).items())
+    out.append(_py_dict("READ_ONLY_KEYS", body))
+    renames = {c: n["py"] for c, n in c_field_names(ledger).items() if n["py"] is not None and n["py"] != c}
+    out.append(_py_dict("C_FIELD_NAMES", "".join(f'    "{c}": "{py}",\n' for c, py in renames.items())))
     return "".join(out)
 
 
@@ -625,9 +720,10 @@ def method_signatures(
     """`(METHOD_ARITY, TYPED_ARGS)` of the facade classes, keyed `Class.method`, sorted.
 
     The arity is the most positional parameters any overload declares (the coordinate form). A method with
-    `CELL_ARGS` or `SPAN_ARGS` must also declare exactly the string form, one parameter fewer per pair or span,
-    which the facade derives at run time. `TYPED_ARGS` lists `[position, type]` per parameter typed by an input
-    record of `RECORD_RANGE_FIELDS` or by another range type; a plain `CellRect` parameter is `RECT_ARGS`'.
+    `CELL_ARGS` or `SPAN_ARGS` must also declare exactly the string form, one parameter fewer per pair or span
+    (as many for a `single` span), which the facade derives at run time. `TYPED_ARGS` lists `[position, type]`
+    per parameter typed by an input record of `RECORD_RANGE_FIELDS` or by another range type; a plain `CellRect`
+    parameter is `RECT_ARGS`'.
     """
     ledger = ledger or facade_scope.load()
     text = WASM_DTS.read_text(encoding="utf-8") if dts is None else dts
@@ -655,12 +751,409 @@ def method_signatures(
         if key not in arities:
             continue
         most = max(arities[key])
-        want = {most, most - len(collapsed.get(key, ())) - len(spans.get(key, ()))}
+        # A `single` span keeps its position: the A1 form replaces the number one for one.
+        folded = [span for span in spans.get(key, ()) if span[2] != "single"]
+        want = {most, most - len(collapsed.get(key, ())) - len(folded)}
         if arities[key] != want:
             raise GenError(f"{key}: overloads take {sorted(arities[key])} arguments, expected {sorted(want)}")
+    for key, counts in _module_signatures(surface).items():
+        if key in arities:
+            raise GenError(f"{key} is both a static or module function and an instance method")
+        arities[key] = {len(params) for params in counts}
     arity = {key: max(counts) for key, counts in sorted(arities.items())}
     args = {key: [[p, k] for p, k in sorted(slots.items())] for key, slots in sorted(typed.items())}
     return arity, args
+
+
+# Interfaces whose methods are not instance methods, and the `Class` their calls are labelled with.
+_MODULE_INTERFACES = {"WorkbookCtor": "Workbook", "Formulon": "Formulon"}
+
+
+def _module_signatures(surface: JsSurface) -> Dict[str, List[List[Tuple[str, str]]]]:
+    """`{Class.fn: [params of each overload]}` of the `Workbook` statics and the `Formulon` module functions."""
+    out: Dict[str, List[List[Tuple[str, str]]]] = {}
+    for interface, owner in _MODULE_INTERFACES.items():
+        decl = surface.decls.get(interface)
+        for member in decl.members if decl is not None and decl.kind == "interface" else ():
+            if member.is_method:
+                out.setdefault(f"{owner}.{member.name}", []).append(list(member.params))
+    return out
+
+
+def _first_signatures(ledger: facade_scope.Ledger, surface: JsSurface, text: str) -> Dict[str, list]:
+    """`{Call: params}` of the first signature of every facade method, keyed by the class a consumer calls it on:
+    `Workbook`, `Sheet`, their `WorkbookOoxml` / `SheetOoxml` layers, each handle class (inherited methods
+    included), `Workbook.<static>` and `Formulon.<fn>`."""
+    interfaces = {interface: interface for interface in _facade_interfaces(ledger)}
+    interfaces.update({layer: layer for layer in OOXML_CLASSES.values()})
+    out: Dict[str, list] = {}
+    for interface, owner in sorted(interfaces.items()):
+        for member in _interface_members(surface, text, interface):
+            if member.is_method:
+                out.setdefault(f"{owner}.{member.name}", list(member.params))
+    for key, overloads in _module_signatures(surface).items():
+        out.setdefault(key, overloads[0])
+    return dict(sorted(out.items()))
+
+
+def param_names(ledger: Optional[facade_scope.Ledger] = None, dts: Optional[str] = None) -> Dict[str, List[str]]:
+    """`PARAM_NAMES`: `{Call: [name, ...]}`, the parameter names of each facade method's first signature (see
+    `_first_signatures`), for the methods that take any."""
+    ledger = ledger or facade_scope.load()
+    text = WASM_DTS.read_text(encoding="utf-8") if dts is None else dts
+    signatures = _first_signatures(ledger, JsSurface(text), text)
+    return {key: [name for name, _type in params] for key, params in signatures.items() if params}
+
+
+_BOOLEAN_TYPES = frozenset({"boolean", "true", "false"})
+
+
+def boolean_args(ledger: Optional[facade_scope.Ledger] = None, dts: Optional[str] = None) -> Dict[str, List[int]]:
+    """`BOOLEAN_ARGS`: `{Call: [position, ...]}` of the parameters a facade method's first signature types
+    `boolean` (an optional one included; a `boolean | null` takes `null` and is left out)."""
+    ledger = ledger or facade_scope.load()
+    text = WASM_DTS.read_text(encoding="utf-8") if dts is None else dts
+    out: Dict[str, List[int]] = {}
+    for key, params in _first_signatures(ledger, JsSurface(text), text).items():
+        positions = [
+            i for i, (_name, ptype) in enumerate(params) if set(_top_union(ptype)) - {"undefined"} <= _BOOLEAN_TYPES
+        ]
+        if positions:
+            out[key] = positions
+    return out
+
+
+def c_field_names(ledger: Optional[facade_scope.Ledger] = None) -> Dict[str, Dict[str, Optional[str]]]:
+    """`C_FIELD_NAMES`: `{c field: {js, py}}` of the ledger fields whose JS name is not the camelCase of the C
+    name, sorted; `py` is None for a field Python does not publish. A C name two records publish under different
+    names is an error, since an engine message names the field by its C name alone."""
+    ledger = ledger or facade_scope.load()
+    out: Dict[str, Dict[str, Optional[str]]] = {}
+    for key, entry in sorted(ledger.entries.items()):
+        if not isinstance(entry, dict) or entry.get("kind") != "field":
+            continue
+        c_name, js_name = entry.get("c"), entry.get("js")
+        if not isinstance(c_name, str) or not isinstance(js_name, str) or js_name == _camel(c_name):
+            continue
+        py_name = entry.get("py") if isinstance(entry.get("py"), str) else None
+        row = {"js": js_name, "py": py_name}
+        if out.setdefault(c_name, row) != row:
+            raise GenError(f"{key}: C field {c_name} is published as {row} and as {out[c_name]}")
+    return dict(sorted(out.items()))
+
+
+def _record_args(ledger: facade_scope.Ledger, surface: JsSurface) -> List[Tuple[dict, str, int, str, str]]:
+    """`(entry, Class.method, position, parameter name, type)` of every op argument that is an input record or a
+    patch, in the first signature of its JS member."""
+    out = []
+    for _key, entry in facade_scope._ops(ledger, ("op",)):
+        for qualified_name in facade_scope._qualified_js(ledger, entry):
+            cls, name = qualified_name.split(".", 1)
+            member = facade_scope._patch_member(surface, entry, name, cls)
+            if member is None and entry.get("namespace") == OOXML_NAMESPACE:
+                member = facade_scope._patch_member(surface, entry, name, f"{cls}Ooxml")
+            if member is None or not member.params:
+                continue
+            if entry.get("patch") is True:
+                position = len(member.params) - 1
+                ptype = facade_scope._patch_type(member.params)
+            else:
+                found = _input_arg(surface, ledger, entry, member)
+                position, ptype = found if found is not None else (-1, None)
+            if ptype is not None:
+                out.append((entry, qualified_name, position, member.params[position][0], ptype))
+    return out
+
+
+def read_only_table(
+    language: str, ledger: Optional[facade_scope.Ledger] = None, dts: Optional[str] = None
+) -> Dict[str, List[str]]:
+    """`READ_ONLY_KEYS`: `{Class.method: [key, ...]}` of each op whose input or patch record lists
+    `read_only_keys`, sorted; JS keys camelCase, Python keys snake_case, a nested one as a dotted path."""
+    ledger = ledger or facade_scope.load()
+    surface = JsSurface(WASM_DTS.read_text(encoding="utf-8") if dts is None else dts)
+    out: Dict[str, List[str]] = {}
+    for entry, qualified_name, _position, _param, ptype in _record_args(ledger, surface):
+        records = facade_scope.type_records(ledger, ptype)
+        keys = sorted({key for record in records for key in record.get("read_only_keys") or ()})
+        if not keys:
+            continue
+        if language == "js":
+            out[qualified_name] = sorted(".".join(_camel(s) for s in k.split(".")) for k in keys)
+            continue
+        cls = qualified_name.split(".", 1)[0]
+        for py_name in facade_scope.qualified(entry, "py", ledger.collections):
+            if py_name.split(".", 1)[0] == cls:
+                out[py_name] = keys
+    return dict(sorted(out.items()))
+
+
+def _alternatives(surface: JsSurface, text: str, depth: int = 0) -> List[str]:
+    """The top-level alternatives of the d.ts type `text`, type aliases expanded, `null` / `undefined` left out."""
+    pool = {**surface.private, **surface.decls}
+    out: List[str] = []
+    for alternative in (a.strip() for a in _top_union(text)):
+        if alternative in ("null", "undefined"):
+            continue
+        decl = pool.get(alternative)
+        alias = decl.text if decl is not None and decl.kind == "type" else None
+        if decl is not None and decl.kind == "const":
+            # An enum is a `const` object and a type alias of the same name; the surface keeps the `const`.
+            found = re.search(r"\bexport\s+type\s+%s\s*=\s*([^;]*);" % re.escape(alternative), surface.raw)
+            alias = found.group(1) if found is not None else None
+        if alias is not None and depth < 8:
+            out += _alternatives(surface, alias, depth + 1)
+        else:
+            out.append(alternative)
+    return out
+
+
+_NUMBER_LITERAL = re.compile(r"-?\d+(?:\.\d+)?")
+
+
+def _is_object_type(alternative: str) -> bool:
+    return (
+        alternative not in _PRIMITIVES
+        and alternative not in ("bigint", "symbol", "unknown", "any", "void", "never")
+        and alternative[:1] not in "'\"`"
+        and not _NUMBER_LITERAL.fullmatch(alternative)
+    )
+
+
+def _object_union_position(surface: JsSurface, params: Sequence[Tuple[str, str]]) -> Optional[int]:
+    """The first parameter whose type is a union of two or more object types, one of them a record the d.ts
+    declares (`DateInput`, `CivilTimeInput | Date`): the record it carries is rooted at that parameter's own name.
+    A union of built-in objects alone (`BytesInput`) carries no record."""
+    pool = {**surface.private, **surface.decls}
+    for position, (_name, ptype) in enumerate(params):
+        alternatives = _alternatives(surface, ptype)
+        if (
+            len(alternatives) > 1
+            and all(_is_object_type(a) for a in alternatives)
+            and any(a in pool and pool[a].kind == "interface" for a in alternatives)
+        ):
+            return position
+    return None
+
+
+def record_params(ledger: Optional[facade_scope.Ledger] = None, dts: Optional[str] = None) -> Dict[str, str]:
+    """`{call: parameter}`: the name of the record parameter of each call that takes an input record or a patch.
+    A call is the facade's `Class.method`, an `.ooxml` op's `<Class>Ooxml.method` too, `Workbook.<static>`,
+    `Formulon.<fn>`, and the label a binding words a handle's raw method with (`Drawing.update`, the class every
+    publishing class shares)."""
+    ledger = ledger or facade_scope.load()
+    surface = JsSurface(WASM_DTS.read_text(encoding="utf-8") if dts is None else dts)
+    out: Dict[str, str] = {}
+    by_raw: Dict[str, set] = {}
+    text = surface.raw
+    signatures = _first_signatures(ledger, surface, text)
+    for entry, qualified_name, position, param, _ptype in _record_args(ledger, surface):
+        cls, name = qualified_name.split(".", 1)
+        union = _object_union_position(surface, signatures.get(qualified_name, []))
+        if union is not None and union < position:
+            param = signatures[qualified_name][union][0]
+        out[qualified_name] = param
+        if entry.get("namespace") == OOXML_NAMESPACE:
+            out[f"{cls}Ooxml.{name}"] = param
+        raw = facade_scope.raw_name(entry, "js")
+        if raw is not None:
+            by_raw.setdefault(raw, set()).add(param)
+    for interface, owner in _MODULE_INTERFACES.items():
+        decl = surface.decls.get(interface)
+        for member in decl.members if decl is not None and decl.kind == "interface" else ():
+            if not member.is_method:
+                continue
+            found = _input_arg(surface, ledger, {}, member)
+            position = found[0] if found is not None else len(member.params)
+            union = _object_union_position(surface, list(member.params))
+            if union is not None and union < position:
+                position = union
+            if position < len(member.params):
+                out.setdefault(f"{owner}.{member.name}", member.params[position][0])
+    for raw, label, _supplied in facade_scope.handle_methods(ledger):
+        params = by_raw.get(raw, set())
+        if label in out or not params:
+            continue
+        if len(params) > 1:
+            raise GenError(f"{label}: the classes that publish it name its record {sorted(params)}")
+        out[label] = params.pop()
+    return dict(sorted(out.items()))
+
+
+def record_params_inc(ledger: Optional[facade_scope.Ledger] = None, dts: Optional[str] = None) -> str:
+    """`binding_record_params.inc`: `kRecordParams`, the record parameter of each call, sorted by call."""
+    rows = "".join(f'    {{"{call}", "{param}"}},\n' for call, param in record_params(ledger, dts).items())
+    return (
+        "// Generated by tools/codegen/gen_facade_tables.py from tools/api/names.yaml and src/wasm/formulon.d.ts;\n"
+        "// do not edit.\n"
+        "\n"
+        "/// A call that takes an input record or a patch, and the name of that parameter.\n"
+        "struct RecordParam {\n"
+        "  const char* call;\n"
+        "  const char* param;\n"
+        "};\n"
+        "\n"
+        "// Sorted by call.\n"
+        "constexpr RecordParam kRecordParams[] = {\n"
+        f"{rows}"
+        "};\n"
+    )
+
+
+# The d.ts type a checked raw position must be able to hold, per Node mask.
+_MASK_NEEDS = {
+    "u32": "number",
+    "i32": "number",
+    "u64": "number",
+    "double": "number",
+    "optionalU32": "number",
+    "optionalU64": "number",
+    "string": "string",
+    "object": "object",
+}
+
+
+def _holds(surface: JsSurface, ptype: str, need: str) -> bool:
+    alternatives = _alternatives(surface, ptype)
+    if need == "number":
+        return any(a == "number" or _NUMBER_LITERAL.fullmatch(a) for a in alternatives)
+    if need == "string":
+        return any(a == "string" or a[:1] in "'\"`" for a in alternatives)
+    return any(_is_object_type(a) for a in alternatives)
+
+
+def _layout_fits(surface: JsSurface, params: Sequence[Tuple[str, str]], supplied: int, spec: Dict[str, int]) -> bool:
+    """Whether every checked raw position of a registration is the d.ts parameter at the same place after the
+    `supplied` leading arguments: no more checked positions than parameters, each of a type the parameter holds."""
+    width = max((mask.bit_length() for kind, mask in spec.items() if kind != "optionalNull"), default=0)
+    if width - supplied > len(params):
+        return False
+    for kind, mask in spec.items():
+        need = _MASK_NEEDS.get(kind)
+        for index in range(supplied, mask.bit_length()) if need is not None else ():
+            if mask >> index & 1 and not _holds(surface, params[index - supplied][1], need):
+                return False
+    return True
+
+
+def raw_layouts(ledger: Optional[facade_scope.Ledger] = None) -> Dict[str, List[Tuple[int, Dict[str, int]]]]:
+    """`{label: [(supplied, spec), ...]}`: the positional masks of every registration a binding words its refusals
+    with `label` (`Sheet.<raw>`, a handle label, `Workbook.<raw>`, `Workbook.<static>`, `Formulon.<fn>`), and the
+    count of leading raw arguments the facade supplies."""
+    ledger = ledger or facade_scope.load()
+    sheet = set(facade_scope.raw_sheet_methods(ledger, "js"))
+    handles = {raw: (label, supplied) for raw, label, supplied in facade_scope.handle_methods(ledger)}
+    out: Dict[str, List[Tuple[int, Dict[str, int]]]] = {}
+    for registration in positional_guards._parse_node_registrations(positional_guards.DEFAULT_NODE_SOURCE):
+        raw = registration.js_name
+        if raw in handles:
+            label, supplied = handles[raw]
+        elif raw in sheet:
+            label, supplied = f"Sheet.{raw}", 1
+        else:
+            label, supplied = f"Workbook.{raw}", 0
+        out.setdefault(label, []).append((supplied, registration.as_js_spec()))
+    for name, spec in positional_guards.STATIC_FUNCTION_GUARDS.items():
+        out.setdefault(f"Workbook.{name}", []).append((0, dict(spec)))
+    for name, spec in positional_guards.FREE_FUNCTION_GUARDS.items():
+        out.setdefault(f"Formulon.{name}", []).append((0, dict(spec)))
+    return out
+
+
+def binding_param_names(
+    ledger: Optional[facade_scope.Ledger] = None,
+    dts: Optional[str] = None,
+    layouts: Optional[Dict[str, List[Tuple[int, Dict[str, int]]]]] = None,
+    aligned_only: bool = True,
+) -> Dict[str, List[str]]:
+    """`{call: [name, ...]}`: the first-signature parameter names of each facade call, plus each handle label a
+    binding words a raw method with (`Drawing.setZOrder`) that no facade class publishes under that name, with the
+    names every publishing class gives the raw method's parameters. A call whose raw layout does not fit its d.ts
+    signature (`_layout_fits`) is left out unless `aligned_only` is false; `layouts` defaults to `raw_layouts()`."""
+    ledger = ledger or facade_scope.load()
+    text = WASM_DTS.read_text(encoding="utf-8") if dts is None else dts
+    surface = JsSurface(text)
+    signatures = {key: params for key, params in _first_signatures(ledger, surface, text).items() if params}
+    by_raw: Dict[str, set] = {}
+    for _key, entry in facade_scope._ops(ledger, ("op",)):
+        raw = facade_scope.raw_name(entry, "js")
+        for qualified_name in facade_scope._qualified_js(ledger, entry) if raw is not None else ():
+            if qualified_name in signatures:
+                by_raw.setdefault(raw, set()).add(tuple(tuple(p) for p in signatures[qualified_name]))
+    out = dict(signatures)
+    for raw, label, _supplied in facade_scope.handle_methods(ledger):
+        params = by_raw.get(raw, set())
+        if label in out or not params:
+            continue
+        if len({tuple(name for name, _type in p) for p in params}) > 1:
+            raise GenError(f"{label}: the classes that publish it name its parameters {sorted(params)}")
+        out[label] = list(params.pop())
+    layouts = raw_layouts(ledger) if layouts is None else layouts
+    return {
+        call: [name for name, _type in params]
+        for call, params in sorted(out.items())
+        if not aligned_only
+        or all(_layout_fits(surface, params, supplied, spec) for supplied, spec in layouts.get(call, ()))
+    }
+
+
+def param_names_inc(
+    ledger: Optional[facade_scope.Ledger] = None,
+    dts: Optional[str] = None,
+    layouts: Optional[Dict[str, List[Tuple[int, Dict[str, int]]]]] = None,
+) -> str:
+    """`binding_param_names.inc`: `kParamNames`, the positional parameter names of each call, sorted by call."""
+    rows = "".join(
+        f'    {{"{call}", "{" ".join(names)}"}},\n' for call, names in binding_param_names(ledger, dts, layouts).items()
+    )
+    declared = "".join(
+        f'    {{"{call}", "{" ".join(names)}"}},\n'
+        for call, names in binding_param_names(ledger, dts, layouts, aligned_only=False).items()
+    )
+    return (
+        "// Generated by tools/codegen/gen_facade_tables.py from tools/api/names.yaml and src/wasm/formulon.d.ts;\n"
+        "// do not edit.\n"
+        "\n"
+        "/// A call and the d.ts names of its positional parameters, in order, separated by single spaces.\n"
+        "struct ParamNames {\n"
+        "  const char* call;\n"
+        "  const char* names;\n"
+        "};\n"
+        "\n"
+        "// Sorted by call; only calls whose raw positions follow the d.ts signature.\n"
+        "constexpr ParamNames kParamNames[] = {\n"
+        f"{rows}"
+        "};\n"
+        "\n"
+        "// Every call's d.ts parameter names, sorted by call: the roots a record field path may start with.\n"
+        "constexpr ParamNames kDeclaredParamNames[] = {\n"
+        f"{declared}"
+        "};\n"
+    )
+
+
+def _js_name_lists(name: str, table: Dict[str, List[str]]) -> str:
+    return _js_frozen(name, "".join(_js_key_list(_INDENT, _js_key(k), v) for k, v in table.items()))
+
+
+def param_names_region(ledger: Optional[facade_scope.Ledger] = None, dts: Optional[str] = None) -> str:
+    """The JS `PARAM_NAMES` table."""
+    return _js_name_lists("PARAM_NAMES", param_names(ledger, dts))
+
+
+def boolean_args_region(ledger: Optional[facade_scope.Ledger] = None, dts: Optional[str] = None) -> str:
+    """The JS `BOOLEAN_ARGS` table."""
+    body = "".join(f"{_INDENT}{_js_key(k)}: {_js_value(v)},\n" for k, v in boolean_args(ledger, dts).items())
+    return _js_frozen("BOOLEAN_ARGS", body)
+
+
+def c_field_names_region(ledger: Optional[facade_scope.Ledger] = None) -> str:
+    """The JS `C_FIELD_NAMES` table."""
+    rows = []
+    for c_name, names in c_field_names(ledger).items():
+        py = f"'{names['py']}'" if names["py"] is not None else "null"
+        rows.append(f"{_INDENT}{_js_bare_key(c_name)}: {{ js: '{names['js']}', py: {py} }},\n")
+    return _js_frozen("C_FIELD_NAMES", "".join(rows))
 
 
 def _camel(snake: str) -> str:
@@ -681,7 +1174,7 @@ def default_args(
         decl = surface.decls.get(interface)
         for member in decl.members if decl is not None and decl.kind == "interface" else ():
             key = f"{owner}.{member.name}"
-            if member.is_method and len(member.params) >= len(longest.get(key, ())):
+            if member.is_method and (key not in longest or len(member.params) > len(longest[key])):
                 longest[key] = [name for name, _type in member.params]
     out: Dict[str, List[List[object]]] = {}
     for entry in ledger.entries.values():
@@ -743,7 +1236,7 @@ def arg_roles(
         decl = surface.decls.get(interface)
         for member in decl.members if decl is not None and decl.kind == "interface" else ():
             key = f"{owner}.{member.name}"
-            if member.is_method and len(member.params) >= len(longest.get(key, ())):
+            if member.is_method and (key not in longest or len(member.params) > len(longest[key])):
                 longest[key] = list(member.params)
     js: Dict[str, List[List[object]]] = {}
     for entry in ledger.entries.values():
@@ -815,21 +1308,24 @@ def _patch_alias(surface: JsSurface, name: str) -> bool:
     return decl is not None and decl.kind == "type" and name.endswith("Patch") and "Patch<" in decl.text
 
 
-def _nested_fields(surface: JsSurface, name: str) -> Dict[str, List[str]]:
-    """Field -> declared types of the nested record `name`; a `Patch<...>` alias `XPatch` has its keys and the
-    fields of its read twin `X`, so a record a getter returned passes back whole."""
-    if not _patch_alias(surface, name):
-        return {f: [t] for f, t in _record_fields(surface, name).items()}
-    out: Dict[str, List[str]] = {}
-    for field, ftype in (_patch_keys(surface.decls, surface.raw, name) or {}).items():
-        out.setdefault(field, []).append(ftype)
-    for field, ftype in _record_fields(surface, name[: -len("Patch")]).items():
-        out.setdefault(field, []).append(ftype)
+def _nested_fields(surface: JsSurface, ledger: facade_scope.Ledger, name: str) -> Dict[str, List[str]]:
+    """Field -> declared types of the nested record `name`; a `Patch<...>` alias has its keys. Each also takes
+    the `read_only_keys` of its ledger record, typed `unknown`, which a record a getter returned carries back."""
+    if _patch_alias(surface, name):
+        out = {f: [t] for f, t in (_patch_keys(surface.decls, surface.raw, name) or {}).items()}
+    else:
+        out = {f: [t] for f, t in _record_fields(surface, name).items()}
+    for field in facade_scope.read_only_keys(ledger, name)[0]:
+        out.setdefault(field, ["unknown"])
     return out
 
 
 def _nested_paths(
-    surface: JsSurface, fields: Dict[str, List[str]], seen: Tuple[str, ...], patch_aliases_only: bool = False
+    surface: JsSurface,
+    ledger: facade_scope.Ledger,
+    fields: Dict[str, List[str]],
+    seen: Tuple[str, ...],
+    patch_aliases_only: bool = False,
 ) -> Dict[str, List[str]]:
     """`{path: [key, ...]}` of every record nested under `fields` (field -> declared types), sorted by path. With
     `patch_aliases_only` a top-level field starts a path only when typed by a `Patch<...>` alias."""
@@ -845,7 +1341,7 @@ def _nested_paths(
                 if patch_aliases_only and not prefix and not _patch_alias(surface, nested):
                     continue
                 path = f"{prefix}{field}{'[]' if element is not None else ''}"
-                inner = _nested_fields(surface, nested)
+                inner = _nested_fields(surface, ledger, nested)
                 out[path] = sorted(set(out.get(path, ())) | set(inner))
                 walk(inner, path + ".", (*seen, nested))
 
@@ -886,16 +1382,16 @@ def _flat(value: object) -> List[int]:
     return []
 
 
-def _input_keys_of(surface: JsSurface, record: str, read: Optional[str]) -> List[str]:
-    keys = set(_record_fields(surface, record))
-    if read:
-        keys |= set(_record_fields(surface, read))
-    return sorted(keys)
+def _input_keys_of(surface: JsSurface, ledger: facade_scope.Ledger, record: str) -> List[str]:
+    """The keys `record` declares and its `read_only_keys`, sorted."""
+    return sorted(set(_record_fields(surface, record)) | set(facade_scope.read_only_keys(ledger, record)[0]))
 
 
-def _input_nested(surface: JsSurface, record: str) -> Dict[str, List[str]]:
+def _input_nested(surface: JsSurface, ledger: facade_scope.Ledger, record: str) -> Dict[str, List[str]]:
     """`{path: [key, ...]}` of every record nested in `record`, sorted by path."""
-    return _nested_paths(surface, {f: [t] for f, t in _record_fields(surface, record).items()}, (record,))
+    fields = {f: [t] for f, t in _record_fields(surface, record).items()}
+    paths = _nested_paths(surface, ledger, fields, (record,))
+    return _with_read_only_paths(surface, ledger, record, fields, paths)
 
 
 def input_keys(
@@ -919,21 +1415,15 @@ def input_keys(
             if found is None:
                 continue
             position, record = found
-            read = entry.get("patch_record")
-            if not isinstance(read, str) or read == "none":
-                read = None
-            if read is None and record.endswith("Input") and _record_fields(surface, record[: -len("Input")]):
-                # `XInput` takes the `X` a read returns as is, so X's fields are accepted (and dropped) too.
-                read = record[: -len("Input")]
-            top[qualified_name] = [position, _input_keys_of(surface, record, read)]
-            paths = _input_nested(surface, record)
+            top[qualified_name] = [position, _input_keys_of(surface, ledger, record)]
+            paths = _input_nested(surface, ledger, record)
             if paths:
                 nested[qualified_name] = paths
     return dict(sorted(top.items())), dict(sorted(nested.items()))
 
 
 def input_keys_region(ledger: Optional[facade_scope.Ledger] = None, dts: Optional[str] = None) -> str:
-    """The JS `INPUT_KEYS` and `INPUT_NESTED_KEYS` tables."""
+    """The JS `INPUT_KEYS`, `INPUT_NESTED_KEYS` and `READ_ONLY_KEYS` tables."""
     top, nested = input_keys(ledger, dts)
     body = "".join(_js_patch_entry(name, position, keys) for name, (position, keys) in top.items())
     out = f"const INPUT_KEYS = Object.freeze({{\n{body}}});\n"
@@ -941,7 +1431,8 @@ def input_keys_region(ledger: Optional[facade_scope.Ledger] = None, dts: Optiona
     for name, paths in nested.items():
         lines = "".join(_js_key_list(_INDENT * 2, _js_bare_key(path), keys) for path, keys in paths.items())
         rows.append(f"{_INDENT}{_js_key(name)}: {{\n{lines}{_INDENT}}},\n")
-    return out + f"const INPUT_NESTED_KEYS = Object.freeze({{\n{''.join(rows)}}});\n"
+    out += f"const INPUT_NESTED_KEYS = Object.freeze({{\n{''.join(rows)}}});\n"
+    return out + _js_name_lists("READ_ONLY_KEYS", read_only_table("js", ledger, dts))
 
 
 _PRIMITIVES = {"number": "number", "string": "string", "boolean": "boolean", "true": "boolean", "false": "boolean"}
@@ -1038,6 +1529,10 @@ def outputs(only: Optional[str] = None) -> List[Tuple[Path, Optional[str]]]:
     """`(path, generated text)` per output; the text is None for a skipped output."""
     if only == "node-scope":
         return [(NODE_SCOPE_INC, node_scope_inc())]
+    if only == "record-params":
+        return [(RECORD_PARAMS_INC, record_params_inc())]
+    if only == "param-names":
+        return [(PARAM_NAMES_INC, param_names_inc())]
     result: List[Tuple[Path, Optional[str]]] = []
     common = NPM_COMMON.read_text(encoding="utf-8")
     common = _splice(common, _REGION["js"], js_region(), NPM_COMMON)
@@ -1049,11 +1544,20 @@ def outputs(only: Optional[str] = None) -> List[Tuple[Path, Optional[str]]]:
         common = _splice(common, _INPUT_REGION, input_keys_region(), NPM_COMMON)
     if _NULLABLE_REGION.search(common):
         common = _splice(common, _NULLABLE_REGION, patch_nullable_region(), NPM_COMMON)
+    for pattern, region in (
+        (_PARAM_NAMES_REGION, param_names_region),
+        (_BOOLEAN_ARGS_REGION, boolean_args_region),
+        (_C_FIELD_NAMES_REGION, c_field_names_region),
+    ):
+        if pattern.search(common):
+            common = _splice(common, pattern, region(), NPM_COMMON)
     result.append((NPM_COMMON, common))
     result.append(_region_output(PYTHON_SHEET, _REGION["py"], py_region))
     result.append(_region_output(PYTHON_INPUTS, _RANGE_REGION["py"], lambda: range_fields_region("py")))
     result.append((PYTHON_HANDLE_TABLES, py_handle_tables()))
     result.append((NODE_SCOPE_INC, node_scope_inc()))
+    result.append((RECORD_PARAMS_INC, record_params_inc()))
+    result.append((PARAM_NAMES_INC, param_names_inc()))
     result.append((ADDRESS_ARGS_JSON, address_args_json()))
     return result
 
@@ -1062,18 +1566,27 @@ def outputs(only: Optional[str] = None) -> List[Tuple[Path, Optional[str]]]:
 _FILLABLE = {
     PYTHON_SHEET: (_REGION["py"],),
     PYTHON_INPUTS: (_RANGE_REGION["py"],),
-    NPM_COMMON: (_RANGE_REGION["js"], _SIGNATURE_REGION, _INPUT_REGION, _NULLABLE_REGION),
+    NPM_COMMON: (
+        _RANGE_REGION["js"],
+        _SIGNATURE_REGION,
+        _INPUT_REGION,
+        _NULLABLE_REGION,
+        _PARAM_NAMES_REGION,
+        _BOOLEAN_ARGS_REGION,
+        _C_FIELD_NAMES_REGION,
+    ),
 }
 
 
 def _skippable(path: Path, current: Optional[str], text: str) -> bool:
-    """`--check` passes an output whose only difference is a fillable region that is still empty."""
+    """`--check` passes an output whose only differences are fillable regions that are still empty."""
+    emptied = text
     for pattern in _FILLABLE.get(path, ()):
         if _empty_region(current, pattern):
-            match = pattern.search(text)
-            if match is not None and current == text[: match.start(2)] + text[match.end(2) :]:
-                return True
-    return False
+            match = pattern.search(emptied)
+            if match is not None:
+                emptied = emptied[: match.start(2)] + emptied[match.end(2) :]
+    return emptied != text and current == emptied
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:

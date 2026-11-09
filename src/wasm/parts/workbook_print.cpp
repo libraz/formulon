@@ -251,9 +251,9 @@ void JsWorkbook::setSheetRowBreak(uint32_t sheet, uint32_t row, emscripten::val 
   }
   JsNarrowNumericReader reader("Sheet.setRowBreak");
   fm_row_break_t brk = FM_STRUCT_INIT(fm_row_break_t);
-  brk.first = reader.u32(input, "first", 0U, "break.first");
-  brk.last = reader.u32(input, "last", 0U, "break.last");
-  brk.manual = reader.boolean(input, "manual", true, "break.manual") ? FM_TRISTATE_TRUE : FM_TRISTATE_FALSE;
+  brk.first = reader.u32(input, "first", 0U, "first");
+  brk.last = reader.u32(input, "last", 0U, "last");
+  brk.manual = reader.boolean(input, "manual", true, "manual") ? FM_TRISTATE_TRUE : FM_TRISTATE_FALSE;
   if (!reader.ok()) {
     return;
   }
@@ -271,9 +271,9 @@ void JsWorkbook::setSheetColBreak(uint32_t sheet, uint32_t col, emscripten::val 
   }
   JsNarrowNumericReader reader("Sheet.setColumnBreak");
   fm_column_break_t brk = FM_STRUCT_INIT(fm_column_break_t);
-  brk.first = reader.u32(input, "first", 0U, "break.first");
-  brk.last = reader.u32(input, "last", 0U, "break.last");
-  brk.manual = reader.boolean(input, "manual", true, "break.manual") ? FM_TRISTATE_TRUE : FM_TRISTATE_FALSE;
+  brk.first = reader.u32(input, "first", 0U, "first");
+  brk.last = reader.u32(input, "last", 0U, "last");
+  brk.manual = reader.boolean(input, "manual", true, "manual") ? FM_TRISTATE_TRUE : FM_TRISTATE_FALSE;
   if (!reader.ok()) {
     return;
   }
@@ -302,17 +302,16 @@ void JsWorkbook::setSheetPageSetup(uint32_t sheet, emscripten::val setup) {
   JsNarrowNumericReader reader("Sheet.updatePageSetup");
   fm_page_setup_patch_t out = FM_STRUCT_INIT(fm_page_setup_patch_t);
   const auto u32 = [&](const char* key, fm_patch_op_t* op, uint32_t* value) {
-    const std::string field = std::string("pageSetup.") + key;
-    js_patch_value(reader, setup, key, field.c_str(), op, value,
-                   [&](const emscripten::val& v) { return reader.u32_value(v, 0U, field.c_str()); });
+    js_patch_value(reader, setup, key, key, op, value,
+                   [&](const emscripten::val& v) { return reader.u32_value(v, 0U, key); });
   };
-  js_patch_value(reader, setup, "orientation", "pageSetup.orientation", &out.orientation_op, &out.orientation,
-                 [&](const emscripten::val& v) { return reader.i32_value(v, 0, "pageSetup.orientation"); });
+  js_patch_value(reader, setup, "orientation", "orientation", &out.orientation_op, &out.orientation,
+                 [&](const emscripten::val& v) { return reader.i32_value(v, 0, "orientation"); });
   u32("paperSize", &out.paper_size_op, &out.paper_size);
   u32("scalePct", &out.scale_pct_op, &out.scale_pct);
   u32("fitToWidth", &out.fit_to_width_op, &out.fit_to_width);
   u32("fitToHeight", &out.fit_to_height_op, &out.fit_to_height);
-  js_patch_value(reader, setup, "fitToPage", "pageSetup.fitToPage", &out.fit_to_page_op, &out.fit_to_page,
+  js_patch_value(reader, setup, "fitToPage", "fitToPage", &out.fit_to_page_op, &out.fit_to_page,
                  [&](const emscripten::val& v) { return reader.boolean_value(v, false) ? 1 : 0; });
   if (!reader.ok()) {
     return;
@@ -328,9 +327,8 @@ void JsWorkbook::setSheetPageMargins(uint32_t sheet, emscripten::val margins) {
   JsNarrowNumericReader reader("Sheet.updatePageMargins");
   fm_page_margins_patch_t out = FM_STRUCT_INIT(fm_page_margins_patch_t);
   const auto margin = [&](const char* key, fm_patch_op_t* op, double* value) {
-    const std::string field = std::string("pageMargins.") + key;
-    js_patch_value(reader, margins, key, field.c_str(), op, value,
-                   [&](const emscripten::val& v) { return reader.number_value(v, 0.0, field.c_str()); });
+    js_patch_value(reader, margins, key, key, op, value,
+                   [&](const emscripten::val& v) { return reader.number_value(v, 0.0, key); });
   };
   margin("leftIn", &out.left_in_op, &out.left_in);
   margin("rightIn", &out.right_in_op, &out.right_in);
@@ -352,8 +350,7 @@ void JsWorkbook::setSheetPrintOptions(uint32_t sheet, emscripten::val options) {
   JsNarrowNumericReader reader("Sheet.updatePrintOptions");
   fm_print_options_patch_t out = FM_STRUCT_INIT(fm_print_options_patch_t);
   const auto flag = [&](const char* key, fm_patch_op_t* op, int32_t* value) {
-    const std::string field = std::string("printOptions.") + key;
-    js_patch_value(reader, options, key, field.c_str(), op, value,
+    js_patch_value(reader, options, key, key, op, value,
                    [&](const emscripten::val& v) { return reader.boolean_value(v, false) ? 1 : 0; });
   };
   flag("gridLines", &out.grid_lines_op, &out.grid_lines);
@@ -381,8 +378,7 @@ void JsWorkbook::setSheetHeaderFooter(uint32_t sheet, emscripten::val headerFoot
   JsNarrowNumericReader reader("Sheet.updateHeaderFooter");
   fm_header_footer_patch_t out = FM_STRUCT_INIT(fm_header_footer_patch_t);
   const auto section = [&](const char* key, std::string& storage, fm_patch_op_t* op, const char** value) {
-    const std::string field = std::string("headerFooter.") + key;
-    js_patch_string(reader, headerFooter, key, field.c_str(), true, storage, op, value);
+    js_patch_string(reader, headerFooter, key, key, true, storage, op, value);
   };
   section("oddHeader", odd_header, &out.odd_header_op, &out.odd_header);
   section("oddFooter", odd_footer, &out.odd_footer_op, &out.odd_footer);
@@ -391,8 +387,7 @@ void JsWorkbook::setSheetHeaderFooter(uint32_t sheet, emscripten::val headerFoot
   section("firstHeader", first_header, &out.first_header_op, &out.first_header);
   section("firstFooter", first_footer, &out.first_footer_op, &out.first_footer);
   const auto flag = [&](const char* key, fm_patch_op_t* op, int32_t* value) {
-    const std::string field = std::string("headerFooter.") + key;
-    js_patch_value(reader, headerFooter, key, field.c_str(), op, value,
+    js_patch_value(reader, headerFooter, key, key, op, value,
                    [&](const emscripten::val& v) { return reader.boolean_value(v, false) ? 1 : 0; });
   };
   flag("differentOddEven", &out.different_odd_even_op, &out.different_odd_even);

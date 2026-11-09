@@ -33,6 +33,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "c_api/binding_status.h"
@@ -101,7 +102,7 @@ struct JsSheetView {
   uint32_t freezeRows = 0U;
   uint32_t freezeCols = 0U;
   bool showGridLines = true;
-  bool showRowColHeaders = true;
+  bool showRowColumnHeaders = true;
   bool showZeros = true;
   bool rightToLeft = false;
   bool tabSelected = false;
@@ -134,10 +135,10 @@ void record_failure(fm_status_t rc);
 /// workbook, with the message "the workbook is disposed".
 void record_invalid_handle();
 
-/// Records a failure the binding raised itself, carrying `message` and an
-/// empty context. Never reads the thread-local diagnostics, which at that
+/// Records a failure the binding raised itself, carrying `message` and a
+/// (possibly empty) context. Never reads the thread-local diagnostics, which at that
 /// point still belong to a previous call.
-void record_binding_failure(int32_t code, const char* message);
+void record_binding_failure(int32_t code, const char* message, const char* context = "");
 
 /// Records a `TypeError` the wrapper throws once the method returns: an
 /// argument of the wrong shape (not an array, not a function, missing).
@@ -189,14 +190,16 @@ class JsNarrowNumericReader {
   uint16_t u16_value(const emscripten::val& value, uint16_t dflt, const char* field);
   uint32_t u32_value(const emscripten::val& value, uint32_t dflt, const char* field);
   int32_t i32_value(const emscripten::val& value, int32_t dflt, const char* field);
-  /// Reads a required uint32 field: absent, non-Number or non-integer is a
-  /// type error, a negative or too-large integer a range error.
+  /// Reads a required uint32 field: absent or non-number is a type error, a
+  /// non-integer or too-large value a range error, a negative one InvalidArgument.
   uint32_t required_u32(const emscripten::val& owner, const char* key, const char* field);
   int64_t i64(const emscripten::val& owner, const char* key, int64_t dflt, const char* field = nullptr);
   double number(const emscripten::val& owner, const char* key, double dflt, const char* field = nullptr);
   double number_value(const emscripten::val& value, double dflt, const char* field);
   bool boolean(const emscripten::val& owner, const char* key, bool dflt, const char* field = nullptr);
-  bool boolean_value(const emscripten::val& value, bool dflt);
+  /// Accepts `true` / `false` only; absent yields `dflt`, anything else is a type error. A null `field` names
+  /// the field read last.
+  bool boolean_value(const emscripten::val& value, bool dflt, const char* field = nullptr);
   std::string string(const emscripten::val& owner, const char* key, const char* field = nullptr);
   std::string string_value(const emscripten::val& value, const char* field);
   const char* optional_string(const emscripten::val& owner, const char* key, std::string& storage,
@@ -213,8 +216,10 @@ class JsNarrowNumericReader {
   std::string required_string(const emscripten::val& owner, const char* key, const char* field);
   /// Records a type error for `field` (it "must be `expected`") unless one is recorded already.
   void fail_type(const char* field, const char* expected);
-  /// Records a range error for `field` (it "must be a finite integer in `range`").
+  /// Records InvalidArgument for `field` (it "must be in" the `[lo, hi]` span `range`).
   void fail_range(const char* field, const char* range);
+  /// Records a type error for `field` (it "must not be null").
+  void fail_null(const char* field);
   uint32_t length(const emscripten::val& array, const char* field = nullptr);
   emscripten::val array_element(const emscripten::val& array, uint32_t index, const char* field = nullptr);
 
@@ -226,25 +231,32 @@ class JsNarrowNumericReader {
   /// Reads `owner[key]`; `*fetched` is false when the reader already failed or the access threw.
   emscripten::val fetch(const emscripten::val& owner, const char* key, const char* field, bool* fetched);
   /// Reads `value` as an integer in [lower, upper]: absent yields `dflt`, a rejected value 0.
-  double integer_value(const emscripten::val& value, double dflt, const char* field, double lower, double upper,
-                       const char* range);
+  double integer_value(const emscripten::val& value, double dflt, const char* field, double lower, double upper);
   bool safe_predicate(const emscripten::val& owner, const emscripten::val& key, int32_t operation, const char* key_name,
                       const char* field);
   /// True when `value` is present and a JS Number; a present non-Number fails the reader.
   bool present_number(const emscripten::val& value, const char* key, const char* field);
   bool read_integer(const emscripten::val& value, const char* key, const char* field, double lower, double upper,
-                    const char* range, double* number);
+                    double* number);
   bool read_number(const emscripten::val& value, const char* key, const char* field, double* number);
   emscripten::val safe_operation(const emscripten::val& owner, const emscripten::val& key, int32_t operation,
                                  bool* succeeded);
   emscripten::val safe_get(const emscripten::val& owner, const emscripten::val& key, const char* field,
                            bool* succeeded);
   void reject_access(const char* key, const char* field);
-  void reject(const char* key, const char* field, const char* range);
+  /// Classifies a rejected integer: non-integral, negative for an unsigned field, or too large.
+  void reject_integer(const char* field, double candidate, double lower);
+  void reject_negative(const char* field, double candidate);
+  /// Records `<operation> <path> <constraint>`; `kind` is the argument-error class the wrapper throws.
+  void reject_with(const char* field, const char* constraint, int32_t kind);
+  /// The record path of `field` under the operation's record parameter.
+  std::string path_of(const char* field) const;
   void reject_type(const char* field, const char* expected);
 
   std::string operation_;
   std::string message_;
+  /// The field most recently read through `value()` / `fetch()`, named by a field-less boolean read.
+  std::string last_field_;
 };
 
 /// The state of one key of a partial-update (patch) object.
@@ -417,8 +429,9 @@ emscripten::val snapshot_bytes(fm_status_t rc, uint8_t* data, std::size_t len);
 // as before.
 
 /// Reads a `CellRect` record with the explicit numeric reader; every field is
-/// required. A missing / nullish record reads as all zeros.
-fm_cell_rect_t js_pull_range(const emscripten::val& v, JsNarrowNumericReader* reader);
+/// required, and `field` (the record's path under the call's record parameter)
+/// names it in a rejection. A missing / nullish record reads as all zeros.
+fm_cell_rect_t js_pull_range(const emscripten::val& v, JsNarrowNumericReader* reader, std::string_view field = "range");
 
 /// Reads a range list with the explicit numeric reader. Other WASM families
 /// must use the same per-call reader before invoking a C mutator.
@@ -432,16 +445,19 @@ std::vector<fm_cell_rect_t> js_pull_range_array(const emscripten::val& array, co
 /// Pulls the `{kind, argb, theme, tint, indexed}` colour specification out
 /// of `v[key]`. An absent object leaves `kind` at `FM_COLOR_KIND_NONE` (no
 /// colour). A supplied selector is authoritative; the binding does not
-/// resolve theme/indexed / auto colours.
-fm_color_t js_pull_color_spec(const emscripten::val& v, const char* key, JsNarrowNumericReader* reader);
+/// resolve theme/indexed / auto colours. `parent` is the path of `v` under the
+/// call's record parameter.
+fm_color_t js_pull_color_spec(const emscripten::val& v, const char* key, JsNarrowNumericReader* reader,
+                              std::string_view parent = {});
 
-/// `js_pull_color_spec` for a value already in hand; `field` names it in a
-/// rejection. A missing value reads as `FM_COLOR_KIND_NONE`.
+/// `js_pull_color_spec` for a value already in hand; `field` is its path, which
+/// a rejection of it or of one of its members names. A missing value reads as
+/// `FM_COLOR_KIND_NONE`.
 fm_color_t js_pull_color_spec_value(const emscripten::val& value, const char* field, JsNarrowNumericReader* reader);
 
 /// Pulls a `{style, color}` border-side record out of `v`, defaulting every
-/// absent field to zero.
-fm_border_side_t js_pull_border_side(const emscripten::val& v, JsNarrowNumericReader* reader);
+/// absent field to zero; `field` is its path.
+fm_border_side_t js_pull_border_side(const emscripten::val& v, std::string_view field, JsNarrowNumericReader* reader);
 
 /// One string field of a record built by `js_set_cstr_fields`.
 struct JsStrField {

@@ -18,6 +18,14 @@ import facade_scope  # noqa: E402
 import gen_facade_tables as gen  # noqa: E402
 import validate_names  # noqa: E402
 
+# The message, read-only-key and signature-row tables are tested beside these, under the same CTest entry.
+from gen_facade_tables_messages_test import (  # noqa: E402, F401
+    MessageTablesTest,
+    ReadOnlyKeysTest,
+    SignatureRowsTest,
+)
+from gen_facade_tables_messages_test import RegionGateTest as MultiRegionGateTest  # noqa: E402, F401
+
 DTS = """
 export interface CellRect { row: number; col: number; rowCount: number; colCount: number; }
 export interface SheetRect { readonly sheet: number; readonly rect: CellRect; }

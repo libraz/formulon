@@ -295,8 +295,7 @@ Napi::Value CollationClasses(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   Napi::Array array;
   if (!ArrayArg(info, 0, &array)) {
-    Napi::TypeError::New(env, "getCollationClasses expects (values:Value[], strength, profileId)")
-        .ThrowAsJavaScriptException();
+    ThrowArgumentTypeError(env, "values", "must be an array");
     return env.Undefined();
   }
   const uint32_t n = array.Length();

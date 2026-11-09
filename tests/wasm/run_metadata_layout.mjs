@@ -388,9 +388,10 @@ export function registerMetadataLayout(Module, test) {
       // wording; a binding that grew its own check would keep returning
       // `kInvalidArgument` while the text stopped matching. The status code
       // alone cannot tell a shared implementation from two that agree today.
-      const kSpanRefused = 'column span out of range';
-      const kRowSpanRefused = 'row span out of range';
-      const kMetricRefused = 'value must be finite and non-negative';
+      const kSpanRefused = 'column span is outside the grid';
+      const kRowSpanRefused = 'row span is outside the grid';
+      const kWidthRefused = 'width_chars must be finite and not negative';
+      const kHeightRefused = 'height_pt must be finite and not negative';
       const refused = (call, expectedMessage, label) => {
         assert.throws(call, (e) => {
           assert.equal(e.name, 'FormulonError', label);
@@ -409,8 +410,8 @@ export function registerMetadataLayout(Module, test) {
       refused(() => wb.setRowOutline(0, 0, 1048576, 1), kRowSpanRefused, 'setRowOutline past the grid');
 
       for (const bad of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, -1]) {
-        refused(() => wb.setColumnWidth(0, 0, 2, bad), kMetricRefused, `setColumnWidth(${bad})`);
-        refused(() => wb.setRowHeight(0, 1, 1, bad), kMetricRefused, `setRowHeight(${bad})`);
+        refused(() => wb.setColumnWidth(0, 0, 2, bad), kWidthRefused, `setColumnWidth(${bad})`);
+        refused(() => wb.setRowHeight(0, 1, 1, bad), kHeightRefused, `setRowHeight(${bad})`);
       }
 
       // The context carries the values the call saw, which is what makes a
@@ -454,18 +455,18 @@ export function registerMetadataLayout(Module, test) {
       const expectRejected = (patch, field) => {
         assert.throws(() => wb.updatePageSetup(0, patch), {
           name: 'RangeError',
-          message: new RegExp(`updatePageSetup.*${field}`),
+          message: new RegExp(`^Sheet\\.updatePageSetup patch\\.${field} `),
         });
         const setup = wb.getPageSetup(0);
         assert.equal(setup.orientation, 1);
         assert.equal(setup.scalePct, 125);
       };
 
-      expectRejected({ scalePct: 2 ** 32 + 100 }, 'pageSetup.scalePct');
-      expectRejected({ scalePct: 100.5 }, 'pageSetup.scalePct');
-      expectRejected({ scalePct: Number.NaN }, 'pageSetup.scalePct');
-      expectRejected({ scalePct: Number.POSITIVE_INFINITY }, 'pageSetup.scalePct');
-      expectRejected({ orientation: 1.5 }, 'pageSetup.orientation');
+      expectRejected({ scalePct: 2 ** 32 + 100 }, 'scalePct');
+      expectRejected({ scalePct: 100.5 }, 'scalePct');
+      expectRejected({ scalePct: Number.NaN }, 'scalePct');
+      expectRejected({ scalePct: Number.POSITIVE_INFINITY }, 'scalePct');
+      expectRejected({ orientation: 1.5 }, 'orientation');
 
       // `undefined` leaves the attribute alone; `null` is refused on a key that cannot be cleared.
       wb.updatePageSetup(0, { scalePct: undefined, orientation: undefined });

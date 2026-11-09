@@ -496,7 +496,7 @@ Napi::Value Workbook::PreviewChartData(const Napi::CallbackInfo& info) {
     return ThrowInvalidHandle(env);
   }
   Napi::Object spec;
-  if (!PatchObjectArg(info, 2, "getChartPreview", &spec)) {
+  if (!PatchObjectArg(info, 2, &spec)) {
     return env.Undefined();
   }
   CheckedSpecReader reader(env);

@@ -17,8 +17,10 @@
 #include <cstring>
 #include <limits>
 #include <string>
+#include <string_view>
 #include <vector>
 
+#include "c_api/binding_message.h"
 #include "c_api/formulon_c.h"
 
 namespace formulon {
@@ -205,8 +207,8 @@ emscripten::val js_object_or_empty(const emscripten::val& value) {
   return js_value_present(value) ? value : emscripten::val::object();
 }
 
-void record_binding_failure(int32_t code, const char* message) {
-  fm_wasm_record_status_error(code, message != nullptr ? message : "", "", nullptr);
+void record_binding_failure(int32_t code, const char* message, const char* context) {
+  fm_wasm_record_status_error(code, message != nullptr ? message : "", context != nullptr ? context : "", nullptr);
 }
 
 void record_type_error(const char* message) {
@@ -257,76 +259,47 @@ emscripten::val optional_or_null(fm_status_t rc, int32_t present, emscripten::va
 JsNarrowNumericReader::JsNarrowNumericReader(const char* operation)
     : operation_(operation != nullptr ? operation : "WASM binding") {}
 
-namespace {
-
-// An operation named `<Class>.<method>` words its errors in the shared public form
-// `<Class>.<method> <field> <constraint>`, with no C integer width in the constraint.
-bool is_public_operation(const std::string& operation) {
-  return operation.find('.') != std::string::npos;
+std::string JsNarrowNumericReader::path_of(const char* field) const {
+  const std::string_view name = field != nullptr ? field : "<field>";
+  return binding::record_path(operation_, name);
 }
 
-// The C integer widths the readers bound a field by; none is public vocabulary.
-bool is_c_width(const char* range) {
-  static const char* const kWidths[] = {"[0, 255]", "[0, 65535]", "[0, 4294967295]", "[-2147483648, 2147483647]",
-                                        "[-2^63, 2^63)"};
-  for (const char* width : kWidths) {
-    if (std::strcmp(range, width) == 0) {
-      return true;
-    }
+void JsNarrowNumericReader::reject_with(const char* field, const char* constraint, int32_t kind) {
+  if (!message_.empty()) {
+    return;
   }
-  return false;
+  message_ = binding::argument_message(operation_, path_of(field), constraint);
+  fm_wasm_record_argument_error(kind, message_.c_str());
 }
-
-// The public spelling of a reader's expected-type phrase.
-const char* public_expected(const char* expected) {
-  if (std::strcmp(expected, "a Number") == 0) {
-    return "a number";
-  }
-  if (std::strcmp(expected, "a whole Number") == 0) {
-    return "an integer";
-  }
-  return expected;
-}
-
-}  // namespace
 
 void JsNarrowNumericReader::reject_access(const char* key, const char* field) {
-  if (!message_.empty()) {
-    return;
-  }
-  const char* name = field != nullptr ? field : key;
-  name = name != nullptr ? name : "<field>";
-  message_ = is_public_operation(operation_) ? operation_ + " " + name + " could not be read"
-                                             : operation_ + ": `" + name + "` field access threw";
-  fm_wasm_record_argument_error(kArgumentErrorAccess, message_.c_str());
+  reject_with(field != nullptr ? field : key, "could not be read", kArgumentErrorAccess);
 }
 
-void JsNarrowNumericReader::reject(const char* key, const char* field, const char* range) {
-  if (!message_.empty()) {
-    return;
-  }
-  const char* name = field != nullptr ? field : key;
-  name = name != nullptr ? name : "<field>";
-  if (is_public_operation(operation_)) {
-    message_ = operation_ + " " + name + " must be an integer";
-    if (!is_c_width(range)) {
-      message_ += std::string(" in ") + range;
-    }
-  } else {
-    message_ = operation_ + ": `" + name + "` must be a finite integer in " + range;
-  }
-  fm_wasm_record_argument_error(kArgumentErrorRange, message_.c_str());
-}
-
-void JsNarrowNumericReader::reject_type(const char* field, const char* expected) {
+void JsNarrowNumericReader::reject_negative(const char* field, double candidate) {
   if (!message_.empty()) {
     return;
   }
   const char* name = field != nullptr ? field : "<field>";
-  const char* want = expected != nullptr ? expected : "the expected type";
-  message_ = is_public_operation(operation_) ? operation_ + " " + name + " must be " + public_expected(want)
-                                             : operation_ + ": `" + name + "` must be " + want;
-  fm_wasm_record_argument_error(kArgumentErrorType, message_.c_str());
+  message_ = binding::argument_message(operation_, path_of(field), "must not be negative");
+  const long long shown = candidate > -9.0e18 ? static_cast<long long>(candidate) : -9000000000000000000LL;
+  const std::string context = std::string(name) + "=" + std::to_string(shown);
+  fm_wasm_record_status_error(FM_STATUS_INVALID_ARGUMENT, message_.c_str(), context.c_str(), nullptr);
+}
+
+void JsNarrowNumericReader::reject_integer(const char* field, double candidate, double lower) {
+  if (!std::isfinite(candidate) || std::floor(candidate) != candidate) {
+    reject_with(field, "must be an integer", kArgumentErrorRange);
+  } else if (candidate < lower && lower == 0.0) {
+    reject_negative(field, candidate);
+  } else {
+    reject_with(field, "is too large", kArgumentErrorRange);
+  }
+}
+
+void JsNarrowNumericReader::reject_type(const char* field, const char* expected) {
+  reject_with(field, (std::string("must be ") + (expected != nullptr ? expected : "the expected type")).c_str(),
+              kArgumentErrorType);
 }
 
 emscripten::val JsNarrowNumericReader::safe_operation(const emscripten::val& owner, const emscripten::val& key,
@@ -360,20 +333,20 @@ bool JsNarrowNumericReader::present_number(const emscripten::val& value, const c
   // Check the JavaScript primitive before asking embind for a C++ value.
   // In particular, Symbol and BigInt must never reach val::as on this path.
   if (!value.isNumber()) {
-    reject_type(field != nullptr ? field : key, "a Number");
+    reject_type(field != nullptr ? field : key, "a number");
     return false;
   }
   return true;
 }
 
 bool JsNarrowNumericReader::read_integer(const emscripten::val& value, const char* key, const char* field, double lower,
-                                         double upper, const char* range, double* number) {
+                                         double upper, double* number) {
   if (!present_number(value, key, field)) {
     return false;
   }
   const double candidate = value.as<double>();
   if (!std::isfinite(candidate) || std::floor(candidate) != candidate || candidate < lower || candidate > upper) {
-    reject(key, field, range);
+    reject_integer(field != nullptr ? field : key, candidate, lower);
     return false;
   }
   *number = candidate;
@@ -395,16 +368,17 @@ emscripten::val JsNarrowNumericReader::fetch(const emscripten::val& owner, const
   if (!ok()) {
     return emscripten::val::undefined();
   }
+  last_field_ = field != nullptr ? field : key;
   return safe_get(owner, emscripten::val(key), field != nullptr ? field : key, fetched);
 }
 
 double JsNarrowNumericReader::integer_value(const emscripten::val& value, double dflt, const char* field, double lower,
-                                            double upper, const char* range) {
+                                            double upper) {
   if (!ok()) {
     return dflt;
   }
   double number = 0.0;
-  if (!read_integer(value, field, field, lower, upper, range, &number)) {
+  if (!read_integer(value, field, field, lower, upper, &number)) {
     return !js_value_present(value) ? dflt : 0.0;
   }
   return number;
@@ -435,15 +409,15 @@ uint16_t JsNarrowNumericReader::u16(const emscripten::val& owner, const char* ke
 }
 
 uint8_t JsNarrowNumericReader::u8_value(const emscripten::val& value, uint8_t dflt, const char* field) {
-  return static_cast<uint8_t>(integer_value(value, dflt, field, 0.0, 255.0, "[0, 255]"));
+  return static_cast<uint8_t>(integer_value(value, dflt, field, 0.0, 255.0));
 }
 
 uint16_t JsNarrowNumericReader::u16_value(const emscripten::val& value, uint16_t dflt, const char* field) {
-  return static_cast<uint16_t>(integer_value(value, dflt, field, 0.0, 65535.0, "[0, 65535]"));
+  return static_cast<uint16_t>(integer_value(value, dflt, field, 0.0, 65535.0));
 }
 
 uint32_t JsNarrowNumericReader::u32_value(const emscripten::val& value, uint32_t dflt, const char* field) {
-  return static_cast<uint32_t>(integer_value(value, dflt, field, 0.0, kMaxU32, "[0, 4294967295]"));
+  return static_cast<uint32_t>(integer_value(value, dflt, field, 0.0, kMaxU32));
 }
 
 std::string JsNarrowNumericReader::required_string(const emscripten::val& owner, const char* key, const char* field) {
@@ -464,7 +438,25 @@ void JsNarrowNumericReader::fail_type(const char* field, const char* expected) {
 }
 
 void JsNarrowNumericReader::fail_range(const char* field, const char* range) {
-  reject(nullptr, field, range);
+  if (!message_.empty()) {
+    return;
+  }
+  // `[lo, hi]` reads `must be in lo..hi`, an InvalidArgument status.
+  std::string bounds(range != nullptr ? range : "");
+  if (bounds.size() >= 2 && bounds.front() == '[' && bounds.back() == ']') {
+    bounds = bounds.substr(1, bounds.size() - 2);
+  }
+  const std::size_t comma = bounds.find(", ");
+  if (comma != std::string::npos) {
+    bounds.replace(comma, 2, "..");
+  }
+  const char* name = field != nullptr ? field : "<field>";
+  message_ = binding::argument_message(operation_, path_of(field), "must be in " + bounds);
+  fm_wasm_record_status_error(FM_STATUS_INVALID_ARGUMENT, message_.c_str(), name, nullptr);
+}
+
+void JsNarrowNumericReader::fail_null(const char* field) {
+  reject_with(field, "must not be null", kArgumentErrorType);
 }
 
 uint32_t JsNarrowNumericReader::required_u32(const emscripten::val& owner, const char* key, const char* field) {
@@ -474,27 +466,18 @@ uint32_t JsNarrowNumericReader::required_u32(const emscripten::val& owner, const
     return 0U;
   }
   if (!js_value_present(value)) {
-    reject_type(field, "a whole Number");
+    reject_with(field, "is required", kArgumentErrorType);
     return 0U;
   }
-  if (!present_number(value, key, field)) {
-    return 0U;
-  }
-  const double number = value.as<double>();
-  if (!std::isfinite(number) || std::floor(number) != number) {
-    reject_type(field, "a whole Number");
-    return 0U;
-  }
-  if (number < 0.0 || number > kMaxU32) {
-    reject(key, field, "[0, 4294967295]");
+  double number = 0.0;
+  if (!read_integer(value, key, field, 0.0, kMaxU32, &number)) {
     return 0U;
   }
   return static_cast<uint32_t>(number);
 }
 
 int32_t JsNarrowNumericReader::i32_value(const emscripten::val& value, int32_t dflt, const char* field) {
-  return static_cast<int32_t>(
-      integer_value(value, dflt, field, -2147483648.0, 2147483647.0, "[-2147483648, 2147483647]"));
+  return static_cast<int32_t>(integer_value(value, dflt, field, -2147483648.0, 2147483647.0));
 }
 
 int64_t JsNarrowNumericReader::i64(const emscripten::val& owner, const char* key, int64_t dflt, const char* field) {
@@ -504,11 +487,11 @@ int64_t JsNarrowNumericReader::i64(const emscripten::val& owner, const char* key
     return dflt;
   }
   double number = 0.0;
-  if (!read_integer(value, key, field, -0x1p63, 0x1p63, "[-2^63, 2^63)", &number)) {
+  if (!read_integer(value, key, field, -0x1p63, 0x1p63, &number)) {
     return dflt;
   }
   if (number >= 0x1p63) {
-    reject(key, field, "[-2^63, 2^63)");
+    reject_integer(field != nullptr ? field : key, number, -0x1p63);
     return dflt;
   }
   // `-2^63` is exactly representable as a JS Number, but converting that
@@ -546,19 +529,24 @@ bool JsNarrowNumericReader::boolean(const emscripten::val& owner, const char* ke
   if (!fetched) {
     return dflt;
   }
-  return boolean_value(value, dflt);
+  return boolean_value(value, dflt, field != nullptr ? field : key);
 }
 
-bool JsNarrowNumericReader::boolean_value(const emscripten::val& value, bool dflt) {
+bool JsNarrowNumericReader::boolean_value(const emscripten::val& value, bool dflt, const char* field) {
   if (!ok()) {
     return dflt;
   }
   if (!js_value_present(value)) {
     return dflt;
   }
-  // JavaScript `!` is a primitive truthiness operation and never performs
-  // user-defined valueOf/toString conversion, including for Symbol values.
-  return !value.operator!();
+  if (value.isTrue()) {
+    return true;
+  }
+  if (value.isFalse()) {
+    return false;
+  }
+  reject_type(field != nullptr ? field : last_field_.c_str(), "a boolean");
+  return dflt;
 }
 
 std::string JsNarrowNumericReader::string(const emscripten::val& owner, const char* key, const char* field) {
@@ -614,6 +602,7 @@ emscripten::val JsNarrowNumericReader::value(const emscripten::val& owner, const
   if (!ok()) {
     return emscripten::val::undefined();
   }
+  last_field_ = field != nullptr ? field : key;
   if (!js_value_present(owner)) {
     reject_type(field != nullptr ? field : key, "an object");
     return emscripten::val::undefined();
@@ -847,7 +836,7 @@ bool val_to_bytes_checked(const emscripten::val& v, std::vector<uint8_t>* out) {
   const emscripten::val snapshot = emscripten::val::take_ownership(fm_wasm_safe_reader_operation(
       v.as_handle(), emscripten::val::undefined().as_handle(), kSafeBytesSnapshot, &completed));
   if (completed == 0) {
-    fm_wasm_record_argument_error(kArgumentErrorAccess, "bytes: field access threw");
+    fm_wasm_record_argument_error(kArgumentErrorAccess, "bytes could not be read");
     return false;
   }
   if (!js_value_present(snapshot)) {
@@ -872,7 +861,7 @@ bool val_to_bytes_checked(const emscripten::val& v, std::vector<uint8_t>* out) {
     // The copy trampoline reports a throw as -1 without capturing it, so
     // both outcomes surface as a type error on the argument.
     fm_wasm_record_argument_error(kArgumentErrorType,
-                                  copied < 0 ? "bytes: field access threw" : "bytes must be a Uint8Array");
+                                  copied < 0 ? "bytes could not be read" : "bytes must be a Uint8Array");
     return false;
   }
   return true;
@@ -894,7 +883,7 @@ emscripten::val snapshot_bytes(fm_status_t rc, uint8_t* data, std::size_t len) {
   return bytes;
 }
 
-fm_cell_rect_t js_pull_range(const emscripten::val& v, JsNarrowNumericReader* reader) {
+fm_cell_rect_t js_pull_range(const emscripten::val& v, JsNarrowNumericReader* reader, std::string_view field) {
   if (reader == nullptr) {
     return fm_cell_rect_t{};
   }
@@ -902,10 +891,10 @@ fm_cell_rect_t js_pull_range(const emscripten::val& v, JsNarrowNumericReader* re
   if (!js_value_present(v)) {
     return m;
   }
-  m.first_row = reader->required_u32(v, "firstRow", "range.firstRow");
-  m.first_col = reader->required_u32(v, "firstCol", "range.firstCol");
-  m.last_row = reader->required_u32(v, "lastRow", "range.lastRow");
-  m.last_col = reader->required_u32(v, "lastCol", "range.lastCol");
+  m.first_row = reader->required_u32(v, "firstRow", binding::field_path(field, "firstRow").c_str());
+  m.first_col = reader->required_u32(v, "firstCol", binding::field_path(field, "firstCol").c_str());
+  m.last_row = reader->required_u32(v, "lastRow", binding::field_path(field, "lastRow").c_str());
+  m.last_col = reader->required_u32(v, "lastCol", binding::field_path(field, "lastCol").c_str());
   return m;
 }
 
@@ -950,12 +939,14 @@ std::vector<fm_cell_rect_t> js_pull_range_array(const emscripten::val& array, co
   return out;
 }
 
-fm_color_t js_pull_color_spec(const emscripten::val& v, const char* key, JsNarrowNumericReader* reader) {
+fm_color_t js_pull_color_spec(const emscripten::val& v, const char* key, JsNarrowNumericReader* reader,
+                              std::string_view parent) {
   if (reader == nullptr) {
     return fm_color_t{};
   }
-  const emscripten::val f = reader->value(v, key, key);
-  return js_pull_color_spec_value(f, key, reader);
+  const std::string field = binding::field_path(parent, key);
+  const emscripten::val f = reader->value(v, key, field.c_str());
+  return js_pull_color_spec_value(f, field.c_str(), reader);
 }
 
 fm_color_t js_pull_color_spec_value(const emscripten::val& f, const char* field, JsNarrowNumericReader* reader) {
@@ -966,21 +957,21 @@ fm_color_t js_pull_color_spec_value(const emscripten::val& f, const char* field,
   if (!reader->require_object(f, field)) {
     return spec;
   }
-  spec.kind = reader->u8(f, "kind", 0, "color.kind");
-  spec.argb = reader->u32(f, "argb", 0U, "color.argb");
-  spec.theme = reader->u32(f, "theme", 0U, "color.theme");
-  spec.tint = reader->number(f, "tint", 0.0, "color.tint");
-  spec.indexed = reader->u32(f, "indexed", 0U, "color.indexed");
+  spec.kind = reader->u8(f, "kind", 0, binding::field_path(field, "kind").c_str());
+  spec.argb = reader->u32(f, "argb", 0U, binding::field_path(field, "argb").c_str());
+  spec.theme = reader->u32(f, "theme", 0U, binding::field_path(field, "theme").c_str());
+  spec.tint = reader->number(f, "tint", 0.0, binding::field_path(field, "tint").c_str());
+  spec.indexed = reader->u32(f, "indexed", 0U, binding::field_path(field, "indexed").c_str());
   return spec;
 }
 
-fm_border_side_t js_pull_border_side(const emscripten::val& v, JsNarrowNumericReader* reader) {
+fm_border_side_t js_pull_border_side(const emscripten::val& v, std::string_view field, JsNarrowNumericReader* reader) {
   fm_border_side_t s{};
   if (reader == nullptr || !js_value_present(v)) {
     return s;
   }
-  s.style = reader->u8(v, "style", 0, "border.style");
-  s.color = js_pull_color_spec(v, "color", reader);
+  s.style = reader->u8(v, "style", 0, binding::field_path(field, "style").c_str());
+  s.color = js_pull_color_spec(v, "color", reader, field);
   return s;
 }
 
@@ -1006,7 +997,7 @@ JsPatchKey js_patch_key(JsNarrowNumericReader& reader, const emscripten::val& va
     if (nullable) {
       return JsPatchKey::kClear;
     }
-    reader.fail_type(field, "a value (null cannot clear this field)");
+    reader.fail_null(field);
     return JsPatchKey::kKeep;
   }
   return JsPatchKey::kSet;
@@ -1142,9 +1133,10 @@ emscripten::val js_border_side(const fm_border_side_t& s) {
 
 namespace {
 
-/// Records a `Value` type error and returns false.
-bool reject_value(const char* message) {
-  fm_wasm_record_argument_error(kArgumentErrorType, message);
+/// Records a `Value` type error for `path` and returns false.
+bool reject_value(const char* path, const char* constraint) {
+  const std::string message = binding::argument_message("Value", path, constraint);
+  fm_wasm_record_argument_error(kArgumentErrorType, message.c_str());
   return false;
 }
 
@@ -1161,13 +1153,13 @@ bool val_to_value(const emscripten::val& in, fm_value_t* out, std::string& text)
     return false;
   }
   if (!kind.isNumber()) {
-    return reject_value("Value: `value.kind` must be a ValueKind");
+    return reject_value("value.kind", "must be a ValueKind");
   }
   const double kind_number = kind.as<double>();
   if (!(kind_number >= static_cast<double>(FM_VALUE_KIND_BLANK) &&
         kind_number <= static_cast<double>(FM_VALUE_KIND_LAMBDA)) ||
       std::floor(kind_number) != kind_number) {
-    return reject_value("Value: `value.kind` must be a ValueKind");
+    return reject_value("value.kind", "must be a ValueKind");
   }
   out->kind = static_cast<int32_t>(kind_number);
   switch (out->kind) {
@@ -1177,7 +1169,7 @@ bool val_to_value(const emscripten::val& in, fm_value_t* out, std::string& text)
         return false;
       }
       if (!number.isNumber()) {
-        return reject_value("Value: `value.number` must be a Number");
+        return reject_value("value.number", "must be a number");
       }
       out->u.number = number.as<double>();
       return true;
@@ -1188,7 +1180,7 @@ bool val_to_value(const emscripten::val& in, fm_value_t* out, std::string& text)
         return false;
       }
       if (!flag.isTrue() && !flag.isFalse()) {
-        return reject_value("Value: `value.boolean` must be a boolean");
+        return reject_value("value.boolean", "must be a boolean");
       }
       out->u.boolean = flag.isTrue() ? 1 : 0;
       return true;
@@ -1199,7 +1191,7 @@ bool val_to_value(const emscripten::val& in, fm_value_t* out, std::string& text)
         return false;
       }
       if (!string.isString()) {
-        return reject_value("Value: `value.text` must be a string");
+        return reject_value("value.text", "must be a string");
       }
       text = reader.string_value(string, "value.text");
       if (!reader.ok()) {
@@ -1214,7 +1206,7 @@ bool val_to_value(const emscripten::val& in, fm_value_t* out, std::string& text)
         return false;
       }
       if (!code.isNumber()) {
-        return reject_value("Value: `value.errorCode` must be an ErrorCode");
+        return reject_value("value.errorCode", "must be an ErrorCode");
       }
       out->u.error_code = reader.i32_value(code, 0, "value.errorCode");
       return reader.ok();

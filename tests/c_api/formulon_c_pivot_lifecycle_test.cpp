@@ -149,7 +149,7 @@ TEST(FormulonCApiPivot, NullHandleStatusMatchesRecordedError) {
 
   const auto expect_null_handle = [&](fm_status_t status) {
     EXPECT_EQ(status, null_pointer);
-    EXPECT_NE(std::string(fm_get_last_error_message()).find("wb is NULL"), std::string::npos)
+    EXPECT_NE(std::string(fm_get_last_error_message()).find("wb must not be NULL"), std::string::npos)
         << "message: " << fm_get_last_error_message();
   };
 

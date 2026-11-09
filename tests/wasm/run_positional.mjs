@@ -8,6 +8,11 @@ function expectRangeError(fn) {
   assert.throws(fn, RangeError);
 }
 
+// A negative value for an unsigned position is an InvalidArgument FormulonError, not a RangeError.
+function expectNegativeRefused(fn) {
+  expectFailure(fn, StatusCode.InvalidArgument);
+}
+
 function expectTypeError(fn) {
   assert.throws(fn, TypeError);
 }
@@ -41,10 +46,12 @@ export function registerPositional(Module, test, hookProbe) {
     const wb = Module.Workbook.createDefault();
     try {
       wb.setNumber(0, 0, 0, 42);
-      for (const value of [2 ** 32, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY]) {
+      for (const value of [2 ** 32, 1.5, Number.NaN, Number.POSITIVE_INFINITY]) {
         expectRangeError(() => wb.setNumber(value, 0, 0, 7));
         assert.equal(wb.getValue(0, 0, 0).number, 42);
       }
+      expectNegativeRefused(() => wb.setNumber(-1, 0, 0, 7));
+      assert.equal(wb.getValue(0, 0, 0).number, 42);
       expectTypeError(() => wb.setNumber(Symbol('sheet'), 0, 0, 7));
       assert.equal(wb.getValue(0, 0, 0).number, 42);
 
@@ -68,10 +75,9 @@ export function registerPositional(Module, test, hookProbe) {
       wb.setText(0, 0, 0, 'valid');
 
       expectFailure(() => wb.setError(1, 0, 0, -1), StatusCode.SheetIndexOutOfRange);
-      assert.equal(typeof Module.getStatusName(-1), 'string');
+      assert.equal(Module.getStatusName, undefined);
       assert.equal(Module.getErrorDisplayName, undefined);
       expectFailure(() => Module.setLogMinLevel(-1), StatusCode.InvalidArgument);
-      expectTypeError(() => Module.getStatusName(Symbol('status')));
       expectTypeError(() => Module.setLogMinLevel(Symbol('level')));
     } finally {
       wb.delete();
@@ -83,34 +89,39 @@ export function registerPositional(Module, test, hookProbe) {
     try {
       assert.throws(() => wb.setNumber('x', 0, 0, 1), {
         name: 'TypeError',
-        message: 'Sheet.setNumber sheet index must be a primitive number',
+        message: 'Sheet.setNumber must be a number',
       });
       assert.throws(() => wb.setNumber(0, -1, 0, 1), {
+        name: 'FormulonError',
+        code: StatusCode.InvalidArgument,
+        message: 'Sheet.setNumber row must not be negative',
+      });
+      assert.throws(() => wb.setNumber(0, 2 ** 32, 0, 1), {
         name: 'RangeError',
-        message: 'Sheet.setNumber argument 1 is outside uint32 range',
+        message: 'Sheet.setNumber row is too large',
       });
       assert.throws(() => wb.setNumber(0, 0, 0, 'x'), {
         name: 'TypeError',
-        message: 'Sheet.setNumber argument 3 must be a primitive number',
+        message: 'Sheet.setNumber value must be a number',
       });
       assert.throws(() => wb.renameSheet(0, 1), {
         name: 'TypeError',
-        message: 'Sheet.rename argument 1 must be a primitive string',
+        message: 'Sheet.rename newName must be a string',
       });
       assert.throws(() => wb.setPrintTitles(0), {
         name: 'TypeError',
-        message: 'Sheet.setPrintTitles argument 1 is required',
+        message: 'Sheet.setPrintTitles titles is required',
       });
     } finally {
       wb.delete();
     }
     assert.throws(() => Module.Workbook.createForProfile(1), {
       name: 'TypeError',
-      message: 'Workbook.createForProfile argument 1 must be a primitive string',
+      message: 'Workbook.createForProfile profileId must be a string',
     });
     assert.throws(() => Module.evaluateFormula(1), {
       name: 'TypeError',
-      message: 'evaluateFormula argument 1 must be a primitive string',
+      message: 'Formulon.evaluateFormula formula must be a string',
     });
   });
 
@@ -131,12 +142,16 @@ export function registerPositional(Module, test, hookProbe) {
     const wb = Module.Workbook.createDefault();
     try {
       wb.setNumber(0, 0, 0, 42);
-      for (const value of [-1, 1.5, Number.NaN, Number.POSITIVE_INFINITY, 2 ** 53, 2 ** 64]) {
+      for (const value of [1.5, Number.NaN, Number.POSITIVE_INFINITY, 2 ** 53, 2 ** 64]) {
         expectRangeError(() => wb.getCellsInRange(0, RANGE, value, 1));
         expectRangeError(() => wb.getCellsInRange(0, RANGE, 0, value));
         expectRangeError(() => wb.getInvalidCells(0, value, 1));
         expectRangeError(() => wb.getInvalidCells(0, 0, value));
       }
+      expectNegativeRefused(() => wb.getCellsInRange(0, RANGE, -1, 1));
+      expectNegativeRefused(() => wb.getCellsInRange(0, RANGE, 0, -1));
+      expectNegativeRefused(() => wb.getInvalidCells(0, -1, 1));
+      expectNegativeRefused(() => wb.getInvalidCells(0, 0, -1));
       expectTypeError(() => wb.getCellsInRange(0, RANGE, Symbol('cursor'), 1));
       expectTypeError(() => wb.getInvalidCells(0, Symbol('cursor'), 1));
 
@@ -207,7 +222,7 @@ export function registerPositional(Module, test, hookProbe) {
       const insertImageLeaf = leaf('addImage', 3);
 
       expectRangeError(() => getCellsLeaf.call(wb, 0, RANGE, 2 ** 64, 1));
-      expectRangeError(() => listInvalidLeaf.call(wb, 0, -1, 1));
+      expectNegativeRefused(() => listInvalidLeaf.call(wb, 0, -1, 1));
       expectRangeError(() => insertImageLeaf.call(wb, 2 ** 32, new Uint8Array(), {}));
       assert.equal(wb.getValue(0, 0, 0).number, 42);
 

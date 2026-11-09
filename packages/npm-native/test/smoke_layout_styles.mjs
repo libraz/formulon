@@ -184,7 +184,7 @@ test('getSheetView surfaces display / orientation defaults', async () => {
   const wb = mod.Workbook.createDefault();
   const v = wb.sheet(0).getView();
   assert.equal(v.showGridLines, true);
-  assert.equal(v.showRowColHeaders, true);
+  assert.equal(v.showRowColumnHeaders, true);
   assert.equal(v.showZeros, true);
   assert.equal(v.rightToLeft, false);
   assert.equal(v.tabSelected, false);
@@ -195,14 +195,14 @@ test('setSheetShowGridLines / setSheetRightToLeft / setSheetTabSelected / setShe
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   wb.sheet(0).updateView({ showGridLines: false });
-  wb.sheet(0).updateView({ showRowColHeaders: false });
+  wb.sheet(0).updateView({ showRowColumnHeaders: false });
   wb.sheet(0).updateView({ showZeros: false });
   wb.sheet(0).updateView({ rightToLeft: true });
   wb.sheet(0).updateView({ tabSelected: true });
   wb.sheet(0).updateView({ viewMode: mod.SheetViewMode.PageBreakPreview });
   const v = wb.sheet(0).getView();
   assert.equal(v.showGridLines, false);
-  assert.equal(v.showRowColHeaders, false);
+  assert.equal(v.showRowColumnHeaders, false);
   assert.equal(v.showZeros, false);
   assert.equal(v.rightToLeft, true);
   assert.equal(v.tabSelected, true);

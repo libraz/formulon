@@ -67,7 +67,11 @@ void print_dump_usage(std::ostream& out) {
       << "  --sheet <name | index>  with the formulas or values view: only that sheet (a name or a 0-based index)\n"
       << "  --range R   with the formulas or values view: only the cells in the A1 range R (with --sheet, on that "
          "sheet)\n"
-      << "  --json      print the selected view as one JSON object: {\"format\":1,...}\n"
+      << "  --json      print the cells as one JSON object {\"format\":1,\"sheets\":[{\"name\":..,\"cells\":[{\"ref\","
+         "\"kind\",\"value\",\"formula\"?}]}]}:\n"
+      << "              every formula or non-blank cell; --view formulas reports cached values, --view values "
+         "recalculates first\n"
+      << "              (the sheets and metadata views keep their own objects; \"format\" is the schema version)\n"
       << "  --           end options; the next token is the input path\n"
       << "Plain output escapes only \\n, \\r, \\t and \\\\.\n";
   print_shared_options(out);
@@ -209,13 +213,13 @@ fm_status_t dump_sheets(const fm_workbook_t* wb, bool json, std::ostream& out) {
 // sheet name, `#<id>` for a sheet that does not exist, or null for workbook scope.
 fm_status_t dump_metadata(const fm_workbook_t* wb, bool json, std::ostream& out) {
   std::ostringstream snapshot;
-  std::string doc = "{\"format\":1,\"defined_names\":[";
+  std::string doc = "{\"format\":1,\"definedNames\":[";
   std::size_t n_sheets = 0;
   if (auto rc = fm_workbook_get_sheet_count(wb, &n_sheets); rc != 0) {
     return rc;
   }
 
-  snapshot << "[defined_names]\n";
+  snapshot << "[definedNames]\n";
   std::size_t n_names = 0;
   if (auto rc = fm_workbook_get_defined_name_count(wb, &n_names); rc != 0) {
     return rc;
@@ -280,8 +284,8 @@ fm_status_t dump_metadata(const fm_workbook_t* wb, bool json, std::ostream& out)
       first_table = false;
     }
   }
-  snapshot << "[passthrough_parts]\n";
-  doc += "],\"passthrough_parts\":[";
+  snapshot << "[passthroughParts]\n";
+  doc += "],\"passthroughParts\":[";
   std::size_t n_parts = 0;
   if (auto rc = fm_workbook_get_passthrough_count(wb, &n_parts); rc != 0) {
     return rc;

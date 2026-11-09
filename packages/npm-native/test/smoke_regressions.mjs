@@ -369,9 +369,9 @@ test('sheet-layout setters refuse coordinates and metrics Excel cannot open', as
     // wording; a binding that grew its own check would keep returning
     // `kInvalidArgument` while the text stopped matching. The status code
     // alone cannot tell a shared implementation from two that agree today.
-    const kSpanRefused = 'column span out of range';
-    const kRowSpanRefused = 'row span out of range';
-    const kMetricRefused = 'value must be finite and non-negative';
+    const kSpanRefused = 'column span is outside the grid';
+    const kRowSpanRefused = 'row span is outside the grid';
+    const kMetricRefused = 'must be finite and not negative';
     const refused = (call, expectedMessage, label) => {
       assert.throws(
         call,
@@ -381,16 +381,48 @@ test('sheet-layout setters refuse coordinates and metrics Excel cannot open', as
     };
 
     // One past Excel's last column / row.
-    refused(() => wb.sheet(0).setColumnWidth(0, 16384, 10), kSpanRefused, 'setColumnWidth past the grid');
-    refused(() => wb.sheet(0).setColumnHidden(0, 16384, true), kSpanRefused, 'setColumnHidden past the grid');
-    refused(() => wb.sheet(0).setColumnOutline(0, 16384, 1), kSpanRefused, 'setColumnOutline past the grid');
-    refused(() => wb.sheet(0).setRowHeight(0, 1048576, 10), kRowSpanRefused, 'setRowHeight past the grid');
-    refused(() => wb.sheet(0).setRowHidden(0, 1048576, true), kRowSpanRefused, 'setRowHidden past the grid');
-    refused(() => wb.sheet(0).setRowOutline(0, 1048576, 1), kRowSpanRefused, 'setRowOutline past the grid');
+    refused(
+      () => wb.sheet(0).setColumnWidth(0, 16384, 10),
+      `Sheet.setColumnWidth ${kSpanRefused}`,
+      'setColumnWidth past the grid',
+    );
+    refused(
+      () => wb.sheet(0).setColumnHidden(0, 16384, true),
+      `Sheet.setColumnHidden ${kSpanRefused}`,
+      'setColumnHidden past the grid',
+    );
+    refused(
+      () => wb.sheet(0).setColumnOutline(0, 16384, 1),
+      `Sheet.setColumnOutline ${kSpanRefused}`,
+      'setColumnOutline past the grid',
+    );
+    refused(
+      () => wb.sheet(0).setRowHeight(0, 1048576, 10),
+      `Sheet.setRowHeight ${kRowSpanRefused}`,
+      'setRowHeight past the grid',
+    );
+    refused(
+      () => wb.sheet(0).setRowHidden(0, 1048576, true),
+      `Sheet.setRowHidden ${kRowSpanRefused}`,
+      'setRowHidden past the grid',
+    );
+    refused(
+      () => wb.sheet(0).setRowOutline(0, 1048576, 1),
+      `Sheet.setRowOutline ${kRowSpanRefused}`,
+      'setRowOutline past the grid',
+    );
 
     for (const bad of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, -1]) {
-      refused(() => wb.sheet(0).setColumnWidth(0, 2, bad), kMetricRefused, `setColumnWidth(${bad})`);
-      refused(() => wb.sheet(0).setRowHeight(1, 1, bad), kMetricRefused, `setRowHeight(${bad})`);
+      refused(
+        () => wb.sheet(0).setColumnWidth(0, 2, bad),
+        `Sheet.setColumnWidth widthChars ${kMetricRefused}`,
+        `setColumnWidth(${bad})`,
+      );
+      refused(
+        () => wb.sheet(0).setRowHeight(1, 1, bad),
+        `Sheet.setRowHeight heightPt ${kMetricRefused}`,
+        `setRowHeight(${bad})`,
+      );
     }
 
     // The context carries the values the engine saw, which is what makes a rejection actionable.

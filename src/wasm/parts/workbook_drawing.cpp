@@ -197,7 +197,7 @@ uint32_t JsWorkbook::insertImage(uint32_t sheet, emscripten::val bytes, emscript
   }
   std::string name_store;
   std::string description_store;
-  JsNarrowNumericReader reader("Sheet.addImage");
+  JsNarrowNumericReader reader("Sheet.addPicture");
   std::vector<uint8_t> data;
   if (!val_to_bytes_checked(bytes, &data)) {
     return 0U;
@@ -260,8 +260,7 @@ uint32_t JsWorkbook::restoreDrawing(uint32_t sheet, emscripten::val bytes, emscr
   if (!val_to_bytes_checked(bytes, &data)) {
     return 0U;
   }
-  const uint32_t flags =
-      reader.boolean(options, "assignNewId", false, "options.assignNewId") ? FM_DRAWING_RESTORE_NEW_ID : 0U;
+  const uint32_t flags = reader.boolean(options, "assignNewId", false, "assignNewId") ? FM_DRAWING_RESTORE_NEW_ID : 0U;
   if (!reader.ok()) {
     return 0U;
   }

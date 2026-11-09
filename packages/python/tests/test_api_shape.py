@@ -1370,10 +1370,12 @@ class StatusRefusalTests(unittest.TestCase):
             self.assertEqual(cm.exception.code, StatusCode.PRECONDITION_FAILED)
             self.assertEqual(len(ws.list_tables()), 1)
 
-    def test_iterative_iteration_cap_takes_the_full_unsigned_range(self) -> None:
+    def test_iterative_iteration_cap_is_one_to_32767(self) -> None:
         with Workbook.create_default() as wb:
-            wb.update_iterative(max_iterations=2**32 - 1)
+            wb.update_iterative(max_iterations=32767)
             self.assertEqual(wb.get_iterative().max_iterations, 32767)
+            with self.assertRaises(InvalidArgumentError):
+                wb.update_iterative(max_iterations=2**32 - 1)
             with self.assertRaises(ValueError):
                 wb.update_iterative(max_iterations=2**32)
 

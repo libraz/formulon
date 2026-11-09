@@ -22,7 +22,7 @@ Napi::Value Workbook::AddSheet(const Napi::CallbackInfo& info) {
   const bool has_name = !info[0].IsUndefined() && !info[0].IsNull();
   if (has_name) {
     if (!info[0].IsString()) {
-      Napi::TypeError::New(env, "Workbook.addSheet argument 1 must be a primitive string or null")
+      Napi::TypeError::New(env, "Workbook.addSheet name must be a string or null")
           .ThrowAsJavaScriptException();
       return env.Undefined();
     }
@@ -59,7 +59,7 @@ Napi::Value Workbook::CopySheet(const Napi::CallbackInfo& info) {
   const bool has_name = info.Length() > 2 && !info[2].IsUndefined() && !info[2].IsNull();
   if (has_name) {
     if (!info[2].IsString()) {
-      Napi::TypeError::New(env, "positional argument must be a string").ThrowAsJavaScriptException();
+      Napi::TypeError::New(env, "Workbook.copySheet newName must be a string").ThrowAsJavaScriptException();
       return env.Undefined();
     }
     name = ArgString(info, 2);
@@ -388,7 +388,7 @@ Napi::Value Workbook::CreateTable(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   if (!has_columns) {
-    Napi::TypeError::New(env, "addTable: `columns` must be an array of column names").ThrowAsJavaScriptException();
+    ThrowArgumentTypeError(env, "input.columns", "must be an array of column names");
     return env.Undefined();
   }
   // `names` has stopped growing, so its `c_str()` views stay put.
@@ -609,7 +609,7 @@ Napi::Value Workbook::SetDefinedName(const Napi::CallbackInfo& info) {
   bool scoped = false;
   const uint32_t sheet = reader.U32(input, "scope", 0U, &scoped);
   if (reader.ok() && scoped && sheet > static_cast<uint32_t>(std::numeric_limits<int32_t>::max())) {
-    reader.FailRange("scope", "int32");
+    reader.FailInteger("scope", static_cast<double>(sheet), 0.0);
   }
   std::string comment;
   const bool has_comment = reader.String(input, "comment", &comment);

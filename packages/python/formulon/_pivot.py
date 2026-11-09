@@ -12,7 +12,7 @@ import struct
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Sequence, Tuple, Union, overload
 
 from . import _structs as S
-from ._c import LIB, FormulonError, _NoCopy, _sint, _uint
+from ._c import LIB, FormulonError, _argument_message, _NoCopy, _require_bool, _sint, _uint
 from ._handle_tables import CELL_ARGS
 from ._status import StatusCode
 from ._workbook import (
@@ -95,13 +95,6 @@ _PIVOT_OPTION_FLAGS = (
 )
 _PIVOT_OPTION_TEXTS = ("error_caption", "missing_caption", "alt_text", "alt_text_summary", "grand_total_caption")
 _PIVOT_OPTION_NAMES = frozenset((*_PIVOT_OPTION_FLAGS, *_PIVOT_OPTION_TEXTS, "indent", "page_wrap"))
-
-
-def _flag(value: Any, name: str) -> int:
-    """``value`` as a C 0/1 flag; ``TypeError`` unless it is a ``bool``."""
-    from ._sheet import _flag as flag
-
-    return flag(value, name)
 
 
 class Pivot(_NoCopy):
@@ -214,7 +207,7 @@ class Pivot(_NoCopy):
         if isinstance(field, str):
             return self.cache()._field_ref(field)
         if isinstance(field, bool):
-            raise TypeError("formulon: field_index must be an int or a str, got bool")
+            raise TypeError(_argument_message("field_index", "must be an integer or a string"))
         return _uint(field, "field_index", role="position")
 
     def __repr__(self) -> str:
@@ -306,7 +299,7 @@ class Pivot(_NoCopy):
         elif isinstance(cell, str):
             row, col = self._sheet._cell(cell)
         else:
-            raise TypeError(f"formulon: cell must be a CellAddress or an A1 string, got {type(cell).__name__}")
+            raise TypeError(_argument_message("cell", "must be a CellAddress or a string"))
         h, sheet, pivot_index = self._locate()
         _check(
             LIB.fm_sheet_set_pivot_anchor(
@@ -342,14 +335,11 @@ class Pivot(_NoCopy):
         Raises:
           TypeError: when a given flag is not a ``bool``.
         """
-        for name, value in (("rows", rows), ("columns", columns)):
-            if value is not UNCHANGED and not isinstance(value, bool):
-                raise TypeError(f"formulon: {name} must be a bool, got {type(value).__name__}")
         values: Dict[str, object] = {}
         for name, value in (("rows", rows), ("columns", columns)):
             if value is not UNCHANGED:
                 values[name + "_op"] = _PATCH_SET
-                values[name] = 1 if value else 0
+                values[name] = int(_require_bool(value, name))
         h, sheet, pivot_index = self._locate()
         with _ArgScope() as scope:
             ptr = scope.struct(S.PIVOT_GRAND_TOTALS_PATCH)
@@ -427,9 +417,9 @@ class Pivot(_NoCopy):
         for key, value in patch.items():
             if key == "style_name":
                 if value is not None and not isinstance(value, str):
-                    raise TypeError(f"formulon: style_name must be a str or None, got {type(value).__name__}")
+                    raise TypeError(_argument_message("style_name", "must be a string"))
             else:
-                _flag(value, key)
+                _require_bool(value, key)
         h, sheet, pivot_index = self._locate()
         with _ArgScope() as scope:
             ptr = _pack_pivot_style_options_patch(patch, scope)
@@ -562,11 +552,11 @@ class Pivot(_NoCopy):
         for name, value in given.items():
             if name in _PIVOT_OPTION_TEXTS:
                 if value is not None and not isinstance(value, str):
-                    raise TypeError(f"formulon: {name} must be a str or None, got {type(value).__name__}")
+                    raise TypeError(_argument_message(name, "must be a string"))
             elif name in _PIVOT_OPTION_FLAGS:
-                _flag(value, name)
+                _require_bool(value, name)
             elif value is None:
-                raise TypeError(f"formulon: {name} cannot be None")
+                raise TypeError(_argument_message(name, "must not be null"))
         h, sheet, pivot_index = self._locate()
         values: Dict[str, object] = {}
         with _ArgScope() as scope:
@@ -577,7 +567,7 @@ class Pivot(_NoCopy):
                         continue
                     values[name] = scope.cstr(value)
                 elif name in _PIVOT_OPTION_FLAGS:
-                    values[name] = 1 if value else 0
+                    values[name] = int(_require_bool(value, name))
                 else:
                     values[name] = _uint(value, name)
                 values[name + "_op"] = _PATCH_SET
@@ -777,9 +767,9 @@ class Pivot(_NoCopy):
         for key, value in patch.items():
             if key in ("custom_name", "number_format", "sort_by_field"):
                 if value is not None and not isinstance(value, str):
-                    raise TypeError(f"formulon: {key} must be a str or None, got {type(value).__name__}")
+                    raise TypeError(_argument_message(key, "must be a string"))
             elif key != "sort_order":
-                _flag(value, key)
+                _require_bool(value, key)
         field_index = self._field_index(field_index)
         h, sheet, pivot_index = self._locate()
         with _ArgScope() as scope:
@@ -852,7 +842,7 @@ class Pivot(_NoCopy):
             ``None`` and the group fields are not the last fields of the cache.
         """
         if group is not None and not isinstance(group, PivotDateGroupInput):
-            raise TypeError(f"formulon: group must be a PivotDateGroupInput or None, got {type(group).__name__}")
+            raise TypeError(_argument_message("group", "must be a PivotDateGroupInput"))
         field_index = self._field_index(field_index)
         h, sheet, pivot_index = self._locate()
         with _ArgScope() as scope:
@@ -943,9 +933,9 @@ class Pivot(_NoCopy):
         for key, value in patch.items():
             if key == "caption":
                 if value is not None and not isinstance(value, str):
-                    raise TypeError(f"formulon: caption must be a str or None, got {type(value).__name__}")
+                    raise TypeError(_argument_message(key, "must be a string"))
             else:
-                _flag(value, key)
+                _require_bool(value, key)
         field_index = self._field_index(field_index)
         h, sheet, pivot_index = self._locate()
         with _ArgScope() as scope:
@@ -964,17 +954,17 @@ class Pivot(_NoCopy):
     def add_field_item(
         self,
         field_index: PivotFieldRef,
-        name: Optional[str] = None,
+        item: Optional[str] = None,
         *,
         cache_index: Optional[int] = None,
         visible: bool = True,
     ) -> int:
         """Append a manual-filter item to pivot field ``field_index``; return its item index.
 
-        Give exactly one of ``name`` and ``cache_index``:
+        Give exactly one of ``item`` and ``cache_index``:
 
-        - ``name`` addresses the item by label. It binds to the first shared
-          item of the cache field that renders as ``name`` (unbound when none
+        - ``item`` addresses the item by label. It binds to the first shared
+          item of the cache field that renders as ``item`` (unbound when none
           does), and records are matched by comparing their rendered label
           against it. An empty label cannot express the blank item, which has
           no label of its own.
@@ -986,10 +976,11 @@ class Pivot(_NoCopy):
           nothing.
 
         Raises:
-          TypeError: when both or neither of ``name`` and ``cache_index`` are given.
+          TypeError: when both or neither of ``item`` and ``cache_index`` are given.
         """
-        if (name is None) == (cache_index is None):
-            raise TypeError("formulon: give exactly one of name and cache_index")
+        visible_flag = int(_require_bool(visible, "visible"))
+        if (item is None) == (cache_index is None):
+            raise TypeError(_argument_message("", "takes exactly one of item and cache_index"))
         field_index = self._field_index(field_index)
         h, sheet, pivot_index = self._locate()
         with _ArgScope() as scope:
@@ -1000,12 +991,12 @@ class Pivot(_NoCopy):
                 _uint(pivot_index, "pivot_index", role="position"),
                 _uint(field_index, "field_index", role="position"),
             )
-            if name is not None:
-                _check(LIB.fm_sheet_add_pivot_field_item(*lead, scope.cstr(name), 1 if visible else 0, out))
+            if item is not None:
+                _check(LIB.fm_sheet_add_pivot_field_item(*lead, scope.cstr(item), visible_flag, out))
             else:
                 _check(
                     LIB.fm_sheet_add_pivot_field_item_by_cache_index(
-                        *lead, _uint(cache_index, "cache_index", role="position"), 1 if visible else 0, out
+                        *lead, _uint(cache_index, "cache_index", role="position"), visible_flag, out
                     )
                 )
             return LIB.read_u32(out)
@@ -1036,7 +1027,7 @@ class Pivot(_NoCopy):
         """
         field_index = self._field_index(field_index)
         if isinstance(aggregations, (str, bytes)) or not hasattr(aggregations, "__iter__"):
-            raise TypeError(f"formulon: aggregations must be a list, got {type(aggregations).__name__}")
+            raise TypeError(_argument_message("aggregations", "must be an array"))
         values = [_sint(aggregation, "aggregation") for aggregation in aggregations]
         h, sheet, pivot_index = self._locate()
         with _ArgScope() as scope:

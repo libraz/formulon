@@ -29,6 +29,7 @@ using formulon::c_api::parts::fresh_read_scratch;
 using formulon::c_api::parts::invalid_argument;
 using formulon::c_api::parts::not_found;
 using formulon::c_api::parts::null_argument;
+using formulon::c_api::parts::null_field;
 using formulon::c_api::parts::patch_op_ok_without_clear;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::set_last_error;
@@ -41,17 +42,16 @@ namespace {
 // it starts is refused. An empty mention id is left for the engine to generate.
 fm_status_t mentions_from_fm(const fm_mention_t* mentions, uint32_t count, std::vector<formulon::Mention>* out) {
   if (mentions == nullptr && count != 0U) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "mentions is NULL while count > 0",
-                             "mentions_count=" + std::to_string(count));
+    return null_field("mentions");
   }
   for (uint32_t i = 0; i < count; ++i) {
     if (auto rc = check_utf8({mentions[i].person_id, mentions[i].mention_id}); rc != 0) {
       return rc;
     }
     if (mentions[i].end < mentions[i].start) {
-      return invalid_argument("mention ends before it starts", "mentions[" + std::to_string(i) +
-                                                                   "] start=" + std::to_string(mentions[i].start) +
-                                                                   " end=" + std::to_string(mentions[i].end));
+      return invalid_argument(("mentions[" + std::to_string(i) + "].end must not be before start").c_str(),
+                              "mentions[" + std::to_string(i) + "] start=" + std::to_string(mentions[i].start) +
+                                  " end=" + std::to_string(mentions[i].end));
     }
     formulon::Mention m;
     m.person_id = text_or_empty(mentions[i].person_id);
@@ -83,7 +83,7 @@ extern "C" fm_status_t fm_sheet_get_threaded_comment_count(const fm_workbook_t* 
                                                            size_t* out_count) {
   clear_last_error();
   if (out_count == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "out_count is NULL");
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "out_count must not be NULL");
   }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
@@ -96,7 +96,7 @@ extern "C" fm_status_t fm_sheet_get_threaded_comment_at(const fm_workbook_t* wb,
                                                         fm_threaded_comment_t* out) {
   clear_last_error();
   if (out == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "out is NULL");
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "out must not be NULL");
   }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
@@ -165,7 +165,7 @@ extern "C" fm_status_t fm_sheet_add_threaded_comment(fm_workbook_t* wb, size_t s
   clear_last_error();
   if (comment == nullptr || out_id == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             comment == nullptr ? "comment is NULL" : "out_id is NULL");
+                             comment == nullptr ? "comment must not be NULL" : "out_id must not be NULL");
   }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
@@ -179,7 +179,7 @@ extern "C" fm_status_t fm_sheet_add_threaded_comment(fm_workbook_t* wb, size_t s
   }
   // NULL opens a thread; an empty parent id names nothing.
   if (comment->parent_id != nullptr && comment->parent_id[0] == '\0') {
-    return invalid_argument("parent_id is empty", "field=parent_id");
+    return invalid_argument("parent_id must not be empty", "field=parent_id");
   }
   formulon::ThreadedComment model;
   if (auto rc = mentions_from_fm(comment->mentions, comment->mentions_count, &model.mentions); rc != 0) {
@@ -211,10 +211,10 @@ extern "C" fm_status_t fm_sheet_update_threaded_comment(fm_workbook_t* wb, size_
                                                         const fm_threaded_comment_patch_t* patch) {
   clear_last_error();
   if (id == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "id is NULL");
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "id must not be NULL");
   }
   if (patch == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "patch is NULL");
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "patch must not be NULL");
   }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
@@ -224,19 +224,19 @@ extern "C" fm_status_t fm_sheet_update_threaded_comment(fm_workbook_t* wb, size_
   }
   // No field can be cleared; the whole patch is checked before anything is written.
   if (!patch_op_ok_without_clear(patch->text_op)) {
-    return invalid_argument("invalid text_op", "text_op=" + std::to_string(patch->text_op));
+    return invalid_argument("text_op is not a patch op", "text_op=" + std::to_string(patch->text_op));
   }
   if (!patch_op_ok_without_clear(patch->mentions_op)) {
-    return invalid_argument("invalid mentions_op", "mentions_op=" + std::to_string(patch->mentions_op));
+    return invalid_argument("mentions_op is not a patch op", "mentions_op=" + std::to_string(patch->mentions_op));
   }
   if (!patch_op_ok_without_clear(patch->done_op)) {
-    return invalid_argument("invalid done_op", "done_op=" + std::to_string(patch->done_op));
+    return invalid_argument("done_op is not a patch op", "done_op=" + std::to_string(patch->done_op));
   }
   const bool set_text = patch->text_op == FM_PATCH_OP_SET;
   const bool set_mentions = patch->mentions_op == FM_PATCH_OP_SET;
   const bool set_done = patch->done_op == FM_PATCH_OP_SET;
   if (set_text && patch->text == nullptr) {
-    return invalid_argument("SET text is NULL", "field=text");
+    return null_field("text");
   }
   if (auto rc = check_utf8({id, set_text ? patch->text : nullptr}); rc != 0) {
     return rc;
@@ -249,7 +249,7 @@ extern "C" fm_status_t fm_sheet_update_threaded_comment(fm_workbook_t* wb, size_
   std::vector<formulon::Mention> mentions;
   if (set_mentions) {
     if (patch->mentions == nullptr && patch->mentions_count != 0U) {
-      return null_argument("mentions");
+      return null_field("mentions");
     }
     if (auto rc = mentions_from_fm(patch->mentions, patch->mentions_count, &mentions); rc != 0) {
       return rc;
@@ -262,7 +262,7 @@ extern "C" fm_status_t fm_sheet_update_threaded_comment(fm_workbook_t* wb, size_
     return not_found("no threaded comment has that id", std::string("id=") + id);
   }
   if (set_done && !comments[index].parent_id.empty()) {
-    return invalid_argument("done is set on a reply", std::string("id=") + id);
+    return invalid_argument("done must not be set on a reply", std::string("id=") + id);
   }
   if (set_text || set_mentions) {
     std::string text = set_text ? std::string(patch->text) : comments[index].text;
@@ -283,7 +283,7 @@ extern "C" fm_status_t fm_sheet_update_threaded_comment(fm_workbook_t* wb, size_
 extern "C" fm_status_t fm_sheet_remove_threaded_comment(fm_workbook_t* wb, size_t sheet_index, const char* id) {
   clear_last_error();
   if (id == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "id is NULL");
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "id must not be NULL");
   }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;

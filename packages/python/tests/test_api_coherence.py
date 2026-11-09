@@ -176,8 +176,12 @@ class DrawingUpdateSignatureTests(unittest.TestCase):
         for cls in (Picture, Chart, Shape, Slicer):
             with self.subTest(cls=cls.__name__):
                 params = {name: p for name, p in inspect.signature(cls.update).parameters.items() if name != "self"}
+                # A slicer's name is fixed by its cache, so it has no ``name`` keyword.
                 for key in self.COMMON:
-                    self.assertIn(key, params)
+                    if cls is Slicer and key == "name":
+                        self.assertNotIn(key, params)
+                    else:
+                        self.assertIn(key, params)
                 self.assertTrue(all(p.kind == inspect.Parameter.KEYWORD_ONLY for p in params.values()))
                 self.assertTrue(all(p.default is UNCHANGED for key, p in params.items() if key != "style"))
 
@@ -322,6 +326,115 @@ class RectArgumentNameTests(unittest.TestCase):
                         py_params[position].kind,
                         (inspect.Parameter.POSITIONAL_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD),
                     )
+
+
+class ParameterNameTests(unittest.TestCase):
+    """Every Python parameter name is the snake_case of the declaration's name at the same position."""
+
+    # (Python class, method) -> reason: the Python name is deliberately different.
+    EXCEPTIONS = {
+        ("Sheet", "set_text"),
+        ("Sheet", "rename"),
+        ("Workbook", "load"),
+        # Python also writes to a path or a stream, so its first parameter is the destination.
+        ("Workbook", "save"),
+        ("Workbook", "save_with_diagnostics"),
+    }
+    SURFACES = (
+        ("Workbook", ("Workbook", "WorkbookCtor")),
+        ("Sheet", ("Sheet",)),
+        ("WorkbookOoxml", ("WorkbookOoxml",)),
+        ("SheetOoxml", ("SheetOoxml",)),
+        ("Table", ("Table",)),
+        ("Pivot", ("Pivot",)),
+        ("PivotCache", ("PivotCache",)),
+        ("Picture", ("Picture", "Drawing")),
+        ("Chart", ("Chart", "Drawing")),
+        ("Shape", ("Shape", "Drawing")),
+        ("Slicer", ("Slicer", "Drawing")),
+    )
+
+    @staticmethod
+    def _positional(function: Any) -> Optional[List[str]]:
+        signature = inspect.signature(function)
+        params = list(signature.parameters.values())
+        if any(p.kind is inspect.Parameter.VAR_POSITIONAL for p in params):
+            import typing
+
+            overloads = getattr(typing, "get_overloads", lambda _f: [])(inspect.unwrap(function))
+            if not overloads:
+                return None
+            params = list(inspect.signature(overloads[0]).parameters.values())
+        return [
+            p.name
+            for p in params
+            if p.kind in (inspect.Parameter.POSITIONAL_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD)
+            and p.name not in ("self", "cls")
+        ]
+
+    def _compare(self, label: str, function: Any, declared: List[str]) -> int:
+        python = self._positional(function)
+        if python is None:
+            return 0
+        for at, (py_name, js_name) in enumerate(zip(python, declared)):
+            self.assertEqual(py_name, _snake(js_name), f"{label} parameter {at}: {py_name} vs {js_name}")
+        return 1
+
+    def test_every_parameter_follows_the_declarations(self) -> None:
+        declared = _dts_methods()
+        compared = 0
+        for py_class, interfaces in self.SURFACES:
+            handle = getattr(formulon, py_class)
+            seen = set()
+            for interface in interfaces:
+                for js_name, js_params in declared.get(interface, {}).items():
+                    py_name = _snake(js_name)
+                    if py_name in seen or (py_class, py_name) in self.EXCEPTIONS:
+                        continue
+                    function = getattr(handle, py_name, None)
+                    if not callable(function):
+                        continue
+                    seen.add(py_name)
+                    with self.subTest(method=f"{py_class}.{py_name}"):
+                        compared += self._compare(f"{py_class}.{py_name}", function, js_params)
+        for js_name, js_params in declared.get("Formulon", {}).items():
+            function = getattr(formulon, _snake(js_name), None)
+            if callable(function):
+                with self.subTest(function=f"formulon.{_snake(js_name)}"):
+                    compared += self._compare(f"formulon.{_snake(js_name)}", function, js_params)
+        self.assertGreater(compared, 150)
+
+    def test_renamed_parameters(self) -> None:
+        expected = {
+            (formulon.Workbook, "set_pinned_now"): ["time"],
+            (formulon.Workbook, "get_person"): ["id"],
+            (formulon.Workbook, "remove_person"): ["id"],
+            (formulon.WorkbookOoxml, "add_dxf"): ["input"],
+            (formulon.WorkbookOoxml, "set_dxf"): ["dxf_index", "input"],
+            (formulon.Sheet, "set_auto_filter"): ["filter"],
+            (formulon.Sheet, "get_threaded_comment"): ["id"],
+            (formulon.Sheet, "remove_threaded_comment"): ["id"],
+            (formulon.Sheet, "set_row_break"): ["row", "input"],
+            (formulon.Sheet, "set_column_break"): ["col", "input"],
+            (formulon.Sheet, "add_shape"): ["spec"],
+            (formulon.Sheet, "add_slicer"): ["table", "column", "spec"],
+            (formulon.Sheet, "add_sparkline_group"): ["spec"],
+            (formulon.Sheet, "add_protected_range"): ["input"],
+            (formulon.SheetOoxml, "restore_range_xfs"): ["bytes"],
+            (formulon.Table, "set_auto_filter"): ["filter"],
+            (formulon.Chart, "set_point"): ["plot", "series_id", "point_index", "point"],
+            (formulon.Chart, "add_series"): ["plot", "input"],
+            (formulon.PivotCache, "set_calculated_item_formula"): ["calculated_item_index", "formula"],
+            (formulon.PivotCache, "move_calculated_item"): ["calculated_item_index", "new_index"],
+            (formulon.PivotCache, "remove_calculated_item"): ["calculated_item_index"],
+        }
+        for (cls, name), names in expected.items():
+            with self.subTest(method=f"{cls.__name__}.{name}"):
+                positional = self._positional(getattr(cls, name))
+                self.assertIsNotNone(positional)
+                self.assertEqual(positional[: len(names)], names)
+        self.assertEqual(self._positional(formulon.get_image_info), ["bytes"])
+        self.assertFalse(hasattr(formulon, "get_status_name"))
 
 
 if __name__ == "__main__":

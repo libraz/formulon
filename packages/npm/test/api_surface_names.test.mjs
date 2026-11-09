@@ -320,10 +320,10 @@ describe('update merges and set(null) removes a singleton', () => {
 
   it('updateFormatDefaults merges', () => {
     withSheet((ws) => {
-      ws.updateFormatDefaults({ defaultColWidthChars: 12 });
+      ws.updateFormatDefaults({ defaultColumnWidthChars: 12 });
       ws.updateFormatDefaults({ defaultRowHeightPt: 20 });
       const defaults = ws.getFormatDefaults();
-      assert.equal(defaults.defaultColWidthChars, 12);
+      assert.equal(defaults.defaultColumnWidthChars, 12);
       assert.equal(defaults.defaultRowHeightPt, 20);
     });
   });
@@ -801,7 +801,7 @@ describe('unit-suffixed fields', () => {
       const view = ws.getView();
       assert.equal(view.zoomPct, 125);
       hasKeys(view, ['splitXTwips', 'splitYTwips']);
-      lacksKeys(view, ['zoomScale', 'splitX', 'splitY']);
+      lacksKeys(view, ['zoomScale', 'splitX', 'splitY', 'showRowColHeaders']);
     });
   });
 
@@ -829,18 +829,21 @@ describe('unit-suffixed fields', () => {
 
   it('sheet format defaults use Chars and Pt suffixes on read and input', () => {
     withSheet((ws) => {
-      ws.updateFormatDefaults({ defaultColWidthChars: 12, baseColWidthChars: 9, defaultRowHeightPt: 18 });
+      ws.updateFormatDefaults({ defaultColumnWidthChars: 12, baseColumnWidthChars: 9, defaultRowHeightPt: 18 });
       const defaults = ws.getFormatDefaults();
       assert.deepEqual(
-        [defaults.defaultColWidthChars, defaults.baseColWidthChars, defaults.defaultRowHeightPt],
+        [defaults.defaultColumnWidthChars, defaults.baseColumnWidthChars, defaults.defaultRowHeightPt],
         [12, 9, 18],
       );
-      hasKeys(defaults, ['effectiveDefaultColWidthChars', 'effectiveDefaultRowHeightPt']);
+      hasKeys(defaults, ['effectiveDefaultColumnWidthChars', 'effectiveDefaultRowHeightPt']);
       lacksKeys(defaults, [
         'defaultColWidth',
+        'defaultColWidthChars',
         'baseColWidth',
+        'baseColWidthChars',
         'defaultRowHeight',
         'effectiveDefaultColWidth',
+        'effectiveDefaultColWidthChars',
         'effectiveDefaultRowHeight',
       ]);
     });

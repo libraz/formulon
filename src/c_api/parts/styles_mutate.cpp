@@ -22,6 +22,7 @@
 #include "sheet_name.h"
 #include "styles.h"
 #include "utils/error.h"
+#include "utils/number_text.h"
 #include "workbook.h"
 
 using formulon::effective_num_fmt;
@@ -36,6 +37,7 @@ using formulon::c_api::parts::finish_status;
 using formulon::c_api::parts::invalid_argument;
 using formulon::c_api::parts::not_found;
 using formulon::c_api::parts::null_argument;
+using formulon::c_api::parts::null_field;
 using formulon::c_api::parts::num_fmt_id_known;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::text_or_empty;
@@ -145,7 +147,9 @@ fm_status_t validate_xf_references(const formulon::StylesTable& styles, const fm
   }
   // Stored ids are 16-bit (XLSB writes a 2-byte ifmt), so a wider id is refused rather than truncated.
   if (record.num_fmt_id > std::numeric_limits<std::uint16_t>::max() || !num_fmt_id_known(styles, record.num_fmt_id)) {
-    return invalid_argument("num_fmt_id not registered", "num_fmt_id=" + std::to_string(record.num_fmt_id));
+    return invalid_argument(
+        ("num_fmt_id " + std::to_string(record.num_fmt_id) + " is not a registered number format").c_str(),
+        "num_fmt_id=" + std::to_string(record.num_fmt_id));
   }
   return 0;
 }
@@ -156,19 +160,20 @@ fm_status_t validate_xf_alignment(const fm_cell_xf_t& record) {
   // ordinals are the canonical writer mapping for the corresponding XML
   // string enums (general..distributed and top..distributed).
   if (record.has_horizontal != 0 && (record.horizontal < 0 || record.horizontal > 7)) {
-    return invalid_argument("horizontal out of range", "horizontal=" + std::to_string(record.horizontal));
+    return invalid_argument("horizontal must be in 0..7", "horizontal=" + std::to_string(record.horizontal));
   }
   if (record.has_vertical != 0 && (record.vertical < 0 || record.vertical > 4)) {
-    return invalid_argument("vertical out of range", "vertical=" + std::to_string(record.vertical));
+    return invalid_argument("vertical must be in 0..4", "vertical=" + std::to_string(record.vertical));
   }
   if (record.has_text_rotation != 0 && record.text_rotation > 180U && record.text_rotation != 255U) {
-    return invalid_argument("text_rotation out of range", "text_rotation=" + std::to_string(record.text_rotation));
+    return invalid_argument("text_rotation must be in 0..180 or 255",
+                            "text_rotation=" + std::to_string(record.text_rotation));
   }
   if (record.has_indent != 0 && record.indent > 255U) {
-    return invalid_argument("indent out of range", "indent=" + std::to_string(record.indent));
+    return invalid_argument("indent must be in 0..255", "indent=" + std::to_string(record.indent));
   }
   if (record.has_reading_order != 0 && (record.reading_order < 0 || record.reading_order > 2)) {
-    return invalid_argument("reading_order out of range", "reading_order=" + std::to_string(record.reading_order));
+    return invalid_argument("reading_order must be in 0..2", "reading_order=" + std::to_string(record.reading_order));
   }
   return 0;
 }
@@ -275,7 +280,7 @@ formulon::FontRecord cell_font_from_c(const fm_font_t& record) {
 /// A stated font size is `1..409` points, Excel's font-size box range.
 fm_status_t check_font_size_pt(double size_pt) {
   if (size_pt < 1.0 || size_pt > 409.0) {
-    return invalid_argument("font size outside 1..409", "field=size_pt");
+    return invalid_argument("size_pt must be in 1..409", "size_pt=" + formulon::fixed_string(size_pt, 6));
   }
   return 0;
 }
@@ -602,13 +607,18 @@ extern "C" fm_status_t fm_workbook_set_cell_style(fm_workbook_t* wb, const fm_ce
     return rc;
   }
   auto& styles = wb->workbook().mutable_styles();
-  if (record->name[0] == '\0' || record->style_xf_index >= styles.cell_style_xfs.size()) {
-    return invalid_argument("invalid name or style_xf_index");
+  if (record->name[0] == '\0') {
+    return invalid_argument("name must not be empty");
+  }
+  if (auto rc = check_index(record->style_xf_index, styles.cell_style_xfs.size(), "style_xf_index"); rc != 0) {
+    return rc;
   }
   // A custom style carries no `builtinId` attribute, which the engine spells as the sentinel.
   const bool builtin = record->has_builtin_id != 0;
   if (builtin && record->builtin_id > formulon::CellStyleRecord::kBuiltinIdMax) {
-    return invalid_argument("builtin_id out of range", "builtin_id=" + std::to_string(record->builtin_id));
+    return invalid_argument(
+        ("builtin_id must be in 0.." + std::to_string(formulon::CellStyleRecord::kBuiltinIdMax)).c_str(),
+        "builtin_id=" + std::to_string(record->builtin_id));
   }
   const uint32_t builtin_id = builtin ? record->builtin_id : formulon::CellStyleRecord::kBuiltinIdNone;
   // Only RowLevel_n / ColLevel_n carry an outline level.
@@ -650,7 +660,7 @@ extern "C" fm_status_t fm_workbook_remove_cell_style(fm_workbook_t* wb, const ch
   }
   if (formulon::sheet_names::resolve_named(wb->workbook().styles().cell_styles, name) ==
       formulon::sheet_names::kNotFound) {
-    return not_found("no cell style has that name", "name=" + std::string(name));
+    return not_found(("name " + std::string(name) + " names no cell style").c_str(), "name=" + std::string(name));
   }
   return finish_status(formulon::remove_cell_style(wb->workbook().mutable_styles(), name));
 }
@@ -663,12 +673,26 @@ extern "C" fm_status_t fm_workbook_add_batch(fm_workbook_t* wb, const fm_styles_
   if (auto rc = check_record_size(*batch); rc != 0) {
     return rc;
   }
-  if ((batch->font_count != 0U && (batch->fonts == nullptr || batch->font_indices == nullptr)) ||
-      (batch->fill_count != 0U && (batch->fills == nullptr || batch->fill_indices == nullptr)) ||
-      (batch->border_count != 0U && (batch->borders == nullptr || batch->border_indices == nullptr)) ||
-      (batch->cell_xf_count != 0U && (batch->cell_xfs == nullptr || batch->cell_xf_indices == nullptr)) ||
-      (batch->num_fmt_count != 0U && (batch->num_fmt_codes == nullptr || batch->num_fmt_ids == nullptr))) {
-    return null_argument("non-empty array");
+  const struct {
+    std::size_t count;
+    const void* data;
+    const char* name;
+    const void* indices;
+    const char* indices_name;
+  } arrays[] = {
+      {batch->font_count, batch->fonts, "fonts", batch->font_indices, "font_indices"},
+      {batch->fill_count, batch->fills, "fills", batch->fill_indices, "fill_indices"},
+      {batch->border_count, batch->borders, "borders", batch->border_indices, "border_indices"},
+      {batch->cell_xf_count, batch->cell_xfs, "cell_xfs", batch->cell_xf_indices, "cell_xf_indices"},
+      {batch->num_fmt_count, batch->num_fmt_codes, "num_fmt_codes", batch->num_fmt_ids, "num_fmt_ids"},
+  };
+  for (const auto& array : arrays) {
+    if (array.count != 0U && array.data == nullptr) {
+      return null_field(array.name);
+    }
+    if (array.count != 0U && array.indices == nullptr) {
+      return null_field(array.indices_name);
+    }
   }
   for (size_t i = 0; i < batch->font_count; ++i) {
     if (auto rc = validate_cell_font(batch->fonts[i]); rc != 0) {

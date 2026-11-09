@@ -168,6 +168,7 @@ if(FM_WASM_VARIANT STREQUAL "embind")
       "${CMAKE_CURRENT_SOURCE_DIR}/src/node_addon/parts/workbook_class.cc"
       "${CMAKE_CURRENT_SOURCE_DIR}/src/wasm/parts/bindings_register.cpp"
       "${CMAKE_CURRENT_SOURCE_DIR}/src/node_addon/generated/facade_scope.inc"
+      "${CMAKE_CURRENT_SOURCE_DIR}/src/c_api/generated/binding_param_names.inc"
     COMMENT "Generating WASM positional argument guards"
     VERBATIM
   )

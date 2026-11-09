@@ -209,9 +209,9 @@ test('listCells and getCellsInRange return RangeCells with native values', () =>
     assert.deepEqual(ws.listCells(), want);
     assert.deepEqual(ws.listCells('B1:B1'), [want[1]]);
     assert.deepEqual(ws.getCellsInRange('A1:B1'), { cells: want, nextCursor: null });
-    const first = ws.getCellsInRange('A1:B1', null, 1);
+    const first = ws.getCellsInRange('A1:B1', { limit: 1 });
     assert.deepEqual(first.cells, [want[0]]);
-    assert.deepEqual(ws.getCellsInRange('A1:B1', first.nextCursor).cells, [want[1]]);
+    assert.deepEqual(ws.getCellsInRange('A1:B1', { cursor: first.nextCursor }).cells, [want[1]]);
   });
 });
 

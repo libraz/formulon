@@ -257,7 +257,8 @@ function seedGrid(ws) {
 }
 
 test('span cases: SPAN_ARGS is non-empty and every entry has an argument row', () => {
-  const names = Object.keys(SPAN_ARGS);
+  // A `single` span names one row or column and is read through its own getter; only ranges shift arguments.
+  const names = Object.keys(SPAN_ARGS).filter((n) => SPAN_ARGS[n][0][2] !== 'single');
   assert.ok(names.length > 0, 'no span_args in address_args.json');
   assert.deepEqual(
     names.filter((n) => !(n in SPAN_METHODS)),
@@ -265,7 +266,7 @@ test('span cases: SPAN_ARGS is non-empty and every entry has an argument row', (
     'span methods missing from the argument table',
   );
   assert.deepEqual(
-    Object.keys(SPAN_METHODS).filter((n) => !(n in SPAN_ARGS)),
+    Object.keys(SPAN_METHODS).filter((n) => !names.includes(n)),
     [],
     'rows for methods that take no span',
   );

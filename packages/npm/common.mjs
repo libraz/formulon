@@ -749,8 +749,8 @@ export function mergeFunctionMetadata(base, entry, locale) {
 export class ExcelError {
   /** @param {number} code An `ErrorCode`. */
   constructor(code) {
-    if (typeof code !== 'number') throw new TypeError('ExcelError argument 1 must be an ErrorCode');
-    if (ErrorDisplayName[code] === undefined) throw new RangeError('ExcelError argument 1 must be an ErrorCode');
+    if (typeof code !== 'number') throw new TypeError('ExcelError code must be an ErrorCode');
+    if (ErrorDisplayName[code] === undefined) throw new RangeError('ExcelError code must be an ErrorCode');
     this.code = code;
     Object.freeze(this);
   }
@@ -768,12 +768,12 @@ export class ExcelError {
  * @returns {string | null}
  */
 export function enumName(enumType, value) {
-  if (!isObject(enumType)) throw new TypeError('enumName argument 1 must be an ordinal table');
+  if (!isObject(enumType)) throw new TypeError('Formulon.enumName enumType must be an object');
   for (const [key, ordinal] of Object.entries(enumType)) if (ordinal === value) return key;
   return null;
 }
 
-const NOT_A_VALUE = 'toNative argument 1 must be a Value';
+const NOT_A_VALUE = 'Formulon.toNative value must be a Value';
 
 /**
  * Maps a `Value` to its native JS value: Blank to `null`, Number to a number, Bool to a boolean, Text to a
@@ -939,7 +939,6 @@ export const FORMULON_MEMBERS = Object.freeze([
   'convertCivilToSerial',
   'convertSerialToCivil',
   'getVersion',
-  'getStatusName',
   'getFunctionMetadata',
   'listFunctionNames',
   'localizeFunctionName',
@@ -960,9 +959,7 @@ export const FORMULON_MEMBERS = Object.freeze([
 // not one of them: `buildFormulon` wraps it with `makeFacade`.
 const RUNTIME_MEMBERS = new Set([
   'getVersion',
-  'getStatusName',
   'setLogMinLevel',
-  'setLogSink',
   'getFunctionMetadata',
   'listFunctionNames',
   'localizeFunctionName',
@@ -977,20 +974,16 @@ const RUNTIME_MEMBERS = new Set([
 ]);
 
 const FORWARDED_OPTIONS = ['locateFile', 'print', 'printErr'];
-
-function int32Field(value, where) {
-  requireInteger(value, where);
-  if (value > INT32_MAX || value < -INT32_MAX - 1) throw new RangeError(`${where} is outside int32 range`);
-  return value;
-}
+const FORMULON_OPTION_KEYS = Object.freeze([...FORWARDED_OPTIONS, 'wasm']);
 
 function dateSystem(options, where) {
   if (options === undefined) return false;
-  requireObject(options, `${where} argument 2`);
+  const label = argLabel(where, 1);
+  requireObject(options, label);
   for (const key of Object.keys(options)) {
-    if (key !== 'date1904') throw new TypeError(`${where} argument 2 has no field ${key}`);
+    if (key !== 'date1904') throw new TypeError(`${label} has no field ${key}`);
   }
-  return options.date1904 === undefined ? false : requireBoolean(options.date1904, `${where} date1904`);
+  return options.date1904 === undefined ? false : requireBoolean(options.date1904, `${label}.date1904`);
 }
 
 const CIVIL_FIELDS = Object.freeze(['year', 'month', 'day', 'hour', 'minute', 'second']);
@@ -1002,10 +995,22 @@ function typedResult(result) {
   return { kind: ValueKind.Array, rows: result.rows, cols: result.cols, cells: result.cells.flat() };
 }
 
-/** A string formula argument; anything else is a `TypeError` naming `where`. */
-function formulaText(formula, where) {
-  if (typeof formula !== 'string') throw new TypeError(`${where} must be a primitive string`);
-  return formula;
+/** A string formula argument; anything else is a `TypeError` naming `label`. */
+function formulaText(formula, label) {
+  return requireString(formula, label);
+}
+
+const LOG_LEVELS = Object.freeze({
+  debug: LogLevel.Debug,
+  info: LogLevel.Info,
+  warn: LogLevel.Warn,
+  error: LogLevel.Error,
+});
+
+/** The `LogEvent` a log line of the engine's JSON carries: `level` as its `LogLevel` ordinal. */
+function logRecord(bytes) {
+  const record = JSON.parse(new TextDecoder().decode(bytes));
+  return { ...record, level: LOG_LEVELS[record.level] ?? record.level };
 }
 
 // Members built over a runtime function, keyed by member name: [the runtime function, the wrapper factory]. The
@@ -1015,21 +1020,10 @@ const RUNTIME_WRAPPERS = Object.freeze({
   convertCivilToSerial: [
     'convertCivilToSerial',
     (convert) =>
-      function convertCivilToSerial(civil, options) {
+      function convertCivilToSerial(date, options) {
         const where = 'Formulon.convertCivilToSerial';
-        requireObject(civil, `${where} argument 1`);
-        for (const [key, value] of Object.entries(civil)) {
-          if (value !== undefined && !CIVIL_FIELDS.includes(key)) {
-            throw new TypeError(`${where} argument 1 has no field ${key}`);
-          }
-        }
-        const fields = {};
-        for (const field of CIVIL_FIELDS) {
-          const value = civil[field];
-          fields[field] =
-            value === undefined && !CIVIL_DATE_FIELDS.includes(field) ? 0 : int32Field(value, `${where} ${field}`);
-        }
-        return convert(fields, dateSystem(options, where));
+        const civil = toCivil(date, where, argumentPath(where, 0));
+        return convert(civil, dateSystem(options, where));
       },
   ],
   getImageInfo: [
@@ -1044,8 +1038,9 @@ const RUNTIME_WRAPPERS = Object.freeze({
     (convert) =>
       function convertSerialToCivil(serial, options) {
         const where = 'Formulon.convertSerialToCivil';
-        requireNumber(serial, `${where} argument 1`);
-        if (!Number.isFinite(serial)) throw new RangeError(`${where} argument 1 must be finite`);
+        const label = argLabel(where, 0);
+        requireNumber(serial, label);
+        if (!Number.isFinite(serial)) throw new RangeError(`${label} must be finite`);
         return convert(serial, dateSystem(options, where));
       },
   ],
@@ -1053,14 +1048,24 @@ const RUNTIME_WRAPPERS = Object.freeze({
     'evaluateFormula',
     (evaluate) =>
       function evaluateFormula(formula) {
-        return toNative(typedResult(evaluate(formulaText(formula, 'Formulon.evaluateFormula argument 1'))));
+        return toNative(typedResult(evaluate(formulaText(formula, argLabel('Formulon.evaluateFormula', 0)))));
       },
   ],
   evaluateTypedFormula: [
     'evaluateFormula',
     (evaluate) =>
       function evaluateTypedFormula(formula) {
-        return typedResult(evaluate(formulaText(formula, 'Formulon.evaluateTypedFormula argument 1')));
+        return typedResult(evaluate(formulaText(formula, argLabel('Formulon.evaluateTypedFormula', 0))));
+      },
+  ],
+  setLogSink: [
+    'setLogSink',
+    (setSink) =>
+      function setLogSink(sink) {
+        if (sink !== null && typeof sink !== 'function') {
+          throw new TypeError(argumentMessage('Formulon.setLogSink', 'sink', 'must be a function'));
+        }
+        return setSink(sink === null ? null : recordThrown((bytes) => sink(logRecord(bytes))));
       },
   ],
 });
@@ -1091,6 +1096,8 @@ export function buildFormulon(runtime, shared, registry) {
     }
     formulon[name] = value;
   }
+  installArityGuards(formulon, 'Formulon');
+  installErrorLabels(formulon, 'Formulon', (name) => Object.hasOwn(METHOD_ARITY, `Formulon.${name}`));
   return Object.freeze(formulon);
 }
 
@@ -1099,8 +1106,37 @@ function isBufferSource(value) {
 }
 
 /**
+ * Refuses a `createFormulon` options bag the factory cannot take: not an object, a key outside `locateFile`,
+ * `print`, `printErr` and `wasm`, a callback that is not a function, or a `wasm` that is not a `BufferSource` or
+ * a `WebAssembly.Module`. `null` and `undefined` stand for no options, and a `null` value for an omitted key.
+ *
+ * @param {unknown} options What `createFormulon` was called with.
+ */
+export function checkFormulonOptions(options) {
+  const where = 'createFormulon';
+  if (options === undefined || options === null) return;
+  if (!isObject(options)) throw new TypeError(argumentMessage(where, 'options', 'must be an object'));
+  for (const [key, value] of Object.entries(options)) {
+    if (!FORMULON_OPTION_KEYS.includes(key)) {
+      throw new TypeError(argumentMessage(where, 'options', `has no field ${key}`));
+    }
+    if (value === undefined || value === null) continue;
+    const path = `options.${key}`;
+    if (key !== 'wasm') {
+      if (typeof value !== 'function') throw new TypeError(argumentMessage(where, path, 'must be a function'));
+    } else if (!(typeof WebAssembly === 'object' && value instanceof WebAssembly.Module)) {
+      if (!isBufferSource(value)) {
+        throw new TypeError(argumentMessage(where, path, 'must be a BufferSource or a WebAssembly.Module'));
+      }
+      if (value.byteLength === 0) throw new TypeError(argumentMessage(where, path, 'must not be empty'));
+    }
+  }
+}
+
+/**
  * The factory options `FormulonOptions.wasm` adds: a `BufferSource` as `wasmBinary`, a `WebAssembly.Module`
- * as an `instantiateWasm` that instantiates it, whose failure `fail` reports.
+ * as an `instantiateWasm` that instantiates it, whose failure `fail` reports. `wasm` was checked by
+ * `checkFormulonOptions`.
  */
 function wasmOptions(wasm, fail) {
   if (wasm === undefined || wasm === null) return {};
@@ -1112,8 +1148,6 @@ function wasmOptions(wasm, fail) {
       },
     };
   }
-  if (!isBufferSource(wasm)) throw new TypeError('FormulonOptions.wasm must be a BufferSource or a WebAssembly.Module');
-  if (wasm.byteLength === 0) throw new TypeError('FormulonOptions.wasm must not be empty');
   return { wasmBinary: wasm };
 }
 
@@ -1128,6 +1162,7 @@ function wasmOptions(wasm, fail) {
  * @returns {Promise<object>} The `Formulon` object.
  */
 export async function loadFormulon(factory, options, shared, registry) {
+  checkFormulonOptions(options);
   const moduleOptions = { FormulonError };
   // The glue awaits `instantiateWasm` without a rejection path, so a failed instantiation settles here.
   let fail;
@@ -1136,7 +1171,9 @@ export async function loadFormulon(factory, options, shared, registry) {
   });
   if (options !== undefined && options !== null) {
     for (const key of FORWARDED_OPTIONS) {
-      if (options[key] !== undefined) moduleOptions[key] = options[key];
+      if (options[key] !== undefined && options[key] !== null) {
+        moduleOptions[key] = key === 'locateFile' ? options[key] : recordThrown(options[key]);
+      }
     }
     Object.assign(moduleOptions, wasmOptions(options.wasm, fail));
   }
@@ -1503,12 +1540,15 @@ const HANDWRITTEN = Object.freeze([
   'evaluateFormula',
   'evaluateTypedFormula',
   'evaluateTypedFormulaArray',
+  'formatReference',
   'getCellFormat',
   'getCellPhoneticRuns',
+  'getCellsInRange',
   'getColumnXfIndex',
   'getDate',
   'getDefaultFont',
   'getFormula',
+  'getInvalidCells',
   'getRangeXfBasesExcluding',
   'getRowXfIndex',
   'getThemeColors',
@@ -1748,10 +1788,15 @@ const RECT_ARGS = Object.freeze({
   'Sheet.setRangeXfIndex': [0],
   'Sheet.snapshotRangeXfs': [0],
   'Sheet.updateCellFormat': [0],
+  'Workbook.formatReference': [0],
 });
 const SPAN_ARGS = Object.freeze({
   'Sheet.deleteColumns': [[0, 'col', 'span']],
   'Sheet.deleteRows': [[0, 'row', 'span']],
+  'Sheet.getColumnWidthPt': [[0, 'col', 'single']],
+  'Sheet.getColumnXfIndex': [[0, 'col', 'single']],
+  'Sheet.getRowHeightPt': [[0, 'row', 'single']],
+  'Sheet.getRowXfIndex': [[0, 'row', 'single']],
   'Sheet.insertColumns': [[0, 'col', 'span']],
   'Sheet.insertRows': [[0, 'row', 'span']],
   'Sheet.resetColumnWidth': [[0, 'col', 'span']],
@@ -1981,11 +2026,11 @@ const PATCH_KEYS = Object.freeze({
   'Sheet.updateFormatDefaults': [
     0,
     [
-      'baseColWidthChars',
+      'baseColumnWidthChars',
       'customHeight',
-      'defaultColWidthChars',
+      'defaultColumnWidthChars',
       'defaultRowHeightPt',
-      'effectiveDefaultColWidthChars',
+      'effectiveDefaultColumnWidthChars',
       'effectiveDefaultRowHeightPt',
       'zeroHeight',
     ],
@@ -2156,7 +2201,7 @@ const PATCH_KEYS = Object.freeze({
       'showFormulas',
       'showGridLines',
       'showOutlineSymbols',
-      'showRowColHeaders',
+      'showRowColumnHeaders',
       'showZeros',
       'splitXTwips',
       'splitYTwips',
@@ -2177,6 +2222,7 @@ const PATCH_KEYS = Object.freeze({
       'crossFilter',
       'description',
       'hidden',
+      'kind',
       'objectId',
       'rowHeightPt',
       'sortOrder',
@@ -2195,18 +2241,13 @@ const PATCH_KEYS = Object.freeze({
 const PATCH_NESTED_KEYS = Object.freeze({
   'Chart.updatePoint': {
     fill: ['color', 'none', 'other', 'transparencyPct'],
-    'fill.color': ['argb', 'indexed', 'kind', 'theme', 'tint'],
     line: ['color', 'dash', 'none', 'other', 'transparencyPct', 'widthPt'],
-    'line.color': ['argb', 'indexed', 'kind', 'theme', 'tint'],
     marker: ['fill', 'line', 'sizePt', 'symbol'],
     'marker.fill': ['color', 'none', 'other', 'transparencyPct'],
-    'marker.fill.color': ['argb', 'indexed', 'kind', 'theme', 'tint'],
     'marker.line': ['color', 'dash', 'none', 'other', 'transparencyPct', 'widthPt'],
-    'marker.line.color': ['argb', 'indexed', 'kind', 'theme', 'tint'],
   },
   'Chart.updateSeries': {
     fill: ['color', 'none', 'other', 'transparencyPct'],
-    'fill.color': ['argb', 'indexed', 'kind', 'theme', 'tint'],
     labels: [
       'deleted',
       'fontColor',
@@ -2221,20 +2262,14 @@ const PATCH_NESTED_KEYS = Object.freeze({
       'showValue',
       'sourceLinked',
     ],
-    'labels.fontColor': ['argb', 'indexed', 'kind', 'theme', 'tint'],
     line: ['color', 'dash', 'none', 'other', 'transparencyPct', 'widthPt'],
-    'line.color': ['argb', 'indexed', 'kind', 'theme', 'tint'],
     marker: ['fill', 'line', 'sizePt', 'symbol'],
     'marker.fill': ['color', 'none', 'other', 'transparencyPct'],
-    'marker.fill.color': ['argb', 'indexed', 'kind', 'theme', 'tint'],
     'marker.line': ['color', 'dash', 'none', 'other', 'transparencyPct', 'widthPt'],
-    'marker.line.color': ['argb', 'indexed', 'kind', 'theme', 'tint'],
   },
   'Shape.update': {
     fill: ['color', 'none', 'other', 'transparencyPct'],
-    'fill.color': ['argb', 'indexed', 'kind', 'theme', 'tint'],
     line: ['color', 'dash', 'none', 'other', 'transparencyPct', 'widthPt'],
-    'line.color': ['argb', 'indexed', 'kind', 'theme', 'tint'],
   },
   'Sheet.updateCellFormat': {
     alignment: [
@@ -2304,7 +2339,6 @@ const RECORD_RANGE_FIELDS = Object.freeze({
   PivotInput: { anchor: 'CellAddress' },
   PivotWorksheetSourceInput: { range: 'SheetRect' },
   ProtectedRangeInput: { ranges: 'CellRect[]' },
-  ReferenceRangeInput: { range: 'CellRect' },
   SheetSelectionInput: { active: 'CellAddress', ranges: 'CellRect[]' },
   SparklineGroupInput: { dateAxisRange: 'SheetRect', sparklines: 'SparklineInput[]' },
   SparklineInput: { source: 'SheetRect', location: 'CellAddress' },
@@ -2391,19 +2425,16 @@ const INPUT_KEYS = Object.freeze({
       'headerColumn',
       'headerRow',
       'hidden',
-      'kind',
       'legend',
       'name',
-      'objectId',
       'range',
-      'sheet',
       'title',
       'type',
     ],
   ],
   'Sheet.addDataTable': [0, ['columnInput', 'range', 'rowInput', 'rowOriented', 'twoDimensional']],
   'Sheet.addPicture': [1, ['anchor', 'description', 'hidden', 'name']],
-  'Sheet.addPivot': [0, ['anchor', 'cacheId', 'index', 'name', 'sheet']],
+  'Sheet.addPivot': [0, ['anchor', 'cacheId', 'name']],
   'Sheet.addProtectedRange': [
     0,
     [
@@ -2430,7 +2461,6 @@ const INPUT_KEYS = Object.freeze({
       'objectId',
       'presetGeometry',
       'rotationDeg',
-      'sheet',
       'text',
       'textBox',
     ],
@@ -2439,18 +2469,19 @@ const INPUT_KEYS = Object.freeze({
     2,
     [
       'anchor',
+      'cacheName',
       'caption',
       'columnCount',
+      'columnName',
       'crossFilter',
       'description',
       'hidden',
-      'kind',
       'name',
       'objectId',
       'rowHeightPt',
-      'sheet',
       'sortOrder',
       'styleName',
+      'tableName',
     ],
   ],
   'Sheet.addSparklineGroup': [
@@ -2490,10 +2521,8 @@ const INPUT_KEYS = Object.freeze({
     [
       'columns',
       'headerRow',
-      'index',
       'name',
       'range',
-      'sheet',
       'showColumnStripes',
       'showFirstColumn',
       'showLastColumn',
@@ -2501,7 +2530,6 @@ const INPUT_KEYS = Object.freeze({
       'styleName',
       'styled',
       'totalsRow',
-      'workbook',
     ],
   ],
   'Sheet.addThreadedComment': [0, ['cell', 'created', 'done', 'id', 'mentions', 'parentId', 'personId', 'text']],
@@ -2525,15 +2553,18 @@ const INPUT_KEYS = Object.freeze({
       'type',
     ],
   ],
+  'Sheet.evaluateCfRange': [1, ['timePeriodRules', 'today']],
+  'Sheet.getCellsInRange': [1, ['cursor', 'limit']],
+  'Sheet.getInvalidCells': [0, ['cursor', 'limit']],
   'Sheet.restoreDrawing': [1, ['assignNewId']],
   'Sheet.setArrayFormula': [0, ['formula', 'range']],
   'Sheet.setAutoFilter': [0, ['columns', 'range', 'sort']],
   'Sheet.setCellPhoneticProperties': [2, ['alignment', 'fontIndex', 'stated', 'type']],
-  'Sheet.setColumnBreak': [1, ['first', 'last', 'manual']],
+  'Sheet.setColumnBreak': [1, ['col', 'first', 'last', 'manual', 'row']],
   'Sheet.setComment': [2, ['author', 'text']],
   'Sheet.setHyperlink': [2, ['display', 'location', 'range', 'target', 'tooltip']],
   'Sheet.setPrintTitles': [0, ['columns', 'rows']],
-  'Sheet.setRowBreak': [1, ['first', 'last', 'manual']],
+  'Sheet.setRowBreak': [1, ['col', 'first', 'last', 'manual', 'row']],
   'Sheet.setSelection': [0, ['active', 'ranges']],
   'Sheet.setSheetProtection': [
     0,
@@ -2644,8 +2675,7 @@ const INPUT_KEYS = Object.freeze({
   'Workbook.addPerson': [0, ['displayName', 'id', 'providerId', 'userId']],
   'Workbook.addSheet': [1, ['insertBefore']],
   'Workbook.copySheet': [1, ['insertBefore', 'newName']],
-  'Workbook.formatReference': [0, ['range', 'sheetName']],
-  'Workbook.formatValue': [0, ['boolean', 'cells', 'cols', 'errorCode', 'kind', 'number', 'rows', 'text']],
+  'Workbook.formatReference': [1, ['absolute', 'sheetName']],
   'Workbook.parseReference': [1, ['baseCol', 'baseRow', 'r1c1']],
   'Workbook.resolveColor': [0, ['argb', 'indexed', 'kind', 'theme', 'tint']],
   'Workbook.setBorder': [1, ['bottom', 'diagonal', 'diagonalDown', 'diagonalUp', 'left', 'right', 'top']],
@@ -2775,7 +2805,6 @@ const INPUT_KEYS = Object.freeze({
 const INPUT_NESTED_KEYS = Object.freeze({
   'Chart.addSeries': {
     fill: ['color', 'none', 'other', 'transparencyPct'],
-    'fill.color': ['argb', 'indexed', 'kind', 'theme', 'tint'],
     labels: [
       'deleted',
       'fontColor',
@@ -2790,14 +2819,10 @@ const INPUT_NESTED_KEYS = Object.freeze({
       'showValue',
       'sourceLinked',
     ],
-    'labels.fontColor': ['argb', 'indexed', 'kind', 'theme', 'tint'],
     line: ['color', 'dash', 'none', 'other', 'transparencyPct', 'widthPt'],
-    'line.color': ['argb', 'indexed', 'kind', 'theme', 'tint'],
     marker: ['fill', 'line', 'sizePt', 'symbol'],
     'marker.fill': ['color', 'none', 'other', 'transparencyPct'],
-    'marker.fill.color': ['argb', 'indexed', 'kind', 'theme', 'tint'],
     'marker.line': ['color', 'dash', 'none', 'other', 'transparencyPct', 'widthPt'],
-    'marker.line.color': ['argb', 'indexed', 'kind', 'theme', 'tint'],
   },
   'Chart.setPoint': {
     fill: ['color', 'none', 'other', 'transparencyPct'],
@@ -2830,7 +2855,7 @@ const INPUT_NESTED_KEYS = Object.freeze({
     ],
     'dataBar.max': ['gte', 'type', 'value'],
     'dataBar.min': ['gte', 'type', 'value'],
-    format: ['alignment', 'border', 'fill', 'font', 'numberFormat', 'protection'],
+    format: ['alignment', 'border', 'fill', 'font', 'numberFormat', 'protection', 'source'],
     'format.alignment': [
       'horizontal',
       'indent',
@@ -2890,6 +2915,10 @@ const INPUT_NESTED_KEYS = Object.freeze({
       'widthEmu',
     ],
   },
+  'Sheet.addDataTable': {
+    columnInput: ['col', 'deleted', 'row'],
+    rowInput: ['col', 'deleted', 'row'],
+  },
   'Sheet.addPicture': {
     anchor: [
       'editAs',
@@ -2922,9 +2951,7 @@ const INPUT_NESTED_KEYS = Object.freeze({
       'widthEmu',
     ],
     fill: ['color', 'none', 'other', 'transparencyPct'],
-    'fill.color': ['argb', 'indexed', 'kind', 'theme', 'tint'],
     line: ['color', 'dash', 'none', 'other', 'transparencyPct', 'widthPt'],
-    'line.color': ['argb', 'indexed', 'kind', 'theme', 'tint'],
   },
   'Sheet.addSlicer': {
     anchor: [
@@ -3114,6 +3141,84 @@ const INPUT_NESTED_KEYS = Object.freeze({
     'elements[]': ['dxfIndex', 'size', 'type'],
   },
 });
+const READ_ONLY_KEYS = Object.freeze({
+  'Chart.addSeries': ['filtered', 'order', 'points', 'seriesId'],
+  'Chart.updateAxis': ['crossAxis', 'id', 'kind'],
+  'Chart.updateDisplay': [
+    'autoTitleDeleted',
+    'axes',
+    'date1904',
+    'filter',
+    'isExtended',
+    'isPivotChart',
+    'legend',
+    'objectId',
+    'onChartsheet',
+    'plots',
+    'source',
+    'title',
+  ],
+  'Chart.updatePlot': ['axisIds', 'barDirection', 'extendedLayout', 'grouping', 'series', 'type'],
+  'Chart.updatePoint': ['index'],
+  'Chart.updateSeries': ['filtered', 'order', 'points', 'seriesId'],
+  'Drawing.update': ['kind', 'objectId'],
+  'Pivot.updateField': [
+    'axis',
+    'cacheFieldIndex',
+    'dateCalendar',
+    'datePeriods',
+    'groupBaseIndex',
+    'sourceName',
+    'subtotalFunctions',
+  ],
+  'Pivot.updateFieldItem': ['cacheIndex', 'name'],
+  'Shape.update': ['kind', 'objectId'],
+  'Sheet.addDataTable': ['columnInput.deleted', 'rowInput.deleted', 'rowOriented', 'twoDimensional'],
+  'Sheet.addShape': ['kind', 'objectId'],
+  'Sheet.addSlicer': ['cacheName', 'columnName', 'objectId', 'tableName'],
+  'Sheet.addSparklineGroup': ['id'],
+  'Sheet.addValidation': ['id'],
+  'Sheet.setCellPhoneticProperties': ['stated'],
+  'Sheet.setColumnBreak': ['col', 'row'],
+  'Sheet.setRowBreak': ['col', 'row'],
+  'Sheet.updateCellFormat': ['source'],
+  'Sheet.updateCfRule': ['id', 'type'],
+  'Sheet.updateFormatDefaults': ['effectiveDefaultColumnWidthChars', 'effectiveDefaultRowHeightPt'],
+  'Sheet.updateHeaderFooter': [
+    'alignWithMarginsStated',
+    'differentFirstStated',
+    'differentOddEvenStated',
+    'scaleWithDocStated',
+  ],
+  'Sheet.updatePageMargins': [
+    'bottomInStated',
+    'footerInStated',
+    'headerInStated',
+    'leftInStated',
+    'rightInStated',
+    'topInStated',
+  ],
+  'Sheet.updatePageSetup': [
+    'fitToHeightStated',
+    'fitToPageStated',
+    'fitToWidthStated',
+    'paperSizeStated',
+    'scalePctStated',
+  ],
+  'Sheet.updatePrintOptions': [
+    'gridLinesStated',
+    'headingsStated',
+    'horizontalCenteredStated',
+    'verticalCenteredStated',
+  ],
+  'Sheet.updateSparklineGroup': ['id'],
+  'Sheet.updateThreadedComment': ['cell', 'created', 'id', 'parentId', 'personId'],
+  'Sheet.updateValidation': ['id'],
+  'Slicer.update': ['cacheName', 'columnName', 'kind', 'objectId', 'tableName'],
+  'Table.setColumnTotals': ['name'],
+  'Table.update': ['columns', 'name'],
+  'Workbook.setThemeColors': ['source'],
+});
 // </input-keys>
 // <patch-nullable> generated by tools/codegen/gen_facade_tables.py; do not edit
 const PATCH_NULLABLE = Object.freeze({
@@ -3151,7 +3256,7 @@ const PATCH_NULLABLE = Object.freeze({
   'PivotCache.updateOptions': { missingItemsLimit: 'number' },
   'Shape.update': { fill: 'object', line: 'object' },
   'Sheet.updateCfRule': { dxfIndex: 'number', formula1: 'string', formula2: 'string' },
-  'Sheet.updateFormatDefaults': { defaultColWidthChars: 'number', defaultRowHeightPt: 'number' },
+  'Sheet.updateFormatDefaults': { defaultColumnWidthChars: 'number', defaultRowHeightPt: 'number' },
   'Sheet.updateHeaderFooter': {
     evenFooter: 'string',
     evenHeader: 'string',
@@ -3226,6 +3331,24 @@ const METHOD_ARITY = Object.freeze({
   'Chart.updateSeries': 3,
   'Drawing.getDrawingProperties': 0,
   'Drawing.update': 1,
+  'Formulon.canonicalizeFormula': 2,
+  'Formulon.canonicalizeFunctionName': 2,
+  'Formulon.compareText': 4,
+  'Formulon.convertCivilToSerial': 2,
+  'Formulon.convertSerialToCivil': 2,
+  'Formulon.evaluateFormula': 1,
+  'Formulon.evaluateTypedFormula': 1,
+  'Formulon.getCollationClasses': 3,
+  'Formulon.getFunctionMetadata': 1,
+  'Formulon.getImageInfo': 1,
+  'Formulon.getLocaleFacts': 1,
+  'Formulon.getVersion': 0,
+  'Formulon.listFunctionNames': 0,
+  'Formulon.listProfileIds': 0,
+  'Formulon.localizeFormula': 2,
+  'Formulon.localizeFunctionName': 2,
+  'Formulon.setLogMinLevel': 1,
+  'Formulon.setLogSink': 1,
   'Picture.getDrawingProperties': 0,
   'Picture.getProperties': 0,
   'Picture.setZOrder': 1,
@@ -3348,7 +3471,7 @@ const METHOD_ARITY = Object.freeze({
   'Sheet.getCellRectPt': 2,
   'Sheet.getCellShowPhonetic': 2,
   'Sheet.getCellXfIndex': 2,
-  'Sheet.getCellsInRange': 3,
+  'Sheet.getCellsInRange': 2,
   'Sheet.getCfRule': 1,
   'Sheet.getColumnWidthPt': 2,
   'Sheet.getColumnXfIndex': 1,
@@ -3365,7 +3488,7 @@ const METHOD_ARITY = Object.freeze({
   'Sheet.getHeaderFooter': 0,
   'Sheet.getHeaderFooterXml': 0,
   'Sheet.getHyperlink': 2,
-  'Sheet.getInvalidCells': 2,
+  'Sheet.getInvalidCells': 1,
   'Sheet.getLambdaText': 2,
   'Sheet.getMergesInRange': 1,
   'Sheet.getPageMargins': 0,
@@ -3538,6 +3661,9 @@ const METHOD_ARITY = Object.freeze({
   'Workbook.addPivotCache': 1,
   'Workbook.addSheet': 2,
   'Workbook.copySheet': 2,
+  'Workbook.createDefault': 0,
+  'Workbook.createEmpty': 0,
+  'Workbook.createForProfile': 1,
   'Workbook.dispose': 0,
   'Workbook.formatReference': 2,
   'Workbook.formatValue': 2,
@@ -3588,6 +3714,7 @@ const METHOD_ARITY = Object.freeze({
   'Workbook.listSheets': 0,
   'Workbook.listTableStyles': 0,
   'Workbook.listThemeScriptFonts': 1,
+  'Workbook.load': 1,
   'Workbook.parseReference': 2,
   'Workbook.pivotCache': 1,
   'Workbook.recalc': 0,
@@ -3656,7 +3783,6 @@ const TYPED_ARGS = Object.freeze({
   'Sheet.setPrintArea': [[0, 'CellRect[]']],
   'Sheet.setSelection': [[0, 'SheetSelectionInput']],
   'Table.setAutoFilter': [[0, 'AutoFilterInput']],
-  'Workbook.formatReference': [[0, 'ReferenceRangeInput']],
 });
 const DEFAULT_ARGS = Object.freeze({
   'Sheet.getCellsInRange': [[0, null]],
@@ -3737,10 +3863,6 @@ const ARG_ROLES = Object.freeze({
     [0, 'coordinate'],
     [1, 'coordinate'],
   ],
-  'Sheet.getCellsInRange': [
-    [1, 'quantity'],
-    [2, 'quantity'],
-  ],
   'Sheet.getColumnWidthPt': [[0, 'coordinate']],
   'Sheet.getComment': [
     [0, 'coordinate'],
@@ -3774,10 +3896,6 @@ const ARG_ROLES = Object.freeze({
   'Sheet.getHyperlink': [
     [0, 'coordinate'],
     [1, 'coordinate'],
-  ],
-  'Sheet.getInvalidCells': [
-    [0, 'quantity'],
-    [1, 'quantity'],
   ],
   'Sheet.getLambdaText': [
     [0, 'coordinate'],
@@ -3949,6 +4067,350 @@ const ARG_ROLES = Object.freeze({
   'Workbook.setFont': [[0, 'position']],
 });
 // </method-signatures>
+// <param-names> generated by tools/codegen/gen_facade_tables.py; do not edit
+const PARAM_NAMES = Object.freeze({
+  'Chart.addSeries': ['plot', 'input'],
+  'Chart.getPreview': ['overrides'],
+  'Chart.removeSeries': ['plot', 'seriesId'],
+  'Chart.setFilter': ['filter'],
+  'Chart.setLegend': ['legend'],
+  'Chart.setPoint': ['plot', 'seriesId', 'pointIndex', 'point'],
+  'Chart.setSource': ['source'],
+  'Chart.setTitle': ['title'],
+  'Chart.setType': ['plot', 'type', 'options'],
+  'Chart.setZOrder': ['zOrderIndex'],
+  'Chart.update': ['patch'],
+  'Chart.updateAxis': ['axis', 'patch'],
+  'Chart.updateDisplay': ['patch'],
+  'Chart.updateLegend': ['patch'],
+  'Chart.updatePlot': ['plot', 'patch'],
+  'Chart.updatePoint': ['plot', 'seriesId', 'pointIndex', 'patch'],
+  'Chart.updateSeries': ['plot', 'seriesId', 'patch'],
+  'Drawing.update': ['patch'],
+  'Formulon.canonicalizeFormula': ['formula', 'profileId'],
+  'Formulon.canonicalizeFunctionName': ['localizedName', 'profileId'],
+  'Formulon.compareText': ['a', 'b', 'strength', 'profileId'],
+  'Formulon.convertCivilToSerial': ['date', 'options'],
+  'Formulon.convertSerialToCivil': ['serial', 'options'],
+  'Formulon.evaluateFormula': ['formula'],
+  'Formulon.evaluateTypedFormula': ['formula'],
+  'Formulon.getCollationClasses': ['values', 'strength', 'profileId'],
+  'Formulon.getFunctionMetadata': ['name'],
+  'Formulon.getImageInfo': ['bytes'],
+  'Formulon.getLocaleFacts': ['profileId'],
+  'Formulon.localizeFormula': ['formula', 'profileId'],
+  'Formulon.localizeFunctionName': ['canonicalName', 'profileId'],
+  'Formulon.setLogMinLevel': ['level'],
+  'Formulon.setLogSink': ['sink'],
+  'Picture.setZOrder': ['zOrderIndex'],
+  'Picture.update': ['patch'],
+  'Pivot.addDataField': ['spec'],
+  'Pivot.addFieldItem': ['fieldIndex', 'item', 'options'],
+  'Pivot.addFilter': ['spec'],
+  'Pivot.clearFieldItems': ['fieldIndex'],
+  'Pivot.getDataField': ['dataFieldIndex'],
+  'Pivot.getDataFieldDefaultName': ['fieldIndex', 'aggregation', 'excludeDataField'],
+  'Pivot.getField': ['fieldIndex'],
+  'Pivot.getFieldItem': ['fieldIndex', 'itemIndex'],
+  'Pivot.getFilter': ['filterIndex'],
+  'Pivot.listFieldItems': ['fieldIndex'],
+  'Pivot.removeFilter': ['filterIndex'],
+  'Pivot.rename': ['name'],
+  'Pivot.setAnchor': ['cell'],
+  'Pivot.setColumnFieldOrder': ['fields'],
+  'Pivot.setDataField': ['dataFieldIndex', 'spec'],
+  'Pivot.setFieldAxis': ['fieldIndex', 'axis'],
+  'Pivot.setFieldDateGroup': ['fieldIndex', 'group'],
+  'Pivot.setFieldSubtotalFunctions': ['fieldIndex', 'aggregations'],
+  'Pivot.setPageFieldOrder': ['fields'],
+  'Pivot.setReportLayout': ['layout'],
+  'Pivot.setRowFieldOrder': ['fields'],
+  'Pivot.showDetails': ['row', 'col'],
+  'Pivot.updateField': ['fieldIndex', 'patch'],
+  'Pivot.updateFieldItem': ['fieldIndex', 'itemIndex', 'patch'],
+  'Pivot.updateGrandTotals': ['patch'],
+  'Pivot.updateOptions': ['patch'],
+  'Pivot.updateStyleOptions': ['patch'],
+  'PivotCache.addCalculatedField': ['name', 'formula'],
+  'PivotCache.addCalculatedItem': ['field', 'name', 'formula'],
+  'PivotCache.addField': ['name'],
+  'PivotCache.addFieldSharedItem': ['field', 'value'],
+  'PivotCache.clearFieldSharedItems': ['field'],
+  'PivotCache.getRecordValue': ['recordIndex', 'field'],
+  'PivotCache.listFieldSharedItems': ['field'],
+  'PivotCache.moveCalculatedItem': ['calculatedItemIndex', 'newIndex'],
+  'PivotCache.removeCalculatedField': ['field'],
+  'PivotCache.removeCalculatedItem': ['calculatedItemIndex'],
+  'PivotCache.setCalculatedFieldFormula': ['field', 'formula'],
+  'PivotCache.setCalculatedItemFormula': ['calculatedItemIndex', 'formula'],
+  'PivotCache.setRecordValue': ['recordIndex', 'field', 'value'],
+  'PivotCache.setWorksheetSource': ['source'],
+  'PivotCache.updateOptions': ['patch'],
+  'Shape.setZOrder': ['zOrderIndex'],
+  'Shape.update': ['patch'],
+  'Sheet.addCfRule': ['rule'],
+  'Sheet.addChart': ['input'],
+  'Sheet.addDataTable': ['spec'],
+  'Sheet.addMerge': ['range'],
+  'Sheet.addPicture': ['bytes', 'input'],
+  'Sheet.addPivot': ['input'],
+  'Sheet.addProtectedRange': ['input'],
+  'Sheet.addShape': ['spec'],
+  'Sheet.addSlicer': ['table', 'column', 'spec'],
+  'Sheet.addSparklineGroup': ['spec'],
+  'Sheet.addTable': ['input'],
+  'Sheet.addThreadedComment': ['comment'],
+  'Sheet.addValidation': ['validation'],
+  'Sheet.chart': ['objectId'],
+  'Sheet.convertColumnCharsToPt': ['chars', 'mode'],
+  'Sheet.convertColumnPtToChars': ['pt', 'mode'],
+  'Sheet.deleteCells': ['range', 'shift'],
+  'Sheet.deleteColumns': ['first', 'last'],
+  'Sheet.deleteRows': ['first', 'last'],
+  'Sheet.drawing': ['objectId'],
+  'Sheet.evaluateCfFormula': ['row', 'col', 'anchorRow', 'anchorCol', 'formula'],
+  'Sheet.evaluateCfRange': ['range', 'options'],
+  'Sheet.evaluateFormula': ['row', 'col', 'formula'],
+  'Sheet.evaluateFormulaArray': ['row', 'col', 'formula'],
+  'Sheet.evaluateTypedFormula': ['row', 'col', 'formula'],
+  'Sheet.evaluateTypedFormulaArray': ['row', 'col', 'formula'],
+  'Sheet.getArrayFormula': ['row', 'col'],
+  'Sheet.getCellFormat': ['row', 'col'],
+  'Sheet.getCellPhonetic': ['row', 'col'],
+  'Sheet.getCellPhoneticProperties': ['row', 'col'],
+  'Sheet.getCellPhoneticRuns': ['row', 'col'],
+  'Sheet.getCellRectPt': ['range', 'mode'],
+  'Sheet.getCellShowPhonetic': ['row', 'col'],
+  'Sheet.getCellsInRange': ['range', 'options'],
+  'Sheet.getCfRule': ['cfRule'],
+  'Sheet.getColumnWidthPt': ['col', 'mode'],
+  'Sheet.getComment': ['row', 'col'],
+  'Sheet.getCommentVisible': ['row', 'col'],
+  'Sheet.getDataTable': ['row', 'col'],
+  'Sheet.getDate': ['row', 'col'],
+  'Sheet.getDependents': ['row', 'col', 'depth'],
+  'Sheet.getDisplayText': ['row', 'col'],
+  'Sheet.getFormula': ['row', 'col'],
+  'Sheet.getFormulaR1C1': ['row', 'col'],
+  'Sheet.getHyperlink': ['row', 'col'],
+  'Sheet.getInvalidCells': ['options'],
+  'Sheet.getLambdaText': ['row', 'col'],
+  'Sheet.getMergesInRange': ['range'],
+  'Sheet.getPrecedents': ['row', 'col', 'depth'],
+  'Sheet.getProtectedRange': ['protectedRange'],
+  'Sheet.getRowHeightPt': ['row'],
+  'Sheet.getSparklineGroup': ['sparklineGroup'],
+  'Sheet.getSpill': ['row', 'col'],
+  'Sheet.getThreadedComment': ['id'],
+  'Sheet.getTypedValue': ['row', 'col'],
+  'Sheet.getTypedValues': ['range'],
+  'Sheet.getValidation': ['validation'],
+  'Sheet.getValue': ['row', 'col'],
+  'Sheet.getValues': ['range'],
+  'Sheet.getWidthModel': ['mode'],
+  'Sheet.insertCells': ['range', 'shift'],
+  'Sheet.insertColumns': ['first', 'last'],
+  'Sheet.insertRows': ['first', 'last'],
+  'Sheet.iterRows': ['range'],
+  'Sheet.listCells': ['range'],
+  'Sheet.move': ['insertBefore'],
+  'Sheet.picture': ['objectId'],
+  'Sheet.pivot': ['pivot'],
+  'Sheet.recalcViewport': ['viewport'],
+  'Sheet.removeCfRule': ['cfRule'],
+  'Sheet.removeDataTable': ['row', 'col'],
+  'Sheet.removeDrawing': ['objectId'],
+  'Sheet.removeMerge': ['range'],
+  'Sheet.removePivot': ['pivot'],
+  'Sheet.removeProtectedRange': ['protectedRange'],
+  'Sheet.removeSparklineGroup': ['sparklineGroup'],
+  'Sheet.removeTable': ['table'],
+  'Sheet.removeThreadedComment': ['id'],
+  'Sheet.removeValidation': ['validation'],
+  'Sheet.rename': ['newName'],
+  'Sheet.resetColumnWidth': ['first', 'last'],
+  'Sheet.resetRowHeight': ['first', 'last'],
+  'Sheet.restoreDrawing': ['bytes', 'opts'],
+  'Sheet.setArrayFormula': ['arrayFormula'],
+  'Sheet.setAutoFilter': ['filter'],
+  'Sheet.setBlank': ['row', 'col'],
+  'Sheet.setBool': ['row', 'col', 'value'],
+  'Sheet.setCellPhonetic': ['row', 'col', 'phonetic'],
+  'Sheet.setCellPhoneticProperties': ['row', 'col', 'properties'],
+  'Sheet.setCellPhoneticRuns': ['row', 'col', 'runs'],
+  'Sheet.setCellShowPhonetic': ['row', 'col', 'show'],
+  'Sheet.setColumnBreak': ['col', 'input'],
+  'Sheet.setColumnCollapsed': ['first', 'last', 'collapsed'],
+  'Sheet.setColumnHidden': ['first', 'last', 'hidden'],
+  'Sheet.setColumnOutline': ['first', 'last', 'level'],
+  'Sheet.setColumnWidth': ['first', 'last', 'widthChars'],
+  'Sheet.setComment': ['row', 'col', 'comment'],
+  'Sheet.setCommentVisible': ['row', 'col', 'visible'],
+  'Sheet.setError': ['row', 'col', 'error'],
+  'Sheet.setFormula': ['row', 'col', 'formula'],
+  'Sheet.setHyperlink': ['row', 'col', 'link'],
+  'Sheet.setNumber': ['row', 'col', 'value'],
+  'Sheet.setPrintArea': ['ranges'],
+  'Sheet.setPrintTitles': ['titles'],
+  'Sheet.setRowAutoHeight': ['first', 'last', 'heightPt'],
+  'Sheet.setRowBreak': ['row', 'input'],
+  'Sheet.setRowCollapsed': ['first', 'last', 'collapsed'],
+  'Sheet.setRowHeight': ['first', 'last', 'heightPt'],
+  'Sheet.setRowHidden': ['first', 'last', 'hidden'],
+  'Sheet.setRowOutline': ['first', 'last', 'level'],
+  'Sheet.setSelection': ['selection'],
+  'Sheet.setSheetProtection': ['protection'],
+  'Sheet.setTabColor': ['color'],
+  'Sheet.setText': ['row', 'col', 'text'],
+  'Sheet.setValue': ['row', 'col', 'value'],
+  'Sheet.setValues': ['row', 'col', 'values'],
+  'Sheet.setVisibility': ['visibility'],
+  'Sheet.shape': ['objectId'],
+  'Sheet.slicer': ['objectId'],
+  'Sheet.table': ['table'],
+  'Sheet.updateCellFormat': ['range', 'patch'],
+  'Sheet.updateCfRule': ['cfRule', 'patch'],
+  'Sheet.updateFormatDefaults': ['patch'],
+  'Sheet.updateHeaderFooter': ['patch'],
+  'Sheet.updatePageMargins': ['patch'],
+  'Sheet.updatePageSetup': ['patch'],
+  'Sheet.updatePrintOptions': ['patch'],
+  'Sheet.updateProtectedRange': ['protectedRange', 'patch'],
+  'Sheet.updateSheetProtection': ['patch'],
+  'Sheet.updateSparklineGroup': ['sparklineGroup', 'patch'],
+  'Sheet.updateThreadedComment': ['id', 'patch'],
+  'Sheet.updateValidation': ['validation', 'patch'],
+  'Sheet.updateView': ['patch'],
+  'Sheet.validateValue': ['row', 'col', 'value'],
+  'SheetOoxml.getCellXfIndex': ['row', 'col'],
+  'SheetOoxml.getColumnXfIndex': ['col'],
+  'SheetOoxml.getEffectiveStyle': ['row', 'col'],
+  'SheetOoxml.getRangeXfBases': ['range'],
+  'SheetOoxml.getRangeXfBasesExcluding': ['range', 'excluded'],
+  'SheetOoxml.getRowXfIndex': ['row'],
+  'SheetOoxml.remapRangeXfs': ['range', 'mapping'],
+  'SheetOoxml.resetCellXfIndex': ['row', 'col'],
+  'SheetOoxml.resetColumnXfIndex': ['first', 'last'],
+  'SheetOoxml.resetRowXfIndex': ['first', 'last'],
+  'SheetOoxml.restoreRangeXfs': ['bytes'],
+  'SheetOoxml.setAutoFilterXml': ['xml'],
+  'SheetOoxml.setCellXfIndex': ['row', 'col', 'xfIndex'],
+  'SheetOoxml.setColumnXfIndex': ['first', 'last', 'xfIndex'],
+  'SheetOoxml.setHeaderFooterXml': ['xml'],
+  'SheetOoxml.setPageMarginsXml': ['xml'],
+  'SheetOoxml.setPageSetupXml': ['xml'],
+  'SheetOoxml.setPrintOptionsXml': ['xml'],
+  'SheetOoxml.setRangeXfIndex': ['range', 'xfIndex'],
+  'SheetOoxml.setRowXfIndex': ['first', 'last', 'xfIndex'],
+  'SheetOoxml.setSheetPrXml': ['xml'],
+  'SheetOoxml.snapshotRangeXfs': ['range'],
+  'Slicer.setZOrder': ['zOrderIndex'],
+  'Slicer.update': ['patch'],
+  'Table.rename': ['name'],
+  'Table.renameColumn': ['column', 'name'],
+  'Table.setAutoFilter': ['filter'],
+  'Table.setColumnTotals': ['column', 'totals'],
+  'Table.update': ['patch'],
+  'Table.updateStyleOptions': ['patch'],
+  'Workbook.addPerson': ['person'],
+  'Workbook.addPivotCache': ['requestedId'],
+  'Workbook.addSheet': ['name', 'options'],
+  'Workbook.copySheet': ['source', 'options'],
+  'Workbook.createForProfile': ['profileId'],
+  'Workbook.formatReference': ['range', 'options'],
+  'Workbook.formatValue': ['value', 'numberFormat'],
+  'Workbook.getCellStyle': ['name'],
+  'Workbook.getDefinedName': ['name', 'scope'],
+  'Workbook.getPerson': ['id'],
+  'Workbook.getTableStyle': ['name'],
+  'Workbook.getThemeScriptFont': ['key'],
+  'Workbook.hasSheet': ['ref'],
+  'Workbook.listThemeScriptFonts': ['scheme'],
+  'Workbook.load': ['bytes'],
+  'Workbook.parseReference': ['text', 'options'],
+  'Workbook.pivotCache': ['cacheId'],
+  'Workbook.recalcParallel': ['threadCount'],
+  'Workbook.removeCellStyle': ['name'],
+  'Workbook.removeDefinedName': ['name', 'scope'],
+  'Workbook.removePerson': ['id'],
+  'Workbook.removePivotCache': ['cacheId'],
+  'Workbook.removeSheet': ['sheet'],
+  'Workbook.removeTableStyle': ['name'],
+  'Workbook.resolveColor': ['spec', 'context'],
+  'Workbook.save': ['format'],
+  'Workbook.saveWithDiagnostics': ['format'],
+  'Workbook.setActiveSheet': ['sheet'],
+  'Workbook.setCalcMode': ['mode'],
+  'Workbook.setCalcOnSave': ['calcOnSave'],
+  'Workbook.setCellStyle': ['record'],
+  'Workbook.setDate1904': ['date1904'],
+  'Workbook.setDefaultFont': ['record'],
+  'Workbook.setDefinedName': ['definedName'],
+  'Workbook.setFileName': ['name'],
+  'Workbook.setFullPrecision': ['fullPrecision'],
+  'Workbook.setIterativeProgress': ['callback'],
+  'Workbook.setPinnedNow': ['time'],
+  'Workbook.setProfileId': ['profileId'],
+  'Workbook.setRefMode': ['mode'],
+  'Workbook.setTableStyle': ['style'],
+  'Workbook.setThemeColors': ['colors'],
+  'Workbook.setThemeFonts': ['fonts'],
+  'Workbook.setThemeScriptFont': ['font'],
+  'Workbook.setWorkbookProtection': ['protection'],
+  'Workbook.sheet': ['key'],
+  'Workbook.table': ['name'],
+  'Workbook.updateIterative': ['patch'],
+  'Workbook.updateTableStyleDefaults': ['patch'],
+  'WorkbookOoxml.addBorder': ['record'],
+  'WorkbookOoxml.addCellStyleXf': ['record'],
+  'WorkbookOoxml.addCellXf': ['record'],
+  'WorkbookOoxml.addDxf': ['input'],
+  'WorkbookOoxml.addFill': ['record'],
+  'WorkbookOoxml.addFont': ['record'],
+  'WorkbookOoxml.addNumberFormat': ['numberFormat'],
+  'WorkbookOoxml.getBorder': ['borderIndex'],
+  'WorkbookOoxml.getCellStyleXf': ['cellStyleXfIndex'],
+  'WorkbookOoxml.getCellXf': ['xfIndex'],
+  'WorkbookOoxml.getDxf': ['dxfIndex'],
+  'WorkbookOoxml.getFill': ['fillIndex'],
+  'WorkbookOoxml.getFont': ['fontIndex'],
+  'WorkbookOoxml.getNumberFormat': ['numFmtId'],
+  'WorkbookOoxml.hasPassthrough': ['path'],
+  'WorkbookOoxml.setBorder': ['borderIndex', 'record'],
+  'WorkbookOoxml.setCellStyleXf': ['cellStyleXfIndex', 'record'],
+  'WorkbookOoxml.setCellXf': ['xfIndex', 'record'],
+  'WorkbookOoxml.setDxf': ['dxfIndex', 'input'],
+  'WorkbookOoxml.setFill': ['fillIndex', 'record'],
+  'WorkbookOoxml.setFont': ['fontIndex', 'record'],
+});
+// </param-names>
+// <boolean-args> generated by tools/codegen/gen_facade_tables.py; do not edit
+const BOOLEAN_ARGS = Object.freeze({
+  'Sheet.setBool': [2],
+  'Sheet.setCellShowPhonetic': [2],
+  'Sheet.setColumnCollapsed': [2],
+  'Sheet.setColumnHidden': [2],
+  'Sheet.setCommentVisible': [2],
+  'Sheet.setRowCollapsed': [2],
+  'Sheet.setRowHidden': [2],
+  'Workbook.setCalcOnSave': [0],
+  'Workbook.setDate1904': [0],
+  'Workbook.setFullPrecision': [0],
+});
+// </boolean-args>
+// <c-field-names> generated by tools/codegen/gen_facade_tables.py; do not edit
+const C_FIELD_NAMES = Object.freeze({
+  date_axis_ref: { js: 'dateAxisRange', py: 'date_axis_range' },
+  has_bottom_in: { js: 'bottomInStated', py: 'bottom_in_stated' },
+  has_footer_in: { js: 'footerInStated', py: 'footer_in_stated' },
+  has_header_in: { js: 'headerInStated', py: 'header_in_stated' },
+  has_left_in: { js: 'leftInStated', py: 'left_in_stated' },
+  has_right_in: { js: 'rightInStated', py: 'right_in_stated' },
+  has_scale_pct: { js: 'scalePctStated', py: 'scale_pct_stated' },
+  has_top_in: { js: 'topInStated', py: 'top_in_stated' },
+  items: { js: 'sparklines', py: 'sparklines' },
+});
+// </c-field-names>
 // Arguments the declarations type `T | null` (or optional) where the raw method
 // takes the C sentinel: `Class.method` -> [position in the public call,
 // sentinel, whether an omitted argument also means absent].
@@ -4118,8 +4580,6 @@ const DRAWING_ANCHOR_KEYS = Object.freeze([
   'widthEmu',
   'heightEmu',
 ]);
-// Keys of a drawing's read record that a patch carries back and the raw update ignores.
-const DRAWING_READ_ONLY_KEYS = Object.freeze(['objectId', 'kind']);
 
 // The keys of a conditional-format patch each rule kind uses, beyond `type` and `id`.
 const CF_PATCH_BASE = Object.freeze(['ranges', 'priority', 'stopIfTrue']);
@@ -4211,11 +4671,12 @@ function decodeSparklineGroup(raw, group) {
 
 /**
  * Splits a drawing patch of `where` into the keys every kind takes (`DRAWING_PATCH_KEYS`, checked here) and the
- * kind's own keys, `undefined` keys and the read-only `objectId` / `kind` dropped. `description` takes `null`, no
- * other common key or anchor key does.
+ * kind's own keys, `undefined` keys and the read-only keys of `Drawing.update` dropped. `description` takes
+ * `null`, no other common key or anchor key does.
  */
 function splitDrawingPatch(where, patch) {
-  requireObject(patch, `${where} argument 1`);
+  const label = argLabel(where, 0);
+  requireObject(patch, label);
   const common = {};
   const rest = {};
   for (const [key, value] of Object.entries(patch)) {
@@ -4227,17 +4688,17 @@ function splitDrawingPatch(where, patch) {
         continue;
       }
       const mismatch = type === 'object' ? !isObject(value) : typeof value !== type;
-      if (mismatch) throw new TypeError(`${where} ${key} must be ${type === 'object' ? 'an object' : `a ${type}`}`);
+      if (mismatch) throw new TypeError(`${label}.${key} must be ${typeNoun(type)}`);
       common[key] = value;
-    } else if (!DRAWING_READ_ONLY_KEYS.includes(key)) {
+    } else if (!READ_ONLY_KEYS['Drawing.update'].includes(key)) {
       rest[key] = value;
     }
   }
   if (common.anchor !== undefined) {
     for (const [key, value] of Object.entries(common.anchor)) {
       if (value === undefined) continue;
-      if (!DRAWING_ANCHOR_KEYS.includes(key)) throw new TypeError(`${where} argument 1 has no field anchor.${key}`);
-      if (typeof value !== 'number') throw new TypeError(`${where} anchor.${key} must be a number`);
+      if (!DRAWING_ANCHOR_KEYS.includes(key)) throw new TypeError(`${label}.anchor has no field ${key}`);
+      if (typeof value !== 'number') throw new TypeError(`${label}.anchor.${key} must be a number`);
     }
   }
   return [common, rest];
@@ -4250,22 +4711,37 @@ function rawDrawingPatch(common) {
 
 /** The axis id a `ChartAxisRef` of chart `id` names: a number is the id, a `{ kind, plot? }` key is looked up. */
 function chartAxisId(raw, sheet, id, axis, label) {
-  if (typeof axis === 'number') return axis;
-  if (!isObject(axis)) throw new TypeError(`${label} must be an axis id or an axis key`);
+  if (typeof axis === 'number') {
+    const known = raw.getChart(sheet, id);
+    if (known !== null && !known.axes.some((a) => a.id === axis)) {
+      const kind = enumName(ChartAxisKind, axis) ?? 'Value';
+      throw new FormulonError(
+        StatusCode.NotFound,
+        `${label} has no axis with id ${axis}. Pass { kind: ChartAxisKind.${kind} } to address an axis by kind.`,
+        `axis_id=${axis}`,
+      );
+    }
+    return axis;
+  }
+  if (!isObject(axis)) throw new TypeError(`${label} must be a number or an object`);
   for (const key of Object.keys(axis)) {
     if (axis[key] !== undefined && key !== 'kind' && key !== 'plot') {
       throw new TypeError(`${label} has no field ${key}`);
     }
   }
-  const kind = requireInteger(axis.kind, `${label} kind`);
-  const plot = axis.plot === undefined ? 0 : requireIndex(axis.plot, `${label} plot`, 'position');
+  const kind = requireInteger(axis.kind, `${label}.kind`);
+  const plot = axis.plot === undefined ? 0 : requireIndex(axis.plot, `${label}.plot`, 'position');
   const properties = raw.getChart(sheet, id);
   if (properties === null) {
     throw new FormulonError(StatusCode.NotFound, 'the drawing object has no such part', `object_id=${id}`);
   }
   const group = properties.plots[plot];
   if (group === undefined) {
-    throw new FormulonError(StatusCode.IndexOutOfRange, `${label} plot ${plot} is out of range`, `plot=${plot}`);
+    throw new FormulonError(
+      StatusCode.IndexOutOfRange,
+      `${label}.plot ${plot} is out of range (${properties.plots.length} items)`,
+      `plot=${plot}`,
+    );
   }
   const found = group.axisIds.find((axisId) => properties.axes.find((a) => a.id === axisId)?.kind === kind);
   if (found === undefined) {
@@ -4291,7 +4767,7 @@ function checkSparklinePatch(where, patch) {
     if (!isObject(value)) return;
     for (const [key, item] of Object.entries(value)) {
       if (item !== undefined && !accepted.includes(key)) {
-        throw new TypeError(`${where} argument 2 has no field ${path}.${key}`);
+        throw new TypeError(`${argLabel(where, 1)}.${path} has no field ${key}`);
       }
     }
   };
@@ -4326,7 +4802,7 @@ function tableRange(raw, sheet, range, where) {
   if (onSheet !== sheet) {
     throw new FormulonError(
       StatusCode.InvalidArgument,
-      `${where} range is not on the table's sheet`,
+      `${argLabel(where, 0, 'range')} must be on the table's sheet`,
       `sheet_index=${sheet}`,
     );
   }
@@ -4395,66 +4871,214 @@ function isObject(value) {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function requireObject(value, where) {
-  if (!isObject(value)) throw new TypeError(`${where} must be an object`);
+// ---- Argument messages: `<Class>.<method> <path> <constraint>` ----
+
+/** `<where> <path> <constraint>`; an empty `path` gives `<where> <constraint>`. */
+function argumentMessage(where, path, constraint) {
+  return path === '' ? `${where} ${constraint}` : `${where} ${path} ${constraint}`;
+}
+
+// The classes whose methods share another class's table rows: a lookup that misses falls back along these.
+const KEY_FALLBACKS = Object.freeze({
+  Workbook: ['WorkbookOoxml'],
+  Sheet: ['SheetOoxml'],
+  WorkbookOoxml: ['Workbook'],
+  SheetOoxml: ['Sheet'],
+  Picture: ['Drawing'],
+  Chart: ['Drawing'],
+  Shape: ['Drawing'],
+  Slicer: ['Drawing'],
+});
+
+/** The row of `table` for `where` (`Class.method`), or the row its fallback class shares. */
+function tableEntry(table, where) {
+  if (Object.hasOwn(table, where)) return table[where];
+  const dot = where.indexOf('.');
+  for (const owner of KEY_FALLBACKS[where.slice(0, dot)] ?? []) {
+    const key = `${owner}${where.slice(dot)}`;
+    if (Object.hasOwn(table, key)) return table[key];
+  }
+  return undefined;
+}
+
+/**
+ * The path of argument `position` of `where`, as the declaration names it, followed by `fields`: a string is a
+ * `.field`, a number an `[index]`.
+ */
+function argumentPath(where, position, ...fields) {
+  let path = tableEntry(PARAM_NAMES, where)?.[position] ?? 'value';
+  for (const field of fields) path += typeof field === 'number' ? `[${field}]` : `.${field}`;
+  return path;
+}
+
+/** `<where> <path>` of argument `position`: the label the `require*` checks append a constraint to. */
+function argLabel(where, position, ...fields) {
+  return `${where} ${argumentPath(where, position, ...fields)}`;
+}
+
+/** The label of `fields` of the record (patch or input) argument of `where`; `source` is the row of its keys. */
+function recordLabel(where, fields = [], source = where) {
+  const position = (tableEntry(PATCH_KEYS, source) ?? tableEntry(INPUT_KEYS, source))?.[0] ?? 0;
+  return argLabel(where, position, ...fields);
+}
+
+const CALL_TOKEN = /^[A-Z][A-Za-z0-9]*\.[A-Za-z0-9]+(?= )/;
+const C_PATH = /^[a-z][a-z0-9_]*(?:\[\d+\])*(?:\.[a-z][a-z0-9_]*(?:\[\d+\])*)*$/;
+const ENGINE_BODY_CODES = new Set([
+  StatusCode.InvalidArgument,
+  StatusCode.SheetIndexOutOfRange,
+  StatusCode.IndexOutOfRange,
+]);
+const camelCase = (snake) => snake.replace(/_([a-z0-9])/g, (_, c) => c.toUpperCase());
+
+/** The public path of an engine body's C path: renamed fields, camelCase, rooted at the parameter it names. */
+function publicPath(where, cPath) {
+  const segments = cPath.split('.').map((segment) => {
+    const [, name, indices] = /^([a-z0-9_]+)((?:\[\d+\])*)$/.exec(segment);
+    return (C_FIELD_NAMES[name]?.js ?? camelCase(name)) + indices;
+  });
+  const params = tableEntry(PARAM_NAMES, where) ?? [];
+  const root = cPath.split(/[.[]/)[0];
+  const named = [camelCase(root), camelCase(root.replace(/_index$/, ''))].find((name) => params.includes(name));
+  if (named !== undefined) return [named + segments[0].replace(/^[^[]*/, ''), ...segments.slice(1)].join('.');
+  const position = (tableEntry(PATCH_KEYS, where) ?? tableEntry(INPUT_KEYS, where))?.[0];
+  return position === undefined || params[position] === undefined
+    ? segments.join('.')
+    : [params[position], ...segments].join('.');
+}
+
+/** Values a user callback threw: they reach the caller as they were thrown. */
+const calledBackErrors = new WeakSet();
+
+/** `fn` as a function that records what it throws, so the error labels leave it alone. */
+function recordThrown(fn) {
+  if (typeof fn !== 'function') return fn;
+  return function (...args) {
+    try {
+      return fn.apply(this, args);
+    } catch (e) {
+      if (isObject(e)) calledBackErrors.add(e);
+      throw e;
+    }
+  };
+}
+
+/** `error` as the same class, code and context with `message`. */
+function withMessage(error, message) {
+  if (error.name === 'FormulonError') return new FormulonError(error.code, message, error.context, error.parseError);
+  return new error.constructor(message);
+}
+
+/**
+ * `error` as the call `where` (`Class.method`) words it: a binding-layer message that leads with another call is
+ * rewritten to lead with `where`, and an engine body `<c_path> <rest>` (an InvalidArgument or out-of-range
+ * `FormulonError` that leads with no call) to `where`, the public path of `c_path`, and `rest`. Anything else
+ * passes as it is. `args` are the arguments of the call.
+ */
+function relabelArgumentError(error, where, _args) {
+  if (calledBackErrors.has(error)) return error;
+  if (typeof error?.message !== 'string') return error;
+  const { message } = error;
+  const isFormulon = error.name === 'FormulonError';
+  if (!isFormulon && !(error instanceof TypeError) && !(error instanceof RangeError)) return error;
+  const call = CALL_TOKEN.exec(message);
+  if (call !== null) return call[0] === where ? error : withMessage(error, where + message.slice(call[0].length));
+  if (!isFormulon || !ENGINE_BODY_CODES.has(error.code)) return error;
+  const space = message.indexOf(' ');
+  if (space < 0 || !C_PATH.test(message.slice(0, space))) return error;
+  return withMessage(error, `${where} ${publicPath(where, message.slice(0, space))}${message.slice(space)}`);
+}
+
+/**
+ * Wraps every method `proto` defines itself (`accept(name)` choosing, when given) so that a thrown argument error
+ * is worded as the call the consumer made: `owner` is the class name, or a function of the receiver giving it.
+ * Installed outermost, after every guard.
+ */
+function installErrorLabels(proto, owner, accept = () => true) {
+  const classOf = typeof owner === 'function' ? owner : () => owner;
+  for (const name of Object.getOwnPropertyNames(proto)) {
+    if (name === 'constructor' || name === 'dispose' || !accept(name)) continue;
+    const desc = Object.getOwnPropertyDescriptor(proto, name);
+    if (typeof desc.value !== 'function') continue;
+    const inner = desc.value;
+    defineMethod(
+      proto,
+      name,
+      namedFunction(name, function (args) {
+        try {
+          return inner.apply(this, args);
+        } catch (e) {
+          throw relabelArgumentError(e, `${classOf(this)}.${name}`, args);
+        }
+      }),
+    );
+  }
+}
+
+const typeNoun = (type) => (type === 'array' || type === 'object' ? `an ${type}` : `a ${type}`);
+
+function requireObject(value, label) {
+  if (!isObject(value)) throw new TypeError(`${label} must be an object`);
   return value;
 }
 
-function requireString(value, where) {
-  if (typeof value !== 'string') throw new TypeError(`${where} must be a primitive string`);
+function requireString(value, label) {
+  if (typeof value !== 'string') throw new TypeError(`${label} must be a string`);
   return value;
 }
 
-function requireBoolean(value, where) {
-  if (typeof value !== 'boolean') throw new TypeError(`${where} must be a primitive boolean`);
+function requireBoolean(value, label) {
+  if (typeof value !== 'boolean') throw new TypeError(`${label} must be a boolean`);
   return value;
 }
 
-function requireArray(value, where) {
-  if (!Array.isArray(value)) throw new TypeError(`${where} must be an array`);
+function requireArray(value, label) {
+  if (!Array.isArray(value)) throw new TypeError(`${label} must be an array`);
   return value;
 }
 
-function requireNumber(value, where) {
-  if (typeof value !== 'number') throw new TypeError(`${where} must be a primitive number`);
+function requireNumber(value, label) {
+  if (typeof value !== 'number') throw new TypeError(`${label} must be a number`);
   return value;
 }
 
-function requireInteger(value, where) {
-  if (typeof value !== 'number') throw new TypeError(`${where} must be a primitive number`);
-  if (!Number.isInteger(value)) throw new RangeError(`${where} is outside int32 range`);
+/** A signed 32-bit integer: a non-number is a `TypeError`, a fraction or a value outside int32 a `RangeError`. */
+function requireInteger(value, label) {
+  requireNumber(value, label);
+  if (!Number.isInteger(value)) throw new RangeError(`${label} must be an integer`);
+  if (value > INT32_MAX || value < -INT32_MAX - 1) throw new RangeError(`${label} is too large`);
   return value;
 }
 
-// An integer argument by role. A negative value is `IndexOutOfRange` for a `position`,
+// An unsigned integer by role. A negative value is `IndexOutOfRange` for a `position`,
 // `SheetIndexOutOfRange` for a `sheet`, and `InvalidArgument` for a `coordinate` (also at or above 2^31) and a
 // `quantity`; a fraction, NaN or an infinity, and a value beyond 32 bits, is a `RangeError`.
-function requireIndex(value, where, role) {
-  requireNumber(value, where);
-  if (!Number.isInteger(value)) throw new RangeError(`${where} must be an integer`);
-  if (value > 0xffffffff) throw new RangeError(`${where} is too large`);
+function requireIndex(value, label, role) {
+  requireNumber(value, label);
+  if (!Number.isInteger(value)) throw new RangeError(`${label} must be an integer`);
+  if (value > 0xffffffff) throw new RangeError(`${label} is too large`);
   if (value < 0) {
     switch (role) {
       case 'sheet':
         throw new FormulonError(
           StatusCode.SheetIndexOutOfRange,
-          `${where} ${value} is out of range`,
+          `${label} ${value} is out of range`,
           `sheet_index=${value}`,
         );
       case 'position':
-        throw new FormulonError(StatusCode.IndexOutOfRange, `${where} ${value} is out of range`, `index=${value}`);
+        throw new FormulonError(StatusCode.IndexOutOfRange, `${label} ${value} is out of range`, `index=${value}`);
       case 'coordinate':
         throw new FormulonError(
           StatusCode.InvalidArgument,
-          `${where} ${value} is outside the grid`,
+          `${label} ${value} is outside the grid`,
           `coordinate=${value}`,
         );
       default:
-        throw new FormulonError(StatusCode.InvalidArgument, `${where} ${value} must not be negative`, `value=${value}`);
+        throw new FormulonError(StatusCode.InvalidArgument, `${label} must not be negative`, `value=${value}`);
     }
   }
   if (role === 'coordinate' && value >= 0x80000000) {
-    throw new FormulonError(StatusCode.InvalidArgument, `${where} ${value} is outside the grid`, `coordinate=${value}`);
+    throw new FormulonError(StatusCode.InvalidArgument, `${label} ${value} is outside the grid`, `coordinate=${value}`);
   }
   return value;
 }
@@ -4464,53 +5088,43 @@ function requireBytes(value, where, param) {
   if (value instanceof Uint8Array) return value;
   if (value instanceof ArrayBuffer) return new Uint8Array(value);
   if (ArrayBuffer.isView(value)) return new Uint8Array(value.buffer, value.byteOffset, value.byteLength);
-  const got =
-    value === null ? 'null' : typeof value === 'object' ? (value.constructor?.name ?? 'object') : typeof value;
-  throw new TypeError(`${where} ${param} expects Uint8Array, ArrayBuffer or ArrayBufferView, got ${got}`);
+  throw new TypeError(argumentMessage(where, param, 'must be a Uint8Array'));
 }
 
 /** A patch field: `undefined` keeps `current`, `null` is refused, anything else must pass `check`. */
 function patchField(patch, field, current, check, where) {
   const value = patch[field];
-  return value === undefined ? current : check(value, `${where} ${field}`);
+  return value === undefined ? current : check(value, recordLabel(where, [field]));
 }
 
-function invalidAddress(a1) {
-  return new FormulonError(
-    StatusCode.InvalidArgument,
-    `${JSON.stringify(a1)} is not a single-cell A1 address without a sheet name`,
-    `address=${a1}`,
-  );
+function invalidAddress(a1, label) {
+  return new FormulonError(StatusCode.InvalidArgument, `${label} must name one cell`, `address=${a1}`);
 }
 
 // The only A1 reader: whatever `parseReference` accepts as one unqualified
-// cell is an address; everything else is rejected.
-function cellAddress(raw, a1, where) {
+// cell is an address; everything else is rejected. `label` is the `<call> <path>` of the argument.
+function cellAddress(raw, a1, label) {
   const ref = raw.parseReference(a1);
-  if (ref.sheetName !== null && where?.startsWith('Sheet.')) {
+  if (ref.sheetName !== null && label.startsWith('Sheet.')) {
     const local = a1.slice(a1.lastIndexOf('!') + 1);
-    const method = where.slice('Sheet.'.length);
+    const method = label.slice('Sheet.'.length, label.indexOf(' '));
     throw new FormulonError(
       StatusCode.InvalidArgument,
-      `${JSON.stringify(a1)} names a sheet; use wb.sheet(${JSON.stringify(ref.sheetName)}).${method}(${JSON.stringify(local)})`,
+      `${label} must not name a sheet; use wb.sheet(${JSON.stringify(ref.sheetName)}).${method}(${JSON.stringify(local)})`,
       `address=${a1}`,
     );
   }
-  if (ref.sheetName !== null) throw invalidAddress(a1);
+  if (ref.sheetName !== null) throw invalidAddress(a1, label);
   const { rect } = ref;
-  if (rect.firstRow !== rect.lastRow || rect.firstCol !== rect.lastCol) throw invalidAddress(a1);
+  if (rect.firstRow !== rect.lastRow || rect.firstCol !== rect.lastCol) throw invalidAddress(a1, label);
   return rect;
 }
 
 // A range argument: any unqualified A1 reference, a single cell being 1x1.
-function rangeAddress(raw, a1) {
+function rangeAddress(raw, a1, label) {
   const ref = raw.parseReference(a1);
   if (ref.sheetName !== null) {
-    throw new FormulonError(
-      StatusCode.InvalidArgument,
-      `${JSON.stringify(a1)} is not an A1 range without a sheet name`,
-      `address=${a1}`,
-    );
+    throw new FormulonError(StatusCode.InvalidArgument, `${label} must not name a sheet`, `address=${a1}`);
   }
   return ref.rect;
 }
@@ -4519,13 +5133,13 @@ function rangeAddress(raw, a1) {
 // cover whole, and the coordinates that bound it.
 const SPAN_AXES = Object.freeze({
   col: {
-    noun: 'whole-column',
+    noun: 'column',
     whole: (rect) => rect.firstRow === 0 && rect.lastRow === GRID_ROWS - 1,
     first: 'firstCol',
     last: 'lastCol',
   },
   row: {
-    noun: 'whole-row',
+    noun: 'row',
     whole: (rect) => rect.firstCol === 0 && rect.lastCol === GRID_COLS - 1,
     first: 'firstRow',
     last: 'lastRow',
@@ -4533,29 +5147,41 @@ const SPAN_AXES = Object.freeze({
 });
 
 // A span argument: an unqualified A1 reference over whole columns (`B`, `B:D`)
-// or whole rows (`3`, `3:5`); the whole sheet is both.
-function spanAddress(raw, text, axis) {
+// or whole rows (`3`, `3:5`); the whole sheet is both. `refusal` words what it must name.
+function spanAddress(raw, text, axis, label, refusal = `must name whole ${SPAN_AXES[axis].noun}s`) {
   const spec = SPAN_AXES[axis];
   const ref = raw.parseReference(text.includes(':') ? text : `${text}:${text}`);
-  if (ref.sheetName !== null || !spec.whole(ref.rect)) {
-    throw new FormulonError(
-      StatusCode.InvalidArgument,
-      `${JSON.stringify(text)} is not a ${spec.noun} A1 span without a sheet name`,
-      `address=${text}`,
-    );
+  if (ref.sheetName !== null) {
+    throw new FormulonError(StatusCode.InvalidArgument, `${label} must not name a sheet`, `address=${text}`);
+  }
+  if (!spec.whole(ref.rect)) {
+    throw new FormulonError(StatusCode.InvalidArgument, `${label} ${refusal}`, `address=${text}`);
   }
   return [ref.rect[spec.first], ref.rect[spec.last]];
 }
 
+// The one row or column an A1 string of a `single` span argument names.
+function singleAxis(raw, where, text, axis) {
+  const label = `${where} a1`;
+  const refusal = `must name one ${SPAN_AXES[axis].noun}`;
+  const [first, last] = spanAddress(raw, text, axis, label, refusal);
+  if (first !== last) throw new FormulonError(StatusCode.InvalidArgument, `${label} ${refusal}`, `address=${text}`);
+  return first;
+}
+
 /**
  * The numeric form of a call whose span arguments (`SPAN_ARGS`) may be one A1
- * span string: `(first, last)`.
+ * span string: `(first, last)`, or the one row or column of a `single` span.
  */
-function expandSpans(raw, spans, args) {
+function expandSpans(raw, where, spans, args) {
   let out = args;
-  for (const [at, axis] of spans) {
+  for (const [at, axis, form] of spans) {
     if (typeof out[at] !== 'string') continue;
-    const [first, last] = spanAddress(raw, out[at], axis);
+    if (form === 'single') {
+      out = [...out.slice(0, at), singleAxis(raw, where, out[at], axis), ...out.slice(at + 1)];
+      continue;
+    }
+    const [first, last] = spanAddress(raw, out[at], axis, `${where} a1`);
     out = [...out.slice(0, at), first, last, ...out.slice(at + 1)];
   }
   return out;
@@ -4570,7 +5196,7 @@ function expandCells(raw, where, pairs, args) {
   if (typeof args[pairs[0][0]] !== 'string') {
     for (const [i, j] of pairs) {
       if (typeof args[i] === 'string' || typeof args[j] === 'string') {
-        throw new TypeError(`${where} argument ${i + 1} must be a row number when argument ${pairs[0][0] + 1} is one`);
+        throw new TypeError(`${argLabel(where, typeof args[i] === 'string' ? i : j)} must be a number`);
       }
     }
     return args;
@@ -4580,10 +5206,8 @@ function expandCells(raw, where, pairs, args) {
   pairs.forEach(([i], k) => {
     const at = i - k;
     out.push(...args.slice(from, at));
-    if (typeof args[at] !== 'string') {
-      throw new TypeError(`${where} argument ${at + 1} must be an A1 address when argument ${pairs[0][0] + 1} is one`);
-    }
-    const cell = cellAddress(raw, args[at], where);
+    if (typeof args[at] !== 'string') throw new TypeError(`${argLabel(where, i)} must be a string`);
+    const cell = cellAddress(raw, args[at], `${where} a1`);
     out.push(cell.firstRow, cell.firstCol);
     from = at + 1;
   });
@@ -4592,16 +5216,17 @@ function expandCells(raw, where, pairs, args) {
 }
 
 // `CellRect` arguments (`RECT_ARGS`) given as A1 ranges, alone or in an array.
-function expandRects(raw, positions, args) {
+function expandRects(raw, where, positions, args) {
   let out = args;
-  const rect = (value) =>
-    typeof value === 'string'
-      ? rangeAddress(raw, value)
-      : isObject(value)
-        ? checkRangeFields('CellRect', value, 'range')
-        : value;
   for (const at of positions) {
     const value = args[at];
+    const label = argLabel(where, at);
+    const rect = (item) =>
+      typeof item === 'string'
+        ? rangeAddress(raw, item, label)
+        : isObject(item)
+          ? checkRangeFields('CellRect', item, label)
+          : item;
     const next = Array.isArray(value) ? value.map(rect) : rect(value);
     if (next !== value) {
       if (out === args) out = [...args];
@@ -4621,11 +5246,7 @@ function parsedRange(raw, value, label, type) {
 function unqualifiedRect(raw, value, label) {
   const [sheetName, rect] = parsedRange(raw, value, label, 'CellRect');
   if (sheetName !== null) {
-    throw new FormulonError(
-      StatusCode.InvalidArgument,
-      `${label} ${JSON.stringify(value)} names a sheet; the range is on the sheet it is passed to`,
-      `address=${value}`,
-    );
+    throw new FormulonError(StatusCode.InvalidArgument, `${label} must not name a sheet`, `address=${value}`);
   }
   return rect;
 }
@@ -4662,34 +5283,30 @@ function normalizeAddress(raw, kind, value, sheet, label) {
       return { sheet: index, rect };
     }
     if (sheet === undefined) {
-      throw new FormulonError(
-        StatusCode.InvalidArgument,
-        `${label} ${JSON.stringify(value)} has no sheet name and the call has no sheet`,
-        `address=${value}`,
-      );
+      throw new FormulonError(StatusCode.InvalidArgument, `${label} must name a sheet`, `address=${value}`);
     }
     return { sheet, rect };
   }
   const rect = unqualifiedRect(raw, value, label);
   if (rect.firstRow !== rect.lastRow || rect.firstCol !== rect.lastCol) {
-    throw new FormulonError(StatusCode.InvalidArgument, `${label} ${JSON.stringify(value)} is not one cell`, '');
+    throw new FormulonError(StatusCode.InvalidArgument, `${label} must name one cell`, '');
   }
   return { row: rect.firstRow, col: rect.firstCol };
 }
 
 const RECT_FIELDS = ['firstRow', 'firstCol', 'lastRow', 'lastCol'];
 
-/** Checks the coordinate fields of a `CellRect`, `CellAddress` or `SheetRect` record; absent fields are left to the call. */
+/** Checks the coordinate fields of a `CellRect`, `CellAddress` or `SheetRect`; absent ones are left to the call. */
 function checkRangeFields(kind, value, label) {
   const check = (record, fields, path) => {
     for (const field of fields) {
-      if (record[field] !== undefined) requireIndex(record[field], `${path} ${field}`, 'coordinate');
+      if (record[field] !== undefined) requireIndex(record[field], `${path}.${field}`, 'coordinate');
     }
   };
   if (kind === 'CellAddress') check(value, ['row', 'col'], label);
   else if (kind === 'SheetRect') {
-    if (value.sheet !== undefined) requireIndex(value.sheet, `${label} sheet`, 'sheet');
-    if (isObject(value.rect)) check(value.rect, RECT_FIELDS, `${label} rect`);
+    if (value.sheet !== undefined) requireIndex(value.sheet, `${label}.sheet`, 'sheet');
+    if (isObject(value.rect)) check(value.rect, RECT_FIELDS, `${label}.rect`);
   } else check(value, RECT_FIELDS, label);
   return value;
 }
@@ -4757,7 +5374,7 @@ function readableCopy(record) {
  * unqualified A1 range, a `CellRect[]` field an array of them or one string, a `SheetRect` field a qualified
  * range (an unqualified one resolves on `sheet`), a `CellAddress` field one A1 cell (read as `{ row, col }`) and a
  * nested record its own fields. Anything but an object passes as it is.
- * `label` words the errors: a field `f` is `<label>f` when it ends in a space, `<label>.f` otherwise.
+ * `label` words the errors: a field `f` is `<label>.f`.
  */
 function normalizeRecordRanges(raw, record, type, sheet, label) {
   const schema = RECORD_RANGE_FIELDS[type];
@@ -4765,7 +5382,7 @@ function normalizeRecordRanges(raw, record, type, sheet, label) {
   let out = record;
   for (const [field, kind] of Object.entries(schema)) {
     const value = record[field];
-    const next = normalizeAddress(raw, kind, value, sheet, label.endsWith(' ') ? label + field : `${label}.${field}`);
+    const next = normalizeAddress(raw, kind, value, sheet, `${label}.${field}`);
     if (next !== value) {
       if (out === record) out = readableCopy(record);
       out[field] = next;
@@ -4779,8 +5396,7 @@ function normalizeTypedArgs(raw, sheet, where, typed, args) {
   let out = args;
   for (const [at, kind] of typed) {
     const value = args[at];
-    const label = RANGE_KINDS.has(kind.replace(/\[\]$/, '')) ? `${where} argument ${at + 1}` : `${where} `;
-    const next = normalizeAddress(raw, kind, value, sheet, label);
+    const next = normalizeAddress(raw, kind, value, sheet, argLabel(where, at));
     if (next !== value) {
       if (out === args) out = [...args];
       out[at] = next;
@@ -4876,9 +5492,17 @@ function cacheFieldIndex(raw, cacheId, ref, label) {
   );
 }
 
+/** `patch` with its `ranges` (A1 text or rectangles) as `CellRect`s. */
+function withRanges(raw, where, patch) {
+  const label = recordLabel(where, ['ranges']);
+  return { ...patch, ranges: normalizeAddress(raw, 'CellRect[]', patch.ranges, undefined, label) };
+}
+
 /** `ranges` is not clearable: a patch's `null` there is a TypeError, as on any other non-nullable key. */
 function refuseNullRanges(where, patch) {
-  if (isObject(patch) && patch.ranges === null) throw new TypeError(`${where} ranges must be an array`);
+  if (isObject(patch) && patch.ranges === null) {
+    throw new TypeError(`${recordLabel(where, ['ranges'])} must be an array`);
+  }
 }
 
 /**
@@ -4893,13 +5517,18 @@ function resolveRef(raw, sheet, where, [at, kind], args, handleIndex) {
   const value = args[at];
   const spec = REF_KINDS[kind];
   if (spec === undefined || (typeof value === 'number' && spec.keyed !== true)) return args;
-  const label = `${where} argument ${at + 1}`;
+  const label = argLabel(where, at);
   if (spec.keyed === true) {
     if (typeof value === 'string') return args;
     if (typeof value !== 'number') throw new TypeError(`${label} must be a position or a ${spec.noun}`);
     requireIndex(value, label, 'position');
-    if (value >= spec.count(raw, sheet)) {
-      throw new FormulonError(StatusCode.IndexOutOfRange, `${label} ${value} is out of range`, `position=${value}`);
+    const count = spec.count(raw, sheet);
+    if (value >= count) {
+      throw new FormulonError(
+        StatusCode.IndexOutOfRange,
+        `${label} ${value} is out of range (${count} items)`,
+        `position=${value}`,
+      );
     }
     const out = [...args];
     out[at] = spec.key(raw, sheet, value);
@@ -4953,7 +5582,7 @@ const PATCH_TABLES = Object.freeze({ keys: PATCH_KEYS, nested: PATCH_NESTED_KEYS
 const INPUT_TABLES = Object.freeze({ keys: INPUT_KEYS, nested: INPUT_NESTED_KEYS });
 
 /**
- * Throws `TypeError: <where> argument <n> has no field <path>` for a key that
+ * Throws `TypeError: <where> <path> has no field <key>` for a key that
  * neither the type of `where` (`Class.method`) nor its getter's record
  * declares (`tables.keys`), and, at each path `tables.nested` lists, for a
  * key of the object there outside its list (a path segment ending in `[]`
@@ -4961,21 +5590,23 @@ const INPUT_TABLES = Object.freeze({ keys: INPUT_KEYS, nested: INPUT_NESTED_KEYS
  * `where` words the error for a method whose record is the entry's twin.
  */
 function refuseUnknownKeys(where, patch, source = where, tables = PATCH_TABLES) {
-  const [position, keys] = tables.keys[source];
-  const nested = tables.nested[source] ?? {};
-  const visit = (value, accepted, prefix) => {
+  const [position, keys] = tableEntry(tables.keys, source);
+  const nested = tableEntry(tables.nested, source) ?? {};
+  const visit = (value, accepted, prefix, trail) => {
     for (const [key, item] of Object.entries(value)) {
       if (item === undefined) continue;
       const path = `${prefix}${key}`;
-      if (!accepted.includes(key)) throw new TypeError(`${where} argument ${position + 1} has no field ${path}`);
-      if (Object.hasOwn(nested, path) && isObject(item)) visit(item, nested[path], `${path}.`);
+      if (!accepted.includes(key)) throw new TypeError(`${trail} has no field ${key}`);
+      if (Object.hasOwn(nested, path) && isObject(item)) visit(item, nested[path], `${path}.`, `${trail}.${key}`);
       const each = `${path}[]`;
       if (Object.hasOwn(nested, each) && Array.isArray(item)) {
-        for (const [i, element] of item.entries()) if (isObject(element)) visit(element, nested[each], `${each}.`);
+        for (const [i, element] of item.entries()) {
+          if (isObject(element)) visit(element, nested[each], `${each}.`, `${trail}.${key}[${i}]`);
+        }
       }
     }
   };
-  visit(patch, keys, '');
+  visit(patch, keys, '', argLabel(where, position));
 }
 
 /** Refuses a key outside the input record of `where` (`INPUT_KEYS`) that `value` is; anything but an object passes. */
@@ -4989,7 +5620,7 @@ function refuseUnknownInputKeys(where, value) {
  * `nullable` takes `null`, and each typed value has its type.
  */
 function checkPatch(where, patch, fields, nullable = {}, source = where) {
-  requireObject(patch, `${where} argument ${PATCH_KEYS[source][0] + 1}`);
+  requireObject(patch, argLabel(where, tableEntry(PATCH_KEYS, source)[0]));
   refuseUnknownKeys(where, patch, source);
   for (const [key, value] of Object.entries(patch)) {
     const type = fields[key] ?? nullable[key];
@@ -4997,10 +5628,7 @@ function checkPatch(where, patch, fields, nullable = {}, source = where) {
     if (value === null && Object.hasOwn(nullable, key)) continue;
     const mismatch =
       type === 'array' ? !Array.isArray(value) : type === 'object' ? !isObject(value) : typeof value !== type;
-    if (mismatch) {
-      const noun = type === 'array' || type === 'object' ? `an ${type}` : `a ${type}`;
-      throw new TypeError(`${where} ${key} must be ${noun}`);
-    }
+    if (mismatch) throw new TypeError(`${recordLabel(where, [key], source)} must be ${typeNoun(type)}`);
   }
   return patch;
 }
@@ -5016,7 +5644,7 @@ function appliedFields(patch, fields, nullable = {}) {
 
 /**
  * Refuses a key outside `PATCH_KEYS` for `where` (`Class.method`), and `null` on
- * a field of `fields` (`TypeError: <where> <field> must be a <type>`). A
+ * a field of `fields` (`TypeError: <where> <path> must be a <type>`). A
  * non-object patch is left to the raw method.
  */
 function checkForwardedPatch(where, patch, fields = {}) {
@@ -5025,15 +5653,40 @@ function checkForwardedPatch(where, patch, fields = {}) {
   for (const [field, type] of Object.entries(fields)) {
     const [head, tail] = field.split('.');
     const value = tail === undefined ? patch[head] : isObject(patch[head]) ? patch[head][tail] : undefined;
-    if (value === null) throw new TypeError(`${where} ${field} must be a ${type}`);
+    if (value === null) throw new TypeError(`${recordLabel(where, [field])} must be ${typeNoun(type)}`);
   }
+}
+
+/**
+ * The positional `[cursor?, limit?]` the raw paging calls take, from a `PageOptions` argument at `position`: an
+ * omitted or `null` key is left to the engine, whose maximum page a limit of 0 asks for.
+ */
+function pageArguments(where, position, options) {
+  if (options === undefined || options === null) return [];
+  const label = argLabel(where, position);
+  requireObject(options, label);
+  refuseOtherKeys(label, options, ['cursor', 'limit']);
+  const cursor = options.cursor ?? undefined;
+  const limit = options.limit ?? undefined;
+  if (cursor !== undefined) {
+    requireNumber(cursor, `${label}.cursor`);
+    if (!Number.isInteger(cursor)) throw new RangeError(`${label}.cursor must be an integer`);
+    if (cursor < 0) {
+      throw new FormulonError(StatusCode.InvalidArgument, `${label}.cursor must not be negative`, `cursor=${cursor}`);
+    }
+    if (cursor > Number.MAX_SAFE_INTEGER) throw new RangeError(`${label}.cursor is too large`);
+  }
+  if (limit !== undefined) requireIndex(limit, `${label}.limit`, 'quantity');
+  if (limit === undefined) return cursor === undefined ? [] : [cursor];
+  return [cursor ?? 0, limit];
 }
 
 function geometryMode(mode, where, position) {
   if (mode === undefined) return GeometryMode.Display;
-  requireNumber(mode, `${where} argument ${position}`);
+  const label = argLabel(where, position);
+  requireNumber(mode, label);
   if (!GEOMETRY_MODES.has(mode)) {
-    throw new FormulonError(StatusCode.InvalidArgument, `${where} mode ${mode} is not a GeometryMode`, `mode=${mode}`);
+    throw new FormulonError(StatusCode.InvalidArgument, `${label} ${mode} is not a GeometryMode`, `mode=${mode}`);
   }
   return mode;
 }
@@ -5058,7 +5711,7 @@ function cacheValue(where, position, value, dateSerialOf) {
       if (value.kind === ValueKind.Error && typeof value.errorCode === 'number') return ['Error', [value.errorCode]];
       break;
   }
-  throw new TypeError(`${where} argument ${position} must be a number, string, boolean, null, Date or an ErrorValue`);
+  throw new TypeError(`${argLabel(where, position)} must be a pivot cache value`);
 }
 
 // The payload field and its type of each scalar `Value` kind but Blank.
@@ -5070,27 +5723,25 @@ const SCALAR_VALUE_FIELDS = Object.freeze({
 });
 
 /** Throws unless `value` is something `Sheet.setValue` writes as one cell. */
-function checkCellValue(value, where) {
+function checkCellValue(value, label) {
   if (value === null || typeof value === 'string' || typeof value === 'boolean') return;
   if (value instanceof ExcelError) return;
   if (value instanceof Date) {
-    if (Number.isNaN(value.getTime())) throw new RangeError(`${where} is an invalid Date`);
+    if (Number.isNaN(value.getTime())) throw new RangeError(`${label} must be a valid Date`);
     return;
   }
   let number = value;
   if (isObject(value)) {
     if (value.kind === ValueKind.Blank) return;
     const [field, type] = SCALAR_VALUE_FIELDS[value.kind] ?? [];
-    if (field === undefined || typeof value[field] !== type) {
-      throw new TypeError(`${where} must be a number, string, boolean, null, Date, ExcelError or a scalar Value`);
-    }
+    if (field === undefined || typeof value[field] !== type) throw new TypeError(`${label} must be a cell value`);
     if (value.kind !== ValueKind.Number) return;
     number = value.number;
   } else if (typeof value !== 'number') {
-    throw new TypeError(`${where} must be a number, string, boolean, null, Date, ExcelError or a scalar Value`);
+    throw new TypeError(`${label} must be a cell value`);
   }
   if (!Number.isFinite(number)) {
-    throw new FormulonError(StatusCode.InvalidArgument, `${where} is not a finite number`, `value=${number}`);
+    throw new FormulonError(StatusCode.InvalidArgument, `${label} must be finite`, `value=${number}`);
   }
 }
 
@@ -5124,29 +5775,42 @@ const DATE_TIME_FORMAT = 'm/d/yyyy h:mm';
 const BUILTIN_NUM_FMT_IDS = Object.freeze({ [DATE_FORMAT]: 14, [DATE_TIME_FORMAT]: 22 });
 
 /**
- * A `CivilTime` from a date-time input: a `CivilTime` passes after its fields are checked, a `Date` is read
- * through its local getters (milliseconds dropped) and an Invalid Date is a `RangeError`. `method` and `param`
- * word the errors.
+ * A `CivilTime` from a date-time input: a civil record needs `year`, `month` and `day` and takes 0 for an omitted
+ * time of day; a `Date` is read through its local getters, or its UTC getters under `utc` (milliseconds dropped),
+ * and an Invalid Date is a `RangeError`. `where` and `param` (the argument's path) word the errors.
  */
-function toCivil(input, method, param) {
-  const where = `${method} ${param}`;
+function toCivil(input, where, param, { utc = false } = {}) {
+  const label = `${where} ${param}`;
   if (input instanceof Date) {
-    if (Number.isNaN(input.getTime())) throw new RangeError(`${where} is an invalid Date`);
-    return {
-      year: input.getFullYear(),
-      month: input.getMonth() + 1,
-      day: input.getDate(),
-      hour: input.getHours(),
-      minute: input.getMinutes(),
-      second: input.getSeconds(),
-    };
+    if (Number.isNaN(input.getTime())) throw new RangeError(`${label} must be a valid Date`);
+    return utc
+      ? {
+          year: input.getUTCFullYear(),
+          month: input.getUTCMonth() + 1,
+          day: input.getUTCDate(),
+          hour: input.getUTCHours(),
+          minute: input.getUTCMinutes(),
+          second: input.getUTCSeconds(),
+        }
+      : {
+          year: input.getFullYear(),
+          month: input.getMonth() + 1,
+          day: input.getDate(),
+          hour: input.getHours(),
+          minute: input.getMinutes(),
+          second: input.getSeconds(),
+        };
   }
-  requireObject(input, where);
+  requireObject(input, label);
   for (const [key, value] of Object.entries(input)) {
-    if (value !== undefined && !CIVIL_FIELDS.includes(key)) throw new TypeError(`${where} has no field ${key}`);
+    if (value !== undefined && !CIVIL_FIELDS.includes(key)) throw new TypeError(`${label} has no field ${key}`);
   }
   const civil = {};
-  for (const field of CIVIL_FIELDS) civil[field] = requireInteger(input[field], `${where}.${field}`);
+  for (const field of CIVIL_FIELDS) {
+    const value = input[field];
+    if (value === undefined && CIVIL_DATE_FIELDS.includes(field)) throw new TypeError(`${label}.${field} is required`);
+    civil[field] = value === undefined ? 0 : requireInteger(value, `${label}.${field}`);
+  }
   return civil;
 }
 
@@ -5154,8 +5818,8 @@ function toCivil(input, method, param) {
 const civilSerial = (runtime, civil, date1904) => runtime.convertCivilToSerial(civil, date1904);
 
 /** The serial of a date-time input under the date system `date1904`. */
-const dateInputSerial = (runtime, input, date1904, method, param) =>
-  civilSerial(runtime, toCivil(input, method, param), date1904);
+const dateInputSerial = (runtime, input, date1904, where, param) =>
+  civilSerial(runtime, toCivil(input, where, param), date1904);
 
 /** The `YYYY-MM-DDTHH:MM:SS.00` stamp of a civil time, as the C threaded comment carries `created`. */
 function civilStamp(civil) {
@@ -5172,12 +5836,10 @@ function stampCivil(text) {
   return { year, month, day, hour, minute, second };
 }
 
-/** Throws `TypeError: <where> argument <position> has no field <key>` for a key of `object` outside `accepted`. */
-function refuseOtherKeys(where, position, object, accepted) {
+/** Throws `TypeError: <label> has no field <key>` for a key of `object` outside `accepted`. */
+function refuseOtherKeys(label, object, accepted) {
   for (const [key, value] of Object.entries(object)) {
-    if (value !== undefined && !accepted.includes(key)) {
-      throw new TypeError(`${where} argument ${position} has no field ${key}`);
-    }
+    if (value !== undefined && !accepted.includes(key)) throw new TypeError(`${label} has no field ${key}`);
   }
 }
 
@@ -5186,7 +5848,7 @@ function refuseOtherKeys(where, position, object, accepted) {
  * engine converts the calendar date; the time of day is added here.
  */
 function dateSerial(runtime, date, date1904, where) {
-  if (Number.isNaN(date.getTime())) throw new RangeError(`${where} is an invalid Date`);
+  if (Number.isNaN(date.getTime())) throw new RangeError(`${where} must be a valid Date`);
   const civil = {
     year: date.getFullYear(),
     month: date.getMonth() + 1,
@@ -5199,6 +5861,23 @@ function dateSerial(runtime, date, date1904, where) {
   const ms = date.getMilliseconds();
   const serial = runtime.convertCivilToSerial(civil, date1904) + seconds / 86400 + ms / MS_PER_DAY;
   return [serial, seconds !== 0 || ms !== 0];
+}
+
+/**
+ * The tagged `Value` that the cell-value argument `value` (labelled `label`) stands for: a string is always text and
+ * a `Date` its serial under the workbook's date system.
+ */
+function valueRecord(runtime, raw, value, label) {
+  checkCellValue(value, label);
+  if (value === null) return BLANK;
+  if (typeof value === 'number') return { kind: ValueKind.Number, number: value };
+  if (typeof value === 'string') return { kind: ValueKind.Text, text: value };
+  if (typeof value === 'boolean') return { kind: ValueKind.Bool, boolean: value };
+  if (value instanceof ExcelError) return { kind: ValueKind.Error, errorCode: value.code };
+  if (value instanceof Date) {
+    return { kind: ValueKind.Number, number: dateSerial(runtime, value, raw.getDate1904(), label)[0] };
+  }
+  return value;
 }
 
 /** The `Date` whose local fields carry `serial` under the date system `date1904`, rounded to the millisecond. */
@@ -5232,11 +5911,12 @@ function chartSourceInput(source) {
 function chartTypeOptions(where, position, type, options) {
   const out = {};
   if (options === undefined || options === null) return out;
-  requireObject(options, `${where} argument ${position}`);
-  refuseOtherKeys(where, position, options, ['barDirection', 'grouping']);
+  const label = argLabel(where, position);
+  requireObject(options, label);
+  refuseOtherKeys(label, options, ['barDirection', 'grouping']);
   for (const key of ['barDirection', 'grouping']) if (present(options[key])) out[key] = options[key];
   if (out.barDirection !== undefined && type !== ChartPlotType.Bar) {
-    throw new TypeError(`${where} barDirection applies to the Bar type only`);
+    throw new TypeError(`${label}.barDirection applies to the Bar type only`);
   }
   return out;
 }
@@ -5299,7 +5979,7 @@ function colorInputs(value, label) {
 function colorArgs(args, where) {
   let out = args;
   args.forEach((arg, i) => {
-    const next = colorInputs(arg, `${where} argument ${i + 1}`);
+    const next = colorInputs(arg, argLabel(where, i));
     if (next !== arg) {
       if (out === args) out = [...args];
       out[i] = next;
@@ -5318,10 +5998,8 @@ function forEachCellIn(raw, sheet, rect, visit) {
   }
 }
 
-function requireValueField(value, field, type) {
-  if (typeof value[field] !== type) {
-    throw new TypeError(`Sheet.setValue argument 3 must carry a ${type} \`${field}\` for its kind`);
-  }
+function requireValueField(value, field, type, label) {
+  if (typeof value[field] !== type) throw new TypeError(`${label}.${field} must be ${typeNoun(type)}`);
   return value[field];
 }
 
@@ -5406,7 +6084,8 @@ function outOfRange(label, value) {
 // A non-negative integer: a fraction, a negative number or NaN is a RangeError.
 function formatCount(value, label) {
   requireNumber(value, label);
-  if (!Number.isInteger(value) || value < 0) throw new RangeError(`${label} must be a non-negative integer`);
+  if (!Number.isInteger(value)) throw new RangeError(`${label} must be an integer`);
+  if (value < 0) throw new RangeError(`${label} must not be negative`);
   return value;
 }
 
@@ -5477,20 +6156,21 @@ function formatGroup(group, value, label) {
 /** Checks a whole `CellFormatPatch` before anything is written; the result holds only its given keys. */
 function checkCellFormatPatch(patch) {
   const where = 'Sheet.updateCellFormat';
-  requireObject(patch, `${where} argument 2`);
+  requireObject(patch, argLabel(where, 1));
   refuseUnknownKeys(where, patch);
   const out = {};
   for (const [key, value] of Object.entries(patch)) {
-    if (value === undefined || key === 'source') continue;
+    if (value === undefined || READ_ONLY_KEYS[where].includes(key)) continue;
     if (key === 'numberFormat') {
-      requireString(value, `${where} numberFormat`);
+      const label = recordLabel(where, [key]);
+      requireString(value, label);
       if (value === '') {
-        throw new FormulonError(StatusCode.InvalidArgument, `${where} numberFormat is empty`, 'number_format=');
+        throw new FormulonError(StatusCode.InvalidArgument, `${label} must not be empty`, 'number_format=');
       }
       out.numberFormat = value;
       continue;
     }
-    out[key] = formatGroup(key, value, `${where} ${key}`);
+    out[key] = formatGroup(key, value, recordLabel(where, [key]));
   }
   return out;
 }
@@ -5706,7 +6386,9 @@ function makeFacade(Raw, registry, runtime) {
       const where = 'Table.update';
       const fields = PATCH_FIELDS[where];
       checkPatch(where, patch, fields);
-      if (patch.range === null) throw new TypeError(`${where} range must be a CellRect, a SheetRect or an A1 string`);
+      if (patch.range === null) {
+        throw new TypeError(`${argLabel(where, 0, 'range')} must be a CellRect, a SheetRect or an A1 string`);
+      }
       const [raw, sheet, index] = this.#locate();
       const input = appliedFields(patch, fields);
       if (patch.range !== undefined) input.rect = tableRange(raw, sheet, patch.range, where);
@@ -5714,7 +6396,7 @@ function makeFacade(Raw, registry, runtime) {
     }
 
     rename(name) {
-      requireString(name, 'Table.rename argument 1');
+      requireString(name, argLabel('Table.rename', 0));
       const [raw, sheet, index] = this.#locate();
       raw.renameTable(sheet, index, name);
     }
@@ -5786,10 +6468,11 @@ function makeFacade(Raw, registry, runtime) {
     // `value` / `valueHigh` reach the raw method as they are; it maps them onto the C operand union.
     addFilter(spec) {
       const where = 'Pivot.addFilter';
-      requireObject(spec, `${where} argument 1`);
-      refuseOtherKeys(where, 1, spec, ['fieldIndex', 'kind', 'dataFieldIndex', 'value', 'valueHigh']);
+      const label = argLabel(where, 0);
+      requireObject(spec, label);
+      refuseOtherKeys(label, spec, ['fieldIndex', 'kind', 'dataFieldIndex', 'value', 'valueHigh']);
       const [raw, sheet, pivot] = this.#locate();
-      const fieldIndex = pivotFieldIndex(raw, sheet, pivot, spec.fieldIndex, `${where} fieldIndex`);
+      const fieldIndex = pivotFieldIndex(raw, sheet, pivot, spec.fieldIndex, `${label}.fieldIndex`);
       return raw.addPivotFilter(sheet, pivot, { ...spec, fieldIndex });
     }
 
@@ -5831,18 +6514,16 @@ function makeFacade(Raw, registry, runtime) {
       const where = 'Pivot.addFieldItem';
       let visible = true;
       if (options !== undefined && options !== null) {
-        requireObject(options, `${where} argument 3`);
-        refuseOtherKeys(where, 3, options, ['visible']);
-        if (options.visible !== undefined) visible = requireBoolean(options.visible, `${where} visible`);
+        const label = argLabel(where, 2);
+        requireObject(options, label);
+        refuseOtherKeys(label, options, ['visible']);
+        if (options.visible !== undefined) visible = requireBoolean(options.visible, `${label}.visible`);
       }
       if (typeof item !== 'string') {
-        requireObject(item, `${where} argument 2`);
-        for (const [key, value] of Object.entries(item)) {
-          if (value !== undefined && key !== 'cacheIndex') {
-            throw new TypeError(`${where} argument 2 has no field ${key}`);
-          }
-        }
-        requireIndex(item.cacheIndex, `${where} cacheIndex`, 'position');
+        const label = argLabel(where, 1);
+        requireObject(item, label);
+        refuseOtherKeys(label, item, ['cacheIndex']);
+        requireIndex(item.cacheIndex, `${label}.cacheIndex`, 'position');
         item = { cacheIndex: item.cacheIndex };
       }
       const [raw, sheet, pivot] = this.#locate();
@@ -5851,7 +6532,7 @@ function makeFacade(Raw, registry, runtime) {
 
     updateGrandTotals(patch) {
       const where = 'Pivot.updateGrandTotals';
-      requireObject(patch, `${where} argument 1`);
+      requireObject(patch, argLabel(where, 0));
       refuseUnknownKeys(where, patch);
       const [raw, sheet, pivot] = this.#locate();
       const current =
@@ -5868,15 +6549,18 @@ function makeFacade(Raw, registry, runtime) {
         raw.setPivotFieldDateGroup(sheet, pivot, field, null);
         return;
       }
-      requireObject(group, `${where} argument 2`);
+      const label = argLabel(where, 1);
+      requireObject(group, label);
       const bound = (key) =>
-        group[key] === undefined ? undefined : dateInputSerial(runtime, group[key], raw.getDate1904(), where, key);
+        group[key] === undefined
+          ? undefined
+          : dateInputSerial(runtime, group[key], raw.getDate1904(), where, `${argumentPath(where, 1)}.${key}`);
       const args = [
-        requireInteger(group.periods, `${where} periods`),
-        group.calendar === undefined ? PivotCalendar.Gregorian : requireInteger(group.calendar, `${where} calendar`),
+        requireInteger(group.periods, `${label}.periods`),
+        group.calendar === undefined ? PivotCalendar.Gregorian : requireInteger(group.calendar, `${label}.calendar`),
       ];
       const intervalDays =
-        group.intervalDays === undefined ? undefined : requireNumber(group.intervalDays, `${where} intervalDays`);
+        group.intervalDays === undefined ? undefined : requireNumber(group.intervalDays, `${label}.intervalDays`);
       // The raw call is positional: a bound after an omitted slot needs that slot's default spelled out.
       const tail = [intervalDays ?? 1, bound('start') ?? Number.NaN, bound('end') ?? Number.NaN];
       while (tail.length > 0 && (tail.length === 1 ? tail[0] === 1 : Number.isNaN(tail.at(-1)))) tail.pop();
@@ -5941,19 +6625,19 @@ function makeFacade(Raw, registry, runtime) {
     addFieldSharedItem(field, value) {
       const where = 'PivotCache.addFieldSharedItem';
       const raw = this.#raw();
-      const [kind, args] = cacheValue(where, 2, value, (date) =>
-        dateInputSerial(runtime, date, raw.getDate1904(), where, 'argument 2'),
+      const [kind, args] = cacheValue(where, 1, value, (date) =>
+        dateInputSerial(runtime, date, raw.getDate1904(), where, argumentPath(where, 1)),
       );
       return raw[`addPivotCacheFieldSharedItem${kind}`](this.#cacheId, field, ...args);
     }
 
     setRecordValue(record, field, value) {
       const where = 'PivotCache.setRecordValue';
-      requireIndex(record, `${where} argument 1`, 'position');
-      requireIndex(field, `${where} argument 2`, 'position');
+      requireIndex(record, argLabel(where, 0), 'position');
+      requireIndex(field, argLabel(where, 1), 'position');
       const raw = this.#raw();
-      const [kind, args] = cacheValue(where, 3, value, (date) =>
-        dateInputSerial(runtime, date, raw.getDate1904(), where, 'argument 3'),
+      const [kind, args] = cacheValue(where, 2, value, (date) =>
+        dateInputSerial(runtime, date, raw.getDate1904(), where, argumentPath(where, 2)),
       );
       raw[`setPivotCacheRecord${kind}`](this.#cacheId, record, field, ...args);
     }
@@ -5981,36 +6665,37 @@ function makeFacade(Raw, registry, runtime) {
       const where = 'PivotCache.setWorksheetSource';
       const raw = this.#raw();
       if (source === null) return raw.setPivotCacheWorksheetSource(this.#cacheId, null);
-      requireObject(source, `${where} argument 1`);
-      refuseOtherKeys(where, 1, source, ['range', 'sheet', 'name']);
+      const label = argLabel(where, 0);
+      requireObject(source, label);
+      refuseOtherKeys(label, source, ['range', 'sheet', 'name']);
       const input = {};
-      let sheet = present(source.sheet) ? sheetRefIndex(this.#workbook, source.sheet, `${where} sheet`) : undefined;
+      let sheet = present(source.sheet) ? sheetRefIndex(this.#workbook, source.sheet, `${label}.sheet`) : undefined;
       if (present(source.range)) {
         let rect;
         let qualified;
         if (typeof source.range === 'string') {
-          const [sheetName, parsed] = parsedRange(raw, source.range, `${where} range`, 'SheetRect');
+          const [sheetName, parsed] = parsedRange(raw, source.range, `${label}.range`, 'SheetRect');
           rect = parsed;
-          qualified = sheetName === null ? undefined : sheetRefIndex(this.#workbook, sheetName, `${where} range`);
+          qualified = sheetName === null ? undefined : sheetRefIndex(this.#workbook, sheetName, `${label}.range`);
         } else {
-          requireObject(source.range, `${where} range`);
+          requireObject(source.range, `${label}.range`);
           ({ rect, sheet: qualified } = source.range);
         }
         if (qualified !== undefined && sheet !== undefined && qualified !== sheet) {
           throw new FormulonError(
             StatusCode.InvalidArgument,
-            `${where} sheet disagrees with the sheet of range`,
+            `${label}.sheet must match the sheet of range`,
             `sheet=${sheet}`,
           );
         }
         sheet ??= qualified;
         if (sheet === undefined) {
-          throw new FormulonError(StatusCode.InvalidArgument, `${where} range has no sheet`, '');
+          throw new FormulonError(StatusCode.InvalidArgument, `${label}.range must name a sheet`, '');
         }
         input.ref = raw.formatReference({ rect });
       }
       if (sheet !== undefined) input.sheet = raw.getSheetName(sheet);
-      if (present(source.name)) input.name = requireString(source.name, `${where} name`);
+      if (present(source.name)) input.name = requireString(source.name, `${label}.name`);
       raw.setPivotCacheWorksheetSource(this.#cacheId, input);
     }
   }
@@ -6064,7 +6749,7 @@ function makeFacade(Raw, registry, runtime) {
     update(patch) {
       const [common, rest] = splitDrawingPatch('Drawing.update', patch);
       const [stray] = Object.keys(rest);
-      if (stray !== undefined) throw new TypeError(`Drawing.update argument 1 has no field ${stray}`);
+      if (stray !== undefined) throw new TypeError(`${argLabel('Drawing.update', 0)} has no field ${stray}`);
       const [raw, sheet, id] = this.#locate();
       raw.updateDrawing(sheet, id, rawDrawingPatch(common));
     }
@@ -6091,31 +6776,29 @@ function makeFacade(Raw, registry, runtime) {
       const where = 'Chart.setPoint';
       const [raw, sheet, id] = drawingState.locate(this);
       if (point === null) return raw.setChartPoint(sheet, id, plot, seriesIndex, pointIndex, null);
-      requireObject(point, `${where} argument 4`);
-      for (const [key, value] of Object.entries(point)) {
-        if (value !== undefined && !['index', 'fill', 'line', 'marker'].includes(key)) {
-          throw new TypeError(`${where} argument 4 has no field ${key}`);
-        }
-      }
-      raw.setChartPoint(sheet, id, plot, seriesIndex, pointIndex, colorInputs(point, `${where} argument 4`));
+      const label = argLabel(where, 3);
+      requireObject(point, label);
+      refuseOtherKeys(label, point, ['index', 'fill', 'line', 'marker']);
+      raw.setChartPoint(sheet, id, plot, seriesIndex, pointIndex, colorInputs(point, label));
     }
 
     // `range` is a `SheetRect` or an A1 string (an unqualified one is on the chart's sheet); the raw call takes
     // the qualified text.
     setSource(source) {
       const where = 'Chart.setSource';
-      requireObject(source, `${where} argument 1`);
-      refuseOtherKeys(where, 1, source, ['range', 'direction', 'headerRow', 'headerColumn']);
+      const label = argLabel(where, 0);
+      requireObject(source, label);
+      refuseOtherKeys(label, source, ['range', 'direction', 'headerRow', 'headerColumn']);
       const [raw, sheet, id] = drawingState.locate(this);
       const flag = (field) =>
         source[field] === undefined || source[field] === null
           ? undefined
-          : requireBoolean(source[field], `${where} ${field}`);
+          : requireBoolean(source[field], `${label}.${field}`);
       const args = [
-        sheetRectText(raw, source.range, sheet, `${where} range`),
+        sheetRectText(raw, source.range, sheet, `${label}.range`),
         source.direction === undefined
           ? ChartSeriesDirection.Auto
-          : requireInteger(source.direction, `${where} direction`),
+          : requireInteger(source.direction, `${label}.direction`),
       ];
       const headerRow = flag('headerRow');
       const headerColumn = flag('headerColumn');
@@ -6126,7 +6809,7 @@ function makeFacade(Raw, registry, runtime) {
     // A bar direction belongs to the `Bar` type alone, and only an explicit one is refused elsewhere.
     setType(plot, type, options) {
       const where = 'Chart.setType';
-      const checked = chartTypeOptions(where, 3, type, options);
+      const checked = chartTypeOptions(where, 2, type, options);
       const [raw, sheet, id] = drawingState.locate(this);
       raw.setChartType(sheet, id, plot, type, checked);
     }
@@ -6134,9 +6817,10 @@ function makeFacade(Raw, registry, runtime) {
     // The record names the series and categories the filter hides; a key it leaves out hides none.
     setFilter(filter) {
       const where = 'Chart.setFilter';
-      requireObject(filter, `${where} argument 1`);
-      refuseOtherKeys(where, 1, filter, ['hiddenSeries', 'hiddenCategories']);
-      const indices = (key) => requireArray(filter[key] ?? [], `${where} ${key}`);
+      const label = argLabel(where, 0);
+      requireObject(filter, label);
+      refuseOtherKeys(label, filter, ['hiddenSeries', 'hiddenCategories']);
+      const indices = (key) => requireArray(filter[key] ?? [], `${label}.${key}`);
       const [raw, sheet, id] = drawingState.locate(this);
       raw.setChartFilter(sheet, id, indices('hiddenSeries'), indices('hiddenCategories'));
     }
@@ -6146,7 +6830,7 @@ function makeFacade(Raw, registry, runtime) {
       const where = 'Chart.updateAxis';
       const [raw, sheet, id] = drawingState.locate(this);
       checkForwardedPatch(where, patch, PATCH_FIELDS[where]);
-      raw.updateChartAxis(sheet, id, chartAxisId(raw, sheet, id, axis, `${where} argument 1`), patch);
+      raw.updateChartAxis(sheet, id, chartAxisId(raw, sheet, id, axis, argLabel(where, 0)), patch);
     }
 
     // The raw source carries qualified reference text, which reads as a `SheetRect` here.
@@ -6165,11 +6849,12 @@ function makeFacade(Raw, registry, runtime) {
     // `overrides.range` is `source` text on the raw call.
     getPreview(overrides) {
       const where = 'Chart.getPreview';
-      requireObject(overrides, `${where} argument 1`);
-      if (overrides.source !== undefined) throw new TypeError(`${where} argument 1 has no field source`);
+      const label = argLabel(where, 0);
+      requireObject(overrides, label);
+      if (overrides.source !== undefined) throw new TypeError(`${label} has no field source`);
       const [raw, sheet, id] = drawingState.locate(this);
-      const { range, ...rest } = colorInputs(overrides, `${where} argument 1`);
-      const source = range === undefined ? undefined : sheetRectText(raw, range, sheet, `${where} range`);
+      const { range, ...rest } = colorInputs(overrides, label);
+      const source = range === undefined ? undefined : sheetRectText(raw, range, sheet, `${label}.range`);
       const input = source === undefined ? rest : { ...rest, source };
       return raw.getChartPreview(sheet, id, input);
     }
@@ -6180,7 +6865,7 @@ function makeFacade(Raw, registry, runtime) {
   class Shape extends Drawing {
     update(patch) {
       const where = 'Shape.update';
-      patch = colorInputs(patch, `${where} argument 1`);
+      patch = colorInputs(patch, argLabel(where, 0));
       const [common, rest] = splitDrawingPatch(where, patch);
       checkPatch(where, rest, PATCH_FIELDS[where], PATCH_NULLABLE[where]);
       const input = appliedFields(rest, PATCH_FIELDS[where], PATCH_NULLABLE[where]);
@@ -6220,7 +6905,7 @@ function makeFacade(Raw, registry, runtime) {
   function sheetRefIndex(workbook, ref, label) {
     if (ref instanceof Sheet) {
       if (ref.workbook !== workbook) {
-        throw new FormulonError(StatusCode.InvalidArgument, `${label} is a Sheet of another workbook`, '');
+        throw new FormulonError(StatusCode.InvalidArgument, `${label} must be a Sheet of this workbook`, '');
       }
       return sheetIndex(ref);
     }
@@ -6240,13 +6925,13 @@ function makeFacade(Raw, registry, runtime) {
   function handleIndex(self, kind, value, label) {
     if (kind === 'table' && value instanceof Table) {
       if (value.sheet !== self) {
-        throw new FormulonError(StatusCode.InvalidArgument, `${label} is a Table of another sheet`, '');
+        throw new FormulonError(StatusCode.InvalidArgument, `${label} must be a Table of this sheet`, '');
       }
       return value.index;
     }
     if (kind === 'pivot' && value instanceof Pivot) {
       if (value.sheet !== self) {
-        throw new FormulonError(StatusCode.InvalidArgument, `${label} is a Pivot of another sheet`, '');
+        throw new FormulonError(StatusCode.InvalidArgument, `${label} must be a Pivot of this sheet`, '');
       }
       return value.index;
     }
@@ -6349,7 +7034,7 @@ function makeFacade(Raw, registry, runtime) {
     #typedGrid(range, where) {
       if (range === undefined || range === null) range = this.getUsedRange();
       if (range === null) return [];
-      requireObject(range, `${where} argument 1`);
+      requireObject(range, argLabel(where, 0));
       const raw = rawOf(this.#workbook);
       const sheet = this.#current();
       const rows = range.lastRow - range.firstRow + 1;
@@ -6357,7 +7042,7 @@ function makeFacade(Raw, registry, runtime) {
       if (rows * cols > MAX_VALUES_CELLS) {
         throw new FormulonError(
           StatusCode.InvalidArgument,
-          `${where} reads at most ${MAX_VALUES_CELLS} cells`,
+          `${argLabel(where, 0)} must name at most ${MAX_VALUES_CELLS} cells`,
           `cells=${rows * cols}`,
         );
       }
@@ -6371,10 +7056,18 @@ function makeFacade(Raw, registry, runtime) {
       return values ?? blank();
     }
 
-    getCellsInRange(range, ...rest) {
+    // The cells of `range` (the used range when it is omitted or `null`), one page at a time.
+    getCellsInRange(range, options) {
+      const paging = pageArguments('Sheet.getCellsInRange', 1, options);
       const rect = range ?? this.getUsedRange();
       if (rect === null) return { cells: [], nextCursor: null };
-      const page = rawOf(this.#workbook).getCellsInRange(this.#current(), rect, ...rest);
+      const page = rawOf(this.#workbook).getCellsInRange(this.#current(), rect, ...paging);
+      return { cells: page.cells.map(rangeCell), nextCursor: page.nextCursor };
+    }
+
+    getInvalidCells(options) {
+      const paging = pageArguments('Sheet.getInvalidCells', 0, options);
+      const page = rawOf(this.#workbook).getInvalidCells(this.#current(), ...paging);
       return { cells: page.cells.map(rangeCell), nextCursor: page.nextCursor };
     }
 
@@ -6409,7 +7102,7 @@ function makeFacade(Raw, registry, runtime) {
     *iterRows(range) {
       const rect = range === undefined || range === null ? this.getUsedRange() : range;
       if (rect === null) return;
-      requireObject(rect, 'Sheet.iterRows argument 1');
+      requireObject(rect, argLabel('Sheet.iterRows', 0));
       const cols = rect.lastCol - rect.firstCol + 1;
       const block = Math.max(1, Math.floor(ITER_ROWS_CELLS / cols));
       for (let first = rect.firstRow; first <= rect.lastRow; first += block) {
@@ -6458,7 +7151,8 @@ function makeFacade(Raw, registry, runtime) {
     }
 
     setTabColor(color) {
-      const value = color === null || color === undefined ? color : formatColor(color, 'Sheet.setTabColor argument 1');
+      const label = argLabel('Sheet.setTabColor', 0);
+      const value = color === null || color === undefined ? color : formatColor(color, label);
       rawOf(this.#workbook).setTabColor(this.#current(), value);
     }
 
@@ -6477,25 +7171,26 @@ function makeFacade(Raw, registry, runtime) {
     // Each row is written in order; a failure leaves the cells before it written and names its cell.
     setValues(row, col, values) {
       const where = 'Sheet.setValues';
-      requireInteger(row, `${where} argument 1`);
-      requireInteger(col, `${where} argument 2`);
-      requireArray(values, `${where} argument 3`);
-      const width = values.length === 0 ? 0 : requireArray(values[0], `${where} row 1`).length;
+      requireInteger(row, argLabel(where, 0));
+      requireInteger(col, argLabel(where, 1));
+      const label = argLabel(where, 2);
+      requireArray(values, label);
+      const width = values.length === 0 ? 0 : requireArray(values[0], `${label}[0]`).length;
       for (const [i, line] of values.entries()) {
-        requireArray(line, `${where} row ${i + 1}`);
+        requireArray(line, `${label}[${i}]`);
         if (line.length !== width) {
-          throw new FormulonError(StatusCode.InvalidArgument, `${where} rows differ in length`, `row=${i}`);
+          throw new FormulonError(StatusCode.InvalidArgument, `${label}[${i}] must have ${width} elements`, `row=${i}`);
         }
         for (let j = 0; j < width; j++) {
-          if (!(j in line) || line[j] === undefined) throw new TypeError(`${where} row ${i + 1} has a hole at ${j}`);
-          checkCellValue(line[j], `${where} row ${i + 1} element ${j + 1}`);
+          if (!(j in line) || line[j] === undefined) throw new TypeError(`${label}[${i}][${j}] is required`);
+          checkCellValue(line[j], `${label}[${i}][${j}]`);
         }
       }
       if (width === 0) return;
       if (row < 0 || col < 0 || row + values.length > GRID_ROWS || col + width > GRID_COLS) {
         throw new FormulonError(
           StatusCode.InvalidArgument,
-          `${where} writes past the grid`,
+          `${label} ${values.length}x${width} at (${row}, ${col}) is outside the grid`,
           `row=${row} col=${col} rows=${values.length} cols=${width}`,
         );
       }
@@ -6556,11 +7251,11 @@ function makeFacade(Raw, registry, runtime) {
       const sheet = this.#current();
       const named = (kind, value, label) => handleIndex(this, kind, value, label);
       const [index] = resolveRef(raw, sheet, 'Sheet.table', [0, 'table'], [ref], named);
-      requireIndex(index, 'Sheet.table argument 1', 'position');
+      requireIndex(index, argLabel('Sheet.table', 0), 'position');
       if (index >= raw.getTableCount(sheet)) {
         throw new FormulonError(
           StatusCode.IndexOutOfRange,
-          `table index ${index} is out of range`,
+          `${argLabel('Sheet.table', 0)} ${index} is out of range (${raw.getTableCount(sheet)} items)`,
           `table_index=${index}`,
         );
       }
@@ -6569,13 +7264,13 @@ function makeFacade(Raw, registry, runtime) {
 
     // Omitted `columns` reach the raw method empty, which takes the names from the header cells.
     addTable(input) {
-      requireObject(input, 'Sheet.addTable argument 1');
+      requireObject(input, argLabel('Sheet.addTable', 0));
       const raw = rawOf(this.#workbook);
       const sheet = this.#current();
       if (typeof input.name === 'string' && namesACell(raw, input.name)) {
         throw new FormulonError(
           StatusCode.InvalidArgument,
-          `invalid table name: ${JSON.stringify(input.name)} is a cell address`,
+          `${argLabel('Sheet.addTable', 0, 'name')} must not be a cell address`,
           `name=${input.name}`,
         );
       }
@@ -6588,15 +7283,12 @@ function makeFacade(Raw, registry, runtime) {
       const where = 'Sheet.addCfRule';
       const raw = rawOf(this.#workbook);
       const sheet = this.#current();
-      input = colorInputs(input, `${where} argument 1`);
+      const label = argLabel(where, 0);
+      input = colorInputs(input, label);
       if (isObject(input) && input.format !== undefined) {
-        if (present(input.dxfIndex)) throw new TypeError(`${where} takes format or dxfIndex, not both`);
-        const format = requireObject(input.format, `${where} format`);
-        for (const [key, value] of Object.entries(format)) {
-          if (value !== undefined && !DXF_INPUT_KEYS.includes(key)) {
-            throw new TypeError(`${where} argument 1 has no field format.${key}`);
-          }
-        }
+        if (present(input.dxfIndex)) throw new TypeError(`${label}.format must not be given with dxfIndex`);
+        const format = requireObject(input.format, `${label}.format`);
+        refuseOtherKeys(`${label}.format`, format, DXF_INPUT_KEYS);
         const spec = readableCopy(input);
         delete spec.format;
         spec.dxfIndex = raw.addDxf(format);
@@ -6611,7 +7303,7 @@ function makeFacade(Raw, registry, runtime) {
       const where = 'Sheet.updateCfRule';
       const raw = rawOf(this.#workbook);
       const sheet = this.#current();
-      patch = colorInputs(patch, `${where} argument 2`);
+      patch = colorInputs(patch, argLabel(where, 1));
       const [id] = resolveRef(raw, sheet, where, [0, 'cfRule'], [cfRule, patch]);
       refuseNullRanges(where, patch);
       if (isObject(patch)) {
@@ -6621,8 +7313,8 @@ function makeFacade(Raw, registry, runtime) {
         const specified = {};
         for (const [key, value] of Object.entries(patch)) {
           if (value === undefined || (value === null && !used.includes(key))) continue;
-          if (key !== 'type' && key !== 'id' && !used.includes(key)) {
-            throw new TypeError(`${where} argument 2 has no field ${key} for this rule`);
+          if (!READ_ONLY_KEYS[where].includes(key) && !used.includes(key)) {
+            throw new TypeError(`${argLabel(where, 1)} has no field ${key}`);
           }
           specified[key] = value;
         }
@@ -6630,12 +7322,12 @@ function makeFacade(Raw, registry, runtime) {
         if (typeof patch.type === 'number' && patch.type !== type) {
           throw new FormulonError(
             StatusCode.InvalidArgument,
-            `${where} cannot change a rule's type; remove the rule and add one`,
+            `${argLabel(where, 1, 'type')} must equal the type of the rule; remove the rule and add one`,
             `type=${patch.type}`,
           );
         }
         if (present(patch.ranges)) {
-          patch = { ...patch, ranges: normalizeAddress(raw, 'CellRect[]', patch.ranges, undefined, `${where} ranges`) };
+          patch = withRanges(raw, where, patch);
         }
       }
       this.#patch(where, patch, (raw, sheet, given) => raw.updateCfRule(sheet, id, given), undefined, ['ranges']);
@@ -6660,15 +7352,16 @@ function makeFacade(Raw, registry, runtime) {
     #idOf(ref, where, kind) {
       if (typeof ref === 'string') return ref;
       if (typeof ref !== 'number') {
-        throw new TypeError(`${where} argument 1 must be a position or a ${REF_KINDS[kind].noun}`);
+        throw new TypeError(`${argLabel(where, 0)} must be a position or a ${REF_KINDS[kind].noun}`);
       }
-      requireIndex(ref, `${where} argument 1`, 'position');
+      requireIndex(ref, argLabel(where, 0), 'position');
       const raw = rawOf(this.#workbook);
       const sheet = this.#current();
-      if (ref >= REF_KINDS[kind].count(raw, sheet)) {
+      const count = REF_KINDS[kind].count(raw, sheet);
+      if (ref >= count) {
         throw new FormulonError(
           StatusCode.IndexOutOfRange,
-          `${where} argument 1 ${ref} is out of range`,
+          `${argLabel(where, 0)} ${ref} is out of range (${count} items)`,
           `position=${ref}`,
         );
       }
@@ -6712,7 +7405,7 @@ function makeFacade(Raw, registry, runtime) {
       const raw = rawOf(this.#workbook);
       refuseNullRanges(where, patch);
       if (isObject(patch) && present(patch.ranges)) {
-        patch = { ...patch, ranges: normalizeAddress(raw, 'CellRect[]', patch.ranges, undefined, `${where} ranges`) };
+        patch = withRanges(raw, where, patch);
       }
       this.#patch(
         where,
@@ -6744,13 +7437,13 @@ function makeFacade(Raw, registry, runtime) {
     }
 
     pivot(index) {
-      requireIndex(index, 'Sheet.pivot argument 1', 'position');
+      requireIndex(index, argLabel('Sheet.pivot', 0), 'position');
       const raw = rawOf(this.#workbook);
       const sheet = this.#current();
       if (index >= raw.getPivotCount(sheet)) {
         throw new FormulonError(
           StatusCode.IndexOutOfRange,
-          `pivot index ${index} is out of range`,
+          `${argLabel('Sheet.pivot', 0)} ${index} is out of range (${raw.getPivotCount(sheet)} items)`,
           `pivot_index=${index}`,
         );
       }
@@ -6759,16 +7452,17 @@ function makeFacade(Raw, registry, runtime) {
 
     addPivot(input) {
       const where = 'Sheet.addPivot';
-      requireObject(input, `${where} argument 1`);
+      requireObject(input, argLabel(where, 0));
       const raw = rawOf(this.#workbook);
       const sheet = this.#current();
-      const anchor = addressOf(raw, input.anchor, `${where} anchor`);
+      const label = argLabel(where, 0);
+      const anchor = addressOf(raw, input.anchor, `${label}.anchor`);
       let { cacheId } = input;
       if (cacheId instanceof PivotCache) {
         if (cacheId.workbook !== this.#workbook) {
           throw new FormulonError(
             StatusCode.InvalidArgument,
-            `${where} cacheId is a PivotCache of another workbook`,
+            `${label}.cacheId must be a PivotCache of this workbook`,
             '',
           );
         }
@@ -6776,10 +7470,10 @@ function makeFacade(Raw, registry, runtime) {
       }
       const index = raw.addPivot(
         sheet,
-        requireString(input.name, `${where} name`),
-        requireNumber(cacheId, `${where} cacheId`),
-        requireNumber(anchor.row, `${where} anchor`),
-        requireNumber(anchor.col, `${where} anchor`),
+        requireString(input.name, `${label}.name`),
+        requireNumber(cacheId, `${label}.cacheId`),
+        requireNumber(anchor.row, `${label}.anchor.row`),
+        requireNumber(anchor.col, `${label}.anchor.col`),
       );
       return this.#pivotAt(raw, sheet, index);
     }
@@ -6798,11 +7492,11 @@ function makeFacade(Raw, registry, runtime) {
     #drawingId(ref, where) {
       if (ref instanceof Drawing) {
         if (ref.sheet !== this) {
-          throw new FormulonError(StatusCode.InvalidArgument, `${where} is a Drawing of another sheet`, '');
+          throw new FormulonError(StatusCode.InvalidArgument, `${where} must be a Drawing of this sheet`, '');
         }
         return ref.objectId;
       }
-      if (typeof ref !== 'number') throw new TypeError(`${where} must be an object id or a Drawing`);
+      if (typeof ref !== 'number') throw new TypeError(`${where} must be a number or a Drawing`);
       return requireIndex(ref, where, 'quantity');
     }
 
@@ -6820,7 +7514,7 @@ function makeFacade(Raw, registry, runtime) {
     }
 
     #lookupDrawing(ref, method) {
-      const id = this.#drawingId(ref, `Sheet.${method} argument 1`);
+      const id = this.#drawingId(ref, argLabel(`Sheet.${method}`, 0));
       const raw = rawOf(this.#workbook);
       const sheet = this.#current();
       return this.#drawingFor(raw, sheet, id, this.#drawingRecord(raw, sheet, id));
@@ -6831,7 +7525,7 @@ function makeFacade(Raw, registry, runtime) {
       if (!(drawing instanceof cls)) {
         throw new FormulonError(
           StatusCode.InvalidArgument,
-          `drawing object ${drawing.objectId} is not a ${cls.name}`,
+          `${argLabel(`Sheet.${method}`, 0)} ${drawing.objectId} is not a ${cls.name}`,
           `object_id=${drawing.objectId}`,
         );
       }
@@ -6896,16 +7590,19 @@ function makeFacade(Raw, registry, runtime) {
     // qualified text as `source`.
     addChart(options) {
       const where = 'Sheet.addChart';
-      requireObject(options, `${where} argument 1`);
-      if (options.source !== undefined) throw new TypeError(`${where} argument 1 has no field source`);
+      const label = argLabel(where, 0);
+      requireObject(options, label);
+      if (options.source !== undefined) throw new TypeError(`${label} has no field source`);
       const raw = rawOf(this.#workbook);
       const sheet = this.#current();
       if (options.title === '') {
-        throw new FormulonError(StatusCode.InvalidArgument, `${where} title must not be empty`, 'argument=title');
+        throw new FormulonError(StatusCode.InvalidArgument, `${label}.title must not be empty`, 'argument=title');
       }
-      const { range, ...rest } = colorInputs(options, `${where} argument 1`);
-      if (present(rest.barDirection)) chartTypeOptions(where, 1, rest.type, { barDirection: rest.barDirection });
-      const source = range === undefined ? undefined : sheetRectText(raw, range, sheet, `${where} range`);
+      const { range, ...rest } = colorInputs(options, label);
+      if (present(rest.barDirection)) {
+        chartTypeOptions(where, 0, rest.type, { barDirection: rest.barDirection });
+      }
+      const source = range === undefined ? undefined : sheetRectText(raw, range, sheet, `${label}.range`);
       const input = source === undefined ? rest : { ...rest, source };
       return this.#added(raw, sheet, raw.addChart(sheet, input));
     }
@@ -6913,7 +7610,7 @@ function makeFacade(Raw, registry, runtime) {
     addShape(spec) {
       const raw = rawOf(this.#workbook);
       const sheet = this.#current();
-      spec = colorInputs(spec, 'Sheet.addShape argument 1');
+      spec = colorInputs(spec, argLabel('Sheet.addShape', 0));
       return this.#added(raw, sheet, raw.addShape(sheet, spec));
     }
 
@@ -6937,11 +7634,15 @@ function makeFacade(Raw, registry, runtime) {
         ({ sheet: tableSheet, index: tableIndex } = found);
       } else if (table instanceof Table) {
         if (table.workbook !== this.#workbook) {
-          throw new FormulonError(StatusCode.InvalidArgument, `${where} argument 1 is a Table of another workbook`, '');
+          throw new FormulonError(
+            StatusCode.InvalidArgument,
+            `${argLabel(where, 0)} must be a Table of this workbook`,
+            '',
+          );
         }
         [, tableSheet, tableIndex] = tableState.locate(table);
       } else {
-        throw new TypeError(`${where} argument 1 must be a table name or a Table`);
+        throw new TypeError(`${argLabel(where, 0)} must be a table name or a Table`);
       }
       if (typeof column === 'string') {
         const want = foldName(column);
@@ -7037,27 +7738,27 @@ function makeFacade(Raw, registry, runtime) {
     }
 
     getColumnWidthPt(col, mode) {
-      mode = geometryMode(mode, 'Sheet.getColumnWidthPt', 2);
+      mode = geometryMode(mode, 'Sheet.getColumnWidthPt', 1);
       return rawOf(this.#workbook).getColumnWidthPt(this.#current(), col, mode);
     }
 
     convertColumnCharsToPt(chars, mode) {
-      mode = geometryMode(mode, 'Sheet.convertColumnCharsToPt', 2);
+      mode = geometryMode(mode, 'Sheet.convertColumnCharsToPt', 1);
       return rawOf(this.#workbook).convertColumnCharsToPt(this.#current(), mode, chars);
     }
 
     convertColumnPtToChars(pt, mode) {
-      mode = geometryMode(mode, 'Sheet.convertColumnPtToChars', 2);
+      mode = geometryMode(mode, 'Sheet.convertColumnPtToChars', 1);
       return rawOf(this.#workbook).convertColumnPtToChars(this.#current(), mode, pt);
     }
 
     getCellRectPt(range, mode) {
-      mode = geometryMode(mode, 'Sheet.getCellRectPt', 2);
+      mode = geometryMode(mode, 'Sheet.getCellRectPt', 1);
       return rawOf(this.#workbook).getCellRectPt(this.#current(), range, mode);
     }
 
     getWidthModel(mode) {
-      mode = geometryMode(mode, 'Sheet.getWidthModel', 1);
+      mode = geometryMode(mode, 'Sheet.getWidthModel', 0);
       return rawOf(this.#workbook).getWidthModel(this.#current(), mode);
     }
 
@@ -7065,8 +7766,8 @@ function makeFacade(Raw, registry, runtime) {
       const where = 'Sheet.addSparklineGroup';
       const raw = rawOf(this.#workbook);
       const sheet = this.#current();
-      spec = colorInputs(spec, `${where} argument 1`);
-      requireObject(spec, `${where} argument 1`);
+      spec = colorInputs(spec, argLabel(where, 0));
+      requireObject(spec, argLabel(where, 0));
       return raw.addSparklineGroup(sheet, encodeSparklineGroup(raw, sheet, spec, where));
     }
 
@@ -7094,12 +7795,12 @@ function makeFacade(Raw, registry, runtime) {
     // The raw update merges the patch with the stored group; without `sparklines` it keeps the group's own.
     updateSparklineGroup(sparklineGroup, patch) {
       const where = 'Sheet.updateSparklineGroup';
-      patch = colorInputs(patch, `${where} argument 2`);
+      patch = colorInputs(patch, argLabel(where, 1));
       checkSparklinePatch(where, patch);
       // `dateAxisRange` takes a record or text, which the one type word of the table cannot say.
       const range = isObject(patch) ? patch.dateAxisRange : undefined;
       if (range !== undefined && range !== null && typeof range !== 'string' && !isObject(range)) {
-        throw new TypeError(`${where} dateAxisRange must be a SheetRect, an A1 string or null`);
+        throw new TypeError(`${argLabel(where, 1, 'dateAxisRange')} must be a SheetRect, an A1 string or null`);
       }
       this.#patch(
         where,
@@ -7117,7 +7818,7 @@ function makeFacade(Raw, registry, runtime) {
       const where = 'Sheet.updateProtectedRange';
       const raw = rawOf(this.#workbook);
       if (isObject(patch) && present(patch.ranges)) {
-        patch = { ...patch, ranges: normalizeAddress(raw, 'CellRect[]', patch.ranges, undefined, `${where} ranges`) };
+        patch = withRanges(raw, where, patch);
       }
       this.#patch(where, patch, (raw, sheet, given) => raw.updateProtectedRange(sheet, protectedRange, given));
     }
@@ -7139,13 +7840,14 @@ function makeFacade(Raw, registry, runtime) {
     // `range` and an input cell are `CellRect` / `CellAddress` or A1 text; the raw call takes `rect`.
     addDataTable(input) {
       const where = 'Sheet.addDataTable';
-      requireObject(input, `${where} argument 1`);
+      const label = argLabel(where, 0);
+      requireObject(input, label);
       const raw = rawOf(this.#workbook);
-      const range = typeof input.range === 'string' ? rangeAddress(raw, input.range) : input.range;
-      const spec = { rect: requireObject(range, `${where} range`) };
+      const range = typeof input.range === 'string' ? rangeAddress(raw, input.range, `${label}.range`) : input.range;
+      const spec = { rect: requireObject(range, `${label}.range`) };
       for (const key of ['rowInput', 'columnInput']) {
         if (!present(input[key])) continue;
-        const { row, col } = addressOf(raw, input[key], `${where} ${key}`);
+        const { row, col } = addressOf(raw, input[key], `${label}.${key}`);
         spec[key] = { row, col };
       }
       return raw.addDataTable(this.#current(), spec);
@@ -7157,6 +7859,7 @@ function makeFacade(Raw, registry, runtime) {
     }
 
     setValue(row, col, value) {
+      const valueLabel = argLabel('Sheet.setValue', 2);
       if (value === null) return this.setBlank(row, col);
       switch (typeof value) {
         case 'number':
@@ -7173,26 +7876,24 @@ function makeFacade(Raw, registry, runtime) {
             case ValueKind.Blank:
               return this.setBlank(row, col);
             case ValueKind.Number:
-              return this.setNumber(row, col, requireValueField(value, 'number', 'number'));
+              return this.setNumber(row, col, requireValueField(value, 'number', 'number', valueLabel));
             case ValueKind.Bool:
-              return this.setBool(row, col, requireValueField(value, 'boolean', 'boolean'));
+              return this.setBool(row, col, requireValueField(value, 'boolean', 'boolean', valueLabel));
             case ValueKind.Text:
-              return this.setText(row, col, requireValueField(value, 'text', 'string'));
+              return this.setText(row, col, requireValueField(value, 'text', 'string', valueLabel));
             case ValueKind.Error:
-              return this.setError(row, col, requireValueField(value, 'errorCode', 'number'));
+              return this.setError(row, col, requireValueField(value, 'errorCode', 'number', valueLabel));
           }
           break;
       }
-      throw new TypeError(
-        'Sheet.setValue argument 3 must be a number, string, boolean, null, Date, ExcelError or a scalar Value',
-      );
+      throw new TypeError(`${valueLabel} must be a cell value`);
     }
 
     // The serial of the date's local fields; a General cell also gets the built-in date format.
     #setDate(row, col, date) {
       const raw = rawOf(this.#workbook);
       const sheet = this.#current();
-      const [serial, timed] = dateSerial(runtime, date, raw.getDate1904(), 'Sheet.setValue argument 3');
+      const [serial, timed] = dateSerial(runtime, date, raw.getDate1904(), argLabel('Sheet.setValue', 2));
       this.setNumber(row, col, serial);
       const { xfIndex } = raw.getEffectiveStyle(sheet, row, col);
       if (raw.getCellXf(xfIndex).numFmtId !== 0) return;
@@ -7211,9 +7912,10 @@ function makeFacade(Raw, registry, runtime) {
       const raw = rawOf(this.#workbook);
       const sheet = this.#current();
       if (comment === null) return raw.setComment(sheet, row, col, null);
-      requireObject(comment, `${where} argument 3`);
-      const author = comment.author === undefined ? '' : requireString(comment.author, `${where} author`);
-      const text = requireString(comment.text, `${where} text`);
+      const label = argLabel(where, 2);
+      requireObject(comment, label);
+      const author = comment.author === undefined ? '' : requireString(comment.author, `${label}.author`);
+      const text = requireString(comment.text, `${label}.text`);
       raw.setComment(sheet, row, col, { author, text });
     }
 
@@ -7221,7 +7923,7 @@ function makeFacade(Raw, registry, runtime) {
     setHyperlink(row, col, link) {
       const raw = rawOf(this.#workbook);
       const sheet = this.#current();
-      raw.setHyperlink(sheet, row, col, link === null ? null : hyperlinkInput(raw, link, 'Sheet.setHyperlink', 3));
+      raw.setHyperlink(sheet, row, col, link === null ? null : hyperlinkInput(raw, link, 'Sheet.setHyperlink', 2));
     }
 
     insertCells(range, shift) {
@@ -7234,33 +7936,30 @@ function makeFacade(Raw, registry, runtime) {
 
     #editCells(where, rawName, range, shift) {
       const raw = rawOf(this.#workbook);
-      const rect = normalizeAddress(raw, 'CellRect', range, undefined, `${where} argument 1`);
-      requireObject(rect, `${where} argument 1`);
-      requireInteger(shift, `${where} argument 2`);
+      const rect = normalizeAddress(raw, 'CellRect', range, undefined, argLabel(where, 0));
+      requireObject(rect, argLabel(where, 0));
+      requireInteger(shift, argLabel(where, 1));
       raw[rawName](this.#current(), rect, shift);
     }
 
     setRowBreak(row, input) {
-      this.#setBreak('Sheet.setRowBreak', 'setRowBreak', 'row', row, input);
+      this.#setBreak('Sheet.setRowBreak', 'setRowBreak', row, input);
     }
 
     setColumnBreak(col, input) {
-      this.#setBreak('Sheet.setColumnBreak', 'setColumnBreak', 'col', col, input);
+      this.#setBreak('Sheet.setColumnBreak', 'setColumnBreak', col, input);
     }
 
-    // `input` is a `PageBreakInput` or the `RowBreak` / `ColumnBreak` read back, whose `key` is ignored; `null`
-    // removes the break.
-    #setBreak(where, rawName, key, position, input) {
+    // `input` is a `PageBreakInput` or the `RowBreak` / `ColumnBreak` read back, whose `row` / `col` is ignored;
+    // `null` removes the break.
+    #setBreak(where, rawName, position, input) {
       let record = null;
       if (input !== null) {
-        requireObject(input, `${where} argument 2`);
-        for (const [name, value] of Object.entries(input)) {
-          if (value !== undefined && ![key, 'first', 'last', 'manual'].includes(name)) {
-            throw new TypeError(`${where} argument 2 has no field ${name}`);
-          }
-        }
+        const label = argLabel(where, 1);
+        requireObject(input, label);
+        refuseOtherKeys(label, input, [...READ_ONLY_KEYS[where], 'first', 'last', 'manual']);
         record = { ...input };
-        delete record[key];
+        for (const read of READ_ONLY_KEYS[where]) delete record[read];
       }
       rawOf(this.#workbook)[rawName](this.#current(), position, record);
     }
@@ -7281,15 +7980,17 @@ function makeFacade(Raw, registry, runtime) {
     // column and the C stamp.
     addThreadedComment(comment) {
       const where = 'Sheet.addThreadedComment';
-      requireObject(comment, `${where} argument 1`);
+      requireObject(comment, argLabel(where, 0));
       const { cell, created, ...rest } = comment;
       const input = { ...rest };
       if (present(cell)) {
-        const { row, col } = addressOf(rawOf(this.#workbook), cell, `${where} cell`);
+        const { row, col } = addressOf(rawOf(this.#workbook), cell, argLabel(where, 0, 'cell'));
         input.row = row;
         input.col = col;
       }
-      if (present(created)) input.created = civilStamp(toCivil(created, where, 'created'));
+      if (present(created)) {
+        input.created = civilStamp(toCivil(created, where, argumentPath(where, 0, 'created'), { utc: true }));
+      }
       return rawOf(this.#workbook).addThreadedComment(this.#current(), input);
     }
 
@@ -7301,10 +8002,10 @@ function makeFacade(Raw, registry, runtime) {
       if (cell.length === 0 || cell[0] === undefined) return comments;
       const at =
         typeof cell[0] === 'string'
-          ? cellAddress(raw, cell[0], where)
+          ? cellAddress(raw, cell[0], `${where} a1`)
           : {
-              firstRow: requireIndex(cell[0], `${where} argument 1`, 'coordinate'),
-              firstCol: requireIndex(cell[1], `${where} argument 2`, 'coordinate'),
+              firstRow: requireIndex(cell[0], `${where} row`, 'coordinate'),
+              firstCol: requireIndex(cell[1], `${where} col`, 'coordinate'),
             };
       const ids = new Set();
       return comments.filter((comment) => {
@@ -7329,20 +8030,22 @@ function makeFacade(Raw, registry, runtime) {
       const input = {};
       let timePeriodRules = true;
       if (options !== undefined) {
-        requireObject(options, `${where} argument 2`);
-        refuseOtherKeys(where, 2, options, ['today', 'timePeriodRules']);
+        const label = argLabel(where, 1);
+        requireObject(options, label);
+        refuseOtherKeys(label, options, ['today', 'timePeriodRules']);
         if (options.timePeriodRules !== undefined) {
-          timePeriodRules = requireBoolean(options.timePeriodRules, `${where} timePeriodRules`);
+          timePeriodRules = requireBoolean(options.timePeriodRules, `${label}.timePeriodRules`);
         }
         if (options.today !== undefined) {
           if (!timePeriodRules) {
             throw new FormulonError(
               StatusCode.InvalidArgument,
-              `${where} today has no effect when timePeriodRules is false`,
+              `${label}.today must be omitted when timePeriodRules is false`,
               'option=today',
             );
           }
-          const civil = { ...toCivil(options.today, where, 'today'), hour: 0, minute: 0, second: 0 };
+          const today = toCivil(options.today, where, argumentPath(where, 1, 'today'));
+          const civil = { ...today, hour: 0, minute: 0, second: 0 };
           input.todaySerial = civilSerial(runtime, civil, raw.getDate1904());
         }
       }
@@ -7359,24 +8062,15 @@ function makeFacade(Raw, registry, runtime) {
     // The candidate is coerced as `setValue` coerces a value, except that a string is always text.
     validateValue(row, col, value) {
       const where = 'Sheet.validateValue';
-      checkCellValue(value, `${where} argument 3`);
       const raw = rawOf(this.#workbook);
-      let proposed = value;
-      if (value === null) proposed = BLANK;
-      else if (typeof value === 'number') proposed = { kind: ValueKind.Number, number: value };
-      else if (typeof value === 'string') proposed = { kind: ValueKind.Text, text: value };
-      else if (typeof value === 'boolean') proposed = { kind: ValueKind.Bool, boolean: value };
-      else if (value instanceof ExcelError) proposed = { kind: ValueKind.Error, errorCode: value.code };
-      else if (value instanceof Date) {
-        proposed = { kind: ValueKind.Number, number: dateSerial(runtime, value, raw.getDate1904(), where)[0] };
-      }
+      const proposed = valueRecord(runtime, raw, value, argLabel(where, 2));
       return raw.validateValue(this.#current(), row, col, proposed);
     }
 
     // Only the keys the patch gives reach the engine; a record's other fields are ignored.
     updateThreadedComment(id, patch) {
       const where = 'Sheet.updateThreadedComment';
-      requireObject(patch, `${where} argument 2`);
+      requireObject(patch, argLabel(where, 1));
       refuseUnknownKeys(where, patch);
       const input = {};
       const checks = [
@@ -7385,7 +8079,7 @@ function makeFacade(Raw, registry, runtime) {
         ['done', requireBoolean],
       ];
       for (const [key, check] of checks) {
-        if (patch[key] !== undefined) input[key] = check(patch[key], `${where} ${key}`);
+        if (patch[key] !== undefined) input[key] = check(patch[key], argLabel(where, 1, key));
       }
       rawOf(this.#workbook).updateThreadedComment(this.#current(), id, input);
     }
@@ -7393,11 +8087,13 @@ function makeFacade(Raw, registry, runtime) {
     // `range` is a `CellRect` or an A1 range of this sheet.
     setArrayFormula(arrayFormula) {
       const where = 'Sheet.setArrayFormula';
-      requireObject(arrayFormula, `${where} argument 1`);
+      const label = argLabel(where, 0);
+      requireObject(arrayFormula, label);
       const raw = rawOf(this.#workbook);
       const { range } = arrayFormula;
-      const rect = typeof range === 'string' ? rangeAddress(raw, range) : requireObject(range, `${where} range`);
-      const formula = requireString(arrayFormula.formula, `${where} formula`);
+      const rect =
+        typeof range === 'string' ? rangeAddress(raw, range, `${label}.range`) : requireObject(range, `${label}.range`);
+      const formula = requireString(arrayFormula.formula, `${label}.formula`);
       raw.setArrayFormula(this.#current(), rect, formula);
     }
 
@@ -7407,17 +8103,16 @@ function makeFacade(Raw, registry, runtime) {
       const raw = rawOf(this.#workbook);
       const sheet = this.#current();
       if (titles === null) return raw.setPrintTitles(sheet, null);
-      requireObject(titles, `${where} argument 1`);
+      requireObject(titles, argLabel(where, 0));
       const span = (axis, key) => {
         const value = titles[key];
         if (typeof value !== 'string') return value;
         try {
-          const [first, last] = spanAddress(raw, value, axis);
+          const [first, last] = spanAddress(raw, value, axis, argLabel(where, 0, key));
           return { first, last };
         } catch (e) {
           if (e?.name !== 'FormulonError' || e.parseError === undefined) throw e;
-          const text = `${where} ${key} ${JSON.stringify(value)} is not a span`;
-          throw new FormulonError(StatusCode.InvalidArgument, text, '');
+          throw new FormulonError(StatusCode.InvalidArgument, `${argLabel(where, 0, key)} must be an A1 span`, '');
         }
       };
       raw.setPrintTitles(sheet, { ...titles, rows: span('row', 'rows'), columns: span('col', 'columns') });
@@ -7434,6 +8129,27 @@ function makeFacade(Raw, registry, runtime) {
       );
     }
 
+    // `runs` is an array of `{ start, end, text }` records, all three keys required, or `null` for none.
+    setCellPhoneticRuns(row, col, runs) {
+      const where = 'Sheet.setCellPhoneticRuns';
+      const label = argLabel(where, 2);
+      const given = runs === null ? [] : requireArray(runs, label);
+      const checked = given.map((run, i) => {
+        const runLabel = `${label}[${i}]`;
+        requireObject(run, runLabel);
+        refuseOtherKeys(runLabel, run, ['start', 'end', 'text']);
+        for (const key of ['start', 'end', 'text']) {
+          if (run[key] === undefined) throw new TypeError(`${runLabel}.${key} is required`);
+        }
+        return {
+          start: requireInteger(run.start, `${runLabel}.start`),
+          end: requireInteger(run.end, `${runLabel}.end`),
+          text: requireString(run.text, `${runLabel}.text`),
+        };
+      });
+      rawOf(this.#workbook).setCellPhoneticRuns(this.#current(), row, col, checked);
+    }
+
     getCellPhoneticRuns(row, col) {
       const raw = rawOf(this.#workbook);
       const sheet = this.#current();
@@ -7446,15 +8162,16 @@ function makeFacade(Raw, registry, runtime) {
 
   // The raw record of a hyperlink: the text fields checked, an A1 `range` as a `CellRect`.
   function hyperlinkInput(raw, link, where, position) {
-    requireObject(link, `${where} argument ${position}`);
+    const label = argLabel(where, position);
+    requireObject(link, label);
     for (const field of ['target', 'location', 'display', 'tooltip']) {
-      if (present(link[field])) requireString(link[field], `${where} ${field}`);
+      if (present(link[field])) requireString(link[field], `${label}.${field}`);
     }
     if (!present(link.target) && !present(link.location)) {
-      throw new TypeError(`${where} location is required when target is null`);
+      throw new TypeError(`${label}.location is required when target is null`);
     }
     if (link.range === undefined || link.range === null) return link;
-    return { ...link, range: normalizeAddress(raw, 'CellRect', link.range, undefined, `${where} range`) };
+    return { ...link, range: normalizeAddress(raw, 'CellRect', link.range, undefined, `${label}.range`) };
   }
 
   class Workbook {
@@ -7565,7 +8282,10 @@ function makeFacade(Raw, registry, runtime) {
 
     // `insertBefore` is a `SheetRef` of the list before the move, or `null` for the end.
     #move(from, insertBefore) {
-      const before = insertBefore === null ? this.#sheets.length : this.#insertBefore(insertBefore, 'move', 1, 'Sheet');
+      const before =
+        insertBefore === null
+          ? this.#sheets.length
+          : this.#insertBefore(insertBefore, 'move', argumentPath('Sheet.move', 0), 'Sheet');
       this.#raw.moveSheet(from, before);
       const to = before > from ? before - 1 : before;
       if (to === from) return;
@@ -7575,33 +8295,34 @@ function makeFacade(Raw, registry, runtime) {
     }
 
     // The position an `insertBefore` option names: a `SheetRef`, or `null` / omitted for the end.
-    #insertPosition(options, method, argument) {
+    #insertPosition(options, method, position) {
       const where = `Workbook.${method}`;
       if (options === undefined) return this.#sheets.length;
-      requireObject(options, `${where} argument ${argument}`);
-      refuseOtherKeys(where, argument, options, method === 'addSheet' ? ['insertBefore'] : ['insertBefore', 'newName']);
+      const label = argLabel(where, position);
+      requireObject(options, label);
+      refuseOtherKeys(label, options, method === 'addSheet' ? ['insertBefore'] : ['insertBefore', 'newName']);
       const { insertBefore } = options;
       return insertBefore === undefined || insertBefore === null
         ? this.#sheets.length
-        : this.#insertBefore(insertBefore, method, 'insertBefore');
+        : this.#insertBefore(insertBefore, method, argumentPath(where, position, 'insertBefore'));
     }
 
     // A `SheetRef` the sheet lands before, where the sheet count (one past the last index) appends.
-    #insertBefore(ref, method, position, owner = 'Workbook') {
+    #insertBefore(ref, method, path, owner = 'Workbook') {
       if (typeof ref === 'number' && ref === this.#sheets.length) {
         this.#alive();
         return ref;
       }
-      return this.#resolve(ref, method, position, owner);
+      return this.#resolve(ref, method, path, owner);
     }
 
-    // Resolves a `SheetRef` the way `sheet(key)` does; `method` and `position` word the errors.
-    // `position` is an argument number, or the name of the record field that holds `ref`.
-    #resolve(ref, method, position, owner = 'Workbook') {
-      const where = `${owner}.${method} ${typeof position === 'number' ? `argument ${position}` : position}`;
+    // Resolves a `SheetRef` the way `sheet(key)` does; `owner`, `method` and `path` (that of the argument or record
+    // field holding `ref`) word the errors.
+    #resolve(ref, method, path, owner = 'Workbook') {
+      const where = `${owner}.${method} ${path}`;
       if (ref instanceof Sheet) {
         if (ref.workbook !== this) {
-          throw new FormulonError(StatusCode.InvalidArgument, `${where} is a Sheet of another workbook`, '');
+          throw new FormulonError(StatusCode.InvalidArgument, `${where} must be a Sheet of this workbook`, '');
         }
         return ref.index;
       }
@@ -7619,7 +8340,7 @@ function makeFacade(Raw, registry, runtime) {
         if (ref >= this.#sheets.length) {
           throw new FormulonError(
             StatusCode.SheetIndexOutOfRange,
-            `sheet index ${ref} is out of range`,
+            `${where} ${ref} is out of range (${this.#sheets.length} sheets)`,
             `sheet_index=${ref}`,
           );
         }
@@ -7629,7 +8350,7 @@ function makeFacade(Raw, registry, runtime) {
     }
 
     sheet(key) {
-      return this.#sheets[this.#resolve(key, 'sheet', 1)];
+      return this.#sheets[this.#resolve(key, 'sheet', argumentPath('Workbook.sheet', 0))];
     }
 
     listSheets() {
@@ -7648,10 +8369,10 @@ function makeFacade(Raw, registry, runtime) {
       if (ref instanceof Sheet) return this.#sheets.includes(ref);
       if (typeof ref === 'string') return this.#raw.getSheetIndex(ref) !== null;
       if (typeof ref === 'number') {
-        if (!Number.isInteger(ref)) throw new RangeError('Workbook.hasSheet argument 1 must be an integer');
+        if (!Number.isInteger(ref)) throw new RangeError(`${argLabel('Workbook.hasSheet', 0)} must be an integer`);
         return ref >= 0 && ref < this.#sheets.length;
       }
-      throw new TypeError('Workbook.hasSheet argument 1 must be a sheet name, a sheet index or a Sheet');
+      throw new TypeError(`${argLabel('Workbook.hasSheet', 0)} must be a sheet name, a sheet index or a Sheet`);
     }
 
     activeSheet() {
@@ -7660,29 +8381,29 @@ function makeFacade(Raw, registry, runtime) {
     }
 
     setActiveSheet(sheet) {
-      this.#raw.setActiveSheet(this.#resolve(sheet, 'setActiveSheet', 1));
+      this.#raw.setActiveSheet(this.#resolve(sheet, 'setActiveSheet', argumentPath('Workbook.setActiveSheet', 0)));
     }
 
     // An omitted or `null` name takes the profile's next default sheet name.
     addSheet(name, options) {
       const where = 'Workbook.addSheet';
-      if (name !== undefined && name !== null) requireString(name, `${where} argument 1`);
-      const before = this.#insertPosition(options, 'addSheet', 2);
+      if (name !== undefined && name !== null) requireString(name, argLabel(where, 0));
+      const before = this.#insertPosition(options, 'addSheet', 1);
       return this.#insert(this.#raw.addSheet(name ?? null, before));
     }
 
     copySheet(source, options) {
-      const index = this.#resolve(source, 'copySheet', 1);
-      const before = this.#insertPosition(options, 'copySheet', 2);
+      const index = this.#resolve(source, 'copySheet', argumentPath('Workbook.copySheet', 0));
+      const before = this.#insertPosition(options, 'copySheet', 1);
       const newName = options?.newName;
-      if (newName !== undefined) requireString(newName, 'Workbook.copySheet newName');
+      if (newName !== undefined) requireString(newName, argLabel('Workbook.copySheet', 1, 'newName'));
       const position =
         newName === undefined ? this.#raw.copySheet(index, before) : this.#raw.copySheet(index, before, newName);
       return this.#insert(position);
     }
 
     removeSheet(sheet) {
-      const index = this.#resolve(sheet, 'removeSheet', 1);
+      const index = this.#resolve(sheet, 'removeSheet', argumentPath('Workbook.removeSheet', 0));
       this.#raw.removeSheet(index);
       const [removed] = this.#sheets.splice(index, 1);
       sheetState.place(removed, -1);
@@ -7691,7 +8412,7 @@ function makeFacade(Raw, registry, runtime) {
 
     // The one workbook-wide table lookup: tables are added, listed and removed on their `Sheet`.
     table(name) {
-      requireString(name, 'Workbook.table name');
+      requireString(name, argLabel('Workbook.table', 0));
       this.#alive();
       const found = this.#raw.findTable(name);
       if (found === null) {
@@ -7718,11 +8439,11 @@ function makeFacade(Raw, registry, runtime) {
     #cacheId(ref, where) {
       if (ref instanceof PivotCache) {
         if (ref.workbook !== this) {
-          throw new FormulonError(StatusCode.InvalidArgument, `${where} is a PivotCache of another workbook`, '');
+          throw new FormulonError(StatusCode.InvalidArgument, `${where} must be a PivotCache of this workbook`, '');
         }
         return ref.cacheId;
       }
-      if (typeof ref !== 'number') throw new TypeError(`${where} must be a cache id or a PivotCache`);
+      if (typeof ref !== 'number') throw new TypeError(`${where} must be a number or a PivotCache`);
       return requireIndex(ref, where, 'quantity');
     }
 
@@ -7732,7 +8453,7 @@ function makeFacade(Raw, registry, runtime) {
     }
 
     pivotCache(cacheId) {
-      const id = this.#cacheId(cacheId, 'Workbook.pivotCache argument 1');
+      const id = this.#cacheId(cacheId, argLabel('Workbook.pivotCache', 0));
       this.#alive();
       if (!this.#raw.listPivotCaches().includes(id)) {
         throw new FormulonError(StatusCode.NotFound, `the workbook has no pivot cache ${id}`, `cache_id=${id}`);
@@ -7743,11 +8464,11 @@ function makeFacade(Raw, registry, runtime) {
     addPivotCache(requestedId) {
       let requested = 0;
       if (requestedId !== undefined && requestedId !== null) {
-        requireNumber(requestedId, 'Workbook.addPivotCache argument 1');
+        requireNumber(requestedId, argLabel('Workbook.addPivotCache', 0));
         if (requestedId === 0) {
           throw new FormulonError(
             StatusCode.InvalidArgument,
-            'Workbook.addPivotCache requestedId 0 is not a valid cache id; omit it to assign one',
+            `${argLabel('Workbook.addPivotCache', 0)} must not be 0; omit it to assign an id`,
             'requested_id=0',
           );
         }
@@ -7757,13 +8478,50 @@ function makeFacade(Raw, registry, runtime) {
     }
 
     removePivotCache(cacheId) {
-      this.#raw.removePivotCache(this.#cacheId(cacheId, 'Workbook.removePivotCache argument 1'));
+      this.#raw.removePivotCache(this.#cacheId(cacheId, argLabel('Workbook.removePivotCache', 0)));
     }
 
     setPinnedNow(time) {
       if (time === null) return this.#raw.setPinnedNow(null);
-      const civil = toCivil(time, 'Workbook.setPinnedNow', 'argument 1');
+      const where = 'Workbook.setPinnedNow';
+      const civil = toCivil(time, where, argumentPath(where, 0));
       return this.#raw.setPinnedNow(...CIVIL_FIELDS.map((field) => civil[field]));
+    }
+
+    // The value is coerced as `Sheet.setValue` coerces one (a string is always text), a `Date` read under this
+    // workbook's date system.
+    formatValue(value, numberFormat) {
+      const raw = this.#raw;
+      const label = argLabel('Workbook.formatValue', 0);
+      if (value === undefined || Array.isArray(value)) throw new TypeError(`${label} must be a cell value`);
+      return raw.formatValue(valueRecord(runtime, raw, value, label), numberFormat);
+    }
+
+    // `range` is an A1 range, a `CellRect` or a `ParsedReference`, whose sheet name `options.sheetName` replaces.
+    formatReference(range, options) {
+      const where = 'Workbook.formatReference';
+      const raw = this.#raw;
+      const label = argLabel(where, 0);
+      let rect = range;
+      let sheetName = null;
+      if (isObject(range) && Object.hasOwn(range, 'range')) {
+        rect = range.range;
+        sheetName = range.sheetName ?? null;
+      }
+      if (typeof rect === 'string') rect = rangeAddress(raw, rect, `${label}.range`);
+      requireObject(rect, label);
+      let absolute = false;
+      if (options !== undefined) {
+        const optionsLabel = argLabel(where, 1);
+        requireObject(options, optionsLabel);
+        refuseOtherKeys(optionsLabel, options, ['sheetName', 'absolute']);
+        if (options.absolute !== undefined) absolute = requireBoolean(options.absolute, `${optionsLabel}.absolute`);
+        if (options.sheetName !== undefined) {
+          sheetName = options.sheetName === null ? null : requireString(options.sheetName, `${optionsLabel}.sheetName`);
+        }
+      }
+      const reference = sheetName === null || sheetName === '' ? { rect } : { sheetName, rect };
+      return absolute ? raw.formatReference(reference, { absolute }) : raw.formatReference(reference);
     }
 
     getThemeFonts() {
@@ -7776,9 +8534,9 @@ function makeFacade(Raw, registry, runtime) {
 
     setThemeColors(colors) {
       const where = 'Workbook.setThemeColors';
-      requireObject(colors, `${where} argument 1`);
-      const input = colorInputs(colors, `${where} argument 1`);
-      this.#raw.setThemeColors(requireArray(input.colors, `${where} colors`));
+      requireObject(colors, argLabel(where, 0));
+      const input = colorInputs(colors, argLabel(where, 0));
+      this.#raw.setThemeColors(requireArray(input.colors, argLabel(where, 0, 'colors')));
     }
 
     getDefaultFont() {
@@ -7787,28 +8545,32 @@ function makeFacade(Raw, registry, runtime) {
 
     setThemeScriptFont(font) {
       const where = 'Workbook.setThemeScriptFont';
-      requireObject(font, `${where} argument 1`);
-      refuseOtherKeys(where, 1, font, ['scheme', 'script', 'typeface']);
+      const label = argLabel(where, 0);
+      requireObject(font, label);
+      refuseOtherKeys(label, font, ['scheme', 'script', 'typeface']);
       this.#raw.setThemeScriptFont(
-        requireInteger(font.scheme, `${where} scheme`),
-        requireString(font.script, `${where} script`),
-        requireString(font.typeface, `${where} typeface`),
+        requireInteger(font.scheme, `${label}.scheme`),
+        requireString(font.script, `${label}.script`),
+        requireString(font.typeface, `${label}.typeface`),
       );
     }
 
     getThemeScriptFont(key) {
       const where = 'Workbook.getThemeScriptFont';
-      requireObject(key, `${where} argument 1`);
-      refuseOtherKeys(where, 1, key, ['scheme', 'script']);
+      const label = argLabel(where, 0);
+      requireObject(key, label);
+      refuseOtherKeys(label, key, ['scheme', 'script']);
       return this.#raw.getThemeScriptFont(
-        requireInteger(key.scheme, `${where} scheme`),
-        requireString(key.script, `${where} script`),
+        requireInteger(key.scheme, `${label}.scheme`),
+        requireString(key.script, `${label}.script`),
       );
     }
 
     // A `null` or omitted scope is workbook scope; the raw sentinel is -1.
     #scope(scope, method) {
-      return scope === undefined || scope === null ? -1 : this.#resolve(scope, method, 2);
+      return scope === undefined || scope === null
+        ? -1
+        : this.#resolve(scope, method, argumentPath(`Workbook.${method}`, 1));
     }
 
     getDefinedName(name, scope) {
@@ -7820,21 +8582,16 @@ function makeFacade(Raw, registry, runtime) {
     }
 
     setDefinedName(definedName) {
-      requireObject(definedName, 'Workbook.setDefinedName argument 1');
+      requireObject(definedName, argLabel('Workbook.setDefinedName', 0));
       const { scope, ...fields } = definedName;
       if (scope === undefined || scope === null) return this.#raw.setDefinedName(fields);
-      return this.#raw.setDefinedName({ ...fields, scope: this.#resolve(scope, 'setDefinedName', 'scope') });
+      const path = argumentPath('Workbook.setDefinedName', 0, 'scope');
+      return this.#raw.setDefinedName({ ...fields, scope: this.#resolve(scope, 'setDefinedName', path) });
     }
 
     updateIterative(patch) {
       const where = 'Workbook.updateIterative';
       checkForwardedPatch(where, patch, PATCH_FIELDS[where]);
-      if (isObject(patch)) {
-        const { maxIterations } = patch;
-        if (maxIterations !== undefined && !Number.isInteger(maxIterations)) {
-          throw new TypeError(`${where} maxIterations must be an integer`);
-        }
-      }
       this.#raw.updateIterative(patch);
     }
   }
@@ -7851,13 +8608,10 @@ function makeFacade(Raw, registry, runtime) {
 
     addDxf(input) {
       const where = 'Workbook.addDxf';
-      requireObject(input, `${where} argument 1`);
-      for (const [key, value] of Object.entries(input)) {
-        if (value !== undefined && !DXF_INPUT_KEYS.includes(key)) {
-          throw new TypeError(`${where} argument 1 has no field ${key}`);
-        }
-      }
-      return rawOf(this.#workbook).addDxf(colorInputs(input, `${where} argument 1`));
+      const label = argLabel(where, 0);
+      requireObject(input, label);
+      refuseOtherKeys(label, input, DXF_INPUT_KEYS);
+      return rawOf(this.#workbook).addDxf(colorInputs(input, label));
     }
 
     static {
@@ -7879,14 +8633,14 @@ function makeFacade(Raw, registry, runtime) {
     }
 
     getColumnXfIndex(col) {
-      requireIndex(col, 'Sheet.getColumnXfIndex argument 1', 'coordinate');
+      requireIndex(col, argLabel('Sheet.getColumnXfIndex', 0), 'coordinate');
       const raw = rawOf(this.#sheet.workbook);
       const span = raw.listColumnOverrides(sheetIndex(this.#sheet)).find((c) => c.first <= col && col <= c.last);
       return span?.xfIndex ?? null;
     }
 
     getRowXfIndex(row) {
-      requireIndex(row, 'Sheet.getRowXfIndex argument 1', 'coordinate');
+      requireIndex(row, argLabel('Sheet.getRowXfIndex', 0), 'coordinate');
       const raw = rawOf(this.#sheet.workbook);
       const override = raw.listRowOverrides(sheetIndex(this.#sheet)).find((r) => r.row === row);
       return override?.xfIndex ?? null;
@@ -7896,13 +8650,13 @@ function makeFacade(Raw, registry, runtime) {
     getRangeXfBasesExcluding(range, excluded) {
       const where = 'Sheet.getRangeXfBasesExcluding';
       const raw = rawOf(this.#sheet.workbook);
-      requireArray(excluded, `${where} argument 2`);
+      requireArray(excluded, argLabel(where, 1));
       const rows = [];
       const cols = [];
       for (const [i, cell] of excluded.entries()) {
-        const { row, col } = addressOf(raw, cell, `${where} argument 2[${i}]`);
-        rows.push(requireIndex(row, `${where} argument 2[${i}].row`, 'coordinate'));
-        cols.push(requireIndex(col, `${where} argument 2[${i}].col`, 'coordinate'));
+        const { row, col } = addressOf(raw, cell, argLabel(where, 1, i));
+        rows.push(requireIndex(row, argLabel(where, 1, i, 'row'), 'coordinate'));
+        cols.push(requireIndex(col, argLabel(where, 1, i, 'col'), 'coordinate'));
       }
       return raw.getRangeXfBasesExcluding(sheetIndex(this.#sheet), range, rows, cols);
     }
@@ -7910,13 +8664,14 @@ function makeFacade(Raw, registry, runtime) {
     // The raw call takes the mapping as parallel base and target arrays.
     remapRangeXfs(range, mapping) {
       const where = 'Sheet.remapRangeXfs';
-      if (!(mapping instanceof Map)) throw new TypeError(`${where} argument 2 must be a Map`);
+      const label = argLabel(where, 1);
+      if (!(mapping instanceof Map)) throw new TypeError(`${label} must be a Map`);
       const from = [];
       const to = [];
       const isIndex = (value) => Number.isInteger(value) && value >= 0 && value <= 0xffffffff;
       for (const [base, target] of mapping) {
         if (!isIndex(base) || !isIndex(target)) {
-          throw new TypeError(`${where} argument 2 maps an XF index to an XF index`);
+          throw new TypeError(`${label} must map an XF index to an XF index`);
         }
         from.push(base);
         to.push(target);
@@ -8011,11 +8766,11 @@ function makeFacade(Raw, registry, runtime) {
   // A `PivotFieldRef` argument or spec key of a `Pivot` method reaches the raw call as the field index.
   const fieldArgument = (name) => (self, args) => {
     if (typeof args[0] === 'number') {
-      return [requireIndex(args[0], `Pivot.${name} argument 1`, 'position'), ...args.slice(1)];
+      return [requireIndex(args[0], argLabel(`Pivot.${name}`, 0), 'position'), ...args.slice(1)];
     }
     if (typeof args[0] !== 'string') return args;
     const [raw, sheet, pivot] = pivotState.locate(self);
-    return [pivotFieldIndex(raw, sheet, pivot, args[0], `Pivot.${name} argument 1`), ...args.slice(1)];
+    return [pivotFieldIndex(raw, sheet, pivot, args[0], argLabel(`Pivot.${name}`, 0)), ...args.slice(1)];
   };
   // `fieldIndex` and `showAsBaseField` of a data field spec.
   const dataFieldSpec = (name, at) => (self, args) => {
@@ -8025,7 +8780,9 @@ function makeFacade(Raw, registry, runtime) {
     if (keys.length === 0) return args;
     const [raw, sheet, pivot] = pivotState.locate(self);
     const resolved = { ...spec };
-    for (const key of keys) resolved[key] = pivotFieldIndex(raw, sheet, pivot, spec[key], `Pivot.${name} ${key}`);
+    for (const key of keys) {
+      resolved[key] = pivotFieldIndex(raw, sheet, pivot, spec[key], argLabel(`Pivot.${name}`, at, key));
+    }
     return args.map((arg, i) => (i === at ? resolved : arg));
   };
   // An axis order: each name becomes its field index; a number (`PIVOT_VALUES_FIELD` included) is left to the call.
@@ -8033,7 +8790,7 @@ function makeFacade(Raw, registry, runtime) {
     if (!Array.isArray(args[0]) || !args[0].some((ref) => typeof ref === 'string')) return args;
     const [raw, sheet, pivot] = pivotState.locate(self);
     const fields = args[0].map((ref, i) =>
-      typeof ref === 'string' ? pivotFieldIndex(raw, sheet, pivot, ref, `Pivot.${name} argument 1[${i}]`) : ref,
+      typeof ref === 'string' ? pivotFieldIndex(raw, sheet, pivot, ref, argLabel(`Pivot.${name}`, 0, i)) : ref,
     );
     return [fields, ...args.slice(1)];
   };
@@ -8065,7 +8822,7 @@ function makeFacade(Raw, registry, runtime) {
       name,
       namedFunction(name, function (args) {
         if (typeof args[at] !== 'string' && typeof args[at] !== 'number') return inner.apply(this, args);
-        const label = `PivotCache.${name} argument ${at + 1}`;
+        const label = argLabel(`PivotCache.${name}`, at);
         const out = [...args];
         out[at] = cacheFieldIndex(cacheState.raw(this), this.cacheId, args[at], label);
         return inner.apply(this, out);
@@ -8130,6 +8887,33 @@ function makeFacade(Raw, registry, runtime) {
   for (const [owner, cls] of guarded) installInputGuards(cls.prototype, owner);
   for (const [cls, workbookOf] of guardedClasses) installCallGuards(cls.prototype, workbookOf, liveRaw, activeCalls);
   for (const [owner, cls] of guarded) installArityGuards(cls.prototype, owner);
+  // The static factories take their arguments from the same table.
+  installArityGuards(Workbook, 'Workbook');
+  // Outermost: an argument error reads as the call the consumer made, on the class of the receiver.
+  const drawingClassName = (self) => {
+    for (const [name, cls] of [
+      ['Picture', Picture],
+      ['Chart', Chart],
+      ['Shape', Shape],
+      ['Slicer', Slicer],
+    ]) {
+      if (self instanceof cls) return name;
+    }
+    return 'Drawing';
+  };
+  for (const [owner, cls] of [
+    ['Workbook', Workbook],
+    ['Sheet', Sheet],
+    ['Table', Table],
+    ['Pivot', Pivot],
+    ['PivotCache', PivotCache],
+    ['WorkbookOoxml', WorkbookOoxml],
+    ['SheetOoxml', SheetOoxml],
+  ]) {
+    installErrorLabels(cls.prototype, owner);
+  }
+  for (const cls of [Drawing, Picture, Chart, Shape, Slicer]) installErrorLabels(cls.prototype, drawingClassName);
+  installErrorLabels(Workbook, 'Workbook');
   // `using` calls the same function as `dispose()`.
   Object.defineProperty(Workbook.prototype, Symbol.dispose, {
     value: Workbook.prototype.dispose,
@@ -8160,6 +8944,7 @@ function installArgumentForms(proto, owner, rawOf, sheetOf, handleIndex) {
     DEFAULT_ARGS,
     ARG_ROLES,
     ARG_TYPES,
+    BOOLEAN_ARGS,
     ENUM_FIELDS,
   ];
   const keys = new Set(tables.flatMap((table) => Object.keys(table)));
@@ -8176,21 +8961,22 @@ function installArgumentForms(proto, owner, rawOf, sheetOf, handleIndex) {
     const defaults = DEFAULT_ARGS[where];
     const roles = ARG_ROLES[where];
     const types = ARG_TYPES[where];
+    const booleans = BOOLEAN_ARGS[where];
     const enums = ENUM_FIELDS[where];
     defineMethod(
       proto,
       name,
       namedFunction(name, function (args) {
-        if (spans !== undefined) args = expandSpans(rawOf(this), spans, args);
+        if (spans !== undefined) args = expandSpans(rawOf(this), where, spans, args);
         if (pairs !== undefined) args = expandCells(rawOf(this), where, pairs, args);
         if (defaults !== undefined) args = fillDefaults(defaults, args);
         if (typed !== undefined) args = normalizeTypedArgs(rawOf(this), sheetOf(this), where, typed, args);
-        if (rects !== undefined) args = expandRects(rawOf(this), rects, args);
+        if (rects !== undefined) args = expandRects(rawOf(this), where, rects, args);
         if (ref !== undefined && (typeof args[ref[0]] !== 'number' || REF_KINDS[ref[1]]?.keyed === true)) {
           const named = (kind, value, label) => handleIndex(this, kind, value, label);
           args = resolveRef(rawOf(this), sheetOf(this), where, ref, args, named);
         }
-        if (types !== undefined) args = checkArgumentTypes(where, types, args);
+        if (types !== undefined || booleans !== undefined) args = checkArgumentTypes(where, types, args, booleans);
         if (roles !== undefined) checkArgumentRoles(where, roles, args);
         if (enums !== undefined) checkEnumFields(where, enums, args);
         return inner.apply(this, args);
@@ -8200,24 +8986,26 @@ function installArgumentForms(proto, owner, rawOf, sheetOf, handleIndex) {
 }
 
 /**
- * Normalises the `bytes` arguments of `types` and refuses a `value` argument that is not a record; an omitted
- * argument is left to the call.
+ * Normalises the `bytes` arguments of `types` and refuses a `value` argument that is not a record, and a
+ * `boolean` argument (the positions of `booleans`) that is not a boolean; an omitted argument is left to the call.
  */
-function checkArgumentTypes(where, types, args) {
+function checkArgumentTypes(where, types, args, booleans) {
   let out = args;
-  for (const [position, type] of types) {
+  for (const [position, type] of types ?? []) {
     const value = out[position];
     if (value === undefined) continue;
     if (type === 'bytes') {
-      const bytes = requireBytes(value, where, `argument ${position + 1}`);
+      const bytes = requireBytes(value, where, argumentPath(where, position));
       if (bytes !== value) {
         out = [...out];
         out[position] = bytes;
       }
     } else if (!isObject(value)) {
-      const got = value === null ? 'null' : typeof value;
-      throw new TypeError(`${where} argument ${position + 1} expects a Value record, got ${got}`);
+      throw new TypeError(`${argLabel(where, position)} must be an object`);
     }
+  }
+  for (const position of booleans ?? []) {
+    if (out[position] !== undefined) requireBoolean(out[position], argLabel(where, position));
   }
   return out;
 }
@@ -8229,11 +9017,12 @@ function checkEnumFields(where, enums, args) {
     if (!isObject(record)) continue;
     const value = record[field];
     if (value === undefined || value === null) continue;
-    requireNumber(value, `${where} ${field}`);
+    const label = argLabel(where, position, field);
+    requireNumber(value, label);
     if (!Object.values(table).includes(value)) {
       throw new FormulonError(
         StatusCode.InvalidArgument,
-        `${where} ${field} ${value} is not a ${tableName}`,
+        `${label} ${value} is not a ${tableName}`,
         `${field}=${value}`,
       );
     }
@@ -8247,7 +9036,7 @@ function checkEnumFields(where, enums, args) {
 function checkArgumentRoles(where, roles, args) {
   for (const [position, role] of roles) {
     const value = args[position];
-    if (typeof value === 'number') requireIndex(value, `${where} argument ${position + 1}`, role);
+    if (typeof value === 'number') requireIndex(value, argLabel(where, position), role);
   }
 }
 
@@ -8255,9 +9044,9 @@ function checkArgumentRoles(where, roles, args) {
  * Wraps every defined method of `owner` listed in `METHOD_ARITY` so that a call
  * with more positional arguments than the declarations allow throws
  * `TypeError: <owner>.<method> takes at most N arguments`. A call in the string
- * form (an A1 cell for each `CELL_ARGS` pair, an A1 span for a `SPAN_ARGS` one)
- * takes one argument fewer per string. `[Symbol.dispose]` is an alias defined
- * afterwards.
+ * form (an A1 cell for each `CELL_ARGS` pair, an A1 span for a `SPAN_ARGS` one that
+ * is not `single`) takes one argument fewer per string. `[Symbol.dispose]` is an alias
+ * defined afterwards.
  */
 function installArityGuards(proto, owner) {
   const prefix = `${owner}.`;
@@ -8276,7 +9065,7 @@ function installArityGuards(proto, owner) {
       namedFunction(name, function (args) {
         let limit = most;
         if (pairs !== undefined && typeof args[pairs[0][0]] === 'string') limit -= pairs.length;
-        for (const [at] of spans ?? []) if (typeof args[at] === 'string') limit -= 1;
+        for (const [at, , form] of spans ?? []) if (form !== 'single' && typeof args[at] === 'string') limit -= 1;
         if (args.length > limit) {
           throw new TypeError(`${where} takes at most ${limit} argument${limit === 1 ? '' : 's'}`);
         }
@@ -8307,7 +9096,9 @@ function installInputGuards(proto, owner) {
       namedFunction(name, function (args) {
         let position = at;
         if (pairs !== undefined && typeof args[pairs[0][0]] === 'string') position -= pairs.length;
-        for (const [span] of spans ?? []) if (typeof args[span] === 'string') position -= 1;
+        for (const [span, , form] of spans ?? []) {
+          if (form !== 'single' && typeof args[span] === 'string') position -= 1;
+        }
         // A plain record with getters is copied once, so the check and the call read each getter a single time.
         const record = args[position];
         if (
@@ -8368,7 +9159,6 @@ const ARG_TYPES = Object.freeze({
   'Sheet.addPicture': [[0, 'bytes']],
   'Sheet.restoreDrawing': [[0, 'bytes']],
   'Sheet.restoreRangeXfs': [[0, 'bytes']],
-  'Workbook.formatValue': [[0, 'value']],
 });
 
 // Enum-valued record fields checked before the call: `Class.method` -> [position in the public call, field, table, table name].
@@ -8408,7 +9198,6 @@ const autoFilterInput = (filter) =>
 const ARG_ADAPTERS = Object.freeze({
   'Sheet.setAutoFilter': (args) => [autoFilterInput(args[0]), ...args.slice(1)],
   'Table.setAutoFilter': (args) => [autoFilterInput(args[0]), ...args.slice(1)],
-  'Workbook.formatReference': (args) => [renamed(args[0], 'range', 'rect'), ...args.slice(1)],
 });
 
 /**
@@ -8431,7 +9220,8 @@ function installForwarders(proto, owner, entries, Raw, call) {
     const where = `${owner}.${name}`;
     const family = LIST_FAMILIES[where];
     const adaptRead = READ_ADAPTERS[where] ?? ((result) => result);
-    const adaptArgs = ARG_ADAPTERS[where] ?? ((args) => args);
+    const adaptOwn = ARG_ADAPTERS[where] ?? ((args) => args);
+    const adaptArgs = (args) => adaptOwn(args).map(recordThrown);
     if (family !== undefined) {
       const [count, element] = family;
       defineMethod(
@@ -8491,7 +9281,7 @@ function installForwarders(proto, owner, entries, Raw, call) {
               // The C sentinel is not a public value; absence is spelled `null`.
               throw new FormulonError(
                 StatusCode.InvalidArgument,
-                `${where} argument ${position + 1} ${value} is not valid; absence is null`,
+                `${argLabel(where, position)} must not be negative; pass null for none`,
                 `value=${value}`,
               );
             }

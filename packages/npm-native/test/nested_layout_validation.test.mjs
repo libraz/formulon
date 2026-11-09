@@ -58,7 +58,7 @@ test('sheet format defaults stops at a throwing nested getter before native muta
   const wb = addon.Workbook.createDefault();
   try {
     const before = wb.getFormatDefaults(0);
-    const spec = { defaultColWidthChars: 12.5 };
+    const spec = { defaultColumnWidthChars: 12.5 };
     Object.defineProperty(spec, 'defaultRowHeightPt', {
       enumerable: true,
       get() {
@@ -75,8 +75,8 @@ test('sheet format defaults stops at a throwing nested getter before native muta
 test('cell geometry rejects fractional nested range coordinates before the query', () => {
   const wb = addon.Workbook.createDefault();
   try {
-    assert.throws(() => wb.getCellRectPt(0, { ...RANGE, firstRow: 1.5 }, 0), TypeError);
-    assert.throws(() => wb.getCellRectPt(0, { ...RANGE, lastCol: Number.NaN }, 0), TypeError);
+    assert.throws(() => wb.getCellRectPt(0, { ...RANGE, firstRow: 1.5 }, 0), RangeError);
+    assert.throws(() => wb.getCellRectPt(0, { ...RANGE, lastCol: Number.NaN }, 0), RangeError);
     const range = {};
     Object.defineProperty(range, 'firstRow', {
       enumerable: true,
@@ -97,7 +97,7 @@ test('partial recalc rejects fractional nested viewport coordinates before recal
     wb.setCalcMode(1);
     wb.setNumber(0, 0, 0, 1);
     wb.setFormula(0, 0, 1, '=A1+1');
-    assert.throws(() => wb.recalcViewport(0, { ...RANGE, firstRow: 1.5 }), TypeError);
+    assert.throws(() => wb.recalcViewport(0, { ...RANGE, firstRow: 1.5 }), RangeError);
     const viewport = { firstRow: 0, lastRow: 0, firstCol: 0, lastCol: 0 };
     Object.defineProperty(viewport, 'lastCol', {
       enumerable: true,

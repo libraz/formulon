@@ -9,7 +9,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Optional, Tuple, Union
 
 from . import _structs as S
-from ._c import LIB, FormulonError, _NoCopy, _sint, _uint
+from ._c import LIB, FormulonError, _argument_message, _NoCopy, _require_bool, _sint, _uint
 from ._sheet import _normalize_auto_filter, _read_auto_filter
 from ._status import StatusCode
 from ._workbook import (
@@ -201,13 +201,11 @@ class Table(_NoCopy):
           PreconditionFailedError: when growing for the totals row finds the
             row below occupied or the table on the last grid row.
         """
-        for flag in (header_row, totals_row):
-            if flag is not UNCHANGED and not isinstance(flag, bool):
-                raise TypeError(f"formulon: a table flag must be a bool, got {type(flag).__name__}")
+        for key, flag in (("header_row", header_row), ("totals_row", totals_row)):
+            if flag is not UNCHANGED:
+                _require_bool(flag, key)
         if range is not UNCHANGED and not isinstance(range, (SheetRect, CellRect, str)):
-            raise TypeError(
-                f"formulon: range must be an A1 string, a CellRect or a SheetRect, got {type(range).__name__}"
-            )
+            raise TypeError(_argument_message("range", "must be a string, a CellRect or a SheetRect"))
         h, sheet, index = self._locate()
         values = {}
         if range is not UNCHANGED:
@@ -215,7 +213,7 @@ class Table(_NoCopy):
         for key, flag in (("header_row", header_row), ("totals_row", totals_row)):
             if flag is not UNCHANGED:
                 values[key + "_op"] = _PATCH_SET
-                values[key] = 1 if flag else 0
+                values[key] = int(flag)
         with _ArgScope() as scope:
             ptr = scope.struct(S.TABLE_PATCH)
             if range is not UNCHANGED:
@@ -321,10 +319,10 @@ class Table(_NoCopy):
             "show_column_stripes": show_column_stripes,
         }
         for key, value in toggles.items():
-            if value is not UNCHANGED and not isinstance(value, bool):
-                raise TypeError(f"formulon: {key} must be a bool, got {type(value).__name__}")
+            if value is not UNCHANGED:
+                _require_bool(value, key)
         if style_name is not UNCHANGED and style_name is not None and not isinstance(style_name, str):
-            raise TypeError(f"formulon: style_name must be a str or None, got {type(style_name).__name__}")
+            raise TypeError(_argument_message("style_name", "must be a string"))
         h, sheet, index = self._locate()
         with _ArgScope() as scope:
             ptr = scope.struct(S.TABLE_STYLE_OPTIONS_PATCH)
@@ -337,7 +335,7 @@ class Table(_NoCopy):
             for key in _STYLE_TOGGLES:
                 if toggles[key] is not UNCHANGED:
                     values[key + "_op"] = _PATCH_SET
-                    values[key] = 1 if toggles[key] else 0
+                    values[key] = int(_require_bool(toggles[key], key))
             S.TABLE_STYLE_OPTIONS_PATCH.pack(LIB, ptr, values)
             _check(
                 LIB.fm_sheet_update_table_style_options(
@@ -391,7 +389,7 @@ class Table(_NoCopy):
           TypeError: when ``totals`` is not one of the two record types.
         """
         if not isinstance(totals, (TableColumnTotalsInput, TableColumn)):
-            raise TypeError(f"formulon: totals must be a TableColumnTotalsInput, got {type(totals).__name__}")
+            raise TypeError(_argument_message("totals", "must be a TableColumnTotalsInput"))
         h, sheet, index = self._locate()
         with _ArgScope() as scope:
             _check(
@@ -412,15 +410,15 @@ class Table(_NoCopy):
         _, sheet, index = self._locate()
         return _read_auto_filter(self._workbook, LIB.fm_sheet_get_table_auto_filter, sheet, index)
 
-    def set_auto_filter(self, auto_filter: Optional[Union[AutoFilterInput, AutoFilter]]) -> None:
+    def set_auto_filter(self, filter: Optional[Union[AutoFilterInput, AutoFilter]]) -> None:
         """Replace the table's AutoFilter, or remove it with ``None`` (no-op without one). Row visibility is unchanged.
 
         ``range`` of the filter, of its sort state and of its sort conditions takes an A1 range too.
         """
         _, sheet, index = self._locate()
-        if auto_filter is not None:
-            auto_filter = _normalize_auto_filter(auto_filter, self._workbook)
-        self._workbook._write_auto_filter(LIB.fm_sheet_set_table_auto_filter, auto_filter, sheet, index)
+        if filter is not None:
+            filter = _normalize_auto_filter(filter, self._workbook)
+        self._workbook._write_auto_filter(LIB.fm_sheet_set_table_auto_filter, filter, sheet, index)
 
     def apply_auto_filter(self) -> None:
         """Hide the body rows the table's AutoFilter excludes and show the rest."""

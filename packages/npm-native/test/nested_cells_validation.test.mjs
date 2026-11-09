@@ -47,7 +47,7 @@ test('cell phonetic run text rejects coercible non-strings like the WASM surface
     wb.sheet(0).setText(0, 0, '東京都');
     wb.sheet(0).setCellPhoneticRuns(0, 0, validRuns());
     const before = wb.sheet(0).getCellPhoneticRuns(0, 0);
-    for (const value of [42, true, { toString: () => 'ト' }]) {
+    for (const value of [42, true, { toString: () => 'ト' }, new TextEncoder().encode('トウキョウ')]) {
       assert.throws(
         () => wb.sheet(0).setCellPhoneticRuns(0, 0, [{ ...validRuns()[0], text: value }, validRuns()[1]]),
         TypeError,
@@ -55,9 +55,6 @@ test('cell phonetic run text rejects coercible non-strings like the WASM surface
       );
       assert.deepEqual(wb.sheet(0).getCellPhoneticRuns(0, 0), before);
     }
-    const bytes = new TextEncoder().encode('トウキョウ');
-    wb.sheet(0).setCellPhoneticRuns(0, 0, [{ ...validRuns()[0], text: bytes }, validRuns()[1]]);
-    assert.deepEqual(wb.sheet(0).getCellPhoneticRuns(0, 0), before);
   });
 });
 

@@ -360,6 +360,7 @@ entries:
     js: ThreadedCommentPatch
     surfaces: [c, wasm, native]
     clearable: []
+    read_only_keys: [id, cell, person_id, created, parent_id]
   record.person:
     kind: record
     role: result
@@ -584,7 +585,9 @@ entries:
     kind: record
     role: input
     js: PageBreakInput
-    surfaces: [wasm, native]
+    py: PageBreakInput
+    surfaces: [wasm, native, py]
+    read_only_keys: [row, col]
   record.page_break:
     kind: record
     role: result
@@ -620,6 +623,7 @@ entries:
     js: PageSetupPatch
     surfaces: [c, wasm, native]
     clearable: [orientation]
+    read_only_keys: [paper_size_stated, scale_pct_stated, fit_to_page_stated, fit_to_width_stated, fit_to_height_stated]
   record.page_margins:
     kind: record
     role: result
@@ -640,6 +644,7 @@ entries:
     js: PageMarginsPatch
     surfaces: [c, wasm, native]
     clearable: []
+    read_only_keys: [left_in_stated, right_in_stated, top_in_stated, bottom_in_stated, header_in_stated, footer_in_stated]
   record.print_options:
     kind: record
     role: result
@@ -655,6 +660,7 @@ entries:
     js: PrintOptionsPatch
     surfaces: [c, wasm, native]
     clearable: []
+    read_only_keys: [grid_lines_stated, headings_stated, horizontal_centered_stated, vertical_centered_stated]
   record.header_footer:
     kind: record
     role: result
@@ -670,6 +676,7 @@ entries:
     js: HeaderFooterPatch
     surfaces: [c, wasm, native]
     clearable: [odd_header, odd_footer, even_header, even_footer, first_header, first_footer]
+    read_only_keys: [align_with_margins_stated, different_first_stated, different_odd_even_stated, scale_with_doc_stated]
   type.cf_results:
     kind: typedef
     c: fm_cf_results_t
@@ -1075,7 +1082,8 @@ entries:
     c: fm_sheet_format_defaults_patch_t
     js: SheetFormatDefaultsPatch
     surfaces: [c, wasm, native]
-    clearable: [default_col_width_chars, default_row_height_pt]
+    clearable: [default_column_width_chars, default_row_height_pt]
+    read_only_keys: [effective_default_column_width_chars, effective_default_row_height_pt]
   enum.geometry_mode:
     kind: enum
     c: fm_geometry_mode_t
@@ -1267,6 +1275,7 @@ entries:
     js: ThemeColorsInput
     py: ThemeColorsInput
     surfaces: [wasm, native, py]
+    read_only_keys: [source]
   record.theme_fonts:
     kind: record
     role: result
@@ -1884,13 +1893,6 @@ entries:
     surfaces: [wasm, native, py]
     was: { js: rect, py: rect }
     closes: R8.js
-  field.reference_range_input_range:
-    kind: field
-    record: record.reference_range_input
-    js: range
-    surfaces: [wasm, native]
-    was: { js: rect }
-    closes: R8.js
   field.data_table_range:
     kind: field
     record: record.data_table
@@ -1981,6 +1983,20 @@ entries:
     surfaces: [wasm, native, py]
     was: { js: dateAxisRef }
     closes: R8.js
+  field.sparkline_group_patch_sparklines:
+    kind: field
+    record: record.sparkline_group_patch
+    c: items
+    js: sparklines
+    py: sparklines
+    surfaces: [c, wasm, native, py]
+  field.sparkline_group_patch_date_axis_range:
+    kind: field
+    record: record.sparkline_group_patch
+    c: date_axis_ref
+    js: dateAxisRange
+    py: date_axis_range
+    surfaces: [c, wasm, native, py]
   field.defined_name_scope:
     kind: field
     record: record.defined_name
@@ -2493,6 +2509,7 @@ entries:
     surfaces: [c, wasm, native, py]
     clearable: [color, transparency_pct]
     was: { c: fm_chart_fill_patch, js: ChartFillPatch, py: ChartFillPatch }
+    read_only_keys: [other]
   record.chart_line_patch:
     kind: record
     role: patch
@@ -2502,6 +2519,7 @@ entries:
     surfaces: [c, wasm, native, py]
     clearable: [color, transparency_pct, width_pt, dash]
     was: { c: fm_chart_line_patch, js: ChartLinePatch, py: ChartLinePatch }
+    read_only_keys: [other]
   record.chart_marker_patch:
     kind: record
     role: patch
@@ -2529,6 +2547,7 @@ entries:
     surfaces: [c, wasm, native, py]
     clearable: [name, categories, x, fill, line, marker, labels]
     was: { c: fm_chart_series_patch, js: ChartSeriesPatch, py: ChartSeriesPatch }
+    read_only_keys: [series_id, order, filtered, points]
   record.chart_point_patch:
     kind: record
     role: patch
@@ -2538,12 +2557,14 @@ entries:
     surfaces: [c, wasm, native, py]
     clearable: [fill, line, marker]
     was: { c: fm_chart_point_patch, js: ChartPointPatch, py: ChartPointPatch }
+    read_only_keys: [index]
   record.chart_series_input:
     kind: record
     role: input
     js: ChartSeriesInput
     py: ChartSeriesInput
     surfaces: [wasm, native, py]
+    read_only_keys: [series_id, order, filtered, points]
   record.chart_plot_patch:
     kind: record
     role: patch
@@ -2553,6 +2574,7 @@ entries:
     surfaces: [c, wasm, native, py]
     clearable: []
     was: { c: fm_chart_plot_patch, js: ChartPlotPatch, py: ChartPlotPatch }
+    read_only_keys: [type, bar_direction, grouping, axis_ids, series, extended_layout]
   record.chart_axis_patch:
     kind: record
     role: patch
@@ -2562,6 +2584,7 @@ entries:
     surfaces: [c, wasm, native, py]
     clearable: [title, min, max, major_unit, minor_unit, number_format, log_base, tick_label_position]
     was: { c: fm_chart_axis_patch, js: ChartAxisPatch, py: ChartAxisPatch }
+    read_only_keys: [id, kind, cross_axis]
   record.chart_legend_patch:
     kind: record
     role: patch
@@ -2579,6 +2602,7 @@ entries:
     surfaces: [c, wasm, native, py]
     clearable: [blanks_as, plot_visible_only, na_as_blank, style]
     was: { c: fm_chart_display_patch, js: ChartDisplayPatch, py: ChartDisplayPatch }
+    read_only_keys: [object_id, on_chartsheet, is_extended, is_pivot_chart, auto_title_deleted, date1904, title, legend, plots, axes, source, filter]
   record.data_table:
     kind: record
     role: result
@@ -2883,6 +2907,7 @@ entries:
     py: DataTableInput
     surfaces: [wasm, native, py]
     was: { js: DataTableSpec, py: DataTableInput }
+    read_only_keys: [two_dimensional, row_oriented, row_input.deleted, column_input.deleted]
   record.data_validation_input:
     kind: record
     role: input
@@ -2890,6 +2915,7 @@ entries:
     py: DataValidationInput
     surfaces: [wasm, native, py]
     was: { js: DataValidationInput, py: DataValidationInput }
+    read_only_keys: [id]
   record.data_validation_range:
     kind: record
     surfaces: [wasm, native]
@@ -3429,10 +3455,6 @@ entries:
     js: SheetOoxml
     py: SheetOoxml
     surfaces: [wasm, native, py]
-  type.cell_input:
-    kind: typedef
-    py: CellValueInput
-    surfaces: [py]
   type.native_value:
     kind: typedef
     js: NativeValue
@@ -3465,13 +3487,6 @@ entries:
     js: ReadDiagnostics
     surfaces: [wasm, native]
     was: { js: ReadDiagnosticsResult }
-  record.reference_range_input:
-    kind: record
-    role: input
-    js: ReferenceRangeInput
-    surfaces: [wasm, native]
-    exception: "sheetName is a text qualifier that may name no sheet of the workbook, not a workbook sheet"
-    was: { js: ReferenceRange }
   record.resolved_color:
     kind: record
     role: result
@@ -3520,6 +3535,7 @@ entries:
     a1_exempt: { fields: [fromRow, fromCol, toRow, toCol], reason: "a two-cell drawing anchor; each cell pairs with an EMU offset" }
     surfaces: [wasm, native, py]
     was: { js: ShapeInput }
+    read_only_keys: [object_id, kind]
   record.sheet_auto_filter_xml_result:
     kind: record
     role: result
@@ -3623,6 +3639,7 @@ entries:
     a1_exempt: { fields: [fromRow, fromCol, toRow, toCol], reason: "a two-cell drawing anchor; each cell pairs with an EMU offset" }
     surfaces: [wasm, native, py]
     was: { js: SlicerInput }
+    read_only_keys: [object_id, cache_name, table_name, column_name]
   record.sparkline_group_input:
     kind: record
     role: input
@@ -3630,6 +3647,7 @@ entries:
     py: SparklineGroupInput
     surfaces: [wasm, native, py]
     was: { js: SparklineGroupInput }
+    read_only_keys: [id]
   record.status:
     kind: record
     role: result
@@ -3657,6 +3675,7 @@ entries:
     py: TableColumnTotalsInput
     surfaces: [wasm, native, py]
     was: { js: TableColumnTotalsInput }
+    read_only_keys: [name]
   record.auto_filter_column_input:
     kind: record
     role: input
@@ -3740,6 +3759,7 @@ entries:
     js: TablePatch
     surfaces: [c, wasm, native]
     clearable: []
+    read_only_keys: [name, columns]
   record.sparkline_group_patch:
     kind: record
     role: patch
@@ -3747,6 +3767,7 @@ entries:
     js: SparklineGroupPatch
     surfaces: [c, wasm, native]
     clearable: [color_series, color_negative, color_axis, color_markers, color_first, color_last, color_high, color_low, manual_min, manual_max, date_axis_range]
+    read_only_keys: [id]
   record.protected_range_patch:
     kind: record
     role: patch
@@ -3761,6 +3782,7 @@ entries:
     js: ShapePatch
     surfaces: [c, wasm, native]
     clearable: [fill, line]
+    read_only_keys: [object_id, kind]
   record.slicer_patch:
     kind: record
     role: patch
@@ -3769,6 +3791,7 @@ entries:
     a1_exempt: { fields: [fromRow, fromCol, toRow, toCol], reason: "a two-cell drawing anchor; each cell pairs with an EMU offset" }
     surfaces: [c, wasm, native]
     clearable: [style_name]
+    read_only_keys: [object_id, cache_name, table_name, column_name]
   record.theme_result:
     kind: record
     role: result
@@ -4657,8 +4680,10 @@ entries:
     js: formatReference
     py: format_reference
     params: { absolute: bool }
+    rect_args: [0]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_format_reference, js: formatReference, py: format_reference }
+    facade: handwritten
   cell.get_count:
     kind: op
     scope: sheet
@@ -4714,6 +4739,7 @@ entries:
     reads_values: true
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_cells_in_range, js: getCellsInRange, py: get_cells_in_range }
+    facade: handwritten
   cell_range.get_cell_count:
     kind: op
     scope: cell_range
@@ -5312,6 +5338,7 @@ entries:
     reads_values: true
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_list_invalid_cells, js: listInvalidCells, py: list_invalid_cells }
+    facade: handwritten
   threaded_comment.get_count:
     kind: op
     scope: sheet
@@ -8045,6 +8072,7 @@ entries:
     js: getColumnWidthPt
     py: get_column_width_pt
     params: { mode: "enum:geometry_mode" }
+    span_args: [[0, col, single]]
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_column_width_pt, js: getColumnWidthPt, py: get_column_width_pt }
   row_height_pt.get:
@@ -8054,6 +8082,7 @@ entries:
     c: fm_sheet_get_row_height_pt
     js: getRowHeightPt
     py: get_row_height_pt
+    span_args: [[0, row, single]]
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_row_height_pt, js: getRowHeightPt, py: get_row_height_pt }
   width_model.get:
@@ -8442,10 +8471,9 @@ entries:
     scope: process
     noun: status_name
     c: fm_get_status_name
-    js: getStatusName
-    py: get_status_name
-    surfaces: [c, wasm, native, py]
+    surfaces: [c, wasm, native]
     was: { c: fm_status_string, js: statusString }
+    drop: { js: statusString, closes: R0.coverage }
   error_display_name.get:
     kind: op
     total: "every error code has a display literal; an unknown one reads as #UNKNOWN!"
@@ -13798,6 +13826,7 @@ entries:
     from: [column_override.get_count, column_override.get_at]
     js: getColumnXfIndex
     py: get_column_xf_index
+    span_args: [[0, col, single]]
     surfaces: [wasm, native, py]
     exception: "composed from the column layout reads; the C ABI has no per-column style getter"
     facade: handwritten
@@ -13809,6 +13838,7 @@ entries:
     from: [row_override.get_count, row_override.get_at]
     js: getRowXfIndex
     py: get_row_xf_index
+    span_args: [[0, row, single]]
     surfaces: [wasm, native, py]
     exception: "composed from the row layout reads; the C ABI has no per-row style getter"
     facade: handwritten
@@ -14128,6 +14158,7 @@ entries:
     js: PivotFieldPatch
     surfaces: [c, wasm, native]
     clearable: [custom_name, number_format, sort_by_field]
+    read_only_keys: [axis, cache_field_index, source_name, subtotal_functions, date_calendar, date_periods, group_base_index]
   record.pivot_item_patch:
     kind: record
     role: patch
@@ -14135,6 +14166,7 @@ entries:
     js: PivotItemPatch
     surfaces: [c, wasm, native]
     clearable: [caption]
+    read_only_keys: [cache_index, name]
   record.pivot_input:
     kind: record
     role: input
@@ -14316,6 +14348,7 @@ entries:
     role: patch
     js: CellFormatPatch
     surfaces: [wasm, native]
+    read_only_keys: [source]
   record.font_patch:
     kind: record
     role: patch
@@ -14359,6 +14392,7 @@ entries:
     role: input
     js: PhoneticPropertiesInput
     surfaces: [wasm, native]
+    read_only_keys: [stated]
   record.pivot_style_info_patch:
     kind: record
     role: patch
@@ -15789,8 +15823,8 @@ entries:
     kind: field
     record: record.sheet_format_defaults
     c: default_column_width_chars
-    js: defaultColWidthChars
-    py: default_col_width_chars
+    js: defaultColumnWidthChars
+    py: default_column_width_chars
     surfaces: [c, wasm, native, py]
     closes: R42.unit.suffix
     was: { c: default_col_width, js: defaultColWidth, py: default_col_width }
@@ -15804,7 +15838,7 @@ entries:
   field.sheet_format_defaults_input_default_col_width_chars:
     kind: field
     record: record.sheet_format_defaults_input
-    js: defaultColWidthChars
+    js: defaultColumnWidthChars
     surfaces: [wasm, native]
     closes: R42.unit.suffix
     was: { js: defaultColWidth }
@@ -15812,15 +15846,15 @@ entries:
     kind: field
     record: record.sheet_format_defaults
     c: base_column_width_chars
-    js: baseColWidthChars
-    py: base_col_width_chars
+    js: baseColumnWidthChars
+    py: base_column_width_chars
     surfaces: [c, wasm, native, py]
     closes: R42.unit.suffix
     was: { c: base_col_width, js: baseColWidth, py: base_col_width }
   field.sheet_format_defaults_input_base_col_width_chars:
     kind: field
     record: record.sheet_format_defaults_input
-    js: baseColWidthChars
+    js: baseColumnWidthChars
     surfaces: [wasm, native]
     closes: R42.unit.suffix
     was: { js: baseColWidth }
@@ -15828,8 +15862,8 @@ entries:
     kind: field
     record: record.sheet_format_defaults
     c: effective_default_column_width_chars
-    js: effectiveDefaultColWidthChars
-    py: effective_default_col_width_chars
+    js: effectiveDefaultColumnWidthChars
+    py: effective_default_column_width_chars
     surfaces: [c, wasm, native, py]
     closes: R42.unit.suffix
     was: { c: effective_default_col_width, js: effectiveDefaultColWidth, py: effective_default_col_width }
@@ -15875,23 +15909,29 @@ entries:
     kind: field
     record: record.sheet_view
     c: show_row_column_headers
-    surfaces: [c]
+    js: showRowColumnHeaders
+    py: show_row_column_headers
+    surfaces: [c, wasm, native, py]
     closes: R8.c
-    was: { c: show_row_col_headers }
+    was: { c: show_row_col_headers, js: showRowColHeaders, py: show_row_col_headers }
   field.sheet_view_split_x_twips:
     kind: field
     record: record.sheet_view
+    c: split_x_twips
     js: splitXTwips
-    surfaces: [wasm, native]
+    py: split_x_twips
+    surfaces: [c, wasm, native, py]
     closes: R42.unit.suffix
-    was: { js: splitX }
+    was: { c: split_x, js: splitX, py: split_x }
   field.sheet_view_split_y_twips:
     kind: field
     record: record.sheet_view
+    c: split_y_twips
     js: splitYTwips
-    surfaces: [wasm, native]
+    py: split_y_twips
+    surfaces: [c, wasm, native, py]
     closes: R42.unit.suffix
-    was: { js: splitY }
+    was: { c: split_y, js: splitY, py: split_y }
   field.width_model_normal_font_size_pt:
     kind: field
     record: record.width_model
@@ -17635,20 +17675,6 @@ entries:
     closes: R8.py
     drop: { py: media_path, closes: R8.py }
     was: { py: media_path }
-  field.sheet_view_split_x_twips_2:
-    kind: field
-    record: record.sheet_view
-    py: split_x_twips
-    surfaces: [py]
-    closes: R42.unit.suffix
-    was: { py: split_x }
-  field.sheet_view_split_y_twips_2:
-    kind: field
-    record: record.sheet_view
-    py: split_y_twips
-    surfaces: [py]
-    closes: R42.unit.suffix
-    was: { py: split_y }
   field.pivot_options_show_empty_column:
     kind: field
     record: record.pivot_options
@@ -18267,7 +18293,8 @@ entries:
   type.cell_value_input:
     kind: typedef
     js: CellValueInput
-    surfaces: [wasm, native]
+    py: CellValueInput
+    surfaces: [wasm, native, py]
   type.date_system_options:
     kind: typedef
     js: DateSystemOptions
@@ -18346,6 +18373,7 @@ entries:
     js: DataValidationPatch
     clearable: [formula1, formula2, error_title, error_message, prompt_title, prompt_message]
     surfaces: [c, wasm, native]
+    read_only_keys: [id]
   record.cf_rule_patch:
     kind: record
     role: patch
@@ -18354,6 +18382,7 @@ entries:
     clearable: [dxf_index, formula1, formula2]
     surfaces: [c, wasm, native]
     exception: "the patch of the ConditionalFormat record; C keeps the cf_rule noun"
+    read_only_keys: [id, type]
   type.conditional_format_patch_fields:
     kind: typedef
     js: ConditionalFormatPatchFields
@@ -18471,6 +18500,7 @@ entries:
     c: fm_drawing_patch_t
     js: DrawingPatch
     surfaces: [c, wasm, native]
+    read_only_keys: [object_id, kind]
   record.drawing_anchor_patch:
     kind: record
     role: patch
@@ -19173,3 +19203,16 @@ entries:
     c: style_name_op
     surfaces: [c]
     closes: R8.c
+  record.log_event:
+    kind: record
+    role: result
+    js: LogEvent
+    surfaces: [wasm, native]
+  type.page_options:
+    kind: typedef
+    js: PageOptions
+    surfaces: [wasm, native]
+  type.cf_range_evaluation_options:
+    kind: typedef
+    js: CfRangeEvaluationOptions
+    surfaces: [wasm, native]

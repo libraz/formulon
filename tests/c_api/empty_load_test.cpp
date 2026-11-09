@@ -29,7 +29,7 @@ TEST(FormulonCApiEmptyLoad, AnEmptyBufferIsAnInvalidArgument) {
   fm_workbook_t* wb = reinterpret_cast<fm_workbook_t*>(1);
   EXPECT_EQ(fm_workbook_load(&byte, 0, &wb), FM_STATUS_INVALID_ARGUMENT);
   EXPECT_EQ(wb, nullptr);
-  EXPECT_STREQ(fm_get_last_error_message(), "input is empty");
+  EXPECT_STREQ(fm_get_last_error_message(), "bytes must not be empty");
 }
 
 TEST(FormulonCApiEmptyLoad, ShortNonArchiveBuffersAreCorruptZips) {

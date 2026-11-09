@@ -23,7 +23,7 @@ Field Probe(CheckedSpecReader& reader, const Napi::Object& owner, const char* ke
 
 /// Reads the patch object argument `info[idx]`; absent reads as `{}`. False after
 /// throwing when a value other than a plain object was supplied.
-bool PatchObjectArg(const Napi::CallbackInfo& info, size_t idx, const char* api, Napi::Object* out);
+bool PatchObjectArg(const Napi::CallbackInfo& info, size_t idx, Napi::Object* out);
 
 /// Reads `owner.fill` / `owner.line` into a paint patch: absent keeps every member, `null` clears every member
 /// (the style's paint), and an object patches the members it carries.

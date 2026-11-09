@@ -38,7 +38,7 @@ from tools.dev.binding_drift.api_conventions import (  # noqa: E402
     load_ledger,
     parse_header,
 )
-from tools.dev.binding_drift.api_conventions_arguments import _js_fields, _patch_keys  # noqa: E402
+from tools.dev.binding_drift.api_conventions_arguments import _patch_keys  # noqa: E402
 from tools.dev.binding_drift.api_conventions_bindings import JsSurface  # noqa: E402
 from tools.dev.binding_drift.api_conventions_shapes import _strip_null  # noqa: E402
 from tools.dev.binding_drift.surface_files import CAPI_HEADER, WASM_DTS  # noqa: E402
@@ -273,8 +273,8 @@ def _patch_type(params) -> Optional[str]:
 def patch_keys(ledger: Ledger, dts: Optional[str] = None) -> Dict[str, list]:
     """`{Class.method: [position, [key, ...]]}` of the `patch: true` ops: the position of the patch argument
     (the last one of the member's first signature in src/wasm/formulon.d.ts) and, sorted, the keys the patch
-    accepts: those its type declares (`| null` aside) and the fields of its `patch_record`, so a record a
-    getter returned passes back whole. An op whose patch type the declaration reader cannot resolve is an
+    accepts: those its type declares (`| null` aside) and the `read_only_keys` of its ledger record, which a
+    record a getter returned carries back. An op whose patch type the declaration reader cannot resolve is an
     error."""
     surface = JsSurface(WASM_DTS.read_text(encoding="utf-8") if dts is None else dts)
     out: Dict[str, list] = {}
@@ -291,10 +291,42 @@ def patch_keys(ledger: Ledger, dts: Optional[str] = None) -> Dict[str, list]:
             keys = _patch_keys(surface.decls, surface.raw, patch_type) if patch_type else None
             if not keys:
                 raise ValueError(f"{key}: the patch type of `{qualified_name}` declares no keys the reader can resolve")
-            record = entry.get("patch_record")
-            fields = _js_fields(surface.decls, surface.raw, record) if record and record != "none" else None
-            out[qualified_name] = [len(params) - 1, sorted(set(keys) | set(fields or {}))]
+            read_only, _nested = read_only_keys(ledger, patch_type)
+            out[qualified_name] = [len(params) - 1, sorted(set(keys) | set(read_only))]
     return dict(sorted(out.items()))
+
+
+def camel_case(snake: str) -> str:
+    head, *rest = snake.split("_")
+    return head + "".join(w[:1].upper() + w[1:] for w in rest)
+
+
+_TYPE_PART_RE = re.compile(r"\s*(?:(?:Omit|Pick|Partial|Readonly)<\s*)?([A-Za-z_$][\w$]*)")
+
+
+def type_records(ledger: Ledger, type_text: Optional[str]) -> List[dict]:
+    """The ledger records an argument type names: each `&` part, `Omit<X, ...>` read as `X`."""
+    by_js = {
+        e["js"]: e for e in ledger.entries.values() if isinstance(e, dict) and e.get("kind") == "record" and "js" in e
+    }
+    out = []
+    for part in (type_text or "").split("&"):
+        match = _TYPE_PART_RE.match(part)
+        if match and match.group(1) in by_js:
+            out.append(by_js[match.group(1)])
+    return out
+
+
+def read_only_keys(ledger: Ledger, type_text: Optional[str]) -> Tuple[List[str], Dict[str, List[str]]]:
+    """`(keys, {path: keys})`, camelCase: the `read_only_keys` of the records `type_text` names that sit on the
+    record itself, and those under each dotted path into it."""
+    top: set = set()
+    nested: Dict[str, set] = {}
+    for entry in type_records(ledger, type_text):
+        for path in entry.get("read_only_keys") or ():
+            *parents, leaf = [camel_case(s) for s in path.split(".")]
+            (nested.setdefault(".".join(parents), set()) if parents else top).add(leaf)
+    return sorted(top), {path: sorted(keys) for path, keys in sorted(nested.items())}
 
 
 def _qualified_js(ledger: Ledger, entry: dict) -> List[str]:
@@ -310,7 +342,7 @@ def _field_type(surface: JsSurface, type_name: str, field: str) -> Optional[str]
 
 def patch_nested_keys(ledger: Ledger, dts: Optional[str] = None) -> Dict[str, Dict[str, list]]:
     """`{Class.method: {path: [key, ...]}}` of the `patch_nested` ops: for each path into the patch, sorted, the
-    keys of the nested patch type there and the fields of the record the ledger names for it."""
+    keys of the nested patch type there and its own `read_only_keys`."""
     surface = JsSurface(WASM_DTS.read_text(encoding="utf-8") if dts is None else dts)
     out: Dict[str, Dict[str, list]] = {}
     for key, entry in _ops(ledger, ("op",)):
@@ -324,15 +356,15 @@ def patch_nested_keys(ledger: Ledger, dts: Optional[str] = None) -> Dict[str, Di
             if root is None:
                 continue
             paths: Dict[str, list] = {}
-            for path, record in sorted(nested.items()):
+            for path in sorted(nested):
                 type_name: Optional[str] = root
                 for segment in path.split("."):
                     type_name = _field_type(surface, type_name, segment) if type_name else None
                 keys = _patch_keys(surface.decls, surface.raw, type_name) if type_name else None
                 if not keys:
                     raise ValueError(f"{key}: `{path}` of `{qualified_name}` resolves to no patch type with keys")
-                fields = _js_fields(surface.decls, surface.raw, record) or {}
-                paths[path] = sorted(set(keys) | set(fields))
+                own, _deeper = read_only_keys(ledger, type_name)
+                paths[path] = sorted(set(keys) | set(own))
             out[qualified_name] = paths
     return dict(sorted(out.items()))
 

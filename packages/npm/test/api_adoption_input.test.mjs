@@ -220,25 +220,29 @@ test('A1 text in a record field is refused with the method and the field it was 
     rejectsWith(
       () => ws.addCfRule({ type: CfRuleType.Expression, ranges: ['A1', 'Sheet1!B2'], formula1: 'TRUE' }),
       StatusCode.InvalidArgument,
-      /^Sheet\.addCfRule ranges\[1\] "Sheet1!B2" names a sheet/,
+      /^Sheet\.addCfRule rule\.ranges\[1\] must not name a sheet$/,
     );
     rejectsWith(
       () => ws.addPivot({ name: 'P', cacheId: wb.addPivotCache().cacheId, anchor: 'A1:B2' }),
       StatusCode.InvalidArgument,
-      /^Sheet\.addPivot anchor "A1:B2" is not one cell/,
+      /^Sheet\.addPivot input\.anchor /,
     );
     rejectsWith(
       () => ws.setAutoFilter({ range: 'A1:B3', sort: { range: 'Sheet1!A1:B3' } }),
       StatusCode.InvalidArgument,
-      /^Sheet\.setAutoFilter sort\.range /,
+      /^Sheet\.setAutoFilter filter\.sort\.range /,
     );
     assert.throws(
       () => ws.setSelection({ active: 'A1', ranges: 7 }),
-      (e) => e instanceof TypeError && /^Sheet\.setSelection ranges must be an array or one A1 string/.test(e.message),
+      (e) =>
+        e instanceof TypeError &&
+        /^Sheet\.setSelection selection\.ranges must be an array or one A1 string/.test(e.message),
     );
     assert.throws(
       () => ws.setAutoFilter({ range: 3 }),
-      (e) => e instanceof TypeError && /^Sheet\.setAutoFilter range must be a CellRect or an A1 string/.test(e.message),
+      (e) =>
+        e instanceof TypeError &&
+        /^Sheet\.setAutoFilter filter\.range must be a CellRect or an A1 string/.test(e.message),
     );
     for (const text of ['A1 B2', 'XFE1', '']) {
       const error = thrown(() => ws.addCfRule({ type: CfRuleType.Expression, ranges: text, formula1: 'TRUE' }));
@@ -265,8 +269,10 @@ function handlePrototypes(ws, wb) {
   const picture = ws.addPicture(PNG_1X1);
   const proto = (value) => Object.getPrototypeOf(value);
   return {
-    Workbook: [proto(wb), proto(wb.ooxml)],
-    Sheet: [proto(ws), proto(ws.ooxml)],
+    Workbook: [proto(wb)],
+    WorkbookOoxml: [proto(wb.ooxml)],
+    Sheet: [proto(ws)],
+    SheetOoxml: [proto(ws.ooxml)],
     Table: [proto(table)],
     Pivot: [proto(pivot)],
     PivotCache: [proto(cache)],
@@ -289,7 +295,7 @@ test('every facade method refuses more positional arguments than it declares, na
           const descriptor = Object.getOwnPropertyDescriptor(proto, key);
           if (typeof descriptor.value !== 'function') continue;
           const name = typeof key === 'symbol' ? '[Symbol.iterator]' : key;
-          const error = thrown(() => descriptor.value.apply(undefined, tooMany));
+          const error = thrown(() => descriptor.value.apply(Object.create(proto), tooMany));
           assert.ok(error instanceof TypeError, `${owner}.${name}: ${error}`);
           assert.match(
             error.message,
@@ -322,7 +328,7 @@ test('the string form of a call takes one argument fewer per A1 cell or span', (
     ws.setColumnWidth('B:C', 12);
     assert.throws(() => ws.setColumnWidth('B:C', 12, 1), { message: 'Sheet.setColumnWidth takes at most 2 arguments' });
     assert.throws(() => wb.listSheets(1), { message: 'Workbook.listSheets takes at most 0 arguments' });
-    assert.throws(() => wb.ooxml.listCellXfs(1), { message: 'Workbook.listCellXfs takes at most 0 arguments' });
+    assert.throws(() => wb.ooxml.listCellXfs(1), { message: 'WorkbookOoxml.listCellXfs takes at most 0 arguments' });
     assert.equal(ws.getValue('A1'), 1);
     assert.equal(ws.getValue('B1'), 2);
     assert.equal(wb[Symbol.dispose], wb.dispose);
@@ -346,7 +352,7 @@ test('a table name that reads as a cell is refused with that reason', () => {
     const error = rejectsWith(
       () => ws.addTable({ range: 'A1:B3', name: 'T2' }),
       StatusCode.InvalidArgument,
-      /^invalid table name: "T2" is a cell address$/,
+      /^Sheet\.addTable input\.name must not be a cell address$/,
     );
     assert.match(error.context, /name=T2/);
     assert.equal(ws.addTable({ range: 'A1:B3', name: 'Sales' }).name, 'Sales');
@@ -435,7 +441,7 @@ test('setDefinedName scopes a name to the sheet its scope names', () => {
     );
     assert.throws(() => wb.setDefinedName({ name: 'Far', formula: '=1', scope: 1.5 }), {
       name: 'RangeError',
-      message: /^Workbook\.setDefinedName scope /,
+      message: 'Workbook.setDefinedName definedName.scope must be an integer',
     });
   });
 });

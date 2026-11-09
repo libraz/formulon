@@ -21,10 +21,11 @@ void print_paginate_usage(std::ostream& out) {
   out << "Usage: formulon paginate [--sheet <name | index>] [--json] [--] <in | ->\n"
       << "\n"
       << "Resolve a worksheet's print area, automatic page breaks, and physical page count.\n"
-      << "--sheet takes a sheet name or a zero-based index and defaults to the first sheet. print_area lists A1 ranges "
+      << "--sheet takes a sheet name or a zero-based index and defaults to the first sheet. printArea lists A1 ranges "
          "(e.g. B2:D5);\n"
       << "break positions are zero-based. <in> is an xlsx or xlsb file; '-' reads stdin.\n"
-      << "  --json       print the sheet's name and one A1 range per physical page as JSON\n"
+      << "  --json       print the same keys as one JSON object {\"format\":1,\"sheets\":[...]}; \"format\" is the "
+         "schema version\n"
       << "  --           end options; the next token is the input path\n";
   print_shared_options(out);
 }
@@ -97,79 +98,91 @@ int run_paginate(const ArgList& args, std::ostream& out, std::ostream& err) {
     emit_last_error(err, "paginate");
     return status;
   }
-  if (want_json) {
-    const char* sheet_name = nullptr;
-    if (const auto status = fm_workbook_get_sheet_name(workbook.handle, sheet_index, &sheet_name); status != 0) {
-      emit_last_error(err, "paginate");
-      return status;
-    }
-    std::string doc =
-        "{\"format\":1,\"sheets\":[{\"name\":" + render_json_string(view_or_empty(sheet_name)) + ",\"pages\":[";
-    for (std::size_t i = 0; i < page_count; ++i) {
-      fm_page_layout_info_t page = FM_STRUCT_INIT(fm_page_layout_info_t);
-      if (const auto status = fm_pagination_get_page_at(pagination.handle, i, &page); status != 0) {
-        emit_last_error(err, "paginate");
-        return status;
-      }
-      if (i != 0) {
-        doc.push_back(',');
-      }
-      doc += "{\"range\":\"" + format_a1(page.rect.first_row, page.rect.first_col) + ':' +
-             format_a1(page.rect.last_row, page.rect.last_col) + "\"}";
-    }
-    doc += "]}]}\n";
-    out << doc;
-    return flush_output(out, err, "paginate");
+  const char* sheet_name = nullptr;
+  if (const auto status = fm_workbook_get_sheet_name(workbook.handle, sheet_index, &sheet_name); status != 0) {
+    emit_last_error(err, "paginate");
+    return status;
   }
   std::size_t print_area_count = 0;
   if (const auto status = fm_pagination_get_print_area_count(pagination.handle, &print_area_count); status != 0) {
     emit_last_error(err, "paginate");
     return status;
   }
-  out << "sheet=" << sheet_index << '\n';
-  out << "pages=" << page_count << '\n';
-  out << "print_area=";
+  std::vector<std::string> print_areas;
   for (std::size_t i = 0; i < print_area_count; ++i) {
     fm_cell_rect_t range{};
     if (const auto status = fm_pagination_get_print_area_at(pagination.handle, i, &range); status != 0) {
       emit_last_error(err, "paginate");
       return status;
     }
-    if (i != 0) {
-      out << ',';
-    }
-    out << format_a1(range.first_row, range.first_col) << ':' << format_a1(range.last_row, range.last_col);
+    print_areas.push_back(format_a1(range.first_row, range.first_col) + ':' +
+                          format_a1(range.last_row, range.last_col));
   }
-  out << '\n';
-  const auto emit_breaks = [&](std::string_view label, auto record, auto position, auto count_fn, auto at_fn) -> bool {
+  const auto collect_breaks = [&](std::vector<std::string>& positions, auto record, auto position, auto count_fn,
+                                  auto at_fn) -> bool {
     std::size_t count = 0;
     if (const auto status = count_fn(pagination.handle, &count); status != 0) {
       emit_last_error(err, "paginate");
       return false;
     }
-    out << label << '=';
     for (std::size_t i = 0; i < count; ++i) {
       auto entry = record;
       if (const auto status = at_fn(pagination.handle, i, &entry); status != 0) {
         emit_last_error(err, "paginate");
         return false;
       }
-      if (i != 0) {
-        out << ',';
-      }
-      out << position(entry);
+      positions.push_back(std::to_string(position(entry)));
     }
-    out << '\n';
     return true;
   };
-  if (!emit_breaks(
-          "horizontal_breaks", FM_STRUCT_INIT(fm_row_break_t), [](const fm_row_break_t& b) { return b.row; },
+  std::vector<std::string> row_breaks;
+  std::vector<std::string> column_breaks;
+  if (!collect_breaks(
+          row_breaks, FM_STRUCT_INIT(fm_row_break_t), [](const fm_row_break_t& b) { return b.row; },
           fm_pagination_get_row_break_count, fm_pagination_get_row_break_at) ||
-      !emit_breaks(
-          "vertical_breaks", FM_STRUCT_INIT(fm_column_break_t), [](const fm_column_break_t& b) { return b.col; },
+      !collect_breaks(
+          column_breaks, FM_STRUCT_INIT(fm_column_break_t), [](const fm_column_break_t& b) { return b.col; },
           fm_pagination_get_column_break_count, fm_pagination_get_column_break_at)) {
     return kExitFailure;
   }
+  std::vector<std::string> pages;
+  for (std::size_t i = 0; i < page_count; ++i) {
+    fm_page_layout_info_t page = FM_STRUCT_INIT(fm_page_layout_info_t);
+    if (const auto status = fm_pagination_get_page_at(pagination.handle, i, &page); status != 0) {
+      emit_last_error(err, "paginate");
+      return status;
+    }
+    pages.push_back(format_a1(page.rect.first_row, page.rect.first_col) + ':' +
+                    format_a1(page.rect.last_row, page.rect.last_col));
+  }
+
+  const auto join = [](const std::vector<std::string>& items, bool quote) {
+    std::string joined;
+    for (std::size_t i = 0; i < items.size(); ++i) {
+      if (i != 0) {
+        joined.push_back(',');
+      }
+      joined += quote ? '"' + items[i] + '"' : items[i];
+    }
+    return joined;
+  };
+  if (want_json) {
+    std::string page_objects;
+    for (std::size_t i = 0; i < pages.size(); ++i) {
+      page_objects += (i != 0 ? ",{\"range\":\"" : "{\"range\":\"") + pages[i] + "\"}";
+    }
+    out << "{\"format\":1,\"sheets\":[{\"name\":" << render_json_string(view_or_empty(sheet_name))
+        << ",\"pageCount\":" << page_count << ",\"printArea\":[" << join(print_areas, true) << "],\"rowBreaks\":["
+        << join(row_breaks, false) << "],\"columnBreaks\":[" << join(column_breaks, false) << "],\"pages\":["
+        << page_objects << "]}]}\n";
+    return flush_output(out, err, "paginate");
+  }
+  out << "name=" << view_or_empty(sheet_name) << '\n'
+      << "pageCount=" << page_count << '\n'
+      << "printArea=" << join(print_areas, false) << '\n'
+      << "rowBreaks=" << join(row_breaks, false) << '\n'
+      << "columnBreaks=" << join(column_breaks, false) << '\n'
+      << "pages=" << join(pages, false) << '\n';
   return flush_output(out, err, "paginate");
 }
 

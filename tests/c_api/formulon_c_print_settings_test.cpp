@@ -1432,7 +1432,7 @@ TEST(FormulonCApiPrintPatch, HeaderFooterRejectsBadPatchesAndWritesNothing) {
   c = Case{"op outside 0..2", kInvalidArgument, base()};
   c.patch.first_footer_op = kBadOp;
   cases.push_back(c);
-  c = Case{"set with a NULL section", kInvalidArgument, base()};
+  c = Case{"set with a NULL section", FM_STATUS_INVALID_ARGUMENT, base()};
   c.patch.odd_footer_op = FM_PATCH_OP_SET;
   c.patch.odd_footer = nullptr;
   cases.push_back(c);

@@ -212,6 +212,7 @@ RECT_TABLE: Dict[str, Case] = {
     "Sheet.set_print_area": Case(setup=lambda wb, ws: None),
     "Sheet.set_range_xf_index": Case(tail=lambda: (0,)),
     "Sheet.snapshot_range_xfs": Case(),
+    "Workbook.format_reference": Case(recv=lambda ws: ws.workbook),
 }
 
 _CLASSES: Dict[str, type] = {"Sheet": Sheet, "Pivot": formulon.Pivot}
@@ -769,7 +770,7 @@ class NoCountNamesTests(unittest.TestCase):
         self.assertFalse(hasattr(Sheet, "remove_merge_at"))
         self.assertFalse(hasattr(Sheet, "remove_hyperlink_at"))
         self.assertTrue(hasattr(Sheet, "evaluate_formula"))
-        self.assertTrue(hasattr(formulon, "get_status_name"))
+        self.assertFalse(hasattr(formulon, "get_status_name"))
         self.assertIn("scheme", {f.name for f in dataclasses.fields(formulon.ThemeScriptFont)})
         self.assertIn("scope", inspect.signature(Workbook.get_defined_name).parameters)
         self.assertIn("scope", inspect.signature(Workbook.remove_defined_name).parameters)
@@ -1225,9 +1226,6 @@ class ModuleFunctionTests(unittest.TestCase):
         info = formulon.get_image_info(png)
         self.assertEqual((info.width_px, info.height_px), (3, 2))
         self.assertEqual(info.format, formulon.ImageFormat.PNG)
-
-    def test_status_name(self) -> None:
-        self.assertIsInstance(formulon.get_status_name(1), str)
 
 
 # ---------------------------------------------------------------------------

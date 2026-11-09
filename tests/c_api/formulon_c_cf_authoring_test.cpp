@@ -112,8 +112,8 @@ TEST(FormulonCApiCfMutate, AddRuleRejectsDxfIdPastTheStylesTable) {
 
   const char* rule_id = nullptr;
   EXPECT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &rule, &rule_id),
-            static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
-  EXPECT_STREQ(fm_get_last_error_message(), "dxf_index out of range");
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kIndexOutOfRange));
+  EXPECT_STREQ(fm_get_last_error_message(), "dxf_index 2 is out of range (2 items)");
 
   // The rejected rule is not appended, so a workbook saved after the failed
   // call carries no `<cfRule>` whose `dxfId` Excel cannot resolve.
@@ -820,7 +820,7 @@ TEST(FormulonCApiCfMutate, UpdateClearsDxfIndexAndAcceptsAnEmptyPatch) {
   past.dxf_index_op = FM_PATCH_OP_SET;
   past.dxf_index = 5;
   EXPECT_EQ(fm_sheet_update_cf_rule(wb.handle, 0, CfRuleIdAt(wb.handle, 0, 0).c_str(), &past),
-            FM_STATUS_INVALID_ARGUMENT);
+            FM_STATUS_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(ReadRule(wb, 0).has_dxf_index, 0);
 }
 
@@ -877,7 +877,7 @@ TEST(FormulonCApiCfMutate, UpdateReportsMissingTargetsByStatus) {
   null_ranges.ranges_op = FM_PATCH_OP_SET;
   null_ranges.range_count = 1;
   EXPECT_EQ(fm_sheet_update_cf_rule(wb.handle, 0, CfRuleIdAt(wb.handle, 0, 0).c_str(), &null_ranges),
-            FM_STATUS_BINDING_NULL_POINTER);
+            FM_STATUS_INVALID_ARGUMENT);
 }
 
 TEST(FormulonCApiCfMutate, UpdateRederivesTheFormulaOfATextRule) {

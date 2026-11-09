@@ -280,7 +280,7 @@ class ValidationCheckTests(unittest.TestCase):
             cursor = None
             pages = 0
             while True:
-                got = wb.sheet(0).get_invalid_cells(cursor, 2)
+                got = wb.sheet(0).get_invalid_cells(cursor=cursor, limit=2)
                 page, cursor = got.cells, got.next_cursor
                 pages += 1
                 seen += [(c.row, c.value) for c in page]

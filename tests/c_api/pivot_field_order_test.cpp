@@ -243,7 +243,7 @@ TEST(FormulonCApiPivotFieldOrder, InvalidAndDuplicateOrdersLeaveAllStateUntouche
   EXPECT_EQ(SetFieldOrder(wb.handle, pivot_index, false, duplicate, 2U),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
   error = fm_get_last_error_message();
-  EXPECT_NE(error.find("indices lists a field twice"), std::string::npos) << error;
+  EXPECT_NE(error.find("indices must not list a field twice"), std::string::npos) << error;
   EXPECT_STREQ(fm_get_last_error_context(), "i=1 value=4");
   EXPECT_EQ(ReadFieldOrder(wb.handle, pivot_index, true), (std::vector<std::uint32_t>{0U, 1U}));
   EXPECT_EQ(ReadFieldOrder(wb.handle, pivot_index, false), (std::vector<std::uint32_t>{2U, 3U, 4U}));

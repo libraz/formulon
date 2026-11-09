@@ -963,9 +963,11 @@ test('Pivot.setAnchor takes one cell as a CellAddress or an A1 string', async ()
 
 // ---- FormulonOptions.wasm is ignored -----------------------------------------------------------
 
-test('createFormulon ignores the wasm option, whatever it holds', async () => {
+test('createFormulon ignores the contents of a valid wasm option and refuses anything else', async () => {
   const mod = await loadPackage();
-  for (const wasm of [new Uint8Array([0, 97, 115, 109]), new Uint8Array(0), 'not a binary', 42, null, {}]) {
+  for (const wasm of ['not a binary', 42, {}, new Uint8Array(0)])
+    await assert.rejects(mod.createFormulon({ wasm }), TypeError);
+  for (const wasm of [new Uint8Array([0, 97, 115, 109]), null]) {
     const f = await mod.createFormulon({ wasm });
     const wb = f.Workbook.createDefault();
     try {

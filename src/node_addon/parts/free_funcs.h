@@ -1,5 +1,5 @@
 // Free (non-method) bindings exposed on the module exports object:
-// `evaluateFormula`, `getVersion`, `getStatusName`, `setLogMinLevel`,
+// `evaluateFormula`, `getVersion`, `setLogMinLevel`,
 // `setLogSink`, the loader-only `__setErrorClass`, and the workbook-free
 // catalog, locale, collation and image-probe functions that
 // `RegisterModuleFunctions` attaches. Declared here so `addon.cc::Init` can
@@ -22,9 +22,6 @@ Napi::Value EvaluateFormula(const Napi::CallbackInfo& info);
 
 /// Returns the engine version string (`fm_get_version`).
 Napi::Value Version(const Napi::CallbackInfo& info);
-
-/// Returns the human-readable description of a numeric status code.
-Napi::Value StatusString(const Napi::CallbackInfo& info);
 
 /// `setLogMinLevel(level)`: sets the engine's minimum structured-log
 /// severity. Process-wide, not per workbook handle. The default is

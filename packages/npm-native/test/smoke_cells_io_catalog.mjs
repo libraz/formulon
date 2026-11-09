@@ -600,7 +600,12 @@ test('compareText folds by strength and rejects bad arguments', async () => {
   assert.equal(ab, -1);
   assert.equal(ba, 1);
   assert.throws(() => mod.compareText('a', 'b', 0, 'nope'), isFormulonError);
-  assert.throws(() => mod.compareText('a', 'b', -1, profile), RangeError);
+  assert.throws(
+    () => mod.compareText('a', 'b', -1, profile),
+    (e) =>
+      isFormulonError(e, mod.StatusCode.InvalidArgument) &&
+      /^Formulon\.compareText strength must not be negative$/.test(e.message),
+  );
 });
 
 test('getCollationClasses orders by kind, folds text by strength, and copies its output', async () => {
@@ -656,7 +661,12 @@ test('getCollationClasses orders by kind, folds text by strength, and copies its
   assert.throws(() => mod.getCollationClasses([{ number: 1 }], 1, 'mac-365-en_US'), TypeError);
   assert.throws(() => mod.getCollationClasses({}, 1, 'mac-365-en_US'), TypeError);
   assert.throws(() => mod.getCollationClasses([{ kind: 1, number: 1 }], 1, 'nope'), isFormulonError);
-  assert.throws(() => mod.getCollationClasses(values, -1, 'mac-365-en_US'), RangeError);
+  assert.throws(
+    () => mod.getCollationClasses(values, -1, 'mac-365-en_US'),
+    (e) =>
+      isFormulonError(e, mod.StatusCode.InvalidArgument) &&
+      /^Formulon\.getCollationClasses strength must not be negative$/.test(e.message),
+  );
 });
 
 test('getCollationClasses timing on 100k mixed CJK/ASCII texts', async () => {

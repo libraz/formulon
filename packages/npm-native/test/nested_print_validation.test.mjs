@@ -32,10 +32,15 @@ test('page setup narrow fields reject lossy values before native mutation', () =
   const wb = addon.Workbook.createDefault();
   try {
     wb.updatePageSetup(0, { scalePct: 125 });
-    for (const value of [2 ** 32 + 100, 100.5, Number.NaN, Number.POSITIVE_INFINITY, -1]) {
+    for (const value of [2 ** 32 + 100, 100.5, Number.NaN, Number.POSITIVE_INFINITY]) {
       assert.throws(() => wb.updatePageSetup(0, { scalePct: value }), RangeError, `scalePct=${String(value)}`);
       assert.equal(readSetup(wb).scalePct, 125, `invalid scale changed the stored value: ${String(value)}`);
     }
+    assert.throws(
+      () => wb.updatePageSetup(0, { scalePct: -1 }),
+      (e) => e.name === 'FormulonError' && e.code === 2,
+    );
+    assert.equal(readSetup(wb).scalePct, 125, 'a negative scale changed the stored value');
     assert.throws(() => wb.updatePageSetup(0, { scalePct: Symbol('scalePct') }), TypeError);
     assert.equal(readSetup(wb).scalePct, 125);
   } finally {

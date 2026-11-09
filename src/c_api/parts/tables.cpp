@@ -32,6 +32,7 @@
 using formulon::c_api::parts::check_entered_cell_formula;
 using formulon::c_api::parts::check_enum_domain;
 using formulon::c_api::parts::check_index;
+using formulon::c_api::parts::check_patch_op;
 using formulon::c_api::parts::check_record_size;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::check_sheet_rect;
@@ -44,6 +45,7 @@ using formulon::c_api::parts::kTotalsRowFunctionTokens;
 using formulon::c_api::parts::local_table_index;
 using formulon::c_api::parts::not_found;
 using formulon::c_api::parts::null_argument;
+using formulon::c_api::parts::null_field;
 using formulon::c_api::parts::ordinal_of;
 using formulon::c_api::parts::patch_op_ok;
 using formulon::c_api::parts::patch_op_ok_without_clear;
@@ -240,8 +242,8 @@ fm_status_t table_column_names(const formulon::Workbook& book, std::size_t sheet
       } else if (column_names == nullptr) {
         (*names)[i] = std::move(header);
       } else if ((*names)[i] != header) {
-        return invalid_argument("column name does not match its header cell",
-                                "column=" + std::to_string(i) + " name=" + (*names)[i] + " header=" + header);
+        return invalid_argument(("column_names[" + std::to_string(i) + "] must match its header cell").c_str(),
+                                "column_names[" + std::to_string(i) + "]=" + (*names)[i] + " header=" + header);
       }
     }
   }
@@ -299,7 +301,7 @@ extern "C" fm_status_t fm_sheet_get_table_at(const fm_workbook_t* wb, size_t she
   const formulon::TableMetadata& table = wb->workbook().tables()[index];
   const std::optional<formulon::MergeRange> rect = formulon::parse_a1_rectangle(table.ref);
   if (!rect) {
-    return invalid_argument("table ref is not a range", "ref=" + table.ref);
+    return invalid_argument("ref is not a range", "ref=" + table.ref);
   }
   const formulon::TableStyleInfo& style = table.style_info;
   const std::uint32_t struct_size = out->struct_size;
@@ -376,7 +378,7 @@ extern "C" fm_status_t fm_workbook_resolve_table_runtime_id(const fm_workbook_t*
       return 0;
     }
   }
-  return not_found("no table has that runtime id", "id=" + std::to_string(id));
+  return not_found(("id " + std::to_string(id) + " names no table").c_str(), "id=" + std::to_string(id));
 }
 
 extern "C" fm_status_t fm_sheet_add_table(fm_workbook_t* wb, size_t sheet_index, const fm_table_spec_t* spec,
@@ -423,11 +425,11 @@ extern "C" fm_status_t fm_sheet_add_table(fm_workbook_t* wb, size_t sheet_index,
     }
   }
   if (spec->style_name != nullptr && spec->style_name[0] == '\0') {
-    return invalid_argument("style_name must be NULL or non-empty", "style_name");
+    return invalid_argument("style_name must not be empty", "style_name=");
   }
   const bool styled = spec->styled != FM_TRISTATE_FALSE;
   if (!styled && spec->style_name != nullptr) {
-    return invalid_argument("an unstyled table takes no style_name", "styled=false");
+    return invalid_argument("style_name must be NULL when styled is false", "styled=false");
   }
   const bool header_row = spec->header_row != FM_TRISTATE_FALSE;
   formulon::Workbook& book = wb->workbook();
@@ -507,15 +509,17 @@ extern "C" fm_status_t fm_sheet_update_table(fm_workbook_t* wb, size_t sheet_ind
   for (const auto& [op, field] : {std::pair<fm_patch_op_t, const char*>{patch->range_op, "range"},
                                   {patch->header_row_op, "header_row"},
                                   {patch->totals_row_op, "totals_row"}}) {
-    if (!patch_op_ok_without_clear(op)) {
-      return invalid_argument("patch op out of range or CLEAR", std::string("field=") + field);
+    if (auto rc = check_patch_op(op, field, false); rc != 0) {
+      return rc;
     }
   }
   for (const auto& [op, value, field] :
        {std::tuple<fm_patch_op_t, int32_t, const char*>{patch->header_row_op, patch->header_row, "header_row"},
         {patch->totals_row_op, patch->totals_row, "totals_row"}}) {
-    if (op == FM_PATCH_OP_SET && value != 0 && value != 1) {
-      return invalid_argument("row flag must be 0 or 1", std::string("field=") + field);
+    if (op == FM_PATCH_OP_SET) {
+      if (auto rc = check_enum_domain(value, 0, 1, field); rc != 0) {
+        return rc;
+      }
     }
   }
   const bool range_set = patch->range_op == FM_PATCH_OP_SET;
@@ -534,8 +538,8 @@ extern "C" fm_status_t fm_sheet_update_table(fm_workbook_t* wb, size_t sheet_ind
       return rc;
     }
     if (!table.columns.empty() && table_ref_column_count(next_ref) != table.columns.size()) {
-      return invalid_argument("ref width does not match the table's column count",
-                              "ref=" + next_ref + " column_count=" + std::to_string(table.columns.size()));
+      return invalid_argument("range width must match the table's column count",
+                              "range=" + next_ref + " column_count=" + std::to_string(table.columns.size()));
     }
     const std::optional<formulon::MergeRange> next_range = formulon::parse_a1_rectangle(next_ref);
     if (next_range) {
@@ -675,14 +679,11 @@ namespace {
 
 /// Checks one toggle of a table-style patch: a known op, no `CLEAR`, a 0 / 1 value under `SET`.
 fm_status_t check_toggle_patch(fm_patch_op_t op, int32_t value, const char* field) {
-  if (!patch_op_ok(op)) {
-    return invalid_argument("patch op out of range", field);
+  if (auto rc = check_patch_op(op, field, false); rc != 0) {
+    return rc;
   }
-  if (op == FM_PATCH_OP_CLEAR) {
-    return invalid_argument("CLEAR is not valid for a toggle", field);
-  }
-  if (op == FM_PATCH_OP_SET && value != 0 && value != 1) {
-    return invalid_argument("toggle must be 0 or 1", field);
+  if (op == FM_PATCH_OP_SET) {
+    return check_enum_domain(value, 0, 1, field);
   }
   return 0;
 }
@@ -704,11 +705,14 @@ extern "C" fm_status_t fm_sheet_update_table_style_options(fm_workbook_t* wb, si
   }
   // The whole patch is checked before anything changes.
   if (!patch_op_ok(patch->style_name_op)) {
-    return invalid_argument("patch op out of range", "style_name");
+    return invalid_argument("style_name_op is not a patch op", "style_name_op=" + std::to_string(patch->style_name_op));
   }
   if (patch->style_name_op == FM_PATCH_OP_SET) {
-    if (patch->style_name == nullptr || patch->style_name[0] == '\0') {
-      return invalid_argument("style_name must be a non-empty string under SET", "style_name");
+    if (patch->style_name == nullptr) {
+      return null_field("style_name");
+    }
+    if (patch->style_name[0] == '\0') {
+      return invalid_argument("style_name must not be empty", "style_name=");
     }
     if (auto rc = check_utf8({patch->style_name}); rc != 0) {
       return rc;
@@ -821,7 +825,7 @@ extern "C" fm_status_t fm_sheet_set_table_column_totals(fm_workbook_t* wb, size_
     return rc;
   }
   if ((label != nullptr && label[0] == '\0') || (formula != nullptr && formula[0] == '\0')) {
-    return invalid_argument("label and formula are NULL or non-empty");
+    return invalid_argument("label and formula must not be empty");
   }
   if (auto rc = check_enum_domain(function, FM_TABLE_TOTALS_ROW_FUNCTION_NONE, FM_TABLE_TOTALS_ROW_FUNCTION_CUSTOM,
                                   "function");
@@ -832,12 +836,12 @@ extern "C" fm_status_t fm_sheet_set_table_column_totals(fm_workbook_t* wb, size_
   std::string stored_formula;
   if (token == "custom") {
     if (formula == nullptr) {
-      return invalid_argument("custom function needs a formula");
+      return invalid_argument("formula is required for a custom function");
     }
     // Entered at the column's totals cell, so `[Qty]` and `[@Qty]` bind to this table.
     const std::optional<formulon::MergeRange> rect = formulon::parse_a1_rectangle(tables[index].ref);
     if (!rect) {
-      return invalid_argument("table ref is not a range", "ref=" + tables[index].ref);
+      return invalid_argument("ref is not a range", "ref=" + tables[index].ref);
     }
     std::string bound;
     if (auto rc = check_entered_cell_formula(wb, tables[index].sheet_index, rect->last_row,

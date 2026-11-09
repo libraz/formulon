@@ -516,28 +516,28 @@ void JsWorkbook::updateCfRule(uint32_t sheet, const std::string& cfRuleId, emscr
     return v;
   };
 
-  i32(patch, "priority", "rule.priority", &p.priority_op, &p.priority);
-  js_patch_flag(reader, patch, "stopIfTrue", "rule.stopIfTrue", &p.stop_if_true_op, &p.stop_if_true);
-  u32(patch, "dxfIndex", "rule.dxfIndex", &p.dxf_index_op, &p.dxf_index, true);
-  const emscripten::val ranges_value = reader.value(patch, "ranges", "rule.ranges");
-  if (reader.ok() && js_patch_key(reader, ranges_value, "rule.ranges", false) == JsPatchKey::kSet &&
-      reader.require_array(ranges_value, "rule.ranges")) {
-    ranges = js_pull_range_array(ranges_value, "rule.ranges", &reader);
+  i32(patch, "priority", "priority", &p.priority_op, &p.priority);
+  js_patch_flag(reader, patch, "stopIfTrue", "stopIfTrue", &p.stop_if_true_op, &p.stop_if_true);
+  u32(patch, "dxfIndex", "dxfIndex", &p.dxf_index_op, &p.dxf_index, true);
+  const emscripten::val ranges_value = reader.value(patch, "ranges", "ranges");
+  if (reader.ok() && js_patch_key(reader, ranges_value, "ranges", false) == JsPatchKey::kSet &&
+      reader.require_array(ranges_value, "ranges")) {
+    ranges = js_pull_range_array(ranges_value, "ranges", &reader);
     p.ranges_op = FM_PATCH_OP_SET;
     p.ranges = ranges.empty() ? nullptr : ranges.data();
     p.range_count = ranges.size();
   }
-  js_patch_string(reader, patch, "formula1", "rule.formula1", true, text[0], &p.formula1_op, &p.formula1);
-  js_patch_string(reader, patch, "formula2", "rule.formula2", true, text[1], &p.formula2_op, &p.formula2);
-  u8(patch, "operator", "rule.operator", &p.op_op, &p.op);
-  i32(patch, "rank", "rule.rank", &p.rank_op, &p.rank);
-  js_patch_flag(reader, patch, "percent", "rule.percent", &p.percent_op, &p.percent);
-  js_patch_flag(reader, patch, "bottom", "rule.bottom", &p.bottom_op, &p.bottom);
-  js_patch_flag(reader, patch, "aboveAverage", "rule.aboveAverage", &p.above_average_op, &p.above_average);
-  js_patch_flag(reader, patch, "equalAverage", "rule.equalAverage", &p.equal_average_op, &p.equal_average);
-  js_patch_number(reader, patch, "stdDev", "rule.stdDev", false, &p.std_dev_op, &p.std_dev);
-  js_patch_string(reader, patch, "text", "rule.text", false, text[2], &p.text_op, &p.text);
-  u8(patch, "timePeriod", "rule.timePeriod", &p.time_period_op, &p.time_period);
+  js_patch_string(reader, patch, "formula1", "formula1", true, text[0], &p.formula1_op, &p.formula1);
+  js_patch_string(reader, patch, "formula2", "formula2", true, text[1], &p.formula2_op, &p.formula2);
+  u8(patch, "operator", "operator", &p.op_op, &p.op);
+  i32(patch, "rank", "rank", &p.rank_op, &p.rank);
+  js_patch_flag(reader, patch, "percent", "percent", &p.percent_op, &p.percent);
+  js_patch_flag(reader, patch, "bottom", "bottom", &p.bottom_op, &p.bottom);
+  js_patch_flag(reader, patch, "aboveAverage", "aboveAverage", &p.above_average_op, &p.above_average);
+  js_patch_flag(reader, patch, "equalAverage", "equalAverage", &p.equal_average_op, &p.equal_average);
+  js_patch_number(reader, patch, "stdDev", "stdDev", false, &p.std_dev_op, &p.std_dev);
+  js_patch_string(reader, patch, "text", "text", false, text[2], &p.text_op, &p.text);
+  u8(patch, "timePeriod", "timePeriod", &p.time_period_op, &p.time_period);
 
   const emscripten::val color_scale = nested("colorScale", "colorScale");
   if (!color_scale.isUndefined()) {
