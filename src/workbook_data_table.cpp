@@ -20,6 +20,7 @@
 #include "eval/recalc_engine.h"
 #include "sheet.h"
 #include "utils/error.h"
+#include "utils/rect_iterator.h"
 #include "utils/resource_budget.h"
 #include "utils/status_macros.h"
 #include "workbook.h"
@@ -66,12 +67,12 @@ bool is_literal_scalar_slot(const Cell* cell) {
 
 // Whether any cell of `ref` is part of a legacy array block or a spill.
 bool intersects_array_or_spill(const Sheet& sheet, const MergeRange& ref) {
-  for (std::uint32_t row = ref.first_row; row <= ref.last_row; ++row) {
-    for (std::uint32_t col = ref.first_col; col <= ref.last_col; ++col) {
-      if (!is_literal_scalar_slot(sheet.cell_at(row, col)) || sheet.array_block_covering(row, col).has_value() ||
-          sheet.committed_spill_footprint_covering(row, col).has_value()) {
-        return true;
-      }
+  for (const utils::RectCoord at : utils::RectRange(ref.first_row, ref.first_col, ref.last_row, ref.last_col)) {
+    const std::uint32_t row = at.row;
+    const std::uint32_t col = at.col;
+    if (!is_literal_scalar_slot(sheet.cell_at(row, col)) || sheet.array_block_covering(row, col).has_value() ||
+        sheet.committed_spill_footprint_covering(row, col).has_value()) {
+      return true;
     }
   }
   return false;
@@ -326,10 +327,8 @@ Expected<void, Error> Workbook::add_data_table(std::size_t sheet_index, MergeRan
                          kDataTableExplicitDel2 | kDataTableExplicitCa;
   // The cells become table results (values only, no formulas) before the
   // table exists, so the write refusal does not apply to them.
-  for (std::uint32_t row = ref.first_row; row <= ref.last_row; ++row) {
-    for (std::uint32_t col = ref.first_col; col <= ref.last_col; ++col) {
-      put_cell_value(sheet_index, row, col, Value::number(0.0));
-    }
+  for (const utils::RectCoord at : utils::RectRange(ref.first_row, ref.first_col, ref.last_row, ref.last_col)) {
+    put_cell_value(sheet_index, at.row, at.col, Value::number(0.0));
   }
   {
     std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
@@ -355,10 +354,8 @@ Expected<void, Error> Workbook::remove_data_table(std::size_t sheet_index, std::
     std::vector<DataTable>& tables = sheets_[sheet_index].mutable_data_tables();
     tables.erase(tables.begin() + (found - tables.data()));
   }
-  for (std::uint32_t r = ref.first_row; r <= ref.last_row; ++r) {
-    for (std::uint32_t c = ref.first_col; c <= ref.last_col; ++c) {
-      put_cell_value(sheet_index, r, c, Value::blank());
-    }
+  for (const utils::RectCoord at : utils::RectRange(ref.first_row, ref.first_col, ref.last_row, ref.last_col)) {
+    put_cell_value(sheet_index, at.row, at.col, Value::blank());
   }
   return Expected<void, Error>::Ok();
 }

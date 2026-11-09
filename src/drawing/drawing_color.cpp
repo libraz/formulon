@@ -42,9 +42,9 @@ bool val_of(const xml_node& node, long& out) {
     return false;
   }
   char* end = nullptr;
-  const std::string text = val.value();
-  out = std::strtol(text.c_str(), &end, 10);
-  return end != text.c_str() && *end == '\0';
+  const char* text = val.value();
+  out = std::strtol(text, &end, 10);
+  return end != text && *end == '\0';
 }
 
 /// Tint of the `lumMod` / `lumOff` children, when they are a form a tint writes.

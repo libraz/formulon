@@ -313,14 +313,20 @@ Expected<void, Error> check_projection_target(const Workbook& wb, std::size_t sh
   return Expected<void, Error>::Ok();
 }
 
-}  // namespace
-
-Expected<void, Error> Workbook::project_pivot(std::size_t sheet_index, std::size_t pivot_index) {
-  if (sheet_index >= sheets_.size() || pivot_index >= sheets_[sheet_index].pivot_tables().size() ||
-      sheets_[sheet_index].pivot_tables()[pivot_index] == nullptr) {
+// Refuses a (sheet, pivot) pair that names no pivot table.
+Expected<void, Error> check_pivot_slot(const Workbook& wb, std::size_t sheet_index, std::size_t pivot_index) {
+  if (sheet_index >= wb.sheet_count() || pivot_index >= wb.sheet(sheet_index).pivot_tables().size() ||
+      wb.sheet(sheet_index).pivot_tables()[pivot_index] == nullptr) {
     return make_error(FormulonErrorCode::kInvalidArgument, "index out of range",
                       "sheet=" + std::to_string(sheet_index) + " pivot=" + std::to_string(pivot_index));
   }
+  return Expected<void, Error>::Ok();
+}
+
+}  // namespace
+
+Expected<void, Error> Workbook::project_pivot(std::size_t sheet_index, std::size_t pivot_index) {
+  RETURN_IF_ERROR(check_pivot_slot(*this, sheet_index, pivot_index));
   pivot::PivotTable& table = *sheets_[sheet_index].mutable_pivot_tables()[pivot_index];
   const pivot::PivotCache* cache = find_pivot_cache(table.pivot_cache_id());
   if (cache == nullptr) {
@@ -360,8 +366,9 @@ Expected<void, Error> Workbook::project_pivot(std::size_t sheet_index, std::size
   // The previous report goes first: its merges, then its cells and the new range's.
   std::vector<MergeRange> stale_merges;
   for (const MergeRange& merge : sheets_[sheet_index].merges()) {
-    if (contains(old_extent, normalized(merge))) {
-      stale_merges.push_back(normalized(merge));
+    const MergeRange m = normalized(merge);
+    if (contains(old_extent, m)) {
+      stale_merges.push_back(m);
     }
   }
   for (const MergeRange& merge : stale_merges) {
@@ -415,11 +422,7 @@ void Workbook::project_pending_pivots() {
 }
 
 Expected<void, Error> Workbook::clear_pivot_projection(std::size_t sheet_index, std::size_t pivot_index) {
-  if (sheet_index >= sheets_.size() || pivot_index >= sheets_[sheet_index].pivot_tables().size() ||
-      sheets_[sheet_index].pivot_tables()[pivot_index] == nullptr) {
-    return make_error(FormulonErrorCode::kInvalidArgument, "index out of range",
-                      "sheet=" + std::to_string(sheet_index) + " pivot=" + std::to_string(pivot_index));
-  }
+  RETURN_IF_ERROR(check_pivot_slot(*this, sheet_index, pivot_index));
   pivot::PivotTable& table = *sheets_[sheet_index].mutable_pivot_tables()[pivot_index];
   if (!table.projected_extent().has_value()) {
     return Expected<void, Error>::Ok();

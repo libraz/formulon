@@ -215,6 +215,17 @@ bool in_emu_range(std::int64_t value) {
   return value >= 0 && value < kEmuLimit;
 }
 
+bool cell_in_range(std::uint32_t row, std::uint32_t col) {
+  return row < Sheet::kMaxRows && col < Sheet::kMaxCols;
+}
+
+// Whether a marker's offsets, the object's size and its cell all lie inside the sheet.
+bool box_in_range(std::int64_t row_off, std::int64_t col_off, std::int64_t cx, std::int64_t cy, std::uint32_t row,
+                  std::uint32_t col) {
+  return in_emu_range(row_off) && in_emu_range(col_off) && in_emu_range(cx) && in_emu_range(cy) &&
+         cell_in_range(row, col);
+}
+
 // Moves one marker for an edit along its axis; a marker inside a deleted span
 // lands on the deletion boundary with offset 0.
 AnchorPoint shift_point(AnchorPoint p, std::uint32_t index, std::uint32_t count, bool is_delete, bool row_axis) {
@@ -396,8 +407,7 @@ Expected<InsertBox, Error> insert_box(const Workbook& wb, std::size_t sheet, con
   if (options.anchor_kind == AnchorKind::kAbsolute) {
     return invalid("drawing: inserted objects are anchored to one or two cells");
   }
-  if (!in_emu_range(options.row_off) || !in_emu_range(options.col_off) || !in_emu_range(cx) || !in_emu_range(cy) ||
-      options.row >= Sheet::kMaxRows || options.col >= Sheet::kMaxCols) {
+  if (!box_in_range(options.row_off, options.col_off, cx, cy, options.row, options.col)) {
     return invalid("drawing: object offset, size or cell out of range");
   }
   std::size_t total_bytes = len;
@@ -727,8 +737,7 @@ Expected<void, Error> set_drawing_anchor(Workbook& wb, std::size_t sheet, std::u
   p.edit_as = anchor.edit_as;
   p.cx = anchor.width_emu != 0 ? anchor.width_emu : cur_cx;
   p.cy = anchor.height_emu != 0 ? anchor.height_emu : cur_cy;
-  if (!in_emu_range(anchor.row_off) || !in_emu_range(anchor.col_off) || !in_emu_range(p.cx) || !in_emu_range(p.cy) ||
-      anchor.row >= Sheet::kMaxRows || anchor.col >= Sheet::kMaxCols) {
+  if (!box_in_range(anchor.row_off, anchor.col_off, p.cx, p.cy, anchor.row, anchor.col)) {
     return invalid("drawing: object offset, size or cell out of range");
   }
   p.from = AnchorPoint{anchor.row, anchor.col, anchor.row_off, anchor.col_off};
@@ -855,7 +864,7 @@ Expected<MergedAnchor, Error> merge_anchor(const Geometry& geo, const DrawingObj
   m.to.col = p.to_col.value_or(m.to.col);
   m.to.row_off = p.to_row_off.value_or(m.to.row_off);
   m.to.col_off = p.to_col_off.value_or(m.to.col_off);
-  if (m.to.row >= Sheet::kMaxRows || m.to.col >= Sheet::kMaxCols) {
+  if (!cell_in_range(m.to.row, m.to.col)) {
     return invalid("drawing: object offset, size or cell out of range");
   }
   m.cx = geo.span(false, m.from, m.to);

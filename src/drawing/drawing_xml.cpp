@@ -297,11 +297,20 @@ std::vector<DrawingObject> read_drawing_objects(const pugi::xml_document& doc,
   return objects;
 }
 
-Expected<std::string, Error> sheet_drawing_path(const Workbook& wb, std::size_t sheet) {
+namespace {
+
+Expected<const Sheet*, Error> checked_sheet(const Workbook& wb, std::size_t sheet) {
   if (sheet >= wb.sheet_count()) {
     return make_error(FormulonErrorCode::kInvalidArgument, "drawing: sheet index out of range");
   }
-  const Sheet& ws = wb.sheet(sheet);
+  return &wb.sheet(sheet);
+}
+
+}  // namespace
+
+Expected<std::string, Error> sheet_drawing_path(const Workbook& wb, std::size_t sheet) {
+  ASSIGN_OR_RETURN(const Sheet* sheet_ptr, checked_sheet(wb, sheet));
+  const Sheet& ws = *sheet_ptr;
   if (!ws.drawing_rel_target().empty()) {
     return ws.drawing_rel_target();
   }
@@ -330,10 +339,8 @@ Expected<void, Error> load_drawing_part(const Workbook& wb, std::string_view pat
 }
 
 Expected<std::string, Error> editable_drawing_path(const Workbook& wb, std::size_t sheet) {
-  if (sheet >= wb.sheet_count()) {
-    return make_error(FormulonErrorCode::kInvalidArgument, "drawing: sheet index out of range");
-  }
-  const Sheet& ws = wb.sheet(sheet);
+  ASSIGN_OR_RETURN(const Sheet* sheet_ptr, checked_sheet(wb, sheet));
+  const Sheet& ws = *sheet_ptr;
   for (const UnknownRelationship& rel : ws.unknown_relationships()) {
     if (rel.type == io::kRelDrawing) {
       return unparseable("drawing retained from an xlsb package is not editable", ws.name());

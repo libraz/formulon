@@ -25,18 +25,9 @@ constexpr std::string_view kStubPreamble =
     "will get removed if the file is opened in a newer version of Excel. Learn more: "
     "https://go.microsoft.com/fwlink/?linkid=870924\n\nComment:\n    ";
 
-bool IsHex(char c) noexcept {
-  const char upper = strings::ascii_to_upper(c);
-  return strings::is_ascii_digit(c) || (upper >= 'A' && upper <= 'F');
-}
-
 // The uppercase spelling Excel writes; `id` is a well-formed GUID in either case.
 std::string CanonicalGuid(std::string_view id) {
-  std::string out(id);
-  for (char& c : out) {
-    c = strings::ascii_to_upper(c);
-  }
-  return out;
+  return strings::to_ascii_upper(id);
 }
 
 // Out of line so the string building is emitted once rather than at every validation site.
@@ -90,14 +81,13 @@ std::uint64_t ClockSeed(const date_time::CivilTime& t) noexcept {
 std::string FormatGuid(std::uint64_t high, std::uint64_t low) {
   high = (high & ~0xF000ULL) | 0x4000ULL;
   low = (low & ~(0xC000ULL << 48U)) | (0x8000ULL << 48U);
-  constexpr char kHex[] = "0123456789ABCDEF";
   std::string out = "{";
   for (int nibble = 0; nibble < 32; ++nibble) {
     if (nibble == 8 || nibble == 12 || nibble == 16 || nibble == 20) {
       out.push_back('-');
     }
     const std::uint64_t word = nibble < 16 ? high : low;
-    out.push_back(kHex[(word >> (60 - 4 * (nibble % 16))) & 0xFU]);
+    out.push_back(strings::hex_digit_upper(static_cast<unsigned>((word >> (60 - 4 * (nibble % 16))) & 0xFU)));
   }
   out.push_back('}');
   return out;
@@ -170,7 +160,7 @@ bool is_threaded_comment_guid(std::string_view s) noexcept {
   }
   for (std::size_t i = 1; i + 1 < s.size(); ++i) {
     const bool dash = i == 9U || i == 14U || i == 19U || i == 24U;
-    if (dash ? s[i] != '-' : !IsHex(s[i])) {
+    if (dash ? s[i] != '-' : strings::hex_digit_value(s[i]) < 0) {
       return false;
     }
   }

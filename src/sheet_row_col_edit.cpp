@@ -141,20 +141,12 @@ void ShiftSpan(std::uint32_t& first, std::uint32_t& last, std::uint32_t index, s
   last = shift_one(last);
 }
 
-void ShiftRowRange(MergeRange& range, std::uint32_t row, std::uint32_t count, bool is_delete, bool* out_drop) {
-  ShiftSpan(range.first_row, range.last_row, row, count, is_delete, Sheet::kMaxRows, out_drop);
-}
-
-void ShiftColRange(MergeRange& range, std::uint32_t col, std::uint32_t count, bool is_delete, bool* out_drop) {
-  ShiftSpan(range.first_col, range.last_col, col, count, is_delete, Sheet::kMaxCols, out_drop);
-}
-
 void ShiftAxisRange(MergeRange& range, std::uint32_t index, std::uint32_t count, bool is_delete, bool row_axis,
                     bool* out_drop) {
   if (row_axis) {
-    ShiftRowRange(range, index, count, is_delete, out_drop);
+    ShiftSpan(range.first_row, range.last_row, index, count, is_delete, Sheet::kMaxRows, out_drop);
   } else {
-    ShiftColRange(range, index, count, is_delete, out_drop);
+    ShiftSpan(range.first_col, range.last_col, index, count, is_delete, Sheet::kMaxCols, out_drop);
   }
 }
 
@@ -362,7 +354,7 @@ void ShiftColumnLayouts(std::vector<ColumnLayout>& columns, std::uint32_t index,
   for (ColumnLayout& column : columns) {
     MergeRange shifted{0, column.first, 0, column.last};
     bool drop = false;
-    ShiftColRange(shifted, index, count, is_delete, &drop);
+    ShiftSpan(shifted.first_col, shifted.last_col, index, count, is_delete, Sheet::kMaxCols, &drop);
     if (!drop) {
       column.first = shifted.first_col;
       column.last = shifted.last_col;

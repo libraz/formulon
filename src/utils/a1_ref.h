@@ -1,11 +1,8 @@
 //
 // Shared A1 reference decoder: column letters, decimal row indices, and
-// composite "AB12"-shaped references. Consolidates the equivalent helpers
-// previously duplicated in `cell_parser.cpp` and `sax_xml_reader.cpp`.
-//
-// Both readers parse OOXML `<c r="...">` attributes and reference strings
-// with identical semantics (column letters A..XFD, decimal row indices,
-// 32-bit overflow rejection); this header is the single source of truth.
+// composite "AB12"-shaped references, as used by OOXML `<c r="...">`
+// attributes and reference strings (column letters A..XFD, decimal row
+// indices, 32-bit overflow rejection).
 
 #ifndef FORMULON_UTILS_A1_REF_H_
 #define FORMULON_UTILS_A1_REF_H_
