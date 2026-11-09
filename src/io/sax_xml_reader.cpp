@@ -34,6 +34,7 @@
 
 #include <cstdint>
 #include <cstring>
+#include <iterator>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -353,11 +354,12 @@ std::string_view AttrOfDecoded(const TagHeader& header, std::string_view name, s
   return DecodeAttr(AttrOfRaw(header, name), scratch);
 }
 
-/// `AttrOfRaw` for `count` distinct names in one walk of the attributes; the
+/// `AttrOfRaw` for the `N` distinct `names` in one walk of the attributes; the
 /// first occurrence of a name wins and an absent one leaves `out[i]` empty.
-void AttrsOfRaw(const TagHeader& header, const std::string_view* names, std::size_t count,
-                std::string_view* out) noexcept {
-  bool seen[8] = {};
+template <std::size_t N>
+void AttrsOfRaw(const TagHeader& header, const std::string_view (&names)[N], std::string_view (&out)[N]) noexcept {
+  bool seen[N] = {};
+  constexpr std::size_t count = N;
   for (std::size_t i = 0; i < count; ++i) {
     out[i] = std::string_view{};
   }
@@ -959,8 +961,8 @@ bool ScanCell(const char* begin, const char* end, const char** p, const TagHeade
   // entity-encoded values (e.g. `r="A&amp;1"`) decode to canonical text
   // before the A1 / type-token validation runs.
   static constexpr std::string_view kCellAttrNames[] = {"r", "t", "s", "cm", "ph"};
-  std::string_view cell_attrs[5];
-  AttrsOfRaw(cell_header, kCellAttrNames, 5U, cell_attrs);
+  std::string_view cell_attrs[std::size(kCellAttrNames)];
+  AttrsOfRaw(cell_header, kCellAttrNames, cell_attrs);
   const std::string_view r_attr = DecodeAttr(cell_attrs[0], &scratch->c_attr_r);
   if (r_attr.empty()) {
     *err = MakeXmlParseError(cell_header.end_offset, "<c> missing r= attribute");
