@@ -18,6 +18,7 @@
 #include "io/xlsb/record.h"
 #include "parser/ast.h"
 #include "parser/ast_format.h"
+#include "parser/formula_prefix.h"
 #include "sheet.h"
 #include "utils/arena.h"
 #include "utils/error.h"
@@ -174,7 +175,7 @@ bool ReadBrtNameHeader(ByteSpan& p, BrtNameHeader& out) {
 /// user chose to hide from the Name Manager, and both this reader's
 /// writer counterpart and Excel itself store the two the same way.
 bool IsStoragePlaceholderName(std::string_view name) {
-  constexpr std::string_view kPrefixes[] = {"_xlfn.", "_xlpm.", "_xleta."};
+  constexpr std::string_view kPrefixes[] = {parser::kFnPrefix, parser::kParamPrefix, parser::kEtaPrefix};
   for (const std::string_view prefix : kPrefixes) {
     if (strings::case_insensitive_starts_with(name, prefix)) {
       return true;

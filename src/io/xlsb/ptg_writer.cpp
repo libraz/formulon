@@ -49,7 +49,7 @@ constexpr const char* kCtx = "context=xlsb_ptg_writer";
 /// The record name a reference spelled `name` resolves to: a cell-shaped name
 /// held as `_xlnm.<cell>` is the plain `<cell>` record.
 std::string_view RecordName(std::string_view name) {
-  return strings::case_insensitive_eq(parser::cell_shaped_name_prefix(name), "_xlnm.")
+  return strings::case_insensitive_eq(parser::cell_shaped_name_prefix(name), parser::kNamePrefix)
              ? parser::cell_shaped_name_bare(name)
              : name;
 }
@@ -57,7 +57,7 @@ std::string_view RecordName(std::string_view name) {
 /// The spelling a reference `name` is matched against a scope's bare
 /// parameter names with; a `_xlnm.` name is never a parameter.
 std::string_view ScopeName(std::string_view name) {
-  return strings::case_insensitive_eq(parser::cell_shaped_name_prefix(name), "_xlnm.")
+  return strings::case_insensitive_eq(parser::cell_shaped_name_prefix(name), parser::kNamePrefix)
              ? std::string_view()
              : parser::cell_shaped_name_bare(name);
 }
@@ -437,8 +437,7 @@ class Encoder {
         // A built-in named as a value is its hidden `_xleta.` name, always value class.
         if (std::find(function_values_.begin(), function_values_.end(), &node) != function_values_.end()) {
           if (const auto it = name_table_.find(function_value_storage_name(node.as_name())); it != name_table_.end()) {
-            emit_u8(out_, ClassedPtg(kPtgName, kPtgValueClass));  // PtgName
-            emit_u32(out_, it->second);
+            emit_name_ptg(ClassedPtg(kPtgName, kPtgValueClass), it->second);  // PtgName
             return Expected<void, Error>::Ok();
           }
         }
@@ -565,18 +564,15 @@ class Encoder {
     // different case than its binding is still that parameter.
     for (auto it = let_scope_.rbegin(); it != let_scope_.rend(); ++it) {
       if (!ScopeName(name).empty() && strings::case_insensitive_eq(it->first, ScopeName(name))) {
-        emit_u8(out_, measured_calls_ ? ClassedPtg(kPtgName, cls) : kPtgName);  // PtgName
-        emit_u32(out_, it->second);
+        emit_name_ptg(measured_calls_ ? ClassedPtg(kPtgName, cls) : kPtgName, it->second);  // PtgName
         return Expected<void, Error>::Ok();
       }
     }
     const auto it = find_name_key(name_table_, RecordName(name));
     if (it == name_table_.end()) {
-      return make_error(FormulonErrorCode::kIoXlsbUnsupportedPtg, "xlsb encoder: name reference not in name table",
-                        std::string(kCtx) + std::string(" name=") + std::string(name));
+      return name_not_in_table(name);
     }
-    emit_u8(out_, ClassedPtg(kPtgName, cls));  // PtgName
-    emit_u32(out_, it->second);
+    emit_name_ptg(ClassedPtg(kPtgName, cls), it->second);  // PtgName
     return Expected<void, Error>::Ok();
   }
 
@@ -605,8 +601,7 @@ class Encoder {
       it = find_wide_name_key(name_table_, sheet_scoped_name_key(-1, name));
     }
     if (it == name_table_.end()) {
-      return make_error(FormulonErrorCode::kIoXlsbUnsupportedPtg, "xlsb encoder: name reference not in name table",
-                        std::string(kCtx) + std::string(" name=") + std::string(name));
+      return name_not_in_table(name);
     }
     return emit_name_x(it->second, cls);
   }
@@ -631,10 +626,26 @@ class Encoder {
       it = find_name_key(name_table_, name);
     }
     if (it == name_table_.end()) {
-      return make_error(FormulonErrorCode::kIoXlsbUnsupportedPtg, "xlsb encoder: name reference not in name table",
-                        std::string(kCtx) + std::string(" name=") + std::string(name));
+      return name_not_in_table(name);
     }
     return emit_name_x(it->second, cls);
+  }
+
+  /// The `PtgName`-family tag `tag` followed by the record index `ilbl`.
+  void emit_name_ptg(std::uint8_t tag, std::uint32_t ilbl) {
+    emit_u8(out_, tag);
+    emit_u32(out_, ilbl);
+  }
+
+  /// The hidden `_xlpm.` record name of the LET / LAMBDA parameter `bare`.
+  static std::string param_storage_name(std::string_view bare) {
+    return std::string(parser::kParamPrefix) + std::string(bare);
+  }
+
+  /// The refusal for a name reference with no record in the name table.
+  static Expected<void, Error> name_not_in_table(std::string_view name) {
+    return make_error(FormulonErrorCode::kIoXlsbUnsupportedPtg, "xlsb encoder: name reference not in name table",
+                      std::string(kCtx) + std::string(" name=") + std::string(name));
   }
 
   /// Emits `PtgNameX` for record `ilbl` through the sheetless
@@ -683,21 +694,19 @@ class Encoder {
     if (node.as_lambda_optional_count() != 0) {
       return unsupported_node("Lambda(optional parameter)");
     }
-    const auto it_lambda = name_table_.find("_xlfn.LAMBDA");
+    const auto it_lambda = name_table_.find(std::string(parser::kFnPrefix) + "LAMBDA");
     if (it_lambda == name_table_.end()) {
       return unsupported_node("Lambda(_xlfn.LAMBDA not registered)");
     }
-    emit_u8(out_, kPtgName);  // PtgName (reference-class): the LAMBDA name-ref
-    emit_u32(out_, it_lambda->second);
+    emit_name_ptg(kPtgName, it_lambda->second);  // PtgName (reference-class): the LAMBDA name-ref
     const std::uint32_t n = node.as_lambda_param_count();
     for (std::uint32_t i = 0; i < n; ++i) {
       const std::string_view raw_name = parser::cell_shaped_name_bare(node.as_lambda_param(i));
-      const auto it_param = name_table_.find(std::string("_xlpm.") + std::string(raw_name));
+      const auto it_param = name_table_.find(param_storage_name(raw_name));
       if (it_param == name_table_.end()) {
         return unsupported_node("Lambda(param name not registered)");
       }
-      emit_u8(out_, kPtgName);  // PtgName (reference-class): the parameter name-ref
-      emit_u32(out_, it_param->second);
+      emit_name_ptg(kPtgName, it_param->second);  // PtgName (reference-class): the parameter name-ref
       let_scope_.emplace_back(raw_name, it_param->second);
       shapes_.bind(node.as_lambda_param(i), Shape::kArray);  // bound to whatever a call passes
     }
@@ -731,25 +740,22 @@ class Encoder {
   /// name/value pairs + body). Verified against real bytes — see
   /// `ptg_reader.cpp`'s LET handling in `decode_future_function`.
   Expected<void, Error> emit_let(const parser::AstNode& node, std::uint8_t cls) {
-    const auto it_let = name_table_.find("_xlfn.LET");
+    const auto it_let = name_table_.find(std::string(parser::kFnPrefix) + "LET");
     if (it_let == name_table_.end()) {
       return unsupported_node("LetBinding(_xlfn.LET not registered)");
     }
-    emit_u8(out_, kPtgName);  // PtgName (reference-class): the LET name-ref
-    emit_u32(out_, it_let->second);
+    emit_name_ptg(kPtgName, it_let->second);  // PtgName (reference-class): the LET name-ref
     const ArrayScope scope(in_array_operand_, measured_calls_ && cls == kPtgArrayClass);
     // Bindings and the body take their argument the way an `S` parameter does.
     const Slot slot = measured_calls_ ? Slot{'S', false} : Slot{};
     const std::uint32_t n = node.as_let_binding_count();
     for (std::uint32_t i = 0; i < n; ++i) {
       const std::string_view raw_name = parser::cell_shaped_name_bare(node.as_let_binding_name(i));
-      const std::string param_name = std::string("_xlpm.") + std::string(raw_name);
-      const auto it_param = name_table_.find(param_name);
+      const auto it_param = name_table_.find(param_storage_name(raw_name));
       if (it_param == name_table_.end()) {
         return unsupported_node("LetBinding(param name not registered)");
       }
-      emit_u8(out_, kPtgName);  // PtgName (reference-class): the binding-name-ref
-      emit_u32(out_, it_param->second);
+      emit_name_ptg(kPtgName, it_param->second);  // PtgName (reference-class): the binding-name-ref
       next_slot_ = slot;
       RETURN_IF_ERROR(emit(node.as_let_binding_expr(i)));
       // Subsequent binding expressions and the body can reference this
@@ -807,11 +813,15 @@ class Encoder {
     return Expected<void, Error>::Ok();
   }
 
+  /// `ref` as a `PtgRef3d` / `PtgArea3d` corner stores it: offset from the
+  /// formula's cell when the formula is cell-relative.
+  parser::Reference Rebased(const parser::Reference& ref) const { return base_ ? OffsetFrom(ref, *base_) : ref; }
+
   /// `PtgRef3d` of the cell `ref` through the XTI `ixti`.
   void emit_ref3d_at(std::uint16_t ixti, const parser::Reference& ref, std::uint8_t cls) {
     emit_u8(out_, ClassedPtg(kPtgRef3d, cls));  // PtgRef3d
     emit_u16(out_, ixti);
-    emit_loc(out_, base_ ? OffsetFrom(ref, *base_) : ref);
+    emit_loc(out_, Rebased(ref));
   }
 
   /// `PtgArea3d` of the rectangle `first`:`last` through the XTI `ixti`.
@@ -819,11 +829,7 @@ class Encoder {
                       std::uint8_t cls) {
     emit_u8(out_, ClassedPtg(kPtgArea3d, cls));  // PtgArea3d
     emit_u16(out_, ixti);
-    if (base_) {
-      emit_area(out_, OffsetFrom(first, *base_), OffsetFrom(last, *base_));
-    } else {
-      emit_area(out_, first, last);
-    }
+    emit_area(out_, Rebased(first), Rebased(last));
   }
 
   /// A deleted sheet's address (`#REF!A1`, `#REF!A1:B2`, `#REF!A:A`): the
@@ -877,21 +883,12 @@ class Encoder {
     ASSIGN_OR_RETURN(const std::uint16_t ixti, resolve_range_ixti(itab_begin, itab_end));
     // A value/array-class 3-D reference used as a function
     // argument reads back as #REF! in real Excel -- do not promote here.
+    const std::uint8_t cls = promote ? kPtgValueClass : kPtgReferenceClass;
     if (node.as_ref3d_is_range()) {
-      emit_u8(out_, promote ? ValueClassPtg(kPtgArea3d) : kPtgArea3d);  // PtgArea3d
-      emit_u16(out_, ixti);
-      const parser::Reference first = node.as_ref3d_cell();
-      const parser::Reference last = node.as_ref3d_cell_end();
-      if (base_) {
-        emit_area(out_, OffsetFrom(first, *base_), OffsetFrom(last, *base_));
-      } else {
-        emit_area(out_, first, last);
-      }
-      return Expected<void, Error>::Ok();
+      emit_area3d_at(ixti, node.as_ref3d_cell(), node.as_ref3d_cell_end(), cls);
+    } else {
+      emit_ref3d_at(ixti, node.as_ref3d_cell(), cls);
     }
-    emit_u8(out_, promote ? ValueClassPtg(kPtgRef3d) : kPtgRef3d);  // PtgRef3d
-    emit_u16(out_, ixti);
-    emit_loc(out_, base_ ? OffsetFrom(node.as_ref3d_cell(), *base_) : node.as_ref3d_cell());
     return Expected<void, Error>::Ok();
   }
 
@@ -1025,52 +1022,9 @@ class Encoder {
     for (std::uint32_t i = 1; i < node.as_binary_arity(); ++i) {
       RETURN_IF_ERROR(emit_operand(node.as_binary_operand(i), slot));
       emit_space(node, parser::WhitespaceSlot::kBeforeOperator, static_cast<std::uint16_t>(i - 1U));
-      emit_u8(out_, binop_ptg(node.as_binary_op(i - 1U)));
+      emit_u8(out_, ptg_of_binop(node.as_binary_op(i - 1U)));
     }
     return Expected<void, Error>::Ok();
-  }
-
-  static std::uint8_t binop_ptg(parser::BinOp op) {
-    std::uint8_t byte = kPtgAdd;
-    switch (op) {
-      case parser::BinOp::Add:
-        byte = kPtgAdd;
-        break;
-      case parser::BinOp::Sub:
-        byte = kPtgSub;
-        break;
-      case parser::BinOp::Mul:
-        byte = kPtgMul;
-        break;
-      case parser::BinOp::Div:
-        byte = kPtgDiv;
-        break;
-      case parser::BinOp::Pow:
-        byte = kPtgPower;
-        break;
-      case parser::BinOp::Concat:
-        byte = kPtgConcat;
-        break;
-      case parser::BinOp::Lt:
-        byte = kPtgLt;
-        break;
-      case parser::BinOp::LtEq:
-        byte = kPtgLe;
-        break;
-      case parser::BinOp::Eq:
-        byte = kPtgEq;
-        break;
-      case parser::BinOp::GtEq:
-        byte = kPtgGe;
-        break;
-      case parser::BinOp::Gt:
-        byte = kPtgGt;
-        break;
-      case parser::BinOp::NotEq:
-        byte = kPtgNe;
-        break;
-    }
-    return byte;
   }
 
   /// `cls`: the class of the fast-path Area/Area3d collapse (see
@@ -1192,7 +1146,7 @@ class Encoder {
         lead();
         emit_u8(out_, ClassedPtg(kPtgArea3d, cls));  // PtgArea3d
         emit_u16(out_, static_cast<std::uint16_t>(ixti));
-        emit_area(out_, base_ ? OffsetFrom(a, *base_) : a, base_ ? OffsetFrom(b, *base_) : b);
+        emit_area(out_, Rebased(a), Rebased(b));
         return Expected<void, Error>::Ok();
       }
     }
@@ -1449,8 +1403,7 @@ class Encoder {
                         "xlsb encoder: hidden-name callee has no BrtName registered",
                         std::string(kCtx) + std::string(" fn=") + std::string(name));
     }
-    emit_u8(out_, kPtgName);  // PtgName (reference-class): the callee name-ref
-    emit_u32(out_, it->second);
+    emit_name_ptg(kPtgName, it->second);  // PtgName (reference-class): the callee name-ref
     return Expected<void, Error>::Ok();
   }
 

@@ -25,6 +25,7 @@
 #include "io/xlsb/ptg_list.h"
 #include "io/xlsb/ptg_space.h"
 #include "io/xlsb/record.h"
+#include "parser/formula_prefix.h"
 #include "parser/reference.h"
 #include "sheet.h"
 #include "utils/status_macros.h"
@@ -177,16 +178,28 @@ FullAxis classify_full_axis(const parser::Reference& first, const parser::Refere
   return axis;
 }
 
-// `first`:`last` as a formula spells it.
-parser::AstNode* make_area(Arena& arena, parser::Reference first, parser::Reference last) {
+// Classifies `first`:`last` and, for a whole column or row, sets the full-axis flags on both corners.
+FullAxis apply_full_axis(parser::Reference& first, parser::Reference& last) {
   const FullAxis axis = classify_full_axis(first, last);
-  const bool full = axis.cols || axis.rows;
-  if (full) {
+  if (axis.cols || axis.rows) {
     first.is_full_col = last.is_full_col = axis.cols;
     first.is_full_row = last.is_full_row = axis.rows;
-    if (axis.one) {
-      return parser::make_ref(arena, first);
-    }
+  }
+  return axis;
+}
+
+// Storage-prefix-free spelling of a LET / LAMBDA parameter name.
+std::string_view strip_param_prefix(std::string_view name) {
+  return strings::case_insensitive_starts_with(name, parser::kParamPrefix) ? name.substr(parser::kParamPrefix.size())
+                                                                           : name;
+}
+
+// `first`:`last` as a formula spells it.
+parser::AstNode* make_area(Arena& arena, parser::Reference first, parser::Reference last) {
+  const FullAxis axis = apply_full_axis(first, last);
+  const bool full = axis.cols || axis.rows;
+  if (axis.one) {
+    return parser::make_ref(arena, first);
   }
   parser::AstNode* lhs = parser::make_ref(arena, first);
   parser::AstNode* rhs = parser::make_ref(arena, last);
@@ -196,13 +209,9 @@ parser::AstNode* make_area(Arena& arena, parser::Reference first, parser::Refere
 // The deleted-sheet `#REF!` of the area `first`:`last` (`#REF!A1:B2`,
 // `#REF!A:A`), spelled as `make_area` spells the area.
 parser::AstNode* make_dead_sheet_area(Arena& arena, parser::Reference first, parser::Reference last) {
-  const FullAxis axis = classify_full_axis(first, last);
-  if (axis.cols || axis.rows) {
-    first.is_full_col = last.is_full_col = axis.cols;
-    first.is_full_row = last.is_full_row = axis.rows;
-    if (axis.one) {
-      return parser::make_dead_sheet_ref_error(arena, &first, nullptr);
-    }
+  const FullAxis axis = apply_full_axis(first, last);
+  if (axis.one) {
+    return parser::make_dead_sheet_ref_error(arena, &first, nullptr);
   }
   return parser::make_dead_sheet_ref_error(arena, &first, &last);
 }
@@ -211,13 +220,9 @@ parser::AstNode* make_dead_sheet_area(Arena& arena, parser::Reference first, par
 // as such, a single one as the cell form with its flag set.
 parser::AstNode* make_external_area(Arena& arena, std::string_view book, std::string_view sheet,
                                     std::string_view sheet_end, parser::Reference first, parser::Reference last) {
-  const FullAxis axis = classify_full_axis(first, last);
-  if (axis.cols || axis.rows) {
-    first.is_full_col = last.is_full_col = axis.cols;
-    first.is_full_row = last.is_full_row = axis.rows;
-    if (axis.one) {
-      last = first;
-    }
+  const FullAxis axis = apply_full_axis(first, last);
+  if (axis.one) {
+    last = first;
   }
   return parser::make_external_ref(arena, {}, book, sheet, sheet_end, first, last, /*is_range=*/!axis.one);
 }
@@ -489,7 +494,7 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
     // reference inside a LET body matches the plain-identifier `NameRef`
     // the text parser would have produced for the same formula.
     const std::string_view name = entry.name;
-    const std::string_view display_name = strings::case_insensitive_starts_with(name, "_xlpm.") ? name.substr(6) : name;
+    const std::string_view display_name = strip_param_prefix(name);
     if (entry.itab >= 0 && (qualified || entry.itab != host_itab) &&
         static_cast<std::size_t>(entry.itab) < sheet_names.size()) {
       const std::string& sheet = sheet_names[static_cast<std::size_t>(entry.itab)];
@@ -551,7 +556,7 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
                             kCtx);
         }
         const std::string_view raw = param->as_name();
-        params[i] = strings::case_insensitive_starts_with(raw, "_xlpm.") ? raw.substr(6) : raw;
+        params[i] = strip_param_prefix(raw);
       }
       auto* body = const_cast<parser::AstNode*>(ops[cparams - 1]);
       parser::AstNode* n = parser::make_lambda(arena, params, param_count, /*optional_count=*/0, body);
@@ -580,7 +585,7 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
                             kCtx);
         }
         std::string_view raw = name_node->as_name();
-        names[b] = strings::case_insensitive_starts_with(raw, "_xlpm.") ? raw.substr(6) : raw;
+        names[b] = strip_param_prefix(raw);
         exprs[b] = ops[2 + (2 * b)];
       }
       auto* body = const_cast<parser::AstNode*>(ops[cparams - 1]);
@@ -1146,47 +1151,7 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
         parser::AstNode* rhs = pop();
         parser::AstNode* lhs = stack.back();
         stack.pop_back();
-        parser::BinOp op = parser::BinOp::Add;
-        switch (info->kind) {
-          case PtgKind::Add:
-            op = parser::BinOp::Add;
-            break;
-          case PtgKind::Sub:
-            op = parser::BinOp::Sub;
-            break;
-          case PtgKind::Mul:
-            op = parser::BinOp::Mul;
-            break;
-          case PtgKind::Div:
-            op = parser::BinOp::Div;
-            break;
-          case PtgKind::Power:
-            op = parser::BinOp::Pow;
-            break;
-          case PtgKind::Concat:
-            op = parser::BinOp::Concat;
-            break;
-          case PtgKind::Lt:
-            op = parser::BinOp::Lt;
-            break;
-          case PtgKind::Le:
-            op = parser::BinOp::LtEq;
-            break;
-          case PtgKind::Eq:
-            op = parser::BinOp::Eq;
-            break;
-          case PtgKind::Ge:
-            op = parser::BinOp::GtEq;
-            break;
-          case PtgKind::Gt:
-            op = parser::BinOp::Gt;
-            break;
-          case PtgKind::Ne:
-            op = parser::BinOp::NotEq;
-            break;
-          default:
-            break;
-        }
+        const parser::BinOp op = binop_of_ptg(info->kind);
         const std::uint32_t* mark = find_open_chain(lhs);
         if (mark != nullptr && !chains.is_range(*mark) &&
             parser::binop_binding_power(chains.first_op(*mark)) == parser::binop_binding_power(op)) {

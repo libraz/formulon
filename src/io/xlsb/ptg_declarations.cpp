@@ -93,7 +93,7 @@ enum class NameCollectMode : std::uint8_t { kPtg, kScopeResolved, kSheetQualifie
 /// True for a cell-shaped name held as `_xlnm.<cell>`, which is the plain
 /// `<cell>` record and never a parameter.
 bool IsNameModePrefixed(std::string_view name) {
-  return strings::case_insensitive_eq(parser::cell_shaped_name_prefix(name), "_xlnm.");
+  return strings::case_insensitive_eq(parser::cell_shaped_name_prefix(name), parser::kNamePrefix);
 }
 
 /// The record name a reference spelled `name` resolves to.
@@ -231,12 +231,12 @@ void CollectNamesScoped(const parser::AstNode& node, std::vector<std::string>& n
       return;
     }
     case parser::NodeKind::LetBinding: {
-      add("_xlfn.LET");
+      add(std::string(parser::kFnPrefix) + "LET");
       const std::uint32_t n = node.as_let_binding_count();
       const std::size_t scope_base = scope.size();
       for (std::uint32_t i = 0; i < n; ++i) {
         const std::string_view bare = parser::cell_shaped_name_bare(node.as_let_binding_name(i));
-        add(std::string("_xlpm.") + std::string(bare));
+        add(std::string(parser::kParamPrefix) + std::string(bare));
         // Excel LET binds sequentially: a value expression sees only the
         // earlier bindings, so collect it before pushing this parameter.
         CollectNamesScoped(node.as_let_binding_expr(i), names, seen, scope, mode, values);
@@ -247,12 +247,12 @@ void CollectNamesScoped(const parser::AstNode& node, std::vector<std::string>& n
       return;
     }
     case parser::NodeKind::Lambda: {
-      add("_xlfn.LAMBDA");
+      add(std::string(parser::kFnPrefix) + "LAMBDA");
       const std::uint32_t n = node.as_lambda_param_count();
       const std::size_t scope_base = scope.size();
       for (std::uint32_t i = 0; i < n; ++i) {
         const std::string_view bare = parser::cell_shaped_name_bare(node.as_lambda_param(i));
-        add(std::string("_xlpm.") + std::string(bare));
+        add(std::string(parser::kParamPrefix) + std::string(bare));
         scope.push_back(bare);
       }
       CollectNamesScoped(node.as_lambda_body(), names, seen, scope, mode, values);

@@ -20,6 +20,8 @@
 #include <array>
 #include <cstdint>
 
+#include "parser/ast.h"
+
 namespace formulon {
 namespace io {
 namespace xlsb {
@@ -212,6 +214,48 @@ inline constexpr std::uint8_t kPtgNameX = 0x39;
 inline constexpr std::uint8_t kPtgRef3d = 0x3A;
 inline constexpr std::uint8_t kPtgArea3d = 0x3B;
 inline constexpr std::uint8_t kPtgRefErr3d = 0x3C;
+
+/// A binary operator and the Ptg that stands for it.
+struct BinOpPtg {
+  parser::BinOp op;
+  PtgKind kind;
+  std::uint8_t byte;
+};
+
+inline constexpr std::array<BinOpPtg, 12> kBinOpPtgs = {{
+    {parser::BinOp::Add, PtgKind::Add, kPtgAdd},
+    {parser::BinOp::Sub, PtgKind::Sub, kPtgSub},
+    {parser::BinOp::Mul, PtgKind::Mul, kPtgMul},
+    {parser::BinOp::Div, PtgKind::Div, kPtgDiv},
+    {parser::BinOp::Pow, PtgKind::Power, kPtgPower},
+    {parser::BinOp::Concat, PtgKind::Concat, kPtgConcat},
+    {parser::BinOp::Lt, PtgKind::Lt, kPtgLt},
+    {parser::BinOp::LtEq, PtgKind::Le, kPtgLe},
+    {parser::BinOp::Eq, PtgKind::Eq, kPtgEq},
+    {parser::BinOp::GtEq, PtgKind::Ge, kPtgGe},
+    {parser::BinOp::Gt, PtgKind::Gt, kPtgGt},
+    {parser::BinOp::NotEq, PtgKind::Ne, kPtgNe},
+}};
+
+/// The operator `kind` decodes to; `Add` for a kind that is no binary operator.
+inline constexpr parser::BinOp binop_of_ptg(PtgKind kind) noexcept {
+  for (const BinOpPtg& row : kBinOpPtgs) {
+    if (row.kind == kind) {
+      return row.op;
+    }
+  }
+  return parser::BinOp::Add;
+}
+
+/// The Reference-class Ptg byte of `op`.
+inline constexpr std::uint8_t ptg_of_binop(parser::BinOp op) noexcept {
+  for (const BinOpPtg& row : kBinOpPtgs) {
+    if (row.op == op) {
+      return row.byte;
+    }
+  }
+  return kPtgAdd;
+}
 
 /// `PtgAttrSpace` whitespace types ([MS-XLSB] PtgAttrSpaceType) the reader
 /// and writer carry. The attr precedes the token it applies to.

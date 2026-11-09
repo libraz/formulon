@@ -32,6 +32,7 @@
 #include "io/xlsb/table_records.h"
 #include "io/xlsb/workbook_props_records.h"
 #include "parser/ast.h"
+#include "parser/formula_prefix.h"
 #include "parser/parser.h"
 #include "sheet.h"
 #include "sheet_name.h"
@@ -563,11 +564,11 @@ Expected<void, Error> EmitName(std::vector<std::uint8_t>& body, const std::strin
   // flags and the placeholder body must match Excel byte-for-byte or the
   // callee shows up as #NAME? on load. A prefixed name Excel does not know
   // (`_xlfn.FOOBAR`) is an ordinary undefined-name stub instead.
-  const bool is_param = strings::starts_with(name, "_xlpm.");
-  const bool is_function_value = strings::starts_with(name, "_xleta.");
+  const bool is_param = strings::starts_with(name, parser::kParamPrefix);
+  const bool is_function_value = strings::starts_with(name, parser::kEtaPrefix);
   std::string_view callee(name);
-  const bool xlfn = strings::starts_with(callee, "_xlfn.");
-  callee.remove_prefix(xlfn ? 6U : 0U);
+  const bool xlfn = strings::starts_with(callee, parser::kFnPrefix);
+  callee.remove_prefix(xlfn ? parser::kFnPrefix.size() : 0U);
   if (strings::starts_with(callee, "_xlws.")) {
     callee.remove_prefix(6U);
   }
