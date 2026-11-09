@@ -201,10 +201,12 @@ TEST(XlsbCfIconsFidelity, EditsOfAnXlsbLoadedRuleAreWritten) {
     }
   }
   ASSERT_NE(rule, nullptr);
+  ASSERT_TRUE(rule->icon_set.has_value());
   rule->icon_set->custom_icons = {{"5Boxes", 4}, {"3Triangles", 0}, {"3Arrows", 1}};
   const Workbook edited = LoadXlsb(SaveXlsb(wb));
   const cf::CFRule* back = FindRule(edited, kIconId);
   ASSERT_NE(back, nullptr);
+  ASSERT_TRUE(back->icon_set.has_value());
   ASSERT_EQ(back->icon_set->custom_icons.size(), 3U);
   EXPECT_EQ(back->icon_set->custom_icons[0].icon_set, "5Boxes");
   EXPECT_EQ(back->icon_set->custom_icons[0].icon_id, 4);
@@ -216,8 +218,10 @@ TEST(XlsbCfIconsFidelity, EditsOfAnXlsbLoadedRuleAreWritten) {
   const std::vector<std::uint16_t> types = SheetRecordTypes(plain);
   EXPECT_EQ(Count(types, 1112U), 0U);
   EXPECT_EQ(Count(types, 465U), 1U);
-  const cf::CFRule* legacy = FindRule(LoadXlsb(plain), kIconId);
+  const Workbook reloaded = LoadXlsb(plain);
+  const cf::CFRule* legacy = FindRule(reloaded, kIconId);
   ASSERT_NE(legacy, nullptr);
+  ASSERT_TRUE(legacy->icon_set.has_value());
   EXPECT_TRUE(legacy->icon_set->custom_icons.empty());
 }
 
