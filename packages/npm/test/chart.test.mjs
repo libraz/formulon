@@ -543,11 +543,13 @@ test('chart calls throw on failure and reject malformed arguments', async () => 
     );
     expectFailure(() => wb.sheet(0).chart(id).updateSeries(5, 0, {}));
     expectFailure(() => wb.sheet(0).chart(id).updateSeries(0, 99, {}));
-    expectFailure(() =>
-      wb
-        .sheet(0)
-        .chart(id)
-        .updateSeries(0, 0, { fill: { color: '#010203' }, marker: { symbol: null } }),
+    assert.throws(
+      () =>
+        wb
+          .sheet(0)
+          .chart(id)
+          .updateSeries(0, 0, { fill: { color: '#010203' }, marker: { symbol: null } }),
+      (e) => e instanceof TypeError && /marker\.symbol must not be null/.test(e.message),
     );
     expectFailure(() => wb.sheet(0).chart(id).updateAxis(12345, {}));
     expectFailure(() => wb.sheet(0).chart(id).updatePlot(0, { holeSizePct: 50 }));

@@ -98,11 +98,12 @@ namespace detail {
 fm_drawing_patch_t PullDrawingPatch(CheckedSpecReader& reader, const Napi::Object& spec, std::string& name_store,
                                     std::string& description_store) {
   fm_drawing_patch_t patch = FM_STRUCT_INIT(fm_drawing_patch_t);
-  patch.name_op = PatchString(reader, spec, "name", &name_store, &patch.name);
-  patch.description_op = PatchString(reader, spec, "description", &description_store, &patch.description);
+  patch.name_op = PatchString(reader, spec, "name", false, &name_store, &patch.name);
+  patch.description_op = PatchString(reader, spec, "description", true, &description_store, &patch.description);
   patch.hidden_op = PatchBool(reader, spec, "hidden", &patch.hidden);
   Napi::Object anchor;
-  if (reader.Object(spec, "anchor", &anchor)) {
+  if (ClassifyPatchKey(reader, reader.Get(spec, "anchor"), "anchor", false) == PatchKey::kSet &&
+      reader.Object(spec, "anchor", &anchor)) {
     patch.anchor = PullDrawingAnchorPatch(reader, anchor);
   }
   return patch;

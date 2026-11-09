@@ -53,8 +53,8 @@ fm_shape_patch_t PullShapePatch(CheckedSpecReader& reader, const Napi::Object& s
   ReadLinePatch(reader, spec, s.line);
   s.rotation_deg_op = PatchDouble(reader, spec, "rotationDeg", &s.rotation_deg);
   s.text_box_op = PatchBool(reader, spec, "textBox", &s.text_box);
-  s.preset_geometry_op = PatchString(reader, spec, "presetGeometry", &store.preset_geometry, &s.preset_geometry);
-  s.text_op = PatchString(reader, spec, "text", &store.text, &s.text);
+  s.preset_geometry_op = PatchString(reader, spec, "presetGeometry", false, &store.preset_geometry, &s.preset_geometry);
+  s.text_op = PatchString(reader, spec, "text", false, &store.text, &s.text);
   return s;
 }
 
@@ -310,7 +310,7 @@ fm_sparkline_group_patch_t PullGroupPatch(CheckedSpecReader& reader, const Napi:
   fm_patch_op_t* const color_ops[] = {&g.color_series_op, &g.color_negative_op, &g.color_axis_op, &g.color_markers_op,
                                       &g.color_first_op,  &g.color_last_op,     &g.color_high_op, &g.color_low_op};
   for (size_t i = 0; i < 8U; ++i) {
-    *color_ops[i] = PatchColor(reader, spec, kSparklineColorKeys[i], colors[i]);
+    *color_ops[i] = PatchColor(reader, spec, kSparklineColorKeys[i], true, colors[i]);
   }
   g.type_op = PatchI32(reader, spec, "type", &g.type);
   g.markers_op = PatchBool(reader, spec, "markers", &g.markers);
@@ -326,11 +326,12 @@ fm_sparkline_group_patch_t PullGroupPatch(CheckedSpecReader& reader, const Napi:
   g.manual_min_op = PatchNullableDouble(reader, spec, "manualMin", &g.manual_min);
   g.manual_max_op = PatchNullableDouble(reader, spec, "manualMax", &g.manual_max);
   g.date_axis_op = PatchBool(reader, spec, "dateAxis", &g.date_axis);
-  g.date_axis_ref_op = PatchString(reader, spec, "dateAxisRef", &ref_store, &g.date_axis_ref);
+  g.date_axis_ref_op = PatchString(reader, spec, "dateAxisRef", true, &ref_store, &g.date_axis_ref);
   g.line_width_pt_op = PatchDouble(reader, spec, "lineWidthPt", &g.line_width_pt);
   g.empty_cells_as_op = PatchI32(reader, spec, "emptyCellsAs", &g.empty_cells_as);
   Napi::Array array;
-  if (reader.Array(spec, "sparklines", &array)) {
+  if (ClassifyPatchKey(reader, reader.Get(spec, "sparklines"), "sparklines", false) == PatchKey::kSet &&
+      reader.Array(spec, "sparklines", &array)) {
     PullSparklines(reader, array, texts, items);
     g.items_op = FM_PATCH_OP_SET;
     g.items = items.empty() ? nullptr : items.data();

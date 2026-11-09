@@ -506,7 +506,7 @@ Napi::Value Workbook::PreviewChartData(const Napi::CallbackInfo& info) {
   overrides.source_op = has_source ? FM_PATCH_OP_SET : FM_PATCH_OP_KEEP;
   overrides.source = has_source ? source.c_str() : nullptr;
   const auto set = [&](const char* key, fm_patch_op_t& op, int32_t& out, bool is_bool) {
-    const Field f = Probe(reader, spec, key);
+    const Field f = Probe(reader, spec, key, true);
     if (f.op == FM_PATCH_OP_CLEAR) {
       // `null` leaves the override unset, as `undefined` does.
       return;

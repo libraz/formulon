@@ -473,7 +473,7 @@ export function registerMetadataLayout(Module, test) {
       const unchanged = wb.getPageSetup(0);
       assert.equal(unchanged.orientation, 1);
       assert.equal(unchanged.scalePct, 125);
-      expectFailure(() => wb.updatePageSetup(0, { scalePct: null }), StatusCode.InvalidArgument);
+      assert.throws(() => wb.updatePageSetup(0, { scalePct: null }), TypeError);
       assert.equal(wb.getPageSetup(0).scalePct, 125);
 
       // `null` on orientation removes the attribute and keeps the rest.

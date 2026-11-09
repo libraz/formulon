@@ -287,14 +287,6 @@ void js_patch_u32(JsNarrowNumericReader& reader, const emscripten::val& owner, c
 void js_patch_u8(JsNarrowNumericReader& reader, const emscripten::val& owner, const char* key, const char* field,
                  fm_patch_op_t* op, int32_t* value);
 
-/// As `js_patch_flag`, but `null` writes `CLEAR` (the C layer decides whether the flag may be cleared).
-void js_patch_flag_clearable(JsNarrowNumericReader& reader, const emscripten::val& owner, const char* key,
-                             const char* field, fm_patch_op_t* op, int32_t* value);
-
-/// As `js_patch_flag`, but `null` keeps like an omitted key instead of recording a type error.
-void js_patch_flag_present(JsNarrowNumericReader& reader, const emscripten::val& owner, const char* key,
-                           const char* field, fm_patch_op_t* op, int32_t* value);
-
 /// Reads the number `owner[key]` of a patch into an `_op` / value pair: an omitted key leaves `KEEP`, a number writes
 /// `SET`; `null` writes `CLEAR` when `nullable`, else records a type error.
 void js_patch_number(JsNarrowNumericReader& reader, const emscripten::val& owner, const char* key, const char* field,
@@ -309,13 +301,13 @@ void js_patch_int(JsNarrowNumericReader& reader, const emscripten::val& owner, c
 bool js_patch_begin(JsNarrowNumericReader& reader, const emscripten::val& owner, const char* key, const char* field,
                     bool nullable, fm_patch_op_t* op, emscripten::val* v);
 
-/// Reads `owner[key]` into an `_op` / value pair for any value type: an omitted key keeps, `null` is `CLEAR` (the C
-/// layer refuses it on a field that cannot be cleared), anything else is `SET` with the value `read` extracts.
+/// Reads `owner[key]` into an `_op` / value pair for any value type: an omitted key keeps, `null` is `CLEAR` when
+/// `nullable` (else a type error), anything else is `SET` with the value `read` extracts.
 template <class T, class Read>
 void js_patch_value(JsNarrowNumericReader& reader, const emscripten::val& owner, const char* key, const char* field,
-                    fm_patch_op_t* op, T* value, Read read) {
+                    bool nullable, fm_patch_op_t* op, T* value, Read read) {
   emscripten::val v;
-  if (js_patch_begin(reader, owner, key, field, true, op, &v)) {
+  if (js_patch_begin(reader, owner, key, field, nullable, op, &v)) {
     *value = read(v);
   }
 }

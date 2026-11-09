@@ -3002,6 +3002,8 @@ class Sheet(_NoCopy):
         "security_descriptor",
     )
 
+    _PROTECTED_RANGE_CLEARABLE = tuple(fld for fld in _PROTECTED_RANGE_TEXT if fld != "name")
+
     def list_protected_ranges(self) -> List[ProtectedRange]:
         """Every protected range of the sheet, in order."""
         return [self._protected_range_at(i) for i in range(self._protected_range_count())]
@@ -3123,21 +3125,21 @@ class Sheet(_NoCopy):
         *,
         name: Union[str, Unchanged] = UNCHANGED,
         ranges: Union[Sequence[Union[CellRect, str]], str, Unchanged] = UNCHANGED,
-        legacy_password_hash: Union[str, Unchanged] = UNCHANGED,
-        algorithm_name: Union[str, Unchanged] = UNCHANGED,
-        hash_value: Union[str, Unchanged] = UNCHANGED,
-        salt_value: Union[str, Unchanged] = UNCHANGED,
+        legacy_password_hash: Union[str, None, Unchanged] = UNCHANGED,
+        algorithm_name: Union[str, None, Unchanged] = UNCHANGED,
+        hash_value: Union[str, None, Unchanged] = UNCHANGED,
+        salt_value: Union[str, None, Unchanged] = UNCHANGED,
         spin_count: Union[int, Unchanged] = UNCHANGED,
-        security_descriptor: Union[str, Unchanged] = UNCHANGED,
+        security_descriptor: Union[str, None, Unchanged] = UNCHANGED,
     ) -> None:
         """Update ``protected_range``, an index or a protected range's name; an omitted argument keeps its value.
 
         The arguments are the :class:`ProtectedRange` fields (``ranges`` also
-        takes A1 text); an empty string clears a text field. Omitting ``ranges`` keeps the stored rectangles,
+        takes A1 text); an empty string or ``None`` clears a text field. Omitting ``ranges`` keeps the stored rectangles,
         including any the reader could not parse.
 
         Raises:
-          TypeError: for ``None`` on any argument but ``legacy_password_hash``, which ``None`` removes.
+          TypeError: for ``None`` on ``name``, ``ranges`` or ``spin_count``.
           NotFoundError: when no protected range has the name ``protected_range``.
           IndexOutOfRangeError: when ``protected_range`` is an index past the last one.
           InvalidArgumentError: when ``ranges`` is empty.
@@ -3157,7 +3159,7 @@ class Sheet(_NoCopy):
             if value is not UNCHANGED
         }
         for key, value in given.items():
-            if value is None and key != "legacy_password_hash":
+            if value is None and key not in self._PROTECTED_RANGE_CLEARABLE:
                 raise TypeError(_argument_message(key, "must not be null"))
         range_name = self._protected_range_name(protected_range)
         sheet = self._index()

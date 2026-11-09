@@ -724,6 +724,64 @@ def check_string_tables(common_text: str, dts_text: str, value_h_text: str, dts_
     return problems
 
 
+_PATCH_TABLE_ENTRY_RE = re.compile(r"^  '([A-Za-z]+\.[A-Za-z]+)': ", re.MULTILINE)
+_PATCH_KEYS_ENTRY_RE = re.compile(r"\[\s*\d+,\s*\[(.*?)\]\s*,?\s*\]", re.DOTALL)
+_FIELD_HELPER_RE = re.compile(r"\b(?:bools|numbers|strings|objects)\(([^)]*)\)")
+_FIELD_TYPE_RE = re.compile(r"\b([A-Za-z]\w*):\s*'(?:boolean|number|string|object|array)'")
+
+
+def _js_table_entries(text: str, name: str) -> Dict[str, str]:
+    """`{Class.method: source}` of the entries of `const <name> = Object.freeze({...});`; empty when undeclared."""
+    start = re.search(rf"^const {name} = Object\.freeze\(\{{\n", text, re.MULTILINE)
+    if start is None:
+        return {}
+    end = text.find("\n});", start.end())
+    body = text[start.end() - 1 : end if end >= 0 else len(text)]
+    marks = list(_PATCH_TABLE_ENTRY_RE.finditer(body))
+    return {
+        m.group(1): body[m.end() : marks[i + 1].start() if i + 1 < len(marks) else len(body)]
+        for i, m in enumerate(marks)
+    }
+
+
+def _facade_key_sets(text: str) -> Dict[str, Set[str]]:
+    """`{Class.method: keys}` of the patch (else input record) argument of every method, with each nested path as
+    `path.key` (`labels.deleted`)."""
+    out: Dict[str, Set[str]] = {}
+    for table in ("PATCH_KEYS", "INPUT_KEYS"):
+        for where, source in _js_table_entries(text, table).items():
+            entry = _PATCH_KEYS_ENTRY_RE.search(source)
+            if entry is not None and where not in out:
+                out[where] = set(re.findall(r"'([^']+)'", entry.group(1)))
+    for table in ("PATCH_NESTED_KEYS", "INPUT_NESTED_KEYS"):
+        for where, source in _js_table_entries(text, table).items():
+            for path, names in re.findall(r"^    '?([\w.]+)'?: \[(.*?)\]", source, re.MULTILINE | re.DOTALL):
+                out.setdefault(where, set()).update(f"{path}.{n}" for n in re.findall(r"'([^']+)'", names))
+    return out
+
+
+def check_facade_patch_keys(common_text: Optional[str] = None) -> List[str]:
+    """Each key a hand-written per-method table of `common.mjs` (`PATCH_FIELDS`) or the generated nullable table
+    (`PATCH_NULLABLE`) names is a key of that method's patch argument (`PATCH_KEYS`, else `INPUT_KEYS`, or a nested
+    path of `*_NESTED_KEYS`); a key the patch type does not have is never type-checked, so a stale name silently
+    lets `null` through."""
+    text = _read(NPM_COMMON_MJS) if common_text is None else common_text
+    keys = _facade_key_sets(text)
+    if not keys:
+        return ["facade-patch-keys: PATCH_KEYS is not declared in packages/npm/common.mjs"]
+    problems: List[str] = []
+    for table in ("PATCH_FIELDS", "PATCH_NULLABLE"):
+        for where, source in sorted(_js_table_entries(text, table).items()):
+            if where not in keys:
+                problems.append(f"facade-patch-keys: {table} names `{where}`, which has no key table")
+                continue
+            named = {n for call in _FIELD_HELPER_RE.findall(source) for n in re.findall(r"'([^']+)'", call)}
+            named |= set(_FIELD_TYPE_RE.findall(source))
+            for name in sorted(named - keys[where]):
+                problems.append(f"facade-patch-keys: {table}['{where}'] names `{name}`, which is not one of its keys")
+    return problems
+
+
 def _check_js_constant_tables(wasm_dts_text: str) -> List[str]:
     problems: List[str] = _npm_entries_reexport_common("dts-enums")
     strings = string_table_names(_read(NPM_COMMON_MJS))

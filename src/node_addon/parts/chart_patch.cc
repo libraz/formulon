@@ -1,5 +1,5 @@
 // Chart patch bindings: chart creation and the typed edits. Patch objects map
-// `undefined` to keep, `null` to clear and a value to set.
+// `undefined` to keep, `null` to clear a clearable key and a value to set.
 
 #include <cstddef>
 #include <cstdint>
@@ -15,17 +15,21 @@ namespace formulon_node {
 
 namespace detail {
 
-Field Probe(CheckedSpecReader& reader, const Napi::Object& owner, const char* key) {
+Field Probe(CheckedSpecReader& reader, const Napi::Object& owner, const char* key, bool nullable) {
   Field f;
   if (!reader.ok()) {
     return f;
   }
-  const Napi::Value v = owner.Get(key);
+  const Napi::Value v = reader.Get(owner, key);
   if (!reader.ok() || v.IsUndefined()) {
     return f;
   }
   if (v.IsNull()) {
-    f.op = FM_PATCH_OP_CLEAR;
+    if (nullable) {
+      f.op = FM_PATCH_OP_CLEAR;
+    } else {
+      reader.FailNull(key);
+    }
     return f;
   }
   f.op = FM_PATCH_OP_SET;
@@ -56,32 +60,38 @@ namespace {
 
 /// Probes `key` and, when it is set, stores `read(f.value)` into `out`.
 template <typename T, typename Read>
-void ReadOp(CheckedSpecReader& r, const Napi::Object& owner, const char* key, fm_patch_op_t& op, T& out, Read&& read) {
-  const Field f = Probe(r, owner, key);
+void ReadOp(CheckedSpecReader& r, const Napi::Object& owner, const char* key, bool nullable, fm_patch_op_t& op, T& out,
+            Read&& read) {
+  const Field f = Probe(r, owner, key, nullable);
   op = f.op;
   if (f.op == FM_PATCH_OP_SET) {
     out = read(f.value);
   }
 }
 
-void ReadU32Op(CheckedSpecReader& r, const Napi::Object& owner, const char* key, fm_patch_op_t& op, uint32_t& out) {
-  ReadOp(r, owner, key, op, out, [&](const Napi::Value& v) { return r.U32(v, key, 0U); });
+void ReadU32Op(CheckedSpecReader& r, const Napi::Object& owner, const char* key, bool nullable, fm_patch_op_t& op,
+               uint32_t& out) {
+  ReadOp(r, owner, key, nullable, op, out, [&](const Napi::Value& v) { return r.U32(v, key, 0U); });
 }
 
-void ReadColorOp(CheckedSpecReader& r, const Napi::Object& owner, const char* key, fm_patch_op_t& op, fm_color_t& out) {
-  ReadOp(r, owner, key, op, out, [&](const Napi::Value& v) { return ReadColorSpec(r, v, key); });
+void ReadColorOp(CheckedSpecReader& r, const Napi::Object& owner, const char* key, bool nullable, fm_patch_op_t& op,
+                 fm_color_t& out) {
+  ReadOp(r, owner, key, nullable, op, out, [&](const Napi::Value& v) { return ReadColorSpec(r, v, key); });
 }
 
-void ReadI32Op(CheckedSpecReader& r, const Napi::Object& owner, const char* key, fm_patch_op_t& op, int32_t& out) {
-  ReadOp(r, owner, key, op, out, [&](const Napi::Value& v) { return r.I32(v, key, 0); });
+void ReadI32Op(CheckedSpecReader& r, const Napi::Object& owner, const char* key, bool nullable, fm_patch_op_t& op,
+               int32_t& out) {
+  ReadOp(r, owner, key, nullable, op, out, [&](const Napi::Value& v) { return r.I32(v, key, 0); });
 }
 
-void ReadDoubleOp(CheckedSpecReader& r, const Napi::Object& owner, const char* key, fm_patch_op_t& op, double& out) {
-  ReadOp(r, owner, key, op, out, [&](const Napi::Value& v) { return r.Double(v, key, 0.0); });
+void ReadDoubleOp(CheckedSpecReader& r, const Napi::Object& owner, const char* key, bool nullable, fm_patch_op_t& op,
+                  double& out) {
+  ReadOp(r, owner, key, nullable, op, out, [&](const Napi::Value& v) { return r.Double(v, key, 0.0); });
 }
 
-void ReadBoolOp(CheckedSpecReader& r, const Napi::Object& owner, const char* key, fm_patch_op_t& op, int32_t& out) {
-  ReadOp(r, owner, key, op, out, [&](const Napi::Value& v) { return r.Bool(v, key, false) ? 1 : 0; });
+void ReadBoolOp(CheckedSpecReader& r, const Napi::Object& owner, const char* key, bool nullable, fm_patch_op_t& op,
+                int32_t& out) {
+  ReadOp(r, owner, key, nullable, op, out, [&](const Napi::Value& v) { return r.Bool(v, key, false) ? 1 : 0; });
 }
 
 /// Keeps the std::string bytes and literal point lists behind the pointer fields of a patch alive.
@@ -95,9 +105,9 @@ const char* Intern(Arena& arena, std::string text) {
   return arena.strings.back().c_str();
 }
 
-void ReadStringOp(CheckedSpecReader& r, const Napi::Object& owner, const char* key, Arena& arena, fm_patch_op_t& op,
-                  const char*& out) {
-  const Field f = Probe(r, owner, key);
+void ReadStringOp(CheckedSpecReader& r, const Napi::Object& owner, const char* key, bool nullable, Arena& arena,
+                  fm_patch_op_t& op, const char*& out) {
+  const Field f = Probe(r, owner, key, nullable);
   op = f.op;
   if (f.op == FM_PATCH_OP_SET) {
     std::string text;
@@ -156,11 +166,11 @@ void ReadLiteral(CheckedSpecReader& r, const Napi::Value& value, const char* key
   out.literal_count = static_cast<uint32_t>(points.size());
 }
 
-/// A series input: absent keeps, `null` removes, a string is a reference (an empty one removes), and an object is
-/// the read-back shape `{ kind, formula, literal }`.
-void ReadSource(CheckedSpecReader& r, const Napi::Object& owner, const char* key, Arena& arena, fm_patch_op_t& op,
-                fm_chart_data_source_spec_t& out) {
-  const Field f = Probe(r, owner, key);
+/// A series input: absent keeps, `null` removes when `nullable`, a string is a reference (an empty one removes), and an
+/// object is the read-back shape `{ kind, formula, literal }`.
+void ReadSource(CheckedSpecReader& r, const Napi::Object& owner, const char* key, bool nullable, Arena& arena,
+                fm_patch_op_t& op, fm_chart_data_source_spec_t& out) {
+  const Field f = Probe(r, owner, key, nullable);
   op = f.op;
   if (f.op != FM_PATCH_OP_SET) {
     return;
@@ -196,7 +206,7 @@ void ReadSource(CheckedSpecReader& r, const Napi::Object& owner, const char* key
 namespace detail {
 
 void ReadFillPatch(CheckedSpecReader& r, const Napi::Object& owner, fm_chart_fill_patch_t& out) {
-  const Field f = Probe(r, owner, "fill");
+  const Field f = Probe(r, owner, "fill", true);
   if (f.op == FM_PATCH_OP_CLEAR) {
     out.color_op = FM_PATCH_OP_CLEAR;
     out.transparency_pct_op = FM_PATCH_OP_CLEAR;
@@ -207,13 +217,13 @@ void ReadFillPatch(CheckedSpecReader& r, const Napi::Object& owner, fm_chart_fil
   if (f.op != FM_PATCH_OP_SET || !r.Object(f.value, "fill", &o)) {
     return;
   }
-  ReadColorOp(r, o, "color", out.color_op, out.color);
-  ReadDoubleOp(r, o, "transparencyPct", out.transparency_pct_op, out.transparency_pct);
-  ReadBoolOp(r, o, "none", out.none_op, out.none);
+  ReadColorOp(r, o, "color", true, out.color_op, out.color);
+  ReadDoubleOp(r, o, "transparencyPct", true, out.transparency_pct_op, out.transparency_pct);
+  ReadBoolOp(r, o, "none", false, out.none_op, out.none);
 }
 
 void ReadLinePatch(CheckedSpecReader& r, const Napi::Object& owner, fm_chart_line_patch_t& out) {
-  const Field f = Probe(r, owner, "line");
+  const Field f = Probe(r, owner, "line", true);
   if (f.op == FM_PATCH_OP_CLEAR) {
     out.color_op = FM_PATCH_OP_CLEAR;
     out.transparency_pct_op = FM_PATCH_OP_CLEAR;
@@ -226,11 +236,11 @@ void ReadLinePatch(CheckedSpecReader& r, const Napi::Object& owner, fm_chart_lin
   if (f.op != FM_PATCH_OP_SET || !r.Object(f.value, "line", &o)) {
     return;
   }
-  ReadColorOp(r, o, "color", out.color_op, out.color);
-  ReadDoubleOp(r, o, "transparencyPct", out.transparency_pct_op, out.transparency_pct);
-  ReadDoubleOp(r, o, "widthPt", out.width_pt_op, out.width_pt);
-  ReadI32Op(r, o, "dash", out.dash_op, out.dash);
-  ReadBoolOp(r, o, "none", out.none_op, out.none);
+  ReadColorOp(r, o, "color", true, out.color_op, out.color);
+  ReadDoubleOp(r, o, "transparencyPct", true, out.transparency_pct_op, out.transparency_pct);
+  ReadDoubleOp(r, o, "widthPt", true, out.width_pt_op, out.width_pt);
+  ReadI32Op(r, o, "dash", true, out.dash_op, out.dash);
+  ReadBoolOp(r, o, "none", false, out.none_op, out.none);
 }
 
 fm_chart_fill_t ReadFillSpec(CheckedSpecReader& r, const Napi::Object& owner) {
@@ -270,51 +280,51 @@ fm_chart_line_t ReadLineSpec(CheckedSpecReader& r, const Napi::Object& owner) {
 namespace {
 
 void ReadMarkerPatch(CheckedSpecReader& r, const Napi::Object& owner, fm_patch_op_t& op, fm_chart_marker_patch_t& out) {
-  const Field f = Probe(r, owner, "marker");
+  const Field f = Probe(r, owner, "marker", true);
   op = f.op;
   Napi::Object o;
   if (f.op != FM_PATCH_OP_SET || !r.Object(f.value, "marker", &o)) {
     return;
   }
-  ReadI32Op(r, o, "symbol", out.symbol_op, out.symbol);
-  ReadDoubleOp(r, o, "sizePt", out.size_pt_op, out.size_pt);
+  ReadI32Op(r, o, "symbol", false, out.symbol_op, out.symbol);
+  ReadDoubleOp(r, o, "sizePt", true, out.size_pt_op, out.size_pt);
   ReadFillPatch(r, o, out.fill);
   ReadLinePatch(r, o, out.line);
 }
 
 void ReadLabelsPatch(CheckedSpecReader& r, const Napi::Object& owner, Arena& arena, fm_patch_op_t& op,
                      fm_chart_labels_patch_t& out) {
-  const Field f = Probe(r, owner, "labels");
+  const Field f = Probe(r, owner, "labels", true);
   op = f.op;
   Napi::Object o;
   if (f.op != FM_PATCH_OP_SET || !r.Object(f.value, "labels", &o)) {
     return;
   }
-  ReadBoolOp(r, o, "showValue", out.show_value_op, out.show_value);
-  ReadBoolOp(r, o, "showCategory", out.show_category_op, out.show_category);
-  ReadBoolOp(r, o, "showSeries", out.show_series_op, out.show_series);
-  ReadBoolOp(r, o, "showPercent", out.show_percent_op, out.show_percent);
-  ReadBoolOp(r, o, "showLegendKey", out.show_legend_key_op, out.show_legend_key);
-  ReadStringOp(r, o, "separator", arena, out.separator_op, out.separator);
-  ReadI32Op(r, o, "position", out.position_op, out.position);
-  ReadStringOp(r, o, "numberFormat", arena, out.number_format_op, out.number_format);
-  ReadColorOp(r, o, "fontColor", out.font_color_op, out.font_color);
-  ReadDoubleOp(r, o, "fontSizePt", out.font_size_pt_op, out.font_size_pt);
-  ReadBoolOp(r, o, "sourceLinked", out.source_linked_op, out.source_linked);
-  ReadBoolOp(r, o, "deleted", out.deleted_op, out.deleted);
+  ReadBoolOp(r, o, "showValue", false, out.show_value_op, out.show_value);
+  ReadBoolOp(r, o, "showCategory", false, out.show_category_op, out.show_category);
+  ReadBoolOp(r, o, "showSeries", false, out.show_series_op, out.show_series);
+  ReadBoolOp(r, o, "showPercent", false, out.show_percent_op, out.show_percent);
+  ReadBoolOp(r, o, "showLegendKey", false, out.show_legend_key_op, out.show_legend_key);
+  ReadStringOp(r, o, "separator", true, arena, out.separator_op, out.separator);
+  ReadI32Op(r, o, "position", true, out.position_op, out.position);
+  ReadStringOp(r, o, "numberFormat", true, arena, out.number_format_op, out.number_format);
+  ReadColorOp(r, o, "fontColor", true, out.font_color_op, out.font_color);
+  ReadDoubleOp(r, o, "fontSizePt", true, out.font_size_pt_op, out.font_size_pt);
+  ReadBoolOp(r, o, "sourceLinked", false, out.source_linked_op, out.source_linked);
+  ReadBoolOp(r, o, "deleted", false, out.deleted_op, out.deleted);
 }
 
 void ReadSeriesPatch(CheckedSpecReader& r, const Napi::Object& spec, Arena& arena, fm_chart_series_patch_t& out) {
-  ReadSource(r, spec, "name", arena, out.name_op, out.name);
-  ReadSource(r, spec, "categories", arena, out.categories_op, out.categories);
-  ReadSource(r, spec, "values", arena, out.values_op, out.values);
-  ReadSource(r, spec, "x", arena, out.x_op, out.x);
-  ReadSource(r, spec, "y", arena, out.y_op, out.y);
-  ReadSource(r, spec, "size", arena, out.size_op, out.size);
+  ReadSource(r, spec, "name", true, arena, out.name_op, out.name);
+  ReadSource(r, spec, "categories", true, arena, out.categories_op, out.categories);
+  ReadSource(r, spec, "values", false, arena, out.values_op, out.values);
+  ReadSource(r, spec, "x", true, arena, out.x_op, out.x);
+  ReadSource(r, spec, "y", false, arena, out.y_op, out.y);
+  ReadSource(r, spec, "size", false, arena, out.size_op, out.size);
   ReadFillPatch(r, spec, out.fill);
   ReadLinePatch(r, spec, out.line);
   ReadMarkerPatch(r, spec, out.marker_op, out.marker);
-  ReadBoolOp(r, spec, "smooth", out.smooth_op, out.smooth);
+  ReadBoolOp(r, spec, "smooth", false, out.smooth_op, out.smooth);
   ReadLabelsPatch(r, spec, arena, out.labels_op, out.labels);
 }
 
@@ -413,7 +423,7 @@ Napi::Value Workbook::InsertChart(const Napi::CallbackInfo& info) {
   reader.String(spec, "source", &source);
   fm_chart_spec_t opts = FM_STRUCT_INIT(fm_chart_spec_t);
   // An omitted title is Excel's automatic title; `null` is no title.
-  const Field title = Probe(reader, spec, "title");
+  const Field title = Probe(reader, spec, "title", true);
   if (title.op == FM_PATCH_OP_SET) {
     opts.has_title = 1;
     opts.title = ReadTitle(reader, title.value, "title", arena);
@@ -534,10 +544,10 @@ Napi::Value Workbook::UpdateChartLegend(const Napi::CallbackInfo& info) {
   }
   CheckedSpecReader reader(env);
   fm_chart_legend_patch_t patch = FM_STRUCT_INIT(fm_chart_legend_patch_t);
-  ReadI32Op(reader, spec, "position", patch.position_op, patch.position);
-  ReadBoolOp(reader, spec, "overlay", patch.overlay_op, patch.overlay);
+  ReadI32Op(reader, spec, "position", false, patch.position_op, patch.position);
+  ReadBoolOp(reader, spec, "overlay", false, patch.overlay_op, patch.overlay);
   std::vector<uint32_t> hidden;
-  const Field hidden_field = Probe(reader, spec, "hiddenEntries");
+  const Field hidden_field = Probe(reader, spec, "hiddenEntries", false);
   if (hidden_field.op == FM_PATCH_OP_SET) {
     ReadUint32List(reader, hidden_field.value, "hiddenEntries", &hidden);
     patch.hidden_entries_op = FM_PATCH_OP_SET;
@@ -565,26 +575,26 @@ Napi::Value Workbook::SetChartAxis(const Napi::CallbackInfo& info) {
   CheckedSpecReader reader(env);
   Arena arena;
   fm_chart_axis_patch_t patch = FM_STRUCT_INIT(fm_chart_axis_patch_t);
-  ReadBoolOp(reader, spec, "visible", patch.visible_op, patch.visible);
-  const Field title = Probe(reader, spec, "title");
+  ReadBoolOp(reader, spec, "visible", false, patch.visible_op, patch.visible);
+  const Field title = Probe(reader, spec, "title", true);
   patch.title_op = title.op;
   if (title.op == FM_PATCH_OP_SET) {
     patch.title = ReadTitle(reader, title.value, "title", arena);
   }
-  ReadDoubleOp(reader, spec, "min", patch.min_op, patch.min);
-  ReadDoubleOp(reader, spec, "max", patch.max_op, patch.max);
-  ReadDoubleOp(reader, spec, "majorUnit", patch.major_unit_op, patch.major_unit);
-  ReadStringOp(reader, spec, "numberFormat", arena, patch.number_format_op, patch.number_format);
-  ReadBoolOp(reader, spec, "majorGridlines", patch.major_gridlines_op, patch.major_gridlines);
-  ReadBoolOp(reader, spec, "reversed", patch.reversed_op, patch.reversed);
-  ReadDoubleOp(reader, spec, "logBase", patch.log_base_op, patch.log_base);
-  ReadI32Op(reader, spec, "crosses", patch.crosses_op, patch.crosses);
-  ReadDoubleOp(reader, spec, "crossesAt", patch.crosses_at_op, patch.crosses_at);
-  ReadI32Op(reader, spec, "tickLabelPosition", patch.tick_label_position_op, patch.tick_label_position);
-  ReadDoubleOp(reader, spec, "minorUnit", patch.minor_unit_op, patch.minor_unit);
-  ReadBoolOp(reader, spec, "minorGridlines", patch.minor_gridlines_op, patch.minor_gridlines);
-  ReadI32Op(reader, spec, "position", patch.position_op, patch.position);
-  ReadBoolOp(reader, spec, "sourceLinked", patch.source_linked_op, patch.source_linked);
+  ReadDoubleOp(reader, spec, "min", true, patch.min_op, patch.min);
+  ReadDoubleOp(reader, spec, "max", true, patch.max_op, patch.max);
+  ReadDoubleOp(reader, spec, "majorUnit", true, patch.major_unit_op, patch.major_unit);
+  ReadStringOp(reader, spec, "numberFormat", true, arena, patch.number_format_op, patch.number_format);
+  ReadBoolOp(reader, spec, "majorGridlines", false, patch.major_gridlines_op, patch.major_gridlines);
+  ReadBoolOp(reader, spec, "reversed", false, patch.reversed_op, patch.reversed);
+  ReadDoubleOp(reader, spec, "logBase", true, patch.log_base_op, patch.log_base);
+  ReadI32Op(reader, spec, "crosses", false, patch.crosses_op, patch.crosses);
+  ReadDoubleOp(reader, spec, "crossesAt", false, patch.crosses_at_op, patch.crosses_at);
+  ReadI32Op(reader, spec, "tickLabelPosition", true, patch.tick_label_position_op, patch.tick_label_position);
+  ReadDoubleOp(reader, spec, "minorUnit", true, patch.minor_unit_op, patch.minor_unit);
+  ReadBoolOp(reader, spec, "minorGridlines", false, patch.minor_gridlines_op, patch.minor_gridlines);
+  ReadI32Op(reader, spec, "position", false, patch.position_op, patch.position);
+  ReadBoolOp(reader, spec, "sourceLinked", false, patch.source_linked_op, patch.source_linked);
   if (!reader.ok()) {
     return env.Undefined();
   }
@@ -604,10 +614,10 @@ Napi::Value Workbook::SetChartDisplay(const Napi::CallbackInfo& info) {
   }
   CheckedSpecReader reader(env);
   fm_chart_display_patch_t patch = FM_STRUCT_INIT(fm_chart_display_patch_t);
-  ReadI32Op(reader, spec, "blanksAs", patch.blanks_as_op, patch.blanks_as);
-  ReadBoolOp(reader, spec, "plotVisibleOnly", patch.plot_visible_only_op, patch.plot_visible_only);
-  ReadBoolOp(reader, spec, "naAsBlank", patch.na_as_blank_op, patch.na_as_blank);
-  ReadI32Op(reader, spec, "style", patch.style_op, patch.style);
+  ReadI32Op(reader, spec, "blanksAs", true, patch.blanks_as_op, patch.blanks_as);
+  ReadBoolOp(reader, spec, "plotVisibleOnly", true, patch.plot_visible_only_op, patch.plot_visible_only);
+  ReadBoolOp(reader, spec, "naAsBlank", true, patch.na_as_blank_op, patch.na_as_blank);
+  ReadI32Op(reader, spec, "style", true, patch.style_op, patch.style);
   if (!reader.ok()) {
     return env.Undefined();
   }
@@ -695,11 +705,11 @@ Napi::Value Workbook::SetChartPlot(const Napi::CallbackInfo& info) {
   }
   CheckedSpecReader reader(env);
   fm_chart_plot_patch_t patch = FM_STRUCT_INIT(fm_chart_plot_patch_t);
-  ReadU32Op(reader, spec, "gapWidthPct", patch.gap_width_pct_op, patch.gap_width_pct);
-  ReadI32Op(reader, spec, "overlapPct", patch.overlap_pct_op, patch.overlap_pct);
-  ReadU32Op(reader, spec, "firstSliceAngleDeg", patch.first_slice_angle_deg_op, patch.first_slice_angle_deg);
-  ReadBoolOp(reader, spec, "varyColors", patch.vary_colors_op, patch.vary_colors);
-  ReadU32Op(reader, spec, "holeSizePct", patch.hole_size_pct_op, patch.hole_size_pct);
+  ReadU32Op(reader, spec, "gapWidthPct", false, patch.gap_width_pct_op, patch.gap_width_pct);
+  ReadI32Op(reader, spec, "overlapPct", false, patch.overlap_pct_op, patch.overlap_pct);
+  ReadU32Op(reader, spec, "firstSliceAngleDeg", false, patch.first_slice_angle_deg_op, patch.first_slice_angle_deg);
+  ReadBoolOp(reader, spec, "varyColors", false, patch.vary_colors_op, patch.vary_colors);
+  ReadU32Op(reader, spec, "holeSizePct", false, patch.hole_size_pct_op, patch.hole_size_pct);
   if (!reader.ok()) {
     return env.Undefined();
   }

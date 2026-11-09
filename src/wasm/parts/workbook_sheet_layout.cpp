@@ -373,25 +373,25 @@ void JsWorkbook::updateSheetView(uint32_t sheet, emscripten::val patch) {
   }
   JsNarrowNumericReader reader("Sheet.updateView");
   fm_sheet_view_patch_t p = FM_STRUCT_INIT(fm_sheet_view_patch_t);
-  js_patch_u32(reader, patch, "zoomPct", "zoomPct", true, &p.zoom_pct_op, &p.zoom_pct);
-  js_patch_u32(reader, patch, "freezeRows", "freezeRows", true, &p.freeze_rows_op, &p.freeze_rows);
-  js_patch_u32(reader, patch, "freezeCols", "freezeCols", true, &p.freeze_cols_op, &p.freeze_cols);
-  js_patch_flag_clearable(reader, patch, "showGridLines", "showGridLines", &p.show_grid_lines_op, &p.show_grid_lines);
-  js_patch_flag_clearable(reader, patch, "showRowColumnHeaders", "showRowColumnHeaders", &p.show_row_column_headers_op,
-                          &p.show_row_column_headers);
-  js_patch_flag_clearable(reader, patch, "showZeros", "showZeros", &p.show_zeros_op, &p.show_zeros);
-  js_patch_flag_clearable(reader, patch, "rightToLeft", "rightToLeft", &p.right_to_left_op, &p.right_to_left);
-  js_patch_flag_clearable(reader, patch, "tabSelected", "tabSelected", &p.tab_selected_op, &p.tab_selected);
-  js_patch_int(reader, patch, "viewMode", "viewMode", true, &p.view_mode_op, &p.view_mode);
-  js_patch_u32(reader, patch, "topLeftRow", "topLeftRow", true, &p.top_left_row_op, &p.top_left_row);
-  js_patch_u32(reader, patch, "topLeftCol", "topLeftCol", true, &p.top_left_col_op, &p.top_left_col);
-  js_patch_u32(reader, patch, "paneTopLeftRow", "paneTopLeftRow", true, &p.pane_top_left_row_op, &p.pane_top_left_row);
-  js_patch_u32(reader, patch, "paneTopLeftCol", "paneTopLeftCol", true, &p.pane_top_left_col_op, &p.pane_top_left_col);
-  js_patch_number(reader, patch, "splitXTwips", "splitXTwips", true, &p.split_x_twips_op, &p.split_x_twips);
-  js_patch_number(reader, patch, "splitYTwips", "splitYTwips", true, &p.split_y_twips_op, &p.split_y_twips);
-  js_patch_flag_clearable(reader, patch, "showFormulas", "showFormulas", &p.show_formulas_op, &p.show_formulas);
-  js_patch_flag_clearable(reader, patch, "showOutlineSymbols", "showOutlineSymbols", &p.show_outline_symbols_op,
-                          &p.show_outline_symbols);
+  js_patch_u32(reader, patch, "zoomPct", "zoomPct", false, &p.zoom_pct_op, &p.zoom_pct);
+  js_patch_u32(reader, patch, "freezeRows", "freezeRows", false, &p.freeze_rows_op, &p.freeze_rows);
+  js_patch_u32(reader, patch, "freezeCols", "freezeCols", false, &p.freeze_cols_op, &p.freeze_cols);
+  js_patch_flag(reader, patch, "showGridLines", "showGridLines", &p.show_grid_lines_op, &p.show_grid_lines);
+  js_patch_flag(reader, patch, "showRowColumnHeaders", "showRowColumnHeaders", &p.show_row_column_headers_op,
+                &p.show_row_column_headers);
+  js_patch_flag(reader, patch, "showZeros", "showZeros", &p.show_zeros_op, &p.show_zeros);
+  js_patch_flag(reader, patch, "rightToLeft", "rightToLeft", &p.right_to_left_op, &p.right_to_left);
+  js_patch_flag(reader, patch, "tabSelected", "tabSelected", &p.tab_selected_op, &p.tab_selected);
+  js_patch_int(reader, patch, "viewMode", "viewMode", false, &p.view_mode_op, &p.view_mode);
+  js_patch_u32(reader, patch, "topLeftRow", "topLeftRow", false, &p.top_left_row_op, &p.top_left_row);
+  js_patch_u32(reader, patch, "topLeftCol", "topLeftCol", false, &p.top_left_col_op, &p.top_left_col);
+  js_patch_u32(reader, patch, "paneTopLeftRow", "paneTopLeftRow", false, &p.pane_top_left_row_op, &p.pane_top_left_row);
+  js_patch_u32(reader, patch, "paneTopLeftCol", "paneTopLeftCol", false, &p.pane_top_left_col_op, &p.pane_top_left_col);
+  js_patch_number(reader, patch, "splitXTwips", "splitXTwips", false, &p.split_x_twips_op, &p.split_x_twips);
+  js_patch_number(reader, patch, "splitYTwips", "splitYTwips", false, &p.split_y_twips_op, &p.split_y_twips);
+  js_patch_flag(reader, patch, "showFormulas", "showFormulas", &p.show_formulas_op, &p.show_formulas);
+  js_patch_flag(reader, patch, "showOutlineSymbols", "showOutlineSymbols", &p.show_outline_symbols_op,
+                &p.show_outline_symbols);
   if (!reader.ok()) {
     return;
   }
@@ -432,10 +432,10 @@ void JsWorkbook::setSheetSelection(uint32_t sheet, emscripten::val selection) {
     row = reader.required_u32(active, "row", "selection.active.row");
     col = reader.required_u32(active, "col", "selection.active.col");
   }
-  const emscripten::val ranges_value = reader.value(selection, "ranges", "ranges");
+  const emscripten::val ranges_value = reader.value(selection, "ranges", "selection.ranges");
   std::vector<fm_cell_rect_t> ranges;
   if (reader.ok()) {
-    ranges = js_pull_range_array(ranges_value, "ranges", &reader);
+    ranges = js_pull_range_array(ranges_value, "selection.ranges", &reader);
   }
   if (!reader.ok()) {
     return;

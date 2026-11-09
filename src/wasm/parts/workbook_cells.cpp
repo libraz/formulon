@@ -414,12 +414,11 @@ void JsWorkbook::updateTableStyleOptions(uint32_t sheet, uint32_t idx, emscripte
   std::string style_name;
   // `null` removes the style name; a string replaces it; an omitted key keeps it.
   js_patch_string(reader, patch, "styleName", "styleName", true, style_name, &p.style_name_op, &p.style_name);
-  js_patch_flag_present(reader, patch, "showFirstColumn", "showFirstColumn", &p.show_first_column_op,
-                        &p.show_first_column);
-  js_patch_flag_present(reader, patch, "showLastColumn", "showLastColumn", &p.show_last_column_op, &p.show_last_column);
-  js_patch_flag_present(reader, patch, "showRowStripes", "showRowStripes", &p.show_row_stripes_op, &p.show_row_stripes);
-  js_patch_flag_present(reader, patch, "showColumnStripes", "showColumnStripes", &p.show_column_stripes_op,
-                        &p.show_column_stripes);
+  js_patch_flag(reader, patch, "showFirstColumn", "showFirstColumn", &p.show_first_column_op, &p.show_first_column);
+  js_patch_flag(reader, patch, "showLastColumn", "showLastColumn", &p.show_last_column_op, &p.show_last_column);
+  js_patch_flag(reader, patch, "showRowStripes", "showRowStripes", &p.show_row_stripes_op, &p.show_row_stripes);
+  js_patch_flag(reader, patch, "showColumnStripes", "showColumnStripes", &p.show_column_stripes_op,
+                &p.show_column_stripes);
   if (!reader.ok()) {
     return;
   }
@@ -498,12 +497,12 @@ void JsWorkbook::updateTable(uint32_t sheet, uint32_t idx, emscripten::val spec)
   JsNarrowNumericReader reader("Table.update");
   fm_table_patch_t patch = FM_STRUCT_INIT(fm_table_patch_t);
   const emscripten::val rect_value = reader.value(spec, "rect", "rect");
-  if (reader.ok() && js_value_present(rect_value)) {
+  if (reader.ok() && js_patch_key(reader, rect_value, "rect", false) == JsPatchKey::kSet) {
     patch.range_op = FM_PATCH_OP_SET;
     patch.range = js_pull_range(rect_value, &reader);
   }
-  js_patch_flag_present(reader, spec, "headerRow", "headerRow", &patch.header_row_op, &patch.header_row);
-  js_patch_flag_present(reader, spec, "totalsRow", "totalsRow", &patch.totals_row_op, &patch.totals_row);
+  js_patch_flag(reader, spec, "headerRow", "headerRow", &patch.header_row_op, &patch.header_row);
+  js_patch_flag(reader, spec, "totalsRow", "totalsRow", &patch.totals_row_op, &patch.totals_row);
   if (!reader.ok()) {
     return;
   }

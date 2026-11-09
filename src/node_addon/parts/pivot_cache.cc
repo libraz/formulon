@@ -352,19 +352,10 @@ Napi::Value Workbook::PivotCacheUpdateOptions(const Napi::CallbackInfo& info) {
   const Napi::Object spec = ArgObject(info, 1);
   fm_pivot_cache_options_patch_t o = FM_STRUCT_INIT(fm_pivot_cache_options_patch_t);
   CheckedSpecReader reader(env);
-  bool present = false;
-  const bool save_data = reader.Bool(spec, "saveData", false, &present);
-  if (present) {
-    o.save_data_op = FM_PATCH_OP_SET;
-    o.save_data = save_data ? 1 : 0;
-  }
+  o.save_data_op = PatchBool(reader, spec, "saveData", &o.save_data);
   // `null` is the automatic limit (no attribute).
   o.missing_items_limit_op = PatchNullableU32(reader, spec, "missingItemsLimit", &o.missing_items_limit);
-  const bool refresh_on_load = reader.Bool(spec, "refreshOnLoad", false, &present);
-  if (present) {
-    o.refresh_on_load_op = FM_PATCH_OP_SET;
-    o.refresh_on_load = refresh_on_load ? 1 : 0;
-  }
+  o.refresh_on_load_op = PatchBool(reader, spec, "refreshOnLoad", &o.refresh_on_load);
   if (!reader.ok()) {
     return env.Undefined();
   }

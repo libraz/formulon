@@ -461,20 +461,11 @@ void JsWorkbook::pivotSetOptions(uint32_t sheet, uint32_t pivotIndex, emscripten
   }
   fm_pivot_options_patch_t p = FM_STRUCT_INIT(fm_pivot_options_patch_t);
   JsNarrowNumericReader reader("Pivot.updateOptions");
-  // An omitted or `null` flag keeps the stored value.
   const auto flag = [&](const char* key, fm_patch_op_t* op, int32_t* value) {
-    const emscripten::val v = reader.value(options, key, key);
-    if (reader.ok() && js_value_present(v)) {
-      *op = FM_PATCH_OP_SET;
-      *value = reader.boolean_value(v, false) ? 1 : 0;
-    }
+    js_patch_flag(reader, options, key, key, op, value);
   };
   const auto count = [&](const char* key, fm_patch_op_t* op, uint32_t* value) {
-    const emscripten::val v = reader.value(options, key, key);
-    if (reader.ok() && js_value_present(v)) {
-      *op = FM_PATCH_OP_SET;
-      *value = reader.u32_value(v, 0U, key);
-    }
+    js_patch_u32(reader, options, key, key, false, op, value);
   };
   // An omitted caption keeps the stored one; `null` removes it.
   std::string error_caption;

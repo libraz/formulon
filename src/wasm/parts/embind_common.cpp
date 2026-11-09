@@ -909,14 +909,15 @@ std::vector<fm_cell_rect_t> js_pull_range_array(const emscripten::val& array, co
   }
   out.reserve(n);
   for (uint32_t i = 0; i < n; ++i) {
-    const emscripten::val range = reader->array_element(array, i, "ranges[]");
+    const std::string element = binding::element_path(key, i);
+    const emscripten::val range = reader->array_element(array, i, element.c_str());
     if (!reader->ok()) {
       return out;
     }
     if (!js_value_present(range)) {
       continue;
     }
-    out.push_back(js_pull_range(range, reader));
+    out.push_back(js_pull_range(range, reader, element));
   }
   return out;
 }
@@ -1049,24 +1050,6 @@ void js_patch_u8(JsNarrowNumericReader& reader, const emscripten::val& owner, co
   if (js_patch_begin(reader, owner, key, field, false, op, &v)) {
     *value = static_cast<int32_t>(reader.u8_value(v, 0U, field));
   }
-}
-
-void js_patch_flag_clearable(JsNarrowNumericReader& reader, const emscripten::val& owner, const char* key,
-                             const char* field, fm_patch_op_t* op, int32_t* value) {
-  emscripten::val v;
-  if (js_patch_begin(reader, owner, key, field, true, op, &v)) {
-    *value = reader.boolean_value(v, false) ? 1 : 0;
-  }
-}
-
-void js_patch_flag_present(JsNarrowNumericReader& reader, const emscripten::val& owner, const char* key,
-                           const char* field, fm_patch_op_t* op, int32_t* value) {
-  const emscripten::val v = reader.value(owner, key, field);
-  if (!reader.ok() || !js_value_present(v)) {
-    return;
-  }
-  *op = FM_PATCH_OP_SET;
-  *value = reader.boolean_value(v, false) ? 1 : 0;
 }
 
 int32_t js_tristate(JsNarrowNumericReader& reader, const emscripten::val& owner, const char* key, const char* field) {

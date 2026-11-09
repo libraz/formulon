@@ -22,8 +22,7 @@ Napi::Value Workbook::AddSheet(const Napi::CallbackInfo& info) {
   const bool has_name = !info[0].IsUndefined() && !info[0].IsNull();
   if (has_name) {
     if (!info[0].IsString()) {
-      Napi::TypeError::New(env, "Workbook.addSheet name must be a string or null")
-          .ThrowAsJavaScriptException();
+      Napi::TypeError::New(env, "Workbook.addSheet name must be a string or null").ThrowAsJavaScriptException();
       return env.Undefined();
     }
     name = ArgString(info, 0);
@@ -429,7 +428,8 @@ Napi::Value Workbook::UpdateTable(const Napi::CallbackInfo& info) {
   CheckedSpecReader reader(env);
   fm_table_patch_t patch = FM_STRUCT_INIT(fm_table_patch_t);
   Napi::Object rect_object;
-  if (reader.Object(spec, "rect", &rect_object) && ReadCellRect(reader, rect_object, &patch.range)) {
+  if (ClassifyPatchKey(reader, reader.Get(spec, "rect"), "rect", false) == PatchKey::kSet &&
+      reader.Object(spec, "rect", &rect_object) && ReadCellRect(reader, rect_object, &patch.range)) {
     patch.range_op = FM_PATCH_OP_SET;
   }
   patch.header_row_op = PatchBool(reader, spec, "headerRow", &patch.header_row);
@@ -460,7 +460,7 @@ Napi::Value Workbook::UpdateTableStyleOptions(const Napi::CallbackInfo& info) {
   CheckedSpecReader reader(env);
   fm_table_style_options_patch_t patch = FM_STRUCT_INIT(fm_table_style_options_patch_t);
   std::string style_name;
-  patch.style_name_op = PatchString(reader, spec, "styleName", &style_name, &patch.style_name);
+  patch.style_name_op = PatchString(reader, spec, "styleName", true, &style_name, &patch.style_name);
   patch.show_first_column_op = PatchBool(reader, spec, "showFirstColumn", &patch.show_first_column);
   patch.show_last_column_op = PatchBool(reader, spec, "showLastColumn", &patch.show_last_column);
   patch.show_row_stripes_op = PatchBool(reader, spec, "showRowStripes", &patch.show_row_stripes);

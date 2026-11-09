@@ -574,7 +574,7 @@ test('chart calls throw on failures and reject malformed arguments', async () =>
           .sheet(0)
           .chart(id)
           .updateSeries(0, 0, { fill: { color: '#010203' }, marker: { symbol: null } }),
-      isFormulonError,
+      (e) => e instanceof TypeError && /marker\.symbol must not be null/.test(e.message),
     );
     assert.throws(() => wb.sheet(0).chart(id).updateAxis(12345, {}), isFormulonError);
     assert.throws(() => wb.sheet(0).chart(id).updatePlot(0, { holeSizePct: 50 }), isFormulonError);

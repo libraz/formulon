@@ -134,7 +134,7 @@ Napi::Value Workbook::PivotUpdateStyleOptions(const Napi::CallbackInfo& info) {
   CheckedSpecReader reader(env);
   fm_pivot_style_options_patch_t patch = FM_STRUCT_INIT(fm_pivot_style_options_patch_t);
   std::string style_name;
-  patch.style_name_op = PatchString(reader, style, "styleName", &style_name, &patch.style_name);
+  patch.style_name_op = PatchString(reader, style, "styleName", true, &style_name, &patch.style_name);
   patch.show_row_headers_op = PatchBool(reader, style, "showRowHeaders", &patch.show_row_headers);
   patch.show_column_headers_op = PatchBool(reader, style, "showColumnHeaders", &patch.show_column_headers);
   patch.show_row_stripes_op = PatchBool(reader, style, "showRowStripes", &patch.show_row_stripes);
@@ -424,15 +424,15 @@ Napi::Value Workbook::PivotUpdateField(const Napi::CallbackInfo& info) {
   std::string custom_name;
   std::string number_format;
   std::string sort_by_field;
-  patch.custom_name_op = PatchString(reader, spec, "customName", &custom_name, &patch.custom_name);
-  patch.number_format_op = PatchString(reader, spec, "numberFormat", &number_format, &patch.number_format);
+  patch.custom_name_op = PatchString(reader, spec, "customName", true, &custom_name, &patch.custom_name);
+  patch.number_format_op = PatchString(reader, spec, "numberFormat", true, &number_format, &patch.number_format);
   patch.default_subtotal_op = PatchBool(reader, spec, "defaultSubtotal", &patch.default_subtotal);
   patch.insert_blank_row_op = PatchBool(reader, spec, "insertBlankRow", &patch.insert_blank_row);
   patch.fill_down_labels_op = PatchBool(reader, spec, "fillDownLabels", &patch.fill_down_labels);
   patch.show_all_op = PatchBool(reader, spec, "showAll", &patch.show_all);
   patch.subtotal_top_op = PatchBool(reader, spec, "subtotalTop", &patch.subtotal_top);
   patch.sort_order_op = PatchI32(reader, spec, "sortOrder", &patch.sort_order);
-  patch.sort_by_field_op = PatchString(reader, spec, "sortByField", &sort_by_field, &patch.sort_by_field);
+  patch.sort_by_field_op = PatchString(reader, spec, "sortByField", true, &sort_by_field, &patch.sort_by_field);
   patch.show_detail_op = PatchBool(reader, spec, "showDetail", &patch.show_detail);
   if (!reader.ok()) {
     return env.Undefined();
@@ -456,7 +456,7 @@ Napi::Value Workbook::PivotUpdateFieldItem(const Napi::CallbackInfo& info) {
   std::string caption;
   patch.visible_op = PatchBool(reader, spec, "visible", &patch.visible);
   patch.show_detail_op = PatchBool(reader, spec, "showDetail", &patch.show_detail);
-  patch.caption_op = PatchString(reader, spec, "caption", &caption, &patch.caption);
+  patch.caption_op = PatchString(reader, spec, "caption", true, &caption, &patch.caption);
   if (!reader.ok()) {
     return env.Undefined();
   }
@@ -529,7 +529,7 @@ Napi::Value Workbook::PivotUpdateOptions(const Napi::CallbackInfo& info) {
   };
   const auto text = [&](const char* key, fm_patch_op_t& op, const char*& field) {
     strings.emplace_back();
-    op = PatchString(reader, spec, key, &strings.back(), &field);
+    op = PatchString(reader, spec, key, true, &strings.back(), &field);
   };
   const auto count = [&](const char* key, fm_patch_op_t& op, uint32_t& field) {
     op = PatchU32(reader, spec, key, &field);

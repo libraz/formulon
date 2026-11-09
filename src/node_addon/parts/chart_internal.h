@@ -13,13 +13,13 @@
 namespace formulon_node {
 namespace detail {
 
-/// A patch field: absent keeps, `null` clears, anything else sets `value`.
+/// A patch field: absent keeps, `null` clears (a TypeError when the key is not clearable), anything else sets `value`.
 struct Field {
   fm_patch_op_t op = FM_PATCH_OP_KEEP;
   Napi::Value value;
 };
 
-Field Probe(CheckedSpecReader& reader, const Napi::Object& owner, const char* key);
+Field Probe(CheckedSpecReader& reader, const Napi::Object& owner, const char* key, bool nullable);
 
 /// Reads the patch object argument `info[idx]`; absent reads as `{}`. False after
 /// throwing when a value other than a plain object was supplied.

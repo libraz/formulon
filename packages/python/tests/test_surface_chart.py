@@ -396,8 +396,8 @@ class ChartEditTests(unittest.TestCase):
             self.assertEqual((axis.crosses, axis.crosses_at), (ChartAxisCrosses.AT, 5.0))
 
             wb.sheet(0).chart(oid).update_axis(val_id)
-            with self.assertRaises(FormulonError):
-                wb.sheet(0).chart(oid).update_axis(val_id, visible=None)
+            with self.assertRaises(TypeError):
+                wb.sheet(0).chart(oid).update_axis(val_id, visible=None)  # type: ignore[arg-type]
             with self.assertRaises(FormulonError):
                 wb.sheet(0).chart(oid).update_axis(987654, min=1.0)
 
@@ -500,8 +500,8 @@ class ChartEditTests(unittest.TestCase):
             self.assertIs(s.smooth, True)
             wb.sheet(0).chart(oid).update_series(0, 0, marker=None)
             self.assertIsNone(wb.sheet(0).chart(oid).get_properties().plots[0].series[0].marker)
-            with self.assertRaises(FormulonError):
-                wb.sheet(0).chart(oid).update_series(0, 0, smooth=None)
+            with self.assertRaises(TypeError):
+                wb.sheet(0).chart(oid).update_series(0, 0, smooth=None)  # type: ignore[arg-type]
 
     def test_point_patch_and_removal(self) -> None:
         wb, oid = _chart()

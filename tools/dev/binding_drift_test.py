@@ -40,6 +40,12 @@ from tools.dev.binding_drift.api_conventions_bindings_test import (  # noqa: F40
     ValueUnionTest,
 )
 
+# The fixture tests of the patch-nullability check run here as well.
+from tools.dev.binding_drift.patch_nullability_test import (  # noqa: F401
+    DtsNullKeysTest,
+    PatchNullabilityTest,
+)
+
 
 def _load_codegen(name: str):
     path = Path(__file__).resolve().parents[1] / "codegen" / f"{name}.py"
@@ -1823,6 +1829,56 @@ class StringTableTest(unittest.TestCase):
         self.assertTrue(any("does not export" in p for p in problems), problems)
         problems = declaration_checks.check_string_tables(self.COMMON, _ERROR_DTS, _VALUE_H)
         self.assertTrue(any("does not declare" in p for p in problems), problems)
+
+
+class FacadePatchKeysTest(unittest.TestCase):
+    COMMON = (
+        "const PATCH_KEYS = Object.freeze({\n"
+        "  'Sheet.updateView': [\n    0,\n    ['showRowColumnHeaders', 'zoomPct'],\n  ],\n"
+        "  'Workbook.updateIterative': [0, ['enabled', 'maxIterations']],\n"
+        "});\n"
+        "const INPUT_KEYS = Object.freeze({\n  'Chart.setLegend': [0, ['overlay', 'position']],\n});\n"
+        "const PATCH_NESTED_KEYS = Object.freeze({\n"
+        "  'Chart.updateSeries': {\n    labels: [\n      'deleted',\n      'sourceLinked',\n    ],\n  },\n"
+        "});\n"
+        "const PATCH_NULLABLE = Object.freeze({\n  'Sheet.updateView': { zoomPct: 'number' },\n});\n"
+        "const PATCH_FIELDS = Object.freeze({\n"
+        "  'Workbook.updateIterative': { ...bools('enabled'), ...numbers('maxIterations') },\n"
+        "  'Sheet.updateView': {\n    ...numbers('zoomPct'),\n    ...bools(\n      'showRowColumnHeaders',\n    ),\n"
+        "  },\n"
+        "  'Chart.setLegend': LEGEND_FIELDS,\n"
+        "  'Chart.updateSeries': bools('labels.sourceLinked', 'labels.deleted'),\n"
+        "});\n"
+    )  # fmt: skip
+
+    def test_names_that_belong_to_the_method_are_clean(self) -> None:
+        self.assertEqual(declaration_checks.check_facade_patch_keys(self.COMMON), [])
+
+    def test_a_stale_key_in_a_field_table_is_reported(self) -> None:
+        problems = declaration_checks.check_facade_patch_keys(
+            self.COMMON.replace("'showRowColumnHeaders',\n    )", "'showRowColHeaders',\n    )")
+        )
+        self.assertEqual(len(problems), 1, problems)
+        self.assertIn("showRowColHeaders", problems[0])
+        problems = declaration_checks.check_facade_patch_keys(
+            self.COMMON.replace("numbers('maxIterations')", "numbers('maxIters')")
+        )
+        self.assertTrue(any("maxIters" in p for p in problems), problems)
+
+    def test_a_stale_key_in_the_nullable_table_or_a_literal_entry_is_reported(self) -> None:
+        problems = declaration_checks.check_facade_patch_keys(
+            self.COMMON.replace("{ zoomPct: 'number' }", "{ zoom: 'number' }")
+        )
+        self.assertTrue(any("PATCH_NULLABLE" in p and "zoom" in p for p in problems), problems)
+
+    def test_a_method_without_a_key_table_is_reported(self) -> None:
+        problems = declaration_checks.check_facade_patch_keys(
+            self.COMMON.replace("'Chart.setLegend': [0,", "'Chart.other': [0,")
+        )
+        self.assertTrue(any("Chart.setLegend" in p for p in problems), problems)
+
+    def test_the_shipped_tables_are_clean(self) -> None:
+        self.assertEqual(declaration_checks.check_facade_patch_keys(), [])
 
 
 class ErrorDisplayNamesGeneratorTest(unittest.TestCase):

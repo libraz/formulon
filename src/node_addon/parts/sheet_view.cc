@@ -236,10 +236,10 @@ Napi::Value Workbook::UpdateSheetProtection(const Napi::CallbackInfo& info) {
   CheckedSpecReader reader(env);
   std::string text[4];
   fm_sheet_protection_patch_t p = FM_STRUCT_INIT(fm_sheet_protection_patch_t);
-  p.algorithm_name_op = PatchString(reader, in, "algorithmName", &text[0], &p.algorithm_name);
-  p.hash_value_op = PatchString(reader, in, "hashValue", &text[1], &p.hash_value);
-  p.salt_value_op = PatchString(reader, in, "saltValue", &text[2], &p.salt_value);
-  p.legacy_password_hash_op = PatchString(reader, in, "legacyPasswordHash", &text[3], &p.legacy_password_hash);
+  p.algorithm_name_op = PatchString(reader, in, "algorithmName", true, &text[0], &p.algorithm_name);
+  p.hash_value_op = PatchString(reader, in, "hashValue", true, &text[1], &p.hash_value);
+  p.salt_value_op = PatchString(reader, in, "saltValue", true, &text[2], &p.salt_value);
+  p.legacy_password_hash_op = PatchString(reader, in, "legacyPasswordHash", true, &text[3], &p.legacy_password_hash);
   p.spin_count_op = PatchNullableU32(reader, in, "spinCount", &p.spin_count);
   p.allow_edit_objects_op = PatchBool(reader, in, "allowEditObjects", &p.allow_edit_objects);
   p.allow_edit_scenarios_op = PatchBool(reader, in, "allowEditScenarios", &p.allow_edit_scenarios);

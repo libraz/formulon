@@ -302,11 +302,11 @@ void JsWorkbook::setSheetPageSetup(uint32_t sheet, emscripten::val setup) {
   JsNarrowNumericReader reader("Sheet.updatePageSetup");
   fm_page_setup_patch_t out = FM_STRUCT_INIT(fm_page_setup_patch_t);
   js_patch_int(reader, setup, "orientation", "orientation", true, &out.orientation_op, &out.orientation);
-  js_patch_u32(reader, setup, "paperSize", "paperSize", true, &out.paper_size_op, &out.paper_size);
-  js_patch_u32(reader, setup, "scalePct", "scalePct", true, &out.scale_pct_op, &out.scale_pct);
-  js_patch_u32(reader, setup, "fitToWidth", "fitToWidth", true, &out.fit_to_width_op, &out.fit_to_width);
-  js_patch_u32(reader, setup, "fitToHeight", "fitToHeight", true, &out.fit_to_height_op, &out.fit_to_height);
-  js_patch_flag_clearable(reader, setup, "fitToPage", "fitToPage", &out.fit_to_page_op, &out.fit_to_page);
+  js_patch_u32(reader, setup, "paperSize", "paperSize", false, &out.paper_size_op, &out.paper_size);
+  js_patch_u32(reader, setup, "scalePct", "scalePct", false, &out.scale_pct_op, &out.scale_pct);
+  js_patch_u32(reader, setup, "fitToWidth", "fitToWidth", false, &out.fit_to_width_op, &out.fit_to_width);
+  js_patch_u32(reader, setup, "fitToHeight", "fitToHeight", false, &out.fit_to_height_op, &out.fit_to_height);
+  js_patch_flag(reader, setup, "fitToPage", "fitToPage", &out.fit_to_page_op, &out.fit_to_page);
   if (!reader.ok()) {
     return;
   }
@@ -320,12 +320,12 @@ void JsWorkbook::setSheetPageMargins(uint32_t sheet, emscripten::val margins) {
   }
   JsNarrowNumericReader reader("Sheet.updatePageMargins");
   fm_page_margins_patch_t out = FM_STRUCT_INIT(fm_page_margins_patch_t);
-  js_patch_number(reader, margins, "leftIn", "leftIn", true, &out.left_in_op, &out.left_in);
-  js_patch_number(reader, margins, "rightIn", "rightIn", true, &out.right_in_op, &out.right_in);
-  js_patch_number(reader, margins, "topIn", "topIn", true, &out.top_in_op, &out.top_in);
-  js_patch_number(reader, margins, "bottomIn", "bottomIn", true, &out.bottom_in_op, &out.bottom_in);
-  js_patch_number(reader, margins, "headerIn", "headerIn", true, &out.header_in_op, &out.header_in);
-  js_patch_number(reader, margins, "footerIn", "footerIn", true, &out.footer_in_op, &out.footer_in);
+  js_patch_number(reader, margins, "leftIn", "leftIn", false, &out.left_in_op, &out.left_in);
+  js_patch_number(reader, margins, "rightIn", "rightIn", false, &out.right_in_op, &out.right_in);
+  js_patch_number(reader, margins, "topIn", "topIn", false, &out.top_in_op, &out.top_in);
+  js_patch_number(reader, margins, "bottomIn", "bottomIn", false, &out.bottom_in_op, &out.bottom_in);
+  js_patch_number(reader, margins, "headerIn", "headerIn", false, &out.header_in_op, &out.header_in);
+  js_patch_number(reader, margins, "footerIn", "footerIn", false, &out.footer_in_op, &out.footer_in);
   if (!reader.ok()) {
     return;
   }
@@ -339,12 +339,12 @@ void JsWorkbook::setSheetPrintOptions(uint32_t sheet, emscripten::val options) {
   }
   JsNarrowNumericReader reader("Sheet.updatePrintOptions");
   fm_print_options_patch_t out = FM_STRUCT_INIT(fm_print_options_patch_t);
-  js_patch_flag_clearable(reader, options, "gridLines", "gridLines", &out.grid_lines_op, &out.grid_lines);
-  js_patch_flag_clearable(reader, options, "headings", "headings", &out.headings_op, &out.headings);
-  js_patch_flag_clearable(reader, options, "horizontalCentered", "horizontalCentered", &out.horizontal_centered_op,
-                          &out.horizontal_centered);
-  js_patch_flag_clearable(reader, options, "verticalCentered", "verticalCentered", &out.vertical_centered_op,
-                          &out.vertical_centered);
+  js_patch_flag(reader, options, "gridLines", "gridLines", &out.grid_lines_op, &out.grid_lines);
+  js_patch_flag(reader, options, "headings", "headings", &out.headings_op, &out.headings);
+  js_patch_flag(reader, options, "horizontalCentered", "horizontalCentered", &out.horizontal_centered_op,
+                &out.horizontal_centered);
+  js_patch_flag(reader, options, "verticalCentered", "verticalCentered", &out.vertical_centered_op,
+                &out.vertical_centered);
   if (!reader.ok()) {
     return;
   }
@@ -374,14 +374,13 @@ void JsWorkbook::setSheetHeaderFooter(uint32_t sheet, emscripten::val headerFoot
   section("evenFooter", even_footer, &out.even_footer_op, &out.even_footer);
   section("firstHeader", first_header, &out.first_header_op, &out.first_header);
   section("firstFooter", first_footer, &out.first_footer_op, &out.first_footer);
-  js_patch_flag_clearable(reader, headerFooter, "differentOddEven", "differentOddEven", &out.different_odd_even_op,
-                          &out.different_odd_even);
-  js_patch_flag_clearable(reader, headerFooter, "differentFirst", "differentFirst", &out.different_first_op,
-                          &out.different_first);
-  js_patch_flag_clearable(reader, headerFooter, "scaleWithDoc", "scaleWithDoc", &out.scale_with_doc_op,
-                          &out.scale_with_doc);
-  js_patch_flag_clearable(reader, headerFooter, "alignWithMargins", "alignWithMargins", &out.align_with_margins_op,
-                          &out.align_with_margins);
+  js_patch_flag(reader, headerFooter, "differentOddEven", "differentOddEven", &out.different_odd_even_op,
+                &out.different_odd_even);
+  js_patch_flag(reader, headerFooter, "differentFirst", "differentFirst", &out.different_first_op,
+                &out.different_first);
+  js_patch_flag(reader, headerFooter, "scaleWithDoc", "scaleWithDoc", &out.scale_with_doc_op, &out.scale_with_doc);
+  js_patch_flag(reader, headerFooter, "alignWithMargins", "alignWithMargins", &out.align_with_margins_op,
+                &out.align_with_margins);
   if (!reader.ok()) {
     return;
   }

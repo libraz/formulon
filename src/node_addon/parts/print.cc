@@ -315,7 +315,7 @@ Napi::Value Workbook::UpdateSheetPageSetup(const Napi::CallbackInfo& info) {
   return InvokeSheetSpec(
       info,
       [&](CheckedSpecReader& reader, const Napi::Object& spec) {
-        out.orientation_op = PatchI32(reader, spec, "orientation", &out.orientation);
+        out.orientation_op = PatchNullableI32(reader, spec, "orientation", &out.orientation);
         out.paper_size_op = PatchU32(reader, spec, "paperSize", &out.paper_size);
         out.scale_pct_op = PatchU32(reader, spec, "scalePct", &out.scale_pct);
         out.fit_to_width_op = PatchU32(reader, spec, "fitToWidth", &out.fit_to_width);
@@ -366,12 +366,12 @@ Napi::Value Workbook::UpdateSheetHeaderFooter(const Napi::CallbackInfo& info) {
   return InvokeSheetSpec(
       info,
       [&](CheckedSpecReader& reader, const Napi::Object& spec) {
-        out.odd_header_op = PatchString(reader, spec, "oddHeader", &odd_header, &out.odd_header);
-        out.odd_footer_op = PatchString(reader, spec, "oddFooter", &odd_footer, &out.odd_footer);
-        out.even_header_op = PatchString(reader, spec, "evenHeader", &even_header, &out.even_header);
-        out.even_footer_op = PatchString(reader, spec, "evenFooter", &even_footer, &out.even_footer);
-        out.first_header_op = PatchString(reader, spec, "firstHeader", &first_header, &out.first_header);
-        out.first_footer_op = PatchString(reader, spec, "firstFooter", &first_footer, &out.first_footer);
+        out.odd_header_op = PatchString(reader, spec, "oddHeader", true, &odd_header, &out.odd_header);
+        out.odd_footer_op = PatchString(reader, spec, "oddFooter", true, &odd_footer, &out.odd_footer);
+        out.even_header_op = PatchString(reader, spec, "evenHeader", true, &even_header, &out.even_header);
+        out.even_footer_op = PatchString(reader, spec, "evenFooter", true, &even_footer, &out.even_footer);
+        out.first_header_op = PatchString(reader, spec, "firstHeader", true, &first_header, &out.first_header);
+        out.first_footer_op = PatchString(reader, spec, "firstFooter", true, &first_footer, &out.first_footer);
         out.different_odd_even_op = PatchBool(reader, spec, "differentOddEven", &out.different_odd_even);
         out.different_first_op = PatchBool(reader, spec, "differentFirst", &out.different_first);
         out.scale_with_doc_op = PatchBool(reader, spec, "scaleWithDoc", &out.scale_with_doc);

@@ -43,37 +43,43 @@ struct WrField {
   uint16_t value;
   Wr kind;
   const WrField* sub;
+  bool nullable;  ///< `null` clears the member; otherwise it is a type error.
 };
 
 // clang-format off
-#define WR(key, T, kind, op, value) {key, offsetof(T, op), offsetof(T, value), Wr::kind, nullptr}
-#define WR_SRC(key, T, op, member) {key, offsetof(T, op), offsetof(T, member), Wr::kSource, nullptr}
-#define WR_OBJ(key, T, member, table) {key, 0, offsetof(T, member), Wr::kObj, table}
-#define WR_OBJ_OP(key, T, op, member, table) {key, offsetof(T, op), offsetof(T, member), Wr::kObjOp, table}
-#define WR_END {nullptr, 0, 0, Wr::kU32, nullptr}
+#define WR(key, T, kind, op, value) {key, offsetof(T, op), offsetof(T, value), Wr::kind, nullptr, false}
+#define WR_SRC(key, T, op, member) {key, offsetof(T, op), offsetof(T, member), Wr::kSource, nullptr, false}
+#define WR_OBJ(key, T, member, table) {key, 0, offsetof(T, member), Wr::kObj, table, false}
+#define WR_OBJ_OP(key, T, op, member, table) {key, offsetof(T, op), offsetof(T, member), Wr::kObjOp, table, false}
+// The same members as above, for a key the patch type declares clearable.
+#define WRN(key, T, kind, op, value) {key, offsetof(T, op), offsetof(T, value), Wr::kind, nullptr, true}
+#define WRN_SRC(key, T, op, member) {key, offsetof(T, op), offsetof(T, member), Wr::kSource, nullptr, true}
+#define WRN_OBJ(key, T, member, table) {key, 0, offsetof(T, member), Wr::kObj, table, true}
+#define WRN_OBJ_OP(key, T, op, member, table) {key, offsetof(T, op), offsetof(T, member), Wr::kObjOp, table, true}
+#define WR_END {nullptr, 0, 0, Wr::kU32, nullptr, false}
 // clang-format on
 
 constexpr WrField kFillWr[] = {
-    WR("color", fm_chart_fill_patch_t, kColor, color_op, color),
-    WR("transparencyPct", fm_chart_fill_patch_t, kF64, transparency_pct_op, transparency_pct),
+    WRN("color", fm_chart_fill_patch_t, kColor, color_op, color),
+    WRN("transparencyPct", fm_chart_fill_patch_t, kF64, transparency_pct_op, transparency_pct),
     WR("none", fm_chart_fill_patch_t, kBool, none_op, none),
     WR_END,
 };
 
 constexpr WrField kLineWr[] = {
-    WR("color", fm_chart_line_patch_t, kColor, color_op, color),
-    WR("transparencyPct", fm_chart_line_patch_t, kF64, transparency_pct_op, transparency_pct),
-    WR("widthPt", fm_chart_line_patch_t, kF64, width_pt_op, width_pt),
-    WR("dash", fm_chart_line_patch_t, kI32, dash_op, dash),
+    WRN("color", fm_chart_line_patch_t, kColor, color_op, color),
+    WRN("transparencyPct", fm_chart_line_patch_t, kF64, transparency_pct_op, transparency_pct),
+    WRN("widthPt", fm_chart_line_patch_t, kF64, width_pt_op, width_pt),
+    WRN("dash", fm_chart_line_patch_t, kI32, dash_op, dash),
     WR("none", fm_chart_line_patch_t, kBool, none_op, none),
     WR_END,
 };
 
 constexpr WrField kMarkerWr[] = {
     WR("symbol", fm_chart_marker_patch_t, kI32, symbol_op, symbol),
-    WR("sizePt", fm_chart_marker_patch_t, kF64, size_pt_op, size_pt),
-    WR_OBJ("fill", fm_chart_marker_patch_t, fill, kFillWr),
-    WR_OBJ("line", fm_chart_marker_patch_t, line, kLineWr),
+    WRN("sizePt", fm_chart_marker_patch_t, kF64, size_pt_op, size_pt),
+    WRN_OBJ("fill", fm_chart_marker_patch_t, fill, kFillWr),
+    WRN_OBJ("line", fm_chart_marker_patch_t, line, kLineWr),
     WR_END,
 };
 
@@ -83,35 +89,35 @@ constexpr WrField kLabelsWr[] = {
     WR("showSeries", fm_chart_labels_patch_t, kBool, show_series_op, show_series),
     WR("showPercent", fm_chart_labels_patch_t, kBool, show_percent_op, show_percent),
     WR("showLegendKey", fm_chart_labels_patch_t, kBool, show_legend_key_op, show_legend_key),
-    WR("separator", fm_chart_labels_patch_t, kStr, separator_op, separator),
-    WR("position", fm_chart_labels_patch_t, kI32, position_op, position),
-    WR("numberFormat", fm_chart_labels_patch_t, kStr, number_format_op, number_format),
-    WR("fontColor", fm_chart_labels_patch_t, kColor, font_color_op, font_color),
-    WR("fontSizePt", fm_chart_labels_patch_t, kF64, font_size_pt_op, font_size_pt),
+    WRN("separator", fm_chart_labels_patch_t, kStr, separator_op, separator),
+    WRN("position", fm_chart_labels_patch_t, kI32, position_op, position),
+    WRN("numberFormat", fm_chart_labels_patch_t, kStr, number_format_op, number_format),
+    WRN("fontColor", fm_chart_labels_patch_t, kColor, font_color_op, font_color),
+    WRN("fontSizePt", fm_chart_labels_patch_t, kF64, font_size_pt_op, font_size_pt),
     WR("sourceLinked", fm_chart_labels_patch_t, kBool, source_linked_op, source_linked),
     WR("deleted", fm_chart_labels_patch_t, kBool, deleted_op, deleted),
     WR_END,
 };
 
 constexpr WrField kSeriesWr[] = {
-    WR_SRC("name", fm_chart_series_patch_t, name_op, name),
-    WR_SRC("categories", fm_chart_series_patch_t, categories_op, categories),
+    WRN_SRC("name", fm_chart_series_patch_t, name_op, name),
+    WRN_SRC("categories", fm_chart_series_patch_t, categories_op, categories),
     WR_SRC("values", fm_chart_series_patch_t, values_op, values),
-    WR_SRC("x", fm_chart_series_patch_t, x_op, x),
+    WRN_SRC("x", fm_chart_series_patch_t, x_op, x),
     WR_SRC("y", fm_chart_series_patch_t, y_op, y),
     WR_SRC("size", fm_chart_series_patch_t, size_op, size),
-    WR_OBJ("fill", fm_chart_series_patch_t, fill, kFillWr),
-    WR_OBJ("line", fm_chart_series_patch_t, line, kLineWr),
-    WR_OBJ_OP("marker", fm_chart_series_patch_t, marker_op, marker, kMarkerWr),
+    WRN_OBJ("fill", fm_chart_series_patch_t, fill, kFillWr),
+    WRN_OBJ("line", fm_chart_series_patch_t, line, kLineWr),
+    WRN_OBJ_OP("marker", fm_chart_series_patch_t, marker_op, marker, kMarkerWr),
     WR("smooth", fm_chart_series_patch_t, kBool, smooth_op, smooth),
-    WR_OBJ_OP("labels", fm_chart_series_patch_t, labels_op, labels, kLabelsWr),
+    WRN_OBJ_OP("labels", fm_chart_series_patch_t, labels_op, labels, kLabelsWr),
     WR_END,
 };
 
 constexpr WrField kPointWr[] = {
-    WR_OBJ("fill", fm_chart_point_patch_t, fill, kFillWr),
-    WR_OBJ("line", fm_chart_point_patch_t, line, kLineWr),
-    WR_OBJ_OP("marker", fm_chart_point_patch_t, marker_op, marker, kMarkerWr),
+    WRN_OBJ("fill", fm_chart_point_patch_t, fill, kFillWr),
+    WRN_OBJ("line", fm_chart_point_patch_t, line, kLineWr),
+    WRN_OBJ_OP("marker", fm_chart_point_patch_t, marker_op, marker, kMarkerWr),
     WR_END,
 };
 
@@ -126,18 +132,18 @@ constexpr WrField kPlotWr[] = {
 
 constexpr WrField kAxisWr[] = {
     WR("visible", fm_chart_axis_patch_t, kBool, visible_op, visible),
-    WR("title", fm_chart_axis_patch_t, kTitle, title_op, title),
-    WR("min", fm_chart_axis_patch_t, kF64, min_op, min),
-    WR("max", fm_chart_axis_patch_t, kF64, max_op, max),
-    WR("majorUnit", fm_chart_axis_patch_t, kF64, major_unit_op, major_unit),
-    WR("numberFormat", fm_chart_axis_patch_t, kStr, number_format_op, number_format),
+    WRN("title", fm_chart_axis_patch_t, kTitle, title_op, title),
+    WRN("min", fm_chart_axis_patch_t, kF64, min_op, min),
+    WRN("max", fm_chart_axis_patch_t, kF64, max_op, max),
+    WRN("majorUnit", fm_chart_axis_patch_t, kF64, major_unit_op, major_unit),
+    WRN("numberFormat", fm_chart_axis_patch_t, kStr, number_format_op, number_format),
     WR("majorGridlines", fm_chart_axis_patch_t, kBool, major_gridlines_op, major_gridlines),
     WR("reversed", fm_chart_axis_patch_t, kBool, reversed_op, reversed),
-    WR("logBase", fm_chart_axis_patch_t, kF64, log_base_op, log_base),
+    WRN("logBase", fm_chart_axis_patch_t, kF64, log_base_op, log_base),
     WR("crosses", fm_chart_axis_patch_t, kI32, crosses_op, crosses),
     WR("crossesAt", fm_chart_axis_patch_t, kF64, crosses_at_op, crosses_at),
-    WR("tickLabelPosition", fm_chart_axis_patch_t, kI32, tick_label_position_op, tick_label_position),
-    WR("minorUnit", fm_chart_axis_patch_t, kF64, minor_unit_op, minor_unit),
+    WRN("tickLabelPosition", fm_chart_axis_patch_t, kI32, tick_label_position_op, tick_label_position),
+    WRN("minorUnit", fm_chart_axis_patch_t, kF64, minor_unit_op, minor_unit),
     WR("minorGridlines", fm_chart_axis_patch_t, kBool, minor_gridlines_op, minor_gridlines),
     WR("position", fm_chart_axis_patch_t, kI32, position_op, position),
     WR("sourceLinked", fm_chart_axis_patch_t, kBool, source_linked_op, source_linked),
@@ -145,10 +151,10 @@ constexpr WrField kAxisWr[] = {
 };
 
 constexpr WrField kDisplayWr[] = {
-    WR("blanksAs", fm_chart_display_patch_t, kI32, blanks_as_op, blanks_as),
-    WR("plotVisibleOnly", fm_chart_display_patch_t, kBool, plot_visible_only_op, plot_visible_only),
-    WR("naAsBlank", fm_chart_display_patch_t, kBool, na_as_blank_op, na_as_blank),
-    WR("style", fm_chart_display_patch_t, kI32, style_op, style),
+    WRN("blanksAs", fm_chart_display_patch_t, kI32, blanks_as_op, blanks_as),
+    WRN("plotVisibleOnly", fm_chart_display_patch_t, kBool, plot_visible_only_op, plot_visible_only),
+    WRN("naAsBlank", fm_chart_display_patch_t, kBool, na_as_blank_op, na_as_blank),
+    WRN("style", fm_chart_display_patch_t, kI32, style_op, style),
     WR_END,
 };
 
@@ -227,6 +233,10 @@ void read_patch(JsNarrowNumericReader& r, Arena& arena, const val& owner, void* 
       continue;
     }
     const bool clear = v.isNull();
+    if (clear && !f->nullable) {
+      r.fail_null(field);
+      break;
+    }
     const int32_t op = clear ? FM_PATCH_OP_CLEAR : FM_PATCH_OP_SET;
     switch (f->kind) {
       case Wr::kSource:
@@ -349,11 +359,11 @@ bool read_patch_arg(JsNarrowNumericReader& r, const val& patch, const char* para
 
 /// A table reading `owner.fill` / `owner.line` into a bare paint patch, which then sits at offset 0.
 constexpr WrField kFillKeyWr[] = {
-    {"fill", 0, 0, Wr::kObj, kFillWr},
+    {"fill", 0, 0, Wr::kObj, kFillWr, true},
     WR_END,
 };
 constexpr WrField kLineKeyWr[] = {
-    {"line", 0, 0, Wr::kObj, kLineWr},
+    {"line", 0, 0, Wr::kObj, kLineWr, true},
     WR_END,
 };
 

@@ -491,7 +491,7 @@ Napi::Value Workbook::UpdateCfRule(const Napi::CallbackInfo& info) {
 
   const auto cfvo_list = [&](const Napi::Object& owner, const char* key, std::vector<fm_cfvo_t>* list) {
     const Napi::Value value = reader.Get(owner, key);
-    const PatchKey state = ClassifyPatchKey(reader, value);
+    const PatchKey state = ClassifyPatchKey(reader, value, key, false);
     Napi::Array array;
     if (state == PatchKey::kSet && reader.Array(value, key, &array)) {
       for (uint32_t i = 0; i < array.Length() && reader.ok(); ++i) {
@@ -509,7 +509,7 @@ Napi::Value Workbook::UpdateCfRule(const Napi::CallbackInfo& info) {
       *out = fm_cfvo_t{FM_CF_VALUE_OBJECT_TYPE_PERCENT, 1, cfvo_strings.emplace("0")};
       return FM_PATCH_OP_SET;
     }
-    const PatchKey state = ClassifyPatchKey(reader, value);
+    const PatchKey state = ClassifyPatchKey(reader, value, key, false);
     Napi::Object object;
     if (state == PatchKey::kSet && reader.Object(value, key, &object)) {
       *out = PullCfvo(reader, object, &cfvo_strings);
@@ -521,7 +521,7 @@ Napi::Value Workbook::UpdateCfRule(const Napi::CallbackInfo& info) {
       *out = fm_color_t{};
       return FM_PATCH_OP_SET;
     }
-    return PatchColor(reader, owner, key, out);
+    return PatchColor(reader, owner, key, false, out);
   };
   // A flag read as `null` while it keeps its default: `null` sets `default_value`.
   const auto flag_or_default = [&](const Napi::Object& owner, const char* key, int32_t* out, int32_t default_value) {
@@ -534,15 +534,14 @@ Napi::Value Workbook::UpdateCfRule(const Napi::CallbackInfo& info) {
 
   patch.priority_op = PatchI32(reader, in, "priority", &patch.priority);
   patch.stop_if_true_op = PatchBool(reader, in, "stopIfTrue", &patch.stop_if_true);
-  patch.dxf_index_op = PatchU32(reader, in, "dxfIndex", &patch.dxf_index);
-  Napi::Array ranges_array;
-  if (reader.Array(in, "ranges", &ranges_array) && ReadCellRects(reader, ranges_array, "ranges", &ranges)) {
+  patch.dxf_index_op = PatchNullableU32(reader, in, "dxfIndex", &patch.dxf_index);
+  if (PatchRects(reader, in, "ranges", &ranges)) {
     patch.ranges_op = FM_PATCH_OP_SET;
     patch.ranges = ranges.data();
     patch.range_count = static_cast<uint32_t>(ranges.size());
   }
-  patch.formula1_op = PatchString(reader, in, "formula1", &text[0], &patch.formula1);
-  patch.formula2_op = PatchString(reader, in, "formula2", &text[1], &patch.formula2);
+  patch.formula1_op = PatchString(reader, in, "formula1", true, &text[0], &patch.formula1);
+  patch.formula2_op = PatchString(reader, in, "formula2", true, &text[1], &patch.formula2);
   patch.op_op = PatchI32(reader, in, "operator", &patch.op);
   patch.rank_op = PatchI32(reader, in, "rank", &patch.rank);
   patch.percent_op = PatchBool(reader, in, "percent", &patch.percent);
@@ -550,14 +549,14 @@ Napi::Value Workbook::UpdateCfRule(const Napi::CallbackInfo& info) {
   patch.above_average_op = PatchBool(reader, in, "aboveAverage", &patch.above_average);
   patch.equal_average_op = PatchBool(reader, in, "equalAverage", &patch.equal_average);
   patch.std_dev_op = PatchDouble(reader, in, "stdDev", &patch.std_dev);
-  patch.text_op = PatchString(reader, in, "text", &text[2], &patch.text);
+  patch.text_op = PatchString(reader, in, "text", false, &text[2], &patch.text);
   patch.time_period_op = PatchI32(reader, in, "timePeriod", &patch.time_period);
 
   Napi::Object color_scale;
   if (reader.Object(in, "colorScale", &color_scale)) {
     patch.color_scale_thresholds_op = cfvo_list(color_scale, "thresholds", &color_scale_thresholds);
     const Napi::Value colors = reader.Get(color_scale, "colors");
-    const PatchKey colors_state = ClassifyPatchKey(reader, colors);
+    const PatchKey colors_state = ClassifyPatchKey(reader, colors, "colors", false);
     patch.color_scale_colors_op = static_cast<fm_patch_op_t>(colors_state);
     Napi::Array colors_array;
     if (colors_state == PatchKey::kSet && reader.Array(colors, "colors", &colors_array)) {
@@ -599,7 +598,7 @@ Napi::Value Workbook::UpdateCfRule(const Napi::CallbackInfo& info) {
     patch.icon_set_percent_op = PatchBool(reader, icon_set, "percent", &patch.icon_set_percent);
     patch.icon_set_floor_op = cfvo_one(icon_set, "floor", &patch.icon_set_floor, true);
     const Napi::Value icons = reader.Get(icon_set, "icons");
-    const PatchKey icons_state = ClassifyPatchKey(reader, icons);
+    const PatchKey icons_state = ClassifyPatchKey(reader, icons, "icons", false);
     patch.icon_set_icons_op = static_cast<fm_patch_op_t>(icons_state);
     Napi::Array icons_array;
     if (icons_state == PatchKey::kSet && reader.Array(icons, "icons", &icons_array)) {

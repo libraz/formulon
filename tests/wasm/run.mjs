@@ -21,6 +21,7 @@ import { registerDrawing } from './run_drawing.mjs';
 import { registerFilterValidationComments } from './run_filter_validation_comments.mjs';
 import { registerLayoutValidation } from './run_layout_validation.mjs';
 import { registerMetadataLayout } from './run_metadata_layout.mjs';
+import { registerPatchNull } from './run_patch_null.mjs';
 import { registerPivotRegressions } from './run_pivot_regressions.mjs';
 import { registerPositional } from './run_positional.mjs';
 import { registerSheetPivot } from './run_sheet_pivot.mjs';
@@ -122,6 +123,7 @@ async function run() {
   registerDrawing(Module, test);
   registerSparseRows(Module, test);
   registerSheetScope(Module, test);
+  registerPatchNull(Module, test);
   registerAdoption(factory, test);
 
   // ---- Run --------------------------------------------------------------

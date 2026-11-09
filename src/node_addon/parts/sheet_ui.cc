@@ -368,15 +368,16 @@ Napi::Value Workbook::UpdateProtectedRange(const Napi::CallbackInfo& info) {
   std::string text[6];
   std::vector<fm_cell_rect_t> ranges;
   fm_protected_range_patch_t patch = FM_STRUCT_INIT(fm_protected_range_patch_t);
-  patch.name_op = PatchString(reader, in, "name", &text[0], &patch.name);
+  patch.name_op = PatchString(reader, in, "name", false, &text[0], &patch.name);
   patch.spin_count_op = PatchU32(reader, in, "spinCount", &patch.spin_count);
-  patch.legacy_password_hash_op = PatchString(reader, in, "legacyPasswordHash", &text[1], &patch.legacy_password_hash);
-  patch.algorithm_name_op = PatchString(reader, in, "algorithmName", &text[2], &patch.algorithm_name);
-  patch.hash_value_op = PatchString(reader, in, "hashValue", &text[3], &patch.hash_value);
-  patch.salt_value_op = PatchString(reader, in, "saltValue", &text[4], &patch.salt_value);
-  patch.security_descriptor_op = PatchString(reader, in, "securityDescriptor", &text[5], &patch.security_descriptor);
-  Napi::Array ranges_array;
-  if (reader.Array(in, "ranges", &ranges_array) && ReadCellRects(reader, ranges_array, "ranges", &ranges)) {
+  patch.legacy_password_hash_op =
+      PatchString(reader, in, "legacyPasswordHash", true, &text[1], &patch.legacy_password_hash);
+  patch.algorithm_name_op = PatchString(reader, in, "algorithmName", true, &text[2], &patch.algorithm_name);
+  patch.hash_value_op = PatchString(reader, in, "hashValue", true, &text[3], &patch.hash_value);
+  patch.salt_value_op = PatchString(reader, in, "saltValue", true, &text[4], &patch.salt_value);
+  patch.security_descriptor_op =
+      PatchString(reader, in, "securityDescriptor", true, &text[5], &patch.security_descriptor);
+  if (PatchRects(reader, in, "ranges", &ranges)) {
     patch.ranges_op = FM_PATCH_OP_SET;
     patch.ranges = ranges.data();
     patch.range_count = static_cast<uint32_t>(ranges.size());
@@ -595,8 +596,7 @@ Napi::Value Workbook::UpdateValidation(const Napi::CallbackInfo& info) {
   std::string text[6];
   std::vector<fm_cell_rect_t> ranges;
   fm_data_validation_patch_t patch = FM_STRUCT_INIT(fm_data_validation_patch_t);
-  Napi::Array ranges_array;
-  if (reader.Array(in, "ranges", &ranges_array) && ReadCellRects(reader, ranges_array, "ranges", &ranges)) {
+  if (PatchRects(reader, in, "ranges", &ranges)) {
     patch.ranges_op = FM_PATCH_OP_SET;
     patch.ranges = ranges.data();
     patch.range_count = static_cast<uint32_t>(ranges.size());
@@ -614,12 +614,12 @@ Napi::Value Workbook::UpdateValidation(const Napi::CallbackInfo& info) {
   patch.show_input_message_op = tristate("showInputMessage", &patch.show_input_message);
   patch.show_error_message_op = tristate("showErrorMessage", &patch.show_error_message);
   patch.show_in_cell_dropdown_op = tristate("showInCellDropdown", &patch.show_in_cell_dropdown);
-  patch.formula1_op = PatchString(reader, in, "formula1", &text[0], &patch.formula1);
-  patch.formula2_op = PatchString(reader, in, "formula2", &text[1], &patch.formula2);
-  patch.error_title_op = PatchString(reader, in, "errorTitle", &text[2], &patch.error_title);
-  patch.error_message_op = PatchString(reader, in, "errorMessage", &text[3], &patch.error_message);
-  patch.prompt_title_op = PatchString(reader, in, "promptTitle", &text[4], &patch.prompt_title);
-  patch.prompt_message_op = PatchString(reader, in, "promptMessage", &text[5], &patch.prompt_message);
+  patch.formula1_op = PatchString(reader, in, "formula1", true, &text[0], &patch.formula1);
+  patch.formula2_op = PatchString(reader, in, "formula2", true, &text[1], &patch.formula2);
+  patch.error_title_op = PatchString(reader, in, "errorTitle", true, &text[2], &patch.error_title);
+  patch.error_message_op = PatchString(reader, in, "errorMessage", true, &text[3], &patch.error_message);
+  patch.prompt_title_op = PatchString(reader, in, "promptTitle", true, &text[4], &patch.prompt_title);
+  patch.prompt_message_op = PatchString(reader, in, "promptMessage", true, &text[5], &patch.prompt_message);
   if (!reader.ok()) {
     return env.Undefined();
   }
@@ -780,11 +780,11 @@ Napi::Value Workbook::EditThreadedComment(const Napi::CallbackInfo& info) {
   const Napi::Object patch = ArgObject(info, 2);
   fm_threaded_comment_patch_t out = FM_STRUCT_INIT(fm_threaded_comment_patch_t);
   std::string text;
-  out.text_op = PatchString(reader, patch, "text", &text, &out.text);
+  out.text_op = PatchString(reader, patch, "text", false, &text, &out.text);
   std::vector<std::string> mention_ids;
   std::vector<fm_mention_t> mentions;
   const Napi::Value mention_list = reader.Get(patch, "mentions");
-  out.mentions_op = static_cast<fm_patch_op_t>(ClassifyPatchKey(reader, mention_list));
+  out.mentions_op = static_cast<fm_patch_op_t>(ClassifyPatchKey(reader, mention_list, "mentions", false));
   if (out.mentions_op == FM_PATCH_OP_SET) {
     ReadMentions(reader, mention_list, mention_ids, mentions);
   }

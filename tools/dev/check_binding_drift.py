@@ -115,6 +115,18 @@ Checks:
                   both. A string table declared `Readonly<Record<Enum,
                   string>>` is keyed by every member of `Enum` in order and
                   carries its source's texts (`ErrorCode`: `kErrorTable`).
+  facade-patch-keys
+                  Every key the hand-written `PATCH_FIELDS` table of
+                  packages/npm/common.mjs, or its generated `PATCH_NULLABLE`
+                  table, names for a method is a key of that method's
+                  `PATCH_KEYS` entry; a stale name is never type-checked, so
+                  `null` would reach the raw layer on it.
+  patch-nullability
+                  For each patch record of tools/api/names.yaml with a
+                  `clearable:` list, the keys the WASM `.d.ts` patch type
+                  admits `null` on, and the Python `update_*` keywords whose
+                  annotation admits `None`, are exactly that list. `description`
+                  on a drawing-family update is the documented exception.
   style-record-fields
                   Every public type that projects a style record
                   (`Color` / `Font` / `Fill` /
@@ -189,10 +201,12 @@ from binding_drift.declaration_checks import (
     check_dts_enums,
     check_dts_node,
     check_dts_wasm,
+    check_facade_patch_keys,
     check_pure_js_helpers,
     check_readme_counts,
     check_staged_dist,
 )
+from binding_drift.patch_nullability import check_patch_nullability
 from binding_drift.python_checks import (
     check_python_call_signatures,
     check_python_exports,
@@ -226,6 +240,8 @@ CHECKS = {
     "readme-facts": check_readme_facts,
     "readme-identifiers": check_readme_identifiers,
     "dts-enums": check_dts_enums,
+    "facade-patch-keys": check_facade_patch_keys,
+    "patch-nullability": check_patch_nullability,
     "style-record-fields": check_style_record_fields,
     "staged-dist": check_staged_dist,
     "abi-baseline": check_abi_baseline,

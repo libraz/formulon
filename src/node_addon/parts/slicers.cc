@@ -38,8 +38,8 @@ fm_slicer_patch_t PullSlicerPatch(CheckedSpecReader& reader, const Napi::Object&
   s.sort_order_op = PatchI32(reader, spec, "sortOrder", &s.sort_order);
   s.cross_filter_op = PatchI32(reader, spec, "crossFilter", &s.cross_filter);
   s.row_height_pt_op = PatchDouble(reader, spec, "rowHeightPt", &s.row_height_pt);
-  s.caption_op = PatchString(reader, spec, "caption", &store.caption, &s.caption);
-  s.style_name_op = PatchString(reader, spec, "styleName", &store.style_name, &s.style_name);
+  s.caption_op = PatchString(reader, spec, "caption", false, &store.caption, &s.caption);
+  s.style_name_op = PatchString(reader, spec, "styleName", true, &store.style_name, &s.style_name);
   return s;
 }
 

@@ -120,9 +120,17 @@ _SLICER_UPDATE_NAMES = ("caption", "style_name", "column_count", "row_height_pt"
 _SHAPE_KINDS = frozenset({DrawingObjectKind.SHAPE, DrawingObjectKind.CONNECTOR, DrawingObjectKind.GROUP})
 
 
-def _given(arguments: Dict[str, Any], patch: type) -> Dict[str, Any]:
-    """The keyword arguments among the keys of the patch ``TypedDict`` that are not :data:`UNCHANGED`."""
-    return {key: arguments[key] for key in patch.__annotations__ if arguments[key] is not UNCHANGED}
+def _given(arguments: Dict[str, Any], patch: type, clearable: Optional[Sequence[str]] = None) -> Dict[str, Any]:
+    """The keyword arguments among the keys of the patch ``TypedDict`` that are not :data:`UNCHANGED`.
+
+    With ``clearable`` given, a ``None`` on any other key is a ``TypeError``.
+    """
+    out = {key: arguments[key] for key in patch.__annotations__ if arguments[key] is not UNCHANGED}
+    if clearable is not None:
+        for key, value in out.items():
+            if value is None and key not in clearable:
+                raise TypeError(_argument_message(key, "must not be null"))
+    return out
 
 
 def _present(
@@ -142,6 +150,19 @@ def _present(
             raise TypeError(_argument_message(key, "must not be null"))
         out[key] = value
     return out
+
+
+_CLEARABLE_AXIS_NAMES = (
+    "title",
+    "min",
+    "max",
+    "major_unit",
+    "minor_unit",
+    "number_format",
+    "log_base",
+    "tick_label_position",
+)
+_CLEARABLE_SERIES_NAMES = ("name", "categories", "x", "fill", "line", "marker", "labels")
 
 
 def _removed() -> FormulonError:
@@ -649,24 +670,24 @@ class Chart(_Snapshotable):
         self,
         axis: ChartAxisRef,
         *,
-        visible: Union[bool, None, Unchanged] = UNCHANGED,
+        visible: Union[bool, Unchanged] = UNCHANGED,
         title: Union[str, ChartTitle, None, Unchanged] = UNCHANGED,
         min: Union[float, None, Unchanged] = UNCHANGED,
         max: Union[float, None, Unchanged] = UNCHANGED,
         major_unit: Union[float, None, Unchanged] = UNCHANGED,
         number_format: Union[str, None, Unchanged] = UNCHANGED,
-        major_gridlines: Union[bool, None, Unchanged] = UNCHANGED,
-        reversed: Union[bool, None, Unchanged] = UNCHANGED,
+        major_gridlines: Union[bool, Unchanged] = UNCHANGED,
+        reversed: Union[bool, Unchanged] = UNCHANGED,
         log_base: Union[float, None, Unchanged] = UNCHANGED,
-        crosses: Union[ChartAxisCrosses, None, Unchanged] = UNCHANGED,
-        crosses_at: Union[float, None, Unchanged] = UNCHANGED,
+        crosses: Union[ChartAxisCrosses, Unchanged] = UNCHANGED,
+        crosses_at: Union[float, Unchanged] = UNCHANGED,
         tick_label_position: Union[ChartTickLabelPosition, None, Unchanged] = UNCHANGED,
         minor_unit: Union[float, None, Unchanged] = UNCHANGED,
         minor_gridlines: Union[bool, Unchanged] = UNCHANGED,
         position: Union[ChartAxisPosition, Unchanged] = UNCHANGED,
         source_linked: Union[bool, Unchanged] = UNCHANGED,
     ) -> None:
-        """Update an axis; an omitted argument keeps its value, ``None`` removes the element.
+        """Update an axis; an omitted argument keeps its value.
 
         ``axis`` is an axis id, a :class:`ChartAxisKind` (that kind's axis of the first plot group) or a
         :class:`ChartAxisKey` (the axis of that kind of plot group ``plot``).
@@ -674,18 +695,14 @@ class Chart(_Snapshotable):
         ``title`` takes the forms of :meth:`set_title`. ``None`` on ``title``
         removes the axis title, on ``log_base`` makes the axis linear, on
         ``minor_unit`` makes the unit automatic and on ``tick_label_position``
-        restores the default. ``crosses_at`` is read when ``crosses`` is
-        ``AT``. ``minor_gridlines``, ``position`` and ``source_linked`` reject ``None``.
+        restores the default; ``min``, ``max``, ``major_unit`` and ``number_format`` take ``None`` the same way.
+        ``crosses_at`` is read when ``crosses`` is ``AT``. Every other argument rejects ``None``.
 
         Raises:
-          TypeError: when ``minor_gridlines``, ``position`` or ``source_linked`` is ``None``, or ``axis`` has the
-            wrong type.
+          TypeError: when an argument other than those five is ``None``, or ``axis`` has the wrong type.
           NotFoundError: when the plot group has no axis of the kind ``axis`` names.
         """
-        patch = _given(dict(locals()), ChartAxisPatch)
-        for key in ("minor_gridlines", "position", "source_linked"):
-            if key in patch and patch[key] is None:
-                raise TypeError(_argument_message(key, "must not be null"))
+        patch = _given(dict(locals()), ChartAxisPatch, _CLEARABLE_AXIS_NAMES)
         if isinstance(axis, int) and not isinstance(axis, (bool, ChartAxisKind)):
             axis_id = axis
         else:
@@ -731,23 +748,24 @@ class Chart(_Snapshotable):
         *,
         name: Union[str, ChartDataSource, None, Unchanged] = UNCHANGED,
         categories: Union[str, ChartDataSource, None, Unchanged] = UNCHANGED,
-        values: Union[str, ChartDataSource, None, Unchanged] = UNCHANGED,
+        values: Union[str, ChartDataSource, Unchanged] = UNCHANGED,
         x: Union[str, ChartDataSource, None, Unchanged] = UNCHANGED,
-        y: Union[str, ChartDataSource, None, Unchanged] = UNCHANGED,
-        size: Union[str, ChartDataSource, None, Unchanged] = UNCHANGED,
+        y: Union[str, ChartDataSource, Unchanged] = UNCHANGED,
+        size: Union[str, ChartDataSource, Unchanged] = UNCHANGED,
         fill: Union[ChartFillPatch, None, Unchanged] = UNCHANGED,
         line: Union[ChartLinePatch, None, Unchanged] = UNCHANGED,
         marker: Union[ChartMarkerPatch, None, Unchanged] = UNCHANGED,
-        smooth: Union[bool, None, Unchanged] = UNCHANGED,
+        smooth: Union[bool, Unchanged] = UNCHANGED,
         labels: Union[ChartLabelsPatch, None, Unchanged] = UNCHANGED,
     ) -> None:
         """Update the series with ``c:idx`` ``series_id`` of plot group ``plot``; an omitted argument keeps its value.
 
         A reference is its new text or a :class:`ChartDataSource` with a reference; ``""`` removes ``name``,
-        ``categories`` or ``x`` (an empty ``values``, ``y`` or ``size`` is rejected). ``None`` on
-        ``marker`` or ``labels`` removes it. A changed reference refreshes its cache.
+        ``categories`` or ``x`` (an empty ``values``, ``y`` or ``size`` is rejected). ``None`` on ``name``,
+        ``categories``, ``x``, ``fill``, ``line``, ``marker`` or ``labels`` removes it; every other argument
+        rejects ``None`` with a ``TypeError``. A changed reference refreshes its cache.
         """
-        patch = _given(dict(locals()), ChartSeriesPatch)
+        patch = _given(dict(locals()), ChartSeriesPatch, _CLEARABLE_SERIES_NAMES)
         h, sheet, object_id = self._at()
         with _ArgScope() as scope:
             ptr = scope.struct_array(S.CHART_SERIES_PATCH, 1)
@@ -840,18 +858,18 @@ class Chart(_Snapshotable):
         self,
         plot: int,
         *,
-        gap_width_pct: Union[int, None, Unchanged] = UNCHANGED,
-        overlap_pct: Union[int, None, Unchanged] = UNCHANGED,
-        first_slice_angle_deg: Union[int, None, Unchanged] = UNCHANGED,
-        vary_colors: Union[bool, None, Unchanged] = UNCHANGED,
-        hole_size_pct: Union[int, None, Unchanged] = UNCHANGED,
+        gap_width_pct: Union[int, Unchanged] = UNCHANGED,
+        overlap_pct: Union[int, Unchanged] = UNCHANGED,
+        first_slice_angle_deg: Union[int, Unchanged] = UNCHANGED,
+        vary_colors: Union[bool, Unchanged] = UNCHANGED,
+        hole_size_pct: Union[int, Unchanged] = UNCHANGED,
     ) -> None:
-        """Update plot group ``plot``; an omitted argument keeps its value, ``None`` removes the element.
+        """Update plot group ``plot``; an omitted argument keeps its value and no argument takes ``None``.
 
         An argument the plot type does not have is rejected. ``hole_size_pct`` is
         10..90 (doughnut only).
         """
-        patch = _given(dict(locals()), ChartPlotPatch)
+        patch = _given(dict(locals()), ChartPlotPatch, ())
         h, sheet, object_id = self._at()
         with _ArgScope() as scope:
             ptr = scope.struct_array(S.CHART_PLOT_PATCH, 1)

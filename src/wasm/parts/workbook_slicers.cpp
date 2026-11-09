@@ -45,25 +45,10 @@ fm_slicer_patch_t pull_slicer_patch(JsNarrowNumericReader& reader, const emscrip
   js_patch_string(reader, patch, "caption", "patch.caption", false, store.caption, &s.caption_op, &s.caption);
   js_patch_string(reader, patch, "styleName", "patch.styleName", true, store.style_name, &s.style_name_op,
                   &s.style_name);
-  const auto has = [&](const char* key, const char* field) {
-    return reader.ok() && js_value_present(reader.value(patch, key, field));
-  };
-  if (has("columnCount", "patch.columnCount")) {
-    s.column_count_op = FM_PATCH_OP_SET;
-    s.column_count = reader.u32(patch, "columnCount", 1U, "patch.columnCount");
-  }
-  if (has("rowHeightPt", "patch.rowHeightPt")) {
-    s.row_height_pt_op = FM_PATCH_OP_SET;
-    s.row_height_pt = reader.number(patch, "rowHeightPt", 0.0, "patch.rowHeightPt");
-  }
-  if (has("sortOrder", "patch.sortOrder")) {
-    s.sort_order_op = FM_PATCH_OP_SET;
-    s.sort_order = reader.i32(patch, "sortOrder", 0, "patch.sortOrder");
-  }
-  if (has("crossFilter", "patch.crossFilter")) {
-    s.cross_filter_op = FM_PATCH_OP_SET;
-    s.cross_filter = reader.i32(patch, "crossFilter", 0, "patch.crossFilter");
-  }
+  js_patch_u32(reader, patch, "columnCount", "patch.columnCount", false, &s.column_count_op, &s.column_count);
+  js_patch_number(reader, patch, "rowHeightPt", "patch.rowHeightPt", false, &s.row_height_pt_op, &s.row_height_pt);
+  js_patch_int(reader, patch, "sortOrder", "patch.sortOrder", false, &s.sort_order_op, &s.sort_order);
+  js_patch_int(reader, patch, "crossFilter", "patch.crossFilter", false, &s.cross_filter_op, &s.cross_filter);
   return s;
 }
 

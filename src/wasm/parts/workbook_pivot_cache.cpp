@@ -353,13 +353,11 @@ void JsWorkbook::pivotCacheSetOptions(uint32_t cacheId, emscripten::val options)
   }
   fm_pivot_cache_options_patch_t opt = FM_STRUCT_INIT(fm_pivot_cache_options_patch_t);
   JsNarrowNumericReader reader("PivotCache.updateOptions");
-  // An omitted or `null` flag keeps the stored value.
-  js_patch_flag_present(reader, options, "saveData", "saveData", &opt.save_data_op, &opt.save_data);
+  js_patch_flag(reader, options, "saveData", "saveData", &opt.save_data_op, &opt.save_data);
   // `null` is the automatic limit (no attribute).
   js_patch_u32(reader, options, "missingItemsLimit", "missingItemsLimit", true, &opt.missing_items_limit_op,
                &opt.missing_items_limit);
-  js_patch_flag_present(reader, options, "refreshOnLoad", "refreshOnLoad", &opt.refresh_on_load_op,
-                        &opt.refresh_on_load);
+  js_patch_flag(reader, options, "refreshOnLoad", "refreshOnLoad", &opt.refresh_on_load_op, &opt.refresh_on_load);
   if (!reader.ok()) {
     return;
   }

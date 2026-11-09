@@ -47,18 +47,17 @@ struct ShapeText {
 };
 
 /// Reads the shape fields `patch` carries; an omitted field is `KEEP`. `fill` / `line` take the chart paint
-/// patches, `null` there removing the shape's own paint; no other shape field can be cleared, so `null` reaches the
-/// core as `CLEAR` and is refused there.
+/// patches, `null` there removing the shape's own paint; `null` on any other shape field is a type error.
 fm_shape_patch_t pull_shape_patch(JsNarrowNumericReader& reader, const emscripten::val& patch, ShapeText& store) {
   fm_shape_patch_t s = FM_STRUCT_INIT(fm_shape_patch_t);
   js_patch_string(reader, patch, "presetGeometry", "patch.presetGeometry", false, store.preset_geometry,
                   &s.preset_geometry_op, &s.preset_geometry);
   js_patch_string(reader, patch, "text", "patch.text", false, store.text, &s.text_op, &s.text);
-  js_patch_value(reader, patch, "textBox", "patch.textBox", &s.text_box_op, &s.text_box,
+  js_patch_value(reader, patch, "textBox", "patch.textBox", false, &s.text_box_op, &s.text_box,
                  [&](const emscripten::val& v) { return reader.boolean_value(v, false) ? 1 : 0; });
   pull_chart_fill_patch(reader, patch, "patch", &s.fill);
   pull_chart_line_patch(reader, patch, "patch", &s.line);
-  js_patch_value(reader, patch, "rotationDeg", "patch.rotationDeg", &s.rotation_deg_op, &s.rotation_deg,
+  js_patch_value(reader, patch, "rotationDeg", "patch.rotationDeg", false, &s.rotation_deg_op, &s.rotation_deg,
                  [&](const emscripten::val& v) { return reader.number_value(v, 0.0, "patch.rotationDeg"); });
   return s;
 }
@@ -321,27 +320,27 @@ void JsWorkbook::updateSparklineGroup(uint32_t sheet, const std::string& groupId
                                 &p.color_first,  &p.color_last,     &p.color_high, &p.color_low};
   for (std::size_t i = 0; i < 8U; ++i) {
     const std::string field = std::string("patch.") + kSparklineColorKeys[i];
-    js_patch_value(reader, spec, kSparklineColorKeys[i], field.c_str(), color_ops[i], colors[i],
+    js_patch_value(reader, spec, kSparklineColorKeys[i], field.c_str(), true, color_ops[i], colors[i],
                    [&](const emscripten::val& v) { return js_pull_color_spec_value(v, field.c_str(), &reader); });
   }
-  const auto num = [&](const char* key, fm_patch_op_t* op, double* value) {
+  const auto num = [&](const char* key, bool nullable, fm_patch_op_t* op, double* value) {
     const std::string field = std::string("patch.") + key;
-    js_patch_value(reader, spec, key, field.c_str(), op, value,
+    js_patch_value(reader, spec, key, field.c_str(), nullable, op, value,
                    [&](const emscripten::val& v) { return reader.number_value(v, 0.0, field.c_str()); });
   };
   const auto i32 = [&](const char* key, fm_patch_op_t* op, int32_t* value) {
     const std::string field = std::string("patch.") + key;
-    js_patch_value(reader, spec, key, field.c_str(), op, value,
+    js_patch_value(reader, spec, key, field.c_str(), false, op, value,
                    [&](const emscripten::val& v) { return reader.i32_value(v, 0, field.c_str()); });
   };
   const auto flag = [&](const char* key, fm_patch_op_t* op, int32_t* value) {
     const std::string field = std::string("patch.") + key;
-    js_patch_value(reader, spec, key, field.c_str(), op, value,
+    js_patch_value(reader, spec, key, field.c_str(), false, op, value,
                    [&](const emscripten::val& v) { return reader.boolean_value(v, false) ? 1 : 0; });
   };
-  num("manualMin", &p.manual_min_op, &p.manual_min);
-  num("manualMax", &p.manual_max_op, &p.manual_max);
-  num("lineWidthPt", &p.line_width_pt_op, &p.line_width_pt);
+  num("manualMin", true, &p.manual_min_op, &p.manual_min);
+  num("manualMax", true, &p.manual_max_op, &p.manual_max);
+  num("lineWidthPt", false, &p.line_width_pt_op, &p.line_width_pt);
   i32("type", &p.type_op, &p.type);
   flag("markers", &p.markers_op, &p.markers);
   flag("high", &p.high_op, &p.high);
@@ -358,7 +357,8 @@ void JsWorkbook::updateSparklineGroup(uint32_t sheet, const std::string& groupId
   js_patch_string(reader, spec, "dateAxisRef", "patch.dateAxisRef", true, ref_store, &p.date_axis_ref_op,
                   &p.date_axis_ref);
   const emscripten::val sparklines = reader.value(spec, "sparklines", "patch.sparklines");
-  if (reader.ok() && js_value_present(sparklines) && pull_sparklines(reader, sparklines, texts, items)) {
+  if (reader.ok() && js_patch_key(reader, sparklines, "patch.sparklines", false) == JsPatchKey::kSet &&
+      pull_sparklines(reader, sparklines, texts, items)) {
     p.items_op = FM_PATCH_OP_SET;
     p.items = items.data();
     p.items_count = static_cast<uint32_t>(items.size());

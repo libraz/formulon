@@ -114,7 +114,11 @@ fm_drawing_patch_t pull_drawing_patch(JsNarrowNumericReader& reader, const emscr
   js_patch_string(reader, patch, "description", label("description").c_str(), true, description_store,
                   &p.description_op, &p.description);
   js_patch_flag(reader, patch, "hidden", label("hidden").c_str(), &p.hidden_op, &p.hidden);
-  const emscripten::val anchor = js_object_or_empty(reader.value(patch, "anchor", label("anchor").c_str()));
+  const emscripten::val anchor_value = reader.value(patch, "anchor", label("anchor").c_str());
+  const emscripten::val anchor =
+      js_object_or_empty(js_patch_key(reader, anchor_value, label("anchor").c_str(), false) == JsPatchKey::kSet
+                             ? anchor_value
+                             : emscripten::val::undefined());
   fm_drawing_anchor_patch_t& a = p.anchor;
   // No anchor field can be cleared: `null` is a type error, like any other flag.
   const auto field = [&](const char* key, fm_patch_op_t* op, auto* value, auto read) {

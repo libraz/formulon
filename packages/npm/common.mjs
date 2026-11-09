@@ -4454,7 +4454,7 @@ const PATCH_FIELDS = Object.freeze({
     ...numbers('zoomPct', 'freezeRows', 'freezeCols', 'splitXTwips', 'splitYTwips', 'viewMode'),
     ...bools(
       'showGridLines',
-      'showRowColHeaders',
+      'showRowColumnHeaders',
       'showZeros',
       'showFormulas',
       'showOutlineSymbols',
@@ -4466,7 +4466,7 @@ const PATCH_FIELDS = Object.freeze({
   'Sheet.updateHeaderFooter': bools('differentOddEven', 'differentFirst', 'scaleWithDoc', 'alignWithMargins'),
   'Sheet.updatePageSetup': { ...numbers('paperSize', 'scalePct', 'fitToWidth', 'fitToHeight'), ...bools('fitToPage') },
   'Sheet.updatePageMargins': numbers('leftIn', 'rightIn', 'topIn', 'bottomIn', 'headerIn', 'footerIn'),
-  'Sheet.updateFormatDefaults': { ...numbers('baseColWidthChars'), ...bools('customHeight', 'zeroHeight') },
+  'Sheet.updateFormatDefaults': { ...numbers('baseColumnWidthChars'), ...bools('customHeight', 'zeroHeight') },
   'Sheet.updateSheetProtection': bools(
     'allowEditObjects',
     'allowEditScenarios',

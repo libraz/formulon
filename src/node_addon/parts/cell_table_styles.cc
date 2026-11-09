@@ -234,8 +234,8 @@ Napi::Value Workbook::SetTableStyleDefaults(const Napi::CallbackInfo& info) {
   std::string table;
   std::string pivot;
   fm_table_style_defaults_patch_t patch = FM_STRUCT_INIT(fm_table_style_defaults_patch_t);
-  patch.table_style_name_op = PatchString(reader, defaults, "tableStyleName", &table, &patch.table_style_name);
-  patch.pivot_style_name_op = PatchString(reader, defaults, "pivotStyleName", &pivot, &patch.pivot_style_name);
+  patch.table_style_name_op = PatchString(reader, defaults, "tableStyleName", true, &table, &patch.table_style_name);
+  patch.pivot_style_name_op = PatchString(reader, defaults, "pivotStyleName", true, &pivot, &patch.pivot_style_name);
   if (!reader.ok()) {
     return env.Undefined();
   }

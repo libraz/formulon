@@ -383,14 +383,11 @@ void JsWorkbook::updateProtectedRange(uint32_t sheet, const std::string& name, e
   std::string text[6];
   std::vector<fm_cell_rect_t> ranges;
   fm_protected_range_patch_t p = FM_STRUCT_INIT(fm_protected_range_patch_t);
-  const emscripten::val spin_count = reader.value(range, "spinCount", "spinCount");
-  if (reader.ok() && js_value_present(spin_count)) {
-    p.spin_count_op = FM_PATCH_OP_SET;
-    p.spin_count = reader.u32_value(spin_count, 0U, "spinCount");
-  }
+  js_patch_u32(reader, range, "spinCount", "spinCount", false, &p.spin_count_op, &p.spin_count);
   js_patch_string(reader, range, "name", "name", false, text[0], &p.name_op, &p.name);
   const emscripten::val ranges_value = reader.value(range, "ranges", "ranges");
-  if (reader.ok() && js_value_present(ranges_value) && reader.require_array(ranges_value, "ranges")) {
+  if (reader.ok() && js_patch_key(reader, ranges_value, "ranges", false) == JsPatchKey::kSet &&
+      reader.require_array(ranges_value, "ranges")) {
     ranges = js_pull_range_array(ranges_value, "ranges", &reader);
     p.ranges_op = FM_PATCH_OP_SET;
     p.ranges = ranges.data();
@@ -821,7 +818,7 @@ void JsWorkbook::editThreadedComment(uint32_t sheet, const std::string& id, emsc
   js_patch_string(reader, patch, "text", "patch.text", false, text, &out.text_op, &out.text);
   MentionStore store;
   const emscripten::val mentions = reader.value(patch, "mentions", "patch.mentions");
-  if (reader.ok() && js_value_present(mentions)) {
+  if (reader.ok() && js_patch_key(reader, mentions, "patch.mentions", false) == JsPatchKey::kSet) {
     out.mentions_op = FM_PATCH_OP_SET;
     pull_mentions(mentions, store, reader);
   }
