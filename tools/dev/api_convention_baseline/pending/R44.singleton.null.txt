@@ -1,7 +1,0 @@
-ledger	auto_filter.clear	clear	`auto_filter` is a singleton; remove it with `set` and `null`, not `clear`
-ledger	auto_filter.remove	remove	`auto_filter` is a singleton; remove it with `set` and `null`, not `remove`
-ledger	pinned_now.clear	clear	`pinned_now` is a singleton; remove it with `set` and `null`, not `clear`
-ledger	pivot_field_date_group.clear	clear	`pivot_field_date_group` is a singleton; remove it with `set` and `null`, not `clear`
-ledger	table_auto_filter.clear	clear	`table_auto_filter` is a singleton; remove it with `set` and `null`, not `clear`
-ledger	table_auto_filter.remove	remove	`table_auto_filter` is a singleton; remove it with `set` and `null`, not `remove`
-ledger	theme.clear	clear	`theme` is a singleton; remove it with `set` and `null`, not `clear`
