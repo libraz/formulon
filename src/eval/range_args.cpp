@@ -119,11 +119,8 @@ bool assign_expanded(const EvalContext& ctx, const parser::Reference& lhs, const
   return true;
 }
 
-// Internal counterpart that still uses the legacy `bool + out_param`
-// shape so it can call (and be called by) the cluster of `expand_*_call`
-// helpers — which are not yet migrated. The public `resolve_range_arg`
-// below is a thin Expected-returning wrapper around this. Once the
-// rest of the family migrates, this helper folds away.
+// `bool + out_param` core shared with the `expand_*_call` helpers; the public
+// `resolve_range_arg` below wraps it in an Expected.
 //
 // `out_scalar` — when non-null — reports whether the result came from the
 // bare-scalar collapse at the bottom of the function rather than from a

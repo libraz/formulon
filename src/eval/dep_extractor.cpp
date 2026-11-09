@@ -791,9 +791,6 @@ void walk_spill_ref(const parser::AstNode& node, WalkState& state) {
     return;
   }
   const parser::Reference& ref = node.as_spill_ref();
-  if (ref.is_full_col || ref.is_full_row) {
-    return;  // Parser rejects this shape; defensive.
-  }
   if (ref.row >= Sheet::kMaxRows || ref.col >= Sheet::kMaxCols) {
     return;
   }
@@ -814,9 +811,6 @@ void walk_ref3d(const parser::AstNode& node, WalkState& state) {
   const parser::Reference& cell_end = node.as_ref3d_cell_end();
   const auto normalized = declared_rect(cell, is_range ? cell_end : cell);
   if (!normalized) {
-    return;
-  }
-  if (state.workbook == nullptr) {
     return;
   }
   std::size_t begin_idx = 0;

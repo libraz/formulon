@@ -111,14 +111,20 @@ Value apply_binop_per_cell(parser::BinOp op, const Value& lhs, const Value& rhs,
   return Value::error(ErrorCode::Value);
 }
 
+void widen_shape(const ArrayView& v, std::uint32_t* rows, std::uint32_t* cols) {
+  *rows = *rows > v.rows ? *rows : v.rows;
+  *cols = *cols > v.cols ? *cols : v.cols;
+}
+
 namespace {
 
 // Excel 365 broadcast shape: each axis extends to the larger operand's size.
 // A size-1 axis broadcasts; a size-mismatch on a non-1 axis pads the shortfall
 // with #N/A (handled per-cell via `broadcast_cell`).
 void broadcast_shape(const ArrayView& a, const ArrayView& b, std::uint32_t* rows, std::uint32_t* cols) {
-  *rows = a.rows > b.rows ? a.rows : b.rows;
-  *cols = a.cols > b.cols ? a.cols : b.cols;
+  *rows = a.rows;
+  *cols = a.cols;
+  widen_shape(b, rows, cols);
 }
 
 // Result cell at (r, c): the operator applied to the cells each operand

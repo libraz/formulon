@@ -67,6 +67,9 @@ ArrayView as_array_view(const Shaped& s, Value* scalar_slot);
 // always reads index 0 (broadcast stretch).
 const Value* broadcast_cell(const ArrayView& v, std::uint32_t r, std::uint32_t c);
 
+// Widens `*rows` x `*cols` to cover `v`: each axis takes the larger extent.
+void widen_shape(const ArrayView& v, std::uint32_t* rows, std::uint32_t* cols);
+
 // Scalar per-cell binary-operator application. Errors propagate
 // left-to-right; numeric arithmetic coerces both operands through
 // `coerce_to_number`; comparisons / concat dispatch through the

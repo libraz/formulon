@@ -513,43 +513,26 @@ Value run_large_small(std::vector<double> xs, double k_raw, bool want_large) {
   return to_finite_value(xs[idx.value() - 1U]);
 }
 
-// PERCENTILE.INC. Domain / position-formula logic lives in
-// `numeric_aggregate_kernels::percentile_sorted_inc`; this wrapper sorts in place
-// and lifts the kernel result to `Value`.
-Value run_percentile_inc(std::vector<double> xs, double p) {
+// PERCENTILE.INC / PERCENTILE.EXC. Domain / position-formula logic lives in
+// `numeric_aggregate_kernels::percentile_sorted_{inc,exc}`; this wrapper sorts in
+// place and lifts the kernel result to `Value`.
+Value run_percentile(std::vector<double> xs, double p, bool exclusive) {
   std::sort(xs.begin(), xs.end());
-  return numeric_aggregate_kernels::value_from_kernel_result(numeric_aggregate_kernels::percentile_sorted_inc(xs, p));
-}
-
-// PERCENTILE.EXC. Domain / position-formula logic lives in
-// `numeric_aggregate_kernels::percentile_sorted_exc`; this wrapper sorts in place
-// and lifts the kernel result to `Value`.
-Value run_percentile_exc(std::vector<double> xs, double p) {
-  std::sort(xs.begin(), xs.end());
-  return numeric_aggregate_kernels::value_from_kernel_result(numeric_aggregate_kernels::percentile_sorted_exc(xs, p));
+  return numeric_aggregate_kernels::value_from_kernel_result(
+      exclusive ? numeric_aggregate_kernels::percentile_sorted_exc(xs, p)
+                : numeric_aggregate_kernels::percentile_sorted_inc(xs, p));
 }
 
 // Shared body of QUARTILE.INC / QUARTILE.EXC: `quart` is truncated, must lie
 // in [lo, hi], and selects the percentile `quart / 4` (exact in binary).
+// INC accepts [0, 4]; EXC accepts [1, 3].
 Value run_quartile(std::vector<double> xs, double quart_raw, double lo, double hi, bool exclusive) {
   const double q_trunc = std::trunc(quart_raw);
   if (!std::isfinite(q_trunc) || q_trunc < lo || q_trunc > hi) {
     return Value::error(ErrorCode::Num);
   }
   const double p = q_trunc / 4.0;
-  return exclusive ? run_percentile_exc(std::move(xs), p) : run_percentile_inc(std::move(xs), p);
-}
-
-// QUARTILE.INC delegates to PERCENTILE.INC at p in {0, 0.25, 0.5, 0.75, 1.0}.
-// `quart` must be an integer in [0, 4]; truncated like the rest.
-Value run_quartile_inc(std::vector<double> xs, double quart_raw) {
-  return run_quartile(std::move(xs), quart_raw, 0.0, 4.0, /*exclusive=*/false);
-}
-
-// QUARTILE.EXC delegates to PERCENTILE.EXC at p in {0.25, 0.5, 0.75}.
-// `quart` must be an integer in {1, 2, 3}; 0 and 4 are rejected.
-Value run_quartile_exc(std::vector<double> xs, double quart_raw) {
-  return run_quartile(std::move(xs), quart_raw, 1.0, 3.0, /*exclusive=*/true);
+  return run_percentile(std::move(xs), p, exclusive);
 }
 
 // SUBTOTAL's function code selects the aggregator in 1..11 and repeats it in
@@ -697,13 +680,13 @@ Value eval_aggregate_lazy(const parser::AstNode& call, Arena& arena, const Funct
         case kCodeSmall:
           return run_large_small(data(), k_raw, /*want_large=*/false);
         case kCodePercentileInc:
-          return run_percentile_inc(data(), k_raw);
+          return run_percentile(data(), k_raw, /*exclusive=*/false);
         case kCodeQuartileInc:
-          return run_quartile_inc(data(), k_raw);
+          return run_quartile(data(), k_raw, 0.0, 4.0, /*exclusive=*/false);
         case kCodePercentileExc:
-          return run_percentile_exc(data(), k_raw);
+          return run_percentile(data(), k_raw, /*exclusive=*/true);
         case kCodeQuartileExc:
-          return run_quartile_exc(data(), k_raw);
+          return run_quartile(data(), k_raw, 1.0, 3.0, /*exclusive=*/true);
         default:
           // Unreachable: code is constrained to [14, 19] in this branch.
           return Value::error(ErrorCode::Value);

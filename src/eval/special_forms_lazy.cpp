@@ -220,8 +220,7 @@ std::vector<ArrayView> view_arms(const std::vector<Value>& values, std::vector<V
   arms.reserve(values.size());
   for (std::size_t i = 0; i < values.size(); ++i) {
     arms.push_back(as_array_view(values[i], &(*slots)[i]));
-    *rows = *rows > arms.back().rows ? *rows : arms.back().rows;
-    *cols = *cols > arms.back().cols ? *cols : arms.back().cols;
+    widen_shape(arms.back(), rows, cols);
   }
   return arms;
 }
@@ -240,10 +239,10 @@ Value eval_if_array_cond_lazy(const parser::AstNode& call, const Value& cond, Ar
   const ArrayView tv = as_array_view(then_val, &then_slot);
   const ArrayView ev = as_array_view(else_val, &else_slot);
 
-  std::uint32_t out_rows = cv.rows > tv.rows ? cv.rows : tv.rows;
-  out_rows = out_rows > ev.rows ? out_rows : ev.rows;
-  std::uint32_t out_cols = cv.cols > tv.cols ? cv.cols : tv.cols;
-  out_cols = out_cols > ev.cols ? out_cols : ev.cols;
+  std::uint32_t out_rows = cv.rows;
+  std::uint32_t out_cols = cv.cols;
+  widen_shape(tv, &out_rows, &out_cols);
+  widen_shape(ev, &out_rows, &out_cols);
 
   Value* buf = nullptr;
   ArrayValue* out = allocate_derived_array_value(out_rows, out_cols, arena, buf);
@@ -366,8 +365,9 @@ Value replace_array_errors(const parser::AstNode& call, const Value& primary, bo
   const Value fallback = eval_node(call.as_call_arg(1), arena, registry, ctx);
   Value fallback_slot = Value::blank();
   const ArrayView fv = as_array_view(fallback, &fallback_slot);
-  const std::uint32_t out_rows = pv.rows > fv.rows ? pv.rows : fv.rows;
-  const std::uint32_t out_cols = pv.cols > fv.cols ? pv.cols : fv.cols;
+  std::uint32_t out_rows = pv.rows;
+  std::uint32_t out_cols = pv.cols;
+  widen_shape(fv, &out_rows, &out_cols);
   Value* buf = nullptr;
   ArrayValue* out = allocate_derived_array_value(out_rows, out_cols, arena, buf);
   if (out == nullptr) {

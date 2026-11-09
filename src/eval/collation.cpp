@@ -913,7 +913,6 @@ void table_key(const LocaleData& L, std::string_view s, CollationStrength streng
   std::vector<Weight>& els = scratch.els;
   std::vector<std::uint32_t>& bounds = scratch.bounds;
   std::vector<Weight>& tmp = scratch.tmp;
-  toks.clear();
   els.clear();
   bounds.clear();
   tokenize(L, s, strength, toks);
