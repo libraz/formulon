@@ -142,10 +142,20 @@ PATCH_RECORD_NONE = "none"
 _JS_CELL_PAIR_RE = re.compile(r"(\w*?)(?:row|Row)")
 
 
+_LEDGER_CACHE: dict = {}
+
+
 def _load(path: Path):
+    """Parses the ledger once per (path, mtime, size); callers get a private copy."""
+    import copy
+
     import yaml  # type: ignore
 
-    return yaml.safe_load(path.read_text(encoding="utf-8"))
+    st = path.stat()
+    key = (str(path.resolve()), st.st_mtime_ns, st.st_size)
+    if key not in _LEDGER_CACHE:
+        _LEDGER_CACHE[key] = yaml.safe_load(path.read_text(encoding="utf-8"))
+    return copy.deepcopy(_LEDGER_CACHE[key])
 
 
 def _surface_of(name_field: str) -> Sequence[str]:

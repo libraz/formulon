@@ -35,12 +35,13 @@ Further rule modules register into the same registry: the sibling modules
 
 from __future__ import annotations
 
+import copy
 import importlib
 import importlib.util
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable, Dict, Iterable, List, NamedTuple, Optional, Sequence, Tuple
+from typing import Any, Callable, Dict, Iterable, List, NamedTuple, Optional, Sequence, Tuple
 
 from .c_header import _C_FUNCTION_DECL_RE, _C_STRUCT_RE, _split_c_params
 from .surface_files import CAPI_HEADER, COMMENT_RE, REPO_ROOT
@@ -481,6 +482,18 @@ def common_base(classes: Sequence[str], bases: Dict[str, str]) -> str:
     return common[0] if common else classes[0]
 
 
+_YAML_CACHE: Dict[Tuple[str, int, int], Any] = {}
+
+
+def _parse_yaml_cached(path: Path, yaml: Any) -> Any:
+    """Parses `path` once per (path, mtime, size); callers get a private copy."""
+    st = path.stat()
+    key = (str(path.resolve()), st.st_mtime_ns, st.st_size)
+    if key not in _YAML_CACHE:
+        _YAML_CACHE[key] = yaml.safe_load(path.read_text(encoding="utf-8"))
+    return copy.deepcopy(_YAML_CACHE[key])
+
+
 def load_ledger(path: Path = LEDGER_PATH) -> Ledger:
     """Reads the ledger; an absent file is an empty ledger, an unreadable one a problem."""
     if not path.is_file():
@@ -494,7 +507,7 @@ def load_ledger(path: Path = LEDGER_PATH) -> Ledger:
             "tools/oracle/.venv or `pip install pyyaml`"
         )
         return ledger
-    data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    data = _parse_yaml_cached(path, yaml)
     if not isinstance(data, dict) or data.get("schema") != 1 or not isinstance(data.get("entries"), dict):
         ledger = Ledger()
         ledger.problems.append(f"api-conventions: {path} is not a `schema: 1` ledger with an `entries:` map")
