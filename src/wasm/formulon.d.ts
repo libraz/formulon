@@ -6,8 +6,8 @@
 // (pthread); both share this surface. It resolves to the frozen `Formulon`
 // object declared below.
 //
-// Mirror of the embind registration in `src/wasm/parts/bindings_register.cpp`
-// and of the pure-JS members and handle classes `packages/npm/common.mjs` adds.
+// Mirror of the WASM module's registered bindings and of the pure-JS members
+// and handle classes the npm package adds.
 // Keep this file in sync when adding or removing bindings.
 
 /// <reference lib="esnext.disposable" />
@@ -484,7 +484,7 @@ export interface TableProperties {
  * A1 range (`'A1:C9'`). Without `columns` the column names are the header row's cell texts, and an empty header
  * cell takes the profile's column word and a number (`Column2`). With `columns`, one name per column of the
  * range, each non-empty header cell must equal its name (otherwise `StatusCode.InvalidArgument`) and an empty
- * one is written with it. A `name` another table already uses (compared case-insensitively) fails with
+ * one is written with it. A `name` another table already uses (by name identity, see {@link Workbook}) fails with
  * `StatusCode.AlreadyExists`.
  *
  * `styleName` names a built-in TableStyle or a custom style; omitted or `null`, it is the workbook default
@@ -509,8 +509,11 @@ export interface TableInput {
 /** Argument of `Table.update`. An omitted key leaves the field unchanged and no key accepts `null` (a
  * `TypeError`). `range` takes a {@link CellRect} or an A1 range on the table's sheet and resizes the table.
  * `headerRow` and `totalsRow` update their flags only when supplied; turning `totalsRow` on grows the table by one
- * row below and writes each column's totals cell there; the update fails with `PreconditionFailed` when that row
- * is occupied (see `Table.setColumnTotals`). With `range` in the same patch only the flag flips. The update is all-or-nothing. The
+ * row below and writes each column's totals cell there, shifting the cells beneath down unless something straddles
+ * the table's columns, and the update fails with `PreconditionFailed` when no free row is left to use (see
+ * `Table.update` for the totals row rules, `Table.setColumnTotals`). Turning it off fails with `PreconditionFailed`
+ * while a formula or name references the row. With `range` in the same patch the range is final and only the flag
+ * flips. The update is all-or-nothing. The
  * record `Table.getProperties()` returns is also accepted: its `name` and `columns` are ignored. Renaming goes
  * through `Table.rename`, the style through `Table.updateStyleOptions`. */
 export interface TablePatch {
@@ -755,7 +758,7 @@ export type PivotShowAsBase = 1048828 | 1048829;
  *  report and `Pivot.setRowFieldOrder` / `Pivot.setColumnFieldOrder` take. */
 export const PIVOT_VALUES_FIELD = -2;
 
-/** Filter type for an active (slicer-applied) filter. */
+/** The type of a pivot label, value or date filter (`Pivot.addFilter`). */
 export const PivotFilterKind: Readonly<{
   ValueTopCount: 0;
   ValueGreaterThan: 1;
@@ -898,7 +901,7 @@ export type PivotFilterKind =
   | 67;
 
 /** Calendar periods of a date group, as the bits of the `periods` mask of
- *  `Pivot.setFieldDateGroup`. Mirrors `FM_PIVOT_PERIOD_*`. */
+ *  `Pivot.setFieldDateGroup`. */
 export const PivotDatePeriod: Readonly<{
   Seconds: 1;
   Minutes: 2;
@@ -1247,7 +1250,7 @@ export interface PivotFilter {
   readonly valueHigh: number | string | null;
 }
 
-/** Conditional-format match kind. Mirrors `formulon::cf::CFMatchKind`. */
+/** Kind of a resolved conditional-format match: the `kind` of a {@link CfMatch}. */
 export const CfMatchKind: Readonly<{
   DifferentialFormat: 0;
   ColorScale: 1;
@@ -1257,8 +1260,7 @@ export const CfMatchKind: Readonly<{
 /** Union of the {@link CfMatchKind} ordinals. */
 export type CfMatchKind = 0 | 1 | 2 | 3;
 
-/** Excel cell-error ordinals. Mirrors `formulon::ErrorCode`; these are the
- *  values carried by `Value.errorCode` and accepted by `setError`. */
+/** Excel cell-error ordinals: the values carried by `Value.errorCode` and accepted by `setError`. */
 export const ErrorCode: Readonly<{
   Null: 0;
   Div0: 1;
@@ -1417,7 +1419,8 @@ export interface DateSystemOptions {
 
 /** A date-time input: a {@link CivilTimeInput} (`hour`, `minute` and `second` are 0 when omitted) or a `Date`. A
  *  `Date` is read through its local getters (year through seconds, milliseconds dropped), as Python reads a naive
- *  `datetime`, except in `ThreadedCommentInput.created`, which reads its UTC getters; an Invalid Date is a
+ *  `datetime`, except in `ThreadedCommentInput.created`, which reads its UTC getters and takes its civil fields as
+ *  UTC; a pinned clock (`setPinnedNow`) keeps the local reading; an Invalid Date is a
  *  `RangeError`. */
 export type DateInput = CivilTimeInput | Date;
 
@@ -2303,9 +2306,9 @@ export const FunctionAvailability: Readonly<{
 export type FunctionAvailability = 0 | 1 | 2 | 3;
 
 /** Metadata of a registered function, as `getFunctionMetadata(name)` returns it.
- *  `signature` and `description` are always `undefined`: the engine ships no
- *  human-readable function text, and {@link mergeFunctionMetadata} overlays a host-supplied
- *  provider document (`docs/function-metadata-schema.md`). */
+ *  `signature` and `description` are null until mergeFunctionMetadata fills them from a
+ *  host-supplied provider document (`docs/function-metadata-schema.md`): the engine ships no
+ *  human-readable function text. */
 export interface FunctionMetadata {
   readonly name: string;
   readonly minArity: number;
@@ -2313,9 +2316,9 @@ export interface FunctionMetadata {
   readonly maxArity: number | null;
   /** How far the engine implements the function. */
   readonly availability: FunctionAvailability;
-  /** `null` unless a host metadata document supplies it. */
+  /** null until mergeFunctionMetadata fills it from a host metadata document. */
   readonly signature: string | null;
-  /** `null` unless a host metadata document supplies it. */
+  /** null until mergeFunctionMetadata fills it from a host metadata document. */
   readonly description: string | null;
 }
 
@@ -2955,11 +2958,11 @@ export interface Color {
   readonly indexed: number;
 }
 
-/** Plain-data shape of a font record. Mirrors `formulon::io::Font`. */
+/** Plain-data shape of a font record (OOXML `<font>`), as `Workbook.ooxml.getFont` returns it. */
 export interface Font {
   readonly name: string;
   /** The `<sz>` size in points; `null` without the element, which on a differential font leaves the size
-   *  unchanged. */
+   *  unchanged (a workbook font always has one). */
   readonly sizePt: number | null;
   /** The `<b>` element: `null` without it, which on a differential font means "leave bold unchanged";
    *  `false` means "switch bold off". */
@@ -2988,7 +2991,8 @@ export interface Font {
 
 /** Argument of `Workbook.ooxml.addFont` / `setFont` / `Workbook.setDefaultFont`, and the `font` of a
  *  {@link DxfInput}: a font record whose keys other than `name` are all optional. An omitted or `null` size,
- *  toggle, family or charset is absent (on a differential font it leaves the attribute unchanged); an omitted
+ *  toggle, family or charset is absent (on a differential font it leaves the attribute unchanged); an omitted or
+ *  `null` size is 11 pt on a workbook font and absent on a differential font; an omitted
  *  `underline`, `vertAlign` or `scheme` is `None`; an omitted `color` is `ColorKind.None`. A colour takes
  *  `"#RRGGBB"` / `"#AARRGGBB"` too. The {@link Font} a read returns passes as is. */
 export interface FontInput {
@@ -3009,7 +3013,7 @@ export interface FontInput {
   color?: ColorInput;
 }
 
-/** Plain-data shape of a fill record. Mirrors `formulon::io::Fill`. */
+/** Plain-data shape of a fill record (OOXML `<fill>`), as `Workbook.ooxml.getFill` returns it. */
 export interface Fill {
   readonly pattern: FillPattern;
   /** The `<fgColor>` element; `ColorKind.None` without one. */
@@ -3092,7 +3096,7 @@ export interface BorderSideInput {
   color?: ColorInput;
 }
 
-/** Plain-data shape of a border record. Mirrors `formulon::io::Border`. */
+/** Plain-data shape of a border record (OOXML `<border>`), as `Workbook.ooxml.getBorder` returns it. */
 export interface Border {
   readonly left: BorderSide;
   readonly right: BorderSide;
@@ -3375,8 +3379,7 @@ export interface LogEvent {
   readonly [field: string]: string | number | boolean | null;
 }
 
-/** External-link kinds. Mirrors
- *  `formulon::io::ExternalLink::Kind`. */
+/** Kind of an external link (OOXML `<externalLink>` body): the `kind` of an {@link ExternalLink}. */
 export const ExternalLinkKind: Readonly<{
   Unknown: 0;
   ExternalBook: 1;
@@ -3386,8 +3389,7 @@ export const ExternalLinkKind: Readonly<{
 /** Union of the {@link ExternalLinkKind} ordinals. */
 export type ExternalLinkKind = 0 | 1 | 2 | 3;
 
-/** One element of `Workbook.listExternalLinks()`. Mirrors
- *  `formulon::io::ExternalLink`. The body part itself is not
+/** One element of `Workbook.listExternalLinks()`: an `<externalReference>` of the workbook. The body part itself is not
  *  exposed (it round-trips through the OOXML passthrough mechanism);
  *  this surface only enumerates the cross-workbook references and
  *  their resolved target URLs. */
@@ -3415,7 +3417,7 @@ export interface ExternalLink {
 export interface CellStyle {
   /** Display name of the style. */
   readonly name: string;
-  /** Index into the `<cellStyleXfs>` table. */
+  /** Index into the `<cellStyleXfs>` table (`Workbook.ooxml.listCellStyleXfs`). */
   readonly styleXfIndex: number;
   /** OOXML built-in ordinal (`0..53`); `null` for a custom style. */
   readonly builtinId: number | null;
@@ -3432,7 +3434,7 @@ export interface CellStyle {
 export interface CellStyleInput {
   /** Display name of the style. */
   readonly name: string;
-  /** Index into the `<cellStyleXfs>` table; defaults to 0. */
+  /** Index into the `<cellStyleXfs>` table (`Workbook.ooxml.listCellStyleXfs`); defaults to 0. */
   readonly styleXfIndex?: number;
   /** OOXML built-in ordinal (`0..53`); omitted or `null` is a custom style (not built-in). */
   readonly builtinId?: number | null;
@@ -4000,8 +4002,7 @@ export interface AutoFilterConditionInput {
  *  of the AutoFilter range. `kind` selects the criterion and only that
  *  criterion's fields are read on input (a `FilterKind`); on output every other criterion's
  *  fields are zero. `conditions` holds the one or two custom conditions, empty unless `kind` is `Custom`;
- *  `dynamicType` is a `DynamicFilterType`.
- *  `dxfIndex` of `4294967295` means absent. */
+ *  `dynamicType` is a `DynamicFilterType`. */
 export interface AutoFilterColumn {
   readonly columnOffset: number;
   readonly hiddenButton: boolean;
@@ -4179,6 +4180,7 @@ export interface ThreadedComment {
   /** The cell the thread is anchored to. */
   readonly cell: CellAddress;
   readonly personId: string;
+  /** The stamp, in UTC and whole seconds (no zone conversion applies); `null` when the stamp is absent. */
   readonly created: CivilTime | null;
   readonly text: string;
   readonly parentId: string | null;
@@ -4195,7 +4197,11 @@ export interface ThreadedCommentInput {
   text: string;
   cell?: CellAddress | string;
   personId: string;
-  /** A `Date` is read through its UTC getters, a {@link CivilTimeInput} is UTC. */
+  /** The stamp, in UTC: a `Date` is read through its UTC getters and a {@link CivilTimeInput} is taken as UTC (the
+   *  other date inputs read a `Date` through its local getters). Milliseconds are dropped. An omitted `created` is
+   *  stamped with the current UTC time; a pinned clock (`Workbook.setPinnedNow`) is written as it is, its local
+   *  wall-clock fields unconverted. A trailing `Z` is accepted and a numeric UTC offset is refused with
+   *  `StatusCode.InvalidArgument`. */
   created?: DateInput | null;
   parentId?: string | null;
   done?: boolean;
@@ -4628,6 +4634,8 @@ export interface ChartMarker {
   readonly line: ChartLine | null;
 }
 
+/** Data labels of a series, as `Chart.getData` returns them; `null` where the series has none. Written through
+ *  `ChartLabelsPatch`. */
 export interface ChartLabels {
   readonly showValue: boolean;
   readonly showCategory: boolean;
@@ -4918,6 +4926,9 @@ export type ChartFillPatch = Patch<
   'color' | 'transparencyPct'
 >;
 
+/** Line paint of a series, point, marker or shape in `Chart.updateSeries` / `Chart.addSeries` /
+ *  `Chart.updatePoint` and a shape's `line`; `null` for `color`, `transparencyPct`, `widthPt` or `dash` removes
+ *  that element, and `none: true` writes an explicit no-line. */
 export type ChartLinePatch = Patch<
   {
     color: ColorInput;
@@ -4929,6 +4940,8 @@ export type ChartLinePatch = Patch<
   'color' | 'transparencyPct' | 'widthPt' | 'dash'
 >;
 
+/** Marker of a series or point in `Chart.updateSeries` / `Chart.addSeries` / `Chart.updatePoint`; `null` for
+ *  `sizePt`, `fill` or `line` removes that element. */
 export type ChartMarkerPatch = Patch<
   {
     symbol: ChartMarkerSymbol;
@@ -4939,6 +4952,8 @@ export type ChartMarkerPatch = Patch<
   'sizePt' | 'fill' | 'line'
 >;
 
+/** Data labels of a series in `Chart.updateSeries` / `Chart.addSeries`; `null` for `separator`, `position`,
+ *  `numberFormat`, `fontColor` or `fontSizePt` removes that element, and `deleted: true` hides the labels. */
 export type ChartLabelsPatch = Patch<
   {
     showValue: boolean;
@@ -5296,8 +5311,8 @@ export type IterativeProgressCallback = (
   maxIterations: number,
 ) => boolean | undefined | void;
 
-/** A sheet passed by its `Sheet` handle, its 0-based index, or its name (matched case-insensitively, as sheet
- *  names compare). A `Sheet` of another workbook throws `TypeError`. */
+/** A sheet passed by its `Sheet` handle, its 0-based index, or its name (resolved by name identity, see
+ *  {@link Workbook}). A `Sheet` of another workbook throws `TypeError`. */
 export type SheetRef = Sheet | number | string;
 
 /** Options of `Workbook.addSheet`. */
@@ -5319,7 +5334,7 @@ export interface CopySheetOptions {
 export type BytesInput = Uint8Array | ArrayBuffer | ArrayBufferView;
 
 /** A table passed by its sheet-local position (its index in `Sheet.listTables()`), its name (the name formulas
- *  use, matched case-insensitively) or its `Table` handle. A string is always a name, digits included. A position
+ *  use, resolved by name identity, see {@link Workbook}) or its `Table` handle. A string is always a name, digits included. A position
  *  past the end fails with `StatusCode.IndexOutOfRange`, a name no table of the sheet has with
  *  `StatusCode.NotFound`, and a handle of another sheet with `StatusCode.InvalidArgument`. Resolving a name reads
  *  the table list, so removing tables by name in a loop is quadratic. */
@@ -5332,7 +5347,7 @@ export type PivotRef = number | string | Pivot;
  *  with `StatusCode.NotFound`, and a handle of another workbook with `StatusCode.InvalidArgument`. */
 export type PivotCacheRef = number | PivotCache;
 /** A pivot field passed by its index (the pivot field index, which is the cache field index) or by its source
- *  name, matched case-insensitively; a calculated field is named by its name. An index past the last field fails
+ *  name, resolved by name identity (see {@link Workbook}); a calculated field is named by its name. An index past the last field fails
  *  with `StatusCode.IndexOutOfRange`, a name no field has with `StatusCode.NotFound`. */
 export type PivotFieldRef = number | string;
 /** The id of a conditional-format rule, as `ConditionalFormat.id` reads it and `Sheet.addCfRule` returns it: a
@@ -5380,9 +5395,17 @@ export type ProtectedRangeRef = number | string;
  *  A sheet position past the end is `StatusCode.SheetIndexOutOfRange`; every other position is
  *  `StatusCode.IndexOutOfRange`. A handle that belongs to another workbook fails with `StatusCode.InvalidArgument`.
  *
- *  Names compare case-insensitively by Unicode simple case folding wherever they must be unique or are looked up:
- *  sheets, tables, table columns, defined names, cell styles, custom table styles, protected ranges, pivot tables
- *  and person ids.
+ *  Name identity. Wherever a name must be unique (sheets, tables, table columns, defined names, cell styles,
+ *  custom table styles, protected ranges and pivot tables), a name being added, renamed or copied collides with an
+ *  existing one when the two are equal under Excel's text comparison, which also folds letter case, full- and
+ *  half-width forms and hiragana / katakana (`Data`, `ＤＡＴＡ`, `ﾃﾞｰﾀ` and `データ` pairs included). Person ids are
+ *  GUIDs and compare by letter case only.
+ *
+ *  A lookup by name resolves in this order: an exact match; else the one entry equal under Unicode simple case
+ *  folding; else the single entry equal under the full comparison above. Two or more such entries with no exact or
+ *  case-only match resolve nothing (`null`, or `StatusCode.NotFound` where the lookup fails). A file that holds
+ *  names colliding only under the full comparison loads as it is and keeps both entries (only letter case makes a
+ *  loaded duplicate); each is reached by its exact name, and a new name that collides with either is refused.
  *
  *  Lookups follow one rule. A getter keyed by a natural key (`getDefinedName`, ...) returns `null` when nothing
  *  has that key. An entry to a handle or a result (`sheet()`, `table()`, `pivot()`, `pivotCache()`, the
@@ -5402,7 +5425,8 @@ export type ProtectedRangeRef = number | string;
  *  values as of the last recalc; call `setCalcMode(CalcMode.Manual)` right after `load` to read the cached
  *  values a file carries. `hasDirtyCells()` tells whether any cell is dirty.
  *
- *  The XF-level style tables, named styles and XML passthrough parts are reached through `ooxml`.
+ *  The XF-level style tables and the XML passthrough parts are reached through `ooxml`; the named styles are on
+ *  the workbook itself.
  *
  *  Tables, pivots, pivot caches and drawing objects are handles (`Table`, `Pivot`, `PivotCache`, `Drawing`): the
  *  parent (the sheet for tables, pivots and drawing objects, the workbook for pivot caches) adds, removes, lists
@@ -5431,12 +5455,14 @@ export interface Workbook {
   [Symbol.iterator](): IterableIterator<Sheet>;
   /** The number of sheets; `listSheets().length`. */
   readonly sheetCount: number;
-  /** Whether `ref` addresses a sheet of this workbook: `false` for a name no sheet has (compared
-   *  case-insensitively), a position past the end or a `Sheet` of another workbook. A value that is not a
+  /** Whether `ref` addresses a sheet of this workbook: `false` for a name no sheet has (by name
+   *  identity, see {@link Workbook}), a position past the end or a `Sheet` of another workbook. A value that is not a
    *  {@link SheetRef} throws `TypeError`. */
   hasSheet(ref: SheetRef): boolean;
-  /** The OOXML-level layer of the workbook: the style record tables addressed by index, the named styles and
-   *  the passthrough parts. Always the same object. */
+  /** The OOXML-level layer of the workbook: the style record tables addressed by index (`listFonts`, ...,
+   *  `addNumberFormat`, `getNumberFormat`, `listCellStyleXfs`, `addCellStyleXf`) and the passthrough parts
+   *  (`listPassthroughs`, `hasPassthrough`). Named styles are on the workbook (`listCellStyles`, `getCellStyle`,
+   *  `setCellStyle`, `removeCellStyle`). Always the same object. */
   readonly ooxml: WorkbookOoxml;
 
   /** Serialises the workbook to an in-memory byte stream in `format` (default `WorkbookFormat.Xlsx`). Dirty
@@ -5470,11 +5496,12 @@ export interface Workbook {
   /** Adds a sheet before `options.insertBefore` (a `Sheet`, an index or a name; omitted, `null` or
    *  `listSheets().length` appends) and returns its handle. An omitted or `null` `name` takes `<base><N>`: the
    *  profile's first sheet name without its trailing `1` (`Sheet`, `Tabelle`, `Feuil`, ...) and the smallest free
-   *  number N, compared case-insensitively. An unknown `insertBefore` name fails with `StatusCode.NotFound`.
+   *  number N, taken as a sheet name is: a sheet whose name is equal under name identity (see {@link Workbook})
+   *  makes N used. An unknown `insertBefore` name fails with `StatusCode.NotFound`.
    *  Fails with `StatusCode.InvalidSheetName` when the name is empty, longer
    *  than 31 UTF-16 units, contains one of `: \ / ? * [ ]`, begins or ends with an apostrophe or is `History` in any
-   *  case, with `StatusCode.AlreadyExists` when it collides case-insensitively (Unicode simple case folding) with an
-   *  existing sheet, and with `StatusCode.SheetCountLimitExceeded` at the maximum sheet count. */
+   *  case, with `StatusCode.AlreadyExists` when it collides with an
+   *  existing sheet under name identity (see {@link Workbook}), and with `StatusCode.SheetCountLimitExceeded` at the maximum sheet count. */
   addSheet(name?: string | null, options?: AddSheetOptions): Sheet;
   /** Removes `sheet`; its handle then throws `StatusCode.NotFound`, and the handles after it move down one place.
    *  References to it are rewritten to `#REF!` at the affected subexpression (cell formulas, defined names,
@@ -5632,7 +5659,7 @@ export interface Workbook {
 
   /** Lists the defined names, workbook- and sheet-scoped alike, in file order. */
   listDefinedNames(): readonly DefinedName[];
-  /** Reads the defined name `name` (case-insensitive by Unicode case folding) in the sheet scope `scope`, or the workbook scope when
+  /** Reads the defined name `name` (resolved by name identity, see {@link Workbook}) in the sheet scope `scope`, or the workbook scope when
    *  `scope` is omitted or `null`; `null` when the scope has no such name. */
   getDefinedName(name: string, scope?: SheetRef | null): DefinedName | null;
   /** Removes the defined name `name` in scope `scope` (as `getDefinedName`); `StatusCode.NotFound` when the scope
@@ -5644,7 +5671,7 @@ export interface Workbook {
    *  a table fails with `StatusCode.AlreadyExists`, a malformed one with `StatusCode.InvalidArgument`, and a
    *  `scope` past the last sheet with `StatusCode.SheetIndexOutOfRange`; `removeDefinedName` removes a name. */
   setDefinedName(definedName: DefinedNameInput): void;
-  /** The handle of the table named `name` on any sheet, matched case-insensitively; the one workbook-wide table
+  /** The handle of the table named `name` on any sheet, resolved by name identity (see {@link Workbook}); the one workbook-wide table
    *  lookup (tables are added, listed and removed on their `Sheet`). A name no table has fails with
    *  `StatusCode.NotFound`. */
   table(name: string): Table;
@@ -5696,9 +5723,9 @@ export interface Workbook {
 
   /** Lists the named cell styles (`<cellStyle>` entries) in file order. */
   listCellStyles(): readonly CellStyle[];
-  /** Reads the named cell style `name` (matched case-insensitively, as sheet names are); `null` when there is none. */
+  /** Reads the named cell style `name` (resolved by name identity, see {@link Workbook}); `null` when there is none. */
   getCellStyle(name: string): CellStyle | null;
-  /** Adds or replaces the `<cellStyle>` entry named `record.name` (names compare case-insensitively). Absent fields default to `styleXfIndex` 0, a
+  /** Adds or replaces the `<cellStyle>` entry named `record.name` (names collide by name identity, see {@link Workbook}). Absent fields default to `styleXfIndex` 0, a
    *  custom style (`0xFFFFFFFF`), level 0 and both flags false. */
   setCellStyle(record: CellStyleInput): void;
   /** Removes the `<cellStyle>` named `name`; cell formats that used it are repointed at the Normal style. */
@@ -5706,10 +5733,10 @@ export interface Workbook {
 
   /** Lists the custom table / PivotTable styles (`<tableStyles>`) in file order. */
   listTableStyles(): readonly TableStyle[];
-  /** Reads the custom table style `name` (case-insensitive); `null` when there is none. */
+  /** Reads the custom table style `name` (by name identity, see {@link Workbook}); `null` when there is none. */
   getTableStyle(name: string): TableStyle | null;
   /** Adds a custom table style, or replaces the one with the same name
-   *  (case-insensitive). The name may not be a built-in style name; each
+   *  (by name identity, see {@link Workbook}). The name may not be a built-in style name; each
    *  element type may appear once, `size` must be at least 1 and `dxfIndex`
    *  must name an existing differential format. A first style also sets the
    *  defaults to `TableStyleMedium2` / `PivotStyleLight16`. */
@@ -6099,7 +6126,8 @@ export interface Sheet {
    *  cross-workbook references to follow the shift. `first > last` fails with `StatusCode.InvalidArgument`.
    *  Fails with `StatusCode.PreconditionFailed` when the edit cuts into a data table, legacy
    *  array block or PivotTable, or would push one of them or a table past
-   *  the sheet bound; the workbook is unchanged. */
+   *  the sheet bound, or when it would push a cell holding a value or formula past the last row; the workbook is
+   *  unchanged. */
   insertRows(first: number, last: number): void;
   /** `insertRows` over the rows of the A1 row span `span` (`"3"`, `"3:5"`). */
   insertRows(span: string): void;
@@ -6116,7 +6144,8 @@ export interface Sheet {
    *  `StatusCode.InvalidArgument`.
    *  Fails with `StatusCode.PreconditionFailed` when the edit cuts into a data table, legacy
    *  array block or PivotTable, or would push one of them or a table past
-   *  the sheet bound; the workbook is unchanged. */
+   *  the sheet bound, or when it would push a cell holding a value or formula past the last column; the workbook
+   *  is unchanged. */
   insertColumns(first: number, last: number): void;
   /** `insertColumns` over the columns of the A1 column span `span` (`"B"`, `"B:D"`). */
   insertColumns(span: string): void;
@@ -6128,17 +6157,41 @@ export interface Sheet {
   deleteColumns(first: number, last: number): void;
   /** `deleteColumns` over the columns of the A1 column span `span` (`"B"`, `"B:D"`). */
   deleteColumns(span: string): void;
-  /** Inserts blank cells over `range`, moving the cells there and beyond `CellShift.Down` or `CellShift.Right`;
-   *  a range covering every column (or row) behaves as `insertRows` (or `insertColumns`). `StatusCode.InvalidArgument`
-   *  for `Up` / `Left`, a shift outside the enum, or a whole-column range with `Down` (whole-row with `Right`);
-   *  `StatusCode.PreconditionFailed` when the shift straddles a table, a legacy array block or a data table, moves
-   *  part of a PivotTable, pushes a value or formula off the grid, or is one Excel refuses silently. The workbook
-   *  is unchanged on failure. */
+  /** Inserts blank cells over `range` and moves the cells there and beyond `CellShift.Down` or `CellShift.Right`
+   *  by the range's height or width; a range covering every column (or row) behaves as `insertRows` (or
+   *  `insertColumns`).
+   *
+   *  The band is the range's columns for `Down` and its rows for `Right`; only the cells of the band from the
+   *  range's edge to the end of the grid move. A reference (cell, range, defined-name target, hyperlink range)
+   *  follows only when its extent across the band lies wholly inside the band: past the edge it moves, across the
+   *  edge it stretches; a range crossing the band, a whole-column and a whole-row reference are unchanged. A
+   *  conditional-format or validation range crossing the shifted region is split into one range per part. Notes
+   *  and threaded comments move with their cells; a merge wholly inside the shifted region moves, one crossing it
+   *  across the band is unmerged. Inserted cells take the format of the cell above (`Down`) or to the left
+   *  (`Right`), none when that cell is absent or unformatted. Row and column layout, page breaks, drawing anchors
+   *  and the sheet view do not move.
+   *
+   *  `StatusCode.InvalidArgument` for `Up` / `Left`, a shift outside the enum, or a whole-column range with `Down`
+   *  (whole-row with `Right`). `StatusCode.PreconditionFailed` when the shifted region meets a table, a
+   *  multi-cell array formula or a data table that extends beyond the band; a PivotTable that straddles the
+   *  region or lies inside the range (one whose full width the band covers, and that is not inside the range, moves
+   *  as one block; one outside the region stays); when the insert would push a cell holding a value or formula off the grid; or when Excel returns success
+   *  without changing anything. The workbook is unchanged on failure. */
   insertCells(range: CellRect | string, shift: CellShift): void;
-  /** Deletes the cells of `range`, moving the cells beyond `CellShift.Up` or `CellShift.Left` into the gap; a
-   *  range covering every column (or row) behaves as `deleteRows` (or `deleteColumns`). `StatusCode.InvalidArgument`
-   *  for `Down` / `Right`, a shift outside the enum, or a whole-column range with `Up` (whole-row with `Left`);
-   *  `StatusCode.PreconditionFailed` for the refusals of `insertCells`. The workbook is unchanged on failure. */
+  /** Deletes the cells of `range` and moves the cells beyond `CellShift.Up` or `CellShift.Left` into the gap; a
+   *  range covering every column (or row) behaves as `deleteRows` (or `deleteColumns`).
+   *
+   *  The band and the reference rules are those of `insertCells`. A reference wholly deleted becomes `#REF!` (a
+   *  defined name `=Sheet!#REF!`), one partly deleted shrinks; a range whose extent along the shift lies inside
+   *  the deleted interval and that touches the band on one side shrinks to its part outside the band. Conditional
+   *  formatting that ends up as adjacent rectangles of one rule joins into one range; validation ranges stay
+   *  split. A merge that only partly meets the deleted range is unmerged, and the values of deleted cells are
+   *  lost. A table or data table lying wholly inside the deleted range is removed, as a row or column delete would.
+   *
+   *  `StatusCode.InvalidArgument` for `Down` / `Right`, a shift outside the enum, or a whole-column range with `Up`
+   *  (whole-row with `Left`); `StatusCode.PreconditionFailed` for the refusals of `insertCells`, a partial-table
+   *  delete with `Up` and a PivotTable crossing the deleted range included. The workbook is unchanged on
+   *  failure. */
   deleteCells(range: CellRect | string, shift: CellShift): void;
 
   /** Reads the sheet's typed AutoFilter; `null` when absent. */
@@ -6148,12 +6201,14 @@ export interface Sheet {
    *  excluded rows. */
   setAutoFilter(filter: AutoFilterInput | null): void;
   /** Hides every body row the criteria exclude and shows the rest, as
-   *  Excel's Reapply does. Fails with `StatusCode.NotFound` when there is no AutoFilter. */
+   *  Excel's Reapply does. Fails with StatusCode.NotFound when the sheet has no AutoFilter. */
   applyAutoFilter(): void;
   /** Drops every column criterion and shows all body rows; the AutoFilter itself stays (remove it with
-   *  `setAutoFilter(null)`). Does nothing on a filter without criteria. */
+   *  `setAutoFilter(null)`). Does nothing on a filter without criteria.
+   *  Fails with StatusCode.NotFound when the sheet has no AutoFilter. */
   clearAutoFilterCriteria(): void;
-  /** Evaluates the sheet AutoFilter without changing the sheet. */
+  /** Evaluates the sheet AutoFilter without changing the sheet.
+   *  Fails with StatusCode.NotFound when the sheet has no AutoFilter. */
   evaluateAutoFilter(): AutoFilterEval;
 
   /** Checks `value` (anything `setValue` accepts) against the validation rule covering `(row, col)` without
@@ -6217,8 +6272,8 @@ export interface Sheet {
    *  content is kept. */
   addShape(spec: ShapeInput): Shape;
   /** Adds a slicer over column `column` of the table `table`, passed as its `Table` handle or its name
-   *  (matched case-insensitively), and returns its handle. `column` is the column's 0-based position or its name
-   *  (matched case-insensitively); a name the table lacks fails with `StatusCode.NotFound`. It creates the slicer and cache parts, the `Slicer_*`
+   *  (resolved by name identity, see {@link Workbook}), and returns its handle. `column` is the column's 0-based
+   *  position or its name (resolved the same way); a name the table lacks fails with `StatusCode.NotFound`. It creates the slicer and cache parts, the `Slicer_*`
    *  defined name and the drawing frame; the table may live on another sheet. A name no table has fails with
    *  `StatusCode.NotFound`. */
   addSlicer(table: Table | string, column: number | string, spec: SlicerInput): Slicer;
@@ -6369,9 +6424,9 @@ export interface Sheet {
    *  non-zero split fails with `StatusCode.InvalidArgument`. Applied in a fixed order: freeze or split (each replaces the other, and a
    *  freeze change resets the pane origin), `paneTopLeft*`, `topLeft*`, the display flags, `zoomPct` (outside
    *  `[10, 400]` is rejected), `viewMode`, `rightToLeft`, `tabSelected`. The pane origin must lie past the
-   *  frozen rows and columns. A `zoomPct` outside `[10, 400]` or a pane origin other than `0, 0` without panes is checked against
-   *  the merged view before anything is written, failing with `StatusCode.InvalidArgument`; another engine failure
-   *  throws with the earlier keys applied. An unknown key (`visibility` included) throws `TypeError`. */
+   *  frozen rows and columns. Every key is checked before anything is written; a failure changes nothing. A
+   *  `zoomPct` outside `[10, 400]` or a pane origin other than `0, 0` without panes is checked against the merged
+   *  view and fails with `StatusCode.InvalidArgument`. An unknown key (`visibility` included) throws `TypeError`. */
   updateView(patch: SheetViewPatch): void;
   /** The sheet's tab colour (`<sheetPr><tabColor>`); `null` when the tab has none. */
   getTabColor(): Color | null;
@@ -6610,7 +6665,7 @@ export interface Sheet {
   /** Returns the cells that `(row, col)` directly reads
    *  (1-step precedents) when `depth <= 1`, or every cell reached
    *  within `depth` BFS steps otherwise (default 1). `depth` is capped at 32 to
-   *  avoid runaway expansion in cyclic graphs. An invalid sheet, row or
+   *  avoid runaway expansion in cyclic graphs. An invalid row or
    *  column throws `FormulonError`. */
   getPrecedents(row: number, col: number, depth?: number): readonly CellNode[];
   /** `getPrecedents` at the A1 address `a1`. */
@@ -6655,7 +6710,8 @@ export interface NumberFormat {
 }
 
 /** The OOXML-level layer of a workbook, `Workbook.ooxml`: the style record tables (cell XFs, fonts, fills,
- *  borders, number formats, differential formats, named-style XFs) and the parts carried through unchanged.
+ *  borders, number formats, differential formats, `<cellStyleXfs>` records) and the parts carried through
+ *  unchanged. The named styles themselves (`<cellStyle>`) are on `Workbook`.
  *  Most code formats cells with `Sheet.updateCellFormat` and never needs it. */
 export interface WorkbookOoxml {
   /** Returns the resolved XF record at `xfIndex`. */
@@ -6903,12 +6959,24 @@ export interface Table {
   /** Reads the table's name, range, header / totals flags and columns. */
   getProperties(): TableProperties;
   /** Partially updates the table's range and header / totals rows; omitted fields keep their current values. A
-   *  supplied `range` must keep the table's existing column count. `totalsRow: true` on a table without one grows
-   *  the table by one row below and writes the totals cells there, `false` removes the totals row and shrinks it by
-   *  one; either fails with `StatusCode.PreconditionFailed` when the row below is occupied or the table ends on the
-   *  last grid row. With `range` in the same patch only the flag flips. */
+   *  supplied `range` must keep the table's existing column count. With `range` in the same patch the range is
+   *  final: the table takes it, only the flag flips and no cell moves.
+   *
+   *  Totals row on: the table grows by one row and each column's saved label and function are written there. When
+   *  nothing straddles the table's columns below it (a merge, another table, a PivotTable, a multi-cell array
+   *  formula or a data table), a row is inserted under the table over its columns, as `insertCells` with
+   *  `CellShift.Down` does, and the cells beneath move down. When something straddles, nothing moves: the row
+   *  directly under the table is used if it is free (no value, formula, spill output, merge or table part;
+   *  formatting alone counts as free), else the update fails with `StatusCode.PreconditionFailed`. It also fails
+   *  when the table ends on the last grid row.
+   *
+   *  Totals row off: fails with `StatusCode.PreconditionFailed`, changing nothing, while a cell formula or a
+   *  defined name references the totals row (its cells, or the table's `[#Totals]` / `[#All]`). Otherwise the table
+   *  shrinks by one row; the old totals row is deleted with the cells beneath moving up, or, when something
+   *  straddles the table's columns below, only emptied in place. The columns' saved labels and functions are kept
+   *  for the next time the row is turned on. */
   update(patch: TablePatch): void;
-  /** Renames the table. A name another table already uses (compared case-insensitively) fails with
+  /** Renames the table. A name another table already uses (by name identity, see {@link Workbook}) fails with
    *  `StatusCode.AlreadyExists`, an empty or malformed one with `StatusCode.InvalidArgument`. Structured
    *  references to the old name are rewritten in cell, defined-name, conditional-format, validation and chart
    *  formulas; a bare table name used as a reference is not rewritten. */
@@ -6919,7 +6987,7 @@ export interface Table {
   updateStyleOptions(patch: TableStyleOptionsPatch): void;
   /** Renames column `column` (0-based), as typing over its header cell does, and returns the final name. An empty
    *  `name` takes the Excel profile's `Column<N>` (`列<N>`) with the lowest unused N, a name another column already has
-   *  (case-insensitively, by Unicode case folding) gains the lowest unused N >= 2, and anything else is kept verbatim. Every
+   *  (by name identity, see {@link Workbook}) gains the lowest unused N >= 2, and anything else is kept verbatim. Every
    *  structured reference to the column through this table follows: cell, totals-row and defined-name formulas
    *  and chart series. Writing a value to a header cell (`setText`, `setNumber`, ...) renames the same way. */
   renameColumn(column: number, name: string): string;
@@ -7344,6 +7412,11 @@ export interface WorkbookCtor {
    *  save recomputes the workbook; to read the cached values the file carries, call
    *  `setCalcMode(CalcMode.Manual)` first (and `setCalcOnSave(false)` to save them unchanged).
    *
+   *  Names that collide only under the full comparison of name identity (see {@link Workbook}) load and stay as
+   *  they are; only letter case makes a loaded sheet name a duplicate. A threaded-comment stamp is normalised on
+   *  load: a trailing `Z` is dropped, and a stamp with a numeric UTC offset or any other shape reads as no stamp
+   *  (`created` is `null`) and is not written back.
+   *
    *  @example
    *  ```ts
    *  const wb = formulon.Workbook.load(await (await fetch('book.xlsx')).arrayBuffer());
@@ -7525,7 +7598,7 @@ export interface Formulon {
   getVersion(): string;
 
   /** Returns metadata for the function `name` (case-insensitive); `null` when no function
-   *  matches. The result is locale-invariant: the description / signature fields are always `undefined`
+   *  matches. The result is locale-invariant: the description / signature fields are null until mergeFunctionMetadata
    *  (see {@link FunctionMetadata}). */
   getFunctionMetadata(name: string): FunctionMetadata | null;
   /** Returns every registered function's canonical name in ascending

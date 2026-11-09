@@ -1879,7 +1879,7 @@ class PivotShowValuesAs(IntEnum):
 
 
 class PivotFilterKind(IntEnum):
-    """Filter type of a pivot filter: every OOXML pivot filter type.
+    """The type of a pivot label, value or date filter (:meth:`Pivot.add_filter`): every OOXML pivot filter type.
 
     The values are the C ABI's filter-type ordinals.
     """
@@ -2333,7 +2333,8 @@ class ThreadedComment:
     #: The anchor cell.
     cell: CellAddress
     person_id: str
-    #: The UTC time it was created, as a naive ``datetime``; whole seconds. ``None`` when the comment states none.
+    #: The UTC time it was created, as a naive ``datetime``; whole seconds. ``None`` when the comment states
+    #: none, including a stored stamp with a numeric offset (a trailing ``Z`` is dropped on load).
     created: Optional[datetime.datetime]
     text: str
     parent_id: Optional[str]
@@ -2348,9 +2349,11 @@ class ThreadedCommentInput:
     ``parent_id`` ``None`` opens a new thread at ``cell`` (``A1`` when
     omitted); otherwise the comment replies to that thread, taking its anchor
     and ignoring ``cell`` and ``done``. An empty ``parent_id`` is an ``InvalidArgumentError``. ``created`` is UTC: a naive ``datetime`` is
-    read as UTC, an aware one is converted to UTC, and a ``date`` is midnight UTC; fractions of a second are dropped. An omitted ``id`` is generated
-    (``{XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX}``) and an omitted ``created`` is the pinned clock if one is
-    set, else now.
+    read as UTC, an aware one is converted to UTC, and a ``date`` is midnight UTC; fractions of a second are dropped.
+    The stored stamp is ``YYYY-MM-DDTHH:MM:SS.00`` without a zone designator. An omitted ``id`` is generated
+    (``{XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX}``) and an omitted ``created`` is the current UTC time, or, with the
+    clock pinned by :meth:`Workbook.set_pinned_now`, the pinned time written as-is (the pin is a local wall clock
+    and is not converted).
     """
 
     person_id: str
@@ -4461,8 +4464,8 @@ class Font:
     differential font an absent ``<b>`` means "leave the source formatting
     unchanged" while ``False`` (``<b val="0"/>``) means "switch bold off".
     ``size_pt`` (points), ``family`` and ``charset`` are ``None`` without their element;
-    a ``None`` size leaves the size unchanged on a differential font, and
-    every cell-font entry point writes a size. ``color`` is ``ColorKind.NONE``
+    an omitted or ``None`` size is 11 pt on a workbook font and absent on a
+    differential font (which leaves the size unchanged). ``color`` is ``ColorKind.NONE``
     without a ``<color>`` element and takes a ``ColorInput`` on input.
     """
 
@@ -7569,8 +7572,12 @@ class Workbook(_NoCopy):
 
     Names:
       Every named collection (sheets, tables, table columns, defined names, pivots, protected ranges, cell
-      styles, custom table styles) and the person ids compare names case-insensitively under Unicode simple
-      case folding, for uniqueness and for lookup.
+      styles, custom table styles) and the person ids share one identity fold. Writing a name (add, rename,
+      copy) is refused when another member of the collection already holds it under the wide fold: the
+      workbook collation, which ignores case, full/half width and hiragana/katakana. Reading a name
+      resolves an exact match first, then a match under Unicode simple case folding, then the one member
+      matching under the wide fold, if there is exactly one. A default sheet name (``add_sheet()`` without a
+      name) is free under the same wide fold.
 
     Recalculation:
       Under the default ``CalcMode.AUTO`` a value read and a save first
@@ -7688,6 +7695,12 @@ class Workbook(_NoCopy):
         Auto-detects ``.xlsx`` vs ``.xlsb`` from the package contents; a
         path's extension is not consulted.
 
+        Names in the loaded file resolve as the workbook's identity fold does: an exact match, then a
+        case-only match, then a unique wide fold match. Two names of a collection that collide only under the
+        wide fold (``ﾃﾞｰﾀ`` and ``データ``) load and stay; the file is not rejected or renamed. A threaded
+        comment's ``dT`` is normalised on load: a trailing ``Z`` is dropped, and a numeric offset or a
+        malformed stamp reads as no ``created`` (the attribute is omitted on save).
+
         Args:
           source: the archive as ``bytes`` / ``bytearray`` / ``memoryview``;
             a ``str`` or :class:`os.PathLike` naming a file; or an object
@@ -7757,8 +7770,14 @@ class Workbook(_NoCopy):
 
     @property
     def ooxml(self) -> WorkbookOoxml:
-        """The OOXML-level layer of the workbook: style tables, named styles and passthrough parts. Always the same
-        object."""
+        """The OOXML-level layer of the workbook. Always the same object.
+
+        It holds the style record tables by index (``list_fonts``, ``list_fills``, ``list_borders``,
+        ``add_number_format``, ``get_number_format``, ``list_cell_style_xfs``, ``add_cell_style_xf``, ...) and
+        the passthrough parts (``list_passthroughs``, ``has_passthrough``). Named styles
+        (:meth:`list_cell_styles`, :meth:`get_cell_style`, :meth:`set_cell_style`, :meth:`remove_cell_style`)
+        live on the workbook itself.
+        """
         layer = getattr(self, "_ooxml", None)
         if layer is None:
             layer = WorkbookOoxml._new(self)
@@ -7823,7 +7842,7 @@ class Workbook(_NoCopy):
         return _read_cstr_out(LIB.fm_workbook_get_sheet_name, h, _uint(index, "sheet_index", role="sheet"))
 
     def _find_sheet(self, name: str) -> Optional[int]:
-        """Index of the sheet named ``name`` (case-insensitive, as sheet names are unique), or ``None``."""
+        """Index of the sheet ``name`` resolves to (exact, case-only, then unique wide fold), or ``None``."""
         if not isinstance(name, str):
             raise TypeError(f"name must be a str, got {type(name).__name__}")
         h = self._require()
@@ -7864,9 +7883,9 @@ class Workbook(_NoCopy):
         Every call for the same sheet returns the same :class:`Sheet` object.
 
         Args:
-          key: a sheet name (compared case-insensitively, as sheet names are
-            unique), a 0-based sheet index, or a :class:`Sheet` of this
-            workbook.
+          key: a sheet name (resolved by the identity fold: exact, case-only,
+            then unique wide fold), a 0-based sheet index, or a :class:`Sheet`
+            of this workbook.
 
         Raises:
           NotFoundError: when no sheet has the name ``key``, or ``key`` is a
@@ -7992,15 +8011,16 @@ class Workbook(_NoCopy):
         """Add a new sheet and return its handle.
 
         Without ``name`` the sheet is named ``<base><N>``: the profile's first sheet name without its trailing
-        ``1`` and the smallest free number from 2 (``Sheet2``, ``Tabelle2``), case-insensitively. An empty name
-        is rejected.
+        ``1`` and the smallest number ``N`` (from 1) such that no sheet holds ``<base>N`` under the wide fold of the
+        identity fold; a new workbook's first sheet takes 1, so the next default is usually ``Sheet2`` or
+        ``Tabelle2``. An empty name is rejected.
 
         The sheet goes before ``insert_before`` (a sheet, a name or a position); omitted, ``None`` or the sheet
         count appends it.
 
         Raises:
-          AlreadyExistsError: when the name collides case-insensitively
-            (Unicode simple case folding) with an existing sheet.
+          AlreadyExistsError: when the name collides with an existing sheet under
+            the wide fold of the identity fold (case, width and kana type).
           FormulonError: ``StatusCode.INVALID_SHEET_NAME`` when the name is
             empty, longer than 31 UTF-16 units, contains one of ``:``,
             backslash, ``/``, ``?``, ``*``, ``[`` or ``]``, begins or ends
@@ -8590,6 +8610,9 @@ class Workbook(_NoCopy):
 
     def set_pinned_now(self, time: Optional[Union[datetime.datetime, datetime.date]]) -> None:
         """Pin every clock-dependent result to the local time ``time``; ``None`` releases the pin.
+
+        A threaded comment stamped while the clock is pinned carries this time as written, without a
+        UTC conversion, because the pin has no time zone.
 
         A ``date`` pins midnight and a naive ``datetime`` is read as the local
         wall clock; an aware ``datetime`` is a ``ValueError``.

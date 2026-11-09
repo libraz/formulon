@@ -497,6 +497,14 @@ FM_API fm_status_t fm_workbook_create_empty(fm_workbook_t** out);
  * The container is auto-detected from its package contents; the caller does
  * not need to provide a filename or extension.
  *
+ * Names in the file resolve by the identity fold (see the name identity notes
+ * above `fm_workbook_get_sheet_name`): an exact match, then a case-only match,
+ * then a unique wide fold match. Two names of one collection that collide
+ * only under the wide fold load and stay as stored; the load neither rejects
+ * nor renames them. A threaded comment's `dT` is normalised: a trailing `Z`
+ * is dropped, and a numeric offset or any other malformed stamp reads as no
+ * `created` (the attribute is omitted again on save).
+ *
  * Lifetime: owned (until fm_workbook_destroy).
  *
  * @param bytes  Pointer to the first byte of the OOXML or MS-XLSB archive.
@@ -773,6 +781,25 @@ FM_API void fm_buffer_destroy(uint8_t* bytes);
  */
 FM_API fm_status_t fm_workbook_get_sheet_count(const fm_workbook_t* wb, size_t* out_count);
 
+/*
+ * Name identity. Every named collection (sheets, tables, table columns,
+ * defined names, pivots, protected ranges, cell styles, custom table styles)
+ * shares one identity fold with two strengths:
+ *
+ *   * The narrow fold is locale-independent Unicode simple case folding
+ *     (C/S mappings only, without normalization). It is the hashing key and
+ *     the duplicate check a load applies.
+ *   * The wide fold is the workbook collation, which also ignores full/half
+ *     width, hiragana/katakana and control characters.
+ *
+ * A write (add, rename, copy, insert) is refused with
+ * `FM_STATUS_ALREADY_EXISTS` when another member holds the name under the
+ * wide fold. A lookup by name tries an exact match, then a case-only match,
+ * then the one member matching under the wide fold, if exactly one does. A
+ * default sheet name is free under the wide fold as well. Folding is not
+ * normalization, full (expanding) case folding or locale tailoring.
+ */
+
 /**
  * @brief Returns the display name of the sheet at `sheet_index` (UTF-8).
  *
@@ -793,11 +820,12 @@ FM_API fm_status_t fm_workbook_get_sheet_count(const fm_workbook_t* wb, size_t* 
 FM_API fm_status_t fm_workbook_get_sheet_name(const fm_workbook_t* wb, size_t sheet_index, const char** out_name);
 
 /**
- * @brief Finds the sheet whose name equals `name`, ignoring case.
+ * @brief Finds the sheet `name` resolves to under the identity fold.
  *
- * Uses the same comparison as sheet add and rename, so at most one sheet
- * matches. A name that matches no sheet is not an error: the call succeeds
- * with `*out_present == 0`.
+ * Resolution order: an exact match, a case-only match, then the one sheet
+ * matching under the wide fold (a unique wide fold match; none when two
+ * sheets of a loaded file collide there). A name that matches no sheet is
+ * not an error: the call succeeds with `*out_present == 0`.
  *
  * @param wb          Workbook handle. Must be non-NULL.
  * @param name        Sheet name (UTF-8). Must be non-NULL.
@@ -816,13 +844,12 @@ FM_API fm_status_t fm_workbook_get_sheet_index(const fm_workbook_t* wb, const ch
  * A `NULL` name takes the profile's default sheet name `<base><N>` (`Sheet2`,
  * `Tabelle2`, ...): `<base>` is the profile's first sheet name without its
  * trailing `1`, and `N` the smallest number whose name no sheet holds under
- * the folding below.
+ * the wide fold of the identity fold.
  *
  * @param wb         Workbook handle. Must be non-NULL.
  * @param name       Strict UTF-8 display name, or `NULL` for the default
- *                   name. Worksheet identity uses locale-independent Unicode
- *                   simple case folding (C/S mappings only, without
- *                   normalization).
+ *                   name. Worksheet identity is the identity fold (see the
+ *                   name identity notes above).
  * @param insert_before 0-based index of the sheet the new one goes before;
  *                   `sheet_count` appends.
  * @param out_sheet_index  Receives the new sheet's index; must be non-NULL.
@@ -835,7 +862,7 @@ FM_API fm_status_t fm_workbook_get_sheet_index(const fm_workbook_t* wb, const ch
  *         (`: \ / ? * [ ]`), begins or ends with an apostrophe, or is
  *         `History` in any case -- the rules `fm_workbook_rename_sheet` applies;
  *         `FM_STATUS_ALREADY_EXISTS` (7) when `name` equals an existing sheet's
- *         name under locale-independent Unicode simple case folding;
+ *         name under the wide fold;
  *         `FM_STATUS_SHEET_COUNT_LIMIT_EXCEEDED` (12) when the workbook already contains
  *         the maximum supported sheet count.
  */
@@ -976,9 +1003,9 @@ FM_API fm_status_t fm_workbook_remove_sheet(fm_workbook_t* wb, size_t sheet_inde
  *         (`: \ / ? * [ ]`), begins or ends with an apostrophe, or is
  *         `History` in any case;
  *         `FM_STATUS_ALREADY_EXISTS` (7) when `new_name` equals another sheet's
- *         name under locale-independent Unicode simple case folding. Folding is
- *         not normalization, full (expanding) case folding, locale tailoring,
- *         or a claim of full Excel-equivalence.
+ *         name under the wide fold of the identity fold, which is not
+ *         normalization, full (expanding) case folding, locale tailoring, or a
+ *         claim of full Excel-equivalence.
  */
 FM_API fm_status_t fm_workbook_rename_sheet(fm_workbook_t* wb, size_t sheet_index, const char* new_name);
 
@@ -1063,18 +1090,20 @@ FM_API fm_status_t fm_workbook_set_defined_name(fm_workbook_t* wb, const fm_defi
 /**
  * @brief Inserts the inclusive row span `[first, last]` on `sheet_index`:
  *        `last - first + 1` blank rows open at `first`. Cells at `first` and
- *        beyond shift forward; cells pushed past the sheet bound are
- *        dropped. References across the workbook are rewritten to
- *        track the new positions; references that would land past the
- *        sheet bound collapse to `#REF!`.
+ *        beyond shift forward. An insert that would push a value or formula
+ *        cell past the sheet bound is refused; a format-only cell, note or
+ *        hyperlink pushed off is dropped. References across the workbook are
+ *        rewritten to track the new positions; references that would land
+ *        past the sheet bound collapse to `#REF!`.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when `last < first`, or `last` is past the last row (1048575);
  *         `FM_STATUS_PRECONDITION_FAILED` (9) when the edit cuts into a data table,
- *         legacy array block or PivotTable, or would push one of them or a
- *         table past the sheet bound; the workbook is unchanged.
+ *         legacy array block or PivotTable, or would push one of them, a
+ *         table, or a value or formula cell past the sheet bound; the
+ *         workbook is unchanged.
  */
 FM_API fm_status_t fm_sheet_insert_rows(fm_workbook_t* wb, size_t sheet_index, uint32_t first, uint32_t last);
 
@@ -2385,8 +2414,8 @@ FM_API fm_status_t fm_sheet_add_table(fm_workbook_t* wb, size_t sheet_index, con
  * and may not overlap the objects `fm_sheet_add_table` lists. `header_row`
  * and `totals_row` are `0` / `1`. `header_row` only flips the flag;
  * `totals_row` grows or shrinks the table by one row (`fm_sheet_update_table`).
- * With `range` in the same patch, `range` is the final extent and
- * `totals_row` only flips the flag. The style is patched through
+ * With `range` in the same patch, `range` is the final extent the caller
+ * chose: nothing shifts and `totals_row` only flips the flag. The style is patched through
  * `fm_sheet_update_table_style_options`.
  */
 typedef struct {
@@ -2403,10 +2432,25 @@ typedef struct {
  * @brief Merges `patch` into table `table_index`. The whole patch is checked
  *        before anything changes.
  *
- * Turning the totals row on grows the table by one row below its range and
- * writes each column's totals cell (`fm_sheet_set_table_column_totals`)
- * there; the data rows are kept. Turning it off removes the totals row from
- * the range and clears its cells. A toggle that changes nothing is a no-op.
+ * Totals row on (without `range`): one row is inserted below the table in
+ * the table's columns, shifting the cells beneath down (as
+ * `fm_sheet_insert_cells` with `FM_CELL_SHIFT_DOWN`), and each column's
+ * stored totals label and function (`fm_sheet_set_table_column_totals`) is
+ * written there; the data rows are kept. If a merged range, another table,
+ * a PivotTable, an array formula or a data table straddles the table's
+ * columns below it, nothing shifts and the row directly below is used when
+ * it is free (no value, formula, spill output, merged range or table cell;
+ * format-only cells count as free).
+ *
+ * Totals row off: every refusal check runs first. If a cell formula or a
+ * defined name references the totals row (a range meeting it, or a
+ * `[#Totals]` / `[#All]` structured reference to the table) the call is
+ * refused. The totals row then leaves the table's range and the cells
+ * beneath shift up; if something straddles the table's columns below, the old
+ * totals row is only emptied and nothing shifts. The columns' stored totals
+ * labels and functions are kept for the next time it is turned on.
+ *
+ * A toggle that changes nothing is a no-op.
  *
  * @return `FM_STATUS_OK` (0) on success, or a common table failure;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `patch` is `NULL`;
@@ -2416,8 +2460,11 @@ typedef struct {
  *         PivotTable, a data table, an array formula or a merged range,
  *         or when turning the totals row on finds the row below occupied (a
  *         non-blank cell in the table's columns, or a merged range, table,
- *         PivotTable, array formula, data table or spill over those cells) or
- *         the table ends on the last grid row; nothing changes then.
+ *         PivotTable, array formula, data table or spill over those cells,
+ *         while something straddles the table's columns below so that the
+ *         insert cannot shift) or the table ends on the last grid row, or
+ *         when turning the totals row off finds a formula or defined name
+ *         referencing it; nothing changes then.
  */
 FM_API fm_status_t fm_sheet_update_table(fm_workbook_t* wb, size_t sheet_index, size_t table_index,
                                          const fm_table_patch_t* patch);
@@ -3536,12 +3583,16 @@ typedef struct {
  *        `parent_id` names its thread.
  *
  * Ids are brace-wrapped GUIDs, taken in either letter case, matched across
- * it, and stored uppercase as Excel writes them; `created` is
- * `YYYY-MM-DDTHH:MM:SS.ss`, absent on read for a loaded comment with no time
- * (written without `dT`). On add, a `NULL` or empty `id` takes an
- * engine-generated GUID and a `NULL` or empty `created` takes the pinned clock
- * when one is set (`fm_workbook_set_pinned_now`), else the current time;
- * with the clock pinned the generated GUIDs are deterministic. `done` is the thread's resolved state and is
+ * it, and stored uppercase as Excel writes them; `created` is UTC,
+ * `YYYY-MM-DDTHH:MM:SS.ss` with no zone designator, absent on read for a
+ * loaded comment with no time (written without `dT`). On add, a trailing `Z`
+ * on `created` is accepted and dropped, and a numeric offset (`+09:00`) or a
+ * three-digit fraction is `FM_STATUS_INVALID_ARGUMENT`. A `NULL` or empty
+ * `id` takes an engine-generated GUID and a `NULL` or empty `created` takes
+ * the current UTC time, or, when a clock is pinned (`fm_workbook_set_pinned_now`),
+ * the pinned time written as-is (the pin carries no time zone, so it is not
+ * converted); with the clock pinned the generated GUIDs are deterministic.
+ * On load a `dT` is normalised as at `fm_workbook_load`. `done` is the thread's resolved state and is
  * meaningful on the opening comment only. On input every other `const char*` may be `NULL`, meaning empty; a `NULL`
  * `parent_id` opens a thread and an empty one is `FM_STATUS_INVALID_ARGUMENT` (2). `mentions` may be `NULL` only with a
  * zero `mentions_count`. On output an opening comment's `parent_id` and an absent `created` read `NULL`.
@@ -3636,7 +3687,8 @@ FM_API fm_status_t fm_sheet_get_threaded_comment(const fm_workbook_t* wb, size_t
  *         `comment->mentions` is `NULL` with a non-zero count;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when a new thread's cell is outside the
- *         grid, the id or a mention id is not a GUID, `created` is malformed, a
+ *         grid, the id or a mention id is not a GUID, `created` is malformed
+ *         (including a numeric offset), a
  *         mention ends before it starts or lies outside the text, `parent_id`
  *         is empty, or `parent_id` names a reply;
  *         `FM_STATUS_ALREADY_EXISTS` (7) when the id is already used on the

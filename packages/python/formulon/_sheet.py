@@ -1317,13 +1317,12 @@ class Sheet(_NoCopy):
     else :meth:`Workbook.parse_reference` does not read as one cell raises
     :class:`InvalidArgumentError`. A method taking a :class:`CellRect` also
     takes an unqualified A1 range (``"A1:B2"``; one cell is a 1x1 range).
-    A method taking a column or row span (``first, last`` or ``col, count``
-    / ``row, count``) also takes it as one A1 span string in its place:
-    ``"B"`` or ``"B:D"`` for columns, ``"3"`` or ``"3:5"`` for rows
-    (``set_column_width("B:D", 12)``); the whole sheet suits either axis.
-    Inserting or deleting rows or columns takes ``(start, count)``
-    (``insert_rows(row, count)``); every other row or column span is the
-    closed interval ``(first, last)``.
+    A method taking a column or row span also takes it as one A1 span string
+    in its place: ``"B"`` or ``"B:D"`` for columns, ``"3"`` or ``"3:5"`` for
+    rows (``set_column_width("B:D", 12)``); the whole sheet suits either axis.
+    Every row or column span, insert and delete included, is the closed
+    interval ``(first, last)`` or an A1 span string (``insert_rows(2, 4)``
+    opens three rows).
 
     To read cells, pick by shape: :meth:`get_values` for a dense grid of
     values, :meth:`list_cells` for the populated cells of a range,
@@ -2476,7 +2475,9 @@ class Sheet(_NoCopy):
           InvalidArgumentError: when ``first`` is past ``last`` or ``last`` is past the sheet bound.
           FormulonError: with ``StatusCode.PRECONDITION_FAILED`` when the edit cuts into
             a data table, legacy array block or PivotTable, or would push one
-            of them or a table past the sheet bound; the workbook is unchanged.
+            of them, a table, or a value or formula cell past the sheet bound
+            (a format-only cell, note or hyperlink pushed off is dropped); the
+            workbook is unchanged.
         """
         first, last = self._span_args("insert_rows", args, kwargs, ("first", "last"))
         sheet = self._index()
@@ -2538,7 +2539,9 @@ class Sheet(_NoCopy):
           InvalidArgumentError: when ``first`` is past ``last`` or ``last`` is past the sheet bound.
           FormulonError: with ``StatusCode.PRECONDITION_FAILED`` when the edit cuts into
             a data table, legacy array block or PivotTable, or would push one
-            of them or a table past the sheet bound; the workbook is unchanged.
+            of them, a table, or a value or formula cell past the sheet bound
+            (a format-only cell, note or hyperlink pushed off is dropped); the
+            workbook is unchanged.
         """
         first, last = self._span_args("insert_columns", args, kwargs, ("first", "last"))
         sheet = self._index()
@@ -2586,25 +2589,44 @@ class Sheet(_NoCopy):
     def insert_cells(self, range: Union[CellRect, str], shift: CellShift) -> None:
         """Insert blank cells over ``range``, moving the cells of the band ``DOWN`` or ``RIGHT``.
 
-        References, merges, conditional formats and validations follow the moved cells. A range
+        The band is the columns of ``range`` for ``DOWN`` and its rows for ``RIGHT``; only the band moves,
+        from the range's leading edge to the grid's end, by the height or width of ``range``. A range
         covering the whole width or height of the sheet acts as :meth:`insert_rows` /
         :meth:`insert_columns`.
+
+        A cell, range, defined-name target or hyperlink range is rewritten only when its perpendicular
+        extent lies inside the band: it moves, or grows when it straddles the leading edge. One straddling
+        the band, a whole column or a whole row keeps its address. A conditional-format or validation range
+        straddling the moving area splits into its moving and fixed parts; a merge straddling it is
+        unmerged. Notes and threaded comments move with their cell. Row and column layout, manual breaks,
+        drawing anchors and the sheet view do not move. An inserted cell takes the format of the cell
+        directly above (``DOWN``) or to its left (``RIGHT``), if that cell has one.
 
         Raises:
           InvalidArgumentError: for an inverted or off-grid ``range``, a ``shift`` of ``UP`` / ``LEFT``, or a
             ``shift`` along the full extent of the range (a whole-column range with ``DOWN``, a
             whole-row range with ``RIGHT``).
-          FormulonError: with ``StatusCode.PRECONDITION_FAILED`` when the edit cuts into a table, array
-            formula, data table or PivotTable, or would push a value or formula off the sheet; the
-            workbook is unchanged.
+          FormulonError: with ``StatusCode.PRECONDITION_FAILED``, leaving the workbook unchanged, when
+            the moving area meets a table, multi-cell array formula or data table whose perpendicular
+            extent the band does not cover; meets a PivotTable, unless the band covers its whole
+            perpendicular extent and ``range`` does not lie inside it; the insert would push a value or
+            formula cell past the grid (a format-only cell, note or hyperlink pushed off is dropped); or
+            Excel would accept the edit without changing anything (an insert inside a PivotTable).
         """
         self._shift_cells(LIB.fm_sheet_insert_cells, range, shift)
 
     def delete_cells(self, range: Union[CellRect, str], shift: CellShift) -> None:
         """Delete the cells of ``range``, moving the cells beyond the band ``UP`` or ``LEFT``.
 
-        A reference to a deleted cell becomes ``#REF!``. Raises as :meth:`insert_cells`, with the
-        direction rule reversed: ``DOWN`` and ``RIGHT`` are refused with ``InvalidArgumentError``.
+        The band and the moving area are as in :meth:`insert_cells`, the deleted rectangle included.
+        A reference to a wholly deleted cell becomes ``#REF!`` (a defined name ``=Sheet!#REF!``); a partly
+        deleted one shrinks. A merge partly intersecting the deleted rectangle is unmerged and its deleted
+        cells lose their values. Notes and threaded comments of a deleted cell are removed; a table, data
+        table or PivotTable the deleted rectangle contains is removed.
+
+        Raises as :meth:`insert_cells`, with the direction rule reversed (``DOWN`` and ``RIGHT`` are
+        refused with ``InvalidArgumentError``) and no push-off refusal; a delete over part of a table or
+        inside a PivotTable is refused with ``StatusCode.PRECONDITION_FAILED``.
         """
         self._shift_cells(LIB.fm_sheet_delete_cells, range, shift)
 
@@ -3902,7 +3924,10 @@ class Sheet(_NoCopy):
         self._workbook._write_auto_filter(LIB.fm_sheet_set_auto_filter, filter, sheet)
 
     def apply_auto_filter(self) -> None:
-        """Hide the body rows the sheet AutoFilter excludes and show the rest."""
+        """Hide the body rows the sheet AutoFilter excludes and show the rest.
+
+        Fails with NotFoundError when the sheet has no AutoFilter.
+        """
         sheet = self._index()
         h = self._workbook._require()
         _check(LIB.fm_sheet_apply_auto_filter(h, _uint(sheet, "sheet_index", role="sheet")))
@@ -3912,6 +3937,8 @@ class Sheet(_NoCopy):
 
         The AutoFilter itself stays (remove it with ``set_auto_filter(None)``);
         a filter without criteria is left as it is.
+
+        Fails with NotFoundError when the sheet has no AutoFilter.
         """
         sheet = self._index()
         h = self._workbook._require()
@@ -3921,6 +3948,8 @@ class Sheet(_NoCopy):
         """Evaluate the sheet AutoFilter without changing the sheet.
 
         Body row ``first_row + i`` matches when ``match[i]`` is true.
+
+        Fails with NotFoundError when the sheet has no AutoFilter.
         """
         sheet = self._index()
         return AutoFilterEval(*self._workbook._evaluate_auto_filter(LIB.fm_sheet_evaluate_auto_filter, sheet))
@@ -4043,7 +4072,9 @@ class Sheet(_NoCopy):
         """Add a threaded comment, a new thread when ``parent_id`` is ``None`` else a reply; return its id.
 
         ``comment.cell`` is a :class:`CellAddress` or an unqualified A1 cell, ``A1`` when omitted. An omitted
-        ``id`` is generated and an omitted ``created`` is the pinned clock if one is set, else now. A
+        ``id`` is generated and an omitted ``created`` is the current UTC time, or the pinned time as written when
+        the clock is pinned (:meth:`Workbook.set_pinned_now`). ``created`` is read as UTC: a naive ``datetime`` is UTC,
+        an aware one is converted, a ``date`` is midnight. A
         :class:`ThreadedComment` read back is accepted in place of a :class:`ThreadedCommentInput`.
 
         Raises:

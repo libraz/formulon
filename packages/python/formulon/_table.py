@@ -186,20 +186,30 @@ class Table(_NoCopy):
         ``range`` is a :class:`CellRect`, an A1 range (``"A1:C5"``,
         optionally sheet-qualified) or a :class:`SheetRect`; it must lie on
         the table's sheet and keep the width the table's column list already
-        describes. Turning ``totals_row`` on without ``range`` grows the table
-        by one row below and writes each column's totals cell there, keeping
-        the data rows; turning it off removes that row and shrinks the table by
-        one. With ``range`` in the same call only the flag changes (a read
-        record feeds back). The update is all-or-nothing. Rename with :meth:`rename` and
+        describes. The update is all-or-nothing. Rename with :meth:`rename` and
         change the style with :meth:`update_style_options`.
+
+        Turning ``totals_row`` on without ``range`` inserts one row below the table (the table's columns
+        shift down, as :meth:`Sheet.insert_cells` with ``DOWN``) and writes each column's stored totals
+        label and function there; the data rows are kept. If something straddles the table's columns
+        below it (a merge, another table, a PivotTable, an array formula, a data table), nothing shifts
+        and the row directly below is used instead when it is free (no value, formula, spill output, merge
+        or table cell; format-only cells count as free), else the call is refused. Turning it off
+        first checks that no formula or defined name references the totals row (a range meeting it, or a
+        ``[#Totals]`` / ``[#All]`` structured reference) and refuses if one does; it then shrinks the table
+        by one row and shifts the cells below up. If something straddles the table's columns below, the
+        old totals row is only emptied and nothing shifts. The per-column labels and functions are kept
+        for the next time it is turned on. With ``range`` in the same call ``range`` is the final extent
+        and only the flag changes: nothing shifts (a read record feeds back).
 
         Raises:
           TypeError: when a flag is not a ``bool`` or ``range`` has the wrong
             type (``None`` included).
           FormulonError: with ``StatusCode.INVALID_ARGUMENT`` when ``range``
             names another sheet or is not an A1 range.
-          PreconditionFailedError: when growing for the totals row finds the
-            row below occupied or the table on the last grid row.
+          PreconditionFailedError: when turning the totals row on finds the row below
+            occupied while something straddles the table's columns, or the table on the last grid row; or
+            when turning it off finds a formula or defined name referencing the totals row.
         """
         for key, flag in (("header_row", header_row), ("totals_row", totals_row)):
             if flag is not UNCHANGED:
