@@ -122,18 +122,13 @@ bool load(pugi::xml_document& doc, const std::string& xml) {
   return !xml.empty() && doc.load_string(xml.c_str()) && local_name(doc.document_element()) == "extLst";
 }
 
-void store(std::string& xml, const pugi::xml_document& doc) {
-  pugi::xml_node root = doc.document_element();
-  xml = has_element_child(root) ? raw_xml(root) : std::string();
-}
-
 // Sets (or removes, for the default) a boolean attribute when its value changes.
 void set_flag(pugi::xml_node node, const char* name, bool value) {
   if (attr_bool(node, name) == value) {
     return;
   }
   if (value) {
-    (node.attribute(name) ? node.attribute(name) : node.append_attribute(name)).set_value("1");
+    ensure_attribute(node, name).set_value("1");
   } else {
     node.remove_attribute(name);
   }
@@ -143,7 +138,7 @@ void set_text_attr(pugi::xml_node node, const char* name, const std::string& val
   if (is_default && !node.attribute(name)) {
     return;
   }
-  (node.attribute(name) ? node.attribute(name) : node.append_attribute(name)).set_value(value.c_str());
+  ensure_attribute(node, name).set_value(value.c_str());
 }
 
 std::string number_text(double value) {
@@ -372,7 +367,7 @@ Expected<void, Error> add_sparkline_group(std::string& ext_lst_xml, const Sparkl
     node.append_attribute("xr2:uid").set_value(group.uid.c_str());
   }
   apply_items(node, group.items);
-  store(ext_lst_xml, doc);
+  store_root_xml(ext_lst_xml, doc);
   return Expected<void, Error>::Ok();
 }
 
@@ -381,7 +376,7 @@ Expected<void, Error> update_sparkline_group(std::string& ext_lst_xml, std::size
   pugi::xml_document doc;
   ASSIGN_OR_RETURN(pugi::xml_node node, group_at(doc, ext_lst_xml, index));
   apply_group(node, group);
-  store(ext_lst_xml, doc);
+  store_root_xml(ext_lst_xml, doc);
   return Expected<void, Error>::Ok();
 }
 
@@ -391,7 +386,7 @@ Expected<void, Error> set_group_sparklines(std::string& ext_lst_xml, std::size_t
   pugi::xml_document doc;
   ASSIGN_OR_RETURN(pugi::xml_node node, group_at(doc, ext_lst_xml, index));
   apply_items(node, items);
-  store(ext_lst_xml, doc);
+  store_root_xml(ext_lst_xml, doc);
   return Expected<void, Error>::Ok();
 }
 
@@ -404,13 +399,13 @@ Expected<void, Error> remove_sparkline_group(std::string& ext_lst_xml, std::size
     pugi::xml_node parent = doomed.parent();
     parent.remove_child(doomed);
     if (has_element_child(parent)) {
-      store(ext_lst_xml, doc);
+      store_root_xml(ext_lst_xml, doc);
       return Expected<void, Error>::Ok();
     }
     doomed = parent;
   }
   doc.document_element().remove_child(doomed);
-  store(ext_lst_xml, doc);
+  store_root_xml(ext_lst_xml, doc);
   return Expected<void, Error>::Ok();
 }
 

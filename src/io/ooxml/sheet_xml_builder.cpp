@@ -35,21 +35,10 @@
 #include "sheet.h"
 #include "utils/a1_ref.h"
 #include "utils/double_format.h"
-#include "utils/structured_log.h"
 
 namespace formulon {
 namespace io {
 namespace {
-
-// Forward declarations for sheet-view / column-layout builders. The
-// definitions live at the bottom of the file alongside the other XML
-// helpers; their signatures are needed up here so `BuildWorksheetXml`
-// can call them.
-std::string BuildSheetViewXml(const SheetView& view);
-std::string BuildSheetFormatPrXml(const SheetFormatDefaults& defaults);
-std::string BuildColsXml(const SheetLayout& layout);
-std::string BuildSheetProtectionXml(const SheetProtection& p);
-std::string BuildDimensionXml(const Sheet& sheet);
 
 // Sheet visibility is owned by xl/workbook.xml's <sheet state="...">
 // attribute.  Older producers also put tabHidden on the worksheet's raw
@@ -752,14 +741,7 @@ SheetRelsResult BuildSheetRels(const Sheet& sheet, const std::vector<EmissionPla
   // so the log line and the counter can never disagree about how many
   // were dropped.
   const auto drop_rel = [&](std::string_view type, std::string_view target) {
-    StructuredLog("ooxml_writer.sheet_rel_skipped")
-        .field("reason", std::string_view("target_part_absent"))
-        .field("type", type)
-        .field("target", target)
-        .warn();
-    if (diagnostics != nullptr) {
-      ++diagnostics->dropped_relationship_count;
-    }
+    RecordDroppedRelationship("ooxml_writer.sheet_rel_skipped", type, target, diagnostics);
   };
   std::string& out = res.xml;
   out.reserve(256 + (sheet_tables.size() + sheet_pivot_tables.size() + sheet.hyperlinks().size()) * 192);

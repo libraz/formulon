@@ -168,7 +168,7 @@ bool ParseTagHeader(const char* begin, const char* end, const char** p, TagHeade
   const char* name_begin = *p;
   while (*p < end) {
     const char c = **p;
-    if (c == ' ' || c == '\t' || c == '\r' || c == '\n' || c == '/' || c == '>') {
+    if (is_xml_space(c) || c == '/' || c == '>') {
       break;
     }
     ++(*p);
@@ -257,12 +257,15 @@ bool ContainsAttributeWhitespace(std::string_view src) noexcept {
 struct AttrIterator {
   std::string_view rest;
 
-  /// Pulls the next attribute. Returns false when no more remain.
-  bool next(std::string_view* key, std::string_view* value) noexcept {
-    // Skip leading whitespace.
+  void skip_space() noexcept {
     while (!rest.empty() && is_xml_space(rest.front())) {
       rest.remove_prefix(1);
     }
+  }
+
+  /// Pulls the next attribute. Returns false when no more remain.
+  bool next(std::string_view* key, std::string_view* value) noexcept {
+    skip_space();
     if (rest.empty()) {
       return false;
     }
@@ -277,16 +280,12 @@ struct AttrIterator {
     }
     *key = rest.substr(0, i);
     rest.remove_prefix(i);
-    while (!rest.empty() && is_xml_space(rest.front())) {
-      rest.remove_prefix(1);
-    }
+    skip_space();
     if (rest.empty() || rest.front() != '=') {
       return false;
     }
     rest.remove_prefix(1);  // '='
-    while (!rest.empty() && is_xml_space(rest.front())) {
-      rest.remove_prefix(1);
-    }
+    skip_space();
     if (rest.empty()) {
       return false;
     }
@@ -391,7 +390,7 @@ std::uint32_t AttrUintOrDecoded(const TagHeader& header, std::string_view name, 
 
 /// Defined below; `ScanTextContent` uses it to discard a child element
 /// that follows the character-data run it returns.
-bool SkipUntilClose(const char* begin, const char* end, const char** p, std::string_view name, Error* err);
+bool SkipUntilClose(const char* begin, const char* end, const char** p, Error* err);
 
 /// Extracts the text content of an element whose opening tag has just
 /// been parsed (`*p` points at the first byte after `>`). Returns the raw
@@ -505,7 +504,7 @@ bool ScanTextContent(const char* begin, const char* end, const char** p, std::st
       *err = MakeXmlParseError(lt_off, "unexpected close tag");
       return false;
     }
-    if (!child.self_closing && !SkipUntilClose(begin, end, p, child.name, err)) {
+    if (!child.self_closing && !SkipUntilClose(begin, end, p, err)) {
       return false;
     }
     any_node = true;
@@ -698,7 +697,7 @@ void DecodeTextRunInto(std::string_view src, TextRunKind kind, std::string* out)
 /// not self-closing). `*p` is at the byte after `>`. The skip is
 /// depth-counted so nested elements are walked in O(content) time
 /// without decoding their children.
-bool SkipUntilClose(const char* begin, const char* end, const char** p, std::string_view /*name*/, Error* err) {
+bool SkipUntilClose(const char* begin, const char* end, const char** p, Error* err) {
   std::size_t depth = 1;
   while (*p < end && depth > 0) {
     // Scan to next '<'.
@@ -855,7 +854,7 @@ bool AppendInlineText(const char* begin, const char* end, const char** p, std::s
 }
 
 bool SkipChildElement(const char* begin, const char* end, const char** p, const TagHeader& child, Error* err) {
-  return child.self_closing || SkipUntilClose(begin, end, p, child.name, err);
+  return child.self_closing || SkipUntilClose(begin, end, p, err);
 }
 
 bool ScanInlineTextChildren(const char* begin, const char* end, const char** p, std::string_view parent,

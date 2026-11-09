@@ -169,7 +169,7 @@ Expected<std::string, Error> resolve_office_document_path(const std::vector<std:
       // Normalise: relationship targets may be absolute (`/xl/...`) or
       // relative (`xl/...`). The ZIP catalogue stores names relative to
       // the package root with no leading slash.
-      if (!target.empty() && target.front() == '/') {
+      if (target.front() == '/') {
         target.erase(0, 1);
       }
       // The workbook part name becomes an archive key and the base

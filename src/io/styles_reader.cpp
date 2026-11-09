@@ -328,7 +328,7 @@ Expected<T, Error> ParseIntegerAttribute(const pugi::xml_attribute& attr, T defa
         return InvalidXfAttribute(section, index, attr.name(), text);
       }
     }
-  } else if (!text.empty() && text.front() == '+') {
+  } else if (text.front() == '+') {
     text.remove_prefix(1U);
     if (text.empty()) {
       return InvalidXfAttribute(section, index, attr.name(), text);

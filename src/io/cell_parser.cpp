@@ -66,15 +66,6 @@ std::uint32_t ParseColumnLetters(std::string_view text, std::size_t* i) {
   return col;
 }
 
-/// Walks `is_node`'s descendants and concatenates every `<t>` text node
-/// payload into `out`, in document order. Thin wrapper over the shared
-/// `append_rich_text` helper (which skips `<rPh>` so phonetic guides do
-/// not leak into the surface string; `append_phonetic_runs` walks
-/// them separately).
-void ConcatInlineStringText(const pugi::xml_node& is_node, std::string& out) {
-  (void)append_rich_text(is_node, out);
-}
-
 Error CellRefError(const char* message, std::string_view ref) {
   std::string ctx("context=cell_parser parse_a1=");
   ctx.append(ref);
@@ -326,7 +317,7 @@ Expected<ParsedCell, Error> parse_cell_element(const pugi::xml_node& node, std::
   if (is_node) {
     is_inline = true;
     value_present = true;
-    ConcatInlineStringText(is_node, inline_concat);
+    (void)append_rich_text(is_node, inline_concat);
     v_text = inline_concat;
   } else if (v_node) {
     value_present = true;

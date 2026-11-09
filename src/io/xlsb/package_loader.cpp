@@ -47,19 +47,6 @@ std::string NormalisePartName(std::string_view raw) {
   return std::string(raw);
 }
 
-/// Resolves an OOXML rels target relative to a base directory, normalising
-/// `.` / `..` segments. Thin wrapper over the OOXML package validator's
-/// shared helper so both readers share a single path-traversal defence.
-///
-/// Path-traversal hardening: a `Target` with excess `..` segments or a
-/// leading `/` (package-absolute) is refused with `kIoZipSlip`. The
-/// surfaced error context is the validator's standard `context=ooxml_reader`
-/// flavour; xlsb's xml envelope is structurally identical to xlsx, so the
-/// shared diagnostic stays accurate for both.
-Expected<std::string, Error> ResolveRelativePath(std::string_view base_dir, std::string_view target) {
-  return ooxml::resolve_relative_path(base_dir, target);
-}
-
 }  // namespace
 
 // ---------------------------------------------------------------------------
@@ -158,12 +145,12 @@ Expected<WorkbookRels, Error> LoadWorkbookRels(const ZipReader& zip, std::string
           if (id.empty()) {
             return Expected<void, Error>::Ok();
           }
-          ASSIGN_OR_RETURN(auto resolved, ResolveRelativePath(base_dir, target));
+          ASSIGN_OR_RETURN(auto resolved, ooxml::resolve_relative_path(base_dir, target));
           rels.sheet_targets.emplace(id, std::move(resolved));
         } else if (type == kRelSharedStrings) {
-          ASSIGN_OR_RETURN(rels.sst_path, ResolveRelativePath(base_dir, target));
+          ASSIGN_OR_RETURN(rels.sst_path, ooxml::resolve_relative_path(base_dir, target));
         } else if (type == kRelStyles) {
-          ASSIGN_OR_RETURN(rels.styles_path, ResolveRelativePath(base_dir, target));
+          ASSIGN_OR_RETURN(rels.styles_path, ooxml::resolve_relative_path(base_dir, target));
         } else {
           ASSIGN_OR_RETURN(UnknownRelationship unknown, ooxml::make_unknown_relationship(rel, base_dir));
           if (!unknown.type.empty()) {
@@ -215,7 +202,7 @@ Expected<std::string, Error> FindRelationship(const ZipReader& zip, std::string_
         if (std::string_view(rel.attribute("TargetMode").value()) == "External") {
           return Expected<void, Error>::Ok();
         }
-        auto resolved = ResolveRelativePath(dir, rel.attribute("Target").value());
+        auto resolved = ooxml::resolve_relative_path(dir, rel.attribute("Target").value());
         if (!resolved) {
           return Expected<void, Error>(std::move(resolved.error()));
         }

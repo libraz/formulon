@@ -11,6 +11,8 @@
 #include "io/ooxml_defs.h"
 #include "io/xml_escape.h"
 #include "io/xml_utils.h"
+#include "passthrough_part.h"
+#include "utils/structured_log.h"
 
 namespace formulon {
 namespace io {
@@ -65,6 +67,16 @@ void AppendOverride(std::string& out, std::string_view path, std::string_view ct
   out.append("\"/>\n");
 }
 
+void AppendPassthroughOverrides(std::string& out, const std::vector<const PassthroughPart*>& parts) {
+  for (const PassthroughPart* part : parts) {
+    if (part->content_type.empty()) {
+      continue;
+    }
+    AppendOverride(out, part->path, part->content_type, /*escape_path=*/true,
+                   /*escape_content_type=*/true);
+  }
+}
+
 void AppendDefault(std::string& out, std::string_view extension, std::string_view ct) {
   out.append("  <Default");
   append_xml_attr(out, "Extension", extension);
@@ -95,6 +107,26 @@ void AppendRelationship(std::string& out, std::string_view id, std::string_view 
 void AppendRelationship(std::string& out, std::uint32_t rid, std::string_view type, std::string_view target,
                         bool target_external, bool escape_target) {
   AppendRelationship(out, "rId" + std::to_string(rid), type, target, target_external, escape_target);
+}
+
+void RecordDroppedRelationship(std::string_view event, std::string_view type, std::string_view target,
+                               WriteDiagnostics* diagnostics) {
+  StructuredLog(event)
+      .field("reason", std::string_view("target_part_absent"))
+      .field("type", type)
+      .field("target", target)
+      .warn();
+  if (diagnostics != nullptr) {
+    ++diagnostics->dropped_relationship_count;
+  }
+}
+
+void RecordDroppedPart(std::string_view event, std::string_view path, std::string_view reason,
+                       WriteDiagnostics* diagnostics) {
+  StructuredLog(event).field("path", path).field("reason", reason).warn();
+  if (diagnostics != nullptr) {
+    ++diagnostics->dropped_part_count;
+  }
 }
 
 }  // namespace io

@@ -74,11 +74,6 @@ std::string_view StripAbsoluteMarkers(std::string_view ref, std::string& buf) {
   return buf;
 }
 
-/// Decodes one A1 cell-range token (`A1`, `A1:B5`, `$A$1:$B$5`) into a
-/// `CFCellRange`. Single-cell tokens land as `first == last`. Absolute
-/// markers (`$`) are stripped first since CF sqref legitimately contains
-/// them. Returns `kIoSheetCorrupt` for unparseable input — the caller
-/// either folds it into the surrounding sqref error or skips the block.
 // Decodes a run of column letters (`A`, `AB`, `XFD`) to a 1-based column
 // index, or 0 when the run is empty / non-alpha / out of range. Only
 // upper-case letters are accepted, matching `parse_a1` (which decodes the
@@ -113,6 +108,11 @@ std::uint32_t DecodeRowRun(std::string_view s) {
   return static_cast<std::uint32_t>(row);
 }
 
+/// Decodes one A1 cell-range token (`A1`, `A1:B5`, `$A$1:$B$5`) into a
+/// `CFCellRange`. Single-cell tokens land as `first == last`. Absolute
+/// markers (`$`) are stripped first since CF sqref legitimately contains
+/// them. Returns `kIoSheetCorrupt` for unparseable input — the caller
+/// either folds it into the surrounding sqref error or skips the block.
 Expected<cf::CFCellRange, Error> ParseA1Range(std::string_view ref) {
   const auto unparseable = [&ref]() {
     std::string ctx("context=cf_reader ref=");

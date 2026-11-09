@@ -18,8 +18,12 @@
 #include <cstdint>
 #include <string>
 #include <string_view>
+#include <vector>
+
+#include "io/package_diagnostics.h"
 
 namespace formulon {
+struct PassthroughPart;
 namespace io {
 
 // ---------------------------------------------------------------------------
@@ -61,6 +65,12 @@ void EndRelationships(std::string& out);
 void AppendOverride(std::string& out, std::string_view path, std::string_view ct, bool escape_path = false,
                     bool escape_content_type = false);
 
+/// Appends an `<Override>` for each kept passthrough part that carried an
+/// explicit content type; parts without one are covered by the package's
+/// `<Default>` entries. Path and content type are escaped, as either may carry
+/// XML-critical bytes.
+void AppendPassthroughOverrides(std::string& out, const std::vector<const PassthroughPart*>& parts);
+
 /// Appends a single `<Default Extension="<extension>"
 /// ContentType="<ct>"/>` entry plus its trailing newline; both values are
 /// attribute-escaped.
@@ -76,6 +86,16 @@ void AppendRelationship(std::string& out, std::string_view id, std::string_view 
 /// relationship id.
 void AppendRelationship(std::string& out, std::uint32_t rid, std::string_view type, std::string_view target,
                         bool target_external = false, bool escape_target = false);
+
+/// Logs `event` for an internal relationship whose target part is not in the
+/// package and counts it in `diagnostics` (when non-null) as dropped.
+void RecordDroppedRelationship(std::string_view event, std::string_view type, std::string_view target,
+                               WriteDiagnostics* diagnostics);
+
+/// Logs `event` for a passthrough part that lost to `reason` and counts it in
+/// `diagnostics` (when non-null) as dropped.
+void RecordDroppedPart(std::string_view event, std::string_view path, std::string_view reason,
+                       WriteDiagnostics* diagnostics);
 
 }  // namespace io
 }  // namespace formulon

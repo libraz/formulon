@@ -71,9 +71,8 @@ std::string_view NameOf(const parser::AstNode& node) {
   }
 }
 
-// Index in `names` of `name` as a formula in `scope` (a sheet index, or -1
-// for workbook scope) resolves it: sheet-local before workbook-wide;
-// `names.size()` when undefined.
+}  // namespace
+
 std::size_t FindDefinedName(const std::vector<DefinedName>& names, std::string_view name, std::int32_t scope) {
   const auto resolve_in = [&](bool local) {
     return sheet_names::resolve_by(names.size(), [&](std::size_t i, sheet_names::Fold fold) {
@@ -87,8 +86,6 @@ std::size_t FindDefinedName(const std::vector<DefinedName>& names, std::string_v
   }
   return found == sheet_names::kNotFound ? names.size() : found;
 }
-
-}  // namespace
 
 bool is_dynamic_array_formula(const Cell& cell) {
   return cell.dynamic_array && !cell.formula_text.empty();

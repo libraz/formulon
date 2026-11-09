@@ -538,13 +538,7 @@ EmissionPlan BuildEmissionPlan(const Workbook& wb, bool generated_shared_strings
       continue;
     }
     if (generated.count(part.path) != 0U) {
-      StructuredLog("ooxml_writer.passthrough_collision")
-          .field("path", part.path)
-          .field("reason", std::string_view("generated_path_wins"))
-          .warn();
-      if (diagnostics != nullptr) {
-        ++diagnostics->dropped_part_count;
-      }
+      RecordDroppedPart("ooxml_writer.passthrough_collision", part.path, "generated_path_wins", diagnostics);
       continue;
     }
     // A workbook read from `.xlsb` still carries that package's binary

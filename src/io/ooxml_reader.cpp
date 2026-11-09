@@ -111,6 +111,15 @@ Expected<std::string, Error> ResolveRelativePathForTesting(std::string_view base
 
 }  // namespace internal
 
+/// Marks `path` consumed when the archive carries it, so it does not surface as
+/// an unknown part.
+static void ConsumeIfPresent(const ZipReader& zip, std::string_view path,
+                             std::unordered_set<std::string>& consumed_parts) {
+  if (zip.has_entry(path)) {
+    consumed_parts.emplace(path);
+  }
+}
+
 /// Reads `path` from `zip`, failing with `code` / `message` and a context of
 /// `<context_head> <path_key>=<path>` when the archive has no such entry.
 static Expected<std::vector<std::uint8_t>, Error> ReadRequiredPart(const ZipReader& zip, std::string_view path,
@@ -246,9 +255,7 @@ static Expected<SharedStringTable, Error> ReadWorkbookAuxParts(ZipReader& zip, c
   // Always swallow the canonical SST path if present in the archive,
   // even when no relationship pointed to it (some writers emit the part
   // via Override only). This keeps `unknown_parts` from surfacing it.
-  if (zip.has_entry("xl/sharedStrings.xml")) {
-    consumed_parts.insert("xl/sharedStrings.xml");
-  }
+  ConsumeIfPresent(zip, "xl/sharedStrings.xml", consumed_parts);
 
   // Swallow calcChain.xml rather than passing it through. It is purely a
   // recalculation-order cache; because the writer rewrites cell values it
@@ -258,9 +265,7 @@ static Expected<SharedStringTable, Error> ReadWorkbookAuxParts(ZipReader& zip, c
   // passthrough sweep skips it, the workbook-rels calcChain relationship is
   // not re-emitted (its target is no longer a passthrough part, so the
   // unknown-rel guard drops it), and no `<Override>` is written for it.
-  if (zip.has_entry("xl/calcChain.xml")) {
-    consumed_parts.insert("xl/calcChain.xml");
-  }
+  ConsumeIfPresent(zip, "xl/calcChain.xml", consumed_parts);
 
   // Persons: the person list the sheets' threaded comments name. The part
   // is model-owned, so its relationship leaves the unknown list with it.
@@ -286,9 +291,7 @@ static Expected<SharedStringTable, Error> ReadWorkbookAuxParts(ZipReader& zip, c
     wb.set_styles(std::move(styles));
     consumed_parts.insert(wb_rels.styles_path);
   }
-  if (zip.has_entry("xl/styles.xml")) {
-    consumed_parts.insert("xl/styles.xml");
-  }
+  ConsumeIfPresent(zip, "xl/styles.xml", consumed_parts);
 
   // 4c. External links. Joins `<externalReferences>` against the
   // workbook rels and the per-link rels files. Loaded before any formula,
@@ -359,9 +362,7 @@ static Expected<void, Error> ReadSheetRelParts(ZipReader& zip, Workbook& wb, std
     // the rels file as consumed so it does not surface as an
     // unknown part.
     const std::string pt_rels_path = ooxml::rels_path_for_part(pivot_table_path);
-    if (zip.has_entry(pt_rels_path)) {
-      consumed_parts.insert(pt_rels_path);
-    }
+    ConsumeIfPresent(zip, pt_rels_path, consumed_parts);
   }
 
   // Hyperlink / comments / VML auxiliary parts. Missing entries are
@@ -492,8 +493,7 @@ static Expected<void, Error> ReadPivotCaches(ZipReader& zip, const pugi::xml_nod
     cache.set_cache_id(cache_id);
     consumed_parts.insert(definition_path);
 
-    ASSIGN_OR_RETURN(auto records_target, ooxml::load_pivot_cache_records_target(zip, definition_path));
-    const std::string& records_path = records_target;
+    ASSIGN_OR_RETURN(auto records_path, ooxml::load_pivot_cache_records_target(zip, definition_path));
     if (!records_path.empty()) {
       ASSIGN_OR_RETURN(auto rec_bytes, ReadRequiredPart(zip, records_path, FormulonErrorCode::kIoRelationshipBroken,
                                                         "pivotCacheRecords: rel target missing from package",
@@ -509,9 +509,7 @@ static Expected<void, Error> ReadPivotCaches(ZipReader& zip, const pugi::xml_nod
     // there's a records part); mark it consumed so it does not surface
     // as an unknown part.
     const std::string def_rels_path = ooxml::rels_path_for_part(definition_path);
-    if (zip.has_entry(def_rels_path)) {
-      consumed_parts.insert(def_rels_path);
-    }
+    ConsumeIfPresent(zip, def_rels_path, consumed_parts);
 
     wb.add_pivot_cache(std::make_unique<pivot::PivotCache>(std::move(cache)));
   }

@@ -78,11 +78,6 @@ bool Load(pugi::xml_document& doc, const std::string& xml) {
   return !xml.empty() && doc.load_string(xml.c_str()) && doc.document_element();
 }
 
-void Store(std::string& xml, const pugi::xml_document& doc) {
-  const pugi::xml_node root = doc.document_element();
-  xml = has_element_child(root) ? raw_xml(root) : std::string();
-}
-
 bool RemapSqrefs(const pugi::xml_document& doc, const SqrefRemap& remap, const SqrefRemap* cf_remap,
                  std::vector<std::size_t>* removed_groups) {
   std::vector<pugi::xml_node> sqrefs;
@@ -156,7 +151,7 @@ bool remap_ext_lst_sqrefs(std::string& xml, const SqrefRemap& remap, const Spark
     changed = CloneSparklines(doc, *clone, translate) || changed;
   }
   if (changed) {
-    Store(xml, doc);
+    store_root_xml(xml, doc);
   }
   return changed;
 }
@@ -179,7 +174,7 @@ bool remap_ext_lst_formulas(std::string& xml, const FormulaRemap& remap) {
     }
   }
   if (changed) {
-    Store(xml, doc);
+    store_root_xml(xml, doc);
   }
   return changed;
 }

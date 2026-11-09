@@ -15,6 +15,7 @@
 #include "io/dv_overlay.h"
 #include "io/ooxml/package_validator.h"
 #include "io/ooxml/print_settings_parse.h"
+#include "io/ooxml/raw_child_sweep.h"
 #include "io/package_diagnostics.h"
 #include "io/sheet_layout_reader.h"
 #include "io/sheet_overlay_reader.h"
@@ -23,7 +24,6 @@
 #include "sheet.h"
 #include "utils/error.h"
 #include "utils/expected.h"
-#include "utils/index_sort.h"
 #include "utils/status_macros.h"
 #include "workbook.h"
 
@@ -61,32 +61,9 @@ bool WorksheetChildIsModelled(std::string_view name) {
 
 /// Captures every `<worksheet>` child the model does not fold in, tagged
 /// with the schema slot the writer must put it back at.
-///
-/// The sweep is by exclusion, so an element no release has modelled yet
-/// still survives a round trip. A name outside the schema sequence takes
-/// the slot of the child before it, keeping it between the same two
-/// siblings. The result is stable-sorted by slot so the writer can emit
-/// it with a single forward cursor, which also repairs a source whose
-/// children were not in schema order.
 void CaptureUnconsumedWorksheetChildren(const pugi::xml_node& worksheet, WorksheetRawExtensions& out) {
-  out.clear();
-  std::size_t previous_slot = 0;
-  for (pugi::xml_node child = worksheet.first_child(); child; child = child.next_sibling()) {
-    if (child.type() != pugi::node_element) {
-      continue;
-    }
-    const std::string_view name = child.name();
-    const std::size_t slot = worksheet_child::slot_of(name);
-    if (slot != worksheet_child::kCount) {
-      previous_slot = slot;
-    }
-    if (WorksheetChildIsModelled(name)) {
-      continue;
-    }
-    out.push_back(WorksheetRawChild{static_cast<std::uint32_t>(slot == worksheet_child::kCount ? previous_slot : slot),
-                                    raw_xml(child)});
-  }
-  sort_by_index(out, [](const WorksheetRawChild& lhs, const WorksheetRawChild& rhs) { return lhs.slot < rhs.slot; });
+  CaptureUnmodelledChildren(worksheet, worksheet_child::slot_of, worksheet_child::kCount, WorksheetChildIsModelled,
+                            out);
 }
 
 }  // namespace

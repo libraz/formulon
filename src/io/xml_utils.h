@@ -310,6 +310,10 @@ void append_raw_xml(std::string& out, const pugi::xml_node& node);
 /// `append_raw_xml` into a fresh string.
 std::string raw_xml(const pugi::xml_node& node);
 
+/// Sets `xml` to the raw XML of `doc`'s root element, or clears it when that
+/// root has no element child.
+void store_root_xml(std::string& xml, const pugi::xml_document& doc);
+
 /// Appends every *element* child of `parent` whose name is NOT in `known`,
 /// in document order, to `out` as raw XML. Text, comment and PI children are
 /// skipped — only element content carries schema payload.

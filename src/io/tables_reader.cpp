@@ -83,13 +83,11 @@ std::string CaptureExtraAttrs(const pugi::xml_node& node, bool root) {
     const std::string_view prefixes(ignorable.value());
     std::size_t position = 0U;
     while (position < prefixes.size()) {
-      while (position < prefixes.size() && (prefixes[position] == ' ' || prefixes[position] == '\t' ||
-                                            prefixes[position] == '\r' || prefixes[position] == '\n')) {
+      while (position < prefixes.size() && is_xml_space(prefixes[position])) {
         ++position;
       }
       const std::size_t begin = position;
-      while (position < prefixes.size() && prefixes[position] != ' ' && prefixes[position] != '\t' &&
-             prefixes[position] != '\r' && prefixes[position] != '\n') {
+      while (position < prefixes.size() && !is_xml_space(prefixes[position])) {
         ++position;
       }
       if (begin == position) {

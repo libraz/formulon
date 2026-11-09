@@ -215,13 +215,7 @@ Expected<EmissionPlan, Error> BuildEmissionPlan(const Workbook& wb, bool sst_pre
                         std::string(kWriteXlsbContext) + " part=" + part.path);
     }
     if (generated.count(part.path) != 0U) {
-      StructuredLog("xlsb.writer.passthrough_collision")
-          .field("path", part.path)
-          .field("reason", std::string_view("generated_path_wins"))
-          .warn();
-      if (diagnostics != nullptr) {
-        ++diagnostics->dropped_part_count;
-      }
+      RecordDroppedPart("xlsb.writer.passthrough_collision", part.path, "generated_path_wins", diagnostics);
       continue;
     }
     // Drop parts that would be stale or orphaned after we regenerate the
@@ -245,13 +239,7 @@ Expected<EmissionPlan, Error> BuildEmissionPlan(const Workbook& wb, bool sst_pre
       continue;
     }
     if (!kept_paths.insert(part.path).second) {
-      StructuredLog("xlsb.writer.passthrough_collision")
-          .field("path", part.path)
-          .field("reason", std::string_view("duplicate_passthrough_path"))
-          .warn();
-      if (diagnostics != nullptr) {
-        ++diagnostics->dropped_part_count;
-      }
+      RecordDroppedPart("xlsb.writer.passthrough_collision", part.path, "duplicate_passthrough_path", diagnostics);
       continue;
     }
     if (part.content_type.empty()) {
@@ -377,13 +365,7 @@ std::string BuildContentTypes(const Workbook& wb, const EmissionPlan& plan) {
   // Passthrough overrides: only for entries that carried an explicit
   // ContentType in the source archive. Default-typed parts (empty
   // content_type) must NOT appear as Overrides.
-  for (const PassthroughPart* part : plan.passthrough_kept) {
-    if (part->content_type.empty()) {
-      continue;
-    }
-    AppendOverride(out, part->path, part->content_type, /*escape_path=*/true,
-                   /*escape_content_type=*/true);
-  }
+  AppendPassthroughOverrides(out, plan.passthrough_kept);
   out.append("</Types>\n");
   return out;
 }
@@ -406,17 +388,10 @@ std::string BuildSheetRels(const Sheet& sheet, const EmissionPlan& plan, const s
       continue;
     }
     if (!rel.target_external && !plan.passthrough_path_index.contains(plan.passthrough_kept, rel.target)) {
-      StructuredLog("xlsb.writer.sheet_rel_skipped")
-          .field("reason", std::string_view("target_part_absent"))
-          .field("type", rel.type)
-          .field("target", rel.target)
-          .warn();
       // Counted alongside the package- and workbook-scope drops: a dropped
       // sheet relationship is a dropped relationship, and OOXML having no
       // sheet-scope equivalent must not make it invisible.
-      if (diagnostics != nullptr) {
-        ++diagnostics->dropped_relationship_count;
-      }
+      RecordDroppedRelationship("xlsb.writer.sheet_rel_skipped", rel.type, rel.target, diagnostics);
       continue;
     }
     const std::string target = rel.target_external ? rel.target : TargetRelativeToWorksheet(rel.target);
@@ -449,11 +424,9 @@ std::string BuildSheetRels(const Sheet& sheet, const EmissionPlan& plan, const s
   std::string out;
   out.reserve(entries.size() + 192);
   out.append(kXmlDecl);
-  out.append("<Relationships");
-  append_xml_ns_decl(out, "", kNsPackageRelationships);
-  out.append(">\n");
+  BeginRelationships(out);
   out.append(entries);
-  out.append("</Relationships>\n");
+  EndRelationships(out);
   return out;
 }
 
@@ -463,9 +436,7 @@ std::string BuildWorkbookRels(std::size_t sheet_count, bool emit_sst, const Emis
   std::string out;
   out.reserve(256 + sheet_count * 192 + wb.unknown_workbook_rels().size() * 192);
   out.append(kXmlDecl);
-  out.append("<Relationships");
-  append_xml_ns_decl(out, "", kNsPackageRelationships);
-  out.append(">\n");
+  BeginRelationships(out);
   std::uint32_t next_rid = 1;
   for (std::size_t i = 0; i < sheet_count; ++i) {
     const std::string target = "worksheets/sheet" + std::to_string(i + 1U) + ".bin";
@@ -510,14 +481,7 @@ std::string BuildWorkbookRels(std::size_t sheet_count, bool emit_sst, const Emis
       continue;
     }
     if (!rel.target_external && !plan.passthrough_path_index.contains(plan.passthrough_kept, rel.target)) {
-      StructuredLog("xlsb.writer.workbook_rel_skipped")
-          .field("reason", std::string_view("target_part_absent"))
-          .field("type", rel.type)
-          .field("target", rel.target)
-          .warn();
-      if (diagnostics != nullptr) {
-        ++diagnostics->dropped_relationship_count;
-      }
+      RecordDroppedRelationship("xlsb.writer.workbook_rel_skipped", rel.type, rel.target, diagnostics);
       continue;
     }
     if (!rel.target_external && ((rel.type == kRelTheme && rel.target == "xl/theme/theme1.xml") ||
@@ -530,7 +494,7 @@ std::string BuildWorkbookRels(std::size_t sheet_count, bool emit_sst, const Emis
     }
     AppendRelationship(out, next_rid++, rel.type, target, rel.target_external, /*escape_target=*/true);
   }
-  out.append("</Relationships>\n");
+  EndRelationships(out);
   return out;
 }
 

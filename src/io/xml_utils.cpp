@@ -540,6 +540,11 @@ std::string raw_xml(const pugi::xml_node& node) {
   return out;
 }
 
+void store_root_xml(std::string& xml, const pugi::xml_document& doc) {
+  const pugi::xml_node root = doc.document_element();
+  xml = has_element_child(root) ? raw_xml(root) : std::string();
+}
+
 namespace {
 
 /// True when `node` is an element whose name is absent from `known`.

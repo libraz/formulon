@@ -479,8 +479,7 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
     return make_error(FormulonErrorCode::kIoRelationshipBroken, "_rels/.rels: missing from package", kReadXlsbContext);
   }
   ASSIGN_OR_RETURN(auto root_rels, zip.read_entry("_rels/.rels"));
-  ASSIGN_OR_RETURN(auto wb_path, ooxml::resolve_office_document_path(root_rels));
-  const std::string workbook_path = wb_path;
+  ASSIGN_OR_RETURN(const std::string workbook_path, ooxml::resolve_office_document_path(root_rels));
   ASSIGN_OR_RETURN(auto package_rels, ooxml::read_unknown_package_rels(root_rels, "xlsb_reader"));
 
   // 3. xl/_rels/workbook.xml.rels (still XML in xlsb).

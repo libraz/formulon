@@ -12,10 +12,12 @@
 #define FORMULON_IO_DYNAMIC_ARRAY_FORMULA_H_
 
 #include <cstdint>
+#include <string_view>
 #include <unordered_set>
 #include <vector>
 
 #include "cell.h"
+#include "defined_name.h"
 #include "io/xlsb/ptg_writer.h"
 #include "sheet.h"
 #include "workbook.h"
@@ -45,6 +47,11 @@ inline std::uint64_t dynamic_array_cell_key(std::uint32_t row, std::uint32_t col
 /// An unmarked array formula, registered as a spill region beforehand, is a
 /// legacy CSE block of that region's extent (`Sheet::set_cell_array_block`).
 void apply_loaded_dynamic_array_marks(Sheet& sheet, const std::unordered_set<std::uint64_t>& marked);
+
+/// Index in `names` of `name` as a formula in `scope` (a sheet index, or -1
+/// for workbook scope) resolves it: sheet-local before workbook-wide;
+/// `names.size()` when undefined.
+std::size_t FindDefinedName(const std::vector<DefinedName>& names, std::string_view name, std::int32_t scope);
 
 /// `xlsb::NameShape` of every defined name of `wb`, in `wb.defined_names()` order.
 std::vector<xlsb::NameShape> defined_name_shapes(const Workbook& wb);

@@ -169,8 +169,7 @@ std::string WithVerbatimFillDownLabels(const std::string& raw_ext_xml, bool fill
     if (name == "/ext" || (!name.empty() && name.front() == '/' && strings::ends_with(name, ":ext"))) {
       break;
     }
-    const std::size_t colon = name.find(':');
-    if ((colon == std::string_view::npos ? name : name.substr(colon + 1)) != "pivotField") {
+    if (name.substr(qname_prefix_colon(name).size()) != "pivotField") {
       continue;
     }
     const std::string_view tail(raw_ext_xml.data() + lt, raw_ext_xml.size() - lt);

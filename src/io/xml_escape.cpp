@@ -36,49 +36,6 @@ void AppendOoxmlEscape(std::string& out, unsigned char byte) {
   out.push_back('_');
 }
 
-std::size_t ValidUtf8SequenceLength(std::string_view in, std::size_t pos) {
-  const auto byte_at = [&in](std::size_t i) { return static_cast<unsigned char>(in[i]); };
-  const unsigned char first = byte_at(pos);
-  const auto continuation = [&byte_at, &in](std::size_t i) {
-    return i < in.size() && byte_at(i) >= 0x80U && byte_at(i) <= 0xBFU;
-  };
-  if (first >= 0xC2U && first <= 0xDFU) {
-    return continuation(pos + 1U) ? 2U : 0U;
-  }
-  if (first == 0xE0U) {
-    return pos + 2U < in.size() && byte_at(pos + 1U) >= 0xA0U && byte_at(pos + 1U) <= 0xBFU && continuation(pos + 2U)
-               ? 3U
-               : 0U;
-  }
-  if (first >= 0xE1U && first <= 0xECU) {
-    return continuation(pos + 1U) && continuation(pos + 2U) ? 3U : 0U;
-  }
-  if (first == 0xEDU) {
-    return pos + 2U < in.size() && byte_at(pos + 1U) >= 0x80U && byte_at(pos + 1U) <= 0x9FU && continuation(pos + 2U)
-               ? 3U
-               : 0U;
-  }
-  if (first >= 0xEEU && first <= 0xEFU) {
-    return continuation(pos + 1U) && continuation(pos + 2U) ? 3U : 0U;
-  }
-  if (first == 0xF0U) {
-    return pos + 3U < in.size() && byte_at(pos + 1U) >= 0x90U && byte_at(pos + 1U) <= 0xBFU && continuation(pos + 2U) &&
-                   continuation(pos + 3U)
-               ? 4U
-               : 0U;
-  }
-  if (first >= 0xF1U && first <= 0xF3U) {
-    return continuation(pos + 1U) && continuation(pos + 2U) && continuation(pos + 3U) ? 4U : 0U;
-  }
-  if (first == 0xF4U) {
-    return pos + 3U < in.size() && byte_at(pos + 1U) >= 0x80U && byte_at(pos + 1U) <= 0x8FU && continuation(pos + 2U) &&
-                   continuation(pos + 3U)
-               ? 4U
-               : 0U;
-  }
-  return 0U;
-}
-
 enum class XmlEscapingMode { kElementText, kAttribute, kRawText, kOoxmlNotationOnly };
 
 void AppendXmlEscapedImpl(std::string& out, std::string_view in, XmlEscapingMode mode) {
@@ -88,15 +45,15 @@ void AppendXmlEscapedImpl(std::string& out, std::string_view in, XmlEscapingMode
     const char raw = in[i];
     const unsigned char byte = static_cast<unsigned char>(raw);
     if (byte >= 0x80U) {
-      const std::size_t sequence_length = ValidUtf8SequenceLength(in, i);
-      if (sequence_length == 0U) {
+      const Utf8DecodeResult decoded = decode_first_utf8_codepoint(in.substr(i));
+      if (!decoded.valid) {
         // The XML declaration promises UTF-8. Replace an invalid source byte
         // rather than serialising a malformed OOXML part that no conforming
         // XML reader can reopen.
         out.append("\xEF\xBF\xBD");
       } else {
-        out.append(in.data() + i, sequence_length);
-        i += sequence_length - 1U;
+        out.append(in.data() + i, decoded.byte_len);
+        i += decoded.byte_len - 1U;
       }
       continue;
     }

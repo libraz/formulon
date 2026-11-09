@@ -28,10 +28,12 @@
 #include "io/future_functions.h"
 #include "io/ooxml/package_validator.h"
 #include "io/ooxml/part_dom.h"
+#include "io/ooxml/relationship_writer.h"
 #include "io/ooxml/workbook_xml_builder.h"
 #include "io/ooxml/zip_part_writer.h"
 #include "io/ooxml_defs.h"
 #include "io/passthrough_part_index.h"
+#include "io/writer_common.h"
 #include "io/xlsb/drawing_record.h"
 #include "io/xlsb/emission_plan.h"
 #include "io/xlsb/external_link_writer.h"
@@ -175,12 +177,7 @@ bool DrawingIsLinkable(const Workbook& wb, const Sheet& sheet, std::size_t sheet
   const std::string& target = sheet.drawing_rel_target();
   const PassthroughPart* part = ooxml::is_safe_part_name(target) ? ooxml::find_passthrough_part(wb, target) : nullptr;
   if (part == nullptr) {
-    StructuredLog("xlsb.writer.sheet_rel_skipped")
-        .field("reason", std::string_view("target_part_absent"))
-        .field("type", kRelDrawing)
-        .field("target", target)
-        .warn();
-    ++diagnostics->dropped_relationship_count;
+    RecordDroppedRelationship("xlsb.writer.sheet_rel_skipped", kRelDrawing, target, diagnostics);
     return false;
   }
   const std::string_view xml(reinterpret_cast<const char*>(part->bytes.data()), part->bytes.size());
@@ -202,10 +199,6 @@ std::string FreshRelId(const std::unordered_set<std::string>& taken) {
   }
 }
 
-bool HasDynamicArrayMetadata(const Workbook& wb) {
-  return has_dynamic_array_formula(wb);
-}
-
 // Whether a dynamic-array metadata part is needed, and which cell-metadata
 // entry a spill anchor's `BrtCellMeta` record must name.
 //
@@ -222,7 +215,7 @@ struct DynamicArrayMetadataPlan {
 
 DynamicArrayMetadataPlan BuildDynamicArrayMetadataPlan(const Workbook& wb) {
   DynamicArrayMetadataPlan plan;
-  if (!HasDynamicArrayMetadata(wb)) {
+  if (!has_dynamic_array_formula(wb)) {
     return plan;
   }
   // The first passthrough part wins the path; `BuildEmissionPlan` drops any
@@ -261,11 +254,7 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
   // `write_ooxml`).
   // Ordered sheet-name list: the Ptg encoder maps a qualified
   // reference's sheet to its 0-based `ixti` through this list.
-  std::vector<std::string> sheet_names;
-  sheet_names.reserve(sheet_count);
-  for (std::size_t i = 0; i < sheet_count; ++i) {
-    sheet_names.push_back(workbook.sheet(i).name());
-  }
+  std::vector<std::string> sheet_names = sheet_names_of(workbook);
 
   // PtgName record order: every genuine defined name plus every
   // future-function callee / `NameRef` any cell's formula needs, built
@@ -298,13 +287,7 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
   // Table parts are generated from the model, numbered clear of every part
   // the package already carries. A table on a missing sheet fails the save,
   // as it does for `.xlsx`.
-  for (const TableMetadata& table : workbook.tables()) {
-    if (table.sheet_index >= sheet_count) {
-      return make_error(FormulonErrorCode::kIoWriteFailed, "table references a missing worksheet",
-                        std::string(kWriteXlsbContext) + " table=" + table.name + " sheet_index=" +
-                            std::to_string(table.sheet_index) + " sheet_count=" + std::to_string(sheet_count));
-    }
-  }
+  RETURN_IF_ERROR(check_tables_have_sheets(workbook, kWriteXlsbContext));
   std::unordered_set<std::string> taken_paths;
   for (const PassthroughPart& part : workbook.passthrough_parts()) {
     taken_paths.insert(part.path);

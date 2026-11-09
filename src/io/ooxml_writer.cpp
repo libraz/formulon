@@ -53,6 +53,7 @@
 #include "io/pivot_table_writer.h"
 #include "io/styles_writer.h"
 #include "io/threaded_comments_io.h"
+#include "io/writer_common.h"
 #include "io/xml_escape.h"
 #include "io/xml_utils.h"
 #include "miniz.h"
@@ -323,13 +324,7 @@ Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb) {
   if (sheet_count == 0) {
     return make_error(FormulonErrorCode::kIoWriteFailed, "workbook has zero sheets", "context=write_ooxml");
   }
-  for (const TableMetadata& table : wb.tables()) {
-    if (table.sheet_index >= sheet_count) {
-      return make_error(FormulonErrorCode::kIoWriteFailed, "table references a missing worksheet",
-                        "context=write_ooxml table=" + table.name + " sheet_index=" +
-                            std::to_string(table.sheet_index) + " sheet_count=" + std::to_string(sheet_count));
-    }
-  }
+  RETURN_IF_ERROR(check_tables_have_sheets(wb, "context=write_ooxml"));
   const PassthroughPartIndex source_index(wb.passthrough_parts());
   for (std::size_t i = 0; i < sheet_count; ++i) {
     const Sheet& sheet = wb.sheet(i);
@@ -386,11 +381,7 @@ Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb) {
   // Per-sheet: worksheet, sheet rels (when the sheet's rels file
   // declares at least one relationship).
   // A CF / DV formula's sheet spellings resolve among these to decide x14 placement.
-  std::vector<std::string> sheet_names;
-  sheet_names.reserve(sheet_count);
-  for (std::size_t i = 0; i < sheet_count; ++i) {
-    sheet_names.push_back(wb.sheet(i).name());
-  }
+  std::vector<std::string> sheet_names = sheet_names_of(wb);
   for (std::size_t i = 0; i < sheet_count; ++i) {
     if (wb.sheet(i).is_opaque_ooxml_sheet()) {
       continue;

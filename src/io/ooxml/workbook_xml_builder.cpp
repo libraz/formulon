@@ -21,6 +21,7 @@
 #include "calc_settings.h"
 #include "default_content_type.h"
 #include "defined_name.h"
+#include "io/dynamic_array_formula.h"
 #include "io/future_functions.h"
 #include "io/ooxml/emission_plan.h"
 #include "io/ooxml/external_link_writer.h"
@@ -38,11 +39,9 @@
 #include "parser/parser.h"
 #include "passthrough_part.h"
 #include "pugixml.hpp"
-#include "sheet_name.h"
 #include "unknown_relationship.h"
 #include "utils/arena.h"
 #include "utils/double_format.h"
-#include "utils/structured_log.h"
 #include "workbook.h"
 
 namespace formulon {
@@ -150,16 +149,9 @@ void AppendDefinedNamesBlock(std::string& out, const std::vector<DefinedName>& n
     if (formula_root != nullptr && formula_parser.errors().empty()) {
       // A name resolves among `n`'s own scope's names, then the workbook-scope ones.
       const xlsb::NameShapes defined = [&names, &n](const parser::AstNode& node) {
-        const auto resolves_in = [&](bool local) {
-          return sheet_names::resolve_by(names.size(), [&](std::size_t i, sheet_names::Fold fold) {
-                   const bool in_scope =
-                       local ? names[i].local_sheet_id == n.local_sheet_id : names[i].local_sheet_id < 0;
-                   return in_scope && sheet_names::same(names[i].name, node.as_name(), fold);
-                 }) != sheet_names::kNotFound;
-        };
         xlsb::NameShape shape;
         shape.defined = node.kind() == parser::NodeKind::NameRef &&
-                        ((n.local_sheet_id >= 0 && resolves_in(true)) || resolves_in(false));
+                        FindDefinedName(names, node.as_name(), n.local_sheet_id) != names.size();
         return shape;
       };
       const std::vector<const parser::AstNode*> function_values = xlsb::function_value_refs(*formula_root, defined);
@@ -179,17 +171,6 @@ void AppendDefinedNamesBlock(std::string& out, const std::vector<DefinedName>& n
     out.append("</definedName>\n");
   }
   out.append("  </definedNames>\n");
-}
-
-/// True when the external-link part `link` names will actually be present
-/// in the package this plan produces: a kept loaded body or a generated one.
-///
-/// Both halves of the reference are gated on this one answer --
-/// `<externalReference r:id>` in `workbook.xml` and the matching
-/// workbook-rels `<Relationship>` -- because either surviving alone is a
-/// dangling edge that opens the package in repair mode.
-bool ExternalLinkPartIsWritten(const EmissionPlan::ExternalLinkPlan& link) {
-  return link.written;
 }
 
 }  // namespace
@@ -303,15 +284,7 @@ std::string BuildContentTypes(const Workbook& wb, const EmissionPlan& plan) {
   // ContentType in the source archive. Default-typed parts (empty
   // content_type) must NOT appear as Overrides — the package's
   // `<Default Extension=...>` entries already cover them.
-  for (const PassthroughPart* part : plan.passthrough_kept) {
-    if (part->content_type.empty()) {
-      continue;
-    }
-    // Passthrough payloads may carry XML-critical bytes in either path
-    // or content type (rare but legal); escape both.
-    AppendOverride(out, part->path, part->content_type, /*escape_path=*/true,
-                   /*escape_content_type=*/true);
-  }
+  AppendPassthroughOverrides(out, plan.passthrough_kept);
   out.append("</Types>\n");
   return out;
 }
@@ -352,14 +325,7 @@ std::string BuildPackageRels(const Workbook& wb, std::string_view workbook_targe
   }
   for (const UnknownRelationship& r : wb.unknown_package_rels()) {
     if (!r.target_external && !passthrough_path_index.contains(passthrough_kept, r.target)) {
-      StructuredLog(skipped_event)
-          .field("reason", std::string_view("target_part_absent"))
-          .field("type", r.type)
-          .field("target", r.target)
-          .warn();
-      if (diagnostics != nullptr) {
-        ++diagnostics->dropped_relationship_count;
-      }
+      RecordDroppedRelationship(skipped_event, r.type, r.target, diagnostics);
       continue;
     }
     AppendRelationship(out, next_rid++, r.type, r.target, r.target_external, /*escape_target=*/true);
@@ -524,7 +490,7 @@ std::string BuildWorkbookXml(const Workbook& wb, const EmissionPlan& plan) {
   {
     std::string external_refs;
     for (const EmissionPlan::ExternalLinkPlan& e : plan.external_links) {
-      if (!ExternalLinkPartIsWritten(e)) {
+      if (!e.written) {
         continue;
       }
       external_refs.append("    <externalReference");
@@ -663,15 +629,8 @@ std::string BuildWorkbookRels(std::size_t sheet_count, const EmissionPlan& plan,
   // would otherwise leave a dangling edge and Excel would open the result
   // in repair mode.
   for (const EmissionPlan::ExternalLinkPlan& e : plan.external_links) {
-    if (!ExternalLinkPartIsWritten(e)) {
-      StructuredLog("ooxml_writer.workbook_rel_skipped")
-          .field("reason", std::string_view("target_part_absent"))
-          .field("type", std::string_view(kRelExternalLink))
-          .field("target", e.part_path)
-          .warn();
-      if (diagnostics != nullptr) {
-        ++diagnostics->dropped_relationship_count;
-      }
+    if (!e.written) {
+      RecordDroppedRelationship("ooxml_writer.workbook_rel_skipped", kRelExternalLink, e.part_path, diagnostics);
       continue;
     }
     AppendRelationship(out, e.workbook_rid, kRelExternalLink, TargetRelativeToWorkbook(e.part_path),
@@ -717,14 +676,7 @@ std::string BuildWorkbookRels(std::size_t sheet_count, const EmissionPlan& plan,
     // surfaces here as a skipped relationship with a warning rather
     // than a silent dangling reference.
     if (!r.target_external && !HasPassthroughPart(plan, r.target)) {
-      StructuredLog("ooxml_writer.workbook_rel_skipped")
-          .field("reason", std::string_view("target_part_absent"))
-          .field("type", r.type)
-          .field("target", r.target)
-          .warn();
-      if (diagnostics != nullptr) {
-        ++diagnostics->dropped_relationship_count;
-      }
+      RecordDroppedRelationship("ooxml_writer.workbook_rel_skipped", r.type, r.target, diagnostics);
       continue;
     }
     const std::string target = r.target_external ? r.target : TargetRelativeToWorkbook(r.target);
