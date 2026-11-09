@@ -35,7 +35,6 @@ namespace {
 // observe a user getter directly while exceptions are disabled.
 enum SafeReaderOperation : int32_t {
   kSafeGet = 0,
-  kSafeHasOwn = 1,
   kSafeIsArray = 2,
   kSafeStringSnapshot = 3,
   kSafeBytesSnapshot = 4,
@@ -70,8 +69,6 @@ EM_JS(emscripten::EM_VAL, fm_wasm_safe_reader_operation,
     var result;
     if (operation === 0) {
       result = owner[key];
-    } else if (operation === 1) {
-      result = Object.prototype.hasOwnProperty.call(owner, key);
     } else if (operation === 2) {
       result = Array.isArray(owner);
     } else if (operation === 3) {
@@ -631,10 +628,6 @@ bool JsNarrowNumericReader::safe_predicate(const emscripten::val& owner, const e
   return result.isTrue();
 }
 
-bool JsNarrowNumericReader::has_own(const emscripten::val& owner, const char* key, const char* field) {
-  return safe_predicate(owner, emscripten::val(key), kSafeHasOwn, key, field);
-}
-
 bool JsNarrowNumericReader::is_array(const emscripten::val& value, const char* field) {
   return safe_predicate(value, emscripten::val::undefined(), kSafeIsArray, nullptr, field);
 }
@@ -898,17 +891,6 @@ fm_cell_rect_t js_pull_range(const emscripten::val& v, JsNarrowNumericReader* re
   return m;
 }
 
-std::vector<fm_cell_rect_t> js_pull_ranges(const emscripten::val& v, const char* key, JsNarrowNumericReader* reader) {
-  if (reader == nullptr) {
-    return {};
-  }
-  const emscripten::val array = reader->value(v, key, key);
-  if (!reader->ok()) {
-    return {};
-  }
-  return js_pull_range_array(array, key, reader);
-}
-
 std::vector<fm_cell_rect_t> js_pull_range_array(const emscripten::val& array, const char* key,
                                                 JsNarrowNumericReader* reader) {
   if (reader == nullptr) {
@@ -1013,52 +995,78 @@ void js_patch_flag(JsNarrowNumericReader& reader, const emscripten::val& owner, 
   *value = reader.boolean_value(v, false) ? 1 : 0;
 }
 
-void js_patch_string(JsNarrowNumericReader& reader, const emscripten::val& owner, const char* key, const char* field,
-                     bool nullable, std::string& storage, fm_patch_op_t* op, const char** value) {
-  const emscripten::val v = reader.value(owner, key, field);
-  switch (js_patch_key(reader, v, field, nullable)) {
+bool js_patch_begin(JsNarrowNumericReader& reader, const emscripten::val& owner, const char* key, const char* field,
+                    bool nullable, fm_patch_op_t* op, emscripten::val* v) {
+  *v = reader.value(owner, key, field);
+  switch (js_patch_key(reader, *v, field, nullable)) {
     case JsPatchKey::kClear:
       *op = FM_PATCH_OP_CLEAR;
-      break;
+      return false;
     case JsPatchKey::kSet:
       *op = FM_PATCH_OP_SET;
-      *value = reader.optional_string_value(v, storage, field);
-      break;
+      return true;
     case JsPatchKey::kKeep:
       break;
+  }
+  return false;
+}
+
+void js_patch_string(JsNarrowNumericReader& reader, const emscripten::val& owner, const char* key, const char* field,
+                     bool nullable, std::string& storage, fm_patch_op_t* op, const char** value) {
+  emscripten::val v;
+  if (js_patch_begin(reader, owner, key, field, nullable, op, &v)) {
+    *value = reader.optional_string_value(v, storage, field);
   }
 }
 
 void js_patch_number(JsNarrowNumericReader& reader, const emscripten::val& owner, const char* key, const char* field,
                      bool nullable, fm_patch_op_t* op, double* value) {
-  const emscripten::val v = reader.value(owner, key, field);
-  switch (js_patch_key(reader, v, field, nullable)) {
-    case JsPatchKey::kClear:
-      *op = FM_PATCH_OP_CLEAR;
-      break;
-    case JsPatchKey::kSet:
-      *op = FM_PATCH_OP_SET;
-      *value = reader.number_value(v, 0.0, field);
-      break;
-    case JsPatchKey::kKeep:
-      break;
+  emscripten::val v;
+  if (js_patch_begin(reader, owner, key, field, nullable, op, &v)) {
+    *value = reader.number_value(v, 0.0, field);
   }
 }
 
 void js_patch_int(JsNarrowNumericReader& reader, const emscripten::val& owner, const char* key, const char* field,
                   bool nullable, fm_patch_op_t* op, int32_t* value) {
-  const emscripten::val v = reader.value(owner, key, field);
-  switch (js_patch_key(reader, v, field, nullable)) {
-    case JsPatchKey::kClear:
-      *op = FM_PATCH_OP_CLEAR;
-      break;
-    case JsPatchKey::kSet:
-      *op = FM_PATCH_OP_SET;
-      *value = reader.i32_value(v, 0, field);
-      break;
-    case JsPatchKey::kKeep:
-      break;
+  emscripten::val v;
+  if (js_patch_begin(reader, owner, key, field, nullable, op, &v)) {
+    *value = reader.i32_value(v, 0, field);
   }
+}
+
+void js_patch_u32(JsNarrowNumericReader& reader, const emscripten::val& owner, const char* key, const char* field,
+                  bool nullable, fm_patch_op_t* op, uint32_t* value) {
+  emscripten::val v;
+  if (js_patch_begin(reader, owner, key, field, nullable, op, &v)) {
+    *value = reader.u32_value(v, 0U, field);
+  }
+}
+
+void js_patch_u8(JsNarrowNumericReader& reader, const emscripten::val& owner, const char* key, const char* field,
+                 fm_patch_op_t* op, int32_t* value) {
+  emscripten::val v;
+  if (js_patch_begin(reader, owner, key, field, false, op, &v)) {
+    *value = static_cast<int32_t>(reader.u8_value(v, 0U, field));
+  }
+}
+
+void js_patch_flag_clearable(JsNarrowNumericReader& reader, const emscripten::val& owner, const char* key,
+                             const char* field, fm_patch_op_t* op, int32_t* value) {
+  emscripten::val v;
+  if (js_patch_begin(reader, owner, key, field, true, op, &v)) {
+    *value = reader.boolean_value(v, false) ? 1 : 0;
+  }
+}
+
+void js_patch_flag_present(JsNarrowNumericReader& reader, const emscripten::val& owner, const char* key,
+                           const char* field, fm_patch_op_t* op, int32_t* value) {
+  const emscripten::val v = reader.value(owner, key, field);
+  if (!reader.ok() || !js_value_present(v)) {
+    return;
+  }
+  *op = FM_PATCH_OP_SET;
+  *value = reader.boolean_value(v, false) ? 1 : 0;
 }
 
 int32_t js_tristate(JsNarrowNumericReader& reader, const emscripten::val& owner, const char* key, const char* field) {
@@ -1099,14 +1107,6 @@ void js_set_cstr_or_null(emscripten::val& o, const char* key, const char* s) {
 void js_set_cstr_or_null_fields(emscripten::val& o, const JsStrField* fields, std::size_t n) {
   for (std::size_t i = 0; i < n; ++i) {
     js_set_cstr_or_null(o, fields[i].key, fields[i].value);
-  }
-}
-
-void js_set_index_or_null(emscripten::val& o, const char* key, int32_t value) {
-  if (value >= 0) {
-    o.set(key, value);
-  } else {
-    o.set(key, emscripten::val::null());
   }
 }
 

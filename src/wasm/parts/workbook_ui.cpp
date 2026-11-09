@@ -619,13 +619,6 @@ void JsWorkbook::updateValidation(uint32_t sheet, const std::string& validationI
     p.ranges = ranges.data();
     p.range_count = ranges.size();
   }
-  const auto u8 = [&](const char* key, const char* field, fm_patch_op_t* op, int32_t* value) {
-    const emscripten::val v = reader.value(patch, key, field);
-    if (js_patch_key(reader, v, field, false) == JsPatchKey::kSet) {
-      *op = FM_PATCH_OP_SET;
-      *value = static_cast<int32_t>(reader.u8_value(v, 0U, field));
-    }
-  };
   // A flag is a boolean in JS; the C patch carries it as a tristate.
   const auto flag = [&](const char* key, const char* field, fm_patch_op_t* op, int32_t* value) {
     const emscripten::val v = reader.value(patch, key, field);
@@ -634,9 +627,9 @@ void JsWorkbook::updateValidation(uint32_t sheet, const std::string& validationI
       *value = reader.boolean_value(v, false) ? FM_TRISTATE_TRUE : FM_TRISTATE_FALSE;
     }
   };
-  u8("type", "type", &p.type_op, &p.type);
-  u8("operator", "operator", &p.op_op, &p.op);
-  u8("errorStyle", "errorStyle", &p.error_style_op, &p.error_style);
+  js_patch_u8(reader, patch, "type", "type", &p.type_op, &p.type);
+  js_patch_u8(reader, patch, "operator", "operator", &p.op_op, &p.op);
+  js_patch_u8(reader, patch, "errorStyle", "errorStyle", &p.error_style_op, &p.error_style);
   flag("allowBlank", "allowBlank", &p.allow_blank_op, &p.allow_blank);
   flag("showInputMessage", "showInputMessage", &p.show_input_message_op, &p.show_input_message);
   flag("showErrorMessage", "showErrorMessage", &p.show_error_message_op, &p.show_error_message);

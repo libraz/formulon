@@ -350,18 +350,7 @@ void JsWorkbook::updateSheetProtection(uint32_t sheet, emscripten::val patch) {
   string_key("hashValue", text[1], &p.hash_value_op, &p.hash_value);
   string_key("saltValue", text[2], &p.salt_value_op, &p.salt_value);
   string_key("legacyPasswordHash", text[3], &p.legacy_password_hash_op, &p.legacy_password_hash);
-  const emscripten::val spin = reader.value(patch, "spinCount", "spinCount");
-  switch (js_patch_key(reader, spin, "spinCount", true)) {
-    case JsPatchKey::kClear:
-      p.spin_count_op = FM_PATCH_OP_CLEAR;
-      break;
-    case JsPatchKey::kSet:
-      p.spin_count_op = FM_PATCH_OP_SET;
-      p.spin_count = reader.u32_value(spin, 0U, "spinCount");
-      break;
-    case JsPatchKey::kKeep:
-      break;
-  }
+  js_patch_u32(reader, patch, "spinCount", "spinCount", true, &p.spin_count_op, &p.spin_count);
   for (const ProtectionFlag& flag : kProtectionFlags) {
     const emscripten::val v = reader.value(patch, flag.key, flag.key);
     if (js_patch_key(reader, v, flag.key, false) == JsPatchKey::kSet) {
@@ -384,39 +373,25 @@ void JsWorkbook::updateSheetView(uint32_t sheet, emscripten::val patch) {
   }
   JsNarrowNumericReader reader("Sheet.updateView");
   fm_sheet_view_patch_t p = FM_STRUCT_INIT(fm_sheet_view_patch_t);
-  const auto u32 = [&](const char* key, fm_patch_op_t* op, uint32_t* value) {
-    js_patch_value(reader, patch, key, key, op, value,
-                   [&](const emscripten::val& v) { return reader.u32_value(v, 0U, key); });
-  };
-  const auto i32 = [&](const char* key, fm_patch_op_t* op, int32_t* value) {
-    js_patch_value(reader, patch, key, key, op, value,
-                   [&](const emscripten::val& v) { return reader.i32_value(v, 0, key); });
-  };
-  const auto f64 = [&](const char* key, fm_patch_op_t* op, double* value) {
-    js_patch_value(reader, patch, key, key, op, value,
-                   [&](const emscripten::val& v) { return reader.number_value(v, 0.0, key); });
-  };
-  const auto flag = [&](const char* key, fm_patch_op_t* op, int32_t* value) {
-    js_patch_value(reader, patch, key, key, op, value,
-                   [&](const emscripten::val& v) { return reader.boolean_value(v, false, key) ? 1 : 0; });
-  };
-  u32("zoomPct", &p.zoom_pct_op, &p.zoom_pct);
-  u32("freezeRows", &p.freeze_rows_op, &p.freeze_rows);
-  u32("freezeCols", &p.freeze_cols_op, &p.freeze_cols);
-  flag("showGridLines", &p.show_grid_lines_op, &p.show_grid_lines);
-  flag("showRowColumnHeaders", &p.show_row_column_headers_op, &p.show_row_column_headers);
-  flag("showZeros", &p.show_zeros_op, &p.show_zeros);
-  flag("rightToLeft", &p.right_to_left_op, &p.right_to_left);
-  flag("tabSelected", &p.tab_selected_op, &p.tab_selected);
-  i32("viewMode", &p.view_mode_op, &p.view_mode);
-  u32("topLeftRow", &p.top_left_row_op, &p.top_left_row);
-  u32("topLeftCol", &p.top_left_col_op, &p.top_left_col);
-  u32("paneTopLeftRow", &p.pane_top_left_row_op, &p.pane_top_left_row);
-  u32("paneTopLeftCol", &p.pane_top_left_col_op, &p.pane_top_left_col);
-  f64("splitXTwips", &p.split_x_twips_op, &p.split_x_twips);
-  f64("splitYTwips", &p.split_y_twips_op, &p.split_y_twips);
-  flag("showFormulas", &p.show_formulas_op, &p.show_formulas);
-  flag("showOutlineSymbols", &p.show_outline_symbols_op, &p.show_outline_symbols);
+  js_patch_u32(reader, patch, "zoomPct", "zoomPct", true, &p.zoom_pct_op, &p.zoom_pct);
+  js_patch_u32(reader, patch, "freezeRows", "freezeRows", true, &p.freeze_rows_op, &p.freeze_rows);
+  js_patch_u32(reader, patch, "freezeCols", "freezeCols", true, &p.freeze_cols_op, &p.freeze_cols);
+  js_patch_flag_clearable(reader, patch, "showGridLines", "showGridLines", &p.show_grid_lines_op, &p.show_grid_lines);
+  js_patch_flag_clearable(reader, patch, "showRowColumnHeaders", "showRowColumnHeaders", &p.show_row_column_headers_op,
+                          &p.show_row_column_headers);
+  js_patch_flag_clearable(reader, patch, "showZeros", "showZeros", &p.show_zeros_op, &p.show_zeros);
+  js_patch_flag_clearable(reader, patch, "rightToLeft", "rightToLeft", &p.right_to_left_op, &p.right_to_left);
+  js_patch_flag_clearable(reader, patch, "tabSelected", "tabSelected", &p.tab_selected_op, &p.tab_selected);
+  js_patch_int(reader, patch, "viewMode", "viewMode", true, &p.view_mode_op, &p.view_mode);
+  js_patch_u32(reader, patch, "topLeftRow", "topLeftRow", true, &p.top_left_row_op, &p.top_left_row);
+  js_patch_u32(reader, patch, "topLeftCol", "topLeftCol", true, &p.top_left_col_op, &p.top_left_col);
+  js_patch_u32(reader, patch, "paneTopLeftRow", "paneTopLeftRow", true, &p.pane_top_left_row_op, &p.pane_top_left_row);
+  js_patch_u32(reader, patch, "paneTopLeftCol", "paneTopLeftCol", true, &p.pane_top_left_col_op, &p.pane_top_left_col);
+  js_patch_number(reader, patch, "splitXTwips", "splitXTwips", true, &p.split_x_twips_op, &p.split_x_twips);
+  js_patch_number(reader, patch, "splitYTwips", "splitYTwips", true, &p.split_y_twips_op, &p.split_y_twips);
+  js_patch_flag_clearable(reader, patch, "showFormulas", "showFormulas", &p.show_formulas_op, &p.show_formulas);
+  js_patch_flag_clearable(reader, patch, "showOutlineSymbols", "showOutlineSymbols", &p.show_outline_symbols_op,
+                          &p.show_outline_symbols);
   if (!reader.ok()) {
     return;
   }
@@ -457,7 +432,11 @@ void JsWorkbook::setSheetSelection(uint32_t sheet, emscripten::val selection) {
     row = reader.required_u32(active, "row", "selection.active.row");
     col = reader.required_u32(active, "col", "selection.active.col");
   }
-  const std::vector<fm_cell_rect_t> ranges = js_pull_ranges(selection, "ranges", &reader);
+  const emscripten::val ranges_value = reader.value(selection, "ranges", "ranges");
+  std::vector<fm_cell_rect_t> ranges;
+  if (reader.ok()) {
+    ranges = js_pull_range_array(ranges_value, "ranges", &reader);
+  }
   if (!reader.ok()) {
     return;
   }
@@ -700,23 +679,12 @@ void JsWorkbook::setSheetFormatDefaults(uint32_t sheet, emscripten::val defaults
     return;
   }
   fm_sheet_format_defaults_patch_t d = FM_STRUCT_INIT(fm_sheet_format_defaults_patch_t);
-  const auto num = [&](const char* key, bool nullable, fm_patch_op_t* op, double* value) {
-    const emscripten::val v = reader.value(defaults, key, key);
-    switch (js_patch_key(reader, v, key, nullable)) {
-      case JsPatchKey::kClear:
-        *op = FM_PATCH_OP_CLEAR;
-        break;
-      case JsPatchKey::kSet:
-        *op = FM_PATCH_OP_SET;
-        *value = reader.number_value(v, 0.0, key);
-        break;
-      case JsPatchKey::kKeep:
-        break;
-    }
-  };
-  num("defaultColumnWidthChars", true, &d.default_column_width_chars_op, &d.default_column_width_chars);
-  num("defaultRowHeightPt", true, &d.default_row_height_pt_op, &d.default_row_height_pt);
-  num("baseColumnWidthChars", false, &d.base_column_width_chars_op, &d.base_column_width_chars);
+  js_patch_number(reader, defaults, "defaultColumnWidthChars", "defaultColumnWidthChars", true,
+                  &d.default_column_width_chars_op, &d.default_column_width_chars);
+  js_patch_number(reader, defaults, "defaultRowHeightPt", "defaultRowHeightPt", true, &d.default_row_height_pt_op,
+                  &d.default_row_height_pt);
+  js_patch_number(reader, defaults, "baseColumnWidthChars", "baseColumnWidthChars", false,
+                  &d.base_column_width_chars_op, &d.base_column_width_chars);
   js_patch_flag(reader, defaults, "customHeight", "customHeight", &d.custom_height_op, &d.custom_height);
   js_patch_flag(reader, defaults, "zeroHeight", "zeroHeight", &d.zero_height_op, &d.zero_height);
   if (!reader.ok()) {

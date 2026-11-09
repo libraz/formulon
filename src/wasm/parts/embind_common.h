@@ -206,7 +206,6 @@ class JsNarrowNumericReader {
                               const char* field = nullptr);
   const char* optional_string_value(const emscripten::val& value, std::string& storage, const char* field);
   emscripten::val value(const emscripten::val& owner, const char* key, const char* field = nullptr);
-  bool has_own(const emscripten::val& owner, const char* key, const char* field = nullptr);
   bool is_array(const emscripten::val& value, const char* field = nullptr);
   /// `is_array`, failing the reader with a type error when `value` is not an array.
   bool require_array(const emscripten::val& value, const char* field);
@@ -280,6 +279,22 @@ void js_patch_flag(JsNarrowNumericReader& reader, const emscripten::val& owner, 
 void js_patch_string(JsNarrowNumericReader& reader, const emscripten::val& owner, const char* key, const char* field,
                      bool nullable, std::string& storage, fm_patch_op_t* op, const char** value);
 
+/// As `js_patch_number` for an unsigned 32-bit key.
+void js_patch_u32(JsNarrowNumericReader& reader, const emscripten::val& owner, const char* key, const char* field,
+                  bool nullable, fm_patch_op_t* op, uint32_t* value);
+
+/// As `js_patch_u32` for an 8-bit key that cannot be cleared, stored widened to `int32_t`.
+void js_patch_u8(JsNarrowNumericReader& reader, const emscripten::val& owner, const char* key, const char* field,
+                 fm_patch_op_t* op, int32_t* value);
+
+/// As `js_patch_flag`, but `null` writes `CLEAR` (the C layer decides whether the flag may be cleared).
+void js_patch_flag_clearable(JsNarrowNumericReader& reader, const emscripten::val& owner, const char* key,
+                             const char* field, fm_patch_op_t* op, int32_t* value);
+
+/// As `js_patch_flag`, but `null` keeps like an omitted key instead of recording a type error.
+void js_patch_flag_present(JsNarrowNumericReader& reader, const emscripten::val& owner, const char* key,
+                           const char* field, fm_patch_op_t* op, int32_t* value);
+
 /// Reads the number `owner[key]` of a patch into an `_op` / value pair: an omitted key leaves `KEEP`, a number writes
 /// `SET`; `null` writes `CLEAR` when `nullable`, else records a type error.
 void js_patch_number(JsNarrowNumericReader& reader, const emscripten::val& owner, const char* key, const char* field,
@@ -289,22 +304,19 @@ void js_patch_number(JsNarrowNumericReader& reader, const emscripten::val& owner
 void js_patch_int(JsNarrowNumericReader& reader, const emscripten::val& owner, const char* key, const char* field,
                   bool nullable, fm_patch_op_t* op, int32_t* value);
 
+/// Reads `owner[key]` of a patch into `*v`: an omitted key leaves `op` and returns false, `null` writes `CLEAR` when
+/// `nullable` (else records a type error) and returns false, any other value writes `SET` and returns true.
+bool js_patch_begin(JsNarrowNumericReader& reader, const emscripten::val& owner, const char* key, const char* field,
+                    bool nullable, fm_patch_op_t* op, emscripten::val* v);
+
 /// Reads `owner[key]` into an `_op` / value pair for any value type: an omitted key keeps, `null` is `CLEAR` (the C
 /// layer refuses it on a field that cannot be cleared), anything else is `SET` with the value `read` extracts.
 template <class T, class Read>
 void js_patch_value(JsNarrowNumericReader& reader, const emscripten::val& owner, const char* key, const char* field,
                     fm_patch_op_t* op, T* value, Read read) {
-  const emscripten::val v = reader.value(owner, key, field);
-  switch (js_patch_key(reader, v, field, true)) {
-    case JsPatchKey::kClear:
-      *op = FM_PATCH_OP_CLEAR;
-      break;
-    case JsPatchKey::kSet:
-      *op = FM_PATCH_OP_SET;
-      *value = read(v);
-      break;
-    case JsPatchKey::kKeep:
-      break;
+  emscripten::val v;
+  if (js_patch_begin(reader, owner, key, field, true, op, &v)) {
+    *value = read(v);
   }
 }
 
@@ -433,10 +445,6 @@ emscripten::val snapshot_bytes(fm_status_t rc, uint8_t* data, std::size_t len);
 /// names it in a rejection. A missing / nullish record reads as all zeros.
 fm_cell_rect_t js_pull_range(const emscripten::val& v, JsNarrowNumericReader* reader, std::string_view field = "range");
 
-/// Reads a range list with the explicit numeric reader. Other WASM families
-/// must use the same per-call reader before invoking a C mutator.
-std::vector<fm_cell_rect_t> js_pull_ranges(const emscripten::val& v, const char* key, JsNarrowNumericReader* reader);
-
 /// Reads the `CellRect` array `array` itself (a positional argument); `field`
 /// names it in a rejection. A missing array reads as empty.
 std::vector<fm_cell_rect_t> js_pull_range_array(const emscripten::val& array, const char* field,
@@ -493,10 +501,6 @@ template <std::size_t N>
 inline void js_set_cstr_or_null_fields(emscripten::val& o, const JsStrField (&fields)[N]) {
   js_set_cstr_or_null_fields(o, fields, N);
 }
-
-/// Sets `o[key]` to `value`, or to `null` when it is negative: the C ABI's
-/// sentinel for an absent index or member.
-void js_set_index_or_null(emscripten::val& o, const char* key, int32_t value);
 
 /// Sets `o[key]` to `value` when `present` is non-zero, else to `null`.
 template <class T>

@@ -404,21 +404,6 @@ emscripten::val JsWorkbook::getTableStyleOptions(uint32_t sheet, uint32_t idx) c
   return o;
 }
 
-namespace {
-
-/// A boolean toggle of a table style patch: `KEEP` when `key` is omitted, else `SET`.
-void js_table_style_toggle(JsNarrowNumericReader& reader, const emscripten::val& spec, const char* key,
-                           const char* field, fm_patch_op_t* op, int32_t* value) {
-  const emscripten::val v = reader.value(spec, key, field);
-  if (!reader.ok() || !js_value_present(v)) {
-    return;
-  }
-  *op = FM_PATCH_OP_SET;
-  *value = reader.boolean_value(v, false) ? 1 : 0;
-}
-
-}  // namespace
-
 void JsWorkbook::updateTableStyleOptions(uint32_t sheet, uint32_t idx, emscripten::val patch) {
   if (handle_ == nullptr) {
     record_invalid_handle();
@@ -428,23 +413,12 @@ void JsWorkbook::updateTableStyleOptions(uint32_t sheet, uint32_t idx, emscripte
   fm_table_style_options_patch_t p = FM_STRUCT_INIT(fm_table_style_options_patch_t);
   std::string style_name;
   // `null` removes the style name; a string replaces it; an omitted key keeps it.
-  const emscripten::val name_value = reader.value(patch, "styleName", "styleName");
-  switch (js_patch_key(reader, name_value, "styleName", true)) {
-    case JsPatchKey::kClear:
-      p.style_name_op = FM_PATCH_OP_CLEAR;
-      break;
-    case JsPatchKey::kSet:
-      p.style_name_op = FM_PATCH_OP_SET;
-      p.style_name = reader.optional_string_value(name_value, style_name, "styleName");
-      break;
-    case JsPatchKey::kKeep:
-      break;
-  }
-  js_table_style_toggle(reader, patch, "showFirstColumn", "showFirstColumn", &p.show_first_column_op,
+  js_patch_string(reader, patch, "styleName", "styleName", true, style_name, &p.style_name_op, &p.style_name);
+  js_patch_flag_present(reader, patch, "showFirstColumn", "showFirstColumn", &p.show_first_column_op,
                         &p.show_first_column);
-  js_table_style_toggle(reader, patch, "showLastColumn", "showLastColumn", &p.show_last_column_op, &p.show_last_column);
-  js_table_style_toggle(reader, patch, "showRowStripes", "showRowStripes", &p.show_row_stripes_op, &p.show_row_stripes);
-  js_table_style_toggle(reader, patch, "showColumnStripes", "showColumnStripes", &p.show_column_stripes_op,
+  js_patch_flag_present(reader, patch, "showLastColumn", "showLastColumn", &p.show_last_column_op, &p.show_last_column);
+  js_patch_flag_present(reader, patch, "showRowStripes", "showRowStripes", &p.show_row_stripes_op, &p.show_row_stripes);
+  js_patch_flag_present(reader, patch, "showColumnStripes", "showColumnStripes", &p.show_column_stripes_op,
                         &p.show_column_stripes);
   if (!reader.ok()) {
     return;
@@ -528,8 +502,8 @@ void JsWorkbook::updateTable(uint32_t sheet, uint32_t idx, emscripten::val spec)
     patch.range_op = FM_PATCH_OP_SET;
     patch.range = js_pull_range(rect_value, &reader);
   }
-  js_table_style_toggle(reader, spec, "headerRow", "headerRow", &patch.header_row_op, &patch.header_row);
-  js_table_style_toggle(reader, spec, "totalsRow", "totalsRow", &patch.totals_row_op, &patch.totals_row);
+  js_patch_flag_present(reader, spec, "headerRow", "headerRow", &patch.header_row_op, &patch.header_row);
+  js_patch_flag_present(reader, spec, "totalsRow", "totalsRow", &patch.totals_row_op, &patch.totals_row);
   if (!reader.ok()) {
     return;
   }

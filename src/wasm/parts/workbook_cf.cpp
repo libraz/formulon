@@ -437,31 +437,6 @@ void JsWorkbook::updateCfRule(uint32_t sheet, const std::string& cfRuleId, emscr
   std::string text[3];
   fm_cf_rule_patch_t p = FM_STRUCT_INIT(fm_cf_rule_patch_t);
 
-  const auto u32 = [&](const emscripten::val& owner, const char* key, const char* field, fm_patch_op_t* op,
-                       uint32_t* value, bool nullable) {
-    const emscripten::val v = reader.value(owner, key, field);
-    switch (js_patch_key(reader, v, field, nullable)) {
-      case JsPatchKey::kClear:
-        *op = FM_PATCH_OP_CLEAR;
-        break;
-      case JsPatchKey::kSet:
-        *op = FM_PATCH_OP_SET;
-        *value = reader.u32_value(v, 0U, field);
-        break;
-      case JsPatchKey::kKeep:
-        break;
-    }
-  };
-  const auto i32 = [&](const emscripten::val& owner, const char* key, const char* field, fm_patch_op_t* op,
-                       int32_t* value) { js_patch_int(reader, owner, key, field, false, op, value); };
-  const auto u8 = [&](const emscripten::val& owner, const char* key, const char* field, fm_patch_op_t* op,
-                      int32_t* value) {
-    const emscripten::val v = reader.value(owner, key, field);
-    if (js_patch_key(reader, v, field, false) == JsPatchKey::kSet) {
-      *op = FM_PATCH_OP_SET;
-      *value = static_cast<int32_t>(reader.u8_value(v, 0U, field));
-    }
-  };
   const auto u8_pct = [&](const emscripten::val& owner, const char* key, const char* field, fm_patch_op_t* op,
                           uint32_t* value) {
     const emscripten::val v = reader.value(owner, key, field);
@@ -516,9 +491,9 @@ void JsWorkbook::updateCfRule(uint32_t sheet, const std::string& cfRuleId, emscr
     return v;
   };
 
-  i32(patch, "priority", "priority", &p.priority_op, &p.priority);
+  js_patch_int(reader, patch, "priority", "priority", false, &p.priority_op, &p.priority);
   js_patch_flag(reader, patch, "stopIfTrue", "stopIfTrue", &p.stop_if_true_op, &p.stop_if_true);
-  u32(patch, "dxfIndex", "dxfIndex", &p.dxf_index_op, &p.dxf_index, true);
+  js_patch_u32(reader, patch, "dxfIndex", "dxfIndex", true, &p.dxf_index_op, &p.dxf_index);
   const emscripten::val ranges_value = reader.value(patch, "ranges", "ranges");
   if (reader.ok() && js_patch_key(reader, ranges_value, "ranges", false) == JsPatchKey::kSet &&
       reader.require_array(ranges_value, "ranges")) {
@@ -529,15 +504,15 @@ void JsWorkbook::updateCfRule(uint32_t sheet, const std::string& cfRuleId, emscr
   }
   js_patch_string(reader, patch, "formula1", "formula1", true, text[0], &p.formula1_op, &p.formula1);
   js_patch_string(reader, patch, "formula2", "formula2", true, text[1], &p.formula2_op, &p.formula2);
-  u8(patch, "operator", "operator", &p.op_op, &p.op);
-  i32(patch, "rank", "rank", &p.rank_op, &p.rank);
+  js_patch_u8(reader, patch, "operator", "operator", &p.op_op, &p.op);
+  js_patch_int(reader, patch, "rank", "rank", false, &p.rank_op, &p.rank);
   js_patch_flag(reader, patch, "percent", "percent", &p.percent_op, &p.percent);
   js_patch_flag(reader, patch, "bottom", "bottom", &p.bottom_op, &p.bottom);
   js_patch_flag(reader, patch, "aboveAverage", "aboveAverage", &p.above_average_op, &p.above_average);
   js_patch_flag(reader, patch, "equalAverage", "equalAverage", &p.equal_average_op, &p.equal_average);
   js_patch_number(reader, patch, "stdDev", "stdDev", false, &p.std_dev_op, &p.std_dev);
   js_patch_string(reader, patch, "text", "text", false, text[2], &p.text_op, &p.text);
-  u8(patch, "timePeriod", "timePeriod", &p.time_period_op, &p.time_period);
+  js_patch_u8(reader, patch, "timePeriod", "timePeriod", &p.time_period_op, &p.time_period);
 
   const emscripten::val color_scale = nested("colorScale", "colorScale");
   if (!color_scale.isUndefined()) {
@@ -578,7 +553,8 @@ void JsWorkbook::updateCfRule(uint32_t sheet, const std::string& cfRuleId, emscr
       p.data_bar_axis_position_op = FM_PATCH_OP_SET;
       p.data_bar_axis_position = FM_CF_DATA_BAR_AXIS_POSITION_AUTOMATIC;
     } else {
-      u8(data_bar, "axisPosition", "dataBar.axisPosition", &p.data_bar_axis_position_op, &p.data_bar_axis_position);
+      js_patch_u8(reader, data_bar, "axisPosition", "dataBar.axisPosition", &p.data_bar_axis_position_op,
+                  &p.data_bar_axis_position);
     }
     color(data_bar, "negativeFill", "dataBar.negativeFill", &p.data_bar_negative_fill_op, &p.data_bar_negative_fill,
           true);
@@ -586,11 +562,11 @@ void JsWorkbook::updateCfRule(uint32_t sheet, const std::string& cfRuleId, emscr
     color(data_bar, "negativeBorder", "dataBar.negativeBorder", &p.data_bar_negative_border_op,
           &p.data_bar_negative_border, true);
     color(data_bar, "axisColor", "dataBar.axisColor", &p.data_bar_axis_color_op, &p.data_bar_axis_color, true);
-    u8(data_bar, "direction", "dataBar.direction", &p.data_bar_direction_op, &p.data_bar_direction);
+    js_patch_u8(reader, data_bar, "direction", "dataBar.direction", &p.data_bar_direction_op, &p.data_bar_direction);
   }
   const emscripten::val icon_set = nested("iconSet", "iconSet");
   if (!icon_set.isUndefined()) {
-    u8(icon_set, "name", "iconSet.name", &p.icon_set_op, &p.icon_set);
+    js_patch_u8(reader, icon_set, "name", "iconSet.name", &p.icon_set_op, &p.icon_set);
     cfvo_list(icon_set, "thresholds", "iconSet.thresholds", &p.icon_set_thresholds_op, icon_set_thresholds,
               &p.icon_set_thresholds, &p.icon_set_thresholds_count);
     js_patch_flag(reader, icon_set, "reverse", "iconSet.reverse", &p.icon_set_reverse_op, &p.icon_set_reverse);

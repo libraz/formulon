@@ -301,18 +301,12 @@ void JsWorkbook::setSheetPageSetup(uint32_t sheet, emscripten::val setup) {
   }
   JsNarrowNumericReader reader("Sheet.updatePageSetup");
   fm_page_setup_patch_t out = FM_STRUCT_INIT(fm_page_setup_patch_t);
-  const auto u32 = [&](const char* key, fm_patch_op_t* op, uint32_t* value) {
-    js_patch_value(reader, setup, key, key, op, value,
-                   [&](const emscripten::val& v) { return reader.u32_value(v, 0U, key); });
-  };
-  js_patch_value(reader, setup, "orientation", "orientation", &out.orientation_op, &out.orientation,
-                 [&](const emscripten::val& v) { return reader.i32_value(v, 0, "orientation"); });
-  u32("paperSize", &out.paper_size_op, &out.paper_size);
-  u32("scalePct", &out.scale_pct_op, &out.scale_pct);
-  u32("fitToWidth", &out.fit_to_width_op, &out.fit_to_width);
-  u32("fitToHeight", &out.fit_to_height_op, &out.fit_to_height);
-  js_patch_value(reader, setup, "fitToPage", "fitToPage", &out.fit_to_page_op, &out.fit_to_page,
-                 [&](const emscripten::val& v) { return reader.boolean_value(v, false) ? 1 : 0; });
+  js_patch_int(reader, setup, "orientation", "orientation", true, &out.orientation_op, &out.orientation);
+  js_patch_u32(reader, setup, "paperSize", "paperSize", true, &out.paper_size_op, &out.paper_size);
+  js_patch_u32(reader, setup, "scalePct", "scalePct", true, &out.scale_pct_op, &out.scale_pct);
+  js_patch_u32(reader, setup, "fitToWidth", "fitToWidth", true, &out.fit_to_width_op, &out.fit_to_width);
+  js_patch_u32(reader, setup, "fitToHeight", "fitToHeight", true, &out.fit_to_height_op, &out.fit_to_height);
+  js_patch_flag_clearable(reader, setup, "fitToPage", "fitToPage", &out.fit_to_page_op, &out.fit_to_page);
   if (!reader.ok()) {
     return;
   }
@@ -326,16 +320,12 @@ void JsWorkbook::setSheetPageMargins(uint32_t sheet, emscripten::val margins) {
   }
   JsNarrowNumericReader reader("Sheet.updatePageMargins");
   fm_page_margins_patch_t out = FM_STRUCT_INIT(fm_page_margins_patch_t);
-  const auto margin = [&](const char* key, fm_patch_op_t* op, double* value) {
-    js_patch_value(reader, margins, key, key, op, value,
-                   [&](const emscripten::val& v) { return reader.number_value(v, 0.0, key); });
-  };
-  margin("leftIn", &out.left_in_op, &out.left_in);
-  margin("rightIn", &out.right_in_op, &out.right_in);
-  margin("topIn", &out.top_in_op, &out.top_in);
-  margin("bottomIn", &out.bottom_in_op, &out.bottom_in);
-  margin("headerIn", &out.header_in_op, &out.header_in);
-  margin("footerIn", &out.footer_in_op, &out.footer_in);
+  js_patch_number(reader, margins, "leftIn", "leftIn", true, &out.left_in_op, &out.left_in);
+  js_patch_number(reader, margins, "rightIn", "rightIn", true, &out.right_in_op, &out.right_in);
+  js_patch_number(reader, margins, "topIn", "topIn", true, &out.top_in_op, &out.top_in);
+  js_patch_number(reader, margins, "bottomIn", "bottomIn", true, &out.bottom_in_op, &out.bottom_in);
+  js_patch_number(reader, margins, "headerIn", "headerIn", true, &out.header_in_op, &out.header_in);
+  js_patch_number(reader, margins, "footerIn", "footerIn", true, &out.footer_in_op, &out.footer_in);
   if (!reader.ok()) {
     return;
   }
@@ -349,14 +339,12 @@ void JsWorkbook::setSheetPrintOptions(uint32_t sheet, emscripten::val options) {
   }
   JsNarrowNumericReader reader("Sheet.updatePrintOptions");
   fm_print_options_patch_t out = FM_STRUCT_INIT(fm_print_options_patch_t);
-  const auto flag = [&](const char* key, fm_patch_op_t* op, int32_t* value) {
-    js_patch_value(reader, options, key, key, op, value,
-                   [&](const emscripten::val& v) { return reader.boolean_value(v, false) ? 1 : 0; });
-  };
-  flag("gridLines", &out.grid_lines_op, &out.grid_lines);
-  flag("headings", &out.headings_op, &out.headings);
-  flag("horizontalCentered", &out.horizontal_centered_op, &out.horizontal_centered);
-  flag("verticalCentered", &out.vertical_centered_op, &out.vertical_centered);
+  js_patch_flag_clearable(reader, options, "gridLines", "gridLines", &out.grid_lines_op, &out.grid_lines);
+  js_patch_flag_clearable(reader, options, "headings", "headings", &out.headings_op, &out.headings);
+  js_patch_flag_clearable(reader, options, "horizontalCentered", "horizontalCentered", &out.horizontal_centered_op,
+                          &out.horizontal_centered);
+  js_patch_flag_clearable(reader, options, "verticalCentered", "verticalCentered", &out.vertical_centered_op,
+                          &out.vertical_centered);
   if (!reader.ok()) {
     return;
   }
@@ -386,14 +374,14 @@ void JsWorkbook::setSheetHeaderFooter(uint32_t sheet, emscripten::val headerFoot
   section("evenFooter", even_footer, &out.even_footer_op, &out.even_footer);
   section("firstHeader", first_header, &out.first_header_op, &out.first_header);
   section("firstFooter", first_footer, &out.first_footer_op, &out.first_footer);
-  const auto flag = [&](const char* key, fm_patch_op_t* op, int32_t* value) {
-    js_patch_value(reader, headerFooter, key, key, op, value,
-                   [&](const emscripten::val& v) { return reader.boolean_value(v, false) ? 1 : 0; });
-  };
-  flag("differentOddEven", &out.different_odd_even_op, &out.different_odd_even);
-  flag("differentFirst", &out.different_first_op, &out.different_first);
-  flag("scaleWithDoc", &out.scale_with_doc_op, &out.scale_with_doc);
-  flag("alignWithMargins", &out.align_with_margins_op, &out.align_with_margins);
+  js_patch_flag_clearable(reader, headerFooter, "differentOddEven", "differentOddEven", &out.different_odd_even_op,
+                          &out.different_odd_even);
+  js_patch_flag_clearable(reader, headerFooter, "differentFirst", "differentFirst", &out.different_first_op,
+                          &out.different_first);
+  js_patch_flag_clearable(reader, headerFooter, "scaleWithDoc", "scaleWithDoc", &out.scale_with_doc_op,
+                          &out.scale_with_doc);
+  js_patch_flag_clearable(reader, headerFooter, "alignWithMargins", "alignWithMargins", &out.align_with_margins_op,
+                          &out.align_with_margins);
   if (!reader.ok()) {
     return;
   }

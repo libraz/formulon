@@ -97,7 +97,7 @@ void set_filter_operand(emscripten::val& o, const char* key, int32_t kind, int32
       o.set(key, as_double);
       break;
     case FM_PIVOT_FILTER_OPERAND_KIND_TEXT:
-      o.set(key, std::string(text != nullptr ? text : ""));
+      js_set_cstr(o, key, text);
       break;
     default:
       o.set(key, emscripten::val::null());
@@ -173,18 +173,7 @@ void JsWorkbook::pivotUpdateStyleOptions(uint32_t sheet, uint32_t pivotIndex, em
   fm_pivot_style_options_patch_t p = FM_STRUCT_INIT(fm_pivot_style_options_patch_t);
   std::string style_name;
   // `null` writes the element without a style name; a string replaces it; an omitted key keeps it.
-  const emscripten::val name_value = reader.value(patch, "styleName", "patch.styleName");
-  switch (js_patch_key(reader, name_value, "patch.styleName", true)) {
-    case JsPatchKey::kClear:
-      p.style_name_op = FM_PATCH_OP_CLEAR;
-      break;
-    case JsPatchKey::kSet:
-      p.style_name_op = FM_PATCH_OP_SET;
-      p.style_name = reader.optional_string_value(name_value, style_name, "patch.styleName");
-      break;
-    case JsPatchKey::kKeep:
-      break;
-  }
+  js_patch_string(reader, patch, "styleName", "patch.styleName", true, style_name, &p.style_name_op, &p.style_name);
   js_patch_flag(reader, patch, "showRowHeaders", "patch.showRowHeaders", &p.show_row_headers_op, &p.show_row_headers);
   js_patch_flag(reader, patch, "showColumnHeaders", "patch.showColumnHeaders", &p.show_column_headers_op,
                 &p.show_column_headers);

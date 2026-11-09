@@ -302,7 +302,7 @@ emscripten::val JsWorkbook::addSparklineGroup(uint32_t sheet, emscripten::val sp
                                               items.size(), &id))) {
     return emscripten::val::undefined();
   }
-  return emscripten::val(std::string(id != nullptr ? id : ""));
+  return emscripten::val(string_from_cstr(id));
 }
 
 void JsWorkbook::updateSparklineGroup(uint32_t sheet, const std::string& groupId, emscripten::val spec) {
