@@ -347,8 +347,7 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
       if (agg == nullptr) {
         return Value::error(ErrorCode::Num);
       }
-      body[rg][cg] =
-          aggregate_value_columns(*values, val_cols, intersection, *agg, arena, registry, ctx, ErrorCode::Calc);
+      body[rg][cg] = aggregate_value_columns(*values, val_cols, intersection, *agg, arena, registry, ctx);
     }
   }
 
@@ -364,8 +363,7 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
       if (agg == nullptr) {
         return Value::error(ErrorCode::Num);
       }
-      row_totals[rg] =
-          aggregate_value_columns(*values, val_cols, row_members[rg], *agg, arena, registry, ctx, ErrorCode::Calc);
+      row_totals[rg] = aggregate_value_columns(*values, val_cols, row_members[rg], *agg, arena, registry, ctx);
     }
   }
 
@@ -381,8 +379,7 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
       if (agg == nullptr) {
         return Value::error(ErrorCode::Num);
       }
-      col_totals[cg] =
-          aggregate_value_columns(*values, val_cols, col_members[cg], *agg, arena, registry, ctx, ErrorCode::Calc);
+      col_totals[cg] = aggregate_value_columns(*values, val_cols, col_members[cg], *agg, arena, registry, ctx);
     }
   }
 
@@ -394,7 +391,7 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
     if (agg == nullptr) {
       return Value::error(ErrorCode::Num);
     }
-    grand_totals = aggregate_value_columns(*values, val_cols, all_rows, *agg, arena, registry, ctx, ErrorCode::Calc);
+    grand_totals = aggregate_value_columns(*values, val_cols, all_rows, *agg, arena, registry, ctx);
   }
 
   // -- Sort row and col groups -------------------------------------------
@@ -477,7 +474,7 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
       *failed = true;
       return cells;
     }
-    return aggregate_value_columns(*values, val_cols, *rows, *agg, arena, registry, ctx, ErrorCode::Calc);
+    return aggregate_value_columns(*values, val_cols, *rows, *agg, arena, registry, ctx);
   };
 
   // -- Assemble output ----------------------------------------------------
@@ -636,32 +633,32 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
     // Merged single-column layout: the combined top row (col-axis labels,
     // plus the row_fields header label when output_emits_header) is
     // always emitted -- see the comment on merged_single_col_layout above.
-    emit_row(&out_rows, render_merged_header_row());
+    out_rows.push_back(render_merged_header_row());
   } else {
     // Multi-column layout: when output_emits_header, the column-field header
     // row comes first and the row/value header row follows the L col-axis
     // label rows.
     if (layout.output_emits_header) {
-      emit_row(&out_rows, render_col_fields_header_row());
+      out_rows.push_back(render_col_fields_header_row());
     }
     for (std::uint32_t level = 0; level < col_levels; ++level) {
-      emit_row(&out_rows, render_col_axis_row(level));
+      out_rows.push_back(render_col_axis_row(level));
     }
     if (layout.output_emits_header) {
-      emit_row(&out_rows, render_header_row());
+      out_rows.push_back(render_header_row());
     }
   }
   // Optional TOP grand-total row.
   if (emit_col_totals_row && row_total_depth < 0) {
-    emit_row(&out_rows, render_node_row(kGrandEntity));
+    out_rows.push_back(render_node_row(kGrandEntity));
   }
   // Body rows and row subtotals in output order.
   for (const AxisEntity& slot : row_slots) {
-    emit_row(&out_rows, render_node_row(slot));
+    out_rows.push_back(render_node_row(slot));
   }
   // Optional BOTTOM grand-total row.
   if (emit_col_totals_row && row_total_depth > 0) {
-    emit_row(&out_rows, render_node_row(kGrandEntity));
+    out_rows.push_back(render_node_row(kGrandEntity));
   }
   if (cell_failed) {
     return Value::error(ErrorCode::Num);

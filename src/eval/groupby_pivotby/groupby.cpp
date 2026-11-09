@@ -153,10 +153,8 @@ Value eval_groupby_lazy(const parser::AstNode& call, Arena& arena, const Functio
     // Value columns: invoke the aggregator per column with the group's
     // slice. Errors land in the cell; they do NOT short-circuit the result.
     const std::vector<Value> cells =
-        aggregate_value_columns(*values, val_cols, group_rows[g], agg, arena, registry, ctx, ErrorCode::Calc);
-    for (std::uint32_t vc = 0; vc < val_cols; ++vc) {
-      row[key_cols + vc] = cells[vc];
-    }
+        aggregate_value_columns(*values, val_cols, group_rows[g], agg, arena, registry, ctx);
+    std::copy(cells.begin(), cells.end(), row.begin() + static_cast<std::ptrdiff_t>(key_cols));
     agg_rows.push_back(std::move(row));
   }
 
@@ -197,11 +195,8 @@ Value eval_groupby_lazy(const parser::AstNode& call, Arena& arena, const Functio
   if (emit_grand_total) {
     grand_total_row.assign(out_cols, placeholder_cell());
     grand_total_row[0] = Value::text(arena.intern(total_label(ctx, emit_subtotals)));
-    const std::vector<Value> totals =
-        aggregate_value_columns(*values, val_cols, all_rows, agg, arena, registry, ctx, ErrorCode::Calc);
-    for (std::uint32_t vc = 0; vc < val_cols; ++vc) {
-      grand_total_row[key_cols + vc] = totals[vc];
-    }
+    const std::vector<Value> totals = aggregate_value_columns(*values, val_cols, all_rows, agg, arena, registry, ctx);
+    std::copy(totals.begin(), totals.end(), grand_total_row.begin() + static_cast<std::ptrdiff_t>(key_cols));
   }
   const AxisHierarchy hierarchy = build_axis_hierarchy(*row_fields, group_repr, group_rows, emit_subtotals);
   const std::vector<AxisEntity> slots = plan_axis_slots(hierarchy, order, total_depth);
@@ -220,19 +215,19 @@ Value eval_groupby_lazy(const parser::AstNode& call, Arena& arena, const Functio
     for (std::uint32_t c = 0; c < val_cols; ++c) {
       header[key_cols + c] = header_label(arena, ctx, field_headers, HeaderField::kValue, values->cells, c);
     }
-    emit_row(&out_rows, std::move(header));
+    out_rows.push_back(std::move(header));
   }
 
   // Grand total at top (negative total_depth).
   if (emit_grand_total && total_depth < 0) {
-    emit_row(&out_rows, std::move(grand_total_row));
+    out_rows.push_back(std::move(grand_total_row));
   }
 
   // Group rows and subtotal rows in output order. A subtotal row restates the
   // first `level` key cells of its prefix and leaves the rest blank.
   for (const AxisEntity& slot : slots) {
     if (slot.level == key_cols) {
-      emit_row(&out_rows, std::move(agg_rows[slot.index]));
+      out_rows.push_back(std::move(agg_rows[slot.index]));
       continue;
     }
     std::vector<Value> row(out_cols, placeholder_cell());
@@ -240,18 +235,15 @@ Value eval_groupby_lazy(const parser::AstNode& call, Arena& arena, const Functio
     for (std::uint32_t c = 0; c < slot.level; ++c) {
       row[c] = row_fields->cells[static_cast<std::size_t>(repr_row) * key_cols + c];
     }
-    const std::vector<Value> totals =
-        aggregate_value_columns(*values, val_cols, axis_entity_rows(hierarchy, group_rows, all_rows, slot), agg, arena,
-                                registry, ctx, ErrorCode::Calc);
-    for (std::uint32_t vc = 0; vc < val_cols; ++vc) {
-      row[key_cols + vc] = totals[vc];
-    }
-    emit_row(&out_rows, std::move(row));
+    const std::vector<Value> totals = aggregate_value_columns(
+        *values, val_cols, axis_entity_rows(hierarchy, group_rows, all_rows, slot), agg, arena, registry, ctx);
+    std::copy(totals.begin(), totals.end(), row.begin() + static_cast<std::ptrdiff_t>(key_cols));
+    out_rows.push_back(std::move(row));
   }
 
   // Grand total at bottom (positive total_depth).
   if (emit_grand_total && total_depth > 0) {
-    emit_row(&out_rows, std::move(grand_total_row));
+    out_rows.push_back(std::move(grand_total_row));
   }
 
   return rows_to_array_value(out_rows, out_cols, arena);

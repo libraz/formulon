@@ -8,6 +8,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <iterator>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -267,29 +268,29 @@ bool coerce_mode_int(const Value& v, const int* allowed, std::size_t n_allowed, 
 std::optional<Value> parse_xmatch_modes(const parser::AstNode& call, std::uint32_t match_index,
                                         std::uint32_t search_index, Arena& arena, const FunctionRegistry& registry,
                                         const EvalContext& ctx, XMatchMode* match_mode, XSearchMode* search_mode) {
-  const std::uint32_t arity = call.as_call_arity();
   static constexpr int kMatchModes[] = {-1, 0, 1, 2, 3};
-  int match_raw = 0;
-  if (arity > match_index && !is_omitted_arg(call.as_call_arg(match_index))) {
-    const Value mm_val = eval_node(call.as_call_arg(match_index), arena, registry, ctx);
-    if (mm_val.is_error()) {
-      return mm_val;
-    }
-    if (!coerce_mode_int(mm_val, kMatchModes, sizeof(kMatchModes) / sizeof(kMatchModes[0]), &match_raw)) {
-      return Value::error(ErrorCode::Value);
-    }
-  }
-
   static constexpr int kSearchModes[] = {-2, -1, 1, 2};
+  int match_raw = 0;
   int search_raw = 1;
-  if (arity > search_index && !is_omitted_arg(call.as_call_arg(search_index))) {
-    const Value sm_val = eval_node(call.as_call_arg(search_index), arena, registry, ctx);
-    if (sm_val.is_error()) {
-      return sm_val;
+  const auto read_mode = [&](std::uint32_t index, const int* allowed, std::size_t n_allowed,
+                             int* out) -> std::optional<Value> {
+    if (!call_arg_supplied(call, index)) {
+      return std::nullopt;
     }
-    if (!coerce_mode_int(sm_val, kSearchModes, sizeof(kSearchModes) / sizeof(kSearchModes[0]), &search_raw)) {
+    const Value mode_val = eval_node(call.as_call_arg(index), arena, registry, ctx);
+    if (mode_val.is_error()) {
+      return mode_val;
+    }
+    if (!coerce_mode_int(mode_val, allowed, n_allowed, out)) {
       return Value::error(ErrorCode::Value);
     }
+    return std::nullopt;
+  };
+  if (const std::optional<Value> err = read_mode(match_index, kMatchModes, std::size(kMatchModes), &match_raw)) {
+    return err;
+  }
+  if (const std::optional<Value> err = read_mode(search_index, kSearchModes, std::size(kSearchModes), &search_raw)) {
+    return err;
   }
 
   *match_mode = static_cast<XMatchMode>(match_raw);
@@ -477,7 +478,6 @@ MatchOutcome match_query(const std::vector<Value>& cells, const Value& query, XM
 /// returns the first cell of its matched return slice.
 Value eval_xlookup_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                         const EvalContext& ctx) {
-  const std::uint32_t arity = call.as_call_arity();
   auto planned = plan_xlookup(call, arena, registry, ctx);
   if (!planned) {
     return Value::error(planned.error());
@@ -499,7 +499,7 @@ Value eval_xlookup_lazy(const parser::AstNode& call, Arena& arena, const Functio
   std::optional<Value> fallback;
   const auto value_for_miss = [&](bool array_lane) -> Value {
     if (!fallback.has_value()) {
-      if (arity >= 4U && !is_omitted_arg(call.as_call_arg(3))) {
+      if (call_arg_supplied(call, 3U)) {
         fallback = eval_node(call.as_call_arg(3), arena, registry, ctx);
       } else {
         fallback = Value::error(ErrorCode::NA);
@@ -598,8 +598,7 @@ bool resolve_xlookup_reference(const parser::AstNode& call, Arena& arena, const 
   }
   const std::size_t offset = found.offset;
   if (found.kind == MatchOutcomeKind::Miss) {
-    const std::uint32_t arity = call.as_call_arity();
-    if (arity < 4U || is_omitted_arg(call.as_call_arg(3))) {
+    if (!call_arg_supplied(call, 3U)) {
       *out_err = ErrorCode::NA;
       return false;
     }

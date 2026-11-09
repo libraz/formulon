@@ -44,6 +44,7 @@
 #include "eval/coerce.h"
 #include "eval/eval_profile_scope.h"
 #include "eval/function_registry.h"
+#include "eval/jp_fold.h"
 #include "eval/jp_kana_table.h"
 #include "excel_locale.h"
 #include "utils/arena.h"
@@ -165,14 +166,13 @@ constexpr std::array<KatakanaMap, 92> kKatakanaFullToHalf = {{
     {0xFF70, 0},            // U+30FC ー
 }};
 
-// Appends the UTF-8 encoding of `cp` to `out`. Thin wrapper over
-// `encode_utf8_codepoint`; a zero codepoint or an invalid codepoint
-// yields no bytes.
+// Appends the UTF-8 encoding of `cp` to `out`; a zero codepoint or an
+// invalid codepoint yields no bytes.
 void append_codepoint(std::string& out, std::uint32_t cp) {
   if (cp == 0) {
     return;
   }
-  out += encode_utf8_codepoint(cp);
+  append_utf8_codepoint(out, cp);
 }
 
 // ASC(text) - full-width to half-width conversion.
@@ -201,8 +201,8 @@ Value Asc(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
       continue;
     }
     const std::uint32_t cp = d.codepoint;
-    if (cp >= 0xFF01 && cp <= 0xFF5E) {
-      append_codepoint(out, cp - 0xFEE0);
+    if (const char ascii = fullwidth_ascii_to_ascii(cp); ascii != '\0') {
+      out.push_back(ascii);
     } else if (cp == 0x3000) {
       out.push_back(' ');
     } else if (kana && cp == 0xFFE5) {

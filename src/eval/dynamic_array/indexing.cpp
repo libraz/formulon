@@ -95,7 +95,6 @@ Value eval_choose_lanes(const parser::AstNode& call, Arena& arena, const Functio
 /// remove, which `resolve_take_drop_range` decides from `take`.
 Value eval_take_drop(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                      const EvalContext& ctx, bool take) {
-  const std::uint32_t arity = call.as_call_arity();
   Value err = Value::error(ErrorCode::Value);
   const ArrayValue* array =
       dynamic_array::resolve_array_prelude(call, 2U, 3U, /*reject_empty=*/false, arena, registry, ctx, err);
@@ -111,8 +110,7 @@ Value eval_take_drop(const parser::AstNode& call, Arena& arena, const FunctionRe
   }
   std::uint32_t col_lo = 0;
   std::uint32_t col_hi = array->cols;
-  const parser::AstNode* col_arg =
-      (arity == 3U && !is_omitted_arg(call.as_call_arg(2))) ? &call.as_call_arg(2) : nullptr;
+  const parser::AstNode* col_arg = call_arg_supplied(call, 2U) ? &call.as_call_arg(2) : nullptr;
   if (!dynamic_array::resolve_take_drop_range(col_arg, array->cols, take, arena, registry, ctx, col_lo, col_hi, err)) {
     return err;
   }

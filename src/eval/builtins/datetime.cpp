@@ -273,27 +273,15 @@ Value Date_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/, bool d
   // helps when building the Excel serial afterwards).
   // The conversion itself tolerates arbitrary (m, d); we only constrain y.
   const int yi = static_cast<int>(y);
-  // `days_from_civil` accepts months in [1, 12] exclusively but tolerates
-  // day-in-month overflow. Funnel month overflow into a year shift using
-  // Python-style floor-division so negative months wrap correctly
-  // (C++ integer division truncates toward zero, which would map month 0
-  // to the *same* year instead of the previous December).
-  long long yy = yi;
+  // Funnel month overflow into a year shift; the shift floor-normalises, so month 0 is the previous December.
+  int yy = yi;
+  unsigned mm = 1u;
   const double min_month = std::max(static_cast<double>(12LL * (1900 - yi) + 1), kDateMonthMin);
   const double max_month = std::min(static_cast<double>(12LL * (9999 - yi) + 12), kDateMonthMax);
   if (!std::isfinite(m) || m < min_month || m > max_month) {
     return Value::error(ErrorCode::Num);
   }
-  long long mm = static_cast<long long>(m);
-  long long mm0 = mm - 1;  // 0-based month in "signed" space
-  long long year_shift = mm0 / 12;
-  long long rem = mm0 % 12;
-  if (rem < 0) {
-    rem += 12;
-    year_shift -= 1;
-  }
-  yy += year_shift;
-  mm = rem + 1;
+  date_time::shift_year_month(yy, mm, static_cast<std::int64_t>(m) - 1);
   // Excel rejects DATE whose post-month-shift year falls outside [1900, 9999]
   // even if a negative `day` argument would rewind it back into range.
   // `DATE(9999, 13, -1)` nominally resolves to 9999-12-30 after day rewind,
@@ -302,7 +290,7 @@ Value Date_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/, bool d
   if (yy < 1900 || yy > 9999) {
     return Value::error(ErrorCode::Num);
   }
-  const std::int64_t first_civil_day = date_time::days_from_civil(static_cast<int>(yy), static_cast<unsigned>(mm), 1u);
+  const std::int64_t first_civil_day = date_time::days_from_civil(yy, mm, 1u);
   const std::int64_t min_civil_day =
       date1904 ? date_time::days_from_civil(1904, 1, 1) : date_time::days_from_civil(1899, 12, 31);
   const std::int64_t max_civil_day = date_time::days_from_civil(9999, 12, 31);
@@ -317,8 +305,7 @@ Value Date_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/, bool d
     return Value::error(ErrorCode::Num);
   }
   const auto day_value = static_cast<long long>(day);
-  const double serial =
-      serial_from_date_components(static_cast<int>(yy), static_cast<unsigned>(mm), day_value, date1904);
+  const double serial = serial_from_date_components(yy, mm, day_value, date1904);
   if (!is_valid_generated_date_serial(serial, date1904)) {
     return Value::error(ErrorCode::Num);
   }
@@ -522,16 +509,18 @@ Expected<ShiftedMonth, ErrorCode> shift_months(const Value* args, bool date1904)
   return out;
 }
 
+// A shifted day of 0 is the 1900-01-00 alias carried over from serial 0: one day before the month's first.
+double serial_from_month_fields(int y, unsigned m, unsigned d, bool date1904) noexcept {
+  return d == 0u ? date_time::serial_from_ymd(y, m, 1u, date1904) - 1.0 : date_time::serial_from_ymd(y, m, d, date1904);
+}
+
 MonthFields legacy_month_target(const ShiftedMonth& shifted) noexcept {
   return shift_month_fields(date_time::legacy_1900_ymd(shifted.legacy_input_1900), shifted.months);
 }
 
 double legacy_edate_result(const ShiftedMonth& shifted) noexcept {
   const MonthFields legacy_target = legacy_month_target(shifted);
-  // The 1900-01-00 alias is one day before the first of its target month.
-  const double serial_1900 = legacy_target.d == 0u
-                                 ? date_time::serial_from_ymd(legacy_target.y, legacy_target.m, 1u, false) - 1.0
-                                 : date_time::serial_from_ymd(legacy_target.y, legacy_target.m, legacy_target.d, false);
+  const double serial_1900 = serial_from_month_fields(legacy_target.y, legacy_target.m, legacy_target.d, false);
   return serial_1900 - kDate1904EpochGap;
 }
 
@@ -547,11 +536,7 @@ Value Edate_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/, bool 
   if (!shifted) {
     return Value::error(shifted.error());
   }
-  // A shifted day of 0 is the 1900-01-00 alias carried over from serial 0: one day before the month's first.
-  const double serial =
-      shifted.value().d == 0u
-          ? date_time::serial_from_ymd(shifted.value().y, shifted.value().m, 1u, date1904) - 1.0
-          : date_time::serial_from_ymd(shifted.value().y, shifted.value().m, shifted.value().d, date1904);
+  const double serial = serial_from_month_fields(shifted.value().y, shifted.value().m, shifted.value().d, date1904);
   if (!is_valid_generated_date_serial(serial, date1904)) {
     return Value::error(ErrorCode::Num);
   }

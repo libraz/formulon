@@ -177,7 +177,7 @@ Value eval_sort_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
   // Optional args. by_col is parsed first because it determines the valid
   // range of sort_index (column-bound for row-sort, row-bound for col-sort).
   bool by_col = false;
-  if (arity >= 4U && !is_omitted_arg(call.as_call_arg(3))) {
+  if (call_arg_supplied(call, 3U)) {
     if (!dynamic_array::eval_bool_arg(call.as_call_arg(3), arena, registry, ctx, by_col, err)) {
       return err;
     }
@@ -188,7 +188,7 @@ Value eval_sort_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
   // limit is `cols`; col-sort uses a row index, so limit is `rows`.
   const std::uint32_t key_max = by_col ? array->rows : array->cols;
   std::uint32_t sort_index = 1U;
-  if (arity >= 2U && !is_omitted_arg(call.as_call_arg(1))) {
+  if (call_arg_supplied(call, 1U)) {
     double n = 0.0;
     if (!dynamic_array::eval_number_arg(call.as_call_arg(1), arena, registry, ctx, n, err)) {
       return err;

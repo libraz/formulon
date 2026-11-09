@@ -119,7 +119,7 @@ bool resolve_wrap_args(const parser::AstNode& call, std::uint32_t arity, Arena& 
   wrap_count = static_cast<std::uint32_t>(std::min(wc_d, static_cast<double>(max_wrap_count)));
 
   // An omitted pad_with keeps the #N/A default; a blank reference pads with 0.
-  const bool has_pad = arity == 3U && !is_omitted_arg(call.as_call_arg(2));
+  const bool has_pad = call_arg_supplied(call, 2U);
   return dynamic_array::resolve_pad_arg(has_pad ? &call.as_call_arg(2) : nullptr, arena, registry, ctx, pad, error_out);
 }
 

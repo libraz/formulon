@@ -78,6 +78,10 @@ std::string text_index_substring(std::string_view text, std::uint32_t start, std
 /// pure UTF-8 in, owned `std::string` out, no `Value`/`Arena` dependencies.
 std::string encode_utf8_codepoint(std::uint32_t codepoint);
 
+/// Appends the UTF-8 encoding of `codepoint` to `out`; an invalid codepoint
+/// appends nothing, exactly as `encode_utf8_codepoint` returns empty.
+void append_utf8_codepoint(std::string& out, std::uint32_t codepoint);
+
 /// Result of decoding the first UTF-8 codepoint in a byte sequence.
 /// `valid` is false when `text` is empty or the leading bytes form a
 /// malformed / truncated sequence.

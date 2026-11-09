@@ -106,14 +106,13 @@ std::string text_index_substring(std::string_view text, std::uint32_t start, std
   return std::string(text.substr(begin, end - begin));
 }
 
-std::string encode_utf8_codepoint(std::uint32_t codepoint) {
-  // Invalid codepoints (beyond Unicode max or in the surrogate range) yield
-  // an empty result. Caller is expected to validate before calling, but we
+void append_utf8_codepoint(std::string& out, std::uint32_t codepoint) {
+  // Invalid codepoints (beyond Unicode max or in the surrogate range) append
+  // nothing. Caller is expected to validate before calling, but we
   // double-guard so this helper never emits malformed UTF-8.
   if (codepoint > 0x10FFFFu || (codepoint >= 0xD800u && codepoint <= 0xDFFFu)) {
-    return std::string();
+    return;
   }
-  std::string out;
   if (codepoint < 0x80u) {
     out.push_back(static_cast<char>(codepoint));
   } else if (codepoint < 0x800u) {
@@ -129,6 +128,11 @@ std::string encode_utf8_codepoint(std::uint32_t codepoint) {
     out.push_back(static_cast<char>(0x80u | ((codepoint >> 6) & 0x3Fu)));
     out.push_back(static_cast<char>(0x80u | (codepoint & 0x3Fu)));
   }
+}
+
+std::string encode_utf8_codepoint(std::uint32_t codepoint) {
+  std::string out;
+  append_utf8_codepoint(out, codepoint);
   return out;
 }
 

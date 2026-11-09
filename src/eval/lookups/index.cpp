@@ -660,7 +660,7 @@ Expected<const parser::AstNode*, ErrorCode> select_index_area(const parser::AstN
   std::vector<const parser::AstNode*> areas;
   collect_union_areas(call.as_call_arg(0), ctx, &areas);
   std::uint32_t area_idx = 1U;
-  if (call.as_call_arity() == 4U && !is_omitted_arg(call.as_call_arg(3))) {
+  if (call_arg_supplied(call, 3U)) {
     const DecodedIndex area =
         decode_index_cell(eval_node(call.as_call_arg(3), arena, registry, ctx), IndexSnap::kNearInteger);
     if (area.state == IndexAxisState::kError) {

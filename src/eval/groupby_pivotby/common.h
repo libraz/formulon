@@ -52,12 +52,6 @@ inline Value placeholder_cell() {
   return Value::text(std::string_view("", 0U));
 }
 
-/// Generated header labels for `field_headers == 2`, e.g. "行フィールド 1",
-/// "列フィールド 1" and "値 1" in ja-JP; `n` is 1-based.
-std::string row_field_label(const EvalContext& ctx, std::uint32_t n);
-std::string column_field_label(const EvalContext& ctx, std::uint32_t n);
-std::string value_label(const EvalContext& ctx, std::uint32_t n);
-
 enum class HeaderField : std::uint8_t { kRow, kColumn, kValue };
 
 /// The header cell of the `index`-th (0-based) field of `kind`: copied from
@@ -68,12 +62,6 @@ Value header_label(Arena& arena, const EvalContext& ctx, int field_headers, Head
 
 /// Returns the locale-appropriate "Grand Total" label.
 std::string_view grand_total_label(const EvalContext& ctx);
-
-/// Returns the label of the grand-total row for a layout that also emits
-/// subtotal rows. ja-JP names the two levels apart ("総計" above the
-/// subtotals' "合計"); locales that draw no such distinction reuse
-/// `grand_total_label`.
-std::string_view hierarchy_grand_total_label(const EvalContext& ctx);
 
 /// The grouping of the flat composite-key groups by their first `prefix_cols`
 /// key columns. Prefix groups are numbered in first-occurrence order of their
@@ -185,16 +173,6 @@ bool bind_aggregator_totals(const ArrayValue& values, const std::vector<std::uin
 const ArrayValue* read_array_arg(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
                                  const EvalContext& ctx, Value* out_err);
 
-/// Reads a scalar integer argument truncated toward zero, then validates it
-/// is a member of `allowed`. Returns true on success; on failure writes the
-/// appropriate scalar error to `*out_err` and returns false.
-bool read_int_in_set(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
-                     const EvalContext& ctx, const int* allowed, std::size_t count, int* out, Value* out_err);
-
-/// Reads a scalar integer argument truncated toward zero (no set membership).
-bool read_int(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx,
-              int* out, Value* out_err);
-
 /// Optional integer-in-set with a default; the optional position is at
 /// `arg_index` and the caller's `arity` is used to short-circuit missing args.
 bool read_optional_int_in_set(const parser::AstNode& call, std::uint32_t arg_index, std::uint32_t arity,
@@ -275,16 +253,6 @@ inline constexpr int kFieldHeadersAuto = -1;
 /// text in its first row and a non-text cell below it, and 0 otherwise.
 int resolve_auto_field_headers(int field_headers, const ArrayValue& values);
 
-/// Computes input/output header layout from `field_headers ∈ {0,1,2,3}` and
-/// the input row count.
-Expected<HeaderLayout, ErrorCode> resolve_header_layout(int field_headers, std::uint32_t input_rows);
-
-/// Reads the optional filter_array argument: a 1D column-shaped boolean mask
-/// over the data rows.
-bool read_filter_mask(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
-                      const EvalContext& ctx, std::uint32_t data_row_count, std::vector<bool>* include_row,
-                      Value* out_err);
-
 /// Resolves the header layout for `field_headers` and, when the call supplies
 /// the filter argument (present and not omitted), reads its mask.
 /// `*include_row` is sized to the layout's data row count.
@@ -296,19 +264,11 @@ bool read_layout_and_mask(const parser::AstNode& call, std::uint32_t filter_arg_
 /// offset by `data_start_row`.
 std::vector<std::uint32_t> collect_included_rows(const std::vector<bool>& include_row, std::uint32_t data_start_row);
 
-/// Builds a hashable canonical key for one row. Text cells become their
-/// dynamic-strength collation key; all scalar kinds retain their type tag.
-/// Values which never compare equal (NaN, Array / Ref / Lambda) receive a
-/// row-unique key.
-std::string normalized_group_key(const ArrayValue& keys, std::uint32_t row);
-
-/// True iff any column of the row's key is an Error value. Error-keyed
-/// groups sort to the bottom (after all valid groups).
-bool row_key_is_error(const ArrayValue& keys, std::uint32_t row);
-
 /// Maps `row`'s group key to its group index, appending a new group (its
 /// representative row, member list and error flag) on first occurrence so
-/// groups keep first-occurrence order.
+/// groups keep first-occurrence order. The key is the row's canonical key
+/// (text cells at dynamic collation strength, scalar kinds type-tagged,
+/// never-equal values row-unique); error-keyed groups sort to the bottom.
 std::size_t find_or_add_group(const ArrayValue& keys, std::uint32_t row,
                               std::vector<std::uint32_t>* representative_rows,
                               std::vector<std::vector<std::uint32_t>>* member_rows, std::vector<bool>* is_error_group,
@@ -327,14 +287,11 @@ const ArrayValue* build_group_slice(const ArrayValue& values, std::uint32_t valu
 Value invoke_aggregator_for_group(const Aggregator& agg, std::uint32_t value_col, const ArrayValue* slice, Arena& arena,
                                   const FunctionRegistry& registry, const EvalContext& ctx);
 
-/// Aggregates each value column over the given row indices.
+/// Aggregates each value column over the given row indices; an empty row set
+/// yields `#CALC!` in every column.
 std::vector<Value> aggregate_value_columns(const ArrayValue& values, std::uint32_t val_cols,
                                            const std::vector<std::uint32_t>& row_indices, const Aggregator& agg,
-                                           Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx,
-                                           ErrorCode empty_error);
-
-/// Renders one row of cells into the buffer.
-void emit_row(std::vector<std::vector<Value>>* rows, std::vector<Value> row);
+                                           Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx);
 
 /// Materialises a rectangular output buffer into a spilled `Value::array`.
 Value rows_to_array_value(const std::vector<std::vector<Value>>& rows, std::uint32_t out_cols, Arena& arena);

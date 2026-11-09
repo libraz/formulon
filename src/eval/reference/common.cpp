@@ -21,6 +21,7 @@
 #include "eval/eval_context.h"
 #include "eval/lazy_impls.h"
 #include "eval/name_env_resolve.h"
+#include "eval/omitted_arg.h"
 #include "eval/range_resolvers.h"
 #include "parser/ast.h"
 #include "parser/reference.h"
@@ -317,19 +318,12 @@ bool compute_offset_rect(const parser::AstNode& call, Arena& arena, const Functi
 
   // An omitted height or width, trailing or empty (`OFFSET(A1,0,0,,2)`),
   // keeps the base reference's.
-  auto given = [&](std::uint32_t idx) {
-    if (idx >= arity) {
-      return false;
-    }
-    const parser::AstNode& arg = call.as_call_arg(idx);
-    return arg.kind() != parser::NodeKind::Literal || !arg.as_literal().is_blank();
-  };
   int height_i = static_cast<int>(out_base->rows);
   int width_i = static_cast<int>(out_base->cols);
-  if (given(3U) && !eval_dim(3U, &height_i)) {
+  if (call_arg_supplied(call, 3U) && !eval_dim(3U, &height_i)) {
     return false;
   }
-  if (given(4U) && !eval_dim(4U, &width_i)) {
+  if (call_arg_supplied(call, 4U) && !eval_dim(4U, &width_i)) {
     return false;
   }
   // Zero height or width -> `#REF!`. Excel allows negative height / width

@@ -25,6 +25,12 @@ inline bool is_omitted_arg(const parser::AstNode& arg) {
   return arg.kind() == parser::NodeKind::Literal && arg.as_literal().is_blank();
 }
 
+/// Whether argument slot `index` of `call` is present and not syntactically
+/// omitted.
+inline bool call_arg_supplied(const parser::AstNode& call, std::uint32_t index) {
+  return call.as_call_arity() > index && !is_omitted_arg(call.as_call_arg(index));
+}
+
 /// The default `def` declares for an omitted slot `index`, or null.
 inline const OmittedArgDefault* omitted_arg_default(const FunctionDef& def, std::uint32_t index) noexcept {
   for (std::uint32_t i = 0; i < def.omitted_default_count; ++i) {

@@ -175,7 +175,7 @@ Value eval_expand_lazy(const parser::AstNode& call, Arena& arena, const Function
   // Resolve the new column count. Optional; defaults to the existing
   // column count (no horizontal expansion).
   std::uint32_t out_cols = array->cols;
-  if (arity >= 3U && !is_omitted_arg(call.as_call_arg(2))) {
+  if (call_arg_supplied(call, 2U)) {
     double cols_d = 0.0;
     if (!dynamic_array::eval_truncated_number_arg(call.as_call_arg(2), arena, registry, ctx, cols_d, err)) {
       return err;

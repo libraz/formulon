@@ -118,6 +118,10 @@ std::string_view grand_total_label(const EvalContext& ctx) {
   return locale_facts(ctx.excel_profile()).grand_total;
 }
 
+namespace {
+
+// Generated header labels for `field_headers == 2`, e.g. "行フィールド 1" in
+// ja-JP; `n` is 1-based.
 std::string row_field_label(const EvalContext& ctx, std::uint32_t n) {
   return numbered_label(locale_facts(ctx.excel_profile()).row_field_prefix, n);
 }
@@ -129,6 +133,8 @@ std::string column_field_label(const EvalContext& ctx, std::uint32_t n) {
 std::string value_label(const EvalContext& ctx, std::uint32_t n) {
   return numbered_label(locale_facts(ctx.excel_profile()).value_field_prefix, n);
 }
+
+}  // namespace
 
 Value header_label(Arena& arena, const EvalContext& ctx, int field_headers, HeaderField kind,
                    const Value* input_header_cells, std::uint32_t index) {
@@ -146,9 +152,15 @@ Value header_label(Arena& arena, const EvalContext& ctx, int field_headers, Head
   return Value::text(arena.intern(value_label(ctx, index + 1U)));
 }
 
+namespace {
+
+// ja-JP names the two levels apart ("総計" above the subtotals' "合計");
+// locales that draw no such distinction reuse `grand_total_label`.
 std::string_view hierarchy_grand_total_label(const EvalContext& ctx) {
   return locale_facts(ctx.excel_profile()).hierarchy_grand_total;
 }
+
+}  // namespace
 
 OuterGrouping build_prefix_grouping(const ArrayValue& keys, const std::vector<std::uint32_t>& group_repr,
                                     const std::vector<std::vector<std::uint32_t>>& group_rows,
@@ -317,8 +329,12 @@ const ArrayValue* read_array_arg(const parser::AstNode& node, Arena& arena, cons
   return resolve_array_value(node, arena, registry, ctx, &out, out_err) ? out : nullptr;
 }
 
-bool read_int(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx,
-              int* out, Value* out_err) {
+namespace {
+
+// Reads a scalar integer argument truncated toward zero, then validates it is
+// a member of `allowed`; on failure writes the scalar error to `*out_err`.
+bool read_int_in_set(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
+                     const EvalContext& ctx, const int* allowed, std::size_t count, int* out, Value* out_err) {
   double n = 0.0;
   if (!dynamic_array::eval_number_arg(node, arena, registry, ctx, n, *out_err)) {
     return false;
@@ -327,16 +343,7 @@ bool read_int(const parser::AstNode& node, Arena& arena, const FunctionRegistry&
     *out_err = Value::error(ErrorCode::Value);
     return false;
   }
-  *out = truncate_saturated_int(n);
-  return true;
-}
-
-bool read_int_in_set(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
-                     const EvalContext& ctx, const int* allowed, std::size_t count, int* out, Value* out_err) {
-  int truncated = 0;
-  if (!read_int(node, arena, registry, ctx, &truncated, out_err)) {
-    return false;
-  }
+  const int truncated = truncate_saturated_int(n);
   for (std::size_t i = 0; i < count; ++i) {
     if (allowed[i] == truncated) {
       *out = truncated;
@@ -346,6 +353,8 @@ bool read_int_in_set(const parser::AstNode& node, Arena& arena, const FunctionRe
   *out_err = Value::error(ErrorCode::Value);
   return false;
 }
+
+}  // namespace
 
 bool read_optional_int_in_set(const parser::AstNode& call, std::uint32_t arg_index, std::uint32_t arity,
                               int default_value, Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx,
@@ -576,6 +585,10 @@ int resolve_auto_field_headers(int field_headers, const ArrayValue& values) {
   return 0;
 }
 
+namespace {
+
+// Computes input/output header layout from `field_headers` in {0,1,2,3} and
+// the input row count.
 Expected<HeaderLayout, ErrorCode> resolve_header_layout(int field_headers, std::uint32_t input_rows) {
   HeaderLayout layout;
   layout.inputs_have_header = (field_headers == 1 || field_headers == 3);
@@ -591,6 +604,8 @@ Expected<HeaderLayout, ErrorCode> resolve_header_layout(int field_headers, std::
   return Expected<HeaderLayout, ErrorCode>::Ok(layout);
 }
 
+// Reads the optional filter_array argument: a 1D column-shaped boolean mask
+// over the data rows.
 bool read_filter_mask(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
                       const EvalContext& ctx, std::uint32_t data_row_count, std::vector<bool>* include_row,
                       Value* out_err) {
@@ -616,6 +631,8 @@ bool read_filter_mask(const parser::AstNode& node, Arena& arena, const FunctionR
   }
   return true;
 }
+
+}  // namespace
 
 bool read_layout_and_mask(const parser::AstNode& call, std::uint32_t filter_arg_index, std::uint32_t arity,
                           int field_headers, std::uint32_t input_rows, Arena& arena, const FunctionRegistry& registry,
@@ -646,6 +663,9 @@ std::vector<std::uint32_t> collect_included_rows(const std::vector<bool>& includ
   return rows;
 }
 
+namespace {
+
+// Hashable canonical key for one row; see `append_cell_group_key`.
 std::string normalized_group_key(const ArrayValue& keys, std::uint32_t row) {
   std::string out;
   out.reserve(static_cast<std::size_t>(keys.cols) * 12U);
@@ -655,6 +675,7 @@ std::string normalized_group_key(const ArrayValue& keys, std::uint32_t row) {
   return out;
 }
 
+// True iff any column of the row's key is an Error value.
 bool row_key_is_error(const ArrayValue& keys, std::uint32_t row) {
   for (std::uint32_t c = 0; c < keys.cols; ++c) {
     const Value& v = keys.cells[static_cast<std::size_t>(row) * keys.cols + c];
@@ -664,6 +685,8 @@ bool row_key_is_error(const ArrayValue& keys, std::uint32_t row) {
   }
   return false;
 }
+
+}  // namespace
 
 std::size_t find_or_add_group(const ArrayValue& keys, std::uint32_t row,
                               std::vector<std::uint32_t>* representative_rows,
@@ -722,12 +745,11 @@ Value invoke_aggregator_for_group(const Aggregator& agg, std::uint32_t value_col
 
 std::vector<Value> aggregate_value_columns(const ArrayValue& values, std::uint32_t val_cols,
                                            const std::vector<std::uint32_t>& row_indices, const Aggregator& agg,
-                                           Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx,
-                                           ErrorCode empty_error) {
+                                           Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx) {
   std::vector<Value> cells(val_cols, Value::blank());
   if (row_indices.empty()) {
     for (std::uint32_t v = 0; v < val_cols; ++v) {
-      cells[v] = Value::error(empty_error);
+      cells[v] = Value::error(ErrorCode::Calc);
     }
     return cells;
   }
@@ -740,10 +762,6 @@ std::vector<Value> aggregate_value_columns(const ArrayValue& values, std::uint32
     cells[v] = invoke_aggregator_for_group(agg, v, slice, arena, registry, ctx);
   }
   return cells;
-}
-
-void emit_row(std::vector<std::vector<Value>>* rows, std::vector<Value> row) {
-  rows->push_back(std::move(row));
 }
 
 Value rows_to_array_value(const std::vector<std::vector<Value>>& rows, std::uint32_t out_cols, Arena& arena) {

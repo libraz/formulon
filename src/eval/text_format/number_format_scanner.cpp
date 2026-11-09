@@ -75,19 +75,8 @@ Utf8Scalar decode_utf8(std::string_view fmt, std::size_t i) noexcept {
   return {first, 1, false};
 }
 
-bool is_fullwidth_ascii(std::uint32_t cp) noexcept {
-  return cp >= 0xFF01U && cp <= 0xFF5EU;
-}
-
-char fullwidth_ascii(std::uint32_t cp) noexcept {
-  return static_cast<char>(cp - 0xFEE0U);
-}
-
 bool is_date_codepoint(std::uint32_t cp) noexcept {
-  if (!is_fullwidth_ascii(cp)) {
-    return false;
-  }
-  const char c = fullwidth_ascii(cp);
+  const char c = eval::fullwidth_ascii_to_ascii(cp);
   return c == 'y' || c == 'Y' || c == 'm' || c == 'M' || c == 'd' || c == 'D' || c == 'h' || c == 'H' || c == 's' ||
          c == 'S' || c == 'g' || c == 'G' || c == 'e' || c == 'E' || c == 'b' || c == 'B';
 }
@@ -119,8 +108,8 @@ bool scalar_matches_ascii(std::string_view fmt, std::size_t i, char expected, st
     }
     return false;
   }
-  if (is_fullwidth_ascii(scalar.codepoint) &&
-      strings::ascii_to_lower(fullwidth_ascii(scalar.codepoint)) == strings::ascii_to_lower(expected)) {
+  const char fullwidth = eval::fullwidth_ascii_to_ascii(scalar.codepoint);
+  if (fullwidth != '\0' && strings::ascii_to_lower(fullwidth) == strings::ascii_to_lower(expected)) {
     *width = scalar.width;
     return true;
   }
@@ -151,10 +140,7 @@ bool match_dbnum(std::string_view fmt, std::size_t start, std::size_t* end, std:
   }
   const Utf8Scalar digit = decode_utf8(fmt, i);
   if (!digit.valid || digit.codepoint < '1' || digit.codepoint > '4') {
-    if (!is_fullwidth_ascii(digit.codepoint)) {
-      return false;
-    }
-    const char c = fullwidth_ascii(digit.codepoint);
+    const char c = eval::fullwidth_ascii_to_ascii(digit.codepoint);
     if (c < '1' || c > '4') {
       return false;
     }
@@ -169,10 +155,7 @@ char syntax_ascii(std::uint32_t cp) noexcept {
   if (const char digit = eval::fullwidth_digit_to_ascii(cp); digit != '\0') {
     return digit;
   }
-  if (!is_fullwidth_ascii(cp)) {
-    return '\0';
-  }
-  const char c = fullwidth_ascii(cp);
+  const char c = eval::fullwidth_ascii_to_ascii(cp);
   switch (c) {
     case '#':
     case '?':
@@ -286,8 +269,9 @@ std::string normalize_fullwidth_format_syntax(std::string_view fmt, std::string_
       std::uint32_t digit_codepoint = 0;
       if (match_dbnum(fmt, i, &marker_end, &digit_codepoint)) {
         out.append("DBNum");
-        const char digit_ascii = digit_codepoint >= '1' && digit_codepoint <= '4' ? static_cast<char>(digit_codepoint)
-                                                                                  : fullwidth_ascii(digit_codepoint);
+        const char digit_ascii = digit_codepoint >= '1' && digit_codepoint <= '4'
+                                     ? static_cast<char>(digit_codepoint)
+                                     : eval::fullwidth_ascii_to_ascii(digit_codepoint);
         out.push_back(digit_ascii);
         i = marker_end;
         continue;
@@ -385,7 +369,7 @@ std::string normalize_fullwidth_format_syntax(std::string_view fmt, std::string_
     // Full-width date/time codes (`ｙ ｍ ｄ ｈ ｓ ｇ ｅ ｂ`, either case) always fold to
     // their ASCII letter, whatever the neighbours. Other full-width letters, `Ａ` included, stay literal.
     if (is_date_codepoint(cp)) {
-      const char c = fullwidth_ascii(cp);
+      const char c = eval::fullwidth_ascii_to_ascii(cp);
       out.push_back(strings::ascii_to_lower(c));
       i += width;
       continue;
