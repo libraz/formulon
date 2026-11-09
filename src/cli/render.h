@@ -40,6 +40,9 @@ namespace cli {
 /// both 0-based.
 std::string format_a1(std::uint32_t row, std::uint32_t col);
 
+/// Returns `rect` as `"A1:B2"`, both corners always written.
+std::string format_range_a1(const fm_cell_rect_t& rect);
+
 /// Renders `v` as a single-line plain-text string. See the header
 /// comment for the per-kind rules.
 std::string render_value(const fm_value_t& v);

@@ -111,7 +111,7 @@ class PatchReader {
 
   void text_field(std::int32_t op, const char* value, ChartPatchField<std::string>& out, const char* name) {
     if (text_ok(value, name)) {
-      field(op, std::string(value != nullptr ? value : ""), out, name);
+      field(op, text_or_empty(value), out, name);
     }
   }
 

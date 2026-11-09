@@ -29,6 +29,7 @@
 #include "value.h"
 #include "workbook.h"
 
+using formulon::c_api::parts::c_str_or_null;
 using formulon::c_api::parts::check_entered_cell_formula;
 using formulon::c_api::parts::check_enum_domain;
 using formulon::c_api::parts::check_index;
@@ -47,7 +48,6 @@ using formulon::c_api::parts::not_found;
 using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::null_field;
 using formulon::c_api::parts::ordinal_of;
-using formulon::c_api::parts::patch_op_ok;
 using formulon::c_api::parts::patch_op_ok_without_clear;
 using formulon::c_api::parts::publish_scratch;
 using formulon::c_api::parts::resolve_sheet_table;
@@ -639,7 +639,7 @@ extern "C" fm_status_t fm_sheet_get_table_column_at(const fm_workbook_t* wb, siz
   out->name = col.name.c_str();
   out->totals_row_function =
       ordinal_of(kTotalsRowFunctionTokens, col.totals_function, FM_TABLE_TOTALS_ROW_FUNCTION_NONE);
-  out->totals_row_label = col.totals_label.empty() ? nullptr : col.totals_label.c_str();
+  out->totals_row_label = c_str_or_null(col.totals_label);
   // The formula sits in the table's totals row, so it is shown from inside the table.
   out->totals_row_formula =
       col.totals_row_formula.empty()
@@ -666,7 +666,7 @@ extern "C" fm_status_t fm_sheet_get_table_style_options(const fm_workbook_t* wb,
   const std::uint32_t struct_size = out->struct_size;
   *out = fm_table_style_options_t{};
   out->struct_size = struct_size;
-  out->style_name = style.name.empty() ? nullptr : style.name.c_str();
+  out->style_name = c_str_or_null(style.name);
   *out_present = style.present ? 1 : 0;
   out->show_first_column = style.present && style.show_first_column ? 1 : 0;
   out->show_last_column = style.present && style.show_last_column ? 1 : 0;
@@ -704,8 +704,8 @@ extern "C" fm_status_t fm_sheet_update_table_style_options(fm_workbook_t* wb, si
     return rc;
   }
   // The whole patch is checked before anything changes.
-  if (!patch_op_ok(patch->style_name_op)) {
-    return invalid_argument("style_name_op is not a patch op", "style_name_op=" + std::to_string(patch->style_name_op));
+  if (auto rc = check_patch_op(patch->style_name_op, "style_name", true); rc != 0) {
+    return rc;
   }
   if (patch->style_name_op == FM_PATCH_OP_SET) {
     if (patch->style_name == nullptr) {

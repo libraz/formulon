@@ -24,6 +24,7 @@
 #include "utils/error.h"
 #include "utils/expected.h"
 
+using formulon::c_api::parts::c_str_or_null;
 using formulon::c_api::parts::check_enum_domain;
 using formulon::c_api::parts::check_finite;
 using formulon::c_api::parts::check_index;
@@ -745,7 +746,7 @@ extern "C" fm_status_t fm_sheet_get_pivot_field_item_at(const fm_workbook_t* wb,
   result.has_cache_index = item.has_cache_index ? 1 : 0;
   result.cache_index = item.has_cache_index ? item.cache_index : 0U;
   result.visible = item.visible ? 1 : 0;
-  result.caption = item.caption.empty() ? nullptr : item.caption.c_str();
+  result.caption = c_str_or_null(item.caption);
   result.show_detail = item.show_detail ? 1 : 0;
   *out = result;
   return 0;

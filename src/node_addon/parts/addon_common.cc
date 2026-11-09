@@ -956,7 +956,7 @@ Napi::Value PrintTitlesToJs(Napi::Env env, const fm_print_titles_t& titles) {
   return out;
 }
 
-PatchKey ClassifyPatchKey(CheckedSpecReader& reader, const Napi::Value& value, const char* /*key*/, bool /*nullable*/) {
+PatchKey ClassifyPatchKey(CheckedSpecReader& reader, const Napi::Value& value) {
   if (!reader.ok() || value.IsUndefined()) {
     return PatchKey::kKeep;
   }
@@ -967,10 +967,9 @@ PatchKey ClassifyPatchKey(CheckedSpecReader& reader, const Napi::Value& value, c
 namespace {
 
 template <typename Read>
-fm_patch_op_t PatchField(CheckedSpecReader& reader, const Napi::Object& spec, const char* key, bool nullable,
-                         Read&& read) {
+fm_patch_op_t PatchField(CheckedSpecReader& reader, const Napi::Object& spec, const char* key, Read&& read) {
   const Napi::Value value = reader.Get(spec, key);
-  const PatchKey state = ClassifyPatchKey(reader, value, key, nullable);
+  const PatchKey state = ClassifyPatchKey(reader, value);
   if (state == PatchKey::kSet) {
     read(value);
   }
@@ -980,41 +979,44 @@ fm_patch_op_t PatchField(CheckedSpecReader& reader, const Napi::Object& spec, co
 }  // namespace
 
 fm_patch_op_t PatchBool(CheckedSpecReader& reader, const Napi::Object& spec, const char* key, int32_t* out) {
-  return PatchField(reader, spec, key, false, [&](const Napi::Value& v) { *out = reader.Bool(v, key, false) ? 1 : 0; });
+  return PatchField(reader, spec, key, [&](const Napi::Value& v) { *out = reader.Bool(v, key, false) ? 1 : 0; });
 }
 
 fm_patch_op_t PatchI32(CheckedSpecReader& reader, const Napi::Object& spec, const char* key, int32_t* out) {
-  return PatchField(reader, spec, key, false, [&](const Napi::Value& v) { *out = reader.I32(v, key, 0); });
+  return PatchField(reader, spec, key, [&](const Napi::Value& v) { *out = reader.I32(v, key, 0); });
 }
 
 fm_patch_op_t PatchU32(CheckedSpecReader& reader, const Napi::Object& spec, const char* key, uint32_t* out) {
-  return PatchField(reader, spec, key, false, [&](const Napi::Value& v) { *out = reader.U32(v, key, 0U); });
+  return PatchField(reader, spec, key, [&](const Napi::Value& v) { *out = reader.U32(v, key, 0U); });
 }
 
 fm_patch_op_t PatchI64(CheckedSpecReader& reader, const Napi::Object& spec, const char* key, int64_t* out) {
-  return PatchField(reader, spec, key, false, [&](const Napi::Value& v) { *out = reader.I64(v, key, 0); });
+  return PatchField(reader, spec, key, [&](const Napi::Value& v) { *out = reader.I64(v, key, 0); });
 }
 
-fm_patch_op_t PatchColor(CheckedSpecReader& reader, const Napi::Object& spec, const char* key, bool nullable,
-                         fm_color_t* out) {
-  return PatchField(reader, spec, key, nullable, [&](const Napi::Value& v) { *out = ReadColorSpec(reader, v, key); });
+fm_patch_op_t PatchColor(CheckedSpecReader& reader, const Napi::Object& spec, const char* key, fm_color_t* out) {
+  return PatchField(reader, spec, key, [&](const Napi::Value& v) { *out = ReadColorSpec(reader, v, key); });
 }
 
 fm_patch_op_t PatchNullableDouble(CheckedSpecReader& reader, const Napi::Object& spec, const char* key, double* out) {
-  return PatchField(reader, spec, key, true, [&](const Napi::Value& v) { *out = reader.Double(v, key, 0.0); });
+  return PatchField(reader, spec, key, [&](const Napi::Value& v) { *out = reader.Double(v, key, 0.0); });
 }
 
 fm_patch_op_t PatchNullableI32(CheckedSpecReader& reader, const Napi::Object& spec, const char* key, int32_t* out) {
-  return PatchField(reader, spec, key, true, [&](const Napi::Value& v) { *out = reader.I32(v, key, 0); });
+  return PatchField(reader, spec, key, [&](const Napi::Value& v) { *out = reader.I32(v, key, 0); });
+}
+
+fm_patch_op_t PatchNullableU32(CheckedSpecReader& reader, const Napi::Object& spec, const char* key, uint32_t* out) {
+  return PatchField(reader, spec, key, [&](const Napi::Value& v) { *out = reader.U32(v, key, 0U); });
 }
 
 fm_patch_op_t PatchDouble(CheckedSpecReader& reader, const Napi::Object& spec, const char* key, double* out) {
-  return PatchField(reader, spec, key, false, [&](const Napi::Value& v) { *out = reader.Double(v, key, 0.0); });
+  return PatchField(reader, spec, key, [&](const Napi::Value& v) { *out = reader.Double(v, key, 0.0); });
 }
 
-fm_patch_op_t PatchString(CheckedSpecReader& reader, const Napi::Object& spec, const char* key, bool nullable,
-                          std::string* store, const char** out) {
-  return PatchField(reader, spec, key, nullable, [&](const Napi::Value& v) {
+fm_patch_op_t PatchString(CheckedSpecReader& reader, const Napi::Object& spec, const char* key, std::string* store,
+                          const char** out) {
+  return PatchField(reader, spec, key, [&](const Napi::Value& v) {
     if (reader.String(v, key, store)) {
       *out = store->c_str();
     }

@@ -34,6 +34,7 @@
 #include "value.h"
 #include "workbook.h"
 
+using formulon::c_api::parts::c_str_or_null;
 using formulon::c_api::parts::cache_tables;
 using formulon::c_api::parts::check_finite;
 using formulon::c_api::parts::check_index;
@@ -193,13 +194,12 @@ extern "C" fm_status_t fm_workbook_get_pivot_cache_worksheet_source(const fm_wor
     return rc;
   }
   const formulon::pivot::WorksheetSource& src = cache->worksheet_source();
-  const auto view = [](const std::string& text) { return text.empty() ? nullptr : text.c_str(); };
   fm_pivot_worksheet_source_t result{};
   result.struct_size = out->struct_size;
   if (src.present) {
-    result.ref = view(src.ref);
-    result.sheet = view(src.sheet);
-    result.name = view(src.name);
+    result.ref = c_str_or_null(src.ref);
+    result.sheet = c_str_or_null(src.sheet);
+    result.name = c_str_or_null(src.name);
   }
   *out_present = src.present ? 1 : 0;
   *out = result;

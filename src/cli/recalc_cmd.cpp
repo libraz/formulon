@@ -233,8 +233,7 @@ int run_recalc(const ArgList& args, std::ostream& out, std::ostream& err) {
   if (want_json) {
     fm_read_diagnostics_info_t read_diagnostics = FM_STRUCT_INIT(fm_read_diagnostics_info_t);
     if (auto rc = fm_workbook_get_diagnostics(wb.handle, &read_diagnostics); rc != 0) {
-      emit_last_error(err, "recalc");
-      return rc;
+      return fail_with_last_error(err, "recalc", rc);
     }
     warnings = read_loss_counters(read_diagnostics);
   }
@@ -244,29 +243,25 @@ int run_recalc(const ArgList& args, std::ostream& out, std::ostream& err) {
     enable.enabled_op = FM_PATCH_OP_SET;
     enable.enabled = 1;
     if (auto rc = fm_workbook_update_iterative(wb.handle, &enable); rc != 0) {
-      emit_last_error(err, "recalc");
-      return rc;
+      return fail_with_last_error(err, "recalc", rc);
     }
   }
 
   fm_parallel_recalc_stats_info_t parallel_stats = FM_STRUCT_INIT(fm_parallel_recalc_stats_info_t);
   if (parallel) {
     if (auto rc = fm_workbook_recalc_parallel(wb.handle, thread_count, &parallel_stats); rc != 0) {
-      emit_last_error(err, "recalc");
-      return rc;
+      return fail_with_last_error(err, "recalc", rc);
     }
   } else {
     if (auto rc = fm_workbook_recalc(wb.handle); rc != 0) {
-      emit_last_error(err, "recalc");
-      return rc;
+      return fail_with_last_error(err, "recalc", rc);
     }
   }
 
   SaveBuffer buf;
   fm_save_diagnostics_info_t save_diagnostics = FM_STRUCT_INIT(fm_save_diagnostics_info_t);
   if (auto rc = fm_workbook_save_with_diagnostics(wb.handle, format, &buf.data, &buf.len, &save_diagnostics); rc != 0) {
-    emit_last_error(err, "recalc");
-    return rc;
+    return fail_with_last_error(err, "recalc", rc);
   }
   if (want_json) {
     for (const LossCounter& counter : write_loss_counters(save_diagnostics)) {

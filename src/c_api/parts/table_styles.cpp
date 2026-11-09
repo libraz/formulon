@@ -21,8 +21,10 @@
 #include "utils/strings.h"
 #include "workbook.h"
 
+using formulon::c_api::parts::c_str_or_null;
 using formulon::c_api::parts::check_enum_domain;
 using formulon::c_api::parts::check_index;
+using formulon::c_api::parts::check_patch_op;
 using formulon::c_api::parts::check_record_size;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
@@ -34,7 +36,6 @@ using formulon::c_api::parts::not_found;
 using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::null_field;
 using formulon::c_api::parts::ordinal_of;
-using formulon::c_api::parts::patch_op_ok;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::token_of;
 
@@ -296,8 +297,8 @@ extern "C" fm_status_t fm_workbook_get_table_style_defaults(const fm_workbook_t*
   const std::uint32_t struct_size = out->struct_size;
   *out = fm_table_style_defaults_t{};
   out->struct_size = struct_size;
-  out->table_style_name = section.default_table_style.empty() ? nullptr : section.default_table_style.c_str();
-  out->pivot_style_name = section.default_pivot_style.empty() ? nullptr : section.default_pivot_style.c_str();
+  out->table_style_name = c_str_or_null(section.default_table_style);
+  out->pivot_style_name = c_str_or_null(section.default_pivot_style);
   return 0;
 }
 
@@ -314,9 +315,8 @@ extern "C" fm_status_t fm_workbook_update_table_style_defaults(fm_workbook_t* wb
   for (const auto& [op, name, field] : {std::tuple<fm_patch_op_t, const char*, const char*>{
                                             patch->table_style_name_op, patch->table_style_name, "table_style_name"},
                                         {patch->pivot_style_name_op, patch->pivot_style_name, "pivot_style_name"}}) {
-    if (!patch_op_ok(op)) {
-      return invalid_argument((std::string(field) + "_op is not a patch op").c_str(),
-                              std::string(field) + "_op=" + std::to_string(op));
+    if (auto rc = check_patch_op(op, field, true); rc != 0) {
+      return rc;
     }
     if (op == FM_PATCH_OP_SET) {
       if (name == nullptr) {

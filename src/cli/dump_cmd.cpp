@@ -279,7 +279,7 @@ fm_status_t dump_metadata(const fm_workbook_t* wb, bool json, std::ostream& out)
         doc += (first_table ? "" : ",") + std::string("{\"name\":") + render_json_string(view_or_empty(name)) +
                ",\"sheet\":" + std::to_string(sheet_index) + ",\"ref\":" + render_json_string(ref) + "}";
       } else {
-        snapshot << escape_c_string(name) << ' ' << sheet_index << ' ' << escape_c_string(ref.c_str()) << '\n';
+        snapshot << escape_c_string(name) << ' ' << sheet_index << ' ' << escape_single_line(ref) << '\n';
       }
       first_table = false;
     }
@@ -423,8 +423,7 @@ int run_dump(const ArgList& args, std::ostream& out, std::ostream& err) {
   // skip recalc to keep the dump cheap and side-effect-free.
   if (mode == DumpMode::kValues) {
     if (auto rc = fm_workbook_recalc(wb.handle); rc != 0) {
-      emit_last_error(err, "dump");
-      return rc;
+      return fail_with_last_error(err, "dump", rc);
     }
   }
 
@@ -442,8 +441,7 @@ int run_dump(const ArgList& args, std::ostream& out, std::ostream& err) {
       break;
   }
   if (rc != 0) {
-    emit_last_error(err, "dump");
-    return rc;
+    return fail_with_last_error(err, "dump", rc);
   }
   return flush_output(out, err, "dump");
 }

@@ -32,6 +32,7 @@
 #include "utils/error.h"
 #include "value.h"
 
+using formulon::c_api::parts::c_str_or_null;
 using formulon::c_api::parts::check_index;
 using formulon::c_api::parts::check_keeps_visible_sheet;
 using formulon::c_api::parts::check_profile_id;
@@ -700,7 +701,7 @@ extern "C" fm_status_t fm_workbook_get_defined_name_at(const fm_workbook_t* wb, 
   out->name = entry.name.c_str();
   out->formula = publish_scratch(wb, with_formula_prefix(display_formula_text(wb->workbook(), entry.formula, {})));
   out->local_sheet_id = entry.local_sheet_id;
-  out->comment = entry.comment.empty() ? nullptr : entry.comment.c_str();
+  out->comment = c_str_or_null(entry.comment);
   out->hidden = entry.hidden ? 1 : 0;
   return 0;
 }

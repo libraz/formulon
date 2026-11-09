@@ -79,8 +79,7 @@ int render_eval_result(const fm_value_array_t* result, bool want_json, std::ostr
   uint32_t rows = 0;
   uint32_t cols = 0;
   if (auto rc = fm_value_array_get_dimensions(result, &rows, &cols); rc != 0) {
-    emit_last_error(err, "eval");
-    return kExitFailure;
+    return fail_with_last_error(err, "eval", kExitFailure);
   }
   // The JSON document is assembled before anything is written so a failure
   // leaves `out` untouched.
@@ -93,8 +92,7 @@ int render_eval_result(const fm_value_array_t* result, bool want_json, std::ostr
       fm_value_t value{};
       const size_t index = static_cast<size_t>(row) * cols + col;
       if (auto rc = fm_value_array_get_value_at(result, index, &value); rc != 0) {
-        emit_last_error(err, "eval");
-        return rc;
+        return fail_with_last_error(err, "eval", rc);
       }
       if (want_json) {
         doc += (col != 0 ? "," : "") + render_value_json(value);
@@ -130,8 +128,7 @@ int report_eval_failure(std::ostream& err) {
         << '\n';
     return kExitDataErr;
   }
-  emit_last_error(err, "eval");
-  return kExitFailure;
+  return fail_with_last_error(err, "eval", kExitFailure);
 }
 
 // Reads the formula from stdin, without its trailing line break.
@@ -248,8 +245,7 @@ int run_eval(const ArgList& args, std::ostream& out, std::ostream& err) {
       return rc;
     }
     if (auto rc = fm_workbook_set_calc_mode(wb.handle, FM_CALC_MODE_AUTO); rc != 0) {
-      emit_last_error(err, "eval");
-      return kExitFailure;
+      return fail_with_last_error(err, "eval", kExitFailure);
     }
     if (sheet_spec.has_value()) {
       if (auto rc = resolve_sheet(wb.handle, *sheet_spec, &sheet_index, err, "eval"); rc != 0) {
@@ -258,24 +254,20 @@ int run_eval(const ArgList& args, std::ostream& out, std::ostream& err) {
     }
   } else {
     if (auto rc = fm_workbook_create_empty(&wb.handle); rc != 0) {
-      emit_last_error(err, "eval");
-      return kExitFailure;
+      return fail_with_last_error(err, "eval", kExitFailure);
     }
     if (auto rc = apply_shared_options(wb.handle, shared); rc != 0) {
-      emit_last_error(err, "eval");
-      return kExitFailure;
+      return fail_with_last_error(err, "eval", kExitFailure);
     }
     if (auto rc = fm_workbook_add_sheet(wb.handle, "Sheet1", 0, &sheet_index); rc != 0) {
-      emit_last_error(err, "eval");
-      return kExitFailure;
+      return fail_with_last_error(err, "eval", kExitFailure);
     }
   }
   if (local) {
     const char* profile_id = nullptr;
     const char* canonical = nullptr;
     if (auto rc = fm_workbook_get_profile_id(wb.handle, &profile_id); rc != 0) {
-      emit_last_error(err, "eval");
-      return kExitFailure;
+      return fail_with_last_error(err, "eval", kExitFailure);
     }
     if (auto rc = fm_canonicalize_formula(formula_str.c_str(), profile_id, &canonical); rc != 0) {
       return report_eval_failure(err);

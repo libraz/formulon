@@ -362,9 +362,9 @@ enum class PatchKey : int32_t {
   kSet = 2,    ///< Any other value.
 };
 
-/// Classifies `value`, read from a patch, as `PatchKey`. When `nullable` is
-/// false a `null` records a TypeError on `reader` and reads as `kKeep`.
-PatchKey ClassifyPatchKey(CheckedSpecReader& reader, const Napi::Value& value, const char* key, bool nullable);
+/// Classifies `value`, read from a patch, as `PatchKey`: `undefined` keeps, `null` clears (the C ABI refuses it on
+/// a field that cannot be cleared), anything else sets.
+PatchKey ClassifyPatchKey(CheckedSpecReader& reader, const Napi::Value& value);
 
 /// Reads `spec[key]` as one patch field and returns its op: an absent key keeps, `null` clears (a TypeError when
 /// the field is not clearable), any other value is read into `*out` and sets. The string form copies into `*store`
@@ -373,15 +373,16 @@ fm_patch_op_t PatchBool(CheckedSpecReader& reader, const Napi::Object& spec, con
 fm_patch_op_t PatchI32(CheckedSpecReader& reader, const Napi::Object& spec, const char* key, int32_t* out);
 fm_patch_op_t PatchU32(CheckedSpecReader& reader, const Napi::Object& spec, const char* key, uint32_t* out);
 fm_patch_op_t PatchI64(CheckedSpecReader& reader, const Napi::Object& spec, const char* key, int64_t* out);
-fm_patch_op_t PatchColor(CheckedSpecReader& reader, const Napi::Object& spec, const char* key, bool nullable,
-                         fm_color_t* out);
+fm_patch_op_t PatchColor(CheckedSpecReader& reader, const Napi::Object& spec, const char* key, fm_color_t* out);
 /// `PatchDouble` for a field `null` clears.
 fm_patch_op_t PatchNullableDouble(CheckedSpecReader& reader, const Napi::Object& spec, const char* key, double* out);
 /// `PatchI32` for a field `null` clears.
 fm_patch_op_t PatchNullableI32(CheckedSpecReader& reader, const Napi::Object& spec, const char* key, int32_t* out);
+/// `PatchU32` for a field `null` clears.
+fm_patch_op_t PatchNullableU32(CheckedSpecReader& reader, const Napi::Object& spec, const char* key, uint32_t* out);
 fm_patch_op_t PatchDouble(CheckedSpecReader& reader, const Napi::Object& spec, const char* key, double* out);
-fm_patch_op_t PatchString(CheckedSpecReader& reader, const Napi::Object& spec, const char* key, bool nullable,
-                          std::string* store, const char** out);
+fm_patch_op_t PatchString(CheckedSpecReader& reader, const Napi::Object& spec, const char* key, std::string* store,
+                          const char** out);
 
 /// Reads a `CellRect` `{ firstRow, firstCol, lastRow, lastCol }` object; every
 /// field is required.

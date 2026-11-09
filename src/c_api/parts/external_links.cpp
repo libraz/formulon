@@ -11,6 +11,7 @@
 #include "utils/error.h"
 #include "workbook.h"
 
+using formulon::c_api::parts::c_str_or_null;
 using formulon::c_api::parts::check_index;
 using formulon::c_api::parts::check_record_size;
 using formulon::c_api::parts::clear_last_error;
@@ -42,7 +43,7 @@ extern "C" fm_status_t fm_workbook_get_external_link_at(const fm_workbook_t* wb,
   out->book_number = rec.index;
   out->rel_id = rec.rel_id.c_str();
   out->part_path = rec.part_path.c_str();
-  out->target = rec.target.empty() ? nullptr : rec.target.c_str();
+  out->target = c_str_or_null(rec.target);
   out->target_external = rec.target_external ? 1 : 0;
   switch (rec.kind) {
     case formulon::ExternalLinkRecord::Kind::kExternalBook:

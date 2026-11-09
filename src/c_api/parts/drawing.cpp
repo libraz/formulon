@@ -49,6 +49,7 @@ using formulon::c_api::parts::plan_add_anchor;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::set_last_error;
 using formulon::c_api::parts::store_cstr;
+using formulon::c_api::parts::text_or_empty;
 using formulon::c_api::parts::TextStore;
 using formulon::c_api::parts::to_c;
 
@@ -463,8 +464,8 @@ extern "C" fm_status_t fm_sheet_add_picture(fm_workbook_t* wb, size_t sheet_inde
     return rc;
   }
   formulon::ImageInsertOptions model;
-  model.name = opts->name != nullptr ? opts->name : "";
-  model.descr = opts->description != nullptr ? opts->description : "";
+  model.name = text_or_empty(opts->name);
+  model.descr = text_or_empty(opts->description);
   model.anchor_kind = plan.kind;
   model.edit_as = plan.edit_as;
   model.row = plan.from.row;

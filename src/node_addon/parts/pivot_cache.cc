@@ -359,18 +359,7 @@ Napi::Value Workbook::PivotCacheUpdateOptions(const Napi::CallbackInfo& info) {
     o.save_data = save_data ? 1 : 0;
   }
   // `null` is the automatic limit (no attribute).
-  const Napi::Value limit = reader.Get(spec, "missingItemsLimit");
-  switch (ClassifyPatchKey(reader, limit, "missingItemsLimit", true)) {
-    case PatchKey::kClear:
-      o.missing_items_limit_op = FM_PATCH_OP_CLEAR;
-      break;
-    case PatchKey::kSet:
-      o.missing_items_limit_op = FM_PATCH_OP_SET;
-      o.missing_items_limit = reader.U32(limit, "missingItemsLimit", 0U);
-      break;
-    case PatchKey::kKeep:
-      break;
-  }
+  o.missing_items_limit_op = PatchNullableU32(reader, spec, "missingItemsLimit", &o.missing_items_limit);
   const bool refresh_on_load = reader.Bool(spec, "refreshOnLoad", false, &present);
   if (present) {
     o.refresh_on_load_op = FM_PATCH_OP_SET;

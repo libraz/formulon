@@ -56,6 +56,9 @@ std::vector<LossCounter> write_loss_counters(const fm_save_diagnostics_info_t& d
 /// context) to `err` as one line, prefixed with `subcommand`.
 void emit_last_error(std::ostream& err, std::string_view subcommand);
 
+/// `emit_last_error`, then returns `exit_code`.
+int fail_with_last_error(std::ostream& err, std::string_view subcommand, int exit_code);
+
 }  // namespace cli
 }  // namespace formulon
 

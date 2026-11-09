@@ -236,47 +236,26 @@ Napi::Value Workbook::UpdateSheetProtection(const Napi::CallbackInfo& info) {
   CheckedSpecReader reader(env);
   std::string text[4];
   fm_sheet_protection_patch_t p = FM_STRUCT_INIT(fm_sheet_protection_patch_t);
-  const auto text_field = [&](const char* key, std::string* store, fm_patch_op_t* op, const char** out) {
-    const Napi::Value v = reader.Get(in, key);
-    *op = static_cast<fm_patch_op_t>(ClassifyPatchKey(reader, v, key, true));
-    if (*op == FM_PATCH_OP_SET && reader.String(v, key, store)) {
-      *out = store->c_str();
-    }
-  };
-  // `tristate` fields take FM_TRISTATE_FALSE / TRUE, the others 0 / 1.
-  const auto flag_field = [&](const char* key, fm_patch_op_t* op, int32_t* out) {
-    const Napi::Value v = reader.Get(in, key);
-    *op = static_cast<fm_patch_op_t>(ClassifyPatchKey(reader, v, key, false));
-    if (*op == FM_PATCH_OP_SET) {
-      *out = reader.Bool(v, key, false) ? 1 : 0;
-    }
-  };
-  text_field("algorithmName", &text[0], &p.algorithm_name_op, &p.algorithm_name);
-  text_field("hashValue", &text[1], &p.hash_value_op, &p.hash_value);
-  text_field("saltValue", &text[2], &p.salt_value_op, &p.salt_value);
-  text_field("legacyPasswordHash", &text[3], &p.legacy_password_hash_op, &p.legacy_password_hash);
-  {
-    const Napi::Value v = reader.Get(in, "spinCount");
-    p.spin_count_op = static_cast<fm_patch_op_t>(ClassifyPatchKey(reader, v, "spinCount", true));
-    if (p.spin_count_op == FM_PATCH_OP_SET) {
-      p.spin_count = reader.U32(v, "spinCount", 0U);
-    }
-  }
-  flag_field("allowEditObjects", &p.allow_edit_objects_op, &p.allow_edit_objects);
-  flag_field("allowEditScenarios", &p.allow_edit_scenarios_op, &p.allow_edit_scenarios);
-  flag_field("allowFormatCells", &p.allow_format_cells_op, &p.allow_format_cells);
-  flag_field("allowFormatColumns", &p.allow_format_columns_op, &p.allow_format_columns);
-  flag_field("allowFormatRows", &p.allow_format_rows_op, &p.allow_format_rows);
-  flag_field("allowInsertColumns", &p.allow_insert_columns_op, &p.allow_insert_columns);
-  flag_field("allowInsertRows", &p.allow_insert_rows_op, &p.allow_insert_rows);
-  flag_field("allowInsertHyperlinks", &p.allow_insert_hyperlinks_op, &p.allow_insert_hyperlinks);
-  flag_field("allowDeleteColumns", &p.allow_delete_columns_op, &p.allow_delete_columns);
-  flag_field("allowDeleteRows", &p.allow_delete_rows_op, &p.allow_delete_rows);
-  flag_field("allowSelectLockedCells", &p.allow_select_locked_cells_op, &p.allow_select_locked_cells);
-  flag_field("allowSelectUnlockedCells", &p.allow_select_unlocked_cells_op, &p.allow_select_unlocked_cells);
-  flag_field("allowSort", &p.allow_sort_op, &p.allow_sort);
-  flag_field("allowAutoFilter", &p.allow_auto_filter_op, &p.allow_auto_filter);
-  flag_field("allowPivotTables", &p.allow_pivot_tables_op, &p.allow_pivot_tables);
+  p.algorithm_name_op = PatchString(reader, in, "algorithmName", &text[0], &p.algorithm_name);
+  p.hash_value_op = PatchString(reader, in, "hashValue", &text[1], &p.hash_value);
+  p.salt_value_op = PatchString(reader, in, "saltValue", &text[2], &p.salt_value);
+  p.legacy_password_hash_op = PatchString(reader, in, "legacyPasswordHash", &text[3], &p.legacy_password_hash);
+  p.spin_count_op = PatchNullableU32(reader, in, "spinCount", &p.spin_count);
+  p.allow_edit_objects_op = PatchBool(reader, in, "allowEditObjects", &p.allow_edit_objects);
+  p.allow_edit_scenarios_op = PatchBool(reader, in, "allowEditScenarios", &p.allow_edit_scenarios);
+  p.allow_format_cells_op = PatchBool(reader, in, "allowFormatCells", &p.allow_format_cells);
+  p.allow_format_columns_op = PatchBool(reader, in, "allowFormatColumns", &p.allow_format_columns);
+  p.allow_format_rows_op = PatchBool(reader, in, "allowFormatRows", &p.allow_format_rows);
+  p.allow_insert_columns_op = PatchBool(reader, in, "allowInsertColumns", &p.allow_insert_columns);
+  p.allow_insert_rows_op = PatchBool(reader, in, "allowInsertRows", &p.allow_insert_rows);
+  p.allow_insert_hyperlinks_op = PatchBool(reader, in, "allowInsertHyperlinks", &p.allow_insert_hyperlinks);
+  p.allow_delete_columns_op = PatchBool(reader, in, "allowDeleteColumns", &p.allow_delete_columns);
+  p.allow_delete_rows_op = PatchBool(reader, in, "allowDeleteRows", &p.allow_delete_rows);
+  p.allow_select_locked_cells_op = PatchBool(reader, in, "allowSelectLockedCells", &p.allow_select_locked_cells);
+  p.allow_select_unlocked_cells_op = PatchBool(reader, in, "allowSelectUnlockedCells", &p.allow_select_unlocked_cells);
+  p.allow_sort_op = PatchBool(reader, in, "allowSort", &p.allow_sort);
+  p.allow_auto_filter_op = PatchBool(reader, in, "allowAutoFilter", &p.allow_auto_filter);
+  p.allow_pivot_tables_op = PatchBool(reader, in, "allowPivotTables", &p.allow_pivot_tables);
   if (!reader.ok()) {
     return env.Undefined();
   }

@@ -89,34 +89,28 @@ int run_paginate(const ArgList& args, std::ostream& out, std::ostream& err) {
   }
   PaginationGuard pagination;
   if (const auto status = fm_sheet_paginate(workbook.handle, sheet_index, &pagination.handle); status != 0) {
-    emit_last_error(err, "paginate");
-    return status;
+    return fail_with_last_error(err, "paginate", status);
   }
 
   std::size_t page_count = 0;
   if (const auto status = fm_pagination_get_page_count(pagination.handle, &page_count); status != 0) {
-    emit_last_error(err, "paginate");
-    return status;
+    return fail_with_last_error(err, "paginate", status);
   }
   const char* sheet_name = nullptr;
   if (const auto status = fm_workbook_get_sheet_name(workbook.handle, sheet_index, &sheet_name); status != 0) {
-    emit_last_error(err, "paginate");
-    return status;
+    return fail_with_last_error(err, "paginate", status);
   }
   std::size_t print_area_count = 0;
   if (const auto status = fm_pagination_get_print_area_count(pagination.handle, &print_area_count); status != 0) {
-    emit_last_error(err, "paginate");
-    return status;
+    return fail_with_last_error(err, "paginate", status);
   }
   std::vector<std::string> print_areas;
   for (std::size_t i = 0; i < print_area_count; ++i) {
     fm_cell_rect_t range{};
     if (const auto status = fm_pagination_get_print_area_at(pagination.handle, i, &range); status != 0) {
-      emit_last_error(err, "paginate");
-      return status;
+      return fail_with_last_error(err, "paginate", status);
     }
-    print_areas.push_back(format_a1(range.first_row, range.first_col) + ':' +
-                          format_a1(range.last_row, range.last_col));
+    print_areas.push_back(format_range_a1(range));
   }
   const auto collect_breaks = [&](std::vector<std::string>& positions, auto record, auto position, auto count_fn,
                                   auto at_fn) -> bool {
@@ -149,11 +143,9 @@ int run_paginate(const ArgList& args, std::ostream& out, std::ostream& err) {
   for (std::size_t i = 0; i < page_count; ++i) {
     fm_page_layout_info_t page = FM_STRUCT_INIT(fm_page_layout_info_t);
     if (const auto status = fm_pagination_get_page_at(pagination.handle, i, &page); status != 0) {
-      emit_last_error(err, "paginate");
-      return status;
+      return fail_with_last_error(err, "paginate", status);
     }
-    pages.push_back(format_a1(page.rect.first_row, page.rect.first_col) + ':' +
-                    format_a1(page.rect.last_row, page.rect.last_col));
+    pages.push_back(format_range_a1(page.rect));
   }
 
   const auto join = [](const std::vector<std::string>& items, bool quote) {

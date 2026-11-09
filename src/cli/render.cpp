@@ -22,6 +22,10 @@ std::string format_a1(std::uint32_t row, std::uint32_t col) {
   return out;
 }
 
+std::string format_range_a1(const fm_cell_rect_t& rect) {
+  return format_a1(rect.first_row, rect.first_col) + ':' + format_a1(rect.last_row, rect.last_col);
+}
+
 namespace {
 
 // Maps the int32 ordinal carried in `fm_value_t::u.error_code` back

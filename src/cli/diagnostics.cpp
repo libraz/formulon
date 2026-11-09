@@ -125,5 +125,10 @@ void emit_last_error(std::ostream& err, std::string_view subcommand) {
   err << '\n';
 }
 
+int fail_with_last_error(std::ostream& err, std::string_view subcommand, int exit_code) {
+  emit_last_error(err, subcommand);
+  return exit_code;
+}
+
 }  // namespace cli
 }  // namespace formulon

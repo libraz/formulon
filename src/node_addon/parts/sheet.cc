@@ -460,7 +460,7 @@ Napi::Value Workbook::UpdateTableStyleOptions(const Napi::CallbackInfo& info) {
   CheckedSpecReader reader(env);
   fm_table_style_options_patch_t patch = FM_STRUCT_INIT(fm_table_style_options_patch_t);
   std::string style_name;
-  patch.style_name_op = PatchString(reader, spec, "styleName", true, &style_name, &patch.style_name);
+  patch.style_name_op = PatchString(reader, spec, "styleName", &style_name, &patch.style_name);
   patch.show_first_column_op = PatchBool(reader, spec, "showFirstColumn", &patch.show_first_column);
   patch.show_last_column_op = PatchBool(reader, spec, "showLastColumn", &patch.show_last_column);
   patch.show_row_stripes_op = PatchBool(reader, spec, "showRowStripes", &patch.show_row_stripes);
