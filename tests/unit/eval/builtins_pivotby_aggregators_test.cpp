@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <string>
 #include <string_view>
+#include <utility>
 
 #include "builtins_pivotby_test_helpers.h"
 #include "util/test_log_recorder.h"
@@ -207,19 +208,31 @@ TEST(PivotBy, ZeroParamLambdaStillRejected) {
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
-TEST(PivotBy, AggregatorReturningArrayYieldsCalcInThatCell) {
-  // SEQUENCE returns multi-cell; each body cell becomes #CALC!.
+TEST(PivotBy, AggregatorReturningArrayYieldsValueInThatCell) {
+  // Mac Excel 365: an array result is #VALUE! per body cell; (B, Y) has no data and is empty text.
   const Value v = EvalSrc(
       "=PIVOTBY({\"A\";\"A\";\"B\"}, {\"X\";\"Y\";\"X\"},"
       "         {1;2;3}, LAMBDA(v, SEQUENCE(1, 3)), 0, 0,, 0)");
   ASSERT_TRUE(v.is_array()) << v.debug_to_string();
-  ASSERT_TRUE(Cell(v, 1, 1).is_error());
-  EXPECT_EQ(Cell(v, 1, 1).as_error(), ErrorCode::Calc);
-  ASSERT_TRUE(Cell(v, 1, 2).is_error());
-  EXPECT_EQ(Cell(v, 1, 2).as_error(), ErrorCode::Calc);
-  // (B, X) is non-empty so the aggregator runs and surfaces #CALC! too.
-  ASSERT_TRUE(Cell(v, 2, 1).is_error());
-  EXPECT_EQ(Cell(v, 2, 1).as_error(), ErrorCode::Calc);
+  for (const auto& [r, c] : {std::pair{1U, 1U}, std::pair{1U, 2U}, std::pair{2U, 1U}}) {
+    ASSERT_TRUE(Cell(v, r, c).is_error()) << r << "," << c;
+    EXPECT_EQ(Cell(v, r, c).as_error(), ErrorCode::Value) << r << "," << c;
+  }
+  ASSERT_TRUE(Cell(v, 2, 2).is_text());
+  EXPECT_EQ(Cell(v, 2, 2).as_text(), "");
+}
+
+TEST(PivotBy, EtaIfIsValueInEveryValueCell) {
+  // Mac Excel 365: IF as the function is #VALUE! in every value cell, totals included.
+  const Value v = EvalSrc("=PIVOTBY({\"a\";\"a\";\"b\"}, {\"x\";\"y\";\"x\"}, {1;0;2}, IF)");
+  ASSERT_TRUE(v.is_array()) << v.debug_to_string();
+  for (const auto& [r, c] : {std::pair{1U, 1U}, std::pair{1U, 2U}, std::pair{1U, 3U}, std::pair{2U, 1U},
+                             std::pair{2U, 3U}, std::pair{3U, 1U}, std::pair{3U, 2U}, std::pair{3U, 3U}}) {
+    ASSERT_TRUE(Cell(v, r, c).is_error()) << r << "," << c;
+    EXPECT_EQ(Cell(v, r, c).as_error(), ErrorCode::Value) << r << "," << c;
+  }
+  ASSERT_TRUE(Cell(v, 2, 2).is_text());
+  EXPECT_EQ(Cell(v, 2, 2).as_text(), "");
 }
 
 }  // namespace

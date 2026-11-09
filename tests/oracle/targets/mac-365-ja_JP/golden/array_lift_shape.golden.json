@@ -1,0 +1,1057 @@
+{
+  "suite": "array_lift_shape",
+  "description": "Result shape of a scalar function lifted over its arguments, and of GROUPBY/PIVOTBY aggregator results. An array in any lifted argument keeps the result an array, 1x1 included (TYPE 64), through operators, LET, LAMBDA and nesting; a 1x1 range argument and INDEX(array,1) are single cells (TYPE 1); range-aware reducers return a scalar. A GROUPBY/PIVOTBY aggregator returning an array of any shape is",
+  "environment": {
+    "excel_version": "16.114.4",
+    "excel_locale": "ja-JP",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-11-09T20:04:23Z"
+  },
+  "tolerance": {
+    "abs": 0.0,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "lift_abs_array_constant_type",
+      "formula": "=TYPE(ABS({1}))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 64.0
+      }
+    },
+    {
+      "id": "lift_array_constant_type",
+      "formula": "=TYPE({1})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 64.0
+      }
+    },
+    {
+      "id": "lift_operator_array_type",
+      "formula": "=TYPE({1}+0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 64.0
+      }
+    },
+    {
+      "id": "lift_len_array_type",
+      "formula": "=TYPE(LEN({\"ab\"}))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 64.0
+      }
+    },
+    {
+      "id": "lift_round_first_arg_array_type",
+      "formula": "=TYPE(ROUND({1.5},0))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 64.0
+      }
+    },
+    {
+      "id": "lift_round_second_arg_array_type",
+      "formula": "=TYPE(ROUND(1.5,{0}))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 64.0
+      }
+    },
+    {
+      "id": "lift_round_both_args_array_type",
+      "formula": "=TYPE(ROUND({1.5},{0}))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 64.0
+      }
+    },
+    {
+      "id": "lift_isnumber_array_type",
+      "formula": "=TYPE(ISNUMBER({1}))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 64.0
+      }
+    },
+    {
+      "id": "lift_not_array_type",
+      "formula": "=TYPE(NOT({TRUE}))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 64.0
+      }
+    },
+    {
+      "id": "lift_upper_array_type",
+      "formula": "=TYPE(UPPER({\"a\"}))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 64.0
+      }
+    },
+    {
+      "id": "lift_text_array_type",
+      "formula": "=TYPE(TEXT({1},\"0\"))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 64.0
+      }
+    },
+    {
+      "id": "lift_isnumber_of_lifted_result",
+      "formula": "=ISNUMBER(ABS({1}))",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "lift_abs_sequence_type",
+      "formula": "=TYPE(ABS(SEQUENCE(1)))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 64.0
+      }
+    },
+    {
+      "id": "lift_let_bound_array_type",
+      "formula": "=TYPE(LET(v,{1},ABS(v)))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 64.0
+      }
+    },
+    {
+      "id": "lift_lambda_param_array_type",
+      "formula": "=TYPE(LET(f,LAMBDA(x,ABS(x)),f({1})))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 64.0
+      }
+    },
+    {
+      "id": "lift_map_type",
+      "formula": "=TYPE(MAP({1},LAMBDA(x,ABS(x))))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 64.0
+      }
+    },
+    {
+      "id": "lift_byrow_eta_type",
+      "formula": "=TYPE(BYROW({1},ABS))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 64.0
+      }
+    },
+    {
+      "id": "lift_if_array_condition_type",
+      "formula": "=TYPE(IF({1},1,2))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 64.0
+      }
+    },
+    {
+      "id": "lift_nested_abs_type",
+      "formula": "=TYPE(ABS(ABS({1})))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 64.0
+      }
+    },
+    {
+      "id": "lift_abs_array_cell_value",
+      "formula": "=ABS({-1})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "lift_rows_two_cell_array",
+      "formula": "=ROWS(ABS({1;2}))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "single_abs_one_cell_range_type",
+      "formula": "=TYPE(ABS(A1:A1))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": -2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "single_abs_cell_type",
+      "formula": "=TYPE(ABS(A1))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": -2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "single_nested_abs_one_cell_range_type",
+      "formula": "=TYPE(ABS(ABS(A1:A1)))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": -2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "single_round_one_cell_range_type",
+      "formula": "=TYPE(ROUND(A1:A1,0))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": -2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "single_len_one_cell_range_type",
+      "formula": "=TYPE(LEN(A1:A1))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": -2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "single_isref_lifted_range",
+      "formula": "=ISREF(ABS(A1:A1))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": -2.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "single_index_array_type",
+      "formula": "=TYPE(INDEX({1},1))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "single_abs_index_array_type",
+      "formula": "=TYPE(ABS(INDEX({1},1)))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "single_sum_array_type",
+      "formula": "=TYPE(SUM({1}))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "groupby_eta_if_single_row",
+      "formula": "=GROUPBY({\"a\"},{1},IF,,0)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "a",
+          {
+            "kind": "error",
+            "code": "#VALUE!"
+          }
+        ],
+        "shape": [
+          1,
+          2
+        ]
+      }
+    },
+    {
+      "id": "groupby_eta_if_single_row_false",
+      "formula": "=GROUPBY({\"a\"},{0},IF,,0)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "a",
+          {
+            "kind": "error",
+            "code": "#VALUE!"
+          }
+        ],
+        "shape": [
+          1,
+          2
+        ]
+      }
+    },
+    {
+      "id": "groupby_eta_if_with_total",
+      "formula": "=GROUPBY({\"a\";\"a\";\"b\"},{1;0;2},IF)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "a",
+          {
+            "kind": "error",
+            "code": "#VALUE!"
+          },
+          "b",
+          {
+            "kind": "error",
+            "code": "#VALUE!"
+          },
+          "合計",
+          {
+            "kind": "error",
+            "code": "#VALUE!"
+          }
+        ],
+        "shape": [
+          3,
+          2
+        ]
+      }
+    },
+    {
+      "id": "groupby_eta_if_no_total",
+      "formula": "=GROUPBY({\"a\";\"a\";\"b\"},{1;0;2},IF,,0)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "a",
+          {
+            "kind": "error",
+            "code": "#VALUE!"
+          },
+          "b",
+          {
+            "kind": "error",
+            "code": "#VALUE!"
+          }
+        ],
+        "shape": [
+          2,
+          2
+        ]
+      }
+    },
+    {
+      "id": "pivotby_eta_if",
+      "formula": "=PIVOTBY({\"a\";\"a\";\"b\"},{\"x\";\"y\";\"x\"},{1;0;2},IF)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "",
+          "x",
+          "y",
+          "合計",
+          "a",
+          {
+            "kind": "error",
+            "code": "#VALUE!"
+          },
+          {
+            "kind": "error",
+            "code": "#VALUE!"
+          },
+          {
+            "kind": "error",
+            "code": "#VALUE!"
+          },
+          "b",
+          {
+            "kind": "error",
+            "code": "#VALUE!"
+          },
+          "",
+          {
+            "kind": "error",
+            "code": "#VALUE!"
+          },
+          "合計",
+          {
+            "kind": "error",
+            "code": "#VALUE!"
+          },
+          {
+            "kind": "error",
+            "code": "#VALUE!"
+          },
+          {
+            "kind": "error",
+            "code": "#VALUE!"
+          }
+        ],
+        "shape": [
+          4,
+          4
+        ]
+      }
+    },
+    {
+      "id": "groupby_aggregator_row_array",
+      "formula": "=GROUPBY({\"A\";\"B\"},{1;2},LAMBDA(v,SEQUENCE(1,3)),0,0)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "A",
+          {
+            "kind": "error",
+            "code": "#VALUE!"
+          },
+          "B",
+          {
+            "kind": "error",
+            "code": "#VALUE!"
+          }
+        ],
+        "shape": [
+          2,
+          2
+        ]
+      }
+    },
+    {
+      "id": "pivotby_aggregator_row_array",
+      "formula": "=PIVOTBY({\"A\";\"A\";\"B\"},{\"X\";\"Y\";\"X\"},{1;2;3},LAMBDA(v,SEQUENCE(1,3)),0,0,,0)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "",
+          "X",
+          "Y",
+          "A",
+          {
+            "kind": "error",
+            "code": "#VALUE!"
+          },
+          {
+            "kind": "error",
+            "code": "#VALUE!"
+          },
+          "B",
+          {
+            "kind": "error",
+            "code": "#VALUE!"
+          },
+          ""
+        ],
+        "shape": [
+          3,
+          3
+        ]
+      }
+    },
+    {
+      "id": "groupby_aggregator_identity_two_rows",
+      "formula": "=GROUPBY({\"a\";\"a\"},{1;2},LAMBDA(v,v),,0)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "a",
+          {
+            "kind": "error",
+            "code": "#VALUE!"
+          }
+        ],
+        "shape": [
+          1,
+          2
+        ]
+      }
+    },
+    {
+      "id": "groupby_aggregator_identity_one_row",
+      "formula": "=GROUPBY({\"a\"},{1},LAMBDA(v,v),,0)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "a",
+          {
+            "kind": "error",
+            "code": "#VALUE!"
+          }
+        ],
+        "shape": [
+          1,
+          2
+        ]
+      }
+    },
+    {
+      "id": "groupby_eta_abs_two_rows",
+      "formula": "=GROUPBY({\"a\";\"a\"},{1;2},ABS,,0)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "a",
+          {
+            "kind": "error",
+            "code": "#VALUE!"
+          }
+        ],
+        "shape": [
+          1,
+          2
+        ]
+      }
+    },
+    {
+      "id": "groupby_eta_abs_one_row",
+      "formula": "=GROUPBY({\"a\"},{1},ABS,,0)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "a",
+          {
+            "kind": "error",
+            "code": "#VALUE!"
+          }
+        ],
+        "shape": [
+          1,
+          2
+        ]
+      }
+    },
+    {
+      "id": "groupby_lambda_abs_one_row",
+      "formula": "=GROUPBY({\"a\"},{1},LAMBDA(v,ABS(v)),,0)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "a",
+          {
+            "kind": "error",
+            "code": "#VALUE!"
+          }
+        ],
+        "shape": [
+          1,
+          2
+        ]
+      }
+    },
+    {
+      "id": "groupby_aggregator_computed_one_by_one",
+      "formula": "=GROUPBY({\"a\"},{1},LAMBDA(v,SEQUENCE(1)),,0)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "a",
+          {
+            "kind": "error",
+            "code": "#VALUE!"
+          }
+        ],
+        "shape": [
+          1,
+          2
+        ]
+      }
+    },
+    {
+      "id": "groupby_aggregator_index_scalar",
+      "formula": "=GROUPBY({\"a\"},{1},LAMBDA(v,INDEX(v,1)),,0)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "a",
+          1.0
+        ],
+        "shape": [
+          1,
+          2
+        ]
+      }
+    },
+    {
+      "id": "groupby_aggregator_returns_lambda",
+      "formula": "=GROUPBY({\"a\"},{1},LAMBDA(v,LAMBDA(x,x)),,0)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "a",
+          {
+            "kind": "error",
+            "code": "#CALC!"
+          }
+        ],
+        "shape": [
+          1,
+          2
+        ]
+      }
+    },
+    {
+      "id": "groupby_aggregator_array_with_totals",
+      "formula": "=GROUPBY({\"a\";\"b\"},{1;2},LAMBDA(v,v),,1)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "a",
+          {
+            "kind": "error",
+            "code": "#VALUE!"
+          },
+          "b",
+          {
+            "kind": "error",
+            "code": "#VALUE!"
+          },
+          "合計",
+          {
+            "kind": "error",
+            "code": "#VALUE!"
+          }
+        ],
+        "shape": [
+          3,
+          2
+        ]
+      }
+    },
+    {
+      "id": "groupby_aggregator_two_params_scalar",
+      "formula": "=GROUPBY({\"a\"},{1},LAMBDA(v,w,SUM(v)+100*SUM(w)),,0)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "a",
+          101.0
+        ],
+        "shape": [
+          1,
+          2
+        ]
+      }
+    },
+    {
+      "id": "groupby_aggregator_two_params_array",
+      "formula": "=GROUPBY({\"a\"},{1},LAMBDA(v,w,IF(v,w)),,0)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "a",
+          {
+            "kind": "error",
+            "code": "#VALUE!"
+          }
+        ],
+        "shape": [
+          1,
+          2
+        ]
+      }
+    },
+    {
+      "id": "groupby_eta_iferror",
+      "formula": "=GROUPBY({\"a\"},{1},IFERROR,,0)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "a",
+          {
+            "kind": "error",
+            "code": "#VALUE!"
+          }
+        ],
+        "shape": [
+          1,
+          2
+        ]
+      }
+    },
+    {
+      "id": "ref_spill_one_cell_lifted_type",
+      "formula": "=TYPE(ABS(C1#))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": -2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "C1": {
+          "kind": "formula",
+          "formula": "=SEQUENCE(1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "ref_spill_one_cell_type",
+      "formula": "=TYPE(C1#)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": -2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "C1": {
+          "kind": "formula",
+          "formula": "=SEQUENCE(1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "ref_spill_one_cell_isref",
+      "formula": "=ISREF(C1#)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": -2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "C1": {
+          "kind": "formula",
+          "formula": "=SEQUENCE(1)"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "ref_take_one_cell_lifted_type",
+      "formula": "=TYPE(ABS(TAKE(A1:B2,1,1)))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": -2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "ref_take_one_cell_isref",
+      "formula": "=ISREF(TAKE(A1:B2,1,1))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": -2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "ref_drop_one_cell_lifted_type",
+      "formula": "=TYPE(ABS(DROP(A1:B2,1,1)))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": -2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "ref_offset_one_cell_lifted_type",
+      "formula": "=TYPE(ABS(OFFSET(A1,0,0,1,1)))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": -2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "ref_xlookup_one_cell_lifted_type",
+      "formula": "=TYPE(ABS(XLOOKUP(1,A1:A2,A1:A2)))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": -2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "value_large_array_k_type",
+      "formula": "=TYPE(LARGE({1,2},{1}))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 64.0
+      }
+    },
+    {
+      "id": "value_choosecols_column_lifted_type",
+      "formula": "=TYPE(ABS(CHOOSECOLS(A1:B2,1)))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": -2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 64.0
+      }
+    },
+    {
+      "id": "value_index_row_lifted_type",
+      "formula": "=TYPE(ABS(INDEX(A1:B2,1,0)))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": -2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 64.0
+      }
+    },
+    {
+      "id": "value_filter_one_row_lifted_type",
+      "formula": "=TYPE(ABS(FILTER(A1:A2,A1:A2>0)))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": -2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 64.0
+      }
+    }
+  ]
+}

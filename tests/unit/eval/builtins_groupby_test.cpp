@@ -23,7 +23,7 @@
 //     `sort_order`; mismatched row counts.
 //   * Empty data after filter -> #CALC!.
 //   * Group-key equality and order under the profile's text collation.
-//   * Aggregator returning array -> #CALC! for that cell.
+//   * Aggregator returning an array -> #VALUE!, returning a LAMBDA -> #CALC! for that cell.
 
 #include <array>
 #include <cstdint>
@@ -894,19 +894,62 @@ TEST(GroupBy, AllExcludedAfterFilterYieldsValueError) {
 }
 
 // ---------------------------------------------------------------------------
-// Multi-cell aggregator return -> #CALC! per cell
+// Aggregator results Excel refuses per cell (Mac Excel 365 ja-JP)
 // ---------------------------------------------------------------------------
 
-TEST(GroupBy, AggregatorReturningArrayYieldsCalcInThatCell) {
-  // SEQUENCE returns a multi-cell array. GROUPBY has a single cell per
-  // (group, value-column) slot, so each aggregated cell is #CALC!.
-  // The remaining columns / rows are still rendered.
+// Every array result is #VALUE!, whatever its shape; a LAMBDA result is #CALC!.
+TEST(GroupBy, AggregatorReturningArrayYieldsValueInThatCell) {
   const Value v = EvalSrc("=GROUPBY({\"A\";\"B\"}, {1;2}, LAMBDA(v, SEQUENCE(1, 3)), 0, 0)");
+  ASSERT_TRUE(v.is_array()) << v.debug_to_string();
+  ASSERT_EQ(v.as_array()->cols, 2U);
+  ASSERT_TRUE(Cell(v, 0, 1).is_error());
+  EXPECT_EQ(Cell(v, 0, 1).as_error(), ErrorCode::Value);
+  ASSERT_TRUE(Cell(v, 1, 1).is_error());
+  EXPECT_EQ(Cell(v, 1, 1).as_error(), ErrorCode::Value);
+}
+
+TEST(GroupBy, AggregatorArrayResultOfAnyShapeIsValue) {
+  for (const char* src : {
+           "=GROUPBY({\"a\";\"a\"}, {1;2}, LAMBDA(v, v),, 0)",
+           "=GROUPBY({\"a\"}, {1}, LAMBDA(v, SEQUENCE(1)),, 0)",
+           "=GROUPBY({\"a\"}, {1}, LAMBDA(v, v),, 0)",
+           "=GROUPBY({\"a\"}, {1}, LAMBDA(v, IF(v, 1)),, 0)",
+           "=GROUPBY({\"a\"}, {1}, LAMBDA(v, w, IF(v, w)),, 0)",
+           "=GROUPBY({\"a\"}, {1}, IFERROR,, 0)",
+           "=GROUPBY({\"a\"}, {1}, IF,, 0)",
+           "=GROUPBY({\"a\"}, {0}, IF,, 0)",
+           "=GROUPBY({\"a\";\"a\"}, {1;2}, ABS,, 0)",
+           "=GROUPBY({\"a\"}, {1}, ABS,, 0)",
+           "=GROUPBY({\"a\"}, {1}, LAMBDA(v, ABS(v)),, 0)",
+       }) {
+    const Value v = EvalSrc(src);
+    ASSERT_TRUE(v.is_array()) << src << " " << v.debug_to_string();
+    ASSERT_TRUE(Cell(v, 0, 1).is_error()) << src;
+    EXPECT_EQ(Cell(v, 0, 1).as_error(), ErrorCode::Value) << src;
+  }
+}
+
+TEST(GroupBy, AggregatorReturningLambdaIsCalc) {
+  const Value v = EvalSrc("=GROUPBY({\"a\"}, {1}, LAMBDA(v, LAMBDA(x, x)),, 0)");
   ASSERT_TRUE(v.is_array()) << v.debug_to_string();
   ASSERT_TRUE(Cell(v, 0, 1).is_error());
   EXPECT_EQ(Cell(v, 0, 1).as_error(), ErrorCode::Calc);
-  ASSERT_TRUE(Cell(v, 1, 1).is_error());
-  EXPECT_EQ(Cell(v, 1, 1).as_error(), ErrorCode::Calc);
+}
+
+TEST(GroupBy, ScalarAggregatorResultsAreKept) {
+  EXPECT_EQ(Cell(EvalSrc("=GROUPBY({\"a\"}, {1}, LAMBDA(v, INDEX(v, 1)),, 0)"), 0, 1).as_number(), 1.0);
+  EXPECT_EQ(Cell(EvalSrc("=GROUPBY({\"a\"}, {1}, LAMBDA(v, IF(SUM(v), 1)),, 0)"), 0, 1).as_number(), 1.0);
+  EXPECT_EQ(Cell(EvalSrc("=GROUPBY({\"a\"}, {1}, LAMBDA(v, w, SUM(v) + 100 * SUM(w)),, 0)"), 0, 1).as_number(), 101.0);
+}
+
+TEST(GroupBy, ArrayResultInTotalsIsValue) {
+  const Value v = EvalSrc("=GROUPBY({\"a\";\"b\"}, {1;2}, LAMBDA(v, v),, 1)");
+  ASSERT_TRUE(v.is_array()) << v.debug_to_string();
+  ASSERT_EQ(v.as_array()->rows, 3U);
+  for (std::uint32_t r = 0; r < 3U; ++r) {
+    ASSERT_TRUE(Cell(v, r, 1).is_error()) << r;
+    EXPECT_EQ(Cell(v, r, 1).as_error(), ErrorCode::Value) << r;
+  }
 }
 
 // Results from Excel (ja-JP), cell by cell.

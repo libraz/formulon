@@ -50,9 +50,7 @@ std::uint32_t aggregator_arity(const LambdaValue& lv, const FunctionRegistry& re
   std::uint32_t required = lv.param_count - lv.optional_count;
   if (!lv.builtin.empty()) {
     std::uint32_t max_arity = 0U;
-    if (strings::case_insensitive_eq(lv.builtin, "IF")) {
-      required = 1U;
-    } else if (!find_lazy_arity(lv.builtin, &required, &max_arity)) {
+    if (!find_lazy_arity(lv.builtin, &required, &max_arity)) {
       const FunctionDef* def = registry.lookup(lv.builtin);
       required = def != nullptr ? def->min_arity : 0U;
     }
@@ -737,7 +735,11 @@ Value invoke_aggregator_for_group(const Aggregator& agg, std::uint32_t value_col
   const Value args[2] = {Value::array(slice), all != nullptr ? Value::array(all) : Value::blank()};
   const parser::AstNode* ast_args[2] = {slice_ast, all_ast};
   const Value res = invoke_lambda_values_with_ast(agg.fn, agg.arity, args, ast_args, arena, registry, ctx);
-  if (res.is_array() || res.is_lambda()) {
+  // Excel refuses an array result of any shape with #VALUE! and a LAMBDA result with #CALC!.
+  if (res.is_array()) {
+    return Value::error(ErrorCode::Value);
+  }
+  if (res.is_lambda()) {
     return Value::error(ErrorCode::Calc);
   }
   return res;
