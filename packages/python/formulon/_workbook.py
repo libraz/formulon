@@ -5775,8 +5775,8 @@ def _cell_xf_fields(record: Union[CellXfInput, CellXf]) -> Dict[str, object]:
 def _tristate_default(flag: Optional[bool]) -> int:  # noqa: FBT001 -- private tri-state encoder
     """Map an optional flag to ``fm_tristate_t``: ``None`` is ``DEFAULT`` (Excel's default), then ``FALSE`` / ``TRUE``."""
     if flag is None:
-        return S.TRISTATE_DEFAULT
-    return S.TRISTATE_TRUE if flag else S.TRISTATE_FALSE
+        return 0
+    return 2 if flag else 1
 
 
 def _tristate(flag: Optional[bool]) -> int:  # noqa: FBT001 -- private tri-state encoder
