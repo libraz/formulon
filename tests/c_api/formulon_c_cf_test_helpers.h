@@ -87,6 +87,15 @@ template <typename MutateFn>
   handle->workbook().mutable_styles().dxfs.resize(count);
 }
 
+// The id of the rule at flattened position `position` on `sheet`; empty when there is none.
+[[maybe_unused]] inline std::string CfRuleIdAt(const fm_workbook_t* handle, std::size_t sheet, std::size_t position) {
+  fm_cf_rule_t out = FM_STRUCT_INIT(fm_cf_rule_t);
+  if (fm_sheet_get_cf_rule_at(handle, sheet, position, &out) != 0) {
+    return std::string();
+  }
+  return out.id;
+}
+
 [[maybe_unused]] inline formulon::cf::CFCellRange MakeRange(std::uint32_t r1, std::uint32_t c1, std::uint32_t r2,
                                                             std::uint32_t c2) {
   return {{r1, c1}, {r2, c2}};

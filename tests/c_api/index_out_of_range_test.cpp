@@ -71,6 +71,14 @@ TEST_F(FormulonCApiIndexOutOfRange, TablePivotAndSparklineIndicesReportTheSameSt
   EXPECT_EQ(fm_sheet_get_sparkline_group_at(wb(), 0, 0, &group), FM_STATUS_INDEX_OUT_OF_RANGE);
 }
 
+// The positional reads of keyed collections stay positional.
+TEST_F(FormulonCApiIndexOutOfRange, PositionalReadsOfKeyedCollectionsReportTheSameStatus) {
+  fm_cf_rule_t rule = FM_STRUCT_INIT(fm_cf_rule_t);
+  EXPECT_EQ(fm_sheet_get_cf_rule_at(wb(), 0, 0, &rule), FM_STATUS_INDEX_OUT_OF_RANGE);
+  fm_protected_range_t range = FM_STRUCT_INIT(fm_protected_range_t);
+  EXPECT_EQ(fm_sheet_get_protected_range_at(wb(), 0, 0, &range), FM_STATUS_INDEX_OUT_OF_RANGE);
+}
+
 TEST_F(FormulonCApiIndexOutOfRange, MutatorsRefuseAnIndexPastTheCountBeforeChangingAnything) {
   fm_font_t font{};
   ASSERT_EQ(fm_workbook_get_font_at(wb(), 0, &font), 0);

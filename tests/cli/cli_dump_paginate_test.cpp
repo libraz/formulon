@@ -44,7 +44,7 @@ TEST(FormulonCli, DumpAndPaginateReportLoadLossesTheWayRecalcDoes) {
     const std::vector<std::string> expected = read_diagnostic_lines(recalc.stderr_text);
     ASSERT_FALSE(expected.empty()) << "fixture loads losslessly: " << fixture;
 
-    const CliRun dump = run_cli({"dump", "--sheets", fixture});
+    const CliRun dump = run_cli({"dump", "--view", "sheets", fixture});
     EXPECT_EQ(dump.exit_code, 0) << fixture << " stderr=" << dump.stderr_text;
     EXPECT_EQ(read_diagnostic_lines(dump.stderr_text), expected) << fixture;
     EXPECT_NE(dump.stderr_text.find("formulon: dump: warning:"), std::string::npos) << dump.stderr_text;
@@ -64,7 +64,7 @@ TEST(FormulonCli, DumpReportsUndecodedCountsBeforeItsSnapshot) {
   PathGuard guard(fixture);
   ASSERT_TRUE(write_dropped_xlsb_fixture(fixture));
 
-  const CliRun merged = run_cli({"dump", "--sheets", fixture}, /*merge_streams=*/true);
+  const CliRun merged = run_cli({"dump", "--view", "sheets", fixture}, /*merge_streams=*/true);
   ASSERT_EQ(merged.exit_code, 0) << merged.stdout_text;
   const std::size_t warning = merged.stdout_text.find("undecoded_part_count=1");
   const std::size_t snapshot = merged.stdout_text.find("Sheet1");
@@ -77,7 +77,7 @@ TEST(FormulonCli, DumpSheetsListsInOrder) {
   std::string in = temp_path("dump_sheets.xlsx");
   PathGuard g_in(in);
   ASSERT_TRUE(write_fixture_workbook(in));
-  CliRun r = run_cli({"dump", "--sheets", in});
+  CliRun r = run_cli({"dump", "--view", "sheets", in});
   EXPECT_EQ(r.exit_code, 0) << "stderr=" << r.stderr_text;
   EXPECT_EQ(r.stdout_text, "Sheet1\n");
 }
@@ -86,18 +86,18 @@ TEST(FormulonCli, DumpFormulasListsFormulaCells) {
   std::string in = temp_path("dump_formulas.xlsx");
   PathGuard g_in(in);
   ASSERT_TRUE(write_fixture_workbook(in));
-  CliRun r = run_cli({"dump", "--formulas", in});
+  CliRun r = run_cli({"dump", "--view", "formulas", in});
   EXPECT_EQ(r.exit_code, 0) << "stderr=" << r.stderr_text;
   // B1 = `=A1+1` is the only formula; A1 is a literal.
   EXPECT_NE(r.stdout_text.find("Sheet1!B1"), std::string::npos) << "stdout=" << r.stdout_text;
-  EXPECT_EQ(r.stdout_text.find("Sheet1!A1"), std::string::npos) << "literal A1 must not appear in --formulas dump";
+  EXPECT_EQ(r.stdout_text.find("Sheet1!A1"), std::string::npos) << "literal A1 must not appear in the formulas view";
 }
 
 TEST(FormulonCli, DumpMetadataPrintsSectionHeaders) {
   std::string in = temp_path("dump_metadata.xlsx");
   PathGuard g_in(in);
   ASSERT_TRUE(write_fixture_workbook(in));
-  CliRun r = run_cli({"dump", "--metadata", in});
+  CliRun r = run_cli({"dump", "--view", "metadata", in});
   EXPECT_EQ(r.exit_code, 0) << "stderr=" << r.stderr_text;
   EXPECT_NE(r.stdout_text.find("[defined_names]"), std::string::npos);
   EXPECT_NE(r.stdout_text.find("[tables]"), std::string::npos);
@@ -108,7 +108,7 @@ TEST(FormulonCli, DumpWriteFailureReturnsOutputError) {
   std::string in = temp_path("dump_write_failure.xlsx");
   PathGuard guard(in);
   ASSERT_TRUE(write_fixture_workbook(in));
-  CliRun r = run_cli({"dump", "--sheets", in}, /*merge_streams=*/false, /*close_stdout=*/true);
+  CliRun r = run_cli({"dump", "--view", "sheets", in}, /*merge_streams=*/false, /*close_stdout=*/true);
   EXPECT_EQ(r.exit_code, 74);
   EXPECT_NE(r.stderr_text.find("failed to write output"), std::string::npos);
 }
@@ -117,14 +117,14 @@ TEST(FormulonCli, DumpValuesEscapesEmbeddedNewlines) {
   std::string in = temp_path("dump_escaped.xlsx");
   PathGuard guard(in);
   ASSERT_TRUE(write_fixture_workbook(in, "first\nsecond"));
-  CliRun r = run_cli({"dump", "--values", in});
+  CliRun r = run_cli({"dump", "--view", "values", in});
   EXPECT_EQ(r.exit_code, 0) << "stderr=" << r.stderr_text;
   EXPECT_NE(r.stdout_text.find("Sheet1!A2 first\\nsecond\n"), std::string::npos) << r.stdout_text;
   EXPECT_EQ(r.stdout_text.find("first\nsecond"), std::string::npos) << r.stdout_text;
 }
 
 TEST(FormulonCli, DumpMissingInputExits64) {
-  CliRun r = run_cli({"dump", "--sheets"});
+  CliRun r = run_cli({"dump", "--view", "sheets"});
   EXPECT_EQ(r.exit_code, 64);
 }
 
@@ -133,10 +133,10 @@ TEST(FormulonCli, DumpOptionTerminatorAcceptsDashLeadingRelativePath) {
   PathGuard guard(input);
   ASSERT_TRUE(write_fixture_workbook(input));
 
-  const CliRun without_terminator = run_cli({"dump", "--sheets", input});
+  const CliRun without_terminator = run_cli({"dump", "--view", "sheets", input});
   EXPECT_EQ(without_terminator.exit_code, 64);
 
-  const CliRun with_terminator = run_cli({"dump", "--sheets", "--", input});
+  const CliRun with_terminator = run_cli({"dump", "--view", "sheets", "--", input});
   EXPECT_EQ(with_terminator.exit_code, 0) << with_terminator.stderr_text;
   EXPECT_EQ(with_terminator.stdout_text, "Sheet1\n");
 }
@@ -191,7 +191,7 @@ TEST(FormulonCli, DumpMetadataDistinguishesDefinedNameScope) {
   fm_buffer_destroy(bytes);
   fm_workbook_destroy(wb);
 
-  CliRun r = run_cli({"dump", "--metadata", in});
+  CliRun r = run_cli({"dump", "--view", "metadata", in});
   EXPECT_EQ(r.exit_code, 0) << "stderr=" << r.stderr_text;
   // Workbook-scoped names print bare; sheet-scoped names are prefixed
   // with `SheetName!` so the two scopes don't collide in the dump.
@@ -205,7 +205,7 @@ TEST(FormulonCli, DumpMetadataRecoversFromOutOfRangeDefinedNameScope) {
   PathGuard guard(in);
   ASSERT_TRUE(write_out_of_range_defined_names_fixture(in));
 
-  CliRun r = run_cli({"dump", "--metadata", in});
+  CliRun r = run_cli({"dump", "--view", "metadata", in});
   EXPECT_EQ(r.exit_code, 0) << "stderr=" << r.stderr_text;
   EXPECT_TRUE(r.stderr_text.empty());
   EXPECT_EQ(r.stdout_text,
@@ -255,10 +255,10 @@ TEST(FormulonCli, DumpRangeNarrowsTheCellViews) {
   const std::string in = temp_path("dump_range.xlsx");
   PathGuard guard(in);
   ASSERT_TRUE(write_fixture_workbook(in, "text"));  // A1 = 7, B1 = =A1+1, A2 = text
-  const CliRun values = run_cli({"dump", "--values", "--range", "B1:B1", in});
+  const CliRun values = run_cli({"dump", "--view", "values", "--range", "B1:B1", in});
   EXPECT_EQ(values.exit_code, 0) << values.stderr_text;
   EXPECT_EQ(values.stdout_text, "Sheet1!B1 8\n");
-  const CliRun column = run_cli({"dump", "--values", "--range=A1:A2", in});
+  const CliRun column = run_cli({"dump", "--view", "values", "--range=A1:A2", in});
   EXPECT_EQ(column.stdout_text, "Sheet1!A1 7\nSheet1!A2 text\n");
   const CliRun formulas = run_cli({"dump", "--range", "A1:B2", in});
   EXPECT_EQ(formulas.stdout_text, "Sheet1!B1 =A1+1\n");
@@ -285,7 +285,68 @@ TEST(FormulonCli, DumpRangeAndSheetRejectBadUseAsUsageErrors) {
   ASSERT_TRUE(write_fixture_workbook(in));
   EXPECT_EQ(run_cli({"dump", "--range", "not a range", in}).exit_code, 64);
   EXPECT_EQ(run_cli({"dump", "--range", "Sheet1!A1:B2", in}).exit_code, 64);
-  EXPECT_EQ(run_cli({"dump", "--sheets", "--range", "A1:B2", in}).exit_code, 64);
-  EXPECT_EQ(run_cli({"dump", "--metadata", "--sheet", "0", in}).exit_code, 64);
+  EXPECT_EQ(run_cli({"dump", "--view", "sheets", "--range", "A1:B2", in}).exit_code, 64);
+  EXPECT_EQ(run_cli({"dump", "--view", "metadata", "--sheet", "0", in}).exit_code, 64);
   EXPECT_EQ(run_cli({"dump", "--range"}).exit_code, 64);
+}
+
+TEST(FormulonCli, DumpViewAcceptsTheEqualsFormAndRejectsUnknownViews) {
+  const std::string in = temp_path("dump_view.xlsx");
+  PathGuard guard(in);
+  ASSERT_TRUE(write_fixture_workbook(in));
+  EXPECT_EQ(run_cli({"dump", "--view=sheets", in}).stdout_text, run_cli({"dump", "--view", "sheets", in}).stdout_text);
+  EXPECT_EQ(run_cli({"dump", "--view", "bogus", in}).exit_code, 64);
+  EXPECT_EQ(run_cli({"dump", "--view"}).exit_code, 64);
+}
+
+TEST(FormulonCli, DumpRetiredModeFlagsAreUnknownOptions) {
+  const std::string in = temp_path("dump_retired_flags.xlsx");
+  PathGuard guard(in);
+  ASSERT_TRUE(write_fixture_workbook(in));
+  for (const char* flag : {"--formulas", "--values", "--sheets", "--metadata"}) {
+    const CliRun r = run_cli({"dump", flag, in});
+    EXPECT_EQ(r.exit_code, 64) << flag;
+    EXPECT_EQ(r.stdout_text, "") << flag;
+  }
+}
+
+TEST(FormulonCli, DumpViewDoesNotTakeAnOperandBesideTheInput) {
+  const std::string in = temp_path("dump_view_operand.xlsx");
+  PathGuard guard(in);
+  ASSERT_TRUE(write_fixture_workbook(in));
+  const CliRun r = run_cli({"dump", "--view", "sheets", "Data", in});
+  EXPECT_EQ(r.exit_code, 64);
+  EXPECT_EQ(r.stdout_text, "");
+}
+
+TEST(FormulonCli, PaginateSheetTakesANameOrAnIndex) {
+  const std::string in = temp_path("paginate_sheet_name.xlsx");
+  PathGuard guard(in);
+  fm_workbook_t* wb = nullptr;
+  ASSERT_EQ(fm_workbook_create_default(&wb), 0);
+  std::size_t second = 0;
+  ASSERT_EQ(fm_workbook_add_sheet(wb, "Sheet2", 1, &second), 0);
+  ASSERT_EQ(fm_sheet_set_number(wb, second, 0, 0, 5.0), 0);
+  std::uint8_t* bytes = nullptr;
+  std::size_t len = 0;
+  ASSERT_EQ(fm_workbook_save(wb, &bytes, &len), 0);
+  ASSERT_TRUE(write_bytes(in, std::string_view(reinterpret_cast<const char*>(bytes), len)));
+  fm_buffer_destroy(bytes);
+  fm_workbook_destroy(wb);
+
+  const CliRun by_name = run_cli({"paginate", "--sheet", "Sheet2", in});
+  ASSERT_EQ(by_name.exit_code, 0) << by_name.stderr_text;
+  EXPECT_EQ(by_name.stdout_text, run_cli({"paginate", "--sheet", "1", in}).stdout_text);
+  EXPECT_NE(by_name.stdout_text.find("sheet=1\n"), std::string::npos) << by_name.stdout_text;
+}
+
+TEST(FormulonCli, PaginateUnknownSheetFailsAsDumpDoes) {
+  const std::string in = temp_path("paginate_unknown_sheet.xlsx");
+  PathGuard guard(in);
+  ASSERT_TRUE(write_fixture_workbook(in));
+  const CliRun paginate = run_cli({"paginate", "--sheet", "Nope", in});
+  const CliRun dump = run_cli({"dump", "--sheet", "Nope", in});
+  EXPECT_EQ(paginate.exit_code, 64);
+  EXPECT_EQ(paginate.exit_code, dump.exit_code);
+  EXPECT_NE(paginate.stderr_text.find("no sheet named or numbered 'Nope'"), std::string::npos) << paginate.stderr_text;
 }

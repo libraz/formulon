@@ -255,7 +255,12 @@ void ParsePageFields(const pugi::xml_node& parent, pivot::PivotTable* out) {
     pivot::PivotPageField entry;
     entry.field_index = *field_index;
     entry.item_index = parse_xml_u32_attr_strict(node.attribute("item"));
-    out->mutable_page_fields().push_back(entry);
+    entry.hierarchy = node.attribute("hier")
+                          ? std::optional<std::int32_t>(parse_xml_i32_attr(node.attribute("hier"), -1))
+                          : std::nullopt;
+    entry.name = node.attribute("name").as_string();
+    entry.caption = node.attribute("cap").as_string();
+    out->mutable_page_fields().push_back(std::move(entry));
   }
 }
 
@@ -844,11 +849,8 @@ Expected<pivot::PivotTable, Error> read_pivot_table_definition(const std::vector
     ParseFieldOrder(cols, &table.mutable_col_field_order(), &values_position);
     table.set_col_values_position(values_position);
   }
-  // `<pageFields>` follows the same decode-but-do-not-own split as
-  // `<filters>` below: it stays out of `kRecognized`, so the block still
-  // lands in the pre-dataFields passthrough bin and the writer re-emits
-  // the authored bytes. What the decode adds is the page-axis report
-  // order and the selected item, neither of which `<pivotFields>` records.
+  // `<pageFields>` is owned by the model: the page-axis report order and the
+  // selected item, neither of which `<pivotFields>` records.
   if (pugi::xml_node pages = root.child("pageFields"); pages) {
     ParsePageFields(pages, &table);
   }
@@ -867,11 +869,11 @@ Expected<pivot::PivotTable, Error> read_pivot_table_definition(const std::vector
   // we do not model structurally into position-keyed raw-XML buffers, so
   // the writer can re-emit them at schema-valid slots.
   //
-  // `CT_pivotTableDefinition` mandates a strict child order. `<rowItems>`,
-  // `<colItems>`, and `<pageFields>` are the only unmodelled elements the
-  // schema places *before* `<dataFields>`; they are binned by name into
-  // the two pre-dataFields slots (rowItems after `<rowFields>`; colItems
-  // and pageFields, each in a bin of its own, after `<colFields>`). Every
+  // `CT_pivotTableDefinition` mandates a strict child order. `<rowItems>`
+  // and `<colItems>` are the only unmodelled elements the schema places
+  // *before* `<dataFields>`; they are binned by name into the two
+  // pre-dataFields slots (rowItems after `<rowFields>`, colItems after
+  // `<colFields>`). Every
   // other unmodelled element (`<formats>`, `<conditionalFormats>`,
   // `<chartFormats>`, `<calculatedFields>`, `<calculatedItems>`,
   // `<pivotTableStyleInfo>`, `<extLst>`, ...) belongs after `<dataFields>`. `<pivotTableStyleInfo>`
@@ -879,8 +881,8 @@ Expected<pivot::PivotTable, Error> read_pivot_table_definition(const std::vector
   // post-dataFields elements the schema places before the style go to their
   // own bin, the rest to the tail buffer. Relative order within each bin
   // follows document order.
-  static const std::string_view kRecognized[] = {"location",  "pivotFields", "rowFields",
-                                                 "colFields", "dataFields",  "filters"};
+  static const std::string_view kRecognized[] = {"location",   "pivotFields", "rowFields", "colFields",
+                                                 "pageFields", "dataFields",  "filters"};
   for (pugi::xml_node child = root.first_child(); child; child = child.next_sibling()) {
     if (child.type() != pugi::node_element) {
       continue;
@@ -912,8 +914,6 @@ Expected<pivot::PivotTable, Error> read_pivot_table_definition(const std::vector
       bucket = &table.mutable_raw_passthrough_after_row_fields();
     } else if (name == "colItems") {
       bucket = &table.mutable_raw_col_items();
-    } else if (name == "pageFields") {
-      bucket = &table.mutable_raw_passthrough_after_col_fields();
     } else if (name == "formats" || name == "conditionalFormats" || name == "chartFormats" ||
                name == "pivotHierarchies") {
       bucket = &table.mutable_raw_passthrough_before_style_info();

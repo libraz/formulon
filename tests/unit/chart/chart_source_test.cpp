@@ -148,6 +148,15 @@ TEST(ChartSource, DefinedNameBodiesResolveNamesInDeclaredScope) {
   EXPECT_EQ(Resolve(wb, 0, "Cycle"), "error");
 }
 
+TEST(ChartSource, BareNamesMatchUnderTheUnicodeCaseFold) {
+  Workbook wb = Book();
+  std::vector<DefinedName> names = wb.defined_names();
+  names.push_back(DefinedName{"\xC3\x84rger", "Sheet1!$B$2:$B$5", -1, false, ""});  // Ärger
+  wb.set_defined_names(std::move(names));
+  EXPECT_EQ(Resolve(wb, kChartNoHostSheet, "\xC3\xA4RGER"), "0:1,1-4,1");  // äRGER
+  EXPECT_EQ(Resolve(wb, 0, "\xC3\xA4rger"), "0:1,1-4,1");
+}
+
 TEST(ChartSource, SpillReferenceCoversTheSpilledRectangle) {
   Workbook wb = Book();
   ASSERT_TRUE(wb.sheet(1).commit_spill(

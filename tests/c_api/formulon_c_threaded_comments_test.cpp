@@ -136,8 +136,9 @@ fm_person_t MakePerson(const char* id, const char* display_name, const char* use
 void AddPeople(fm_workbook_t* wb) {
   const fm_person_t alice = MakePerson(kAlice, "Alice", "alice@example.com", "None");
   const fm_person_t bob = MakePerson(kBob, "Bob", "bob@example.com", "None");
-  ASSERT_EQ(fm_workbook_add_person(wb, &alice), 0) << fm_get_last_error_message();
-  ASSERT_EQ(fm_workbook_add_person(wb, &bob), 0) << fm_get_last_error_message();
+  const char* person_id = nullptr;
+  ASSERT_EQ(fm_workbook_add_person(wb, &alice, &person_id), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_workbook_add_person(wb, &bob, &person_id), 0) << fm_get_last_error_message();
 }
 
 fm_threaded_comment_t Comment(const char* id, std::uint32_t row, std::uint32_t col, const char* person,
@@ -178,10 +179,13 @@ TEST(FormulonCApiThreadedComments, PersonsAddListAndRemove) {
   EXPECT_EQ(fm_workbook_get_person_at(wb.handle, 2, &p), FM_STATUS_INDEX_OUT_OF_RANGE);
 
   const fm_person_t duplicate = MakePerson(kAlice, "Again", nullptr, nullptr);
-  EXPECT_EQ(fm_workbook_add_person(wb.handle, &duplicate), kAlreadyExists);
+  const char* added_id = nullptr;
+  EXPECT_EQ(fm_workbook_add_person(wb.handle, &duplicate, &added_id), kAlreadyExists);
+  EXPECT_EQ(added_id, nullptr);
   // A GUID is taken in either case, stored uppercase and matched across case.
   const fm_person_t lowercase = MakePerson("{0a1b2c3d-0000-4000-8000-00000000000c}", "Low", nullptr, nullptr);
-  ASSERT_EQ(fm_workbook_add_person(wb.handle, &lowercase), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_workbook_add_person(wb.handle, &lowercase, &added_id), 0) << fm_get_last_error_message();
+  EXPECT_STREQ(added_id, "{0A1B2C3D-0000-4000-8000-00000000000C}");
   int32_t present = 0;
   ASSERT_EQ(fm_workbook_get_person(wb.handle, "{0A1B2C3D-0000-4000-8000-00000000000C}", &present, &p), 0);
   EXPECT_EQ(present, 1);
@@ -190,8 +194,8 @@ TEST(FormulonCApiThreadedComments, PersonsAddListAndRemove) {
   EXPECT_EQ(present, 1);
   ASSERT_EQ(fm_workbook_remove_person(wb.handle, "{0a1b2c3d-0000-4000-8000-00000000000C}"), 0);
   const fm_person_t malformed = MakePerson("{0A1B2C3D-0000-4000-8000-00000000000Z}", "Bad", nullptr, nullptr);
-  EXPECT_EQ(fm_workbook_add_person(wb.handle, &malformed), FM_STATUS_INVALID_ARGUMENT);
-  EXPECT_EQ(fm_workbook_add_person(wb.handle, nullptr), kBindingNullPointer);
+  EXPECT_EQ(fm_workbook_add_person(wb.handle, &malformed, &added_id), FM_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(fm_workbook_add_person(wb.handle, nullptr, &added_id), kBindingNullPointer);
 
   ASSERT_EQ(fm_workbook_remove_person(wb.handle, kAlice), 0);
   EXPECT_EQ(PersonNames(wb.handle), (std::vector<std::string>{"Bob"}));
@@ -427,7 +431,8 @@ TEST(FormulonCApiThreadedComments, AbsentOptionalStringsReadNull) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   const fm_person_t bare = MakePerson(kAlice, "Alice", nullptr, "");
-  ASSERT_EQ(fm_workbook_add_person(wb.handle, &bare), 0) << fm_get_last_error_message();
+  const char* added_id = nullptr;
+  ASSERT_EQ(fm_workbook_add_person(wb.handle, &bare, &added_id), 0) << fm_get_last_error_message();
   fm_person_t p = FM_STRUCT_INIT(fm_person_t);
   ASSERT_EQ(fm_workbook_get_person_at(wb.handle, 0, &p), 0);
   EXPECT_STREQ(p.display_name, "Alice");

@@ -53,6 +53,22 @@ function checkedPivotGrid(wb, pivot) {
 const CHECKED_PIVOT_GRID = ['Row Labels|Sum of Amount', 'East|10', 'West|30', 'Grand Total|40'];
 
 export function registerPivotRegressions(Module, test) {
+  test('page field order moves listed fields onto the page axis and refuses the Values level', () => {
+    const { wb, pivot, region } = makeCheckedPivot(Module);
+    try {
+      assert.deepEqual(wb.getPivotPageFieldOrder(0, pivot), []);
+      wb.setPivotPageFieldOrder(0, pivot, [region]);
+      assert.deepEqual(wb.getPivotPageFieldOrder(0, pivot), [region]);
+      assert.deepEqual(wb.getPivotRowFieldOrder(0, pivot), []);
+      expectFailure(() => wb.setPivotPageFieldOrder(0, pivot, [-2]), StatusCode.InvalidArgument);
+      expectFailure(() => wb.setPivotPageFieldOrder(0, pivot, [region, region]), StatusCode.InvalidArgument);
+      expectFailure(() => wb.setPivotPageFieldOrder(0, pivot, [99]), StatusCode.IndexOutOfRange);
+      assert.deepEqual(wb.getPivotPageFieldOrder(0, pivot), [region]);
+    } finally {
+      wb.delete();
+    }
+  });
+
   test('setPivotFieldDateGroup accepts null and leaves an ungrouped field alone', () => {
     const { wb, pivot, region } = makeCheckedPivot(Module);
     try {
@@ -72,8 +88,9 @@ export function registerPivotRegressions(Module, test) {
       const amount = wb.addPivotCacheField(cache, 'Amount');
       // Shared item 0 renders as "North"; shared item 1 is the blank, which
       // carries no label of its own and can only be named by its index.
-      wb.addPivotCacheFieldSharedItemText(cache, region, 'North');
-      wb.addPivotCacheFieldSharedItemBlank(cache, region);
+      const north = wb.addPivotCacheFieldSharedItemText(cache, region, 'North');
+      const blank = wb.addPivotCacheFieldSharedItemBlank(cache, region);
+      assert.equal(blank, north + 1);
 
       const first = wb.addPivotCacheRecord(cache);
       wb.setPivotCacheRecordNumber(cache, first, region, 0);

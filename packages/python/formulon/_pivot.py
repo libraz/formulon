@@ -596,7 +596,11 @@ class Pivot(_NoCopy):
             )
 
     def is_projection_pending(self) -> bool:
-        """Return whether a cache change left the pivot's sheet cells stale; see :meth:`project`."""
+        """Return whether a cache change left the pivot's sheet cells stale; see :meth:`project`.
+
+        Metadata only: records come from ``add_field`` / ``add_record`` / ``set_record_value`` on the cache;
+        neither :meth:`project` nor a cell edit re-reads the source range.
+        """
         h, sheet, pivot_index = self._locate()
         with _ArgScope() as scope:
             out = scope.out_ptr()
@@ -1173,6 +1177,21 @@ class Pivot(_NoCopy):
         Same contract as :meth:`set_row_field_order`.
         """
         self._set_field_order(LIB.fm_sheet_set_pivot_column_field_order, indices)
+
+    def get_page_field_order(self) -> List[int]:
+        """Return the page-axis field order (the list :meth:`set_page_field_order` takes)."""
+        return self._get_field_order(LIB.fm_sheet_get_pivot_page_field_order)
+
+    def set_page_field_order(self, indices: Sequence[int]) -> None:
+        """Replace the page-axis field order with ``indices``.
+
+        The list is the axis's whole membership: listed fields move onto the
+        page axis, and fields left out come off it. Each index must be below
+        the pivot's field count and may appear once; pass an empty list to
+        clear. ``PIVOT_VALUES_FIELD`` is never a page field and raises
+        ``InvalidArgumentError``.
+        """
+        self._set_field_order(LIB.fm_sheet_set_pivot_page_field_order, indices)
 
     # -- Data fields -------------------------------------------------------
     def list_data_fields(self) -> List[PivotDataField]:

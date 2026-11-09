@@ -229,15 +229,16 @@ TEST(FormulonCApiFormulaEntry, CfAddRuleRejectsUnparseableFormulasAndKeepsState)
   WorkbookGuard wb;
   MakeWorkbook(&wb);
   const fm_cell_rect_t sqref{0, 0, 9, 0};
-  std::size_t index = 0;
-  ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, record_arg(MakeCfRule(&sqref, "A1>0", nullptr)), &index), 0);
+  ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, record_arg(MakeCfRule(&sqref, "A1>0", nullptr)), ignored_id()), 0);
   for (const std::string& formula : RejectedFormulas()) {
     SCOPED_TRACE(formula);
     ExpectParseRefusal(
-        fm_sheet_add_cf_rule(wb.handle, 0, record_arg(MakeCfRule(&sqref, formula.c_str(), nullptr)), &index), formula);
+        fm_sheet_add_cf_rule(wb.handle, 0, record_arg(MakeCfRule(&sqref, formula.c_str(), nullptr)), ignored_id()),
+        formula);
     EXPECT_NE(std::string(fm_get_last_error_context()).find("formula1"), std::string::npos);
     ExpectParseRefusal(
-        fm_sheet_add_cf_rule(wb.handle, 0, record_arg(MakeCfRule(&sqref, "A1>0", formula.c_str())), &index), formula);
+        fm_sheet_add_cf_rule(wb.handle, 0, record_arg(MakeCfRule(&sqref, "A1>0", formula.c_str())), ignored_id()),
+        formula);
     EXPECT_NE(std::string(fm_get_last_error_context()).find("formula2"), std::string::npos);
   }
   std::size_t count = 0;
@@ -249,10 +250,10 @@ TEST(FormulonCApiFormulaEntry, CfAddRuleAcceptsParseableAndEmptyFormulas) {
   WorkbookGuard wb;
   MakeWorkbook(&wb);
   const fm_cell_rect_t sqref{0, 0, 9, 0};
-  std::size_t index = 0;
-  EXPECT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, record_arg(MakeCfRule(&sqref, "'S2'!$A$1>0", "")), &index), 0);
-  EXPECT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, record_arg(MakeCfRule(&sqref, "Gone!$A$1>0", nullptr)), &index), 0);
-  EXPECT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, record_arg(MakeCfRule(&sqref, "", "")), &index), 0);
+  EXPECT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, record_arg(MakeCfRule(&sqref, "'S2'!$A$1>0", "")), ignored_id()), 0);
+  EXPECT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, record_arg(MakeCfRule(&sqref, "Gone!$A$1>0", nullptr)), ignored_id()),
+            0);
+  EXPECT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, record_arg(MakeCfRule(&sqref, "", "")), ignored_id()), 0);
   std::size_t count = 0;
   ASSERT_EQ(fm_sheet_get_cf_rule_count(wb.handle, 0, &count), 0);
   EXPECT_EQ(count, 3U);
@@ -335,10 +336,10 @@ TEST(FormulonCApiFormulaEntry, EveryFormulaSetterStoresTheEnteredSpelling) {
   EXPECT_STREQ(entry.formula, "= 1+ 5");
 
   const fm_cell_rect_t sqref{0, 0, 9, 0};
-  std::size_t index = 0;
-  ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, record_arg(MakeCfRule(&sqref, "=$A$1>+1.50", "{1, 2}")), &index), 0);
+  ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, record_arg(MakeCfRule(&sqref, "=$A$1>+1.50", "{1, 2}")), ignored_id()),
+            0);
   fm_cf_rule_t rule = FM_STRUCT_INIT(fm_cf_rule_t);
-  ASSERT_EQ(fm_sheet_get_cf_rule_at(wb.handle, 0, index, &rule), 0);
+  ASSERT_EQ(fm_sheet_get_cf_rule_at(wb.handle, 0, 0, &rule), 0);
   EXPECT_STREQ(rule.formula1, "=$A$1>1.5");
   EXPECT_STREQ(rule.formula2, "={1,2}");
 

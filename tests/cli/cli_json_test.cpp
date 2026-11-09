@@ -1,4 +1,7 @@
 // `formulon_cli` `--json` output of `dump` and `paginate`.
+#include <fstream>
+#include <string>
+
 #include "cli_test_support.h"
 
 using namespace formulon::cli_test;
@@ -29,11 +32,11 @@ TEST(FormulonCli, DumpJsonValuesFlagKeepsTheSameShape) {
   PathGuard guard(path);
   ASSERT_TRUE(write_fixture_workbook(path, "q\"t\nz"));
 
-  const CliRun r = run_cli({"dump", "--values", "--json", path});
+  const CliRun r = run_cli({"dump", "--view", "values", "--json", path});
   ASSERT_EQ(r.exit_code, 0) << r.stderr_text;
   EXPECT_EQ(r.stdout_text, kFixtureDumpJson);
 
-  const CliRun explicit_formulas = run_cli({"dump", "--json", "--formulas", path});
+  const CliRun explicit_formulas = run_cli({"dump", "--json", "--view", "formulas", path});
   ASSERT_EQ(explicit_formulas.exit_code, 0) << explicit_formulas.stderr_text;
   EXPECT_EQ(explicit_formulas.stdout_text, kFixtureDumpJson);
 }
@@ -66,7 +69,7 @@ TEST(FormulonCli, PaginateJsonFailureLeavesStdoutEmpty) {
   ASSERT_TRUE(write_fixture_workbook(path));
 
   const CliRun r = run_cli({"paginate", "--json", "--sheet", "99", path});
-  EXPECT_EQ(r.exit_code, 1);
+  EXPECT_EQ(r.exit_code, 64);
   EXPECT_EQ(r.stdout_text, "");
 }
 
@@ -87,11 +90,11 @@ TEST(FormulonCli, JsonEnvelopeDumpSheetsListsSheetNames) {
   const std::string path = temp_path("json_envelope_sheets.xlsx");
   PathGuard guard(path);
   ASSERT_TRUE(write_fixture_workbook(path));
-  const CliRun r = run_cli({"dump", "--sheets", "--json", path});
+  const CliRun r = run_cli({"dump", "--view", "sheets", "--json", path});
   ASSERT_EQ(r.exit_code, 0) << r.stderr_text;
   EXPECT_EQ(r.stdout_text, "{\"format\":1,\"sheets\":[{\"name\":\"Sheet1\"}]}\n");
 
-  const CliRun json_first = run_cli({"dump", "--json", "--sheets", path});
+  const CliRun json_first = run_cli({"dump", "--json", "--view", "sheets", path});
   EXPECT_EQ(json_first.stdout_text, r.stdout_text);
 }
 
@@ -99,7 +102,7 @@ TEST(FormulonCli, JsonEnvelopeDumpMetadataListsNamesTablesAndParts) {
   const std::string path = temp_path("json_envelope_metadata.xlsx");
   PathGuard guard(path);
   ASSERT_TRUE(write_out_of_range_defined_names_fixture(path));
-  const CliRun r = run_cli({"dump", "--metadata", "--json", path});
+  const CliRun r = run_cli({"dump", "--view", "metadata", "--json", path});
   ASSERT_EQ(r.exit_code, 0) << r.stderr_text;
   EXPECT_EQ(r.stdout_text,
             "{\"format\":1,\"defined_names\":["
@@ -117,9 +120,9 @@ TEST(FormulonCli, JsonEnvelopeEveryStdoutFormStartsWithFormatOne) {
            std::vector<std::string>{"eval", "--json", "=1"},
            std::vector<std::string>{"eval", "--json", "=SEQUENCE(2,2)"},
            std::vector<std::string>{"dump", "--json", path},
-           std::vector<std::string>{"dump", "--json", "--values", path},
-           std::vector<std::string>{"dump", "--json", "--sheets", path},
-           std::vector<std::string>{"dump", "--json", "--metadata", path},
+           std::vector<std::string>{"dump", "--json", "--view", "values", path},
+           std::vector<std::string>{"dump", "--json", "--view", "sheets", path},
+           std::vector<std::string>{"dump", "--json", "--view", "metadata", path},
            std::vector<std::string>{"paginate", "--json", path},
            std::vector<std::string>{"profiles", "--json"},
        }) {
@@ -130,10 +133,42 @@ TEST(FormulonCli, JsonEnvelopeEveryStdoutFormStartsWithFormatOne) {
   }
 }
 
-TEST(FormulonCli, JsonEnvelopeRecalcHasNoJsonFlag) {
-  const std::string path = temp_path("json_envelope_recalc.xlsx");
+TEST(FormulonCli, RecalcJsonReportsOutputAndByteCount) {
+  const std::string path = temp_path("recalc_json.xlsx");
+  const std::string out_path = temp_path("recalc_json_out.xlsx");
+  PathGuard guard(path);
+  PathGuard out_guard(out_path);
+  ASSERT_TRUE(write_fixture_workbook(path));
+  const CliRun r = run_cli({"recalc", "--json", "--quiet", path, "-o", out_path});
+  ASSERT_EQ(r.exit_code, 0) << r.stderr_text;
+  std::ifstream written(out_path, std::ios::binary | std::ios::ate);
+  ASSERT_TRUE(written.good());
+  const std::string expected = "{\"format\":1,\"status\":\"ok\",\"output\":\"" + out_path +
+                               "\",\"bytes\":" + std::to_string(static_cast<std::streamoff>(written.tellg())) +
+                               ",\"warnings\":[]}\n";
+  EXPECT_EQ(r.stdout_text, expected);
+}
+
+TEST(FormulonCli, RecalcJsonListsLossCountersInsteadOfWarningOnStderr) {
+  const std::string input = temp_path("recalc_json_lossy.xlsx");
+  const std::string output = temp_path("recalc_json_lossy.xlsb");
+  PathGuard input_guard(input);
+  PathGuard output_guard(output);
+  ASSERT_TRUE(write_lossy_xlsx_fixture(input));
+  const CliRun r = run_cli({"recalc", "--json", "--quiet", input, "-o", output});
+  ASSERT_EQ(r.exit_code, 0) << r.stderr_text;
+  EXPECT_NE(r.stdout_text.find("{\"kind\":\"downgraded_formula_count\",\"count\":1}"), std::string::npos)
+      << r.stdout_text;
+  EXPECT_NE(r.stdout_text.find("{\"kind\":\"deferred_feature_count\",\"count\":1}"), std::string::npos)
+      << r.stdout_text;
+  EXPECT_EQ(r.stderr_text.find("warning"), std::string::npos) << r.stderr_text;
+}
+
+TEST(FormulonCli, RecalcJsonIsRefusedWhenTheWorkbookGoesToStdout) {
+  const std::string path = temp_path("recalc_json_stdout.xlsx");
   PathGuard guard(path);
   ASSERT_TRUE(write_fixture_workbook(path));
-  const CliRun r = run_cli({"recalc", "--json", path, "-o", temp_path("json_envelope_recalc_out.xlsx")});
+  const CliRun r = run_cli({"recalc", "--json", path, "-o", "-"});
   EXPECT_EQ(r.exit_code, 64);
+  EXPECT_EQ(r.stdout_text, "");
 }

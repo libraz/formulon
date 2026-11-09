@@ -18,6 +18,7 @@ import formulon
 from formulon import (
     ErrorCode,
     ExcelError,
+    FormulaSyntaxError,
     FormulonError,
     InvalidArgumentError,
     Sheet,
@@ -428,10 +429,16 @@ class SpanCaseTests(unittest.TestCase):
             # Dollar signs are allowed.
             ws.set_column_hidden("$B:$D", True)
             ws.set_row_hidden("$3:$5", True)
-            for bad in ("0", "", "XFE", "1048577", "Ｂ:Ｄ", "Sheet1!B:D", "B:", ":D", "B:3"):
-                with self.subTest(column=bad), self.assertRaises(InvalidArgumentError):
+            # Malformed text surfaces the parser failure; a well-formed address of the wrong shape is an argument error.
+            for bad in ("0", "", "XFE", "1048577", "Ｂ:Ｄ", "B:", ":D", "B:3"):
+                with self.subTest(column=bad), self.assertRaises(FormulaSyntaxError):
                     ws.set_column_width(bad, 9)
-            for bad in ("0", "", "1048577", "B", "Ｂ:Ｄ", "Sheet1!3:5", "3:"):
+            for bad in ("0", "", "1048577", "Ｂ:Ｄ", "3:"):
+                with self.subTest(row=bad), self.assertRaises(FormulaSyntaxError):
+                    ws.set_row_height(bad, 9)
+            with self.assertRaises(InvalidArgumentError):
+                ws.set_column_width("Sheet1!B:D", 9)
+            for bad in ("B", "Sheet1!3:5"):
                 with self.subTest(row=bad), self.assertRaises(InvalidArgumentError):
                     ws.set_row_height(bad, 9)
             # A column span on a row operation and the reverse.
@@ -454,7 +461,7 @@ class SpanCaseTests(unittest.TestCase):
                 ws.set_column_width(1, 3)  # type: ignore[call-overload]
             # A rejected call changed nothing.
             state = _state(ws)
-            with self.assertRaises(InvalidArgumentError):
+            with self.assertRaises(FormulaSyntaxError):
                 ws.delete_rows("0")
             self.assertEqual(_state(ws), state)
             # The whole sheet is both a column span and a row span (last: it makes a million row records).
@@ -466,7 +473,7 @@ class SpanCaseTests(unittest.TestCase):
         with Workbook.create_default() as wb:
             wb.sheet(0).set_column_width(0, 0, 8)
             self.assertEqual([(c.first, c.last) for c in wb.sheet(0).list_column_overrides()], [(0, 0)])
-            with self.assertRaises(InvalidArgumentError):
+            with self.assertRaises(FormulaSyntaxError):
                 wb.sheet(0).set_column_width("0", 8)
 
     def test_insert_and_delete_take_the_span_as_start_and_count(self) -> None:

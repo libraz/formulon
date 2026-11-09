@@ -19,6 +19,9 @@
 #include "c_api/parts/enum_map.h"
 #include "c_api/parts/struct_v1_sizes.h"
 #include "chart/chart_edit.h"
+#include "chart/chart_source.h"
+#include "drawing/drawing_edit.h"
+#include "eval/function_registry.h"
 #include "utils/error.h"
 #include "utils/expected.h"
 #include "workbook.h"
@@ -254,7 +257,9 @@ extern "C" fm_status_t fm_sheet_add_chart(fm_workbook_t* wb, size_t sheet_index,
   if (opts->source == nullptr) {
     return null_argument();
   }
-  if (auto rc = check_utf8({opts->source, opts->title, opts->placement.name, opts->placement.description}); rc != 0) {
+  if (auto rc = check_utf8(
+          {opts->source, opts->title.text, opts->title.formula, opts->placement.name, opts->placement.description});
+      rc != 0) {
     return rc;
   }
   PatchReader r;
@@ -265,9 +270,29 @@ extern "C" fm_status_t fm_sheet_add_chart(fm_workbook_t* wb, size_t sheet_index,
   r.enum_ok(opts->header_row, FM_TRISTATE_TRUE, "header_row");
   r.enum_ok(opts->header_column, FM_TRISTATE_TRUE, "header_column");
   r.enum_ok(opts->legend, FM_CHART_LEGEND_POSITION_ABSENT, FM_CHART_LEGEND_POSITION_TOP, "legend");
+  r.enum_ok(opts->has_title, 1, "has_title");
+  if (opts->has_title != 0) {
+    r.enum_ok(opts->title.kind, FM_CHART_TITLE_KIND_AUTO, "title.kind");
+    if (opts->title.kind == FM_CHART_TITLE_KIND_TEXT && (opts->title.text == nullptr || *opts->title.text == '\0')) {
+      r.fail("title.text", "must not be empty");
+    }
+  }
   r.enum_ok(opts->placement.hidden, FM_TRISTATE_TRUE, "placement.hidden");
   if (r.status() != 0) {
     return r.status();
+  }
+  std::optional<formulon::ChartTitle> ref_title;
+  if (opts->has_title != 0 && opts->title.kind == FM_CHART_TITLE_KIND_REF) {
+    ref_title = title_of(opts->title);
+    ingest_title_ref(wb, *ref_title);
+    if (ref_title->ref_formula.empty()) {
+      return formulon::c_api::parts::invalid_argument("title.formula must not be empty");
+    }
+    auto resolved = formulon::resolve_chart_source(wb->workbook(), sheet_index, ref_title->ref_formula,
+                                                   formulon::eval::default_registry());
+    if (!resolved) {
+      return set_last_error(resolved.error());
+    }
   }
   auto kind = insert_kind_of(opts->type, opts->bar_direction);
   if (!kind) {
@@ -280,8 +305,11 @@ extern "C" fm_status_t fm_sheet_add_chart(fm_workbook_t* wb, size_t sheet_index,
   model.direction = static_cast<formulon::ChartSeriesDirection>(opts->direction);
   model.header_row = header_mode_from_c(opts->header_row);
   model.header_column = header_mode_from_c(opts->header_column);
-  if (opts->title != nullptr) {
-    model.title = std::string(opts->title);
+  // NONE is the empty title of the model; AUTO and REF leave the insert automatic (a REF title is set below).
+  if (opts->has_title != 0 && opts->title.kind == FM_CHART_TITLE_KIND_NONE) {
+    model.title = std::string();
+  } else if (opts->has_title != 0 && opts->title.kind == FM_CHART_TITLE_KIND_TEXT) {
+    model.title = std::string(opts->title.text);
   }
   model.legend = chart_legend_position_from_c(opts->legend);
   AnchorPlan plan;
@@ -305,6 +333,13 @@ extern "C" fm_status_t fm_sheet_add_chart(fm_workbook_t* wb, size_t sheet_index,
     return set_last_error(id.error());
   }
   *out_object_id = id.value();
+  if (ref_title) {
+    if (auto rc = finish_status(formulon::set_chart_title(wb->workbook(), sheet_index, id.value(), *ref_title));
+        rc != 0) {
+      static_cast<void>(formulon::remove_drawing(wb->workbook(), sheet_index, id.value()));
+      return rc;
+    }
+  }
   return apply_placement_extras(wb->workbook(), sheet_index, id.value(), opts->placement, false);
 }
 

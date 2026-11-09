@@ -33,7 +33,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 FACADE_SCOPE_INC = REPO_ROOT / "src/node_addon/generated/facade_scope.inc"
 DEFAULT_NODE_SOURCE = REPO_ROOT / "src/node_addon/parts/workbook_class.cc"
 DEFAULT_WASM_SOURCE = REPO_ROOT / "src/wasm/parts/bindings_register.cpp"
-EXPECTED_NODE_REGISTRATIONS = 410
+EXPECTED_NODE_REGISTRATIONS = 412
 
 MASK_NAMES = (
     "u32",
@@ -74,7 +74,6 @@ FREE_FUNCTION_GUARDS = {
     "getFunctionMetadata": {"string": 0x1},
     "getImageInfo": {"object": 0x1},
     "getLocaleFacts": {"string": 0x1},
-    "listLocaleErrorNames": {"string": 0x1},
     "localizeFormula": {"string": 0x3},
     "localizeFunctionName": {"string": 0x3},
 }

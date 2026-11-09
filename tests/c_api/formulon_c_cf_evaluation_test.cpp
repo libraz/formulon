@@ -269,9 +269,9 @@ TEST(FormulonCApiCf, ExpressionRuleEvaluatesFunctionsAndQualifiedRefs) {
   rule.dxf_index = 3;
   rule.ranges = &sqref;
   rule.range_count = 1;
-  std::size_t rule_index = 0;
-  ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &rule, &rule_index), 0) << fm_get_last_error_message();
-  EXPECT_EQ(rule_index, 0U);
+  const char* rule_id = nullptr;
+  ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &rule, &rule_id), 0) << fm_get_last_error_message();
+  EXPECT_EQ(CfRuleIdAt(wb.handle, 0, 0), rule_id);
 
   CfResultsGuard results;
   ASSERT_EQ(fm_sheet_evaluate_cf_range(wb.handle, 0, record_arg(fm_cell_rect_t{0, 0, 0, 0}), 0, std::nan(""),
@@ -303,9 +303,9 @@ TEST(FormulonCApiCf, ExpressionRuleRecursivelyEvaluatesFormulaCells) {
   rule.dxf_index = 4;
   rule.ranges = &sqref;
   rule.range_count = 1;
-  std::size_t rule_index = 0;
-  ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &rule, &rule_index), 0) << fm_get_last_error_message();
-  EXPECT_EQ(rule_index, 0U);
+  const char* rule_id = nullptr;
+  ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &rule, &rule_id), 0) << fm_get_last_error_message();
+  EXPECT_EQ(CfRuleIdAt(wb.handle, 0, 0), rule_id);
 
   // No explicit recalc: CF evaluation should use a recursive EvalState
   // instead of reading the formula cell's stale blank cached value.

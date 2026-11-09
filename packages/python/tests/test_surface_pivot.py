@@ -17,6 +17,8 @@ from formulon import (
     ErrorCode,
     ExcelError,
     FormulonError,
+    IndexOutOfRangeError,
+    InvalidArgumentError,
     NotFoundError,
     Pivot,
     PivotAggregation,
@@ -228,6 +230,7 @@ _PIVOT_READERS = {
     "Pivot.get_grand_totals",
     "Pivot.get_layout",
     "Pivot.get_options",
+    "Pivot.get_page_field_order",
     "Pivot.get_properties",
     "Pivot.get_report_layout",
     "Pivot.get_row_field_order",
@@ -928,6 +931,15 @@ class PivotMutatorTableTests(unittest.TestCase):
                 None,
                 grid_is(["行ラベル|Sum of Amount", "Apple|40", "Pear|12", "総計|52"]),
             ),
+            "Pivot.set_page_field_order": (
+                None,
+                lambda f: f.wb.sheet(0).pivot(f.pivot).set_page_field_order([f.product]),
+                None,
+                lambda t, f, r: (
+                    eq(f.wb.sheet(0).pivot(f.pivot).get_page_field_order(), [f.product]),
+                    eq(f.wb.sheet(0).pivot(f.pivot).get_row_field_order(), [f.region]),
+                ),
+            ),
             "Pivot.set_column_field_order": (
                 None,
                 lambda f: f.wb.sheet(0).pivot(f.pivot).set_column_field_order([f.product]),
@@ -1169,11 +1181,62 @@ class PivotDefinitionReadBackTests(unittest.TestCase):
             self.assertEqual(date.date_calendar, PivotCalendar.GREGORIAN)
             self.assertEqual(date.axis, PivotAxis.VALUE)
 
-            wb.sheet(0).pivot(f.pivot).set_field_axis(f.product, PivotAxis.COL)
+            wb.sheet(0).pivot(f.pivot).set_field_axis(f.product, PivotAxis.COLUMN)
             self.assertEqual(wb.sheet(0).pivot(f.pivot).get_column_field_order(), [f.product])
             wb.sheet(0).pivot(f.pivot).set_row_field_order([f.product, f.region])
             self.assertEqual(wb.sheet(0).pivot(f.pivot).get_row_field_order(), [f.product, f.region])
             self.assertEqual(wb.sheet(0).pivot(f.pivot).get_column_field_order(), [])
+
+    def test_the_column_axis_member_is_spelled_out(self) -> None:
+        self.assertEqual(PivotAxis.COLUMN, 1)
+        self.assertFalse(hasattr(PivotAxis, "COL"))
+        with Workbook.create_default() as wb:
+            f = _PivotFixture(wb)
+            pivot = wb.sheet(0).pivot(f.pivot)
+            added = pivot.add_field(PivotFieldInput(field_index="Date", axis=PivotAxis.COLUMN))
+            self.assertIn(added, pivot.get_column_field_order())
+            self.assertEqual(pivot.list_fields()[added].axis, PivotAxis.COLUMN)
+
+    def test_unknown_option_names_are_refused(self) -> None:
+        with Workbook.create_default() as wb:
+            f = _PivotFixture(wb)
+            with self.assertRaises(TypeError):
+                wb.sheet(0).pivot(f.pivot).add_field_item(f.region, "East", visble=False)  # type: ignore[call-arg]
+
+    def test_page_field_order_is_the_whole_axis_membership(self) -> None:
+        with Workbook.create_default() as wb:
+            f = _PivotFixture(wb)
+            pivot = wb.sheet(0).pivot(f.pivot)
+            self.assertEqual(pivot.get_page_field_order(), [])
+            pivot.set_page_field_order([f.product, f.date])
+            self.assertEqual(pivot.get_page_field_order(), [f.product, f.date])
+            pivot.set_page_field_order([f.date, f.product])
+            self.assertEqual(pivot.get_page_field_order(), [f.date, f.product])
+            self.assertEqual(pivot.list_fields()[f.product].axis, PivotAxis.PAGE)
+            # A field left out leaves the axis.
+            pivot.set_page_field_order([f.date])
+            self.assertEqual(pivot.get_page_field_order(), [f.date])
+            self.assertNotEqual(pivot.list_fields()[f.product].axis, PivotAxis.PAGE)
+            # A listed row field moves onto the page axis.
+            pivot.set_page_field_order([f.region, f.date])
+            self.assertEqual(pivot.get_page_field_order(), [f.region, f.date])
+            self.assertEqual(pivot.get_row_field_order(), [])
+            pivot.set_page_field_order([])
+            self.assertEqual(pivot.get_page_field_order(), [])
+
+    def test_page_field_order_refuses_bad_lists_and_changes_nothing(self) -> None:
+        with Workbook.create_default() as wb:
+            f = _PivotFixture(wb)
+            pivot = wb.sheet(0).pivot(f.pivot)
+            pivot.set_page_field_order([f.product])
+            for bad, error in (
+                ([f.date, f.date], InvalidArgumentError),
+                ([PIVOT_VALUES_FIELD], InvalidArgumentError),
+                ([99], IndexOutOfRangeError),
+            ):
+                with self.subTest(bad=bad), self.assertRaises(error):
+                    pivot.set_page_field_order(bad)
+                self.assertEqual(pivot.get_page_field_order(), [f.product])
 
     def test_values_level_marker_round_trips_in_field_order(self) -> None:
         self.assertEqual(PIVOT_VALUES_FIELD, -2)

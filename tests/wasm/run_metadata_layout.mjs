@@ -16,6 +16,72 @@ export function registerMetadataLayout(Module, test) {
     }
   });
 
+  test('the locale error names come only from getLocaleFacts', () => {
+    assert.equal('listLocaleErrorNames' in Module, false);
+    assert.ok(Module.getLocaleFacts('win-365-en_US').errorNames.length > 0);
+  });
+
+  test('protected ranges are keyed by the name addProtectedRange returns', () => {
+    const wb = Module.Workbook.createDefault();
+    try {
+      const rect = { firstRow: 0, firstCol: 0, lastRow: 1, lastCol: 1 };
+      assert.equal(wb.addProtectedRange(0, { name: 'Inputs', ranges: [rect] }), 'Inputs');
+      expectFailure(() => wb.addProtectedRange(0, { name: 'Inputs', ranges: [rect] }), StatusCode.AlreadyExists);
+      assert.equal(wb.getProtectedRange(0, 0).name, 'Inputs');
+      wb.updateProtectedRange(0, 'Inputs', { name: 'Entries' });
+      assert.equal(wb.getProtectedRange(0, 0).name, 'Entries');
+      expectFailure(() => wb.updateProtectedRange(0, 'Inputs', {}), StatusCode.NotFound);
+      expectFailure(() => wb.removeProtectedRange(0, 'Inputs'), StatusCode.NotFound);
+      wb.removeProtectedRange(0, 'Entries');
+      assert.equal(wb.getProtectedRangeCount(0), 0);
+    } finally {
+      wb.delete();
+    }
+  });
+
+  test('addDataTable stores a table readable at the top-left of its result range', () => {
+    const wb = Module.Workbook.createDefault();
+    try {
+      wb.addDataTable(0, {
+        rect: { firstRow: 1, firstCol: 1, lastRow: 5, lastCol: 3 },
+        columnInput: { row: 0, col: 0 },
+      });
+      assert.notEqual(wb.getDataTable(0, 1, 1), null);
+    } finally {
+      wb.delete();
+    }
+  });
+
+  test('addChart title: omitted is automatic, null is none, text is kept, empty text is refused', () => {
+    const wb = Module.Workbook.createDefault();
+    try {
+      wb.setNumber(0, 0, 0, 1);
+      wb.setNumber(0, 1, 0, 2);
+      const insert = (extra) => wb.addChart(0, { source: 'A1:A2', ...extra });
+      assert.equal(wb.getChart(0, insert({})).title.kind, 3);
+      assert.equal(wb.getChart(0, insert({ title: null })).title, null);
+      const text = wb.getChart(0, insert({ title: 'Sales' })).title;
+      assert.deepEqual([text.kind, text.text], [1, 'Sales']);
+      expectFailure(() => insert({ title: '' }), StatusCode.InvalidArgument);
+    } finally {
+      wb.delete();
+    }
+  });
+
+  test('addMerge refuses a rectangle that overlaps an existing merge', () => {
+    const wb = Module.Workbook.createDefault();
+    try {
+      wb.addMerge(0, { firstRow: 1, firstCol: 1, lastRow: 2, lastCol: 2 });
+      expectFailure(
+        () => wb.addMerge(0, { firstRow: 2, firstCol: 2, lastRow: 3, lastCol: 3 }),
+        StatusCode.AlreadyExists,
+      );
+      assert.equal(wb.listMerges(0).length, 1);
+    } finally {
+      wb.delete();
+    }
+  });
+
   test('removeMerge / removeMergeAt / clearMerges step-wise prune the merge list', () => {
     const wb = Module.Workbook.createDefault();
     try {

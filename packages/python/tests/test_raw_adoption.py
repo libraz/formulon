@@ -130,7 +130,8 @@ class ParseErrorPositionTest(unittest.TestCase):
             error = FormulonError._from_engine(status)
 
         self.assertIsInstance(error, FormulaSyntaxError)
-        self.assertIsInstance(error, InvalidArgumentError)
+        self.assertNotIsInstance(error, InvalidArgumentError)
+        self.assertIsInstance(error, ValueError)
         self.assertIsNotNone(error.parse_error)
         self.assertIsInstance(error.parse_error.code, ParseErrorCode)
         self.assertLessEqual(error.parse_error.start, error.parse_error.end)

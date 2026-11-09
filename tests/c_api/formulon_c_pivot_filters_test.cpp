@@ -689,8 +689,8 @@ TEST(FormulonCApiPivot, RemovingADataFieldRepointsOrDropsEveryValueFilterType) {
     std::size_t idx = 0;
     ASSERT_EQ(fm_workbook_add_pivot_cache_field(wb.handle, cache_id, name, &idx), 0);
   }
-  ASSERT_EQ(fm_workbook_add_pivot_cache_field_shared_item_text(wb.handle, cache_id, 0, "North"), 0);
-  ASSERT_EQ(fm_workbook_add_pivot_cache_field_shared_item_text(wb.handle, cache_id, 0, "South"), 0);
+  ASSERT_EQ(fm_workbook_add_pivot_cache_field_shared_item_text(wb.handle, cache_id, 0, "North", ignored_index()), 0);
+  ASSERT_EQ(fm_workbook_add_pivot_cache_field_shared_item_text(wb.handle, cache_id, 0, "South", ignored_index()), 0);
   const double rows[][3] = {{0, 100, 1}, {1, 200, 2}, {0, 300, 3}};
   for (const auto& row : rows) {
     std::size_t rec = 0;

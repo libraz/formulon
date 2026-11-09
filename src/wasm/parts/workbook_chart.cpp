@@ -351,7 +351,7 @@ uint32_t JsWorkbook::insertChart(uint32_t sheet, val options) {
   JsNarrowNumericReader reader("Sheet.addChart");
   std::string name_store;
   std::string descr_store;
-  std::string title_store;
+  Arena title_arena;
   fm_chart_insert_spec_t opts = FM_STRUCT_INIT(fm_chart_insert_spec_t);
   opts.type = reader.i32(options, "type", FM_CHART_PLOT_TYPE_BAR, "type");
   opts.bar_direction = reader.i32(options, "barDirection", FM_CHART_BAR_DIRECTION_COLUMN, "barDirection");
@@ -361,7 +361,16 @@ uint32_t JsWorkbook::insertChart(uint32_t sheet, val options) {
   opts.direction = reader.i32(options, "direction", FM_CHART_SERIES_DIRECTION_AUTO, "direction");
   opts.header_row = header_mode(reader, reader.value(options, "headerRow", "headerRow"), "headerRow");
   opts.header_column = header_mode(reader, reader.value(options, "headerColumn", "headerColumn"), "headerColumn");
-  opts.title = reader.optional_string(options, "title", title_store, "title");
+  // An omitted title is Excel's automatic one; `null` is no title.
+  const val title = reader.value(options, "title", "title");
+  if (reader.ok() && !title.isUndefined()) {
+    opts.has_title = 1;
+    if (title.isNull()) {
+      opts.title.kind = FM_CHART_TITLE_KIND_NONE;
+    } else {
+      opts.title = read_title(reader, title_arena, title, "title");
+    }
+  }
   // An omitted legend is Excel's default bottom legend; `null` is none.
   const val legend = reader.value(options, "legend", "legend");
   opts.legend = legend.isNull() ? FM_CHART_LEGEND_POSITION_ABSENT

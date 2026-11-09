@@ -2,8 +2,9 @@
 // C ABI contracts shared by the bindings' usability surface: the dirty-cell
 // query, the process-scope image probe, the drawing and chart id statuses
 // (absent, of another kind, past the end), the drawing patches, the chart
-// absence flags, the duplicate CF id refusal, and the leading `=` on formula
-// text read back from cells, rules, tables and pivot caches.
+// absence flags, CF rules and protected ranges addressed by their keys, the
+// keys and indices adds return, the chart insert title, and the leading `=` on
+// formula text read back from cells, rules, tables and pivot caches.
 
 #include <cstddef>
 #include <cstdint>
@@ -711,36 +712,56 @@ TEST(FormulonCApiUsability, AbsentChartNumbersReadAsHasFlagsNotNaN) {
 // Conditional-format rule ids
 // ---------------------------------------------------------------------------
 
-// A read rule re-added to its own sheet collides with itself; the copy takes a fresh GUID.
-std::string CfRuleId(const fm_workbook_t* wb, std::size_t index) {
-  fm_cf_rule_t out = FM_STRUCT_INIT(fm_cf_rule_t);
-  EXPECT_EQ(fm_sheet_get_cf_rule_at(wb, 0, index, &out), 0);
-  return out.id != nullptr ? std::string(out.id) : std::string();
+// A brace-wrapped GUID with upper-case hex digits, the shape the engine generates.
+bool IsUpperGuid(const std::string& id) {
+  static const char kShape[] = "{XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX}";
+  if (id.size() != sizeof(kShape) - 1U) {
+    return false;
+  }
+  for (std::size_t i = 0; i < id.size(); ++i) {
+    const char c = id[i];
+    if (kShape[i] != 'X') {
+      if (c != kShape[i]) {
+        return false;
+      }
+    } else if (!((c >= '0' && c <= '9') || (c >= 'A' && c <= 'F'))) {
+      return false;
+    }
+  }
+  return true;
 }
 
-TEST(FormulonCApiUsability, CfRuleWithAnExistingIdGetsAFreshId) {
-  WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  const fm_cell_rect_t sqref{0, 0, 9, 0};
-  std::size_t index = 99;
-  fm_cf_rule_t rule = ExpressionRule(&sqref, "A1>0", kRuleId);
-  ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &rule, &index), 0) << fm_get_last_error_message();
-  ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &rule, &index), 0) << fm_get_last_error_message();
-  std::string lower(kRuleId);
-  for (char& c : lower) {
+std::string Lower(std::string text) {
+  for (char& c : text) {
     if (c >= 'A' && c <= 'F') {
       c = static_cast<char>(c - 'A' + 'a');
     }
   }
+  return text;
+}
+
+std::string AddCfRule(fm_workbook_t* wb, std::size_t sheet, const fm_cf_rule_t& rule) {
+  const char* id = nullptr;
+  EXPECT_EQ(fm_sheet_add_cf_rule(wb, sheet, &rule, &id), 0) << fm_get_last_error_message();
+  return id != nullptr ? std::string(id) : std::string();
+}
+
+// A read rule re-added to its own sheet collides with itself; the copy takes a
+// generated id, and the add returns the id actually stored.
+TEST(FormulonCApiUsability, CfRuleWithAnExistingIdGetsAFreshId) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  const fm_cell_rect_t sqref{0, 0, 9, 0};
+  fm_cf_rule_t rule = ExpressionRule(&sqref, "A1>0", kRuleId);
+  const std::string first = AddCfRule(wb.handle, 0, rule);
+  const std::string second = AddCfRule(wb.handle, 0, rule);
+  const std::string lower = Lower(kRuleId);
   rule.id = lower.c_str();
-  ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &rule, &index), 0) << fm_get_last_error_message();
+  const std::string third = AddCfRule(wb.handle, 0, rule);
   ASSERT_EQ(CfRuleCount(wb.handle), 3U);
-  const std::string first = CfRuleId(wb.handle, 0);
-  const std::string second = CfRuleId(wb.handle, 1);
-  const std::string third = CfRuleId(wb.handle, 2);
   EXPECT_EQ(first, kRuleId);
-  EXPECT_FALSE(second.empty());
-  EXPECT_FALSE(third.empty());
+  EXPECT_TRUE(IsUpperGuid(second)) << second;
+  EXPECT_TRUE(IsUpperGuid(third)) << third;
   EXPECT_NE(second, first);
   EXPECT_NE(third, first);
   EXPECT_NE(third, second);
@@ -749,30 +770,193 @@ TEST(FormulonCApiUsability, CfRuleWithAnExistingIdGetsAFreshId) {
   std::size_t other = 0;
   ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Other", append_position(wb.handle), &other), 0);
   rule.id = kRuleId;
-  ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, other, &rule, &index), 0) << fm_get_last_error_message();
+  EXPECT_EQ(AddCfRule(wb.handle, other, rule), kRuleId);
+}
+
+TEST(FormulonCApiUsability, CfRuleIdIsGeneratedWhenOmittedAndMustOtherwiseBeAGuid) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  const fm_cell_rect_t sqref{0, 0, 9, 0};
+  EXPECT_TRUE(IsUpperGuid(AddCfRule(wb.handle, 0, ExpressionRule(&sqref, "A1>0"))));
+  EXPECT_TRUE(IsUpperGuid(AddCfRule(wb.handle, 0, ExpressionRule(&sqref, "A1>0", ""))));
+  const fm_cf_rule_t bad = ExpressionRule(&sqref, "A1>0", "abc");
+  const char* id = nullptr;
+  EXPECT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &bad, &id), FM_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(CfRuleCount(wb.handle), 2U);
+}
+
+// The id an add returns reads, updates and removes the rule, in either case
+// of its hex digits; the positional read stays.
+TEST(FormulonCApiUsability, CfRuleIsAddressedByItsId) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  const fm_cell_rect_t sqref{0, 0, 9, 0};
+  AddCfRule(wb.handle, 0, ExpressionRule(&sqref, "A1>1"));
+  const std::string id = AddCfRule(wb.handle, 0, ExpressionRule(&sqref, "A1>0", kRuleId));
+  ASSERT_EQ(id, kRuleId);
+
+  std::int32_t present = 99;
   fm_cf_rule_t out = FM_STRUCT_INIT(fm_cf_rule_t);
-  ASSERT_EQ(fm_sheet_get_cf_rule_at(wb.handle, other, index, &out), 0);
-  ASSERT_NE(out.id, nullptr);
-  EXPECT_STREQ(out.id, kRuleId);
+  ASSERT_EQ(fm_sheet_get_cf_rule(wb.handle, 0, Lower(id).c_str(), &present, &out), 0) << fm_get_last_error_message();
+  ASSERT_EQ(present, 1);
+  EXPECT_EQ(Str(out.formula1), "=A1>0");
+  ASSERT_EQ(fm_sheet_get_cf_rule_at(wb.handle, 0, 1, &out), 0);
+  EXPECT_EQ(Str(out.id), kRuleId);
+
+  fm_cf_rule_patch_t patch = FM_STRUCT_INIT(fm_cf_rule_patch_t);
+  patch.formula1_op = FM_PATCH_OP_SET;
+  patch.formula1 = "A1>5";
+  ASSERT_EQ(fm_sheet_update_cf_rule(wb.handle, 0, id.c_str(), &patch), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_get_cf_rule(wb.handle, 0, id.c_str(), &present, &out), 0);
+  ASSERT_EQ(present, 1);
+  EXPECT_EQ(Str(out.formula1), "=A1>5");
+
+  ASSERT_EQ(fm_sheet_remove_cf_rule(wb.handle, 0, Lower(id).c_str()), 0) << fm_get_last_error_message();
+  EXPECT_EQ(CfRuleCount(wb.handle), 1U);
+  present = 99;
+  ASSERT_EQ(fm_sheet_get_cf_rule(wb.handle, 0, id.c_str(), &present, &out), 0);
+  EXPECT_EQ(present, 0);
+  EXPECT_EQ(fm_sheet_remove_cf_rule(wb.handle, 0, id.c_str()), FM_STATUS_NOT_FOUND);
+  EXPECT_EQ(fm_sheet_update_cf_rule(wb.handle, 0, id.c_str(), &patch), FM_STATUS_NOT_FOUND);
 }
 
 TEST(FormulonCApiUsability, CfRuleReadBackFeedsAddWithoutDoublingTheEquals) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   const fm_cell_rect_t sqref{0, 0, 9, 0};
-  std::size_t index = 99;
-  fm_cf_rule_t rule = ExpressionRule(&sqref, "=A1>0", kRuleId);
-  ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &rule, &index), 0) << fm_get_last_error_message();
+  const std::string id = AddCfRule(wb.handle, 0, ExpressionRule(&sqref, "=A1>0", kRuleId));
 
   fm_cf_rule_t out = FM_STRUCT_INIT(fm_cf_rule_t);
   ASSERT_EQ(fm_sheet_get_cf_rule_at(wb.handle, 0, 0, &out), 0);
   EXPECT_EQ(Str(out.formula1), "=A1>0");
   // The read record goes back in once its own rule is gone.
-  ASSERT_EQ(fm_sheet_remove_cf_rule(wb.handle, 0, 0), 0);
-  ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &out, &index), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_remove_cf_rule(wb.handle, 0, id.c_str()), 0);
+  EXPECT_EQ(AddCfRule(wb.handle, 0, out), kRuleId);
   ASSERT_EQ(fm_sheet_get_cf_rule_at(wb.handle, 0, 0, &out), 0);
   EXPECT_EQ(Str(out.formula1), "=A1>0");
   EXPECT_EQ(Str(out.id), kRuleId);
+}
+
+// ---------------------------------------------------------------------------
+// Protected ranges by name
+// ---------------------------------------------------------------------------
+
+TEST(FormulonCApiUsability, ProtectedRangeIsAddressedByItsName) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  const fm_cell_rect_t rect{0, 0, 1, 1};
+  fm_protected_range_t range = FM_STRUCT_INIT(fm_protected_range_t);
+  range.name = "Edit";
+  range.ranges = &rect;
+  range.range_count = 1;
+  ASSERT_EQ(fm_sheet_add_protected_range(wb.handle, 0, &range), 0) << fm_get_last_error_message();
+  range.name = "EDIT";
+  EXPECT_EQ(fm_sheet_add_protected_range(wb.handle, 0, &range), FM_STATUS_ALREADY_EXISTS);
+
+  std::int32_t present = 99;
+  fm_protected_range_t out = FM_STRUCT_INIT(fm_protected_range_t);
+  ASSERT_EQ(fm_sheet_get_protected_range(wb.handle, 0, "edit", &present, &out), 0) << fm_get_last_error_message();
+  ASSERT_EQ(present, 1);
+  EXPECT_EQ(Str(out.name), "Edit");
+
+  fm_protected_range_patch_t patch = FM_STRUCT_INIT(fm_protected_range_patch_t);
+  patch.name_op = FM_PATCH_OP_SET;
+  patch.name = "Renamed";
+  ASSERT_EQ(fm_sheet_update_protected_range(wb.handle, 0, "Edit", &patch), 0) << fm_get_last_error_message();
+  EXPECT_EQ(fm_sheet_update_protected_range(wb.handle, 0, "Edit", &patch), FM_STATUS_NOT_FOUND);
+  ASSERT_EQ(fm_sheet_get_protected_range_at(wb.handle, 0, 0, &out), 0);
+  EXPECT_EQ(Str(out.name), "Renamed");
+
+  ASSERT_EQ(fm_sheet_remove_protected_range(wb.handle, 0, "renamed"), 0) << fm_get_last_error_message();
+  EXPECT_EQ(fm_sheet_remove_protected_range(wb.handle, 0, "Renamed"), FM_STATUS_NOT_FOUND);
+  present = 99;
+  ASSERT_EQ(fm_sheet_get_protected_range(wb.handle, 0, "Renamed", &present, &out), 0);
+  EXPECT_EQ(present, 0);
+}
+
+// ---------------------------------------------------------------------------
+// Keys and indices returned by adds
+// ---------------------------------------------------------------------------
+
+TEST(FormulonCApiUsability, AddPersonReturnsTheIdAsStored) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  const std::string lower = Lower(kRuleId);
+  const fm_person_t person{sizeof(fm_person_t), lower.c_str(), "Alice", nullptr, nullptr};
+  const char* id = nullptr;
+  ASSERT_EQ(fm_workbook_add_person(wb.handle, &person, &id), 0) << fm_get_last_error_message();
+  EXPECT_EQ(Str(id), kRuleId);
+  EXPECT_EQ(fm_workbook_add_person(wb.handle, &person, nullptr), FM_STATUS_BINDING_NULL_POINTER);
+}
+
+TEST(FormulonCApiUsability, SharedItemAddsReturnTheNewItemsIndex) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  std::uint32_t cache_id = 0U;
+  ASSERT_EQ(fm_workbook_add_pivot_cache(wb.handle, 0, &cache_id), 0) << fm_get_last_error_message();
+  std::size_t field = 99U;
+  ASSERT_EQ(fm_workbook_add_pivot_cache_field(wb.handle, cache_id, "Region", &field), 0);
+  ASSERT_EQ(field, 0U);
+  const std::size_t before = 0U;
+
+  std::size_t index = 99U;
+  ASSERT_EQ(fm_workbook_add_pivot_cache_field_shared_item_text(wb.handle, cache_id, 0U, "Q", &index), 0)
+      << fm_get_last_error_message();
+  EXPECT_EQ(index, before);
+  ASSERT_EQ(fm_workbook_add_pivot_cache_field_shared_item_number(wb.handle, cache_id, 0U, 7.0, &index), 0);
+  EXPECT_EQ(index, before + 1U);
+  ASSERT_EQ(fm_workbook_add_pivot_cache_field_shared_item_date(wb.handle, cache_id, 0U, 45292.0, &index), 0);
+  EXPECT_EQ(index, before + 2U);
+  ASSERT_EQ(fm_workbook_add_pivot_cache_field_shared_item_bool(wb.handle, cache_id, 0U, 1, &index), 0);
+  EXPECT_EQ(index, before + 3U);
+  ASSERT_EQ(fm_workbook_add_pivot_cache_field_shared_item_blank(wb.handle, cache_id, 0U, &index), 0);
+  EXPECT_EQ(index, before + 4U);
+  ASSERT_EQ(fm_workbook_add_pivot_cache_field_shared_item_error(wb.handle, cache_id, 0U, 1, &index), 0);  // #DIV/0!
+  EXPECT_EQ(index, before + 5U);
+  EXPECT_EQ(fm_workbook_add_pivot_cache_field_shared_item_text(wb.handle, cache_id, 0U, "R", nullptr),
+            FM_STATUS_BINDING_NULL_POINTER);
+}
+
+// ---------------------------------------------------------------------------
+// Chart insert title
+// ---------------------------------------------------------------------------
+
+// The insert title is the setter's record: no flag is the automatic title,
+// `NONE` no title, an empty `TEXT` a refusal.
+TEST(FormulonCApiUsability, ChartInsertTitleTakesTheSettersRecord) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  FillChartSource(wb.handle);
+  std::uint32_t id = 0;
+
+  fm_chart_insert_spec_t opts = ChartOptions();
+  ASSERT_EQ(fm_sheet_add_chart(wb.handle, 0, &opts, &id), 0) << fm_get_last_error_message();
+  EXPECT_EQ(ReadChartInfo(wb.handle, id).title.kind, FM_CHART_TITLE_KIND_AUTO);
+
+  opts.has_title = 1;
+  opts.title = fm_chart_title_t{FM_CHART_TITLE_KIND_NONE, nullptr, nullptr};
+  ASSERT_EQ(fm_sheet_add_chart(wb.handle, 0, &opts, &id), 0) << fm_get_last_error_message();
+  EXPECT_EQ(ReadChartInfo(wb.handle, id).title.kind, FM_CHART_TITLE_KIND_NONE);
+
+  opts.title = fm_chart_title_t{FM_CHART_TITLE_KIND_TEXT, "Sales", nullptr};
+  ASSERT_EQ(fm_sheet_add_chart(wb.handle, 0, &opts, &id), 0) << fm_get_last_error_message();
+  // The title text is a view into the chart snapshot, so read it before the snapshot is released.
+  std::int32_t present = 0;
+  fm_chart_t* chart = nullptr;
+  ASSERT_EQ(fm_sheet_get_chart(wb.handle, 0, id, &present, &chart), 0) << fm_get_last_error_message();
+  fm_chart_info_t info = FM_STRUCT_INIT(fm_chart_info_t);
+  ASSERT_EQ(fm_chart_get_info(chart, &info), 0);
+  EXPECT_EQ(info.title.kind, FM_CHART_TITLE_KIND_TEXT);
+  EXPECT_EQ(Str(info.title.text), "Sales");
+  fm_chart_destroy(chart);
+
+  std::size_t before = 0;
+  ASSERT_EQ(fm_sheet_get_drawing_object_count(wb.handle, 0, &before), 0);
+  opts.title = fm_chart_title_t{FM_CHART_TITLE_KIND_TEXT, "", nullptr};
+  EXPECT_EQ(fm_sheet_add_chart(wb.handle, 0, &opts, &id), FM_STATUS_INVALID_ARGUMENT);
+  std::size_t after = 0;
+  ASSERT_EQ(fm_sheet_get_drawing_object_count(wb.handle, 0, &after), 0);
+  EXPECT_EQ(after, before);
 }
 
 // ---------------------------------------------------------------------------
@@ -825,7 +1009,7 @@ TEST(FormulonCApiUsability, CfFormulasCarryTheEqualsWhicheverWayTheyWereEntered)
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   const fm_cell_rect_t sqref{0, 0, 9, 0};
-  std::size_t index = 99;
+  const char* id = nullptr;
   fm_cf_rule_t bare = FM_STRUCT_INIT(fm_cf_rule_t);
   bare.type = 1;  // CellIs
   bare.has_op = 1;
@@ -834,7 +1018,7 @@ TEST(FormulonCApiUsability, CfFormulasCarryTheEqualsWhicheverWayTheyWereEntered)
   bare.formula2 = "=10";
   bare.ranges = &sqref;
   bare.range_count = 1;
-  ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &bare, &index), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &bare, &id), 0) << fm_get_last_error_message();
   fm_cf_rule_t out = FM_STRUCT_INIT(fm_cf_rule_t);
   ASSERT_EQ(fm_sheet_get_cf_rule_at(wb.handle, 0, 0, &out), 0);
   EXPECT_EQ(Str(out.formula1), "=1");
@@ -846,13 +1030,15 @@ TEST(FormulonCApiUsability, CfFormulasCarryTheEqualsWhicheverWayTheyWereEntered)
   text.text = "ab";
   text.ranges = &sqref;
   text.range_count = 1;
-  ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &text, &index), 0) << fm_get_last_error_message();
-  ASSERT_EQ(fm_sheet_get_cf_rule_at(wb.handle, 0, index, &out), 0);
+  ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &text, &id), 0) << fm_get_last_error_message();
+  std::int32_t present = 0;
+  ASSERT_EQ(fm_sheet_get_cf_rule(wb.handle, 0, id, &present, &out), 0);
+  ASSERT_EQ(present, 1);
   EXPECT_EQ(Str(out.formula1), "=NOT(ISERROR(SEARCH(\"ab\",A1)))");
 
   // A doubled `=` is still refused.
   fm_cf_rule_t doubled = ExpressionRule(&sqref, "==A1>0");
-  EXPECT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &doubled, &index), FM_STATUS_PARSER_UNEXPECTED_TOKEN);
+  EXPECT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &doubled, &id), FM_STATUS_PARSER_UNEXPECTED_TOKEN);
 }
 
 TEST(FormulonCApiUsability, ValidationFormulasCarryTheEqualsWhicheverWayTheyWereEntered) {
@@ -948,9 +1134,8 @@ TEST(FormulonCApiUsability, SaveAndReloadDoesNotDoubleTheEquals) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 0, 1, "A1+1"), 0);
   const fm_cell_rect_t sqref{0, 0, 9, 0};
-  std::size_t index = 99;
   const fm_cf_rule_t rule = ExpressionRule(&sqref, "=A1>0");
-  ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &rule, &index), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &rule, ignored_id()), 0) << fm_get_last_error_message();
   const fm_data_validation_t v = WholeBetween(&sqref, "=1", "10");
   const char* validation_id = nullptr;
   ASSERT_EQ(fm_sheet_add_validation(wb.handle, 0, &v, &validation_id), 0) << fm_get_last_error_message();

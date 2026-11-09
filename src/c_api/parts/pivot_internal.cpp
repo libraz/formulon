@@ -240,7 +240,7 @@ formulon::pivot::PivotAxis pivot_axis_from_fm(fm_pivot_axis_t axis) {
       return formulon::pivot::PivotAxis::None;
     case FM_PIVOT_AXIS_ROW:
       return formulon::pivot::PivotAxis::Row;
-    case FM_PIVOT_AXIS_COL:
+    case FM_PIVOT_AXIS_COLUMN:
       return formulon::pivot::PivotAxis::Col;
     case FM_PIVOT_AXIS_VALUE:
       return formulon::pivot::PivotAxis::Value;
@@ -275,7 +275,7 @@ std::optional<fm_pivot_axis_t> pivot_axis_to_fm(formulon::pivot::PivotAxis axis)
     case formulon::pivot::PivotAxis::Row:
       return FM_PIVOT_AXIS_ROW;
     case formulon::pivot::PivotAxis::Col:
-      return FM_PIVOT_AXIS_COL;
+      return FM_PIVOT_AXIS_COLUMN;
     case formulon::pivot::PivotAxis::Value:
       return FM_PIVOT_AXIS_VALUE;
     case formulon::pivot::PivotAxis::Page:

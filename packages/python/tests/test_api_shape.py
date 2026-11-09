@@ -26,6 +26,7 @@ from formulon import (
     Comment,
     ErrorCode,
     ExcelError,
+    FormulaSyntaxError,
     FormulonError,
     IndexOutOfRangeError,
     InvalidArgumentError,
@@ -471,7 +472,7 @@ class SheetViewTests(unittest.TestCase):
     def test_grid_edge(self) -> None:
         self.ws.set_value("XFD1048576", 9)
         self.assertEqual(self.wb.sheet(0).get_typed_value(1048575, 16383).number, 9.0)
-        with self.assertRaises(InvalidArgumentError):
+        with self.assertRaises(FormulaSyntaxError):
             self.ws.get_value("XFE1")
 
     def test_rejected_addresses(self) -> None:
@@ -480,11 +481,12 @@ class SheetViewTests(unittest.TestCase):
         not_a_cell = ("A1:B2", "Sheet2!A1", "Sheet1!A1")
         for a1 in unparseable + not_a_cell:
             with self.subTest(a1=a1):
-                with self.assertRaises(InvalidArgumentError) as cm:
+                error = FormulaSyntaxError if a1 in unparseable else InvalidArgumentError
+                with self.assertRaises(error) as cm:
                     self.ws.get_value(a1)
                 want = StatusCode.PARSER_INVALID_REFERENCE if a1 in unparseable else StatusCode.INVALID_ARGUMENT
                 self.assertEqual(cm.exception.code, want)
-                with self.assertRaises(InvalidArgumentError):
+                with self.assertRaises(error):
                     self.ws.set_value(a1, 1)
 
     def test_non_string_address_is_type_error(self) -> None:
@@ -547,6 +549,8 @@ _A1_PAIRWISE = (
     ("P32", "$a9", (8, 0)),
 )
 
+_A1_NOT_A_CELL = frozenset({"P5", "P7", "P9", "P15", "P21", "P22", "P24", "P28", "P30", "P31"})
+
 
 class SheetA1PairwiseTests(unittest.TestCase):
     def setUp(self) -> None:
@@ -558,9 +562,12 @@ class SheetA1PairwiseTests(unittest.TestCase):
         for case_id, a1, expected in _A1_PAIRWISE:
             with self.subTest(case=case_id, a1=a1):
                 if expected is None:
-                    with self.assertRaises(InvalidArgumentError):
+                    # Text that does not parse is a syntax error; a valid reference that is not one bare cell is
+                    # an invalid argument.
+                    error = InvalidArgumentError if case_id in _A1_NOT_A_CELL else FormulaSyntaxError
+                    with self.assertRaises(error):
                         self.ws.get_value(a1)
-                    with self.assertRaises(InvalidArgumentError):
+                    with self.assertRaises(error):
                         self.ws.set_value(a1, 1)
                     continue
                 row, col = expected

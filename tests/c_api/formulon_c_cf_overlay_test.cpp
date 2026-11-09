@@ -69,7 +69,7 @@ TEST(FormulonCApiCfMutate, RemoveAtPrunesRemovedRuleFromX14Overlay) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   SeedDataBarRulesWithOverlay(wb.handle);
 
-  ASSERT_EQ(fm_sheet_remove_cf_rule(wb.handle, 0, 0), 0);
+  ASSERT_EQ(fm_sheet_remove_cf_rule(wb.handle, 0, CfRuleIdAt(wb.handle, 0, 0).c_str()), 0);
 
   const std::string& overlay = wb.handle->workbook().sheet(0).ext_lst_xml();
   EXPECT_FALSE(ContainsSubstring(overlay, kX14IdA));
@@ -91,7 +91,7 @@ TEST(FormulonCApiCfMutate, MalformedOverlayDroppedWhollyOnRemove) {
   SeedDataBarRulesWithOverlay(wb.handle);
   wb.handle->workbook().sheet(0).set_ext_lst_xml("<extLst><ext><x14:conditionalFormattings>");
 
-  ASSERT_EQ(fm_sheet_remove_cf_rule(wb.handle, 0, 0), 0);
+  ASSERT_EQ(fm_sheet_remove_cf_rule(wb.handle, 0, CfRuleIdAt(wb.handle, 0, 0).c_str()), 0);
   EXPECT_TRUE(wb.handle->workbook().sheet(0).ext_lst_xml().empty());
 }
 
@@ -100,7 +100,7 @@ TEST(FormulonCApiCfMutate, RemovedRuleDoesNotResurfaceThroughSaveLoad) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   SeedDataBarRulesWithOverlay(wb.handle);
 
-  ASSERT_EQ(fm_sheet_remove_cf_rule(wb.handle, 0, 0), 0);
+  ASSERT_EQ(fm_sheet_remove_cf_rule(wb.handle, 0, CfRuleIdAt(wb.handle, 0, 0).c_str()), 0);
 
   BufferGuard saved;
   ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0);
@@ -135,8 +135,8 @@ TEST(FormulonCApiCfMutate, DataBarExtensionFieldsSurviveSaveAndLoad) {
   rule.data_bar_negative_border = CfRgb(4, 5, 6, 255);
   rule.data_bar_axis_color = CfRgb(7, 8, 9, 255);
   rule.data_bar_direction = 2;  // right to left
-  std::size_t rule_index = 0;
-  ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &rule, &rule_index), 0) << fm_get_last_error_message();
+  const char* rule_id = nullptr;
+  ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &rule, &rule_id), 0) << fm_get_last_error_message();
 
   BufferGuard saved;
   ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0);
@@ -183,8 +183,8 @@ TEST(FormulonCApiCfMutate, IconSetFloorSurvivesSaveAndLoad) {
   rule.icon_set_floor.type = 0;  // Number
   rule.icon_set_floor.value = "5";
   rule.icon_set_floor.gte = 0;
-  std::size_t rule_index = 0;
-  ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &rule, &rule_index), 0) << fm_get_last_error_message();
+  const char* rule_id = nullptr;
+  ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &rule, &rule_id), 0) << fm_get_last_error_message();
 
   BufferGuard saved;
   ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0);
@@ -210,8 +210,8 @@ TEST(FormulonCApiCfMutate, UnengagedIconSetFloorIsExcelsDefault) {
   fm_cfvo_t thresholds[2]{};
   rule.icon_set_thresholds = thresholds;
   rule.icon_set_threshold_count = 2;
-  std::size_t rule_index = 0;
-  ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &rule, &rule_index), 0) << fm_get_last_error_message();
+  const char* rule_id = nullptr;
+  ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &rule, &rule_id), 0) << fm_get_last_error_message();
   const auto& floor = wb.handle->workbook().sheet(0).conditional_formats()[0].rules[0].icon_set->floor;
   EXPECT_EQ(floor.type, formulon::cf::CfvoType::Percent);
   EXPECT_EQ(floor.value, "0");

@@ -18,7 +18,8 @@ Public API:
   * :class:`ExcelError` -- an Excel cell error as a Python value;
     :attr:`ErrorCode.display_name` spells a code as Excel does (``#DIV/0!``).
   * :class:`FormulonError` and its subclasses -- host-side failures;
-    :class:`FormulaSyntaxError` carries the position of a formula syntax error.
+    :class:`FormulaSyntaxError` carries the position of a formula syntax error;
+    :class:`IoError` (and its :class:`InvalidFileError`) covers file and part failures.
 
 Cell-level Excel errors (``#DIV/0!`` and friends) are values: an
 :class:`ExcelError` in a native read. Host-side failures (a closed workbook,
@@ -34,12 +35,20 @@ from __future__ import annotations
 from . import _workbook  # noqa: F401
 from ._c import (
     AlreadyExistsError,
+    BindingError,
+    EvaluationError,
     FormulaSyntaxError,
+    FunctionError,
     IndexOutOfRangeError,
     InvalidArgumentError,
+    IoError,
     NotFoundError,
     ParseError,
     ParseErrorCode,
+    PivotError,
+    PrintError,
+    RecalcError,
+    SecurityError,
     ValueKind,
     WorkbookClosedError,
 )
@@ -115,6 +124,7 @@ from ._workbook import (
     CfMatchIcon,
     CfMatchKind,
     CfPlainRuleInput,
+    CfRuleId,
     CfRuleRef,
     CfRuleType,
     CfTextRuleInput,
@@ -383,7 +393,6 @@ from ._workbook import (
     get_image_info,
     get_locale_facts,
     list_function_names,
-    list_locale_error_names,
     list_profile_ids,
     localize_formula,
     localize_function_name,
@@ -454,6 +463,14 @@ for _exception in (
     IndexOutOfRangeError,
     WorkbookClosedError,
     InvalidFileError,
+    BindingError,
+    EvaluationError,
+    FunctionError,
+    IoError,
+    PivotError,
+    PrintError,
+    RecalcError,
+    SecurityError,
 ):
     _exception.__module__ = __name__
 del _exception
@@ -514,6 +531,7 @@ __all__ = [
     "CfMatchIcon",
     "CfMatchKind",
     "CfPlainRuleInput",
+    "CfRuleId",
     "CfRuleType",
     "CfRuleRef",
     "CfTextRuleInput",
@@ -657,9 +675,16 @@ __all__ = [
     "IndexOutOfRangeError",
     "InvalidArgumentError",
     "InvalidFileError",
+    "BindingError",
+    "EvaluationError",
+    "FunctionError",
+    "IoError",
+    "PivotError",
+    "PrintError",
+    "RecalcError",
+    "SecurityError",
     "IterativeSettings",
     "list_function_names",
-    "list_locale_error_names",
     "list_profile_ids",
     "LocaleDateOrder",
     "LocaleFacts",
@@ -828,7 +853,8 @@ def evaluate_formula(formula: str) -> NativeValue:
     The formula is evaluated read-only as if entered at ``Sheet1!A1``. A
     1x1 result is returned as its value; any other result as a list of rows.
     Cell-level Excel errors (``#DIV/0!``, ``#VALUE!``, ...) are returned as
-    :class:`ExcelError` values.
+    :class:`ExcelError` values. A blank cell the formula reads evaluates as 0, as it
+    does in a cell (``=B9`` on an empty B9 is 0).
 
     Args:
       formula: the formula text, with or without a leading ``=``.

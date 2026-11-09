@@ -11,7 +11,7 @@
 namespace formulon::cli {
 
 fm_status_t load_workbook_file(const std::string& path, const SharedOptions& shared, WorkbookGuard& wb,
-                               std::ostream& err, std::string_view subcommand) {
+                               std::ostream& err, std::string_view subcommand, bool report_loss) {
   std::vector<std::uint8_t> bytes;
   const bool from_stdin = path == kStdioPath;
   if (auto rc = from_stdin ? read_stdin(bytes) : read_file(path, bytes); rc != 0) {
@@ -36,6 +36,9 @@ fm_status_t load_workbook_file(const std::string& path, const SharedOptions& sha
     return rc;
   }
   // Load losses are reported before any output is produced from the workbook.
+  if (!report_loss) {
+    return 0;
+  }
   if (auto rc = emit_read_diagnostics(wb.handle, err, subcommand); rc != 0) {
     emit_last_error(err, subcommand);
     return rc;

@@ -562,6 +562,31 @@ class DerivationTest(BindingRuleTestBase):
             ],
         )
 
+    def test_r5_list_a_dropped_list_is_expected_to_be_absent(self) -> None:
+        def ledger(dropped: bool) -> dict:
+            entry = {
+                "kind": "list",
+                "from": ["hyperlink.get_count", "hyperlink.get_at"],
+                "js": "listHyperlinks",
+                "py": "list_hyperlinks",
+                "surfaces": ["wasm", "py"],
+            }
+            if dropped:
+                entry["drop"] = {"js": "listHyperlinks", "py": "list_hyperlinks", "closes": "R5.derive"}
+            return {
+                "collections": {
+                    "hyperlink": {"key": "natural", "plural": "hyperlinks", "ops": ["hyperlink.get_count"]}
+                },
+                "entries": {"hyperlinks.list": entry},
+            }
+
+        self.assert_rule(
+            "R5.list",
+            self.fixture.context("", ledger(False)),
+            self.fixture.context("", ledger(True)),
+            [("py", "hyperlinks.list", "missing"), ("wasm", "hyperlinks.list", "missing")],
+        )
+
     def test_a_process_list_may_be_a_module_function(self) -> None:
         ledger = {
             "collections": {"function": {"key": "natural", "plural": "function_names", "ops": ["function.get_count"]}},
@@ -3015,6 +3040,20 @@ class RefArgTest(BindingRuleTestBase):
             ),
             # `PivotRef` lacks the handle class; `LocalRef` has the union but is not exported.
             [("py", "get_table", "table"), ("py", "remove_pivot", "pivot")],
+        )
+
+    def test_r26_resolves_a_member_alias_of_one_type(self) -> None:
+        aliases = 'PivotKey = str\nPivotRef = Union[int, PivotKey, "Pivot"]\n'
+        py = _py_wb("    def remove_pivot(self, pivot: PivotRef) -> None: ...\n", prelude=aliases)
+        exported = "__all__ = ['PivotKey', 'PivotRef']\n"
+        self.assert_rule(
+            "R26.ref",
+            self.fixture.context(
+                "", None, py_workbook=py.replace("PivotKey = str", "PivotKey = bytes"), py_init=exported
+            ),
+            self.fixture.context("", None, py_workbook=py, py_init=exported),
+            # `PivotKey` names one type, so `PivotRef` is the reference union once it resolves; `bytes` is not.
+            [("py", "remove_pivot", "pivot")],
         )
 
     def test_r26_keeps_the_type_of_an_argument_the_ledger_exempts(self) -> None:

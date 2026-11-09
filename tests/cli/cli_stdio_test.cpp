@@ -26,11 +26,11 @@ TEST(FormulonCli, StdinDashFeedsEveryInputSubcommand) {
   PathGuard guard(path);
   ASSERT_TRUE(write_fixture_workbook(path));
 
-  const CliRun dump = run_cli({"dump", "--sheets", "-"}, false, false, path);
+  const CliRun dump = run_cli({"dump", "--view", "sheets", "-"}, false, false, path);
   EXPECT_EQ(dump.exit_code, 0) << dump.stderr_text;
   EXPECT_EQ(dump.stdout_text, "Sheet1\n");
 
-  const CliRun dump_after_terminator = run_cli({"dump", "--sheets", "--", "-"}, false, false, path);
+  const CliRun dump_after_terminator = run_cli({"dump", "--view", "sheets", "--", "-"}, false, false, path);
   EXPECT_EQ(dump_after_terminator.exit_code, 0) << dump_after_terminator.stderr_text;
   EXPECT_EQ(dump_after_terminator.stdout_text, "Sheet1\n");
 
@@ -50,11 +50,11 @@ TEST(FormulonCli, StdinDashEmptyInputIsAnEngineFailure) {
   PathGuard guard(empty);
   ASSERT_TRUE(write_bytes(empty, ""));
 
-  const CliRun from_stdin = run_cli({"dump", "--sheets", "-"}, false, false, empty);
+  const CliRun from_stdin = run_cli({"dump", "--view", "sheets", "-"}, false, false, empty);
   EXPECT_EQ(from_stdin.exit_code, 1);
   EXPECT_EQ(from_stdin.stdout_text, "");
 
-  const CliRun from_file = run_cli({"dump", "--sheets", empty});
+  const CliRun from_file = run_cli({"dump", "--view", "sheets", empty});
   EXPECT_EQ(from_file.exit_code, 1);
 }
 
@@ -62,7 +62,7 @@ TEST(FormulonCli, StdinDashCorruptInputIsAnEngineFailure) {
   const std::string junk = temp_path("stdin_dash_junk.xlsx");
   PathGuard guard(junk);
   ASSERT_TRUE(write_bytes(junk, "this is not a workbook"));
-  const CliRun r = run_cli({"dump", "--sheets", "-"}, false, false, junk);
+  const CliRun r = run_cli({"dump", "--view", "sheets", "-"}, false, false, junk);
   EXPECT_EQ(r.exit_code, 1);
 }
 
@@ -70,7 +70,7 @@ TEST(FormulonCli, StdinDashOnATerminalIsAUsageError) {
   SpawnOptions options;
   options.stdin_tty = true;
   for (const std::vector<std::string>& args : {
-           std::vector<std::string>{"dump", "--sheets", "-"},
+           std::vector<std::string>{"dump", "--view", "sheets", "-"},
            std::vector<std::string>{"paginate", "-"},
            std::vector<std::string>{"recalc", "-", "-o", temp_path("stdin_tty_unused.xlsx")},
        }) {
@@ -85,7 +85,7 @@ TEST(FormulonCli, StdinDashDotSlashNamesAFileCalledDash) {
   const std::string name = "-";
   PathGuard guard(name);
   ASSERT_TRUE(write_fixture_workbook(name));
-  const CliRun r = run_cli({"dump", "--sheets", "./-"}, false, false, "/dev/null");
+  const CliRun r = run_cli({"dump", "--view", "sheets", "./-"}, false, false, "/dev/null");
   EXPECT_EQ(r.exit_code, 0) << r.stderr_text;
   EXPECT_EQ(r.stdout_text, "Sheet1\n");
 }
@@ -190,7 +190,7 @@ TEST(FormulonCli, OptEqualsMatchesTheSpacedForm) {
   EXPECT_EQ(equals.stdout_text, spaced.stdout_text);
   EXPECT_NE(equals.stderr_text.find("2 iterations"), std::string::npos) << equals.stderr_text;
 
-  const CliRun dump = run_cli({"dump", "--profile=win-365-en_US", "--sheets", in});
+  const CliRun dump = run_cli({"dump", "--profile=win-365-en_US", "--view", "sheets", in});
   EXPECT_EQ(dump.exit_code, 0) << dump.stderr_text;
   EXPECT_EQ(dump.stdout_text, "Sheet1\n");
 
@@ -218,7 +218,7 @@ TEST(FormulonCli, OptEqualsOnAValuelessFlagIsAUsageError) {
 
   for (const std::vector<std::string>& args : {
            std::vector<std::string>{"eval", "--json=1", "=1"},
-           std::vector<std::string>{"dump", "--sheets=1", in},
+           std::vector<std::string>{"paginate", "--json=1", in},
            std::vector<std::string>{"dump", "--json=", in},
            std::vector<std::string>{"recalc", "--iterative=yes", in, "-o", temp_path("unused.xlsx")},
            std::vector<std::string>{"recalc", "--quiet=1", in, "-o", temp_path("unused.xlsx")},

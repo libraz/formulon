@@ -321,6 +321,7 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value PivotGetStyleOptions(const Napi::CallbackInfo& info);
   Napi::Value PivotRowFieldOrder(const Napi::CallbackInfo& info);
   Napi::Value PivotColFieldOrder(const Napi::CallbackInfo& info);
+  Napi::Value PivotPageFieldOrder(const Napi::CallbackInfo& info);
   Napi::Value PivotFieldCount(const Napi::CallbackInfo& info);
   Napi::Value PivotFieldAdd(const Napi::CallbackInfo& info);
   Napi::Value PivotFieldAt(const Napi::CallbackInfo& info);
@@ -357,6 +358,7 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value PivotFieldSetDateGroup(const Napi::CallbackInfo& info);
   Napi::Value PivotSetRowFieldOrder(const Napi::CallbackInfo& info);
   Napi::Value PivotSetColFieldOrder(const Napi::CallbackInfo& info);
+  Napi::Value PivotSetPageFieldOrder(const Napi::CallbackInfo& info);
   Napi::Value PivotDataFieldCount(const Napi::CallbackInfo& info);
   Napi::Value PivotDataFieldAdd(const Napi::CallbackInfo& info);
   Napi::Value PivotDataFieldAt(const Napi::CallbackInfo& info);

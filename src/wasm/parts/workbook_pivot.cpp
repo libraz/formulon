@@ -757,6 +757,11 @@ void JsWorkbook::pivotSetColFieldOrder(uint32_t sheet, uint32_t pivotIndex, emsc
                                "Pivot.setColumnFieldOrder");
 }
 
+void JsWorkbook::pivotSetPageFieldOrder(uint32_t sheet, uint32_t pivotIndex, emscripten::val indices) {
+  return set_pivot_field_order(handle_, sheet, pivotIndex, indices, &fm_sheet_set_pivot_page_field_order,
+                               "Pivot.setPageFieldOrder");
+}
+
 namespace {
 
 // Shared body of `pivotRowFieldOrder` / `pivotColFieldOrder`.
@@ -792,6 +797,10 @@ emscripten::val JsWorkbook::pivotRowFieldOrder(uint32_t sheet, uint32_t pivotInd
 
 emscripten::val JsWorkbook::pivotColFieldOrder(uint32_t sheet, uint32_t pivotIndex) const {
   return get_pivot_field_order(handle_, sheet, pivotIndex, &fm_sheet_get_pivot_column_field_order);
+}
+
+emscripten::val JsWorkbook::pivotPageFieldOrder(uint32_t sheet, uint32_t pivotIndex) const {
+  return get_pivot_field_order(handle_, sheet, pivotIndex, &fm_sheet_get_pivot_page_field_order);
 }
 
 double JsWorkbook::pivotDataFieldCount(uint32_t sheet, uint32_t pivotIndex) const {

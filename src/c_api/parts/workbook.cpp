@@ -28,8 +28,8 @@
 #include "io/xlsb/reader.h"
 #include "io/xlsb/writer.h"
 #include "sheet.h"
+#include "sheet_name.h"
 #include "utils/error.h"
-#include "utils/strings.h"
 #include "value.h"
 
 using formulon::c_api::parts::check_index;
@@ -674,11 +674,11 @@ extern "C" fm_status_t fm_workbook_get_defined_name_at(const fm_workbook_t* wb, 
 
 namespace {
 
-// Position of the defined name `name` (ASCII case-insensitive) in scope `local_sheet_id`, or the list size.
+// Position of the defined name `name` (Unicode case-folded) in scope `local_sheet_id`, or the list size.
 std::size_t find_defined_name_index(const fm_workbook_t* wb, const char* name, int32_t local_sheet_id) {
   const auto& names = wb->workbook().defined_names();
   for (std::size_t i = 0; i < names.size(); ++i) {
-    if (names[i].local_sheet_id == local_sheet_id && formulon::strings::case_insensitive_eq(names[i].name, name)) {
+    if (names[i].local_sheet_id == local_sheet_id && formulon::collection_names::equal(names[i].name, name)) {
       return i;
     }
   }

@@ -186,8 +186,11 @@ class Table(_NoCopy):
         ``range`` is a :class:`CellRect`, an A1 range (``"A1:C5"``,
         optionally sheet-qualified) or a :class:`SheetRect`; it must lie on
         the table's sheet and keep the width the table's column list already
-        describes. Turning the totals row on writes each column's totals
-        cell. The update is all-or-nothing. Rename with :meth:`rename` and
+        describes. Turning ``totals_row`` on without ``range`` grows the table
+        by one row below and writes each column's totals cell there, keeping
+        the data rows; turning it off removes that row and shrinks the table by
+        one. With ``range`` in the same call only the flag changes (a read
+        record feeds back). The update is all-or-nothing. Rename with :meth:`rename` and
         change the style with :meth:`update_style_options`.
 
         Raises:
@@ -195,6 +198,8 @@ class Table(_NoCopy):
             type (``None`` included).
           FormulonError: with ``StatusCode.INVALID_ARGUMENT`` when ``range``
             names another sheet or is not an A1 range.
+          PreconditionFailedError: when growing for the totals row finds the
+            row below occupied or the table on the last grid row.
         """
         for flag in (header_row, totals_row):
             if flag is not UNCHANGED and not isinstance(flag, bool):
@@ -346,7 +351,8 @@ class Table(_NoCopy):
 
         As typing over the header cell does: an empty ``name`` takes the
         profile's ``Column<N>`` (``列<N>``) with the lowest unused N, a name
-        another column already has (ASCII case-insensitively) gains the
+        another column already has (ignoring case under Unicode simple case
+        folding, as sheet names do) gains the
         lowest unused N >= 2, and anything else is kept verbatim. Structured
         references to the column through this table are rewritten in cell,
         totals-row and defined-name formulas and chart series. Writing a

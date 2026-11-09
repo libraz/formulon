@@ -46,7 +46,6 @@ const NON_TABLE_MEMBERS = new Set([
   'localizeFormula',
   'canonicalizeFormula',
   'getLocaleFacts',
-  'listLocaleErrorNames',
   'listProfileIds',
   'compareText',
   'getCollationClasses',

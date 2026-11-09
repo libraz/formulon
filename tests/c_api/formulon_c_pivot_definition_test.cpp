@@ -135,7 +135,7 @@ TEST(FormulonCApiPivot, ReadBackRoundTripsWhatTheSettersWrote) {
   // Field orders follow the setters.
   fm_pivot_field_spec_t extra = FM_STRUCT_INIT(fm_pivot_field_spec_t);
   extra.source_name = "Amount";
-  extra.axis = FM_PIVOT_AXIS_COL;
+  extra.axis = FM_PIVOT_AXIS_COLUMN;
   extra.subtotal_top = FM_TRISTATE_TRUE;
   std::size_t extra_index = 99;
   ASSERT_EQ(fm_sheet_add_pivot_field(wb.handle, 0, pivot_index, &extra, &extra_index), 0);
@@ -309,9 +309,9 @@ void BuildWideCachePivot(fm_workbook_t* wb, std::uint32_t* cache_id, std::size_t
     std::size_t idx = 0;
     ASSERT_EQ(fm_workbook_add_pivot_cache_field(wb, *cache_id, name, &idx), 0);
   }
-  ASSERT_EQ(fm_workbook_add_pivot_cache_field_shared_item_text(wb, *cache_id, 0, "North"), 0);
-  ASSERT_EQ(fm_workbook_add_pivot_cache_field_shared_item_text(wb, *cache_id, 0, "South"), 0);
-  ASSERT_EQ(fm_workbook_add_pivot_cache_field_shared_item_text(wb, *cache_id, 1, "Pen"), 0);
+  ASSERT_EQ(fm_workbook_add_pivot_cache_field_shared_item_text(wb, *cache_id, 0, "North", ignored_index()), 0);
+  ASSERT_EQ(fm_workbook_add_pivot_cache_field_shared_item_text(wb, *cache_id, 0, "South", ignored_index()), 0);
+  ASSERT_EQ(fm_workbook_add_pivot_cache_field_shared_item_text(wb, *cache_id, 1, "Pen", ignored_index()), 0);
   const double rows[][4] = {{0, 0, 100, 1}, {1, 0, 200, 2}, {0, 0, 300, 3}};
   for (const auto& row : rows) {
     std::size_t rec = 0;

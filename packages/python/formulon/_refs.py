@@ -1,9 +1,8 @@
-"""Resolve a table, pivot, CF-rule or protected-range reference to its index.
+"""Resolve a table or pivot reference to its index.
 
-A reference is a 0-based index, a name or, for a table or a pivot, its
-handle. A name is a table's display name, a pivot's name, a CF rule's id or
-a protected range's name; it matches ignoring case under Unicode simple case
-folding, as sheet names do, and the first entry carrying it wins; a
+A reference is a 0-based index, a name or its handle. A name is a table's
+display name or a pivot's name; it matches ignoring case under Unicode simple
+case folding, as sheet names do, and the first entry carrying it wins; a
 numeric-looking string is still a name. The collection is listed afresh on
 every call, so resolving is O(n). A handle resolves to its object's current
 index.

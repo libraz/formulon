@@ -801,6 +801,23 @@ const PIVOT_MUTATORS = [
     },
   ],
   [
+    'Pivot.setPageFieldOrder',
+    {
+      act: (b) => b.wb.sheet(0).pivot(b.pivot).setPageFieldOrder([b.product]),
+      expect: (b) => {
+        assert.deepEqual(b.wb.sheet(0).pivot(b.pivot).getPageFieldOrder(), [b.product]);
+        assert.deepEqual(pivotGrid(b.wb), [
+          'Product|(すべて)',
+          '|',
+          '行ラベル|Sum of Amount',
+          'East|15',
+          'West|37',
+          '総計|52',
+        ]);
+      },
+    },
+  ],
+  [
     'Pivot.setColumnFieldOrder',
     {
       act: (b) => b.wb.sheet(0).pivot(b.pivot).setColumnFieldOrder([b.product]),
@@ -1125,7 +1142,7 @@ const MODULE_FUNCTIONS = [
   ['localizeFunctionName', ['SUM', 'win-365-en_US'], ['NOPE_XYZ', 'win-365-en_US']],
   ['canonicalizeFunctionName', ['SUM', 'win-365-en_US'], ['NOPE_XYZ', 'win-365-en_US']],
   ['listFunctionNames', [], null],
-  ['listLocaleErrorNames', ['win-365-en_US'], ['nope']],
+  ['getLocaleFacts', ['win-365-en_US'], ['nope']],
   [
     'convertCivilToSerial',
     [{ year: 2026, month: 1, day: 1, hour: 0, minute: 0, second: 0 }],

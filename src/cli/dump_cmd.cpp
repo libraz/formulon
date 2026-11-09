@@ -1,9 +1,9 @@
 //
-// `formulon dump <in> [--formulas|--values|--sheets|--metadata]`.
+// `formulon dump <in> [--view formulas|values|sheets|metadata]`.
 //
 // Renders a stable, diff-friendly snapshot of a workbook so it can be
-// fed into `diff(1)` between recalc passes. The four flags are
-// mutually exclusive; `--formulas` is the default.
+// fed into `diff(1)` between recalc passes. `--view` picks one of
+// four views; `formulas` is the default.
 //
 // Iteration order is sheet index ASC, then cell `(row, col)` ASC. The
 // C ABI's `fm_sheet_get_cell_at` enumerates cells in a stable order
@@ -38,7 +38,7 @@ namespace {
 
 enum class DumpMode { kFormulas, kValues, kSheets, kMetadata };
 
-/// Which cells the `--formulas` / `--values` views list.
+/// Which cells the `formulas` / `values` views list.
 struct DumpScope {
   std::optional<std::size_t> sheet;
   std::optional<fm_cell_rect_t> range;
@@ -55,16 +55,18 @@ std::string escape_c_string(const char* text) {
 }
 
 void print_dump_usage(std::ostream& out) {
-  out << "Usage: formulon dump [--formulas|--values|--sheets|--metadata] [--sheet <name | index>] [--range A1:B2]\n"
+  out << "Usage: formulon dump [--view formulas|values|sheets|metadata] [--sheet <name | index>] [--range A1:B2]\n"
       << "                     [--json] [--] <in | ->\n"
       << "\n"
       << "Print a diff-friendly snapshot of <in>, an xlsx or xlsb file ('-' reads stdin):\n"
-      << "  --formulas  list every formula cell (default)\n"
-      << "  --values    recalculate, then list every non-blank cell with its rendered value\n"
-      << "  --sheets    list sheet names in document order\n"
-      << "  --metadata  list defined names, tables and passthrough parts\n"
-      << "  --sheet S   with --formulas or --values: only the sheet named S (or the 0-based index S)\n"
-      << "  --range R   with --formulas or --values: only the cells in the A1 range R (with --sheet, on that sheet)\n"
+      << "  --view V    what to print (default formulas):\n"
+      << "                formulas  list every formula cell\n"
+      << "                values    recalculate, then list every non-blank cell with its rendered value\n"
+      << "                sheets    list sheet names in document order\n"
+      << "                metadata  list defined names, tables and passthrough parts\n"
+      << "  --sheet <name | index>  with the formulas or values view: only that sheet (a name or a 0-based index)\n"
+      << "  --range R   with the formulas or values view: only the cells in the A1 range R (with --sheet, on that "
+         "sheet)\n"
       << "  --json      print the selected view as one JSON object: {\"format\":1,...}\n"
       << "  --           end options; the next token is the input path\n"
       << "Plain output escapes only \\n, \\r, \\t and \\\\.\n";
@@ -303,23 +305,22 @@ fm_status_t dump_metadata(const fm_workbook_t* wb, bool json, std::ostream& out)
   return 0;
 }
 
-struct DumpModeFlag {
-  std::string_view flag;
+struct DumpView {
+  std::string_view name;
   DumpMode mode;
 };
 
-constexpr DumpModeFlag kDumpModeFlags[] = {
-    {"--formulas", DumpMode::kFormulas},
-    {"--values", DumpMode::kValues},
-    {"--sheets", DumpMode::kSheets},
-    {"--metadata", DumpMode::kMetadata},
+constexpr DumpView kDumpViews[] = {
+    {"formulas", DumpMode::kFormulas},
+    {"values", DumpMode::kValues},
+    {"sheets", DumpMode::kSheets},
+    {"metadata", DumpMode::kMetadata},
 };
 
 }  // namespace
 
 int run_dump(const ArgList& args, std::ostream& out, std::ostream& err) {
   DumpMode mode = DumpMode::kFormulas;
-  bool mode_set = false;
   bool want_json = false;
   std::optional<std::string> sheet_spec;
   std::optional<std::string> range_spec;
@@ -328,16 +329,6 @@ int run_dump(const ArgList& args, std::ostream& out, std::ostream& err) {
   bool options_ended = false;
   SharedOptions shared;
   int exit_code = 0;
-
-  auto select_mode = [&](DumpMode m, std::string_view flag) -> bool {
-    if (mode_set) {
-      err << "formulon: dump: " << flag << " conflicts with another mode flag\n";
-      return false;
-    }
-    mode = m;
-    mode_set = true;
-    return true;
-  };
 
   for (std::size_t i = 0; i < args.size(); ++i) {
     const std::string_view a = args[i];
@@ -353,6 +344,25 @@ int run_dump(const ArgList& args, std::ostream& out, std::ostream& err) {
       want_json = true;
       continue;
     }
+    if (!options_ended && a == "--view") {
+      if (i + 1 >= args.size()) {
+        err << "formulon: dump: --view requires formulas, values, sheets or metadata\n";
+        return kExitUsage;
+      }
+      const DumpView* view = nullptr;
+      for (const DumpView& candidate : kDumpViews) {
+        if (args[i + 1] == candidate.name) {
+          view = &candidate;
+        }
+      }
+      if (view == nullptr) {
+        err << "formulon: dump: --view must be formulas, values, sheets or metadata, not '" << args[i + 1] << "'\n";
+        return kExitUsage;
+      }
+      mode = view->mode;
+      ++i;
+      continue;
+    }
     if (!options_ended && (a == "--sheet" || a == "--range")) {
       if (i + 1 >= args.size()) {
         err << "formulon: dump: " << a << " requires a value\n";
@@ -360,18 +370,6 @@ int run_dump(const ArgList& args, std::ostream& out, std::ostream& err) {
       }
       (a == "--sheet" ? sheet_spec : range_spec).emplace(args[i + 1]);
       ++i;
-      continue;
-    }
-    const DumpModeFlag* mode_flag = nullptr;
-    for (const DumpModeFlag& candidate : kDumpModeFlags) {
-      if (!options_ended && a == candidate.flag) {
-        mode_flag = &candidate;
-      }
-    }
-    if (mode_flag != nullptr) {
-      if (!select_mode(mode_flag->mode, a)) {
-        return kExitUsage;
-      }
       continue;
     }
     if (!accept_positional(a, options_ended, input_seen, "dump", "input path", err, /*allow_dash=*/true)) {
@@ -386,7 +384,7 @@ int run_dump(const ArgList& args, std::ostream& out, std::ostream& err) {
   }
 
   if ((sheet_spec.has_value() || range_spec.has_value()) && mode != DumpMode::kFormulas && mode != DumpMode::kValues) {
-    err << "formulon: dump: --sheet and --range apply to --formulas and --values only\n";
+    err << "formulon: dump: --sheet and --range apply to the formulas and values views only\n";
     return kExitUsage;
   }
 
@@ -416,8 +414,8 @@ int run_dump(const ArgList& args, std::ostream& out, std::ostream& err) {
     scope.range = ref.rect;
   }
 
-  // `--values` mode runs a recalc so cached values reflect the
-  // post-load state. `--formulas` and the metadata views deliberately
+  // The values view runs a recalc so cached values reflect the
+  // post-load state. The formulas and metadata views deliberately
   // skip recalc to keep the dump cheap and side-effect-free.
   if (mode == DumpMode::kValues) {
     if (auto rc = fm_workbook_recalc(wb.handle); rc != 0) {

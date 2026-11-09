@@ -54,7 +54,7 @@ static_assert(sizeof(fm_sheet_rect_t) == 20U, "fm_sheet_rect_t ABI layout change
 static_assert(sizeof(fm_chart_axis_title_text_info_t) == (kWasm32 ? 12U : 16U),
               "fm_chart_axis_title_text_info_t ABI layout changed");
 static_assert(sizeof(fm_chart_unresolved_info_t) == 16U, "fm_chart_unresolved_info_t ABI layout changed");
-static_assert(sizeof(fm_chart_insert_spec_t) == (kWasm32 ? 128U : 160U), "fm_chart_insert_spec_t ABI layout changed");
+static_assert(sizeof(fm_chart_insert_spec_t) == (kWasm32 ? 136U : 176U), "fm_chart_insert_spec_t ABI layout changed");
 static_assert(sizeof(fm_chart_fill_patch_t) == 48U, "fm_chart_fill_patch_t ABI layout changed");
 static_assert(sizeof(fm_chart_line_patch_t) == 80U, "fm_chart_line_patch_t ABI layout changed");
 static_assert(sizeof(fm_chart_marker_patch_t) == 152U, "fm_chart_marker_patch_t ABI layout changed");
@@ -297,6 +297,69 @@ TEST(FormulonCApiChart, TickLabelPositionOrdinalsStartAtTheSchemaDefault) {
 }
 
 // An element the chart does not carry reads as -1: no legend, and no
+TEST(FormulonCApiChart, InsertTitleFollowsHasTitle) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  FillGrid(wb.handle);
+  const auto insert = [&](int32_t has_title, fm_chart_title_t title, fm_status_t* status) {
+    fm_chart_insert_spec_t o = Options(kLine, "Sheet1!$A$1:$D$5");
+    o.has_title = has_title;
+    o.title = title;
+    uint32_t id = 0;
+    *status = fm_sheet_add_chart(wb.handle, 0, &o, &id);
+    return id;
+  };
+  fm_status_t rc = 0;
+  uint32_t id = insert(0, {FM_CHART_TITLE_KIND_TEXT, "Ignored", nullptr}, &rc);
+  ASSERT_EQ(rc, 0) << fm_get_last_error_message();
+  ChartGuard chart;
+  Open(wb.handle, id, &chart);
+  EXPECT_EQ(Info(chart).title.kind, FM_CHART_TITLE_KIND_AUTO);
+
+  id = insert(1, {FM_CHART_TITLE_KIND_NONE, nullptr, nullptr}, &rc);
+  ASSERT_EQ(rc, 0) << fm_get_last_error_message();
+  ChartGuard none;
+  Open(wb.handle, id, &none);
+  EXPECT_EQ(Info(none).title.kind, FM_CHART_TITLE_KIND_NONE);
+
+  id = insert(1, {FM_CHART_TITLE_KIND_TEXT, "Sales", nullptr}, &rc);
+  ASSERT_EQ(rc, 0) << fm_get_last_error_message();
+  ChartGuard text;
+  Open(wb.handle, id, &text);
+  EXPECT_EQ(Info(text).title.kind, FM_CHART_TITLE_KIND_TEXT);
+  EXPECT_STREQ(Info(text).title.text, "Sales");
+
+  insert(1, {FM_CHART_TITLE_KIND_TEXT, "", nullptr}, &rc);
+  EXPECT_EQ(rc, kInvalidArgument);
+  insert(1, {FM_CHART_TITLE_KIND_TEXT, nullptr, nullptr}, &rc);
+  EXPECT_EQ(rc, kInvalidArgument);
+  insert(1, {FM_CHART_TITLE_KIND_AUTO + 1, nullptr, nullptr}, &rc);
+  EXPECT_EQ(rc, kInvalidArgument);
+  insert(2, {FM_CHART_TITLE_KIND_NONE, nullptr, nullptr}, &rc);
+  EXPECT_EQ(rc, kInvalidArgument);
+}
+
+TEST(FormulonCApiChart, InsertWithBadReferenceTitleLeavesNoChart) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  FillGrid(wb.handle);
+  fm_chart_insert_spec_t o = Options(kLine, "Sheet1!$A$1:$D$5");
+  o.has_title = 1;
+  uint32_t id = 0;
+  for (const char* bad : {"not a reference", "Sheet1!$A$0", ""}) {
+    o.title = fm_chart_title_t{FM_CHART_TITLE_KIND_REF, nullptr, bad};
+    EXPECT_NE(fm_sheet_add_chart(wb.handle, 0, &o, &id), 0) << bad;
+    size_t count = 9;
+    ASSERT_EQ(fm_sheet_get_drawing_object_count(wb.handle, 0, &count), 0);
+    EXPECT_EQ(count, 0U) << bad;
+  }
+  o.title = fm_chart_title_t{FM_CHART_TITLE_KIND_REF, nullptr, "Sheet1!$B$1"};
+  ASSERT_EQ(fm_sheet_add_chart(wb.handle, 0, &o, &id), 0) << fm_get_last_error_message();
+  ChartGuard chart;
+  Open(wb.handle, id, &chart);
+  EXPECT_EQ(Info(chart).title.kind, FM_CHART_TITLE_KIND_REF);
+}
+
 // `c:barDir` on a plot that is not a bar plot.
 TEST(FormulonCApiChart, AbsentElementsReadAsMinusOne) {
   WorkbookGuard wb;
@@ -1294,8 +1357,9 @@ TEST(FormulonCApiChart, InsertRejectsBadOptions) {
   ASSERT_EQ(fm_sheet_get_drawing_object_count(wb.handle, 0, &count), 0);
   EXPECT_EQ(count, 0U);
 
-  // An empty title is no title; a given name and description are kept.
-  o.title = "";
+  // A NONE title is no title; a given name and description are kept.
+  o.has_title = 1;
+  o.title.kind = FM_CHART_TITLE_KIND_NONE;
   o.placement.name = "Sales chart";
   o.placement.description = "Quarterly";
   ASSERT_EQ(fm_sheet_add_chart(wb.handle, 0, &o, &id), 0) << fm_get_last_error_message();

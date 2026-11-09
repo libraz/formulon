@@ -61,8 +61,8 @@ PATCH_OVERRIDES: Dict[str, dict] = {
     # The common drawing patch: its round trips live in the drawing suites.
     "drawing.update": {"skip": True},
     "table.update": {"create": ["table.create"]},
-    "protected_range.update": {"create": ["protected_range.add"]},
-    "cf_rule.update": {"id": "cf_rule_update", "create": ["cf_rule.add"]},
+    "protected_range.update": {"get": "protected_range.get_at", "create": ["protected_range.add"]},
+    "cf_rule.update": {"id": "cf_rule_update", "get": "cf_rule.get_at", "create": ["cf_rule.add"]},
     "validation.update": {"id": "validation_update", "get": "validation.get_at", "create": ["validation.add"]},
     "threaded_comment.update": {"create": ["threaded_comment.add"]},
     "shape.update": {"create": ["shape.add"]},
@@ -76,7 +76,12 @@ PATCH_OVERRIDES: Dict[str, dict] = {
 
 # Record-taking adds: row id -> (getter op, adding op, record, known_fix).
 READD: Dict[str, tuple] = {
-    "cf_rule": ("cf_rule.get", "cf_rule.add", "ConditionalFormat", "an id equal to an existing rule's gets a new GUID"),
+    "cf_rule": (
+        "cf_rule.get_at",
+        "cf_rule.add",
+        "ConditionalFormat",
+        "an id equal to an existing rule's gets a new GUID",
+    ),
     "validation": ("validation.get_at", "validation.add", "DataValidation", None),
     "hyperlink": ("hyperlink.get", "hyperlink.set", "Hyperlink", "location is `string | null | undefined`"),
     "comment": ("comment.get", "comment.set", "Comment", None),

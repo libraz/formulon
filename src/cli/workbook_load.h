@@ -15,10 +15,10 @@ namespace formulon::cli {
 
 /// Reads and loads `path` into `wb` (`-` reads stdin to the end and leaves the
 /// workbook unnamed), names it after the file, applies the
-/// shared options and reports load diagnostics. Every failure is written to
+/// shared options and, when `report_loss` is set, writes the load diagnostics to `err`. Every failure is written to
 /// `err` under `subcommand` and its status returned.
 fm_status_t load_workbook_file(const std::string& path, const SharedOptions& shared, WorkbookGuard& wb,
-                               std::ostream& err, std::string_view subcommand);
+                               std::ostream& err, std::string_view subcommand, bool report_loss = true);
 
 /// Switches a loaded workbook to manual calculation so that reading it shows
 /// the file's stored values. Failures are written to `err` under `subcommand`.

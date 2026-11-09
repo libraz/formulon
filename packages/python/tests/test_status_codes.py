@@ -160,8 +160,10 @@ class ExceptionFamilyTest(unittest.TestCase):
         self.assertIs(type(FormulonError(StatusCode.INDEX_OUT_OF_RANGE)), IndexOutOfRangeError)
         self.assertIs(type(FormulonError(StatusCode.BINDING_INVALID_HANDLE)), formulon.WorkbookClosedError)
 
-    def test_file_not_found_codes_stay_on_the_base(self) -> None:
-        self.assertIs(type(FormulonError(StatusCode.IO_FILE_NOT_FOUND)), FormulonError)
+    def test_file_not_found_codes_use_the_io_class_not_the_not_found_class(self) -> None:
+        error = FormulonError(StatusCode.IO_FILE_NOT_FOUND)
+        self.assertIs(type(error), formulon.IoError)
+        self.assertNotIsInstance(error, NotFoundError)
 
     def test_every_not_found_suffix_maps_to_not_found_error(self) -> None:
         for member in StatusCode:

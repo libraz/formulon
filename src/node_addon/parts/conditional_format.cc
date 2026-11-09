@@ -464,9 +464,9 @@ Napi::Value Workbook::AddConditionalFormat(const Napi::CallbackInfo& info) {
     // in favor of the pending exception either way.
     return env.Undefined();
   }
-  std::size_t new_index = 0;
-  const fm_status_t rc = fm_sheet_add_cf_rule(handle_, sheet, &rule, &new_index);
-  return ValueOrThrow(env, rc, Napi::Number::New(env, static_cast<double>(new_index)));
+  const char* added_id = nullptr;
+  const fm_status_t rc = fm_sheet_add_cf_rule(handle_, sheet, &rule, &added_id);
+  return ValueOrThrow(env, rc, rc == 0 ? JsString(env, added_id) : env.Undefined());
 }
 
 // Every member is optional: an omitted key keeps the stored value. `null` clears `dxfIndex`, `formula1` and
@@ -622,11 +622,15 @@ Napi::Value Workbook::UpdateCfRule(const Napi::CallbackInfo& info) {
   patch.icon_set_thresholds_count = static_cast<uint32_t>(icon_set_thresholds.size());
   patch.icon_set_icons = icon_set_icons.empty() ? nullptr : icon_set_icons.data();
   patch.icon_set_icons_count = static_cast<uint32_t>(icon_set_icons.size());
-  return ValueOrThrow(env, fm_sheet_update_cf_rule(handle_, ArgU32(info, 0), ArgU32(info, 1), &patch), env.Undefined());
+  const std::string id = ArgString(info, 1);
+  return ValueOrThrow(env, fm_sheet_update_cf_rule(handle_, ArgU32(info, 0), id.c_str(), &patch), env.Undefined());
 }
 
 Napi::Value Workbook::RemoveConditionalFormatAt(const Napi::CallbackInfo& info) {
-  return InvokeSheetCall(info, &fm_sheet_remove_cf_rule);
+  return StatusCall(info, [&](fm_workbook_t* handle) {
+    const std::string id = ArgString(info, 1);
+    return fm_sheet_remove_cf_rule(handle, ArgU32(info, 0), id.c_str());
+  });
 }
 
 Napi::Value Workbook::ClearConditionalFormats(const Napi::CallbackInfo& info) {

@@ -106,7 +106,7 @@ TEST(FormulonCli, ProfileFlagAppliesAfterDumpLoad) {
   ASSERT_TRUE(write_formula_fixture(input, "=DOLLAR(1234.5)"));
 
   for (const ProfileCase& profile : kProfiles) {
-    const CliRun result = run_cli({"dump", "--profile", profile.id, "--values", input});
+    const CliRun result = run_cli({"dump", "--profile", profile.id, "--view", "values", input});
     ASSERT_EQ(result.exit_code, 0) << profile.id << " stderr=" << result.stderr_text;
     EXPECT_NE(result.stdout_text.find(profile.expected), std::string::npos) << profile.id;
   }

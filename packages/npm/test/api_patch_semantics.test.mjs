@@ -125,7 +125,7 @@ describe('a chart type is one vocabulary: the plot type plus a bar direction', (
 
   it('a bar chart without a direction is drawn as columns', () => {
     withSheet((ws) => {
-      assert.equal(addColumnChart(ws).getProperties().plots[0].barDirection, f.ChartBarDirection.Col);
+      assert.equal(addColumnChart(ws).getProperties().plots[0].barDirection, f.ChartBarDirection.Column);
     });
   });
 
@@ -165,7 +165,7 @@ describe('a chart type is one vocabulary: the plot type plus a bar direction', (
       const chart = addColumnChart(ws);
       expectInvalid(() => chart.setType(0, f.ChartPlotType.Bar3D));
       expectTypeError(() => chart.setType(0, f.ChartPlotType.Line, { barDirection: f.ChartBarDirection.Bar }));
-      expectTypeError(() => chart.setType(0, f.ChartPlotType.Line, { barDirection: f.ChartBarDirection.Col }));
+      expectTypeError(() => chart.setType(0, f.ChartPlotType.Line, { barDirection: f.ChartBarDirection.Column }));
     });
   });
 });

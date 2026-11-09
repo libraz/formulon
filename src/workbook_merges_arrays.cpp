@@ -11,8 +11,12 @@
 #include <utility>
 #include <vector>
 
+#include "auto_filter.h"
+#include "cell.h"
+#include "data_table.h"
 #include "eval/dep_graph.h"
 #include "eval/recalc_engine.h"
+#include "io/xlsb/table_records.h"
 #include "pivot/pivot_table.h"
 #include "sheet.h"
 #include "table.h"
@@ -79,6 +83,60 @@ Expected<void, Error> check_array_target_free(const char* op, const Workbook& wb
       if (ref.has_value() && intersects(*ref, target)) {
         return refuse("multi-cell array formulas are not valid in a table");
       }
+    }
+  }
+  return Expected<void, Error>::Ok();
+}
+
+// Refusal of `merge` as a new merged area, on the first structure it
+// intersects: another merge is `kAlreadyExists`, a structure Excel keeps
+// merges out of is `kPreconditionFailed`.
+Expected<void, Error> check_merge_target_free(const Workbook& wb, std::size_t sheet_index, const MergeRange& merge) {
+  const Sheet& sheet = wb.sheet(sheet_index);
+  const auto context = [&] {
+    std::string ref;
+    append_a1_rectangle(ref, merge);
+    return "ref=" + ref;
+  };
+  const auto refuse = [&](const char* what) {
+    return make_error(FormulonErrorCode::kPreconditionFailed, what, context());
+  };
+  for (const MergeRange& existing : sheet.merges()) {
+    if (intersects(normalized(existing), merge)) {
+      return make_error(FormulonErrorCode::kAlreadyExists, "range overlaps an existing merge", context());
+    }
+  }
+  for (const TableMetadata& table : wb.tables()) {
+    const std::optional<MergeRange> ref = detail::table_rect_on_sheet(table, sheet_index);
+    if (ref.has_value() && intersects(*ref, merge)) {
+      return refuse("cannot merge cells in a table");
+    }
+  }
+  for (const io::xlsb::XlsbRetainedTable& kept : io::xlsb::xlsb_retained_tables(wb)) {
+    const std::optional<MergeRange> kept_rect = parse_a1_rectangle(kept.ref);
+    if (kept.sheet_index == sheet_index && kept_rect && intersects(*kept_rect, merge)) {
+      return refuse("cannot merge cells in a table");
+    }
+  }
+  for (const std::unique_ptr<pivot::PivotTable>& pivot : sheet.pivot_tables()) {
+    if (pivot != nullptr && intersects(detail::pivot_occupied_extent(*pivot), merge)) {
+      return refuse("cannot change part of a PivotTable");
+    }
+  }
+  for (const CellAddress address : sheet.formula_cells_in(0U, 0U, merge.last_row, merge.last_col)) {
+    const Cell* cell = sheet.cell_at(address.row, address.col);
+    if (cell == nullptr || cell->array_block_rows == 0U) {
+      continue;
+    }
+    const MergeRange block{address.row, address.col, address.row + cell->array_block_rows - 1U,
+                           address.col + cell->array_block_cols - 1U};
+    if (intersects(block, merge)) {
+      return refuse("array formulas are not valid in merged cells");
+    }
+  }
+  for (const DataTable& table : sheet.data_tables()) {
+    if (intersects(normalized(table.ref), merge)) {
+      return refuse("cannot change part of a data table");
     }
   }
   return Expected<void, Error>::Ok();
@@ -190,6 +248,12 @@ Expected<void, Error> Workbook::add_merge(std::size_t sheet_index, MergeRange me
                           " last_row=" + std::to_string(merge.last_row) +
                           " last_col=" + std::to_string(merge.last_col));
   }
+  RETURN_IF_ERROR(check_merge_target_free(*this, sheet_index, merge));
+  put_merge(sheet_index, merge);
+  return Expected<void, Error>::Ok();
+}
+
+void Workbook::put_merge(std::size_t sheet_index, const MergeRange& merge) {
   std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
   const eval::RecalcEngine::LockedMutator mutator = engine_->locked_mutator();
   sheets_[sheet_index].add_merge(merge);
@@ -198,7 +262,6 @@ Expected<void, Error> Workbook::add_merge(std::size_t sheet_index, MergeRange me
   // records the resulting #SPILL! state under the normal commit contract.
   mark_spill_anchors_intersecting_merge(mutator, sheet_index, sheets_, merge,
                                         &Sheet::committed_spill_anchors_intersecting);
-  return Expected<void, Error>::Ok();
 }
 
 Expected<void, Error> Workbook::remove_merges_intersecting(std::size_t sheet_index, MergeRange merge) {

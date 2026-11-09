@@ -151,15 +151,14 @@ TEST(FormulonCApiExternalLinks, CfRuleNamingANewBookBindsIt) {
   rule.formula1 = "[Book.xlsx]Sheet1!$A$1>0";
   rule.ranges = &sqref;
   rule.range_count = 1;
-  std::size_t index = 0;
-  ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &rule, &index), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &rule, ignored_id()), 0) << fm_get_last_error_message();
   EXPECT_EQ(LinkCount(wb.handle), 1U);
   rule.formula1 = "[BOOK.xlsx]Sheet1!$A$2>0";
-  ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &rule, &index), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &rule, ignored_id()), 0) << fm_get_last_error_message();
   EXPECT_EQ(LinkCount(wb.handle), 1U);
   rule.formula1 = "A1>0";
   rule.formula2 = "[Other.xlsx]Sheet1!$A$1";
-  ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &rule, &index), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &rule, ignored_id()), 0) << fm_get_last_error_message();
   EXPECT_EQ(LinkCount(wb.handle), 2U);
 }
 
@@ -404,8 +403,7 @@ TEST(FormulonCApiExternalLinks, FileNameConditionalFormatsStoreAndSpellTheName) 
   rule.formula1 = "M5.xlsx!LN>0";
   rule.ranges = &sqref;
   rule.range_count = 1;
-  std::size_t index = 0;
-  ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &rule, &index), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &rule, ignored_id()), 0) << fm_get_last_error_message();
   fm_cfvo_t thresholds[2]{};
   thresholds[0].type = 5;  // Formula
   thresholds[0].value = "M5.xlsx!LN";
@@ -420,7 +418,7 @@ TEST(FormulonCApiExternalLinks, FileNameConditionalFormatsStoreAndSpellTheName) 
   scale.color_scale_thresholds = thresholds;
   scale.color_scale_colors = colors;
   scale.color_scale_count = 2;
-  ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &scale, &index), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &scale, ignored_id()), 0) << fm_get_last_error_message();
   EXPECT_EQ(LinkCount(wb.handle), 0U);
   for (const bool named : {true, false}) {
     ASSERT_EQ(fm_workbook_set_file_name(wb.handle, named ? "M5.xlsx" : ""), 0);

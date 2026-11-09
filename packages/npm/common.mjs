@@ -106,7 +106,7 @@ export const PivotCellKind = Object.freeze({
   GrandTotal: 6,
   Blank: 7,
 });
-export const PivotAxis = Object.freeze({ Row: 0, Col: 1, Value: 2, Page: 3 });
+export const PivotAxis = Object.freeze({ Row: 0, Column: 1, Value: 2, Page: 3 });
 export const PivotAggregation = Object.freeze({
   Sum: 0,
   Count: 1,
@@ -123,15 +123,15 @@ export const PivotAggregation = Object.freeze({
 export const PivotShowValuesAs = Object.freeze({
   Normal: 0,
   PercentOfRow: 1,
-  PercentOfCol: 2,
+  PercentOfColumn: 2,
   PercentOfTotal: 3,
   RunningTotalInRow: 4,
-  RunningTotalInCol: 5,
+  RunningTotalInColumn: 5,
   Index: 6,
   DifferenceFrom: 7,
   PercentDifferenceFrom: 8,
   PercentOfParentRow: 9,
-  PercentOfParentCol: 10,
+  PercentOfParentColumn: 10,
   PercentOfParent: 11,
   PercentOf: 12,
   PercentOfRunningTotal: 13,
@@ -607,7 +607,7 @@ export const ChartLegendPosition = Object.freeze({
   Top: 4,
 });
 export const ChartAxisPosition = Object.freeze({ Bottom: 0, Top: 1, Left: 2, Right: 3 });
-export const ChartBarDirection = Object.freeze({ Col: 0, Bar: 1 });
+export const ChartBarDirection = Object.freeze({ Column: 0, Bar: 1 });
 export const ChartLineDash = Object.freeze({ Solid: 0, Dash: 1, Dot: 2, DashDot: 3, Other: 4 });
 export const ChartMarkerSymbol = Object.freeze({
   None: 0,
@@ -947,7 +947,6 @@ export const FORMULON_MEMBERS = Object.freeze([
   'localizeFormula',
   'canonicalizeFormula',
   'getLocaleFacts',
-  'listLocaleErrorNames',
   'listProfileIds',
   'compareText',
   'getCollationClasses',
@@ -971,7 +970,6 @@ const RUNTIME_MEMBERS = new Set([
   'localizeFormula',
   'canonicalizeFormula',
   'getLocaleFacts',
-  'listLocaleErrorNames',
   'listProfileIds',
   'compareText',
   'getCollationClasses',
@@ -990,7 +988,7 @@ function dateSystem(options, where) {
   if (options === undefined) return false;
   requireObject(options, `${where} argument 2`);
   for (const key of Object.keys(options)) {
-    if (key !== 'date1904') throw new TypeError(`${where} argument 2 has an unknown key ${JSON.stringify(key)}`);
+    if (key !== 'date1904') throw new TypeError(`${where} argument 2 has no field ${key}`);
   }
   return options.date1904 === undefined ? false : requireBoolean(options.date1904, `${where} date1904`);
 }
@@ -1020,6 +1018,11 @@ const RUNTIME_WRAPPERS = Object.freeze({
       function convertCivilToSerial(civil, options) {
         const where = 'Formulon.convertCivilToSerial';
         requireObject(civil, `${where} argument 1`);
+        for (const [key, value] of Object.entries(civil)) {
+          if (value !== undefined && !CIVIL_FIELDS.includes(key)) {
+            throw new TypeError(`${where} argument 1 has no field ${key}`);
+          }
+        }
         const fields = {};
         for (const field of CIVIL_FIELDS) {
           const value = civil[field];
@@ -1593,6 +1596,7 @@ const HANDLE_FORWARDERS = Object.freeze({
   'Pivot.getGrandTotals': 'getPivotGrandTotals',
   'Pivot.getLayout': 'getPivotLayout',
   'Pivot.getOptions': 'getPivotOptions',
+  'Pivot.getPageFieldOrder': 'getPivotPageFieldOrder',
   'Pivot.getProperties': null,
   'Pivot.getReportLayout': 'getPivotReportLayout',
   'Pivot.getRowFieldOrder': 'getPivotRowFieldOrder',
@@ -1611,6 +1615,7 @@ const HANDLE_FORWARDERS = Object.freeze({
   'Pivot.setFieldAxis': 'setPivotFieldAxis',
   'Pivot.setFieldDateGroup': null,
   'Pivot.setFieldSubtotalFunctions': 'setPivotFieldSubtotalFunctions',
+  'Pivot.setPageFieldOrder': 'setPivotPageFieldOrder',
   'Pivot.setReportLayout': 'setPivotReportLayout',
   'Pivot.setRowFieldOrder': 'setPivotRowFieldOrder',
   'Pivot.showDetails': null,
@@ -3151,6 +3156,7 @@ const METHOD_ARITY = Object.freeze({
   'Pivot.getGrandTotals': 0,
   'Pivot.getLayout': 0,
   'Pivot.getOptions': 0,
+  'Pivot.getPageFieldOrder': 0,
   'Pivot.getProperties': 0,
   'Pivot.getReportLayout': 0,
   'Pivot.getRowFieldOrder': 0,
@@ -3169,6 +3175,7 @@ const METHOD_ARITY = Object.freeze({
   'Pivot.setFieldAxis': 2,
   'Pivot.setFieldDateGroup': 2,
   'Pivot.setFieldSubtotalFunctions': 2,
+  'Pivot.setPageFieldOrder': 1,
   'Pivot.setReportLayout': 1,
   'Pivot.setRowFieldOrder': 1,
   'Pivot.showDetails': 2,
@@ -4255,6 +4262,8 @@ function tableRange(raw, sheet, range, where) {
 // How a string key of each `*Ref` kind is matched: the element count, the key
 // of element `i`, the wording of the errors, and the handle class that also
 // names an element.
+// A `keyed` kind reaches the raw call as its key: a string passes through for the engine to match (an unknown
+// one is `NotFound`), a position is read as the key stored there.
 const REF_KINDS = Object.freeze({
   table: {
     noun: 'table name',
@@ -4271,12 +4280,14 @@ const REF_KINDS = Object.freeze({
     key: (raw, sheet, i) => raw.getPivotName(sheet, i),
   },
   cfRule: {
+    keyed: true,
     noun: 'conditional-format rule id',
     context: 'cf_rule_id',
     count: (raw, sheet) => raw.getCfRuleCount(sheet),
     key: (raw, sheet, i) => raw.getCfRule(sheet, i).id,
   },
   protectedRange: {
+    keyed: true,
     noun: 'protected range name',
     context: 'protected_range_name',
     count: (raw, sheet) => raw.getProtectedRangeCount(sheet),
@@ -4832,10 +4843,20 @@ function refuseNullRanges(where, patch) {
  */
 function resolveRef(raw, sheet, where, [at, kind], args, handleIndex) {
   const value = args[at];
-  if (typeof value === 'number') return args;
   const spec = REF_KINDS[kind];
-  if (spec === undefined) return args;
+  if (spec === undefined || (typeof value === 'number' && spec.keyed !== true)) return args;
   const label = `${where} argument ${at + 1}`;
+  if (spec.keyed === true) {
+    if (typeof value === 'string') return args;
+    if (typeof value !== 'number') throw new TypeError(`${label} must be a position or a ${spec.noun}`);
+    requireIndex(value, label, 'position');
+    if (value >= spec.count(raw, sheet)) {
+      throw new FormulonError(StatusCode.IndexOutOfRange, `${label} ${value} is out of range`, `position=${value}`);
+    }
+    const out = [...args];
+    out[at] = spec.key(raw, sheet, value);
+    return out;
+  }
   const out = [...args];
   if (typeof value !== 'string') {
     const index = spec.handle === undefined ? undefined : handleIndex(kind, value, label);
@@ -5068,6 +5089,9 @@ function toCivil(input, method, param) {
     };
   }
   requireObject(input, where);
+  for (const [key, value] of Object.entries(input)) {
+    if (value !== undefined && !CIVIL_FIELDS.includes(key)) throw new TypeError(`${where} has no field ${key}`);
+  }
   const civil = {};
   for (const field of CIVIL_FIELDS) civil[field] = requireInteger(input[field], `${where}.${field}`);
   return civil;
@@ -5335,6 +5359,8 @@ function formatCount(value, label) {
   return value;
 }
 
+const COLOR_FIELDS = Object.freeze(['kind', 'argb', 'theme', 'tint', 'indexed']);
+
 /** A `ColorInput` as a `Color`: `#RRGGBB` (opaque) or `#AARRGGBB`, or a `Color` record. */
 function formatColor(value, label) {
   if (typeof value === 'string') {
@@ -5343,6 +5369,9 @@ function formatColor(value, label) {
     return { kind: ColorKind.Rgb, argb: Number.parseInt(hex, 16), theme: 0, tint: 0, indexed: 0 };
   }
   if (!isObject(value)) throw new TypeError(`${label} must be a colour string or a Color`);
+  for (const [key, item] of Object.entries(value)) {
+    if (item !== undefined && !COLOR_FIELDS.includes(key)) throw new TypeError(`${label} has no field ${key}`);
+  }
   const kind = formatCount(value.kind, `${label}.kind`);
   if (kind > ColorKind.Auto) throw outOfRange(`${label}.kind`, kind);
   return value;
@@ -5752,6 +5781,7 @@ function makeFacade(Raw, registry, runtime) {
       let visible = true;
       if (options !== undefined && options !== null) {
         requireObject(options, `${where} argument 3`);
+        refuseOtherKeys(where, 3, options, ['visible']);
         if (options.visible !== undefined) visible = requireBoolean(options.visible, `${where} visible`);
       }
       if (typeof item !== 'string') {
@@ -5863,7 +5893,7 @@ function makeFacade(Raw, registry, runtime) {
       const [kind, args] = cacheValue(where, 2, value, (date) =>
         dateInputSerial(runtime, date, raw.getDate1904(), where, 'argument 2'),
       );
-      raw[`addPivotCacheFieldSharedItem${kind}`](this.#cacheId, field, ...args);
+      return raw[`addPivotCacheFieldSharedItem${kind}`](this.#cacheId, field, ...args);
     }
 
     setRecordValue(record, field, value) {
@@ -6546,11 +6576,10 @@ function makeFacade(Raw, registry, runtime) {
       const raw = rawOf(this.#workbook);
       const sheet = this.#current();
       patch = colorInputs(patch, `${where} argument 2`);
-      const [index] = resolveRef(raw, sheet, where, [0, 'cfRule'], [cfRule, patch]);
-      requireIndex(index, `${where} argument 1`, 'position');
+      const [id] = resolveRef(raw, sheet, where, [0, 'cfRule'], [cfRule, patch]);
       refuseNullRanges(where, patch);
       if (isObject(patch)) {
-        const { type } = raw.getCfRule(sheet, index);
+        const { type } = this.#cfRuleById(raw, sheet, id, where);
         const used = CF_PATCH_KEYS[type] ?? [];
         // `null` on a key the rule's type does not use is "not specified", so a read record passes back.
         const specified = {};
@@ -6573,7 +6602,22 @@ function makeFacade(Raw, registry, runtime) {
           patch = { ...patch, ranges: normalizeAddress(raw, 'CellRect[]', patch.ranges, undefined, `${where} ranges`) };
         }
       }
-      this.#patch(where, patch, (raw, sheet, given) => raw.updateCfRule(sheet, index, given), undefined, ['ranges']);
+      this.#patch(where, patch, (raw, sheet, given) => raw.updateCfRule(sheet, id, given), undefined, ['ranges']);
+    }
+
+    // The rule whose id matches `id` as ids are matched everywhere; an unknown id is `NotFound`.
+    #cfRuleById(raw, sheet, id, where) {
+      const want = foldName(id);
+      const n = raw.getCfRuleCount(sheet);
+      for (let i = 0; i < n; i++) {
+        const rule = raw.getCfRule(sheet, i);
+        if (foldName(rule.id) === want) return rule;
+      }
+      throw new FormulonError(
+        StatusCode.NotFound,
+        `${where} found no rule with the ${REF_KINDS.cfRule.noun} ${JSON.stringify(id)}`,
+        `${REF_KINDS.cfRule.context}=${id}`,
+      );
     }
 
     // The raw call addresses a validation or sparkline group by id: a position names the id read there.
@@ -6804,6 +6848,9 @@ function makeFacade(Raw, registry, runtime) {
       if (options.source !== undefined) throw new TypeError(`${where} argument 1 has no field source`);
       const raw = rawOf(this.#workbook);
       const sheet = this.#current();
+      if (options.title === '') {
+        throw new FormulonError(StatusCode.InvalidArgument, `${where} title must not be empty`, 'argument=title');
+      }
       const { range, ...rest } = colorInputs(options, `${where} argument 1`);
       if (present(rest.barDirection)) chartTypeOptions(where, 1, rest.type, { barDirection: rest.barDirection });
       const source = range === undefined ? undefined : sheetRectText(raw, range, sheet, `${where} range`);
@@ -7044,6 +7091,14 @@ function makeFacade(Raw, registry, runtime) {
         spec[key] = { row, col };
       }
       raw.addDataTable(this.#current(), spec);
+      return { row: spec.rect.firstRow, col: spec.rect.firstCol };
+    }
+
+    // `range` is a `CellRect` or A1 text (expanded before this runs); the merged range comes back as stored.
+    addMerge(range) {
+      rawOf(this.#workbook).addMerge(this.#current(), range);
+      const { firstRow, firstCol, lastRow, lastCol } = range;
+      return { firstRow, firstCol, lastRow, lastCol };
     }
 
     setValue(row, col, value) {
@@ -8050,7 +8105,7 @@ function installArgumentForms(proto, owner, rawOf, sheetOf, handleIndex) {
         if (defaults !== undefined) args = fillDefaults(defaults, args);
         if (typed !== undefined) args = normalizeTypedArgs(rawOf(this), sheetOf(this), where, typed, args);
         if (rects !== undefined) args = expandRects(rawOf(this), rects, args);
-        if (ref !== undefined && typeof args[ref[0]] !== 'number') {
+        if (ref !== undefined && (typeof args[ref[0]] !== 'number' || REF_KINDS[ref[1]]?.keyed === true)) {
           const named = (kind, value, label) => handleIndex(this, kind, value, label);
           args = resolveRef(rawOf(this), sheetOf(this), where, ref, args, named);
         }

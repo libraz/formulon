@@ -242,7 +242,7 @@ TEST(FormulonCApiPivot, AddingAFieldAfterLoadReprojectsTheLocationRef) {
   fm_pivot_field_spec_t region_spec = FM_STRUCT_INIT(fm_pivot_field_spec_t);
   region_spec.source_name = "Region";
   region_spec.custom_name = "";
-  region_spec.axis = FM_PIVOT_AXIS_COL;
+  region_spec.axis = FM_PIVOT_AXIS_COLUMN;
   region_spec.subtotal_top = FM_TRISTATE_FALSE;
   region_spec.number_format = "";
   std::size_t added = 99;

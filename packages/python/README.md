@@ -42,7 +42,7 @@ print(type(v).__name__, v.code.name)  # ExcelError DIV0
 
 Numbers come back as `float`, because every Excel number is a double: `6.0`, not `6`.
 
-Excel errors come back as `ExcelError` values; a host-side failure raises `FormulonError`. Its subclasses are `IndexOutOfRangeError`, `NotFoundError`, `InvalidArgumentError` and `WorkbookClosedError`. See [Errors](https://formulon.libraz.net/compatibility/errors).
+Excel errors come back as `ExcelError` values; a host-side failure raises `FormulonError`. Its subclasses are `IndexOutOfRangeError`, `NotFoundError`, `InvalidArgumentError`, `FormulaSyntaxError`, `WorkbookClosedError` and one class per status range (`IoError`, `EvaluationError` and the others). See [Errors](https://formulon.libraz.net/compatibility/errors).
 
 ## Recalculate a workbook
 

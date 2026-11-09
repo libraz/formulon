@@ -624,28 +624,42 @@ std::string write_pivot_table_definition(const pivot::PivotTable& table, std::op
   if (!rebuilt_on_open) {
     out.append(table.raw_col_items());
   }
-  // `<pageFields>`, which the schema places before `<dataFields>`.
-  out.append(table.raw_passthrough_after_col_fields());
-
-  // A table whose `<pageFields>` was decoded re-emits it from the bin
-  // just flushed, so synthesise the element only for a table that never
-  // carried one -- built through the C API, or read from a definition
-  // that placed a field on the page axis without declaring it here.
-  // `hier="-1"` is the non-OLAP marker Excel writes for a page field
-  // bound to a cache field rather than to an OLAP hierarchy.
-  if (table.page_fields().empty()) {
-    const std::vector<std::uint32_t> page_order = table.page_field_order();
-    if (!page_order.empty()) {
-      out.append("<pageFields count=\"");
-      out.append(std::to_string(page_order.size()));
-      out.append("\">");
-      for (const std::uint32_t idx : page_order) {
-        out.append("<pageField fld=\"");
-        out.append(std::to_string(idx));
-        out.append("\" hier=\"-1\"/>");
+  // `<pageFields>`, which the schema places before `<dataFields>`, from the
+  // model's page order; a field with no entry of its own gets the non-OLAP
+  // `hier="-1"` Excel writes for a page field bound to a cache field.
+  if (const std::vector<std::uint32_t> page_order = table.page_field_order(); !page_order.empty()) {
+    out.append("<pageFields count=\"");
+    out.append(std::to_string(page_order.size()));
+    out.append("\">");
+    for (const std::uint32_t idx : page_order) {
+      const pivot::PivotPageField* page = table.find_page_field(idx);
+      out.append("<pageField fld=\"");
+      out.append(std::to_string(idx));
+      out.push_back('"');
+      if (page != nullptr && page->item_index.has_value()) {
+        out.append(" item=\"");
+        out.append(std::to_string(*page->item_index));
+        out.push_back('"');
       }
-      out.append("</pageFields>");
+      const std::optional<std::int32_t> hierarchy = page != nullptr ? page->hierarchy : std::optional<std::int32_t>(-1);
+      if (hierarchy.has_value()) {
+        out.append(" hier=\"");
+        out.append(std::to_string(*hierarchy));
+        out.push_back('"');
+      }
+      if (page != nullptr && !page->name.empty()) {
+        out.append(" name=\"");
+        AppendXmlAttrEscaped(out, page->name);
+        out.push_back('"');
+      }
+      if (page != nullptr && !page->caption.empty()) {
+        out.append(" cap=\"");
+        AppendXmlAttrEscaped(out, page->caption);
+        out.push_back('"');
+      }
+      out.append("/>");
     }
+    out.append("</pageFields>");
   }
 
   if (!table.data_fields().empty()) {

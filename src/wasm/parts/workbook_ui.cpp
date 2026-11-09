@@ -307,25 +307,24 @@ bool pull_protected_range(const emscripten::val& range, const char* operation, s
 
 }  // namespace
 
-uint32_t JsWorkbook::addProtectedRange(uint32_t sheet, emscripten::val range) {
+emscripten::val JsWorkbook::addProtectedRange(uint32_t sheet, emscripten::val range) {
   if (handle_ == nullptr) {
     record_invalid_handle();
-    return 0U;
+    return emscripten::val::undefined();
   }
   std::string text[6];
   std::vector<fm_cell_rect_t> ranges;
   fm_protected_range_t r = FM_STRUCT_INIT(fm_protected_range_t);
   if (!pull_protected_range(range, "addProtectedRange", text, ranges, &r)) {
-    return 0U;
+    return emscripten::val::undefined();
   }
-  std::size_t out = 0;
-  if (!succeeded(fm_sheet_add_protected_range(handle_, sheet, &r, &out))) {
-    return 0U;
+  if (!succeeded(fm_sheet_add_protected_range(handle_, sheet, &r))) {
+    return emscripten::val::undefined();
   }
-  return static_cast<uint32_t>(out);
+  return emscripten::val(text[0]);
 }
 
-void JsWorkbook::updateProtectedRange(uint32_t sheet, uint32_t index, emscripten::val range) {
+void JsWorkbook::updateProtectedRange(uint32_t sheet, const std::string& name, emscripten::val range) {
   if (handle_ == nullptr) {
     record_invalid_handle();
     return;
@@ -358,11 +357,11 @@ void JsWorkbook::updateProtectedRange(uint32_t sheet, uint32_t index, emscripten
   if (!reader.ok()) {
     return;
   }
-  succeeded(fm_sheet_update_protected_range(handle_, sheet, index, &p));
+  succeeded(fm_sheet_update_protected_range(handle_, sheet, name.c_str(), &p));
 }
 
-void JsWorkbook::removeProtectedRange(uint32_t sheet, uint32_t index) {
-  succeeded(handle_ != nullptr ? fm_sheet_remove_protected_range(handle_, sheet, index) : kBindingInvalidHandle);
+void JsWorkbook::removeProtectedRange(uint32_t sheet, const std::string& name) {
+  succeeded(handle_ != nullptr ? fm_sheet_remove_protected_range(handle_, sheet, name.c_str()) : kBindingInvalidHandle);
 }
 
 // ---- Hyperlinks --------------------------------------------------------
@@ -799,10 +798,10 @@ emscripten::val JsWorkbook::getPersons() const {
   return persons;
 }
 
-void JsWorkbook::addPerson(emscripten::val person) {
+emscripten::val JsWorkbook::addPerson(emscripten::val person) {
   if (handle_ == nullptr) {
     record_invalid_handle();
-    return;
+    return emscripten::val::undefined();
   }
   JsNarrowNumericReader reader("Workbook.addPerson");
   const std::string id = reader.required_string(person, "id", "person.id");
@@ -811,14 +810,18 @@ void JsWorkbook::addPerson(emscripten::val person) {
   const std::string user_id = reader.string(person, "userId", "person.userId");
   const std::string provider_id = reader.string(person, "providerId", "person.providerId");
   if (!reader.ok()) {
-    return;
+    return emscripten::val::undefined();
   }
   fm_person_t p = FM_STRUCT_INIT(fm_person_t);
   p.id = id.c_str();
   p.display_name = display_name.c_str();
   p.user_id = user_id.c_str();
   p.provider_id = provider_id.c_str();
-  succeeded(fm_workbook_add_person(handle_, &p));
+  const char* out_id = nullptr;
+  if (!succeeded(fm_workbook_add_person(handle_, &p, &out_id))) {
+    return emscripten::val::undefined();
+  }
+  return emscripten::val(string_from_cstr(out_id));
 }
 
 void JsWorkbook::removePerson(const std::string& id) {

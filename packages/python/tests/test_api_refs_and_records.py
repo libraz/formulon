@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import dataclasses
 import unittest
+from pathlib import Path
 
 import formulon
 from formulon import (
@@ -44,6 +45,8 @@ from formulon import (
     ValidationType,
     Workbook,
 )
+
+_NAMES_YAML = Path(__file__).resolve().parents[3] / "tools" / "api" / "names.yaml"
 
 _RED = Color(kind=ColorKind.RGB, argb=0xFFFF0000)
 _GREEN = Color(kind=ColorKind.RGB, argb=0xFF00FF00)
@@ -487,11 +490,31 @@ class EffectiveStyleBordersTests(unittest.TestCase):
             )
 
 
+def _retired_python_type_names() -> list:
+    """The former Python names of every renamed record, typedef and enum in the name ledger, less any name an entry
+    publishes today."""
+    import yaml
+
+    ledger = yaml.safe_load(_NAMES_YAML.read_text(encoding="utf-8"))["entries"]
+    kinds = {"record", "typedef", "enum"}
+    current = {e.get("py") for e in ledger.values() if isinstance(e, dict)}
+    retired = set()
+    for entry in ledger.values():
+        if not isinstance(entry, dict) or entry.get("kind") not in kinds:
+            continue
+        was = entry.get("was")
+        former = was.get("py") if isinstance(was, dict) else None
+        if isinstance(former, str) and former != entry.get("py") and former not in current:
+            retired.add(former)
+    return sorted(retired)
+
+
 class RecordNameTests(unittest.TestCase):
     def test_records_carry_the_names_the_other_bindings_use(self) -> None:
         for name in ("LocaleErrorName", "PaginationMargins", "PaginationPage", "PaginationPaper", "CfValueObject"):
             self.assertTrue(hasattr(formulon, name), name)
-        for name in ("ErrorName", "MarginsPt", "PageLayout", "Paper", "Cfvo", "ColorScale", "DataBar", "IconSet"):
+        # Names a post-release rename retired before they shipped are not in the ledger's `was` keys.
+        for name in (*_retired_python_type_names(), "Paper", "Cfvo", "ColorScale", "DataBar", "IconSet"):
             self.assertFalse(hasattr(formulon, name), name)
 
     def test_one_input_dataclass_per_cf_rule_type(self) -> None:

@@ -1360,6 +1360,8 @@ import {
   type AutoFilterConditionInput,
   type BorderInput,
   type CellAddress,
+  type CfRuleId,
+  type ChartTitle,
   type CellRect,
   type CellStyleInput,
   type CellXf,
@@ -1742,4 +1744,32 @@ export function xfRemapAndRangeDefaults(): void {
   sheet.listThreadedComments();
   sheet.listThreadedComments('B2');
   sheet.listThreadedComments(1, 1);
+}
+
+declare const chartTitle: ChartTitle;
+
+export function returnedKeysAndPageOrder(): void {
+  const ruleId: CfRuleId = sheet.addCfRule({ type: CfRuleType.Expression, ranges: 'A1:A9', formula1: '=A1>0' });
+  sheet.updateCfRule(ruleId, { stopIfTrue: true });
+  sheet.removeCfRule(ruleId);
+  sheet.removeCfRule(0);
+  const protectedName: string = sheet.addProtectedRange({ name: 'p', ranges: 'A1' });
+  const merged: CellRect = sheet.addMerge('A1:B2');
+  const topLeft: CellAddress = sheet.addDataTable({ range: 'B2:D6', columnInput: 'A1' });
+  const personId: string = wb.addPerson(person);
+  const itemIndex: number = cache.addFieldSharedItem(0, 'Q');
+  const pageOrder: readonly number[] = pivot.getPageFieldOrder();
+  pivot.setPageFieldOrder([0, 1]);
+  const column: 1 = PivotAxis.Column;
+  const barColumn: 0 = ChartBarDirection.Column;
+  sheet.addChart({ type: ChartPlotType.Bar, range: 'A1:B3', title: null });
+  sheet.addChart({ type: ChartPlotType.Bar, range: 'A1:B3', title: 'T' });
+  sheet.addChart({ type: ChartPlotType.Bar, range: 'A1:B3', title: chartTitle });
+  // @ts-expect-error the member is spelled out
+  void PivotAxis.Col;
+  // @ts-expect-error the member is spelled out
+  void ChartBarDirection.Col;
+  // @ts-expect-error the locale error names are read through getLocaleFacts
+  void formulon.listLocaleErrorNames;
+  void [protectedName, merged, topLeft, personId, itemIndex, pageOrder, column, barColumn];
 }

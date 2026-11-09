@@ -182,11 +182,19 @@ Napi::Value Workbook::PivotCacheFieldSharedItemValue(const Napi::CallbackInfo& i
 }
 
 Napi::Value Workbook::PivotCacheFieldAddSharedItemNumber(const Napi::CallbackInfo& info) {
-  return InvokeSheetCall(info, &fm_workbook_add_pivot_cache_field_shared_item_number);
+  return IndexCall(info, [&](fm_workbook_t* handle, std::size_t* out) {
+    return fm_workbook_add_pivot_cache_field_shared_item_number(handle, ArgU32(info, 0),
+                                                                static_cast<std::size_t>(ArgU32(info, 1)),
+                                                                ArgDouble(info, 2), out);
+  });
 }
 
 Napi::Value Workbook::PivotCacheFieldAddSharedItemDate(const Napi::CallbackInfo& info) {
-  return InvokeSheetCall(info, &fm_workbook_add_pivot_cache_field_shared_item_date);
+  return IndexCall(info, [&](fm_workbook_t* handle, std::size_t* out) {
+    return fm_workbook_add_pivot_cache_field_shared_item_date(handle, ArgU32(info, 0),
+                                                              static_cast<std::size_t>(ArgU32(info, 1)),
+                                                              ArgDouble(info, 2), out);
+  });
 }
 
 Napi::Value Workbook::PivotCacheFieldSharedItemIsDate(const Napi::CallbackInfo& info) {
@@ -202,32 +210,35 @@ Napi::Value Workbook::PivotCacheFieldSharedItemIsDate(const Napi::CallbackInfo& 
 }
 
 Napi::Value Workbook::PivotCacheFieldAddSharedItemText(const Napi::CallbackInfo& info) {
-  return StatusCall(info, [&](fm_workbook_t* handle) {
+  return IndexCall(info, [&](fm_workbook_t* handle, std::size_t* out) {
     const uint32_t cache_id = ArgU32(info, 0);
     const std::size_t field_index = static_cast<std::size_t>(ArgU32(info, 1));
     const std::string utf8 = ArgString(info, 2);
-    return fm_workbook_add_pivot_cache_field_shared_item_text(handle, cache_id, field_index, utf8.c_str());
+    return fm_workbook_add_pivot_cache_field_shared_item_text(handle, cache_id, field_index, utf8.c_str(), out);
   });
 }
 
 Napi::Value Workbook::PivotCacheFieldAddSharedItemBool(const Napi::CallbackInfo& info) {
-  return StatusCall(info, [&](fm_workbook_t* handle) {
+  return IndexCall(info, [&](fm_workbook_t* handle, std::size_t* out) {
     const uint32_t cache_id = ArgU32(info, 0);
     const std::size_t field_index = static_cast<std::size_t>(ArgU32(info, 1));
-    return fm_workbook_add_pivot_cache_field_shared_item_bool(handle, cache_id, field_index, ArgFlag(info, 2));
+    return fm_workbook_add_pivot_cache_field_shared_item_bool(handle, cache_id, field_index, ArgFlag(info, 2), out);
   });
 }
 
 Napi::Value Workbook::PivotCacheFieldAddSharedItemBlank(const Napi::CallbackInfo& info) {
-  return InvokeSheetCall(info, &fm_workbook_add_pivot_cache_field_shared_item_blank);
+  return IndexCall(info, [&](fm_workbook_t* handle, std::size_t* out) {
+    return fm_workbook_add_pivot_cache_field_shared_item_blank(handle, ArgU32(info, 0),
+                                                               static_cast<std::size_t>(ArgU32(info, 1)), out);
+  });
 }
 
 Napi::Value Workbook::PivotCacheFieldAddSharedItemError(const Napi::CallbackInfo& info) {
-  return StatusCall(info, [&](fm_workbook_t* handle) {
+  return IndexCall(info, [&](fm_workbook_t* handle, std::size_t* out) {
     const uint32_t cache_id = ArgU32(info, 0);
     const std::size_t field_index = static_cast<std::size_t>(ArgU32(info, 1));
     const fm_error_code_t error = static_cast<fm_error_code_t>(ArgI32(info, 2));
-    return fm_workbook_add_pivot_cache_field_shared_item_error(handle, cache_id, field_index, error);
+    return fm_workbook_add_pivot_cache_field_shared_item_error(handle, cache_id, field_index, error, out);
   });
 }
 

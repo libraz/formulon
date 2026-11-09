@@ -12,8 +12,10 @@
 #ifndef FORMULON_CLI_DIAGNOSTICS_H_
 #define FORMULON_CLI_DIAGNOSTICS_H_
 
+#include <cstdint>
 #include <ostream>
 #include <string_view>
+#include <vector>
 
 #include "c_api/formulon_c.h"
 
@@ -37,6 +39,18 @@ fm_status_t emit_read_diagnostics(const fm_workbook_t* wb, std::ostream& err, st
 /// `subcommand`. Emits nothing when the save lost nothing.
 void emit_write_diagnostics(std::ostream& err, std::string_view subcommand, fm_workbook_format_t format,
                             const fm_save_diagnostics_info_t& d);
+
+/// One non-zero load or save counter, named as the stderr warnings name it.
+struct LossCounter {
+  std::string_view name;
+  std::uint32_t count;
+};
+
+/// The non-zero counters of `d`, in the order the stderr warnings list them.
+std::vector<LossCounter> read_loss_counters(const fm_read_diagnostics_info_t& d);
+
+/// The non-zero counters of `d`, in the order the stderr warnings list them.
+std::vector<LossCounter> write_loss_counters(const fm_save_diagnostics_info_t& d);
 
 /// Writes the most recent `fm_*` diagnostic (message and, when present, its
 /// context) to `err` as one line, prefixed with `subcommand`.

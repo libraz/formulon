@@ -22,11 +22,10 @@
 #include "io/auto_filter_xml.h"
 #include "io/xml_escape.h"
 #include "new_workbook_defaults.h"
-#include "parser/structured_ref_payload.h"
+#include "sheet_name.h"
 #include "table.h"
 #include "utils/error.h"
 #include "utils/formula_text.h"
-#include "utils/strings.h"
 #include "value.h"
 #include "workbook.h"
 
@@ -95,54 +94,6 @@ formulon::TableStyleInfo default_style_info(std::string_view style_name) {
     info.show_row_stripes = true;
   }
   return info;
-}
-
-/// `SUBTOTAL` function number of each built-in `ST_TotalsRowFunction`
-/// token (the 1xx forms skip hidden rows, as the desktop application uses).
-struct TotalsFunction {
-  std::string_view token;
-  int subtotal_code;
-};
-constexpr TotalsFunction kTotalsFunctions[] = {
-    {"none", 0},    {"sum", 109},       {"min", 105},    {"max", 104}, {"average", 101},
-    {"count", 103}, {"countNums", 102}, {"stdDev", 107}, {"var", 110}, {"custom", 0},
-};
-
-const TotalsFunction* find_totals_function(std::string_view token) {
-  for (const TotalsFunction& entry : kTotalsFunctions) {
-    if (entry.token == token) {
-      return &entry;
-    }
-  }
-  return nullptr;
-}
-
-/// Writes column `column`'s totals-row cell from its totals settings: the
-/// `SUBTOTAL` formula, the custom formula, the label, or nothing.
-fm_status_t write_totals_cell(formulon::Workbook& book, const formulon::TableMetadata& table, std::size_t column) {
-  const auto rect = formulon::parse_a1_rectangle(table.ref);
-  if (!rect || column >= table.columns.size()) {
-    return 0;
-  }
-  const formulon::TableColumn& col = table.columns[column];
-  const std::uint32_t row = rect->last_row;
-  const std::uint32_t cell_col = rect->first_col + static_cast<std::uint32_t>(column);
-  const TotalsFunction* function = find_totals_function(col.totals_function.empty() ? "none" : col.totals_function);
-  formulon::Expected<void, formulon::Error> written = formulon::Expected<void, formulon::Error>::Ok();
-  if (function != nullptr && function->subtotal_code != 0) {
-    formulon::parser::StructuredRefPayload payload;
-    payload.columns.push_back(col.name);
-    written = book.set_cell_formula(table.sheet_index, row, cell_col,
-                                    "=SUBTOTAL(" + std::to_string(function->subtotal_code) + "," + table.display_name +
-                                        "[" + formulon::parser::stored_payload(payload) + "])");
-  } else if (col.totals_function == "custom" && !col.totals_row_formula.empty()) {
-    written = book.set_cell_formula(table.sheet_index, row, cell_col, "=" + col.totals_row_formula);
-  } else if (!col.totals_label.empty()) {
-    written = book.set_cell_text(table.sheet_index, row, cell_col, col.totals_label);
-  } else {
-    written = book.set_cell_value(table.sheet_index, row, cell_col, formulon::Value::blank());
-  }
-  return finish_status(written);
 }
 
 // Changes only the opening element's ref attribute of an AutoFilter the
@@ -298,7 +249,7 @@ fm_status_t table_column_names(const formulon::Workbook& book, std::size_t sheet
     const std::string word = formulon::new_workbook_defaults(book.excel_profile().locale).column_word;
     const auto taken = [names](const std::string& candidate) {
       return std::any_of(names->begin(), names->end(), [&candidate](const std::string& existing) {
-        return formulon::strings::case_insensitive_eq(existing, candidate);
+        return formulon::collection_names::equal(existing, candidate);
       });
     };
     std::size_t suffix = 1;
@@ -380,7 +331,7 @@ extern "C" fm_status_t fm_workbook_find_table(const fm_workbook_t* wb, const cha
   *out_present = 0;
   const auto& tables = wb->workbook().tables();
   for (std::size_t i = 0; i < tables.size(); ++i) {
-    if (formulon::strings::case_insensitive_eq(tables[i].display_name, name)) {
+    if (formulon::collection_names::equal(tables[i].display_name, name)) {
       *out_sheet_index = tables[i].sheet_index;
       *out_table_index = local_table_index(wb->workbook(), i);
       *out_present = 1;
@@ -555,10 +506,17 @@ extern "C" fm_status_t fm_sheet_update_table(fm_workbook_t* wb, size_t sheet_ind
       return invalid_argument("row flag must be 0 or 1", std::string("field=") + field);
     }
   }
+  const bool range_set = patch->range_op == FM_PATCH_OP_SET;
+  // Without a range, the totals toggle resizes the table; it checks everything
+  // before changing anything, so a refusal leaves the whole patch unapplied.
+  if (!range_set && patch->totals_row_op == FM_PATCH_OP_SET) {
+    if (auto rc = finish_status(wb->workbook().set_table_totals_row(index, patch->totals_row == 1)); rc != 0) {
+      return rc;
+    }
+  }
   formulon::TableMetadata& table = wb->workbook().mutable_tables()[index];
   std::string next_ref = table.ref;
   formulon::AutoFilterSlot next_auto_filter = table.auto_filter_xml;
-  const bool range_set = patch->range_op == FM_PATCH_OP_SET;
   if (range_set) {
     if (auto rc = table_ref_text(patch->range, &next_ref); rc != 0) {
       return rc;
@@ -583,10 +541,10 @@ extern "C" fm_status_t fm_sheet_update_table(fm_workbook_t* wb, size_t sheet_ind
   }
   const bool next_header_row = patch->header_row_op == FM_PATCH_OP_SET ? patch->header_row == 1 : table.header_row;
   const bool next_totals_row = patch->totals_row_op == FM_PATCH_OP_SET ? patch->totals_row == 1 : table.totals_row;
-  if (!range_set && next_header_row == table.header_row && next_totals_row == table.totals_row) {
+  if (!range_set && next_header_row == table.header_row) {
     return 0;
   }
-  const bool totals_turned_on = next_totals_row && !table.totals_row;
+  const bool totals_turned_on = range_set && next_totals_row && !table.totals_row;
 
   table.ref = std::move(next_ref);
   table.header_row = next_header_row;
@@ -610,7 +568,7 @@ extern "C" fm_status_t fm_sheet_update_table(fm_workbook_t* wb, size_t sheet_ind
       if (col.totals_function.empty() && col.totals_label.empty()) {
         continue;
       }
-      if (auto rc = write_totals_cell(wb->workbook(), table, column); rc != 0) {
+      if (auto rc = finish_status(wb->workbook().write_table_totals_cell(index, column)); rc != 0) {
         return rc;
       }
     }
@@ -883,5 +841,5 @@ extern "C" fm_status_t fm_sheet_set_table_column_totals(fm_workbook_t* wb, size_
   col.totals_label = text_or_empty(label);
   col.totals_row_formula = std::move(stored_formula);
   const formulon::TableMetadata& table = tables[index];
-  return table.totals_row ? write_totals_cell(book, table, column_index) : 0;
+  return table.totals_row ? finish_status(book.write_table_totals_cell(index, column_index)) : 0;
 }

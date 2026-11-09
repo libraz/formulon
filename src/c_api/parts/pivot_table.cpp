@@ -465,11 +465,11 @@ fm_status_t set_field_order(fm_workbook_t* wb, std::size_t sheet_index, std::siz
   std::vector<std::uint32_t>& target = row ? table->mutable_row_field_order() : table->mutable_col_field_order();
   for (const std::uint32_t field : target) {
     if (field < field_count && requested_field[field] == kNotRequested) {
-      table->mutable_fields()[field].axis = formulon::pivot::PivotAxis::None;
+      table->set_field_axis(field, formulon::pivot::PivotAxis::None);
     }
   }
   for (const std::uint32_t field : requested_order) {
-    table->mutable_fields()[field].axis = axis;
+    table->set_field_axis(field, axis);
   }
 
   // Remove each requested field's first occurrence from the opposite order,

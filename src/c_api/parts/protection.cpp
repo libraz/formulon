@@ -81,6 +81,35 @@ const char* optional_cstr(TextStore& store, const std::string& text) {
   return text.empty() ? nullptr : store_cstr(store, text);
 }
 
+// The position of the range named `name` (collection-name matching), or `ranges.size()` when none has it.
+std::size_t FindRange(const std::vector<formulon::ProtectedRange>& ranges, const char* name) {
+  std::size_t i = 0;
+  while (i < ranges.size() && !formulon::collection_names::equal(ranges[i].name, name)) {
+    ++i;
+  }
+  return i;
+}
+
+fm_status_t RangeNotFound(const char* name) {
+  return formulon::c_api::parts::not_found("no protected range has that name", "name=" + std::string(name));
+}
+
+// Fills `out` from `r`; every text view lives in the read scratch.
+void FillRange(const fm_workbook_t* wb, const formulon::ProtectedRange& r, fm_protected_range_t* out) {
+  TextStore& store = fresh_read_scratch(wb);
+  out->spin_count = r.spin_count;
+  out->name = store_cstr(store, r.name);
+  std::vector<formulon::MergeRange> rects;
+  formulon::io::parse_selection_sqref_text(r.sqref, rects);
+  out->ranges = publish_rects(wb, rects);
+  out->range_count = static_cast<std::uint32_t>(rects.size());
+  out->legacy_password_hash = optional_cstr(store, r.password);
+  out->algorithm_name = optional_cstr(store, r.algorithm_name);
+  out->hash_value = optional_cstr(store, r.hash_value);
+  out->salt_value = optional_cstr(store, r.salt_value);
+  out->security_descriptor = optional_cstr(store, r.security_descriptor);
+}
+
 // One string field of `fm_protected_range_patch_t`: its op, value and model member.
 struct StringPatch {
   fm_patch_op_t op;
@@ -182,28 +211,44 @@ extern "C" fm_status_t fm_sheet_get_protected_range_at(const fm_workbook_t* wb, 
   if (auto rc = check_index(protected_range_index, ranges.size(), "protected_range_index"); rc != 0) {
     return rc;
   }
-  const formulon::ProtectedRange& r = ranges[protected_range_index];
-  TextStore& store = fresh_read_scratch(wb);
-  out->spin_count = r.spin_count;
-  out->name = store_cstr(store, r.name);
-  std::vector<formulon::MergeRange> rects;
-  formulon::io::parse_selection_sqref_text(r.sqref, rects);
-  out->ranges = publish_rects(wb, rects);
-  out->range_count = static_cast<std::uint32_t>(rects.size());
-  out->legacy_password_hash = optional_cstr(store, r.password);
-  out->algorithm_name = optional_cstr(store, r.algorithm_name);
-  out->hash_value = optional_cstr(store, r.hash_value);
-  out->salt_value = optional_cstr(store, r.salt_value);
-  out->security_descriptor = optional_cstr(store, r.security_descriptor);
+  FillRange(wb, ranges[protected_range_index], out);
+  return 0;
+}
+
+extern "C" fm_status_t fm_sheet_get_protected_range(const fm_workbook_t* wb, size_t sheet_index, const char* name,
+                                                    int32_t* out_present, fm_protected_range_t* out) {
+  clear_last_error();
+  if (name == nullptr || out_present == nullptr || out == nullptr) {
+    return null_argument(name == nullptr ? "name" : (out_present == nullptr ? "out_present" : "out"));
+  }
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_record_size(*out); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_utf8({name}); rc != 0) {
+    return rc;
+  }
+  const auto ranges = formulon::io::read_protected_ranges(wb->workbook().sheet(sheet_index).raw_extensions());
+  const std::size_t i = FindRange(ranges, name);
+  if (i == ranges.size()) {
+    const std::uint32_t struct_size = out->struct_size;
+    *out = FM_STRUCT_INIT(fm_protected_range_t);
+    out->struct_size = struct_size;
+    *out_present = 0;
+    return 0;
+  }
+  FillRange(wb, ranges[i], out);
+  *out_present = 1;
   return 0;
 }
 
 extern "C" fm_status_t fm_sheet_add_protected_range(fm_workbook_t* wb, size_t sheet_index,
-                                                    const fm_protected_range_t* range,
-                                                    size_t* out_protected_range_index) {
+                                                    const fm_protected_range_t* range) {
   clear_last_error();
-  if (range == nullptr || out_protected_range_index == nullptr) {
-    return null_argument();
+  if (range == nullptr) {
+    return null_argument("range");
   }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
@@ -222,16 +267,14 @@ extern "C" fm_status_t fm_sheet_add_protected_range(fm_workbook_t* wb, size_t sh
   }
   ranges.push_back(std::move(added));
   formulon::io::write_protected_ranges(raw, ranges);
-  *out_protected_range_index = ranges.size() - 1U;
   return 0;
 }
 
-extern "C" fm_status_t fm_sheet_update_protected_range(fm_workbook_t* wb, size_t sheet_index,
-                                                       size_t protected_range_index,
+extern "C" fm_status_t fm_sheet_update_protected_range(fm_workbook_t* wb, size_t sheet_index, const char* name,
                                                        const fm_protected_range_patch_t* patch) {
   clear_last_error();
-  if (patch == nullptr) {
-    return null_argument("patch");
+  if (name == nullptr || patch == nullptr) {
+    return null_argument(name == nullptr ? "name" : "patch");
   }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
@@ -274,8 +317,12 @@ extern "C" fm_status_t fm_sheet_update_protected_range(fm_workbook_t* wb, size_t
   }
   formulon::WorksheetRawExtensions& raw = wb->workbook().sheet(sheet_index).mutable_raw_extensions();
   auto ranges = formulon::io::read_protected_ranges(raw);
-  if (auto rc = check_index(protected_range_index, ranges.size(), "protected_range_index"); rc != 0) {
+  if (auto rc = check_utf8({name}); rc != 0) {
     return rc;
+  }
+  const std::size_t protected_range_index = FindRange(ranges, name);
+  if (protected_range_index == ranges.size()) {
+    return RangeNotFound(name);
   }
   ProtectedRange updated = ranges[protected_range_index];
   for (const StringPatch& f : strings) {
@@ -309,16 +356,22 @@ extern "C" fm_status_t fm_sheet_update_protected_range(fm_workbook_t* wb, size_t
   return 0;
 }
 
-extern "C" fm_status_t fm_sheet_remove_protected_range(fm_workbook_t* wb, size_t sheet_index,
-                                                       size_t protected_range_index) {
+extern "C" fm_status_t fm_sheet_remove_protected_range(fm_workbook_t* wb, size_t sheet_index, const char* name) {
   clear_last_error();
+  if (name == nullptr) {
+    return null_argument("name");
+  }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_utf8({name}); rc != 0) {
     return rc;
   }
   formulon::WorksheetRawExtensions& raw = wb->workbook().sheet(sheet_index).mutable_raw_extensions();
   auto ranges = formulon::io::read_protected_ranges(raw);
-  if (auto rc = check_index(protected_range_index, ranges.size(), "protected_range_index"); rc != 0) {
-    return rc;
+  const std::size_t protected_range_index = FindRange(ranges, name);
+  if (protected_range_index == ranges.size()) {
+    return RangeNotFound(name);
   }
   ranges.erase(ranges.begin() + static_cast<std::ptrdiff_t>(protected_range_index));
   formulon::io::write_protected_ranges(raw, ranges);

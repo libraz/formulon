@@ -250,6 +250,15 @@ struct PivotPageField {
   /// are listed in shared-item order. Resolution follows the literal
   /// reading.
   std::optional<std::uint32_t> item_index;
+
+  /// `<pageField hier="N">`; -1 is the non-OLAP marker Excel writes for a
+  /// field bound to a cache field. Absent when the file left it out.
+  std::optional<std::int32_t> hierarchy = -1;
+
+  /// `<pageField name>` and `<pageField cap>` (OLAP member name and caption),
+  /// kept verbatim; empty when absent.
+  std::string name{};
+  std::string caption{};
 };
 
 /// The `<filter>` element a loaded `PivotFilter` was decoded from.

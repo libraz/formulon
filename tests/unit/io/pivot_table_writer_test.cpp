@@ -6,6 +6,7 @@
 
 #include "io/pivot_table_writer.h"
 
+#include <algorithm>
 #include <cstdint>
 #include <cstdio>
 #include <memory>
@@ -830,11 +831,12 @@ TEST(PivotTableWriter, PassthroughElementsKeepSchemaOrder) {
   std::string xml(kXmlDecl);
   xml.append("<pivotTableDefinition").append(kPivotNs).append(" name=\"P\" cacheId=\"0\">");
   xml.append("<location ref=\"A1:D10\"/>");
-  xml.append("<pivotFields count=\"2\"><pivotField axis=\"axisRow\"/><pivotField dataField=\"1\"/></pivotFields>");
+  xml.append("<pivotFields count=\"3\"><pivotField axis=\"axisRow\"/><pivotField dataField=\"1\"/>");
+  xml.append("<pivotField axis=\"axisPage\"/></pivotFields>");
   xml.append("<rowFields count=\"1\"><field x=\"0\"/></rowFields>");
   xml.append("<rowItems count=\"1\"><i><x/></i></rowItems>");
   xml.append("<colFields count=\"1\"><field x=\"-2\"/></colFields>");
-  xml.append("<pageFields count=\"1\"><pageField fld=\"0\"/></pageFields>");
+  xml.append("<pageFields count=\"1\"><pageField fld=\"2\"/></pageFields>");
   xml.append("<dataFields count=\"1\"><dataField name=\"Sum of V\" fld=\"1\" subtotal=\"sum\"/></dataFields>");
   xml.append("<pivotTableStyleInfo name=\"PivotStyleLight16\"/>");
   xml.append("</pivotTableDefinition>");
@@ -1347,9 +1349,8 @@ TEST(PivotTableWriter, CapturedUpdatedVersionIsNotDuplicatedAndShowAllTrueIsUnwr
 // `<pageFields>`
 // ---------------------------------------------------------------------------
 //
-// The element is both passed through and synthesised: an authored block is
-// re-emitted from the bin the reader filled, and a table assembled in memory
-// gets one built for it, because a saved `axis="axisPage"` field with no
+// The element is written from the model, for a loaded table and one
+// assembled in memory alike: a saved `axis="axisPage"` field with no
 // page-field entry leaves Excel with no page-axis order to draw.
 
 pivot::PivotTable BuildPageAxisTable() {
@@ -1393,20 +1394,77 @@ TEST(PivotTableWriter, TableWithoutAPageAxisEmitsNoPageFields) {
   EXPECT_EQ(write_pivot_table_definition(table).find("<pageFields"), std::string::npos);
 }
 
-TEST(PivotTableWriter, AuthoredPageFieldsAreNotDuplicated) {
-  // What the reader decoded is re-emitted from the passthrough bin, so the
-  // writer must leave the element alone rather than add a second one built
-  // from the axis assignments.
+TEST(PivotTableWriter, PageFieldsAreWrittenOnceFromTheModelWithTheirAttributes) {
   pivot::PivotTable table = BuildPageAxisTable();
-  table.mutable_page_fields().push_back(pivot::PivotPageField{0U, std::optional<std::uint32_t>{3}});
-  table.mutable_raw_passthrough_after_col_fields() =
-      "<pageFields count=\"1\"><pageField fld=\"0\" item=\"3\"/></pageFields>";
+  pivot::PivotPageField page;
+  page.field_index = 0U;
+  page.item_index = 3U;
+  page.hierarchy = std::nullopt;
+  page.name = "[R].&[\"x\"]";
+  page.caption = "East";
+  table.mutable_page_fields().push_back(page);
 
   const std::string xml = write_pivot_table_definition(table);
 
-  EXPECT_NE(xml.find("<pageField fld=\"0\" item=\"3\"/>"), std::string::npos) << xml;
-  EXPECT_EQ(xml.find("hier=\"-1\""), std::string::npos) << xml;
+  EXPECT_NE(xml.find("<pageFields count=\"1\"><pageField fld=\"0\" item=\"3\" name=\"[R].&amp;[&quot;x&quot;]\" "
+                     "cap=\"East\"/></pageFields>"),
+            std::string::npos)
+      << xml;
   EXPECT_EQ(xml.find("<pageFields", xml.find("<pageFields") + 1), std::string::npos) << xml;
+}
+
+// Two page fields read from a file: an order set on the model is what is
+// saved, and a field moved onto the page axis later joins it last.
+TEST(PivotTableWriter, PageOrderSetOnALoadedTableRoundTrips) {
+  std::string authored(kXmlDecl);
+  authored.append("<pivotTableDefinition").append(kPivotNs).append(" name=\"P\" cacheId=\"1\">");
+  authored.append("<location ref=\"A3:B6\" firstHeaderRow=\"1\" firstDataRow=\"1\" firstDataCol=\"1\"/>");
+  authored.append("<pivotFields count=\"3\"><pivotField axis=\"axisPage\"/><pivotField axis=\"axisPage\"/>");
+  authored.append("<pivotField axis=\"axisRow\"/></pivotFields>");
+  authored.append("<rowFields count=\"1\"><field x=\"2\"/></rowFields>");
+  authored.append("<pageFields count=\"2\"><pageField fld=\"0\" item=\"1\" hier=\"-1\"/>");
+  authored.append("<pageField fld=\"1\" hier=\"-1\"/></pageFields>");
+  authored.append("</pivotTableDefinition>");
+  auto loaded_or = read_pivot_table_definition(Bytes(authored));
+  ASSERT_TRUE(static_cast<bool>(loaded_or)) << loaded_or.error().message;
+  pivot::PivotTable table = std::move(loaded_or.value());
+
+  std::reverse(table.mutable_page_fields().begin(), table.mutable_page_fields().end());
+  auto reread_or = read_pivot_table_definition(Bytes(write_pivot_table_definition(table)));
+  ASSERT_TRUE(static_cast<bool>(reread_or)) << reread_or.error().message;
+  EXPECT_EQ(reread_or.value().page_field_order(), (std::vector<std::uint32_t>{1U, 0U}));
+  ASSERT_NE(reread_or.value().find_page_field(0U), nullptr);
+  EXPECT_EQ(reread_or.value().find_page_field(0U)->item_index, std::optional<std::uint32_t>(1U));
+
+  table.mutable_row_field_order().clear();
+  table.set_field_axis(2U, pivot::PivotAxis::Page);
+  const std::string xml = write_pivot_table_definition(table);
+  EXPECT_NE(xml.find("<pageFields count=\"3\"><pageField fld=\"1\" hier=\"-1\"/><pageField fld=\"0\" item=\"1\" "
+                     "hier=\"-1\"/><pageField fld=\"2\" hier=\"-1\"/></pageFields>"),
+            std::string::npos)
+      << xml;
+  auto moved_or = read_pivot_table_definition(Bytes(xml));
+  ASSERT_TRUE(static_cast<bool>(moved_or)) << moved_or.error().message;
+  EXPECT_EQ(moved_or.value().page_field_order(), (std::vector<std::uint32_t>{1U, 0U, 2U}));
+
+  // Leaving the axis drops the entry; joining again appends it.
+  table.set_field_axis(1U, pivot::PivotAxis::None);
+  EXPECT_EQ(table.page_field_order(), (std::vector<std::uint32_t>{0U, 2U}));
+  table.set_field_axis(1U, pivot::PivotAxis::Page);
+  EXPECT_EQ(table.page_field_order(), (std::vector<std::uint32_t>{0U, 2U, 1U}));
+}
+
+TEST(PivotTableWriter, APageFieldWhoseAxisWasSetDirectlyJoinsTheOrderLast) {
+  pivot::PivotTable table = BuildPageAxisTable();
+  table.mutable_page_fields().push_back(pivot::PivotPageField{0U, std::nullopt});
+  pivot::PivotField quarter;
+  quarter.source_name = "Quarter";
+  quarter.axis = pivot::PivotAxis::Page;
+  table.mutable_fields().push_back(std::move(quarter));
+  EXPECT_EQ(table.page_field_order(), (std::vector<std::uint32_t>{0U, 2U}));
+  table.mutable_fields()[0].axis = pivot::PivotAxis::Row;
+  EXPECT_EQ(table.page_field_order(), (std::vector<std::uint32_t>{2U}));
+  EXPECT_EQ(table.find_page_field(0U), nullptr);
 }
 
 // ---------------------------------------------------------------------------

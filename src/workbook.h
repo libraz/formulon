@@ -525,6 +525,11 @@ class Workbook {
   /// Adds a normalized merge range through the workbook mutation path.  The
   /// engine mutex is held while the sheet merge vector is updated so a spill
   /// collision check cannot observe a partially-written metadata mutation.
+  /// Returns `kInvalidArgument` for a missing sheet or a range outside the
+  /// grid, `kAlreadyExists` when the range intersects an existing merge (an
+  /// identical one included), and `kPreconditionFailed` when it intersects a
+  /// table, a PivotTable, a legacy array formula or a data table's result
+  /// range; nothing changes on a refusal. File readers do not come here.
   Expected<void, Error> add_merge(std::size_t sheet_index, MergeRange merge);
 
   /// Removes every merge intersecting `merge` and wakes any blocked spill
@@ -818,6 +823,30 @@ class Workbook {
   /// Returns `kPreconditionFailed` for an overlap and `kInvalidArgument` for
   /// any other refusal or an out-of-range `index`.
   Expected<void, Error> check_table_resize(std::size_t index, const MergeRange& rect) const;
+
+  /// Shows or hides the totals row of table `index`. Showing it grows `ref`
+  /// by the row below and writes each column's totals cell there
+  /// (`write_table_totals_cell`); the data rows are kept. Hiding it shrinks
+  /// `ref` by its last row and clears that row's cells within the table's
+  /// columns (styles are kept). A call that changes nothing is a no-op. Every
+  /// check runs before the first change, so a refusal leaves the table and
+  /// the cells as they were. Returns `kInvalidArgument` for an out-of-range
+  /// `index` or a range that is not a single area, and `kPreconditionFailed`
+  /// when showing the row and the table ends on the grid's last row, or the
+  /// row below holds a value or formula, a spilled result, a merge, a table,
+  /// a PivotTable, a multi-cell array formula or a data table within the
+  /// table's columns, or when hiding the row would leave a header row with
+  /// no data row or its cells hold part of a multi-cell array formula or a
+  /// data table.
+  Expected<void, Error> set_table_totals_row(std::size_t index, bool shown);
+
+  /// Writes column `column`'s totals cell on the last row of table `index`'s
+  /// range from the column's totals settings: the `SUBTOTAL` formula of a
+  /// built-in totals function (the 1xx code, which skips hidden rows), the
+  /// custom formula, the label, or a blank. The caller decides whether the
+  /// table shows a totals row. Returns `kInvalidArgument` for an out-of-range
+  /// `index` or `column`, or a range that is not a single area.
+  Expected<void, Error> write_table_totals_cell(std::size_t index, std::size_t column);
 
   /// Smallest N >= 1 such that `<word><N>` is not the name or display name
   /// of any table nor a defined name (compared case-insensitively), as
@@ -1495,6 +1524,9 @@ class Workbook {
   // `set_cell_value` without the array / data-table write refusals.
   void put_cell_value(std::size_t sheet_index, std::uint32_t row, std::uint32_t col, Value value);
   void put_cell_text(std::size_t sheet_index, std::uint32_t row, std::uint32_t col, std::string_view text);
+  // `add_merge` without the overlap refusals, for a PivotTable writing its
+  // own report; `merge` must be normalized and inside the grid.
+  void put_merge(std::size_t sheet_index, const MergeRange& merge);
   // Drops every stored cell of `rect`, marking what read them dirty.
   void erase_cells_in(std::size_t sheet_index, const MergeRange& rect);
   // `set_cell_formula` without the write refusals; a non-zero `block_rows` x

@@ -61,9 +61,6 @@ Napi::Value CanonicalizeFormula(const Napi::CallbackInfo& info);
 /// currency placement and localized error names of a profile.
 Napi::Value LocaleFacts(const Napi::CallbackInfo& info);
 
-/// `listLocaleErrorNames(profileId)`: the profile's error names in code order.
-Napi::Value ListLocaleErrorNames(const Napi::CallbackInfo& info);
-
 /// `compareText(a, b, strength, profileId)`: the profile's collation order.
 Napi::Value CompareText(const Napi::CallbackInfo& info);
 

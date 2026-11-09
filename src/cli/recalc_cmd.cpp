@@ -33,6 +33,7 @@
 #include "cli/cli.h"
 #include "cli/diagnostics.h"
 #include "cli/file_io.h"
+#include "cli/render.h"
 #include "cli/workbook_load.h"
 #include "utils/strings.h"
 
@@ -45,9 +46,10 @@ namespace {
 constexpr std::uint32_t kMaxRecalcThreads = 8U;
 
 void print_recalc_usage(std::ostream& out) {
-  out << "Usage: formulon recalc [--iterative] [--threads N] [--quiet] [--format xlsx|xlsb] <in.xlsx-or-xlsb | -> -o "
-         "<out | ->\n"
-      << "       formulon recalc [--iterative] [--threads N] [--quiet] [--format xlsx|xlsb] -o <out> -- "
+  out << "Usage: formulon recalc [--iterative] [--threads N] [--quiet] [--json] [--format xlsx|xlsb] <in.xlsx-or-xlsb "
+         "| -> "
+         "-o <out>\n"
+      << "       formulon recalc [--iterative] [--threads N] [--quiet] [--json] [--format xlsx|xlsb] -o <out> -- "
          "<in.xlsx-or-xlsb>\n"
       << "\n"
       << "Load <in.xlsx-or-xlsb>, drive a full recalc, and write the result to <out.xlsx-or-xlsb>.\n"
@@ -63,7 +65,11 @@ void print_recalc_usage(std::ostream& out) {
          "otherwise\n"
       << "(refused when stdout is a terminal). Use './-' for a file named '-'.\n"
       << "Status: prints \"formulon: recalc: ok, wrote M bytes to 'OUT'\" on stderr unless\n"
-      << "--quiet is supplied; --quiet does not suppress load/save loss warnings.\n";
+      << "--quiet is supplied; --quiet does not suppress load/save loss warnings.\n"
+      << "--json prints "
+         "{\"format\":1,\"status\":\"ok\",\"output\":<path>,\"bytes\":N,\"warnings\":[{\"kind\":<counter>,\"count\":N},"
+         "...]}\n"
+      << "on stdout and lists the load/save loss counters there instead of on stderr; it is refused with '-o -'.\n";
   print_shared_options(out);
 }
 
@@ -100,6 +106,7 @@ int run_recalc(const ArgList& args, std::ostream& out, std::ostream& err) {
   std::string output_path;
   bool iterative = false;
   bool quiet = false;
+  bool want_json = false;
   bool parallel = false;
   std::uint32_t thread_count = 0U;
   std::optional<fm_workbook_format_t> format_option;
@@ -121,6 +128,10 @@ int run_recalc(const ArgList& args, std::ostream& out, std::ostream& err) {
     }
     if (!options_ended && a == "--iterative") {
       iterative = true;
+      continue;
+    }
+    if (!options_ended && a == "--json") {
+      want_json = true;
       continue;
     }
     if (!options_ended && a == "--quiet") {
@@ -195,6 +206,11 @@ int run_recalc(const ArgList& args, std::ostream& out, std::ostream& err) {
     return kExitUsage;
   }
 
+  if (to_stdout && want_json) {
+    err << "formulon: recalc: --json cannot be combined with '-o -'; stdout carries the workbook\n";
+    return kExitUsage;
+  }
+
   // `-o -` has no extension and defaults to .xlsx, as a stream does elsewhere.
   const std::optional<fm_workbook_format_t> implied = to_stdout ? std::nullopt : format_from_extension(output_path);
   if (format_option.has_value() && implied.has_value() && *format_option != *implied) {
@@ -210,8 +226,17 @@ int run_recalc(const ArgList& args, std::ostream& out, std::ostream& err) {
   const fm_workbook_format_t format = format_option.value_or(implied.value_or(FM_WORKBOOK_FORMAT_XLSX));
 
   WorkbookGuard wb;
-  if (auto rc = load_workbook_file(input_path, shared, wb, err, "recalc"); rc != 0) {
+  if (auto rc = load_workbook_file(input_path, shared, wb, err, "recalc", /*report_loss=*/!want_json); rc != 0) {
     return rc;
+  }
+  std::vector<LossCounter> warnings;
+  if (want_json) {
+    fm_read_diagnostics_info_t read_diagnostics = FM_STRUCT_INIT(fm_read_diagnostics_info_t);
+    if (auto rc = fm_workbook_get_diagnostics(wb.handle, &read_diagnostics); rc != 0) {
+      emit_last_error(err, "recalc");
+      return rc;
+    }
+    warnings = read_loss_counters(read_diagnostics);
   }
 
   if (iterative) {
@@ -243,7 +268,13 @@ int run_recalc(const ArgList& args, std::ostream& out, std::ostream& err) {
     emit_last_error(err, "recalc");
     return rc;
   }
-  emit_write_diagnostics(err, "recalc", format, save_diagnostics);
+  if (want_json) {
+    for (const LossCounter& counter : write_loss_counters(save_diagnostics)) {
+      warnings.push_back(counter);
+    }
+  } else {
+    emit_write_diagnostics(err, "recalc", format, save_diagnostics);
+  }
 
   if (to_stdout) {
     out.flush();
@@ -268,6 +299,17 @@ int run_recalc(const ArgList& args, std::ostream& out, std::ostream& err) {
     } else {
       err << "formulon: recalc: ok, wrote " << buf.len << " bytes to '" << output_path << "'\n";
     }
+  }
+  if (want_json) {
+    std::string doc = "{\"format\":1,\"status\":\"ok\",\"output\":" + render_json_string(output_path) +
+                      ",\"bytes\":" + std::to_string(buf.len) + ",\"warnings\":[";
+    for (std::size_t i = 0; i < warnings.size(); ++i) {
+      doc += (i != 0 ? ",{\"kind\":" : "{\"kind\":") + render_json_string(warnings[i].name) +
+             ",\"count\":" + std::to_string(warnings[i].count) + "}";
+    }
+    doc += "]}\n";
+    out << doc;
+    return flush_output(out, err, "recalc");
   }
   return 0;
 }

@@ -1015,7 +1015,7 @@ test('criterion 7: updatePivotField clears customName with null and ignores reco
     assert.equal(ws.pivot(pivot).listFields()[0].customName, null);
     // `axis` is a field of the getter's record the patch cannot set: ignored, not applied.
     const axis = ws.pivot(pivot).listFields()[0].axis;
-    ws.pivot(pivot).updateField(0, { axis: axis === f.PivotAxis.Row ? f.PivotAxis.Col : f.PivotAxis.Row });
+    ws.pivot(pivot).updateField(0, { axis: axis === f.PivotAxis.Row ? f.PivotAxis.Column : f.PivotAxis.Row });
     assert.equal(ws.pivot(pivot).listFields()[0].axis, axis);
   });
 });
@@ -1207,7 +1207,6 @@ const MOVED = [
   'localizeFormula',
   'canonicalizeFormula',
   'getLocaleFacts',
-  'listLocaleErrorNames',
   'compareText',
   'getCollationClasses',
   'getImageInfo',
@@ -1225,7 +1224,8 @@ test('criterion 9: the stateless functions are Formulon members and not Workbook
     assert.equal(f.canonicalizeFunctionName('SUMME', 'win-365-de_DE'), 'SUM');
     assert.ok(f.listFunctionNames().includes('SUM'));
     assert.equal(f.getLocaleFacts('win-365-en_US').decimalSeparator, '.');
-    assert.ok(Array.isArray(f.listLocaleErrorNames('win-365-en_US')));
+    assert.ok(Array.isArray(f.getLocaleFacts('win-365-en_US').errorNames));
+    assert.equal('listLocaleErrorNames' in f, false);
     assert.equal(typeof f.compareText('a', 'b', 0, 'win-365-en_US'), 'number');
     assert.equal(typeof f.getFunctionMetadata, 'function');
     assert.equal(typeof f.getCollationClasses, 'function');

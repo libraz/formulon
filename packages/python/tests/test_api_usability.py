@@ -32,6 +32,7 @@ from formulon import (
     CellRect,
     ErrorCode,
     ExcelError,
+    FormulaSyntaxError,
     FormulonError,
     IndexOutOfRangeError,
     InvalidArgumentError,
@@ -330,8 +331,11 @@ class CellArgumentsTests(unittest.TestCase):
     def test_rejected_texts(self) -> None:
         with _open() as wb:
             ws = wb.sheet(0)
-            for text in ("Sheet1!A1", "A1:B2", "", "R1C1", "Ａ1", "XFE1"):
+            for text in ("Sheet1!A1", "A1:B2"):
                 with self.subTest(text=text), self.assertRaises(InvalidArgumentError):
+                    ws.get_value(text)
+            for text in ("", "R1C1", "Ａ1", "XFE1"):
+                with self.subTest(text=text), self.assertRaises(FormulaSyntaxError):
                     ws.get_value(text)
 
     def test_set_number_with_text(self) -> None:
@@ -1036,7 +1040,7 @@ class PivotPatchTests(unittest.TestCase):
             _pivot_book(wb, ws)
             ws.pivot(0).add_field(formulon.PivotFieldInput(field_index="Region", axis=formulon.PivotAxis.ROW))
             with self.assertRaises(TypeError):
-                ws.pivot(0).update_field(0, axis=formulon.PivotAxis.COL)  # type: ignore[call-arg]
+                ws.pivot(0).update_field(0, axis=formulon.PivotAxis.COLUMN)  # type: ignore[call-arg]
 
     def test_update_pivot_item(self) -> None:
         with _open() as wb:
@@ -1196,7 +1200,6 @@ class ModuleFunctionTests(unittest.TestCase):
         "localize_formula",
         "canonicalize_formula",
         "get_locale_facts",
-        "list_locale_error_names",
         "compare_text",
         "get_collation_classes",
         "get_image_info",
@@ -1208,6 +1211,13 @@ class ModuleFunctionTests(unittest.TestCase):
                 self.assertTrue(callable(getattr(formulon, name, None)), "missing on the module")
                 self.assertFalse(hasattr(Workbook, name), "still on Workbook")
                 self.assertFalse(hasattr(Sheet, name), "still on Sheet")
+
+    def test_locale_error_names_come_from_the_locale_facts_only(self) -> None:
+        self.assertFalse(hasattr(formulon, "list_locale_error_names"))
+        self.assertNotIn("list_locale_error_names", formulon.__all__)
+        facts = formulon.get_locale_facts("mac-365-de_DE")
+        na = next(e for e in facts.error_names if e.canonical == "#N/A")
+        self.assertEqual(na.localized, "#NV")
 
     def test_get_image_info_reads_a_png(self) -> None:
         png = (

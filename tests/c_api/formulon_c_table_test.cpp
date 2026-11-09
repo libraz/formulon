@@ -1002,8 +1002,114 @@ TEST(FormulonCApiTable, UpdateWritesOnlyTheFieldsItSets) {
   info = Info(wb.handle);
   EXPECT_EQ(info.totals_row_count, 1U);
   EXPECT_EQ(info.header_row_count, 1U) << "KEEP leaves the header row";
-  EXPECT_EQ(info.range.last_row, 2U) << "KEEP leaves the range";
+  EXPECT_EQ(info.range.last_row, 3U) << "the totals row joins the range";
   EXPECT_STREQ(info.style_name, "TableStyleMedium2");
+}
+
+TEST(FormulonCApiTable, TotalsRowOnGrowsTheRangeAndKeepsTheDataRows) {
+  WorkbookGuard wb;
+  CreateSalesTable(wb);
+  ASSERT_EQ(fm_sheet_set_table_column_totals(wb.handle, 0, 0, 1, FM_TABLE_TOTALS_ROW_FUNCTION_SUM, nullptr, nullptr),
+            0);
+  fm_table_patch_t patch = TablePatch();
+  patch.totals_row_op = FM_PATCH_OP_SET;
+  patch.totals_row = 1;
+  ASSERT_EQ(fm_sheet_update_table(wb.handle, 0, 0, &patch), 0) << fm_get_last_error_message();
+  const fm_table_info_t info = Info(wb.handle);
+  EXPECT_EQ(info.range.first_row, 0U);
+  EXPECT_EQ(info.range.last_row, 3U);
+  EXPECT_EQ(info.totals_row_count, 1U);
+  const fm_value_t last_data = Value(wb.handle, 2, 1);
+  ASSERT_EQ(last_data.kind, FM_VALUE_KIND_NUMBER);
+  EXPECT_EQ(last_data.u.number, 20.0);
+  EXPECT_EQ(Formula(wb.handle, 3, 1), "=SUBTOTAL(109,[Amount])");
+
+  // A patch that changes nothing is a no-op.
+  ASSERT_EQ(fm_sheet_update_table(wb.handle, 0, 0, &patch), 0);
+  EXPECT_EQ(Info(wb.handle).range.last_row, 3U);
+}
+
+TEST(FormulonCApiTable, TotalsRowOffShrinksTheRangeAndClearsTheRow) {
+  WorkbookGuard wb;
+  CreateSalesTable(wb);
+  ASSERT_EQ(fm_sheet_set_table_column_totals(wb.handle, 0, 0, 1, FM_TABLE_TOTALS_ROW_FUNCTION_SUM, nullptr, nullptr),
+            0);
+  fm_table_patch_t patch = TablePatch();
+  patch.totals_row_op = FM_PATCH_OP_SET;
+  patch.totals_row = 1;
+  ASSERT_EQ(fm_sheet_update_table(wb.handle, 0, 0, &patch), 0);
+  patch.totals_row = 0;
+  ASSERT_EQ(fm_sheet_update_table(wb.handle, 0, 0, &patch), 0) << fm_get_last_error_message();
+  const fm_table_info_t info = Info(wb.handle);
+  EXPECT_EQ(info.range.last_row, 2U);
+  EXPECT_EQ(info.totals_row_count, 0U);
+  EXPECT_EQ(Value(wb.handle, 3, 1).kind, FM_VALUE_KIND_BLANK);
+}
+
+TEST(FormulonCApiTable, TotalsRowOnRefusesAnOccupiedRowBelowAndChangesNothing) {
+  WorkbookGuard wb;
+  CreateSalesTable(wb);
+  ASSERT_EQ(fm_sheet_set_text(wb.handle, 0, 3, 0, "x"), 0);
+  fm_table_patch_t patch = TablePatch();
+  patch.header_row_op = FM_PATCH_OP_SET;
+  patch.header_row = 0;
+  patch.totals_row_op = FM_PATCH_OP_SET;
+  patch.totals_row = 1;
+  EXPECT_EQ(fm_sheet_update_table(wb.handle, 0, 0, &patch), FM_STATUS_PRECONDITION_FAILED);
+  const fm_table_info_t info = Info(wb.handle);
+  EXPECT_EQ(info.range.last_row, 2U);
+  EXPECT_EQ(info.header_row_count, 1U) << "the header flag was not applied either";
+  EXPECT_EQ(info.totals_row_count, 0U);
+  const fm_value_t occupant = Value(wb.handle, 3, 0);
+  ASSERT_EQ(occupant.kind, FM_VALUE_KIND_TEXT);
+  EXPECT_STREQ(occupant.u.text, "x");
+}
+
+TEST(FormulonCApiTable, TotalsRowOnRefusesATableOnTheLastGridRow) {
+  WorkbookGuard wb;
+  CreateSalesTable(wb, "TableStyleMedium2", 0, fm_cell_rect_t{1048574U, 0, 1048575U, 1});
+  fm_table_patch_t patch = TablePatch();
+  patch.totals_row_op = FM_PATCH_OP_SET;
+  patch.totals_row = 1;
+  EXPECT_EQ(fm_sheet_update_table(wb.handle, 0, 0, &patch), FM_STATUS_PRECONDITION_FAILED);
+  const fm_table_info_t info = Info(wb.handle);
+  EXPECT_EQ(info.range.last_row, 1048575U);
+  EXPECT_EQ(info.totals_row_count, 0U);
+}
+
+TEST(FormulonCApiTable, ColumnRenameFoldsNonAsciiCase) {
+  WorkbookGuard wb;
+  CreateSalesTable(wb);
+  const char* name = nullptr;
+  ASSERT_EQ(fm_sheet_rename_table_column(wb.handle, 0, 0, 0, "\xC3\x84", &name), 0);
+  EXPECT_STREQ(name, "\xC3\x84");
+  ASSERT_EQ(fm_sheet_rename_table_column(wb.handle, 0, 0, 1, "\xC3\xA4", &name), 0) << fm_get_last_error_message();
+  EXPECT_STREQ(name,
+               "\xC3\xA4"
+               "2")
+      << "a duplicate under the fold takes a number";
+}
+
+TEST(FormulonCApiTableStyles, CustomStyleNamesFoldNonAsciiCase) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  const fm_table_style_t upper = MakeTableStyle(
+      "\xC3\x84"
+      "1",
+      0, 1, nullptr, 0U);
+  ASSERT_EQ(fm_workbook_set_table_style(wb.handle, &upper), 0) << fm_get_last_error_message();
+  const fm_table_style_t lower = MakeTableStyle(
+      "\xC3\xA4"
+      "1",
+      0, 1, nullptr, 0U);
+  ASSERT_EQ(fm_workbook_set_table_style(wb.handle, &lower), 0) << fm_get_last_error_message();
+  std::size_t count = 0;
+  ASSERT_EQ(fm_workbook_get_table_style_count(wb.handle, &count), 0);
+  EXPECT_EQ(count, 1U) << "the second set replaces the first";
+  EXPECT_EQ(fm_workbook_remove_table_style(wb.handle,
+                                           "\xC3\x84"
+                                           "1"),
+            0);
 }
 
 TEST(FormulonCApiTable, UpdateRefusesABadPatchAndChangesNothing) {

@@ -46,6 +46,8 @@ TEST_F(FormulonCApiRemoveMissingKey, SheetScopedKeys) {
   ExpectNotFound(fm_sheet_remove_sparkline_group(wb(), 0, "nope"), "sparkline group");
   ExpectNotFound(fm_sheet_remove_data_table(wb(), 0, 0, 0), "data table");
   ExpectNotFound(fm_sheet_remove_drawing(wb(), 0, 42U), "drawing");
+  ExpectNotFound(fm_sheet_remove_cf_rule(wb(), 0, kAbsentId), "cf rule");
+  ExpectNotFound(fm_sheet_remove_protected_range(wb(), 0, "nope"), "protected range");
 }
 
 // The chart readers are keyed reads: an absent id succeeds, reports the miss
@@ -69,6 +71,17 @@ TEST_F(FormulonCApiRemoveMissingKey, UpdatingAnAbsentThreadedCommentIsNotFound) 
   patch.done_op = FM_PATCH_OP_SET;
   patch.done = 1;
   ExpectNotFound(fm_sheet_update_threaded_comment(wb(), 0, kAbsentId, &patch), "threaded comment update");
+}
+
+TEST_F(FormulonCApiRemoveMissingKey, UpdatingAnAbsentCfRuleOrProtectedRangeIsNotFound) {
+  fm_cf_rule_patch_t cf = FM_STRUCT_INIT(fm_cf_rule_patch_t);
+  cf.stop_if_true_op = FM_PATCH_OP_SET;
+  cf.stop_if_true = 1;
+  ExpectNotFound(fm_sheet_update_cf_rule(wb(), 0, kAbsentId, &cf), "cf rule update");
+  fm_protected_range_patch_t range = FM_STRUCT_INIT(fm_protected_range_patch_t);
+  range.spin_count_op = FM_PATCH_OP_SET;
+  range.spin_count = 1U;
+  ExpectNotFound(fm_sheet_update_protected_range(wb(), 0, "nope", &range), "protected range update");
 }
 
 // Every edit of a drawing object or chart addressed by an id no object holds
@@ -142,6 +155,18 @@ TEST_F(FormulonCApiRemoveMissingKey, KeyedReadsReportAMissThroughOutPresent) {
   EXPECT_EQ(fm_workbook_get_file_name(wb(), &present, &file_name), 0);
   EXPECT_EQ(present, 0);
   EXPECT_EQ(file_name, nullptr);
+
+  present = 99;
+  fm_cf_rule_t rule = FM_STRUCT_INIT(fm_cf_rule_t);
+  EXPECT_EQ(fm_sheet_get_cf_rule(wb(), 0, kAbsentId, &present, &rule), 0);
+  EXPECT_EQ(present, 0);
+  EXPECT_EQ(rule.id, nullptr);
+
+  present = 99;
+  fm_protected_range_t range = FM_STRUCT_INIT(fm_protected_range_t);
+  EXPECT_EQ(fm_sheet_get_protected_range(wb(), 0, "nope", &present, &range), 0);
+  EXPECT_EQ(present, 0);
+  EXPECT_EQ(range.name, nullptr);
 
   present = 99;
   fm_auto_filter_t filter = FM_STRUCT_INIT(fm_auto_filter_t);

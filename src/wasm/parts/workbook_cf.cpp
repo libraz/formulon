@@ -212,10 +212,10 @@ emscripten::val JsWorkbook::getCfRule(uint32_t sheet, uint32_t cfRuleIndex) cons
   return cf_rule_to_val(rule);
 }
 
-uint32_t JsWorkbook::addConditionalFormat(uint32_t sheet, emscripten::val v) {
+emscripten::val JsWorkbook::addConditionalFormat(uint32_t sheet, emscripten::val v) {
   if (handle_ == nullptr) {
     record_invalid_handle();
-    return 0U;
+    return emscripten::val::undefined();
   }
   // Pull every JS field into local storage; the C ABI receives
   // borrowed `const char*` views that must stay valid for the
@@ -386,17 +386,17 @@ uint32_t JsWorkbook::addConditionalFormat(uint32_t sheet, emscripten::val v) {
     }
   }
   if (!reader.ok()) {
-    return 0U;
+    return emscripten::val::undefined();
   }
 
-  std::size_t new_index = 0;
-  if (!succeeded(fm_sheet_add_cf_rule(handle_, sheet, &rule, &new_index))) {
-    return 0U;
+  const char* out_id = nullptr;
+  if (!succeeded(fm_sheet_add_cf_rule(handle_, sheet, &rule, &out_id))) {
+    return emscripten::val::undefined();
   }
-  return static_cast<uint32_t>(new_index);
+  return emscripten::val(string_from_cstr(out_id));
 }
 
-void JsWorkbook::updateCfRule(uint32_t sheet, uint32_t cfRuleIndex, emscripten::val patch) {
+void JsWorkbook::updateCfRule(uint32_t sheet, const std::string& cfRuleId, emscripten::val patch) {
   if (handle_ == nullptr) {
     record_invalid_handle();
     return;
@@ -595,11 +595,11 @@ void JsWorkbook::updateCfRule(uint32_t sheet, uint32_t cfRuleIndex, emscripten::
   if (!reader.ok()) {
     return;
   }
-  succeeded(fm_sheet_update_cf_rule(handle_, sheet, cfRuleIndex, &p));
+  succeeded(fm_sheet_update_cf_rule(handle_, sheet, cfRuleId.c_str(), &p));
 }
 
-void JsWorkbook::removeConditionalFormatAt(uint32_t sheet, uint32_t index) {
-  succeeded(handle_ != nullptr ? fm_sheet_remove_cf_rule(handle_, sheet, index) : kBindingInvalidHandle);
+void JsWorkbook::removeConditionalFormatAt(uint32_t sheet, const std::string& cfRuleId) {
+  succeeded(handle_ != nullptr ? fm_sheet_remove_cf_rule(handle_, sheet, cfRuleId.c_str()) : kBindingInvalidHandle);
 }
 
 void JsWorkbook::clearConditionalFormats(uint32_t sheet) {

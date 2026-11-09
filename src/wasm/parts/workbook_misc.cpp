@@ -3,7 +3,7 @@
 // functions: `precedents` / `dependents` and their shared `trace_to_val`
 // bridge, `function_metadata` / `function_names` / `localize_function_name` /
 // `canonicalize_function_name` / `localize_formula` / `canonicalize_formula` /
-// `locale_facts` / `list_locale_error_names`, `compare_text` /
+// `locale_facts`, `compare_text` /
 // `collation_classes`, `getSpill`, and the legacy array formula accessors.
 
 #include <emscripten/val.h>
@@ -185,14 +185,6 @@ emscripten::val locale_facts(const std::string& profile_id) {
   }
   facts.set("errorNames", errors);
   return facts;
-}
-
-emscripten::val list_locale_error_names(const std::string& profile_id) {
-  emscripten::val arr = emscripten::val::array();
-  if (!succeeded(collect_locale_error_names(profile_id, arr))) {
-    return emscripten::val::undefined();
-  }
-  return arr;
 }
 
 emscripten::val list_profile_ids() {

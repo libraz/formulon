@@ -81,7 +81,7 @@ TEST(FormulonCli, ExitCodeInputEmptyAndCorruptFilesAreEngineFailures) {
 TEST(FormulonCli, ExitCodeInputUsageErrorsStayAt64) {
   EXPECT_EQ(run_cli({"dump"}).exit_code, 64);
   EXPECT_EQ(run_cli({"bogus"}).exit_code, 64);
-  EXPECT_EQ(run_cli({"recalc", "--json", "x.xlsx", "-o", "y.xlsx"}).exit_code, 64);
+  EXPECT_EQ(run_cli({"recalc", "--json", "x.xlsx", "-o", "-"}).exit_code, 64);
 }
 
 TEST(FormulonCli, ExitCodeOutputMissingDirectoryIs73) {
@@ -127,7 +127,7 @@ TEST(FormulonCli, ExitCodeIoClosedStdoutIs74) {
   PathGuard guard(in);
   ASSERT_TRUE(write_fixture_workbook(in));
   for (const std::vector<std::string>& args : {
-           std::vector<std::string>{"dump", "--sheets", in},
+           std::vector<std::string>{"dump", "--view", "sheets", in},
            std::vector<std::string>{"paginate", in},
            std::vector<std::string>{"profiles"},
            std::vector<std::string>{"recalc", "--quiet", in, "-o", "-"},
@@ -145,7 +145,7 @@ TEST(FormulonCli, ExitCodeIoBrokenPipeOnStdoutIs74) {
   SpawnOptions options;
   options.stdout_broken_pipe = true;
   for (const std::vector<std::string>& args : {
-           std::vector<std::string>{"dump", "--sheets", in},
+           std::vector<std::string>{"dump", "--view", "sheets", in},
            std::vector<std::string>{"dump", "--json", in},
            std::vector<std::string>{"eval", "=SEQUENCE(10,10)"},
            std::vector<std::string>{"profiles"},

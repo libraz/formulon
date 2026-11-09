@@ -76,7 +76,8 @@ class FormulaTextTests(unittest.TestCase):
     def test_a_lone_equals_sign_is_a_syntax_error(self) -> None:
         with self.assertRaises(FormulaSyntaxError) as caught:
             self.ws.set_value("A1", "=")
-        self.assertIsInstance(caught.exception, InvalidArgumentError)
+        self.assertNotIsInstance(caught.exception, InvalidArgumentError)
+        self.assertIsInstance(caught.exception, ValueError)
         self.assertIsNone(self.ws.get_value("A1"))
 
     def test_set_values_stops_at_the_failing_cell(self) -> None:

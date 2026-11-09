@@ -531,6 +531,14 @@ def _alternatives(ptype: str, js: bool) -> List[str]:
     return _strip_null(ptype, True) if js else _py_union(" | ".join(_strip_null(ptype, False)))
 
 
+def _scalar_alias(py, name: str) -> str:
+    """`name` resolved through an exported alias of a single type (`CfRuleId = str` gives `str`), else `name`."""
+    if name not in py.exports or name not in py.aliases:
+        return name
+    resolved = _alternatives(py.aliases[name], False)
+    return resolved[0] if len(resolved) == 1 else name
+
+
 @_owned("R26.ref")
 def _rule_refs(ctx: Context) -> Iterable[Violation]:
     """A table, pivot, CF rule or protected range argument is a reference by index or name: `table: TableRef`,
@@ -566,6 +574,8 @@ def _rule_refs(ctx: Context) -> Iterable[Violation]:
                     alternatives = _alternatives(ptype, False)
                     if len(alternatives) == 1 and alternatives[0] in py.exports:
                         alternatives = _alternatives(py.aliases.get(alternatives[0], alternatives[0]), False)
+                    # A member may itself be an exported alias of one type (`CfRuleId = str`).
+                    alternatives = [_scalar_alias(py, a) for a in alternatives]
                     if set(alternatives) == union:
                         continue
                     message = f"`{name}({param}: {ptype})` is not `{want}`"

@@ -117,6 +117,82 @@ fm_status_t lookup_pivot_field(const fm_workbook_t* wb, std::size_t sheet_index,
 // PivotTable fields
 // ---------------------------------------------------------------------------
 
+extern "C" fm_status_t fm_sheet_set_pivot_page_field_order(fm_workbook_t* wb, std::size_t sheet_index,
+                                                           std::size_t pivot_index, const std::uint32_t* indices,
+                                                           std::size_t count) {
+  clear_last_error();
+  if (wb == nullptr) {
+    return null_argument("wb");
+  }
+  if (count > 0 && indices == nullptr) {
+    return null_argument("indices");
+  }
+  formulon::pivot::PivotTable* table = nullptr;
+  if (auto rc = resolve_pivot_mut(wb, sheet_index, pivot_index, &table); rc != 0) {
+    return rc;
+  }
+  const std::size_t field_count = table->fields().size();
+  std::vector<bool> requested_field(field_count, false);
+  // Every entry is validated before the first change.
+  std::vector<std::uint32_t> requested_order;
+  requested_order.reserve(count);
+  for (std::size_t i = 0; i < count; ++i) {
+    if (indices[i] == FM_PIVOT_VALUES_FIELD) {
+      return invalid_argument("the Values field is never a page field", "i=" + std::to_string(i));
+    }
+    if (auto rc = check_index(indices[i], field_count, "indices[i]"); rc != 0) {
+      return rc;
+    }
+    if (requested_field[indices[i]]) {
+      return invalid_argument("indices lists a field twice",
+                              "i=" + std::to_string(i) + " value=" + std::to_string(indices[i]));
+    }
+    requested_field[indices[i]] = true;
+    requested_order.push_back(indices[i]);
+  }
+  // The list is the axis's whole membership: a page field left out comes off
+  // the axis, and a listed field moves onto it from wherever it was.
+  PivotEdit edit(wb->workbook(), sheet_index, pivot_index, *table);
+  for (const std::uint32_t field : table->page_field_order()) {
+    if (!requested_field[field]) {
+      table->set_field_axis(field, formulon::pivot::PivotAxis::None);
+    }
+  }
+  std::vector<formulon::pivot::PivotPageField> pages;
+  pages.reserve(requested_order.size());
+  for (const std::uint32_t field : requested_order) {
+    if (const formulon::pivot::PivotPageField* kept = table->find_page_field(field); kept != nullptr) {
+      pages.push_back(*kept);
+    } else {
+      formulon::pivot::PivotPageField added;
+      added.field_index = field;
+      pages.push_back(added);
+    }
+    table->set_field_axis(field, formulon::pivot::PivotAxis::Page);
+    remove_from_field_order(*table, true, field);
+    remove_from_field_order(*table, false, field);
+  }
+  table->mutable_page_fields() = std::move(pages);
+  return edit.commit();
+}
+
+extern "C" fm_status_t fm_sheet_get_pivot_page_field_order(const fm_workbook_t* wb, std::size_t sheet_index,
+                                                           std::size_t pivot_index, std::uint32_t* out,
+                                                           std::size_t capacity, std::size_t* out_count) {
+  clear_last_error();
+  if (out == nullptr && capacity > 0U) {
+    return null_argument("out");
+  }
+  const formulon::pivot::PivotTable* table = nullptr;
+  if (auto rc = resolve_pivot_checked(wb, {out_count}, sheet_index, pivot_index, &table); rc != 0) {
+    return rc;
+  }
+  const std::vector<std::uint32_t> order = table->page_field_order();
+  std::copy_n(order.begin(), std::min(capacity, order.size()), out);
+  *out_count = order.size();
+  return 0;
+}
+
 extern "C" fm_status_t fm_sheet_get_pivot_field_count(const fm_workbook_t* wb, std::size_t sheet_index,
                                                       std::size_t pivot_index, std::size_t* out_count) {
   clear_last_error();
@@ -180,9 +256,10 @@ extern "C" fm_status_t fm_sheet_add_pivot_field(fm_workbook_t* wb, std::size_t s
   formulon::pivot::PivotField& field = fields[index];
   field.source_name = spec->source_name;
   field.custom_name = text_or_empty(spec->custom_name);
-  field.axis = pivot_axis_from_fm(static_cast<fm_pivot_axis_t>(spec->axis));
   field.subtotal_top = spec->subtotal_top != FM_TRISTATE_FALSE;
   field.number_format = std::move(number_format);
+  table->set_field_axis(static_cast<std::uint32_t>(index),
+                        pivot_axis_from_fm(static_cast<fm_pivot_axis_t>(spec->axis)));
   sync_field_order(*table, static_cast<std::uint32_t>(index));
   const fm_status_t status = edit.commit();
   if (status == 0) {
@@ -352,10 +429,11 @@ extern "C" fm_status_t fm_sheet_set_pivot_field_axis(fm_workbook_t* wb, std::siz
   }
   PivotEdit edit(wb->workbook(), sheet_index, pivot_index, *table);
   if (axis == FM_PIVOT_AXIS_ABSENT) {
-    field->axis = formulon::pivot::PivotAxis::None;
+    table->set_field_axis(static_cast<std::uint32_t>(field_index), formulon::pivot::PivotAxis::None);
     formulon::pivot::drop_field_aggregates(*table, field_index);
   } else {
-    field->axis = pivot_axis_from_fm(static_cast<fm_pivot_axis_t>(axis));
+    table->set_field_axis(static_cast<std::uint32_t>(field_index),
+                          pivot_axis_from_fm(static_cast<fm_pivot_axis_t>(axis)));
   }
   sync_field_order(*table, static_cast<std::uint32_t>(field_index));
   return edit.commit();

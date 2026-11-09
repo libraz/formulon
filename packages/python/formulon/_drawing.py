@@ -561,6 +561,10 @@ class Chart(Drawing):
         A :class:`~formulon.ChartTitle` sets that kind, so
         ``ChartTitle(ChartTitleKind.AUTO)`` returns the title to
         Excel's automatic one.
+
+        Raises:
+          InvalidArgumentError: when ``title`` is an empty string; remove the
+            title with ``None``.
         """
         h, sheet, object_id = self._at()
         with _ArgScope() as scope:

@@ -42,6 +42,7 @@ EXPECT_HAS_FLAG(fm_header_footer_t, has_different_first);
 EXPECT_HAS_FLAG(fm_cf_rule_t, has_op);
 EXPECT_HAS_FLAG(fm_cf_rule_t, has_icon_set_floor);
 EXPECT_HAS_FLAG(fm_dxf_t, has_font);
+EXPECT_HAS_FLAG(fm_chart_insert_spec_t, has_title);
 EXPECT_FLAGGED_INDEX(fm_function_metadata_info_t, max_arity);
 EXPECT_FLAGGED_INDEX(fm_filter_column_t, dxf_index);
 EXPECT_FLAGGED_INDEX(fm_pivot_cache_options_t, missing_items_limit);
@@ -255,8 +256,15 @@ int main(void) {
                                                const char**) = fm_sheet_get_pivot_data_field_default_name;
   fm_status_t (*merges_in_range)(const fm_workbook_t*, size_t, const fm_cell_rect_t*, fm_cell_rect_t*, size_t,
                                  size_t*) = fm_sheet_get_merges_in_range;
-  fm_status_t (*update_protected_range)(fm_workbook_t*, size_t, size_t, const fm_protected_range_patch_t*) =
+  // Protected ranges are keyed by name; the add returns nothing because the
+  // caller's name is the key.
+  fm_status_t (*get_protected_range)(const fm_workbook_t*, size_t, const char*, int32_t*, fm_protected_range_t*) =
+      fm_sheet_get_protected_range;
+  fm_status_t (*add_protected_range)(fm_workbook_t*, size_t, const fm_protected_range_t*) =
+      fm_sheet_add_protected_range;
+  fm_status_t (*update_protected_range)(fm_workbook_t*, size_t, const char*, const fm_protected_range_patch_t*) =
       fm_sheet_update_protected_range;
+  fm_status_t (*remove_protected_range)(fm_workbook_t*, size_t, const char*) = fm_sheet_remove_protected_range;
   fm_threaded_comment_patch_t comment_patch = FM_STRUCT_INIT(fm_threaded_comment_patch_t);
   comment_patch.done_op = FM_PATCH_OP_SET;
   comment_patch.done = 1;
@@ -329,6 +337,16 @@ int main(void) {
       fm_sheet_update_pivot_grand_totals;
   fm_status_t (*pivot_row_field_order)(const fm_workbook_t*, size_t, size_t, uint32_t*, size_t, size_t*) =
       fm_sheet_get_pivot_row_field_order;
+  fm_status_t (*pivot_page_field_order)(const fm_workbook_t*, size_t, size_t, uint32_t*, size_t, size_t*) =
+      fm_sheet_get_pivot_page_field_order;
+  fm_status_t (*set_pivot_page_field_order)(fm_workbook_t*, size_t, size_t, const uint32_t*, size_t) =
+      fm_sheet_set_pivot_page_field_order;
+  // Every add returns its key or index.
+  fm_status_t (*add_shared_item_text)(fm_workbook_t*, uint32_t, size_t, const char*, size_t*) =
+      fm_workbook_add_pivot_cache_field_shared_item_text;
+  fm_status_t (*add_shared_item_blank)(fm_workbook_t*, uint32_t, size_t, size_t*) =
+      fm_workbook_add_pivot_cache_field_shared_item_blank;
+  fm_status_t (*add_person)(fm_workbook_t*, const fm_person_t*, const char**) = fm_workbook_add_person;
   fm_status_t (*pivot_cache_field_formula)(const fm_workbook_t*, uint32_t, size_t, int32_t*, const char**) =
       fm_workbook_get_pivot_cache_field_formula;
   fm_pivot_field_patch_t pivot_field_patch = FM_STRUCT_INIT(fm_pivot_field_patch_t);
@@ -361,8 +379,17 @@ int main(void) {
   validation_patch.formula1_op = FM_PATCH_OP_CLEAR;
   _Static_assert(sizeof(fm_cf_rule_patch_t) == (sizeof(void*) == 4 ? 472 : 544),
                  "fm_cf_rule_patch_t ABI layout changed");
-  fm_status_t (*update_cf_rule)(fm_workbook_t*, size_t, size_t, const fm_cf_rule_patch_t*) = fm_sheet_update_cf_rule;
+  // CF rules are keyed by id.
+  fm_status_t (*get_cf_rule)(const fm_workbook_t*, size_t, const char*, int32_t*, fm_cf_rule_t*) = fm_sheet_get_cf_rule;
+  fm_status_t (*add_cf_rule)(fm_workbook_t*, size_t, const fm_cf_rule_t*, const char**) = fm_sheet_add_cf_rule;
+  fm_status_t (*update_cf_rule)(fm_workbook_t*, size_t, const char*, const fm_cf_rule_patch_t*) =
+      fm_sheet_update_cf_rule;
+  fm_status_t (*remove_cf_rule)(fm_workbook_t*, size_t, const char*) = fm_sheet_remove_cf_rule;
   fm_cf_rule_patch_t cf_patch = FM_STRUCT_INIT(fm_cf_rule_patch_t);
+  // A chart's insert title is the setter's record behind `has_title`.
+  fm_chart_insert_spec_t chart_spec = FM_STRUCT_INIT(fm_chart_insert_spec_t);
+  chart_spec.has_title = 1;
+  chart_spec.title.kind = FM_CHART_TITLE_KIND_NONE;
   cf_patch.dxf_index_op = FM_PATCH_OP_CLEAR;
   // A pivot filter names its field by index; subtotal functions are set as a
   // whole; cache records read back.
@@ -394,8 +421,12 @@ int main(void) {
   (void)update_validation;
   (void)remove_validation;
   (void)validation_patch;
+  (void)get_cf_rule;
+  (void)add_cf_rule;
   (void)update_cf_rule;
+  (void)remove_cf_rule;
   (void)cf_patch;
+  (void)chart_spec;
   (void)set_subtotal_functions;
   (void)cache_record_value;
   (void)set_fill;
@@ -432,6 +463,11 @@ int main(void) {
   (void)update_pivot_cache_options;
   (void)update_pivot_grand_totals;
   (void)pivot_row_field_order;
+  (void)pivot_page_field_order;
+  (void)set_pivot_page_field_order;
+  (void)add_shared_item_text;
+  (void)add_shared_item_blank;
+  (void)add_person;
   (void)pivot_cache_field_formula;
   (void)pivot_field_patch;
   (void)format_value;
@@ -454,7 +490,10 @@ int main(void) {
   (void)set_pivot_field_date_group;
   (void)pivot_data_field_default_name;
   (void)merges_in_range;
+  (void)get_protected_range;
+  (void)add_protected_range;
   (void)update_protected_range;
+  (void)remove_protected_range;
   (void)comment_patch;
   (void)person_at;
   (void)insert_image;

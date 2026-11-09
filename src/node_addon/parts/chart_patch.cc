@@ -356,17 +356,18 @@ Napi::Value Workbook::InsertChart(const Napi::CallbackInfo& info) {
   std::string source;
   std::string name;
   std::string description;
-  std::string title;
+  Arena arena;
   reader.String(spec, "source", &source);
-  bool has_title = false;
-  {
-    const Field f = Probe(reader, spec, "title");
-    if (f.op == FM_PATCH_OP_SET) {
-      reader.String(f.value, "title", &title);
-      has_title = true;
-    }
-  }
   fm_chart_insert_spec_t opts = FM_STRUCT_INIT(fm_chart_insert_spec_t);
+  // An omitted title is Excel's automatic title; `null` is no title.
+  const Field title = Probe(reader, spec, "title");
+  if (title.op == FM_PATCH_OP_SET) {
+    opts.has_title = 1;
+    opts.title = ReadTitle(reader, title.value, "title", arena);
+  } else if (title.op == FM_PATCH_OP_CLEAR) {
+    opts.has_title = 1;
+    opts.title.kind = FM_CHART_TITLE_KIND_NONE;
+  }
   opts.type = reader.I32(spec, "type", FM_CHART_PLOT_TYPE_BAR);
   opts.bar_direction = reader.I32(spec, "barDirection", FM_CHART_BAR_DIRECTION_COLUMN);
   opts.grouping = reader.I32(spec, "grouping", FM_CHART_GROUPING_CLUSTERED);
@@ -374,7 +375,6 @@ Napi::Value Workbook::InsertChart(const Napi::CallbackInfo& info) {
   opts.direction = reader.I32(spec, "direction", FM_CHART_SERIES_DIRECTION_AUTO);
   opts.header_row = reader.Tristate(spec, "headerRow");
   opts.header_column = reader.Tristate(spec, "headerColumn");
-  opts.title = has_title ? title.c_str() : nullptr;
   // An omitted legend is Excel's default bottom legend; `null` is none.
   const Napi::Value legend = reader.Get(spec, "legend");
   opts.legend =

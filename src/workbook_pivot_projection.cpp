@@ -393,7 +393,8 @@ Expected<void, Error> Workbook::project_pivot(std::size_t sheet_index, std::size
   std::vector<PivotRect>& merges = table.mutable_projected_merges();
   merges.clear();
   for (const PivotRect& merge : cells.merges) {
-    RETURN_IF_ERROR(add_merge(sheet_index, to_merge(merge)));
+    // The report's own merges sit inside the pivot, which `add_merge` refuses.
+    put_merge(sheet_index, normalized(to_merge(merge)));
     merges.push_back(merge);
   }
   table.set_projected_extent(new_extent.has_value() ? std::optional<PivotRect>(to_rect(*new_extent)) : std::nullopt);

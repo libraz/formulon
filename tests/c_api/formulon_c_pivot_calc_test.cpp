@@ -87,10 +87,10 @@ void BuildSales(WorkbookGuard& wb, std::uint32_t* out_cache, bool product_on_col
     ASSERT_EQ(fm_workbook_add_pivot_cache_field(wb.handle, cache, name, &index), 0) << fm_get_last_error_message();
   }
   for (const char* item : {"North", "South", "East"}) {
-    ASSERT_EQ(fm_workbook_add_pivot_cache_field_shared_item_text(wb.handle, cache, kRegion, item), 0);
+    ASSERT_EQ(fm_workbook_add_pivot_cache_field_shared_item_text(wb.handle, cache, kRegion, item, ignored_index()), 0);
   }
   for (const char* item : {"A", "B"}) {
-    ASSERT_EQ(fm_workbook_add_pivot_cache_field_shared_item_text(wb.handle, cache, kProduct, item), 0);
+    ASSERT_EQ(fm_workbook_add_pivot_cache_field_shared_item_text(wb.handle, cache, kProduct, item, ignored_index()), 0);
   }
   for (const SourceRow& row : kRows) {
     std::size_t record = 99;
@@ -117,7 +117,7 @@ void BuildSales(WorkbookGuard& wb, std::uint32_t* out_cache, bool product_on_col
   const std::uint32_t rows[] = {static_cast<std::uint32_t>(kRegion)};
   ASSERT_EQ(fm_sheet_set_pivot_row_field_order(wb.handle, 0U, kPivot, rows, 1U), 0) << fm_get_last_error_message();
   if (product_on_cols) {
-    AddField(wb.handle, "Product", FM_PIVOT_AXIS_COL);
+    AddField(wb.handle, "Product", FM_PIVOT_AXIS_COLUMN);
     ASSERT_EQ(SetPivotFieldSort(wb.handle, 0U, kPivot, kProduct, FM_PIVOT_SORT_ORDER_MANUAL, nullptr), 0);
     for (const char* item : {"A", "B"}) {
       ASSERT_EQ(fm_sheet_add_pivot_field_item(wb.handle, 0U, kPivot, kProduct, item, 1, ignored_index()), 0);

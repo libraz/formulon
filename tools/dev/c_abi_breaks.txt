@@ -85,11 +85,11 @@ signature fm_sheet_add_validation :: parameter type renamed (fm_data_validation 
 removed fm_sheet_add_col_break :: replaced by fm_sheet_set_column_break(wb, sheet_index, col, const fm_column_break_t*), which upserts the break with its span and removes it with NULL
 removed fm_sheet_cell_rect_pt :: renamed to fm_sheet_get_cell_rect_pt
 removed fm_sheet_cells_in_range :: renamed to fm_sheet_get_cells_in_range
-removed fm_sheet_cf_add_rule :: renamed to fm_sheet_add_cf_rule
+removed fm_sheet_cf_add_rule :: renamed to fm_sheet_add_cf_rule, which takes the rule by const pointer and returns its id through const char** out_cf_rule_id
 removed fm_sheet_cf_clear :: renamed to fm_sheet_clear_cf_rules
 removed fm_sheet_cf_count :: renamed to fm_sheet_get_cf_rule_count
-removed fm_sheet_cf_get_at :: renamed to fm_sheet_get_cf_rule
-removed fm_sheet_cf_remove_at :: renamed to fm_sheet_remove_cf_rule
+removed fm_sheet_cf_get_at :: renamed to fm_sheet_get_cf_rule_at; fm_sheet_get_cf_rule reads a rule by id, with int32_t* out_present before out
+removed fm_sheet_cf_remove_at :: renamed to fm_sheet_remove_cf_rule, which takes the rule's id
 removed fm_sheet_col_break_at :: renamed to fm_sheet_get_column_break_at
 removed fm_sheet_col_break_count :: renamed to fm_sheet_get_column_break_count
 removed fm_sheet_column_chars_to_pt :: renamed to fm_sheet_convert_column_chars_to_pt
@@ -161,7 +161,7 @@ removed fm_table_remove_auto_filter :: fm_sheet_set_table_auto_filter with NULL 
 removed fm_table_set_auto_filter :: moved to fm_sheet_set_table_auto_filter, addressing the table by sheet_index and a sheet-local table_index; NULL removes the filter
 removed fm_text_compare :: renamed to fm_compare_text
 removed fm_version_string :: renamed to fm_get_version
-retyped fm_workbook_add_person :: parameter type renamed (fm_person -> fm_person_t)
+signature fm_workbook_add_person :: parameter type renamed (fm_person -> fm_person_t); returns the id as stored through const char** out_person_id
 removed fm_workbook_calc_mode :: renamed to fm_workbook_get_calc_mode
 removed fm_workbook_cell_at :: renamed to fm_sheet_get_cell_at
 removed fm_workbook_cell_count :: renamed to fm_sheet_get_cell_count

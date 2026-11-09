@@ -1,5 +1,6 @@
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <ostream>
 #include <string>
 #include <string_view>
@@ -17,10 +18,11 @@ namespace formulon::cli {
 namespace {
 
 void print_paginate_usage(std::ostream& out) {
-  out << "Usage: formulon paginate [--sheet INDEX] [--json] [--] <in | ->\n"
+  out << "Usage: formulon paginate [--sheet <name | index>] [--json] [--] <in | ->\n"
       << "\n"
       << "Resolve a worksheet's print area, automatic page breaks, and physical page count.\n"
-      << "INDEX is zero-based and defaults to 0. print_area lists A1 ranges (e.g. B2:D5);\n"
+      << "--sheet takes a sheet name or a zero-based index and defaults to the first sheet. print_area lists A1 ranges "
+         "(e.g. B2:D5);\n"
       << "break positions are zero-based. <in> is an xlsx or xlsb file; '-' reads stdin.\n"
       << "  --json       print the sheet's name and one A1 range per physical page as JSON\n"
       << "  --           end options; the next token is the input path\n";
@@ -31,7 +33,7 @@ void print_paginate_usage(std::ostream& out) {
 
 int run_paginate(const ArgList& args, std::ostream& out, std::ostream& err) {
   std::string input_path;
-  std::size_t sheet_index = 0;
+  std::optional<std::string> sheet_spec;
   bool input_seen = false;
   bool options_ended = false;
   bool want_json = false;
@@ -53,10 +55,11 @@ int run_paginate(const ArgList& args, std::ostream& out, std::ostream& err) {
       continue;
     }
     if (!options_ended && arg == "--sheet") {
-      if (i + 1 == args.size() || !parse_unsigned(args[i + 1], &sheet_index)) {
-        err << "formulon: paginate: --sheet requires a non-negative integer\n";
+      if (i + 1 == args.size()) {
+        err << "formulon: paginate: --sheet requires a sheet name or index\n";
         return kExitUsage;
       }
+      sheet_spec.emplace(args[i + 1]);
       ++i;
       continue;
     }
@@ -76,6 +79,12 @@ int run_paginate(const ArgList& args, std::ostream& out, std::ostream& err) {
   }
   if (auto rc = use_manual_calculation(workbook.handle, err, "paginate"); rc != 0) {
     return rc;
+  }
+  std::size_t sheet_index = 0;
+  if (sheet_spec.has_value()) {
+    if (auto rc = resolve_sheet(workbook.handle, *sheet_spec, &sheet_index, err, "paginate"); rc != 0) {
+      return rc;
+    }
   }
   PaginationGuard pagination;
   if (const auto status = fm_sheet_paginate(workbook.handle, sheet_index, &pagination.handle); status != 0) {

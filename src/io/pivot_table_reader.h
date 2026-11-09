@@ -77,11 +77,9 @@ namespace formulon::io {
 ///   * `<pageFields>` walked in document order. Each `<pageField>`
 ///     records `fld` -> the page-axis field index (an entry without
 ///     `fld` is skipped, not defaulted to 0) and `item` -> the single
-///     selected item, absent when the field shows every item or several.
-///     The block itself still reaches the passthrough bin so the writer
-///     re-emits the authored bytes; the decode exists to supply the
-///     report order and the selection, which `<pivotFields>` does not
-///     record. See `PivotTable::page_fields`.
+///     selected item, absent when the field shows every item or several;
+///     `hier`, `name` and `cap` are kept for the writer. The model owns the
+///     block: nothing of it is passed through. See `PivotTable::page_fields`.
 ///   * `<formats>`, `<conditionalFormats>`, `<chartFormats>`, etc. are
 ///     silently skipped (preserved as bytes by a future writer).
 ///

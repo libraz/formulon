@@ -14,6 +14,7 @@
 #include "c_api/parts/enum_map.h"
 #include "c_api/parts/struct_v1_sizes.h"
 #include "c_api/parts/table_style_defaults.h"
+#include "sheet_name.h"
 #include "styles.h"
 #include "utils/error.h"
 #include "utils/strings.h"
@@ -74,7 +75,7 @@ bool is_builtin_style_name(std::string_view name) {
 
 std::size_t find_style(const formulon::TableStylesSection& section, std::string_view name) {
   for (std::size_t i = 0; i < section.styles.size(); ++i) {
-    if (formulon::strings::case_insensitive_eq(section.styles[i].name, name)) {
+    if (formulon::collection_names::equal(section.styles[i].name, name)) {
       return i;
     }
   }
@@ -253,10 +254,10 @@ extern "C" fm_status_t fm_workbook_remove_table_style(fm_workbook_t* wb, const c
     return not_found("no custom table style has that name", "name=" + std::string(name));
   }
   section.styles.erase(section.styles.begin() + static_cast<std::ptrdiff_t>(index));
-  if (formulon::strings::case_insensitive_eq(section.default_table_style, name)) {
+  if (formulon::collection_names::equal(section.default_table_style, name)) {
     section.default_table_style = std::string(kDefaultTableStyle);
   }
-  if (formulon::strings::case_insensitive_eq(section.default_pivot_style, name)) {
+  if (formulon::collection_names::equal(section.default_pivot_style, name)) {
     section.default_pivot_style = std::string(kDefaultPivotStyle);
   }
   return 0;

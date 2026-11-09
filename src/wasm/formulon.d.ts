@@ -507,8 +507,9 @@ export interface TableInput {
 
 /** Argument of `Table.update`. An omitted key leaves the field unchanged and no key accepts `null` (a
  * `TypeError`). `range` takes a {@link CellRect} or an A1 range on the table's sheet and resizes the table.
- * `headerRow` and `totalsRow` update their flags only when supplied; turning `totalsRow` on writes each column's
- * totals cell on the last row of the range (see `Table.setColumnTotals`). The update is all-or-nothing. The
+ * `headerRow` and `totalsRow` update their flags only when supplied; turning `totalsRow` on grows the table by one
+ * row below and writes each column's totals cell there; the update fails with `PreconditionFailed` when that row
+ * is occupied (see `Table.setColumnTotals`). With `range` in the same patch only the flag flips. The update is all-or-nothing. The
  * record `Table.getProperties()` returns is also accepted: its `name` and `columns` are ignored. Renaming goes
  * through `Table.rename`, the style through `Table.updateStyleOptions`. */
 export interface TablePatch {
@@ -696,7 +697,7 @@ export interface PivotLayout {
 /** PivotTable axis enumeration. */
 export const PivotAxis: Readonly<{
   Row: 0;
-  Col: 1;
+  Column: 1;
   Value: 2;
   Page: 3;
 }>;
@@ -724,15 +725,15 @@ export type PivotAggregation = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10;
 export const PivotShowValuesAs: Readonly<{
   Normal: 0;
   PercentOfRow: 1;
-  PercentOfCol: 2;
+  PercentOfColumn: 2;
   PercentOfTotal: 3;
   RunningTotalInRow: 4;
-  RunningTotalInCol: 5;
+  RunningTotalInColumn: 5;
   Index: 6;
   DifferenceFrom: 7;
   PercentDifferenceFrom: 8;
   PercentOfParentRow: 9;
-  PercentOfParentCol: 10;
+  PercentOfParentColumn: 10;
   PercentOfParent: 11;
   PercentOf: 12;
   PercentOfRunningTotal: 13;
@@ -2546,8 +2547,9 @@ export interface CfIcon {
 }
 
 /** The members every {@link ConditionalFormatInput} shares. When `priority` is missing, zero, or negative, the
- *  engine assigns `existing_max + 1`. When `id` is missing, empty, or names another rule of the sheet, the
- *  engine assigns a new one. */
+ *  engine assigns `existing_max + 1`. `id` is a brace-wrapped GUID (hex digits in either case); when it is missing,
+ *  empty or names another rule of the sheet, the engine assigns an upper-case one, and any other text fails with
+ *  `StatusCode.InvalidArgument`. */
 interface CfRuleInputBase {
   ranges: readonly (CellRect | string)[] | string;
   priority?: number;
@@ -3735,7 +3737,7 @@ export type ChartAxisPosition = 0 | 1 | 2 | 3;
 
 /** Bar direction of a bar-family plot: vertical columns or horizontal bars. */
 export const ChartBarDirection: Readonly<{
-  Col: 0;
+  Column: 0;
   Bar: 1;
 }>;
 /** Union of the {@link ChartBarDirection} ordinals. */
@@ -4851,10 +4853,11 @@ export interface ChartData {
 }
 
 /** Options of `Sheet.addChart`. `type` is one of `Bar`, `Line`, `Area`, `Pie`, `Doughnut` and `Scatter` (any
- *  other {@link ChartPlotType} fails with `StatusCode.InvalidArgument`); `barDirection` is for `Bar` only, `Col`
+ *  other {@link ChartPlotType} fails with `StatusCode.InvalidArgument`); `barDirection` is for `Bar` only, `Column`
  *  when omitted. `range` is a {@link SheetRect} or an A1 range (an unqualified one resolves on the receiving
- *  sheet). A `headerRow` / `headerColumn` that is omitted or `null` follows Excel's detection, an omitted `title`
- *  is Excel's automatic title and an empty one is no title. An omitted `legend` is
+ *  sheet). A `headerRow` / `headerColumn` that is omitted or `null` follows Excel's detection. An omitted `title`
+ *  is Excel's automatic title, `null` is no title, a string or {@link ChartTitle} sets that title and an empty
+ *  string fails with `StatusCode.InvalidArgument`. An omitted `legend` is
  *  `ChartLegendPosition.Bottom`, Excel's default for a new chart; `null` is no legend. `placement` names the
  *  frame, sets its description and visibility, and places it; its anchor defaults to a two-cell anchor, and a
  *  zero `widthEmu` / `heightEmu` means Excel's default frame. */
@@ -4866,7 +4869,7 @@ export interface ChartInsertInput {
   direction?: ChartSeriesDirection;
   headerRow?: boolean | null;
   headerColumn?: boolean | null;
-  title?: string;
+  title?: string | ChartTitle | null;
   legend?: ChartLegendPosition | null;
   placement?: DrawingPlacementInput;
 }
@@ -5309,9 +5312,13 @@ export type PivotCacheRef = number | PivotCache;
  *  name, matched case-insensitively; a calculated field is named by its name. An index past the last field fails
  *  with `StatusCode.IndexOutOfRange`, a name no field has with `StatusCode.NotFound`. */
 export type PivotFieldRef = number | string;
-/** A conditional-format rule passed by its flattened index (its position in `listCfRules()`) or its `id`.
- *  Resolved as {@link TableRef} is. */
-export type CfRuleRef = number | string;
+/** The id of a conditional-format rule, as `ConditionalFormat.id` reads it and `Sheet.addCfRule` returns it: a
+ *  brace-wrapped GUID. */
+export type CfRuleId = string;
+/** A conditional-format rule passed by its flattened position (in `listCfRules()`) or its {@link CfRuleId}; a
+ *  string is always an id. A position past the end fails with `StatusCode.IndexOutOfRange`, an id no rule of the
+ *  sheet has with `StatusCode.NotFound`. */
+export type CfRuleRef = number | CfRuleId;
 /** The opaque id of a data-validation rule, as `DataValidation.id` reads it and `Sheet.addValidation` returns it. */
 export type ValidationId = string;
 /** A data-validation rule passed by its position (in `listValidations()`) or its {@link ValidationId}; a string is
@@ -5323,8 +5330,9 @@ export type SparklineGroupId = string;
 /** A sparkline group passed by its position (in `listSparklineGroups()`) or its {@link SparklineGroupId}.
  *  Resolved as {@link ValidationRef} is. */
 export type SparklineGroupRef = number | SparklineGroupId;
-/** A protected range passed by its index (its position in `listProtectedRanges()`) or its name. Resolved as
- *  {@link TableRef} is. */
+/** A protected range passed by its position (in `listProtectedRanges()`) or its name; a string is always a name.
+ *  A position past the end fails with `StatusCode.IndexOutOfRange`, a name no range of the sheet has with
+ *  `StatusCode.NotFound`. */
 export type ProtectedRangeRef = number | string;
 
 /** Workbook handle: the workbook-scope operations, the `Sheet` handles that carry the sheet-scope ones, and the
@@ -5350,7 +5358,8 @@ export type ProtectedRangeRef = number | string;
  *  `StatusCode.IndexOutOfRange`. A handle that belongs to another workbook fails with `StatusCode.InvalidArgument`.
  *
  *  Names compare case-insensitively by Unicode simple case folding wherever they must be unique or are looked up:
- *  sheets, tables, defined names, cell styles, protected ranges, pivot tables and person ids.
+ *  sheets, tables, table columns, defined names, cell styles, custom table styles, protected ranges, pivot tables
+ *  and person ids.
  *
  *  Lookups follow one rule. A getter keyed by a natural key (`getDefinedName`, ...) returns `null` when nothing
  *  has that key. An entry to a handle or a result (`sheet()`, `table()`, `pivot()`, `pivotCache()`, the
@@ -5377,7 +5386,7 @@ export type ProtectedRangeRef = number | string;
  *  and looks them up, and every other operation is a method of the handle; `Workbook.table(name)` also finds a
  *  table by name across the workbook. One object
  *  has one handle, so every lookup of it returns the same handle. Tables, pivots, conditional-format rules and
- *  protected ranges are addressed by index, name or handle (`TableRef`, `PivotRef`, `CfRuleRef`,
+ *  protected ranges are addressed by position, key or handle (`TableRef`, `PivotRef`, `CfRuleRef`,
  *  `ProtectedRangeRef`). Validations and sparkline groups are addressed by position or by id (`ValidationRef`,
  *  `SparklineGroupRef`); an id stays valid while the workbook is open, and removing one shifts the positions
  *  after it down by one.
@@ -5599,7 +5608,7 @@ export interface Workbook {
 
   /** Lists the defined names, workbook- and sheet-scoped alike, in file order. */
   listDefinedNames(): readonly DefinedName[];
-  /** Reads the defined name `name` (ASCII case-insensitive) in the sheet scope `scope`, or the workbook scope when
+  /** Reads the defined name `name` (case-insensitive by Unicode case folding) in the sheet scope `scope`, or the workbook scope when
    *  `scope` is omitted or `null`; `null` when the scope has no such name. */
   getDefinedName(name: string, scope?: SheetRef | null): DefinedName | null;
   /** Removes the defined name `name` in scope `scope` (as `getDefinedName`); `StatusCode.NotFound` when the scope
@@ -5617,10 +5626,10 @@ export interface Workbook {
   table(name: string): Table;
   /** Lists the workbook's persons. */
   listPeople(): readonly Person[];
-  /** Appends a person to the workbook's person list; the id is a brace-wrapped GUID in either letter case, stored
-   *  uppercase. Fails with `StatusCode.InvalidArgument` when the id is not a GUID, `StatusCode.AlreadyExists` when
+  /** Appends a person to the workbook's person list and returns the id as stored; the id is a brace-wrapped GUID in
+   *  either letter case, stored uppercase. Fails with `StatusCode.InvalidArgument` when the id is not a GUID, `StatusCode.AlreadyExists` when
    *  it is already listed (in any case) and `StatusCode.InvalidArgument` when the display name is empty. */
-  addPerson(person: PersonInput): void;
+  addPerson(person: PersonInput): string;
   /** Fails with `StatusCode.PreconditionFailed` while a threaded comment or mention still names the person. */
   removePerson(id: string): void;
   /** Reads the person with `id`; `null` when the list has none. */
@@ -5919,7 +5928,8 @@ export interface Sheet {
   getTypedValues(range?: CellRect | string | null): readonly (readonly Value[])[];
   /** Reads the cell as a date: the serial's calendar date under the workbook's date system, its fraction
    *  rounded to the millisecond, as a `Date` whose local fields carry it (the wall clock a `Date` input means). `null` for an empty cell; a cell that
-   *  holds no number fails with `StatusCode.InvalidArgument`. */
+   *  holds no number, or a serial outside the date system (below 1 in the 1900 system, below 0 in the 1904 one, or
+   *  past 9999-12-31), fails with `StatusCode.InvalidArgument`. */
   getDate(row: number, col: number): Date | null;
   /** `getDate` at the A1 address `a1`. */
   getDate(a1: string): Date | null;
@@ -5975,7 +5985,8 @@ export interface Sheet {
    *  the target cell's value rather than raising `#REF!`, since the ad-hoc formula never joins the dependency
    *  graph. A formula that does not parse fails with its parser status and `FormulonError.parseError`.
    *  It computes every precedent it reads, even under `CalcMode.Manual`, without storing the results; `getValue`
-   *  follows the calc mode.
+   *  follows the calc mode. A blank cell the formula reads evaluates as 0, as it does in a cell (`=B9` on an empty
+   *  B9 is 0); `getValue` reads the blank as `null`.
    *
    *  @example
    *  ```ts
@@ -5991,7 +6002,7 @@ export interface Sheet {
   evaluateTypedFormula(a1: string, formula: string): Value;
 
   /** `evaluateFormula`, always as rows: a scalar result is one row of one value. A range blank reads as 0, as a
-   *  dynamic array spills it. */
+   *  dynamic array spills it; `getValue` reads the blank as `null`. */
   evaluateFormulaArray(row: number, col: number, formula: string): readonly (readonly NativeValue[])[];
   /** `evaluateFormulaArray` at the A1 address `a1`. */
   evaluateFormulaArray(a1: string, formula: string): readonly (readonly NativeValue[])[];
@@ -6186,8 +6197,8 @@ export interface Sheet {
   removeDrawing(objectId: number | Drawing): void;
 
   // What-If data tables. The formulas sit in the row above the result range and the substitution values in the column left of it (or the other way round); each result cell is found by substituting into the input cell(s), recalculating the cells that read them and restoring the inputs.
-  /** Creates a data table over `spec`'s result range. The result cells read 0 until the next recalc and refuse writes ("cannot change part of a data table") until the table is removed. `StatusCode.DataTableInvalid` (8005) when no input is given, the range has no row above or column left of it, an input lies inside the range, or the range overlaps another data table. */
-  addDataTable(spec: DataTableInput): void;
+  /** Creates a data table over `spec`'s result range. The result cells read 0 until the next recalc and refuse writes ("cannot change part of a data table") until the table is removed. Returns the top-left cell of the result range, the cell `getDataTable` and `removeDataTable` take. `StatusCode.DataTableInvalid` (8005) when no input is given, the range has no row above or column left of it, an input lies inside the range, or the range overlaps another data table. */
+  addDataTable(spec: DataTableInput): CellAddress;
   /** Reads the data table whose result range contains `(row, col)`; `null` when no table covers the cell. */
   getDataTable(row: number, col: number): DataTable | null;
   /** `getDataTable` at the A1 address `a1`. */
@@ -6456,9 +6467,11 @@ export interface Sheet {
    *  ``` */
   updateCellFormat(range: CellRect | string, patch: CellFormatPatch): void;
 
-  /** Adds a merge range to the sheet. Covered cells keep their values and stay writable; clear them first to match
-   *  Excel's Merge. */
-  addMerge(range: CellRect | string): void;
+  /** Adds a merge range to the sheet and returns it as stored. Covered cells keep their values and stay writable;
+   *  clear them first to match Excel's Merge. A range that intersects an existing merge (an identical one included)
+   *  fails with `StatusCode.AlreadyExists`; one that intersects a table, pivot table, array formula or data table
+   *  fails with `StatusCode.PreconditionFailed`. */
+  addMerge(range: CellRect | string): CellRect;
   /** Removes every merge that overlaps `range` (inclusive); `StatusCode.NotFound` when nothing overlaps. */
   removeMerge(range: CellRect | string): void;
   /** Drops every merge on the sheet. */
@@ -6496,8 +6509,8 @@ export interface Sheet {
   setCommentVisible(a1: string, visible: boolean): void;
   /** Lists the sheet's protected ranges; a range's position, or its name, is the `protectedRange` argument of the other protected-range methods. */
   listProtectedRanges(): readonly ProtectedRange[];
-  /** Appends a protected range. `name` must be non-empty (`StatusCode.InvalidArgument`) and unique on the sheet (`StatusCode.AlreadyExists`); `ranges` must hold at least one rectangle. */
-  addProtectedRange(range: ProtectedRangeInput): number;
+  /** Appends a protected range and returns its name. `name` must be non-empty (`StatusCode.InvalidArgument`) and unique on the sheet (`StatusCode.AlreadyExists`); `ranges` must hold at least one rectangle. */
+  addProtectedRange(range: ProtectedRangeInput): string;
   /** Updates the protected range `protectedRange` with the keys `patch` names; the others keep their value.
    *  Leaving `ranges` out keeps the stored ranges. See {@link ProtectedRangePatch}. */
   updateProtectedRange(protectedRange: ProtectedRangeRef, patch: ProtectedRangePatch): void;
@@ -6543,15 +6556,14 @@ export interface Sheet {
   listCfRules(): readonly ConditionalFormat[];
   /** Appends a new single-rule `<conditionalFormatting>` block to
    *  the sheet, including visual rules when their payload object is supplied.
-   *  The result is the new rule's position in the sheet's flattened CF rule
-   *  sequence (the same indexing `listCfRules` and
-   *  `removeCfRule` use); it stays valid until a subsequent
-   *  add/remove/clear mutation on the same sheet renumbers the sequence.
+   *  The result is the id the rule is stored under (a {@link CfRuleId}); it stays valid while the rule exists.
    *  A non-empty `formula1` / `formula2` that does not parse fails with its parser status and
-   *  `FormulonError.parseError`. An `id` another rule on the sheet has is replaced by a new one. */
-  addCfRule(rule: ConditionalFormatInput): number;
+   *  `FormulonError.parseError`. `id` is a brace-wrapped GUID
+   *  (`{XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX}`, hex digits in either case); omitted, empty or already used on the
+   *  sheet, the engine generates an upper-case one; anything else fails with `StatusCode.InvalidArgument`. */
+  addCfRule(rule: ConditionalFormatInput): CfRuleId;
   /** Adds back a rule `listCfRules` returned, as it is. */
-  addCfRule(rule: ConditionalFormat): number;
+  addCfRule(rule: ConditionalFormat): CfRuleId;
   /** Updates the CF rule `cfRule` with the keys `patch` names; see {@link ConditionalFormatPatch}. */
   updateCfRule(cfRule: CfRuleRef, patch: ConditionalFormatPatch): void;
   /** Removes the CF rule `cfRule`. When the containing block becomes empty it is removed too. */
@@ -6837,7 +6849,10 @@ export interface Table {
   /** Reads the table's name, range, header / totals flags and columns. */
   getProperties(): TableProperties;
   /** Partially updates the table's range and header / totals rows; omitted fields keep their current values. A
-   *  supplied `range` must keep the table's existing column count. */
+   *  supplied `range` must keep the table's existing column count. `totalsRow: true` on a table without one grows
+   *  the table by one row below and writes the totals cells there, `false` removes the totals row and shrinks it by
+   *  one; either fails with `StatusCode.PreconditionFailed` when the row below is occupied or the table ends on the
+   *  last grid row. With `range` in the same patch only the flag flips. */
   update(patch: TablePatch): void;
   /** Renames the table. A name another table already uses (compared case-insensitively) fails with
    *  `StatusCode.AlreadyExists`, an empty or malformed one with `StatusCode.InvalidArgument`. Structured
@@ -6850,7 +6865,7 @@ export interface Table {
   updateStyleOptions(patch: TableStyleOptionsPatch): void;
   /** Renames column `column` (0-based), as typing over its header cell does, and returns the final name. An empty
    *  `name` takes the Excel profile's `Column<N>` (`列<N>`) with the lowest unused N, a name another column already has
-   *  (ASCII case-insensitively) gains the lowest unused N >= 2, and anything else is kept verbatim. Every
+   *  (case-insensitively, by Unicode case folding) gains the lowest unused N >= 2, and anything else is kept verbatim. Every
    *  structured reference to the column through this table follows: cell, totals-row and defined-name formulas
    *  and chart series. Writing a value to a header cell (`setText`, `setNumber`, ...) renames the same way. */
   renameColumn(column: number, name: string): string;
@@ -6917,7 +6932,8 @@ export interface Pivot {
    *  fail without changing the pivot. Fails with `StatusCode.PreconditionFailed` when the report would overlap
    *  another structure. */
   updateOptions(patch: PivotOptionsPatch): void;
-  /** Reads whether a cache change left the pivot's sheet cells stale; see `project`. */
+  /** Reads whether a cache change left the pivot's sheet cells stale; see `project`. Metadata only: records come
+   *  from `addField` / `addRecord` / `setRecordValue`; neither `project()` nor a cell edit re-reads the range. */
   isProjectionPending(): boolean;
   /** Writes the pivot's report, computed from its cache records, into its sheet cells now and clears the pending
    *  flag. It does not re-read the cache's source range. */
@@ -7012,6 +7028,11 @@ export interface Pivot {
   getColumnFieldOrder(): readonly number[];
   /** Replaces the column-axis field order. Same contract as rows. */
   setColumnFieldOrder(indices: readonly number[]): void;
+  /** Reads the page-axis field order. */
+  getPageFieldOrder(): readonly number[];
+  /** Replaces the page-axis field order. Same contract as rows, except that {@link PIVOT_VALUES_FIELD} fails with
+   *  `StatusCode.InvalidArgument`: the Values level is never a page field. */
+  setPageFieldOrder(indices: readonly number[]): void;
   /** Lists the pivot's data fields; a data field's position is its `dataFieldIndex`. */
   listDataFields(): readonly PivotDataField[];
   /** Reads data field `dataFieldIndex`; an index past the last data field fails with
@@ -7055,7 +7076,8 @@ export interface PivotCache {
    *  source. */
   getWorksheetSource(): PivotWorksheetSource | null;
   /** Sets the cache's worksheet source metadata, or removes the source with `null`. An empty object writes a
-   *  source with no attributes. */
+   *  source with no attributes. Metadata only: records come from `addField` / `addRecord` / `setRecordValue`;
+   *  neither `project()` nor a cell edit re-reads the range. */
   setWorksheetSource(source: PivotWorksheetSourceInput | null): void;
   /** Reads the cache's options. */
   getOptions(): PivotCacheOptions;
@@ -7087,10 +7109,10 @@ export interface PivotCache {
   removeCalculatedItem(calculatedItemIndex: number): void;
   /** Lists the shared items of cache field `fieldIndex`; an item's position is its index. */
   listFieldSharedItems(fieldIndex: number): readonly PivotCacheSharedItem[];
-  /** Appends `value` as a shared item of cache field `fieldIndex`. A `Date` is stored as a date in the
+  /** Appends `value` as a shared item of cache field `fieldIndex` and returns the new item's index. A `Date` is stored as a date in the
    *  workbook's date system (not before 1900, not past 9999-12-31, else `StatusCode.InvalidArgument`), saved with
    *  seconds precision, and read through its local getters (see {@link DateInput}); a number is a number. */
-  addFieldSharedItem(fieldIndex: number, value: number | string | boolean | null | Date | ErrorValue): void;
+  addFieldSharedItem(fieldIndex: number, value: number | string | boolean | null | Date | ErrorValue): number;
   /** Drops every shared item from cache field `fieldIndex`. */
   clearFieldSharedItems(fieldIndex: number): void;
   /** Returns the number of records on the cache. */
@@ -7162,7 +7184,7 @@ export interface Chart extends Drawing {
   getPreview(overrides: ChartPreviewOverridesInput): ChartData;
   /** Replaces plot group `plot` with `type`, one of `Bar`, `Line`, `Area`, `Pie`, `Doughnut` and `Scatter` (any
    *  other {@link ChartPlotType} fails with `StatusCode.InvalidArgument`). `options.barDirection` is for `Bar`
-   *  only (`Col` when omitted; on another type it throws `TypeError`); `options.grouping` (default `Clustered`)
+   *  only (`Column` when omitted; on another type it throws `TypeError`); `options.grouping` (default `Clustered`)
    *  applies to bar, line and area. `getProperties().plots[plot]` passes as `type`, `barDirection` and
    *  `grouping`. */
   setType(
@@ -7171,7 +7193,8 @@ export interface Chart extends Drawing {
     options?: { barDirection?: ChartBarDirection | null; grouping?: ChartGrouping | null },
   ): void;
   /** Sets the chart title text, or removes the title with `null`. A {@link ChartTitle} sets that kind, so a title
-   *  of kind `ChartTitleKind.Auto` returns the title to Excel's automatic one. */
+   *  of kind `ChartTitleKind.Auto` returns the title to Excel's automatic one. An empty string fails with
+   *  `StatusCode.InvalidArgument`. */
   setTitle(title: string | ChartTitle | null): void;
   /** Replaces the legend with `legend` (the record `getProperties().legend` returns), or with `null` removes it
    *  (doing nothing when the chart has none). `hiddenEntries` holds legend entry `c:idx` values. */
@@ -7496,8 +7519,6 @@ export interface Formulon {
   /** Returns the locale facts (separators, boolean names, date order,
    *  currency, error names) of `profileId`. */
   getLocaleFacts(profileId: ProfileId): LocaleFacts;
-  /** Lists the error names of `profileId` in error-code order. */
-  listLocaleErrorNames(profileId: ProfileId): readonly LocaleErrorName[];
   /** Compares two texts under `profileId` and returns the sign of the
    *  result (-1, 0 or 1). `strength` picks the fold (see
    *  {@link CollationStrength}); it is a text comparison, not Excel's `=`

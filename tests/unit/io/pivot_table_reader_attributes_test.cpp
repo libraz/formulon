@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -293,7 +294,7 @@ TEST(PivotTableReader, X14PivotFieldExtensionIsSplitAndOtherExtensionsKeptVerbat
   EXPECT_EQ(field.raw_children_xml.find("<extLst"), std::string::npos);
 }
 
-TEST(PivotTableReader, ColItemsAndPageFieldsLandInSeparateBins) {
+TEST(PivotTableReader, ColItemsAreBinnedAndPageFieldsAreModelled) {
   std::string xml(kXmlDecl);
   xml.append("<pivotTableDefinition").append(kPivotNs).append(" name=\"P\" cacheId=\"1\">");
   xml.append("<location ref=\"A3:B6\" firstHeaderRow=\"1\" firstDataRow=\"1\" firstDataCol=\"1\"/>");
@@ -306,8 +307,9 @@ TEST(PivotTableReader, ColItemsAndPageFieldsLandInSeparateBins) {
   ASSERT_TRUE(static_cast<bool>(table_or)) << table_or.error().message;
   EXPECT_NE(table_or.value().raw_col_items().find("<colItems"), std::string::npos);
   EXPECT_EQ(table_or.value().raw_col_items().find("<pageFields"), std::string::npos);
-  EXPECT_NE(table_or.value().raw_passthrough_after_col_fields().find("<pageFields"), std::string::npos);
-  EXPECT_EQ(table_or.value().raw_passthrough_after_col_fields().find("<colItems"), std::string::npos);
+  ASSERT_EQ(table_or.value().page_fields().size(), 1U);
+  EXPECT_EQ(table_or.value().page_fields()[0].field_index, 1U);
+  EXPECT_EQ(table_or.value().page_fields()[0].hierarchy, std::optional<std::int32_t>(-1));
 }
 
 }  // namespace

@@ -127,15 +127,14 @@ TEST(FormulonCStatus, TakenNamesAndIdsAreAlreadyExists) {
   fm_person_t person = FM_STRUCT_INIT(fm_person_t);
   person.id = "{0A1B2C3D-0000-4000-8000-000000000001}";
   person.display_name = "Alice";
-  ASSERT_EQ(fm_workbook_add_person(wb.handle, &person), 0) << fm_get_last_error_message();
-  EXPECT_EQ(fm_workbook_add_person(wb.handle, &person), FM_STATUS_ALREADY_EXISTS);
+  ASSERT_EQ(fm_workbook_add_person(wb.handle, &person, ignored_id()), 0) << fm_get_last_error_message();
+  EXPECT_EQ(fm_workbook_add_person(wb.handle, &person, ignored_id()), FM_STATUS_ALREADY_EXISTS);
 
   const fm_cell_rect_t area{4, 4, 5, 5};
   fm_protected_range_t range = FM_STRUCT_INIT(fm_protected_range_t);
   range.name = "Edit";
   range.ranges = &area;
   range.range_count = 1;
-  std::size_t range_index = 0;
-  ASSERT_EQ(fm_sheet_add_protected_range(wb.handle, 0, &range, &range_index), 0) << fm_get_last_error_message();
-  EXPECT_EQ(fm_sheet_add_protected_range(wb.handle, 0, &range, &range_index), FM_STATUS_ALREADY_EXISTS);
+  ASSERT_EQ(fm_sheet_add_protected_range(wb.handle, 0, &range), 0) << fm_get_last_error_message();
+  EXPECT_EQ(fm_sheet_add_protected_range(wb.handle, 0, &range), FM_STATUS_ALREADY_EXISTS);
 }

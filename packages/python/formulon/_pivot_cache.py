@@ -110,6 +110,10 @@ class PivotCache(_NoCopy):
         A :class:`PivotWorksheetSource` read back is accepted in place of a
         :class:`PivotWorksheetSourceInput`.
 
+        Metadata only: records come from :meth:`add_field` / :meth:`add_record` /
+        :meth:`set_record_value`; neither :meth:`Pivot.project` nor a cell edit
+        re-reads the range.
+
         Raises:
           TypeError: when ``source`` is neither a source record nor ``None``.
           InvalidArgumentError: when the range's sheet disagrees with ``sheet``.
@@ -341,13 +345,13 @@ class PivotCache(_NoCopy):
         """The serial of a ``date`` or ``datetime`` cache value in the workbook's date system."""
         return date_serial(value, date1904=self._workbook.get_date1904())[0]
 
-    def add_field_shared_item(self, field_index: int, value: _PivotCacheValue) -> None:
-        """Append a shared item to cache field ``field_index``.
+    def add_field_shared_item(self, field_index: int, value: _PivotCacheValue) -> int:
+        """Append a shared item to cache field ``field_index`` and return its index.
 
         ``value`` is a number, a ``str``, a ``bool``, ``None`` (blank) or an
         :class:`ExcelError`, or a ``date`` / ``datetime`` (a date item stored as
         its serial in the workbook's date system, saved to the second); a number
-        is a number.
+        is a number. The index is the field's shared-item count before the call.
 
         Raises:
           TypeError: when ``value`` is none of the above.
@@ -355,22 +359,33 @@ class PivotCache(_NoCopy):
         kind = _pivot_cache_value_kind(value)
         h, cache_id = self._call()
         field = _uint(field_index, "field_index", role="position")
-        if kind == "date":
-            _check(LIB.fm_workbook_add_pivot_cache_field_shared_item_date(h, cache_id, field, self._date_serial(value)))
-        elif kind == "number":
-            _check(LIB.fm_workbook_add_pivot_cache_field_shared_item_number(h, cache_id, field, float(value)))
-        elif kind == "bool":
-            _check(LIB.fm_workbook_add_pivot_cache_field_shared_item_bool(h, cache_id, field, 1 if value else 0))
-        elif kind == "blank":
-            _check(LIB.fm_workbook_add_pivot_cache_field_shared_item_blank(h, cache_id, field))
-        elif kind == "error":
-            _check(
-                LIB.fm_workbook_add_pivot_cache_field_shared_item_error(h, cache_id, field, _sint(value.code, "error"))
-            )
-        else:
-            with _ArgScope() as scope:
-                text = scope.cstr(value)
-                _check(LIB.fm_workbook_add_pivot_cache_field_shared_item_text(h, cache_id, field, text))
+        with _ArgScope() as scope:
+            out = scope.out_ptr()
+            if kind == "date":
+                _check(
+                    LIB.fm_workbook_add_pivot_cache_field_shared_item_date(
+                        h, cache_id, field, self._date_serial(value), out
+                    )
+                )
+            elif kind == "number":
+                _check(LIB.fm_workbook_add_pivot_cache_field_shared_item_number(h, cache_id, field, float(value), out))
+            elif kind == "bool":
+                _check(
+                    LIB.fm_workbook_add_pivot_cache_field_shared_item_bool(h, cache_id, field, 1 if value else 0, out)
+                )
+            elif kind == "blank":
+                _check(LIB.fm_workbook_add_pivot_cache_field_shared_item_blank(h, cache_id, field, out))
+            elif kind == "error":
+                _check(
+                    LIB.fm_workbook_add_pivot_cache_field_shared_item_error(
+                        h, cache_id, field, _sint(value.code, "error"), out
+                    )
+                )
+            else:
+                _check(
+                    LIB.fm_workbook_add_pivot_cache_field_shared_item_text(h, cache_id, field, scope.cstr(value), out)
+                )
+            return LIB.read_u32(out)
 
     def clear_field_shared_items(self, field_index: int) -> None:
         """Drop every shared item from cache field ``field_index``."""

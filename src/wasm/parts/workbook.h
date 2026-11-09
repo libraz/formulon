@@ -484,9 +484,10 @@ class JsWorkbook {
   /// The sheet's `<protectedRange>` entries, in file order.
   double getProtectedRangeCount(uint32_t sheet) const;
   emscripten::val getProtectedRange(uint32_t sheet, uint32_t protectedRangeIndex) const;
-  uint32_t addProtectedRange(uint32_t sheet, emscripten::val range);
-  void updateProtectedRange(uint32_t sheet, uint32_t index, emscripten::val range);
-  void removeProtectedRange(uint32_t sheet, uint32_t index);
+  /// Adds the range and returns its name, the key the other calls take.
+  emscripten::val addProtectedRange(uint32_t sheet, emscripten::val range);
+  void updateProtectedRange(uint32_t sheet, const std::string& name, emscripten::val range);
+  void removeProtectedRange(uint32_t sheet, const std::string& name);
 
   void addHyperlink(uint32_t sheet, uint32_t row, uint32_t col, const std::string& target, const std::string& display,
                     const std::string& tooltip, const std::string& location);
@@ -524,7 +525,7 @@ class JsWorkbook {
   void editThreadedComment(uint32_t sheet, const std::string& id, emscripten::val patch);
   void removeThreadedComment(uint32_t sheet, const std::string& id);
   emscripten::val getPersons() const;
-  void addPerson(emscripten::val person);
+  emscripten::val addPerson(emscripten::val person);
   void removePerson(const std::string& id);
   emscripten::val getPerson(const std::string& id) const;
 
@@ -594,11 +595,12 @@ class JsWorkbook {
 
   double getCfRuleCount(uint32_t sheet) const;
   emscripten::val getCfRule(uint32_t sheet, uint32_t cfRuleIndex) const;
-  /// Applies the rule patch at `cfRuleIndex` (flattened order); `colorScale`, `dataBar` and `iconSet` patch their
+  /// Applies the rule patch to the rule with id `cfRuleId`; `colorScale`, `dataBar` and `iconSet` patch their
   /// own keys.
-  void updateCfRule(uint32_t sheet, uint32_t cfRuleIndex, emscripten::val patch);
-  uint32_t addConditionalFormat(uint32_t sheet, emscripten::val v);
-  void removeConditionalFormatAt(uint32_t sheet, uint32_t index);
+  void updateCfRule(uint32_t sheet, const std::string& cfRuleId, emscripten::val patch);
+  /// Adds the rule and returns its id, the key `updateCfRule` / `removeCfRule` take.
+  emscripten::val addConditionalFormat(uint32_t sheet, emscripten::val v);
+  void removeConditionalFormatAt(uint32_t sheet, const std::string& cfRuleId);
   void clearConditionalFormats(uint32_t sheet);
 
   // ---- Misc trace / metadata / spill -------------------------------------
@@ -628,13 +630,13 @@ class JsWorkbook {
 
   double pivotCacheFieldSharedItemCount(uint32_t cacheId, uint32_t fieldIndex) const;
   emscripten::val pivotCacheFieldSharedItemValue(uint32_t cacheId, uint32_t fieldIndex, uint32_t itemIndex) const;
-  void pivotCacheFieldAddSharedItemNumber(uint32_t cacheId, uint32_t fieldIndex, double value);
-  void pivotCacheFieldAddSharedItemDate(uint32_t cacheId, uint32_t fieldIndex, double serial);
+  double pivotCacheFieldAddSharedItemNumber(uint32_t cacheId, uint32_t fieldIndex, double value);
+  double pivotCacheFieldAddSharedItemDate(uint32_t cacheId, uint32_t fieldIndex, double serial);
   bool pivotCacheFieldSharedItemIsDate(uint32_t cacheId, uint32_t fieldIndex, uint32_t itemIndex) const;
-  void pivotCacheFieldAddSharedItemText(uint32_t cacheId, uint32_t fieldIndex, const std::string& utf8);
-  void pivotCacheFieldAddSharedItemBool(uint32_t cacheId, uint32_t fieldIndex, bool value);
-  void pivotCacheFieldAddSharedItemBlank(uint32_t cacheId, uint32_t fieldIndex);
-  void pivotCacheFieldAddSharedItemError(uint32_t cacheId, uint32_t fieldIndex, int32_t errorCode);
+  double pivotCacheFieldAddSharedItemText(uint32_t cacheId, uint32_t fieldIndex, const std::string& utf8);
+  double pivotCacheFieldAddSharedItemBool(uint32_t cacheId, uint32_t fieldIndex, bool value);
+  double pivotCacheFieldAddSharedItemBlank(uint32_t cacheId, uint32_t fieldIndex);
+  double pivotCacheFieldAddSharedItemError(uint32_t cacheId, uint32_t fieldIndex, int32_t errorCode);
   void pivotCacheFieldClearSharedItems(uint32_t cacheId, uint32_t fieldIndex);
 
   double pivotCacheRecordCount(uint32_t cacheId) const;
@@ -670,6 +672,7 @@ class JsWorkbook {
   emscripten::val pivotGetStyleOptions(uint32_t sheet, uint32_t pivotIndex) const;
   emscripten::val pivotRowFieldOrder(uint32_t sheet, uint32_t pivotIndex) const;
   emscripten::val pivotColFieldOrder(uint32_t sheet, uint32_t pivotIndex) const;
+  emscripten::val pivotPageFieldOrder(uint32_t sheet, uint32_t pivotIndex) const;
 
   double pivotFieldCount(uint32_t sheet, uint32_t pivotIndex) const;
   uint32_t pivotFieldAdd(uint32_t sheet, uint32_t pivotIndex, emscripten::val spec);
@@ -721,6 +724,7 @@ class JsWorkbook {
 
   void pivotSetRowFieldOrder(uint32_t sheet, uint32_t pivotIndex, emscripten::val indices);
   void pivotSetColFieldOrder(uint32_t sheet, uint32_t pivotIndex, emscripten::val indices);
+  void pivotSetPageFieldOrder(uint32_t sheet, uint32_t pivotIndex, emscripten::val indices);
 
   double pivotDataFieldCount(uint32_t sheet, uint32_t pivotIndex) const;
   uint32_t pivotDataFieldAdd(uint32_t sheet, uint32_t pivotIndex, emscripten::val spec);
@@ -817,9 +821,6 @@ std::string canonicalize_formula(const std::string& formula, const std::string& 
 /// Separators, boolean names, date order, currency placement and localized
 /// error names of a profile. See `fm_get_locale_facts`.
 emscripten::val locale_facts(const std::string& profile_id);
-
-/// The profile's localized error names in error-code order.
-emscripten::val list_locale_error_names(const std::string& profile_id);
 
 /// Every Excel profile id the engine accepts. See `fm_get_profile_id_count`.
 emscripten::val list_profile_ids();

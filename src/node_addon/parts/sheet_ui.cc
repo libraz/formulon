@@ -352,9 +352,8 @@ Napi::Value Workbook::GetProtectedRange(const Napi::CallbackInfo& info) {
 
 Napi::Value Workbook::AddProtectedRange(const Napi::CallbackInfo& info) {
   return EditProtectedRange(handle_, info, 1, [&](fm_workbook_t* handle, const fm_protected_range_t& r) {
-    std::size_t out = 0;
-    const fm_status_t rc = fm_sheet_add_protected_range(handle, ArgU32(info, 0), &r, &out);
-    return ValueOrThrow(info.Env(), rc, Napi::Number::New(info.Env(), static_cast<double>(out)));
+    const fm_status_t rc = fm_sheet_add_protected_range(handle, ArgU32(info, 0), &r);
+    return ValueOrThrow(info.Env(), rc, rc == 0 ? JsString(info.Env(), r.name) : info.Env().Undefined());
   });
 }
 
@@ -387,12 +386,16 @@ Napi::Value Workbook::UpdateProtectedRange(const Napi::CallbackInfo& info) {
   if (!reader.ok()) {
     return env.Undefined();
   }
-  return ValueOrThrow(env, fm_sheet_update_protected_range(handle_, ArgU32(info, 0), ArgU32(info, 1), &patch),
+  const std::string name = ArgString(info, 1);
+  return ValueOrThrow(env, fm_sheet_update_protected_range(handle_, ArgU32(info, 0), name.c_str(), &patch),
                       env.Undefined());
 }
 
 Napi::Value Workbook::RemoveProtectedRange(const Napi::CallbackInfo& info) {
-  return InvokeSheetCall(info, &fm_sheet_remove_protected_range);
+  return StatusCall(info, [&](fm_workbook_t* handle) {
+    const std::string name = ArgString(info, 1);
+    return fm_sheet_remove_protected_range(handle, ArgU32(info, 0), name.c_str());
+  });
 }
 
 // ---- Hyperlinks -----------------------------------------------------
@@ -894,7 +897,9 @@ Napi::Value Workbook::AddPerson(const Napi::CallbackInfo& info) {
   if (!reader.ok()) {
     return env.Undefined();
   }
-  return ValueOrThrow(env, fm_workbook_add_person(handle_, &p), env.Undefined());
+  const char* stored_id = nullptr;
+  const fm_status_t rc = fm_workbook_add_person(handle_, &p, &stored_id);
+  return ValueOrThrow(env, rc, rc == 0 ? JsString(env, stored_id) : env.Undefined());
 }
 
 Napi::Value Workbook::RemovePerson(const Napi::CallbackInfo& info) {

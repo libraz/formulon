@@ -280,13 +280,6 @@ Napi::Value LocaleFacts(const Napi::CallbackInfo& info) {
   return ValueOrThrow(env, rc, facts);
 }
 
-Napi::Value ListLocaleErrorNames(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  Napi::Array arr = Napi::Array::New(env);
-  const fm_status_t rc = CollectLocaleErrorNames(env, Workbook::ArgString(info, 0), arr);
-  return ValueOrThrow(env, rc, arr);
-}
-
 Napi::Value CompareText(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   const std::string a = Workbook::ArgString(info, 0);

@@ -147,7 +147,7 @@ class StructLayoutTests(unittest.TestCase):
         "SHEET_RECT": 20,
         "CHART_AXIS_TITLE_TEXT": 12,
         "CHART_UNRESOLVED": 16,
-        "CHART_INSERT": 128,
+        "CHART_INSERT": 144,
         "CHART_FILL_PATCH": 48,
         "CHART_LINE_PATCH": 80,
         "CHART_MARKER_PATCH": 152,

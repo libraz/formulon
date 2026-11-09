@@ -300,6 +300,10 @@ Napi::Value Workbook::PivotColFieldOrder(const Napi::CallbackInfo& info) {
   return GetPivotFieldOrder(info, handle_, &fm_sheet_get_pivot_column_field_order);
 }
 
+Napi::Value Workbook::PivotPageFieldOrder(const Napi::CallbackInfo& info) {
+  return GetPivotFieldOrder(info, handle_, &fm_sheet_get_pivot_page_field_order);
+}
+
 Napi::Value Workbook::PivotFieldCount(const Napi::CallbackInfo& info) {
   return PivotCountResult(info, handle_, &fm_sheet_get_pivot_field_count);
 }
@@ -757,6 +761,10 @@ Napi::Value Workbook::PivotSetRowFieldOrder(const Napi::CallbackInfo& info) {
 
 Napi::Value Workbook::PivotSetColFieldOrder(const Napi::CallbackInfo& info) {
   return InvokePivotFieldOrder(info, &fm_sheet_set_pivot_column_field_order);
+}
+
+Napi::Value Workbook::PivotSetPageFieldOrder(const Napi::CallbackInfo& info) {
+  return InvokePivotFieldOrder(info, &fm_sheet_set_pivot_page_field_order);
 }
 
 Napi::Value Workbook::PivotDataFieldCount(const Napi::CallbackInfo& info) {

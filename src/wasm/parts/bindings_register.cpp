@@ -442,9 +442,11 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("getPivotStyleOptions", &JsWorkbook::pivotGetStyleOptions)
       .function("getPivotRowFieldOrder", &JsWorkbook::pivotRowFieldOrder)
       .function("getPivotColumnFieldOrder", &JsWorkbook::pivotColFieldOrder)
+      .function("getPivotPageFieldOrder", &JsWorkbook::pivotPageFieldOrder)
       .function("setPivotReportLayout", &JsWorkbook::pivotSetLayout)
       .function("renamePivot", &JsWorkbook::pivotSetName)
       .function("setPivotRowFieldOrder", &JsWorkbook::pivotSetRowFieldOrder)
+      .function("setPivotPageFieldOrder", &JsWorkbook::pivotSetPageFieldOrder)
       .function("getPrecedents", &JsWorkbook::precedents)
       .function("recalc", &JsWorkbook::recalc)
       .function("recalcParallel", &JsWorkbook::recalcParallel)
@@ -603,7 +605,6 @@ EMSCRIPTEN_BINDINGS(formulon) {
   function("getImageInfo", &probe_image);
   function("getLocaleFacts", &locale_facts);
   function("listFunctionNames", &function_names);
-  function("listLocaleErrorNames", &list_locale_error_names);
   function("listProfileIds", &list_profile_ids);
   function("localizeFormula", &localize_formula);
   function("localizeFunctionName", &localize_function_name);

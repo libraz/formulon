@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <ostream>
 #include <string_view>
+#include <vector>
 
 #include "c_api/formulon_c.h"
 
@@ -79,6 +80,40 @@ void emit_write_diagnostics(std::ostream& err, std::string_view subcommand, fm_w
     err << " (a dropped part also drops its relationship; these may describe the same loss)";
   }
   err << '\n';
+}
+
+std::vector<LossCounter> read_loss_counters(const fm_read_diagnostics_info_t& d) {
+  const LossCounter all[] = {
+      {"undecoded_formula_count", d.undecoded_formula_count},
+      {"undecoded_defined_name_count", d.undecoded_defined_name_count},
+      {"undecoded_part_count", d.undecoded_part_count},
+      {"skipped_feature_count", d.skipped_feature_count},
+      {"unknown_content_type_count", d.unknown_content_type_count},
+  };
+  std::vector<LossCounter> counters;
+  for (const LossCounter& c : all) {
+    if (c.count != 0U) {
+      counters.push_back(c);
+    }
+  }
+  return counters;
+}
+
+std::vector<LossCounter> write_loss_counters(const fm_save_diagnostics_info_t& d) {
+  const LossCounter all[] = {
+      {"downgraded_formula_count", d.downgraded_formula_count},
+      {"deferred_feature_count", d.deferred_feature_count},
+      {"dropped_part_count", d.dropped_part_count},
+      {"dropped_relationship_count", d.dropped_relationship_count},
+      {"renumbered_part_count", d.renumbered_part_count},
+  };
+  std::vector<LossCounter> counters;
+  for (const LossCounter& c : all) {
+    if (c.count != 0U) {
+      counters.push_back(c);
+    }
+  }
+  return counters;
 }
 
 void emit_last_error(std::ostream& err, std::string_view subcommand) {

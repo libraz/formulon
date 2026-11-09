@@ -1667,6 +1667,10 @@ typedef struct fm_value_array fm_value_array_t;
  * yields a 1 x 1 array. The bindings' `evaluateFormula` / `evaluate_formula`
  * use this entry point and fold a 1 x 1 result to a scalar.
  *
+ * A blank cell the formula reads evaluates as 0, as it does in a cell (`=B9`
+ * on an empty B9 is 0); `fm_sheet_get_value` reads the blank as
+ * `FM_VALUE_KIND_BLANK`.
+ *
  * A degenerate empty array result (which producers should never emit)
  * surfaces as a single `#VALUE!` cell.
  *
@@ -2089,7 +2093,7 @@ FM_API fm_status_t fm_workbook_get_defined_name_count(const fm_workbook_t* wb, s
 FM_API fm_status_t fm_workbook_get_defined_name_at(const fm_workbook_t* wb, size_t index, fm_defined_name_t* out);
 
 /**
- * @brief Reads the defined name `name` (ASCII case-insensitive) in scope
+ * @brief Reads the defined name `name` (Unicode simple case folding) in scope
  *        `local_sheet_id` (`FM_DEFINED_NAME_SCOPE_WORKBOOK` for workbook scope,
  *        else a 0-based sheet index). `*out_present` is `1` and `*out` filled the way
  *        `fm_workbook_get_defined_name_at` fills it when there is one, else
@@ -2109,7 +2113,7 @@ FM_API fm_status_t fm_workbook_get_defined_name(const fm_workbook_t* wb, const c
                                                 int32_t* out_present, fm_defined_name_t* out);
 
 /**
- * @brief Removes the defined name `name` (ASCII case-insensitive) in scope
+ * @brief Removes the defined name `name` (Unicode simple case folding) in scope
  *        `local_sheet_id` (`FM_DEFINED_NAME_SCOPE_WORKBOOK` for workbook scope,
  *        else a 0-based sheet index), refreshing the formulas that reference it.
  *
@@ -2283,7 +2287,8 @@ typedef struct {
  * `totals_row` and the four toggles are `fm_tristate_t`; a toggle set to
  * `FM_TRISTATE_TRUE` or `FM_TRISTATE_FALSE` is written in the same call, and
  * a failure creates nothing. The table's filter definition is created
- * automatically.
+ * automatically. `range` is the whole table, so with `totals_row` on its
+ * last row is the totals row.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb`, `spec`, `spec->name` or `out_table_index` is `NULL`;
@@ -2306,7 +2311,10 @@ FM_API fm_status_t fm_sheet_add_table(fm_workbook_t* wb, size_t sheet_index, con
  * preamble); no field can be cleared. `range` is checked as for
  * `fm_sheet_add_table`, keeps the width the table's column list describes,
  * and may not overlap the objects `fm_sheet_add_table` lists. `header_row`
- * and `totals_row` are `0` / `1`. The style is patched through
+ * and `totals_row` are `0` / `1`. `header_row` only flips the flag;
+ * `totals_row` grows or shrinks the table by one row (`fm_sheet_update_table`).
+ * With `range` in the same patch, `range` is the final extent and
+ * `totals_row` only flips the flag. The style is patched through
  * `fm_sheet_update_table_style_options`.
  */
 typedef struct {
@@ -2323,15 +2331,21 @@ typedef struct {
  * @brief Merges `patch` into table `table_index`. The whole patch is checked
  *        before anything changes.
  *
- * Turning the totals row on writes each column's totals cell
- * (`fm_sheet_set_table_column_totals`) on the last row of the range.
+ * Turning the totals row on grows the table by one row below its range and
+ * writes each column's totals cell (`fm_sheet_set_table_column_totals`)
+ * there; the data rows are kept. Turning it off removes the totals row from
+ * the range and clears its cells. A toggle that changes nothing is a no-op.
  *
  * @return `FM_STATUS_OK` (0) on success, or a common table failure;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `patch` is `NULL`;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when an op is out of range or `CLEAR`, `range` is
  *         inverted, outside the grid or of another width, or a row flag is not 0 / 1;
  *         `FM_STATUS_PRECONDITION_FAILED` (9) when `range` overlaps another table, a
- *         PivotTable, a data table, an array formula or a merged range.
+ *         PivotTable, a data table, an array formula or a merged range,
+ *         or when turning the totals row on finds the row below occupied (a
+ *         non-blank cell in the table's columns, or a merged range, table,
+ *         PivotTable, array formula, data table or spill over those cells) or
+ *         the table ends on the last grid row; nothing changes then.
  */
 FM_API fm_status_t fm_sheet_update_table(fm_workbook_t* wb, size_t sheet_index, size_t table_index,
                                          const fm_table_patch_t* patch);
@@ -2339,6 +2353,9 @@ FM_API fm_status_t fm_sheet_update_table(fm_workbook_t* wb, size_t sheet_index, 
 /**
  * @brief Removes table `table_index` from `sheet_index`; the tables after it
  *        move down one index.
+ *
+ * Formulas that name the table keep their structured references and
+ * evaluate to `#NAME?`.
  *
  * @return `FM_STATUS_OK` (0) on success, or a common table failure;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` is `NULL`.
@@ -2488,8 +2505,8 @@ FM_API fm_status_t fm_sheet_rename_table(fm_workbook_t* wb, size_t sheet_index, 
  * The final name is `name` kept verbatim (spaces and a case-only change
  * included), except that an empty `name` takes the profile's default
  * `<word>N` (`Column1`, `列1`) with the lowest unused N >= 1, and a name
- * another column of the table already has (ASCII case-insensitively)
- * takes `<name>N` with the lowest unused N >= 2 (`Amount2` becomes
+ * another column of the table already has (under Unicode simple case
+ * folding) takes `<name>N` with the lowest unused N >= 2 (`Amount2` becomes
  * `Amount22`). When it differs from the current name, every structured
  * reference to the column through this table is rewritten: cell formulas
  * on every sheet, totals-row formulas, defined names and chart series. A
@@ -2670,7 +2687,11 @@ FM_API fm_status_t fm_sheet_clear_hyperlinks(fm_workbook_t* wb, size_t sheet_ind
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `merge` is `NULL`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when the merge
- *         rectangle is inverted or outside the Excel grid.
+ *         rectangle is inverted or outside the Excel grid;
+ *         `FM_STATUS_ALREADY_EXISTS` (7) when the rectangle intersects a merge
+ *         already on the sheet (an identical one included);
+ *         `FM_STATUS_PRECONDITION_FAILED` (9) when it intersects a table, a
+ *         PivotTable, an array formula or a data table.
  */
 FM_API fm_status_t fm_sheet_add_merge(fm_workbook_t* wb, size_t sheet_index, const fm_cell_rect_t* merge);
 
@@ -3020,12 +3041,29 @@ FM_API fm_status_t fm_sheet_get_protected_range_at(const fm_workbook_t* wb, size
                                                    size_t protected_range_index, fm_protected_range_t* out);
 
 /**
- * @brief Appends a protected range and writes its index to `*out_protected_range_index`.
- *        The range follows row and column edits like any other sheet range
- *        and disappears when an edit deletes all of it.
+ * @brief Reads the protected range named `name` (Unicode simple case folding)
+ *        on `sheet_index`. `*out_present` is `1` and `*out` filled the way
+ *        `fm_sheet_get_protected_range_at` fills it when there is one, else
+ *        `0` and `*out` zeroed (still `FM_STATUS_OK` (0)).
+ *
+ * Lifetime: transient; the views in `*out` follow
+ * `fm_sheet_get_protected_range_at`.
  *
  * @return `FM_STATUS_OK` (0) on success;
- *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb`, `range` or `out_protected_range_index` is `NULL`, or
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
+ *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
+ *         `FM_STATUS_BINDING_UTF8ENCODING_ERROR` (7002) when `name` is not valid UTF-8.
+ */
+FM_API fm_status_t fm_sheet_get_protected_range(const fm_workbook_t* wb, size_t sheet_index, const char* name,
+                                                int32_t* out_present, fm_protected_range_t* out);
+
+/**
+ * @brief Appends a protected range; its `name` is the key the other calls
+ *        take. The range follows row and column edits like any other sheet
+ *        range and disappears when an edit deletes all of it.
+ *
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `range` is `NULL`, or
  *           `range.ranges` is `NULL` while `range.range_count > 0`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when `name` is empty, or when
@@ -3035,37 +3073,38 @@ FM_API fm_status_t fm_sheet_get_protected_range_at(const fm_workbook_t* wb, size
  *         of the sheet.
  */
 FM_API fm_status_t fm_sheet_add_protected_range(fm_workbook_t* wb, size_t sheet_index,
-                                                const fm_protected_range_t* range, size_t* out_protected_range_index);
+                                                const fm_protected_range_t* range);
 
 /**
- * @brief Merges `patch` into protected range `protected_range_index`. The whole
+ * @brief Merges `patch` into the protected range named `name`. The whole
  *        patch is checked before anything changes.
  *
  * @return `FM_STATUS_OK` (0) on success;
- *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `patch` is `NULL`, or a `SET` `ranges` is
- *           `NULL` while `range_count > 0`;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb`, `name` or `patch` is `NULL`, or a `SET`
+ *           `ranges` is `NULL` while `range_count > 0`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
- *         `FM_STATUS_INDEX_OUT_OF_RANGE` (13) when `protected_range_index` is out of range;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when an op is outside 0..2, `CLEAR` hits a
  *           field other than `legacy_password_hash`, `SET` carries a `NULL` string or
  *           an empty name, or a `SET` `ranges` is empty, past the per-call range cap,
  *           or holds an inverted or out-of-grid rectangle;
+ *         `FM_STATUS_NOT_FOUND` (6) when no range of the sheet has `name`;
  *         `FM_STATUS_ALREADY_EXISTS` (7) when a `SET` name already names another
  *           range of the sheet;
- *         `FM_STATUS_BINDING_UTF8ENCODING_ERROR` (7002) when a `SET` string is not valid UTF-8.
+ *         `FM_STATUS_BINDING_UTF8ENCODING_ERROR` (7002) when `name` or a `SET` string is not valid UTF-8.
  */
-FM_API fm_status_t fm_sheet_update_protected_range(fm_workbook_t* wb, size_t sheet_index, size_t protected_range_index,
+FM_API fm_status_t fm_sheet_update_protected_range(fm_workbook_t* wb, size_t sheet_index, const char* name,
                                                    const fm_protected_range_patch_t* patch);
 
 /**
- * @brief Removes protected range `protected_range_index`.
+ * @brief Removes the protected range named `name` on `sheet_index`.
  *
  * @return `FM_STATUS_OK` (0) on success;
- *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `name` is `NULL`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
- *         `FM_STATUS_INDEX_OUT_OF_RANGE` (13) when `protected_range_index` is out of range.
+ *         `FM_STATUS_NOT_FOUND` (6) when no range of the sheet has `name`;
+ *         `FM_STATUS_BINDING_UTF8ENCODING_ERROR` (7002) when `name` is not valid UTF-8.
  */
-FM_API fm_status_t fm_sheet_remove_protected_range(fm_workbook_t* wb, size_t sheet_index, size_t protected_range_index);
+FM_API fm_status_t fm_sheet_remove_protected_range(fm_workbook_t* wb, size_t sheet_index, const char* name);
 
 /** @brief Data-validation error style (`fm_data_validation_t::error_style`,
  * `fm_validation_outcome_info_t::error_style`). */
@@ -3612,9 +3651,14 @@ FM_API fm_status_t fm_workbook_get_person(const fm_workbook_t* wb, const char* i
                                           fm_person_t* out);
 
 /**
- * @brief Appends a person to the workbook's person list. The id is a
- *        brace-wrapped GUID in either letter case, stored uppercase; person
- *        ids match across letter case.
+ * @brief Appends a person to the workbook's person list and writes the id as
+ *        stored to `*out_person_id`. The id is a brace-wrapped GUID in either
+ *        letter case, stored uppercase; person ids match across letter case.
+ *
+ * `*out_person_id` is a read-scratch-backed view, valid until the next
+ * scratch-backed read.
+ *
+ * Lifetime: transient.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any argument is `NULL`;
@@ -3622,7 +3666,7 @@ FM_API fm_status_t fm_workbook_get_person(const fm_workbook_t* wb, const char* i
  *         name is empty;
  *         `FM_STATUS_ALREADY_EXISTS` (7) when the id is already listed.
  */
-FM_API fm_status_t fm_workbook_add_person(fm_workbook_t* wb, const fm_person_t* person);
+FM_API fm_status_t fm_workbook_add_person(fm_workbook_t* wb, const fm_person_t* person, const char** out_person_id);
 
 /**
  * @brief Removes the person with `id`.
@@ -5472,16 +5516,17 @@ typedef struct {
 } fm_cfvo_t;
 
 /**
- * @brief CF rule wire format used by `fm_sheet_add_cf_rule` and `fm_sheet_get_cf_rule_at`.
+ * @brief CF rule wire format used by `fm_sheet_add_cf_rule`, `fm_sheet_get_cf_rule_at`
+ *        and `fm_sheet_get_cf_rule`.
  *
  * Wide POD covering both differential-format rules and visual rules.
  * `fm_sheet_add_cf_rule` deep-copies every pointer-backed payload into
- * the engine model. `fm_sheet_get_cf_rule_at` returns every pointer in the
+ * the engine model. `fm_sheet_get_cf_rule_at` / `fm_sheet_get_cf_rule` return every pointer in the
  * selected rule -- id, ranges, formula/text strings, and the visual
  * threshold arrays and their value strings alike -- as a view into
  * handle-owned storage, not the workbook model; see that function's own
  * doc for the full lifetime contract (valid until the next successful
- * `fm_sheet_get_cf_rule_at` on the same handle, or handle destruction; CF
+ * `fm_sheet_get_cf_rule_at` / `fm_sheet_get_cf_rule` on the same handle, or handle destruction; CF
  * mutations, unrelated reads, and a validation-rejected call do not
  * invalidate it).
  *
@@ -5519,10 +5564,11 @@ typedef struct {
   uint32_t struct_size;
   /* Stable rule id, linking the rule to the `<x14:cfRule id="...">`
    * block that carries whatever settings the legacy OOXML schema cannot
-   * express. On input, pass `NULL` or `""` to auto-generate one; a
-   * supplied id must be GUID-shaped, since that is the schema type of
-   * the attribute it becomes, and must not match (ignoring the case of
-   * its hex digits) the id of a rule already on the sheet. On output, always a non-NULL view into
+   * express, and the key `fm_sheet_get_cf_rule`, `fm_sheet_update_cf_rule`
+   * and `fm_sheet_remove_cf_rule` take. On input it is a brace-wrapped GUID
+   * (`{XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX}`, hex digits in either case);
+   * `NULL`, `""` or an id already used on the sheet makes the engine
+   * generate an upper-case one. On output, always a non-NULL view into
    * `fm_sheet_get_cf_rule_at`'s handle-owned storage (see that function's doc).
    *
    * Only rules that need such a block put their id in the saved file, so
@@ -5694,22 +5740,39 @@ FM_API fm_status_t fm_sheet_get_cf_rule_at(const fm_workbook_t* wb, size_t sheet
                                            fm_cf_rule_t* out);
 
 /**
- * @brief Appends a new single-rule `<conditionalFormatting>` block.
+ * @brief Reads the CF rule whose id is `id` (hex digits in either case) on
+ *        `sheet_index`. `*out_present` is `1` and `*out` filled the way
+ *        `fm_sheet_get_cf_rule_at` fills it when there is one, else `0` and
+ *        `*out` zeroed (still `FM_STATUS_OK` (0)).
+ *
+ * The pointers in `*out` share the handle-owned storage of
+ * `fm_sheet_get_cf_rule_at`: either getter's next successful call releases
+ * them.
+ *
+ * Lifetime: transient.
+ *
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
+ *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
+ *         `FM_STATUS_BINDING_UTF8ENCODING_ERROR` (7002) when `id` is not valid UTF-8.
+ */
+FM_API fm_status_t fm_sheet_get_cf_rule(const fm_workbook_t* wb, size_t sheet_index, const char* id,
+                                        int32_t* out_present, fm_cf_rule_t* out);
+
+/**
+ * @brief Appends a new single-rule `<conditionalFormatting>` block and
+ *        writes the new rule's id to `*out_cf_rule_id`.
  *
  * The new block carries `rule.ranges` (deep-copied) and a single CF
  * rule constructed from the remaining fields. The auto-generated
- * priority (when `rule.priority <= 0`) is `existing_max + 1`. If
- * `rule.id` is `NULL` or empty, a new id is synthesised from the
- * priority.
+ * priority (when `rule.priority <= 0`) is `existing_max + 1`. `rule.id`
+ * follows the input rule of `fm_cf_rule_t::id`.
  *
- * `*out_cf_rule_index` receives the new rule's position in the sheet's
- * flattened CF rule sequence (the same indexing `fm_sheet_get_cf_rule_at`
- * and `fm_sheet_remove_cf_rule` use). Since this call always appends a
- * new block after every existing one, the returned index equals the
- * flattened rule count observed just before the call; it stays valid
- * until a subsequent mutation (`fm_sheet_add_cf_rule`,
- * `fm_sheet_remove_cf_rule`, `fm_sheet_clear_cf_rules`) on the same sheet
- * renumbers the sequence.
+ * `*out_cf_rule_id` is the id actually stored (the caller's, or the one the
+ * engine generated), a read-scratch-backed view valid until the next
+ * scratch-backed read. Since this call always appends a new block after
+ * every existing one, the rule's flattened position equals the flattened
+ * rule count observed just before the call.
  *
  * When `rule.has_dxf_index` is non-zero, `rule.dxf_index` must already name a
  * registered differential format (`fm_workbook_add_dxf`). A rule referencing a
@@ -5733,16 +5796,17 @@ FM_API fm_status_t fm_sheet_get_cf_rule_at(const fm_workbook_t* wb, size_t sheet
  * with the formula Excel stores for the rule, relative to the top-left
  * corner of the bounding box of `rule.ranges` (e.g. `NOT(ISERROR(SEARCH("ab",B1)))`).
  *
+ * Lifetime: transient.
+ *
  * @return `FM_STATUS_OK` (0) on success;
- *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when `wb`, `rule` or `out_cf_rule_index` is `NULL`, or
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when `wb`, `rule` or `out_cf_rule_id` is `NULL`, or
  *           `rule.ranges` is `NULL` while `rule.range_count > 0`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when `rule.range_count == 0` or exceeds the per-call range cap,
  *           when any `rule.ranges` entry is inverted (`first` past
  *           `last`) or reaches outside the grid (`row >= 1048576`,
  *           `col >= 16384`) and therefore has no A1 spelling, when
- *           `rule.id` is non-empty but not GUID-shaped (an id that already
- *           names a rule on the sheet is replaced by a fresh GUID), when `rule.type`
+ *           `rule.id` is non-empty but not a brace-wrapped GUID, when `rule.type`
  *           / `rule.op` / `rule.time_period` / `rule.icon_set_name` /
  *           `rule.data_bar_axis_position` or any present `fm_cfvo_t`
  *           `type` names no declared enumerator, when `rule.dxf_index` is
@@ -5754,7 +5818,7 @@ FM_API fm_status_t fm_sheet_get_cf_rule_at(const fm_workbook_t* wb, size_t sheet
  * `rule.formula1`, `rule.formula2` or formula-typed `fm_cfvo_t` value does not parse (the rule is not stored).
  */
 FM_API fm_status_t fm_sheet_add_cf_rule(fm_workbook_t* wb, size_t sheet_index, const fm_cf_rule_t* rule,
-                                        size_t* out_cf_rule_index);
+                                        const char** out_cf_rule_id);
 
 /**
  * @brief Partial update of one CF rule (`fm_sheet_update_cf_rule`),
@@ -5858,35 +5922,36 @@ typedef struct {
 } fm_cf_rule_patch_t;
 
 /**
- * @brief Merges `patch` into the `cf_rule_index`-th CF rule (flattened
- *        order). The whole patch is checked before anything changes; the
- *        rule keeps its id, type and position.
+ * @brief Merges `patch` into the CF rule whose id is `id` (hex digits in
+ *        either case). The whole patch is checked before anything changes;
+ *        the rule keeps its id, type and position.
  *
  * @return `FM_STATUS_OK` (0) on success;
- *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when `wb` or `patch` is `NULL`, or a `SET` array is `NULL`
- *           while its count is non-zero;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when `wb`, `id` or `patch` is `NULL`, or a `SET` array is
+ *           `NULL` while its count is non-zero;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
- *         `FM_STATUS_INDEX_OUT_OF_RANGE` (13) when `cf_rule_index` is out of range;
+ *         `FM_STATUS_NOT_FOUND` (6) when no rule of the sheet has `id`;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when an op is outside 0..2, `CLEAR` hits a field that cannot be
  *           cleared, `SET` carries a `NULL` string, a `SET` field is not used by the rule's type, or a
  *           `SET` value fails a check `fm_sheet_add_cf_rule` applies;
- *         `FM_STATUS_BINDING_UTF8ENCODING_ERROR` (7002) when a `SET` string is not valid UTF-8;
+ *         `FM_STATUS_BINDING_UTF8ENCODING_ERROR` (7002) when `id` or a `SET` string is not valid UTF-8;
  *         a parser status (1000-1014; `fm_get_last_parse_error` gives the code and position) when a `SET`
  *           formula does not parse.
  */
-FM_API fm_status_t fm_sheet_update_cf_rule(fm_workbook_t* wb, size_t sheet_index, size_t cf_rule_index,
+FM_API fm_status_t fm_sheet_update_cf_rule(fm_workbook_t* wb, size_t sheet_index, const char* id,
                                            const fm_cf_rule_patch_t* patch);
 
 /**
- * @brief Removes the `cf_rule_index`-th CF rule (flattened order). When the
- *        containing block becomes empty it is removed too.
+ * @brief Removes the CF rule whose id is `id` (hex digits in either case).
+ *        When the containing block becomes empty it is removed too.
  *
  * @return `FM_STATUS_OK` (0) on success;
- *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when `wb` is `NULL`;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when `wb` or `id` is `NULL`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
- *         `FM_STATUS_INDEX_OUT_OF_RANGE` (13) when `cf_rule_index` is out of range.
+ *         `FM_STATUS_NOT_FOUND` (6) when no rule of the sheet has `id`;
+ *         `FM_STATUS_BINDING_UTF8ENCODING_ERROR` (7002) when `id` is not valid UTF-8.
  */
-FM_API fm_status_t fm_sheet_remove_cf_rule(fm_workbook_t* wb, size_t sheet_index, size_t cf_rule_index);
+FM_API fm_status_t fm_sheet_remove_cf_rule(fm_workbook_t* wb, size_t sheet_index, const char* id);
 
 /**
  * @brief Removes every CF block on `sheet_index`.
@@ -6123,7 +6188,7 @@ FM_API fm_status_t fm_pivot_report_get_cell_at(const fm_pivot_report_t* report, 
 typedef enum {
   FM_PIVOT_AXIS_ABSENT = -1,
   FM_PIVOT_AXIS_ROW = 0,
-  FM_PIVOT_AXIS_COL = 1,
+  FM_PIVOT_AXIS_COLUMN = 1,
   FM_PIVOT_AXIS_VALUE = 2,
   FM_PIVOT_AXIS_PAGE = 3
 } fm_pivot_axis_t;
@@ -6165,15 +6230,15 @@ typedef enum {
 typedef enum {
   FM_PIVOT_SHOW_VALUES_AS_NORMAL = 0,
   FM_PIVOT_SHOW_VALUES_AS_PERCENT_OF_ROW = 1,
-  FM_PIVOT_SHOW_VALUES_AS_PERCENT_OF_COL = 2,
+  FM_PIVOT_SHOW_VALUES_AS_PERCENT_OF_COLUMN = 2,
   FM_PIVOT_SHOW_VALUES_AS_PERCENT_OF_TOTAL = 3,
   FM_PIVOT_SHOW_VALUES_AS_RUNNING_TOTAL_IN_ROW = 4,
-  FM_PIVOT_SHOW_VALUES_AS_RUNNING_TOTAL_IN_COL = 5,
+  FM_PIVOT_SHOW_VALUES_AS_RUNNING_TOTAL_IN_COLUMN = 5,
   FM_PIVOT_SHOW_VALUES_AS_INDEX = 6,
   FM_PIVOT_SHOW_VALUES_AS_DIFFERENCE_FROM = 7,
   FM_PIVOT_SHOW_VALUES_AS_PERCENT_DIFFERENCE_FROM = 8,
   FM_PIVOT_SHOW_VALUES_AS_PERCENT_OF_PARENT_ROW = 9,
-  FM_PIVOT_SHOW_VALUES_AS_PERCENT_OF_PARENT_COL = 10,
+  FM_PIVOT_SHOW_VALUES_AS_PERCENT_OF_PARENT_COLUMN = 10,
   FM_PIVOT_SHOW_VALUES_AS_PERCENT_OF_PARENT = 11,
   FM_PIVOT_SHOW_VALUES_AS_PERCENT_OF = 12,
   FM_PIVOT_SHOW_VALUES_AS_PERCENT_OF_RUNNING_TOTAL = 13,
@@ -6868,6 +6933,10 @@ FM_API fm_status_t fm_workbook_get_pivot_cache_worksheet_source(const fm_workboo
  * source: any other `<cacheSource>` type, attribute or child captured on
  * load is dropped.
  *
+ * Metadata only: records come from `fm_workbook_add_pivot_cache_field` /
+ * `fm_workbook_add_pivot_cache_record` / `fm_workbook_set_pivot_cache_record_*`;
+ * neither `fm_sheet_project_pivot` nor a cell edit re-reads the range.
+ *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` is `NULL`;
  *         `FM_STATUS_NOT_FOUND` (6) when no cache matches `cache_id`;
@@ -6940,16 +7009,19 @@ FM_API fm_status_t fm_workbook_get_pivot_cache_field_shared_item_value(const fm_
                                                                        fm_value_t* out);
 
 /**
- * @brief Appends a numeric shared item to cache field `field_index`.
+ * @brief Appends a numeric shared item to cache field `field_index`
+ *        and writes its index to `*out_shared_item_index`.
  *
  * @return `FM_STATUS_OK` (0) on success, or a common pivot failure;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when `value` is NaN or infinite.
  */
 FM_API fm_status_t fm_workbook_add_pivot_cache_field_shared_item_number(fm_workbook_t* wb, uint32_t cache_id,
-                                                                        size_t field_index, double value);
+                                                                        size_t field_index, double value,
+                                                                        size_t* out_shared_item_index);
 
 /**
- * @brief Appends a date shared item to cache field `field_index`. `serial` is a
+ * @brief Appends a date shared item to cache field `field_index`. and writes
+ *        its index to `*out_shared_item_index`. `serial` is a
  *        date serial in the workbook's date system, as a cell holds it.
  *        Saved with seconds precision.
  *
@@ -6958,7 +7030,8 @@ FM_API fm_status_t fm_workbook_add_pivot_cache_field_shared_item_number(fm_workb
  *         negative or is past 9999-12-31.
  */
 FM_API fm_status_t fm_workbook_add_pivot_cache_field_shared_item_date(fm_workbook_t* wb, uint32_t cache_id,
-                                                                      size_t field_index, double serial);
+                                                                      size_t field_index, double serial,
+                                                                      size_t* out_shared_item_index);
 
 /**
  * @brief Reports whether shared item `item_index` of cache field `field_index` is
@@ -6971,37 +7044,45 @@ FM_API fm_status_t fm_workbook_is_pivot_cache_field_shared_item_date(const fm_wo
                                                                      int32_t* out_is_date);
 
 /**
- * @brief Appends a text shared item to cache field `field_index`.
+ * @brief Appends a text shared item to cache field `field_index`
+ *        and writes its index to `*out_shared_item_index`.
  *
  * @return `FM_STATUS_OK` (0) on success, or a common pivot failure.
  */
 FM_API fm_status_t fm_workbook_add_pivot_cache_field_shared_item_text(fm_workbook_t* wb, uint32_t cache_id,
-                                                                      size_t field_index, const char* text);
+                                                                      size_t field_index, const char* text,
+                                                                      size_t* out_shared_item_index);
 
 /**
- * @brief Appends a boolean shared item to cache field `field_index`.
+ * @brief Appends a boolean shared item to cache field `field_index`
+ *        and writes its index to `*out_shared_item_index`.
  *
  * @return `FM_STATUS_OK` (0) on success, or a common pivot failure.
  */
 FM_API fm_status_t fm_workbook_add_pivot_cache_field_shared_item_bool(fm_workbook_t* wb, uint32_t cache_id,
-                                                                      size_t field_index, int32_t value);
+                                                                      size_t field_index, int32_t value,
+                                                                      size_t* out_shared_item_index);
 
 /**
- * @brief Appends a blank shared item to cache field `field_index`.
+ * @brief Appends a blank shared item to cache field `field_index`
+ *        and writes its index to `*out_shared_item_index`.
  *
  * @return `FM_STATUS_OK` (0) on success, or a common pivot failure.
  */
 FM_API fm_status_t fm_workbook_add_pivot_cache_field_shared_item_blank(fm_workbook_t* wb, uint32_t cache_id,
-                                                                       size_t field_index);
+                                                                       size_t field_index,
+                                                                       size_t* out_shared_item_index);
 
 /**
- * @brief Appends an Excel error shared item to cache field `field_index`.
+ * @brief Appends an Excel error shared item to cache field `field_index`
+ *        and writes its index to `*out_shared_item_index`.
  *
  * @return `FM_STATUS_OK` (0) on success, or a common pivot failure;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when `error` names no `fm_error_code_t`.
  */
 FM_API fm_status_t fm_workbook_add_pivot_cache_field_shared_item_error(fm_workbook_t* wb, uint32_t cache_id,
-                                                                       size_t field_index, fm_error_code_t error);
+                                                                       size_t field_index, fm_error_code_t error,
+                                                                       size_t* out_shared_item_index);
 
 /**
  * @brief Drops every shared item from cache field `field_index`.
@@ -7783,6 +7864,17 @@ FM_API fm_status_t fm_sheet_set_pivot_column_field_order(fm_workbook_t* wb, size
                                                          const uint32_t* indices, size_t count);
 
 /**
+ * @brief Replaces the page-axis (report filter) field order. Same contract as
+ *        rows, except that `FM_PIVOT_VALUES_FIELD` is
+ *        `FM_STATUS_INVALID_ARGUMENT` (2): the Values level is never a page
+ *        field. The saved `<pageFields>` follow this order.
+ *
+ * @return As `fm_sheet_set_pivot_row_field_order`.
+ */
+FM_API fm_status_t fm_sheet_set_pivot_page_field_order(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
+                                                       const uint32_t* indices, size_t count);
+
+/**
  * @brief Number of `<dataField>` entries on the pivot.
  *
  * @return `FM_STATUS_OK` (0) on success, or a common pivot failure.
@@ -7948,6 +8040,11 @@ FM_API fm_status_t fm_sheet_project_pivot(fm_workbook_t* wb, size_t sheet_index,
  * @brief Reads into `*out` whether the pivot's sheet cells are stale after a
  *        change to its cache (`1`) or current (`0`).
  *
+ * The worksheet source is metadata only: records come from
+ * `fm_workbook_add_pivot_cache_field` / `fm_workbook_add_pivot_cache_record` /
+ * `fm_workbook_set_pivot_cache_record_*`; neither `fm_sheet_project_pivot` nor a
+ * cell edit re-reads the range.
+ *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `out` is `NULL`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) if `sheet_index` is out of range;
@@ -8079,6 +8176,16 @@ FM_API fm_status_t fm_sheet_get_pivot_row_field_order(const fm_workbook_t* wb, s
 FM_API fm_status_t fm_sheet_get_pivot_column_field_order(const fm_workbook_t* wb, size_t sheet_index,
                                                          size_t pivot_index, uint32_t* out, size_t capacity,
                                                          size_t* out_count);
+
+/**
+ * @brief Copies the page-axis (report filter) field order into the caller's
+ *        buffer. Same contract as rows; the list never holds
+ *        `FM_PIVOT_VALUES_FIELD`.
+ *
+ * @return As `fm_sheet_get_pivot_row_field_order`.
+ */
+FM_API fm_status_t fm_sheet_get_pivot_page_field_order(const fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
+                                                       uint32_t* out, size_t capacity, size_t* out_count);
 
 /*
  * Persistence contract shared by the whole pivot-filter family
@@ -10782,8 +10889,8 @@ FM_API fm_status_t fm_workbook_get_table_style_count(const fm_workbook_t* wb, si
 FM_API fm_status_t fm_workbook_get_table_style_at(const fm_workbook_t* wb, size_t index, fm_table_style_t* out);
 
 /**
- * @brief Reads the custom table style named `name` (ASCII case-insensitive,
- *        as `fm_workbook_remove_table_style` matches). `*out_present` is `1`
+ * @brief Reads the custom table style named `name` (Unicode simple case
+ *        folding, as `fm_workbook_remove_table_style` matches). `*out_present` is `1`
  *        and `*out` filled when there is one, else `0` and `*out` zeroed
  *        (still `FM_STATUS_OK` (0)).
  *
@@ -10798,7 +10905,7 @@ FM_API fm_status_t fm_workbook_get_table_style(const fm_workbook_t* wb, const ch
 
 /**
  * @brief Adds a custom table style, or replaces the one with the same name
- *        (case-insensitive) in place.
+ *        (Unicode simple case folding) in place.
  *
  * The name must be non-empty and must not be a built-in style name
  * (`TableStyleLight1`, `PivotStyleMedium2`, ...). Each element type may
@@ -10816,7 +10923,7 @@ FM_API fm_status_t fm_workbook_get_table_style(const fm_workbook_t* wb, const ch
 FM_API fm_status_t fm_workbook_set_table_style(fm_workbook_t* wb, const fm_table_style_t* style);
 
 /**
- * @brief Removes the custom table style `name` (case-insensitive).
+ * @brief Removes the custom table style `name` (Unicode simple case folding).
  *
  * A default naming it reverts to the built-in default. Tables and pivots
  * naming it keep the name, which the desktop application then renders
@@ -10927,8 +11034,8 @@ FM_API fm_status_t fm_workbook_get_cell_style_count(const fm_workbook_t* wb, siz
 FM_API fm_status_t fm_workbook_get_cell_style_at(const fm_workbook_t* wb, size_t index, fm_cell_style_t* out);
 
 /**
- * @brief Reads the named cell style `name` (matched exactly, as
- *        `fm_workbook_remove_cell_style` matches). `*out_present` is `1` and
+ * @brief Reads the named cell style `name` (Unicode simple case
+ *        folding, as `fm_workbook_remove_cell_style` matches). `*out_present` is `1` and
  *        `*out` filled when there is one, else `0` and `*out` zeroed (still
  *        `FM_STATUS_OK` (0)). Lifetimes as `fm_workbook_get_cell_style_at`.
  *
@@ -13591,8 +13698,12 @@ FM_API fm_status_t fm_chart_data_get_unresolved_at(const fm_chart_data_t* data, 
  * `fm_chart_grouping_t`) applies to bar, line and area. `source` is
  * one A1 rectangle, sheet-qualified or on the target sheet. `direction` is
  * an `fm_chart_series_direction_t`, `header_row`/`header_column`
- * `fm_tristate_t`s (`FM_TRISTATE_DEFAULT` follows Excel's detection). `title` is
- * `NULL` for Excel's automatic title, empty for none, else the text.
+ * `fm_tristate_t`s (`FM_TRISTATE_DEFAULT` follows Excel's detection).
+ * `has_title` `0` (the `FM_STRUCT_INIT` default) gives Excel's automatic
+ * title; `1` writes `title` as `fm_sheet_set_chart_title` does (`NONE` for no
+ * title, a `TEXT` title with empty text is `FM_STATUS_INVALID_ARGUMENT` (2));
+ * a `REF` title is resolved before the insert, so a bad reference fails with
+ * no chart added.
  * `legend` is an `fm_chart_legend_position_t`; zero is
  * `FM_CHART_LEGEND_POSITION_RIGHT`, the OOXML default, while Excel's insert
  * default is `FM_CHART_LEGEND_POSITION_BOTTOM`, which the bindings pass for an
@@ -13611,7 +13722,8 @@ typedef struct {
   int32_t direction;
   int32_t header_row;    /* fm_tristate_t */
   int32_t header_column; /* fm_tristate_t */
-  const char* title;
+  int32_t has_title;
+  fm_chart_title_t title;
   int32_t legend;
   fm_drawing_placement_spec_t placement;
 } fm_chart_insert_spec_t;
@@ -13883,9 +13995,10 @@ typedef struct {
  *         `out_object_id` is `NULL`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) for a bad enum value or placement (as
- *         `fm_sheet_add_picture`), or a source that does not yield a series;
+ *         `fm_sheet_add_picture`), a source that does not yield a series, or a
+ *         title `fm_sheet_set_chart_title` refuses;
  *         `FM_STATUS_IO_CHART_INVALID_REFERENCE` (5026) when `source` does not resolve to
- *         one rectangle;
+ *         one rectangle, or a `REF` title's `formula` does not resolve;
  *         `FM_STATUS_IO_DRAWING_UNPARSEABLE` (5024) when the drawing part does not parse
  *         or is an `.xlsb` drawing the reader could not lift. The workbook is then
  *         unchanged.
@@ -13917,6 +14030,8 @@ FM_API fm_status_t fm_sheet_set_chart_type(fm_workbook_t* wb, size_t sheet_index
  *
  * @return `FM_STATUS_OK` (0) on success, or a common chart failure;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when `title` is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `kind` is outside
+ *         `fm_chart_title_kind_t`, `TEXT` has empty text or `REF` no formula;
  *         `FM_STATUS_IO_CHART_INVALID_REFERENCE` (5026) when `formula` does not resolve.
  */
 FM_API fm_status_t fm_sheet_set_chart_title(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,

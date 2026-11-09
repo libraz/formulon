@@ -579,6 +579,23 @@ const PIVOT_MUTATORS = [
     },
   ],
   [
+    'Pivot.setPageFieldOrder',
+    {
+      act: (b) => b.pivot.setPageFieldOrder([b.product]),
+      expect: (b) => {
+        assert.deepEqual(b.pivot.getPageFieldOrder(), [b.product]);
+        assert.deepEqual(pivotGrid(b.wb), [
+          'Product|(すべて)',
+          '|',
+          '行ラベル|Sum of Amount',
+          'East|15',
+          'West|37',
+          '総計|52',
+        ]);
+      },
+    },
+  ],
+  [
     'Pivot.setColumnFieldOrder',
     {
       act: (b) => b.pivot.setColumnFieldOrder([b.product]),
@@ -1087,7 +1104,7 @@ test('fallible accessors succeed, throw on a rejection and on a released handle'
   assert.equal(mod.localizeFunctionName('SUM', 'win-365-ja_JP'), 'SUM');
   assert.throws(() => mod.localizeFunctionName('SUM', 'nope'), isFormulonError);
   assert.equal(mod.listFunctionNames().includes('SUM'), true);
-  assert.throws(() => mod.listLocaleErrorNames('nope'), isFormulonError);
+  assert.throws(() => mod.getLocaleFacts('nope'), isFormulonError);
   assert.throws(() => mod.compareText('a', 'b', 0, 'nope'), isFormulonError);
 
   wb.dispose();

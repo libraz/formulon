@@ -35,7 +35,7 @@
       "scope": "sheet",
       "record": "ConditionalFormat",
       "get": {
-        "op": "cf_rule.get",
+        "op": "cf_rule.get_at",
         "js": "getCfRule",
         "py": "get_cf_rule"
       },
@@ -370,7 +370,7 @@
       "scope": "sheet",
       "record": "ProtectedRange",
       "get": {
-        "op": "protected_range.get",
+        "op": "protected_range.get_at",
         "js": "getProtectedRange",
         "py": "get_protected_range"
       },
@@ -644,7 +644,7 @@
       "scope": "sheet",
       "record": "ConditionalFormat",
       "get": {
-        "op": "cf_rule.get",
+        "op": "cf_rule.get_at",
         "js": "getCfRule",
         "py": "get_cf_rule"
       },

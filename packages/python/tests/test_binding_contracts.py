@@ -81,7 +81,6 @@ from formulon import (
     canonicalize_function_name,
     get_function_metadata,
     get_locale_facts,
-    list_locale_error_names,
     localize_formula,
     localize_function_name,
 )
@@ -209,7 +208,6 @@ class CatalogProfileTests(unittest.TestCase):
             lambda: localize_formula("=SUM(1)", "nope"),
             lambda: canonicalize_formula("=SUM(1)", "nope"),
             lambda: get_locale_facts("nope"),
-            lambda: list_locale_error_names("nope"),
         ):
             with self.assertRaises(FormulonError):
                 call()
@@ -232,7 +230,6 @@ class CatalogProfileTests(unittest.TestCase):
         self.assertTrue(mac.measured)
         na = next(e for e in mac.error_names if e.canonical == "#N/A")
         self.assertEqual(na.localized, "#NV")
-        self.assertEqual(list_locale_error_names("mac-365-de_DE"), list(mac.error_names))
         self.assertFalse(get_locale_facts("win-365-de_DE").measured)
         self.assertEqual(get_locale_facts("win-365-en_US").decimal_separator, ".")
 

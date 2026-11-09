@@ -185,9 +185,8 @@ inline int print_version(std::ostream& out, std::ostream& err) {
 inline bool split_option_values(const ArgList& raw, std::string_view subcommand, std::vector<std::string>& storage,
                                 ArgList& expanded, std::ostream& err) {
   constexpr std::string_view kValueOptions[] = {"--profile", "--now", "--repeat", "--threads", "--output",
-                                                "--sheet",   "--in",  "--range",  "--format"};
-  constexpr std::string_view kFlagOptions[] = {"--json",   "--iterative", "--quiet", "--formulas", "--values",
-                                               "--sheets", "--metadata",  "--local", "--help",     "--version"};
+                                                "--sheet",   "--in",  "--range",  "--format",  "--view"};
+  constexpr std::string_view kFlagOptions[] = {"--json", "--iterative", "--quiet", "--local", "--help", "--version"};
   const auto contains = [](const auto& names, std::string_view name) {
     for (const std::string_view candidate : names) {
       if (candidate == name) {
@@ -372,18 +371,18 @@ int run_recalc(const ArgList& args, std::ostream& out, std::ostream& err);
 /// `args` carries the post-`dump` arguments. The first non-flag argument
 /// is the input path.
 ///
-/// Supported flags: the common options above and (mutually exclusive): `--formulas` (default),
-/// `--values`, `--sheets`, `--metadata`, `-h | --help`, and `--` to end
+/// Supported flags: the common options above, `--view formulas|values|sheets|metadata`
+/// (default `formulas`), `-h | --help`, and `--` to end
 /// option parsing before an input path. `--sheet NAME|INDEX` and `--range
-/// A1:B2` narrow `--formulas` and `--values`. The workbook opens with manual
-/// calculation, so only `--values` recalculates. `--json` prints the selected view as
+/// A1:B2` narrow the `formulas` and `values` views. The workbook opens with manual
+/// calculation, so only the `values` view recalculates. `--json` prints the selected view as
 /// one JSON object with a top-level `"format":1`.
 int run_dump(const ArgList& args, std::ostream& out, std::ostream& err);
 
 /// `paginate` handler: resolve the print geometry of one worksheet.
 ///
-/// Supported flags: the common options above, `--sheet INDEX` (0-based,
-/// default 0), `--json` (one JSON object with the sheet's page ranges),
+/// Supported flags: the common options above, `--sheet NAME|INDEX` (a name or
+/// a 0-based index, default 0), `--json` (one JSON object with the sheet's page ranges),
 /// and `--` to end option parsing before an input path.
 int run_paginate(const ArgList& args, std::ostream& out, std::ostream& err);
 

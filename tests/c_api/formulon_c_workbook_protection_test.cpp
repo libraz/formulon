@@ -9,7 +9,6 @@
 
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
-#include "formulon_c_out_index.h"
 #include "gtest/gtest.h"
 #include "io/protection_xml.h"
 #include "sheet.h"
@@ -173,8 +172,8 @@ TEST(FormulonCApiProtectedRanges, AddListUpdateRemove) {
   totals.salt_value = "cw==";
   totals.spin_count = 100000;
   totals.security_descriptor = "O:WDG:WD";
-  ASSERT_EQ(fm_sheet_add_protected_range(wb.handle, 0, &inputs, ignored_index()), 0) << fm_get_last_error_message();
-  ASSERT_EQ(fm_sheet_add_protected_range(wb.handle, 0, &totals, ignored_index()), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_add_protected_range(wb.handle, 0, &inputs), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_add_protected_range(wb.handle, 0, &totals), 0) << fm_get_last_error_message();
   EXPECT_EQ(RangeCount(wb), 2U);
 
   WorkbookGuard loaded;
@@ -199,18 +198,18 @@ TEST(FormulonCApiProtectedRanges, AddListUpdateRemove) {
   renamed.ranges_op = FM_PATCH_OP_SET;
   renamed.ranges = &d4;
   renamed.range_count = 1;
-  ASSERT_EQ(fm_sheet_update_protected_range(loaded.handle, 0, 0, &renamed), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_update_protected_range(loaded.handle, 0, "Inputs", &renamed), 0) << fm_get_last_error_message();
   ASSERT_EQ(fm_sheet_get_protected_range_at(loaded.handle, 0, 0, &out), 0);
   EXPECT_STREQ(out.name, "Renamed");
   EXPECT_EQ(RangesText(loaded, out), "D4");
   EXPECT_STREQ(out.legacy_password_hash, "CC1A");
   EXPECT_EQ(out.algorithm_name, nullptr);
 
-  ASSERT_EQ(fm_sheet_remove_protected_range(loaded.handle, 0, 0), 0);
+  ASSERT_EQ(fm_sheet_remove_protected_range(loaded.handle, 0, "Renamed"), 0);
   ASSERT_EQ(RangeCount(loaded), 1U);
   ASSERT_EQ(fm_sheet_get_protected_range_at(loaded.handle, 0, 0, &out), 0);
   EXPECT_STREQ(out.name, "Totals");
-  ASSERT_EQ(fm_sheet_remove_protected_range(loaded.handle, 0, 0), 0);
+  ASSERT_EQ(fm_sheet_remove_protected_range(loaded.handle, 0, "Totals"), 0);
   EXPECT_EQ(RangeCount(loaded), 0U);
 }
 
@@ -220,35 +219,89 @@ TEST(FormulonCApiProtectedRanges, NamesCollideUnderUnicodeCaseFolding) {
   const fm_cell_rect_t a1{0, 0, 0, 0};
   const fm_cell_rect_t b2{1, 1, 1, 1};
   const fm_protected_range_t budget = Range("Budget", &a1, 1);
-  ASSERT_EQ(fm_sheet_add_protected_range(wb.handle, 0, &budget, ignored_index()), 0);
+  ASSERT_EQ(fm_sheet_add_protected_range(wb.handle, 0, &budget), 0);
 
   const fm_protected_range_t upper = Range("BUDGET", &b2, 1);
-  EXPECT_EQ(fm_sheet_add_protected_range(wb.handle, 0, &upper, ignored_index()), kAlreadyExists);
+  EXPECT_EQ(fm_sheet_add_protected_range(wb.handle, 0, &upper), kAlreadyExists);
   const fm_protected_range_t umlaut = Range("\xC3\x84rger", &b2, 1);
-  ASSERT_EQ(fm_sheet_add_protected_range(wb.handle, 0, &umlaut, ignored_index()), 0);
+  ASSERT_EQ(fm_sheet_add_protected_range(wb.handle, 0, &umlaut), 0);
   const fm_protected_range_t folded = Range("\xC3\xA4rger", &a1, 1);
-  EXPECT_EQ(fm_sheet_add_protected_range(wb.handle, 0, &folded, ignored_index()), kAlreadyExists);
+  EXPECT_EQ(fm_sheet_add_protected_range(wb.handle, 0, &folded), kAlreadyExists);
   EXPECT_EQ(RangeCount(wb), 2U);
 
   // A rename into the folded spelling of another range is refused; a recase of its own name is not.
   fm_protected_range_patch_t clash = Patch();
   clash.name_op = FM_PATCH_OP_SET;
   clash.name = "budget";
-  EXPECT_EQ(fm_sheet_update_protected_range(wb.handle, 0, 1, &clash), kAlreadyExists);
+  EXPECT_EQ(fm_sheet_update_protected_range(wb.handle, 0, "\xC3\x84rger", &clash), kAlreadyExists);
   fm_protected_range_patch_t recase = Patch();
   recase.name_op = FM_PATCH_OP_SET;
   recase.name = "BUDGET";
-  ASSERT_EQ(fm_sheet_update_protected_range(wb.handle, 0, 0, &recase), 0);
+  ASSERT_EQ(fm_sheet_update_protected_range(wb.handle, 0, "Budget", &recase), 0);
   fm_protected_range_t out = FM_STRUCT_INIT(fm_protected_range_t);
   ASSERT_EQ(fm_sheet_get_protected_range_at(wb.handle, 0, 0, &out), 0);
   EXPECT_STREQ(out.name, "BUDGET");
+}
+
+TEST(FormulonCApiProtectedRanges, RangesAreReadUpdatedAndRemovedByName) {
+  WorkbookGuard wb;
+  Create(&wb);
+  const fm_cell_rect_t a1{0, 0, 0, 0};
+  const fm_cell_rect_t b2{1, 1, 1, 1};
+  const fm_protected_range_t umlaut = Range("\xC3\x84rger", &a1, 1);
+  const fm_protected_range_t budget = Range("Budget", &b2, 1);
+  ASSERT_EQ(fm_sheet_add_protected_range(wb.handle, 0, &umlaut), 0);
+  ASSERT_EQ(fm_sheet_add_protected_range(wb.handle, 0, &budget), 0);
+
+  // A name matches under Unicode case folding, whatever its position.
+  fm_protected_range_t out = FM_STRUCT_INIT(fm_protected_range_t);
+  int32_t present = 0;
+  ASSERT_EQ(fm_sheet_get_protected_range(wb.handle, 0, "\xC3\xA4rger", &present, &out), 0);
+  ASSERT_EQ(present, 1);
+  EXPECT_STREQ(out.name, "\xC3\x84rger");
+  ASSERT_EQ(fm_sheet_get_protected_range(wb.handle, 0, "BUDGET", &present, &out), 0);
+  ASSERT_EQ(present, 1);
+  EXPECT_EQ(RangesText(wb, out), "B2");
+
+  fm_protected_range_patch_t patch = Patch();
+  patch.spin_count_op = FM_PATCH_OP_SET;
+  patch.spin_count = 7;
+  ASSERT_EQ(fm_sheet_update_protected_range(wb.handle, 0, "budget", &patch), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_get_protected_range(wb.handle, 0, "Budget", &present, &out), 0);
+  EXPECT_EQ(out.spin_count, 7U);
+
+  ASSERT_EQ(fm_sheet_remove_protected_range(wb.handle, 0, "\xC3\xA4rger"), 0);
+  EXPECT_EQ(RangeCount(wb), 1U);
+  ASSERT_EQ(fm_sheet_get_protected_range_at(wb.handle, 0, 0, &out), 0);
+  EXPECT_STREQ(out.name, "Budget");
+}
+
+TEST(FormulonCApiProtectedRanges, UnknownNameReadsAbsentAndWritesNotFound) {
+  WorkbookGuard wb;
+  Create(&wb);
+  const fm_cell_rect_t a1{0, 0, 0, 0};
+  const fm_protected_range_t budget = Range("Budget", &a1, 1);
+  ASSERT_EQ(fm_sheet_add_protected_range(wb.handle, 0, &budget), 0);
+
+  fm_protected_range_t out = FM_STRUCT_INIT(fm_protected_range_t);
+  int32_t present = 1;
+  ASSERT_EQ(fm_sheet_get_protected_range(wb.handle, 0, "Other", &present, &out), 0);
+  EXPECT_EQ(present, 0);
+  EXPECT_EQ(out.name, nullptr);
+  const fm_protected_range_patch_t keep = Patch();
+  EXPECT_EQ(fm_sheet_update_protected_range(wb.handle, 0, "Other", &keep), FM_STATUS_NOT_FOUND);
+  EXPECT_EQ(fm_sheet_remove_protected_range(wb.handle, 0, "Other"), FM_STATUS_NOT_FOUND);
+  EXPECT_EQ(fm_sheet_remove_protected_range(wb.handle, 0, nullptr), FM_STATUS_BINDING_NULL_POINTER);
+  EXPECT_EQ(fm_sheet_get_protected_range(wb.handle, 0, nullptr, &present, &out), FM_STATUS_BINDING_NULL_POINTER);
+  EXPECT_EQ(fm_sheet_get_protected_range(wb.handle, 4, "Budget", &present, &out), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(RangeCount(wb), 1U);
 }
 
 TEST(FormulonCApiProtectedRanges, SqrefFollowsRowAndColumnEdits) {
   WorkbookGuard wb;
   Create(&wb);
   const fm_protected_range_t r = Range("Inputs", kInputsRanges, 2);
-  ASSERT_EQ(fm_sheet_add_protected_range(wb.handle, 0, &r, ignored_index()), 0);
+  ASSERT_EQ(fm_sheet_add_protected_range(wb.handle, 0, &r), 0);
   ASSERT_EQ(fm_sheet_insert_rows(wb.handle, 0, 0, 1), 0);
   ASSERT_EQ(fm_sheet_insert_columns(wb.handle, 0, 0, 0), 0);
   fm_protected_range_t out = FM_STRUCT_INIT(fm_protected_range_t);
@@ -275,7 +328,7 @@ TEST(FormulonCApiProtectedRanges, AnUnparsedTokenIsKeptForSave) {
   // Adding another range rewrites the list from the stored entries.
   const fm_cell_rect_t d4{3, 3, 3, 3};
   const fm_protected_range_t other = Range("Other", &d4, 1);
-  ASSERT_EQ(fm_sheet_add_protected_range(wb.handle, 0, &other, ignored_index()), 0);
+  ASSERT_EQ(fm_sheet_add_protected_range(wb.handle, 0, &other), 0);
   WorkbookGuard loaded;
   RoundTrip(wb, &loaded);
   const auto ranges = formulon::io::read_protected_ranges(loaded.handle->workbook().sheet(0).raw_extensions());
@@ -296,7 +349,7 @@ TEST(FormulonCApiProtectedRanges, UpdateWithoutRangesKeepsTheStoredText) {
   fm_protected_range_patch_t rename = Patch();
   rename.name_op = FM_PATCH_OP_SET;
   rename.name = "Renamed";
-  ASSERT_EQ(fm_sheet_update_protected_range(wb.handle, 0, 0, &rename), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_update_protected_range(wb.handle, 0, "Odd", &rename), 0) << fm_get_last_error_message();
   WorkbookGuard loaded;
   RoundTrip(wb, &loaded);
   const auto ranges = formulon::io::read_protected_ranges(loaded.handle->workbook().sheet(0).raw_extensions());
@@ -310,10 +363,9 @@ TEST(FormulonCApiProtectedRanges, UpdateWithoutRangesKeepsTheStoredText) {
   empty.ranges_op = FM_PATCH_OP_SET;
   empty.ranges = &sentinel;
   empty.range_count = 0;
-  EXPECT_EQ(fm_sheet_update_protected_range(wb.handle, 0, 0, &empty), kInvalidArgument);
-  size_t index = 0;
+  EXPECT_EQ(fm_sheet_update_protected_range(wb.handle, 0, "Renamed", &empty), kInvalidArgument);
   const fm_protected_range_t no_ranges = Range("Renamed", nullptr, 0);
-  EXPECT_EQ(fm_sheet_add_protected_range(wb.handle, 0, &no_ranges, &index), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_add_protected_range(wb.handle, 0, &no_ranges), kInvalidArgument);
 }
 
 TEST(FormulonCApiProtectedRanges, ArgumentsAreValidated) {
@@ -324,28 +376,28 @@ TEST(FormulonCApiProtectedRanges, ArgumentsAreValidated) {
   const fm_cell_rect_t inverted{2, 0, 1, 0};
   const fm_cell_rect_t off_grid{0, 0, 0, 16384};
   const fm_protected_range_t good = Range("Inputs", &a1, 1);
-  ASSERT_EQ(fm_sheet_add_protected_range(wb.handle, 0, &good, ignored_index()), 0);
+  ASSERT_EQ(fm_sheet_add_protected_range(wb.handle, 0, &good), 0);
   const fm_protected_range_t duplicate = Range("Inputs", &b1, 1);
   const fm_protected_range_t unnamed = Range("", &b1, 1);
   const fm_protected_range_t inverted_range = Range("Other", &inverted, 1);
   const fm_protected_range_t off_grid_range = Range("Other", &off_grid, 1);
   const fm_protected_range_t no_ranges = Range("Other", nullptr, 0);
   const fm_protected_range_t null_ranges = Range("Other", nullptr, 1);
-  EXPECT_EQ(fm_sheet_add_protected_range(wb.handle, 0, &duplicate, ignored_index()), kAlreadyExists);
-  EXPECT_EQ(fm_sheet_add_protected_range(wb.handle, 0, &unnamed, ignored_index()), kInvalidArgument);
-  EXPECT_EQ(fm_sheet_add_protected_range(wb.handle, 0, &inverted_range, ignored_index()), kInvalidArgument);
-  EXPECT_EQ(fm_sheet_add_protected_range(wb.handle, 0, &off_grid_range, ignored_index()), kInvalidArgument);
-  EXPECT_EQ(fm_sheet_add_protected_range(wb.handle, 0, &no_ranges, ignored_index()), kInvalidArgument);
-  EXPECT_EQ(fm_sheet_add_protected_range(wb.handle, 0, &null_ranges, ignored_index()), FM_STATUS_BINDING_NULL_POINTER);
-  EXPECT_EQ(fm_sheet_add_protected_range(wb.handle, 9, &good, ignored_index()), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
-  EXPECT_NE(fm_sheet_add_protected_range(wb.handle, 0, nullptr, ignored_index()), 0);
+  EXPECT_EQ(fm_sheet_add_protected_range(wb.handle, 0, &duplicate), kAlreadyExists);
+  EXPECT_EQ(fm_sheet_add_protected_range(wb.handle, 0, &unnamed), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_add_protected_range(wb.handle, 0, &inverted_range), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_add_protected_range(wb.handle, 0, &off_grid_range), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_add_protected_range(wb.handle, 0, &no_ranges), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_add_protected_range(wb.handle, 0, &null_ranges), FM_STATUS_BINDING_NULL_POINTER);
+  EXPECT_EQ(fm_sheet_add_protected_range(wb.handle, 9, &good), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
+  EXPECT_NE(fm_sheet_add_protected_range(wb.handle, 0, nullptr), 0);
   // Updating an entry to its own name is not a duplicate.
   fm_protected_range_patch_t same_name = Patch();
   same_name.name_op = FM_PATCH_OP_SET;
   same_name.name = "Inputs";
-  EXPECT_EQ(fm_sheet_update_protected_range(wb.handle, 0, 0, &same_name), 0);
-  EXPECT_EQ(fm_sheet_update_protected_range(wb.handle, 0, 5, &same_name), FM_STATUS_INDEX_OUT_OF_RANGE);
-  EXPECT_EQ(fm_sheet_remove_protected_range(wb.handle, 0, 5), FM_STATUS_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(fm_sheet_update_protected_range(wb.handle, 0, "Inputs", &same_name), 0);
+  EXPECT_EQ(fm_sheet_update_protected_range(wb.handle, 0, "Missing", &same_name), FM_STATUS_NOT_FOUND);
+  EXPECT_EQ(fm_sheet_remove_protected_range(wb.handle, 0, "Missing"), FM_STATUS_NOT_FOUND);
   fm_protected_range_t out = FM_STRUCT_INIT(fm_protected_range_t);
   EXPECT_EQ(fm_sheet_get_protected_range_at(wb.handle, 0, 5, &out), FM_STATUS_INDEX_OUT_OF_RANGE);
   // The context names the index by its parameter name.
@@ -414,10 +466,10 @@ void AddPatchFixture(const WorkbookGuard& wb) {
   inputs.salt_value = "cw==";
   inputs.spin_count = 100000;
   inputs.security_descriptor = "O:WDG:WD";
-  ASSERT_EQ(fm_sheet_add_protected_range(wb.handle, 0, &inputs, ignored_index()), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_add_protected_range(wb.handle, 0, &inputs), 0) << fm_get_last_error_message();
   const fm_cell_rect_t a10{9, 0, 9, 0};
   const fm_protected_range_t totals = Range("Totals", &a10, 1);
-  ASSERT_EQ(fm_sheet_add_protected_range(wb.handle, 0, &totals, ignored_index()), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_add_protected_range(wb.handle, 0, &totals), 0) << fm_get_last_error_message();
 }
 
 // Every field of range 0 equals the fixture.
@@ -441,7 +493,7 @@ TEST(FormulonCApiProtectedRangePatch, AllKeepIsANoOp) {
   Create(&wb);
   AddPatchFixture(wb);
   const fm_protected_range_patch_t keep = Patch();
-  ASSERT_EQ(fm_sheet_update_protected_range(wb.handle, 0, 0, &keep), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_update_protected_range(wb.handle, 0, "Inputs", &keep), 0) << fm_get_last_error_message();
   ExpectFixtureUnchanged(wb);
 }
 
@@ -452,7 +504,7 @@ TEST(FormulonCApiProtectedRangePatch, OneSetFieldChangesOnlyThatField) {
   fm_protected_range_patch_t patch = Patch();
   patch.spin_count_op = FM_PATCH_OP_SET;
   patch.spin_count = 5;
-  ASSERT_EQ(fm_sheet_update_protected_range(wb.handle, 0, 0, &patch), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_update_protected_range(wb.handle, 0, "Inputs", &patch), 0) << fm_get_last_error_message();
   fm_protected_range_t out = FM_STRUCT_INIT(fm_protected_range_t);
   ASSERT_EQ(fm_sheet_get_protected_range_at(wb.handle, 0, 0, &out), 0);
   EXPECT_EQ(out.spin_count, 5U);
@@ -464,7 +516,7 @@ TEST(FormulonCApiProtectedRangePatch, OneSetFieldChangesOnlyThatField) {
   patch = Patch();
   patch.security_descriptor_op = FM_PATCH_OP_SET;
   patch.security_descriptor = "";
-  ASSERT_EQ(fm_sheet_update_protected_range(wb.handle, 0, 0, &patch), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_update_protected_range(wb.handle, 0, "Inputs", &patch), 0) << fm_get_last_error_message();
   ASSERT_EQ(fm_sheet_get_protected_range_at(wb.handle, 0, 0, &out), 0);
   // An empty SET string writes the attribute absent.
   EXPECT_EQ(out.security_descriptor, nullptr);
@@ -478,7 +530,7 @@ TEST(FormulonCApiProtectedRangePatch, ClearRemovesOnlyTheClearedPasswordStrings)
   fm_protected_range_patch_t clear = Patch();
   clear.legacy_password_hash_op = FM_PATCH_OP_CLEAR;
   clear.hash_value_op = FM_PATCH_OP_CLEAR;
-  ASSERT_EQ(fm_sheet_update_protected_range(wb.handle, 0, 0, &clear), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_update_protected_range(wb.handle, 0, "Inputs", &clear), 0) << fm_get_last_error_message();
   fm_protected_range_t out = FM_STRUCT_INIT(fm_protected_range_t);
   ASSERT_EQ(fm_sheet_get_protected_range_at(wb.handle, 0, 0, &out), 0);
   EXPECT_EQ(out.legacy_password_hash, nullptr);
@@ -545,11 +597,11 @@ TEST(FormulonCApiProtectedRangePatch, RejectedPatchesChangeNothing) {
     p.name = "\xff";
   });
   for (const Case& c : cases) {
-    EXPECT_EQ(fm_sheet_update_protected_range(wb.handle, 0, 0, &c.patch), c.expected) << c.what;
+    EXPECT_EQ(fm_sheet_update_protected_range(wb.handle, 0, "Inputs", &c.patch), c.expected) << c.what;
     ExpectFixtureUnchanged(wb);
   }
-  EXPECT_EQ(fm_sheet_update_protected_range(wb.handle, 0, 0, nullptr), FM_STATUS_BINDING_NULL_POINTER);
+  EXPECT_EQ(fm_sheet_update_protected_range(wb.handle, 0, "Inputs", nullptr), FM_STATUS_BINDING_NULL_POINTER);
   const fm_protected_range_patch_t keep = Patch();
-  EXPECT_EQ(fm_sheet_update_protected_range(wb.handle, 9, 0, &keep), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
-  EXPECT_EQ(fm_sheet_update_protected_range(wb.handle, 0, 2, &keep), FM_STATUS_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(fm_sheet_update_protected_range(wb.handle, 9, "Inputs", &keep), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(fm_sheet_update_protected_range(wb.handle, 0, "Missing", &keep), FM_STATUS_NOT_FOUND);
 }

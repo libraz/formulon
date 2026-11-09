@@ -144,9 +144,15 @@ class SyntaxErrorTests(unittest.TestCase):
                         (case["start"], case["end"], case["line"], case["column"]),
                     )
 
-    def test_a_syntax_error_is_an_invalid_argument(self) -> None:
-        with self.assertRaises(InvalidArgumentError):
+    def test_a_syntax_error_is_a_value_error_outside_the_invalid_argument_family(self) -> None:
+        with self.assertRaises(FormulaSyntaxError) as caught:
             evaluate_formula("=(1+")
+        self.assertNotIsInstance(caught.exception, InvalidArgumentError)
+        self.assertIsInstance(caught.exception, ValueError)
+        self.assertIsInstance(caught.exception, FormulonError)
+        self.assertNotEqual(int(caught.exception.code), int(formulon.StatusCode.INVALID_ARGUMENT))
+        with Workbook.create_default() as wb, self.assertRaises(FormulaSyntaxError):
+            wb.sheet(0).set_formula("A1", "=1+")
         self.assertIs(ParseErrorCode.UNEXPECTED_EOF, formulon.ParseErrorCode.UNEXPECTED_EOF)
 
 
@@ -269,10 +275,12 @@ class RecordA1Tests(unittest.TestCase):
         self.assertEqual(
             _inputs.normalize_record_ranges(record, self.wb).ranges, [CellRect(1048575, 16383, 1048575, 16383)]
         )
-        for bad in ("XFE1", "", "A1:B2 C3", "Data!A1"):
+        for bad in ("XFE1", "", "A1:B2 C3"):
             with self.subTest(bad):
-                with self.assertRaises(InvalidArgumentError):
+                with self.assertRaises(FormulaSyntaxError):
                     _inputs.normalize_record_ranges(dataclasses.replace(record, ranges=bad), self.wb)
+        with self.assertRaises(InvalidArgumentError):
+            _inputs.normalize_record_ranges(dataclasses.replace(record, ranges="Data!A1"), self.wb)
         with self.assertRaises(TypeError):
             _inputs.normalize_record_ranges(dataclasses.replace(record, ranges=[3]), self.wb)
 

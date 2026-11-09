@@ -127,8 +127,9 @@ TEST(FormulonCApiPivot, NullPointerArgumentsRejected) {
   EXPECT_EQ(fm_workbook_add_pivot_cache_field(wb.handle, cache_id, nullptr, &field_index),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
 
-  EXPECT_EQ(fm_workbook_add_pivot_cache_field_shared_item_text(wb.handle, cache_id, field_index, nullptr),
-            static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
+  EXPECT_EQ(
+      fm_workbook_add_pivot_cache_field_shared_item_text(wb.handle, cache_id, field_index, nullptr, ignored_index()),
+      static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
 
   std::size_t pivot_index = 99;
   EXPECT_EQ(AddPivot(wb.handle, 0, nullptr, cache_id, 0, 0, &pivot_index),
@@ -155,10 +156,11 @@ TEST(FormulonCApiPivot, NullHandleStatusMatchesRecordedError) {
         << "message: " << fm_get_last_error_message();
   };
 
-  expect_null_handle(fm_workbook_add_pivot_cache_field_shared_item_number(nullptr, 0U, 0U, 1.0));
-  expect_null_handle(fm_workbook_add_pivot_cache_field_shared_item_bool(nullptr, 0U, 0U, 1));
-  expect_null_handle(fm_workbook_add_pivot_cache_field_shared_item_blank(nullptr, 0U, 0U));
-  expect_null_handle(fm_workbook_add_pivot_cache_field_shared_item_error(nullptr, 0U, 0U, /*error=*/1));
+  expect_null_handle(fm_workbook_add_pivot_cache_field_shared_item_number(nullptr, 0U, 0U, 1.0, ignored_index()));
+  expect_null_handle(fm_workbook_add_pivot_cache_field_shared_item_bool(nullptr, 0U, 0U, 1, ignored_index()));
+  expect_null_handle(fm_workbook_add_pivot_cache_field_shared_item_blank(nullptr, 0U, 0U, ignored_index()));
+  expect_null_handle(
+      fm_workbook_add_pivot_cache_field_shared_item_error(nullptr, 0U, 0U, /*error=*/1, ignored_index()));
   expect_null_handle(fm_workbook_clear_pivot_cache_field_shared_items(nullptr, 0U, 0U));
   expect_null_handle(fm_workbook_set_pivot_cache_record_number(nullptr, 0U, 0U, 0U, 1.0));
   expect_null_handle(fm_workbook_set_pivot_cache_record_text(nullptr, 0U, 0U, 0U, "x"));
@@ -175,9 +177,11 @@ TEST(FormulonCApiPivot, NullHandleStatusMatchesRecordedError) {
   std::size_t field_index = 99;
   ASSERT_EQ(fm_workbook_add_pivot_cache_field(wb.handle, cache_id, "F", &field_index), 0);
 
-  EXPECT_EQ(fm_workbook_add_pivot_cache_field_shared_item_number(wb.handle, cache_id, field_index + 1U, 1.0),
-            FM_STATUS_INDEX_OUT_OF_RANGE);
-  EXPECT_EQ(fm_workbook_add_pivot_cache_field_shared_item_number(wb.handle, cache_id + 100U, field_index, 1.0),
+  EXPECT_EQ(
+      fm_workbook_add_pivot_cache_field_shared_item_number(wb.handle, cache_id, field_index + 1U, 1.0, ignored_index()),
+      FM_STATUS_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(fm_workbook_add_pivot_cache_field_shared_item_number(wb.handle, cache_id + 100U, field_index, 1.0,
+                                                                 ignored_index()),
             FM_STATUS_NOT_FOUND);
   EXPECT_EQ(fm_workbook_set_pivot_cache_record_number(wb.handle, cache_id, /*record_index=*/0U, field_index, 1.0),
             FM_STATUS_INDEX_OUT_OF_RANGE);
@@ -258,9 +262,9 @@ TEST(FormulonCApiPivot, MutationAndClearExportsCompleteTheirLifecycles) {
   ASSERT_EQ(fm_workbook_get_pivot_cache_field_name(wb.handle, cache_id, 0, &field_name), 0);
   EXPECT_STREQ(field_name, "Region");
 
-  ASSERT_EQ(fm_workbook_add_pivot_cache_field_shared_item_number(wb.handle, cache_id, 0, 7.0), 0);
-  ASSERT_EQ(fm_workbook_add_pivot_cache_field_shared_item_bool(wb.handle, cache_id, 0, 1), 0);
-  ASSERT_EQ(fm_workbook_add_pivot_cache_field_shared_item_blank(wb.handle, cache_id, 0), 0);
+  ASSERT_EQ(fm_workbook_add_pivot_cache_field_shared_item_number(wb.handle, cache_id, 0, 7.0, ignored_index()), 0);
+  ASSERT_EQ(fm_workbook_add_pivot_cache_field_shared_item_bool(wb.handle, cache_id, 0, 1, ignored_index()), 0);
+  ASSERT_EQ(fm_workbook_add_pivot_cache_field_shared_item_blank(wb.handle, cache_id, 0, ignored_index()), 0);
   ASSERT_EQ(fm_workbook_clear_pivot_cache_field_shared_items(wb.handle, cache_id, 0), 0);
   std::size_t shared_count = 99;
   ASSERT_EQ(fm_workbook_get_pivot_cache_field_shared_item_count(wb.handle, cache_id, 0, &shared_count), 0);

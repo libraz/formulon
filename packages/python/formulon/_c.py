@@ -52,7 +52,7 @@ from typing import Optional, Tuple, Union
 
 import wasmtime
 
-from ._status import INDEX_OUT_OF_RANGE_CODES, NOT_FOUND_CODES, StatusCode
+from ._status import INDEX_OUT_OF_RANGE_CODES, NOT_FOUND_CODES, StatusCode, range_class_name
 from ._structs import PARSE_ERROR
 
 __all__ = [
@@ -63,6 +63,14 @@ __all__ = [
     "AlreadyExistsError",
     "InvalidArgumentError",
     "InvalidFileError",
+    "BindingError",
+    "EvaluationError",
+    "FunctionError",
+    "IoError",
+    "PivotError",
+    "PrintError",
+    "RecalcError",
+    "SecurityError",
     "NotFoundError",
     "ParseError",
     "ParseErrorCode",
@@ -265,7 +273,11 @@ class FormulonError(Exception):
     :class:`InvalidArgumentError`, :class:`AlreadyExistsError`,
     :class:`FormulaSyntaxError`, :class:`InvalidFileError`, :class:`NotFoundError`,
     :class:`WorkbookClosedError`), so ``except IndexError`` / ``except
-    ValueError`` / ``except KeyError`` also catch the matching failures.
+    ValueError`` / ``except KeyError`` also catch the matching failures. A
+    status without one yields the class of its module range
+    (:class:`EvaluationError`, :class:`FunctionError`, :class:`RecalcError`,
+    :class:`IoError`, :class:`SecurityError`, :class:`BindingError`,
+    :class:`PivotError`, :class:`PrintError`).
 
     ``str(e)`` is ``[CODE_NAME] message`` (``[INVALID_ARGUMENT] unknown
     function``); the context is only in :attr:`context`.
@@ -307,6 +319,8 @@ class FormulonError(Exception):
                 cls = WorkbookClosedError
             elif code in _INVALID_FILE_CODES:
                 cls = InvalidFileError
+            else:
+                cls = globals().get(range_class_name(int(code)), FormulonError)
         return super().__new__(cls)
 
     def __init__(
@@ -346,8 +360,10 @@ class AlreadyExistsError(FormulonError, ValueError):
     """A name or id is already taken (``StatusCode.ALREADY_EXISTS``)."""
 
 
-class FormulaSyntaxError(InvalidArgumentError):
+class FormulaSyntaxError(FormulonError, ValueError):
     """A formula or reference text failed to parse (statuses 1000 to 1014).
+
+    Not an :class:`InvalidArgumentError`: a parse failure is its own range.
 
     ``parse_error`` locates the offending span (see :class:`ParseError`) and is
     ``None`` when the engine recorded no position.
@@ -370,7 +386,43 @@ class WorkbookClosedError(FormulonError, ValueError):
     """The workbook was used after :meth:`~formulon.Workbook.close` (``BINDING_INVALID_HANDLE``)."""
 
 
-class InvalidFileError(FormulonError):
+class EvaluationError(FormulonError):
+    """A failure in the evaluator (statuses 2000 to 2999)."""
+
+
+class FunctionError(FormulonError):
+    """A failure in a worksheet function (statuses 3000 to 3999)."""
+
+
+class RecalcError(FormulonError):
+    """A failure in the dependency graph or recalculation (statuses 4000 to 4999)."""
+
+
+class IoError(FormulonError):
+    """A failure reading or writing a file or part (statuses 5000 to 5999).
+
+    Raised for every I/O status without a narrower class, such as an
+    unsupported image (``StatusCode.IO_IMAGE_UNSUPPORTED``).
+    """
+
+
+class SecurityError(FormulonError):
+    """A failure in encryption or the security envelope (statuses 6000 to 6999)."""
+
+
+class BindingError(FormulonError):
+    """A failure at the binding or C API boundary (statuses 7000 to 7999)."""
+
+
+class PivotError(FormulonError):
+    """A failure in pivot evaluation or authoring (statuses 8000 to 8999)."""
+
+
+class PrintError(FormulonError):
+    """A failure in print layout (statuses 9000 to 9999)."""
+
+
+class InvalidFileError(IoError, ValueError):
     """The bytes cannot be opened as a workbook package.
 
     Raised for a corrupt or hostile archive, unparsable XML, broken
@@ -475,6 +527,7 @@ _STATUS_RETURNING_EXPORT_NAMES = (
     "fm_sheet_add_cf_rule",
     "fm_sheet_clear_cf_rules",
     "fm_sheet_get_cf_rule_count",
+    "fm_sheet_get_cf_rule",
     "fm_sheet_get_cf_rule_at",
     "fm_sheet_remove_cf_rule",
     "fm_sheet_remove_comment",
@@ -526,6 +579,7 @@ _STATUS_RETURNING_EXPORT_NAMES = (
     "fm_sheet_get_print_area",
     "fm_sheet_get_print_options_xml",
     "fm_sheet_get_print_titles",
+    "fm_sheet_get_protected_range",
     "fm_sheet_get_protected_range_at",
     "fm_sheet_get_sheet_protection",
     "fm_sheet_get_row_layout_at",
@@ -753,6 +807,8 @@ _STATUS_RETURNING_EXPORT_NAMES = (
     "fm_workbook_remove_pivot_cache",
     "fm_workbook_update_pivot_cache_options",
     "fm_workbook_set_pivot_cache_worksheet_source",
+    "fm_sheet_get_pivot_page_field_order",
+    "fm_sheet_set_pivot_page_field_order",
     "fm_sheet_get_pivot_count",
     "fm_sheet_add_pivot",
     "fm_sheet_add_pivot_data_field",

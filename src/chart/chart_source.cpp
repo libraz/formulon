@@ -12,12 +12,12 @@
 #include "parser/ast.h"
 #include "sheet.h"
 #include "sheet_layout_edit.h"
+#include "sheet_name.h"
 #include "utils/arena.h"
 #include "utils/formula_text.h"
 #include "utils/number_text.h"
 #include "utils/resource_budget.h"
 #include "utils/status_macros.h"
-#include "utils/strings.h"
 #include "workbook.h"
 
 namespace formulon {
@@ -68,7 +68,7 @@ struct Resolver {
       return eval::find_defined_name(ctx, name);
     }
     for (const DefinedName& def : wb.defined_names()) {
-      if (def.local_sheet_id < 0 && strings::case_insensitive_eq(def.name, name)) {
+      if (def.local_sheet_id < 0 && collection_names::equal(def.name, name)) {
         return &def;
       }
     }

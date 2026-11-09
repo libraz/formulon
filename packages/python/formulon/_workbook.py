@@ -122,6 +122,7 @@ __all__ = [
     "CfMatchKind",
     "CfPlainRuleInput",
     "CfRuleType",
+    "CfRuleId",
     "CfRuleRef",
     "CfTextRuleInput",
     "CfTimePeriodRuleInput",
@@ -250,7 +251,6 @@ __all__ = [
     "InvalidFileError",
     "IterativeSettings",
     "list_function_names",
-    "list_locale_error_names",
     "list_profile_ids",
     "LocaleDateOrder",
     "LocaleFacts",
@@ -450,10 +450,14 @@ TableRef = Union[int, str, "Table"]
 #: A pivot table: its index on the sheet, its name (the first of several) or its :class:`Pivot` handle.
 PivotRef = Union[int, str, "Pivot"]
 
-#: A conditional-format rule: its flattened index or its id.
-CfRuleRef = Union[int, str]
+#: The id of a conditional-format rule: a brace-wrapped GUID, stable while the workbook is open and
+#: returned by :meth:`Sheet.add_cf_rule`.
+CfRuleId = str
 
-#: A protected range: its index or its name.
+#: A conditional-format rule: its flattened position or its :data:`CfRuleId`; a ``str`` is always an id.
+CfRuleRef = Union[int, CfRuleId]
+
+#: A protected range: its position or its name; a ``str`` is always a name.
 ProtectedRangeRef = Union[int, str]
 
 #: Excel profile id accepted by `Workbook.set_profile_id`.
@@ -1778,7 +1782,7 @@ class PivotAxis(IntEnum):
     """PivotTable axis for a field."""
 
     ROW = 0
-    COL = 1
+    COLUMN = 1
     VALUE = 2
     PAGE = 3
 
@@ -1815,15 +1819,15 @@ class PivotShowValuesAs(IntEnum):
 
     NORMAL = 0
     PERCENT_OF_ROW = 1
-    PERCENT_OF_COL = 2
+    PERCENT_OF_COLUMN = 2
     PERCENT_OF_TOTAL = 3
     RUNNING_TOTAL_IN_ROW = 4
-    RUNNING_TOTAL_IN_COL = 5
+    RUNNING_TOTAL_IN_COLUMN = 5
     INDEX = 6
     DIFFERENCE_FROM = 7
     PERCENT_DIFFERENCE_FROM = 8
     PERCENT_OF_PARENT_ROW = 9
-    PERCENT_OF_PARENT_COL = 10
+    PERCENT_OF_PARENT_COLUMN = 10
     PERCENT_OF_PARENT = 11
     PERCENT_OF = 12
     PERCENT_OF_RUNNING_TOTAL = 13
@@ -3008,8 +3012,9 @@ class ChartInsertInput:
     ``type`` is a writable :class:`ChartPlotType` (``BAR``, ``LINE``, ``AREA``, ``PIE``, ``DOUGHNUT``,
     ``SCATTER``); ``bar_direction`` (default ``COLUMN``) applies to ``BAR`` only. ``range`` is a
     :class:`SheetRect` or an A1 range (an unqualified one resolves on the sheet); ``header_row`` /
-    ``header_column`` ``None`` follow Excel's detection. ``title`` ``None`` is Excel's automatic title and
-    ``""`` none; ``legend`` ``None`` is no legend and the default is the bottom, Excel's default for a new
+    ``header_column`` ``None`` follow Excel's detection. ``title`` is a :class:`ChartTitle`, or its text as a
+    ``str``; the default ``ChartTitle(ChartTitleKind.AUTO)`` is Excel's automatic title, ``None`` no title and
+    ``""`` an ``InvalidArgumentError``; ``legend`` ``None`` is no legend and the default is the bottom, Excel's default for a new
     chart. ``placement`` reads as for :meth:`Sheet.add_picture`, except that a zero ``width_emu`` or
     ``height_emu`` means Excel's default 360 x 216 pt frame and an omitted anchor kind is two-cell.
     """
@@ -3021,7 +3026,7 @@ class ChartInsertInput:
     direction: ChartSeriesDirection = ChartSeriesDirection.AUTO
     header_row: Optional[bool] = None
     header_column: Optional[bool] = None
-    title: Optional[str] = None
+    title: Union[str, ChartTitle, None] = ChartTitle(ChartTitleKind.AUTO)
     legend: Optional[ChartLegendPosition] = ChartLegendPosition.BOTTOM
     placement: Optional[DrawingPlacementInput] = None
 
@@ -4011,8 +4016,9 @@ class ConditionalFormat:
 class _CfRuleInput:
     """The members every rule input shares.
 
-    A ``priority`` of zero or less is ``existing_max + 1``. An ``id`` that is empty or names another rule of
-    the sheet is replaced by a new one.
+    A ``priority`` of zero or less is ``existing_max + 1``. ``id`` is a brace-wrapped GUID
+    (``{XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX}``, hex digits in either case); omitted, empty or already used on
+    the sheet, the engine generates an upper-case one; anything else is an ``InvalidArgumentError``.
     """
 
     #: Rectangles, unqualified A1 ranges, or one A1 string.
@@ -6777,6 +6783,12 @@ def _encode_chart_insert(scope: _ArgScope, workbook: Workbook, sheet: int, inser
     plot_type = _enum(ChartPlotType, insert.type)
     if insert.bar_direction is not None and plot_type != ChartPlotType.BAR:
         raise TypeError(f"formulon: bar_direction applies to a BAR chart only, not {plot_type.name}")
+    title = insert.title
+    auto_title = isinstance(title, ChartTitle) and title.kind == ChartTitleKind.AUTO
+    if title is None:
+        title_fields = {"kind": _sint(_CHART_TITLE_NONE, "kind")}
+    else:
+        title_fields = _title_fields(title, scope)
     ptr = scope.struct(S.CHART_INSERT)
     S.CHART_INSERT.pack(
         LIB,
@@ -6791,7 +6803,8 @@ def _encode_chart_insert(scope: _ArgScope, workbook: Workbook, sheet: int, inser
             "direction": _sint(insert.direction, "direction"),
             "header_row": _sint(_header_mode(insert.header_row), "header_row"),
             "header_column": _sint(_header_mode(insert.header_column), "header_column"),
-            "title": scope.opt_cstr(insert.title),
+            "has_title": 0 if auto_title else 1,
+            "title": {} if auto_title else title_fields,
             "legend": _sint(_nullable_enum(insert.legend, "legend"), "legend"),
             "placement": _placement_fields(scope, insert.placement),
         },
@@ -7405,9 +7418,9 @@ class Workbook(_NoCopy):
       by a natural name (:meth:`get_defined_name`) returns ``None`` instead.
 
     Names:
-      Every named collection (sheets, tables, defined names, pivots, protected ranges, cell styles) and the
-      person ids compare names case-insensitively under Unicode simple case folding, for uniqueness and
-      for lookup.
+      Every named collection (sheets, tables, table columns, defined names, pivots, protected ranges, cell
+      styles, custom table styles) and the person ids compare names case-insensitively under Unicode simple
+      case folding, for uniqueness and for lookup.
 
     Recalculation:
       Under the default ``CalcMode.AUTO`` a value read and a save first
@@ -7537,7 +7550,7 @@ class Workbook(_NoCopy):
           OSError: when the file cannot be opened or read
             (``FileNotFoundError`` for a missing path).
           InvalidArgumentError: when the input is empty.
-          FormulonError: when the input cannot be parsed as a valid
+          InvalidFileError: when the input cannot be parsed as a valid
             OOXML or XLSB archive.
 
         Example::
@@ -8325,7 +8338,7 @@ class Workbook(_NoCopy):
     # An insert also does not copy the formatting of the row or column before
     # it onto the new one, which Excel does -- a sparkline included.
     def get_defined_name(self, name: str, scope: Optional[SheetRef] = None) -> Optional[DefinedName]:
-        """Return the defined name ``name`` (ASCII case-insensitive) in ``scope``, or ``None``.
+        """Return the defined name ``name`` (compared case-insensitively under Unicode simple case folding) in ``scope``, or ``None``.
 
         ``scope`` is ``None`` for workbook scope, else the sheet the name is local to.
 
@@ -8656,8 +8669,8 @@ class Workbook(_NoCopy):
                 out.append(_person_from(d))
         return out
 
-    def add_person(self, person: Person) -> None:
-        """Append a person to the workbook's person list.
+    def add_person(self, person: Person) -> str:
+        """Append a person to the workbook's person list and return the id as stored (upper case).
 
         Raises:
           AlreadyExistsError: when the id is already listed.
@@ -8667,7 +8680,9 @@ class Workbook(_NoCopy):
             ptr = scope.struct_array(S.PERSON, 1)
             for fld in ("id", "display_name", "user_id", "provider_id"):
                 S.write_str_field(LIB, ptr, S.PERSON, fld, getattr(person, fld), scope)
-            _check(LIB.fm_workbook_add_person(h, ptr))
+            out = scope.out_ptr()
+            _check(LIB.fm_workbook_add_person(h, ptr, out))
+            return LIB.read_cstr(LIB.read_u32(out))
 
     def get_person(self, person_id: str) -> Optional[Person]:
         """Return the person ``person_id``, or ``None`` when the list has none."""
@@ -8793,7 +8808,7 @@ class Workbook(_NoCopy):
         return out
 
     def get_cell_style(self, name: str) -> Optional[CellStyle]:
-        """Return the named cell style ``name`` (matched exactly), or ``None``."""
+        """Return the named cell style ``name`` (Unicode simple case folding), or ``None``."""
         return self._lookup(LIB.fm_workbook_get_cell_style, (name,), S.CELL_STYLE_RECORD, _cell_style_from)
 
     def set_cell_style(self, record: CellStyle) -> None:
@@ -8856,7 +8871,7 @@ class Workbook(_NoCopy):
         return out
 
     def get_table_style(self, name: str) -> Optional[TableStyle]:
-        """Return the custom table style ``name`` (case-insensitive), or ``None``."""
+        """Return the custom table style ``name`` (Unicode simple case folding), or ``None``."""
         return self._lookup(LIB.fm_workbook_get_table_style, (name,), S.TABLE_STYLE, _table_style_from)
 
     def set_table_style(self, style: TableStyle) -> None:
@@ -9688,7 +9703,7 @@ def get_image_info(data: Union[bytes, bytearray, memoryview]) -> ImageInfo:
     """Sniff the format and pixel size of PNG, JPEG, GIF or BMP bytes from the header alone.
 
     Raises:
-      FormulonError: with ``StatusCode.IO_IMAGE_UNSUPPORTED`` when the bytes are
+      IoError: with ``StatusCode.IO_IMAGE_UNSUPPORTED`` when the bytes are
         not a recognised image, the header is truncated, or a dimension is zero.
     """
     raw = bytes(data)
@@ -9832,17 +9847,6 @@ def list_profile_ids() -> List[ProfileId]:
         cast(ProfileId, _read_cstr_out(LIB.fm_get_profile_id_at, _uint(index, "idx", role="position")))
         for index in range(count)
     ]
-
-
-@_lock_workbook_method
-def list_locale_error_names(profile_id: ProfileId) -> List[LocaleErrorName]:
-    """Return the error names of ``profile_id`` in error-code order.
-
-    Raises:
-      FormulonError: when ``profile_id`` is not a documented profile.
-    """
-    with _ArgScope() as scope:
-        return _read_locale_error_names(scope, scope.cstr(profile_id))
 
 
 @_lock_workbook_method

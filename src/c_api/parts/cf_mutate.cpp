@@ -99,6 +99,53 @@ fm_status_t resolve_flat_index(const std::vector<formulon::cf::ConditionalFormat
   return check_index(flat_index, cursor, "index");
 }
 
+// The id of every rule, per block: the stored one, or for a rule that carries none (a model-built rule, a file
+// without an x14 id) the deterministic one the writer would synthesise, never repeating another rule's id.
+std::vector<std::vector<std::string>> effective_rule_ids(const std::vector<formulon::cf::ConditionalFormat>& blocks,
+                                                         std::size_t sheet_index) {
+  std::unordered_set<std::string> used;
+  for (const auto& block : blocks) {
+    for (const auto& rule : block.rules) {
+      if (!rule.id.empty()) {
+        used.insert(rule.id);
+      }
+    }
+  }
+  std::vector<std::vector<std::string>> ids;
+  ids.reserve(blocks.size());
+  for (const auto& block : blocks) {
+    auto& row = ids.emplace_back();
+    for (const auto& rule : block.rules) {
+      if (rule.id.empty()) {
+        row.push_back(
+            formulon::cf::x14_rule_id(sheet_index, static_cast<std::uint32_t>(std::max(rule.priority, 0)), used));
+        used.insert(row.back());
+      } else {
+        row.push_back(rule.id);
+      }
+    }
+  }
+  return ids;
+}
+
+// Resolves the rule whose id is `id` (hex digits in either case) into its
+// (block_index, rule_index) pair; `kNotFound` when no rule of the sheet has it
+// (an empty id names no rule).
+fm_status_t resolve_rule_id(const std::vector<formulon::cf::ConditionalFormat>& blocks, std::size_t sheet_index,
+                            const char* id, std::size_t* out_block, std::size_t* out_rule) {
+  const auto ids = effective_rule_ids(blocks, sheet_index);
+  for (std::size_t b = 0; b < ids.size() && id[0] != '\0'; ++b) {
+    for (std::size_t r = 0; r < ids[b].size(); ++r) {
+      if (formulon::strings::case_insensitive_eq(ids[b][r], id)) {
+        *out_block = b;
+        *out_rule = r;
+        return 0;
+      }
+    }
+  }
+  return formulon::c_api::parts::not_found("no conditional-format rule has that id", "id=" + std::string(id));
+}
+
 // Materialises a `cf::CFRule` onto the wire-format `fm_cf_rule_t`.
 // All non-engaged variant fields are zero-initialised first so callers
 // observe deterministic defaults.
@@ -453,6 +500,27 @@ fm_status_t store_cfvo_formulas(fm_workbook_t* wb, formulon::cf::CFRule* out_rul
 
 }  // namespace
 
+namespace {
+
+// Refills the CF arenas and writes `rule` into `out`.
+void read_rule(const fm_workbook_t* wb, const formulon::cf::ConditionalFormat& block, const formulon::cf::CFRule& rule,
+               const std::string& id, fm_cf_rule_t* out) {
+  // The CF arenas are refreshed here and nowhere else, so the record stays
+  // readable across CF mutations and across unrelated reads that recycle
+  // `read_scratch`. Only a successful get reaches this point, so a rejected
+  // call leaves the previous rule's storage intact.
+  auto& text_arena = fresh_arena(wb, &fm_workbook_t::cf_text_scratch);
+  auto& range_arena = fresh_arena(wb, &fm_workbook_t::cf_range_scratch);
+  auto& cfvo_arena = fresh_arena(wb, &fm_workbook_t::cfvo_scratch);
+  auto& color_arena = fresh_arena(wb, &fm_workbook_t::cf_color_scratch);
+  auto& icon_arena = fresh_arena(wb, &fm_workbook_t::cf_icon_scratch);
+  fill_rule(wb->workbook(), block, rule, wb->workbook().styles().dxfs.size(), text_arena, range_arena, cfvo_arena,
+            color_arena, icon_arena, out);
+  out->id = text_arena.emplace(id);
+}
+
+}  // namespace
+
 extern "C" fm_status_t fm_sheet_get_cf_rule_count(const fm_workbook_t* wb, std::size_t sheet_index,
                                                   std::size_t* out_count) {
   clear_last_error();
@@ -488,17 +556,38 @@ extern "C" fm_status_t fm_sheet_get_cf_rule_at(const fm_workbook_t* wb, std::siz
   if (auto rc = resolve_flat_index(blocks, idx, &b, &r); rc != 0) {
     return rc;
   }
-  // The CF arenas are refreshed here and nowhere else, so the record stays
-  // readable across CF mutations and across unrelated reads that recycle
-  // `read_scratch`. Only a successful get reaches this point, so a rejected
-  // call leaves the previous rule's storage intact.
-  auto& text_arena = fresh_arena(wb, &fm_workbook_t::cf_text_scratch);
-  auto& range_arena = fresh_arena(wb, &fm_workbook_t::cf_range_scratch);
-  auto& cfvo_arena = fresh_arena(wb, &fm_workbook_t::cfvo_scratch);
-  auto& color_arena = fresh_arena(wb, &fm_workbook_t::cf_color_scratch);
-  auto& icon_arena = fresh_arena(wb, &fm_workbook_t::cf_icon_scratch);
-  fill_rule(wb->workbook(), blocks[b], blocks[b].rules[r], wb->workbook().styles().dxfs.size(), text_arena, range_arena,
-            cfvo_arena, color_arena, icon_arena, out);
+  read_rule(wb, blocks[b], blocks[b].rules[r], effective_rule_ids(blocks, sheet_index)[b][r], out);
+  return 0;
+}
+
+extern "C" fm_status_t fm_sheet_get_cf_rule(const fm_workbook_t* wb, std::size_t sheet_index, const char* id,
+                                            std::int32_t* out_present, fm_cf_rule_t* out) {
+  clear_last_error();
+  if (id == nullptr || out_present == nullptr || out == nullptr) {
+    return null_argument(id == nullptr ? "id" : (out_present == nullptr ? "out_present" : "out"));
+  }
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_record_size(*out); rc != 0) {
+    return rc;
+  }
+  if (auto rc = formulon::c_api::parts::check_utf8({id}); rc != 0) {
+    return rc;
+  }
+  const auto& blocks = wb->workbook().sheet(sheet_index).conditional_formats();
+  std::size_t b = 0;
+  std::size_t r = 0;
+  if (resolve_rule_id(blocks, sheet_index, id, &b, &r) != 0) {
+    clear_last_error();
+    const std::uint32_t struct_size = out->struct_size;
+    *out = fm_cf_rule_t{};
+    out->struct_size = struct_size;
+    *out_present = 0;
+    return 0;
+  }
+  read_rule(wb, blocks[b], blocks[b].rules[r], effective_rule_ids(blocks, sheet_index)[b][r], out);
+  *out_present = 1;
   return 0;
 }
 
@@ -545,10 +634,8 @@ void assign_id(const fm_cf_rule_t& rule, const formulon::Sheet& sheet, std::size
     }
   }
   std::unordered_set<std::string> used_ids;
-  for (const auto& block : sheet.conditional_formats()) {
-    for (const auto& existing : block.rules) {
-      used_ids.insert(existing.id);
-    }
+  for (const auto& row : effective_rule_ids(sheet.conditional_formats(), sheet_index)) {
+    used_ids.insert(row.begin(), row.end());
   }
   out->id = formulon::cf::x14_rule_id(sheet_index, static_cast<std::uint32_t>(out->priority), used_ids);
 }
@@ -652,13 +739,13 @@ std::vector<formulon::cf::CFCellRange> sqref_from_c(const fm_cell_rect_t* ranges
 }  // namespace
 
 extern "C" fm_status_t fm_sheet_add_cf_rule(fm_workbook_t* wb, std::size_t sheet_index, const fm_cf_rule_t* rule,
-                                            std::size_t* out_index) {
+                                            const char** out_cf_rule_id) {
   clear_last_error();
   if (rule == nullptr) {
     return null_argument("rule");
   }
-  if (out_index == nullptr) {
-    return null_argument("out_index");
+  if (out_cf_rule_id == nullptr) {
+    return null_argument("out_cf_rule_id");
   }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
@@ -685,17 +772,10 @@ extern "C" fm_status_t fm_sheet_add_cf_rule(fm_workbook_t* wb, std::size_t sheet
   }
   assign_id(*rule, wb->workbook().sheet(sheet_index), sheet_index, &out_rule);
 
+  const std::string stored_id = out_rule.id;
   new_block.rules.push_back(std::move(out_rule));
-  auto& blocks_mut = wb->workbook().sheet(sheet_index).mutable_conditional_formats();
-  // The new block is appended after every existing block, so its single
-  // rule lands at the flattened index equal to the total rule count
-  // observed just before the append.
-  std::size_t new_index = 0;
-  for (const auto& block : blocks_mut) {
-    new_index += block.rules.size();
-  }
-  blocks_mut.push_back(std::move(new_block));
-  *out_index = new_index;
+  wb->workbook().sheet(sheet_index).mutable_conditional_formats().push_back(std::move(new_block));
+  *out_cf_rule_id = formulon::c_api::parts::publish_scratch(wb, stored_id);
   return 0;
 }
 
@@ -737,11 +817,11 @@ fm_status_t check_set_string(fm_patch_op_t op, const char* value, const char* fi
 
 }  // namespace
 
-extern "C" fm_status_t fm_sheet_update_cf_rule(fm_workbook_t* wb, std::size_t sheet_index, std::size_t cf_rule_index,
+extern "C" fm_status_t fm_sheet_update_cf_rule(fm_workbook_t* wb, std::size_t sheet_index, const char* id,
                                                const fm_cf_rule_patch_t* patch) {
   clear_last_error();
-  if (patch == nullptr) {
-    return null_argument("patch");
+  if (id == nullptr || patch == nullptr) {
+    return null_argument(id == nullptr ? "id" : "patch");
   }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
@@ -753,7 +833,10 @@ extern "C" fm_status_t fm_sheet_update_cf_rule(fm_workbook_t* wb, std::size_t sh
   formulon::Sheet& sheet = workbook.sheet(sheet_index);
   std::size_t block_index = 0;
   std::size_t rule_pos = 0;
-  if (auto rc = resolve_flat_index(sheet.conditional_formats(), cf_rule_index, &block_index, &rule_pos); rc != 0) {
+  if (auto rc = formulon::c_api::parts::check_utf8({id}); rc != 0) {
+    return rc;
+  }
+  if (auto rc = resolve_rule_id(sheet.conditional_formats(), sheet_index, id, &block_index, &rule_pos); rc != 0) {
     return rc;
   }
   const formulon::cf::ConditionalFormat& current_block = sheet.conditional_formats()[block_index];
@@ -1093,16 +1176,22 @@ extern "C" fm_status_t fm_sheet_update_cf_rule(fm_workbook_t* wb, std::size_t sh
   return 0;
 }
 
-extern "C" fm_status_t fm_sheet_remove_cf_rule(fm_workbook_t* wb, std::size_t sheet_index, std::size_t idx) {
+extern "C" fm_status_t fm_sheet_remove_cf_rule(fm_workbook_t* wb, std::size_t sheet_index, const char* id) {
   clear_last_error();
+  if (id == nullptr) {
+    return null_argument("id");
+  }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = formulon::c_api::parts::check_utf8({id}); rc != 0) {
     return rc;
   }
   auto& sheet = wb->workbook().sheet(sheet_index);
   auto& blocks = sheet.mutable_conditional_formats();
   std::size_t b = 0;
   std::size_t r = 0;
-  if (auto rc = resolve_flat_index(blocks, idx, &b, &r); rc != 0) {
+  if (auto rc = resolve_rule_id(blocks, sheet_index, id, &b, &r); rc != 0) {
     return rc;
   }
   blocks[b].rules.erase(blocks[b].rules.begin() + static_cast<std::ptrdiff_t>(r));

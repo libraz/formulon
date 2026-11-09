@@ -32,7 +32,7 @@ TEST(FormulonCli, PlainEscapeDumpFormulasKeepsQuotes) {
   const std::string path = temp_path("plain_escape_formulas.xlsx");
   PathGuard guard(path);
   ASSERT_TRUE(write_plain_escape_fixture(path));
-  CliRun r = run_cli({"dump", "--formulas", path});
+  CliRun r = run_cli({"dump", "--view", "formulas", path});
   ASSERT_EQ(r.exit_code, 0) << r.stderr_text;
   EXPECT_EQ(r.stdout_text, "Sheet1!A1 =\"a\"&\"x\"\n");
 }
@@ -41,7 +41,7 @@ TEST(FormulonCli, PlainEscapeDumpValuesEscapesOnlyFourCharacters) {
   const std::string path = temp_path("plain_escape_values.xlsx");
   PathGuard guard(path);
   ASSERT_TRUE(write_plain_escape_fixture(path));
-  CliRun r = run_cli({"dump", "--values", path});
+  CliRun r = run_cli({"dump", "--view", "values", path});
   ASSERT_EQ(r.exit_code, 0) << r.stderr_text;
   EXPECT_EQ(r.stdout_text, "Sheet1!A1 ax\nSheet1!A2 q\"t\\tb\\\\s\\r\\nz\n");
 }
@@ -94,9 +94,9 @@ TEST(FormulonCli, HelpDocumentsFlagsExitCodesAndInputFormats) {
   CliRun r = run_cli({"--help"});
   ASSERT_EQ(r.exit_code, 0);
   for (const char* needle :
-       {"--repeat",   "--json",   "--iterative", "--threads",  "--quiet",      "--sheet",     "--output",
-        "--formulas", "--values", "--sheets",    "--metadata", "Exit codes",   "64",          "66",
-        "73",         "74",       "stdin",       "stdout",     "recalculates", "xlsx or xlsb"}) {
+       {"--repeat", "--json", "--iterative", "--threads", "--quiet",      "--sheet",     "--output",
+        "--view",   "values", "sheets",      "metadata",  "Exit codes",   "64",          "66",
+        "73",       "74",     "stdin",       "stdout",    "recalculates", "xlsx or xlsb"}) {
     EXPECT_NE(r.stdout_text.find(needle), std::string::npos) << needle;
   }
 }

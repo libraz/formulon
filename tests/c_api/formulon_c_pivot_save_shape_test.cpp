@@ -57,7 +57,7 @@ void BuildHostPivot(fm_workbook_t* wb) {
   }
   std::size_t pivot = 99;
   ASSERT_EQ(AddPivot(wb, 0, "PT1", cache_id, 2U, 5U, &pivot), 0) << fm_get_last_error_message();
-  const fm_pivot_axis_t axes[] = {FM_PIVOT_AXIS_ROW, FM_PIVOT_AXIS_COL, FM_PIVOT_AXIS_VALUE, FM_PIVOT_AXIS_VALUE};
+  const fm_pivot_axis_t axes[] = {FM_PIVOT_AXIS_ROW, FM_PIVOT_AXIS_COLUMN, FM_PIVOT_AXIS_VALUE, FM_PIVOT_AXIS_VALUE};
   for (std::size_t i = 0; i < 4; ++i) {
     fm_pivot_field_spec_t spec = FM_STRUCT_INIT(fm_pivot_field_spec_t);
     spec.source_name = headers[i];
@@ -387,7 +387,7 @@ TEST(FormulonCApiPivotSaveShape, AProjectionThatWouldOverlapStaysPending) {
   std::uint32_t cache_id = 0;
   BuildScratch(wb, &cache_id);
   // A new item grows the report to D1:E5, onto a merge.
-  ASSERT_EQ(fm_workbook_add_pivot_cache_field_shared_item_text(wb.handle, cache_id, 0U, "West"), 0);
+  ASSERT_EQ(fm_workbook_add_pivot_cache_field_shared_item_text(wb.handle, cache_id, 0U, "West", ignored_index()), 0);
   std::size_t record = 99;
   ASSERT_EQ(fm_workbook_add_pivot_cache_record(wb.handle, cache_id, &record), 0);
   ASSERT_EQ(fm_workbook_set_pivot_cache_record_number(wb.handle, cache_id, record, 0U, 2.0), 0);

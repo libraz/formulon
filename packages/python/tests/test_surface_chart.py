@@ -166,9 +166,36 @@ class ChartReadTests(unittest.TestCase):
         with wb:
             title = wb.sheet(0).chart(oid).get_properties().title
             self.assertEqual((title.kind, title.text), (ChartTitleKind.TEXT, "Quarterly"))
-        wb, oid = _chart(title="")
+        wb, oid = _chart(title=None)
         with wb:
             self.assertIsNone(wb.sheet(0).chart(oid).get_properties().title)
+        wb, oid = _chart()
+        with wb:
+            self.assertEqual(wb.sheet(0).chart(oid).get_properties().title.kind, ChartTitleKind.AUTO)
+
+    def test_empty_title_text_is_refused_on_insert_and_set(self) -> None:
+        with Workbook.create_default() as wb:
+            _grid(wb)
+            ws = wb.sheet(0)
+            with self.assertRaises(InvalidArgumentError):
+                _chart_input.add_chart(ws, _chart_input.COLUMN, SOURCE, title="")
+            self.assertEqual(ws.list_charts(), [])
+        wb, oid = _chart(title="Kept")
+        with wb:
+            with self.assertRaises(InvalidArgumentError):
+                wb.sheet(0).chart(oid).set_title("")
+            self.assertEqual(wb.sheet(0).chart(oid).get_properties().title.text, "Kept")
+
+    def test_unknown_patch_keys_are_refused_at_every_depth(self) -> None:
+        wb, oid = _chart()
+        with wb:
+            chart = wb.sheet(0).chart(oid)
+            with self.assertRaises(TypeError):
+                chart.update_series(0, 0, line={"width": 2})
+            with self.assertRaises(TypeError):
+                chart.update_series(0, 0, fill={"colour": _rgb(0xFF0000FF)})
+            with self.assertRaises(TypeError):
+                chart.update_series(0, 0, bogus=1)  # type: ignore[call-arg]
 
     def test_resolved_data(self) -> None:
         wb, oid = _chart()

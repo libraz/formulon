@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "auto_filter.h"
+#include "cell.h"
 #include "chart/chart_ref.h"
 #include "data_table.h"
 #include "defined_name.h"
@@ -33,6 +34,7 @@
 #include "utils/expected.h"
 #include "utils/name_syntax.h"
 #include "utils/status_macros.h"
+#include "value.h"
 #include "workbook.h"
 #include "workbook_formula_index.h"
 #include "workbook_internal.h"
@@ -201,6 +203,150 @@ Expected<void, Error> Workbook::check_table_resize(std::size_t index, const Merg
     return invalid_table("table range has no data row", "ref=" + table.ref);
   }
   return check_table_range_free(*this, table.sheet_index, rect, index, /*unmerge_inside=*/false);
+}
+
+namespace {
+
+/// `SUBTOTAL` function number of each built-in `ST_TotalsRowFunction` token;
+/// the 1xx forms skip hidden rows, as the desktop application writes them.
+struct TotalsFunction {
+  std::string_view token;
+  int subtotal_code;
+};
+constexpr TotalsFunction kTotalsFunctions[] = {
+    {"sum", 109},   {"min", 105},       {"max", 104},    {"average", 101},
+    {"count", 103}, {"countNums", 102}, {"stdDev", 107}, {"var", 110},
+};
+
+int subtotal_code_of(std::string_view token) {
+  for (const TotalsFunction& entry : kTotalsFunctions) {
+    if (entry.token == token) {
+      return entry.subtotal_code;
+    }
+  }
+  return 0;
+}
+
+// Refusal of the row below `rect` (within its columns) as a new totals row,
+// on the first thing occupying it. `rect` must end above the grid's last row.
+Expected<void, Error> check_totals_row_free(const Workbook& wb, std::size_t index, const MergeRange& rect) {
+  const std::size_t sheet_index = wb.tables()[index].sheet_index;
+  const MergeRange below{rect.last_row + 1U, rect.first_col, rect.last_row + 1U, rect.last_col};
+  const auto refuse = [&](const char* what) {
+    std::string ref;
+    append_a1_rectangle(ref, below);
+    return make_error(FormulonErrorCode::kPreconditionFailed, what, "row=" + ref);
+  };
+  const Sheet& sheet = wb.sheet(sheet_index);
+  for (std::uint32_t col = below.first_col; col <= below.last_col; ++col) {
+    const Cell* cell = sheet.cell_at(below.first_row, col);
+    if (cell != nullptr && (!cell->formula_text.empty() || !cell->cached_value.is_blank())) {
+      return refuse("the row below the table is not empty");
+    }
+    if (sheet.committed_spill_footprint_covering(below.first_row, col).has_value()) {
+      return refuse("the row below the table holds a spilled result");
+    }
+  }
+  MergeRange grown = rect;
+  grown.last_row = below.last_row;
+  return wb.check_table_resize(index, grown);
+}
+
+}  // namespace
+
+Expected<void, Error> Workbook::set_table_totals_row(std::size_t index, bool shown) {
+  if (index >= tables_.size()) {
+    return invalid_table("index out of range", "index=" + std::to_string(index));
+  }
+  const std::optional<MergeRange> rect = parse_a1_rectangle(tables_[index].ref);
+  if (!rect) {
+    return invalid_table("table ref is not a range", "ref=" + tables_[index].ref);
+  }
+  if (shown == tables_[index].totals_row) {
+    return Expected<void, Error>::Ok();
+  }
+  MergeRange next = *rect;
+  if (shown) {
+    if (rect->last_row + 1U >= Sheet::kMaxRows) {
+      return make_error(FormulonErrorCode::kPreconditionFailed, "the table ends on the last row of the grid",
+                        "ref=" + tables_[index].ref);
+    }
+    RETURN_IF_ERROR(check_totals_row_free(*this, index, *rect));
+    next.last_row = rect->last_row + 1U;
+  } else {
+    const std::uint32_t data_rows = rect->last_row - rect->first_row - (tables_[index].header_row ? 1U : 0U);
+    if (data_rows == 0U) {
+      return make_error(FormulonErrorCode::kPreconditionFailed, "the table would keep no data row",
+                        "ref=" + tables_[index].ref);
+    }
+    for (std::uint32_t col = rect->first_col; col <= rect->last_col; ++col) {
+      const std::optional<ArrayFormulaInfo> block = array_formula_at(tables_[index].sheet_index, rect->last_row, col);
+      if ((block && (block->rows != 1U || block->cols != 1U)) ||
+          data_table_at(tables_[index].sheet_index, rect->last_row, col) != nullptr) {
+        return make_error(FormulonErrorCode::kPreconditionFailed,
+                          "the totals row holds part of a multi-cell array formula or data table",
+                          "ref=" + tables_[index].ref);
+      }
+    }
+    next.last_row = rect->last_row - 1U;
+  }
+
+  TableMetadata& table = tables_[index];
+  table.ref.clear();
+  append_a1_rectangle(table.ref, next);
+  table.totals_row = shown;
+  if (shown) {
+    // Shown now, so the "never shown" marker no longer applies.
+    table.totals_row_shown.reset();
+  }
+  // The extent changed, so every structured reference into the table may
+  // resolve differently; reindex the formulas that name it.
+  reindex_formulas_for_table_change({table.name, table.display_name});
+  mark_row_visibility_dependents_dirty();
+  if (!shown) {
+    for (std::uint32_t col = rect->first_col; col <= rect->last_col; ++col) {
+      if (sheets_[table.sheet_index].cell_at(rect->last_row, col) != nullptr) {
+        RETURN_IF_ERROR(set_cell_value(table.sheet_index, rect->last_row, col, Value::blank()));
+      }
+    }
+    return Expected<void, Error>::Ok();
+  }
+  for (std::size_t column = 0; column < table.columns.size(); ++column) {
+    const TableColumn& col = table.columns[column];
+    if (col.totals_function.empty() && col.totals_label.empty()) {
+      continue;
+    }
+    RETURN_IF_ERROR(write_table_totals_cell(index, column));
+  }
+  return Expected<void, Error>::Ok();
+}
+
+Expected<void, Error> Workbook::write_table_totals_cell(std::size_t index, std::size_t column) {
+  if (index >= tables_.size() || column >= tables_[index].columns.size()) {
+    return invalid_table("index out of range", "index=" + std::to_string(index) + " column=" + std::to_string(column));
+  }
+  const TableMetadata& table = tables_[index];
+  const std::optional<MergeRange> rect = parse_a1_rectangle(table.ref);
+  if (!rect) {
+    return invalid_table("table ref is not a range", "ref=" + table.ref);
+  }
+  const TableColumn& col = table.columns[column];
+  const std::uint32_t row = rect->last_row;
+  const std::uint32_t cell_col = rect->first_col + static_cast<std::uint32_t>(column);
+  if (const int code = subtotal_code_of(col.totals_function); code != 0) {
+    parser::StructuredRefPayload payload;
+    payload.columns.push_back(col.name);
+    return set_cell_formula(
+        table.sheet_index, row, cell_col,
+        "=SUBTOTAL(" + std::to_string(code) + "," + table.display_name + "[" + parser::stored_payload(payload) + "])");
+  }
+  if (col.totals_function == "custom" && !col.totals_row_formula.empty()) {
+    return set_cell_formula(table.sheet_index, row, cell_col, "=" + col.totals_row_formula);
+  }
+  if (!col.totals_label.empty()) {
+    return set_cell_text(table.sheet_index, row, cell_col, col.totals_label);
+  }
+  return set_cell_value(table.sheet_index, row, cell_col, Value::blank());
 }
 
 void Workbook::set_tables(std::vector<TableMetadata> tables) {

@@ -187,11 +187,11 @@ template <typename Enum>
     return st;
   }
   // Shared items for "Region": index 0 = "North", index 1 = "South".
-  st = fm_workbook_add_pivot_cache_field_shared_item_text(wb, cache_id, region_index, "North");
+  st = fm_workbook_add_pivot_cache_field_shared_item_text(wb, cache_id, region_index, "North", ignored_index());
   if (st != 0) {
     return st;
   }
-  st = fm_workbook_add_pivot_cache_field_shared_item_text(wb, cache_id, region_index, "South");
+  st = fm_workbook_add_pivot_cache_field_shared_item_text(wb, cache_id, region_index, "South", ignored_index());
   if (st != 0) {
     return st;
   }

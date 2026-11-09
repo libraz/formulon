@@ -712,6 +712,7 @@ Napi::Function Workbook::GetClass(Napi::Env env) {
           GuardedInstanceMethod<&Workbook::PivotLayout, 0x3ULL>("getPivotLayout"),
           GuardedInstanceMethod<&Workbook::PivotRemove, 0x3ULL>("removePivot"),
           GuardedInstanceMethod<&Workbook::PivotSetAnchor, 0x3ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x4ULL>("setPivotAnchor"),
+          GuardedInstanceMethod<&Workbook::PivotSetPageFieldOrder, 0x3ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x4ULL>("setPivotPageFieldOrder"),
           GuardedInstanceMethod<&Workbook::PivotSetColFieldOrder, 0x3ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x4ULL>("setPivotColumnFieldOrder"),
           GuardedInstanceMethod<&Workbook::PivotUpdateGrandTotals, 0x3ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0xCULL>("updatePivotGrandTotals"),
           GuardedInstanceMethod<&Workbook::PivotUpdateStyleOptions, 0x3ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x4ULL>("updatePivotStyleOptions"),
@@ -737,6 +738,7 @@ Napi::Function Workbook::GetClass(Napi::Env env) {
           GuardedInstanceMethod<&Workbook::PivotProjectionPending, 0x3ULL>("isPivotProjectionPending"),
           GuardedInstanceMethod<&Workbook::PivotShowDetails, 0xFULL>("showPivotDetails"),
           GuardedInstanceMethod<&Workbook::PivotName, 0x3ULL>("getPivotName"),
+          GuardedInstanceMethod<&Workbook::PivotPageFieldOrder, 0x3ULL>("getPivotPageFieldOrder"),
           GuardedInstanceMethod<&Workbook::PivotRuntimeId, 0x3ULL>("getPivotRuntimeId"),
           GuardedInstanceMethod<&Workbook::ResolvePivotRuntimeId, 0x3ULL>("resolvePivotRuntimeId"),
           GuardedInstanceMethod<&Workbook::PivotRowFieldOrder, 0x3ULL>("getPivotRowFieldOrder"),
@@ -747,7 +749,7 @@ Napi::Function Workbook::GetClass(Napi::Env env) {
           GuardedInstanceMethod<&Workbook::Recalc>("recalc"),
           GuardedInstanceMethod<&Workbook::RecalcParallel>("recalcParallel"),
           GuardedInstanceMethod<&Workbook::HasDirtyCells>("hasDirtyCells"),
-          GuardedInstanceMethod<&Workbook::RemoveConditionalFormatAt, 0x3ULL>("removeCfRule"),
+          GuardedInstanceMethod<&Workbook::RemoveConditionalFormatAt, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x2ULL>("removeCfRule"),
           GuardedInstanceMethod<&Workbook::RemoveHyperlink, 0x7ULL>("removeHyperlink"),
           GuardedInstanceMethod<&Workbook::RemoveHyperlinkAt, 0x3ULL>("removeHyperlinkAt"),
           GuardedInstanceMethod<&Workbook::RemoveMerge, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x2ULL>("removeMerge"),
@@ -755,7 +757,7 @@ Napi::Function Workbook::GetClass(Napi::Env env) {
           GuardedInstanceMethod<&Workbook::RemoveSheet, 0x1ULL>("removeSheet"),
           GuardedInstanceMethod<&Workbook::RemoveValidationAt, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x2ULL>("removeValidation"),
           GuardedInstanceMethod<&Workbook::UpdateValidation, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x2ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x4ULL>("updateValidation"),
-          GuardedInstanceMethod<&Workbook::UpdateCfRule, 0x3ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x4ULL>("updateCfRule"),
+          GuardedInstanceMethod<&Workbook::UpdateCfRule, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x2ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x4ULL>("updateCfRule"),
           GuardedInstanceMethod<&Workbook::RenameSheet, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x2ULL>("renameSheet"),
           GuardedInstanceMethod<&Workbook::Save, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x1ULL>("save"),
           GuardedInstanceMethod<&Workbook::SaveWithDiagnostics, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x1ULL>("saveWithDiagnostics"),
@@ -785,8 +787,8 @@ Napi::Function Workbook::GetClass(Napi::Env env) {
           GuardedInstanceMethod<&Workbook::SetCommentVisible, 0x7ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x8ULL>("setCommentVisible"),
           GuardedInstanceMethod<&Workbook::SetWorkbookProtection, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x1ULL>("setWorkbookProtection"),
           GuardedInstanceMethod<&Workbook::AddProtectedRange, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x2ULL>("addProtectedRange"),
-          GuardedInstanceMethod<&Workbook::UpdateProtectedRange, 0x3ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x4ULL>("updateProtectedRange"),
-          GuardedInstanceMethod<&Workbook::RemoveProtectedRange, 0x3ULL>("removeProtectedRange"),
+          GuardedInstanceMethod<&Workbook::UpdateProtectedRange, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x2ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x4ULL>("updateProtectedRange"),
+          GuardedInstanceMethod<&Workbook::RemoveProtectedRange, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x2ULL>("removeProtectedRange"),
           GuardedInstanceMethod<&Workbook::SetDefinedName, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x1ULL>("setDefinedName"),
           GuardedInstanceMethod<&Workbook::SetDefaultFont, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x1ULL>("setDefaultFont"),
           GuardedInstanceMethod<&Workbook::SetFill, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x2ULL>("setFill"),
@@ -866,7 +868,6 @@ void RegisterModuleFunctions(Napi::Env env, Napi::Object exports) {
   SetGuardedModuleFunction<&ProbeImage, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x1ULL>(env, exports, "getImageInfo");
   SetGuardedModuleFunction<&LocaleFacts, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x1ULL>(env, exports, "getLocaleFacts");
   SetGuardedModuleFunction<&FunctionNames>(env, exports, "listFunctionNames");
-  SetGuardedModuleFunction<&ListLocaleErrorNames, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x1ULL>(env, exports, "listLocaleErrorNames");
   SetGuardedModuleFunction<&ListProfileIds>(env, exports, "listProfileIds");
   SetGuardedModuleFunction<&LocalizeFormula, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x3ULL>(env, exports, "localizeFormula");
   SetGuardedModuleFunction<&LocalizeFunctionName, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x3ULL>(env, exports, "localizeFunctionName");

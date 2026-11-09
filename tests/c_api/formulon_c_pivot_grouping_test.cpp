@@ -137,11 +137,13 @@ fm_status_t BuildBlankItemPivot(fm_workbook_t* wb, std::uint32_t* out_cache_id, 
   if (fm_status_t st = fm_workbook_add_pivot_cache_field(wb, cache_id, "Amount", &amount_index); st != 0) {
     return st;
   }
-  if (fm_status_t st = fm_workbook_add_pivot_cache_field_shared_item_text(wb, cache_id, region_index, "North");
+  if (fm_status_t st =
+          fm_workbook_add_pivot_cache_field_shared_item_text(wb, cache_id, region_index, "North", ignored_index());
       st != 0) {
     return st;
   }
-  if (fm_status_t st = fm_workbook_add_pivot_cache_field_shared_item_blank(wb, cache_id, region_index); st != 0) {
+  if (fm_status_t st = fm_workbook_add_pivot_cache_field_shared_item_blank(wb, cache_id, region_index, ignored_index());
+      st != 0) {
     return st;
   }
 
@@ -421,8 +423,8 @@ TEST(FormulonCApiPivot, AddItemAtHidesANonBlankItemBeforeAnyReload) {
   // The label is derived at evaluation time, so repopulating the shared
   // items after the item was added changes nothing.
   ASSERT_EQ(fm_workbook_clear_pivot_cache_field_shared_items(wb.handle, cache_id, 0), 0);
-  ASSERT_EQ(fm_workbook_add_pivot_cache_field_shared_item_text(wb.handle, cache_id, 0, "North"), 0);
-  ASSERT_EQ(fm_workbook_add_pivot_cache_field_shared_item_text(wb.handle, cache_id, 0, "South"), 0);
+  ASSERT_EQ(fm_workbook_add_pivot_cache_field_shared_item_text(wb.handle, cache_id, 0, "North", ignored_index()), 0);
+  ASSERT_EQ(fm_workbook_add_pivot_cache_field_shared_item_text(wb.handle, cache_id, 0, "South", ignored_index()), 0);
   PivotCellsGuard projected;
   ASSERT_EQ(fm_sheet_get_pivot_layout(wb.handle, 0, pivot_index, &projected.handle), 0) << fm_get_last_error_message();
   EXPECT_DOUBLE_EQ(SumDataCells(projected.handle), 400.0);

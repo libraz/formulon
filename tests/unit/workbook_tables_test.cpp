@@ -330,5 +330,156 @@ TEST(WorkbookTables, ASpillTouchingATableIsRefused) {
   EXPECT_EQ(At(wb, 1U, 0U), Value::error(ErrorCode::Spill));
 }
 
+// East / West on A1:B3 under a header row; Amount totals with SUM, Region with a label.
+void AddRegions(Workbook& wb) {
+  TableMetadata table = make_table("Regions", "A1:B3", 2);
+  table.columns[0].name = "Region";
+  table.columns[0].totals_label = "Total";
+  table.columns[1].name = "Amount";
+  table.columns[1].totals_function = "sum";
+  ASSERT_TRUE(wb.set_cell_text(0, 1U, 0U, "East").has_value());
+  ASSERT_TRUE(wb.set_cell_value(0, 1U, 1U, Value::number(10.0)).has_value());
+  ASSERT_TRUE(wb.set_cell_text(0, 2U, 0U, "West").has_value());
+  ASSERT_TRUE(wb.set_cell_value(0, 2U, 1U, Value::number(30.0)).has_value());
+  ASSERT_TRUE(wb.add_table(std::move(table)).has_value());
+}
+
+void ExpectTotalsRowRefused(Workbook& wb, const std::string& ref) {
+  const auto shown = wb.set_table_totals_row(0, true);
+  ASSERT_FALSE(shown.has_value());
+  EXPECT_EQ(shown.error().code, FormulonErrorCode::kPreconditionFailed);
+  EXPECT_EQ(wb.tables()[0].ref, ref);
+  EXPECT_FALSE(wb.tables()[0].totals_row);
+}
+
+TEST(WorkbookTableTotalsRow, ShowingGrowsTheTableByTheRowBelowAndKeepsTheData) {
+  Workbook wb = Workbook::create();
+  AddRegions(wb);
+  ASSERT_TRUE(wb.set_table_totals_row(0, true).has_value());
+  EXPECT_EQ(wb.tables()[0].ref, "A1:B4");
+  EXPECT_TRUE(wb.tables()[0].totals_row);
+  Recalc(wb);
+  EXPECT_EQ(At(wb, 2U, 1U), Value::number(30.0));
+  EXPECT_EQ(At(wb, 3U, 1U), Value::number(40.0));
+  EXPECT_EQ(At(wb, 3U, 0U).as_text(), "Total");
+  ASSERT_NE(wb.sheet(0).cell_at(3U, 1U), nullptr);
+  EXPECT_NE(wb.sheet(0).cell_at(3U, 1U)->formula_text.find("SUBTOTAL(109,"), std::string::npos);
+  // Showing it again changes nothing.
+  ASSERT_TRUE(wb.set_table_totals_row(0, true).has_value());
+  EXPECT_EQ(wb.tables()[0].ref, "A1:B4");
+}
+
+TEST(WorkbookTableTotalsRow, AnOccupiedRowBelowIsRefusedAndNothingChanges) {
+  {
+    Workbook wb = Workbook::create();
+    AddRegions(wb);
+    ASSERT_TRUE(wb.set_cell_text(0, 3U, 1U, "x").has_value());  // B4
+    ExpectTotalsRowRefused(wb, "A1:B3");
+    EXPECT_EQ(At(wb, 3U, 1U).as_text(), "x");
+    EXPECT_EQ(At(wb, 2U, 1U), Value::number(30.0));
+    EXPECT_EQ(wb.sheet(0).cell_at(3U, 0U), nullptr);
+  }
+  {
+    Workbook wb = Workbook::create();
+    AddRegions(wb);
+    ASSERT_TRUE(wb.set_cell_formula(0, 3U, 0U, "=1+1").has_value());  // A4
+    ExpectTotalsRowRefused(wb, "A1:B3");
+  }
+  {
+    Workbook wb = Workbook::create();
+    AddRegions(wb);
+    ASSERT_TRUE(wb.add_merge(0, MergeRange{3U, 1U, 4U, 2U}).has_value());  // B4:C5
+    ExpectTotalsRowRefused(wb, "A1:B3");
+  }
+  {
+    Workbook wb = Workbook::create();
+    AddRegions(wb);
+    ASSERT_TRUE(wb.add_table(make_table("Below", "B4:C6", 2)).has_value());
+    ExpectTotalsRowRefused(wb, "A1:B3");
+  }
+}
+
+TEST(WorkbookTableTotalsRow, ASpilledResultInTheRowBelowIsRefused) {
+  Workbook wb = Workbook::create();
+  ASSERT_TRUE(wb.add_table(make_table("Right", "C1:D3", 2)).has_value());
+  ASSERT_TRUE(wb.set_cell_formula(0, 3U, 0U, "=SEQUENCE(1,4)").has_value());  // A4 spills to D4
+  Recalc(wb);
+  ExpectTotalsRowRefused(wb, "C1:D3");
+}
+
+TEST(WorkbookTableTotalsRow, ATableOnTheLastGridRowCannotShowIt) {
+  Workbook wb = Workbook::create();
+  ASSERT_TRUE(wb.add_table(make_table("Bottom", "A1048574:B1048576", 2)).has_value());
+  ExpectTotalsRowRefused(wb, "A1048574:B1048576");
+}
+
+TEST(WorkbookTableTotalsRow, HidingShrinksTheTableAndClearsTheRow) {
+  Workbook wb = Workbook::create();
+  AddRegions(wb);
+  ASSERT_TRUE(wb.set_table_totals_row(0, true).has_value());
+  ASSERT_TRUE(wb.set_table_totals_row(0, false).has_value());
+  EXPECT_EQ(wb.tables()[0].ref, "A1:B3");
+  EXPECT_FALSE(wb.tables()[0].totals_row);
+  Recalc(wb);
+  EXPECT_EQ(At(wb, 2U, 1U), Value::number(30.0));
+  EXPECT_TRUE(At(wb, 3U, 0U).is_blank());
+  EXPECT_TRUE(At(wb, 3U, 1U).is_blank());
+  // Hiding it again changes nothing.
+  ASSERT_TRUE(wb.set_table_totals_row(0, false).has_value());
+  EXPECT_EQ(wb.tables()[0].ref, "A1:B3");
+}
+
+TEST(WorkbookTableTotalsRow, HidingKeepsADataRowUnderTheHeader) {
+  Workbook wb = Workbook::create();
+  TableMetadata table = make_table("Thin", "A1:B2", 2);
+  table.totals_row = true;
+  ASSERT_TRUE(wb.add_table(std::move(table)).has_value());
+  const auto hidden = wb.set_table_totals_row(0, false);
+  ASSERT_FALSE(hidden.has_value());
+  EXPECT_EQ(hidden.error().code, FormulonErrorCode::kPreconditionFailed);
+  EXPECT_EQ(wb.tables()[0].ref, "A1:B2");
+  EXPECT_TRUE(wb.tables()[0].totals_row);
+}
+
+TEST(WorkbookTableTotalsRow, AnOutOfRangeIndexIsAnInvalidArgument) {
+  Workbook wb = Workbook::create();
+  const auto shown = wb.set_table_totals_row(0, true);
+  ASSERT_FALSE(shown.has_value());
+  EXPECT_EQ(shown.error().code, FormulonErrorCode::kInvalidArgument);
+}
+
+TEST(WorkbookMerges, AMergeIntersectingAnotherIsAlreadyExists) {
+  Workbook wb = Workbook::create();
+  ASSERT_TRUE(wb.add_merge(0, MergeRange{0U, 0U, 1U, 1U}).has_value());                      // A1:B2
+  for (const MergeRange merge : {MergeRange{1U, 1U, 2U, 2U}, MergeRange{0U, 0U, 1U, 1U}}) {  // B2:C3, A1:B2
+    const auto added = wb.add_merge(0, merge);
+    ASSERT_FALSE(added.has_value());
+    EXPECT_EQ(added.error().code, FormulonErrorCode::kAlreadyExists);
+  }
+  EXPECT_TRUE(wb.add_merge(0, MergeRange{0U, 2U, 1U, 3U}).has_value());  // C1:D2, adjacent
+  EXPECT_EQ(wb.sheet(0).merges().size(), 2U);
+}
+
+TEST(WorkbookMerges, AMergeOverATablePivotArrayFormulaOrDataTableIsPreconditionFailed) {
+  Workbook wb = Workbook::create();
+  ASSERT_TRUE(wb.add_table(make_table("Sales", "A1:B4", 2)).has_value());
+  ASSERT_TRUE(wb.set_array_formula(0, 9U, 1U, 1U, 1U, "=1").has_value());  // B10
+  DataTableInput input;
+  input.present = true;
+  ASSERT_TRUE(wb.add_data_table(0, MergeRange{41U, 1U, 43U, 1U}, DataTableInput{}, input).has_value());  // B42:B44
+  auto pivot = std::make_unique<pivot::PivotTable>();
+  pivot->set_anchor(/*row=*/50U, /*col=*/0U, /*rows=*/3U, /*cols=*/2U);  // A51:B53
+  wb.sheet(0).add_pivot_table(std::move(pivot));
+
+  for (const MergeRange merge : {MergeRange{3U, 1U, 4U, 2U}, MergeRange{9U, 0U, 9U, 1U}, MergeRange{43U, 1U, 44U, 1U},
+                                 MergeRange{52U, 1U, 53U, 2U}}) {
+    const auto added = wb.add_merge(0, merge);
+    ASSERT_FALSE(added.has_value());
+    EXPECT_EQ(added.error().code, FormulonErrorCode::kPreconditionFailed);
+  }
+  EXPECT_TRUE(wb.sheet(0).merges().empty());
+  EXPECT_TRUE(wb.add_merge(0, MergeRange{4U, 0U, 5U, 1U}).has_value());  // A5:B6, below the table
+}
+
 }  // namespace
 }  // namespace formulon

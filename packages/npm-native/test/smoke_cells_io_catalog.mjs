@@ -251,16 +251,17 @@ test('addConditionalFormat + getCfRule + clearConditionalFormats round-trip', as
     dxfIndex: dxf,
     stopIfTrue: false,
   });
-  assert.equal(typeof add, 'number');
+  assert.equal(typeof add, 'string');
   const list = wb.sheet(0).listCfRules();
   assert.equal(list.length, 1);
+  assert.equal(list[0].id, add);
   assert.equal(list[0].type, 1);
   assert.equal(typeof list[0].id, 'string');
   assert.equal(list[0].ranges.length, 1);
   assert.equal(list[0].ranges[0].lastRow, 4);
   assert.equal(list[0].formula1, '=10');
   // removeConditionalFormatAt drops the only rule.
-  wb.sheet(0).removeCfRule(0);
+  wb.sheet(0).removeCfRule(add);
   assert.equal(wb.sheet(0).listCfRules().length, 0);
   // clearConditionalFormats is a safe no-op on an empty sheet.
   wb.sheet(0).clearCfRules();
@@ -580,9 +581,7 @@ test('getLocaleFacts reports separators, names, error spellings and measurement'
   assert.equal(mac.collationMeasured, true);
   const na = mac.errorNames.find((e) => e.canonical === '#N/A');
   assert.equal(na.localized, '#NV');
-  const listed = mod.listLocaleErrorNames('mac-365-de_DE');
-  assert.deepEqual([...listed], mac.errorNames);
-  assert.throws(() => mod.listLocaleErrorNames('nope'), isFormulonError);
+  assert.equal('listLocaleErrorNames' in mod, false);
   assert.equal(mod.getLocaleFacts('win-365-de_DE').measured, false);
   assert.equal(mod.getLocaleFacts('win-365-ja_JP').collationMeasured, false);
   assert.equal(mod.getLocaleFacts('win-365-en_US').decimalSeparator, '.');

@@ -54,7 +54,7 @@ test('chart enums keep their C ordinals', async () => {
   assert.equal(mod.ChartPlotType.Extended, 16);
   assert.equal(mod.ChartPlotType.Scatter, 10);
   assert.equal(mod.ChartPlotType.Doughnut, 8);
-  assert.equal(mod.ChartBarDirection.Col, 0);
+  assert.equal(mod.ChartBarDirection.Column, 0);
   assert.equal(mod.ChartBarDirection.Bar, 1);
   assert.equal(mod.ChartInsertKind, undefined);
   assert.equal(mod.ChartGrouping.Standard, 3);
@@ -105,7 +105,7 @@ test('insertChart creates a two-cell chart that getChart and getChartData read b
     assert.equal(chart.plots.length, 1);
     const plot = chart.plots[0];
     assert.equal(plot.type, mod.ChartPlotType.Bar);
-    assert.equal(plot.barDirection, mod.ChartBarDirection.Col);
+    assert.equal(plot.barDirection, mod.ChartBarDirection.Column);
     assert.equal(plot.axisIds.length, 2);
     assert.equal(plot.series.length, 3);
     const s0 = plot.series[0];
@@ -170,7 +170,7 @@ test('insertChart covers the creation kinds and omitted options', async () => {
       assert.equal(chartOf(wb, id).plots[0].type, type);
     }
     const column = insert(wb, mod, { range: 'Sheet1!$A$1:$B$5' });
-    assert.equal(chartOf(wb, column).plots[0].barDirection, mod.ChartBarDirection.Col);
+    assert.equal(chartOf(wb, column).plots[0].barDirection, mod.ChartBarDirection.Column);
     const bar = insert(wb, mod, {
       type: mod.ChartPlotType.Bar,
       barDirection: mod.ChartBarDirection.Bar,
@@ -179,7 +179,7 @@ test('insertChart covers the creation kinds and omitted options', async () => {
       direction: mod.ChartSeriesDirection.Columns,
       headerRow: true,
       headerColumn: true,
-      title: '',
+      title: null,
     });
     const barPlot = chartOf(wb, bar).plots[0];
     assert.equal(barPlot.barDirection, mod.ChartBarDirection.Bar);

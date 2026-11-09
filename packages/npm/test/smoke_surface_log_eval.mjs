@@ -439,9 +439,7 @@ test('getLocaleFacts reports separators, names, error spellings and measurement'
     assert.equal(mac.measured, true);
     const na = mac.errorNames.find((e) => e.canonical === '#N/A');
     assert.equal(na.localized, '#NV');
-    const listed = mod.listLocaleErrorNames('mac-365-de_DE');
-    assert.deepEqual([...listed], mac.errorNames);
-    expectFailure(() => mod.listLocaleErrorNames('nope'));
+    assert.equal('listLocaleErrorNames' in mod, false);
     assert.equal(mod.getLocaleFacts('win-365-de_DE').measured, false);
     assert.equal(mod.getLocaleFacts('win-365-en_US').decimalSeparator, '.');
     expectFailure(() => mod.getLocaleFacts('nope'));

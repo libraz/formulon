@@ -84,6 +84,7 @@ from ._workbook import (
     CfIconSet,
     CfIconSetInput,
     CfMatch,
+    CfRuleId,
     CfRuleRef,
     CfValueObject,
     CfValueObjectType,
@@ -2351,7 +2352,9 @@ class Sheet(_NoCopy):
         rows. A cell-level Excel error is an :class:`ExcelError`. A reference
         to the anchor cell itself reads its value. Every precedent the
         formula reads is computed, even under ``CalcMode.MANUAL``, without
-        storing the results; :meth:`get_value` follows the calc mode.
+        storing the results; :meth:`get_value` follows the calc mode. A blank
+        cell the formula reads evaluates as 0, as it does in a cell (``=B9``
+        on an empty B9 is 0); :meth:`get_value` reads the blank as ``None``.
 
         Raises:
           TypeError: when ``formula`` is not a ``str``.
@@ -2389,7 +2392,9 @@ class Sheet(_NoCopy):
         A scalar result such as ``=1+2`` is a 1x1 grid (``[[3.0]]``); a
         dynamic-array formula such as ``=SEQUENCE(2,3)`` yields its
         ``rows x cols`` grid in row-major order (``result[r][c]``). Nothing is
-        written and no spill is committed.
+        written and no spill is committed. A blank cell the formula reads
+        evaluates as 0, as it does in a cell; :meth:`get_value` reads the
+        blank as ``None``.
 
         Raises:
           TypeError: when ``formula`` is not a ``str``.
@@ -2601,11 +2606,16 @@ class Sheet(_NoCopy):
         )
 
     # -- Merges ------------------------------------------------------------
-    def add_merge(self, range: Union[CellRect, str]) -> None:
-        """Append a merge range to the sheet.
+    def add_merge(self, range: Union[CellRect, str]) -> CellRect:
+        """Append a merge range to the sheet and return it as stored.
 
         Covered cells keep their values and stay writable; clear them first to
         match Excel's Merge.
+
+        Raises:
+          AlreadyExistsError: when ``range`` intersects a merge already on the sheet.
+          PreconditionFailedError: when ``range`` intersects a table, a pivot table, an array formula or a
+            data table.
         """
         merge = self._rect(range)
         sheet = self._index()
@@ -2613,6 +2623,7 @@ class Sheet(_NoCopy):
         with _ArgScope() as scope:
             ptr = _pack_cell_rect_array([merge], scope)
             _check(LIB.fm_sheet_add_merge(h, _uint(sheet, "sheet", role="sheet"), ptr))
+        return merge
 
     def remove_merge(self, range: Union[CellRect, str]) -> None:
         """Remove every merge on the sheet overlapping ``range``."""
@@ -3008,9 +3019,8 @@ class Sheet(_NoCopy):
         leading: tuple,
         protected: Union[ProtectedRange, ProtectedRangeInput],
         *,
-        returns_index: bool = False,
         keep_ranges: bool = False,
-    ) -> Optional[int]:
+    ) -> None:
         h = self._workbook._require()
         rects = [] if keep_ranges else _cell_rects(self._workbook, protected.ranges, "ranges")
         with _ArgScope() as scope:
@@ -3030,15 +3040,10 @@ class Sheet(_NoCopy):
             )
             for fld in self._PROTECTED_RANGE_TEXT:
                 S.write_str_field(LIB, ptr, S.PROTECTED_RANGE, fld, getattr(protected, fld), scope)
-            if not returns_index:
-                _check(fn(h, *leading, ptr))
-                return None
-            out = scope.out_ptr()
-            _check(fn(h, *leading, ptr, out))
-            return LIB.read_u32(out)
+            _check(fn(h, *leading, ptr))
 
-    def add_protected_range(self, protected: Union[ProtectedRangeInput, ProtectedRange]) -> int:
-        """Append a protected range and return its index; ``name`` must be non-empty and unique on the sheet.
+    def add_protected_range(self, protected: Union[ProtectedRangeInput, ProtectedRange]) -> str:
+        """Append a protected range and return its name; ``name`` must be non-empty and unique on the sheet.
 
         ``protected.ranges`` is a list of :class:`CellRect` or unqualified A1 ranges, or one A1 string. A
         :class:`ProtectedRange` read back is accepted in place of a :class:`ProtectedRangeInput`.
@@ -3049,22 +3054,20 @@ class Sheet(_NoCopy):
         if not isinstance(protected, (ProtectedRangeInput, ProtectedRange)):
             raise TypeError(f"formulon: protected must be a ProtectedRangeInput, got {type(protected).__name__}")
         sheet = self._index()
-        index = self._protected_range_call(
+        self._protected_range_call(
             LIB.fm_sheet_add_protected_range,
             (_uint(sheet, "sheet", role="sheet"),),
             protected,
-            returns_index=True,
         )
-        assert index is not None
-        return index
+        return protected.name
 
-    def _protected_range_index(self, protected_range: ProtectedRangeRef) -> int:
-        """The index ``protected_range`` addresses: an index, or a protected range's name."""
-        return resolve_ref(
-            protected_range,
-            lambda: [self._protected_range_at(i).name for i in range(self._protected_range_count())],
-            "protected range",
-        )
+    def _protected_range_name(self, protected_range: ProtectedRangeRef) -> str:
+        """The name ``protected_range`` addresses: a name as it is, a position through its range."""
+        if isinstance(protected_range, str):
+            return protected_range
+        if isinstance(protected_range, bool):
+            raise TypeError("formulon: protected_range must be an int or a str, got bool")
+        return self._protected_range_at(_uint(protected_range, "protected_range", role="position")).name
 
     def update_protected_range(
         self,
@@ -3108,7 +3111,7 @@ class Sheet(_NoCopy):
         for key, value in given.items():
             if value is None and key != "legacy_password_hash":
                 raise TypeError(f"formulon: {key} cannot be None")
-        index = self._protected_range_index(protected_range)
+        range_name = self._protected_range_name(protected_range)
         sheet = self._index()
         h = self._workbook._require()
         values: Dict[str, object] = {}
@@ -3133,9 +3136,7 @@ class Sheet(_NoCopy):
                     values[key] = scope.cstr(given[key])
             S.PROTECTED_RANGE_PATCH.pack(LIB, ptr, values)
             _check(
-                LIB.fm_sheet_update_protected_range(
-                    h, _uint(sheet, "sheet", role="sheet"), _uint(index, "protected_range_index", role="position"), ptr
-                )
+                LIB.fm_sheet_update_protected_range(h, _uint(sheet, "sheet", role="sheet"), scope.cstr(range_name), ptr)
             )
 
     def remove_protected_range(self, protected_range: ProtectedRangeRef) -> None:
@@ -3145,14 +3146,11 @@ class Sheet(_NoCopy):
           NotFoundError: when no protected range has the name ``protected_range``.
           IndexOutOfRangeError: when ``protected_range`` is an index past the last one.
         """
-        index = self._protected_range_index(protected_range)
+        range_name = self._protected_range_name(protected_range)
         sheet = self._index()
         h = self._workbook._require()
-        _check(
-            LIB.fm_sheet_remove_protected_range(
-                h, _uint(sheet, "sheet", role="sheet"), _uint(index, "protected_range_index", role="position")
-            )
-        )
+        with _ArgScope() as scope:
+            _check(LIB.fm_sheet_remove_protected_range(h, _uint(sheet, "sheet", role="sheet"), scope.cstr(range_name)))
 
     # -- Data validations --------------------------------------------------
     def list_validations(self) -> List[DataValidation]:
@@ -4317,8 +4315,10 @@ class Sheet(_NoCopy):
             )
         )
 
-    def add_data_table(self, spec: Union[DataTableInput, DataTable]) -> None:
-        """Create the data table ``spec`` describes.
+    def add_data_table(self, spec: Union[DataTableInput, DataTable]) -> CellAddress:
+        """Create the data table ``spec`` describes and return the top-left cell of its result range.
+
+        The returned cell is the one :meth:`get_data_table` and :meth:`remove_data_table` take.
 
         The formulas sit in the row above the range and the substitution values in the column left of it (a
         one-variable table), or the other way round; ``spec.row_input`` / ``spec.column_input`` are the input cells
@@ -4348,6 +4348,7 @@ class Sheet(_NoCopy):
                     values[prefix + "_col"] = _uint(cell[1], prefix + "_col")
             S.DATA_TABLE.pack(LIB, ptr, values)
             _check(LIB.fm_sheet_add_data_table(h, _uint(sheet, "sheet_index", role="sheet"), ptr))
+        return CellAddress(row=rect.first_row, col=rect.first_col)
 
     @overload
     @_coordinate_form
@@ -4669,8 +4670,9 @@ class Sheet(_NoCopy):
 
         ``input.range`` is a :class:`SheetRect` or an A1 range, on this sheet
         when unqualified. ``input.grouping`` applies to bar, line and area
-        charts. An omitted ``title`` is Excel's automatic title and an empty one
-        is no title; ``legend`` is ``None`` for no legend. ``input.placement``
+        charts. An omitted ``title`` (``ChartTitle(ChartTitleKind.AUTO)``) is
+        Excel's automatic title, ``None`` is no title and an empty string is refused; ``legend`` is ``None`` for
+        no legend. ``input.placement``
         reads as for :meth:`add_picture` (an empty ``name`` becomes
         ``Chart <id>``), except that a zero ``width_emu`` or ``height_emu`` means
         Excel's default 360 x 216 pt frame and an omitted anchor is a two-cell
@@ -4679,6 +4681,7 @@ class Sheet(_NoCopy):
         Raises:
           TypeError: when ``input`` is not a :class:`ChartInsertInput`, or for
             ``bar_direction`` on a type other than ``BAR``.
+          InvalidArgumentError: when ``input.title`` is an empty string.
 
         Example::
 
@@ -6016,8 +6019,12 @@ class Sheet(_NoCopy):
                 icon_set=icon_set,
             )
 
-    def add_cf_rule(self, rule: Union[ConditionalFormatInput, ConditionalFormat]) -> int:
-        """Append a CF rule to the sheet; return its index.
+    def add_cf_rule(self, rule: Union[ConditionalFormatInput, ConditionalFormat]) -> CfRuleId:
+        """Append a CF rule to the sheet; return its :data:`CfRuleId`.
+
+        ``rule.id`` is a brace-wrapped GUID (``{XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX}``, hex digits in either
+        case); omitted, empty or already used on the sheet, the engine generates an upper-case one; anything
+        else is ``InvalidArgumentError``.
 
         ``rule`` is the input dataclass of its type (:class:`CfCellIsRuleInput`, :class:`CfColorScaleRuleInput`
         and the others of :data:`ConditionalFormatInput`); a :class:`ConditionalFormat` read back is accepted
@@ -6148,7 +6155,15 @@ class Sheet(_NoCopy):
                     LIB.write_bytes(ptr + ro["icon_set_icons"][1], struct.pack("<I", icons_ptr))
                     LIB.write_bytes(ptr + ro["icon_set_icon_count"][1], struct.pack("<I", len(icon_set.icons)))
             _check(LIB.fm_sheet_add_cf_rule(h, _uint(sheet, "sheet_index", role="sheet"), ptr, out))
-            return LIB.read_u32(out)
+            return LIB.read_cstr(LIB.read_u32(out))
+
+    def _cf_rule_id(self, cf_rule: CfRuleRef) -> CfRuleId:
+        """The :data:`CfRuleId` ``cf_rule`` names: an id as it is, a position through its rule."""
+        if isinstance(cf_rule, str):
+            return cf_rule
+        if isinstance(cf_rule, bool):
+            raise TypeError("formulon: cf_rule must be an int or a str, got bool")
+        return self._cf_rule_at(_uint(cf_rule, "cf_rule", role="position")).id
 
     def update_cf_rule(
         self,
@@ -6218,7 +6233,7 @@ class Sheet(_NoCopy):
         for key in ("stop_if_true", "percent", "bottom", "above_average", "equal_average"):
             if key in given and not isinstance(given[key], bool):
                 raise TypeError(f"formulon: {key} must be a bool, got {type(given[key]).__name__}")
-        index = resolve_ref(cf_rule, lambda: [rule.id for rule in self.list_cf_rules()], "CF rule")
+        rule_id = self._cf_rule_id(cf_rule)
         sheet = self._index()
         h = self._workbook._require()
         values: Dict[str, object] = {}
@@ -6346,11 +6361,7 @@ class Sheet(_NoCopy):
             raw = bytearray(LIB.read_bytes(ptr, S.CF_RULE_PATCH.size))
             S.CF_RULE_PATCH.pack_into(raw, 0, values)
             LIB.write_bytes(ptr, bytes(raw))
-            _check(
-                LIB.fm_sheet_update_cf_rule(
-                    h, _uint(sheet, "sheet_index", role="sheet"), _uint(index, "idx", role="position"), ptr
-                )
-            )
+            _check(LIB.fm_sheet_update_cf_rule(h, _uint(sheet, "sheet_index", role="sheet"), scope.cstr(rule_id), ptr))
 
     def remove_cf_rule(self, cf_rule: CfRuleRef) -> None:
         """Remove ``cf_rule``, an index in :meth:`list_cf_rules` order or a rule's ``id``.
@@ -6359,14 +6370,11 @@ class Sheet(_NoCopy):
           NotFoundError: when no rule has the id ``cf_rule``.
           IndexOutOfRangeError: when ``cf_rule`` is an index past the last rule.
         """
-        index = resolve_ref(cf_rule, lambda: [rule.id for rule in self.list_cf_rules()], "CF rule")
+        rule_id = self._cf_rule_id(cf_rule)
         sheet = self._index()
         h = self._workbook._require()
-        _check(
-            LIB.fm_sheet_remove_cf_rule(
-                h, _uint(sheet, "sheet_index", role="sheet"), _uint(index, "idx", role="position")
-            )
-        )
+        with _ArgScope() as scope:
+            _check(LIB.fm_sheet_remove_cf_rule(h, _uint(sheet, "sheet_index", role="sheet"), scope.cstr(rule_id)))
 
     def clear_cf_rules(self) -> None:
         """Drop every CF block on the sheet."""

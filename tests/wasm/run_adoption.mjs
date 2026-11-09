@@ -86,8 +86,12 @@ export function registerAdoption(factory, test) {
         userId: 'alice@example.com',
         providerId: 'AD',
       };
-      wb.addPerson(person);
+      assert.equal(wb.addPerson(person), person.id);
       assert.deepEqual(wb.listPeople(), [person]);
+      assert.equal(
+        wb.addPerson({ id: '{0a1b2c3d-0000-4000-8000-000000000002}', displayName: 'Bob' }),
+        '{0A1B2C3D-0000-4000-8000-000000000002}',
+      );
     }));
 
   test('raw: a formula syntax error carries its code and UTF-16 position', () => {

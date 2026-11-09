@@ -17,6 +17,7 @@
 #include "io/xml_utils.h"
 #include "passthrough_part.h"
 #include "sheet.h"
+#include "sheet_name.h"
 #include "unknown_relationship.h"
 #include "utils/name_syntax.h"
 #include "utils/status_macros.h"
@@ -402,14 +403,14 @@ bool cache_in_use(const Workbook& wb, std::string_view name) {
   return false;
 }
 
-std::string lower(std::string_view text) {
-  return strings::to_ascii_lower(text);
+std::string name_key(std::string_view text) {
+  return collection_names::fold_key(text);
 }
 
-// `base`, then `base<sep>1`, `base<sep>2`... until it is not in `taken` (lower-cased names).
+// `base`, then `base<sep>1`, `base<sep>2`... until it is not in `taken` (folded names).
 std::string unique_name(const std::string& base, const char* sep, const std::vector<std::string>& taken) {
   const auto used = [&taken](const std::string& name) {
-    return std::find(taken.begin(), taken.end(), lower(name)) != taken.end();
+    return std::find(taken.begin(), taken.end(), name_key(name)) != taken.end();
   };
   std::string name = base;
   for (std::uint32_t n = 1; used(name); ++n) {
@@ -418,14 +419,14 @@ std::string unique_name(const std::string& base, const char* sep, const std::vec
   return name;
 }
 
-// Lower-cased `name` attributes of every element in the parts under `dir`.
+// Folded `name` attributes of every element in the parts under `dir`.
 void collect_names(const Workbook& wb, std::string_view dir, std::vector<std::string>& names) {
   for (const PassthroughPart& part : wb.passthrough_parts()) {
     pugi::xml_document doc;
     if (strings::starts_with(part.path, dir) && io::ooxml::load_part_dom(wb, part.path, "slicer", doc)) {
       doc.find_node([&names](const pugi::xml_node& node) {
         if (node.attribute("name")) {
-          names.push_back(lower(node.attribute("name").value()));
+          names.push_back(name_key(node.attribute("name").value()));
         }
         return false;
       });
@@ -499,7 +500,7 @@ Expected<std::uint32_t, Error> add_slicer(Workbook& wb, std::size_t sheet, std::
   collect_names(wb, "xl/slicers/", slicer_names);
   collect_names(wb, "xl/slicerCaches/", cache_names);
   for (const DefinedName& defined : wb.defined_names()) {
-    cache_names.push_back(lower(defined.name));
+    cache_names.push_back(name_key(defined.name));
   }
   const std::string name = unique_name((spec.fields & kName) != 0U ? spec.name : col.name, " ", slicer_names);
   std::string cache_base = "Slicer_";

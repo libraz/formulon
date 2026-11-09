@@ -338,11 +338,8 @@ TEST(PivotTableReader, PageFieldsCarryTheSelectedItem) {
   EXPECT_EQ(table.page_fields()[0].field_index, 0U);
   ASSERT_TRUE(table.page_fields()[0].item_index.has_value());
   EXPECT_EQ(*table.page_fields()[0].item_index, 2U);
-
-  // Decoding does not take the block off the writer's hands: the authored
-  // bytes still ride in the pre-dataFields bin so the round trip re-emits
-  // them untouched.
-  EXPECT_NE(table.raw_passthrough_after_col_fields().find("<pageField "), std::string::npos);
+  // The file wrote no `hier`, so none is kept.
+  EXPECT_FALSE(table.page_fields()[0].hierarchy.has_value());
 }
 TEST(PivotTableReader, PageFieldWithoutASelectionLeavesTheItemAbsent) {
   // The unfiltered state: Excel writes no `item`, and the field is showing

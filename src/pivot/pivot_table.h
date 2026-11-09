@@ -8,6 +8,7 @@
 #ifndef FORMULON_PIVOT_PIVOT_TABLE_H_
 #define FORMULON_PIVOT_PIVOT_TABLE_H_
 
+#include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <mutex>
@@ -125,25 +126,29 @@ class PivotTable {
 
   // Page (report filter) axis -----------------------------------------------
   //
-  // Decoded from `<pageFields>` for rendering only. The block itself stays
-  // in the pre-dataFields passthrough bin and the writer re-emits it from
-  // there, so this list is read-side state: populating it changes not one
-  // byte of a round trip, and clearing it would not remove the page field
-  // from a saved file. The one thing the writer does own is the element's absence
-  // — see `write_pivot_table_definition`, which synthesises `<pageFields>`
-  // only for a table that never carried one.
+  // The model owns the page axis: the writer emits `<pageFields>` from
+  // `page_field_order()` and each field's entry here, and nothing of the
+  // element is passed through. An entry adds what `<pivotFields>` cannot
+  // record: the report order and the single selected item (`item_index`).
+  //
+  // The list is kept in step with the axis: `set_field_axis` appends a field
+  // joining the page axis and drops one leaving it, and `page_field_order()`
+  // skips an entry whose field is no longer on the axis and appends a page
+  // field without an entry in `fields()` order, so a table whose `axis` was
+  // set directly still reads consistently.
   //
   // A page field's hidden items prune records through
   // `PreparedRecordFilter`, which keys off `PivotField::items` on every axis
-  // alike; a single selected item (`item_index`) filters on that item too.
-  // This list adds the report order and that selection, neither of which is
-  // recoverable from `<pivotFields>`.
+  // alike; a single selected item filters on that item too.
   const std::vector<PivotPageField>& page_fields() const { return page_fields_; }
   std::vector<PivotPageField>& mutable_page_fields() { return page_fields_; }
 
   /// The first page-field entry for `field_index`, or null when the field is
-  /// not on the page axis.
+  /// not on the page axis or has no entry.
   const PivotPageField* find_page_field(std::uint32_t field_index) const {
+    if (field_index >= fields_.size() || fields_[field_index].axis != PivotAxis::Page) {
+      return nullptr;
+    }
     for (const PivotPageField& page : page_fields_) {
       if (page.field_index == field_index) {
         return &page;
@@ -152,30 +157,54 @@ class PivotTable {
     return nullptr;
   }
 
-  /// Indices into `fields()` of the page-axis fields, in report order.
-  ///
-  /// `<pageFields>` states that order explicitly and wins when it was
-  /// decoded. A table assembled in memory (C API, the workbook-oracle
-  /// builder) sets only `PivotField::axis`, so the fallback is `fields()`
-  /// document order — which is what Excel itself falls back to when a page
-  /// field carries no `<pageField>` entry of its own.
+  /// Indices into `fields()` of the page-axis fields, in report order: the
+  /// entries of `page_fields()` whose field is on the page axis, then every
+  /// other page-axis field in `fields()` order (Excel's own fallback for a
+  /// page field without a `<pageField>`).
   std::vector<std::uint32_t> page_field_order() const {
     std::vector<std::uint32_t> order;
-    if (!page_fields_.empty()) {
-      order.reserve(page_fields_.size());
-      for (const PivotPageField& page : page_fields_) {
-        if (page.field_index < fields_.size()) {
-          order.push_back(page.field_index);
-        }
+    std::vector<bool> listed(fields_.size(), false);
+    for (const PivotPageField& page : page_fields_) {
+      if (page.field_index < fields_.size() && fields_[page.field_index].axis == PivotAxis::Page &&
+          !listed[page.field_index]) {
+        listed[page.field_index] = true;
+        order.push_back(page.field_index);
       }
-      return order;
     }
     for (std::size_t i = 0; i < fields_.size(); ++i) {
-      if (fields_[i].axis == PivotAxis::Page) {
+      if (fields_[i].axis == PivotAxis::Page && !listed[i]) {
         order.push_back(static_cast<std::uint32_t>(i));
       }
     }
     return order;
+  }
+
+  /// Moves field `field_index` to `axis`, keeping the page list in step: a
+  /// field joining the page axis is appended to it, one leaving it is
+  /// removed. Row / column orders and data fields are the caller's. An
+  /// out-of-range index is ignored.
+  void set_field_axis(std::uint32_t field_index, PivotAxis axis) {
+    if (field_index >= fields_.size()) {
+      return;
+    }
+    const bool was_page = fields_[field_index].axis == PivotAxis::Page;
+    fields_[field_index].axis = axis;
+    if (was_page == (axis == PivotAxis::Page)) {
+      return;
+    }
+    std::vector<PivotPageField> kept;
+    kept.reserve(page_fields_.size() + 1U);
+    for (PivotPageField& page : page_fields_) {
+      if (page.field_index != field_index) {
+        kept.push_back(std::move(page));
+      }
+    }
+    if (axis == PivotAxis::Page) {
+      PivotPageField added;
+      added.field_index = field_index;
+      kept.push_back(std::move(added));
+    }
+    page_fields_ = std::move(kept);
   }
 
   // Layout / location --------------------------------------------------------
@@ -344,19 +373,18 @@ class PivotTable {
   // OOXML round-trip passthrough --------------------------------------------
   //
   // OOXML pivot definitions can carry several elements this version does
-  // not model structurally — `<rowItems>`, `<colItems>`, `<pageFields>`,
+  // not model structurally — `<rowItems>`, `<colItems>`,
   // `<calculatedFields>`, `<calculatedItems>`, `<chartFormats>`,
   // `<formats>`, etc. The reader captures them as
   // concatenated raw XML so the writer can emit them back verbatim,
   // keeping a round trip stable for files that depend on those features.
   //
   // `CT_pivotTableDefinition` mandates a strict child order, so a single
-  // trailing buffer would re-emit `<rowItems>`/`<colItems>`/`<pageFields>`
-  // after `<dataFields>` and make Excel flag the file for repair. Those
-  // three are the only unmodelled elements the schema places *before*
-  // `<dataFields>`, so the reader bins them by name into the two
-  // pre-dataFields slots (rowItems after `<rowFields>`; colItems, held in
-  // its own bin, and pageFields after `<colFields>`). `<pivotTableStyleInfo>` is modelled
+  // trailing buffer would re-emit `<rowItems>`/`<colItems>` after
+  // `<dataFields>` and make Excel flag the file for repair. Those two are
+  // the only unmodelled elements the schema places *before* `<dataFields>`,
+  // so the reader bins them by name into the two pre-dataFields slots
+  // (rowItems after `<rowFields>`, colItems after `<colFields>`). `<pivotTableStyleInfo>` is modelled
   // (`style_info`) and splits the post-dataFields elements: formats,
   // conditionalFormats, chartFormats and pivotHierarchies go to
   // `raw_passthrough_before_style_info_`; everything else — hierarchy
@@ -374,11 +402,7 @@ class PivotTable {
   const std::string& raw_passthrough_after_row_fields() const { return raw_passthrough_after_row_fields_; }
   std::string& mutable_raw_passthrough_after_row_fields() { return raw_passthrough_after_row_fields_; }
 
-  const std::string& raw_passthrough_after_col_fields() const { return raw_passthrough_after_col_fields_; }
-  std::string& mutable_raw_passthrough_after_col_fields() { return raw_passthrough_after_col_fields_; }
-
-  /// `<colItems>`, kept apart from the rest of the post-colFields bin because
-  /// the writer drops it, and only it, from a `layout_dirty()` table.
+  /// `<colItems>`, which the writer drops from a `layout_dirty()` table.
   const std::string& raw_col_items() const { return raw_col_items_; }
   std::string& mutable_raw_col_items() { return raw_col_items_; }
 
@@ -617,7 +641,6 @@ class PivotTable {
   std::string raw_passthrough_xml_;
   std::string raw_passthrough_before_style_info_;
   std::string raw_passthrough_after_row_fields_;
-  std::string raw_passthrough_after_col_fields_;
   std::string raw_col_items_;
   std::vector<std::pair<std::string, std::string>> passthrough_attrs_;
   // Keep the mutex separately allocated so PivotTable remains movable.

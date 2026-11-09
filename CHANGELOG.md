@@ -759,6 +759,83 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **JavaScript, Python:** `ThreadedCommentInput.id` is optional (the engine
   generates one) and `personId` is required. Python `ChartCategories.format_code`
   is `number_format`.
+- **C ABI, JavaScript, Python:** `PivotAxis.Col` is `PivotAxis.Column`
+  (`FM_PIVOT_AXIS_COL` is `FM_PIVOT_AXIS_COLUMN`; Python `PivotAxis.COLUMN`),
+  and `ChartBarDirection.Col` is `ChartBarDirection.Column`. The
+  show-values-as members `PercentOfCol`, `RunningTotalInCol` and
+  `PercentOfParentCol` are spelled out the same way (C
+  `FM_PIVOT_SHOW_VALUES_AS_PERCENT_OF_COLUMN`, `_RUNNING_TOTAL_IN_COLUMN` and
+  `_PERCENT_OF_PARENT_COLUMN`; Python `PERCENT_OF_COLUMN` and so on). `Col`
+  remains only inside coordinate names such as `firstCol`.
+- **Python:** the status ranges have exception classes. `IoError`,
+  `EvaluationError`, `FunctionError`, `RecalcError`, `SecurityError`,
+  `BindingError`, `PivotError` and `PrintError` are `FormulonError` subclasses,
+  one per range, and a status without a narrower class raises the class of its
+  range. `InvalidFileError` is an `IoError` and a `ValueError`.
+  `FormulaSyntaxError` is a `FormulonError` and a `ValueError` and is no longer
+  an `InvalidArgumentError`: code that caught a failed parse with
+  `except InvalidArgumentError` must catch `FormulaSyntaxError` (or
+  `ValueError`) instead.
+- **JavaScript, Python:** `listLocaleErrorNames()` and
+  `list_locale_error_names()` are removed; `getLocaleFacts` carries the error
+  names.
+- **JavaScript:** an object passed where a record is expected refuses a key it
+  does not define with `TypeError` at every depth. That now covers the options
+  of `Pivot.addFieldItem`, the `CivilTime` objects (`setPinnedNow`,
+  `convertCivilToSerial`, the `today` option of `evaluateCfRange`, a threaded
+  comment's `created`), the date-system options and `Color` objects
+  (`setTabColor` and every colour key); a misspelt key used to be ignored.
+- **C ABI, JavaScript, Python:** a chart title of `''` is `InvalidArgument` in
+  `addChart`, as it already was in `setTitle`; `null` (`None`) is no title and
+  an omitted title is Excel's automatic one. `fm_chart_insert_spec_t` replaces
+  `const char* title` with `int32_t has_title` and `fm_chart_title_t title`
+  (`has_title == 0` is automatic, a title of kind `NONE` is no title), so the
+  insert takes the title shape `fm_sheet_set_chart_title` takes.
+- **JavaScript, Python:** `Table.update({ totalsRow: true })`
+  (`update(totals_row=True)`) adds the totals row below the table: the range
+  grows by one row, the data rows stay and each column's totals cell is written
+  in the new row. It used to overwrite the last data row. It fails with
+  `PreconditionFailed` and changes nothing when the row below holds a cell,
+  a merge, a table, a pivot, an array formula or a data table, or when the table
+  ends on the last row of the grid. `update({ totalsRow: false })` removes the
+  totals row and shrinks the range by one row. A toggle that changes nothing is
+  a no-op, and with `range` in the same patch the range is final and
+  `totalsRow` only sets the flag. `fm_sheet_update_table` behaves the same.
+- **C ABI, JavaScript, Python:** `addMerge` refuses a range that overlaps an
+  existing merge, an identical one included, with `AlreadyExists`, and one
+  that overlaps a table, a pivot, an array formula or a data table with
+  `PreconditionFailed`. A workbook that already carries overlapping merges
+  still loads.
+- **C ABI, JavaScript, Python:** the page-axis field order of a pivot is read
+  and written like the row and column orders: `Pivot.getPageFieldOrder()` and
+  `setPageFieldOrder(indices)` (`get_page_field_order`, `set_page_field_order`),
+  `fm_sheet_get_pivot_page_field_order` and `fm_sheet_set_pivot_page_field_order`.
+  The Values level is `InvalidArgument` there, and a saved file lists the page
+  fields in this order.
+- **C ABI, JavaScript, Python:** a conditional-format rule is addressed by its
+  id and a protected range by its name, as validations are. `addCfRule` returns
+  the stored `CfRuleId` (a string; `CfRuleRef` is a position or an id) and
+  `addProtectedRange` returns the name. The C functions
+  `fm_sheet_update_cf_rule`, `fm_sheet_remove_cf_rule`,
+  `fm_sheet_update_protected_range` and `fm_sheet_remove_protected_range` take
+  the id or name in place of a position, `fm_sheet_get_cf_rule` is new, and
+  `fm_sheet_get_protected_range` reads by name; the positional reads are
+  `fm_sheet_get_cf_rule_at` and `fm_sheet_get_protected_range_at`. A rule's
+  `id` is a brace-wrapped GUID; one that is omitted, empty or already used on
+  the sheet is replaced by an upper-case one the engine generates. See
+  [C ABI changes](#c-abi-changes).
+- **JavaScript, Python:** adds that returned nothing return what they created:
+  `addMerge` the stored `CellRect`, `addDataTable` the top-left `CellAddress` of
+  the result range, `addPerson` the stored id and `PivotCache.addFieldSharedItem`
+  (`add_field_shared_item`) the new item's index.
+- **Command line:** `dump` takes `--view formulas|values|sheets|metadata`
+  (default `formulas`; `--view=values` also works); `--formulas`, `--values`,
+  `--sheets` and `--metadata` are removed and exit with status 64. `paginate
+  --sheet` takes a sheet name or an index and fails for an unknown sheet as
+  `dump --sheet` does. `recalc --json` prints
+  `{"format":1,"status":"ok","output":PATH,"bytes":N,"warnings":[{"kind":...,"count":N}]}`
+  on stdout and puts the loss warnings in `warnings` instead of stderr; it is
+  refused with status 64 together with `-o -`.
 
 ### Sheet handles
 
@@ -1111,7 +1188,8 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
   `getAutoFilter` returns is still accepted. An omitted `top` on a top-10
   column reads as `true` (the top items), as in Python and the file format.
   It used to read as the bottom items.
-- `addCfRule` rejects a caller-supplied id that the sheet already uses with
+- `addCfRule` takes a brace-wrapped GUID as `id`; an id the sheet already uses
+  is replaced by a generated one, and text that is not a GUID is
   `InvalidArgument`.
 - Every named collection compares names by Unicode simple case folding, as
   sheet names already did: defined names, tables, table styles, cell styles,
@@ -1119,6 +1197,8 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
   either case and stored uppercase). `Budget` and `BUDGET` collide, `=ä`
   resolves a name `Ä`, and structured references and table column names fold
   the same way; they used to fold ASCII letters only, or compare exactly.
+  Table styles, table columns and the C defined-name lookup follow the same
+  rule; the built-in table-style prefix test stays ASCII.
 - `addSheet()` without a name (Python `add_sheet()`, C `NULL`) takes the
   profile's first sheet name without its trailing `1` and the smallest free
   number from 2, ignoring case: `Sheet2`, `Tabelle2`, `Feuil2`.
@@ -1738,6 +1818,7 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
 | `FM_PIVOT_AGG_SUM` | `FM_PIVOT_AGGREGATION_SUM` |
 | `FM_PIVOT_AGG_VAR` | `FM_PIVOT_AGGREGATION_VAR` |
 | `FM_PIVOT_AGG_VARP` | `FM_PIVOT_AGGREGATION_VARP` |
+| `FM_PIVOT_AXIS_COL` | `FM_PIVOT_AXIS_COLUMN` |
 | `FM_PIVOT_CELL_BLANK` | `FM_PIVOT_CELL_KIND_BLANK` |
 | `FM_PIVOT_CELL_COL_LABEL` | `FM_PIVOT_CELL_KIND_COLUMN_LABEL` |
 | `FM_PIVOT_CELL_COL_SUBTOTAL` | `FM_PIVOT_CELL_KIND_COLUMN_SUBTOTAL` |
@@ -1836,8 +1917,8 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
 | `FM_PIVOT_SHOW_AS_INDEX` | `FM_PIVOT_SHOW_VALUES_AS_INDEX` |
 | `FM_PIVOT_SHOW_AS_NORMAL` | `FM_PIVOT_SHOW_VALUES_AS_NORMAL` |
 | `FM_PIVOT_SHOW_AS_PERCENT_DIFFERENCE_FROM` | `FM_PIVOT_SHOW_VALUES_AS_PERCENT_DIFFERENCE_FROM` |
-| `FM_PIVOT_SHOW_AS_PERCENT_OF_COL` | `FM_PIVOT_SHOW_VALUES_AS_PERCENT_OF_COL` |
-| `FM_PIVOT_SHOW_AS_PERCENT_OF_PARENT_COL` | `FM_PIVOT_SHOW_VALUES_AS_PERCENT_OF_PARENT_COL` |
+| `FM_PIVOT_SHOW_AS_PERCENT_OF_COL` | `FM_PIVOT_SHOW_VALUES_AS_PERCENT_OF_COLUMN` |
+| `FM_PIVOT_SHOW_AS_PERCENT_OF_PARENT_COL` | `FM_PIVOT_SHOW_VALUES_AS_PERCENT_OF_PARENT_COLUMN` |
 | `FM_PIVOT_SHOW_AS_PERCENT_OF_PARENT_ROW` | `FM_PIVOT_SHOW_VALUES_AS_PERCENT_OF_PARENT_ROW` |
 | `FM_PIVOT_SHOW_AS_PERCENT_OF_PARENT` | `FM_PIVOT_SHOW_VALUES_AS_PERCENT_OF_PARENT` |
 | `FM_PIVOT_SHOW_AS_PERCENT_OF_ROW` | `FM_PIVOT_SHOW_VALUES_AS_PERCENT_OF_ROW` |
@@ -1846,7 +1927,7 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
 | `FM_PIVOT_SHOW_AS_PERCENT_OF` | `FM_PIVOT_SHOW_VALUES_AS_PERCENT_OF` |
 | `FM_PIVOT_SHOW_AS_RANK_ASCENDING` | `FM_PIVOT_SHOW_VALUES_AS_RANK_ASCENDING` |
 | `FM_PIVOT_SHOW_AS_RANK_DESCENDING` | `FM_PIVOT_SHOW_VALUES_AS_RANK_DESCENDING` |
-| `FM_PIVOT_SHOW_AS_RUNNING_TOTAL_IN_COL` | `FM_PIVOT_SHOW_VALUES_AS_RUNNING_TOTAL_IN_COL` |
+| `FM_PIVOT_SHOW_AS_RUNNING_TOTAL_IN_COL` | `FM_PIVOT_SHOW_VALUES_AS_RUNNING_TOTAL_IN_COLUMN` |
 | `FM_PIVOT_SHOW_AS_RUNNING_TOTAL_IN_ROW` | `FM_PIVOT_SHOW_VALUES_AS_RUNNING_TOTAL_IN_ROW` |
 | `fm_pivot_show_as_t` | `fm_pivot_show_values_as_t` |
 | `FM_PIVOT_SORT_ASCENDING` | `FM_PIVOT_SORT_ORDER_ASCENDING` |
@@ -1919,7 +2000,6 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
 | `fm_sheet_get_comment_at_index` | `fm_sheet_get_comment_at` |
 | `fm_sheet_get_comment_at` | `fm_sheet_get_comment` |
 | `fm_sheet_get_image` | `fm_sheet_get_picture` |
-| `fm_sheet_get_protected_range` | `fm_sheet_get_protected_range_at` |
 | `fm_sheet_get_protection` | `fm_sheet_get_sheet_protection` |
 | `fm_sheet_get_row_override_count` | `fm_sheet_get_row_layout_count` |
 | `fm_sheet_get_row_override` | `fm_sheet_get_row_layout_at` |
@@ -2414,6 +2494,7 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
 | `chart` | `value` |
 | `ChartAxis.deleted` | `ChartAxis.visible` |
 | `ChartAxisInfo` | `ChartAxis` |
+| `ChartBarDirection.Col` | `ChartBarDirection.Column` |
 | `ChartBlanksAs` | `BlanksAs` |
 | `ChartCategories.formatCode` | `ChartCategories.numberFormat` |
 | `ChartDataResult` | removed |
@@ -2618,6 +2699,7 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
 | `layout` | `value` |
 | `listDrawingObjects()` | `listDrawings()` |
 | `listInvalidCells()` | `getInvalidCells()` |
+| `listLocaleErrorNames()` | removed |
 | `ListResult` | removed |
 | `localeFacts()` | `getLocaleFacts()` |
 | `LocaleFactsResult` | removed |
@@ -2682,6 +2764,7 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
 | `PictureProperties.pxWidth` | `PictureProperties.widthPx` |
 | `pinnedNow()` | `getPinnedNow()` |
 | `PinnedNowResult` | removed |
+| `PivotAxis.Col` | `PivotAxis.Column` |
 | `pivotCacheCalculatedFieldAdd()` | `wb.pivotCache(...).addCalculatedField()` |
 | `pivotCacheCalculatedFieldRemove()` | `wb.pivotCache(...).removeCalculatedField()` |
 | `pivotCacheCalculatedFieldSetFormula()` | `wb.pivotCache(...).setCalculatedFieldFormula()` |
@@ -2809,6 +2892,9 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
 | `PivotShowAsBase.PIVOT_SHOW_AS_BASE_NEXT` | `PivotShowAsBase.Next` |
 | `PivotShowAsBase.PIVOT_SHOW_AS_BASE_PREVIOUS` | `PivotShowAsBase.Previous` |
 | `pivotShowDetails()` | `ws.pivot(...).showDetails()` |
+| `PivotShowValuesAs.PercentOfCol` | `PivotShowValuesAs.PercentOfColumn` |
+| `PivotShowValuesAs.PercentOfParentCol` | `PivotShowValuesAs.PercentOfParentColumn` |
+| `PivotShowValuesAs.RunningTotalInCol` | `PivotShowValuesAs.RunningTotalInColumn` |
 | `PivotStyleInfo` | `PivotStyleOptions` |
 | `PivotStyleInfoInput` | `PivotStyleOptionsPatch` |
 | `PivotStyleInfoResult` | folded into `PivotStyleOptions` |
@@ -3204,6 +3290,7 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
 | `library_version()` | `get_version()` |
 | `list_drawing_objects()` | `list_drawings()` |
 | `list_invalid_cells()` | `get_invalid_cells()` |
+| `list_locale_error_names()` | removed |
 | `MarginsPt` | `PaginationMargins` |
 | `memory_usage()` | `get_memory_usage()` |
 | `merge_count()` | removed; use `list_merges()` |
@@ -3342,6 +3429,7 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
 | `pivot_set_style_info()` | `ws.pivot(...).update_style_options()` |
 | `pivot_show_details()` | `ws.pivot(...).show_details()` |
 | `pivot_style_info()` | `ws.pivot(...).get_style_options()` |
+| `PivotAxis.COL` | `PivotAxis.COLUMN` |
 | `PivotDataFieldSpec` | `PivotDataFieldInput` |
 | `PivotField.subtotal_fns` | `PivotField.subtotal_functions` |
 | `PivotFieldInfo` | `PivotField` |
@@ -3357,6 +3445,9 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
 | `PivotOptions.show_empty_col` | `PivotOptions.show_empty_column` |
 | `PivotShowAsBase.PIVOT_SHOW_AS_BASE_NEXT` | `PivotShowAsBase.NEXT` |
 | `PivotShowAsBase.PIVOT_SHOW_AS_BASE_PREVIOUS` | `PivotShowAsBase.PREVIOUS` |
+| `PivotShowValuesAs.PERCENT_OF_COL` | `PivotShowValuesAs.PERCENT_OF_COLUMN` |
+| `PivotShowValuesAs.PERCENT_OF_PARENT_COL` | `PivotShowValuesAs.PERCENT_OF_PARENT_COLUMN` |
+| `PivotShowValuesAs.RUNNING_TOTAL_IN_COL` | `PivotShowValuesAs.RUNNING_TOTAL_IN_COLUMN` |
 | `PivotStyleInfo` | `PivotStyleOptions` |
 | `PivotStyleOptions.name` | `PivotStyleOptions.style_name` |
 | `PivotWorksheetSource.ref` | `PivotWorksheetSource.range` |
@@ -3727,6 +3818,17 @@ through its operation instead.
 | `-1` as the workbook scope of a defined name (`fm_defined_name_t.local_sheet_id` and three functions), `SIZE_MAX` as no excluded data field, the numbers 1048828 and 1048829 as show-as base items | `FM_DEFINED_NAME_SCOPE_WORKBOOK`, `FM_PIVOT_DATA_FIELD_NONE`, `FM_PIVOT_SHOW_AS_BASE_PREVIOUS` and `FM_PIVOT_SHOW_AS_BASE_NEXT` |
 | `fm_chart_title_t` `text` and `formula` read as `""` when the title kind does not use them | `NULL` for the unused field; as input `NULL` and `""` both read as empty |
 | a C parameter that names a column or a plot group as `index` | `column_index` and `plot_index` (names only, no ABI change) |
+| `fm_sheet_add_cf_rule(..., size_t* out_cf_rule_index)` | `const char** out_cf_rule_id`, the stored id (a view valid until the next scratch-backed read) |
+| `fm_sheet_update_cf_rule`, `fm_sheet_remove_cf_rule` (a position) | take the rule's id (`const char* id`); a missing id is `FM_STATUS_NOT_FOUND` |
+| (none) | `fm_sheet_get_cf_rule(wb, sheet_index, id, int32_t* out_present, fm_cf_rule_t* out)` reads a rule by id; `fm_sheet_get_cf_rule_at` stays the positional read |
+| `fm_sheet_add_protected_range(wb, sheet_index, range, size_t* out_protected_range_index)` | no out parameter: the name is the key; a name already in use is `FM_STATUS_ALREADY_EXISTS` |
+| `fm_sheet_update_protected_range`, `fm_sheet_remove_protected_range` (a position) | take the range's name |
+| `fm_sheet_get_protected_range(wb, sheet_index, index, out)` (the positional read) | `fm_sheet_get_protected_range_at`; `fm_sheet_get_protected_range(wb, sheet_index, name, int32_t* out_present, out)` now reads by name |
+| `fm_workbook_add_pivot_cache_field_shared_item_number`, `_date`, `_text`, `_bool`, `_blank`, `_error` | gain a trailing `size_t* out_shared_item_index` |
+| `fm_workbook_add_person(wb, person)` | `fm_workbook_add_person(wb, person, const char** out_person_id)` returns the stored id |
+| `fm_chart_insert_spec_t.title` (`const char*`; `NULL` automatic, `""` none) | `int32_t has_title` and `fm_chart_title_t title`; the struct layout changes |
+| (none) | `fm_sheet_get_pivot_page_field_order` and `fm_sheet_set_pivot_page_field_order` |
+| `FM_PIVOT_AXIS_COL`, `FM_PIVOT_SHOW_VALUES_AS_PERCENT_OF_COL`, `_RUNNING_TOTAL_IN_COL`, `_PERCENT_OF_PARENT_COL` | `FM_PIVOT_AXIS_COLUMN`, `FM_PIVOT_SHOW_VALUES_AS_PERCENT_OF_COLUMN`, `_RUNNING_TOTAL_IN_COLUMN`, `_PERCENT_OF_PARENT_COLUMN` (same numbers) |
 
 **Additive changes (no ABI break).** `fm_convert_civil_to_serial` and
 `fm_convert_serial_to_civil` convert between a civil time and a serial for

@@ -45,6 +45,21 @@ TEST_F(FormulonCApiSheetFeatures, MergeAddAndIterate) {
   EXPECT_EQ(got.last_col, 2U);
 }
 
+TEST_F(FormulonCApiSheetFeatures, MergeIntersectingAnExistingMergeIsRefused) {
+  const fm_cell_rect_t first{0, 0, 1, 1};
+  ASSERT_EQ(fm_sheet_add_merge(wb_, 0, &first), 0);
+
+  const fm_cell_rect_t overlapping{1, 1, 2, 2};
+  EXPECT_EQ(fm_sheet_add_merge(wb_, 0, &overlapping), FM_STATUS_ALREADY_EXISTS);
+  EXPECT_EQ(fm_sheet_add_merge(wb_, 0, &first), FM_STATUS_ALREADY_EXISTS);
+
+  const fm_cell_rect_t adjacent{0, 2, 1, 3};
+  EXPECT_EQ(fm_sheet_add_merge(wb_, 0, &adjacent), 0);
+  std::size_t count = 0;
+  ASSERT_EQ(fm_sheet_get_merge_count(wb_, 0, &count), 0);
+  EXPECT_EQ(count, 2U);
+}
+
 TEST_F(FormulonCApiSheetFeatures, MergeOutOfRangeIndex) {
   fm_cell_rect_t got{};
   EXPECT_NE(fm_sheet_get_merge_at(wb_, 0, 999, &got), 0);

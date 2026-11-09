@@ -344,11 +344,13 @@ extern "C" fm_status_t fm_workbook_get_person(const fm_workbook_t* wb, const cha
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_add_person(fm_workbook_t* wb, const fm_person_t* person) {
+extern "C" fm_status_t fm_workbook_add_person(fm_workbook_t* wb, const fm_person_t* person,
+                                              const char** out_person_id) {
   clear_last_error();
-  if (wb == nullptr || person == nullptr) {
+  if (wb == nullptr || person == nullptr || out_person_id == nullptr) {
     return null_argument();
   }
+  *out_person_id = nullptr;
   if (auto rc = check_record_size(*person); rc != 0) {
     return rc;
   }
@@ -360,7 +362,12 @@ extern "C" fm_status_t fm_workbook_add_person(fm_workbook_t* wb, const fm_person
   model.display_name = text_or_empty(person->display_name);
   model.user_id = text_or_empty(person->user_id);
   model.provider_id = text_or_empty(person->provider_id);
-  return finish_status(wb->workbook().add_person(std::move(model)));
+  auto added = wb->workbook().add_person(std::move(model));
+  if (!added) {
+    return set_last_error(added.error());
+  }
+  *out_person_id = formulon::c_api::parts::publish_scratch(wb, std::string(wb->workbook().persons().back().id));
+  return 0;
 }
 
 extern "C" fm_status_t fm_workbook_remove_person(fm_workbook_t* wb, const char* id) {

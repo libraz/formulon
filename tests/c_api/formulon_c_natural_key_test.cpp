@@ -146,7 +146,9 @@ TEST(FormulonCApiNaturalKey, PersonAndThreadedCommentById) {
   WorkbookGuard wb;
   CreateDefault(wb);
   const fm_person_t alice{sizeof(fm_person_t), kAlice, "Alice", "alice@example.com", "None"};
-  ASSERT_EQ(fm_workbook_add_person(wb.handle, &alice), 0) << fm_get_last_error_message();
+  const char* added_person_id = nullptr;
+  ASSERT_EQ(fm_workbook_add_person(wb.handle, &alice, &added_person_id), 0) << fm_get_last_error_message();
+  EXPECT_STREQ(added_person_id, kAlice);
   fm_threaded_comment_t comment = FM_STRUCT_INIT(fm_threaded_comment_t);
   comment.id = kThread;
   comment.row = 4U;
@@ -271,11 +273,8 @@ TEST(FormulonCApiNaturalKey, IndexKeyedAddsReturnTheirIndex) {
   protected_range.name = "Inputs";
   protected_range.ranges = &range;
   protected_range.range_count = 1;
-  std::size_t protected_index = 99;
-  ASSERT_EQ(fm_sheet_add_protected_range(wb.handle, sheet, &protected_range, &protected_index), 0)
-      << fm_get_last_error_message();
-  EXPECT_EQ(protected_index, 0U);
-  EXPECT_EQ(fm_sheet_add_protected_range(wb.handle, sheet, &protected_range, nullptr), kBindingNullPointer);
+  ASSERT_EQ(fm_sheet_add_protected_range(wb.handle, sheet, &protected_range), 0) << fm_get_last_error_message();
+  EXPECT_EQ(fm_sheet_add_protected_range(wb.handle, sheet, nullptr), kBindingNullPointer);
 }
 
 TEST(FormulonCApiNaturalKey, ARejectedAddLeavesItsOutIndexUntouched) {

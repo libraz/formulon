@@ -1110,6 +1110,9 @@ def _rule_list(ctx: Context) -> Iterable[Violation]:
             name = entry.get(field)
             if not isinstance(name, str):
                 continue
+            drop = entry.get("drop")
+            if isinstance(drop, dict) and drop.get(field) == name:
+                continue  # the list itself is dropped: its absence is the point
             if plural is not None:
                 want = f"list_{plural}" if field == "py" else "list" + _pascal(plural)
                 if name != want:

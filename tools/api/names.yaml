@@ -35,9 +35,9 @@ collections:
   pivot_cache_record: { key: index, access: exempt, plural: pivot_cache_records, exempt: "no getter returns a record; its values have typed getters and setters", ops: [pivot_cache_record.add, pivot_cache_record.clear, pivot_cache_record.get_count] }
   pivot_cache_field_shared_item: { key: index, access: list, plural: pivot_cache_field_shared_items, ops: [pivot_cache_field_shared_item.get_count] }
   pivot_cache_calculated_item: { key: index, access: list, plural: pivot_cache_calculated_items, ops: [pivot_cache_calculated_item.add, pivot_cache_calculated_item.get, pivot_cache_calculated_item.get_count, pivot_cache_calculated_item.move, pivot_cache_calculated_item.remove] }
-  cf_rule: { key: index, access: list, plural: cf_rules, ops: [cf_rule.add, cf_rule.clear, cf_rule.get, cf_rule.get_count, cf_rule.remove, cf_rule.update] }
+  cf_rule: { key: natural, by: id, plural: cf_rules, ops: [cf_rule.add, cf_rule.clear, cf_rule.get, cf_rule.get_at, cf_rule.get_count, cf_rule.remove, cf_rule.update] }
   validation: { key: natural, by: id, plural: validations, ops: [validation.add, validation.get, validation.get_at, validation.get_count, validation.remove, validation.update] }
-  protected_range: { key: index, access: list, plural: protected_ranges, ops: [protected_range.add, protected_range.get, protected_range.get_count, protected_range.remove, protected_range.update] }
+  protected_range: { key: natural, by: name, plural: protected_ranges, ops: [protected_range.add, protected_range.get, protected_range.get_at, protected_range.get_count, protected_range.remove, protected_range.update] }
   sparkline_group: { key: natural, by: id, plural: sparkline_groups, ops: [sparkline_group.add, sparkline_group.get, sparkline_group.get_at, sparkline_group.get_count, sparkline_group.remove, sparkline_group.update] }
   table_column: { key: index, access: exempt, plural: table_columns, exempt: "C-only getter; the bindings read columns as a Table field", ops: [table_column.get] }
   sparkline: { key: index, access: exempt, plural: sparklines, exempt: "C-only getter; the bindings read sparklines as a SparklineGroup field", ops: [sparkline.get] }
@@ -77,6 +77,8 @@ enum_families:
   # reading direction: Context 0, LeftToRight 1, RightToLeft 2 (`readingOrder` / `<x14:dataBar direction>`)
   reading_direction: [enum.reading_order, enum.cf_data_bar_direction]
 enum_distinct:
+  - { enums: [enum.chart_bar_direction, enum.pivot_axis], reason: "share Absent / Column: bar orientation vs pivot field axis" }
+  - { enums: [enum.effective_style_source, enum.pivot_axis], reason: "share Column / Row: where a cell's style came from vs pivot field axis" }
   - { enums: [enum.chart_axis_crosses, enum.pivot_aggregation], reason: "share Min / Max only: axis crossing point vs aggregation function" }
   - { enums: [enum.chart_axis_position, enum.chart_label_position], reason: "share Left / Right: axis side vs data-label placement" }
   - { enums: [enum.chart_label_position, enum.chart_legend_position], reason: "share Left / Right: data-label placement vs legend placement" }
@@ -3977,6 +3979,38 @@ entries:
     kind: typedef
     py: InvalidFileError
     surfaces: [py]
+  type.io_error:
+    kind: typedef
+    py: IoError
+    surfaces: [py]
+  type.evaluation_error:
+    kind: typedef
+    py: EvaluationError
+    surfaces: [py]
+  type.function_error:
+    kind: typedef
+    py: FunctionError
+    surfaces: [py]
+  type.recalc_error:
+    kind: typedef
+    py: RecalcError
+    surfaces: [py]
+  type.security_error:
+    kind: typedef
+    py: SecurityError
+    surfaces: [py]
+  type.binding_error:
+    kind: typedef
+    py: BindingError
+    surfaces: [py]
+  type.pivot_error:
+    kind: typedef
+    py: PivotError
+    surfaces: [py]
+  type.print_error:
+    kind: typedef
+    py: PrintError
+    surfaces: [py]
   record.iterative_settings:
     kind: record
     role: result
@@ -5157,12 +5191,18 @@ entries:
     kind: op
     scope: sheet
     noun: protected_range
+    c: fm_sheet_get_protected_range
+    surfaces: [c]
+    exception: "C reads one range by name; the bindings read the list"
+  protected_range.get_at:
+    kind: op
+    scope: sheet
+    noun: protected_range
     c: fm_sheet_get_protected_range_at
     js: getProtectedRange
     py: get_protected_range
     surfaces: [c, wasm, native, py]
     exception: "the bindings read by position through get<X>(index); only the C name carries `_at`"
-    was: { c: fm_sheet_get_protected_range }
     drop: { js: getProtectedRange, py: get_protected_range, closes: R23.list }
   protected_range.add:
     kind: op
@@ -5173,7 +5213,7 @@ entries:
     py: add_protected_range
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_add_protected_range, js: addProtectedRange, py: add_protected_range }
-    add_returns: index
+    add_returns: key
   protected_range.update:
     kind: op
     scope: sheet
@@ -6140,6 +6180,13 @@ entries:
     kind: op
     scope: sheet
     noun: cf_rule
+    c: fm_sheet_get_cf_rule
+    surfaces: [c]
+    exception: "C reads one rule by id; the bindings read the list"
+  cf_rule.get_at:
+    kind: op
+    scope: sheet
+    noun: cf_rule
     c: fm_sheet_get_cf_rule_at
     js: getCfRule
     py: get_cf_rule
@@ -6157,7 +6204,7 @@ entries:
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_cf_add_rule, js: addConditionalFormat, py: add_conditional_format }
     facade: handwritten
-    add_returns: index
+    add_returns: key
   cf_rule.remove:
     kind: op
     scope: sheet
@@ -7099,6 +7146,15 @@ entries:
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_set_col_field_order, js: pivotSetColFieldOrder, py: pivot_set_col_field_order }
     handle: { class: Pivot, supplies: [sheet, pivot] }
+  pivot_page_field_order.set:
+    kind: op
+    scope: sheet
+    noun: pivot_page_field_order
+    c: fm_sheet_set_pivot_page_field_order
+    js: setPivotPageFieldOrder
+    py: set_pivot_page_field_order
+    surfaces: [c, wasm, native, py]
+    handle: { class: Pivot, supplies: [sheet, pivot] }
   pivot_data_field.get_count:
     kind: op
     scope: sheet
@@ -7310,6 +7366,15 @@ entries:
     py: get_pivot_column_field_order
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_get_col_field_order, js: pivotColFieldOrder, py: pivot_col_field_order }
+    handle: { class: Pivot, supplies: [sheet, pivot] }
+  pivot_page_field_order.get:
+    kind: op
+    scope: sheet
+    noun: pivot_page_field_order
+    c: fm_sheet_get_pivot_page_field_order
+    js: getPivotPageFieldOrder
+    py: get_pivot_page_field_order
+    surfaces: [c, wasm, native, py]
     handle: { class: Pivot, supplies: [sheet, pivot] }
   pivot_filter.get_count:
     kind: op
@@ -9804,10 +9869,11 @@ entries:
     js: listLocaleErrorNames
     py: list_locale_error_names
     surfaces: [wasm, native, py]
+    drop: { js: listLocaleErrorNames, py: list_locale_error_names, closes: R5.derive }
   cf_rule.list.get_conditional_formats:
     kind: list
     scope: sheet
-    from: [cf_rule.get_count, cf_rule.get]
+    from: [cf_rule.get_count, cf_rule.get_at]
     js: listCfRules
     py: list_cf_rules
     surfaces: [wasm, native, py]
@@ -9883,7 +9949,7 @@ entries:
   protected_range.list.get_protected_ranges:
     kind: list
     scope: sheet
-    from: [protected_range.get_count, protected_range.get]
+    from: [protected_range.get_count, protected_range.get_at]
     js: listProtectedRanges
     py: list_protected_ranges
     surfaces: [wasm, native, py]
@@ -10242,10 +10308,12 @@ entries:
     was: { c: FM_PIVOT_AXIS_ROW }
   constant.fm_pivot_axis_col:
     kind: constant
-    c: FM_PIVOT_AXIS_COL
+    c: FM_PIVOT_AXIS_COLUMN
     enum: enum.pivot_axis
-    surfaces: [c]
-    was: { c: FM_PIVOT_AXIS_COL }
+    js: Column
+    py: COLUMN
+    surfaces: [c, wasm, native, py]
+    was: { c: FM_PIVOT_AXIS_COL, js: Col, py: COL }
   constant.fm_pivot_axis_value:
     kind: constant
     c: FM_PIVOT_AXIS_VALUE
@@ -10361,10 +10429,12 @@ entries:
     was: { c: FM_PIVOT_SHOW_AS_PERCENT_OF_ROW }
   constant.fm_pivot_show_as_percent_of_col:
     kind: constant
-    c: FM_PIVOT_SHOW_VALUES_AS_PERCENT_OF_COL
+    c: FM_PIVOT_SHOW_VALUES_AS_PERCENT_OF_COLUMN
     enum: enum.pivot_show_as
-    surfaces: [c]
-    was: { c: FM_PIVOT_SHOW_AS_PERCENT_OF_COL }
+    js: PercentOfColumn
+    py: PERCENT_OF_COLUMN
+    surfaces: [c, wasm, native, py]
+    was: { c: FM_PIVOT_SHOW_AS_PERCENT_OF_COL, js: PercentOfCol, py: PERCENT_OF_COL }
   constant.fm_pivot_show_as_percent_of_total:
     kind: constant
     c: FM_PIVOT_SHOW_VALUES_AS_PERCENT_OF_TOTAL
@@ -10379,10 +10449,12 @@ entries:
     was: { c: FM_PIVOT_SHOW_AS_RUNNING_TOTAL_IN_ROW }
   constant.fm_pivot_show_as_running_total_in_col:
     kind: constant
-    c: FM_PIVOT_SHOW_VALUES_AS_RUNNING_TOTAL_IN_COL
+    c: FM_PIVOT_SHOW_VALUES_AS_RUNNING_TOTAL_IN_COLUMN
     enum: enum.pivot_show_as
-    surfaces: [c]
-    was: { c: FM_PIVOT_SHOW_AS_RUNNING_TOTAL_IN_COL }
+    js: RunningTotalInColumn
+    py: RUNNING_TOTAL_IN_COLUMN
+    surfaces: [c, wasm, native, py]
+    was: { c: FM_PIVOT_SHOW_AS_RUNNING_TOTAL_IN_COL, js: RunningTotalInCol, py: RUNNING_TOTAL_IN_COL }
   constant.fm_pivot_show_as_index:
     kind: constant
     c: FM_PIVOT_SHOW_VALUES_AS_INDEX
@@ -10409,10 +10481,12 @@ entries:
     was: { c: FM_PIVOT_SHOW_AS_PERCENT_OF_PARENT_ROW }
   constant.fm_pivot_show_as_percent_of_parent_col:
     kind: constant
-    c: FM_PIVOT_SHOW_VALUES_AS_PERCENT_OF_PARENT_COL
+    c: FM_PIVOT_SHOW_VALUES_AS_PERCENT_OF_PARENT_COLUMN
     enum: enum.pivot_show_as
-    surfaces: [c]
-    was: { c: FM_PIVOT_SHOW_AS_PERCENT_OF_PARENT_COL }
+    js: PercentOfParentColumn
+    py: PERCENT_OF_PARENT_COLUMN
+    surfaces: [c, wasm, native, py]
+    was: { c: FM_PIVOT_SHOW_AS_PERCENT_OF_PARENT_COL, js: PercentOfParentCol, py: PERCENT_OF_PARENT_COL }
   constant.fm_pivot_show_as_percent_of_parent:
     kind: constant
     c: FM_PIVOT_SHOW_VALUES_AS_PERCENT_OF_PARENT
@@ -12340,8 +12414,10 @@ entries:
     kind: constant
     c: FM_CHART_BAR_DIRECTION_COLUMN
     enum: enum.chart_bar_direction
-    surfaces: [c]
-    was: { c: FM_CHART_BAR_DIR_COL }
+    js: Column
+    py: COLUMN
+    surfaces: [c, wasm, native, py]
+    was: { c: FM_CHART_BAR_DIR_COL, js: Col }
   constant.fm_chart_bar_dir_bar:
     kind: constant
     c: FM_CHART_BAR_DIRECTION_BAR
@@ -18212,6 +18288,11 @@ entries:
     kind: typedef
     js: ChartAxisRef
     py: ChartAxisRef
+    surfaces: [wasm, native, py]
+  type.cf_rule_id:
+    kind: typedef
+    js: CfRuleId
+    py: CfRuleId
     surfaces: [wasm, native, py]
   type.validation_id:
     kind: typedef

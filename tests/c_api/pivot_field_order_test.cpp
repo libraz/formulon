@@ -94,7 +94,8 @@ TEST(FormulonCApiPivotFieldOrder, ReplacesMembershipAndMovesMultipleFieldsBetwee
   ASSERT_EQ(SetFieldOrder(wb.handle, pivot_index, false, reordered_cols, 3U), 0) << fm_get_last_error_message();
   EXPECT_EQ(ReadFieldOrder(wb.handle, pivot_index, true), (std::vector<std::uint32_t>{1U}));
   EXPECT_EQ(ReadFieldOrder(wb.handle, pivot_index, false), (std::vector<std::uint32_t>{2U, 4U, 0U}));
-  ExpectAxes(wb.handle, pivot_index, {FM_PIVOT_AXIS_COL, FM_PIVOT_AXIS_ROW, FM_PIVOT_AXIS_COL, -1, FM_PIVOT_AXIS_COL});
+  ExpectAxes(wb.handle, pivot_index,
+             {FM_PIVOT_AXIS_COLUMN, FM_PIVOT_AXIS_ROW, FM_PIVOT_AXIS_COLUMN, -1, FM_PIVOT_AXIS_COLUMN});
 
   // A later row replacement moves field 3 from no axis and field 1 from rows;
   // the column membership and order remain intact.
@@ -103,7 +104,7 @@ TEST(FormulonCApiPivotFieldOrder, ReplacesMembershipAndMovesMultipleFieldsBetwee
   EXPECT_EQ(ReadFieldOrder(wb.handle, pivot_index, true), (std::vector<std::uint32_t>{3U, 1U}));
   EXPECT_EQ(ReadFieldOrder(wb.handle, pivot_index, false), (std::vector<std::uint32_t>{2U, 4U, 0U}));
   ExpectAxes(wb.handle, pivot_index,
-             {FM_PIVOT_AXIS_COL, FM_PIVOT_AXIS_ROW, FM_PIVOT_AXIS_COL, FM_PIVOT_AXIS_ROW, FM_PIVOT_AXIS_COL});
+             {FM_PIVOT_AXIS_COLUMN, FM_PIVOT_AXIS_ROW, FM_PIVOT_AXIS_COLUMN, FM_PIVOT_AXIS_ROW, FM_PIVOT_AXIS_COLUMN});
 }
 
 TEST(FormulonCApiPivotFieldOrder, AcceptsGetterOrderAsTheOtherAxisInput) {
@@ -126,8 +127,9 @@ TEST(FormulonCApiPivotFieldOrder, AcceptsGetterOrderAsTheOtherAxisInput) {
       << fm_get_last_error_message();
   EXPECT_TRUE(ReadFieldOrder(wb.handle, pivot_index, true).empty());
   EXPECT_EQ(ReadFieldOrder(wb.handle, pivot_index, false), (std::vector<std::uint32_t>{0U, 1U}));
-  ExpectAxes(wb.handle, pivot_index,
-             {FM_PIVOT_AXIS_COL, FM_PIVOT_AXIS_COL, FM_PIVOT_AXIS_VALUE, FM_PIVOT_AXIS_VALUE, FM_PIVOT_AXIS_VALUE});
+  ExpectAxes(
+      wb.handle, pivot_index,
+      {FM_PIVOT_AXIS_COLUMN, FM_PIVOT_AXIS_COLUMN, FM_PIVOT_AXIS_VALUE, FM_PIVOT_AXIS_VALUE, FM_PIVOT_AXIS_VALUE});
 }
 
 TEST(FormulonCApiPivotFieldOrder, ASmallerBufferTakesThePrefixAndReportsTheFullCount) {
@@ -251,7 +253,7 @@ TEST(FormulonCApiPivotFieldOrder, InvalidAndDuplicateOrdersLeaveAllStateUntouche
   EXPECT_EQ(table.row_values_position(), 1U);
   EXPECT_EQ(table.col_values_position(), 2U);
   ExpectAxes(wb.handle, pivot_index,
-             {FM_PIVOT_AXIS_ROW, FM_PIVOT_AXIS_ROW, FM_PIVOT_AXIS_COL, FM_PIVOT_AXIS_COL, FM_PIVOT_AXIS_COL});
+             {FM_PIVOT_AXIS_ROW, FM_PIVOT_AXIS_ROW, FM_PIVOT_AXIS_COLUMN, FM_PIVOT_AXIS_COLUMN, FM_PIVOT_AXIS_COLUMN});
 }
 
 TEST(FormulonCApiPivotFieldOrder, NullPointerWithEmptyOrderClearsBothAxesSafely) {
@@ -269,7 +271,7 @@ TEST(FormulonCApiPivotFieldOrder, NullPointerWithEmptyOrderClearsBothAxesSafely)
       << fm_get_last_error_message();
   EXPECT_TRUE(ReadFieldOrder(wb.handle, pivot_index, true).empty());
   EXPECT_EQ(ReadFieldOrder(wb.handle, pivot_index, false), (std::vector<std::uint32_t>{2U, 3U, 4U}));
-  ExpectAxes(wb.handle, pivot_index, {-1, -1, FM_PIVOT_AXIS_COL, FM_PIVOT_AXIS_COL, FM_PIVOT_AXIS_COL});
+  ExpectAxes(wb.handle, pivot_index, {-1, -1, FM_PIVOT_AXIS_COLUMN, FM_PIVOT_AXIS_COLUMN, FM_PIVOT_AXIS_COLUMN});
 
   ASSERT_EQ(fm_sheet_set_pivot_column_field_order(wb.handle, 0U, pivot_index, nullptr, 0U), 0)
       << fm_get_last_error_message();
@@ -292,4 +294,95 @@ TEST(FormulonCApiPivotFieldOrder, MovesOnlyFirstOccurrenceFromMalformedOppositeO
       << fm_get_last_error_message();
   EXPECT_EQ(ReadFieldOrder(wb.handle, pivot_index, true), (std::vector<std::uint32_t>{0U, 2U, 1U, 3U}));
   EXPECT_EQ(ReadFieldOrder(wb.handle, pivot_index, false), (std::vector<std::uint32_t>{1U}));
+}
+
+namespace {
+
+std::vector<std::uint32_t> ReadPageOrder(const fm_workbook_t* wb, std::size_t pivot_index) {
+  std::size_t count = 0;
+  EXPECT_EQ(fm_sheet_get_pivot_page_field_order(wb, 0U, pivot_index, nullptr, 0U, &count), 0)
+      << fm_get_last_error_message();
+  std::vector<std::uint32_t> indices(count);
+  if (count != 0U) {
+    EXPECT_EQ(fm_sheet_get_pivot_page_field_order(wb, 0U, pivot_index, indices.data(), indices.size(), &count), 0)
+        << fm_get_last_error_message();
+  }
+  return indices;
+}
+
+}  // namespace
+
+TEST(FormulonCApiPivotFieldOrder, PageOrderReadsSetsAndReadsBackReversed) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  std::size_t pivot_index = 0;
+  ASSERT_EQ(BuildFieldOrderPivot(wb.handle, &pivot_index), 0) << fm_get_last_error_message();
+  EXPECT_TRUE(ReadPageOrder(wb.handle, pivot_index).empty());
+
+  const std::uint32_t order[] = {1U, 3U};
+  ASSERT_EQ(fm_sheet_set_pivot_page_field_order(wb.handle, 0U, pivot_index, order, 2U), 0)
+      << fm_get_last_error_message();
+  EXPECT_EQ(ReadPageOrder(wb.handle, pivot_index), (std::vector<std::uint32_t>{1U, 3U}));
+  ExpectAxes(wb.handle, pivot_index,
+             {FM_PIVOT_AXIS_VALUE, FM_PIVOT_AXIS_PAGE, FM_PIVOT_AXIS_VALUE, FM_PIVOT_AXIS_PAGE, FM_PIVOT_AXIS_VALUE});
+
+  const std::uint32_t reversed[] = {3U, 1U};
+  ASSERT_EQ(fm_sheet_set_pivot_page_field_order(wb.handle, 0U, pivot_index, reversed, 2U), 0)
+      << fm_get_last_error_message();
+  EXPECT_EQ(ReadPageOrder(wb.handle, pivot_index), (std::vector<std::uint32_t>{3U, 1U}));
+
+  // A field left out comes off the page axis.
+  const std::uint32_t only[] = {3U};
+  ASSERT_EQ(fm_sheet_set_pivot_page_field_order(wb.handle, 0U, pivot_index, only, 1U), 0);
+  EXPECT_EQ(ReadPageOrder(wb.handle, pivot_index), (std::vector<std::uint32_t>{3U}));
+  ExpectAxes(wb.handle, pivot_index,
+             {FM_PIVOT_AXIS_VALUE, -1, FM_PIVOT_AXIS_VALUE, FM_PIVOT_AXIS_PAGE, FM_PIVOT_AXIS_VALUE});
+}
+
+TEST(FormulonCApiPivotFieldOrder, ListingARowFieldOnThePageMovesItOffTheRowAxis) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  std::size_t pivot_index = 0;
+  ASSERT_EQ(BuildFieldOrderPivot(wb.handle, &pivot_index), 0) << fm_get_last_error_message();
+  const std::uint32_t rows[] = {0U, 1U};
+  ASSERT_EQ(SetFieldOrder(wb.handle, pivot_index, true, rows, 2U), 0);
+  const std::uint32_t page[] = {1U};
+  ASSERT_EQ(fm_sheet_set_pivot_page_field_order(wb.handle, 0U, pivot_index, page, 1U), 0)
+      << fm_get_last_error_message();
+  EXPECT_EQ(ReadFieldOrder(wb.handle, pivot_index, true), (std::vector<std::uint32_t>{0U}));
+  EXPECT_EQ(ReadPageOrder(wb.handle, pivot_index), (std::vector<std::uint32_t>{1U}));
+}
+
+TEST(FormulonCApiPivotFieldOrder, PageOrderRefusesTheValuesFieldDuplicatesAndPastTheEnd) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  std::size_t pivot_index = 0;
+  ASSERT_EQ(BuildFieldOrderPivot(wb.handle, &pivot_index), 0) << fm_get_last_error_message();
+  const std::uint32_t seed[] = {2U};
+  ASSERT_EQ(fm_sheet_set_pivot_page_field_order(wb.handle, 0U, pivot_index, seed, 1U), 0);
+
+  const std::uint32_t values[] = {0U, FM_PIVOT_VALUES_FIELD};
+  EXPECT_EQ(fm_sheet_set_pivot_page_field_order(wb.handle, 0U, pivot_index, values, 2U), FM_STATUS_INVALID_ARGUMENT);
+  const std::uint32_t twice[] = {0U, 0U};
+  EXPECT_EQ(fm_sheet_set_pivot_page_field_order(wb.handle, 0U, pivot_index, twice, 2U), FM_STATUS_INVALID_ARGUMENT);
+  const std::uint32_t past[] = {0U, static_cast<std::uint32_t>(kFieldCount)};
+  EXPECT_EQ(fm_sheet_set_pivot_page_field_order(wb.handle, 0U, pivot_index, past, 2U), FM_STATUS_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(ReadPageOrder(wb.handle, pivot_index), (std::vector<std::uint32_t>{2U})) << "a refusal changes nothing";
+}
+
+TEST(FormulonCApiPivotFieldOrder, AFieldMovedOffThePageAxisAndBackJoinsThePageOrderLast) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  std::size_t pivot_index = 0;
+  ASSERT_EQ(BuildFieldOrderPivot(wb.handle, &pivot_index), 0) << fm_get_last_error_message();
+  const std::uint32_t page[] = {1U, 2U, 3U};
+  ASSERT_EQ(fm_sheet_set_pivot_page_field_order(wb.handle, 0U, pivot_index, page, 3U), 0)
+      << fm_get_last_error_message();
+
+  ASSERT_EQ(fm_sheet_set_pivot_field_axis(wb.handle, 0U, pivot_index, 1U, FM_PIVOT_AXIS_ROW), 0)
+      << fm_get_last_error_message();
+  EXPECT_EQ(ReadPageOrder(wb.handle, pivot_index), (std::vector<std::uint32_t>{2U, 3U}));
+  ASSERT_EQ(fm_sheet_set_pivot_field_axis(wb.handle, 0U, pivot_index, 1U, FM_PIVOT_AXIS_PAGE), 0)
+      << fm_get_last_error_message();
+  EXPECT_EQ(ReadPageOrder(wb.handle, pivot_index), (std::vector<std::uint32_t>{2U, 3U, 1U}));
 }

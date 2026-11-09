@@ -400,8 +400,12 @@ formulon::pivot::PivotCacheField* lookup_cache_field_mut(fm_workbook_t* wb, std:
 }  // namespace
 
 extern "C" fm_status_t fm_workbook_add_pivot_cache_field_shared_item_number(fm_workbook_t* wb, std::uint32_t cache_id,
-                                                                            std::size_t field_index, double value) {
+                                                                            std::size_t field_index, double value,
+                                                                            std::size_t* out_shared_item_index) {
   clear_last_error();
+  if (out_shared_item_index == nullptr) {
+    return null_argument("out_shared_item_index");
+  }
   if (const fm_status_t st = check_finite(value, "value")) {
     return st;
   }
@@ -411,12 +415,17 @@ extern "C" fm_status_t fm_workbook_add_pivot_cache_field_shared_item_number(fm_w
     return status;
   }
   field->shared_items.push_back(formulon::Value::number(value));
+  *out_shared_item_index = field->shared_items.size() - 1U;
   return 0;
 }
 
 extern "C" fm_status_t fm_workbook_add_pivot_cache_field_shared_item_date(fm_workbook_t* wb, std::uint32_t cache_id,
-                                                                          std::size_t field_index, double serial) {
+                                                                          std::size_t field_index, double serial,
+                                                                          std::size_t* out_shared_item_index) {
   clear_last_error();
+  if (out_shared_item_index == nullptr) {
+    return null_argument("out_shared_item_index");
+  }
   if (const fm_status_t st = check_finite(serial, "serial")) {
     return st;
   }
@@ -431,12 +440,17 @@ extern "C" fm_status_t fm_workbook_add_pivot_cache_field_shared_item_date(fm_wor
   field->shared_item_is_date.resize(field->shared_items.size(), false);
   field->shared_items.push_back(formulon::Value::number(serial));
   field->shared_item_is_date.push_back(true);
+  *out_shared_item_index = field->shared_items.size() - 1U;
   return 0;
 }
 
 extern "C" fm_status_t fm_workbook_add_pivot_cache_field_shared_item_text(fm_workbook_t* wb, std::uint32_t cache_id,
-                                                                          std::size_t field_index, const char* utf8) {
+                                                                          std::size_t field_index, const char* utf8,
+                                                                          std::size_t* out_shared_item_index) {
   clear_last_error();
+  if (out_shared_item_index == nullptr) {
+    return null_argument("out_shared_item_index");
+  }
   if (utf8 == nullptr) {
     return null_argument("utf8");
   }
@@ -450,37 +464,52 @@ extern "C" fm_status_t fm_workbook_add_pivot_cache_field_shared_item_text(fm_wor
     return status;
   }
   field->shared_items.push_back(intern_cache_text(*cache, std::string_view(utf8)));
+  *out_shared_item_index = field->shared_items.size() - 1U;
   return 0;
 }
 
 extern "C" fm_status_t fm_workbook_add_pivot_cache_field_shared_item_bool(fm_workbook_t* wb, std::uint32_t cache_id,
-                                                                          std::size_t field_index, std::int32_t value) {
+                                                                          std::size_t field_index, std::int32_t value,
+                                                                          std::size_t* out_shared_item_index) {
   clear_last_error();
+  if (out_shared_item_index == nullptr) {
+    return null_argument("out_shared_item_index");
+  }
   fm_status_t status = 0;
   auto* field = lookup_cache_field_mut(wb, cache_id, field_index, &status);
   if (field == nullptr) {
     return status;
   }
   field->shared_items.push_back(formulon::Value::boolean(value != 0));
+  *out_shared_item_index = field->shared_items.size() - 1U;
   return 0;
 }
 
 extern "C" fm_status_t fm_workbook_add_pivot_cache_field_shared_item_blank(fm_workbook_t* wb, std::uint32_t cache_id,
-                                                                           std::size_t field_index) {
+                                                                           std::size_t field_index,
+                                                                           std::size_t* out_shared_item_index) {
   clear_last_error();
+  if (out_shared_item_index == nullptr) {
+    return null_argument("out_shared_item_index");
+  }
   fm_status_t status = 0;
   auto* field = lookup_cache_field_mut(wb, cache_id, field_index, &status);
   if (field == nullptr) {
     return status;
   }
   field->shared_items.push_back(formulon::Value::blank());
+  *out_shared_item_index = field->shared_items.size() - 1U;
   return 0;
 }
 
 extern "C" fm_status_t fm_workbook_add_pivot_cache_field_shared_item_error(fm_workbook_t* wb, std::uint32_t cache_id,
                                                                            std::size_t field_index,
-                                                                           fm_error_code_t error) {
+                                                                           fm_error_code_t error,
+                                                                           std::size_t* out_shared_item_index) {
   clear_last_error();
+  if (out_shared_item_index == nullptr) {
+    return null_argument("out_shared_item_index");
+  }
   if (!is_valid_error_code(error)) {
     return invalid_error_code(error);
   }
@@ -490,6 +519,7 @@ extern "C" fm_status_t fm_workbook_add_pivot_cache_field_shared_item_error(fm_wo
     return status;
   }
   field->shared_items.push_back(formulon::Value::error(static_cast<formulon::ErrorCode>(error)));
+  *out_shared_item_index = field->shared_items.size() - 1U;
   return 0;
 }
 

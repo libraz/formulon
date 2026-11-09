@@ -8,6 +8,7 @@
 #include <string>
 
 #include "c_api/formulon_c.h"
+#include "formulon_c_out_index.h"
 #include "formulon_c_setters.h"
 #include "gtest/gtest.h"
 #include "utils/error.h"
@@ -158,11 +159,12 @@ TEST(CApiPivotCacheNumbers, RejectNonFiniteValues) {
   size_t record_index = 0;
   ASSERT_EQ(fm_workbook_add_pivot_cache_record(g.handle, cache_id, &record_index), 0);
   for (const double bad : {kNaN, kInf, -kInf}) {
-    EXPECT_EQ(fm_workbook_add_pivot_cache_field_shared_item_number(g.handle, cache_id, field_index, bad),
-              kInvalidArgument);
+    EXPECT_EQ(
+        fm_workbook_add_pivot_cache_field_shared_item_number(g.handle, cache_id, field_index, bad, ignored_index()),
+        kInvalidArgument);
     EXPECT_EQ(fm_workbook_set_pivot_cache_record_number(g.handle, cache_id, record_index, field_index, bad),
               kInvalidArgument);
-    EXPECT_EQ(fm_workbook_add_pivot_cache_field_shared_item_date(g.handle, cache_id, field_index, bad),
+    EXPECT_EQ(fm_workbook_add_pivot_cache_field_shared_item_date(g.handle, cache_id, field_index, bad, ignored_index()),
               kInvalidArgument);
     EXPECT_EQ(fm_workbook_set_pivot_cache_record_date(g.handle, cache_id, record_index, field_index, bad),
               kInvalidArgument);
@@ -170,7 +172,8 @@ TEST(CApiPivotCacheNumbers, RejectNonFiniteValues) {
   size_t count = 99;
   ASSERT_EQ(fm_workbook_get_pivot_cache_field_shared_item_count(g.handle, cache_id, field_index, &count), 0);
   EXPECT_EQ(count, 0U);
-  EXPECT_EQ(fm_workbook_add_pivot_cache_field_shared_item_number(g.handle, cache_id, field_index, 1.5), 0);
+  EXPECT_EQ(fm_workbook_add_pivot_cache_field_shared_item_number(g.handle, cache_id, field_index, 1.5, ignored_index()),
+            0);
   EXPECT_EQ(fm_workbook_set_pivot_cache_record_number(g.handle, cache_id, record_index, field_index, 1.5), 0);
 }
 

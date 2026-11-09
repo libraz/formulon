@@ -13,12 +13,10 @@
 // writer flushes them back at the schema slot they came from, so a round
 // trip preserves them without either end modelling their content.
 //
-// `<pageFields>` is the one element that is both passed through and
-// synthesised. A table read from a file re-emits its authored block from
-// the passthrough bin; a table assembled in memory has no such block, so
-// the writer builds one from the page-axis fields. Without it a saved
-// `axis="axisPage"` field names no page-field order and Excel treats the
-// definition as damaged.
+// `<pageFields>` is written from the model (`PivotTable::page_field_order`
+// and the per-field entries), for a loaded table and one assembled in
+// memory alike. Without it a saved `axis="axisPage"` field names no
+// page-field order and Excel treats the definition as damaged.
 //
 // Design references:
 //   * src/io/pivot_table_reader.h (sister reader; canonical grammar)
