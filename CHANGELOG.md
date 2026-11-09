@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.19.0] - 2026-11-10
+
 ### BREAKING
 
 - **Names:** one naming convention covers every public function, type and
@@ -601,8 +603,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `fm_sheet_set_row_break(wb, sheet_index, row, const fm_row_break_t* or
   NULL)` and `fm_sheet_set_column_break`.
 - **C ABI, JavaScript, Python:** a cell has at most one hyperlink, so
-  `ws.setHyperlink(cell, link | null)` and `ws.setHyperlinkRange(range, link |
-  null)` replace `addHyperlink` and `addHyperlinkRange`.
+  `ws.setHyperlink(cell, link | null)` replaces `addHyperlink` and
+  `addHyperlinkRange`; the range the link covers is `range` in the
+  `HyperlinkInput` record (omitted or `null` is the key cell alone, and a range
+  that does not start at the key cell is `InvalidArgument`).
 - **C ABI, JavaScript, Python:** `Pivot.addFieldItem(field, name | {
   cacheIndex }, options)` takes either a label or a cache index (Python
   `add_field_item(field, name=None, *, cache_index=None, ...)` with exactly
@@ -736,8 +740,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `hasJustifyLastLine` and `hasProtection`, and `PivotWorksheetSource.present`.
   `CfValueObjectInput` is `CfValueObject` and `CfIconInput` is `CfIcon`.
 - **JavaScript:** `Patch<T, Clearable>` names the keys that take `null`.
-  `null` on any other key is a compile-time error and throws `TypeError` at
-  run time; an empty patch changes nothing.
+  `null` on any other key is a compile-time error (and a `TypeError` at run
+  time, see above); an empty patch changes nothing.
 - **JavaScript, Python:** a key that holds a cell rectangle is `range`, and one
   that holds several is `ranges`. `rect` is `range` on `ArrayFormula`,
   `Spill`, `ParsedReference`, `DataTable` and
@@ -851,6 +855,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a call written for the old form inserts a different number of rows.
   `ws.insertRows(3, 5)` inserts three rows, and `first > last` is
   `InvalidArgument`.
+- **C ABI, JavaScript, Python:** `insertRows` and `insertColumns` fail with
+  `PreconditionFailed` and change nothing when they would push a cell that
+  holds a value or formula past the last row or column of the grid; they used
+  to drop it.
+- **C ABI, JavaScript, Python:** `Sheet.insertCells(range, shift)` and
+  `deleteCells(range, shift)` fail with `PreconditionFailed` and change nothing
+  when the shifted region meets a table, a multi-cell array formula or a data
+  table that extends beyond the band, a PivotTable edge or inside, or when a
+  value or formula would be pushed off the grid; `InvalidArgument` for a wrong
+  shift direction or a whole-column range shifted down (whole-row shifted
+  right).
 - **JavaScript, Python:** `addValidation` and `addSparklineGroup` return the
   new rule's id (`ValidationId`, `SparklineGroupId`), and
   `removeValidation`, `updateSparklineGroup` and `removeSparklineGroup` take a
@@ -897,20 +912,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`setTabColor` and every colour key); a misspelt key used to be ignored.
 - **C ABI, JavaScript, Python:** a chart title of `''` is `InvalidArgument` in
   `addChart`, as it already was in `setTitle`; `null` (`None`) is no title and
-  an omitted title is Excel's automatic one. `fm_chart_insert_spec_t` replaces
-  `const char* title` with `int32_t has_title` and `fm_chart_title_t title`
+  an omitted title is Excel's automatic one. `fm_chart_spec_t` (was
+  `fm_chart_insert_spec_t`) replaces `const char* title` with `int32_t has_title` and `fm_chart_title_t title`
   (`has_title == 0` is automatic, a title of kind `NONE` is no title), so the
   insert takes the title shape `fm_sheet_set_chart_title` takes.
 - **JavaScript, Python:** `Table.update({ totalsRow: true })`
   (`update(totals_row=True)`) adds the totals row below the table: the range
-  grows by one row, the data rows stay and each column's totals cell is written
-  in the new row. It used to overwrite the last data row. It fails with
-  `PreconditionFailed` and changes nothing when the row below holds a cell,
-  a merge, a table, a pivot, an array formula or a data table, or when the table
-  ends on the last row of the grid. `update({ totalsRow: false })` removes the
-  totals row and shrinks the range by one row. A toggle that changes nothing is
-  a no-op, and with `range` in the same patch the range is final and
-  `totalsRow` only sets the flag. `fm_sheet_update_table` behaves the same.
+  grows by one row, the cells beneath the table's columns shift down, and each
+  column's totals cell is written in the new row. It used to overwrite the last
+  data row. When something straddles the shifted band the row is taken from
+  free space below instead, and the update fails with `PreconditionFailed` and
+  changes nothing when no free row is left, or when the table ends on the last
+  row of the grid. `update({ totalsRow: false })` removes the totals row and
+  shifts the cells beneath up, or only empties it when something straddles the
+  columns below; it fails with `PreconditionFailed` while a formula or defined
+  name references the row, and the columns keep their saved totals labels and
+  functions. A toggle that changes nothing is a no-op, and with `range` in the
+  same patch the range is final and `totalsRow` only sets the flag.
+  `fm_sheet_update_table` behaves the same.
+- **C ABI, JavaScript, Python:** every named collection (sheets, tables, table
+  columns, defined names, cell styles, custom table styles, protected ranges,
+  pivots) refuses to add, rename or copy a name that equals an existing one
+  under Excel's text comparison, which folds letter case, full- and half-width
+  forms and hiragana / katakana: `Data`, `ＤＡＴＡ`, `ﾃﾞｰﾀ` and `データ` collide.
+  A lookup resolves an exact match, else the one entry equal under Unicode
+  simple case folding, else the single entry equal under the full comparison;
+  two or more such entries resolve nothing. A file with names that collide
+  only under the full comparison loads as it is, and a new name colliding with
+  either is refused. GUID ids and person ids compare by letter case only (a
+  GUID is accepted in either case and stored uppercase), and `=ä` resolves a
+  name `Ä`. Names used to fold ASCII letters only, or compare exactly.
+- **JavaScript, Python:** `null` (`None`) for a patch key that the patch type
+  does not declare clearable throws `TypeError` in the facade, the raw
+  WebAssembly and native layers and Python. `Sheet.updateView({
+  showRowColumnHeaders: null })` and `updateFormatDefaults({
+  baseColumnWidthChars: null })` used to reach the library and fail with
+  `InvalidArgument`, and Python `Chart.update_plot`, `update_axis` (`visible`,
+  `major_gridlines`, `reversed`, `crosses`, `crosses_at`) and `update_series`
+  (`values`, `y`, `size`, `smooth`) raised `InvalidArgumentError` for `None`.
+  Python `Sheet.update_protected_range` takes `None` to clear `algorithm_name`,
+  `hash_value`, `salt_value` and `security_descriptor`, as the other bindings
+  do.
 - **C ABI, JavaScript, Python:** `addMerge` refuses a range that overlaps an
   existing merge, an identical one included, with `AlreadyExists`, and one
   that overlaps a table, a pivot, an array formula or a data table with
@@ -1004,7 +1046,7 @@ argument is a keyword-only argument list there (see
 | `setComment(sheet, row, col, author, text)` (empty text removed the comment) | `ws.setComment(row, col, { text, author? })` writes the comment, empty text included (an omitted `author` is `""`); `ws.setComment(row, col, null)` removes it and does nothing when the cell has none |
 | `setWorkbookProtection(p)` / `setSheetProtection(sheet, p)` (an all-zero record cleared them) | `wb.setWorkbookProtection(null)` and `ws.setSheetProtection(null)` remove them; an all-zero workbook-protection record still does. Sheet protection is described under [Behaviour changes](#behaviour-changes-under-an-unchanged-name) |
 | `setCellPhoneticRuns(sheet, row, col, runs)` | `ws.setCellPhoneticRuns(row, col, runs)`; `null` and `[]` clear |
-| `addHyperlink(sheet, row, col, target, display, tooltip, location)` | `ws.setHyperlink(row, col, { target, location?, display?, tooltip? })` sets or replaces the cell's link and `null` removes it; a `null` target is an in-workbook link and requires `location`. `setHyperlinkRange(rect, link)` likewise |
+| `addHyperlink(sheet, row, col, target, display, tooltip, location)` | `ws.setHyperlink(row, col, { target, location?, display?, tooltip? })` sets or replaces the cell's link and `null` removes it; a `null` target is an in-workbook link and requires `location`. the range the link covers is `range` in the record |
 | `setThemeScriptFont(major, script, typeface)` | `setThemeScriptFont({ scheme, script, typeface })`, with `scheme` a `FontScheme` (`Major` or `Minor`) |
 | `editThreadedComment(sheet, id, text, mentions)` | `ws.updateThreadedComment(id, { text?, mentions? })` |
 | `addThreadedComment(sheet, partial)` | `ws.addThreadedComment(input)` with `ThreadedCommentInput` |
@@ -1300,14 +1342,6 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
 - `addCfRule` takes a brace-wrapped GUID as `id`; an id the sheet already uses
   is replaced by a generated one, and text that is not a GUID is
   `InvalidArgument`.
-- Every named collection compares names by Unicode simple case folding, as
-  sheet names already did: defined names, tables, table styles, cell styles,
-  protected ranges, pivots, slicers, people and GUID ids (a GUID is accepted in
-  either case and stored uppercase). `Budget` and `BUDGET` collide, `=ä`
-  resolves a name `Ä`, and structured references and table column names fold
-  the same way; they used to fold ASCII letters only, or compare exactly.
-  Table styles, table columns and the C defined-name lookup follow the same
-  rule; the built-in table-style prefix test stays ASCII.
 - `addSheet()` without a name (Python `add_sheet()`, C `NULL`) takes the
   profile's first sheet name without its trailing `1` and the smallest free
   number from 2, ignoring case: `Sheet2`, `Tabelle2`, `Feuil2`.
@@ -1322,9 +1356,11 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
   picture, two-cell for a chart, shape and slicer). A read anchor can be passed
   back to `update`: a two-cell anchor takes its box and ignores the size, a
   one-cell anchor takes the size.
-- A shape without a fill or outline of its own reads `ShapePaint.Default`
-  (not `null`); omitting the key on add means `Default`, and a patch that sets
-  `Default` removes the shape's own paint.
+- A shape without a fill or outline of its own reads `fill: null` /
+  `line: null` (it draws its style's paint); omitting the key on add means the
+  same, and a patch of `null` removes the shape's own paint. `ChartFill` and
+  `ChartLine` carry `none` (explicit no-fill / no-line) and `other` (a
+  gradient, pattern or picture the record cannot state; read only).
 - A straight connector may have a zero width or a zero height.
 - `Slicer.update` and `Shape.update` accept the common keys (`name`,
   `description`, `hidden`, `anchor`) as well, and apply them before their own.
@@ -4013,6 +4049,14 @@ order.
 
 ### Added
 
+- `Sheet.insertCells(range, shift)` and `deleteCells(range, shift)` (Python
+  `insert_cells`, `delete_cells`; C `fm_sheet_insert_cells`,
+  `fm_sheet_delete_cells`) shift the cells of a band down or right (insert) or
+  up or left (delete), with `CellShift` naming the direction. A reference moves
+  only when its extent across the band lies wholly inside it; a range crossing
+  the band and a whole-row or whole-column reference stay, and a range wholly
+  deleted becomes `#REF!`. Conditional-format and validation ranges are split
+  across the band, and a merge that only partly meets it is unmerged.
 - Lookups and lists: `Workbook.sheetCount` and `hasSheet(ref)` (Python
   `len(wb)` and `ref in wb`), `formulon.listProfileIds()` (Python
   `list_profile_ids()`, 28 ids), `Workbook.listThemeScriptFonts(scheme)` with
@@ -4393,8 +4437,6 @@ order.
   new pivot: item print titles on, compact indent 0 and one filter per field.
 - Loaded pivot filters of every type are listed by `fm_sheet_get_pivot_filter_at`
   and removed by `fm_sheet_clear_pivot_filters`.
-- The WASM size report's Brotli ceilings moved to 1280 KiB soft / 1344 KiB
-  hard, to take in the pivot layout and date grouping.
 
 - Functions that return formula text spell structured references as the
   formula bar does: `[#This Row]` is written `@`, a reference from inside the
@@ -4458,11 +4500,6 @@ order.
   a 3-D reference is `#NAME?`, and a union of areas on different sheets is
   `#VALUE!`. A list validation whose source is a range compares the proposed
   number exactly, so `0.1+0.2` matches its own list entry.
-- The threads WebAssembly build skips Binaryen's memory packing: raw size
-  grows by 19 KB and the Brotli size shrinks by 1.5 KB.
-- Both WebAssembly builds are about 4.7 KB smaller raw and 1.0 to 1.5 KB
-  smaller under Brotli, from shared argument readers in the JavaScript
-  binding layer and shared helpers in the engine. Behaviour is unchanged.
 
 ### Removed
 
@@ -4483,7 +4520,7 @@ order.
   `clearPinnedNow`, `removeRowBreak`, `removeColumnBreak`, and the table
   AutoFilter equivalent), replaced by `set<X>(null)`; `addHyperlink`,
   `addHyperlinkRange`, `addRowBreak` and `addColumnBreak`, replaced by
-  `setHyperlink`, `setHyperlinkRange`, `setRowBreak` and `setColumnBreak`;
+  `setHyperlink`, `setRowBreak` and `setColumnBreak`;
   `Pivot.addFieldSharedItem`, replaced by `addFieldItem(field, { cacheIndex })`;
   the `enabled` field of sheet protection; `DrawingObject.mediaPath`, whose
   role `format` covers; and the `fm_sheet_remove_auto_filter`,
@@ -4496,6 +4533,14 @@ order.
   where the tables merged (see [Enums](#enums)); `Value.to_python()`; the
   `valueKind`, `valueInt`, `valueDouble`, `valueText` and `valueHighText` keys
   of a pivot filter; the `todaySerial` argument of `evaluateCfRange`.
+
+### Performance
+
+- The threads WebAssembly build skips Binaryen's memory packing, which trades
+  raw module size for a smaller Brotli size.
+- Both WebAssembly builds are smaller, from shared argument readers in the
+  JavaScript binding layer and shared helpers in the engine. Behaviour is
+  unchanged.
 
 ### Fixed
 
@@ -4633,20 +4678,16 @@ order.
   cell: a one-cell spill (`=TYPE(C1#)` is 1), a name over one cell, and `TAKE`
   / `DROP` over a range. `ISREF` is `TRUE` for a spill reference and for `TAKE`
   / `DROP` over a range.
-- `null` on a patch key that the patch type does not declare clearable throws
-  `TypeError` in every binding and layer. `Sheet.updateView({
-  showRowColumnHeaders: null })` and `updateFormatDefaults({
-  baseColumnWidthChars: null })` reached the library and failed with
-  `InvalidArgument`. Python `Chart.update_plot`, `Chart.update_axis`
-  (`visible`, `major_gridlines`, `reversed`, `crosses`, `crosses_at`) and
-  `Chart.update_series` (`values`, `y`, `size`, `smooth`) admitted `None` and
-  raised `InvalidArgumentError`. Python `Sheet.update_protected_range` now
-  takes `None` to clear `algorithm_name`, `hash_value`, `salt_value` and
-  `security_descriptor`, as the other bindings do.
 - `formulon paginate` exits with the library status when reading page breaks
   fails, as its other failures do.
-- Clearing a chart's "show #N/A as blank" option removes the chart's
-  `c:extLst` when only non-element nodes are left in it.
+- Text comparison, sorting and lookups under the Mac ja-JP profile treat a
+  prolonged sound mark as Excel does: after a kana it keeps that kana's width,
+  and after a half-width voiced mark it counts as half-width. A voiced or
+  semi-voiced combining mark composes with its base kana on the Mac profiles.
+- A threaded comment's `created` stamp is saved in UTC. A trailing `Z` in a
+  file is accepted, and a stamp with a UTC offset or an unparseable stamp reads
+  as absent (`null`) on load; the attribute text used to be kept as it was
+  read.
 
 ## [0.18.0] - 2026-10-26
 
@@ -7998,7 +8039,8 @@ See the
 [GitHub release page](https://github.com/libraz/formulon/releases/tag/v0.9.0)
 for the full auto-generated change list.
 
-[Unreleased]: https://github.com/libraz/formulon/compare/v0.18.0...HEAD
+[Unreleased]: https://github.com/libraz/formulon/compare/v0.19.0...HEAD
+[0.19.0]: https://github.com/libraz/formulon/compare/v0.18.0...v0.19.0
 [0.18.0]: https://github.com/libraz/formulon/compare/v0.17.0...v0.18.0
 [0.17.0]: https://github.com/libraz/formulon/compare/v0.16.1...v0.17.0
 [0.16.1]: https://github.com/libraz/formulon/compare/v0.16.0...v0.16.1

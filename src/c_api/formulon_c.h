@@ -201,7 +201,7 @@
 
 /** @brief Library version at compile time; equals `fm_get_version()`. */
 #define FM_VERSION_MAJOR 0
-#define FM_VERSION_MINOR 18
+#define FM_VERSION_MINOR 19
 #define FM_VERSION_PATCH 0
 
 /** @brief Numeric library version, `MAJOR * 10000 + MINOR * 100 + PATCH`; equals `fm_get_version_number()`. */
