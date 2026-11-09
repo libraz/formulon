@@ -4618,11 +4618,35 @@ order.
   `TRANSLATE` takes one to three, as in Excel.
 - `GROUPBY` and `PIVOTBY` call a function passed by name with the group values
   and the whole value column when its minimum is two arguments, so `XIRR` and
-  `FORECAST.ETS.SEASONALITY` give Excel's results; `IF` still receives the
-  group values alone.
+  `FORECAST.ETS.SEASONALITY` give Excel's results.
 - Adding or updating a slicer with an ascending sort order (`fm_sheet_add_slicer`,
   `fm_sheet_update_slicer`, `addSlicer`, `Slicer.update`) failed with
   `InvalidArgument`; it is accepted and stored.
+- A `GROUPBY` / `PIVOTBY` function that returns an array, of any shape and
+  one cell included, gives `#VALUE!` in that value cell as Excel does (it was
+  `#CALC!`); one that returns a `LAMBDA` stays `#CALC!`. `IF` passed by name is
+  `#VALUE!` in every value cell.
+- A scalar function lifted over an array argument returns an array even when
+  that array is one cell (`=TYPE(ABS({1}))`, `=TYPE(ROUND(1.5,{0}))` and
+  `=TYPE(ISNUMBER({1}))` are 64, through `LET` and `LAMBDA` too), so
+  `=GROUPBY({"a"},{1},ABS,,0)` is `#VALUE!`. A one-cell reference reads as that
+  cell: a one-cell spill (`=TYPE(C1#)` is 1), a name over one cell, and `TAKE`
+  / `DROP` over a range. `ISREF` is `TRUE` for a spill reference and for `TAKE`
+  / `DROP` over a range.
+- `null` on a patch key that the patch type does not declare clearable throws
+  `TypeError` in every binding and layer. `Sheet.updateView({
+  showRowColumnHeaders: null })` and `updateFormatDefaults({
+  baseColumnWidthChars: null })` reached the library and failed with
+  `InvalidArgument`. Python `Chart.update_plot`, `Chart.update_axis`
+  (`visible`, `major_gridlines`, `reversed`, `crosses`, `crosses_at`) and
+  `Chart.update_series` (`values`, `y`, `size`, `smooth`) admitted `None` and
+  raised `InvalidArgumentError`. Python `Sheet.update_protected_range` now
+  takes `None` to clear `algorithm_name`, `hash_value`, `salt_value` and
+  `security_descriptor`, as the other bindings do.
+- `formulon paginate` exits with the library status when reading page breaks
+  fails, as its other failures do.
+- Clearing a chart's "show #N/A as blank" option removes the chart's
+  `c:extLst` when only non-element nodes are left in it.
 
 ## [0.18.0] - 2026-10-26
 
