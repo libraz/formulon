@@ -79,20 +79,23 @@ test('insertChart creates a two-cell chart that getChart and getChartData read b
   try {
     const id = insert(wb, mod, {
       title: 'Sales',
-      placement: { name: 'Revenue', description: 'alt', anchor: { row: 7, col: 2 } },
+      placement: { name: 'Revenue', description: 'alt', anchor: { fromRow: 7, fromCol: 2 } },
     });
     const listed = drawingsOf(wb);
     assert.equal(listed.length, 1);
     assert.equal(listed[0].objectId, id);
     assert.equal(listed[0].kind, mod.DrawingObjectKind.Chart);
-    assert.equal(listed[0].anchorKind, mod.AnchorKind.TwoCell);
-    assert.equal(listed[0].fromRow, 7);
-    assert.equal(listed[0].fromCol, 2);
+    assert.equal(listed[0].anchor.kind, mod.AnchorKind.TwoCell);
+    assert.equal(listed[0].anchor.fromRow, 7);
+    assert.equal(listed[0].anchor.fromCol, 2);
+    assert.equal(listed[0].name, 'Revenue');
+    assert.equal(listed[0].description, 'alt');
+    assert.equal(wb.sheet(0).chart(id).name, 'Revenue');
 
     const chart = chartOf(wb, id);
     assert.equal(chart.objectId, id);
-    assert.equal(chart.name, 'Revenue');
-    assert.equal(chart.description, 'alt');
+    assert.equal('name' in chart, false);
+    assert.equal('description' in chart, false);
     assert.equal(chart.isExtended, false);
     assert.equal(chart.isPivotChart, false);
     assert.equal(chart.title.kind, mod.ChartTitleKind.Text);
@@ -196,7 +199,7 @@ test('insertChart covers the creation kinds and omitted options', async () => {
     // An omitted title is Excel's automatic one.
     const auto = insert(wb, mod);
     assert.equal(chartOf(wb, auto).title.kind, mod.ChartTitleKind.Auto);
-    assert.equal(drawingsOf(wb).at(-1).anchorKind, mod.AnchorKind.TwoCell);
+    assert.equal(drawingsOf(wb).at(-1).anchor.kind, mod.AnchorKind.TwoCell);
   } finally {
     wb.dispose();
   }
@@ -358,10 +361,10 @@ test('typed chart edits are visible through getChart', async () => {
       .chart(id)
       .setFilter({ hiddenSeries: [2], hiddenCategories: [1] });
     info = chartOf(wb, id);
-    assert.equal(info.plots[0].series.find((s) => s.index === 2).filtered, true);
+    assert.equal(info.plots[0].series.find((s) => s.seriesId === 2).filtered, true);
     assert.deepEqual(info.filter, { hiddenSeries: [2], hiddenCategories: [1] });
     const filtered = dataOf(wb, id);
-    assert.ok(filtered.series.find((s) => s.index === 2).filtered);
+    assert.ok(filtered.series.find((s) => s.seriesId === 2).filtered);
     wb.sheet(0).chart(id).setFilter({});
     assert.deepEqual(chartOf(wb, id).filter, { hiddenSeries: [], hiddenCategories: [] });
 
@@ -391,7 +394,7 @@ test('series can be added, removed and rebuilt from a new source', async () => {
       categories: 'Sheet1!$A$2:$A$5',
     });
     assert.equal(chartOf(wb, id).plots[0].series.length, 3);
-    assert.ok(chartOf(wb, id).plots[0].series.some((s) => s.index === added));
+    assert.ok(chartOf(wb, id).plots[0].series.some((s) => s.seriesId === added));
     assert.equal(dataOf(wb, id).series.length, 3);
 
     wb.sheet(0).chart(id).removeSeries(0, added);
@@ -453,7 +456,7 @@ test('a chart survives save and load and goes through the drawing operations', a
   const mod = await load();
   const wb = newBook(mod);
   try {
-    const id = insert(wb, mod, { title: 'Kept', placement: { anchor: { row: 3, col: 3 } } });
+    const id = insert(wb, mod, { title: 'Kept', placement: { anchor: { fromRow: 3, fromCol: 3 } } });
     const other = insert(wb, mod, { type: mod.ChartPlotType.Line, range: 'Sheet1!$A$1:$B$5' });
 
     const saved = wb.save();
@@ -467,8 +470,13 @@ test('a chart survives save and load and goes through the drawing operations', a
     }
 
     // Move, reorder, snapshot, remove and restore keep the chart's id.
-    wb.sheet(0).chart(id).setAnchor({ row: 10, col: 1, widthEmu: 3000000, heightEmu: 2000000 });
-    const moved = drawingsOf(wb).find((o) => o.objectId === id);
+    wb.sheet(0)
+      .chart(id)
+      .update({
+        anchor: { kind: mod.AnchorKind.OneCell, fromRow: 10, fromCol: 1, widthEmu: 3000000, heightEmu: 2000000 },
+      });
+    const moved = drawingsOf(wb).find((o) => o.objectId === id).anchor;
+    assert.equal(moved.kind, mod.AnchorKind.OneCell);
     assert.equal(moved.fromRow, 10);
     assert.equal(moved.fromCol, 1);
     assert.equal(moved.widthEmu, 3000000);
@@ -610,10 +618,7 @@ test('a theme colour round-trips through a series fill and is refused when index
 
     const shape = wb.sheet(0).addShape({
       presetGeometry: 'rect',
-      anchorKind: 0,
-      fromRow: 2,
-      widthEmu: 9144,
-      heightEmu: 9144,
+      anchor: { kind: mod.AnchorKind.OneCell, fromRow: 2, widthEmu: 9144, heightEmu: 9144 },
       fillKind: mod.ShapePaint.Solid,
       fillColor: theme,
     });
@@ -629,7 +634,10 @@ test('a theme colour round-trips through a series fill and is refused when index
     assert.throws(() => shape.update({ fillColor: theme }), TypeError);
     assert.throws(() => shape.update({ lineKind: null, lineColor: theme }), TypeError);
     assert.throws(
-      () => wb.sheet(0).addShape({ anchorKind: 0, widthEmu: 9144, heightEmu: 9144, lineColor: theme }),
+      () =>
+        wb
+          .sheet(0)
+          .addShape({ anchor: { kind: mod.AnchorKind.OneCell, widthEmu: 9144, heightEmu: 9144 }, lineColor: theme }),
       TypeError,
     );
     expectFailure(

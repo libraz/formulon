@@ -37,10 +37,7 @@ Error invalid(const char* message) {
   return make_error(FormulonErrorCode::kInvalidArgument, message);
 }
 
-bool is_shape_kind(DrawingObjectKind kind) {
-  return kind == DrawingObjectKind::kShape || kind == DrawingObjectKind::kConnector ||
-         kind == DrawingObjectKind::kGroup;
-}
+using drawing_edit::is_shape_kind;
 
 bool in_range(std::int64_t value) {
   return value >= 0 && value < kEmuLimit;
@@ -152,7 +149,6 @@ ShapeInfo read_shape(pugi::xml_node anchor, DrawingObject object) {
   read_paint(ln, info.line, info.line_color);
   info.line_width_emu = ln.attribute("w").as_llong();
   info.rotation = child_local(props, "xfrm").attribute("rot").as_int();
-  info.hidden = anchor_cnvpr(anchor).attribute("hidden").as_bool();
   return info;
 }
 
@@ -250,20 +246,51 @@ bool marker_ok(const AnchorPoint& p) {
   return in_range(p.row_off) && in_range(p.col_off) && p.row < Sheet::kMaxRows && p.col < Sheet::kMaxCols;
 }
 
-// Writes the anchor fields of `spec` into the existing `anchor` and the matching `a:xfrm`.
+// Turns `anchor` into an empty anchor of `kind`: its tag, `editAs` and position children change.
+void convert_anchor(pugi::xml_node anchor, AnchorKind kind) {
+  const std::string xp = xdr_prefix(anchor);
+  anchor.set_name((xp + (kind == AnchorKind::kOneCell   ? "oneCellAnchor"
+                         : kind == AnchorKind::kTwoCell ? "twoCellAnchor"
+                                                        : "absoluteAnchor"))
+                      .c_str());
+  anchor.remove_attribute("editAs");
+  for (const char* name : {"pos", "from", "to", "ext"}) {
+    anchor.remove_child(child_local(anchor, name));
+  }
+  // Prepended last-first, so the children end up as from + to, from + ext or pos + ext.
+  const auto prepend_marker = [&](const char* tag) {
+    pugi::xml_node marker = anchor.prepend_child((xp + tag).c_str());
+    for (const char* part : {"col", "colOff", "row", "rowOff"}) {
+      marker.append_child((xp + part).c_str()).text().set(0);
+    }
+  };
+  if (kind == AnchorKind::kTwoCell) {
+    prepend_marker("to");
+  } else {
+    anchor.prepend_child((xp + "ext").c_str());
+  }
+  if (kind == AnchorKind::kAbsolute) {
+    anchor.prepend_child((xp + "pos").c_str());
+  } else {
+    prepend_marker("from");
+  }
+}
+
+// Writes the anchor fields of `spec` into the existing `anchor` and the matching `a:xfrm`, converting the
+// anchor's kind when `spec` names another one.
 Expected<void, Error> place(const Workbook& wb, std::size_t sheet, pugi::xml_node anchor, pugi::xml_node content,
                             const ShapeSpec& spec) {
   const bool absolute = spec.anchor_kind == AnchorKind::kAbsolute;
   const bool two_cell = spec.anchor_kind == AnchorKind::kTwoCell;
-  if (read_drawing_object(anchor, {}).anchor_kind != spec.anchor_kind) {
-    return invalid("shape: the anchor kind cannot change");
-  }
   if (absolute ? !in_range(spec.from.row_off) || !in_range(spec.from.col_off) : !marker_ok(spec.from)) {
     return invalid("shape: anchor cell or offset out of range");
   }
   if (two_cell ? !marker_ok(spec.to) || spec.to.row < spec.from.row || spec.to.col < spec.from.col
                : !in_range(spec.cx) || !in_range(spec.cy)) {
     return invalid("shape: anchor box or size out of range");
+  }
+  if (read_drawing_object(anchor, {}).anchor_kind != spec.anchor_kind) {
+    convert_anchor(anchor, spec.anchor_kind);
   }
   std::int64_t off_x = spec.from.col_off;
   std::int64_t off_y = spec.from.row_off;
@@ -390,11 +417,7 @@ Expected<void, Error> apply_fields(pugi::xml_node anchor, pugi::xml_node content
     (cnvpr.attribute("name") ? cnvpr.attribute("name") : cnvpr.append_attribute("name")).set_value(spec.name.c_str());
   }
   if ((f & shape_field::kHidden) != 0U) {
-    if (spec.hidden) {
-      (cnvpr.attribute("hidden") ? cnvpr.attribute("hidden") : cnvpr.append_attribute("hidden")).set_value("1");
-    } else {
-      cnvpr.remove_attribute("hidden");
-    }
+    drawing_edit::set_cnvpr_hidden(cnvpr, spec.hidden);
   }
   if ((f & shape_field::kTextBox) != 0U) {
     pugi::xml_node cnv = child_local(child_local(content, "nvSpPr"), "cNvSpPr");

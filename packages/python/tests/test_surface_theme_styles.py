@@ -11,10 +11,12 @@ from formulon import (
     ColorContext,
     ColorKind,
     ColorResolution,
+    EffectiveBorders,
     EffectiveStyleSource,
     Font,
     FontScheme,
     FormulonError,
+    ResolvedColor,
     ThemeColorsInput,
     ThemeFonts,
     ThemeScriptFont,
@@ -79,14 +81,14 @@ class ThemeTests(unittest.TestCase):
 
     def test_resolve_color(self) -> None:
         with Workbook.create_default() as wb:
-            rgb = wb.resolve_color(Color(kind=_RGB_KIND, argb=0xFF123456))
+            rgb = wb.resolve_color(Color(kind=_RGB_KIND, argb=0xFF123456), ColorContext.FONT)
             self.assertEqual(rgb.argb, 0xFF123456)
             self.assertEqual(rgb.resolution, ColorResolution.EXACT)
 
             colors = [0xFF000000 + i * 0x010101 for i in range(12)]
             wb.set_theme_colors(ThemeColorsInput(colors=colors))
             # Theme index 1 is dk1, which is clrScheme slot 0.
-            theme = wb.resolve_color(Color(kind=_THEME_KIND, theme=1))
+            theme = wb.resolve_color(Color(kind=_THEME_KIND, theme=1), ColorContext.FONT)
             self.assertEqual(theme.argb, colors[0])
             self.assertEqual(theme.resolution, ColorResolution.EXACT)
 
@@ -106,7 +108,9 @@ class EffectiveStyleTests(unittest.TestCase):
             style = wb.sheet(0).ooxml.get_effective_style(4, 4)
         self.assertEqual(style.xf_index, 0)
         self.assertEqual(style.source, EffectiveStyleSource.DEFAULT)
-        self.assertEqual(len(style.borders), 5)
+        self.assertIsInstance(style.borders, EffectiveBorders)
+        for side in ("left", "right", "top", "bottom", "diagonal"):
+            self.assertIsInstance(getattr(style.borders, side), ResolvedColor)
         self.assertTrue(style.protection.locked)
         self.assertEqual(style.number_format, "General")
 

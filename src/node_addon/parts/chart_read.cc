@@ -125,7 +125,7 @@ Napi::Object SeriesToJs(Napi::Env env, const fm_chart_t* chart, size_t plot, siz
   if (!Step(rc, fm_chart_get_series_at(chart, plot, index, &s))) {
     return o;
   }
-  o.Set("index", JsNumber(env, s.idx));
+  o.Set("seriesId", JsNumber(env, s.series_id));
   o.Set("order", JsNumber(env, s.order));
   o.Set("filtered", JsBool(env, s.filtered));
   o.Set("name", DataSourceToJs(env, chart, plot, index, FM_CHART_ROLE_NAME, s.name, rc));
@@ -219,8 +219,6 @@ Napi::Object ChartToJs(Napi::Env env, const fm_chart_t* chart, fm_status_t& rc) 
     return o;
   }
   o.Set("objectId", JsNumber(env, info.object_id));
-  o.Set("name", JsString(env, info.name));
-  o.Set("description", JsString(env, info.description));
   o.Set("isExtended", JsBool(env, info.is_extended));
   o.Set("isPivotChart", JsBool(env, info.is_pivot_chart));
   o.Set("onChartsheet", JsBool(env, info.on_chartsheet));
@@ -263,7 +261,7 @@ Napi::Object ChartToJs(Napi::Env env, const fm_chart_t* chart, fm_status_t& rc) 
     }
   }
   o.Set("axes", axes);
-  // The filter: the `idx` of every filtered series across the plots, and the hidden category positions.
+  // The filter: the id of every filtered series across the plots, and the hidden category positions.
   Napi::Array hidden_series = Napi::Array::New(env);
   for (size_t i = 0; i < info.plot_count && rc == 0; ++i) {
     fm_chart_plot_info_t plot = FM_STRUCT_INIT(fm_chart_plot_info_t);
@@ -273,7 +271,7 @@ Napi::Object ChartToJs(Napi::Env env, const fm_chart_t* chart, fm_status_t& rc) 
     for (size_t j = 0; j < plot.series_count && rc == 0; ++j) {
       fm_chart_series_info_t series = FM_STRUCT_INIT(fm_chart_series_info_t);
       if (Step(rc, fm_chart_get_series_at(chart, i, j, &series)) && series.filtered != 0) {
-        hidden_series.Set(hidden_series.Length(), JsNumber(env, series.idx));
+        hidden_series.Set(hidden_series.Length(), JsNumber(env, series.series_id));
       }
     }
   }
@@ -329,7 +327,7 @@ Napi::Object DataSeriesToJs(Napi::Env env, const fm_chart_data_t* data, size_t i
     return o;
   }
   o.Set("plotIndex", JsNumber(env, static_cast<double>(s.plot_index)));
-  o.Set("index", JsNumber(env, s.idx));
+  o.Set("seriesId", JsNumber(env, s.series_id));
   o.Set("name", StringOrNull(env, s.name));
   o.Set("numberFormat", JsString(env, s.format_code));
   o.Set("xNumberFormat", JsString(env, s.x_format_code));
@@ -421,7 +419,7 @@ Napi::Object ChartDataToJs(Napi::Env env, const fm_chart_data_t* data, fm_status
     fm_chart_unresolved_info_t u = FM_STRUCT_INIT(fm_chart_unresolved_info_t);
     if (Step(rc, fm_chart_data_get_unresolved_at(data, i, &u))) {
       Napi::Object item = Napi::Object::New(env);
-      item.Set("seriesIndex", JsNumber(env, u.series_index));
+      item.Set("seriesId", JsNumber(env, u.series_id));
       item.Set("source", JsNumber(env, u.source));
       item.Set("axisId", JsNumber(env, u.axis_id));
       unresolved.Set(static_cast<uint32_t>(i), item);

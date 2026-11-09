@@ -60,6 +60,9 @@ constexpr std::uint16_t kBrtFileVersion = 128;
 
 namespace {
 
+/// The scopes each defined-name spelling is declared in, compared like defined names.
+using DefinedScopes = std::unordered_map<std::string, std::vector<std::int32_t>, NameKeyHash, NameKeyEqual>;
+
 /// Parses `formula` (with or without a leading `=`) and folds every name
 /// `collect_ptg_names` finds into `names` / `seen`. Parse failures are
 /// silently skipped here — `EncodeCellFormula` / the defined-name
@@ -73,14 +76,10 @@ namespace {
 /// workbook-scope record of its own rather than an ordinal borrowed from
 /// another sheet's definition, which would read back as that sheet's
 /// qualified name. Every sheet-qualified reference is appended to
-/// `qualified` as `(sheet, name)`. `folded_scopes` is `defined_scopes` keyed
-/// by ASCII-lowered name, the fold `case_insensitive_eq` applies.
-void CollectNamesFromFormula(std::string_view formula, std::int32_t scope_sheet_id,
-                             const std::unordered_map<std::string, std::vector<std::int32_t>>& defined_scopes,
-                             const std::unordered_map<std::string, std::vector<std::int32_t>>& folded_scopes,
-                             std::vector<std::string>& names, std::unordered_set<std::string>& seen,
-                             std::vector<std::string>& invisible, std::unordered_set<std::string>& invisible_seen,
-                             std::vector<std::pair<std::string, std::string>>& qualified) {
+/// `qualified` as `(sheet, name)`.
+void CollectNamesFromFormula(std::string_view formula, std::int32_t scope_sheet_id, const DefinedScopes& defined_scopes,
+                             std::vector<std::string>& names, NameSet& seen, std::vector<std::string>& invisible,
+                             NameSet& invisible_seen, std::vector<std::pair<std::string, std::string>>& qualified) {
   formula = strip_formula_prefix(formula);
   Arena arena;
   parser::Parser p(formula, arena);
@@ -94,8 +93,8 @@ void CollectNamesFromFormula(std::string_view formula, std::int32_t scope_sheet_
     if (node.kind() != parser::NodeKind::NameRef) {
       return shape;
     }
-    const auto it = folded_scopes.find(strings::to_ascii_lower(node.as_name()));
-    if (it != folded_scopes.end() &&
+    const auto it = defined_scopes.find(std::string(node.as_name()));
+    if (it != defined_scopes.end() &&
         std::any_of(it->second.begin(), it->second.end(),
                     [scope_sheet_id](std::int32_t s) { return s < 0 || s == scope_sheet_id; })) {
       shape.defined = true;
@@ -106,7 +105,7 @@ void CollectNamesFromFormula(std::string_view formula, std::int32_t scope_sheet_
   collect_ptg_names(*root, names, seen, &function_values);
   collect_sheet_qualified_names(*root, qualified);
   std::vector<std::string> referenced;
-  std::unordered_set<std::string> referenced_seen;
+  NameSet referenced_seen;
   collect_scope_resolved_names(*root, referenced, referenced_seen);
   for (std::string& text : referenced) {
     const auto it = defined_scopes.find(text);
@@ -219,33 +218,31 @@ void ForEachTableFormula(const Workbook& wb, Visit&& visit) {
 /// the `ilbl` values encoded into formulas.
 void BuildOrderedNames(const Workbook& wb, std::vector<OrderedName>& ordered_names) {
   std::vector<std::string> names;
-  std::unordered_set<std::string> seen;
+  NameSet seen;
   std::vector<std::string> invisible;
-  std::unordered_set<std::string> invisible_seen;
+  NameSet invisible_seen;
   std::vector<std::pair<std::string, std::string>> qualified;
-  std::unordered_map<std::string, std::vector<std::int32_t>> defined_scopes;
-  std::unordered_map<std::string, std::vector<std::int32_t>> folded_scopes;
-  std::unordered_set<std::string> scoped_keys;
+  DefinedScopes defined_scopes;
+  NameSet scoped_keys;
   for (const DefinedName& dn : wb.defined_names()) {
     names.push_back(dn.name);
     seen.insert(dn.name);
     defined_scopes[dn.name].push_back(dn.local_sheet_id);
-    folded_scopes[strings::to_ascii_lower(dn.name)].push_back(dn.local_sheet_id);
     scoped_keys.insert(sheet_scoped_name_key(dn.local_sheet_id, dn.name));
   }
   for (const DefinedName& dn : wb.defined_names()) {
-    CollectNamesFromFormula(dn.formula, dn.local_sheet_id, defined_scopes, folded_scopes, names, seen, invisible,
-                            invisible_seen, qualified);
+    CollectNamesFromFormula(dn.formula, dn.local_sheet_id, defined_scopes, names, seen, invisible, invisible_seen,
+                            qualified);
   }
   for (std::size_t i = 0; i < wb.sheet_count(); ++i) {
     ForEachSheetFormula(wb.sheet(i), [&](std::string_view formula) {
-      CollectNamesFromFormula(formula, static_cast<std::int32_t>(i), defined_scopes, folded_scopes, names, seen,
-                              invisible, invisible_seen, qualified);
+      CollectNamesFromFormula(formula, static_cast<std::int32_t>(i), defined_scopes, names, seen, invisible,
+                              invisible_seen, qualified);
     });
   }
   ForEachTableFormula(wb, [&](std::string_view formula, std::size_t sheet_index) {
-    CollectNamesFromFormula(formula, static_cast<std::int32_t>(sheet_index), defined_scopes, folded_scopes, names, seen,
-                            invisible, invisible_seen, qualified);
+    CollectNamesFromFormula(formula, static_cast<std::int32_t>(sheet_index), defined_scopes, names, seen, invisible,
+                            invisible_seen, qualified);
   });
   for (std::string& text : names) {
     ordered_names.push_back(OrderedName{std::move(text), -1});

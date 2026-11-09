@@ -27,12 +27,12 @@
 #include "pivot/pivot_cache.h"
 #include "pivot/pivot_table.h"
 #include "sheet.h"
+#include "sheet_name.h"
 #include "table.h"
 #include "utils/error.h"
 #include "utils/expected.h"
 #include "utils/name_syntax.h"
 #include "utils/status_macros.h"
-#include "utils/strings.h"
 #include "workbook.h"
 #include "workbook_formula_index.h"
 #include "workbook_internal.h"
@@ -51,10 +51,9 @@ Error invalid_table(std::string message, std::string context = {}) {
 /// True when `existing` owns `name` or `display_name` as either of its names.
 template <typename Existing>
 bool names_collide(const Existing& existing, std::string_view name, std::string_view display_name) {
-  return strings::case_insensitive_eq(existing.name, name) ||
-         strings::case_insensitive_eq(existing.display_name, name) ||
-         strings::case_insensitive_eq(existing.name, display_name) ||
-         strings::case_insensitive_eq(existing.display_name, display_name);
+  return collection_names::equal(existing.name, name) || collection_names::equal(existing.display_name, name) ||
+         collection_names::equal(existing.name, display_name) ||
+         collection_names::equal(existing.display_name, display_name);
 }
 
 bool name_in_use(const std::vector<TableMetadata>& tables, const std::vector<io::xlsb::XlsbRetainedTable>& retained,
@@ -72,7 +71,7 @@ bool name_in_use(const std::vector<TableMetadata>& tables, const std::vector<io:
   }
   // A defined name of any scope owns its name against tables.
   for (const DefinedName& defined : defined_names) {
-    if (strings::case_insensitive_eq(defined.name, name) || strings::case_insensitive_eq(defined.name, display_name)) {
+    if (collection_names::equal(defined.name, name) || collection_names::equal(defined.name, display_name)) {
       return true;
     }
   }
@@ -168,7 +167,7 @@ Expected<std::size_t, Error> Workbook::add_table(TableMetadata table) {
     if (column.name.empty()) {
       return invalid_table("column name is empty");
     }
-    if (!column_keys.insert(strings::to_ascii_lower(column.name)).second) {
+    if (!column_keys.insert(collection_names::fold_key(column.name)).second) {
       return invalid_table("column name is duplicated");
     }
     column.id = column_id++;
@@ -261,7 +260,7 @@ std::optional<std::size_t> Workbook::table_containing(std::size_t sheet_index, s
 
 bool Workbook::is_table_name(std::string_view name) const noexcept {
   for (const TableMetadata& table : tables_) {
-    if (strings::case_insensitive_eq(table.name, name) || strings::case_insensitive_eq(table.display_name, name)) {
+    if (collection_names::equal(table.name, name) || collection_names::equal(table.display_name, name)) {
       return true;
     }
   }
@@ -291,7 +290,7 @@ class TableRenameTransform final : public parser::RefTransform {
 
   std::optional<parser::StructuredRefTarget> apply_structured_ref(std::string_view table,
                                                                   std::string_view /*column*/) const override {
-    if (strings::case_insensitive_eq(table, old_name_) || strings::case_insensitive_eq(table, old_display_name_)) {
+    if (collection_names::equal(table, old_name_) || collection_names::equal(table, old_display_name_)) {
       return parser::StructuredRefTarget{new_name_, {}};
     }
     return parser::StructuredRefTarget{table, {}};
@@ -326,8 +325,8 @@ Expected<void, Error> Workbook::rename_table(std::size_t index, std::string name
       continue;
     }
     pivot::WorksheetSource& source = cache->mutable_worksheet_source();
-    if (!source.name.empty() && (strings::case_insensitive_eq(source.name, old_name) ||
-                                 strings::case_insensitive_eq(source.name, old_display_name))) {
+    if (!source.name.empty() &&
+        (collection_names::equal(source.name, old_name) || collection_names::equal(source.name, old_display_name))) {
       source.name = display_name;
     }
   }
@@ -358,8 +357,7 @@ class TableColumnRenameTransform final : public parser::RefTransform {
 
   std::optional<parser::StructuredRefTarget> apply_structured_ref(std::string_view table,
                                                                   std::string_view column) const override {
-    if (!strings::case_insensitive_eq(table, table_name_) &&
-        !strings::case_insensitive_eq(table, table_display_name_)) {
+    if (!collection_names::equal(table, table_name_) && !collection_names::equal(table, table_display_name_)) {
       return parser::StructuredRefTarget{table, {}};
     }
     std::optional<parser::StructuredRefPayload> payload = parser::parse_structured_ref_payload_text(column);
@@ -368,7 +366,7 @@ class TableColumnRenameTransform final : public parser::RefTransform {
     }
     bool renamed = false;
     for (std::string& name : payload->columns) {
-      if (strings::case_insensitive_eq(name, old_column_)) {
+      if (collection_names::equal(name, old_column_)) {
         name.assign(new_column_);
         renamed = true;
       }
@@ -402,7 +400,7 @@ Expected<std::string, Error> Workbook::rename_table_column(std::size_t table, st
   }
   const auto taken = [&columns, column](std::string_view candidate) {
     for (std::size_t i = 0; i < columns.size(); ++i) {
-      if (i != column && strings::case_insensitive_eq(columns[i].name, candidate)) {
+      if (i != column && collection_names::equal(columns[i].name, candidate)) {
         return true;
       }
     }

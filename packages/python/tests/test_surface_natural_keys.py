@@ -12,6 +12,7 @@ from formulon import (
     DataValidationInput,
     DefinedName,
     DefinedNameInput,
+    DrawingAnchorInput,
     FontScheme,
     FormulonError,
     HyperlinkInput,
@@ -80,10 +81,9 @@ class NaturalKeyLookupTests(unittest.TestCase):
                 wb.sheet(0)
                 .add_shape(
                     ShapeInput(
-                        anchor_kind=AnchorKind.ONE_CELL,
-                        from_row=2,
-                        width_emu=914400,
-                        height_emu=457200,
+                        anchor=DrawingAnchorInput(
+                            kind=AnchorKind.ONE_CELL, from_row=2, width_emu=914400, height_emu=457200
+                        ),
                         preset_geometry="rect",
                     ),
                 )
@@ -96,7 +96,7 @@ class NaturalKeyLookupTests(unittest.TestCase):
             drawing = wb.sheet(0).drawing(object_id).get_drawing_properties()
             self.assertIsNotNone(drawing)
             assert drawing is not None
-            self.assertEqual(drawing.from_row, 2)
+            self.assertEqual(drawing.anchor.from_row, 2)
             with self.assertRaises(NotFoundError):
                 wb.sheet(0).shape(object_id + 1)
             with self.assertRaises(NotFoundError):
@@ -114,7 +114,7 @@ class NaturalKeyLookupTests(unittest.TestCase):
                 ThemeScriptFont(scheme=FontScheme.MINOR, script="Zzzz", typeface="Test Face"),
             )
             self.assertIsNone(wb.get_theme_script_font(scheme=FontScheme.MAJOR, script="Zzzz"))
-            path = wb.ooxml.list_passthroughs()[0].path
+            path = wb.ooxml.list_passthroughs()[0]
             self.assertTrue(wb.ooxml.has_passthrough(path))
             self.assertFalse(wb.ooxml.has_passthrough("/" + path))
 
@@ -124,8 +124,11 @@ class IndexKeyedAddTests(unittest.TestCase):
         with Workbook.create_default() as wb:
             self.assertEqual(wb.add_sheet("Second").index, 1)
             rule = DataValidationInput(ranges=[CellRect(0, 0, 3, 0)], type=1, formula1="1", formula2="9")
-            self.assertEqual(wb.sheet(1).add_validation(rule), 0)
-            self.assertEqual(wb.sheet(1).add_validation(rule), 1)
+            first = wb.sheet(1).add_validation(rule)
+            second = wb.sheet(1).add_validation(rule)
+            self.assertEqual([v.id for v in wb.sheet(1).list_validations()], [first, second])
+            self.assertTrue(first)
+            self.assertNotEqual(first, second)
 
 
 if __name__ == "__main__":

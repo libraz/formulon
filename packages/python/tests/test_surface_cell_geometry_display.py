@@ -280,16 +280,16 @@ class DisplayTextTests(unittest.TestCase):
         with Workbook.create_default() as wb:
             num = Value(kind=ValueKind.NUMBER, number=1234.5)
             self.assertEqual(wb.format_value(num, "#,##0.00"), DisplayText("1,234.50", DisplayStatus.OK))
-            self.assertEqual(wb.format_value(num), DisplayText("1234.5", DisplayStatus.OK))
+            self.assertEqual(wb.format_value(num, "General"), DisplayText("1234.5", DisplayStatus.OK))
             text = Value(kind=ValueKind.TEXT, text="abc")
             self.assertEqual(wb.format_value(text, "General"), DisplayText("abc", DisplayStatus.OK))
             boolean = Value(kind=ValueKind.BOOL, boolean=True)
-            self.assertEqual(wb.format_value(boolean).text, "TRUE")
+            self.assertEqual(wb.format_value(boolean, "General").text, "TRUE")
             text_out, status = (lambda r: (r.text, r.display_status))(wb.format_value(num, "0.00["))
             self.assertEqual(status, DisplayStatus.INVALID_FORMAT)
             self.assertTrue(text_out)
             with self.assertRaises(FormulonError):
-                wb.format_value(Value(kind=ValueKind.NUMBER, number=float("nan")))
+                wb.format_value(Value(kind=ValueKind.NUMBER, number=float("nan")), "General")
 
 
 class CellXfFlagTests(unittest.TestCase):

@@ -766,10 +766,7 @@ fm_status_t validate(const fm_pivot_data_field_t& spec) {
 }
 
 fm_status_t validate(const fm_pivot_filter_t& spec) {
-  if (auto rc = check_utf8({spec.field_name, spec.value_text, spec.value_high_text}); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_enum_domain(spec.axis, 0, FM_PIVOT_AXIS_PAGE, "axis"); rc != 0) {
+  if (auto rc = check_utf8({spec.value_text, spec.value_high_text}); rc != 0) {
     return rc;
   }
   return check_enum_domain(spec.type, 0, FM_PIVOT_FILTER_KIND_M12, "type");
@@ -1178,6 +1175,28 @@ std::string ingest_entered_formula(fm_workbook_t* wb, std::string_view formula) 
   std::string text(formula);
   wb->workbook().ingest_entered_formula(text);
   return std::string(strip_formula_prefix(text));
+}
+
+std::string format_runtime_id(std::uint32_t id) {
+  return std::to_string(id);
+}
+
+bool parse_runtime_id(std::string_view text, std::uint32_t* out) {
+  if (text.empty() || text.size() > 10U || text.front() == '0') {
+    return false;
+  }
+  std::uint64_t value = 0;
+  for (const char c : text) {
+    if (c < '0' || c > '9') {
+      return false;
+    }
+    value = value * 10U + static_cast<std::uint64_t>(c - '0');
+  }
+  if (value > std::numeric_limits<std::uint32_t>::max()) {
+    return false;
+  }
+  *out = static_cast<std::uint32_t>(value);
+  return true;
 }
 
 fm_status_t check_entered_cell_formula(const fm_workbook_t* wb, std::size_t sheet, std::uint32_t row, std::uint32_t col,

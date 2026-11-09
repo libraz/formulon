@@ -402,10 +402,9 @@ TEST(DrawingEdit, CoexistsWithChart) {
   const std::string after_rels(Part(saved, kRelsPath)->bytes.begin(), Part(saved, kRelsPath)->bytes.end());
   EXPECT_NE(after_rels.find("rId1"), std::string::npos);
   EXPECT_EQ(after_rels.find("rId2"), std::string::npos);
-  // A shape is neither a picture nor a chart, so it cannot be removed.
-  auto refused = remove_drawing(saved, 0, 3);
-  ASSERT_FALSE(static_cast<bool>(refused));
-  EXPECT_EQ(refused.error().code, FormulonErrorCode::kInvalidArgument);
+  // The shape goes through the same remover.
+  ASSERT_TRUE(static_cast<bool>(remove_drawing(saved, 0, 3)));
+  EXPECT_EQ(List(saved).size(), 1U);
 }
 
 TEST(DrawingEdit, TwoCellDeletedWithRows) {

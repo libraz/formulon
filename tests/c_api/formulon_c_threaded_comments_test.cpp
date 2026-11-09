@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "c_api/formulon_c.h"
+#include "formulon_c_out_index.h"
 #include "gtest/gtest.h"
 #include "utils/error.h"
 
@@ -22,8 +23,6 @@ static_assert(sizeof(fm_threaded_comment_patch_t) == (kWasm32 ? 32U : 48U),
 
 constexpr fm_status_t kInvalidArgument = static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
 constexpr fm_status_t kBindingNullPointer = static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer);
-constexpr fm_status_t kThreadedCommentInvalid =
-    static_cast<fm_status_t>(formulon::FormulonErrorCode::kThreadedCommentInvalid);
 constexpr fm_status_t kAlreadyExists = static_cast<fm_status_t>(formulon::FormulonErrorCode::kAlreadyExists);
 constexpr fm_status_t kPreconditionFailed = static_cast<fm_status_t>(formulon::FormulonErrorCode::kPreconditionFailed);
 
@@ -160,10 +159,10 @@ void AddThread(fm_workbook_t* wb) {
   fm_threaded_comment_t opening = Comment(kThread, 1, 1, kAlice, "@Bob please check", nullptr);
   opening.mentions = &mention;
   opening.mentions_count = 1;
-  ASSERT_EQ(fm_sheet_add_threaded_comment(wb, 0, &opening), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_add_threaded_comment(wb, 0, &opening, ignored_id()), 0) << fm_get_last_error_message();
   // A reply takes the thread's anchor, whatever coordinates it carries.
   const fm_threaded_comment_t reply = Comment(kReply, 7, 7, kBob, "Done", kThread);
-  ASSERT_EQ(fm_sheet_add_threaded_comment(wb, 0, &reply), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_add_threaded_comment(wb, 0, &reply, ignored_id()), 0) << fm_get_last_error_message();
 }
 
 TEST(FormulonCApiThreadedComments, PersonsAddListAndRemove) {
@@ -180,8 +179,18 @@ TEST(FormulonCApiThreadedComments, PersonsAddListAndRemove) {
 
   const fm_person_t duplicate = MakePerson(kAlice, "Again", nullptr, nullptr);
   EXPECT_EQ(fm_workbook_add_person(wb.handle, &duplicate), kAlreadyExists);
-  const fm_person_t lowercase = MakePerson("{0a1b2c3d-0000-4000-8000-000000000009}", "Low", nullptr, nullptr);
-  EXPECT_EQ(fm_workbook_add_person(wb.handle, &lowercase), kThreadedCommentInvalid);
+  // A GUID is taken in either case, stored uppercase and matched across case.
+  const fm_person_t lowercase = MakePerson("{0a1b2c3d-0000-4000-8000-00000000000c}", "Low", nullptr, nullptr);
+  ASSERT_EQ(fm_workbook_add_person(wb.handle, &lowercase), 0) << fm_get_last_error_message();
+  int32_t present = 0;
+  ASSERT_EQ(fm_workbook_get_person(wb.handle, "{0A1B2C3D-0000-4000-8000-00000000000C}", &present, &p), 0);
+  EXPECT_EQ(present, 1);
+  EXPECT_STREQ(p.id, "{0A1B2C3D-0000-4000-8000-00000000000C}");
+  EXPECT_EQ(fm_workbook_get_person(wb.handle, "{0a1b2c3d-0000-4000-8000-00000000000c}", &present, &p), 0);
+  EXPECT_EQ(present, 1);
+  ASSERT_EQ(fm_workbook_remove_person(wb.handle, "{0a1b2c3d-0000-4000-8000-00000000000C}"), 0);
+  const fm_person_t malformed = MakePerson("{0A1B2C3D-0000-4000-8000-00000000000Z}", "Bad", nullptr, nullptr);
+  EXPECT_EQ(fm_workbook_add_person(wb.handle, &malformed), FM_STATUS_INVALID_ARGUMENT);
   EXPECT_EQ(fm_workbook_add_person(wb.handle, nullptr), kBindingNullPointer);
 
   ASSERT_EQ(fm_workbook_remove_person(wb.handle, kAlice), 0);
@@ -196,7 +205,14 @@ TEST(FormulonCApiThreadedComments, ThreadRepliesAndMentionsRoundTrip) {
   AddThread(wb.handle);
   const fm_threaded_comment_patch_t resolve = SetDone(1);
   ASSERT_EQ(fm_sheet_update_threaded_comment(wb.handle, 0, kThread, &resolve), 0) << fm_get_last_error_message();
-  EXPECT_EQ(fm_sheet_update_threaded_comment(wb.handle, 0, kReply, &resolve), kThreadedCommentInvalid);
+  EXPECT_EQ(fm_sheet_update_threaded_comment(wb.handle, 0, kReply, &resolve), kInvalidArgument);
+  // A comment id matches across letter case.
+  fm_threaded_comment_t found = FM_STRUCT_INIT(fm_threaded_comment_t);
+  int32_t found_present = 0;
+  ASSERT_EQ(
+      fm_sheet_get_threaded_comment(wb.handle, 0, "{6f1e0d2c-1111-4111-8111-000000000001}", &found_present, &found), 0);
+  EXPECT_EQ(found_present, 1);
+  EXPECT_STREQ(found.id, kThread);
 
   const fm_mention_t edited_mention{kAlice, kMention, 5, 6};
   fm_threaded_comment_patch_t edit = SetText("Done @Alice");
@@ -252,9 +268,9 @@ TEST(FormulonCApiThreadedComments, RemovingTheOpeningCommentRemovesTheThread) {
   ASSERT_EQ(fm_sheet_remove_threaded_comment(wb.handle, 0, kReply), 0);
   EXPECT_EQ(ReadComments(wb.handle).size(), 1U);
   const fm_threaded_comment_t reply = Comment(kReply, 0, 0, kBob, "Again", kThread);
-  ASSERT_EQ(fm_sheet_add_threaded_comment(wb.handle, 0, &reply), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_add_threaded_comment(wb.handle, 0, &reply, ignored_id()), 0) << fm_get_last_error_message();
   EXPECT_EQ(ReadComments(wb.handle).size(), 2U);
-  EXPECT_EQ(fm_sheet_add_threaded_comment(wb.handle, 0, nullptr), kBindingNullPointer);
+  EXPECT_EQ(fm_sheet_add_threaded_comment(wb.handle, 0, nullptr, ignored_id()), kBindingNullPointer);
   ASSERT_EQ(fm_sheet_remove_threaded_comment(wb.handle, 0, kThread), 0);
   EXPECT_TRUE(ReadComments(wb.handle).empty());
   EXPECT_EQ(fm_sheet_remove_threaded_comment(wb.handle, 0, kThread), FM_STATUS_NOT_FOUND);
@@ -267,12 +283,12 @@ TEST(FormulonCApiThreadedComments, CellCarriesNoteOrThreadNotBoth) {
   AddPeople(wb.handle);
   ASSERT_EQ(fm_sheet_set_comment(wb.handle, 0, 4, 2, "Alice", "a note"), 0);
   const fm_threaded_comment_t on_note = Comment(kThread, 4, 2, kAlice, "hi", nullptr);
-  EXPECT_EQ(fm_sheet_add_threaded_comment(wb.handle, 0, &on_note), kAlreadyExists);
+  EXPECT_EQ(fm_sheet_add_threaded_comment(wb.handle, 0, &on_note, ignored_id()), kAlreadyExists);
 
   AddThread(wb.handle);
   EXPECT_EQ(fm_sheet_set_comment(wb.handle, 0, 1, 1, "Alice", "a note"), kAlreadyExists);
   const fm_threaded_comment_t second = Comment("{6F1E0D2C-1111-4111-8111-000000000003}", 1, 1, kAlice, "x", nullptr);
-  EXPECT_EQ(fm_sheet_add_threaded_comment(wb.handle, 0, &second), kAlreadyExists);
+  EXPECT_EQ(fm_sheet_add_threaded_comment(wb.handle, 0, &second, ignored_id()), kAlreadyExists);
 }
 
 TEST(FormulonCApiThreadedComments, RejectsMalformedInput) {
@@ -281,21 +297,21 @@ TEST(FormulonCApiThreadedComments, RejectsMalformedInput) {
   AddPeople(wb.handle);
   fm_threaded_comment_t c = Comment(kThread, 0, 0, kAlice, "text", nullptr);
   c.created = "2026-01-02 03:04:05";
-  EXPECT_EQ(fm_sheet_add_threaded_comment(wb.handle, 0, &c), kThreadedCommentInvalid);
+  EXPECT_EQ(fm_sheet_add_threaded_comment(wb.handle, 0, &c, ignored_id()), kInvalidArgument);
   c.created = kCreated;
   c.person_id = "{0A1B2C3D-0000-4000-8000-0000000000FF}";
-  EXPECT_EQ(fm_sheet_add_threaded_comment(wb.handle, 0, &c), kThreadedCommentInvalid);
+  EXPECT_EQ(fm_sheet_add_threaded_comment(wb.handle, 0, &c, ignored_id()), FM_STATUS_NOT_FOUND);
   c.person_id = kAlice;
   c.mentions_count = 1;
-  EXPECT_EQ(fm_sheet_add_threaded_comment(wb.handle, 0, &c), kBindingNullPointer);
+  EXPECT_EQ(fm_sheet_add_threaded_comment(wb.handle, 0, &c, ignored_id()), kBindingNullPointer);
   const fm_mention_t beyond{kBob, kMention, 2, 10};
   c.mentions = &beyond;
-  EXPECT_EQ(fm_sheet_add_threaded_comment(wb.handle, 0, &c), kThreadedCommentInvalid);
+  EXPECT_EQ(fm_sheet_add_threaded_comment(wb.handle, 0, &c, ignored_id()), kInvalidArgument);
   c.mentions = nullptr;
   c.mentions_count = 0;
-  EXPECT_EQ(fm_sheet_add_threaded_comment(wb.handle, 3, &c), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
-  ASSERT_EQ(fm_sheet_add_threaded_comment(wb.handle, 0, &c), 0) << fm_get_last_error_message();
-  EXPECT_EQ(fm_sheet_add_threaded_comment(wb.handle, 0, &c), kAlreadyExists);
+  EXPECT_EQ(fm_sheet_add_threaded_comment(wb.handle, 3, &c, ignored_id()), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
+  ASSERT_EQ(fm_sheet_add_threaded_comment(wb.handle, 0, &c, ignored_id()), 0) << fm_get_last_error_message();
+  EXPECT_EQ(fm_sheet_add_threaded_comment(wb.handle, 0, &c, ignored_id()), kAlreadyExists);
 
   fm_threaded_comment_patch_t patch = SetText("x");
   EXPECT_EQ(fm_sheet_update_threaded_comment(wb.handle, 0, nullptr, &patch), kBindingNullPointer);
@@ -341,7 +357,7 @@ TEST(FormulonCApiThreadedComments, UpdatePatchKeepsWhatItDoesNotEngage) {
   EXPECT_EQ(comments[0].mentions[0].person_id, kBob);
   EXPECT_EQ(comments[0].done, 1);
   const fm_threaded_comment_patch_t too_short = SetText("@B");
-  EXPECT_EQ(fm_sheet_update_threaded_comment(wb.handle, 0, kThread, &too_short), kThreadedCommentInvalid);
+  EXPECT_EQ(fm_sheet_update_threaded_comment(wb.handle, 0, kThread, &too_short), kInvalidArgument);
 
   // SET mentions alone replace the list and keep the text; an empty list clears it.
   fm_threaded_comment_patch_t unmention = KeepAll();
@@ -355,7 +371,7 @@ TEST(FormulonCApiThreadedComments, UpdatePatchKeepsWhatItDoesNotEngage) {
   fm_threaded_comment_patch_t reply_done = SetText("changed");
   reply_done.done_op = FM_PATCH_OP_SET;
   reply_done.done = 0;
-  EXPECT_EQ(fm_sheet_update_threaded_comment(wb.handle, 0, kReply, &reply_done), kThreadedCommentInvalid);
+  EXPECT_EQ(fm_sheet_update_threaded_comment(wb.handle, 0, kReply, &reply_done), kInvalidArgument);
   comments = ReadComments(wb.handle);
   EXPECT_EQ(comments[1].text, "Done");
 
@@ -404,8 +420,9 @@ TEST(FormulonCApiThreadedComments, UpdateRejectsClearUnknownOpsAndNullSetText) {
   EXPECT_EQ(ReadComments(wb.handle)[0].text, "@Bob please check");
 }
 
-// Optional strings read NULL when absent: an opening comment's parent id, a
-// comment with no time, and a person without user or provider id.
+// Optional strings read NULL when absent: an opening comment's parent id and a
+// person without user or provider id. A comment added without a time is
+// stamped, so its created string is present.
 TEST(FormulonCApiThreadedComments, AbsentOptionalStringsReadNull) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
@@ -419,12 +436,78 @@ TEST(FormulonCApiThreadedComments, AbsentOptionalStringsReadNull) {
 
   fm_threaded_comment_t c = Comment(kThread, 0, 0, kAlice, "text", nullptr);
   c.created = nullptr;
-  ASSERT_EQ(fm_sheet_add_threaded_comment(wb.handle, 0, &c), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_add_threaded_comment(wb.handle, 0, &c, ignored_id()), 0) << fm_get_last_error_message();
   fm_threaded_comment_t out = FM_STRUCT_INIT(fm_threaded_comment_t);
   ASSERT_EQ(fm_sheet_get_threaded_comment_at(wb.handle, 0, 0, &out), 0);
   EXPECT_STREQ(out.text, "text");
   EXPECT_EQ(out.parent_id, nullptr);
-  EXPECT_EQ(out.created, nullptr);
+  EXPECT_NE(out.created, nullptr);
 }
 
 }  // namespace
+
+TEST(FormulonCApiThreadedComments, AddReturnsTheGivenOrGeneratedId) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  AddPeople(wb.handle);
+  const char* id = nullptr;
+  const fm_threaded_comment_t given = Comment(kThread, 1, 1, kAlice, "hello", nullptr);
+  ASSERT_EQ(fm_sheet_add_threaded_comment(wb.handle, 0, &given, &id), 0) << fm_get_last_error_message();
+  EXPECT_STREQ(id, kThread);
+
+  const fm_threaded_comment_t generated = Comment(nullptr, 2, 2, kAlice, "again", nullptr);
+  ASSERT_EQ(fm_sheet_add_threaded_comment(wb.handle, 0, &generated, &id), 0) << fm_get_last_error_message();
+  ASSERT_NE(id, nullptr);
+  const std::string generated_id = id;
+  EXPECT_EQ(generated_id.size(), 38U);
+  EXPECT_EQ(generated_id.front(), '{');
+  EXPECT_EQ(ReadComments(wb.handle).at(1).id, generated_id);
+
+  fm_threaded_comment_t read = FM_STRUCT_INIT(fm_threaded_comment_t);
+  int32_t present = 0;
+  ASSERT_EQ(fm_sheet_get_threaded_comment(wb.handle, 0, generated_id.c_str(), &present, &read), 0);
+  EXPECT_EQ(present, 1);
+}
+
+TEST(FormulonCApiThreadedComments, AddWithoutCreatedStampsThePinnedClock) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  AddPeople(wb.handle);
+  const fm_civil_time_t pinned{2026, 3, 4, 5, 6, 7};
+  ASSERT_EQ(fm_workbook_set_pinned_now(wb.handle, &pinned), 0);
+  fm_threaded_comment_t c = Comment(kThread, 1, 1, kAlice, "hello", nullptr);
+  c.created = nullptr;
+  ASSERT_EQ(fm_sheet_add_threaded_comment(wb.handle, 0, &c, ignored_id()), 0) << fm_get_last_error_message();
+  EXPECT_EQ(ReadComments(wb.handle).at(0).created.rfind("2026-03-04T05:06:07", 0), 0U);
+}
+
+TEST(FormulonCApiThreadedComments, GeneratedIdsAreReproducibleWithAPinnedClock) {
+  std::string ids[2];
+  for (std::string& out : ids) {
+    WorkbookGuard wb;
+    ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+    AddPeople(wb.handle);
+    const fm_civil_time_t pinned{2026, 3, 4, 5, 6, 7};
+    ASSERT_EQ(fm_workbook_set_pinned_now(wb.handle, &pinned), 0);
+    const fm_threaded_comment_t c = Comment(nullptr, 1, 1, kAlice, "hello", nullptr);
+    const char* id = nullptr;
+    ASSERT_EQ(fm_sheet_add_threaded_comment(wb.handle, 0, &c, &id), 0) << fm_get_last_error_message();
+    out = id != nullptr ? id : "";
+  }
+  EXPECT_FALSE(ids[0].empty());
+  EXPECT_EQ(ids[0], ids[1]);
+}
+
+TEST(FormulonCApiThreadedComments, UnknownParentAndUnknownPersonAreNotFound) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  AddPeople(wb.handle);
+  AddThread(wb.handle);
+  const fm_threaded_comment_t orphan =
+      Comment(nullptr, 0, 0, kAlice, "reply", "{6F1E0D2C-1111-4111-8111-0000000000EE}");
+  EXPECT_EQ(fm_sheet_add_threaded_comment(wb.handle, 0, &orphan, ignored_id()), FM_STATUS_NOT_FOUND);
+  const fm_threaded_comment_t stranger =
+      Comment(nullptr, 5, 5, "{0A1B2C3D-0000-4000-8000-0000000000FF}", "hi", nullptr);
+  EXPECT_EQ(fm_sheet_add_threaded_comment(wb.handle, 0, &stranger, ignored_id()), FM_STATUS_NOT_FOUND);
+  EXPECT_EQ(ReadComments(wb.handle).size(), 2U);
+}

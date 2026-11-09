@@ -437,7 +437,7 @@ Napi::Value Workbook::ValidateValue(const Napi::CallbackInfo& info) {
   }
   Napi::Object out = Napi::Object::New(env);
   out.Set("valid", Napi::Boolean::New(env, outcome.valid != 0));
-  out.Set("ruleIndex", JsNumberOrNull(env, outcome.has_rule, outcome.rule_index));
+  out.Set("ruleId", outcome.has_rule != 0 ? Napi::Value(JsString(env, outcome.rule_id)) : env.Null());
   out.Set("errorStyle", JsNumberOrNull(env, outcome.has_rule, static_cast<uint32_t>(outcome.error_style)));
   return out;
 }

@@ -91,8 +91,8 @@ function addCache(wb) {
 
 function addPivot(ws, cache, name = 'ByRegion', anchor = 'E1') {
   const pivot = ws.addPivot({ name, cacheId: cache.cacheId, anchor });
-  pivot.addField({ sourceName: 'Region', axis: formulon.PivotAxis.Row });
-  const amount = pivot.addField({ sourceName: 'Amount', axis: formulon.PivotAxis.Value });
+  pivot.addField({ fieldIndex: 'Region', axis: formulon.PivotAxis.Row });
+  const amount = pivot.addField({ fieldIndex: 'Amount', axis: formulon.PivotAxis.Value });
   pivot.addDataField({ name: 'Sum of Amount', fieldIndex: amount, aggregation: 0 });
   return pivot;
 }
@@ -256,8 +256,11 @@ function handlePrototypes(ws, wb) {
   const cache = addCache(wb);
   const pivot = addPivot(ws, cache);
   const chart = ws.addChart({ type: formulon.ChartPlotType.Bar, range: 'Sheet1!$A$1:$B$3', legend: null });
-  const shape = ws.addShape({ presetGeometry: 'rect', anchorKind: 0, fromRow: 2, widthEmu: 9144, heightEmu: 9144 });
-  const slicer = ws.addSlicer(table, 0, { fromRow: 20, fromCol: 3, toRow: 30, toCol: 5 });
+  const shape = ws.addShape({
+    presetGeometry: 'rect',
+    anchor: { kind: formulon.AnchorKind.OneCell, fromRow: 2, widthEmu: 9144, heightEmu: 9144 },
+  });
+  const slicer = ws.addSlicer(table, 0, { anchor: { fromRow: 20, fromCol: 3, toRow: 30, toCol: 5 } });
   const picture = ws.addPicture(PNG_1X1);
   const proto = (value) => Object.getPrototypeOf(value);
   return {
@@ -379,10 +382,10 @@ test('copySheet appends when insertBefore is omitted or null', () => {
     const appended = wb.copySheet(0);
     assert.equal(appended.index, 2);
     assert.equal(appended.name, 'Sheet1 (2)');
-    const named = wb.copySheet(0, null, 'Copy');
+    const named = wb.copySheet(0, { insertBefore: null, newName: 'Copy' });
     assert.equal(named.index, 3);
     assert.equal(named.name, 'Copy');
-    assert.equal(wb.copySheet(ws, 1, 'Front').index, 1);
+    assert.equal(wb.copySheet(ws, { insertBefore: 1, newName: 'Front' }).index, 1);
     assert.deepEqual(
       wb.listSheets().map((sheet) => sheet.name),
       ['Sheet1', 'Front', 'Last', 'Sheet1 (2)', 'Copy'],
@@ -480,6 +483,14 @@ const DRIVERS = {
     get: (ws) => ws.getCellFormat('B1'),
     put: (ws, record) => ws.updateCellFormat('B1', record),
   },
+  cf_rule_update: {
+    make: (ws) => {
+      ws.addCfRule({ type: formulon.CfRuleType.Expression, ranges: 'A1:B2', formula1: 'A1>1' });
+      return ws;
+    },
+    get: (ws) => ws.listCfRules()[0],
+    put: (ws, record) => ws.updateCfRule(0, record),
+  },
   chart_legend: {
     make: (ws) => ws.addChart({ type: formulon.ChartPlotType.Bar, range: 'Sheet1!$A$1:$B$3', legend: 0 }),
     get: (chart) => chart.getProperties().legend,
@@ -565,7 +576,11 @@ const DRIVERS = {
     put: (ws, record) => ws.updateProtectedRange(0, record),
   },
   shape: {
-    make: (ws) => ws.addShape({ presetGeometry: 'rect', anchorKind: 0, fromRow: 2, widthEmu: 9144, heightEmu: 9144 }),
+    make: (ws) =>
+      ws.addShape({
+        presetGeometry: 'rect',
+        anchor: { kind: formulon.AnchorKind.OneCell, fromRow: 2, widthEmu: 9144, heightEmu: 9144 },
+      }),
     get: (shape) => shape.getProperties(),
     put: (shape, record) => shape.update(record),
   },
@@ -585,7 +600,7 @@ const DRIVERS = {
   slicer: {
     make: (ws) => {
       const table = ws.addTable({ range: 'A1:B3', name: 'Tbl' });
-      return ws.addSlicer(table, 0, { fromRow: 20, fromCol: 3, toRow: 30, toCol: 5 });
+      return ws.addSlicer(table, 0, { anchor: { fromRow: 20, fromCol: 3, toRow: 30, toCol: 5 } });
     },
     get: (slicer) => slicer.getProperties(),
     put: (slicer, record) => slicer.update(record),
@@ -657,6 +672,14 @@ const DRIVERS = {
     again: (ws) => ws.getHyperlink('B1'),
     identity: ['range'],
   },
+  validation_update: {
+    make: (ws) => {
+      ws.addValidation({ type: formulon.ValidationType.Whole, ranges: 'D1:D3', formula1: '1', formula2: '5' });
+      return ws;
+    },
+    get: (ws) => ws.listValidations()[0],
+    put: (ws, record) => ws.updateValidation(0, record),
+  },
   validation: {
     make: (ws) => {
       ws.addValidation({ type: formulon.ValidationType.Whole, ranges: 'D1:D3', formula1: '1', formula2: '5' });
@@ -665,6 +688,7 @@ const DRIVERS = {
     get: (ws) => ws.listValidations()[0],
     put: (ws, record) => ws.addValidation(record),
     again: (ws) => ws.listValidations()[1],
+    identity: ['id'],
   },
 };
 

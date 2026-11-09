@@ -78,8 +78,12 @@ extern "C" fm_status_t fm_sheet_validate_value(const fm_workbook_t* wb, size_t s
   out->struct_size = struct_size;
   out->has_rule = outcome.value().has_rule ? 1 : 0;
   out->valid = outcome.value().valid ? 1 : 0;
-  out->rule_index = outcome.value().rule_index;
   out->error_style = outcome.value().error_style;
+  if (outcome.value().has_rule) {
+    out->rule_id = formulon::c_api::parts::publish_scratch(
+        wb,
+        formulon::c_api::parts::format_runtime_id(book.validation_runtime_id(sheet_index, outcome.value().rule_index)));
+  }
   return 0;
 }
 

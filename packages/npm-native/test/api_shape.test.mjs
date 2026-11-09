@@ -47,6 +47,7 @@ const NON_TABLE_MEMBERS = new Set([
   'canonicalizeFormula',
   'getLocaleFacts',
   'listLocaleErrorNames',
+  'listProfileIds',
   'compareText',
   'getCollationClasses',
   'getImageInfo',
@@ -92,13 +93,14 @@ test('the resolved object is frozen and has exactly FORMULON_MEMBERS', async () 
   }
 });
 
-test('named exports are the value tables, FormulonError and createFormulon only', async () => {
+test('named exports are the value tables, FormulonError, toNative, mergeFunctionMetadata and createFormulon only', async () => {
   const { mod, common } = await loaded;
   const tables = common.FORMULON_MEMBERS.filter((name) => !NON_TABLE_MEMBERS.has(name));
-  const expected = ['createFormulon', 'default', 'FormulonError', ...tables].sort();
+  const helpers = ['toNative', 'mergeFunctionMetadata'];
+  const expected = ['createFormulon', 'default', 'FormulonError', ...helpers, ...tables].sort();
   assert.deepEqual(Object.keys(mod).sort(), expected);
   const formulon = await getFormulon();
-  for (const name of tables) assert.equal(mod[name], formulon[name], name);
+  for (const name of [...tables, ...helpers]) assert.equal(mod[name], formulon[name], name);
 });
 
 test('createFormulon accepts and ignores options', async () => {
@@ -599,15 +601,15 @@ test('H2 / H14: copySheet before a handle shifts it and returns the copy; at the
   try {
     const calc = wb.sheet('Calc');
     calc.setNumber(0, 0, 7);
-    const copy = wb.copySheet(calc, 0, 'Copy');
+    const copy = wb.copySheet(calc, { insertBefore: 0, newName: 'Copy' });
     assert.equal(copy.index, 0);
     assert.equal(copy.name, 'Copy');
     assert.equal(wb.sheet(0), copy);
     assert.equal(calc.index, 2);
     assert.equal(calc.getTypedValue(0, 0).number, 7);
-    const last = wb.copySheet(calc, wb.listSheets().length, 'Last');
+    const last = wb.copySheet(calc, { insertBefore: wb.listSheets().length, newName: 'Last' });
     assert.equal(last.index, 4);
-    expectFormulonError(() => wb.copySheet(calc, 6), formulon.StatusCode.SheetIndexOutOfRange);
+    expectFormulonError(() => wb.copySheet(calc, { insertBefore: 6 }), formulon.StatusCode.SheetIndexOutOfRange);
     assertSheetsInSync(formulon, wb);
   } finally {
     wb.dispose();
@@ -620,7 +622,7 @@ test('H3 / H4 / H14: moveSheet and renameSheet keep the handle on its sheet', as
   try {
     const data = wb.sheet('Data');
     data.setNumber(0, 0, 1);
-    wb.sheet(data).move(2);
+    wb.sheet(data).move(3);
     assert.equal(data.index, 2);
     assert.equal(data.getTypedValue(0, 0).number, 1);
     wb.sheet(data).move(data.index);
@@ -900,7 +902,8 @@ test('A1: a value the workbook does not hold reads as null', async () => {
     assert.equal(view.viewMode, formulon.SheetViewMode.Normal);
     assert.equal(view.showGridLines, true);
     assert.equal(view.rightToLeft, false);
-    assert.equal(view.visibility, formulon.SheetVisibility.Visible);
+    assert.equal('visibility' in view, false);
+    assert.equal(ws.getVisibility(), formulon.SheetVisibility.Visible);
     assert.equal(ws.getSheetProtection(), null);
 
     const field = ws.pivot(pivot).listFields()[0];
@@ -925,7 +928,7 @@ test('A1: a value the workbook does not hold reads as null', async () => {
     const row = ws.listRowOverrides().find((r) => r.row === 20);
     assert.deepEqual([ws.ooxml.getRowXfIndex(20), row.hidden], [null, false]);
     const outcome = ws.validateValue(30, 30, { kind: formulon.ValueKind.Number, number: 1 });
-    assert.deepEqual([outcome.valid, outcome.ruleIndex, outcome.errorStyle], [true, null, null]);
+    assert.deepEqual([outcome.valid, outcome.ruleId, outcome.errorStyle], [true, null, null]);
   } finally {
     wb.dispose();
   }
@@ -1275,8 +1278,8 @@ function pivotWorkbook(formulon) {
     wb.pivotCache(cacheId).setRecordValue(rec, 1, amount);
   }
   const pivot = ws.addPivot({ name: 'Pivot1', cacheId, anchor: { row: 0, col: 4 } });
-  ws.pivot(pivot).addField({ sourceName: 'Region', axis: 0 });
-  const amount = ws.pivot(pivot).addField({ sourceName: 'Amount', axis: 2 });
+  ws.pivot(pivot).addField({ fieldIndex: 'Region', axis: 0 });
+  const amount = ws.pivot(pivot).addField({ fieldIndex: 'Amount', axis: 2 });
   ws.pivot(pivot).addDataField({ name: 'Sum of Amount', fieldIndex: amount, aggregation: 0 });
   return { wb, pivot };
 }
@@ -1287,11 +1290,11 @@ test('activating a hidden or very hidden sheet is PreconditionFailed and keeps t
   await withWorkbook((wb, { StatusCode, SheetVisibility }) => {
     wb.addSheet('Second');
     for (const visibility of [SheetVisibility.Hidden, SheetVisibility.VeryHidden]) {
-      wb.sheet(1).updateView({ visibility });
+      wb.sheet(1).setVisibility(visibility);
       expectFormulonError(() => wb.setActiveSheet(1), StatusCode.PreconditionFailed);
       assert.equal(wb.activeSheet().index, 0);
     }
-    wb.sheet(1).updateView({ visibility: SheetVisibility.Visible });
+    wb.sheet(1).setVisibility(SheetVisibility.Visible);
     wb.setActiveSheet(1);
     assert.equal(wb.activeSheet().index, 1);
   });
@@ -1345,10 +1348,10 @@ test('a refusal caused by the workbook or a neighbouring object is PreconditionF
   await withWorkbook((wb, { StatusCode, SheetVisibility }) => {
     const ws = wb.sheet(0);
     expectFormulonError(() => wb.removeSheet(0), StatusCode.PreconditionFailed);
-    expectFormulonError(() => ws.updateView({ visibility: SheetVisibility.Hidden }), StatusCode.PreconditionFailed);
+    expectFormulonError(() => ws.setVisibility(SheetVisibility.Hidden), StatusCode.PreconditionFailed);
     assert.equal(wb.listSheets().length, 1);
     wb.addSheet('Second');
-    wb.sheet(1).updateView({ visibility: SheetVisibility.Hidden });
+    wb.sheet(1).setVisibility(SheetVisibility.Hidden);
     expectFormulonError(() => wb.removeSheet(0), StatusCode.PreconditionFailed);
     assert.equal(wb.listSheets().length, 2);
 

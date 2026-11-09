@@ -75,8 +75,8 @@ def add_cache(wb: Workbook, source_sheet: str) -> PivotCache:
 def add_pivot(sheet: Sheet, cache: PivotCache, name: str, anchor_row: int, anchor_col: int) -> Tuple[Pivot, int]:
     """A pivot of ``cache`` on ``sheet``: Region on rows, Sum of Amount as the data field."""
     pivot = sheet.add_pivot(PivotInput(name=name, cache_id=cache.cache_id, anchor=CellAddress(anchor_row, anchor_col)))
-    pivot.add_field(PivotFieldInput(source_name="Region", axis=PivotAxis.ROW))
-    amount = pivot.add_field(PivotFieldInput(source_name="Amount", axis=PivotAxis.VALUE))
+    pivot.add_field(PivotFieldInput(field_index="Region", axis=PivotAxis.ROW))
+    amount = pivot.add_field(PivotFieldInput(field_index="Amount", axis=PivotAxis.VALUE))
     pivot.add_data_field(
         PivotDataFieldInput(name="Sum of Amount", field_index=amount, aggregation=PivotAggregation.SUM)
     )
@@ -100,10 +100,9 @@ def add_shape(sheet: Sheet) -> formulon.Shape:
     return sheet.add_shape(
         ShapeInput(
             preset_geometry="rect",
-            anchor_kind=formulon.AnchorKind.ONE_CELL,
-            from_row=2,
-            width_emu=914400,
-            height_emu=457200,
+            anchor=formulon.DrawingAnchorInput(
+                kind=formulon.AnchorKind.ONE_CELL, from_row=2, width_emu=914400, height_emu=457200
+            ),
         )
     )
 
@@ -201,7 +200,7 @@ class IdentityTests(HandleTestCase):
             for read in (
                 lambda: pivot.name,
                 pivot.get_properties,
-                lambda: pivot.add_field(PivotFieldInput(source_name="Region", axis=PivotAxis.ROW)),
+                lambda: pivot.add_field(PivotFieldInput(field_index="Region", axis=PivotAxis.ROW)),
                 lambda: ws.pivot("P1"),
             ):
                 self.assertCode(NotFoundError, read, StatusCode.NOT_FOUND)
@@ -281,7 +280,7 @@ class IdentityTests(HandleTestCase):
             cache = add_cache(wb, "Sheet1")
             pivot, _ = add_pivot(ws, cache, "P1", 0, 4)
             chart = add_chart(ws)
-            copy = wb.copy_sheet(ws, 1, "Copy")
+            copy = wb.copy_sheet(ws, insert_before=1, new_name="Copy")
             self.assertIsNot(copy, ws)
             self.assertIs(wb.sheet("Sheet1"), ws)
             # The original handles are undisturbed and the copy has its own.
@@ -298,10 +297,14 @@ class IdentityTests(HandleTestCase):
             # A slicer on the sheet makes the copy fail; the handles stay as they were.
             table_sheet = wb.add_sheet("Tables")
             table = add_table(wb, table_sheet, "Tbl")
-            slicer = table_sheet.add_slicer(table, 0, SlicerInput(from_row=4, from_col=3, to_row=14, to_col=5))
+            slicer = table_sheet.add_slicer(
+                table, 0, SlicerInput(anchor=formulon.DrawingAnchorInput(from_row=4, from_col=3, to_row=14, to_col=5))
+            )
             sheet_count = len(wb.list_sheets())
             self.assertCode(
-                FormulonError, lambda: wb.copy_sheet(table_sheet, 0, "TablesCopy"), StatusCode.NOT_IMPLEMENTED
+                FormulonError,
+                lambda: wb.copy_sheet(table_sheet, insert_before=0, new_name="TablesCopy"),
+                StatusCode.NOT_IMPLEMENTED,
             )
             self.assertEqual(len(wb.list_sheets()), sheet_count)
             self.assertIs(table_sheet.list_slicers()[0], slicer)
@@ -327,7 +330,7 @@ class IdentityTests(HandleTestCase):
             self.assertIs(table_sheet.table(0), table)
 
             chart = add_chart(ws)
-            chart.rename("Revenue")
+            chart.update(name="Revenue")
             self.assertIs(ws.chart(chart.object_id), chart)
             self.assertEqual(chart.get_drawing_properties().name, "Revenue")
 
@@ -699,9 +702,9 @@ class ThreadedDoneTests(HandleTestCase):
             self.assertCode(
                 FormulonError,
                 lambda: ws.update_threaded_comment(REPLY, done=True),
-                StatusCode.THREADED_COMMENT_INVALID,
+                StatusCode.INVALID_ARGUMENT,
             )
-            self.assertEqual(StatusCode.THREADED_COMMENT_INVALID, 9006)
+            self.assertFalse(hasattr(StatusCode, "THREADED_COMMENT_INVALID"))
             self.assertFalse(ws.get_threaded_comment(REPLY).done)
             with self.assertRaises(TypeError):
                 ws.update_threaded_comment(THREAD, done=None)  # type: ignore[arg-type]

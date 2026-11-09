@@ -88,8 +88,8 @@ function pivotWorkbook(wb, formulon) {
     wb.pivotCache(cacheId).setRecordValue(rec, 1, amount);
   }
   const pivot = ws.addPivot({ name: 'Pivot1', cacheId, anchor: { row: 0, col: 4 } });
-  ws.pivot(pivot).addField({ sourceName: 'Region', axis: formulon.PivotAxis.Row });
-  const amountField = ws.pivot(pivot).addField({ sourceName: 'Amount', axis: formulon.PivotAxis.Value });
+  ws.pivot(pivot).addField({ fieldIndex: 'Region', axis: formulon.PivotAxis.Row });
+  const amountField = ws.pivot(pivot).addField({ fieldIndex: 'Amount', axis: formulon.PivotAxis.Value });
   ws.pivot(pivot).addDataField({ name: 'Sum of Amount', fieldIndex: amountField, aggregation: 0 });
   return { cacheId, pivot };
 }
@@ -668,7 +668,7 @@ test('criterion 5: edits mark the workbook dirty', async () => {
   const edits = {
     setNumber: (wb) => wb.sheet(0).setNumber(0, 0, 2),
     setDefinedName: (wb) => wb.setDefinedName({ name: 'Rate', formula: 'Sheet1!$A$1' }),
-    insertRows: (wb) => wb.sheet(0).insertRows(0, 1),
+    insertRows: (wb) => wb.sheet(0).insertRows(0, 0),
     removeSheet: (wb) => wb.removeSheet(1),
   };
   for (const [name, edit] of Object.entries(edits)) {
@@ -791,7 +791,18 @@ test('criterion 6: listPivots, listPivotFieldItems and the pivot cache lists des
   await withWorkbook((wb, f) => {
     const { cacheId, pivot } = pivotWorkbook(wb, f);
     const ws = wb.sheet(0);
-    assert.deepEqual(plain(ws.listPivots().map((p) => p.getProperties())), [{ name: 'Pivot1', cacheId }]);
+    const properties = plain(ws.listPivots().map((p) => p.getProperties()));
+    assert.deepEqual(
+      properties.map(({ name, cacheId: id }) => ({ name, cacheId: id })),
+      [{ name: 'Pivot1', cacheId }],
+    );
+    assert.deepEqual(Object.keys(properties[0]).sort(), [
+      'cacheId',
+      'grandTotals',
+      'name',
+      'reportLayout',
+      'styleOptions',
+    ]);
     assert.equal(ws.listPivots()[0], pivot);
     assert.deepEqual(
       wb
@@ -861,15 +872,30 @@ test('criterion 7: updateView checks paneTopLeft against the merged state', asyn
   });
 });
 
-test('criterion 7: updateView refuses to hide the only visible sheet and changes nothing', async () => {
+test('criterion 7: setVisibility refuses to hide the only visible sheet and changes nothing', async () => {
   await withWorkbook((wb, f) => {
     const ws = wb.sheet(0);
     const before = plain(ws.getView());
-    assert.throws(
-      () => ws.updateView({ visibility: f.SheetVisibility.Hidden, showGridLines: false }),
-      (e) => e.name === 'FormulonError',
-    );
+    expectCode(() => ws.setVisibility(f.SheetVisibility.Hidden), f.StatusCode.PreconditionFailed);
+    assert.equal(ws.getVisibility(), f.SheetVisibility.Visible);
     assert.deepEqual(plain(ws.getView()), before);
+  });
+});
+
+test('updateView refuses a visibility key and the tab visibility is read and written by its own pair', async () => {
+  await withWorkbook((wb, f) => {
+    wb.addSheet('Second');
+    const second = wb.sheet(1);
+    const before = plain(second.getView());
+    assert.throws(() => second.updateView({ visibility: f.SheetVisibility.Hidden }), TYPE_ERROR);
+    assert.equal('visibility' in second.getView(), false);
+    assert.equal(second.getVisibility(), f.SheetVisibility.Visible);
+    second.setVisibility(f.SheetVisibility.VeryHidden);
+    assert.equal(second.getVisibility(), f.SheetVisibility.VeryHidden);
+    second.setVisibility(f.SheetVisibility.Hidden);
+    assert.equal(second.getVisibility(), f.SheetVisibility.Hidden);
+    second.setVisibility(f.SheetVisibility.Visible);
+    assert.deepEqual(plain(second.getView()), before);
   });
 });
 
@@ -879,7 +905,6 @@ test('criterion 7: updateView replaces the per-field view setters', async () => 
     const gone = [
       'setZoom',
       'setFreeze',
-      'setVisibility',
       'setShowGridLines',
       'setShowRowColHeaders',
       'setShowZeros',
@@ -1151,13 +1176,14 @@ test('criterion 8: removeCfRule takes an id; a colliding id is given a new one',
   });
 });
 
-test('criterion 8: removePivot resolves a name and takes the first of two equal names', async () => {
+test('criterion 8: removePivot resolves a name case-insensitively and a name in use is refused', async () => {
   await withWorkbook((wb, f) => {
     const { cacheId, pivot: first } = pivotWorkbook(wb, f);
     const ws = wb.sheet(0);
-    const second = ws.addPivot({ name: 'Pivot1', cacheId, anchor: { row: 0, col: 10 } });
+    const second = ws.addPivot({ name: 'Pivot2', cacheId, anchor: { row: 0, col: 10 } });
     assert.equal(second.index, 1);
-    ws.removePivot('Pivot1');
+    expectCode(() => ws.addPivot({ name: 'pivot2', cacheId, anchor: { row: 0, col: 20 } }), f.StatusCode.AlreadyExists);
+    ws.removePivot('pivot1');
     const left = ws.listPivots();
     assert.equal(left.length, 1);
     assert.equal(left[0], second);

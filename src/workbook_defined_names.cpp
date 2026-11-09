@@ -18,10 +18,10 @@
 #include "io/xlsb/table_records.h"
 #include "parser/ast.h"
 #include "parser/external_book_spelling.h"
+#include "sheet_name.h"
 #include "utils/error.h"
 #include "utils/expected.h"
 #include "utils/name_syntax.h"
-#include "utils/strings.h"
 #include "workbook.h"
 #include "workbook_formula_index.h"
 #include "workbook_internal.h"
@@ -60,7 +60,7 @@ bool erase_slicer_cache_names(std::vector<DefinedName>& names, const std::vector
   const auto it = std::remove_if(names.begin(), names.end(), [&cache_names](const DefinedName& entry) {
     return entry.local_sheet_id == -1 &&
            std::any_of(cache_names.begin(), cache_names.end(), [&entry](const std::string& cache_name) {
-             return strings::case_insensitive_eq(entry.name, cache_name);
+             return collection_names::equal(entry.name, cache_name);
            });
   });
   const bool removed = it != names.end();
@@ -83,7 +83,7 @@ void Workbook::set_defined_names(std::vector<DefinedName> names) {
     const auto group = [](const std::vector<DefinedName>& entries) {
       std::unordered_map<std::string, Definitions> grouped;
       for (const DefinedName& entry : entries) {
-        grouped[strings::to_ascii_lower(entry.name)].emplace_back(entry.local_sheet_id, entry.formula);
+        grouped[collection_names::fold_key(entry.name)].emplace_back(entry.local_sheet_id, entry.formula);
       }
       return grouped;
     };
@@ -139,6 +139,8 @@ Expected<void, Error> Workbook::set_defined_name_scoped(std::string name, std::s
   // Case-insensitive lookup: Excel resolves defined names case-folded.
   // Restrict the search to the requested scope.
   if (const auto it = find_defined_name(defined_names_, name, local_sheet_id); it != defined_names_.end()) {
+    // Keep the stored spelling; formulas match it under the same fold.
+    name = it->name;
     if (formula.empty()) {
       defined_names_.erase(it);
     } else {
@@ -161,14 +163,15 @@ Expected<void, Error> Workbook::set_defined_name_scoped(std::string name, std::s
   if (formula.empty()) {
     return Expected<void, Error>::Ok();
   }
+  const auto table_named = [&name](const auto& table) {
+    return collection_names::equal(table.name, name) || collection_names::equal(table.display_name, name);
+  };
   const std::vector<io::xlsb::XlsbRetainedTable> retained = io::xlsb::xlsb_retained_tables(*this);
-  const bool retained_table = std::any_of(retained.begin(), retained.end(), [&name](const auto& table) {
-    return strings::case_insensitive_eq(table.name, name) || strings::case_insensitive_eq(table.display_name, name);
-  });
   if (!is_valid_defined_name(name)) {
     return make_error(FormulonErrorCode::kInvalidArgument, "invalid name", "name=" + name);
   }
-  if (is_table_name(name) || retained_table) {
+  if (std::any_of(tables_.begin(), tables_.end(), table_named) ||
+      std::any_of(retained.begin(), retained.end(), table_named)) {
     return make_error(FormulonErrorCode::kAlreadyExists, "name is taken by a table", "name=" + name);
   }
   DefinedName entry;

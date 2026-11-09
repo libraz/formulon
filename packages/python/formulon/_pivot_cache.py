@@ -15,6 +15,7 @@ from ._workbook import (
     _PATCH_CLEAR,
     _PATCH_SET,
     UNCHANGED,
+    NativeValue,
     PivotCacheField,
     PivotCacheOptions,
     PivotCacheSharedItem,
@@ -398,6 +399,24 @@ class PivotCache(_NoCopy):
         """Drop every record from the cache."""
         h, cache_id = self._call()
         _check(LIB.fm_workbook_clear_pivot_cache_records(h, cache_id))
+
+    def get_record_value(self, record_index: int, field_index: int) -> NativeValue:
+        """Read cache cell ``(record_index, field_index)`` as a native value.
+
+        A cell that indexes a shared item reads the item's value, a cell its record does not reach reads
+        ``None``, and a date reads as its serial number, as a shared item does.
+
+        Raises:
+          IndexOutOfRangeError: when ``record_index`` is not below the record count or ``field_index`` not
+            below the cache's field count.
+        """
+        h, cache_id = self._call()
+        record = _uint(record_index, "record_index", role="position")
+        field = _uint(field_index, "field_index", role="position")
+        with _ArgScope() as scope:
+            value_ptr = scope.alloc(fm_value_t_size)
+            _check(LIB.fm_workbook_get_pivot_cache_record_value(h, cache_id, record, field, value_ptr))
+            return to_native(Value._from_wasm(value_ptr))
 
     def set_record_value(self, record_index: int, field_index: int, value: _PivotCacheValue) -> None:
         """Set cache cell ``(record_index, field_index)``; ``value`` as in :meth:`add_field_shared_item`.

@@ -42,6 +42,27 @@ emscripten::val JsWorkbook::getThemeScriptFont(int32_t scheme, const std::string
   return optional_or_null(rc, present, item);
 }
 
+emscripten::val JsWorkbook::listThemeScriptFonts(int32_t scheme) const {
+  std::size_t count = 0;
+  if (!succeeded(handle_ != nullptr ? fm_workbook_get_theme_script_font_count(handle_, scheme, &count)
+                                    : kBindingInvalidHandle)) {
+    return emscripten::val::undefined();
+  }
+  emscripten::val list = emscripten::val::array();
+  for (std::size_t i = 0; i < count; ++i) {
+    const char* script = nullptr;
+    const char* typeface = nullptr;
+    if (!succeeded(fm_workbook_get_theme_script_font_at(handle_, scheme, i, &script, &typeface))) {
+      return emscripten::val::undefined();
+    }
+    emscripten::val item = emscripten::val::object();
+    item.set("scheme", scheme);
+    js_set_cstr_fields(item, {{"script", script}, {"typeface", typeface}});
+    list.set(static_cast<uint32_t>(i), item);
+  }
+  return list;
+}
+
 emscripten::val JsWorkbook::getThemeColors() const {
   fm_theme_colors_t colors = FM_STRUCT_INIT(fm_theme_colors_t);
   int32_t source = 0;

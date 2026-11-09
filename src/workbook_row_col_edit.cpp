@@ -39,7 +39,6 @@
 #include "utils/expected.h"
 #include "utils/formula_text.h"
 #include "utils/status_macros.h"
-#include "utils/strings.h"
 #include "workbook.h"
 #include "workbook_formula_index.h"
 #include "workbook_internal.h"
@@ -369,7 +368,7 @@ void update_table_columns(TableMetadata& table, const MergeRange& before, const 
   added.reserve(edit.count);
   std::uint32_t suffix = 1;
   const auto name_taken = [&](const std::string& name) {
-    const auto same = [&name](const TableColumn& column) { return strings::case_insensitive_eq(column.name, name); };
+    const auto same = [&name](const TableColumn& column) { return collection_names::equal(column.name, name); };
     return std::any_of(table.columns.begin(), table.columns.end(), same) ||
            std::any_of(added.begin(), added.end(), same);
   };

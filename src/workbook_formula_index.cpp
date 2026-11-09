@@ -116,7 +116,7 @@ bool references_any(const parser::AstNode& node, const std::vector<std::string>&
       return false;
     }
     return std::any_of(candidates.begin(), candidates.end(), [&](const std::string& n) {
-      return kind == RefKind::kSheet ? sheet_names::equal(n, ref) : strings::case_insensitive_eq(n, ref);
+      return kind == RefKind::kSheet ? sheet_names::equal(n, ref) : collection_names::equal(n, ref);
     });
   };
   switch (node.kind()) {
@@ -174,7 +174,7 @@ bool references_any_sheet(const parser::AstNode& root, const std::vector<std::st
 
 bool contains_affected_name(const std::vector<std::string>& affected, std::string_view candidate) {
   return std::any_of(affected.begin(), affected.end(),
-                     [&](const std::string& name) { return strings::case_insensitive_eq(name, candidate); });
+                     [&](const std::string& name) { return collection_names::equal(name, candidate); });
 }
 
 }  // namespace
@@ -211,7 +211,7 @@ void collect_local_name_refs(const parser::AstNode& node, std::string_view sheet
       return;
     }
     for (const std::string& local : locals) {
-      if (strings::case_insensitive_eq(local, node.as_name()) && !contains_affected_name(found, local)) {
+      if (collection_names::equal(local, node.as_name()) && !contains_affected_name(found, local)) {
         found.push_back(local);
       }
     }
@@ -299,7 +299,7 @@ std::vector<std::string> referenced_local_names_of_removed_sheet(const std::vect
       continue;
     }
     for (const DefinedName& entry : defined_names) {
-      if (entry.local_sheet_id == removed_id && strings::case_insensitive_eq(entry.name, name)) {
+      if (entry.local_sheet_id == removed_id && collection_names::equal(entry.name, name)) {
         scan(entry.formula);
       }
     }
@@ -385,10 +385,15 @@ void mark_row_visibility_dependents_dirty_locked(const std::vector<Sheet>& sheet
           continue;
         }
         // A call must spell its name, so text scans miss nothing; a string literal costs a spare dirty mark.
+        // The scan folds ASCII only, so a non-ASCII byte on either side defers to the parse.
         bool affected = visibility_sensitive(cell.formula_text);
         const std::string_view text = cell.formula_text;
-        const auto spells_name = [text](const std::string& name) {
-          return strings::case_insensitive_contains(text, name);
+        const auto ascii = [](std::string_view s) {
+          return std::none_of(s.begin(), s.end(), [](char c) { return (static_cast<unsigned char>(c) & 0x80U) != 0U; });
+        };
+        const bool text_ascii = ascii(text);
+        const auto spells_name = [&](const std::string& name) {
+          return !text_ascii || !ascii(name) || strings::case_insensitive_contains(text, name);
         };
         if (!affected && std::any_of(affected_names.begin(), affected_names.end(), spells_name)) {
           const parser::AstNode* root = parse_stored_formula(cell.formula_text, parser_arena);

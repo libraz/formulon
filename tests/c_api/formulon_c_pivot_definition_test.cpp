@@ -421,8 +421,7 @@ TEST(FormulonCApiPivot, FieldAxisNoneTakesTheFieldOffTheReport) {
     ASSERT_EQ(fm_sheet_add_pivot_data_field(wb.handle, 0, pivot, &df, &idx), 0) << fm_get_last_error_message();
   }
   fm_pivot_filter_t filter = FM_STRUCT_INIT(fm_pivot_filter_t);
-  filter.axis = FM_PIVOT_AXIS_VALUE;
-  filter.field_name = "Qty";
+  filter.field_index = 3;
   filter.type = FM_PIVOT_FILTER_KIND_VALUE_GREATER_THAN;
   filter.value_kind = FM_PIVOT_FILTER_OPERAND_KIND_DOUBLE;
   filter.value_double = 0.0;

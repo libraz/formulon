@@ -6,6 +6,7 @@
 #include <string>
 
 #include "c_api/formulon_c.h"
+#include "formulon_c_out_index.h"
 #include "formulon_c_test_helpers.h"
 #include "gtest/gtest.h"
 
@@ -29,7 +30,7 @@ TEST(FormulonCApiSheetIndexByName, FindsASheetByItsExactName) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   size_t added = 0;
-  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Budget", &added), 0);
+  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Budget", append_position(wb.handle), &added), 0);
   ASSERT_EQ(added, 1U);
 
   const Found first = Lookup(wb.handle, "Sheet1");
@@ -46,7 +47,7 @@ TEST(FormulonCApiSheetIndexByName, IgnoresCase) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   size_t added = 0;
-  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Budget", &added), 0);
+  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Budget", append_position(wb.handle), &added), 0);
 
   for (const char* spelling : {"budget", "BUDGET", "bUdGeT"}) {
     const Found found = Lookup(wb.handle, spelling);

@@ -46,11 +46,11 @@ def _pivot(wb: Workbook) -> Any:
     pivot = wb.sheet(0).pivot(
         wb.sheet(0).add_pivot(PivotInput(name="P1", cache_id=cache.cache_id, anchor=CellAddress(0, 6)))
     )
-    region = pivot.add_field(PivotFieldInput(source_name="Region", axis=PivotAxis.ROW))
+    region = pivot.add_field(PivotFieldInput(field_index="Region", axis=PivotAxis.ROW))
     pivot.add_field_item(region, "East", visible=True)
     pivot.add_field_item(region, "West", visible=True)
-    pivot.add_field(PivotFieldInput(source_name="Product", axis=PivotAxis.ROW))
-    pivot.add_field(PivotFieldInput(source_name="Amount", axis=PivotAxis.VALUE))
+    pivot.add_field(PivotFieldInput(field_index="Product", axis=PivotAxis.ROW))
+    pivot.add_field(PivotFieldInput(field_index="Amount", axis=PivotAxis.VALUE))
     return pivot
 
 
@@ -281,7 +281,7 @@ class ChartPatchTests(unittest.TestCase):
         with Workbook.create_default() as wb:
             chart = _chart(wb)
             series = chart.get_properties().plots[0].series[0]
-            chart.update_series(0, series.index, values=series.values)
+            chart.update_series(0, series.series_id, values=series.values)
             self.assertEqual(chart.get_properties().plots[0].series[0].values, series.values)
 
 

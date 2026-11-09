@@ -13,6 +13,7 @@
 #include "miniz.h"
 #include "sheet.h"
 #include "threaded_comment.h"
+#include "utils/date_time.h"
 #include "utils/error.h"
 #include "workbook.h"
 
@@ -223,17 +224,26 @@ TEST(ThreadedComments, RoundTripRepliesMentions) {
 }
 
 TEST(ThreadedComments, CommentWithNoTimeOmitsDtAndRoundTrips) {
+  // A comment that carries no time, as a loaded file can, is written without `dT` and reads back without one.
+  ThreadedComment c = Comment(kThread, 0, 0, kAlice, "undated");
+  c.created.clear();
+  const std::string xml = io::write_threaded_comments({c});
+  EXPECT_EQ(xml.find("dT="), std::string::npos);
+  std::vector<std::uint8_t> bytes(xml.begin(), xml.end());
+  auto decoded = io::read_threaded_comments(bytes);
+  ASSERT_TRUE(static_cast<bool>(decoded)) << decoded.error().message;
+  ASSERT_EQ(decoded.value().size(), 1U);
+  EXPECT_TRUE(decoded.value()[0].created.empty());
+}
+
+TEST(ThreadedComments, AddedCommentWithNoTimeIsStamped) {
   Workbook wb = WorkbookWithPersons();
   ThreadedComment c = Comment(kThread, 0, 0, kAlice, "undated");
   c.created.clear();
   ASSERT_TRUE(static_cast<bool>(wb.add_threaded_comment(0, c)));
-  const std::vector<std::uint8_t> saved = Save(wb);
-  const std::string part = Part(saved, "xl/threadedComments/threadedComment1.xml");
-  ASSERT_FALSE(part.empty());
-  EXPECT_EQ(part.find("dT="), std::string::npos);
-  Workbook reloaded = Load(saved);
+  Workbook reloaded = Load(Save(wb));
   ASSERT_EQ(reloaded.sheet(0).threaded_comments().size(), 1U);
-  EXPECT_TRUE(reloaded.sheet(0).threaded_comments()[0].created.empty());
+  EXPECT_FALSE(reloaded.sheet(0).threaded_comments()[0].created.empty());
 }
 
 TEST(ThreadedComments, TextSurvivesTwoOoxmlCycles) {
@@ -409,7 +419,7 @@ TEST(ThreadedComments, ResolveAndUnresolve) {
 
   auto on_reply = wb.set_thread_resolved(0, kReply, true);
   ASSERT_FALSE(static_cast<bool>(on_reply));
-  EXPECT_EQ(on_reply.error().code, FormulonErrorCode::kThreadedCommentInvalid);
+  EXPECT_EQ(on_reply.error().code, FormulonErrorCode::kInvalidArgument);
   // The reply took its thread's anchor rather than the one it was given.
   EXPECT_EQ(wb.sheet(0).threaded_comments()[1].row, 0U);
   EXPECT_EQ(wb.sheet(0).threaded_comments()[1].col, 0U);
@@ -467,18 +477,17 @@ TEST(ThreadedComments, XlsbSaveReportsDeferral) {
 TEST(ThreadedComments, RefusesMalformedInputCollisionsAndUnknownIds) {
   Workbook wb = WorkbookWithPersons();
   wb.sheet(0).mutable_comments().push_back(CellComment(4, 4, "Carol", "note"));
-  const auto invalid = [](const Expected<void, Error>& r) {
-    return !r && r.error().code == FormulonErrorCode::kThreadedCommentInvalid;
-  };
-  const auto code = [](const Expected<void, Error>& r) { return r ? FormulonErrorCode::kOk : r.error().code; };
-  EXPECT_TRUE(
-      invalid(wb.add_threaded_comment(0, Comment("{2bd0b1a4-7c3e-4f2a-9d11-6a5e8c0f1b23}", 0, 0, kAlice, "x"))));
-  EXPECT_TRUE(invalid(wb.add_threaded_comment(0, Comment("2BD0B1A4-7C3E-4F2A-9D11-6A5E8C0F1B23", 0, 0, kAlice, "x"))));
+  const auto invalid = [](const auto& r) { return !r && r.error().code == FormulonErrorCode::kInvalidArgument; };
+  const auto code = [](const auto& r) { return r ? FormulonErrorCode::kOk : r.error().code; };
+  EXPECT_EQ(code(wb.add_threaded_comment(0, Comment("2BD0B1A4-7C3E-4F2A-9D11-6A5E8C0F1B23", 0, 0, kAlice, "x"))),
+            FormulonErrorCode::kInvalidArgument);
+  EXPECT_EQ(code(wb.add_threaded_comment(0, Comment("{2BD0B1A4-7C3E-4F2A-9D11-6A5E8C0F1B2G}", 0, 0, kAlice, "x"))),
+            FormulonErrorCode::kInvalidArgument);
   ThreadedComment bad_time = Comment(kThread, 0, 0, kAlice, "x");
   bad_time.created = "2026-10-05T10:00:00.000";
   EXPECT_TRUE(invalid(wb.add_threaded_comment(0, bad_time)));
-  EXPECT_TRUE(
-      invalid(wb.add_threaded_comment(0, Comment(kThread, 0, 0, "{99999999-9999-4999-8999-999999999999}", "x"))));
+  EXPECT_EQ(code(wb.add_threaded_comment(0, Comment(kThread, 0, 0, "{99999999-9999-4999-8999-999999999999}", "x"))),
+            FormulonErrorCode::kNotFound);
   EXPECT_EQ(code(wb.add_threaded_comment(0, Comment(kThread, 4, 4, kAlice, "x"))), FormulonErrorCode::kAlreadyExists);
   EXPECT_TRUE(invalid(wb.add_threaded_comment(0, Comment(kReply, 0, 0, kAlice, "x", kThread))));
 
@@ -504,5 +513,90 @@ TEST(ThreadedComments, RefusesMalformedInputCollisionsAndUnknownIds) {
   EXPECT_EQ(wb.sheet(0).threaded_comments()[0].text, "plain");
 }
 
+TEST(ThreadedComments, GeneratesIdAndStampFromThePinnedClock) {
+  const date_time::CivilTime pinned{{2026, 11, 9}, {8, 5, 3}};
+  ThreadedComment thread = Comment("", 0, 0, kAlice, "x");
+  thread.created.clear();
+  Workbook wb = WorkbookWithPersons();
+  wb.set_pinned_now(pinned);
+  auto id = wb.add_threaded_comment(0, thread);
+  ASSERT_TRUE(static_cast<bool>(id));
+  EXPECT_TRUE(is_threaded_comment_guid(id.value()));
+  ASSERT_EQ(wb.sheet(0).threaded_comments().size(), 1U);
+  EXPECT_EQ(wb.sheet(0).threaded_comments()[0].id, id.value());
+  EXPECT_EQ(wb.sheet(0).threaded_comments()[0].created, "2026-11-09T08:05:03.00");
+
+  // The same pinned instant reproduces the same id in another workbook.
+  Workbook other = WorkbookWithPersons();
+  other.set_pinned_now(pinned);
+  auto again = other.add_threaded_comment(0, thread);
+  ASSERT_TRUE(static_cast<bool>(again));
+  EXPECT_EQ(again.value(), id.value());
+
+  ThreadedComment reply = Comment("", 0, 0, kBob, "y", id.value());
+  reply.created.clear();
+  auto reply_id = wb.add_threaded_comment(0, reply);
+  ASSERT_TRUE(static_cast<bool>(reply_id));
+  EXPECT_TRUE(is_threaded_comment_guid(reply_id.value()));
+  EXPECT_NE(reply_id.value(), id.value());
+
+  // An explicit id and stamp are kept; the same id again is refused.
+  auto kept = wb.add_threaded_comment(0, Comment(kThread, 3, 3, kAlice, "z"));
+  ASSERT_TRUE(static_cast<bool>(kept));
+  EXPECT_EQ(kept.value(), kThread);
+  EXPECT_EQ(wb.sheet(0).threaded_comments().back().created, "2026-10-05T10:00:00.00");
+  auto duplicate = wb.add_threaded_comment(0, Comment(kThread, 4, 4, kAlice, "w"));
+  ASSERT_FALSE(static_cast<bool>(duplicate));
+  EXPECT_EQ(duplicate.error().code, FormulonErrorCode::kAlreadyExists);
+}
+
+TEST(ThreadedComments, PersonIdsMatchAcrossCase) {
+  Workbook wb = WorkbookWithPersons();
+  const std::string alice_lower = "{11111111-aaaa-4bbb-8ccc-dddddddddddd}";
+  ThreadedComment thread = Comment(kThread, 0, 0, alice_lower, "x");
+  thread.mentions.push_back(Mention{"{22222222-aaaa-4bbb-8ccc-eeeeeeeeeeee}", std::string(kMention), 0, 1});
+  ASSERT_TRUE(static_cast<bool>(wb.add_threaded_comment(0, thread)));
+  // Stored in the listed spelling.
+  EXPECT_EQ(wb.sheet(0).threaded_comments()[0].person_id, kAlice);
+  EXPECT_EQ(wb.sheet(0).threaded_comments()[0].mentions[0].person_id, kBob);
+
+  auto refused = wb.add_person(Person{alice_lower, "Alice again", "", ""});
+  ASSERT_FALSE(static_cast<bool>(refused));
+  EXPECT_EQ(refused.error().code, FormulonErrorCode::kAlreadyExists);
+  auto in_use = wb.remove_person(alice_lower);
+  ASSERT_FALSE(static_cast<bool>(in_use));
+  EXPECT_EQ(in_use.error().code, FormulonErrorCode::kPreconditionFailed);
+  ASSERT_TRUE(static_cast<bool>(wb.remove_threaded_comment(0, kThread)));
+  ASSERT_TRUE(static_cast<bool>(wb.remove_person(alice_lower)));
+  ASSERT_EQ(wb.persons().size(), 1U);
+  EXPECT_EQ(wb.persons()[0].id, kBob);
+}
+
 }  // namespace
+TEST(ThreadedComments, GuidIdsAreTakenInEitherCaseStoredUppercaseAndMatchedAcrossCase) {
+  Workbook wb = WorkbookWithPersons();
+  ASSERT_TRUE(static_cast<bool>(wb.add_person(Person{"{33333333-abcd-4ef0-8abc-0123456789ab}", "Carol", "", ""})));
+  EXPECT_EQ(wb.persons().back().id, "{33333333-ABCD-4EF0-8ABC-0123456789AB}");
+  const auto code = [](const auto& r) { return r ? FormulonErrorCode::kOk : r.error().code; };
+  EXPECT_EQ(code(wb.add_person(Person{"{33333333-ABCD-4EF0-8ABC-0123456789AB}", "Again", "", ""})),
+            FormulonErrorCode::kAlreadyExists);
+  EXPECT_EQ(code(wb.add_person(Person{"{not-a-guid}", "Dan", "", ""})), FormulonErrorCode::kInvalidArgument);
+
+  const std::string lower_thread = "{6f1e0d2c-1111-4111-8111-0000000000aa}";
+  ThreadedComment thread = Comment(lower_thread, 0, 0, kAlice, "Q");
+  thread.mentions.push_back(Mention{std::string(kBob), "{7a2b3c4d-2222-4222-8222-0000000000bb}", 0, 1});
+  auto id = wb.add_threaded_comment(0, thread);
+  ASSERT_TRUE(static_cast<bool>(id));
+  EXPECT_EQ(id.value(), "{6F1E0D2C-1111-4111-8111-0000000000AA}");
+  EXPECT_EQ(wb.sheet(0).threaded_comments()[0].mentions[0].mention_id, "{7A2B3C4D-2222-4222-8222-0000000000BB}");
+  EXPECT_EQ(find_threaded_comment(wb.sheet(0).threaded_comments(), lower_thread), 0U);
+
+  // A reply naming its thread in another case binds to the stored spelling.
+  ASSERT_TRUE(static_cast<bool>(wb.add_threaded_comment(0, Comment(kReply, 0, 0, kBob, "A", lower_thread))));
+  EXPECT_EQ(wb.sheet(0).threaded_comments()[1].parent_id, id.value());
+  ASSERT_TRUE(static_cast<bool>(wb.set_thread_resolved(0, lower_thread, true)));
+  ASSERT_TRUE(static_cast<bool>(wb.remove_threaded_comment(0, lower_thread)));
+  EXPECT_TRUE(wb.sheet(0).threaded_comments().empty());
+}
+
 }  // namespace formulon

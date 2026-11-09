@@ -44,7 +44,7 @@ from ._c import (
     fm_value_t_size,
 )
 from ._inputs import cell_rect, civil_datetime, color_input, date_serial, normalize_record_ranges, serial_datetime
-from ._refs import resolve_ref
+from ._refs import _fold, resolve_ref
 from ._status import (
     StatusCode,
 )
@@ -56,7 +56,6 @@ from ._workbook import (
     UNCHANGED,
     Alignment,
     AlignmentPatch,
-    AnchorKind,
     ArrayFormula,
     AutoFilter,
     AutoFilterEval,
@@ -75,31 +74,40 @@ from ._workbook import (
     CellXf,
     CellXfInput,
     CfCell,
+    CfColorScale,
+    CfColorScaleInput,
+    CfDataBar,
     CfDataBarAxisPosition,
     CfDataBarDirection,
+    CfDataBarInput,
     CfIcon,
+    CfIconSet,
+    CfIconSetInput,
     CfMatch,
-    Cfvo,
+    CfRuleRef,
+    CfValueObject,
+    CfValueObjectType,
     ChartInsertInput,
     Color,
     ColorInput,
     ColorKind,
     ColorResolution,
-    ColorScale,
     ColumnBreak,
     ColumnLayout,
     Comment,
+    ComparisonOperator,
     ConditionalFormat,
     ConditionalFormatInput,
-    DataBar,
     DataTable,
     DataTableInput,
     DataTableInputCell,
     DataValidation,
     DataValidationInput,
+    DatePeriod,
     DisplayStatus,
     DisplayText,
-    DrawingAnchor,
+    DrawingPlacementInput,
+    EffectiveBorders,
     EffectiveStyle,
     EffectiveStyleSource,
     ErrorCode,
@@ -118,25 +126,25 @@ from ._workbook import (
     HorizontalAlign,
     Hyperlink,
     HyperlinkInput,
-    IconSet,
-    MarginsPt,
     Mention,
     NativeValue,
-    PageLayout,
     PageMargins,
     PageOrientation,
     PageSetup,
     Pagination,
-    Paper,
+    PaginationMargins,
+    PaginationPage,
+    PaginationPaper,
     PhoneticProperties,
     PhoneticRun,
-    PictureInput,
     PivotInput,
+    PivotRef,
     PrintOptions,
     PrintTitles,
     PrintTitlesInput,
     ProtectedRange,
     ProtectedRangeInput,
+    ProtectedRangeRef,
     RangeCell,
     ReadingOrder,
     RectPt,
@@ -149,6 +157,7 @@ from ._workbook import (
     SheetProtection,
     SheetProtectionInput,
     SheetRect,
+    SheetRef,
     SheetSelection,
     SheetSelectionInput,
     SheetView,
@@ -159,17 +168,23 @@ from ._workbook import (
     Sparkline,
     SparklineAxisType,
     SparklineGroup,
+    SparklineGroupId,
     SparklineGroupInput,
+    SparklineGroupRef,
     SparklineInput,
     SparklineType,
     Spill,
     TableInput,
+    TableRef,
     ThreadedComment,
     ThreadedCommentInput,
     Unchanged,
     UnderlineStyle,
     ValidationErrorStyle,
+    ValidationId,
     ValidationOutcome,
+    ValidationRef,
+    ValidationType,
     Value,
     VerticalAlign,
     WidthModel,
@@ -192,7 +207,6 @@ from ._workbook import (
     _finite,
     _format_created,
     _hyperlink_from,
-    _image_anchor_fields,
     _install_workbook_locks,
     _pack_cell_rect_array,
     _pack_cell_rect_at,
@@ -201,10 +215,11 @@ from ._workbook import (
     _pack_optional_color,
     _pack_phonetic_run_array,
     _pack_pivot_spec,
-    _pack_shape,
-    _pack_slicer,
+    _pack_shape_spec,
+    _pack_slicer_spec,
     _pack_sparkline_group,
     _pack_sparklines,
+    _placement_fields,
     _print_titles_from,
     _qualified_range_text,
     _read_count,
@@ -230,6 +245,9 @@ _SPARKLINE_FLAGS = (
     "display_hidden",
     "date_axis",
 )
+
+_VALIDATION_FLAGS = ("allow_blank", "show_input_message", "show_error_message", "show_in_cell_dropdown")
+_VALIDATION_TEXTS = ("formula1", "formula2", "error_title", "error_message", "prompt_title", "prompt_message")
 
 # <facade-tables>
 WORKBOOK_METHODS = (
@@ -271,6 +289,7 @@ WORKBOOK_METHODS = (
     "list_pivot_caches",
     "list_sheets",
     "list_table_styles",
+    "list_theme_script_fonts",
     "ooxml",
     "parse_reference",
     "pivot_cache",
@@ -385,6 +404,7 @@ SHEET_METHODS = (
     "get_value",
     "get_values",
     "get_view",
+    "get_visibility",
     "get_width_model",
     "insert_columns",
     "insert_rows",
@@ -461,10 +481,12 @@ SHEET_METHODS = (
     "set_text",
     "set_value",
     "set_values",
+    "set_visibility",
     "shape",
     "slicer",
     "table",
     "update_cell_format",
+    "update_cf_rule",
     "update_format_defaults",
     "update_header_footer",
     "update_page_margins",
@@ -474,6 +496,7 @@ SHEET_METHODS = (
     "update_sheet_protection",
     "update_sparkline_group",
     "update_threaded_comment",
+    "update_validation",
     "update_view",
     "validate_value",
 )
@@ -500,6 +523,10 @@ OOXML_WORKBOOK_METHODS = (
     "list_fills",
     "list_fonts",
     "list_passthroughs",
+    "set_border",
+    "set_cell_xf",
+    "set_dxf",
+    "set_fill",
     "set_font",
 )
 OOXML_SHEET_METHODS = (
@@ -612,9 +639,11 @@ HANDWRITTEN = (
     "slicer",
     "table",
     "update_cell_format",
+    "update_cf_rule",
     "update_protected_range",
     "update_sparkline_group",
     "update_threaded_comment",
+    "update_validation",
     "update_view",
 )
 CELL_ARGS = {
@@ -689,10 +718,10 @@ RECT_ARGS = {
     "Sheet.update_cell_format": (0,),
 }
 SPAN_ARGS = {
-    "Sheet.delete_columns": ((0, "col", "start_count"),),
-    "Sheet.delete_rows": ((0, "row", "start_count"),),
-    "Sheet.insert_columns": ((0, "col", "start_count"),),
-    "Sheet.insert_rows": ((0, "row", "start_count"),),
+    "Sheet.delete_columns": ((0, "col", "span"),),
+    "Sheet.delete_rows": ((0, "row", "span"),),
+    "Sheet.insert_columns": ((0, "col", "span"),),
+    "Sheet.insert_rows": ((0, "row", "span"),),
     "Sheet.reset_column_width": ((0, "col", "span"),),
     "Sheet.reset_column_xf_index": ((0, "col", "span"),),
     "Sheet.reset_row_height": ((0, "row", "span"),),
@@ -712,7 +741,7 @@ SPAN_ARGS = {
 # </facade-tables>
 
 #: A value :meth:`Sheet.set_value` stores.
-CellInput = Union[
+CellValueInput = Union[
     None, bool, int, float, decimal.Decimal, str, ExcelError, Value, datetime.date, datetime.datetime, datetime.time
 ]
 
@@ -848,20 +877,6 @@ def _geometry_mode(mode: Any) -> int:
         ) from None
 
 
-def _drawing_anchor_fields(anchor: DrawingAnchor) -> Dict[str, int]:
-    """The ABI fields of ``anchor``."""
-    return _image_anchor_fields(
-        anchor.anchor_kind,
-        anchor.edit_as,
-        anchor.row,
-        anchor.col,
-        anchor.row_offset_emu,
-        anchor.col_offset_emu,
-        anchor.width_emu,
-        anchor.height_emu,
-    )
-
-
 def _flag(value: Any, name: str) -> int:
     """``value`` as a C 0/1 flag; ``TypeError`` unless it is a ``bool``."""
     if not isinstance(value, bool):
@@ -919,7 +934,7 @@ def _cell_input(value: Any) -> Tuple[str, Tuple[Any, ...]]:
 
 
 def _value_of_input(value: Any, *, date1904: bool) -> Value:
-    """A :class:`Value` of any :data:`CellInput`; a ``str`` is text, a date its serial.
+    """A :class:`Value` of any :data:`CellValueInput`; a ``str`` is text, a date its serial.
 
     Raises:
       TypeError: for a type no cell holds.
@@ -1392,19 +1407,25 @@ class Sheet(_NoCopy):
             _check(LIB.fm_workbook_rename_sheet(h, _uint(index, "sheet_index", role="sheet"), name_ptr))
         self._name = self._workbook._sheet_name(index)
 
-    def move(self, to_index: int) -> None:
-        """Move the sheet to ``to_index`` (the position after it is taken out).
+    def move(self, insert_before: Optional[SheetRef]) -> None:
+        """Move the sheet before ``insert_before`` (a sheet, a name or a position in the current order).
 
-        Every :class:`Sheet` handle keeps pointing at its sheet.
+        ``None`` or the sheet count moves it to the end; moving a sheet before itself or before the sheet
+        after it changes nothing. Every :class:`Sheet` handle keeps pointing at its sheet.
+
+        Raises:
+          IndexOutOfRangeError: when ``insert_before`` is a position past the sheet count.
         """
         from_index = self._index()
         h = self._workbook._require()
         handles = self._workbook._sheet_handles()
+        before = self._workbook._insert_before_position(insert_before, len(handles))
         _check(
             LIB.fm_workbook_move_sheet(
-                h, _uint(from_index, "from_index", role="sheet"), _uint(to_index, "to_index", role="sheet")
+                h, _uint(from_index, "from_index", role="sheet"), _uint(before, "insert_before", role="sheet")
             )
         )
+        to_index = before if before < from_index else max(from_index, before - 1)
         handles.insert(to_index, handles.pop(from_index))
         self._workbook._renumber_sheets(handles)
 
@@ -1500,6 +1521,22 @@ class Sheet(_NoCopy):
         if isinstance(key, tuple) and len(key) == 2 and all(isinstance(k, numbers.Integral) for k in key):
             return key[0], key[1]
         raise TypeError(f"formulon: a sheet key is an A1 string or a (row, col) pair, got {key!r}")
+
+    def __iter__(self) -> Iterator[Any]:
+        """Not iterable: a sheet is not a sequence of cells; use :meth:`iter_rows`.
+
+        Raises:
+          TypeError: always.
+        """
+        raise TypeError("formulon: a Sheet is not iterable; use iter_rows() to walk its cells")
+
+    def __contains__(self, item: object) -> bool:
+        """Not a container: membership is undefined for a sheet; use :meth:`iter_rows`.
+
+        Raises:
+          TypeError: always.
+        """
+        raise TypeError("formulon: a Sheet has no membership test; use iter_rows() to walk its cells")
 
     def __getitem__(self, key: Union[str, Tuple[int, int]]) -> NativeValue:
         if isinstance(key, str) and ":" in key:
@@ -1698,14 +1735,14 @@ class Sheet(_NoCopy):
         self,
         row: int,
         col: int,
-        value: CellInput,  # noqa: FBT001 -- the value is any cell type; a bool is one of them
+        value: CellValueInput,  # noqa: FBT001 -- the value is any cell type; a bool is one of them
     ) -> None: ...
 
     @overload
     def set_value(
         self,
         a1: str,
-        value: CellInput,  # noqa: FBT001 -- the value is any cell type; a bool is one of them
+        value: CellValueInput,  # noqa: FBT001 -- the value is any cell type; a bool is one of them
     ) -> None: ...
 
     def set_value(self, *args: Any, **kwargs: Any) -> None:
@@ -2208,10 +2245,10 @@ class Sheet(_NoCopy):
 
     @overload
     @_coordinate_form
-    def set_values(self, row: int, col: int, values: Sequence[Sequence[CellInput]]) -> None: ...
+    def set_values(self, row: int, col: int, values: Sequence[Sequence[CellValueInput]]) -> None: ...
 
     @overload
-    def set_values(self, a1: str, values: Sequence[Sequence[CellInput]]) -> None: ...
+    def set_values(self, a1: str, values: Sequence[Sequence[CellValueInput]]) -> None: ...
 
     def set_values(self, *args: Any, **kwargs: Any) -> None:
         """Store a row-major grid of values with ``(row, col)`` as its top-left cell.
@@ -2403,109 +2440,125 @@ class Sheet(_NoCopy):
 
     @overload
     @_span_form
-    def insert_rows(self, row: int, count: int) -> None: ...
+    def insert_rows(self, first: int, last: int) -> None: ...
 
     @overload
     def insert_rows(self, span: str) -> None: ...
 
     def insert_rows(self, *args: Any, **kwargs: Any) -> None:
-        """Insert ``count`` rows at ``row`` on the sheet.
+        """Insert the rows ``first`` to ``last`` (inclusive) on the sheet, or the A1 span ``"3:5"``.
 
         The anchor of an embedded OLE object or form control is not
         remapped; see the note above this method group.
 
         Raises:
+          InvalidArgumentError: when ``first`` is past ``last`` or ``last`` is past the sheet bound.
           FormulonError: with ``StatusCode.PRECONDITION_FAILED`` when the edit cuts into
             a data table, legacy array block or PivotTable, or would push one
             of them or a table past the sheet bound; the workbook is unchanged.
         """
-        row, count = self._span_args("insert_rows", args, kwargs, ("row", "count"))
+        first, last = self._span_args("insert_rows", args, kwargs, ("first", "last"))
         sheet = self._index()
         h = self._workbook._require()
         _check(
             LIB.fm_sheet_insert_rows(
-                h, _uint(sheet, "sheet", role="sheet"), _uint(row, "row", role="coordinate"), _uint(count, "count")
+                h,
+                _uint(sheet, "sheet", role="sheet"),
+                _uint(first, "first", role="coordinate"),
+                _uint(last, "last", role="coordinate"),
             )
         )
 
     @overload
     @_span_form
-    def delete_rows(self, row: int, count: int) -> None: ...
+    def delete_rows(self, first: int, last: int) -> None: ...
 
     @overload
     def delete_rows(self, span: str) -> None: ...
 
     def delete_rows(self, *args: Any, **kwargs: Any) -> None:
-        """Delete ``count`` rows starting at ``row`` on the sheet.
+        """Delete the rows ``first`` to ``last`` (inclusive) on the sheet, or the A1 span ``"3:5"``.
 
         The anchor of an embedded OLE object or form control is not
         remapped; see the note above this method group.
 
         Raises:
+          InvalidArgumentError: when ``first`` is past ``last`` or ``last`` is past the sheet bound.
           FormulonError: with ``StatusCode.PRECONDITION_FAILED`` when the edit cuts into
             a data table, legacy array block or PivotTable, or would push one
             of them or a table past the sheet bound; the workbook is unchanged.
         """
-        row, count = self._span_args("delete_rows", args, kwargs, ("row", "count"))
+        first, last = self._span_args("delete_rows", args, kwargs, ("first", "last"))
         sheet = self._index()
         h = self._workbook._require()
         _check(
             LIB.fm_sheet_delete_rows(
-                h, _uint(sheet, "sheet", role="sheet"), _uint(row, "row", role="coordinate"), _uint(count, "count")
+                h,
+                _uint(sheet, "sheet", role="sheet"),
+                _uint(first, "first", role="coordinate"),
+                _uint(last, "last", role="coordinate"),
             )
         )
 
     @overload
     @_span_form
-    def insert_columns(self, col: int, count: int) -> None: ...
+    def insert_columns(self, first: int, last: int) -> None: ...
 
     @overload
     def insert_columns(self, span: str) -> None: ...
 
     def insert_columns(self, *args: Any, **kwargs: Any) -> None:
-        """Insert ``count`` columns at ``col`` on the sheet.
+        """Insert the columns ``first`` to ``last`` (inclusive) on the sheet, or the A1 span ``"C:D"``.
 
         The anchor of an embedded OLE object or form control is not
         remapped; see the note above this method group.
 
         Raises:
+          InvalidArgumentError: when ``first`` is past ``last`` or ``last`` is past the sheet bound.
           FormulonError: with ``StatusCode.PRECONDITION_FAILED`` when the edit cuts into
             a data table, legacy array block or PivotTable, or would push one
             of them or a table past the sheet bound; the workbook is unchanged.
         """
-        col, count = self._span_args("insert_columns", args, kwargs, ("col", "count"))
+        first, last = self._span_args("insert_columns", args, kwargs, ("first", "last"))
         sheet = self._index()
         h = self._workbook._require()
         _check(
             LIB.fm_sheet_insert_columns(
-                h, _uint(sheet, "sheet", role="sheet"), _uint(col, "col", role="coordinate"), _uint(count, "count")
+                h,
+                _uint(sheet, "sheet", role="sheet"),
+                _uint(first, "first", role="coordinate"),
+                _uint(last, "last", role="coordinate"),
             )
         )
 
     @overload
     @_span_form
-    def delete_columns(self, col: int, count: int) -> None: ...
+    def delete_columns(self, first: int, last: int) -> None: ...
 
     @overload
     def delete_columns(self, span: str) -> None: ...
 
     def delete_columns(self, *args: Any, **kwargs: Any) -> None:
-        """Delete ``count`` columns starting at ``col`` on the sheet.
+        """Delete the columns ``first`` to ``last`` (inclusive) on the sheet, or the A1 span ``"C:D"``.
 
         The anchor of an embedded OLE object or form control is not
         remapped; see the note above this method group.
 
         Raises:
+          InvalidArgumentError: when ``first`` is past ``last`` or ``last`` is past the sheet bound.
           FormulonError: with ``StatusCode.PRECONDITION_FAILED`` when the edit cuts into
             a data table, legacy array block or PivotTable, or would push one
             of them or a table past the sheet bound; the workbook is unchanged.
         """
-        col, count = self._span_args("delete_columns", args, kwargs, ("col", "count"))
+        first, last = self._span_args("delete_columns", args, kwargs, ("first", "last"))
         sheet = self._index()
         h = self._workbook._require()
         _check(
             LIB.fm_sheet_delete_columns(
-                h, _uint(sheet, "sheet", role="sheet"), _uint(col, "col", role="coordinate"), _uint(count, "count")
+                h,
+                _uint(sheet, "sheet", role="sheet"),
+                _uint(first, "first", role="coordinate"),
+                _uint(last, "last", role="coordinate"),
             )
         )
 
@@ -2779,9 +2832,8 @@ class Sheet(_NoCopy):
         ``*_threaded_comment`` family.
 
         Raises:
-          FormulonError: with ``StatusCode.THREADED_COMMENT_INVALID`` when the
-            cell holds a threaded comment: a cell carries a note or a thread,
-            never both.
+          AlreadyExistsError: when the cell holds a threaded comment: a cell
+            carries a note or a thread, never both.
         """
         row, col, comment = self._cell_args("set_comment", args, kwargs, ("comment",))
         if not isinstance(comment, Comment):
@@ -3006,7 +3058,7 @@ class Sheet(_NoCopy):
         assert index is not None
         return index
 
-    def _protected_range_index(self, protected_range: Union[int, str]) -> int:
+    def _protected_range_index(self, protected_range: ProtectedRangeRef) -> int:
         """The index ``protected_range`` addresses: an index, or a protected range's name."""
         return resolve_ref(
             protected_range,
@@ -3016,7 +3068,7 @@ class Sheet(_NoCopy):
 
     def update_protected_range(
         self,
-        protected_range: Union[int, str],
+        protected_range: ProtectedRangeRef,
         *,
         name: Union[str, Unchanged] = UNCHANGED,
         ranges: Union[Sequence[Union[CellRect, str]], str, Unchanged] = UNCHANGED,
@@ -3086,7 +3138,7 @@ class Sheet(_NoCopy):
                 )
             )
 
-    def remove_protected_range(self, protected_range: Union[int, str]) -> None:
+    def remove_protected_range(self, protected_range: ProtectedRangeRef) -> None:
         """Remove ``protected_range``, an index or a protected range's name.
 
         Raises:
@@ -3138,6 +3190,7 @@ class Sheet(_NoCopy):
         for i in range(d["range_count"]):
             ranges.append(_decode_cell_rect_at(base + i * rsize))
         return DataValidation(
+            id=LIB.read_cstr(d["id"]),
             ranges=ranges,
             type=d["type"],
             operator=d["op"],
@@ -3154,10 +3207,12 @@ class Sheet(_NoCopy):
             prompt_message=LIB.read_cstr(d["prompt_message"]) or None,
         )
 
-    def add_validation(self, validation: DataValidationInput) -> int:
-        """Append a data-validation rule to the sheet; return its index.
+    def add_validation(self, validation: Union[DataValidationInput, DataValidation]) -> ValidationId:
+        """Append a data-validation rule to the sheet; return its :data:`ValidationId`.
 
-        ``validation.ranges`` takes :class:`CellRect` values, A1 ranges or one A1 range string.
+        ``validation.ranges`` takes :class:`CellRect` values, A1 ranges or one A1 range string. A
+        :class:`DataValidation` read back is accepted in place of a :class:`DataValidationInput`; its ``id``
+        is ignored and the new rule gets a fresh one.
         """
         sheet = self._index()
         validation = normalize_record_ranges(validation, self._workbook, sheet=sheet, label="validation")
@@ -3195,17 +3250,117 @@ class Sheet(_NoCopy):
                 S.write_str_field(LIB, ptr, S.DATA_VALIDATION, fld, getattr(validation, fld), scope)
             out = scope.out_ptr()
             _check(LIB.fm_sheet_add_validation(h, _uint(sheet, "sheet", role="sheet"), ptr, out))
-            return LIB.read_u32(out)
+            return LIB.read_cstr(LIB.read_u32(out))
 
-    def remove_validation(self, validation_index: int) -> None:
-        """Remove the validation rule at ``validation_index`` on the sheet."""
+    def _validation_id(self, validation: ValidationRef) -> str:
+        """The :data:`ValidationId` ``validation`` names: an id as it is, a position through its rule."""
+        if isinstance(validation, str):
+            return validation
+        if isinstance(validation, bool):
+            raise TypeError("formulon: validation must be an int or a str, got bool")
+        return self._validation_at(_uint(validation, "validation", role="position")).id
+
+    def remove_validation(self, validation: ValidationRef) -> None:
+        """Remove ``validation``, a rule's :data:`ValidationId` or its position in :meth:`list_validations`.
+
+        Raises:
+          NotFoundError: when no rule has the id ``validation``.
+          IndexOutOfRangeError: when ``validation`` is a position past the last rule.
+        """
+        validation_id = self._validation_id(validation)
         sheet = self._index()
         h = self._workbook._require()
-        _check(
-            LIB.fm_sheet_remove_validation(
-                h, _uint(sheet, "sheet", role="sheet"), _uint(validation_index, "validation_index", role="position")
+        with _ArgScope() as scope:
+            _check(LIB.fm_sheet_remove_validation(h, _uint(sheet, "sheet", role="sheet"), scope.cstr(validation_id)))
+
+    def update_validation(
+        self,
+        validation: ValidationRef,
+        *,
+        ranges: Union[Sequence[Union[CellRect, str]], str, Unchanged] = UNCHANGED,
+        type: Union[ValidationType, Unchanged] = UNCHANGED,
+        operator: Union[ComparisonOperator, Unchanged] = UNCHANGED,
+        error_style: Union[ValidationErrorStyle, Unchanged] = UNCHANGED,
+        allow_blank: Union[bool, Unchanged] = UNCHANGED,
+        show_input_message: Union[bool, Unchanged] = UNCHANGED,
+        show_error_message: Union[bool, Unchanged] = UNCHANGED,
+        show_in_cell_dropdown: Union[bool, Unchanged] = UNCHANGED,
+        formula1: Union[str, None, Unchanged] = UNCHANGED,
+        formula2: Union[str, None, Unchanged] = UNCHANGED,
+        error_title: Union[str, None, Unchanged] = UNCHANGED,
+        error_message: Union[str, None, Unchanged] = UNCHANGED,
+        prompt_title: Union[str, None, Unchanged] = UNCHANGED,
+        prompt_message: Union[str, None, Unchanged] = UNCHANGED,
+    ) -> None:
+        """Update ``validation``, a rule's :data:`ValidationId` or position; an omitted argument keeps its value.
+
+        The arguments are the :class:`DataValidationInput` fields. ``None`` clears ``formula1``, ``formula2``
+        and the four texts, and is a ``TypeError`` for any other argument. The whole update is checked before
+        anything changes.
+
+        Raises:
+          TypeError: for ``None`` on an argument that is not clearable.
+          NotFoundError: when no rule has the id ``validation``.
+          IndexOutOfRangeError: when ``validation`` is a position past the last rule.
+          InvalidArgumentError: when ``ranges`` is empty or a value is outside its domain.
+        """
+        given = {
+            key: value
+            for key, value in (
+                ("ranges", ranges),
+                ("type", type),
+                ("op", operator),
+                ("error_style", error_style),
+                ("allow_blank", allow_blank),
+                ("show_input_message", show_input_message),
+                ("show_error_message", show_error_message),
+                ("show_in_cell_dropdown", show_in_cell_dropdown),
+                ("formula1", formula1),
+                ("formula2", formula2),
+                ("error_title", error_title),
+                ("error_message", error_message),
+                ("prompt_title", prompt_title),
+                ("prompt_message", prompt_message),
             )
-        )
+            if value is not UNCHANGED
+        }
+        for key, value in given.items():
+            if value is None and key not in _VALIDATION_TEXTS:
+                raise TypeError(f"formulon: {'operator' if key == 'op' else key} cannot be None")
+        validation_id = self._validation_id(validation)
+        sheet = self._index()
+        h = self._workbook._require()
+        values: Dict[str, object] = {}
+        with _ArgScope() as scope:
+            ptr = scope.struct(S.DATA_VALIDATION_PATCH)
+            if "ranges" in given:
+                rects = _cell_rects(self._workbook, given["ranges"], "ranges")
+                # An empty list still needs a non-NULL pointer; the engine refuses it by count.
+                values["ranges_op"] = _PATCH_SET
+                values["ranges"] = _pack_cell_rect_array(rects, scope) or scope.struct_array(S.CELL_RECT, 1)
+                values["range_count"] = _uint(len(rects), "range_count")
+            for key in ("type", "op", "error_style"):
+                if key in given:
+                    values[key + "_op"] = _PATCH_SET
+                    values[key] = _sint(given[key], key)
+            for key in _VALIDATION_FLAGS:
+                if key in given:
+                    if not isinstance(given[key], bool):
+                        raise TypeError(f"formulon: {key} must be a bool, got {type(given[key]).__name__}")
+                    values[key + "_op"] = _PATCH_SET
+                    values[key] = _tristate_default(given[key])
+            for key in _VALIDATION_TEXTS:
+                if key not in given:
+                    continue
+                if given[key] is None:
+                    values[key + "_op"] = _PATCH_CLEAR
+                else:
+                    values[key + "_op"] = _PATCH_SET
+                    values[key] = scope.cstr(given[key])
+            S.DATA_VALIDATION_PATCH.pack(LIB, ptr, values)
+            _check(
+                LIB.fm_sheet_update_validation(h, _uint(sheet, "sheet", role="sheet"), scope.cstr(validation_id), ptr)
+            )
 
     def clear_validations(self) -> None:
         """Drop every validation rule on the sheet."""
@@ -3705,10 +3860,10 @@ class Sheet(_NoCopy):
     # -- Validation checks -----------------------------------------------------
     @overload
     @_coordinate_form
-    def validate_value(self, row: int, col: int, value: CellInput) -> ValidationOutcome: ...
+    def validate_value(self, row: int, col: int, value: CellValueInput) -> ValidationOutcome: ...
 
     @overload
-    def validate_value(self, a1: str, value: CellInput) -> ValidationOutcome: ...
+    def validate_value(self, a1: str, value: CellValueInput) -> ValidationOutcome: ...
 
     def validate_value(self, *args: Any, **kwargs: Any) -> ValidationOutcome:
         """Check ``value`` against the data-validation rule covering ``(row, col)`` without storing it.
@@ -3738,7 +3893,7 @@ class Sheet(_NoCopy):
         has_rule = bool(d["has_rule"])
         return ValidationOutcome(
             valid=bool(d["valid"]),
-            rule_index=d["rule_index"] if has_rule else None,
+            rule_id=LIB.read_cstr(d["rule_id"]) if has_rule else None,
             error_style=ValidationErrorStyle(d["error_style"]) if has_rule else None,
         )
 
@@ -3798,15 +3953,18 @@ class Sheet(_NoCopy):
             out = [c for c in out if (c.cell.row, c.cell.col) == anchor]
         return out
 
-    def add_threaded_comment(self, comment: ThreadedCommentInput) -> None:
-        """Add a threaded comment: a new thread when ``parent_id`` is ``None``, else a reply.
+    def add_threaded_comment(self, comment: Union[ThreadedCommentInput, ThreadedComment]) -> str:
+        """Add a threaded comment, a new thread when ``parent_id`` is ``None`` else a reply; return its id.
 
-        ``comment.cell`` is a :class:`CellAddress` or an unqualified A1 cell,
-        ``A1`` when omitted.
+        ``comment.cell`` is a :class:`CellAddress` or an unqualified A1 cell, ``A1`` when omitted. An omitted
+        ``id`` is generated and an omitted ``created`` is the pinned clock if one is set, else now. A
+        :class:`ThreadedComment` read back is accepted in place of a :class:`ThreadedCommentInput`.
 
         Raises:
           AlreadyExistsError: when the id is already used on the sheet, or a
             new thread's cell already holds a note or a thread.
+          NotFoundError: when ``person_id`` names no person of the workbook or ``parent_id`` no comment
+            of the sheet.
         """
         row, col = (0, 0) if comment.cell is None else self._cell_address(comment.cell, "cell")
         sheet = self._index()
@@ -3831,7 +3989,9 @@ class Sheet(_NoCopy):
             ):
                 S.write_str_field(LIB, ptr, S.THREADED_COMMENT, fld, text, scope)
             _write_mentions(ptr, S.THREADED_COMMENT, comment.mentions, scope)
-            _check(LIB.fm_sheet_add_threaded_comment(h, _uint(sheet, "sheet_index", role="sheet"), ptr))
+            out = scope.out_ptr()
+            _check(LIB.fm_sheet_add_threaded_comment(h, _uint(sheet, "sheet_index", role="sheet"), ptr, out))
+            return LIB.read_cstr(LIB.read_u32(out))
 
     def update_threaded_comment(
         self,
@@ -3848,8 +4008,7 @@ class Sheet(_NoCopy):
         Raises:
           TypeError: when an argument is ``None`` or ``done`` is not a ``bool``.
           NotFoundError: when the sheet has no comment ``comment_id``.
-          FormulonError: with ``StatusCode.THREADED_COMMENT_INVALID`` when
-            ``done`` is given for a reply.
+          InvalidArgumentError: when ``done`` is given for a reply.
         """
         for name, value in (("text", text), ("mentions", mentions), ("done", done)):
             if value is None:
@@ -4004,15 +4163,19 @@ class Sheet(_NoCopy):
 
         Children of a group are not listed.
         """
-        ids = self._object_ids(LIB.fm_sheet_get_shape_count, LIB.fm_sheet_get_shape_at, S.SHAPE)
-        return [cast("Shape", self._drawing_handle(object_id)) for object_id in ids]
+        from ._drawing import Shape
+
+        return [drawing for drawing in self.list_drawings() if isinstance(drawing, Shape)]
 
     def list_slicers(self) -> List[Slicer]:
         """Return the handles of the table slicers the sheet hosts; slicers over a pivot cache are not listed."""
-        ids = self._object_ids(LIB.fm_sheet_get_slicer_count, LIB.fm_sheet_get_slicer_at, S.SLICER)
-        return [cast("Slicer", self._drawing_handle(object_id)) for object_id in ids]
+        from ._drawing import Slicer
 
-    def add_picture(self, data: Union[bytes, bytearray, memoryview], input: Optional[PictureInput] = None) -> Picture:
+        return [drawing for drawing in self.list_drawings() if isinstance(drawing, Slicer)]
+
+    def add_picture(
+        self, data: Union[bytes, bytearray, memoryview], input: Optional[DrawingPlacementInput] = None
+    ) -> Picture:
         """Insert ``data`` as a picture placed as ``input`` says and return its handle.
 
         An empty ``name`` becomes ``Picture <id>``. An ``anchor`` of ``None``
@@ -4021,21 +4184,14 @@ class Sheet(_NoCopy):
         ``edit_as`` is honoured for a two-cell anchor only. Existing drawing
         content is kept.
         """
-        if input is None:
-            input = PictureInput()
-        elif not isinstance(input, PictureInput):
-            raise TypeError(f"formulon: input must be a PictureInput or None, got {type(input).__name__}")
-        anchor = DrawingAnchor() if input.anchor is None else input.anchor
         sheet = self._index()
         h = self._workbook._require()
         raw = bytes(data)
         with _ArgScope() as scope:
             out = scope.out_ptr()
             buf = scope.buffer(raw)
-            ptr = scope.struct_array(S.PICTURE_INSERT_SPEC, 1)
-            S.PICTURE_INSERT_SPEC.pack(LIB, ptr, {"anchor": _drawing_anchor_fields(anchor)})
-            S.write_str_field(LIB, ptr, S.PICTURE_INSERT_SPEC, "name", input.name, scope)
-            S.write_str_field(LIB, ptr, S.PICTURE_INSERT_SPEC, "description", input.description, scope)
+            ptr = scope.struct(S.DRAWING_PLACEMENT_SPEC)
+            S.DRAWING_PLACEMENT_SPEC.pack(LIB, ptr, _placement_fields(scope, input))
             _check(
                 LIB.fm_sheet_add_picture(
                     h, _uint(sheet, "sheet_index", role="sheet"), buf, _uint(len(raw), "len"), ptr, out
@@ -4052,60 +4208,53 @@ class Sheet(_NoCopy):
         (``TypeError`` otherwise), and a colour with ``NONE`` fails with a
         status error.
         """
-        if not isinstance(input, ShapeInput):
-            raise TypeError(f"formulon: input must be a ShapeInput, got {type(input).__name__}")
         sheet = self._index()
         h = self._workbook._require()
         with _ArgScope() as scope:
             out = scope.out_ptr()
-            ptr = _pack_shape(
-                scope, input.name, input.preset_geometry, input.text, input.text_box, input.anchor_kind, input.edit_as,
-                input.from_row, input.from_col, input.from_row_offset_emu, input.from_col_offset_emu, input.to_row,
-                input.to_col, input.to_row_offset_emu, input.to_col_offset_emu, input.width_emu, input.height_emu,
-                input.fill_kind, input.fill_color, input.line_kind, input.line_color, input.line_width_pt,
-                input.rotation_deg, input.hidden,
-            )  # fmt: skip
+            ptr = _pack_shape_spec(scope, input)
             _check(LIB.fm_sheet_add_shape(h, _uint(sheet, "sheet_index", role="sheet"), ptr, out))
             object_id = LIB.read_u32(out)
         return cast("Shape", self._drawing_handle(object_id))
 
-    def add_slicer(self, table: Union[str, Table], column: int, input: SlicerInput) -> Slicer:
+    def add_slicer(self, table: Union[str, Table], column: Union[int, str], input: SlicerInput) -> Slicer:
         """Add a slicer over column ``column`` of ``table`` (a :class:`Table` or its name); return its handle.
 
         ``table`` may live on another sheet; a name is compared
-        case-insensitively. The frame is the two-cell anchor
-        ``input.from_*`` .. ``input.to_*`` (0-based cells plus EMU offsets),
-        named as in :class:`ShapeInput`. The name and caption default to the
-        column name (the name is made unique), ``row_height_emu`` to 241300
-        and ``column_count`` to 1.
+        case-insensitively. ``column`` is a 0-based position or the column's
+        name, compared case-insensitively. The frame is two-cell: ``input.anchor``
+        gives its box or its size, as for :class:`ShapeInput`. The name and
+        caption default to the column name (the name is made unique),
+        ``row_height_emu`` to 241300 and ``column_count`` to 1.
 
         Raises:
-          NotFoundError: when no table has the name ``table``.
-          TypeError: when ``table`` is neither a ``str`` nor a :class:`Table`.
+          NotFoundError: when no table has the name ``table`` or the table has no column named ``column``.
+          TypeError: when ``table`` is neither a ``str`` nor a :class:`Table`, or ``column`` is neither an
+            ``int`` nor a ``str``.
         """
         from ._table import Table
 
-        if not isinstance(input, SlicerInput):
-            raise TypeError(f"formulon: input must be a SlicerInput, got {type(input).__name__}")
         if isinstance(table, Table):
-            table_sheet, table_index = table.sheet.index, table.index
+            found = table
         elif isinstance(table, str):
             found = self._workbook.table(table)
-            table_sheet, table_index = found.sheet.index, found.index
         else:
             raise TypeError(f"formulon: table must be a Table or a str, got {type(table).__name__}")
+        table_sheet, table_index = found.sheet.index, found.index
+        if isinstance(column, str):
+            wanted = _fold(column)
+            names = [c.name for c in found.get_properties().columns]
+            matches = [i for i, name in enumerate(names) if _fold(name) == wanted]
+            if not matches:
+                raise FormulonError(StatusCode.NOT_FOUND, f'the table has no column "{column}"', f"column={column}")
+            column = matches[0]
+        elif isinstance(column, bool) or not isinstance(column, int):
+            raise TypeError(f"formulon: column must be an int or a str, got {type(column).__name__}")
         sheet = self._index()
         h = self._workbook._require()
-        anchor = (
-            input.from_row, input.from_col, input.to_row, input.to_col,
-            input.from_row_offset_emu, input.from_col_offset_emu, input.to_row_offset_emu, input.to_col_offset_emu,
-        )  # fmt: skip
         with _ArgScope() as scope:
             out = scope.out_ptr()
-            ptr = _pack_slicer(
-                scope, input.name, input.caption, input.style, input.column_count, input.row_height_emu, anchor,
-                input.sort_order, input.cross_filter,
-            )  # fmt: skip
+            ptr = _pack_slicer_spec(scope, input)
             _check(
                 LIB.fm_sheet_add_slicer(
                     h,
@@ -4156,27 +4305,17 @@ class Sheet(_NoCopy):
 
         Raises:
           NotFoundError: when the sheet's drawing has no such object.
-          InvalidArgumentError: when the object is not a picture, chart, shape
-            or table slicer, or ``object_id`` is a :class:`Drawing` of another sheet.
+          InvalidArgumentError: when the sheet is a chartsheet, or ``object_id``
+            is a :class:`Drawing` of another sheet.
         """
-        from ._drawing import Chart, Picture, Shape, Slicer
-
         drawing = self.drawing(object_id)
         sheet = self._index()
         h = self._workbook._require()
-        args = (h, _uint(sheet, "sheet_index", role="sheet"), _uint(drawing.object_id, "object_id"))
-        if isinstance(drawing, (Picture, Chart)):
-            _check(LIB.fm_sheet_remove_drawing(*args))
-        elif isinstance(drawing, Shape):
-            _check(LIB.fm_sheet_remove_shape(*args))
-        elif isinstance(drawing, Slicer):
-            _check(LIB.fm_sheet_remove_slicer(*args))
-        else:
-            raise FormulonError(
-                StatusCode.INVALID_ARGUMENT,
-                f"drawing object {drawing.object_id} is not a picture, chart, shape or table slicer",
-                "",
+        _check(
+            LIB.fm_sheet_remove_drawing(
+                h, _uint(sheet, "sheet_index", role="sheet"), _uint(drawing.object_id, "object_id")
             )
+        )
 
     def add_data_table(self, spec: Union[DataTableInput, DataTable]) -> None:
         """Create the data table ``spec`` describes.
@@ -4296,10 +4435,13 @@ class Sheet(_NoCopy):
                 )
             )
             d = S.SPARKLINE_GROUP.unpack(LIB, group_ptr)
+            # Read the scratch-backed strings before the date-axis decode makes another scratch-backed read.
+            group_id = LIB.read_cstr(d["id"])
             date_axis_range, stored_date_axis = _decode_sparkline_date_axis(
                 self._workbook, sheet, LIB.read_cstr(d["date_axis_ref"])
             )
             group = SparklineGroup(
+                id=group_id,
                 type=d["type"],
                 color_series=_decode_optional_color(group_ptr + S.SPARKLINE_GROUP.offsets["color_series"][1]),
                 color_negative=_decode_optional_color(group_ptr + S.SPARKLINE_GROUP.offsets["color_negative"][1]),
@@ -4342,14 +4484,14 @@ class Sheet(_NoCopy):
                 group.sparklines.append(_decode_sparkline(self._workbook, sheet, item))
             return group
 
-    def add_sparkline_group(self, group: Union[SparklineGroupInput, SparklineGroup]) -> int:
+    def add_sparkline_group(self, group: Union[SparklineGroupInput, SparklineGroup]) -> SparklineGroupId:
         """Append ``group`` with its ``sparklines`` (at least one) to the sheet's worksheet extension list.
 
         A sparkline's ``source`` and the group's ``date_axis_range`` are a
         :class:`SheetRect` or a sheet-qualified A1 range (an unqualified one is
         on this sheet); ``location`` is a :class:`CellAddress` or an A1 cell. A
         :class:`SparklineGroup` read back is accepted in place of a
-        :class:`SparklineGroupInput`. Returns the new group's index.
+        :class:`SparklineGroupInput`; its ``id`` is ignored. Returns the new group's :data:`SparklineGroupId`.
 
         Raises:
           TypeError: when ``group`` is not one of the two record types.
@@ -4367,11 +4509,19 @@ class Sheet(_NoCopy):
                     h, _uint(sheet, "sheet_index", role="sheet"), ptr, items, _uint(len(group.sparklines), "count"), out
                 )
             )
-            return LIB.read_u32(out)
+            return LIB.read_cstr(LIB.read_u32(out))
+
+    def _sparkline_group_id(self, group: SparklineGroupRef) -> str:
+        """The :data:`SparklineGroupId` ``group`` names: an id as it is, a position through its group."""
+        if isinstance(group, str):
+            return group
+        if isinstance(group, bool):
+            raise TypeError("formulon: sparkline group must be an int or a str, got bool")
+        return self._sparkline_group_at(_uint(group, "group", role="position")).id
 
     def update_sparkline_group(
         self,
-        group_index: int,
+        group: SparklineGroupRef,
         *,
         type: Union[SparklineType, Unchanged] = UNCHANGED,
         color_series: Union[ColorInput, None, Unchanged] = UNCHANGED,
@@ -4400,7 +4550,8 @@ class Sheet(_NoCopy):
         empty_cells_as: Union[BlanksAs, Unchanged] = UNCHANGED,
         sparklines: Union[Sequence[Union[SparklineInput, Sparkline]], Unchanged] = UNCHANGED,
     ) -> None:
-        """Update group ``group_index``; an omitted argument keeps the group's value.
+        """Update ``group``, a :data:`SparklineGroupId` or a position in :meth:`list_sparkline_groups`; an
+        omitted argument keeps the group's value.
 
         The arguments are the :class:`SparklineGroup` fields. ``None`` clears
         ``manual_min``, ``manual_max`` and ``date_axis_range`` and is a
@@ -4409,6 +4560,8 @@ class Sheet(_NoCopy):
 
         Raises:
           TypeError: for ``None`` on an argument that is not clearable.
+          NotFoundError: when no group has the id ``group``.
+          IndexOutOfRangeError: when ``group`` is a position past the last group.
           InvalidArgumentError: when ``sparklines`` is empty (a group holds at
             least one sparkline; remove the group instead).
         """
@@ -4447,6 +4600,7 @@ class Sheet(_NoCopy):
         for key, value in given.items():
             if value is None and key not in ("manual_min", "manual_max", "date_axis_range", *_SPARKLINE_COLORS):
                 raise TypeError(f"formulon: {key} cannot be None")
+        group_id = self._sparkline_group_id(group)
         sheet = self._index()
         h = self._workbook._require()
         values: Dict[str, object] = {}
@@ -4491,19 +4645,24 @@ class Sheet(_NoCopy):
             LIB.write_bytes(ptr, bytes(raw))
             _check(
                 LIB.fm_sheet_update_sparkline_group(
-                    h, _uint(sheet, "sheet_index", role="sheet"), _uint(group_index, "idx", role="position"), ptr
+                    h, _uint(sheet, "sheet_index", role="sheet"), scope.cstr(group_id), ptr
                 )
             )
 
-    def remove_sparkline_group(self, group_index: int) -> None:
-        """Remove sparkline group ``group_index``."""
+    def remove_sparkline_group(self, group: SparklineGroupRef) -> None:
+        """Remove ``group``, a :data:`SparklineGroupId` or a position in :meth:`list_sparkline_groups`.
+
+        Raises:
+          NotFoundError: when no group has the id ``group``.
+          IndexOutOfRangeError: when ``group`` is a position past the last group.
+        """
+        group_id = self._sparkline_group_id(group)
         sheet = self._index()
         h = self._workbook._require()
-        _check(
-            LIB.fm_sheet_remove_sparkline_group(
-                h, _uint(sheet, "sheet_index", role="sheet"), _uint(group_index, "idx", role="position")
+        with _ArgScope() as scope:
+            _check(
+                LIB.fm_sheet_remove_sparkline_group(h, _uint(sheet, "sheet_index", role="sheet"), scope.cstr(group_id))
             )
-        )
 
     def add_chart(self, input: ChartInsertInput) -> Chart:
         """Create the chart ``input`` describes and return its handle.
@@ -4527,20 +4686,11 @@ class Sheet(_NoCopy):
         """
         if not isinstance(input, ChartInsertInput):
             raise TypeError(f"formulon: input must be a ChartInsertInput, got {type(input).__name__}")
-        placing = PictureInput() if input.placement is None else input.placement
-        if not isinstance(placing, PictureInput):
-            raise TypeError(f"formulon: placement must be a PictureInput or None, got {type(placing).__name__}")
-        anchor = DrawingAnchor(anchor_kind=AnchorKind.TWO_CELL) if placing.anchor is None else placing.anchor
         sheet = self._index()
         h = self._workbook._require()
         with _ArgScope() as scope:
             out = scope.out_ptr()
-            placement = {
-                "name": scope.nonempty_cstr(placing.name),
-                "description": scope.nonempty_cstr(placing.description),
-                "anchor": _drawing_anchor_fields(anchor),
-            }
-            ptr = _encode_chart_insert(scope, self._workbook, sheet, input, placement)
+            ptr = _encode_chart_insert(scope, self._workbook, sheet, input)
             _check(LIB.fm_sheet_add_chart(h, _uint(sheet, "sheet_index", role="sheet"), ptr, out))
             object_id = LIB.read_u32(out)
         return cast("Chart", self._drawing_handle(object_id))
@@ -4676,8 +4826,8 @@ class Sheet(_NoCopy):
                     return layout.unpack(LIB, struct_ptr)
 
                 d = read_struct(S.PAPER_INFO, LIB.fm_pagination_get_paper)
-                paper = Paper(d["width_pt"], d["height_pt"], bool(d["landscape"]), bool(d["known"]))
-                margins = MarginsPt(**read_struct(S.MARGINS_PT, LIB.fm_pagination_get_margins))
+                paper = PaginationPaper(d["width_pt"], d["height_pt"], bool(d["landscape"]), bool(d["known"]))
+                margins = PaginationMargins(**read_struct(S.MARGINS_PT, LIB.fm_pagination_get_margins))
                 printable = RectPt(**read_struct(S.RECT_PT, LIB.fm_pagination_get_printable))
                 d = read_struct(S.PRINT_TITLES, LIB.fm_pagination_get_print_titles)
                 print_titles = _print_titles_from(d)
@@ -4689,7 +4839,7 @@ class Sheet(_NoCopy):
                     _check(LIB.fm_pagination_get_page_at(pagination, _uint(i, "index", role="position"), struct_ptr))
                     page = S.PAGE_LAYOUT.unpack(LIB, struct_ptr)
                     page["range"] = _cell_rect_from(page.pop("rect"))
-                    pages.append(PageLayout(**page))
+                    pages.append(PaginationPage(**page))
                 return Pagination(
                     page_count,
                     print_area,
@@ -4707,8 +4857,9 @@ class Sheet(_NoCopy):
                 LIB.fm_pagination_destroy(pagination)
 
     def get_view(self) -> SheetView:
-        """Read the full per-sheet view (zoom, freeze, visibility, and the
-        display / orientation flags)."""
+        """Read the full per-sheet view (zoom, freeze, and the display / orientation flags).
+
+        The sheet's visibility is :meth:`get_visibility`."""
         sheet = self._index()
         h = self._workbook._require()
         with _ArgScope() as scope:
@@ -4719,7 +4870,6 @@ class Sheet(_NoCopy):
                 zoom_pct=d["zoom_pct"],
                 freeze_rows=d["freeze_rows"],
                 freeze_cols=d["freeze_cols"],
-                visibility=SheetVisibility(d["visibility"]),
                 show_grid_lines=bool(d["show_grid_lines"]),
                 show_row_column_headers=bool(d["show_row_column_headers"]),
                 show_zeros=bool(d["show_zeros"]),
@@ -4744,7 +4894,6 @@ class Sheet(_NoCopy):
         split_y_twips: Union[float, Unchanged] = UNCHANGED,
         top_left: Union[CellAddress, str, Unchanged] = UNCHANGED,
         pane_top_left: Union[CellAddress, str, Unchanged] = UNCHANGED,
-        visibility: Union[SheetVisibility, Unchanged] = UNCHANGED,
         show_grid_lines: Union[bool, Unchanged] = UNCHANGED,
         show_row_column_headers: Union[bool, Unchanged] = UNCHANGED,
         show_zeros: Union[bool, Unchanged] = UNCHANGED,
@@ -4763,8 +4912,7 @@ class Sheet(_NoCopy):
         given. ``top_left`` and ``pane_top_left`` are a :class:`CellAddress` or
         an A1 cell. One half of a pair (``freeze_rows`` without
         ``freeze_cols``...) keeps the other half.
-        :attr:`SheetVisibility.VERY_HIDDEN` hides the tab from Excel's Unhide
-        dialog as well.
+        The sheet's visibility is :meth:`set_visibility`.
 
         The whole patch is checked before anything is written.
 
@@ -4773,8 +4921,6 @@ class Sheet(_NoCopy):
           InvalidArgumentError: when a non-zero freeze and a non-zero split
             are both given, for a pane origin on a view without panes, or for
             a value outside its domain.
-          FormulonError: with ``code == StatusCode.PRECONDITION_FAILED`` when
-            hiding the only visible sheet.
         """
         flag_keys = (
             "show_grid_lines",
@@ -4795,7 +4941,6 @@ class Sheet(_NoCopy):
                 ("split_y_twips", split_y_twips),
                 ("top_left", top_left),
                 ("pane_top_left", pane_top_left),
-                ("visibility", visibility),
                 ("view_mode", view_mode),
                 ("show_grid_lines", show_grid_lines),
                 ("show_row_column_headers", show_row_column_headers),
@@ -4827,9 +4972,8 @@ class Sheet(_NoCopy):
                 cell = CellAddress(*self._cell_address(given[key], key))
                 values[key + "_row"] = _uint(cell.row, key + "_row")
                 values[key + "_col"] = _uint(cell.col, key + "_col")
-        for key in ("visibility", "view_mode"):
-            if key in given:
-                values[key] = _sint(given[key], key)
+        if "view_mode" in given:
+            values["view_mode"] = _sint(given["view_mode"], "view_mode")
         for key in flag_keys:
             if key in given:
                 values[key] = 1 if given[key] else 0
@@ -4841,6 +4985,28 @@ class Sheet(_NoCopy):
             ptr = scope.struct(S.SHEET_VIEW_PATCH)
             S.SHEET_VIEW_PATCH.pack(LIB, ptr, values)
             _check(LIB.fm_sheet_update_view(h, _uint(sheet, "sheet_index", role="sheet"), ptr))
+
+    def get_visibility(self) -> SheetVisibility:
+        """The sheet's tab visibility: shown, hidden, or very hidden (absent from Excel's Unhide dialog)."""
+        sheet = self._index()
+        h = self._workbook._require()
+        with _ArgScope() as scope:
+            out = scope.out_ptr()
+            _check(LIB.fm_sheet_get_visibility(h, _uint(sheet, "sheet_index", role="sheet"), out))
+            return SheetVisibility(LIB.read_i32(out))
+
+    def set_visibility(self, visibility: SheetVisibility) -> None:
+        """Set the sheet's tab visibility.
+
+        Raises:
+          FormulonError: with ``code == StatusCode.PRECONDITION_FAILED`` when hiding the only visible sheet.
+          InvalidArgumentError: for a value that is not a :class:`SheetVisibility` member.
+        """
+        sheet = self._index()
+        h = self._workbook._require()
+        _check(
+            LIB.fm_sheet_set_visibility(h, _uint(sheet, "sheet_index", role="sheet"), _sint(visibility, "visibility"))
+        )
 
     def get_selection(self) -> SheetSelection:
         """Return the active cell and ranges of the active pane's selection.
@@ -5748,12 +5914,14 @@ class Sheet(_NoCopy):
         )
 
     @staticmethod
-    def _decode_cfvo(ptr: int) -> Cfvo:
+    def _decode_cfvo(ptr: int) -> CfValueObject:
         d = S.CFVO.unpack(LIB, ptr)
-        return Cfvo(type=d["type"], value=LIB.read_cstr(d["value"]) if d["value"] else None, gte=bool(d["gte"]))
+        return CfValueObject(
+            type=d["type"], value=LIB.read_cstr(d["value"]) if d["value"] else None, gte=bool(d["gte"])
+        )
 
     @staticmethod
-    def _write_cfvo(ptr: int, value: Cfvo, scope: _ArgScope) -> None:
+    def _write_cfvo(ptr: int, value: CfValueObject, scope: _ArgScope) -> None:
         S.CFVO.pack(LIB, ptr, {"type": _uint(value.type, "type", 8), "gte": 1 if value.gte else 0})
         if value.value is not None:
             S.write_str_field(LIB, ptr, S.CFVO, "value", value.value, scope)
@@ -5781,11 +5949,11 @@ class Sheet(_NoCopy):
                     _decode_color(d["color_scale_colors"] + i * S.COLOR_SPEC.size)
                     for i in range(d["color_scale_count"])
                 ]
-                color_scale = ColorScale(thresholds, colors)
+                color_scale = CfColorScale(thresholds, colors)
             offsets = S.CF_RULE.offsets
             data_bar = None
             if d["has_data_bar"]:
-                data_bar = DataBar(
+                data_bar = CfDataBar(
                     self._decode_cfvo(ptr + offsets["data_bar_min"][1]),
                     self._decode_cfvo(ptr + offsets["data_bar_max"][1]),
                     _decode_color(ptr + offsets["data_bar_fill"][1]),
@@ -5807,7 +5975,7 @@ class Sheet(_NoCopy):
                 )
             icon_set = None
             if d["has_icon_set"]:
-                icon_set = IconSet(
+                icon_set = CfIconSet(
                     d["icon_set_name"],
                     [
                         self._decode_cfvo(d["icon_set_thresholds"] + i * S.CFVO.size)
@@ -5848,16 +6016,25 @@ class Sheet(_NoCopy):
                 icon_set=icon_set,
             )
 
-    def add_cf_rule(self, rule: ConditionalFormatInput) -> int:
+    def add_cf_rule(self, rule: Union[ConditionalFormatInput, ConditionalFormat]) -> int:
         """Append a CF rule to the sheet; return its index.
 
-        Every rule type is accepted, the visual ones included: a color scale,
-        data bar or icon set rule carries its payload in ``rule.color_scale``,
-        ``rule.data_bar`` or ``rule.icon_set``. ``rule.ranges`` takes
-        :class:`CellRect` values, A1 ranges or one A1 range string.
+        ``rule`` is the input dataclass of its type (:class:`CfCellIsRuleInput`, :class:`CfColorScaleRuleInput`
+        and the others of :data:`ConditionalFormatInput`); a :class:`ConditionalFormat` read back is accepted
+        too. A color scale, data bar or icon set rule carries its payload in ``rule.color_scale``,
+        ``rule.data_bar`` or ``rule.icon_set``. ``rule.ranges`` takes :class:`CellRect` values, A1 ranges or
+        one A1 range string.
         """
         sheet = self._index()
-        rule = normalize_record_ranges(rule, self._workbook, sheet=sheet, label="rule")
+        ranges = _cell_rects(self._workbook, rule.ranges, "rule.ranges")
+        operator = getattr(rule, "operator", None)
+        time_period = getattr(rule, "time_period", None)
+        dxf_index = getattr(rule, "dxf_index", None)
+        rank = getattr(rule, "rank", None)
+        std_dev = getattr(rule, "std_dev", None)
+        color_scale = getattr(rule, "color_scale", None)
+        data_bar = getattr(rule, "data_bar", None)
+        icon_set = getattr(rule, "icon_set", None)
         h = self._workbook._require()
         with _ArgScope() as scope:
             ptr = scope.struct(S.CF_RULE)
@@ -5867,47 +6044,46 @@ class Sheet(_NoCopy):
                 ptr,
                 {
                     "type": _uint(rule.type, "type", 8),
-                    "op": _uint(rule.operator or 0, "operator", 8),
-                    "time_period": _uint(rule.time_period or 0, "time_period", 8),
+                    "op": _uint(operator or 0, "operator", 8),
+                    "time_period": _uint(time_period or 0, "time_period", 8),
                     "priority": _sint(rule.priority, "priority"),
                     "stop_if_true": 1 if rule.stop_if_true else 0,
-                    "has_dxf_index": 1 if rule.dxf_index is not None else 0,
-                    "dxf_index": _uint(rule.dxf_index or 0, "dxf_index", role="position"),
-                    "has_op": 1 if rule.operator is not None else 0,
-                    "has_rank": 1 if rule.rank is not None else 0,
-                    "rank": _sint(rule.rank or 0, "rank"),
-                    "percent": 1 if rule.percent else 0,
-                    "bottom": 1 if rule.bottom else 0,
-                    "above_average": 1 if rule.above_average else 0,
-                    "equal_average": 1 if rule.equal_average else 0,
-                    "has_std_dev": 1 if rule.std_dev is not None else 0,
-                    "std_dev": float(rule.std_dev or 0.0),
-                    "has_time_period": 1 if rule.time_period is not None else 0,
+                    "has_dxf_index": 1 if dxf_index is not None else 0,
+                    "dxf_index": _uint(dxf_index or 0, "dxf_index", role="position"),
+                    "has_op": 1 if operator is not None else 0,
+                    "has_rank": 1 if rank is not None else 0,
+                    "rank": _sint(rank or 0, "rank"),
+                    "percent": 1 if getattr(rule, "percent", False) else 0,
+                    "bottom": 1 if getattr(rule, "bottom", False) else 0,
+                    "above_average": 1 if getattr(rule, "above_average", False) else 0,
+                    "equal_average": 1 if getattr(rule, "equal_average", False) else 0,
+                    "has_std_dev": 1 if std_dev is not None else 0,
+                    "std_dev": float(std_dev or 0.0),
+                    "has_time_period": 1 if time_period is not None else 0,
                 },
             )
-            ranges_ptr = _pack_cell_rect_array(rule.ranges, scope)
+            ranges_ptr = _pack_cell_rect_array(ranges, scope)
             ro = S.CF_RULE.offsets
             LIB.write_bytes(ptr + ro["ranges"][1], struct.pack("<I", ranges_ptr))
-            LIB.write_bytes(ptr + ro["range_count"][1], struct.pack("<I", len(rule.ranges)))
+            LIB.write_bytes(ptr + ro["range_count"][1], struct.pack("<I", len(ranges)))
             S.write_str_field(LIB, ptr, S.CF_RULE, "id", rule.id, scope)
-            S.write_str_field(LIB, ptr, S.CF_RULE, "formula1", rule.formula1, scope)
-            S.write_str_field(LIB, ptr, S.CF_RULE, "formula2", rule.formula2, scope)
-            S.write_str_field(LIB, ptr, S.CF_RULE, "text", rule.text, scope)
-            if rule.color_scale is not None:
-                count = len(rule.color_scale.thresholds)
-                if count != len(rule.color_scale.colors):
+            S.write_str_field(LIB, ptr, S.CF_RULE, "formula1", getattr(rule, "formula1", None), scope)
+            S.write_str_field(LIB, ptr, S.CF_RULE, "formula2", getattr(rule, "formula2", None), scope)
+            S.write_str_field(LIB, ptr, S.CF_RULE, "text", getattr(rule, "text", None), scope)
+            if color_scale is not None:
+                count = len(color_scale.thresholds)
+                if count != len(color_scale.colors):
                     raise ValueError("color_scale thresholds and colors must have equal length")
                 thresholds = scope.alloc(count * S.CFVO.size)
                 colors = scope.alloc(count * S.COLOR_SPEC.size)
-                for i, value in enumerate(rule.color_scale.thresholds):
+                for i, value in enumerate(color_scale.thresholds):
                     self._write_cfvo(thresholds + i * S.CFVO.size, value, scope)
-                for i, color in enumerate(rule.color_scale.colors):
+                for i, color in enumerate(color_scale.colors):
                     _pack_color(colors + i * S.COLOR_SPEC.size, color, f"color_scale.colors[{i}]")
                 LIB.write_bytes(ptr + ro["color_scale_thresholds"][1], struct.pack("<I", thresholds))
                 LIB.write_bytes(ptr + ro["color_scale_colors"][1], struct.pack("<I", colors))
                 LIB.write_bytes(ptr + ro["color_scale_count"][1], struct.pack("<I", count))
-            if rule.data_bar is not None:
-                data_bar = rule.data_bar
+            if data_bar is not None:
                 self._write_cfvo(ptr + ro["data_bar_min"][1], data_bar.minimum, scope)
                 self._write_cfvo(ptr + ro["data_bar_max"][1], data_bar.maximum, scope)
                 _pack_color(ptr + ro["data_bar_fill"][1], data_bar.fill, "data_bar.fill")
@@ -5943,8 +6119,7 @@ class Sheet(_NoCopy):
                 LIB.write_bytes(
                     ptr + ro["data_bar_direction"][1], struct.pack("<i", _sint(data_bar.direction, "direction"))
                 )
-            if rule.icon_set is not None:
-                icon_set = rule.icon_set
+            if icon_set is not None:
                 count = len(icon_set.thresholds)
                 thresholds = scope.alloc(count * S.CFVO.size)
                 for i, value in enumerate(icon_set.thresholds):
@@ -5975,7 +6150,209 @@ class Sheet(_NoCopy):
             _check(LIB.fm_sheet_add_cf_rule(h, _uint(sheet, "sheet_index", role="sheet"), ptr, out))
             return LIB.read_u32(out)
 
-    def remove_cf_rule(self, cf_rule: Union[int, str]) -> None:
+    def update_cf_rule(
+        self,
+        cf_rule: CfRuleRef,
+        *,
+        priority: Union[int, Unchanged] = UNCHANGED,
+        stop_if_true: Union[bool, Unchanged] = UNCHANGED,
+        dxf_index: Union[int, None, Unchanged] = UNCHANGED,
+        ranges: Union[Sequence[Union[CellRect, str]], str, Unchanged] = UNCHANGED,
+        formula1: Union[str, None, Unchanged] = UNCHANGED,
+        formula2: Union[str, None, Unchanged] = UNCHANGED,
+        operator: Union[ComparisonOperator, Unchanged] = UNCHANGED,
+        rank: Union[int, Unchanged] = UNCHANGED,
+        percent: Union[bool, Unchanged] = UNCHANGED,
+        bottom: Union[bool, Unchanged] = UNCHANGED,
+        above_average: Union[bool, Unchanged] = UNCHANGED,
+        equal_average: Union[bool, Unchanged] = UNCHANGED,
+        std_dev: Union[float, Unchanged] = UNCHANGED,
+        text: Union[str, Unchanged] = UNCHANGED,
+        time_period: Union[DatePeriod, Unchanged] = UNCHANGED,
+        color_scale: Union[CfColorScaleInput, CfColorScale, Unchanged] = UNCHANGED,
+        data_bar: Union[CfDataBarInput, CfDataBar, Unchanged] = UNCHANGED,
+        icon_set: Union[CfIconSetInput, CfIconSet, Unchanged] = UNCHANGED,
+    ) -> None:
+        """Update ``cf_rule``, an index in :meth:`list_cf_rules` order or a rule's ``id``; an omitted argument
+        keeps its value.
+
+        The arguments are the fields of the rule's own input dataclass, except ``type`` and ``id``: a rule keeps
+        its type, id and position. ``None`` clears ``dxf_index``, ``formula1`` and ``formula2`` and is a
+        ``TypeError`` for any other argument. A payload (``color_scale``, ``data_bar``, ``icon_set``) replaces
+        the whole payload; a ``None`` field of a data bar or icon set restores its default. The whole update is
+        checked before anything changes.
+
+        Raises:
+          TypeError: for ``None`` on an argument that is not clearable.
+          NotFoundError: when no rule has the id ``cf_rule``.
+          IndexOutOfRangeError: when ``cf_rule`` is an index past the last rule.
+          InvalidArgumentError: when an argument is not used by the rule's type, or a value is outside its domain.
+        """
+        given = {
+            key: value
+            for key, value in (
+                ("priority", priority),
+                ("stop_if_true", stop_if_true),
+                ("dxf_index", dxf_index),
+                ("ranges", ranges),
+                ("formula1", formula1),
+                ("formula2", formula2),
+                ("op", operator),
+                ("rank", rank),
+                ("percent", percent),
+                ("bottom", bottom),
+                ("above_average", above_average),
+                ("equal_average", equal_average),
+                ("std_dev", std_dev),
+                ("text", text),
+                ("time_period", time_period),
+                ("color_scale", color_scale),
+                ("data_bar", data_bar),
+                ("icon_set", icon_set),
+            )
+            if value is not UNCHANGED
+        }
+        for key, value in given.items():
+            if value is None and key not in ("dxf_index", "formula1", "formula2"):
+                raise TypeError(f"formulon: {'operator' if key == 'op' else key} cannot be None")
+        for key in ("stop_if_true", "percent", "bottom", "above_average", "equal_average"):
+            if key in given and not isinstance(given[key], bool):
+                raise TypeError(f"formulon: {key} must be a bool, got {type(given[key]).__name__}")
+        index = resolve_ref(cf_rule, lambda: [rule.id for rule in self.list_cf_rules()], "CF rule")
+        sheet = self._index()
+        h = self._workbook._require()
+        values: Dict[str, object] = {}
+        with _ArgScope() as scope:
+            ptr = scope.struct_array(S.CF_RULE_PATCH, 1)
+            po = S.CF_RULE_PATCH.offsets
+            if "priority" in given:
+                values["priority_op"] = _PATCH_SET
+                values["priority"] = _sint(given["priority"], "priority")
+            for key in ("stop_if_true", "percent", "bottom", "above_average", "equal_average"):
+                if key in given:
+                    values[key + "_op"] = _PATCH_SET
+                    values[key] = 1 if given[key] else 0
+            if "dxf_index" in given:
+                if given["dxf_index"] is None:
+                    values["dxf_index_op"] = _PATCH_CLEAR
+                else:
+                    values["dxf_index_op"] = _PATCH_SET
+                    values["dxf_index"] = _uint(given["dxf_index"], "dxf_index", role="position")
+            if "ranges" in given:
+                rects = _cell_rects(self._workbook, given["ranges"], "ranges")
+                values["ranges_op"] = _PATCH_SET
+                values["ranges"] = _pack_cell_rect_array(rects, scope)
+                values["range_count"] = _uint(len(rects), "range_count")
+            for key in ("formula1", "formula2", "text"):
+                if key not in given:
+                    continue
+                if given[key] is None:
+                    values[key + "_op"] = _PATCH_CLEAR
+                else:
+                    values[key + "_op"] = _PATCH_SET
+                    values[key] = scope.cstr(given[key])
+            for key in ("op", "rank", "time_period"):
+                if key in given:
+                    values[key + "_op"] = _PATCH_SET
+                    values[key] = _sint(given[key], key)
+            if "std_dev" in given:
+                values["std_dev_op"] = _PATCH_SET
+                values["std_dev"] = _finite(given["std_dev"], "std_dev")
+            if "color_scale" in given:
+                payload = given["color_scale"]
+                count = len(payload.thresholds)
+                if count != len(payload.colors):
+                    raise ValueError("color_scale thresholds and colors must have equal length")
+                thresholds = scope.alloc(count * S.CFVO.size)
+                colors = scope.alloc(count * S.COLOR_SPEC.size)
+                for i, value in enumerate(payload.thresholds):
+                    self._write_cfvo(thresholds + i * S.CFVO.size, value, scope)
+                for i, color in enumerate(payload.colors):
+                    _pack_color(colors + i * S.COLOR_SPEC.size, color, f"color_scale.colors[{i}]")
+                values.update(
+                    color_scale_thresholds_op=_PATCH_SET,
+                    color_scale_thresholds=thresholds,
+                    color_scale_thresholds_count=count,
+                    color_scale_colors_op=_PATCH_SET,
+                    color_scale_colors=colors,
+                    color_scale_colors_count=count,
+                )
+            if "data_bar" in given:
+                payload = given["data_bar"]
+                self._write_cfvo(ptr + po["data_bar_min"][1], payload.minimum, scope)
+                self._write_cfvo(ptr + po["data_bar_max"][1], payload.maximum, scope)
+                _pack_color(ptr + po["data_bar_fill"][1], payload.fill, "data_bar.fill")
+                for key in ("negative_fill", "border", "negative_border", "axis_color"):
+                    _pack_optional_color(ptr + po[f"data_bar_{key}"][1], getattr(payload, key), f"data_bar.{key}")
+                gradient = True if payload.gradient is None else payload.gradient
+                axis_position = (
+                    CfDataBarAxisPosition.AUTOMATIC if payload.axis_position is None else payload.axis_position
+                )
+                for key in (
+                    "min",
+                    "max",
+                    "fill",
+                    "show_value",
+                    "min_length_pct",
+                    "max_length_pct",
+                    "gradient",
+                    "axis_position",
+                    "negative_fill",
+                    "border",
+                    "negative_border",
+                    "axis_color",
+                    "direction",
+                ):
+                    values[f"data_bar_{key}_op"] = _PATCH_SET
+                values.update(
+                    data_bar_show_value=1 if payload.show_value else 0,
+                    data_bar_min_length_pct=_uint(payload.min_length_pct, "min_length_pct", 8),
+                    data_bar_max_length_pct=_uint(payload.max_length_pct, "max_length_pct", 8),
+                    data_bar_gradient=1 if gradient else 0,
+                    data_bar_axis_position=_sint(axis_position, "axis_position"),
+                    data_bar_direction=_sint(payload.direction, "direction"),
+                )
+            if "icon_set" in given:
+                payload = given["icon_set"]
+                count = len(payload.thresholds)
+                thresholds = scope.alloc(count * S.CFVO.size)
+                for i, value in enumerate(payload.thresholds):
+                    self._write_cfvo(thresholds + i * S.CFVO.size, value, scope)
+                floor = CfValueObject(CfValueObjectType.PERCENT, "0") if payload.floor is None else payload.floor
+                self._write_cfvo(ptr + po["icon_set_floor"][1], floor, scope)
+                icons = payload.icons or ()
+                icons_ptr = scope.alloc(len(icons) * S.CF_ICON.size) if icons else 0
+                for i, icon in enumerate(icons):
+                    S.CF_ICON.pack(
+                        LIB,
+                        icons_ptr + i * S.CF_ICON.size,
+                        {
+                            "icon_set": _sint(icon.icon_set, "icon_set"),
+                            "icon_index": _sint(icon.icon_index, "icon_index"),
+                        },
+                    )
+                for key in ("name", "thresholds", "reverse", "show_value", "percent", "floor", "icons"):
+                    values[f"icon_set_{key}_op"] = _PATCH_SET
+                values.update(
+                    icon_set_name=_sint(payload.name, "icon_set"),
+                    icon_set_thresholds=thresholds,
+                    icon_set_thresholds_count=count,
+                    icon_set_reverse=1 if payload.reverse else 0,
+                    icon_set_show_value=1 if payload.show_value else 0,
+                    icon_set_percent=1 if payload.percent else 0,
+                    icon_set_icons=icons_ptr,
+                    icon_set_icons_count=len(icons),
+                )
+            raw = bytearray(LIB.read_bytes(ptr, S.CF_RULE_PATCH.size))
+            S.CF_RULE_PATCH.pack_into(raw, 0, values)
+            LIB.write_bytes(ptr, bytes(raw))
+            _check(
+                LIB.fm_sheet_update_cf_rule(
+                    h, _uint(sheet, "sheet_index", role="sheet"), _uint(index, "idx", role="position"), ptr
+                )
+            )
+
+    def remove_cf_rule(self, cf_rule: CfRuleRef) -> None:
         """Remove ``cf_rule``, an index in :meth:`list_cf_rules` order or a rule's ``id``.
 
         Raises:
@@ -6099,7 +6476,7 @@ class Sheet(_NoCopy):
             _uint(pivot_index, "pivot_index", role="position"),
         )
 
-    def _pivot_index(self, pivot: Union[int, str, Pivot]) -> int:
+    def _pivot_index(self, pivot: PivotRef) -> int:
         """The index ``pivot`` addresses: an index, a pivot table's name or a :class:`Pivot` of this sheet."""
         return resolve_ref(
             pivot, lambda: [self._pivot_name(i) for i in range(self._pivot_count())], "pivot", owner=self
@@ -6127,7 +6504,7 @@ class Sheet(_NoCopy):
         """Return the handles of the pivot tables anchored on the sheet, in index order."""
         return [self._pivot_at(i) for i in range(self._pivot_count())]
 
-    def pivot(self, pivot: Union[int, str, Pivot]) -> Pivot:
+    def pivot(self, pivot: PivotRef) -> Pivot:
         """Return the handle of the pivot table ``pivot``: an index, a name or a :class:`Pivot` of this sheet.
 
         Raises:
@@ -6143,12 +6520,16 @@ class Sheet(_NoCopy):
     def add_pivot(self, input: PivotInput) -> Pivot:
         """Create the empty pivot table ``input`` describes and return its handle.
 
-        ``input.anchor`` is the top-left cell, a :class:`CellAddress` or one A1 cell.
+        ``input.anchor`` is the top-left cell, a :class:`CellAddress` or one A1 cell; ``input.cache_id`` is a
+        cache id or a :class:`PivotCache` of this workbook.
+
+        Raises:
+          InvalidArgumentError: when ``input.cache_id`` is a :class:`PivotCache` of another workbook.
 
         Example::
 
             cache = wb.add_pivot_cache()
-            pivot = ws.add_pivot(PivotInput(name="Sales", cache_id=cache.cache_id, anchor="E1"))
+            pivot = ws.add_pivot(PivotInput(name="Sales", cache_id=cache, anchor="E1"))
         """
         if not isinstance(input, PivotInput):
             raise TypeError(f"formulon: input must be a PivotInput, got {type(input).__name__}")
@@ -6156,13 +6537,15 @@ class Sheet(_NoCopy):
         sheet = self._index()
         h = self._workbook._require()
         with _ArgScope() as scope:
-            spec = _pack_pivot_spec(scope, input.name, input.cache_id, anchor_row, anchor_col)
+            spec = _pack_pivot_spec(
+                scope, input.name, self._workbook._pivot_cache_id(input.cache_id), anchor_row, anchor_col
+            )
             out = scope.out_ptr()
             _check(LIB.fm_sheet_add_pivot(h, _uint(sheet, "sheet_index", role="sheet"), spec, out))
             pivot_index = LIB.read_u32(out)
         return self._pivot_at(pivot_index)
 
-    def remove_pivot(self, pivot: Union[int, str, Pivot]) -> None:
+    def remove_pivot(self, pivot: PivotRef) -> None:
         """Remove the pivot table ``pivot``; its handle raises :class:`NotFoundError` from then on."""
         pivot_index = self._pivot_index(pivot)
         sheet = self._index()
@@ -6177,7 +6560,7 @@ class Sheet(_NoCopy):
     def _table_count(self) -> int:
         return self._workbook._table_count(self._index())
 
-    def _table_index(self, table: Union[int, str, Table]) -> int:
+    def _table_index(self, table: TableRef) -> int:
         """The sheet-local index ``table`` addresses: an index, a table name or a :class:`Table` of this sheet."""
         from ._table import Table
 
@@ -6198,7 +6581,7 @@ class Sheet(_NoCopy):
         sheet = self._index()
         return [self._workbook._table_handle(sheet, i) for i in range(self._table_count())]
 
-    def table(self, table: Union[int, str, Table]) -> Table:
+    def table(self, table: TableRef) -> Table:
         """Return the handle of the table ``table`` on this sheet: an index, a name or a :class:`Table` of this sheet.
 
         A name is compared case-insensitively and a string is always a name,
@@ -6226,7 +6609,7 @@ class Sheet(_NoCopy):
         """
         return self._workbook._add_table(self._index(), input)
 
-    def remove_table(self, table: Union[int, str, Table]) -> None:
+    def remove_table(self, table: TableRef) -> None:
         """Remove the table ``table``; its handle raises :class:`NotFoundError` from then on.
 
         Formulas that name the table keep their structured references and
@@ -6681,7 +7064,9 @@ class SheetOoxml(_NoCopy):
                 font_color=ResolvedColor(d["font_argb"], ColorResolution(d["font_resolution"])),
                 fill_foreground=ResolvedColor(d["fill_fg_argb"], ColorResolution(d["fill_fg_resolution"])),
                 fill_background=ResolvedColor(d["fill_bg_argb"], ColorResolution(d["fill_bg_resolution"])),
-                borders=[ResolvedColor(a, ColorResolution(r)) for a, r in zip(border_argb, border_res)],
+                borders=EffectiveBorders(
+                    *(ResolvedColor(a, ColorResolution(r)) for a, r in zip(border_argb, border_res))
+                ),
                 protection=CellProtection(locked=bool(d["locked"]), hidden=bool(d["hidden"])),
                 number_format=LIB.read_cstr(d["num_fmt_code"]),
             )

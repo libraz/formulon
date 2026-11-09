@@ -337,18 +337,18 @@ export function registerFilterValidationComments(Module, test) {
       );
       assert.equal(wb.listThreadedComments(0).length, beforeComments);
 
-      for (const value of [Number.NaN, 1.5, Symbol('rowOffsetEmu')]) {
+      for (const value of [Number.NaN, 1.5, Symbol('fromRowOffsetEmu')]) {
         assert.throws(
-          () => wb.addImage(0, new Uint8Array([1, 2, 3]), { anchor: { rowOffsetEmu: value } }),
+          () => wb.addImage(0, new Uint8Array([1, 2, 3]), { anchor: { fromRowOffsetEmu: value } }),
           typeof value === 'symbol' ? TypeError : RangeError,
-          `rowOffsetEmu=${String(value)}`,
+          `fromRowOffsetEmu=${String(value)}`,
         );
         assert.equal(wb.listDrawingObjects(0).length, 0);
       }
 
       expectFailure(() =>
         wb.addImage(0, new Uint8Array([1, 2, 3]), {
-          anchor: { rowOffsetEmu: -(2 ** 63), colOffsetEmu: 2 ** 63 - 1024 },
+          anchor: { fromRowOffsetEmu: -(2 ** 63), fromColOffsetEmu: 2 ** 63 - 1024 },
         }),
       );
       assert.equal(wb.listDrawingObjects(0).length, 0);
@@ -435,14 +435,14 @@ export function registerFilterValidationComments(Module, test) {
         formula2: '10',
         errorStyle: ValidationErrorStyle.Warning,
       };
-      wb.addValidation(0, rule);
+      const ruleId = wb.addValidation(0, rule);
 
       const none = wb.validateValue(0, 0, 3, { kind: 1, number: 99 });
-      assert.deepEqual({ ...none }, { valid: true, ruleIndex: null, errorStyle: null });
+      assert.deepEqual({ ...none }, { valid: true, ruleId: null, errorStyle: null });
 
       const good = wb.validateValue(0, 0, 0, { kind: 1, number: 5 });
       assert.equal(good.valid, true);
-      assert.equal(good.ruleIndex, 0);
+      assert.equal(good.ruleId, ruleId);
 
       const bad = wb.validateValue(0, 0, 0, { kind: 1, number: 50 });
       assert.equal(bad.valid, false);
@@ -480,6 +480,44 @@ export function registerFilterValidationComments(Module, test) {
 
       expectFailure(() => wb.getInvalidCells(99));
       assert.throws(() => wb.getInvalidCells(0, -1), RangeError);
+    });
+  });
+
+  test('addThreadedComment returns the id, generating one and stamping the pinned clock when omitted', () => {
+    withWorkbook(Module, (wb) => {
+      wb.addPerson({ id: ALICE, displayName: 'Alice' });
+      wb.setPinnedNow(2026, 10, 5, 9, 30, 0);
+      const generated = wb.addThreadedComment(0, { row: 0, col: 0, personId: ALICE, text: 'First' });
+      assert.match(generated, /^\{[0-9A-F]{8}(-[0-9A-F]{4}){3}-[0-9A-F]{12}\}$/);
+      const read = wb.getThreadedComment(0, generated);
+      assert.equal(read.id, generated);
+      assert.equal(read.created, '2026-10-05T09:30:00.00');
+
+      const given = wb.addThreadedComment(0, { id: THREAD, row: 1, col: 0, personId: ALICE, text: 'Second' });
+      assert.equal(given, THREAD);
+      assert.equal(wb.getThreadedComment(0, THREAD).created, '2026-10-05T09:30:00.00');
+      const stamped = wb.addThreadedComment(0, {
+        row: 2,
+        col: 0,
+        personId: ALICE,
+        text: 'Third',
+        created: CREATED,
+      });
+      assert.equal(wb.getThreadedComment(0, stamped).created, CREATED);
+      assert.notEqual(stamped, generated);
+
+      expectFailure(
+        () => wb.addThreadedComment(0, { id: THREAD, row: 3, col: 0, personId: ALICE, text: 'Dup' }),
+        StatusCode.AlreadyExists,
+      );
+      expectFailure(
+        () => wb.addThreadedComment(0, { row: 4, col: 0, personId: ALICE, text: 'Orphan', parentId: BOB }),
+        StatusCode.NotFound,
+      );
+      expectFailure(
+        () => wb.addThreadedComment(0, { row: 5, col: 0, personId: BOB, text: 'Nobody' }),
+        StatusCode.NotFound,
+      );
     });
   });
 

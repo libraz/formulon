@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -25,9 +26,12 @@ using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::color_spec_from_c;
 using formulon::c_api::parts::color_spec_to_c;
+using formulon::c_api::parts::format_runtime_id;
 using formulon::c_api::parts::fresh_read_scratch;
 using formulon::c_api::parts::invalid_argument;
+using formulon::c_api::parts::not_found;
 using formulon::c_api::parts::null_argument;
+using formulon::c_api::parts::parse_runtime_id;
 using formulon::c_api::parts::patch_op_ok;
 using formulon::c_api::parts::patch_op_ok_without_clear;
 using formulon::c_api::parts::set_last_error;
@@ -233,13 +237,37 @@ fm_status_t writable_sheet(fm_workbook_t* wb, size_t sheet_index, formulon::Shee
   return 0;
 }
 
-// `idx` against the sheet's sparkline groups.
-fm_status_t check_group_index(const fm_workbook_t* wb, size_t sheet_index, size_t idx) {
+// Resolves `group_id` to the group's position on sheet `sheet_index`. A non-zero return is the status to report;
+// `*found` is false when the text names no group of the sheet.
+fm_status_t find_group(const fm_workbook_t* wb, size_t sheet_index, const char* group_id, size_t* index, bool* found) {
+  *found = false;
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
-  return check_index(idx, io::read_sparkline_groups(wb->workbook().sheet(sheet_index).ext_lst_xml()).size(),
-                     "group_index");
+  if (auto rc = check_utf8(group_id, "field=group_id"); rc != 0) {
+    return rc;
+  }
+  std::uint32_t id = 0;
+  if (!parse_runtime_id(group_id, &id)) {
+    return 0;
+  }
+  if (const auto position = wb->workbook().find_sparkline_group(sheet_index, id)) {
+    *index = *position;
+    *found = true;
+  }
+  return 0;
+}
+
+// `find_group` for a mutator: an id no group holds is not found.
+fm_status_t require_group(const fm_workbook_t* wb, size_t sheet_index, const char* group_id, size_t* index) {
+  bool found = false;
+  if (auto rc = find_group(wb, sheet_index, group_id, index, &found); rc != 0) {
+    return rc;
+  }
+  if (!found) {
+    return not_found("no sparkline group has that id", std::string("group_id=") + group_id);
+  }
+  return 0;
 }
 
 // Runs `edit` on a copy of the sheet's extension list and keeps it on success.
@@ -295,6 +323,7 @@ extern "C" fm_status_t fm_sheet_get_sparkline_group_at(const fm_workbook_t* wb, 
   const std::uint32_t struct_size = out->struct_size;
   *out = fm_sparkline_group_t{};
   out->struct_size = struct_size;
+  out->id = store_cstr(store, format_runtime_id(wb->workbook().sparkline_group_runtime_id(sheet_index, idx)));
   out->color_series = color_spec_to_c(g.color_series);
   out->color_negative = color_spec_to_c(g.color_negative);
   out->color_axis = color_spec_to_c(g.color_axis);
@@ -326,6 +355,28 @@ extern "C" fm_status_t fm_sheet_get_sparkline_group_at(const fm_workbook_t* wb, 
   return 0;
 }
 
+extern "C" fm_status_t fm_sheet_get_sparkline_group(const fm_workbook_t* wb, size_t sheet_index, const char* group_id,
+                                                    int32_t* out_present, fm_sparkline_group_t* out) {
+  clear_last_error();
+  if (group_id == nullptr || out_present == nullptr || out == nullptr) {
+    return null_argument();
+  }
+  if (auto rc = check_record_size(*out); rc != 0) {
+    return rc;
+  }
+  *out_present = 0;
+  const std::uint32_t struct_size = out->struct_size;
+  *out = fm_sparkline_group_t{};
+  out->struct_size = struct_size;
+  size_t index = 0;
+  bool found = false;
+  if (auto rc = find_group(wb, sheet_index, group_id, &index, &found); rc != 0 || !found) {
+    return rc;
+  }
+  *out_present = 1;
+  return fm_sheet_get_sparkline_group_at(wb, sheet_index, index, out);
+}
+
 extern "C" fm_status_t fm_sheet_get_sparkline_at(const fm_workbook_t* wb, size_t sheet_index, size_t group_index,
                                                  size_t idx, fm_sparkline_t* out) {
   clear_last_error();
@@ -352,9 +403,9 @@ extern "C" fm_status_t fm_sheet_get_sparkline_at(const fm_workbook_t* wb, size_t
 
 extern "C" fm_status_t fm_sheet_add_sparkline_group(fm_workbook_t* wb, size_t sheet_index,
                                                     const fm_sparkline_group_t* group, const fm_sparkline_t* items,
-                                                    size_t count, size_t* out_index) {
+                                                    size_t count, const char** out_group_id) {
   clear_last_error();
-  if (group == nullptr || items == nullptr || out_index == nullptr) {
+  if (group == nullptr || items == nullptr || out_group_id == nullptr) {
     return null_argument();
   }
   if (auto rc = check_record_size(*group); rc != 0) {
@@ -374,32 +425,29 @@ extern "C" fm_status_t fm_sheet_add_sparkline_group(fm_workbook_t* wb, size_t sh
   }
   io::SparklineGroup model = group_from_c(*group);
   model.items = items_from_c(items, count);
-  return edit_ext_lst(wb, sheet_index, [&model, out_index](std::string& xml) {
-    auto added = io::add_sparkline_group(xml, model);
-    if (added) {
-      *out_index = io::read_sparkline_groups(xml).size() - 1U;
-    }
-    return added;
-  });
+  auto id = io::add_sheet_sparkline_group(wb->workbook(), sheet_index, model);
+  if (!id) {
+    return set_last_error(id.error());
+  }
+  *out_group_id = store_cstr(fresh_read_scratch(wb), format_runtime_id(id.value()));
+  return 0;
 }
 
-extern "C" fm_status_t fm_sheet_update_sparkline_group(fm_workbook_t* wb, size_t sheet_index, size_t group_index,
+extern "C" fm_status_t fm_sheet_update_sparkline_group(fm_workbook_t* wb, size_t sheet_index, const char* group_id,
                                                        const fm_sparkline_group_patch_t* patch) {
   clear_last_error();
-  if (patch == nullptr) {
-    return null_argument("patch");
+  if (wb == nullptr || group_id == nullptr || patch == nullptr) {
+    return null_argument();
   }
   if (auto rc = check_record_size(*patch); rc != 0) {
     return rc;
   }
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+  size_t group_index = 0;
+  if (auto rc = require_group(wb, sheet_index, group_id, &group_index); rc != 0) {
     return rc;
   }
   const std::vector<io::SparklineGroup> groups =
       io::read_sparkline_groups(wb->workbook().sheet(sheet_index).ext_lst_xml());
-  if (auto rc = check_index(group_index, groups.size(), "group_index"); rc != 0) {
-    return rc;
-  }
   io::SparklineGroup model = groups[group_index];
   if (auto rc = apply_patch(*patch, model); rc != 0) {
     return rc;
@@ -428,10 +476,16 @@ extern "C" fm_status_t fm_sheet_update_sparkline_group(fm_workbook_t* wb, size_t
   });
 }
 
-extern "C" fm_status_t fm_sheet_remove_sparkline_group(fm_workbook_t* wb, size_t sheet_index, size_t idx) {
+extern "C" fm_status_t fm_sheet_remove_sparkline_group(fm_workbook_t* wb, size_t sheet_index, const char* group_id) {
   clear_last_error();
-  if (auto rc = check_group_index(wb, sheet_index, idx); rc != 0) {
+  if (wb == nullptr || group_id == nullptr) {
+    return null_argument();
+  }
+  size_t index = 0;
+  if (auto rc = require_group(wb, sheet_index, group_id, &index); rc != 0) {
     return rc;
   }
-  return edit_ext_lst(wb, sheet_index, [idx](std::string& xml) { return io::remove_sparkline_group(xml, idx); });
+  std::uint32_t id = 0;
+  parse_runtime_id(group_id, &id);
+  return formulon::c_api::parts::finish_status(io::remove_sheet_sparkline_group(wb->workbook(), sheet_index, id));
 }

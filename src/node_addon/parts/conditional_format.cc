@@ -469,6 +469,162 @@ Napi::Value Workbook::AddConditionalFormat(const Napi::CallbackInfo& info) {
   return ValueOrThrow(env, rc, Napi::Number::New(env, static_cast<double>(new_index)));
 }
 
+// Every member is optional: an omitted key keeps the stored value. `null` clears `dxfIndex`, `formula1` and
+// `formula2`; on a setting a rule reads as `null` while it keeps the default, `null` sets that default.
+Napi::Value Workbook::UpdateCfRule(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return ThrowInvalidHandle(env);
+  }
+  const Napi::Object in = ArgObject(info, 2);
+  CheckedSpecReader reader(env);
+  fm_cf_rule_patch_t patch = FM_STRUCT_INIT(fm_cf_rule_patch_t);
+  std::string text[3];
+  std::vector<fm_cell_rect_t> ranges;
+  std::vector<fm_cfvo_t> color_scale_thresholds;
+  std::vector<fm_color_t> color_scale_colors;
+  std::vector<fm_cfvo_t> icon_set_thresholds;
+  std::vector<fm_cf_icon_t> icon_set_icons;
+  formulon::c_api::BorrowedStringArena cfvo_strings;
+
+  const auto cfvo_list = [&](const Napi::Object& owner, const char* key, std::vector<fm_cfvo_t>* list) {
+    const Napi::Value value = reader.Get(owner, key);
+    const PatchKey state = ClassifyPatchKey(reader, value, key, false);
+    Napi::Array array;
+    if (state == PatchKey::kSet && reader.Array(value, key, &array)) {
+      for (uint32_t i = 0; i < array.Length() && reader.ok(); ++i) {
+        Napi::Value element;
+        if (reader.ArrayElement(array, i, &element) && element.IsObject()) {
+          list->push_back(PullCfvo(reader, element.As<Napi::Object>(), &cfvo_strings));
+        }
+      }
+    }
+    return static_cast<fm_patch_op_t>(state);
+  };
+  const auto cfvo_one = [&](const Napi::Object& owner, const char* key, fm_cfvo_t* out, bool null_sets_default) {
+    const Napi::Value value = reader.Get(owner, key);
+    if (null_sets_default && value.IsNull()) {
+      *out = fm_cfvo_t{FM_CF_VALUE_OBJECT_TYPE_PERCENT, 1, cfvo_strings.emplace("0")};
+      return FM_PATCH_OP_SET;
+    }
+    const PatchKey state = ClassifyPatchKey(reader, value, key, false);
+    Napi::Object object;
+    if (state == PatchKey::kSet && reader.Object(value, key, &object)) {
+      *out = PullCfvo(reader, object, &cfvo_strings);
+    }
+    return static_cast<fm_patch_op_t>(state);
+  };
+  const auto color_one = [&](const Napi::Object& owner, const char* key, fm_color_t* out, bool null_sets_none) {
+    if (null_sets_none && reader.Get(owner, key).IsNull()) {
+      *out = fm_color_t{};
+      return FM_PATCH_OP_SET;
+    }
+    return PatchColor(reader, owner, key, false, out);
+  };
+  // A flag read as `null` while it keeps its default: `null` sets `default_value`.
+  const auto flag_or_default = [&](const Napi::Object& owner, const char* key, int32_t* out, int32_t default_value) {
+    if (reader.Get(owner, key).IsNull()) {
+      *out = default_value;
+      return FM_PATCH_OP_SET;
+    }
+    return PatchBool(reader, owner, key, out);
+  };
+
+  patch.priority_op = PatchI32(reader, in, "priority", &patch.priority);
+  patch.stop_if_true_op = PatchBool(reader, in, "stopIfTrue", &patch.stop_if_true);
+  patch.dxf_index_op = PatchU32(reader, in, "dxfIndex", &patch.dxf_index);
+  Napi::Array ranges_array;
+  if (reader.Array(in, "ranges", &ranges_array) && ReadCellRects(reader, ranges_array, "ranges", &ranges)) {
+    patch.ranges_op = FM_PATCH_OP_SET;
+    patch.ranges = ranges.data();
+    patch.range_count = static_cast<uint32_t>(ranges.size());
+  }
+  patch.formula1_op = PatchString(reader, in, "formula1", true, &text[0], &patch.formula1);
+  patch.formula2_op = PatchString(reader, in, "formula2", true, &text[1], &patch.formula2);
+  patch.op_op = PatchI32(reader, in, "operator", &patch.op);
+  patch.rank_op = PatchI32(reader, in, "rank", &patch.rank);
+  patch.percent_op = PatchBool(reader, in, "percent", &patch.percent);
+  patch.bottom_op = PatchBool(reader, in, "bottom", &patch.bottom);
+  patch.above_average_op = PatchBool(reader, in, "aboveAverage", &patch.above_average);
+  patch.equal_average_op = PatchBool(reader, in, "equalAverage", &patch.equal_average);
+  patch.std_dev_op = PatchDouble(reader, in, "stdDev", &patch.std_dev);
+  patch.text_op = PatchString(reader, in, "text", false, &text[2], &patch.text);
+  patch.time_period_op = PatchI32(reader, in, "timePeriod", &patch.time_period);
+
+  Napi::Object color_scale;
+  if (reader.Object(in, "colorScale", &color_scale)) {
+    patch.color_scale_thresholds_op = cfvo_list(color_scale, "thresholds", &color_scale_thresholds);
+    const Napi::Value colors = reader.Get(color_scale, "colors");
+    const PatchKey colors_state = ClassifyPatchKey(reader, colors, "colors", false);
+    patch.color_scale_colors_op = static_cast<fm_patch_op_t>(colors_state);
+    Napi::Array colors_array;
+    if (colors_state == PatchKey::kSet && reader.Array(colors, "colors", &colors_array)) {
+      for (uint32_t i = 0; i < colors_array.Length() && reader.ok(); ++i) {
+        Napi::Value color;
+        if (reader.ArrayElement(colors_array, i, &color) && color.IsObject()) {
+          color_scale_colors.push_back(ReadColorSpec(reader, color, "colors"));
+        }
+      }
+    }
+  }
+  Napi::Object data_bar;
+  if (reader.Object(in, "dataBar", &data_bar)) {
+    patch.data_bar_min_op = cfvo_one(data_bar, "min", &patch.data_bar_min, false);
+    patch.data_bar_max_op = cfvo_one(data_bar, "max", &patch.data_bar_max, false);
+    patch.data_bar_fill_op = color_one(data_bar, "fill", &patch.data_bar_fill, false);
+    patch.data_bar_show_value_op = PatchBool(reader, data_bar, "showValue", &patch.data_bar_show_value);
+    patch.data_bar_min_length_pct_op = PatchU32(reader, data_bar, "minLengthPct", &patch.data_bar_min_length_pct);
+    patch.data_bar_max_length_pct_op = PatchU32(reader, data_bar, "maxLengthPct", &patch.data_bar_max_length_pct);
+    patch.data_bar_gradient_op = flag_or_default(data_bar, "gradient", &patch.data_bar_gradient, 1);
+    if (reader.Get(data_bar, "axisPosition").IsNull()) {
+      patch.data_bar_axis_position_op = FM_PATCH_OP_SET;
+      patch.data_bar_axis_position = FM_CF_DATA_BAR_AXIS_POSITION_AUTOMATIC;
+    } else {
+      patch.data_bar_axis_position_op = PatchI32(reader, data_bar, "axisPosition", &patch.data_bar_axis_position);
+    }
+    patch.data_bar_negative_fill_op = color_one(data_bar, "negativeFill", &patch.data_bar_negative_fill, true);
+    patch.data_bar_border_op = color_one(data_bar, "border", &patch.data_bar_border, true);
+    patch.data_bar_negative_border_op = color_one(data_bar, "negativeBorder", &patch.data_bar_negative_border, true);
+    patch.data_bar_axis_color_op = color_one(data_bar, "axisColor", &patch.data_bar_axis_color, true);
+    patch.data_bar_direction_op = PatchI32(reader, data_bar, "direction", &patch.data_bar_direction);
+  }
+  Napi::Object icon_set;
+  if (reader.Object(in, "iconSet", &icon_set)) {
+    patch.icon_set_name_op = PatchI32(reader, icon_set, "name", &patch.icon_set_name);
+    patch.icon_set_thresholds_op = cfvo_list(icon_set, "thresholds", &icon_set_thresholds);
+    patch.icon_set_reverse_op = PatchBool(reader, icon_set, "reverse", &patch.icon_set_reverse);
+    patch.icon_set_show_value_op = PatchBool(reader, icon_set, "showValue", &patch.icon_set_show_value);
+    patch.icon_set_percent_op = PatchBool(reader, icon_set, "percent", &patch.icon_set_percent);
+    patch.icon_set_floor_op = cfvo_one(icon_set, "floor", &patch.icon_set_floor, true);
+    const Napi::Value icons = reader.Get(icon_set, "icons");
+    const PatchKey icons_state = ClassifyPatchKey(reader, icons, "icons", false);
+    patch.icon_set_icons_op = static_cast<fm_patch_op_t>(icons_state);
+    Napi::Array icons_array;
+    if (icons_state == PatchKey::kSet && reader.Array(icons, "icons", &icons_array)) {
+      for (uint32_t i = 0; i < icons_array.Length() && reader.ok(); ++i) {
+        Napi::Value element;
+        Napi::Object icon;
+        if (reader.ArrayElement(icons_array, i, &element) && reader.Object(element, "icons[]", &icon)) {
+          const int32_t icon_set_id = reader.I32(icon, "iconSet", -1);
+          icon_set_icons.push_back(fm_cf_icon_t{icon_set_id, reader.I32(icon, "iconIndex", 0)});
+        }
+      }
+    }
+  }
+  if (!reader.ok()) {
+    return env.Undefined();
+  }
+  patch.color_scale_thresholds = color_scale_thresholds.empty() ? nullptr : color_scale_thresholds.data();
+  patch.color_scale_thresholds_count = static_cast<uint32_t>(color_scale_thresholds.size());
+  patch.color_scale_colors = color_scale_colors.empty() ? nullptr : color_scale_colors.data();
+  patch.color_scale_colors_count = static_cast<uint32_t>(color_scale_colors.size());
+  patch.icon_set_thresholds = icon_set_thresholds.empty() ? nullptr : icon_set_thresholds.data();
+  patch.icon_set_thresholds_count = static_cast<uint32_t>(icon_set_thresholds.size());
+  patch.icon_set_icons = icon_set_icons.empty() ? nullptr : icon_set_icons.data();
+  patch.icon_set_icons_count = static_cast<uint32_t>(icon_set_icons.size());
+  return ValueOrThrow(env, fm_sheet_update_cf_rule(handle_, ArgU32(info, 0), ArgU32(info, 1), &patch), env.Undefined());
+}
+
 Napi::Value Workbook::RemoveConditionalFormatAt(const Napi::CallbackInfo& info) {
   return InvokeSheetCall(info, &fm_sheet_remove_cf_rule);
 }

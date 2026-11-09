@@ -12,7 +12,6 @@
 #include "parser/reference.h"
 #include "sheet_name.h"
 #include "utils/a1_ref.h"
-#include "utils/strings.h"
 
 namespace formulon {
 namespace parser {
@@ -83,7 +82,7 @@ std::optional<std::string_view> SheetCopyTransform::apply_name_sheet(std::string
 std::optional<StructuredRefTarget> SheetCopyTransform::apply_structured_ref(std::string_view table,
                                                                             std::string_view /*column*/) const {
   for (const std::pair<std::string, std::string>& entry : table_map_) {
-    if (strings::case_insensitive_eq(table, entry.first)) {
+    if (collection_names::equal(table, entry.first)) {
       return StructuredRefTarget{entry.second, {}};
     }
   }
@@ -132,7 +131,7 @@ bool SheetRemovalTransform::rebinds_name_to_book(std::string_view sheet, std::st
     return false;
   }
   return std::any_of(rebound_names_.begin(), rebound_names_.end(),
-                     [name](const std::string& rebound) { return strings::case_insensitive_eq(rebound, name); });
+                     [name](const std::string& rebound) { return collection_names::equal(rebound, name); });
 }
 
 std::optional<RefTransform::Ref3DSheetSpan> SheetRemovalTransform::apply_ref3d_span(std::string_view begin,

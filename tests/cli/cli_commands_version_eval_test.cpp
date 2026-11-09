@@ -124,7 +124,7 @@ TEST(FormulonCli, EvalMalformedSyntaxMatchesTheAdHocCApiEntryPoint) {
   fm_workbook_t* wb = nullptr;
   ASSERT_EQ(fm_workbook_create_empty(&wb), 0);
   std::size_t sheet = 0;
-  ASSERT_EQ(fm_workbook_add_sheet(wb, "Sheet1", &sheet), 0);
+  ASSERT_EQ(fm_workbook_add_sheet(wb, "Sheet1", 0, &sheet), 0);
   fm_value_array_t* result = nullptr;
   EXPECT_NE(fm_sheet_evaluate_formula_array(wb, sheet, 0, 0, "=1+", &result), 0);
   fm_parse_error_info_t position = FM_STRUCT_INIT(fm_parse_error_info_t);
@@ -210,7 +210,7 @@ TEST(FormulonCli, EvalInSelectsTheSheetByNameOrIndex) {
   fm_workbook_t* wb = nullptr;
   ASSERT_EQ(fm_workbook_create_default(&wb), 0);
   std::size_t second = 0;
-  ASSERT_EQ(fm_workbook_add_sheet(wb, "Second", &second), 0);
+  ASSERT_EQ(fm_workbook_add_sheet(wb, "Second", 1, &second), 0);
   ASSERT_EQ(fm_sheet_set_number(wb, 0, 0, 0, 1.0), 0);
   ASSERT_EQ(fm_sheet_set_number(wb, second, 0, 0, 5.0), 0);
   std::uint8_t* bytes = nullptr;

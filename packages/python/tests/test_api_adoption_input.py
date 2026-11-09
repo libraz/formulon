@@ -16,11 +16,11 @@ from formulon import (
     AutoFilterSortState,
     CellAddress,
     CellRect,
-    CfRuleType,
+    CfExpressionRuleInput,
     Color,
     ColorKind,
-    ConditionalFormatInput,
     DataValidationInput,
+    DrawingAnchorInput,
     FormulaSyntaxError,
     FormulonError,
     InvalidArgumentError,
@@ -178,12 +178,10 @@ class RecordA1Tests(unittest.TestCase):
         self.wb.close()
 
     def test_cf_rule_ranges(self) -> None:
-        self.ws.add_cf_rule(ConditionalFormatInput(ranges="A1:B2", type=CfRuleType.EXPRESSION, formula1="TRUE"))
+        self.ws.add_cf_rule(CfExpressionRuleInput(ranges="A1:B2", formula1="TRUE"))
         self.ws.add_cf_rule(
-            ConditionalFormatInput(
-                ranges=["C3", CellRect(first_row=4, first_col=0, last_row=4, last_col=0)],
-                type=CfRuleType.EXPRESSION,
-                formula1="TRUE",
+            CfExpressionRuleInput(
+                ranges=["C3", CellRect(first_row=4, first_col=0, last_row=4, last_col=0)], formula1="TRUE"
             )
         )
         rules = self.ws.list_cf_rules()
@@ -243,9 +241,7 @@ class ColourInputTests(unittest.TestCase):
             ws = wb[0]
             shape = ws.add_shape(
                 ShapeInput(
-                    anchor_kind=AnchorKind.TWO_CELL,
-                    to_row=3,
-                    to_col=3,
+                    anchor=DrawingAnchorInput(kind=AnchorKind.TWO_CELL, to_row=3, to_col=3),
                     fill_kind=ShapePaint.SOLID,
                     fill_color="#FF0000",
                     line_kind=ShapePaint.SOLID,
@@ -263,7 +259,10 @@ class ColourInputTests(unittest.TestCase):
                 for f in dataclasses.fields(props)
                 if f.name in ("fill_kind", "fill_color", "line_kind", "line_color")
             }
-            shape.update(**{**passed_back, "fill_kind": None, "fill_color": None})
+            shape.update(**passed_back)
+            self.assertEqual(shape.get_properties().fill_color, props.fill_color)
+            shape.update(fill_kind=ShapePaint.DEFAULT)
+            self.assertEqual(shape.get_properties().fill_kind, ShapePaint.DEFAULT)
             self.assertIsNone(shape.get_properties().fill_color)
             self.assertEqual(shape.get_properties().line_color, props.line_color)
 
@@ -271,12 +270,13 @@ class ColourInputTests(unittest.TestCase):
         with Workbook.create_default() as wb:
             ws = wb[0]
             ws.set_values("A1", [[1, 2, 3]])
-            index = ws.add_sparkline_group(
+            group_id = ws.add_sparkline_group(
                 SparklineGroupInput(color_series="#112233", sparklines=[SparklineInput("Sheet1!A1:C1", "D1")])
             )
-            self.assertEqual(ws.list_sparkline_groups()[index].color_series, Color(kind=ColorKind.RGB, argb=0xFF112233))
-            ws.update_sparkline_group(index, color_high="#445566")
-            self.assertEqual(ws.list_sparkline_groups()[index].color_high, Color(kind=ColorKind.RGB, argb=0xFF445566))
+            self.assertEqual(ws.list_sparkline_groups()[0].id, group_id)
+            self.assertEqual(ws.list_sparkline_groups()[0].color_series, Color(kind=ColorKind.RGB, argb=0xFF112233))
+            ws.update_sparkline_group(group_id, color_high="#445566")
+            self.assertEqual(ws.list_sparkline_groups()[0].color_high, Color(kind=ColorKind.RGB, argb=0xFF445566))
 
     def test_cell_format_colour_keys(self) -> None:
         with Workbook.create_default() as wb:

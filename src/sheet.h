@@ -46,6 +46,7 @@
 #include "threaded_comment.h"
 #include "unknown_relationship.h"
 #include "utils/a1_ref.h"
+#include "utils/runtime_id.h"
 #include "value.h"
 
 namespace formulon {
@@ -1186,6 +1187,12 @@ class Sheet {
   /// Sets the raw worksheet-level `<extLst>` element. Plain metadata.
   void set_ext_lst_xml(std::string xml) { ext_lst_xml_ = std::move(xml); }
 
+  /// Session ids of the sparkline groups in `ext_lst_xml()`, in document
+  /// order (see `utils/runtime_id.h`). May be shorter than the group list:
+  /// `Workbook::sparkline_group_runtime_id` lengthens it, and an edit that
+  /// drops a group erases that group's slot.
+  std::vector<RuntimeId>& sparkline_group_ids() const noexcept { return sparkline_group_ids_; }
+
   /// Extra namespace declarations (and `mc:Ignorable`) captured from the
   /// source `<worksheet>` root, serialised as ` name="value"` attribute
   /// pairs, excluding the default `xmlns` / `xmlns:r`. Re-emitted on the
@@ -1430,6 +1437,8 @@ class Sheet {
   // Raw worksheet-level `<extLst>` element (x14 conditional-formatting
   // data etc.), or empty. Round-trips verbatim.
   std::string ext_lst_xml_;
+  // See `sparkline_group_ids()`; a copied sheet's entries start unassigned.
+  mutable std::vector<RuntimeId> sparkline_group_ids_;
   // Extra `<worksheet>` root namespace declarations captured for verbatim
   // re-emission so namespaced attributes in raw captures resolve. Empty by
   // default.

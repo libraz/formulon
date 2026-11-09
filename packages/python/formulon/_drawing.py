@@ -25,12 +25,12 @@ from ._workbook import (
     _PLOT_PATCH_SPEC,
     _PREVIEW_OVERRIDE_SPEC,
     UNCHANGED,
-    AnchorEditAs,
-    AnchorKind,
     BlanksAs,
     ChartAxisCrosses,
+    ChartAxisKind,
     ChartAxisPatch,
     ChartAxisPosition,
+    ChartAxisRef,
     ChartBarDirection,
     ChartData,
     ChartDataSource,
@@ -57,7 +57,7 @@ from ._workbook import (
     ChartTickLabelPosition,
     ChartTitle,
     ColorInput,
-    DrawingAnchor,
+    DrawingAnchorInput,
     DrawingObjectKind,
     ImageFormat,
     ShapePaint,
@@ -75,12 +75,13 @@ from ._workbook import (
     _encode_series_patch,
     _enum,
     _id_array,
-    _image_anchor_fields,
     _install_workbook_locks,
-    _pack_shape,
-    _pack_slicer,
+    _pack_drawing_patch,
+    _pack_shape_patch,
+    _pack_slicer_patch,
     _read_chart,
     _read_chart_data,
+    _resolve_chart_axis,
     _title_fields,
 )
 
@@ -103,20 +104,10 @@ _PREVIEW_OVERRIDE_NAMES = (
     "plot_visible_only",
     "na_as_blank",
 )
+_COMMON_UPDATE_NAMES = ("name", "description", "hidden", "anchor")
+# The common keys whose ``None`` clears the field.
+_CLEARABLE_COMMON_NAMES = ("description",)
 _SHAPE_UPDATE_NAMES = (
-    "anchor_kind",
-    "edit_as",
-    "from_row",
-    "from_col",
-    "from_row_offset_emu",
-    "from_col_offset_emu",
-    "to_row",
-    "to_col",
-    "to_row_offset_emu",
-    "to_col_offset_emu",
-    "width_emu",
-    "height_emu",
-    "name",
     "preset_geometry",
     "text",
     "text_box",
@@ -126,25 +117,8 @@ _SHAPE_UPDATE_NAMES = (
     "line_color",
     "line_width_pt",
     "rotation_deg",
-    "hidden",
 )
-_SHAPE_ANCHOR_NAMES = _SHAPE_UPDATE_NAMES[1:12]
-_SLICER_UPDATE_NAMES = (
-    "from_row",
-    "from_col",
-    "to_row",
-    "to_col",
-    "from_row_offset_emu",
-    "from_col_offset_emu",
-    "to_row_offset_emu",
-    "to_col_offset_emu",
-    "caption",
-    "style",
-    "column_count",
-    "row_height_emu",
-    "sort_order",
-    "cross_filter",
-)
+_SLICER_UPDATE_NAMES = ("caption", "style", "column_count", "row_height_emu", "sort_order", "cross_filter")
 _SHAPE_KINDS = frozenset({DrawingObjectKind.SHAPE, DrawingObjectKind.CONNECTOR, DrawingObjectKind.GROUP})
 
 
@@ -153,17 +127,20 @@ def _given(arguments: Dict[str, Any], patch: type) -> Dict[str, Any]:
     return {key: arguments[key] for key in patch.__annotations__ if arguments[key] is not UNCHANGED}
 
 
-def _present(arguments: Dict[str, Any], names: Sequence[str], absent: Sequence[str] = ()) -> Dict[str, Any]:
+def _present(
+    arguments: Dict[str, Any], names: Sequence[str], absent: Sequence[str] = (), clearable: Sequence[str] = ()
+) -> Dict[str, Any]:
     """The arguments among ``names`` that are not :data:`UNCHANGED`.
 
-    A ``None`` among ``absent`` means "keep" and is dropped; any other ``None`` is a ``TypeError``.
+    A ``None`` among ``absent`` means "keep" and is dropped; a ``None`` among ``clearable`` is kept (it clears);
+    any other ``None`` is a ``TypeError``.
     """
     out: Dict[str, Any] = {}
     for key in names:
         value = arguments[key]
         if value is UNCHANGED or (value is None and key in absent):
             continue
-        if value is None:
+        if value is None and key not in clearable:
             raise TypeError(f"formulon: {key} cannot be None")
         out[key] = value
     return out
@@ -295,6 +272,15 @@ class Drawing(_NoCopy):
         """The object's kind."""
         return self._kind
 
+    @property
+    def name(self) -> str:
+        """The object's name, read from the drawing on each access.
+
+        Raises:
+          NotFoundError: when the object or its sheet was removed.
+        """
+        return self.get_drawing_properties().name
+
     def _at(self) -> Tuple[int, int, int]:
         """``(workbook handle, sheet index, object id)`` for a raw call.
 
@@ -308,7 +294,7 @@ class Drawing(_NoCopy):
         return f"{type(self).__name__}(object_id={self._object_id})"
 
     def get_drawing_properties(self) -> DrawingProperties:
-        """Return the object's kind, anchor, name and description.
+        """Return the object's kind, name, description, visibility and anchor.
 
         Raises:
           NotFoundError: when the object or its sheet was removed.
@@ -323,37 +309,41 @@ class Drawing(_NoCopy):
             raise _removed()
         return cast("DrawingProperties", found)
 
+    def update(
+        self,
+        *,
+        name: Union[str, Unchanged] = UNCHANGED,
+        description: Union[str, None, Unchanged] = UNCHANGED,
+        hidden: Union[bool, Unchanged] = UNCHANGED,
+        anchor: Union[DrawingAnchorInput, Unchanged] = UNCHANGED,
+    ) -> None:
+        """Apply the arguments that are given to the object's name, description, visibility and anchor.
 
-def _rename(handle: Drawing, name: str) -> None:
-    """Rename the picture, chart or shape ``handle``."""
-    h, sheet, object_id = handle._at()
-    with _ArgScope() as scope:
-        name_ptr = scope.cstr(name)
-        _check(LIB.fm_sheet_set_drawing_name(h, sheet, object_id, name_ptr))
+        An argument left at :data:`UNCHANGED` keeps its value. ``anchor`` merges into the current anchor
+        field by field (see :class:`~formulon.DrawingAnchorInput`): an omitted field keeps its value and an
+        omitted ``kind`` keeps the object's kind. ``description=None`` removes the description. A slicer's name
+        cannot change. Duplicate names are allowed.
+
+        Raises:
+          TypeError: when an argument other than ``description`` is ``None`` or has the wrong type.
+          FormulonError: with ``PRECONDITION_FAILED`` for a slicer ``name``.
+        """
+        given = _present(dict(locals()), _COMMON_UPDATE_NAMES, clearable=_CLEARABLE_COMMON_NAMES)
+        h, sheet, object_id = self._at()
+        with _ArgScope() as scope:
+            ptr = _common_patch(scope, given)
+            if ptr:
+                _check(LIB.fm_sheet_update_drawing(h, sheet, object_id, ptr))
 
 
-def _set_anchor(handle: Drawing, anchor: DrawingAnchor) -> None:
-    """Move and resize the picture or chart ``handle`` to ``anchor``."""
-    if not isinstance(anchor, DrawingAnchor):
-        raise TypeError(f"formulon: anchor must be a DrawingAnchor, got {type(anchor).__name__}")
-    h, sheet, object_id = handle._at()
-    with _ArgScope() as scope:
-        ptr = scope.struct_array(S.DRAWING_ANCHOR, 1)
-        S.DRAWING_ANCHOR.pack(
-            LIB,
-            ptr,
-            _image_anchor_fields(
-                anchor.anchor_kind,
-                anchor.edit_as,
-                anchor.row,
-                anchor.col,
-                anchor.row_offset_emu,
-                anchor.col_offset_emu,
-                anchor.width_emu,
-                anchor.height_emu,
-            ),
-        )
-        _check(LIB.fm_sheet_set_drawing_anchor(h, sheet, object_id, ptr))
+def _common_patch(scope: _ArgScope, given: Dict[str, Any]) -> int:
+    """An ``fm_drawing_patch_t`` of the common keys in ``given``, or ``0`` when it has none."""
+    if not any(key in given for key in _COMMON_UPDATE_NAMES):
+        return 0
+    clear = [key for key in _CLEARABLE_COMMON_NAMES if key in given and given[key] is None]
+    return _pack_drawing_patch(
+        scope, given.get("name"), given.get("description"), given.get("hidden"), given.get("anchor"), clear=clear
+    )
 
 
 def _set_z_order(handle: Drawing, z_order_index: int) -> None:
@@ -414,22 +404,6 @@ class Picture(Drawing):
                 bytes=LIB.read_bytes(LIB.read_u32(bytes_ptr), LIB.read_u32(len_ptr)),
             )
 
-    def rename(self, name: str) -> None:
-        """Rename the picture. Duplicate names are allowed; ``name`` must be non-empty."""
-        _rename(self, name)
-
-    def set_anchor(self, anchor: DrawingAnchor) -> None:
-        """Move and resize the picture to ``anchor``, keeping its id and every other element.
-
-        The placement is in the quantities :meth:`get_drawing_properties`
-        reports: ``(row, col)`` and the offsets are the top-left marker of the
-        anchor box, ``width_emu`` and ``height_emu`` the object's own unrotated
-        size; ``0`` keeps the current size. ``edit_as`` is
-        honoured for a two-cell anchor only. A default
-        :class:`~formulon.DrawingAnchor` moves the object to A1.
-        """
-        _set_anchor(self, anchor)
-
     def set_z_order(self, z_order_index: int) -> None:
         """Make the picture item ``z_order_index`` of :meth:`Sheet.list_drawings`.
 
@@ -472,22 +446,6 @@ class Chart(Drawing):
             return cast("ChartProperties", _read_chart(chart, self._sheet._workbook, sheet))
         finally:
             LIB.fm_chart_destroy(chart)
-
-    def rename(self, name: str) -> None:
-        """Rename the chart. Duplicate names are allowed; ``name`` must be non-empty."""
-        _rename(self, name)
-
-    def set_anchor(self, anchor: DrawingAnchor) -> None:
-        """Move and resize the chart frame to ``anchor``, keeping its id and every other element.
-
-        The placement is in the quantities :meth:`get_drawing_properties`
-        reports: ``(row, col)`` and the offsets are the top-left marker of the
-        anchor box, ``width_emu`` and ``height_emu`` the object's own unrotated
-        size; ``0`` keeps the current size. ``edit_as`` is
-        honoured for a two-cell anchor only. A default
-        :class:`~formulon.DrawingAnchor` moves the object to A1.
-        """
-        _set_anchor(self, anchor)
 
     def set_z_order(self, z_order_index: int) -> None:
         """Make the chart item ``z_order_index`` of :meth:`Sheet.list_drawings`.
@@ -689,7 +647,7 @@ class Chart(Drawing):
 
     def update_axis(
         self,
-        axis_id: int,
+        axis: ChartAxisRef,
         *,
         visible: Union[bool, None, Unchanged] = UNCHANGED,
         title: Union[str, ChartTitle, None, Unchanged] = UNCHANGED,
@@ -708,7 +666,10 @@ class Chart(Drawing):
         position: Union[ChartAxisPosition, Unchanged] = UNCHANGED,
         source_linked: Union[bool, Unchanged] = UNCHANGED,
     ) -> None:
-        """Update axis ``axis_id``; an omitted argument keeps its value, ``None`` removes the element.
+        """Update an axis; an omitted argument keeps its value, ``None`` removes the element.
+
+        ``axis`` is an axis id, a :class:`ChartAxisKind` (that kind's axis of the first plot group) or a
+        :class:`ChartAxisKey` (the axis of that kind of plot group ``plot``).
 
         ``title`` takes the forms of :meth:`set_title`. ``None`` on ``title``
         removes the axis title, on ``log_base`` makes the axis linear, on
@@ -717,12 +678,18 @@ class Chart(Drawing):
         ``AT``. ``minor_gridlines``, ``position`` and ``source_linked`` reject ``None``.
 
         Raises:
-          TypeError: when ``minor_gridlines``, ``position`` or ``source_linked`` is ``None``.
+          TypeError: when ``minor_gridlines``, ``position`` or ``source_linked`` is ``None``, or ``axis`` has the
+            wrong type.
+          NotFoundError: when the plot group has no axis of the kind ``axis`` names.
         """
         patch = _given(dict(locals()), ChartAxisPatch)
         for key in ("minor_gridlines", "position", "source_linked"):
             if key in patch and patch[key] is None:
                 raise TypeError(f"formulon: {key} cannot be None")
+        if isinstance(axis, int) and not isinstance(axis, (bool, ChartAxisKind)):
+            axis_id = axis
+        else:
+            axis_id = _resolve_chart_axis(axis, self.get_properties())
         h, sheet, object_id = self._at()
         with _ArgScope() as scope:
             ptr = scope.struct_array(S.CHART_AXIS_PATCH, 1)
@@ -753,7 +720,7 @@ class Chart(Drawing):
     def update_series(
         self,
         plot: int,
-        series_index: int,
+        series_id: int,
         *,
         name: Union[str, ChartDataSource, None, Unchanged] = UNCHANGED,
         categories: Union[str, ChartDataSource, None, Unchanged] = UNCHANGED,
@@ -767,7 +734,7 @@ class Chart(Drawing):
         smooth: Union[bool, None, Unchanged] = UNCHANGED,
         labels: Union[ChartLabelsPatch, None, Unchanged] = UNCHANGED,
     ) -> None:
-        """Update the series with ``c:idx`` ``series_index`` of plot group ``plot``; an omitted argument keeps its value.
+        """Update the series with ``c:idx`` ``series_id`` of plot group ``plot``; an omitted argument keeps its value.
 
         A reference is its new text or a :class:`ChartDataSource` with a reference; ``""`` removes ``name``,
         ``categories`` or ``x`` (an empty ``values``, ``y`` or ``size`` is rejected). ``None`` on
@@ -781,11 +748,11 @@ class Chart(Drawing):
             S.CHART_SERIES_PATCH.pack(LIB, ptr, fields)
             _check(
                 LIB.fm_sheet_update_chart_series(
-                    h, sheet, object_id, _uint(plot, "plot"), _uint(series_index, "series_index", role="position"), ptr
+                    h, sheet, object_id, _uint(plot, "plot"), _uint(series_id, "series_id"), ptr
                 )
             )
 
-    def set_point(self, plot: int, series_index: int, point_index: int, value: Optional[ChartPoint]) -> None:
+    def set_point(self, plot: int, series_id: int, point_index: int, value: Optional[ChartPoint]) -> None:
         """Replace the formatting of data point ``point_index`` with ``value``, or remove it with ``None``.
 
         ``value`` is a :class:`ChartPoint` as :meth:`get_properties` reads it;
@@ -796,7 +763,7 @@ class Chart(Drawing):
           TypeError: when ``value`` is neither a :class:`ChartPoint` nor ``None``.
         """
         if value is None:
-            self._patch_point(plot, series_index, point_index, None)
+            self._patch_point(plot, series_id, point_index, None)
             return
         if not isinstance(value, ChartPoint):
             raise TypeError(f"formulon: value must be a ChartPoint or None, got {type(value).__name__}")
@@ -813,13 +780,13 @@ class Chart(Drawing):
             marker = UNCHANGED
             plots = self.get_properties().plots
             for series in plots[plot].series if 0 <= plot < len(plots) else ():
-                if series.index == series_index:
+                if series.series_id == series_id:
                     if any(p.index == point_index and p.marker is not None for p in series.points):
                         marker = None
                     break
         self.update_point(
             plot,
-            series_index,
+            series_id,
             point_index,
             fill=_fill_patch_of(value.fill),
             line=_line_patch_of(value.line),
@@ -829,7 +796,7 @@ class Chart(Drawing):
     def update_point(
         self,
         plot: int,
-        series_index: int,
+        series_id: int,
         point_index: int,
         *,
         fill: Union[ChartFillPatch, None, Unchanged] = UNCHANGED,
@@ -841,9 +808,9 @@ class Chart(Drawing):
         A call with no keyword argument changes nothing; ``None`` on a keyword removes that member. Remove the
         point's formatting with :meth:`set_point` and ``None``.
         """
-        self._patch_point(plot, series_index, point_index, _given(dict(locals()), ChartPointPatch))
+        self._patch_point(plot, series_id, point_index, _given(dict(locals()), ChartPointPatch))
 
-    def _patch_point(self, plot: int, series_index: int, point_index: int, patch: Optional[Dict[str, Any]]) -> None:
+    def _patch_point(self, plot: int, series_id: int, point_index: int, patch: Optional[Dict[str, Any]]) -> None:
         """Apply a point patch; ``None`` clears every member."""
         h, sheet, object_id = self._at()
         with _ArgScope() as scope:
@@ -856,7 +823,7 @@ class Chart(Drawing):
                     sheet,
                     object_id,
                     _uint(plot, "plot"),
-                    _uint(series_index, "series_index", role="position"),
+                    _uint(series_id, "series_id"),
                     _uint(point_index, "point_index", role="position"),
                     ptr,
                 )
@@ -910,7 +877,7 @@ class Chart(Drawing):
             )
 
     def add_series(self, plot: int, series: ChartSeriesInput) -> int:
-        """Append ``series`` to plot group ``plot`` and return its ``c:idx``.
+        """Append ``series`` to plot group ``plot`` and return its series id (``c:idx``).
 
         ``series.values`` is required (``y`` for a scatter plot); the other fields read as in
         :meth:`update_series`, and a field left ``None`` is not written.
@@ -929,13 +896,11 @@ class Chart(Drawing):
             _check(LIB.fm_sheet_add_chart_series(h, sheet, object_id, _uint(plot, "plot"), ptr, out))
             return LIB.read_u32(out)
 
-    def remove_series(self, plot: int, series_index: int) -> None:
-        """Remove the series with ``c:idx`` ``series_index`` from plot group ``plot``."""
+    def remove_series(self, plot: int, series_id: int) -> None:
+        """Remove the series with ``c:idx`` ``series_id`` from plot group ``plot``."""
         h, sheet, object_id = self._at()
         _check(
-            LIB.fm_sheet_remove_chart_series(
-                h, sheet, object_id, _uint(plot, "plot"), _uint(series_index, "series_index", role="position")
-            )
+            LIB.fm_sheet_remove_chart_series(h, sheet, object_id, _uint(plot, "plot"), _uint(series_id, "series_id"))
         )
 
     def set_source(self, source: Union[ChartSourceInput, ChartSource]) -> None:
@@ -976,7 +941,7 @@ class Shape(Drawing):
     __slots__ = ()
 
     def get_properties(self) -> ShapeProperties:
-        """Return the shape's anchor, geometry, text and paint.
+        """Return the shape's geometry, text and paint.
 
         Raises:
           NotFoundError: when the shape or its sheet was removed.
@@ -992,68 +957,52 @@ class Shape(Drawing):
     def update(
         self,
         *,
-        anchor_kind: Union[AnchorKind, Unchanged] = UNCHANGED,
-        edit_as: Union[AnchorEditAs, Unchanged] = UNCHANGED,
-        from_row: Union[int, Unchanged] = UNCHANGED,
-        from_col: Union[int, Unchanged] = UNCHANGED,
-        from_row_offset_emu: Union[int, Unchanged] = UNCHANGED,
-        from_col_offset_emu: Union[int, Unchanged] = UNCHANGED,
-        to_row: Union[int, Unchanged] = UNCHANGED,
-        to_col: Union[int, Unchanged] = UNCHANGED,
-        to_row_offset_emu: Union[int, Unchanged] = UNCHANGED,
-        to_col_offset_emu: Union[int, Unchanged] = UNCHANGED,
-        width_emu: Union[int, Unchanged] = UNCHANGED,
-        height_emu: Union[int, Unchanged] = UNCHANGED,
         name: Union[str, Unchanged] = UNCHANGED,
+        description: Union[str, None, Unchanged] = UNCHANGED,
+        hidden: Union[bool, Unchanged] = UNCHANGED,
+        anchor: Union[DrawingAnchorInput, Unchanged] = UNCHANGED,
         preset_geometry: Union[str, Unchanged] = UNCHANGED,
         text: Union[str, Unchanged] = UNCHANGED,
         text_box: Union[bool, Unchanged] = UNCHANGED,
-        fill_kind: Union[ShapePaint, None, Unchanged] = UNCHANGED,
-        fill_color: Union[ColorInput, None, Unchanged] = UNCHANGED,
-        line_kind: Union[ShapePaint, None, Unchanged] = UNCHANGED,
-        line_color: Union[ColorInput, None, Unchanged] = UNCHANGED,
+        fill_kind: Union[ShapePaint, Unchanged] = UNCHANGED,
+        fill_color: Union[ColorInput, Unchanged] = UNCHANGED,
+        line_kind: Union[ShapePaint, Unchanged] = UNCHANGED,
+        line_color: Union[ColorInput, Unchanged] = UNCHANGED,
         line_width_pt: Union[float, Unchanged] = UNCHANGED,
         rotation_deg: Union[float, Unchanged] = UNCHANGED,
-        hidden: Union[bool, Unchanged] = UNCHANGED,
     ) -> None:
-        """Apply the arguments that are given to the shape, the name and anchor included; the rest of its XML is kept.
+        """Apply the arguments that are given to the shape; the rest of its XML is kept.
 
-        An argument left at :data:`UNCHANGED` keeps its value. ``fill_kind``,
-        ``line_kind``, ``fill_color`` and ``line_color`` also take ``None``, which
-        removes the shape's own fill or outline so the one its style names applies;
-        such a shape reads ``None`` for them. The anchor is
-        applied as a whole when ``anchor_kind`` is given, and its kind cannot
-        change. Text applies to a shape only and keeps the first paragraph's
-        properties and first run's formatting.
+        An argument left at :data:`UNCHANGED` keeps its value. ``name``, ``description``, ``hidden`` and
+        ``anchor`` are those of :meth:`Drawing.update` and apply first; the other arguments are the shape's
+        own. ``fill_kind`` or ``line_kind`` of ``ShapePaint.DEFAULT`` removes the shape's own fill or outline
+        so the one its style names applies. Text applies to a shape only and keeps the first paragraph's
+        properties and first run's formatting. Every argument is checked before anything changes.
+
+        A ``fill_color`` or ``line_color`` of ``None`` beside a given kind other than ``ShapePaint.SOLID`` is how
+        a read reports no colour and is ignored.
 
         Raises:
-          TypeError: when an argument other than ``fill_kind`` / ``line_kind`` /
-            ``fill_color`` / ``line_color`` is ``None``, an anchor argument (``edit_as``, ``from_*``,
-            ``to_*``, ``width_emu``, ``height_emu``) is given without ``anchor_kind``, or
-            ``fill_color`` / ``line_color`` without ``fill_kind`` / ``line_kind``.
+          TypeError: when an argument other than ``description`` is ``None`` or has the wrong type.
         """
         arguments = dict(locals())
-        paint = ("fill_kind", "line_kind", "fill_color", "line_color")
-        cleared = [key for key in paint if arguments[key] is None]
-        given = _present(arguments, _SHAPE_UPDATE_NAMES, absent=paint)
-        if "anchor_kind" not in given:
-            stray = [key for key in _SHAPE_ANCHOR_NAMES if key in given]
-            if stray:
-                raise TypeError(f"formulon: {', '.join(stray)} need anchor_kind")
+        # A colour of None beside a kind other than SOLID is not specified, so a read record passes back.
+        absent = tuple(
+            color
+            for kind, color in (("fill_kind", "fill_color"), ("line_kind", "line_color"))
+            if arguments[kind] is not UNCHANGED and arguments[kind] is not None and arguments[kind] != ShapePaint.SOLID
+        )
+        given = _present(arguments, _COMMON_UPDATE_NAMES + _SHAPE_UPDATE_NAMES, absent, _CLEARABLE_COMMON_NAMES)
         h, sheet, object_id = self._at()
-        values = {key: given.get(key) for key in _SHAPE_UPDATE_NAMES}
-        if values["edit_as"] is None:
-            values["edit_as"] = AnchorEditAs.TWO_CELL
-        for key in _SHAPE_ANCHOR_NAMES[1:]:
-            if values[key] is None:
-                values[key] = 0
         with _ArgScope() as scope:
-            ptr = _pack_shape(scope, **values, clear=cleared)
-            _check(LIB.fm_sheet_update_shape(h, sheet, object_id, ptr))
-
-    def rename(self, name: str) -> None:
-        """Rename the shape. Duplicate names are allowed; ``name`` must be non-empty."""
-        _rename(self, name)
+            common = _common_patch(scope, given)
+            kind_ptr = 0
+            if any(key in given for key in _SHAPE_UPDATE_NAMES):
+                kind_ptr = _pack_shape_patch(scope, *(given.get(key) for key in _SHAPE_UPDATE_NAMES))
+            if common:
+                _check(LIB.fm_sheet_update_drawing(h, sheet, object_id, common))
+            if kind_ptr:
+                _check(LIB.fm_sheet_update_shape(h, sheet, object_id, kind_ptr))
 
     def set_z_order(self, z_order_index: int) -> None:
         """Make the shape item ``z_order_index`` of :meth:`Sheet.list_drawings`.
@@ -1076,16 +1025,16 @@ class Slicer(Drawing):
     Add one with :meth:`Sheet.add_slicer`.
     Removing its table or sheet removes the slicer.
 
-    A slicer has :meth:`update` and :meth:`set_z_order` but no ``rename`` or
-    ``snapshot``: its name is the key that ties the frame to the slicer part
-    and cannot change, and a snapshot would have to capture parts outside the
-    drawing (the slicer part, its cache and extension data).
+    A slicer has no ``snapshot``: a snapshot would have to capture parts
+    outside the drawing (the slicer part, its cache and extension data), and
+    its name is the key that ties the frame to the slicer part, so
+    :meth:`update` refuses to change it.
     """
 
     __slots__ = ()
 
     def get_properties(self) -> SlicerProperties:
-        """Return the slicer's caption, cache, table column, layout and anchor.
+        """Return the slicer's caption, cache, table column and layout.
 
         Raises:
           NotFoundError: when the slicer or its sheet was removed.
@@ -1101,14 +1050,10 @@ class Slicer(Drawing):
     def update(
         self,
         *,
-        from_row: Union[int, Unchanged] = UNCHANGED,
-        from_col: Union[int, Unchanged] = UNCHANGED,
-        to_row: Union[int, Unchanged] = UNCHANGED,
-        to_col: Union[int, Unchanged] = UNCHANGED,
-        from_row_offset_emu: Union[int, Unchanged] = UNCHANGED,
-        from_col_offset_emu: Union[int, Unchanged] = UNCHANGED,
-        to_row_offset_emu: Union[int, Unchanged] = UNCHANGED,
-        to_col_offset_emu: Union[int, Unchanged] = UNCHANGED,
+        name: Union[str, Unchanged] = UNCHANGED,
+        description: Union[str, None, Unchanged] = UNCHANGED,
+        hidden: Union[bool, Unchanged] = UNCHANGED,
+        anchor: Union[DrawingAnchorInput, Unchanged] = UNCHANGED,
         caption: Union[str, Unchanged] = UNCHANGED,
         style: Union[str, None, Unchanged] = UNCHANGED,
         column_count: Union[int, Unchanged] = UNCHANGED,
@@ -1116,39 +1061,33 @@ class Slicer(Drawing):
         sort_order: Union[SlicerSortOrder, Unchanged] = UNCHANGED,
         cross_filter: Union[SlicerCrossFilter, Unchanged] = UNCHANGED,
     ) -> None:
-        """Apply the arguments that are given to the slicer, the anchor included; the rest of its XML is kept.
+        """Apply the arguments that are given to the slicer; the rest of its XML is kept.
 
-        An argument left at :data:`UNCHANGED` keeps its value; ``style=None``
-        removes the style. The four ``from_*`` / ``to_*`` cells, given
-        together, move the slicer's two-cell frame (0-based cells plus EMU
-        offsets); the EMU offsets apply only with them.
+        An argument left at :data:`UNCHANGED` keeps its value; ``style=None`` removes the style and
+        ``description=None`` the description.
+        ``description``, ``hidden`` and ``anchor`` are those of :meth:`Drawing.update` and apply first; the
+        frame stays two-cell. A ``name`` is refused: it keys the frame to the slicer part. Every argument is
+        checked before anything changes.
 
         Raises:
-          TypeError: when an argument other than ``style`` is ``None``, the
-            four cells are not given together, or an offset is given without them.
+          TypeError: when an argument other than ``style`` or ``description`` is ``None`` or has the wrong type.
+          FormulonError: with ``PRECONDITION_FAILED`` when ``name`` is given.
         """
-        given = _present(dict(locals()), _SLICER_UPDATE_NAMES, absent=("style",))
-        corners = ("from_row", "from_col", "to_row", "to_col")
-        anchor: Optional[Tuple[int, ...]] = None
-        if any(key in given for key in _SLICER_UPDATE_NAMES[:8]):
-            if any(key not in given for key in corners):
-                raise TypeError("formulon: from_row, from_col, to_row and to_col move the frame together")
-            anchor = tuple(given.get(key, 0) for key in _SLICER_UPDATE_NAMES[:8])
-        style = given.get("style", "" if style is None else None)
+        arguments = dict(locals())
+        clear = ["style"] if style is None else []
+        given = _present(
+            arguments, _COMMON_UPDATE_NAMES + _SLICER_UPDATE_NAMES, absent=("style",), clearable=_CLEARABLE_COMMON_NAMES
+        )
         h, sheet, object_id = self._at()
         with _ArgScope() as scope:
-            ptr = _pack_slicer(
-                scope,
-                None,
-                given.get("caption"),
-                style,
-                given.get("column_count"),
-                given.get("row_height_emu"),
-                anchor,
-                given.get("sort_order"),
-                given.get("cross_filter"),
-            )
-            _check(LIB.fm_sheet_update_slicer(h, sheet, object_id, ptr))
+            common = _common_patch(scope, given)
+            kind_ptr = 0
+            if clear or any(key in given for key in _SLICER_UPDATE_NAMES):
+                kind_ptr = _pack_slicer_patch(scope, *(given.get(key) for key in _SLICER_UPDATE_NAMES), clear=clear)
+            if common:
+                _check(LIB.fm_sheet_update_drawing(h, sheet, object_id, common))
+            if kind_ptr:
+                _check(LIB.fm_sheet_update_slicer(h, sheet, object_id, kind_ptr))
 
     def set_z_order(self, z_order_index: int) -> None:
         """Make the slicer item ``z_order_index`` of :meth:`Sheet.list_drawings`.

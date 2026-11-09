@@ -219,8 +219,8 @@ function makePivotWorkbook(Workbook) {
     wb.pivotCache(cacheId).setRecordValue(rec, 1, amount);
   }
   const pivot = wb.sheet(0).addPivot({ name: 'Pivot1', cacheId, anchor: { row: 0, col: 4 } });
-  wb.sheet(0).pivot(pivot).addField({ sourceName: 'Region', axis: 0 });
-  const amountField = wb.sheet(0).pivot(pivot).addField({ sourceName: 'Amount', axis: 2 });
+  wb.sheet(0).pivot(pivot).addField({ fieldIndex: 'Region', axis: 0 });
+  const amountField = wb.sheet(0).pivot(pivot).addField({ fieldIndex: 'Amount', axis: 2 });
   wb.sheet(0).pivot(pivot).addDataField({
     name: 'Sum of Amount',
     fieldIndex: amountField,
@@ -231,8 +231,7 @@ function makePivotWorkbook(Workbook) {
 
 // greaterThan on a double payload: the shape pivotFilterAt must read back.
 const PIVOT_FILTER = Object.freeze({
-  axis: 0,
-  fieldName: 'Region',
+  fieldIndex: 'Region',
   type: 1,
   value: 15,
 });
@@ -244,8 +243,7 @@ test('pivotFilterAt reads back an added filter field for field', async () => {
     wb.sheet(0).pivot(pivot).addFilter(PIVOT_FILTER);
     assert.equal(wb.sheet(0).pivot(pivot).listFilters().length, 1);
     const got = wb.sheet(0).pivot(pivot).listFilters()[0];
-    assert.equal(got.axis, PIVOT_FILTER.axis);
-    assert.equal(got.fieldName, PIVOT_FILTER.fieldName);
+    assert.equal(got.fieldIndex, 0);
     assert.equal(got.type, PIVOT_FILTER.type);
     assert.equal(got.value, PIVOT_FILTER.value);
   } finally {
@@ -283,7 +281,7 @@ test('pivot filters survive save/load', async () => {
     // The filter is written as `<filters>` and decodes back into the list.
     assert.equal(reloaded.sheet(0).pivot(0).listFilters().length, 1);
     const got = reloaded.sheet(0).pivot(0).listFilters()[0];
-    assert.equal(got.fieldName, PIVOT_FILTER.fieldName);
+    assert.equal(got.fieldIndex, 0);
     assert.equal(got.type, PIVOT_FILTER.type);
     assert.equal(got.value, PIVOT_FILTER.value);
   } finally {
@@ -306,8 +304,8 @@ test('a required pivot spec string field left out of the object is rejected, not
   const { wb, pivot } = makePivotWorkbook(Module.Workbook);
   try {
     const fieldCountBefore = wb.sheet(0).pivot(pivot).listFields().length;
-    // no `sourceName`
-    expectFailure(() => wb.sheet(0).pivot(pivot).addField({ axis: 0 }), Module.StatusCode.BindingNullPointer);
+    // no `fieldIndex`
+    assert.throws(() => wb.sheet(0).pivot(pivot).addField({ axis: 0 }), TypeError);
     assert.equal(wb.sheet(0).pivot(pivot).listFields().length, fieldCountBefore, 'no field must have been added');
 
     // `name` is optional: an omitted one is derived from the workbook profile.
@@ -317,11 +315,8 @@ test('a required pivot spec string field left out of the object is rejected, not
     assert.equal(wb.sheet(0).pivot(pivot).listDataFields()[dataField].name, 'Sum of Region');
 
     const filterCountBefore = wb.sheet(0).pivot(pivot).listFilters().length;
-    // no `fieldName`
-    expectFailure(
-      () => wb.sheet(0).pivot(pivot).addFilter({ axis: 0, type: 1, value: 15 }),
-      Module.StatusCode.BindingNullPointer,
-    );
+    // no `fieldIndex`
+    assert.throws(() => wb.sheet(0).pivot(pivot).addFilter({ type: 1, value: 15 }), TypeError);
     assert.equal(wb.sheet(0).pivot(pivot).listFilters().length, filterCountBefore, 'no filter must have been added');
   } finally {
     wb.dispose();
@@ -755,8 +750,8 @@ test('pivotFieldAdd binds by cache column name and a null axis takes a field off
       for (const [col, value] of [0, 0, sales, 1].entries()) wb.pivotCache(cacheId).setRecordValue(rec, col, value);
     }
     const pivot = wb.sheet(0).addPivot({ name: 'PT', cacheId, anchor: { row: 0, col: 6 } });
-    const region = wb.sheet(0).pivot(pivot).addField({ sourceName: 'Region', axis: 0 });
-    const sales = wb.sheet(0).pivot(pivot).addField({ sourceName: 'Sales', axis: 2 });
+    const region = wb.sheet(0).pivot(pivot).addField({ fieldIndex: 'Region', axis: 0 });
+    const sales = wb.sheet(0).pivot(pivot).addField({ fieldIndex: 'Sales', axis: 2 });
     assert.equal(region, 0);
     assert.equal(sales, 2);
     assert.equal(wb.sheet(0).pivot(pivot).listFields().length, 4);
@@ -789,18 +784,18 @@ test('copySheet names the copy automatically or explicitly and reports bad argum
   try {
     wb.sheet(0).setNumber(0, 0, 5);
     wb.sheet(0).setFormula(0, 1, '=A1*2');
-    const auto = wb.copySheet(0, 1);
+    const auto = wb.copySheet(0, { insertBefore: 1 });
     assert.equal(auto.index, 1);
     assert.equal(auto.name, 'Sheet1 (2)');
-    const named = wb.copySheet(0, 0, 'Archive');
+    const named = wb.copySheet(0, { insertBefore: 0, newName: 'Archive' });
     assert.equal(named, wb.sheet(0));
     assert.equal(wb.sheet(0).name, 'Archive');
     assert.equal(auto.index, 2);
     wb.recalc();
     assert.equal(wb.sheet(0).getTypedValue(0, 1).number, 10);
-    expectFailure(() => wb.copySheet(9, 0), Module.StatusCode.SheetIndexOutOfRange);
-    expectFailure(() => wb.copySheet(0, 9), Module.StatusCode.SheetIndexOutOfRange);
-    expectFailure(() => wb.copySheet(0, 0, ''), Module.StatusCode.InvalidSheetName);
+    expectFailure(() => wb.copySheet(9, { insertBefore: 0 }), Module.StatusCode.SheetIndexOutOfRange);
+    expectFailure(() => wb.copySheet(0, { insertBefore: 9 }), Module.StatusCode.SheetIndexOutOfRange);
+    expectFailure(() => wb.copySheet(0, { insertBefore: 0, newName: '' }), Module.StatusCode.InvalidSheetName);
     assert.equal(wb.listSheets().length, 3);
   } finally {
     wb.dispose();

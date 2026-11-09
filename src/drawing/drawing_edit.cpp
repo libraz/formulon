@@ -10,6 +10,8 @@
 #include "drawing/drawing_edit_internal.h"
 #include "drawing/drawing_geometry.h"
 #include "drawing/image_header.h"
+#include "drawing/shape_edit.h"
+#include "drawing/slicer_edit.h"
 #include "io/ooxml/package_validator.h"
 #include "io/ooxml/part_dom.h"
 #include "io/ooxml/part_graph.h"
@@ -580,15 +582,35 @@ Expected<std::uint32_t, Error> insert_graphic_frame(Workbook& wb, std::size_t sh
   return id;
 }
 
+namespace {
+
+bool is_slicer_object(const pugi::xml_node& anchor, DrawingObjectKind /*kind*/) {
+  return is_slicer_frame(anchor);
+}
+
+}  // namespace
+
 Expected<void, Error> remove_drawing(Workbook& wb, std::size_t sheet, std::uint32_t object_id) {
   pugi::xml_document doc;
   ASSIGN_OR_RETURN(std::string path, load_object_drawing(wb, sheet, doc));
   const pugi::xml_node root = doc.document_element();
-  const pugi::xml_node target = find_drawing_object(root, object_id, is_editable);
-  if (!target) {
+  if (const pugi::xml_node target = find_drawing_object(root, object_id, is_editable)) {
+    return drop_objects(wb, path, doc, {top_of(root, target)});
+  }
+  // A slicer frame is checked before the shapes: its `mc:Fallback` holds a shape with the same id.
+  if (find_drawing_object(root, object_id, is_slicer_object)) {
+    ASSIGN_OR_RETURN(std::vector<SlicerInfo> slicers, list_slicers(wb, sheet));
+    for (std::size_t i = 0; i < slicers.size(); ++i) {
+      if (slicers[i].object.object_id == object_id) {
+        return remove_slicer(wb, sheet, i);
+      }
+    }
     return refuse_object(root, object_id, kNoObject);
   }
-  return drop_objects(wb, path, doc, {top_of(root, target)});
+  if (find_drawing_object(root, object_id, is_shape_kind)) {
+    return remove_shape(wb, sheet, object_id);
+  }
+  return refuse_object(root, object_id, kNoObject);
 }
 
 void shift_drawing_anchors(Workbook& wb, std::size_t sheet, std::uint32_t index, std::uint32_t count, bool is_delete,
@@ -767,6 +789,243 @@ Expected<void, Error> set_drawing_z_order(Workbook& wb, std::size_t sheet, std::
     root.append_move(top);
   }
   return io::ooxml::store_part_dom(wb, path, doc);
+}
+
+namespace {
+
+constexpr const char* kNoDrawingObject = "drawing: no picture, chart, shape or slicer with that id";
+
+enum class DrawingRoute { kFrame, kShape, kSlicer };
+
+bool any_anchor_field(const DrawingAnchorPatch& p) {
+  return p.kind || p.edit_as || p.from_row || p.from_col || p.from_row_off || p.from_col_off || p.to_row || p.to_col ||
+         p.to_row_off || p.to_col_off || p.width_emu || p.height_emu;
+}
+
+// `patch` merged into the anchor of `obj` (whose box is `box_cx` x `box_cy`).
+// `to` is meaningful for a two-cell result, `cx`/`cy` for any other.
+struct MergedAnchor {
+  AnchorKind kind = AnchorKind::kTwoCell;
+  EditAs edit_as = EditAs::kTwoCell;
+  AnchorPoint from;
+  AnchorPoint to;
+  std::int64_t cx = 0;
+  std::int64_t cy = 0;
+};
+
+Expected<MergedAnchor, Error> merge_anchor(const Geometry& geo, const DrawingObject& obj, std::int64_t box_cx,
+                                           std::int64_t box_cy, const DrawingAnchorPatch& p) {
+  MergedAnchor m;
+  m.kind = p.kind.value_or(obj.anchor_kind);
+  m.edit_as = p.edit_as.value_or(obj.edit_as);
+  if (p.kind && m.kind == AnchorKind::kAbsolute) {
+    return invalid("drawing: objects are anchored to one or two cells");
+  }
+  const bool two = m.kind == AnchorKind::kTwoCell;
+  const bool has_to = p.to_row || p.to_col || p.to_row_off || p.to_col_off;
+  const bool has_size = p.width_emu || p.height_emu;
+  // A read anchor carries both the end marker and the size: the field the resulting kind holds wins.
+  if (two && has_size && !has_to) {
+    return invalid("drawing: a two-cell anchor takes its size from its markers");
+  }
+  if (!two && has_to && !has_size) {
+    return invalid("drawing: only a two-cell anchor has an end marker");
+  }
+  m.from = obj.from;
+  m.from.row = p.from_row.value_or(m.from.row);
+  m.from.col = p.from_col.value_or(m.from.col);
+  m.from.row_off = p.from_row_off.value_or(m.from.row_off);
+  m.from.col_off = p.from_col_off.value_or(m.from.col_off);
+  if (!two) {
+    m.cx = p.width_emu.value_or(box_cx);
+    m.cy = p.height_emu.value_or(box_cy);
+    return m;
+  }
+  if (obj.anchor_kind == AnchorKind::kTwoCell) {
+    m.to = obj.to;
+  } else {
+    // A converted anchor ends where the current size reaches from the new start.
+    m.to = m.from;
+    if (m.from.row >= Sheet::kMaxRows || m.from.col >= Sheet::kMaxCols ||
+        !geo.advance(true, m.to.row, m.to.row_off, box_cy) || !geo.advance(false, m.to.col, m.to.col_off, box_cx)) {
+      return invalid("drawing: anchor lies outside the sheet");
+    }
+  }
+  m.to.row = p.to_row.value_or(m.to.row);
+  m.to.col = p.to_col.value_or(m.to.col);
+  m.to.row_off = p.to_row_off.value_or(m.to.row_off);
+  m.to.col_off = p.to_col_off.value_or(m.to.col_off);
+  if (m.to.row >= Sheet::kMaxRows || m.to.col >= Sheet::kMaxCols) {
+    return invalid("drawing: object offset, size or cell out of range");
+  }
+  m.cx = geo.span(false, m.from, m.to);
+  m.cy = geo.span(true, m.from, m.to);
+  if (m.cx < 0 || m.cy < 0) {
+    return invalid("drawing: the end marker lies before the start marker");
+  }
+  return m;
+}
+
+// Routes a merged anchor through the edit of the object's kind.
+Expected<void, Error> apply_merged_anchor(Workbook& wb, std::size_t sheet, std::uint32_t object_id, DrawingRoute route,
+                                          const MergedAnchor& m, bool swapped) {
+  switch (route) {
+    case DrawingRoute::kFrame: {
+      DrawingAnchor a;
+      a.anchor_kind = m.kind;
+      a.edit_as = m.edit_as;
+      a.row = m.from.row;
+      a.col = m.from.col;
+      a.row_off = m.from.row_off;
+      a.col_off = m.from.col_off;
+      // `set_drawing_anchor` takes the unrotated size of a picture laid out in a swapped box.
+      a.width_emu = swapped ? m.cy : m.cx;
+      a.height_emu = swapped ? m.cx : m.cy;
+      if (a.width_emu == 0 || a.height_emu == 0) {
+        return invalid("drawing: an object needs a non-zero size");
+      }
+      return set_drawing_anchor(wb, sheet, object_id, a);
+    }
+    case DrawingRoute::kShape: {
+      ShapeSpec spec;
+      spec.fields = shape_field::kAnchor;
+      spec.anchor_kind = m.kind;
+      spec.edit_as = m.edit_as;
+      spec.from = m.from;
+      spec.to = m.to;
+      spec.cx = m.cx;
+      spec.cy = m.cy;
+      return update_shape(wb, sheet, object_id, spec);
+    }
+    case DrawingRoute::kSlicer: {
+      if (m.kind != AnchorKind::kTwoCell) {
+        return invalid("drawing: a slicer frame is anchored to two cells");
+      }
+      ASSIGN_OR_RETURN(std::vector<SlicerInfo> slicers, list_slicers(wb, sheet));
+      for (std::size_t i = 0; i < slicers.size(); ++i) {
+        if (slicers[i].object.object_id == object_id) {
+          SlicerSpec spec;
+          spec.fields = slicer_field::kAnchor;
+          spec.from = m.from;
+          spec.to = m.to;
+          return update_slicer(wb, sheet, i, spec);
+        }
+      }
+      return not_found(kNoDrawingObject);
+    }
+  }
+  return invalid(kNoDrawingObject);
+}
+
+// Every `cNvPr` of `top` carrying `object_id`: both branches of an `mc:AlternateContent`.
+std::vector<pugi::xml_node> object_cnvprs(const pugi::xml_node& top, std::uint32_t object_id) {
+  std::vector<pugi::xml_node> out;
+  for_each_element(top, [&](const pugi::xml_node& node) {
+    if (local_name(node) == "cNvPr" && node.attribute("id").as_uint() == object_id) {
+      out.push_back(node);
+    }
+  });
+  return out;
+}
+
+// Applies the `cNvPr` fields of `patch`; true when anything changed.
+bool apply_cnvpr_fields(pugi::xml_node cnvpr, const DrawingCommonPatch& patch) {
+  bool changed = false;
+  if (patch.name && std::string_view(cnvpr.attribute("name").value()) != *patch.name) {
+    io::set_attr(cnvpr, "name", *patch.name);
+    changed = true;
+  }
+  if (patch.description && std::string_view(cnvpr.attribute("descr").value()) != *patch.description) {
+    if (patch.description->empty()) {
+      cnvpr.remove_attribute("descr");
+    } else {
+      io::set_attr(cnvpr, "descr", *patch.description);
+    }
+    changed = true;
+  }
+  if (patch.hidden && cnvpr.attribute("hidden").as_bool() != *patch.hidden) {
+    set_cnvpr_hidden(cnvpr, *patch.hidden);
+    changed = true;
+  }
+  return changed;
+}
+
+}  // namespace
+
+Expected<void, Error> update_drawing(Workbook& wb, std::size_t sheet, std::uint32_t object_id,
+                                     const DrawingCommonPatch& patch) {
+  pugi::xml_document doc;
+  ASSIGN_OR_RETURN(std::string path, load_object_drawing(wb, sheet, doc));
+  pugi::xml_node root = doc.document_element();
+  DrawingRoute route = DrawingRoute::kFrame;
+  // A slicer frame is checked before the shapes: its `mc:Fallback` holds a shape with the same id.
+  pugi::xml_node target = find_drawing_object(root, object_id, is_slicer_object);
+  if (target) {
+    route = DrawingRoute::kSlicer;
+  } else if ((target = find_drawing_object(root, object_id, is_editable))) {
+    route = DrawingRoute::kFrame;
+  } else if ((target = find_drawing_object(root, object_id, is_shape_kind))) {
+    route = DrawingRoute::kShape;
+  } else {
+    return refuse_object(root, object_id, kNoDrawingObject);
+  }
+  if (patch.name && route == DrawingRoute::kSlicer) {
+    return make_error(FormulonErrorCode::kPreconditionFailed, "drawing: a slicer's name ties it to its slicer part");
+  }
+  if (patch.name && patch.name->empty()) {
+    return invalid("drawing: an object name cannot be empty");
+  }
+
+  std::optional<MergedAnchor> merged;
+  bool swapped = false;
+  if (any_anchor_field(patch.anchor)) {
+    const Geometry geo(wb, wb.sheet(sheet));
+    const DrawingObject obj = read_drawing_object(target, {});
+    swapped =
+        route == DrawingRoute::kFrame && obj.kind == DrawingObjectKind::kPicture && swaps_box(object_xfrm(target));
+    std::int64_t box_cx = swapped ? obj.cy : obj.cx;
+    std::int64_t box_cy = swapped ? obj.cx : obj.cy;
+    if (obj.anchor_kind == AnchorKind::kTwoCell) {
+      box_cx = geo.span(false, obj.from, obj.to);
+      box_cy = geo.span(true, obj.from, obj.to);
+    }
+    ASSIGN_OR_RETURN(MergedAnchor m, merge_anchor(geo, obj, box_cx, box_cy, patch.anchor));
+    merged = m;
+  }
+
+  // The anchor edit stores the part itself; keep the bytes so a later failure leaves the drawing as it was.
+  std::vector<std::uint8_t> before;
+  for (const PassthroughPart& part : wb.passthrough_parts()) {
+    if (part.path == path) {
+      before = part.bytes;
+      break;
+    }
+  }
+  if (merged) {
+    RETURN_IF_ERROR(apply_merged_anchor(wb, sheet, object_id, route, *merged, swapped));
+    RETURN_IF_ERROR(load_drawing_part(wb, path, doc));
+    root = doc.document_element();
+    const auto any_kind = [](DrawingObjectKind) { return true; };
+    target = find_drawing_object(root, object_id, +any_kind);
+    if (!target) {
+      (void)wb.replace_passthrough_part(path, std::move(before));
+      return not_found(kNoDrawingObject);
+    }
+  }
+  bool changed = false;
+  for (pugi::xml_node cnvpr : object_cnvprs(top_of(root, target), object_id)) {
+    changed = apply_cnvpr_fields(cnvpr, patch) || changed;
+  }
+  if (!changed) {
+    return Expected<void, Error>::Ok();
+  }
+  if (auto stored = io::ooxml::store_part_dom(wb, path, doc); !stored) {
+    if (merged) {
+      (void)wb.replace_passthrough_part(path, std::move(before));
+    }
+    return stored;
+  }
+  return Expected<void, Error>::Ok();
 }
 
 }  // namespace formulon

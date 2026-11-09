@@ -24,6 +24,45 @@ export function registerStyles(Module, test) {
     }
   });
 
+  test('setFill / setBorder / setCellXf / setDxf overwrite a record in place from the getter record', () => {
+    const wb = Module.Workbook.createDefault();
+    try {
+      const fill = wb.addFill({ pattern: 1, foreground: rgb(0xffff0000), background: rgb(0xff000000) });
+      const border = wb.addBorder({ left: { style: 1, color: rgb(0xff000000) } });
+      const font = wb.addFont({ name: 'Arial', sizePt: 12 });
+      const xf = wb.addCellXf({ fontIndex: font, fillIndex: fill, borderIndex: border, wrapText: true });
+      const dxf = wb.addDxf({ font: { bold: true } });
+      const counts = [wb.getFillCount(), wb.getBorderCount(), wb.getCellXfCount(), wb.getDxfCount()];
+
+      // Read, modify and write back the same record.
+      const readFill = { ...wb.getFill(fill), foreground: rgb(0xff00ff00) };
+      wb.setFill(fill, readFill);
+      assert.equal(wb.getFill(fill).foreground.argb, 0xff00ff00);
+
+      const readBorder = wb.getBorder(border);
+      wb.setBorder(border, { ...readBorder, left: { style: 2, color: rgb(0xff0000ff) } });
+      assert.equal(wb.getBorder(border).left.style, 2);
+
+      const readXf = { ...wb.getCellXf(xf), wrapText: false };
+      wb.setCellXf(xf, readXf);
+      assert.equal(wb.getCellXf(xf).wrapText, false);
+
+      wb.setDxf(dxf, { font: { italic: true } });
+      assert.equal(wb.getDxf(dxf).font.italic, true);
+      assert.equal(wb.getDxf(dxf).font.bold, null);
+
+      assert.deepEqual([wb.getFillCount(), wb.getBorderCount(), wb.getCellXfCount(), wb.getDxfCount()], counts);
+
+      // A slot past the table is refused, whatever the record.
+      expectFailure(() => wb.setFill(wb.getFillCount(), readFill), StatusCode.IndexOutOfRange);
+      expectFailure(() => wb.setBorder(wb.getBorderCount(), readBorder), StatusCode.IndexOutOfRange);
+      expectFailure(() => wb.setCellXf(wb.getCellXfCount(), readXf), StatusCode.IndexOutOfRange);
+      expectFailure(() => wb.setDxf(wb.getDxfCount(), {}), StatusCode.IndexOutOfRange);
+    } finally {
+      wb.delete();
+    }
+  });
+
   test('getCellXfIndex reads null for an absent cell and the stored index for a present one', () => {
     const wb = Module.Workbook.createDefault();
     try {

@@ -3,8 +3,10 @@
 // validations, and sheet protection.
 
 #include <algorithm>
+#include <array>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <utility>
 
@@ -34,7 +36,9 @@ using formulon::c_api::parts::not_found;
 using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::patch_op_ok;
 using formulon::c_api::parts::patch_op_ok_without_clear;
+using formulon::c_api::parts::publish_scratch;
 using formulon::c_api::parts::set_binding_error;
+using formulon::c_api::parts::set_last_error;
 using formulon::c_api::parts::store_cstr;
 using formulon::c_api::parts::text_or_empty;
 using formulon::c_api::parts::to_cell_rect;
@@ -564,6 +568,58 @@ extern "C" fm_status_t fm_sheet_get_validation_count(const fm_workbook_t* wb, st
   return sheet_item_count(wb, sheet_index, out_count, [](const formulon::Sheet& s) { return s.validations().size(); });
 }
 
+namespace {
+
+/// Writes validation `index` of `sheet_index` into `out`; its strings live in the read scratch.
+void fill_validation(const fm_workbook_t* wb, std::size_t sheet_index, std::size_t index, fm_data_validation_t* out) {
+  const formulon::Workbook& book = wb->workbook();
+  const formulon::DataValidation& v = book.sheet(sheet_index).validations()[index];
+  // Ranges are layout-compatible (see static_asserts above), so we hand
+  // out the engine-side vector buffer directly. The lifetime contract
+  // documented in the header (valid until the next mutation that
+  // touches the validation list) follows naturally from
+  // `std::vector::data()` invalidation rules.
+  out->ranges = v.ranges.empty() ? nullptr : reinterpret_cast<const fm_cell_rect_t*>(v.ranges.data());
+  out->range_count = static_cast<std::uint32_t>(v.ranges.size());
+  out->type = v.type;
+  out->op = validation_operator_to_c(v.op);
+  out->error_style = v.error_style;
+  out->allow_blank = tristate_of(v.allow_blank);
+  out->show_input_message = tristate_of(v.show_input_message);
+  out->show_error_message = tristate_of(v.show_error_message);
+  out->show_in_cell_dropdown = tristate_of(v.show_dropdown);
+  formulon::c_api::parts::TextStore& store = fresh_read_scratch(wb);
+  out->id =
+      store_cstr(store, formulon::c_api::parts::format_runtime_id(book.validation_runtime_id(sheet_index, index)));
+  out->formula1 = nullptr;
+  out->formula2 = nullptr;
+  if (!v.formula1.empty()) {
+    out->formula1 = store_cstr(store, with_formula_prefix(display_formula_text(book, v.formula1, {})));
+  }
+  if (!v.formula2.empty()) {
+    out->formula2 = store_cstr(store, with_formula_prefix(display_formula_text(book, v.formula2, {})));
+  }
+  out->error_title = c_str_or_null(v.error_title);
+  out->error_message = c_str_or_null(v.error_message);
+  out->prompt_title = c_str_or_null(v.prompt_title);
+  out->prompt_message = c_str_or_null(v.prompt_message);
+}
+
+/// Position of the validation with id text `id` on `sheet_index`; nullopt when the text names none.
+std::optional<std::size_t> locate_validation(const fm_workbook_t* wb, std::size_t sheet_index, const char* id) {
+  std::uint32_t runtime_id = 0;
+  if (!formulon::c_api::parts::parse_runtime_id(id, &runtime_id)) {
+    return std::nullopt;
+  }
+  return wb->workbook().find_validation(sheet_index, runtime_id);
+}
+
+fm_status_t validation_not_found(const char* id) {
+  return not_found("no data validation has that id", "id=" + std::string(id));
+}
+
+}  // namespace
+
 extern "C" fm_status_t fm_sheet_get_validation_at(const fm_workbook_t* wb, std::size_t sheet_index,
                                                   std::size_t validation_index, fm_data_validation_t* out) {
   clear_last_error();
@@ -580,45 +636,43 @@ extern "C" fm_status_t fm_sheet_get_validation_at(const fm_workbook_t* wb, std::
   if (auto rc = check_index(validation_index, list.size(), "validation_index"); rc != 0) {
     return rc;
   }
-  const formulon::DataValidation& v = list[validation_index];
-  // Ranges are layout-compatible (see static_asserts above), so we hand
-  // out the engine-side vector buffer directly. The lifetime contract
-  // documented in the header (valid until the next mutation that
-  // touches the validation list) follows naturally from
-  // `std::vector::data()` invalidation rules.
-  out->ranges = v.ranges.empty() ? nullptr : reinterpret_cast<const fm_cell_rect_t*>(v.ranges.data());
-  out->range_count = static_cast<std::uint32_t>(v.ranges.size());
-  out->type = v.type;
-  out->op = validation_operator_to_c(v.op);
-  out->error_style = v.error_style;
-  out->allow_blank = tristate_of(v.allow_blank);
-  out->show_input_message = tristate_of(v.show_input_message);
-  out->show_error_message = tristate_of(v.show_error_message);
-  out->show_in_cell_dropdown = tristate_of(v.show_dropdown);
-  const formulon::Workbook& book = wb->workbook();
-  out->formula1 = nullptr;
-  out->formula2 = nullptr;
-  if (!v.formula1.empty() || !v.formula2.empty()) {
-    formulon::c_api::parts::TextStore& store = fresh_read_scratch(wb);
-    if (!v.formula1.empty()) {
-      out->formula1 = store_cstr(store, with_formula_prefix(display_formula_text(book, v.formula1, {})));
-    }
-    if (!v.formula2.empty()) {
-      out->formula2 = store_cstr(store, with_formula_prefix(display_formula_text(book, v.formula2, {})));
-    }
+  fill_validation(wb, sheet_index, validation_index, out);
+  return 0;
+}
+
+extern "C" fm_status_t fm_sheet_get_validation(const fm_workbook_t* wb, std::size_t sheet_index, const char* id,
+                                               std::int32_t* out_present, fm_data_validation_t* out) {
+  clear_last_error();
+  if (id == nullptr || out_present == nullptr || out == nullptr) {
+    return null_argument(id == nullptr ? "id" : (out_present == nullptr ? "out_present" : "out"));
   }
-  out->error_title = c_str_or_null(v.error_title);
-  out->error_message = c_str_or_null(v.error_message);
-  out->prompt_title = c_str_or_null(v.prompt_title);
-  out->prompt_message = c_str_or_null(v.prompt_message);
+  if (auto rc = check_record_size(*out); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_utf8({id}); rc != 0) {
+    return rc;
+  }
+  const std::optional<std::size_t> index = locate_validation(wb, sheet_index, id);
+  if (!index.has_value()) {
+    const std::uint32_t struct_size = out->struct_size;
+    *out = FM_STRUCT_INIT(fm_data_validation_t);
+    out->struct_size = struct_size;
+    *out_present = 0;
+    return 0;
+  }
+  fill_validation(wb, sheet_index, *index, out);
+  *out_present = 1;
   return 0;
 }
 
 extern "C" fm_status_t fm_sheet_add_validation(fm_workbook_t* wb, std::size_t sheet_index,
-                                               const fm_data_validation_t* v, std::size_t* out_index) {
+                                               const fm_data_validation_t* v, const char** out_validation_id) {
   clear_last_error();
-  if (v == nullptr || out_index == nullptr) {
-    return null_argument(v == nullptr ? "v" : "out_index");
+  if (v == nullptr || out_validation_id == nullptr) {
+    return null_argument(v == nullptr ? "v" : "out_validation_id");
   }
   if (auto rc = check_record_size(*v); rc != 0) {
     return rc;
@@ -662,16 +716,178 @@ extern "C" fm_status_t fm_sheet_add_validation(fm_workbook_t* wb, std::size_t sh
       *formula_slots[i] = ingest_entered_formula(wb, formula_fields[i]);
     }
   }
-  auto& validations = wb->workbook().sheet(sheet_index).mutable_validations();
-  validations.push_back(std::move(out));
-  *out_index = validations.size() - 1U;
+  auto added = wb->workbook().add_validation(sheet_index, std::move(out));
+  if (!added) {
+    return set_last_error(added.error());
+  }
+  *out_validation_id = publish_scratch(wb, formulon::c_api::parts::format_runtime_id(added.value()));
   return 0;
 }
 
-extern "C" fm_status_t fm_sheet_remove_validation(fm_workbook_t* wb, std::size_t sheet_index, std::size_t index) {
+namespace {
+
+/// A patch string field: checked text and, for a formula, its stored spelling.
+struct PatchedText {
+  fm_patch_op_t op;
+  const char* text;
+  const char* field;
+  bool is_formula;
+  std::string stored;
+};
+
+fm_status_t check_validation_patch(const fm_data_validation_patch_t& p, std::array<PatchedText, 6>* texts) {
+  if (!formulon::c_api::parts::patch_op_ok_without_clear(p.ranges_op) ||
+      !formulon::c_api::parts::patch_op_ok_without_clear(p.type_op) ||
+      !formulon::c_api::parts::patch_op_ok_without_clear(p.op_op) ||
+      !formulon::c_api::parts::patch_op_ok_without_clear(p.error_style_op) ||
+      !formulon::c_api::parts::patch_op_ok_without_clear(p.allow_blank_op) ||
+      !formulon::c_api::parts::patch_op_ok_without_clear(p.show_input_message_op) ||
+      !formulon::c_api::parts::patch_op_ok_without_clear(p.show_error_message_op) ||
+      !formulon::c_api::parts::patch_op_ok_without_clear(p.show_in_cell_dropdown_op)) {
+    return formulon::c_api::parts::invalid_argument("patch op is not KEEP or SET for a field that cannot be cleared");
+  }
+  if (p.ranges_op == FM_PATCH_OP_SET) {
+    if (auto rc = formulon::c_api::parts::check_rect_list(p.ranges, p.range_count); rc != 0) {
+      return rc;
+    }
+  }
+  struct Domain {
+    fm_patch_op_t op;
+    std::int32_t value;
+    std::int64_t max;
+    const char* field;
+    std::int64_t min;
+  };
+  const Domain domains[] = {
+      {p.type_op, p.type, 7, "type", 0},
+      {p.op_op, p.op, FM_COMPARISON_OPERATOR_GREATER_THAN_OR_EQUAL, "op", 0},
+      {p.error_style_op, p.error_style, 2, "error_style", 0},
+      {p.allow_blank_op, p.allow_blank, FM_TRISTATE_TRUE, "allow_blank", FM_TRISTATE_DEFAULT},
+      {p.show_input_message_op, p.show_input_message, FM_TRISTATE_TRUE, "show_input_message", FM_TRISTATE_DEFAULT},
+      {p.show_error_message_op, p.show_error_message, FM_TRISTATE_TRUE, "show_error_message", FM_TRISTATE_DEFAULT},
+      {p.show_in_cell_dropdown_op, p.show_in_cell_dropdown, FM_TRISTATE_TRUE, "show_in_cell_dropdown",
+       FM_TRISTATE_DEFAULT},
+  };
+  for (const Domain& d : domains) {
+    if (d.op == FM_PATCH_OP_SET) {
+      if (auto rc = formulon::c_api::parts::check_enum_domain(d.value, d.min, d.max, d.field); rc != 0) {
+        return rc;
+      }
+    }
+  }
+  *texts = {{{p.formula1_op, p.formula1, "field=formula1", true, {}},
+             {p.formula2_op, p.formula2, "field=formula2", true, {}},
+             {p.error_title_op, p.error_title, "field=error_title", false, {}},
+             {p.error_message_op, p.error_message, "field=error_message", false, {}},
+             {p.prompt_title_op, p.prompt_title, "field=prompt_title", false, {}},
+             {p.prompt_message_op, p.prompt_message, "field=prompt_message", false, {}}}};
+  for (PatchedText& t : *texts) {
+    if (!formulon::c_api::parts::patch_op_ok(t.op)) {
+      return formulon::c_api::parts::invalid_argument("patch op is outside KEEP, CLEAR and SET", t.field);
+    }
+    if (t.op != FM_PATCH_OP_SET) {
+      continue;
+    }
+    if (t.text == nullptr) {
+      return formulon::c_api::parts::invalid_argument("SET needs a non-NULL string", t.field);
+    }
+    if (auto rc = check_utf8({t.text}); rc != 0) {
+      return rc;
+    }
+    if (t.is_formula) {
+      if (auto rc = check_stored_formula(t.text, t.field, &t.stored); rc != 0) {
+        return rc;
+      }
+    }
+  }
+  return 0;
+}
+
+}  // namespace
+
+extern "C" fm_status_t fm_sheet_update_validation(fm_workbook_t* wb, std::size_t sheet_index, const char* id,
+                                                  const fm_data_validation_patch_t* patch) {
   clear_last_error();
-  return remove_sheet_item_at(wb, sheet_index, index,
-                              [](formulon::Sheet& s) -> decltype(auto) { return s.mutable_validations(); });
+  if (wb == nullptr || id == nullptr || patch == nullptr) {
+    return null_argument(wb == nullptr ? "wb" : (id == nullptr ? "id" : "patch"));
+  }
+  if (auto rc = check_record_size(*patch); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_utf8({id}); rc != 0) {
+    return rc;
+  }
+  const std::optional<std::size_t> index = locate_validation(wb, sheet_index, id);
+  if (!index.has_value()) {
+    return validation_not_found(id);
+  }
+  std::array<PatchedText, 6> texts{};
+  if (auto rc = check_validation_patch(*patch, &texts); rc != 0) {
+    return rc;
+  }
+  formulon::DataValidation& v = wb->workbook().sheet(sheet_index).mutable_validations()[*index];
+  if (patch->ranges_op == FM_PATCH_OP_SET) {
+    v.ranges.clear();
+    v.ranges.reserve(patch->range_count);
+    for (std::size_t i = 0; i < patch->range_count; ++i) {
+      v.ranges.push_back(to_merge_range(patch->ranges[i]));
+    }
+  }
+  if (patch->type_op == FM_PATCH_OP_SET) {
+    v.type = static_cast<std::uint8_t>(patch->type);
+  }
+  if (patch->op_op == FM_PATCH_OP_SET) {
+    v.op = validation_operator_from_c(patch->op);
+  }
+  if (patch->error_style_op == FM_PATCH_OP_SET) {
+    v.error_style = static_cast<std::uint8_t>(patch->error_style);
+  }
+  if (patch->allow_blank_op == FM_PATCH_OP_SET) {
+    v.allow_blank = tristate_to_bool(patch->allow_blank);
+  }
+  if (patch->show_input_message_op == FM_PATCH_OP_SET) {
+    v.show_input_message = tristate_to_bool(patch->show_input_message);
+  }
+  if (patch->show_error_message_op == FM_PATCH_OP_SET) {
+    v.show_error_message = tristate_to_bool(patch->show_error_message);
+  }
+  if (patch->show_in_cell_dropdown_op == FM_PATCH_OP_SET) {
+    v.show_dropdown = tristate_to_bool(patch->show_in_cell_dropdown);
+  }
+  std::string* const slots[] = {&v.formula1,      &v.formula2,     &v.error_title,
+                                &v.error_message, &v.prompt_title, &v.prompt_message};
+  for (std::size_t i = 0; i < texts.size(); ++i) {
+    const PatchedText& t = texts[i];
+    if (t.op == FM_PATCH_OP_CLEAR) {
+      slots[i]->clear();
+    } else if (t.op == FM_PATCH_OP_SET) {
+      *slots[i] = t.is_formula ? ingest_entered_formula(wb, t.text) : std::string(t.text);
+    }
+  }
+  return 0;
+}
+
+extern "C" fm_status_t fm_sheet_remove_validation(fm_workbook_t* wb, std::size_t sheet_index, const char* id) {
+  clear_last_error();
+  if (wb == nullptr || id == nullptr) {
+    return null_argument(wb == nullptr ? "wb" : "id");
+  }
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_utf8({id}); rc != 0) {
+    return rc;
+  }
+  const std::optional<std::size_t> index = locate_validation(wb, sheet_index, id);
+  if (!index.has_value()) {
+    return validation_not_found(id);
+  }
+  std::uint32_t runtime_id = 0;
+  formulon::c_api::parts::parse_runtime_id(id, &runtime_id);
+  return finish_status(wb->workbook().remove_validation(sheet_index, runtime_id));
 }
 
 extern "C" fm_status_t fm_sheet_clear_validations(fm_workbook_t* wb, std::size_t sheet_index) {

@@ -255,8 +255,8 @@ def _add_pivot(wb: Workbook):
         cache.set_record_value(record, 0, region)
         cache.set_record_value(record, 1, amount)
     pivot = ws.add_pivot(PivotInput(name="P1", cache_id=cache.cache_id, anchor=CellAddress(0, 4)))
-    pivot.add_field(PivotFieldInput(source_name="Region", axis=PivotAxis.ROW))
-    amount = pivot.add_field(PivotFieldInput(source_name="Amount", axis=PivotAxis.VALUE))
+    pivot.add_field(PivotFieldInput(field_index="Region", axis=PivotAxis.ROW))
+    amount = pivot.add_field(PivotFieldInput(field_index="Amount", axis=PivotAxis.VALUE))
     pivot.add_data_field(PivotDataFieldInput(name="Sum", field_index=amount, aggregation=PivotAggregation.SUM))
     return cache, pivot
 
@@ -273,10 +273,9 @@ class HandleCopyTests(unittest.TestCase):
         shape = ws.add_shape(
             ShapeInput(
                 preset_geometry="rect",
-                anchor_kind=formulon.AnchorKind.ONE_CELL,
-                from_row=2,
-                width_emu=914400,
-                height_emu=457200,
+                anchor=formulon.DrawingAnchorInput(
+                    kind=formulon.AnchorKind.ONE_CELL, from_row=2, width_emu=914400, height_emu=457200
+                ),
             )
         )
         return {

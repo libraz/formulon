@@ -13,11 +13,11 @@
 #include <vector>
 
 #include "sheet.h"
+#include "sheet_name.h"
 #include "table.h"
 #include "utils/a1_ref.h"
 #include "utils/error.h"
 #include "utils/expected.h"
-#include "utils/strings.h"
 #include "value.h"
 #include "workbook.h"
 
@@ -30,7 +30,7 @@ namespace {
 /// `t.columns` on success, `-1u` on failure.
 std::uint32_t find_column_index(const TableMetadata& t, std::string_view name) noexcept {
   for (std::size_t i = 0; i < t.columns.size(); ++i) {
-    if (strings::case_insensitive_eq(t.columns[i].name, name)) {
+    if (collection_names::equal(t.columns[i].name, name)) {
       return static_cast<std::uint32_t>(i);
     }
   }
@@ -84,8 +84,8 @@ Expected<StructuredRefRange, ErrorCode> resolve_structured_ref(const StructuredR
   // allows them to differ; accept either to match Excel.
   const TableMetadata* table = nullptr;
   for (const TableMetadata& t : wb.tables()) {
-    if (strings::case_insensitive_eq(t.display_name, selector.table_name) ||
-        strings::case_insensitive_eq(t.name, selector.table_name)) {
+    if (collection_names::equal(t.display_name, selector.table_name) ||
+        collection_names::equal(t.name, selector.table_name)) {
       table = &t;
       break;
     }

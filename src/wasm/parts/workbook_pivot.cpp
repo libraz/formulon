@@ -648,19 +648,28 @@ void JsWorkbook::pivotFieldClearItems(uint32_t sheet, uint32_t pivotIndex, uint3
                                : kBindingInvalidHandle);
 }
 
-void JsWorkbook::pivotFieldAddSubtotalFn(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex, uint32_t agg) {
+void JsWorkbook::pivotFieldSetSubtotalFns(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex,
+                                          emscripten::val aggregations) {
   if (handle_ == nullptr) {
     record_invalid_handle();
     return;
   }
-  fm_status_t rc = fm_sheet_add_pivot_field_subtotal_function(handle_, sheet, pivotIndex, fieldIndex,
-                                                              static_cast<std::int32_t>(agg));
-  succeeded(rc);
-}
-
-void JsWorkbook::pivotFieldClearSubtotalFns(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex) {
-  succeeded(handle_ != nullptr ? fm_sheet_clear_pivot_field_subtotal_functions(handle_, sheet, pivotIndex, fieldIndex)
-                               : kBindingInvalidHandle);
+  JsNarrowNumericReader reader("Pivot.setFieldSubtotalFunctions");
+  if (!reader.is_array(aggregations, "aggregations")) {
+    record_type_error("subtotal functions must be an array");
+    return;
+  }
+  const uint32_t length = reader.length(aggregations, "aggregations");
+  std::vector<int32_t> list;
+  list.reserve(length);
+  for (uint32_t i = 0; i < length && reader.ok(); ++i) {
+    list.push_back(reader.i32_value(reader.array_element(aggregations, i, "aggregations"), 0, "aggregations"));
+  }
+  if (!reader.ok()) {
+    return;
+  }
+  succeeded(fm_sheet_set_pivot_field_subtotal_functions(handle_, sheet, pivotIndex, fieldIndex,
+                                                        list.empty() ? nullptr : list.data(), list.size()));
 }
 
 void JsWorkbook::pivotFieldSetDateGroup(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex, uint32_t periods,
@@ -869,16 +878,9 @@ uint32_t JsWorkbook::pivotFilterAdd(uint32_t sheet, uint32_t pivotIndex, emscrip
     record_invalid_handle();
     return 0U;
   }
-  // `fieldName` is required; an omitted key passes NULL through rather
-  // than `js_pull_string`'s empty-string default, which the C ABI's own
-  // required-field check does not treat the same as a missing argument.
-  std::string field_name;
   JsNarrowNumericReader reader("Pivot.addFilter");
-  const char* field_name_ptr = reader.optional_string(spec, "fieldName", field_name, "pivotFilter.fieldName");
-
   fm_pivot_filter_t c_spec = FM_STRUCT_INIT(fm_pivot_filter_t);
-  c_spec.axis = static_cast<fm_pivot_axis_t>(reader.required_u32(spec, "axis", "pivotFilter.axis"));
-  c_spec.field_name = field_name_ptr;
+  c_spec.field_index = reader.required_u32(spec, "fieldIndex", "pivotFilter.fieldIndex");
   c_spec.type = static_cast<fm_pivot_filter_kind_t>(reader.required_u32(spec, "type", "pivotFilter.type"));
   // A count filter takes a whole number; every other numeric operand is a double.
   const bool count_type =
@@ -916,8 +918,7 @@ emscripten::val JsWorkbook::pivotFilterAt(uint32_t sheet, uint32_t pivotIndex, u
     return emscripten::val::undefined();
   }
   emscripten::val o = emscripten::val::object();
-  o.set("axis", static_cast<int32_t>(spec.axis));
-  js_set_cstr(o, "fieldName", spec.field_name);
+  o.set("fieldIndex", spec.field_index);
   o.set("type", static_cast<int32_t>(spec.type));
   o.set("dataFieldIndex", spec.data_field_index);
   set_filter_operand(o, "value", spec.value_kind, spec.value_int, spec.value_double, spec.value_text);

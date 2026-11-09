@@ -628,6 +628,15 @@ uint32_t JsWorkbook::addFill(emscripten::val record) {
       [&](fm_workbook_t* handle, std::size_t* idx) { return fm_workbook_add_fill(handle, &fr, idx); });
 }
 
+void JsWorkbook::setFill(uint32_t fill_index, emscripten::val record) {
+  std::vector<fm_gradient_stop_t> stops;
+  fm_fill_t fr{};
+  set_style_record(
+      "setFill", record,
+      [&](JsNarrowNumericReader& reader, const emscripten::val& rec) { fr = js_pull_fill_record(rec, &stops, reader); },
+      [&](fm_workbook_t* handle) { return fm_workbook_set_fill(handle, fill_index, &fr); });
+}
+
 uint32_t JsWorkbook::addBorder(emscripten::val record) {
   fm_border_t br{};
   return add_style_record(
@@ -636,6 +645,16 @@ uint32_t JsWorkbook::addBorder(emscripten::val record) {
         br = js_pull_border_record(rec, kBorderFields, reader);
       },
       [&](fm_workbook_t* handle, std::size_t* idx) { return fm_workbook_add_border(handle, &br, idx); });
+}
+
+void JsWorkbook::setBorder(uint32_t border_index, emscripten::val record) {
+  fm_border_t br{};
+  set_style_record(
+      "setBorder", record,
+      [&](JsNarrowNumericReader& reader, const emscripten::val& rec) {
+        br = js_pull_border_record(rec, kBorderFields, reader);
+      },
+      [&](fm_workbook_t* handle) { return fm_workbook_set_border(handle, border_index, &br); });
 }
 
 uint32_t JsWorkbook::addNumFmt(const std::string& format_code) {
@@ -655,48 +674,76 @@ uint32_t JsWorkbook::addXf(emscripten::val record) {
       [&](fm_workbook_t* handle, std::size_t* idx) { return add_indexed(fm_workbook_add_cell_xf, handle, &xf, idx); });
 }
 
-uint32_t JsWorkbook::addDxf(emscripten::val record) {
+void JsWorkbook::setXf(uint32_t xf_index, emscripten::val record) {
+  fm_cell_xf_t xf{};
+  set_style_record(
+      "setCellXf", record,
+      [&](JsNarrowNumericReader& reader, const emscripten::val& rec) { js_pull_cell_xf(rec, &xf, reader); },
+      [&](fm_workbook_t* handle) { return fm_workbook_set_cell_xf(handle, xf_index, &xf); });
+}
+
+namespace {
+
+// Owns the strings and gradient stops a pulled `fm_dxf_t` borrows.
+struct DxfStore {
   std::string font_name;
   std::string num_fmt_code;
   std::string alignment_xml;
   std::string protection_xml;
   std::vector<fm_gradient_stop_t> fill_stops;
+};
+
+void pull_dxf(JsNarrowNumericReader& reader, const emscripten::val& rec, DxfStore& store, fm_dxf_t& dxf) {
+  emscripten::val font = reader.value(rec, "font", "dxf.font");
+  if (js_value_present(font)) {
+    dxf.has_font = 1;
+    js_pull_font_record(font, &store.font_name, &dxf.font, reader);
+  }
+
+  emscripten::val fill = reader.value(rec, "fill", "dxf.fill");
+  if (js_value_present(fill)) {
+    dxf.has_fill = 1;
+    dxf.fill = js_pull_fill_record(fill, &store.fill_stops, reader);
+  }
+
+  emscripten::val border = reader.value(rec, "border", "dxf.border");
+  if (js_value_present(border)) {
+    dxf.has_border = 1;
+    dxf.border = js_pull_border_record(border, kDxfBorderFields, reader);
+  }
+
+  dxf.number_format = reader.optional_string(rec, "numberFormat", store.num_fmt_code, "dxf.numberFormat");
+
+  const emscripten::val alignment = reader.value(rec, "alignment", "dxf.alignment");
+  if (js_value_present(alignment)) {
+    store.alignment_xml = dxf_alignment_xml(reader, alignment);
+  }
+  const emscripten::val protection = reader.value(rec, "protection", "dxf.protection");
+  if (js_value_present(protection)) {
+    store.protection_xml = dxf_protection_xml(reader, protection);
+  }
+  dxf.alignment_xml = store.alignment_xml.c_str();
+  dxf.protection_xml = store.protection_xml.c_str();
+}
+
+}  // namespace
+
+uint32_t JsWorkbook::addDxf(emscripten::val record) {
+  DxfStore store;
   fm_dxf_t dxf{};
   return add_style_record(
       "addDxf", record,
-      [&](JsNarrowNumericReader& reader, const emscripten::val& rec) {
-        emscripten::val font = reader.value(rec, "font", "dxf.font");
-        if (js_value_present(font)) {
-          dxf.has_font = 1;
-          js_pull_font_record(font, &font_name, &dxf.font, reader);
-        }
-
-        emscripten::val fill = reader.value(rec, "fill", "dxf.fill");
-        if (js_value_present(fill)) {
-          dxf.has_fill = 1;
-          dxf.fill = js_pull_fill_record(fill, &fill_stops, reader);
-        }
-
-        emscripten::val border = reader.value(rec, "border", "dxf.border");
-        if (js_value_present(border)) {
-          dxf.has_border = 1;
-          dxf.border = js_pull_border_record(border, kDxfBorderFields, reader);
-        }
-
-        dxf.number_format = reader.optional_string(rec, "numberFormat", num_fmt_code, "dxf.numberFormat");
-
-        const emscripten::val alignment = reader.value(rec, "alignment", "dxf.alignment");
-        if (js_value_present(alignment)) {
-          alignment_xml = dxf_alignment_xml(reader, alignment);
-        }
-        const emscripten::val protection = reader.value(rec, "protection", "dxf.protection");
-        if (js_value_present(protection)) {
-          protection_xml = dxf_protection_xml(reader, protection);
-        }
-        dxf.alignment_xml = alignment_xml.c_str();
-        dxf.protection_xml = protection_xml.c_str();
-      },
+      [&](JsNarrowNumericReader& reader, const emscripten::val& rec) { pull_dxf(reader, rec, store, dxf); },
       [&](fm_workbook_t* handle, std::size_t* idx) { return add_indexed(fm_workbook_add_dxf, handle, &dxf, idx); });
+}
+
+void JsWorkbook::setDxf(uint32_t dxf_index, emscripten::val record) {
+  DxfStore store;
+  fm_dxf_t dxf{};
+  set_style_record(
+      "setDxf", record,
+      [&](JsNarrowNumericReader& reader, const emscripten::val& rec) { pull_dxf(reader, rec, store, dxf); },
+      [&](fm_workbook_t* handle) { return fm_workbook_set_dxf(handle, dxf_index, &dxf); });
 }
 
 // ---- Style count accessors ---------------------------------------------

@@ -181,3 +181,24 @@ extern "C" fm_status_t fm_get_locale_error_name_at(const char* profile_id, size_
   *out_measured = formulon::is_measured_profile(profile) && formulon::error_name_measured(index) ? 1 : 0;
   return 0;
 }
+
+extern "C" fm_status_t fm_get_profile_id_count(size_t* out_count) {
+  clear_last_error();
+  if (out_count == nullptr) {
+    return null_argument("out_count");
+  }
+  *out_count = formulon::detail::kExcelProfileIds.size();
+  return 0;
+}
+
+extern "C" fm_status_t fm_get_profile_id_at(size_t index, const char** out_profile_id) {
+  clear_last_error();
+  if (out_profile_id == nullptr) {
+    return null_argument("out_profile_id");
+  }
+  if (auto rc = check_index(index, formulon::detail::kExcelProfileIds.size(), "index"); rc != 0) {
+    return rc;
+  }
+  *out_profile_id = formulon::detail::kExcelProfileIds[index].id;
+  return 0;
+}

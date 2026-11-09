@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "c_api/formulon_c.h"
+#include "formulon_c_out_index.h"
 #include "formulon_c_test_helpers.h"
 #include "gtest/gtest.h"
 
@@ -37,7 +38,7 @@ TEST(FormulonCApiErrorText, SheetIndexOutOfRangeNamesTheIndexAndTheSheetCount) {
   ExpectNoInternalNames(Context());
 
   size_t added = 0;
-  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Second", &added), 0);
+  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Second", append_position(wb.handle), &added), 0);
   ASSERT_EQ(fm_sheet_get_cell_count(wb.handle, 7, &count), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(Message(), "sheet index 7 is out of range (2 sheets)");
   EXPECT_EQ(Context(), "sheet_index=7 sheet_count=2");

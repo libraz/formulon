@@ -54,7 +54,8 @@ const salesWorkbook = (mod) => {
   return wb;
 };
 
-const anchor = { fromRow: 4, fromCol: 3, toRow: 14, toCol: 5 };
+const box = { fromRow: 4, fromCol: 3, toRow: 14, toCol: 5 };
+const anchor = { anchor: box };
 
 test('slicers add, list, update, remove and round-trip', async () => {
   const mod = await load();
@@ -85,7 +86,6 @@ test('slicers add, list, update, remove and round-trip', async () => {
   assert.equal(slicers.length, 1);
   const s = slicers[0].getProperties();
   assert.equal(s.objectId, addedId);
-  assert.equal(s.name, 'Product');
   assert.equal(s.caption, 'Pick a product');
   assert.equal(s.cacheName, 'Slicer_Product');
   assert.equal(s.tableName, 'Sales');
@@ -95,23 +95,38 @@ test('slicers add, list, update, remove and round-trip', async () => {
   assert.equal(s.rowHeightEmu, 241300);
   assert.equal(s.sortOrder, mod.SlicerSortOrder.Descending);
   assert.equal(s.crossFilter, mod.SlicerCrossFilter.None);
-  assert.equal(s.anchorKind, mod.AnchorKind.TwoCell);
-  assert.deepEqual([s.fromRow, s.fromCol, s.toRow, s.toCol], [4, 3, 14, 5]);
+  const common = slicers[0].getDrawingProperties();
+  assert.equal(common.name, 'Product');
+  assert.equal(slicers[0].name, 'Product');
+  assert.equal(common.anchor.kind, mod.AnchorKind.TwoCell);
+  assert.deepEqual(
+    [common.anchor.fromRow, common.anchor.fromCol, common.anchor.toRow, common.anchor.toCol],
+    [4, 3, 14, 5],
+  );
+  assert.equal(typeof common.anchor.editAs, 'number');
+  assert.ok(common.anchor.widthEmu > 0 && common.anchor.heightEmu > 0);
 
   // An update changes the named fields only; the frame follows row edits.
   loaded
     .sheet(0)
     .slicer(addedId)
-    .update({ caption: 'Renamed', style: '', columnCount: 1, fromRow: 0, fromCol: 3, toRow: 8, toCol: 5 });
+    .update({
+      caption: 'Renamed',
+      style: null,
+      columnCount: 1,
+      anchor: { fromRow: 0, fromCol: 3, toRow: 8, toCol: 5 },
+    });
   const found = loaded.sheet(0).slicer(addedId).getProperties();
   assert.equal(found.caption, 'Renamed');
-  loaded.sheet(0).insertRows(0, 3);
-  const moved = loaded.sheet(0).listSlicers()[0].getProperties();
+  loaded.sheet(0).insertRows(0, 2);
+  const movedHandle = loaded.sheet(0).listSlicers()[0];
+  const moved = movedHandle.getProperties();
+  const movedAnchor = movedHandle.getDrawingProperties().anchor;
   assert.equal(moved.caption, 'Renamed');
   assert.equal(moved.style, null);
   assert.equal(moved.columnCount, 1);
   assert.equal(moved.sortOrder, mod.SlicerSortOrder.Descending);
-  assert.deepEqual([moved.fromRow, moved.fromCol, moved.toRow, moved.toCol], [3, 3, 11, 5]);
+  assert.deepEqual([movedAnchor.fromRow, movedAnchor.fromCol, movedAnchor.toRow, movedAnchor.toCol], [3, 3, 11, 5]);
 
   const handle = loaded.sheet(0).slicer(addedId);
   loaded.sheet(0).removeDrawing(addedId);
@@ -153,10 +168,14 @@ test('slicer arguments are validated', async () => {
   expectFailure(() => wb.sheet(0).addSlicer('Missing', 0, anchor));
   expectFailure(() => wb.sheet(0).addSlicer('Sales', 2, anchor));
   expectFailure(() => wb.sheet(5).addSlicer('Sales', 0, anchor));
-  expectFailure(() => wb.sheet(0).addSlicer('Sales', 0, { ...anchor, toRow: 1 }));
-  expectFailure(() => wb.sheet(0).addSlicer('Sales', 0, { ...anchor, columnCount: 0 }));
+  expectFailure(() => wb.sheet(0).addSlicer('Sales', 0, { anchor: { ...box, toRow: 1 } }));
+  expectFailure(() => wb.sheet(0).addSlicer('Sales', 0, { ...anchor, columnCount: 20001 }));
   expectFailure(() => wb.sheet(0).addSlicer('Sales', 0, { ...anchor, sortOrder: 5 }));
   assert.equal(wb.sheet(0).listSlicers().length, 0);
+  // A zero column count on add is the default.
+  const defaulted = wb.sheet(0).addSlicer('Sales', 0, { ...anchor, columnCount: 0 });
+  assert.equal(defaulted.getProperties().columnCount, 1);
+  wb.sheet(0).removeDrawing(defaulted);
   const added = wb.sheet(0).addSlicer('Sales', 0, anchor);
   expectFailure(() =>
     wb
@@ -164,15 +183,16 @@ test('slicer arguments are validated', async () => {
       .slicer(added.objectId + 1)
       .update({ caption: 'x' }),
   );
-  // `name` is a record key the patch ignores, so the slicer keeps its name.
-  const nameBefore = wb.sheet(0).slicer(added).getProperties().name;
-  wb.sheet(0).slicer(added).update({ name: 'x' });
-  assert.equal(wb.sheet(0).slicer(added).getProperties().name, nameBefore);
+  // A slicer's name keys its cache, so the common patch refuses to set it.
+  const nameBefore = wb.sheet(0).slicer(added).name;
+  expectFailure(() => wb.sheet(0).slicer(added).update({ name: 'x' }), mod.StatusCode.PreconditionFailed);
+  assert.equal(wb.sheet(0).slicer(added).name, nameBefore);
   assert.throws(() => wb.sheet(0).slicer(added).update({ unknownKey: 1 }), TypeError);
   assert.throws(() => wb.sheet(0).slicer(added).update({ toRow: 3 }), TypeError);
+  assert.throws(() => wb.sheet(0).slicer(added).update({ fromRow: 3 }), TypeError);
   assert.throws(() => wb.sheet(0).slicer(added).update({ caption: null }), TypeError);
   expectFailure(() => wb.sheet(0).removeDrawing(added.objectId + 1));
   expectFailure(() => wb.sheet(5).slicer(added).getProperties());
-  assert.throws(() => wb.sheet(0).addSlicer('Sales', 0, { ...anchor, fromRow: -1 }), RangeError);
+  assert.throws(() => wb.sheet(0).addSlicer('Sales', 0, { anchor: { ...box, fromRow: -1 } }), RangeError);
   release(wb);
 });

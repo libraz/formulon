@@ -22,8 +22,8 @@ export function createFormulon(options) {
 }
 export default createFormulon;
 
-// The value tables, the error classes and `enumName`; everything else is a member of the
-// `Formulon` object.
+// The value tables, the error classes, `enumName`, `toNative` and `mergeFunctionMetadata`;
+// everything else is a member of the `Formulon` object.
 export {
   AnchorEditAs,
   AnchorKind,
@@ -83,6 +83,7 @@ export {
   ImageFormat,
   LocaleDateOrder,
   LogLevel,
+  mergeFunctionMetadata,
   PageOrder,
   PageOrientation,
   PaperSize,
@@ -115,6 +116,7 @@ export {
   TableStyleElementType,
   TableTotalsRowFunction,
   ThemeSource,
+  toNative,
   UnderlineStyle,
   ValidationErrorStyle,
   ValidationType,

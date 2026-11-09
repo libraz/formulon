@@ -13,6 +13,7 @@
 #include "auto_filter.h"
 #include "data_table.h"
 #include "merge_range.h"
+#include "utils/runtime_id.h"
 #include "value.h"
 
 namespace formulon {
@@ -205,6 +206,9 @@ struct DataValidation {
   /// Attributes not represented by the model (`imeMode`, ...) retained as
   /// escaped ` name="value"` pairs.
   std::string extra_attrs;
+  /// Session identity of the rule, never saved; assigned by
+  /// `Workbook::validation_runtime_id` (see `utils/runtime_id.h`).
+  mutable RuntimeId runtime_id;
 };
 
 /// A registered spill region produced by a dynamic-array formula.

@@ -44,7 +44,7 @@ from .api_conventions import (
     _struct_field_comments,
     c_verb,
 )
-from .api_conventions_arguments import _targets
+from .api_conventions_arguments import _address_params, _targets
 from .api_conventions_bindings import (
     BINDING_SURFACES,
     JS_SURFACES,
@@ -255,10 +255,19 @@ def _rule_numeric_enums(ctx: Context) -> Iterable[Violation]:
 _NOT_INPUT_RECORDS = frozenset({"CellRect", "SheetRect", "CellAddress", "CellRef", "CivilTime", "ErrorValue"})
 
 
+def _typedef_names(ctx: Context) -> Set[str]:
+    """JS names the ledger records as `kind: typedef`: options objects and aliases, not input records."""
+    return {
+        e["js"] for e in ctx.ledger.entries.values()
+        if isinstance(e, dict) and e.get("kind") == "typedef" and isinstance(e.get("js"), str)
+    }  # fmt: skip
+
+
 def _takes_record(ctx: Context, entry: dict) -> Optional[str]:
     """The record or input type the JS twin of an op takes as its value, or None."""
     decls = surfaces(ctx).js["wasm"].decls
     addressed = _address_positions(entry)
+    typedefs = _typedef_names(ctx)
     for target in _targets(ctx, entry, "wasm"):
         for position, (name, ptype) in enumerate(target.member.params):  # type: ignore[attr-defined]
             if position in addressed or _is_coordinate(name, True):
@@ -269,6 +278,7 @@ def _takes_record(ctx: Context, entry: dict) -> Optional[str]:
                     decl is not None
                     and decl.kind == "interface"
                     and alternative not in _NOT_INPUT_RECORDS
+                    and alternative not in typedefs
                     and not alternative.endswith("Patch")
                     and not any(m.is_method for m in decl.members)
                 ):
@@ -290,7 +300,9 @@ def _mentions(text: str, names: Iterable[str]) -> bool:
 def _rule_py_args(ctx: Context) -> Iterable[Violation]:
     """A Python `add_*` / `set_*` whose JS twin takes a record or input takes one positional dataclass argument;
     an `update_*` takes its keys keyword-only, each defaulting to `UNCHANGED`. A positional argument is a key when
-    it names a field of the `patch_record` dataclass, or, without one, when it is not a coordinate."""
+    it names a field of the `patch_record` dataclass, or, without one, when it is not a coordinate; an argument
+    the C or JS twin takes as the address is never a key. A JS options object the ledger records as a `typedef`
+    (not an input record) is spelled as keyword-only arguments in Python."""
     dataclasses = _dataclass_names(surfaces(ctx).py.classes)
     for key, entry in _ops(ctx):
         if not isinstance(entry.get("py"), str):
@@ -330,9 +342,10 @@ def _rule_py_args(ctx: Context) -> Iterable[Violation]:
                         )
                 ref = entry.get("ref_args") or [None]
                 record = surfaces(ctx).py.classes.get(entry.get("patch_record") or "")
+                address = _address_params(ctx, entry)
                 for position, (param, _) in enumerate(positional):
                     is_key = param in record.fields if record is not None else not _is_coordinate(param, False)
-                    if position != ref[0] and is_key:
+                    if position != ref[0] and param not in address and is_key:
                         yield _violation(
                             ctx,
                             "R39.py.args",

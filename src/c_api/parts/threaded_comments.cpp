@@ -13,6 +13,7 @@
 #include "c_api/parts/common.h"
 #include "c_api/parts/struct_v1_sizes.h"
 #include "sheet.h"
+#include "sheet_name.h"
 #include "threaded_comment.h"
 #include "utils/error.h"
 #include "workbook.h"
@@ -154,10 +155,11 @@ extern "C" fm_status_t fm_sheet_get_threaded_comment(const fm_workbook_t* wb, si
 }
 
 extern "C" fm_status_t fm_sheet_add_threaded_comment(fm_workbook_t* wb, size_t sheet_index,
-                                                     const fm_threaded_comment_t* comment) {
+                                                     const fm_threaded_comment_t* comment, const char** out_id) {
   clear_last_error();
-  if (comment == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "comment is NULL");
+  if (comment == nullptr || out_id == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             comment == nullptr ? "comment is NULL" : "out_id is NULL");
   }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
@@ -173,6 +175,12 @@ extern "C" fm_status_t fm_sheet_add_threaded_comment(fm_workbook_t* wb, size_t s
   if (auto rc = mentions_from_fm(comment->mentions, comment->mentions_count, &model.mentions); rc != 0) {
     return rc;
   }
+  if (comment->parent_id != nullptr && comment->parent_id[0] != '\0') {
+    const auto& list = wb->workbook().sheet(sheet_index).threaded_comments();
+    if (formulon::find_threaded_comment(list, comment->parent_id) == list.size()) {
+      return not_found("no threaded comment has that id", "parent_id=" + std::string(comment->parent_id));
+    }
+  }
   model.id = text_or_empty(comment->id);
   model.row = comment->row;
   model.col = comment->col;
@@ -181,7 +189,12 @@ extern "C" fm_status_t fm_sheet_add_threaded_comment(fm_workbook_t* wb, size_t s
   model.text = text_or_empty(comment->text);
   model.parent_id = text_or_empty(comment->parent_id);
   model.done = comment->done != 0;
-  return finish_status(wb->workbook().add_threaded_comment(sheet_index, std::move(model)));
+  auto added = wb->workbook().add_threaded_comment(sheet_index, std::move(model));
+  if (!added) {
+    return set_last_error(added.error());
+  }
+  *out_id = formulon::c_api::parts::publish_scratch(wb, std::move(added.value()));
+  return 0;
 }
 
 extern "C" fm_status_t fm_sheet_update_threaded_comment(fm_workbook_t* wb, size_t sheet_index, const char* id,
@@ -239,8 +252,7 @@ extern "C" fm_status_t fm_sheet_update_threaded_comment(fm_workbook_t* wb, size_
     return not_found("no threaded comment has that id", std::string("id=") + id);
   }
   if (set_done && !comments[index].parent_id.empty()) {
-    return set_binding_error(formulon::FormulonErrorCode::kThreadedCommentInvalid, "done is set on a reply",
-                             std::string("id=") + id);
+    return invalid_argument("done is set on a reply", std::string("id=") + id);
   }
   if (set_text || set_mentions) {
     std::string text = set_text ? std::string(patch->text) : comments[index].text;
@@ -324,7 +336,7 @@ extern "C" fm_status_t fm_workbook_get_person(const fm_workbook_t* wb, const cha
   out->struct_size = struct_size;
   const auto& persons = wb->workbook().persons();
   for (std::size_t i = 0; i < persons.size(); ++i) {
-    if (persons[i].id == id) {
+    if (formulon::collection_names::equal(persons[i].id, id)) {
       *out_present = 1;
       return fm_workbook_get_person_at(wb, i, out);
     }
@@ -360,7 +372,8 @@ extern "C" fm_status_t fm_workbook_remove_person(fm_workbook_t* wb, const char* 
     return rc;
   }
   const auto& people = wb->workbook().persons();
-  if (std::none_of(people.begin(), people.end(), [&](const formulon::Person& p) { return p.id == id; })) {
+  if (std::none_of(people.begin(), people.end(),
+                   [&](const formulon::Person& p) { return formulon::collection_names::equal(p.id, id); })) {
     return not_found("no person has that id", std::string("id=") + id);
   }
   return finish_status(wb->workbook().remove_person(id));

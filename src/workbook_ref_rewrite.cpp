@@ -341,8 +341,16 @@ void shift_retained_extension_ranges(Sheet& sheet, std::uint32_t index, std::uin
   const bool clones = !is_delete && index > 0U;
   const io::SparklineClone clone{row_axis, index - 1U, count};
   std::string ext_lst = sheet.ext_lst_xml();
-  if (io::remap_ext_lst_sqrefs(ext_lst, remap, clones ? &clone : nullptr, rewritten_formula)) {
+  std::vector<std::size_t> removed_groups;
+  if (io::remap_ext_lst_sqrefs(ext_lst, remap, clones ? &clone : nullptr, rewritten_formula, &removed_groups)) {
     sheet.set_ext_lst_xml(std::move(ext_lst));
+  }
+  // A dropped group takes its session id along; the ids of the groups after it stay theirs.
+  std::vector<RuntimeId>& group_ids = sheet.sparkline_group_ids();
+  for (const std::size_t position : removed_groups) {
+    if (position < group_ids.size()) {
+      group_ids.erase(group_ids.begin() + static_cast<std::ptrdiff_t>(position));
+    }
   }
   const StructuralEdit edit{index, count, is_delete, row_axis};
   io::remap_worksheet_children(sheet.mutable_raw_extensions(), edit);

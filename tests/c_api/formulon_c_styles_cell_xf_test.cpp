@@ -339,7 +339,7 @@ TEST(FormulonCApiStyles, NullInputRecordRejected) {
   EXPECT_EQ(fm_sheet_add_merge(wb.handle, 0, nullptr), kNull);
   EXPECT_EQ(fm_sheet_remove_merge(wb.handle, 0, nullptr), kNull);
   EXPECT_EQ(fm_sheet_get_merges_in_range(wb.handle, 0, nullptr, nullptr, 0, &merges_found), kNull);
-  EXPECT_EQ(fm_sheet_add_validation(wb.handle, 0, nullptr, ignored_index()), kNull);
+  EXPECT_EQ(fm_sheet_add_validation(wb.handle, 0, nullptr, ignored_id()), kNull);
 }
 
 namespace {
@@ -575,4 +575,36 @@ TEST(FormulonCApiStyles, AddCellXfDoesNotReuseARecordWithUnmodelledAttributes) {
       EXPECT_EQ(index, 1U);
     }
   }
+}
+
+TEST(FormulonCApiStyles, SetCellXfOverwritesTheSlotInPlace) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  std::size_t fill_index = 0;
+  ASSERT_EQ(fm_workbook_add_fill(wb.handle, record_arg(MakeRedFill()), &fill_index), 0);
+  fm_cell_xf_t xf{};
+  xf.fill_index = static_cast<uint32_t>(fill_index);
+  std::uint32_t xf_index = 0;
+  ASSERT_EQ(fm_workbook_add_cell_xf(wb.handle, &xf, &xf_index), 0);
+  std::size_t count_before = 0;
+  ASSERT_EQ(fm_workbook_get_cell_xf_count(wb.handle, &count_before), 0);
+
+  fm_cell_xf_t read{};
+  ASSERT_EQ(fm_workbook_get_cell_xf_at(wb.handle, xf_index, &read), 0);
+  read.has_wrap_text = 1;
+  read.wrap_text = 1;
+  ASSERT_EQ(fm_workbook_set_cell_xf(wb.handle, xf_index, &read), 0) << fm_get_last_error_message();
+
+  fm_cell_xf_t after{};
+  ASSERT_EQ(fm_workbook_get_cell_xf_at(wb.handle, xf_index, &after), 0);
+  EXPECT_EQ(after.wrap_text, 1);
+  EXPECT_EQ(after.fill_index, static_cast<uint32_t>(fill_index));
+  std::size_t count_after = 0;
+  ASSERT_EQ(fm_workbook_get_cell_xf_count(wb.handle, &count_after), 0);
+  EXPECT_EQ(count_after, count_before);
+
+  EXPECT_EQ(fm_workbook_set_cell_xf(wb.handle, static_cast<uint32_t>(count_after), &read),
+            FM_STATUS_INDEX_OUT_OF_RANGE);
+  read.fill_index = 0xFFFFU;
+  EXPECT_EQ(fm_workbook_set_cell_xf(wb.handle, xf_index, &read), FM_STATUS_INDEX_OUT_OF_RANGE);
 }

@@ -87,7 +87,7 @@ TEST(CApiCopySheet, ExplicitNameAndInsertBeforeFirst) {
 TEST(CApiCopySheet, AppendAtSheetCountAfterReindex) {
   WorkbookGuard wb;
   MakeSingleSheet(wb);
-  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Other", ignored_index()), 0);
+  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Other", append_position(wb.handle), ignored_index()), 0);
   std::size_t out = kSentinel;
   ASSERT_EQ(fm_workbook_copy_sheet(wb.handle, 0, 2, "Tail", &out), 0) << fm_get_last_error_message();
   EXPECT_EQ(out, 2U);
@@ -163,7 +163,7 @@ TEST(CApiCopySheet, SheetCountLimit) {
 TEST(CApiCopySheet, VeryHiddenSourceRefused) {
   WorkbookGuard wb;
   MakeSingleSheet(wb);
-  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Visible", ignored_index()), 0);
+  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Visible", append_position(wb.handle), ignored_index()), 0);
   ASSERT_EQ(SetViewVisibility(wb.handle, 0, FM_SHEET_VISIBILITY_VERY_HIDDEN), 0) << fm_get_last_error_message();
   ExpectCopyStatus(wb.handle, 0, 2, nullptr, Code(FormulonErrorCode::kPreconditionFailed));
 }
@@ -180,15 +180,13 @@ TEST(CApiCopySheet, SlicerSourceRefusedWithoutChange) {
   ASSERT_EQ(AddTable(wb.handle, 0, record_arg(fm_cell_rect_t{0, 0, 1, 1}), "Sales", columns, 2, "TableStyleMedium2", 1,
                      0, &table),
             0);
-  fm_slicer_patch_t spec = FM_STRUCT_INIT(fm_slicer_patch_t);
-  spec.from_row_op = FM_PATCH_OP_SET;
-  spec.from_row = 4;
-  spec.from_col_op = FM_PATCH_OP_SET;
-  spec.from_col = 3;
-  spec.to_row_op = FM_PATCH_OP_SET;
-  spec.to_row = 14;
-  spec.to_col_op = FM_PATCH_OP_SET;
-  spec.to_col = 5;
+  fm_slicer_spec_t spec = FM_STRUCT_INIT(fm_slicer_spec_t);
+  spec.placement = FM_STRUCT_INIT(fm_drawing_placement_spec_t);
+  spec.placement.anchor.kind = FM_ANCHOR_KIND_TWO_CELL;
+  spec.placement.anchor.from_row = 4;
+  spec.placement.anchor.from_col = 3;
+  spec.placement.anchor.to_row = 14;
+  spec.placement.anchor.to_col = 5;
   std::uint32_t id = 0;
   ASSERT_EQ(fm_sheet_add_slicer(wb.handle, 0, 0, 0, 0, &spec, &id), 0) << fm_get_last_error_message();
   ExpectCopyStatus(wb.handle, 0, 1, nullptr, Code(FormulonErrorCode::kNotImplemented));

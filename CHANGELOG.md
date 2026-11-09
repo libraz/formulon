@@ -143,6 +143,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `FM_STATUS_SECURITY_RESOURCE_LIMIT`; Python `FUNCTION_OVERFLOW`,
   `SECURITY_RESOURCE_LIMIT`). A caller that compares numbers must update them;
   one that compares `StatusCode` members only needs the two new spellings.
+- **C ABI, JavaScript, Python:** the status `ThreadedCommentInvalid` (9006,
+  `FM_STATUS_THREADED_COMMENT_INVALID`) is retired and the number is never
+  reused. A malformed timestamp, a mention outside the text, an empty display
+  name, `done` on a reply, removing a person a comment still names and the
+  other cases it covered are `InvalidArgument`.
 - **C ABI, JavaScript, Python:** "absent" is one thing on every read: `NULL` in
   C, `null` in JavaScript and `None` in Python, never `""`, `0`, `-1` or a
   presence flag in the record. `getSpill` returns `Spill | null`,
@@ -279,8 +284,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   reference or lambda stays a `Value`; Python's
   `formulon.to_native(value)` does the same).
 - **Spans:** row and column operations (`setColumnWidth`, `insertRows`,
-  `deleteRows` and the others that take a first and last index or a count)
-  also accept a span string such as `"B:D"` or `"2:5"`.
+  `deleteRows` and the others that take a first and last index) also accept a
+  span string such as `"B:D"` or `"2:5"`.
 - **Enums:** ten enum tables are new (`BorderStyle`, `FillPattern`,
   `FontFamily`, `FontScheme`, `FontVerticalAlign`, `GradientType`,
   `HorizontalAlign`, `ReadingOrder`, `UnderlineStyle`, `VerticalAlign`; Python
@@ -297,25 +302,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   returning to its default; pass the field to change it.
 - **Patches (JavaScript):** an unknown key in a patch throws `TypeError` at any
   depth, and `null` for a key that is not nullable throws `TypeError` (in
-  `Shape.update` it used to mean "do not apply"; leave the key out). An anchor
-  key given to `Shape.update` or `Slicer.update` without its trigger key
-  throws `TypeError` where it used to be dropped silently; pass the trigger
-  key with it (`anchorKind` for a shape).
-- **Patches (JavaScript):** `Slicer.update({ name })` is ignored instead of
-  failing with `InvalidArgument`, and so are record keys such as `objectId`,
-  so the record `getProperties()` returned can be passed back to `update`.
-  Use `rename()` to rename a slicer.
+  `Shape.update` it used to mean "do not apply"; leave the key out).
+- **Patches (JavaScript):** record keys such as `objectId` and `kind` are
+  ignored by `update`, so the record `getProperties()` returned can be passed
+  back. `Slicer.update({ name })` fails with `PreconditionFailed`: a slicer's
+  name ties its frame to the slicer part.
 - **Pivot tables (JavaScript):** `Pivot.addFieldSharedItem`'s third argument is
   an options object. `PivotWorksheetSourceInput` has no `present` key; clear
   the source with `setWorksheetSource(null)`. The parameter of
   `Pivot.setAnchor` is named `range`; its type is unchanged.
 - **Python:** `Shape.update` and `Slicer.update` default every argument to the
   `UNCHANGED` singleton (an enum member of type `Unchanged`). `None` clears
-  only in `Slicer.update(style=None)`; elsewhere it is a `TypeError`. An
-  anchor key without its trigger key is a `TypeError`.
-- **Python:** an anchor is one `DrawingAnchor` value instead of separate
-  `anchor_kind=` / `row=` / ... keyword arguments; build it with
-  `DrawingAnchor(...)` for `set_anchor`, `add_picture` and `add_chart`.
+  only in `Slicer.update(style=None)`; elsewhere it is a `TypeError`.
+- **Python:** an anchor is one `DrawingAnchorInput` value instead of separate
+  `anchor_kind=` / `row=` / ... keyword arguments; pass it as `anchor=` to
+  `add_picture`, `add_shape`, `add_slicer`, a chart's `placement` and
+  `Drawing.update`.
 - **Python:** `set_selection`, `set_cell_phonetic_properties`,
   `set_theme_colors`, `set_theme_script_font` and `get_preview` take keyword
   arguments, and `set_field_date_group` takes them keyword-only. The
@@ -698,6 +700,66 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `set_theme_script_font(font)` a `ThemeScriptFont`. The old keyword forms
   raise `TypeError`.
 
+- **C ABI, JavaScript, Python:** one drawing surface. `DrawingProperties`
+  carries `name`, `description`, `hidden` and one nested `anchor`
+  (`DrawingAnchor`: `kind`, `editAs`, `fromRow`, `fromCol`, the four offsets,
+  `toRow`, `toCol`, `widthEmu`, `heightEmu`) for every kind, and
+  `ShapeProperties`, `SlicerProperties` and `ChartProperties` hold only
+  their own fields (`ChartProperties` has no name or description; `format`
+  is on `PictureProperties`). Input takes `anchor: DrawingAnchorInput` in
+  place of the flat `anchorKind`, `from*`, `to*` and offset keys
+  (`ShapeInput`, `SlicerInput`, `DrawingPlacementInput`, the chart's
+  `placement`; Python `DrawingAnchorInput`, `DrawingPlacementInput`).
+  `Drawing.update(patch)` (Python `update(name=, description=, hidden=,
+  anchor=)`) changes the common fields of a picture, chart, shape or slicer;
+  `rename` and `setAnchor` (`set_anchor`) are removed from them, and
+  `Pivot.rename` and `Pivot.setAnchor` stay. `AnchorKind` and `AnchorEditAs`
+  gain `Default` (0), so the other members move up by one ([Enums](#enums)),
+  and a reader reports the stored `editAs`, never `Default`.
+- **C ABI, JavaScript, Python:** the series of a chart is keyed by `seriesId`
+  (`ChartSeries.seriesId`, `ChartDataSeries.seriesId`,
+  `ChartUnresolved.seriesId`, and the `seriesId` parameter of `updateSeries`,
+  `setPoint`, `updatePoint` and `removeSeries`; Python `series_id`). `addSeries`
+  returns it. A point's `index` is still a position.
+- **JavaScript, Python:** `ExternalLink.index` is `bookNumber` (`book_number`),
+  the `n` of `[n]` in formula text. `PivotFieldInput.sourceName`
+  (`source_name`) is `fieldIndex` (`field_index`), a `PivotFieldRef`: the
+  pivot field index, or the source name of the cache field. A pivot filter
+  states its field as `fieldIndex` instead of `axis` and `fieldName`.
+- **JavaScript, Python:** `Pivot.addFieldSubtotalFn` and
+  `clearFieldSubtotalFns` are `Pivot.setFieldSubtotalFunctions(fieldIndex,
+  list)` (`set_field_subtotal_functions`), which replaces the set; an empty
+  list clears it and a repeated function is `InvalidArgument`.
+- **JavaScript, Python:** the tab's visibility leaves `SheetView` and
+  `SheetViewPatch`; read it with `getVisibility()` and write it with
+  `setVisibility(v)` (`get_visibility`, `set_visibility`).
+- **JavaScript, Python:** `addSheet(name?, { insertBefore? })` and
+  `copySheet(source, { insertBefore?, newName? })` take an options object
+  (Python keyword-only `insert_before=`, `new_name=`); the positional
+  `insertBefore` of `copySheet` is gone. `Sheet.move(toIndex)` is
+  `Sheet.move(insertBefore)`.
+- **C ABI, JavaScript, Python:** `insertRows`, `deleteRows`, `insertColumns`
+  and `deleteColumns` take `(first, last)` instead of `(start, count)`;
+  a call written for the old form inserts a different number of rows.
+- **JavaScript, Python:** `addValidation` and `addSparklineGroup` return the
+  new rule's id (`ValidationId`, `SparklineGroupId`), and
+  `removeValidation`, `updateSparklineGroup` and `removeSparklineGroup` take a
+  `ValidationRef` or `SparklineGroupRef`: an id, or a position as before.
+  `DataValidation` and `SparklineGroup` carry `id`; `ValidationOutcome`
+  names the covering rule as `ruleId` in place of `ruleIndex` (`null` when no rule covers the cell).
+- **Python:** six record types take the JavaScript names: `ErrorName` is
+  `LocaleErrorName`, `MarginsPt` is `PaginationMargins`, `PageLayout` is
+  `PaginationPage`, `Paper` is `PaginationPaper`, `Cfvo` is `CfValueObject`
+  and `CellInput` is `CellValueInput`. `Workbook.list_passthroughs()` returns
+  a list of part names, and `PassthroughPart` is removed. `resolve_color`
+  has no default for its context, and `format_value(value, number_format)`
+  names its second argument as JavaScript does and requires it.
+  `PivotDataFieldInput(field_index, name=None, ...)` takes the field first,
+  and `PivotFieldInput.custom_name` is `None` when omitted.
+- **JavaScript, Python:** `ThreadedCommentInput.id` is optional (the engine
+  generates one) and `personId` is required. Python `ChartCategories.format_code`
+  is `number_format`.
+
 ### Sheet handles
 
 A sheet-scoped call moves from the workbook onto a `Sheet` handle, and the
@@ -727,9 +789,9 @@ the handle of a removed sheet throws `FormulonError` with
 
 | Before | After |
 |---|---|
-| `sheetCount()` / `sheet_count()` | `listSheets().length` / `len(wb)` |
+| `sheetCount()` / `sheet_count()` (a method) | the property `sheetCount` / `len(wb)`; `hasSheet(ref)` / `ref in wb` tells whether a sheet exists |
 | `sheetName(i)` / `sheet_name(i)` | `sheet(i).name` |
-| `addSheet(name)` | returns the new `Sheet`; `copySheet(...)` likewise |
+| `addSheet(name)` | `addSheet(name?, { insertBefore? })` returns the new `Sheet`; `copySheet(source, { insertBefore?, newName? })` likewise (Python keyword-only) |
 | `activeSheet()` returning an index | `getActiveSheet()` returns a `Sheet`; `setActiveSheet`, `moveSheet`, `removeSheet` and `renameSheet` take a `Sheet`, an index or a name |
 
 `sheet(name).index` finds a sheet by name and throws when there is no such
@@ -806,7 +868,6 @@ argument is `null` (Python `None`) instead. Reading the removed member gives
 | `BlanksAs` (was `ChartBlanksAs`) | `Absent` | `null` |
 | `ChartLegendPosition` | `None` | `null` (no legend) |
 | `ChartTitleKind` | `None` | `null` (no title) |
-| `ShapePaint` | `Unset` | `null` |
 
 `ChartRole` gains `Title` (6) and `AxisTitle` (7), and `unresolved.source` is
 a `ChartRole` (C `int32_t` `fm_chart_role_t`) instead of a string. `PivotFilterType`
@@ -828,9 +889,9 @@ that writes the numbers instead of the names changes meaning:
 
 | Enum | Before | After |
 |---|---|---|
-| `AnchorEditAs` | `TwoCell` 0, `OneCell` 1, `Absolute` 2 | `OneCell` 0, `TwoCell` 1, `Absolute` 2 |
+| `AnchorKind` | `OneCell` 0, `TwoCell` 1, `Absolute` 2 | `Default` 0, `OneCell` 1, `TwoCell` 2, `Absolute` 3 |
+| `AnchorEditAs` | `TwoCell` 0, `OneCell` 1, `Absolute` 2 | `Default` 0, `OneCell` 1, `TwoCell` 2, `Absolute` 3 |
 | `ChartAxisCrosses` | `AutoZero` 1, `Min` 2, `Max` 3, `At` 4 | `AutoZero` 0, `Min` 1, `Max` 2, `At` 3 |
-| `ShapePaint` | `Solid` 1, `None` 2, `Other` 3 | `Solid` 0, `None` 1, `Other` 2 |
 | `ChartLegendPosition` | `Bottom` 1, `Top` 2, `Left` 3, `Right` 4, `TopRight` 5 | `Right` 0, `Bottom` 1, `TopRight` 2, `Left` 3, `Top` 4 |
 | `BlanksAs` for a chart's `blanksAs` (was `ChartBlanksAs`) | `Gap` 1, `Zero` 2, `Span` 3 | `Zero` 0, `Gap` 1, `Span` 2 |
 | `BlanksAs` for a sparkline group's `emptyCellsAs` (was `SparklineEmptyCells`) | `Gap` 0, `Zero` 1, `Span` 2 | `Zero` 0, `Gap` 1, `Span` 2 |
@@ -898,7 +959,7 @@ A comparison such as `field === -1` is silently false now.
 
 | Before | After |
 |---|---|
-| `-1` | `null`: `PivotField.axis`, `PivotField.cacheFieldIndex`, `PivotField.groupBaseIndex`, `PivotItem.cacheIndex`, `PivotDataField.showAsBaseField`, `PivotDataField.showAsBaseItem`, `PivotCacheOptions.missingItemsLimit`, `DefinedName.scope`, `ValidationOutcome.ruleIndex`, `PivotFilter.valueKind`, `PivotFilter.valueHighKind` |
+| `-1` | `null`: `PivotField.axis`, `PivotField.cacheFieldIndex`, `PivotField.groupBaseIndex`, `PivotItem.cacheIndex`, `PivotDataField.showAsBaseField`, `PivotDataField.showAsBaseItem`, `PivotCacheOptions.missingItemsLimit`, `DefinedName.scope`, `ValidationOutcome.ruleId`, `PivotFilter.valueKind`, `PivotFilter.valueHighKind` |
 | `''` | `null`: `DefinedName.comment`, `DrawingObject.mediaPath`, `Hyperlink.location`, `Hyperlink.display`, `Hyperlink.tooltip`, `PivotCell.numberFormat`, `PivotDataField.numberFormat`, `PivotField.customName`, `PivotField.numberFormat`, `PivotFilter.valueHighText`, `PivotOptions` captions and alternative text, `PivotWorksheetSource.ref` / `sheet` / `name`, the password, algorithm, hash and salt fields of `SheetProtection` and `WorkbookProtection`, `Slicer.style`, `SparklineGroup.dateAxisRef`, `TableStyleDefaults.tableStyle` / `pivotStyle` |
 | a number or boolean next to a `has...` flag | a nullable field, and the flag is gone: `AutoFilterColumn.filterVal` / `dynVal` / `dynMaxVal` / `iconId`, `AutoFilterSortCondition.dxfId` / `iconId`, `CellXf` alignment, wrap, locked and hidden fields, `ColumnLayout.width` / `styleXf`, `RowLayout.height` / `styleXf`, `SheetFormatDefaults.defaultColWidth` / `defaultRowHeight`, `PageSetup.orientation`, `Shape.fillKind` / `lineKind`, `ChartInsertInput.legend` |
 
@@ -1052,6 +1113,45 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
   It used to read as the bottom items.
 - `addCfRule` rejects a caller-supplied id that the sheet already uses with
   `InvalidArgument`.
+- Every named collection compares names by Unicode simple case folding, as
+  sheet names already did: defined names, tables, table styles, cell styles,
+  protected ranges, pivots, slicers, people and GUID ids (a GUID is accepted in
+  either case and stored uppercase). `Budget` and `BUDGET` collide, `=ä`
+  resolves a name `Ä`, and structured references and table column names fold
+  the same way; they used to fold ASCII letters only, or compare exactly.
+- `addSheet()` without a name (Python `add_sheet()`, C `NULL`) takes the
+  profile's first sheet name without its trailing `1` and the smallest free
+  number from 2, ignoring case: `Sheet2`, `Tabelle2`, `Feuil2`.
+- A threaded comment without an `id` gets a generated GUID and one without
+  `created` the pinned clock, else now; both are written to the file (the
+  `id` and the `dT` attribute). `addThreadedComment` returns the id.
+- A slicer's fallback shape in the drawing carries the frame's id and name,
+  as Excel writes them.
+- The anchor of a drawing object merges per key: `Drawing.update({ anchor })`
+  keeps every key it leaves out, and an omitted `kind` keeps the object's
+  kind. A kind left out of an add is the operation's default (one-cell for a
+  picture, two-cell for a chart, shape and slicer). A read anchor can be passed
+  back to `update`: a two-cell anchor takes its box and ignores the size, a
+  one-cell anchor takes the size.
+- A shape without a fill or outline of its own reads `ShapePaint.Default`
+  (not `null`); omitting the key on add means `Default`, and a patch that sets
+  `Default` removes the shape's own paint.
+- A straight connector may have a zero width or a zero height.
+- `Slicer.update` and `Shape.update` accept the common keys (`name`,
+  `description`, `hidden`, `anchor`) as well, and apply them before their own.
+- A validation or sparkline group is addressed by its id, which stays valid
+  across structural edits; ids are opaque strings and are assigned again
+  when a workbook is loaded or a sheet is copied. A number is still accepted
+  and means a position (`IndexOutOfRange` past the end); an unknown id is
+  `NotFound`.
+- `updateValidation` and `updateCfRule` accept the record a read returned. A
+  change of the rule's type is `InvalidArgument`.
+- `insertRows(first, last)`, `deleteRows`, `insertColumns` and `deleteColumns`
+  take an inclusive span like every other row and column function; `first >
+  last` is `InvalidArgument`. `ws.insertRows(3, 5)` inserts three rows.
+- `Sheet.move(insertBefore)` takes the position in the list before the move
+  (`null` appends; a move before itself or before the next sheet changes
+  nothing), as `addSheet` and `copySheet` do.
 - `getPrintArea` returns `null` (Python `None`) when no print area is set,
   where JavaScript returned `[]`.
 - `convertColumnCharsToPt`, `convertColumnPtToChars` and `getColumnWidthPt`
@@ -1322,6 +1422,7 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
 | `fm_chart_data_points_t` | `fm_chart_data_points_info_t` |
 | `fm_chart_data_range_at` | `fm_chart_data_get_range_at` |
 | `fm_chart_data_series_at` | `fm_chart_data_get_series_at` |
+| `fm_chart_data_series_info_t.idx` | `fm_chart_data_series_info_t.series_id` |
 | `fm_chart_data_series_points` | `fm_chart_data_get_series_points` |
 | `fm_chart_data_series_t` | `fm_chart_data_series_info_t` |
 | `fm_chart_data_unresolved_at` | `fm_chart_data_get_unresolved_at` |
@@ -1435,6 +1536,7 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
 | `fm_chart_preview_overrides_spec_t.plot_vis_only` | `fm_chart_preview_overrides_spec_t.plot_visible_only` |
 | `fm_chart_preview_overrides` | `fm_chart_preview_overrides_spec_t` |
 | `fm_chart_series_at` | `fm_chart_get_series_at` |
+| `fm_chart_series_info_t.idx` | `fm_chart_series_info_t.series_id` |
 | `fm_chart_series_literal_at` | `fm_chart_get_series_literal_at` |
 | `fm_chart_series_patch` | `fm_chart_series_patch_t` |
 | `fm_chart_series_point_at` | `fm_chart_get_series_point_at` |
@@ -1451,6 +1553,7 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
 | `FM_CHART_TRI_FALSE` | `FM_TRISTATE_FALSE` |
 | `fm_chart_tri_t` | `fm_tristate_t` |
 | `FM_CHART_TRI_TRUE` | `FM_TRISTATE_TRUE` |
+| `fm_chart_unresolved_info_t.series_idx` | `fm_chart_unresolved_info_t.series_id` |
 | `fm_chart_unresolved_t` | `fm_chart_unresolved_info_t` |
 | `fm_collation_classes` | `fm_get_collation_classes` |
 | `FM_COLLATION_CLASSIC_EXACT` | `FM_COLLATION_STRENGTH_CLASSIC_EXACT` |
@@ -1524,6 +1627,7 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
 | `FM_DYNAMIC_FILTER_YESTERDAY` | `FM_DYNAMIC_FILTER_TYPE_YESTERDAY` |
 | `fm_effective_style` | `fm_effective_style_info_t` |
 | `fm_error_display_name` | `fm_get_error_display_name` |
+| `fm_external_link_info_t.index` | `fm_external_link_info_t.book_number` |
 | `fm_external_link_record_t` | `fm_external_link_info_t` |
 | `fm_fill_record` | `fm_fill_t` |
 | `fm_filter_column_t.col_id` | `fm_filter_column_t.column_offset` |
@@ -1580,7 +1684,7 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
 | `FM_ICON_SET_5_QUARTERS` | `FM_ICON_SET_NAME_5_QUARTERS` |
 | `FM_ICON_SET_5_RATING` | `FM_ICON_SET_NAME_5_RATING` |
 | `fm_image_info` | `fm_image_info_t` |
-| `fm_image_insert` | `fm_picture_insert_spec_t` |
+| `fm_image_insert` | `fm_drawing_placement_spec_t` |
 | `fm_last_error_context` | `fm_get_last_error_context` |
 | `fm_last_error_message` | `fm_get_last_error_message` |
 | `fm_locale_error_name_count` | `fm_get_locale_error_name_count` |
@@ -1775,7 +1879,7 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
 | `FM_SHAPE_FIELD_ROTATION` | removed |
 | `FM_SHAPE_FIELD_TEXT_BOX` | removed |
 | `FM_SHAPE_FIELD_TEXT` | removed |
-| `FM_SHAPE_PAINT_UNSET` | `FM_SHAPE_PAINT_ABSENT` |
+| `FM_SHAPE_PAINT_UNSET` | folded into `FM_SHAPE_PAINT_DEFAULT` |
 | `fm_shape` | `fm_shape_info_t` |
 | `fm_sheet_add_col_break` | `fm_sheet_set_column_break` |
 | `fm_sheet_add_hyperlink` | `fm_sheet_set_hyperlink` |
@@ -1832,6 +1936,8 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
 | `fm_sheet_remove_auto_filter` | removed; use `fm_sheet_set_auto_filter` |
 | `fm_sheet_remove_col_break` | removed |
 | `fm_sheet_remove_row_break` | removed |
+| `fm_sheet_remove_shape` | removed |
+| `fm_sheet_remove_slicer` | removed |
 | `fm_sheet_remove_validation_at` | `fm_sheet_remove_validation` |
 | `fm_sheet_restore_range_style` | `fm_sheet_restore_range_xfs` |
 | `fm_sheet_row_break_at` | `fm_sheet_get_row_break_at` |
@@ -1843,6 +1949,8 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
 | `fm_sheet_set_chart_point` | removed |
 | `fm_sheet_set_chart_series` | `fm_sheet_update_chart_series` |
 | `fm_sheet_set_column_style` | `fm_sheet_set_column_xf_index` |
+| `fm_sheet_set_drawing_anchor` | removed; use `fm_sheet_update_drawing` |
+| `fm_sheet_set_drawing_name` | removed; use `fm_sheet_update_drawing` |
 | `fm_sheet_set_fit_to_page` | removed; use `fm_sheet_update_page_setup` |
 | `fm_sheet_set_format_defaults` | `fm_sheet_update_format_defaults` |
 | `fm_sheet_set_freeze` | removed |
@@ -1866,12 +1974,11 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
 | `fm_sheet_set_thread_resolved` | removed; use `fm_sheet_update_threaded_comment` |
 | `fm_sheet_set_top_left` | removed |
 | `fm_sheet_set_view_mode` | removed |
-| `fm_sheet_set_visibility` | removed |
 | `fm_sheet_set_zoom` | removed |
-| `fm_sheet_shape_at` | `fm_sheet_get_shape_at` |
-| `fm_sheet_shape_count` | `fm_sheet_get_shape_count` |
-| `fm_sheet_slicer_at` | `fm_sheet_get_slicer_at` |
-| `fm_sheet_slicer_count` | `fm_sheet_get_slicer_count` |
+| `fm_sheet_shape_at` | removed |
+| `fm_sheet_shape_count` | removed |
+| `fm_sheet_slicer_at` | removed |
+| `fm_sheet_slicer_count` | removed |
 | `fm_sheet_snapshot_range_style` | `fm_sheet_snapshot_range_xfs` |
 | `fm_sheet_sparkline_at` | `fm_sheet_get_sparkline_at` |
 | `fm_sheet_sparkline_group_at` | `fm_sheet_get_sparkline_group_at` |
@@ -1970,6 +2077,7 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
 | `FM_STATUS_SLICER_NOT_CONNECTED` | removed |
 | `FM_STATUS_SPARKLINE_INVALID` | removed |
 | `fm_status_string` | `fm_get_status_name` |
+| `FM_STATUS_THREADED_COMMENT_INVALID` | removed |
 | `FM_STATUS_UI_SNAPSHOT_FAILED` | removed |
 | `FM_STATUS_UI_VIEW_STATE_INVALID` | removed |
 | `FM_STATUS_UNKNOWN_ERROR` | removed |
@@ -2134,12 +2242,12 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
 | `fm_workbook_pivot_data_field_set` | `fm_sheet_set_pivot_data_field` |
 | `fm_workbook_pivot_field_add_item_at` | `fm_sheet_add_pivot_field_item_by_cache_index` |
 | `fm_workbook_pivot_field_add_item` | `fm_sheet_add_pivot_field_item` |
-| `fm_workbook_pivot_field_add_subtotal_fn` | `fm_sheet_add_pivot_field_subtotal_function` |
+| `fm_workbook_pivot_field_add_subtotal_fn` | removed; use `fm_sheet_set_pivot_field_subtotal_functions` |
 | `fm_workbook_pivot_field_add` | `fm_sheet_add_pivot_field` |
 | `fm_workbook_pivot_field_at` | `fm_sheet_get_pivot_field_at` |
 | `fm_workbook_pivot_field_clear_date_group` | removed; use `fm_sheet_set_pivot_field_date_group` |
 | `fm_workbook_pivot_field_clear_items` | `fm_sheet_clear_pivot_field_items` |
-| `fm_workbook_pivot_field_clear_subtotal_fns` | `fm_sheet_clear_pivot_field_subtotal_functions` |
+| `fm_workbook_pivot_field_clear_subtotal_fns` | removed; use `fm_sheet_set_pivot_field_subtotal_functions` |
 | `fm_workbook_pivot_field_clear` | `fm_sheet_clear_pivot_fields` |
 | `fm_workbook_pivot_field_count` | `fm_sheet_get_pivot_field_count` |
 | `fm_workbook_pivot_field_item_at` | `fm_sheet_get_pivot_field_item_at` |
@@ -2307,7 +2415,9 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
 | `ChartAxis.deleted` | `ChartAxis.visible` |
 | `ChartAxisInfo` | `ChartAxis` |
 | `ChartBlanksAs` | `BlanksAs` |
+| `ChartCategories.formatCode` | `ChartCategories.numberFormat` |
 | `ChartDataResult` | removed |
+| `ChartDataSeries.idx` | `ChartDataSeries.seriesId` |
 | `ChartFill.transparency` | `ChartFill.transparencyPct` |
 | `ChartFillInfo` | `ChartFill` |
 | `ChartFillPatch.transparency` | `ChartFillPatch.transparencyPct` |
@@ -2336,10 +2446,12 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
 | `ChartPreviewOverridesInput.source` | `ChartPreviewOverridesInput.range` |
 | `ChartProperties.isChartex` | `ChartProperties.isExtended` |
 | `ChartResult` | folded into `OptionalResult` |
+| `ChartSeries.idx` | `ChartSeries.seriesId` |
 | `ChartSeriesInfo` | `ChartSeries` |
 | `ChartSheetRange` | folded into `SheetRect` |
 | `ChartSourceInput.source` | `ChartSourceInput.range` |
 | `ChartTitleInfo` | `ChartTitle` |
+| `ChartUnresolved.seriesIdx` | `ChartUnresolved.seriesId` |
 | `clearAutoFilter()` | `clearAutoFilterCriteria()` |
 | `clearCellXfIndex()` | `resetCellXfIndex()` |
 | `clearColumnStyle()` | `resetColumnXfIndex()` |
@@ -2392,7 +2504,6 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
 | `dependents()` | `getDependents()` |
 | `DisplayTextResult` | `DisplayText` |
 | `DrawingObject` | `DrawingProperties` |
-| `DrawingProperties.imageFormat` | `DrawingProperties.format` |
 | `Dxf.alignmentXml` | `Dxf.alignment` |
 | `Dxf.numFmt` | `Dxf.numberFormat` |
 | `Dxf.protectionXml` | `Dxf.protection` |
@@ -2412,6 +2523,7 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
 | `evaluateTableAutoFilter()` | `ws.table(...).evaluateAutoFilter()` |
 | `excelProfileId()` | `getProfileId()` |
 | `ExcelProfileId` | `ProfileId` |
+| `ExternalLink.index` | `ExternalLink.bookNumber` |
 | `ExternalLinkRecord` | `ExternalLink` |
 | `ExternalLinkResult` | removed |
 | `fileName()` | `getFileName()` |
@@ -2483,13 +2595,12 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
 | `getValidation()` | removed; use `listValidations()` |
 | `getValidationCount()` | removed; use `listValidations()` |
 | `getValidations()` | removed |
-| `HeaderFooterInput` | `HeaderFooterPatch` |
 | `Hyperlink.rect` | `Hyperlink.range` |
 | `HyperlinkEntry` | `Hyperlink` |
 | `ImageInfo.pxHeight` | `ImageInfo.heightPx` |
 | `ImageInfo.pxWidth` | `ImageInfo.widthPx` |
 | `ImageInfoResult` | folded into `ImageInfo` |
-| `ImageInsertOptions` | `PictureInput` |
+| `ImageInsertOptions` | `DrawingPlacementInput` |
 | `ImagePlacement` | folded into `DrawingAnchor` |
 | `ImageResult` | folded into `PictureProperties` |
 | `ImageSnapshotResult` | removed |
@@ -2620,7 +2731,7 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
 | `pivotCount()` | removed |
 | `pivotCreate()` | `addPivot()` |
 | `pivotDataFieldAdd()` | `ws.pivot(...).addDataField()` |
-| `pivotDataFieldAt()` | removed; use `listPivotDataFields()` |
+| `pivotDataFieldAt()` | `ws.pivot(...).getDataField()` |
 | `pivotDataFieldClear()` | `ws.pivot(...).clearDataFields()` |
 | `pivotDataFieldCount()` | removed; use `listPivotDataFields()` |
 | `pivotDataFieldDefaultName()` | `ws.pivot(...).getDataFieldDefaultName()` |
@@ -2631,12 +2742,12 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
 | `pivotFieldAdd()` | `ws.pivot(...).addField()` |
 | `pivotFieldAddItem()` | `ws.pivot(...).addFieldItem()` |
 | `pivotFieldAddItemAt()` | removed |
-| `pivotFieldAddSubtotalFn()` | `ws.pivot(...).addFieldSubtotalFunction()` |
-| `pivotFieldAt()` | removed; use `listPivotFields()` |
+| `pivotFieldAddSubtotalFn()` | removed; use `ws.pivot(...).setFieldSubtotalFunctions()` |
+| `pivotFieldAt()` | `ws.pivot(...).getField()` |
 | `pivotFieldClear()` | `ws.pivot(...).clearFields()` |
 | `pivotFieldClearDateGroup()` | removed; use `ws.pivot(...).setFieldDateGroup()` |
 | `pivotFieldClearItems()` | `ws.pivot(...).clearFieldItems()` |
-| `pivotFieldClearSubtotalFns()` | `ws.pivot(...).clearFieldSubtotalFunctions()` |
+| `pivotFieldClearSubtotalFns()` | removed; use `ws.pivot(...).setFieldSubtotalFunctions()` |
 | `pivotFieldCount()` | removed; use `listPivotFields()` |
 | `pivotFieldItemAt()` | `ws.pivot(...).getFieldItem()` |
 | `pivotFieldItemCount()` | removed; use `listPivotFieldItems()` |
@@ -2658,7 +2769,7 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
 | `pivotFieldSetSubtotalTop()` | removed |
 | `PivotFieldSpecInput` | `PivotFieldInput` |
 | `pivotFilterAdd()` | `ws.pivot(...).addFilter()` |
-| `pivotFilterAt()` | removed; use `listPivotFilters()` |
+| `pivotFilterAt()` | `ws.pivot(...).getFilter()` |
 | `pivotFilterClear()` | `ws.pivot(...).clearFilters()` |
 | `pivotFilterCount()` | removed; use `listPivotFilters()` |
 | `pivotFilterRemoveAt()` | `ws.pivot(...).removeFilter()` |
@@ -2707,7 +2818,6 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
 | `PivotWorksheetSourceResult` | folded into `PivotWorksheetSource` |
 | `precedents()` | `getPrecedents()` |
 | `previewChartData()` | `ws.chart(...).getPreview()` |
-| `PrintOptionsInput` | `PrintOptionsPatch` |
 | `probeImage()` | `getImageInfo()` |
 | `ProtectedRange.password` | `ProtectedRange.legacyPasswordHash` |
 | `ProtectedRangeResult` | removed |
@@ -2763,8 +2873,8 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
 | `setColumnStyle()` | `setColumnXfIndex()` |
 | `setDefinedNameAttrs()` | removed |
 | `setDefinedNameScoped()` | removed |
-| `setDrawingAnchor()` | `ws.drawing(...).setAnchor()` |
-| `setDrawingName()` | `ws.drawing(...).rename()` |
+| `setDrawingAnchor()` | removed; use `ws.drawing(...).update()` |
+| `setDrawingName()` | removed; use `ws.drawing(...).update()` |
 | `setDrawingZOrder()` | `ws.drawing(...).setZOrder()` |
 | `setExcelProfileId()` | `setProfileId()` |
 | `setIterative()` | `updateIterative()` |
@@ -2797,7 +2907,7 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
 | `setSheetTabSelected()` | removed |
 | `setSheetTopLeft()` | removed |
 | `setSheetViewMode()` | removed |
-| `setSheetVisibility()` | removed |
+| `setSheetVisibility()` | `setVisibility()` |
 | `setSheetZoom()` | removed |
 | `setSparklineGroupSparklines()` | removed; use `updateSparklineGroup()` |
 | `setTableAutoFilter()` | `ws.table(...).setAutoFilter()` |
@@ -2811,7 +2921,6 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
 | `ShapeProperties.rotation` | `ShapeProperties.rotationDeg` |
 | `SheetAutoFilterXmlResult` | folded into `StringResult` |
 | `SheetCommentEntry` | `SheetComment` |
-| `sheetCount()` | removed |
 | `SheetFormatDefaults.baseColWidth` | `SheetFormatDefaults.baseColWidthChars` |
 | `SheetFormatDefaults.defaultColWidth` | `SheetFormatDefaults.defaultColWidthChars` |
 | `SheetFormatDefaults.defaultRowHeight` | `SheetFormatDefaults.defaultRowHeightPt` |
@@ -2949,9 +3058,10 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
 | `CfColor` | folded into `Color` |
 | `CfIcon.icon_id` | `CfIcon.icon_index` |
 | `CfMatch.dxf_id` | `CfMatch.dxf_index` |
-| `CfValueObject` | `Cfvo` |
 | `ChartAxisInfo` | `ChartAxis` |
 | `ChartBlanksAs` | `BlanksAs` |
+| `ChartCategories.format_code` | `ChartCategories.number_format` |
+| `ChartDataSeries.idx` | `ChartDataSeries.series_id` |
 | `ChartFill.transparency` | `ChartFill.transparency_pct` |
 | `ChartFillInfo` | `ChartFill` |
 | `ChartFillPatch.transparency` | `ChartFillPatch.transparency_pct` |
@@ -2976,10 +3086,12 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
 | `ChartPointInfo` | `ChartPoint` |
 | `ChartPreviewOverrides` | removed |
 | `ChartProperties.is_chartex` | `ChartProperties.is_extended` |
+| `ChartSeries.idx` | `ChartSeries.series_id` |
 | `ChartSeriesInfo` | `ChartSeries` |
 | `ChartSheetRange` | folded into `SheetRect` |
 | `ChartSourceInfo` | `ChartSource` |
 | `ChartTitleInfo` | `ChartTitle` |
+| `ChartUnresolved.series_idx` | `ChartUnresolved.series_id` |
 | `CivilTime` | removed |
 | `clear_auto_filter()` | `clear_auto_filter_criteria()` |
 | `clear_cell_xf_index()` | `reset_cell_xf_index()` |
@@ -3017,11 +3129,13 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
 | `EffectiveStyle.font` | `EffectiveStyle.font_color` |
 | `EffectiveStyle.num_fmt_code` | `EffectiveStyle.number_format` |
 | `error_display_name()` | removed |
+| `ErrorName` | `LocaleErrorName` |
 | `eval_formula()` | `evaluate_formula()` |
 | `evaluate_table_auto_filter()` | `ws.table(...).evaluate_auto_filter()` |
 | `excel_profile_id()` | `get_profile_id()` |
 | `ExcelProfileId` | `ProfileId` |
 | `external_link_count()` | removed; use `list_external_links()` |
+| `ExternalLink.index` | `ExternalLink.book_number` |
 | `ExternalLinkRecord` | `ExternalLink` |
 | `file_name()` | `get_file_name()` |
 | `fill_count()` | removed; use `list_fills()` |
@@ -3090,18 +3204,13 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
 | `library_version()` | `get_version()` |
 | `list_drawing_objects()` | `list_drawings()` |
 | `list_invalid_cells()` | `get_invalid_cells()` |
-| `MarginsPt.bottom` | `MarginsPt.bottom_in` |
-| `MarginsPt.footer` | `MarginsPt.footer_in` |
-| `MarginsPt.header` | `MarginsPt.header_in` |
-| `MarginsPt.left` | `MarginsPt.left_in` |
-| `MarginsPt.right` | `MarginsPt.right_in` |
-| `MarginsPt.top` | `MarginsPt.top_in` |
+| `MarginsPt` | `PaginationMargins` |
 | `memory_usage()` | `get_memory_usage()` |
 | `merge_count()` | removed; use `list_merges()` |
 | `MergeRange` | folded into `CellRect` |
 | `move_sheet()` | `wb.sheet(...).move()` |
 | `PageBreak` | `RowBreak` |
-| `PageLayout.rect` | `PageLayout.range` |
+| `PageLayout` | `PaginationPage` |
 | `PageMargins.bottom_stated` | `PageMargins.bottom_in_stated` |
 | `PageMargins.bottom` | `PageMargins.bottom_in` |
 | `PageMargins.footer_stated` | `PageMargins.footer_in_stated` |
@@ -3120,10 +3229,18 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
 | `Pagination.horizontal_breaks` | `Pagination.row_breaks` |
 | `Pagination.scale` | `Pagination.scale_pct` |
 | `Pagination.vertical_breaks` | `Pagination.column_breaks` |
+| `PaginationMargins.bottom` | `PaginationMargins.bottom_in` |
+| `PaginationMargins.footer` | `PaginationMargins.footer_in` |
+| `PaginationMargins.header` | `PaginationMargins.header_in` |
+| `PaginationMargins.left` | `PaginationMargins.left_in` |
+| `PaginationMargins.right` | `PaginationMargins.right_in` |
+| `PaginationMargins.top` | `PaginationMargins.top_in` |
+| `PaginationPage.rect` | `PaginationPage.range` |
 | `PaginationResult` | `Pagination` |
-| `PaperInfo` | `Paper` |
+| `PaperInfo` | `PaginationPaper` |
 | `ParsedReference.rect` | `ParsedReference.range` |
 | `partial_recalc()` | `recalc_viewport()` |
+| `PassthroughPart` | removed |
 | `PhoneticProperties.font_id` | `PhoneticProperties.font_index` |
 | `PictureProperties.px_height` | `PictureProperties.height_px` |
 | `PictureProperties.px_width` | `PictureProperties.width_px` |
@@ -3172,7 +3289,7 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
 | `pivot_count()` | removed |
 | `pivot_create()` | `add_pivot()` |
 | `pivot_data_field_add()` | `ws.pivot(...).add_data_field()` |
-| `pivot_data_field_at()` | removed; use `list_pivot_data_fields()` |
+| `pivot_data_field_at()` | `ws.pivot(...).get_data_field()` |
 | `pivot_data_field_clear()` | `ws.pivot(...).clear_data_fields()` |
 | `pivot_data_field_count()` | removed; use `list_pivot_data_fields()` |
 | `pivot_data_field_default_name()` | `ws.pivot(...).get_data_field_default_name()` |
@@ -3180,12 +3297,12 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
 | `pivot_field_add()` | `ws.pivot(...).add_field()` |
 | `pivot_field_add_item()` | `ws.pivot(...).add_field_item()` |
 | `pivot_field_add_item_at()` | removed |
-| `pivot_field_add_subtotal_fn()` | `ws.pivot(...).add_field_subtotal_function()` |
-| `pivot_field_at()` | removed; use `list_pivot_fields()` |
+| `pivot_field_add_subtotal_fn()` | removed; use `ws.pivot(...).set_field_subtotal_functions()` |
+| `pivot_field_at()` | `ws.pivot(...).get_field()` |
 | `pivot_field_clear()` | `ws.pivot(...).clear_fields()` |
 | `pivot_field_clear_date_group()` | removed; use `ws.pivot(...).set_field_date_group()` |
 | `pivot_field_clear_items()` | `ws.pivot(...).clear_field_items()` |
-| `pivot_field_clear_subtotal_fns()` | `ws.pivot(...).clear_field_subtotal_functions()` |
+| `pivot_field_clear_subtotal_fns()` | removed; use `ws.pivot(...).set_field_subtotal_functions()` |
 | `pivot_field_count()` | removed; use `list_pivot_fields()` |
 | `pivot_field_item_at()` | `ws.pivot(...).get_field_item()` |
 | `pivot_field_item_count()` | removed; use `list_pivot_field_items()` |
@@ -3204,7 +3321,7 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
 | `pivot_field_set_sort()` | removed |
 | `pivot_field_set_subtotal_top()` | removed |
 | `pivot_filter_add()` | `ws.pivot(...).add_filter()` |
-| `pivot_filter_at()` | removed; use `list_pivot_filters()` |
+| `pivot_filter_at()` | `ws.pivot(...).get_filter()` |
 | `pivot_filter_clear()` | `ws.pivot(...).clear_filters()` |
 | `pivot_filter_count()` | removed; use `list_pivot_filters()` |
 | `pivot_filter_remove_at()` | `ws.pivot(...).remove_filter()` |
@@ -3283,8 +3400,8 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
 | `set_column_style()` | `set_column_xf_index()` |
 | `set_defined_name_attrs()` | removed |
 | `set_defined_name_scoped()` | removed |
-| `set_drawing_anchor()` | `ws.drawing(...).set_anchor()` |
-| `set_drawing_name()` | `ws.drawing(...).rename()` |
+| `set_drawing_anchor()` | removed; use `ws.drawing(...).update()` |
+| `set_drawing_name()` | removed; use `ws.drawing(...).update()` |
 | `set_drawing_z_order()` | `ws.drawing(...).set_z_order()` |
 | `set_excel_profile_id()` | `set_profile_id()` |
 | `set_fit_to_page()` | removed; use `update_page_setup()` |
@@ -3315,7 +3432,7 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
 | `set_sheet_tab_selected()` | removed |
 | `set_sheet_top_left()` | removed |
 | `set_sheet_view_mode()` | removed |
-| `set_sheet_visibility()` | removed |
+| `set_sheet_visibility()` | `set_visibility()` |
 | `set_sheet_zoom()` | removed |
 | `set_show_phonetic()` | `set_cell_show_phonetic()` |
 | `set_sparkline_group_sparklines()` | removed; use `update_sparkline_group()` |
@@ -3417,7 +3534,7 @@ A caller compiled against an earlier header must be recompiled.
 | `fm_sheet_set_tab_hidden` | removed; `fm_sheet_set_visibility` states every tab state |
 | `fm_sheet_set_fit_to_page` | removed; `fm_sheet_update_page_setup` carries the fit-to-page flag |
 | `fm_sheet_set_sparkline_group_sparklines(wb, sheet_index, group_index, items, count)` | removed; `fm_sheet_update_sparkline_group(wb, sheet_index, group_index, group, items, count)` rewrites the group and, when `items` is not `NULL`, its sparklines. `items == NULL` keeps the sparklines; `count == 0` with `items` set is `FM_STATUS_INVALID_ARGUMENT` |
-| `fm_sheet_set_thread_resolved` and `fm_sheet_update_threaded_comment(wb, sheet_index, id, text, mentions, mention_count)` | `fm_sheet_set_thread_resolved` is removed; `fm_sheet_update_threaded_comment(wb, sheet_index, id, const fm_threaded_comment_patch_t*)` with `text`, `mentions` (applied when `mentions_engaged` is non-zero) and `done` (`-1` keeps the resolved state). `done` on a reply id returns `FM_STATUS_THREADED_COMMENT_INVALID` (9006), as before |
+| `fm_sheet_set_thread_resolved` and `fm_sheet_update_threaded_comment(wb, sheet_index, id, text, mentions, mention_count)` | `fm_sheet_set_thread_resolved` is removed; `fm_sheet_update_threaded_comment(wb, sheet_index, id, const fm_threaded_comment_patch_t*)` with `text`, `mentions` (applied when `mentions_engaged` is non-zero) and `done` (`-1` keeps the resolved state). `done` on a reply id returns `FM_STATUS_INVALID_ARGUMENT` |
 | (none) | `fm_sheet_get_print_options` and `fm_sheet_get_header_footer` read the print options and header/footer back |
 | (none) | `fm_workbook_get_table_runtime_id` / `fm_workbook_resolve_table_runtime_id` and `fm_sheet_get_pivot_runtime_id` / `fm_sheet_resolve_pivot_runtime_id` map a table or pivot index to an id that survives other tables or pivots being added or removed, and back |
 | a pivot `number_format` (`fm_pivot_field_spec_t`, the data-field spec and the pivot field setters) given as the text of a number-format id | `number_format` is a format code (`0.00%`). A digits-only string is read as a format code, so a call written for the old form silently selects a different format |
@@ -3450,6 +3567,24 @@ A caller compiled against an earlier header must be recompiled.
 | `fm_sheet_set_column_style`, `fm_sheet_set_row_style` | `fm_sheet_set_column_xf_index`, `fm_sheet_set_row_xf_index`, with `xf_index` as `size_t` |
 | `fm_sheet_remap_range_style`, `fm_sheet_snapshot_range_style`, `fm_sheet_restore_range_style` | `fm_sheet_remap_range_xfs`, `fm_sheet_snapshot_range_xfs`, `fm_sheet_restore_range_xfs`; the rectangle is a `const fm_cell_rect_t*` |
 | `fm_pivot_cells_destroy` | `fm_pivot_report_destroy`, on the `fm_pivot_report_t` handle |
+| `fm_sheet_set_drawing_anchor`, `fm_sheet_set_drawing_name` | removed; `fm_sheet_update_drawing(wb, sheet_index, object_id, const fm_drawing_patch_t*)` changes the name, description, hidden flag and anchor of any drawing object. The anchor is an embedded `fm_drawing_anchor_patch_t` that merges per field (an omitted `kind` keeps the object's kind); a slicer's name stays unchangeable |
+| `fm_sheet_remove_shape`, `fm_sheet_remove_slicer`, `fm_sheet_get_shape_count` / `_at`, `fm_sheet_get_slicer_count` / `_at` | removed; `fm_sheet_remove_drawing` removes a picture, chart, shape, connector, group or slicer, and `fm_sheet_get_drawing_object_count` / `_at` enumerate every kind |
+| the flat anchor fields of the shape, slicer and drawing records | one `fm_drawing_anchor_t anchor` (`kind`, `edit_as`, `from_row`, `from_col`, the four offsets, `to_row`, `to_col`, `width_emu`, `height_emu`); `fm_drawing_object_info_t` also carries `hidden` and `description` for every kind; `fm_chart_info_t` has no anchor, name or description |
+| `fm_sheet_insert_rows(wb, sheet_index, row, count)`, `fm_sheet_delete_rows`, `fm_sheet_insert_columns`, `fm_sheet_delete_columns` | `(wb, sheet_index, first, last)`, inclusive; `last < first` or a `last` past the grid is `FM_STATUS_INVALID_ARGUMENT` |
+| `fm_workbook_add_sheet(wb, name, out_sheet_index)`, `fm_workbook_move_sheet(wb, from_index, to_index)` | `fm_workbook_add_sheet(wb, name, insert_before, out_sheet_index)` and `fm_workbook_move_sheet(wb, from_index, insert_before)`, both with a position in the list before the call, as `fm_workbook_copy_sheet` has; `insert_before == sheet_count` appends. A `NULL` name takes the next default name |
+| `fm_sheet_add_validation(..., out_validation_index)`, `fm_sheet_remove_validation(wb, sheet_index, validation_index)` | `fm_sheet_add_validation(..., out_id)` returns an opaque `const char*` id (also `fm_data_validation_t.id`); `fm_sheet_get_validation`, `fm_sheet_update_validation` and `fm_sheet_remove_validation` take the id; an unknown id is `FM_STATUS_NOT_FOUND`; `_count` and `_at` stay for enumeration. `fm_validation_outcome_info_t.rule_index` is `rule_id` |
+| `fm_sheet_update_sparkline_group(wb, sheet_index, group_index, ...)`, `fm_sheet_remove_sparkline_group(wb, sheet_index, group_index)` | the same functions with a `const char* group_id`; `fm_sheet_add_sparkline_group` returns the id, `fm_sheet_get_sparkline_group` reads one by id and `fm_sparkline_group_t.id` carries it |
+| `fm_sheet_add_threaded_comment(...)` with a required `fm_threaded_comment_t.id` | `id` may be `NULL` and the engine generates a GUID; the id comes back through `const char** out_id`. `created` left empty is the pinned clock, else now. An unknown parent id is `FM_STATUS_NOT_FOUND` |
+| `fm_chart_series_info_t.idx`, `fm_chart_data_series_info_t.idx`, `fm_chart_unresolved_info_t.series_index` and the series parameters of the chart functions | `series_id` (point `idx` stays a position) |
+| `fm_external_link_info_t.index` | `book_number`, still 1-based: the `n` of `[n]` in formula text |
+| `fm_pivot_filter_t` `axis` and `field_name` | `field_index`; the axis is the field's |
+| `fm_sheet_add_pivot_field_subtotal_function`, `fm_sheet_clear_pivot_field_subtotal_functions` | `fm_sheet_set_pivot_field_subtotal_functions(wb, sheet_index, pivot_index, field_index, aggregations, count)` replaces the set; an empty list clears it and a repeated function is `FM_STATUS_INVALID_ARGUMENT` |
+| (none) | `fm_workbook_get_pivot_cache_record_value` reads one cache cell as an `fm_value_t` |
+| `fm_sheet_view_info_t.visibility`, `fm_sheet_view_patch_t.visibility` | removed; `fm_sheet_get_visibility` and `fm_sheet_set_visibility` |
+| (none) | `fm_sheet_update_cf_rule` merges an `fm_cf_rule_patch_t`; `fm_sheet_update_validation` merges an `fm_data_validation_patch_t`. A type change is `FM_STATUS_INVALID_ARGUMENT` |
+| (none) | `fm_workbook_set_fill`, `_set_border`, `_set_cell_xf` and `_set_dxf` replace the record at an index, as `fm_workbook_set_font` does |
+| (none) | `fm_get_profile_id_count` and `fm_get_profile_id_at` list the 28 Excel profile ids |
+| (none) | `fm_sheet_set_value(wb, sheet_index, row, col, const fm_value_t*)` writes any non-array value that `fm_sheet_get_value` reads |
 | `fm_sheet_add_row_break` | `fm_sheet_set_row_break(wb, sheet_index, row, const fm_row_break_t*)`, which upserts the break with its span and removes it with `NULL` |
 | `fm_sheet_get_row_override_count` | `fm_sheet_get_row_layout_count` |
 | `fm_sheet_set_header_footer`, `fm_sheet_set_page_margins`, `fm_sheet_set_print_options` | `fm_sheet_update_header_footer`, `fm_sheet_update_page_margins` (fields in inches with an `_in` suffix), `fm_sheet_update_print_options`; each merges |
@@ -3478,7 +3613,8 @@ where one exists, and the other members start at 0.
 | `fm_pivot_sort_order_t` | `DESCENDING` 0, `ASCENDING` 1, `MANUAL` 2 | `MANUAL` 0, `ASCENDING` 1, `DESCENDING` 2 |
 | `fm_comparison_operator_t` (replaces `fm_cf_operator_t`, `fm_validation_operator_t` and `fm_filter_operator_t`) | one table per feature (see the JavaScript table under [Enums](#enums)) | `BETWEEN` 0, `NOT_BETWEEN` 1, `EQUAL` 2, `NOT_EQUAL` 3, `LESS_THAN` 4, `LESS_THAN_OR_EQUAL` 5, `GREATER_THAN` 6, `GREATER_THAN_OR_EQUAL` 7 |
 | `fm_date_period_t` (was `fm_cf_time_period_t`) | `TODAY` 0, `YESTERDAY` 1, `TOMORROW` 2, `LAST_7_DAYS` 3, `THIS_WEEK` 4, `LAST_WEEK` 5, `NEXT_WEEK` 6, `THIS_MONTH` 7, `LAST_MONTH` 8, `NEXT_MONTH` 9 | `TODAY` 0, `YESTERDAY` 1, `TOMORROW` 2, `LAST_7_DAYS` 3, `THIS_MONTH` 4, `LAST_MONTH` 5, `NEXT_MONTH` 6, `THIS_WEEK` 7, `LAST_WEEK` 8, `NEXT_WEEK` 9 |
-| `fm_shape_paint_t` | `UNSET` 0, `SOLID` 1, `NONE` 2, `OTHER` 3 | `UNSET` -1, `SOLID` 0, `NONE` 1, `OTHER` 2 |
+| `fm_anchor_kind_t`, `fm_anchor_edit_as_t` | `FM_ANCHOR_KIND_DEFAULT` 0 and `FM_ANCHOR_EDIT_AS_DEFAULT` 0 (the operation's default kind on input, the anchor's own kind for `edit_as`); `ONE_CELL`, `TWO_CELL` and `ABSOLUTE` are 1, 2 and 3 | `ONE_CELL` 0, `TWO_CELL` 1, `ABSOLUTE` 2 (`edit_as`: `TWO_CELL` 0, `ONE_CELL` 1, `ABSOLUTE` 2) |
+| `fm_shape_paint_t` | `DEFAULT` 0 (no fill or outline of its own: the shape style's), `SOLID` 1, `NONE` 2, `OTHER` 3 | `UNSET` 0, `SOLID` 1, `NONE` 2, `OTHER` 3 |
 
 New enum typedefs replace `#define` sets and plain integers:
 `fm_page_orientation_t` (`PORTRAIT` 0, `LANDSCAPE` 1, replacing
@@ -3508,9 +3644,8 @@ field by field reads differently when a field is left at 0:
 
 | Field | 0 meant | 0 means |
 |---|---|---|
-| `fm_picture_insert_spec_t` anchor `edit_as` | `FM_ANCHOR_EDIT_AS_TWO_CELL` | `FM_ANCHOR_EDIT_AS_ONE_CELL` |
+| an anchor's `kind` and `edit_as` | `FM_ANCHOR_KIND_ONE_CELL`; `FM_ANCHOR_EDIT_AS_TWO_CELL` | `FM_ANCHOR_KIND_DEFAULT` (picture one-cell, chart, shape and slicer two-cell); `FM_ANCHOR_EDIT_AS_DEFAULT` (the anchor's own kind) |
 | a legend position (`fm_chart_legend_position_t`) | no legend | `FM_CHART_LEGEND_POSITION_RIGHT` |
-| a shape fill or line (`fm_shape_paint_t`) | unset | `FM_SHAPE_PAINT_SOLID` |
 | chart blanks, crossing and bar direction | absent | zero, automatic zero and column |
 | a sparkline group's `empty_cells_as` | `FM_SPARKLINE_EMPTY_CELLS_GAP` | `FM_BLANKS_AS_ZERO` |
 | a pivot field sort order (`fm_pivot_sort_order_t`) | descending | manual |
@@ -3535,10 +3670,10 @@ through its operation instead.
 | `fm_chart_legend_t`, `fm_chart_legend_patch_t` | `hidden_series` and `hidden_series_count` are `hidden_entries` and `hidden_entry_count` (the patch's op is `hidden_entries_op`); `fm_sheet_set_chart_filter` keeps `hidden_series` |
 | `fm_chart_axis_patch_t`, `fm_chart_labels_patch_t`, `fm_chart_display_patch_t` | gain `minor_unit`, `minor_gridlines`, `position` and `source_linked`; `source_linked` and `deleted`; and `style` (1 to 48), each with its `_op` |
 | `fm_chart_point_patch_t` | an all-`KEEP` patch changes nothing (it removed the point's formatting); a point whose override ends empty loses its `c:dPt`, and `CLEAR` on a line's `none` resets it to 0 |
-| `fm_picture_insert_spec_t` | `descr` is `description`; the anchor fields (`anchor_kind`, `edit_as`, `row`, `col`, `row_offset_emu`, `col_offset_emu`, `width_emu`, `height_emu`) are the `anchor` member, an `fm_drawing_anchor_t` |
+| `fm_picture_insert_spec_t` (`fm_drawing_placement_spec_t`, which also carries `hidden`) | `descr` is `description`; the anchor fields (`anchor_kind`, `edit_as`, `row`, `col`, `row_offset_emu`, `col_offset_emu`, `width_emu`, `height_emu`) are the `anchor` member, an `fm_drawing_anchor_t` |
 | `fm_chart_info_t`, `fm_drawing_object_t` | `descr` is `description`; `from_row_offset`, `from_col_offset`, `to_row_offset`, `to_col_offset` gain `_emu`; `cx` and `cy` are `width_emu` and `height_emu` |
-| `fm_shape_t` | the same offset and size renames; `prst` is `preset_geometry` |
-| `fm_slicer_t` | the four offsets gain `_emu`; `row_height` is `row_height_emu` |
+| `fm_shape_t` | the same offset and size renames; `prst` is `preset_geometry`; the anchor and the name are read from `fm_drawing_object_info_t` |
+| `fm_slicer_t` | `row_height` is `row_height_emu`; the anchor and the name are read from `fm_drawing_object_info_t` |
 | `fm_sheet_view_t` | `tab_hidden` is removed; `view_mode` is an `int32_t` `fm_sheet_view_mode_t` instead of text |
 | `fm_page_setup_t` | `orientation` is an `int32_t` `fm_page_orientation_t` (was `uint32_t`) |
 | `fm_external_link_record_t` | `kind` is an `int32_t` `fm_external_link_kind_t` (was `uint32_t`) |
@@ -3567,7 +3702,7 @@ through its operation instead.
 |---|---|
 | every `_t` record under a role | renamed by role: `_spec_t` input only, `_info_t` output only, plain `_t` read and written, `_patch_t` partial update; the table under [Name migration](#name-migration) lists each one. `fm_sheet_rect_t`, `fm_drawing_anchor_t` and the chart fill, line, marker and label value types keep their names |
 | per-record patch conventions (`engaged` flags, `-1` sentinels, `FM_CHART_PATCH_*`) | `fm_patch_op_t` (`FM_PATCH_OP_KEEP` 0, `_CLEAR` 1, `_SET` 2) and one `<field>_op` before each field of the shape, slicer, chart, table, iterative-settings, view and threaded-comment patches. `FM_CHART_PATCH_*` and `fm_chart_patch_op_t` are gone |
-| `fm_sheet_add_shape`, `fm_sheet_update_shape` and the slicer pair taking an `FM_SHAPE_FIELD_*` / `FM_SLICER_FIELD_*` mask | `fm_shape_patch_t` and `fm_slicer_patch_t`; the masks are removed. The read records are `fm_shape_info_t` and `fm_slicer_info_t`, and a `KEEP` or `CLEAR` field of an add takes the new-object default |
+| `fm_sheet_add_shape`, `fm_sheet_update_shape` and the slicer pair taking an `FM_SHAPE_FIELD_*` / `FM_SLICER_FIELD_*` mask | `fm_shape_spec_t` and `fm_slicer_spec_t` for the adds and `fm_shape_patch_t` and `fm_slicer_patch_t` (kind-specific fields only) for the updates; the masks are removed. The read records are `fm_shape_info_t` and `fm_slicer_info_t` |
 | the fourteen single-field view setters (`fm_sheet_set_zoom` and the rest; `fm_sheet_set_selection` stays) | `fm_sheet_update_view(wb, sheet_index, const fm_sheet_view_patch_t*)` |
 | `fm_workbook_table_at` and `fm_sheet_get_table_info` | `fm_sheet_get_table_at(wb, sheet_index, table_index, fm_table_info_t*)`, which carries the name and range |
 | a positional getter without `_at` | `_at` on every positional getter, for example `fm_workbook_get_external_link_at` |
@@ -3605,6 +3740,54 @@ order.
 
 ### Added
 
+- Lookups and lists: `Workbook.sheetCount` and `hasSheet(ref)` (Python
+  `len(wb)` and `ref in wb`), `formulon.listProfileIds()` (Python
+  `list_profile_ids()`, 28 ids), `Workbook.listThemeScriptFonts(scheme)` with
+  the `ThemeScriptFontKey` type for `getThemeScriptFont`, and
+  `PivotCache.getRecordValue(recordIndex, fieldIndex)` (`get_record_value`).
+  `Pivot.getField(i)`, `getDataField(i)` and `getFilter(i)` read one element
+  of the list at that position (`IndexOutOfRange` past the end), and
+  `Pivot.getProperties()` returns `{ name, cacheId, reportLayout, grandTotals,
+  styleOptions }`, the definition of the pivot.
+- `Sheet.updateValidation(ref, patch)` and `updateCfRule(ref, patch)` (Python
+  keyword-only `update_validation`, `update_cf_rule`) change part of a rule.
+  `ooxml.setFill`, `setBorder`, `setCellXf` and `setDxf` replace the record at an
+  index, as `setFont` does.
+- Reference types: `ValidationRef`, `SparklineGroupRef`, `PivotCacheRef` (a
+  number or a `PivotCache`: `pivotCache`, `removePivotCache` and
+  `PivotInput.cacheId` take it), `PivotFieldRef`, `ChartAxisRef` (an axis id, or
+  `{ kind, plot? }`: `updateAxis(axis, patch)` finds the axis of that kind).
+  Python exports the same aliases.
+- `Sheet.getVisibility()` and `setVisibility(visibility)`, and the C
+  functions of the same names.
+- `DrawingAnchorInput`, `DrawingAnchorPatch` and `DrawingPlacementInput`
+  (JavaScript and Python); `DrawingProperties.hidden` and `description` for every
+  kind, written as the `hidden` and `descr` attributes of the drawing's
+  `cNvPr`. `Drawing.name` reads the object's current name.
+  `addSlicer(table, column, spec)` takes the column by name as well as by
+  number.
+- Chart parts are named and read-only: `ChartCategories`, `ChartAxisTitleText`,
+  `ChartUnresolved` and `ChartSeriesRanges`.
+- Conditional-format payloads: `CfColorScale`, `CfDataBar` and `CfIconSet` are
+  the records a read returns, with `CfColorScaleInput`, `CfDataBarInput` and
+  `CfIconSetInput` for input (they replace Python's `ColorScale`, `DataBar` and
+  `IconSet`), and `CfExpressionRuleInput`,
+  `CfCellIsRuleInput`, `CfColorScaleRuleInput`, `CfDataBarRuleInput`,
+  `CfIconSetRuleInput`, `CfTop10RuleInput`, `CfAboveAverageRuleInput`,
+  `CfTextRuleInput`, `CfTimePeriodRuleInput` and `CfPlainRuleInput` are the
+  inputs of `addCfRule` (Python dataclasses of the same names, with
+  `ConditionalFormatInput` the union).
+- `EffectiveBorders` (`left`, `right`, `top`, `bottom`, `diagonal`) is the
+  type of `EffectiveStyle.borders` in both bindings. `PrintOptionsInput`,
+  `HeaderFooterInput` and their patches are exported, and
+  `toNative` and `mergeFunctionMetadata` are named exports of every entry
+  point. `getImageInfo`, `addPicture` and `restoreDrawing` accept the byte
+  inputs `load` accepts. Python `Pivot` has a `repr`, `Workbook.ooxml` is typed,
+  and iterating a `Sheet` or testing `in` raises `TypeError` that names
+  `iter_rows()`.
+- C: `fm_sheet_set_value`, `fm_get_profile_id_count`, `fm_get_profile_id_at`,
+  `fm_sheet_get_sparkline_group` and `fm_sheet_get_validation`; see [C ABI
+  changes](#c-abi-changes).
 - Input types: `FontInput`, `FillInput` (`GradientFillInput`,
   `GradientStopInput`), `BorderInput` (`BorderSideInput`), `CellXfInput`,
   `DxfInput`, `CellStyleInput`, `TableStyleInput` (`TableStyleElementInput`),

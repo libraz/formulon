@@ -111,7 +111,7 @@ Napi::Value EvaluateFormula(const Napi::CallbackInfo& info) {
     return ThrowStatus(env, rc);
   }
   std::size_t sheet_index = 0;
-  rc = fm_workbook_add_sheet(wb, "Sheet1", &sheet_index);
+  rc = fm_workbook_add_sheet(wb, "Sheet1", 0, &sheet_index);
   if (rc != 0) {
     const Napi::Value failed = ThrowStatus(env, rc);
     fm_workbook_destroy(wb);

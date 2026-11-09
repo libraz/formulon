@@ -23,6 +23,7 @@
 #include "parser/ref_transforms.h"
 #include "sheet.h"
 #include "sheet_copy_names.h"
+#include "sheet_name.h"
 #include "table.h"
 #include "unknown_relationship.h"
 #include "utils/derived_guid.h"
@@ -105,14 +106,13 @@ Expected<std::size_t, Error> Workbook::copy_sheet(std::size_t source, std::size_
   const auto name_taken = [](void* context, std::string_view candidate) {
     const auto& [workbook, copies] = *static_cast<const NameScope*>(context);
     const auto table_named = [candidate](const TableMetadata& table) {
-      return strings::case_insensitive_eq(table.name, candidate) ||
-             strings::case_insensitive_eq(table.display_name, candidate);
+      return collection_names::equal(table.name, candidate) || collection_names::equal(table.display_name, candidate);
     };
     return std::any_of(workbook->tables_.begin(), workbook->tables_.end(), table_named) ||
            std::any_of(copies->begin(), copies->end(), table_named) ||
            std::any_of(
                workbook->defined_names_.begin(), workbook->defined_names_.end(),
-               [candidate](const DefinedName& entry) { return strings::case_insensitive_eq(entry.name, candidate); });
+               [candidate](const DefinedName& entry) { return collection_names::equal(entry.name, candidate); });
   };
   for (const TableMetadata& table : tables_) {
     if (table.sheet_index != source) {
@@ -155,7 +155,7 @@ Expected<std::size_t, Error> Workbook::copy_sheet(std::size_t source, std::size_
       continue;
     }
     const bool shadowed = std::any_of(defined_names_.begin(), defined_names_.end(), [&](const DefinedName& local) {
-      return local.local_sheet_id == source_id && strings::case_insensitive_eq(local.name, entry.name);
+      return local.local_sheet_id == source_id && collection_names::equal(local.name, entry.name);
     });
     if (shadowed) {
       continue;

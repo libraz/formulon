@@ -34,9 +34,9 @@ struct WorkbookGuard {
 // Builds a workbook with three sheets — `Alpha`, `Beta`, `Gamma`.
 void MakeThreeSheets(WorkbookGuard& wb) {
   ASSERT_EQ(fm_workbook_create_empty(&wb.handle), 0);
-  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Alpha", ignored_index()), 0);
-  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Beta", ignored_index()), 0);
-  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Gamma", ignored_index()), 0);
+  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Alpha", append_position(wb.handle), ignored_index()), 0);
+  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Beta", append_position(wb.handle), ignored_index()), 0);
+  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Gamma", append_position(wb.handle), ignored_index()), 0);
 }
 
 const char* SheetName(fm_workbook_t* wb, std::size_t idx) {
@@ -70,10 +70,10 @@ TEST(WorkbookSheetOpsCApi, RenameRejectsBadName) {
 TEST(WorkbookSheetOpsCApi, UnicodeSimpleFoldAddRejectsDuplicateAndRenameWorks) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_empty(&wb.handle), 0);
-  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "\xC3\x84", ignored_index()), 0);        // Ä
-  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "\xC3\x96", ignored_index()), 0);        // Ö
-  EXPECT_NE(fm_workbook_add_sheet(wb.handle, "\xC3\xA4", ignored_index()), 0);        // ä
-  const fm_status_t collision = fm_workbook_rename_sheet(wb.handle, 1U, "\xC3\xA4");  // ä
+  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "\xC3\x84", append_position(wb.handle), ignored_index()), 0);  // Ä
+  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "\xC3\x96", append_position(wb.handle), ignored_index()), 0);  // Ö
+  EXPECT_NE(fm_workbook_add_sheet(wb.handle, "\xC3\xA4", append_position(wb.handle), ignored_index()), 0);  // ä
+  const fm_status_t collision = fm_workbook_rename_sheet(wb.handle, 1U, "\xC3\xA4");                        // ä
   EXPECT_NE(collision, 0);
   EXPECT_EQ(collision, FM_STATUS_ALREADY_EXISTS);
   EXPECT_STREQ(SheetName(wb.handle, 0U), "\xC3\x84");  // Ä
@@ -86,25 +86,25 @@ TEST(WorkbookSheetOpsCApi, UnicodeSimpleFoldAddRejectsDuplicateAndRenameWorks) {
 TEST(WorkbookSheetOpsCApi, UnicodeMalformedUtf8Rejected) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_empty(&wb.handle), 0);
-  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Valid", ignored_index()), 0);
+  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Valid", append_position(wb.handle), ignored_index()), 0);
   const char malformed[] = {'\xC3', '\0'};
-  EXPECT_NE(fm_workbook_add_sheet(wb.handle, malformed, ignored_index()), 0);
+  EXPECT_NE(fm_workbook_add_sheet(wb.handle, malformed, append_position(wb.handle), ignored_index()), 0);
   EXPECT_NE(fm_workbook_rename_sheet(wb.handle, 0U, malformed), 0);
 }
 
 TEST(WorkbookSheetOpsCApi, AddRejectsNamesExcelsUiRefusesAsRenameDoes) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_empty(&wb.handle), 0);
-  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Valid", ignored_index()), 0);
+  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Valid", append_position(wb.handle), ignored_index()), 0);
   for (const char* name : {"History", "HISTORY", "'a", "a'"}) {
-    const fm_status_t added = fm_workbook_add_sheet(wb.handle, name, ignored_index());
+    const fm_status_t added = fm_workbook_add_sheet(wb.handle, name, append_position(wb.handle), ignored_index());
     EXPECT_STREQ(fm_get_status_name(added), "INVALID_SHEET_NAME") << name;
     EXPECT_EQ(added, fm_workbook_rename_sheet(wb.handle, 0U, name)) << name;
   }
   EXPECT_EQ(count_of(fm_workbook_get_sheet_count, wb.handle), 1U);
   EXPECT_STREQ(SheetName(wb.handle, 0U), "Valid");
   // An inner apostrophe is an ordinary character.
-  EXPECT_EQ(fm_workbook_add_sheet(wb.handle, "a'b", ignored_index()), 0);
+  EXPECT_EQ(fm_workbook_add_sheet(wb.handle, "a'b", append_position(wb.handle), ignored_index()), 0);
 }
 
 TEST(WorkbookSheetOpsCApi, RenameRejectsOutOfRange) {
@@ -148,8 +148,8 @@ TEST(WorkbookSheetOpsCApi, RemoveRejectsOutOfRange) {
 TEST(WorkbookSheetOpsCApi, MoveForward) {
   WorkbookGuard wb;
   MakeThreeSheets(wb);
-  // Alpha -> end (post-removal index 2).
-  ASSERT_EQ(fm_workbook_move_sheet(wb.handle, 0, 2), 0);
+  // Alpha -> end: before the position one past the last sheet.
+  ASSERT_EQ(fm_workbook_move_sheet(wb.handle, 0, 3), 0);
   EXPECT_STREQ(SheetName(wb.handle, 0), "Beta");
   EXPECT_STREQ(SheetName(wb.handle, 1), "Gamma");
   EXPECT_STREQ(SheetName(wb.handle, 2), "Alpha");
@@ -168,6 +168,7 @@ TEST(WorkbookSheetOpsCApi, MoveNoOp) {
   WorkbookGuard wb;
   MakeThreeSheets(wb);
   ASSERT_EQ(fm_workbook_move_sheet(wb.handle, 1, 1), 0);
+  ASSERT_EQ(fm_workbook_move_sheet(wb.handle, 1, 2), 0);
   EXPECT_STREQ(SheetName(wb.handle, 1), "Beta");
 }
 
@@ -405,10 +406,99 @@ TEST(WorkbookSheetOpsCApi, RenameAndRemoveRewriteFormulaThroughPublicPath) {
   ASSERT_EQ(fm_sheet_get_cell_at(wb.handle, 0, 0, &row, &col, &formula, &cached), 0);
   ASSERT_NE(formula, nullptr);
   EXPECT_STREQ(formula, "=#REF!A1");
-  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Delta", ignored_index()), 0);
+  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Delta", append_position(wb.handle), ignored_index()), 0);
   ASSERT_EQ(fm_sheet_set_number(wb.handle, 2, 0, 0, 99.0), 0);
   ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
   ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, 0, 0, &cached), 0);
   EXPECT_EQ(cached.kind, FM_VALUE_KIND_ERROR);
   EXPECT_EQ(cached.u.error_code, static_cast<fm_error_code_t>(formulon::ErrorCode::Ref));
+}
+
+TEST(WorkbookSheetOpsCApi, AddWithoutNameTakesTheNextDefaultName) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  std::size_t added = 99;
+  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, nullptr, append_position(wb.handle), &added), 0);
+  EXPECT_EQ(added, 1U);
+  EXPECT_STREQ(SheetName(wb.handle, 1), "Sheet2");
+  ASSERT_EQ(fm_workbook_rename_sheet(wb.handle, 0, "Sheet3"), 0);
+  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, nullptr, append_position(wb.handle), &added), 0);
+  EXPECT_STREQ(SheetName(wb.handle, 2), "Sheet1");
+}
+
+TEST(WorkbookSheetOpsCApi, AddPlacesTheSheetBeforeTheGivenPosition) {
+  WorkbookGuard wb;
+  MakeThreeSheets(wb);
+  std::size_t added = 99;
+  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Front", 0, &added), 0);
+  EXPECT_EQ(added, 0U);
+  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Middle", 2, &added), 0);
+  EXPECT_EQ(added, 2U);
+  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Back", 5, &added), 0);
+  EXPECT_EQ(added, 5U);
+  const char* const expected[] = {"Front", "Alpha", "Middle", "Beta", "Gamma", "Back"};
+  for (std::size_t i = 0; i < 6; ++i) {
+    EXPECT_STREQ(SheetName(wb.handle, i), expected[i]) << i;
+  }
+}
+
+TEST(WorkbookSheetOpsCApi, AddRejectsAPositionPastTheSheetCount) {
+  WorkbookGuard wb;
+  MakeThreeSheets(wb);
+  std::size_t added = 0;
+  EXPECT_EQ(fm_workbook_add_sheet(wb.handle, "Late", 4, &added), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(fm_workbook_add_sheet(wb.handle, nullptr, 4, &added), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(count_of(fm_workbook_get_sheet_count, wb.handle), 3U);
+}
+
+TEST(WorkbookSheetOpsCApi, MoveTakesAnInsertBeforePosition) {
+  WorkbookGuard wb;
+  MakeThreeSheets(wb);
+  ASSERT_EQ(fm_workbook_move_sheet(wb.handle, 0, 2), 0);  // Alpha goes before Gamma.
+  EXPECT_STREQ(SheetName(wb.handle, 0), "Beta");
+  EXPECT_STREQ(SheetName(wb.handle, 1), "Alpha");
+  EXPECT_STREQ(SheetName(wb.handle, 2), "Gamma");
+  EXPECT_EQ(fm_workbook_move_sheet(wb.handle, 0, 4), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(fm_workbook_move_sheet(wb.handle, 3, 0), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
+}
+
+TEST(WorkbookSheetOpsCApi, StructuralEditsTakeAnInclusiveSpan) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  ASSERT_EQ(fm_sheet_set_number(wb.handle, 0, 5, 5, 7.0), 0);  // F6
+  ASSERT_EQ(fm_sheet_insert_rows(wb.handle, 0, 1, 3), 0);      // three rows open at row 1
+  ASSERT_EQ(fm_sheet_insert_columns(wb.handle, 0, 0, 1), 0);   // two columns open at column 0
+  fm_value_t value{};
+  ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, 8, 7, &value), 0);
+  EXPECT_DOUBLE_EQ(value.u.number, 7.0);
+  ASSERT_EQ(fm_sheet_delete_rows(wb.handle, 0, 1, 3), 0);
+  ASSERT_EQ(fm_sheet_delete_columns(wb.handle, 0, 0, 1), 0);
+  ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, 5, 5, &value), 0);
+  EXPECT_DOUBLE_EQ(value.u.number, 7.0);
+}
+
+TEST(WorkbookSheetOpsCApi, StructuralEditsRejectAnEmptySpanOrOneBeyondTheSheet) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  EXPECT_EQ(fm_sheet_insert_rows(wb.handle, 0, 4, 3), FM_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(fm_sheet_delete_rows(wb.handle, 0, 4, 3), FM_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(fm_sheet_insert_rows(wb.handle, 0, 0, 1048576U), FM_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(fm_sheet_insert_columns(wb.handle, 0, 4, 3), FM_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(fm_sheet_delete_columns(wb.handle, 0, 0, 16384U), FM_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(fm_sheet_insert_rows(wb.handle, 9, 0, 0), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
+}
+
+TEST(WorkbookSheetOpsCApi, ProfileIdsAreListedByPosition) {
+  const std::size_t count = count_of(fm_get_profile_id_count);
+  ASSERT_GT(count, 0U);
+  for (std::size_t i = 0; i < count; ++i) {
+    const char* id = nullptr;
+    ASSERT_EQ(fm_get_profile_id_at(i, &id), 0);
+    fm_workbook_t* wb = nullptr;
+    ASSERT_EQ(fm_workbook_create_for_profile(id, &wb), 0) << id;
+    fm_workbook_destroy(wb);
+  }
+  const char* id = nullptr;
+  EXPECT_EQ(fm_get_profile_id_at(count, &id), FM_STATUS_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(fm_get_profile_id_at(0, nullptr), FM_STATUS_BINDING_NULL_POINTER);
 }

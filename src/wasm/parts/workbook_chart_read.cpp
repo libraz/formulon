@@ -148,7 +148,7 @@ constexpr RdField kPointRd[] = {
 };
 
 constexpr RdField kSeriesRd[] = {
-    RD("index", fm_chart_series_info_t, idx, kU32),
+    RD("seriesId", fm_chart_series_info_t, series_id, kU32),
     RD("order", fm_chart_series_info_t, order, kU32),
     RD("filtered", fm_chart_series_info_t, filtered, kBool),
     RD_OBJ("fill", fm_chart_series_info_t, fill, kFillRd),
@@ -193,8 +193,6 @@ constexpr RdField kAxisRd[] = {
 
 constexpr RdField kInfoRd[] = {
     RD("objectId", fm_chart_info_t, object_id, kU32),
-    RD("name", fm_chart_info_t, name, kStr),
-    RD("description", fm_chart_info_t, description, kStr),
     RD("isExtended", fm_chart_info_t, is_extended, kBool),
     RD("isPivotChart", fm_chart_info_t, is_pivot_chart, kBool),
     RD("onChartsheet", fm_chart_info_t, on_chartsheet, kBool),
@@ -402,7 +400,7 @@ val chart_to_val(const fm_chart_t* chart, fm_status_t& rc) {
     push(axes, a);
   }
   o.set("axes", axes);
-  // The filter: the `idx` of every filtered series across the plots, and the hidden categories.
+  // The filter: the id of every filtered series across the plots, and the hidden categories.
   val filter = val::object();
   val hidden_series = val::array();
   for (size_t i = 0; i < info.plot_count && rc == 0; ++i) {
@@ -416,7 +414,7 @@ val chart_to_val(const fm_chart_t* chart, fm_status_t& rc) {
         break;
       }
       if (series.filtered != 0) {
-        push(hidden_series, val(series.idx));
+        push(hidden_series, val(series.series_id));
       }
     }
   }
@@ -463,7 +461,7 @@ val data_series_to_val(const fm_chart_data_t* data, size_t index, fm_status_t& r
   }
   val o = val::object();
   o.set("plotIndex", val(s.plot_index));
-  o.set("index", val(s.idx));
+  o.set("seriesId", val(s.series_id));
   o.set("name", s.name != nullptr ? val(std::string(s.name)) : val::null());
   o.set("numberFormat", val(string_from_cstr(s.format_code)));
   o.set("xNumberFormat", val(string_from_cstr(s.x_format_code)));
@@ -559,7 +557,7 @@ val chart_data_to_val(const fm_chart_data_t* data, fm_status_t& rc) {
       break;
     }
     val item = val::object();
-    item.set("seriesIndex", val(u.series_index));
+    item.set("seriesId", val(u.series_id));
     item.set("source", val(u.source));
     item.set("axisId", val(u.axis_id));
     push(unresolved, item);

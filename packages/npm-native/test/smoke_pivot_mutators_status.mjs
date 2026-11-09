@@ -34,14 +34,14 @@ function buildPivot(mod) {
   }
   const pivot = wb.sheet(0).addPivot({ name: 'Pivot1', cacheId, anchor: { row: 0, col: 6 } });
   const addField = (spec) => pivot.addField(spec);
-  const region = addField({ sourceName: 'Region', axis: 0 });
+  const region = addField({ fieldIndex: 'Region', axis: 0 });
   pivot.addFieldItem(region, 'East');
   pivot.addFieldItem(region, 'West');
-  const product = addField({ sourceName: 'Product', axis: 2 });
+  const product = addField({ fieldIndex: 'Product', axis: 2 });
   pivot.addFieldItem(product, 'Apple');
   pivot.addFieldItem(product, 'Pear');
-  const amount = addField({ sourceName: 'Amount', axis: 2 });
-  const date = addField({ sourceName: 'Date', axis: 2 });
+  const amount = addField({ fieldIndex: 'Amount', axis: 2 });
+  const date = addField({ fieldIndex: 'Date', axis: 2 });
   pivot.setRowFieldOrder([region]);
   pivot.addDataField({ name: 'Sum of Amount', fieldIndex: amount, aggregation: 0 });
   return { wb, mod, cacheId, pivot, region, product, amount, date };
@@ -83,10 +83,9 @@ const twoLevels = (b) => b.pivot.setRowFieldOrder([b.region, b.product]);
 const dateRows = (b) => b.pivot.setRowFieldOrder([b.date]);
 const hideEast = (b) => b.pivot.updateFieldItem(b.region, 0, { visible: false });
 const WEST_ONLY = ['行ラベル|Sum of Amount', 'West|37', '総計|37'];
-const GREATER_THAN_20 = Object.freeze({ axis: 0, fieldName: 'Region', type: 1, value: 20 });
+const GREATER_THAN_20 = Object.freeze({ fieldIndex: 'Region', type: 1, value: 20 });
 const BETWEEN_10_20 = Object.freeze({
-  axis: 0,
-  fieldName: 'Region',
+  fieldIndex: 'Region',
   type: 2,
   value: 10,
   valueHigh: 20,
@@ -415,7 +414,7 @@ const PIVOT_MUTATORS = [
   [
     'Pivot.addField',
     {
-      act: (b) => b.pivot.addField({ sourceName: 'Product', customName: 'Fruit', axis: 3 }),
+      act: (b) => b.pivot.addField({ fieldIndex: 'Product', customName: 'Fruit', axis: 3 }),
       expect: (b, r) => {
         // Product is a cache column the fixture already added, so it is updated in place.
         assert.equal(r, b.product);
@@ -507,10 +506,10 @@ const PIVOT_MUTATORS = [
     },
   ],
   [
-    'Pivot.addFieldSubtotalFunction',
+    'Pivot.setFieldSubtotalFunctions',
     {
       setup: twoLevels,
-      act: (b) => b.pivot.addFieldSubtotalFunction(b.region, 3),
+      act: (b) => b.pivot.setFieldSubtotalFunctions(b.region, [3]),
       expect: (b) =>
         assert.deepEqual(pivotGrid(b.wb), [
           '行ラベル|Sum of Amount',
@@ -525,13 +524,13 @@ const PIVOT_MUTATORS = [
     },
   ],
   [
-    'Pivot.clearFieldSubtotalFunctions',
+    'Pivot.setFieldSubtotalFunctions',
     {
       setup: (b) => {
         twoLevels(b);
-        b.pivot.addFieldSubtotalFunction(b.region, 3);
+        b.pivot.setFieldSubtotalFunctions(b.region, [3]);
       },
-      act: (b) => b.pivot.clearFieldSubtotalFunctions(b.region),
+      act: (b) => b.pivot.setFieldSubtotalFunctions(b.region, []),
       expect: (b) => assert.deepEqual(pivotGrid(b.wb), TWO_LEVEL_GRID),
     },
   ],
@@ -940,8 +939,7 @@ test('pivot filters and subtotal functions survive save and reload', async () =>
   const b = buildPivot(mod);
   try {
     b.pivot.addFilter(GREATER_THAN_20);
-    b.pivot.addFieldSubtotalFunction(b.region, 2);
-    b.pivot.addFieldSubtotalFunction(b.region, 0);
+    b.pivot.setFieldSubtotalFunctions(b.region, [2, 0]);
     const region = b.pivot.listFields()[b.region];
     assert.equal(region.defaultSubtotal, false);
     assert.deepEqual(region.subtotalFunctions, [0, 2]);
@@ -959,7 +957,7 @@ test('pivot filters and subtotal functions survive save and reload', async () =>
       assert.equal(back.sheet(0).pivot(0).listFilters().length, 1);
       const filter = back.sheet(0).pivot(0).listFilters()[0];
       assert.equal(filter.type, 1);
-      assert.equal(filter.fieldName, 'Region');
+      assert.equal(filter.fieldIndex, 0);
       assert.equal(filter.value, 20);
       assert.deepEqual(pivotGrid(back), WEST_ONLY);
       const field = back.sheet(0).pivot(0).listFields()[0];
@@ -1346,7 +1344,10 @@ test('calculated fields and items reject bad arguments and change nothing', asyn
     assert.throws(() => b.wb.pivotCache('1').addCalculatedField('D', 'Amount'), TypeError);
     assert.throws(() => b.wb.pivotCache(b.cacheId).addCalculatedItem(0.5, 'N', 'East'), RangeError);
     assert.throws(() => b.wb.pivotCache(b.cacheId).addCalculatedItem(b.region, 'N', undefined), TypeError);
-    assert.throws(() => b.wb.pivotCache(b.cacheId).moveCalculatedItem(0, -1), RangeError);
+    assert.throws(
+      () => b.wb.pivotCache(b.cacheId).moveCalculatedItem(0, -1),
+      (e) => isFormulonError(e, 13),
+    );
     assert.throws(() => b.wb.pivotCache('a').listCalculatedItems(), TypeError);
     // Rejected by the engine: empty or reserved names, bad formulas.
     for (const [name, formula] of [
@@ -1402,7 +1403,10 @@ test('pivot field custom names, show-all and default data field names report bad
   try {
     assert.throws(() => b.pivot.updateField(b.region, { customName: 5 }), TypeError);
     assert.throws(() => b.pivot.updateField(b.region), TypeError);
-    assert.throws(() => b.pivot.updateField(-1, { customName: 'x' }), RangeError);
+    assert.throws(
+      () => b.pivot.updateField(-1, { customName: 'x' }),
+      (e) => isFormulonError(e, 13),
+    );
     assert.throws(() => b.pivot.updateField(b.region, { showAll: null }), TypeError);
     assert.throws(() => b.pivot.updateField(b.region, { bogus: 0 }), TypeError);
     assert.throws(() => b.pivot.updateField(99, { customName: 'x' }), isFormulonError);
@@ -1444,8 +1448,7 @@ test('label-between filters carry valueHigh', async () => {
   const b = buildPivot(mod);
   try {
     const spec = {
-      axis: 0,
-      fieldName: 'Region',
+      fieldIndex: 'Region',
       type: mod.PivotFilterKind.LabelBetween,
       value: 'A',
     };

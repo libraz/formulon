@@ -45,10 +45,14 @@ test('drawing enums keep their C ordinals', async () => {
   assert.equal(mod.ImageFormat.Bmp, 4);
   assert.equal(mod.DrawingObjectKind.Picture, 0);
   assert.equal(mod.DrawingObjectKind.Other, 6);
-  assert.equal(mod.AnchorKind.Absolute, 2);
-  assert.equal(mod.AnchorEditAs.OneCell, 0);
-  assert.equal(mod.AnchorEditAs.TwoCell, 1);
-  assert.equal(mod.AnchorEditAs.Absolute, 2);
+  assert.equal(mod.AnchorKind.Default, 0);
+  assert.equal(mod.AnchorKind.OneCell, 1);
+  assert.equal(mod.AnchorKind.TwoCell, 2);
+  assert.equal(mod.AnchorKind.Absolute, 3);
+  assert.equal(mod.AnchorEditAs.Default, 0);
+  assert.equal(mod.AnchorEditAs.OneCell, 1);
+  assert.equal(mod.AnchorEditAs.TwoCell, 2);
+  assert.equal(mod.AnchorEditAs.Absolute, 3);
 });
 
 test('images probe, insert, list, read back, survive save and load, and remove', async () => {
@@ -68,7 +72,7 @@ test('images probe, insert, list, read back, survive save and load, and remove',
     const ins = wb.sheet(0).addPicture(png, {
       name: 'logo',
       description: 'alt',
-      anchor: { anchorKind: mod.AnchorKind.OneCell, row: 2, col: 3 },
+      anchor: { kind: mod.AnchorKind.OneCell, fromRow: 2, fromCol: 3 },
     });
     assert.ok(ins.objectId > 0);
     assert.equal(ins.kind, mod.DrawingObjectKind.Picture);
@@ -78,14 +82,16 @@ test('images probe, insert, list, read back, survive save and load, and remove',
       assert.equal(list.length, 1);
       const o = list[0].getDrawingProperties();
       assert.equal(o.kind, mod.DrawingObjectKind.Picture);
-      assert.equal(o.anchorKind, mod.AnchorKind.OneCell);
-      assert.equal(o.fromRow, 2);
-      assert.equal(o.fromCol, 3);
-      assert.equal(o.widthEmu, 4 * 9525);
-      assert.equal(o.heightEmu, 9525);
-      assert.equal(o.format, mod.ImageFormat.Png);
+      assert.equal(o.anchor.kind, mod.AnchorKind.OneCell);
+      assert.equal(o.anchor.fromRow, 2);
+      assert.equal(o.anchor.fromCol, 3);
+      assert.equal(o.anchor.widthEmu, 4 * 9525);
+      assert.equal(o.anchor.heightEmu, 9525);
+      assert.equal('format' in o, false);
       assert.equal(o.name, 'logo');
+      assert.equal(list[0].name, 'logo');
       assert.equal(o.description, 'alt');
+      assert.equal(o.hidden, false);
       assert.equal('mediaPath' in o, false);
       assert.equal('imageFormat' in o, false);
       const img = list[0].getProperties();
@@ -126,34 +132,53 @@ test('images probe, insert, list, read back, survive save and load, and remove',
   }
 });
 
-test('setDrawingAnchor moves and resizes a picture and keeps its id', async () => {
+test('Drawing.update moves and resizes a picture and keeps its id', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   try {
-    const ins = wb.sheet(0).addPicture(makePng(4), { name: 'logo', anchor: { row: 1, col: 1 } });
-    wb.sheet(0).picture(ins).setAnchor({
-      anchorKind: mod.AnchorKind.TwoCell,
-      editAs: mod.AnchorEditAs.OneCell,
-      row: 5,
-      col: 3,
-      rowOffsetEmu: 1000,
-      colOffsetEmu: 2000,
-      widthEmu: 200000,
-    });
+    const ins = wb.sheet(0).addPicture(makePng(4), { name: 'logo', anchor: { fromRow: 1, fromCol: 1 } });
+    wb.sheet(0)
+      .picture(ins)
+      .update({
+        anchor: {
+          kind: mod.AnchorKind.TwoCell,
+          editAs: mod.AnchorEditAs.OneCell,
+          fromRow: 5,
+          fromCol: 3,
+          fromRowOffsetEmu: 1000,
+          fromColOffsetEmu: 2000,
+          toRow: 9,
+          toCol: 6,
+        },
+      });
     const listed = wb.sheet(0).listDrawings()[0];
     assert.equal(listed, ins);
     const o = listed.getDrawingProperties();
     assert.equal(o.name, 'logo');
-    assert.equal(o.anchorKind, mod.AnchorKind.TwoCell);
-    assert.equal(o.editAs, mod.AnchorEditAs.OneCell);
-    assert.equal(o.fromRow, 5);
-    assert.equal(o.fromCol, 3);
-    assert.equal(o.fromRowOffsetEmu, 1000);
-    assert.equal(o.fromColOffsetEmu, 2000);
-    assert.equal(o.widthEmu, 200000);
-    assert.equal(o.heightEmu, 9525);
-    assert.throws(() => wb.sheet(0).picture(ins).setAnchor({ anchorKind: mod.AnchorKind.Absolute }), isFormulonError);
-    assert.throws(() => wb.sheet(0).picture(9999).setAnchor({}), isFormulonError);
+    assert.equal(o.anchor.kind, mod.AnchorKind.TwoCell);
+    assert.equal(o.anchor.editAs, mod.AnchorEditAs.OneCell);
+    assert.equal(o.anchor.fromRow, 5);
+    assert.equal(o.anchor.fromCol, 3);
+    assert.equal(o.anchor.fromRowOffsetEmu, 1000);
+    assert.equal(o.anchor.fromColOffsetEmu, 2000);
+    assert.equal(o.anchor.toRow, 9);
+    assert.equal(o.anchor.toCol, 6);
+    // A key omitted from an anchor patch keeps its value.
+    wb.sheet(0)
+      .picture(ins)
+      .update({ anchor: { fromRow: 6 } });
+    const kept = wb.sheet(0).picture(ins).getDrawingProperties().anchor;
+    assert.equal(kept.kind, mod.AnchorKind.TwoCell);
+    assert.deepEqual([kept.fromRow, kept.fromCol, kept.toRow, kept.toCol], [6, 3, 9, 6]);
+    assert.throws(
+      () =>
+        wb
+          .sheet(0)
+          .picture(ins)
+          .update({ anchor: { kind: mod.AnchorKind.Absolute } }),
+      isFormulonError,
+    );
+    assert.throws(() => wb.sheet(0).picture(9999).update({ anchor: {} }), isFormulonError);
   } finally {
     wb.dispose();
   }
@@ -163,9 +188,9 @@ test('setDrawingZOrder reorders pictures in listDrawings order', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   try {
-    const a = wb.sheet(0).addPicture(makePng(2), { anchor: { row: 0 } });
-    const b = wb.sheet(0).addPicture(makePng(2), { anchor: { row: 3 } });
-    const c = wb.sheet(0).addPicture(makePng(2), { anchor: { row: 6 } });
+    const a = wb.sheet(0).addPicture(makePng(2), { anchor: { fromRow: 0 } });
+    const b = wb.sheet(0).addPicture(makePng(2), { anchor: { fromRow: 3 } });
+    const c = wb.sheet(0).addPicture(makePng(2), { anchor: { fromRow: 6 } });
     const ids = () => Array.from(wb.sheet(0).listDrawings(), (o) => o.objectId);
     assert.deepEqual(ids(), [a.objectId, b.objectId, c.objectId]);
     wb.sheet(0).picture(c).setZOrder(0);
@@ -182,8 +207,8 @@ test('snapshotDrawing and restoreDrawing bring back a removed, moved or copied p
   const wb = mod.Workbook.createDefault();
   try {
     const png = makePng(4);
-    const a = wb.sheet(0).addPicture(png, { name: 'A', anchor: { row: 1 } });
-    const b = wb.sheet(0).addPicture(makePng(2), { name: 'B', anchor: { row: 4 } });
+    const a = wb.sheet(0).addPicture(png, { name: 'A', anchor: { fromRow: 1 } });
+    const b = wb.sheet(0).addPicture(makePng(2), { name: 'B', anchor: { fromRow: 4 } });
     const snap = wb.sheet(0).picture(a).snapshot();
     assert.ok(snap instanceof Uint8Array);
     assert.ok(snap.length > 0);
@@ -195,11 +220,13 @@ test('snapshotDrawing and restoreDrawing bring back a removed, moved or copied p
     assert.deepEqual(ids(), [a.objectId, b.objectId]);
     assert.deepEqual([...wb.sheet(0).picture(a).getProperties().bytes], [...png]);
 
-    wb.sheet(0).picture(a).setAnchor({ row: 9 });
+    wb.sheet(0)
+      .picture(a)
+      .update({ anchor: { fromRow: 9 } });
     wb.sheet(0).picture(a).setZOrder(1);
     wb.sheet(0).restoreDrawing(snap, {});
     assert.deepEqual(ids(), [a.objectId, b.objectId]);
-    assert.equal(wb.sheet(0).listDrawings()[0].getDrawingProperties().fromRow, 1);
+    assert.equal(wb.sheet(0).listDrawings()[0].getDrawingProperties().anchor.fromRow, 1);
 
     const copy = wb.sheet(0).restoreDrawing(snap, { assignNewId: true });
     assert.notEqual(copy.objectId, a.objectId);
@@ -212,17 +239,18 @@ test('snapshotDrawing and restoreDrawing bring back a removed, moved or copied p
   }
 });
 
-test('setDrawingName renames a picture and keeps its id', async () => {
+test('Drawing.update renames a picture and keeps its id', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   try {
-    const ins = wb.sheet(0).addPicture(makePng(4), { name: 'logo', anchor: { row: 1, col: 1 } });
-    wb.sheet(0).picture(ins).rename('banner');
+    const ins = wb.sheet(0).addPicture(makePng(4), { name: 'logo', anchor: { fromRow: 1, fromCol: 1 } });
+    wb.sheet(0).picture(ins).update({ name: 'banner' });
     const listed = wb.sheet(0).listDrawings()[0];
     assert.equal(listed, ins);
     assert.equal(listed.getDrawingProperties().name, 'banner');
-    assert.throws(() => wb.sheet(0).picture(ins).rename(''), isFormulonError);
-    assert.throws(() => wb.sheet(0).picture(9999).rename('x'), isFormulonError);
+    assert.equal(listed.name, 'banner');
+    assert.throws(() => wb.sheet(0).picture(ins).update({ name: '' }), isFormulonError);
+    assert.throws(() => wb.sheet(0).picture(9999).update({ name: 'x' }), isFormulonError);
   } finally {
     wb.dispose();
   }

@@ -367,7 +367,7 @@ uint32_t JsWorkbook::insertChart(uint32_t sheet, val options) {
   opts.legend = legend.isNull() ? FM_CHART_LEGEND_POSITION_ABSENT
                                 : reader.i32_value(legend, FM_CHART_LEGEND_POSITION_BOTTOM, "legend");
   const val placement = reader.value(options, "placement", "placement");
-  opts.placement = pull_image_insert(reader, placement, FM_ANCHOR_KIND_TWO_CELL, name_store, descr_store);
+  opts.placement = pull_drawing_placement(reader, placement, name_store, descr_store);
   if (!reader.ok()) {
     return 0U;
   }
@@ -502,7 +502,7 @@ void JsWorkbook::setChartDisplay(uint32_t sheet, uint32_t objectId, val patch) {
   succeeded(fm_sheet_update_chart_display(handle_, sheet, objectId, &p));
 }
 
-void JsWorkbook::setChartSeries(uint32_t sheet, uint32_t objectId, uint32_t plot, uint32_t seriesIndex, val patch) {
+void JsWorkbook::setChartSeries(uint32_t sheet, uint32_t objectId, uint32_t plot, uint32_t seriesId, val patch) {
   if (handle_ == nullptr) {
     record_invalid_handle();
     return;
@@ -513,10 +513,10 @@ void JsWorkbook::setChartSeries(uint32_t sheet, uint32_t objectId, uint32_t plot
   if (!read_patch_arg(reader, patch, &p, kSeriesWr, arena)) {
     return;
   }
-  succeeded(fm_sheet_update_chart_series(handle_, sheet, objectId, plot, seriesIndex, &p));
+  succeeded(fm_sheet_update_chart_series(handle_, sheet, objectId, plot, seriesId, &p));
 }
 
-void JsWorkbook::updateChartPoint(uint32_t sheet, uint32_t objectId, uint32_t plot, uint32_t seriesIndex,
+void JsWorkbook::updateChartPoint(uint32_t sheet, uint32_t objectId, uint32_t plot, uint32_t seriesId,
                                   uint32_t pointIndex, val patch) {
   if (handle_ == nullptr) {
     record_invalid_handle();
@@ -528,11 +528,11 @@ void JsWorkbook::updateChartPoint(uint32_t sheet, uint32_t objectId, uint32_t pl
   if (!read_patch_arg(reader, patch, &p, kPointWr, arena)) {
     return;
   }
-  succeeded(fm_sheet_update_chart_point(handle_, sheet, objectId, plot, seriesIndex, pointIndex, &p));
+  succeeded(fm_sheet_update_chart_point(handle_, sheet, objectId, plot, seriesId, pointIndex, &p));
 }
 
-void JsWorkbook::setChartPoint(uint32_t sheet, uint32_t objectId, uint32_t plot, uint32_t seriesIndex,
-                               uint32_t pointIndex, val point) {
+void JsWorkbook::setChartPoint(uint32_t sheet, uint32_t objectId, uint32_t plot, uint32_t seriesId, uint32_t pointIndex,
+                               val point) {
   if (handle_ == nullptr) {
     record_invalid_handle();
     return;
@@ -546,7 +546,7 @@ void JsWorkbook::setChartPoint(uint32_t sheet, uint32_t objectId, uint32_t plot,
     return;
   }
   clear_unset(&p, kPointWr);
-  succeeded(fm_sheet_update_chart_point(handle_, sheet, objectId, plot, seriesIndex, pointIndex, &p));
+  succeeded(fm_sheet_update_chart_point(handle_, sheet, objectId, plot, seriesId, pointIndex, &p));
 }
 
 void JsWorkbook::setChartPlot(uint32_t sheet, uint32_t objectId, uint32_t plot, val patch) {
@@ -589,15 +589,15 @@ uint32_t JsWorkbook::addChartSeries(uint32_t sheet, uint32_t objectId, uint32_t 
   if (!read_patch_arg(reader, patch, &p, kSeriesWr, arena)) {
     return 0U;
   }
-  uint32_t series_index = 0;
-  if (!succeeded(fm_sheet_add_chart_series(handle_, sheet, objectId, plot, &p, &series_index))) {
+  uint32_t series_id = 0;
+  if (!succeeded(fm_sheet_add_chart_series(handle_, sheet, objectId, plot, &p, &series_id))) {
     return 0U;
   }
-  return series_index;
+  return series_id;
 }
 
-void JsWorkbook::removeChartSeries(uint32_t sheet, uint32_t objectId, uint32_t plot, uint32_t seriesIndex) {
-  succeeded(handle_ != nullptr ? fm_sheet_remove_chart_series(handle_, sheet, objectId, plot, seriesIndex)
+void JsWorkbook::removeChartSeries(uint32_t sheet, uint32_t objectId, uint32_t plot, uint32_t seriesId) {
+  succeeded(handle_ != nullptr ? fm_sheet_remove_chart_series(handle_, sheet, objectId, plot, seriesId)
                                : kBindingInvalidHandle);
 }
 

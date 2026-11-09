@@ -1995,7 +1995,7 @@ class FacadeAddressTablesTest(unittest.TestCase):
         self.assertIn("constexpr const char* kSheetMethods[] = {\n", text)
         self.assertIn("struct HandleMethod {\n  const char* raw;\n  const char* label;\n  int supplied;\n};\n", text)
         self.assertIn('    {"addPivotField", "Pivot.addField", 2},\n', text)
-        self.assertIn('    {"setDrawingName", "Drawing.rename", 2},\n', text)
+        self.assertIn('    {"setDrawingZOrder", "Drawing.setZOrder", 2},\n', text)
         guards = _load_codegen("gen_wasm_positional_guards")
         self.assertIn("addPivotField", guards._sheet_methods({"addPivotField", "nope"}, text))
         self.assertEqual(guards._handle_methods({"addPivotField"}, text), {"addPivotField": ["Pivot.addField", 2]})

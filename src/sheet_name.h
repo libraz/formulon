@@ -1,8 +1,9 @@
-// Worksheet-name identity helpers.
+// Worksheet-name and collection-name identity helpers.
 //
-// Worksheet names use Unicode simple case folding for identity. This is
+// Worksheet names, and the names of every other named collection of a
+// workbook, use Unicode simple case folding for identity. This is
 // intentionally separate from the ASCII-only string helpers: those helpers
-// are also used for function names, logical literals, table names, and other
+// are also used for function names, logical literals, and other
 // byte-oriented contracts that must not acquire Unicode semantics.
 
 #ifndef FORMULON_SHEET_NAME_H_
@@ -45,6 +46,23 @@ std::size_t find_index(const std::vector<std::string>& names, std::string_view s
 bool valid_utf8(std::string_view name) noexcept;
 
 }  // namespace sheet_names
+
+namespace collection_names {
+
+/// Returns true when `lhs` and `rhs` name the same member of a workbook
+/// collection (tables, defined names, pivot tables, people) for uniqueness
+/// and lookup: the worksheet-name fold, plus byte identity so a name a file
+/// stored as malformed UTF-8 still matches itself.
+inline bool equal(std::string_view lhs, std::string_view rhs) noexcept {
+  return lhs == rhs || sheet_names::equal(lhs, rhs);
+}
+
+/// Hash key with `equal(a, b) == (fold_key(a) == fold_key(b))`: a well-formed
+/// name maps to its folded UTF-8 spelling, a malformed one to its own bytes
+/// (never well-formed, so the two kinds cannot collide).
+std::string fold_key(std::string_view name);
+
+}  // namespace collection_names
 }  // namespace formulon
 
 #endif  // FORMULON_SHEET_NAME_H_

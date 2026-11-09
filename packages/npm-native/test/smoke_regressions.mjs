@@ -276,8 +276,8 @@ test('pivotFieldAddItemAt hides the blank item an empty label cannot name', asyn
     cache.setRecordValue(second, amount, 200);
 
     const pivot = wb.sheet(0).addPivot({ name: 'PT', cacheId: cache.cacheId, anchor: { row: 0, col: 0 } });
-    const regionField = wb.sheet(0).pivot(pivot).addField({ sourceName: 'Region', axis: 0 });
-    const amountField = wb.sheet(0).pivot(pivot).addField({ sourceName: 'Amount', axis: 2 });
+    const regionField = wb.sheet(0).pivot(pivot).addField({ fieldIndex: 'Region', axis: 0 });
+    const amountField = wb.sheet(0).pivot(pivot).addField({ fieldIndex: 'Amount', axis: 2 });
     wb.sheet(0).pivot(pivot).setRowFieldOrder([regionField]);
     wb.sheet(0).pivot(pivot).addDataField({
       name: 'Sum of Amount',
@@ -422,14 +422,13 @@ test('setVisibility states every tab visibility, veryHidden included', async () 
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   try {
-    const read = () => wb.sheet(0).getView();
-    assert.equal(read().visibility, mod.SheetVisibility.Visible);
+    assert.equal(wb.sheet(0).getVisibility(), mod.SheetVisibility.Visible);
     // The only visible sheet cannot be hidden: PreconditionFailed, sheet left alone.
     assert.throws(
-      () => wb.sheet(0).updateView({ visibility: mod.SheetVisibility.Hidden }),
+      () => wb.sheet(0).setVisibility(mod.SheetVisibility.Hidden),
       (e) => isFormulonError(e, mod.StatusCode.PreconditionFailed),
     );
-    assert.equal(read().visibility, mod.SheetVisibility.Visible);
+    assert.equal(wb.sheet(0).getVisibility(), mod.SheetVisibility.Visible);
     // The last sheet cannot be removed either.
     assert.throws(
       () => wb.removeSheet(0),
@@ -439,27 +438,27 @@ test('setVisibility states every tab visibility, veryHidden included', async () 
     // A second sheet lets the first one change state, but removing the first
     // while the second is hidden would leave no visible sheet.
     wb.addSheet('Second');
-    wb.sheet(1).updateView({ visibility: mod.SheetVisibility.Hidden });
+    wb.sheet(1).setVisibility(mod.SheetVisibility.Hidden);
     assert.throws(
       () => wb.removeSheet(0),
       (e) => isFormulonError(e, mod.StatusCode.PreconditionFailed),
     );
     assert.equal(wb.listSheets().length, 2);
-    wb.sheet(1).updateView({ visibility: mod.SheetVisibility.Visible });
+    wb.sheet(1).setVisibility(mod.SheetVisibility.Visible);
 
-    wb.sheet(0).updateView({ visibility: mod.SheetVisibility.VeryHidden });
-    assert.equal(read().visibility, mod.SheetVisibility.VeryHidden);
+    wb.sheet(0).setVisibility(mod.SheetVisibility.VeryHidden);
+    assert.equal(wb.sheet(0).getVisibility(), mod.SheetVisibility.VeryHidden);
 
     // Demotion and showing are explicit states too.
-    wb.sheet(0).updateView({ visibility: mod.SheetVisibility.Hidden });
-    assert.equal(read().visibility, mod.SheetVisibility.Hidden);
-    wb.sheet(0).updateView({ visibility: mod.SheetVisibility.Visible });
-    assert.equal(read().visibility, mod.SheetVisibility.Visible);
+    wb.sheet(0).setVisibility(mod.SheetVisibility.Hidden);
+    assert.equal(wb.sheet(0).getVisibility(), mod.SheetVisibility.Hidden);
+    wb.sheet(0).setVisibility(mod.SheetVisibility.Visible);
+    assert.equal(wb.sheet(0).getVisibility(), mod.SheetVisibility.Visible);
 
     // An unknown ordinal is refused and leaves the sheet alone.
-    wb.sheet(0).updateView({ visibility: mod.SheetVisibility.VeryHidden });
-    assert.throws(() => wb.sheet(0).updateView({ visibility: 3 }), isFormulonError);
-    assert.equal(read().visibility, mod.SheetVisibility.VeryHidden);
+    wb.sheet(0).setVisibility(mod.SheetVisibility.VeryHidden);
+    assert.throws(() => wb.sheet(0).setVisibility(3), isFormulonError);
+    assert.equal(wb.sheet(0).getVisibility(), mod.SheetVisibility.VeryHidden);
   } finally {
     wb.dispose();
   }

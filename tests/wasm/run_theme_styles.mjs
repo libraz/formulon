@@ -335,6 +335,42 @@ export function registerThemeStyles(Module, test) {
     });
   });
 
+  test('listThemeScriptFonts lists the scheme entries and reflects a set face', () => {
+    withWorkbook(Module, (wb) => {
+      const major = wb.listThemeScriptFonts(MAJOR);
+      assert.ok(major.length > 0);
+      assert.ok(major.every((entry) => entry.scheme === MAJOR && typeof entry.script === 'string'));
+      assert.deepEqual(
+        major.find((entry) => entry.script === 'Jpan'),
+        wb.getThemeScriptFont(MAJOR, 'Jpan'),
+      );
+
+      wb.setThemeScriptFont(MAJOR, 'Jpan', 'Test Face');
+      const after = wb.listThemeScriptFonts(MAJOR);
+      assert.equal(after.find((entry) => entry.script === 'Jpan').typeface, 'Test Face');
+      assert.equal(after.length, major.length);
+      assert.equal(wb.listThemeScriptFonts(MINOR).find((entry) => entry.script === 'Jpan').typeface, '游ゴシック');
+
+      expectFailure(() => wb.listThemeScriptFonts(0));
+    });
+  });
+
+  test('listProfileIds lists every profile id and each one builds a workbook', () => {
+    const ids = Module.listProfileIds();
+    assert.equal(ids.length, 28);
+    assert.equal(new Set(ids).size, ids.length);
+    assert.ok(ids.includes('win-365-en_US'));
+    assert.ok(ids.includes('mac-365-ja_JP'));
+    for (const id of ids) {
+      const wb = Module.Workbook.createForProfile(id);
+      try {
+        assert.equal(wb.getProfileId(), id);
+      } finally {
+        wb.delete();
+      }
+    }
+  });
+
   test('setThemeScriptFont rejects an invalid script or empty typeface', () => {
     withWorkbook(Module, (wb) => {
       expectFailure(() => wb.setThemeScriptFont(MAJOR, 'Jp', 'X'));

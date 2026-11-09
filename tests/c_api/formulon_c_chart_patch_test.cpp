@@ -39,10 +39,10 @@ fm_chart_insert_spec_t InsertOptions(int32_t type, int32_t bar_direction) {
   o.bar_direction = bar_direction;
   o.source = "Sheet1!$A$1:$D$5";
   o.legend = FM_CHART_LEGEND_POSITION_RIGHT;
-  o.placement = FM_STRUCT_INIT(fm_picture_insert_spec_t);
-  o.placement.anchor.anchor_kind = FM_ANCHOR_KIND_TWO_CELL;
+  o.placement = FM_STRUCT_INIT(fm_drawing_placement_spec_t);
+  o.placement.anchor.kind = FM_ANCHOR_KIND_TWO_CELL;
   o.placement.anchor.edit_as = FM_ANCHOR_EDIT_AS_TWO_CELL;
-  o.placement.anchor.row = 6;
+  o.placement.anchor.from_row = 6;
   return o;
 }
 

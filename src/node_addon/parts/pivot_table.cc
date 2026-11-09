@@ -662,12 +662,31 @@ Napi::Value Workbook::PivotShowDetails(const Napi::CallbackInfo& info) {
   });
 }
 
-Napi::Value Workbook::PivotFieldAddSubtotalFunction(const Napi::CallbackInfo& info) {
-  return InvokeSheetCall(info, &fm_sheet_add_pivot_field_subtotal_function);
-}
-
-Napi::Value Workbook::PivotFieldClearSubtotalFunctions(const Napi::CallbackInfo& info) {
-  return InvokeSheetCall(info, &fm_sheet_clear_pivot_field_subtotal_functions);
+Napi::Value Workbook::PivotFieldSetSubtotalFunctions(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return ThrowInvalidHandle(env);
+  }
+  const PivotFieldArgs field = ReadPivotField(info);
+  CheckedSpecReader reader(env);
+  Napi::Array list;
+  std::vector<int32_t> aggregations;
+  if (reader.Array(info[3], "aggregations", &list)) {
+    aggregations.reserve(list.Length());
+    for (uint32_t i = 0; i < list.Length() && reader.ok(); ++i) {
+      Napi::Value value;
+      if (reader.ArrayElement(list, i, &value)) {
+        aggregations.push_back(reader.I32(value, "aggregations element", 0));
+      }
+    }
+  }
+  if (!reader.ok()) {
+    return env.Undefined();
+  }
+  const fm_status_t rc = fm_sheet_set_pivot_field_subtotal_functions(
+      handle_, field.sheet, field.pivot_index, field.field_index, aggregations.empty() ? nullptr : aggregations.data(),
+      aggregations.size());
+  return ValueOrThrow(env, rc, env.Undefined());
 }
 
 Napi::Value Workbook::PivotFieldSetDateGroup(const Napi::CallbackInfo& info) {
@@ -889,8 +908,7 @@ Napi::Value Workbook::PivotFilterAt(const Napi::CallbackInfo& info) {
     return ThrowStatus(env, rc);
   }
   Napi::Object out = Napi::Object::New(env);
-  out.Set("axis", Napi::Number::New(env, static_cast<int32_t>(spec.axis)));
-  out.Set("fieldName", JsString(env, spec.field_name));
+  out.Set("fieldIndex", Napi::Number::New(env, spec.field_index));
   out.Set("type", Napi::Number::New(env, static_cast<int32_t>(spec.type)));
   out.Set("dataFieldIndex", Napi::Number::New(env, spec.data_field_index));
   out.Set("value", FilterOperandToJs(env, spec.value_kind, spec.value_int, spec.value_double, spec.value_text));
@@ -909,15 +927,8 @@ Napi::Value Workbook::PivotFilterAdd(const Napi::CallbackInfo& info) {
   Napi::Object spec = ArgObject(info, 2);
 
   CheckedSpecReader reader(env);
-  std::string field_name;
-  const bool has_field = reader.String(spec, "fieldName", &field_name);
-
   fm_pivot_filter_t c_spec = FM_STRUCT_INIT(fm_pivot_filter_t);
-  c_spec.axis = static_cast<fm_pivot_axis_t>(reader.RequiredU32(spec, "axis"));
-  // `fieldName` is required; see the `sourceName` comment in
-  // `PivotFieldAdd` above -- an omitted key must reach the C ABI as NULL,
-  // not the coerced literal string "undefined".
-  c_spec.field_name = has_field ? field_name.c_str() : nullptr;
+  c_spec.field_index = reader.RequiredU32(spec, "fieldIndex");
   c_spec.type = static_cast<fm_pivot_filter_kind_t>(reader.RequiredU32(spec, "type"));
   // A count filter takes a whole number; every other numeric operand is a double.
   const bool count_type =

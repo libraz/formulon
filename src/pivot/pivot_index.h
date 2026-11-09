@@ -38,6 +38,11 @@ struct PivotItem;
 const PivotTable* find_pivot_at_anchor(const Workbook& wb, std::string_view sheet_name, std::uint32_t row,
                                        std::uint32_t col) noexcept;
 
+/// Whether a pivot table on `sheet` other than the one at position `self` is
+/// named `name` under `collection_names::equal`; pass `sheet.pivot_tables().size()`
+/// as `self` for a name no pivot holds yet.
+bool pivot_name_taken(const Sheet& sheet, std::string_view name, std::size_t self) noexcept;
+
 /// Resolves the cache value item `item` of field `field_index` binds to:
 /// `shared_items[item.cache_index]` of the positionally-matching cache
 /// field, or `group_items[item.cache_index]` of a group field. Returns

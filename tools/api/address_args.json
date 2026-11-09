@@ -73,10 +73,10 @@
       "Sheet.updateCellFormat": [0]
     },
     "span_args": {
-      "Sheet.deleteColumns": [[0, "col", "start_count"]],
-      "Sheet.deleteRows": [[0, "row", "start_count"]],
-      "Sheet.insertColumns": [[0, "col", "start_count"]],
-      "Sheet.insertRows": [[0, "row", "start_count"]],
+      "Sheet.deleteColumns": [[0, "col", "span"]],
+      "Sheet.deleteRows": [[0, "row", "span"]],
+      "Sheet.insertColumns": [[0, "col", "span"]],
+      "Sheet.insertRows": [[0, "row", "span"]],
       "Sheet.resetColumnWidth": [[0, "col", "span"]],
       "Sheet.resetColumnXfIndex": [[0, "col", "span"]],
       "Sheet.resetRowHeight": [[0, "row", "span"]],
@@ -168,10 +168,10 @@
       "Sheet.update_cell_format": [0]
     },
     "span_args": {
-      "Sheet.delete_columns": [[0, "col", "start_count"]],
-      "Sheet.delete_rows": [[0, "row", "start_count"]],
-      "Sheet.insert_columns": [[0, "col", "start_count"]],
-      "Sheet.insert_rows": [[0, "row", "start_count"]],
+      "Sheet.delete_columns": [[0, "col", "span"]],
+      "Sheet.delete_rows": [[0, "row", "span"]],
+      "Sheet.insert_columns": [[0, "col", "span"]],
+      "Sheet.insert_rows": [[0, "row", "span"]],
       "Sheet.reset_column_width": [[0, "col", "span"]],
       "Sheet.reset_column_xf_index": [[0, "col", "span"]],
       "Sheet.reset_row_height": [[0, "row", "span"]],

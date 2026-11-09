@@ -415,6 +415,53 @@ void PullCellXf(CheckedSpecReader& reader, const Napi::Object& record, fm_cell_x
   xf.hidden = hidden_value ? 1 : 0;
 }
 
+/// A differential-format record and the strings it borrows.
+struct DxfStorage {
+  std::string font_name;
+  std::string number_format;
+  std::string alignment_xml;
+  std::string protection_xml;
+  std::vector<fm_gradient_stop_t> fill_stops;
+  fm_dxf_t dxf{};
+};
+
+void PullDxfRecord(CheckedSpecReader& reader, const Napi::Object& record, DxfStorage* storage) {
+  fm_dxf_t& dxf = storage->dxf;
+  Napi::Object font;
+  if (reader.Object(record, "font", &font)) {
+    dxf.has_font = 1;
+    PullFontRecord(reader, font, &storage->font_name, &dxf.font);
+  }
+
+  Napi::Object fill;
+  if (reader.Object(record, "fill", &fill)) {
+    dxf.has_fill = 1;
+    dxf.fill = PullFillRecord(reader, fill, &storage->fill_stops);
+  }
+
+  Napi::Object border;
+  if (reader.Object(record, "border", &border)) {
+    dxf.has_border = 1;
+    dxf.border = PullBorderRecord(reader, border);
+  }
+
+  // An omitted or `null` number format is not set.
+  if (reader.String(record, "numberFormat", &storage->number_format)) {
+    dxf.number_format = storage->number_format.c_str();
+  }
+
+  Napi::Object alignment;
+  if (reader.Object(record, "alignment", &alignment)) {
+    storage->alignment_xml = AlignmentToXml(reader, alignment);
+  }
+  Napi::Object protection;
+  if (reader.Object(record, "protection", &protection)) {
+    storage->protection_xml = ProtectionToXml(reader, protection);
+  }
+  dxf.alignment_xml = storage->alignment_xml.c_str();
+  dxf.protection_xml = storage->protection_xml.c_str();
+}
+
 }  // namespace
 
 namespace detail {
@@ -583,6 +630,22 @@ Napi::Value Workbook::AddFill(const Napi::CallbackInfo& info) {
       [&](fm_workbook_t* handle, std::size_t* idx) { return fm_workbook_add_fill(handle, &fr, idx); });
 }
 
+Napi::Value Workbook::SetFill(const Napi::CallbackInfo& info) {
+  fm_fill_t fr{};
+  std::vector<fm_gradient_stop_t> stops;
+  return SetStyleRecord(
+      info, 1,
+      [&](CheckedSpecReader& reader, const Napi::Object& record) { fr = PullFillRecord(reader, record, &stops); },
+      [&](fm_workbook_t* handle) { return fm_workbook_set_fill(handle, ArgU32(info, 0), &fr); });
+}
+
+Napi::Value Workbook::SetBorder(const Napi::CallbackInfo& info) {
+  fm_border_t br{};
+  return SetStyleRecord(
+      info, 1, [&](CheckedSpecReader& reader, const Napi::Object& record) { br = PullBorderRecord(reader, record); },
+      [&](fm_workbook_t* handle) { return fm_workbook_set_border(handle, ArgU32(info, 0), &br); });
+}
+
 Napi::Value Workbook::AddBorder(const Napi::CallbackInfo& info) {
   fm_border_t br{};
   return AddStyleRecord(
@@ -608,6 +671,13 @@ Napi::Value Workbook::AddXf(const Napi::CallbackInfo& info) {
       [&](fm_workbook_t* handle, uint32_t* idx) { return fm_workbook_add_cell_xf(handle, &xf, idx); });
 }
 
+Napi::Value Workbook::SetCellXf(const Napi::CallbackInfo& info) {
+  fm_cell_xf_t xf{};
+  return SetStyleRecord(
+      info, 1, [&](CheckedSpecReader& reader, const Napi::Object& record) { PullCellXf(reader, record, &xf); },
+      [&](fm_workbook_t* handle) { return fm_workbook_set_cell_xf(handle, ArgU32(info, 0), &xf); });
+}
+
 Napi::Value Workbook::AddCellStyleXf(const Napi::CallbackInfo& info) {
   fm_cell_xf_t xf{};
   return AddStyleRecord<uint32_t>(
@@ -616,50 +686,17 @@ Napi::Value Workbook::AddCellStyleXf(const Napi::CallbackInfo& info) {
 }
 
 Napi::Value Workbook::AddDxf(const Napi::CallbackInfo& info) {
-  std::string font_name;
-  std::string number_format;
-  std::string alignment_xml;
-  std::string protection_xml;
-  std::vector<fm_gradient_stop_t> fill_stops;
-  fm_dxf_t dxf{};
+  DxfStorage storage;
   return AddStyleRecord<uint32_t>(
-      info,
-      [&](CheckedSpecReader& reader, const Napi::Object& record) {
-        Napi::Object font;
-        if (reader.Object(record, "font", &font)) {
-          dxf.has_font = 1;
-          PullFontRecord(reader, font, &font_name, &dxf.font);
-        }
+      info, [&](CheckedSpecReader& reader, const Napi::Object& record) { PullDxfRecord(reader, record, &storage); },
+      [&](fm_workbook_t* handle, uint32_t* idx) { return fm_workbook_add_dxf(handle, &storage.dxf, idx); });
+}
 
-        Napi::Object fill;
-        if (reader.Object(record, "fill", &fill)) {
-          dxf.has_fill = 1;
-          dxf.fill = PullFillRecord(reader, fill, &fill_stops);
-        }
-
-        Napi::Object border;
-        if (reader.Object(record, "border", &border)) {
-          dxf.has_border = 1;
-          dxf.border = PullBorderRecord(reader, border);
-        }
-
-        // An omitted or `null` number format is not set.
-        if (reader.String(record, "numberFormat", &number_format)) {
-          dxf.number_format = number_format.c_str();
-        }
-
-        Napi::Object alignment;
-        if (reader.Object(record, "alignment", &alignment)) {
-          alignment_xml = AlignmentToXml(reader, alignment);
-        }
-        Napi::Object protection;
-        if (reader.Object(record, "protection", &protection)) {
-          protection_xml = ProtectionToXml(reader, protection);
-        }
-        dxf.alignment_xml = alignment_xml.c_str();
-        dxf.protection_xml = protection_xml.c_str();
-      },
-      [&](fm_workbook_t* handle, uint32_t* idx) { return fm_workbook_add_dxf(handle, &dxf, idx); });
+Napi::Value Workbook::SetDxf(const Napi::CallbackInfo& info) {
+  DxfStorage storage;
+  return SetStyleRecord(
+      info, 1, [&](CheckedSpecReader& reader, const Napi::Object& record) { PullDxfRecord(reader, record, &storage); },
+      [&](fm_workbook_t* handle) { return fm_workbook_set_dxf(handle, ArgU32(info, 0), &storage.dxf); });
 }
 
 // ---- Style pool counts ----------------------------------------------

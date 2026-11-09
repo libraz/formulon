@@ -18,13 +18,14 @@ from formulon import (
     CalcMode,
     CellAddress,
     CellRect,
+    CfExpressionRuleInput,
+    CfIconSetInput,
     CfRuleType,
+    CfValueObject,
     CfValueObjectType,
-    Cfvo,
     Color,
     ColorKind,
     ComparisonOperator,
-    ConditionalFormatInput,
     DataValidationInput,
     DatePeriod,
     DefinedNameInput,
@@ -37,7 +38,6 @@ from formulon import (
     FormulonError,
     GradientFill,
     GradientStop,
-    IconSet,
     IconSetName,
     InvalidArgumentError,
     InvalidFileError,
@@ -208,8 +208,8 @@ class EnumTests(unittest.TestCase):
             enum_name(int, 1)  # type: ignore[arg-type]
 
     def test_records_read_their_codes_as_members(self) -> None:
-        self.assertIs(Cfvo(type=3).type, CfValueObjectType.MIN)
-        self.assertIs(IconSet(name=16, thresholds=[]).name, IconSetName.FIVE_QUARTERS)
+        self.assertIs(CfValueObject(type=3).type, CfValueObjectType.MIN)
+        self.assertIs(CfIconSetInput(name=16, thresholds=[]).name, IconSetName.FIVE_QUARTERS)
 
 
 class StyleColourTests(unittest.TestCase):
@@ -255,7 +255,7 @@ class RecordA1Tests(unittest.TestCase):
         self.wb.close()
 
     def test_rect_list_field_takes_strings_and_one_string(self) -> None:
-        record = ConditionalFormatInput(ranges="B2:C3", type=CfRuleType.EXPRESSION, formula1="=TRUE")
+        record = CfExpressionRuleInput(ranges="B2:C3", formula1="=TRUE")
         normalized = _inputs.normalize_record_ranges(record, self.wb)
         self.assertEqual(normalized.ranges, [CellRect(1, 1, 2, 2)])
         mixed = DataValidationInput(type=ValidationType.WHOLE, ranges=["A1", CellRect(4, 0, 5, 0)])
@@ -324,7 +324,7 @@ class WorkbookEntryTests(unittest.TestCase):
     def test_copy_sheet_appends_by_default(self) -> None:
         with Workbook.create_default() as wb:
             self.assertEqual(wb.copy_sheet(0).name, "Sheet1 (2)")
-            self.assertEqual(wb.copy_sheet("Sheet1", None, "Copy").index, 2)
+            self.assertEqual(wb.copy_sheet("Sheet1", new_name="Copy").index, 2)
             self.assertEqual([s.name for s in wb], ["Sheet1", "Sheet1 (2)", "Copy"])
 
     def test_add_table_derives_columns_and_takes_a1(self) -> None:

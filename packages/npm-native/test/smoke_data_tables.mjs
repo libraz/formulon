@@ -122,12 +122,12 @@ test('a data table survives save and load as a dataTable formula and follows row
   const loaded = mod.Workbook.load(saved);
   assert.deepEqual(loaded.sheet(0).getDataTable(4, 1).columnInput, { row: 0, col: 1, deleted: false });
   assert.throws(() => loaded.sheet(0).setNumber(4, 1, 1), isFormulonError);
-  loaded.sheet(0).insertRows(0, 2);
+  loaded.sheet(0).insertRows(0, 1);
   const moved = loaded.sheet(0).getDataTable(6, 1);
   assert.deepEqual([moved.range.firstRow, moved.range.lastRow], [4, 6]);
   assert.deepEqual(moved.columnInput, { row: 2, col: 1, deleted: false });
   // Deleting the input's row marks it deleted and the table turns into errors.
-  loaded.sheet(0).deleteRows(2, 1);
+  loaded.sheet(0).deleteRows(2, 2);
   assert.equal(loaded.sheet(0).getDataTable(5, 1).columnInput.deleted, true);
   loaded.recalc();
   assert.equal(loaded.sheet(0).getTypedValue(3, 1).kind, KIND.Error);

@@ -15,6 +15,7 @@
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
 #include "drawing/drawing_xml.h"
+#include "formulon_c_out_index.h"
 #include "formulon_c_record_arg.h"
 #include "formulon_c_test_helpers.h"
 #include "gtest/gtest.h"
@@ -33,7 +34,7 @@ static_assert(sizeof(fm_chart_fill_t) == 40U, "fm_chart_fill_t ABI layout change
 static_assert(sizeof(fm_chart_line_t) == 72U, "fm_chart_line_t ABI layout changed");
 static_assert(sizeof(fm_chart_marker_t) == 128U, "fm_chart_marker_t ABI layout changed");
 static_assert(sizeof(fm_chart_labels_t) == (kWasm32 ? 88U : 104U), "fm_chart_labels_t ABI layout changed");
-static_assert(sizeof(fm_chart_info_t) == (kWasm32 ? 184U : 208U), "fm_chart_info_t ABI layout changed");
+static_assert(sizeof(fm_chart_info_t) == (kWasm32 ? 100U : 120U), "fm_chart_info_t ABI layout changed");
 static_assert(sizeof(fm_chart_plot_info_t) == 68U, "fm_chart_plot_info_t ABI layout changed");
 static_assert(sizeof(fm_chart_data_source_t) == (kWasm32 ? 12U : 24U), "fm_chart_data_source_t ABI layout changed");
 static_assert(sizeof(fm_chart_series_info_t) == (kWasm32 ? 440U : 528U), "fm_chart_series_info_t ABI layout changed");
@@ -53,7 +54,7 @@ static_assert(sizeof(fm_sheet_rect_t) == 20U, "fm_sheet_rect_t ABI layout change
 static_assert(sizeof(fm_chart_axis_title_text_info_t) == (kWasm32 ? 12U : 16U),
               "fm_chart_axis_title_text_info_t ABI layout changed");
 static_assert(sizeof(fm_chart_unresolved_info_t) == 16U, "fm_chart_unresolved_info_t ABI layout changed");
-static_assert(sizeof(fm_chart_insert_spec_t) == (kWasm32 ? 104U : 128U), "fm_chart_insert_spec_t ABI layout changed");
+static_assert(sizeof(fm_chart_insert_spec_t) == (kWasm32 ? 128U : 160U), "fm_chart_insert_spec_t ABI layout changed");
 static_assert(sizeof(fm_chart_fill_patch_t) == 48U, "fm_chart_fill_patch_t ABI layout changed");
 static_assert(sizeof(fm_chart_line_patch_t) == 80U, "fm_chart_line_patch_t ABI layout changed");
 static_assert(sizeof(fm_chart_marker_patch_t) == 152U, "fm_chart_marker_patch_t ABI layout changed");
@@ -65,7 +66,7 @@ static_assert(sizeof(fm_chart_axis_patch_t) == (kWasm32 ? 184U : 208U), "fm_char
 static_assert(sizeof(fm_chart_legend_patch_t) == (kWasm32 ? 32U : 40U), "fm_chart_legend_patch_t ABI layout changed");
 static_assert(sizeof(fm_chart_legend_t) == (kWasm32 ? 20U : 32U), "fm_chart_legend_t ABI layout changed");
 static_assert(sizeof(fm_chart_display_patch_t) == 36U, "fm_chart_display_patch_t ABI layout changed");
-static_assert(offsetof(fm_chart_info_t, na_as_blank) == (kWasm32 ? 180U : 204U), "fm_chart_info_t na_as_blank offset");
+static_assert(offsetof(fm_chart_info_t, na_as_blank) == (kWasm32 ? 96U : 116U), "fm_chart_info_t na_as_blank offset");
 
 constexpr fm_status_t Code(formulon::FormulonErrorCode c) {
   return static_cast<fm_status_t>(c);
@@ -127,10 +128,10 @@ fm_chart_insert_spec_t Options(InsertKind kind, const char* source) {
   o.bar_direction = kind.bar_direction;
   o.source = source;
   o.legend = FM_CHART_LEGEND_POSITION_RIGHT;
-  o.placement = FM_STRUCT_INIT(fm_picture_insert_spec_t);
-  o.placement.anchor.anchor_kind = FM_ANCHOR_KIND_TWO_CELL;
+  o.placement = FM_STRUCT_INIT(fm_drawing_placement_spec_t);
+  o.placement.anchor.kind = FM_ANCHOR_KIND_TWO_CELL;
   o.placement.anchor.edit_as = FM_ANCHOR_EDIT_AS_TWO_CELL;
-  o.placement.anchor.row = 6;
+  o.placement.anchor.from_row = 6;
   return o;
 }
 
@@ -332,8 +333,8 @@ TEST(FormulonCApiChart, InsertAndReadThroughAccessors) {
   Open(wb.handle, id, &chart);
   const fm_chart_info_t info = Info(chart);
   EXPECT_EQ(info.object_id, id);
-  EXPECT_EQ(info.anchor_kind, FM_ANCHOR_KIND_TWO_CELL);
-  EXPECT_EQ(info.from_row, 6U);
+  EXPECT_EQ(obj.anchor.kind, FM_ANCHOR_KIND_TWO_CELL);
+  EXPECT_EQ(obj.anchor.from_row, 6U);
   EXPECT_EQ(info.is_extended, 0);
   EXPECT_EQ(info.is_pivot_chart, 0);
   EXPECT_EQ(info.title.kind, FM_CHART_TITLE_KIND_AUTO);
@@ -362,7 +363,7 @@ TEST(FormulonCApiChart, InsertAndReadThroughAccessors) {
   EXPECT_EQ(Axis(chart, axis_id).id, axis_id);
 
   const fm_chart_series_info_t s = Series(chart, 0, 1);
-  EXPECT_EQ(s.idx, 1U);
+  EXPECT_EQ(s.series_id, 1U);
   EXPECT_EQ(s.order, 1U);
   EXPECT_EQ(s.filtered, 0);
   EXPECT_EQ(s.name.kind, FM_CHART_SOURCE_KIND_REF);
@@ -418,7 +419,7 @@ TEST(FormulonCApiChart, ResolvedDataAccessors) {
   fm_chart_data_series_info_t s = FM_STRUCT_INIT(fm_chart_data_series_info_t);
   ASSERT_EQ(fm_chart_data_get_series_at(data.handle, 0, &s), 0);
   EXPECT_EQ(s.plot_index, 0U);
-  EXPECT_EQ(s.idx, 0U);
+  EXPECT_EQ(s.series_id, 0U);
   ASSERT_NE(s.name, nullptr);
   EXPECT_STREQ(s.name, "S1");
   EXPECT_EQ(s.point_count, 4U);
@@ -948,7 +949,7 @@ TEST(FormulonCApiChart, SeriesPointFilterAndSourceEdits) {
   ASSERT_EQ(fm_chart_get_plot_at(chart.handle, 0, &plot), 0);
   for (size_t i = 0; i < plot.series_count; ++i) {
     const fm_chart_series_info_t each = Series(chart, 0, i);
-    filtered = filtered || (each.idx == 1U && each.filtered == 1);
+    filtered = filtered || (each.series_id == 1U && each.filtered == 1);
   }
   EXPECT_TRUE(filtered);
   ASSERT_EQ(fm_sheet_set_chart_filter(wb.handle, 0, id, nullptr, 0, nullptr, 0), 0) << fm_get_last_error_message();
@@ -1153,14 +1154,19 @@ TEST(FormulonCApiChart, CaptureRestoreAndRemoveThroughDrawingOperations) {
   EXPECT_STREQ(Info(chart).title.text, "Before");
 
   // Move and reorder like any drawing object.
-  fm_drawing_anchor_t anchor{};
-  anchor.anchor_kind = FM_ANCHOR_KIND_TWO_CELL;
-  anchor.row = 10;
-  anchor.col = 2;
-  ASSERT_EQ(fm_sheet_set_drawing_anchor(wb.handle, 0, id, &anchor), 0) << fm_get_last_error_message();
-  Open(wb.handle, id, &chart);
-  EXPECT_EQ(Info(chart).from_row, 10U);
-  EXPECT_EQ(Info(chart).from_col, 2U);
+  fm_drawing_patch_t move = FM_STRUCT_INIT(fm_drawing_patch_t);
+  move.anchor.from_row_op = FM_PATCH_OP_SET;
+  move.anchor.from_row = 10;
+  move.anchor.from_col_op = FM_PATCH_OP_SET;
+  move.anchor.from_col = 2;
+  ASSERT_EQ(fm_sheet_update_drawing(wb.handle, 0, id, &move), 0) << fm_get_last_error_message();
+  fm_drawing_object_info_t moved = FM_STRUCT_INIT(fm_drawing_object_info_t);
+  int32_t moved_present = 0;
+  ASSERT_EQ(fm_sheet_get_drawing_object(wb.handle, 0, id, &moved_present, &moved), 0);
+  ASSERT_EQ(moved_present, 1);
+  EXPECT_EQ(moved.anchor.kind, FM_ANCHOR_KIND_TWO_CELL);
+  EXPECT_EQ(moved.anchor.from_row, 10U);
+  EXPECT_EQ(moved.anchor.from_col, 2U);
 
   // A copy with a fresh id reads as its own chart.
   uint32_t copy = 0;
@@ -1274,7 +1280,7 @@ TEST(FormulonCApiChart, InsertRejectsBadOptions) {
   o.header_row = 3;  // outside fm_tristate_t
   EXPECT_EQ(fm_sheet_add_chart(wb.handle, 0, &o, &id), kInvalidArgument);
   o = Options(kColumn, "Sheet1!$A$1:$D$5");
-  o.placement.anchor.anchor_kind = 3;
+  o.placement.anchor.kind = 4;  // outside fm_anchor_kind_t
   EXPECT_EQ(fm_sheet_add_chart(wb.handle, 0, &o, &id), kInvalidArgument);
   o = Options(kColumn, "Nope!$A$1:$D$5");
   EXPECT_EQ(fm_sheet_add_chart(wb.handle, 0, &o, &id), kInvalidReference);
@@ -1298,8 +1304,12 @@ TEST(FormulonCApiChart, InsertRejectsBadOptions) {
   const fm_chart_info_t info = Info(chart);
   EXPECT_EQ(info.title.kind, FM_CHART_TITLE_KIND_NONE);
   EXPECT_EQ(info.auto_title_deleted, FM_TRISTATE_TRUE);
-  EXPECT_STREQ(info.name, "Sales chart");
-  EXPECT_STREQ(info.description, "Quarterly");
+  fm_drawing_object_info_t obj = FM_STRUCT_INIT(fm_drawing_object_info_t);
+  int32_t obj_present = 0;
+  ASSERT_EQ(fm_sheet_get_drawing_object(wb.handle, 0, id, &obj_present, &obj), 0);
+  ASSERT_EQ(obj_present, 1);
+  EXPECT_STREQ(obj.name, "Sales chart");
+  EXPECT_STREQ(obj.description, "Quarterly");
 }
 
 TEST(FormulonCApiChart, ChartexAndPivotChartsRefuseEdits) {
@@ -1949,7 +1959,8 @@ TEST(FormulonCApiChart, UnresolvedInputsReportTheirRole) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   FillGrid(wb.handle);
   size_t second = 0;
-  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Other", &second), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Other", append_position(wb.handle), &second), 0)
+      << fm_get_last_error_message();
   ASSERT_EQ(second, 1U);
   ASSERT_EQ(fm_sheet_set_text(wb.handle, 1, 0, 0, "T"), 0);
   ASSERT_EQ(fm_sheet_set_text(wb.handle, 1, 0, 1, "S"), 0);

@@ -1,6 +1,7 @@
 // `formulon profiles` and the CLI's exit-code vocabulary.
 #include <string>
 
+#include "c_api/formulon_c.h"
 #include "cli_test_support.h"
 #include "excel_profile.h"
 
@@ -10,6 +11,21 @@ TEST(FormulonCli, ProfilesCommandPrintsOneIdPerLine) {
   std::string expected;
   for (const formulon::detail::ExcelProfileIdEntry& entry : formulon::detail::kExcelProfileIds) {
     expected += entry.id;
+    expected += '\n';
+  }
+  const CliRun r = run_cli({"profiles"});
+  ASSERT_EQ(r.exit_code, 0) << r.stderr_text;
+  EXPECT_EQ(r.stdout_text, expected);
+}
+
+TEST(FormulonCli, ProfilesCommandListsTheSameIdsAsTheCAbi) {
+  std::size_t count = 0;
+  ASSERT_EQ(fm_get_profile_id_count(&count), 0);
+  std::string expected;
+  for (std::size_t i = 0; i < count; ++i) {
+    const char* id = nullptr;
+    ASSERT_EQ(fm_get_profile_id_at(i, &id), 0);
+    expected += id;
     expected += '\n';
   }
   const CliRun r = run_cli({"profiles"});

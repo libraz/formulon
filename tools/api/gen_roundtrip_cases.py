@@ -58,12 +58,16 @@ PATCH_OVERRIDES: Dict[str, dict] = {
     "chart_series.set": {"skip": True},
     "chart_point.update": {"skip": True},
     "chart_plot.set": {"skip": True},
+    # The common drawing patch: its round trips live in the drawing suites.
+    "drawing.update": {"skip": True},
     "table.update": {"create": ["table.create"]},
     "protected_range.update": {"create": ["protected_range.add"]},
+    "cf_rule.update": {"id": "cf_rule_update", "create": ["cf_rule.add"]},
+    "validation.update": {"id": "validation_update", "get": "validation.get_at", "create": ["validation.add"]},
     "threaded_comment.update": {"create": ["threaded_comment.add"]},
     "shape.update": {"create": ["shape.add"]},
     "slicer.update": {"create": ["table.create", "slicer.add"]},
-    "sparkline_group.update": {"create": ["sparkline_group.add"]},
+    "sparkline_group.update": {"get": "sparkline_group.get_at", "create": ["sparkline_group.add"]},
     "pivot_grand_totals.set": {"create": _PIVOT},
     "pivot_style_info.set": {"create": _PIVOT},
     "pivot_options.set": {"create": _PIVOT},
@@ -73,8 +77,8 @@ PATCH_OVERRIDES: Dict[str, dict] = {
 # Record-taking adds: row id -> (getter op, adding op, record, known_fix).
 READD: Dict[str, tuple] = {
     "cf_rule": ("cf_rule.get", "cf_rule.add", "ConditionalFormat", "an id equal to an existing rule's gets a new GUID"),
-    "validation": ("validation.get", "validation.add", "DataValidation", None),
-    "hyperlink": ("hyperlink.get", "hyperlink.add", "Hyperlink", "location is `string | null | undefined`"),
+    "validation": ("validation.get_at", "validation.add", "DataValidation", None),
+    "hyperlink": ("hyperlink.get", "hyperlink.set", "Hyperlink", "location is `string | null | undefined`"),
     "comment": ("comment.get", "comment.set", "Comment", None),
 }
 

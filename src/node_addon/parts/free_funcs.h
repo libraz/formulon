@@ -42,6 +42,9 @@ Napi::Value FunctionMetadata(const Napi::CallbackInfo& info);
 /// `listFunctionNames()`: every built-in's canonical name.
 Napi::Value FunctionNames(const Napi::CallbackInfo& info);
 
+/// `listProfileIds()`: every profile id the engine accepts, in table order.
+Napi::Value ListProfileIds(const Napi::CallbackInfo& info);
+
 /// `localizeFunctionName(name, profileId)`.
 Napi::Value LocalizeFunctionName(const Napi::CallbackInfo& info);
 

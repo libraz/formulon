@@ -100,6 +100,21 @@ inline bool is_editable(DrawingObjectKind kind) {
   return kind == DrawingObjectKind::kPicture || kind == DrawingObjectKind::kChart;
 }
 
+// Writes `cNvPr/@hidden` as Excel does: `1` when hidden, absent otherwise.
+inline void set_cnvpr_hidden(pugi::xml_node cnvpr, bool hidden) {
+  if (hidden) {
+    (cnvpr.attribute("hidden") ? cnvpr.attribute("hidden") : cnvpr.append_attribute("hidden")).set_value("1");
+  } else {
+    cnvpr.remove_attribute("hidden");
+  }
+}
+
+// The kinds the shape edits address: a shape, a connector or a group.
+inline bool is_shape_kind(DrawingObjectKind kind) {
+  return kind == DrawingObjectKind::kShape || kind == DrawingObjectKind::kConnector ||
+         kind == DrawingObjectKind::kGroup;
+}
+
 // The kinds a rename accepts.
 inline bool is_nameable(DrawingObjectKind kind) {
   return is_editable(kind) || kind == DrawingObjectKind::kShape;

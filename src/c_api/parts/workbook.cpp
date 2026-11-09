@@ -56,6 +56,21 @@ using formulon::c_api::parts::with_formula_prefix;
 
 namespace {
 
+// An inclusive span `[first, last]` inside a sheet with `limit` lines.
+fm_status_t check_span(std::uint32_t first, std::uint32_t last, std::uint32_t limit) {
+  if (last < first || last >= limit) {
+    return invalid_argument("span is empty or past the sheet bound",
+                            "first=" + std::to_string(first) + " last=" + std::to_string(last));
+  }
+  return 0;
+}
+
+fm_status_t sheet_index_out_of_range(std::size_t position, const char* what) {
+  return formulon::c_api::parts::set_binding_error(formulon::FormulonErrorCode::kSheetIndexOutOfRange,
+                                                   "sheet position is out of range",
+                                                   std::string(what) + "=" + std::to_string(position));
+}
+
 // Projects the io layer's `WriteDiagnostics` onto the C ABI struct. Both
 // carry the same five `uint32_t` counters under the same names; the copy is
 // explicit so a field added on one side fails to compile rather than
@@ -371,28 +386,50 @@ extern "C" fm_status_t fm_workbook_get_sheet_index(const fm_workbook_t* wb, cons
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_add_sheet(fm_workbook_t* wb, const char* utf8_name, size_t* out_index) {
+extern "C" fm_status_t fm_workbook_add_sheet(fm_workbook_t* wb, const char* utf8_name, size_t insert_before,
+                                             size_t* out_index) {
   clear_last_error();
-  if (wb == nullptr || utf8_name == nullptr || out_index == nullptr) {
+  if (wb == nullptr || out_index == nullptr) {
     return null_argument();
   }
-  if (auto rc = check_utf8({utf8_name}); rc != 0) {
-    return rc;
+  if (utf8_name != nullptr) {
+    if (auto rc = check_utf8({utf8_name}); rc != 0) {
+      return rc;
+    }
   }
-  auto r = wb->workbook().add_sheet_entered(std::string(utf8_name));
+  formulon::Workbook& book = wb->workbook();
+  const std::size_t count = book.sheet_count();
+  if (insert_before > count) {
+    return sheet_index_out_of_range(insert_before, "insert_before");
+  }
+  auto r = book.add_sheet_entered(utf8_name != nullptr ? std::string(utf8_name) : book.next_default_sheet_name());
   if (!r) {
     return set_last_error(r.error());
   }
-  *out_index = wb->workbook().sheet_count() - 1U;
+  // The new sheet is last; the engine's move interprets its target in the list without it.
+  if (insert_before < count) {
+    book.move_sheet(static_cast<std::uint32_t>(count), static_cast<std::uint32_t>(insert_before));
+    wb->clear_cell_enumeration_cache();
+  }
+  *out_index = std::min(insert_before, count);
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_move_sheet(fm_workbook_t* wb, size_t from_index, size_t to_index) {
+extern "C" fm_status_t fm_workbook_move_sheet(fm_workbook_t* wb, size_t from_index, size_t insert_before) {
   clear_last_error();
   if (wb == nullptr) {
     return null_argument("wb");
   }
-  auto r = wb->workbook().move_sheet(saturate_index(from_index), saturate_index(to_index));
+  const std::size_t count = wb->workbook().sheet_count();
+  if (from_index >= count) {
+    return sheet_index_out_of_range(from_index, "from_index");
+  }
+  if (insert_before > count) {
+    return sheet_index_out_of_range(insert_before, "insert_before");
+  }
+  // The engine's target index is a position in the list after the sheet is lifted out.
+  const std::size_t to_index = insert_before > from_index ? insert_before - 1U : insert_before;
+  auto r = wb->workbook().move_sheet(static_cast<std::uint32_t>(from_index), static_cast<std::uint32_t>(to_index));
   if (!r) {
     return set_last_error(r.error());
   }
@@ -542,7 +579,7 @@ extern "C" fm_status_t fm_workbook_set_defined_name(fm_workbook_t* wb, const fm_
   return finish_status(book.set_defined_name_hidden(input->name, scope, input->hidden != 0));
 }
 
-extern "C" fm_status_t fm_sheet_insert_rows(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t count) {
+extern "C" fm_status_t fm_sheet_insert_rows(fm_workbook_t* wb, size_t sheet_index, uint32_t first, uint32_t last) {
   clear_last_error();
   if (wb == nullptr) {
     return null_argument();
@@ -550,10 +587,13 @@ extern "C" fm_status_t fm_sheet_insert_rows(fm_workbook_t* wb, size_t sheet_inde
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
-  return finish_status(wb->workbook().insert_rows(sheet_index, row, count));
+  if (auto rc = check_span(first, last, formulon::Sheet::kMaxRows); rc != 0) {
+    return rc;
+  }
+  return finish_status(wb->workbook().insert_rows(sheet_index, first, last - first + 1U));
 }
 
-extern "C" fm_status_t fm_sheet_delete_rows(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t count) {
+extern "C" fm_status_t fm_sheet_delete_rows(fm_workbook_t* wb, size_t sheet_index, uint32_t first, uint32_t last) {
   clear_last_error();
   if (wb == nullptr) {
     return null_argument();
@@ -561,10 +601,13 @@ extern "C" fm_status_t fm_sheet_delete_rows(fm_workbook_t* wb, size_t sheet_inde
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
-  return finish_status(wb->workbook().delete_rows(sheet_index, row, count));
+  if (auto rc = check_span(first, last, formulon::Sheet::kMaxRows); rc != 0) {
+    return rc;
+  }
+  return finish_status(wb->workbook().delete_rows(sheet_index, first, last - first + 1U));
 }
 
-extern "C" fm_status_t fm_sheet_insert_columns(fm_workbook_t* wb, size_t sheet_index, uint32_t col, uint32_t count) {
+extern "C" fm_status_t fm_sheet_insert_columns(fm_workbook_t* wb, size_t sheet_index, uint32_t first, uint32_t last) {
   clear_last_error();
   if (wb == nullptr) {
     return null_argument();
@@ -572,10 +615,13 @@ extern "C" fm_status_t fm_sheet_insert_columns(fm_workbook_t* wb, size_t sheet_i
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
-  return finish_status(wb->workbook().insert_cols(sheet_index, col, count));
+  if (auto rc = check_span(first, last, formulon::Sheet::kMaxCols); rc != 0) {
+    return rc;
+  }
+  return finish_status(wb->workbook().insert_cols(sheet_index, first, last - first + 1U));
 }
 
-extern "C" fm_status_t fm_sheet_delete_columns(fm_workbook_t* wb, size_t sheet_index, uint32_t col, uint32_t count) {
+extern "C" fm_status_t fm_sheet_delete_columns(fm_workbook_t* wb, size_t sheet_index, uint32_t first, uint32_t last) {
   clear_last_error();
   if (wb == nullptr) {
     return null_argument();
@@ -583,7 +629,10 @@ extern "C" fm_status_t fm_sheet_delete_columns(fm_workbook_t* wb, size_t sheet_i
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
-  return finish_status(wb->workbook().delete_cols(sheet_index, col, count));
+  if (auto rc = check_span(first, last, formulon::Sheet::kMaxCols); rc != 0) {
+    return rc;
+  }
+  return finish_status(wb->workbook().delete_cols(sheet_index, first, last - first + 1U));
 }
 
 // ---------------------------------------------------------------------------

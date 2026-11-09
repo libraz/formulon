@@ -103,8 +103,8 @@ int main(void) {
   // definition of either record is miscompiled rather than diagnosed.
   _Static_assert(sizeof(fm_cell_xf_t) == 136, "fm_cell_xf_t ABI layout changed");
   _Static_assert(sizeof(fm_row_layout_info_t) == 48, "fm_row_layout_info_t ABI layout changed");
-  _Static_assert(sizeof(fm_sheet_view_info_t) == 88, "fm_sheet_view_info_t ABI layout changed");
-  _Static_assert(sizeof(fm_sheet_view_patch_t) == 160, "fm_sheet_view_patch_t ABI layout changed");
+  _Static_assert(sizeof(fm_sheet_view_info_t) == 80, "fm_sheet_view_info_t ABI layout changed");
+  _Static_assert(sizeof(fm_sheet_view_patch_t) == 152, "fm_sheet_view_patch_t ABI layout changed");
   // The three records a C consumer marshals without help from any binding:
   // `fm_value_t` comes back from every cell read, `fm_cell_rect_t` from
   // pagination, and `fm_styles_batch_spec_t` is passed in by pointer with
@@ -156,42 +156,63 @@ int main(void) {
   _Static_assert(sizeof(fm_sort_condition_t) == (sizeof(void*) == 4 ? 48 : 56),
                  "fm_sort_condition_t ABI layout changed");
   _Static_assert(sizeof(fm_auto_filter_t) == (sizeof(void*) == 4 ? 68 : 88), "fm_auto_filter_t ABI layout changed");
-  _Static_assert(sizeof(fm_validation_outcome_info_t) == 20, "fm_validation_outcome_info_t ABI layout changed");
+  _Static_assert(sizeof(fm_validation_outcome_info_t) == (sizeof(void*) == 4 ? 20 : 24),
+                 "fm_validation_outcome_info_t ABI layout changed");
   _Static_assert(sizeof(fm_mention_t) == (sizeof(void*) == 4 ? 16 : 24), "fm_mention_t ABI layout changed");
   _Static_assert(sizeof(fm_threaded_comment_t) == (sizeof(void*) == 4 ? 44 : 80),
                  "fm_threaded_comment_t ABI layout changed");
   _Static_assert(sizeof(fm_person_t) == 5 * sizeof(void*), "fm_person_t ABI layout changed");
   _Static_assert(sizeof(fm_image_info_t) == 16, "fm_image_info_t ABI layout changed");
-  _Static_assert(sizeof(fm_drawing_object_info_t) == (sizeof(void*) == 4 ? 104 : 120),
+  _Static_assert(sizeof(fm_drawing_object_info_t) == (sizeof(void*) == 4 ? 104 : 112),
                  "fm_drawing_object_info_t ABI layout changed");
-  _Static_assert(sizeof(fm_picture_insert_spec_t) == (sizeof(void*) == 4 ? 64 : 72),
-                 "fm_picture_insert_spec_t ABI layout changed");
-  _Static_assert(offsetof(fm_picture_insert_spec_t, struct_size) == 0, "fm_picture_insert_spec_t is a record");
-  _Static_assert(sizeof(fm_drawing_anchor_t) == 48, "fm_drawing_anchor_t ABI layout changed");
+  _Static_assert(sizeof(fm_drawing_placement_spec_t) == (sizeof(void*) == 4 ? 88 : 104),
+                 "fm_drawing_placement_spec_t ABI layout changed");
+  _Static_assert(offsetof(fm_drawing_placement_spec_t, struct_size) == 0, "fm_drawing_placement_spec_t is a record");
+  _Static_assert(sizeof(fm_drawing_anchor_t) == 72, "fm_drawing_anchor_t ABI layout changed");
+  _Static_assert(sizeof(fm_drawing_anchor_patch_t) == 144, "fm_drawing_anchor_patch_t ABI layout changed");
+  _Static_assert(sizeof(fm_drawing_patch_t) == (sizeof(void*) == 4 ? 176 : 184),
+                 "fm_drawing_patch_t ABI layout changed");
+  _Static_assert(FM_ANCHOR_KIND_DEFAULT == 0, "a zeroed anchor kind asks for the operation's default");
+  _Static_assert(FM_ANCHOR_EDIT_AS_DEFAULT == 0, "a zeroed editAs asks for the operation's default");
+  _Static_assert(FM_SHAPE_PAINT_DEFAULT == 0, "a zeroed shape paint kind asks for the shape style's paint");
   _Static_assert(FM_DRAWING_RESTORE_NEW_ID == 1u, "FM_DRAWING_RESTORE_NEW_ID changed");
-  _Static_assert(sizeof(fm_shape_info_t) == (sizeof(void*) == 4 ? 184 : 192), "fm_shape_info_t ABI layout changed");
-  _Static_assert(sizeof(fm_slicer_info_t) == (sizeof(void*) == 4 ? 104 : 128), "fm_slicer_info_t ABI layout changed");
+  _Static_assert(sizeof(fm_shape_info_t) == (sizeof(void*) == 4 ? 104 : 112), "fm_shape_info_t ABI layout changed");
+  _Static_assert(sizeof(fm_shape_spec_t) == (sizeof(void*) == 4 ? 192 : 216), "fm_shape_spec_t ABI layout changed");
+  _Static_assert(sizeof(fm_slicer_info_t) == (sizeof(void*) == 4 ? 56 : 72), "fm_slicer_info_t ABI layout changed");
+  _Static_assert(sizeof(fm_slicer_spec_t) == (sizeof(void*) == 4 ? 128 : 152), "fm_slicer_spec_t ABI layout changed");
   _Static_assert(sizeof(fm_data_table_t) == 60, "fm_data_table_t ABI layout changed");
   _Static_assert(sizeof(fm_sparkline_t) == 2 * sizeof(void*), "fm_sparkline_t ABI layout changed");
-  _Static_assert(sizeof(fm_sparkline_group_t) == (sizeof(void*) == 4 ? 296 : 304),
+  _Static_assert(sizeof(fm_sparkline_group_t) == (sizeof(void*) == 4 ? 296 : 312),
                  "fm_sparkline_group_t ABI layout changed");
-  // Drawing updates each take their own patch.
-  _Static_assert(sizeof(fm_shape_patch_t) == (sizeof(void*) == 4 ? 296 : 320), "fm_shape_patch_t ABI layout changed");
-  _Static_assert(sizeof(fm_slicer_patch_t) == (sizeof(void*) == 4 ? 160 : 184), "fm_slicer_patch_t ABI layout changed");
+  // The common drawing fields share one patch; each kind's update takes its own fields only.
+  _Static_assert(sizeof(fm_shape_patch_t) == (sizeof(void*) == 4 ? 136 : 152), "fm_shape_patch_t ABI layout changed");
+  _Static_assert(sizeof(fm_slicer_patch_t) == (sizeof(void*) == 4 ? 56 : 72), "fm_slicer_patch_t ABI layout changed");
   _Static_assert(sizeof(fm_sparkline_group_patch_t) == (sizeof(void*) == 4 ? 432 : 448),
                  "fm_sparkline_group_patch_t ABI layout changed");
-  fm_status_t (*add_shape)(fm_workbook_t*, size_t, const fm_shape_patch_t*, uint32_t*) = fm_sheet_add_shape;
+  fm_status_t (*add_shape)(fm_workbook_t*, size_t, const fm_shape_spec_t*, uint32_t*) = fm_sheet_add_shape;
+  fm_status_t (*add_slicer)(fm_workbook_t*, size_t, size_t, size_t, size_t, const fm_slicer_spec_t*, uint32_t*) =
+      fm_sheet_add_slicer;
+  fm_status_t (*update_drawing)(fm_workbook_t*, size_t, uint32_t, const fm_drawing_patch_t*) = fm_sheet_update_drawing;
   fm_status_t (*update_shape)(fm_workbook_t*, size_t, uint32_t, const fm_shape_patch_t*) = fm_sheet_update_shape;
   fm_status_t (*update_slicer)(fm_workbook_t*, size_t, uint32_t, const fm_slicer_patch_t*) = fm_sheet_update_slicer;
-  fm_status_t (*update_sparkline_group)(fm_workbook_t*, size_t, size_t, const fm_sparkline_group_patch_t*) =
+  fm_status_t (*update_sparkline_group)(fm_workbook_t*, size_t, const char*, const fm_sparkline_group_patch_t*) =
       fm_sheet_update_sparkline_group;
+  fm_status_t (*add_sparkline_group)(fm_workbook_t*, size_t, const fm_sparkline_group_t*, const fm_sparkline_t*, size_t,
+                                     const char**) = fm_sheet_add_sparkline_group;
+  fm_status_t (*get_sparkline_group)(const fm_workbook_t*, size_t, const char*, int32_t*, fm_sparkline_group_t*) =
+      fm_sheet_get_sparkline_group;
   fm_status_t (*chart_data)(const fm_workbook_t*, size_t, uint32_t, int32_t*, fm_chart_data_t**) =
       fm_sheet_get_chart_data;
   fm_status_t (*update_chart_series)(fm_workbook_t*, size_t, uint32_t, size_t, uint32_t,
                                      const fm_chart_series_patch_t*) = fm_sheet_update_chart_series;
   fm_shape_patch_t shape_patch = FM_STRUCT_INIT(fm_shape_patch_t);
-  shape_patch.hidden_op = FM_PATCH_OP_SET;
-  shape_patch.hidden = 1;
+  shape_patch.text_box_op = FM_PATCH_OP_SET;
+  shape_patch.text_box = 1;
+  fm_drawing_patch_t drawing_patch = FM_STRUCT_INIT(fm_drawing_patch_t);
+  drawing_patch.hidden_op = FM_PATCH_OP_SET;
+  drawing_patch.hidden = 1;
+  drawing_patch.anchor.from_row_op = FM_PATCH_OP_SET;
+  drawing_patch.anchor.from_row = 3;
   // Table and custom table-style records, pinned per target.
   _Static_assert(sizeof(fm_table_info_t) == (sizeof(void*) == 4 ? 56 : 72), "fm_table_info_t ABI layout changed");
   _Static_assert(sizeof(fm_table_patch_t) == 40, "fm_table_patch_t ABI layout changed");
@@ -248,17 +269,15 @@ int main(void) {
                                 fm_validation_outcome_info_t*) = fm_sheet_validate_value;
   fm_status_t (*list_invalid_cells)(const fm_workbook_t*, size_t, uint64_t, uint32_t, fm_cell_range_t**) =
       fm_sheet_get_invalid_cells;
-  fm_status_t (*add_threaded_comment)(fm_workbook_t*, size_t, const fm_threaded_comment_t*) =
+  fm_status_t (*add_threaded_comment)(fm_workbook_t*, size_t, const fm_threaded_comment_t*, const char**) =
       fm_sheet_add_threaded_comment;
   fm_status_t (*edit_threaded_comment)(fm_workbook_t*, size_t, const char*, const fm_threaded_comment_patch_t*) =
       fm_sheet_update_threaded_comment;
   fm_status_t (*person_at)(const fm_workbook_t*, size_t, fm_person_t*) = fm_workbook_get_person_at;
-  fm_status_t (*insert_image)(fm_workbook_t*, size_t, const uint8_t*, size_t, const fm_picture_insert_spec_t*,
+  fm_status_t (*insert_image)(fm_workbook_t*, size_t, const uint8_t*, size_t, const fm_drawing_placement_spec_t*,
                               uint32_t*) = fm_sheet_add_picture;
   fm_status_t (*get_image)(const fm_workbook_t*, size_t, uint32_t, int32_t*, const uint8_t**, size_t*,
                            fm_image_info_t*) = fm_sheet_get_picture;
-  fm_status_t (*set_drawing_anchor)(fm_workbook_t*, size_t, uint32_t, const fm_drawing_anchor_t*) =
-      fm_sheet_set_drawing_anchor;
   fm_status_t (*set_drawing_z_order)(fm_workbook_t*, size_t, uint32_t, size_t) = fm_sheet_set_drawing_z_order;
   fm_status_t (*snapshot_drawing)(const fm_workbook_t*, size_t, uint32_t, uint8_t**, size_t*) =
       fm_sheet_snapshot_drawing;
@@ -314,6 +333,75 @@ int main(void) {
       fm_workbook_get_pivot_cache_field_formula;
   fm_pivot_field_patch_t pivot_field_patch = FM_STRUCT_INIT(fm_pivot_field_patch_t);
   pivot_field_patch.custom_name_op = FM_PATCH_OP_CLEAR;
+  // Sheets are placed by `insert_before` in the current list; a `NULL` name
+  // takes the profile's default; row and column edits take an inclusive span.
+  fm_status_t (*add_sheet)(fm_workbook_t*, const char*, size_t, size_t*) = fm_workbook_add_sheet;
+  fm_status_t (*move_sheet)(fm_workbook_t*, size_t, size_t) = fm_workbook_move_sheet;
+  fm_status_t (*insert_rows)(fm_workbook_t*, size_t, uint32_t, uint32_t) = fm_sheet_insert_rows;
+  fm_status_t (*delete_columns)(fm_workbook_t*, size_t, uint32_t, uint32_t) = fm_sheet_delete_columns;
+  fm_status_t (*set_value)(fm_workbook_t*, size_t, uint32_t, uint32_t, const fm_value_t*) = fm_sheet_set_value;
+  fm_status_t (*get_visibility)(const fm_workbook_t*, size_t, int32_t*) = fm_sheet_get_visibility;
+  fm_status_t (*set_visibility)(fm_workbook_t*, size_t, int32_t) = fm_sheet_set_visibility;
+  fm_status_t (*profile_id_count)(size_t*) = fm_get_profile_id_count;
+  fm_status_t (*profile_id_at)(size_t, const char**) = fm_get_profile_id_at;
+  // Data validations are addressed by their engine id; add returns it.
+  _Static_assert(sizeof(fm_data_validation_t) == (sizeof(void*) == 4 ? 68 : 104),
+                 "fm_data_validation_t ABI layout changed");
+  _Static_assert(offsetof(fm_data_validation_t, id) == sizeof(void*), "fm_data_validation_t leads with its id");
+  _Static_assert(sizeof(fm_data_validation_patch_t) == (sizeof(void*) == 4 ? 120 : 168),
+                 "fm_data_validation_patch_t ABI layout changed");
+  fm_status_t (*get_validation)(const fm_workbook_t*, size_t, const char*, int32_t*, fm_data_validation_t*) =
+      fm_sheet_get_validation;
+  fm_status_t (*add_validation)(fm_workbook_t*, size_t, const fm_data_validation_t*, const char**) =
+      fm_sheet_add_validation;
+  fm_status_t (*update_validation)(fm_workbook_t*, size_t, const char*, const fm_data_validation_patch_t*) =
+      fm_sheet_update_validation;
+  fm_status_t (*remove_validation)(fm_workbook_t*, size_t, const char*) = fm_sheet_remove_validation;
+  fm_data_validation_patch_t validation_patch = FM_STRUCT_INIT(fm_data_validation_patch_t);
+  validation_patch.formula1_op = FM_PATCH_OP_CLEAR;
+  _Static_assert(sizeof(fm_cf_rule_patch_t) == (sizeof(void*) == 4 ? 472 : 544),
+                 "fm_cf_rule_patch_t ABI layout changed");
+  fm_status_t (*update_cf_rule)(fm_workbook_t*, size_t, size_t, const fm_cf_rule_patch_t*) = fm_sheet_update_cf_rule;
+  fm_cf_rule_patch_t cf_patch = FM_STRUCT_INIT(fm_cf_rule_patch_t);
+  cf_patch.dxf_index_op = FM_PATCH_OP_CLEAR;
+  // A pivot filter names its field by index; subtotal functions are set as a
+  // whole; cache records read back.
+  _Static_assert(sizeof(fm_pivot_filter_t) == (sizeof(void*) == 4 ? 64 : 72), "fm_pivot_filter_t ABI layout changed");
+  _Static_assert(offsetof(fm_pivot_filter_t, field_index) == 4, "fm_pivot_filter_t names its field by index");
+  fm_status_t (*set_subtotal_functions)(fm_workbook_t*, size_t, size_t, size_t, const int32_t*, size_t) =
+      fm_sheet_set_pivot_field_subtotal_functions;
+  fm_status_t (*cache_record_value)(const fm_workbook_t*, uint32_t, size_t, size_t, fm_value_t*) =
+      fm_workbook_get_pivot_cache_record_value;
+  _Static_assert(sizeof(fm_external_link_info_t) == (sizeof(void*) == 4 ? 28 : 40),
+                 "fm_external_link_info_t ABI layout changed");
+  _Static_assert(offsetof(fm_external_link_info_t, book_number) == 4, "fm_external_link_info_t book_number moved");
+  // Each style table with an `add` also overwrites a slot in place.
+  fm_status_t (*set_fill)(fm_workbook_t*, size_t, const fm_fill_t*) = fm_workbook_set_fill;
+  fm_status_t (*set_border)(fm_workbook_t*, size_t, const fm_border_t*) = fm_workbook_set_border;
+  fm_status_t (*set_cell_xf)(fm_workbook_t*, uint32_t, const fm_cell_xf_t*) = fm_workbook_set_cell_xf;
+  fm_status_t (*set_dxf)(fm_workbook_t*, uint32_t, const fm_dxf_t*) = fm_workbook_set_dxf;
+  (void)add_sheet;
+  (void)move_sheet;
+  (void)insert_rows;
+  (void)delete_columns;
+  (void)set_value;
+  (void)get_visibility;
+  (void)set_visibility;
+  (void)profile_id_count;
+  (void)profile_id_at;
+  (void)get_validation;
+  (void)add_validation;
+  (void)update_validation;
+  (void)remove_validation;
+  (void)validation_patch;
+  (void)update_cf_rule;
+  (void)cf_patch;
+  (void)set_subtotal_functions;
+  (void)cache_record_value;
+  (void)set_fill;
+  (void)set_border;
+  (void)set_cell_xf;
+  (void)set_dxf;
   (void)cells_in_range;
   (void)set_table_style;
   (void)set_column_totals;
@@ -321,6 +409,11 @@ int main(void) {
   (void)update_table;
   (void)table_patch;
   (void)add_shape;
+  (void)add_slicer;
+  (void)update_drawing;
+  (void)add_sparkline_group;
+  (void)get_sparkline_group;
+  (void)drawing_patch;
   (void)update_shape;
   (void)update_slicer;
   (void)update_sparkline_group;
@@ -366,7 +459,6 @@ int main(void) {
   (void)person_at;
   (void)insert_image;
   (void)get_image;
-  (void)set_drawing_anchor;
   (void)set_drawing_z_order;
   (void)snapshot_drawing;
   (void)restore_drawing;

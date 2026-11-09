@@ -265,7 +265,7 @@ int run_eval(const ArgList& args, std::ostream& out, std::ostream& err) {
       emit_last_error(err, "eval");
       return kExitFailure;
     }
-    if (auto rc = fm_workbook_add_sheet(wb.handle, "Sheet1", &sheet_index); rc != 0) {
+    if (auto rc = fm_workbook_add_sheet(wb.handle, "Sheet1", 0, &sheet_index); rc != 0) {
       emit_last_error(err, "eval");
       return kExitFailure;
     }

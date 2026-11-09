@@ -1,6 +1,6 @@
 // Drawing bindings: probe, enumerate, read and insert pictures, and the
-// remove, re-anchor, re-order, snapshot and restore operations that apply to
-// any picture or chart.
+// remove, update, re-order, snapshot and restore operations that apply to
+// any drawing object.
 
 #include <cstddef>
 #include <cstdint>
@@ -47,26 +47,33 @@ bool ReadBytesWithOpts(const Napi::CallbackInfo& info, const char* usage, BytesW
   return true;
 }
 
+// The JS `DrawingAnchor` record of `a`.
+Napi::Object DrawingAnchorToJs(Napi::Env env, const fm_drawing_anchor_t& a) {
+  Napi::Object item = Napi::Object::New(env);
+  item.Set("kind", JsNumber(env, a.kind));
+  item.Set("editAs", JsNumber(env, a.edit_as));
+  item.Set("fromRow", JsNumber(env, a.from_row));
+  item.Set("fromCol", JsNumber(env, a.from_col));
+  item.Set("fromRowOffsetEmu", JsNumber(env, static_cast<double>(a.from_row_offset_emu)));
+  item.Set("fromColOffsetEmu", JsNumber(env, static_cast<double>(a.from_col_offset_emu)));
+  item.Set("toRow", JsNumber(env, a.to_row));
+  item.Set("toCol", JsNumber(env, a.to_col));
+  item.Set("toRowOffsetEmu", JsNumber(env, static_cast<double>(a.to_row_offset_emu)));
+  item.Set("toColOffsetEmu", JsNumber(env, static_cast<double>(a.to_col_offset_emu)));
+  item.Set("widthEmu", JsNumber(env, static_cast<double>(a.width_emu)));
+  item.Set("heightEmu", JsNumber(env, static_cast<double>(a.height_emu)));
+  return item;
+}
+
 // The JS `DrawingObject` record of `o`.
 Napi::Object DrawingObjectToJs(Napi::Env env, const fm_drawing_object_info_t& o) {
   Napi::Object item = Napi::Object::New(env);
   item.Set("objectId", JsNumber(env, o.object_id));
   item.Set("kind", JsNumber(env, o.kind));
-  item.Set("anchorKind", JsNumber(env, o.anchor_kind));
-  item.Set("editAs", JsNumber(env, o.edit_as));
-  item.Set("fromRow", JsNumber(env, o.from_row));
-  item.Set("fromCol", JsNumber(env, o.from_col));
-  item.Set("fromRowOffsetEmu", JsNumber(env, static_cast<double>(o.from_row_offset_emu)));
-  item.Set("fromColOffsetEmu", JsNumber(env, static_cast<double>(o.from_col_offset_emu)));
-  item.Set("toRow", JsNumber(env, o.to_row));
-  item.Set("toCol", JsNumber(env, o.to_col));
-  item.Set("toRowOffsetEmu", JsNumber(env, static_cast<double>(o.to_row_offset_emu)));
-  item.Set("toColOffsetEmu", JsNumber(env, static_cast<double>(o.to_col_offset_emu)));
-  item.Set("widthEmu", JsNumber(env, static_cast<double>(o.width_emu)));
-  item.Set("heightEmu", JsNumber(env, static_cast<double>(o.height_emu)));
-  item.Set("format", JsNumber(env, o.image_format));
+  item.Set("hidden", JsBool(env, o.hidden));
+  item.Set("anchor", DrawingAnchorToJs(env, o.anchor));
   item.Set("name", JsString(env, o.name));
-  item.Set("description", JsString(env, o.description));
+  item.Set("description", JsStringOrNull(env, o.description));
   return item;
 }
 
@@ -161,7 +168,7 @@ Napi::Value Workbook::InsertImage(const Napi::CallbackInfo& info) {
   CheckedSpecReader reader(env);
   std::string name;
   std::string description;
-  const fm_picture_insert_spec_t opts = PullImageInsert(reader, args.spec, FM_ANCHOR_KIND_ONE_CELL, name, description);
+  const fm_drawing_placement_spec_t opts = PullPlacement(reader, args.spec, name, description);
   if (!reader.ok()) {
     return env.Undefined();
   }
@@ -174,26 +181,28 @@ Napi::Value Workbook::RemoveDrawing(const Napi::CallbackInfo& info) {
   return InvokeSheetCall(info, &fm_sheet_remove_drawing);
 }
 
-Napi::Value Workbook::SetDrawingAnchor(const Napi::CallbackInfo& info) {
+Napi::Value Workbook::UpdateDrawing(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
     return ThrowInvalidHandle(env);
   }
   CheckedSpecReader reader(env);
   const Napi::Object spec = ArgObject(info, 2);
-  const fm_drawing_anchor_t anchor = PullDrawingAnchor(reader, spec, FM_ANCHOR_KIND_ONE_CELL);
+  std::string name;
+  std::string description;
+  fm_drawing_patch_t patch = FM_STRUCT_INIT(fm_drawing_patch_t);
+  patch.name_op = PatchString(reader, spec, "name", false, &name, &patch.name);
+  patch.description_op = PatchString(reader, spec, "description", true, &description, &patch.description);
+  patch.hidden_op = PatchBool(reader, spec, "hidden", &patch.hidden);
+  Napi::Object anchor;
+  if (reader.Object(spec, "anchor", &anchor)) {
+    patch.anchor = PullDrawingAnchorPatch(reader, anchor);
+  }
   if (!reader.ok()) {
     return env.Undefined();
   }
-  return ValueOrThrow(env, fm_sheet_set_drawing_anchor(handle_, ArgU32(info, 0), ArgU32(info, 1), &anchor),
+  return ValueOrThrow(env, fm_sheet_update_drawing(handle_, ArgU32(info, 0), ArgU32(info, 1), &patch),
                       env.Undefined());
-}
-
-Napi::Value Workbook::SetDrawingName(const Napi::CallbackInfo& info) {
-  return StatusCall(info, [&](fm_workbook_t* handle) {
-    const std::string name = ArgString(info, 2);
-    return fm_sheet_set_drawing_name(handle, ArgU32(info, 0), ArgU32(info, 1), name.c_str());
-  });
 }
 
 Napi::Value Workbook::SetDrawingZOrder(const Napi::CallbackInfo& info) {

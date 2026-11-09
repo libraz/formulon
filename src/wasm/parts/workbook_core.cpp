@@ -284,16 +284,26 @@ JsReadDiagnostics JsWorkbook::readDiagnostics() const {
 
 // ---- Sheet management ----------------------------------------------------
 
-uint32_t JsWorkbook::addSheet(const std::string& name) {
+uint32_t JsWorkbook::addSheet(emscripten::val name, uint32_t insertBefore) {
+  if (handle_ == nullptr) {
+    record_invalid_handle();
+    return 0U;
+  }
+  JsNarrowNumericReader reader("Workbook.addSheet");
+  std::string storage;
+  const char* text = reader.optional_string_value(name, storage, "name");
+  if (!reader.ok()) {
+    return 0U;
+  }
   std::size_t out = 0;
-  if (!succeeded(handle_ != nullptr ? fm_workbook_add_sheet(handle_, name.c_str(), &out) : kBindingInvalidHandle)) {
+  if (!succeeded(fm_workbook_add_sheet(handle_, text, insertBefore, &out))) {
     return 0U;
   }
   return static_cast<uint32_t>(out);
 }
 
-void JsWorkbook::moveSheet(uint32_t fromIndex, uint32_t toIndex) {
-  succeeded(handle_ != nullptr ? fm_workbook_move_sheet(handle_, fromIndex, toIndex) : kBindingInvalidHandle);
+void JsWorkbook::moveSheet(uint32_t fromIndex, uint32_t insertBefore) {
+  succeeded(handle_ != nullptr ? fm_workbook_move_sheet(handle_, fromIndex, insertBefore) : kBindingInvalidHandle);
 }
 
 uint32_t JsWorkbook::copySheet(uint32_t sourceIndex, uint32_t insertBefore, emscripten::val newName) {
@@ -374,28 +384,28 @@ void JsWorkbook::setDefinedName(emscripten::val input) {
 
 // ---- Row / column edits --------------------------------------------------
 
-void JsWorkbook::invoke_row_col_edit(RowColEditFn fn, uint32_t sheet, uint32_t index, uint32_t count) {
+void JsWorkbook::invoke_row_col_edit(RowColEditFn fn, uint32_t sheet, uint32_t first, uint32_t last) {
   if (handle_ == nullptr) {
     record_invalid_handle();
     return;
   }
-  succeeded(fn(handle_, sheet, index, count));
+  succeeded(fn(handle_, sheet, first, last));
 }
 
-void JsWorkbook::insertRows(uint32_t sheet, uint32_t row, uint32_t count) {
-  invoke_row_col_edit(fm_sheet_insert_rows, sheet, row, count);
+void JsWorkbook::insertRows(uint32_t sheet, uint32_t first, uint32_t last) {
+  invoke_row_col_edit(fm_sheet_insert_rows, sheet, first, last);
 }
 
-void JsWorkbook::deleteRows(uint32_t sheet, uint32_t row, uint32_t count) {
-  invoke_row_col_edit(fm_sheet_delete_rows, sheet, row, count);
+void JsWorkbook::deleteRows(uint32_t sheet, uint32_t first, uint32_t last) {
+  invoke_row_col_edit(fm_sheet_delete_rows, sheet, first, last);
 }
 
-void JsWorkbook::insertColumns(uint32_t sheet, uint32_t col, uint32_t count) {
-  invoke_row_col_edit(fm_sheet_insert_columns, sheet, col, count);
+void JsWorkbook::insertColumns(uint32_t sheet, uint32_t first, uint32_t last) {
+  invoke_row_col_edit(fm_sheet_insert_columns, sheet, first, last);
 }
 
-void JsWorkbook::deleteColumns(uint32_t sheet, uint32_t col, uint32_t count) {
-  invoke_row_col_edit(fm_sheet_delete_columns, sheet, col, count);
+void JsWorkbook::deleteColumns(uint32_t sheet, uint32_t first, uint32_t last) {
+  invoke_row_col_edit(fm_sheet_delete_columns, sheet, first, last);
 }
 
 // `JsWorkbook::sheetCount` is now emitted by the binding codegen (see
@@ -789,7 +799,7 @@ emscripten::val evaluate_formula(const std::string& formula) {
   }
   std::size_t sheet_index = 0;
   fm_value_array_t* array = nullptr;
-  const bool ok = succeeded(fm_workbook_add_sheet(wb, "Sheet1", &sheet_index)) &&
+  const bool ok = succeeded(fm_workbook_add_sheet(wb, "Sheet1", 0, &sheet_index)) &&
                   succeeded(fm_sheet_evaluate_formula_array(wb, 0, 0, 0, formula.c_str(), &array));
   // A text payload borrows the array, so convert before destroying it.
   emscripten::val out = ok ? value_array_to_val(array) : emscripten::val::undefined();

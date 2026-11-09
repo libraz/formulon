@@ -85,10 +85,11 @@ function makeRaw(surface) {
       const i = this.names.findIndex((n) => n.toLowerCase() === name.toLowerCase());
       return i < 0 ? null : i;
     }
-    addSheet(name) {
+    addSheet(name, insertBefore) {
       this.alive();
-      this.names.push(name);
-      return this.names.length - 1;
+      if (insertBefore > this.names.length) throw fail(StatusCode.SheetIndexOutOfRange, 'insertBefore');
+      this.names.splice(insertBefore, 0, name ?? `Sheet${this.names.length + 1}`);
+      return insertBefore;
     }
     copySheet(source, insertBefore, newName) {
       this.alive();
@@ -97,12 +98,12 @@ function makeRaw(surface) {
       this.names.splice(insertBefore, 0, newName ?? `${this.names[source]} (2)`);
       return insertBefore;
     }
-    moveSheet(from, to) {
+    moveSheet(from, insertBefore) {
       this.alive();
       this.checkSheet(from);
-      this.checkSheet(to);
+      if (insertBefore > this.names.length) throw fail(StatusCode.SheetIndexOutOfRange, 'insertBefore');
       const [name] = this.names.splice(from, 1);
-      this.names.splice(to, 0, name);
+      this.names.splice(insertBefore > from ? insertBefore - 1 : insertBefore, 0, name);
     }
     removeSheet(i) {
       this.alive();
@@ -209,6 +210,7 @@ function buildFacade(surface = 'wasm') {
     canonicalizeFormula: (f) => f,
     getLocaleFacts: () => null,
     listLocaleErrorNames: () => [],
+    listProfileIds: () => [],
     compareText: () => 0,
     getCollationClasses: () => null,
     getImageInfo: () => null,
@@ -288,7 +290,7 @@ test('H1: one handle per sheet, by index or case-insensitive name', () => {
 test('H2: copySheet before a handle shifts it and returns the copy', () => {
   const { wb, raw } = loaded();
   const calc = wb.sheet('Calc');
-  const copy = wb.copySheet(calc, 0, 'Copy');
+  const copy = wb.copySheet(calc, { insertBefore: 0, newName: 'Copy' });
   assert.equal(copy.name, 'Copy');
   assert.equal(copy.index, 0);
   assert.equal(wb.sheet(0), copy);
@@ -300,7 +302,7 @@ test('H2: copySheet before a handle shifts it and returns the copy', () => {
 test('H3 / H4: Sheet.move and Sheet.rename keep the handle on its sheet', () => {
   const { wb, raw } = loaded();
   const data = wb.sheet('Data');
-  data.move(2);
+  data.move(3);
   assert.equal(data.index, 2);
   assert.equal(data.name, 'Data');
   assert.equal(rawSheetOf(raw, data), 2);
@@ -366,9 +368,9 @@ test('H13 / H7: after dispose, Sheet members throw BindingInvalidHandle', () => 
 test('H14: copySheet at the end appends; past the end fails; Sheet.move in place is a no-op', () => {
   const { wb, raw } = loaded();
   const data = wb.sheet(0);
-  const copy = wb.copySheet(data, 3);
+  const copy = wb.copySheet(data, { insertBefore: 3 });
   assert.equal(copy.index, 3);
-  expectCode(() => wb.copySheet(data, 5), StatusCode.SheetIndexOutOfRange);
+  expectCode(() => wb.copySheet(data, { insertBefore: 5 }), StatusCode.SheetIndexOutOfRange);
   assertInSync(wb, raw);
   data.move(data.index);
   assertInSync(wb, raw);

@@ -342,15 +342,74 @@ def _same_type(patch_type: str, record_type: str, decls: Optional[Dict[str, TsDe
     return patch == record or (len(record) == 1 and patch == [f"{record[0]}Patch"])
 
 
-def _js_patch_problems(decls: Dict[str, TsDecl], raw: str, member, record: Optional[str]) -> Iterator[Tuple[str, str]]:
+class _CommonPatch(NamedTuple):
+    """The patch a kind handle's base class publishes for the fields every kind has: its `patch_record` and, on a
+    JS surface, the patch type the base's method takes. A kind handle's `update` composes it with its own."""
+
+    record: str
+    js_patch: Optional[str]
+
+
+def _common_patch(ctx: Context, cls: str, surface: str) -> Optional[_CommonPatch]:
+    """The `patch: true` op published on the `handle_base` of handle class `cls`, or None for a class without a
+    base (or whose base publishes no patch)."""
+    base = ctx.ledger.handle_bases().get(cls)
+    if base is None or base == cls:
+        return None
+    for _key_, entry in _ledger_ops(ctx, "patch"):
+        if entry.get("patch") is not True or base not in handle_classes(entry):
+            continue
+        record = entry.get("patch_record")
+        if not isinstance(record, str) or record == PATCH_RECORD_NONE:
+            return None
+        js_patch = None
+        if surface != "py":
+            for target in _targets(ctx, entry, surface):
+                if target.name.partition(".")[0] == base and target.member.params:
+                    kinds = _strip_null(target.member.params[-1][1], True)
+                    js_patch = kinds[0] if len(kinds) == 1 else None
+        return _CommonPatch(record, js_patch)
+    return None
+
+
+def _composed_parts(text: str, common: Optional[_CommonPatch]) -> Optional[Tuple[str, str]]:
+    """`(kind patch, common part)` of `<X>Patch & <Common>` / `<X>Patch & Omit<<Common>, ...>`, else None."""
+    if common is None or common.js_patch is None:
+        return None
+    parts = _split_top(text, "&")
+    if len(parts) != 2:
+        return None
+    own, shared = parts
+    if shared != common.js_patch and not re.fullmatch(rf"Omit<\s*{re.escape(common.js_patch)}\s*,.*>", shared, re.S):
+        return None
+    return own, shared
+
+
+def _js_patch_problems(
+    decls: Dict[str, TsDecl], raw: str, member, record: Optional[str], common: Optional[_CommonPatch] = None
+) -> Iterator[Tuple[str, str]]:
     last = member.params[-1] if member.params else ("", "")
     kinds = _strip_null(last[1], True)
-    if len(kinds) != 1 or not kinds[0].endswith("Patch") or kinds[0] not in decls:
+    composed = _composed_parts(kinds[0], common) if len(kinds) == 1 else None
+    if composed is not None:
+        own, shared = composed
+        checks = [(own, record), (shared, common.record)]
+    else:
+        own = kinds[0] if len(kinds) == 1 else ""
+        checks = [(own, record)]
+    if not own.endswith("Patch") or own not in decls:
         yield "patch", f"`{member.name}` takes `{last[1] or 'nothing'}` last, not a declared `<X>Patch`"
         return
-    keys = _patch_keys(decls, raw, kinds[0])
+    for patch, patch_record in checks:
+        yield from _js_patch_key_problems(decls, raw, patch, patch_record)
+
+
+def _js_patch_key_problems(
+    decls: Dict[str, TsDecl], raw: str, patch: str, record: Optional[str]
+) -> Iterator[Tuple[str, str]]:
+    keys = _patch_keys(decls, raw, patch)
     if keys is None:
-        yield "patch", f"`{kinds[0]}` is not a record or `Patch<...>` the checker can read"
+        yield "patch", f"`{patch}` is not a record or `Patch<...>` the checker can read"
         return
     if record is None:
         return
@@ -360,12 +419,31 @@ def _js_patch_problems(decls: Dict[str, TsDecl], raw: str, member, record: Optio
         return
     for key, ptype in sorted(keys.items()):
         if key not in fields:
-            yield f"key:{key}", f"`{kinds[0]}.{key}` is not a field of `{record}`"
+            yield f"key:{key}", f"`{patch}.{key}` is not a field of `{record}`"
         elif not _same_type(ptype, fields[key], decls):
-            yield f"type:{key}", f"`{kinds[0]}.{key}: {ptype}` differs from `{record}.{key}: {fields[key]}`"
+            yield f"type:{key}", f"`{patch}.{key}: {ptype}` differs from `{record}.{key}: {fields[key]}`"
 
 
-def _py_patch_problems(fn, name: str, fields: Optional[Set[str]]) -> Iterator[Tuple[str, str]]:
+def _address_params(ctx: Context, entry: dict) -> Set[str]:
+    """Snake-case names of the arguments that address what an update patches rather than carry its keys: the C
+    function's arguments before the patch struct, and every JS positional argument before the patch."""
+    out: Set[str] = set()
+    fn = _tree_c(ctx, entry)
+    for param in fn.params if fn else ():
+        if "patch" in param.ctype:
+            break
+        out.add("_".join(_words(param.name)))
+    for surface in ("wasm", "native"):
+        if not _on(entry, surface):
+            continue
+        for target in _targets(ctx, entry, surface):
+            out.update("_".join(_words(p)) for p, _ in target.member.params[:-1])
+    return out
+
+
+def _py_patch_problems(
+    fn, name: str, fields: Optional[Set[str]], address: Set[str] = frozenset()
+) -> Iterator[Tuple[str, str]]:
     if not fn.kwonly:
         yield "patch", f"`{name}` takes no keyword-only patch arguments"
         return
@@ -376,7 +454,7 @@ def _py_patch_problems(fn, name: str, fields: Optional[Set[str]]) -> Iterator[Tu
         if fields is not None and param not in fields:
             yield f"key:{param}", f"`{name}({param})` is not a field of the record"
     for param, _ in fn.params:
-        if param not in fn.kwonly and fields is not None and param in fields:
+        if param not in fn.kwonly and param not in address and fields is not None and param in fields:
             yield f"positional:{param}", f"`{name}({param})` is a patch key; make it keyword-only"
 
 
@@ -385,10 +463,13 @@ def _rule_patch_shape(ctx: Context) -> Iterable[Violation]:
     """An op with `patch: true` is named `update` / `update<X>` on every binding surface (a `set` replaces a whole
     value and never merges) and takes a declared `<X>Patch` last in JS, whose keys are fields of the
     `patch_record` interface with the same types (`null` added, a nested record as its patch); in Python it takes
-    keyword-only arguments defaulting to `UNCHANGED`, named after fields of the `patch_record` dataclass. Every
+    keyword-only arguments defaulting to `UNCHANGED`, named after fields of the `patch_record` dataclass (a
+    positional argument the C or JS twin takes as the address, such as a series id, is not a key). Every
     patch reads back through a getter: `patch_record: none` is a violation. An op named `update` / `update<X>` is
     always a patch. A rectangle field may take its A1 string as well in the patch, a `SheetRect` field a
-    sheet-local `CellRect`.
+    sheet-local `CellRect`. A handle class with a `handle_base` whose patch op covers the common fields composes
+    them: its JS `update` may take `<X>Patch & <Common>` (or `& Omit<<Common>, ...>`), each part checked against
+    its own record, and its Python `update` may also take the common record's fields.
     """
     for key, entry in sorted(ctx.ledger.entries.items()):
         if not isinstance(entry, dict) or entry.get("kind") != "op" or entry.get("internal") is True:
@@ -421,6 +502,7 @@ def _rule_patch_shape(ctx: Context) -> Iterable[Violation]:
                     yield _violation(
                         ctx, "R18.all", surface, key, "verb", f"`{name}` merges a patch; name it with `update`"
                     )
+                common = _common_patch(ctx, name.partition(".")[0], surface) if "." in name else None
                 if surface == "py":
                     cls = found.py.classes.get(record) if record else None
                     if record and cls is None:
@@ -428,10 +510,14 @@ def _rule_patch_shape(ctx: Context) -> Iterable[Violation]:
                             ctx, "R18.all", "py", key, "record", f"`patch_record` `{record}` is not a class"
                         )
                         continue
-                    problems = _py_patch_problems(member, name, set(cls.fields) if cls else None)
+                    fields = set(cls.fields) if cls else None
+                    shared = found.py.classes.get(common.record) if common else None
+                    if fields is not None and shared is not None:
+                        fields |= set(shared.fields)
+                    problems = _py_patch_problems(member, name, fields, _address_params(ctx, entry))
                 else:
                     js = found.js[surface]
-                    problems = _js_patch_problems(js.decls, js.raw, member, record)
+                    problems = _js_patch_problems(js.decls, js.raw, member, record, common)
                 for disc, message in problems:
                     yield _violation(ctx, "R18.all", surface, key, disc, message)
 
@@ -450,8 +536,10 @@ def _rule_refs(ctx: Context) -> Iterable[Violation]:
     """A table, pivot, CF rule or protected range argument is a reference by index or name: `table: TableRef`,
     `pivot: PivotRef`, `cfRule: CfRuleRef`, `protectedRange: ProtectedRangeRef` in JS, `Union[int, str]` under
     the snake-case name in Python (plus the handle class for a table or pivot, as `TableRef` / `PivotRef` carry
-    it); never `<thing>Index`. The arguments an op's `ref_exempt: {params, reason}` names keep their type.
+    it); never `<thing>Index`. A Python argument may name an exported alias defined as that union (`TableRef`).
+    The arguments an op's `ref_exempt: {params, reason}` names keep their type.
     """
+    py = surfaces(ctx).py
     for surface in BINDING_SURFACES:
         js = surface != "py"
         for name, member in sorted(_public_pool(ctx, surface).items()):
@@ -474,7 +562,11 @@ def _rule_refs(ctx: Context) -> Iterable[Violation]:
                     message = f"`{name}({param}: {ptype})` is not `{ref}`"
                 elif not js and param in _PY_REFS.values():
                     want = _py_ref_union(param)
-                    if set(_alternatives(ptype, False)) == {"int", "str", *_PY_REF_HANDLES.get(param, ())}:
+                    union = {"int", "str", *_PY_REF_HANDLES.get(param, ())}
+                    alternatives = _alternatives(ptype, False)
+                    if len(alternatives) == 1 and alternatives[0] in py.exports:
+                        alternatives = _alternatives(py.aliases.get(alternatives[0], alternatives[0]), False)
+                    if set(alternatives) == union:
                         continue
                     message = f"`{name}({param}: {ptype})` is not `{want}`"
                 else:

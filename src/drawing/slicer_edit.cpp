@@ -480,8 +480,11 @@ Expected<std::uint32_t, Error> add_slicer(Workbook& wb, std::size_t sheet, std::
   SlicerSpec spec = request;
   RETURN_IF_ERROR(check_spec(spec));
   if (sheet >= wb.sheet_count() || wb.sheet(sheet).is_opaque_ooxml_sheet() || table_index >= wb.tables().size() ||
-      column >= wb.tables()[table_index].columns.size() || (spec.fields & kAnchor) == 0U) {
-    return invalid("slicer: bad sheet, table or column, or no anchor");
+      (spec.fields & kAnchor) == 0U) {
+    return invalid("slicer: bad sheet or table, or no anchor");
+  }
+  if (column >= wb.tables()[table_index].columns.size()) {
+    return make_error(FormulonErrorCode::kIndexOutOfRange, "slicer: column index out of range");
   }
   const std::vector<UnknownRelationship>& sheet_rels = wb.sheet(sheet).unknown_relationships();
   if (std::any_of(sheet_rels.begin(), sheet_rels.end(),
@@ -536,6 +539,10 @@ Expected<std::uint32_t, Error> add_slicer(Workbook& wb, std::size_t sheet, std::
   const pugi::xml_node cnvpr = find_element(frame, "cNvPr");
   io::set_attr(cnvpr, "id", std::to_string(frame_id));
   io::set_attr(cnvpr, "name", name);
+  // The fallback shape carries the frame's id and name, as Excel writes them.
+  const pugi::xml_node fallback_cnvpr = find_element(find_element(frame, "Fallback"), "cNvPr");
+  io::set_attr(fallback_cnvpr, "id", std::to_string(frame_id));
+  io::set_attr(fallback_cnvpr, "name", name);
   io::set_attr(find_element(frame, "slicer"), "name", name);
   apply_anchor(wb, sheet, frame, spec);
 

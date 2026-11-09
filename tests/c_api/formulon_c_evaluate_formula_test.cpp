@@ -86,7 +86,7 @@ TEST(EvaluateFormula, RowColumnAnchoredAtTarget) {
 TEST(EvaluateFormula, CrossSheetReference) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Data", ignored_index()), 0);
+  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Data", append_position(wb.handle), ignored_index()), 0);
   ASSERT_EQ(fm_sheet_set_number(wb.handle, 1, 0, 0, 99.0), 0);  // Data!A1
   ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
 

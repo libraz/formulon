@@ -45,10 +45,13 @@ fm_status_t SetFreeze(const WorkbookGuard& wb, std::size_t sheet, std::uint32_t 
 }
 
 fm_status_t SetVisibility(const WorkbookGuard& wb, std::size_t sheet, std::int32_t visibility) {
-  fm_sheet_view_patch_t patch = FM_STRUCT_INIT(fm_sheet_view_patch_t);
-  patch.visibility_op = FM_PATCH_OP_SET;
-  patch.visibility = visibility;
-  return fm_sheet_update_view(wb.handle, sheet, &patch);
+  return fm_sheet_set_visibility(wb.handle, sheet, visibility);
+}
+
+std::int32_t Visibility(const WorkbookGuard& wb, std::size_t sheet) {
+  std::int32_t visibility = -1;
+  EXPECT_EQ(fm_sheet_get_visibility(wb.handle, sheet, &visibility), 0) << fm_get_last_error_message();
+  return visibility;
 }
 
 fm_status_t SetTopLeft(const WorkbookGuard& wb, std::uint32_t row, std::uint32_t col) {
@@ -204,12 +207,12 @@ TEST(FormulonCApiArgumentRange, PivotDataFieldIndicesAreCheckedWithAnExplicitNam
 TEST(FormulonCApiArgumentRange, TheOnlyVisibleSheetCannotBeHidden) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Hidden", ignored_index()), 0);
+  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Hidden", append_position(wb.handle), ignored_index()), 0);
   ASSERT_EQ(SetVisibility(wb, 1, FM_SHEET_VISIBILITY_HIDDEN), 0);
 
   EXPECT_EQ(SetVisibility(wb, 0, FM_SHEET_VISIBILITY_HIDDEN), kPreconditionFailed);
   EXPECT_EQ(SetVisibility(wb, 0, FM_SHEET_VISIBILITY_VERY_HIDDEN), kPreconditionFailed);
-  EXPECT_EQ(View(wb, 0).visibility, FM_SHEET_VISIBILITY_VISIBLE);
+  EXPECT_EQ(Visibility(wb, 0), FM_SHEET_VISIBILITY_VISIBLE);
   EXPECT_EQ(ActiveSheet(wb), 0U);
 
   // Re-stating a hidden sheet's state leaves the visible one alone, so it passes.
@@ -219,12 +222,12 @@ TEST(FormulonCApiArgumentRange, TheOnlyVisibleSheetCannotBeHidden) {
 TEST(FormulonCApiArgumentRange, TheOnlyVisibleSheetCannotBeRemoved) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Hidden", ignored_index()), 0);
+  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Hidden", append_position(wb.handle), ignored_index()), 0);
   ASSERT_EQ(SetVisibility(wb, 1, FM_SHEET_VISIBILITY_HIDDEN), 0);
 
   EXPECT_EQ(fm_workbook_remove_sheet(wb.handle, 0), kPreconditionFailed);
   EXPECT_EQ(count_of(fm_workbook_get_sheet_count, wb.handle), 2U);
-  EXPECT_EQ(View(wb, 0).visibility, FM_SHEET_VISIBILITY_VISIBLE);
+  EXPECT_EQ(Visibility(wb, 0), FM_SHEET_VISIBILITY_VISIBLE);
   EXPECT_EQ(ActiveSheet(wb), 0U);
 
   // A hidden sheet can still go, which leaves the visible one in place.
@@ -579,6 +582,7 @@ TEST(FormulonCApiArgumentRange, ViewPatchWritesOnlyItsSetFields) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   const fm_sheet_view_info_t before = View(wb, 0);
+  const std::int32_t visibility_before = Visibility(wb, 0);
 
   fm_sheet_view_patch_t keep = FM_STRUCT_INIT(fm_sheet_view_patch_t);
   ASSERT_EQ(fm_sheet_update_view(wb.handle, 0, &keep), 0) << fm_get_last_error_message();
@@ -593,7 +597,7 @@ TEST(FormulonCApiArgumentRange, ViewPatchWritesOnlyItsSetFields) {
   EXPECT_EQ(after.show_zeros, before.show_zeros);
   EXPECT_EQ(after.freeze_rows, before.freeze_rows);
   EXPECT_EQ(after.view_mode, before.view_mode);
-  EXPECT_EQ(after.visibility, before.visibility);
+  EXPECT_EQ(Visibility(wb, 0), visibility_before);
 }
 
 TEST(FormulonCApiArgumentRange, ViewPatchRefusingOneFieldWritesNothing) {

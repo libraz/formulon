@@ -89,7 +89,6 @@ export const StatusCode: Readonly<{
   AutoFilterInvalid: 8006;
   PrintInvalidArea: 9002;
   PrintPageCountOverflow: 9005;
-  ThreadedCommentInvalid: 9006;
 }>;
 /** Union of the {@link StatusCode} values. */
 export type StatusCode =
@@ -151,8 +150,7 @@ export type StatusCode =
   | 8005
   | 8006
   | 9002
-  | 9005
-  | 9006;
+  | 9005;
 // <status-codes:end>
 
 /** Why a formula failed to parse, as carried by {@link ParseError.code}. Values are fixed; new codes are only
@@ -963,7 +961,9 @@ export interface PivotWorksheetSource {
 
 /** Plain-data spec for `Pivot.addField`. */
 export interface PivotFieldInput {
-  sourceName: string;
+  /** The cache field to place: its index, or its source name (see {@link PivotFieldRef}). A name the cache lacks
+   *  appends a field. */
+  fieldIndex: PivotFieldRef;
   customName?: string;
   axis: PivotAxis;
   /** Subtotal on the group's own heading row (default `true`, as in Excel);
@@ -981,9 +981,10 @@ export interface PivotDataFieldInput {
   /** Display name (key for GETPIVOTDATA). Omit it to let the
    *  engine name the data field from the Excel profile's pivot wording,
    *  e.g. `"Sum of Sales"` (en-US) or `"合計 / Sales"` (ja-JP). That needs
-   *  `fieldIndex` to be in range. */
+   *  `fieldIndex` to resolve. */
   readonly name?: string;
-  readonly fieldIndex: number;
+  /** The field the data field aggregates. */
+  readonly fieldIndex: PivotFieldRef;
   /** The aggregation function; omitted is `PivotAggregation.Sum`. */
   readonly aggregation?: PivotAggregation;
   /** Number format code of the data field's values; omitted, `null` or empty for none. */
@@ -1091,9 +1092,9 @@ export interface PivotCalculatedItem {
   readonly scoped: boolean;
 }
 
-/** One element of `Pivot.listFields()`. `sourceName`, `customName`,
- *  `axis`, `subtotalTop` and `numberFormat` match `PivotFieldInput`, except
- *  that `axis` is `null` for a field that sits on no axis. */
+/** One element of `Pivot.listFields()`. `customName`, `axis`, `subtotalTop` and `numberFormat` match
+ *  `PivotFieldInput`, except that `axis` is `null` for a field that sits on no axis; the field's index is its
+ *  position in the list. */
 export interface PivotField {
   readonly sourceName: string;
   readonly customName: string | null;
@@ -1126,7 +1127,7 @@ export interface PivotField {
   /** Whether every item and the default marker are expanded; `true` for a field without items. Writing
    *  applies to all of them. */
   readonly showDetail: boolean;
-  /** Custom subtotal functions (`Pivot.addFieldSubtotalFunction`), in ascending
+  /** Custom subtotal functions (`Pivot.setFieldSubtotalFunctions`), in ascending
    *  `PivotAggregation` order. */
   readonly subtotalFunctions: readonly PivotAggregation[];
 }
@@ -1170,20 +1171,23 @@ export interface PivotItem {
  *  have no cleared form. */
 export type PivotItemPatch = Patch<Pick<PivotItem, 'visible' | 'showDetail' | 'caption'>, 'caption'>;
 
-/** Argument of `Sheet.addPivot`: a new empty pivot named `name`, drawing from cache `cacheId`, with its
- *  top-left cell at `anchor` (a {@link CellAddress} or an A1 cell, `'C3'`). A `PivotCache` handle passes its
- *  `cacheId`. The pivot takes the workbook's PivotTable style default (`getTableStyleDefaults().pivotStyle`),
+/** Argument of `Sheet.addPivot`: a new empty pivot named `name`, drawing from cache `cacheId` (a
+ *  {@link PivotCacheRef}), with its top-left cell at `anchor` (a {@link CellAddress} or an A1 cell, `'C3'`). The pivot takes the workbook's PivotTable style default (`getTableStyleDefaults().pivotStyle`),
  *  else `PivotStyleLight16`. */
 export interface PivotInput {
   name: string;
-  cacheId: number;
+  cacheId: PivotCacheRef;
   anchor: CellAddress | string;
 }
 
-/** Return type of `Pivot.getProperties()`. */
+/** Return type of `Pivot.getProperties()`: the pivot's definition, composed of what the separate getters read.
+ *  `styleOptions` is `null` when the definition has no style element. */
 export interface PivotProperties {
   readonly name: string;
   readonly cacheId: number;
+  readonly reportLayout: PivotReportLayout;
+  readonly grandTotals: PivotGrandTotals;
+  readonly styleOptions: PivotStyleOptions | null;
 }
 
 /** One element of `PivotCache.listFields()`; its position is the cache field's index. */
@@ -1229,8 +1233,8 @@ export interface PivotDateGroupInput {
  *  `LabelNotBetween`, `DateBetween`, `DateNotBetween`) take their upper bound in `valueHigh`, and no other type may
  *  set it. Omitted `value` / `valueHigh` and `null` mean no operand. */
 export interface PivotFilterInput {
-  readonly axis: PivotAxis;
-  readonly fieldName: string;
+  /** The field the filter applies to; its axis is the field's. */
+  readonly fieldIndex: PivotFieldRef;
   readonly type: PivotFilterKind;
   /** Data-field aggregate scored by value filters. Defaults to 0. */
   readonly dataFieldIndex?: number;
@@ -1238,17 +1242,17 @@ export interface PivotFilterInput {
   readonly valueHigh?: number | string | null;
 }
 
-/** One element of `Pivot.listFilters()`: the stored filter. Field names and semantics match `PivotFilterInput`.
+/** One element of `Pivot.listFilters()`: the stored filter. Semantics match `PivotFilterInput`; `fieldIndex` is
+ *  the index of the filtered field.
  *  `value` and `valueHigh` are `null` when the filter has no operand / no high bound.
  *
  *  The filter list is saved as the definition's `<filters>` block. Every entry of a loaded block whose type
- *  the engine enumerates appears here, naming its field by source name, and `Pivot.clearFilters` /
+ *  the engine enumerates appears here, and `Pivot.clearFilters` /
  *  `Pivot.removeFilter` remove it. Only entries the model cannot express (an unknown type, a member-property or
  *  OLAP measure filter, criteria that do not decode) are not listed; they filter nothing and are saved verbatim in
  *  their original position. */
 export interface PivotFilter {
-  readonly axis: PivotAxis;
-  readonly fieldName: string;
+  readonly fieldIndex: number;
   readonly type: PivotFilterKind;
   readonly dataFieldIndex: number;
   readonly value: number | string | null;
@@ -1822,15 +1826,13 @@ export const SheetViewMode: Readonly<{
 export type SheetViewMode = 0 | 1 | 2;
 
 /** Per-sheet view: zoom percentage (10..400, default 100), frozen-pane row/col
- *  counts, tab visibility, and the display / orientation flags mirrored
+ *  counts, and the display / orientation flags mirrored
  *  from OOXML `<sheetView>` (gridlines, row/col headers, zero display,
  *  right-to-left, tab-selected, view mode). */
 export interface SheetView {
   readonly zoomPct: number;
   readonly freezeRows: number;
   readonly freezeCols: number;
-  /** The tab state. */
-  readonly visibility: SheetVisibility;
   /** `showGridLines`; default true. */
   readonly showGridLines: boolean;
   /** `showRowColHeaders`; default true. */
@@ -2159,6 +2161,8 @@ export type ValidationType = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
 
 /** One sheet `<dataValidation>` block as returned by `Sheet.listValidations()` (OOXML `dataValidations.xsd`). */
 export interface DataValidation {
+  /** The rule's id: stable while the workbook is open, across structural edits; assigned again on load. */
+  readonly id: ValidationId;
   readonly ranges: readonly CellRect[];
   readonly type: ValidationType;
   readonly operator: ComparisonOperator;
@@ -2206,6 +2210,15 @@ export interface DataValidationInput {
   promptTitle?: string | null;
   promptMessage?: string | null;
 }
+
+/** Argument of `Sheet.updateValidation`: every {@link DataValidationInput} key, each optional. A key left out is
+ *  unchanged; the two formulas and the four texts accept `null` to clear them and no other key does (a `TypeError`).
+ *  `ranges` must hold at least one rectangle (`StatusCode.InvalidArgument`). A `DataValidation` read back passes as
+ *  is; any unknown key fails with a `TypeError`. */
+export type DataValidationPatch = Patch<
+  DataValidationInput,
+  'formula1' | 'formula2' | 'errorTitle' | 'errorMessage' | 'promptTitle' | 'promptMessage'
+>;
 
 /** Workbook-wide cell coordinate used by trace results. `sheet` is the
  *  0-based sheet index. */
@@ -2345,8 +2358,8 @@ export interface MergedFunctionMetadata extends FunctionMetadata {
  *  passed to the engine locale calls. See `docs/function-metadata-schema.md`.
  *
  *  A pure host-side helper: it touches no engine state, reached as
- *  `Formulon.mergeFunctionMetadata` on both packages. */
-declare function mergeFunctionMetadata(
+ *  `Formulon.mergeFunctionMetadata` and as a named export of both packages. */
+export function mergeFunctionMetadata(
   base: FunctionMetadata,
   entry: FunctionMetadataEntry | undefined,
   locale: string,
@@ -2357,15 +2370,15 @@ declare function mergeFunctionMetadata(
  *  rows. A `RefValue` or `LambdaValue`, which no read returns, and anything that is not a `Value` throw
  *  `TypeError`.
  *
- *  A pure host-side helper, reached as `Formulon.toNative` on both packages; Python's counterpart is
+ *  A pure host-side helper, reached as `Formulon.toNative` and as a named export of both packages; Python's counterpart is
  *  `formulon.to_native`. */
-declare function toNative(value: BlankValue): null;
-declare function toNative(value: NumberValue): number;
-declare function toNative(value: BoolValue): boolean;
-declare function toNative(value: TextValue): string;
-declare function toNative(value: ErrorValue): ExcelError;
-declare function toNative(value: ArrayValue): readonly (readonly NativeValue[])[];
-declare function toNative(value: Value): NativeValue;
+export function toNative(value: BlankValue): null;
+export function toNative(value: NumberValue): number;
+export function toNative(value: BoolValue): boolean;
+export function toNative(value: TextValue): string;
+export function toNative(value: ErrorValue): ExcelError;
+export function toNative(value: ArrayValue): readonly (readonly NativeValue[])[];
+export function toNative(value: Value): NativeValue;
 
 /** The key `value` has in the ordinal table `enumType` (`enumName(CfRuleType, 3)` is `'DataBar'`); `null` when
  *  no key has it. A pure host-side helper, reached as `Formulon.enumName` and as a named export of both packages. */
@@ -2465,49 +2478,58 @@ export interface ConditionalFormat {
   /** `null` unless the rule is `TimePeriod`. */
   readonly timePeriod: DatePeriod | null;
   /** `null` unless the rule is `ColorScale`. */
-  readonly colorScale: {
-    readonly thresholds: readonly CfValueObject[];
-    readonly colors: readonly Color[];
-  } | null;
+  readonly colorScale: CfColorScale | null;
   /** `null` unless the rule is `DataBar`. */
-  readonly dataBar: {
-    readonly min: CfValueObject;
-    readonly max: CfValueObject;
-    readonly fill: Color;
-    readonly showValue: boolean;
-    readonly minLengthPct: number;
-    readonly maxLengthPct: number;
-    /**
-     * `x14` extension payload. A key is `null` when the rule does not state the
-     * setting; the object can be handed straight to `addCfRule`.
-     */
-    readonly gradient: boolean | null;
-    readonly axisPosition: CfDataBarAxisPosition | null;
-    readonly negativeFill: Color | null;
-    readonly border: Color | null;
-    readonly negativeBorder: Color | null;
-    readonly axisColor: Color | null;
-    /** Edge the bar grows from. */
-    readonly direction: CfDataBarDirection;
-  } | null;
+  readonly dataBar: CfDataBar | null;
   /** `null` unless the rule is `IconSet`. */
-  readonly iconSet: {
-    readonly name: IconSetName;
-    /** Exactly N-1 thresholds for an N-icon set (the floor is `floor`, not a threshold). A formula-typed value carries its leading `=` on read. */
-    readonly thresholds: readonly CfValueObject[];
-    readonly reverse: boolean;
-    readonly showValue: boolean;
-    /** Round-trip only: the `percent` attribute is preserved across load
-     *  and save but never consulted during evaluation. Each threshold
-     *  carries its own `type`, and that type is what interprets it. */
-    readonly percent: boolean;
-    /** Lower bound of the lowest icon's bucket; a cell below it gets no
-     *  icon. `null` when the rule states no floor. */
-    readonly floor: CfValueObject | null;
-    /** Custom icon set: the icon drawn for each level; `null` when the
-     *  set draws its own icons. */
-    readonly icons: readonly CfIcon[] | null;
-  } | null;
+  readonly iconSet: CfIconSet | null;
+}
+
+/** The payload of a `ColorScale` rule, as a read returns it. */
+export interface CfColorScale {
+  readonly thresholds: readonly CfValueObject[];
+  readonly colors: readonly Color[];
+}
+
+/** The payload of a `DataBar` rule, as a read returns it. */
+export interface CfDataBar {
+  readonly min: CfValueObject;
+  readonly max: CfValueObject;
+  readonly fill: Color;
+  readonly showValue: boolean;
+  readonly minLengthPct: number;
+  readonly maxLengthPct: number;
+  /**
+   * `x14` extension payload. A key is `null` when the rule does not state the
+   * setting; the object can be handed straight to `addCfRule`.
+   */
+  readonly gradient: boolean | null;
+  readonly axisPosition: CfDataBarAxisPosition | null;
+  readonly negativeFill: Color | null;
+  readonly border: Color | null;
+  readonly negativeBorder: Color | null;
+  readonly axisColor: Color | null;
+  /** Edge the bar grows from. */
+  readonly direction: CfDataBarDirection;
+}
+
+/** The payload of an `IconSet` rule, as a read returns it. */
+export interface CfIconSet {
+  readonly name: IconSetName;
+  /** Exactly N-1 thresholds for an N-icon set (the floor is `floor`, not a threshold). A formula-typed value carries its leading `=` on read. */
+  readonly thresholds: readonly CfValueObject[];
+  readonly reverse: boolean;
+  readonly showValue: boolean;
+  /** Round-trip only: the `percent` attribute is preserved across load
+   *  and save but never consulted during evaluation. Each threshold
+   *  carries its own `type`, and that type is what interprets it. */
+  readonly percent: boolean;
+  /** Lower bound of the lowest icon's bucket; a cell below it gets no
+   *  icon. `null` when the rule states no floor. */
+  readonly floor: CfValueObject | null;
+  /** Custom icon set: the icon drawn for each level; `null` when the
+   *  set draws its own icons. */
+  readonly icons: readonly CfIcon[] | null;
 }
 
 /** One level of a custom icon set. `iconSet` is the set the icon comes from
@@ -2542,78 +2564,89 @@ interface CfFormatRuleInputBase extends CfRuleInputBase {
 }
 
 /** `Expression`: formats a cell where `formula1` (leading `=` optional) is true. */
-interface CfExpressionRuleInput extends CfFormatRuleInputBase {
+export interface CfExpressionRuleInput extends CfFormatRuleInputBase {
   type: typeof CfRuleType.Expression;
   formula1: string;
 }
 
 /** `CellIs`: compares the cell with `formula1`, and `formula2` for `Between` / `NotBetween`. */
-interface CfCellIsRuleInput extends CfFormatRuleInputBase {
+export interface CfCellIsRuleInput extends CfFormatRuleInputBase {
   type: typeof CfRuleType.CellIs;
   operator: ComparisonOperator;
   formula1: string;
   formula2?: string;
 }
 
+/** The payload of a `ColorScale` rule input. A {@link CfColorScale} read back passes as is. */
+export interface CfColorScaleInput {
+  thresholds: readonly CfValueObjectInput[];
+  colors: readonly ColorInput[];
+}
+
+/** The payload of a `DataBar` rule input. A {@link CfDataBar} read back passes as is; `null` on an optional key
+ *  is the same as leaving it out. */
+export interface CfDataBarInput {
+  min: CfValueObjectInput;
+  max: CfValueObjectInput;
+  fill: ColorInput;
+  showValue?: boolean;
+  minLengthPct?: number;
+  maxLengthPct?: number;
+  /**
+   * `x14` extension payload. Omit a key to keep the model default:
+   * gradient fill on, automatic axis, negative fill equal to `fill`, no
+   * border, and a black axis.
+   */
+  gradient?: boolean | null;
+  axisPosition?: CfDataBarAxisPosition | null;
+  negativeFill?: ColorInput | null;
+  border?: ColorInput | null;
+  negativeBorder?: ColorInput | null;
+  axisColor?: ColorInput | null;
+  /** Defaults to `CfDataBarDirection.Context`. */
+  direction?: CfDataBarDirection;
+}
+
+/** The payload of an `IconSet` rule input. A {@link CfIconSet} read back passes as is; `null` on an optional key
+ *  is the same as leaving it out. */
+export interface CfIconSetInput {
+  name: IconSetName;
+  /** Exactly N-1 thresholds for an N-icon set (the floor is `floor`, not a threshold); any other count is rejected with `StatusCode.InvalidArgument`. A formula-typed value takes its leading `=` with or without. */
+  thresholds: readonly CfValueObjectInput[];
+  reverse?: boolean;
+  showValue?: boolean;
+  /** Round-trip only: preserved across load and save but never
+   *  consulted during evaluation (each threshold's own `type` is
+   *  authoritative). */
+  percent?: boolean;
+  /** Lower bound of the lowest icon's bucket; a cell below it gets no
+   *  icon. Omit for Excel's default, `percent 0`. */
+  floor?: CfValueObjectInput | null;
+  /** Custom icon set: one icon per level (the set's icon count), or omit
+   *  for the set's own icons. Evaluation still buckets against `name`. */
+  icons?: readonly CfIconInput[] | null;
+}
+
 /** `ColorScale`: two or three thresholds with as many colours. */
-interface CfColorScaleRuleInput extends CfRuleInputBase {
+export interface CfColorScaleRuleInput extends CfRuleInputBase {
   type: typeof CfRuleType.ColorScale;
-  colorScale: {
-    thresholds: readonly CfValueObjectInput[];
-    colors: readonly ColorInput[];
-  };
+  colorScale: CfColorScaleInput;
 }
 
 /** `DataBar`. */
-interface CfDataBarRuleInput extends CfRuleInputBase {
+export interface CfDataBarRuleInput extends CfRuleInputBase {
   type: typeof CfRuleType.DataBar;
-  dataBar: {
-    min: CfValueObjectInput;
-    max: CfValueObjectInput;
-    fill: ColorInput;
-    showValue?: boolean;
-    minLengthPct?: number;
-    maxLengthPct?: number;
-    /**
-     * `x14` extension payload. Omit a key to keep the model default:
-     * gradient fill on, automatic axis, negative fill equal to `fill`, no
-     * border, and a black axis.
-     */
-    gradient?: boolean;
-    axisPosition?: CfDataBarAxisPosition;
-    negativeFill?: ColorInput;
-    border?: ColorInput;
-    negativeBorder?: ColorInput;
-    axisColor?: ColorInput;
-    /** Defaults to `CfDataBarDirection.Context`. */
-    direction?: CfDataBarDirection;
-  };
+  dataBar: CfDataBarInput;
 }
 
 /** `IconSet`: the cell's bucket among the thresholds picks an icon of `name`. */
-interface CfIconSetRuleInput extends CfRuleInputBase {
+export interface CfIconSetRuleInput extends CfRuleInputBase {
   type: typeof CfRuleType.IconSet;
-  iconSet: {
-    name: IconSetName;
-    /** Exactly N-1 thresholds for an N-icon set (the floor is `floor`, not a threshold); any other count is rejected with `StatusCode.InvalidArgument`. A formula-typed value takes its leading `=` with or without. */
-    thresholds: readonly CfValueObjectInput[];
-    reverse?: boolean;
-    showValue?: boolean;
-    /** Round-trip only: preserved across load and save but never
-     *  consulted during evaluation (each threshold's own `type` is
-     *  authoritative). */
-    percent?: boolean;
-    /** Lower bound of the lowest icon's bucket; a cell below it gets no
-     *  icon. Omit for Excel's default, `percent 0`. */
-    floor?: CfValueObjectInput;
-    /** Custom icon set: one icon per level (the set's icon count), or omit
-     *  for the set's own icons. Evaluation still buckets against `name`. */
-    icons?: readonly CfIconInput[];
-  };
+  iconSet: CfIconSetInput;
 }
 
 /** `Top10`: the top (or with `bottom`, the bottom) `rank` values, or `rank` percent with `percent`. */
-interface CfTop10RuleInput extends CfFormatRuleInputBase {
+export interface CfTop10RuleInput extends CfFormatRuleInputBase {
   type: typeof CfRuleType.Top10;
   rank?: number;
   percent?: boolean;
@@ -2622,7 +2655,7 @@ interface CfTop10RuleInput extends CfFormatRuleInputBase {
 
 /** `AboveAverage`: values above (or with `aboveAverage: false`, below) the mean, optionally by `stdDev`
  *  standard deviations. */
-interface CfAboveAverageRuleInput extends CfFormatRuleInputBase {
+export interface CfAboveAverageRuleInput extends CfFormatRuleInputBase {
   type: typeof CfRuleType.AboveAverage;
   aboveAverage?: boolean;
   equalAverage?: boolean;
@@ -2631,7 +2664,7 @@ interface CfAboveAverageRuleInput extends CfFormatRuleInputBase {
 
 /** `ContainsText` / `NotContainsText` / `BeginsWith` / `EndsWith`: a text test against `text`. `formula1` is the
  *  stored test formula Excel writes beside it; omit it to have it derived. */
-interface CfTextRuleInput extends CfFormatRuleInputBase {
+export interface CfTextRuleInput extends CfFormatRuleInputBase {
   type:
     | typeof CfRuleType.ContainsText
     | typeof CfRuleType.NotContainsText
@@ -2642,7 +2675,7 @@ interface CfTextRuleInput extends CfFormatRuleInputBase {
 }
 
 /** `TimePeriod`: a date in `timePeriod` relative to today. */
-interface CfTimePeriodRuleInput extends CfFormatRuleInputBase {
+export interface CfTimePeriodRuleInput extends CfFormatRuleInputBase {
   type: typeof CfRuleType.TimePeriod;
   timePeriod: DatePeriod;
   formula1?: string;
@@ -2650,7 +2683,7 @@ interface CfTimePeriodRuleInput extends CfFormatRuleInputBase {
 
 /** `ContainsBlanks` / `NotContainsBlanks` / `ContainsErrors` / `NotContainsErrors` / `DuplicateValues` /
  *  `UniqueValues`: a test with no operand. `formula1` is the stored test formula, derived when omitted. */
-interface CfPlainRuleInput extends CfFormatRuleInputBase {
+export interface CfPlainRuleInput extends CfFormatRuleInputBase {
   type:
     | typeof CfRuleType.ContainsBlanks
     | typeof CfRuleType.NotContainsBlanks
@@ -2675,6 +2708,36 @@ export type ConditionalFormatInput =
   | CfTextRuleInput
   | CfTimePeriodRuleInput
   | CfPlainRuleInput;
+
+/** The keys of every {@link ConditionalFormatInput} kind except `type`, `id` and `format` (a patch sets
+ *  `dxfIndex`); see {@link ConditionalFormatPatch}. */
+export interface ConditionalFormatPatchFields {
+  ranges: readonly (CellRect | string)[] | string;
+  priority: number;
+  stopIfTrue: boolean;
+  dxfIndex: number;
+  operator: ComparisonOperator;
+  formula1: string;
+  formula2: string;
+  colorScale: CfColorScaleInput;
+  dataBar: CfDataBarInput;
+  iconSet: CfIconSetInput;
+  rank: number;
+  percent: boolean;
+  bottom: boolean;
+  aboveAverage: boolean;
+  equalAverage: boolean;
+  stdDev: number;
+  text: string;
+  timePeriod: DatePeriod;
+}
+
+/** Argument of `Sheet.updateCfRule`: any {@link ConditionalFormatPatchFields} key, each optional. A key left out is
+ *  unchanged; `dxfIndex`, `formula1` and `formula2` accept `null` to clear them and no other key does (a
+ *  `TypeError`). The rule's `type` and `id` cannot change. A key the rule's kind does not use passes the type
+ *  check and fails at run time with `StatusCode.InvalidArgument`; the whole patch is validated before anything
+ *  changes. */
+export type ConditionalFormatPatch = Patch<ConditionalFormatPatchFields, 'dxfIndex' | 'formula1' | 'formula2'>;
 
 /** Horizontal alignment of a cell (OOXML `ST_HorizontalAlignment`). */
 export const HorizontalAlign: Readonly<{
@@ -3306,8 +3369,8 @@ export type ExternalLinkKind = 0 | 1 | 2 | 3;
  *  their resolved target URLs. */
 export interface ExternalLink {
   /** 1-based document order matching `<externalReferences>` in
-   *  `xl/workbook.xml`. */
-  readonly index: number;
+   *  `xl/workbook.xml`: the `[n]` of formula text (`=[1]Sheet1!A1`). */
+  readonly bookNumber: number;
   /** Workbook-rels Id ("rId3" etc.). */
   readonly relId: string;
   /** Resolved package-relative path of the body part (e.g.
@@ -3516,32 +3579,39 @@ export const DrawingObjectKind: Readonly<{
 /** Union of the {@link DrawingObjectKind} ordinals. */
 export type DrawingObjectKind = 0 | 1 | 2 | 3 | 4 | 5 | 6;
 
-/** The anchor element type of a drawing object. */
+/** The anchor element type of a drawing object. `Default` is input only: the operation's default kind (`OneCell`
+ *  for a picture, `TwoCell` for a chart, shape or slicer; an update keeps the object's kind). A read never
+ *  returns it. */
 export const AnchorKind: Readonly<{
-  OneCell: 0;
-  TwoCell: 1;
-  Absolute: 2;
+  Default: 0;
+  OneCell: 1;
+  TwoCell: 2;
+  Absolute: 3;
 }>;
 /** Union of the {@link AnchorKind} ordinals. */
-export type AnchorKind = 0 | 1 | 2;
+export type AnchorKind = 0 | 1 | 2 | 3;
 
-/** How a drawing object follows row and column edits. */
+/** How a drawing object follows row and column edits. `Default` is input only: the anchor's own kind. A read
+ *  reports the stored value, never `Default`. */
 export const AnchorEditAs: Readonly<{
-  OneCell: 0;
-  TwoCell: 1;
-  Absolute: 2;
+  Default: 0;
+  OneCell: 1;
+  TwoCell: 2;
+  Absolute: 3;
 }>;
 /** Union of the {@link AnchorEditAs} ordinals. */
-export type AnchorEditAs = 0 | 1 | 2;
+export type AnchorEditAs = 0 | 1 | 2 | 3;
 
-/** How a shape's fill or outline is specified; a shape with no fill or outline element reads `null`. */
+/** How a shape's fill or outline is specified. `Default` is a shape with no fill or outline element of its own,
+ *  which draws its style's; `Other` is read only. */
 export const ShapePaint: Readonly<{
-  Solid: 0;
-  None: 1;
-  Other: 2;
+  Default: 0;
+  Solid: 1;
+  None: 2;
+  Other: 3;
 }>;
 /** Union of the {@link ShapePaint} ordinals. */
-export type ShapePaint = 0 | 1 | 2;
+export type ShapePaint = 0 | 1 | 2 | 3;
 
 /** Table slicer item order. */
 export const SlicerSortOrder: Readonly<{
@@ -3836,10 +3906,22 @@ export interface ThemeScriptFontInput {
   typeface: string;
 }
 
+/** The key of a {@link ThemeScriptFont}: the font set and the script. */
+export type ThemeScriptFontKey = Pick<ThemeScriptFontInput, 'scheme' | 'script'>;
+
 /** A resolved colour: 0xFFRRGGBB plus how it was obtained. */
 export interface ResolvedColor {
   readonly argb: number;
   readonly resolution: ColorResolution;
+}
+
+/** The resolved colour of each border side of an {@link EffectiveStyle}. */
+export interface EffectiveBorders {
+  readonly left: ResolvedColor;
+  readonly right: ResolvedColor;
+  readonly top: ResolvedColor;
+  readonly bottom: ResolvedColor;
+  readonly diagonal: ResolvedColor;
 }
 
 /** Return type of `Sheet.ooxml.getEffectiveStyle(...)`. */
@@ -3853,13 +3935,7 @@ export interface EffectiveStyle {
   readonly fontColor: ResolvedColor;
   readonly fillForeground: ResolvedColor;
   readonly fillBackground: ResolvedColor;
-  readonly borders: {
-    left: ResolvedColor;
-    right: ResolvedColor;
-    top: ResolvedColor;
-    bottom: ResolvedColor;
-    diagonal: ResolvedColor;
-  };
+  readonly borders: EffectiveBorders;
   readonly protection: CellProtection;
   /** The number format code. */
   readonly numberFormat: string;
@@ -3881,13 +3957,13 @@ export type IterativeSettingsPatch = Patch<IterativeSettings>;
 /** One `<dateGroupItem>` of a values filter. `grouping` is the granularity
  *  the item matches at (a `DateTimeGrouping`); fields finer than `grouping` are zero. */
 export interface AutoFilterDateGroup {
-  year: number;
-  month: number;
-  day: number;
-  hour: number;
-  minute: number;
-  second: number;
-  grouping: DateTimeGrouping;
+  readonly year: number;
+  readonly month: number;
+  readonly day: number;
+  readonly hour: number;
+  readonly minute: number;
+  readonly second: number;
+  readonly grouping: DateTimeGrouping;
 }
 
 /** One condition of a custom AutoFilter column (`<customFilter>`). `operator` is a `ComparisonOperator` other
@@ -3910,56 +3986,56 @@ export interface AutoFilterConditionInput {
  *  `dynamicType` is a `DynamicFilterType`.
  *  `dxfIndex` of `4294967295` means absent. */
 export interface AutoFilterColumn {
-  columnOffset: number;
-  hiddenButton: boolean;
-  showButton: boolean;
-  kind: FilterKind;
-  filterBlank: boolean;
-  values: readonly string[];
-  dateGroups: readonly AutoFilterDateGroup[];
-  customAnd: boolean;
-  conditions: readonly AutoFilterCondition[];
-  top: boolean;
-  percent: boolean;
-  topValue: number;
+  readonly columnOffset: number;
+  readonly hiddenButton: boolean;
+  readonly showButton: boolean;
+  readonly kind: FilterKind;
+  readonly filterBlank: boolean;
+  readonly values: readonly string[];
+  readonly dateGroups: readonly AutoFilterDateGroup[];
+  readonly customAnd: boolean;
+  readonly conditions: readonly AutoFilterCondition[];
+  readonly top: boolean;
+  readonly percent: boolean;
+  readonly topValue: number;
   /** The top-10 `<top10 filterVal>`; `null` when absent. */
-  filterValue: number | null;
-  dynamicType: DynamicFilterType;
+  readonly filterValue: number | null;
+  readonly dynamicType: DynamicFilterType;
   /** The dynamic filter's `val`; `null` when absent. */
-  dynamicValue: number | null;
+  readonly dynamicValue: number | null;
   /** The dynamic filter's `<dynamicFilter maxVal>`; `null` when absent. */
-  dynamicMaxValue: number | null;
-  valueIso: string;
-  maxValueIso: string;
+  readonly dynamicMaxValue: number | null;
+  readonly valueIso: string;
+  readonly maxValueIso: string;
   /** The color filter's differential format; `null` for a column that filters on anything else. */
-  dxfIndex: number | null;
-  cellColor: boolean;
-  iconSet: IconSetName;
+  readonly dxfIndex: number | null;
+  readonly cellColor: boolean;
+  readonly iconSet: IconSetName;
   /** `null` when the icon filter names no icon. */
-  iconIndex: number | null;
+  readonly iconIndex: number | null;
 }
 
 /** One `<sortCondition>`. `sortBy` is a `SortBy`. */
 export interface AutoFilterSortCondition {
-  range: CellRect;
-  descending: boolean;
-  sortBy: SortBy;
-  customList: string;
+  readonly range: CellRect;
+  readonly descending: boolean;
+  readonly sortBy: SortBy;
+  readonly customList: string;
   /** `null` when the condition names no differential format. */
-  dxfIndex: number | null;
-  iconSet: IconSetName;
+  readonly dxfIndex: number | null;
+  readonly iconSet: IconSetName;
   /** `null` when the condition names no icon. */
-  iconIndex: number | null;
+  readonly iconIndex: number | null;
 }
 
 /** The `<sortState>` of an AutoFilter. `sortMethod` is a
  *  `SortMethod`. */
 export interface AutoFilterSortState {
-  range: CellRect;
-  columnSort: boolean;
-  caseSensitive: boolean;
-  sortMethod: SortMethod;
-  conditions: readonly AutoFilterSortCondition[];
+  readonly range: CellRect;
+  readonly columnSort: boolean;
+  readonly caseSensitive: boolean;
+  readonly sortMethod: SortMethod;
+  readonly conditions: readonly AutoFilterSortCondition[];
 }
 
 /** A sheet or table AutoFilter. `range` includes the header row; `columns`
@@ -4049,12 +4125,12 @@ export interface AutoFilterEval {
   readonly match: readonly boolean[];
 }
 
-/** Result of `Sheet.validateValue`. `ruleIndex` is `null` when no rule covers
- *  the cell, and `valid` is then true; otherwise it indexes `listValidations()`. `errorStyle` is `null`
- *  without a rule. */
+/** Result of `Sheet.validateValue`. `ruleId` is `null` when no rule covers
+ *  the cell, and `valid` is then true; otherwise it is the applied rule's `DataValidation.id`. `errorStyle` is
+ *  `null` without a rule. */
 export interface ValidationOutcome {
   readonly valid: boolean;
-  readonly ruleIndex: number | null;
+  readonly ruleId: ValidationId | null;
   readonly errorStyle: ValidationErrorStyle | null;
 }
 
@@ -4067,9 +4143,10 @@ export interface Mention {
   readonly length: number;
 }
 
-/** One threaded comment: a thread's opening comment (`parentId` is `null`), or a reply. Ids are brace-wrapped uppercase GUIDs and
- *  `created` is a {@link CivilTime} (whole seconds), `null` when the stamp is absent; the caller supplies both. `done`
- *  is the thread's resolved state, meaningful on the opening comment only. */
+/** One threaded comment: a thread's opening comment (`parentId` is `null`), or a reply. Ids are brace-wrapped GUIDs,
+ *  taken in either letter case, matched across it and stored uppercase; `created` is a {@link CivilTime} (whole
+ *  seconds), `null` when the stamp is absent; the caller supplies both. `done` is the thread's resolved state,
+ *  meaningful on the opening comment only. */
 export interface ThreadedComment {
   readonly id: string;
   /** The cell the thread is anchored to. */
@@ -4082,14 +4159,15 @@ export interface ThreadedComment {
   readonly mentions: readonly Mention[];
 }
 
-/** Argument of `Sheet.addThreadedComment`: `id` and `text` are required; an omitted, `null` or empty `parentId` opens a
- *  new thread at `cell` (a {@link CellAddress} or an A1 cell, `'B2'`; A1 when omitted). `cell` is ignored on a
+/** Argument of `Sheet.addThreadedComment`: `text` and `personId` are required; an omitted `id` is generated
+ *  (`{XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX}`), and an omitted `created` is the pinned clock if one is set, else now.
+ *  An omitted, `null` or empty `parentId` opens a new thread at `cell` (a {@link CellAddress} or an A1 cell, `'B2'`; A1 when omitted). `cell` is ignored on a
  *  reply. The {@link ThreadedComment} a read returns passes as is. */
 export interface ThreadedCommentInput {
-  id: string;
+  id?: string;
   text: string;
   cell?: CellAddress | string;
-  personId?: string;
+  personId: string;
   created?: DateInput | null;
   parentId?: string | null;
   done?: boolean;
@@ -4098,7 +4176,7 @@ export interface ThreadedCommentInput {
 
 /** Argument of `Sheet.updateThreadedComment`: the keys to change; an omitted key keeps its value. No key has a
  *  cleared form, so `null` throws `TypeError`. `done` resolves or reopens a thread and is accepted only on a
- *  thread's opening comment; on a reply it fails with `StatusCode.ThreadedCommentInvalid`. */
+ *  thread's opening comment; on a reply it fails with `StatusCode.InvalidArgument`. */
 export interface ThreadedCommentPatch {
   readonly text?: string;
   readonly mentions?: readonly Mention[];
@@ -4138,103 +4216,46 @@ export interface PictureProperties {
   readonly bytes: Uint8Array;
 }
 
-/** Return type of `Drawing.getDrawingProperties()`: one anchored object of a sheet's drawing. An absolute anchor reports its
- *  position from A1 as `fromColOffsetEmu` (x) and `fromRowOffsetEmu` (y); `toRow` /
- *  `toCol` and their offsets are zero unless the anchor is two-cell. Offsets
- *  and `widthEmu` / `heightEmu` are in EMU. `format` is non-zero for a picture whose
- *  media part is present. */
+/** Return type of `Drawing.getDrawingProperties()`: the fields every anchored object of a sheet's drawing has,
+ *  whatever its kind. `description` is the object's alternative text, `null` when it has none (`DrawingPatch`
+ *  removes it with `null`). */
 export interface DrawingProperties {
   readonly objectId: number;
   readonly kind: DrawingObjectKind;
-  readonly anchorKind: AnchorKind;
-  readonly editAs: AnchorEditAs;
-  readonly fromRow: number;
-  readonly fromCol: number;
-  readonly fromRowOffsetEmu: number;
-  readonly fromColOffsetEmu: number;
-  readonly toRow: number;
-  readonly toCol: number;
-  readonly toRowOffsetEmu: number;
-  readonly toColOffsetEmu: number;
-  readonly widthEmu: number;
-  readonly heightEmu: number;
-  readonly format: ImageFormat;
   readonly name: string;
-  readonly description: string;
-}
-
-/** Name, description and placement of a new picture (`Sheet.addPicture`) or chart frame
- *  (`ChartInsertInput.placement`). An omitted or empty `name` becomes `Picture <id>` (a chart's own default for a
- *  chart); an omitted `anchor` is a one-cell anchor at A1. */
-export interface PictureInput {
-  name?: string;
-  description?: string;
-  anchor?: DrawingAnchor;
-}
-
-/** The placement of a picture or chart frame, in the quantities `Drawing.getDrawingProperties`
- *  reports: `row` / `col` / `rowOffsetEmu` / `colOffsetEmu` are the top-left marker of the
- *  anchor box (`fromRow` ...), `widthEmu` / `heightEmu` the object's own unrotated
- *  size. A zero size is the picture's pixel size times 9525 on insert, Excel's default frame for a chart, and
- *  keeps the current size on `setAnchor`. `anchorKind` is `OneCell` (default) or `TwoCell`; `editAs`
- *  applies to a two-cell anchor only. */
-export interface DrawingAnchor {
-  anchorKind?: AnchorKind;
-  editAs?: AnchorEditAs;
-  row?: number;
-  col?: number;
-  rowOffsetEmu?: number;
-  colOffsetEmu?: number;
-  widthEmu?: number;
-  heightEmu?: number;
-}
-
-/** Return type of `Shape.getProperties()`: a shape, connector or group of a sheet's drawing. The anchor fields
- *  read as in {@link DrawingProperties}. `fillKind` / `lineKind` are {@link ShapePaint}; `fillColor` /
- *  `lineColor` are the colour when the kind is `Solid` (`Rgb` or `Theme`), else `null`; a colour with a
- *  transform a theme reference cannot state reads as `Other`. `rotationDeg` is in degrees, `lineWidthPt` in
- *  points and 0 without a width. `presetGeometry` is the preset geometry, empty for custom
- *  geometry or a group; `text` joins paragraphs with `\n`. */
-export interface ShapeProperties {
-  readonly objectId: number;
-  readonly kind: DrawingObjectKind;
-  readonly anchorKind: AnchorKind;
-  readonly editAs: AnchorEditAs;
-  readonly fromRow: number;
-  readonly fromCol: number;
-  readonly fromRowOffsetEmu: number;
-  readonly fromColOffsetEmu: number;
-  readonly toRow: number;
-  readonly toCol: number;
-  readonly toRowOffsetEmu: number;
-  readonly toColOffsetEmu: number;
-  readonly widthEmu: number;
-  readonly heightEmu: number;
-  readonly name: string;
-  readonly presetGeometry: string;
-  readonly text: string;
-  readonly textBox: boolean;
-  readonly fillKind: ShapePaint | null;
-  readonly fillColor: Color | null;
-  readonly lineKind: ShapePaint | null;
-  readonly lineColor: Color | null;
-  readonly lineWidthPt: number;
-  readonly rotationDeg: number;
+  readonly description: string | null;
   readonly hidden: boolean;
+  readonly anchor: DrawingAnchor;
 }
 
-/** Argument of `Sheet.addShape`. `anchorKind` is required and applies the whole anchor (`editAs`, `from*`,
- *  `to*`, `widthEmu`, `heightEmu`; a two-cell anchor's size is its box); any other key left out is not applied.
- *  `fillKind` / `lineKind` must be `Solid` (with an RGB or theme `fillColor` / `lineColor`) or `None`; a colour
- *  without its kind fails with a `TypeError`, and a colour with `None` with a status error. `presetGeometry`
- *  defaults to `rect` and `name` to `Shape <id>`; a `presetGeometry` naming a line or connector geometry makes a
- *  connector, which holds no text. `rotationDeg` is in degrees and `lineWidthPt` in points. */
-export interface ShapeInput {
-  name?: string;
-  presetGeometry?: string;
-  text?: string;
-  textBox?: boolean;
-  anchorKind: AnchorKind;
+/** The anchor of a drawing object, as a read returns it: every field is present. An absolute anchor reports its
+ *  position from A1 as `fromColOffsetEmu` (x) and `fromRowOffsetEmu` (y); `toRow` / `toCol` and their offsets
+ *  are zero unless the anchor is two-cell. Offsets, `widthEmu` and `heightEmu` are in EMU; the size is the
+ *  object's own unrotated size, and a two-cell anchor's size is its box. */
+export interface DrawingAnchor {
+  readonly kind: AnchorKind;
+  readonly editAs: AnchorEditAs;
+  readonly fromRow: number;
+  readonly fromCol: number;
+  readonly fromRowOffsetEmu: number;
+  readonly fromColOffsetEmu: number;
+  readonly toRow: number;
+  readonly toCol: number;
+  readonly toRowOffsetEmu: number;
+  readonly toColOffsetEmu: number;
+  readonly widthEmu: number;
+  readonly heightEmu: number;
+}
+
+/** The anchor of a new drawing object: the keys of {@link DrawingAnchor}, each optional. An omitted `kind` is the
+ *  operation's default (`OneCell` for a picture, `TwoCell` for a chart, shape or slicer) and an omitted `editAs`
+ *  is the anchor's own kind; `editAs` applies to a two-cell anchor only. A two-cell anchor takes its box from
+ *  `toRow` / `toCol` and their offsets, and ignores `widthEmu` / `heightEmu` unless all four `to*` keys are 0,
+ *  when the size sizes the box; a one-cell anchor takes the size and ignores `to*`. A zero size is the image's pixel
+ *  size times 9525 for a picture and Excel's default frame for a chart; a shape or slicer needs a non-zero
+ *  one. An `Absolute` kind is not added. */
+export interface DrawingAnchorInput {
+  kind?: AnchorKind;
   editAs?: AnchorEditAs;
   fromRow?: number;
   fromCol?: number;
@@ -4246,56 +4267,117 @@ export interface ShapeInput {
   toColOffsetEmu?: number;
   widthEmu?: number;
   heightEmu?: number;
+}
+
+/** An anchor update: the keys of {@link DrawingAnchorInput}, each optional, merged into the object's current
+ *  anchor. An omitted key keeps its value and an omitted `kind` keeps the object's kind; a given `kind` converts
+ *  the anchor (a two-cell anchor made from a one-cell or absolute one takes its `to*` box from the current size
+ *  unless the patch gives it, and a one-cell anchor made from a two-cell one keeps the box's size). A `to*` key on
+ *  an anchor that ends up one-cell, or a size key on one that ends up two-cell, fails with
+ *  `StatusCode.InvalidArgument`. No key accepts `null`; an unknown key fails with a `TypeError`. */
+export interface DrawingAnchorPatch {
+  kind?: AnchorKind;
+  editAs?: AnchorEditAs;
+  fromRow?: number;
+  fromCol?: number;
+  fromRowOffsetEmu?: number;
+  fromColOffsetEmu?: number;
+  toRow?: number;
+  toCol?: number;
+  toRowOffsetEmu?: number;
+  toColOffsetEmu?: number;
+  widthEmu?: number;
+  heightEmu?: number;
+}
+
+/** The placement of a new drawing object: a picture (`Sheet.addPicture`), a chart frame
+ *  (`ChartInsertInput.placement`), and the base of {@link ShapeInput} and {@link SlicerInput}. An omitted or empty
+ *  `name` becomes the kind's default (`Picture <id>`; a chart or shape has its own); `hidden` defaults to
+ *  `false`; an omitted `anchor` is the operation's default kind at A1. */
+export interface DrawingPlacementInput {
+  name?: string;
+  description?: string;
+  hidden?: boolean;
+  anchor?: DrawingAnchorInput;
+}
+
+/** Argument of `Drawing.update`, valid for every kind: the fields every drawing object has. A key left out is
+ *  unchanged. `description: null` (or an empty string) removes the description; no other key accepts `null`,
+ *  and a `null` there fails with a `TypeError`. `name` cannot be empty and duplicates are allowed; a slicer's
+ *  `name` cannot be set (it ties the frame to the slicer part) and fails with `StatusCode.PreconditionFailed`.
+ *  `anchor` merges as {@link DrawingAnchorPatch} describes. The keys of a {@link DrawingProperties} that cannot be
+ *  updated (`objectId`, `kind`) are ignored; any other unknown key fails with a `TypeError`. */
+export interface DrawingPatch {
+  name?: string;
+  description?: string | null;
+  hidden?: boolean;
+  anchor?: DrawingAnchorPatch;
+}
+
+/** Return type of `Shape.getProperties()`: the shape-specific fields of a shape, connector or group. The anchor,
+ *  name, description and visibility are read with `getDrawingProperties()`. `fillKind` / `lineKind` are
+ *  {@link ShapePaint} (`Default` when the shape has no element of its own); `fillColor` / `lineColor` are the
+ *  colour when the kind is `Solid` (`Rgb` or `Theme`), else `null`; a colour with a transform a theme reference
+ *  cannot state reads as `Other`. `rotationDeg` is in degrees, `lineWidthPt` in points and 0 without a width.
+ *  `presetGeometry` is the preset geometry, empty for custom geometry or a group; `text` joins paragraphs with
+ *  `\n`. */
+export interface ShapeProperties {
+  readonly objectId: number;
+  readonly kind: DrawingObjectKind;
+  readonly presetGeometry: string;
+  readonly text: string;
+  readonly textBox: boolean;
+  readonly fillKind: ShapePaint;
+  readonly fillColor: Color | null;
+  readonly lineKind: ShapePaint;
+  readonly lineColor: Color | null;
+  readonly lineWidthPt: number;
+  readonly rotationDeg: number;
+}
+
+/** Argument of `Sheet.addShape`: the {@link DrawingPlacementInput} keys (its anchor needs a non-zero size or a
+ *  `to*` box) and the shape fields; a key left out is not applied. `fillKind` / `lineKind` default to `Default`
+ *  (the shape style's paint) and may be `Solid` (with an RGB or theme `fillColor` / `lineColor`) or `None`; a
+ *  colour without its kind fails with a `TypeError`, and a colour with `None` with a status error.
+ *  `presetGeometry` defaults to `rect` and `name` to `Shape <id>`; a `presetGeometry` naming a line or connector
+ *  geometry makes a connector, which holds no text. `rotationDeg` is in degrees and `lineWidthPt` in points. */
+export interface ShapeInput extends DrawingPlacementInput {
+  presetGeometry?: string;
+  text?: string;
+  textBox?: boolean;
   fillKind?: ShapePaint;
   fillColor?: ColorInput;
   lineKind?: ShapePaint;
   lineColor?: ColorInput;
   lineWidthPt?: number;
   rotationDeg?: number;
-  hidden?: boolean;
 }
 
-/** Argument of `Shape.update`: the {@link ShapeInput} keys, each optional. A key left out is unchanged and no key
- *  accepts `null` to clear, except `fillKind` / `lineKind` / `fillColor` / `lineColor`, where `null` clears the
- *  paint (the value {@link ShapeProperties} reads back for a shape that has none). Any other `null` fails
- *  with a `TypeError`. The anchor keys (`editAs`, `from*`, `to*`, `widthEmu`, `heightEmu`) need `anchorKind` in
- *  the same patch, otherwise the call fails with a `TypeError`; an update cannot change the anchor kind.
- *  `objectId` and `kind` of a {@link ShapeProperties} are ignored; any other unknown key fails with a
- *  `TypeError`. */
+/** The shape-specific keys of `Shape.update`: those of {@link ShapeInput} except the placement keys, each
+ *  optional. A key left out is unchanged and no key accepts `null`, except a `fillColor` / `lineColor` beside a
+ *  `fillKind` / `lineKind` other than `Solid`, which is ignored as a read reports it. A `fillKind` / `lineKind`
+ *  of `Default` removes the shape's own paint, so it draws its style's. `Shape.update` also takes the
+ *  {@link DrawingPatch} keys. `objectId` and `kind` of a {@link ShapeProperties} are ignored; any other unknown
+ *  key fails with a `TypeError`. */
 export interface ShapePatch {
-  name?: string;
   presetGeometry?: string;
   text?: string;
   textBox?: boolean;
-  anchorKind?: AnchorKind;
-  editAs?: AnchorEditAs;
-  fromRow?: number;
-  fromCol?: number;
-  fromRowOffsetEmu?: number;
-  fromColOffsetEmu?: number;
-  toRow?: number;
-  toCol?: number;
-  toRowOffsetEmu?: number;
-  toColOffsetEmu?: number;
-  widthEmu?: number;
-  heightEmu?: number;
-  fillKind?: ShapePaint | null;
-  fillColor?: ColorInput | null;
-  lineKind?: ShapePaint | null;
-  lineColor?: ColorInput | null;
+  fillKind?: ShapePaint;
+  fillColor?: ColorInput;
+  lineKind?: ShapePaint;
+  lineColor?: ColorInput;
   lineWidthPt?: number;
   rotationDeg?: number;
-  hidden?: boolean;
 }
 
-/** Return type of `Slicer.getProperties()`: a table slicer of a worksheet. `objectId` is the slicer's frame in
- *  the sheet's drawing; the anchor fields read as in {@link DrawingProperties}, with `to*` zero unless the
- *  anchor is two-cell. `cacheName`, `tableName` and `columnName`
- *  identify the slicer cache and the table column it filters; the selection itself lives in the
- *  table's AutoFilter. `style` is `null` without a style. */
+/** Return type of `Slicer.getProperties()`: the slicer-specific fields of a table slicer of a worksheet.
+ *  `objectId` is the slicer's frame in the sheet's drawing; its anchor, name, description and visibility are read
+ *  with `getDrawingProperties()`. `cacheName`, `tableName` and `columnName` identify the slicer cache and the
+ *  table column it filters; the selection itself lives in the table's AutoFilter. `style` is `null` without a
+ *  style. */
 export interface SlicerProperties {
   readonly objectId: number;
-  readonly name: string;
   readonly caption: string;
   readonly cacheName: string;
   readonly tableName: string;
@@ -4305,59 +4387,31 @@ export interface SlicerProperties {
   readonly rowHeightEmu: number;
   readonly sortOrder: SlicerSortOrder;
   readonly crossFilter: SlicerCrossFilter;
-  readonly anchorKind: AnchorKind;
-  readonly fromRow: number;
-  readonly fromCol: number;
-  readonly fromRowOffsetEmu: number;
-  readonly fromColOffsetEmu: number;
-  readonly toRow: number;
-  readonly toCol: number;
-  readonly toRowOffsetEmu: number;
-  readonly toColOffsetEmu: number;
 }
 
-/** Argument of `Sheet.addSlicer`; a key left out is not applied. The two-cell anchor is required: `fromRow`,
- *  `fromCol`, `toRow` and `toCol`, with the four offsets optional (0). `name` and `caption` default to the column name (the name is made
- *  unique), `rowHeightEmu` to 241300 and `columnCount` to 1; `name` cannot be updated (see
- *  {@link SlicerPatch}). A `null` (or empty) `style` creates the slicer without a style. */
-export interface SlicerInput {
-  name?: string;
+/** Argument of `Sheet.addSlicer`: the {@link DrawingPlacementInput} keys and the slicer fields; a key left out is
+ *  not applied. The anchor is two-cell (`kind` omitted or `TwoCell`) and needs its `to*` box or a non-zero size.
+ *  `name` and `caption` default to the column name (the name is made unique), `rowHeightEmu` to 241300 and
+ *  `columnCount` to 1; `name` cannot be updated. A `null` (or empty) `style` creates the slicer without a style. */
+export interface SlicerInput extends DrawingPlacementInput {
   caption?: string;
   style?: string | null;
   columnCount?: number;
   rowHeightEmu?: number;
-  fromRow: number;
-  fromCol: number;
-  fromRowOffsetEmu?: number;
-  fromColOffsetEmu?: number;
-  toRow: number;
-  toCol: number;
-  toRowOffsetEmu?: number;
-  toColOffsetEmu?: number;
   sortOrder?: SlicerSortOrder;
   crossFilter?: SlicerCrossFilter;
 }
 
-/** Argument of `Slicer.update`: every {@link SlicerInput} key except `name`, each optional. A key left out is
- *  unchanged and `style: null` removes the style (the only key that accepts `null`; any other `null` fails
- *  with a `TypeError`). The anchor applies as a whole: `fromRow`, `fromCol`, `toRow` and `toCol` are given
- *  together (the offsets optional) or not at all; one or more of them without the others, or an offset without
- *  them, fails with a `TypeError`. The keys of a {@link SlicerProperties} that cannot be updated
- *  (`name`, `objectId`, `cacheName`, `tableName`, `columnName`, `anchorKind`) are ignored; any other unknown key
- *  fails with a `TypeError`. */
+/** The slicer-specific keys of `Slicer.update`: those of {@link SlicerInput} except the placement keys, each
+ *  optional. A key left out is unchanged and `style: null` removes the style (the only key that accepts `null`;
+ *  any other `null` fails with a `TypeError`). `Slicer.update` also takes the {@link DrawingPatch} keys except
+ *  `name`. The keys of a {@link SlicerProperties} that cannot be updated (`objectId`, `cacheName`, `tableName`,
+ *  `columnName`) are ignored; any other unknown key fails with a `TypeError`. */
 export interface SlicerPatch {
   caption?: string;
   style?: string | null;
   columnCount?: number;
   rowHeightEmu?: number;
-  fromRow?: number;
-  fromCol?: number;
-  fromRowOffsetEmu?: number;
-  fromColOffsetEmu?: number;
-  toRow?: number;
-  toCol?: number;
-  toRowOffsetEmu?: number;
-  toColOffsetEmu?: number;
   sortOrder?: SlicerSortOrder;
   crossFilter?: SlicerCrossFilter;
 }
@@ -4411,6 +4465,8 @@ export interface SparklineInput {
  *  `manualMin` / `manualMax` are `null` when the axis bound is not set.
  *  `dateAxisRange` is the group's date range, `null` when absent or when its stored text does not parse. */
 export interface SparklineGroup {
+  /** The group's id: stable while the workbook is open, across structural edits; assigned again on load. */
+  readonly id: SparklineGroupId;
   readonly type: SparklineType;
   readonly colorSeries: Color | null;
   readonly colorNegative: Color | null;
@@ -4574,7 +4630,8 @@ export interface ChartPoint {
 }
 
 export interface ChartSeries {
-  readonly index: number;
+  /** The series' `c:idx`, the key `Chart.updateSeries` and `Chart.removeSeries` take. */
+  readonly seriesId: number;
   readonly order: number;
   readonly filtered: boolean;
   readonly name: ChartDataSource;
@@ -4674,6 +4731,17 @@ export interface ChartAxis {
   readonly tickLabelPosition: ChartTickLabelPosition | null;
 }
 
+/** Names the axis of a given kind of a plot group: `plot` is the plot group's position (0 by default). The axis is
+ *  found through `ChartPlot.axisIds` and {@link ChartAxis.kind}; a chart without an axis of that kind fails with
+ *  `StatusCode.NotFound`. */
+export interface ChartAxisKey {
+  kind: ChartAxisKind;
+  plot?: number;
+}
+
+/** An axis of a chart: its id (`ChartAxis.id`) or a {@link ChartAxisKey}. */
+export type ChartAxisRef = number | ChartAxisKey;
+
 /** The range every series of a chart was split from, as `Chart.getProperties()` returns it in `source`. */
 export interface ChartSource {
   readonly range: SheetRect;
@@ -4701,8 +4769,6 @@ export interface ChartFilterInput {
  *  split from, `null` when they share none. */
 export interface ChartProperties {
   readonly objectId: number;
-  readonly name: string;
-  readonly description: string;
   /** An extended (`cx:`) chart. */
   readonly isExtended: boolean;
   readonly isPivotChart: boolean;
@@ -4725,7 +4791,7 @@ export interface ChartProperties {
 /** One resolved series; `values`, `states` (a {@link ChartPointState} each) and the optional `x` / `sizes` have `pointCount` entries. */
 export interface ChartDataSeries {
   readonly plotIndex: number;
-  readonly index: number;
+  readonly seriesId: number;
   readonly name: string | null;
   /** Number format code of the values (the y values in the XY domain). */
   readonly numberFormat: string;
@@ -4736,33 +4802,52 @@ export interface ChartDataSeries {
   readonly states: Uint8Array;
   readonly x: Float64Array | null;
   readonly sizes: Float64Array | null;
-  readonly ranges: {
-    name: SheetRect[];
-    categories: SheetRect[];
-    values: SheetRect[];
-    x: SheetRect[];
-    y: SheetRect[];
-    size: SheetRect[];
-  };
+  readonly ranges: ChartSeriesRanges;
 }
 
-/** Series resolved against the current cell values by Excel's rules. `unresolved` lists inputs that did not
- *  resolve: `source` is the input's {@link ChartRole}, `seriesIndex` the series' `c:idx` (0 for a title) and
- *  `axisId` the axis of a `ChartRole.AxisTitle` entry. */
+/** The cell ranges a resolved series reads; an empty list is a literal or absent source. */
+export interface ChartSeriesRanges {
+  readonly name: readonly SheetRect[];
+  readonly categories: readonly SheetRect[];
+  readonly values: readonly SheetRect[];
+  readonly x: readonly SheetRect[];
+  readonly y: readonly SheetRect[];
+  readonly size: readonly SheetRect[];
+}
+
+/** The resolved category axis labels of a chart. */
+export interface ChartCategories {
+  readonly labels: readonly string[];
+  readonly levels: readonly (readonly string[])[];
+  readonly values: Float64Array | null;
+  readonly numberFormat: string;
+  readonly generated: boolean;
+}
+
+/** The resolved text of an axis title. */
+export interface ChartAxisTitleText {
+  readonly axisId: number;
+  readonly text: string;
+}
+
+/** A chart input that did not resolve: `source` is the input's {@link ChartRole}, `seriesId` the series' `c:idx`
+ *  (0 for a title) and `axisId` the axis of a `ChartRole.AxisTitle` entry. */
+export interface ChartUnresolved {
+  readonly seriesId: number;
+  readonly source: ChartRole;
+  readonly axisId: number;
+}
+
+/** Series resolved against the current cell values by Excel's rules. `unresolved` lists the inputs that did not
+ *  resolve. */
 export interface ChartData {
-  domain: ChartDomain;
-  pointCount: number;
-  categories: {
-    labels: string[];
-    levels: string[][];
-    values: Float64Array | null;
-    numberFormat: string;
-    generated: boolean;
-  };
-  series: ChartDataSeries[];
-  titleText: string | null;
-  axisTitleTexts: { axisId: number; text: string }[];
-  unresolved: { seriesIndex: number; source: ChartRole; axisId: number }[];
+  readonly domain: ChartDomain;
+  readonly pointCount: number;
+  readonly categories: ChartCategories;
+  readonly series: readonly ChartDataSeries[];
+  readonly titleText: string | null;
+  readonly axisTitleTexts: readonly ChartAxisTitleText[];
+  readonly unresolved: readonly ChartUnresolved[];
 }
 
 /** Options of `Sheet.addChart`. `type` is one of `Bar`, `Line`, `Area`, `Pie`, `Doughnut` and `Scatter` (any
@@ -4771,8 +4856,8 @@ export interface ChartData {
  *  sheet). A `headerRow` / `headerColumn` that is omitted or `null` follows Excel's detection, an omitted `title`
  *  is Excel's automatic title and an empty one is no title. An omitted `legend` is
  *  `ChartLegendPosition.Bottom`, Excel's default for a new chart; `null` is no legend. `placement` names the
- *  frame and places it; its anchor defaults to a two-cell anchor, and a zero `widthEmu` / `heightEmu` means
- *  Excel's default frame. */
+ *  frame, sets its description and visibility, and places it; its anchor defaults to a two-cell anchor, and a
+ *  zero `widthEmu` / `heightEmu` means Excel's default frame. */
 export interface ChartInsertInput {
   type: ChartPlotType;
   barDirection?: ChartBarDirection;
@@ -4783,7 +4868,7 @@ export interface ChartInsertInput {
   headerColumn?: boolean | null;
   title?: string;
   legend?: ChartLegendPosition | null;
-  placement?: PictureInput;
+  placement?: DrawingPlacementInput;
 }
 
 /** Argument of `Chart.setSource`: the source range, a {@link SheetRect} or an A1 range (an unqualified one
@@ -5095,13 +5180,16 @@ export interface PageMargins {
   readonly footerInStated: boolean;
 }
 
-/** Argument of `Sheet.updatePrintOptions`: partial `<printOptions>` update. No key has a cleared form. */
-export type PrintOptionsPatch = Patch<{
+/** The `<printOptions>` flags `Sheet.updatePrintOptions` accepts. */
+export interface PrintOptionsInput {
   gridLines: boolean;
   headings: boolean;
   horizontalCentered: boolean;
   verticalCentered: boolean;
-}>;
+}
+
+/** Argument of `Sheet.updatePrintOptions`: partial `<printOptions>` update. No key has a cleared form. */
+export type PrintOptionsPatch = Patch<PrintOptionsInput>;
 
 /** Result of `Sheet.getPrintOptions`. An attribute the XML does not state reads `false`, with its `*Stated` flag
  *  `false`. */
@@ -5116,24 +5204,27 @@ export interface PrintOptions {
   readonly verticalCenteredStated: boolean;
 }
 
+/** The `<headerFooter>` values `Sheet.updateHeaderFooter` accepts. Section text is the decoded string. */
+export interface HeaderFooterInput {
+  oddHeader: string;
+  oddFooter: string;
+  evenHeader: string;
+  evenFooter: string;
+  firstHeader: string;
+  firstFooter: string;
+  differentOddEven: boolean;
+  differentFirst: boolean;
+  scaleWithDoc: boolean;
+  alignWithMargins: boolean;
+}
+
 /** Argument of `Sheet.updateHeaderFooter`: partial `<headerFooter>` update.
  *
  * A section cleared with `null` or `""` is removed; the flags have no cleared form. Section text is the
  * decoded string, so Excel's formatting codes go in plainly (`'&C&"MS Gothic"Report &P/&N'`); the engine
  * applies the XML escaping that turns each leading `&` into the `&amp;` Excel stores. */
 export type HeaderFooterPatch = Patch<
-  {
-    oddHeader: string;
-    oddFooter: string;
-    evenHeader: string;
-    evenFooter: string;
-    firstHeader: string;
-    firstFooter: string;
-    differentOddEven: boolean;
-    differentFirst: boolean;
-    scaleWithDoc: boolean;
-    alignWithMargins: boolean;
-  },
+  HeaderFooterInput,
   'oddHeader' | 'oddFooter' | 'evenHeader' | 'evenFooter' | 'firstHeader' | 'firstFooter'
 >;
 
@@ -5183,6 +5274,24 @@ export type IterativeProgressCallback = (
  *  names compare). A `Sheet` of another workbook throws `TypeError`. */
 export type SheetRef = Sheet | number | string;
 
+/** Options of `Workbook.addSheet`. */
+export interface AddSheetOptions {
+  /** The sheet the new one goes before; omitted, `null` or the sheet count appends. */
+  insertBefore?: SheetRef | null;
+}
+
+/** Options of `Workbook.copySheet`. */
+export interface CopySheetOptions {
+  /** The sheet the copy goes before; omitted, `null` or the sheet count appends. */
+  insertBefore?: SheetRef | null;
+  /** The copy's name; `Src (2)` style when omitted. */
+  newName?: string;
+}
+
+/** Bytes a method takes: a `Uint8Array`, an `ArrayBuffer` or any `ArrayBufferView` (a `DataView` included). Anything
+ *  else throws `TypeError`. */
+export type BytesInput = Uint8Array | ArrayBuffer | ArrayBufferView;
+
 /** A table passed by its sheet-local position (its index in `Sheet.listTables()`), its name (the name formulas
  *  use, matched case-insensitively) or its `Table` handle. A string is always a name, digits included. A position
  *  past the end fails with `StatusCode.IndexOutOfRange`, a name no table of the sheet has with
@@ -5193,9 +5302,27 @@ export type TableRef = number | string | Table;
  *  several pivots with that name) or its `Pivot` handle. Resolved as {@link TableRef} is; a handle of another
  *  sheet fails with `StatusCode.InvalidArgument`. */
 export type PivotRef = number | string | Pivot;
+/** A pivot cache passed by its `cacheId` or its `PivotCache` handle. A cache id the workbook has none of fails
+ *  with `StatusCode.NotFound`, and a handle of another workbook with `StatusCode.InvalidArgument`. */
+export type PivotCacheRef = number | PivotCache;
+/** A pivot field passed by its index (the pivot field index, which is the cache field index) or by its source
+ *  name, matched case-insensitively; a calculated field is named by its name. An index past the last field fails
+ *  with `StatusCode.IndexOutOfRange`, a name no field has with `StatusCode.NotFound`. */
+export type PivotFieldRef = number | string;
 /** A conditional-format rule passed by its flattened index (its position in `listCfRules()`) or its `id`.
  *  Resolved as {@link TableRef} is. */
 export type CfRuleRef = number | string;
+/** The opaque id of a data-validation rule, as `DataValidation.id` reads it and `Sheet.addValidation` returns it. */
+export type ValidationId = string;
+/** A data-validation rule passed by its position (in `listValidations()`) or its {@link ValidationId}; a string is
+ *  always an id. A position past the end fails with `StatusCode.IndexOutOfRange`, an id no rule of the sheet has
+ *  with `StatusCode.NotFound`. */
+export type ValidationRef = number | ValidationId;
+/** The opaque id of a sparkline group, as `SparklineGroup.id` reads it and `Sheet.addSparklineGroup` returns it. */
+export type SparklineGroupId = string;
+/** A sparkline group passed by its position (in `listSparklineGroups()`) or its {@link SparklineGroupId}.
+ *  Resolved as {@link ValidationRef} is. */
+export type SparklineGroupRef = number | SparklineGroupId;
 /** A protected range passed by its index (its position in `listProtectedRanges()`) or its name. Resolved as
  *  {@link TableRef} is. */
 export type ProtectedRangeRef = number | string;
@@ -5221,6 +5348,9 @@ export type ProtectedRangeRef = number | string;
  *  last visible sheet, a table overlapping an object, a pivot cache still in use) with `StatusCode.PreconditionFailed`.
  *  A sheet position past the end is `StatusCode.SheetIndexOutOfRange`; every other position is
  *  `StatusCode.IndexOutOfRange`. A handle that belongs to another workbook fails with `StatusCode.InvalidArgument`.
+ *
+ *  Names compare case-insensitively by Unicode simple case folding wherever they must be unique or are looked up:
+ *  sheets, tables, defined names, cell styles, protected ranges, pivot tables and person ids.
  *
  *  Lookups follow one rule. A getter keyed by a natural key (`getDefinedName`, ...) returns `null` when nothing
  *  has that key. An entry to a handle or a result (`sheet()`, `table()`, `pivot()`, `pivotCache()`, the
@@ -5248,8 +5378,9 @@ export type ProtectedRangeRef = number | string;
  *  table by name across the workbook. One object
  *  has one handle, so every lookup of it returns the same handle. Tables, pivots, conditional-format rules and
  *  protected ranges are addressed by index, name or handle (`TableRef`, `PivotRef`, `CfRuleRef`,
- *  `ProtectedRangeRef`). Validations and sparkline groups are addressed by index only, and removing one shifts the
- *  indices after it down by one.
+ *  `ProtectedRangeRef`). Validations and sparkline groups are addressed by position or by id (`ValidationRef`,
+ *  `SparklineGroupRef`); an id stays valid while the workbook is open, and removing one shifts the positions
+ *  after it down by one.
  *
  *  Each `createFormulon()` result has its own `Workbook` and `Sheet` classes, so `instanceof` holds only within one
  *  result; code handling workbooks from several results tells them apart by `constructor.name`, as
@@ -5266,6 +5397,12 @@ export interface Workbook {
   [Symbol.dispose](): void;
   /** Iterates the sheets' handles in sheet order, as `listSheets()` lists them. */
   [Symbol.iterator](): IterableIterator<Sheet>;
+  /** The number of sheets; `listSheets().length`. */
+  readonly sheetCount: number;
+  /** Whether `ref` addresses a sheet of this workbook: `false` for a name no sheet has (compared
+   *  case-insensitively), a position past the end or a `Sheet` of another workbook. A value that is not a
+   *  {@link SheetRef} throws `TypeError`. */
+  hasSheet(ref: SheetRef): boolean;
   /** The OOXML-level layer of the workbook: the style record tables addressed by index, the named styles and
    *  the passthrough parts. Always the same object. */
   readonly ooxml: WorkbookOoxml;
@@ -5298,11 +5435,15 @@ export interface Workbook {
   sheet(key: SheetRef): Sheet;
   /** Every sheet's handle, in sheet order; a new array on each call. */
   listSheets(): readonly Sheet[];
-  /** Appends a sheet and returns its handle. Fails with `StatusCode.InvalidSheetName` when the name is empty, longer
+  /** Adds a sheet before `options.insertBefore` (a `Sheet`, an index or a name; omitted, `null` or
+   *  `listSheets().length` appends) and returns its handle. An omitted or `null` `name` takes `<base><N>`: the
+   *  profile's first sheet name without its trailing `1` (`Sheet`, `Tabelle`, `Feuil`, ...) and the smallest free
+   *  number N, compared case-insensitively. An unknown `insertBefore` name fails with `StatusCode.NotFound`.
+   *  Fails with `StatusCode.InvalidSheetName` when the name is empty, longer
    *  than 31 UTF-16 units, contains one of `: \ / ? * [ ]`, begins or ends with an apostrophe or is `History` in any
    *  case, with `StatusCode.AlreadyExists` when it collides case-insensitively (Unicode simple case folding) with an
    *  existing sheet, and with `StatusCode.SheetCountLimitExceeded` at the maximum sheet count. */
-  addSheet(name: string): Sheet;
+  addSheet(name?: string | null, options?: AddSheetOptions): Sheet;
   /** Removes `sheet`; its handle then throws `StatusCode.NotFound`, and the handles after it move down one place.
    *  References to it are rewritten to `#REF!` at the affected subexpression (cell formulas, defined names,
    *  conditional-format, validation and table formulas); sheet-scoped names and tables owned by the sheet are
@@ -5310,15 +5451,15 @@ export interface Workbook {
    *  `StatusCode.PreconditionFailed` when only one sheet remains or the sheet is the only visible one, and leaves
    *  the workbook unchanged. */
   removeSheet(sheet: SheetRef): void;
-  /** Copies the worksheet `source` into the workbook before the sheet now at `insertBefore` (omitted, `null` or
-   *  `listSheets().length` appends, so `copySheet(src, null, 'Copy')` names the copy only) and returns the copy's
-   *  handle. Without `newName` the copy
+  /** Copies the worksheet `source` into the workbook before `options.insertBefore` (a `Sheet`, an index or a
+   *  name; omitted, `null` or `listSheets().length` appends) and returns the copy's
+   *  handle. Without `options.newName` the copy
    *  is named `Src (2)`; an explicit name follows the `addSheet` rules. References qualified with the source
    *  sheet are re-pointed at the copy, tables are renamed, and the active sheet does not change. Fails with
    *  `StatusCode.SheetIndexOutOfRange`, `StatusCode.InvalidSheetName`, `StatusCode.AlreadyExists` (the name is taken),
    *  `StatusCode.SheetCountLimitExceeded`, `StatusCode.PreconditionFailed` (very hidden source) or `StatusCode.NotImplemented` (slicers, shapes, pivot
    *  charts and other content the copy cannot model); the workbook is unchanged when it throws. */
-  copySheet(source: SheetRef, insertBefore?: number | null, newName?: string): Sheet;
+  copySheet(source: SheetRef, options?: CopySheetOptions): Sheet;
   /** Returns the sheet the first `<workbookView>` marks active (`activeTab`); without workbook views (an XLSB
    *  load) the first tab-selected sheet; the first sheet when neither is recorded. Removing or hiding the
    *  active sheet activates the next visible sheet, else the previous one. */
@@ -5476,8 +5617,9 @@ export interface Workbook {
   table(name: string): Table;
   /** Lists the workbook's persons. */
   listPeople(): readonly Person[];
-  /** Appends a person to the workbook's person list. Fails with `StatusCode.AlreadyExists` when the id is already
-   *  listed and with `StatusCode.ThreadedCommentInvalid` when it is malformed or the display name is empty. */
+  /** Appends a person to the workbook's person list; the id is a brace-wrapped GUID in either letter case, stored
+   *  uppercase. Fails with `StatusCode.InvalidArgument` when the id is not a GUID, `StatusCode.AlreadyExists` when
+   *  it is already listed (in any case) and `StatusCode.InvalidArgument` when the display name is empty. */
   addPerson(person: PersonInput): void;
   /** Fails with `StatusCode.PreconditionFailed` while a threaded comment or mention still names the person. */
   removePerson(id: string): void;
@@ -5501,7 +5643,7 @@ export interface Workbook {
   /** Lists the handles of the pivot caches the workbook owns. A new array on each call. */
   listPivotCaches(): readonly PivotCache[];
   /** The handle of the pivot cache `cacheId`; `StatusCode.NotFound` when the workbook has no such cache. */
-  pivotCache(cacheId: number | PivotCache): PivotCache;
+  pivotCache(cacheId: PivotCacheRef): PivotCache;
   /** Creates a new empty pivot cache and returns its handle; its id is `requestedId` when given, else one the
    *  engine assigns. A cache id is never 0: an explicit 0 fails with `StatusCode.InvalidArgument`, and omission
    *  or `null` asks the engine to assign one; an id already in use fails with `StatusCode.AlreadyExists`. A new cache has no worksheet source, and a workbook containing one cannot be saved: call
@@ -5509,7 +5651,7 @@ export interface Workbook {
   addPivotCache(requestedId?: number | null): PivotCache;
   /** Removes the pivot cache `cacheId`; its handle then fails with `StatusCode.NotFound` until a cache with the
    *  same id is added. Fails with `StatusCode.PreconditionFailed` if any pivot table still references it. */
-  removePivotCache(cacheId: number | PivotCache): void;
+  removePivotCache(cacheId: PivotCacheRef): void;
 
   /** Declares the workbook's default font: font 0, the record an unstyled
    *  cell resolves to. A new workbook seeds it with Excel's Calibri 11 and
@@ -5521,9 +5663,9 @@ export interface Workbook {
 
   /** Lists the named cell styles (`<cellStyle>` entries) in file order. */
   listCellStyles(): readonly CellStyle[];
-  /** Reads the named cell style `name` (matched exactly); `null` when there is none. */
+  /** Reads the named cell style `name` (matched case-insensitively, as sheet names are); `null` when there is none. */
   getCellStyle(name: string): CellStyle | null;
-  /** Adds or replaces the `<cellStyle>` entry named `record.name`. Absent fields default to `styleXfIndex` 0, a
+  /** Adds or replaces the `<cellStyle>` entry named `record.name` (names compare case-insensitively). Absent fields default to `styleXfIndex` 0, a
    *  custom style (`0xFFFFFFFF`), level 0 and both flags false. */
   setCellStyle(record: CellStyleInput): void;
   /** Removes the `<cellStyle>` named `name`; cell formats that used it are repointed at the Normal style. */
@@ -5566,7 +5708,11 @@ export interface Workbook {
   setThemeScriptFont(font: ThemeScriptFontInput): void;
   /** Reads the typeface of `key.script` in the major (`FontScheme.Major`) or minor (`FontScheme.Minor`) font set;
    *  `null` when the set does not list the script. */
-  getThemeScriptFont(key: Pick<ThemeScriptFontInput, 'scheme' | 'script'>): ThemeScriptFont | null;
+  getThemeScriptFont(key: ThemeScriptFontKey): ThemeScriptFont | null;
+  /** Lists the script typefaces of the major (`FontScheme.Major`) or minor (`FontScheme.Minor`) font set in file
+   *  order; without a theme part (after `resetTheme`, for one) the default Office theme's script typefaces.
+   *  `FontScheme.None` fails with `StatusCode.InvalidArgument`. */
+  listThemeScriptFonts(scheme: FontScheme): readonly ThemeScriptFont[];
   /** Restores the default Office theme by removing the theme part, so the workbook reports the default theme
    *  (`source` is `Default`). Excel adds a theme part again when it saves the file. */
   resetTheme(): void;
@@ -5614,8 +5760,7 @@ export interface Workbook {
  *  string that does not parse fails with `StatusCode.ParserInvalidReference`; one that names a sheet, or is not
  *  whole columns (for a column method) or whole rows (for a row method), fails with `StatusCode.InvalidArgument`; the whole sheet (`A:XFD`, `1:1048576`) is both.
  *
- *  Spans come in two forms. A method that inserts or deletes rows or columns takes `(start, count)`; every other
- *  row or column span is the closed interval `(first, last)`. The parameter names say which form a method uses.
+ *  Every row or column span is the closed interval `(first, last)`, as a pair of numbers or an A1 span string.
  *
  *  To read cells, pick by shape: `getValues` for a dense grid of values, `listCells` for the populated cells of a
  *  range, `getCellsInRange` to page through a large range with a cursor, and `iterRows` for the rows of the
@@ -5637,8 +5782,14 @@ export interface Sheet {
   /** Renames the sheet; this handle keeps addressing it under the new name. Fails with
    *  `StatusCode.InvalidSheetName` under the `Workbook.addSheet` naming rules. */
   rename(newName: string): void;
-  /** Moves the sheet to `toIndex` (the index after its removal); every sheet handle keeps addressing its sheet. */
-  move(toIndex: number): void;
+  /** The sheet's tab state. */
+  getVisibility(): SheetVisibility;
+  /** Sets the tab state. Hiding the only visible sheet fails with `StatusCode.PreconditionFailed`. */
+  setVisibility(visibility: SheetVisibility): void;
+  /** Moves the sheet before `insertBefore`, a position of the list as it is now (a `Sheet`, an index or a name);
+   *  `null` or `listSheets().length` appends. Moving a sheet before itself or before the next sheet changes
+   *  nothing. Every sheet handle keeps addressing its sheet. */
+  move(insertBefore: SheetRef | null): void;
   /** Stores a numeric literal. NaN and infinity are rejected with `StatusCode.InvalidArgument`. */
   setNumber(row: number, col: number, value: number): void;
   /** `setNumber` at the A1 address `a1`. */
@@ -5909,34 +6060,37 @@ export interface Sheet {
    * it onto the new one, which Excel does — a sparkline included.
    */
 
-  /** Inserts `count` rows at `row` on the sheet and rewrites cross-workbook
-   *  references to follow the shift.
+  /** Inserts the rows `first` to `last` (closed, so `last - first + 1` rows) on the sheet and rewrites
+   *  cross-workbook references to follow the shift. `first > last` fails with `StatusCode.InvalidArgument`.
    *  Fails with `StatusCode.PreconditionFailed` when the edit cuts into a data table, legacy
    *  array block or PivotTable, or would push one of them or a table past
    *  the sheet bound; the workbook is unchanged. */
-  insertRows(row: number, count: number): void;
+  insertRows(first: number, last: number): void;
   /** `insertRows` over the rows of the A1 row span `span` (`"3"`, `"3:5"`). */
   insertRows(span: string): void;
-  /** Deletes `count` rows starting at `row` on the sheet. References that
+  /** Deletes the rows `first` to `last` (closed) on the sheet. `first > last` fails with
+   *  `StatusCode.InvalidArgument`. References that
    *  fall inside the deleted interval collapse to `#REF!`.
    *  Fails with `StatusCode.PreconditionFailed` when the edit cuts into a data table, legacy
    *  array block or PivotTable, or would push one of them or a table past
    *  the sheet bound; the workbook is unchanged. */
-  deleteRows(row: number, count: number): void;
+  deleteRows(first: number, last: number): void;
   /** `deleteRows` over the rows of the A1 row span `span` (`"3"`, `"3:5"`). */
   deleteRows(span: string): void;
-  /** Inserts `count` columns at `col` on the sheet.
+  /** Inserts the columns `first` to `last` (closed) on the sheet. `first > last` fails with
+   *  `StatusCode.InvalidArgument`.
    *  Fails with `StatusCode.PreconditionFailed` when the edit cuts into a data table, legacy
    *  array block or PivotTable, or would push one of them or a table past
    *  the sheet bound; the workbook is unchanged. */
-  insertColumns(col: number, count: number): void;
+  insertColumns(first: number, last: number): void;
   /** `insertColumns` over the columns of the A1 column span `span` (`"B"`, `"B:D"`). */
   insertColumns(span: string): void;
-  /** Deletes `count` columns starting at `col` on the sheet.
+  /** Deletes the columns `first` to `last` (closed) on the sheet. `first > last` fails with
+   *  `StatusCode.InvalidArgument`.
    *  Fails with `StatusCode.PreconditionFailed` when the edit cuts into a data table, legacy
    *  array block or PivotTable, or would push one of them or a table past
    *  the sheet bound; the workbook is unchanged. */
-  deleteColumns(col: number, count: number): void;
+  deleteColumns(first: number, last: number): void;
   /** `deleteColumns` over the columns of the A1 column span `span` (`"B"`, `"B:D"`). */
   deleteColumns(span: string): void;
 
@@ -5971,10 +6125,10 @@ export interface Sheet {
   listThreadedComments(row: number, col: number): readonly ThreadedComment[];
   /** `listThreadedComments` of the cell at the A1 address `a1`. */
   listThreadedComments(a1: string): readonly ThreadedComment[];
-  /** Adds a threaded comment. A `parentId` that is omitted or `null` opens a new thread at
+  /** Adds a threaded comment and returns its id (the given one, or the generated one). A `parentId` that is omitted or `null` opens a new thread at
    *  `cell`, which must hold neither a note nor a thread (else `StatusCode.AlreadyExists`);
    *  otherwise it replies to that thread. An `id` the sheet already uses fails with `StatusCode.AlreadyExists`. */
-  addThreadedComment(comment: ThreadedCommentInput): void;
+  addThreadedComment(comment: ThreadedCommentInput): string;
   /** Updates the text, mentions and resolved state of the comment with `id`; an omitted key keeps its value.
    *  `done` applies to a thread's opening comment only. */
   updateThreadedComment(id: string, patch: ThreadedCommentPatch): void;
@@ -5992,10 +6146,11 @@ export interface Sheet {
   listPictures(): readonly Picture[];
   /** Lists the handles of the sheet's charts, in document order. */
   listCharts(): readonly Chart[];
-  /** Lists the handles of the shapes, connectors and groups of the sheet's drawing in z-order (back first);
-   *  children of a group are not listed. */
+  /** Lists the handles of the shapes, connectors and groups of the sheet's drawing in z-order (back first),
+   *  filtered from `listDrawings()`; children of a group are not listed. */
   listShapes(): readonly Shape[];
-  /** Lists the handles of the table slicers the sheet hosts; slicers over a pivot cache are not listed. */
+  /** Lists the handles of the table slicers the sheet hosts, filtered from `listDrawings()`; slicers over a pivot
+   *  cache are not listed. */
   listSlicers(): readonly Slicer[];
   /** The handle of the drawing object `objectId`, an instance of the class its kind selects.
    *  `StatusCode.NotFound` when the sheet's drawing has no such object. */
@@ -6010,19 +6165,20 @@ export interface Sheet {
   /** The `Slicer` handle of `objectId` (a table slicer's frame); fails as `picture` does otherwise. */
   slicer(objectId: number | Drawing): Slicer;
   /** Inserts `bytes` as a picture and returns its handle; existing drawing content is kept. */
-  addPicture(bytes: Uint8Array, input?: PictureInput): Picture;
+  addPicture(bytes: BytesInput, input?: DrawingPlacementInput): Picture;
   /** Appends a shape on top and returns its handle; a sheet without a drawing gets one and existing drawing
    *  content is kept. */
   addShape(spec: ShapeInput): Shape;
-  /** Adds a slicer over column `column` (0-based) of the table `table`, passed as its `Table` handle or its name
-   *  (matched case-insensitively), and returns its handle. It creates the slicer and cache parts, the `Slicer_*`
+  /** Adds a slicer over column `column` of the table `table`, passed as its `Table` handle or its name
+   *  (matched case-insensitively), and returns its handle. `column` is the column's 0-based position or its name
+   *  (matched case-insensitively); a name the table lacks fails with `StatusCode.NotFound`. It creates the slicer and cache parts, the `Slicer_*`
    *  defined name and the drawing frame; the table may live on another sheet. A name no table has fails with
    *  `StatusCode.NotFound`. */
-  addSlicer(table: Table | string, column: number, spec: SlicerInput): Slicer;
+  addSlicer(table: Table | string, column: number | string, spec: SlicerInput): Slicer;
   /** Puts a `snapshot` capture of a picture, chart or shape back and returns the object's handle: in place of
    *  an object with the same id at its recorded position, where a handle of that id addresses it again, or as a
    *  copy on top with `assignNewId`. */
-  restoreDrawing(bytes: Uint8Array, opts?: RestoreDrawingOptions): Picture | Chart | Shape;
+  restoreDrawing(bytes: BytesInput, opts?: RestoreDrawingOptions): Picture | Chart | Shape;
   /** Removes the drawing object `objectId` and the parts only it reaches; other drawing content is kept. A
    *  shape, connector or group goes with its children; a slicer with its frame, and its cache when no other
    *  slicer uses it. `StatusCode.NotFound` when the sheet's drawing has no such object, and
@@ -6040,17 +6196,17 @@ export interface Sheet {
   removeDataTable(row: number, col: number): void;
   /** `removeDataTable` at the A1 address `a1`. */
   removeDataTable(a1: string): void;
-  /** Appends a group; `spec.sparklines` must hold at least one sparkline. */
-  addSparklineGroup(spec: SparklineGroupInput): number;
-  /** Lists the sheet's sparkline groups; a group's position is its `sparklineGroupIndex`. */
+  /** Appends a group and returns its id; `spec.sparklines` must hold at least one sparkline. */
+  addSparklineGroup(spec: SparklineGroupInput): SparklineGroupId;
+  /** Lists the sheet's sparkline groups; a group's place in this list is its position, its `id` the stable key. */
   listSparklineGroups(): readonly SparklineGroup[];
-  /** Updates the attributes, colours and date range of group `sparklineGroupIndex` that `patch` names, and its
+  /** Updates the attributes, colours and date range of group `sparklineGroup` that `patch` names, and its
    *  sparklines when `patch.sparklines` is present; unmodelled XML is kept. `{ sparklines }` replaces the
    *  sparklines alone. See {@link SparklineGroupPatch} for the `null` rules. An empty `sparklines` fails with
    *  `StatusCode.InvalidArgument`. */
-  updateSparklineGroup(sparklineGroupIndex: number, patch: SparklineGroupPatch): void;
-  /** Removes group `sparklineGroupIndex`. */
-  removeSparklineGroup(sparklineGroupIndex: number): void;
+  updateSparklineGroup(sparklineGroup: SparklineGroupRef, patch: SparklineGroupPatch): void;
+  /** Removes group `sparklineGroup`. */
+  removeSparklineGroup(sparklineGroup: SparklineGroupRef): void;
 
   /** Creates a chart with filled caches and returns its handle.
    *
@@ -6159,18 +6315,17 @@ export interface Sheet {
   /** Reads the `<headerFooter>` sections and flags, and which flags the XML states. */
   getHeaderFooter(): HeaderFooter;
 
-  /** Reads the full per-sheet view (zoom, freeze, visibility, and the
-   *  display / orientation flags). */
+  /** Reads the full per-sheet view (zoom, freeze, and the
+   *  display / orientation flags). The tab's visibility is `getVisibility()`. */
   getView(): SheetView;
   /** Updates the view with the keys `patch` names; an empty patch changes nothing. A freeze or split key takes
    *  its partner from the current view (`{ freezeRows: 2 }` keeps `freezeCols`), and a non-zero freeze with a
    *  non-zero split fails with `StatusCode.InvalidArgument`. Applied in a fixed order: freeze or split (each replaces the other, and a
    *  freeze change resets the pane origin), `paneTopLeft*`, `topLeft*`, the display flags, `zoomPct` (outside
-   *  `[10, 400]` is rejected), `viewMode`, `rightToLeft`, `tabSelected`, `visibility`. The pane origin must lie past the
+   *  `[10, 400]` is rejected), `viewMode`, `rightToLeft`, `tabSelected`. The pane origin must lie past the
    *  frozen rows and columns. A `zoomPct` outside `[10, 400]` or a pane origin other than `0, 0` without panes is checked against
-   *  the merged view before anything is written, failing with `StatusCode.InvalidArgument`, and hiding the only
-   *  visible sheet fails with `StatusCode.PreconditionFailed`; another engine failure throws with the earlier keys
-   *  applied. */
+   *  the merged view before anything is written, failing with `StatusCode.InvalidArgument`; another engine failure
+   *  throws with the earlier keys applied. An unknown key (`visibility` included) throws `TypeError`. */
   updateView(patch: SheetViewPatch): void;
   /** The sheet's tab colour (`<sheetPr><tabColor>`); `null` when the tab has none. */
   getTabColor(): Color | null;
@@ -6322,7 +6477,7 @@ export interface Sheet {
    *  cells that carry no value. */
   listComments(): readonly SheetComment[];
   /** Sets / replaces the cell comment (an Excel note); an empty `text` writes an empty comment. Fails with
-   *  `StatusCode.ThreadedCommentInvalid` when the cell holds a threaded comment: a cell carries a note or a thread,
+   *  `StatusCode.AlreadyExists` when the cell holds a threaded comment: a cell carries a note or a thread,
    *  never both. */
   setComment(row: number, col: number, comment: CommentInput): void;
   /** `setComment` at the A1 address `a1`. */
@@ -6371,14 +6526,17 @@ export interface Sheet {
   getHyperlink(row: number, col: number): Hyperlink | null;
   /** `getHyperlink` at the A1 address `a1`. */
   getHyperlink(a1: string): Hyperlink | null;
-  /** Lists the sheet's data-validation rules; a rule's position is its `validationIndex`. */
+  /** Lists the sheet's data-validation rules; a rule's place in this list is its position, its `id` the stable key. */
   listValidations(): readonly DataValidation[];
   /** Appends a data-validation rule to the sheet. A non-empty `formula1` / `formula2`
-   *  that does not parse fails with a parser status (1000-1014; `FormulonError.parseError` gives the position). */
-  addValidation(validation: DataValidationInput): number;
-  /** Removes the validation rule at `validationIndex`. Fails with `StatusCode.IndexOutOfRange`
-   *  if `validationIndex` is out of range. */
-  removeValidation(validationIndex: number): void;
+   *  that does not parse fails with a parser status (1000-1014; `FormulonError.parseError` gives the position).
+   *  Returns the new rule's id; an `id` on `validation` is ignored. */
+  addValidation(validation: DataValidationInput): ValidationId;
+  /** Updates the rule `validation` with the keys `patch` names; see {@link DataValidationPatch}. A formula that does
+   *  not parse fails with a parser status and the rule is unchanged. */
+  updateValidation(validation: ValidationRef, patch: DataValidationPatch): void;
+  /** Removes the validation rule `validation`. */
+  removeValidation(validation: ValidationRef): void;
   /** Drops every validation rule on the sheet. */
   clearValidations(): void;
   /** Lists the sheet's conditional-format rules in flattened order; a rule's position, or its id, is the `cfRule` argument of `removeCfRule`. */
@@ -6394,6 +6552,8 @@ export interface Sheet {
   addCfRule(rule: ConditionalFormatInput): number;
   /** Adds back a rule `listCfRules` returned, as it is. */
   addCfRule(rule: ConditionalFormat): number;
+  /** Updates the CF rule `cfRule` with the keys `patch` names; see {@link ConditionalFormatPatch}. */
+  updateCfRule(cfRule: CfRuleRef, patch: ConditionalFormatPatch): void;
   /** Removes the CF rule `cfRule`. When the containing block becomes empty it is removed too. */
   removeCfRule(cfRule: CfRuleRef): void;
   /** Drops every CF block on the sheet. */
@@ -6469,20 +6629,32 @@ export interface WorkbookOoxml {
   setFont(fontIndex: number, record: FontInput): void;
   /** Adds a fill (deduplicating against existing entries). */
   addFill(record: FillInput): number;
+  /** Overwrites the fill at `fillIndex` in place, restyling every `<xf>` that names it; the {@link Fill} `getFill`
+   *  returns passes as is. An index past the end fails with `StatusCode.IndexOutOfRange`. */
+  setFill(fillIndex: number, record: FillInput): void;
   /** Adds a border (deduplicating against existing entries). */
   addBorder(record: BorderInput): number;
+  /** Overwrites the border at `borderIndex` in place, restyling every `<xf>` that names it; the {@link Border}
+   *  `getBorder` returns passes as is. An index past the end fails with `StatusCode.IndexOutOfRange`. */
+  setBorder(borderIndex: number, record: BorderInput): void;
   /** Adds a number format code in the workbook profile's vocabulary and returns its id. A built-in id
    *  whose profile code equals `numberFormat` (lowest id first) wins, then an existing custom record,
    *  else a custom code is appended at `max(existing_custom_id, 163) + 1`. Under en-US `m/d/yy` is id 14;
    *  the ECMA-376 spelling `mm-dd-yy` is a custom format. `getNumberFormat(addNumberFormat(x))` returns `x`. */
   addNumberFormat(numberFormat: string): number;
   /** Adds an `<xf>` record (deduplicating against existing entries).
-   *  Out-of-range font/fill/border indices or unregistered `numFmtId`
-   *  surface `StatusCode.InvalidArgument` rather than auto-growing the parallel
-   *  tables. */
+   *  A font / fill / border index past its table fails with `StatusCode.IndexOutOfRange` and an unregistered
+   *  `numFmtId` with `StatusCode.InvalidArgument`, rather than auto-growing the parallel tables. */
   addCellXf(record: CellXfInput): number;
-  /** Adds a `<dxf>` differential-format record for conditional formats and returns its `dxfIndex`. */
+  /** Overwrites the `<xf>` at `xfIndex` in place; the {@link CellXf} `getCellXf` returns passes as is. An index past
+   *  the end and a font / fill / border index past its table fail with `StatusCode.IndexOutOfRange`, an
+   *  unregistered `numFmtId` with `StatusCode.InvalidArgument`. */
+  setCellXf(xfIndex: number, record: CellXfInput): void;
+  /** Adds a `<dxf> differential-format record for conditional formats and returns its `dxfIndex`. */
   addDxf(input: DxfInput): number;
+  /** Overwrites the `<dxf>` at `dxfIndex` in place; the {@link Dxf} `getDxf` returns passes as is. An index past the
+   *  end fails with `StatusCode.IndexOutOfRange`. */
+  setDxf(dxfIndex: number, input: DxfInput): void;
 
   /** Lists the font records; a record's position is its font index. */
   listFonts(): readonly Font[];
@@ -6713,7 +6885,7 @@ export interface Pivot {
   readonly index: number;
   /** The pivot's current name. */
   readonly name: string;
-  /** Reads the pivot's name and the id of the cache it draws from. */
+  /** Reads the pivot's definition: name, cache id, report layout, grand totals and style options. */
   getProperties(): PivotProperties;
   /** Renames the pivot table. */
   rename(name: string): void;
@@ -6757,9 +6929,11 @@ export interface Pivot {
   showDetails(a1: string): Sheet;
   /** Lists the pivot's fields; a field's position is its `fieldIndex`. */
   listFields(): readonly PivotField[];
+  /** Reads pivot field `fieldIndex`; an index past the last field fails with `StatusCode.IndexOutOfRange`. */
+  getField(fieldIndex: PivotFieldRef): PivotField;
   /** Places a field on the pivot. Returns its field index.
    *  A pivot's fields are positional over its cache's fields (field `i` is
-   *  cache field `i`): when `sourceName` names a cache field the pivot first
+   *  cache field `i`): when `spec.fieldIndex` names a cache field the pivot first
    *  gets one bare, axis-less field per cache field and the named one is
    *  configured in place, so `index` is that cache field's position and
    *  adding it again updates it. A name the cache lacks appends a field.
@@ -6769,7 +6943,7 @@ export interface Pivot {
   /** Updates pivot field `fieldIndex` with the keys `patch` names. A `customName` may be the field's own source
    *  name, not another field's source or custom name or a data field's name. The whole patch is checked first
    *  and applied atomically: when any key is rejected, nothing changes. An empty patch changes nothing. */
-  updateField(fieldIndex: number, patch: PivotFieldPatch): void;
+  updateField(fieldIndex: PivotFieldRef, patch: PivotFieldPatch): void;
   /** Drops every field from the pivot, emptying the row and column orders. */
   clearFields(): void;
   /** Sets the axis of pivot field `fieldIndex`. Moving onto the row or column
@@ -6778,14 +6952,14 @@ export interface Pivot {
    *  does: its data fields are removed (later data-field indices shift
    *  down), as are filters naming it and value filters scoring a
    *  removed data field; its item visibility is kept. */
-  setFieldAxis(fieldIndex: number, axis: PivotAxis | null): void;
+  setFieldAxis(fieldIndex: PivotFieldRef, axis: PivotAxis | null): void;
   /** Lists the field's items (what `addFieldItem` appends to); an item's position is its `itemIndex`. */
-  listFieldItems(fieldIndex: number): readonly PivotItem[];
+  listFieldItems(fieldIndex: PivotFieldRef): readonly PivotItem[];
   /** Reads item `itemIndex` of the field. */
-  getFieldItem(fieldIndex: number, itemIndex: number): PivotItem;
+  getFieldItem(fieldIndex: PivotFieldRef, itemIndex: number): PivotItem;
   /** Updates item `itemIndex` of pivot field `fieldIndex` with the keys `patch` names. The whole patch is
    *  checked first and applied atomically: when any key is rejected, nothing changes. */
-  updateFieldItem(fieldIndex: number, itemIndex: number, patch: PivotItemPatch): void;
+  updateFieldItem(fieldIndex: PivotFieldRef, itemIndex: number, patch: PivotItemPatch): void;
   /** Appends a manual-filter item to pivot field `fieldIndex` and returns its item index. The item is addressed
    *  one of two ways:
    *  - by label (a string): it binds to the first shared item of the cache field that renders as `item`
@@ -6798,13 +6972,16 @@ export interface Pivot {
    *    nothing.
    *
    *  `options.visible` defaults to `true`. */
-  addFieldItem(fieldIndex: number, item: string | { cacheIndex: number }, options?: { visible?: boolean }): number;
+  addFieldItem(
+    fieldIndex: PivotFieldRef,
+    item: string | { cacheIndex: number },
+    options?: { visible?: boolean },
+  ): number;
   /** Drops every manual-filter item from pivot field `fieldIndex`. */
-  clearFieldItems(fieldIndex: number): void;
-  /** Adds the custom subtotal function `aggregation` to pivot field `fieldIndex`. */
-  addFieldSubtotalFunction(fieldIndex: number, aggregation: PivotAggregation): void;
-  /** Drops every custom subtotal function from pivot field `fieldIndex`. */
-  clearFieldSubtotalFunctions(fieldIndex: number): void;
+  clearFieldItems(fieldIndex: PivotFieldRef): void;
+  /** Replaces the custom subtotal functions of pivot field `fieldIndex` with `aggregations`; an empty list clears
+   *  them. A repeated function fails with `StatusCode.InvalidArgument`. */
+  setFieldSubtotalFunctions(fieldIndex: PivotFieldRef, aggregations: readonly PivotAggregation[]): void;
   /** Groups the date field `fieldIndex` (a source field, or one of its group
    *  fields) by the `PivotDatePeriod` bits of `group.periods`, as Excel's Group
    *  command does, replacing any grouping it has. Each period becomes a
@@ -6823,7 +7000,7 @@ export interface Pivot {
    *  group fields) from every pivot on its cache; the field returns to the axis position its group fields held.
    *  A field that is not grouped is left as it is. `StatusCode.PreconditionFailed` when the group fields are not
    *  the last fields of the cache. */
-  setFieldDateGroup(fieldIndex: number, group: PivotDateGroupInput | null): void;
+  setFieldDateGroup(fieldIndex: PivotFieldRef, group: PivotDateGroupInput | null): void;
   /** Reads the row-axis field order (the list `setRowFieldOrder` takes). */
   getRowFieldOrder(): readonly number[];
   /** Replaces the row-axis field order with `indices`. Each entry must
@@ -6837,6 +7014,9 @@ export interface Pivot {
   setColumnFieldOrder(indices: readonly number[]): void;
   /** Lists the pivot's data fields; a data field's position is its `dataFieldIndex`. */
   listDataFields(): readonly PivotDataField[];
+  /** Reads data field `dataFieldIndex`; an index past the last data field fails with
+   *  `StatusCode.IndexOutOfRange`. */
+  getDataField(dataFieldIndex: number): PivotDataField;
   /** Appends a new data-field entry. An omitted or empty `spec.name` is
    *  derived from the Excel profile; see {@link PivotDataFieldInput}. */
   addDataField(spec: PivotDataFieldInput): number;
@@ -6846,11 +7026,13 @@ export interface Pivot {
   /** Reads the name a new data field would get for `fieldIndex` and `aggregation`, without adding one.
    *  `excludeDataField` leaves that data field out of the numbering (as `setDataField` does); omit it
    *  for a new data field. */
-  getDataFieldDefaultName(fieldIndex: number, aggregation: PivotAggregation, excludeDataField?: number): string;
+  getDataFieldDefaultName(fieldIndex: PivotFieldRef, aggregation: PivotAggregation, excludeDataField?: number): string;
   /** Drops every data-field entry from the pivot. */
   clearDataFields(): void;
   /** Lists the pivot's filters; a filter's position is its `filterIndex`. */
   listFilters(): readonly PivotFilter[];
+  /** Reads filter `filterIndex`; an index past the last filter fails with `StatusCode.IndexOutOfRange`. */
+  getFilter(filterIndex: number): PivotFilter;
   /** Appends a filter, saved with the pivot; see {@link PivotFilter}. */
   addFilter(spec: PivotFilterInput): number;
   /** Removes the filter at `filterIndex`. */
@@ -6867,7 +7049,7 @@ export interface Pivot {
 export interface PivotCache {
   /** The workbook this cache belongs to. */
   readonly workbook: Workbook;
-  /** The cache's id, the `cacheId` a `PivotInput` takes. */
+  /** The cache's id, the `cacheId` a `PivotInput` takes (as does the handle itself). */
   readonly cacheId: number;
   /** Reads the cache's worksheet source range / defined-name metadata; `null` when the cache has no worksheet
    *  source. */
@@ -6917,6 +7099,9 @@ export interface PivotCache {
   addRecord(): number;
   /** Drops every record from the cache. */
   clearRecords(): void;
+  /** Reads cell `(recordIndex, fieldIndex)`: a blank cell is `null` and a date reads as its serial number. An
+   *  index past the end fails with `StatusCode.IndexOutOfRange`. */
+  getRecordValue(recordIndex: number, fieldIndex: number): NativeValue;
   /** Sets cell `(recordIndex, fieldIndex)` to `value`; `null` is Blank and a `Date` is read as in
    *  `addFieldSharedItem`. */
   setRecordValue(
@@ -6939,8 +7124,13 @@ export interface Drawing {
   readonly objectId: number;
   /** The object's kind. */
   readonly kind: DrawingObjectKind;
-  /** Reads the object's kind, anchor, name and description. */
+  /** The object's name, read from the sheet's drawing on each access. */
+  readonly name: string;
+  /** Reads the object's name, description, visibility and anchor. */
   getDrawingProperties(): DrawingProperties;
+  /** Applies the fields `patch` names, valid for every kind; the object's other elements are kept. The anchor
+   *  merges key by key. See {@link DrawingPatch} for the `null` rules. */
+  update(patch: DrawingPatch): void;
 }
 
 /** A picture of a sheet's drawing; also has the members of {@link Drawing}. Add one with `Sheet.addPicture`. */
@@ -6948,10 +7138,6 @@ export interface Picture extends Drawing {
   /** Reads the picture's format, pixel size and a copy of its media bytes. Fails with `StatusCode.NotFound` when
    *  the picture's media part is missing. */
   getProperties(): PictureProperties;
-  /** Renames the picture; duplicate names are allowed. */
-  rename(name: string): void;
-  /** Moves and resizes the picture, keeping its id, crop, rotation and every other element. */
-  setAnchor(anchor: DrawingAnchor): void;
   /** Makes the picture item `zOrderIndex` of `Sheet.listDrawings()`, whose order is the stacking order (0 is the
    *  back). */
   setZOrder(zOrderIndex: number): void;
@@ -6964,10 +7150,6 @@ export interface Picture extends Drawing {
 export interface Chart extends Drawing {
   /** Reads the typed view of the chart. */
   getProperties(): ChartProperties;
-  /** Renames the chart; duplicate names are allowed. */
-  rename(name: string): void;
-  /** Moves and resizes the chart frame, keeping its id and every other element. */
-  setAnchor(anchor: DrawingAnchor): void;
   /** Makes the chart item `zOrderIndex` of `Sheet.listDrawings()`, whose order is the stacking order (0 is the
    *  back). */
   setZOrder(zOrderIndex: number): void;
@@ -6996,28 +7178,29 @@ export interface Chart extends Drawing {
   setLegend(legend: ChartLegend | null): void;
   /** Updates the legend with the keys `patch` names, creating it when absent. */
   updateLegend(patch: ChartLegendPatch): void;
-  /** Updates the axis `axisId`; an axis id the chart lacks fails with `StatusCode.NotFound`. */
-  updateAxis(axisId: number, patch: ChartAxisPatch): void;
+  /** Updates the axis `axis`, an axis id or a {@link ChartAxisKey}; an axis the chart lacks fails with
+   *  `StatusCode.NotFound`. */
+  updateAxis(axis: ChartAxisRef, patch: ChartAxisPatch): void;
   /** Updates how blanks are plotted, whether hidden cells are skipped and whether `#N/A` draws as blank. */
   updateDisplay(patch: ChartDisplayPatch): void;
-  /** Updates the series with `c:idx` `seriesIndex` of plot group `plot`; a series index the plot lacks fails with
+  /** Updates the series `seriesId` (its `c:idx`) of plot group `plot`; a series id the plot lacks fails with
    *  `StatusCode.NotFound`. */
-  updateSeries(plot: number, seriesIndex: number, patch: ChartSeriesPatch): void;
+  updateSeries(plot: number, seriesId: number, patch: ChartSeriesPatch): void;
   /** Replaces the formatting of data point `pointIndex` with `point` (a {@link ChartPoint} read back; its `index`
    *  is ignored), or with `null` removes it (doing nothing when the point has none). */
-  setPoint(plot: number, seriesIndex: number, pointIndex: number, point: ChartPoint | null): void;
+  setPoint(plot: number, seriesId: number, pointIndex: number, point: ChartPoint | null): void;
   /** Updates the formatting of data point `pointIndex` with the keys `patch` names. An empty patch changes
    *  nothing; a point whose override ends up empty loses it (as `setPoint(..., null)` does). */
-  updatePoint(plot: number, seriesIndex: number, pointIndex: number, patch: ChartPointPatch): void;
+  updatePoint(plot: number, seriesId: number, pointIndex: number, patch: ChartPointPatch): void;
   /** Updates plot group `plot`. */
   updatePlot(plot: number, patch: ChartPlotPatch): void;
   /** Replaces the chart filter: the series by `c:idx` and the categories by position that `filter` lists are
    *  hidden, and an omitted list hides none. */
   setFilter(filter: ChartFilterInput): void;
-  /** Appends a series to plot group `plot` and returns its `c:idx`. */
+  /** Appends a series to plot group `plot` and returns its `seriesId` (`c:idx`). */
   addSeries(plot: number, input: ChartSeriesInput): number;
-  /** Removes the series with `c:idx` `seriesIndex` from plot group `plot`. */
-  removeSeries(plot: number, seriesIndex: number): void;
+  /** Removes the series `seriesId` (its `c:idx`) from plot group `plot`. */
+  removeSeries(plot: number, seriesId: number): void;
   /** Rebuilds every series from `source.range`, keeping the chart kind and each series' formatting by index, and
    *  clears the filter. A header flag that is omitted or `null` follows Excel's detection. */
   setSource(source: ChartSourceInput): void;
@@ -7026,13 +7209,12 @@ export interface Chart extends Drawing {
 /** A shape, connector or group of a sheet's drawing; also has the members of {@link Drawing}. Add one with
  *  `Sheet.addShape`; removing a group removes its children. */
 export interface Shape extends Drawing {
-  /** Reads the shape's anchor, geometry, text and paint. */
+  /** Reads the shape's geometry, text and paint. */
   getProperties(): ShapeProperties;
-  /** Applies the fields `patch` names, the name and anchor included; every other part of its XML is kept. See
-   *  {@link ShapePatch} for the `null` and anchor-key rules. */
-  update(patch: ShapePatch): void;
-  /** Renames the shape; duplicate names are allowed. */
-  rename(name: string): void;
+  /** Applies the fields `patch` names: the {@link ShapePatch} keys and the {@link DrawingPatch} keys (name,
+   *  description, hidden, anchor). The common keys apply first, then the shape keys; every other part of its XML
+   *  is kept. */
+  update(patch: ShapePatch & DrawingPatch): void;
   /** Makes the shape item `zOrderIndex` of `Sheet.listDrawings()`, whose order is the stacking order (0 is the
    *  back). */
   setZOrder(zOrderIndex: number): void;
@@ -7043,15 +7225,16 @@ export interface Shape extends Drawing {
 /** A table slicer, through its drawing frame; also has the members of {@link Drawing}. Add one with
  *  `Sheet.addSlicer`. Removing its table or sheet removes the slicer.
  *
- *  Unlike {@link Shape}, a slicer has no `rename` and no `snapshot`. Its name is the key that ties the drawing
- *  frame to the slicer part and cannot change, and a snapshot would have to capture the slicer cache and
+ *  Unlike {@link Shape}, a slicer cannot be renamed and has no `snapshot`. Its name is the key that ties the
+ *  drawing frame to the slicer part and cannot change, and a snapshot would have to capture the slicer cache and
  *  extension parts that live outside the drawing part. */
 export interface Slicer extends Drawing {
-  /** Reads the slicer's caption, cache, table column, layout and anchor. */
+  /** Reads the slicer's caption, cache, table column and layout. */
   getProperties(): SlicerProperties;
-  /** Applies the fields `patch` names, the anchor included; every other part of its XML is kept. See
-   *  {@link SlicerPatch} for the `null` and anchor-key rules. */
-  update(patch: SlicerPatch): void;
+  /** Applies the fields `patch` names: the {@link SlicerPatch} keys and the {@link DrawingPatch} keys except
+   *  `name` (a slicer cannot be renamed). The common keys apply first, then the slicer keys; every other part of
+   *  its XML is kept. */
+  update(patch: SlicerPatch & Omit<DrawingPatch, 'name'>): void;
   /** Makes the slicer item `zOrderIndex` of `Sheet.listDrawings()`, whose order is the stacking order (0 is the
    *  back). */
   setZOrder(zOrderIndex: number): void;
@@ -7098,7 +7281,7 @@ export interface WorkbookCtor {
    *  console.log(wb.sheet(0).getDisplayText('A1').text);
    *  wb.dispose();
    *  ``` */
-  load(bytes: Uint8Array | ArrayBuffer | ArrayBufferView): Workbook;
+  load(bytes: BytesInput): Workbook;
 }
 
 /** Options for {@link createFormulon}. Keys other than these four are ignored, and a key set to `null` is
@@ -7343,8 +7526,11 @@ export interface Formulon {
    *    blank/zero distinction. */
   getCollationClasses(values: readonly Value[], strength: CollationStrength, profileId: ProfileId): CollationClasses;
 
+  /** Every {@link ProfileId} the engine knows, in a fixed order. */
+  listProfileIds(): readonly ProfileId[];
+
   /** Sniffs the format and pixel size of PNG, JPEG, GIF or BMP bytes. */
-  getImageInfo(bytes: Uint8Array): ImageInfo;
+  getImageInfo(bytes: BytesInput): ImageInfo;
 
   /** Sets the engine's minimum structured-log severity. This is **process-wide** state, not per
    *  `Workbook`. The default is `LogLevel.Off`, under which the engine writes nothing to

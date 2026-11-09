@@ -1,5 +1,5 @@
-// Drawing-shape and sparkline-group bindings: list, insert, update and remove
-// the shapes of a sheet's drawing, and the sparkline groups of its worksheet
+// Drawing-shape and sparkline-group bindings: read, insert and update the
+// shapes of a sheet's drawing, and the sparkline groups of its worksheet
 // extension list.
 
 #include <cstddef>
@@ -24,37 +24,40 @@ fm_color_t* GroupColor(fm_sparkline_group_t& g, size_t i) {
 
 struct ShapeText {
   std::string name;
+  std::string description;
   std::string preset_geometry;
   std::string text;
 };
 
-// Reads the fields `spec` carries into a patch: an omitted key keeps, and `null` clears the four paint fields.
-fm_shape_patch_t PullShape(CheckedSpecReader& reader, const Napi::Object& spec, ShapeText& store) {
+// Reads a shape to add: the common placement keys plus the shape keys; an omitted key takes the default.
+fm_shape_spec_t PullShapeSpec(CheckedSpecReader& reader, const Napi::Object& spec, ShapeText& store) {
+  fm_shape_spec_t s = FM_STRUCT_INIT(fm_shape_spec_t);
+  s.placement = PullPlacement(reader, spec, store.name, store.description);
+  s.fill_kind = reader.I32(spec, "fillKind", FM_SHAPE_PAINT_DEFAULT);
+  s.fill_color = PullColorSpec(reader, spec, "fillColor");
+  s.line_kind = reader.I32(spec, "lineKind", FM_SHAPE_PAINT_DEFAULT);
+  s.line_color = PullColorSpec(reader, spec, "lineColor");
+  s.line_width_pt = reader.Double(spec, "lineWidthPt", 0.0);
+  s.rotation_deg = reader.Double(spec, "rotationDeg", 0.0);
+  s.text_box = reader.Bool(spec, "textBox", false) ? 1 : 0;
+  s.preset_geometry = reader.String(spec, "presetGeometry", &store.preset_geometry) ? store.preset_geometry.c_str() : nullptr;
+  s.text = reader.String(spec, "text", &store.text) ? store.text.c_str() : nullptr;
+  return s;
+}
+
+// Reads the shape fields `spec` carries into a patch: an omitted key keeps, and no key is clearable.
+fm_shape_patch_t PullShapePatch(CheckedSpecReader& reader, const Napi::Object& spec, ShapeText& store) {
   fm_shape_patch_t s = FM_STRUCT_INIT(fm_shape_patch_t);
-  s.name_op = PatchString(reader, spec, "name", false, &store.name, &s.name);
+  s.fill_kind_op = PatchI32(reader, spec, "fillKind", &s.fill_kind);
+  s.fill_color_op = PatchColor(reader, spec, "fillColor", false, &s.fill_color);
+  s.line_kind_op = PatchI32(reader, spec, "lineKind", &s.line_kind);
+  s.line_color_op = PatchColor(reader, spec, "lineColor", false, &s.line_color);
+  s.line_width_pt_op = PatchDouble(reader, spec, "lineWidthPt", &s.line_width_pt);
+  s.rotation_deg_op = PatchDouble(reader, spec, "rotationDeg", &s.rotation_deg);
+  s.text_box_op = PatchBool(reader, spec, "textBox", &s.text_box);
   s.preset_geometry_op =
       PatchString(reader, spec, "presetGeometry", false, &store.preset_geometry, &s.preset_geometry);
   s.text_op = PatchString(reader, spec, "text", false, &store.text, &s.text);
-  s.text_box_op = PatchBool(reader, spec, "textBox", &s.text_box);
-  s.anchor_kind_op = PatchI32(reader, spec, "anchorKind", &s.anchor_kind);
-  s.edit_as_op = PatchI32(reader, spec, "editAs", &s.edit_as);
-  s.from_row_op = PatchU32(reader, spec, "fromRow", &s.from_row);
-  s.from_col_op = PatchU32(reader, spec, "fromCol", &s.from_col);
-  s.from_row_offset_emu_op = PatchI64(reader, spec, "fromRowOffsetEmu", &s.from_row_offset_emu);
-  s.from_col_offset_emu_op = PatchI64(reader, spec, "fromColOffsetEmu", &s.from_col_offset_emu);
-  s.to_row_op = PatchU32(reader, spec, "toRow", &s.to_row);
-  s.to_col_op = PatchU32(reader, spec, "toCol", &s.to_col);
-  s.to_row_offset_emu_op = PatchI64(reader, spec, "toRowOffsetEmu", &s.to_row_offset_emu);
-  s.to_col_offset_emu_op = PatchI64(reader, spec, "toColOffsetEmu", &s.to_col_offset_emu);
-  s.width_emu_op = PatchI64(reader, spec, "widthEmu", &s.width_emu);
-  s.height_emu_op = PatchI64(reader, spec, "heightEmu", &s.height_emu);
-  s.fill_kind_op = PatchNullableI32(reader, spec, "fillKind", &s.fill_kind);
-  s.fill_color_op = PatchColor(reader, spec, "fillColor", true, &s.fill_color);
-  s.line_kind_op = PatchNullableI32(reader, spec, "lineKind", &s.line_kind);
-  s.line_color_op = PatchColor(reader, spec, "lineColor", true, &s.line_color);
-  s.line_width_pt_op = PatchDouble(reader, spec, "lineWidthPt", &s.line_width_pt);
-  s.rotation_deg_op = PatchDouble(reader, spec, "rotationDeg", &s.rotation_deg);
-  s.hidden_op = PatchBool(reader, spec, "hidden", &s.hidden);
   return s;
 }
 
@@ -114,52 +117,24 @@ bool PullSparklines(CheckedSpecReader& reader, const Napi::Array& array, std::ve
   return reader.ok();
 }
 
-// The JS `Shape` record of `s`.
+// The JS `Shape` record of `s`: the shape-specific fields only.
 Napi::Object ShapeToJs(Napi::Env env, const fm_shape_info_t& s) {
   Napi::Object item = Napi::Object::New(env);
   item.Set("objectId", JsNumber(env, s.object_id));
   item.Set("kind", JsNumber(env, s.kind));
-  item.Set("anchorKind", JsNumber(env, s.anchor_kind));
-  item.Set("editAs", JsNumber(env, s.edit_as));
-  item.Set("fromRow", JsNumber(env, s.from_row));
-  item.Set("fromCol", JsNumber(env, s.from_col));
-  item.Set("fromRowOffsetEmu", JsNumber(env, static_cast<double>(s.from_row_offset_emu)));
-  item.Set("fromColOffsetEmu", JsNumber(env, static_cast<double>(s.from_col_offset_emu)));
-  item.Set("toRow", JsNumber(env, s.to_row));
-  item.Set("toCol", JsNumber(env, s.to_col));
-  item.Set("toRowOffsetEmu", JsNumber(env, static_cast<double>(s.to_row_offset_emu)));
-  item.Set("toColOffsetEmu", JsNumber(env, static_cast<double>(s.to_col_offset_emu)));
-  item.Set("widthEmu", JsNumber(env, static_cast<double>(s.width_emu)));
-  item.Set("heightEmu", JsNumber(env, static_cast<double>(s.height_emu)));
-  item.Set("name", JsString(env, s.name));
-  item.Set("presetGeometry", JsString(env, s.preset_geometry));
-  item.Set("text", JsString(env, s.text));
-  item.Set("textBox", Napi::Boolean::New(env, s.text_box != 0));
-  item.Set("fillKind", JsIndexOrNull(env, s.fill_kind));
+  item.Set("fillKind", JsNumber(env, s.fill_kind));
   item.Set("fillColor", ColorSpecOrNull(env, s.fill_color));
-  item.Set("lineKind", JsIndexOrNull(env, s.line_kind));
+  item.Set("lineKind", JsNumber(env, s.line_kind));
   item.Set("lineColor", ColorSpecOrNull(env, s.line_color));
   item.Set("lineWidthPt", JsNumber(env, s.line_width_pt));
   item.Set("rotationDeg", JsNumber(env, s.rotation_deg));
-  item.Set("hidden", Napi::Boolean::New(env, s.hidden != 0));
+  item.Set("textBox", Napi::Boolean::New(env, s.text_box != 0));
+  item.Set("presetGeometry", JsString(env, s.preset_geometry));
+  item.Set("text", JsString(env, s.text));
   return item;
 }
 
 }  // namespace
-
-Napi::Value Workbook::ListShapes(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return ThrowInvalidHandle(env);
-  }
-  Napi::Array arr = Napi::Array::New(env);
-  const uint32_t sheet = ArgU32(info, 0);
-  const fm_status_t rc = CollectList<fm_shape_info_t>(
-      arr, [&](size_t* n) { return fm_sheet_get_shape_count(handle_, sheet, n); },
-      [&](size_t i, fm_shape_info_t* s) { return fm_sheet_get_shape_at(handle_, sheet, i, s); },
-      [&](const fm_shape_info_t& s) { return ShapeToJs(env, s); });
-  return ValueOrThrow(env, rc, arr);
-}
 
 Napi::Value Workbook::GetShape(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
@@ -179,7 +154,7 @@ Napi::Value Workbook::InsertShape(const Napi::CallbackInfo& info) {
   }
   CheckedSpecReader reader(env);
   ShapeText store;
-  const fm_shape_patch_t shape = PullShape(reader, ArgObject(info, 1), store);
+  const fm_shape_spec_t shape = PullShapeSpec(reader, ArgObject(info, 1), store);
   if (!reader.ok()) {
     return env.Undefined();
   }
@@ -195,15 +170,11 @@ Napi::Value Workbook::UpdateShape(const Napi::CallbackInfo& info) {
   }
   CheckedSpecReader reader(env);
   ShapeText store;
-  const fm_shape_patch_t shape = PullShape(reader, ArgObject(info, 2), store);
+  const fm_shape_patch_t shape = PullShapePatch(reader, ArgObject(info, 2), store);
   if (!reader.ok()) {
     return env.Undefined();
   }
   return ValueOrThrow(env, fm_sheet_update_shape(handle_, ArgU32(info, 0), ArgU32(info, 1), &shape), env.Undefined());
-}
-
-Napi::Value Workbook::RemoveShape(const Napi::CallbackInfo& info) {
-  return InvokeSheetCall(info, &fm_sheet_remove_shape);
 }
 
 Napi::Value Workbook::GetSparklineGroupCount(const Napi::CallbackInfo& info) {
@@ -229,6 +200,7 @@ Napi::Value Workbook::GetSparklineGroup(const Napi::CallbackInfo& info) {
     return ThrowStatus(env, rc);
   }
   Napi::Object item = Napi::Object::New(env);
+  item.Set("id", JsString(env, g.id));
   for (size_t c = 0; c < 8U; ++c) {
     item.Set(kSparklineColorKeys[c], ColorSpecOrNull(env, *GroupColor(g, c)));
   }
@@ -287,10 +259,10 @@ Napi::Value Workbook::AddSparklineGroup(const Napi::CallbackInfo& info) {
   }
   // No array, or an empty one, reaches the core as zero sparklines and is rejected there.
   fm_sparkline_t none{};
-  std::size_t out = 0;
+  const char* id = nullptr;
   const fm_status_t rc = fm_sheet_add_sparkline_group(handle_, ArgU32(info, 0), &group,
-                                                      items.empty() ? &none : items.data(), items.size(), &out);
-  return ValueOrThrow(env, rc, Napi::Number::New(env, static_cast<double>(out)));
+                                                      items.empty() ? &none : items.data(), items.size(), &id);
+  return ValueOrThrow(env, rc, JsString(env, id));
 }
 
 namespace {
@@ -351,12 +323,16 @@ Napi::Value Workbook::UpdateSparklineGroup(const Napi::CallbackInfo& info) {
   if (!reader.ok()) {
     return env.Undefined();
   }
-  return ValueOrThrow(env, fm_sheet_update_sparkline_group(handle_, ArgU32(info, 0), ArgU32(info, 1), &patch),
+  const std::string id = ArgString(info, 1);
+  return ValueOrThrow(env, fm_sheet_update_sparkline_group(handle_, ArgU32(info, 0), id.c_str(), &patch),
                       env.Undefined());
 }
 
 Napi::Value Workbook::RemoveSparklineGroup(const Napi::CallbackInfo& info) {
-  return InvokeSheetCall(info, &fm_sheet_remove_sparkline_group);
+  return StatusCall(info, [&](fm_workbook_t* handle) {
+    const std::string id = ArgString(info, 1);
+    return fm_sheet_remove_sparkline_group(handle, ArgU32(info, 0), id.c_str());
+  });
 }
 
 }  // namespace formulon_node

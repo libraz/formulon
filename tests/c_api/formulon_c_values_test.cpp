@@ -36,8 +36,8 @@ TEST(FormulonCApi, CreateEmptyAndAddSheet) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_empty(&wb.handle), 0);
   EXPECT_EQ(count_of(fm_workbook_get_sheet_count, wb.handle), 0U);
-  EXPECT_EQ(fm_workbook_add_sheet(wb.handle, "Data", ignored_index()), 0);
-  EXPECT_EQ(fm_workbook_add_sheet(wb.handle, "Stats", ignored_index()), 0);
+  EXPECT_EQ(fm_workbook_add_sheet(wb.handle, "Data", append_position(wb.handle), ignored_index()), 0);
+  EXPECT_EQ(fm_workbook_add_sheet(wb.handle, "Stats", append_position(wb.handle), ignored_index()), 0);
   EXPECT_EQ(count_of(fm_workbook_get_sheet_count, wb.handle), 2U);
 
   const char* n0 = nullptr;
@@ -50,16 +50,16 @@ TEST(FormulonCApi, CreateEmptyAndAddSheet) {
 TEST(FormulonCApi, AddSheetValidatesNameAndRejectsDuplicate) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_empty(&wb.handle), 0);
-  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Data", ignored_index()), 0);
+  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Data", append_position(wb.handle), ignored_index()), 0);
   // Duplicate (case-insensitive), forbidden character, and empty name are
   // all rejected now that the public add surface shares the rename
   // validator instead of silently accepting anything.
-  EXPECT_NE(fm_workbook_add_sheet(wb.handle, "data", ignored_index()), 0);
-  EXPECT_NE(fm_workbook_add_sheet(wb.handle, "a/b", ignored_index()), 0);
-  EXPECT_NE(fm_workbook_add_sheet(wb.handle, "", ignored_index()), 0);
+  EXPECT_NE(fm_workbook_add_sheet(wb.handle, "data", append_position(wb.handle), ignored_index()), 0);
+  EXPECT_NE(fm_workbook_add_sheet(wb.handle, "a/b", append_position(wb.handle), ignored_index()), 0);
+  EXPECT_NE(fm_workbook_add_sheet(wb.handle, "", append_position(wb.handle), ignored_index()), 0);
   EXPECT_EQ(count_of(fm_workbook_get_sheet_count, wb.handle), 1U);
   // A valid, distinct name still succeeds.
-  EXPECT_EQ(fm_workbook_add_sheet(wb.handle, "Stats", ignored_index()), 0);
+  EXPECT_EQ(fm_workbook_add_sheet(wb.handle, "Stats", append_position(wb.handle), ignored_index()), 0);
   EXPECT_EQ(count_of(fm_workbook_get_sheet_count, wb.handle), 2U);
 }
 TEST(FormulonCApi, NumberLiteralRoundTrip) {
@@ -410,12 +410,79 @@ TEST(FormulonCApi, DefinedNameScopeOutsideTheSheetsIsSheetIndexOutOfRange) {
 TEST(FormulonCApi, HiddenSheetRefusalsArePreconditionFailures) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Hidden", ignored_index()), 0);
-  fm_sheet_view_patch_t hide = FM_STRUCT_INIT(fm_sheet_view_patch_t);
-  hide.visibility_op = FM_PATCH_OP_SET;
-  hide.visibility = FM_SHEET_VISIBILITY_HIDDEN;
-  ASSERT_EQ(fm_sheet_update_view(wb.handle, 1, &hide), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Hidden", append_position(wb.handle), ignored_index()), 0);
+  ASSERT_EQ(fm_sheet_set_visibility(wb.handle, 1, FM_SHEET_VISIBILITY_HIDDEN), 0) << fm_get_last_error_message();
   EXPECT_EQ(fm_workbook_set_active_sheet(wb.handle, 1), FM_STATUS_PRECONDITION_FAILED);
   EXPECT_EQ(fm_workbook_remove_sheet(wb.handle, 0), FM_STATUS_PRECONDITION_FAILED);
   EXPECT_EQ(count_of(fm_workbook_get_sheet_count, wb.handle), 2U);
+}
+
+TEST(FormulonCApi, SetValueStoresEveryLiteralKind) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  fm_value_t value{};
+  value.kind = FM_VALUE_KIND_NUMBER;
+  value.u.number = 2.5;
+  ASSERT_EQ(fm_sheet_set_value(wb.handle, 0, 0, 0, &value), 0);
+  value.kind = FM_VALUE_KIND_BOOL;
+  value.u.boolean = 1;
+  ASSERT_EQ(fm_sheet_set_value(wb.handle, 0, 1, 0, &value), 0);
+  value.kind = FM_VALUE_KIND_TEXT;
+  value.u.text = "hello";
+  ASSERT_EQ(fm_sheet_set_value(wb.handle, 0, 2, 0, &value), 0);
+  value.kind = FM_VALUE_KIND_ERROR;
+  value.u.error_code = static_cast<fm_error_code_t>(formulon::ErrorCode::Div0);
+  ASSERT_EQ(fm_sheet_set_value(wb.handle, 0, 3, 0, &value), 0);
+
+  fm_value_t read{};
+  ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, 0, 0, &read), 0);
+  EXPECT_EQ(read.kind, FM_VALUE_KIND_NUMBER);
+  EXPECT_DOUBLE_EQ(read.u.number, 2.5);
+  ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, 1, 0, &read), 0);
+  EXPECT_EQ(read.kind, FM_VALUE_KIND_BOOL);
+  EXPECT_EQ(read.u.boolean, 1);
+  ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, 2, 0, &read), 0);
+  EXPECT_EQ(read.kind, FM_VALUE_KIND_TEXT);
+  EXPECT_STREQ(read.u.text, "hello");
+  ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, 3, 0, &read), 0);
+  EXPECT_EQ(read.kind, FM_VALUE_KIND_ERROR);
+  EXPECT_EQ(read.u.error_code, static_cast<fm_error_code_t>(formulon::ErrorCode::Div0));
+
+  value.kind = FM_VALUE_KIND_BLANK;
+  ASSERT_EQ(fm_sheet_set_value(wb.handle, 0, 0, 0, &value), 0);
+  ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, 0, 0, &read), 0);
+  EXPECT_EQ(read.kind, FM_VALUE_KIND_BLANK);
+}
+
+TEST(FormulonCApi, SetValueRoundTripsAReadValue) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  ASSERT_EQ(fm_sheet_set_text(wb.handle, 0, 0, 0, "kept"), 0);
+  fm_value_t read{};
+  ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, 0, 0, &read), 0);
+  ASSERT_EQ(fm_sheet_set_value(wb.handle, 0, 5, 5, &read), 0);
+  fm_value_t copy{};
+  ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, 5, 5, &copy), 0);
+  EXPECT_EQ(copy.kind, FM_VALUE_KIND_TEXT);
+  EXPECT_STREQ(copy.u.text, "kept");
+}
+
+TEST(FormulonCApi, SetValueRejectsNonLiteralKindsAndBadArguments) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  fm_value_t value{};
+  for (const int32_t kind : {int32_t{FM_VALUE_KIND_ARRAY}, int32_t{FM_VALUE_KIND_REF}, int32_t{FM_VALUE_KIND_LAMBDA},
+                             int32_t{99}, int32_t{-1}}) {
+    value.kind = kind;
+    EXPECT_EQ(fm_sheet_set_value(wb.handle, 0, 0, 0, &value), FM_STATUS_INVALID_ARGUMENT) << kind;
+  }
+  value.kind = FM_VALUE_KIND_TEXT;
+  value.u.text = nullptr;
+  EXPECT_EQ(fm_sheet_set_value(wb.handle, 0, 0, 0, &value), FM_STATUS_BINDING_NULL_POINTER);
+  EXPECT_EQ(fm_sheet_set_value(wb.handle, 0, 0, 0, nullptr), FM_STATUS_BINDING_NULL_POINTER);
+  EXPECT_EQ(fm_sheet_set_value(nullptr, 0, 0, 0, &value), FM_STATUS_BINDING_NULL_POINTER);
+  value.kind = FM_VALUE_KIND_NUMBER;
+  value.u.number = 1.0;
+  EXPECT_EQ(fm_sheet_set_value(wb.handle, 4, 0, 0, &value), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(fm_sheet_set_value(wb.handle, 0, 2000000, 0, &value), FM_STATUS_INVALID_ARGUMENT);
 }

@@ -9,8 +9,8 @@ from unittest import mock
 import formulon
 from formulon import (
     CellRect,
+    CfCellIsRuleInput,
     ComparisonOperator,
-    ConditionalFormatInput,
     DataValidationInput,
     ReadDiagnostics,
     SaveDiagnostics,
@@ -82,11 +82,8 @@ class PackageDiagnosticsTests(unittest.TestCase):
                 ),
             )
             wb.sheet(0).add_cf_rule(
-                ConditionalFormatInput(
-                    ranges=[CellRect(0, 0, 0, 0)],
-                    type=1,
-                    operator=ComparisonOperator.GREATER_THAN,
-                    formula1="10",
+                CfCellIsRuleInput(
+                    ranges=[CellRect(0, 0, 0, 0)], operator=ComparisonOperator.GREATER_THAN, formula1="10"
                 ),
             )
 

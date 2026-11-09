@@ -285,3 +285,34 @@ TEST(FormulonCApiStyles, DxfFontWithoutSizeRoundTripsAndCellFontKeepsSize) {
   ASSERT_NE(fonts_end, std::string::npos);
   EXPECT_NE(xml.rfind("<sz val=\"14\"/>", fonts_end), std::string::npos);
 }
+
+TEST(FormulonCApiStyles, SetDxfOverwritesTheSlotInPlace) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+
+  fm_dxf_t dxf{};
+  dxf.has_fill = 1;
+  dxf.fill.pattern = 1;
+  dxf.fill.foreground = RgbColor(0xFFFFFF00U);
+  std::uint32_t index = 0xFFFFFFFFU;
+  ASSERT_EQ(fm_workbook_add_dxf(wb.handle, &dxf, &index), 0);
+
+  fm_dxf_t replacement{};
+  replacement.has_font = 1;
+  replacement.font.bold = 1;
+  replacement.number_format = "0.00";
+  ASSERT_EQ(fm_workbook_set_dxf(wb.handle, index, &replacement), 0) << fm_get_last_error_message();
+
+  fm_dxf_t out{};
+  ASSERT_EQ(fm_workbook_get_dxf_at(wb.handle, index, &out), 0);
+  EXPECT_EQ(out.has_font, 1);
+  EXPECT_EQ(out.font.bold, 1);
+  EXPECT_EQ(out.has_fill, 0);
+  ASSERT_NE(out.number_format, nullptr);
+  EXPECT_STREQ(out.number_format, "0.00");
+  std::size_t count = 0;
+  ASSERT_EQ(fm_workbook_get_dxf_count(wb.handle, &count), 0);
+  EXPECT_EQ(count, 1U);
+
+  EXPECT_EQ(fm_workbook_set_dxf(wb.handle, 1U, &replacement), FM_STATUS_INDEX_OUT_OF_RANGE);
+}

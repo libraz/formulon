@@ -13,10 +13,9 @@ from formulon import (
     AutoFilterColumn,
     CellRect,
     CfCell,
-    CfRuleType,
+    CfTimePeriodRuleInput,
     Color,
     ColorKind,
-    ConditionalFormatInput,
     DatePeriod,
     DxfInput,
     FilterKind,
@@ -288,9 +287,7 @@ class EvaluateCfRangeOptionTests(unittest.TestCase):
         sheet.set_number(0, 0, 45000.0)
         dxf = wb.ooxml.add_dxf(DxfInput())
         sheet.add_cf_rule(
-            ConditionalFormatInput(
-                ranges=[CellRect(0, 0, 0, 0)], type=CfRuleType.TIME_PERIOD, time_period=DatePeriod.TODAY, dxf_index=dxf
-            )
+            CfTimePeriodRuleInput(ranges=[CellRect(0, 0, 0, 0)], time_period=DatePeriod.TODAY, dxf_index=dxf)
         )
         return sheet
 

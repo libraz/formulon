@@ -30,6 +30,34 @@
       ]
     },
     {
+      "id": "cf_rule_update",
+      "kind": "patch",
+      "scope": "sheet",
+      "record": "ConditionalFormat",
+      "get": {
+        "op": "cf_rule.get",
+        "js": "getCfRule",
+        "py": "get_cf_rule"
+      },
+      "set": {
+        "op": "cf_rule.update",
+        "js": "updateCfRule",
+        "py": "update_cf_rule",
+        "ref_args": [
+          0,
+          "cfRule"
+        ]
+      },
+      "create": [
+        "cf_rule.add"
+      ],
+      "surfaces": [
+        "wasm",
+        "native",
+        "py"
+      ]
+    },
+    {
       "id": "chart_legend",
       "kind": "patch",
       "scope": "sheet",
@@ -466,14 +494,18 @@
       "scope": "sheet",
       "record": "SparklineGroup",
       "get": {
-        "op": "sparkline_group.get",
+        "op": "sparkline_group.get_at",
         "js": "getSparklineGroup",
         "py": "get_sparkline_group"
       },
       "set": {
         "op": "sparkline_group.update",
         "js": "updateSparklineGroup",
-        "py": "update_sparkline_group"
+        "py": "update_sparkline_group",
+        "ref_args": [
+          0,
+          "sparklineGroup"
+        ]
       },
       "create": [
         "sparkline_group.add"
@@ -579,6 +611,34 @@
       ]
     },
     {
+      "id": "validation_update",
+      "kind": "patch",
+      "scope": "sheet",
+      "record": "DataValidation",
+      "get": {
+        "op": "validation.get_at",
+        "js": "getValidation",
+        "py": "get_validation"
+      },
+      "set": {
+        "op": "validation.update",
+        "js": "updateValidation",
+        "py": "update_validation",
+        "ref_args": [
+          0,
+          "validation"
+        ]
+      },
+      "create": [
+        "validation.add"
+      ],
+      "surfaces": [
+        "wasm",
+        "native",
+        "py"
+      ]
+    },
+    {
       "id": "cf_rule",
       "kind": "readd",
       "scope": "sheet",
@@ -652,7 +712,7 @@
         ]
       },
       "set": {
-        "op": "hyperlink.add",
+        "op": "hyperlink.set",
         "js": "setHyperlink",
         "py": "set_hyperlink",
         "cell_args": [
@@ -676,7 +736,7 @@
       "scope": "sheet",
       "record": "DataValidation",
       "get": {
-        "op": "validation.get",
+        "op": "validation.get_at",
         "js": "getValidation",
         "py": "get_validation"
       },

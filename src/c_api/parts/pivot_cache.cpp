@@ -524,6 +524,39 @@ extern "C" fm_status_t fm_workbook_get_pivot_cache_record_count(const fm_workboo
   return 0;
 }
 
+extern "C" fm_status_t fm_workbook_get_pivot_cache_record_value(const fm_workbook_t* wb, std::uint32_t cache_id,
+                                                                std::size_t record_index, std::size_t field_index,
+                                                                fm_value_t* out) {
+  clear_last_error();
+  if (wb == nullptr || out == nullptr) {
+    return null_argument();
+  }
+  const formulon::pivot::PivotCache* cache = nullptr;
+  if (fm_status_t rc = resolve_cache(wb, cache_id, &cache); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_index(record_index, cache->records().size(), "record_index"); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_index(field_index, cache->fields().size(), "field_index"); rc != 0) {
+    return rc;
+  }
+  const formulon::pivot::PivotCacheRecord& record = cache->records()[record_index];
+  formulon::Value value = formulon::Value::blank();
+  if (field_index < record.cells.size()) {
+    value = record.cells[field_index];
+    const bool indexed = field_index < record.cell_is_index.size() && record.cell_is_index[field_index];
+    if (indexed && value.is_number()) {
+      const std::vector<formulon::Value>& shared = cache->fields()[field_index].shared_items;
+      const double slot = value.as_number();
+      value = slot >= 0.0 && slot < static_cast<double>(shared.size()) ? shared[static_cast<std::size_t>(slot)]
+                                                                       : formulon::Value::blank();
+    }
+  }
+  value_to_fm(value, fresh_read_scratch(wb), out);
+  return 0;
+}
+
 extern "C" fm_status_t fm_workbook_add_pivot_cache_record(fm_workbook_t* wb, std::uint32_t cache_id,
                                                           std::size_t* out_record_index) {
   clear_last_error();

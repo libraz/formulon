@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import io
 import re
 import unittest
@@ -15,9 +16,11 @@ from formulon import (
     Color,
     ColorKind,
     Comment,
+    DrawingAnchorInput,
     DrawingObjectKind,
     FormulonError,
     InvalidArgumentError,
+    NotFoundError,
     Shape,
     ShapeInput,
     ShapePaint,
@@ -34,11 +37,7 @@ from formulon import (
 
 def _box(**overrides):
     fields = dict(
-        anchor_kind=AnchorKind.TWO_CELL,
-        from_row=1,
-        from_col=1,
-        to_row=5,
-        to_col=4,
+        anchor=DrawingAnchorInput(kind=AnchorKind.TWO_CELL, from_row=1, from_col=1, to_row=5, to_col=4),
         name="Box",
         preset_geometry="roundRect",
         text="Hello\nWorld",
@@ -58,11 +57,13 @@ class ShapeTests(unittest.TestCase):
             rect = wb.sheet(0).add_shape(ShapeInput(**_box()))
             line = wb.sheet(0).add_shape(
                 ShapeInput(
-                    anchor_kind=AnchorKind.ONE_CELL,
-                    from_row=10,
-                    from_col_offset_emu=500,
-                    width_emu=914400,
-                    height_emu=0,
+                    anchor=DrawingAnchorInput(
+                        kind=AnchorKind.ONE_CELL,
+                        from_row=10,
+                        from_col_offset_emu=500,
+                        width_emu=914400,
+                        height_emu=12700,
+                    ),
                     preset_geometry="line",
                     line_kind=ShapePaint.SOLID,
                     line_color="#00FF00",
@@ -75,42 +76,121 @@ class ShapeTests(unittest.TestCase):
                 handles = loaded.sheet(0).list_shapes()
                 self.assertEqual(len(handles), 2)
                 shapes = [h.get_properties() for h in handles]
+                common = [h.get_drawing_properties() for h in handles]
                 self.assertIsInstance(shapes[0], ShapeProperties)
                 self.assertEqual(shapes[0].object_id, rect.object_id)
                 self.assertEqual(shapes[0].kind, DrawingObjectKind.SHAPE)
                 self.assertEqual(
-                    (shapes[0].name, shapes[0].preset_geometry, shapes[0].text), ("Box", "roundRect", "Hello\nWorld")
+                    (common[0].name, shapes[0].preset_geometry, shapes[0].text), ("Box", "roundRect", "Hello\nWorld")
                 )
                 self.assertEqual(
                     (shapes[0].fill_kind, shapes[0].fill_color),
                     (ShapePaint.SOLID, Color(ColorKind.RGB, argb=0xFFFF0000)),
                 )
                 self.assertEqual(shapes[0].line_kind, ShapePaint.NONE)
-                self.assertEqual((shapes[0].rotation_deg, shapes[0].hidden, shapes[0].text_box), (15.0, False, False))
-                self.assertEqual((shapes[0].from_row, shapes[0].to_row, shapes[0].to_col), (1, 5, 4))
+                self.assertEqual((shapes[0].rotation_deg, common[0].hidden, shapes[0].text_box), (15.0, False, False))
+                self.assertEqual(
+                    (common[0].anchor.from_row, common[0].anchor.to_row, common[0].anchor.to_col), (1, 5, 4)
+                )
                 self.assertEqual(shapes[1].kind, DrawingObjectKind.CONNECTOR)
                 self.assertEqual(
-                    (shapes[1].from_col_offset_emu, shapes[1].width_emu, shapes[1].line_color),
+                    (common[1].anchor.from_col_offset_emu, common[1].anchor.width_emu, shapes[1].line_color),
                     (500, 914400, Color(ColorKind.RGB, argb=0xFF00FF00)),
                 )
                 self.assertEqual(shapes[1].line_width_pt, 1.5)
 
                 loaded.sheet(0).shape(rect.object_id).update(name="Renamed", hidden=True, fill_kind=ShapePaint.NONE)
-                loaded.sheet(0).insert_rows(0, 3)
-                moved = loaded.sheet(0).list_shapes()[0].get_properties()
-                self.assertEqual((moved.name, moved.hidden, moved.fill_kind), ("Renamed", True, ShapePaint.NONE))
+                loaded.sheet(0).insert_rows(0, 2)
+                moved_handle = loaded.sheet(0).list_shapes()[0]
+                moved = moved_handle.get_properties()
+                moved_common = moved_handle.get_drawing_properties()
+                self.assertEqual(
+                    (moved_common.name, moved_common.hidden, moved.fill_kind), ("Renamed", True, ShapePaint.NONE)
+                )
                 self.assertEqual((moved.preset_geometry, moved.rotation_deg), ("roundRect", 15.0))
-                self.assertEqual((moved.from_row, moved.to_row), (4, 8))
+                self.assertEqual((moved_common.anchor.from_row, moved_common.anchor.to_row), (4, 8))
 
                 loaded.sheet(0).remove_drawing(rect.object_id)
                 self.assertEqual([s.object_id for s in loaded.sheet(0).list_shapes()], [line.object_id])
 
+    def test_a_shape_without_an_anchor_kind_is_two_cell_and_has_no_flat_keys(self) -> None:
+        with Workbook.create_default() as wb:
+            shape = wb.sheet(0).add_shape(
+                ShapeInput(anchor=DrawingAnchorInput(from_row=1, from_col=1, to_row=4, to_col=4))
+            )
+            anchor = shape.get_drawing_properties().anchor
+            self.assertEqual(
+                (anchor.kind, anchor.from_row, anchor.from_col, anchor.to_row, anchor.to_col),
+                (AnchorKind.TWO_CELL, 1, 1, 4, 4),
+            )
+            self.assertEqual(shape.get_properties().fill_kind, ShapePaint.DEFAULT)
+            self.assertEqual(shape.get_properties().line_kind, ShapePaint.DEFAULT)
+            for flat in ("anchor_kind", "from_row", "from_col", "to_row", "to_col", "width_emu", "height_emu"):
+                with self.subTest(key=flat):
+                    with self.assertRaises(TypeError):
+                        ShapeInput(**{flat: 1})  # type: ignore[arg-type]
+                    with self.assertRaises(TypeError):
+                        shape.update(**{flat: 1})  # type: ignore[arg-type]
+            names = {f.name for f in dataclasses.fields(ShapeProperties)}
+            self.assertFalse(names & {"name", "description", "hidden", "from_row", "anchor_kind", "width_emu"})
+
+    def test_anchor_update_merges_per_key_and_keeps_the_other_corners(self) -> None:
+        with Workbook.create_default() as wb:
+            shape = wb.sheet(0).add_shape(ShapeInput(**_box()))
+            shape.update(anchor=DrawingAnchorInput(to_col=6))
+            anchor = shape.get_drawing_properties().anchor
+            self.assertEqual(
+                (anchor.kind, anchor.from_row, anchor.from_col, anchor.to_row, anchor.to_col),
+                (AnchorKind.TWO_CELL, 1, 1, 5, 6),
+            )
+            shape.update(anchor=DrawingAnchorInput(from_row=3))
+            anchor = shape.get_drawing_properties().anchor
+            self.assertEqual(
+                (anchor.kind, anchor.from_row, anchor.from_col, anchor.to_row), (AnchorKind.TWO_CELL, 3, 1, 5)
+            )
+
+    def test_common_keys_update_before_the_shape_keys(self) -> None:
+        with Workbook.create_default() as wb:
+            shape = wb.sheet(0).add_shape(ShapeInput(**_box()))
+            shape.update(name="N", description="D", hidden=True, text="changed", rotation_deg=30.0)
+            common = shape.get_drawing_properties()
+            self.assertEqual((common.name, common.description, common.hidden), ("N", "D", True))
+            self.assertEqual((shape.get_properties().text, shape.get_properties().rotation_deg), ("changed", 30.0))
+            self.assertEqual(shape.name, "N")
+            # Every argument is checked before anything changes.
+            with self.assertRaises(TypeError):
+                shape.update(name="M", text=None)  # type: ignore[arg-type]
+            self.assertEqual(shape.name, "N")
+
+    def test_a_shape_paint_default_is_a_real_state_and_a_patch_removes_the_own_paint(self) -> None:
+        with Workbook.create_default() as wb:
+            shape = wb.sheet(0).add_shape(ShapeInput(**_box()))
+            self.assertEqual(shape.get_properties().fill_kind, ShapePaint.SOLID)
+            shape.update(fill_kind=ShapePaint.DEFAULT, line_kind=ShapePaint.DEFAULT)
+            props = shape.get_properties()
+            self.assertEqual((props.fill_kind, props.line_kind), (ShapePaint.DEFAULT, ShapePaint.DEFAULT))
+            self.assertEqual((props.fill_color, props.line_color), (None, None))
+            self.assertEqual((ShapePaint.DEFAULT, ShapePaint.SOLID, ShapePaint.NONE, ShapePaint.OTHER), (0, 1, 2, 3))
+
+    def test_a_shape_and_a_group_member_are_removed_by_the_one_remover(self) -> None:
+        with Workbook.create_default() as wb:
+            shape = wb.sheet(0).add_shape(ShapeInput(**_box()))
+            self.assertEqual([d.object_id for d in wb.sheet(0).list_drawings()], [shape.object_id])
+            wb.sheet(0).remove_drawing(shape)
+            self.assertEqual(wb.sheet(0).list_drawings(), [])
+            with self.assertRaises(NotFoundError):
+                shape.update(name="x")
+            with self.assertRaises(NotFoundError):
+                shape.name
+            with self.assertRaises(NotFoundError):
+                wb.sheet(0).remove_drawing(shape.object_id)
+
     def test_arguments_are_validated(self) -> None:
         with Workbook.create_default() as wb:
             for bad in (
-                _box(anchor_kind=9),
+                _box(anchor=DrawingAnchorInput(kind=9, from_row=1, from_col=1, to_row=5, to_col=4)),
                 _box(fill_kind=ShapePaint.OTHER),
-                _box(to_row=0),
+                _box(anchor=DrawingAnchorInput(kind=AnchorKind.TWO_CELL, from_row=1, from_col=1, to_row=0, to_col=4)),
                 _box(preset_geometry='a"/>'),
             ):
                 with self.assertRaises(FormulonError):
@@ -173,7 +253,7 @@ class SparklineGroupTests(unittest.TestCase):
                 )
                 self.assertEqual((second.type, second.line_weight), (SparklineType.LINE, 0.75))
 
-                loaded.sheet(0).insert_rows(0, 2)
+                loaded.sheet(0).insert_rows(0, 1)
                 self.assertEqual(
                     loaded.sheet(0).list_sparkline_groups()[0].sparklines[1],
                     Sparkline(SheetRect(0, CellRect(3, 0, 3, 3)), CellAddress(3, 5)),

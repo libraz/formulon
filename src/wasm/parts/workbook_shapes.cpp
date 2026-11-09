@@ -1,7 +1,7 @@
 //
-// JsWorkbook drawing-shape and sparkline-group surface: listing, inserting,
-// updating and removing the shapes of a sheet's drawing, and the sparkline
-// groups of its worksheet extension list.
+// JsWorkbook drawing-shape and sparkline-group surface: reading, inserting and
+// updating the shapes of a sheet's drawing, and the sparkline groups of its
+// worksheet extension list.
 
 #include <emscripten/val.h>
 
@@ -31,57 +31,32 @@ emscripten::val shape_to_val(const fm_shape_info_t& s) {
   emscripten::val o = emscripten::val::object();
   o.set("objectId", s.object_id);
   o.set("kind", s.kind);
-  o.set("anchorKind", s.anchor_kind);
-  o.set("editAs", s.edit_as);
-  o.set("fromRow", s.from_row);
-  o.set("fromCol", s.from_col);
-  o.set("fromRowOffsetEmu", static_cast<double>(s.from_row_offset_emu));
-  o.set("fromColOffsetEmu", static_cast<double>(s.from_col_offset_emu));
-  o.set("toRow", s.to_row);
-  o.set("toCol", s.to_col);
-  o.set("toRowOffsetEmu", static_cast<double>(s.to_row_offset_emu));
-  o.set("toColOffsetEmu", static_cast<double>(s.to_col_offset_emu));
-  o.set("widthEmu", static_cast<double>(s.width_emu));
-  o.set("heightEmu", static_cast<double>(s.height_emu));
-  js_set_cstr_fields(o, {{"name", s.name}, {"presetGeometry", s.preset_geometry}, {"text", s.text}});
+  js_set_cstr_fields(o, {{"presetGeometry", s.preset_geometry}, {"text", s.text}});
   o.set("textBox", s.text_box != 0);
-  js_set_index_or_null(o, "fillKind", s.fill_kind);
+  o.set("fillKind", s.fill_kind);
   o.set("fillColor", js_color_spec_or_null(s.fill_color));
-  js_set_index_or_null(o, "lineKind", s.line_kind);
+  o.set("lineKind", s.line_kind);
   o.set("lineColor", js_color_spec_or_null(s.line_color));
   o.set("lineWidthPt", s.line_width_pt);
   o.set("rotationDeg", s.rotation_deg);
-  o.set("hidden", s.hidden != 0);
   return o;
 }
 
 struct ShapeText {
   std::string name;
+  std::string description;
   std::string preset_geometry;
   std::string text;
 };
 
-/// Reads the fields `spec` carries; an omitted field is `KEEP`, `null` is `CLEAR` (accepted on the four paint fields).
-fm_shape_patch_t pull_shape(JsNarrowNumericReader& reader, const emscripten::val& spec, ShapeText& store) {
+/// Reads the shape fields `spec` carries into a patch; an omitted field is `KEEP`. No shape field can be cleared,
+/// so `null` reaches the core as `CLEAR` and is refused there.
+fm_shape_patch_t pull_shape_patch(JsNarrowNumericReader& reader, const emscripten::val& spec, ShapeText& store) {
   fm_shape_patch_t s = FM_STRUCT_INIT(fm_shape_patch_t);
-  const auto text = [&](const char* key, std::string& storage, fm_patch_op_t* op, const char** value) {
-    const std::string field = std::string("shape.") + key;
-    js_patch_string(reader, spec, key, field.c_str(), false, storage, op, value);
-  };
-  const auto u32 = [&](const char* key, fm_patch_op_t* op, uint32_t* value) {
-    const std::string field = std::string("shape.") + key;
-    js_patch_value(reader, spec, key, field.c_str(), op, value,
-                   [&](const emscripten::val& v) { return reader.u32_value(v, 0U, field.c_str()); });
-  };
   const auto i32 = [&](const char* key, fm_patch_op_t* op, int32_t* value) {
     const std::string field = std::string("shape.") + key;
     js_patch_value(reader, spec, key, field.c_str(), op, value,
                    [&](const emscripten::val& v) { return reader.i32_value(v, 0, field.c_str()); });
-  };
-  const auto i64 = [&](const char* key, fm_patch_op_t* op, int64_t* value) {
-    const std::string field = std::string("shape.") + key;
-    js_patch_value(reader, spec, key, field.c_str(), op, value,
-                   [&](const emscripten::val&) { return reader.i64(spec, key, 0, field.c_str()); });
   };
   const auto f64 = [&](const char* key, fm_patch_op_t* op, double* value) {
     const std::string field = std::string("shape.") + key;
@@ -93,31 +68,34 @@ fm_shape_patch_t pull_shape(JsNarrowNumericReader& reader, const emscripten::val
     js_patch_value(reader, spec, key, field.c_str(), op, value,
                    [&](const emscripten::val& v) { return js_pull_color_spec_value(v, field.c_str(), &reader); });
   };
-  text("name", store.name, &s.name_op, &s.name);
-  text("presetGeometry", store.preset_geometry, &s.preset_geometry_op, &s.preset_geometry);
-  text("text", store.text, &s.text_op, &s.text);
+  js_patch_string(reader, spec, "presetGeometry", "shape.presetGeometry", false, store.preset_geometry,
+                  &s.preset_geometry_op, &s.preset_geometry);
+  js_patch_string(reader, spec, "text", "shape.text", false, store.text, &s.text_op, &s.text);
   js_patch_value(reader, spec, "textBox", "shape.textBox", &s.text_box_op, &s.text_box,
                  [&](const emscripten::val& v) { return reader.boolean_value(v, false) ? 1 : 0; });
-  i32("anchorKind", &s.anchor_kind_op, &s.anchor_kind);
-  i32("editAs", &s.edit_as_op, &s.edit_as);
-  u32("fromRow", &s.from_row_op, &s.from_row);
-  u32("fromCol", &s.from_col_op, &s.from_col);
-  i64("fromRowOffsetEmu", &s.from_row_offset_emu_op, &s.from_row_offset_emu);
-  i64("fromColOffsetEmu", &s.from_col_offset_emu_op, &s.from_col_offset_emu);
-  u32("toRow", &s.to_row_op, &s.to_row);
-  u32("toCol", &s.to_col_op, &s.to_col);
-  i64("toRowOffsetEmu", &s.to_row_offset_emu_op, &s.to_row_offset_emu);
-  i64("toColOffsetEmu", &s.to_col_offset_emu_op, &s.to_col_offset_emu);
-  i64("widthEmu", &s.width_emu_op, &s.width_emu);
-  i64("heightEmu", &s.height_emu_op, &s.height_emu);
   i32("fillKind", &s.fill_kind_op, &s.fill_kind);
   color("fillColor", &s.fill_color_op, &s.fill_color);
   i32("lineKind", &s.line_kind_op, &s.line_kind);
   color("lineColor", &s.line_color_op, &s.line_color);
   f64("lineWidthPt", &s.line_width_pt_op, &s.line_width_pt);
   f64("rotationDeg", &s.rotation_deg_op, &s.rotation_deg);
-  js_patch_value(reader, spec, "hidden", "shape.hidden", &s.hidden_op, &s.hidden,
-                 [&](const emscripten::val& v) { return reader.boolean_value(v, false) ? 1 : 0; });
+  return s;
+}
+
+/// Reads a shape spec: the placement keys (`name`, `description`, `hidden`, `anchor`) and the shape fields; an
+/// absent key takes the default of a new shape.
+fm_shape_spec_t pull_shape_spec(JsNarrowNumericReader& reader, const emscripten::val& spec, ShapeText& store) {
+  fm_shape_spec_t s = FM_STRUCT_INIT(fm_shape_spec_t);
+  s.placement = pull_drawing_placement(reader, spec, store.name, store.description);
+  s.fill_kind = reader.i32(spec, "fillKind", FM_SHAPE_PAINT_DEFAULT, "shape.fillKind");
+  s.fill_color = js_pull_color_spec(spec, "fillColor", &reader);
+  s.line_kind = reader.i32(spec, "lineKind", FM_SHAPE_PAINT_DEFAULT, "shape.lineKind");
+  s.line_color = js_pull_color_spec(spec, "lineColor", &reader);
+  s.line_width_pt = reader.number(spec, "lineWidthPt", 0.0, "shape.lineWidthPt");
+  s.rotation_deg = reader.number(spec, "rotationDeg", 0.0, "shape.rotationDeg");
+  s.text_box = reader.boolean(spec, "textBox", false, "shape.textBox") ? 1 : 0;
+  s.preset_geometry = reader.optional_string(spec, "presetGeometry", store.preset_geometry, "shape.presetGeometry");
+  s.text = reader.optional_string(spec, "text", store.text, "shape.text");
   return s;
 }
 
@@ -129,6 +107,7 @@ fm_color_t* group_color(fm_sparkline_group_t& g, std::size_t i) {
 
 emscripten::val sparkline_group_to_val(fm_sparkline_group_t g, emscripten::val sparklines) {
   emscripten::val o = emscripten::val::object();
+  js_set_cstr_fields(o, {{"id", g.id}});
   for (std::size_t i = 0; i < 8U; ++i) {
     o.set(kSparklineColorKeys[i], js_color_spec_or_null(*group_color(g, i)));
   }
@@ -204,15 +183,6 @@ bool pull_sparklines(JsNarrowNumericReader& reader, const emscripten::val& array
   return reader.ok();
 }
 
-fm_status_t shape_item(const fm_workbook_t* handle, size_t sheet, size_t index, emscripten::val* out) {
-  fm_shape_info_t s = FM_STRUCT_INIT(fm_shape_info_t);
-  const fm_status_t rc = fm_sheet_get_shape_at(handle, sheet, index, &s);
-  if (rc == 0) {
-    *out = shape_to_val(s);
-  }
-  return rc;
-}
-
 // Reads sparkline group `index` with its sparklines nested under `sparklines`;
 // a failed read leaves `*out` untouched.
 fm_status_t sparkline_group_item(const fm_workbook_t* handle, size_t sheet, size_t index, emscripten::val* out) {
@@ -239,14 +209,6 @@ fm_status_t sparkline_group_item(const fm_workbook_t* handle, size_t sheet, size
 
 }  // namespace
 
-emscripten::val JsWorkbook::listShapes(uint32_t sheet) const {
-  emscripten::val arr = emscripten::val::array();
-  if (!succeeded(js_collect_list(handle_, sheet, &fm_sheet_get_shape_count, &shape_item, arr))) {
-    return emscripten::val::undefined();
-  }
-  return arr;
-}
-
 uint32_t JsWorkbook::insertShape(uint32_t sheet, emscripten::val spec) {
   if (handle_ == nullptr) {
     record_invalid_handle();
@@ -254,7 +216,8 @@ uint32_t JsWorkbook::insertShape(uint32_t sheet, emscripten::val spec) {
   }
   JsNarrowNumericReader reader("Sheet.addShape");
   ShapeText store;
-  const fm_shape_patch_t shape = pull_shape(reader, spec, store);
+  const emscripten::val options = js_object_or_empty(spec);
+  const fm_shape_spec_t shape = pull_shape_spec(reader, options, store);
   if (!reader.ok()) {
     return 0U;
   }
@@ -272,7 +235,8 @@ void JsWorkbook::updateShape(uint32_t sheet, uint32_t objectId, emscripten::val 
   }
   JsNarrowNumericReader reader("Shape.update");
   ShapeText store;
-  const fm_shape_patch_t shape = pull_shape(reader, spec, store);
+  const emscripten::val options = js_object_or_empty(spec);
+  const fm_shape_patch_t shape = pull_shape_patch(reader, options, store);
   if (!reader.ok()) {
     return;
   }
@@ -285,10 +249,6 @@ emscripten::val JsWorkbook::getShape(uint32_t sheet, uint32_t objectId) const {
   const fm_status_t rc =
       handle_ != nullptr ? fm_sheet_get_shape(handle_, sheet, objectId, &present, &s) : kBindingInvalidHandle;
   return optional_or_null(rc, present, rc == 0 && present != 0 ? shape_to_val(s) : emscripten::val::null());
-}
-
-void JsWorkbook::removeShape(uint32_t sheet, uint32_t objectId) {
-  succeeded(handle_ != nullptr ? fm_sheet_remove_shape(handle_, sheet, objectId) : kBindingInvalidHandle);
 }
 
 double JsWorkbook::getSparklineGroupCount(uint32_t sheet) const {
@@ -305,10 +265,10 @@ emscripten::val JsWorkbook::getSparklineGroup(uint32_t sheet, uint32_t sparkline
   return group;
 }
 
-uint32_t JsWorkbook::addSparklineGroup(uint32_t sheet, emscripten::val spec) {
+emscripten::val JsWorkbook::addSparklineGroup(uint32_t sheet, emscripten::val spec) {
   if (handle_ == nullptr) {
     record_invalid_handle();
-    return 0U;
+    return emscripten::val::undefined();
   }
   JsNarrowNumericReader reader("Sheet.addSparklineGroup");
   std::string ref_store;
@@ -319,19 +279,19 @@ uint32_t JsWorkbook::addSparklineGroup(uint32_t sheet, emscripten::val spec) {
     pull_sparklines(reader, reader.value(spec, "sparklines", "group.sparklines"), texts, items);
   }
   if (!reader.ok()) {
-    return 0U;
+    return emscripten::val::undefined();
   }
   // An empty array reaches the core, which rejects it; keep a valid pointer to pass.
   fm_sparkline_t none{};
-  std::size_t out = 0;
+  const char* id = nullptr;
   if (!succeeded(fm_sheet_add_sparkline_group(handle_, sheet, &group, items.empty() ? &none : items.data(),
-                                              items.size(), &out))) {
-    return 0U;
+                                              items.size(), &id))) {
+    return emscripten::val::undefined();
   }
-  return static_cast<uint32_t>(out);
+  return emscripten::val(std::string(id != nullptr ? id : ""));
 }
 
-void JsWorkbook::updateSparklineGroup(uint32_t sheet, uint32_t index, emscripten::val spec) {
+void JsWorkbook::updateSparklineGroup(uint32_t sheet, const std::string& groupId, emscripten::val spec) {
   if (handle_ == nullptr) {
     record_invalid_handle();
     return;
@@ -392,11 +352,12 @@ void JsWorkbook::updateSparklineGroup(uint32_t sheet, uint32_t index, emscripten
   if (!reader.ok()) {
     return;
   }
-  succeeded(fm_sheet_update_sparkline_group(handle_, sheet, index, &p));
+  succeeded(fm_sheet_update_sparkline_group(handle_, sheet, groupId.c_str(), &p));
 }
 
-void JsWorkbook::removeSparklineGroup(uint32_t sheet, uint32_t index) {
-  succeeded(handle_ != nullptr ? fm_sheet_remove_sparkline_group(handle_, sheet, index) : kBindingInvalidHandle);
+void JsWorkbook::removeSparklineGroup(uint32_t sheet, const std::string& groupId) {
+  succeeded(handle_ != nullptr ? fm_sheet_remove_sparkline_group(handle_, sheet, groupId.c_str())
+                               : kBindingInvalidHandle);
 }
 
 }  // namespace parts

@@ -195,6 +195,22 @@ emscripten::val list_locale_error_names(const std::string& profile_id) {
   return arr;
 }
 
+emscripten::val list_profile_ids() {
+  std::size_t count = 0;
+  if (!succeeded(fm_get_profile_id_count(&count))) {
+    return emscripten::val::undefined();
+  }
+  emscripten::val arr = emscripten::val::array();
+  for (std::size_t i = 0; i < count; ++i) {
+    const char* id = nullptr;
+    if (!succeeded(fm_get_profile_id_at(i, &id))) {
+      return emscripten::val::undefined();
+    }
+    arr.set(static_cast<uint32_t>(i), emscripten::val(string_from_cstr(id)));
+  }
+  return arr;
+}
+
 // ---- Spill info --------------------------------------------------------
 
 emscripten::val JsWorkbook::getSpill(uint32_t sheet, uint32_t row, uint32_t col) const {

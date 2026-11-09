@@ -287,6 +287,13 @@ StylesTable BuildDeletionTable() {
   return t;
 }
 
+TEST(StylesCellStyleRemoval, MatchesTheNameAcrossCase) {
+  StylesTable t = BuildDeletionTable();
+  ASSERT_TRUE(static_cast<bool>(remove_cell_style(t, "PROBESTYLE")));
+  ASSERT_EQ(t.cell_styles.size(), 1U);
+  EXPECT_EQ(t.cell_styles[0].name, "Normal");
+}
+
 TEST(StylesCellStyleRemoval, RepointsXfsAndKeepsAppliedGroups) {
   StylesTable t = BuildDeletionTable();
   ASSERT_TRUE(static_cast<bool>(remove_cell_style(t, "ProbeStyle")));

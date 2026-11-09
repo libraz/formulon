@@ -55,8 +55,7 @@ inline fm_status_t SetViewPaneTopLeft(fm_workbook_t* wb, std::size_t sheet, std:
 }
 
 inline fm_status_t SetViewVisibility(fm_workbook_t* wb, std::size_t sheet, std::int32_t visibility) {
-  return UpdateViewField(wb, sheet, &fm_sheet_view_patch_t::visibility_op, &fm_sheet_view_patch_t::visibility,
-                         visibility);
+  return fm_sheet_set_visibility(wb, sheet, visibility);
 }
 
 inline fm_status_t SetViewMode(fm_workbook_t* wb, std::size_t sheet, std::int32_t mode) {

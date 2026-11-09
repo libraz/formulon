@@ -75,7 +75,6 @@ TEST_F(FormulonCApiIndexOutOfRange, MutatorsRefuseAnIndexPastTheCountBeforeChang
   fm_font_t font{};
   ASSERT_EQ(fm_workbook_get_font_at(wb(), 0, &font), 0);
   EXPECT_EQ(fm_workbook_set_font(wb(), 999, &font), FM_STATUS_INDEX_OUT_OF_RANGE);
-  EXPECT_EQ(fm_sheet_remove_sparkline_group(wb(), 0, 0), FM_STATUS_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(fm_sheet_remove_merge_at(wb(), 0, 0), FM_STATUS_INDEX_OUT_OF_RANGE);
 }
 

@@ -17,6 +17,7 @@
 #include "c_api/parts/common.h"
 #include "cell.h"
 #include "sheet.h"
+#include "sheet_name.h"
 #include "utils/error.h"
 #include "utils/resource_budget.h"
 #include "workbook.h"
@@ -409,7 +410,7 @@ extern "C" fm_status_t fm_workbook_get_cell_style(const fm_workbook_t* wb, const
   *out = fm_cell_style_t{};
   const auto& styles = wb->workbook().styles().cell_styles;
   for (std::size_t i = 0; i < styles.size(); ++i) {
-    if (styles[i].name == name) {
+    if (formulon::collection_names::equal(styles[i].name, name)) {
       *out_present = 1;
       return fm_workbook_get_cell_style_at(wb, i, out);
     }

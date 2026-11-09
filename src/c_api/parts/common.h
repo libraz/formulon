@@ -149,6 +149,13 @@ fm_status_t check_stored_formula(std::string_view formula, std::string_view cont
 // names) without the one leading '='. An empty `formula` yields "".
 std::string ingest_entered_formula(fm_workbook_t* wb, std::string_view formula);
 
+// The opaque id string a collection addressed by session id (data validations,
+// sparkline groups) hands out for engine id `id`.
+std::string format_runtime_id(std::uint32_t id);
+
+// The engine id behind an id string `format_runtime_id` produced; false for any other text.
+bool parse_runtime_id(std::string_view text, std::uint32_t* out);
+
 // Entry check for formula text entered at (`sheet`, `row`, `col`): refuses
 // malformed UTF-8 (`check_utf8`), binds the structured references at that
 // cell (`Workbook::bind_entered_structured_refs`: `[@Qty]` and `ROWS(T)` take

@@ -76,8 +76,8 @@ function addCache(wb, sheetName = 'Sheet1', ref = 'A1:B3') {
 
 function addPivot(sheet, cache, name, anchorRow, anchorCol) {
   const pivot = sheet.addPivot({ name, cacheId: cache.cacheId, anchor: { row: anchorRow, col: anchorCol } });
-  pivot.addField({ sourceName: 'Region', axis: 0 });
-  const amount = pivot.addField({ sourceName: 'Amount', axis: 2 });
+  pivot.addField({ fieldIndex: 'Region', axis: 0 });
+  const amount = pivot.addField({ fieldIndex: 'Amount', axis: 2 });
   pivot.addDataField({ name: 'Sum of Amount', fieldIndex: amount, aggregation: 0 });
   return pivot;
 }
@@ -214,7 +214,7 @@ test(
     const doomed = addPivot(ws, cache, 'Pivot1', 0, 4);
     const kept = addPivot(ws, cache, 'Pivot2', 20, 4);
     const rect = doomed.getLayout().range;
-    ws.deleteRows(0, rect.lastRow + 1);
+    ws.deleteRows(0, rect.lastRow);
     assert.throws(() => doomed.getLayout(), notFound(mod));
     assert.equal(ws.listPivots().length, 1);
     assert.equal(ws.listPivots()[0], kept);
@@ -256,7 +256,7 @@ test(
     const cache = addCache(wb);
     const pivot = addPivot(ws, cache, 'Pivot1', 0, 4);
     const chart = ws.addChart({ type: mod.ChartPlotType.Bar, range: 'Sheet1!$A$1:$B$3' });
-    const copied = wb.copySheet(ws, 1, 'Copy');
+    const copied = wb.copySheet(ws, { newName: 'Copy' });
     assert.notEqual(copied, ws);
     assert.equal(ws.listPivots()[0], pivot);
     assert.equal(ws.listCharts()[0], chart);
@@ -272,9 +272,9 @@ test(
 
     // A sheet with a slicer cannot be copied; nothing changes.
     const sales = addTable(wb, 'Sales', 5);
-    const slicer = ws.addSlicer(sales, 0, { fromRow: 30, fromCol: 3, toRow: 40, toCol: 5 });
+    const slicer = ws.addSlicer(sales, 0, { anchor: { fromRow: 30, fromCol: 3, toRow: 40, toCol: 5 } });
     assert.throws(
-      () => wb.copySheet(ws, 2, 'Copy2'),
+      () => wb.copySheet(ws, { newName: 'Copy2' }),
       (e) => isFormulonError(e, mod.StatusCode.NotImplemented),
     );
     assert.equal(wb.listSheets().length, 2);
@@ -337,10 +337,7 @@ test(
     const ws = wb.sheet(0);
     const shape = ws.addShape({
       presetGeometry: 'rect',
-      anchorKind: mod.AnchorKind.OneCell,
-      fromRow: 2,
-      widthEmu: 914400,
-      heightEmu: 457200,
+      anchor: { kind: mod.AnchorKind.OneCell, fromRow: 2, widthEmu: 914400, heightEmu: 457200 },
     });
     const chart = ws.addChart({ type: mod.ChartPlotType.Bar, range: 'Sheet1!$A$1:$B$3' });
     const picture = ws.addPicture(makePng(2));
@@ -407,7 +404,7 @@ test(
     assert.equal(wb.table('Target'), target);
     const side = wb.addSheet('Side');
     side.setText(0, 0, 'x');
-    side.deleteRows(0, 1);
+    side.deleteRows(0, 0);
     assert.equal(wb.table('Target'), target);
     const doomed = wb.addSheet('Doomed');
     wb.removeSheet(doomed);

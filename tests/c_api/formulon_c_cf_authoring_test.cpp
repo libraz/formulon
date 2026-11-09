@@ -728,3 +728,268 @@ TEST(FormulonCApiCfMutate, DerivedFormulaAnchorsAtSqrefBoundingBox) {
     EXPECT_STREQ(out.formula1, "=NOT(ISERROR(SEARCH(\"x\",B2)))");
   }
 }
+
+namespace {
+
+fm_cf_rule_t ReadRule(const WorkbookGuard& wb, std::size_t index) {
+  fm_cf_rule_t out = FM_STRUCT_INIT(fm_cf_rule_t);
+  EXPECT_EQ(fm_sheet_get_cf_rule_at(wb.handle, 0, index, &out), 0) << fm_get_last_error_message();
+  return out;
+}
+
+// Adds a rule over `range` and returns its index.
+std::size_t AddRule(const WorkbookGuard& wb, fm_cf_rule_t rule, const fm_cell_rect_t* range) {
+  rule.ranges = range;
+  rule.range_count = 1;
+  std::size_t index = 0;
+  EXPECT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &rule, &index), 0) << fm_get_last_error_message();
+  return index;
+}
+
+fm_cf_rule_t CellIsRule(const char* formula) {
+  fm_cf_rule_t rule = FM_STRUCT_INIT(fm_cf_rule_t);
+  rule.type = 1;  // CellIs
+  rule.has_op = 1;
+  rule.op = FM_COMPARISON_OPERATOR_GREATER_THAN;
+  rule.formula1 = formula;
+  return rule;
+}
+
+}  // namespace
+
+TEST(FormulonCApiCfMutate, UpdateMergesIntoTheRuleAndKeepsIdAndPosition) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  SeedDxfs(wb.handle, 2);
+  const fm_cell_rect_t a1_a10{0, 0, 9, 0};
+  fm_cf_rule_t first = CellIsRule("50");
+  first.has_dxf_index = 1;
+  first.dxf_index = 1;
+  first.stop_if_true = 1;
+  ASSERT_EQ(AddRule(wb, first, &a1_a10), 0U);
+  ASSERT_EQ(AddRule(wb, CellIsRule("7"), &a1_a10), 1U);
+  const std::string id = ReadRule(wb, 0).id;
+  const std::int32_t priority = ReadRule(wb, 0).priority;
+
+  fm_cf_rule_patch_t patch = FM_STRUCT_INIT(fm_cf_rule_patch_t);
+  patch.formula1_op = FM_PATCH_OP_SET;
+  patch.formula1 = "=60";
+  patch.op_op = FM_PATCH_OP_SET;
+  patch.op = FM_COMPARISON_OPERATOR_LESS_THAN;
+  ASSERT_EQ(fm_sheet_update_cf_rule(wb.handle, 0, 0, &patch), 0) << fm_get_last_error_message();
+
+  const fm_cf_rule_t out = ReadRule(wb, 0);
+  EXPECT_STREQ(out.id, id.c_str());
+  EXPECT_EQ(out.priority, priority);
+  EXPECT_STREQ(out.formula1, "=60");
+  EXPECT_EQ(out.op, FM_COMPARISON_OPERATOR_LESS_THAN);
+  EXPECT_EQ(out.has_dxf_index, 1);
+  EXPECT_EQ(out.dxf_index, 1U);
+  EXPECT_EQ(out.stop_if_true, 1);
+  EXPECT_STREQ(ReadRule(wb, 1).formula1, "=7");
+  std::size_t count = 0;
+  ASSERT_EQ(fm_sheet_get_cf_rule_count(wb.handle, 0, &count), 0);
+  EXPECT_EQ(count, 2U);
+}
+
+TEST(FormulonCApiCfMutate, UpdateClearsDxfIndexAndAcceptsAnEmptyPatch) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  SeedDxfs(wb.handle, 1);
+  const fm_cell_rect_t range{0, 0, 4, 0};
+  fm_cf_rule_t rule = CellIsRule("1");
+  rule.has_dxf_index = 1;
+  ASSERT_EQ(AddRule(wb, rule, &range), 0U);
+
+  fm_cf_rule_patch_t none = FM_STRUCT_INIT(fm_cf_rule_patch_t);
+  ASSERT_EQ(fm_sheet_update_cf_rule(wb.handle, 0, 0, &none), 0);
+  EXPECT_EQ(ReadRule(wb, 0).has_dxf_index, 1);
+
+  fm_cf_rule_patch_t clear = FM_STRUCT_INIT(fm_cf_rule_patch_t);
+  clear.dxf_index_op = FM_PATCH_OP_CLEAR;
+  ASSERT_EQ(fm_sheet_update_cf_rule(wb.handle, 0, 0, &clear), 0);
+  EXPECT_EQ(ReadRule(wb, 0).has_dxf_index, 0);
+
+  fm_cf_rule_patch_t past = FM_STRUCT_INIT(fm_cf_rule_patch_t);
+  past.dxf_index_op = FM_PATCH_OP_SET;
+  past.dxf_index = 5;
+  EXPECT_EQ(fm_sheet_update_cf_rule(wb.handle, 0, 0, &past), FM_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(ReadRule(wb, 0).has_dxf_index, 0);
+}
+
+TEST(FormulonCApiCfMutate, UpdateRefusesFieldsTheRuleTypeDoesNotUseAndChangesNothing) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  const fm_cell_rect_t range{0, 0, 4, 0};
+  ASSERT_EQ(AddRule(wb, CellIsRule("1"), &range), 0U);
+
+  fm_cf_rule_patch_t patch = FM_STRUCT_INIT(fm_cf_rule_patch_t);
+  patch.formula1_op = FM_PATCH_OP_SET;
+  patch.formula1 = "=2";
+  patch.rank_op = FM_PATCH_OP_SET;  // a Top10 field
+  patch.rank = 3;
+  EXPECT_EQ(fm_sheet_update_cf_rule(wb.handle, 0, 0, &patch), FM_STATUS_INVALID_ARGUMENT);
+  EXPECT_STREQ(ReadRule(wb, 0).formula1, "=1");
+
+  fm_cf_rule_patch_t not_clearable = FM_STRUCT_INIT(fm_cf_rule_patch_t);
+  not_clearable.op_op = FM_PATCH_OP_CLEAR;
+  EXPECT_EQ(fm_sheet_update_cf_rule(wb.handle, 0, 0, &not_clearable), FM_STATUS_INVALID_ARGUMENT);
+
+  fm_cf_rule_patch_t bad_op = FM_STRUCT_INIT(fm_cf_rule_patch_t);
+  bad_op.priority_op = static_cast<fm_patch_op_t>(9);
+  EXPECT_EQ(fm_sheet_update_cf_rule(wb.handle, 0, 0, &bad_op), FM_STATUS_INVALID_ARGUMENT);
+
+  fm_cf_rule_patch_t null_text = FM_STRUCT_INIT(fm_cf_rule_patch_t);
+  null_text.formula1_op = FM_PATCH_OP_SET;
+  null_text.formula1 = nullptr;
+  EXPECT_EQ(fm_sheet_update_cf_rule(wb.handle, 0, 0, &null_text), FM_STATUS_INVALID_ARGUMENT);
+}
+
+TEST(FormulonCApiCfMutate, UpdateReportsMissingTargetsByStatus) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  const fm_cell_rect_t range{0, 0, 4, 0};
+  ASSERT_EQ(AddRule(wb, CellIsRule("1"), &range), 0U);
+  fm_cf_rule_patch_t patch = FM_STRUCT_INIT(fm_cf_rule_patch_t);
+
+  EXPECT_EQ(fm_sheet_update_cf_rule(wb.handle, 0, 1, &patch), FM_STATUS_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(fm_sheet_update_cf_rule(wb.handle, 9, 0, &patch), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(fm_sheet_update_cf_rule(wb.handle, 0, 0, nullptr), FM_STATUS_BINDING_NULL_POINTER);
+  EXPECT_EQ(fm_sheet_update_cf_rule(nullptr, 0, 0, &patch), FM_STATUS_BINDING_NULL_POINTER);
+
+  fm_cf_rule_patch_t null_ranges = FM_STRUCT_INIT(fm_cf_rule_patch_t);
+  null_ranges.ranges_op = FM_PATCH_OP_SET;
+  null_ranges.range_count = 1;
+  EXPECT_EQ(fm_sheet_update_cf_rule(wb.handle, 0, 0, &null_ranges), FM_STATUS_BINDING_NULL_POINTER);
+}
+
+TEST(FormulonCApiCfMutate, UpdateRederivesTheFormulaOfATextRule) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  const fm_cell_rect_t b2_b5{1, 1, 4, 1};
+  fm_cf_rule_t rule = FM_STRUCT_INIT(fm_cf_rule_t);
+  rule.type = 7;  // ContainsText
+  rule.text = "ab";
+  ASSERT_EQ(AddRule(wb, rule, &b2_b5), 0U);
+  EXPECT_STREQ(ReadRule(wb, 0).formula1, "=NOT(ISERROR(SEARCH(\"ab\",B2)))");
+
+  fm_cf_rule_patch_t patch = FM_STRUCT_INIT(fm_cf_rule_patch_t);
+  patch.text_op = FM_PATCH_OP_SET;
+  patch.text = "cd";
+  ASSERT_EQ(fm_sheet_update_cf_rule(wb.handle, 0, 0, &patch), 0) << fm_get_last_error_message();
+  EXPECT_STREQ(ReadRule(wb, 0).formula1, "=NOT(ISERROR(SEARCH(\"cd\",B2)))");
+
+  const fm_cell_rect_t d4_d6{3, 3, 5, 3};
+  fm_cf_rule_patch_t move = FM_STRUCT_INIT(fm_cf_rule_patch_t);
+  move.ranges_op = FM_PATCH_OP_SET;
+  move.ranges = &d4_d6;
+  move.range_count = 1;
+  ASSERT_EQ(fm_sheet_update_cf_rule(wb.handle, 0, 0, &move), 0);
+  const fm_cf_rule_t out = ReadRule(wb, 0);
+  EXPECT_STREQ(out.formula1, "=NOT(ISERROR(SEARCH(\"cd\",D4)))");
+  ASSERT_EQ(out.range_count, 1U);
+  EXPECT_EQ(out.ranges[0].first_row, 3U);
+  EXPECT_EQ(out.ranges[0].last_row, 5U);
+
+  fm_cf_rule_patch_t empty_ranges = FM_STRUCT_INIT(fm_cf_rule_patch_t);
+  empty_ranges.ranges_op = FM_PATCH_OP_SET;
+  EXPECT_EQ(fm_sheet_update_cf_rule(wb.handle, 0, 0, &empty_ranges), FM_STATUS_INVALID_ARGUMENT);
+}
+
+TEST(FormulonCApiCfMutate, UpdateOfOneRuleInASharedBlockKeepsTheFlattenedOrder) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  formulon::cf::ConditionalFormat block;
+  block.sqref = {MakeRange(0, 0, 4, 0)};
+  for (int i = 0; i < 3; ++i) {
+    formulon::cf::CFRule rule;
+    rule.type = formulon::cf::RuleType::Expression;
+    rule.priority = i + 1;
+    rule.formula1 = std::to_string(i + 1) + ">0";
+    block.rules.push_back(rule);
+  }
+  wb.handle->workbook().sheet(0).mutable_conditional_formats().push_back(block);
+
+  const fm_cell_rect_t moved{0, 2, 4, 2};
+  fm_cf_rule_patch_t patch = FM_STRUCT_INIT(fm_cf_rule_patch_t);
+  patch.ranges_op = FM_PATCH_OP_SET;
+  patch.ranges = &moved;
+  patch.range_count = 1;
+  ASSERT_EQ(fm_sheet_update_cf_rule(wb.handle, 0, 1, &patch), 0) << fm_get_last_error_message();
+
+  std::size_t count = 0;
+  ASSERT_EQ(fm_sheet_get_cf_rule_count(wb.handle, 0, &count), 0);
+  ASSERT_EQ(count, 3U);
+  const fm_cf_rule_t r0 = ReadRule(wb, 0);
+  EXPECT_STREQ(r0.formula1, "=1>0");
+  EXPECT_EQ(r0.ranges[0].first_col, 0U);
+  const fm_cf_rule_t r1 = ReadRule(wb, 1);
+  EXPECT_STREQ(r1.formula1, "=2>0");
+  EXPECT_EQ(r1.ranges[0].first_col, 2U);
+  const fm_cf_rule_t r2 = ReadRule(wb, 2);
+  EXPECT_STREQ(r2.formula1, "=3>0");
+  EXPECT_EQ(r2.ranges[0].first_col, 0U);
+}
+
+TEST(FormulonCApiCfMutate, UpdateMergesDataBarSettingsAndChecksTheMergedBar) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  const fm_cell_rect_t range{0, 0, 9, 0};
+  ASSERT_EQ(AddRule(wb, MakeDataBarRule(&range), &range), 0U);
+
+  fm_cf_rule_patch_t patch = FM_STRUCT_INIT(fm_cf_rule_patch_t);
+  patch.data_bar_fill_op = FM_PATCH_OP_SET;
+  patch.data_bar_fill = CfRgb(1, 2, 3);
+  patch.data_bar_gradient_op = FM_PATCH_OP_SET;
+  patch.data_bar_gradient = 0;
+  ASSERT_EQ(fm_sheet_update_cf_rule(wb.handle, 0, 0, &patch), 0) << fm_get_last_error_message();
+  fm_cf_rule_t out = ReadRule(wb, 0);
+  EXPECT_EQ(CfR(out.data_bar_fill), 1U);
+  EXPECT_EQ(CfB(out.data_bar_fill), 3U);
+  EXPECT_EQ(out.data_bar_gradient, 0);
+  EXPECT_EQ(out.data_bar_min_length_pct, 10U);
+  EXPECT_EQ(out.data_bar_max_length_pct, 90U);
+
+  // The merged lengths must stay ordered, and none may pass 100.
+  fm_cf_rule_patch_t inverted = FM_STRUCT_INIT(fm_cf_rule_patch_t);
+  inverted.data_bar_min_length_pct_op = FM_PATCH_OP_SET;
+  inverted.data_bar_min_length_pct = 95;
+  EXPECT_EQ(fm_sheet_update_cf_rule(wb.handle, 0, 0, &inverted), FM_STATUS_INVALID_ARGUMENT);
+  fm_cf_rule_patch_t too_long = FM_STRUCT_INIT(fm_cf_rule_patch_t);
+  too_long.data_bar_max_length_pct_op = FM_PATCH_OP_SET;
+  too_long.data_bar_max_length_pct = 300;
+  EXPECT_EQ(fm_sheet_update_cf_rule(wb.handle, 0, 0, &too_long), FM_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(ReadRule(wb, 0).data_bar_min_length_pct, 10U);
+}
+
+TEST(FormulonCApiCfMutate, UpdateColorScaleNeedsMatchingThresholdAndColorCounts) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  const fm_cell_rect_t range{0, 0, 9, 0};
+  fm_cf_rule_t scale = FM_STRUCT_INIT(fm_cf_rule_t);
+  scale.type = 2;  // ColorScale
+  fm_cfvo_t thresholds[2]{};
+  thresholds[0].type = 3;  // Min
+  thresholds[1].type = 4;  // Max
+  fm_color_t colors[2] = {CfRgb(255, 0, 0), CfRgb(0, 255, 0)};
+  scale.color_scale_thresholds = thresholds;
+  scale.color_scale_colors = colors;
+  scale.color_scale_count = 2;
+  ASSERT_EQ(AddRule(wb, scale, &range), 0U);
+
+  fm_color_t recolored[2] = {CfRgb(9, 9, 9), CfRgb(8, 8, 8)};
+  fm_cf_rule_patch_t colors_only = FM_STRUCT_INIT(fm_cf_rule_patch_t);
+  colors_only.color_scale_colors_op = FM_PATCH_OP_SET;
+  colors_only.color_scale_colors = recolored;
+  colors_only.color_scale_colors_count = 2;
+  ASSERT_EQ(fm_sheet_update_cf_rule(wb.handle, 0, 0, &colors_only), 0) << fm_get_last_error_message();
+  EXPECT_EQ(CfR(ReadRule(wb, 0).color_scale_colors[1]), 8U);
+
+  fm_cf_rule_patch_t three_colors = FM_STRUCT_INIT(fm_cf_rule_patch_t);
+  fm_color_t more[3] = {CfRgb(1, 1, 1), CfRgb(2, 2, 2), CfRgb(3, 3, 3)};
+  three_colors.color_scale_colors_op = FM_PATCH_OP_SET;
+  three_colors.color_scale_colors = more;
+  three_colors.color_scale_colors_count = 3;
+  EXPECT_EQ(fm_sheet_update_cf_rule(wb.handle, 0, 0, &three_colors), FM_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(ReadRule(wb, 0).color_scale_count, 2U);
+}

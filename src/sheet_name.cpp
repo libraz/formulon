@@ -4,6 +4,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <string>
 #include <string_view>
 
 #include "sheet_name_casefold_data.h"
@@ -86,4 +87,29 @@ std::size_t find_index(const std::vector<std::string>& names, std::string_view s
 }
 
 }  // namespace sheet_names
+
+namespace collection_names {
+
+std::string fold_key(std::string_view name) {
+  std::string key;
+  key.reserve(name.size());
+  std::size_t offset = 0;
+  while (offset < name.size()) {
+    const char c = name[offset];
+    // Same per-scalar fold as `sheet_names::equal`, ASCII fast path included.
+    if ((static_cast<unsigned char>(c) & 0x80U) == 0U) {
+      key.push_back(strings::ascii_to_lower(c));
+      ++offset;
+      continue;
+    }
+    std::uint32_t scalar = 0;
+    if (!sheet_names::decode_one(name, &offset, &scalar)) {
+      return std::string(name);
+    }
+    key += encode_utf8_codepoint(sheet_names::detail::fold_scalar(scalar));
+  }
+  return key;
+}
+
+}  // namespace collection_names
 }  // namespace formulon

@@ -329,6 +329,14 @@ def _returned_dict(func: ast.FunctionDef) -> "ast.Dict | None":
     return None
 
 
+def _returned_local_dict(func: ast.FunctionDef) -> "list | None":
+    """The fields written into the one local dict a helper builds and returns, or ``None`` for any other shape."""
+    returns = [n for n in ast.walk(func) if isinstance(n, ast.Return)]
+    if len(returns) != 1 or not isinstance(returns[0].value, ast.Name):
+        return None
+    return _collected_payload(returns[0].value.id, func)
+
+
 def _collected_payload(name: str, scope: ast.AST) -> "list | None":
     """Every ``(key_node_or_None, value)`` written into a local dict ``name``.
 
@@ -403,6 +411,9 @@ def _struct_pack_slots(
         returned = _returned_dict(helper) if helper is not None else None
         if returned is not None:
             pairs = list(zip(returned.keys, returned.values))
+            known = _Facts(helper).known
+        elif helper is not None and (built := _returned_local_dict(helper)) is not None:
+            pairs = built
             known = _Facts(helper).known
     elif isinstance(payload, ast.Name) and scope is not None:
         pairs = _collected_payload(payload.id, scope)
@@ -573,9 +584,25 @@ class ArgumentSweepTests(unittest.TestCase):
         self.assertIn("u32 spin_count", findings[0])
 
     def test_sweep_catches_a_64_bit_field_coerced_with_int(self) -> None:
-        findings = _sweep_source('S.SHAPE.pack(LIB, ptr, {"width_emu": int(width_emu)})', _parse_header(_HEADER))
+        findings = _sweep_source(
+            'S.DRAWING_ANCHOR.pack(LIB, ptr, {"width_emu": int(width_emu)})', _parse_header(_HEADER)
+        )
         self.assertEqual(len(findings), 1, findings)
         self.assertIn("i64 width_emu <- int(width_emu)", findings[0])
+
+    def test_sweep_follows_a_helper_that_builds_and_returns_a_local_dict(self) -> None:
+        template = (
+            "def fields(scope, spec):\n"
+            "    values = {}\n"
+            '    values["width_emu"] = %s\n'
+            "    return values\n"
+            "def add(spec):\n"
+            "    S.DRAWING_ANCHOR.pack(LIB, ptr, fields(scope, spec))\n"
+        )
+        findings = _sweep_source(template % "int(spec.width)", _parse_header(_HEADER))
+        self.assertEqual(len(findings), 1, findings)
+        self.assertIn("i64 width_emu <- int(spec.width)", findings[0])
+        self.assertEqual(_sweep_source(template % '_sint(spec.width, "width_emu", 64)', _parse_header(_HEADER)), [])
 
     def test_sweep_catches_int_inside_a_guard(self) -> None:
         findings = _sweep_source('S.COMMENT.pack(LIB, ptr, {"row": _uint(int(row), "row")})', _parse_header(_HEADER))

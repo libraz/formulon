@@ -8,7 +8,7 @@ from formulon import (
     ChartBarDirection,
     ChartInsertInput,
     ChartPlotType,
-    PictureInput,
+    DrawingPlacementInput,
 )
 
 Kind = Tuple[ChartPlotType, "ChartBarDirection | None"]
@@ -30,7 +30,7 @@ def insert(kind: Kind, source: Any, *, anchor: Any = None, **options: Any) -> Ch
     placement = (
         None
         if anchor is None and not (name or description)
-        else PictureInput(name=name, description=description, anchor=anchor)
+        else DrawingPlacementInput(name=name, description=description, anchor=anchor)
     )
     return ChartInsertInput(type=plot, range=source, bar_direction=direction, placement=placement, **options)
 

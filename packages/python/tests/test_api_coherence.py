@@ -2,8 +2,9 @@
 
 Criterion 3: an unknown key, a ``None`` on a key that cannot be cleared and an anchor key without its trigger raise
 ``TypeError`` at the top level and inside a nested patch. Criterion 4: the methods of the ``patch: true`` ops in
-``tools/api/names.yaml`` take only ``UNCHANGED`` as a keyword default and no ``None`` default, and the picture and chart
-``set_anchor`` take the single positional ``anchor``. Criterion 5: a rectangle argument position listed in
+``tools/api/names.yaml`` take only ``UNCHANGED`` as a keyword default and no ``None`` default, and every drawing's
+``update`` takes the common keys (``name``, ``description``, ``hidden``, ``anchor``) as keyword-only arguments.
+Criterion 5: a rectangle argument position listed in
 ``tools/api/address_args.json`` carries, in Python, the snake_case of the name ``src/wasm/formulon.d.ts`` gives it.
 """
 
@@ -24,8 +25,12 @@ from formulon import (
     AnchorKind,
     CellRect,
     Chart,
+    DrawingAnchorInput,
     Picture,
+    Shape,
     ShapeInput,
+    ShapePaint,
+    Slicer,
     SlicerInput,
     TableInput,
     Workbook,
@@ -67,10 +72,13 @@ class _Fixture:
         self.table = ws.add_table(TableInput(range=CellRect(0, 0, 2, 1), name="Sales", columns=["Product", "Amount"]))
         self.shape = ws.add_shape(
             ShapeInput(
-                anchor_kind=AnchorKind.ONE_CELL, from_row=6, width_emu=914400, height_emu=457200, preset_geometry="rect"
+                anchor=DrawingAnchorInput(kind=AnchorKind.ONE_CELL, from_row=6, width_emu=914400, height_emu=457200),
+                preset_geometry="rect",
             )
         )
-        self.slicer = ws.add_slicer(self.table, 0, SlicerInput(from_row=10, from_col=4, to_row=20, to_col=6))
+        self.slicer = ws.add_slicer(
+            self.table, 0, SlicerInput(anchor=DrawingAnchorInput(from_row=10, from_col=4, to_row=20, to_col=6))
+        )
         self.chart = _chart_input.add_chart(ws, _chart_input.COLUMN, "Sheet1!$A$1:$B$3")
         self.cache = self.wb.add_pivot_cache()
 
@@ -92,13 +100,23 @@ class PatchKeyTests(unittest.TestCase):
             ("Shape.update unknown", lambda: f.shape.update(bogus=1), TypeError),
             ("Shape.update None", lambda: f.shape.update(name=None), TypeError),
             ("Shape.update None rotation", lambda: f.shape.update(rotation_deg=None), TypeError),
-            ("Shape.update anchor orphan", lambda: f.shape.update(from_row=1), TypeError),
-            ("Shape.update edit_as orphan", lambda: f.shape.update(edit_as=1), TypeError),
-            ("Shape.update fill_kind None keeps", lambda: f.shape.update(fill_kind=None, line_kind=None), None),
+            ("Shape.update flat anchor key is gone", lambda: f.shape.update(from_row=1), TypeError),
+            ("Shape.update flat edit_as is gone", lambda: f.shape.update(edit_as=1), TypeError),
+            ("Shape.update anchor None", lambda: f.shape.update(anchor=None), TypeError),
+            ("Shape.update anchor not a record", lambda: f.shape.update(anchor={"from_row": 1}), TypeError),
+            ("Chart.update unknown", lambda: f.chart.update(bogus=1), TypeError),
+            ("Chart.update None name", lambda: f.chart.update(name=None), TypeError),
+            ("Shape.update fill_kind None", lambda: f.shape.update(fill_kind=None), TypeError),
+            ("Shape.update line_kind None", lambda: f.shape.update(line_kind=None), TypeError),
+            (
+                "Shape.update paint DEFAULT removes",
+                lambda: f.shape.update(fill_kind=ShapePaint.DEFAULT, line_kind=ShapePaint.DEFAULT),
+                None,
+            ),
             ("Slicer.update unknown", lambda: f.slicer.update(bogus=1), TypeError),
             ("Slicer.update None", lambda: f.slicer.update(caption=None), TypeError),
-            ("Slicer.update offset orphan", lambda: f.slicer.update(to_row_offset_emu=1), TypeError),
-            ("Slicer.update corner orphan", lambda: f.slicer.update(to_row=3), TypeError),
+            ("Slicer.update flat offset is gone", lambda: f.slicer.update(to_row_offset_emu=1), TypeError),
+            ("Slicer.update flat corner is gone", lambda: f.slicer.update(to_row=3), TypeError),
             ("Slicer.update style None clears", lambda: f.slicer.update(style=None), None),
             ("Table.update unknown", lambda: f.table.update(bogus=1), TypeError),
             ("Table.update name is gone", lambda: f.table.update(name="Other"), TypeError),
@@ -155,24 +173,33 @@ class PatchKeyTests(unittest.TestCase):
                         call()
 
 
-class AnchorSignatureTests(unittest.TestCase):
+class DrawingUpdateSignatureTests(unittest.TestCase):
     """Criterion 4, second bullet."""
 
-    def test_set_anchor_takes_one_positional_anchor(self) -> None:
-        for cls in (Picture, Chart):
-            with self.subTest(cls=cls.__name__):
-                params = [p for name, p in inspect.signature(cls.set_anchor).parameters.items() if name != "self"]
-                self.assertEqual([p.name for p in params], ["anchor"])
-                self.assertEqual(params[0].kind, inspect.Parameter.POSITIONAL_OR_KEYWORD)
-                self.assertIs(params[0].default, inspect.Parameter.empty)
+    COMMON = ("name", "description", "hidden", "anchor")
 
-    def test_set_anchor_moves_the_object(self) -> None:
+    def test_update_takes_the_common_keys_as_keyword_only_arguments(self) -> None:
+        for cls in (Picture, Chart, Shape, Slicer):
+            with self.subTest(cls=cls.__name__):
+                params = {name: p for name, p in inspect.signature(cls.update).parameters.items() if name != "self"}
+                for key in self.COMMON:
+                    self.assertIn(key, params)
+                self.assertTrue(all(p.kind == inspect.Parameter.KEYWORD_ONLY for p in params.values()))
+                self.assertTrue(all(p.default is UNCHANGED for key, p in params.items() if key != "style"))
+
+    def test_the_dropped_setters_are_gone(self) -> None:
+        for cls in (Picture, Chart, Shape, Slicer):
+            with self.subTest(cls=cls.__name__):
+                self.assertFalse(hasattr(cls, "set_anchor"))
+                self.assertFalse(hasattr(cls, "rename"))
+
+    def test_update_anchor_moves_the_object(self) -> None:
         f = _Fixture()
         try:
-            f.chart.set_anchor(formulon.DrawingAnchor(row=12, col=3))
-            self.assertEqual(f.chart.get_drawing_properties().from_row, 12)
+            f.chart.update(anchor=DrawingAnchorInput(from_row=12, from_col=3))
+            self.assertEqual(f.chart.get_drawing_properties().anchor.from_row, 12)
             with self.assertRaises(TypeError):
-                f.chart.set_anchor(row=1)  # type: ignore[call-arg]
+                f.chart.update(row=1)  # type: ignore[call-arg]
         finally:
             f.close()
 
@@ -188,6 +215,9 @@ def _patch_ops() -> List[Tuple[str, str, str]]:
         if not (isinstance(entry, dict) and entry.get("patch") and "py" in entry.get("surfaces", ())):
             continue
         handle_class = (entry.get("handle") or {}).get("class")
+        if isinstance(handle_class, list):
+            found.extend((op, name, entry["handle"]["py"]) for name in handle_class)
+            continue
         if handle_class is None:
             found.append((op, "Workbook" if entry["scope"] == "workbook" else "Sheet", entry["py"]))
             continue

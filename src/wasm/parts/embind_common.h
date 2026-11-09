@@ -100,8 +100,6 @@ struct JsSheetView {
   uint32_t zoomPct = 100U;
   uint32_t freezeRows = 0U;
   uint32_t freezeCols = 0U;
-  /// `fm_sheet_visibility_t` ordinal.
-  int32_t visibility = 0;
   bool showGridLines = true;
   bool showRowColHeaders = true;
   bool showZeros = true;

@@ -226,26 +226,26 @@ test('copySheet names the copy automatically or explicitly and reports bad argum
   const wb = mod.Workbook.createDefault();
   wb.sheet(0).setNumber(0, 0, 5);
   wb.sheet(0).setFormula(0, 1, '=A1*2');
-  const auto = wb.copySheet(0, 1);
+  const auto = wb.copySheet(0, { insertBefore: 1 });
   assert.equal(auto.index, 1);
   assert.equal(auto.name, 'Sheet1 (2)');
   assert.equal(wb.sheet(1), auto);
-  const named = wb.copySheet(0, 0, 'Archive');
+  const named = wb.copySheet(0, { insertBefore: 0, newName: 'Archive' });
   assert.equal(named.index, 0);
   assert.equal(named.name, 'Archive');
   assert.equal(wb.sheet(0), named);
   wb.recalc();
   assert.equal(wb.sheet(0).getTypedValue(0, 1).number, 10);
   assert.throws(
-    () => wb.copySheet(9, 0),
+    () => wb.copySheet(9, { insertBefore: 0 }),
     (e) => isFormulonError(e, 10),
   );
   assert.throws(
-    () => wb.copySheet(0, 9),
+    () => wb.copySheet(0, { insertBefore: 9 }),
     (e) => isFormulonError(e, 10),
   );
   assert.throws(
-    () => wb.copySheet(0, 0, ''),
+    () => wb.copySheet(0, { insertBefore: 0, newName: '' }),
     (e) => isFormulonError(e, 11),
   );
   assert.equal(wb.listSheets().length, 3);

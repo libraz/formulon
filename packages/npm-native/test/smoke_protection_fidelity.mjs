@@ -75,7 +75,7 @@ test('protected ranges add, list, update, remove and follow row edits', async ()
   assert.equal(ranges[1].spinCount, 100000);
   assert.equal(ranges[1].securityDescriptor, 'O:WDG:WD');
 
-  loaded.sheet(0).insertRows(0, 2);
+  loaded.sheet(0).insertRows(0, 1);
   assert.deepEqual(loaded.sheet(0).listProtectedRanges()[0].ranges, [
     { firstRow: 3, firstCol: 1, lastRow: 4, lastCol: 2 },
     { firstRow: 6, firstCol: 4, lastRow: 6, lastCol: 4 },

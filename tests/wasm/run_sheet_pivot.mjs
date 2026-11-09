@@ -46,9 +46,9 @@ export function registerSheetPivot(Module, test) {
   test('removeSheet drops a sheet but rejects the last one', () => {
     const wb = Module.Workbook.createEmpty();
     try {
-      wb.addSheet('A');
-      wb.addSheet('B');
-      wb.addSheet('C');
+      wb.addSheet('A', wb.getSheetCount());
+      wb.addSheet('B', wb.getSheetCount());
+      wb.addSheet('C', wb.getSheetCount());
       assert.equal(wb.getSheetCount(), 3);
       wb.removeSheet(1);
       assert.equal(wb.getSheetCount(), 2);
@@ -67,17 +67,94 @@ export function registerSheetPivot(Module, test) {
     }
   });
 
-  test('moveSheet rearranges sheets (Excel UI semantics)', () => {
+  test('moveSheet places a sheet before the sheet at the given position', () => {
     const wb = Module.Workbook.createEmpty();
     try {
-      wb.addSheet('Alpha');
-      wb.addSheet('Beta');
-      wb.addSheet('Gamma');
-      // Move Alpha (0) to the end. Excel semantics: to=2 (post-removal).
-      wb.moveSheet(0, 2);
+      wb.addSheet('Alpha', wb.getSheetCount());
+      wb.addSheet('Beta', wb.getSheetCount());
+      wb.addSheet('Gamma', wb.getSheetCount());
+      // The position is a slot of the current list: 3 is past the last sheet.
+      wb.moveSheet(0, 3);
       assert.equal(wb.getSheetName(0), 'Beta');
       assert.equal(wb.getSheetName(1), 'Gamma');
       assert.equal(wb.getSheetName(2), 'Alpha');
+      // Gamma goes before Beta; moving a sheet before itself or its successor changes nothing.
+      wb.moveSheet(1, 0);
+      wb.moveSheet(0, 0);
+      wb.moveSheet(0, 1);
+      assert.deepEqual(
+        [0, 1, 2].map((i) => wb.getSheetName(i)),
+        ['Gamma', 'Beta', 'Alpha'],
+      );
+    } finally {
+      wb.delete();
+    }
+  });
+
+  test('addSheet inserts before a position and names a null name from the profile', () => {
+    const wb = Module.Workbook.createForProfile('win-365-de_DE');
+    try {
+      assert.equal(wb.addSheet(null, wb.getSheetCount()), 1);
+      assert.equal(wb.getSheetName(1), 'Tabelle2');
+      // The default name is the smallest free number, compared case-insensitively.
+      wb.addSheet('tabelle3', wb.getSheetCount());
+      assert.equal(wb.addSheet(undefined, wb.getSheetCount()), 3);
+      assert.equal(wb.getSheetName(3), 'Tabelle4');
+
+      assert.equal(wb.addSheet('Front', 0), 0);
+      assert.equal(wb.getSheetName(0), 'Front');
+      assert.equal(wb.getSheetName(1), 'Tabelle1');
+      assert.equal(wb.addSheet('Middle', 2), 2);
+      assert.deepEqual(
+        [0, 1, 2, 3].map((i) => wb.getSheetName(i)),
+        ['Front', 'Tabelle1', 'Middle', 'Tabelle2'],
+      );
+
+      expectFailure(() => wb.addSheet('', wb.getSheetCount()), StatusCode.InvalidSheetName);
+      expectFailure(() => wb.addSheet('MIDDLE', wb.getSheetCount()), StatusCode.AlreadyExists);
+      expectFailure(() => wb.addSheet('Past', wb.getSheetCount() + 1), StatusCode.SheetIndexOutOfRange);
+      assert.throws(() => wb.addSheet(1, wb.getSheetCount()), TypeError);
+    } finally {
+      wb.delete();
+    }
+  });
+
+  test('copySheet places the copy before the given position', () => {
+    const wb = Module.Workbook.createEmpty();
+    try {
+      wb.addSheet('A', wb.getSheetCount());
+      wb.addSheet('B', wb.getSheetCount());
+      assert.equal(wb.copySheet(1, 0, 'First'), 0);
+      assert.equal(wb.copySheet(0, wb.getSheetCount(), 'Last'), 3);
+      assert.deepEqual(
+        [0, 1, 2, 3].map((i) => wb.getSheetName(i)),
+        ['First', 'A', 'B', 'Last'],
+      );
+    } finally {
+      wb.delete();
+    }
+  });
+
+  test('insertRows / deleteRows / insertColumns / deleteColumns take an inclusive span', () => {
+    const wb = Module.Workbook.createDefault();
+    try {
+      wb.setNumber(0, 2, 2, 7);
+      wb.insertRows(0, 2, 4);
+      assert.equal(wb.getValue(0, 5, 2).number, 7);
+      wb.deleteRows(0, 2, 4);
+      assert.equal(wb.getValue(0, 2, 2).number, 7);
+      wb.insertColumns(0, 2, 3);
+      assert.equal(wb.getValue(0, 2, 4).number, 7);
+      wb.deleteColumns(0, 2, 3);
+      assert.equal(wb.getValue(0, 2, 2).number, 7);
+
+      // A single row or column is the span `[n, n]`.
+      wb.insertRows(0, 2, 2);
+      assert.equal(wb.getValue(0, 3, 2).number, 7);
+      for (const edit of [wb.insertRows, wb.deleteRows, wb.insertColumns, wb.deleteColumns]) {
+        expectFailure(() => edit.call(wb, 0, 5, 3), StatusCode.InvalidArgument);
+      }
+      expectFailure(() => wb.insertRows(0, 0, 1048576), StatusCode.InvalidArgument);
     } finally {
       wb.delete();
     }

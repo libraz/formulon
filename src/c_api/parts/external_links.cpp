@@ -39,7 +39,7 @@ extern "C" fm_status_t fm_workbook_get_external_link_at(const fm_workbook_t* wb,
     return rc;
   }
   const formulon::ExternalLinkRecord& rec = links[external_link_index];
-  out->index = rec.index;
+  out->book_number = rec.index;
   out->rel_id = rec.rel_id.c_str();
   out->part_path = rec.part_path.c_str();
   out->target = rec.target.empty() ? nullptr : rec.target.c_str();

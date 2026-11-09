@@ -37,7 +37,6 @@ using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::color_spec_to_c;
 using formulon::c_api::parts::ensure_calculated;
-using formulon::c_api::parts::fill_anchor;
 using formulon::c_api::parts::invalid_argument;
 using formulon::c_api::parts::kTickLabelPositionTokens;
 using formulon::c_api::parts::not_found;
@@ -340,15 +339,9 @@ extern "C" fm_status_t fm_chart_get_info(const fm_chart_t* chart, fm_chart_info_
     return rc;
   }
   out->object_id = m.object_id;
-  out->name = m.name.c_str();
-  out->description = m.descr.c_str();
   out->is_extended = m.is_chartex ? 1 : 0;
   out->is_pivot_chart = m.is_pivot_chart ? 1 : 0;
   out->on_chartsheet = m.on_chartsheet ? 1 : 0;
-  out->edit_as = to_c(m.edit_as);
-  fill_anchor(m, out);
-  out->width_emu = m.cx;
-  out->height_emu = m.cy;
   out->title = to_fm(m.title);
   out->auto_title_deleted = tri(m.auto_title_deleted);
   out->legend_position =
@@ -461,7 +454,7 @@ extern "C" fm_status_t fm_chart_get_series_at(const fm_chart_t* chart, size_t pl
   if (auto rc = begin_record(out); rc != 0) {
     return rc;
   }
-  out->idx = s->idx;
+  out->series_id = s->idx;
   out->order = s->order;
   out->filtered = s->filtered ? 1 : 0;
   out->name = to_fm(s->name);
@@ -766,7 +759,7 @@ extern "C" fm_status_t fm_chart_data_get_series_at(const fm_chart_data_t* data, 
     return rc;
   }
   out->plot_index = static_cast<std::uint32_t>(s.plot_index);
-  out->idx = s.idx;
+  out->series_id = s.idx;
   out->name = opt_cstr(s.name);
   out->format_code = s.format_code.c_str();
   out->x_format_code = s.x_format_code.c_str();
@@ -853,7 +846,7 @@ extern "C" fm_status_t fm_chart_data_get_unresolved_at(const fm_chart_data_t* da
   if (auto rc = check_index(idx, list.size(), "index"); rc != 0) {
     return rc;
   }
-  out->series_index = list[idx].series_idx;
+  out->series_id = list[idx].series_idx;
   out->source = unresolved_role(list[idx].source);
   out->axis_id = list[idx].axis_id;
   return 0;

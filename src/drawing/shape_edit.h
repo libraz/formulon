@@ -40,7 +40,8 @@ enum class ShapePaint : std::int32_t {
 };
 
 /// A listed shape. `object` carries id, kind (shape, connector or group),
-/// anchor, size and name as `list_drawing_objects` reports them.
+/// anchor, size, name, description and hidden flag as `list_drawing_objects`
+/// reports them.
 struct ShapeInfo {
   DrawingObject object;
   std::string prst;       ///< `a:prstGeom/@prst`; empty for custom geometry or a group.
@@ -52,7 +53,6 @@ struct ShapeInfo {
   ColorSpec line_color;             ///< Rgb or Theme when `line` is `kSolid`.
   std::int64_t line_width_emu = 0;  ///< `a:ln/@w`; 0 when absent.
   std::int32_t rotation = 0;        ///< `a:xfrm/@rot` in 60000ths of a degree.
-  bool hidden = false;
 };
 
 /// `ShapeSpec::fields` bits: the fields an insert or update applies.
@@ -114,7 +114,7 @@ Expected<std::vector<ShapeInfo>, Error> list_shapes(const Workbook& wb, std::siz
 Expected<std::uint32_t, Error> insert_shape(Workbook& wb, std::size_t sheet, const ShapeSpec& spec);
 
 /// Applies the fields `spec.fields` names to the shape, connector or group
-/// with `object_id`. The anchor kind cannot change. Text applies to a shape
+/// with `object_id`. An anchor of another kind converts the anchor. Text applies to a shape
 /// only and keeps the first paragraph's properties and first run's
 /// formatting. Fails like `insert_shape`, with `kNotFound` for an unknown id,
 /// and with `kInvalidArgument` for an object of another kind.

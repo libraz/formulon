@@ -55,7 +55,7 @@ TEST(FormulonCApiUtf8Input, MalformedTextIsRefusedWithTheWorkbookUnchanged) {
     EXPECT_EQ(fm_sheet_set_text(wb.handle, 0, 0, 0, bad), kUtf8Error);
     EXPECT_EQ(fm_sheet_set_formula(wb.handle, 0, 0, 1, (std::string("=\"") + bad + "\"").c_str()), kUtf8Error);
     EXPECT_EQ(fm_workbook_rename_sheet(wb.handle, 0, bad), kUtf8Error);
-    EXPECT_EQ(fm_workbook_add_sheet(wb.handle, bad, ignored_index()), kUtf8Error);
+    EXPECT_EQ(fm_workbook_add_sheet(wb.handle, bad, append_position(wb.handle), ignored_index()), kUtf8Error);
     EXPECT_EQ(fm_sheet_set_comment(wb.handle, 0, 0, 2, "author", bad), kUtf8Error);
     EXPECT_EQ(SetDefinedName(wb.handle, bad, "=1"), kUtf8Error);
     EXPECT_EQ(SetDefinedName(wb.handle, "Name", (std::string("=\"") + bad + "\"").c_str()), kUtf8Error);
@@ -112,13 +112,16 @@ TEST(FormulonCApiUtf8Input, KeyedGettersRefuseAMalformedKey) {
   }
 }
 
-// A drawing rename checks its text before it looks up the id, so even an id
+// A drawing update checks its text before it looks up the id, so even an id
 // no object holds reports the encoding.
-TEST(FormulonCApiUtf8Input, DrawingRenameRefusesAMalformedName) {
+TEST(FormulonCApiUtf8Input, DrawingUpdateRefusesAMalformedName) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   for (const char* bad : {kLoneSurrogate, kTruncated, "\xff"}) {
-    EXPECT_EQ(fm_sheet_set_drawing_name(wb.handle, 0, 42U, bad), kUtf8Error);
+    fm_drawing_patch_t patch = FM_STRUCT_INIT(fm_drawing_patch_t);
+    patch.name_op = FM_PATCH_OP_SET;
+    patch.name = bad;
+    EXPECT_EQ(fm_sheet_update_drawing(wb.handle, 0, 42U, &patch), kUtf8Error);
   }
 }
 

@@ -1409,6 +1409,28 @@ class EntryShapeTest(BindingRuleTestBase):
             ],
         )
 
+    def test_r17_entry_accepts_host_helpers_that_are_also_members(self) -> None:
+        common = self.COMMON.replace("'getVersion',\n", "'getVersion',\n  'toNative',\n  'mergeFunctionMetadata',\n")
+        helpers = (
+            "export function toNative(value: Value): unknown;\n"
+            "export function mergeFunctionMetadata(base: Meta, entry: Meta): Meta;\n"
+        )
+        members = "  toNative: typeof toNative;\n  mergeFunctionMetadata: typeof mergeFunctionMetadata;\n"
+        good_text = helpers + self.GOOD.replace("  getVersion(): string;\n", "  getVersion(): string;\n" + members)
+        good = self.fixture.context("", None, wasm=good_text, native=good_text, common=common)
+        self.assertEqual(hits(good, "R17.entry"), [])
+        unlisted_text = helpers + self.GOOD
+        bad = self.fixture.context("", None, wasm=good_text, native=unlisted_text, common=self.COMMON)
+        self.assertEqual(
+            hits(bad, "R17.entry"),
+            [
+                ("native", "mergeFunctionMetadata", "mergeFunctionMetadata"),
+                ("native", "toNative", "toNative"),
+                ("wasm", "Formulon", "mergeFunctionMetadata"),
+                ("wasm", "Formulon", "toNative"),
+            ],
+        )
+
     def test_r17_entry_without_a_member_list(self) -> None:
         ctx = self.fixture.context("", None, wasm=self.GOOD, native=self.GOOD, common="export const X = 1;\n")
         self.assertEqual(
@@ -2683,6 +2705,68 @@ class PatchShapeTest(BindingRuleTestBase):
              ("wasm", "table.update", "type:range")],
         )  # fmt: skip
 
+    def test_r18_all_composes_a_kind_patch_with_its_base_handle_patch(self) -> None:
+        def op(js: str, py: str, record: str, cls: object) -> dict:
+            return {"kind": "op", "scope": "sheet", "js": js, "py": py, "surfaces": ["wasm", "py"], "patch": True,
+                    "patch_record": record, "handle": {"class": cls, "js": "update", "py": "update"}}  # fmt: skip
+
+        ledger = {
+            "collections": {
+                "shape": {"key": "natural", "access": "handles", "handle_class": "Shape", "handle_base": "Drawing",
+                          "ops": ["shape.update"]},
+                "slicer": {"key": "natural", "access": "handles", "handle_class": "Slicer",
+                           "handle_base": "Drawing", "ops": ["slicer.update"]},
+            },
+            "entries": {
+                "drawing.update": op("updateDrawing", "update_drawing", "DrawingProperties", ["Drawing"]),
+                "shape.update": op("updateShape", "update_shape", "ShapeProperties", "Shape"),
+                "slicer.update": op("updateSlicer", "update_slicer", "SlicerProperties", "Slicer"),
+            },
+        }  # fmt: skip
+        records = (
+            "export interface DrawingProperties {\n  readonly name: string;\n  readonly hidden: boolean;\n}\n"
+            "export interface DrawingPatch {\n  name?: string;\n  hidden?: boolean;\n}\n"
+            "export interface ShapeProperties {\n  readonly text: string;\n}\n"
+            "export interface ShapePatch {\n  text?: string;\n}\n"
+            "export interface SlicerProperties {\n  readonly caption: string;\n}\n"
+            "export interface SlicerPatch {\n  caption?: string;\n}\n"
+            "export interface Drawing {\n  update(patch: DrawingPatch): void;\n}\n"
+        )
+        good_js = records + (
+            "export interface Shape extends Drawing {\n  update(patch: ShapePatch & DrawingPatch): void;\n}\n"
+            "export interface Slicer extends Drawing {\n"
+            "  update(patch: SlicerPatch & Omit<DrawingPatch, 'name'>): void;\n}\n"
+        )
+        # The common part only composes with the base's own patch; any other intersection stays a violation.
+        bad_js = records + (
+            "export interface Shape extends Drawing {\n  update(patch: ShapePatch & SlicerPatch): void;\n}\n"
+            "export interface Slicer extends Drawing {\n  update(patch: SlicerPatch & { extra?: number }): void;\n}\n"
+        )
+        py_records = (
+            "@dataclass(frozen=True)\nclass DrawingProperties:\n    name: str\n    hidden: bool\n\n"
+            "@dataclass(frozen=True)\nclass ShapeProperties:\n    text: str\n\n"
+            "@dataclass(frozen=True)\nclass SlicerProperties:\n    caption: str\n\n"
+            "class Drawing:\n    def update(self, *, name: str = UNCHANGED, hidden: bool = UNCHANGED) -> None: ...\n\n"
+        )
+        good_py = py_records + (
+            "class Shape(Drawing):\n    def update(self, *, text: str = UNCHANGED, name: str = UNCHANGED,"
+            " hidden: bool = UNCHANGED) -> None: ...\n\n"
+            "class Slicer(Drawing):\n    def update(self, *, caption: str = UNCHANGED, hidden: bool = UNCHANGED)"
+            " -> None: ...\n"
+        )
+        bad_py = py_records + (
+            "class Shape(Drawing):\n    def update(self, *, text: str = UNCHANGED, extra: int = UNCHANGED)"
+            " -> None: ...\n\n"
+            "class Slicer(Drawing):\n    def update(self, *, caption: str = UNCHANGED) -> None: ...\n"
+        )
+        self.assert_rule(
+            "R18.all",
+            self.fixture.context("", ledger, wasm=bad_js, py_workbook=bad_py),
+            self.fixture.context("", ledger, wasm=good_js, py_workbook=good_py),
+            [("py", "shape.update", "key:extra"), ("wasm", "shape.update", "patch"),
+             ("wasm", "slicer.update", "patch")],
+        )  # fmt: skip
+
 
 class HandleRuleTest(BindingRuleTestBase):
     """R28.handles, R25.span, and the handle frame of the address rules."""
@@ -2907,6 +2991,30 @@ class RefArgTest(BindingRuleTestBase):
                 ("wasm", "removePivot", "pivot"),
                 ("wasm", "removeTable", "tableIndex"),
             ],
+        )
+
+    def test_r26_accepts_an_exported_python_alias_of_the_reference_union(self) -> None:
+        aliases = (
+            'TableRef = Union[int, str, "Table"]\nPivotRef = Union[int, str]\nLocalRef = Union[int, str, "Table"]\n'
+        )
+        py = _py_wb(
+            "    def remove_table(self, table: TableRef) -> None: ...\n"
+            "    def remove_pivot(self, pivot: PivotRef) -> None: ...\n"
+            "    def get_table(self, table: LocalRef) -> None: ...\n",
+            prelude=aliases,
+        )
+        exported = "__all__ = ['TableRef', 'PivotRef', 'LocalRef']\n"
+        self.assert_rule(
+            "R26.ref",
+            self.fixture.context("", None, py_workbook=py, py_init="__all__ = ['TableRef', 'PivotRef']\n"),
+            self.fixture.context(
+                "",
+                None,
+                py_workbook=py.replace("PivotRef = Union[int, str]", 'PivotRef = Union[int, str, "Pivot"]'),
+                py_init=exported,
+            ),
+            # `PivotRef` lacks the handle class; `LocalRef` has the union but is not exported.
+            [("py", "get_table", "table"), ("py", "remove_pivot", "pivot")],
         )
 
     def test_r26_keeps_the_type_of_an_argument_the_ledger_exempts(self) -> None:

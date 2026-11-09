@@ -93,9 +93,9 @@ export function registerPositional(Module, test, hookProbe) {
         name: 'TypeError',
         message: 'Sheet.setNumber argument 3 must be a primitive number',
       });
-      assert.throws(() => wb.addSheet(1), {
+      assert.throws(() => wb.renameSheet(0, 1), {
         name: 'TypeError',
-        message: 'Workbook.addSheet argument 1 must be a primitive string',
+        message: 'Sheet.rename argument 1 must be a primitive string',
       });
       assert.throws(() => wb.setPrintTitles(0), {
         name: 'TypeError',

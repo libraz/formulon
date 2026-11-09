@@ -19,12 +19,13 @@
 namespace {
 
 constexpr bool kWasm32 = sizeof(void*) == 4U;
-static_assert(sizeof(fm_shape_info_t) == (kWasm32 ? 184U : 192U), "fm_shape_info_t ABI layout changed");
-static_assert(sizeof(fm_shape_patch_t) == (kWasm32 ? 296U : 320U), "fm_shape_patch_t ABI layout changed");
+static_assert(sizeof(fm_shape_info_t) == (kWasm32 ? 104U : 112U), "fm_shape_info_t ABI layout changed");
+static_assert(sizeof(fm_shape_spec_t) == (kWasm32 ? 192U : 216U), "fm_shape_spec_t ABI layout changed");
+static_assert(sizeof(fm_shape_patch_t) == (kWasm32 ? 136U : 152U), "fm_shape_patch_t ABI layout changed");
 static_assert(sizeof(fm_sparkline_group_patch_t) == (kWasm32 ? 432U : 448U),
               "fm_sparkline_group_patch_t ABI layout changed");
 static_assert(sizeof(fm_sparkline_t) == 2U * sizeof(void*), "fm_sparkline_t ABI layout changed");
-static_assert(sizeof(fm_sparkline_group_t) == (kWasm32 ? 296U : 304U), "fm_sparkline_group_t ABI layout changed");
+static_assert(sizeof(fm_sparkline_group_t) == (kWasm32 ? 296U : 312U), "fm_sparkline_group_t ABI layout changed");
 
 constexpr fm_status_t kInvalidArgument = static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
 constexpr fm_status_t kBindingNullPointer = static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer);
@@ -57,127 +58,211 @@ fm_color_t Theme(uint32_t theme, double tint) {
 }
 
 // A two-cell callout with text, a solid fill, no outline, a line width and a rotation.
-fm_shape_patch_t Callout() {
-  fm_shape_patch_t s = FM_STRUCT_INIT(fm_shape_patch_t);
-  Set(s.name_op, s.name, "Callout");
-  Set(s.preset_geometry_op, s.preset_geometry, "wedgeRectCallout");
-  Set(s.text_op, s.text, "Hello\nWorld");
-  Set(s.anchor_kind_op, s.anchor_kind, FM_ANCHOR_KIND_TWO_CELL);
-  Set(s.edit_as_op, s.edit_as, FM_ANCHOR_EDIT_AS_ONE_CELL);
-  Set(s.from_row_op, s.from_row, 2U);
-  Set(s.from_col_op, s.from_col, 1U);
-  Set(s.to_row_op, s.to_row, 6U);
-  Set(s.to_col_op, s.to_col, 4U);
-  Set(s.fill_kind_op, s.fill_kind, FM_SHAPE_PAINT_SOLID);
-  Set(s.fill_color_op, s.fill_color, Rgb(0xFFFFCC00U));
-  Set(s.line_kind_op, s.line_kind, FM_SHAPE_PAINT_NONE);
-  Set(s.line_width_pt_op, s.line_width_pt, 1.0);
-  Set(s.rotation_deg_op, s.rotation_deg, 5.0);
+fm_shape_spec_t Callout() {
+  fm_shape_spec_t s = FM_STRUCT_INIT(fm_shape_spec_t);
+  s.placement = FM_STRUCT_INIT(fm_drawing_placement_spec_t);
+  s.placement.name = "Callout";
+  s.placement.anchor.kind = FM_ANCHOR_KIND_TWO_CELL;
+  s.placement.anchor.edit_as = FM_ANCHOR_EDIT_AS_ONE_CELL;
+  s.placement.anchor.from_row = 2;
+  s.placement.anchor.from_col = 1;
+  s.placement.anchor.to_row = 6;
+  s.placement.anchor.to_col = 4;
+  s.preset_geometry = "wedgeRectCallout";
+  s.text = "Hello\nWorld";
+  s.fill_kind = FM_SHAPE_PAINT_SOLID;
+  s.fill_color = Rgb(0xFFFFCC00U);
+  s.line_kind = FM_SHAPE_PAINT_NONE;
+  s.line_width_pt = 1.0;
+  s.rotation_deg = 5.0;
   return s;
 }
 
-fm_shape_info_t ShapeAt(const fm_workbook_t* wb, size_t index) {
+// The shape fields of the id'th object of the first sheet's drawing.
+fm_shape_info_t ShapeById(const fm_workbook_t* wb, std::uint32_t id) {
   fm_shape_info_t out = FM_STRUCT_INIT(fm_shape_info_t);
-  EXPECT_EQ(fm_sheet_get_shape_at(wb, 0, index, &out), 0) << fm_get_last_error_message();
+  int32_t present = 0;
+  EXPECT_EQ(fm_sheet_get_shape(wb, 0, id, &present, &out), 0) << fm_get_last_error_message();
+  EXPECT_EQ(present, 1);
   return out;
 }
 
+// The common drawing fields (name, anchor, visibility) of object `id`.
+fm_drawing_object_info_t ObjectById(const fm_workbook_t* wb, std::uint32_t id) {
+  fm_drawing_object_info_t out = FM_STRUCT_INIT(fm_drawing_object_info_t);
+  int32_t present = 0;
+  EXPECT_EQ(fm_sheet_get_drawing_object(wb, 0, id, &present, &out), 0) << fm_get_last_error_message();
+  EXPECT_EQ(present, 1);
+  return out;
+}
+
+// The id of the object at `index` of the first sheet's drawing.
+std::uint32_t IdAt(const fm_workbook_t* wb, size_t index) {
+  fm_drawing_object_info_t out = FM_STRUCT_INIT(fm_drawing_object_info_t);
+  EXPECT_EQ(fm_sheet_get_drawing_object_at(wb, 0, index, &out), 0) << fm_get_last_error_message();
+  return out.object_id;
+}
+
+size_t ObjectCount(const fm_workbook_t* wb) {
+  size_t count = 99;
+  EXPECT_EQ(fm_sheet_get_drawing_object_count(wb, 0, &count), 0);
+  return count;
+}
+
 TEST(FormulonCApiShapes, EnumOrdinals) {
-  EXPECT_EQ(FM_SHAPE_PAINT_ABSENT, -1);
-  EXPECT_EQ(FM_SHAPE_PAINT_SOLID, 0);
-  EXPECT_EQ(FM_SHAPE_PAINT_NONE, 1);
-  EXPECT_EQ(FM_SHAPE_PAINT_OTHER, 2);
+  // Zero is no paint of its own: the shape style's.
+  EXPECT_EQ(FM_SHAPE_PAINT_DEFAULT, 0);
+  EXPECT_EQ(FM_SHAPE_PAINT_SOLID, 1);
+  EXPECT_EQ(FM_SHAPE_PAINT_NONE, 2);
+  EXPECT_EQ(FM_SHAPE_PAINT_OTHER, 3);
   EXPECT_EQ(FM_SPARKLINE_TYPE_STACKED, 2);
   EXPECT_EQ(FM_SPARKLINE_AXIS_TYPE_CUSTOM, 2);
 }
 
-TEST(FormulonCApiShapes, InsertListUpdateRemoveAndReload) {
+TEST(FormulonCApiShapes, InsertReadUpdateRemoveAndReload) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  size_t count = 99;
-  ASSERT_EQ(fm_sheet_get_shape_count(wb.handle, 0, &count), 0);
-  EXPECT_EQ(count, 0U);
+  EXPECT_EQ(ObjectCount(wb.handle), 0U);
 
-  const fm_shape_patch_t spec = Callout();
+  const fm_shape_spec_t spec = Callout();
   uint32_t id = 0;
   ASSERT_EQ(fm_sheet_add_shape(wb.handle, 0, &spec, &id), 0) << fm_get_last_error_message();
   EXPECT_EQ(id, 2U);
 
-  fm_shape_patch_t connector = FM_STRUCT_INIT(fm_shape_patch_t);
-  Set(connector.preset_geometry_op, connector.preset_geometry, "straightConnector1");
-  Set(connector.anchor_kind_op, connector.anchor_kind, FM_ANCHOR_KIND_ONE_CELL);
-  Set(connector.from_row_op, connector.from_row, 10U);
-  Set(connector.from_col_offset_emu_op, connector.from_col_offset_emu, 500);
-  Set(connector.width_emu_op, connector.width_emu, 914400);
-  Set(connector.line_kind_op, connector.line_kind, FM_SHAPE_PAINT_SOLID);
-  Set(connector.line_color_op, connector.line_color, Rgb(0xFF00FF00U));
+  fm_shape_spec_t connector = FM_STRUCT_INIT(fm_shape_spec_t);
+  connector.placement = FM_STRUCT_INIT(fm_drawing_placement_spec_t);
+  connector.preset_geometry = "straightConnector1";
+  connector.placement.anchor.kind = FM_ANCHOR_KIND_ONE_CELL;
+  connector.placement.anchor.from_row = 10;
+  connector.placement.anchor.from_col_offset_emu = 500;
+  connector.placement.anchor.width_emu = 914400;
+  connector.placement.anchor.height_emu = 914400;
+  connector.line_kind = FM_SHAPE_PAINT_SOLID;
+  connector.line_color = Rgb(0xFF00FF00U);
   uint32_t line_id = 0;
   ASSERT_EQ(fm_sheet_add_shape(wb.handle, 0, &connector, &line_id), 0) << fm_get_last_error_message();
 
   WorkbookGuard again;
   SaveAndReload(wb.handle, &again);
-  ASSERT_EQ(fm_sheet_get_shape_count(again.handle, 0, &count), 0);
-  ASSERT_EQ(count, 2U);
-  fm_shape_info_t out = ShapeAt(again.handle, 0);
+  ASSERT_EQ(ObjectCount(again.handle), 2U);
+  ASSERT_EQ(IdAt(again.handle, 0), id);
+  fm_shape_info_t out = ShapeById(again.handle, id);
   EXPECT_EQ(out.object_id, id);
   EXPECT_EQ(out.kind, FM_DRAWING_OBJECT_KIND_SHAPE);
-  EXPECT_STREQ(out.name, "Callout");
   EXPECT_STREQ(out.preset_geometry, "wedgeRectCallout");
   EXPECT_STREQ(out.text, "Hello\nWorld");
-  EXPECT_EQ(out.anchor_kind, FM_ANCHOR_KIND_TWO_CELL);
-  EXPECT_EQ(out.edit_as, FM_ANCHOR_EDIT_AS_ONE_CELL);
-  EXPECT_EQ(out.from_row, 2U);
-  EXPECT_EQ(out.to_col, 4U);
   EXPECT_EQ(out.fill_kind, FM_SHAPE_PAINT_SOLID);
   EXPECT_EQ(out.fill_color.kind, FM_COLOR_KIND_RGB);
   EXPECT_EQ(out.fill_color.argb, 0xFFFFCC00U);
   EXPECT_EQ(out.line_kind, FM_SHAPE_PAINT_NONE);
   EXPECT_DOUBLE_EQ(out.line_width_pt, 1.0);
   EXPECT_DOUBLE_EQ(out.rotation_deg, 5.0);
-  out = ShapeAt(again.handle, 1);
+  fm_drawing_object_info_t frame = ObjectById(again.handle, id);
+  EXPECT_STREQ(frame.name, "Callout");
+  EXPECT_EQ(frame.anchor.kind, FM_ANCHOR_KIND_TWO_CELL);
+  EXPECT_EQ(frame.anchor.edit_as, FM_ANCHOR_EDIT_AS_ONE_CELL);
+  EXPECT_EQ(frame.anchor.from_row, 2U);
+  EXPECT_EQ(frame.anchor.to_col, 4U);
+  out = ShapeById(again.handle, line_id);
   EXPECT_EQ(out.kind, FM_DRAWING_OBJECT_KIND_CONNECTOR);
-  EXPECT_EQ(out.from_col_offset_emu, 500);
-  EXPECT_EQ(out.width_emu, 914400);
   EXPECT_EQ(out.line_color.kind, FM_COLOR_KIND_RGB);
   EXPECT_EQ(out.line_color.argb, 0xFF00FF00U);
+  frame = ObjectById(again.handle, line_id);
+  EXPECT_EQ(frame.anchor.from_col_offset_emu, 500);
+  EXPECT_EQ(frame.anchor.width_emu, 914400);
 
+  // The name and visibility change through the common drawing patch, the paint through the shape patch.
+  fm_drawing_patch_t common = FM_STRUCT_INIT(fm_drawing_patch_t);
+  Set(common.name_op, common.name, "Renamed");
+  Set(common.hidden_op, common.hidden, 1);
+  ASSERT_EQ(fm_sheet_update_drawing(again.handle, 0, id, &common), 0) << fm_get_last_error_message();
   fm_shape_patch_t patch = FM_STRUCT_INIT(fm_shape_patch_t);
-  Set(patch.name_op, patch.name, "Renamed");
-  Set(patch.hidden_op, patch.hidden, 1);
   Set(patch.fill_kind_op, patch.fill_kind, FM_SHAPE_PAINT_NONE);
   ASSERT_EQ(fm_sheet_update_shape(again.handle, 0, id, &patch), 0) << fm_get_last_error_message();
-  out = ShapeAt(again.handle, 0);
-  EXPECT_STREQ(out.name, "Renamed");
-  EXPECT_EQ(out.hidden, 1);
-  EXPECT_EQ(out.fill_kind, FM_SHAPE_PAINT_NONE);
+  out = ShapeById(again.handle, id);
+  // Strings are read-scratch views: compare the shape's before the frame read replaces them.
   EXPECT_STREQ(out.preset_geometry, "wedgeRectCallout");  // KEEP fields stay
+  frame = ObjectById(again.handle, id);
+  EXPECT_STREQ(frame.name, "Renamed");
+  EXPECT_EQ(frame.hidden, 1);
+  EXPECT_EQ(out.fill_kind, FM_SHAPE_PAINT_NONE);
   EXPECT_DOUBLE_EQ(out.rotation_deg, 5.0);
 
   EXPECT_EQ(fm_sheet_update_shape(again.handle, 0, 99, &patch), FM_STATUS_NOT_FOUND);
-  ASSERT_EQ(fm_sheet_remove_shape(again.handle, 0, id), 0);
-  ASSERT_EQ(fm_sheet_get_shape_count(again.handle, 0, &count), 0);
-  EXPECT_EQ(count, 1U);
-  EXPECT_EQ(fm_sheet_remove_shape(again.handle, 0, id), FM_STATUS_NOT_FOUND);
+  ASSERT_EQ(fm_sheet_remove_drawing(again.handle, 0, id), 0) << fm_get_last_error_message();
+  EXPECT_EQ(ObjectCount(again.handle), 1U);
+  EXPECT_EQ(fm_sheet_remove_drawing(again.handle, 0, id), FM_STATUS_NOT_FOUND);
+  int32_t present = 1;
+  fm_shape_info_t gone = FM_STRUCT_INIT(fm_shape_info_t);
+  ASSERT_EQ(fm_sheet_get_shape(again.handle, 0, id, &present, &gone), 0);
+  EXPECT_EQ(present, 0);
+}
+
+TEST(FormulonCApiShapes, PlacementDescriptionAndHiddenReachTheShape) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  fm_shape_spec_t spec = Callout();
+  spec.placement.description = "a callout";
+  spec.placement.hidden = FM_TRISTATE_TRUE;
+  uint32_t id = 0;
+  ASSERT_EQ(fm_sheet_add_shape(wb.handle, 0, &spec, &id), 0) << fm_get_last_error_message();
+  const fm_drawing_object_info_t frame = ObjectById(wb.handle, id);
+  EXPECT_STREQ(frame.description, "a callout");
+  EXPECT_EQ(frame.hidden, 1);
+
+  // A default placement takes Excel's defaults: a two-cell anchor, the generated name, shown.
+  fm_shape_spec_t plain = FM_STRUCT_INIT(fm_shape_spec_t);
+  plain.placement = FM_STRUCT_INIT(fm_drawing_placement_spec_t);
+  plain.placement.anchor.from_row = 1;
+  plain.placement.anchor.to_row = 3;
+  plain.placement.anchor.to_col = 2;
+  uint32_t plain_id = 0;
+  ASSERT_EQ(fm_sheet_add_shape(wb.handle, 0, &plain, &plain_id), 0) << fm_get_last_error_message();
+  const fm_drawing_object_info_t made = ObjectById(wb.handle, plain_id);
+  EXPECT_EQ(made.anchor.kind, FM_ANCHOR_KIND_TWO_CELL);
+  EXPECT_EQ(made.hidden, 0);
+  EXPECT_EQ(std::string(made.name), "Shape " + std::to_string(plain_id));
+  const fm_shape_info_t shape = ShapeById(wb.handle, plain_id);
+  EXPECT_STREQ(shape.preset_geometry, "rect");
+  EXPECT_EQ(shape.fill_kind, FM_SHAPE_PAINT_DEFAULT);
+  EXPECT_EQ(shape.line_kind, FM_SHAPE_PAINT_DEFAULT);
+}
+
+TEST(FormulonCApiShapes, AStraightConnectorMayBeFlatButNotSizeless) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  fm_shape_spec_t line = FM_STRUCT_INIT(fm_shape_spec_t);
+  line.placement = FM_STRUCT_INIT(fm_drawing_placement_spec_t);
+  line.preset_geometry = "straightConnector1";
+  line.placement.anchor.kind = FM_ANCHOR_KIND_ONE_CELL;
+  line.placement.anchor.from_row = 2;
+  line.placement.anchor.width_emu = 914400;
+  uint32_t id = 0;
+  EXPECT_EQ(fm_sheet_add_shape(wb.handle, 0, &line, &id), 0) << fm_get_last_error_message();
+  EXPECT_EQ(ObjectById(wb.handle, id).anchor.height_emu, 0);
+
+  line.placement.anchor.width_emu = 0;
+  EXPECT_EQ(fm_sheet_add_shape(wb.handle, 0, &line, &id), FM_STATUS_INVALID_ARGUMENT);
 }
 
 TEST(FormulonCApiShapes, RotationDegreesAndLineWidthPointsSurviveReload) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  fm_shape_patch_t spec = Callout();
+  fm_shape_spec_t spec = Callout();
   spec.rotation_deg = 12.5;
-  Set(spec.line_kind_op, spec.line_kind, FM_SHAPE_PAINT_SOLID);
-  Set(spec.line_color_op, spec.line_color, Rgb(0xFF102030U));
+  spec.line_kind = FM_SHAPE_PAINT_SOLID;
+  spec.line_color = Rgb(0xFF102030U);
   spec.line_width_pt = 2.25;
   uint32_t id = 0;
   ASSERT_EQ(fm_sheet_add_shape(wb.handle, 0, &spec, &id), 0) << fm_get_last_error_message();
 
-  fm_shape_info_t out = ShapeAt(wb.handle, 0);
+  fm_shape_info_t out = ShapeById(wb.handle, id);
   EXPECT_DOUBLE_EQ(out.rotation_deg, 12.5);
   EXPECT_DOUBLE_EQ(out.line_width_pt, 2.25);
 
   WorkbookGuard again;
   SaveAndReload(wb.handle, &again);
-  out = ShapeAt(again.handle, 0);
+  out = ShapeById(again.handle, id);
   EXPECT_DOUBLE_EQ(out.rotation_deg, 12.5);
   EXPECT_DOUBLE_EQ(out.line_width_pt, 2.25);
 
@@ -185,7 +270,7 @@ TEST(FormulonCApiShapes, RotationDegreesAndLineWidthPointsSurviveReload) {
   fm_shape_patch_t patch = FM_STRUCT_INIT(fm_shape_patch_t);
   Set(patch.rotation_deg_op, patch.rotation_deg, 90.0);
   ASSERT_EQ(fm_sheet_update_shape(again.handle, 0, id, &patch), 0) << fm_get_last_error_message();
-  out = ShapeAt(again.handle, 0);
+  out = ShapeById(again.handle, id);
   EXPECT_DOUBLE_EQ(out.rotation_deg, 90.0);
   EXPECT_DOUBLE_EQ(out.line_width_pt, 2.25);
 }
@@ -193,15 +278,15 @@ TEST(FormulonCApiShapes, RotationDegreesAndLineWidthPointsSurviveReload) {
 TEST(FormulonCApiShapes, RotationIsNormalisedAndRangeChecked) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  fm_shape_patch_t spec = Callout();
+  fm_shape_spec_t spec = Callout();
   spec.rotation_deg = -90.0;
   uint32_t id = 0;
   ASSERT_EQ(fm_sheet_add_shape(wb.handle, 0, &spec, &id), 0) << fm_get_last_error_message();
-  EXPECT_DOUBLE_EQ(ShapeAt(wb.handle, 0).rotation_deg, 270.0);
+  EXPECT_DOUBLE_EQ(ShapeById(wb.handle, id).rotation_deg, 270.0);
 
   spec.rotation_deg = 450.0;
   ASSERT_EQ(fm_sheet_add_shape(wb.handle, 0, &spec, &id), 0) << fm_get_last_error_message();
-  EXPECT_DOUBLE_EQ(ShapeAt(wb.handle, 1).rotation_deg, 90.0);
+  EXPECT_DOUBLE_EQ(ShapeById(wb.handle, id).rotation_deg, 90.0);
 
   for (const double bad :
        {3601.0, -3601.0, std::numeric_limits<double>::infinity(), std::numeric_limits<double>::quiet_NaN()}) {
@@ -213,14 +298,14 @@ TEST(FormulonCApiShapes, RotationIsNormalisedAndRangeChecked) {
 TEST(FormulonCApiShapes, ThemeColorsRoundTripAndAreValidated) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  fm_shape_patch_t spec = Callout();
+  fm_shape_spec_t spec = Callout();
   spec.fill_color = Theme(4, 0.4);
-  Set(spec.line_kind_op, spec.line_kind, FM_SHAPE_PAINT_SOLID);
-  Set(spec.line_color_op, spec.line_color, Theme(1, -0.25));
+  spec.line_kind = FM_SHAPE_PAINT_SOLID;
+  spec.line_color = Theme(1, -0.25);
   uint32_t id = 0;
   ASSERT_EQ(fm_sheet_add_shape(wb.handle, 0, &spec, &id), 0) << fm_get_last_error_message();
 
-  const fm_shape_info_t out = ShapeAt(wb.handle, 0);
+  const fm_shape_info_t out = ShapeById(wb.handle, id);
   EXPECT_EQ(out.fill_kind, FM_SHAPE_PAINT_SOLID);
   EXPECT_EQ(out.fill_color.kind, FM_COLOR_KIND_THEME);
   EXPECT_EQ(out.fill_color.theme, 4U);
@@ -240,7 +325,7 @@ TEST(FormulonCApiShapes, ThemeColorsRoundTripAndAreValidated) {
       {FM_COLOR_KIND_THEME, 4, -1.5},  {FM_COLOR_KIND_THEME, 4, std::numeric_limits<double>::quiet_NaN()},
   };
   for (const Bad& b : bad) {
-    fm_shape_patch_t s = Callout();
+    fm_shape_spec_t s = Callout();
     s.fill_color = fm_color_t{};
     s.fill_color.kind = b.kind;
     s.fill_color.theme = b.theme;
@@ -250,51 +335,55 @@ TEST(FormulonCApiShapes, ThemeColorsRoundTripAndAreValidated) {
   }
 
   // A colour on a paint that is not solid is refused rather than dropped.
-  fm_shape_patch_t none = Callout();
+  fm_shape_spec_t none = Callout();
   none.fill_kind = FM_SHAPE_PAINT_NONE;
   EXPECT_EQ(fm_sheet_add_shape(wb.handle, 0, &none, &id), kInvalidArgument);
   none = Callout();
-  Set(none.line_color_op, none.line_color, Rgb(0xFF000000U));
+  none.line_color = Rgb(0xFF000000U);
   EXPECT_EQ(fm_sheet_add_shape(wb.handle, 0, &none, &id), kInvalidArgument);
-  // A colour left KEEP is not read at all.
-  none.line_color_op = FM_PATCH_OP_KEEP;
+  // A colour left None is not read at all.
+  none.line_color = fm_color_t{};
   EXPECT_EQ(fm_sheet_add_shape(wb.handle, 0, &none, &id), 0) << fm_get_last_error_message();
 }
 
-// CLEAR on a paint field removes the shape's own fill or outline so the style's
-// paint applies; it reads ABSENT and survives a save and reload.
-TEST(FormulonCApiShapes, PaintClearRemovesTheShapesOwnFillAndOutline) {
+// A SET `DEFAULT` kind removes the shape's own fill or outline so the style's paint
+// applies; it reads `DEFAULT` and survives a save and reload.
+TEST(FormulonCApiShapes, SettingDefaultPaintRemovesTheShapesOwnFillAndOutline) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  const fm_shape_patch_t spec = Callout();
+  fm_shape_spec_t spec = Callout();
+  spec.line_kind = FM_SHAPE_PAINT_SOLID;
+  spec.line_color = Rgb(0xFF0000FFU);
   uint32_t id = 0;
   ASSERT_EQ(fm_sheet_add_shape(wb.handle, 0, &spec, &id), 0) << fm_get_last_error_message();
 
-  fm_shape_patch_t clear = FM_STRUCT_INIT(fm_shape_patch_t);
-  clear.fill_kind_op = FM_PATCH_OP_CLEAR;
-  clear.line_color_op = FM_PATCH_OP_CLEAR;
-  ASSERT_EQ(fm_sheet_update_shape(wb.handle, 0, id, &clear), 0) << fm_get_last_error_message();
-  fm_shape_info_t out = ShapeAt(wb.handle, 0);
-  EXPECT_EQ(out.fill_kind, FM_SHAPE_PAINT_ABSENT);
+  fm_shape_patch_t reset = FM_STRUCT_INIT(fm_shape_patch_t);
+  Set(reset.fill_kind_op, reset.fill_kind, FM_SHAPE_PAINT_DEFAULT);
+  Set(reset.line_kind_op, reset.line_kind, FM_SHAPE_PAINT_DEFAULT);
+  ASSERT_EQ(fm_sheet_update_shape(wb.handle, 0, id, &reset), 0) << fm_get_last_error_message();
+  fm_shape_info_t out = ShapeById(wb.handle, id);
+  EXPECT_EQ(out.fill_kind, FM_SHAPE_PAINT_DEFAULT);
   EXPECT_EQ(out.fill_color.kind, FM_COLOR_KIND_NONE);
-  EXPECT_EQ(out.line_kind, FM_SHAPE_PAINT_ABSENT);
-  EXPECT_DOUBLE_EQ(out.line_width_pt, 1.0);  // the outline keeps its width
+  EXPECT_EQ(out.line_kind, FM_SHAPE_PAINT_DEFAULT);
+  EXPECT_EQ(out.line_color.kind, FM_COLOR_KIND_NONE);
 
   WorkbookGuard again;
   SaveAndReload(wb.handle, &again);
-  out = ShapeAt(again.handle, 0);
-  EXPECT_EQ(out.fill_kind, FM_SHAPE_PAINT_ABSENT);
-  EXPECT_EQ(out.line_kind, FM_SHAPE_PAINT_ABSENT);
+  out = ShapeById(again.handle, id);
+  EXPECT_EQ(out.fill_kind, FM_SHAPE_PAINT_DEFAULT);
+  EXPECT_EQ(out.line_kind, FM_SHAPE_PAINT_DEFAULT);
 
-  // CLEAR on one of a pair with SET on the other is refused, and nothing changes.
-  fm_shape_patch_t mixed = FM_STRUCT_INIT(fm_shape_patch_t);
-  mixed.fill_kind_op = FM_PATCH_OP_CLEAR;
-  Set(mixed.fill_color_op, mixed.fill_color, Rgb(0xFF123456U));
-  Set(mixed.hidden_op, mixed.hidden, 1);
-  EXPECT_EQ(fm_sheet_update_shape(again.handle, 0, id, &mixed), kInvalidArgument);
-  out = ShapeAt(again.handle, 0);
-  EXPECT_EQ(out.fill_kind, FM_SHAPE_PAINT_ABSENT);
-  EXPECT_EQ(out.hidden, 0);
+  // No field of a shape patch can be cleared, and a refused patch changes nothing.
+  fm_shape_patch_t clear = FM_STRUCT_INIT(fm_shape_patch_t);
+  clear.fill_kind_op = FM_PATCH_OP_CLEAR;
+  Set(clear.rotation_deg_op, clear.rotation_deg, 45.0);
+  EXPECT_EQ(fm_sheet_update_shape(again.handle, 0, id, &clear), kInvalidArgument);
+  fm_shape_patch_t clear_text = FM_STRUCT_INIT(fm_shape_patch_t);
+  clear_text.text_op = FM_PATCH_OP_CLEAR;
+  EXPECT_EQ(fm_sheet_update_shape(again.handle, 0, id, &clear_text), kInvalidArgument);
+  out = ShapeById(again.handle, id);
+  EXPECT_EQ(out.fill_kind, FM_SHAPE_PAINT_DEFAULT);
+  EXPECT_DOUBLE_EQ(out.rotation_deg, 5.0);
 }
 
 // A paint pair combines with the stored paint: a colour alone makes the paint
@@ -302,91 +391,216 @@ TEST(FormulonCApiShapes, PaintClearRemovesTheShapesOwnFillAndOutline) {
 TEST(FormulonCApiShapes, PaintPairCombinesWithTheStoredPaint) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  const fm_shape_patch_t spec = Callout();
+  const fm_shape_spec_t spec = Callout();
   uint32_t id = 0;
   ASSERT_EQ(fm_sheet_add_shape(wb.handle, 0, &spec, &id), 0) << fm_get_last_error_message();
 
   fm_shape_patch_t colour = FM_STRUCT_INIT(fm_shape_patch_t);
   Set(colour.line_color_op, colour.line_color, Rgb(0xFF0000FFU));
   ASSERT_EQ(fm_sheet_update_shape(wb.handle, 0, id, &colour), 0) << fm_get_last_error_message();
-  fm_shape_info_t out = ShapeAt(wb.handle, 0);
+  fm_shape_info_t out = ShapeById(wb.handle, id);
   EXPECT_EQ(out.line_kind, FM_SHAPE_PAINT_SOLID);
   EXPECT_EQ(out.line_color.argb, 0xFF0000FFU);
 
+  fm_shape_patch_t none = FM_STRUCT_INIT(fm_shape_patch_t);
+  Set(none.fill_kind_op, none.fill_kind, FM_SHAPE_PAINT_NONE);
+  ASSERT_EQ(fm_sheet_update_shape(wb.handle, 0, id, &none), 0) << fm_get_last_error_message();
   fm_shape_patch_t kind = FM_STRUCT_INIT(fm_shape_patch_t);
   Set(kind.fill_kind_op, kind.fill_kind, FM_SHAPE_PAINT_SOLID);
   ASSERT_EQ(fm_sheet_update_shape(wb.handle, 0, id, &kind), 0) << fm_get_last_error_message();
-  out = ShapeAt(wb.handle, 0);
+  out = ShapeById(wb.handle, id);
   EXPECT_EQ(out.fill_kind, FM_SHAPE_PAINT_SOLID);
-  EXPECT_EQ(out.fill_color.argb, 0xFFFFCC00U);
 }
 
-// An update applies its anchor fields to the current anchor and cannot change
-// its kind.
-TEST(FormulonCApiShapes, UpdateMergesAnchorFieldsIntoTheCurrentAnchor) {
+// An anchor update through the common drawing patch merges field by field into
+// the current anchor.
+TEST(FormulonCApiShapes, DrawingPatchMergesAnchorFieldsIntoTheCurrentAnchor) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  const fm_shape_patch_t spec = Callout();
+  const fm_shape_spec_t spec = Callout();
   uint32_t id = 0;
   ASSERT_EQ(fm_sheet_add_shape(wb.handle, 0, &spec, &id), 0) << fm_get_last_error_message();
 
-  fm_shape_patch_t move = FM_STRUCT_INIT(fm_shape_patch_t);
-  Set(move.to_col_op, move.to_col, 7U);
-  ASSERT_EQ(fm_sheet_update_shape(wb.handle, 0, id, &move), 0) << fm_get_last_error_message();
-  fm_shape_info_t out = ShapeAt(wb.handle, 0);
-  EXPECT_EQ(out.from_row, 2U);
-  EXPECT_EQ(out.from_col, 1U);
-  EXPECT_EQ(out.to_row, 6U);
-  EXPECT_EQ(out.to_col, 7U);
-  EXPECT_EQ(out.edit_as, FM_ANCHOR_EDIT_AS_ONE_CELL);
+  fm_drawing_patch_t move = FM_STRUCT_INIT(fm_drawing_patch_t);
+  Set(move.anchor.to_col_op, move.anchor.to_col, 7U);
+  ASSERT_EQ(fm_sheet_update_drawing(wb.handle, 0, id, &move), 0) << fm_get_last_error_message();
+  fm_drawing_object_info_t out = ObjectById(wb.handle, id);
+  EXPECT_EQ(out.anchor.from_row, 2U);
+  EXPECT_EQ(out.anchor.from_col, 1U);
+  EXPECT_EQ(out.anchor.to_row, 6U);
+  EXPECT_EQ(out.anchor.to_col, 7U);
+  EXPECT_EQ(out.anchor.edit_as, FM_ANCHOR_EDIT_AS_ONE_CELL);
 
-  fm_shape_patch_t same = FM_STRUCT_INIT(fm_shape_patch_t);
-  Set(same.anchor_kind_op, same.anchor_kind, FM_ANCHOR_KIND_TWO_CELL);
-  EXPECT_EQ(fm_sheet_update_shape(wb.handle, 0, id, &same), 0) << fm_get_last_error_message();
-  fm_shape_patch_t other = FM_STRUCT_INIT(fm_shape_patch_t);
-  Set(other.anchor_kind_op, other.anchor_kind, FM_ANCHOR_KIND_ONE_CELL);
-  EXPECT_EQ(fm_sheet_update_shape(wb.handle, 0, id, &other), kInvalidArgument);
-  EXPECT_EQ(ShapeAt(wb.handle, 0).anchor_kind, FM_ANCHOR_KIND_TWO_CELL);
+  // A kind equal to the current one is accepted.
+  fm_drawing_patch_t same = FM_STRUCT_INIT(fm_drawing_patch_t);
+  Set(same.anchor.kind_op, same.anchor.kind, FM_ANCHOR_KIND_TWO_CELL);
+  EXPECT_EQ(fm_sheet_update_drawing(wb.handle, 0, id, &same), 0) << fm_get_last_error_message();
+  // A size on a two-cell anchor is refused and changes nothing.
+  fm_drawing_patch_t sized = FM_STRUCT_INIT(fm_drawing_patch_t);
+  Set(sized.anchor.width_emu_op, sized.anchor.width_emu, 100000);
+  EXPECT_EQ(fm_sheet_update_drawing(wb.handle, 0, id, &sized), kInvalidArgument);
+  EXPECT_EQ(ObjectById(wb.handle, id).anchor.to_col, 7U);
+}
+
+// Every field of `a` as SET in an anchor patch: a read record passed back whole.
+fm_drawing_patch_t WholeAnchorPatch(const fm_drawing_anchor_t& a) {
+  fm_drawing_patch_t p = FM_STRUCT_INIT(fm_drawing_patch_t);
+  fm_drawing_anchor_patch_t& q = p.anchor;
+  Set(q.kind_op, q.kind, a.kind);
+  Set(q.edit_as_op, q.edit_as, a.edit_as);
+  Set(q.from_row_op, q.from_row, a.from_row);
+  Set(q.from_col_op, q.from_col, a.from_col);
+  Set(q.from_row_offset_emu_op, q.from_row_offset_emu, a.from_row_offset_emu);
+  Set(q.from_col_offset_emu_op, q.from_col_offset_emu, a.from_col_offset_emu);
+  Set(q.to_row_op, q.to_row, a.to_row);
+  Set(q.to_col_op, q.to_col, a.to_col);
+  Set(q.to_row_offset_emu_op, q.to_row_offset_emu, a.to_row_offset_emu);
+  Set(q.to_col_offset_emu_op, q.to_col_offset_emu, a.to_col_offset_emu);
+  Set(q.width_emu_op, q.width_emu, a.width_emu);
+  Set(q.height_emu_op, q.height_emu, a.height_emu);
+  return p;
+}
+
+void ExpectSameAnchor(const fm_drawing_anchor_t& a, const fm_drawing_anchor_t& b) {
+  EXPECT_EQ(a.kind, b.kind);
+  EXPECT_EQ(a.edit_as, b.edit_as);
+  EXPECT_EQ(a.from_row, b.from_row);
+  EXPECT_EQ(a.from_col, b.from_col);
+  EXPECT_EQ(a.from_row_offset_emu, b.from_row_offset_emu);
+  EXPECT_EQ(a.from_col_offset_emu, b.from_col_offset_emu);
+  EXPECT_EQ(a.to_row, b.to_row);
+  EXPECT_EQ(a.to_col, b.to_col);
+  EXPECT_EQ(a.to_row_offset_emu, b.to_row_offset_emu);
+  EXPECT_EQ(a.to_col_offset_emu, b.to_col_offset_emu);
+  EXPECT_EQ(a.width_emu, b.width_emu);
+  EXPECT_EQ(a.height_emu, b.height_emu);
+}
+
+// A shape's anchor converts between one-cell and two-cell through the drawing
+// patch: one-cell keeps the box's size, two-cell takes its end marker from the
+// current size, and the converted anchor survives a save and reload.
+TEST(FormulonCApiShapes, DrawingPatchConvertsTheShapeAnchorKind) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  const fm_shape_spec_t spec = Callout();
+  uint32_t id = 0;
+  ASSERT_EQ(fm_sheet_add_shape(wb.handle, 0, &spec, &id), 0) << fm_get_last_error_message();
+  const fm_drawing_anchor_t box = ObjectById(wb.handle, id).anchor;
+
+  fm_drawing_patch_t one = FM_STRUCT_INIT(fm_drawing_patch_t);
+  Set(one.anchor.kind_op, one.anchor.kind, FM_ANCHOR_KIND_ONE_CELL);
+  ASSERT_EQ(fm_sheet_update_drawing(wb.handle, 0, id, &one), 0) << fm_get_last_error_message();
+  fm_drawing_anchor_t a = ObjectById(wb.handle, id).anchor;
+  EXPECT_EQ(a.kind, FM_ANCHOR_KIND_ONE_CELL);
+  EXPECT_EQ(a.from_row, 2U);
+  EXPECT_EQ(a.from_col, 1U);
+  EXPECT_EQ(a.width_emu, box.width_emu);
+  EXPECT_EQ(a.height_emu, box.height_emu);
+  EXPECT_EQ(ShapeById(wb.handle, id).fill_kind, FM_SHAPE_PAINT_SOLID);
+
+  fm_drawing_patch_t two = FM_STRUCT_INIT(fm_drawing_patch_t);
+  Set(two.anchor.kind_op, two.anchor.kind, FM_ANCHOR_KIND_TWO_CELL);
+  ASSERT_EQ(fm_sheet_update_drawing(wb.handle, 0, id, &two), 0) << fm_get_last_error_message();
+  a = ObjectById(wb.handle, id).anchor;
+  EXPECT_EQ(a.kind, FM_ANCHOR_KIND_TWO_CELL);
+  EXPECT_EQ(a.to_row, 6U);
+  EXPECT_EQ(a.to_col, 4U);
+
+  ASSERT_EQ(fm_sheet_update_drawing(wb.handle, 0, id, &one), 0) << fm_get_last_error_message();
+  WorkbookGuard again;
+  SaveAndReload(wb.handle, &again);
+  a = ObjectById(again.handle, id).anchor;
+  EXPECT_EQ(a.kind, FM_ANCHOR_KIND_ONE_CELL);
+  EXPECT_EQ(a.width_emu, box.width_emu);
+  EXPECT_EQ(ShapeById(again.handle, id).fill_kind, FM_SHAPE_PAINT_SOLID);
+}
+
+// A read anchor passed back whole is accepted and changes nothing: a two-cell
+// result takes its box from `to_*` and ignores the size, a one-cell result
+// takes the size and ignores `to_*`.
+TEST(FormulonCApiShapes, AReadAnchorFeedsBackIntoTheDrawingPatch) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  const fm_shape_spec_t spec = Callout();
+  uint32_t id = 0;
+  ASSERT_EQ(fm_sheet_add_shape(wb.handle, 0, &spec, &id), 0) << fm_get_last_error_message();
+
+  const fm_drawing_anchor_t two_cell = ObjectById(wb.handle, id).anchor;
+  fm_drawing_patch_t whole = WholeAnchorPatch(two_cell);
+  ASSERT_EQ(fm_sheet_update_drawing(wb.handle, 0, id, &whole), 0) << fm_get_last_error_message();
+  ExpectSameAnchor(ObjectById(wb.handle, id).anchor, two_cell);
+
+  fm_drawing_patch_t one = FM_STRUCT_INIT(fm_drawing_patch_t);
+  Set(one.anchor.kind_op, one.anchor.kind, FM_ANCHOR_KIND_ONE_CELL);
+  ASSERT_EQ(fm_sheet_update_drawing(wb.handle, 0, id, &one), 0) << fm_get_last_error_message();
+  const fm_drawing_anchor_t one_cell = ObjectById(wb.handle, id).anchor;
+  whole = WholeAnchorPatch(one_cell);
+  ASSERT_EQ(fm_sheet_update_drawing(wb.handle, 0, id, &whole), 0) << fm_get_last_error_message();
+  ExpectSameAnchor(ObjectById(wb.handle, id).anchor, one_cell);
+
+  // A one-cell read handed back with a two-cell kind takes the box from `to_*`, which the read holds as zero:
+  // the end marker lies before the start.
+  whole.anchor.kind = FM_ANCHOR_KIND_TWO_CELL;
+  EXPECT_EQ(fm_sheet_update_drawing(wb.handle, 0, id, &whole), kInvalidArgument);
 }
 
 TEST(FormulonCApiShapes, Validation) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   uint32_t id = 0;
-  fm_shape_patch_t spec = Callout();
+  fm_shape_spec_t spec = Callout();
   EXPECT_EQ(fm_sheet_add_shape(wb.handle, 0, nullptr, &id), kBindingNullPointer);
   EXPECT_EQ(fm_sheet_add_shape(wb.handle, 0, &spec, nullptr), kBindingNullPointer);
   EXPECT_EQ(fm_sheet_add_shape(wb.handle, 7, &spec, &id), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
-  spec.anchor_kind = 9;
+  spec.placement.anchor.kind = 9;
   EXPECT_EQ(fm_sheet_add_shape(wb.handle, 0, &spec, &id), kInvalidArgument);
   spec = Callout();
-  spec.anchor_kind = FM_ANCHOR_KIND_ABSOLUTE;
+  spec.placement.anchor.kind = FM_ANCHOR_KIND_ABSOLUTE;
   EXPECT_EQ(fm_sheet_add_shape(wb.handle, 0, &spec, &id), kInvalidArgument);
   spec = Callout();
-  spec.anchor_kind_op = FM_PATCH_OP_KEEP;  // no anchor
+  spec.placement.anchor = fm_drawing_anchor_t{};  // no box and no size
   EXPECT_EQ(fm_sheet_add_shape(wb.handle, 0, &spec, &id), kInvalidArgument);
   spec = Callout();
-  spec.name_op = static_cast<fm_patch_op_t>(3);
+  spec.placement.struct_size = 0;
   EXPECT_EQ(fm_sheet_add_shape(wb.handle, 0, &spec, &id), kInvalidArgument);
   spec = Callout();
-  spec.text = nullptr;  // a SET string cannot be NULL
+  spec.placement.hidden = 3;
   EXPECT_EQ(fm_sheet_add_shape(wb.handle, 0, &spec, &id), kInvalidArgument);
   spec = Callout();
-  spec.name = "\xC3";
+  spec.placement.name = "\xC3";
+  EXPECT_EQ(fm_sheet_add_shape(wb.handle, 0, &spec, &id), FM_STATUS_BINDING_UTF8ENCODING_ERROR);
+  spec = Callout();
+  spec.text = "\xC3";
   EXPECT_EQ(fm_sheet_add_shape(wb.handle, 0, &spec, &id), FM_STATUS_BINDING_UTF8ENCODING_ERROR);
   spec = Callout();
   spec.fill_kind = FM_SHAPE_PAINT_OTHER;
   EXPECT_EQ(fm_sheet_add_shape(wb.handle, 0, &spec, &id), kInvalidArgument);
   spec = Callout();
-  spec.to_row = 0;  // two-cell box ends before it starts
+  spec.fill_kind = 9;
   EXPECT_EQ(fm_sheet_add_shape(wb.handle, 0, &spec, &id), kInvalidArgument);
-  size_t count = 5;
-  ASSERT_EQ(fm_sheet_get_shape_count(wb.handle, 0, &count), 0);
-  EXPECT_EQ(count, 0U);
+  spec = Callout();
+  spec.placement.anchor.to_row = 0;  // two-cell box ends before it starts
+  EXPECT_EQ(fm_sheet_add_shape(wb.handle, 0, &spec, &id), kInvalidArgument);
+  EXPECT_EQ(ObjectCount(wb.handle), 0U);
+
+  const fm_shape_spec_t valid = Callout();
+  ASSERT_EQ(fm_sheet_add_shape(wb.handle, 0, &valid, &id), 0) << fm_get_last_error_message();
   fm_shape_info_t out = FM_STRUCT_INIT(fm_shape_info_t);
-  EXPECT_EQ(fm_sheet_get_shape_at(wb.handle, 0, 0, &out), FM_STATUS_INDEX_OUT_OF_RANGE);
-  EXPECT_EQ(fm_sheet_get_shape_at(wb.handle, 0, 0, nullptr), kBindingNullPointer);
-  EXPECT_EQ(fm_sheet_get_shape_count(wb.handle, 0, nullptr), kBindingNullPointer);
+  int32_t present = 1;
+  EXPECT_EQ(fm_sheet_get_shape(wb.handle, 0, id, nullptr, &out), kBindingNullPointer);
+  EXPECT_EQ(fm_sheet_get_shape(wb.handle, 0, id, &present, nullptr), kBindingNullPointer);
+  EXPECT_EQ(fm_sheet_get_shape(wb.handle, 7, id, &present, &out), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
+  ASSERT_EQ(fm_sheet_get_shape(wb.handle, 0, id + 5U, &present, &out), 0);
+  EXPECT_EQ(present, 0);
+  const fm_shape_patch_t keep = FM_STRUCT_INIT(fm_shape_patch_t);
+  EXPECT_EQ(fm_sheet_update_shape(wb.handle, 0, id, nullptr), kBindingNullPointer);
+  EXPECT_EQ(fm_sheet_update_shape(wb.handle, 7, id, &keep), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
+  fm_shape_patch_t bad_op = FM_STRUCT_INIT(fm_shape_patch_t);
+  bad_op.rotation_deg_op = static_cast<fm_patch_op_t>(3);
+  EXPECT_EQ(fm_sheet_update_shape(wb.handle, 0, id, &bad_op), kInvalidArgument);
+  fm_shape_patch_t null_text = FM_STRUCT_INIT(fm_shape_patch_t);
+  null_text.text_op = FM_PATCH_OP_SET;
+  EXPECT_EQ(fm_sheet_update_shape(wb.handle, 0, id, &null_text), kInvalidArgument);
 }
 
 fm_sparkline_group_t ColumnGroup() {
@@ -420,16 +634,28 @@ TEST(FormulonCApiSparklines, AddReadUpdateReplaceRemoveAndReload) {
 
   const fm_sparkline_t items[] = {{"Sheet1!A1:D1", "F1"}, {"Sheet1!A2:D2", "F2"}};
   fm_sparkline_group_t g = ColumnGroup();
-  std::size_t group_index = 99;
-  ASSERT_EQ(fm_sheet_add_sparkline_group(wb.handle, 0, &g, items, 2, &group_index), 0) << fm_get_last_error_message();
-  EXPECT_EQ(group_index, 0U);
+  const char* added_id = nullptr;
+  ASSERT_EQ(fm_sheet_add_sparkline_group(wb.handle, 0, &g, items, 2, &added_id), 0) << fm_get_last_error_message();
+  ASSERT_NE(added_id, nullptr);
+  const std::string first_id = added_id;
+  EXPECT_FALSE(first_id.empty());
   g.type = FM_SPARKLINE_TYPE_LINE;
   g.markers = 0;
   g.has_manual_min = 0;
   g.color_series = fm_color_t{};
   const fm_sparkline_t more[] = {{"Sheet1!A9:D9", "G9"}};
-  ASSERT_EQ(fm_sheet_add_sparkline_group(wb.handle, 0, &g, more, 1, &group_index), 0) << fm_get_last_error_message();
-  EXPECT_EQ(group_index, 1U);
+  ASSERT_EQ(fm_sheet_add_sparkline_group(wb.handle, 0, &g, more, 1, &added_id), 0) << fm_get_last_error_message();
+  const std::string second_id = added_id;
+  EXPECT_NE(second_id, first_id);
+  // Both groups read back through their ids, in the session that added them.
+  fm_sparkline_group_t by_id = FM_STRUCT_INIT(fm_sparkline_group_t);
+  int32_t id_present = 0;
+  ASSERT_EQ(fm_sheet_get_sparkline_group(wb.handle, 0, second_id.c_str(), &id_present, &by_id), 0);
+  ASSERT_EQ(id_present, 1);
+  EXPECT_STREQ(by_id.id, second_id.c_str());
+  EXPECT_EQ(by_id.type, FM_SPARKLINE_TYPE_LINE);
+  ASSERT_EQ(fm_sheet_get_sparkline_group(wb.handle, 0, "no such group", &id_present, &by_id), 0);
+  EXPECT_EQ(id_present, 0);
 
   WorkbookGuard again;
   SaveAndReload(wb.handle, &again);
@@ -437,6 +663,8 @@ TEST(FormulonCApiSparklines, AddReadUpdateReplaceRemoveAndReload) {
   ASSERT_EQ(count, 2U);
   fm_sparkline_group_t out = FM_STRUCT_INIT(fm_sparkline_group_t);
   ASSERT_EQ(fm_sheet_get_sparkline_group_at(again.handle, 0, 0, &out), 0);
+  ASSERT_NE(out.id, nullptr);
+  const std::string reloaded_id = out.id;  // a load assigns fresh ids
   EXPECT_EQ(out.type, FM_SPARKLINE_TYPE_COLUMN);
   EXPECT_EQ(out.negative, 1);
   EXPECT_EQ(out.markers, 1);
@@ -472,7 +700,8 @@ TEST(FormulonCApiSparklines, AddReadUpdateReplaceRemoveAndReload) {
   Set(patch.date_axis_op, patch.date_axis, 1);
   Set(patch.date_axis_ref_op, patch.date_axis_ref, "Sheet1!A1:D1");
   Set(patch.high_op, patch.high, 1);
-  ASSERT_EQ(fm_sheet_update_sparkline_group(again.handle, 0, 0, &patch), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_update_sparkline_group(again.handle, 0, reloaded_id.c_str(), &patch), 0)
+      << fm_get_last_error_message();
   fm_sparkline_group_t changed = FM_STRUCT_INIT(fm_sparkline_group_t);
   ASSERT_EQ(fm_sheet_get_sparkline_group_at(again.handle, 0, 0, &changed), 0);
   EXPECT_EQ(changed.type, FM_SPARKLINE_TYPE_STACKED);
@@ -489,7 +718,8 @@ TEST(FormulonCApiSparklines, AddReadUpdateReplaceRemoveAndReload) {
   replace.items_op = FM_PATCH_OP_SET;
   replace.items = replacement;
   replace.items_count = 1;
-  ASSERT_EQ(fm_sheet_update_sparkline_group(again.handle, 0, 0, &replace), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_update_sparkline_group(again.handle, 0, reloaded_id.c_str(), &replace), 0)
+      << fm_get_last_error_message();
   ASSERT_EQ(fm_sheet_get_sparkline_group_at(again.handle, 0, 0, &changed), 0);
   EXPECT_EQ(changed.sparkline_count, 1U);
   EXPECT_EQ(changed.type, FM_SPARKLINE_TYPE_STACKED);
@@ -502,22 +732,33 @@ TEST(FormulonCApiSparklines, AddReadUpdateReplaceRemoveAndReload) {
   // CLEAR removes the date range.
   fm_sparkline_group_patch_t clear = FM_STRUCT_INIT(fm_sparkline_group_patch_t);
   clear.date_axis_ref_op = FM_PATCH_OP_CLEAR;
-  ASSERT_EQ(fm_sheet_update_sparkline_group(again.handle, 0, 0, &clear), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_update_sparkline_group(again.handle, 0, reloaded_id.c_str(), &clear), 0)
+      << fm_get_last_error_message();
   ASSERT_EQ(fm_sheet_get_sparkline_group_at(again.handle, 0, 0, &changed), 0);
   EXPECT_EQ(changed.date_axis_ref, nullptr);
 
   // CLEAR removes a colour, which then reads as no colour.
   fm_sparkline_group_patch_t uncolour = FM_STRUCT_INIT(fm_sparkline_group_patch_t);
   uncolour.color_high_op = FM_PATCH_OP_CLEAR;
-  ASSERT_EQ(fm_sheet_update_sparkline_group(again.handle, 0, 0, &uncolour), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_update_sparkline_group(again.handle, 0, reloaded_id.c_str(), &uncolour), 0)
+      << fm_get_last_error_message();
   ASSERT_EQ(fm_sheet_get_sparkline_group_at(again.handle, 0, 0, &changed), 0);
   EXPECT_EQ(changed.color_high.kind, FM_COLOR_KIND_NONE);
 
-  ASSERT_EQ(fm_sheet_remove_sparkline_group(again.handle, 0, 0), 0);
+  ASSERT_EQ(fm_sheet_remove_sparkline_group(again.handle, 0, reloaded_id.c_str()), 0);
   ASSERT_EQ(fm_sheet_get_sparkline_group_count(again.handle, 0, &count), 0);
   EXPECT_EQ(count, 1U);
-  ASSERT_EQ(fm_sheet_remove_sparkline_group(again.handle, 0, 0), 0);
-  EXPECT_EQ(fm_sheet_remove_sparkline_group(again.handle, 0, 0), FM_STATUS_INDEX_OUT_OF_RANGE);
+  // The removed group's id stays unused, and the other one keeps its own.
+  ASSERT_EQ(fm_sheet_get_sparkline_group(again.handle, 0, reloaded_id.c_str(), &id_present, &by_id), 0);
+  EXPECT_EQ(id_present, 0);
+  EXPECT_EQ(fm_sheet_remove_sparkline_group(again.handle, 0, reloaded_id.c_str()), FM_STATUS_NOT_FOUND);
+  ASSERT_EQ(fm_sheet_get_sparkline_group_at(again.handle, 0, 0, &changed), 0);
+  ASSERT_NE(changed.id, nullptr);
+  const std::string remaining_id = changed.id;
+  EXPECT_NE(remaining_id, reloaded_id);
+  ASSERT_EQ(fm_sheet_remove_sparkline_group(again.handle, 0, remaining_id.c_str()), 0);
+  ASSERT_EQ(fm_sheet_get_sparkline_group_count(again.handle, 0, &count), 0);
+  EXPECT_EQ(count, 0U);
 }
 
 TEST(FormulonCApiSparklines, Validation) {
@@ -525,34 +766,45 @@ TEST(FormulonCApiSparklines, Validation) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   const fm_sparkline_t good[] = {{"Sheet1!A1:D1", "F1"}};
   fm_sparkline_group_t g = ColumnGroup();
-  EXPECT_EQ(fm_sheet_add_sparkline_group(wb.handle, 0, nullptr, good, 1, ignored_index()), kBindingNullPointer);
-  EXPECT_EQ(fm_sheet_add_sparkline_group(wb.handle, 0, &g, nullptr, 1, ignored_index()), kBindingNullPointer);
-  EXPECT_EQ(fm_sheet_add_sparkline_group(wb.handle, 0, &g, good, 0, ignored_index()), kInvalidArgument);
-  EXPECT_EQ(fm_sheet_add_sparkline_group(wb.handle, 3, &g, good, 1, ignored_index()),
-            FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(fm_sheet_add_sparkline_group(wb.handle, 0, nullptr, good, 1, ignored_id()), kBindingNullPointer);
+  EXPECT_EQ(fm_sheet_add_sparkline_group(wb.handle, 0, &g, nullptr, 1, ignored_id()), kBindingNullPointer);
+  EXPECT_EQ(fm_sheet_add_sparkline_group(wb.handle, 0, &g, good, 0, ignored_id()), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_add_sparkline_group(wb.handle, 3, &g, good, 1, ignored_id()), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
   const fm_sparkline_t range_location[] = {{"Sheet1!A1:D1", "F1:F2"}};
-  EXPECT_EQ(fm_sheet_add_sparkline_group(wb.handle, 0, &g, range_location, 1, ignored_index()), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_add_sparkline_group(wb.handle, 0, &g, range_location, 1, ignored_id()), kInvalidArgument);
   const fm_sparkline_t no_formula[] = {{"", "F1"}};
-  EXPECT_EQ(fm_sheet_add_sparkline_group(wb.handle, 0, &g, no_formula, 1, ignored_index()), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_add_sparkline_group(wb.handle, 0, &g, no_formula, 1, ignored_id()), kInvalidArgument);
   fm_sparkline_group_t bad = g;
   bad.type = 7;
-  EXPECT_EQ(fm_sheet_add_sparkline_group(wb.handle, 0, &bad, good, 1, ignored_index()), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_add_sparkline_group(wb.handle, 0, &bad, good, 1, ignored_id()), kInvalidArgument);
   bad = g;
   bad.line_weight = -1.0;
-  EXPECT_EQ(fm_sheet_add_sparkline_group(wb.handle, 0, &bad, good, 1, ignored_index()), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_add_sparkline_group(wb.handle, 0, &bad, good, 1, ignored_id()), kInvalidArgument);
   // A group always states how it draws empty cells.
   bad = g;
   bad.empty_cells_as = FM_BLANKS_AS_ABSENT;
-  EXPECT_EQ(fm_sheet_add_sparkline_group(wb.handle, 0, &bad, good, 1, ignored_index()), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_add_sparkline_group(wb.handle, 0, &bad, good, 1, ignored_id()), kInvalidArgument);
   bad.empty_cells_as = FM_BLANKS_AS_SPAN + 1;
-  EXPECT_EQ(fm_sheet_add_sparkline_group(wb.handle, 0, &bad, good, 1, ignored_index()), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_add_sparkline_group(wb.handle, 0, &bad, good, 1, ignored_id()), kInvalidArgument);
   size_t count = 5;
   ASSERT_EQ(fm_sheet_get_sparkline_group_count(wb.handle, 0, &count), 0);
   EXPECT_EQ(count, 0U);
   const fm_sparkline_group_patch_t keep = FM_STRUCT_INIT(fm_sparkline_group_patch_t);
-  EXPECT_EQ(fm_sheet_update_sparkline_group(wb.handle, 0, 0, &keep), FM_STATUS_INDEX_OUT_OF_RANGE);
-  EXPECT_EQ(fm_sheet_update_sparkline_group(wb.handle, 0, 0, nullptr), kBindingNullPointer);
+  EXPECT_EQ(fm_sheet_update_sparkline_group(wb.handle, 0, "7", &keep), FM_STATUS_NOT_FOUND);
+  EXPECT_EQ(fm_sheet_update_sparkline_group(wb.handle, 0, "7", nullptr), kBindingNullPointer);
+  EXPECT_EQ(fm_sheet_update_sparkline_group(wb.handle, 0, nullptr, &keep), kBindingNullPointer);
+  EXPECT_EQ(fm_sheet_update_sparkline_group(wb.handle, 4, "7", &keep), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(fm_sheet_update_sparkline_group(wb.handle, 0, "\xC3", &keep), FM_STATUS_BINDING_UTF8ENCODING_ERROR);
+  EXPECT_EQ(fm_sheet_remove_sparkline_group(wb.handle, 0, "7"), FM_STATUS_NOT_FOUND);
+  EXPECT_EQ(fm_sheet_remove_sparkline_group(wb.handle, 0, nullptr), kBindingNullPointer);
+  EXPECT_EQ(fm_sheet_remove_sparkline_group(wb.handle, 4, "7"), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
   fm_sparkline_group_t out = FM_STRUCT_INIT(fm_sparkline_group_t);
+  int32_t present = 1;
+  EXPECT_EQ(fm_sheet_get_sparkline_group(wb.handle, 0, nullptr, &present, &out), kBindingNullPointer);
+  EXPECT_EQ(fm_sheet_get_sparkline_group(wb.handle, 0, "7", nullptr, &out), kBindingNullPointer);
+  EXPECT_EQ(fm_sheet_get_sparkline_group(wb.handle, 0, "7", &present, nullptr), kBindingNullPointer);
+  EXPECT_EQ(fm_sheet_get_sparkline_group(wb.handle, 4, "7", &present, &out), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(fm_sheet_get_sparkline_group(wb.handle, 0, "\xC3", &present, &out), FM_STATUS_BINDING_UTF8ENCODING_ERROR);
   EXPECT_EQ(fm_sheet_get_sparkline_group_at(wb.handle, 0, 0, &out), FM_STATUS_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(fm_sheet_get_sparkline_group_at(wb.handle, 0, 0, nullptr), kBindingNullPointer);
 }
@@ -562,8 +814,9 @@ TEST(FormulonCApiSparklines, UpdateWithItemsIsAllOrNothing) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   const fm_sparkline_t items[] = {{"Sheet1!A1:D1", "F1"}, {"Sheet1!A2:D2", "F2"}};
   fm_sparkline_group_t g = ColumnGroup();
-  ASSERT_EQ(fm_sheet_add_sparkline_group(wb.handle, 0, &g, items, 2, ignored_index()), 0)
-      << fm_get_last_error_message();
+  const char* added = nullptr;
+  ASSERT_EQ(fm_sheet_add_sparkline_group(wb.handle, 0, &g, items, 2, &added), 0) << fm_get_last_error_message();
+  const std::string gid = added;
 
   // A group cannot hold zero sparklines (CT_Sparklines requires one), so an
   // empty SET items is rejected like an invalid item, and no field lands.
@@ -573,46 +826,48 @@ TEST(FormulonCApiSparklines, UpdateWithItemsIsAllOrNothing) {
   const fm_sparkline_t none[] = {{"Sheet1!A1:D1", "F1"}};
   patch.items = none;
   patch.items_count = 0;
-  EXPECT_EQ(fm_sheet_update_sparkline_group(wb.handle, 0, 0, &patch), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_update_sparkline_group(wb.handle, 0, gid.c_str(), &patch), kInvalidArgument);
   const fm_sparkline_t bad[] = {{"Sheet1!A1:D1", "F1:F2"}};
   patch.items = bad;
   patch.items_count = 1;
-  EXPECT_EQ(fm_sheet_update_sparkline_group(wb.handle, 0, 0, &patch), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_update_sparkline_group(wb.handle, 0, gid.c_str(), &patch), kInvalidArgument);
   patch.items = nullptr;
-  EXPECT_EQ(fm_sheet_update_sparkline_group(wb.handle, 0, 0, &patch), kBindingNullPointer);
+  EXPECT_EQ(fm_sheet_update_sparkline_group(wb.handle, 0, gid.c_str(), &patch), kBindingNullPointer);
   // An invalid field with valid items does not replace the items either.
   const fm_sparkline_t one[] = {{"Sheet1!B1:B5", "H1"}};
   patch.items = one;
   Set(patch.line_weight_op, patch.line_weight, -1.0);
-  EXPECT_EQ(fm_sheet_update_sparkline_group(wb.handle, 0, 0, &patch), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_update_sparkline_group(wb.handle, 0, gid.c_str(), &patch), kInvalidArgument);
   // Out-of-domain values and ops are refused before anything is written.
   fm_sparkline_group_patch_t bad_field = FM_STRUCT_INIT(fm_sparkline_group_patch_t);
   Set(bad_field.type_op, bad_field.type, 7);
-  EXPECT_EQ(fm_sheet_update_sparkline_group(wb.handle, 0, 0, &bad_field), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_update_sparkline_group(wb.handle, 0, gid.c_str(), &bad_field), kInvalidArgument);
   bad_field = FM_STRUCT_INIT(fm_sparkline_group_patch_t);
   bad_field.markers_op = static_cast<fm_patch_op_t>(3);
-  EXPECT_EQ(fm_sheet_update_sparkline_group(wb.handle, 0, 0, &bad_field), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_update_sparkline_group(wb.handle, 0, gid.c_str(), &bad_field), kInvalidArgument);
   bad_field = FM_STRUCT_INIT(fm_sparkline_group_patch_t);
   Set(bad_field.date_axis_ref_op, bad_field.date_axis_ref, nullptr);
-  EXPECT_EQ(fm_sheet_update_sparkline_group(wb.handle, 0, 0, &bad_field), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_update_sparkline_group(wb.handle, 0, gid.c_str(), &bad_field), kInvalidArgument);
   bad_field = FM_STRUCT_INIT(fm_sparkline_group_patch_t);
   Set(bad_field.empty_cells_as_op, bad_field.empty_cells_as, FM_BLANKS_AS_ABSENT);
-  EXPECT_EQ(fm_sheet_update_sparkline_group(wb.handle, 0, 0, &bad_field), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_update_sparkline_group(wb.handle, 0, gid.c_str(), &bad_field), kInvalidArgument);
 
   fm_sparkline_group_t read = FM_STRUCT_INIT(fm_sparkline_group_t);
-  ASSERT_EQ(fm_sheet_get_sparkline_group_at(wb.handle, 0, 0, &read), 0);
+  int32_t present = 0;
+  ASSERT_EQ(fm_sheet_get_sparkline_group(wb.handle, 0, gid.c_str(), &present, &read), 0);
+  ASSERT_EQ(present, 1);
   EXPECT_EQ(read.type, FM_SPARKLINE_TYPE_COLUMN);
   EXPECT_EQ(read.sparkline_count, 2U);
 }
 
-// An out-of-range position names the parameter it came from in the error context.
-TEST(FormulonCApiSparklines, OutOfRangeContextNamesTheParameter) {
+// An out-of-range position names the parameter it came from in the error context; an
+// unknown group id names the id.
+TEST(FormulonCApiSparklines, ErrorContextNamesTheParameter) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   const fm_sparkline_t items[] = {{"Sheet1!A1:D1", "F1"}};
   fm_sparkline_group_t g = ColumnGroup();
-  ASSERT_EQ(fm_sheet_add_sparkline_group(wb.handle, 0, &g, items, 1, ignored_index()), 0)
-      << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_add_sparkline_group(wb.handle, 0, &g, items, 1, ignored_id()), 0) << fm_get_last_error_message();
   const auto context_has = [](const char* key) {
     return std::string(fm_get_last_error_context()).find(key) != std::string::npos;
   };
@@ -625,10 +880,10 @@ TEST(FormulonCApiSparklines, OutOfRangeContextNamesTheParameter) {
   EXPECT_EQ(fm_sheet_get_sparkline_at(wb.handle, 0, 0, 4, &sp), FM_STATUS_INDEX_OUT_OF_RANGE);
   EXPECT_TRUE(context_has("sparkline_index=4"));
   const fm_sparkline_group_patch_t keep = FM_STRUCT_INIT(fm_sparkline_group_patch_t);
-  EXPECT_EQ(fm_sheet_update_sparkline_group(wb.handle, 0, 5, &keep), FM_STATUS_INDEX_OUT_OF_RANGE);
-  EXPECT_TRUE(context_has("group_index=5"));
-  EXPECT_EQ(fm_sheet_remove_sparkline_group(wb.handle, 0, 6), FM_STATUS_INDEX_OUT_OF_RANGE);
-  EXPECT_TRUE(context_has("group_index=6"));
+  EXPECT_EQ(fm_sheet_update_sparkline_group(wb.handle, 0, "5", &keep), FM_STATUS_NOT_FOUND);
+  EXPECT_TRUE(context_has("group_id=5"));
+  EXPECT_EQ(fm_sheet_remove_sparkline_group(wb.handle, 0, "6"), FM_STATUS_NOT_FOUND);
+  EXPECT_TRUE(context_has("group_id=6"));
 }
 
 std::string SavedSheetXml(fm_workbook_t* wb) {
@@ -684,8 +939,7 @@ TEST(FormulonCApiSparklines, EmptyCellsAsMapsEachTokenToTheSharedBlanksMember) {
     const fm_sparkline_t items[] = {{"Sheet1!A1:D1", "F1"}};
     fm_sparkline_group_t g = ColumnGroup();
     g.empty_cells_as = c.blanks_as;
-    ASSERT_EQ(fm_sheet_add_sparkline_group(wb.handle, 0, &g, items, 1, ignored_index()), 0)
-        << fm_get_last_error_message();
+    ASSERT_EQ(fm_sheet_add_sparkline_group(wb.handle, 0, &g, items, 1, ignored_id()), 0) << fm_get_last_error_message();
     // Zero is the schema default, which the writer leaves implicit.
     const bool written =
         SavedSheetXml(wb.handle).find(std::string("displayEmptyCellsAs=\"") + c.token + "\"") != std::string::npos;
@@ -702,11 +956,9 @@ TEST(FormulonCApiSparklines, FormulasReadWithALeadingEqualsAndTakeEitherSpelling
   fm_sparkline_group_t g = ColumnGroup();
   g.date_axis = 1;
   g.date_axis_ref = "=Sheet1!A5:D5";
-  ASSERT_EQ(fm_sheet_add_sparkline_group(wb.handle, 0, &g, items, 2, ignored_index()), 0)
-      << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_add_sparkline_group(wb.handle, 0, &g, items, 2, ignored_id()), 0) << fm_get_last_error_message();
   g.date_axis_ref = "Sheet1!A6:D6";
-  ASSERT_EQ(fm_sheet_add_sparkline_group(wb.handle, 0, &g, items, 2, ignored_index()), 0)
-      << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_add_sparkline_group(wb.handle, 0, &g, items, 2, ignored_id()), 0) << fm_get_last_error_message();
 
   WorkbookGuard again;
   SaveAndReload(wb.handle, &again);

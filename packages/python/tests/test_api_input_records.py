@@ -212,7 +212,7 @@ class PivotInputTests(unittest.TestCase):
             pivot = sheet.pivot(
                 sheet.add_pivot(PivotInput(name="P", cache_id=cache.cache_id, anchor=CellAddress(0, 4)))
             )
-            pivot.add_field(PivotFieldInput(source_name="When", axis=PivotAxis.ROW))
+            pivot.add_field(PivotFieldInput(field_index="When", axis=PivotAxis.ROW))
             pivot.set_field_date_group(
                 0,
                 formulon.PivotDateGroupInput(
@@ -235,13 +235,13 @@ class PivotInputTests(unittest.TestCase):
     def test_filter_records_are_keyword_only(self) -> None:
         for cls in (formulon.PivotFilterInput, formulon.PivotFilter):
             with self.assertRaises(TypeError):
-                cls(PivotAxis.ROW, "Product", PivotFilterKind.LABEL_EQUAL)  # type: ignore[call-arg]
-        built = formulon.PivotFilterInput(axis=PivotAxis.ROW, field_name="Product", type=PivotFilterKind.LABEL_EQUAL)
-        self.assertEqual(built.field_name, "Product")
+                cls("Product", PivotFilterKind.LABEL_EQUAL)  # type: ignore[call-arg]
+        built = formulon.PivotFilterInput(field_index="Product", type=PivotFilterKind.LABEL_EQUAL)
+        self.assertEqual(built.field_index, "Product")
 
     def test_field_axis_is_required(self) -> None:
         with self.assertRaises(TypeError):
-            PivotFieldInput(source_name="Product")  # type: ignore[call-arg]
+            PivotFieldInput(field_index="Product")  # type: ignore[call-arg]
         with self.assertRaises(TypeError):
             PivotFieldInput("Product")  # type: ignore[call-arg]
 
@@ -303,10 +303,11 @@ class SheetRecordInputTests(unittest.TestCase):
         with Workbook.create_default() as wb:
             ws = wb.sheet(0)
             _grid(ws)
-            index = ws.add_sparkline_group(
+            group_id = ws.add_sparkline_group(
                 formulon.SparklineGroupInput(sparklines=[formulon.SparklineInput("Sheet1!B2:C2", "E1")])
             )
-            group = ws.list_sparkline_groups()[index]
+            group = ws.list_sparkline_groups()[0]
+            self.assertEqual(group.id, group_id)
             spark = group.sparklines[0]
             self.assertEqual(spark.source, SheetRect(0, CellRect(1, 1, 1, 2)))
             self.assertEqual(spark.location, CellAddress(0, 4))

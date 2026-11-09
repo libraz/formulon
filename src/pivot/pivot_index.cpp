@@ -18,11 +18,22 @@
 #include "pivot/pivot_types.h"
 #include "pivot/value_order.h"
 #include "sheet.h"
+#include "sheet_name.h"
 #include "value.h"
 #include "workbook.h"
 
 namespace formulon {
 namespace pivot {
+
+bool pivot_name_taken(const Sheet& sheet, std::string_view name, std::size_t self) noexcept {
+  const auto& pivots = sheet.pivot_tables();
+  for (std::size_t i = 0; i < pivots.size(); ++i) {
+    if (i != self && pivots[i] != nullptr && collection_names::equal(pivots[i]->name(), name)) {
+      return true;
+    }
+  }
+  return false;
+}
 
 const PivotTable* find_pivot_at_anchor(const Workbook& wb, std::string_view sheet_name, std::uint32_t row,
                                        std::uint32_t col) noexcept {

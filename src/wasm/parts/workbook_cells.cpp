@@ -648,7 +648,7 @@ fm_status_t count_external_links(const fm_workbook_t* handle, size_t, size_t* ou
 
 emscripten::val external_link_to_val(const fm_external_link_info_t& rec) {
   emscripten::val item = emscripten::val::object();
-  item.set("index", rec.index);
+  item.set("bookNumber", rec.book_number);
   js_set_cstr(item, "relId", rec.rel_id);
   js_set_cstr(item, "partPath", rec.part_path);
   js_set_cstr_or_null(item, "target", rec.target);
@@ -814,7 +814,7 @@ emscripten::val JsWorkbook::validateValue(uint32_t sheet, uint32_t row, uint32_t
   }
   emscripten::val o = emscripten::val::object();
   o.set("valid", outcome.valid != 0);
-  js_set_present_or_null(o, "ruleIndex", outcome.has_rule, outcome.rule_index);
+  o.set("ruleId", outcome.has_rule != 0 ? cstr_or_null(outcome.rule_id) : emscripten::val::null());
   js_set_present_or_null(o, "errorStyle", outcome.has_rule, static_cast<uint32_t>(outcome.error_style));
   return o;
 }

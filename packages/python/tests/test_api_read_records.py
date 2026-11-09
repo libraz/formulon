@@ -152,7 +152,7 @@ class ReferenceFormattingTests(unittest.TestCase):
             names = {f.name for f in dataclasses.fields(cls)}
             self.assertIn("range", names, cls.__name__)
             self.assertNotIn("ref", names, cls.__name__)
-        for cls in (formulon.PivotLayout, formulon.PageLayout):
+        for cls in (formulon.PivotLayout, formulon.PaginationPage):
             names = {f.name for f in dataclasses.fields(cls)}
             self.assertIn("range", names, cls.__name__)
             self.assertNotIn("rect", names, cls.__name__)
@@ -295,23 +295,17 @@ class CfMatchKindTests(unittest.TestCase):
             rect = formulon.CellRect(0, 0, 2, 0)
             red = formulon.Color(formulon.ColorKind.RGB, argb=0xFFFF0000)
             ws.add_cf_rule(
-                formulon.ConditionalFormatInput(
+                formulon.CfDataBarRuleInput(
                     ranges=[rect],
-                    type=formulon.CfRuleType.DATA_BAR,
-                    data_bar=formulon.DataBar(
-                        formulon.Cfvo(formulon.CfValueObjectType.MIN),
-                        formulon.Cfvo(formulon.CfValueObjectType.MAX),
+                    data_bar=formulon.CfDataBarInput(
+                        formulon.CfValueObject(formulon.CfValueObjectType.MIN),
+                        formulon.CfValueObject(formulon.CfValueObjectType.MAX),
                         red,
                     ),
                 )
             )
             ws.add_cf_rule(
-                formulon.ConditionalFormatInput(
-                    ranges=[rect],
-                    type=formulon.CfRuleType.CELL_IS,
-                    operator=ComparisonOperator.GREATER_THAN,
-                    formula1="0",
-                )
+                formulon.CfCellIsRuleInput(ranges=[rect], operator=ComparisonOperator.GREATER_THAN, formula1="0")
             )
             matches = ws.evaluate_cf_range(rect)[2].matches
             by_kind = {m.kind: m for m in matches}

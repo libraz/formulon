@@ -23,6 +23,10 @@
 #include "utils/error.h"
 #include "utils/expected.h"
 
+namespace formulon {
+class Workbook;
+}  // namespace formulon
+
 namespace formulon::io {
 
 /// One sparkline: the data `formula` (`xm:f`, sheet-qualified range text
@@ -94,6 +98,17 @@ Expected<void, Error> set_group_sparklines(std::string& ext_lst_xml, std::size_t
 /// Removes group `index`, and the `ext` and `extLst` once nothing remains in
 /// them. Fails with `kInvalidArgument` for an `index` past the last group.
 Expected<void, Error> remove_sparkline_group(std::string& ext_lst_xml, std::size_t index);
+
+/// Appends `group` to sheet `sheet` of `wb` and returns its fresh session id
+/// (`Workbook::sparkline_group_runtime_id`). Fails with
+/// `kSheetIndexOutOfRange` for an out-of-range sheet, otherwise like
+/// `add_sparkline_group` above, leaving the sheet as is.
+Expected<std::uint32_t, Error> add_sheet_sparkline_group(Workbook& wb, std::size_t sheet, const SparklineGroup& group);
+
+/// Removes the group holding session id `id` from sheet `sheet` of `wb`.
+/// Fails with `kSheetIndexOutOfRange` for an out-of-range sheet and
+/// `kNotFound` when no group holds `id`.
+Expected<void, Error> remove_sheet_sparkline_group(Workbook& wb, std::size_t sheet, std::uint32_t id);
 
 }  // namespace formulon::io
 

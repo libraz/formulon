@@ -1,5 +1,6 @@
 #include "io/ext_lst_refs.h"
 
+#include <cstddef>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -36,9 +37,20 @@ void SyncCount(pugi::xml_node container) {
   count.set_value(n);
 }
 
+// Position of `group` among the document's sparkline groups.
+std::size_t GroupPosition(const pugi::xml_node& group) {
+  std::vector<pugi::xml_node> groups;
+  Collect(group.root(), "x14:sparklineGroup", groups);
+  std::size_t position = 0;
+  while (position < groups.size() && groups[position] != group) {
+    ++position;
+  }
+  return position;
+}
+
 // A sparkline group is only its sparklines plus styling, so losing the last
-// sparkline takes the group with it.
-void RemoveOwner(const pugi::xml_node& sqref) {
+// sparkline takes the group with it; its position then goes to `removed_groups`.
+void RemoveOwner(const pugi::xml_node& sqref, std::vector<std::size_t>* removed_groups) {
   pugi::xml_node doomed = sqref.parent();
   if (std::string_view(doomed.name()) == "x14:sparkline") {
     pugi::xml_node list = doomed.parent();
@@ -47,6 +59,9 @@ void RemoveOwner(const pugi::xml_node& sqref) {
       return;
     }
     doomed = list.parent();
+    if (removed_groups != nullptr) {
+      removed_groups->push_back(GroupPosition(doomed));
+    }
   }
   for (;;) {
     pugi::xml_node parent = doomed.parent();
@@ -68,7 +83,7 @@ void Store(std::string& xml, const pugi::xml_document& doc) {
   xml = has_element_child(root) ? raw_xml(root) : std::string();
 }
 
-bool RemapSqrefs(const pugi::xml_document& doc, const SqrefRemap& remap) {
+bool RemapSqrefs(const pugi::xml_document& doc, const SqrefRemap& remap, std::vector<std::size_t>* removed_groups) {
   std::vector<pugi::xml_node> sqrefs;
   Collect(doc.document_element(), "xm:sqref", sqrefs);
   bool changed = false;
@@ -80,7 +95,7 @@ bool RemapSqrefs(const pugi::xml_document& doc, const SqrefRemap& remap) {
     const std::vector<MergeRange> before = ranges;
     remap(ranges);
     if (ranges.empty()) {
-      RemoveOwner(node);
+      RemoveOwner(node, removed_groups);
       changed = true;
     } else if (before != ranges) {
       node.text().set(format_sqref_text(ranges).c_str());
@@ -125,7 +140,7 @@ bool CloneSparklines(const pugi::xml_document& doc, const SparklineClone& clone,
 }  // namespace
 
 bool remap_ext_lst_sqrefs(std::string& xml, const SqrefRemap& remap, const SparklineClone* clone,
-                          FormulaTranslate translate) {
+                          FormulaTranslate translate, std::vector<std::size_t>* removed_groups) {
   if (xml.find("xm:sqref") == std::string::npos) {
     return false;
   }
@@ -133,7 +148,7 @@ bool remap_ext_lst_sqrefs(std::string& xml, const SqrefRemap& remap, const Spark
   if (!Load(doc, xml)) {
     return false;
   }
-  bool changed = RemapSqrefs(doc, remap);
+  bool changed = RemapSqrefs(doc, remap, removed_groups);
   if (clone != nullptr) {
     changed = CloneSparklines(doc, *clone, translate) || changed;
   }

@@ -1,7 +1,7 @@
 //
 // JsWorkbook drawing surface: probing, listing, reading and inserting
-// pictures, and re-anchoring, reordering, snapshotting and restoring any
-// drawing object (picture or chart).
+// pictures, and updating, reordering, snapshotting, restoring and removing any
+// drawing object.
 
 #include <emscripten/val.h>
 
@@ -30,24 +30,31 @@ emscripten::val image_info_to_val(const fm_image_info_t& info) {
   return o;
 }
 
+emscripten::val drawing_anchor_to_val(const fm_drawing_anchor_t& a) {
+  emscripten::val o = emscripten::val::object();
+  o.set("kind", a.kind);
+  o.set("editAs", a.edit_as);
+  o.set("fromRow", a.from_row);
+  o.set("fromCol", a.from_col);
+  o.set("fromRowOffsetEmu", static_cast<double>(a.from_row_offset_emu));
+  o.set("fromColOffsetEmu", static_cast<double>(a.from_col_offset_emu));
+  o.set("toRow", a.to_row);
+  o.set("toCol", a.to_col);
+  o.set("toRowOffsetEmu", static_cast<double>(a.to_row_offset_emu));
+  o.set("toColOffsetEmu", static_cast<double>(a.to_col_offset_emu));
+  o.set("widthEmu", static_cast<double>(a.width_emu));
+  o.set("heightEmu", static_cast<double>(a.height_emu));
+  return o;
+}
+
 emscripten::val drawing_object_to_val(const fm_drawing_object_info_t& d) {
   emscripten::val o = emscripten::val::object();
   o.set("objectId", d.object_id);
   o.set("kind", d.kind);
-  o.set("anchorKind", d.anchor_kind);
-  o.set("editAs", d.edit_as);
-  o.set("fromRow", d.from_row);
-  o.set("fromCol", d.from_col);
-  o.set("fromRowOffsetEmu", static_cast<double>(d.from_row_offset_emu));
-  o.set("fromColOffsetEmu", static_cast<double>(d.from_col_offset_emu));
-  o.set("toRow", d.to_row);
-  o.set("toCol", d.to_col);
-  o.set("toRowOffsetEmu", static_cast<double>(d.to_row_offset_emu));
-  o.set("toColOffsetEmu", static_cast<double>(d.to_col_offset_emu));
-  o.set("widthEmu", static_cast<double>(d.width_emu));
-  o.set("heightEmu", static_cast<double>(d.height_emu));
-  o.set("format", d.image_format);
-  js_set_cstr_fields(o, {{"name", d.name}, {"description", d.description}});
+  o.set("hidden", d.hidden != 0);
+  o.set("anchor", drawing_anchor_to_val(d.anchor));
+  js_set_cstr_fields(o, {{"name", d.name}});
+  js_set_cstr_or_null(o, "description", d.description);
   return o;
 }
 
@@ -62,30 +69,33 @@ fm_status_t drawing_object_item(const fm_workbook_t* handle, size_t sheet, size_
 
 }  // namespace
 
-fm_drawing_anchor_t pull_drawing_anchor(JsNarrowNumericReader& reader, const emscripten::val& anchor,
-                                        int32_t default_anchor_kind) {
+fm_drawing_anchor_t pull_drawing_anchor(JsNarrowNumericReader& reader, const emscripten::val& anchor) {
   fm_drawing_anchor_t out{};
-  out.anchor_kind = reader.i32(anchor, "anchorKind", default_anchor_kind, "anchor.anchorKind");
-  out.edit_as = reader.i32(anchor, "editAs", FM_ANCHOR_EDIT_AS_TWO_CELL, "anchor.editAs");
-  out.row = reader.u32(anchor, "row", 0U, "anchor.row");
-  out.col = reader.u32(anchor, "col", 0U, "anchor.col");
-  out.row_offset_emu = reader.i64(anchor, "rowOffsetEmu", 0, "anchor.rowOffsetEmu");
-  out.col_offset_emu = reader.i64(anchor, "colOffsetEmu", 0, "anchor.colOffsetEmu");
+  out.kind = reader.i32(anchor, "kind", FM_ANCHOR_KIND_DEFAULT, "anchor.kind");
+  out.edit_as = reader.i32(anchor, "editAs", FM_ANCHOR_EDIT_AS_DEFAULT, "anchor.editAs");
+  out.from_row = reader.u32(anchor, "fromRow", 0U, "anchor.fromRow");
+  out.from_col = reader.u32(anchor, "fromCol", 0U, "anchor.fromCol");
+  out.from_row_offset_emu = reader.i64(anchor, "fromRowOffsetEmu", 0, "anchor.fromRowOffsetEmu");
+  out.from_col_offset_emu = reader.i64(anchor, "fromColOffsetEmu", 0, "anchor.fromColOffsetEmu");
+  out.to_row = reader.u32(anchor, "toRow", 0U, "anchor.toRow");
+  out.to_col = reader.u32(anchor, "toCol", 0U, "anchor.toCol");
+  out.to_row_offset_emu = reader.i64(anchor, "toRowOffsetEmu", 0, "anchor.toRowOffsetEmu");
+  out.to_col_offset_emu = reader.i64(anchor, "toColOffsetEmu", 0, "anchor.toColOffsetEmu");
   out.width_emu = reader.i64(anchor, "widthEmu", 0, "anchor.widthEmu");
   out.height_emu = reader.i64(anchor, "heightEmu", 0, "anchor.heightEmu");
   return out;
 }
 
-fm_picture_insert_spec_t pull_image_insert(JsNarrowNumericReader& reader, const emscripten::val& input,
-                                           int32_t default_anchor_kind, std::string& name_store,
-                                           std::string& description_store) {
+fm_drawing_placement_spec_t pull_drawing_placement(JsNarrowNumericReader& reader, const emscripten::val& input,
+                                                   std::string& name_store, std::string& description_store) {
   const emscripten::val options = js_object_or_empty(input);
-  fm_picture_insert_spec_t ins = FM_STRUCT_INIT(fm_picture_insert_spec_t);
-  ins.name = reader.optional_string(options, "name", name_store, "name");
-  ins.description = reader.optional_string(options, "description", description_store, "description");
+  fm_drawing_placement_spec_t placement = FM_STRUCT_INIT(fm_drawing_placement_spec_t);
+  placement.name = reader.optional_string(options, "name", name_store, "name");
+  placement.description = reader.optional_string(options, "description", description_store, "description");
+  placement.hidden = js_tristate(reader, options, "hidden", "hidden");
   const emscripten::val anchor = reader.value(options, "anchor", "anchor");
-  ins.anchor = pull_drawing_anchor(reader, js_object_or_empty(anchor), default_anchor_kind);
-  return ins;
+  placement.anchor = pull_drawing_anchor(reader, js_object_or_empty(anchor));
+  return placement;
 }
 
 emscripten::val probe_image(emscripten::val bytes) {
@@ -147,8 +157,7 @@ uint32_t JsWorkbook::insertImage(uint32_t sheet, emscripten::val bytes, emscript
   if (!val_to_bytes_checked(bytes, &data)) {
     return 0U;
   }
-  const fm_picture_insert_spec_t ins =
-      pull_image_insert(reader, input, FM_ANCHOR_KIND_ONE_CELL, name_store, description_store);
+  const fm_drawing_placement_spec_t ins = pull_drawing_placement(reader, input, name_store, description_store);
   if (!reader.ok()) {
     return 0U;
   }
@@ -163,23 +172,50 @@ void JsWorkbook::removeDrawing(uint32_t sheet, uint32_t objectId) {
   succeeded(handle_ != nullptr ? fm_sheet_remove_drawing(handle_, sheet, objectId) : kBindingInvalidHandle);
 }
 
-void JsWorkbook::setDrawingName(uint32_t sheet, uint32_t objectId, const std::string& name) {
-  succeeded(handle_ != nullptr ? fm_sheet_set_drawing_name(handle_, sheet, objectId, name.c_str())
-                               : kBindingInvalidHandle);
-}
-
-void JsWorkbook::setDrawingAnchor(uint32_t sheet, uint32_t objectId, emscripten::val input) {
+void JsWorkbook::updateDrawing(uint32_t sheet, uint32_t objectId, emscripten::val patch) {
   if (handle_ == nullptr) {
     record_invalid_handle();
     return;
   }
-  JsNarrowNumericReader reader("Sheet.setDrawingAnchor");
-  const emscripten::val options = js_object_or_empty(input);
-  const fm_drawing_anchor_t anchor = pull_drawing_anchor(reader, options, FM_ANCHOR_KIND_ONE_CELL);
+  JsNarrowNumericReader reader("Drawing.update");
+  const emscripten::val spec = js_object_or_empty(patch);
+  std::string name_store;
+  std::string description_store;
+  fm_drawing_patch_t p = FM_STRUCT_INIT(fm_drawing_patch_t);
+  js_patch_string(reader, spec, "name", "name", false, name_store, &p.name_op, &p.name);
+  js_patch_string(reader, spec, "description", "description", true, description_store, &p.description_op,
+                  &p.description);
+  js_patch_flag(reader, spec, "hidden", "hidden", &p.hidden_op, &p.hidden);
+  const emscripten::val anchor = js_object_or_empty(reader.value(spec, "anchor", "anchor"));
+  fm_drawing_anchor_patch_t& a = p.anchor;
+  // No anchor field can be cleared: `null` is a type error, like any other flag.
+  const auto field = [&](const char* key, fm_patch_op_t* op, auto* value, auto read) {
+    const std::string name = std::string("anchor.") + key;
+    const emscripten::val v = reader.value(anchor, key, name.c_str());
+    if (js_patch_key(reader, v, name.c_str(), false) == JsPatchKey::kSet) {
+      *op = FM_PATCH_OP_SET;
+      *value = read(key, name.c_str());
+    }
+  };
+  const auto u32 = [&](const char* key, const char* name) { return reader.u32(anchor, key, 0U, name); };
+  const auto i32 = [&](const char* key, const char* name) { return reader.i32(anchor, key, 0, name); };
+  const auto i64 = [&](const char* key, const char* name) { return reader.i64(anchor, key, 0, name); };
+  field("kind", &a.kind_op, &a.kind, i32);
+  field("editAs", &a.edit_as_op, &a.edit_as, i32);
+  field("fromRow", &a.from_row_op, &a.from_row, u32);
+  field("fromCol", &a.from_col_op, &a.from_col, u32);
+  field("fromRowOffsetEmu", &a.from_row_offset_emu_op, &a.from_row_offset_emu, i64);
+  field("fromColOffsetEmu", &a.from_col_offset_emu_op, &a.from_col_offset_emu, i64);
+  field("toRow", &a.to_row_op, &a.to_row, u32);
+  field("toCol", &a.to_col_op, &a.to_col, u32);
+  field("toRowOffsetEmu", &a.to_row_offset_emu_op, &a.to_row_offset_emu, i64);
+  field("toColOffsetEmu", &a.to_col_offset_emu_op, &a.to_col_offset_emu, i64);
+  field("widthEmu", &a.width_emu_op, &a.width_emu, i64);
+  field("heightEmu", &a.height_emu_op, &a.height_emu, i64);
   if (!reader.ok()) {
     return;
   }
-  succeeded(fm_sheet_set_drawing_anchor(handle_, sheet, objectId, &anchor));
+  succeeded(fm_sheet_update_drawing(handle_, sheet, objectId, &p));
 }
 
 void JsWorkbook::setDrawingZOrder(uint32_t sheet, uint32_t objectId, uint32_t zOrderIndex) {

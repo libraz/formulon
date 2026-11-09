@@ -18,11 +18,13 @@
 namespace {
 
 constexpr bool kWasm32 = sizeof(void*) == 4U;
-static_assert(sizeof(fm_slicer_info_t) == (kWasm32 ? 104U : 128U), "fm_slicer_info_t ABI layout changed");
-static_assert(sizeof(fm_slicer_patch_t) == (kWasm32 ? 160U : 184U), "fm_slicer_patch_t ABI layout changed");
+static_assert(sizeof(fm_slicer_info_t) == (kWasm32 ? 56U : 72U), "fm_slicer_info_t ABI layout changed");
+static_assert(sizeof(fm_slicer_spec_t) == (kWasm32 ? 128U : 152U), "fm_slicer_spec_t ABI layout changed");
+static_assert(sizeof(fm_slicer_patch_t) == (kWasm32 ? 56U : 72U), "fm_slicer_patch_t ABI layout changed");
 
 constexpr fm_status_t kInvalidArgument = static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
 constexpr fm_status_t kBindingNullPointer = static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer);
+constexpr fm_status_t kPreconditionFailed = static_cast<fm_status_t>(formulon::FormulonErrorCode::kPreconditionFailed);
 
 std::vector<std::uint8_t> Save(fm_workbook_t* wb) {
   BufferGuard saved;
@@ -68,13 +70,14 @@ void Set(fm_patch_op_t& op, T& field, V value) {
   field = value;
 }
 
-/// A patch with the four anchor cells SET to D5:F15 and every other field KEEP.
-fm_slicer_patch_t Anchored() {
-  fm_slicer_patch_t s = FM_STRUCT_INIT(fm_slicer_patch_t);
-  Set(s.from_row_op, s.from_row, 4U);
-  Set(s.from_col_op, s.from_col, 3U);
-  Set(s.to_row_op, s.to_row, 14U);
-  Set(s.to_col_op, s.to_col, 5U);
+/// A spec placing the slicer at D5:F15, every other field left at its default.
+fm_slicer_spec_t Anchored() {
+  fm_slicer_spec_t s = FM_STRUCT_INIT(fm_slicer_spec_t);
+  s.placement = FM_STRUCT_INIT(fm_drawing_placement_spec_t);
+  s.placement.anchor.from_row = 4;
+  s.placement.anchor.from_col = 3;
+  s.placement.anchor.to_row = 14;
+  s.placement.anchor.to_col = 5;
   return s;
 }
 
@@ -86,6 +89,31 @@ fm_slicer_info_t Read(const fm_workbook_t* wb, std::uint32_t id) {
   return out;
 }
 
+/// The slicer's frame in the sheet's drawing.
+fm_drawing_object_info_t ReadFrame(const fm_workbook_t* wb, size_t sheet, std::uint32_t id) {
+  fm_drawing_object_info_t out = FM_STRUCT_INIT(fm_drawing_object_info_t);
+  int32_t present = 0;
+  EXPECT_EQ(fm_sheet_get_drawing_object(wb, sheet, id, &present, &out), 0) << fm_get_last_error_message();
+  EXPECT_EQ(present, 1);
+  return out;
+}
+
+/// How many drawing objects of `sheet` are table slicers.
+size_t SlicerCount(const fm_workbook_t* wb, size_t sheet) {
+  size_t objects = 0;
+  EXPECT_EQ(fm_sheet_get_drawing_object_count(wb, sheet, &objects), 0);
+  size_t slicers = 0;
+  for (size_t i = 0; i < objects; ++i) {
+    fm_drawing_object_info_t obj = FM_STRUCT_INIT(fm_drawing_object_info_t);
+    EXPECT_EQ(fm_sheet_get_drawing_object_at(wb, sheet, i, &obj), 0);
+    fm_slicer_info_t info = FM_STRUCT_INIT(fm_slicer_info_t);
+    int32_t present = 0;
+    EXPECT_EQ(fm_sheet_get_slicer(wb, sheet, obj.object_id, &present, &info), 0);
+    slicers += present == 1 ? 1U : 0U;
+  }
+  return slicers;
+}
+
 TEST(FormulonCApiSlicers, EnumOrdinals) {
   // Zero is the OOXML default `ascending`.
   EXPECT_EQ(FM_SLICER_SORT_ORDER_ASCENDING, 0);
@@ -94,31 +122,26 @@ TEST(FormulonCApiSlicers, EnumOrdinals) {
   EXPECT_EQ(FM_SLICER_CROSS_FILTER_NONE, 2);
 }
 
-TEST(FormulonCApiSlicers, AddListUpdateRemoveAndReload) {
+TEST(FormulonCApiSlicers, AddReadUpdateRemoveAndReload) {
   WorkbookGuard wb;
   CreateSalesTable(wb);
-  size_t count = 99;
-  ASSERT_EQ(fm_sheet_get_slicer_count(wb.handle, 0, &count), 0);
-  EXPECT_EQ(count, 0U);
+  EXPECT_EQ(SlicerCount(wb.handle, 0), 0U);
 
-  fm_slicer_patch_t spec = Anchored();
-  Set(spec.caption_op, spec.caption, "Pick a product");
-  Set(spec.style_op, spec.style, "SlicerStyleLight3");
-  Set(spec.column_count_op, spec.column_count, 2U);
-  Set(spec.sort_order_op, spec.sort_order, FM_SLICER_SORT_ORDER_DESCENDING);
-  Set(spec.cross_filter_op, spec.cross_filter, FM_SLICER_CROSS_FILTER_NONE);
+  fm_slicer_spec_t spec = Anchored();
+  spec.caption = "Pick a product";
+  spec.style = "SlicerStyleLight3";
+  spec.column_count = 2U;
+  spec.sort_order = FM_SLICER_SORT_ORDER_DESCENDING;
+  spec.cross_filter = FM_SLICER_CROSS_FILTER_NONE;
   uint32_t id = 0;
   ASSERT_EQ(fm_sheet_add_slicer(wb.handle, 0, 0, 0, 0, &spec, &id), 0) << fm_get_last_error_message();
   EXPECT_EQ(id, 2U);
 
   WorkbookGuard again;
   Load(Save(wb.handle), again);
-  ASSERT_EQ(fm_sheet_get_slicer_count(again.handle, 0, &count), 0);
-  ASSERT_EQ(count, 1U);
-  fm_slicer_info_t out = FM_STRUCT_INIT(fm_slicer_info_t);
-  ASSERT_EQ(fm_sheet_get_slicer_at(again.handle, 0, 0, &out), 0);
+  EXPECT_EQ(SlicerCount(again.handle, 0), 1U);
+  fm_slicer_info_t out = Read(again.handle, id);
   EXPECT_EQ(out.object_id, 2U);
-  EXPECT_STREQ(out.name, "Product");
   EXPECT_STREQ(out.caption, "Pick a product");
   EXPECT_STREQ(out.cache_name, "Slicer_Product");
   EXPECT_STREQ(out.table_name, "Sales");
@@ -129,71 +152,109 @@ TEST(FormulonCApiSlicers, AddListUpdateRemoveAndReload) {
   EXPECT_EQ(out.sort_order, FM_SLICER_SORT_ORDER_DESCENDING);
   EXPECT_TRUE(Has(ExtractZipEntry(Save(wb.handle), "xl/slicerCaches/slicerCache1.xml"), "sortOrder=\"descending\""));
   EXPECT_EQ(out.cross_filter, FM_SLICER_CROSS_FILTER_NONE);
-  EXPECT_EQ(out.anchor_kind, FM_ANCHOR_KIND_TWO_CELL);
-  EXPECT_EQ(out.from_row, 4U);
-  EXPECT_EQ(out.from_col, 3U);
-  EXPECT_EQ(out.to_row, 14U);
-  EXPECT_EQ(out.to_col, 5U);
+  // The name and the anchor belong to the slicer's frame.
+  fm_drawing_object_info_t frame = ReadFrame(again.handle, 0, id);
+  EXPECT_STREQ(frame.name, "Product");
+  EXPECT_EQ(frame.anchor.kind, FM_ANCHOR_KIND_TWO_CELL);
+  EXPECT_EQ(frame.anchor.from_row, 4U);
+  EXPECT_EQ(frame.anchor.from_col, 3U);
+  EXPECT_EQ(frame.anchor.to_row, 14U);
+  EXPECT_EQ(frame.anchor.to_col, 5U);
 
-  // The slicer's frame is a drawing object of the sheet.
-  size_t objects = 0;
-  ASSERT_EQ(fm_sheet_get_drawing_object_count(again.handle, 0, &objects), 0);
-  EXPECT_EQ(objects, 1U);
-
-  fm_slicer_patch_t update = Anchored();
+  fm_slicer_patch_t update = FM_STRUCT_INIT(fm_slicer_patch_t);
   Set(update.caption_op, update.caption, "Renamed");
   Set(update.style_op, update.style, "");
   Set(update.column_count_op, update.column_count, 1U);
-  update.from_row = 0;
-  update.to_row = 8;
   ASSERT_EQ(fm_sheet_update_slicer(again.handle, 0, id, &update), 0) << fm_get_last_error_message();
-  int32_t present = 0;
-  ASSERT_EQ(fm_sheet_get_slicer(again.handle, 0, id, &present, &out), 0);
-  ASSERT_EQ(present, 1);
+  fm_drawing_patch_t move = FM_STRUCT_INIT(fm_drawing_patch_t);
+  Set(move.anchor.from_row_op, move.anchor.from_row, 0U);
+  Set(move.anchor.to_row_op, move.anchor.to_row, 8U);
+  ASSERT_EQ(fm_sheet_update_drawing(again.handle, 0, id, &move), 0) << fm_get_last_error_message();
+  out = Read(again.handle, id);
   EXPECT_EQ(out.object_id, id);
   EXPECT_STREQ(out.caption, "Renamed");
   EXPECT_EQ(out.style, nullptr);  // a SET empty style removes it
   EXPECT_EQ(out.column_count, 1U);
   EXPECT_EQ(out.sort_order, FM_SLICER_SORT_ORDER_DESCENDING);
-  EXPECT_EQ(out.from_row, 0U);
-  EXPECT_EQ(out.to_row, 8U);
+  frame = ReadFrame(again.handle, 0, id);
+  EXPECT_EQ(frame.anchor.from_row, 0U);
+  EXPECT_EQ(frame.anchor.to_row, 8U);
+  EXPECT_EQ(frame.anchor.to_col, 5U);
 
   // Ascending, the schema default, is accepted as well.
   fm_slicer_patch_t ascending = FM_STRUCT_INIT(fm_slicer_patch_t);
   Set(ascending.sort_order_op, ascending.sort_order, FM_SLICER_SORT_ORDER_ASCENDING);
   ASSERT_EQ(fm_sheet_update_slicer(again.handle, 0, id, &ascending), 0) << fm_get_last_error_message();
-  ASSERT_EQ(fm_sheet_get_slicer(again.handle, 0, id, &present, &out), 0);
-  EXPECT_EQ(out.sort_order, FM_SLICER_SORT_ORDER_ASCENDING);
+  EXPECT_EQ(Read(again.handle, id).sort_order, FM_SLICER_SORT_ORDER_ASCENDING);
 
   const std::vector<std::uint8_t> saved = Save(again.handle);
   EXPECT_TRUE(Has(ExtractZipEntry(saved, "xl/slicers/slicer1.xml"), "caption=\"Renamed\""));
   EXPECT_TRUE(Has(ExtractZipEntry(saved, "[Content_Types].xml"), "/xl/slicerCaches/slicerCache1.xml"));
 
-  ASSERT_EQ(fm_sheet_remove_slicer(again.handle, 0, id), 0);
-  ASSERT_EQ(fm_sheet_get_slicer_count(again.handle, 0, &count), 0);
-  EXPECT_EQ(count, 0U);
+  ASSERT_EQ(fm_sheet_remove_drawing(again.handle, 0, id), 0) << fm_get_last_error_message();
+  EXPECT_EQ(SlicerCount(again.handle, 0), 0U);
+  int32_t present = 1;
   ASSERT_EQ(fm_sheet_get_slicer(again.handle, 0, id, &present, &out), 0);
   EXPECT_EQ(present, 0);
+  EXPECT_EQ(fm_sheet_remove_drawing(again.handle, 0, id), FM_STATUS_NOT_FOUND);
   const std::vector<std::uint8_t> emptied = Save(again.handle);
   EXPECT_FALSE(HasEntry(emptied, "xl/slicers/slicer1.xml"));
   EXPECT_FALSE(HasEntry(emptied, "xl/slicerCaches/slicerCache1.xml"));
   EXPECT_FALSE(Has(ExtractZipEntry(emptied, "xl/workbook.xml"), "Slicer_Product"));
 }
 
+TEST(FormulonCApiSlicers, PlacementNameDescriptionAndHiddenReachTheFrame) {
+  WorkbookGuard wb;
+  CreateSalesTable(wb);
+  fm_slicer_spec_t spec = Anchored();
+  spec.placement.name = "Region picker";
+  spec.placement.description = "filters sales";
+  spec.placement.hidden = FM_TRISTATE_TRUE;
+  uint32_t id = 0;
+  ASSERT_EQ(fm_sheet_add_slicer(wb.handle, 0, 0, 0, 0, &spec, &id), 0) << fm_get_last_error_message();
+  const fm_drawing_object_info_t frame = ReadFrame(wb.handle, 0, id);
+  EXPECT_STREQ(frame.name, "Region picker");
+  EXPECT_STREQ(frame.description, "filters sales");
+  EXPECT_EQ(frame.hidden, 1);
+
+  fm_drawing_patch_t patch = FM_STRUCT_INIT(fm_drawing_patch_t);
+  Set(patch.description_op, patch.description, "new text");
+  Set(patch.hidden_op, patch.hidden, 0);
+  ASSERT_EQ(fm_sheet_update_drawing(wb.handle, 0, id, &patch), 0) << fm_get_last_error_message();
+  const fm_drawing_object_info_t after = ReadFrame(wb.handle, 0, id);
+  EXPECT_STREQ(after.description, "new text");
+  EXPECT_EQ(after.hidden, 0);
+}
+
+TEST(FormulonCApiSlicers, FrameNameCannotBeSetAndItsAnchorStaysTwoCell) {
+  WorkbookGuard wb;
+  CreateSalesTable(wb);
+  fm_slicer_spec_t spec = Anchored();
+  uint32_t id = 0;
+  ASSERT_EQ(fm_sheet_add_slicer(wb.handle, 0, 0, 0, 0, &spec, &id), 0) << fm_get_last_error_message();
+
+  fm_drawing_patch_t rename = FM_STRUCT_INIT(fm_drawing_patch_t);
+  Set(rename.name_op, rename.name, "Other");
+  EXPECT_EQ(fm_sheet_update_drawing(wb.handle, 0, id, &rename), kPreconditionFailed);
+  fm_drawing_patch_t one_cell = FM_STRUCT_INIT(fm_drawing_patch_t);
+  Set(one_cell.anchor.kind_op, one_cell.anchor.kind, FM_ANCHOR_KIND_ONE_CELL);
+  EXPECT_EQ(fm_sheet_update_drawing(wb.handle, 0, id, &one_cell), kInvalidArgument);
+  const fm_drawing_object_info_t frame = ReadFrame(wb.handle, 0, id);
+  EXPECT_STREQ(frame.name, "Product");
+  EXPECT_EQ(frame.anchor.kind, FM_ANCHOR_KIND_TWO_CELL);
+}
+
 TEST(FormulonCApiSlicers, RemovingTheTableRemovesItsSlicers) {
   WorkbookGuard wb;
   CreateSalesTable(wb);
-  fm_slicer_patch_t spec = Anchored();
+  fm_slicer_spec_t spec = Anchored();
   uint32_t id = 0;
   ASSERT_EQ(fm_sheet_add_slicer(wb.handle, 0, 0, 0, 0, &spec, &id), 0);
   ASSERT_EQ(fm_sheet_add_slicer(wb.handle, 0, 0, 0, 1, &spec, &id), 0);
-  size_t count = 0;
-  ASSERT_EQ(fm_sheet_get_slicer_count(wb.handle, 0, &count), 0);
-  ASSERT_EQ(count, 2U);
+  ASSERT_EQ(SlicerCount(wb.handle, 0), 2U);
 
   ASSERT_EQ(fm_sheet_remove_table(wb.handle, 0, 0), 0);
-  ASSERT_EQ(fm_sheet_get_slicer_count(wb.handle, 0, &count), 0);
-  EXPECT_EQ(count, 0U);
+  EXPECT_EQ(SlicerCount(wb.handle, 0), 0U);
   const std::vector<std::uint8_t> saved = Save(wb.handle);
   EXPECT_FALSE(HasEntry(saved, "xl/slicers/slicer1.xml"));
   EXPECT_FALSE(HasEntry(saved, "xl/slicerCaches/slicerCache1.xml"));
@@ -208,15 +269,13 @@ TEST(FormulonCApiSlicers, RemovingTheTableRemovesItsSlicers) {
 TEST(FormulonCApiSlicers, RemovingTheSheetRemovesTheSlicersItHostsAndTheirCaches) {
   WorkbookGuard wb;
   CreateSalesTable(wb);
-  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Dash", ignored_index()), 0);
+  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Dash", append_position(wb.handle), ignored_index()), 0);
   const size_t sheet = 1;
-  fm_slicer_patch_t spec = Anchored();
+  fm_slicer_spec_t spec = Anchored();
   uint32_t id = 0;
   // The slicer lives on the second sheet, over the first sheet's table.
   ASSERT_EQ(fm_sheet_add_slicer(wb.handle, sheet, 0, 0, 0, &spec, &id), 0) << fm_get_last_error_message();
-  size_t count = 0;
-  ASSERT_EQ(fm_sheet_get_slicer_count(wb.handle, sheet, &count), 0);
-  ASSERT_EQ(count, 1U);
+  ASSERT_EQ(SlicerCount(wb.handle, sheet), 1U);
 
   ASSERT_EQ(fm_workbook_remove_sheet(wb.handle, sheet), 0);
   const std::vector<std::uint8_t> saved = Save(wb.handle);
@@ -226,7 +285,7 @@ TEST(FormulonCApiSlicers, RemovingTheSheetRemovesTheSlicersItHostsAndTheirCaches
   // Removing the table's own sheet takes the slicers bound to its table.
   WorkbookGuard other;
   CreateSalesTable(other);
-  ASSERT_EQ(fm_workbook_add_sheet(other.handle, "Dash", ignored_index()), 0);
+  ASSERT_EQ(fm_workbook_add_sheet(other.handle, "Dash", append_position(other.handle), ignored_index()), 0);
   ASSERT_EQ(fm_sheet_add_slicer(other.handle, sheet, 0, 0, 0, &spec, &id), 0);
   ASSERT_EQ(fm_workbook_remove_sheet(other.handle, 0), 0);
   const std::vector<std::uint8_t> after = Save(other.handle);
@@ -237,8 +296,8 @@ TEST(FormulonCApiSlicers, RemovingTheSheetRemovesTheSlicersItHostsAndTheirCaches
 TEST(FormulonCApiSlicers, TableIsAddressedBySheetAndSheetLocalIndex) {
   WorkbookGuard wb;
   CreateSalesTable(wb);
-  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Dash", ignored_index()), 0);
-  fm_slicer_patch_t spec = Anchored();
+  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Dash", append_position(wb.handle), ignored_index()), 0);
+  fm_slicer_spec_t spec = Anchored();
   uint32_t id = 0;
   // The table lives on sheet 0; sheet 1 has none, so its index 0 is past the end.
   EXPECT_EQ(fm_sheet_add_slicer(wb.handle, 1, 1, 0, 0, &spec, &id), FM_STATUS_INDEX_OUT_OF_RANGE);
@@ -250,83 +309,80 @@ TEST(FormulonCApiSlicers, TableIsAddressedBySheetAndSheetLocalIndex) {
 TEST(FormulonCApiSlicers, RejectsBadArguments) {
   WorkbookGuard wb;
   CreateSalesTable(wb);
-  fm_slicer_patch_t spec = Anchored();
+  fm_slicer_spec_t spec = Anchored();
   uint32_t id = 0;
-  size_t count = 0;
   fm_slicer_info_t out = FM_STRUCT_INIT(fm_slicer_info_t);
-  EXPECT_EQ(fm_sheet_get_slicer_count(wb.handle, 0, nullptr), kBindingNullPointer);
-  EXPECT_EQ(fm_sheet_get_slicer_count(wb.handle, 7, &count), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
-  EXPECT_EQ(fm_sheet_get_slicer_at(wb.handle, 0, 0, &out), FM_STATUS_INDEX_OUT_OF_RANGE);
-  EXPECT_EQ(fm_sheet_get_slicer_at(wb.handle, 0, 0, nullptr), kBindingNullPointer);
   EXPECT_EQ(fm_sheet_add_slicer(wb.handle, 0, 0, 0, 0, nullptr, &id), kBindingNullPointer);
   EXPECT_EQ(fm_sheet_add_slicer(wb.handle, 0, 0, 0, 0, &spec, nullptr), kBindingNullPointer);
   EXPECT_EQ(fm_sheet_add_slicer(wb.handle, 7, 0, 0, 0, &spec, &id), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(fm_sheet_add_slicer(wb.handle, 0, 0, 1, 0, &spec, &id), FM_STATUS_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(fm_sheet_add_slicer(wb.handle, 0, 7, 0, 0, &spec, &id), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
-  EXPECT_EQ(fm_sheet_add_slicer(wb.handle, 0, 0, 0, 2, &spec, &id), kInvalidArgument);
-  fm_slicer_patch_t no_anchor = FM_STRUCT_INIT(fm_slicer_patch_t);
+  // A column position past the table's columns is a position out of range, like a table past the end.
+  EXPECT_EQ(fm_sheet_add_slicer(wb.handle, 0, 0, 0, 2, &spec, &id), FM_STATUS_INDEX_OUT_OF_RANGE);
+  fm_slicer_spec_t no_anchor = FM_STRUCT_INIT(fm_slicer_spec_t);
+  no_anchor.placement = FM_STRUCT_INIT(fm_drawing_placement_spec_t);
   EXPECT_EQ(fm_sheet_add_slicer(wb.handle, 0, 0, 0, 0, &no_anchor, &id), kInvalidArgument);
-  fm_slicer_patch_t three_cells = Anchored();
-  three_cells.to_col_op = FM_PATCH_OP_KEEP;
-  EXPECT_EQ(fm_sheet_add_slicer(wb.handle, 0, 0, 0, 0, &three_cells, &id), kInvalidArgument);
-  fm_slicer_patch_t bad_op = Anchored();
-  bad_op.caption_op = static_cast<fm_patch_op_t>(3);
-  EXPECT_EQ(fm_sheet_add_slicer(wb.handle, 0, 0, 0, 0, &bad_op, &id), kInvalidArgument);
-  fm_slicer_patch_t null_caption = Anchored();
-  Set(null_caption.caption_op, null_caption.caption, nullptr);
-  EXPECT_EQ(fm_sheet_add_slicer(wb.handle, 0, 0, 0, 0, &null_caption, &id), kInvalidArgument);
-  fm_slicer_patch_t bad_utf8 = Anchored();
-  Set(bad_utf8.caption_op, bad_utf8.caption, "\xC3");
+  fm_slicer_spec_t short_placement = Anchored();
+  short_placement.placement.struct_size = 0;
+  EXPECT_EQ(fm_sheet_add_slicer(wb.handle, 0, 0, 0, 0, &short_placement, &id), kInvalidArgument);
+  fm_slicer_spec_t one_cell = Anchored();
+  one_cell.placement.anchor.kind = FM_ANCHOR_KIND_ONE_CELL;
+  one_cell.placement.anchor.width_emu = 100000;
+  one_cell.placement.anchor.height_emu = 100000;
+  EXPECT_EQ(fm_sheet_add_slicer(wb.handle, 0, 0, 0, 0, &one_cell, &id), kInvalidArgument);
+  fm_slicer_spec_t absolute = Anchored();
+  absolute.placement.anchor.kind = FM_ANCHOR_KIND_ABSOLUTE;
+  EXPECT_EQ(fm_sheet_add_slicer(wb.handle, 0, 0, 0, 0, &absolute, &id), kInvalidArgument);
+  fm_slicer_spec_t bad_hidden = Anchored();
+  bad_hidden.placement.hidden = 3;
+  EXPECT_EQ(fm_sheet_add_slicer(wb.handle, 0, 0, 0, 0, &bad_hidden, &id), kInvalidArgument);
+  fm_slicer_spec_t bad_utf8 = Anchored();
+  bad_utf8.caption = "\xC3";
   EXPECT_EQ(fm_sheet_add_slicer(wb.handle, 0, 0, 0, 0, &bad_utf8, &id), FM_STATUS_BINDING_UTF8ENCODING_ERROR);
-  fm_slicer_patch_t bad_sort = Anchored();
-  Set(bad_sort.sort_order_op, bad_sort.sort_order, 2);
+  fm_slicer_spec_t bad_sort = Anchored();
+  bad_sort.sort_order = 2;
   EXPECT_EQ(fm_sheet_add_slicer(wb.handle, 0, 0, 0, 0, &bad_sort, &id), kInvalidArgument);
-  fm_slicer_patch_t bad_cross = Anchored();
-  Set(bad_cross.cross_filter_op, bad_cross.cross_filter, 3);
+  fm_slicer_spec_t bad_cross = Anchored();
+  bad_cross.cross_filter = 3;
   EXPECT_EQ(fm_sheet_add_slicer(wb.handle, 0, 0, 0, 0, &bad_cross, &id), kInvalidArgument);
-  fm_slicer_patch_t bad_count = Anchored();
-  Set(bad_count.column_count_op, bad_count.column_count, 0U);
-  EXPECT_EQ(fm_sheet_add_slicer(wb.handle, 0, 0, 0, 0, &bad_count, &id), kInvalidArgument);
-  fm_slicer_patch_t backwards = Anchored();
-  backwards.to_row = 1;
+  fm_slicer_spec_t backwards = Anchored();
+  backwards.placement.anchor.to_row = 1;
   EXPECT_EQ(fm_sheet_add_slicer(wb.handle, 0, 0, 0, 0, &backwards, &id), kInvalidArgument);
-  ASSERT_EQ(fm_sheet_get_slicer_count(wb.handle, 0, &count), 0);
-  EXPECT_EQ(count, 0U);
+  EXPECT_EQ(SlicerCount(wb.handle, 0), 0U);
 
   ASSERT_EQ(fm_sheet_add_slicer(wb.handle, 0, 0, 0, 0, &spec, &id), 0);
+  fm_slicer_patch_t keep = FM_STRUCT_INIT(fm_slicer_patch_t);
   EXPECT_EQ(fm_sheet_update_slicer(wb.handle, 0, id, nullptr), kBindingNullPointer);
-  EXPECT_EQ(fm_sheet_update_slicer(wb.handle, 0, id + 1U, &spec), FM_STATUS_NOT_FOUND);
-  EXPECT_EQ(fm_sheet_update_slicer(wb.handle, 0, 0U, &spec), FM_STATUS_NOT_FOUND);
-  fm_slicer_patch_t rename = FM_STRUCT_INIT(fm_slicer_patch_t);
-  Set(rename.name_op, rename.name, "Other");
-  EXPECT_EQ(fm_sheet_update_slicer(wb.handle, 0, id, &rename), kInvalidArgument);
-  EXPECT_EQ(fm_sheet_remove_slicer(wb.handle, 0, id + 1U), FM_STATUS_NOT_FOUND);
-  EXPECT_EQ(fm_sheet_remove_slicer(wb.handle, 7, id), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(fm_sheet_update_slicer(wb.handle, 0, id + 1U, &keep), FM_STATUS_NOT_FOUND);
+  EXPECT_EQ(fm_sheet_update_slicer(wb.handle, 0, 0U, &keep), FM_STATUS_NOT_FOUND);
+  EXPECT_EQ(fm_sheet_update_slicer(wb.handle, 7, id, &keep), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(fm_sheet_remove_drawing(wb.handle, 0, id + 1U), FM_STATUS_NOT_FOUND);
+  EXPECT_EQ(fm_sheet_remove_drawing(wb.handle, 7, id), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
   int32_t present = 1;
   EXPECT_EQ(fm_sheet_get_slicer(wb.handle, 0, id, nullptr, &out), kBindingNullPointer);
+  EXPECT_EQ(fm_sheet_get_slicer(wb.handle, 0, id, &present, nullptr), kBindingNullPointer);
   EXPECT_EQ(fm_sheet_get_slicer(wb.handle, 7, id, &present, &out), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
   ASSERT_EQ(fm_sheet_get_slicer(wb.handle, 0, id + 1U, &present, &out), 0);
   EXPECT_EQ(present, 0);
 }
 
-// A slicer patch writes only its SET fields: an offset alone moves within the
-// current cells, CLEAR removes the style, and a refused field (CLEAR outside
-// `style`, a partial set of anchor cells) leaves the whole slicer unchanged.
+// A slicer patch writes only its SET fields, CLEAR removes the style, and a
+// refused field (CLEAR outside `style`, a bad ordinal) leaves the whole slicer unchanged.
 TEST(FormulonCApiSlicers, PatchWritesOnlyItsSetFieldsAndRefusesAtomically) {
   WorkbookGuard wb;
   CreateSalesTable(wb);
-  fm_slicer_patch_t spec = Anchored();
-  Set(spec.style_op, spec.style, "SlicerStyleLight3");
+  fm_slicer_spec_t spec = Anchored();
+  spec.style = "SlicerStyleLight3";
   uint32_t id = 0;
   ASSERT_EQ(fm_sheet_add_slicer(wb.handle, 0, 0, 0, 0, &spec, &id), 0) << fm_get_last_error_message();
   const fm_slicer_info_t added = Read(wb.handle, id);
-  EXPECT_STREQ(added.name, "Product");
   EXPECT_STREQ(added.caption, "Product");
   EXPECT_EQ(added.column_count, 1U);
   EXPECT_EQ(added.row_height_emu, 241300);
   EXPECT_EQ(added.sort_order, FM_SLICER_SORT_ORDER_ASCENDING);
   EXPECT_EQ(added.cross_filter, FM_SLICER_CROSS_FILTER_SHOW_ITEMS_WITH_DATA_AT_TOP);
-  EXPECT_EQ(added.from_row_offset_emu, 0);
+  EXPECT_STREQ(ReadFrame(wb.handle, 0, id).name, "Product");
+  EXPECT_EQ(ReadFrame(wb.handle, 0, id).anchor.from_row_offset_emu, 0);
 
   fm_slicer_patch_t caption = FM_STRUCT_INIT(fm_slicer_patch_t);
   Set(caption.caption_op, caption.caption, "Pick one");
@@ -334,17 +390,16 @@ TEST(FormulonCApiSlicers, PatchWritesOnlyItsSetFieldsAndRefusesAtomically) {
   fm_slicer_info_t out = Read(wb.handle, id);
   EXPECT_STREQ(out.caption, "Pick one");
   EXPECT_STREQ(out.style, "SlicerStyleLight3");
-  EXPECT_EQ(out.from_row, 4U);
-  EXPECT_EQ(out.to_col, 5U);
+  EXPECT_EQ(ReadFrame(wb.handle, 0, id).anchor.from_row, 4U);
 
-  fm_slicer_patch_t offset = FM_STRUCT_INIT(fm_slicer_patch_t);
-  Set(offset.from_col_offset_emu_op, offset.from_col_offset_emu, 12700);
-  ASSERT_EQ(fm_sheet_update_slicer(wb.handle, 0, id, &offset), 0) << fm_get_last_error_message();
-  out = Read(wb.handle, id);
-  EXPECT_EQ(out.from_col_offset_emu, 12700);
-  EXPECT_EQ(out.from_row, 4U);
-  EXPECT_EQ(out.from_col, 3U);
-  EXPECT_EQ(out.to_row, 14U);
+  fm_drawing_patch_t offset = FM_STRUCT_INIT(fm_drawing_patch_t);
+  Set(offset.anchor.from_col_offset_emu_op, offset.anchor.from_col_offset_emu, 12700);
+  ASSERT_EQ(fm_sheet_update_drawing(wb.handle, 0, id, &offset), 0) << fm_get_last_error_message();
+  const fm_drawing_object_info_t frame = ReadFrame(wb.handle, 0, id);
+  EXPECT_EQ(frame.anchor.from_col_offset_emu, 12700);
+  EXPECT_EQ(frame.anchor.from_row, 4U);
+  EXPECT_EQ(frame.anchor.from_col, 3U);
+  EXPECT_EQ(frame.anchor.to_row, 14U);
 
   fm_slicer_patch_t clear = FM_STRUCT_INIT(fm_slicer_patch_t);
   clear.style_op = FM_PATCH_OP_CLEAR;
@@ -356,15 +411,11 @@ TEST(FormulonCApiSlicers, PatchWritesOnlyItsSetFieldsAndRefusesAtomically) {
   bad.caption_op = FM_PATCH_OP_CLEAR;
   EXPECT_EQ(fm_sheet_update_slicer(wb.handle, 0, id, &bad), kInvalidArgument);
   bad.caption_op = FM_PATCH_OP_KEEP;
-  Set(bad.from_row_op, bad.from_row, 0U);  // one anchor cell without the other three
-  EXPECT_EQ(fm_sheet_update_slicer(wb.handle, 0, id, &bad), kInvalidArgument);
-  bad.from_row_op = FM_PATCH_OP_KEEP;
   bad.sort_order_op = static_cast<fm_patch_op_t>(3);
   EXPECT_EQ(fm_sheet_update_slicer(wb.handle, 0, id, &bad), kInvalidArgument);
   out = Read(wb.handle, id);
   EXPECT_EQ(out.column_count, 1U);
   EXPECT_STREQ(out.caption, "Pick one");
-  EXPECT_EQ(out.from_row, 4U);
 
   const fm_slicer_patch_t keep = FM_STRUCT_INIT(fm_slicer_patch_t);
   EXPECT_EQ(fm_sheet_update_slicer(wb.handle, 0, id, &keep), 0) << fm_get_last_error_message();

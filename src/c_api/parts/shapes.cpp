@@ -14,6 +14,7 @@
 #include "c_api/formulon_c.h"
 #include "c_api/parts/chart_patch_reader.h"
 #include "c_api/parts/common.h"
+#include "c_api/parts/drawing_anchor.h"
 #include "c_api/parts/enum_map.h"
 #include "c_api/parts/struct_v1_sizes.h"
 #include "drawing/drawing_geometry.h"
@@ -21,23 +22,22 @@
 #include "utils/error.h"
 #include "workbook.h"
 
-using formulon::c_api::parts::anchor_kind_from_c;
+using formulon::c_api::parts::AnchorPlan;
+using formulon::c_api::parts::apply_placement_extras;
 using formulon::c_api::parts::check_enum_domain;
-using formulon::c_api::parts::check_index;
 using formulon::c_api::parts::check_record_size;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::color_spec_from_c;
 using formulon::c_api::parts::color_spec_to_c;
-using formulon::c_api::parts::edit_as_from_c;
-using formulon::c_api::parts::fill_anchor;
 using formulon::c_api::parts::finish_status;
 using formulon::c_api::parts::fresh_read_scratch;
 using formulon::c_api::parts::invalid_argument;
 using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::patch_op_ok;
 using formulon::c_api::parts::patch_op_ok_without_clear;
+using formulon::c_api::parts::plan_add_anchor;
 using formulon::c_api::parts::set_last_error;
 using formulon::c_api::parts::shape_paint_from_c;
 using formulon::c_api::parts::store_cstr;
@@ -95,50 +95,35 @@ bool is_set(fm_patch_op_t op) {
 struct OpField {
   fm_patch_op_t op;
   const char* name;
-  bool paint;  // One of the four fields an update may clear.
 };
 
 // Every op of `p` with its field name, in declaration order.
-std::array<OpField, 23> ops_of(const fm_shape_patch_t& p) {
-  return {{{p.anchor_kind_op, "anchor_kind", false},
-           {p.edit_as_op, "edit_as", false},
-           {p.from_row_op, "from_row", false},
-           {p.from_col_op, "from_col", false},
-           {p.to_row_op, "to_row", false},
-           {p.to_col_op, "to_col", false},
-           {p.from_row_offset_emu_op, "from_row_offset_emu", false},
-           {p.from_col_offset_emu_op, "from_col_offset_emu", false},
-           {p.to_row_offset_emu_op, "to_row_offset_emu", false},
-           {p.to_col_offset_emu_op, "to_col_offset_emu", false},
-           {p.width_emu_op, "width_emu", false},
-           {p.height_emu_op, "height_emu", false},
-           {p.fill_kind_op, "fill_kind", true},
-           {p.fill_color_op, "fill_color", true},
-           {p.line_kind_op, "line_kind", true},
-           {p.line_color_op, "line_color", true},
-           {p.line_width_pt_op, "line_width_pt", false},
-           {p.rotation_deg_op, "rotation_deg", false},
-           {p.hidden_op, "hidden", false},
-           {p.text_box_op, "text_box", false},
-           {p.name_op, "name", false},
-           {p.preset_geometry_op, "preset_geometry", false},
-           {p.text_op, "text", false}}};
+std::array<OpField, 7> ops_of(const fm_shape_patch_t& p) {
+  return {{{p.fill_kind_op, "fill_kind"},
+           {p.fill_color_op, "fill_color"},
+           {p.line_kind_op, "line_kind"},
+           {p.line_color_op, "line_color"},
+           {p.line_width_pt_op, "line_width_pt"},
+           {p.rotation_deg_op, "rotation_deg"},
+           {p.text_box_op, "text_box"}}};
 }
 
-// The ops, strings and UTF-8 of `p`. On add every field may be CLEAR (Excel's default); on update only the
-// paint fields.
-fm_status_t check_patch(const fm_shape_patch_t& p, bool add) {
+// The ops, strings and UTF-8 of `p`; no field can be cleared.
+fm_status_t check_patch(const fm_shape_patch_t& p) {
   for (const OpField& f : ops_of(p)) {
-    const bool ok = add || f.paint ? patch_op_ok(f.op) : patch_op_ok_without_clear(f.op);
-    if (!ok) {
-      return invalid_argument(patch_op_ok(f.op) ? "field cannot be cleared" : "op must be KEEP, CLEAR or SET",
+    if (!patch_op_ok_without_clear(f.op)) {
+      return invalid_argument(patch_op_ok(f.op) ? "field cannot be cleared" : "op must be KEEP or SET",
                               std::string("field=") + f.name);
     }
   }
-  const std::array<std::pair<fm_patch_op_t, const char*>, 3> texts = {
-      {{p.name_op, p.name}, {p.preset_geometry_op, p.preset_geometry}, {p.text_op, p.text}}};
-  const char* const names[] = {"name", "preset_geometry", "text"};
+  const std::array<std::pair<fm_patch_op_t, const char*>, 2> texts = {
+      {{p.preset_geometry_op, p.preset_geometry}, {p.text_op, p.text}}};
+  const char* const names[] = {"preset_geometry", "text"};
   for (std::size_t i = 0; i < texts.size(); ++i) {
+    if (!patch_op_ok_without_clear(texts[i].first)) {
+      return invalid_argument(patch_op_ok(texts[i].first) ? "field cannot be cleared" : "op must be KEEP or SET",
+                              std::string("field=") + names[i]);
+    }
     if (!is_set(texts[i].first)) {
       continue;
     }
@@ -163,22 +148,12 @@ fm_status_t paint_from_patch(fm_patch_op_t kind_op, std::int32_t kind, fm_patch_
                              const char* kind_name, const char* color_name, formulon::ShapePaint& out_paint,
                              formulon::ColorSpec& out_color, bool& apply) {
   apply = false;
-  const bool clear = stored_kind != nullptr && (kind_op == FM_PATCH_OP_CLEAR || color_op == FM_PATCH_OP_CLEAR);
-  if (clear) {
-    if (is_set(kind_op) || is_set(color_op)) {
-      return invalid_argument("one of a paint pair cannot be cleared while the other is set",
-                              std::string("field=") + kind_name);
-    }
-    out_paint = formulon::ShapePaint::kUnset;
-    out_color = formulon::ColorSpec{};
-    apply = true;
-    return 0;
-  }
   if (!is_set(kind_op) && !is_set(color_op)) {
     return 0;
   }
-  if (is_set(kind_op) && kind != FM_SHAPE_PAINT_SOLID && kind != FM_SHAPE_PAINT_NONE) {
-    return invalid_argument("a paint is solid or none", std::string("field=") + kind_name);
+  if (is_set(kind_op) && kind != FM_SHAPE_PAINT_DEFAULT && kind != FM_SHAPE_PAINT_SOLID &&
+      kind != FM_SHAPE_PAINT_NONE) {
+    return invalid_argument("a paint is default, solid or none", std::string("field=") + kind_name);
   }
   // Setting only a colour makes the paint solid.
   out_paint = is_set(kind_op) ? shape_paint_from_c(kind) : formulon::ShapePaint::kSolid;
@@ -200,17 +175,12 @@ fm_status_t paint_from_patch(fm_patch_op_t kind_op, std::int32_t kind, fm_patch_
   return 0;
 }
 
-// Converts `p` to the model spec. `stored` is the shape an update merges into (NULL on add, and on an update
-// whose id names no shape, which the engine then refuses); a non-zero return is the status to report.
+// Converts `p` to the model spec's shape fields. `stored` is the shape an update merges into (NULL on add, and
+// on an update whose id names no shape, which the engine then refuses); a non-zero return is the status to report.
 fm_status_t to_spec(const fm_shape_patch_t& p, bool add, const formulon::ShapeInfo* stored, formulon::ShapeSpec& spec) {
   namespace field = formulon::shape_field;
-  if (auto rc = check_patch(p, add); rc != 0) {
+  if (auto rc = check_patch(p); rc != 0) {
     return rc;
-  }
-  spec.fields = 0;
-  if (is_set(p.name_op)) {
-    spec.fields |= field::kName;
-    spec.name = p.name;
   }
   if (is_set(p.preset_geometry_op)) {
     spec.fields |= field::kPrst;
@@ -226,79 +196,6 @@ fm_status_t to_spec(const fm_shape_patch_t& p, bool add, const formulon::ShapeIn
     }
     spec.fields |= field::kTextBox;
     spec.text_box = p.text_box != 0;
-  }
-  if (is_set(p.hidden_op)) {
-    if (auto rc = check_flag(p.hidden, "hidden"); rc != 0) {
-      return rc;
-    }
-    spec.fields |= field::kHidden;
-    spec.hidden = p.hidden != 0;
-  }
-
-  const fm_patch_op_t anchor_ops[] = {p.anchor_kind_op,
-                                      p.edit_as_op,
-                                      p.from_row_op,
-                                      p.from_col_op,
-                                      p.to_row_op,
-                                      p.to_col_op,
-                                      p.from_row_offset_emu_op,
-                                      p.from_col_offset_emu_op,
-                                      p.to_row_offset_emu_op,
-                                      p.to_col_offset_emu_op,
-                                      p.width_emu_op,
-                                      p.height_emu_op};
-  const bool any_anchor = std::any_of(std::begin(anchor_ops), std::end(anchor_ops), is_set);
-  if (add && !is_set(p.anchor_kind_op)) {
-    return invalid_argument("a new shape needs anchor_kind SET", "field=anchor_kind");
-  }
-  if (add || any_anchor) {
-    spec.fields |= field::kAnchor;
-    if (stored != nullptr) {
-      const formulon::DrawingObject& obj = stored->object;
-      spec.anchor_kind = obj.anchor_kind;
-      spec.edit_as = obj.edit_as;
-      spec.from = obj.from;
-      spec.to = obj.to;
-      spec.cx = obj.cx;
-      spec.cy = obj.cy;
-    }
-    if (is_set(p.anchor_kind_op)) {
-      if (auto rc = check_enum_domain(p.anchor_kind, 0, FM_ANCHOR_KIND_ABSOLUTE, "anchor_kind"); rc != 0) {
-        return rc;
-      }
-      const formulon::AnchorKind kind = anchor_kind_from_c(p.anchor_kind);
-      if (add && kind == formulon::AnchorKind::kAbsolute) {
-        return invalid_argument("a new shape is anchored one-cell or two-cell", "field=anchor_kind");
-      }
-      if (stored != nullptr && kind != stored->object.anchor_kind) {
-        return invalid_argument("an update cannot change the anchor kind", "field=anchor_kind");
-      }
-      spec.anchor_kind = kind;
-      if (add) {
-        spec.edit_as = kind == formulon::AnchorKind::kOneCell ? formulon::EditAs::kOneCell : formulon::EditAs::kTwoCell;
-      }
-    }
-    if (is_set(p.edit_as_op)) {
-      if (auto rc = check_enum_domain(p.edit_as, 0, FM_ANCHOR_EDIT_AS_ABSOLUTE, "edit_as"); rc != 0) {
-        return rc;
-      }
-      spec.edit_as = edit_as_from_c(p.edit_as);
-    }
-    const auto take = [](fm_patch_op_t op, auto value, auto& out) {
-      if (is_set(op)) {
-        out = value;
-      }
-    };
-    take(p.from_row_op, p.from_row, spec.from.row);
-    take(p.from_col_op, p.from_col, spec.from.col);
-    take(p.to_row_op, p.to_row, spec.to.row);
-    take(p.to_col_op, p.to_col, spec.to.col);
-    take(p.from_row_offset_emu_op, p.from_row_offset_emu, spec.from.row_off);
-    take(p.from_col_offset_emu_op, p.from_col_offset_emu, spec.from.col_off);
-    take(p.to_row_offset_emu_op, p.to_row_offset_emu, spec.to.row_off);
-    take(p.to_col_offset_emu_op, p.to_col_offset_emu, spec.to.col_off);
-    take(p.width_emu_op, p.width_emu, spec.cx);
-    take(p.height_emu_op, p.height_emu, spec.cy);
   }
 
   bool apply = false;
@@ -348,68 +245,6 @@ fm_status_t to_spec(const fm_shape_patch_t& p, bool add, const formulon::ShapeIn
 
 }  // namespace
 
-extern "C" fm_status_t fm_sheet_get_shape_count(const fm_workbook_t* wb, size_t sheet_index, size_t* out_count) {
-  clear_last_error();
-  if (out_count == nullptr) {
-    return null_argument("out_count");
-  }
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
-    return rc;
-  }
-  auto shapes = formulon::list_shapes(wb->workbook(), sheet_index);
-  if (!shapes) {
-    return set_last_error(shapes.error());
-  }
-  *out_count = shapes.value().size();
-  return 0;
-}
-
-extern "C" fm_status_t fm_sheet_get_shape_at(const fm_workbook_t* wb, size_t sheet_index, size_t idx,
-                                             fm_shape_info_t* out) {
-  clear_last_error();
-  if (out == nullptr) {
-    return null_argument("out");
-  }
-  if (auto rc = check_record_size(*out); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
-    return rc;
-  }
-  auto shapes = formulon::list_shapes(wb->workbook(), sheet_index);
-  if (!shapes) {
-    return set_last_error(shapes.error());
-  }
-  const std::vector<formulon::ShapeInfo>& list = shapes.value();
-  if (auto rc = check_index(idx, list.size(), "index"); rc != 0) {
-    return rc;
-  }
-  const formulon::ShapeInfo& info = list[idx];
-  const formulon::DrawingObject& obj = info.object;
-  TextStore& store = fresh_read_scratch(wb);
-  const std::uint32_t struct_size = out->struct_size;
-  *out = fm_shape_info_t{};
-  out->struct_size = struct_size;
-  out->object_id = obj.object_id;
-  out->kind = static_cast<int32_t>(obj.kind);
-  out->edit_as = to_c(obj.edit_as);
-  fill_anchor(obj, out);
-  out->width_emu = obj.cx;
-  out->height_emu = obj.cy;
-  out->fill_kind = to_c(info.fill);
-  out->fill_color = paint_color_to_c(info.fill, info.fill_color);
-  out->line_kind = to_c(info.line);
-  out->line_color = paint_color_to_c(info.line, info.line_color);
-  out->line_width_pt = static_cast<double>(info.line_width_emu) / static_cast<double>(formulon::kEmuPerPoint);
-  out->rotation_deg = static_cast<double>(info.rotation) / kRotationUnitsPerDegree;
-  out->hidden = info.hidden ? 1 : 0;
-  out->text_box = info.text_box ? 1 : 0;
-  out->name = store_cstr(store, obj.name);
-  out->preset_geometry = store_cstr(store, info.prst);
-  out->text = store_cstr(store, info.text);
-  return 0;
-}
-
 extern "C" fm_status_t fm_sheet_get_shape(const fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
                                           int32_t* out_present, fm_shape_info_t* out) {
   clear_last_error();
@@ -430,17 +265,29 @@ extern "C" fm_status_t fm_sheet_get_shape(const fm_workbook_t* wb, size_t sheet_
   if (!shapes) {
     return set_last_error(shapes.error());
   }
-  const std::vector<formulon::ShapeInfo>& list = shapes.value();
-  for (size_t i = 0; i < list.size(); ++i) {
-    if (list[i].object.object_id == object_id) {
-      *out_present = 1;
-      return fm_sheet_get_shape_at(wb, sheet_index, i, out);
+  for (const formulon::ShapeInfo& info : shapes.value()) {
+    if (info.object.object_id != object_id) {
+      continue;
     }
+    TextStore& store = fresh_read_scratch(wb);
+    out->object_id = info.object.object_id;
+    out->kind = static_cast<int32_t>(info.object.kind);
+    out->fill_kind = to_c(info.fill);
+    out->fill_color = paint_color_to_c(info.fill, info.fill_color);
+    out->line_kind = to_c(info.line);
+    out->line_color = paint_color_to_c(info.line, info.line_color);
+    out->line_width_pt = static_cast<double>(info.line_width_emu) / static_cast<double>(formulon::kEmuPerPoint);
+    out->rotation_deg = static_cast<double>(info.rotation) / kRotationUnitsPerDegree;
+    out->text_box = info.text_box ? 1 : 0;
+    out->preset_geometry = store_cstr(store, info.prst);
+    out->text = store_cstr(store, info.text);
+    *out_present = 1;
+    break;
   }
   return 0;
 }
 
-extern "C" fm_status_t fm_sheet_add_shape(fm_workbook_t* wb, size_t sheet_index, const fm_shape_patch_t* spec,
+extern "C" fm_status_t fm_sheet_add_shape(fm_workbook_t* wb, size_t sheet_index, const fm_shape_spec_t* spec,
                                           uint32_t* out_object_id) {
   clear_last_error();
   if (spec == nullptr || out_object_id == nullptr) {
@@ -452,16 +299,82 @@ extern "C" fm_status_t fm_sheet_add_shape(fm_workbook_t* wb, size_t sheet_index,
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
-  formulon::ShapeSpec model;
-  if (auto rc = to_spec(*spec, true, nullptr, model); rc != 0) {
+  if (auto rc = check_record_size(spec->placement); rc != 0) {
     return rc;
+  }
+  const fm_drawing_placement_spec_t& placement = spec->placement;
+  if (auto rc = check_utf8({placement.name, placement.description}); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_enum_domain(placement.hidden, FM_TRISTATE_DEFAULT, FM_TRISTATE_TRUE, "placement.hidden");
+      rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_enum_domain(spec->fill_kind, FM_SHAPE_PAINT_DEFAULT, FM_SHAPE_PAINT_NONE, "fill_kind"); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_enum_domain(spec->line_kind, FM_SHAPE_PAINT_DEFAULT, FM_SHAPE_PAINT_NONE, "line_kind"); rc != 0) {
+    return rc;
+  }
+  AnchorPlan plan;
+  if (auto rc =
+          plan_add_anchor(wb->workbook(), sheet_index, placement.anchor, formulon::AnchorKind::kTwoCell, true, &plan);
+      rc != 0) {
+    return rc;
+  }
+  // Every field of the spec is a value: the patch that carries them all.
+  fm_shape_patch_t fields{};
+  fields.struct_size = sizeof(fields);
+  fields.fill_kind_op = fields.fill_color_op = FM_PATCH_OP_SET;
+  fields.fill_kind = spec->fill_kind;
+  fields.fill_color = spec->fill_color;
+  fields.line_kind_op = fields.line_color_op = FM_PATCH_OP_SET;
+  fields.line_kind = spec->line_kind;
+  fields.line_color = spec->line_color;
+  fields.line_width_pt_op = fields.rotation_deg_op = FM_PATCH_OP_SET;
+  fields.line_width_pt = spec->line_width_pt;
+  fields.rotation_deg = spec->rotation_deg;
+  // A connector or group holds no text, so the flag is written only when it is on.
+  if (spec->text_box != 0) {
+    fields.text_box_op = FM_PATCH_OP_SET;
+    fields.text_box = spec->text_box;
+  }
+  if (spec->preset_geometry != nullptr && spec->preset_geometry[0] != '\0') {
+    fields.preset_geometry_op = FM_PATCH_OP_SET;
+    fields.preset_geometry = spec->preset_geometry;
+  }
+  if (spec->text != nullptr) {
+    fields.text_op = FM_PATCH_OP_SET;
+    fields.text = spec->text;
+  }
+  formulon::ShapeSpec model;
+  if (auto rc = to_spec(fields, true, nullptr, model); rc != 0) {
+    return rc;
+  }
+  namespace field = formulon::shape_field;
+  model.fields |= field::kAnchor;
+  model.anchor_kind = plan.kind;
+  model.edit_as = plan.edit_as;
+  model.from = plan.from;
+  model.to = plan.to;
+  model.cx = plan.cx;
+  model.cy = plan.cy;
+  if (placement.name != nullptr && placement.name[0] != '\0') {
+    model.fields |= field::kName;
+    model.name = placement.name;
+  }
+  if (placement.hidden == FM_TRISTATE_TRUE) {
+    model.fields |= field::kHidden;
+    model.hidden = true;
   }
   auto id = formulon::insert_shape(wb->workbook(), sheet_index, model);
   if (!id) {
     return set_last_error(id.error());
   }
   *out_object_id = id.value();
-  return 0;
+  fm_drawing_placement_spec_t description_only{};
+  description_only.description = placement.description;
+  return apply_placement_extras(wb->workbook(), sheet_index, id.value(), description_only, true);
 }
 
 extern "C" fm_status_t fm_sheet_update_shape(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
@@ -488,12 +401,4 @@ extern "C" fm_status_t fm_sheet_update_shape(fm_workbook_t* wb, size_t sheet_ind
     return rc;
   }
   return finish_status(formulon::update_shape(wb->workbook(), sheet_index, object_id, model));
-}
-
-extern "C" fm_status_t fm_sheet_remove_shape(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id) {
-  clear_last_error();
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
-    return rc;
-  }
-  return finish_status(formulon::remove_shape(wb->workbook(), sheet_index, object_id));
 }

@@ -19,9 +19,9 @@
 #include "external_link.h"
 #include "parser/ast.h"
 #include "sheet.h"
+#include "sheet_name.h"
 #include "utils/expected.h"
 #include "utils/formula_text.h"
-#include "utils/strings.h"
 #include "value.h"
 #include "workbook.h"
 
@@ -33,7 +33,7 @@ const DefinedName* find_defined_name(const Workbook& workbook, std::uint16_t cur
   const auto& names = workbook.defined_names();
   const DefinedName* workbook_match = nullptr;
   for (const auto& entry : names) {
-    if (!strings::case_insensitive_eq(entry.name, name)) {
+    if (!collection_names::equal(entry.name, name)) {
       continue;
     }
     // Compare in the wider type: `local_sheet_id` comes from the file and is
@@ -89,7 +89,7 @@ const DefinedName* find_defined_name(const EvalContext& ctx, std::string_view na
 const DefinedName* find_self_book_defined_name(const Workbook& workbook, std::string_view name) noexcept {
   const DefinedName* local_match = nullptr;
   for (const auto& entry : workbook.defined_names()) {
-    if (!strings::case_insensitive_eq(entry.name, name)) {
+    if (!collection_names::equal(entry.name, name)) {
       continue;
     }
     if (entry.local_sheet_id < 0) {

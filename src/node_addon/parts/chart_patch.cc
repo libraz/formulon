@@ -379,7 +379,7 @@ Napi::Value Workbook::InsertChart(const Napi::CallbackInfo& info) {
   const Napi::Value legend = reader.Get(spec, "legend");
   opts.legend =
       legend.IsNull() ? FM_CHART_LEGEND_POSITION_ABSENT : reader.I32(legend, "legend", FM_CHART_LEGEND_POSITION_BOTTOM);
-  opts.placement = PullImageInsert(reader, reader.Get(spec, "placement"), FM_ANCHOR_KIND_TWO_CELL, name, description);
+  opts.placement = PullPlacement(reader, reader.Get(spec, "placement"), name, description);
   if (!reader.ok()) {
     return env.Undefined();
   }
@@ -689,10 +689,10 @@ Napi::Value Workbook::AddChartSeries(const Napi::CallbackInfo& info) {
   if (!reader.ok()) {
     return env.Undefined();
   }
-  uint32_t series_index = 0;
+  uint32_t series_id = 0;
   const fm_status_t rc =
-      fm_sheet_add_chart_series(handle_, ArgU32(info, 0), ArgU32(info, 1), ArgU32(info, 2), &patch, &series_index);
-  return ValueOrThrow(env, rc, Napi::Number::New(env, static_cast<double>(series_index)));
+      fm_sheet_add_chart_series(handle_, ArgU32(info, 0), ArgU32(info, 1), ArgU32(info, 2), &patch, &series_id);
+  return ValueOrThrow(env, rc, Napi::Number::New(env, static_cast<double>(series_id)));
 }
 
 Napi::Value Workbook::RemoveChartSeries(const Napi::CallbackInfo& info) {

@@ -253,14 +253,18 @@ class ValidationCheckTests(unittest.TestCase):
 
     def test_validate_value(self) -> None:
         with self._wb_with_list_rule() as wb:
+            rule_id = wb.sheet(0).list_validations()[0].id
+            self.assertTrue(rule_id)
             ok = wb.sheet(0).validate_value(0, 3, _text("Yes"))
-            self.assertEqual(ok, ValidationOutcome(valid=True, rule_index=0, error_style=ValidationErrorStyle.WARNING))
+            self.assertEqual(
+                ok, ValidationOutcome(valid=True, rule_id=rule_id, error_style=ValidationErrorStyle.WARNING)
+            )
             bad = wb.sheet(0).validate_value(0, 3, _text("Maybe"))
-            self.assertEqual(bad.rule_index, 0)
+            self.assertEqual(bad.rule_id, rule_id)
             self.assertFalse(bad.valid)
             self.assertEqual(bad.error_style, ValidationErrorStyle.WARNING)
             none = wb.sheet(0).validate_value(0, 0, Value(kind=ValueKind.NUMBER, number=1.0))
-            self.assertEqual(none, ValidationOutcome(valid=True, rule_index=None, error_style=None))
+            self.assertEqual(none, ValidationOutcome(valid=True, rule_id=None, error_style=None))
             with self.assertRaises(FormulonError):
                 wb.sheet(99).validate_value(0, 3, _text("Yes"))
 

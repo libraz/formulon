@@ -401,37 +401,37 @@ describe('a record a getter returns is accepted by the matching setter', () => {
 });
 
 describe('required keys are required at runtime', () => {
-  it('a pivot field without an axis, and a pivot filter without axis or type, are TypeErrors', () => {
+  it('a pivot field without an axis, and a pivot filter without a field or type, are TypeErrors', () => {
     withSheet((ws, wb) => {
       const { pivot } = pivotOver(ws, wb);
-      expectTypeError(() => pivot.addField({ sourceName: 'Region' }));
-      expectTypeError(() =>
-        pivot.addFilter({ fieldName: 'Region', type: f.PivotFilterKind.LabelEquals, value: 'East' }),
-      );
-      expectTypeError(() => pivot.addFilter({ axis: f.PivotAxis.Row, fieldName: 'Region', value: 'East' }));
+      expectTypeError(() => pivot.addField({ fieldIndex: 'Region' }));
+      expectTypeError(() => pivot.addFilter({ type: f.PivotFilterKind.LabelEquals, value: 'East' }));
+      expectTypeError(() => pivot.addFilter({ fieldIndex: 'Region', value: 'East' }));
     });
   });
 
-  it('a slicer needs the whole two-cell anchor', () => {
+  it('a slicer takes its position only inside the anchor and needs a box or a size', () => {
     withSheet((ws) => {
       fillTable(ws);
       const table = ws.addTable({ range: 'A1:B3', name: 'T' });
-      expectTypeError(() => ws.addSlicer(table, 0, { fromRow: 1 }));
-      expectTypeError(() => ws.addSlicer(table, 0, { fromRow: 1, fromCol: 3, toRow: 9 }));
-      const slicer = ws.addSlicer(table, 0, { fromRow: 1, fromCol: 3, toRow: 9, toCol: 5 });
-      const read = slicer.getProperties();
+      expectTypeError(() => ws.addSlicer(table, 0, { fromRow: 1, fromCol: 3, toRow: 9, toCol: 5 }));
+      expectInvalid(() => ws.addSlicer(table, 0, { anchor: { fromRow: 1 } }));
+      expectInvalid(() => ws.addSlicer(table, 0, {}));
+      const slicer = ws.addSlicer(table, 0, { anchor: { fromRow: 1, fromCol: 3, toRow: 9, toCol: 5 } });
+      const read = slicer.getDrawingProperties().anchor;
       assert.deepEqual([read.fromRow, read.fromCol, read.toRow, read.toCol], [1, 3, 9, 5]);
     });
   });
 
-  it('a slicer patch names the whole anchor or none of it', () => {
+  it('a slicer patch merges the anchor keys it names and refuses them outside the anchor', () => {
     withSheet((ws) => {
       fillTable(ws);
       const table = ws.addTable({ range: 'A1:B3', name: 'T' });
-      const slicer = ws.addSlicer(table, 0, { fromRow: 1, fromCol: 3, toRow: 9, toCol: 5 });
+      const slicer = ws.addSlicer(table, 0, { anchor: { fromRow: 1, fromCol: 3, toRow: 9, toCol: 5 } });
       expectTypeError(() => slicer.update({ fromRow: 2 }));
-      slicer.update({ fromRow: 2, fromCol: 3, toRow: 10, toCol: 5 });
-      assert.equal(slicer.getProperties().fromRow, 2);
+      slicer.update({ anchor: { fromRow: 2 } });
+      const read = slicer.getDrawingProperties().anchor;
+      assert.deepEqual([read.fromRow, read.fromCol, read.toRow, read.toCol], [2, 3, 9, 5]);
     });
   });
 
@@ -660,8 +660,8 @@ function pivotOver(ws, wb) {
     cache.setRecordValue(record, 1, amount);
   }
   const pivot = ws.addPivot({ name: 'P', cacheId: cache.cacheId, anchor: 'E1' });
-  pivot.addField({ sourceName: 'Region', axis: f.PivotAxis.Row });
-  const amount = pivot.addField({ sourceName: 'Amount', axis: f.PivotAxis.Value });
+  pivot.addField({ fieldIndex: 'Region', axis: f.PivotAxis.Row });
+  const amount = pivot.addField({ fieldIndex: 'Amount', axis: f.PivotAxis.Value });
   pivot.addDataField({ name: 'Sum of Amount', fieldIndex: amount, aggregation: f.PivotAggregation.Sum });
   return { cache, pivot };
 }

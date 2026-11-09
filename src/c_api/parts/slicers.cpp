@@ -1,6 +1,5 @@
 //
-// C ABI - the table slicers of a worksheet: listing, adding, updating and
-// removing them.
+// C ABI - the table slicers of a worksheet: reading, adding and updating them.
 
 #include <cstddef>
 #include <cstdint>
@@ -11,19 +10,20 @@
 
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
+#include "c_api/parts/drawing_anchor.h"
 #include "c_api/parts/enum_map.h"
 #include "c_api/parts/struct_v1_sizes.h"
 #include "drawing/slicer_edit.h"
 #include "utils/error.h"
 #include "workbook.h"
 
+using formulon::c_api::parts::AnchorPlan;
+using formulon::c_api::parts::apply_placement_extras;
 using formulon::c_api::parts::check_enum_domain;
-using formulon::c_api::parts::check_index;
 using formulon::c_api::parts::check_record_size;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
-using formulon::c_api::parts::fill_anchor;
 using formulon::c_api::parts::finish_status;
 using formulon::c_api::parts::fresh_read_scratch;
 using formulon::c_api::parts::invalid_argument;
@@ -31,6 +31,7 @@ using formulon::c_api::parts::not_found;
 using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::patch_op_ok;
 using formulon::c_api::parts::patch_op_ok_without_clear;
+using formulon::c_api::parts::plan_add_anchor;
 using formulon::c_api::parts::resolve_sheet_table;
 using formulon::c_api::parts::set_last_error;
 using formulon::c_api::parts::slicer_sort_order_from_c;
@@ -44,26 +45,12 @@ bool is_set(fm_patch_op_t op) {
   return op == FM_PATCH_OP_SET;
 }
 
-// Converts `p` to the model spec. `stored` is the slicer an update merges into (NULL on add); a non-zero
-// return is the status to report. On add every field may be CLEAR (Excel's default); on update only `style`.
-fm_status_t to_spec(const fm_slicer_patch_t& p, const formulon::SlicerInfo* stored, formulon::SlicerSpec& spec) {
+// Converts `p` to the model spec. On add every field may be CLEAR (the default); on update only `style`.
+fm_status_t to_spec(const fm_slicer_patch_t& p, bool add, formulon::SlicerSpec& spec) {
   namespace field = formulon::slicer_field;
-  const bool add = stored == nullptr;
-  const std::pair<fm_patch_op_t, const char*> ops[] = {{p.column_count_op, "column_count"},
-                                                       {p.sort_order_op, "sort_order"},
-                                                       {p.cross_filter_op, "cross_filter"},
-                                                       {p.from_row_op, "from_row"},
-                                                       {p.from_col_op, "from_col"},
-                                                       {p.to_row_op, "to_row"},
-                                                       {p.to_col_op, "to_col"},
-                                                       {p.from_row_offset_emu_op, "from_row_offset_emu"},
-                                                       {p.from_col_offset_emu_op, "from_col_offset_emu"},
-                                                       {p.to_row_offset_emu_op, "to_row_offset_emu"},
-                                                       {p.to_col_offset_emu_op, "to_col_offset_emu"},
-                                                       {p.row_height_emu_op, "row_height_emu"},
-                                                       {p.name_op, "name"},
-                                                       {p.caption_op, "caption"},
-                                                       {p.style_op, "style"}};
+  const std::pair<fm_patch_op_t, const char*> ops[] = {
+      {p.column_count_op, "column_count"},     {p.sort_order_op, "sort_order"}, {p.cross_filter_op, "cross_filter"},
+      {p.row_height_emu_op, "row_height_emu"}, {p.caption_op, "caption"},       {p.style_op, "style"}};
   for (const auto& [op, name] : ops) {
     const bool clearable = add || std::string_view(name) == "style";
     if (!(clearable ? patch_op_ok(op) : patch_op_ok_without_clear(op))) {
@@ -71,10 +58,9 @@ fm_status_t to_spec(const fm_slicer_patch_t& p, const formulon::SlicerInfo* stor
                               std::string("field=") + name);
     }
   }
-  const std::pair<fm_patch_op_t, const char*> texts[] = {
-      {p.name_op, p.name}, {p.caption_op, p.caption}, {p.style_op, p.style}};
-  const char* const text_names[] = {"name", "caption", "style"};
-  for (std::size_t i = 0; i < 3; ++i) {
+  const std::pair<fm_patch_op_t, const char*> texts[] = {{p.caption_op, p.caption}, {p.style_op, p.style}};
+  const char* const text_names[] = {"caption", "style"};
+  for (std::size_t i = 0; i < 2; ++i) {
     if (!is_set(texts[i].first)) {
       continue;
     }
@@ -85,15 +71,8 @@ fm_status_t to_spec(const fm_slicer_patch_t& p, const formulon::SlicerInfo* stor
       return rc;
     }
   }
-  if (!add && is_set(p.name_op)) {
-    return invalid_argument("a slicer cannot be renamed", "field=name");
-  }
 
   spec.fields = 0;
-  if (is_set(p.name_op)) {
-    spec.fields |= field::kName;
-    spec.name = p.name;
-  }
   if (is_set(p.caption_op)) {
     spec.fields |= field::kCaption;
     spec.caption = p.caption;
@@ -125,40 +104,6 @@ fm_status_t to_spec(const fm_slicer_patch_t& p, const formulon::SlicerInfo* stor
     }
     spec.fields |= field::kCrossFilter;
     spec.cross_filter = static_cast<formulon::SlicerCrossFilter>(p.cross_filter);
-  }
-
-  // The four anchor cells are SET together; an offset alone moves the anchor within its current cells.
-  const int cells = static_cast<int>(is_set(p.from_row_op)) + static_cast<int>(is_set(p.from_col_op)) +
-                    static_cast<int>(is_set(p.to_row_op)) + static_cast<int>(is_set(p.to_col_op));
-  if (cells != 0 && cells != 4) {
-    return invalid_argument("the four anchor cells are set together", "field=from_row");
-  }
-  if (add && cells != 4) {
-    return invalid_argument("a new slicer needs its four anchor cells SET", "field=from_row");
-  }
-  const bool offsets = is_set(p.from_row_offset_emu_op) || is_set(p.from_col_offset_emu_op) ||
-                       is_set(p.to_row_offset_emu_op) || is_set(p.to_col_offset_emu_op);
-  if (cells == 4 || offsets) {
-    spec.fields |= field::kAnchor;
-    if (stored != nullptr) {
-      spec.from = stored->object.from;
-      spec.to = stored->object.to;
-    }
-    if (cells == 4) {
-      spec.from.row = p.from_row;
-      spec.from.col = p.from_col;
-      spec.to.row = p.to_row;
-      spec.to.col = p.to_col;
-    }
-    const auto take = [](fm_patch_op_t op, std::int64_t value, std::int64_t& out) {
-      if (is_set(op)) {
-        out = value;
-      }
-    };
-    take(p.from_row_offset_emu_op, p.from_row_offset_emu, spec.from.row_off);
-    take(p.from_col_offset_emu_op, p.from_col_offset_emu, spec.from.col_off);
-    take(p.to_row_offset_emu_op, p.to_row_offset_emu, spec.to.row_off);
-    take(p.to_col_offset_emu_op, p.to_col_offset_emu, spec.to.col_off);
   }
   return 0;
 }
@@ -196,63 +141,6 @@ fm_status_t require_slicer(const fm_workbook_t* wb, size_t sheet_index, uint32_t
 
 }  // namespace
 
-extern "C" fm_status_t fm_sheet_get_slicer_count(const fm_workbook_t* wb, size_t sheet_index, size_t* out_count) {
-  clear_last_error();
-  if (out_count == nullptr) {
-    return null_argument("out_count");
-  }
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
-    return rc;
-  }
-  auto slicers = formulon::list_slicers(wb->workbook(), sheet_index);
-  if (!slicers) {
-    return set_last_error(slicers.error());
-  }
-  *out_count = slicers.value().size();
-  return 0;
-}
-
-extern "C" fm_status_t fm_sheet_get_slicer_at(const fm_workbook_t* wb, size_t sheet_index, size_t idx,
-                                              fm_slicer_info_t* out) {
-  clear_last_error();
-  if (out == nullptr) {
-    return null_argument("out");
-  }
-  if (auto rc = check_record_size(*out); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
-    return rc;
-  }
-  auto slicers = formulon::list_slicers(wb->workbook(), sheet_index);
-  if (!slicers) {
-    return set_last_error(slicers.error());
-  }
-  const std::vector<formulon::SlicerInfo>& list = slicers.value();
-  if (auto rc = check_index(idx, list.size(), "index"); rc != 0) {
-    return rc;
-  }
-  const formulon::SlicerInfo& info = list[idx];
-  const formulon::DrawingObject& obj = info.object;
-  TextStore& store = fresh_read_scratch(wb);
-  const std::uint32_t struct_size = out->struct_size;
-  *out = fm_slicer_info_t{};
-  out->struct_size = struct_size;
-  out->object_id = obj.object_id;
-  out->column_count = info.column_count;
-  out->sort_order = to_c(info.sort_order);
-  out->cross_filter = static_cast<int32_t>(info.cross_filter);
-  fill_anchor(obj, out);
-  out->row_height_emu = info.row_height;
-  out->name = store_cstr(store, info.name);
-  out->caption = store_cstr(store, info.caption);
-  out->cache_name = store_cstr(store, info.cache_name);
-  out->table_name = store_cstr(store, info.table_name);
-  out->column_name = store_cstr(store, info.column_name);
-  out->style = info.style.empty() ? nullptr : store_cstr(store, info.style);
-  return 0;
-}
-
 extern "C" fm_status_t fm_sheet_get_slicer(const fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
                                            int32_t* out_present, fm_slicer_info_t* out) {
   clear_last_error();
@@ -274,12 +162,28 @@ extern "C" fm_status_t fm_sheet_get_slicer(const fm_workbook_t* wb, size_t sheet
   if (auto rc = find_slicer(wb, sheet_index, object_id, &index, &found); rc != 0 || !found) {
     return rc;
   }
+  auto slicers = formulon::list_slicers(wb->workbook(), sheet_index);
+  if (!slicers) {
+    return set_last_error(slicers.error());
+  }
+  const formulon::SlicerInfo& info = slicers.value()[index];
+  TextStore& store = fresh_read_scratch(wb);
+  out->object_id = info.object.object_id;
+  out->column_count = info.column_count;
+  out->sort_order = to_c(info.sort_order);
+  out->cross_filter = static_cast<int32_t>(info.cross_filter);
+  out->row_height_emu = info.row_height;
+  out->caption = store_cstr(store, info.caption);
+  out->cache_name = store_cstr(store, info.cache_name);
+  out->table_name = store_cstr(store, info.table_name);
+  out->column_name = store_cstr(store, info.column_name);
+  out->style = info.style.empty() ? nullptr : store_cstr(store, info.style);
   *out_present = 1;
-  return fm_sheet_get_slicer_at(wb, sheet_index, index, out);
+  return 0;
 }
 
 extern "C" fm_status_t fm_sheet_add_slicer(fm_workbook_t* wb, size_t sheet_index, size_t table_sheet_index,
-                                           size_t table_index, size_t column_index, const fm_slicer_patch_t* spec,
+                                           size_t table_index, size_t column_index, const fm_slicer_spec_t* spec,
                                            uint32_t* out_object_id) {
   clear_last_error();
   if (spec == nullptr || out_object_id == nullptr) {
@@ -291,28 +195,78 @@ extern "C" fm_status_t fm_sheet_add_slicer(fm_workbook_t* wb, size_t sheet_index
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
+  if (auto rc = check_record_size(spec->placement); rc != 0) {
+    return rc;
+  }
+  const fm_drawing_placement_spec_t& placement = spec->placement;
+  if (auto rc = check_utf8({placement.name, placement.description, spec->caption, spec->style}); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_enum_domain(placement.hidden, FM_TRISTATE_DEFAULT, FM_TRISTATE_TRUE, "placement.hidden");
+      rc != 0) {
+    return rc;
+  }
   // The engine addresses a table by its workbook-wide position.
   size_t global = 0;
   if (auto rc = resolve_sheet_table(wb, table_sheet_index, table_index, &global); rc != 0) {
     return rc;
   }
-  formulon::SlicerSpec model;
-  if (auto rc = to_spec(*spec, nullptr, model); rc != 0) {
+  AnchorPlan plan;
+  if (auto rc =
+          plan_add_anchor(wb->workbook(), sheet_index, placement.anchor, formulon::AnchorKind::kTwoCell, true, &plan);
+      rc != 0) {
     return rc;
+  }
+  if (plan.kind != formulon::AnchorKind::kTwoCell) {
+    return invalid_argument("a slicer frame is two-cell", "field=placement.anchor.kind");
+  }
+  // A zero field takes the default; the sort order and cross filter are plain values.
+  fm_slicer_patch_t fields{};
+  fields.struct_size = sizeof(fields);
+  if (spec->column_count != 0U) {
+    fields.column_count_op = FM_PATCH_OP_SET;
+    fields.column_count = spec->column_count;
+  }
+  fields.sort_order_op = fields.cross_filter_op = FM_PATCH_OP_SET;
+  fields.sort_order = spec->sort_order;
+  fields.cross_filter = spec->cross_filter;
+  if (spec->row_height_emu != 0) {
+    fields.row_height_emu_op = FM_PATCH_OP_SET;
+    fields.row_height_emu = spec->row_height_emu;
+  }
+  if (spec->caption != nullptr && spec->caption[0] != '\0') {
+    fields.caption_op = FM_PATCH_OP_SET;
+    fields.caption = spec->caption;
+  }
+  if (spec->style != nullptr && spec->style[0] != '\0') {
+    fields.style_op = FM_PATCH_OP_SET;
+    fields.style = spec->style;
+  }
+  formulon::SlicerSpec model;
+  if (auto rc = to_spec(fields, true, model); rc != 0) {
+    return rc;
+  }
+  namespace field = formulon::slicer_field;
+  model.fields |= field::kAnchor;
+  model.from = plan.from;
+  model.to = plan.to;
+  if (placement.name != nullptr && placement.name[0] != '\0') {
+    model.fields |= field::kName;
+    model.name = placement.name;
   }
   auto id = formulon::add_slicer(wb->workbook(), sheet_index, global, column_index, model);
   if (!id) {
     return set_last_error(id.error());
   }
   *out_object_id = id.value();
-  return 0;
+  return apply_placement_extras(wb->workbook(), sheet_index, id.value(), placement, true);
 }
 
 extern "C" fm_status_t fm_sheet_update_slicer(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
                                               const fm_slicer_patch_t* patch) {
   clear_last_error();
-  if (patch == nullptr) {
-    return null_argument("patch");
+  if (wb == nullptr || patch == nullptr) {
+    return null_argument();
   }
   if (auto rc = check_record_size(*patch); rc != 0) {
     return rc;
@@ -324,29 +278,9 @@ extern "C" fm_status_t fm_sheet_update_slicer(fm_workbook_t* wb, size_t sheet_in
   if (auto rc = require_slicer(wb, sheet_index, object_id, &idx); rc != 0) {
     return rc;
   }
-  auto slicers = formulon::list_slicers(wb->workbook(), sheet_index);
-  if (!slicers) {
-    return set_last_error(slicers.error());
-  }
   formulon::SlicerSpec model;
-  if (auto rc = to_spec(*patch, &slicers.value()[idx], model); rc != 0) {
+  if (auto rc = to_spec(*patch, false, model); rc != 0) {
     return rc;
   }
   return finish_status(formulon::update_slicer(wb->workbook(), sheet_index, idx, model));
-}
-
-extern "C" fm_status_t fm_sheet_remove_slicer(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id) {
-  clear_last_error();
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
-    return rc;
-  }
-  size_t idx = 0;
-  bool found = false;
-  if (auto rc = find_slicer(wb, sheet_index, object_id, &idx, &found); rc != 0) {
-    return rc;
-  }
-  if (!found) {
-    return not_found("no slicer has that object_id", "object_id=" + std::to_string(object_id));
-  }
-  return finish_status(formulon::remove_slicer(wb->workbook(), sheet_index, idx));
 }

@@ -395,6 +395,34 @@ extern "C" fm_status_t fm_sheet_set_blank(fm_workbook_t* wb, size_t sheet_index,
   return finish_status(wb->workbook().set_cell_value(sheet_index, row, col, formulon::Value::blank()));
 }
 
+extern "C" fm_status_t fm_sheet_set_value(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
+                                          const fm_value_t* value) {
+  clear_last_error();
+  if (wb == nullptr) {
+    return null_argument("wb");
+  }
+  if (value == nullptr) {
+    return null_argument("value");
+  }
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  switch (value->kind) {
+    case FM_VALUE_KIND_BLANK:
+      return fm_sheet_set_blank(wb, sheet_index, row, col);
+    case FM_VALUE_KIND_NUMBER:
+      return fm_sheet_set_number(wb, sheet_index, row, col, value->u.number);
+    case FM_VALUE_KIND_BOOL:
+      return fm_sheet_set_bool(wb, sheet_index, row, col, value->u.boolean);
+    case FM_VALUE_KIND_TEXT:
+      return fm_sheet_set_text(wb, sheet_index, row, col, value->u.text);
+    case FM_VALUE_KIND_ERROR:
+      return fm_sheet_set_error(wb, sheet_index, row, col, value->u.error_code);
+    default:
+      return invalid_argument("value kind is not a literal", "kind=" + std::to_string(value->kind));
+  }
+}
+
 extern "C" fm_status_t fm_sheet_set_formula(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
                                             const char* formula) {
   clear_last_error();

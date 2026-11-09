@@ -22,37 +22,56 @@
 
 namespace formulon_node {
 
-/// Reads a `DrawingAnchor` (`anchorKind`, `editAs`, `row`, `col`, the EMU
-/// offsets and size) shared by the picture, chart and re-anchor calls; an
-/// absent `anchorKind` takes `default_anchor_kind`.
-inline fm_drawing_anchor_t PullDrawingAnchor(CheckedSpecReader& reader, const Napi::Object& spec,
-                                             int32_t default_anchor_kind) {
+/// Reads a `DrawingAnchorInput` (`kind`, `editAs`, the `from*` / `to*` cells and offsets, `widthEmu`, `heightEmu`);
+/// an absent `kind` or `editAs` is the operation's default.
+inline fm_drawing_anchor_t PullDrawingAnchor(CheckedSpecReader& reader, const Napi::Object& spec) {
   fm_drawing_anchor_t anchor{};
-  anchor.anchor_kind = reader.I32(spec, "anchorKind", default_anchor_kind);
-  anchor.edit_as = reader.I32(spec, "editAs", FM_ANCHOR_EDIT_AS_TWO_CELL);
-  anchor.row = reader.U32(spec, "row", 0U);
-  anchor.col = reader.U32(spec, "col", 0U);
-  anchor.row_offset_emu = reader.I64(spec, "rowOffsetEmu", 0);
-  anchor.col_offset_emu = reader.I64(spec, "colOffsetEmu", 0);
+  anchor.kind = reader.I32(spec, "kind", FM_ANCHOR_KIND_DEFAULT);
+  anchor.edit_as = reader.I32(spec, "editAs", FM_ANCHOR_EDIT_AS_DEFAULT);
+  anchor.from_row = reader.U32(spec, "fromRow", 0U);
+  anchor.from_col = reader.U32(spec, "fromCol", 0U);
+  anchor.from_row_offset_emu = reader.I64(spec, "fromRowOffsetEmu", 0);
+  anchor.from_col_offset_emu = reader.I64(spec, "fromColOffsetEmu", 0);
+  anchor.to_row = reader.U32(spec, "toRow", 0U);
+  anchor.to_col = reader.U32(spec, "toCol", 0U);
+  anchor.to_row_offset_emu = reader.I64(spec, "toRowOffsetEmu", 0);
+  anchor.to_col_offset_emu = reader.I64(spec, "toColOffsetEmu", 0);
   anchor.width_emu = reader.I64(spec, "widthEmu", 0);
   anchor.height_emu = reader.I64(spec, "heightEmu", 0);
   return anchor;
 }
 
-/// Reads an `ImageInsertInput` (`name`, `description`, nested `anchor`) out
-/// of `input`; an absent `input` is all defaults. The stores own the
-/// returned strings.
-inline fm_picture_insert_spec_t PullImageInsert(CheckedSpecReader& reader, const Napi::Value& input,
-                                                int32_t default_anchor_kind, std::string& name_store,
-                                                std::string& description_store) {
-  fm_picture_insert_spec_t ins = FM_STRUCT_INIT(fm_picture_insert_spec_t);
+/// Reads a `DrawingAnchorPatch`: an omitted key keeps, and no key is clearable.
+inline fm_drawing_anchor_patch_t PullDrawingAnchorPatch(CheckedSpecReader& reader, const Napi::Object& spec) {
+  fm_drawing_anchor_patch_t a{};
+  a.kind_op = PatchI32(reader, spec, "kind", &a.kind);
+  a.edit_as_op = PatchI32(reader, spec, "editAs", &a.edit_as);
+  a.from_row_op = PatchU32(reader, spec, "fromRow", &a.from_row);
+  a.from_col_op = PatchU32(reader, spec, "fromCol", &a.from_col);
+  a.from_row_offset_emu_op = PatchI64(reader, spec, "fromRowOffsetEmu", &a.from_row_offset_emu);
+  a.from_col_offset_emu_op = PatchI64(reader, spec, "fromColOffsetEmu", &a.from_col_offset_emu);
+  a.to_row_op = PatchU32(reader, spec, "toRow", &a.to_row);
+  a.to_col_op = PatchU32(reader, spec, "toCol", &a.to_col);
+  a.to_row_offset_emu_op = PatchI64(reader, spec, "toRowOffsetEmu", &a.to_row_offset_emu);
+  a.to_col_offset_emu_op = PatchI64(reader, spec, "toColOffsetEmu", &a.to_col_offset_emu);
+  a.width_emu_op = PatchI64(reader, spec, "widthEmu", &a.width_emu);
+  a.height_emu_op = PatchI64(reader, spec, "heightEmu", &a.height_emu);
+  return a;
+}
+
+/// Reads a `DrawingPlacementInput` (`name`, `description`, `hidden`, nested `anchor`) out of `input`; an absent
+/// `input` is all defaults. The stores own the returned strings.
+inline fm_drawing_placement_spec_t PullPlacement(CheckedSpecReader& reader, const Napi::Value& input,
+                                                 std::string& name_store, std::string& description_store) {
+  fm_drawing_placement_spec_t ins = FM_STRUCT_INIT(fm_drawing_placement_spec_t);
   Napi::Object options = Napi::Object::New(input.Env());
   (void)reader.Object(input, "input", &options);
   ins.name = reader.String(options, "name", &name_store) ? name_store.c_str() : nullptr;
   ins.description = reader.String(options, "description", &description_store) ? description_store.c_str() : nullptr;
+  ins.hidden = reader.Tristate(options, "hidden");
   Napi::Object anchor = Napi::Object::New(input.Env());
   (void)reader.Object(options, "anchor", &anchor);
-  ins.anchor = PullDrawingAnchor(reader, anchor, default_anchor_kind);
+  ins.anchor = PullDrawingAnchor(reader, anchor);
   return ins;
 }
 
@@ -275,6 +294,7 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value PivotCacheRecordCount(const Napi::CallbackInfo& info);
   Napi::Value PivotCacheRecordAdd(const Napi::CallbackInfo& info);
   Napi::Value PivotCacheRecordClear(const Napi::CallbackInfo& info);
+  Napi::Value PivotCacheRecordGetValue(const Napi::CallbackInfo& info);
   Napi::Value PivotCacheRecordSetNumber(const Napi::CallbackInfo& info);
   Napi::Value PivotCacheRecordSetDate(const Napi::CallbackInfo& info);
   Napi::Value PivotCacheRecordSetText(const Napi::CallbackInfo& info);
@@ -333,8 +353,7 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value PivotProject(const Napi::CallbackInfo& info);
   Napi::Value PivotProjectionPending(const Napi::CallbackInfo& info);
   Napi::Value PivotShowDetails(const Napi::CallbackInfo& info);
-  Napi::Value PivotFieldAddSubtotalFunction(const Napi::CallbackInfo& info);
-  Napi::Value PivotFieldClearSubtotalFunctions(const Napi::CallbackInfo& info);
+  Napi::Value PivotFieldSetSubtotalFunctions(const Napi::CallbackInfo& info);
   Napi::Value PivotFieldSetDateGroup(const Napi::CallbackInfo& info);
   Napi::Value PivotSetRowFieldOrder(const Napi::CallbackInfo& info);
   Napi::Value PivotSetColFieldOrder(const Napi::CallbackInfo& info);
@@ -365,11 +384,14 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value GetCfRuleCount(const Napi::CallbackInfo& info);
   Napi::Value GetCfRule(const Napi::CallbackInfo& info);
   Napi::Value AddConditionalFormat(const Napi::CallbackInfo& info);
+  Napi::Value UpdateCfRule(const Napi::CallbackInfo& info);
   Napi::Value RemoveConditionalFormatAt(const Napi::CallbackInfo& info);
   Napi::Value ClearConditionalFormats(const Napi::CallbackInfo& info);
 
   // Sheet view / layout.
   Napi::Value GetSheetView(const Napi::CallbackInfo& info);
+  Napi::Value GetVisibility(const Napi::CallbackInfo& info);
+  Napi::Value SetVisibility(const Napi::CallbackInfo& info);
   Napi::Value GetSheetProtection(const Napi::CallbackInfo& info);
   Napi::Value SetSheetProtection(const Napi::CallbackInfo& info);
   Napi::Value UpdateSheetProtection(const Napi::CallbackInfo& info);
@@ -423,6 +445,10 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value GetDxf(const Napi::CallbackInfo& info);
   Napi::Value AddFont(const Napi::CallbackInfo& info);
   Napi::Value SetFont(const Napi::CallbackInfo& info);
+  Napi::Value SetFill(const Napi::CallbackInfo& info);
+  Napi::Value SetBorder(const Napi::CallbackInfo& info);
+  Napi::Value SetCellXf(const Napi::CallbackInfo& info);
+  Napi::Value SetDxf(const Napi::CallbackInfo& info);
   Napi::Value SetDefaultFont(const Napi::CallbackInfo& info);
   Napi::Value GetDefaultFont(const Napi::CallbackInfo& info);
   Napi::Value AddFill(const Napi::CallbackInfo& info);
@@ -456,6 +482,7 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value GetThemeFonts(const Napi::CallbackInfo& info);
   Napi::Value SetThemeColors(const Napi::CallbackInfo& info);
   Napi::Value SetThemeFonts(const Napi::CallbackInfo& info);
+  Napi::Value ListThemeScriptFonts(const Napi::CallbackInfo& info);
   Napi::Value SetThemeScriptFont(const Napi::CallbackInfo& info);
   Napi::Value GetThemeScriptFont(const Napi::CallbackInfo& info);
   Napi::Value ResetTheme(const Napi::CallbackInfo& info);
@@ -492,6 +519,7 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value GetValidationCount(const Napi::CallbackInfo& info);
   Napi::Value GetValidation(const Napi::CallbackInfo& info);
   Napi::Value AddValidation(const Napi::CallbackInfo& info);
+  Napi::Value UpdateValidation(const Napi::CallbackInfo& info);
   Napi::Value RemoveValidationAt(const Napi::CallbackInfo& info);
   Napi::Value ClearValidations(const Napi::CallbackInfo& info);
   /// Validates `value` against the rule covering a cell, and lists the
@@ -532,23 +560,18 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value GetImage(const Napi::CallbackInfo& info);
   Napi::Value InsertImage(const Napi::CallbackInfo& info);
   Napi::Value RemoveDrawing(const Napi::CallbackInfo& info);
-  Napi::Value SetDrawingAnchor(const Napi::CallbackInfo& info);
-  Napi::Value SetDrawingName(const Napi::CallbackInfo& info);
+  Napi::Value UpdateDrawing(const Napi::CallbackInfo& info);
   Napi::Value SetDrawingZOrder(const Napi::CallbackInfo& info);
   Napi::Value SnapshotDrawing(const Napi::CallbackInfo& info);
   Napi::Value RestoreDrawing(const Napi::CallbackInfo& info);
 
   // Drawing shapes and sparkline groups.
-  Napi::Value ListShapes(const Napi::CallbackInfo& info);
   Napi::Value InsertShape(const Napi::CallbackInfo& info);
   Napi::Value UpdateShape(const Napi::CallbackInfo& info);
-  Napi::Value RemoveShape(const Napi::CallbackInfo& info);
   Napi::Value GetShape(const Napi::CallbackInfo& info);
-  Napi::Value ListSlicers(const Napi::CallbackInfo& info);
   Napi::Value GetSlicer(const Napi::CallbackInfo& info);
   Napi::Value AddSlicer(const Napi::CallbackInfo& info);
   Napi::Value UpdateSlicer(const Napi::CallbackInfo& info);
-  Napi::Value RemoveSlicer(const Napi::CallbackInfo& info);
   Napi::Value AddDataTable(const Napi::CallbackInfo& info);
   Napi::Value GetDataTable(const Napi::CallbackInfo& info);
   Napi::Value RemoveDataTable(const Napi::CallbackInfo& info);

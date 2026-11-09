@@ -239,17 +239,25 @@ TEST(DrawingEditKinds, ShapeRenameAndZOrderSurviveSaveAndReload) {
   EXPECT_EQ(Part(reloaded, fill.target)->bytes, Png(10, 10));
 }
 
-TEST(DrawingEditKinds, ShapeStillRefusesRemoveAndAnchor) {
+TEST(DrawingEditKinds, ShapeStillRefusesAnchor) {
   Workbook wb = ShapeFixture();
   const std::vector<Bytes> before = AllBytes(wb);
   DrawingAnchor anchor;
   anchor.row = 20;
-  EXPECT_EQ(Code(remove_drawing(wb, 0, 3)), FormulonErrorCode::kInvalidArgument);
   EXPECT_EQ(Code(set_drawing_anchor(wb, 0, 3, anchor)), FormulonErrorCode::kInvalidArgument);
   // An id no object holds is unknown rather than of the wrong kind.
-  EXPECT_EQ(Code(remove_drawing(wb, 0, 99)), FormulonErrorCode::kNotFound);
   EXPECT_EQ(Code(set_drawing_anchor(wb, 0, 99, anchor)), FormulonErrorCode::kNotFound);
   EXPECT_EQ(AllBytes(wb), before);
+}
+
+TEST(DrawingEditKinds, RemoveDrawingRemovesAShape) {
+  Workbook wb = ShapeFixture();
+  const std::vector<Bytes> before = AllBytes(wb);
+  EXPECT_EQ(Code(remove_drawing(wb, 0, 99)), FormulonErrorCode::kNotFound);
+  EXPECT_EQ(AllBytes(wb), before);
+  ASSERT_TRUE(static_cast<bool>(remove_drawing(wb, 0, 3)));
+  EXPECT_EQ(Ids(wb), (std::vector<std::uint32_t>{2, 4}));
+  EXPECT_EQ(Code(remove_drawing(wb, 0, 3)), FormulonErrorCode::kNotFound);
 }
 
 TEST(DrawingEditKinds, ShapeSnapshotCarriesItsRelationshipsToAnotherSheet) {
@@ -420,13 +428,141 @@ TEST(DrawingEditKinds, SlicerZOrderMovesTheWholeFrame) {
   ExpectSlicerFrame(Tops(doc)[0], book.slicer);
 }
 
-TEST(DrawingEditKinds, SlicerRefusesRemoveAnchorRenameAndSnapshot) {
+TEST(DrawingEditKinds, RemoveDrawingRemovesASlicerWithItsFrame) {
+  SlicerBook book = MakeSlicerBook();
+  Workbook& wb = book.wb;
+  ASSERT_TRUE(static_cast<bool>(remove_drawing(wb, 0, book.slicer)));
+  EXPECT_EQ(Ids(wb), (std::vector<std::uint32_t>{book.picture, book.shape}));
+  EXPECT_TRUE(list_slicers(wb, 0).value().empty());
+  EXPECT_EQ(Code(remove_drawing(wb, 0, book.slicer)), FormulonErrorCode::kNotFound);
+}
+
+// The listed object with `id`, or a default one.
+DrawingObject ObjectWithId(const Workbook& wb, std::uint32_t id) {
+  for (const DrawingObject& obj : List(wb)) {
+    if (obj.object_id == id) {
+      return obj;
+    }
+  }
+  ADD_FAILURE() << "no object " << id;
+  return DrawingObject{};
+}
+
+TEST(DrawingEditKinds, UpdateDrawingWritesHiddenAndDescriptionForEveryKind) {
+  SlicerBook book = MakeSlicerBook();
+  Workbook& wb = book.wb;
+  for (const std::uint32_t id : {book.picture, book.slicer, book.shape}) {
+    DrawingCommonPatch patch;
+    patch.hidden = true;
+    patch.description = "Object " + std::to_string(id);
+    ASSERT_TRUE(static_cast<bool>(update_drawing(wb, 0, id, patch))) << id;
+  }
+  DrawingCommonPatch rename;
+  rename.name = "Logo";
+  ASSERT_TRUE(static_cast<bool>(update_drawing(wb, 0, book.picture, rename)));
+  rename.name = "Box";
+  ASSERT_TRUE(static_cast<bool>(update_drawing(wb, 0, book.shape, rename)));
+
+  const Workbook reloaded = RoundTrip(wb);
+  for (const std::uint32_t id : {book.picture, book.slicer, book.shape}) {
+    const DrawingObject obj = ObjectWithId(reloaded, id);
+    EXPECT_TRUE(obj.hidden) << id;
+    EXPECT_EQ(obj.descr, "Object " + std::to_string(id));
+  }
+  EXPECT_EQ(ObjectWithId(reloaded, book.picture).name, "Logo");
+  EXPECT_EQ(ObjectWithId(reloaded, book.shape).name, "Box");
+  // Both branches of the slicer's `mc:AlternateContent` carry the flags.
+  pugi::xml_document doc;
+  ParseDrawing(reloaded, 0, doc);
+  std::size_t flagged = 0;
+  doc.document_element().find_node([&](const pugi::xml_node& node) {
+    if (node.type() == pugi::node_element && local_name(node) == "cNvPr" &&
+        node.attribute("id").as_uint() == book.slicer) {
+      EXPECT_STREQ(node.attribute("hidden").value(), "1");
+      ++flagged;
+    }
+    return false;
+  });
+  EXPECT_EQ(flagged, 2U);
+}
+
+TEST(DrawingEditKinds, UpdateDrawingLeavesUnsetFieldsAndRefusesAsAWhole) {
+  SlicerBook book = MakeSlicerBook();
+  Workbook& wb = book.wb;
+  DrawingCommonPatch describe;
+  describe.description = "Sales logo";
+  ASSERT_TRUE(static_cast<bool>(update_drawing(wb, 0, book.picture, describe)));
+  const DrawingObject before = ObjectWithId(wb, book.picture);
+  EXPECT_EQ(before.descr, "Sales logo");
+  EXPECT_FALSE(before.hidden);
+
+  // Only the start row moves; name, description and the rest of the anchor stay.
+  DrawingCommonPatch move;
+  move.anchor.from_row = 20;
+  ASSERT_TRUE(static_cast<bool>(update_drawing(wb, 0, book.picture, move)));
+  const DrawingObject moved = ObjectWithId(wb, book.picture);
+  EXPECT_EQ(moved.from.row, 20U);
+  EXPECT_EQ(moved.from.col, before.from.col);
+  EXPECT_EQ(moved.anchor_kind, before.anchor_kind);
+  EXPECT_EQ(moved.cx, before.cx);
+  EXPECT_EQ(moved.name, before.name);
+  EXPECT_EQ(moved.descr, "Sales logo");
+
+  DrawingCommonPatch clear;
+  clear.description = "";
+  ASSERT_TRUE(static_cast<bool>(update_drawing(wb, 0, book.picture, clear)));
+  EXPECT_TRUE(ObjectWithId(wb, book.picture).descr.empty());
+
+  const std::vector<Bytes> unchanged = AllBytes(wb);
+  DrawingCommonPatch bad;
+  bad.hidden = true;
+  bad.anchor.to_row = 30;  // The picture is one-cell.
+  EXPECT_EQ(Code(update_drawing(wb, 0, book.picture, bad)), FormulonErrorCode::kInvalidArgument);
+  DrawingCommonPatch empty_name;
+  empty_name.name = "";
+  EXPECT_EQ(Code(update_drawing(wb, 0, book.shape, empty_name)), FormulonErrorCode::kInvalidArgument);
+  DrawingCommonPatch slicer_name;
+  slicer_name.name = "Renamed";
+  EXPECT_EQ(Code(update_drawing(wb, 0, book.slicer, slicer_name)), FormulonErrorCode::kPreconditionFailed);
+  DrawingCommonPatch one_cell_slicer;
+  one_cell_slicer.anchor.kind = AnchorKind::kOneCell;
+  EXPECT_EQ(Code(update_drawing(wb, 0, book.slicer, one_cell_slicer)), FormulonErrorCode::kInvalidArgument);
+  EXPECT_EQ(Code(update_drawing(wb, 0, 99, describe)), FormulonErrorCode::kNotFound);
+  EXPECT_EQ(AllBytes(wb), unchanged);
+}
+
+TEST(DrawingEditKinds, UpdateDrawingMergesShapeAndSlicerAnchors) {
+  SlicerBook book = MakeSlicerBook();
+  Workbook& wb = book.wb;
+  DrawingCommonPatch shape;
+  shape.anchor.from_col = 10;
+  shape.anchor.width_emu = 457200;
+  ASSERT_TRUE(static_cast<bool>(update_drawing(wb, 0, book.shape, shape)));
+  const DrawingObject box = ObjectWithId(wb, book.shape);
+  EXPECT_EQ(box.from.col, 10U);
+  EXPECT_EQ(box.from.row, 1U);
+  EXPECT_EQ(box.cx, 457200);
+  EXPECT_EQ(box.cy, 457200);
+
+  DrawingCommonPatch slicer;
+  slicer.anchor.to_row = 20;
+  slicer.hidden = true;
+  ASSERT_TRUE(static_cast<bool>(update_drawing(wb, 0, book.slicer, slicer)));
+  auto slicers = list_slicers(wb, 0);
+  ASSERT_TRUE(static_cast<bool>(slicers));
+  ASSERT_EQ(slicers.value().size(), 1U);
+  EXPECT_EQ(slicers.value()[0].object.from.row, 3U);
+  EXPECT_EQ(slicers.value()[0].object.to.row, 20U);
+  EXPECT_EQ(slicers.value()[0].object.to.col, 6U);
+  EXPECT_TRUE(slicers.value()[0].object.hidden);
+}
+
+TEST(DrawingEditKinds, SlicerRefusesAnchorRenameAndSnapshot) {
   SlicerBook book = MakeSlicerBook();
   Workbook& wb = book.wb;
   const std::vector<Bytes> before = AllBytes(wb);
   DrawingAnchor anchor;
   anchor.row = 20;
-  EXPECT_EQ(Code(remove_drawing(wb, 0, book.slicer)), FormulonErrorCode::kInvalidArgument);
   EXPECT_EQ(Code(set_drawing_anchor(wb, 0, book.slicer, anchor)), FormulonErrorCode::kInvalidArgument);
   EXPECT_EQ(Code(set_drawing_name(wb, 0, book.slicer, "Renamed")), FormulonErrorCode::kInvalidArgument);
   EXPECT_EQ(Code(snapshot_drawing(wb, 0, book.slicer)), FormulonErrorCode::kInvalidArgument);

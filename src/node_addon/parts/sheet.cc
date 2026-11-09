@@ -16,9 +16,21 @@ namespace formulon_node {
 // ---- Sheet operations -----------------------------------------------
 
 Napi::Value Workbook::AddSheet(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  // A null name takes the next default sheet name.
+  std::string name;
+  const bool has_name = !info[0].IsUndefined() && !info[0].IsNull();
+  if (has_name) {
+    if (!info[0].IsString()) {
+      Napi::TypeError::New(env, "Workbook.addSheet argument 1 must be a primitive string or null")
+          .ThrowAsJavaScriptException();
+      return env.Undefined();
+    }
+    name = ArgString(info, 0);
+  }
+  const std::size_t insert_before = ArgU32(info, 1);
   return IndexCall(info, [&](fm_workbook_t* handle, std::size_t* out) {
-    const std::string name = ArgString(info, 0);
-    return fm_workbook_add_sheet(handle, name.c_str(), out);
+    return fm_workbook_add_sheet(handle, has_name ? name.c_str() : nullptr, insert_before, out);
   });
 }
 

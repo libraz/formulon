@@ -87,9 +87,6 @@ extern "C" fm_status_t fm_sheet_get_view(const fm_workbook_t* wb, size_t sheet_i
   out->zoom_pct = v.zoom_scale;
   out->freeze_rows = v.freeze_rows;
   out->freeze_cols = v.freeze_cols;
-  // `visibility()` resolves the model's two bits, including the
-  // combination no writer should produce.
-  out->visibility = static_cast<int32_t>(v.visibility());
   out->show_grid_lines = v.show_grid_lines ? 1 : 0;
   out->show_row_column_headers = v.show_row_col_headers ? 1 : 0;
   out->show_zeros = v.show_zeros ? 1 : 0;
@@ -151,9 +148,9 @@ extern "C" fm_status_t fm_sheet_update_view(fm_workbook_t* wb, size_t sheet_inde
       {patch->tab_selected_op, patch->tab_selected, &formulon::SheetView::tab_selected},
   };
   const fm_patch_op_t ops[] = {
-      patch->zoom_pct_op,          patch->freeze_rows_op,  patch->freeze_cols_op,  patch->visibility_op,
-      patch->view_mode_op,         patch->top_left_row_op, patch->top_left_col_op, patch->pane_top_left_row_op,
-      patch->pane_top_left_col_op, patch->split_x_op,      patch->split_y_op,
+      patch->zoom_pct_op,     patch->freeze_rows_op,  patch->freeze_cols_op,       patch->view_mode_op,
+      patch->top_left_row_op, patch->top_left_col_op, patch->pane_top_left_row_op, patch->pane_top_left_col_op,
+      patch->split_x_op,      patch->split_y_op,
   };
   for (const fm_patch_op_t op : ops) {
     if (!patch_op_ok_without_clear(op)) {
@@ -171,13 +168,6 @@ extern "C" fm_status_t fm_sheet_update_view(fm_workbook_t* wb, size_t sheet_inde
   }
   if (patch->view_mode_op == FM_PATCH_OP_SET) {
     if (auto rc = check_enum_domain(patch->view_mode, 0, FM_SHEET_VIEW_MODE_PAGE_LAYOUT, "view_mode"); rc != 0) {
-      return rc;
-    }
-  }
-  if (patch->visibility_op == FM_PATCH_OP_SET) {
-    if (auto rc = check_enum_domain(patch->visibility, FM_SHEET_VISIBILITY_VISIBLE, FM_SHEET_VISIBILITY_VERY_HIDDEN,
-                                    "visibility");
-        rc != 0) {
       return rc;
     }
   }
@@ -246,11 +236,6 @@ extern "C" fm_status_t fm_sheet_update_view(fm_workbook_t* wb, size_t sheet_inde
     }
     next.top_left_cell = row == 0U && col == 0U ? std::string() : formulon::a1::encode_a1(row, col);
   }
-  if (patch->visibility_op == FM_PATCH_OP_SET && patch->visibility != FM_SHEET_VISIBILITY_VISIBLE) {
-    if (auto rc = check_keeps_visible_sheet(workbook, static_cast<std::uint32_t>(sheet_index)); rc != 0) {
-      return rc;
-    }
-  }
 
   // Every check passed; nothing below can fail.
   if (patch->zoom_pct_op == FM_PATCH_OP_SET) {
@@ -264,11 +249,43 @@ extern "C" fm_status_t fm_sheet_update_view(fm_workbook_t* wb, size_t sheet_inde
       next.*flag.member = flag.value != 0;
     }
   }
-  if (patch->visibility_op == FM_PATCH_OP_SET) {
-    next.set_visibility(static_cast<formulon::SheetVisibility>(patch->visibility));
-  }
   workbook.sheet(sheet_index).mutable_view() = std::move(next);
-  activate_successor_if_hidden(workbook, static_cast<std::uint32_t>(sheet_index));
+  return 0;
+}
+
+extern "C" fm_status_t fm_sheet_get_visibility(const fm_workbook_t* wb, size_t sheet_index, int32_t* out_visibility) {
+  clear_last_error();
+  if (out_visibility == nullptr) {
+    return null_argument("out_visibility");
+  }
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  // `visibility()` resolves the model's two bits, including the
+  // combination no writer should produce.
+  *out_visibility = static_cast<int32_t>(wb->workbook().sheet(sheet_index).view().visibility());
+  return 0;
+}
+
+extern "C" fm_status_t fm_sheet_set_visibility(fm_workbook_t* wb, size_t sheet_index, int32_t visibility) {
+  clear_last_error();
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc =
+          check_enum_domain(visibility, FM_SHEET_VISIBILITY_VISIBLE, FM_SHEET_VISIBILITY_VERY_HIDDEN, "visibility");
+      rc != 0) {
+    return rc;
+  }
+  formulon::Workbook& workbook = wb->workbook();
+  const auto index = static_cast<std::uint32_t>(sheet_index);
+  if (visibility != FM_SHEET_VISIBILITY_VISIBLE) {
+    if (auto rc = check_keeps_visible_sheet(workbook, index); rc != 0) {
+      return rc;
+    }
+  }
+  workbook.sheet(sheet_index).mutable_view().set_visibility(static_cast<formulon::SheetVisibility>(visibility));
+  activate_successor_if_hidden(workbook, index);
   return 0;
 }
 

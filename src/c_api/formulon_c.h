@@ -833,15 +833,24 @@ FM_API fm_status_t fm_workbook_get_sheet_index(const fm_workbook_t* wb, const ch
                                                size_t* out_sheet_index);
 
 /**
- * @brief Appends a new sheet with the given UTF-8 display name.
+ * @brief Adds a new worksheet before the sheet now at `insert_before`.
+ *
+ * A `NULL` name takes the profile's default sheet name `<base><N>` (`Sheet2`,
+ * `Tabelle2`, ...): `<base>` is the profile's first sheet name without its
+ * trailing `1`, and `N` the smallest number whose name no sheet holds under
+ * the folding below.
  *
  * @param wb         Workbook handle. Must be non-NULL.
- * @param name  Strict UTF-8 display name; must be non-NULL. Worksheet
- *                   identity uses locale-independent Unicode simple case
- *                   folding (C/S mappings only, without normalization).
+ * @param name       Strict UTF-8 display name, or `NULL` for the default
+ *                   name. Worksheet identity uses locale-independent Unicode
+ *                   simple case folding (C/S mappings only, without
+ *                   normalization).
+ * @param insert_before 0-based index of the sheet the new one goes before;
+ *                   `sheet_count` appends.
  * @param out_sheet_index  Receives the new sheet's index; must be non-NULL.
  * @return `FM_STATUS_OK` (0) on success;
- *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `out_sheet_index` is `NULL`;
+ *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `insert_before > sheet_count`;
  *         `FM_STATUS_BINDING_UTF8ENCODING_ERROR` (7002) when `name` is malformed UTF-8;
  *         `FM_STATUS_INVALID_SHEET_NAME` (11) when `name` is empty,
  *         exceeds 31 UTF-16 units, contains a forbidden character
@@ -852,21 +861,27 @@ FM_API fm_status_t fm_workbook_get_sheet_index(const fm_workbook_t* wb, const ch
  *         `FM_STATUS_SHEET_COUNT_LIMIT_EXCEEDED` (12) when the workbook already contains
  *         the maximum supported sheet count.
  */
-FM_API fm_status_t fm_workbook_add_sheet(fm_workbook_t* wb, const char* name, size_t* out_sheet_index);
+FM_API fm_status_t fm_workbook_add_sheet(fm_workbook_t* wb, const char* name, size_t insert_before,
+                                         size_t* out_sheet_index);
 
 /**
- * @brief Moves the sheet at `from_index` to `to_index`.
+ * @brief Moves the sheet at `from_index` before the sheet now at `insert_before`.
  *
- * `to_index` is interpreted in the *post-removal* sheet list (Excel UI
- * semantics): with three sheets, moving sheet 0 to the end uses
- * `to_index == 2`, not `3`. A move to the same position is a successful
- * no-op.
+ * `insert_before` names a position in the current sheet list, as
+ * `fm_workbook_add_sheet` and `fm_workbook_copy_sheet` do: with three sheets,
+ * `insert_before == 3` moves sheet 0 to the end. Moving a sheet before itself
+ * or before the sheet after it is a successful no-op.
  *
+ * @param wb            Workbook handle. Must be non-NULL.
+ * @param from_index    0-based index of the sheet to move.
+ * @param insert_before 0-based index of the sheet it goes before;
+ *                      `sheet_count` appends.
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`;
- *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when either index is out of range.
+ *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `from_index >= sheet_count` or
+ *         `insert_before > sheet_count`.
  */
-FM_API fm_status_t fm_workbook_move_sheet(fm_workbook_t* wb, size_t from_index, size_t to_index);
+FM_API fm_status_t fm_workbook_move_sheet(fm_workbook_t* wb, size_t from_index, size_t insert_before);
 
 /**
  * @brief Copies the worksheet at `source_index` into the workbook.
@@ -1068,7 +1083,8 @@ FM_API fm_status_t fm_workbook_set_defined_name(fm_workbook_t* wb, const fm_defi
  */
 
 /**
- * @brief Inserts `count` rows at `row` on `sheet_index`. Cells at `row` and
+ * @brief Inserts the inclusive row span `[first, last]` on `sheet_index`:
+ *        `last - first + 1` blank rows open at `first`. Cells at `first` and
  *        beyond shift forward; cells pushed past the sheet bound are
  *        dropped. References across the workbook are rewritten to
  *        track the new positions; references that would land past the
@@ -1077,40 +1093,38 @@ FM_API fm_status_t fm_workbook_set_defined_name(fm_workbook_t* wb, const fm_defi
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) when `row` is
- *         past the sheet bound, or `count == 0`. Delete operations also
- *         reject a `count` that extends past the sheet bound;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `last < first`, or `last` is past the last row (1048575);
  *         `FM_STATUS_PRECONDITION_FAILED` (9) when the edit cuts into a data table,
  *         legacy array block or PivotTable, or would push one of them or a
  *         table past the sheet bound; the workbook is unchanged.
  */
-FM_API fm_status_t fm_sheet_insert_rows(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t count);
+FM_API fm_status_t fm_sheet_insert_rows(fm_workbook_t* wb, size_t sheet_index, uint32_t first, uint32_t last);
 
 /**
- * @brief Deletes `count` rows starting at `row` on `sheet_index`. The deleted
- *        rows are dropped wholesale; subsequent rows shift back.
+ * @brief Deletes the inclusive row span `[first, last]` on `sheet_index`. The
+ *        deleted rows are dropped wholesale; subsequent rows shift back.
  *        References pointing inside the deleted interval collapse to
  *        `#REF!`; references past the deletion shift back.
  *
  * @return Same status codes as `fm_sheet_insert_rows`.
  */
-FM_API fm_status_t fm_sheet_delete_rows(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t count);
+FM_API fm_status_t fm_sheet_delete_rows(fm_workbook_t* wb, size_t sheet_index, uint32_t first, uint32_t last);
 
 /**
- * @brief Inserts `count` columns at `col` on `sheet_index`. Mirrors
- *        `fm_sheet_insert_rows` along the column axis.
+ * @brief Inserts the inclusive column span `[first, last]` on `sheet_index`.
+ *        Mirrors `fm_sheet_insert_rows` along the column axis.
  *
- * @return Same status codes as `fm_sheet_insert_rows`, `col` in place of `row`.
+ * @return Same status codes as `fm_sheet_insert_rows`, with the last column (16383) as the bound.
  */
-FM_API fm_status_t fm_sheet_insert_columns(fm_workbook_t* wb, size_t sheet_index, uint32_t col, uint32_t count);
+FM_API fm_status_t fm_sheet_insert_columns(fm_workbook_t* wb, size_t sheet_index, uint32_t first, uint32_t last);
 
 /**
- * @brief Deletes `count` columns starting at `col` on `sheet_index`. Mirrors
- *        `fm_sheet_delete_rows` along the column axis.
+ * @brief Deletes the inclusive column span `[first, last]` on `sheet_index`.
+ *        Mirrors `fm_sheet_delete_rows` along the column axis.
  *
- * @return Same status codes as `fm_sheet_insert_rows`, `col` in place of `row`.
+ * @return Same status codes as `fm_sheet_insert_rows`, with the last column (16383) as the bound.
  */
-FM_API fm_status_t fm_sheet_delete_columns(fm_workbook_t* wb, size_t sheet_index, uint32_t col, uint32_t count);
+FM_API fm_status_t fm_sheet_delete_columns(fm_workbook_t* wb, size_t sheet_index, uint32_t first, uint32_t last);
 
 /* -------------------------------------------------------------------------- */
 /* Cell mutation                                                              */
@@ -1209,6 +1223,24 @@ FM_API fm_status_t fm_sheet_set_error(fm_workbook_t* wb, size_t sheet_index, uin
  */
 FM_API fm_status_t fm_sheet_set_text(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
                                      const char* text);
+
+/**
+ * @brief Stores the literal `*value` at `(row, col)`, dispatching on its kind.
+ *
+ * `FM_VALUE_KIND_NUMBER`, `_BOOL`, `_ERROR` and `_TEXT` behave as
+ * `fm_sheet_set_number`, `fm_sheet_set_bool`, `fm_sheet_set_error` and
+ * `fm_sheet_set_text`; `FM_VALUE_KIND_BLANK` as `fm_sheet_set_blank`. A value
+ * read with `fm_sheet_get_value` can be written back unchanged.
+ *
+ * @return `FM_STATUS_OK` (0) on success, or a common cell-mutation failure, or what the
+ *         dispatched setter returns;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `value` is `NULL`, or `value->u.text` is
+ *         `NULL` for a text value;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `value->kind` is `FM_VALUE_KIND_ARRAY`, `_REF`, `_LAMBDA` or
+ *         not a `fm_value_kind_t` member.
+ */
+FM_API fm_status_t fm_sheet_set_value(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
+                                      const fm_value_t* value);
 
 /**
  * @brief One `<rPh>` block: the kana reading `text` covers the half-open
@@ -3080,6 +3112,11 @@ typedef enum {
  * @brief Data-validation rule descriptor.
  *
  * Mirrors `formulon::DataValidation`:
+ *   * `id` — the rule's engine id: an opaque string, unique on its sheet,
+ *     stable for the open workbook across structural edits and never reused
+ *     within the session; a load or a sheet copy assigns fresh ones. It is
+ *     not saved. A read-scratch-backed view on getter results; ignored on
+ *     the add path, which assigns a new id.
  *   * `ranges` / `range_count` — the cell-range list this rule applies to.
  *     For getter results the pointer is a model-backed view into the
  *     workbook handle (see `fm_sheet_get_validation_at` for the lifetime
@@ -3108,6 +3145,7 @@ typedef enum {
  */
 typedef struct {
   uint32_t struct_size;
+  const char* id;
   const fm_cell_rect_t* ranges;
   uint32_t range_count;
   int32_t type;                  /* fm_validation_type_t */
@@ -3140,13 +3178,14 @@ FM_API fm_status_t fm_sheet_get_validation_count(const fm_workbook_t* wb, size_t
  * `ranges` and the four message strings in `*out` are model-backed views
  * owned by the workbook handle. They remain valid until the next mutation
  * that touches the sheet's validation list (any of
- * `fm_sheet_add_validation`, `fm_sheet_remove_validation`,
- * `fm_sheet_clear_validations`, or any reader / writer round-trip), or
+ * `fm_sheet_add_validation`, `fm_sheet_update_validation`,
+ * `fm_sheet_remove_validation`, `fm_sheet_clear_validations`, or any
+ * reader / writer round-trip), or
  * until the handle is destroyed. Callers that need to retain the
  * payload across mutations must copy it. `formula1` / `formula2` are
  * spelled as `fm_sheet_get_formula` spells formulas, leading `=` included
- * (an absent formula is `NULL`); a present one is read-scratch-backed, valid
- * until the next scratch-backed read.
+ * (an absent formula is `NULL`); a present one and `id` are
+ * read-scratch-backed, valid until the next scratch-backed read.
  *
  * Lifetime: transient.
  *
@@ -3159,11 +3198,31 @@ FM_API fm_status_t fm_sheet_get_validation_at(const fm_workbook_t* wb, size_t sh
                                               fm_data_validation_t* out);
 
 /**
- * @brief Appends a data-validation rule to the sheet's validation list and
- *        writes its index to `*out_validation_index`.
+ * @brief Reads the data-validation rule whose id is `id` on `sheet_index`.
+ *        `*out_present` is `1` and `*out` filled when there is one, else `0`
+ *        and `*out` zeroed (still `FM_STATUS_OK` (0)).
  *
- * Every string field accepts `NULL`, which is treated as the empty
- * string. `v.ranges` must point to `v.range_count >= 1` consecutive
+ * The views in `out` have the lifetime `fm_sheet_get_validation_at`
+ * describes.
+ *
+ * Lifetime: transient.
+ *
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
+ *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
+ *         `FM_STATUS_BINDING_UTF8ENCODING_ERROR` (7002) when `id` is not valid UTF-8.
+ */
+FM_API fm_status_t fm_sheet_get_validation(const fm_workbook_t* wb, size_t sheet_index, const char* id,
+                                           int32_t* out_present, fm_data_validation_t* out);
+
+/**
+ * @brief Appends a data-validation rule to the sheet's validation list and
+ *        writes its new id to `*out_validation_id`.
+ *
+ * `*out_validation_id` is a read-scratch-backed view, valid until the next
+ * scratch-backed read. `v.id` is ignored. Every other string field accepts
+ * `NULL`, which is treated as the empty string. `v.ranges` must point to
+ * `v.range_count >= 1` consecutive
  * `fm_cell_rect_t` values that the implementation copies into the
  * rule's owned storage. Every rectangle must be normalised
  * (`first <= last`) and lie within the Excel grid; an inverted or
@@ -3173,8 +3232,10 @@ FM_API fm_status_t fm_sheet_get_validation_at(const fm_workbook_t* wb, size_t sh
  * the rule stores them as files carry them, spelled as
  * `fm_sheet_set_formula` stores a cell formula.
  *
+ * Lifetime: transient.
+ *
  * @return `FM_STATUS_OK` (0) on success;
- *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb`, `v` or `out_validation_index` is `NULL`, or `v.ranges` is
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb`, `v` or `out_validation_id` is `NULL`, or `v.ranges` is
  *           `NULL` while `v.range_count > 0`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when `v.range_count` is 0 or
@@ -3186,17 +3247,84 @@ FM_API fm_status_t fm_sheet_get_validation_at(const fm_workbook_t* wb, size_t sh
  * `v.formula1` or `v.formula2` does not parse (the rule is not stored).
  */
 FM_API fm_status_t fm_sheet_add_validation(fm_workbook_t* wb, size_t sheet_index, const fm_data_validation_t* v,
-                                           size_t* out_validation_index);
+                                           const char** out_validation_id);
 
 /**
- * @brief Removes the validation rule at `validation_index` on `sheet_index`.
+ * @brief Partial update of one data-validation rule
+ *        (`fm_sheet_update_validation`), following the header's patch rules
+ *        (Patches, above).
+ *
+ * Each field of `fm_data_validation_t` but `id` has its `<field>_op`, with the
+ * domains `fm_sheet_add_validation` checks. `formula1`, `formula2`,
+ * `error_title`, `error_message`, `prompt_title` and `prompt_message` can be
+ * cleared, which makes them absent; a `SET` string follows the add path's
+ * input rule. `ranges_op` `SET` replaces every rectangle with the
+ * `range_count` ones of `ranges` (at least one); `CLEAR` on `ranges` is
+ * refused like any other non-clearable field.
+ */
+typedef struct {
+  uint32_t struct_size;
+  fm_patch_op_t ranges_op;
+  const fm_cell_rect_t* ranges;
+  uint32_t range_count;
+  fm_patch_op_t type_op;
+  int32_t type; /* fm_validation_type_t */
+  fm_patch_op_t op_op;
+  int32_t op; /* fm_comparison_operator_t */
+  fm_patch_op_t error_style_op;
+  int32_t error_style; /* fm_validation_error_style_t */
+  fm_patch_op_t allow_blank_op;
+  int32_t allow_blank; /* fm_tristate_t */
+  fm_patch_op_t show_input_message_op;
+  int32_t show_input_message; /* fm_tristate_t */
+  fm_patch_op_t show_error_message_op;
+  int32_t show_error_message; /* fm_tristate_t */
+  fm_patch_op_t show_in_cell_dropdown_op;
+  int32_t show_in_cell_dropdown; /* fm_tristate_t */
+  fm_patch_op_t formula1_op;
+  const char* formula1;
+  fm_patch_op_t formula2_op;
+  const char* formula2;
+  fm_patch_op_t error_title_op;
+  const char* error_title;
+  fm_patch_op_t error_message_op;
+  const char* error_message;
+  fm_patch_op_t prompt_title_op;
+  const char* prompt_title;
+  fm_patch_op_t prompt_message_op;
+  const char* prompt_message;
+} fm_data_validation_patch_t;
+
+/**
+ * @brief Merges `patch` into the validation rule with `id`. The whole patch is
+ *        checked before anything changes.
  *
  * @return `FM_STATUS_OK` (0) on success;
- *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb`, `id` or `patch` is `NULL`, or a `SET` `ranges` is
+ *           `NULL` while `range_count > 0`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
- *         `FM_STATUS_INDEX_OUT_OF_RANGE` (13) when `validation_index` is out of range.
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when an op is outside 0..2, `CLEAR` hits a field
+ *           that cannot be cleared, `SET` carries a `NULL` string, a `SET` enumeration is outside
+ *           its domain, or a `SET` `ranges` is empty, past the per-call range cap, or holds an
+ *           inverted or out-of-grid rectangle;
+ *         `FM_STATUS_NOT_FOUND` (6) when no rule has `id`;
+ *         `FM_STATUS_BINDING_UTF8ENCODING_ERROR` (7002) when `id` or a `SET` string is not valid UTF-8;
+ *         a parser status (1000-1014; `fm_get_last_parse_error` gives the code and position) when a
+ *           `SET` formula does not parse.
  */
-FM_API fm_status_t fm_sheet_remove_validation(fm_workbook_t* wb, size_t sheet_index, size_t validation_index);
+FM_API fm_status_t fm_sheet_update_validation(fm_workbook_t* wb, size_t sheet_index, const char* id,
+                                              const fm_data_validation_patch_t* patch);
+
+/**
+ * @brief Removes the validation rule with `id` on `sheet_index`.
+ *
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `id` is `NULL`;
+ *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
+ *         `FM_STATUS_NOT_FOUND` (6) when no rule has `id`;
+ *         `FM_STATUS_BINDING_UTF8ENCODING_ERROR` (7002) when `id` is not valid UTF-8.
+ */
+FM_API fm_status_t fm_sheet_remove_validation(fm_workbook_t* wb, size_t sheet_index, const char* id);
 
 /**
  * @brief Drops every validation rule on `sheet_index`. No-op when the sheet
@@ -3212,17 +3340,17 @@ FM_API fm_status_t fm_sheet_clear_validations(fm_workbook_t* wb, size_t sheet_in
  * @brief Result of checking a value against the data-validation rule that
  *        covers a cell.
  *
- * `has_rule` is 0 when no rule covers the cell, and `valid` is then 1.
- * Otherwise `rule_index` is the `fm_sheet_get_validation_at` index of the
- * applied rule and `error_style` its error style (an
- * `fm_validation_error_style_t`).
+ * `has_rule` is 0 when no rule covers the cell, and `valid` is then 1 and
+ * `rule_id` `NULL`. Otherwise `rule_id` is the applied rule's id
+ * (`fm_data_validation_t::id`), a read-scratch-backed view, and
+ * `error_style` its error style (an `fm_validation_error_style_t`).
  */
 typedef struct {
   uint32_t struct_size;
   int32_t has_rule;
   int32_t valid;
-  uint32_t rule_index;
   int32_t error_style; /* fm_validation_error_style_t */
+  const char* rule_id;
 } fm_validation_outcome_info_t;
 
 /**
@@ -3233,7 +3361,10 @@ typedef struct {
  * `fm_sheet_get_validation_at` order wins. `proposed` is taken as the
  * already-parsed value (text "5" is text, not a number). The rule's
  * formulas, including a `custom` formula that refers to the cell itself,
- * read the workbook as stored.
+ * read the workbook as stored. `out->rule_id` is a read-scratch-backed view,
+ * valid until the next scratch-backed read.
+ *
+ * Lifetime: transient.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`, or a
@@ -3287,9 +3418,13 @@ typedef struct {
  * @brief One threaded comment: a thread's opening comment, or a reply when
  *        `parent_id` names its thread.
  *
- * Ids are brace-wrapped uppercase GUIDs and `created` is
- * `YYYY-MM-DDTHH:MM:SS.ss`, absent for a comment with no time (written
- * without `dT`); the caller supplies both, the engine never mints them. `done` is the thread's resolved state and is
+ * Ids are brace-wrapped GUIDs, taken in either letter case, matched across
+ * it, and stored uppercase as Excel writes them; `created` is
+ * `YYYY-MM-DDTHH:MM:SS.ss`, absent on read for a loaded comment with no time
+ * (written without `dT`). On add, a `NULL` or empty `id` takes an
+ * engine-generated GUID and a `NULL` or empty `created` takes the pinned clock
+ * when one is set (`fm_workbook_set_pinned_now`), else the current time;
+ * with the clock pinned the generated GUIDs are deterministic. `done` is the thread's resolved state and is
  * meaningful on the opening comment only. On input every `const char*` may be `NULL`, meaning empty, and `mentions` may
  * be `NULL` only with a zero `mentions_count`. On output an opening comment's `parent_id` and an absent `created` read
  * `NULL`.
@@ -3369,22 +3504,27 @@ FM_API fm_status_t fm_sheet_get_threaded_comment(const fm_workbook_t* wb, size_t
  * @brief Adds a threaded comment. A `NULL` or empty `parent_id` opens a new
  *        thread at `row`/`col`, which must hold neither a note nor a thread;
  *        any other one appends a reply to that thread, taking its anchor and
- *        ignoring `row`, `col` and `done`. On any failure the sheet is
- *        unchanged.
+ *        ignoring `row`, `col` and `done`. The comment's id, given or
+ *        generated (`fm_threaded_comment_t`), is written to `*out_id`, a
+ *        read-scratch-backed view valid until the next scratch-backed read.
+ *        On any failure the sheet is unchanged.
+ *
+ * Lifetime: transient.
  *
  * @return `FM_STATUS_OK` (0) on success;
- *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `comment` is `NULL`, or
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb`, `comment` or `out_id` is `NULL`, or
  *         `comment->mentions` is `NULL` with a non-zero count;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) when a new
- *         thread's cell is outside the grid;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when a new thread's cell is outside the
+ *         grid, the id or a mention id is not a GUID, `created` is malformed, a
+ *         mention lies outside the text, or `parent_id` names a reply;
  *         `FM_STATUS_ALREADY_EXISTS` (7) when the id is already used on the
  *         sheet, or a new thread's cell already carries a note or thread;
- *         `FM_STATUS_THREADED_COMMENT_INVALID` (9006) for a malformed id or timestamp,
- *         an unknown person or parent, or a mention outside the text.
+ *         `FM_STATUS_NOT_FOUND` (6) when `comment->person_id` names no person of the workbook
+ *         or `parent_id` no comment of the sheet.
  */
 FM_API fm_status_t fm_sheet_add_threaded_comment(fm_workbook_t* wb, size_t sheet_index,
-                                                 const fm_threaded_comment_t* comment);
+                                                 const fm_threaded_comment_t* comment, const char** out_id);
 
 /**
  * @brief Partial update of one threaded comment
@@ -3419,10 +3559,10 @@ typedef struct {
  *           `mentions` is `NULL` with a non-zero count;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when an op is outside 0..2 or `CLEAR`,
- *           `SET` carries a `NULL` `text`, or a `SET` `done` is not `0` or `1`;
- *         `FM_STATUS_NOT_FOUND` (6) when no comment has `id`;
- *         `FM_STATUS_THREADED_COMMENT_INVALID` (9006) when a mention is invalid, or
- *         `done` is set on a reply.
+ *           `SET` carries a `NULL` `text`, a `SET` `done` is not `0` or `1`, a
+ *           mention id is not a GUID, a mention lies outside the text, or `done`
+ *           is set on a reply;
+ *         `FM_STATUS_NOT_FOUND` (6) when no comment has `id`.
  */
 FM_API fm_status_t fm_sheet_update_threaded_comment(fm_workbook_t* wb, size_t sheet_index, const char* id,
                                                     const fm_threaded_comment_patch_t* patch);
@@ -3472,13 +3612,15 @@ FM_API fm_status_t fm_workbook_get_person(const fm_workbook_t* wb, const char* i
                                           fm_person_t* out);
 
 /**
- * @brief Appends a person to the workbook's person list.
+ * @brief Appends a person to the workbook's person list. The id is a
+ *        brace-wrapped GUID in either letter case, stored uppercase; person
+ *        ids match across letter case.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any argument is `NULL`;
- *         `FM_STATUS_ALREADY_EXISTS` (7) when the id is already listed;
- *         `FM_STATUS_THREADED_COMMENT_INVALID` (9006) when the id is malformed or the
- *         display name is empty.
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when the id is not a GUID or the display
+ *         name is empty;
+ *         `FM_STATUS_ALREADY_EXISTS` (7) when the id is already listed.
  */
 FM_API fm_status_t fm_workbook_add_person(fm_workbook_t* wb, const fm_person_t* person);
 
@@ -3889,6 +4031,32 @@ FM_API fm_status_t fm_workbook_get_profile_id(const fm_workbook_t* wb, const cha
  *         `FM_STATUS_INVALID_ARGUMENT` (2) if `profile_id` is not a documented profile.
  */
 FM_API fm_status_t fm_workbook_set_profile_id(fm_workbook_t* wb, const char* profile_id);
+
+/**
+ * @brief Writes the number of supported Excel formula profile ids (28) to
+ *        `*out_count`.
+ *
+ * Drives the profile id iterator (`fm_get_profile_id_at`).
+ *
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when `out_count` is `NULL`.
+ */
+FM_API fm_status_t fm_get_profile_id_count(size_t* out_count);
+
+/**
+ * @brief Returns the `index`-th supported Excel formula profile id, the set
+ *        `fm_workbook_set_profile_id` accepts.
+ *
+ * The order is fixed across calls and releases of the same table.
+ * `*out_profile_id` is a static view into Formulon's profile table.
+ *
+ * Lifetime: static.
+ *
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when `out_profile_id` is `NULL`;
+ *         `FM_STATUS_INDEX_OUT_OF_RANGE` (13) when `index` is out of range.
+ */
+FM_API fm_status_t fm_get_profile_id_at(size_t index, const char** out_profile_id);
 
 /**
  * @brief Reads the file name the workbook is shown under, extension included
@@ -5589,6 +5757,127 @@ FM_API fm_status_t fm_sheet_add_cf_rule(fm_workbook_t* wb, size_t sheet_index, c
                                         size_t* out_cf_rule_index);
 
 /**
+ * @brief Partial update of one CF rule (`fm_sheet_update_cf_rule`),
+ *        following the header's patch rules (Patches, above).
+ *
+ * The fields are those of `fm_cf_rule_t` except `id` and `type`: a rule
+ * keeps its type, and `SET` on a field its type does not use (the
+ * "Active fields by `type`" list of `fm_cf_rule_t`) is refused. `dxf_index`,
+ * `formula1` and `formula2` can be cleared. A `SET` value follows the input
+ * rule of `fm_sheet_add_cf_rule`, and the merged rule must pass its checks:
+ * the colour-scale thresholds and colours end with the same count, 2 or 3.
+ * A setting the record flags with `has_<field>` is `SET` here with an
+ * explicit value: `data_bar_gradient` `1`, `data_bar_axis_position`
+ * automatic, an `FM_COLOR_KIND_NONE` colour and a `percent 0`
+ * `icon_set_floor` restore the defaults `fm_sheet_add_cf_rule` applies.
+ */
+typedef struct {
+  uint32_t struct_size;
+  fm_patch_op_t priority_op;
+  int32_t priority;
+  fm_patch_op_t stop_if_true_op;
+  int32_t stop_if_true; /* 0/1 */
+  fm_patch_op_t dxf_index_op;
+  uint32_t dxf_index;
+  fm_patch_op_t ranges_op;
+  const fm_cell_rect_t* ranges;
+  uint32_t range_count;
+  fm_patch_op_t formula1_op;
+  const char* formula1;
+  fm_patch_op_t formula2_op;
+  const char* formula2;
+  fm_patch_op_t op_op;
+  int32_t op; /* fm_comparison_operator_t */
+  fm_patch_op_t rank_op;
+  int32_t rank;
+  fm_patch_op_t percent_op;
+  int32_t percent; /* 0/1 */
+  fm_patch_op_t bottom_op;
+  int32_t bottom; /* 0/1 */
+  fm_patch_op_t above_average_op;
+  int32_t above_average; /* 0/1 */
+  fm_patch_op_t equal_average_op;
+  int32_t equal_average; /* 0/1 */
+  fm_patch_op_t std_dev_op;
+  double std_dev;
+  fm_patch_op_t text_op;
+  const char* text;
+  fm_patch_op_t time_period_op;
+  int32_t time_period; /* fm_date_period_t */
+
+  fm_patch_op_t color_scale_thresholds_op;
+  const fm_cfvo_t* color_scale_thresholds;
+  uint32_t color_scale_thresholds_count;
+  fm_patch_op_t color_scale_colors_op;
+  const fm_color_t* color_scale_colors;
+  uint32_t color_scale_colors_count;
+
+  fm_patch_op_t data_bar_min_op;
+  fm_cfvo_t data_bar_min;
+  fm_patch_op_t data_bar_max_op;
+  fm_cfvo_t data_bar_max;
+  fm_patch_op_t data_bar_fill_op;
+  fm_color_t data_bar_fill;
+  fm_patch_op_t data_bar_show_value_op;
+  int32_t data_bar_show_value; /* 0/1 */
+  fm_patch_op_t data_bar_min_length_pct_op;
+  uint32_t data_bar_min_length_pct;
+  fm_patch_op_t data_bar_max_length_pct_op;
+  uint32_t data_bar_max_length_pct;
+  fm_patch_op_t data_bar_gradient_op;
+  int32_t data_bar_gradient; /* 0/1 */
+  fm_patch_op_t data_bar_axis_position_op;
+  int32_t data_bar_axis_position; /* fm_cf_data_bar_axis_position_t */
+  fm_patch_op_t data_bar_negative_fill_op;
+  fm_color_t data_bar_negative_fill;
+  fm_patch_op_t data_bar_border_op;
+  fm_color_t data_bar_border;
+  fm_patch_op_t data_bar_negative_border_op;
+  fm_color_t data_bar_negative_border;
+  fm_patch_op_t data_bar_axis_color_op;
+  fm_color_t data_bar_axis_color;
+  fm_patch_op_t data_bar_direction_op;
+  int32_t data_bar_direction; /* fm_cf_data_bar_direction_t */
+
+  fm_patch_op_t icon_set_name_op;
+  int32_t icon_set_name; /* fm_icon_set_name_t */
+  fm_patch_op_t icon_set_thresholds_op;
+  const fm_cfvo_t* icon_set_thresholds;
+  uint32_t icon_set_thresholds_count;
+  fm_patch_op_t icon_set_reverse_op;
+  int32_t icon_set_reverse; /* 0/1 */
+  fm_patch_op_t icon_set_show_value_op;
+  int32_t icon_set_show_value; /* 0/1 */
+  fm_patch_op_t icon_set_percent_op;
+  int32_t icon_set_percent; /* 0/1 */
+  fm_patch_op_t icon_set_floor_op;
+  fm_cfvo_t icon_set_floor;
+  fm_patch_op_t icon_set_icons_op;
+  const fm_cf_icon_t* icon_set_icons;
+  uint32_t icon_set_icons_count;
+} fm_cf_rule_patch_t;
+
+/**
+ * @brief Merges `patch` into the `cf_rule_index`-th CF rule (flattened
+ *        order). The whole patch is checked before anything changes; the
+ *        rule keeps its id, type and position.
+ *
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when `wb` or `patch` is `NULL`, or a `SET` array is `NULL`
+ *           while its count is non-zero;
+ *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
+ *         `FM_STATUS_INDEX_OUT_OF_RANGE` (13) when `cf_rule_index` is out of range;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when an op is outside 0..2, `CLEAR` hits a field that cannot be
+ *           cleared, `SET` carries a `NULL` string, a `SET` field is not used by the rule's type, or a
+ *           `SET` value fails a check `fm_sheet_add_cf_rule` applies;
+ *         `FM_STATUS_BINDING_UTF8ENCODING_ERROR` (7002) when a `SET` string is not valid UTF-8;
+ *         a parser status (1000-1014; `fm_get_last_parse_error` gives the code and position) when a `SET`
+ *           formula does not parse.
+ */
+FM_API fm_status_t fm_sheet_update_cf_rule(fm_workbook_t* wb, size_t sheet_index, size_t cf_rule_index,
+                                           const fm_cf_rule_patch_t* patch);
+
+/**
  * @brief Removes the `cf_rule_index`-th CF rule (flattened order). When the
  *        containing block becomes empty it is removed too.
  *
@@ -6140,7 +6429,7 @@ typedef struct {
  *                           `subtotal_functions` is non-zero.
  *   * `subtotal_functions` — bit `1u << aggregation` is set for each
  *                           `fm_pivot_aggregation_t` selected through
- *                           `fm_sheet_add_pivot_field_subtotal_function` or read
+ *                           `fm_sheet_set_pivot_field_subtotal_functions` or read
  *                           from the `*Subtotal` attributes; `0` for none.
  *   * `insert_blank_row`  — non-zero when a blank row follows each of the
  *                           field's item blocks (OOXML `insertBlankRow`).
@@ -6222,8 +6511,9 @@ typedef struct {
 /**
  * @brief Plain-data spec for `fm_sheet_add_pivot_filter`.
  *
- *   * `axis`           — pivot axis the filter targets.
- *   * `field_name`     — required; the pivot field's name (or display name).
+ *   * `field_index`    — the pivot field the filter applies to (the pivot
+ *                        field index, equal to the cache field index); the
+ *                        filter takes that field's axis.
  *   * `type`           — filter type.
  *   * `value_kind`     — discriminator for the primary `value` payload, the
  *                        lower bound of a range type. `_NONE` for the
@@ -6248,8 +6538,7 @@ typedef struct {
  */
 typedef struct {
   uint32_t struct_size;
-  int32_t axis; /* fm_pivot_axis_t */
-  const char* field_name;
+  uint32_t field_index;
   int32_t type;       /* fm_pivot_filter_kind_t */
   int32_t value_kind; /* fm_pivot_filter_operand_kind_t */
   int32_t value_int;
@@ -6731,6 +7020,24 @@ FM_API fm_status_t fm_workbook_get_pivot_cache_record_count(const fm_workbook_t*
                                                             size_t* out_count);
 
 /**
+ * @brief Reads cell `(record_index, field_index)` of the cache into `out`.
+ *
+ * A cell that indexes a shared item reads the item's value. A cell the
+ * record does not reach (its cell vector is shorter) reads Blank. Dates read
+ * as `FM_VALUE_KIND_NUMBER` serials, as shared items do. Text is
+ * read-scratch backed: the pointer remains valid until the next
+ * scratch-backed read, any mutation, or handle destruction.
+ *
+ * Lifetime: transient.
+ *
+ * @return `FM_STATUS_OK` (0) on success, or a common pivot failure;
+ *         `FM_STATUS_INDEX_OUT_OF_RANGE` (13) when `record_index` is not below the record count or
+ *           `field_index` is not below the cache's field count.
+ */
+FM_API fm_status_t fm_workbook_get_pivot_cache_record_value(const fm_workbook_t* wb, uint32_t cache_id,
+                                                            size_t record_index, size_t field_index, fm_value_t* out);
+
+/**
  * @brief Appends a new empty record to the cache. `out_record_index`
  *        receives the new record's index. The record's cell vector is
  *        empty; populate it via `fm_workbook_set_pivot_cache_record_*`.
@@ -7012,6 +7319,8 @@ typedef struct {
  *         is `NULL`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
  *         `FM_STATUS_NOT_FOUND` (6) when `spec->cache_id` does not match any existing cache;
+ *         `FM_STATUS_ALREADY_EXISTS` (7) when `spec->name` equals another pivot's name on
+ *         the sheet under Unicode simple case folding;
  *         `FM_STATUS_PRECONDITION_FAILED` (9), creating nothing, when the report range
  *         would overlap another structure.
  */
@@ -7033,7 +7342,9 @@ FM_API fm_status_t fm_sheet_remove_pivot(fm_workbook_t* wb, size_t sheet_index, 
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `name` is `NULL`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
  *         `FM_STATUS_INDEX_OUT_OF_RANGE` (13) when `pivot_index` is out of range;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) when `name` is empty.
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `name` is empty;
+ *         `FM_STATUS_ALREADY_EXISTS` (7) when `name` equals another pivot's name on the
+ *         sheet under Unicode simple case folding.
  */
 FM_API fm_status_t fm_sheet_rename_pivot(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index, const char* name);
 
@@ -7376,24 +7687,21 @@ FM_API fm_status_t fm_sheet_clear_pivot_field_items(fm_workbook_t* wb, size_t sh
                                                     size_t field_index);
 
 /**
- * @brief Appends a subtotal function to pivot field `field_index`.
+ * @brief Replaces the subtotal functions of pivot field `field_index` with
+ *        the `count` entries of `aggregations`.
  *
- * `aggregation` is an `fm_pivot_aggregation_t` ordinal. The selection reads
+ * Each entry is an `fm_pivot_aggregation_t` ordinal; the order of the list
+ * does not matter, and a `count` of 0 clears the set. The selection reads
  * back through `fm_pivot_field_info_t::subtotal_functions`.
  *
- * @return `FM_STATUS_OK` (0) on success, or a common pivot failure;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) when `aggregation` names no `fm_pivot_aggregation_t`.
+ * @return `FM_STATUS_OK` (0) on success, or a common pivot failure (a `NULL`
+ *           `aggregations` is one only while `count > 0`);
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when an entry names no `fm_pivot_aggregation_t`, or
+ *           the list holds one function twice. Nothing is written on failure.
  */
-FM_API fm_status_t fm_sheet_add_pivot_field_subtotal_function(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
-                                                              size_t field_index, int32_t aggregation);
-
-/**
- * @brief Drops every subtotal function from pivot field `field_index`.
- *
- * @return `FM_STATUS_OK` (0) on success, or a common pivot failure.
- */
-FM_API fm_status_t fm_sheet_clear_pivot_field_subtotal_functions(fm_workbook_t* wb, size_t sheet_index,
-                                                                 size_t pivot_index, size_t field_index);
+FM_API fm_status_t fm_sheet_set_pivot_field_subtotal_functions(fm_workbook_t* wb, size_t sheet_index,
+                                                               size_t pivot_index, size_t field_index,
+                                                               const int32_t* aggregations, size_t count);
 
 /**
  * @brief A date grouping to apply (`fm_sheet_set_pivot_field_date_group`).
@@ -7800,22 +8108,22 @@ FM_API fm_status_t fm_sheet_get_pivot_filter_count(const fm_workbook_t* wb, size
 /**
  * @brief Reads the filter at `filter_index` without mutating the pivot.
  *
- * See the persistence contract above. A loaded entry names its field by
- * source name and reads back the axis its field sits on.
+ * See the persistence contract above. A loaded entry reads back the index
+ * of the field it names.
  *
  * `out` reuses the `fm_pivot_filter_t` shape accepted by
- * `fm_sheet_add_pivot_filter`. `field_name` and (for a text primary
- * value) `value_text` are model-backed views; they remain valid until the
+ * `fm_sheet_add_pivot_filter`. A text primary value's `value_text` is a
+ * model-backed view; it remains valid until the
  * next mutation of this pivot's filter list, a workbook model replacement,
- * or handle destruction. Reads do not invalidate the views. Copy them when
- * they must outlive those events. For non-text primary values,
+ * or handle destruction. Reads do not invalidate the view. Copy it when
+ * it must outlive those events. For non-text primary values,
  * `value_text` is `NULL`; an unset upper bound has kind
  * `FM_PIVOT_FILTER_OPERAND_KIND_ABSENT` and zero numeric payloads.
  *
  * Lifetime: transient.
  *
  * @return `FM_STATUS_OK` (0) on success, or a common pivot failure;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) if the model contains an axis or filter type
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) if the model contains a filter type
  *         that is not representable by this C ABI. On any error, `*out` is left
  *         unchanged.
  */
@@ -7823,7 +8131,8 @@ FM_API fm_status_t fm_sheet_get_pivot_filter_at(const fm_workbook_t* wb, size_t 
                                                 size_t filter_index, fm_pivot_filter_t* out);
 
 /**
- * @brief Appends an active filter. `spec->field_name` must be non-NULL;
+ * @brief Appends an active filter on field `spec->field_index`, which must
+ *        sit on a row, column or page axis of the pivot.
  *        `spec->value_text` must be non-NULL when
  *        `spec->value_kind == FM_PIVOT_FILTER_OPERAND_KIND_TEXT`. The upper-bound
  *        payload is honoured only for the range types (`*_BETWEEN`,
@@ -7834,11 +8143,10 @@ FM_API fm_status_t fm_sheet_get_pivot_filter_at(const fm_workbook_t* wb, size_t 
  *
  * @return `FM_STATUS_OK` (0) on success, or a common pivot failure (a `NULL`
  *           `spec->value_text` where it is required is a `NULL` required pointer);
- *         `FM_STATUS_INDEX_OUT_OF_RANGE` (13) if `data_field_index` is out of range for a
- *           value filter;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) if `axis` or `type` is outside the C ABI enum
- *           ranges, the value payload discriminators are unusable, or a label/date
- *           filter's `field_name` names no pivot field.
+ *         `FM_STATUS_INDEX_OUT_OF_RANGE` (13) if `field_index` is not below the pivot's field count, or
+ *           `data_field_index` is out of range for a value filter;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) if `type` is outside the C ABI enum range, the value
+ *           payload discriminators are unusable, or field `field_index` sits on no axis.
  */
 FM_API fm_status_t fm_sheet_add_pivot_filter(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
                                              const fm_pivot_filter_t* spec, size_t* out_filter_index);
@@ -8352,7 +8660,6 @@ typedef struct {
   uint32_t zoom_pct;
   uint32_t freeze_rows;
   uint32_t freeze_cols;
-  int32_t visibility;              /* fm_sheet_visibility_t */
   int32_t show_grid_lines;         /* 0/1; OOXML default 1 */
   int32_t show_row_column_headers; /* 0/1; OOXML default 1 */
   int32_t show_zeros;              /* 0/1; OOXML default 1 */
@@ -8393,10 +8700,6 @@ typedef struct {
  *     sheet affects only what a host reproduces as the active tab.
  *   * `view_mode` -- an `fm_sheet_view_mode_t`; `FM_SHEET_VIEW_MODE_NORMAL`
  *     removes the `view` attribute.
- *   * `visibility` -- an `fm_sheet_visibility_t`, stating the whole tab state:
- *     `VISIBLE` shows the sheet from either hidden state, `HIDDEN` demotes a
- *     very-hidden one. Hiding the active sheet activates its visible
- *     successor (`fm_workbook_get_active_sheet`).
  *
  * A freeze replaces a split and a split replaces a freeze, so one patch may
  * not state a non-zero freeze and a non-zero split together. Changing the
@@ -8413,8 +8716,6 @@ typedef struct {
   uint32_t freeze_rows;
   fm_patch_op_t freeze_cols_op;
   uint32_t freeze_cols;
-  fm_patch_op_t visibility_op;
-  int32_t visibility; /* fm_sheet_visibility_t */
   fm_patch_op_t show_grid_lines_op;
   int32_t show_grid_lines;
   fm_patch_op_t show_row_column_headers_op;
@@ -8543,8 +8844,9 @@ FM_API fm_status_t fm_sheet_get_row_layout_at(const fm_workbook_t* wb, size_t sh
                                               fm_row_layout_info_t* out);
 
 /**
- * @brief Reads the sheet-view state (zoom, frozen panes, tab hidden, and
- *        the display / orientation flags).
+ * @brief Reads the sheet-view state (zoom, frozen panes, and the display /
+ *        orientation flags). The tab's visibility is
+ *        `fm_sheet_get_visibility`.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
@@ -8554,19 +8856,44 @@ FM_API fm_status_t fm_sheet_get_view(const fm_workbook_t* wb, size_t sheet_index
 
 /**
  * @brief Merges `patch` into the sheet view (zoom, panes, scroll and pane
- *        origins, display flags, view mode, tab state); the field rules are
- *        on `fm_sheet_view_patch_t`.
+ *        origins, display flags, view mode); the field rules are on
+ *        `fm_sheet_view_patch_t`.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `patch` is `NULL`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when an op is outside 0..2, any op is `CLEAR`, a `SET`
  *           value is outside the domain its field states, a non-zero freeze and a non-zero
- *           split are set together, or the pane origin does not fit the view's panes;
- *         `FM_STATUS_PRECONDITION_FAILED` (9) when `visibility` hides the only visible sheet.
+ *           split are set together, or the pane origin does not fit the view's panes.
  *         Nothing is written on failure.
  */
 FM_API fm_status_t fm_sheet_update_view(fm_workbook_t* wb, size_t sheet_index, const fm_sheet_view_patch_t* patch);
+
+/**
+ * @brief Reads the sheet tab's visibility (`<sheet state>`) as an
+ *        `fm_sheet_visibility_t`.
+ *
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `out_visibility` is `NULL`;
+ *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range.
+ */
+FM_API fm_status_t fm_sheet_get_visibility(const fm_workbook_t* wb, size_t sheet_index, int32_t* out_visibility);
+
+/**
+ * @brief Sets the sheet tab's visibility to `visibility`, an
+ *        `fm_sheet_visibility_t` stating the whole tab state: `VISIBLE` shows
+ *        the sheet from either hidden state, `HIDDEN` demotes a very-hidden
+ *        one. Hiding the active sheet activates its visible successor
+ *        (`fm_workbook_get_active_sheet`). Setting the current state is a
+ *        no-op.
+ *
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`;
+ *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `visibility` is not an `fm_sheet_visibility_t` member;
+ *         `FM_STATUS_PRECONDITION_FAILED` (9) when it hides the only visible sheet.
+ */
+FM_API fm_status_t fm_sheet_set_visibility(fm_workbook_t* wb, size_t sheet_index, int32_t visibility);
 
 /**
  * @brief Reads the active pane's selection: the active cell and its ranges.
@@ -10352,6 +10679,22 @@ FM_API fm_status_t fm_workbook_get_dxf_at(const fm_workbook_t* wb, uint32_t dxf_
 FM_API fm_status_t fm_workbook_add_dxf(fm_workbook_t* wb, const fm_dxf_t* record, uint32_t* out_dxf_index);
 
 /**
+ * @brief Overwrites the `dxf_index`-th `<dxf>` record in place, with the
+ *        no-dedup semantics of `fm_workbook_set_font`: every conditional
+ *        format, table style element and filter naming this slot renders with
+ *        the new record. Fields copy as `fm_workbook_add_dxf` copies them.
+ *
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `record` is `NULL`;
+ *         `FM_STATUS_BINDING_UTF8ENCODING_ERROR` (7002) when the present font's `name`,
+ *           `number_format`, `alignment_xml` or `protection_xml` is malformed UTF-8;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when the present font states a `size_pt` outside
+ *           `1..409` or not finite;
+ *         `FM_STATUS_INDEX_OUT_OF_RANGE` (13) when `dxf_index` is not below the dxf count.
+ */
+FM_API fm_status_t fm_workbook_set_dxf(fm_workbook_t* wb, uint32_t dxf_index, const fm_dxf_t* record);
+
+/**
  * @brief The region a custom table style element formats
  *        (`fm_table_style_element_t::type`), in OOXML `ST_TableStyleType`
  *        order; the schema has no default, so zero is its first member.
@@ -10721,6 +11064,18 @@ FM_API fm_status_t fm_workbook_set_default_font(fm_workbook_t* wb, const fm_font
 FM_API fm_status_t fm_workbook_add_fill(fm_workbook_t* wb, const fm_fill_t* record, size_t* out_fill_index);
 
 /**
+ * @brief Overwrites the `fill_index`-th fill record in place, with the
+ *        bulk-restyle and no-dedup semantics of `fm_workbook_set_font`:
+ *        every `<xf>` naming this slot renders with the new record.
+ *
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `record` is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when a value `fm_workbook_add_fill` refuses is set;
+ *         `FM_STATUS_INDEX_OUT_OF_RANGE` (13) when `fill_index` is not below the fill count.
+ */
+FM_API fm_status_t fm_workbook_set_fill(fm_workbook_t* wb, size_t fill_index, const fm_fill_t* record);
+
+/**
  * @brief Adds a border record to the workbook's styles table, deduplicating
  *        against existing entries.
  *
@@ -10735,6 +11090,17 @@ FM_API fm_status_t fm_workbook_add_fill(fm_workbook_t* wb, const fm_fill_t* reco
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb`, `record` or `out_border_index` is `NULL`.
  */
 FM_API fm_status_t fm_workbook_add_border(fm_workbook_t* wb, const fm_border_t* record, size_t* out_border_index);
+
+/**
+ * @brief Overwrites the `border_index`-th border record in place, with the
+ *        bulk-restyle and no-dedup semantics of `fm_workbook_set_font`.
+ *
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `record` is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when a value `fm_workbook_add_border` refuses is set;
+ *         `FM_STATUS_INDEX_OUT_OF_RANGE` (13) when `border_index` is not below the border count.
+ */
+FM_API fm_status_t fm_workbook_set_border(fm_workbook_t* wb, size_t border_index, const fm_border_t* record);
 
 /**
  * @brief Adds a number-format code to the workbook's styles table,
@@ -10801,6 +11167,22 @@ FM_API fm_status_t fm_workbook_add_number_format(fm_workbook_t* wb, const char* 
  *         outside its range.
  */
 FM_API fm_status_t fm_workbook_add_cell_xf(fm_workbook_t* wb, const fm_cell_xf_t* record, uint32_t* out_xf_index);
+
+/**
+ * @brief Overwrites the `xf_index`-th `<xf>` record in place, with the
+ *        bulk-restyle and no-dedup semantics of `fm_workbook_set_font`:
+ *        every cell, row and column using this cell format renders with the
+ *        new record. The record is validated as `fm_workbook_add_cell_xf`
+ *        validates it.
+ *
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `record` is `NULL`;
+ *         `FM_STATUS_INDEX_OUT_OF_RANGE` (13) when `xf_index` is not below the cell-xf count, or
+ *         `font_index`, `fill_index`, `border_index` or `style_xf_index` is past its table;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) for an unregistered `num_fmt_id` or an alignment value
+ *         outside its range.
+ */
+FM_API fm_status_t fm_workbook_set_cell_xf(fm_workbook_t* wb, uint32_t xf_index, const fm_cell_xf_t* record);
 
 /**
  * @brief Adds a named-style xf (`<cellStyleXfs>`) including optional
@@ -11219,14 +11601,15 @@ typedef enum {
  * new book appends to it). `target_external` follows the wide-POD
  * convention used elsewhere on this surface.
  *
- * `index` is the 1-based position in `<externalReferences>` document
- * order. `kind` is an `fm_external_link_kind_t`.
+ * `book_number` is the 1-based position in `<externalReferences>` document
+ * order: the `n` a formula spells as `[n]` (`=[1]Sheet1!A1` names book 1).
+ * `kind` is an `fm_external_link_kind_t`.
  * `target` is `NULL` when the per-link rels file was missing or
  * unparseable.
  */
 typedef struct {
   uint32_t struct_size;
-  uint32_t index;          /* 1-based document order */
+  uint32_t book_number;    /* 1-based document order, the `[n]` of formula text */
   const char* rel_id;      /* workbook.xml.rels rId for this link */
   const char* part_path;   /* resolved package-relative body path */
   const char* target;      /* remote workbook URL, or NULL */
@@ -11301,18 +11684,31 @@ typedef enum {
   FM_DRAWING_OBJECT_KIND_OTHER = 6,
 } fm_drawing_object_kind_t;
 
-/** @brief The anchor element type of a drawing object. */
+/**
+ * @brief The anchor element type of a drawing object.
+ *
+ * `DEFAULT` is input only and asks for the operation's default: one-cell for
+ * a picture, two-cell for a chart, shape or slicer. A read never returns it.
+ */
 typedef enum {
-  FM_ANCHOR_KIND_ONE_CELL = 0,
-  FM_ANCHOR_KIND_TWO_CELL = 1,
-  FM_ANCHOR_KIND_ABSOLUTE = 2,
+  FM_ANCHOR_KIND_DEFAULT = 0,
+  FM_ANCHOR_KIND_ONE_CELL = 1,
+  FM_ANCHOR_KIND_TWO_CELL = 2,
+  FM_ANCHOR_KIND_ABSOLUTE = 3,
 } fm_anchor_kind_t;
 
-/** @brief How a drawing object follows row and column edits. */
+/**
+ * @brief How a drawing object follows row and column edits.
+ *
+ * `DEFAULT` is input only and asks for the operation's default, the
+ * anchor's own kind (`TWO_CELL` for a two-cell anchor). A read never
+ * returns it.
+ */
 typedef enum {
-  FM_ANCHOR_EDIT_AS_ONE_CELL = 0,
-  FM_ANCHOR_EDIT_AS_TWO_CELL = 1,
-  FM_ANCHOR_EDIT_AS_ABSOLUTE = 2,
+  FM_ANCHOR_EDIT_AS_DEFAULT = 0,
+  FM_ANCHOR_EDIT_AS_ONE_CELL = 1,
+  FM_ANCHOR_EDIT_AS_TWO_CELL = 2,
+  FM_ANCHOR_EDIT_AS_ABSOLUTE = 3,
 } fm_anchor_edit_as_t;
 
 /**
@@ -11327,24 +11723,26 @@ typedef struct {
 } fm_image_info_t;
 
 /**
- * @brief One anchored object of a sheet's drawing.
+ * @brief The anchor of a drawing object: read back by every drawing record
+ *        and taken by every add (`fm_drawing_placement_spec_t::anchor`).
  *
- * `kind` is an `fm_drawing_object_kind_t`, `anchor_kind` an
- * `fm_anchor_kind_t` and `edit_as` an `fm_anchor_edit_as_t`. `from_*` is the
- * top-left marker (an absolute anchor reports its position from A1 as
- * `from_col_offset_emu` = x and `from_row_offset_emu` = y); `to_*` is the
- * bottom-right marker of a two-cell anchor and zero otherwise. `width_emu`
- * and `height_emu` are the size. `image_format` is an `fm_image_format_t`,
- * non-zero for a picture whose media part is present. `name`, `description`
- * and `media_path` are
- * read-scratch-backed views (the lifetime `fm_sheet_get_auto_filter`
- * describes); `media_path` is `NULL` for a non-picture.
+ * `kind` is an `fm_anchor_kind_t` and `edit_as` an `fm_anchor_edit_as_t`,
+ * written for a two-cell anchor only. `from_*` is the top-left marker (an
+ * absolute anchor reports its position from A1 as `from_col_offset_emu` = x
+ * and `from_row_offset_emu` = y); `to_*` is the bottom-right marker of a
+ * two-cell anchor and zero otherwise. `width_emu` / `height_emu` are the
+ * object's own unrotated size; a two-cell anchor's size is its box.
+ *
+ * On add, a two-cell anchor takes its box from `to_*` and ignores the size,
+ * except that an all-zero `to_*` marker sizes the box from `width_emu` /
+ * `height_emu`; a one-cell anchor takes the size and ignores `to_*`. A zero
+ * size means the image's pixel size times 9525 for a picture and Excel's
+ * 360 x 216 pt frame for a chart; a shape or slicer needs a non-zero width
+ * or height (a straight connector may be zero in one direction).
+ * An absolute kind is not added.
  */
 typedef struct {
-  uint32_t struct_size;
-  uint32_t object_id;
   int32_t kind;
-  int32_t anchor_kind;
   int32_t edit_as;
   uint32_t from_row;
   uint32_t from_col;
@@ -11356,49 +11754,110 @@ typedef struct {
   int64_t to_col_offset_emu;
   int64_t width_emu;
   int64_t height_emu;
-  int32_t image_format;
+} fm_drawing_anchor_t;
+
+/**
+ * @brief One anchored object of a sheet's drawing.
+ *
+ * `kind` is an `fm_drawing_object_kind_t`; `hidden` is 0 / 1. `name`,
+ * `description` and `media_path` are read-scratch-backed views (the lifetime
+ * `fm_sheet_get_auto_filter` describes); `media_path` is `NULL` for a
+ * non-picture. A picture's format is read with `fm_sheet_get_picture`.
+ */
+typedef struct {
+  uint32_t struct_size;
+  uint32_t object_id;
+  int32_t kind;
+  int32_t hidden;
+  fm_drawing_anchor_t anchor;
   const char* name;
   const char* description;
   const char* media_path;
 } fm_drawing_object_info_t;
 
 /**
- * @brief Placement of a picture or chart, in the quantities
- *        `fm_sheet_get_drawing_object_at` reports: the anchor of an inserted
- *        image (`fm_picture_insert_spec_t`) or chart, and the new placement
- *        `fm_sheet_set_drawing_anchor` takes.
+ * @brief The common placement of a new drawing object: a picture
+ *        (`fm_sheet_add_picture`), and embedded as `placement` in
+ *        `fm_chart_insert_spec_t`, `fm_shape_spec_t` and `fm_slicer_spec_t`.
+ *        An embedded copy sets its own `struct_size` too.
  *
- * `anchor_kind` is `FM_ANCHOR_KIND_ONE_CELL` or `FM_ANCHOR_KIND_TWO_CELL`;
- * `edit_as` (an `fm_anchor_edit_as_t`) is honoured for a two-cell anchor
- * only. `row`/`col`/`*_offset_emu` are the top-left marker of the anchor box
- * (`from_*`). `width_emu`/`height_emu` are the object's own unrotated size.
- * On insert a `0` width or height means the image's pixel size times 9525;
- * on `fm_sheet_set_drawing_anchor` it keeps the current value.
- */
-typedef struct {
-  int32_t anchor_kind;
-  int32_t edit_as;
-  uint32_t row;
-  uint32_t col;
-  int64_t row_offset_emu;
-  int64_t col_offset_emu;
-  int64_t width_emu;
-  int64_t height_emu;
-} fm_drawing_anchor_t;
-
-/**
- * @brief An image to insert. `name` and `description` may be `NULL`,
- *        meaning empty; an empty name becomes `Picture <n>`, n being the object id minus one.
- *
- * `fm_chart_insert_spec_t` embeds it as `placement`; the embedded copy sets
- * its own `struct_size` too.
+ * `name` and `description` may be `NULL`, meaning empty; an empty name
+ * becomes the kind's default (`Picture <n>`, n being the object id minus
+ * one, for a picture). `hidden` is an `fm_tristate_t` (default shown).
+ * `anchor` follows the add rules of `fm_drawing_anchor_t`.
  */
 typedef struct {
   uint32_t struct_size;
   const char* name;
   const char* description;
+  int32_t hidden; /* fm_tristate_t */
   fm_drawing_anchor_t anchor;
-} fm_picture_insert_spec_t;
+} fm_drawing_placement_spec_t;
+
+/**
+ * @brief Partial update of a drawing anchor, embedded as `anchor` in
+ *        `fm_drawing_patch_t`. Each field of `fm_drawing_anchor_t` has its
+ *        `<field>_op`; none can be cleared.
+ *
+ * The patch merges into the object's current anchor: a field left `KEEP`
+ * keeps its value, and `kind` left `KEEP` keeps the object's kind. A `SET`
+ * `kind` (one-cell or two-cell) converts the anchor: a two-cell anchor made
+ * from a one-cell or absolute one takes its `to_*` marker from the current
+ * size unless the patch sets it, and a one-cell anchor made from a two-cell
+ * one keeps the box's size. As on add, an anchor that ends up two-cell takes
+ * its box from a `SET` `to_*` field and ignores a `SET` size, and one that
+ * ends up one-cell takes a `SET` size and ignores `to_*`, so a read anchor
+ * feeds back. A `SET` `to_*` field without a `SET` size on an anchor that
+ * ends up one-cell, or a `SET` size without a `SET` `to_*` field on one that
+ * ends up two-cell, is `FM_STATUS_INVALID_ARGUMENT` (2).
+ */
+typedef struct {
+  fm_patch_op_t kind_op;
+  int32_t kind; /* fm_anchor_kind_t */
+  fm_patch_op_t edit_as_op;
+  int32_t edit_as; /* fm_anchor_edit_as_t */
+  fm_patch_op_t from_row_op;
+  uint32_t from_row;
+  fm_patch_op_t from_col_op;
+  uint32_t from_col;
+  fm_patch_op_t from_row_offset_emu_op;
+  int64_t from_row_offset_emu;
+  fm_patch_op_t from_col_offset_emu_op;
+  int64_t from_col_offset_emu;
+  fm_patch_op_t to_row_op;
+  uint32_t to_row;
+  fm_patch_op_t to_col_op;
+  uint32_t to_col;
+  fm_patch_op_t to_row_offset_emu_op;
+  int64_t to_row_offset_emu;
+  fm_patch_op_t to_col_offset_emu_op;
+  int64_t to_col_offset_emu;
+  fm_patch_op_t width_emu_op;
+  int64_t width_emu;
+  fm_patch_op_t height_emu_op;
+  int64_t height_emu;
+} fm_drawing_anchor_patch_t;
+
+/**
+ * @brief Partial update of the fields every drawing object has
+ *        (`fm_sheet_update_drawing`), following the header's patch rules
+ *        (Patches, above).
+ *
+ * `name` cannot be empty, and duplicate names are allowed; a slicer's name
+ * cannot be `SET` (it ties the frame to the slicer part). `description` is
+ * the one clearable field: `CLEAR` removes it, as a `SET` empty string does.
+ * `hidden` is 0 / 1. `anchor` follows `fm_drawing_anchor_patch_t`.
+ */
+typedef struct {
+  uint32_t struct_size;
+  fm_patch_op_t name_op;
+  const char* name;
+  fm_patch_op_t description_op;
+  const char* description;
+  fm_patch_op_t hidden_op;
+  int32_t hidden;
+  fm_drawing_anchor_patch_t anchor;
+} fm_drawing_patch_t;
 
 /** @brief `fm_sheet_restore_drawing` flag: restore as a copy with a fresh id, added on top. */
 #define FM_DRAWING_RESTORE_NEW_ID 1u
@@ -11496,11 +11955,11 @@ FM_API fm_status_t fm_sheet_get_picture(const fm_workbook_t* wb, size_t sheet_in
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when `opts->struct_size` is below the
- *         first layout of `fm_picture_insert_spec_t`, an enum
+ *         first layout of `fm_drawing_placement_spec_t`, an enum
  *         field is outside its domain, the anchor kind is absolute, an
  *         offset or size is negative or 2^31 EMU or more, the anchor lies
- *         outside the sheet, the image exceeds 32 MiB, or the package would
- *         exceed the reader's limits;
+ *         outside the sheet, a two-cell `to` marker lies before `from`, the
+ *         image exceeds 32 MiB, or the package would exceed the reader's limits;
  *         `FM_STATUS_PRECONDITION_FAILED` (9) when the drawing's id space is exhausted;
  *         `FM_STATUS_IO_IMAGE_UNSUPPORTED` (5023) when `bytes` is not a recognised image;
  *         `FM_STATUS_IO_DRAWING_UNPARSEABLE` (5024) when the drawing part does not parse
@@ -11508,70 +11967,65 @@ FM_API fm_status_t fm_sheet_get_picture(const fm_workbook_t* wb, size_t sheet_in
  *         unchanged.
  */
 FM_API fm_status_t fm_sheet_add_picture(fm_workbook_t* wb, size_t sheet_index, const uint8_t* bytes, size_t len,
-                                        const fm_picture_insert_spec_t* opts, uint32_t* out_object_id);
+                                        const fm_drawing_placement_spec_t* opts, uint32_t* out_object_id);
 
 /**
- * @brief Removes the picture or chart `object_id`, the relationships it
- *        names, and the parts it reaches (media, or a chart part and its
- *        style, colors and embeddings) once nothing else references them.
+ * @brief Removes the drawing object `object_id` of any kind with what it
+ *        reaches: a picture or chart with the relationships it names and the
+ *        parts it reaches (media, or a chart part and its style, colors and
+ *        embeddings) once nothing else references them; a shape, connector or
+ *        group with its children; a table slicer with its frame, its cache
+ *        when no other slicer uses it, and the sheet's drawing when it held
+ *        nothing else.
+ *
+ * Removing a table or a sheet, or deleting the rows or columns under a
+ * slicer's frame, removes the slicers bound to it the same way.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
  *         `FM_STATUS_NOT_FOUND` (6) when no object of the sheet's drawing holds
  *         that id;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) when the id belongs to a shape or
- *         slicer, or the sheet is a chartsheet, whose drawing is not editable;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when the sheet is a chartsheet,
+ *         whose drawing is not editable;
  *         `FM_STATUS_IO_DRAWING_UNPARSEABLE` (5024) when the drawing part does not parse
  *         or is an `.xlsb` drawing the reader could not lift.
  */
 FM_API fm_status_t fm_sheet_remove_drawing(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id);
 
 /**
- * @brief Moves and resizes the picture or chart `object_id` (the first one
- *        when ids repeat), keeping its id, name, crop, rotation, flips and
- *        every other element.
+ * @brief Merges `patch` into the drawing object `object_id` of any kind (the
+ *        first one when ids repeat), keeping its id, crop, rotation, flips
+ *        and every other element. The whole patch is checked before anything
+ *        changes.
  *
- * Only the anchor markers, `editAs` when its value changes, and the
- * object's `a:off`/`a:ext` (a chart's `xdr:xfrm`) are rewritten. A picture
- * rotated into [45, 135) or [225, 315) degrees gets an anchor box with
- * width and height swapped about the same centre. A placement equal to the
- * current one writes nothing. An absolute object can be converted by naming
- * a one-cell or two-cell kind.
+ * An anchor change rewrites only the anchor markers, `editAs` when its value
+ * changes, and the object's `a:off`/`a:ext` (a chart's `xdr:xfrm`). A
+ * picture rotated into [45, 135) or [225, 315) degrees gets an anchor box
+ * with width and height swapped about the same centre. A patch equal to the
+ * current state writes nothing.
  *
  * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `patch` is `NULL`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
  *         `FM_STATUS_NOT_FOUND` (6) when no object of the sheet's drawing holds
  *         that id;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) when an enum
- *         field is outside its domain, the anchor kind is absolute, an
- *         offset or size is negative or 2^31 EMU or more, the anchor lies
- *         outside the sheet, or the id belongs to a shape or slicer;
- *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `anchor == NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when an op is outside 0..2, `CLEAR`
+ *         hits a field other than `description`, `SET` carries a `NULL` or
+ *         empty `name` or a `NULL` description, an enum field is outside its
+ *         domain, a `SET` anchor kind is not one-cell or two-cell, a field
+ *         the resulting anchor kind does not hold is `SET` without one it
+ *         holds (`fm_drawing_anchor_patch_t`), an offset or size
+ *         is negative or 2^31 EMU or more, the anchor lies outside the sheet,
+ *         a two-cell `to` marker lies before `from`, a slicer's anchor is not
+ *         two-cell, or the sheet is a chartsheet;
+ *         `FM_STATUS_PRECONDITION_FAILED` (9) when `name` is `SET` on a slicer;
+ *         `FM_STATUS_BINDING_UTF8ENCODING_ERROR` (7002) when a `SET` string is not valid UTF-8;
  *         `FM_STATUS_IO_DRAWING_UNPARSEABLE` (5024) when the drawing part does not parse
  *         or is an `.xlsb` drawing the reader could not lift.
  */
-FM_API fm_status_t fm_sheet_set_drawing_anchor(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
-                                               const fm_drawing_anchor_t* anchor);
-
-/**
- * @brief Renames the picture, chart or shape `object_id` (the first one
- *        when ids repeat). Duplicate names are allowed. A slicer cannot be
- *        renamed: its name is the key that ties the frame to the slicer part.
- *
- * @return `FM_STATUS_OK` (0) on success;
- *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `name` is `NULL`;
- *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
- *         `FM_STATUS_NOT_FOUND` (6) when no object of the sheet's drawing holds
- *         that id;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) when `name` is empty or the id
- *         belongs to a slicer;
- *         `FM_STATUS_BINDING_UTF8ENCODING_ERROR` (7002) when `name` is not valid UTF-8;
- *         `FM_STATUS_IO_DRAWING_UNPARSEABLE` (5024) when the drawing part does not parse
- *         or is an `.xlsb` drawing the reader could not lift.
- */
-FM_API fm_status_t fm_sheet_set_drawing_name(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
-                                             const char* name);
+FM_API fm_status_t fm_sheet_update_drawing(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
+                                           const fm_drawing_patch_t* patch);
 
 /**
  * @brief Moves the picture, chart, shape or slicer `object_id` so it becomes
@@ -11658,115 +12112,90 @@ FM_API fm_status_t fm_sheet_restore_drawing(fm_workbook_t* wb, size_t sheet_inde
 
 /** @brief How a shape's fill or outline is specified (`fm_shape_info_t::fill_kind`, `line_kind`). */
 typedef enum {
-  FM_SHAPE_PAINT_ABSENT = -1, /**< No fill or outline element. */
-  FM_SHAPE_PAINT_SOLID = 0,   /**< Solid `srgbClr` or palette `schemeClr`; the colour is `fill_color` / `line_color`. */
-  FM_SHAPE_PAINT_NONE = 1,    /**< `noFill`. */
+  FM_SHAPE_PAINT_DEFAULT = 0, /**< No fill or outline element of its own: the shape style's. */
+  FM_SHAPE_PAINT_SOLID = 1,   /**< Solid `srgbClr` or palette `schemeClr`; the colour is `fill_color` / `line_color`. */
+  FM_SHAPE_PAINT_NONE = 2,    /**< `noFill`. */
   FM_SHAPE_PAINT_OTHER =
-      2, /**< Gradient, pattern, picture or a colour that is neither Rgb nor a palette Theme colour; read only. */
+      3, /**< Gradient, pattern, picture or a colour that is neither Rgb nor a palette Theme colour; read only. */
 } fm_shape_paint_t;
 
 /**
- * @brief A shape, connector or group of a sheet's drawing; the record
- *        `fm_sheet_get_shape_at` and `fm_sheet_get_shape` read.
+ * @brief The shape-specific fields of a shape, connector or group of a
+ *        sheet's drawing; the record `fm_sheet_get_shape` reads. The anchor,
+ *        name, description and visibility are read with
+ *        `fm_sheet_get_drawing_object`.
  *
- * The anchor fields read as `fm_drawing_object_info_t` does: `kind` is an
- * `fm_drawing_object_kind_t` (shape, connector or group), an absolute anchor
- * reports its position as `from_col_offset_emu` = x and `from_row_offset_emu`
- * = y, and `width_emu`/`height_emu` are the size. `fill_kind` / `line_kind`
- * are `fm_shape_paint_t` (`-1` when the element is absent);
- * `fill_color` / `line_color` are None, Rgb or Theme: Rgb or Theme when the
- * kind is solid (Indexed and Auto are rejected on write; None writes black), None otherwise
- * (a colour with a non-solid kind is rejected on write). `rotation_deg` is clockwise in degrees: an input
- * in [-3600, 3600] is stored normalised to [0, 360) (a value outside that range or not finite is
- * `FM_STATUS_INVALID_ARGUMENT`), and `line_width_pt` is in points, `0` without a width, at most 1584 (a
- * larger, negative or non-finite value is `FM_STATUS_INVALID_ARGUMENT`); both convert to and from the
- * file's 60000ths of a degree and EMU at the boundary. `preset_geometry` is the `prst` name, empty for custom geometry
- * or a group; `text` joins paragraphs with `\n`.
+ * `kind` is an `fm_drawing_object_kind_t` (shape, connector or group).
+ * `fill_kind` / `line_kind` are `fm_shape_paint_t` (`DEFAULT` when the shape
+ * has no element of its own and draws its style's); `fill_color` /
+ * `line_color` are None, Rgb or Theme: Rgb or Theme when the kind is solid
+ * (Indexed and Auto are rejected on write; None writes black), None otherwise
+ * (a colour with a non-solid kind is rejected on write). `OTHER` is read
+ * only. `rotation_deg` is clockwise in degrees: an input in [-3600, 3600]
+ * is stored normalised to [0, 360) (a value outside that range or not finite
+ * is `FM_STATUS_INVALID_ARGUMENT`), and `line_width_pt` is in points, `0`
+ * without a width, at most 1584 (a larger, negative or non-finite value is
+ * `FM_STATUS_INVALID_ARGUMENT`); both convert to and from the file's 60000ths
+ * of a degree and EMU at the boundary. `preset_geometry` is the `prst` name,
+ * empty for custom geometry or a group; `text` joins paragraphs with `\n`.
  *
- * A two-cell anchor's size is its box. The strings are read-scratch-backed
- * views. `fm_sheet_add_shape` and `fm_sheet_update_shape` take
- * `fm_shape_patch_t`.
+ * The strings are read-scratch-backed views.
  */
 typedef struct {
   uint32_t struct_size;
   uint32_t object_id;
   int32_t kind;
-  int32_t anchor_kind;
-  int32_t edit_as;
-  uint32_t from_row;
-  uint32_t from_col;
-  uint32_t to_row;
-  uint32_t to_col;
   int32_t fill_kind;
   fm_color_t fill_color;
   int32_t line_kind;
   fm_color_t line_color;
   double rotation_deg;
-  int32_t hidden;
   int32_t text_box;
-  int64_t from_row_offset_emu;
-  int64_t from_col_offset_emu;
-  int64_t to_row_offset_emu;
-  int64_t to_col_offset_emu;
-  int64_t width_emu;
-  int64_t height_emu;
   double line_width_pt;
-  const char* name;
   const char* preset_geometry;
   const char* text;
 } fm_shape_info_t;
 
 /**
- * @brief A shape to add (`fm_sheet_add_shape`) or a partial update of a
- *        shape, connector or group (`fm_sheet_update_shape`), following the
- *        header's patch rules (Patches, above). The fields are the writable
- *        ones of `fm_shape_info_t`, in its units and domains.
+ * @brief A shape to add (`fm_sheet_add_shape`): the common `placement` and
+ *        the shape fields of `fm_shape_info_t`, in its units and domains.
  *
- * On add, `anchor_kind` is `SET` (one-cell or two-cell) and every other field
- * left `KEEP` or `CLEAR` takes Excel's default for a new shape: anchor cells
- * and offsets 0, `edit_as` the anchor kind, `preset_geometry` `rect`, `name`
- * `Shape <id>`, no text, no fill or outline element of its own (the style's),
- * no line width, no rotation, shown. A `SET` value follows the rules below.
- *
- * On update, the anchor fields apply to the object's current anchor: a `SET`
- * `anchor_kind` names that kind (an update cannot change it), and a two-cell
- * anchor ignores `width_emu` / `height_emu`. `fill_kind` and `fill_color`
- * combine with the stored fill, and the result is solid with an Rgb or Theme
- * colour (a None colour writes black) or `FM_SHAPE_PAINT_NONE` without one;
- * `line_kind` and `line_color` the same for the outline. `CLEAR` on
- * `fill_kind` or `fill_color` removes the shape's own fill element, so it
- * reads `FM_SHAPE_PAINT_ABSENT` and draws the fill its style names; `CLEAR`
- * on `line_kind` or `line_color` does the same for the outline. These four
- * are the clearable fields of an update; `CLEAR` on one of a pair with `SET`
- * on the other is `FM_STATUS_INVALID_ARGUMENT` (2). `text` applies to a shape only and
- * keeps the first paragraph's properties and first run's formatting.
+ * Every field left zero takes Excel's default for a new shape: a two-cell
+ * anchor, `name` `Shape <id>`, shown, `preset_geometry` `rect` (`NULL` or
+ * empty), no text (`NULL`), no line width, no rotation, not a text box, and
+ * `FM_SHAPE_PAINT_DEFAULT` fill and outline (the shape style's).
  */
 typedef struct {
   uint32_t struct_size;
-  fm_patch_op_t anchor_kind_op;
-  int32_t anchor_kind;
-  fm_patch_op_t edit_as_op;
-  int32_t edit_as;
-  fm_patch_op_t from_row_op;
-  uint32_t from_row;
-  fm_patch_op_t from_col_op;
-  uint32_t from_col;
-  fm_patch_op_t to_row_op;
-  uint32_t to_row;
-  fm_patch_op_t to_col_op;
-  uint32_t to_col;
-  fm_patch_op_t from_row_offset_emu_op;
-  int64_t from_row_offset_emu;
-  fm_patch_op_t from_col_offset_emu_op;
-  int64_t from_col_offset_emu;
-  fm_patch_op_t to_row_offset_emu_op;
-  int64_t to_row_offset_emu;
-  fm_patch_op_t to_col_offset_emu_op;
-  int64_t to_col_offset_emu;
-  fm_patch_op_t width_emu_op;
-  int64_t width_emu;
-  fm_patch_op_t height_emu_op;
-  int64_t height_emu;
+  fm_drawing_placement_spec_t placement;
+  int32_t fill_kind; /* fm_shape_paint_t */
+  fm_color_t fill_color;
+  int32_t line_kind; /* fm_shape_paint_t */
+  fm_color_t line_color;
+  double line_width_pt;
+  double rotation_deg;
+  int32_t text_box;
+  const char* preset_geometry;
+  const char* text;
+} fm_shape_spec_t;
+
+/**
+ * @brief Partial update of the shape fields of a shape, connector or group
+ *        (`fm_sheet_update_shape`), following the header's patch rules
+ *        (Patches, above). The fields are the writable ones of
+ *        `fm_shape_info_t`, in its units and domains; the anchor, name,
+ *        description and visibility change through `fm_sheet_update_drawing`.
+ *
+ * `fill_kind` and `fill_color` combine with the stored fill, and the result
+ * is solid with an Rgb or Theme colour (a None colour writes black),
+ * `FM_SHAPE_PAINT_NONE` without one, or `FM_SHAPE_PAINT_DEFAULT` without
+ * one: a `SET` `DEFAULT` removes the shape's own fill element, so it draws
+ * the fill its style names. `line_kind` and `line_color` do the same for the
+ * outline. No field can be cleared. `text` applies to a shape only and keeps the first paragraph's properties
+ * and first run's formatting.
+ */
+typedef struct {
+  uint32_t struct_size;
   fm_patch_op_t fill_kind_op;
   int32_t fill_kind;
   fm_patch_op_t fill_color_op;
@@ -11779,12 +12208,8 @@ typedef struct {
   double line_width_pt;
   fm_patch_op_t rotation_deg_op;
   double rotation_deg;
-  fm_patch_op_t hidden_op;
-  int32_t hidden;
   fm_patch_op_t text_box_op;
   int32_t text_box;
-  fm_patch_op_t name_op;
-  const char* name;
   fm_patch_op_t preset_geometry_op;
   const char* preset_geometry;
   fm_patch_op_t text_op;
@@ -11792,41 +12217,13 @@ typedef struct {
 } fm_shape_patch_t;
 
 /**
- * @brief Number of shapes, connectors and groups in the sheet's drawing; `0`
- *        for a sheet without a drawing. Pictures, charts and other frames are
- *        not counted; children of a group are not listed.
- *
- * @return `FM_STATUS_OK` (0) on success;
- *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `out_count == NULL`;
- *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
- *         `FM_STATUS_IO_DRAWING_UNPARSEABLE` (5024) when the drawing part does not parse.
- */
-FM_API fm_status_t fm_sheet_get_shape_count(const fm_workbook_t* wb, size_t sheet_index, size_t* out_count);
-
-/**
- * @brief Reads shape `index` of the sheet's drawing, in z-order (0 is the back).
+ * @brief Reads the shape, connector or group whose frame id is `object_id`.
+ *        `*out_present` is `1` and `*out` filled when there is one, else `0`
+ *        and `*out` zeroed (still `FM_STATUS_OK` (0)).
  *
  * Fields the model does not express read as `FM_SHAPE_PAINT_OTHER` or empty
- * and pass through a save untouched. The three strings are read-scratch-backed
- * views.
- *
- * Lifetime: transient.
- *
- * @return `FM_STATUS_OK` (0) on success;
- *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `out == NULL`;
- *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
- *         `FM_STATUS_INDEX_OUT_OF_RANGE` (13) when `index` is out of range;
- *         `FM_STATUS_IO_DRAWING_UNPARSEABLE` (5024) when the drawing part does not parse.
- */
-FM_API fm_status_t fm_sheet_get_shape_at(const fm_workbook_t* wb, size_t sheet_index, size_t index,
-                                         fm_shape_info_t* out);
-
-/**
- * @brief Reads the shape whose frame id is `object_id`. `*out_present` is `1`
- *        and `*out` filled when there is one, else `0` and `*out` zeroed
- *        (still `FM_STATUS_OK` (0)).
- *
- * The three strings are read-scratch-backed views.
+ * and pass through a save untouched. Shapes are enumerated with
+ * `fm_sheet_get_drawing_object_at`.
  *
  * Lifetime: transient.
  *
@@ -11840,7 +12237,7 @@ FM_API fm_status_t fm_sheet_get_shape(const fm_workbook_t* wb, size_t sheet_inde
 
 /**
  * @brief Appends a shape on top of the sheet's drawing from `spec` (see
- *        `fm_shape_patch_t` for the defaults) and returns its id.
+ *        `fm_shape_spec_t` for the defaults) and returns its id.
  *
  * A `preset_geometry` naming a line or connector geometry (`line`,
  * `straightConnector1`, `bentConnector*`, `curvedConnector*`) inserts a
@@ -11850,19 +12247,19 @@ FM_API fm_status_t fm_sheet_get_shape(const fm_workbook_t* wb, size_t sheet_inde
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `spec` or `out_object_id` is `NULL`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) for an op outside 0..2, a `SET` `NULL` string, an `anchor_kind` that is
- *         not `SET` or is absolute, a bad enumeration,
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) for a `struct_size` below the first layout of
+ *         `fm_shape_spec_t` or its `placement`, a bad enumeration, an absolute anchor kind,
  *         a `preset_geometry` that is not an alphanumeric token, an offset or size
- *         outside [0, 2^31) EMU, a cell outside the sheet, a two-cell `to`
- *         before `from`, a fill or outline that is neither solid nor none, an Indexed or Auto
- *         colour, a colour given with a kind other than solid,
- *         or text with control characters;
- *         `FM_STATUS_BINDING_UTF8ENCODING_ERROR` (7002) when a `SET` string is not valid UTF-8;
+ *         outside [0, 2^31) EMU, a zero size where the anchor needs one, a cell outside
+ *         the sheet, a two-cell `to` before `from`, a fill or outline kind of
+ *         `FM_SHAPE_PAINT_OTHER`, an Indexed or Auto colour, a colour given with a kind
+ *         other than solid, or text with control characters;
+ *         `FM_STATUS_BINDING_UTF8ENCODING_ERROR` (7002) when a string is not valid UTF-8;
  *         `FM_STATUS_PRECONDITION_FAILED` (9) when the drawing's id space is exhausted;
  *         `FM_STATUS_IO_DRAWING_UNPARSEABLE` (5024) when the drawing part does not parse
  *         or is an `.xlsb` drawing the reader could not lift.
  */
-FM_API fm_status_t fm_sheet_add_shape(fm_workbook_t* wb, size_t sheet_index, const fm_shape_patch_t* spec,
+FM_API fm_status_t fm_sheet_add_shape(fm_workbook_t* wb, size_t sheet_index, const fm_shape_spec_t* spec,
                                       uint32_t* out_object_id);
 
 /**
@@ -11875,27 +12272,14 @@ FM_API fm_status_t fm_sheet_add_shape(fm_workbook_t* wb, size_t sheet_index, con
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
  *         `FM_STATUS_NOT_FOUND` (6) when no object of the sheet's drawing holds that id;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when the id belongs to a picture, chart or
- *         slicer, an op is outside 0..2, `CLEAR` hits a field other than the four
- *         paint fields, `SET` carries a `NULL` string, a `SET` value fails a rule
- *         of `fm_sheet_add_shape`, or `anchor_kind` names another kind;
+ *         slicer, an op is outside 0..2, any field is `CLEAR`, `SET` carries a `NULL`
+ *         string, or a `SET` value fails a rule of `fm_sheet_add_shape`;
  *         `FM_STATUS_BINDING_UTF8ENCODING_ERROR` (7002) when a `SET` string is not valid UTF-8;
  *         `FM_STATUS_IO_DRAWING_UNPARSEABLE` (5024) when the drawing part does not parse
  *         or is an `.xlsb` drawing the reader could not lift.
  */
 FM_API fm_status_t fm_sheet_update_shape(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
                                          const fm_shape_patch_t* patch);
-
-/**
- * @brief Removes the shape, connector or group `object_id` with its children.
- *
- * @return `FM_STATUS_OK` (0) on success;
- *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`;
- *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
- *         `FM_STATUS_NOT_FOUND` (6) when no object of the sheet's drawing holds that id;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) when the id belongs to a picture, chart or slicer;
- *         `FM_STATUS_IO_DRAWING_UNPARSEABLE` (5024) when the drawing part does not parse.
- */
-FM_API fm_status_t fm_sheet_remove_shape(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id);
 
 /* -------------------------------------------------------------------------- */
 /* Table slicers                                                              */
@@ -11915,21 +12299,18 @@ typedef enum {
 } fm_slicer_cross_filter_t;
 
 /**
- * @brief A table slicer; the record `fm_sheet_get_slicer_at` and
- *        `fm_sheet_get_slicer` read.
+ * @brief The slicer-specific fields of a table slicer; the record
+ *        `fm_sheet_get_slicer` reads. The frame's anchor, name, description
+ *        and visibility are read with `fm_sheet_get_drawing_object`.
  *
- * `object_id` is the slicer's frame in the sheet's drawing (`0` when the
- * drawing holds none). `anchor_kind` is an `fm_anchor_kind_t`; `from_*` and
- * `to_*` are the frame's markers (`to_*` is zero unless the anchor is
- * two-cell) and an add or update always writes a two-cell anchor.
+ * `object_id` is the slicer's frame in the sheet's drawing.
  * `sort_order` is an `fm_slicer_sort_order_t` and `cross_filter` an
  * `fm_slicer_cross_filter_t`. `cache_name`, `table_name` and `column_name`
  * identify the slicer cache and the table column it filters; the selection
  * itself lives in the table's AutoFilter, not here. `style` is `NULL` without
  * a style.
  *
- * The strings are read-scratch-backed views. `fm_sheet_add_slicer` and
- * `fm_sheet_update_slicer` take `fm_slicer_patch_t`.
+ * The strings are read-scratch-backed views.
  */
 typedef struct {
   uint32_t struct_size;
@@ -11937,17 +12318,7 @@ typedef struct {
   uint32_t column_count;
   int32_t sort_order;
   int32_t cross_filter;
-  int32_t anchor_kind;
-  uint32_t from_row;
-  uint32_t from_col;
-  uint32_t to_row;
-  uint32_t to_col;
-  int64_t from_row_offset_emu;
-  int64_t from_col_offset_emu;
-  int64_t to_row_offset_emu;
-  int64_t to_col_offset_emu;
   int64_t row_height_emu;
-  const char* name;
   const char* caption;
   const char* cache_name;
   const char* table_name;
@@ -11956,20 +12327,36 @@ typedef struct {
 } fm_slicer_info_t;
 
 /**
- * @brief A table slicer to add (`fm_sheet_add_slicer`) or a partial update of
- *        one (`fm_sheet_update_slicer`), following the header's patch rules
- *        (Patches, above). The fields are the writable ones of `fm_slicer_info_t`,
- *        in its units and domains.
+ * @brief A table slicer to add (`fm_sheet_add_slicer`): the common
+ *        `placement` and the slicer fields of `fm_slicer_info_t`, in its
+ *        units and domains.
  *
- * The anchor applies as a whole: `from_row`, `from_col`, `to_row` and
- * `to_col` are `SET` together or not at all, and with them a two-cell anchor
- * is written. On add the four are required, and every other field left
- * `KEEP` or `CLEAR` takes Excel's default for a new slicer: offsets 0, `name`
- * and `caption` the column name (the name made unique), `row_height_emu`
- * 241300, `column_count` 1, ascending sort, the default cross filter, no
- * style. On update an offset left `KEEP` keeps its value, `name` cannot be
- * `SET` (it ties the frame to the slicer part), and `style` is the one
- * clearable field: `CLEAR` removes the style, as a `SET` empty string does.
+ * The frame is always two-cell (`placement.anchor.kind` `DEFAULT` or
+ * `TWO_CELL`). Every field left zero takes Excel's default for a new slicer:
+ * `name` and `caption` the column name (the name made unique), shown,
+ * `column_count` 1, ascending sort, the default cross filter,
+ * `row_height_emu` 241300, no style (`NULL` or empty).
+ */
+typedef struct {
+  uint32_t struct_size;
+  fm_drawing_placement_spec_t placement;
+  uint32_t column_count;
+  int32_t sort_order;   /* fm_slicer_sort_order_t */
+  int32_t cross_filter; /* fm_slicer_cross_filter_t */
+  int64_t row_height_emu;
+  const char* caption;
+  const char* style;
+} fm_slicer_spec_t;
+
+/**
+ * @brief Partial update of the slicer fields of a table slicer
+ *        (`fm_sheet_update_slicer`), following the header's patch rules
+ *        (Patches, above). The fields are the writable ones of
+ *        `fm_slicer_info_t`, in its units and domains; the frame's anchor,
+ *        description and visibility change through `fm_sheet_update_drawing`.
+ *
+ * `style` is the one clearable field: `CLEAR` removes the style, as a `SET`
+ * empty string does.
  */
 typedef struct {
   uint32_t struct_size;
@@ -11979,26 +12366,8 @@ typedef struct {
   int32_t sort_order;
   fm_patch_op_t cross_filter_op;
   int32_t cross_filter;
-  fm_patch_op_t from_row_op;
-  uint32_t from_row;
-  fm_patch_op_t from_col_op;
-  uint32_t from_col;
-  fm_patch_op_t to_row_op;
-  uint32_t to_row;
-  fm_patch_op_t to_col_op;
-  uint32_t to_col;
-  fm_patch_op_t from_row_offset_emu_op;
-  int64_t from_row_offset_emu;
-  fm_patch_op_t from_col_offset_emu_op;
-  int64_t from_col_offset_emu;
-  fm_patch_op_t to_row_offset_emu_op;
-  int64_t to_row_offset_emu;
-  fm_patch_op_t to_col_offset_emu_op;
-  int64_t to_col_offset_emu;
   fm_patch_op_t row_height_emu_op;
   int64_t row_height_emu;
-  fm_patch_op_t name_op;
-  const char* name;
   fm_patch_op_t caption_op;
   const char* caption;
   fm_patch_op_t style_op;
@@ -12006,38 +12375,18 @@ typedef struct {
 } fm_slicer_patch_t;
 
 /**
- * @brief Number of table slicers hosted by the sheet; `0` for a sheet without
- *        any. Slicers over a pivot cache are not counted.
- *
- * @return `FM_STATUS_OK` (0) on success;
- *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `out_count == NULL`;
- *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
- *         `FM_STATUS_IO_DRAWING_UNPARSEABLE` (5024) when the sheet's drawing does not parse.
- */
-FM_API fm_status_t fm_sheet_get_slicer_count(const fm_workbook_t* wb, size_t sheet_index, size_t* out_count);
-
-/**
- * @brief Reads slicer `index` of the sheet. The strings are read-scratch-backed
- *        views.
- *
- * Lifetime: transient.
- *
- * @return As `fm_sheet_get_slicer_count`, with `FM_STATUS_INDEX_OUT_OF_RANGE` (13) also for an
- *         out-of-range `index`.
- */
-FM_API fm_status_t fm_sheet_get_slicer_at(const fm_workbook_t* wb, size_t sheet_index, size_t index,
-                                          fm_slicer_info_t* out);
-
-/**
  * @brief Reads the slicer whose frame id is `object_id`, the id
  *        `fm_sheet_add_slicer` returned. `*out_present` is `1` and `*out`
  *        filled when there is one, else `0` and `*out` zeroed (still
  *        `FM_STATUS_OK` (0)). A slicer without a frame has no id and is not
- *        found. The strings are read-scratch-backed views.
+ *        found. Slicers are enumerated with `fm_sheet_get_drawing_object_at`.
  *
  * Lifetime: transient.
  *
- * @return As `fm_sheet_get_slicer_count`.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
+ *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
+ *         `FM_STATUS_IO_DRAWING_UNPARSEABLE` (5024) when the sheet's drawing does not parse.
  */
 FM_API fm_status_t fm_sheet_get_slicer(const fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
                                        int32_t* out_present, fm_slicer_info_t* out);
@@ -12049,23 +12398,26 @@ FM_API fm_status_t fm_sheet_get_slicer(const fm_workbook_t* wb, size_t sheet_ind
  * Creates the slicer and cache parts, their relationships and content types,
  * the `Slicer_*` defined name and the drawing frame (with its fallback shape),
  * or extends the sheet's existing slicer part, from `spec` (see
- * `fm_slicer_patch_t` for the defaults). The table is `table_index` of sheet `table_sheet_index` (a sheet-local
+ * `fm_slicer_spec_t` for the defaults). The table is `table_index` of sheet `table_sheet_index` (a sheet-local
  * index, as every table function takes); it may live on another sheet than the slicer.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `spec` or `out_object_id` is `NULL`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` or `table_sheet_index` is out of range;
- *         `FM_STATUS_INDEX_OUT_OF_RANGE` (13) when `table_index` is past that sheet's tables;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) for an op outside 0..2, a `SET` `NULL` string, a bad column, an
- *         anchor that is not `SET` as a whole or lies outside the sheet, a bad
+ *         `FM_STATUS_INDEX_OUT_OF_RANGE` (13) when `table_index` is past that sheet's tables
+ *         or `column_index` past the table's columns;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) for a `struct_size` below the first layout of
+ *         `fm_slicer_spec_t` or its `placement`, a column whose name yields no slicer
+ *         cache name, an anchor kind other than
+ *         default or two-cell, an anchor that lies outside the sheet or has no size, a bad
  *         enumeration, column count, row height or text with control characters;
- *         `FM_STATUS_BINDING_UTF8ENCODING_ERROR` (7002) when a `SET` string is not valid UTF-8;
+ *         `FM_STATUS_BINDING_UTF8ENCODING_ERROR` (7002) when a string is not valid UTF-8;
  *         `FM_STATUS_PRECONDITION_FAILED` (9) when the drawing's id space is exhausted;
  *         `FM_STATUS_IO_DRAWING_UNPARSEABLE` (5024) when the drawing part does not parse
  *         or is an `.xlsb` drawing the reader could not lift.
  */
 FM_API fm_status_t fm_sheet_add_slicer(fm_workbook_t* wb, size_t sheet_index, size_t table_sheet_index,
-                                       size_t table_index, size_t column_index, const fm_slicer_patch_t* spec,
+                                       size_t table_index, size_t column_index, const fm_slicer_spec_t* spec,
                                        uint32_t* out_object_id);
 
 /**
@@ -12078,30 +12430,14 @@ FM_API fm_status_t fm_sheet_add_slicer(fm_workbook_t* wb, size_t sheet_index, si
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
  *         `FM_STATUS_NOT_FOUND` (6) when no slicer has that id;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when an op is outside 0..2, `CLEAR` hits a
- *         field other than `style`, `SET` carries a `NULL` string or a `name`, the anchor cells
- *         are not set together, a `SET` value fails a rule of `fm_sheet_add_slicer`,
- *         or the anchor is set on a slicer whose frame is not two-cell;
+ *         field other than `style`, `SET` carries a `NULL` string, or a `SET` value
+ *         fails a rule of `fm_sheet_add_slicer`;
  *         `FM_STATUS_BINDING_UTF8ENCODING_ERROR` (7002) when a `SET` string is not valid UTF-8;
  *         `FM_STATUS_IO_DRAWING_UNPARSEABLE` (5024) when the drawing part does not parse
  *         or is an `.xlsb` drawing the reader could not lift.
  */
 FM_API fm_status_t fm_sheet_update_slicer(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
                                           const fm_slicer_patch_t* patch);
-
-/**
- * @brief Removes the slicer whose frame id is `object_id` with its drawing
- *        frame, and its cache when no other slicer uses it, and the sheet's
- *        drawing when it held nothing else. Removing a table or a sheet, or
- *        deleting the rows or columns under a slicer's frame, removes the
- *        slicers bound to it the same way.
- *
- * @return `FM_STATUS_OK` (0) on success;
- *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`;
- *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
- *         `FM_STATUS_NOT_FOUND` (6) when no slicer has that id;
- *         `FM_STATUS_IO_DRAWING_UNPARSEABLE` (5024) when the sheet's drawing does not parse.
- */
-FM_API fm_status_t fm_sheet_remove_slicer(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id);
 
 /* -------------------------------------------------------------------------- */
 /* Sparkline groups                                                           */
@@ -12151,7 +12487,11 @@ typedef struct {
  * @brief A sparkline group (`x14:sparklineGroup`) of the sheet's worksheet
  *        extension list.
  *
- * Each colour has `kind == FM_COLOR_KIND_NONE` when the element is absent.
+ * `id` is the group's engine id: an opaque string, unique on its sheet,
+ * stable for the open workbook across structural edits and never reused
+ * within the session; a load or a sheet copy assigns fresh ones. It is not
+ * saved. A read-scratch-backed view on read; ignored on the add path, which
+ * assigns a new id. Each colour has `kind == FM_COLOR_KIND_NONE` when the element is absent.
  * `has_manual_min` / `has_manual_max` say whether `manualMin` / `manualMax`
  * are present. `date_axis_ref` is the group's own `xm:f` date range, `NULL`
  * when absent (`NULL` or empty writes none); it reads with a leading `=`, and
@@ -12162,6 +12502,7 @@ typedef struct {
  */
 typedef struct {
   uint32_t struct_size;
+  const char* id;
   fm_color_t color_series;
   fm_color_t color_negative;
   fm_color_t color_axis;
@@ -12196,8 +12537,8 @@ typedef struct {
  * @brief Partial update of a sparkline group
  *        (`fm_sheet_update_sparkline_group`), following the header's patch
  *        rules (Patches, above). The fields are the writable ones of
- *        `fm_sparkline_group_t`, in its units and domains, and the group's
- *        sparklines.
+ *        `fm_sparkline_group_t` but `id`, in its units and domains, and the
+ *        group's sparklines.
  *
  * The eight colours, `manual_min`, `manual_max` and `date_axis_ref` can be
  * cleared, which removes the colour (it reads back `FM_COLOR_KIND_NONE`),
@@ -12266,10 +12607,11 @@ typedef struct {
 /**
  * @brief Number of sparkline groups in the sheet's worksheet extension list.
  *
- * Groups are addressed by their position in document order; adding or
- * removing one shifts the later indices. Groups of a workbook loaded from
- * `.xlsb` are listed and editable the same way; a group the reader cannot
- * decode stays a binary record and is not listed.
+ * A group is addressed by its id (`fm_sparkline_group_t::id`); positions, in
+ * document order, serve enumeration only, and adding or removing a group
+ * shifts the later ones. Groups of a workbook loaded from `.xlsb` are listed
+ * and editable the same way; a group the reader cannot decode stays a binary
+ * record and is not listed.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `out_count == NULL`;
@@ -12278,7 +12620,8 @@ typedef struct {
 FM_API fm_status_t fm_sheet_get_sparkline_group_count(const fm_workbook_t* wb, size_t sheet_index, size_t* out_count);
 
 /**
- * @brief Reads sparkline group `group_index`; `date_axis_ref` is a read-scratch-backed view or `NULL`.
+ * @brief Reads sparkline group `group_index`; `id` and `date_axis_ref` are
+ *        read-scratch-backed views (`date_axis_ref` `NULL` when absent).
  *
  * Lifetime: transient.
  *
@@ -12289,6 +12632,22 @@ FM_API fm_status_t fm_sheet_get_sparkline_group_count(const fm_workbook_t* wb, s
  */
 FM_API fm_status_t fm_sheet_get_sparkline_group_at(const fm_workbook_t* wb, size_t sheet_index, size_t group_index,
                                                    fm_sparkline_group_t* out);
+
+/**
+ * @brief Reads the sparkline group whose id is `group_id`. `*out_present` is
+ *        `1` and `*out` filled when there is one, else `0` and `*out` zeroed
+ *        (still `FM_STATUS_OK` (0)). The views in `out` have the lifetime
+ *        `fm_sheet_get_sparkline_group_at` describes.
+ *
+ * Lifetime: transient.
+ *
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
+ *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
+ *         `FM_STATUS_BINDING_UTF8ENCODING_ERROR` (7002) when `group_id` is not valid UTF-8.
+ */
+FM_API fm_status_t fm_sheet_get_sparkline_group(const fm_workbook_t* wb, size_t sheet_index, const char* group_id,
+                                                int32_t* out_present, fm_sparkline_group_t* out);
 
 /**
  * @brief Reads sparkline `sparkline_index` of group `group_index`; both strings are
@@ -12305,14 +12664,17 @@ FM_API fm_status_t fm_sheet_get_sparkline_at(const fm_workbook_t* wb, size_t she
                                              size_t sparkline_index, fm_sparkline_t* out);
 
 /**
- * @brief Appends a sparkline group with `count` sparklines and writes its
- *        index to `*out_group_index`.
+ * @brief Appends a sparkline group with `count` sparklines and writes its new
+ *        id to `*out_group_id`, a read-scratch-backed view valid until the
+ *        next scratch-backed read. `group->id` is ignored.
  *
  * Attributes and children outside the model are not written. A sheet without
  * a worksheet extension list gets one; other extensions are kept.
  *
+ * Lifetime: transient.
+ *
  * @return `FM_STATUS_OK` (0) on success;
- *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `group`, `items` or `out_group_index` is `NULL`;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `group`, `items` or `out_group_id` is `NULL`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) for `count == 0`, a sparkline whose
  *         location is not one A1 cell or whose formula is empty, a
@@ -12321,35 +12683,36 @@ FM_API fm_status_t fm_sheet_get_sparkline_at(const fm_workbook_t* wb, size_t she
  */
 FM_API fm_status_t fm_sheet_add_sparkline_group(fm_workbook_t* wb, size_t sheet_index,
                                                 const fm_sparkline_group_t* group, const fm_sparkline_t* items,
-                                                size_t count, size_t* out_group_index);
+                                                size_t count, const char** out_group_id);
 
 /**
- * @brief Merges `patch` into sparkline group `group_index`. The whole patch is
- *        checked before anything changes.
+ * @brief Merges `patch` into the sparkline group whose id is `group_id`. The
+ *        whole patch is checked before anything changes.
  *
  * @return `FM_STATUS_OK` (0) on success;
- *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `patch` is `NULL`, or a `SET`
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb`, `group_id` or `patch` is `NULL`, or a `SET`
  *           `items` is `NULL` while `items_count > 0`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
- *         `FM_STATUS_INDEX_OUT_OF_RANGE` (13) when `group_index` is out of range;
+ *         `FM_STATUS_NOT_FOUND` (6) when no group has `group_id`;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when an op is outside 0..2, `CLEAR` hits a
- *           field other than `manual_min`, `manual_max` and `date_axis_ref`, `SET`
- *           carries a `NULL` string, a `SET` `items` is empty, or a `SET` value fails
+ *           field other than the eight colours, `manual_min`, `manual_max` and `date_axis_ref`,
+ *           `SET` carries a `NULL` string, a `SET` `items` is empty, or a `SET` value fails
  *           a rule of `fm_sheet_add_sparkline_group`;
- *         `FM_STATUS_BINDING_UTF8ENCODING_ERROR` (7002) when a `SET` string is not valid UTF-8.
+ *         `FM_STATUS_BINDING_UTF8ENCODING_ERROR` (7002) when `group_id` or a `SET` string is not valid UTF-8.
  */
-FM_API fm_status_t fm_sheet_update_sparkline_group(fm_workbook_t* wb, size_t sheet_index, size_t group_index,
+FM_API fm_status_t fm_sheet_update_sparkline_group(fm_workbook_t* wb, size_t sheet_index, const char* group_id,
                                                    const fm_sparkline_group_patch_t* patch);
 
 /**
- * @brief Removes sparkline group `group_index`.
+ * @brief Removes the sparkline group whose id is `group_id`.
  *
  * @return `FM_STATUS_OK` (0) on success;
- *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `group_id` is `NULL`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
- *         `FM_STATUS_INDEX_OUT_OF_RANGE` (13) when `group_index` is out of range.
+ *         `FM_STATUS_NOT_FOUND` (6) when no group has `group_id`;
+ *         `FM_STATUS_BINDING_UTF8ENCODING_ERROR` (7002) when `group_id` is not valid UTF-8.
  */
-FM_API fm_status_t fm_sheet_remove_sparkline_group(fm_workbook_t* wb, size_t sheet_index, size_t group_index);
+FM_API fm_status_t fm_sheet_remove_sparkline_group(fm_workbook_t* wb, size_t sheet_index, const char* group_id);
 
 /* -------------------------------------------------------------------------- */
 /* Charts                                                                     */
@@ -12639,7 +13002,8 @@ typedef struct {
 /**
  * @brief Top-level fields of a chart.
  *
- * The anchor fields read as `fm_drawing_object_info_t` does. `legend_position` is
+ * The anchor, name and description are read with
+ * `fm_sheet_get_drawing_object`. `legend_position` is
  * `FM_CHART_LEGEND_POSITION_ABSENT` when the chart has no legend. `auto_title_deleted`,
  * `plot_visible_only` and `na_as_blank` (`c16r3:dispNaAsBlank`, whether `#N/A`
  * points draw as blank cells) are `fm_tristate_t`; `blanks_as` an
@@ -12650,23 +13014,9 @@ typedef struct {
 typedef struct {
   uint32_t struct_size;
   uint32_t object_id;
-  const char* name;
-  const char* description;
   int32_t is_extended;
   int32_t is_pivot_chart;
   int32_t on_chartsheet;
-  int32_t anchor_kind;
-  int32_t edit_as;
-  uint32_t from_row;
-  uint32_t from_col;
-  int64_t from_row_offset_emu;
-  int64_t from_col_offset_emu;
-  uint32_t to_row;
-  uint32_t to_col;
-  int64_t to_row_offset_emu;
-  int64_t to_col_offset_emu;
-  int64_t width_emu;
-  int64_t height_emu;
   fm_chart_title_t title;
   int32_t auto_title_deleted;
   int32_t legend_position;
@@ -12734,14 +13084,15 @@ typedef struct {
 } fm_chart_data_source_t;
 
 /**
- * @brief One series of a plot group. `smooth` is an `fm_tristate_t`;
+ * @brief One series of a plot group. `series_id` is the series' `c:idx`,
+ *        the key the series functions take. `smooth` is an `fm_tristate_t`;
  *        `marker` and `labels` are meaningful when their `has_*` flag is
  *        set. `point_count` counts the formatted points
  *        `fm_chart_get_series_point_at` reads.
  */
 typedef struct {
   uint32_t struct_size;
-  uint32_t idx;
+  uint32_t series_id;
   uint32_t order;
   int32_t filtered;
   fm_chart_data_source_t name;
@@ -13024,7 +13375,7 @@ typedef struct {
 typedef struct {
   uint32_t struct_size;
   uint32_t plot_index;
-  uint32_t idx;
+  uint32_t series_id;
   const char* name;
   const char* format_code;
   int32_t filtered;
@@ -13059,13 +13410,13 @@ typedef struct {
 
 /**
  * @brief An input that did not resolve; its points read as gaps. `source`
- *        is an `fm_chart_role_t`; `series` is the series' `c:idx`
+ *        is an `fm_chart_role_t`; `series_id` is the series' `c:idx`
  *        (0 for a title) and `axis_id` the axis of an
  *        `FM_CHART_ROLE_AXIS_TITLE`.
  */
 typedef struct {
   uint32_t struct_size;
-  uint32_t series_index;
+  uint32_t series_id;
   int32_t source; /* fm_chart_role_t */
   uint32_t axis_id;
 } fm_chart_unresolved_info_t;
@@ -13247,9 +13598,9 @@ FM_API fm_status_t fm_chart_data_get_unresolved_at(const fm_chart_data_t* data, 
  * default is `FM_CHART_LEGEND_POSITION_BOTTOM`, which the bindings pass for an
  * omitted option. `placement` reads as for
  * `fm_sheet_add_picture`, its `name` and `description` naming the chart (an
- * empty name becomes `Chart <n>`, n being the object id minus one), except that a zero width or height
- * means Excel's default 360 x 216 pt frame. Excel inserts charts with a
- * two-cell anchor.
+ * empty name becomes `Chart <n>`, n being the object id minus one); a
+ * `DEFAULT` anchor kind is two-cell, as Excel inserts charts, and a zero
+ * size means Excel's default 360 x 216 pt frame.
  */
 typedef struct {
   uint32_t struct_size;
@@ -13262,7 +13613,7 @@ typedef struct {
   int32_t header_column; /* fm_tristate_t */
   const char* title;
   int32_t legend;
-  fm_picture_insert_spec_t placement;
+  fm_drawing_placement_spec_t placement;
 } fm_chart_insert_spec_t;
 
 /**
@@ -13617,7 +13968,7 @@ FM_API fm_status_t fm_sheet_update_chart_display(fm_workbook_t* wb, size_t sheet
                                                  const fm_chart_display_patch_t* patch);
 
 /**
- * @brief Patches the series with `c:idx` `series_index` of plot group `plot_index`.
+ * @brief Patches the series whose id (`c:idx`) is `series_id` in plot group `plot_index`.
  *        A changed reference refreshes its cache.
  *
  * @return `FM_STATUS_OK` (0) on success, or a common chart failure;
@@ -13628,11 +13979,11 @@ FM_API fm_status_t fm_sheet_update_chart_display(fm_workbook_t* wb, size_t sheet
  *         chart.
  */
 FM_API fm_status_t fm_sheet_update_chart_series(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
-                                                size_t plot_index, uint32_t series_index,
+                                                size_t plot_index, uint32_t series_id,
                                                 const fm_chart_series_patch_t* patch);
 
 /**
- * @brief Patches point `point_index` of the series with `c:idx` `series_index`. An all-`KEEP`
+ * @brief Patches point `point_index` of the series whose id is `series_id`. An all-`KEEP`
  *        patch changes nothing; a patch that leaves the point's override
  *        empty removes it (see `fm_chart_point_patch_t`).
  *
@@ -13640,7 +13991,7 @@ FM_API fm_status_t fm_sheet_update_chart_series(fm_workbook_t* wb, size_t sheet_
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when `patch` is `NULL`.
  */
 FM_API fm_status_t fm_sheet_update_chart_point(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
-                                               size_t plot_index, uint32_t series_index, size_t point_index,
+                                               size_t plot_index, uint32_t series_id, size_t point_index,
                                                const fm_chart_point_patch_t* patch);
 
 /**
@@ -13667,26 +14018,26 @@ FM_API fm_status_t fm_sheet_set_chart_filter(fm_workbook_t* wb, size_t sheet_ind
 
 /**
  * @brief Appends a series to plot group `plot_index` from `patch` (which must set
- *        `values`, or `y` for a scatter plot) and returns its `c:idx`.
+ *        `values`, or `y` for a scatter plot) and returns its id (`c:idx`).
  *
  * @return `FM_STATUS_OK` (0) on success, or a common chart failure;
- *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when `patch` or `out_series_index` is `NULL`;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when `patch` or `out_series_id` is `NULL`;
  *         `FM_STATUS_IO_CHART_INVALID_REFERENCE` (5026) when a reference does not
  *         resolve;
  *         `FM_STATUS_IO_CHART_UNSUPPORTED_KIND` (5027) for a pivot chart.
  */
 FM_API fm_status_t fm_sheet_add_chart_series(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
                                              size_t plot_index, const fm_chart_series_patch_t* patch,
-                                             uint32_t* out_series_index);
+                                             uint32_t* out_series_id);
 
 /**
- * @brief Removes the series with `c:idx` `series_index` from plot group `plot_index`.
+ * @brief Removes the series whose id is `series_id` from plot group `plot_index`.
  *
  * @return `FM_STATUS_OK` (0) on success, or a common chart failure;
  *         `FM_STATUS_IO_CHART_UNSUPPORTED_KIND` (5027) for a pivot chart.
  */
 FM_API fm_status_t fm_sheet_remove_chart_series(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
-                                                size_t plot_index, uint32_t series_index);
+                                                size_t plot_index, uint32_t series_id);
 
 /**
  * @brief Rebuilds every series from `source` by the insert splitting rules,

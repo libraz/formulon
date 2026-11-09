@@ -69,16 +69,12 @@ test('hyperlinks, people and threaded comments are read by key', async () => {
 test('shapes and drawing objects are read by object id', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
-  // anchorKind 0 is OneCell.
   const added = wb.sheet(0).addShape({
     presetGeometry: 'rect',
-    anchorKind: 0,
-    fromRow: 2,
-    widthEmu: 914400,
-    heightEmu: 457200,
+    anchor: { kind: mod.AnchorKind.OneCell, fromRow: 2, widthEmu: 914400, heightEmu: 457200 },
   });
   assert.equal(wb.sheet(0).shape(added).getProperties().presetGeometry, 'rect');
-  assert.equal(wb.sheet(0).drawing(added).getDrawingProperties().fromRow, 2);
+  assert.equal(wb.sheet(0).drawing(added).getDrawingProperties().anchor.fromRow, 2);
   // An id the sheet does not hold is NotFound, and so is a removed object.
   const absent = (read) => assert.throws(read, (e) => isFormulonError(e, mod.StatusCode.NotFound));
   absent(() => wb.sheet(0).shape(added.objectId + 1));
@@ -106,7 +102,7 @@ test('theme script fonts and passthrough parts are queried by path', async () =>
   release(wb);
 });
 
-test('index-keyed adds return the index they allocate', async () => {
+test('adds return the index or the id they allocate', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   const sheet = wb.addSheet('Second');
@@ -118,7 +114,16 @@ test('index-keyed adds return the index they allocate', async () => {
     formula1: '1',
     formula2: '9',
   };
-  assert.equal(wb.sheet(1).addValidation(rule), 0);
-  assert.equal(wb.sheet(1).addValidation(rule), 1);
+  const first = wb.sheet(1).addValidation(rule);
+  const second = wb.sheet(1).addValidation(rule);
+  assert.equal(typeof first, 'string');
+  assert.notEqual(first, second);
+  assert.deepEqual(
+    wb
+      .sheet(1)
+      .listValidations()
+      .map((v) => v.id),
+    [first, second],
+  );
   release(wb);
 });

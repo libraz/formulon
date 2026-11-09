@@ -96,19 +96,19 @@ inline bool MayNameExternalBook(std::string_view formula) noexcept {
          (formula.find('\'') != std::string_view::npos && formula.find_first_of("/\\") != std::string_view::npos);
 }
 
-/// The defined name `name' (ASCII case-insensitive) in scope `local_sheet_id`
+/// The defined name `name' (`collection_names::equal`) in scope `local_sheet_id`
 /// (-1 is workbook scope), or `names.end()`.
 inline std::vector<DefinedName>::iterator find_defined_name(std::vector<DefinedName>& names, std::string_view name,
                                                             std::int32_t local_sheet_id) {
   return std::find_if(names.begin(), names.end(), [name, local_sheet_id](const DefinedName& entry) {
-    return entry.local_sheet_id == local_sheet_id && strings::case_insensitive_eq(entry.name, name);
+    return entry.local_sheet_id == local_sheet_id && collection_names::equal(entry.name, name);
   });
 }
 
-/// Whether a workbook-scope name spelled `name` (ASCII case-insensitive) exists.
+/// Whether a workbook-scope name spelled `name` (`collection_names::equal`) exists.
 inline bool has_book_namesake(const std::vector<DefinedName>& names, std::string_view name) {
   return std::any_of(names.begin(), names.end(), [name](const DefinedName& entry) {
-    return entry.local_sheet_id < 0 && strings::case_insensitive_eq(entry.name, name);
+    return entry.local_sheet_id < 0 && collection_names::equal(entry.name, name);
   });
 }
 

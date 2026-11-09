@@ -20,7 +20,7 @@
 #include "parser/formula_prefix.h"
 #include "parser/reference.h"
 #include "parser/structured_ref_payload.h"
-#include "utils/strings.h"
+#include "sheet_name.h"
 
 namespace formulon {
 namespace parser {
@@ -176,7 +176,7 @@ struct Emitter {
       out.append(table).append("[").append(node.as_structured_ref_column()).push_back(']');
       return;
     }
-    const bool inside = !display->own_table.empty() && strings::case_insensitive_eq(table, display->own_table);
+    const bool inside = !display->own_table.empty() && collection_names::equal(table, display->own_table);
     out.append(display_structured_ref(table, *payload, inside));
   }
 

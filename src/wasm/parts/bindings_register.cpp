@@ -57,7 +57,6 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .field("zoomPct", &JsSheetView::zoomPct)
       .field("freezeRows", &JsSheetView::freezeRows)
       .field("freezeCols", &JsSheetView::freezeCols)
-      .field("visibility", &JsSheetView::visibility)
       .field("showGridLines", &JsSheetView::showGridLines)
       .field("showRowColHeaders", &JsSheetView::showRowColHeaders)
       .field("showZeros", &JsSheetView::showZeros)
@@ -90,6 +89,10 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("addFill", &JsWorkbook::addFill)
       .function("addFont", &JsWorkbook::addFont)
       .function("setFont", &JsWorkbook::setFont)
+      .function("setFill", &JsWorkbook::setFill)
+      .function("setBorder", &JsWorkbook::setBorder)
+      .function("setCellXf", &JsWorkbook::setXf)
+      .function("setDxf", &JsWorkbook::setDxf)
       .function("setDefaultFont", &JsWorkbook::setDefaultFont)
       .function("setHyperlink", &JsWorkbook::addHyperlink)
       .function("setHyperlinkRange", &JsWorkbook::addHyperlinkRange)
@@ -128,6 +131,7 @@ EMSCRIPTEN_BINDINGS(formulon) {
       // Profile ids are {mac,win}-365-{ja_JP,en_US,de_DE,fr_FR,zh_CN,ko_KR,
       // th_TH,es_ES,es_MX,pt_BR,ru_RU,zh_TW,it_IT,nl_NL}. New workbooks default to win-365-en_US.
       .function("getProfileId", &JsWorkbook::profileId)
+      .function("getVisibility", &JsWorkbook::getVisibility)
       .function("getFileName", &JsWorkbook::fileName)
       .function("getFillCount", &JsWorkbook::fillCount)
       .function("getFontCount", &JsWorkbook::fontCount)
@@ -166,6 +170,8 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("listThreadedComments", &JsWorkbook::getThreadedComments)
       .function("getThreadedComment", &JsWorkbook::getThreadedComment)
       .function("addThreadedComment", &JsWorkbook::addThreadedComment)
+      .function("updateValidation", &JsWorkbook::updateValidation)
+      .function("updateCfRule", &JsWorkbook::updateCfRule)
       .function("updateThreadedComment", &JsWorkbook::editThreadedComment)
       .function("removeThreadedComment", &JsWorkbook::removeThreadedComment)
       .function("listPeople", &JsWorkbook::getPersons)
@@ -180,8 +186,7 @@ EMSCRIPTEN_BINDINGS(formulon) {
                   return self.insertImage(sheet, bytes, emscripten::val::object());
                 }))
       .function("removeDrawingObject", &JsWorkbook::removeDrawing)
-      .function("setDrawingAnchor", &JsWorkbook::setDrawingAnchor)
-      .function("setDrawingName", &JsWorkbook::setDrawingName)
+      .function("updateDrawing", &JsWorkbook::updateDrawing)
       .function("setDrawingZOrder", &JsWorkbook::setDrawingZOrder)
       .function("snapshotDrawing", &JsWorkbook::snapshotDrawing)
       .function("restoreDrawing", &JsWorkbook::restoreDrawing)
@@ -189,16 +194,12 @@ EMSCRIPTEN_BINDINGS(formulon) {
                 emscripten::optional_override([](JsWorkbook& self, uint32_t sheet, emscripten::val bytes) {
                   return self.restoreDrawing(sheet, bytes, emscripten::val::object());
                 }))
-      .function("listShapes", &JsWorkbook::listShapes)
       .function("addShape", &JsWorkbook::insertShape)
       .function("updateShape", &JsWorkbook::updateShape)
-      .function("removeShape", &JsWorkbook::removeShape)
       .function("getShape", &JsWorkbook::getShape)
-      .function("listSlicers", &JsWorkbook::listSlicers)
       .function("getSlicer", &JsWorkbook::getSlicer)
       .function("addSlicer", &JsWorkbook::addSlicer)
       .function("updateSlicer", &JsWorkbook::updateSlicer)
-      .function("removeSlicer", &JsWorkbook::removeSlicer)
       .function("addDataTable", &JsWorkbook::addDataTable)
       .function("getDataTable", &JsWorkbook::getDataTable)
       .function("removeDataTable", &JsWorkbook::removeDataTable)
@@ -333,6 +334,7 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("addPivotCacheRecord", &JsWorkbook::pivotCacheRecordAdd)
       .function("clearPivotCacheRecords", &JsWorkbook::pivotCacheRecordClear)
       .function("getPivotCacheRecordCount", &JsWorkbook::pivotCacheRecordCount)
+      .function("getPivotCacheRecordValue", &JsWorkbook::pivotCacheRecordValue)
       .function("setPivotCacheRecordBlank", &JsWorkbook::pivotCacheRecordSetBlank)
       .function("setPivotCacheRecordBool", &JsWorkbook::pivotCacheRecordSetBool)
       .function("setPivotCacheRecordError", &JsWorkbook::pivotCacheRecordSetError)
@@ -350,10 +352,9 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("setPivotDataField", &JsWorkbook::pivotDataFieldSet)
       .function("addPivotField", &JsWorkbook::pivotFieldAdd)
       .function("addPivotFieldItem", &JsWorkbook::pivotFieldAddItem)
-      .function("addPivotFieldSubtotalFunction", &JsWorkbook::pivotFieldAddSubtotalFn)
       .function("clearPivotFields", &JsWorkbook::pivotFieldClear)
       .function("clearPivotFieldItems", &JsWorkbook::pivotFieldClearItems)
-      .function("clearPivotFieldSubtotalFunctions", &JsWorkbook::pivotFieldClearSubtotalFns)
+      .function("setPivotFieldSubtotalFunctions", &JsWorkbook::pivotFieldSetSubtotalFns)
       .function("getPivotFieldCount", &JsWorkbook::pivotFieldCount)
       .function("getPivotField", &JsWorkbook::pivotFieldAt)
       .function("getPivotFieldItemCount", &JsWorkbook::pivotFieldItemCount)
@@ -494,9 +495,11 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("getThemeColors", &JsWorkbook::getThemeColors)
       .function("getThemeFonts", &JsWorkbook::getThemeFonts)
       .function("getThemeScriptFont", &JsWorkbook::getThemeScriptFont)
+      .function("listThemeScriptFonts", &JsWorkbook::listThemeScriptFonts)
       .function("setThemeColors", &JsWorkbook::setThemeColors)
       .function("setThemeFonts", &JsWorkbook::setThemeFonts)
       .function("setThemeScriptFont", &JsWorkbook::setThemeScriptFont)
+      .function("setVisibility", &JsWorkbook::setVisibility)
       .function("resetTheme", &JsWorkbook::resetTheme)
       .function("resolveColor", &JsWorkbook::resolveColor)
       .function("getEffectiveStyle", &JsWorkbook::getEffectiveStyle)
@@ -601,6 +604,7 @@ EMSCRIPTEN_BINDINGS(formulon) {
   function("getLocaleFacts", &locale_facts);
   function("listFunctionNames", &function_names);
   function("listLocaleErrorNames", &list_locale_error_names);
+  function("listProfileIds", &list_profile_ids);
   function("localizeFormula", &localize_formula);
   function("localizeFunctionName", &localize_function_name);
 }

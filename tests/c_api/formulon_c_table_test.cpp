@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "c_api/formulon_c.h"
+#include "formulon_c_out_index.h"
 #include "formulon_c_pivot_test_helpers.h"
 #include "formulon_c_record_arg.h"
 #include "formulon_c_setters.h"
@@ -1086,7 +1087,8 @@ TEST(FormulonCApiTable, TableIndexIsLocalToItsSheet) {
   WorkbookGuard wb;
   CreateSalesTable(wb);
   std::size_t other = 99;
-  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Other", &other), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Other", append_position(wb.handle), &other), 0)
+      << fm_get_last_error_message();
   const char* columns[] = {"Value"};
   ASSERT_EQ(fm_sheet_set_text(wb.handle, other, 0, 0, "Value"), 0);
   std::size_t local = 99;
@@ -1133,7 +1135,7 @@ TEST(FormulonCApiTable, FindTableLooksUpByNameAcrossTheWorkbook) {
   WorkbookGuard wb;
   CreateSalesTable(wb);
   std::size_t other = 99;
-  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Other", &other), 0);
+  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Other", append_position(wb.handle), &other), 0);
   AddOneColumnTable(wb.handle, other, 0U, "Tracked");
   AddOneColumnTable(wb.handle, other, 4U, "Later");
 
@@ -1168,7 +1170,7 @@ TEST(FormulonCApiTable, AddRefusesATakenNameWithAlreadyExists) {
   WorkbookGuard wb;
   CreateSalesTable(wb);
   std::size_t other = 99;
-  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Other", &other), 0);
+  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Other", append_position(wb.handle), &other), 0);
   ASSERT_EQ(fm_sheet_set_text(wb.handle, other, 0, 0, "Value"), 0);
   const char* columns[] = {"Value"};
   std::size_t index = 99;
@@ -1185,7 +1187,8 @@ TEST(FormulonCApiTable, RuntimeIdFollowsTheTableAcrossListRebuilds) {
   WorkbookGuard wb;
   CreateSalesTable(wb);
   std::size_t other = 99;
-  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Other", &other), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Other", append_position(wb.handle), &other), 0)
+      << fm_get_last_error_message();
   AddOneColumnTable(wb.handle, other, 0U, "Tracked");
   const std::uint32_t tracked = TableRuntimeId(wb.handle, other, 0);
   const std::uint32_t sales = TableRuntimeId(wb.handle, 0, 0);
@@ -1211,12 +1214,13 @@ TEST(FormulonCApiTable, RuntimeIdFollowsTheTableAcrossListRebuilds) {
   EXPECT_EQ(ResolvedTableName(wb.handle, tracked), "Tracked");
 
   // A row deletion on another sheet rebuilds the list.
-  ASSERT_EQ(fm_sheet_delete_rows(wb.handle, 0, 5U, 2U), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_delete_rows(wb.handle, 0, 5U, 6U), 0) << fm_get_last_error_message();
   EXPECT_EQ(ResolvedTableName(wb.handle, tracked), "Tracked");
 
   // Removing another sheet, with a table of its own, rebuilds it too.
   std::size_t doomed = 99;
-  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Doomed", &doomed), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Doomed", append_position(wb.handle), &doomed), 0)
+      << fm_get_last_error_message();
   AddOneColumnTable(wb.handle, doomed, 0U, "Gone");
   const std::uint32_t gone = TableRuntimeId(wb.handle, doomed, 0);
   ASSERT_EQ(fm_workbook_remove_sheet(wb.handle, doomed), 0) << fm_get_last_error_message();

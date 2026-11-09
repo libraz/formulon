@@ -36,7 +36,8 @@ struct WorkbookGuard {
 void MakeWorkbook(WorkbookGuard* wb) {
   ASSERT_EQ(fm_workbook_create_default(&wb->handle), 0);
   for (const char* name : {"Data", "S2"}) {
-    ASSERT_EQ(fm_workbook_add_sheet(wb->handle, name, ignored_index()), 0) << fm_get_last_error_message();
+    ASSERT_EQ(fm_workbook_add_sheet(wb->handle, name, append_position(wb->handle), ignored_index()), 0)
+        << fm_get_last_error_message();
   }
 }
 
@@ -272,16 +273,15 @@ TEST(FormulonCApiFormulaEntry, AddValidationRejectsUnparseableFormulasAndKeepsSt
   WorkbookGuard wb;
   MakeWorkbook(&wb);
   const fm_cell_rect_t range{0, 0, 9, 0};
-  ASSERT_EQ(fm_sheet_add_validation(wb.handle, 0, record_arg(MakeValidation(&range, 1, "0", "10")), ignored_index()),
-            0);
+  ASSERT_EQ(fm_sheet_add_validation(wb.handle, 0, record_arg(MakeValidation(&range, 1, "0", "10")), ignored_id()), 0);
   for (const std::string& formula : RejectedFormulas()) {
     SCOPED_TRACE(formula);
     ExpectParseRefusal(fm_sheet_add_validation(
-                           wb.handle, 0, record_arg(MakeValidation(&range, 1, formula.c_str(), "10")), ignored_index()),
+                           wb.handle, 0, record_arg(MakeValidation(&range, 1, formula.c_str(), "10")), ignored_id()),
                        formula);
     EXPECT_NE(std::string(fm_get_last_error_context()).find("formula1"), std::string::npos);
     ExpectParseRefusal(fm_sheet_add_validation(
-                           wb.handle, 0, record_arg(MakeValidation(&range, 1, "0", formula.c_str())), ignored_index()),
+                           wb.handle, 0, record_arg(MakeValidation(&range, 1, "0", formula.c_str())), ignored_id()),
                        formula);
     EXPECT_NE(std::string(fm_get_last_error_context()).find("formula2"), std::string::npos);
   }
@@ -296,26 +296,24 @@ TEST(FormulonCApiFormulaEntry, AddValidationAcceptsEveryListAndScalarShape) {
   const fm_cell_rect_t range{0, 0, 9, 0};
   constexpr std::uint8_t kList = 3;
   EXPECT_EQ(fm_sheet_add_validation(wb.handle, 0, record_arg(MakeValidation(&range, kList, "\"a,b,c\"", nullptr)),
-                                    ignored_index()),
+                                    ignored_id()),
             0);
   EXPECT_EQ(fm_sheet_add_validation(wb.handle, 0, record_arg(MakeValidation(&range, kList, "'S2'!$A$1:$A$5", nullptr)),
-                                    ignored_index()),
+                                    ignored_id()),
             0);
   EXPECT_EQ(fm_sheet_add_validation(wb.handle, 0, record_arg(MakeValidation(&range, kList, "Gone!$A$1:$A$5", nullptr)),
-                                    ignored_index()),
+                                    ignored_id()),
             0);
   EXPECT_EQ(fm_sheet_add_validation(wb.handle, 0, record_arg(MakeValidation(&range, kList, "ListName", nullptr)),
-                                    ignored_index()),
+                                    ignored_id()),
             0);
   EXPECT_EQ(
-      fm_sheet_add_validation(wb.handle, 0, record_arg(MakeValidation(&range, 1, "-3.5", "TODAY()")), ignored_index()),
+      fm_sheet_add_validation(wb.handle, 0, record_arg(MakeValidation(&range, 1, "-3.5", "TODAY()")), ignored_id()), 0);
+  EXPECT_EQ(
+      fm_sheet_add_validation(wb.handle, 0, record_arg(MakeValidation(&range, 7, "ISNUMBER(A1)", "")), ignored_id()),
       0);
   EXPECT_EQ(
-      fm_sheet_add_validation(wb.handle, 0, record_arg(MakeValidation(&range, 7, "ISNUMBER(A1)", "")), ignored_index()),
-      0);
-  EXPECT_EQ(
-      fm_sheet_add_validation(wb.handle, 0, record_arg(MakeValidation(&range, 0, nullptr, nullptr)), ignored_index()),
-      0);
+      fm_sheet_add_validation(wb.handle, 0, record_arg(MakeValidation(&range, 0, nullptr, nullptr)), ignored_id()), 0);
   std::size_t count = 0;
   ASSERT_EQ(fm_sheet_get_validation_count(wb.handle, 0, &count), 0);
   EXPECT_EQ(count, 7U);
@@ -348,18 +346,18 @@ TEST(FormulonCApiFormulaEntry, EveryFormulaSetterStoresTheEnteredSpelling) {
   constexpr std::uint8_t kList = 3;
   constexpr std::uint8_t kCustom = 7;
   ASSERT_EQ(fm_sheet_add_validation(wb.handle, 0, record_arg(MakeValidation(&range, kList, "\"1.50,1E3,+5\"", nullptr)),
-                                    ignored_index()),
+                                    ignored_id()),
             0);
   ASSERT_EQ(fm_sheet_add_validation(wb.handle, 0, record_arg(MakeValidation(&range, kList, "+$A$1:$A$3", nullptr)),
-                                    ignored_index()),
+                                    ignored_id()),
             0);
   ASSERT_EQ(fm_sheet_add_validation(
                 wb.handle, 0, record_arg(MakeValidation(&range, kList, "OFFSET($A$1,+0,-0,1E3/1E3+2,1)", nullptr)),
-                ignored_index()),
+                ignored_id()),
             0);
   ASSERT_EQ(
       fm_sheet_add_validation(
-          wb.handle, 0, record_arg(MakeValidation(&range, kCustom, "SUM(A1 : A2)>-1E-309", nullptr)), ignored_index()),
+          wb.handle, 0, record_arg(MakeValidation(&range, kCustom, "SUM(A1 : A2)>-1E-309", nullptr)), ignored_id()),
       0);
   const char* const expected[] = {"=\"1.50,1E3,+5\"", "=+$A$1:$A$3", "=OFFSET($A$1,0,0,1000/1000+2,1)",
                                   "=SUM(A1:A2)>0"};

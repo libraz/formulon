@@ -36,7 +36,6 @@
 #include "utils/error.h"
 #include "utils/expected.h"
 #include "utils/index_sort.h"
-#include "utils/strings.h"
 #include "value.h"
 #include "workbook.h"
 
@@ -46,14 +45,6 @@ namespace {
 using ValueRank = std::map<Value, std::size_t, pivot::ValueLess>;
 
 constexpr std::string_view kDetailTableStyle = "TableStyleMedium9";
-
-/// The locale's first sheet name without its trailing number.
-std::string_view sheet_word(std::string_view first_sheet_name) {
-  while (!first_sheet_name.empty() && strings::is_ascii_digit(first_sheet_name.back())) {
-    first_sheet_name.remove_suffix(1);
-  }
-  return first_sheet_name;
-}
 
 bool same_item(const Value& lhs, const Value& rhs) {
   return !pivot::value_less(lhs, rhs) && !pivot::value_less(rhs, lhs);
@@ -214,14 +205,7 @@ Expected<std::size_t, Error> Workbook::show_pivot_details(std::size_t sheet, std
   }
 
   const NewWorkbookDefaults& defaults = new_workbook_defaults(excel_profile_.locale);
-  const std::string_view word = sheet_word(defaults.sheet_name);
-  std::string name;
-  for (std::size_t n = 1;; ++n) {
-    name = std::string(word) + std::to_string(n);
-    if (sheet_by_name(name) == nullptr) {
-      break;
-    }
-  }
+  const std::string name = next_default_sheet_name();
 
   TableMetadata detail;
   detail.name = next_default_table_name(defaults.table_word);

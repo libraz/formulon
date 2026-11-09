@@ -159,7 +159,7 @@ Napi::Value Workbook::GetExternalLink(const Napi::CallbackInfo& info) {
     return ThrowStatus(env, rc);
   }
   Napi::Object item = Napi::Object::New(env);
-  item.Set("index", Napi::Number::New(env, rec.index));
+  item.Set("bookNumber", Napi::Number::New(env, rec.book_number));
   item.Set("relId", JsString(env, rec.rel_id));
   item.Set("partPath", JsString(env, rec.part_path));
   item.Set("target", JsStringOrNull(env, rec.target));
@@ -196,6 +196,16 @@ Napi::Value FunctionNames(const Napi::CallbackInfo& info) {
       arr, [](size_t* n) { return fm_get_function_count(n); },
       [](size_t i, const char** name) { return fm_get_function_name_at(i, name); },
       [&](const char* name) { return JsString(env, name); });
+  return ValueOrThrow(env, rc, arr);
+}
+
+Napi::Value ListProfileIds(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  Napi::Array arr = Napi::Array::New(env);
+  const fm_status_t rc = CollectList<const char*>(
+      arr, [](size_t* n) { return fm_get_profile_id_count(n); },
+      [](size_t i, const char** id) { return fm_get_profile_id_at(i, id); },
+      [&](const char* id) { return JsString(env, id); });
   return ValueOrThrow(env, rc, arr);
 }
 

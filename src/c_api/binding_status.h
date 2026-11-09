@@ -148,8 +148,6 @@ inline const char* status_name(std::int32_t status) {
       return "PRINT_INVALID_AREA";
     case FM_STATUS_PRINT_PAGE_COUNT_OVERFLOW:
       return "PRINT_PAGE_COUNT_OVERFLOW";
-    case FM_STATUS_THREADED_COMMENT_INVALID:
-      return "THREADED_COMMENT_INVALID";
     default:
       return nullptr;
   }

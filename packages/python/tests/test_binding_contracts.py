@@ -31,14 +31,17 @@ from formulon import (
     CellRect,
     CellStyle,
     CellXfInput,
-    Cfvo,
+    CfCellIsRuleInput,
+    CfDataBarInput,
+    CfDataBarRuleInput,
+    CfTimePeriodRuleInput,
+    CfValueObject,
     Color,
     ColorKind,
     Comment,
     ComparisonOperator,
-    ConditionalFormatInput,
-    DataBar,
     DefinedNameInput,
+    DrawingAnchorInput,
     DxfInput,
     ErrorCode,
     ExcelError,
@@ -854,8 +857,8 @@ class PivotFilterPersistenceTests(unittest.TestCase):
             wb.pivot_cache(cache_id).set_record_value(rec, 0, region)
             wb.pivot_cache(cache_id).set_record_value(rec, 1, amount)
         pivot = wb.sheet(0).add_pivot(PivotInput(name="Pivot1", cache_id=cache_id, anchor=CellAddress(0, 4)))
-        wb.sheet(0).pivot(pivot).add_field(PivotFieldInput(source_name="Region", axis=PivotAxis.ROW))
-        amount_field = wb.sheet(0).pivot(pivot).add_field(PivotFieldInput(source_name="Amount", axis=PivotAxis.VALUE))
+        wb.sheet(0).pivot(pivot).add_field(PivotFieldInput(field_index="Region", axis=PivotAxis.ROW))
+        amount_field = wb.sheet(0).pivot(pivot).add_field(PivotFieldInput(field_index="Amount", axis=PivotAxis.VALUE))
         wb.sheet(0).pivot(pivot).add_data_field(
             PivotDataFieldInput(name="Sum of Amount", field_index=amount_field, aggregation=PivotAggregation.SUM)
         )
@@ -864,8 +867,7 @@ class PivotFilterPersistenceTests(unittest.TestCase):
     @staticmethod
     def _filter() -> PivotFilterInput:
         return PivotFilterInput(
-            axis=PivotAxis.ROW,
-            field_name="Region",
+            field_index="Region",
             type=PivotFilterKind.VALUE_GREATER_THAN,
             value=15.0,
         )
@@ -878,8 +880,7 @@ class PivotFilterPersistenceTests(unittest.TestCase):
             got = wb.sheet(0).pivot(pivot).list_filters()[0]
         finally:
             wb.close()
-        self.assertEqual(got.axis, PivotAxis.ROW)
-        self.assertEqual(got.field_name, "Region")
+        self.assertEqual(got.field_index, 0)
         self.assertEqual(got.type, PivotFilterKind.VALUE_GREATER_THAN)
         self.assertEqual(got.value, 15.0)
 
@@ -905,7 +906,7 @@ class PivotFilterPersistenceTests(unittest.TestCase):
             self.assertEqual(len(reloaded.sheet(0).list_pivots()), 1)
             self.assertEqual(len(reloaded.sheet(0).pivot(0).list_filters()), 1)
             got = reloaded.sheet(0).pivot(0).list_filters()[0]
-            self.assertEqual((got.field_name, got.type), ("Region", PivotFilterKind.VALUE_GREATER_THAN))
+            self.assertEqual((got.field_index, got.type), (0, PivotFilterKind.VALUE_GREATER_THAN))
             self.assertEqual(got.value, 15.0)
 
     def test_out_of_range_index_is_rejected(self) -> None:
@@ -1156,9 +1157,8 @@ class CollectionReaderAllocationTests(unittest.TestCase):
             for r in range(n):
                 wb.sheet(0).set_number(r, 0, float(r + 100))
             wb.sheet(0).add_cf_rule(
-                ConditionalFormatInput(
+                CfCellIsRuleInput(
                     ranges=[CellRect(0, 0, n - 1, 0)],
-                    type=1,
                     operator=ComparisonOperator.GREATER_THAN_OR_EQUAL,
                     formula1="10",
                     dxf_index=dxf_index,
@@ -1277,12 +1277,7 @@ class EvaluateCfRangeDefaultTests(unittest.TestCase):
             dxf_index = wb.ooxml.add_dxf(DxfInput())
             wb.sheet(0).set_number(0, 0, 0.0)
             wb.sheet(0).add_cf_rule(
-                ConditionalFormatInput(
-                    ranges=[CellRect(0, 0, 0, 0)],
-                    type=15,
-                    time_period=0,
-                    dxf_index=dxf_index,
-                ),
+                CfTimePeriodRuleInput(ranges=[CellRect(0, 0, 0, 0)], time_period=0, dxf_index=dxf_index),
             )
             wb.recalc()
             omitted = wb.sheet(0).evaluate_cf_range(CellRect(0, 0, 0, 0))
@@ -1298,12 +1293,7 @@ class EvaluateCfRangeDefaultTests(unittest.TestCase):
             dxf_index = wb.ooxml.add_dxf(DxfInput())
             wb.sheet(0).set_number(0, 0, 45366.0)  # 2024-03-15
             wb.sheet(0).add_cf_rule(
-                ConditionalFormatInput(
-                    ranges=[CellRect(0, 0, 0, 0)],
-                    type=15,
-                    time_period=0,
-                    dxf_index=dxf_index,
-                ),
+                CfTimePeriodRuleInput(ranges=[CellRect(0, 0, 0, 0)], time_period=0, dxf_index=dxf_index),
             )
             wb.recalc()
             omitted = wb.sheet(0).evaluate_cf_range(CellRect(0, 0, 0, 0))
@@ -1400,7 +1390,7 @@ class ArgumentScopeTests(unittest.TestCase):
 
     def test_a_value_of_the_wrong_type_is_rejected_before_any_allocation(self) -> None:
         with Workbook.create_default() as wb:
-            allocations = self._assert_rejected_without_leak(lambda: wb.format_value("abc"), TypeError)
+            allocations = self._assert_rejected_without_leak(lambda: wb.format_value("abc", "General"), TypeError)
             self.assertEqual(allocations, 0)
 
 
@@ -1436,7 +1426,7 @@ class ValueValidationTests(unittest.TestCase):
         value = Value(kind=1, number=5.5)
         self.assertIs(value.kind, ValueKind.NUMBER)
         with Workbook.create_default() as wb:
-            self.assertEqual(wb.format_value(value).text, "5.5")
+            self.assertEqual(wb.format_value(value, "General").text, "5.5")
 
     def test_a_missing_or_extra_payload_is_a_value_error(self) -> None:
         for kwargs in (
@@ -1473,7 +1463,11 @@ class PackedIntegerGuardTests(unittest.TestCase):
                 with self.subTest(from_col_offset_emu=bad):
                     with self.assertRaises(exception):
                         wb.sheet(0).add_shape(
-                            ShapeInput(anchor_kind=AnchorKind.TWO_CELL, to_row=5, to_col=4, from_col_offset_emu=bad)
+                            ShapeInput(
+                                anchor=DrawingAnchorInput(
+                                    kind=AnchorKind.TWO_CELL, to_row=5, to_col=4, from_col_offset_emu=bad
+                                )
+                            )
                         )
             self.assertEqual(wb.sheet(0).list_shapes(), [])
 
@@ -1489,10 +1483,11 @@ class PackedIntegerGuardTests(unittest.TestCase):
         with Workbook.create_default() as wb:
             for bad, exception in ((1.5, TypeError), (256, ValueError), (-1, ValueError)):
                 with self.subTest(min_length_pct=bad):
-                    rule = ConditionalFormatInput(
+                    rule = CfDataBarRuleInput(
                         ranges=[CellRect(0, 0, 2, 0)],
-                        type=3,
-                        data_bar=DataBar(Cfvo(3), Cfvo(4), _rgb(0, 0, 255), min_length_pct=bad),
+                        data_bar=CfDataBarInput(
+                            CfValueObject(3), CfValueObject(4), _rgb(0, 0, 255), min_length_pct=bad
+                        ),
                     )
                     with self.assertRaises(exception):
                         wb.sheet(0).add_cf_rule(rule)

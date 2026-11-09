@@ -56,8 +56,8 @@ def add_cache(wb: Workbook, source_sheet: str) -> formulon.PivotCache:
 
 def add_pivot(sheet: formulon.Sheet, cache: formulon.PivotCache, name: str = "P1") -> formulon.Pivot:
     pivot = sheet.add_pivot(formulon.PivotInput(name=name, cache_id=cache.cache_id, anchor=formulon.CellAddress(0, 4)))
-    pivot.add_field(formulon.PivotFieldInput(source_name="Region", axis=PivotAxis.ROW))
-    amount = pivot.add_field(formulon.PivotFieldInput(source_name="Amount", axis=PivotAxis.VALUE))
+    pivot.add_field(formulon.PivotFieldInput(field_index="Region", axis=PivotAxis.ROW))
+    amount = pivot.add_field(formulon.PivotFieldInput(field_index="Amount", axis=PivotAxis.VALUE))
     pivot.add_data_field(
         formulon.PivotDataFieldInput(
             name="Sum of Amount", field_index=amount, aggregation=formulon.PivotAggregation.SUM
@@ -150,8 +150,7 @@ class RenamedMemberTests(SurfaceTestCase):
                     "update_style_options",
                     "update_options",
                     "update_field_item",
-                    "add_field_subtotal_function",
-                    "clear_field_subtotal_functions",
+                    "set_field_subtotal_functions",
                     "set_anchor",
                 ),
             )
@@ -164,6 +163,8 @@ class RenamedMemberTests(SurfaceTestCase):
                     "update_item",
                     "add_field_subtotal_fn",
                     "clear_field_subtotal_fns",
+                    "add_field_subtotal_function",
+                    "clear_field_subtotal_functions",
                     "add_field_shared_item",
                 ),
             )
@@ -738,7 +739,7 @@ class ProtectionAndValidationDefaultsTests(SurfaceTestCase):
             formulon.DataValidation,
             formulon.DataValidationInput,
             formulon.ConditionalFormat,
-            formulon.ConditionalFormatInput,
+            formulon.CfCellIsRuleInput,
         ):
             self.assertFieldsRenamed(cls, ("operator",), ("op",))
         self.assertFieldsRenamed(formulon.DataValidation, ("show_in_cell_dropdown",), ("show_dropdown",))
@@ -754,11 +755,11 @@ class UnitSuffixTests(SurfaceTestCase):
         self.assertTrue({f"{name}_stated" for name in inches} <= field_names(formulon.PageMargins))
         self.assertTrue(
             {f"{side}_in" for side in ("left", "right", "top", "bottom", "header", "footer")}
-            <= field_names(formulon.MarginsPt)
+            <= field_names(formulon.PaginationMargins)
         )
         for side in ("left", "right", "top", "bottom", "header", "footer"):
             self.assertNotIn(side, field_names(formulon.PageMargins))
-            self.assertNotIn(side, field_names(formulon.MarginsPt))
+            self.assertNotIn(side, field_names(formulon.PaginationMargins))
 
     def test_pagination_reports_percent_scale_and_inch_margins(self) -> None:
         with Workbook.create_default() as wb:
@@ -852,10 +853,9 @@ class UnitSuffixTests(SurfaceTestCase):
             shape = ws.add_shape(
                 formulon.ShapeInput(
                     preset_geometry="rect",
-                    anchor_kind=formulon.AnchorKind.ONE_CELL,
-                    from_row=2,
-                    width_emu=914400,
-                    height_emu=457200,
+                    anchor=formulon.DrawingAnchorInput(
+                        kind=formulon.AnchorKind.ONE_CELL, from_row=2, width_emu=914400, height_emu=457200
+                    ),
                     rotation_deg=45.0,
                 )
             )
@@ -883,7 +883,7 @@ class UnitSuffixTests(SurfaceTestCase):
     def test_phonetic_font_and_icon_and_dxf_references_are_indexes(self) -> None:
         self.assertFieldsRenamed(formulon.PhoneticProperties, ("font_index",), ("font_id",))
         self.assertFieldsRenamed(formulon.ConditionalFormat, ("dxf_index",), ("dxf_id",))
-        self.assertFieldsRenamed(formulon.ConditionalFormatInput, ("dxf_index",), ("dxf_id",))
+        self.assertFieldsRenamed(formulon.CfExpressionRuleInput, ("dxf_index",), ("dxf_id",))
         self.assertFieldsRenamed(formulon.CellXf, ("style_xf_index",), ("xf_id",))
         self.assertFieldsRenamed(formulon.CfIcon, ("icon_index",), ("icon_id",))
         self.assertFieldsRenamed(formulon.TableStyleElement, ("dxf_index",), ("dxf_id",))
@@ -952,8 +952,9 @@ class RenamedFieldTests(SurfaceTestCase):
             ("font", "num_fmt_code", "locked", "hidden"),
         )
 
-    def test_drawing_properties_has_one_format_name_and_no_media_path(self) -> None:
-        self.assertFieldsRenamed(formulon.DrawingProperties, ("format",), ("image_format", "media_path"))
+    def test_image_format_is_a_picture_field_and_not_a_common_drawing_field(self) -> None:
+        self.assertFieldsRenamed(formulon.PictureProperties, ("format",), ("image_format", "media_path"))
+        self.assertFieldsRenamed(formulon.DrawingProperties, (), ("format", "image_format", "media_path"))
 
     def test_phonetic_run_spans_start_and_end(self) -> None:
         self.assertFieldsRenamed(formulon.PhoneticRun, ("start", "end"), ("sb", "eb"))
@@ -1183,9 +1184,9 @@ class PivotFieldItemTests(SurfaceTestCase):
     def test_subtotal_functions_are_listed_under_the_spelled_out_name(self) -> None:
         with Workbook.create_default() as wb:
             pivot = self._pivot(wb)
-            pivot.add_field_subtotal_function(0, formulon.PivotAggregation.SUM)
+            pivot.set_field_subtotal_functions(0, [formulon.PivotAggregation.SUM])
             self.assertEqual(pivot.list_fields()[0].subtotal_functions, [formulon.PivotAggregation.SUM])
-            pivot.clear_field_subtotal_functions(0)
+            pivot.set_field_subtotal_functions(0, [])
             self.assertEqual(pivot.list_fields()[0].subtotal_functions, [])
 
     def test_set_anchor_takes_one_cell(self) -> None:

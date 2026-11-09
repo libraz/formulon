@@ -16,6 +16,7 @@
 #ifndef FORMULON_IO_EXT_LST_REFS_H_
 #define FORMULON_IO_EXT_LST_REFS_H_
 
+#include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <optional>
@@ -102,9 +103,11 @@ using FormulaTranslate = std::optional<std::string> (*)(std::string_view, const 
 /// container's `count` attribute is kept in step. An sqref that does not
 /// parse is left alone. When `clone` is given, the same pass then appends
 /// each sparkline copy it describes, its source translated with `translate`
-/// (required in that case). Returns true when `xml` changed.
+/// (required in that case). Each sparkline group removed appends its
+/// position to a non-null `removed_groups`, counted in the list as it stood
+/// just before that removal. Returns true when `xml` changed.
 bool remap_ext_lst_sqrefs(std::string& xml, const SqrefRemap& remap, const SparklineClone* clone = nullptr,
-                          FormulaTranslate translate = nullptr);
+                          FormulaTranslate translate = nullptr, std::vector<std::size_t>* removed_groups = nullptr);
 
 }  // namespace formulon::io
 

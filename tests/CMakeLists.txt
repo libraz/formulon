@@ -34,6 +34,8 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/workbook_test.cpp
   unit/workbook_auto_calc_test.cpp
   unit/workbook_tables_test.cpp
+  unit/workbook_collection_identity_test.cpp
+  unit/collection_name_formula_fold_test.cpp
   unit/workbook_table_column_rename_test.cpp
   unit/derived_guid_test.cpp
   unit/workbook_external_bind_test.cpp

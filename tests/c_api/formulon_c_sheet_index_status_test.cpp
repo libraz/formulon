@@ -221,7 +221,7 @@ TEST(FormulonCApiSheetIndexStatus, SheetCollectionIndexIsSheetIndexOutOfRange) {
   EXPECT_EQ(fm_workbook_remove_sheet(wb.handle, kBad), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(fm_workbook_rename_sheet(wb.handle, kBad, "Other"), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(fm_workbook_move_sheet(wb.handle, kBad, 0U), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
-  EXPECT_EQ(fm_workbook_move_sheet(wb.handle, 0U, kBad), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(fm_workbook_move_sheet(wb.handle, 0U, kBad + 1U), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(fm_workbook_copy_sheet(wb.handle, kBad, 0U, nullptr, &index), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(fm_workbook_copy_sheet(wb.handle, 0U, kBad + 1U, nullptr, &index), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(AddTable(wb.handle, kBad, record_arg(fm_cell_rect_t{0, 0, 1, 0}), "T", columns, 1U, nullptr, 1, 0, &index),

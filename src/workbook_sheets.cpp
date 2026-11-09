@@ -112,6 +112,19 @@ Expected<void, Error> Workbook::check_sheet_capacity() const {
   return check_sheet_headroom(sheets_.size());
 }
 
+std::string Workbook::next_default_sheet_name() const {
+  std::string_view word = new_workbook_defaults(excel_profile_.locale).sheet_name;
+  while (!word.empty() && strings::is_ascii_digit(word.back())) {
+    word.remove_suffix(1);
+  }
+  for (std::size_t n = 1;; ++n) {
+    std::string name = std::string(word) + std::to_string(n);
+    if (sheet_by_name(name) == nullptr) {
+      return name;
+    }
+  }
+}
+
 Expected<Sheet*, Error> Workbook::add_sheet_entered(std::string name) {
   RETURN_IF_ERROR(validate_entered_sheet_name(name, excel_profile_.host));
   return add_sheet_validated(std::move(name));
@@ -368,9 +381,8 @@ Expected<void, Error> Workbook::remove_sheet_locked(std::uint32_t index) {
   for (std::size_t i = 0; i < defined_names_.size(); ++i) {
     const DefinedName& entry = defined_names_[i];
     promotes[i] = entry.local_sheet_id == static_cast<std::int32_t>(index) && !has_book_namesake(entry.name) &&
-                  std::any_of(rebound_names.begin(), rebound_names.end(), [&entry](const std::string& name) {
-                    return strings::case_insensitive_eq(name, entry.name);
-                  });
+                  std::any_of(rebound_names.begin(), rebound_names.end(),
+                              [&entry](const std::string& name) { return collection_names::equal(name, entry.name); });
   }
   const parser::SheetRemovalTransform removal(pre_removal_sheet_order, index, std::move(rebound_names));
   std::vector<TableLoss> table_losses;

@@ -6,8 +6,8 @@ import unittest
 
 from formulon import (
     CellRect,
+    CfExpressionRuleInput,
     Comment,
-    ConditionalFormatInput,
     DataValidationInput,
     FormulonError,
     InvalidArgumentError,
@@ -77,7 +77,7 @@ class ProtectedRangeTests(unittest.TestCase):
                 self.assertEqual(ranges[1].spin_count, 100000)
                 self.assertEqual(ranges[1].security_descriptor, "O:WDG:WD")
 
-                reloaded.sheet(0).insert_rows(0, 2)
+                reloaded.sheet(0).insert_rows(0, 1)
                 self.assertEqual(
                     reloaded.sheet(0).list_protected_ranges()[0].ranges,
                     [CellRect(3, 1, 4, 2), CellRect(6, 4, 6, 4)],
@@ -128,7 +128,7 @@ class RangeInputTests(unittest.TestCase):
             with self.assertRaises(TypeError):
                 DataValidationInput(type=3)  # type: ignore[call-arg]
             with self.assertRaises(TypeError):
-                ConditionalFormatInput(type=0)  # type: ignore[call-arg]
+                CfExpressionRuleInput()  # type: ignore[call-arg]
             with self.assertRaises(TypeError):
                 wb.sheet(0).add_table(TableInput(name="T", columns=["A"]))  # type: ignore[call-arg]
             self.assertEqual(wb.sheet(0).list_tables(), [])

@@ -477,7 +477,7 @@ TEST(FormulonCApiPivot, ScalarEnumMutatorsRejectRawValuesWithoutMutation) {
   const fm_status_t expected = static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
   for (const std::int32_t raw : invalid) {
     EXPECT_EQ(fm_sheet_set_pivot_field_axis(wb.handle, 0, pivot_index, 0, raw), expected) << raw;
-    EXPECT_EQ(fm_sheet_add_pivot_field_subtotal_function(wb.handle, 0, pivot_index, 0, raw), expected) << raw;
+    EXPECT_EQ(fm_sheet_set_pivot_field_subtotal_functions(wb.handle, 0, pivot_index, 0, &raw, 1), expected) << raw;
     EXPECT_EQ(SetPivotFieldSort(wb.handle, 0, pivot_index, 0, raw, nullptr), expected) << raw;
     EXPECT_EQ(SetPivotFieldDateGroup(wb.handle, 0, pivot_index, 0, static_cast<std::uint32_t>(raw),
                                      FM_PIVOT_CALENDAR_GREGORIAN, 1, kAutoBound, kAutoBound),
@@ -1199,4 +1199,85 @@ TEST(FormulonCApiPivot, PivotCacheDateItemsSaveWithExcelHints) {
               std::string::npos)
         << def;
   }
+}
+
+TEST(FormulonCApiPivot, SetFieldSubtotalFunctionsReplacesTheSet) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  std::uint32_t cache_id = 0;
+  std::size_t pivot_index = 0;
+  ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_index), 0) << fm_get_last_error_message();
+
+  const std::int32_t sum_count[] = {FM_PIVOT_AGGREGATION_SUM, FM_PIVOT_AGGREGATION_COUNT};
+  ASSERT_EQ(fm_sheet_set_pivot_field_subtotal_functions(wb.handle, 0, pivot_index, 0, sum_count, 2), 0)
+      << fm_get_last_error_message();
+  fm_pivot_field_info_t info = FM_STRUCT_INIT(fm_pivot_field_info_t);
+  ASSERT_EQ(fm_sheet_get_pivot_field_at(wb.handle, 0, pivot_index, 0, &info), 0);
+  EXPECT_EQ(info.subtotal_functions, (1U << FM_PIVOT_AGGREGATION_SUM) | (1U << FM_PIVOT_AGGREGATION_COUNT));
+
+  const std::int32_t max_only[] = {FM_PIVOT_AGGREGATION_MAX};
+  ASSERT_EQ(fm_sheet_set_pivot_field_subtotal_functions(wb.handle, 0, pivot_index, 0, max_only, 1), 0);
+  ASSERT_EQ(fm_sheet_get_pivot_field_at(wb.handle, 0, pivot_index, 0, &info), 0);
+  EXPECT_EQ(info.subtotal_functions, 1U << FM_PIVOT_AGGREGATION_MAX);
+
+  // A duplicate is refused and leaves the set as it was.
+  const std::int32_t twice[] = {FM_PIVOT_AGGREGATION_SUM, FM_PIVOT_AGGREGATION_SUM};
+  EXPECT_EQ(fm_sheet_set_pivot_field_subtotal_functions(wb.handle, 0, pivot_index, 0, twice, 2),
+            FM_STATUS_INVALID_ARGUMENT);
+  ASSERT_EQ(fm_sheet_get_pivot_field_at(wb.handle, 0, pivot_index, 0, &info), 0);
+  EXPECT_EQ(info.subtotal_functions, 1U << FM_PIVOT_AGGREGATION_MAX);
+
+  ASSERT_EQ(fm_sheet_set_pivot_field_subtotal_functions(wb.handle, 0, pivot_index, 0, nullptr, 0), 0);
+  ASSERT_EQ(fm_sheet_get_pivot_field_at(wb.handle, 0, pivot_index, 0, &info), 0);
+  EXPECT_EQ(info.subtotal_functions, 0U);
+}
+
+TEST(FormulonCApiPivot, CacheRecordValueReadsWhatTheSettersWrite) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  std::uint32_t cache_id = 0;
+  std::size_t pivot_index = 0;
+  ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_index), 0) << fm_get_last_error_message();
+
+  fm_value_t value{};
+  // The number setter writes an inline value, so the cell reads back as written.
+  ASSERT_EQ(fm_workbook_get_pivot_cache_record_value(wb.handle, cache_id, 1, 0, &value), 0);
+  ASSERT_EQ(value.kind, FM_VALUE_KIND_NUMBER);
+  EXPECT_DOUBLE_EQ(value.u.number, 1.0);
+  ASSERT_EQ(fm_workbook_set_pivot_cache_record_text(wb.handle, cache_id, 1, 0, "South"), 0);
+  ASSERT_EQ(fm_workbook_get_pivot_cache_record_value(wb.handle, cache_id, 1, 0, &value), 0);
+  ASSERT_EQ(value.kind, FM_VALUE_KIND_TEXT);
+  EXPECT_STREQ(value.u.text, "South");
+  ASSERT_EQ(fm_workbook_get_pivot_cache_record_value(wb.handle, cache_id, 0, 1, &value), 0);
+  ASSERT_EQ(value.kind, FM_VALUE_KIND_NUMBER);
+  EXPECT_DOUBLE_EQ(value.u.number, 100.0);
+
+  ASSERT_EQ(fm_workbook_set_pivot_cache_record_number(wb.handle, cache_id, 0, 1, 42.0), 0);
+  ASSERT_EQ(fm_workbook_get_pivot_cache_record_value(wb.handle, cache_id, 0, 1, &value), 0);
+  EXPECT_DOUBLE_EQ(value.u.number, 42.0);
+  ASSERT_EQ(fm_workbook_set_pivot_cache_record_bool(wb.handle, cache_id, 0, 1, 1), 0);
+  ASSERT_EQ(fm_workbook_get_pivot_cache_record_value(wb.handle, cache_id, 0, 1, &value), 0);
+  EXPECT_EQ(value.kind, FM_VALUE_KIND_BOOL);
+  ASSERT_EQ(fm_workbook_set_pivot_cache_record_blank(wb.handle, cache_id, 0, 1), 0);
+  ASSERT_EQ(fm_workbook_get_pivot_cache_record_value(wb.handle, cache_id, 0, 1, &value), 0);
+  EXPECT_EQ(value.kind, FM_VALUE_KIND_BLANK);
+
+  EXPECT_EQ(fm_workbook_get_pivot_cache_record_value(wb.handle, cache_id, 4, 0, &value), FM_STATUS_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(fm_workbook_get_pivot_cache_record_value(wb.handle, cache_id, 0, 2, &value), FM_STATUS_INDEX_OUT_OF_RANGE);
+}
+
+TEST(FormulonCApiPivot, PivotNamesAreUniquePerSheetIgnoringCase) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  std::uint32_t cache_id = 0;
+  std::size_t pivot_index = 0;
+  ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_index), 0) << fm_get_last_error_message();  // "PT"
+
+  std::size_t other = 99;
+  EXPECT_EQ(AddPivot(wb.handle, 0, "pt", cache_id, 10U, 10U, &other), FM_STATUS_ALREADY_EXISTS);
+  ASSERT_EQ(AddPivot(wb.handle, 0, "Other", cache_id, 10U, 10U, &other), 0) << fm_get_last_error_message();
+
+  EXPECT_EQ(fm_sheet_rename_pivot(wb.handle, 0, other, "Pt"), FM_STATUS_ALREADY_EXISTS);
+  // A pivot may be renamed to a case variant of its own name.
+  EXPECT_EQ(fm_sheet_rename_pivot(wb.handle, 0, other, "OTHER"), 0) << fm_get_last_error_message();
 }

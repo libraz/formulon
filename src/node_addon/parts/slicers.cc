@@ -1,5 +1,4 @@
-// Table-slicer bindings: list, add, update and remove the slicers of a
-// worksheet.
+// Table-slicer bindings: read, add and update the slicers of a worksheet.
 
 #include <cstddef>
 #include <cstdint>
@@ -13,50 +12,44 @@ namespace {
 
 struct SlicerText {
   std::string name;
+  std::string description;
   std::string caption;
   std::string style;
 };
 
-// Reads the fields `spec` carries into a patch: an omitted key keeps, and `null` clears `style`. The C ABI
-// requires the four anchor cells together.
-fm_slicer_patch_t PullSlicer(CheckedSpecReader& reader, const Napi::Object& spec, SlicerText& store) {
-  fm_slicer_patch_t s = FM_STRUCT_INIT(fm_slicer_patch_t);
-  s.name_op = PatchString(reader, spec, "name", false, &store.name, &s.name);
-  s.caption_op = PatchString(reader, spec, "caption", false, &store.caption, &s.caption);
-  s.style_op = PatchString(reader, spec, "style", true, &store.style, &s.style);
-  s.column_count_op = PatchU32(reader, spec, "columnCount", &s.column_count);
-  s.row_height_emu_op = PatchI64(reader, spec, "rowHeightEmu", &s.row_height_emu);
-  s.from_row_op = PatchU32(reader, spec, "fromRow", &s.from_row);
-  s.from_col_op = PatchU32(reader, spec, "fromCol", &s.from_col);
-  s.from_row_offset_emu_op = PatchI64(reader, spec, "fromRowOffsetEmu", &s.from_row_offset_emu);
-  s.from_col_offset_emu_op = PatchI64(reader, spec, "fromColOffsetEmu", &s.from_col_offset_emu);
-  s.to_row_op = PatchU32(reader, spec, "toRow", &s.to_row);
-  s.to_col_op = PatchU32(reader, spec, "toCol", &s.to_col);
-  s.to_row_offset_emu_op = PatchI64(reader, spec, "toRowOffsetEmu", &s.to_row_offset_emu);
-  s.to_col_offset_emu_op = PatchI64(reader, spec, "toColOffsetEmu", &s.to_col_offset_emu);
-  s.sort_order_op = PatchI32(reader, spec, "sortOrder", &s.sort_order);
-  s.cross_filter_op = PatchI32(reader, spec, "crossFilter", &s.cross_filter);
+// Reads a slicer to add: the common placement keys plus the slicer keys; an omitted key takes the default.
+fm_slicer_spec_t PullSlicerSpec(CheckedSpecReader& reader, const Napi::Object& spec, SlicerText& store) {
+  fm_slicer_spec_t s = FM_STRUCT_INIT(fm_slicer_spec_t);
+  s.placement = PullPlacement(reader, spec, store.name, store.description);
+  s.column_count = reader.U32(spec, "columnCount", 0U);
+  s.sort_order = reader.I32(spec, "sortOrder", FM_SLICER_SORT_ORDER_ASCENDING);
+  s.cross_filter = reader.I32(spec, "crossFilter", FM_SLICER_CROSS_FILTER_SHOW_ITEMS_WITH_DATA_AT_TOP);
+  s.row_height_emu = reader.I64(spec, "rowHeightEmu", 0);
+  s.caption = reader.String(spec, "caption", &store.caption) ? store.caption.c_str() : nullptr;
+  s.style = reader.String(spec, "style", &store.style) ? store.style.c_str() : nullptr;
   return s;
 }
 
-// The JS `Slicer` record of `s`.
+// Reads the slicer fields `spec` carries into a patch: an omitted key keeps, and `null` clears `style`.
+fm_slicer_patch_t PullSlicerPatch(CheckedSpecReader& reader, const Napi::Object& spec, SlicerText& store) {
+  fm_slicer_patch_t s = FM_STRUCT_INIT(fm_slicer_patch_t);
+  s.column_count_op = PatchU32(reader, spec, "columnCount", &s.column_count);
+  s.sort_order_op = PatchI32(reader, spec, "sortOrder", &s.sort_order);
+  s.cross_filter_op = PatchI32(reader, spec, "crossFilter", &s.cross_filter);
+  s.row_height_emu_op = PatchI64(reader, spec, "rowHeightEmu", &s.row_height_emu);
+  s.caption_op = PatchString(reader, spec, "caption", false, &store.caption, &s.caption);
+  s.style_op = PatchString(reader, spec, "style", true, &store.style, &s.style);
+  return s;
+}
+
+// The JS `Slicer` record of `s`: the slicer-specific fields only.
 Napi::Object SlicerToJs(Napi::Env env, const fm_slicer_info_t& s) {
   Napi::Object item = Napi::Object::New(env);
   item.Set("objectId", JsNumber(env, s.object_id));
   item.Set("columnCount", JsNumber(env, s.column_count));
   item.Set("sortOrder", JsNumber(env, s.sort_order));
   item.Set("crossFilter", JsNumber(env, s.cross_filter));
-  item.Set("anchorKind", JsNumber(env, s.anchor_kind));
-  item.Set("fromRow", JsNumber(env, s.from_row));
-  item.Set("fromCol", JsNumber(env, s.from_col));
-  item.Set("fromRowOffsetEmu", JsNumber(env, static_cast<double>(s.from_row_offset_emu)));
-  item.Set("fromColOffsetEmu", JsNumber(env, static_cast<double>(s.from_col_offset_emu)));
-  item.Set("toRow", JsNumber(env, s.to_row));
-  item.Set("toCol", JsNumber(env, s.to_col));
-  item.Set("toRowOffsetEmu", JsNumber(env, static_cast<double>(s.to_row_offset_emu)));
-  item.Set("toColOffsetEmu", JsNumber(env, static_cast<double>(s.to_col_offset_emu)));
   item.Set("rowHeightEmu", JsNumber(env, static_cast<double>(s.row_height_emu)));
-  item.Set("name", JsString(env, s.name));
   item.Set("caption", JsString(env, s.caption));
   item.Set("cacheName", JsString(env, s.cache_name));
   item.Set("tableName", JsString(env, s.table_name));
@@ -66,20 +59,6 @@ Napi::Object SlicerToJs(Napi::Env env, const fm_slicer_info_t& s) {
 }
 
 }  // namespace
-
-Napi::Value Workbook::ListSlicers(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return ThrowInvalidHandle(env);
-  }
-  Napi::Array arr = Napi::Array::New(env);
-  const uint32_t sheet = ArgU32(info, 0);
-  const fm_status_t rc = CollectList<fm_slicer_info_t>(
-      arr, [&](size_t* n) { return fm_sheet_get_slicer_count(handle_, sheet, n); },
-      [&](size_t i, fm_slicer_info_t* s) { return fm_sheet_get_slicer_at(handle_, sheet, i, s); },
-      [&](const fm_slicer_info_t& s) { return SlicerToJs(env, s); });
-  return ValueOrThrow(env, rc, arr);
-}
 
 Napi::Value Workbook::GetSlicer(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
@@ -99,7 +78,7 @@ Napi::Value Workbook::AddSlicer(const Napi::CallbackInfo& info) {
   }
   CheckedSpecReader reader(env);
   SlicerText store;
-  const fm_slicer_patch_t slicer = PullSlicer(reader, ArgObject(info, 4), store);
+  const fm_slicer_spec_t slicer = PullSlicerSpec(reader, ArgObject(info, 4), store);
   if (!reader.ok()) {
     return env.Undefined();
   }
@@ -116,15 +95,11 @@ Napi::Value Workbook::UpdateSlicer(const Napi::CallbackInfo& info) {
   }
   CheckedSpecReader reader(env);
   SlicerText store;
-  const fm_slicer_patch_t slicer = PullSlicer(reader, ArgObject(info, 2), store);
+  const fm_slicer_patch_t slicer = PullSlicerPatch(reader, ArgObject(info, 2), store);
   if (!reader.ok()) {
     return env.Undefined();
   }
   return ValueOrThrow(env, fm_sheet_update_slicer(handle_, ArgU32(info, 0), ArgU32(info, 1), &slicer), env.Undefined());
-}
-
-Napi::Value Workbook::RemoveSlicer(const Napi::CallbackInfo& info) {
-  return InvokeSheetCall(info, &fm_sheet_remove_slicer);
 }
 
 }  // namespace formulon_node

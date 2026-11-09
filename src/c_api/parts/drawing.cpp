@@ -3,6 +3,7 @@
 // objects, reading and inserting pictures, and moving, reordering,
 // capturing, restoring and removing pictures and charts.
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <string>
@@ -10,18 +11,23 @@
 
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
+#include "c_api/parts/drawing_anchor.h"
 #include "c_api/parts/enum_map.h"
 #include "c_api/parts/struct_v1_sizes.h"
 #include "drawing/drawing_edit.h"
+#include "drawing/drawing_geometry.h"
 #include "drawing/drawing_xml.h"
 #include "drawing/image_header.h"
+#include "drawing/shape_edit.h"
+#include "drawing/slicer_edit.h"
 #include "io/ooxml/part_dom.h"
 #include "passthrough_part.h"
 #include "utils/error.h"
 #include "workbook.h"
 
 using formulon::c_api::parts::anchor_kind_from_c;
-using formulon::c_api::parts::check_anchor_enums;
+using formulon::c_api::parts::AnchorPlan;
+using formulon::c_api::parts::check_enum_domain;
 using formulon::c_api::parts::check_index;
 using formulon::c_api::parts::check_record_size;
 using formulon::c_api::parts::check_sheet_index;
@@ -29,10 +35,14 @@ using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::copy_owned_bytes;
 using formulon::c_api::parts::edit_as_from_c;
-using formulon::c_api::parts::fill_anchor;
+using formulon::c_api::parts::fill_drawing_anchor;
 using formulon::c_api::parts::finish_status;
 using formulon::c_api::parts::fresh_read_scratch;
+using formulon::c_api::parts::invalid_argument;
 using formulon::c_api::parts::null_argument;
+using formulon::c_api::parts::patch_op_ok;
+using formulon::c_api::parts::patch_op_ok_without_clear;
+using formulon::c_api::parts::plan_add_anchor;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::set_last_error;
 using formulon::c_api::parts::store_cstr;
@@ -48,7 +58,189 @@ void fill_image_info(const formulon::ImageInfo& info, fm_image_info_t* out) {
   out->height_px = info.px_height;
 }
 
+// Offsets and sizes of an anchor lie in [0, 2^31) EMU.
+constexpr std::int64_t kEmuLimit = std::int64_t{1} << 31;
+
+bool in_emu_range(std::int64_t value) {
+  return value >= 0 && value < kEmuLimit;
+}
+
+bool is_set(fm_patch_op_t op) {
+  return op == FM_PATCH_OP_SET;
+}
+
+bool cell_outside_sheet(const formulon::AnchorPoint& p) {
+  return p.row >= formulon::Sheet::kMaxRows || p.col >= formulon::Sheet::kMaxCols;
+}
+
+bool point_is_zero(const formulon::AnchorPoint& p) {
+  return p.row == 0U && p.col == 0U && p.row_off == 0 && p.col_off == 0;
+}
+
+// The object's own size; a two-cell anchor's size is its box.
+void current_size(const formulon::Geometry& geo, const formulon::DrawingObject& obj, std::int64_t* cx,
+                  std::int64_t* cy) {
+  if (obj.anchor_kind == formulon::AnchorKind::kTwoCell) {
+    *cx = geo.span(false, obj.from, obj.to);
+    *cy = geo.span(true, obj.from, obj.to);
+    return;
+  }
+  *cx = obj.cx;
+  *cy = obj.cy;
+}
+
+// Reads the ops of `p` into the engine's partial anchor; the merge itself is the engine's.
+fm_status_t anchor_patch_from_c(const fm_drawing_anchor_patch_t& p, formulon::DrawingAnchorPatch* out) {
+  struct OpField {
+    fm_patch_op_t op;
+    const char* name;
+  };
+  const OpField ops[] = {{p.kind_op, "kind"},
+                         {p.edit_as_op, "edit_as"},
+                         {p.from_row_op, "from_row"},
+                         {p.from_col_op, "from_col"},
+                         {p.from_row_offset_emu_op, "from_row_offset_emu"},
+                         {p.from_col_offset_emu_op, "from_col_offset_emu"},
+                         {p.to_row_op, "to_row"},
+                         {p.to_col_op, "to_col"},
+                         {p.to_row_offset_emu_op, "to_row_offset_emu"},
+                         {p.to_col_offset_emu_op, "to_col_offset_emu"},
+                         {p.width_emu_op, "width_emu"},
+                         {p.height_emu_op, "height_emu"}};
+  for (const OpField& f : ops) {
+    if (!patch_op_ok_without_clear(f.op)) {
+      return invalid_argument(patch_op_ok(f.op) ? "field cannot be cleared" : "op must be KEEP, CLEAR or SET",
+                              std::string("field=anchor.") + f.name);
+    }
+  }
+  if (is_set(p.kind_op)) {
+    if (p.kind != FM_ANCHOR_KIND_ONE_CELL && p.kind != FM_ANCHOR_KIND_TWO_CELL) {
+      return invalid_argument("an anchor kind is converted to one-cell or two-cell", "field=anchor.kind");
+    }
+    out->kind = formulon::c_api::parts::anchor_kind_from_c(p.kind, formulon::AnchorKind::kOneCell);
+  }
+  if (is_set(p.edit_as_op)) {
+    if (auto rc = check_enum_domain(p.edit_as, FM_ANCHOR_EDIT_AS_DEFAULT, FM_ANCHOR_EDIT_AS_ABSOLUTE, "anchor.edit_as");
+        rc != 0) {
+      return rc;
+    }
+    out->edit_as = formulon::c_api::parts::edit_as_from_c(p.edit_as);
+  }
+  const auto take = [](fm_patch_op_t op, auto value, auto& field) {
+    if (is_set(op)) {
+      field = value;
+    }
+  };
+  take(p.from_row_op, p.from_row, out->from_row);
+  take(p.from_col_op, p.from_col, out->from_col);
+  take(p.from_row_offset_emu_op, p.from_row_offset_emu, out->from_row_off);
+  take(p.from_col_offset_emu_op, p.from_col_offset_emu, out->from_col_off);
+  take(p.to_row_op, p.to_row, out->to_row);
+  take(p.to_col_op, p.to_col, out->to_col);
+  take(p.to_row_offset_emu_op, p.to_row_offset_emu, out->to_row_off);
+  take(p.to_col_offset_emu_op, p.to_col_offset_emu, out->to_col_off);
+  take(p.width_emu_op, p.width_emu, out->width_emu);
+  take(p.height_emu_op, p.height_emu, out->height_emu);
+  return 0;
+}
+
 }  // namespace
+
+namespace formulon {
+namespace c_api {
+namespace parts {
+
+fm_status_t plan_add_anchor(const Workbook& wb, std::size_t sheet, const fm_drawing_anchor_t& a,
+                            AnchorKind default_kind, bool size_required, AnchorPlan* out) {
+  if (auto rc = check_enum_domain(a.kind, FM_ANCHOR_KIND_DEFAULT, FM_ANCHOR_KIND_ABSOLUTE, "anchor.kind"); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_enum_domain(a.edit_as, FM_ANCHOR_EDIT_AS_DEFAULT, FM_ANCHOR_EDIT_AS_ABSOLUTE, "anchor.edit_as");
+      rc != 0) {
+    return rc;
+  }
+  AnchorPlan plan;
+  plan.kind = anchor_kind_from_c(a.kind, default_kind);
+  if (plan.kind == AnchorKind::kAbsolute) {
+    return invalid_argument("a new object is anchored one-cell or two-cell", "field=anchor.kind");
+  }
+  plan.edit_as = edit_as_from_c(a.edit_as);
+  plan.from = AnchorPoint{a.from_row, a.from_col, a.from_row_offset_emu, a.from_col_offset_emu};
+  plan.to = AnchorPoint{a.to_row, a.to_col, a.to_row_offset_emu, a.to_col_offset_emu};
+  if (!in_emu_range(plan.from.row_off) || !in_emu_range(plan.from.col_off) || !in_emu_range(plan.to.row_off) ||
+      !in_emu_range(plan.to.col_off) || !in_emu_range(a.width_emu) || !in_emu_range(a.height_emu)) {
+    return invalid_argument("an anchor offset or size is outside [0, 2^31) EMU", "field=anchor");
+  }
+  if (cell_outside_sheet(plan.from) || cell_outside_sheet(plan.to)) {
+    return invalid_argument("the anchor lies outside the sheet", "field=anchor");
+  }
+  const Geometry geo(wb, wb.sheet(sheet));
+  plan.cx = a.width_emu;
+  plan.cy = a.height_emu;
+  if (plan.kind == AnchorKind::kTwoCell) {
+    if (!point_is_zero(plan.to)) {
+      plan.cx = geo.span(false, plan.from, plan.to);
+      plan.cy = geo.span(true, plan.from, plan.to);
+      if (plan.to.row < plan.from.row || plan.to.col < plan.from.col || plan.cx < 0 || plan.cy < 0) {
+        return invalid_argument("the anchor's to marker lies before its from marker", "field=anchor.to_row");
+      }
+    } else {
+      plan.to = plan.from;
+      if (!geo.advance(true, plan.to.row, plan.to.row_off, plan.cy) ||
+          !geo.advance(false, plan.to.col, plan.to.col_off, plan.cx)) {
+        return invalid_argument("the object extends past the sheet", "field=anchor");
+      }
+    }
+  } else {
+    plan.to = AnchorPoint{};
+  }
+  if (size_required && plan.cx <= 0 && plan.cy <= 0) {
+    return invalid_argument("the object needs a size", "field=anchor");
+  }
+  *out = plan;
+  return 0;
+}
+
+fm_status_t apply_placement_extras(Workbook& wb, std::size_t sheet, std::uint32_t object_id,
+                                   const fm_drawing_placement_spec_t& placement, bool with_description) {
+  DrawingCommonPatch patch;
+  if (placement.hidden == FM_TRISTATE_TRUE) {
+    patch.hidden = true;
+  }
+  if (with_description && placement.description != nullptr && placement.description[0] != '\0') {
+    patch.description = std::string(placement.description);
+  }
+  if (!patch.hidden && !patch.description) {
+    return 0;
+  }
+  return finish_status(update_drawing(wb, sheet, object_id, patch));
+}
+
+void fill_drawing_anchor(const Workbook& wb, std::size_t sheet, const DrawingObject& obj, fm_drawing_anchor_t* out) {
+  const Geometry geo(wb, wb.sheet(sheet));
+  std::int64_t cx = 0;
+  std::int64_t cy = 0;
+  current_size(geo, obj, &cx, &cy);
+  *out = fm_drawing_anchor_t{};
+  out->kind = to_c(obj.anchor_kind);
+  out->edit_as = to_c(obj.anchor_kind == AnchorKind::kTwoCell ? obj.edit_as : EditAs::kTwoCell);
+  out->from_row = obj.from.row;
+  out->from_col = obj.from.col;
+  out->from_row_offset_emu = obj.from.row_off;
+  out->from_col_offset_emu = obj.from.col_off;
+  if (obj.anchor_kind == AnchorKind::kTwoCell) {
+    out->to_row = obj.to.row;
+    out->to_col = obj.to.col;
+    out->to_row_offset_emu = obj.to.row_off;
+    out->to_col_offset_emu = obj.to.col_off;
+  }
+  out->width_emu = cx;
+  out->height_emu = cy;
+}
+
+}  // namespace parts
+}  // namespace c_api
+}  // namespace formulon
 
 extern "C" fm_status_t fm_get_image_info(const uint8_t* bytes, size_t len, fm_image_info_t* out) {
   clear_last_error();
@@ -110,11 +302,8 @@ extern "C" fm_status_t fm_sheet_get_drawing_object_at(const fm_workbook_t* wb, s
   out->struct_size = struct_size;
   out->object_id = obj.object_id;
   out->kind = static_cast<int32_t>(obj.kind);
-  out->edit_as = to_c(obj.edit_as);
-  fill_anchor(obj, out);
-  out->width_emu = obj.cx;
-  out->height_emu = obj.cy;
-  out->image_format = static_cast<int32_t>(obj.image_format);
+  out->hidden = obj.hidden ? 1 : 0;
+  fill_drawing_anchor(wb->workbook(), sheet_index, obj, &out->anchor);
   out->name = store_cstr(store, obj.name);
   out->description = store_cstr(store, obj.descr);
   out->media_path = obj.kind == formulon::DrawingObjectKind::kPicture ? store_cstr(store, obj.media_path) : nullptr;
@@ -198,7 +387,7 @@ extern "C" fm_status_t fm_sheet_get_picture(const fm_workbook_t* wb, size_t shee
 }
 
 extern "C" fm_status_t fm_sheet_add_picture(fm_workbook_t* wb, size_t sheet_index, const uint8_t* bytes, size_t len,
-                                            const fm_picture_insert_spec_t* opts, uint32_t* out_object_id) {
+                                            const fm_drawing_placement_spec_t* opts, uint32_t* out_object_id) {
   clear_last_error();
   if (bytes == nullptr || opts == nullptr || out_object_id == nullptr) {
     return null_argument();
@@ -209,30 +398,35 @@ extern "C" fm_status_t fm_sheet_add_picture(fm_workbook_t* wb, size_t sheet_inde
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
-  const fm_drawing_anchor_t& anchor = opts->anchor;
-  if (auto rc = check_anchor_enums(anchor.anchor_kind, anchor.edit_as); rc != 0) {
+  if (auto rc = check_utf8({opts->name, opts->description}); rc != 0) {
     return rc;
   }
-  if (auto rc = check_utf8({opts->name, opts->description}); rc != 0) {
+  if (auto rc = check_enum_domain(opts->hidden, FM_TRISTATE_DEFAULT, FM_TRISTATE_TRUE, "hidden"); rc != 0) {
+    return rc;
+  }
+  AnchorPlan plan;
+  if (auto rc =
+          plan_add_anchor(wb->workbook(), sheet_index, opts->anchor, formulon::AnchorKind::kOneCell, false, &plan);
+      rc != 0) {
     return rc;
   }
   formulon::ImageInsertOptions model;
   model.name = opts->name != nullptr ? opts->name : "";
   model.descr = opts->description != nullptr ? opts->description : "";
-  model.anchor_kind = anchor_kind_from_c(anchor.anchor_kind);
-  model.edit_as = edit_as_from_c(anchor.edit_as);
-  model.row = anchor.row;
-  model.col = anchor.col;
-  model.row_off = anchor.row_offset_emu;
-  model.col_off = anchor.col_offset_emu;
-  model.width_emu = anchor.width_emu;
-  model.height_emu = anchor.height_emu;
+  model.anchor_kind = plan.kind;
+  model.edit_as = plan.edit_as;
+  model.row = plan.from.row;
+  model.col = plan.from.col;
+  model.row_off = plan.from.row_off;
+  model.col_off = plan.from.col_off;
+  model.width_emu = plan.cx;
+  model.height_emu = plan.cy;
   auto id = formulon::insert_image(wb->workbook(), sheet_index, bytes, len, model);
   if (!id) {
     return set_last_error(id.error());
   }
   *out_object_id = id.value();
-  return 0;
+  return formulon::c_api::parts::apply_placement_extras(wb->workbook(), sheet_index, id.value(), *opts, false);
 }
 
 extern "C" fm_status_t fm_sheet_remove_drawing(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id) {
@@ -243,43 +437,60 @@ extern "C" fm_status_t fm_sheet_remove_drawing(fm_workbook_t* wb, size_t sheet_i
   return finish_status(formulon::remove_drawing(wb->workbook(), sheet_index, object_id));
 }
 
-extern "C" fm_status_t fm_sheet_set_drawing_anchor(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
-                                                   const fm_drawing_anchor_t* anchor) {
+extern "C" fm_status_t fm_sheet_update_drawing(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
+                                               const fm_drawing_patch_t* patch) {
   clear_last_error();
-  if (anchor == nullptr) {
+  if (wb == nullptr || patch == nullptr) {
     return null_argument();
   }
+  if (auto rc = check_record_size(*patch); rc != 0) {
+    return rc;
+  }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
-  if (auto rc = check_anchor_enums(anchor->anchor_kind, anchor->edit_as); rc != 0) {
+  const fm_patch_op_t plain_ops[] = {patch->name_op, patch->hidden_op};
+  for (const fm_patch_op_t op : plain_ops) {
+    if (!patch_op_ok_without_clear(op)) {
+      return invalid_argument(patch_op_ok(op) ? "field cannot be cleared" : "op must be KEEP, CLEAR or SET");
+    }
+  }
+  if (!patch_op_ok(patch->description_op)) {
+    return invalid_argument("op must be KEEP, CLEAR or SET", "field=description");
+  }
+  if (is_set(patch->name_op) && (patch->name == nullptr || patch->name[0] == '\0')) {
+    return invalid_argument("a SET name is not empty", "field=name");
+  }
+  if (is_set(patch->description_op) && patch->description == nullptr) {
+    return invalid_argument("a SET string cannot be NULL", "field=description");
+  }
+  if (auto rc = check_utf8({is_set(patch->name_op) ? patch->name : nullptr,
+                            is_set(patch->description_op) ? patch->description : nullptr});
+      rc != 0) {
     return rc;
   }
-  formulon::DrawingAnchor model;
-  model.anchor_kind = anchor_kind_from_c(anchor->anchor_kind);
-  model.edit_as = edit_as_from_c(anchor->edit_as);
-  model.row = anchor->row;
-  model.col = anchor->col;
-  model.row_off = anchor->row_offset_emu;
-  model.col_off = anchor->col_offset_emu;
-  model.width_emu = anchor->width_emu;
-  model.height_emu = anchor->height_emu;
-  return finish_status(formulon::set_drawing_anchor(wb->workbook(), sheet_index, object_id, model));
-}
+  if (is_set(patch->hidden_op)) {
+    if (auto rc = check_enum_domain(patch->hidden, 0, 1, "hidden"); rc != 0) {
+      return rc;
+    }
+  }
 
-extern "C" fm_status_t fm_sheet_set_drawing_name(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
-                                                 const char* name) {
-  clear_last_error();
-  if (name == nullptr) {
-    return null_argument("name");
+  formulon::DrawingCommonPatch model;
+  if (is_set(patch->name_op)) {
+    model.name = std::string(patch->name);
   }
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+  if (is_set(patch->description_op)) {
+    model.description = std::string(patch->description);
+  } else if (patch->description_op == FM_PATCH_OP_CLEAR) {
+    model.description = std::string();
+  }
+  if (is_set(patch->hidden_op)) {
+    model.hidden = patch->hidden != 0;
+  }
+  if (auto rc = anchor_patch_from_c(patch->anchor, &model.anchor); rc != 0) {
     return rc;
   }
-  if (auto rc = check_utf8({name}); rc != 0) {
-    return rc;
-  }
-  return finish_status(formulon::set_drawing_name(wb->workbook(), sheet_index, object_id, name));
+  return finish_status(formulon::update_drawing(wb->workbook(), sheet_index, object_id, model));
 }
 
 extern "C" fm_status_t fm_sheet_set_drawing_z_order(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,

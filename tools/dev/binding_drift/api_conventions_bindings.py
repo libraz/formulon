@@ -423,6 +423,8 @@ class PySurface:
     def __init__(self, sources: Dict[str, str]) -> None:
         self.classes: Dict[str, PyClass] = {}
         self.functions: Dict[str, PyFunc] = {}
+        # Module-level `Name = <type expression>` assignments: alias name -> right-hand side source.
+        self.aliases: Dict[str, str] = {}
         self.exports: List[str] = []
         self.problems: List[str] = []
         for file_name, text in sorted(sources.items()):
@@ -438,6 +440,8 @@ class PySurface:
                     self.classes.setdefault(node.name, _py_class(node))
                 elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                     self.functions.setdefault(node.name, _py_func(node, method=False))
+                elif isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
+                    self.aliases.setdefault(node.targets[0].id, ast.unparse(node.value))
 
     @property
     def workbook(self) -> Dict[str, PyFunc]:
@@ -1988,8 +1992,8 @@ def _rule_entry_points(ctx: Context) -> Iterable[Violation]:
 
 
 _ENTRY_REQUIRED_EXPORTS = frozenset({"FormulonError", "createFormulon"})
-# Host-side values both packages also export by name, besides carrying them as `Formulon` members.
-_ENTRY_SHARED_EXPORTS = frozenset({"ExcelError", "enumName"})
+# Host-side values and pure helpers both packages also export by name, besides carrying them as `Formulon` members.
+_ENTRY_SHARED_EXPORTS = frozenset({"ExcelError", "enumName", "mergeFunctionMetadata", "toNative"})
 _SCALAR_CONSTANT_RE = re.compile(r"=?\s*-?\d+")
 _MEMBERS_LIST_RE = re.compile(r"\bFORMULON_MEMBERS\s*=\s*(?:Object\.freeze\(\s*)?\[(.*?)\]", re.S)
 _MJS_COMMENT_RE = re.compile(r"/\*.*?\*/|//[^\n]*", re.S)
@@ -2021,7 +2025,7 @@ def _formulon_members(ctx: Context) -> Optional[Set[str]]:
 def _rule_entry_shape(ctx: Context) -> Iterable[Violation]:
     """Each declaration file's `Formulon` interface has exactly the members `FORMULON_MEMBERS` lists, and its
     runtime named exports are the constant tables, `FormulonError`, `createFormulon` and the host-side values
-    `ExcelError` / `enumName` (which must also be `Formulon` members) only.
+    `ExcelError` / `enumName` / `mergeFunctionMetadata` / `toNative` (which must also be `Formulon` members) only.
     """
     js = surfaces(ctx).js
     listed = _formulon_members(ctx)

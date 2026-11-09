@@ -85,8 +85,8 @@ function addPivot(ws, wb) {
   fillTable(ws);
   const cache = addCache(wb);
   const pivot = ws.addPivot({ name: 'ByRegion', cacheId: cache.cacheId, anchor: 'E1' });
-  pivot.addField({ sourceName: 'Region', axis: f.PivotAxis.Row });
-  const amount = pivot.addField({ sourceName: 'Amount', axis: f.PivotAxis.Value });
+  pivot.addField({ fieldIndex: 'Region', axis: f.PivotAxis.Row });
+  const amount = pivot.addField({ fieldIndex: 'Amount', axis: f.PivotAxis.Value });
   pivot.addDataField({ name: 'Sum of Amount', fieldIndex: amount, aggregation: 0 });
   return { pivot, cache };
 }
@@ -143,8 +143,7 @@ describe('method names', () => {
         'updateGrandTotals',
         'updateStyleOptions',
         'updateFieldItem',
-        'addFieldSubtotalFunction',
-        'clearFieldSubtotalFunctions',
+        'setFieldSubtotalFunctions',
         'addFieldItem',
         'rename',
       ]);
@@ -157,6 +156,8 @@ describe('method names', () => {
         'updateItem',
         'addFieldSubtotalFn',
         'clearFieldSubtotalFns',
+        'addFieldSubtotalFunction',
+        'clearFieldSubtotalFunctions',
         'addFieldSharedItem',
       ]);
       present(cache, ['updateOptions', 'addFieldSharedItem']);
@@ -902,10 +903,7 @@ describe('unit-suffixed fields', () => {
     withSheet((ws) => {
       const shape = ws.addShape({
         presetGeometry: 'rect',
-        anchorKind: f.AnchorKind.OneCell,
-        fromRow: 2,
-        widthEmu: 9144,
-        heightEmu: 9144,
+        anchor: { kind: f.AnchorKind.OneCell, fromRow: 2, widthEmu: 9144, heightEmu: 9144 },
         rotationDeg: 45,
         lineWidthPt: 2,
       });
@@ -931,10 +929,13 @@ describe('unit-suffixed fields', () => {
     });
   });
 
-  it('drawing properties name the image format format and drop the media path', () => {
+  it('the image format is a picture property, not a drawing property, and the media path is not exposed', () => {
     withSheet((ws) => {
-      ws.addPicture(PNG_1X1);
-      const props = ws.listDrawings()[0].getDrawingProperties();
+      const picture = ws.addPicture(PNG_1X1);
+      const common = picture.getDrawingProperties();
+      hasKeys(common, ['objectId', 'kind', 'name', 'description', 'hidden', 'anchor']);
+      lacksKeys(common, ['format', 'imageFormat', 'mediaPath']);
+      const props = picture.getProperties();
       hasKeys(props, ['format']);
       lacksKeys(props, ['imageFormat', 'mediaPath']);
     });
@@ -1422,9 +1423,9 @@ describe('pivot shape changes', () => {
   it('subtotal functions are spelled out on members and on the field record', () => {
     withSheet((ws, wb) => {
       const { pivot } = addPivot(ws, wb);
-      pivot.addFieldSubtotalFunction(0, f.PivotAggregation.Sum);
+      pivot.setFieldSubtotalFunctions(0, [f.PivotAggregation.Sum]);
       assert.deepEqual([...pivot.listFields()[0].subtotalFunctions], [f.PivotAggregation.Sum]);
-      pivot.clearFieldSubtotalFunctions(0);
+      pivot.setFieldSubtotalFunctions(0, []);
       assert.deepEqual([...pivot.listFields()[0].subtotalFunctions], []);
       lacksKeys(pivot.listFields()[0], ['subtotalFns']);
     });

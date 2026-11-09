@@ -103,7 +103,6 @@ Napi::Value Workbook::GetSheetView(const Napi::CallbackInfo& info) {
   view.Set("zoomPct", Napi::Number::New(env, v.zoom_pct));
   view.Set("freezeRows", Napi::Number::New(env, v.freeze_rows));
   view.Set("freezeCols", Napi::Number::New(env, v.freeze_cols));
-  view.Set("visibility", Napi::Number::New(env, v.visibility));
   view.Set("showGridLines", JsBool(env, v.show_grid_lines));
   view.Set("showRowColHeaders", JsBool(env, v.show_row_column_headers));
   view.Set("showZeros", JsBool(env, v.show_zeros));
@@ -119,6 +118,20 @@ Napi::Value Workbook::GetSheetView(const Napi::CallbackInfo& info) {
   view.Set("showFormulas", JsBool(env, v.show_formulas));
   view.Set("showOutlineSymbols", JsBool(env, v.show_outline_symbols));
   return view;
+}
+
+Napi::Value Workbook::GetVisibility(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return ThrowInvalidHandle(env);
+  }
+  int32_t visibility = 0;
+  const fm_status_t rc = fm_sheet_get_visibility(handle_, static_cast<std::size_t>(ArgU32(info, 0)), &visibility);
+  return ValueOrThrow(env, rc, Napi::Number::New(env, visibility));
+}
+
+Napi::Value Workbook::SetVisibility(const Napi::CallbackInfo& info) {
+  return InvokeSheetCall(info, &fm_sheet_set_visibility);
 }
 
 Napi::Value Workbook::GetSheetProtection(const Napi::CallbackInfo& info) {
@@ -279,7 +292,6 @@ Napi::Value Workbook::UpdateSheetView(const Napi::CallbackInfo& info) {
         patch.zoom_pct_op = PatchU32(reader, spec, "zoomPct", &patch.zoom_pct);
         patch.freeze_rows_op = PatchU32(reader, spec, "freezeRows", &patch.freeze_rows);
         patch.freeze_cols_op = PatchU32(reader, spec, "freezeCols", &patch.freeze_cols);
-        patch.visibility_op = PatchI32(reader, spec, "visibility", &patch.visibility);
         patch.show_grid_lines_op = PatchBool(reader, spec, "showGridLines", &patch.show_grid_lines);
         patch.show_row_column_headers_op =
             PatchBool(reader, spec, "showRowColHeaders", &patch.show_row_column_headers);

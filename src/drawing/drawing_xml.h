@@ -86,6 +86,7 @@ struct DrawingObject {
   std::int64_t cy = 0;
   std::string name;
   std::string descr;
+  bool hidden = false;                               ///< `cNvPr/@hidden`.
   std::string image_rel_id;                          ///< Picture `a:blip/@r:embed`.
   std::string media_path;                            ///< Package path the blip resolves to, or empty.
   ImageFormat image_format = ImageFormat::kUnknown;  ///< Filled by callers that hold the media bytes.

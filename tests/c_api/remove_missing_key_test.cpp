@@ -43,8 +43,7 @@ TEST_F(FormulonCApiRemoveMissingKey, SheetScopedKeys) {
   const fm_cell_rect_t rect{10, 10, 12, 12};
   ExpectNotFound(fm_sheet_remove_merge(wb(), 0, &rect), "merge");
   ExpectNotFound(fm_sheet_remove_threaded_comment(wb(), 0, kAbsentId), "threaded comment");
-  ExpectNotFound(fm_sheet_remove_shape(wb(), 0, 42U), "shape");
-  ExpectNotFound(fm_sheet_remove_slicer(wb(), 0, 42U), "slicer");
+  ExpectNotFound(fm_sheet_remove_sparkline_group(wb(), 0, "nope"), "sparkline group");
   ExpectNotFound(fm_sheet_remove_data_table(wb(), 0, 0, 0), "data table");
   ExpectNotFound(fm_sheet_remove_drawing(wb(), 0, 42U), "drawing");
 }
@@ -76,8 +75,10 @@ TEST_F(FormulonCApiRemoveMissingKey, UpdatingAnAbsentThreadedCommentIsNotFound) 
 // is FM_STATUS_NOT_FOUND.
 TEST_F(FormulonCApiRemoveMissingKey, EditingAnAbsentDrawingOrChartIdIsNotFound) {
   constexpr std::uint32_t kId = 42U;
-  fm_drawing_anchor_t anchor{};
-  anchor.anchor_kind = FM_ANCHOR_KIND_ONE_CELL;
+  fm_drawing_patch_t drawing = FM_STRUCT_INIT(fm_drawing_patch_t);
+  drawing.anchor.from_row_op = FM_PATCH_OP_SET;
+  drawing.anchor.from_row = 1;
+  const fm_sparkline_group_patch_t sparkline_group = FM_STRUCT_INIT(fm_sparkline_group_patch_t);
   const fm_shape_patch_t shape = FM_STRUCT_INIT(fm_shape_patch_t);
   const fm_slicer_patch_t slicer = FM_STRUCT_INIT(fm_slicer_patch_t);
   const fm_chart_title_t title{FM_CHART_TITLE_KIND_TEXT, "t", nullptr};
@@ -94,12 +95,12 @@ TEST_F(FormulonCApiRemoveMissingKey, EditingAnAbsentDrawingOrChartIdIsNotFound) 
     const char* what;
     fm_status_t rc;
   } cases[] = {
-      {"set_drawing_anchor", fm_sheet_set_drawing_anchor(wb(), 0, kId, &anchor)},
-      {"set_drawing_name", fm_sheet_set_drawing_name(wb(), 0, kId, "x")},
+      {"update_drawing", fm_sheet_update_drawing(wb(), 0, kId, &drawing)},
       {"set_drawing_z_order", fm_sheet_set_drawing_z_order(wb(), 0, kId, 0)},
       {"snapshot_drawing", fm_sheet_snapshot_drawing(wb(), 0, kId, &bytes, &len)},
       {"update_shape", fm_sheet_update_shape(wb(), 0, kId, &shape)},
       {"update_slicer", fm_sheet_update_slicer(wb(), 0, kId, &slicer)},
+      {"update_sparkline_group", fm_sheet_update_sparkline_group(wb(), 0, "nope", &sparkline_group)},
       {"set_chart_type", fm_sheet_set_chart_type(wb(), 0, kId, 0, FM_CHART_PLOT_TYPE_BAR, FM_CHART_BAR_DIRECTION_COLUMN,
                                                  FM_CHART_GROUPING_CLUSTERED)},
       {"set_chart_title", fm_sheet_set_chart_title(wb(), 0, kId, &title)},

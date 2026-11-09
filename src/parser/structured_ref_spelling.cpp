@@ -16,6 +16,7 @@
 #include "parser/parser.h"
 #include "parser/parser_detail.h"
 #include "parser/structured_ref_payload.h"
+#include "sheet_name.h"
 #include "utils/arena.h"
 #include "utils/formula_text.h"
 #include "utils/strings.h"
@@ -69,7 +70,7 @@ void CollectDisplay(const AstNode& node, std::string_view body, std::string_view
       return;
     }
     const std::string_view table = node.as_structured_ref_table();
-    const bool inside = !own_table.empty() && strings::case_insensitive_eq(table, own_table);
+    const bool inside = !own_table.empty() && collection_names::equal(table, own_table);
     Edit edit = NodeSpan(node, body);
     edit.text = display_structured_ref(table, *payload, inside);
     if (body.substr(edit.start, edit.end - edit.start) != edit.text) {

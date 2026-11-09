@@ -135,16 +135,10 @@ function makeHandles(formulon, wb) {
   });
   const shape = ws.addShape({
     presetGeometry: 'rect',
-    anchorKind: 0,
-    fromRow: 2,
-    widthEmu: 914400,
-    heightEmu: 457200,
+    anchor: { kind: formulon.AnchorKind.OneCell, fromRow: 2, widthEmu: 914400, heightEmu: 457200 },
   });
   const slicer = ws.addSlicer(table, 0, {
-    fromRow: 20,
-    fromCol: 3,
-    toRow: 30,
-    toCol: 5,
+    anchor: { fromRow: 20, fromCol: 3, toRow: 30, toCol: 5 },
   });
   const picture = ws.addPicture(PNG_1X1);
   return {

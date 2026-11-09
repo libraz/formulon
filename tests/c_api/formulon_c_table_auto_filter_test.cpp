@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "c_api/formulon_c.h"
+#include "formulon_c_out_index.h"
 #include "formulon_c_record_arg.h"
 #include "formulon_c_setters.h"
 #include "formulon_c_test_helpers.h"
@@ -163,7 +164,7 @@ TEST(FormulonCApiTableAutoFilter, FilterOfATableOnASecondSheetHidesThatSheetsRow
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   std::size_t second = 99;
-  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Second", &second), 0);
+  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Second", append_position(wb.handle), &second), 0);
   ASSERT_EQ(fm_sheet_set_text(wb.handle, second, 0, 0, "N"), 0);
   for (std::uint32_t i = 1; i <= 5; ++i) {
     ASSERT_EQ(fm_sheet_set_number(wb.handle, second, i, 0, static_cast<double>(i)), 0);

@@ -214,18 +214,48 @@ TEST(FormulonCApiProtectedRanges, AddListUpdateRemove) {
   EXPECT_EQ(RangeCount(loaded), 0U);
 }
 
+TEST(FormulonCApiProtectedRanges, NamesCollideUnderUnicodeCaseFolding) {
+  WorkbookGuard wb;
+  Create(&wb);
+  const fm_cell_rect_t a1{0, 0, 0, 0};
+  const fm_cell_rect_t b2{1, 1, 1, 1};
+  const fm_protected_range_t budget = Range("Budget", &a1, 1);
+  ASSERT_EQ(fm_sheet_add_protected_range(wb.handle, 0, &budget, ignored_index()), 0);
+
+  const fm_protected_range_t upper = Range("BUDGET", &b2, 1);
+  EXPECT_EQ(fm_sheet_add_protected_range(wb.handle, 0, &upper, ignored_index()), kAlreadyExists);
+  const fm_protected_range_t umlaut = Range("\xC3\x84rger", &b2, 1);
+  ASSERT_EQ(fm_sheet_add_protected_range(wb.handle, 0, &umlaut, ignored_index()), 0);
+  const fm_protected_range_t folded = Range("\xC3\xA4rger", &a1, 1);
+  EXPECT_EQ(fm_sheet_add_protected_range(wb.handle, 0, &folded, ignored_index()), kAlreadyExists);
+  EXPECT_EQ(RangeCount(wb), 2U);
+
+  // A rename into the folded spelling of another range is refused; a recase of its own name is not.
+  fm_protected_range_patch_t clash = Patch();
+  clash.name_op = FM_PATCH_OP_SET;
+  clash.name = "budget";
+  EXPECT_EQ(fm_sheet_update_protected_range(wb.handle, 0, 1, &clash), kAlreadyExists);
+  fm_protected_range_patch_t recase = Patch();
+  recase.name_op = FM_PATCH_OP_SET;
+  recase.name = "BUDGET";
+  ASSERT_EQ(fm_sheet_update_protected_range(wb.handle, 0, 0, &recase), 0);
+  fm_protected_range_t out = FM_STRUCT_INIT(fm_protected_range_t);
+  ASSERT_EQ(fm_sheet_get_protected_range_at(wb.handle, 0, 0, &out), 0);
+  EXPECT_STREQ(out.name, "BUDGET");
+}
+
 TEST(FormulonCApiProtectedRanges, SqrefFollowsRowAndColumnEdits) {
   WorkbookGuard wb;
   Create(&wb);
   const fm_protected_range_t r = Range("Inputs", kInputsRanges, 2);
   ASSERT_EQ(fm_sheet_add_protected_range(wb.handle, 0, &r, ignored_index()), 0);
-  ASSERT_EQ(fm_sheet_insert_rows(wb.handle, 0, 0, 2), 0);
-  ASSERT_EQ(fm_sheet_insert_columns(wb.handle, 0, 0, 1), 0);
+  ASSERT_EQ(fm_sheet_insert_rows(wb.handle, 0, 0, 1), 0);
+  ASSERT_EQ(fm_sheet_insert_columns(wb.handle, 0, 0, 0), 0);
   fm_protected_range_t out = FM_STRUCT_INIT(fm_protected_range_t);
   ASSERT_EQ(fm_sheet_get_protected_range_at(wb.handle, 0, 0, &out), 0);
   EXPECT_EQ(RangesText(wb, out), "C4:D5 F7");
   // Deleting every row the range covers removes it.
-  ASSERT_EQ(fm_sheet_delete_rows(wb.handle, 0, 3, 4), 0);
+  ASSERT_EQ(fm_sheet_delete_rows(wb.handle, 0, 3, 6), 0);
   EXPECT_EQ(RangeCount(wb), 0U);
 }
 

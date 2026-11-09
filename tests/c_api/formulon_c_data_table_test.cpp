@@ -129,7 +129,7 @@ TEST(FormulonCApiDataTable, TwoVariableTableReadsBothInputs) {
   EXPECT_EQ(info.column_input_row, 1U);
 
   // Deleting the row input's row flags it deleted and turns the table into #REF!.
-  ASSERT_EQ(fm_sheet_delete_rows(wb.handle, 0, 0, 1), 0);
+  ASSERT_EQ(fm_sheet_delete_rows(wb.handle, 0, 0, 0), 0);
   ASSERT_EQ(fm_sheet_get_data_table(wb.handle, 0, 4, 3, &present, &info), 0);
   ASSERT_EQ(present, 1);
   EXPECT_EQ(info.row_input_deleted, 1);
@@ -245,10 +245,10 @@ TEST(FormulonCApiDataTable, StructuralEditsMoveOrRemoveTheTableWhole) {
   const fm_data_table_t spec = SquaresSpec();
   ASSERT_EQ(fm_sheet_add_data_table(wb.handle, 0, &spec), 0);
   // The table's block is A2:B5: the results B3:B5, the formula row 2 and the value column A.
-  EXPECT_EQ(fm_sheet_delete_rows(wb.handle, 0, 3, 1), kPreconditionFailed);
-  EXPECT_EQ(fm_sheet_delete_rows(wb.handle, 0, 2, 3), kPreconditionFailed);
-  EXPECT_EQ(fm_sheet_insert_rows(wb.handle, 0, 4, 1), kPreconditionFailed);
-  EXPECT_EQ(fm_sheet_delete_columns(wb.handle, 0, 0, 1), kPreconditionFailed);
+  EXPECT_EQ(fm_sheet_delete_rows(wb.handle, 0, 3, 3), kPreconditionFailed);
+  EXPECT_EQ(fm_sheet_delete_rows(wb.handle, 0, 2, 4), kPreconditionFailed);
+  EXPECT_EQ(fm_sheet_insert_rows(wb.handle, 0, 4, 4), kPreconditionFailed);
+  EXPECT_EQ(fm_sheet_delete_columns(wb.handle, 0, 0, 0), kPreconditionFailed);
   EXPECT_EQ(fm_sheet_insert_columns(wb.handle, 0, 1, 1), kPreconditionFailed);
   int32_t present = 0;
   fm_data_table_t info = FM_STRUCT_INIT(fm_data_table_t);
@@ -260,7 +260,7 @@ TEST(FormulonCApiDataTable, StructuralEditsMoveOrRemoveTheTableWhole) {
   ASSERT_EQ(fm_sheet_get_data_table(wb.handle, 0, 5, 1, &present, &info), 0);
   EXPECT_EQ(present, 1);
   EXPECT_EQ(info.rect.first_row, 3U);
-  ASSERT_EQ(fm_sheet_delete_rows(wb.handle, 0, 2, 4), 0);
+  ASSERT_EQ(fm_sheet_delete_rows(wb.handle, 0, 2, 5), 0);
   ASSERT_EQ(fm_sheet_get_data_table(wb.handle, 0, 3, 1, &present, &info), 0);
   EXPECT_EQ(present, 0);
 }

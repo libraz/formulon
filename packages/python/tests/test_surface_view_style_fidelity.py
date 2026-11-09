@@ -7,7 +7,9 @@ import unittest
 from formulon import (
     CellRect,
     CfIcon,
-    Cfvo,
+    CfIconSetInput,
+    CfIconSetRuleInput,
+    CfValueObject,
     Color,
     ColorKind,
     ConditionalFormatInput,
@@ -18,7 +20,6 @@ from formulon import (
     FormulonError,
     GradientFill,
     GradientStop,
-    IconSet,
     IconSetName,
     InvalidArgumentError,
     RefMode,
@@ -141,12 +142,11 @@ class GradientFillTests(unittest.TestCase):
 class CustomIconTests(unittest.TestCase):
     @staticmethod
     def _rule(icons: list[CfIcon]) -> ConditionalFormatInput:
-        return ConditionalFormatInput(
+        return CfIconSetRuleInput(
             ranges=[CellRect(0, 0, 9, 0)],
-            type=4,
-            icon_set=IconSet(
+            icon_set=CfIconSetInput(
                 name=0,
-                thresholds=[Cfvo(1, "33"), Cfvo(1, "67")],
+                thresholds=[CfValueObject(1, "33"), CfValueObject(1, "67")],
                 icons=icons,
             ),
         )

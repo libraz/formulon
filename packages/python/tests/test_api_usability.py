@@ -27,6 +27,7 @@ import _chart_input
 import formulon
 from formulon import (
     UNCHANGED,
+    AlreadyExistsError,
     CellAddress,
     CellRect,
     ErrorCode,
@@ -89,9 +90,9 @@ def _pivot_report_book(wb: Workbook, ws: Sheet) -> None:
         wb.pivot_cache(cache).set_record_value(rec, 0, region)
         wb.pivot_cache(cache).set_record_value(rec, 1, amount)
     pivot = ws.add_pivot(PivotInput(name="Pivot1", cache_id=cache, anchor=CellAddress(0, 4)))
-    ws.pivot(pivot).add_field(formulon.PivotFieldInput(source_name="Region", axis=formulon.PivotAxis.ROW))
+    ws.pivot(pivot).add_field(formulon.PivotFieldInput(field_index="Region", axis=formulon.PivotAxis.ROW))
     amount_field = ws.pivot(pivot).add_field(
-        formulon.PivotFieldInput(source_name="Amount", axis=formulon.PivotAxis.VALUE)
+        formulon.PivotFieldInput(field_index="Amount", axis=formulon.PivotAxis.VALUE)
     )
     ws.pivot(pivot).add_data_field(formulon.PivotDataFieldInput(name="Sum of Amount", field_index=amount_field))
 
@@ -866,7 +867,6 @@ class PatchShapeTests(unittest.TestCase):
         for name in (
             "set_zoom",
             "set_freeze",
-            "set_visibility",
             "set_show_grid_lines",
             "set_show_row_col_headers",
             "set_show_zeros",
@@ -936,7 +936,7 @@ class SetViewTests(unittest.TestCase):
         with _open() as wb:
             before = wb.sheet(0).get_view()
             with self.assertRaises(FormulonError):
-                wb.sheet(0).update_view(zoom_pct=150, visibility=formulon.SheetVisibility.HIDDEN)
+                wb.sheet(0).set_visibility(formulon.SheetVisibility.HIDDEN)
             self.assertEqual(wb.sheet(0).get_view(), before)
 
 
@@ -949,7 +949,7 @@ class ChartLegendPatchTests(unittest.TestCase):
             ws.set_number(r + 1, 1, float(r + 1))
         ws.set_text(0, 1, "S")
         return _chart_input.add_chart(
-            ws, _chart_input.COLUMN, "Sheet1!$A$1:$B$4", anchor=formulon.DrawingAnchor(row=6), **options
+            ws, _chart_input.COLUMN, "Sheet1!$A$1:$B$4", anchor=formulon.DrawingAnchorInput(from_row=6), **options
         )
 
     def test_position_keeps_overlay(self) -> None:
@@ -1020,7 +1020,7 @@ class PivotPatchTests(unittest.TestCase):
         with _open() as wb:
             ws = wb.sheet(0)
             _pivot_book(wb, ws)
-            ws.pivot(0).add_field(formulon.PivotFieldInput(source_name="Region", axis=formulon.PivotAxis.ROW))
+            ws.pivot(0).add_field(formulon.PivotFieldInput(field_index="Region", axis=formulon.PivotAxis.ROW))
             ws.pivot(0).update_field(0, custom_name="Area", show_all=True)
             field = ws.pivot(0).list_fields()[0]
             self.assertEqual(field.custom_name, "Area")
@@ -1034,7 +1034,7 @@ class PivotPatchTests(unittest.TestCase):
         with _open() as wb:
             ws = wb.sheet(0)
             _pivot_book(wb, ws)
-            ws.pivot(0).add_field(formulon.PivotFieldInput(source_name="Region", axis=formulon.PivotAxis.ROW))
+            ws.pivot(0).add_field(formulon.PivotFieldInput(field_index="Region", axis=formulon.PivotAxis.ROW))
             with self.assertRaises(TypeError):
                 ws.pivot(0).update_field(0, axis=formulon.PivotAxis.COL)  # type: ignore[call-arg]
 
@@ -1042,7 +1042,7 @@ class PivotPatchTests(unittest.TestCase):
         with _open() as wb:
             ws = wb.sheet(0)
             _pivot_book(wb, ws)
-            ws.pivot(0).add_field(formulon.PivotFieldInput(source_name="Region", axis=formulon.PivotAxis.ROW))
+            ws.pivot(0).add_field(formulon.PivotFieldInput(field_index="Region", axis=formulon.PivotAxis.ROW))
             ws.pivot(0).add_field_item(0, "East", visible=True)
             ws.pivot(0).update_field_item(0, 0, visible=False, caption="Eastern")
             item = ws.pivot(0).get_field_item(0, 0)
@@ -1105,9 +1105,7 @@ class RefTests(unittest.TestCase):
             self.assertEqual(ws.list_pivots(), [])
         with _open() as wb:
             ws = wb.sheet(0)
-            ws.add_cf_rule(
-                formulon.ConditionalFormatInput(ranges=[CellRect(0, 0, 2, 0)], type=1, operator=3, formula1="5")
-            )
+            ws.add_cf_rule(formulon.CfCellIsRuleInput(ranges=[CellRect(0, 0, 2, 0)], operator=3, formula1="5"))
             rule_id = ws.list_cf_rules()[0].id
             ws.remove_cf_rule(rule_id.lower())
             self.assertEqual(ws.list_cf_rules(), [])
@@ -1126,9 +1124,7 @@ class RefTests(unittest.TestCase):
     def test_cf_rule_by_id(self) -> None:
         with _open() as wb:
             ws = wb.sheet(0)
-            ws.add_cf_rule(
-                formulon.ConditionalFormatInput(ranges=[CellRect(0, 0, 2, 0)], type=1, operator=3, formula1="5")
-            )
+            ws.add_cf_rule(formulon.CfCellIsRuleInput(ranges=[CellRect(0, 0, 2, 0)], operator=3, formula1="5"))
             rule_id = ws.list_cf_rules()[0].id
             self.assertTrue(rule_id)
             ws.remove_cf_rule(rule_id)
@@ -1139,14 +1135,10 @@ class RefTests(unittest.TestCase):
     def test_colliding_cf_id_gets_a_fresh_one(self) -> None:
         with _open() as wb:
             ws = wb.sheet(0)
-            ws.add_cf_rule(
-                formulon.ConditionalFormatInput(ranges=[CellRect(0, 0, 2, 0)], type=1, operator=3, formula1="5")
-            )
+            ws.add_cf_rule(formulon.CfCellIsRuleInput(ranges=[CellRect(0, 0, 2, 0)], operator=3, formula1="5"))
             rule_id = ws.list_cf_rules()[0].id
             ws.add_cf_rule(
-                formulon.ConditionalFormatInput(
-                    ranges=[CellRect(0, 1, 2, 1)], type=1, operator=3, formula1="6", id=rule_id
-                )
+                formulon.CfCellIsRuleInput(ranges=[CellRect(0, 1, 2, 1)], operator=3, formula1="6", id=rule_id)
             )
             ids = [rule.id for rule in ws.list_cf_rules()]
             self.assertEqual(len(ids), 2)
@@ -1156,28 +1148,27 @@ class RefTests(unittest.TestCase):
     def test_cf_round_trip_keeps_one_equals_sign(self) -> None:
         with _open() as wb:
             ws = wb.sheet(0)
-            ws.add_cf_rule(
-                formulon.ConditionalFormatInput(ranges=[CellRect(0, 0, 2, 0)], type=1, operator=3, formula1="5")
-            )
+            ws.add_cf_rule(formulon.CfCellIsRuleInput(ranges=[CellRect(0, 0, 2, 0)], operator=3, formula1="5"))
             rule = ws.list_cf_rules()[0]
             self.assertTrue(rule.formula1.startswith("="))
             self.assertFalse(rule.formula1.startswith("=="))
-            values = {f.name: getattr(rule, f.name) for f in dataclasses.fields(rule)}
-            values["id"] = ""
-            ws.add_cf_rule(formulon.ConditionalFormatInput(**values))
+            ws.add_cf_rule(rule)
             first, second = ws.list_cf_rules()[:2]
             self.assertEqual(first.formula1, second.formula1)
             self.assertFalse(second.formula1.startswith("=="))
 
-    def test_duplicate_pivot_name_removes_the_first(self) -> None:
+    def test_duplicate_pivot_name_is_refused_and_changes_nothing(self) -> None:
         with _open() as wb:
             ws = wb.sheet(0)
             first = wb.add_pivot_cache().cache_id
             second = wb.add_pivot_cache().cache_id
             ws.add_pivot(PivotInput(name="Dup", cache_id=first, anchor=CellAddress(0, 0)))
-            ws.add_pivot(PivotInput(name="Dup", cache_id=second, anchor=CellAddress(0, 10)))
-            ws.remove_pivot("Dup")
-            self.assertEqual([(p.name, p.get_cache().cache_id) for p in ws.list_pivots()], [("Dup", second)])
+            for name in ("Dup", "dup"):
+                with self.assertRaises(AlreadyExistsError):
+                    ws.add_pivot(PivotInput(name=name, cache_id=second, anchor=CellAddress(0, 10)))
+            self.assertEqual([(p.name, p.get_cache().cache_id) for p in ws.list_pivots()], [("Dup", first)])
+            ws.remove_pivot("DUP")
+            self.assertEqual(ws.list_pivots(), [])
 
     def test_pivot_by_name_and_number_agree(self) -> None:
         with _open() as wb:

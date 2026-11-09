@@ -230,6 +230,7 @@ DrawingObject read_drawing_object_fields(const pugi::xml_node& anchor) {
   obj.object_id = cnvpr.attribute("id").as_uint();
   obj.name = cnvpr.attribute("name").value();
   obj.descr = cnvpr.attribute("descr").value();
+  obj.hidden = cnvpr.attribute("hidden").as_bool();
   if (obj.kind == DrawingObjectKind::kPicture) {
     obj.image_rel_id = attr_local(find_descendant(content, "blip"), "embed").value();
   }

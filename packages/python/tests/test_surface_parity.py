@@ -321,7 +321,7 @@ class SurfaceParityTests(unittest.TestCase):
             "ChartDisplayPatch",
             "FunctionMetadata",
             "LocaleFacts",
-            "ErrorName",
+            "LocaleErrorName",
             "CollationStrength",
             "CollationClasses",
             "CellXf",

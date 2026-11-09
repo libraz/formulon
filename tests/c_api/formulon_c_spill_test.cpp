@@ -221,7 +221,7 @@ TEST(FormulonCApiSpill, CellEnumerationCacheInvalidatesAfterSpillMutation) {
 TEST(FormulonCApiSpill, CellEnumerationCacheKeepsTwoAlternatingSheetsWarm) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Second", ignored_index()), 0);
+  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Second", append_position(wb.handle), ignored_index()), 0);
 
   // Both sheets reach the same revision, but their coordinate lists differ.
   ASSERT_EQ(fm_sheet_set_number(wb.handle, 0, 0, 0, 1.0), 0);
@@ -273,7 +273,7 @@ TEST(FormulonCApiSpill, CellEnumerationCacheSurvivesSheetAddition) {
   ASSERT_EQ(fm_sheet_get_cell_at(wb.handle, 0, 0, &row, &col, nullptr, &value), 0);
   ASSERT_EQ(wb.handle->cell_enumeration_cache[0].sheet_index, 0U);
   const auto* addresses = wb.handle->cell_enumeration_cache[0].addresses.data();
-  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Second", ignored_index()), 0);
+  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Second", append_position(wb.handle), ignored_index()), 0);
 
   ASSERT_EQ(fm_sheet_get_cell_at(wb.handle, 0, 0, &row, &col, nullptr, &value), 0);
   EXPECT_EQ(wb.handle->cell_enumeration_cache[0].sheet_index, 0U);
@@ -285,7 +285,7 @@ TEST(FormulonCApiSpill, CellEnumerationCacheSurvivesSheetAddition) {
 TEST(FormulonCApiSpill, CellEnumerationCacheSurvivesFailedSheetMutation) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Second", ignored_index()), 0);
+  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Second", append_position(wb.handle), ignored_index()), 0);
   ASSERT_EQ(fm_sheet_set_number(wb.handle, 0, 0, 0, 1.0), 0);
 
   uint32_t row = 0;
@@ -295,7 +295,7 @@ TEST(FormulonCApiSpill, CellEnumerationCacheSurvivesFailedSheetMutation) {
   const auto data = wb.handle->cell_enumeration_cache[0].addresses.data();
   const auto revision = wb.handle->cell_enumeration_cache[0].revision;
 
-  EXPECT_NE(fm_workbook_add_sheet(wb.handle, "SHEET1", ignored_index()), 0);
+  EXPECT_NE(fm_workbook_add_sheet(wb.handle, "SHEET1", append_position(wb.handle), ignored_index()), 0);
   EXPECT_NE(fm_workbook_move_sheet(wb.handle, 99U, 0U), 0);
   EXPECT_NE(fm_workbook_remove_sheet(wb.handle, 99U), 0);
   EXPECT_EQ(wb.handle->cell_enumeration_cache[0].sheet_index, 0U);
@@ -306,7 +306,7 @@ TEST(FormulonCApiSpill, CellEnumerationCacheSurvivesFailedSheetMutation) {
 TEST(FormulonCApiSpill, CellEnumerationCacheInvalidatesAfterSheetRemoval) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Second", ignored_index()), 0);
+  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Second", append_position(wb.handle), ignored_index()), 0);
   // Give both sheets the same enumeration revision while making their
   // coordinate lists observably different.
   ASSERT_EQ(fm_sheet_set_number(wb.handle, 0, 0, 0, 1.0), 0);
@@ -333,7 +333,7 @@ TEST(FormulonCApiSpill, CellEnumerationCacheInvalidatesAfterSheetRemoval) {
 TEST(FormulonCApiSpill, CellEnumerationCacheInvalidatesAfterSheetMove) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Second", ignored_index()), 0);
+  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Second", append_position(wb.handle), ignored_index()), 0);
   ASSERT_EQ(fm_sheet_set_number(wb.handle, 0, 0, 0, 1.0), 0);
   ASSERT_EQ(fm_sheet_set_number(wb.handle, 1, 1, 1, 2.0), 0);
 
@@ -358,7 +358,7 @@ TEST(FormulonCApiSpill, CellEnumerationCacheInvalidatesAfterSheetMove) {
 TEST(FormulonCApiSpill, CellEnumerationCacheInvalidatesBothSlotsAfterSheetMove) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Second", ignored_index()), 0);
+  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Second", append_position(wb.handle), ignored_index()), 0);
   ASSERT_EQ(fm_sheet_set_number(wb.handle, 0, 0, 0, 1.0), 0);
   ASSERT_EQ(fm_sheet_set_number(wb.handle, 1, 1, 1, 2.0), 0);
 

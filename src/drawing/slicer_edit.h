@@ -89,9 +89,10 @@ Expected<std::vector<SlicerInfo>, Error> list_slicers(const Workbook& wb, std::s
 /// Adds a slicer on `sheet` over column `column` (0-based) of table
 /// `table_index`, with its cache, relationships, content types, `Slicer_*`
 /// defined name and drawing frame, and returns the frame's `cNvPr` id.
-/// Fails with `kInvalidArgument` for a bad sheet, table, column, anchor or
-/// text, and `kIoDrawingUnparseable` for a drawing that does not parse or was
-/// retained from an `.xlsb` package.
+/// Fails with `kIndexOutOfRange` for a column past the table's columns,
+/// `kInvalidArgument` for a bad sheet, table, column name, anchor or text, and
+/// `kIoDrawingUnparseable` for a drawing that does not parse or was retained
+/// from an `.xlsb` package.
 Expected<std::uint32_t, Error> add_slicer(Workbook& wb, std::size_t sheet, std::size_t table_index, std::size_t column,
                                           const SlicerSpec& spec);
 

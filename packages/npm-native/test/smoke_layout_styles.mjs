@@ -152,7 +152,7 @@ test('setSheetZoom + getSheetView surface the new zoom', async () => {
   // Default freeze / visibility state survives a zoom change.
   assert.equal(v.freezeRows, 0);
   assert.equal(v.freezeCols, 0);
-  assert.equal(v.visibility, mod.SheetVisibility.Visible);
+  assert.equal(wb.sheet(0).getVisibility(), mod.SheetVisibility.Visible);
 });
 
 test('sheet layout getters preserve explicit width presence flags', async () => {
@@ -215,7 +215,7 @@ test('insertRows shifts an existing literal forward', async () => {
   const wb = mod.Workbook.createDefault();
   // Populate row 0; insert one row at row 0; the literal is now at row 1.
   wb.sheet(0).setNumber(0, 0, 99);
-  wb.sheet(0).insertRows(0, 1);
+  wb.sheet(0).insertRows(0, 0);
   const r0 = wb.sheet(0).getTypedValue(0, 0);
   // The freshly-inserted row 0 is blank.
   assert.equal(r0.kind, mod.ValueKind.Blank);

@@ -440,6 +440,51 @@ export function registerCellsIo(Module, test) {
     }
   });
 
+  test('updateCfRule patches the named keys and refuses a key the rule type does not use', () => {
+    const wb = Module.Workbook.createDefault();
+    try {
+      const dxf = wb.addDxf({ font: { bold: true } });
+      const other = wb.addDxf({ font: { italic: true } });
+      const cellA1 = [{ firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }];
+      wb.addCfRule(0, { ranges: cellA1, type: 1, operator: 6, formula1: '10', dxfIndex: dxf });
+      wb.addCfRule(0, {
+        ranges: cellA1,
+        type: 3,
+        dataBar: { min: { type: 3 }, max: { type: 4 }, fill: rgbColor(0xff0000ff), gradient: false },
+      });
+
+      wb.updateCfRule(0, 0, { dxfIndex: other, formula1: '20', stopIfTrue: true });
+      const changed = wb.getCfRule(0, 0);
+      assert.equal(changed.dxfIndex, other);
+      assert.match(changed.formula1, /^=?20$/);
+      assert.equal(changed.stopIfTrue, true);
+      assert.equal(changed.operator, 6);
+
+      // `null` clears a nullable key; the others keep their values.
+      wb.updateCfRule(0, 0, { dxfIndex: null });
+      assert.equal(wb.getCfRule(0, 0).dxfIndex, null);
+      assert.match(wb.getCfRule(0, 0).formula1, /^=?20$/);
+      wb.updateCfRule(0, 0, {});
+      assert.match(wb.getCfRule(0, 0).formula1, /^=?20$/);
+
+      // A nested payload patches its own keys only.
+      wb.updateCfRule(0, 1, { dataBar: { gradient: true, showValue: false } });
+      const bar = wb.getCfRule(0, 1).dataBar;
+      assert.equal(bar.gradient, true);
+      assert.equal(bar.showValue, false);
+      assert.equal(bar.fill.argb, 0xff0000ff);
+
+      assert.throws(() => wb.updateCfRule(0, 0, { stopIfTrue: null }), TypeError);
+      assert.throws(() => wb.updateCfRule(0, 0, { dxfIndex: 1.5 }), RangeError);
+      expectFailure(() => wb.updateCfRule(0, 0, { rank: 3 }), StatusCode.InvalidArgument);
+      expectFailure(() => wb.updateCfRule(0, 0, { dxfIndex: 99 }), StatusCode.InvalidArgument);
+      expectFailure(() => wb.updateCfRule(0, 5, {}), StatusCode.IndexOutOfRange);
+      expectFailure(() => wb.updateCfRule(9, 0, {}), StatusCode.SheetIndexOutOfRange);
+    } finally {
+      wb.delete();
+    }
+  });
+
   test('data bar x14 fields survive save and load', () => {
     // The six live in the `x14` extension, not the legacy `<dataBar>`
     // element. An in-session round-trip would still pass with a writer that

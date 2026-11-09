@@ -26,8 +26,6 @@ using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::invalid_argument;
 using formulon::c_api::parts::null_argument;
-using formulon::c_api::parts::pivot_axis_from_fm;
-using formulon::c_api::parts::pivot_axis_to_fm;
 using formulon::c_api::parts::pivot_count;
 using formulon::c_api::parts::pivot_filter_type_from_fm;
 using formulon::c_api::parts::PivotEdit;
@@ -85,9 +83,6 @@ fm_status_t add_pivot_filter_impl(fm_workbook_t* wb, std::size_t sheet_index, st
   if (auto rc = check_record_size(*spec); rc != 0) {
     return rc;
   }
-  if (spec->field_name == nullptr) {
-    return null_argument("spec->field_name");
-  }
   if (auto rc = validate(*spec); rc != 0) {
     return rc;
   }
@@ -122,14 +117,17 @@ fm_status_t add_pivot_filter_impl(fm_workbook_t* wb, std::size_t sheet_index, st
       return rc;
     }
   }
-  // The engine skips a filter whose field does not resolve, so an unresolvable
-  // name would leave any filter kind a silent no-op.
-  if (!formulon::pivot::resolve_field_by_any_name(*table, spec->field_name).has_value()) {
-    return invalid_argument("field_name does not name a pivot field", std::string("field_name=") + spec->field_name);
+  if (auto rc = check_index(spec->field_index, table->fields().size(), "field_index"); rc != 0) {
+    return rc;
+  }
+  // The filter takes its field's axis; a field on no axis would leave it a silent no-op.
+  const formulon::pivot::PivotField& target = table->fields()[spec->field_index];
+  if (target.axis == formulon::pivot::PivotAxis::None) {
+    return invalid_argument("field_index names a field on no axis", "field_index=" + std::to_string(spec->field_index));
   }
   formulon::pivot::PivotFilter filter;
-  filter.axis = pivot_axis_from_fm(static_cast<fm_pivot_axis_t>(spec->axis));
-  filter.field_name = spec->field_name;
+  filter.axis = target.axis;
+  filter.field_name = target.source_name;
   filter.type = type;
   filter.data_field_index = spec->data_field_index;
   switch (spec->value_kind) {
@@ -218,9 +216,9 @@ extern "C" fm_status_t fm_sheet_get_pivot_filter_at(const fm_workbook_t* wb, std
   }
 
   const auto& filter = filters[filter_index];
-  const auto axis = pivot_axis_to_fm(filter.axis);
-  if (!axis.has_value()) {
-    return invalid_argument("model axis is not representable");
+  const auto field = formulon::pivot::resolve_field_by_any_name(*table, filter.field_name);
+  if (!field.has_value()) {
+    return invalid_argument("filter field does not name a pivot field", "field_name=" + filter.field_name);
   }
   if (filter.type > formulon::pivot::FilterType::DateM12) {
     return invalid_argument("model filter type is not representable");
@@ -228,8 +226,7 @@ extern "C" fm_status_t fm_sheet_get_pivot_filter_at(const fm_workbook_t* wb, std
 
   fm_pivot_filter_t result{};
   result.struct_size = out->struct_size;
-  result.axis = *axis;
-  result.field_name = filter.field_name.c_str();
+  result.field_index = static_cast<std::uint32_t>(*field);
   result.type = static_cast<fm_pivot_filter_kind_t>(filter.type);
   result.value_kind = FM_PIVOT_FILTER_OPERAND_KIND_ABSENT;
   result.value_high_kind = FM_PIVOT_FILTER_OPERAND_KIND_ABSENT;

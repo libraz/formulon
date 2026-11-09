@@ -16,7 +16,7 @@ function withWorkbook(Module, fn) {
 export function registerSheetScope(Module, test) {
   test('tables are addressed by sheet and a sheet-local index', () => {
     withWorkbook(Module, (wb) => {
-      wb.addSheet('Second');
+      wb.addSheet('Second', wb.getSheetCount());
       const first = wb.addTable(0, { range: rect(0, 0, 2, 1), name: 'Sales', columns: ['Product', 'Amount'] });
       const second = wb.addTable(1, { range: rect(0, 0, 2, 1), name: 'Costs', columns: ['Item', 'Price'] });
       assert.equal(first, 0);
@@ -239,7 +239,7 @@ export function registerSheetScope(Module, test) {
     withWorkbook(Module, (wb) => {
       assert.deepEqual({ ...wb.getDefaultFont() }, { ...wb.getFont(0) });
       assert.equal(wb.activeSheet(), 0);
-      wb.addSheet('Second');
+      wb.addSheet('Second', wb.getSheetCount());
       wb.setActiveSheet(1);
       assert.equal(wb.activeSheet(), 1);
     });

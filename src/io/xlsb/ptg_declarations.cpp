@@ -29,7 +29,7 @@ namespace {
 
 /// Recursion helper for `collect_ptg_names`: adds `name` to `names` (and
 /// marks it in `seen`) unless already present.
-void AddName(std::string_view name, std::vector<std::string>& names, std::unordered_set<std::string>& seen) {
+void AddName(std::string_view name, std::vector<std::string>& names, NameSet& seen) {
   std::string owned(name);
   if (seen.insert(owned).second) {
     names.push_back(std::move(owned));
@@ -123,9 +123,9 @@ bool InParamScope(const std::vector<std::string_view>& scope, std::string_view n
 /// (`kPtg`); only names resolved from the formula's own scope
 /// (`kScopeResolved`); or only sheet-qualified names, each added as `sheet`
 /// NUL `name` (`kSheetQualified`).
-void CollectNamesScoped(const parser::AstNode& node, std::vector<std::string>& names,
-                        std::unordered_set<std::string>& seen, std::vector<std::string_view>& scope,
-                        NameCollectMode mode, const std::vector<const parser::AstNode*>* values) {
+void CollectNamesScoped(const parser::AstNode& node, std::vector<std::string>& names, NameSet& seen,
+                        std::vector<std::string_view>& scope, NameCollectMode mode,
+                        const std::vector<const parser::AstNode*>* values) {
   // Hidden `_xlfn.*` / `_xlpm.*` records and unqualified names.
   auto add = [&](std::string_view name) {
     if (mode != NameCollectMode::kSheetQualified) {
@@ -271,19 +271,17 @@ void CollectNamesScoped(const parser::AstNode& node, std::vector<std::string>& n
 std::string sheet_scoped_name_key(std::int32_t itab, std::string_view name) {
   std::string key = std::to_string(itab);
   key.push_back('!');
-  key.append(strings::to_ascii_lower(name));
+  key.append(name);
   return key;
 }
 
-void collect_ptg_names(const parser::AstNode& node, std::vector<std::string>& names,
-                       std::unordered_set<std::string>& seen,
+void collect_ptg_names(const parser::AstNode& node, std::vector<std::string>& names, NameSet& seen,
                        const std::vector<const parser::AstNode*>* function_values) {
   std::vector<std::string_view> scope;
   CollectNamesScoped(node, names, seen, scope, NameCollectMode::kPtg, function_values);
 }
 
-void collect_scope_resolved_names(const parser::AstNode& node, std::vector<std::string>& names,
-                                  std::unordered_set<std::string>& seen) {
+void collect_scope_resolved_names(const parser::AstNode& node, std::vector<std::string>& names, NameSet& seen) {
   std::vector<std::string_view> scope;
   CollectNamesScoped(node, names, seen, scope, NameCollectMode::kScopeResolved, nullptr);
 }
@@ -291,7 +289,7 @@ void collect_scope_resolved_names(const parser::AstNode& node, std::vector<std::
 void collect_sheet_qualified_names(const parser::AstNode& node,
                                    std::vector<std::pair<std::string, std::string>>& qualified) {
   std::vector<std::string> keys;
-  std::unordered_set<std::string> seen;
+  NameSet seen;
   std::vector<std::string_view> scope;
   CollectNamesScoped(node, keys, seen, scope, NameCollectMode::kSheetQualified, nullptr);
   for (const std::string& key : keys) {

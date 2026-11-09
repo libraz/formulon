@@ -680,7 +680,7 @@ class SheetHandleTests(unittest.TestCase):
         # H2
         ws = self.wb.sheet("Data")
         ws.set_value("A1", 7)
-        copy = self.wb.copy_sheet(ws, 0)
+        copy = self.wb.copy_sheet(ws, insert_before=0)
         self.assertIsInstance(copy, Sheet)
         self.assertEqual(copy.index, 0)
         self.assertEqual(copy.name, "Data (2)")
@@ -691,7 +691,7 @@ class SheetHandleTests(unittest.TestCase):
         self._assert_in_sync()
 
     def test_copy_inserts_at_returned_index(self) -> None:
-        copy = self.wb.copy_sheet("Sheet1", 2, "Mid")
+        copy = self.wb.copy_sheet("Sheet1", insert_before=2, new_name="Mid")
         self.assertIs(self.wb.sheet(2), copy)
         self.assertEqual(copy.name, "Mid")
         self._assert_in_sync()
@@ -699,7 +699,7 @@ class SheetHandleTests(unittest.TestCase):
     def test_move_keeps_handle(self) -> None:
         # H3
         ws = self.wb.sheet("Sheet1")
-        self.wb.sheet(ws).move(2)
+        self.wb.sheet(ws).move(None)
         self.assertEqual(ws.index, 2)
         self.assertEqual(ws.name, "Sheet1")
         self.assertIs(self.wb.sheet(2), ws)
@@ -762,10 +762,10 @@ class SheetHandleTests(unittest.TestCase):
     def test_structure_edge_cases(self) -> None:
         # H14
         count = len(self.wb)
-        tail = self.wb.copy_sheet(0, count)
+        tail = self.wb.copy_sheet(0, insert_before=count)
         self.assertEqual(tail.index, count)
         with self.assertRaises(IndexOutOfRangeError) as cm:
-            self.wb.copy_sheet(0, len(self.wb) + 1)
+            self.wb.copy_sheet(0, insert_before=len(self.wb) + 1)
         self.assertEqual(cm.exception.code, StatusCode.SHEET_INDEX_OUT_OF_RANGE)
         ws = self.wb.sheet("Data")
         self.wb.sheet(ws).move(ws.index)
@@ -873,8 +873,8 @@ def _workbook_with_pivot() -> "tuple[Workbook, int, int]":
         wb.pivot_cache(cache_id).set_record_value(record, 1, amount)
     ws = wb.sheet(0)
     pivot = ws.add_pivot(PivotInput(name="Pivot1", cache_id=cache_id, anchor=CellAddress(0, 4)))
-    ws.pivot(pivot).add_field(formulon.PivotFieldInput(source_name="Region", axis=formulon.PivotAxis.ROW))
-    amount = ws.pivot(pivot).add_field(formulon.PivotFieldInput(source_name="Amount", axis=formulon.PivotAxis.VALUE))
+    ws.pivot(pivot).add_field(formulon.PivotFieldInput(field_index="Region", axis=formulon.PivotAxis.ROW))
+    amount = ws.pivot(pivot).add_field(formulon.PivotFieldInput(field_index="Amount", axis=formulon.PivotAxis.VALUE))
     ws.pivot(pivot).add_data_field(formulon.PivotDataFieldInput(name="Sum of Amount", field_index=amount))
     return wb, pivot, cache_id
 
@@ -1308,12 +1308,12 @@ class StatusRefusalTests(unittest.TestCase):
             wb.add_sheet("Second")
             for visibility in (formulon.SheetVisibility.HIDDEN, formulon.SheetVisibility.VERY_HIDDEN):
                 with self.subTest(visibility=visibility):
-                    wb.sheet(1).update_view(visibility=visibility)
+                    wb.sheet(1).set_visibility(visibility)
                     with self.assertRaises(FormulonError) as cm:
                         wb.set_active_sheet(1)
                     self.assertEqual(cm.exception.code, StatusCode.PRECONDITION_FAILED)
                     self.assertEqual(wb.active_sheet().index, 0)
-            wb.sheet(1).update_view(visibility=formulon.SheetVisibility.VISIBLE)
+            wb.sheet(1).set_visibility(formulon.SheetVisibility.VISIBLE)
             wb.set_active_sheet(1)
             self.assertEqual(wb.active_sheet().index, 1)
 
@@ -1353,7 +1353,7 @@ class StatusRefusalTests(unittest.TestCase):
                 wb.remove_sheet(0)
             self.assertEqual(cm.exception.code, StatusCode.PRECONDITION_FAILED)
             with self.assertRaises(FormulonError) as cm:
-                ws.update_view(visibility=formulon.SheetVisibility.HIDDEN)
+                ws.set_visibility(formulon.SheetVisibility.HIDDEN)
             self.assertEqual(cm.exception.code, StatusCode.PRECONDITION_FAILED)
             self.assertEqual(len(wb.list_sheets()), 1)
             for r in range(4):

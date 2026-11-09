@@ -116,6 +116,9 @@ TEST(FormulonCApiNaturalKey, TableAndCellStyleByName) {
   EXPECT_STREQ(cell_style.name, "Normal");
   EXPECT_EQ(cell_style.builtin_id, 0U);
   ASSERT_EQ(fm_workbook_get_cell_style(wb.handle, "normal", &present, &cell_style), 0);
+  EXPECT_EQ(present, 1);
+  EXPECT_STREQ(cell_style.name, "Normal");
+  ASSERT_EQ(fm_workbook_get_cell_style(wb.handle, "Other", &present, &cell_style), 0);
   EXPECT_EQ(present, 0);
   EXPECT_EQ(fm_workbook_get_cell_style(wb.handle, nullptr, &present, &cell_style), kBindingNullPointer);
 }
@@ -151,7 +154,7 @@ TEST(FormulonCApiNaturalKey, PersonAndThreadedCommentById) {
   comment.person_id = kAlice;
   comment.created = "2026-01-02T03:04:05.67";
   comment.text = "Check this";
-  ASSERT_EQ(fm_sheet_add_threaded_comment(wb.handle, 0, &comment), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_add_threaded_comment(wb.handle, 0, &comment, ignored_id()), 0) << fm_get_last_error_message();
 
   int32_t present = 0;
   fm_person_t person = FM_STRUCT_INIT(fm_person_t);
@@ -174,17 +177,13 @@ TEST(FormulonCApiNaturalKey, PersonAndThreadedCommentById) {
 TEST(FormulonCApiNaturalKey, ShapeAndDrawingObjectByObjectId) {
   WorkbookGuard wb;
   CreateDefault(wb);
-  fm_shape_patch_t spec = FM_STRUCT_INIT(fm_shape_patch_t);
-  spec.preset_geometry_op = FM_PATCH_OP_SET;
+  fm_shape_spec_t spec = FM_STRUCT_INIT(fm_shape_spec_t);
+  spec.placement = FM_STRUCT_INIT(fm_drawing_placement_spec_t);
   spec.preset_geometry = "rect";
-  spec.anchor_kind_op = FM_PATCH_OP_SET;
-  spec.anchor_kind = FM_ANCHOR_KIND_ONE_CELL;
-  spec.from_row_op = FM_PATCH_OP_SET;
-  spec.from_row = 2;
-  spec.width_emu_op = FM_PATCH_OP_SET;
-  spec.width_emu = 914400;
-  spec.height_emu_op = FM_PATCH_OP_SET;
-  spec.height_emu = 457200;
+  spec.placement.anchor.kind = FM_ANCHOR_KIND_ONE_CELL;
+  spec.placement.anchor.from_row = 2;
+  spec.placement.anchor.width_emu = 914400;
+  spec.placement.anchor.height_emu = 457200;
   uint32_t id = 0;
   ASSERT_EQ(fm_sheet_add_shape(wb.handle, 0, &spec, &id), 0) << fm_get_last_error_message();
 
@@ -201,7 +200,7 @@ TEST(FormulonCApiNaturalKey, ShapeAndDrawingObjectByObjectId) {
   ASSERT_EQ(fm_sheet_get_drawing_object(wb.handle, 0, id, &present, &object), 0);
   ASSERT_EQ(present, 1);
   EXPECT_EQ(object.object_id, id);
-  EXPECT_EQ(object.from_row, 2U);
+  EXPECT_EQ(object.anchor.from_row, 2U);
   ASSERT_EQ(fm_sheet_get_drawing_object(wb.handle, 0, id + 1U, &present, &object), 0);
   EXPECT_EQ(present, 0);
   EXPECT_EQ(fm_sheet_get_drawing_object(wb.handle, 0, id, nullptr, &object), kBindingNullPointer);
@@ -245,9 +244,9 @@ TEST(FormulonCApiNaturalKey, IndexKeyedAddsReturnTheirIndex) {
   WorkbookGuard wb;
   CreateDefault(wb);
   std::size_t sheet = 99;
-  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Second", &sheet), 0);
+  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Second", append_position(wb.handle), &sheet), 0);
   EXPECT_EQ(sheet, 1U);
-  EXPECT_EQ(fm_workbook_add_sheet(wb.handle, "Third", nullptr), kBindingNullPointer);
+  EXPECT_EQ(fm_workbook_add_sheet(wb.handle, "Third", append_position(wb.handle), nullptr), kBindingNullPointer);
 
   fm_cell_rect_t range{0U, 0U, 3U, 0U};
   fm_data_validation_t validation = FM_STRUCT_INIT(fm_data_validation_t);
@@ -257,12 +256,16 @@ TEST(FormulonCApiNaturalKey, IndexKeyedAddsReturnTheirIndex) {
   validation.op = 0;
   validation.formula1 = "1";
   validation.formula2 = "9";
-  std::size_t first = 99;
-  std::size_t second = 99;
-  ASSERT_EQ(fm_sheet_add_validation(wb.handle, sheet, &validation, &first), 0) << fm_get_last_error_message();
-  ASSERT_EQ(fm_sheet_add_validation(wb.handle, sheet, &validation, &second), 0);
-  EXPECT_EQ(first, 0U);
-  EXPECT_EQ(second, 1U);
+  const char* added = nullptr;
+  ASSERT_EQ(fm_sheet_add_validation(wb.handle, sheet, &validation, &added), 0) << fm_get_last_error_message();
+  ASSERT_NE(added, nullptr);
+  const std::string first = added;
+  ASSERT_EQ(fm_sheet_add_validation(wb.handle, sheet, &validation, &added), 0);
+  EXPECT_NE(first, added);
+  fm_data_validation_t read = FM_STRUCT_INIT(fm_data_validation_t);
+  int32_t present = 0;
+  ASSERT_EQ(fm_sheet_get_validation(wb.handle, sheet, first.c_str(), &present, &read), 0);
+  EXPECT_EQ(present, 1);
 
   fm_protected_range_t protected_range = FM_STRUCT_INIT(fm_protected_range_t);
   protected_range.name = "Inputs";
@@ -283,11 +286,12 @@ TEST(FormulonCApiNaturalKey, ARejectedAddLeavesItsOutIndexUntouched) {
   EXPECT_EQ(out, 99U);
   EXPECT_NE(fm_sheet_add_pivot_field_item(wb.handle, 0, 0, 0, "East", 1, &out), 0);
   EXPECT_EQ(out, 99U);
-  EXPECT_NE(fm_workbook_add_sheet(wb.handle, "Sheet1", &out), 0);
+  EXPECT_NE(fm_workbook_add_sheet(wb.handle, "Sheet1", append_position(wb.handle), &out), 0);
   EXPECT_EQ(out, 99U);
   fm_data_validation_t validation = FM_STRUCT_INIT(fm_data_validation_t);
-  EXPECT_NE(fm_sheet_add_validation(wb.handle, 0, &validation, &out), 0);
-  EXPECT_EQ(out, 99U);
+  const char* out_id = nullptr;
+  EXPECT_NE(fm_sheet_add_validation(wb.handle, 0, &validation, &out_id), 0);
+  EXPECT_EQ(out_id, nullptr);
 }
 
 }  // namespace

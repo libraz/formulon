@@ -458,6 +458,7 @@ namespace {
 
 emscripten::val validation_to_val(const fm_data_validation_t& v) {
   emscripten::val item = emscripten::val::object();
+  js_set_cstr(item, "id", v.id);
   item.set("ranges", cell_rects_to_val(v.ranges, v.range_count));
   item.set("type", v.type);
   item.set("operator", v.op);
@@ -491,10 +492,10 @@ emscripten::val JsWorkbook::getValidation(uint32_t sheet, uint32_t validationInd
   return validation_to_val(v);
 }
 
-uint32_t JsWorkbook::addValidation(uint32_t sheet, emscripten::val v) {
+emscripten::val JsWorkbook::addValidation(uint32_t sheet, emscripten::val v) {
   if (handle_ == nullptr) {
     record_invalid_handle();
-    return 0U;
+    return emscripten::val::undefined();
   }
   // Pull every JS field into local storage first; the C ABI receives
   // borrowed `const char*` views that must stay valid until
@@ -506,7 +507,7 @@ uint32_t JsWorkbook::addValidation(uint32_t sheet, emscripten::val v) {
     ranges_buf = js_pull_range_array(ranges_value, "validation.ranges", &reader);
   }
   if (!reader.ok()) {
-    return 0U;
+    return emscripten::val::undefined();
   }
   const std::string formula1 = reader.string(v, "formula1", "validation.formula1");
   const std::string formula2 = reader.string(v, "formula2", "validation.formula2");
@@ -515,7 +516,7 @@ uint32_t JsWorkbook::addValidation(uint32_t sheet, emscripten::val v) {
   const std::string prompt_title = reader.string(v, "promptTitle", "validation.promptTitle");
   const std::string prompt_message = reader.string(v, "promptMessage", "validation.promptMessage");
   if (!reader.ok()) {
-    return 0U;
+    return emscripten::val::undefined();
   }
 
   fm_data_validation_t dv = FM_STRUCT_INIT(fm_data_validation_t);
@@ -525,7 +526,7 @@ uint32_t JsWorkbook::addValidation(uint32_t sheet, emscripten::val v) {
   dv.op = reader.u8(v, "operator", 0U, "validation.operator");
   dv.error_style = reader.u8(v, "errorStyle", 0U, "validation.errorStyle");
   if (!reader.ok()) {
-    return 0U;
+    return emscripten::val::undefined();
   }
   // An omitted flag takes Excel's dialog default.
   dv.allow_blank = js_tristate(reader, v, "allowBlank", "validation.allowBlank");
@@ -533,7 +534,7 @@ uint32_t JsWorkbook::addValidation(uint32_t sheet, emscripten::val v) {
   dv.show_error_message = js_tristate(reader, v, "showErrorMessage", "validation.showErrorMessage");
   dv.show_in_cell_dropdown = js_tristate(reader, v, "showInCellDropdown", "validation.showInCellDropdown");
   if (!reader.ok()) {
-    return 0U;
+    return emscripten::val::undefined();
   }
   dv.formula1 = formula1.empty() ? nullptr : formula1.c_str();
   dv.formula2 = formula2.empty() ? nullptr : formula2.c_str();
@@ -541,15 +542,71 @@ uint32_t JsWorkbook::addValidation(uint32_t sheet, emscripten::val v) {
   dv.error_message = error_message.empty() ? nullptr : error_message.c_str();
   dv.prompt_title = prompt_title.empty() ? nullptr : prompt_title.c_str();
   dv.prompt_message = prompt_message.empty() ? nullptr : prompt_message.c_str();
-  std::size_t out = 0;
-  if (!succeeded(fm_sheet_add_validation(handle_, sheet, &dv, &out))) {
-    return 0U;
+  const char* out_id = nullptr;
+  if (!succeeded(fm_sheet_add_validation(handle_, sheet, &dv, &out_id))) {
+    return emscripten::val::undefined();
   }
-  return static_cast<uint32_t>(out);
+  return emscripten::val(string_from_cstr(out_id));
 }
 
-void JsWorkbook::removeValidationAt(uint32_t sheet, uint32_t index) {
-  succeeded(handle_ != nullptr ? fm_sheet_remove_validation(handle_, sheet, index) : kBindingInvalidHandle);
+void JsWorkbook::updateValidation(uint32_t sheet, const std::string& validationId, emscripten::val patch) {
+  if (handle_ == nullptr) {
+    record_invalid_handle();
+    return;
+  }
+  JsNarrowNumericReader reader("Sheet.updateValidation");
+  fm_data_validation_patch_t p = FM_STRUCT_INIT(fm_data_validation_patch_t);
+  std::vector<fm_cell_rect_t> ranges;
+  const emscripten::val ranges_value = reader.value(patch, "ranges", "validation.ranges");
+  if (reader.ok() && js_patch_key(reader, ranges_value, "validation.ranges", false) == JsPatchKey::kSet &&
+      reader.require_array(ranges_value, "validation.ranges")) {
+    ranges = js_pull_range_array(ranges_value, "validation.ranges", &reader);
+    p.ranges_op = FM_PATCH_OP_SET;
+    p.ranges = ranges.data();
+    p.range_count = ranges.size();
+  }
+  const auto u8 = [&](const char* key, const char* field, fm_patch_op_t* op, int32_t* value) {
+    const emscripten::val v = reader.value(patch, key, field);
+    if (js_patch_key(reader, v, field, false) == JsPatchKey::kSet) {
+      *op = FM_PATCH_OP_SET;
+      *value = static_cast<int32_t>(reader.u8_value(v, 0U, field));
+    }
+  };
+  // A flag is a boolean in JS; the C patch carries it as a tristate.
+  const auto flag = [&](const char* key, const char* field, fm_patch_op_t* op, int32_t* value) {
+    const emscripten::val v = reader.value(patch, key, field);
+    if (js_patch_key(reader, v, field, false) == JsPatchKey::kSet) {
+      *op = FM_PATCH_OP_SET;
+      *value = reader.boolean_value(v, false) ? FM_TRISTATE_TRUE : FM_TRISTATE_FALSE;
+    }
+  };
+  u8("type", "validation.type", &p.type_op, &p.type);
+  u8("operator", "validation.operator", &p.op_op, &p.op);
+  u8("errorStyle", "validation.errorStyle", &p.error_style_op, &p.error_style);
+  flag("allowBlank", "validation.allowBlank", &p.allow_blank_op, &p.allow_blank);
+  flag("showInputMessage", "validation.showInputMessage", &p.show_input_message_op, &p.show_input_message);
+  flag("showErrorMessage", "validation.showErrorMessage", &p.show_error_message_op, &p.show_error_message);
+  flag("showInCellDropdown", "validation.showInCellDropdown", &p.show_in_cell_dropdown_op, &p.show_in_cell_dropdown);
+  std::string text[6];
+  js_patch_string(reader, patch, "formula1", "validation.formula1", true, text[0], &p.formula1_op, &p.formula1);
+  js_patch_string(reader, patch, "formula2", "validation.formula2", true, text[1], &p.formula2_op, &p.formula2);
+  js_patch_string(reader, patch, "errorTitle", "validation.errorTitle", true, text[2], &p.error_title_op,
+                  &p.error_title);
+  js_patch_string(reader, patch, "errorMessage", "validation.errorMessage", true, text[3], &p.error_message_op,
+                  &p.error_message);
+  js_patch_string(reader, patch, "promptTitle", "validation.promptTitle", true, text[4], &p.prompt_title_op,
+                  &p.prompt_title);
+  js_patch_string(reader, patch, "promptMessage", "validation.promptMessage", true, text[5], &p.prompt_message_op,
+                  &p.prompt_message);
+  if (!reader.ok()) {
+    return;
+  }
+  succeeded(fm_sheet_update_validation(handle_, sheet, validationId.c_str(), &p));
+}
+
+void JsWorkbook::removeValidationAt(uint32_t sheet, const std::string& validationId) {
+  succeeded(handle_ != nullptr ? fm_sheet_remove_validation(handle_, sheet, validationId.c_str())
+                               : kBindingInvalidHandle);
 }
 
 void JsWorkbook::clearValidations(uint32_t sheet) {
@@ -662,34 +719,35 @@ emscripten::val JsWorkbook::getThreadedComments(uint32_t sheet) const {
   return comments;
 }
 
-void JsWorkbook::addThreadedComment(uint32_t sheet, emscripten::val comment) {
+emscripten::val JsWorkbook::addThreadedComment(uint32_t sheet, emscripten::val comment) {
   if (handle_ == nullptr) {
     record_invalid_handle();
-    return;
+    return emscripten::val::undefined();
   }
   JsNarrowNumericReader reader("Sheet.addThreadedComment");
   if (!reader.require_object(comment, "comment")) {
-    return;
+    return emscripten::val::undefined();
   }
-  const std::string id = reader.required_string(comment, "id", "id");
+  // An omitted id and an omitted `created` are filled in by the engine.
+  const std::string id = reader.string(comment, "id", "comment.id");
   const std::string person_id = reader.string(comment, "personId", "comment.personId");
   const std::string created = reader.string(comment, "created", "comment.created");
   const std::string text = reader.required_string(comment, "text", "text");
   const std::string parent_id = reader.string(comment, "parentId", "comment.parentId");
   if (!reader.ok()) {
-    return;
+    return emscripten::val::undefined();
   }
   MentionStore mentions;
   pull_mentions(reader.value(comment, "mentions", "comment.mentions"), mentions, reader);
   if (!reader.ok()) {
-    return;
+    return emscripten::val::undefined();
   }
   fm_threaded_comment_t c = FM_STRUCT_INIT(fm_threaded_comment_t);
   c.id = id.c_str();
   c.row = reader.u32(comment, "row", 0U, "comment.row");
   c.col = reader.u32(comment, "col", 0U, "comment.col");
   if (!reader.ok()) {
-    return;
+    return emscripten::val::undefined();
   }
   c.person_id = person_id.c_str();
   c.created = created.c_str();
@@ -698,7 +756,11 @@ void JsWorkbook::addThreadedComment(uint32_t sheet, emscripten::val comment) {
   c.done = reader.boolean(comment, "done", false, "done") ? 1 : 0;
   c.mentions = mentions.items.empty() ? nullptr : mentions.items.data();
   c.mentions_count = static_cast<uint32_t>(mentions.items.size());
-  succeeded(fm_sheet_add_threaded_comment(handle_, sheet, &c));
+  const char* out_id = nullptr;
+  if (!succeeded(fm_sheet_add_threaded_comment(handle_, sheet, &c, &out_id))) {
+    return emscripten::val::undefined();
+  }
+  return emscripten::val(string_from_cstr(out_id));
 }
 
 void JsWorkbook::editThreadedComment(uint32_t sheet, const std::string& id, emscripten::val patch) {

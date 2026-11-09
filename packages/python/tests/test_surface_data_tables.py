@@ -90,7 +90,7 @@ class DataTableTests(unittest.TestCase):
             self.assertEqual(table.row_input, DataTableInputCell(0, 5, False))
             self.assertEqual(table.column_input, DataTableInputCell(1, 5, False))
 
-            wb.sheet(0).delete_rows(0, 1)  # the row input's row
+            wb.sheet(0).delete_rows(0, 0)  # the row input's row
             table = wb.sheet(0).get_data_table(4, 3)
             self.assertTrue(table.row_input.deleted)
             self.assertFalse(table.column_input.deleted)

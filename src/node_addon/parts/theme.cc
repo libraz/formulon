@@ -122,6 +122,34 @@ Napi::Value Workbook::GetThemeScriptFont(const Napi::CallbackInfo& info) {
   return OptionalOrNull(env, rc, present, item);
 }
 
+Napi::Value Workbook::ListThemeScriptFonts(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return ThrowInvalidHandle(env);
+  }
+  const int32_t scheme = ArgI32(info, 0);
+  std::size_t count = 0;
+  fm_status_t rc = fm_workbook_get_theme_script_font_count(handle_, scheme, &count);
+  if (rc != 0) {
+    return ThrowStatus(env, rc);
+  }
+  Napi::Array list = Napi::Array::New(env, count);
+  for (std::size_t i = 0; i < count; ++i) {
+    const char* script = nullptr;
+    const char* typeface = nullptr;
+    rc = fm_workbook_get_theme_script_font_at(handle_, scheme, i, &script, &typeface);
+    if (rc != 0) {
+      return ThrowStatus(env, rc);
+    }
+    Napi::Object item = Napi::Object::New(env);
+    item.Set("scheme", Napi::Number::New(env, scheme));
+    item.Set("script", JsString(env, script));
+    item.Set("typeface", JsString(env, typeface));
+    list.Set(static_cast<uint32_t>(i), item);
+  }
+  return list;
+}
+
 Napi::Value Workbook::SetThemeScriptFont(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {

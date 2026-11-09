@@ -180,10 +180,7 @@ std::string StateAfterSettingVisibility(const std::vector<std::uint8_t>& bytes, 
   if (handle == nullptr) {
     return std::string();
   }
-  fm_sheet_view_patch_t patch = FM_STRUCT_INIT(fm_sheet_view_patch_t);
-  patch.visibility_op = FM_PATCH_OP_SET;
-  patch.visibility = visibility;
-  EXPECT_EQ(fm_sheet_update_view(handle, 0, &patch), 0);
+  EXPECT_EQ(fm_sheet_set_visibility(handle, 0, visibility), 0);
   std::uint8_t* saved = nullptr;
   std::size_t saved_len = 0;
   EXPECT_EQ(fm_workbook_save(handle, &saved, &saved_len), 0);

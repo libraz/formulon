@@ -10,6 +10,7 @@
 #include <string>
 
 #include "c_api/formulon_c.h"
+#include "formulon_c_out_index.h"
 #include "gtest/gtest.h"
 #include "utils/error.h"
 
@@ -41,7 +42,6 @@ TEST(FormulonCStatus, DefinesCarryTheEngineValues) {
   EXPECT_EQ(FM_STATUS_PRECONDITION_FAILED, static_cast<int>(formulon::FormulonErrorCode::kPreconditionFailed));
   EXPECT_EQ(FM_STATUS_SHEET_INDEX_OUT_OF_RANGE, static_cast<int>(formulon::FormulonErrorCode::kSheetIndexOutOfRange));
   EXPECT_EQ(FM_STATUS_BINDING_NULL_POINTER, static_cast<int>(formulon::FormulonErrorCode::kBindingNullPointer));
-  EXPECT_EQ(FM_STATUS_THREADED_COMMENT_INVALID, static_cast<int>(formulon::FormulonErrorCode::kThreadedCommentInvalid));
 }
 
 TEST(FormulonCStatus, StatusStringIsOkForZero) {
@@ -61,10 +61,13 @@ TEST(FormulonCStatus, StatusStringIsOkForZero) {
 #ifdef FM_STATUS_GRAPH_ITERATION_ABORTED
 #error "FM_STATUS_GRAPH_ITERATION_ABORTED is no longer a status code"
 #endif
+#ifdef FM_STATUS_THREADED_COMMENT_INVALID
+#error "FM_STATUS_THREADED_COMMENT_INVALID is no longer a status code"
+#endif
 
 TEST(FormulonCStatus, UnknownValuesAreUnrecognized) {
   for (const fm_status_t value :
-       {-1, 1, 14, 999, 1015, 5050, 5052, 5054, 5051 + 100, 10000, 123456, INT32_MIN, INT32_MAX}) {
+       {-1, 1, 14, 999, 1015, 5050, 5052, 5054, 5051 + 100, 9006, 10000, 123456, INT32_MIN, INT32_MAX}) {
     EXPECT_STREQ(fm_get_status_name(value), "UNRECOGNIZED_STATUS") << value;
   }
 }
@@ -81,7 +84,7 @@ TEST(FormulonCStatus, EveryEngineCodeIsNamedAndNothingElseIs) {
       EXPECT_EQ(c_name, UpperSnake(engine_name)) << value;
     }
   }
-  EXPECT_EQ(named, 60);
+  EXPECT_EQ(named, 59);
 }
 
 namespace {
@@ -102,9 +105,10 @@ TEST(FormulonCStatus, TakenNamesAndIdsAreAlreadyExists) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   std::size_t index = 0;
-  EXPECT_EQ(fm_workbook_add_sheet(wb.handle, "sheet1", &index), FM_STATUS_ALREADY_EXISTS);
-  EXPECT_EQ(fm_workbook_add_sheet(wb.handle, "bad:name", &index), FM_STATUS_INVALID_SHEET_NAME);
-  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Other", &index), 0);
+  EXPECT_EQ(fm_workbook_add_sheet(wb.handle, "sheet1", append_position(wb.handle), &index), FM_STATUS_ALREADY_EXISTS);
+  EXPECT_EQ(fm_workbook_add_sheet(wb.handle, "bad:name", append_position(wb.handle), &index),
+            FM_STATUS_INVALID_SHEET_NAME);
+  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Other", append_position(wb.handle), &index), 0);
   EXPECT_EQ(fm_workbook_rename_sheet(wb.handle, index, "SHEET1"), FM_STATUS_ALREADY_EXISTS);
   EXPECT_EQ(fm_workbook_copy_sheet(wb.handle, 0, 0, "Other", &index), FM_STATUS_ALREADY_EXISTS);
 

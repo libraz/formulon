@@ -10,8 +10,10 @@
       "[Symbol.iterator]",
       "dispose",
       "disposed",
+      "hasSheet",
       "recalcParallel",
-      "setIterativeProgress"
+      "setIterativeProgress",
+      "sheetCount"
     ]
   },
   "native_only": {

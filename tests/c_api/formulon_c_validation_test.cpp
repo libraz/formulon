@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <limits>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -15,7 +16,7 @@
 
 namespace {
 
-static_assert(sizeof(fm_validation_outcome_info_t) == 20U, "fm_validation_outcome_info_t ABI layout changed");
+static_assert(sizeof(fm_validation_outcome_info_t) == 24U, "fm_validation_outcome_info_t ABI layout changed");
 
 constexpr fm_status_t kInvalidArgument = static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
 constexpr fm_status_t kBindingNullPointer = static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer);
@@ -73,13 +74,35 @@ void AddWholeBetween(fm_workbook_t* wb, fm_cell_rect_t range, const char* low, c
   v.show_error_message = FM_TRISTATE_TRUE;
   v.formula1 = low;
   v.formula2 = high;
-  ASSERT_EQ(fm_sheet_add_validation(wb, 0, &v, ignored_index()), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_add_validation(wb, 0, &v, ignored_id()), 0) << fm_get_last_error_message();
 }
 
-fm_validation_outcome_info_t Validate(const fm_workbook_t* wb, std::uint32_t row, std::uint32_t col, fm_value_t value) {
+/// A verdict with its rule id copied out of the read scratch.
+struct Verdict {
+  int32_t has_rule = 0;
+  int32_t valid = 0;
+  int32_t error_style = 0;
+  std::string rule_id;
+};
+
+Verdict Validate(const fm_workbook_t* wb, std::uint32_t row, std::uint32_t col, fm_value_t value) {
   fm_validation_outcome_info_t out = FM_STRUCT_INIT(fm_validation_outcome_info_t);
   EXPECT_EQ(fm_sheet_validate_value(wb, 0, row, col, &value, &out), 0) << fm_get_last_error_message();
-  return out;
+  Verdict verdict;
+  verdict.has_rule = out.has_rule;
+  verdict.valid = out.valid;
+  verdict.error_style = out.error_style;
+  if (out.rule_id != nullptr) {
+    verdict.rule_id = out.rule_id;
+  }
+  return verdict;
+}
+
+/// The id of the rule at position `index` on sheet 0.
+std::string RuleIdAt(const fm_workbook_t* wb, std::size_t index) {
+  fm_data_validation_t rule = FM_STRUCT_INIT(fm_data_validation_t);
+  EXPECT_EQ(fm_sheet_get_validation_at(wb, 0, index, &rule), 0) << fm_get_last_error_message();
+  return rule.id != nullptr ? rule.id : "";
 }
 
 /// Lists every invalid cell, `limit` per page, as `(row, col)` pairs.
@@ -117,17 +140,18 @@ void BuildRules(fm_workbook_t* wb) {
 }
 
 void ExpectVerdicts(const fm_workbook_t* wb) {
-  const fm_validation_outcome_info_t free_cell = Validate(wb, 0, 0, Number(99));
+  const Verdict free_cell = Validate(wb, 0, 0, Number(99));
   EXPECT_EQ(free_cell.has_rule, 0);
   EXPECT_EQ(free_cell.valid, 1);
+  EXPECT_TRUE(free_cell.rule_id.empty());
 
-  const fm_validation_outcome_info_t ok = Validate(wb, 1, 0, Number(5));
+  const Verdict ok = Validate(wb, 1, 0, Number(5));
   EXPECT_EQ(ok.has_rule, 1);
   EXPECT_EQ(ok.valid, 1);
-  EXPECT_EQ(ok.rule_index, 0U);
+  EXPECT_EQ(ok.rule_id, RuleIdAt(wb, 0));
   EXPECT_EQ(ok.error_style, 1);
 
-  const fm_validation_outcome_info_t too_big = Validate(wb, 1, 0, Number(20));
+  const Verdict too_big = Validate(wb, 1, 0, Number(20));
   EXPECT_EQ(too_big.has_rule, 1);
   EXPECT_EQ(too_big.valid, 0);
 
@@ -135,10 +159,10 @@ void ExpectVerdicts(const fm_workbook_t* wb) {
   EXPECT_EQ(Validate(wb, 1, 0, Text("5")).valid, 0);
   EXPECT_EQ(Validate(wb, 1, 0, Number(2.5)).valid, 0);
 
-  const fm_validation_outcome_info_t second = Validate(wb, 4, 1, Number(7));
+  const Verdict second = Validate(wb, 4, 1, Number(7));
   EXPECT_EQ(second.has_rule, 1);
   EXPECT_EQ(second.valid, 0);
-  EXPECT_EQ(second.rule_index, 1U);
+  EXPECT_EQ(second.rule_id, RuleIdAt(wb, 1));
   EXPECT_EQ(second.error_style, 0);
 }
 
@@ -189,7 +213,7 @@ TEST(FormulonCApiValidation, EachComparisonOperatorComparesAsNamed) {
     v.op = static_cast<std::uint8_t>(c.op);
     v.formula1 = "5";
     v.formula2 = "6";
-    ASSERT_EQ(fm_sheet_add_validation(wb.handle, 0, &v, ignored_index()), 0) << fm_get_last_error_message();
+    ASSERT_EQ(fm_sheet_add_validation(wb.handle, 0, &v, ignored_id()), 0) << fm_get_last_error_message();
     EXPECT_EQ(Validate(wb.handle, 0, 0, Number(4)).valid, c.four ? 1 : 0) << c.op;
     EXPECT_EQ(Validate(wb.handle, 0, 0, Number(5)).valid, c.five ? 1 : 0) << c.op;
     EXPECT_EQ(Validate(wb.handle, 0, 0, Number(6)).valid, c.six ? 1 : 0) << c.op;
@@ -201,11 +225,11 @@ TEST(FormulonCApiValidation, OverlappingRulesApplyTheFirst) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   AddWholeBetween(wb.handle, fm_cell_rect_t{0, 0, 4, 0}, "1", "3", 0);
   AddWholeBetween(wb.handle, fm_cell_rect_t{0, 0, 9, 0}, "1", "100", 2);
-  const fm_validation_outcome_info_t overlap = Validate(wb.handle, 2, 0, Number(50));
-  EXPECT_EQ(overlap.rule_index, 0U);
+  const Verdict overlap = Validate(wb.handle, 2, 0, Number(50));
+  EXPECT_EQ(overlap.rule_id, RuleIdAt(wb.handle, 0));
   EXPECT_EQ(overlap.valid, 0);
-  const fm_validation_outcome_info_t tail = Validate(wb.handle, 7, 0, Number(50));
-  EXPECT_EQ(tail.rule_index, 1U);
+  const Verdict tail = Validate(wb.handle, 7, 0, Number(50));
+  EXPECT_EQ(tail.rule_id, RuleIdAt(wb.handle, 1));
   EXPECT_EQ(tail.valid, 1);
   EXPECT_EQ(tail.error_style, 2);
 }
@@ -277,7 +301,7 @@ TEST(FormulonCApiValidation, UnsetTristatesReadBackAsExcelDefaults) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   const fm_cell_rect_t range{0, 0, 0, 0};
   const fm_data_validation_t v = DefaultListRule(&range);
-  ASSERT_EQ(fm_sheet_add_validation(wb.handle, 0, &v, ignored_index()), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_add_validation(wb.handle, 0, &v, ignored_id()), 0) << fm_get_last_error_message();
 
   fm_data_validation_t got = FM_STRUCT_INIT(fm_data_validation_t);
   ASSERT_EQ(fm_sheet_get_validation_at(wb.handle, 0, 0, &got), 0);
@@ -296,7 +320,7 @@ TEST(FormulonCApiValidation, ExplicitFalseTristatesRoundTripThroughSave) {
   v.show_in_cell_dropdown = FM_TRISTATE_FALSE;
   v.show_input_message = FM_TRISTATE_FALSE;
   v.show_error_message = FM_TRISTATE_FALSE;
-  ASSERT_EQ(fm_sheet_add_validation(wb.handle, 0, &v, ignored_index()), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_add_validation(wb.handle, 0, &v, ignored_id()), 0) << fm_get_last_error_message();
 
   WorkbookGuard reloaded;
   SaveAndReload(wb.handle, &reloaded);
@@ -315,7 +339,7 @@ TEST(FormulonCApiValidation, ExplicitTrueTristatesReadBackAsTrue) {
   fm_data_validation_t v = DefaultListRule(&range);
   v.allow_blank = FM_TRISTATE_TRUE;
   v.show_in_cell_dropdown = FM_TRISTATE_TRUE;
-  ASSERT_EQ(fm_sheet_add_validation(wb.handle, 0, &v, ignored_index()), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_add_validation(wb.handle, 0, &v, ignored_id()), 0) << fm_get_last_error_message();
   fm_data_validation_t got = FM_STRUCT_INIT(fm_data_validation_t);
   ASSERT_EQ(fm_sheet_get_validation_at(wb.handle, 0, 0, &got), 0);
   EXPECT_EQ(got.allow_blank, FM_TRISTATE_TRUE);
@@ -330,9 +354,9 @@ TEST(FormulonCApiValidation, TristateOutsideDomainIsRejectedWithoutStoringTheRul
     fm_data_validation_t v = DefaultListRule(&range);
     int32_t* slots[] = {&v.allow_blank, &v.show_in_cell_dropdown, &v.show_input_message, &v.show_error_message};
     *slots[field] = 3;
-    EXPECT_EQ(fm_sheet_add_validation(wb.handle, 0, &v, ignored_index()), kInvalidArgument) << "field " << field;
+    EXPECT_EQ(fm_sheet_add_validation(wb.handle, 0, &v, ignored_id()), kInvalidArgument) << "field " << field;
     *slots[field] = -1;
-    EXPECT_EQ(fm_sheet_add_validation(wb.handle, 0, &v, ignored_index()), kInvalidArgument) << "field " << field;
+    EXPECT_EQ(fm_sheet_add_validation(wb.handle, 0, &v, ignored_id()), kInvalidArgument) << "field " << field;
   }
   std::size_t count = 9;
   ASSERT_EQ(fm_sheet_get_validation_count(wb.handle, 0, &count), 0);
@@ -360,6 +384,199 @@ TEST(FormulonCApiValidation, RejectsBadArguments) {
   EXPECT_EQ(fm_sheet_get_invalid_cells(wb.handle, 0, 1048576ULL * kCursorStride, 0, &page.handle), kInvalidArgument);
   EXPECT_EQ(page.handle, nullptr);
   EXPECT_EQ(fm_sheet_get_invalid_cells(wb.handle, 2, 0, 0, &page.handle), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
+}
+
+/// Adds a whole-number rule over `range` and returns the id the add handed out.
+std::string AddRule(fm_workbook_t* wb, fm_cell_rect_t range, const char* low, const char* high) {
+  fm_data_validation_t v = FM_STRUCT_INIT(fm_data_validation_t);
+  v.ranges = &range;
+  v.range_count = 1;
+  v.type = FM_VALIDATION_TYPE_WHOLE;
+  v.formula1 = low;
+  v.formula2 = high;
+  const char* id = nullptr;
+  EXPECT_EQ(fm_sheet_add_validation(wb, 0, &v, &id), 0) << fm_get_last_error_message();
+  return id != nullptr ? id : "";
+}
+
+TEST(FormulonCApiValidation, AddReturnsTheRuleIdAndGetByIdFindsIt) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  const std::string first = AddRule(wb.handle, fm_cell_rect_t{0, 0, 4, 0}, "1", "3");
+  const std::string second = AddRule(wb.handle, fm_cell_rect_t{0, 1, 4, 1}, "4", "6");
+  EXPECT_FALSE(first.empty());
+  EXPECT_NE(first, second);
+  EXPECT_EQ(RuleIdAt(wb.handle, 0), first);
+  EXPECT_EQ(RuleIdAt(wb.handle, 1), second);
+
+  fm_data_validation_t got = FM_STRUCT_INIT(fm_data_validation_t);
+  int32_t present = 0;
+  ASSERT_EQ(fm_sheet_get_validation(wb.handle, 0, second.c_str(), &present, &got), 0);
+  EXPECT_EQ(present, 1);
+  EXPECT_STREQ(got.formula1, "=4");
+  EXPECT_EQ(got.id, second);
+}
+
+TEST(FormulonCApiValidation, GetByUnknownIdReportsAbsence) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  AddRule(wb.handle, fm_cell_rect_t{0, 0, 4, 0}, "1", "3");
+  fm_data_validation_t got = FM_STRUCT_INIT(fm_data_validation_t);
+  int32_t present = 7;
+  for (const char* id : {"", "0", "x", "999999", "01"}) {
+    present = 7;
+    EXPECT_EQ(fm_sheet_get_validation(wb.handle, 0, id, &present, &got), 0) << id;
+    EXPECT_EQ(present, 0) << id;
+    EXPECT_EQ(got.range_count, 0U) << id;
+  }
+  EXPECT_EQ(fm_sheet_get_validation(wb.handle, 0, nullptr, &present, &got), kBindingNullPointer);
+  EXPECT_EQ(fm_sheet_get_validation(wb.handle, 5, "1", &present, &got), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
+}
+
+TEST(FormulonCApiValidation, IdsSurviveTheRemovalOfAnotherRuleAndAreNotReused) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  const std::string first = AddRule(wb.handle, fm_cell_rect_t{0, 0, 4, 0}, "1", "3");
+  const std::string second = AddRule(wb.handle, fm_cell_rect_t{0, 1, 4, 1}, "4", "6");
+  ASSERT_EQ(fm_sheet_remove_validation(wb.handle, 0, first.c_str()), 0);
+  EXPECT_EQ(RuleIdAt(wb.handle, 0), second);
+  const std::string third = AddRule(wb.handle, fm_cell_rect_t{0, 2, 4, 2}, "7", "9");
+  EXPECT_NE(third, first);
+  EXPECT_NE(third, second);
+}
+
+TEST(FormulonCApiValidation, RemoveAndUpdateByUnknownIdAreNotFound) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  const std::string id = AddRule(wb.handle, fm_cell_rect_t{0, 0, 4, 0}, "1", "3");
+  ASSERT_EQ(fm_sheet_remove_validation(wb.handle, 0, id.c_str()), 0);
+  EXPECT_EQ(fm_sheet_remove_validation(wb.handle, 0, id.c_str()), FM_STATUS_NOT_FOUND);
+  EXPECT_EQ(fm_sheet_remove_validation(wb.handle, 0, "abc"), FM_STATUS_NOT_FOUND);
+  const fm_data_validation_patch_t patch = FM_STRUCT_INIT(fm_data_validation_patch_t);
+  EXPECT_EQ(fm_sheet_update_validation(wb.handle, 0, id.c_str(), &patch), FM_STATUS_NOT_FOUND);
+  EXPECT_EQ(fm_sheet_remove_validation(wb.handle, 0, nullptr), kBindingNullPointer);
+  EXPECT_EQ(fm_sheet_remove_validation(wb.handle, 4, "1"), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
+}
+
+TEST(FormulonCApiValidation, UpdateMergesOnlyTheSetFields) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  const std::string id = AddRule(wb.handle, fm_cell_rect_t{0, 0, 4, 0}, "1", "3");
+
+  fm_data_validation_patch_t patch = FM_STRUCT_INIT(fm_data_validation_patch_t);
+  patch.formula2_op = FM_PATCH_OP_SET;
+  patch.formula2 = "=20";
+  patch.error_title_op = FM_PATCH_OP_SET;
+  patch.error_title = "Out of range";
+  patch.error_style_op = FM_PATCH_OP_SET;
+  patch.error_style = 2;
+  patch.allow_blank_op = FM_PATCH_OP_SET;
+  patch.allow_blank = FM_TRISTATE_FALSE;
+  ASSERT_EQ(fm_sheet_update_validation(wb.handle, 0, id.c_str(), &patch), 0) << fm_get_last_error_message();
+
+  fm_data_validation_t got = FM_STRUCT_INIT(fm_data_validation_t);
+  int32_t present = 0;
+  ASSERT_EQ(fm_sheet_get_validation(wb.handle, 0, id.c_str(), &present, &got), 0);
+  EXPECT_STREQ(got.formula1, "=1");
+  EXPECT_STREQ(got.formula2, "=20");
+  EXPECT_STREQ(got.error_title, "Out of range");
+  EXPECT_EQ(got.error_style, 2);
+  EXPECT_EQ(got.allow_blank, FM_TRISTATE_FALSE);
+  EXPECT_EQ(got.type, FM_VALIDATION_TYPE_WHOLE);
+  EXPECT_EQ(got.range_count, 1U);
+
+  fm_data_validation_patch_t clear = FM_STRUCT_INIT(fm_data_validation_patch_t);
+  clear.error_title_op = FM_PATCH_OP_CLEAR;
+  clear.formula2_op = FM_PATCH_OP_CLEAR;
+  ASSERT_EQ(fm_sheet_update_validation(wb.handle, 0, id.c_str(), &clear), 0);
+  ASSERT_EQ(fm_sheet_get_validation(wb.handle, 0, id.c_str(), &present, &got), 0);
+  EXPECT_EQ(got.error_title, nullptr);
+  EXPECT_EQ(got.formula2, nullptr);
+  EXPECT_STREQ(got.formula1, "=1");
+}
+
+TEST(FormulonCApiValidation, UpdateReplacesTheRangesAndKeepsTheId) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  const std::string id = AddRule(wb.handle, fm_cell_rect_t{0, 0, 4, 0}, "1", "3");
+  const fm_cell_rect_t moved[] = {{0, 2, 1, 2}, {5, 2, 6, 2}};
+  fm_data_validation_patch_t patch = FM_STRUCT_INIT(fm_data_validation_patch_t);
+  patch.ranges_op = FM_PATCH_OP_SET;
+  patch.ranges = moved;
+  patch.range_count = 2;
+  ASSERT_EQ(fm_sheet_update_validation(wb.handle, 0, id.c_str(), &patch), 0);
+  fm_data_validation_t got = FM_STRUCT_INIT(fm_data_validation_t);
+  int32_t present = 0;
+  ASSERT_EQ(fm_sheet_get_validation(wb.handle, 0, id.c_str(), &present, &got), 0);
+  EXPECT_EQ(present, 1);
+  ASSERT_EQ(got.range_count, 2U);
+  EXPECT_EQ(got.ranges[1].first_row, 5U);
+}
+
+TEST(FormulonCApiValidation, UpdateChecksTheWholePatchBeforeChangingAnything) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  const std::string id = AddRule(wb.handle, fm_cell_rect_t{0, 0, 4, 0}, "1", "3");
+
+  fm_data_validation_patch_t patch = FM_STRUCT_INIT(fm_data_validation_patch_t);
+  patch.formula1_op = FM_PATCH_OP_SET;
+  patch.formula1 = "=99";
+  patch.type_op = FM_PATCH_OP_CLEAR;
+  EXPECT_EQ(fm_sheet_update_validation(wb.handle, 0, id.c_str(), &patch), kInvalidArgument);
+
+  patch = FM_STRUCT_INIT(fm_data_validation_patch_t);
+  patch.formula1_op = FM_PATCH_OP_SET;
+  patch.formula1 = "=99";
+  patch.error_message_op = FM_PATCH_OP_SET;
+  patch.error_message = nullptr;
+  EXPECT_EQ(fm_sheet_update_validation(wb.handle, 0, id.c_str(), &patch), kInvalidArgument);
+
+  patch = FM_STRUCT_INIT(fm_data_validation_patch_t);
+  patch.formula1_op = FM_PATCH_OP_SET;
+  patch.formula1 = "=99";
+  patch.ranges_op = FM_PATCH_OP_SET;
+  patch.range_count = 0;
+  EXPECT_EQ(fm_sheet_update_validation(wb.handle, 0, id.c_str(), &patch), kInvalidArgument);
+
+  patch = FM_STRUCT_INIT(fm_data_validation_patch_t);
+  patch.error_style_op = FM_PATCH_OP_SET;
+  patch.error_style = 9;
+  EXPECT_EQ(fm_sheet_update_validation(wb.handle, 0, id.c_str(), &patch), kInvalidArgument);
+
+  fm_data_validation_t got = FM_STRUCT_INIT(fm_data_validation_t);
+  int32_t present = 0;
+  ASSERT_EQ(fm_sheet_get_validation(wb.handle, 0, id.c_str(), &present, &got), 0);
+  EXPECT_STREQ(got.formula1, "=1");
+  EXPECT_EQ(got.type, FM_VALIDATION_TYPE_WHOLE);
+}
+
+TEST(FormulonCApiValidation, UpdateWithAnUnparsableFormulaLeavesTheRuleAlone) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  const std::string id = AddRule(wb.handle, fm_cell_rect_t{0, 0, 4, 0}, "1", "3");
+  fm_data_validation_patch_t patch = FM_STRUCT_INIT(fm_data_validation_patch_t);
+  patch.error_title_op = FM_PATCH_OP_SET;
+  patch.error_title = "changed";
+  patch.formula1_op = FM_PATCH_OP_SET;
+  patch.formula1 = "=1+";
+  EXPECT_NE(fm_sheet_update_validation(wb.handle, 0, id.c_str(), &patch), 0);
+  fm_data_validation_t got = FM_STRUCT_INIT(fm_data_validation_t);
+  int32_t present = 0;
+  ASSERT_EQ(fm_sheet_get_validation(wb.handle, 0, id.c_str(), &present, &got), 0);
+  EXPECT_EQ(got.error_title, nullptr);
+  EXPECT_STREQ(got.formula1, "=1");
+}
+
+TEST(FormulonCApiValidation, OutcomeNamesTheRuleByItsId) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  const std::string first = AddRule(wb.handle, fm_cell_rect_t{0, 0, 4, 0}, "1", "3");
+  const std::string second = AddRule(wb.handle, fm_cell_rect_t{5, 0, 9, 0}, "1", "3");
+  ASSERT_EQ(fm_sheet_remove_validation(wb.handle, 0, first.c_str()), 0);
+  const Verdict covered = Validate(wb.handle, 6, 0, Number(2));
+  EXPECT_EQ(covered.has_rule, 1);
+  EXPECT_EQ(covered.rule_id, second);
+  EXPECT_TRUE(Validate(wb.handle, 1, 0, Number(2)).rule_id.empty());
 }
 
 }  // namespace

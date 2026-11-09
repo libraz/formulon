@@ -95,9 +95,9 @@ function buildPivot(wb) {
     cache.setRecordValue(rec, 2, date);
   });
   const pivot = ws.addPivot({ name: 'Pivot1', cacheId: cache.cacheId, anchor: { row: 0, col: 6 } });
-  const region = pivot.addField({ sourceName: 'Region', axis: f.PivotAxis.Row });
-  const amount = pivot.addField({ sourceName: 'Amount', axis: f.PivotAxis.Value });
-  const date = pivot.addField({ sourceName: 'Date', axis: f.PivotAxis.Hidden ?? 2 });
+  const region = pivot.addField({ fieldIndex: 'Region', axis: f.PivotAxis.Row });
+  const amount = pivot.addField({ fieldIndex: 'Amount', axis: f.PivotAxis.Value });
+  const date = pivot.addField({ fieldIndex: 'Date', axis: f.PivotAxis.Hidden ?? 2 });
   pivot.addDataField({ name: 'Sum of Amount', fieldIndex: amount, aggregation: 0 });
   return { cache, pivot, region, amount, date };
 }
@@ -168,6 +168,50 @@ describe('enum tables list their members at the exact ordinals', () => {
   it('PivotSortOrder starts at Manual and SlicerSortOrder at Ascending', () => {
     assertTable('PivotSortOrder', { Manual: 0, Ascending: 1, Descending: 2 });
     assertTable('SlicerSortOrder', { Ascending: 0, Descending: 1 });
+  });
+
+  it('AnchorKind and AnchorEditAs start at Default, and ShapePaint at Default for no paint of its own', () => {
+    assertTable('AnchorKind', { Default: 0, OneCell: 1, TwoCell: 2, Absolute: 3 });
+    assertTable('AnchorEditAs', { Default: 0, OneCell: 1, TwoCell: 2, Absolute: 3 });
+    assertTable('ShapePaint', { Default: 0, Solid: 1, None: 2, Other: 3 });
+  });
+
+  it('an omitted anchor kind takes the operation default and a read reports the stored kind and edit-as', () => {
+    withSheet((ws) => {
+      const box = { fromRow: 1, fromCol: 1, toRow: 4, toCol: 4 };
+      const shape = ws.addShape({ anchor: box });
+      assert.equal(shape.getDrawingProperties().anchor.kind, f.AnchorKind.TwoCell);
+      const oneCell = ws.addShape({ anchor: { kind: f.AnchorKind.OneCell, widthEmu: 9525, heightEmu: 9525 } });
+      assert.equal(oneCell.getDrawingProperties().anchor.kind, f.AnchorKind.OneCell);
+      for (const handle of ws.listDrawings()) {
+        const { anchor } = handle.getDrawingProperties();
+        assert.notEqual(anchor.kind, f.AnchorKind.Default);
+        assert.notEqual(anchor.editAs, f.AnchorEditAs.Default);
+      }
+      const free = ws.addShape({ anchor: { ...box, editAs: f.AnchorEditAs.Absolute } });
+      assert.equal(free.getDrawingProperties().anchor.editAs, f.AnchorEditAs.Absolute);
+      assert.equal(free.getDrawingProperties().anchor.kind, f.AnchorKind.TwoCell);
+    });
+  });
+
+  it('a shape without its own paint reads ShapePaint.Default and a patch of Default removes the paint', () => {
+    withSheet((ws) => {
+      const anchor = { fromRow: 1, fromCol: 1, toRow: 4, toCol: 4 };
+      const plain = ws.addShape({ anchor });
+      assert.equal(plain.getProperties().fillKind, f.ShapePaint.Default);
+      assert.equal(plain.getProperties().lineKind, f.ShapePaint.Default);
+      const painted = ws.addShape({
+        anchor,
+        fillKind: f.ShapePaint.Solid,
+        fillColor: '#336699',
+        lineKind: f.ShapePaint.None,
+      });
+      assert.equal(painted.getProperties().fillKind, f.ShapePaint.Solid);
+      painted.update({ fillKind: f.ShapePaint.Default, lineKind: f.ShapePaint.Default });
+      assert.equal(painted.getProperties().fillKind, f.ShapePaint.Default);
+      assert.equal(painted.getProperties().fillColor, null);
+      assert.equal(painted.getProperties().lineKind, f.ShapePaint.Default);
+    });
   });
 
   it('TableTotalsRowFunction follows the schema order', () => {
@@ -453,7 +497,11 @@ describe('reordered tables round-trip by member through save and load', () => {
       withSheet((ws) => {
         fillColumns(ws);
         ws.addTable({ range: 'A1:B4', name: 'Sales' });
-        ws.addSlicer('Sales', 0, { fromRow: 4, fromCol: 3, toRow: 14, toCol: 5, caption: 'Pick', sortOrder });
+        ws.addSlicer('Sales', 0, {
+          anchor: { fromRow: 4, fromCol: 3, toRow: 14, toCol: 5 },
+          caption: 'Pick',
+          sortOrder,
+        });
         assert.equal(ws.listSlicers()[0].getProperties().sortOrder, sortOrder, name);
       });
     }
@@ -1009,7 +1057,7 @@ describe('pivot filters carry value and valueHigh as number or string', () => {
   function withPivot(body) {
     withSheet((_ws, wb) => body(buildPivot(wb).pivot));
   }
-  const region = { axis: 0, fieldName: 'Region' };
+  const region = { fieldIndex: 'Region' };
 
   it('a value filter reads back its numeric operand and no high bound', () => {
     withPivot((pivot) => {

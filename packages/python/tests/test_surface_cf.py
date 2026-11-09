@@ -6,15 +6,22 @@ import unittest
 
 from formulon import (
     CellRect,
-    Cfvo,
+    CfAboveAverageRuleInput,
+    CfCellIsRuleInput,
+    CfColorScaleInput,
+    CfColorScaleRuleInput,
+    CfDataBarInput,
+    CfDataBarRuleInput,
+    CfIconSetInput,
+    CfIconSetRuleInput,
+    CfTimePeriodRuleInput,
+    CfTop10RuleInput,
+    CfValueObject,
     Color,
     ColorKind,
-    ColorScale,
     ComparisonOperator,
     ConditionalFormatInput,
-    DataBar,
     DxfInput,
-    IconSet,
     Workbook,
 )
 
@@ -31,9 +38,8 @@ class ConditionalFormatTests(unittest.TestCase):
             # A rule's dxf_index must resolve against a registered dxf.
             dxf_index = wb.ooxml.add_dxf(DxfInput())
             wb.sheet(0).add_cf_rule(
-                ConditionalFormatInput(
-                    ranges=[CellRect(0, 0, 2, 0)],
-                    type=1,  # cellIs
+                CfCellIsRuleInput(
+                    ranges=[CellRect(0, 0, 2, 0)],  # cellIs
                     operator=ComparisonOperator.GREATER_THAN,
                     formula1="4",
                     dxf_index=dxf_index,
@@ -58,7 +64,7 @@ class ConditionalFormatTests(unittest.TestCase):
     def test_cell_is_op_alone_is_engaged(self) -> None:
         with Workbook.create_default() as wb:
             wb.sheet(0).add_cf_rule(
-                ConditionalFormatInput(ranges=[CellRect(0, 0, 2, 0)], type=1, operator=3, formula1="5"),
+                CfCellIsRuleInput(ranges=[CellRect(0, 0, 2, 0)], operator=3, formula1="5"),
             )
             rule = wb.sheet(0).list_cf_rules()[0]
             self.assertEqual(rule.operator, 3)
@@ -69,7 +75,7 @@ class ConditionalFormatTests(unittest.TestCase):
 
     def test_unset_rank_reads_back_none(self) -> None:
         with Workbook.create_default() as wb:
-            wb.sheet(0).add_cf_rule(ConditionalFormatInput(ranges=[CellRect(0, 0, 2, 0)], type=5))
+            wb.sheet(0).add_cf_rule(CfTop10RuleInput(ranges=[CellRect(0, 0, 2, 0)]))
             rule = wb.sheet(0).list_cf_rules()[0]
             self.assertIsNone(rule.rank)
             self.assertIsNone(rule.operator)
@@ -79,36 +85,17 @@ class ConditionalFormatTests(unittest.TestCase):
             dxf_index = wb.ooxml.add_dxf(DxfInput())
             sqref = [CellRect(0, 0, 2, 0)]
             wb.sheet(0).add_cf_rule(
-                ConditionalFormatInput(
-                    ranges=sqref, type=1, operator=ComparisonOperator.LESS_THAN, formula1="1", dxf_index=dxf_index
+                CfCellIsRuleInput(
+                    ranges=sqref, operator=ComparisonOperator.LESS_THAN, formula1="1", dxf_index=dxf_index
                 )
             )
-            wb.sheet(0).add_cf_rule(ConditionalFormatInput(ranges=sqref, type=5, rank=0, dxf_index=dxf_index))
-            wb.sheet(0).add_cf_rule(ConditionalFormatInput(ranges=sqref, type=6, std_dev=0.0))
-            wb.sheet(0).add_cf_rule(ConditionalFormatInput(ranges=sqref, type=15, time_period=0))
+            wb.sheet(0).add_cf_rule(CfTop10RuleInput(ranges=sqref, rank=0, dxf_index=dxf_index))
+            wb.sheet(0).add_cf_rule(CfAboveAverageRuleInput(ranges=sqref, std_dev=0.0))
+            wb.sheet(0).add_cf_rule(CfTimePeriodRuleInput(ranges=sqref, time_period=0))
             first = wb.sheet(0).list_cf_rules()
             wb.sheet(0).clear_cf_rules()
             for r in first:
-                wb.sheet(0).add_cf_rule(
-                    ConditionalFormatInput(
-                        ranges=r.ranges,
-                        type=r.type,
-                        priority=r.priority,
-                        stop_if_true=r.stop_if_true,
-                        dxf_index=r.dxf_index,
-                        formula1=r.formula1,
-                        formula2=r.formula2,
-                        operator=r.operator,
-                        rank=r.rank,
-                        percent=r.percent,
-                        bottom=r.bottom,
-                        above_average=r.above_average,
-                        equal_average=r.equal_average,
-                        std_dev=r.std_dev,
-                        text=r.text,
-                        time_period=r.time_period,
-                    ),
-                )
+                wb.sheet(0).add_cf_rule(r)
             again = wb.sheet(0).list_cf_rules()
             for x, y in zip(first, again):
                 for f in ("operator", "rank", "std_dev", "time_period", "dxf_index"):
@@ -117,23 +104,20 @@ class ConditionalFormatTests(unittest.TestCase):
     def test_visual_rules_roundtrip(self) -> None:
         with Workbook.create_default() as wb:
             rules = [
-                ConditionalFormatInput(
+                CfColorScaleRuleInput(
                     ranges=[CellRect(0, 0, 2, 0)],
-                    type=2,
-                    color_scale=ColorScale(
-                        [Cfvo(3), Cfvo(4)],
+                    color_scale=CfColorScaleInput(
+                        [CfValueObject(3), CfValueObject(4)],
                         [_rgb(255, 0, 0), _rgb(0, 255, 0)],
                     ),
                 ),
-                ConditionalFormatInput(
+                CfDataBarRuleInput(
                     ranges=[CellRect(0, 1, 2, 1)],
-                    type=3,
-                    data_bar=DataBar(Cfvo(3), Cfvo(4), _rgb(0, 0, 255)),
+                    data_bar=CfDataBarInput(CfValueObject(3), CfValueObject(4), _rgb(0, 0, 255)),
                 ),
-                ConditionalFormatInput(
+                CfIconSetRuleInput(
                     ranges=[CellRect(0, 2, 2, 2)],
-                    type=4,
-                    icon_set=IconSet(0, [Cfvo(1, "33"), Cfvo(1, "67")]),
+                    icon_set=CfIconSetInput(0, [CfValueObject(1, "33"), CfValueObject(1, "67")]),
                 ),
             ]
             for rule in rules:
@@ -143,7 +127,7 @@ class ConditionalFormatTests(unittest.TestCase):
             self.assertEqual(got[1].data_bar.fill, _rgb(0, 0, 255))
             self.assertEqual(got[2].icon_set.thresholds[1].value, "67")
 
-    # `Cfvo.type`: 0 num, 1 percent, 2 percentile, 3 min, 4 max,
+    # `CfValueObject.type`: 0 num, 1 percent, 2 percentile, 3 min, 4 max,
     # 5 formula, 6 autoMin, 7 autoMax. Every threshold below states a
     # `value`, which is what puts a borrowed string behind each CFVO.
     EXPECTED_CFVO_VALUES = ["0", "50", "100", "5", "95", "0", "33", "67"]
@@ -152,24 +136,21 @@ class ConditionalFormatTests(unittest.TestCase):
     def _cfvo_rules() -> list[ConditionalFormatInput]:
         """Build one color-scale, one data-bar and one icon-set rule."""
         return [
-            ConditionalFormatInput(
+            CfColorScaleRuleInput(
                 ranges=[CellRect(0, 0, 4, 0)],
-                type=2,
-                color_scale=ColorScale(
-                    [Cfvo(0, "0"), Cfvo(1, "50"), Cfvo(0, "100")],
+                color_scale=CfColorScaleInput(
+                    [CfValueObject(0, "0"), CfValueObject(1, "50"), CfValueObject(0, "100")],
                     [_rgb(248, 105, 107), _rgb(255, 235, 132), _rgb(99, 190, 123)],
                 ),
             ),
-            ConditionalFormatInput(
+            CfDataBarRuleInput(
                 ranges=[CellRect(0, 1, 4, 1)],
-                type=3,
-                data_bar=DataBar(Cfvo(0, "5"), Cfvo(0, "95"), _rgb(0, 112, 192)),
+                data_bar=CfDataBarInput(CfValueObject(0, "5"), CfValueObject(0, "95"), _rgb(0, 112, 192)),
             ),
-            ConditionalFormatInput(
+            CfIconSetRuleInput(
                 ranges=[CellRect(0, 2, 4, 2)],
-                type=4,
                 # 4Arrows: a 4-icon set carries three thresholds.
-                icon_set=IconSet(8, [Cfvo(1, "0"), Cfvo(1, "33"), Cfvo(1, "67")]),
+                icon_set=CfIconSetInput(8, [CfValueObject(1, "0"), CfValueObject(1, "33"), CfValueObject(1, "67")]),
             ),
         ]
 
@@ -218,9 +199,9 @@ class ConditionalFormatTests(unittest.TestCase):
         # that never emits the extension, which is how they were lost
         # before: the values came back from the model and disappeared on
         # the way through the file.
-        bar = DataBar(
-            Cfvo(3),
-            Cfvo(4),
+        bar = CfDataBarInput(
+            CfValueObject(3),
+            CfValueObject(4),
             _rgb(0, 0, 255),
             gradient=False,
             axis_position=1,
@@ -231,7 +212,7 @@ class ConditionalFormatTests(unittest.TestCase):
             direction=2,
         )
         with Workbook.create_default() as wb:
-            wb.sheet(0).add_cf_rule(ConditionalFormatInput(ranges=[CellRect(0, 0, 2, 0)], type=3, data_bar=bar))
+            wb.sheet(0).add_cf_rule(CfDataBarRuleInput(ranges=[CellRect(0, 0, 2, 0)], data_bar=bar))
             saved = wb.save()
 
         with Workbook.load(saved) as reloaded:
@@ -244,25 +225,26 @@ class ConditionalFormatTests(unittest.TestCase):
             self.assertEqual(got.axis_color, _rgb(1, 2, 3))
             self.assertEqual(got.direction, 2)
             # Feeding the decoded bar straight back must reproduce it.
-            reloaded.sheet(0).add_cf_rule(ConditionalFormatInput(ranges=[CellRect(4, 0, 6, 0)], type=3, data_bar=got))
+            reloaded.sheet(0).add_cf_rule(CfDataBarRuleInput(ranges=[CellRect(4, 0, 6, 0)], data_bar=got))
             self.assertEqual(reloaded.sheet(0).list_cf_rules()[1].data_bar, got)
 
     def test_icon_set_floor_survives_save_and_load(self) -> None:
-        icons = IconSet(2, [Cfvo(0, "7"), Cfvo(0, "9")], floor=Cfvo(0, "5", gte=False))
+        icons = CfIconSetInput(
+            2, [CfValueObject(0, "7"), CfValueObject(0, "9")], floor=CfValueObject(0, "5", gte=False)
+        )
         with Workbook.create_default() as wb:
-            wb.sheet(0).add_cf_rule(ConditionalFormatInput(ranges=[CellRect(0, 0, 9, 0)], type=4, icon_set=icons))
+            wb.sheet(0).add_cf_rule(CfIconSetRuleInput(ranges=[CellRect(0, 0, 9, 0)], icon_set=icons))
             saved = wb.save()
         with Workbook.load(saved) as reloaded:
             got = reloaded.sheet(0).list_cf_rules()[0].icon_set
-            self.assertEqual(got.floor, Cfvo(0, "5", gte=False))
+            self.assertEqual(got.floor, CfValueObject(0, "5", gte=False))
 
     def test_omitted_data_bar_x14_fields_keep_the_model_defaults(self) -> None:
         with Workbook.create_default() as wb:
             wb.sheet(0).add_cf_rule(
-                ConditionalFormatInput(
+                CfDataBarRuleInput(
                     ranges=[CellRect(0, 0, 2, 0)],
-                    type=3,
-                    data_bar=DataBar(Cfvo(3), Cfvo(4), _rgb(0, 0, 255)),
+                    data_bar=CfDataBarInput(CfValueObject(3), CfValueObject(4), _rgb(0, 0, 255)),
                 ),
             )
             got = wb.sheet(0).list_cf_rules()[0].data_bar

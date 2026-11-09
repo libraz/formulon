@@ -4,8 +4,9 @@
 // A thread is the top-level `ThreadedComment` of a cell (empty `parent_id`);
 // its replies name the top-level id in `parent_id` and share its anchor.
 // A sheet stores its comments as one flat list in file order, each thread
-// followed by its replies. Ids and timestamps come from the caller: the
-// engine never mints a GUID or reads the clock, so a save is deterministic.
+// followed by its replies. A comment added without an id or timestamp gets a
+// generated GUID and the workbook clock's reading; both are reproducible
+// while the clock is pinned. Loading and saving never generate either.
 //
 // Excel also stores every thread as a legacy note ("stub") whose author is
 // `tc={thread id}` so older readers can show it. The stub is not modelled:
@@ -25,14 +26,14 @@ namespace formulon {
 /// One `@person` mention inside a threaded comment's text.
 struct Mention {
   std::string person_id;     ///< `Person::id` of the mentioned person.
-  std::string mention_id;    ///< Brace-wrapped uppercase GUID of the mention itself.
+  std::string mention_id;    ///< Brace-wrapped GUID of the mention itself; added ones are stored uppercase.
   std::uint32_t start = 0;   ///< Offset into the text, in UTF-16 code units.
   std::uint32_t length = 0;  ///< Length of the mention, in UTF-16 code units.
 };
 
 /// One threaded comment: a thread's opening comment or one of its replies.
 struct ThreadedComment {
-  std::string id;  ///< Brace-wrapped uppercase GUID.
+  std::string id;  ///< Brace-wrapped GUID; added ids are stored uppercase, as Excel writes them.
   std::uint32_t row = 0;
   std::uint32_t col = 0;
   std::string person_id;  ///< `Person::id` of the author.
@@ -45,19 +46,19 @@ struct ThreadedComment {
 
 /// One entry of the workbook's person list (`xl/persons/person.xml`).
 struct Person {
-  std::string id;  ///< Brace-wrapped uppercase GUID.
+  std::string id;  ///< Brace-wrapped GUID; added ids are stored uppercase, as Excel writes them.
   std::string display_name;
   std::string user_id;
   std::string provider_id;  ///< `AD`, `Windows Live`, `PeoplePicker` or `None`.
 };
 
-/// True for a brace-wrapped uppercase GUID, `{XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX}`.
+/// True for a brace-wrapped GUID, `{XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX}`, in either letter case.
 bool is_threaded_comment_guid(std::string_view s) noexcept;
 
 /// True for Excel's threaded-comment timestamp form `YYYY-MM-DDTHH:MM:SS.ss`.
 bool is_threaded_comment_timestamp(std::string_view s) noexcept;
 
-/// Index of the comment with `id` in `list`, or `list.size()` when absent.
+/// Index of the comment with `id` in `list` (GUIDs match across letter case), or `list.size()` when absent.
 std::size_t find_threaded_comment(const std::vector<ThreadedComment>& list, std::string_view id) noexcept;
 
 /// Index of the thread (opening comment) anchored at `row`/`col`, or

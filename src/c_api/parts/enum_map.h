@@ -30,14 +30,17 @@ namespace parts {
 
 // --- anchor family -----------------------------------------------------------
 
-inline AnchorKind anchor_kind_from_c(std::int32_t value) {
+// `FM_ANCHOR_KIND_DEFAULT` takes the operation's own default, `fallback`.
+inline AnchorKind anchor_kind_from_c(std::int32_t value, AnchorKind fallback) {
   switch (value) {
+    case FM_ANCHOR_KIND_ONE_CELL:
+      return AnchorKind::kOneCell;
     case FM_ANCHOR_KIND_TWO_CELL:
       return AnchorKind::kTwoCell;
     case FM_ANCHOR_KIND_ABSOLUTE:
       return AnchorKind::kAbsolute;
     default:
-      return AnchorKind::kOneCell;
+      return fallback;
   }
 }
 
@@ -53,6 +56,7 @@ inline std::int32_t to_c(AnchorKind value) {
   return FM_ANCHOR_KIND_ONE_CELL;
 }
 
+// `FM_ANCHOR_EDIT_AS_DEFAULT` is the anchor's own kind, which only a two-cell anchor writes.
 inline EditAs edit_as_from_c(std::int32_t value) {
   switch (value) {
     case FM_ANCHOR_EDIT_AS_ONE_CELL:
@@ -76,22 +80,7 @@ inline std::int32_t to_c(EditAs value) {
   return FM_ANCHOR_EDIT_AS_TWO_CELL;
 }
 
-// Copies the anchor kind and the two anchor points of drawing object `obj`
-// into the record `out`; both share the `from_*` / `to_*` field names.
-template <typename Object, typename Record>
-void fill_anchor(const Object& obj, Record* out) {
-  out->anchor_kind = to_c(obj.anchor_kind);
-  out->from_row = obj.from.row;
-  out->from_col = obj.from.col;
-  out->from_row_offset_emu = obj.from.row_off;
-  out->from_col_offset_emu = obj.from.col_off;
-  out->to_row = obj.to.row;
-  out->to_col = obj.to.col;
-  out->to_row_offset_emu = obj.to.row_off;
-  out->to_col_offset_emu = obj.to.col_off;
-}
-
-// --- shape paint (`-1` = no element) ----------------------------------------
+// --- shape paint (`FM_SHAPE_PAINT_DEFAULT` = no element of its own) -----------
 
 inline ShapePaint shape_paint_from_c(std::int32_t value) {
   switch (value) {
@@ -117,7 +106,7 @@ inline std::int32_t to_c(ShapePaint value) {
     case ShapePaint::kUnset:
       break;
   }
-  return FM_SHAPE_PAINT_ABSENT;
+  return FM_SHAPE_PAINT_DEFAULT;
 }
 
 // --- sort_order family -------------------------------------------------------

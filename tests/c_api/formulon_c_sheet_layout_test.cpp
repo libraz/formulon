@@ -40,11 +40,10 @@ static_assert(sizeof(fm_row_layout_info_t) == 48U);
 // the end of its own storage rather than getting a diagnosable error. Pin the
 // size here: changing the struct must break the build and be acknowledged,
 // not merely be reflected in the bindings afterwards.
-static_assert(sizeof(fm_sheet_view_info_t) == 88U);
-static_assert(offsetof(fm_sheet_view_info_t, visibility) == 16U);
-static_assert(offsetof(fm_sheet_view_info_t, tab_selected) == 36U);
-static_assert(offsetof(fm_sheet_view_info_t, view_mode) == 40U);
-static_assert(offsetof(fm_sheet_view_info_t, top_left_row) == 44U);
+static_assert(sizeof(fm_sheet_view_info_t) == 80U);
+static_assert(offsetof(fm_sheet_view_info_t, tab_selected) == 32U);
+static_assert(offsetof(fm_sheet_view_info_t, view_mode) == 36U);
+static_assert(offsetof(fm_sheet_view_info_t, top_left_row) == 40U);
 
 /// The status every documented rejection on this surface returns. Pinning
 /// the value rather than "non-zero" is what makes the assertions below
@@ -100,7 +99,6 @@ TEST(FormulonCApiSheetLayout, GetViewDefaults) {
   EXPECT_EQ(v.zoom_pct, 100U);
   EXPECT_EQ(v.freeze_rows, 0U);
   EXPECT_EQ(v.freeze_cols, 0U);
-  EXPECT_EQ(v.visibility, FM_SHEET_VISIBILITY_VISIBLE);
   EXPECT_EQ(v.show_grid_lines, 1);
   EXPECT_EQ(v.show_row_column_headers, 1);
   EXPECT_EQ(v.show_zeros, 1);
@@ -109,57 +107,70 @@ TEST(FormulonCApiSheetLayout, GetViewDefaults) {
   EXPECT_EQ(v.view_mode, FM_SHEET_VIEW_MODE_NORMAL);
 }
 
-TEST(FormulonCApiSheetLayout, ViewPatchSetsZoomFreezeAndVisibility) {
+TEST(FormulonCApiSheetLayout, ViewPatchSetsZoomAndFreeze) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  // A workbook keeps one visible sheet, so sheet 0 can only be hidden beside another.
-  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Visible", ignored_index()), 0);
   ASSERT_EQ(SetViewZoom(wb.handle, 0, 175U), 0);
   ASSERT_EQ(SetViewFreeze(wb.handle, 0, 4U, 2U), 0);
-  ASSERT_EQ(SetViewVisibility(wb.handle, 0, FM_SHEET_VISIBILITY_HIDDEN), 0);
   fm_sheet_view_info_t v = FM_STRUCT_INIT(fm_sheet_view_info_t);
   ASSERT_EQ(fm_sheet_get_view(wb.handle, 0, &v), 0);
   EXPECT_EQ(v.zoom_pct, 175U);
   EXPECT_EQ(v.freeze_rows, 4U);
   EXPECT_EQ(v.freeze_cols, 2U);
-  EXPECT_EQ(v.visibility, FM_SHEET_VISIBILITY_HIDDEN);
+}
+
+int32_t ReadVisibility(const WorkbookGuard& wb, std::size_t sheet) {
+  int32_t visibility = -1;
+  EXPECT_EQ(fm_sheet_get_visibility(wb.handle, sheet, &visibility), 0);
+  return visibility;
+}
+
+TEST(FormulonCApiSheetLayout, GetVisibilityReadsVisibleByDefault) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  EXPECT_EQ(ReadVisibility(wb, 0), FM_SHEET_VISIBILITY_VISIBLE);
+  EXPECT_EQ(fm_sheet_get_visibility(wb.handle, 0, nullptr), FM_STATUS_BINDING_NULL_POINTER);
+  int32_t out = 0;
+  EXPECT_EQ(fm_sheet_get_visibility(wb.handle, 99U, &out), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
 }
 
 TEST(FormulonCApiSheetLayout, SetVisibilityStatesAllThreeTabStates) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   // A workbook keeps one visible sheet, so sheet 0 can only be hidden beside another.
-  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Visible", ignored_index()), 0);
-  fm_sheet_view_info_t v = FM_STRUCT_INIT(fm_sheet_view_info_t);
+  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Visible", 1U, ignored_index()), 0);
 
-  ASSERT_EQ(SetViewVisibility(wb.handle, 0, FM_SHEET_VISIBILITY_VERY_HIDDEN), 0);
-  ASSERT_EQ(fm_sheet_get_view(wb.handle, 0, &v), 0);
-  EXPECT_EQ(v.visibility, FM_SHEET_VISIBILITY_VERY_HIDDEN);
+  ASSERT_EQ(fm_sheet_set_visibility(wb.handle, 0, FM_SHEET_VISIBILITY_VERY_HIDDEN), 0);
+  EXPECT_EQ(ReadVisibility(wb, 0), FM_SHEET_VISIBILITY_VERY_HIDDEN);
 
   // Demotion to plain hidden.
-  ASSERT_EQ(SetViewVisibility(wb.handle, 0, FM_SHEET_VISIBILITY_HIDDEN), 0);
-  ASSERT_EQ(fm_sheet_get_view(wb.handle, 0, &v), 0);
-  EXPECT_EQ(v.visibility, FM_SHEET_VISIBILITY_HIDDEN);
+  ASSERT_EQ(fm_sheet_set_visibility(wb.handle, 0, FM_SHEET_VISIBILITY_HIDDEN), 0);
+  EXPECT_EQ(ReadVisibility(wb, 0), FM_SHEET_VISIBILITY_HIDDEN);
 
-  ASSERT_EQ(SetViewVisibility(wb.handle, 0, FM_SHEET_VISIBILITY_VISIBLE), 0);
-  ASSERT_EQ(fm_sheet_get_view(wb.handle, 0, &v), 0);
-  EXPECT_EQ(v.visibility, FM_SHEET_VISIBILITY_VISIBLE);
+  ASSERT_EQ(fm_sheet_set_visibility(wb.handle, 0, FM_SHEET_VISIBILITY_VISIBLE), 0);
+  EXPECT_EQ(ReadVisibility(wb, 0), FM_SHEET_VISIBILITY_VISIBLE);
 }
 
 TEST(FormulonCApiSheetLayout, SetVisibilityRejectsUnknownStateAndLeavesTheSheet) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   // A workbook keeps one visible sheet, so sheet 0 can only be hidden beside another.
-  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Visible", ignored_index()), 0);
-  ASSERT_EQ(SetViewVisibility(wb.handle, 0, FM_SHEET_VISIBILITY_VERY_HIDDEN), 0);
+  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Visible", 1U, ignored_index()), 0);
+  ASSERT_EQ(fm_sheet_set_visibility(wb.handle, 0, FM_SHEET_VISIBILITY_VERY_HIDDEN), 0);
 
-  EXPECT_EQ(SetViewVisibility(wb.handle, 0, 3), kInvalidArgument);
-  EXPECT_EQ(SetViewVisibility(wb.handle, 0, -1), kInvalidArgument);
-  EXPECT_EQ(SetViewVisibility(wb.handle, 99U, FM_SHEET_VISIBILITY_HIDDEN), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(fm_sheet_set_visibility(wb.handle, 0, 3), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_set_visibility(wb.handle, 0, -1), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_set_visibility(wb.handle, 99U, FM_SHEET_VISIBILITY_HIDDEN), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(fm_sheet_set_visibility(nullptr, 0, FM_SHEET_VISIBILITY_HIDDEN), FM_STATUS_BINDING_NULL_POINTER);
 
-  fm_sheet_view_info_t v = FM_STRUCT_INIT(fm_sheet_view_info_t);
-  ASSERT_EQ(fm_sheet_get_view(wb.handle, 0, &v), 0);
-  EXPECT_EQ(v.visibility, FM_SHEET_VISIBILITY_VERY_HIDDEN);
+  EXPECT_EQ(ReadVisibility(wb, 0), FM_SHEET_VISIBILITY_VERY_HIDDEN);
+}
+
+TEST(FormulonCApiSheetLayout, SetVisibilityRefusesToHideTheOnlyVisibleSheet) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  EXPECT_EQ(fm_sheet_set_visibility(wb.handle, 0, FM_SHEET_VISIBILITY_HIDDEN), FM_STATUS_PRECONDITION_FAILED);
+  EXPECT_EQ(ReadVisibility(wb, 0), FM_SHEET_VISIBILITY_VISIBLE);
 }
 
 TEST(FormulonCApiSheetLayout, ViewPatchSetsDisplayFlags) {

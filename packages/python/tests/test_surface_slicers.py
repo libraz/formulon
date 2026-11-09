@@ -7,8 +7,10 @@ import unittest
 import zipfile
 
 from formulon import (
+    AnchorEditAs,
     AnchorKind,
     CellRect,
+    DrawingAnchorInput,
     FormulonError,
     NotFoundError,
     Slicer,
@@ -16,11 +18,12 @@ from formulon import (
     SlicerInput,
     SlicerProperties,
     SlicerSortOrder,
+    StatusCode,
     TableInput,
     Workbook,
 )
 
-ANCHOR = {"from_row": 4, "from_col": 3, "to_row": 14, "to_col": 5}
+ANCHOR = {"anchor": DrawingAnchorInput(from_row=4, from_col=3, to_row=14, to_col=5)}
 SALES = "Sales"
 
 
@@ -69,25 +72,36 @@ class SlicerTests(unittest.TestCase):
                 self.assertIs(slicers[0], loaded.sheet(0).slicer(object_id))
                 s = slicers[0].get_properties()
                 self.assertIsInstance(s, SlicerProperties)
-                self.assertEqual((s.object_id, s.name, s.caption), (object_id, "Product", "Pick a product"))
+                self.assertEqual((s.object_id, s.caption), (object_id, "Pick a product"))
+                found_common = slicers[0].get_drawing_properties()
+                self.assertEqual(found_common.name, "Product")
                 self.assertEqual((s.cache_name, s.table_name, s.column_name), ("Slicer_Product", "Sales", "Product"))
                 self.assertEqual((s.style, s.column_count, s.row_height_emu), ("SlicerStyleLight3", 2, 241300))
                 self.assertEqual((s.sort_order, s.cross_filter), (SlicerSortOrder.DESCENDING, SlicerCrossFilter.NONE))
-                self.assertEqual(s.anchor_kind, AnchorKind.TWO_CELL)
-                self.assertEqual((s.from_row, s.from_col, s.to_row, s.to_col), (4, 3, 14, 5))
+                anchor = found_common.anchor
+                self.assertEqual(anchor.kind, AnchorKind.TWO_CELL)
+                self.assertEqual((anchor.from_row, anchor.from_col, anchor.to_row, anchor.to_col), (4, 3, 14, 5))
+                self.assertGreater(anchor.width_emu, 0)
+                self.assertGreater(anchor.height_emu, 0)
+                self.assertNotEqual(anchor.edit_as, AnchorEditAs.DEFAULT)
 
                 loaded.sheet(0).slicer(object_id).update(
-                    caption="Renamed", style=None, column_count=1, from_row=0, from_col=3, to_row=8, to_col=5
+                    caption="Renamed",
+                    style=None,
+                    column_count=1,
+                    anchor=DrawingAnchorInput(from_row=0, from_col=3, to_row=8, to_col=5),
                 )
                 found = loaded.sheet(0).slicer(object_id).get_properties()
                 self.assertIsNotNone(found)
                 assert found is not None
                 self.assertEqual(found.caption, "Renamed")
-                loaded.sheet(0).insert_rows(0, 3)
-                moved = loaded.sheet(0).list_slicers()[0].get_properties()
+                loaded.sheet(0).insert_rows(0, 2)
+                moved_handle = loaded.sheet(0).list_slicers()[0]
+                moved = moved_handle.get_properties()
                 self.assertEqual((moved.caption, moved.style, moved.column_count), ("Renamed", None, 1))
                 self.assertEqual(moved.sort_order, SlicerSortOrder.DESCENDING)
-                self.assertEqual((moved.from_row, moved.to_row), (3, 11))
+                moved_anchor = moved_handle.get_drawing_properties().anchor
+                self.assertEqual((moved_anchor.from_row, moved_anchor.to_row), (3, 11))
 
                 loaded.sheet(0).remove_drawing(object_id)
                 self.assertEqual(loaded.sheet(0).list_slicers(), [])
@@ -111,6 +125,46 @@ class SlicerTests(unittest.TestCase):
             self.assertNotIn("xl/slicerCaches/slicerCache2.xml", parts)
             self.assertNotIn("Slicer_", parts["xl/workbook.xml"])
 
+    def test_column_by_name_equals_column_by_position(self) -> None:
+        with _sales() as wb:
+            by_position = wb.sheet(0).add_slicer(SALES, 1, SlicerInput(**ANCHOR))
+            by_name = wb.sheet(0).add_slicer(SALES, "Amount", SlicerInput(**ANCHOR))
+            by_folded_name = wb.sheet(0).add_slicer(SALES, "amount", SlicerInput(**ANCHOR))
+            for handle in (by_position, by_name, by_folded_name):
+                self.assertEqual(handle.get_properties().column_name, "Amount")
+            by_handle = wb.sheet(0).add_slicer(wb.table(SALES), "Product", SlicerInput(**ANCHOR))
+            self.assertEqual(by_handle.get_properties().column_name, "Product")
+            with self.assertRaises(NotFoundError):
+                wb.sheet(0).add_slicer(SALES, "nope", SlicerInput(**ANCHOR))
+            with self.assertRaises(TypeError):
+                wb.sheet(0).add_slicer(SALES, 1.5, SlicerInput(**ANCHOR))  # type: ignore[arg-type]
+
+    def test_common_update_keys_apply_to_a_slicer_and_a_name_is_refused(self) -> None:
+        with _sales() as wb:
+            slicer = wb.sheet(0).add_slicer(SALES, 0, SlicerInput(**ANCHOR))
+            slicer.update(description="pick one", hidden=True, caption="Cap", anchor=DrawingAnchorInput(to_col=6))
+            common = slicer.get_drawing_properties()
+            self.assertEqual((common.description, common.hidden), ("pick one", True))
+            self.assertEqual(
+                (common.anchor.kind, common.anchor.from_row, common.anchor.to_col), (AnchorKind.TWO_CELL, 4, 6)
+            )
+            self.assertEqual(slicer.get_properties().caption, "Cap")
+            self.assertEqual(slicer.name, "Product")
+            with self.assertRaises(FormulonError) as refused:
+                slicer.update(name="other")
+            self.assertEqual(refused.exception.code, StatusCode.PRECONDITION_FAILED)
+            self.assertEqual(slicer.name, "Product")
+            self.assertEqual(slicer.get_drawing_properties().description, "pick one")
+
+    def test_a_slicer_is_removed_by_the_one_remover(self) -> None:
+        with _sales() as wb:
+            slicer = wb.sheet(0).add_slicer(SALES, 0, SlicerInput(**ANCHOR))
+            wb.sheet(0).remove_drawing(slicer)
+            self.assertEqual(wb.sheet(0).list_slicers(), [])
+            self.assertEqual(wb.sheet(0).list_drawings(), [])
+            with self.assertRaises(NotFoundError):
+                wb.sheet(0).remove_drawing(slicer)
+
     def test_arguments_are_validated(self) -> None:
         with _sales() as wb:
             with self.assertRaises(FormulonError):
@@ -118,13 +172,18 @@ class SlicerTests(unittest.TestCase):
             with self.assertRaises(FormulonError):
                 wb.sheet(0).add_slicer(SALES, 2, SlicerInput(**ANCHOR))
             with self.assertRaises(FormulonError):
-                wb.sheet(0).add_slicer(SALES, 0, SlicerInput(from_row=4, from_col=3, to_row=1, to_col=5))
-            with self.assertRaises(FormulonError):
-                wb.sheet(0).add_slicer(SALES, 0, SlicerInput(**ANCHOR, column_count=0))
+                wb.sheet(0).add_slicer(
+                    SALES, 0, SlicerInput(anchor=DrawingAnchorInput(from_row=4, from_col=3, to_row=1, to_col=5))
+                )
             with self.assertRaises(TypeError):
                 SlicerInput(from_row=1, from_col=2, to_row=3)  # type: ignore[call-arg]
+            with self.assertRaises(TypeError):
+                DrawingAnchorInput(row=1)  # type: ignore[call-arg]
             self.assertEqual(wb.sheet(0).list_slicers(), [])
-            object_id = wb.sheet(0).add_slicer(SALES, 0, SlicerInput(**ANCHOR)).object_id
+            slicer = wb.sheet(0).add_slicer(SALES, 0, SlicerInput(**ANCHOR))
+            object_id = slicer.object_id
+            with self.assertRaises(FormulonError):
+                slicer.update(column_count=0)
             with self.assertRaises(FormulonError):
                 wb.sheet(0).slicer(object_id + 1).update(caption="x")
             with self.assertRaises(FormulonError):

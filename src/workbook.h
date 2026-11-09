@@ -212,6 +212,12 @@ class Workbook {
   ///   * `kSheetCountLimitExceeded` when `sheet_count() == kMaxSheets`.
   Expected<Sheet*, Error> add_sheet_validated(std::string name);
 
+  /// The name a sheet added without one takes: the profile's first sheet
+  /// name without its trailing number (`Sheet`, `Tabelle`, `Feuil`, ...)
+  /// followed by the smallest N >= 1 that no sheet holds under Unicode simple
+  /// case folding.
+  std::string next_default_sheet_name() const;
+
   /// Appends a new sheet whose name a user entered, validating it exactly as
   /// `rename_sheet` does: `add_sheet_validated`'s rules, plus, under a
   /// Windows profile, not `History` in any case, which Windows Excel's naming
@@ -747,10 +753,43 @@ class Workbook {
   /// and A1 rectangle before the writer rebuilds its relationships.
   std::vector<TableMetadata>& mutable_tables() noexcept { return tables_; }
 
-  /// Hands out the next session id for `TableMetadata::runtime_id` and
-  /// `pivot::PivotTable::runtime_id()`: one counter for both, starting at 1,
-  /// never reused, never saved.
+  /// Hands out the next session id for `TableMetadata::runtime_id`,
+  /// `pivot::PivotTable::runtime_id()`, `DataValidation::runtime_id` and the
+  /// sheet's sparkline-group ids: one counter for all, starting at 1, never
+  /// reused, never saved.
   std::uint32_t allocate_runtime_id() const noexcept { return next_runtime_id_++; }
+
+  // --- Data-validation and sparkline-group ids ---
+  // Both collections are addressed by session id (see `utils/runtime_id.h`):
+  // assigned on first request or on add, kept across structural edits and the
+  // removal of other members, fresh on a copied sheet and after a load.
+
+  /// Session id of validation `index` on sheet `sheet`, assigned on first
+  /// request. Precondition: both indices in range.
+  std::uint32_t validation_runtime_id(std::size_t sheet, std::size_t index) const;
+
+  /// Position of the validation holding session id `id` on sheet `sheet`, or
+  /// `std::nullopt` (also for an out-of-range sheet).
+  std::optional<std::size_t> find_validation(std::size_t sheet, std::uint32_t id) const noexcept;
+
+  /// Appends `validation` to sheet `sheet` and returns its session id, always
+  /// a fresh one. `kSheetIndexOutOfRange` for an out-of-range sheet.
+  Expected<std::uint32_t, Error> add_validation(std::size_t sheet, DataValidation validation);
+
+  /// Removes the validation holding session id `id`. `kSheetIndexOutOfRange`
+  /// for an out-of-range sheet, `kNotFound` when no validation holds `id`.
+  Expected<void, Error> remove_validation(std::size_t sheet, std::uint32_t id);
+
+  /// Session id of sparkline group `index` (document order in
+  /// `Sheet::ext_lst_xml()`) on sheet `sheet`, assigned on first request.
+  /// Precondition: both indices in range.
+  std::uint32_t sparkline_group_runtime_id(std::size_t sheet, std::size_t index) const;
+
+  /// Position of the sparkline group holding session id `id` on sheet
+  /// `sheet`, or `std::nullopt` (also for an out-of-range sheet). Adding and
+  /// removing a group by id live with the group model, in
+  /// `io/sparkline_groups.h`.
+  std::optional<std::size_t> find_sparkline_group(std::size_t sheet, std::uint32_t id) const;
 
   /// Replaces the workbook's table-metadata list and re-registers every
   /// formula whose structured reference names a table of the old or new
@@ -794,8 +833,8 @@ class Workbook {
   std::optional<std::size_t> table_containing(std::size_t sheet_index, std::uint32_t row,
                                               std::uint32_t col) const noexcept;
 
-  /// True when `name` is the name or display name of a table, compared
-  /// ASCII case-insensitively. Defined names are not consulted.
+  /// True when `name` is the name or display name of a table under
+  /// `collection_names::equal`. Defined names are not consulted.
   bool is_table_name(std::string_view name) const noexcept;
 
   /// Re-registers dep-graph edges and dirties every formula cell whose
@@ -823,7 +862,7 @@ class Workbook {
   /// Renames column `column` of table `table` from a typed header and
   /// returns the name it takes: an empty `name` becomes the profile's column
   /// word plus the lowest unused N >= 1, a name another column already uses
-  /// (ASCII case-insensitive) gains the lowest unused N >= 2, and anything
+  /// (`collection_names::equal`) gains the lowest unused N >= 2, and anything
   /// else, spaces and a case-only change included, is kept. Every structured
   /// reference to the old name through this table is rewritten (cell,
   /// defined-name, metadata and chart formulas), and the header cell, when
@@ -907,9 +946,11 @@ class Workbook {
   /// `remove_person`.
   std::vector<Person>& mutable_persons() noexcept { return persons_; }
 
-  /// Appends `person`. Fails with `kThreadedCommentInvalid` when the id is
-  /// not a brace-wrapped uppercase GUID or the display name is empty, and
-  /// with `kAlreadyExists` when the id is already listed.
+  /// Appends `person`, its id stored uppercase. Fails with `kInvalidArgument`
+  /// when the id is not a brace-wrapped GUID (either letter case) or the
+  /// display name is empty, and with `kAlreadyExists` when the id is already
+  /// listed. Person ids compare
+  /// with `collection_names::equal` here and wherever a person is named.
   Expected<void, Error> add_person(Person person);
 
   /// Removes the person with `id`. Fails with `kNotFound` when no such person
@@ -917,14 +958,20 @@ class Workbook {
   /// still names them.
   Expected<void, Error> remove_person(std::string_view id);
 
-  /// Adds `comment` to sheet `sheet`. An empty `parent_id` opens a new thread
-  /// at `row`/`col`, which must hold neither a note nor a thread; a non-empty
-  /// one appends a reply to that thread, taking its anchor and ignoring
-  /// `row`/`col` and `done`. Ids, timestamps, persons and mention ranges are
-  /// validated; any violation fails with `kThreadedCommentInvalid`, an id
-  /// already used on the sheet or a cell already holding a note or thread
-  /// with `kAlreadyExists`. A failure leaves the sheet unchanged.
-  Expected<void, Error> add_threaded_comment(std::size_t sheet, ThreadedComment comment);
+  /// Adds `comment` to sheet `sheet` and returns its id. An empty `parent_id`
+  /// opens a new thread at `row`/`col`, which must hold neither a note nor a
+  /// thread; a non-empty one appends a reply to that thread, taking its anchor
+  /// and ignoring `row`/`col` and `done`. An empty `id` takes a generated
+  /// GUID, reproducible while the clock is pinned (`set_pinned_now`); an
+  /// empty `created` takes the pinned clock, else the host clock. The author
+  /// and mentioned persons and the parent are stored in their listed spelling,
+  /// the comment and mention ids uppercase. Fails with `kInvalidArgument` for
+  /// an id or mention id that is not a GUID, a malformed timestamp, a mention
+  /// outside the text or a parent that is a reply, `kNotFound` for an author
+  /// or mention no listed person matches, and
+  /// `kAlreadyExists` for an id already used on the sheet or a cell already
+  /// holding a note or thread. A failure leaves the sheet unchanged.
+  Expected<std::string, Error> add_threaded_comment(std::size_t sheet, ThreadedComment comment);
 
   /// Replaces the text and mentions of the comment with `id`.
   Expected<void, Error> edit_threaded_comment(std::size_t sheet, std::string_view id, std::string text,
@@ -1485,6 +1532,10 @@ class Workbook {
   std::vector<TableMetadata> tables_;
   // See `allocate_runtime_id()`.
   mutable std::uint32_t next_runtime_id_ = 1;
+  // Generator state behind `add_threaded_comment`'s GUIDs; seeded on first use.
+  std::optional<std::uint64_t> guid_seed_;
+  std::uint64_t guid_sequence_ = 0;
+  std::string next_threaded_comment_guid();
   std::vector<PassthroughPart> passthrough_parts_;
   std::vector<ExternalLinkRecord> external_links_;
   // See `file_name()`.

@@ -150,7 +150,7 @@ TEST(FormulonCApi, LoadMapsCorruptAndEncryptedContainersToIoErrors) {
 TEST(FormulonCApi, SaveLoadRoundTrip) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Second", ignored_index()), 0);
+  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Second", append_position(wb.handle), ignored_index()), 0);
   ASSERT_EQ(fm_sheet_set_number(wb.handle, 0, 0, 0, 7.0), 0);
   ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 1, 0, "=A1+1"), 0);
   ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);

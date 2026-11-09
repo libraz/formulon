@@ -23,6 +23,7 @@
 #include "pivot/calculated.h"
 #include "pivot/field_lookup.h"
 #include "pivot/pivot_cache.h"
+#include "pivot/pivot_index.h"
 #include "pivot/pivot_locale.h"
 #include "sheet.h"
 #include "utils/error.h"
@@ -56,6 +57,7 @@ using formulon::c_api::parts::publish_scratch;
 using formulon::c_api::parts::resolve_cache;
 using formulon::c_api::parts::resolve_pivot_checked;
 using formulon::c_api::parts::resolve_pivot_mut;
+using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::set_last_error;
 using formulon::c_api::parts::set_values_position;
 using formulon::c_api::parts::store_cstr;
@@ -139,6 +141,13 @@ extern "C" fm_status_t fm_sheet_add_pivot(fm_workbook_t* wb, std::size_t sheet_i
   if (auto rc = check_cell_coord(spec->anchor_row, spec->anchor_col); rc != 0) {
     return rc;
   }
+  {
+    const formulon::Sheet& target = wb->workbook().sheet(sheet_index);
+    if (formulon::pivot::pivot_name_taken(target, spec->name, target.pivot_tables().size())) {
+      return set_binding_error(formulon::FormulonErrorCode::kAlreadyExists, "pivot name already in use",
+                               std::string("name=") + spec->name);
+    }
+  }
   auto table = std::make_unique<formulon::pivot::PivotTable>();
   table->set_name(spec->name);
   table->set_pivot_cache_id(spec->cache_id);
@@ -198,6 +207,10 @@ extern "C" fm_status_t fm_sheet_rename_pivot(fm_workbook_t* wb, std::size_t shee
   formulon::pivot::PivotTable* table = nullptr;
   if (fm_status_t rc = resolve_pivot_checked(wb, sheet_index, pivot_index, &table); rc != 0) {
     return rc;
+  }
+  if (formulon::pivot::pivot_name_taken(wb->workbook().sheet(sheet_index), utf8_name, pivot_index)) {
+    return set_binding_error(formulon::FormulonErrorCode::kAlreadyExists, "pivot name already in use",
+                             std::string("name=") + utf8_name);
   }
   PivotEdit edit(wb->workbook(), sheet_index, pivot_index, *table);
   table->set_name(utf8_name);

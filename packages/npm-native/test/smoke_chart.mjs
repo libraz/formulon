@@ -67,21 +67,24 @@ test('insertChart creates a two-cell chart that getChart and getChartData read b
   try {
     const id = insert(wb, mod, {
       title: 'Sales',
-      placement: { name: 'Revenue', description: 'alt', anchor: { row: 7, col: 2 } },
+      placement: { name: 'Revenue', description: 'alt', anchor: { fromRow: 7, fromCol: 2 } },
     });
     const listed = wb.sheet(0).listDrawings();
     assert.equal(listed.length, 1);
     assert.equal(listed[0], id);
     assert.equal(listed[0].kind, mod.DrawingObjectKind.Chart);
     const listedProps = listed[0].getDrawingProperties();
-    assert.equal(listedProps.anchorKind, mod.AnchorKind.TwoCell);
-    assert.equal(listedProps.fromRow, 7);
-    assert.equal(listedProps.fromCol, 2);
+    assert.equal(listedProps.anchor.kind, mod.AnchorKind.TwoCell);
+    assert.equal(listedProps.anchor.fromRow, 7);
+    assert.equal(listedProps.anchor.fromCol, 2);
+    assert.equal(listedProps.name, 'Revenue');
+    assert.equal(listedProps.description, 'alt');
+    assert.equal(listed[0].name, 'Revenue');
 
     const chart = chartOf(wb, id);
     assert.equal(chart.objectId, id.objectId);
-    assert.equal(chart.name, 'Revenue');
-    assert.equal(chart.description, 'alt');
+    assert.equal('name' in chart, false);
+    assert.equal('description' in chart, false);
     assert.equal(chart.isExtended, false);
     assert.equal(chart.isPivotChart, false);
     assert.equal(chart.title.kind, mod.ChartTitleKind.Text);
@@ -185,7 +188,7 @@ test('insertChart covers the creation kinds and omitted options', async () => {
     // An omitted title is Excel's automatic one.
     const auto = insert(wb, mod);
     assert.equal(chartOf(wb, auto).title.kind, mod.ChartTitleKind.Auto);
-    assert.equal(wb.sheet(0).listDrawings().at(-1).getDrawingProperties().anchorKind, mod.AnchorKind.TwoCell);
+    assert.equal(wb.sheet(0).listDrawings().at(-1).getDrawingProperties().anchor.kind, mod.AnchorKind.TwoCell);
   } finally {
     wb.dispose();
   }
@@ -363,10 +366,10 @@ test('typed chart edits are visible through getChart', async () => {
       .chart(id)
       .setFilter({ hiddenSeries: [2], hiddenCategories: [1] });
     info = chartOf(wb, id);
-    assert.equal(info.plots[0].series.find((s) => s.index === 2).filtered, true);
+    assert.equal(info.plots[0].series.find((s) => s.seriesId === 2).filtered, true);
     assert.deepEqual(info.filter, { hiddenSeries: [2], hiddenCategories: [1] });
     const filtered = dataOf(wb, id);
-    assert.ok(filtered.series.find((s) => s.index === 2).filtered);
+    assert.ok(filtered.series.find((s) => s.seriesId === 2).filtered);
     wb.sheet(0).chart(id).setFilter({});
     assert.deepEqual(chartOf(wb, id).filter, { hiddenSeries: [], hiddenCategories: [] });
 
@@ -396,7 +399,7 @@ test('series can be added, removed and rebuilt from a new source', async () => {
       categories: 'Sheet1!$A$2:$A$5',
     });
     assert.equal(chartOf(wb, id).plots[0].series.length, 3);
-    assert.ok(chartOf(wb, id).plots[0].series.some((s) => s.index === added));
+    assert.ok(chartOf(wb, id).plots[0].series.some((s) => s.seriesId === added));
     assert.equal(dataOf(wb, id).series.length, 3);
 
     wb.sheet(0).chart(id).removeSeries(0, added);
@@ -461,7 +464,7 @@ test('a chart survives save and load and goes through the drawing operations', a
   const mod = await getModule();
   const wb = newBook(mod);
   try {
-    const id = insert(wb, mod, { title: 'Kept', placement: { anchor: { row: 3, col: 3 } } });
+    const id = insert(wb, mod, { title: 'Kept', placement: { anchor: { fromRow: 3, fromCol: 3 } } });
     const other = insert(wb, mod, { type: mod.ChartPlotType.Line, range: 'Sheet1!$A$1:$B$5' });
 
     const saved = wb.save();
@@ -481,12 +484,17 @@ test('a chart survives save and load and goes through the drawing operations', a
     }
 
     // Move, reorder, snapshot, remove and restore keep the chart's id.
-    wb.sheet(0).chart(id).setAnchor({ row: 10, col: 1, widthEmu: 3000000, heightEmu: 2000000 });
+    wb.sheet(0)
+      .chart(id)
+      .update({
+        anchor: { kind: mod.AnchorKind.OneCell, fromRow: 10, fromCol: 1, widthEmu: 3000000, heightEmu: 2000000 },
+      });
     const moved = wb
       .sheet(0)
       .listDrawings()
       .find((o) => o === id)
-      .getDrawingProperties();
+      .getDrawingProperties().anchor;
+    assert.equal(moved.kind, mod.AnchorKind.OneCell);
     assert.equal(moved.fromRow, 10);
     assert.equal(moved.fromCol, 1);
     assert.equal(moved.widthEmu, 3000000);

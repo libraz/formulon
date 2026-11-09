@@ -231,6 +231,16 @@ void JsWorkbook::pivotCacheRecordClear(uint32_t cacheId) {
   succeeded(handle_ != nullptr ? fm_workbook_clear_pivot_cache_records(handle_, cacheId) : kBindingInvalidHandle);
 }
 
+emscripten::val JsWorkbook::pivotCacheRecordValue(uint32_t cacheId, uint32_t recordIndex, uint32_t fieldIndex) const {
+  fm_value_t v{};
+  if (!succeeded(handle_ != nullptr
+                     ? fm_workbook_get_pivot_cache_record_value(handle_, cacheId, recordIndex, fieldIndex, &v)
+                     : kBindingInvalidHandle)) {
+    return emscripten::val::undefined();
+  }
+  return value_to_val(v);
+}
+
 void JsWorkbook::pivotCacheRecordSetNumber(uint32_t cacheId, uint32_t recordIndex, uint32_t fieldIndex, double value) {
   succeeded(handle_ != nullptr
                 ? fm_workbook_set_pivot_cache_record_number(handle_, cacheId, recordIndex, fieldIndex, value)

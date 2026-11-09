@@ -396,6 +396,208 @@ uint32_t JsWorkbook::addConditionalFormat(uint32_t sheet, emscripten::val v) {
   return static_cast<uint32_t>(new_index);
 }
 
+void JsWorkbook::updateCfRule(uint32_t sheet, uint32_t cfRuleIndex, emscripten::val patch) {
+  if (handle_ == nullptr) {
+    record_invalid_handle();
+    return;
+  }
+  JsNarrowNumericReader reader("Sheet.updateCfRule");
+  formulon::c_api::BorrowedStringArena cfvo_strings;
+  std::vector<fm_cfvo_t> color_scale_thresholds;
+  std::vector<fm_color_t> color_scale_colors;
+  std::vector<fm_cfvo_t> icon_set_thresholds;
+  std::vector<fm_cf_icon_t> icon_set_icons;
+  std::vector<fm_cell_rect_t> ranges;
+  std::string text[3];
+  fm_cf_rule_patch_t p = FM_STRUCT_INIT(fm_cf_rule_patch_t);
+
+  const auto u32 = [&](const emscripten::val& owner, const char* key, const char* field, fm_patch_op_t* op,
+                       uint32_t* value, bool nullable) {
+    const emscripten::val v = reader.value(owner, key, field);
+    switch (js_patch_key(reader, v, field, nullable)) {
+      case JsPatchKey::kClear:
+        *op = FM_PATCH_OP_CLEAR;
+        break;
+      case JsPatchKey::kSet:
+        *op = FM_PATCH_OP_SET;
+        *value = reader.u32_value(v, 0U, field);
+        break;
+      case JsPatchKey::kKeep:
+        break;
+    }
+  };
+  const auto i32 = [&](const emscripten::val& owner, const char* key, const char* field, fm_patch_op_t* op,
+                       int32_t* value) { js_patch_int(reader, owner, key, field, false, op, value); };
+  const auto u8 = [&](const emscripten::val& owner, const char* key, const char* field, fm_patch_op_t* op,
+                      int32_t* value) {
+    const emscripten::val v = reader.value(owner, key, field);
+    if (js_patch_key(reader, v, field, false) == JsPatchKey::kSet) {
+      *op = FM_PATCH_OP_SET;
+      *value = static_cast<int32_t>(reader.u8_value(v, 0U, field));
+    }
+  };
+  const auto u8_pct = [&](const emscripten::val& owner, const char* key, const char* field, fm_patch_op_t* op,
+                          uint32_t* value) {
+    const emscripten::val v = reader.value(owner, key, field);
+    if (js_patch_key(reader, v, field, false) == JsPatchKey::kSet) {
+      *op = FM_PATCH_OP_SET;
+      *value = reader.u8_value(v, 0U, field);
+    }
+  };
+  const auto cfvo = [&](const emscripten::val& owner, const char* key, const char* field, fm_patch_op_t* op,
+                        fm_cfvo_t* value) {
+    const emscripten::val v = reader.value(owner, key, field);
+    if (js_patch_key(reader, v, field, false) == JsPatchKey::kSet) {
+      *op = FM_PATCH_OP_SET;
+      *value = js_pull_cfvo(v, &cfvo_strings, reader);
+    }
+  };
+  // `null` on an optional bar colour restores its default, which the C patch spells as a colour of kind none.
+  const auto color = [&](const emscripten::val& owner, const char* key, const char* field, fm_patch_op_t* op,
+                         fm_color_t* value, bool nullable) {
+    const emscripten::val v = reader.value(owner, key, field);
+    if (v.isUndefined()) {
+      return;
+    }
+    if (v.isNull() && !nullable) {
+      js_patch_key(reader, v, field, false);
+      return;
+    }
+    *op = FM_PATCH_OP_SET;
+    *value = js_pull_color_spec_value(v, field, &reader);
+  };
+  const auto cfvo_list = [&](const emscripten::val& owner, const char* key, const char* field, fm_patch_op_t* op,
+                             std::vector<fm_cfvo_t>& store, const fm_cfvo_t** data, uint32_t* count) {
+    const emscripten::val v = reader.value(owner, key, field);
+    if (js_patch_key(reader, v, field, false) != JsPatchKey::kSet || !reader.is_array(v, field)) {
+      return;
+    }
+    const uint32_t n = reader.length(v, field);
+    store.reserve(n);
+    for (uint32_t i = 0; i < n; ++i) {
+      store.push_back(js_pull_cfvo(reader.array_element(v, i, field), &cfvo_strings, reader));
+    }
+    *op = FM_PATCH_OP_SET;
+    *data = store.empty() ? nullptr : store.data();
+    *count = static_cast<uint32_t>(store.size());
+  };
+  // A nested payload patch: an object whose own keys are the payload's fields.
+  const auto nested = [&](const char* key, const char* field) {
+    const emscripten::val v = reader.value(patch, key, field);
+    if (js_patch_key(reader, v, field, false) != JsPatchKey::kSet || !reader.require_object(v, field)) {
+      return emscripten::val::undefined();
+    }
+    return v;
+  };
+
+  i32(patch, "priority", "rule.priority", &p.priority_op, &p.priority);
+  js_patch_flag(reader, patch, "stopIfTrue", "rule.stopIfTrue", &p.stop_if_true_op, &p.stop_if_true);
+  u32(patch, "dxfIndex", "rule.dxfIndex", &p.dxf_index_op, &p.dxf_index, true);
+  const emscripten::val ranges_value = reader.value(patch, "ranges", "rule.ranges");
+  if (reader.ok() && js_patch_key(reader, ranges_value, "rule.ranges", false) == JsPatchKey::kSet &&
+      reader.require_array(ranges_value, "rule.ranges")) {
+    ranges = js_pull_range_array(ranges_value, "rule.ranges", &reader);
+    p.ranges_op = FM_PATCH_OP_SET;
+    p.ranges = ranges.empty() ? nullptr : ranges.data();
+    p.range_count = ranges.size();
+  }
+  js_patch_string(reader, patch, "formula1", "rule.formula1", true, text[0], &p.formula1_op, &p.formula1);
+  js_patch_string(reader, patch, "formula2", "rule.formula2", true, text[1], &p.formula2_op, &p.formula2);
+  u8(patch, "operator", "rule.operator", &p.op_op, &p.op);
+  i32(patch, "rank", "rule.rank", &p.rank_op, &p.rank);
+  js_patch_flag(reader, patch, "percent", "rule.percent", &p.percent_op, &p.percent);
+  js_patch_flag(reader, patch, "bottom", "rule.bottom", &p.bottom_op, &p.bottom);
+  js_patch_flag(reader, patch, "aboveAverage", "rule.aboveAverage", &p.above_average_op, &p.above_average);
+  js_patch_flag(reader, patch, "equalAverage", "rule.equalAverage", &p.equal_average_op, &p.equal_average);
+  js_patch_number(reader, patch, "stdDev", "rule.stdDev", false, &p.std_dev_op, &p.std_dev);
+  js_patch_string(reader, patch, "text", "rule.text", false, text[2], &p.text_op, &p.text);
+  u8(patch, "timePeriod", "rule.timePeriod", &p.time_period_op, &p.time_period);
+
+  const emscripten::val color_scale = nested("colorScale", "colorScale");
+  if (!color_scale.isUndefined()) {
+    cfvo_list(color_scale, "thresholds", "colorScale.thresholds", &p.color_scale_thresholds_op, color_scale_thresholds,
+              &p.color_scale_thresholds, &p.color_scale_thresholds_count);
+    const emscripten::val colors = reader.value(color_scale, "colors", "colorScale.colors");
+    if (js_patch_key(reader, colors, "colorScale.colors", false) == JsPatchKey::kSet &&
+        reader.is_array(colors, "colorScale.colors")) {
+      const uint32_t n = reader.length(colors, "colorScale.colors");
+      color_scale_colors.reserve(n);
+      for (uint32_t i = 0; i < n; ++i) {
+        color_scale_colors.push_back(js_pull_color_spec_value(reader.array_element(colors, i, "colorScale.colors[]"),
+                                                              "colorScale.colors[]", &reader));
+      }
+      p.color_scale_colors_op = FM_PATCH_OP_SET;
+      p.color_scale_colors = color_scale_colors.empty() ? nullptr : color_scale_colors.data();
+      p.color_scale_colors_count = static_cast<uint32_t>(color_scale_colors.size());
+    }
+  }
+  const emscripten::val data_bar = nested("dataBar", "dataBar");
+  if (!data_bar.isUndefined()) {
+    cfvo(data_bar, "min", "dataBar.min", &p.data_bar_min_op, &p.data_bar_min);
+    cfvo(data_bar, "max", "dataBar.max", &p.data_bar_max_op, &p.data_bar_max);
+    color(data_bar, "fill", "dataBar.fill", &p.data_bar_fill_op, &p.data_bar_fill, false);
+    js_patch_flag(reader, data_bar, "showValue", "dataBar.showValue", &p.data_bar_show_value_op,
+                  &p.data_bar_show_value);
+    u8_pct(data_bar, "minLengthPct", "dataBar.minLengthPct", &p.data_bar_min_length_pct_op, &p.data_bar_min_length_pct);
+    u8_pct(data_bar, "maxLengthPct", "dataBar.maxLengthPct", &p.data_bar_max_length_pct_op, &p.data_bar_max_length_pct);
+    // `null` on these three is "not specified": the patch sets the default the add path applies.
+    const emscripten::val gradient = reader.value(data_bar, "gradient", "dataBar.gradient");
+    if (gradient.isNull()) {
+      p.data_bar_gradient_op = FM_PATCH_OP_SET;
+      p.data_bar_gradient = 1;
+    } else {
+      js_patch_flag(reader, data_bar, "gradient", "dataBar.gradient", &p.data_bar_gradient_op, &p.data_bar_gradient);
+    }
+    if (reader.value(data_bar, "axisPosition", "dataBar.axisPosition").isNull()) {
+      p.data_bar_axis_position_op = FM_PATCH_OP_SET;
+      p.data_bar_axis_position = FM_CF_DATA_BAR_AXIS_POSITION_AUTOMATIC;
+    } else {
+      u8(data_bar, "axisPosition", "dataBar.axisPosition", &p.data_bar_axis_position_op, &p.data_bar_axis_position);
+    }
+    color(data_bar, "negativeFill", "dataBar.negativeFill", &p.data_bar_negative_fill_op, &p.data_bar_negative_fill,
+          true);
+    color(data_bar, "border", "dataBar.border", &p.data_bar_border_op, &p.data_bar_border, true);
+    color(data_bar, "negativeBorder", "dataBar.negativeBorder", &p.data_bar_negative_border_op,
+          &p.data_bar_negative_border, true);
+    color(data_bar, "axisColor", "dataBar.axisColor", &p.data_bar_axis_color_op, &p.data_bar_axis_color, true);
+    u8(data_bar, "direction", "dataBar.direction", &p.data_bar_direction_op, &p.data_bar_direction);
+  }
+  const emscripten::val icon_set = nested("iconSet", "iconSet");
+  if (!icon_set.isUndefined()) {
+    u8(icon_set, "name", "iconSet.name", &p.icon_set_name_op, &p.icon_set_name);
+    cfvo_list(icon_set, "thresholds", "iconSet.thresholds", &p.icon_set_thresholds_op, icon_set_thresholds,
+              &p.icon_set_thresholds, &p.icon_set_thresholds_count);
+    js_patch_flag(reader, icon_set, "reverse", "iconSet.reverse", &p.icon_set_reverse_op, &p.icon_set_reverse);
+    js_patch_flag(reader, icon_set, "showValue", "iconSet.showValue", &p.icon_set_show_value_op,
+                  &p.icon_set_show_value);
+    js_patch_flag(reader, icon_set, "percent", "iconSet.percent", &p.icon_set_percent_op, &p.icon_set_percent);
+    if (reader.value(icon_set, "floor", "iconSet.floor").isNull()) {
+      p.icon_set_floor_op = FM_PATCH_OP_SET;
+      p.icon_set_floor = fm_cfvo_t{FM_CF_VALUE_OBJECT_TYPE_PERCENT, 1, nullptr};
+    } else {
+      cfvo(icon_set, "floor", "iconSet.floor", &p.icon_set_floor_op, &p.icon_set_floor);
+    }
+    const emscripten::val icons = reader.value(icon_set, "icons", "iconSet.icons");
+    if (!icons.isNull() && js_patch_key(reader, icons, "iconSet.icons", false) == JsPatchKey::kSet &&
+        reader.is_array(icons, "iconSet.icons")) {
+      const uint32_t n = reader.length(icons, "iconSet.icons");
+      icon_set_icons.reserve(n);
+      for (uint32_t i = 0; i < n; ++i) {
+        const emscripten::val icon = reader.array_element(icons, i, "iconSet.icons[]");
+        icon_set_icons.push_back(fm_cf_icon_t{reader.i32(icon, "iconSet", 0, "iconSet.icons[].iconSet"),
+                                              reader.i32(icon, "iconIndex", 0, "iconSet.icons[].iconIndex")});
+      }
+      p.icon_set_icons_op = FM_PATCH_OP_SET;
+      p.icon_set_icons = icon_set_icons.empty() ? nullptr : icon_set_icons.data();
+      p.icon_set_icons_count = static_cast<uint32_t>(icon_set_icons.size());
+    }
+  }
+  if (!reader.ok()) {
+    return;
+  }
+  succeeded(fm_sheet_update_cf_rule(handle_, sheet, cfRuleIndex, &p));
+}
+
 void JsWorkbook::removeConditionalFormatAt(uint32_t sheet, uint32_t index) {
   succeeded(handle_ != nullptr ? fm_sheet_remove_cf_rule(handle_, sheet, index) : kBindingInvalidHandle);
 }

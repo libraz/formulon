@@ -69,7 +69,6 @@ class StatusCode(IntEnum):
     AUTO_FILTER_INVALID = 8006
     PRINT_INVALID_AREA = 9002
     PRINT_PAGE_COUNT_OVERFLOW = 9005
-    THREADED_COMMENT_INVALID = 9006
 
 
 # Codes raised as `NotFoundError`.

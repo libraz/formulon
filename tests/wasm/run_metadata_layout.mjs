@@ -169,7 +169,7 @@ export function registerMetadataLayout(Module, test) {
     }
   });
 
-  test('addValidation / getValidation / removeValidationAt / clearValidations round-trip', () => {
+  test('addValidation / getValidation / updateValidation / removeValidation / clearValidations round-trip', () => {
     const wb = Module.Workbook.createDefault();
     try {
       // List-type validation at A1:B3 with prompts and an error message.
@@ -187,7 +187,8 @@ export function registerMetadataLayout(Module, test) {
         errorTitle: 'Bad value',
         errorMessage: 'Pick from the list',
       };
-      wb.addValidation(0, listRule);
+      const listId = wb.addValidation(0, listRule);
+      assert.equal(typeof listId, 'string');
 
       // Decimal between [0, 100] across two rectangles.
       const decimalRule = {
@@ -201,7 +202,8 @@ export function registerMetadataLayout(Module, test) {
         formula2: '100',
         allowBlank: false,
       };
-      wb.addValidation(0, decimalRule);
+      const decimalId = wb.addValidation(0, decimalRule);
+      assert.notEqual(decimalId, listId);
 
       const list = readAll(
         () => wb.getValidationCount(0),
@@ -210,6 +212,8 @@ export function registerMetadataLayout(Module, test) {
       assert.equal(list.length, 2);
 
       const a = list[0];
+      assert.equal(a.id, listId);
+      assert.equal(list[1].id, decimalId);
       assert.equal(a.type, 3);
       assert.equal(a.operator, 0);
       assert.equal(a.errorStyle, 1);
@@ -237,17 +241,30 @@ export function registerMetadataLayout(Module, test) {
       assert.equal(b.ranges[1].firstRow, 6);
       assert.equal(b.ranges[1].lastRow, 9);
 
-      // removeValidationAt drops the first rule.
-      wb.removeValidation(0, 0);
+      // A patch changes the keys it names, clears a nullable one and leaves the rest.
+      wb.updateValidation(0, listId, { errorMessage: 'Changed', promptTitle: null, allowBlank: false });
+      const patched = wb.getValidation(0, 0);
+      assert.equal(patched.errorMessage, 'Changed');
+      assert.equal(patched.promptTitle, null);
+      assert.equal(patched.allowBlank, false);
+      assert.equal(patched.formula1, '="Yes,No,Maybe"');
+      assert.equal(patched.id, listId);
+      assert.throws(() => wb.updateValidation(0, listId, { type: null }), TypeError);
+      expectFailure(() => wb.updateValidation(0, 'missing', {}), StatusCode.NotFound);
+
+      // removeValidation drops the rule with that id.
+      wb.removeValidation(0, listId);
       const after = readAll(
         () => wb.getValidationCount(0),
         (i) => wb.getValidation(0, i),
       );
       assert.equal(after.length, 1);
       assert.equal(after[0].type, 2);
+      assert.equal(after[0].id, decimalId);
 
-      // Out-of-range index is rejected.
-      expectFailure(() => wb.removeValidation(0, 99));
+      // An id no rule carries is rejected, the removed one included.
+      expectFailure(() => wb.removeValidation(0, listId), StatusCode.NotFound);
+      expectFailure(() => wb.removeValidation(0, 'missing'), StatusCode.NotFound);
 
       // clearValidations drops everything; safe to call again.
       wb.clearValidations(0);
@@ -262,7 +279,7 @@ export function registerMetadataLayout(Module, test) {
 
       // Sheet-out-of-range is rejected on every entry.
       expectFailure(() => wb.addValidation(999, listRule));
-      expectFailure(() => wb.removeValidation(999, 0));
+      expectFailure(() => wb.removeValidation(999, decimalId));
       expectFailure(() => wb.clearValidations(999));
     } finally {
       wb.delete();
@@ -456,10 +473,11 @@ export function registerMetadataLayout(Module, test) {
   test('setVisibility states hidden and veryHidden and refuses to hide the last visible sheet', () => {
     const wb = Module.Workbook.createDefault();
     try {
-      const read = () => wb.getView(0).visibility;
+      const read = () => wb.getVisibility(0);
       assert.equal(read(), 0);
       assert.equal('tabHidden' in wb.getView(0), false);
-      const setVisibility = (sheet, visibility) => wb.updateView(sheet, { visibility });
+      assert.equal('visibility' in wb.getView(0), false);
+      const setVisibility = (sheet, visibility) => wb.setVisibility(sheet, visibility);
       // The only visible sheet cannot be hidden: PreconditionFailed, sheet left alone.
       expectFailure(() => setVisibility(0, 1), StatusCode.PreconditionFailed);
       assert.equal(read(), 0);
@@ -468,7 +486,7 @@ export function registerMetadataLayout(Module, test) {
       assert.equal(wb.getSheetCount(), 1);
       // A second sheet lets the first one change state, but removing the first
       // while the second is hidden would leave no visible sheet.
-      wb.addSheet('Second');
+      wb.addSheet('Second', wb.getSheetCount());
       setVisibility(1, 1);
       expectFailure(() => wb.removeSheet(0), StatusCode.PreconditionFailed);
       assert.equal(wb.getSheetCount(), 2);

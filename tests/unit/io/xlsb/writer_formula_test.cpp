@@ -491,6 +491,27 @@ TEST(XlsbWriter, SheetQualifiedNamesKeepTheirQualifierAndScope) {
   }
 }
 
+TEST(XlsbWriter, NameSpelledInAnotherCaseReusesTheDefinedNameRecord) {
+  Workbook wb = Workbook::create_empty();
+  Sheet& sheet = wb.sheet(wb.add_sheet("Sheet1"));
+  sheet.set_cell_value(0, 0, Value::number(5.0));
+  wb.set_defined_names({DefinedName{"Äpfel", "Sheet1!$A$1", -1, false, ""}});
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0, 0, 1U, "=äPFEL*2")));
+
+  auto bytes_or = write_xlsb(wb);
+  ASSERT_TRUE(static_cast<bool>(bytes_or)) << bytes_or.error().message << " | " << bytes_or.error().context;
+  auto read_or = read_xlsb(SpanOf(bytes_or.value()));
+  ASSERT_TRUE(static_cast<bool>(read_or)) << read_or.error().message << " | " << read_or.error().context;
+  Workbook& back = read_or.value().workbook;
+  ASSERT_EQ(back.defined_names().size(), 1U);
+  EXPECT_EQ(back.defined_names()[0].name, "Äpfel");
+  ASSERT_TRUE(static_cast<bool>(back.recalc(eval::default_registry())));
+  const Cell* c = back.sheet(0).cell_at(0, 1U);
+  ASSERT_NE(c, nullptr);
+  EXPECT_EQ(c->formula_text, "=Äpfel*2");
+  EXPECT_EQ(c->cached_value, Value::number(10.0));
+}
+
 TEST(XlsbWriter, DefinedNameWithFutureFunctionRoundTrips) {
   Workbook wb = Workbook::create_empty();
   wb.add_sheet("Data");

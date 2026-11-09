@@ -82,8 +82,8 @@ function addCache(wb, sourceSheet) {
 // A pivot of `cache` on `sheet` anchored at (row, col): Region on rows, Sum of Amount as the data field.
 function addPivot(formulon, sheet, cache, name, anchorRow, anchorCol) {
   const pivot = sheet.addPivot({ name, cacheId: cache.cacheId, anchor: { row: anchorRow, col: anchorCol } });
-  pivot.addField({ sourceName: 'Region', axis: formulon.PivotAxis.Row });
-  const amount = pivot.addField({ sourceName: 'Amount', axis: formulon.PivotAxis.Value });
+  pivot.addField({ fieldIndex: 'Region', axis: formulon.PivotAxis.Row });
+  const amount = pivot.addField({ fieldIndex: 'Amount', axis: formulon.PivotAxis.Value });
   pivot.addDataField({ name: 'Sum of Amount', fieldIndex: amount, aggregation: 0 });
   return { pivot, amount };
 }
@@ -109,7 +109,10 @@ function addChart(formulon, sheet) {
   });
 }
 
-const SHAPE = { presetGeometry: 'rect', anchorKind: 0, fromRow: 2, widthEmu: 914400, heightEmu: 457200 };
+const SHAPE = {
+  presetGeometry: 'rect',
+  anchor: { fromRow: 2, widthEmu: 914400, heightEmu: 457200 },
+};
 
 // ---- Identity: twelve cases ---------------------------------------------------------
 
@@ -201,7 +204,7 @@ test('identity 3: the handle of a removed target throws NotFound', async () => {
     ws.removePivot(pivot);
     expectCode(() => pivot.name, f.StatusCode.NotFound);
     expectCode(() => pivot.getProperties(), f.StatusCode.NotFound);
-    expectCode(() => pivot.addField({ sourceName: 'Region', axis: f.PivotAxis.Row }), f.StatusCode.NotFound);
+    expectCode(() => pivot.addField({ fieldIndex: 'Region', axis: f.PivotAxis.Row }), f.StatusCode.NotFound);
     expectCode(() => ws.pivot('P1'), f.StatusCode.NotFound);
 
     const chart = addChart(f, ws);
@@ -286,7 +289,7 @@ test('identity 7: copySheet keeps the existing handles; a sheet with a slicer is
     const cache = addCache(wb, 'Sheet1');
     const { pivot } = addPivot(f, ws, cache, 'P1', 0, 4);
     const chart = addChart(f, ws);
-    const copy = wb.copySheet(ws, 1, 'Copy');
+    const copy = wb.copySheet(ws, { newName: 'Copy' });
     assert.notEqual(copy, ws);
     assert.equal(wb.sheet('Sheet1'), ws);
     // The original handles are undisturbed and the copy has its own.
@@ -303,9 +306,9 @@ test('identity 7: copySheet keeps the existing handles; a sheet with a slicer is
     // A slicer on the sheet makes the copy fail; the handles stay as they were.
     const tableSheet = wb.addSheet('Tables');
     const table = addTable(tableSheet, 'Tbl');
-    const slicer = tableSheet.addSlicer(table, 0, { fromRow: 4, fromCol: 3, toRow: 14, toCol: 5 });
+    const slicer = tableSheet.addSlicer(table, 0, { anchor: { fromRow: 4, fromCol: 3, toRow: 14, toCol: 5 } });
     const sheetCount = wb.listSheets().length;
-    expectCode(() => wb.copySheet(tableSheet, 0, 'TablesCopy'), f.StatusCode.NotImplemented);
+    expectCode(() => wb.copySheet(tableSheet, { insertBefore: 0, newName: 'TablesCopy' }), f.StatusCode.NotImplemented);
     assert.equal(wb.listSheets().length, sheetCount);
     assert.equal(tableSheet.listSlicers()[0], slicer);
     assert.equal(slicer.getProperties().tableName, 'Tbl');
@@ -335,9 +338,10 @@ test('identity 8: a rename leaves the handle in place', async () => {
     assert.equal('displayName' in tables, false);
 
     const chart = addChart(f, ws);
-    chart.rename('Revenue');
+    chart.update({ name: 'Revenue' });
     assert.equal(ws.chart(chart.objectId), chart);
     assert.equal(chart.getDrawingProperties().name, 'Revenue');
+    assert.equal(chart.name, 'Revenue');
 
     ws.rename('Renamed1');
     assert.equal(ws.name, 'Renamed1');
@@ -645,7 +649,7 @@ const PERSON = '{0A1B2C3D-0000-4000-8000-000000000001}';
 const THREAD = '{6F1E0D2C-1111-4111-8111-000000000001}';
 const REPLY = '{6F1E0D2C-1111-4111-8111-000000000002}';
 
-test('threaded comments: done on a thread resolves it, on a reply is ThreadedCommentInvalid, null is a TypeError', async () => {
+test('threaded comments: done on a thread resolves it, on a reply is InvalidArgument, null is a TypeError', async () => {
   await withWorkbook((wb, f) => {
     const ws = wb.sheet(0);
     wb.addPerson({ id: PERSON, displayName: 'Alice', userId: 'alice', providerId: 'None' });
@@ -676,8 +680,8 @@ test('threaded comments: done on a thread resolves it, on a reply is ThreadedCom
     ws.updateThreadedComment(THREAD, { done: false });
     assert.equal(ws.getThreadedComment(THREAD).done, false);
 
-    expectCode(() => ws.updateThreadedComment(REPLY, { done: true }), f.StatusCode.ThreadedCommentInvalid);
-    assert.equal(f.StatusCode.ThreadedCommentInvalid, 9006);
+    expectCode(() => ws.updateThreadedComment(REPLY, { done: true }), f.StatusCode.InvalidArgument);
+    assert.equal(f.StatusCode.ThreadedCommentInvalid, undefined);
     assert.equal(ws.getThreadedComment(REPLY).done, false);
     assert.throws(() => ws.updateThreadedComment(THREAD, { done: null }), TypeError);
     assert.throws(() => ws.updateThreadedComment(THREAD, { done: 'yes' }), TypeError);

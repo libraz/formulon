@@ -15,6 +15,7 @@
 #include <utility>
 
 #include "num_fmt_locale.h"
+#include "sheet_name.h"
 
 namespace formulon {
 namespace {
@@ -229,7 +230,7 @@ constexpr std::array<const char*, 164> kBuiltinNumFmts = {
 Expected<void, Error> remove_cell_style(StylesTable& styles, std::string_view name) {
   std::size_t pos = styles.cell_styles.size();
   for (std::size_t i = 0; i < styles.cell_styles.size(); ++i) {
-    if (styles.cell_styles[i].name == name) {
+    if (collection_names::equal(styles.cell_styles[i].name, name)) {
       pos = i;
       break;
     }

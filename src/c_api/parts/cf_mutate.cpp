@@ -19,6 +19,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <iterator>
 #include <limits>
 #include <string>
 #include <unordered_set>
@@ -58,6 +59,8 @@ using formulon::c_api::parts::invalid_argument;
 using formulon::c_api::parts::kIconSetNameTokens;
 using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::ordinal_of;
+using formulon::c_api::parts::patch_op_ok;
+using formulon::c_api::parts::patch_op_ok_without_clear;
 using formulon::c_api::parts::text_or_empty;
 using formulon::c_api::parts::to_c;
 using formulon::c_api::parts::token_of;
@@ -564,6 +567,88 @@ fm_status_t copy_payloads(const fm_cf_rule_t& rule, formulon::cf::CFRule* out) {
   return 0;
 }
 
+// Builds the model rule a validated record states, over `sqref`, except for
+// its id and priority, which the callers assign.
+fm_status_t build_rule(fm_workbook_t* wb, const fm_cf_rule_t& rule, const std::vector<formulon::cf::CFCellRange>& sqref,
+                       formulon::cf::CFRule* out_rule) {
+  out_rule->type = static_cast<formulon::cf::RuleType>(rule.type);
+  out_rule->stop_if_true = rule.stop_if_true != 0;
+  if (rule.has_dxf_index != 0) {
+    // A `dxfId` past the end of `<dxfs>` makes Excel treat the whole
+    // `xl/styles.xml` reference as broken and strip every conditional format
+    // from the workbook on open. The writer already refuses to emit an
+    // unresolvable `dxfId`, but rejecting it here tells the caller at set
+    // time which index was wrong instead of silently losing the format.
+    const std::size_t dxf_count = wb->workbook().styles().dxfs.size();
+    if (static_cast<std::size_t>(rule.dxf_index) >= dxf_count) {
+      return invalid_argument("dxf_index out of range", "dxf_index=" + std::to_string(rule.dxf_index) +
+                                                            " dxfs_count=" + std::to_string(dxf_count));
+    }
+    out_rule->dxf_id = rule.dxf_index;
+  }
+  if (rule.formula1 != nullptr) {
+    if (auto rc = check_stored_formula(rule.formula1, "field=formula1", &out_rule->formula1.emplace()); rc != 0) {
+      return rc;
+    }
+  }
+  if (rule.formula2 != nullptr) {
+    if (auto rc = check_stored_formula(rule.formula2, "field=formula2", &out_rule->formula2.emplace()); rc != 0) {
+      return rc;
+    }
+  }
+  if (rule.has_op != 0) {
+    out_rule->op = cf_operator_from_c(rule.op);
+  }
+  if (rule.has_rank != 0) {
+    out_rule->rank = rule.rank;
+  }
+  out_rule->percent = (rule.percent != 0);
+  out_rule->bottom = (rule.bottom != 0);
+  out_rule->above_average = (rule.above_average != 0);
+  out_rule->equal_average = (rule.equal_average != 0);
+  if (rule.has_std_dev != 0) {
+    out_rule->std_dev = rule.std_dev;
+  }
+  if (rule.text != nullptr) {
+    out_rule->text = std::string(rule.text);
+  }
+  if (rule.has_time_period != 0) {
+    out_rule->time_period = date_period_from_c(rule.time_period);
+  }
+  if (!out_rule->formula1.has_value() || out_rule->formula1->empty()) {
+    // Excel stores a derived formula for these types and readers surface it.
+    if (auto derived = formulon::cf::derived_rule_formula(*out_rule, formulon::cf::sqref_anchor(sqref))) {
+      out_rule->formula1 = std::move(*derived);
+    }
+  }
+  if (auto rc = copy_payloads(rule, out_rule); rc != 0) {
+    return rc;
+  }
+  if (auto rc = store_cfvo_formulas(wb, out_rule); rc != 0) {
+    return rc;
+  }
+  // Every check passed, so binding the books the formulas name commits nothing early.
+  if (rule.formula1 != nullptr && rule.formula1[0] != '\0') {
+    out_rule->formula1 = ingest_entered_formula(wb, rule.formula1);
+  }
+  if (rule.formula2 != nullptr && rule.formula2[0] != '\0') {
+    out_rule->formula2 = ingest_entered_formula(wb, rule.formula2);
+  }
+  return 0;
+}
+
+std::vector<formulon::cf::CFCellRange> sqref_from_c(const fm_cell_rect_t* ranges, std::size_t count) {
+  std::vector<formulon::cf::CFCellRange> out;
+  out.reserve(count);
+  for (std::size_t i = 0; i < count; ++i) {
+    formulon::cf::CFCellRange r;
+    r.first = formulon::CellAddress{ranges[i].first_row, ranges[i].first_col};
+    r.last = formulon::CellAddress{ranges[i].last_row, ranges[i].last_col};
+    out.push_back(r);
+  }
+  return out;
+}
+
 }  // namespace
 
 extern "C" fm_status_t fm_sheet_add_cf_rule(fm_workbook_t* wb, std::size_t sheet_index, const fm_cf_rule_t* rule,
@@ -589,83 +674,16 @@ extern "C" fm_status_t fm_sheet_add_cf_rule(fm_workbook_t* wb, std::size_t sheet
   }
 
   formulon::cf::ConditionalFormat new_block;
-  new_block.sqref.reserve(rule->range_count);
-  for (std::size_t i = 0; i < rule->range_count; ++i) {
-    formulon::cf::CFCellRange r;
-    r.first = formulon::CellAddress{rule->ranges[i].first_row, rule->ranges[i].first_col};
-    r.last = formulon::CellAddress{rule->ranges[i].last_row, rule->ranges[i].last_col};
-    new_block.sqref.push_back(r);
-  }
+  new_block.sqref = sqref_from_c(rule->ranges, rule->range_count);
 
   formulon::cf::CFRule out_rule;
-  out_rule.type = static_cast<formulon::cf::RuleType>(rule->type);
-
   if (auto rc = assign_priority(*rule, wb->workbook().sheet(sheet_index), &out_rule); rc != 0) {
     return rc;
   }
-  out_rule.stop_if_true = rule->stop_if_true != 0;
-  if (rule->has_dxf_index != 0) {
-    // A `dxfId` past the end of `<dxfs>` makes Excel treat the whole
-    // `xl/styles.xml` reference as broken and strip every conditional format
-    // from the workbook on open. The writer already refuses to emit an
-    // unresolvable `dxfId`, but rejecting it here tells the caller at set
-    // time which index was wrong instead of silently losing the format.
-    const std::size_t dxf_count = wb->workbook().styles().dxfs.size();
-    if (static_cast<std::size_t>(rule->dxf_index) >= dxf_count) {
-      return invalid_argument("dxf_index out of range", "dxf_index=" + std::to_string(rule->dxf_index) +
-                                                            " dxfs_count=" + std::to_string(dxf_count));
-    }
-    out_rule.dxf_id = rule->dxf_index;
+  if (auto rc = build_rule(wb, *rule, new_block.sqref, &out_rule); rc != 0) {
+    return rc;
   }
   assign_id(*rule, wb->workbook().sheet(sheet_index), sheet_index, &out_rule);
-  if (rule->formula1 != nullptr) {
-    if (auto rc = check_stored_formula(rule->formula1, "field=formula1", &out_rule.formula1.emplace()); rc != 0) {
-      return rc;
-    }
-  }
-  if (rule->formula2 != nullptr) {
-    if (auto rc = check_stored_formula(rule->formula2, "field=formula2", &out_rule.formula2.emplace()); rc != 0) {
-      return rc;
-    }
-  }
-  if (rule->has_op != 0) {
-    out_rule.op = cf_operator_from_c(rule->op);
-  }
-  if (rule->has_rank != 0) {
-    out_rule.rank = rule->rank;
-  }
-  out_rule.percent = (rule->percent != 0);
-  out_rule.bottom = (rule->bottom != 0);
-  out_rule.above_average = (rule->above_average != 0);
-  out_rule.equal_average = (rule->equal_average != 0);
-  if (rule->has_std_dev != 0) {
-    out_rule.std_dev = rule->std_dev;
-  }
-  if (rule->text != nullptr) {
-    out_rule.text = std::string(rule->text);
-  }
-  if (rule->has_time_period != 0) {
-    out_rule.time_period = date_period_from_c(rule->time_period);
-  }
-  if (!out_rule.formula1.has_value() || out_rule.formula1->empty()) {
-    // Excel stores a derived formula for these types and readers surface it.
-    if (auto derived = formulon::cf::derived_rule_formula(out_rule, formulon::cf::sqref_anchor(new_block.sqref))) {
-      out_rule.formula1 = std::move(*derived);
-    }
-  }
-  if (auto rc = copy_payloads(*rule, &out_rule); rc != 0) {
-    return rc;
-  }
-  if (auto rc = store_cfvo_formulas(wb, &out_rule); rc != 0) {
-    return rc;
-  }
-  // Every check passed, so binding the books the formulas name commits nothing early.
-  if (rule->formula1 != nullptr && rule->formula1[0] != '\0') {
-    out_rule.formula1 = ingest_entered_formula(wb, rule->formula1);
-  }
-  if (rule->formula2 != nullptr && rule->formula2[0] != '\0') {
-    out_rule.formula2 = ingest_entered_formula(wb, rule->formula2);
-  }
 
   new_block.rules.push_back(std::move(out_rule));
   auto& blocks_mut = wb->workbook().sheet(sheet_index).mutable_conditional_formats();
@@ -678,6 +696,400 @@ extern "C" fm_status_t fm_sheet_add_cf_rule(fm_workbook_t* wb, std::size_t sheet
   }
   blocks_mut.push_back(std::move(new_block));
   *out_index = new_index;
+  return 0;
+}
+
+namespace {
+
+// One scalar or string field of `fm_cf_rule_patch_t`: its op, name, whether
+// the rule's type uses it, and whether it can be cleared.
+struct PatchField {
+  fm_patch_op_t op;
+  const char* name;
+  bool used;
+  bool clearable;
+};
+
+bool is_text_type(formulon::cf::RuleType type) {
+  return type >= formulon::cf::RuleType::ContainsText && type <= formulon::cf::RuleType::EndsWith;
+}
+
+// Types whose first formula Excel derives from the rule's other settings.
+bool has_derived_formula(formulon::cf::RuleType type) {
+  return type >= formulon::cf::RuleType::ContainsText && type <= formulon::cf::RuleType::TimePeriod;
+}
+
+// A SET array must be present when its count is non-zero.
+fm_status_t check_set_array(fm_patch_op_t op, const void* data, std::size_t count, const char* field) {
+  if (op == FM_PATCH_OP_SET && count != 0U && data == nullptr) {
+    return null_argument(field);
+  }
+  return 0;
+}
+
+// A SET string must be present.
+fm_status_t check_set_string(fm_patch_op_t op, const char* value, const char* field) {
+  if (op == FM_PATCH_OP_SET && value == nullptr) {
+    return invalid_argument("SET string is NULL", std::string("field=") + field);
+  }
+  return 0;
+}
+
+}  // namespace
+
+extern "C" fm_status_t fm_sheet_update_cf_rule(fm_workbook_t* wb, std::size_t sheet_index, std::size_t cf_rule_index,
+                                               const fm_cf_rule_patch_t* patch) {
+  clear_last_error();
+  if (patch == nullptr) {
+    return null_argument("patch");
+  }
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_record_size(*patch); rc != 0) {
+    return rc;
+  }
+  formulon::Workbook& workbook = wb->workbook();
+  formulon::Sheet& sheet = workbook.sheet(sheet_index);
+  std::size_t block_index = 0;
+  std::size_t rule_pos = 0;
+  if (auto rc = resolve_flat_index(sheet.conditional_formats(), cf_rule_index, &block_index, &rule_pos); rc != 0) {
+    return rc;
+  }
+  const formulon::cf::ConditionalFormat& current_block = sheet.conditional_formats()[block_index];
+  const formulon::cf::CFRule& current = current_block.rules[rule_pos];
+  using formulon::cf::RuleType;
+  const RuleType type = current.type;
+  const bool top10 = type == RuleType::Top10;
+  const bool average = type == RuleType::AboveAverage;
+  const bool color_scale = type == RuleType::ColorScale;
+  const bool data_bar = type == RuleType::DataBar;
+  const bool icon_set = type == RuleType::IconSet;
+  const bool cell_is = type == RuleType::CellIs;
+
+  const PatchField fields[] = {
+      {patch->priority_op, "priority", true, false},
+      {patch->stop_if_true_op, "stop_if_true", true, false},
+      {patch->dxf_index_op, "dxf_index", true, true},
+      {patch->ranges_op, "ranges", true, false},
+      {patch->formula1_op, "formula1", cell_is || type == RuleType::Expression, true},
+      {patch->formula2_op, "formula2", cell_is, true},
+      {patch->op_op, "op", cell_is, false},
+      {patch->rank_op, "rank", top10, false},
+      {patch->percent_op, "percent", top10, false},
+      {patch->bottom_op, "bottom", top10, false},
+      {patch->above_average_op, "above_average", average, false},
+      {patch->equal_average_op, "equal_average", average, false},
+      {patch->std_dev_op, "std_dev", average, false},
+      {patch->text_op, "text", is_text_type(type), false},
+      {patch->time_period_op, "time_period", type == RuleType::TimePeriod, false},
+      {patch->color_scale_thresholds_op, "color_scale_thresholds", color_scale, false},
+      {patch->color_scale_colors_op, "color_scale_colors", color_scale, false},
+      {patch->data_bar_min_op, "data_bar_min", data_bar, false},
+      {patch->data_bar_max_op, "data_bar_max", data_bar, false},
+      {patch->data_bar_fill_op, "data_bar_fill", data_bar, false},
+      {patch->data_bar_show_value_op, "data_bar_show_value", data_bar, false},
+      {patch->data_bar_min_length_pct_op, "data_bar_min_length_pct", data_bar, false},
+      {patch->data_bar_max_length_pct_op, "data_bar_max_length_pct", data_bar, false},
+      {patch->data_bar_gradient_op, "data_bar_gradient", data_bar, false},
+      {patch->data_bar_axis_position_op, "data_bar_axis_position", data_bar, false},
+      {patch->data_bar_negative_fill_op, "data_bar_negative_fill", data_bar, false},
+      {patch->data_bar_border_op, "data_bar_border", data_bar, false},
+      {patch->data_bar_negative_border_op, "data_bar_negative_border", data_bar, false},
+      {patch->data_bar_axis_color_op, "data_bar_axis_color", data_bar, false},
+      {patch->data_bar_direction_op, "data_bar_direction", data_bar, false},
+      {patch->icon_set_name_op, "icon_set_name", icon_set, false},
+      {patch->icon_set_thresholds_op, "icon_set_thresholds", icon_set, false},
+      {patch->icon_set_reverse_op, "icon_set_reverse", icon_set, false},
+      {patch->icon_set_show_value_op, "icon_set_show_value", icon_set, false},
+      {patch->icon_set_percent_op, "icon_set_percent", icon_set, false},
+      {patch->icon_set_floor_op, "icon_set_floor", icon_set, false},
+      {patch->icon_set_icons_op, "icon_set_icons", icon_set, false},
+  };
+  for (const PatchField& f : fields) {
+    if (!(f.clearable ? patch_op_ok(f.op) : patch_op_ok_without_clear(f.op))) {
+      return invalid_argument("cf rule patch op out of range or not clearable",
+                              std::string("field=") + f.name + " op=" + std::to_string(f.op));
+    }
+    if (f.op != FM_PATCH_OP_KEEP && !f.used) {
+      return invalid_argument("field is not used by the rule's type", std::string("field=") + f.name);
+    }
+  }
+  if (auto rc = check_set_string(patch->formula1_op, patch->formula1, "formula1"); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_set_string(patch->formula2_op, patch->formula2, "formula2"); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_set_string(patch->text_op, patch->text, "text"); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_set_array(patch->ranges_op, patch->ranges, patch->range_count, "ranges"); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_set_array(patch->color_scale_thresholds_op, patch->color_scale_thresholds,
+                                patch->color_scale_thresholds_count, "color_scale_thresholds");
+      rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_set_array(patch->color_scale_colors_op, patch->color_scale_colors,
+                                patch->color_scale_colors_count, "color_scale_colors");
+      rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_set_array(patch->icon_set_thresholds_op, patch->icon_set_thresholds,
+                                patch->icon_set_thresholds_count, "icon_set_thresholds");
+      rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_set_array(patch->icon_set_icons_op, patch->icon_set_icons, patch->icon_set_icons_count,
+                                "icon_set_icons");
+      rc != 0) {
+    return rc;
+  }
+  if (patch->color_scale_thresholds_op == FM_PATCH_OP_SET || patch->color_scale_colors_op == FM_PATCH_OP_SET) {
+    const std::size_t stored_thresholds = current.color_scale.has_value() ? current.color_scale->thresholds.size() : 0U;
+    const std::size_t stored_colors = current.color_scale.has_value() ? current.color_scale->colors.size() : 0U;
+    const std::size_t thresholds =
+        patch->color_scale_thresholds_op == FM_PATCH_OP_SET ? patch->color_scale_thresholds_count : stored_thresholds;
+    const std::size_t colors =
+        patch->color_scale_colors_op == FM_PATCH_OP_SET ? patch->color_scale_colors_count : stored_colors;
+    if (thresholds != colors) {
+      return invalid_argument("color scale thresholds and colors differ in count");
+    }
+  }
+  if (data_bar) {
+    if (patch->data_bar_min_length_pct_op == FM_PATCH_OP_SET && patch->data_bar_min_length_pct > 100U) {
+      return invalid_argument("data bar length above 100", "field=data_bar_min_length_pct");
+    }
+    if (patch->data_bar_max_length_pct_op == FM_PATCH_OP_SET && patch->data_bar_max_length_pct > 100U) {
+      return invalid_argument("data bar length above 100", "field=data_bar_max_length_pct");
+    }
+  }
+
+  // The merged record: the rule as it reads today, with every SET / CLEAR
+  // applied. It goes through the checks and the builder `fm_sheet_add_cf_rule`
+  // uses, over local storage so the caller's read record stays valid.
+  BorrowedStringArena text_arena;
+  BorrowedArrayArena<fm_cell_rect_t> range_arena;
+  BorrowedArrayArena<fm_cfvo_t> cfvo_arena;
+  BorrowedArrayArena<fm_color_t> color_arena;
+  BorrowedArrayArena<fm_cf_icon_t> icon_arena;
+  fm_cf_rule_t merged{};
+  merged.struct_size = sizeof(fm_cf_rule_t);
+  fill_rule(workbook, current_block, current, workbook.styles().dxfs.size(), text_arena, range_arena, cfvo_arena,
+            color_arena, icon_arena, &merged);
+  merged.id = nullptr;
+
+  if (patch->priority_op == FM_PATCH_OP_SET) {
+    merged.priority = patch->priority;
+  }
+  if (patch->stop_if_true_op == FM_PATCH_OP_SET) {
+    merged.stop_if_true = patch->stop_if_true;
+  }
+  if (patch->dxf_index_op == FM_PATCH_OP_SET) {
+    merged.has_dxf_index = 1;
+    merged.dxf_index = patch->dxf_index;
+  } else if (patch->dxf_index_op == FM_PATCH_OP_CLEAR) {
+    merged.has_dxf_index = 0;
+    merged.dxf_index = 0;
+  }
+  if (patch->ranges_op == FM_PATCH_OP_SET) {
+    merged.ranges = patch->ranges;
+    merged.range_count = patch->range_count;
+  }
+  // A derived formula follows the rule's settings and ranges, so it is
+  // derived again; the other types take the formula as input.
+  if (has_derived_formula(type)) {
+    merged.formula1 = nullptr;
+  }
+  if (patch->formula1_op == FM_PATCH_OP_SET) {
+    merged.formula1 = patch->formula1;
+  } else if (patch->formula1_op == FM_PATCH_OP_CLEAR) {
+    merged.formula1 = nullptr;
+  }
+  if (patch->formula2_op == FM_PATCH_OP_SET) {
+    merged.formula2 = patch->formula2;
+  } else if (patch->formula2_op == FM_PATCH_OP_CLEAR) {
+    merged.formula2 = nullptr;
+  }
+  if (patch->op_op == FM_PATCH_OP_SET) {
+    merged.has_op = 1;
+    merged.op = patch->op;
+  }
+  if (patch->rank_op == FM_PATCH_OP_SET) {
+    merged.has_rank = 1;
+    merged.rank = patch->rank;
+  }
+  if (patch->percent_op == FM_PATCH_OP_SET) {
+    merged.percent = patch->percent;
+  }
+  if (patch->bottom_op == FM_PATCH_OP_SET) {
+    merged.bottom = patch->bottom;
+  }
+  if (patch->above_average_op == FM_PATCH_OP_SET) {
+    merged.above_average = patch->above_average;
+  }
+  if (patch->equal_average_op == FM_PATCH_OP_SET) {
+    merged.equal_average = patch->equal_average;
+  }
+  if (patch->std_dev_op == FM_PATCH_OP_SET) {
+    merged.has_std_dev = 1;
+    merged.std_dev = patch->std_dev;
+  }
+  if (patch->text_op == FM_PATCH_OP_SET) {
+    merged.text = patch->text;
+  }
+  if (patch->time_period_op == FM_PATCH_OP_SET) {
+    merged.has_time_period = 1;
+    merged.time_period = patch->time_period;
+  }
+  if (patch->color_scale_thresholds_op == FM_PATCH_OP_SET) {
+    merged.color_scale_thresholds = patch->color_scale_thresholds;
+    merged.color_scale_count = patch->color_scale_thresholds_count;
+  }
+  if (patch->color_scale_colors_op == FM_PATCH_OP_SET) {
+    merged.color_scale_colors = patch->color_scale_colors;
+    merged.color_scale_count = patch->color_scale_colors_count;
+  }
+  if (data_bar) {
+    merged.has_data_bar = 1;
+    if (patch->data_bar_min_op == FM_PATCH_OP_SET) {
+      merged.data_bar_min = patch->data_bar_min;
+    }
+    if (patch->data_bar_max_op == FM_PATCH_OP_SET) {
+      merged.data_bar_max = patch->data_bar_max;
+    }
+    if (patch->data_bar_fill_op == FM_PATCH_OP_SET) {
+      merged.data_bar_fill = patch->data_bar_fill;
+    }
+    if (patch->data_bar_show_value_op == FM_PATCH_OP_SET) {
+      merged.data_bar_show_value = patch->data_bar_show_value;
+    }
+    if (patch->data_bar_min_length_pct_op == FM_PATCH_OP_SET) {
+      merged.data_bar_min_length_pct = static_cast<std::uint8_t>(patch->data_bar_min_length_pct);
+    }
+    if (patch->data_bar_max_length_pct_op == FM_PATCH_OP_SET) {
+      merged.data_bar_max_length_pct = static_cast<std::uint8_t>(patch->data_bar_max_length_pct);
+    }
+    if (patch->data_bar_gradient_op == FM_PATCH_OP_SET) {
+      merged.has_data_bar_gradient = 1;
+      merged.data_bar_gradient = patch->data_bar_gradient;
+    }
+    if (patch->data_bar_axis_position_op == FM_PATCH_OP_SET) {
+      merged.has_data_bar_axis_position = 1;
+      merged.data_bar_axis_position = patch->data_bar_axis_position;
+    }
+    if (patch->data_bar_negative_fill_op == FM_PATCH_OP_SET) {
+      merged.data_bar_negative_fill = patch->data_bar_negative_fill;
+    }
+    if (patch->data_bar_border_op == FM_PATCH_OP_SET) {
+      merged.data_bar_border = patch->data_bar_border;
+    }
+    if (patch->data_bar_negative_border_op == FM_PATCH_OP_SET) {
+      merged.data_bar_negative_border = patch->data_bar_negative_border;
+    }
+    if (patch->data_bar_axis_color_op == FM_PATCH_OP_SET) {
+      merged.data_bar_axis_color = patch->data_bar_axis_color;
+    }
+    if (patch->data_bar_direction_op == FM_PATCH_OP_SET) {
+      merged.data_bar_direction = patch->data_bar_direction;
+    }
+  }
+  if (icon_set) {
+    merged.has_icon_set = 1;
+    if (patch->icon_set_name_op == FM_PATCH_OP_SET) {
+      merged.icon_set_name = patch->icon_set_name;
+    }
+    if (patch->icon_set_thresholds_op == FM_PATCH_OP_SET) {
+      merged.icon_set_thresholds = patch->icon_set_thresholds;
+      merged.icon_set_threshold_count = patch->icon_set_thresholds_count;
+    }
+    if (patch->icon_set_reverse_op == FM_PATCH_OP_SET) {
+      merged.icon_set_reverse = patch->icon_set_reverse;
+    }
+    if (patch->icon_set_show_value_op == FM_PATCH_OP_SET) {
+      merged.icon_set_show_value = patch->icon_set_show_value;
+    }
+    if (patch->icon_set_percent_op == FM_PATCH_OP_SET) {
+      merged.icon_set_percent = patch->icon_set_percent;
+    }
+    if (patch->icon_set_floor_op == FM_PATCH_OP_SET) {
+      merged.has_icon_set_floor = 1;
+      merged.icon_set_floor = patch->icon_set_floor;
+    }
+    if (patch->icon_set_icons_op == FM_PATCH_OP_SET) {
+      merged.icon_set_icons = patch->icon_set_icons;
+      merged.icon_set_icon_count = patch->icon_set_icons_count;
+    }
+  }
+
+  if (auto rc = validate(merged); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_payload_colors(merged); rc != 0) {
+    return rc;
+  }
+  formulon::cf::CFRule updated;
+  const std::vector<formulon::cf::CFCellRange> sqref = sqref_from_c(merged.ranges, merged.range_count);
+  if (patch->priority_op == FM_PATCH_OP_SET) {
+    if (auto rc = assign_priority(merged, sheet, &updated); rc != 0) {
+      return rc;
+    }
+  } else {
+    updated.priority = current.priority;
+  }
+  if (auto rc = build_rule(wb, merged, sqref, &updated); rc != 0) {
+    return rc;
+  }
+  updated.id = current.id;
+  updated.ext_lst_raw = current.ext_lst_raw;
+  // A stored index the styles table cannot resolve reads as absent; an
+  // untouched one stays as stored.
+  if (patch->dxf_index_op == FM_PATCH_OP_KEEP) {
+    updated.dxf_id = current.dxf_id;
+  }
+
+  // Every check passed; nothing below can fail.
+  auto& blocks = sheet.mutable_conditional_formats();
+  formulon::cf::ConditionalFormat& block = blocks[block_index];
+  if (sqref == block.sqref) {
+    block.rules[rule_pos] = std::move(updated);
+    return 0;
+  }
+  if (block.rules.size() == 1U) {
+    block.sqref = sqref;
+    block.rules[0] = std::move(updated);
+    return 0;
+  }
+  // The block's other rules keep its ranges: the rule moves into a block of
+  // its own between the rules before it and the rules after it, so the
+  // flattened order does not change.
+  const formulon::cf::ConditionalFormat original = block;
+  std::vector<formulon::cf::ConditionalFormat> pieces;
+  const auto rule_it = original.rules.begin() + static_cast<std::ptrdiff_t>(rule_pos);
+  if (rule_pos > 0U) {
+    formulon::cf::ConditionalFormat head = original;
+    head.rules.assign(original.rules.begin(), rule_it);
+    pieces.push_back(std::move(head));
+  }
+  formulon::cf::ConditionalFormat middle;
+  middle.sqref = sqref;
+  middle.pivot_scope = original.pivot_scope;
+  if (rule_pos == 0U) {
+    middle.ext_lst_raw = original.ext_lst_raw;
+  }
+  middle.rules.push_back(std::move(updated));
+  pieces.push_back(std::move(middle));
+  if (rule_it + 1 != original.rules.end()) {
+    formulon::cf::ConditionalFormat tail = original;
+    tail.ext_lst_raw.reset();
+    tail.rules.assign(rule_it + 1, original.rules.end());
+    pieces.push_back(std::move(tail));
+  }
+  blocks.erase(blocks.begin() + static_cast<std::ptrdiff_t>(block_index));
+  blocks.insert(blocks.begin() + static_cast<std::ptrdiff_t>(block_index), std::make_move_iterator(pieces.begin()),
+                std::make_move_iterator(pieces.end()));
   return 0;
 }
 

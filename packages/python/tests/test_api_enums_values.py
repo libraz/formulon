@@ -18,16 +18,18 @@ from formulon import (
     BlanksAs,
     CellAddress,
     CellRect,
+    CfCellIsRuleInput,
     CfIcon,
-    CfRuleType,
-    Cfvo,
+    CfIconSetInput,
+    CfIconSetRuleInput,
+    CfTimePeriodRuleInput,
+    CfValueObject,
     ChartLegend,
     ChartLegendPosition,
     ChartPointState,
     ComparisonOperator,
-    ConditionalFormatInput,
     DataValidationInput,
-    DrawingAnchor,
+    DrawingAnchorInput,
     DxfInput,
     EffectiveStyleSource,
     ErrorCode,
@@ -37,7 +39,6 @@ from formulon import (
     FormulonError,
     FunctionAvailability,
     GeometryMode,
-    IconSet,
     IconSetName,
     Person,
     PhoneticProperties,
@@ -116,7 +117,7 @@ def _chart_workbook(kind: _chart_input.Kind = _chart_input.COLUMN, source: str =
         sheet.set_number(r + 1, 1, float(r + 1))
         sheet.set_number(r + 1, 2, float((r + 1) * 2))
     oid = _chart_input.add_chart(
-        sheet, kind, source, anchor=DrawingAnchor(anchor_kind=AnchorKind.TWO_CELL, row=6)
+        sheet, kind, source, anchor=DrawingAnchorInput(kind=AnchorKind.TWO_CELL, from_row=6)
     ).object_id
     return wb, oid
 
@@ -325,18 +326,9 @@ class EnumRecordFieldTests(unittest.TestCase):
         with Workbook.create_default() as wb:
             sheet = wb.sheet(0)
             sheet.add_cf_rule(
-                ConditionalFormatInput(
-                    ranges=[CellRect(0, 0, 2, 0)],
-                    type=CfRuleType.CELL_IS,
-                    operator=ComparisonOperator.GREATER_THAN,
-                    formula1="4",
-                )
+                CfCellIsRuleInput(ranges=[CellRect(0, 0, 2, 0)], operator=ComparisonOperator.GREATER_THAN, formula1="4")
             )
-            sheet.add_cf_rule(
-                ConditionalFormatInput(
-                    ranges=[CellRect(0, 1, 2, 1)], type=CfRuleType.TIME_PERIOD, time_period=DatePeriod.THIS_WEEK
-                )
-            )
+            sheet.add_cf_rule(CfTimePeriodRuleInput(ranges=[CellRect(0, 1, 2, 1)], time_period=DatePeriod.THIS_WEEK))
             saved = wb.save()
         with Workbook.load(saved) as reloaded:
             rules = reloaded.sheet(0).list_cf_rules()
@@ -482,9 +474,9 @@ class EnumRecordFieldTests(unittest.TestCase):
             self.assertTrue(all(isinstance(e.type, TableStyleElementType) for e in elements))
 
     def test_custom_icon_level_takes_the_icon_set_name_table(self) -> None:
-        icons = IconSet(
+        icons = CfIconSetInput(
             IconSetName.THREE_ARROWS,
-            [Cfvo(1, "33"), Cfvo(1, "67")],
+            [CfValueObject(1, "33"), CfValueObject(1, "67")],
             icons=[
                 CfIcon(IconSetName.THREE_STARS, 0),
                 CfIcon(IconSetName.FIVE_BOXES, 2),
@@ -492,9 +484,7 @@ class EnumRecordFieldTests(unittest.TestCase):
             ],
         )
         with Workbook.create_default() as wb:
-            wb.sheet(0).add_cf_rule(
-                ConditionalFormatInput(ranges=[CellRect(0, 0, 9, 0)], type=CfRuleType.ICON_SET, icon_set=icons)
-            )
+            wb.sheet(0).add_cf_rule(CfIconSetRuleInput(ranges=[CellRect(0, 0, 9, 0)], icon_set=icons))
             saved = wb.save()
         with Workbook.load(saved) as reloaded:
             got = reloaded.sheet(0).list_cf_rules()[0].icon_set
@@ -545,7 +535,7 @@ class EnumRecordFieldTests(unittest.TestCase):
             pivot = sheet.pivot(
                 sheet.add_pivot(PivotInput(name="P", cache_id=cache.cache_id, anchor=CellAddress(0, 4)))
             )
-            pivot.add_field(PivotFieldInput(source_name="Region", axis=PivotAxis.ROW))
+            pivot.add_field(PivotFieldInput(field_index="Region", axis=PivotAxis.ROW))
             pivot.update_field(0, sort_order=PivotSortOrder.DESCENDING)
             saved = wb.save()
         with Workbook.load(saved) as reloaded:
@@ -620,11 +610,7 @@ class ValueInputUnionTests(unittest.TestCase):
             sheet = wb.sheet(0)
             sheet.set_number(0, 0, _serial(inside))
             sheet.set_number(1, 0, _serial(outside))
-            sheet.add_cf_rule(
-                ConditionalFormatInput(
-                    ranges=[CellRect(0, 0, 1, 0)], type=CfRuleType.TIME_PERIOD, time_period=DatePeriod.THIS_MONTH
-                )
-            )
+            sheet.add_cf_rule(CfTimePeriodRuleInput(ranges=[CellRect(0, 0, 1, 0)], time_period=DatePeriod.THIS_MONTH))
             wb.recalc()
 
             def matched(today: object) -> set:
@@ -665,7 +651,7 @@ class ValueInputUnionTests(unittest.TestCase):
             pivot = sheet.pivot(
                 sheet.add_pivot(PivotInput(name="P", cache_id=cache.cache_id, anchor=CellAddress(0, 4)))
             )
-            pivot.add_field(PivotFieldInput(source_name="When", axis=PivotAxis.ROW))
+            pivot.add_field(PivotFieldInput(field_index="When", axis=PivotAxis.ROW))
             pivot.set_field_date_group(
                 0,
                 PivotDateGroupInput(
@@ -694,14 +680,16 @@ class ValueInputUnionTests(unittest.TestCase):
                 DataValidationInput(type=ValidationType.LIST, ranges=[CellRect(0, 3, 9, 3)], formula1='"Open,Closed"')
             )
             ok = sheet.validate_value("D1", "Open")
-            self.assertEqual((ok.valid, ok.rule_index), (True, 0))
+            self.assertEqual((ok.valid, ok.rule_id), (True, sheet.list_validations()[0].id))
             self.assertFalse(sheet.validate_value("D1", "Pending").valid)
             self.assertFalse(sheet.validate_value(0, 3, 42).valid)
             self.assertFalse(sheet.validate_value(0, 3, True).valid)
             self.assertTrue(sheet.validate_value(0, 3, None).valid)
             self.assertEqual(
                 sheet.validate_value(0, 3, Value(kind=ValueKind.TEXT, text="Closed")),
-                ValidationOutcome(valid=True, rule_index=0, error_style=formulon.ValidationErrorStyle.STOP),
+                ValidationOutcome(
+                    valid=True, rule_id=sheet.list_validations()[0].id, error_style=formulon.ValidationErrorStyle.STOP
+                ),
             )
             self.assertTrue(sheet.validate_value(0, 0, 1.5).valid)
 
@@ -722,11 +710,8 @@ class FormulaLeadingEqualsTests(unittest.TestCase):
             sheet = wb.sheet(0)
             for formula in ("5", "=5"):
                 sheet.add_cf_rule(
-                    ConditionalFormatInput(
-                        ranges=[CellRect(0, 0, 2, 0)],
-                        type=CfRuleType.CELL_IS,
-                        operator=ComparisonOperator.GREATER_THAN,
-                        formula1=formula,
+                    CfCellIsRuleInput(
+                        ranges=[CellRect(0, 0, 2, 0)], operator=ComparisonOperator.GREATER_THAN, formula1=formula
                     )
                 )
                 sheet.add_validation(

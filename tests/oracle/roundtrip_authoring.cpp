@@ -166,7 +166,8 @@ Expected<std::map<std::string, std::uint32_t>, Error> apply_sheets(fm_workbook_t
         RETURN_IF_ERROR(checked(fm_workbook_rename_sheet(wb, 0, name.c_str()), "fm_workbook_rename_sheet"));
       } else {
         std::size_t added = 0;
-        RETURN_IF_ERROR(checked(fm_workbook_add_sheet(wb, name.c_str(), &added), "fm_workbook_add_sheet"));
+        RETURN_IF_ERROR(checked(fm_workbook_add_sheet(wb, name.c_str(), static_cast<std::size_t>(position), &added),
+                                "fm_workbook_add_sheet"));
       }
       indices[name] = position;
       if (cells != nullptr && cells->is_object()) {

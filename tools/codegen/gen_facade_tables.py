@@ -567,6 +567,31 @@ def _facade_interfaces(ledger: facade_scope.Ledger) -> Dict[str, str]:
     return out
 
 
+_INTERFACE_EXTENDS_RE = re.compile(
+    r"^(?:export\s+)?(?:declare\s+)?interface\s+([A-Za-z_$][\w$]*)\s+extends\s+([^{]+)\{", re.M
+)
+
+
+def _interface_members(surface: JsSurface, text: str, interface: str) -> list:
+    """The members of d.ts `interface`, then the methods it inherits through `extends` and does not redeclare,
+    so a facade subclass overriding an inherited method has a row of its own."""
+    heritage = {m.group(1): [b.strip() for b in m.group(2).split(",")] for m in _INTERFACE_EXTENDS_RE.finditer(text)}
+    own = surface.decls.get(interface)
+    if own is None or own.kind != "interface":
+        return []
+    members = list(own.members)
+    seen = {member.name for member in members}
+    pending = list(heritage.get(interface, ()))
+    while pending:
+        decl = surface.decls.get(pending.pop(0))
+        if decl is None or decl.kind != "interface":
+            continue
+        members.extend(m for m in decl.members if m.is_method and m.name not in seen)
+        seen.update(m.name for m in decl.members)
+        pending.extend(heritage.get(decl.name, ()))
+    return members
+
+
 def method_signatures(
     ledger: Optional[facade_scope.Ledger] = None, dts: Optional[str] = None
 ) -> Tuple[Dict[str, int], Dict[str, List[List[object]]]]:
@@ -585,8 +610,7 @@ def method_signatures(
     arities: Dict[str, set] = {}
     typed: Dict[str, Dict[int, str]] = {}
     for interface, owner in _facade_interfaces(ledger).items():
-        decl = surface.decls.get(interface)
-        for member in decl.members if decl is not None and decl.kind == "interface" else ():
+        for member in _interface_members(surface, text, interface):
             if not member.is_method:
                 continue
             key = f"{owner}.{member.name}"
@@ -902,7 +926,9 @@ def patch_nullable(
             cls, name = qualified_name.split(".", 1)
             member = facade_scope._patch_member(surface, entry, name, cls)
             patch_type = facade_scope._patch_type(member.params) if member is not None else None
-            fields = clearable.get(patch_type or "")
+            # A handle's patch may be an intersection with the common drawing keys: the kind's own record lists them.
+            parts = [re.match(r"[\w$]*", p.strip()).group(0) for p in (patch_type or "").split("&")]
+            fields = next((clearable[p] for p in parts if clearable.get(p)), None)
             if not fields:
                 continue
             declared = facade_scope._patch_keys(surface.decls, surface.raw, patch_type) or {}

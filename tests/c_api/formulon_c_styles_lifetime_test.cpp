@@ -6,7 +6,7 @@
 TEST(FormulonCApiStyles, CreateEmptySeedsReservedStyleSlots) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_empty(&wb.handle), 0);
-  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Sheet1", ignored_index()), 0);
+  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Sheet1", append_position(wb.handle), ignored_index()), 0);
 
   std::size_t font_count = 0;
   std::size_t fill_count = 0;

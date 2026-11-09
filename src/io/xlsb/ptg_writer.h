@@ -21,6 +21,7 @@
 #ifndef FORMULON_IO_XLSB_PTG_WRITER_H_
 #define FORMULON_IO_XLSB_PTG_WRITER_H_
 
+#include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <optional>
@@ -34,6 +35,7 @@
 #include "io/xlsb/ptg.h"
 #include "parser/ast.h"
 #include "parser/ast_format.h"
+#include "sheet_name.h"
 #include "utils/error.h"
 #include "utils/expected.h"
 
@@ -44,18 +46,34 @@ struct TableMetadata;
 namespace io {
 namespace xlsb {
 
+/// Hash and equality under `collection_names::fold_key`: a name spelled in
+/// another case reaches the entry of the spelling stored first.
+struct NameKeyHash {
+  std::size_t operator()(std::string_view name) const {
+    return std::hash<std::string>{}(collection_names::fold_key(name));
+  }
+};
+struct NameKeyEqual {
+  bool operator()(std::string_view lhs, std::string_view rhs) const noexcept {
+    return collection_names::equal(lhs, rhs);
+  }
+};
+
+/// A set of names compared like defined names.
+using NameSet = std::unordered_set<std::string, NameKeyHash, NameKeyEqual>;
+
 /// Maps a name (a genuine defined name, or a hidden `_xlfn.*` /
 /// `_xlpm.*` future-function / LET-parameter placeholder) to its
-/// 1-based `BrtName` declaration index. Shared between the encoder
-/// (`encode_ptgs`, which emits `PtgName(ilbl)` for any lookup hit) and
-/// the top-level writer (which emits the matching `BrtName` records
-/// into `xl/workbook.bin`'s globals).
-using NameTable = std::unordered_map<std::string, std::uint32_t>;
+/// 1-based `BrtName` declaration index, compared like defined names.
+/// Shared between the encoder (`encode_ptgs`, which emits
+/// `PtgName(ilbl)` for any lookup hit) and the top-level writer (which
+/// emits the matching `BrtName` records into `xl/workbook.bin`'s globals).
+using NameTable = std::unordered_map<std::string, std::uint32_t, NameKeyHash, NameKeyEqual>;
 
 /// `NameTable` key of the defined-name record scoped to 0-based sheet
-/// `itab` (`-1`: workbook scope) spelling `name`, ASCII case-folded. A
-/// sheet-qualified reference (`Sheet2!Local`) encodes through these keys;
-/// `!` never occurs in a defined name, so they cannot collide with one.
+/// `itab` (`-1`: workbook scope) spelling `name`. A sheet-qualified
+/// reference (`Sheet2!Local`) encodes through these keys; `!` never occurs
+/// in a defined name, so they cannot collide with one.
 std::string sheet_scoped_name_key(std::int32_t itab, std::string_view name);
 
 /// One `BrtExternSheet` XTI: the book it qualifies and the span of that
@@ -210,14 +228,12 @@ struct EncodedFormula {
 /// Names already present in `seen` are skipped (both to dedupe and so
 /// callers can pre-seed `seen` with names that already have an assigned
 /// `ilbl`, e.g. from the workbook's existing defined-name table).
-void collect_ptg_names(const parser::AstNode& node, std::vector<std::string>& names,
-                       std::unordered_set<std::string>& seen,
+void collect_ptg_names(const parser::AstNode& node, std::vector<std::string>& names, NameSet& seen,
                        const std::vector<const parser::AstNode*>* function_values = nullptr);
 
 /// `collect_ptg_names` without the self-book `[0]!Rate`: every name the
 /// formula resolves from its own scope.
-void collect_scope_resolved_names(const parser::AstNode& node, std::vector<std::string>& names,
-                                  std::unordered_set<std::string>& seen);
+void collect_scope_resolved_names(const parser::AstNode& node, std::vector<std::string>& names, NameSet& seen);
 
 /// Appends every distinct sheet-qualified defined-name reference in `node`
 /// (`Sheet2!Rate`, `Sheet2!Fn(3)`) as `(sheet, name)`, in encounter order.

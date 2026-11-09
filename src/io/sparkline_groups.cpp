@@ -2,15 +2,24 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstddef>
+#include <cstdint>
 #include <cstring>
+#include <optional>
+#include <string>
+#include <utility>
+#include <vector>
 
 #include "io/color_spec_xml.h"
 #include "io/ooxml_defs.h"
 #include "io/sqref_text.h"
 #include "io/xml_utils.h"
 #include "pugixml.hpp"
+#include "sheet.h"
 #include "utils/number_text.h"
+#include "utils/runtime_id.h"
 #include "utils/status_macros.h"
+#include "workbook.h"
 
 namespace formulon::io {
 namespace {
@@ -402,6 +411,47 @@ Expected<void, Error> remove_sparkline_group(std::string& ext_lst_xml, std::size
   }
   doc.document_element().remove_child(doomed);
   store(ext_lst_xml, doc);
+  return Expected<void, Error>::Ok();
+}
+
+namespace {
+
+Error sheet_out_of_range(std::size_t sheet, std::size_t count) {
+  return make_error(FormulonErrorCode::kSheetIndexOutOfRange, "sheet index out of range",
+                    "sheet=" + std::to_string(sheet) + " sheet_count=" + std::to_string(count));
+}
+
+}  // namespace
+
+Expected<std::uint32_t, Error> add_sheet_sparkline_group(Workbook& wb, std::size_t sheet, const SparklineGroup& group) {
+  if (sheet >= wb.sheet_count()) {
+    return sheet_out_of_range(sheet, wb.sheet_count());
+  }
+  Sheet& target = wb.sheet(sheet);
+  std::string xml = target.ext_lst_xml();
+  RETURN_IF_ERROR(add_sparkline_group(xml, group));
+  target.set_ext_lst_xml(std::move(xml));
+  const std::size_t index = read_sparkline_groups(target.ext_lst_xml()).size() - 1U;
+  std::vector<RuntimeId>& ids = target.sparkline_group_ids();
+  ids.resize(index + 1U);
+  ids[index].assign(wb.allocate_runtime_id());
+  return ids[index].value();
+}
+
+Expected<void, Error> remove_sheet_sparkline_group(Workbook& wb, std::size_t sheet, std::uint32_t id) {
+  if (sheet >= wb.sheet_count()) {
+    return sheet_out_of_range(sheet, wb.sheet_count());
+  }
+  const std::optional<std::size_t> index = wb.find_sparkline_group(sheet, id);
+  if (!index.has_value()) {
+    return make_error(FormulonErrorCode::kNotFound, "no sparkline group has that id", "id=" + std::to_string(id));
+  }
+  Sheet& target = wb.sheet(sheet);
+  std::string xml = target.ext_lst_xml();
+  RETURN_IF_ERROR(remove_sparkline_group(xml, *index));
+  target.set_ext_lst_xml(std::move(xml));
+  std::vector<RuntimeId>& ids = target.sparkline_group_ids();
+  ids.erase(ids.begin() + static_cast<std::ptrdiff_t>(*index));
   return Expected<void, Error>::Ok();
 }
 

@@ -187,6 +187,18 @@ emscripten::val JsWorkbook::paginate(uint32_t sheet) const {
   return result;
 }
 
+int32_t JsWorkbook::getVisibility(uint32_t sheet) const {
+  int32_t visibility = 0;
+  if (!succeeded(handle_ != nullptr ? fm_sheet_get_visibility(handle_, sheet, &visibility) : kBindingInvalidHandle)) {
+    return 0;
+  }
+  return visibility;
+}
+
+void JsWorkbook::setVisibility(uint32_t sheet, int32_t visibility) {
+  succeeded(handle_ != nullptr ? fm_sheet_set_visibility(handle_, sheet, visibility) : kBindingInvalidHandle);
+}
+
 JsSheetView JsWorkbook::getSheetView(uint32_t sheet) const {
   JsSheetView r;
   fm_sheet_view_info_t v = FM_STRUCT_INIT(fm_sheet_view_info_t);
@@ -196,7 +208,6 @@ JsSheetView JsWorkbook::getSheetView(uint32_t sheet) const {
   r.zoomPct = v.zoom_pct;
   r.freezeRows = v.freeze_rows;
   r.freezeCols = v.freeze_cols;
-  r.visibility = v.visibility;
   r.showGridLines = v.show_grid_lines != 0;
   r.showRowColHeaders = v.show_row_column_headers != 0;
   r.showZeros = v.show_zeros != 0;
@@ -392,7 +403,6 @@ void JsWorkbook::updateSheetView(uint32_t sheet, emscripten::val patch) {
   u32("zoomPct", &p.zoom_pct_op, &p.zoom_pct);
   u32("freezeRows", &p.freeze_rows_op, &p.freeze_rows);
   u32("freezeCols", &p.freeze_cols_op, &p.freeze_cols);
-  i32("visibility", &p.visibility_op, &p.visibility);
   flag("showGridLines", &p.show_grid_lines_op, &p.show_grid_lines);
   flag("showRowColHeaders", &p.show_row_column_headers_op, &p.show_row_column_headers);
   flag("showZeros", &p.show_zeros_op, &p.show_zeros);

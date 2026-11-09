@@ -15,6 +15,7 @@
 #include "c_api/formulon_c.h"
 #include "c_api/parts/chart_patch_reader.h"
 #include "c_api/parts/common.h"
+#include "c_api/parts/drawing_anchor.h"
 #include "c_api/parts/enum_map.h"
 #include "c_api/parts/struct_v1_sizes.h"
 #include "chart/chart_edit.h"
@@ -22,7 +23,8 @@
 #include "utils/expected.h"
 #include "workbook.h"
 
-using formulon::c_api::parts::anchor_kind_from_c;
+using formulon::c_api::parts::AnchorPlan;
+using formulon::c_api::parts::apply_placement_extras;
 using formulon::c_api::parts::chart_axis_crosses_from_c;
 using formulon::c_api::parts::chart_blanks_as_from_c;
 using formulon::c_api::parts::chart_legend_position_from_c;
@@ -32,12 +34,12 @@ using formulon::c_api::parts::check_record_size;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
-using formulon::c_api::parts::edit_as_from_c;
 using formulon::c_api::parts::finish_status;
 using formulon::c_api::parts::ingest_entered_formula;
 using formulon::c_api::parts::kTickLabelPositionTokens;
 using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::PatchReader;
+using formulon::c_api::parts::plan_add_anchor;
 using formulon::c_api::parts::saturate_index;
 using formulon::c_api::parts::set_last_error;
 using formulon::c_api::parts::text_or_empty;
@@ -263,8 +265,7 @@ extern "C" fm_status_t fm_sheet_add_chart(fm_workbook_t* wb, size_t sheet_index,
   r.enum_ok(opts->header_row, FM_TRISTATE_TRUE, "header_row");
   r.enum_ok(opts->header_column, FM_TRISTATE_TRUE, "header_column");
   r.enum_ok(opts->legend, FM_CHART_LEGEND_POSITION_ABSENT, FM_CHART_LEGEND_POSITION_TOP, "legend");
-  r.enum_ok(opts->placement.anchor.anchor_kind, FM_ANCHOR_KIND_ABSOLUTE, "placement.anchor.anchor_kind");
-  r.enum_ok(opts->placement.anchor.edit_as, FM_ANCHOR_EDIT_AS_ABSOLUTE, "placement.anchor.edit_as");
+  r.enum_ok(opts->placement.hidden, FM_TRISTATE_TRUE, "placement.hidden");
   if (r.status() != 0) {
     return r.status();
   }
@@ -283,15 +284,20 @@ extern "C" fm_status_t fm_sheet_add_chart(fm_workbook_t* wb, size_t sheet_index,
     model.title = std::string(opts->title);
   }
   model.legend = chart_legend_position_from_c(opts->legend);
-  const fm_drawing_anchor_t& p = opts->placement.anchor;
-  model.placement.anchor_kind = anchor_kind_from_c(p.anchor_kind);
-  model.placement.edit_as = edit_as_from_c(p.edit_as);
-  model.placement.row = p.row;
-  model.placement.col = p.col;
-  model.placement.row_off = p.row_offset_emu;
-  model.placement.col_off = p.col_offset_emu;
-  model.placement.width_emu = p.width_emu;
-  model.placement.height_emu = p.height_emu;
+  AnchorPlan plan;
+  if (auto rc = plan_add_anchor(wb->workbook(), sheet_index, opts->placement.anchor, formulon::AnchorKind::kTwoCell,
+                                false, &plan);
+      rc != 0) {
+    return rc;
+  }
+  model.placement.anchor_kind = plan.kind;
+  model.placement.edit_as = plan.edit_as;
+  model.placement.row = plan.from.row;
+  model.placement.col = plan.from.col;
+  model.placement.row_off = plan.from.row_off;
+  model.placement.col_off = plan.from.col_off;
+  model.placement.width_emu = plan.cx;
+  model.placement.height_emu = plan.cy;
   model.name = text_or_empty(opts->placement.name);
   model.descr = text_or_empty(opts->placement.description);
   auto id = formulon::insert_chart(wb->workbook(), sheet_index, model);
@@ -299,7 +305,7 @@ extern "C" fm_status_t fm_sheet_add_chart(fm_workbook_t* wb, size_t sheet_index,
     return set_last_error(id.error());
   }
   *out_object_id = id.value();
-  return 0;
+  return apply_placement_extras(wb->workbook(), sheet_index, id.value(), opts->placement, false);
 }
 
 extern "C" fm_status_t fm_sheet_set_chart_type(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
@@ -498,7 +504,7 @@ extern "C" fm_status_t fm_sheet_update_chart_display(fm_workbook_t* wb, size_t s
 }
 
 extern "C" fm_status_t fm_sheet_update_chart_series(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
-                                                    size_t plot_index, uint32_t series_index,
+                                                    size_t plot_index, uint32_t series_id,
                                                     const fm_chart_series_patch_t* patch) {
   if (auto rc = edit_entry(wb, sheet_index, patch); rc != 0) {
     return rc;
@@ -513,11 +519,11 @@ extern "C" fm_status_t fm_sheet_update_chart_series(fm_workbook_t* wb, size_t sh
   }
   ingest_series_refs(wb, model);
   return finish_status(
-      formulon::set_chart_series(wb->workbook(), sheet_index, object_id, plot_index, series_index, model));
+      formulon::set_chart_series(wb->workbook(), sheet_index, object_id, plot_index, series_id, model));
 }
 
 extern "C" fm_status_t fm_sheet_update_chart_point(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
-                                                   size_t plot_index, uint32_t series_index, size_t point_index,
+                                                   size_t plot_index, uint32_t series_id, size_t point_index,
                                                    const fm_chart_point_patch_t* patch) {
   if (auto rc = edit_entry(wb, sheet_index, patch); rc != 0) {
     return rc;
@@ -535,7 +541,7 @@ extern "C" fm_status_t fm_sheet_update_chart_point(fm_workbook_t* wb, size_t she
   if (r.status() != 0) {
     return r.status();
   }
-  return finish_status(formulon::set_chart_point(wb->workbook(), sheet_index, object_id, plot_index, series_index,
+  return finish_status(formulon::set_chart_point(wb->workbook(), sheet_index, object_id, plot_index, series_id,
                                                  saturate_index(point_index), model));
 }
 
@@ -584,8 +590,8 @@ extern "C" fm_status_t fm_sheet_set_chart_filter(fm_workbook_t* wb, size_t sheet
 
 extern "C" fm_status_t fm_sheet_add_chart_series(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
                                                  size_t plot_index, const fm_chart_series_patch_t* patch,
-                                                 uint32_t* out_series_index) {
-  if (out_series_index == nullptr) {
+                                                 uint32_t* out_series_id) {
+  if (out_series_id == nullptr) {
     return null_argument();
   }
   if (auto rc = edit_entry(wb, sheet_index, patch); rc != 0) {
@@ -604,16 +610,16 @@ extern "C" fm_status_t fm_sheet_add_chart_series(fm_workbook_t* wb, size_t sheet
   if (!idx) {
     return set_last_error(idx.error());
   }
-  *out_series_index = idx.value();
+  *out_series_id = idx.value();
   return 0;
 }
 
 extern "C" fm_status_t fm_sheet_remove_chart_series(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
-                                                    size_t plot_index, uint32_t series_index) {
+                                                    size_t plot_index, uint32_t series_id) {
   if (auto rc = edit_entry(wb, sheet_index, wb); rc != 0) {
     return rc;
   }
-  return finish_status(formulon::remove_chart_series(wb->workbook(), sheet_index, object_id, plot_index, series_index));
+  return finish_status(formulon::remove_chart_series(wb->workbook(), sheet_index, object_id, plot_index, series_id));
 }
 
 extern "C" fm_status_t fm_sheet_set_chart_source(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,

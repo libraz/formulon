@@ -105,16 +105,16 @@ test('threaded mention and image integer fields reject before C mutation', async
     assert.equal(wb.sheet(0).listThreadedComments().length, beforeComments);
 
     assert.throws(
-      () => wb.sheet(0).addPicture(new Uint8Array([1, 2, 3]), { anchor: { rowOffsetEmu: Number.NaN } }),
+      () => wb.sheet(0).addPicture(new Uint8Array([1, 2, 3]), { anchor: { fromRowOffsetEmu: Number.NaN } }),
       RangeError,
     );
     assert.equal(wb.sheet(0).listDrawings().length, 0);
 
-    // The offsets fit the binding's int64 range; only the image bytes are refused, by the host.
+    // The offsets fit the binding's int64 range, so the host refuses them as out of range.
     assert.throws(
       () =>
         wb.sheet(0).addPicture(new Uint8Array([1, 2, 3]), {
-          anchor: { rowOffsetEmu: -(2 ** 63), colOffsetEmu: 2 ** 63 - 1024 },
+          anchor: { fromRowOffsetEmu: -(2 ** 63), fromColOffsetEmu: 2 ** 63 - 1024 },
         }),
       (e) => e.name === 'FormulonError',
     );

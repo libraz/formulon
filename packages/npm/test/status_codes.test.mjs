@@ -13,7 +13,7 @@ const upperSnake = (key) => key.replace(/([a-z])([A-Z])/g, '$1_$2').toUpperCase(
 test('StatusCode mirrors the C status defines', async () => {
   const mod = await loadStagedModule();
   const expected = await headerCodes();
-  assert.equal(expected.size, 60);
+  assert.equal(expected.size, 59);
   assert.ok(Object.isFrozen(mod.StatusCode));
   const actual = new Map(Object.entries(mod.StatusCode).map(([key, value]) => [upperSnake(key), value]));
   assert.deepEqual([...actual].sort(), [...expected].sort());

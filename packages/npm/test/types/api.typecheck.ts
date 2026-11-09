@@ -1,10 +1,12 @@
 // Compile-time checks of the public declarations. Never executed: `make npm-typecheck` runs tsc over it
 // against the staged d.ts. A line marked `@ts-expect-error` must fail to compile; it is the rejected form.
 import createFormulon, {
+  AnchorKind,
   BlanksAs,
   CfRuleType,
   ChartDomain,
   ChartExtendedLayout,
+  ChartAxisKind,
   ChartLegendPosition,
   ChartTickLabelPosition,
   ComparisonOperator,
@@ -16,6 +18,7 @@ import createFormulon, {
   PhoneticType,
   PivotShowAsBase,
   PivotSortOrder,
+  ShapePaint,
   SlicerSortOrder,
   TableStyleElementType,
   TableTotalsRowFunction,
@@ -30,8 +33,12 @@ import createFormulon, {
   PivotFilterKind,
   ValueKind,
   enumName,
+  mergeFunctionMetadata,
+  toNative,
   type Chart,
   type ChartAxis,
+  type ChartAxisRef,
+  type ChartCategories,
   type ChartData,
   type ChartDataSource,
   type ChartPlot,
@@ -40,8 +47,42 @@ import createFormulon, {
   type ColumnBreak,
   type ConditionalFormat,
   type ConditionalFormatInput,
+  type ConditionalFormatPatch,
+  type AutoFilterColumnInput,
+  type AutoFilterDateGroup,
+  type AutoFilterSortCondition,
+  type CfCellIsRuleInput,
+  type CfColorScale,
+  type CfColorScaleInput,
+  type CfColorScaleRuleInput,
+  type CfDataBar,
+  type CfDataBarInput,
+  type CfDataBarRuleInput,
+  type CfExpressionRuleInput,
+  type CfIconSet,
+  type CfIconSetInput,
+  type CfIconSetRuleInput,
+  type CfAboveAverageRuleInput,
+  type CfPlainRuleInput,
+  type CfTextRuleInput,
+  type CfTimePeriodRuleInput,
+  type CfTop10RuleInput,
+  type EffectiveBorders,
+  type HeaderFooterInput,
+  type HeaderFooterPatch,
+  type PrintOptionsInput,
+  type PrintOptionsPatch,
+  type ResolvedColor,
+  type SparklineGroupId,
+  type SparklineGroupRef,
+  type ThemeScriptFont,
+  type ThemeScriptFontKey,
+  type ValidationId,
+  type ValidationRef,
   type DataValidation,
   type DateInput,
+  type DrawingPatch,
+  type DrawingProperties,
   type CellValueInput,
   type PivotDatePeriodMask,
   type Dxf,
@@ -59,12 +100,18 @@ import createFormulon, {
   type RangeCell,
   type Pivot,
   type PivotCache,
+  type PivotCacheRef,
+  type PivotFieldRef,
+  type PivotFilter,
+  type PivotGrandTotals,
+  type PivotReportLayout,
   type PivotStyleOptions,
   type RowBreak,
   type Shape,
   type ShapePatch,
   type ShapeProperties,
   type Sheet,
+  type SheetVisibility,
   type SheetProtection,
   type Slicer,
   type SlicerPatch,
@@ -174,10 +221,13 @@ export function sheetTables(): void {
 
 export function slicerPatch(): void {
   slicer.update({ caption: 'Region', style: null, columnCount: 2 });
-  slicer.update({ fromRow: 0, fromCol: 0, toRow: 4, toCol: 4 });
+  slicer.update({ anchor: { fromRow: 0, fromCol: 0, toRow: 4, toCol: 4 }, description: 'd', hidden: true });
+  slicer.update({ anchor: { toCol: 6 } });
   slicer.update(slicerProps);
   // @ts-expect-error `name` cannot be updated
   slicer.update({ name: 'renamed' });
+  // @ts-expect-error the anchor keys are nested under `anchor`
+  slicer.update({ fromRow: 0 });
   // @ts-expect-error unknown key
   slicer.update({ bogus: true });
   const patch: SlicerPatch = {};
@@ -186,13 +236,18 @@ export function slicerPatch(): void {
 
 export function shapePatch(): void {
   shape.update({ text: 'hi', hidden: false });
-  // `null` on fillKind / lineKind clears the paint.
-  shape.update({ fillKind: null, lineKind: null });
-  shape.update(shapeProps);
+  shape.update({ name: 'Callout', description: null, anchor: { kind: AnchorKind.TwoCell, toCol: 6 } });
+  // `Default` removes the shape's own paint.
+  shape.update({ fillKind: ShapePaint.Default, lineKind: ShapePaint.Default });
+  // @ts-expect-error a shape patch has no clearable key
+  shape.update({ fillKind: null });
+  shape.update({ presetGeometry: shapeProps.presetGeometry, rotationDeg: shapeProps.rotationDeg });
   // @ts-expect-error unknown key
   shape.update({ bogus: 1 });
   // @ts-expect-error a string is not an anchor kind
-  shape.update({ anchorKind: 'oneCell' });
+  shape.update({ anchor: { kind: 'oneCell' } });
+  // @ts-expect-error the anchor keys are nested under `anchor`
+  shape.update({ anchorKind: AnchorKind.OneCell });
   const patch: ShapePatch = { rotationDeg: 90, lineWidthPt: 1.5 };
   void patch;
   // @ts-expect-error rotation is in degrees, `rotationDeg`
@@ -201,15 +256,18 @@ export function shapePatch(): void {
   shape.update({ lineWidthEmu: 12700 });
   const rotation: number = shapeProps.rotationDeg;
   void rotation;
-  sheet.addShape({ anchorKind: 0, presetGeometry: 'rect' });
-  // @ts-expect-error an insert needs `anchorKind`
-  sheet.addShape({ presetGeometry: 'rect' });
-  sheet.addSlicer('T', 0, { fromRow: 0, fromCol: 0, toRow: 4, toCol: 4 });
-  sheet.addSlicer(table, 0, { fromRow: 0, fromCol: 0, toRow: 4, toCol: 4 });
-  // @ts-expect-error an insert needs the anchor (`fromRow`)
+  sheet.addShape({ anchor: { fromRow: 1, fromCol: 1, toRow: 4, toCol: 4 }, presetGeometry: 'rect' });
+  sheet.addShape({ presetGeometry: 'rect', hidden: true, description: 'd' });
+  // @ts-expect-error the anchor keys are nested under `anchor`
+  sheet.addShape({ fromRow: 1, presetGeometry: 'rect' });
+  sheet.addSlicer('T', 0, { anchor: { fromRow: 0, fromCol: 0, toRow: 4, toCol: 4 } });
+  sheet.addSlicer(table, 'Region', { anchor: { fromRow: 0, fromCol: 0, toRow: 4, toCol: 4 } });
   sheet.addSlicer('T', 0, { caption: 'Region' });
   // @ts-expect-error a table index is sheet-local, so the slicer takes a handle or a name
-  sheet.addSlicer(0, 0, { fromRow: 0 });
+  sheet.addSlicer(0, 0, { caption: 'x' });
+  // @ts-expect-error a column is a position or a name
+  sheet.addSlicer(table, true, {});
+  // @ts-expect-error a shape is renamed through `update`
   shape.rename('Callout');
   shape.setZOrder(0);
   const snapshot: Uint8Array = shape.snapshot();
@@ -219,6 +277,10 @@ export function shapePatch(): void {
   slicer.snapshot();
   // @ts-expect-error a slicer cannot be renamed
   slicer.rename('x');
+  const name: string = shape.name;
+  const drawingPatch: DrawingPatch = { description: 'x', hidden: true, anchor: { fromRow: 3 } };
+  shape.update(drawingPatch);
+  void name;
 }
 
 export function chartSourceKind(): void {
@@ -285,12 +347,40 @@ export function pivotFieldItems(): void {
   pivot.setAnchor(rect);
 }
 
+export function pivotRefs(): void {
+  const byName: PivotField = pivot.getField('Item');
+  const byIndex: PivotField = pivot.getField(0);
+  const dataField: PivotDataField = pivot.getDataField(0);
+  const filter: PivotFilter = pivot.getFilter(0);
+  const recordValue: NativeValue = cache.getRecordValue(0, 1);
+  const ref: PivotCacheRef = cache;
+  const numberRef: PivotCacheRef = 3;
+  const fieldRef: PivotFieldRef = 'Item';
+  wb.pivotCache(cache);
+  wb.removePivotCache(numberRef);
+  sheet.addPivot({ name: 'P', cacheId: cache, anchor: 'E1' });
+  pivot.updateField(fieldRef, { showDetail: false });
+  pivot.setDataField(0, { fieldIndex: 'Sales' });
+  pivot.setFieldAxis('Item', null);
+  const props = pivot.getProperties();
+  const layout: PivotReportLayout = props.reportLayout;
+  const totals: PivotGrandTotals = props.grandTotals;
+  const style: PivotStyleOptions | null = props.styleOptions;
+  // @ts-expect-error a cache handle is not a field reference
+  pivot.updateField(cache, {});
+  void [byName, byIndex, dataField, filter, recordValue, ref, layout, totals, style];
+}
+
 export function pivotUpdates(): void {
   pivot.updateGrandTotals({ rows: false });
   pivot.updateOptions({ showError: true, errorCaption: null });
   pivot.updateStyleOptions({ styleName: null, showRowStripes: true });
   pivot.updateFieldItem(0, 0, { visible: false });
+  pivot.setFieldSubtotalFunctions(0, [0, 1]);
+  pivot.setFieldSubtotalFunctions('Item', []);
+  // @ts-expect-error the subtotal functions are a set, replaced as a whole
   pivot.addFieldSubtotalFunction(0, 0);
+  // @ts-expect-error an empty list clears
   pivot.clearFieldSubtotalFunctions(0);
   cache.updateOptions({ refreshOnLoad: true });
   const style: PivotStyleOptions | null = pivot.getStyleOptions();
@@ -312,7 +402,7 @@ export function pivotUpdates(): void {
   pivot.getStyleInfo();
   // @ts-expect-error renamed to `updateFieldItem`
   pivot.updateItem(0, 0, { visible: false });
-  // @ts-expect-error renamed to `addFieldSubtotalFunction`
+  // @ts-expect-error renamed to `setFieldSubtotalFunctions`
   pivot.addFieldSubtotalFn(0, 0);
   // @ts-expect-error renamed to `updateOptions`
   cache.setOptions({ refreshOnLoad: true });
@@ -405,8 +495,57 @@ export function cellWrites(): void {
 
 export function workbookSurface(): void {
   for (const ws of wb) void ws.name;
-  wb.copySheet(0, null, 'Copy');
+  wb.copySheet(0, { newName: 'Copy' });
   wb.copySheet('Sheet1');
+  wb.copySheet('Sheet1', { insertBefore: sheet, newName: 'Copy' });
+  wb.copySheet(0, { insertBefore: null });
+  // @ts-expect-error the copy's position and name are options keys
+  wb.copySheet(0, null, 'Copy');
+  const added: Sheet = wb.addSheet();
+  wb.addSheet(null, { insertBefore: 0 });
+  wb.addSheet('X', { insertBefore: 'Sheet1' });
+  wb.addSheet('X', { insertBefore: sheet });
+  wb.addSheet('X', { insertBefore: null });
+  // @ts-expect-error the position is an options key
+  wb.addSheet('X', 0);
+  const count: number = wb.sheetCount;
+  const has: boolean = wb.hasSheet('Sheet1') && wb.hasSheet(0) && wb.hasSheet(sheet);
+  const profiles: readonly ProfileId[] = formulon.listProfileIds();
+  void [added, count, has, profiles];
+  sheet.move(2);
+  sheet.move('Sheet1');
+  sheet.move(sheet);
+  sheet.move(null);
+  // @ts-expect-error the target is required (`null` appends)
+  sheet.move();
+  const vis: SheetVisibility = sheet.getVisibility();
+  sheet.setVisibility(vis);
+  // @ts-expect-error visibility left the view
+  sheet.updateView({ visibility: 0 });
+  // @ts-expect-error visibility left the view
+  void sheet.getView().visibility;
+  sheet.insertRows(3, 5);
+  sheet.insertRows('3:5');
+  sheet.deleteColumns('C:D');
+  sheet.deleteColumns(2, 3);
+  sheet.insertColumns(1, 1);
+  sheet.deleteRows(0, 0);
+  const newId: string = sheet.addThreadedComment({ text: 'x', personId: 'p' });
+  void newId;
+  // @ts-expect-error personId is required
+  sheet.addThreadedComment({ text: 'x' });
+  const png = new Uint8Array(8);
+  formulon.getImageInfo(png);
+  formulon.getImageInfo(png.buffer);
+  formulon.getImageInfo(new DataView(png.buffer));
+  sheet.addPicture(png.buffer);
+  // @ts-expect-error a string is not bytes
+  formulon.getImageInfo('abc');
+  const book: number = wb.listExternalLinks()[0].bookNumber;
+  void book;
+  // @ts-expect-error `index` became `bookNumber`
+  void wb.listExternalLinks()[0].index;
+  void [toNative, mergeFunctionMetadata];
   wb.recalcParallel();
   sheet.getPrecedents('A1');
   sheet.evaluateCfRange('A1:B9');
@@ -581,6 +720,120 @@ export function dataValidations(): void {
   sheet.addValidation({ ranges: 'B1:B9', type: 3, showDropDown: false });
   // @ts-expect-error the operator is `operator`
   void rule.op;
+  const id: ValidationId = sheet.addValidation({ ranges: 'B1:B9', type: 3, formula1: '"a,b"' });
+  const ref: ValidationRef = id;
+  sheet.updateValidation(ref, { errorMessage: 'x', formula1: null, ranges: 'C1:C9' });
+  sheet.updateValidation(0, { allowBlank: false, formula2: null, promptTitle: null });
+  sheet.updateValidation(rule.id, rule);
+  sheet.removeValidation(id);
+  sheet.removeValidation(0);
+  const readId: ValidationId = rule.id;
+  void readId;
+  // @ts-expect-error `type` cannot be cleared
+  sheet.updateValidation(0, { type: null });
+  // @ts-expect-error `ranges` cannot be cleared
+  sheet.updateValidation(0, { ranges: null });
+  // @ts-expect-error unknown key
+  sheet.updateValidation(0, { bogus: 1 });
+  // @ts-expect-error the id is a string or a position
+  sheet.removeValidation(true);
+}
+
+export function cfRuleUpdates(): void {
+  const patch: ConditionalFormatPatch = { dxfIndex: null, formula1: '=A1>1' };
+  sheet.updateCfRule(0, patch);
+  sheet.updateCfRule('id-1', { dxfIndex: 2 });
+  sheet.updateCfRule(0, { rank: 5, bottom: true });
+  sheet.updateCfRule(0, { colorScale: { thresholds: [{ type: 3 }, { type: 4 }], colors: ['#FF0000', '#00FF00'] } });
+  sheet.updateCfRule(0, { priority: 2, stopIfTrue: true, ranges: 'A1:A3' });
+  // @ts-expect-error the rule's type cannot change
+  sheet.updateCfRule(0, { type: CfRuleType.Top10 });
+  // @ts-expect-error the id cannot change
+  sheet.updateCfRule(0, { id: 'other' });
+  // @ts-expect-error `priority` cannot be cleared
+  sheet.updateCfRule(0, { priority: null });
+  // @ts-expect-error unknown key
+  sheet.updateCfRule(0, { bogus: 1 });
+  const read: ConditionalFormat = sheet.listCfRules()[0];
+  const scale: CfColorScale | null = read.colorScale;
+  const bar: CfDataBar | null = read.dataBar;
+  const icons: CfIconSet | null = read.iconSet;
+  const scaleInput: CfColorScaleInput | null = scale;
+  const barInput: CfDataBarInput | null = bar;
+  const iconsInput: CfIconSetInput | null = icons;
+  const rule: CfCellIsRuleInput = { type: CfRuleType.CellIs, ranges: 'A1', operator: ComparisonOperator.Equal, formula1: '1' };
+  const plain: CfPlainRuleInput = { type: CfRuleType.UniqueValues, ranges: 'A1' };
+  const others: CfExpressionRuleInput | CfTop10RuleInput | CfTextRuleInput | CfTimePeriodRuleInput | CfAboveAverageRuleInput =
+    { type: CfRuleType.Top10, ranges: 'A1' };
+  const visual: CfColorScaleRuleInput | CfDataBarRuleInput | CfIconSetRuleInput = {
+    type: CfRuleType.ColorScale,
+    ranges: 'A1',
+    colorScale: { thresholds: [{ type: 3 }, { type: 4 }], colors: ['#FF0000', '#00FF00'] },
+  };
+  void [scaleInput, barInput, iconsInput, rule, plain, others, visual];
+  const sparklineId: SparklineGroupId = sheet.addSparklineGroup({ sparklines: [] });
+  const groupRef: SparklineGroupRef = sparklineId;
+  sheet.updateSparklineGroup(groupRef, { lineWeight: 2 });
+  sheet.updateSparklineGroup(0, { manualMin: null });
+  sheet.removeSparklineGroup(sparklineId);
+  sheet.removeSparklineGroup(0);
+  const groupId: SparklineGroupId = sheet.listSparklineGroups()[0].id;
+  void groupId;
+  // @ts-expect-error a sparkline group id is a string or a position
+  sheet.removeSparklineGroup(true);
+}
+
+export function styleRecordSetters(): void {
+  const ooxml = wb.ooxml;
+  ooxml.setFill(1, ooxml.getFill(1));
+  ooxml.setBorder(1, ooxml.getBorder(1));
+  ooxml.setCellXf(1, ooxml.getCellXf(1));
+  ooxml.setDxf(0, ooxml.getDxf(0));
+  ooxml.setFont(0, ooxml.getFont(0));
+  // @ts-expect-error the index comes first
+  ooxml.setFill(ooxml.getFill(1), 1);
+  // @ts-expect-error a border record is not a fill
+  ooxml.setFill(1, ooxml.getBorder(1));
+  const borders: EffectiveBorders = sheet.ooxml.getEffectiveStyle('A1').borders;
+  const left: ResolvedColor = borders.left;
+  // @ts-expect-error a returned record is read-only
+  borders.left = left;
+  const key: ThemeScriptFontKey = { scheme: FontScheme.Major, script: 'Jpan' };
+  const font: ThemeScriptFont | null = wb.getThemeScriptFont(key);
+  const listed: readonly ThemeScriptFont[] = wb.listThemeScriptFonts(FontScheme.Major);
+  void [font, listed];
+  // @ts-expect-error the argument is the font set
+  wb.listThemeScriptFonts('major');
+  const options: PrintOptionsInput = { gridLines: true, headings: false, horizontalCentered: false, verticalCentered: false };
+  sheet.updatePrintOptions(options);
+  const patchOptions: PrintOptionsPatch = { headings: true };
+  const footer: HeaderFooterPatch = { oddFooter: null, scaleWithDoc: true };
+  void [patchOptions, footer];
+  // @ts-expect-error a flag has no cleared form
+  sheet.updatePrintOptions({ gridLines: null });
+  // @ts-expect-error the input requires every key
+  const incomplete: HeaderFooterInput = { oddHeader: 'x' };
+  void incomplete;
+}
+
+export function autoFilterRecordsAreReadOnly(): void {
+  const filter = sheet.getAutoFilter();
+  if (!filter) return;
+  const column: AutoFilterColumn = filter.columns[0];
+  // @ts-expect-error a returned column is read-only
+  column.columnOffset = 1;
+  const group: AutoFilterDateGroup = column.dateGroups[0];
+  // @ts-expect-error a returned date group is read-only
+  group.year = 2024;
+  if (filter.sort) {
+    // @ts-expect-error a returned sort state is read-only
+    filter.sort.columnSort = true;
+    const condition: AutoFilterSortCondition = filter.sort.conditions[0];
+    // @ts-expect-error a returned sort condition is read-only
+    condition.descending = true;
+  }
+  const input: AutoFilterColumnInput = { columnOffset: 0 };
+  input.hiddenButton = true;
 }
 
 export function pageBreaks(): void {
@@ -706,6 +959,11 @@ export function chartMembers(chart: Chart): void {
   chart.setLegend(null);
   chart.updateLegend({ overlay: true });
   chart.updateAxis(1, { visible: false });
+  chart.updateAxis({ kind: ChartAxisKind.Value }, { visible: false });
+  chart.updateAxis({ kind: ChartAxisKind.Category, plot: 1 }, { visible: false });
+  const axisRef: ChartAxisRef = 1;
+  chart.updateAxis(axisRef, {});
+  chart.updateAxis(ChartAxisKind.Value, {});
   chart.updateDisplay({ plotVisibleOnly: true });
   chart.updateSeries(0, 0, { fill: { transparencyPct: 50 }, marker: { sizePt: 7 } });
   chart.updatePlot(0, { gapWidthPct: 150, firstSliceAngleDeg: 90 });
@@ -757,6 +1015,14 @@ export function chartMembers(chart: Chart): void {
   const titled: boolean = role === ChartRole.AxisTitle;
   const format: string = data.series[0].numberFormat;
   void [titled, format, data.categories.numberFormat];
+  const categories: ChartCategories = data.categories;
+  // @ts-expect-error the resolved data is readonly
+  categories.numberFormat = 'General';
+  const seriesId: number = data.series[0].seriesId;
+  const unresolvedId: number = data.unresolved[0].seriesId;
+  void [seriesId, unresolvedId];
+  // @ts-expect-error the series key is `seriesId`
+  void data.series[0].index;
   // @ts-expect-error the source of an unresolved entry is a `ChartRole`
   const sourceText: string = data.unresolved[0].source;
   void sourceText;
@@ -826,13 +1092,20 @@ export function styleRecords(dxf: Dxf): void {
 
 export function drawingRecords(): void {
   const props = sheet.listDrawings()[0].getDrawingProperties();
-  const format: number = props.format;
+  const drawingProps: DrawingProperties = props;
+  const anchorKind: AnchorKind = props.anchor.kind;
+  const hidden: boolean = props.hidden;
+  const format: number = sheet.listPictures()[0].getProperties().format;
   const info = sheet.listPictures()[0].getProperties();
   const width: number = info.widthPx;
   sheet.restoreDrawing(bytes, { assignNewId: true });
   const metadata = formulon.getFunctionMetadata('SUM');
   const signature: string | null | undefined = metadata?.signature;
-  void [format, width, signature];
+  void [format, width, signature, drawingProps, anchorKind, hidden];
+  // @ts-expect-error the format is a picture field
+  void props.format;
+  // @ts-expect-error the anchor is nested under `anchor`
+  void props.fromRow;
   // @ts-expect-error the media path is not public
   void props.mediaPath;
   // @ts-expect-error renamed to `format`
@@ -1052,15 +1325,20 @@ export function writerUnions(): void {
 }
 
 export function pivotFilterOperands(): void {
-  pivot.addFilter({ axis: 0, fieldName: 'Item', type: PivotFilterKind.ValueTopCount, value: 10 });
-  pivot.addFilter({ axis: 0, fieldName: 'Item', type: PivotFilterKind.LabelContains, value: 'a' });
-  pivot.addFilter({ axis: 0, fieldName: 'Item', type: PivotFilterKind.ValueBetween, value: 1, valueHigh: 9 });
-  pivot.addFilter({ axis: 0, fieldName: 'Item', type: PivotFilterKind.LabelBetween, value: 'a', valueHigh: null });
+  pivot.addFilter({ fieldIndex: 'Item', type: PivotFilterKind.ValueTopCount, value: 10 });
+  pivot.addFilter({ fieldIndex: 'Item', type: PivotFilterKind.LabelContains, value: 'a' });
+  pivot.addFilter({ fieldIndex: 'Item', type: PivotFilterKind.ValueBetween, value: 1, valueHigh: 9 });
+  pivot.addFilter({ fieldIndex: 'Item', type: PivotFilterKind.LabelBetween, value: 'a', valueHigh: null });
   // @ts-expect-error the operand discriminator and per-kind payload fields are gone
-  pivot.addFilter({ axis: 0, fieldName: 'Item', type: PivotFilterKind.ValueTopCount, valueKind: 0, valueInt: 10 });
+  pivot.addFilter({ fieldIndex: 'Item', type: PivotFilterKind.ValueTopCount, valueKind: 0, valueInt: 10 });
   // @ts-expect-error the text payload is `value`
-  pivot.addFilter({ axis: 0, fieldName: 'Item', type: PivotFilterKind.LabelContains, valueText: 'a' });
+  pivot.addFilter({ fieldIndex: 'Item', type: PivotFilterKind.LabelContains, valueText: 'a' });
+  pivot.addFilter({ fieldIndex: 2, type: PivotFilterKind.LabelContains, value: 'a' });
+  // @ts-expect-error the filter's axis is its field's
+  pivot.addFilter({ axis: 0, fieldIndex: 2, type: PivotFilterKind.LabelContains, value: 'a' });
   const filter = pivot.listFilters()[0];
+  const filterField: number = filter.fieldIndex;
+  void filterField;
   const value: number | string | null = filter.value;
   const high: number | string | null = filter.valueHigh;
   void [value, high, PivotFilterKind.Today, PivotFilterKind.M12];
@@ -1253,7 +1531,7 @@ export function writableOnlyInputs(): void {
   sheet.setSelection({ active: 'C3', ranges: 'A1:D5' });
   sheet.setSelection({ active: address });
   sheet.updateView({ topLeft: 'C5', paneTopLeft: address });
-  sheet.addThreadedComment({ id: 'g', text: 't', cell: 'B2' });
+  sheet.addThreadedComment({ id: 'g', text: 't', personId: 'p', cell: 'B2' });
   sheet.addSparklineGroup({ sparklines: [{ source: 'Sheet1!A1:D1', location: 'E1' }], dateAxisRange: sheetRect });
   sheet.addDataTable({ range: 'B2:D6', rowInput: { row: 0, col: 0 }, columnInput: 'A1' });
   table.setColumnTotals(0, { totalsRowFunction: 0, totalsRowLabel: 'Total' });
@@ -1275,10 +1553,8 @@ export function writableOnlyInputs(): void {
 
 export function requiredInputKeys(): void {
   // @ts-expect-error the pivot axis is required
-  const noAxis: PivotFieldInput = { sourceName: 'Product' };
-  // @ts-expect-error the slicer anchor is required
-  sheet.addSlicer(table, 0, { fromRow: 1 });
-  sheet.addSlicer(table, 0, { fromRow: 1, fromCol: 3, toRow: 9, toCol: 5 });
+  const noAxis: PivotFieldInput = { fieldIndex: 'Product' };
+  sheet.addSlicer(table, 0, { anchor: { fromRow: 1, fromCol: 3, toRow: 9, toCol: 5 } });
   void [noAxis, PivotAxis.Row, PivotAggregation.Sum];
 }
 

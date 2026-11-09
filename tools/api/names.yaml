@@ -20,11 +20,11 @@ schema: 1
 collections:
   sheet: { key: index, access: handles, plural: sheets, ops: [sheet.add, sheet.copy, sheet.get_count, sheet.move, sheet.remove, sheet.rename, sheet_index.get, sheet_name.get] }
   font: { key: index, access: indexed, plural: fonts, ops: [font.add, font.get, font.get_count, font.set] }
-  fill: { key: index, access: indexed, plural: fills, ops: [fill.add, fill.get, fill.get_count] }
-  border: { key: index, access: indexed, plural: borders, ops: [border.add, border.get, border.get_count] }
-  cell_xf: { key: index, access: indexed, plural: cell_xfs, ops: [cell_xf.add, cell_xf.get, cell_xf.get_count] }
+  fill: { key: index, access: indexed, plural: fills, ops: [fill.add, fill.get, fill.get_count, fill.set] }
+  border: { key: index, access: indexed, plural: borders, ops: [border.add, border.get, border.get_count, border.set] }
+  cell_xf: { key: index, access: indexed, plural: cell_xfs, ops: [cell_xf.add, cell_xf.get, cell_xf.get_count, cell_xf.set] }
   cell_style_xf: { key: index, access: indexed, plural: cell_style_xfs, ops: [cell_style_xf.add, cell_style_xf.get, cell_style_xf.get_count] }
-  dxf: { key: index, access: indexed, plural: dxfs, ops: [dxf.add, dxf.get, dxf.get_count] }
+  dxf: { key: index, access: indexed, plural: dxfs, ops: [dxf.add, dxf.get, dxf.get_count, dxf.set] }
   table: { key: index, access: handles, handle_class: Table, plural: tables, ops: [table.create, table.get, table.get_count, table.remove, table.rename, table.update, table.list.iter_tables, binding.table, binding.sheet_table] }
   pivot: { key: index, access: handles, handle_class: Pivot, plural: pivots, ops: [pivot.create, pivot.get_count, pivot.remove, pivots.list, binding.pivot] }
   pivot_field: { key: index, access: list, plural: pivot_fields, ops: [pivot_field.add, pivot_field.clear, pivot_field.get, pivot_field.get_count] }
@@ -35,10 +35,10 @@ collections:
   pivot_cache_record: { key: index, access: exempt, plural: pivot_cache_records, exempt: "no getter returns a record; its values have typed getters and setters", ops: [pivot_cache_record.add, pivot_cache_record.clear, pivot_cache_record.get_count] }
   pivot_cache_field_shared_item: { key: index, access: list, plural: pivot_cache_field_shared_items, ops: [pivot_cache_field_shared_item.get_count] }
   pivot_cache_calculated_item: { key: index, access: list, plural: pivot_cache_calculated_items, ops: [pivot_cache_calculated_item.add, pivot_cache_calculated_item.get, pivot_cache_calculated_item.get_count, pivot_cache_calculated_item.move, pivot_cache_calculated_item.remove] }
-  cf_rule: { key: index, access: list, plural: cf_rules, ops: [cf_rule.add, cf_rule.clear, cf_rule.get, cf_rule.get_count, cf_rule.remove] }
-  validation: { key: index, access: list, plural: validations, ops: [validation.add, validation.get, validation.get_count, validation.remove] }
+  cf_rule: { key: index, access: list, plural: cf_rules, ops: [cf_rule.add, cf_rule.clear, cf_rule.get, cf_rule.get_count, cf_rule.remove, cf_rule.update] }
+  validation: { key: natural, by: id, plural: validations, ops: [validation.add, validation.get, validation.get_at, validation.get_count, validation.remove, validation.update] }
   protected_range: { key: index, access: list, plural: protected_ranges, ops: [protected_range.add, protected_range.get, protected_range.get_count, protected_range.remove, protected_range.update] }
-  sparkline_group: { key: index, access: list, plural: sparkline_groups, ops: [sparkline_group.add, sparkline_group.get, sparkline_group.get_count, sparkline_group.remove, sparkline_group.update] }
+  sparkline_group: { key: natural, by: id, plural: sparkline_groups, ops: [sparkline_group.add, sparkline_group.get, sparkline_group.get_at, sparkline_group.get_count, sparkline_group.remove, sparkline_group.update] }
   table_column: { key: index, access: exempt, plural: table_columns, exempt: "C-only getter; the bindings read columns as a Table field", ops: [table_column.get] }
   sparkline: { key: index, access: exempt, plural: sparklines, exempt: "C-only getter; the bindings read sparklines as a SparklineGroup field", ops: [sparkline.get] }
   external_link: { key: index, access: list, plural: external_links, ops: [external_link.get, external_link.get_count] }
@@ -46,7 +46,7 @@ collections:
   comment: { key: natural, by: cell, plural: comments, ops: [comment.get, comment.get_at, comment.get_count, comment.remove, comment.set, comment_visible.get] }
   threaded_comment: { key: natural, by: id, plural: threaded_comments, ops: [threaded_comment.add, threaded_comment.get, threaded_comment.get_at, threaded_comment.get_count, threaded_comment.remove, threaded_comment.update] }
   person: { key: natural, by: id, plural: people, ops: [person.add, person.get, person.get_at, person.get_count, person.remove] }
-  hyperlink: { key: natural, by: cell, plural: hyperlinks, ops: [hyperlink.add, hyperlink.get, hyperlink.get_at, hyperlink.get_count, hyperlink.remove, hyperlink.remove_at] }
+  hyperlink: { key: natural, by: cell, plural: hyperlinks, ops: [hyperlink.set, hyperlink.get, hyperlink.get_at, hyperlink.get_count, hyperlink.remove, hyperlink.remove_at] }
   auto_filter_column: { key: natural, by: column_offset, plural: auto_filter_columns, ops: [auto_filter.clear], no_getter: "the columns are read and written as the AutoFilter record's columns; clearing every criterion is the one call of its own" }
   table_auto_filter_column: { key: natural, by: column_offset, plural: table_auto_filter_columns, ops: [table_auto_filter.clear], no_getter: "the columns are read and written as the table AutoFilter record's columns; clearing every criterion is the one call of its own" }
   merge: { key: natural, by: rect, plural: merges, ops: [merge.add, merge.get_at, merge.get_count, merge.remove, merge.remove_at], no_getter: "the element is its rectangle; a lookup by key returns nothing more" }
@@ -60,7 +60,7 @@ collections:
   row_break: { key: natural, by: row, plural: row_breaks, ops: [row_break.set, row_break.get_at, row_break.get_count, row_break.remove], no_getter: "the element is its row number; a lookup by key returns nothing more" }
   column_break: { key: natural, by: col, plural: column_breaks, ops: [column_break.set, column_break.get_at, column_break.get_count, column_break.remove], no_getter: "the element is its column number; a lookup by key returns nothing more" }
   row_override: { key: natural, by: row, plural: row_overrides, ops: [row_override.get_at, row_override.get_count], no_getter: "read by row through the per-property row getters" }
-  theme_script_font: { key: natural, by: script, plural: theme_script_fonts, ops: [theme_script_font.get, theme_script_font.get_at, theme_script_font.get_count, theme_script_font.set] }
+  theme_script_font: { key: natural, by: script, plural: theme_script_fonts, ops: [theme_script_font.get, theme_script_font.get_at, theme_script_font.get_count, theme_script_font.set, theme_script_fonts.list] }
   shape: { key: natural, by: object_id, access: handles, handle_class: Shape, handle_base: Drawing, plural: shapes, ops: [shape.add, shape.get, shape.get_at, shape.get_count, shape.remove, shape.update, shapes.list, binding.shape] }
   image: { key: natural, by: object_id, access: handles, handle_class: Picture, handle_base: Drawing, plural: pictures, ops: [image.add, image.get, binding.picture, binding.list_pictures, binding.add_picture] }
   chart: { key: natural, by: object_id, access: handles, handle_class: Chart, handle_base: Drawing, plural: charts, ops: [chart.add, chart.get, binding.chart, binding.list_charts] }
@@ -71,6 +71,7 @@ collections:
   column_override: { key: natural, by: col, plural: column_overrides, ops: [column_override.get_at, column_override.get_count], no_getter: "read by column through the per-property column getters" }
   table_style: { key: natural, by: name, plural: table_styles, ops: [table_style.get, table_style.get_at, table_style.get_count, table_style.remove, table_style.set] }
   cell_style: { key: natural, by: name, plural: cell_styles, ops: [cell_style.get, cell_style.get_at, cell_style.get_count, cell_style.remove, cell_style.set] }
+  profile_id: { key: index, access: list, plural: profile_ids, ops: [profile_id.get_count, profile_id.get_at, profile_ids.list] }
 enum_families:
   anchor: [enum.anchor_kind, enum.anchor_edit_as]
   # reading direction: Context 0, LeftToRight 1, RightToLeft 2 (`readingOrder` / `<x14:dataBar direction>`)
@@ -532,16 +533,18 @@ entries:
     kind: record
     role: result
     c: fm_paper_info_t
-    py: Paper
+    py: PaginationPaper
     surfaces: [c, py]
     was: { c: fm_paper_info, py: PaperInfo }
+    exception: "Python takes the JS record name; the C typedef keeps the layout noun"
   record.margins_pt:
     kind: record
     role: result
     c: fm_margins_pt_info_t
-    py: MarginsPt
+    py: PaginationMargins
     surfaces: [c, py]
     was: { c: fm_margins_pt, py: MarginsPt }
+    exception: "Python takes the JS record name; the C typedef keeps the layout noun"
   record.print_titles:
     kind: record
     role: both
@@ -566,9 +569,10 @@ entries:
     kind: record
     role: result
     c: fm_page_layout_info_t
-    py: PageLayout
+    py: PaginationPage
     surfaces: [c, py]
     was: { c: fm_page_layout, py: PageLayout }
+    exception: "Python takes the JS record name; the C typedef keeps the layout noun"
   record.page_break_input:
     kind: record
     role: input
@@ -644,7 +648,6 @@ entries:
     js: PrintOptionsPatch
     surfaces: [c, wasm, native]
     clearable: []
-    was: { js: PrintOptionsInput }
   record.header_footer:
     kind: record
     role: result
@@ -660,7 +663,6 @@ entries:
     js: HeaderFooterPatch
     surfaces: [c, wasm, native]
     clearable: [odd_header, odd_footer, even_header, even_footer, first_header, first_footer]
-    was: { js: HeaderFooterInput }
   type.cf_results:
     kind: typedef
     c: fm_cf_results_t
@@ -678,10 +680,10 @@ entries:
     role: result
     c: fm_cfvo_t
     js: CfValueObject
-    py: Cfvo
+    py: CfValueObject
     surfaces: [c, wasm, native, py]
-    exception: "the JS record spells out the abbreviation the C typedef and the Python class keep"
-    was: { c: fm_cfvo_t, py: CfValueObject }
+    exception: "the bindings spell out the abbreviation the C typedef keeps"
+    was: { c: fm_cfvo_t }
   record.cf_rule:
     kind: record
     role: result
@@ -1742,21 +1744,21 @@ entries:
   record.image_insert:
     kind: record
     role: input
-    c: fm_picture_insert_spec_t
-    js: PictureInput
-    py: PictureInput
+    c: fm_drawing_placement_spec_t
+    js: DrawingPlacementInput
+    py: DrawingPlacementInput
     surfaces: [c, wasm, native, py]
     was: { c: fm_image_insert, js: ImageInsertOptions }
-    exception: "the insert record of a Picture handle carries the class name; C keeps the image noun"
+    exception: "one placement record (name, description, anchor) for a picture and a chart frame"
   record.drawing_anchor:
     kind: record
-    role: input
+    role: both
     c: fm_drawing_anchor_t
     js: DrawingAnchor
     py: DrawingAnchor
     surfaces: [c, wasm, native, py]
     was: { c: fm_drawing_anchor }
-    exception: "one anchor shape for ImageInsertInput, ChartInsertInput and setDrawingAnchor; Python passes it as an input dataclass, and no result carries it"
+    exception: "the anchor every drawing record reads back; C reads and writes the one record, the bindings take DrawingAnchorInput"
   enum.shape_paint:
     kind: enum
     c: fm_shape_paint_t
@@ -2459,15 +2461,17 @@ entries:
     kind: record
     role: result
     c: fm_chart_axis_title_text_info_t
+    js: ChartAxisTitleText
     py: ChartAxisTitleText
-    surfaces: [c, py]
+    surfaces: [c, wasm, native, py]
     was: { c: fm_chart_axis_title_text_t, py: ChartAxisTitleText }
   record.chart_unresolved:
     kind: record
     role: result
     c: fm_chart_unresolved_info_t
+    js: ChartUnresolved
     py: ChartUnresolved
-    surfaces: [c, py]
+    surfaces: [c, wasm, native, py]
     was: { c: fm_chart_unresolved_t, py: ChartUnresolved }
   record.chart_insert:
     kind: record
@@ -3422,7 +3426,7 @@ entries:
     surfaces: [wasm, native, py]
   type.cell_input:
     kind: typedef
-    py: CellInput
+    py: CellValueInput
     surfaces: [py]
   type.native_value:
     kind: typedef
@@ -3750,7 +3754,7 @@ entries:
     c: fm_shape_patch_t
     js: ShapePatch
     surfaces: [c, wasm, native]
-    clearable: [fill_kind, line_kind, fill_color, line_color]
+    clearable: []
   record.slicer_patch:
     kind: record
     role: patch
@@ -3835,8 +3839,9 @@ entries:
   record.chart_categories:
     kind: record
     role: result
+    js: ChartCategories
     py: ChartCategories
-    surfaces: [py]
+    surfaces: [wasm, native, py]
     was: { py: ChartCategories }
   record.chart_legend_info:
     kind: record
@@ -3860,8 +3865,9 @@ entries:
   record.chart_series_ranges:
     kind: record
     role: result
+    js: ChartSeriesRanges
     py: ChartSeriesRanges
-    surfaces: [py]
+    surfaces: [wasm, native, py]
     was: { py: ChartSeriesRanges }
   record.chart_source_info:
     kind: record
@@ -3943,7 +3949,7 @@ entries:
   record.error_name:
     kind: record
     role: result
-    py: ErrorName
+    py: LocaleErrorName
     surfaces: [py]
     was: { py: ErrorName }
   type.formulon_error:
@@ -4016,6 +4022,7 @@ entries:
     py: PassthroughPart
     surfaces: [py]
     was: { py: PassthroughPart }
+    drop: { py: PassthroughPart, closes: R0.coverage }
   record.table:
     kind: record
     role: result
@@ -4159,11 +4166,12 @@ entries:
     scope: workbook
     noun: sheet
     c: fm_workbook_get_sheet_count
-    js: getSheetCount
+    js: sheetCount
     py: get_sheet_count
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_sheet_count, js: sheetCount, py: sheet_count }
-    drop: { js: getSheetCount, py: get_sheet_count, closes: R23.list }
+    drop: { py: get_sheet_count, closes: R23.list }
+    exception: "JS reads the count as the readonly property sheetCount; Python as len(wb)"
   sheet_name.get:
     kind: op
     scope: workbook
@@ -4194,9 +4202,11 @@ entries:
     js: addSheet
     py: add_sheet
     returns: "union:Sheet"
+    params: { name: { default: null } }
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_add_sheet, js: addSheet, py: add_sheet }
     facade: handwritten
+    add_returns: handle
   sheet.move:
     kind: op
     scope: workbook
@@ -4204,6 +4214,7 @@ entries:
     c: fm_workbook_move_sheet
     js: moveSheet
     py: move_sheet
+    params: { insert_before: { default: null } }
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_move_sheet, js: moveSheet, py: move_sheet }
     facade: handwritten
@@ -4216,7 +4227,6 @@ entries:
     js: copySheet
     py: copy_sheet
     returns: "union:Sheet"
-    params: { insert_before: { default: null } }
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_copy_sheet, js: copySheet, py: copy_sheet }
     facade: handwritten
@@ -4309,7 +4319,7 @@ entries:
     py: insert_rows
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_insert_rows, js: insertRows, py: insert_rows }
-    span_args: [[0, row, start_count]]
+    span_args: [[0, row, span]]
   rows.delete:
     kind: op
     scope: sheet
@@ -4319,7 +4329,7 @@ entries:
     py: delete_rows
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_delete_rows, js: deleteRows, py: delete_rows }
-    span_args: [[0, row, start_count]]
+    span_args: [[0, row, span]]
   cols.insert:
     kind: op
     scope: sheet
@@ -4329,7 +4339,7 @@ entries:
     py: insert_columns
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_insert_cols, js: insertCols, py: insert_cols }
-    span_args: [[0, col, start_count]]
+    span_args: [[0, col, span]]
   cols.delete:
     kind: op
     scope: sheet
@@ -4339,7 +4349,7 @@ entries:
     py: delete_columns
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_delete_cols, js: deleteCols, py: delete_cols }
-    span_args: [[0, col, start_count]]
+    span_args: [[0, col, span]]
   number.set:
     kind: op
     scope: sheet
@@ -4780,6 +4790,7 @@ entries:
     params: { header_row: bool, totals_row: bool, show_first_column: bool, show_last_column: bool, show_row_stripes: bool, show_column_stripes: bool }
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_table_create, js: createTable, py: table_create }
+    add_returns: handle
   table.update:
     kind: op
     scope: sheet
@@ -4906,7 +4917,7 @@ entries:
     surfaces: [c]
     was: { c: fm_workbook_passthrough_at, js: passthroughAt }
     drop: { js: passthroughAt, closes: R5.list }
-  hyperlink.add:
+  hyperlink.set:
     kind: op
     scope: sheet
     noun: hyperlink
@@ -4917,7 +4928,7 @@ entries:
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_add_hyperlink, js: addHyperlink, py: add_hyperlink }
     facade: handwritten
-  hyperlink.add_range:
+  hyperlink.set_range:
     kind: op
     scope: sheet
     noun: hyperlink
@@ -4967,6 +4978,7 @@ entries:
     rect_args: [0]
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_add_merge, js: addMerge, py: add_merge }
+    add_returns: key
   merge.remove:
     kind: op
     scope: sheet
@@ -5161,6 +5173,7 @@ entries:
     py: add_protected_range
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_add_protected_range, js: addProtectedRange, py: add_protected_range }
+    add_returns: index
   protected_range.update:
     kind: op
     scope: sheet
@@ -5198,6 +5211,13 @@ entries:
     kind: op
     scope: sheet
     noun: validation
+    c: fm_sheet_get_validation
+    surfaces: [c]
+    exception: "C reads one rule by id; the bindings read the list"
+  validation.get_at:
+    kind: op
+    scope: sheet
+    noun: validation
     c: fm_sheet_get_validation_at
     js: getValidation
     py: get_validation
@@ -5214,6 +5234,7 @@ entries:
     py: add_validation
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_add_validation, js: addValidation, py: add_validation }
+    add_returns: key
   validation.remove:
     kind: op
     scope: sheet
@@ -5221,6 +5242,7 @@ entries:
     c: fm_sheet_remove_validation
     js: removeValidation
     py: remove_validation
+    ref_args: [0, validation]
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_remove_validation_at, js: removeValidationAt, py: remove_validation_at }
   validations.clear:
@@ -5276,6 +5298,7 @@ entries:
     py: add_threaded_comment
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_add_threaded_comment, js: addThreadedComment, py: add_threaded_comment }
+    add_returns: key
   threaded_comment.update:
     kind: op
     scope: sheet
@@ -5332,6 +5355,7 @@ entries:
     py: add_person
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_add_person, js: addPerson, py: add_person }
+    add_returns: key
   person.remove:
     kind: op
     scope: workbook
@@ -6133,6 +6157,7 @@ entries:
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_cf_add_rule, js: addConditionalFormat, py: add_conditional_format }
     facade: handwritten
+    add_returns: index
   cf_rule.remove:
     kind: op
     scope: sheet
@@ -6271,6 +6296,7 @@ entries:
     py: add_pivot_cache
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_cache_create, js: pivotCacheCreate, py: pivot_cache_create }
+    add_returns: handle
   pivot_cache.remove:
     kind: op
     scope: workbook
@@ -6278,6 +6304,7 @@ entries:
     c: fm_workbook_remove_pivot_cache
     js: removePivotCache
     py: remove_pivot_cache
+    ref_args: [0, pivotCache]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_cache_remove, js: pivotCacheRemove, py: pivot_cache_remove }
   pivot_cache_worksheet_source.get:
@@ -6332,6 +6359,7 @@ entries:
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_cache_field_add, js: pivotCacheFieldAdd, py: pivot_cache_field_add }
     handle: { class: PivotCache, supplies: [cache_id] }
+    add_returns: index
   pivot_cache_field.clear:
     kind: op
     scope: workbook
@@ -6372,6 +6400,7 @@ entries:
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_cache_field_add_shared_item_number, js: pivotCacheFieldAddSharedItemNumber, py: pivot_cache_field_add_shared_item_number }
     drop: { js: addPivotCacheFieldSharedItemNumber, py: add_pivot_cache_field_shared_item_number, closes: R0.coverage }
+    add_returns: index
   pivot_cache_field_shared_item_date.add:
     kind: op
     scope: workbook
@@ -6382,6 +6411,7 @@ entries:
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_cache_field_add_shared_item_date, js: pivotCacheFieldAddSharedItemDate, py: pivot_cache_field_add_shared_item_date }
     drop: { js: addPivotCacheFieldSharedItemDate, py: add_pivot_cache_field_shared_item_date, closes: R0.coverage }
+    add_returns: index
   pivot_cache_field_shared_item_date.is:
     kind: op
     scope: workbook
@@ -6403,6 +6433,7 @@ entries:
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_cache_field_add_shared_item_text, js: pivotCacheFieldAddSharedItemText, py: pivot_cache_field_add_shared_item_text }
     drop: { js: addPivotCacheFieldSharedItemText, py: add_pivot_cache_field_shared_item_text, closes: R0.coverage }
+    add_returns: index
   pivot_cache_field_shared_item_bool.add:
     kind: op
     scope: workbook
@@ -6414,6 +6445,7 @@ entries:
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_cache_field_add_shared_item_bool, js: pivotCacheFieldAddSharedItemBool, py: pivot_cache_field_add_shared_item_bool }
     drop: { js: addPivotCacheFieldSharedItemBool, py: add_pivot_cache_field_shared_item_bool, closes: R0.coverage }
+    add_returns: index
   pivot_cache_field_shared_item_blank.add:
     kind: op
     scope: workbook
@@ -6424,6 +6456,7 @@ entries:
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_cache_field_add_shared_item_blank, js: pivotCacheFieldAddSharedItemBlank, py: pivot_cache_field_add_shared_item_blank }
     drop: { js: addPivotCacheFieldSharedItemBlank, py: add_pivot_cache_field_shared_item_blank, closes: R0.coverage }
+    add_returns: index
   pivot_cache_field_shared_item_error.add:
     kind: op
     scope: workbook
@@ -6434,6 +6467,7 @@ entries:
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_cache_field_add_shared_item_error, js: pivotCacheFieldAddSharedItemError, py: pivot_cache_field_add_shared_item_error }
     drop: { js: addPivotCacheFieldSharedItemError, py: add_pivot_cache_field_shared_item_error, closes: R0.coverage }
+    add_returns: index
   pivot_cache_field_shared_items.clear:
     kind: op
     scope: workbook
@@ -6464,6 +6498,7 @@ entries:
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_cache_record_add, js: pivotCacheRecordAdd, py: pivot_cache_record_add }
     handle: { class: PivotCache, supplies: [cache_id] }
+    add_returns: index
   pivot_cache_record.clear:
     kind: op
     scope: workbook
@@ -6567,6 +6602,7 @@ entries:
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_cache_calculated_field_add, js: pivotCacheCalculatedFieldAdd, py: pivot_cache_calculated_field_add }
     handle: { class: PivotCache, supplies: [cache_id] }
+    add_returns: index
   pivot_cache_calculated_field_formula.set:
     kind: op
     scope: workbook
@@ -6607,6 +6643,7 @@ entries:
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_cache_calculated_item_add, js: pivotCacheCalculatedItemAdd, py: pivot_cache_calculated_item_add }
     handle: { class: PivotCache, supplies: [cache_id] }
+    add_returns: index
   pivot_cache_calculated_item.get_count:
     kind: op
     scope: workbook
@@ -6667,6 +6704,7 @@ entries:
     py: add_pivot
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_create, js: pivotCreate, py: pivot_create }
+    add_returns: handle
   pivot.remove:
     kind: op
     scope: sheet
@@ -6783,6 +6821,7 @@ entries:
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_field_add, js: pivotFieldAdd, py: pivot_field_add }
     handle: { class: Pivot, supplies: [sheet, pivot] }
+    add_returns: index
   pivot_field.clear:
     kind: op
     scope: sheet
@@ -6935,6 +6974,7 @@ entries:
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_field_add_item, js: pivotFieldAddItem, py: pivot_field_add_item }
     handle: { class: Pivot, supplies: [sheet, pivot] }
+    add_returns: index
   pivot_field_item.add_at:
     kind: op
     scope: sheet
@@ -6946,6 +6986,7 @@ entries:
     exception: "C only: the bindings reach it through Pivot.addFieldItem(field, { cacheIndex })"
     was: { c: fm_workbook_pivot_field_add_item_at, js: pivotFieldAddItemAt, py: pivot_field_add_item_at }
     facade: handwritten
+    add_returns: index
   pivot_field_item.update:
     kind: op
     scope: sheet
@@ -6990,6 +7031,8 @@ entries:
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_field_add_subtotal_fn, js: pivotFieldAddSubtotalFn, py: pivot_field_add_subtotal_fn }
     handle: { class: Pivot, supplies: [sheet, pivot] }
+    drop: { c: fm_sheet_add_pivot_field_subtotal_function, js: addPivotFieldSubtotalFunction, py: add_pivot_field_subtotal_function, closes: R37.add.returns }
+    replaced_by: pivot_field_subtotal_fns.set
   pivot_field_subtotal_fns.clear:
     kind: op
     scope: sheet
@@ -7000,6 +7043,8 @@ entries:
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_field_clear_subtotal_fns, js: pivotFieldClearSubtotalFns, py: pivot_field_clear_subtotal_fns }
     handle: { class: Pivot, supplies: [sheet, pivot] }
+    drop: { c: fm_sheet_clear_pivot_field_subtotal_functions, js: clearPivotFieldSubtotalFunctions, py: clear_pivot_field_subtotal_functions, closes: R0.coverage }
+    replaced_by: pivot_field_subtotal_fns.set
   pivot_field_date_group.set:
     kind: op
     scope: sheet
@@ -7074,6 +7119,7 @@ entries:
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_data_field_add, js: pivotDataFieldAdd, py: pivot_data_field_add }
     handle: { class: Pivot, supplies: [sheet, pivot] }
+    add_returns: index
   pivot_data_field.clear:
     kind: op
     scope: sheet
@@ -7212,7 +7258,7 @@ entries:
     surfaces: [c, wasm, native, py]
     exception: "the bindings read by position through get<X>(index); only the C name carries `_at`"
     was: { c: fm_workbook_pivot_field_at, js: pivotFieldAt, py: pivot_field_at }
-    drop: { js: getPivotField, py: get_pivot_field, closes: R23.list }
+    handle: { class: Pivot, supplies: [sheet, pivot] }
   pivot_field_item.get_count:
     kind: op
     scope: sheet
@@ -7244,7 +7290,7 @@ entries:
     surfaces: [c, wasm, native, py]
     exception: "the bindings read by position through get<X>(index); only the C name carries `_at`"
     was: { c: fm_workbook_pivot_data_field_at, js: pivotDataFieldAt, py: pivot_data_field_at }
-    drop: { js: getPivotDataField, py: get_pivot_data_field, closes: R23.list }
+    handle: { class: Pivot, supplies: [sheet, pivot] }
   pivot_row_field_order.get:
     kind: op
     scope: sheet
@@ -7285,7 +7331,7 @@ entries:
     surfaces: [c, wasm, native, py]
     exception: "the bindings read by position through get<X>(index); only the C name carries `_at`"
     was: { c: fm_workbook_pivot_filter_at, js: pivotFilterAt, py: pivot_filter_at }
-    drop: { js: getPivotFilter, py: get_pivot_filter, closes: R23.list }
+    handle: { class: Pivot, supplies: [sheet, pivot] }
   pivot_filter.add:
     kind: op
     scope: sheet
@@ -7296,6 +7342,7 @@ entries:
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_filter_add, js: pivotFilterAdd, py: pivot_filter_add }
     handle: { class: Pivot, supplies: [sheet, pivot] }
+    add_returns: index
   pivot_filter.clear:
     kind: op
     scope: sheet
@@ -8019,7 +8066,6 @@ entries:
     params: { visibility: "enum:sheet_visibility" }
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_set_visibility, js: setSheetVisibility, py: set_sheet_visibility }
-    drop: { c: fm_sheet_set_visibility, js: setVisibility, py: set_visibility, closes: R18.all }
   show_grid_lines.set:
     kind: op
     scope: sheet
@@ -8497,6 +8543,7 @@ entries:
     py: add_dxf
     surfaces: [c, wasm, native, py]
     was: { c: fm_styles_add_dxf, js: addDxf, py: add_dxf }
+    add_returns: index
   table_style.get_count:
     kind: op
     scope: workbook
@@ -8643,6 +8690,7 @@ entries:
     py: add_font
     surfaces: [c, wasm, native, py]
     was: { c: fm_styles_add_font, js: addFont, py: add_font }
+    add_returns: index
   font.set:
     kind: op
     scope: workbook
@@ -8681,6 +8729,7 @@ entries:
     py: add_fill
     surfaces: [c, wasm, native, py]
     was: { c: fm_styles_add_fill, js: addFill, py: add_fill }
+    add_returns: index
   border.add:
     kind: op
     scope: workbook
@@ -8691,6 +8740,7 @@ entries:
     py: add_border
     surfaces: [c, wasm, native, py]
     was: { c: fm_styles_add_border, js: addBorder, py: add_border }
+    add_returns: index
   num_fmt.add:
     kind: op
     scope: workbook
@@ -8701,6 +8751,7 @@ entries:
     py: add_number_format
     surfaces: [c, wasm, native, py]
     was: { c: fm_styles_add_num_fmt, js: addNumFmt, py: add_num_fmt }
+    add_returns: key
   cell_xf.add:
     kind: op
     scope: workbook
@@ -8711,6 +8762,7 @@ entries:
     py: add_cell_xf
     surfaces: [c, wasm, native, py]
     was: { c: fm_styles_add_cell_xf, js: addXf, py: add_cell_xf }
+    add_returns: index
   cell_style_xf.add:
     kind: op
     scope: workbook
@@ -8721,6 +8773,7 @@ entries:
     py: add_cell_style_xf
     surfaces: [c, wasm, native, py]
     was: { c: fm_styles_add_cell_style_xf, js: addCellStyleXf, py: add_cell_style_xf }
+    add_returns: index
   cell_style.set:
     kind: op
     scope: workbook
@@ -8755,6 +8808,7 @@ entries:
     surfaces: [c, py]
     was: { c: fm_styles_add_batch, py: add_batch }
     drop: { py: add_batch, closes: R0.coverage }
+    add_returns: index
   theme_colors.get:
     kind: op
     scope: workbook
@@ -8943,6 +8997,8 @@ entries:
     params: { anchor_kind: "enum:anchor_kind", edit_as: "enum:anchor_edit_as" }
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_set_drawing_anchor, js: setDrawingAnchor, py: set_drawing_anchor }
+    drop: { c: fm_sheet_set_drawing_anchor, js: setDrawingAnchor, py: set_drawing_anchor, closes: R36.merge }
+    replaced_by: drawing.update
     handle: { class: [Picture, Chart], supplies: [sheet, object_id] }
   drawing_name.set:
     kind: op
@@ -8953,7 +9009,21 @@ entries:
     py: set_drawing_name
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_set_drawing_name, js: setDrawingName, py: set_drawing_name }
+    drop: { c: fm_sheet_set_drawing_name, js: setDrawingName, py: set_drawing_name, closes: R36.merge }
+    replaced_by: drawing.update
     handle: { class: [Picture, Chart, Shape], js: rename, py: rename, supplies: [sheet, object_id] }
+  drawing.update:
+    kind: op
+    scope: sheet
+    noun: drawing
+    c: fm_sheet_update_drawing
+    js: updateDrawing
+    py: update_drawing
+    patch: true
+    patch_record: DrawingProperties
+    surfaces: [c, wasm, native, py]
+    facade: handwritten
+    handle: { class: Drawing, js: update, py: update, supplies: [sheet, object_id] }
   drawing_z_order.set:
     kind: op
     scope: sheet
@@ -8991,6 +9061,7 @@ entries:
     c: fm_sheet_get_shape_count
     surfaces: [c]
     was: { c: fm_sheet_shape_count }
+    drop: { c: fm_sheet_get_shape_count, closes: R0.coverage }
   shape.get_at:
     kind: op
     scope: sheet
@@ -8998,6 +9069,7 @@ entries:
     c: fm_sheet_get_shape_at
     surfaces: [c]
     was: { c: fm_sheet_shape_at }
+    drop: { c: fm_sheet_get_shape_at, closes: R0.coverage }
   shape.add:
     kind: op
     scope: sheet
@@ -9005,9 +9077,10 @@ entries:
     c: fm_sheet_add_shape
     js: addShape
     py: add_shape
-    params: { anchor_kind: "enum:anchor_kind", edit_as: "enum:anchor_edit_as", text_box: bool, fill_kind: "enum:shape_paint", line_kind: "enum:shape_paint", hidden: bool }
+    params: { text_box: bool, fill_kind: "enum:shape_paint", line_kind: "enum:shape_paint" }
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_insert_shape, js: insertShape, py: insert_shape }
+    add_returns: handle
   shape.update:
     kind: op
     scope: sheet
@@ -9015,7 +9088,7 @@ entries:
     c: fm_sheet_update_shape
     js: updateShape
     py: update_shape
-    params: { anchor_kind: "enum:anchor_kind", edit_as: "enum:anchor_edit_as", text_box: bool, fill_kind: "enum:shape_paint", line_kind: "enum:shape_paint", hidden: bool }
+    params: { text_box: bool, fill_kind: "enum:shape_paint", line_kind: "enum:shape_paint" }
     patch: true
     patch_record: ShapeProperties
     surfaces: [c, wasm, native, py]
@@ -9034,6 +9107,7 @@ entries:
     internal: true
     replaced_by: binding.remove_drawing
     closes: R28.handles
+    drop: { c: fm_sheet_remove_shape, js: removeShape, py: remove_shape, closes: R0.coverage }
   slicer.get_count:
     kind: op
     scope: sheet
@@ -9041,6 +9115,7 @@ entries:
     c: fm_sheet_get_slicer_count
     surfaces: [c]
     was: { c: fm_sheet_slicer_count }
+    drop: { c: fm_sheet_get_slicer_count, closes: R0.coverage }
   slicer.get_at:
     kind: op
     scope: sheet
@@ -9048,6 +9123,7 @@ entries:
     c: fm_sheet_get_slicer_at
     surfaces: [c]
     was: { c: fm_sheet_slicer_at }
+    drop: { c: fm_sheet_get_slicer_at, closes: R0.coverage }
   slicer.add:
     kind: op
     scope: sheet
@@ -9059,6 +9135,7 @@ entries:
     ref_exempt: { params: [table], reason: "table indices are sheet-local and a slicer may filter a table on another sheet" }
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_add_slicer, js: addSlicer, py: add_slicer }
+    add_returns: handle
   slicer.update:
     kind: op
     scope: sheet
@@ -9085,6 +9162,7 @@ entries:
     internal: true
     replaced_by: binding.remove_drawing
     closes: R28.handles
+    drop: { c: fm_sheet_remove_slicer, js: removeSlicer, py: remove_slicer, closes: R0.coverage }
   sparkline_group.get_count:
     kind: op
     scope: sheet
@@ -9096,6 +9174,13 @@ entries:
     was: { c: fm_sheet_sparkline_group_count }
     drop: { js: getSparklineGroupCount, py: get_sparkline_group_count, closes: R23.list }
   sparkline_group.get:
+    kind: op
+    scope: sheet
+    noun: sparkline_group
+    c: fm_sheet_get_sparkline_group
+    surfaces: [c]
+    exception: "C reads one group by id; the bindings read the list"
+  sparkline_group.get_at:
     kind: op
     scope: sheet
     noun: sparkline_group
@@ -9122,6 +9207,7 @@ entries:
     py: add_sparkline_group
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_add_sparkline_group, js: addSparklineGroup, py: add_sparkline_group }
+    add_returns: key
   sparkline_group.update:
     kind: op
     scope: sheet
@@ -9129,6 +9215,7 @@ entries:
     c: fm_sheet_update_sparkline_group
     js: updateSparklineGroup
     py: update_sparkline_group
+    ref_args: [0, sparklineGroup]
     patch: true
     patch_record: SparklineGroup
     surfaces: [c, wasm, native, py]
@@ -9152,6 +9239,7 @@ entries:
     c: fm_sheet_remove_sparkline_group
     js: removeSparklineGroup
     py: remove_sparkline_group
+    ref_args: [0, sparklineGroup]
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_remove_sparkline_group, js: removeSparklineGroup, py: remove_sparkline_group }
   chart.get:
@@ -9345,6 +9433,7 @@ entries:
     params: { type: "enum:chart_plot_type", bar_direction: "enum:chart_bar_direction", grouping: "enum:chart_grouping", direction: "enum:chart_series_direction", header_row: bool, header_column: bool, legend: "enum:chart_legend_position", anchor_kind: "enum:anchor_kind", edit_as: "enum:anchor_edit_as" }
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_insert_chart, js: insertChart, py: insert_chart }
+    add_returns: handle
   chart_type.set:
     kind: op
     scope: sheet
@@ -9479,6 +9568,7 @@ entries:
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_add_chart_series, js: addChartSeries, py: add_chart_series }
     handle: { class: Chart, supplies: [sheet, object_id] }
+    add_returns: key
   chart_series.remove:
     kind: op
     scope: sheet
@@ -9511,6 +9601,7 @@ entries:
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_add_data_table, js: addDataTable, py: add_data_table }
     facade: handwritten
+    add_returns: key
   data_table.get:
     kind: op
     scope: sheet
@@ -9783,7 +9874,7 @@ entries:
   validation.list.get_validations:
     kind: list
     scope: sheet
-    from: [validation.get_count, validation.get]
+    from: [validation.get_count, validation.get_at]
     js: listValidations
     py: list_validations
     surfaces: [wasm, native, py]
@@ -9825,7 +9916,7 @@ entries:
   sparkline_group.list.list_sparkline_groups:
     kind: list
     scope: sheet
-    from: [sparkline_group.get_count, sparkline_group.get]
+    from: [sparkline_group.get_count, sparkline_group.get_at]
     js: listSparklineGroups
     py: list_sparkline_groups
     surfaces: [wasm, native, py]
@@ -11524,6 +11615,16 @@ entries:
     enum: enum.drawing_object_kind
     surfaces: [c]
     was: { c: FM_DRAWING_OBJECT_OTHER }
+  constant.fm_anchor_kind_default:
+    kind: constant
+    c: FM_ANCHOR_KIND_DEFAULT
+    enum: enum.anchor_kind
+    surfaces: [c]
+  constant.fm_anchor_edit_as_default:
+    kind: constant
+    c: FM_ANCHOR_EDIT_AS_DEFAULT
+    enum: enum.anchor_edit_as
+    surfaces: [c]
   constant.fm_anchor_kind_one_cell:
     kind: constant
     c: FM_ANCHOR_KIND_ONE_CELL
@@ -11562,10 +11663,16 @@ entries:
     was: { c: FM_ANCHOR_EDIT_AS_ABSOLUTE }
   constant.fm_shape_paint_unset:
     kind: constant
-    c: FM_SHAPE_PAINT_ABSENT
     enum: enum.shape_paint
     surfaces: [c]
     was: { c: FM_SHAPE_PAINT_UNSET }
+    drop: { c: FM_SHAPE_PAINT_UNSET, closes: R0.coverage }
+    replaced_by: constant.fm_shape_paint_default
+  constant.fm_shape_paint_default:
+    kind: constant
+    c: FM_SHAPE_PAINT_DEFAULT
+    enum: enum.shape_paint
+    surfaces: [c]
   constant.fm_shape_paint_solid:
     kind: constant
     c: FM_SHAPE_PAINT_SOLID
@@ -13317,10 +13424,10 @@ entries:
     was: { c: FM_STATUS_PRINT_PAGE_COUNT_OVERFLOW }
   constant.fm_status_threaded_comment_invalid:
     kind: constant
-    c: FM_STATUS_THREADED_COMMENT_INVALID
     enum: enum.status_code
     surfaces: [c]
     was: { c: FM_STATUS_THREADED_COMMENT_INVALID }
+    drop: { c: FM_STATUS_THREADED_COMMENT_INVALID, closes: R0.coverage }
   constant.fm_status_sheet_index_out_of_range:
     kind: constant
     c: FM_STATUS_SHEET_INDEX_OUT_OF_RANGE
@@ -13616,6 +13723,7 @@ entries:
     scope: workbook
     js: pivotCache
     py: pivot_cache
+    ref_args: [0, pivotCache]
     surfaces: [wasm, native, py]
     exception: "binding accessor: the PivotCache handle of a cache id"
     facade: handwritten
@@ -13706,6 +13814,7 @@ entries:
     surfaces: [wasm, native, py]
     exception: "binding convenience: inserts an image and returns its Picture handle"
     facade: handwritten
+    add_returns: handle
   binding.pivot_get_properties:
     kind: op
     scope: sheet
@@ -13722,6 +13831,7 @@ entries:
     exception: "binding convenience: dispatches on the type of the value to the typed setters"
     facade: handwritten
     handle: { class: PivotCache, supplies: [cache_id] }
+    add_returns: index
   binding.set_pivot_cache_record_value:
     kind: op
     scope: workbook
@@ -13815,19 +13925,23 @@ entries:
   type.table_ref:
     kind: typedef
     js: TableRef
-    surfaces: [wasm, native]
+    py: TableRef
+    surfaces: [wasm, native, py]
   type.pivot_ref:
     kind: typedef
     js: PivotRef
-    surfaces: [wasm, native]
+    py: PivotRef
+    surfaces: [wasm, native, py]
   type.cf_rule_ref:
     kind: typedef
     js: CfRuleRef
-    surfaces: [wasm, native]
+    py: CfRuleRef
+    surfaces: [wasm, native, py]
   type.protected_range_ref:
     kind: typedef
     js: ProtectedRangeRef
-    surfaces: [wasm, native]
+    py: ProtectedRangeRef
+    surfaces: [wasm, native, py]
   type.error_display_name:
     kind: typedef
     js: ErrorDisplayName
@@ -15714,10 +15828,10 @@ entries:
   field.drawing_object_format:
     kind: field
     record: record.drawing_object
-    js: format
     surfaces: [wasm, native]
     closes: R8.js
     was: { js: imageFormat }
+    drop: { js: imageFormat, closes: R8.js }
   field.drawing_object_media_path:
     kind: field
     record: record.drawing_object
@@ -17930,4 +18044,398 @@ entries:
   type.date_system_options:
     kind: typedef
     js: DateSystemOptions
+    surfaces: [wasm, native]
+  pivot_field_subtotal_fns.set:
+    kind: op
+    scope: sheet
+    noun: pivot_field_subtotal_functions
+    c: fm_sheet_set_pivot_field_subtotal_functions
+    js: setPivotFieldSubtotalFunctions
+    py: set_pivot_field_subtotal_functions
+    surfaces: [c, wasm, native, py]
+    handle: { class: Pivot, supplies: [sheet, pivot] }
+  visibility.get:
+    kind: op
+    scope: sheet
+    noun: visibility
+    c: fm_sheet_get_visibility
+    js: getVisibility
+    py: get_visibility
+    surfaces: [c, wasm, native, py]
+  profile_id.get_count:
+    kind: op
+    scope: process
+    noun: supported_profile_id
+    c: fm_get_profile_id_count
+    surfaces: [c]
+  profile_id.get_at:
+    kind: op
+    scope: process
+    noun: supported_profile_id
+    c: fm_get_profile_id_at
+    surfaces: [c]
+  profile_ids.list:
+    kind: list
+    scope: process
+    from: [profile_id.get_count, profile_id.get_at]
+    js: listProfileIds
+    py: list_profile_ids
+    surfaces: [wasm, native, py]
+  value.set:
+    kind: op
+    scope: sheet
+    noun: value
+    c: fm_sheet_set_value
+    surfaces: [c]
+    exception: "C writes the tagged value it reads; the bindings write values through setValue"
+  validation.update:
+    kind: op
+    scope: sheet
+    noun: validation
+    c: fm_sheet_update_validation
+    js: updateValidation
+    py: update_validation
+    ref_args: [0, validation]
+    patch: true
+    patch_record: DataValidation
+    surfaces: [c, wasm, native, py]
+    facade: handwritten
+  cf_rule.update:
+    kind: op
+    scope: sheet
+    noun: cf_rule
+    c: fm_sheet_update_cf_rule
+    js: updateCfRule
+    py: update_cf_rule
+    ref_args: [0, cfRule]
+    patch: true
+    patch_record: ConditionalFormat
+    surfaces: [c, wasm, native, py]
+    facade: handwritten
+  record.data_validation_patch:
+    kind: record
+    role: patch
+    c: fm_data_validation_patch_t
+    js: DataValidationPatch
+    clearable: [formula1, formula2, error_title, error_message, prompt_title, prompt_message]
+    surfaces: [c, wasm, native]
+  record.cf_rule_patch:
+    kind: record
+    role: patch
+    c: fm_cf_rule_patch_t
+    js: ConditionalFormatPatch
+    clearable: [dxf_index, formula1, formula2]
+    surfaces: [c, wasm, native]
+    exception: "the patch of the ConditionalFormat record; C keeps the cf_rule noun"
+  type.conditional_format_patch_fields:
+    kind: typedef
+    js: ConditionalFormatPatchFields
+    surfaces: [wasm, native]
+  pivot_cache_record_value.get:
+    kind: op
+    scope: workbook
+    noun: pivot_cache_record_value
+    c: fm_workbook_get_pivot_cache_record_value
+    js: getPivotCacheRecordValue
+    py: get_pivot_cache_record_value
+    surfaces: [c, wasm, native, py]
+    handle: { class: PivotCache, supplies: [cache_id] }
+  theme_script_fonts.list:
+    kind: list
+    scope: workbook
+    from: [theme_script_font.get_count, theme_script_font.get_at]
+    js: listThemeScriptFonts
+    py: list_theme_script_fonts
+    params: { scheme: "enum:font_scheme" }
+    surfaces: [wasm, native, py]
+  fill.set:
+    kind: op
+    scope: workbook
+    namespace: ooxml
+    noun: fill
+    c: fm_workbook_set_fill
+    js: setFill
+    py: set_fill
+    surfaces: [c, wasm, native, py]
+  border.set:
+    kind: op
+    scope: workbook
+    namespace: ooxml
+    noun: border
+    c: fm_workbook_set_border
+    js: setBorder
+    py: set_border
+    surfaces: [c, wasm, native, py]
+  cell_xf.set:
+    kind: op
+    scope: workbook
+    namespace: ooxml
+    noun: cell_xf
+    c: fm_workbook_set_cell_xf
+    js: setCellXf
+    py: set_cell_xf
+    surfaces: [c, wasm, native, py]
+  dxf.set:
+    kind: op
+    scope: workbook
+    namespace: ooxml
+    noun: dxf
+    c: fm_workbook_set_dxf
+    js: setDxf
+    py: set_dxf
+    surfaces: [c, wasm, native, py]
+  record.print_options_input:
+    kind: record
+    role: input
+    js: PrintOptionsInput
+    surfaces: [wasm, native]
+  record.header_footer_input:
+    kind: record
+    role: input
+    js: HeaderFooterInput
+    surfaces: [wasm, native]
+  type.theme_script_font_key:
+    kind: typedef
+    js: ThemeScriptFontKey
+    surfaces: [wasm, native]
+  type.pivot_cache_ref:
+    kind: typedef
+    js: PivotCacheRef
+    py: PivotCacheRef
+    surfaces: [wasm, native, py]
+  type.pivot_field_ref:
+    kind: typedef
+    js: PivotFieldRef
+    py: PivotFieldRef
+    surfaces: [wasm, native, py]
+  type.chart_axis_ref:
+    kind: typedef
+    js: ChartAxisRef
+    py: ChartAxisRef
+    surfaces: [wasm, native, py]
+  type.validation_id:
+    kind: typedef
+    js: ValidationId
+    py: ValidationId
+    surfaces: [wasm, native, py]
+  type.validation_ref:
+    kind: typedef
+    js: ValidationRef
+    py: ValidationRef
+    surfaces: [wasm, native, py]
+  type.sparkline_group_id:
+    kind: typedef
+    js: SparklineGroupId
+    py: SparklineGroupId
+    surfaces: [wasm, native, py]
+  type.sparkline_group_ref:
+    kind: typedef
+    js: SparklineGroupRef
+    py: SparklineGroupRef
+    surfaces: [wasm, native, py]
+  record.drawing_patch:
+    kind: record
+    role: patch
+    c: fm_drawing_patch_t
+    js: DrawingPatch
+    surfaces: [c, wasm, native]
+  record.drawing_anchor_patch:
+    kind: record
+    role: patch
+    c: fm_drawing_anchor_patch_t
+    js: DrawingAnchorPatch
+    surfaces: [c, wasm, native]
+  record.shape_spec:
+    kind: record
+    role: input
+    c: fm_shape_spec_t
+    surfaces: [c]
+  record.slicer_spec:
+    kind: record
+    role: input
+    c: fm_slicer_spec_t
+    surfaces: [c]
+  type.chart_axis_key:
+    kind: typedef
+    js: ChartAxisKey
+    py: ChartAxisKey
+    surfaces: [wasm, native, py]
+  record.drawing_anchor_input:
+    kind: record
+    role: input
+    js: DrawingAnchorInput
+    py: DrawingAnchorInput
+    a1_exempt: { fields: [fromRow, fromCol, toRow, toCol], reason: "a two-cell drawing anchor; each cell pairs with an EMU offset" }
+    surfaces: [wasm, native, py]
+  record.effective_borders:
+    kind: record
+    role: result
+    js: EffectiveBorders
+    py: EffectiveBorders
+    surfaces: [wasm, native, py]
+  field.external_link_book_number:
+    kind: field
+    record: record.external_link_record
+    c: book_number
+    js: bookNumber
+    py: book_number
+    surfaces: [c, wasm, native, py]
+    was: { c: index, js: index, py: index }
+  field.chart_series_info_series_id:
+    kind: field
+    record: record.chart_series_info
+    js: seriesId
+    py: series_id
+    surfaces: [wasm, native, py]
+    was: { js: idx, py: idx }
+  field.chart_series_series_id:
+    kind: field
+    record: record.chart_series
+    c: series_id
+    surfaces: [c]
+    was: { c: idx }
+  field.chart_data_series_series_id:
+    kind: field
+    record: record.chart_data_series
+    c: series_id
+    js: seriesId
+    py: series_id
+    surfaces: [c, wasm, native, py]
+    was: { c: idx, js: idx, py: idx }
+  field.chart_unresolved_series_id:
+    kind: field
+    record: record.chart_unresolved
+    c: series_id
+    js: seriesId
+    py: series_id
+    surfaces: [c, wasm, native, py]
+    was: { c: series_idx, js: seriesIdx, py: series_idx }
+  field.chart_categories_number_format:
+    kind: field
+    record: record.chart_categories
+    js: numberFormat
+    py: number_format
+    surfaces: [wasm, native, py]
+    was: { js: formatCode, py: format_code }
+  binding.has_sheet:
+    kind: op
+    scope: workbook
+    js: hasSheet
+    surfaces: [wasm, native]
+    exception: "binding predicate over SheetRef; Python spells it `key in wb` (__contains__)"
+    facade: handwritten
+  binding.raw_sheet_count:
+    kind: op
+    scope: workbook
+    js: getSheetCount
+    surfaces: [wasm, native]
+    internal: true
+    exception: "the raw count behind the facade's sheetCount property"
+  record.cf_color_scale:
+    kind: record
+    role: result
+    js: CfColorScale
+    py: CfColorScale
+    surfaces: [wasm, native, py]
+  record.cf_data_bar:
+    kind: record
+    role: result
+    js: CfDataBar
+    py: CfDataBar
+    surfaces: [wasm, native, py]
+  record.cf_icon_set:
+    kind: record
+    role: result
+    js: CfIconSet
+    py: CfIconSet
+    surfaces: [wasm, native, py]
+  record.cf_color_scale_input:
+    kind: record
+    role: input
+    js: CfColorScaleInput
+    py: CfColorScaleInput
+    surfaces: [wasm, native, py]
+  record.cf_data_bar_input:
+    kind: record
+    role: input
+    js: CfDataBarInput
+    py: CfDataBarInput
+    surfaces: [wasm, native, py]
+  record.cf_icon_set_input:
+    kind: record
+    role: input
+    js: CfIconSetInput
+    py: CfIconSetInput
+    surfaces: [wasm, native, py]
+  record.cf_expression_rule_input:
+    kind: record
+    role: input
+    js: CfExpressionRuleInput
+    py: CfExpressionRuleInput
+    surfaces: [wasm, native, py]
+  record.cf_cell_is_rule_input:
+    kind: record
+    role: input
+    js: CfCellIsRuleInput
+    py: CfCellIsRuleInput
+    surfaces: [wasm, native, py]
+  record.cf_color_scale_rule_input:
+    kind: record
+    role: input
+    js: CfColorScaleRuleInput
+    py: CfColorScaleRuleInput
+    surfaces: [wasm, native, py]
+  record.cf_data_bar_rule_input:
+    kind: record
+    role: input
+    js: CfDataBarRuleInput
+    py: CfDataBarRuleInput
+    surfaces: [wasm, native, py]
+  record.cf_icon_set_rule_input:
+    kind: record
+    role: input
+    js: CfIconSetRuleInput
+    py: CfIconSetRuleInput
+    surfaces: [wasm, native, py]
+  record.cf_top10_rule_input:
+    kind: record
+    role: input
+    js: CfTop10RuleInput
+    py: CfTop10RuleInput
+    surfaces: [wasm, native, py]
+  record.cf_above_average_rule_input:
+    kind: record
+    role: input
+    js: CfAboveAverageRuleInput
+    py: CfAboveAverageRuleInput
+    surfaces: [wasm, native, py]
+  record.cf_text_rule_input:
+    kind: record
+    role: input
+    js: CfTextRuleInput
+    py: CfTextRuleInput
+    surfaces: [wasm, native, py]
+  record.cf_time_period_rule_input:
+    kind: record
+    role: input
+    js: CfTimePeriodRuleInput
+    py: CfTimePeriodRuleInput
+    surfaces: [wasm, native, py]
+  record.cf_plain_rule_input:
+    kind: record
+    role: input
+    js: CfPlainRuleInput
+    py: CfPlainRuleInput
+    surfaces: [wasm, native, py]
+  type.add_sheet_options:
+    kind: typedef
+    js: AddSheetOptions
+    surfaces: [wasm, native]
+  type.copy_sheet_options:
+    kind: typedef
+    js: CopySheetOptions
+    surfaces: [wasm, native]
+  type.bytes_input:
+    kind: typedef
+    js: BytesInput
     surfaces: [wasm, native]

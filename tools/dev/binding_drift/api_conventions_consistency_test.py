@@ -246,6 +246,51 @@ class BindingSurfaceRuleTest(BindingRuleTestBase):
             [("py", "plot.update", "positional:gap_width_pct")],
         )
 
+    def test_r39_an_address_argument_of_the_js_or_c_twin_is_not_a_patch_key(self) -> None:
+        header = (
+            "FM_API fm_status_t fm_sheet_update_series(fm_workbook_t* wb, size_t sheet_index, uint32_t series_id,"
+            " const fm_series_patch_t* patch);\n"
+        )
+        record = "@dataclass(frozen=True)\nclass Series:\n    series_id: int\n    name: str\n\n"
+        py = "class Sheet:\n    def update_series(self, series_id: int, *, name: str = UNCHANGED) -> None: ...\n"
+
+        def ledger(**fields: object) -> dict:
+            op = _op(js="updateSeries", py="update_series", patch=True, patch_record="Series", **fields)
+            return {"entries": {"series.update": op}}
+
+        js = _sheet("  updateSeries(seriesId: number, patch: SeriesPatch): void;\n")
+        # Neither twin declared: `series_id` reads as a key; either twin's address clears it.
+        self.assert_rule(
+            "R39.py.args",
+            self.fixture.context("", ledger(surfaces=["py"]), py_workbook=record, py_sheet=py),
+            self.fixture.context("", ledger(surfaces=["wasm", "py"]), wasm=js, py_workbook=record, py_sheet=py),
+            [("py", "series.update", "positional:series_id")],
+        )
+        with_c = self.fixture.context(
+            header, ledger(c="fm_sheet_update_series", surfaces=["c", "py"]), py_workbook=record, py_sheet=py
+        )
+        self.assertEqual(hits(with_c, "R39.py.args"), [])
+        # R18.all judges the patch keys with the same address.
+        self.assertEqual(hits(with_c, "R18.all"), [])
+        bare = self.fixture.context("", ledger(surfaces=["py"]), py_workbook=record, py_sheet=py)
+        self.assertEqual(hits(bare, "R18.all"), [("py", "series.update", "positional:series_id")])
+
+    def test_r39_a_js_options_typedef_is_spelled_as_python_keywords(self) -> None:
+        js = "export interface AddSheetOptions {\n  insertBefore?: SheetRef;\n}\n" + _wb(
+            "  addSheet(name?: string | null, options?: AddSheetOptions): Sheet;\n"
+        )
+        py = _py_wb("    def add_sheet(self, name: Optional[str] = None, *, insert_before: int = None) -> Sheet: ...\n")
+        add = _op(scope="workbook", js="addSheet", py="add_sheet", surfaces=["wasm", "py"])
+        typedef = {"kind": "typedef", "js": "AddSheetOptions", "surfaces": ["wasm", "native"]}
+        self.assert_rule(
+            "R39.py.args",
+            self.fixture.context("", {"entries": {"sheet.add": add}}, wasm=js, py_workbook=py),
+            self.fixture.context(
+                "", {"entries": {"sheet.add": add, "type.add_sheet_options": typedef}}, wasm=js, py_workbook=py
+            ),
+            [("py", "sheet.add", "input")],
+        )
+
     def test_r41_protection_booleans_name_what_true_allows(self) -> None:
         ledger = {"entries": {"fixture.present": {"kind": "op"}}}
         cell = "export interface CellProtection {\n  readonly locked: boolean;\n  readonly hidden: boolean;\n}\n"

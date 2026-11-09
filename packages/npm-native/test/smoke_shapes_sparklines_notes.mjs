@@ -39,11 +39,7 @@ const box = (mod) => ({
   name: 'Box',
   presetGeometry: 'roundRect',
   text: 'Hello\nWorld',
-  anchorKind: mod.AnchorKind.TwoCell,
-  fromRow: 1,
-  fromCol: 1,
-  toRow: 5,
-  toCol: 4,
+  anchor: { kind: mod.AnchorKind.TwoCell, fromRow: 1, fromCol: 1, toRow: 5, toCol: 4 },
   fillKind: mod.ShapePaint.Solid,
   fillColor: '#FF0000',
   lineKind: mod.ShapePaint.None,
@@ -57,11 +53,13 @@ test('shapes insert, list, update, remove and round-trip', async () => {
   const rect = wb.sheet(0).addShape(box(mod));
   const line = wb.sheet(0).addShape({
     presetGeometry: 'line',
-    anchorKind: mod.AnchorKind.OneCell,
-    fromRow: 10,
-    fromColOffsetEmu: 500,
-    widthEmu: 914400,
-    heightEmu: 0,
+    anchor: {
+      kind: mod.AnchorKind.OneCell,
+      fromRow: 10,
+      fromColOffsetEmu: 500,
+      widthEmu: 914400,
+      heightEmu: 12700,
+    },
     lineKind: mod.ShapePaint.Solid,
     lineColor: '#00FF00',
     lineWidthPt: 1.5,
@@ -71,37 +69,41 @@ test('shapes insert, list, update, remove and round-trip', async () => {
   const loaded = roundTrip(mod, wb);
   const shapes = loaded.sheet(0).listShapes();
   assert.equal(shapes.length, 2);
-  const props = shapes.map((shape) => shape.getProperties());
+  const props = shapes.map((shape) => ({ ...shape.getProperties(), ...shape.getDrawingProperties() }));
   assert.equal(shapes[0].objectId, rect.objectId);
   assert.equal(props[0].kind, mod.DrawingObjectKind.Shape);
   assert.equal(props[0].name, 'Box');
   assert.equal(props[0].presetGeometry, 'roundRect');
   assert.equal(props[0].text, 'Hello\nWorld');
-  assert.equal(props[0].anchorKind, mod.AnchorKind.TwoCell);
-  assert.equal(props[0].toCol, 4);
+  assert.equal(props[0].anchor.kind, mod.AnchorKind.TwoCell);
+  assert.equal(props[0].anchor.toCol, 4);
   assert.equal(props[0].fillKind, mod.ShapePaint.Solid);
   assert.equal(props[0].fillColor.argb, 0xffff0000);
   assert.equal(props[0].lineKind, mod.ShapePaint.None);
   assert.equal(props[0].rotationDeg, 15);
   assert.equal(props[0].hidden, false);
   assert.equal(props[1].kind, mod.DrawingObjectKind.Connector);
-  assert.equal(props[1].anchorKind, mod.AnchorKind.OneCell);
-  assert.equal(props[1].fromColOffsetEmu, 500);
-  assert.equal(props[1].widthEmu, 914400);
+  assert.equal(props[1].anchor.kind, mod.AnchorKind.OneCell);
+  assert.equal(props[1].anchor.fromColOffsetEmu, 500);
+  assert.equal(props[1].anchor.widthEmu, 914400);
   assert.equal(props[1].lineColor.argb, 0xff00ff00);
   assert.equal(props[1].lineWidthPt, 1.5);
+  assert.equal(props[1].fillKind, mod.ShapePaint.Default);
+  assert.equal(props[1].fillColor, null);
 
   // An update changes the named fields only, and an anchor moves with a row insert.
   loaded.sheet(0).shape(rect.objectId).update({ name: 'Renamed', hidden: true, fillKind: mod.ShapePaint.None });
-  loaded.sheet(0).insertRows(0, 3);
-  const moved = loaded.sheet(0).listShapes()[0].getProperties();
+  loaded.sheet(0).insertRows(0, 2);
+  const movedHandle = loaded.sheet(0).listShapes()[0];
+  const moved = { ...movedHandle.getProperties(), ...movedHandle.getDrawingProperties() };
+  assert.equal(movedHandle.name, 'Renamed');
   assert.equal(moved.name, 'Renamed');
   assert.equal(moved.hidden, true);
   assert.equal(moved.fillKind, mod.ShapePaint.None);
   assert.equal(moved.presetGeometry, 'roundRect');
   assert.equal(moved.rotationDeg, 15);
-  assert.equal(moved.fromRow, 4);
-  assert.equal(moved.toRow, 8);
+  assert.equal(moved.anchor.fromRow, 4);
+  assert.equal(moved.anchor.toRow, 8);
 
   loaded.sheet(0).removeDrawing(rect.objectId);
   assert.deepEqual(
@@ -119,15 +121,15 @@ test('shape arguments are validated', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   assert.throws(() => wb.sheet(0).addShape({ presetGeometry: 'rect' }), isFormulonError);
-  assert.throws(() => wb.sheet(0).addShape({ ...box(mod), anchorKind: 9 }), isFormulonError);
+  assert.throws(() => wb.sheet(0).addShape({ ...box(mod), anchor: { ...box(mod).anchor, kind: 9 } }), isFormulonError);
   assert.throws(() => wb.sheet(0).addShape({ ...box(mod), fillKind: mod.ShapePaint.Other }), isFormulonError);
-  assert.throws(() => wb.sheet(0).addShape({ ...box(mod), toRow: 0 }), isFormulonError);
+  assert.throws(() => wb.sheet(0).addShape({ ...box(mod), anchor: { ...box(mod).anchor, toRow: 0 } }), isFormulonError);
   assert.throws(() => wb.sheet(0).addShape({ ...box(mod), presetGeometry: 'a"/>' }), isFormulonError);
   assert.throws(() => wb.sheet(5).addShape(box(mod)), isFormulonError);
   assert.equal(wb.sheet(0).listShapes().length, 0);
   assert.throws(() => wb.sheet(0).shape(99).update({ name: 'x' }), isFormulonError);
   assert.throws(() => wb.sheet(0).removeDrawing(99), isFormulonError);
-  assert.throws(() => wb.sheet(0).addShape({ ...box(mod), fromRow: -1 }), RangeError);
+  assert.throws(() => wb.sheet(0).addShape({ ...box(mod), anchor: { ...box(mod).anchor, fromRow: -1 } }), RangeError);
   release(wb);
 });
 
@@ -187,7 +189,7 @@ test('sparkline groups add, list, update, replace, remove and follow row edits',
   assert.equal(second.type, mod.SparklineType.Line);
   assert.equal(second.lineWeight, 0.75);
 
-  loaded.sheet(0).insertRows(0, 2);
+  loaded.sheet(0).insertRows(0, 1);
   assert.deepEqual(plainOf(loaded.sheet(0).listSparklineGroups()[0].sparklines[1]), {
     source: onSheet1(3, 0, 3, 3),
     location: { row: 3, col: 5 },

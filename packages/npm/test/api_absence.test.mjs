@@ -32,8 +32,8 @@ function pivotOver(ws, wb, f) {
     cache.setRecordValue(record, 1, amount);
   }
   const pivot = ws.addPivot({ name: 'P', cacheId: cache.cacheId, anchor: 'E1' });
-  pivot.addField({ sourceName: 'Region', axis: f.PivotAxis.Row });
-  const amount = pivot.addField({ sourceName: 'Amount', axis: f.PivotAxis.Value });
+  pivot.addField({ fieldIndex: 'Region', axis: f.PivotAxis.Row });
+  const amount = pivot.addField({ fieldIndex: 'Amount', axis: f.PivotAxis.Value });
   pivot.addDataField({ name: 'Sum of Amount', fieldIndex: amount, aggregation: f.PivotAggregation.Sum });
   return { cache, pivot, amount };
 }

@@ -84,7 +84,7 @@ PURE_JS_WORKBOOK_METHODS = {"setValue", "sheet"}
 WORKBOOK_ACCESSORS = {"disposed"}
 
 # Read-only `Workbook` properties the facade builds; no runtime registers them.
-FACADE_WORKBOOK_ACCESSORS = {"ooxml"}
+FACADE_WORKBOOK_ACCESSORS = {"ooxml", "sheetCount"}
 
 # Addon exports that are internal wiring and not part of the `Formulon` interface.
 NODE_ADDON_INTERNAL_EXPORTS = {"__setErrorClass"}

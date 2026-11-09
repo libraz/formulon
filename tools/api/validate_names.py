@@ -101,7 +101,15 @@ COLLECTION_FIELDS = frozenset(
 SPAN_AXES = frozenset({"row", "col"})
 SPAN_FORMS = frozenset({"span", "start_count"})
 # Reference types of the JS surface, by the `ref_args` kind that names them.
-JS_REF_KINDS = {"TableRef": "table", "PivotRef": "pivot", "CfRuleRef": "cfRule", "ProtectedRangeRef": "protectedRange"}
+JS_REF_KINDS = {
+    "TableRef": "table",
+    "PivotRef": "pivot",
+    "CfRuleRef": "cfRule",
+    "ProtectedRangeRef": "protectedRange",
+    "ValidationRef": "validation",
+    "SparklineGroupRef": "sparklineGroup",
+    "PivotCacheRef": "pivotCache",
+}
 ROLES = frozenset({"result", "input", "patch", "both"})
 SCOPED_KINDS = frozenset({"op", "list", "factory", "free"})
 BINDING_SURFACES = frozenset({"wasm", "native", "py"})

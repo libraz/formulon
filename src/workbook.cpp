@@ -35,6 +35,7 @@
 #include "io/future_functions.h"
 #include "io/ooxml/part_graph.h"
 #include "io/ooxml_writer.h"
+#include "io/sparkline_groups.h"
 #include "io/theme_part.h"
 #include "io/workbook_kind_ooxml.h"
 #include "io/xlsb/ptg_writer.h"
@@ -592,6 +593,85 @@ Expected<void, Error> Workbook::restore_range_style(std::size_t sheet_index, con
   }
   std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
   return formulon::restore_range_style(sheets_[sheet_index], bytes, len, styles_.cell_xfs.size());
+}
+
+namespace {
+
+Error sheet_out_of_range(std::size_t sheet, std::size_t count) {
+  return make_error(FormulonErrorCode::kSheetIndexOutOfRange, "sheet index out of range",
+                    "sheet=" + std::to_string(sheet) + " sheet_count=" + std::to_string(count));
+}
+
+// `id`'s value, assigning the next session id first when it has none.
+std::uint32_t assigned(const Workbook& wb, RuntimeId& id) {
+  if (id.value() == 0U) {
+    id.assign(wb.allocate_runtime_id());
+  }
+  return id.value();
+}
+
+}  // namespace
+
+std::uint32_t Workbook::validation_runtime_id(std::size_t sheet, std::size_t index) const {
+  return assigned(*this, sheets_[sheet].validations()[index].runtime_id);
+}
+
+std::optional<std::size_t> Workbook::find_validation(std::size_t sheet, std::uint32_t id) const noexcept {
+  if (sheet >= sheets_.size() || id == 0U) {
+    return std::nullopt;
+  }
+  const std::vector<DataValidation>& validations = sheets_[sheet].validations();
+  for (std::size_t i = 0; i < validations.size(); ++i) {
+    if (validations[i].runtime_id.value() == id) {
+      return i;
+    }
+  }
+  return std::nullopt;
+}
+
+Expected<std::uint32_t, Error> Workbook::add_validation(std::size_t sheet, DataValidation validation) {
+  if (sheet >= sheets_.size()) {
+    return sheet_out_of_range(sheet, sheets_.size());
+  }
+  validation.runtime_id.assign(allocate_runtime_id());
+  std::vector<DataValidation>& validations = sheets_[sheet].mutable_validations();
+  validations.push_back(std::move(validation));
+  return validations.back().runtime_id.value();
+}
+
+Expected<void, Error> Workbook::remove_validation(std::size_t sheet, std::uint32_t id) {
+  if (sheet >= sheets_.size()) {
+    return sheet_out_of_range(sheet, sheets_.size());
+  }
+  const std::optional<std::size_t> index = find_validation(sheet, id);
+  if (!index.has_value()) {
+    return make_error(FormulonErrorCode::kNotFound, "no validation has that id", "id=" + std::to_string(id));
+  }
+  std::vector<DataValidation>& validations = sheets_[sheet].mutable_validations();
+  validations.erase(validations.begin() + static_cast<std::ptrdiff_t>(*index));
+  return Expected<void, Error>::Ok();
+}
+
+std::uint32_t Workbook::sparkline_group_runtime_id(std::size_t sheet, std::size_t index) const {
+  std::vector<RuntimeId>& ids = sheets_[sheet].sparkline_group_ids();
+  if (index >= ids.size()) {
+    ids.resize(index + 1U);
+  }
+  return assigned(*this, ids[index]);
+}
+
+std::optional<std::size_t> Workbook::find_sparkline_group(std::size_t sheet, std::uint32_t id) const {
+  if (sheet >= sheets_.size() || id == 0U) {
+    return std::nullopt;
+  }
+  const std::vector<RuntimeId>& ids = sheets_[sheet].sparkline_group_ids();
+  const std::size_t count = io::read_sparkline_groups(sheets_[sheet].ext_lst_xml()).size();
+  for (std::size_t i = 0; i < ids.size() && i < count; ++i) {
+    if (ids[i].value() == id) {
+      return i;
+    }
+  }
+  return std::nullopt;
 }
 
 }  // namespace formulon

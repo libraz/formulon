@@ -361,3 +361,31 @@ TEST(FormulonCApiNamedStyles, CellStyleXfIndexPastTheEndNamesTheParameter) {
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kIndexOutOfRange));
   EXPECT_NE(std::strstr(fm_get_last_error_context(), "cell_style_xf_index="), nullptr) << fm_get_last_error_context();
 }
+
+TEST(FormulonCApiNamedStyles, NamesCompareWithUnicodeCaseFolding) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  std::size_t font = 0;
+  const uint32_t xf_id = AddBoldDateStyleXf(wb.handle, &font);
+  const fm_cell_style_t record = StyleRecord("\xC3\x84pfel", xf_id, kCustomStyle);  // "Äpfel"
+  ASSERT_EQ(fm_workbook_set_cell_style(wb.handle, &record), 0);
+  std::size_t count_before = 0;
+  ASSERT_EQ(fm_workbook_get_cell_style_count(wb.handle, &count_before), 0);
+
+  int32_t present = 0;
+  fm_cell_style_t read{};
+  ASSERT_EQ(fm_workbook_get_cell_style(wb.handle, "\xC3\xA4pfel", &present, &read), 0);  // "äpfel"
+  EXPECT_EQ(present, 1);
+  EXPECT_STREQ(read.name, "\xC3\x84pfel");
+
+  // Setting under the other case replaces the style instead of adding one.
+  const fm_cell_style_t again = StyleRecord("\xC3\xA4pfel", xf_id, kCustomStyle);
+  ASSERT_EQ(fm_workbook_set_cell_style(wb.handle, &again), 0);
+  std::size_t count_after = 0;
+  ASSERT_EQ(fm_workbook_get_cell_style_count(wb.handle, &count_after), 0);
+  EXPECT_EQ(count_after, count_before);
+
+  ASSERT_EQ(fm_workbook_remove_cell_style(wb.handle, "\xC3\x84PFEL"), 0);
+  ASSERT_EQ(fm_workbook_get_cell_style(wb.handle, "\xC3\xA4pfel", &present, &read), 0);
+  EXPECT_EQ(present, 0);
+}

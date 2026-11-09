@@ -513,6 +513,7 @@ Napi::Object ValidationToJs(Napi::Env env, const fm_data_validation_t& v) {
   for (size_t r = 0; r < v.range_count; ++r) {
     ranges.Set(static_cast<uint32_t>(r), RangeToJs(env, v.ranges[r]));
   }
+  item.Set("id", JsString(env, v.id));
   item.Set("ranges", ranges);
   item.Set("type", Napi::Number::New(env, v.type));
   item.Set("operator", Napi::Number::New(env, v.op));
@@ -523,10 +524,10 @@ Napi::Object ValidationToJs(Napi::Env env, const fm_data_validation_t& v) {
   item.Set("showInCellDropdown", JsTristate(env, v.show_in_cell_dropdown));
   item.Set("formula1", JsStringOrNull(env, v.formula1));
   item.Set("formula2", JsStringOrNull(env, v.formula2));
-  item.Set("errorTitle", JsString(env, v.error_title));
-  item.Set("errorMessage", JsString(env, v.error_message));
-  item.Set("promptTitle", JsString(env, v.prompt_title));
-  item.Set("promptMessage", JsString(env, v.prompt_message));
+  item.Set("errorTitle", JsStringOrNull(env, v.error_title));
+  item.Set("errorMessage", JsStringOrNull(env, v.error_message));
+  item.Set("promptTitle", JsStringOrNull(env, v.prompt_title));
+  item.Set("promptMessage", JsStringOrNull(env, v.prompt_message));
   return item;
 }
 
@@ -605,13 +606,59 @@ Napi::Value Workbook::AddValidation(const Napi::CallbackInfo& info) {
   if (!reader.ok()) {
     return env.Undefined();
   }
-  std::size_t out = 0;
-  fm_status_t rc = fm_sheet_add_validation(handle_, sheet, &dv, &out);
-  return ValueOrThrow(env, rc, Napi::Number::New(env, static_cast<uint32_t>(out)));
+  const char* id = nullptr;
+  fm_status_t rc = fm_sheet_add_validation(handle_, sheet, &dv, &id);
+  return ValueOrThrow(env, rc, JsString(env, id));
+}
+
+// Every member is optional: an omitted key keeps the stored value, and `null` clears a formula or a text.
+Napi::Value Workbook::UpdateValidation(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return ThrowInvalidHandle(env);
+  }
+  const std::string id = ArgString(info, 1);
+  const Napi::Object in = ArgObject(info, 2);
+  CheckedSpecReader reader(env);
+  std::string text[6];
+  std::vector<fm_cell_rect_t> ranges;
+  fm_data_validation_patch_t patch = FM_STRUCT_INIT(fm_data_validation_patch_t);
+  Napi::Array ranges_array;
+  if (reader.Array(in, "ranges", &ranges_array) && ReadCellRects(reader, ranges_array, "ranges", &ranges)) {
+    patch.ranges_op = FM_PATCH_OP_SET;
+    patch.ranges = ranges.data();
+    patch.range_count = static_cast<uint32_t>(ranges.size());
+  }
+  patch.type_op = PatchI32(reader, in, "type", &patch.type);
+  patch.op_op = PatchI32(reader, in, "operator", &patch.op);
+  patch.error_style_op = PatchI32(reader, in, "errorStyle", &patch.error_style);
+  const auto tristate = [&](const char* key, int32_t* out) {
+    int32_t flag = 0;
+    const fm_patch_op_t op = PatchBool(reader, in, key, &flag);
+    *out = flag != 0 ? FM_TRISTATE_TRUE : FM_TRISTATE_FALSE;
+    return op;
+  };
+  patch.allow_blank_op = tristate("allowBlank", &patch.allow_blank);
+  patch.show_input_message_op = tristate("showInputMessage", &patch.show_input_message);
+  patch.show_error_message_op = tristate("showErrorMessage", &patch.show_error_message);
+  patch.show_in_cell_dropdown_op = tristate("showInCellDropdown", &patch.show_in_cell_dropdown);
+  patch.formula1_op = PatchString(reader, in, "formula1", true, &text[0], &patch.formula1);
+  patch.formula2_op = PatchString(reader, in, "formula2", true, &text[1], &patch.formula2);
+  patch.error_title_op = PatchString(reader, in, "errorTitle", true, &text[2], &patch.error_title);
+  patch.error_message_op = PatchString(reader, in, "errorMessage", true, &text[3], &patch.error_message);
+  patch.prompt_title_op = PatchString(reader, in, "promptTitle", true, &text[4], &patch.prompt_title);
+  patch.prompt_message_op = PatchString(reader, in, "promptMessage", true, &text[5], &patch.prompt_message);
+  if (!reader.ok()) {
+    return env.Undefined();
+  }
+  return ValueOrThrow(env, fm_sheet_update_validation(handle_, ArgU32(info, 0), id.c_str(), &patch), env.Undefined());
 }
 
 Napi::Value Workbook::RemoveValidationAt(const Napi::CallbackInfo& info) {
-  return InvokeSheetCall(info, &fm_sheet_remove_validation);
+  return StatusCall(info, [&](fm_workbook_t* handle) {
+    const std::string id = ArgString(info, 1);
+    return fm_sheet_remove_validation(handle, ArgU32(info, 0), id.c_str());
+  });
 }
 
 Napi::Value Workbook::ClearValidations(const Napi::CallbackInfo& info) {
@@ -716,8 +763,9 @@ Napi::Value Workbook::AddThreadedComment(const Napi::CallbackInfo& info) {
   }
   CheckedSpecReader reader(env);
   const Napi::Object spec = ArgObject(info, 1);
-  const std::string id = reader.RequiredString(spec, "id");
+  std::string id;
   std::string person_id;
+  reader.String(spec, "id", &id);
   std::string created;
   std::string parent_id;
   reader.String(spec, "personId", &person_id);
@@ -744,7 +792,9 @@ Napi::Value Workbook::AddThreadedComment(const Napi::CallbackInfo& info) {
   if (!reader.ok()) {
     return env.Undefined();
   }
-  return ValueOrThrow(env, fm_sheet_add_threaded_comment(handle_, ArgU32(info, 0), &c), env.Undefined());
+  const char* new_id = nullptr;
+  const fm_status_t rc = fm_sheet_add_threaded_comment(handle_, ArgU32(info, 0), &c, &new_id);
+  return ValueOrThrow(env, rc, JsString(env, new_id));
 }
 
 Napi::Value Workbook::EditThreadedComment(const Napi::CallbackInfo& info) {

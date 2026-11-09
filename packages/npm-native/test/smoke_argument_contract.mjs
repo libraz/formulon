@@ -234,7 +234,7 @@ test('every method called from the iterative progress callback throws and change
     const attempts = {
       setFormula: () => wb.sheet(1).setFormula(0, 0, '=1'),
       setNumber: () => wb.sheet(1).setNumber(5, 5, 7),
-      deleteRows: () => wb.sheet(1).deleteRows(0, 1),
+      deleteRows: () => wb.sheet(1).deleteRows(0, 0),
       removeSheet: () => wb.removeSheet(1),
       getValue: () => wb.sheet(1).getTypedValue(5, 5),
     };

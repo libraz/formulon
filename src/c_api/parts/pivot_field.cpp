@@ -556,31 +556,33 @@ extern "C" fm_status_t fm_sheet_clear_pivot_field_items(fm_workbook_t* wb, std::
   });
 }
 
-extern "C" fm_status_t fm_sheet_add_pivot_field_subtotal_function(fm_workbook_t* wb, std::size_t sheet_index,
-                                                                  std::size_t pivot_index, std::size_t field_index,
-                                                                  std::int32_t aggregation) {
+extern "C" fm_status_t fm_sheet_set_pivot_field_subtotal_functions(fm_workbook_t* wb, std::size_t sheet_index,
+                                                                   std::size_t pivot_index, std::size_t field_index,
+                                                                   const std::int32_t* aggregations,
+                                                                   std::size_t count) {
   clear_last_error();
-  if (wb == nullptr) {
-    return null_argument("wb");
+  if (wb == nullptr || (aggregations == nullptr && count > 0)) {
+    return null_argument();
   }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
-  fm_status_t enum_status = check_enum_domain(aggregation, 0, FM_PIVOT_AGGREGATION_VARP, "aggregation");
-  if (enum_status != 0) {
-    return enum_status;
+  std::vector<formulon::pivot::SubtotalFn> functions;
+  functions.reserve(count);
+  std::uint32_t seen = 0;
+  for (std::size_t i = 0; i < count; ++i) {
+    if (auto rc = check_enum_domain(aggregations[i], 0, FM_PIVOT_AGGREGATION_VARP, "aggregations"); rc != 0) {
+      return rc;
+    }
+    const std::uint32_t bit = 1U << static_cast<unsigned>(aggregations[i]);
+    if ((seen & bit) != 0U) {
+      return invalid_argument("aggregations lists one function twice", "index=" + std::to_string(i));
+    }
+    seen |= bit;
+    functions.push_back(pivot_subtotal_from_fm(static_cast<fm_pivot_aggregation_t>(aggregations[i])));
   }
-  return mutate_pivot_field(
-      wb, sheet_index, pivot_index, field_index, [aggregation](formulon::pivot::PivotField& field) {
-        field.subtotal_fns.push_back(pivot_subtotal_from_fm(static_cast<fm_pivot_aggregation_t>(aggregation)));
-      });
-}
-
-extern "C" fm_status_t fm_sheet_clear_pivot_field_subtotal_functions(fm_workbook_t* wb, std::size_t sheet_index,
-                                                                     std::size_t pivot_index, std::size_t field_index) {
-  clear_last_error();
   return mutate_pivot_field(wb, sheet_index, pivot_index, field_index,
-                            [](formulon::pivot::PivotField& field) { field.subtotal_fns.clear(); });
+                            [&functions](formulon::pivot::PivotField& field) { field.subtotal_fns = functions; });
 }
 
 extern "C" fm_status_t fm_sheet_set_pivot_field_date_group(fm_workbook_t* wb, std::size_t sheet_index,

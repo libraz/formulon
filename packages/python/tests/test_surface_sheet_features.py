@@ -37,21 +37,21 @@ class SheetStructureTests(unittest.TestCase):
         with Workbook.create_default() as wb:
             wb.sheet(0).set_number(0, 0, 5.0)
             wb.sheet(0).set_formula(0, 1, "=A1*2")
-            self.assertEqual(wb.copy_sheet(0, 1).index, 1)
+            self.assertEqual(wb.copy_sheet(0, insert_before=1).index, 1)
             self.assertEqual(wb.sheet(1).name, "Sheet1 (2)")
-            self.assertEqual(wb.copy_sheet(0, 0, "Archive").index, 0)
+            self.assertEqual(wb.copy_sheet(0, insert_before=0, new_name="Archive").index, 0)
             self.assertEqual(wb.sheet(0).name, "Archive")
             self.assertEqual(len(wb), 3)
             wb.recalc()
             self.assertEqual(wb.sheet(0).get_typed_value(0, 1).number, 10.0)
             with self.assertRaises(FormulonError):
-                wb.copy_sheet(3, 0)
+                wb.copy_sheet(3, insert_before=0)
             with self.assertRaises(FormulonError):
-                wb.copy_sheet(0, 4)
+                wb.copy_sheet(0, insert_before=4)
             with self.assertRaises(FormulonError):
-                wb.copy_sheet(0, 0, "")
+                wb.copy_sheet(0, insert_before=0, new_name="")
             with self.assertRaises(FormulonError):
-                wb.copy_sheet(0, 0, "ARCHIVE")
+                wb.copy_sheet(0, insert_before=0, new_name="ARCHIVE")
             self.assertEqual(len(wb), 3)
 
 
@@ -59,7 +59,7 @@ class MatrixEditTests(unittest.TestCase):
     def test_insert_row_shifts_value_down(self) -> None:
         with Workbook.create_default() as wb:
             wb.sheet(0).set_number(0, 0, 11.0)  # A1
-            wb.sheet(0).insert_rows(0, 1)
+            wb.sheet(0).insert_rows(0, 0)
             wb.recalc()
             # A1 is now blank; the value moved to A2.
             self.assertEqual(wb.sheet(0).get_typed_value(0, 0).kind, ValueKind.BLANK)
@@ -69,7 +69,7 @@ class MatrixEditTests(unittest.TestCase):
         with Workbook.create_default() as wb:
             wb.sheet(0).set_number(0, 0, 1.0)  # A1
             wb.sheet(0).set_number(0, 1, 2.0)  # B1
-            wb.sheet(0).delete_columns(0, 1)
+            wb.sheet(0).delete_columns(0, 0)
             wb.recalc()
             # The old B1 collapses into A1.
             self.assertEqual(formulon.to_native(wb.sheet(0).get_typed_value(0, 0)), 2.0)
@@ -205,35 +205,35 @@ class SheetViewProtectionTests(unittest.TestCase):
         with Workbook.create_default() as wb:
             # A workbook keeps one visible sheet, so sheet 1 stays shown.
             wb.add_sheet("Shown")
-            self.assertEqual(wb.sheet(0).get_view().visibility, SheetVisibility.VISIBLE)
+            self.assertEqual(wb.sheet(0).get_visibility(), SheetVisibility.VISIBLE)
 
-            wb.sheet(0).update_view(visibility=SheetVisibility.VERY_HIDDEN)
-            self.assertEqual(wb.sheet(0).get_view().visibility, SheetVisibility.VERY_HIDDEN)
+            wb.sheet(0).set_visibility(SheetVisibility.VERY_HIDDEN)
+            self.assertEqual(wb.sheet(0).get_visibility(), SheetVisibility.VERY_HIDDEN)
 
-            wb.sheet(0).update_view(visibility=SheetVisibility.HIDDEN)
-            self.assertEqual(wb.sheet(0).get_view().visibility, SheetVisibility.HIDDEN)
+            wb.sheet(0).set_visibility(SheetVisibility.HIDDEN)
+            self.assertEqual(wb.sheet(0).get_visibility(), SheetVisibility.HIDDEN)
 
-            wb.sheet(0).update_view(visibility=SheetVisibility.VISIBLE)
-            self.assertEqual(wb.sheet(0).get_view().visibility, SheetVisibility.VISIBLE)
+            wb.sheet(0).set_visibility(SheetVisibility.VISIBLE)
+            self.assertEqual(wb.sheet(0).get_visibility(), SheetVisibility.VISIBLE)
 
     def test_visibility_rejects_hiding_the_only_visible_sheet(self) -> None:
         with Workbook.create_default() as wb:
             for hide in (
-                lambda: wb.sheet(0).update_view(visibility=SheetVisibility.HIDDEN),
-                lambda: wb.sheet(0).update_view(visibility=SheetVisibility.VERY_HIDDEN),
+                lambda: wb.sheet(0).set_visibility(SheetVisibility.HIDDEN),
+                lambda: wb.sheet(0).set_visibility(SheetVisibility.VERY_HIDDEN),
             ):
                 with self.assertRaises(FormulonError):
                     hide()
-            self.assertEqual(wb.sheet(0).get_view().visibility, SheetVisibility.VISIBLE)
+            self.assertEqual(wb.sheet(0).get_visibility(), SheetVisibility.VISIBLE)
 
     def test_visibility_rejects_unknown_state(self) -> None:
         with Workbook.create_default() as wb:
             wb.add_sheet("Shown")
-            wb.sheet(0).update_view(visibility=SheetVisibility.VERY_HIDDEN)
+            wb.sheet(0).set_visibility(SheetVisibility.VERY_HIDDEN)
             with self.assertRaises(FormulonError):
-                wb.sheet(0).update_view(visibility=3)
+                wb.sheet(0).set_visibility(3)
             # A refused call leaves the sheet as it was.
-            self.assertEqual(wb.sheet(0).get_view().visibility, SheetVisibility.VERY_HIDDEN)
+            self.assertEqual(wb.sheet(0).get_visibility(), SheetVisibility.VERY_HIDDEN)
 
     def test_column_row_overrides(self) -> None:
         with Workbook.create_default() as wb:

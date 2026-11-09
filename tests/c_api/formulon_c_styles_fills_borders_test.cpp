@@ -296,3 +296,48 @@ TEST(FormulonCApiStyles, FontFillAndBorderOrdinalsOutsideTheirEnumerationsAreRej
   EXPECT_EQ(fills_after, fills_before);
   EXPECT_EQ(borders_after, borders_before);
 }
+
+TEST(FormulonCApiStyles, SetFillOverwritesTheSlotInPlace) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  std::size_t index = 0;
+  ASSERT_EQ(fm_workbook_add_fill(wb.handle, record_arg(MakeRedFill()), &index), 0);
+  std::size_t count_before = 0;
+  ASSERT_EQ(fm_workbook_get_fill_count(wb.handle, &count_before), 0);
+
+  fm_fill_t blue = MakeRedFill();
+  blue.foreground = RgbColor(0xFF0000FFU);
+  ASSERT_EQ(fm_workbook_set_fill(wb.handle, index, &blue), 0) << fm_get_last_error_message();
+
+  fm_fill_t read{};
+  ASSERT_EQ(fm_workbook_get_fill_at(wb.handle, index, &read), 0);
+  EXPECT_EQ(read.foreground.argb, 0xFF0000FFU);
+  std::size_t count_after = 0;
+  ASSERT_EQ(fm_workbook_get_fill_count(wb.handle, &count_after), 0);
+  EXPECT_EQ(count_after, count_before);
+
+  EXPECT_EQ(fm_workbook_set_fill(wb.handle, count_after, &blue), FM_STATUS_INDEX_OUT_OF_RANGE);
+}
+
+TEST(FormulonCApiStyles, SetBorderOverwritesTheSlotInPlace) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  std::size_t index = 0;
+  ASSERT_EQ(fm_workbook_add_border(wb.handle, record_arg(MakeThinBoxBorder()), &index), 0);
+  std::size_t count_before = 0;
+  ASSERT_EQ(fm_workbook_get_border_count(wb.handle, &count_before), 0);
+
+  fm_border_t read{};
+  ASSERT_EQ(fm_workbook_get_border_at(wb.handle, index, &read), 0);
+  read.left.color = RgbColor(0xFF112233U);
+  ASSERT_EQ(fm_workbook_set_border(wb.handle, index, &read), 0) << fm_get_last_error_message();
+
+  fm_border_t after{};
+  ASSERT_EQ(fm_workbook_get_border_at(wb.handle, index, &after), 0);
+  EXPECT_EQ(after.left.color.argb, 0xFF112233U);
+  std::size_t count_after = 0;
+  ASSERT_EQ(fm_workbook_get_border_count(wb.handle, &count_after), 0);
+  EXPECT_EQ(count_after, count_before);
+
+  EXPECT_EQ(fm_workbook_set_border(wb.handle, count_after, &read), FM_STATUS_INDEX_OUT_OF_RANGE);
+}

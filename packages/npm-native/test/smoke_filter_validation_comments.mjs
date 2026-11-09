@@ -163,10 +163,10 @@ test('validateValue and listInvalidCells follow the rule covering a cell', async
   const wb = mod.Workbook.createDefault();
   try {
     const free = wb.sheet(0).validateValue(0, 1, { kind: mod.ValueKind.Number, number: 99 });
-    assert.equal(free.ruleIndex, null);
+    assert.equal(free.ruleId, null);
     assert.equal(free.valid, true);
 
-    wb.sheet(0).addValidation({
+    const ruleId = wb.sheet(0).addValidation({
       ranges: [{ firstRow: 0, lastRow: 3, firstCol: 1, lastCol: 1 }],
       type: 1,
       operator: 0,
@@ -177,12 +177,12 @@ test('validateValue and listInvalidCells follow the rule covering a cell', async
     });
     const ok = wb.sheet(0).validateValue(0, 1, { kind: mod.ValueKind.Number, number: 5 });
     assert.deepEqual(
-      { valid: ok.valid, ruleIndex: ok.ruleIndex, errorStyle: ok.errorStyle },
-      { valid: true, ruleIndex: 0, errorStyle: mod.ValidationErrorStyle.Warning },
+      { valid: ok.valid, ruleId: ok.ruleId, errorStyle: ok.errorStyle },
+      { valid: true, ruleId, errorStyle: mod.ValidationErrorStyle.Warning },
     );
     const bad = wb.sheet(0).validateValue(0, 1, { kind: mod.ValueKind.Number, number: 50 });
     assert.equal(bad.valid, false);
-    assert.equal(bad.ruleIndex, 0);
+    assert.equal(bad.ruleId, ruleId);
     const text = wb.sheet(0).validateValue(0, 1, { kind: mod.ValueKind.Text, text: '5' });
     assert.equal(text.valid, false, 'text "5" is text, not a number');
     assert.throws(() => wb.sheet(99).validateValue(0, 0, { kind: mod.ValueKind.Number, number: 1 }), isFormulonError);
@@ -287,7 +287,7 @@ test('threaded comments cover a thread, a reply with a mention, resolution and r
     );
     assert.throws(
       () => wb.sheet(0).updateThreadedComment(REPLY, { done: true }),
-      (e) => isFormulonError(e, 9006),
+      (e) => isFormulonError(e, 2),
       'a reply is not a thread',
     );
     assert.throws(() => wb.sheet(0).updateThreadedComment(THREAD, { done: null }), TypeError);

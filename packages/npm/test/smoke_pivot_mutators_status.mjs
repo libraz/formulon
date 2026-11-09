@@ -43,14 +43,14 @@ function buildPivot(mod) {
   }
   const pivot = wb.sheet(0).addPivot({ name: 'Pivot1', cacheId: cacheId, anchor: { row: 0, col: 6 } });
   const addField = (spec) => wb.sheet(0).pivot(pivot).addField(spec);
-  const region = addField({ sourceName: 'Region', axis: 0 });
+  const region = addField({ fieldIndex: 'Region', axis: 0 });
   wb.sheet(0).pivot(pivot).addFieldItem(region, 'East', { visible: true });
   wb.sheet(0).pivot(pivot).addFieldItem(region, 'West', { visible: true });
-  const product = addField({ sourceName: 'Product', axis: 2 });
+  const product = addField({ fieldIndex: 'Product', axis: 2 });
   wb.sheet(0).pivot(pivot).addFieldItem(product, 'Apple', { visible: true });
   wb.sheet(0).pivot(pivot).addFieldItem(product, 'Pear', { visible: true });
-  const amount = addField({ sourceName: 'Amount', axis: 2 });
-  const date = addField({ sourceName: 'Date', axis: 2 });
+  const amount = addField({ fieldIndex: 'Amount', axis: 2 });
+  const date = addField({ fieldIndex: 'Date', axis: 2 });
   wb.sheet(0).pivot(pivot).setRowFieldOrder([region]);
   wb.sheet(0).pivot(pivot).addDataField({ name: 'Sum of Amount', fieldIndex: amount, aggregation: 0 });
   return { mod, wb, cacheId, pivot, region, product, amount, date };
@@ -95,10 +95,9 @@ const twoLevels = (b) => b.wb.sheet(0).pivot(b.pivot).setRowFieldOrder([b.region
 const dateRows = (b) => b.wb.sheet(0).pivot(b.pivot).setRowFieldOrder([b.date]);
 const hideEast = (b) => b.wb.sheet(0).pivot(b.pivot).updateFieldItem(b.region, 0, { visible: false });
 const WEST_ONLY = ['行ラベル|Sum of Amount', 'West|37', '総計|37'];
-const GREATER_THAN_20 = Object.freeze({ axis: 0, fieldName: 'Region', type: 1, value: 20 });
+const GREATER_THAN_20 = Object.freeze({ fieldIndex: 'Region', type: 1, value: 20 });
 const BETWEEN_10_20 = Object.freeze({
-  axis: 0,
-  fieldName: 'Region',
+  fieldIndex: 'Region',
   type: 2,
   value: 10,
   valueHigh: 20,
@@ -421,7 +420,7 @@ const PIVOT_MUTATORS = [
   [
     'Pivot.addField',
     {
-      act: (b) => b.wb.sheet(0).pivot(b.pivot).addField({ sourceName: 'Product', customName: 'Fruit', axis: 3 }),
+      act: (b) => b.wb.sheet(0).pivot(b.pivot).addField({ fieldIndex: 'Product', customName: 'Fruit', axis: 3 }),
       expect: (b, r) => {
         // Product is a cache column the fixture already added, so it is updated in place.
         assert.equal(r, b.product);
@@ -726,10 +725,10 @@ const PIVOT_MUTATORS = [
     },
   ],
   [
-    'Pivot.addFieldSubtotalFunction',
+    'Pivot.setFieldSubtotalFunctions',
     {
       setup: twoLevels,
-      act: (b) => b.wb.sheet(0).pivot(b.pivot).addFieldSubtotalFunction(b.region, 3),
+      act: (b) => b.wb.sheet(0).pivot(b.pivot).setFieldSubtotalFunctions(b.region, [3]),
       expect: (b) =>
         assert.deepEqual(pivotGrid(b.wb), [
           '行ラベル|Sum of Amount',
@@ -744,13 +743,13 @@ const PIVOT_MUTATORS = [
     },
   ],
   [
-    'Pivot.clearFieldSubtotalFunctions',
+    'Pivot.setFieldSubtotalFunctions',
     {
       setup: (b) => {
         twoLevels(b);
-        b.wb.sheet(0).pivot(b.pivot).addFieldSubtotalFunction(b.region, 3);
+        b.wb.sheet(0).pivot(b.pivot).setFieldSubtotalFunctions(b.region, [3]);
       },
-      act: (b) => b.wb.sheet(0).pivot(b.pivot).clearFieldSubtotalFunctions(b.region),
+      act: (b) => b.wb.sheet(0).pivot(b.pivot).setFieldSubtotalFunctions(b.region, []),
       expect: (b) => assert.deepEqual(pivotGrid(b.wb), TWO_LEVEL_GRID),
     },
   ],
@@ -1021,8 +1020,7 @@ test('pivot filters and subtotal functions survive save and reload', async () =>
   const b = buildPivot(mod);
   try {
     b.wb.sheet(0).pivot(b.pivot).addFilter(GREATER_THAN_20);
-    b.wb.sheet(0).pivot(b.pivot).addFieldSubtotalFunction(b.region, 2);
-    b.wb.sheet(0).pivot(b.pivot).addFieldSubtotalFunction(b.region, 0);
+    b.wb.sheet(0).pivot(b.pivot).setFieldSubtotalFunctions(b.region, [2, 0]);
     const region = b.wb.sheet(0).pivot(b.pivot).listFields()[b.region];
     assert.equal(region.defaultSubtotal, false);
     assert.deepEqual(region.subtotalFunctions, [0, 2]);
@@ -1040,7 +1038,7 @@ test('pivot filters and subtotal functions survive save and reload', async () =>
       assert.equal(back.sheet(0).pivot(0).listFilters().length, 1);
       const filter = back.sheet(0).pivot(0).listFilters()[0];
       assert.equal(filter.type, 1);
-      assert.equal(filter.fieldName, 'Region');
+      assert.equal(filter.fieldIndex, 0);
       assert.equal(filter.value, 20);
       assert.deepEqual(pivotGrid(back), WEST_ONLY);
       const field = back.sheet(0).pivot(0).listFields()[0];
@@ -1595,8 +1593,7 @@ test('pivot filters take the full type range and an upper text bound', async () 
   try {
     const { wb, pivot } = b;
     const between = {
-      axis: 0,
-      fieldName: 'Region',
+      fieldIndex: 'Region',
       type: PivotFilterKind.LabelBetween,
       value: 'A',
       valueHigh: 'F',
@@ -1622,8 +1619,7 @@ test('pivot filters take the full type range and an upper text bound', async () 
 
     wb.sheet(0).pivot(pivot).clearFilters();
     wb.sheet(0).pivot(pivot).addFilter({
-      axis: 0,
-      fieldName: 'Region',
+      fieldIndex: 'Region',
       type: PivotFilterKind.ValueEqual,
       value: 15,
     });

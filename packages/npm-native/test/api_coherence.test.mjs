@@ -83,15 +83,11 @@ function addSalesTable(ws, name = 'Sales', lastRow = 2) {
   });
 }
 
-function addBox(f, ws, name, extra = {}) {
+function addBox(f, ws, name, { anchor, ...extra } = {}) {
   return ws.addShape({
     name,
     presetGeometry: 'rect',
-    anchorKind: f.AnchorKind.TwoCell,
-    fromRow: 1,
-    fromCol: 1,
-    toRow: 5,
-    toCol: 4,
+    anchor: { kind: f.AnchorKind.TwoCell, fromRow: 1, fromCol: 1, toRow: 5, toCol: 4, ...anchor },
     fillKind: f.ShapePaint.Solid,
     fillColor: '#FF0000',
     lineKind: f.ShapePaint.Solid,
@@ -103,7 +99,7 @@ function addBox(f, ws, name, extra = {}) {
 const SLICER_ANCHOR = { fromRow: 4, fromCol: 3, toRow: 14, toCol: 5 };
 
 function addSlicerOf(wb, ws) {
-  return ws.addSlicer('Sales', 0, { ...SLICER_ANCHOR, caption: 'Pick', style: 'SlicerStyleLight3' });
+  return ws.addSlicer('Sales', 0, { anchor: SLICER_ANCHOR, caption: 'Pick', style: 'SlicerStyleLight3' });
 }
 
 function sparklineGroup(f) {
@@ -153,7 +149,7 @@ function addPivotOver(wb, f) {
   cache.addFieldSharedItem(0, 'East');
   cache.addFieldSharedItem(0, 'West');
   const pivot = ws.addPivot({ name: 'P1', cacheId: cache.cacheId, anchor: { row: 0, col: 4 } });
-  pivot.addField({ sourceName: 'Region', axis: f.PivotAxis.Row });
+  pivot.addField({ fieldIndex: 'Region', axis: f.PivotAxis.Row });
   return { cache, pivot, ws };
 }
 
@@ -161,26 +157,25 @@ function addPivotOver(wb, f) {
 //
 // Parameter model (pairwise, strength 2, generated with coverwise pairwise_generate, seed 7):
 //   method   : updateCellFormat | Shape.update | Slicer.update | Table.update | Table.updateStyleOptions | updateSparklineGroup | updateProtectedRange
-//   keyKind  : unknown | recordOnly | nullable | nonNullable | anchorNoTrigger
+//   keyKind  : unknown | recordOnly | nullable | nonNullable | flatAnchor (an anchor key outside `anchor`)
 //   depth    : top | nested
 //   valueKind: valid | null
 // Constraints:
-//   anchorNoTrigger -> method in {Shape.update, Slicer.update}, valueKind = valid
+//   flatAnchor      -> method in {Shape.update, Slicer.update}, valueKind = valid
 //   recordOnly      -> method in {Shape.update, Slicer.update, Table.update}, valueKind = valid
-//   nullable        -> method in {Shape.update, Slicer.update, Table.updateStyleOptions, updateSparklineGroup, updateCellFormat}, valueKind = null
+//   nullable        -> method in {Slicer.update, Table.updateStyleOptions, updateSparklineGroup, updateCellFormat}, valueKind = null
 //   updateCellFormat & nullable -> depth = nested
 //   depth = nested  -> method = updateCellFormat and keyKind in {unknown, nullable, nonNullable}
 //   unknown -> valid; nonNullable -> null
-// The 23 rows below are the generated suite; the expectation of a row follows from keyKind alone:
-//   unknown / nonNullable / anchorNoTrigger -> TypeError and nothing changed;
+// The 22 rows below are the generated suite; the expectation of a row follows from keyKind alone:
+//   unknown / nonNullable / flatAnchor -> TypeError and nothing changed;
 //   recordOnly -> accepted and nothing changed; nullable -> accepted and the key is cleared.
 const PATCH_ROWS = [
   ['Shape.update', 'recordOnly', 'top', 'valid'],
   ['updateCellFormat', 'unknown', 'nested', 'valid'],
-  ['Slicer.update', 'anchorNoTrigger', 'top', 'valid'],
-  ['Shape.update', 'nullable', 'top', 'null'],
+  ['Slicer.update', 'flatAnchor', 'top', 'valid'],
   ['updateSparklineGroup', 'nullable', 'top', 'null'],
-  ['Shape.update', 'anchorNoTrigger', 'top', 'valid'],
+  ['Shape.update', 'flatAnchor', 'top', 'valid'],
   ['Table.update', 'unknown', 'top', 'valid'],
   ['updateProtectedRange', 'unknown', 'top', 'valid'],
   ['updateCellFormat', 'nonNullable', 'top', 'null'],
@@ -225,16 +220,11 @@ const SUBJECTS = {
     read: (t) => plain(t.getProperties()),
     unknown: { top: { bogus: 1 } },
     recordOnly: { top: { objectId: 9999, kind: 12345 } },
-    nullable: { top: { fillKind: null, lineKind: null, fillColor: null, lineColor: null } },
-    cleared: (state) => {
-      assert.equal(state.fillKind, null);
-      assert.equal(state.fillColor, null);
-      assert.equal(state.lineKind, null);
-      assert.equal(state.lineColor, null);
+    nonNullable: {
+      top: [{ name: null }, { fillKind: null }, { lineKind: null }, { fillColor: null }, { lineColor: null }],
     },
-    nonNullable: { top: { name: null } },
-    anchorNoTrigger: [
-      { editAs: 1 },
+    flatAnchor: [
+      { editAs: 2 },
       { fromRow: 3 },
       { fromCol: 3 },
       { toRow: 6 },
@@ -253,12 +243,12 @@ const SUBJECTS = {
     read: (t) => plain(t.getProperties()),
     unknown: { top: { bogus: 1 } },
     recordOnly: {
-      top: { name: 'Other', objectId: 777, cacheName: 'x', tableName: 'x', columnName: 'x', anchorKind: 0 },
+      top: { objectId: 777, cacheName: 'x', tableName: 'x', columnName: 'x' },
     },
     nullable: { top: { style: null } },
     cleared: (state) => assert.equal(state.style, null),
     nonNullable: { top: { caption: null } },
-    anchorNoTrigger: [{ toRow: 20 }, { toCol: 9 }, { toRowOffsetEmu: 5 }, { fromColOffsetEmu: 5 }],
+    flatAnchor: [{ toRow: 20 }, { toCol: 9 }, { toRowOffsetEmu: 5 }, { fromColOffsetEmu: 5 }],
   },
   'Table.update': {
     setup(f, wb) {
@@ -319,7 +309,7 @@ for (const [method, keyKind, depth, valueKind] of PATCH_ROWS) {
         switch (keyKind) {
           case 'unknown':
           case 'nonNullable':
-          case 'anchorNoTrigger':
+          case 'flatAnchor':
             assertMisuse(() => subject.apply(target, patch), TypeError, label);
             assert.deepEqual(subject.read(target), before, `${label} left the state unchanged`);
             break;
@@ -372,20 +362,31 @@ test('patch: an unknown key is a TypeError on every other patch entry point', as
   });
 });
 
-test('patch: Shape.update clears fill and line kind and colour on null and rejects null elsewhere', async () => {
+test('patch: Shape.update removes its own fill and line on Default and rejects null on every key', async () => {
   await withWorkbook((wb, f) => {
     const shape = addBox(f, wb.sheet(0), 'S1');
-    shape.update({ fillKind: null, lineKind: null, fillColor: null, lineColor: null, name: 'Renamed' });
+    shape.update({ fillKind: f.ShapePaint.Default, lineKind: f.ShapePaint.Default, name: 'Renamed' });
     const props = shape.getProperties();
-    assert.equal(props.name, 'Renamed');
-    assert.equal(props.fillKind, null);
+    assert.equal(shape.getDrawingProperties().name, 'Renamed');
+    assert.equal(shape.name, 'Renamed');
+    assert.equal(props.fillKind, f.ShapePaint.Default);
     assert.equal(props.fillColor, null);
-    assert.equal(props.lineKind, null);
+    assert.equal(props.lineKind, f.ShapePaint.Default);
     assert.equal(props.lineColor, null);
-    for (const key of ['presetGeometry', 'text', 'hidden', 'rotationDeg', 'anchorKind']) {
+    for (const key of [
+      'presetGeometry',
+      'text',
+      'hidden',
+      'rotationDeg',
+      'fillKind',
+      'lineKind',
+      'fillColor',
+      'lineColor',
+      'name',
+    ]) {
       assertMisuse(() => shape.update({ [key]: null }), TypeError, key);
     }
-    assert.equal(shape.getProperties().name, 'Renamed');
+    assert.equal(shape.name, 'Renamed');
   });
 });
 
@@ -394,39 +395,59 @@ test('patch: Shape.update and Slicer.update accept the getter record back and ke
     const ws = wb.sheet(0);
     const shape = addBox(f, ws, 'S1');
     const shapeBefore = plain(shape.getProperties());
-    assert.doesNotThrow(() => shape.update(shape.getProperties()));
+    const shapeCommonBefore = plain(shape.getDrawingProperties());
+    const { anchor: _shapeAnchor, ...shapeCommon } = shape.getDrawingProperties();
+    void _shapeAnchor;
+    assert.doesNotThrow(() => shape.update({ ...shape.getProperties(), ...shapeCommon }));
     assert.deepEqual(plain(shape.getProperties()), shapeBefore);
+    assert.deepEqual(plain(shape.getDrawingProperties()), shapeCommonBefore);
 
     addSalesTable(ws);
     const slicer = addSlicerOf(wb, ws);
     const slicerBefore = plain(slicer.getProperties());
-    assert.doesNotThrow(() => slicer.update(slicer.getProperties()));
+    const slicerCommonBefore = plain(slicer.getDrawingProperties());
+    // A slicer's name cannot be set and the read anchor carries both a box and a size, so both stay out.
+    const { name: _name, anchor: _slicerAnchor, ...slicerCommon } = slicer.getDrawingProperties();
+    void _name;
+    void _slicerAnchor;
+    assert.doesNotThrow(() => slicer.update({ ...slicer.getProperties(), ...slicerCommon }));
     assert.deepEqual(plain(slicer.getProperties()), slicerBefore);
+    assert.deepEqual(plain(slicer.getDrawingProperties()), slicerCommonBefore);
   });
 });
 
-test('patch: anchor keys are accepted with their trigger key', async () => {
+test('patch: an anchor patch merges per key and an omitted kind keeps the object kind', async () => {
   await withWorkbook((wb, f) => {
     const ws = wb.sheet(0);
     const shape = addBox(f, ws, 'S1');
-    shape.update({ anchorKind: f.AnchorKind.TwoCell, fromRow: 2, fromCol: 2, toRow: 8, toCol: 6 });
-    const moved = shape.getProperties();
+    shape.update({ anchor: { toCol: 6 } });
+    let moved = shape.getDrawingProperties().anchor;
+    assert.equal(moved.kind, f.AnchorKind.TwoCell);
+    assert.deepEqual([moved.fromRow, moved.fromCol, moved.toRow, moved.toCol], [1, 1, 5, 6]);
+    shape.update({ anchor: { fromRow: 2, fromCol: 2, toRow: 8 } });
+    moved = shape.getDrawingProperties().anchor;
     assert.deepEqual([moved.fromRow, moved.fromCol, moved.toRow, moved.toCol], [2, 2, 8, 6]);
-    // An update cannot change the anchor kind; a one-cell anchor takes its size from the patch.
-    const oneCell = addBox(f, ws, 'S2', { anchorKind: f.AnchorKind.OneCell, widthEmu: 100, heightEmu: 100 });
-    oneCell.update({ anchorKind: f.AnchorKind.OneCell, fromRow: 3, widthEmu: 914400, heightEmu: 457200 });
-    assert.equal(oneCell.getProperties().widthEmu, 914400);
-    assert.equal(oneCell.getProperties().fromRow, 3);
-    assert.equal(oneCell.getProperties().anchorKind, f.AnchorKind.OneCell);
+
+    // A one-cell object takes size keys; a `to*` key on it is refused.
+    const oneCell = addBox(f, ws, 'S2', {
+      anchor: { kind: f.AnchorKind.OneCell, toRow: 0, toCol: 0, widthEmu: 100, heightEmu: 100 },
+    });
+    oneCell.update({ anchor: { fromRow: 3, widthEmu: 914400, heightEmu: 457200 } });
+    const resized = oneCell.getDrawingProperties().anchor;
+    assert.equal(resized.widthEmu, 914400);
+    assert.equal(resized.fromRow, 3);
+    assert.equal(resized.kind, f.AnchorKind.OneCell);
+    assertFormulonError(() => oneCell.update({ anchor: { toRow: 9 } }), f.StatusCode.InvalidArgument);
+    assert.equal(oneCell.getDrawingProperties().anchor.fromRow, 3);
 
     addSalesTable(ws);
     const slicer = addSlicerOf(wb, ws);
-    slicer.update({ fromRow: 6, fromCol: 3, toRow: 20, toCol: 6 });
-    const s = slicer.getProperties();
+    slicer.update({ anchor: { fromRow: 6, fromCol: 3, toRow: 20, toCol: 6 } });
+    const s = slicer.getDrawingProperties().anchor;
     assert.deepEqual([s.fromRow, s.fromCol, s.toRow, s.toCol], [6, 3, 20, 6]);
     // A patch without anchor keys keeps the anchor.
     slicer.update({ caption: 'Renamed' });
-    assert.equal(slicer.getProperties().fromRow, 6);
+    assert.equal(slicer.getDrawingProperties().anchor.fromRow, 6);
     assert.equal(slicer.getProperties().caption, 'Renamed');
   });
 });
@@ -787,8 +808,8 @@ test('Shape.rename, setZOrder and snapshot work and Sheet.restoreDrawing brings 
   await withWorkbook((wb, f) => {
     const ws = wb.sheet(0);
     const a = addBox(f, ws, 'A');
-    const b = addBox(f, ws, 'B', { fromRow: 7, toRow: 9 });
-    const c = addBox(f, ws, 'C', { fromRow: 11, toRow: 13 });
+    const b = addBox(f, ws, 'B', { anchor: { fromRow: 7, toRow: 9 } });
+    const c = addBox(f, ws, 'C', { anchor: { fromRow: 11, toRow: 13 } });
     assert.deepEqual(orderOf(ws), [a.objectId, b.objectId, c.objectId]);
 
     c.setZOrder(0);
@@ -800,10 +821,11 @@ test('Shape.rename, setZOrder and snapshot work and Sheet.restoreDrawing brings 
     assertFormulonError(() => a.setZOrder(3), f.StatusCode.IndexOutOfRange);
     assert.deepEqual(orderOf(ws), [c.objectId, b.objectId, a.objectId]);
 
-    b.rename('Renamed');
-    assert.equal(b.getProperties().name, 'Renamed');
-    assert.equal(ws.shape(b.objectId).getProperties().name, 'Renamed');
-    assertMisuse(() => b.rename(5), TypeError, 'non-string name');
+    b.update({ name: 'Renamed' });
+    assert.equal(b.getDrawingProperties().name, 'Renamed');
+    assert.equal(ws.shape(b.objectId).name, 'Renamed');
+    assertMisuse(() => b.update({ name: 5 }), TypeError, 'non-string name');
+    assert.equal(typeof b.rename, 'undefined');
 
     const bytes = b.snapshot();
     assert.ok(bytes instanceof Uint8Array);
@@ -814,8 +836,8 @@ test('Shape.rename, setZOrder and snapshot work and Sheet.restoreDrawing brings 
     const restored = ws.restoreDrawing(bytes);
     assert.equal(restored, b, 'restoring under the old id revives the handle');
     assert.equal(restored.objectId, id);
-    assert.equal(b.getProperties().name, 'Renamed');
-    assert.equal(b.getProperties().fromRow, 7);
+    assert.equal(b.name, 'Renamed');
+    assert.equal(b.getDrawingProperties().anchor.fromRow, 7);
     assert.equal(orderOf(ws).length, 3);
   });
 });
@@ -824,11 +846,11 @@ test('Shape rename and z-order survive save and load', async () => {
   await withWorkbook(async (wb, f) => {
     const ws = wb.sheet(0);
     const a = addBox(f, ws, 'A');
-    const b = addBox(f, ws, 'B', { fromRow: 7, toRow: 9 });
-    const c = addBox(f, ws, 'C', { fromRow: 11, toRow: 13 });
+    const b = addBox(f, ws, 'B', { anchor: { fromRow: 7, toRow: 9 } });
+    const c = addBox(f, ws, 'C', { anchor: { fromRow: 11, toRow: 13 } });
     c.setZOrder(0);
-    a.rename('First');
-    const namesInOrder = (sheet) => orderOf(sheet).map((id) => sheet.shape(id).getProperties().name);
+    a.update({ name: 'First' });
+    const namesInOrder = (sheet) => orderOf(sheet).map((id) => sheet.shape(id).name);
     const expected = namesInOrder(ws);
     assert.deepEqual(expected, ['C', 'First', 'B']);
     void b;
@@ -853,11 +875,11 @@ test('Sheet.restoreDrawing puts a snapshot of a shape back after the sheet was s
     try {
       assert.equal(loaded.sheet(0).listShapes().length, 0);
       const back = loaded.sheet(0).restoreDrawing(bytes);
-      assert.equal(back.getProperties().name, 'Keep');
+      assert.equal(back.name, 'Keep');
       assert.equal(back.getProperties().text, 'Hello');
       const again = f.Workbook.load(loaded.save());
       try {
-        assert.equal(again.sheet(0).listShapes()[0].getProperties().name, 'Keep');
+        assert.equal(again.sheet(0).listShapes()[0].name, 'Keep');
       } finally {
         again.dispose();
       }

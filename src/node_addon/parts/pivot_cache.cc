@@ -249,6 +249,18 @@ Napi::Value Workbook::PivotCacheRecordClear(const Napi::CallbackInfo& info) {
   return InvokeSheetCall(info, &fm_workbook_clear_pivot_cache_records);
 }
 
+Napi::Value Workbook::PivotCacheRecordGetValue(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return ThrowInvalidHandle(env);
+  }
+  const CacheRecordArgs record = ReadCacheRecord(info);
+  fm_value_t value{};
+  const fm_status_t rc = fm_workbook_get_pivot_cache_record_value(handle_, record.cache_id, record.record_index,
+                                                                  record.field_index, &value);
+  return ValueOrThrow(env, rc, rc == 0 ? ValueToJs(env, value) : env.Undefined());
+}
+
 Napi::Value Workbook::PivotCacheRecordSetNumber(const Napi::CallbackInfo& info) {
   return InvokeSheetCall(info, &fm_workbook_set_pivot_cache_record_number);
 }

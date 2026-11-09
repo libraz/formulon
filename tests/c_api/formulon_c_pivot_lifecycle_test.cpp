@@ -138,13 +138,7 @@ TEST(FormulonCApiPivot, NullPointerArgumentsRejected) {
   EXPECT_EQ(fm_sheet_add_pivot_field(wb.handle, 0, 0, nullptr, &pivot_index),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
 
-  fm_pivot_filter_t bad_filter = FM_STRUCT_INIT(fm_pivot_filter_t);
-  bad_filter.field_name = nullptr;
-  bad_filter.type = FM_PIVOT_FILTER_KIND_LABEL_CONTAINS;
-  bad_filter.value_kind = FM_PIVOT_FILTER_OPERAND_KIND_TEXT;
-  bad_filter.value_text = "X";
-  bad_filter.value_high_kind = FM_PIVOT_FILTER_OPERAND_KIND_ABSENT;
-  EXPECT_EQ(fm_sheet_add_pivot_filter(wb.handle, 0, 0, &bad_filter, ignored_index()),
+  EXPECT_EQ(fm_sheet_add_pivot_filter(wb.handle, 0, 0, nullptr, ignored_index()),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
 }
 
@@ -299,8 +293,9 @@ TEST(FormulonCApiPivot, MutationAndClearExportsCompleteTheirLifecycles) {
   ASSERT_EQ(SetPivotFieldSubtotalTop(wb.handle, 0, pivot_index, 0, 1), 0);
   ASSERT_EQ(SetPivotFieldItemVisible(wb.handle, 0, pivot_index, 0, 0, 0), 0);
   ASSERT_EQ(fm_sheet_clear_pivot_field_items(wb.handle, 0, pivot_index, 0), 0);
-  ASSERT_EQ(fm_sheet_add_pivot_field_subtotal_function(wb.handle, 0, pivot_index, 0, FM_PIVOT_AGGREGATION_COUNT), 0);
-  ASSERT_EQ(fm_sheet_clear_pivot_field_subtotal_functions(wb.handle, 0, pivot_index, 0), 0);
+  const std::int32_t count_only[] = {FM_PIVOT_AGGREGATION_COUNT};
+  ASSERT_EQ(fm_sheet_set_pivot_field_subtotal_functions(wb.handle, 0, pivot_index, 0, count_only, 1), 0);
+  ASSERT_EQ(fm_sheet_set_pivot_field_subtotal_functions(wb.handle, 0, pivot_index, 0, nullptr, 0), 0);
   // Region holds text: grouping it by date is refused, and clearing a
   // grouping it does not have changes nothing.
   ASSERT_EQ(SetPivotFieldDateGroup(wb.handle, 0, pivot_index, 0, FM_PIVOT_PERIOD_YEARS, FM_PIVOT_CALENDAR_GREGORIAN, 1,
@@ -317,8 +312,7 @@ TEST(FormulonCApiPivot, MutationAndClearExportsCompleteTheirLifecycles) {
   EXPECT_EQ(data_field_count, 0U);
 
   fm_pivot_filter_t filter = FM_STRUCT_INIT(fm_pivot_filter_t);
-  filter.axis = FM_PIVOT_AXIS_ROW;
-  filter.field_name = "Region";
+  filter.field_index = 0;
   filter.type = FM_PIVOT_FILTER_KIND_LABEL_BEGINS_WITH;
   filter.value_kind = FM_PIVOT_FILTER_OPERAND_KIND_TEXT;
   filter.value_text = "N";
@@ -577,8 +571,9 @@ TEST(FormulonCApiPivot, RuntimeIdFollowsThePivotAcrossEditsAndIsNeverReused) {
 
   // Another sheet's row deletion and removal leave it alone.
   std::size_t other = 99;
-  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Other", &other), 0) << fm_get_last_error_message();
-  ASSERT_EQ(fm_sheet_delete_rows(wb.handle, other, 0U, 2U), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Other", append_position(wb.handle), &other), 0)
+      << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_delete_rows(wb.handle, other, 0U, 1U), 0) << fm_get_last_error_message();
   ASSERT_EQ(fm_workbook_remove_sheet(wb.handle, copy), 0) << fm_get_last_error_message();
   ASSERT_EQ(fm_sheet_resolve_pivot_runtime_id(wb.handle, 0, second_id, &index), 0) << fm_get_last_error_message();
   EXPECT_EQ(PivotName(wb.handle, 0, index), "PT2");

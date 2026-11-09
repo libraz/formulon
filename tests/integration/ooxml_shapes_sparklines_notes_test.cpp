@@ -246,12 +246,12 @@ TEST(ShapeFidelity, ListReportsEveryModelledField) {
   EXPECT_EQ(Rgb24(rect.line_color), 0x0000FFU);
   EXPECT_EQ(rect.line_width_emu, 19050);
   EXPECT_EQ(rect.rotation, 900000);
-  EXPECT_FALSE(rect.hidden);
+  EXPECT_FALSE(rect.object.hidden);
   EXPECT_FALSE(rect.text_box);
 
   const ShapeInfo& custom = shapes.value()[1];
   EXPECT_TRUE(custom.prst.empty());
-  EXPECT_TRUE(custom.hidden);
+  EXPECT_TRUE(custom.object.hidden);
   EXPECT_TRUE(custom.text_box);
   EXPECT_EQ(custom.fill, ShapePaint::kOther);
   EXPECT_EQ(custom.line, ShapePaint::kSolid);
@@ -453,12 +453,13 @@ TEST(ShapeFidelity, UpdateMovesTheAnchorAndTheTransform) {
   EXPECT_EQ(rect.prst, "ellipse");
   EXPECT_EQ(rect.line, ShapePaint::kNone);
   EXPECT_EQ(rect.line_width_emu, 12700);
-  EXPECT_TRUE(rect.hidden);
+  EXPECT_TRUE(rect.object.hidden);
   // A new preset drops guides that belonged to the old one.
   EXPECT_FALSE(Has(ReadPart(SaveOrDie(wb), "xl/drawings/drawing1.xml"), "val 25000"));
 
+  // The anchor kind converts in place: a two-cell shape becomes one-cell and keeps its size.
   spec.anchor_kind = AnchorKind::kOneCell;
-  EXPECT_FALSE(static_cast<bool>(update_shape(wb, 0, 2, spec)));
+  ASSERT_TRUE(static_cast<bool>(update_shape(wb, 0, 2, spec)));
   EXPECT_EQ(update_shape(wb, 0, 99, spec).error().code, FormulonErrorCode::kNotFound);
 }
 

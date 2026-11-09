@@ -33,6 +33,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -121,6 +122,51 @@ std::int64_t sheet_offset_emu(const Workbook& wb, std::size_t sheet, bool row_ax
 Expected<void, Error> set_drawing_anchor(Workbook& wb, std::size_t sheet, std::uint32_t object_id,
                                          const DrawingAnchor& anchor);
 
+/// A partial anchor: each set field replaces the object's current value.
+/// The merged anchor keeps the object's kind unless `kind` (one-cell or
+/// two-cell) is set. A two-cell anchor made from a one-cell or absolute one
+/// takes the `to_*` fields the patch leaves unset from the current size; a
+/// one-cell anchor made from a two-cell one keeps the box's size. A two-cell
+/// result ignores a set size when a `to_*` field is set, and any other result
+/// ignores the `to_*` fields when a size is set, so a read anchor feeds back.
+struct DrawingAnchorPatch {
+  std::optional<AnchorKind> kind;
+  std::optional<EditAs> edit_as;  ///< Honoured for a two-cell result only.
+  std::optional<std::uint32_t> from_row;
+  std::optional<std::uint32_t> from_col;
+  std::optional<std::int64_t> from_row_off;
+  std::optional<std::int64_t> from_col_off;
+  std::optional<std::uint32_t> to_row;  ///< Two-cell result only.
+  std::optional<std::uint32_t> to_col;
+  std::optional<std::int64_t> to_row_off;
+  std::optional<std::int64_t> to_col_off;
+  std::optional<std::int64_t> width_emu;  ///< One-cell or absolute result only.
+  std::optional<std::int64_t> height_emu;
+};
+
+/// The fields every drawing object carries in its `cNvPr` plus its anchor;
+/// an unset field keeps the current value.
+struct DrawingCommonPatch {
+  std::optional<std::string> name;         ///< Non-empty; duplicates allowed.
+  std::optional<std::string> description;  ///< `descr`; empty removes it.
+  std::optional<bool> hidden;              ///< `hidden`; false removes it.
+  DrawingAnchorPatch anchor;
+};
+
+/// Applies `patch` to the picture, chart, shape / connector / group or table
+/// slicer frame with `object_id`, all or nothing. The `cNvPr` fields are
+/// written on every branch of an `mc:AlternateContent`; the anchor merge goes
+/// through the kind's own edit (`set_drawing_anchor`, `update_shape`,
+/// `update_slicer`). Fails with `kNotFound` for an unknown id;
+/// `kInvalidArgument` for an object no edit models, an empty name, an
+/// absolute `kind`, a `to_*` field without a size on a merged anchor that is
+/// not two-cell, a size without a `to_*` field on one that is two-cell, a
+/// slicer anchor that is not two-cell, or
+/// what the kind's edit refuses; `kPreconditionFailed` for a name on a slicer
+/// (its name ties the frame to the slicer part).
+Expected<void, Error> update_drawing(Workbook& wb, std::size_t sheet, std::uint32_t object_id,
+                                     const DrawingCommonPatch& patch);
+
 /// Renames the first picture, chart or shape with `object_id`. Duplicate
 /// names are allowed. Fails with `kInvalidArgument` for an empty `name` or an
 /// object of another kind, and with `kNotFound` for an unknown id.
@@ -157,10 +203,12 @@ Expected<std::vector<std::uint8_t>, Error> snapshot_drawing(const Workbook& wb, 
 Expected<std::uint32_t, Error> restore_drawing(Workbook& wb, std::size_t sheet, const std::uint8_t* bytes,
                                                std::size_t len, std::uint32_t flags);
 
-/// Removes the picture or chart with `object_id`, plus the relationships it
-/// named and the parts (a chart's part and its dependents) nothing else
-/// references. Fails with `kNotFound` for an unknown id and
-/// `kInvalidArgument` for an object of another kind.
+/// Removes the object with `object_id` whatever its kind: a picture or chart,
+/// plus the relationships it named and the parts (a chart's part and its
+/// dependents) nothing else references; a shape, connector or group with its
+/// children (`remove_shape`); a table slicer with its frame, and its cache
+/// once unused (`remove_slicer`). Fails with `kNotFound` for an unknown id and
+/// `kInvalidArgument` for an object no edit models (SmartArt, a content part).
 Expected<void, Error> remove_drawing(Workbook& wb, std::size_t sheet, std::uint32_t object_id);
 
 /// Moves sheet `sheet`'s anchors for a row (`row_axis`) or column edit of
