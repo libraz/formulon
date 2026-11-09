@@ -113,31 +113,33 @@ int run_paginate(const ArgList& args, std::ostream& out, std::ostream& err) {
     print_areas.push_back(format_range_a1(range));
   }
   const auto collect_breaks = [&](std::vector<std::string>& positions, auto record, auto position, auto count_fn,
-                                  auto at_fn) -> bool {
+                                  auto at_fn) -> int {
     std::size_t count = 0;
     if (const auto status = count_fn(pagination.handle, &count); status != 0) {
-      emit_last_error(err, "paginate");
-      return false;
+      return fail_with_last_error(err, "paginate", status);
     }
     for (std::size_t i = 0; i < count; ++i) {
       auto entry = record;
       if (const auto status = at_fn(pagination.handle, i, &entry); status != 0) {
-        emit_last_error(err, "paginate");
-        return false;
+        return fail_with_last_error(err, "paginate", status);
       }
       positions.push_back(std::to_string(position(entry)));
     }
-    return true;
+    return 0;
   };
   std::vector<std::string> row_breaks;
   std::vector<std::string> column_breaks;
-  if (!collect_breaks(
+  if (const auto rc = collect_breaks(
           row_breaks, FM_STRUCT_INIT(fm_row_break_t), [](const fm_row_break_t& b) { return b.row; },
-          fm_pagination_get_row_break_count, fm_pagination_get_row_break_at) ||
-      !collect_breaks(
+          fm_pagination_get_row_break_count, fm_pagination_get_row_break_at);
+      rc != 0) {
+    return rc;
+  }
+  if (const auto rc = collect_breaks(
           column_breaks, FM_STRUCT_INIT(fm_column_break_t), [](const fm_column_break_t& b) { return b.col; },
-          fm_pagination_get_column_break_count, fm_pagination_get_column_break_at)) {
-    return kExitFailure;
+          fm_pagination_get_column_break_count, fm_pagination_get_column_break_at);
+      rc != 0) {
+    return rc;
   }
   std::vector<std::string> pages;
   for (std::size_t i = 0; i < page_count; ++i) {
