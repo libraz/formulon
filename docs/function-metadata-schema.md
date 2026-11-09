@@ -3,8 +3,8 @@
 Formulon's calculation engine deliberately ships **no** human-readable
 function documentation. `getFunctionMetadata(name)` returns only the
 data the engine actually owns — canonical name, arity bounds, and an
-availability class — and leaves `signatureTemplate` / `description` as
-`NULL` (empty). Display-name tables beyond the engine's own function-name
+availability class — and leaves `signature` / `description` as
+`null` (`None` in Python). Display-name tables beyond the engine's own function-name
 translation are likewise empty.
 
 That content is a UI concern, not a calculation concern. Rather than bake
@@ -79,18 +79,18 @@ A host resolves the displayed metadata for a function by calling the
 engine, then merging a provider entry over it with the pure helper
 `mergeFunctionMetadata` (the native Node package, and also the WASM
 `@libraz/formulon` package for browser/worker hosts) or
-`merge_function_metadata` (Python). Given `base` (the engine metadata: the `value` of a JavaScript `getFunctionMetadata` result, or the Python return value), `entry`
+`merge_function_metadata` (Python). Given `base` (the engine metadata: the `getFunctionMetadata(name)` result in JavaScript, or the `get_function_metadata(name)` return value in Python), `entry`
 (`functions[NAME]`, or absent), and a display `locale` tag, each field is
 resolved by first-non-null precedence:
 
 - **signature** — `entry.localized[locale].signature` → `entry.signature`
-  → engine value (`NULL`).
+  → engine value (`null`).
 - **description** — `entry.localized[locale].description` →
-  `entry.description` → engine value (`NULL`).
+  `entry.description` → engine value (`null`).
 - **display name** — `entry.aliases[locale]` → the canonical name.
 
 When no provider entry exists for a function, the merge is the identity:
-`base` is returned unchanged, so `signature` / `description` stay `NULL`
+`base` is returned unchanged, so `signature` / `description` stay `null`
 exactly as the engine reports them. This preserves the engine's behaviour
 for hosts that inject nothing.
 

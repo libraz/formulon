@@ -207,6 +207,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `InvalidArgument` with a message that names the method and the parameter.
 - **C ABI:** a few records and functions change shape; a caller compiled
   against an earlier header must be recompiled. See [C ABI changes](#c-abi-changes).
+- **C ABI:** `fm_workbook_save` takes the `int32_t format` that
+  `fm_workbook_save_as` took, and `fm_workbook_save_as` is removed:
+  `fm_workbook_save(wb, FM_WORKBOOK_FORMAT_XLSX, &bytes, &len)`.
 - **Command line:** plain output escapes only newline, carriage return, tab and
   backslash, so a value pastes back as written. `paginate` prints print-area ranges in A1 notation. `eval` with no formula
   exits with status 64, and an engine failure exits with status 1. `dump` and
@@ -455,7 +458,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   gains fields only at its end. Value types (`fm_cell_rect_t`, `fm_value_t`,
   `fm_color_t`, the style records and the chart parts) are frozen.
   `FM_CHECK_VERSION()` compares the header version with the library's.
-- **C ABI:** colours share one record. `fm_color_t` (`kind`, `rgb`,
+- **C ABI:** colours share one record. `fm_color_t` (`kind`, `argb`,
   `theme`, `tint`, `indexed`) replaces `fm_cf_color_t` and the `*_argb`
   fields of the chart fill, line and label font records and of the shape
   record. Before, a record held an `*_argb` integer beside a theme index;
@@ -740,7 +743,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `Spill`, `ParsedReference`, `DataTable` and
   `PivotWorksheetSource` (which also replaces `ref`), `ref` is `range` on
   `AutoFilterSortCondition` and `AutoFilterSortState`, and `source` is `range`
-  on `ChartSourceInput`, `ChartInsertInput` and `ChartPreviewOverridesInput`.
+  on `ChartSourceInput`, `ChartInput` and `ChartPreviewOverridesInput`.
   A sparkline's `source` is a `SheetRect` (it was the text `formula`), and
   `SparklineGroup.dateAxisRef` is `dateAxisRange`, a `SheetRect` or `null`.
   Input takes a `SheetRect` or an A1 range where the type says so.
@@ -795,7 +798,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   of a boolean. A `date1904` that is not a boolean throws `TypeError`.
 - **Python:** nine signatures take a record in place of keywords:
   `set_cell_phonetic_properties(row, col, properties)` takes a
-  `PhoneticProperties`, `add_chart(input)` a `ChartInsertInput`,
+  `PhoneticProperties`, `add_chart(input)` a `ChartInput`,
   `Chart.set_source(source)` a `ChartSourceInput`,
   `PivotCache.set_worksheet_source(source)` a `PivotWorksheetSourceInput` or
   `None`, `Pivot.set_field_date_group(field_index, group)` a
@@ -998,7 +1001,7 @@ argument is a keyword-only argument list there (see
 | `setPinnedNow(y, m, d, h, mi, s)` and `clearPinnedNow()` | `setPinnedNow(time)` with a `CivilTime` or a `Date` read through its local getters; `null` clears the pin. Python takes and returns a naive `datetime.datetime` (`set_pinned_now(None)` clears it) |
 | `setSheetPrintTitles(sheet, repeatRows, repeatCols)` / `getSheetPrintTitles(sheet)` | `ws.setPrintTitles(titles)` / `ws.getPrintTitles()` with `PrintTitles = { rows: Span \| null, columns: Span \| null }` and `Span = { first, last }` (0-based, inclusive); `null` clears. `Pagination.printTitles` has the same type |
 | `pivotSetGrandTotals(sheet, pivot, rows, cols)` | `ws.pivot(pivot).updateGrandTotals({ rows, columns })` |
-| `setComment(sheet, row, col, author, text)` (empty text removed the comment) | `ws.setComment(row, col, { text, author? })` writes the comment, empty text included (an omitted `author` is `""`); `ws.removeComment(row, col)` removes it and throws `NotFound` when the cell has none |
+| `setComment(sheet, row, col, author, text)` (empty text removed the comment) | `ws.setComment(row, col, { text, author? })` writes the comment, empty text included (an omitted `author` is `""`); `ws.setComment(row, col, null)` removes it and does nothing when the cell has none |
 | `setWorkbookProtection(p)` / `setSheetProtection(sheet, p)` (an all-zero record cleared them) | `wb.setWorkbookProtection(null)` and `ws.setSheetProtection(null)` remove them; an all-zero workbook-protection record still does. Sheet protection is described under [Behaviour changes](#behaviour-changes-under-an-unchanged-name) |
 | `setCellPhoneticRuns(sheet, row, col, runs)` | `ws.setCellPhoneticRuns(row, col, runs)`; `null` and `[]` clear |
 | `addHyperlink(sheet, row, col, target, display, tooltip, location)` | `ws.setHyperlink(row, col, { target, location?, display?, tooltip? })` sets or replaces the cell's link and `null` removes it; a `null` target is an in-workbook link and requires `location`. `setHyperlinkRange(rect, link)` likewise |
@@ -1145,7 +1148,7 @@ A comparison such as `field === -1` is silently false now.
 |---|---|
 | `-1` | `null`: `PivotField.axis`, `PivotField.cacheFieldIndex`, `PivotField.groupBaseIndex`, `PivotItem.cacheIndex`, `PivotDataField.showAsBaseField`, `PivotDataField.showAsBaseItem`, `PivotCacheOptions.missingItemsLimit`, `DefinedName.scope`, `ValidationOutcome.ruleId` |
 | `''` | `null`: `DefinedName.comment`, `Hyperlink.location`, `Hyperlink.display`, `Hyperlink.tooltip`, `PivotCell.numberFormat`, `PivotDataField.numberFormat`, `PivotField.customName`, `PivotField.numberFormat`, `PivotOptions` captions and alternative text, `PivotWorksheetSource.name`, the password, algorithm, hash and salt fields of `SheetProtection` and `WorkbookProtection`, `Slicer.style`, `SparklineGroup.dateAxisRange`, `TableStyleDefaults.tableStyle` / `pivotStyle` |
-| a number or boolean next to a `has...` flag | a nullable field, and the flag is gone: `AutoFilterColumn.filterValue` / `dynamicValue` / `dynamicMaxValue` / `iconIndex`, `AutoFilterSortCondition.dxfIndex` / `iconIndex`, `CellXf` alignment, wrap, locked and hidden fields, `ColumnLayout.widthChars`, `RowLayout.heightPt`, `SheetFormatDefaults.defaultColWidthChars` / `defaultRowHeightPt`, `PageSetup.orientation`, `ChartInsertInput.legend` |
+| a number or boolean next to a `has...` flag | a nullable field, and the flag is gone: `AutoFilterColumn.filterValue` / `dynamicValue` / `dynamicMaxValue` / `iconIndex`, `AutoFilterSortCondition.dxfIndex` / `iconIndex`, `CellXf` alignment, wrap, locked and hidden fields, `ColumnLayout.widthChars`, `RowLayout.heightPt`, `SheetFormatDefaults.defaultColWidthChars` / `defaultRowHeightPt`, `PageSetup.orientation`, `ChartInput.legend` |
 
 `Table.hasStyleInfo` and `CellXf.hasAlignment` are removed; an absent value is
 the field being `null`.
@@ -1164,7 +1167,7 @@ These parameters can no longer be passed by position.
 
 | Method | Keyword-only parameters |
 |---|---|
-| `HyperlinkInput` | `target`, `location`, `display`, `tooltip` (a dataclass passed to `Sheet.set_hyperlink` and `Sheet.set_hyperlink_range`) |
+| `HyperlinkInput` | `target`, `location`, `display`, `tooltip`, `range` (a dataclass passed to `Sheet.set_hyperlink`) |
 | `Sheet.add_picture` | `name`, `description`, `anchor` |
 | `Sheet.add_shape`, `Shape.update` | `anchor`, `preset_geometry` and the other shape fields |
 | `Sheet.add_slicer`, `Slicer.update` | `anchor`, `row_height_emu` and the other slicer fields |
@@ -1507,6 +1510,7 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
 | `fm_cell_set_xf_index` | `fm_sheet_set_cell_xf_index` |
 | `FM_CELL_STYLE_BUILTIN_ID_NONE` | removed |
 | `fm_cell_style_record_t` | `fm_cell_style_t` |
+| `fm_cell_style_t.i_level` | `fm_cell_style_t.outline_level` |
 | `fm_cell_xf_t.has_horizontal_align` | `fm_cell_xf_t.has_horizontal` |
 | `fm_cell_xf_t.has_vertical_align` | `fm_cell_xf_t.has_vertical` |
 | `fm_cell_xf_t.horizontal_align` | `fm_cell_xf_t.horizontal` |
@@ -1522,6 +1526,7 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
 | `FM_CF_DIFFERENTIAL_FORMAT` | `FM_CF_MATCH_KIND_DIFFERENTIAL_FORMAT` |
 | `FM_CF_ICON_SET` | `FM_CF_MATCH_KIND_ICON_SET` |
 | `fm_cf_match_info_t.dxf_id_engaged` | `fm_cf_match_info_t.has_dxf_index` |
+| `fm_cf_match_info_t.icon_set_name` | `fm_cf_match_info_t.icon_set` |
 | `fm_cf_match_t` | `fm_cf_match_info_t` |
 | `FM_CF_OPERATOR_BETWEEN` | removed |
 | `FM_CF_OPERATOR_EQUAL` | removed |
@@ -1541,6 +1546,7 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
 | `fm_cf_rule_t.dxf_id` | `fm_cf_rule_t.dxf_index` |
 | `fm_cf_rule_t.icon_set_engaged` | `fm_cf_rule_t.has_icon_set` |
 | `fm_cf_rule_t.icon_set_floor_engaged` | `fm_cf_rule_t.has_icon_set_floor` |
+| `fm_cf_rule_t.icon_set_name` | `fm_cf_rule_t.icon_set` |
 | `fm_cf_rule_t.op_engaged` | `fm_cf_rule_t.has_op` |
 | `fm_cf_rule_t.rank_engaged` | `fm_cf_rule_t.has_rank` |
 | `fm_cf_rule_t.std_dev_engaged` | `fm_cf_rule_t.has_std_dev` |
@@ -1597,9 +1603,12 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
 | `fm_chart_data_points_t` | `fm_chart_data_points_info_t` |
 | `fm_chart_data_range_at` | `fm_chart_data_get_range_at` |
 | `fm_chart_data_series_at` | `fm_chart_data_get_series_at` |
+| `fm_chart_data_series_info_t.format_code` | `fm_chart_data_series_info_t.number_format` |
 | `fm_chart_data_series_info_t.idx` | `fm_chart_data_series_info_t.series_id` |
+| `fm_chart_data_series_info_t.x_format_code` | `fm_chart_data_series_info_t.x_number_format` |
 | `fm_chart_data_series_points` | `fm_chart_data_get_series_points` |
 | `fm_chart_data_series_t` | `fm_chart_data_series_info_t` |
+| `fm_chart_data_t.category_format_code` | `fm_chart_data_t.category_number_format` |
 | `fm_chart_data_unresolved_at` | `fm_chart_data_get_unresolved_at` |
 | `FM_CHART_DIRECTION_AUTO` | `FM_CHART_SERIES_DIRECTION_AUTO` |
 | `FM_CHART_DIRECTION_COLUMNS` | `FM_CHART_SERIES_DIRECTION_COLUMNS` |
@@ -1624,7 +1633,7 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
 | `FM_CHART_INSERT_LINE` | removed |
 | `FM_CHART_INSERT_PIE` | removed |
 | `FM_CHART_INSERT_SCATTER` | removed |
-| `fm_chart_insert` | `fm_chart_insert_spec_t` |
+| `fm_chart_insert` | `fm_chart_spec_t` |
 | `FM_CHART_LABEL_ABOVE` | `FM_CHART_LABEL_POSITION_ABOVE` |
 | `FM_CHART_LABEL_BELOW` | `FM_CHART_LABEL_POSITION_BELOW` |
 | `FM_CHART_LABEL_BEST_FIT` | `FM_CHART_LABEL_POSITION_BEST_FIT` |
@@ -1688,11 +1697,19 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
 | `fm_chart_plot_info_t.gap_width` | `fm_chart_plot_info_t.gap_width_pct` |
 | `fm_chart_plot_info_t.has_first_slice_angle` | `fm_chart_plot_info_t.has_first_slice_angle_deg` |
 | `fm_chart_plot_info_t.has_gap_width` | `fm_chart_plot_info_t.has_gap_width_pct` |
+| `fm_chart_plot_info_t.has_hole_size` | `fm_chart_plot_info_t.has_hole_size_pct` |
+| `fm_chart_plot_info_t.has_overlap` | `fm_chart_plot_info_t.has_overlap_pct` |
+| `fm_chart_plot_info_t.hole_size` | `fm_chart_plot_info_t.hole_size_pct` |
+| `fm_chart_plot_info_t.overlap` | `fm_chart_plot_info_t.overlap_pct` |
 | `FM_CHART_PLOT_LINE_3D` | `FM_CHART_PLOT_TYPE_LINE_3D` |
 | `FM_CHART_PLOT_LINE` | `FM_CHART_PLOT_TYPE_LINE` |
 | `FM_CHART_PLOT_OF_PIE` | `FM_CHART_PLOT_TYPE_OF_PIE` |
 | `fm_chart_plot_patch_t.first_slice_angle_op` | `fm_chart_plot_patch_t.first_slice_angle_deg_op` |
 | `fm_chart_plot_patch_t.gap_width_op` | `fm_chart_plot_patch_t.gap_width_pct_op` |
+| `fm_chart_plot_patch_t.hole_size_op` | `fm_chart_plot_patch_t.hole_size_pct_op` |
+| `fm_chart_plot_patch_t.hole_size` | `fm_chart_plot_patch_t.hole_size_pct` |
+| `fm_chart_plot_patch_t.overlap_op` | `fm_chart_plot_patch_t.overlap_pct_op` |
+| `fm_chart_plot_patch_t.overlap` | `fm_chart_plot_patch_t.overlap_pct` |
 | `fm_chart_plot_patch` | `fm_chart_plot_patch_t` |
 | `FM_CHART_PLOT_PIE_3D` | `FM_CHART_PLOT_TYPE_PIE_3D` |
 | `FM_CHART_PLOT_PIE` | `FM_CHART_PLOT_TYPE_PIE` |
@@ -1729,17 +1746,20 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
 | `fm_chart_tri_t` | `fm_tristate_t` |
 | `FM_CHART_TRI_TRUE` | `FM_TRISTATE_TRUE` |
 | `fm_chart_unresolved_info_t.series_idx` | `fm_chart_unresolved_info_t.series_id` |
+| `fm_chart_unresolved_info_t.source` | `fm_chart_unresolved_info_t.role` |
 | `fm_chart_unresolved_t` | `fm_chart_unresolved_info_t` |
 | `fm_collation_classes` | `fm_get_collation_classes` |
 | `FM_COLLATION_CLASSIC_EXACT` | `FM_COLLATION_STRENGTH_CLASSIC_EXACT` |
 | `FM_COLLATION_COMPARE` | `FM_COLLATION_STRENGTH_COMPARE` |
 | `FM_COLLATION_DYNAMIC` | `FM_COLLATION_STRENGTH_DYNAMIC` |
+| `FM_COLOR_CONTEXT_FILL_BG` | `FM_COLOR_CONTEXT_FILL_BACKGROUND` |
+| `FM_COLOR_CONTEXT_FILL_FG` | `FM_COLOR_CONTEXT_FILL_FOREGROUND` |
 | `fm_color_spec` | `fm_color_t` |
 | `fm_column_layout_info_t.has_style` | `fm_column_layout_info_t.has_xf_index` |
 | `fm_column_layout_info_t.has_width` | `fm_column_layout_info_t.has_width_chars` |
 | `fm_column_layout_info_t.style_xf` | `fm_column_layout_info_t.xf_index` |
 | `fm_column_layout_t` | `fm_column_layout_info_t` |
-| `fm_comment` | `fm_comment_info_t` |
+| `fm_comment` | `fm_comment_t` |
 | `fm_data_table_t.col_input_col` | `fm_data_table_t.column_input_col` |
 | `fm_data_table_t.col_input_deleted` | `fm_data_table_t.column_input_deleted` |
 | `fm_data_table_t.col_input_row` | `fm_data_table_t.column_input_row` |
@@ -1800,11 +1820,17 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
 | `FM_DYNAMIC_FILTER_TOMORROW` | `FM_DYNAMIC_FILTER_TYPE_TOMORROW` |
 | `FM_DYNAMIC_FILTER_YEAR_TO_DATE` | `FM_DYNAMIC_FILTER_TYPE_YEAR_TO_DATE` |
 | `FM_DYNAMIC_FILTER_YESTERDAY` | `FM_DYNAMIC_FILTER_TYPE_YESTERDAY` |
+| `fm_effective_style_info_t.fill_bg_argb` | `fm_effective_style_info_t.fill_background_argb` |
+| `fm_effective_style_info_t.fill_bg_resolution` | `fm_effective_style_info_t.fill_background_resolution` |
+| `fm_effective_style_info_t.fill_fg_argb` | `fm_effective_style_info_t.fill_foreground_argb` |
+| `fm_effective_style_info_t.fill_fg_resolution` | `fm_effective_style_info_t.fill_foreground_resolution` |
+| `fm_effective_style_info_t.num_fmt_code` | `fm_effective_style_info_t.number_format` |
 | `fm_effective_style` | `fm_effective_style_info_t` |
 | `fm_error_display_name` | `fm_get_error_display_name` |
 | `fm_external_link_info_t.index` | `fm_external_link_info_t.book_number` |
 | `fm_external_link_record_t` | `fm_external_link_info_t` |
 | `fm_fill_record` | `fm_fill_t` |
+| `fm_fill_t.gradient_degree` | `fm_fill_t.gradient_angle_deg` |
 | `fm_filter_column_t.col_id` | `fm_filter_column_t.column_offset` |
 | `fm_filter_column_t.dxf_id` | `fm_filter_column_t.dxf_index` |
 | `fm_filter_column_t.has_icon_id` | `fm_filter_column_t.has_icon_index` |
@@ -1841,23 +1867,23 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
 | `fm_header_footer_t.different_odd_even_engaged` | `fm_header_footer_t.has_different_odd_even` |
 | `fm_header_footer_t.scale_with_doc_engaged` | `fm_header_footer_t.has_scale_with_doc` |
 | `fm_hyperlink` | `fm_hyperlink_t` |
-| `FM_ICON_SET_3_ARROWS_GRAY` | `FM_ICON_SET_NAME_3_ARROWS_GRAY` |
-| `FM_ICON_SET_3_ARROWS` | `FM_ICON_SET_NAME_3_ARROWS` |
-| `FM_ICON_SET_3_FLAGS` | `FM_ICON_SET_NAME_3_FLAGS` |
-| `FM_ICON_SET_3_SIGNS` | `FM_ICON_SET_NAME_3_SIGNS` |
-| `FM_ICON_SET_3_SYMBOLS_2` | `FM_ICON_SET_NAME_3_SYMBOLS_2` |
-| `FM_ICON_SET_3_SYMBOLS` | `FM_ICON_SET_NAME_3_SYMBOLS` |
-| `FM_ICON_SET_3_TRAFFIC_LIGHTS_1` | `FM_ICON_SET_NAME_3_TRAFFIC_LIGHTS_1` |
-| `FM_ICON_SET_3_TRAFFIC_LIGHTS_2` | `FM_ICON_SET_NAME_3_TRAFFIC_LIGHTS_2` |
-| `FM_ICON_SET_4_ARROWS_GRAY` | `FM_ICON_SET_NAME_4_ARROWS_GRAY` |
-| `FM_ICON_SET_4_ARROWS` | `FM_ICON_SET_NAME_4_ARROWS` |
-| `FM_ICON_SET_4_RATING` | `FM_ICON_SET_NAME_4_RATING` |
-| `FM_ICON_SET_4_RED_TO_BLACK` | `FM_ICON_SET_NAME_4_RED_TO_BLACK` |
-| `FM_ICON_SET_4_TRAFFIC_LIGHTS` | `FM_ICON_SET_NAME_4_TRAFFIC_LIGHTS` |
-| `FM_ICON_SET_5_ARROWS_GRAY` | `FM_ICON_SET_NAME_5_ARROWS_GRAY` |
-| `FM_ICON_SET_5_ARROWS` | `FM_ICON_SET_NAME_5_ARROWS` |
-| `FM_ICON_SET_5_QUARTERS` | `FM_ICON_SET_NAME_5_QUARTERS` |
-| `FM_ICON_SET_5_RATING` | `FM_ICON_SET_NAME_5_RATING` |
+| `FM_ICON_SET_3_ARROWS_GRAY` | `FM_ICON_SET_NAME_THREE_ARROWS_GRAY` |
+| `FM_ICON_SET_3_ARROWS` | `FM_ICON_SET_NAME_THREE_ARROWS` |
+| `FM_ICON_SET_3_FLAGS` | `FM_ICON_SET_NAME_THREE_FLAGS` |
+| `FM_ICON_SET_3_SIGNS` | `FM_ICON_SET_NAME_THREE_SIGNS` |
+| `FM_ICON_SET_3_SYMBOLS_2` | `FM_ICON_SET_NAME_THREE_SYMBOLS_2` |
+| `FM_ICON_SET_3_SYMBOLS` | `FM_ICON_SET_NAME_THREE_SYMBOLS` |
+| `FM_ICON_SET_3_TRAFFIC_LIGHTS_1` | `FM_ICON_SET_NAME_THREE_TRAFFIC_LIGHTS_1` |
+| `FM_ICON_SET_3_TRAFFIC_LIGHTS_2` | `FM_ICON_SET_NAME_THREE_TRAFFIC_LIGHTS_2` |
+| `FM_ICON_SET_4_ARROWS_GRAY` | `FM_ICON_SET_NAME_FOUR_ARROWS_GRAY` |
+| `FM_ICON_SET_4_ARROWS` | `FM_ICON_SET_NAME_FOUR_ARROWS` |
+| `FM_ICON_SET_4_RATING` | `FM_ICON_SET_NAME_FOUR_RATING` |
+| `FM_ICON_SET_4_RED_TO_BLACK` | `FM_ICON_SET_NAME_FOUR_RED_TO_BLACK` |
+| `FM_ICON_SET_4_TRAFFIC_LIGHTS` | `FM_ICON_SET_NAME_FOUR_TRAFFIC_LIGHTS` |
+| `FM_ICON_SET_5_ARROWS_GRAY` | `FM_ICON_SET_NAME_FIVE_ARROWS_GRAY` |
+| `FM_ICON_SET_5_ARROWS` | `FM_ICON_SET_NAME_FIVE_ARROWS` |
+| `FM_ICON_SET_5_QUARTERS` | `FM_ICON_SET_NAME_FIVE_QUARTERS` |
+| `FM_ICON_SET_5_RATING` | `FM_ICON_SET_NAME_FIVE_RATING` |
 | `fm_image_info` | `fm_image_info_t` |
 | `fm_image_insert` | `fm_drawing_placement_spec_t` |
 | `fm_last_error_context` | `fm_get_last_error_context` |
@@ -1867,6 +1893,7 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
 | `fm_locale_facts_t` | `fm_locale_facts_info_t` |
 | `fm_locale_facts` | `fm_get_locale_facts` |
 | `fm_margins_pt` | `fm_margins_pt_info_t` |
+| `fm_mention_t.length` | `fm_mention_t.end` |
 | `fm_mention` | `fm_mention_t` |
 | `fm_merge_range` | folded into `fm_cell_rect_t` |
 | `fm_page_break_t` | `fm_row_break_t` |
@@ -1902,6 +1929,8 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
 | `fm_paper_info` | `fm_paper_info_t` |
 | `fm_parallel_recalc_stats` | `fm_parallel_recalc_stats_info_t` |
 | `fm_person` | `fm_person_t` |
+| `fm_phonetic_run_t.eb` | `fm_phonetic_run_t.end` |
+| `fm_phonetic_run_t.sb` | `fm_phonetic_run_t.start` |
 | `FM_PIVOT_AGG_AVERAGE` | `FM_PIVOT_AGGREGATION_AVERAGE` |
 | `FM_PIVOT_AGG_COUNT_NUMBERS` | `FM_PIVOT_AGGREGATION_COUNT_NUMBERS` |
 | `FM_PIVOT_AGG_COUNT` | `FM_PIVOT_AGGREGATION_COUNT` |
@@ -1929,6 +1958,7 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
 | `fm_pivot_cells_destroy` | `fm_pivot_report_destroy` |
 | `fm_pivot_cells_t` | `fm_pivot_report_t` |
 | `fm_pivot_data_field_spec_t` | `fm_pivot_data_field_t` |
+| `fm_pivot_field_spec_t` | removed |
 | `FM_PIVOT_FILTER_DATE_EQUAL` | `FM_PIVOT_FILTER_KIND_DATE_EQUAL` |
 | `FM_PIVOT_FILTER_DATE_LAST_MONTH` | `FM_PIVOT_FILTER_KIND_LAST_MONTH` |
 | `FM_PIVOT_FILTER_DATE_LAST_QUARTER` | `FM_PIVOT_FILTER_KIND_LAST_QUARTER` |
@@ -1971,7 +2001,7 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
 | `FM_PIVOT_FILTER_LABEL_BEGINS_WITH` | `FM_PIVOT_FILTER_KIND_LABEL_BEGINS_WITH` |
 | `FM_PIVOT_FILTER_LABEL_BETWEEN` | `FM_PIVOT_FILTER_KIND_LABEL_BETWEEN` |
 | `FM_PIVOT_FILTER_LABEL_CONTAINS` | `FM_PIVOT_FILTER_KIND_LABEL_CONTAINS` |
-| `FM_PIVOT_FILTER_LABEL_DATE` | `FM_PIVOT_FILTER_KIND_LABEL_DATE` |
+| `FM_PIVOT_FILTER_LABEL_DATE` | `FM_PIVOT_FILTER_KIND_DATE_BETWEEN` |
 | `FM_PIVOT_FILTER_LABEL_ENDS_WITH` | `FM_PIVOT_FILTER_KIND_LABEL_ENDS_WITH` |
 | `FM_PIVOT_FILTER_LABEL_EQUAL` | `FM_PIVOT_FILTER_KIND_LABEL_EQUAL` |
 | `FM_PIVOT_FILTER_LABEL_GREATER_THAN_OR_EQUAL` | `FM_PIVOT_FILTER_KIND_LABEL_GREATER_THAN_OR_EQUAL` |
@@ -1984,6 +2014,7 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
 | `FM_PIVOT_FILTER_LABEL_NOT_ENDS_WITH` | `FM_PIVOT_FILTER_KIND_LABEL_NOT_ENDS_WITH` |
 | `FM_PIVOT_FILTER_LABEL_NOT_EQUAL` | `FM_PIVOT_FILTER_KIND_LABEL_NOT_EQUAL` |
 | `fm_pivot_filter_spec_t` | `fm_pivot_filter_t` |
+| `fm_pivot_filter_t.type` | `fm_pivot_filter_t.kind` |
 | `fm_pivot_filter_type_t` | `fm_pivot_filter_kind_t` |
 | `FM_PIVOT_FILTER_VALUE_BETWEEN` | `FM_PIVOT_FILTER_KIND_VALUE_BETWEEN` |
 | `FM_PIVOT_FILTER_VALUE_BOTTOM_COUNT` | `FM_PIVOT_FILTER_KIND_VALUE_BOTTOM_COUNT` |
@@ -2001,7 +2032,7 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
 | `FM_PIVOT_FILTER_VALUE_NOT_BETWEEN` | `FM_PIVOT_FILTER_KIND_VALUE_NOT_BETWEEN` |
 | `FM_PIVOT_FILTER_VALUE_NOT_EQUAL` | `FM_PIVOT_FILTER_KIND_VALUE_NOT_EQUAL` |
 | `FM_PIVOT_FILTER_VALUE_TEXT` | `FM_PIVOT_FILTER_OPERAND_KIND_TEXT` |
-| `FM_PIVOT_FILTER_VALUE_TOP_10` | `FM_PIVOT_FILTER_KIND_VALUE_TOP_10` |
+| `FM_PIVOT_FILTER_VALUE_TOP_10` | `FM_PIVOT_FILTER_KIND_VALUE_TOP_COUNT` |
 | `FM_PIVOT_FILTER_VALUE_TOP_PERCENT` | `FM_PIVOT_FILTER_KIND_VALUE_TOP_PERCENT` |
 | `FM_PIVOT_FILTER_VALUE_TOP_SUM` | `FM_PIVOT_FILTER_KIND_VALUE_TOP_SUM` |
 | `FM_PIVOT_LAYOUT_COMPACT` | `FM_PIVOT_REPORT_LAYOUT_COMPACT` |
@@ -2055,7 +2086,11 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
 | `FM_SHAPE_FIELD_ROTATION` | removed |
 | `FM_SHAPE_FIELD_TEXT_BOX` | removed |
 | `FM_SHAPE_FIELD_TEXT` | removed |
-| `FM_SHAPE_PAINT_UNSET` | folded into `FM_SHAPE_PAINT_DEFAULT` |
+| `FM_SHAPE_PAINT_NONE` | removed |
+| `FM_SHAPE_PAINT_OTHER` | removed |
+| `FM_SHAPE_PAINT_SOLID` | removed |
+| `fm_shape_paint_t` | removed |
+| `FM_SHAPE_PAINT_UNSET` | removed |
 | `fm_shape` | `fm_shape_info_t` |
 | `fm_sheet_add_col_break` | `fm_sheet_set_column_break` |
 | `fm_sheet_add_hyperlink` | `fm_sheet_set_hyperlink` |
@@ -2110,6 +2145,8 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
 | `fm_sheet_remap_range_style` | `fm_sheet_remap_range_xfs` |
 | `fm_sheet_remove_auto_filter` | removed; use `fm_sheet_set_auto_filter` |
 | `fm_sheet_remove_col_break` | removed |
+| `fm_sheet_remove_comment` | removed; use `fm_sheet_set_comment` |
+| `fm_sheet_remove_hyperlink` | removed; use `fm_sheet_set_hyperlink` |
 | `fm_sheet_remove_row_break` | removed |
 | `fm_sheet_remove_shape` | removed |
 | `fm_sheet_remove_slicer` | removed |
@@ -2162,6 +2199,8 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
 | `fm_sheet_threaded_comment_count` | `fm_sheet_get_threaded_comment_count` |
 | `FM_SHEET_VERY_HIDDEN` | `FM_SHEET_VISIBILITY_VERY_HIDDEN` |
 | `fm_sheet_view_info_t.show_row_col_headers` | `fm_sheet_view_info_t.show_row_column_headers` |
+| `fm_sheet_view_info_t.split_x` | `fm_sheet_view_info_t.split_x_twips` |
+| `fm_sheet_view_info_t.split_y` | `fm_sheet_view_info_t.split_y_twips` |
 | `fm_sheet_view_t` | `fm_sheet_view_info_t` |
 | `FM_SHEET_VISIBLE` | `FM_SHEET_VISIBILITY_VISIBLE` |
 | `fm_sheet_width_model` | `fm_sheet_get_width_model` |
@@ -2176,6 +2215,7 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
 | `FM_SLICER_FIELD_ROW_HEIGHT` | removed |
 | `FM_SLICER_FIELD_SORT_ORDER` | removed |
 | `FM_SLICER_FIELD_STYLE` | removed |
+| `fm_slicer_info_t.style` | `fm_slicer_info_t.style_name` |
 | `FM_SLICER_SORT_ASCENDING` | `FM_SLICER_SORT_ORDER_ASCENDING` |
 | `FM_SLICER_SORT_DESCENDING` | `FM_SLICER_SORT_ORDER_DESCENDING` |
 | `fm_slicer_sort_t` | `fm_slicer_sort_order_t` |
@@ -2193,6 +2233,9 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
 | `FM_SPARKLINE_EMPTY_GAP` | removed |
 | `FM_SPARKLINE_EMPTY_SPAN` | removed |
 | `FM_SPARKLINE_EMPTY_ZERO` | removed |
+| `fm_sparkline_group_patch_t.line_weight_op` | `fm_sparkline_group_patch_t.line_width_pt_op` |
+| `fm_sparkline_group_patch_t.line_weight` | `fm_sparkline_group_patch_t.line_width_pt` |
+| `fm_sparkline_group_t.line_weight` | `fm_sparkline_group_t.line_width_pt` |
 | `fm_sparkline_group` | `fm_sparkline_group_t` |
 | `FM_SPARKLINE_LINE` | `FM_SPARKLINE_TYPE_LINE` |
 | `FM_SPARKLINE_STACKED` | `FM_SPARKLINE_TYPE_STACKED` |
@@ -2342,6 +2385,7 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
 | `fm_workbook_external_link_at` | `fm_workbook_get_external_link_at` |
 | `fm_workbook_external_link_count` | `fm_workbook_get_external_link_count` |
 | `fm_workbook_file_name` | `fm_workbook_get_file_name` |
+| `FM_WORKBOOK_FORMAT_UNKNOWN` | removed |
 | `fm_workbook_full_precision` | `fm_workbook_get_full_precision` |
 | `fm_workbook_get_array_formula` | `fm_sheet_get_array_formula` |
 | `fm_workbook_get_cell_phonetic_properties` | `fm_sheet_get_cell_phonetic_properties` |
@@ -2354,7 +2398,7 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
 | `fm_workbook_get_formula` | `fm_sheet_get_formula` |
 | `fm_workbook_get_protection` | `fm_workbook_get_workbook_protection` |
 | `fm_workbook_get_value` | `fm_sheet_get_value` |
-| `fm_workbook_has_cell_phonetic_properties` | `fm_sheet_has_cell_phonetic_properties` |
+| `fm_workbook_has_cell_phonetic_properties` | removed; use `fm_sheet_get_cell_phonetic_properties` |
 | `fm_workbook_insert_cols` | `fm_sheet_insert_columns` |
 | `fm_workbook_insert_rows` | `fm_sheet_insert_rows` |
 | `fm_workbook_lambda_text_at` | `fm_sheet_get_lambda_text` |
@@ -2418,7 +2462,7 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
 | `fm_workbook_pivot_field_add_item_at` | `fm_sheet_add_pivot_field_item_by_cache_index` |
 | `fm_workbook_pivot_field_add_item` | `fm_sheet_add_pivot_field_item` |
 | `fm_workbook_pivot_field_add_subtotal_fn` | removed; use `fm_sheet_set_pivot_field_subtotal_functions` |
-| `fm_workbook_pivot_field_add` | `fm_sheet_add_pivot_field` |
+| `fm_workbook_pivot_field_add` | removed |
 | `fm_workbook_pivot_field_at` | `fm_sheet_get_pivot_field_at` |
 | `fm_workbook_pivot_field_clear_date_group` | removed; use `fm_sheet_set_pivot_field_date_group` |
 | `fm_workbook_pivot_field_clear_items` | `fm_sheet_clear_pivot_field_items` |
@@ -2471,6 +2515,7 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
 | `fm_workbook_probe_image` | `fm_get_image_info` |
 | `fm_workbook_read_diagnostics` | `fm_workbook_get_diagnostics` |
 | `fm_workbook_ref_mode` | `fm_workbook_get_ref_mode` |
+| `fm_workbook_save_as` | removed; use `fm_workbook_save` |
 | `fm_workbook_set_array_formula` | `fm_sheet_set_array_formula` |
 | `fm_workbook_set_blank` | `fm_sheet_set_blank` |
 | `fm_workbook_set_bool` | `fm_sheet_set_bool` |
@@ -2518,7 +2563,7 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
 | `AddChartSeriesResult` | removed |
 | `addConditionalFormat()` | `addCfRule()` |
 | `addHyperlink()` | `setHyperlink()` |
-| `addHyperlinkRange()` | `setHyperlinkRange()` |
+| `addHyperlinkRange()` | removed; use `setHyperlink()` |
 | `addNumFmt()` | `addNumberFormat()` |
 | `AddNumFmtResult` | removed |
 | `addSheetColBreak()` | `setColumnBreak()` |
@@ -2569,8 +2614,10 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
 | `CellResult` | removed |
 | `CellShowPhoneticResult` | folded into `BoolResult` |
 | `CellsInRangeResult` | `CellsInRange` |
+| `CellStyle.iLevel` | `CellStyle.outlineLevel` |
 | `CellStyle.xfId` | `CellStyle.styleXfIndex` |
 | `cellStyleCount()` | removed; use `listCellStyles()` |
+| `CellStyleInput.iLevel` | `CellStyleInput.outlineLevel` |
 | `CellStyleRecord` | `CellStyle` |
 | `cellStyleXfCount()` | removed; use `listCellStyleXfs()` |
 | `CellXf.horizontalAlign` | `CellXf.horizontal` |
@@ -2598,9 +2645,9 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
 | `ChartFillInfo` | `ChartFill` |
 | `ChartFillPatch.transparency` | `ChartFillPatch.transparencyPct` |
 | `ChartInfo` | `ChartProperties` |
-| `ChartInsertInput.source` | `ChartInsertInput.range` |
+| `ChartInput.source` | `ChartInput.range` |
 | `ChartInsertKind` | folded into `ChartPlotType` |
-| `ChartInsertOptions` | `ChartInsertInput` |
+| `ChartInsertOptions` | `ChartInput` |
 | `ChartLabelsInfo` | `ChartLabels` |
 | `ChartLegend.hiddenSeries` | `ChartLegend.hiddenEntries` |
 | `ChartLegendPatch.hiddenSeries` | `ChartLegendPatch.hiddenEntries` |
@@ -2613,9 +2660,13 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
 | `ChartPlot.chartexLayout` | `ChartPlot.extendedLayout` |
 | `ChartPlot.firstSliceAngle` | `ChartPlot.firstSliceAngleDeg` |
 | `ChartPlot.gapWidth` | `ChartPlot.gapWidthPct` |
+| `ChartPlot.holeSize` | `ChartPlot.holeSizePct` |
+| `ChartPlot.overlap` | `ChartPlot.overlapPct` |
 | `ChartPlotInfo` | `ChartPlot` |
 | `ChartPlotPatch.firstSliceAngle` | `ChartPlotPatch.firstSliceAngleDeg` |
 | `ChartPlotPatch.gapWidth` | `ChartPlotPatch.gapWidthPct` |
+| `ChartPlotPatch.holeSize` | `ChartPlotPatch.holeSizePct` |
+| `ChartPlotPatch.overlap` | `ChartPlotPatch.overlapPct` |
 | `ChartPlotType.Chartex` | `ChartPlotType.Extended` |
 | `ChartPointInfo` | `ChartPoint` |
 | `ChartPreviewOverrides` | `ChartPreviewOverridesInput` |
@@ -2727,7 +2778,6 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
 | `functionNames()` | `listFunctionNames()` |
 | `getCellPhoneticRun()` | removed |
 | `getCellPhoneticRunCount()` | removed |
-| `getCfRule()` | removed; use `listCfRules()` |
 | `getCfRuleCount()` | removed; use `listCfRules()` |
 | `getChart()` | `ws.chart(...).getProperties()` |
 | `getChartData()` | `ws.chart(...).getData()` |
@@ -2742,7 +2792,6 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
 | `getMerges()` | `listMerges()` |
 | `getNumFmt()` | `getNumberFormat()` |
 | `getPersons()` | `listPeople()` |
-| `getProtectedRange()` | removed; use `listProtectedRanges()` |
 | `getProtectedRangeCount()` | removed; use `listProtectedRanges()` |
 | `getProtectedRanges()` | removed |
 | `getSheetAutoFilterXml()` | `getAutoFilterXml()` |
@@ -2763,14 +2812,13 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
 | `getSheetSelection()` | `getSelection()` |
 | `getSheetSheetPrXml()` | `getSheetPrXml()` |
 | `getSheetView()` | `getView()` |
-| `getSparklineGroup()` | removed; use `listSparklineGroups()` |
 | `getSparklineGroupCount()` | removed; use `listSparklineGroups()` |
 | `getTableAutoFilter()` | `ws.table(...).getAutoFilter()` |
 | `getTheme()` | `getThemeFonts()` |
 | `getThreadedComments()` | `listThreadedComments()` |
-| `getValidation()` | removed; use `listValidations()` |
 | `getValidationCount()` | removed; use `listValidations()` |
 | `getValidations()` | removed |
+| `GradientFill.degree` | `GradientFill.angleDeg` |
 | `Hyperlink.rect` | `Hyperlink.range` |
 | `HyperlinkEntry` | `Hyperlink` |
 | `ImageInfo.pxHeight` | `ImageInfo.heightPx` |
@@ -2799,6 +2847,7 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
 | `localeFacts()` | `getLocaleFacts()` |
 | `LocaleFactsResult` | removed |
 | `memoryUsage()` | `getMemoryUsage()` |
+| `Mention.length` | `Mention.end` |
 | `MergedFunctionMetadataResult` | removed |
 | `MergeRange` | folded into `CellRect` |
 | `moveSheet()` | `wb.sheet(...).move()` |
@@ -2888,7 +2937,7 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
 | `pivotCacheFieldSharedItemValue()` | removed |
 | `pivotCacheGetOptions()` | `wb.pivotCache(...).getOptions()` |
 | `pivotCacheGetWorksheetSource()` | `wb.pivotCache(...).getWorksheetSource()` |
-| `pivotCacheId()` | `ws.pivot(...).getCache()` |
+| `pivotCacheId()` | `ws.pivot(...).cache()` |
 | `pivotCacheIdAt()` | removed |
 | `PivotCacheOptionsResult` | removed |
 | `pivotCacheRecordAdd()` | `wb.pivotCache(...).addRecord()` |
@@ -2905,6 +2954,8 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
 | `pivotCacheSetWorksheetSource()` | `wb.pivotCache(...).setWorksheetSource()` |
 | `PivotCacheSharedItemIsDateResult` | folded into `BoolResult` |
 | `PivotCalculatedItemResult` | `PivotCalculatedItem` |
+| `PivotCellKind.ColLabel` | `PivotCellKind.ColumnLabel` |
+| `PivotCellKind.ColSubtotal` | `PivotCellKind.ColumnSubtotal` |
 | `pivotColFieldOrder()` | `ws.pivot(...).getColumnFieldOrder()` |
 | `pivotCount()` | removed |
 | `pivotCreate()` | `addPivot()` |
@@ -2917,7 +2968,7 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
 | `pivotDataFieldSet()` | `ws.pivot(...).setDataField()` |
 | `PivotDataFieldSpec` | `PivotDataFieldInput` |
 | `PivotField.subtotalFns` | `PivotField.subtotalFunctions` |
-| `pivotFieldAdd()` | `ws.pivot(...).addField()` |
+| `pivotFieldAdd()` | `ws.pivot(...).pivotFieldAdd()` |
 | `pivotFieldAddItem()` | `ws.pivot(...).addFieldItem()` |
 | `pivotFieldAddItemAt()` | removed |
 | `pivotFieldAddSubtotalFn()` | removed; use `ws.pivot(...).setFieldSubtotalFunctions()` |
@@ -2945,11 +2996,12 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
 | `pivotFieldSetShowDetail()` | removed |
 | `pivotFieldSetSort()` | removed |
 | `pivotFieldSetSubtotalTop()` | removed |
-| `PivotFieldSpecInput` | `PivotFieldInput` |
+| `PivotFieldSpecInput` | removed |
 | `pivotFilterAdd()` | `ws.pivot(...).addFilter()` |
 | `pivotFilterAt()` | `ws.pivot(...).getFilter()` |
 | `pivotFilterClear()` | `ws.pivot(...).clearFilters()` |
 | `pivotFilterCount()` | removed; use `listPivotFilters()` |
+| `PivotFilterInput.type` | `PivotFilterInput.kind` |
 | `pivotFilterRemoveAt()` | `ws.pivot(...).removeFilter()` |
 | `PivotFilterResult` | `PivotFilter` |
 | `PivotFilterSpec` | `PivotFilterInput` |
@@ -3012,12 +3064,12 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
 | `recomputed` | `value` |
 | `RectPt.height` | `RectPt.heightPt` |
 | `RectPt.width` | `RectPt.widthPt` |
-| `ReferenceRange` | removed; `formatReference` takes an A1 string, a `CellRect` or a `ParsedReference` |
 | `refMode()` | `getRefMode()` |
 | `remapRangeStyle()` | `remapRangeXfs()` |
 | `removeAutoFilter()` | removed; use `setAutoFilter()` |
 | `removeChartSeries()` | `ws.chart(...).removeSeries()` |
 | `removeConditionalFormatAt()` | `removeCfRule()` |
+| `removeHyperlink()` | removed; use `setHyperlink()` |
 | `removeHyperlinkAt()` | removed |
 | `removeMergeAt()` | removed |
 | `removeShape()` | `removeDrawing()` |
@@ -3095,9 +3147,8 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
 | `setTableStyleDefaults()` | `updateTableStyleDefaults()` |
 | `setThreadResolved()` | removed; use `updateThreadedComment()` |
 | `Shape` | `ShapeProperties` |
-| `ShapeInput.lineWidthEmu` | `ShapeInput.lineWidthPt` |
 | `ShapeInput.rotation` | `ShapeInput.rotationDeg` |
-| `ShapeProperties.lineWidthEmu` | `ShapeProperties.lineWidthPt` |
+| `ShapePaint` | removed |
 | `ShapeProperties.rotation` | `ShapeProperties.rotationDeg` |
 | `SheetAutoFilterXmlResult` | folded into `StringResult` |
 | `SheetCommentEntry` | `SheetComment` |
@@ -3150,14 +3201,16 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
 | `Sparkline.formula` | `Sparkline.source` |
 | `SparklineEmptyCells` | folded into `BlanksAs` |
 | `SparklineGroup.dateAxisRef` | `SparklineGroup.dateAxisRange` |
+| `SparklineGroup.lineWeight` | `SparklineGroup.lineWidthPt` |
 | `SparklineGroupInput.dateAxisRef` | `SparklineGroupInput.dateAxisRange` |
+| `SparklineGroupInput.lineWeight` | `SparklineGroupInput.lineWidthPt` |
 | `SparklineGroupResult` | removed |
 | `Spill.rect` | `Spill.range` |
 | `spillInfo()` | `getSpill()` |
 | `SpillInfo` | `Spill` |
 | `Status.status` | `Status.code` |
 | `Status` | removed |
-| `statusString()` | removed; `enumName(StatusCode, code)` names a status |
+| `statusString()` | removed |
 | `StringResult` | removed |
 | `tableAt()` | `ws.table(...).getProperties()` |
 | `TableColumnEntry` | `TableColumn` |
@@ -3169,6 +3222,8 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
 | `TableProperties.headerRowCount` | `TableProperties.headerRow` |
 | `TableProperties.totalsRowCount` | `TableProperties.totalsRow` |
 | `tableStyleCount()` | removed; use `listTableStyles()` |
+| `TableStyleDefaults.pivotStyle` | `TableStyleDefaults.pivotStyleName` |
+| `TableStyleDefaults.tableStyle` | `TableStyleDefaults.tableStyleName` |
 | `TableStyleDefaultsResult` | `TableStyleDefaults` |
 | `TableStyleElement.dxfId` | `TableStyleElement.dxfIndex` |
 | `TableUpdateInput` | folded into `TablePatch` |
@@ -3187,6 +3242,7 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
 | `WidthModel.normalFontSize` | `WidthModel.normalFontSizePt` |
 | `WidthModelResult` | `WidthModel` |
 | `Workbook.loadBytes()` | `Workbook.load()` |
+| `WorkbookFormat.Unknown` | removed |
 | `WorkbookProtection.revisionsPassword` | `WorkbookProtection.revisionsLegacyPasswordHash` |
 | `WorkbookProtection.workbookPassword` | `WorkbookProtection.workbookLegacyPasswordHash` |
 | `WorkbookProtectionResult` | removed |
@@ -3203,7 +3259,7 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
 | `add_col_break()` | `set_column_break()` |
 | `add_conditional_format()` | `add_cf_rule()` |
 | `add_hyperlink()` | `set_hyperlink()` |
-| `add_hyperlink_range()` | `set_hyperlink_range()` |
+| `add_hyperlink_range()` | removed; use `set_hyperlink()` |
 | `add_num_fmt()` | `add_number_format()` |
 | `add_row_break()` | `set_row_break()` |
 | `apply_table_auto_filter()` | `ws.table(...).apply_auto_filter()` |
@@ -3228,6 +3284,7 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
 | `cell_style_xf_count()` | removed; use `list_cell_style_xfs()` |
 | `cell_xf_count()` | removed; use `list_cell_xfs()` |
 | `Cell` | folded into `RangeCell` |
+| `CellStyle.i_level` | `CellStyle.outline_level` |
 | `CellStyle.xf_id` | `CellStyle.style_xf_index` |
 | `CellStyleRecord` | `CellStyle` |
 | `CellXf.horizontal_align` | `CellXf.horizontal` |
@@ -3237,12 +3294,16 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
 | `cf_count()` | removed; use `list_cf_rules()` |
 | `CfCellResult` | `CfCell` |
 | `CfColor` | folded into `Color` |
+| `CfDataBar.maximum` | `CfDataBar.max` |
+| `CfDataBar.minimum` | `CfDataBar.min` |
 | `CfIcon.icon_id` | `CfIcon.icon_index` |
 | `CfMatch.dxf_id` | `CfMatch.dxf_index` |
 | `ChartAxisInfo` | `ChartAxis` |
 | `ChartBlanksAs` | `BlanksAs` |
 | `ChartCategories.format_code` | `ChartCategories.number_format` |
+| `ChartDataSeries.format_code` | `ChartDataSeries.number_format` |
 | `ChartDataSeries.idx` | `ChartDataSeries.series_id` |
+| `ChartDataSeries.x_format_code` | `ChartDataSeries.x_number_format` |
 | `ChartFill.transparency` | `ChartFill.transparency_pct` |
 | `ChartFillInfo` | `ChartFill` |
 | `ChartFillPatch.transparency` | `ChartFillPatch.transparency_pct` |
@@ -3260,9 +3321,13 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
 | `ChartPlot.chartex_layout` | `ChartPlot.extended_layout` |
 | `ChartPlot.first_slice_angle` | `ChartPlot.first_slice_angle_deg` |
 | `ChartPlot.gap_width` | `ChartPlot.gap_width_pct` |
+| `ChartPlot.hole_size` | `ChartPlot.hole_size_pct` |
+| `ChartPlot.overlap` | `ChartPlot.overlap_pct` |
 | `ChartPlotInfo` | `ChartPlot` |
 | `ChartPlotPatch.first_slice_angle` | `ChartPlotPatch.first_slice_angle_deg` |
 | `ChartPlotPatch.gap_width` | `ChartPlotPatch.gap_width_pct` |
+| `ChartPlotPatch.hole_size` | `ChartPlotPatch.hole_size_pct` |
+| `ChartPlotPatch.overlap` | `ChartPlotPatch.overlap_pct` |
 | `ChartPlotType.CHARTEX` | `ChartPlotType.EXTENDED` |
 | `ChartPointInfo` | `ChartPoint` |
 | `ChartPreviewOverrides` | removed |
@@ -3273,6 +3338,7 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
 | `ChartSourceInfo` | `ChartSource` |
 | `ChartTitleInfo` | `ChartTitle` |
 | `ChartUnresolved.series_idx` | `ChartUnresolved.series_id` |
+| `ChartUnresolved.source` | `ChartUnresolved.role` |
 | `CivilTime` | removed |
 | `clear_auto_filter()` | `clear_auto_filter_criteria()` |
 | `clear_cell_xf_index()` | `reset_cell_xf_index()` |
@@ -3284,6 +3350,7 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
 | `clear_row_style()` | `reset_row_xf_index()` |
 | `clear_table_auto_filter()` | `ws.table(...).clear_auto_filter_criteria()` |
 | `ColorSpec` | `Color` |
+| `cols` | `columns` |
 | `column_chars_to_pt()` | `convert_column_chars_to_pt()` |
 | `column_pt_to_chars()` | `convert_column_pt_to_chars()` |
 | `ColumnLayout.width` | `ColumnLayout.width_chars` |
@@ -3335,7 +3402,7 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
 | `get_chart_data()` | `ws.chart(...).get_data()` |
 | `get_col_breaks()` | `list_column_breaks()` |
 | `get_comments()` | `list_comments()` |
-| `get_conditional_format_at()` | removed; use `list_cf_rules()` |
+| `get_conditional_format_at()` | removed |
 | `get_conditional_formats()` | removed |
 | `get_external_link_at()` | removed; use `list_external_links()` |
 | `get_external_links()` | removed |
@@ -3349,7 +3416,6 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
 | `get_phonetic_runs()` | `get_cell_phonetic_runs()` |
 | `get_pivot_cache_worksheet_source()` | `wb.pivot_cache(...).get_worksheet_source()` |
 | `get_pivot_report_layout()` | `ws.pivot(...).get_report_layout()` |
-| `get_protected_range()` | removed; use `list_protected_ranges()` |
 | `get_protected_ranges()` | removed |
 | `get_row_breaks()` | `list_row_breaks()` |
 | `get_sheet_columns()` | `list_column_overrides()` |
@@ -3359,15 +3425,15 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
 | `get_sheet_selection()` | `get_selection()` |
 | `get_sheet_view()` | `get_view()` |
 | `get_show_phonetic()` | `get_cell_show_phonetic()` |
-| `get_sparkline_group()` | removed; use `list_sparkline_groups()` |
 | `get_sparkline_group_count()` | removed; use `list_sparkline_groups()` |
 | `get_table_auto_filter()` | `ws.table(...).get_auto_filter()` |
 | `get_table_count()` | removed |
 | `get_theme()` | `get_theme_fonts()` |
 | `get_threaded_comments()` | `list_threaded_comments()` |
-| `get_validation_at()` | removed; use `list_validations()` |
+| `get_validation_at()` | removed |
 | `get_validations()` | removed |
-| `has_phonetic_properties()` | removed |
+| `GradientFill.degree` | `GradientFill.angle_deg` |
+| `has_phonetic_properties()` | removed; use `get_cell_phonetic_properties()` |
 | `Hyperlink.rect` | `Hyperlink.range` |
 | `hyperlink_count()` | removed; use `list_hyperlinks()` |
 | `ImageInfo.px_height` | `ImageInfo.height_px` |
@@ -3388,6 +3454,7 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
 | `list_locale_error_names()` | removed |
 | `MarginsPt` | `PaginationMargins` |
 | `memory_usage()` | `get_memory_usage()` |
+| `Mention.length` | `Mention.end` |
 | `merge_count()` | removed; use `list_merges()` |
 | `MergeRange` | folded into `CellRect` |
 | `move_sheet()` | `wb.sheet(...).move()` |
@@ -3454,7 +3521,7 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
 | `pivot_cache_field_shared_item_is_date()` | removed |
 | `pivot_cache_field_shared_item_value()` | removed |
 | `pivot_cache_get_options()` | `wb.pivot_cache(...).get_options()` |
-| `pivot_cache_id()` | `ws.pivot(...).get_cache()` |
+| `pivot_cache_id()` | `ws.pivot(...).cache()` |
 | `pivot_cache_id_at()` | removed |
 | `pivot_cache_record_add()` | `wb.pivot_cache(...).add_record()` |
 | `pivot_cache_record_clear()` | `wb.pivot_cache(...).clear_records()` |
@@ -3476,7 +3543,7 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
 | `pivot_data_field_count()` | removed; use `list_pivot_data_fields()` |
 | `pivot_data_field_default_name()` | `ws.pivot(...).get_data_field_default_name()` |
 | `pivot_data_field_set()` | `ws.pivot(...).set_data_field()` |
-| `pivot_field_add()` | `ws.pivot(...).add_field()` |
+| `pivot_field_add()` | `ws.pivot(...).pivot_field_add()` |
 | `pivot_field_add_item()` | `ws.pivot(...).add_field_item()` |
 | `pivot_field_add_item_at()` | removed |
 | `pivot_field_add_subtotal_fn()` | removed; use `ws.pivot(...).set_field_subtotal_functions()` |
@@ -3525,16 +3592,18 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
 | `pivot_show_details()` | `ws.pivot(...).show_details()` |
 | `pivot_style_info()` | `ws.pivot(...).get_style_options()` |
 | `PivotAxis.COL` | `PivotAxis.COLUMN` |
+| `PivotCellKind.COL_LABEL` | `PivotCellKind.COLUMN_LABEL` |
+| `PivotCellKind.COL_SUBTOTAL` | `PivotCellKind.COLUMN_SUBTOTAL` |
 | `PivotDataFieldSpec` | `PivotDataFieldInput` |
 | `PivotField.subtotal_fns` | `PivotField.subtotal_functions` |
 | `PivotFieldInfo` | `PivotField` |
-| `PivotFieldSpecInput` | `PivotFieldInput` |
+| `PivotFieldSpecInput` | removed |
+| `PivotFilterInput.type` | `PivotFilterInput.kind` |
 | `PivotFilterSpec` | `PivotFilterInput` |
 | `PivotFilterType.LABEL_DATE` | `PivotFilterKind.DATE_BETWEEN` |
 | `PivotFilterType.VALUE_TOP_10` | `PivotFilterKind.VALUE_TOP_COUNT` |
 | `PivotFilterType` | `PivotFilterKind` |
 | `PivotFilterValueKind` | removed |
-| `PivotGrandTotals.cols` | `PivotGrandTotals.columns` |
 | `PivotItemInfo` | `PivotItem` |
 | `PivotLayout.rect` | `PivotLayout.range` |
 | `PivotOptions.show_empty_col` | `PivotOptions.show_empty_column` |
@@ -3562,6 +3631,7 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
 | `remove_chart_series()` | `ws.chart(...).remove_series()` |
 | `remove_col_break()` | removed |
 | `remove_conditional_format_at()` | `remove_cf_rule()` |
+| `remove_hyperlink()` | removed; use `set_hyperlink()` |
 | `remove_hyperlink_at()` | removed |
 | `remove_merge_at()` | removed |
 | `remove_row_break()` | removed |
@@ -3626,7 +3696,7 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
 | `set_table_style_defaults()` | `update_table_style_defaults()` |
 | `set_thread_resolved()` | removed; use `update_threaded_comment()` |
 | `Shape` | `ShapeProperties` |
-| `ShapeProperties.line_width_emu` | `ShapeProperties.line_width_pt` |
+| `ShapePaint` | removed |
 | `ShapeProperties.rotation` | `ShapeProperties.rotation_deg` |
 | `sheet_count()` | removed |
 | `sheet_name()` | removed |
@@ -3654,6 +3724,7 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
 | `SheetProtection.sort` | `SheetProtection.allow_sort` |
 | `SheetSelection.active_row` | `SheetSelection.active` |
 | `SheetView.pane_top_left_row` | `SheetView.pane_top_left` |
+| `SheetView.show_row_col_headers` | `SheetView.show_row_column_headers` |
 | `SheetView.split_x` | `SheetView.split_x_twips` |
 | `SheetView.split_y` | `SheetView.split_y_twips` |
 | `SheetView.top_left_row` | `SheetView.top_left` |
@@ -3665,6 +3736,7 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
 | `Sparkline.formula` | `Sparkline.source` |
 | `SparklineEmptyCells` | folded into `BlanksAs` |
 | `SparklineGroup.date_axis_ref` | `SparklineGroup.date_axis_range` |
+| `SparklineGroup.line_weight` | `SparklineGroup.line_width_pt` |
 | `Spill.rect` | `Spill.range` |
 | `spill_info()` | `get_spill()` |
 | `SpillInfo` | `Spill` |
@@ -3700,6 +3772,7 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
 | `Workbook.locale_facts()` | `get_locale_facts()` |
 | `Workbook.localize_formula()` | `localize_formula()` |
 | `Workbook.localize_function_name()` | `localize_function_name()` |
+| `WorkbookFormat.UNKNOWN` | removed |
 | `WorkbookProtection.revisions_password` | `WorkbookProtection.revisions_legacy_password_hash` |
 | `WorkbookProtection.workbook_password` | `WorkbookProtection.workbook_legacy_password_hash` |
 <!-- migration-table:end -->
