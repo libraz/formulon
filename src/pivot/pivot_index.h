@@ -38,8 +38,8 @@ struct PivotItem;
 const PivotTable* find_pivot_at_anchor(const Workbook& wb, std::string_view sheet_name, std::uint32_t row,
                                        std::uint32_t col) noexcept;
 
-/// Whether a pivot table on `sheet` other than the one at position `self` is
-/// named `name` under `collection_names::equal`; pass `sheet.pivot_tables().size()`
+/// Whether writing `name` collides (`sheet_names::write_collides`) with a pivot
+/// table on `sheet` other than the one at position `self`; pass `sheet.pivot_tables().size()`
 /// as `self` for a name no pivot holds yet.
 bool pivot_name_taken(const Sheet& sheet, std::string_view name, std::size_t self) noexcept;
 

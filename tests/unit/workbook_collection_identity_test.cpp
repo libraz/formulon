@@ -72,10 +72,10 @@ TEST(CollectionIdentity, TableNamesCollideUnderUnicodeCaseFolding) {
 TEST(CollectionIdentity, DefinedNamesFoldBeyondAscii) {
   Workbook wb = Workbook::create();
   ASSERT_TRUE(static_cast<bool>(wb.set_defined_name_scoped("Ölpreis", "1", -1)));
-  // The other casing names the same entry: it is updated, not appended.
+  // The other casing names the same entry: it is updated, not appended, and takes the new spelling.
   ASSERT_TRUE(static_cast<bool>(wb.set_defined_name_scoped("ölPREIS", "2", -1)));
   ASSERT_EQ(wb.defined_names().size(), 1U);
-  EXPECT_EQ(wb.defined_names()[0].name, "Ölpreis");
+  EXPECT_EQ(wb.defined_names()[0].name, "ölPREIS");
   EXPECT_EQ(wb.defined_names()[0].formula, "2");
   ASSERT_TRUE(static_cast<bool>(wb.set_defined_name_hidden("ÖLPREIS", -1, true)));
   EXPECT_TRUE(wb.defined_names()[0].hidden);

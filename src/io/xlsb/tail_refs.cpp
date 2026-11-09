@@ -116,7 +116,7 @@ Edit Open(const std::vector<std::uint8_t>& buf) {
   return edit;
 }
 
-void RemapSlotSqrefs(std::vector<std::uint8_t>& buf, const SqrefRemap& remap) {
+void RemapSlotSqrefs(std::vector<std::uint8_t>& buf, const SqrefRemap& remap, const SqrefRemap* cf_remap) {
   Edit edit = Open(buf);
   bool changed = false;
   for (std::size_t i = 0; i < edit.recs.size(); ++i) {
@@ -127,7 +127,7 @@ void RemapSlotSqrefs(std::vector<std::uint8_t>& buf, const SqrefRemap& remap) {
       continue;
     }
     const std::vector<MergeRange> before = ranges;
-    remap(ranges);
+    (rec.type == kBeginCondFmt14 && cf_remap != nullptr ? *cf_remap : remap)(ranges);
     if (ranges.empty()) {
       edit.Drop(i, rec.type == kBeginCondFmt14 ? edit.Find(i, kEndCondFmt14) : i);
       changed = true;
@@ -658,7 +658,7 @@ bool RemapAutoFilter(Edit& edit, std::size_t begin, const StructuralEdit& e) {
   AutoFilter whole;
   whole.range = read_rfx(cursor).value();
   const auto moved = [&e](AutoFilter filter) -> std::optional<AutoFilter> {
-    if (!shift_auto_filter(filter, e.index, e.count, e.is_delete, e.row_axis, /*header_delete_removes=*/true)) {
+    if (!shift_auto_filter(filter, e, /*header_delete_removes=*/true)) {
       return std::nullopt;
     }
     return filter;
@@ -781,12 +781,8 @@ bool RemapBreaks(Edit& edit, std::size_t begin, std::uint16_t end_type, const St
 }
 
 void RemapSlotChildRefs(std::vector<std::uint8_t>& buf, const StructuralEdit& e) {
-  const SqrefRemap move = [&e](std::vector<MergeRange>& ranges) {
-    shift_sqref_ranges(ranges, e.index, e.count, e.is_delete, e.row_axis);
-  };
-  const SqrefRemap cut = [&e](std::vector<MergeRange>& ranges) {
-    cut_sqref_ranges(ranges, e.index, e.count, e.is_delete, e.row_axis);
-  };
+  const SqrefRemap move = [&e](std::vector<MergeRange>& ranges) { shift_reference_ranges(ranges, e); };
+  const SqrefRemap cut = [&e](std::vector<MergeRange>& ranges) { cut_sqref_ranges(ranges, e); };
   Edit edit = Open(buf);
   bool changed = false;
   bool cells_dropped = false;
@@ -806,7 +802,8 @@ void RemapSlotChildRefs(std::vector<std::uint8_t>& buf, const StructuralEdit& e)
       }
       case kBrtBeginRwBrk:
       case kBrtBeginColBrk:
-        if ((edit.recs[i].type == kBrtBeginRwBrk) == e.row_axis) {
+        // Page breaks follow the row and column geometry, which a band edit leaves alone.
+        if ((edit.recs[i].type == kBrtBeginRwBrk) == e.row_axis && !e.band.has_value()) {
           changed =
               RemapBreaks(edit, i, edit.recs[i].type == kBrtBeginRwBrk ? kBrtEndRwBrk : kBrtEndColBrk, e) || changed;
         }
@@ -880,10 +877,10 @@ void RemapSlotChildRefs(std::vector<std::uint8_t>& buf, const StructuralEdit& e)
 
 }  // namespace
 
-void remap_tail_sqrefs(XlsbSheetTail& tail, const SqrefRemap& remap) {
+void remap_tail_sqrefs(XlsbSheetTail& tail, const SqrefRemap& remap, const SqrefRemap* cf_remap) {
   for (std::vector<std::uint8_t>* slot :
        {&tail.before_merges, &tail.after_merges_before_hyperlinks, &tail.after_hyperlinks}) {
-    RemapSlotSqrefs(*slot, remap);
+    RemapSlotSqrefs(*slot, remap, cf_remap);
   }
 }
 

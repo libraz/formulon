@@ -638,13 +638,14 @@ AstNode* parse_entry_with_diagnostics(std::string_view src, Arena& arena, ParseF
   return nullptr;
 }
 
-bool formula_references_other_sheet(std::string_view formula, std::string_view own_sheet) {
+bool formula_references_other_sheet(std::string_view formula, std::string_view own_sheet,
+                                    const std::vector<std::string>* sheet_list) {
   if (formula.empty()) {
     return false;
   }
   Arena arena;
   const AstNode* root = parse_strict(formula, arena);
-  return root != nullptr && references_other_sheet(*root, own_sheet);
+  return root != nullptr && references_other_sheet(*root, own_sheet, sheet_list);
 }
 
 // ---------------------------------------------------------------------------

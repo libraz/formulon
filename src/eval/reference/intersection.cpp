@@ -353,6 +353,16 @@ bool resolve_name_endpoint(const parser::AstNode& node, Arena& arena, const Func
 
 }  // namespace
 
+namespace {
+
+// Whether the sheet spelling `sheet` resolves to `target`; without a workbook, the case fold of its name.
+bool names_sheet(const EvalContext& ctx, std::string_view sheet, const Sheet& target) {
+  const Workbook* wb = ctx.workbook();
+  return wb == nullptr ? sheet_names::equal(target.name(), sheet) : wb->sheet_by_name(sheet) == &target;
+}
+
+}  // namespace
+
 bool merge_range_endpoint_sheets(const parser::AstNode& lhs, std::string_view lhs_sheet, const parser::AstNode& rhs,
                                  std::string_view rhs_sheet, const EvalContext& ctx, std::string_view* out_sheet,
                                  ErrorCode* out_err) {
@@ -361,7 +371,7 @@ bool merge_range_endpoint_sheets(const parser::AstNode& lhs, std::string_view lh
     return true;
   }
   if (!lhs_sheet.empty() && !rhs_sheet.empty()) {
-    if (!sheet_names::equal(lhs_sheet, rhs_sheet)) {
+    if (!same_sheet_spelling(ctx.workbook(), lhs_sheet, rhs_sheet)) {
       *out_err = ErrorCode::Value;
       return false;
     }
@@ -375,7 +385,7 @@ bool merge_range_endpoint_sheets(const parser::AstNode& lhs, std::string_view lh
   // name or a call does not reach the bare side, which stays on the
   // formula's own sheet.
   const bool literal = qualified.kind() == parser::NodeKind::Ref || qualified.kind() == parser::NodeKind::RangeOp;
-  if (literal || ctx.current_sheet() == nullptr || sheet_names::equal(ctx.current_sheet()->name(), sheet)) {
+  if (literal || ctx.current_sheet() == nullptr || names_sheet(ctx, sheet, *ctx.current_sheet())) {
     return true;
   }
   *out_err = ErrorCode::Value;
@@ -519,7 +529,7 @@ bool resolve_intersect_operand(const parser::AstNode& node, Arena& arena, const 
   // rectangle for — falls through to its existing resolution.
   parser::Reference rect_lhs{};
   parser::Reference rect_rhs{};
-  if (declared_rect_endpoint_pair(node, &rect_lhs, &rect_rhs)) {
+  if (declared_rect_endpoint_pair(node, &rect_lhs, &rect_rhs, ctx.workbook())) {
     const Expected<DeclaredRect, ErrorCode> rect = declared_rect(rect_lhs, rect_rhs);
     if (rect && rect.value().whole_axis) {
       // The parser keeps the sheet qualifier on the left endpoint.
@@ -575,7 +585,7 @@ bool compute_intersect_rect(const parser::AstNode& lhs, const parser::AstNode& r
                                  out_err)) {
     return false;
   }
-  const auto merged = merge_sheet_qualifiers(lhs_sheet, rhs_sheet);
+  const auto merged = merge_sheet_qualifiers(lhs_sheet, rhs_sheet, ctx.workbook());
   if (!merged) {
     *out_err = merged.error();
     return false;
@@ -636,11 +646,11 @@ bool spelled_area_sheet(const parser::AstNode& area, std::string_view home, std:
 }
 
 // Writes the first spelled sheet to `*first`; false once an area names another sheet.
-bool union_areas_share_sheet(const parser::AstNode& node, std::string_view home, std::string_view* first,
-                             bool* have_first) {
+bool union_areas_share_sheet(const parser::AstNode& node, const EvalContext& ctx, std::string_view home,
+                             std::string_view* first, bool* have_first) {
   if (node.kind() == parser::NodeKind::UnionOp) {
     for (std::uint32_t i = 0; i < node.as_union_arity(); ++i) {
-      if (!union_areas_share_sheet(node.as_union_child(i), home, first, have_first)) {
+      if (!union_areas_share_sheet(node.as_union_child(i), ctx, home, first, have_first)) {
         return false;
       }
     }
@@ -655,10 +665,21 @@ bool union_areas_share_sheet(const parser::AstNode& node, std::string_view home,
     *have_first = true;
     return true;
   }
-  return sheet_names::equal(*first, sheet);
+  return same_sheet_spelling(ctx.workbook(), *first, sheet);
 }
 
 }  // namespace
+
+bool same_sheet_spelling(const Workbook* wb, std::string_view a, std::string_view b) noexcept {
+  if (a == b) {
+    return true;
+  }
+  if (wb == nullptr) {
+    return sheet_names::equal(a, b);
+  }
+  const std::size_t index = wb->sheet_index_by_name(a);
+  return index != Workbook::kNoSheet && index == wb->sheet_index_by_name(b);
+}
 
 std::optional<ErrorCode> union_reference_error(const parser::AstNode& union_node, const EvalContext& ctx) {
   if (union_has_ref3d(union_node)) {
@@ -668,7 +689,7 @@ std::optional<ErrorCode> union_reference_error(const parser::AstNode& union_node
       ctx.current_sheet() != nullptr ? std::string_view(ctx.current_sheet()->name()) : std::string_view();
   std::string_view first;
   bool have_first = false;
-  if (!union_areas_share_sheet(union_node, home, &first, &have_first)) {
+  if (!union_areas_share_sheet(union_node, ctx, home, &first, &have_first)) {
     return ErrorCode::Value;
   }
   return std::nullopt;

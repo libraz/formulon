@@ -1,6 +1,7 @@
 //
 // C ABI - custom table / PivotTable styles (`<tableStyles>` in styles.xml).
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <string>
@@ -33,6 +34,7 @@ using formulon::c_api::parts::not_found;
 using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::ordinal_of;
 using formulon::c_api::parts::patch_op_ok;
+using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::token_of;
 
 namespace {
@@ -73,13 +75,10 @@ bool is_builtin_style_name(std::string_view name) {
   return false;
 }
 
+// The custom style `name` resolves to (`sheet_names::resolve_named`), or `section.styles.size()` when none.
 std::size_t find_style(const formulon::TableStylesSection& section, std::string_view name) {
-  for (std::size_t i = 0; i < section.styles.size(); ++i) {
-    if (formulon::collection_names::equal(section.styles[i].name, name)) {
-      return i;
-    }
-  }
-  return section.styles.size();
+  const std::size_t found = formulon::sheet_names::resolve_named(section.styles, name);
+  return found == formulon::sheet_names::kNotFound ? section.styles.size() : found;
 }
 
 /// Built-in defaults the desktop application writes into a new workbook.
@@ -234,6 +233,10 @@ extern "C" fm_status_t fm_workbook_set_table_style(fm_workbook_t* wb, const fm_t
     // Attributes the record does not carry (`xr9:uid`) stay with the style.
     next.extra_attrs = std::move(section.styles[existing].extra_attrs);
     section.styles[existing] = std::move(next);
+  } else if (std::any_of(section.styles.begin(), section.styles.end(), [&](const auto& style) {
+               return formulon::sheet_names::write_collides(style.name, next.name);
+             })) {
+    return set_binding_error(formulon::FormulonErrorCode::kAlreadyExists, "name already in use", "name=" + next.name);
   } else {
     section.styles.push_back(std::move(next));
   }
@@ -253,11 +256,14 @@ extern "C" fm_status_t fm_workbook_remove_table_style(fm_workbook_t* wb, const c
   if (index >= section.styles.size()) {
     return not_found("no custom table style has that name", "name=" + std::string(name));
   }
+  // A default naming the removed style falls back to the built-in one.
+  const bool table_default = find_style(section, section.default_table_style) == index;
+  const bool pivot_default = find_style(section, section.default_pivot_style) == index;
   section.styles.erase(section.styles.begin() + static_cast<std::ptrdiff_t>(index));
-  if (formulon::collection_names::equal(section.default_table_style, name)) {
+  if (table_default) {
     section.default_table_style = std::string(kDefaultTableStyle);
   }
-  if (formulon::collection_names::equal(section.default_pivot_style, name)) {
+  if (pivot_default) {
     section.default_pivot_style = std::string(kDefaultPivotStyle);
   }
   return 0;

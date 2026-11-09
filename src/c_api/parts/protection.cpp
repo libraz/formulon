@@ -57,7 +57,7 @@ formulon::ProtectedRange ToModel(const fm_protected_range_t& range) {
   return out;
 }
 
-// Every text is UTF-8 and a name is non-empty and unique per sheet, compared as collection names.
+// Every text is UTF-8 and a name is non-empty and collides with no other on the sheet (`sheet_names::write_collides`).
 fm_status_t CheckRange(const std::vector<formulon::ProtectedRange>& ranges, const formulon::ProtectedRange& range) {
   if (auto rc = check_utf8({range.name.c_str(), range.password.c_str(), range.algorithm_name.c_str(),
                             range.hash_value.c_str(), range.salt_value.c_str(), range.security_descriptor.c_str()});
@@ -68,7 +68,7 @@ fm_status_t CheckRange(const std::vector<formulon::ProtectedRange>& ranges, cons
     return invalid_argument("empty name");
   }
   for (std::size_t i = 0; i < ranges.size(); ++i) {
-    if (formulon::collection_names::equal(ranges[i].name, range.name)) {
+    if (formulon::sheet_names::write_collides(ranges[i].name, range.name)) {
       return set_binding_error(formulon::FormulonErrorCode::kAlreadyExists, "name already in use",
                                "name=" + range.name);
     }
@@ -81,13 +81,10 @@ const char* optional_cstr(TextStore& store, const std::string& text) {
   return text.empty() ? nullptr : store_cstr(store, text);
 }
 
-// The position of the range named `name` (collection-name matching), or `ranges.size()` when none has it.
+// The position of the range `name` resolves to (`sheet_names::resolve_named`), or `ranges.size()` when none.
 std::size_t FindRange(const std::vector<formulon::ProtectedRange>& ranges, const char* name) {
-  std::size_t i = 0;
-  while (i < ranges.size() && !formulon::collection_names::equal(ranges[i].name, name)) {
-    ++i;
-  }
-  return i;
+  const std::size_t found = formulon::sheet_names::resolve_named(ranges, name);
+  return found == formulon::sheet_names::kNotFound ? ranges.size() : found;
 }
 
 fm_status_t RangeNotFound(const char* name) {
@@ -345,7 +342,7 @@ extern "C" fm_status_t fm_sheet_update_protected_range(fm_workbook_t* wb, size_t
   }
   if (patch->name_op == FM_PATCH_OP_SET) {
     for (std::size_t i = 0; i < ranges.size(); ++i) {
-      if (i != protected_range_index && formulon::collection_names::equal(ranges[i].name, updated.name)) {
+      if (i != protected_range_index && formulon::sheet_names::write_collides(ranges[i].name, updated.name)) {
         return set_binding_error(formulon::FormulonErrorCode::kAlreadyExists, "name already in use",
                                  "name=" + updated.name);
       }

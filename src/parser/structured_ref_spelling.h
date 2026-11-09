@@ -12,6 +12,8 @@
 #include <string>
 #include <string_view>
 
+#include "sheet_name.h"
+
 namespace formulon {
 namespace parser {
 
@@ -25,8 +27,10 @@ struct BareTableNamePredicate {
 
 /// `text` (a leading `=` optional) with every structured reference in the
 /// display form for a formula in `own_table`'s range; `own_table` is empty
-/// outside every table.
-std::string display_structured_refs(std::string_view text, std::string_view own_table);
+/// outside every table. A table spelling resolves among `table_list` (the
+/// case fold against `own_table` without one).
+std::string display_structured_refs(std::string_view text, std::string_view own_table,
+                                    const sheet_names::NameList* table_list = nullptr);
 
 /// The stored form of entered `text` at a cell in `own_table`'s range (empty
 /// outside every table): an unqualified `[...]` gains `own_table` and the

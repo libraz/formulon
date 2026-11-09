@@ -165,12 +165,14 @@ void Workbook::put_cell_value(std::size_t sheet_index, std::uint32_t row, std::u
   // edit. Going through the public engine API would release and
   // re-acquire the lock between every step and let the `Sheet` write
   // race against the recalc worker reading the same cell.
-  {
-    std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
-    const eval::RecalcEngine::LockedMutator mutator = engine_->locked_mutator();
-    prepare_cell_overwrite(mutator, sheet_index, sheets_, row, col);
-    sheets_[sheet_index].set_cell_value(row, col, value);
-  }
+  std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
+  put_cell_value_locked(sheet_index, row, col, value);
+}
+
+void Workbook::put_cell_value_locked(std::size_t sheet_index, std::uint32_t row, std::uint32_t col, Value value) {
+  const eval::RecalcEngine::LockedMutator mutator = engine_->locked_mutator();
+  prepare_cell_overwrite(mutator, sheet_index, sheets_, row, col);
+  sheets_[sheet_index].set_cell_value(row, col, value);
 }
 
 Expected<void, Error> Workbook::set_cell_text(std::size_t sheet_index, std::uint32_t row, std::uint32_t col,
@@ -182,6 +184,11 @@ Expected<void, Error> Workbook::set_cell_text(std::size_t sheet_index, std::uint
 
 void Workbook::put_cell_text(std::size_t sheet_index, std::uint32_t row, std::uint32_t col, std::string_view text) {
   std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
+  put_cell_text_locked(sheet_index, row, col, text);
+}
+
+void Workbook::put_cell_text_locked(std::size_t sheet_index, std::uint32_t row, std::uint32_t col,
+                                    std::string_view text) {
   const eval::RecalcEngine::LockedMutator mutator = engine_->locked_mutator();
   prepare_cell_overwrite(mutator, sheet_index, sheets_, row, col);
   sheets_[sheet_index].set_cell_text(row, col, text);
@@ -273,6 +280,16 @@ Expected<void, Error> Workbook::set_cell_formula(std::size_t sheet_index, std::u
 
 void Workbook::put_cell_formula(std::size_t sheet_index, std::uint32_t row, std::uint32_t col, std::string formula,
                                 FormulaSource source, std::uint32_t block_rows, std::uint32_t block_cols) {
+  // The compound mutation runs under a single hold of the engine mutex so a
+  // concurrent `recalc_parallel` does not see a half-applied edit -- see the
+  // comment in `put_cell_value` for the full rationale.
+  std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
+  put_cell_formula_locked(sheet_index, row, col, std::move(formula), source, block_rows, block_cols);
+}
+
+void Workbook::put_cell_formula_locked(std::size_t sheet_index, std::uint32_t row, std::uint32_t col,
+                                       std::string formula, FormulaSource source, std::uint32_t block_rows,
+                                       std::uint32_t block_cols) {
   // Normalize Excel's `_xlfn.` / `_xlfn._xlws.` / `_xlws.` / `_xlpm.`
   // storage prefixes to the canonical formula-bar form at the single
   // ingestion point every reader (OOXML DOM / SAX, XLSB) and binding
@@ -301,11 +318,7 @@ void Workbook::put_cell_formula(std::size_t sheet_index, std::uint32_t row, std:
   parser::AstNode* root = parse_indexable_formula(src, tmp_arena);
   const bool may_name_external_book = MayNameExternalBook(src);
 
-  // The compound mutation runs under a single hold of the engine mutex
-  // so a concurrent `recalc_parallel` does not see a half-applied
-  // edit — see the comment in `set_cell_value` for the full rationale.
   {
-    std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
     const eval::RecalcEngine::LockedMutator mutator = engine_->locked_mutator();
     // Query the covering spill BEFORE the sheet write clears it, so a write
     // into a live spill's phantom re-dirties the anchor.

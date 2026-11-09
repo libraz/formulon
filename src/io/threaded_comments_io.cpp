@@ -81,6 +81,12 @@ Expected<std::vector<ThreadedComment>, Error> read_threaded_comments(const std::
     c.id = node.attribute("id").value();
     c.person_id = node.attribute("personId").value();
     c.created = node.attribute("dT").value();
+    if (!c.created.empty() && c.created.back() == 'Z') {
+      c.created.pop_back();
+    }
+    if (!is_threaded_comment_timestamp(c.created)) {
+      c.created.clear();
+    }
     c.parent_id = node.attribute("parentId").value();
     c.done = attr_bool(node, "done");
     AppendOoxmlTextUnescaped(c.text, node.child("text").text().get());

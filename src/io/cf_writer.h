@@ -61,6 +61,9 @@ struct CfSheetContext {
   std::string_view sheet_name;
   std::size_t sheet_index = 0;
   const std::vector<DifferentialFormat>* dxfs = nullptr;
+  /// The workbook's sheet names, among which a formula's sheet spelling resolves; null compares with `sheet_name`
+  /// under the case fold.
+  const std::vector<std::string>* sheet_names = nullptr;
 };
 
 /// The inverse of `canonical_feature_formula` (cf_reader.h), for writing a

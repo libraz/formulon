@@ -7,7 +7,9 @@
 #include "parser/ast.h"
 
 #include <array>
+#include <cstddef>
 #include <cstring>
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -863,8 +865,18 @@ bool is_self_book_name_ref(const AstNode& node) noexcept {
          !node.as_external_ref_name().empty();
 }
 
-bool references_other_sheet(const AstNode& root, std::string_view own_sheet) {
-  const auto other = [&](std::string_view sheet) { return !sheet.empty() && !sheet_names::equal(sheet, own_sheet); };
+bool references_other_sheet(const AstNode& root, std::string_view own_sheet,
+                            const std::vector<std::string>* sheet_list) {
+  const auto other = [&](std::string_view sheet) {
+    if (sheet.empty()) {
+      return false;
+    }
+    if (sheet_list == nullptr) {
+      return !sheet_names::equal(sheet, own_sheet);
+    }
+    const std::size_t index = sheet_names::resolve(*sheet_list, sheet);
+    return index == sheet_names::kNotFound || (*sheet_list)[index] != own_sheet;
+  };
   switch (root.kind()) {
     case NodeKind::Ref:
       return other(root.as_ref().sheet);
@@ -883,7 +895,8 @@ bool references_other_sheet(const AstNode& root, std::string_view own_sheet) {
     default:
       break;
   }
-  return any_child_node(root, [&](const AstNode& child) { return references_other_sheet(child, own_sheet); });
+  return any_child_node(root,
+                        [&](const AstNode& child) { return references_other_sheet(child, own_sheet, sheet_list); });
 }
 
 bool is_cellref_shaped_function_name(std::string_view lexeme) noexcept {

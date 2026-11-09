@@ -62,7 +62,8 @@ std::string Splice(std::string_view text, std::size_t body_at, const std::vector
   return out;
 }
 
-void CollectDisplay(const AstNode& node, std::string_view body, std::string_view own_table, std::vector<Edit>* edits) {
+void CollectDisplay(const AstNode& node, std::string_view body, std::string_view own_table,
+                    const sheet_names::NameList* table_list, std::vector<Edit>* edits) {
   if (node.kind() == NodeKind::StructuredRef) {
     const std::optional<StructuredRefPayload> payload =
         parse_structured_ref_payload_text(node.as_structured_ref_column());
@@ -70,7 +71,7 @@ void CollectDisplay(const AstNode& node, std::string_view body, std::string_view
       return;
     }
     const std::string_view table = node.as_structured_ref_table();
-    const bool inside = !own_table.empty() && collection_names::equal(table, own_table);
+    const bool inside = !own_table.empty() && sheet_names::NameList::denotes(table_list, table, own_table);
     Edit edit = NodeSpan(node, body);
     edit.text = display_structured_ref(table, *payload, inside);
     if (body.substr(edit.start, edit.end - edit.start) != edit.text) {
@@ -79,7 +80,7 @@ void CollectDisplay(const AstNode& node, std::string_view body, std::string_view
     return;
   }
   any_child_node(node, [&](const AstNode& child) {
-    CollectDisplay(child, body, own_table, edits);
+    CollectDisplay(child, body, own_table, table_list, edits);
     return false;
   });
 }
@@ -153,7 +154,8 @@ struct BindWalk {
 
 }  // namespace
 
-std::string display_structured_refs(std::string_view text, std::string_view own_table) {
+std::string display_structured_refs(std::string_view text, std::string_view own_table,
+                                    const sheet_names::NameList* table_list) {
   if (text.find('[') == std::string_view::npos) {
     return std::string(text);
   }
@@ -165,7 +167,7 @@ std::string display_structured_refs(std::string_view text, std::string_view own_
     return std::string(text);
   }
   std::vector<Edit> edits;
-  CollectDisplay(*root, body, own_table, &edits);
+  CollectDisplay(*root, body, own_table, table_list, &edits);
   return Splice(text, body_at, edits);
 }
 

@@ -1,5 +1,7 @@
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
+#include <ctime>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -548,6 +550,125 @@ TEST(ThreadedComments, GeneratesIdAndStampFromThePinnedClock) {
   auto duplicate = wb.add_threaded_comment(0, Comment(kThread, 4, 4, kAlice, "w"));
   ASSERT_FALSE(static_cast<bool>(duplicate));
   EXPECT_EQ(duplicate.error().code, FormulonErrorCode::kAlreadyExists);
+}
+
+// Restores the process time zone when a test that changes `TZ` ends.
+class ScopedTimeZone {
+ public:
+  explicit ScopedTimeZone(const char* zone) {
+    const char* old = std::getenv("TZ");
+    had_ = old != nullptr;
+    if (had_) {
+      saved_ = old;
+    }
+    setenv("TZ", zone, 1);
+    tzset();
+  }
+  ~ScopedTimeZone() {
+    if (had_) {
+      setenv("TZ", saved_.c_str(), 1);
+    } else {
+      unsetenv("TZ");
+    }
+    tzset();
+  }
+  ScopedTimeZone(const ScopedTimeZone&) = delete;
+  ScopedTimeZone& operator=(const ScopedTimeZone&) = delete;
+
+ private:
+  bool had_ = false;
+  std::string saved_;
+};
+
+// Seconds since the epoch of a `YYYY-MM-DDTHH:MM:SS.ff` value read as UTC.
+std::time_t StampAsUtcSeconds(const std::string& stamp) {
+  std::tm tm{};
+  tm.tm_year = std::stoi(stamp.substr(0, 4)) - 1900;
+  tm.tm_mon = std::stoi(stamp.substr(5, 2)) - 1;
+  tm.tm_mday = std::stoi(stamp.substr(8, 2));
+  tm.tm_hour = std::stoi(stamp.substr(11, 2));
+  tm.tm_min = std::stoi(stamp.substr(14, 2));
+  tm.tm_sec = std::stoi(stamp.substr(17, 2));
+  return timegm(&tm);
+}
+
+std::string UnpinnedStampUnder(const char* zone) {
+  ScopedTimeZone tz(zone);
+  Workbook wb = WorkbookWithPersons();
+  ThreadedComment c = Comment(kThread, 0, 0, kAlice, "x");
+  c.created.clear();
+  const std::time_t before = std::time(nullptr);
+  EXPECT_TRUE(static_cast<bool>(wb.add_threaded_comment(0, c)));
+  const std::time_t after = std::time(nullptr);
+  const std::string stamp = wb.sheet(0).threaded_comments()[0].created;
+  EXPECT_TRUE(is_threaded_comment_timestamp(stamp)) << stamp;
+  const std::time_t at = StampAsUtcSeconds(stamp);
+  EXPECT_GE(at, before - 2);
+  EXPECT_LE(at, after + 2);
+  return stamp;
+}
+
+TEST(ThreadedComments, UnpinnedStampIsUtcWhateverTheHostZone) {
+  const std::string tokyo = UnpinnedStampUnder("Asia/Tokyo");
+  const std::string utc = UnpinnedStampUnder("UTC");
+  EXPECT_NEAR(static_cast<double>(StampAsUtcSeconds(tokyo)), static_cast<double>(StampAsUtcSeconds(utc)), 2.0);
+}
+
+TEST(ThreadedComments, PinnedStampIsWrittenAsIsUnderAnyHostZone) {
+  ScopedTimeZone tz("Asia/Tokyo");
+  Workbook wb = WorkbookWithPersons();
+  wb.set_pinned_now(date_time::CivilTime{{2026, 11, 9}, {17, 4, 48}});
+  ThreadedComment c = Comment(kThread, 0, 0, kAlice, "x");
+  c.created.clear();
+  ASSERT_TRUE(static_cast<bool>(wb.add_threaded_comment(0, c)));
+  EXPECT_EQ(wb.sheet(0).threaded_comments()[0].created, "2026-11-09T17:04:48.00");
+}
+
+TEST(ThreadedComments, InputStampWithZuluSuffixIsStoredWithoutIt) {
+  Workbook wb = WorkbookWithPersons();
+  ThreadedComment c = Comment(kThread, 0, 0, kAlice, "x");
+  c.created = "2026-10-06T09:00:00.00Z";
+  ASSERT_TRUE(static_cast<bool>(wb.add_threaded_comment(0, c)));
+  EXPECT_EQ(wb.sheet(0).threaded_comments()[0].created, "2026-10-06T09:00:00.00");
+}
+
+TEST(ThreadedComments, InputStampWithOffsetOrThreeDigitFractionIsRefused) {
+  for (const char* bad : {"2026-10-06T09:00:00.00+09:00", "2026-10-06T09:00:00.123", "2026-10-06T09:00:00.123Z"}) {
+    Workbook wb = WorkbookWithPersons();
+    ThreadedComment c = Comment(kThread, 0, 0, kAlice, "x");
+    c.created = bad;
+    auto r = wb.add_threaded_comment(0, c);
+    ASSERT_FALSE(static_cast<bool>(r)) << bad;
+    EXPECT_EQ(r.error().code, FormulonErrorCode::kInvalidArgument) << bad;
+  }
+}
+
+std::vector<ThreadedComment> ReadWithDt(const std::string& dt_attr) {
+  const std::string xml =
+      "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n"
+      "<ThreadedComments xmlns=\"http://schemas.microsoft.com/office/spreadsheetml/2018/threadedcomments\">"
+      "<threadedComment ref=\"A1\" " +
+      dt_attr + " personId=\"" + std::string(kAlice) + "\" id=\"" + std::string(kThread) +
+      "\"><text>t</text></threadedComment></ThreadedComments>";
+  std::vector<std::uint8_t> bytes(xml.begin(), xml.end());
+  auto decoded = io::read_threaded_comments(bytes);
+  EXPECT_TRUE(static_cast<bool>(decoded));
+  return decoded ? decoded.value() : std::vector<ThreadedComment>{};
+}
+
+TEST(ThreadedComments, LoadedStampWithZuluSuffixReadsWithoutIt) {
+  const auto list = ReadWithDt("dT=\"2026-10-06T09:00:00.00Z\"");
+  ASSERT_EQ(list.size(), 1U);
+  EXPECT_EQ(list[0].created, "2026-10-06T09:00:00.00");
+}
+
+TEST(ThreadedComments, LoadedStampWithOffsetOrThreeDigitFractionIsAbsentAndOmittedOnSave) {
+  for (const char* bad : {"2026-10-06T09:00:00.00+09:00", "2026-10-06T09:00:00.123"}) {
+    const auto list = ReadWithDt(std::string("dT=\"") + bad + "\"");
+    ASSERT_EQ(list.size(), 1U) << bad;
+    EXPECT_TRUE(list[0].created.empty()) << bad;
+    EXPECT_EQ(io::write_threaded_comments(list).find("dT="), std::string::npos) << bad;
+  }
 }
 
 TEST(ThreadedComments, PersonIdsMatchAcrossCase) {

@@ -21,8 +21,9 @@ namespace formulon::io {
 
 /// True when `v` is stored in the x14 extension: it was read from there, or a
 /// formula names a sheet other than `own_sheet` (see
-/// `parser::references_other_sheet`).
-bool data_validation_in_x14(const DataValidation& v, std::string_view own_sheet);
+/// `parser::references_other_sheet`, which resolves among `sheet_list`).
+bool data_validation_in_x14(const DataValidation& v, std::string_view own_sheet,
+                            const std::vector<std::string>* sheet_list = nullptr);
 
 /// Appends the attributes of `v` shared by both forms (everything but
 /// `sqref`), in Excel's order.
@@ -36,7 +37,8 @@ void append_data_validation_attrs(std::string& out, const DataValidation& v);
 /// unchanged when no validation is selected or it does not parse.
 std::string merge_x14_dv_entries(const std::string& ext_lst_xml, const std::vector<DataValidation>& validations,
                                  std::string_view own_sheet, const parser::ExternalBookIndexer* indexer = nullptr,
-                                 std::string_view container_extra_attrs = {});
+                                 std::string_view container_extra_attrs = {},
+                                 const std::vector<std::string>* sheet_list = nullptr);
 
 /// Removes every `<x14:dataValidations>` -- the entries the reader moved into
 /// the model -- and the `<ext>` elements that leaves empty. Returns the input

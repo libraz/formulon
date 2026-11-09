@@ -80,7 +80,7 @@ const parser::AstNode* resolve_computed_reference(const parser::AstNode& expr, A
   } else if (expr.kind() == parser::NodeKind::RangeOp) {
     parser::Reference lhs{};
     parser::Reference rhs{};
-    if (declared_rect_endpoint_pair(expr, &lhs, &rhs)) {
+    if (declared_rect_endpoint_pair(expr, &lhs, &rhs, ctx.workbook())) {
       return nullptr;
     }
   } else if (expr.kind() != parser::NodeKind::IntersectOp) {
@@ -139,7 +139,7 @@ const parser::AstNode* resolve_binding_reference(const parser::AstNode& expr, Ar
       // The defined-name form (`[Book.xlsx]!Name`, `[0]!Name`) is not a cell.
       return expr.as_external_ref_name().empty() ? &expr : nullptr;
     case parser::NodeKind::RangeOp:
-      if (declared_rect_endpoint_pair(expr, &lhs, &rhs)) {
+      if (declared_rect_endpoint_pair(expr, &lhs, &rhs, ctx.workbook())) {
         return &expr;
       }
       break;

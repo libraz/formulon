@@ -19,15 +19,17 @@
 
 #include "parser/ast_shift.h"
 #include "parser/reference.h"
+#include "sheet_name.h"
+#include "utils/band.h"
 
 namespace formulon {
 namespace parser {
 
 /// Renames every reference that names `old_name` to `new_name`.
 ///
-/// Matching uses locale-independent Unicode simple case folding for worksheet
-/// identity (not full Excel-equivalence, normalization, or locale
-/// tailoring). Quoting of the new sheet name is recomputed from the new bytes:
+/// A sheet spelling names `old_name` when it resolves to it among
+/// `sheet_list` (the workbook's sheet names, `old_name` among them); without
+/// a list, when the two agree under the case fold. Quoting of the new sheet name is recomputed from the new bytes:
 /// if it cannot be represented unambiguously in bare A1 syntax, the
 /// `Reference.sheet_quoted` flag is set so `format_a1` round-trips with
 /// the canonical quoted form.
@@ -35,10 +37,11 @@ namespace parser {
 /// 3-D references store their sheet endpoints in a separate span slot. The
 /// dedicated `apply_ref3d_span` hook maps those workbook-local endpoint names.
 ///
-/// `old_name` and `new_name` must outlive the transform.
+/// `old_name`, `new_name` and `sheet_list` must outlive the transform.
 class SheetRenameTransform final : public RefTransform {
  public:
-  SheetRenameTransform(std::string_view old_name, std::string_view new_name) noexcept;
+  SheetRenameTransform(std::string_view old_name, std::string_view new_name,
+                       const sheet_names::NameList* sheet_list = nullptr) noexcept;
 
   /// Pure mapping from old to new for a single sheet field. Public so
   /// callers that want to manipulate refs outside the AST walker (for
@@ -52,6 +55,7 @@ class SheetRenameTransform final : public RefTransform {
  private:
   std::string_view old_name_;
   std::string_view new_name_;
+  const sheet_names::NameList* sheet_list_;
   // Pre-computed quoting decision for the new name. Computing this once at
   // construction time keeps `apply` allocation-free.
   bool new_name_needs_quotes_;
@@ -67,15 +71,18 @@ class SheetRenameTransform final : public RefTransform {
 ///   keeping its address (`#REF!A1`); a span whose two endpoints are both
 ///   `source` becomes the single-sheet reference `copy!tail`. Any other span
 ///   is unchanged.
-/// - A structured reference whose table name matches a `table_map` key
-///   (ASCII case-insensitive) takes the mapped display name.
+/// - A structured reference whose table name resolves to a `table_map` key
+///   among `table_list` takes the mapped display name.
 ///
-/// Sheet identity uses Unicode simple case folding. `source` and `copy` must
-/// outlive the transform; `table_map` is owned.
+/// Spellings resolve among `sheet_list` and `table_list`; a null list falls
+/// back to the case fold. `source`, `copy` and the lists must outlive the
+/// transform; `table_map` is owned.
 class SheetCopyTransform final : public RefTransform {
  public:
   SheetCopyTransform(std::string_view source, std::string_view copy,
-                     std::vector<std::pair<std::string, std::string>> table_map);
+                     std::vector<std::pair<std::string, std::string>> table_map,
+                     const sheet_names::NameList* sheet_list = nullptr,
+                     const sheet_names::NameList* table_list = nullptr);
 
   std::optional<Reference> apply(const Reference& ref) const override;
   std::optional<Ref3DSheetSpan> apply_ref3d_span(std::string_view begin, std::string_view end) const override;
@@ -89,6 +96,8 @@ class SheetCopyTransform final : public RefTransform {
   std::string_view source_;
   std::string_view copy_;
   std::vector<std::pair<std::string, std::string>> table_map_;
+  const sheet_names::NameList* sheet_list_;
+  const sheet_names::NameList* table_list_;
 };
 
 /// Leaves every reference unchanged; `shift_refs` returns the input tree.
@@ -116,9 +125,10 @@ class IdentityTransform final : public RefTransform {
 /// resolves to the removed sheet, the unresolved counterpart collapses to
 /// `#REF!` because the inward direction cannot be determined.
 ///
-/// A name qualified by the removed sheet collapses to `#REF!` unless it is
-/// one of `rebound_names` (ASCII case-insensitive): those become `[0]!Name`,
-/// the workbook-scoped name the removal promotes or rebinds to.
+/// A sheet spelling resolves among `pre_removal_sheet_order`. A name
+/// qualified by the removed sheet collapses to `#REF!` unless it resolves to
+/// one of `rebound_names`: those become `[0]!Name`, the workbook-scoped name
+/// the removal promotes or rebinds to.
 class SheetRemovalTransform final : public RefTransform {
  public:
   SheetRemovalTransform(const std::vector<std::string_view>& pre_removal_sheet_order, std::uint32_t removed_index,
@@ -155,8 +165,9 @@ enum class RowColAxis : std::uint8_t {
 
 /// Reference rewriter for row / column insert and delete operations.
 ///
-/// The transform applies to references whose sheet field matches
-/// `target_sheet` under Unicode simple case folding. References with an empty sheet
+/// The transform applies to references whose sheet field resolves to
+/// `target_sheet` among `sheet_list` (the case fold without a list).
+/// References with an empty sheet
 /// field are local to the formula's owning sheet; whether they fall in
 /// scope depends on the formula's location, which is information the
 /// per-Reference walker does not carry. The caller therefore runs the
@@ -176,7 +187,18 @@ enum class RowColAxis : std::uint8_t {
 class RowColShiftTransform final : public RefTransform {
  public:
   RowColShiftTransform(std::string_view target_sheet, RowColAxis axis, RowColEdit edit, std::uint32_t index,
-                       std::uint32_t count, bool local_means_target = false) noexcept;
+                       std::uint32_t count, bool local_means_target = false,
+                       const sheet_names::NameList* sheet_list = nullptr) noexcept;
+
+  /// An Insert / Delete Cells edit confined to `band`, the perpendicular
+  /// extent (columns for a row-axis edit, rows for a column-axis one). A
+  /// reference adjusts only when its perpendicular extent lies wholly inside
+  /// the band; whole columns and whole rows never adjust. On a delete, a
+  /// range whose axial extent lies in the deleted interval and that the band
+  /// touches at one perpendicular end shrinks to its part outside the band.
+  RowColShiftTransform(std::string_view target_sheet, RowColAxis axis, RowColEdit edit, std::uint32_t index,
+                       std::uint32_t count, Band band, bool local_means_target = false,
+                       const sheet_names::NameList* sheet_list = nullptr) noexcept;
 
   std::optional<Reference> apply(const Reference& ref) const override;
   std::optional<std::pair<Reference, Reference>> apply_range(const Reference& lhs, const Reference& rhs) const override;
@@ -195,12 +217,22 @@ class RowColShiftTransform final : public RefTransform {
   // True iff `ref.sheet` falls within the transform's scope.
   bool sheet_in_scope(std::string_view sheet) const noexcept;
 
+  // True iff the perpendicular interval `[first, last]` lies inside the band
+  // (always, for a whole row/column edit).
+  bool inside_band(std::uint32_t first, std::uint32_t last) const noexcept;
+
+  // The band edit's rule for a range whose perpendicular extent leaves the
+  // band: unchanged, or the delete's shrink to the part outside the band.
+  std::pair<Reference, Reference> apply_range_across_band(const Reference& lhs, const Reference& rhs) const;
+
   std::string_view target_sheet_;
   RowColAxis axis_;
   RowColEdit edit_;
   std::uint32_t index_;
   std::uint32_t count_;
   bool local_means_target_;
+  const sheet_names::NameList* sheet_list_;
+  std::optional<Band> band_;
 };
 
 }  // namespace parser

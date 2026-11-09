@@ -674,15 +674,15 @@ extern "C" fm_status_t fm_workbook_get_defined_name_at(const fm_workbook_t* wb, 
 
 namespace {
 
-// Position of the defined name `name` (Unicode case-folded) in scope `local_sheet_id`, or the list size.
+// Position of the defined name `name` resolves to (`sheet_names::resolve_by`) in scope `local_sheet_id`, or the
+// list size.
 std::size_t find_defined_name_index(const fm_workbook_t* wb, const char* name, int32_t local_sheet_id) {
   const auto& names = wb->workbook().defined_names();
-  for (std::size_t i = 0; i < names.size(); ++i) {
-    if (names[i].local_sheet_id == local_sheet_id && formulon::collection_names::equal(names[i].name, name)) {
-      return i;
-    }
-  }
-  return names.size();
+  const std::size_t found =
+      formulon::sheet_names::resolve_by(names.size(), [&](std::size_t i, formulon::sheet_names::Fold fold) {
+        return names[i].local_sheet_id == local_sheet_id && formulon::sheet_names::same(names[i].name, name, fold);
+      });
+  return found == formulon::sheet_names::kNotFound ? names.size() : found;
 }
 
 }  // namespace

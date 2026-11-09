@@ -189,16 +189,22 @@ test('a totals row toggle grows the table by one row below and shrinks it back',
   });
 });
 
-test('a totals row over an occupied row or on the last grid row is PreconditionFailed and changes nothing', async () => {
-  await withWorkbook((wb, { StatusCode }) => {
+test('a totals row over an occupied row below shifts that row down within the table columns', async () => {
+  await withWorkbook((wb) => {
     const ws = wb.sheet(0);
     const table = salesTable(ws);
     ws.setValue('B4', 'keep');
-    rejectsWith(() => table.update({ totalsRow: true }), StatusCode.PreconditionFailed, 'occupied row below');
-    assert.deepEqual(rectOf(table), rect(0, 0, 2, 1));
-    assert.equal(table.getProperties().totalsRow, false);
-    assert.equal(ws.getValue('B4'), 'keep');
+    table.update({ totalsRow: true });
+    assert.deepEqual(rectOf(table), rect(0, 0, 3, 1));
+    assert.equal(table.getProperties().totalsRow, true);
+    assert.equal(ws.getValue('B5'), 'keep');
+    // A table without a stored totals label or function gets an empty totals row.
+    assert.equal(ws.getValue('B4'), null);
+  });
+});
 
+test('a totals row on the last grid row is PreconditionFailed and changes nothing', async () => {
+  await withWorkbook((wb, { StatusCode }) => {
     const edge = wb.addSheet('Edge');
     edge.setValues('A1048575', [
       ['Item', 'Qty'],
@@ -208,6 +214,20 @@ test('a totals row over an occupied row or on the last grid row is PreconditionF
     rejectsWith(() => last.update({ totalsRow: true }), StatusCode.PreconditionFailed, 'last grid row');
     assert.deepEqual(rectOf(last), rect(1048574, 0, 1048575, 1));
     assert.equal(last.getProperties().totalsRow, false);
+  });
+});
+
+test('turning the totals row off is PreconditionFailed while a formula references it', async () => {
+  await withWorkbook((wb, { StatusCode }) => {
+    const ws = wb.sheet(0);
+    const table = salesTable(ws);
+    table.setColumnTotals(1, { totalsRowFunction: 1 });
+    table.update({ totalsRow: true });
+    ws.setFormula('D1', '=B4');
+    rejectsWith(() => table.update({ totalsRow: false }), StatusCode.PreconditionFailed, 'referenced totals row');
+    assert.deepEqual(rectOf(table), rect(0, 0, 3, 1));
+    assert.equal(table.getProperties().totalsRow, true);
+    assert.equal(ws.getValue('B4'), 40);
   });
 });
 
@@ -378,10 +398,16 @@ test('custom table styles, defined names and table columns match by the one case
     wb.setTableStyle({ name: 'Ä1', table: true });
     assert.equal(wb.getTableStyle('ä1').name, 'Ä1');
     wb.setTableStyle({ name: 'ä1', table: true });
-    assert.equal(wb.listTableStyles().filter((s) => s.name.toLowerCase() === 'ä1').length, 1);
+    const matching = wb.listTableStyles().filter((s) => s.name.toLowerCase() === 'ä1');
+    assert.deepEqual(
+      matching.map((s) => s.name),
+      ['ä1'],
+    );
 
     wb.setDefinedName({ name: 'Ä', formula: '=1' });
     assert.equal(wb.getDefinedName('ä').name, 'Ä');
+    wb.setDefinedName({ name: 'ä', formula: '=2' });
+    assert.equal(wb.getDefinedName('Ä').name, 'ä');
 
     const ws = wb.sheet(0);
     ws.setValues('A1', [
@@ -392,6 +418,17 @@ test('custom table styles, defined names and table columns match by the one case
     const renamed = table.renameColumn(1, 'ä');
     assert.notEqual(renamed.toLowerCase(), 'ä');
     rejectsWith(() => ws.addTable({ name: 'tbl', range: 'D1:E2' }), StatusCode.AlreadyExists, 'table name');
+  });
+});
+
+test('a sheet whose name differs only by width is AlreadyExists', async () => {
+  await withWorkbook((wb, { StatusCode }) => {
+    rejectsWith(
+      () => wb.addSheet('\uFF33\uFF48\uFF45\uFF45\uFF54\uFF11'),
+      StatusCode.AlreadyExists,
+      'full-width Sheet1',
+    );
+    assert.equal(wb.listSheets().length, 1);
   });
 });
 

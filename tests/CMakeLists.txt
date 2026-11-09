@@ -35,6 +35,10 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/workbook_auto_calc_test.cpp
   unit/workbook_tables_test.cpp
   unit/workbook_collection_identity_test.cpp
+  unit/name_identity_collation_test.cpp
+  unit/name_identity_resolver_test.cpp
+  unit/eval/collation_prolonged_mark_test.cpp
+  unit/workbook_insert_delete_cells_test.cpp
   unit/collection_name_formula_fold_test.cpp
   unit/workbook_table_column_rename_test.cpp
   unit/derived_guid_test.cpp

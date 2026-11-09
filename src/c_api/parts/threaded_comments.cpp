@@ -13,9 +13,9 @@
 #include "c_api/parts/common.h"
 #include "c_api/parts/struct_v1_sizes.h"
 #include "sheet.h"
-#include "sheet_name.h"
 #include "threaded_comment.h"
 #include "utils/error.h"
+#include "utils/strings.h"
 #include "workbook.h"
 
 using formulon::c_api::parts::check_enum_domain;
@@ -336,7 +336,7 @@ extern "C" fm_status_t fm_workbook_get_person(const fm_workbook_t* wb, const cha
   out->struct_size = struct_size;
   const auto& persons = wb->workbook().persons();
   for (std::size_t i = 0; i < persons.size(); ++i) {
-    if (formulon::collection_names::equal(persons[i].id, id)) {
+    if (formulon::strings::case_insensitive_eq(persons[i].id, id)) {
       *out_present = 1;
       return fm_workbook_get_person_at(wb, i, out);
     }
@@ -380,7 +380,7 @@ extern "C" fm_status_t fm_workbook_remove_person(fm_workbook_t* wb, const char* 
   }
   const auto& people = wb->workbook().persons();
   if (std::none_of(people.begin(), people.end(),
-                   [&](const formulon::Person& p) { return formulon::collection_names::equal(p.id, id); })) {
+                   [&](const formulon::Person& p) { return formulon::strings::case_insensitive_eq(p.id, id); })) {
     return not_found("no person has that id", std::string("id=") + id);
   }
   return finish_status(wb->workbook().remove_person(id));

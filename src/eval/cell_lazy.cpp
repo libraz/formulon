@@ -97,7 +97,7 @@ bool extract_topleft_ref(const parser::AstNode& ref_node, Arena& arena, const Fu
   }
   if (operand != nullptr && ctx.has_formula_cell()) {
     parser::Reference target{};
-    switch (project_implicit_intersection(*operand, ctx.formula_row(), ctx.formula_col(), &target)) {
+    switch (project_implicit_intersection(*operand, ctx.formula_row(), ctx.formula_col(), &target, ctx.workbook())) {
       case IntersectionProjection::kCell:
         *out_row = target.row;
         *out_col = target.col;

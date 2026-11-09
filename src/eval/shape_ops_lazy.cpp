@@ -135,7 +135,7 @@ OperationShape operation_shape(const parser::AstNode& raw, Arena& arena, const F
     case parser::NodeKind::RangeOp: {
       parser::Reference lhs{};
       parser::Reference rhs{};
-      if (is_three_d_reference(node) || !declared_rect_endpoint_pair(node, &lhs, &rhs)) {
+      if (is_three_d_reference(node) || !declared_rect_endpoint_pair(node, &lhs, &rhs, ctx.workbook())) {
         return OperationShape::kUnknown;
       }
       const auto rect = ctx.declared_range_rect(lhs, rhs);
@@ -235,7 +235,7 @@ bool resolve_shape(const parser::AstNode& raw_arg, Arena& arena, const FunctionR
   if (k == parser::NodeKind::Ref || k == parser::NodeKind::RangeOp) {
     parser::Reference lhs{};
     parser::Reference rhs{};
-    if (declared_rect_endpoint_pair(arg_node, &lhs, &rhs)) {
+    if (declared_rect_endpoint_pair(arg_node, &lhs, &rhs, ctx.workbook())) {
       const auto rect = ctx.declared_range_rect(lhs, rhs);
       if (!rect) {
         *out_err = Value::error(rect.error());
@@ -449,7 +449,7 @@ Value eval_row_or_column(const parser::AstNode& call, Arena& arena, const Functi
   const parser::NodeKind k = arg.kind();
   parser::Reference rect_lhs{};
   parser::Reference rect_rhs{};
-  if (declared_rect_endpoint_pair(arg, &rect_lhs, &rect_rhs)) {
+  if (declared_rect_endpoint_pair(arg, &rect_lhs, &rect_rhs, ctx.workbook())) {
     // A full-axis endpoint carries a meaningful coordinate only on its
     // bounded axis, so the rectangle comes from the shared derivation
     // rather than from the endpoints' raw row/col fields. Reading those
@@ -577,7 +577,7 @@ Value eval_sumproduct_lazy(const parser::AstNode& call, Arena& arena, const Func
     if (k == parser::NodeKind::Ref || k == parser::NodeKind::RangeOp) {
       parser::Reference lhs{};
       parser::Reference rhs{};
-      if (declared_rect_endpoint_pair(arg_node, &lhs, &rhs)) {
+      if (declared_rect_endpoint_pair(arg_node, &lhs, &rhs, ctx.workbook())) {
         const auto rect = ctx.declared_range_rect(lhs, rhs);
         spans_axis = rect && (rect.value().rows() == Sheet::kMaxRows || rect.value().cols() == Sheet::kMaxCols);
       }

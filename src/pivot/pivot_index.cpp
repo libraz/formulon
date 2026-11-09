@@ -28,7 +28,7 @@ namespace pivot {
 bool pivot_name_taken(const Sheet& sheet, std::string_view name, std::size_t self) noexcept {
   const auto& pivots = sheet.pivot_tables();
   for (std::size_t i = 0; i < pivots.size(); ++i) {
-    if (i != self && pivots[i] != nullptr && collection_names::equal(pivots[i]->name(), name)) {
+    if (i != self && pivots[i] != nullptr && sheet_names::write_collides(pivots[i]->name(), name)) {
       return true;
     }
   }

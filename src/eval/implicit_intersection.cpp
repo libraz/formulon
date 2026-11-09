@@ -69,10 +69,11 @@ std::optional<parser::Reference> project_implicit_intersection(const parser::Ref
 }
 
 IntersectionProjection project_implicit_intersection(const parser::AstNode& operand, std::uint32_t formula_row,
-                                                     std::uint32_t formula_col, parser::Reference* out_target) {
+                                                     std::uint32_t formula_col, parser::Reference* out_target,
+                                                     const Workbook* wb) {
   parser::Reference lhs{};
   parser::Reference rhs{};
-  if (!declared_rect_endpoint_pair(operand, &lhs, &rhs)) {
+  if (!declared_rect_endpoint_pair(operand, &lhs, &rhs, wb)) {
     // A `RangeOp` over reference-returning calls is still a range, but not
     // one with static coordinates; Excel rejects `@` on it rather than
     // reducing the evaluated rectangle.

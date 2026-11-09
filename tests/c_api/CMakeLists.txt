@@ -97,6 +97,7 @@ set(FORMULON_C_API_TEST_SOURCES
   version_number_test.cpp
   workbook_copy_sheet_test.cpp
   workbook_sheet_ops_test.cpp
+  formulon_c_name_identity_test.cpp
 )
 
 # The sheet-index status test calls every sheet-scoped function through a

@@ -732,8 +732,8 @@ TEST(WorkbookSheetOps, SetDefinedNameUpdatesExisting) {
   ASSERT_TRUE(static_cast<bool>(wb.set_defined_name("Pi", "=3.14")));
   ASSERT_TRUE(static_cast<bool>(wb.set_defined_name("PI", "=3.14159")));
   ASSERT_EQ(wb.defined_names().size(), 1U);
-  // Authored casing of the original entry is preserved.
-  EXPECT_EQ(wb.defined_names()[0].name, "Pi");
+  // The update takes the new spelling, as Excel's Names.Add does.
+  EXPECT_EQ(wb.defined_names()[0].name, "PI");
   EXPECT_EQ(wb.defined_names()[0].formula, "=3.14159");
 }
 

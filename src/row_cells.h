@@ -153,6 +153,13 @@ class RowCells {
   /// `count` from every key after the band.
   void erase_cols(std::uint32_t col, std::uint32_t count);
 
+  /// Drops the keys in `[first, end)` with their cells; other keys stay.
+  void erase_in(std::uint32_t first, std::uint64_t end);
+
+  /// Moves the cells keyed in `[first, end)` to the same keys of `dest`
+  /// (another row), replacing what `dest` stored there.
+  void move_in_to(std::uint32_t first, std::uint64_t end, RowCells& dest);
+
   /// Heap bytes reserved by the key and cell arrays.
   std::size_t capacity_bytes() const noexcept {
     return cols_.capacity() * sizeof(std::uint16_t) + cells_.capacity() * sizeof(Cell);

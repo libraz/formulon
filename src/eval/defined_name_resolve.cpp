@@ -6,6 +6,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <string_view>
+#include <vector>
 
 #include "defined_name.h"
 #include "eval/array_context.h"
@@ -28,28 +29,32 @@
 namespace formulon {
 namespace eval {
 
+namespace {
+
+// The entry `name` resolves to (`sheet_names::resolve_by`) among the entries whose scope passes `in_scope`.
+template <typename InScope>
+const DefinedName* resolve_in_scope(const std::vector<DefinedName>& names, std::string_view name, InScope in_scope) {
+  const std::size_t index = sheet_names::resolve_by(names.size(), [&](std::size_t i, sheet_names::Fold fold) {
+    return in_scope(names[i].local_sheet_id) && sheet_names::same(names[i].name, name, fold);
+  });
+  return index == sheet_names::kNotFound ? nullptr : &names[index];
+}
+
+}  // namespace
+
 const DefinedName* find_defined_name(const Workbook& workbook, std::uint16_t current_sheet_id,
                                      std::string_view name) noexcept {
   const auto& names = workbook.defined_names();
-  const DefinedName* workbook_match = nullptr;
-  for (const auto& entry : names) {
-    if (!collection_names::equal(entry.name, name)) {
-      continue;
-    }
-    // Compare in the wider type: `local_sheet_id` comes from the file and is
-    // not bounded by `sheet_count()`, so narrowing it to the 16-bit sheet id
-    // first would let a crafted scope (0x10000) match sheet 0.
-    if (entry.local_sheet_id >= 0 && entry.local_sheet_id == static_cast<std::int32_t>(current_sheet_id)) {
-      // Sheet-scoped match for the current sheet wins immediately.
-      return &entry;
-    }
-    if (entry.local_sheet_id < 0 && workbook_match == nullptr) {
-      // Latch the first workbook-scoped match but keep scanning for a
-      // sheet-scoped one that should take priority.
-      workbook_match = &entry;
-    }
+  // Compare in the wider type: `local_sheet_id` comes from the file and is
+  // not bounded by `sheet_count()`, so narrowing it to the 16-bit sheet id
+  // first would let a crafted scope (0x10000) match sheet 0.
+  const auto current = static_cast<std::int32_t>(current_sheet_id);
+  // A sheet-scoped definition for the current sheet takes priority over a workbook-scoped one.
+  if (const DefinedName* local = resolve_in_scope(names, name, [current](std::int32_t id) { return id == current; });
+      local != nullptr) {
+    return local;
   }
-  return workbook_match;
+  return resolve_in_scope(names, name, [](std::int32_t id) { return id < 0; });
 }
 
 namespace {
@@ -87,17 +92,22 @@ const DefinedName* find_defined_name(const EvalContext& ctx, std::string_view na
 }
 
 const DefinedName* find_self_book_defined_name(const Workbook& workbook, std::string_view name) noexcept {
+  const auto& names = workbook.defined_names();
+  if (const DefinedName* book = resolve_in_scope(names, name, [](std::int32_t id) { return id < 0; });
+      book != nullptr) {
+    return book;
+  }
+  // Otherwise the lowest-indexed sheet whose local scope `name` resolves in.
   const DefinedName* local_match = nullptr;
-  for (const auto& entry : workbook.defined_names()) {
-    if (!collection_names::equal(entry.name, name)) {
+  for (const auto& entry : names) {
+    if (entry.local_sheet_id < 0 || static_cast<std::size_t>(entry.local_sheet_id) >= workbook.sheet_count() ||
+        (local_match != nullptr && entry.local_sheet_id >= local_match->local_sheet_id)) {
       continue;
     }
-    if (entry.local_sheet_id < 0) {
-      return &entry;
-    }
-    if (static_cast<std::size_t>(entry.local_sheet_id) < workbook.sheet_count() &&
-        (local_match == nullptr || entry.local_sheet_id < local_match->local_sheet_id)) {
-      local_match = &entry;
+    const std::int32_t scope = entry.local_sheet_id;
+    if (const DefinedName* found = resolve_in_scope(names, name, [scope](std::int32_t id) { return id == scope; });
+        found != nullptr) {
+      local_match = found;
     }
   }
   return local_match;
@@ -196,7 +206,7 @@ Shaped evaluate_defined_name_shaped(const DefinedName* def, Arena& arena, const 
       // A bounded rectangle stays an array even when it is one cell.
       parser::Reference lhs{};
       parser::Reference rhs{};
-      if (declared_rect_endpoint_pair(*root, &lhs, &rhs)) {
+      if (declared_rect_endpoint_pair(*root, &lhs, &rhs, ctx.workbook())) {
         const Expected<DeclaredRect, ErrorCode> rect = declared_rect(lhs, rhs);
         shaped = rect && (rect.value().rows() == Sheet::kMaxRows || rect.value().cols() == Sheet::kMaxCols);
       }

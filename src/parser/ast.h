@@ -27,6 +27,7 @@
 #define FORMULON_PARSER_AST_H_
 
 #include <cstdint>
+#include <string>
 #include <string_view>
 #include <type_traits>
 #include <vector>
@@ -619,10 +620,13 @@ bool is_self_book_name_ref(const AstNode& node) noexcept;
 /// Storage-placement predicate: true when `root` holds a reference into a
 /// sheet other than `own_sheet` (Ref / area, SpillRef anchor, Ref3D end), or a
 /// `#REF!` whose site names such a sheet or a deleted one. External
-/// workbooks, name qualifiers, names and INDIRECT do not count. Distinct from
+/// workbooks, name qualifiers, names and INDIRECT do not count. A sheet
+/// spelling resolves among `sheet_list` (the workbook's sheet names); without
+/// a list it is compared with `own_sheet` under the case fold. Distinct from
 /// `references_any_sheet` in workbook_formula_index, which tracks dirtiness
 /// and counts name qualifiers.
-bool references_other_sheet(const AstNode& root, std::string_view own_sheet);
+bool references_other_sheet(const AstNode& root, std::string_view own_sheet,
+                            const std::vector<std::string>* sheet_list = nullptr);
 
 /// The expressions directly under `node`, in source order: operands,
 /// arguments, a lambda call's callee, LET binding values and body, a lambda

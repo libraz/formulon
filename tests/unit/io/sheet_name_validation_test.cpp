@@ -114,6 +114,40 @@ TEST(SheetNameValidation, DistinctUnicodeNamesLoadOnBothReaders) {
   EXPECT_EQ(read_xlsb_or.value().workbook.sheet_count(), 2U);
 }
 
+// The readers refuse case-only duplicates alone. Names that only the wider
+// entry-time identity equates (width, kana type, prolonged-mark width) load
+// side by side, as Excel files from a ja-JP UI can hold them.
+TEST(SheetNameValidation, WidthAndKanaVariantsLoadOnBothReaders) {
+  const std::vector<std::vector<std::string>> pairs = {
+      {"Sheet1", "\xEF\xBC\xB3\xEF\xBD\x88\xEF\xBD\x85\xEF\xBD\x85\xEF\xBD\x94\xEF\xBC\x91"},  // Ｓｈｅｅｔ１
+      {"\xEF\xBE\x83\xEF\xBE\x9E\xEF\xBD\xB0\xEF\xBE\x80", "\xE3\x83\x87\xE3\x83\xBC\xE3\x82\xBF"},  // ﾃﾞｰﾀ / データ
+      {"\xE3\x82\xAB\xE3\x82\xBF", "\xE3\x81\x8B\xE3\x81\x9F"},                                      // カタ / かた
+      {"\xE3\x82\xAC", "\xE3\x82\xAB\xE3\x82\x99"},  // ガ / カ + U+3099
+  };
+  for (const std::vector<std::string>& names : pairs) {
+    SCOPED_TRACE(names[0] + " / " + names[1]);
+    Workbook wb = Workbook::create_empty();
+    wb.add_sheet(names[0]);
+    wb.add_sheet(names[1]);
+    ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 0U, Value::number(1.0))));
+    ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(1U, 0U, 0U, Value::number(2.0))));
+
+    auto xlsx_or = wb.save();
+    ASSERT_TRUE(static_cast<bool>(xlsx_or)) << xlsx_or.error().message;
+    auto read_xlsx_or = read_ooxml(SpanOf(xlsx_or.value()));
+    ASSERT_TRUE(static_cast<bool>(read_xlsx_or)) << read_xlsx_or.error().message;
+    EXPECT_EQ(read_xlsx_or.value().workbook.sheet_count(), 2U);
+    EXPECT_EQ(read_xlsx_or.value().workbook.sheet(1).name(), names[1]);
+
+    auto xlsb_or = wb.save_as(WorkbookFormat::Xlsb);
+    ASSERT_TRUE(static_cast<bool>(xlsb_or)) << xlsb_or.error().message;
+    auto read_xlsb_or = xlsb::read_xlsb(SpanOf(xlsb_or.value()));
+    ASSERT_TRUE(static_cast<bool>(read_xlsb_or)) << read_xlsb_or.error().message;
+    EXPECT_EQ(read_xlsb_or.value().workbook.sheet_count(), 2U);
+    EXPECT_EQ(read_xlsb_or.value().workbook.sheet(1).name(), names[1]);
+  }
+}
+
 TEST(SheetNameValidation, DistinctNamesStillLoadOnBothReaders) {
   Workbook wb = Workbook::create_empty();
   wb.add_sheet("Data");

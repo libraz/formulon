@@ -89,7 +89,7 @@ SourceOrigin source_origin(const parser::AstNode& node, const ArrayValue* arr, A
   const parser::AstNode* ref = resolve_binding_reference(node, arena, registry, ctx);
   parser::Reference lhs{};
   parser::Reference rhs{};
-  if (ref == nullptr || !declared_rect_endpoint_pair(*ref, &lhs, &rhs)) {
+  if (ref == nullptr || !declared_rect_endpoint_pair(*ref, &lhs, &rhs, ctx.workbook())) {
     return out;
   }
   const Expected<DeclaredRect, ErrorCode> rect = declared_rect(lhs, rhs);

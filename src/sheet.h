@@ -1241,6 +1241,12 @@ class Sheet {
   /// `[col, col+count)` are dropped; cells past the deletion shift left.
   void delete_cols(std::uint32_t col, std::uint32_t count);
 
+  /// Insert Cells / Delete Cells: moves the cells of `edit`'s band (which
+  /// must be set) from its edge on, and every sheet-attached structure by
+  /// the band rules (`BandFit`). Row and column layout and page breaks stay;
+  /// an inserted cell takes the XF of the cell above (row axis) or to the left.
+  void edit_cells_in_band(const StructuralEdit& edit);
+
  private:
   /// Applies `edit` to every sheet-attached structure other than the cells
   /// themselves (which each public edit method moves first, since the cell
@@ -1259,6 +1265,7 @@ class Sheet {
   /// Gives the rows or columns an insert opened the style of the row above or
   /// the column to the left: the row / column style and every cell's XF. An
   /// insert at the first row or column has no neighbour and inherits nothing.
+  /// A band insert gives each inserted cell the XF of its neighbour only.
   /// Caller must hold `spill_mutex_`.
   void inherit_inserted_formatting_locked(const StructuralEdit& edit);
 
@@ -1316,8 +1323,8 @@ class Sheet {
   /// public `clear_all_spills()` also drops the blocked records.
   void clear_committed_spills_locked() noexcept;
 
-  /// Remaps blocked-footprint anchors through one structural row/column edit.
-  /// Caller must hold `spill_mutex_`.
+  /// Remaps blocked-footprint anchors through one structural row/column edit;
+  /// under a band, an anchor outside it stays. Caller must hold `spill_mutex_`.
   void shift_blocked_spills_locked(const StructuralEdit& edit);
 
   /// Clears the spill region a write at `(row, col)` displaces and returns the

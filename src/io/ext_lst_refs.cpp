@@ -83,7 +83,8 @@ void Store(std::string& xml, const pugi::xml_document& doc) {
   xml = has_element_child(root) ? raw_xml(root) : std::string();
 }
 
-bool RemapSqrefs(const pugi::xml_document& doc, const SqrefRemap& remap, std::vector<std::size_t>* removed_groups) {
+bool RemapSqrefs(const pugi::xml_document& doc, const SqrefRemap& remap, const SqrefRemap* cf_remap,
+                 std::vector<std::size_t>* removed_groups) {
   std::vector<pugi::xml_node> sqrefs;
   Collect(doc.document_element(), "xm:sqref", sqrefs);
   bool changed = false;
@@ -93,7 +94,8 @@ bool RemapSqrefs(const pugi::xml_document& doc, const SqrefRemap& remap, std::ve
       continue;
     }
     const std::vector<MergeRange> before = ranges;
-    remap(ranges);
+    const bool cf = cf_remap != nullptr && std::string_view(node.parent().name()) == "x14:conditionalFormatting";
+    (cf ? *cf_remap : remap)(ranges);
     if (ranges.empty()) {
       RemoveOwner(node, removed_groups);
       changed = true;
@@ -140,7 +142,8 @@ bool CloneSparklines(const pugi::xml_document& doc, const SparklineClone& clone,
 }  // namespace
 
 bool remap_ext_lst_sqrefs(std::string& xml, const SqrefRemap& remap, const SparklineClone* clone,
-                          FormulaTranslate translate, std::vector<std::size_t>* removed_groups) {
+                          FormulaTranslate translate, std::vector<std::size_t>* removed_groups,
+                          const SqrefRemap* cf_remap) {
   if (xml.find("xm:sqref") == std::string::npos) {
     return false;
   }
@@ -148,7 +151,7 @@ bool remap_ext_lst_sqrefs(std::string& xml, const SqrefRemap& remap, const Spark
   if (!Load(doc, xml)) {
     return false;
   }
-  bool changed = RemapSqrefs(doc, remap, removed_groups);
+  bool changed = RemapSqrefs(doc, remap, cf_remap, removed_groups);
   if (clone != nullptr) {
     changed = CloneSparklines(doc, *clone, translate) || changed;
   }

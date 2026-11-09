@@ -29,13 +29,19 @@
 #include "parser/ast.h"
 #include "parser/reference.h"
 #include "sheet.h"
-#include "sheet_name.h"
 #include "utils/error.h"
 #include "utils/expected.h"
 #include "value.h"  // formulon::ErrorCode
 
 namespace formulon {
+
+class Workbook;
+
 namespace eval {
+
+/// Whether sheet spellings `a` and `b` are identical or resolve to the same
+/// sheet of `wb`; without a workbook, whether they agree under the case fold.
+bool same_sheet_spelling(const Workbook* wb, std::string_view a, std::string_view b) noexcept;
 
 /// Inclusive, 0-based rectangle in sheet coordinates.
 struct DeclaredRect {
@@ -106,12 +112,13 @@ inline Expected<DeclaredRect, ErrorCode> declared_rect(const parser::Reference& 
 }
 
 /// The sheet qualifier a pair of endpoint qualifiers settles on: a bare side
-/// inherits the other side's, and two qualified sides must agree under
-/// Unicode simple case folding or the pair is `#REF!`. Empty means the
-/// context's own sheet.
-inline Expected<std::string_view, ErrorCode> merge_sheet_qualifiers(std::string_view lhs, std::string_view rhs) {
+/// inherits the other side's, and two qualified sides must name the same
+/// sheet of `wb` (`same_sheet_spelling`) or the pair is `#REF!`. Empty means
+/// the context's own sheet.
+inline Expected<std::string_view, ErrorCode> merge_sheet_qualifiers(std::string_view lhs, std::string_view rhs,
+                                                                    const Workbook* wb = nullptr) {
   if (!lhs.empty() && !rhs.empty()) {
-    if (!sheet_names::equal(lhs, rhs)) {
+    if (!same_sheet_spelling(wb, lhs, rhs)) {
       return ErrorCode::Ref;
     }
     return lhs;
@@ -175,9 +182,12 @@ struct RangeChainFold {
   /// Empty qualifiers inherit and must not hide a later sheet conflict.
   const parser::Reference* representative_sheet = nullptr;
   /// First nonempty qualifier that names a different sheet from
-  /// `representative_sheet`, so the synthesised pair carries the conflict
-  /// into `effective_range_sheet` rather than restating its rule here.
+  /// `representative_sheet` (`same_sheet_spelling` against `workbook`), so
+  /// the synthesised pair carries the conflict into `effective_range_sheet`
+  /// rather than restating its rule here.
   const parser::Reference* other_sheet = nullptr;
+  /// The workbook whose sheets the qualifiers resolve among; null compares them under the case fold.
+  const Workbook* workbook = nullptr;
   /// Extents in the coordinates each leaf actually bounds: a whole-column
   /// leaf spans every row, a whole-row leaf spans every column.
   std::uint32_t row_first = 0;
@@ -205,7 +215,8 @@ inline bool fold_range_chain(const parser::AstNode& node, RangeChainFold* acc) {
     if (!ref.sheet.empty()) {
       if (acc->representative_sheet == nullptr) {
         acc->representative_sheet = &ref;
-      } else if (acc->other_sheet == nullptr && !sheet_names::equal(acc->representative_sheet->sheet, ref.sheet)) {
+      } else if (acc->other_sheet == nullptr &&
+                 !same_sheet_spelling(acc->workbook, acc->representative_sheet->sheet, ref.sheet)) {
         acc->other_sheet = &ref;
       }
     }
@@ -258,8 +269,12 @@ inline bool fold_range_chain(const parser::AstNode& node, RangeChainFold* acc) {
 /// two-endpoint `A:1` earns `#VALUE!` from `declared_rect` and keeps it,
 /// but that spelling is a grammar case rather than a semantic one --
 /// Excel rejects it when it is typed, so no answer for it is observable.
+///
+/// A chain's qualifiers resolve among `wb`'s sheets, so width variants of
+/// one sheet agree and a third sheet anywhere in the chain is the conflict
+/// the pair carries; without a workbook they compare under the case fold.
 inline bool declared_rect_endpoint_pair(const parser::AstNode& node, parser::Reference* out_lhs,
-                                        parser::Reference* out_rhs) {
+                                        parser::Reference* out_rhs, const Workbook* wb = nullptr) {
   const parser::Reference* pair_lhs = nullptr;
   const parser::Reference* pair_rhs = nullptr;
   if (declared_rect_endpoints(node, &pair_lhs, &pair_rhs)) {
@@ -268,6 +283,7 @@ inline bool declared_rect_endpoint_pair(const parser::AstNode& node, parser::Ref
     return true;
   }
   detail::RangeChainFold acc;
+  acc.workbook = wb;
   if (!detail::fold_range_chain(node, &acc) || !acc.seen) {
     return false;
   }

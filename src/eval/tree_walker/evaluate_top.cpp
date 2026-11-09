@@ -144,11 +144,11 @@ Value evaluate_top_body(const parser::AstNode& node, Arena& arena, const Functio
   bool footprint_probed = false;
   parser::Reference bare_range_top{};
   parser::Reference bare_range_bottom{};
-  if (spill_position && whole_axis_declared_rect(node, &bare_range_top, &bare_range_bottom)) {
+  if (spill_position && whole_axis_declared_rect(node, &bare_range_top, &bare_range_bottom, ctx.workbook())) {
     sv = evaluate_bare_range_spill(bare_range_top, bare_range_bottom, arena, registry, ctx_with_counters,
                                    BareRangeSpillOptions{/*settle_circularity=*/true, /*allow_tail=*/true},
                                    &footprint_probed);
-  } else if (spill_position && bounded_declared_rect(node, &bare_range_top, &bare_range_bottom)) {
+  } else if (spill_position && bounded_declared_rect(node, &bare_range_top, &bare_range_bottom, ctx.workbook())) {
     // Excel rewrites a bounded range spanning a full grid axis into the
     // whole-axis spelling on entry, so exactly this set has a twin above
     // whose answer it must match. Anything narrower has no twin.

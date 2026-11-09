@@ -301,7 +301,7 @@ RangeArgOutcome collect_range_arg(const FunctionDef& def, const parser::AstNode&
     if (whole_axis_pair) {
       chain_lhs = lhs_ast.as_ref();
       chain_rhs = rhs_ast.as_ref();
-    } else if (is_bare_pair || !declared_rect_endpoint_pair(arg_node, &chain_lhs, &chain_rhs)) {
+    } else if (is_bare_pair || !declared_rect_endpoint_pair(arg_node, &chain_lhs, &chain_rhs, ctx.workbook())) {
       // Union the two endpoints into one rectangle and let `expand_range`
       // validate sheet equality (mismatched qualifiers surface as #REF!).
       ErrorCode endpoint_err = ErrorCode::Ref;

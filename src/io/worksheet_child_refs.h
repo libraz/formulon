@@ -19,6 +19,8 @@
 //                                     the scenarios left;
 //   cellWatch r                    -- a cell a delete leaves where it was.
 //
+// Under a band edit (Insert / Delete Cells) only a range inside the band moves.
+//
 // `dataConsolidate`, `customSheetViews` and the `<scenarios sqref>` keep
 // their text, as they do in Excel.
 

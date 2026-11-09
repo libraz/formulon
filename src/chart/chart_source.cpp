@@ -67,12 +67,11 @@ struct Resolver {
     if (host_sheet != kChartNoHostSheet || ctx.name_scope_sheet() >= 0) {
       return eval::find_defined_name(ctx, name);
     }
-    for (const DefinedName& def : wb.defined_names()) {
-      if (def.local_sheet_id < 0 && collection_names::equal(def.name, name)) {
-        return &def;
-      }
-    }
-    return nullptr;
+    const std::vector<DefinedName>& names = wb.defined_names();
+    const std::size_t index = sheet_names::resolve_by(names.size(), [&](std::size_t i, sheet_names::Fold fold) {
+      return names[i].local_sheet_id < 0 && sheet_names::same(names[i].name, name, fold);
+    });
+    return index == sheet_names::kNotFound ? nullptr : &names[index];
   }
 
   Expected<void, Error> resolve_name(const parser::AstNode& node, const eval::EvalContext& ctx) {

@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -28,6 +29,7 @@
 #include "pivot/pivot_cache.h"
 #include "pivot/pivot_table.h"
 #include "sheet.h"
+#include "sheet_metadata.h"
 #include "sheet_name.h"
 #include "table.h"
 #include "utils/error.h"
@@ -50,12 +52,12 @@ Error invalid_table(std::string message, std::string context = {}) {
   return err;
 }
 
-/// True when `existing` owns `name` or `display_name` as either of its names.
+/// True when writing `name` or `display_name` collides with either of `existing`'s names.
 template <typename Existing>
 bool names_collide(const Existing& existing, std::string_view name, std::string_view display_name) {
-  return collection_names::equal(existing.name, name) || collection_names::equal(existing.display_name, name) ||
-         collection_names::equal(existing.name, display_name) ||
-         collection_names::equal(existing.display_name, display_name);
+  return sheet_names::write_collides(existing.name, name) || sheet_names::write_collides(existing.display_name, name) ||
+         sheet_names::write_collides(existing.name, display_name) ||
+         sheet_names::write_collides(existing.display_name, display_name);
 }
 
 bool name_in_use(const std::vector<TableMetadata>& tables, const std::vector<io::xlsb::XlsbRetainedTable>& retained,
@@ -73,7 +75,7 @@ bool name_in_use(const std::vector<TableMetadata>& tables, const std::vector<io:
   }
   // A defined name of any scope owns its name against tables.
   for (const DefinedName& defined : defined_names) {
-    if (collection_names::equal(defined.name, name) || collection_names::equal(defined.name, display_name)) {
+    if (sheet_names::write_collides(defined.name, name) || sheet_names::write_collides(defined.name, display_name)) {
       return true;
     }
   }
@@ -162,14 +164,19 @@ Expected<std::size_t, Error> Workbook::add_table(TableMetadata table) {
   RETURN_IF_ERROR(check_table_identity(*this, table.name, table.display_name, std::nullopt));
   RETURN_IF_ERROR(check_table_range_free(*this, table.sheet_index, *rect, std::nullopt, /*unmerge_inside=*/true));
   table.id = next_free_table_id(0);
+  // Headers collide under either fold, as `sheet_names::write_collides` does.
   std::unordered_set<std::string> column_keys;
+  std::unordered_set<std::string> column_wide_keys;
   column_keys.reserve(table.columns.size());
+  column_wide_keys.reserve(table.columns.size());
   std::uint32_t column_id = 1;
   for (TableColumn& column : table.columns) {
     if (column.name.empty()) {
       return invalid_table("column name is empty");
     }
-    if (!column_keys.insert(collection_names::fold_key(column.name)).second) {
+    std::optional<std::string> wide = sheet_names::wide_key(column.name);
+    if (!column_keys.insert(collection_names::fold_key(column.name)).second ||
+        (wide.has_value() && !column_wide_keys.insert(std::move(*wide)).second)) {
       return invalid_table("column name is duplicated");
     }
     column.id = column_id++;
@@ -252,6 +259,137 @@ Expected<void, Error> check_totals_row_free(const Workbook& wb, std::size_t inde
   return wb.check_table_resize(index, grown);
 }
 
+// Whether a merge, table, PivotTable, multi-cell array formula or data table
+// reaches `edit`'s moving region across its band edge, which keeps a totals
+// row toggle from shifting cells.
+bool band_meets_straddler(const Workbook& wb, std::size_t sheet_index, const StructuralEdit& edit) {
+  const Sheet& sheet = wb.sheet(sheet_index);
+  const auto straddles = [&edit](const MergeRange& rect) { return band_fit(rect, edit) == BandFit::kStraddles; };
+  if (std::any_of(sheet.merges().begin(), sheet.merges().end(), straddles)) {
+    return true;
+  }
+  for (const DataTable& table : sheet.data_tables()) {
+    if (straddles(data_table_block(table))) {
+      return true;
+    }
+  }
+  for (const std::unique_ptr<pivot::PivotTable>& pivot : sheet.pivot_tables()) {
+    if (pivot != nullptr && straddles(pivot_location(*pivot))) {
+      return true;
+    }
+  }
+  for (const TableMetadata& table : wb.tables()) {
+    const std::optional<MergeRange> ref = detail::table_rect_on_sheet(table, sheet_index);
+    if (ref.has_value() && straddles(*ref)) {
+      return true;
+    }
+  }
+  for (const CellAddress address : sheet.all_formula_cells()) {
+    const Cell* cell = sheet.cell_at(address.row, address.col);
+    if (cell != nullptr && cell->array_block_rows != 0U &&
+        straddles(MergeRange{address.row, address.col, address.row + cell->array_block_rows - 1U,
+                             address.col + cell->array_block_cols - 1U})) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// Records whether the formulas it walks reach a table's totals row: a
+// reference meeting the row's cells, or the table's `[#Totals]` / `[#All]`.
+class TotalsRowProbe final : public parser::RefTransform {
+ public:
+  TotalsRowProbe(const MergeRange& row, std::string_view sheet, const sheet_names::NameList* sheet_list,
+                 const std::vector<TableMetadata>& tables, std::size_t table) noexcept
+      : row_(row), sheet_(sheet), sheet_list_(sheet_list), tables_(tables), table_(table) {}
+
+  /// Whether an unqualified reference names the table's sheet.
+  void set_local_means_sheet(bool local) noexcept { local_means_sheet_ = local; }
+  bool hit() const noexcept { return hit_; }
+
+  std::optional<parser::Reference> apply(const parser::Reference& ref) const override {
+    note(ref, ref);
+    return ref;
+  }
+  std::optional<std::pair<parser::Reference, parser::Reference>> apply_range(
+      const parser::Reference& lhs, const parser::Reference& rhs) const override {
+    note(lhs, rhs);
+    return std::make_pair(lhs, rhs);
+  }
+  std::optional<parser::StructuredRefTarget> apply_structured_ref(std::string_view table,
+                                                                  std::string_view column) const override {
+    if (sheet_names::resolve_table(tables_, table) == table_) {
+      const std::optional<parser::StructuredRefPayload> payload = parser::parse_structured_ref_payload_text(column);
+      constexpr std::uint8_t kReachesTotals =
+          parser::StructuredRefSpecifiers::kTotals | parser::StructuredRefSpecifiers::kAll;
+      hit_ = hit_ || (payload.has_value() && (payload->specifiers & kReachesTotals) != 0U);
+    }
+    return parser::StructuredRefTarget{table, {}};
+  }
+  bool preserves_ref3d_coordinates() const noexcept override { return true; }
+
+ private:
+  void note(const parser::Reference& lhs, const parser::Reference& rhs) const {
+    const bool on_sheet =
+        lhs.sheet.empty() ? local_means_sheet_ : sheet_names::NameList::denotes(sheet_list_, lhs.sheet, sheet_);
+    if (!on_sheet) {
+      return;
+    }
+    const bool full_col = lhs.is_full_col || rhs.is_full_col;
+    const bool full_row = lhs.is_full_row || rhs.is_full_row;
+    const std::uint32_t first_row = full_col ? 0U : std::min(lhs.row, rhs.row);
+    const std::uint32_t last_row = full_col ? Sheet::kMaxRows - 1U : std::max(lhs.row, rhs.row);
+    const std::uint32_t first_col = full_row ? 0U : std::min(lhs.col, rhs.col);
+    const std::uint32_t last_col = full_row ? Sheet::kMaxCols - 1U : std::max(lhs.col, rhs.col);
+    hit_ = hit_ || (first_row <= row_.last_row && row_.first_row <= last_row && first_col <= row_.last_col &&
+                    row_.first_col <= last_col);
+  }
+
+  MergeRange row_;
+  std::string_view sheet_;
+  const sheet_names::NameList* sheet_list_;
+  const std::vector<TableMetadata>& tables_;
+  std::size_t table_;
+  bool local_means_sheet_ = false;
+  mutable bool hit_ = false;
+};
+
+// Whether a cell formula or a defined name references `row`, table `index`'s
+// totals row. CF and DV formulas are not "formulas or names" here, and an
+// INDIRECT / OFFSET target is not followed.
+bool totals_row_referenced(const std::vector<Sheet>& sheets, const std::vector<TableMetadata>& tables,
+                           const std::vector<DefinedName>& names, std::size_t index, const MergeRange& row) {
+  const std::size_t sheet_index = tables[index].sheet_index;
+  const sheet_names::NameList sheet_list = detail::sheet_name_list(sheets);
+  TotalsRowProbe probe(row, sheets[sheet_index].name(), &sheet_list, tables, index);
+  for (std::size_t s = 0; s < sheets.size(); ++s) {
+    probe.set_local_means_sheet(s == sheet_index);
+    for (const CellAddress address : sheets[s].all_formula_cells()) {
+      // The totals cells themselves go with the row.
+      if (s == sheet_index && address.row == row.first_row && address.col >= row.first_col &&
+          address.col <= row.last_col) {
+        continue;
+      }
+      const Cell* cell = sheets[s].cell_at(address.row, address.col);
+      if (cell != nullptr && !cell->formula_text.empty()) {
+        static_cast<void>(rewrite_formula(cell->formula_text, probe));
+      }
+      if (probe.hit()) {
+        return true;
+      }
+    }
+  }
+  for (const DefinedName& name : names) {
+    probe.set_local_means_sheet(name.local_sheet_id >= 0 &&
+                                static_cast<std::size_t>(name.local_sheet_id) == sheet_index);
+    static_cast<void>(rewrite_formula(name.formula, probe));
+    if (probe.hit()) {
+      return true;
+    }
+  }
+  return false;
+}
+
 }  // namespace
 
 Expected<void, Error> Workbook::set_table_totals_row(std::size_t index, bool shown) {
@@ -265,14 +403,26 @@ Expected<void, Error> Workbook::set_table_totals_row(std::size_t index, bool sho
   if (shown == tables_[index].totals_row) {
     return Expected<void, Error>::Ok();
   }
+  const std::size_t sheet_index = tables_[index].sheet_index;
+  const Band columns{rect->first_col, rect->last_col};
+  // The toggle inserts or deletes cells, rewrites references and writes the
+  // totals cells as one edit under a single hold of the engine mutex.
+  std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
   MergeRange next = *rect;
   if (shown) {
     if (rect->last_row + 1U >= Sheet::kMaxRows) {
       return make_error(FormulonErrorCode::kPreconditionFailed, "the table ends on the last row of the grid",
                         "ref=" + tables_[index].ref);
     }
-    RETURN_IF_ERROR(check_totals_row_free(*this, index, *rect));
-    next.last_row = rect->last_row + 1U;
+    const MergeRange below{rect->last_row + 1U, rect->first_col, rect->last_row + 1U, rect->last_col};
+    // Something straddling the columns below keeps the cells from shifting;
+    // the totals row then takes the row below only while it is empty.
+    if (band_meets_straddler(*this, sheet_index, StructuralEdit{below.first_row, 1U, false, true, columns})) {
+      RETURN_IF_ERROR(check_totals_row_free(*this, index, *rect));
+    } else {
+      RETURN_IF_ERROR(apply_band_edit_locked(sheet_index, below, CellShift::kDown, /*is_delete=*/false));
+    }
+    next.last_row = below.last_row;
   } else {
     const std::uint32_t data_rows = rect->last_row - rect->first_row - (tables_[index].header_row ? 1U : 0U);
     if (data_rows == 0U) {
@@ -280,35 +430,58 @@ Expected<void, Error> Workbook::set_table_totals_row(std::size_t index, bool sho
                         "ref=" + tables_[index].ref);
     }
     for (std::uint32_t col = rect->first_col; col <= rect->last_col; ++col) {
-      const std::optional<ArrayFormulaInfo> block = array_formula_at(tables_[index].sheet_index, rect->last_row, col);
+      const std::optional<ArrayFormulaInfo> block = array_formula_at(sheet_index, rect->last_row, col);
       if ((block && (block->rows != 1U || block->cols != 1U)) ||
-          data_table_at(tables_[index].sheet_index, rect->last_row, col) != nullptr) {
+          data_table_at(sheet_index, rect->last_row, col) != nullptr) {
         return make_error(FormulonErrorCode::kPreconditionFailed,
                           "the totals row holds part of a multi-cell array formula or data table",
                           "ref=" + tables_[index].ref);
       }
     }
+    const MergeRange totals{rect->last_row, rect->first_col, rect->last_row, rect->last_col};
+    if (totals_row_referenced(sheets_, tables_, defined_names_, index, totals)) {
+      return make_error(FormulonErrorCode::kPreconditionFailed, "a formula or name references the totals row",
+                        "ref=" + tables_[index].ref);
+    }
     next.last_row = rect->last_row - 1U;
   }
 
+  const bool shifts_back =
+      !shown && !band_meets_straddler(*this, sheet_index, StructuralEdit{rect->last_row, 1U, true, true, columns});
+  const std::string ref_before = tables_[index].ref;
+  // The range shrinks before the old totals row goes, so the edit below never
+  // reads the last data row as the table's end.
+  tables_[index].ref.clear();
+  append_a1_rectangle(tables_[index].ref, next);
+  tables_[index].totals_row = shown;
+  if (!shown) {
+    const MergeRange totals{rect->last_row, rect->first_col, rect->last_row, rect->last_col};
+    if (shifts_back) {
+      if (Expected<void, Error> deleted = apply_band_edit_locked(sheet_index, totals, CellShift::kUp, true); !deleted) {
+        tables_[index].ref = ref_before;
+        tables_[index].totals_row = true;
+        return deleted;
+      }
+    } else {
+      for (std::uint32_t col = rect->first_col; col <= rect->last_col; ++col) {
+        if (sheets_[sheet_index].cell_at(rect->last_row, col) != nullptr) {
+          put_cell_value_locked(sheet_index, rect->last_row, col, Value::blank());
+        }
+      }
+    }
+  }
   TableMetadata& table = tables_[index];
-  table.ref.clear();
-  append_a1_rectangle(table.ref, next);
-  table.totals_row = shown;
   if (shown) {
     // Shown now, so the "never shown" marker no longer applies.
     table.totals_row_shown.reset();
   }
   // The extent changed, so every structured reference into the table may
   // resolve differently; reindex the formulas that name it.
-  reindex_formulas_for_table_change({table.name, table.display_name});
-  mark_row_visibility_dependents_dirty();
+  const eval::RecalcEngine::LockedMutator mutator = engine_->locked_mutator();
+  reindex_formulas_referencing_table(sheets_, mutator, *this, {table.name, table.display_name});
+  sync_table_spill_barriers_locked(sheets_, mutator, tables_);
+  mark_row_visibility_dependents_dirty_locked(sheets_, mutator, defined_names_);
   if (!shown) {
-    for (std::uint32_t col = rect->first_col; col <= rect->last_col; ++col) {
-      if (sheets_[table.sheet_index].cell_at(rect->last_row, col) != nullptr) {
-        RETURN_IF_ERROR(set_cell_value(table.sheet_index, rect->last_row, col, Value::blank()));
-      }
-    }
     return Expected<void, Error>::Ok();
   }
   for (std::size_t column = 0; column < table.columns.size(); ++column) {
@@ -316,12 +489,17 @@ Expected<void, Error> Workbook::set_table_totals_row(std::size_t index, bool sho
     if (col.totals_function.empty() && col.totals_label.empty()) {
       continue;
     }
-    RETURN_IF_ERROR(write_table_totals_cell(index, column));
+    RETURN_IF_ERROR(write_table_totals_cell_locked(index, column));
   }
   return Expected<void, Error>::Ok();
 }
 
 Expected<void, Error> Workbook::write_table_totals_cell(std::size_t index, std::size_t column) {
+  std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
+  return write_table_totals_cell_locked(index, column);
+}
+
+Expected<void, Error> Workbook::write_table_totals_cell_locked(std::size_t index, std::size_t column) {
   if (index >= tables_.size() || column >= tables_[index].columns.size()) {
     return invalid_table("index out of range", "index=" + std::to_string(index) + " column=" + std::to_string(column));
   }
@@ -336,17 +514,19 @@ Expected<void, Error> Workbook::write_table_totals_cell(std::size_t index, std::
   if (const int code = subtotal_code_of(col.totals_function); code != 0) {
     parser::StructuredRefPayload payload;
     payload.columns.push_back(col.name);
-    return set_cell_formula(
+    put_cell_formula_locked(
         table.sheet_index, row, cell_col,
-        "=SUBTOTAL(" + std::to_string(code) + "," + table.display_name + "[" + parser::stored_payload(payload) + "])");
+        "=SUBTOTAL(" + std::to_string(code) + "," + table.display_name + "[" + parser::stored_payload(payload) + "])",
+        FormulaSource::kEntered, 0U, 0U);
+  } else if (col.totals_function == "custom" && !col.totals_row_formula.empty()) {
+    put_cell_formula_locked(table.sheet_index, row, cell_col, "=" + col.totals_row_formula, FormulaSource::kEntered, 0U,
+                            0U);
+  } else if (!col.totals_label.empty()) {
+    put_cell_text_locked(table.sheet_index, row, cell_col, col.totals_label);
+  } else {
+    put_cell_value_locked(table.sheet_index, row, cell_col, Value::blank());
   }
-  if (col.totals_function == "custom" && !col.totals_row_formula.empty()) {
-    return set_cell_formula(table.sheet_index, row, cell_col, "=" + col.totals_row_formula);
-  }
-  if (!col.totals_label.empty()) {
-    return set_cell_text(table.sheet_index, row, cell_col, col.totals_label);
-  }
-  return set_cell_value(table.sheet_index, row, cell_col, Value::blank());
+  return Expected<void, Error>::Ok();
 }
 
 void Workbook::set_tables(std::vector<TableMetadata> tables) {
@@ -405,12 +585,7 @@ std::optional<std::size_t> Workbook::table_containing(std::size_t sheet_index, s
 }
 
 bool Workbook::is_table_name(std::string_view name) const noexcept {
-  for (const TableMetadata& table : tables_) {
-    if (collection_names::equal(table.name, name) || collection_names::equal(table.display_name, name)) {
-      return true;
-    }
-  }
-  return false;
+  return sheet_names::resolve_table(tables_, name) != sheet_names::kNotFound;
 }
 
 void Workbook::reindex_formulas_for_table_change(const std::vector<std::string>& table_names) {
@@ -425,26 +600,26 @@ void Workbook::reindex_formulas_for_table_change(const std::vector<std::string>&
 
 namespace {
 
-/// Maps a structured reference's table name from either of a table's old
-/// names to its new display name.
+/// Maps a structured reference's table name that resolves to `tables[index]`
+/// (still under its old names) to the table's new display name.
 class TableRenameTransform final : public parser::RefTransform {
  public:
-  TableRenameTransform(std::string_view old_name, std::string_view old_display_name, std::string_view new_name)
-      : old_name_(old_name), old_display_name_(old_display_name), new_name_(new_name) {}
+  TableRenameTransform(const std::vector<TableMetadata>& tables, std::size_t index, std::string_view new_name)
+      : tables_(tables), index_(index), new_name_(new_name) {}
 
   std::optional<parser::Reference> apply(const parser::Reference& ref) const override { return ref; }
 
   std::optional<parser::StructuredRefTarget> apply_structured_ref(std::string_view table,
                                                                   std::string_view /*column*/) const override {
-    if (collection_names::equal(table, old_name_) || collection_names::equal(table, old_display_name_)) {
+    if (sheet_names::resolve_table(tables_, table) == index_) {
       return parser::StructuredRefTarget{new_name_, {}};
     }
     return parser::StructuredRefTarget{table, {}};
   }
 
  private:
-  std::string_view old_name_;
-  std::string_view old_display_name_;
+  const std::vector<TableMetadata>& tables_;
+  std::size_t index_;
   std::string_view new_name_;
 };
 
@@ -460,7 +635,7 @@ Expected<void, Error> Workbook::rename_table(std::size_t index, std::string name
   const std::string old_name = tables_[index].name;
   const std::string old_display_name = tables_[index].display_name;
   const eval::RecalcEngine::LockedMutator mutator = engine_->locked_mutator();
-  const TableRenameTransform transform(old_name, old_display_name, display_name);
+  const TableRenameTransform transform(tables_, index, display_name);
   std::vector<std::uint32_t> ignored_cache_ids;
   bool defined_names_changed = false;
   rewrite_workbook_references(sheets_, defined_names_, tables_, pivot_caches_, transform, mutator, {}, {}, {},
@@ -471,8 +646,7 @@ Expected<void, Error> Workbook::rename_table(std::size_t index, std::string name
       continue;
     }
     pivot::WorksheetSource& source = cache->mutable_worksheet_source();
-    if (!source.name.empty() &&
-        (collection_names::equal(source.name, old_name) || collection_names::equal(source.name, old_display_name))) {
+    if (!source.name.empty() && sheet_names::resolve_table(tables_, source.name) == index) {
       source.name = display_name;
     }
   }
@@ -488,22 +662,20 @@ Expected<void, Error> Workbook::rename_table(std::size_t index, std::string name
 
 namespace {
 
-/// Maps a structured reference through one table naming `old_column` to the
-/// same reference naming `new_column`, re-spelled in the stored form.
+/// Maps a structured reference through `tables[table]` naming its column
+/// `column` (still under its old name) to the same reference naming
+/// `new_column`, re-spelled in the stored form.
 class TableColumnRenameTransform final : public parser::RefTransform {
  public:
-  TableColumnRenameTransform(std::string_view table_name, std::string_view table_display_name,
-                             std::string_view old_column, std::string_view new_column)
-      : table_name_(table_name),
-        table_display_name_(table_display_name),
-        old_column_(old_column),
-        new_column_(new_column) {}
+  TableColumnRenameTransform(const std::vector<TableMetadata>& tables, std::size_t table, std::size_t column,
+                             std::string_view new_column)
+      : tables_(tables), table_(table), column_(column), new_column_(new_column) {}
 
   std::optional<parser::Reference> apply(const parser::Reference& ref) const override { return ref; }
 
   std::optional<parser::StructuredRefTarget> apply_structured_ref(std::string_view table,
                                                                   std::string_view column) const override {
-    if (!collection_names::equal(table, table_name_) && !collection_names::equal(table, table_display_name_)) {
+    if (sheet_names::resolve_table(tables_, table) != table_) {
       return parser::StructuredRefTarget{table, {}};
     }
     std::optional<parser::StructuredRefPayload> payload = parser::parse_structured_ref_payload_text(column);
@@ -512,7 +684,7 @@ class TableColumnRenameTransform final : public parser::RefTransform {
     }
     bool renamed = false;
     for (std::string& name : payload->columns) {
-      if (collection_names::equal(name, old_column_)) {
+      if (sheet_names::resolve_named(tables_[table_].columns, name) == column_) {
         name.assign(new_column_);
         renamed = true;
       }
@@ -524,9 +696,9 @@ class TableColumnRenameTransform final : public parser::RefTransform {
   }
 
  private:
-  std::string_view table_name_;
-  std::string_view table_display_name_;
-  std::string_view old_column_;
+  const std::vector<TableMetadata>& tables_;
+  std::size_t table_;
+  std::size_t column_;
   std::string_view new_column_;
 };
 
@@ -546,7 +718,7 @@ Expected<std::string, Error> Workbook::rename_table_column(std::size_t table, st
   }
   const auto taken = [&columns, column](std::string_view candidate) {
     for (std::size_t i = 0; i < columns.size(); ++i) {
-      if (i != column && collection_names::equal(columns[i].name, candidate)) {
+      if (i != column && sheet_names::write_collides(columns[i].name, candidate)) {
         return true;
       }
     }
@@ -565,12 +737,11 @@ Expected<std::string, Error> Workbook::rename_table_column(std::size_t table, st
     }
   }
 
-  const TableMetadata& meta = tables_[table];
   const eval::RecalcEngine::LockedMutator mutator = engine_->locked_mutator();
   const std::string old_name = columns[column].name;
   const bool renamed = final_name != old_name;
   if (renamed) {
-    const TableColumnRenameTransform transform(meta.name, meta.display_name, old_name, final_name);
+    const TableColumnRenameTransform transform(tables_, table, column, final_name);
     std::vector<std::uint32_t> ignored_cache_ids;
     bool defined_names_changed = false;
     rewrite_workbook_references(sheets_, defined_names_, tables_, pivot_caches_, transform, mutator, {}, {}, {},

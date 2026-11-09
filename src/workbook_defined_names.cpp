@@ -54,17 +54,16 @@ bool erase_filter_database_name(std::vector<DefinedName>& names, std::size_t she
   return true;
 }
 
-/// Removes the workbook-scoped names listed in `cache_names` (slicer cache
-/// names, matched case-insensitively). Returns true when any was removed.
+/// Removes the workbook-scoped names `cache_names` (slicer cache names)
+/// resolve to. Returns true when any was removed.
 bool erase_slicer_cache_names(std::vector<DefinedName>& names, const std::vector<std::string>& cache_names) {
-  const auto it = std::remove_if(names.begin(), names.end(), [&cache_names](const DefinedName& entry) {
-    return entry.local_sheet_id == -1 &&
-           std::any_of(cache_names.begin(), cache_names.end(), [&entry](const std::string& cache_name) {
-             return collection_names::equal(entry.name, cache_name);
-           });
-  });
-  const bool removed = it != names.end();
-  names.erase(it, names.end());
+  bool removed = false;
+  for (const std::string& cache_name : cache_names) {
+    if (const auto it = find_defined_name(names, cache_name, -1); it != names.end()) {
+      names.erase(it);
+      removed = true;
+    }
+  }
   return removed;
 }
 
@@ -136,14 +135,15 @@ Expected<void, Error> Workbook::set_defined_name_scoped(std::string name, std::s
     formula = parser::bind_self_book_names(formula, file_name_);
   }
   bind_external_books_unlocked(std::string_view(formula));
-  // Case-insensitive lookup: Excel resolves defined names case-folded.
-  // Restrict the search to the requested scope.
+  // An upsert: the name resolves within the requested scope only, and the
+  // entry found takes the new spelling, as Excel's Names.Add does.
   if (const auto it = find_defined_name(defined_names_, name, local_sheet_id); it != defined_names_.end()) {
-    // Keep the stored spelling; formulas match it under the same fold.
-    name = it->name;
+    // Formulas spelling the stored name are found through it; the new spelling resolves to the same entry.
+    std::string stored = it->name;
     if (formula.empty()) {
       defined_names_.erase(it);
     } else {
+      it->name = std::move(name);
       it->formula = std::move(formula);
     }
     // Retargeting or removing an existing name changes what every formula
@@ -154,7 +154,7 @@ Expected<void, Error> Workbook::set_defined_name_scoped(std::string name, std::s
     // only where one of them anchors a spill, rather than the workbook-
     // wide rebuild `reindex_all_formulas` would force.
     const eval::RecalcEngine::LockedMutator mutator = engine_->locked_mutator();
-    reindex_formulas_referencing_name(sheets_, mutator, *this, name);
+    reindex_formulas_referencing_name(sheets_, mutator, *this, stored);
     return Expected<void, Error>::Ok();
   }
   // No existing entry; appending only makes sense if a formula is
@@ -164,7 +164,10 @@ Expected<void, Error> Workbook::set_defined_name_scoped(std::string name, std::s
     return Expected<void, Error>::Ok();
   }
   const auto table_named = [&name](const auto& table) {
-    return collection_names::equal(table.name, name) || collection_names::equal(table.display_name, name);
+    return sheet_names::write_collides(table.name, name) || sheet_names::write_collides(table.display_name, name);
+  };
+  const auto scope_namesake = [&name, local_sheet_id](const DefinedName& entry) {
+    return entry.local_sheet_id == local_sheet_id && sheet_names::write_collides(entry.name, name);
   };
   const std::vector<io::xlsb::XlsbRetainedTable> retained = io::xlsb::xlsb_retained_tables(*this);
   if (!is_valid_defined_name(name)) {
@@ -173,6 +176,9 @@ Expected<void, Error> Workbook::set_defined_name_scoped(std::string name, std::s
   if (std::any_of(tables_.begin(), tables_.end(), table_named) ||
       std::any_of(retained.begin(), retained.end(), table_named)) {
     return make_error(FormulonErrorCode::kAlreadyExists, "name is taken by a table", "name=" + name);
+  }
+  if (std::any_of(defined_names_.begin(), defined_names_.end(), scope_namesake)) {
+    return make_error(FormulonErrorCode::kAlreadyExists, "name is taken in this scope", "name=" + name);
   }
   DefinedName entry;
   entry.name = std::move(name);

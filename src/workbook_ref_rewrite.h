@@ -114,9 +114,9 @@ bool rewrite_defined_names(std::vector<DefinedName>& names, const std::vector<co
 // cannot do this in its own move: finding those ranges takes the
 // file-format readers. Formulas in the same content move with
 // `rewrite_sheet_metadata_formulas` against pre-edit coordinates, so call
-// this after the sheet's own move.
-void shift_retained_extension_ranges(Sheet& sheet, std::uint32_t index, std::uint32_t count, bool is_delete,
-                                     bool row_axis);
+// this after the sheet's own move. An x14 CF sqref moves as the legacy CF
+// sqref does (`shift_cf_sqref_ranges`); a band edit copies no sparklines.
+void shift_retained_extension_ranges(Sheet& sheet, const StructuralEdit& edit);
 
 }  // namespace formulon
 

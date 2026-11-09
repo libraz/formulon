@@ -698,7 +698,7 @@ bool is_x14_icon_set_rule(const cf::CFRule& rule) {
   return rule.type == cf::RuleType::IconSet && rule.icon_set.has_value() && !rule.icon_set->custom_icons.empty();
 }
 
-bool is_x14_only_rule(const cf::CFRule& rule, std::string_view own_sheet) {
+bool is_x14_only_rule(const cf::CFRule& rule, std::string_view own_sheet, const std::vector<std::string>* sheet_list) {
   if (is_x14_icon_set_rule(rule)) {
     return true;
   }
@@ -706,7 +706,7 @@ bool is_x14_only_rule(const cf::CFRule& rule, std::string_view own_sheet) {
     return false;
   }
   const auto names_other = [&](const std::optional<std::string>& formula) {
-    return formula.has_value() && parser::formula_references_other_sheet(*formula, own_sheet);
+    return formula.has_value() && parser::formula_references_other_sheet(*formula, own_sheet, sheet_list);
   };
   return !own_sheet.empty() && (names_other(rule.formula1) || names_other(rule.formula2));
 }
@@ -810,7 +810,7 @@ Expected<void, Error> reconcile_x14_rules(std::vector<std::uint8_t>& records,
   std::unordered_map<std::string, std::pair<const cf::ConditionalFormat*, const cf::CFRule*>> model;
   for (const cf::ConditionalFormat& format : formats) {
     for (const cf::CFRule& rule : format.rules) {
-      if (!rule.id.empty() && !is_x14_icon_set_rule(rule) && is_x14_only_rule(rule, own_sheet)) {
+      if (!rule.id.empty() && !is_x14_icon_set_rule(rule) && is_x14_only_rule(rule, own_sheet, &ctx.sheet_names)) {
         model.emplace(rule.id, std::make_pair(&format, &rule));
       }
     }
@@ -899,7 +899,7 @@ Expected<void, Error> add_x14_rules(std::vector<std::uint8_t>& records,
       emit_record(groups, kEndCondFmt14, ByteSpan{});
     }
     for (const cf::CFRule& rule : format.rules) {
-      if (is_x14_icon_set_rule(rule) || !is_x14_only_rule(rule, own_sheet) ||
+      if (is_x14_icon_set_rule(rule) || !is_x14_only_rule(rule, own_sheet, &ctx.sheet_names) ||
           (!rule.id.empty() && linked.count(rule.id) != 0U)) {
         continue;
       }

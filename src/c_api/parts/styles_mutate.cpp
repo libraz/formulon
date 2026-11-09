@@ -606,11 +606,16 @@ extern "C" fm_status_t fm_workbook_set_cell_style(fm_workbook_t* wb, const fm_ce
   style.i_level = record->i_level;
   style.hidden = record->hidden != 0;
   style.custom_builtin = record->custom_builtin != 0;
-  for (auto& existing : styles.cell_styles) {
-    if (formulon::collection_names::equal(existing.name, style.name)) {
-      existing = std::move(style);
-      return 0;
-    }
+  // An upsert: the style the name resolves to takes the record, new spelling included.
+  if (const std::size_t found = formulon::sheet_names::resolve_named(styles.cell_styles, style.name);
+      found != formulon::sheet_names::kNotFound) {
+    styles.cell_styles[found] = std::move(style);
+    return 0;
+  }
+  if (std::any_of(styles.cell_styles.begin(), styles.cell_styles.end(), [&](const formulon::CellStyleRecord& s) {
+        return formulon::sheet_names::write_collides(s.name, style.name);
+      })) {
+    return set_binding_error(formulon::FormulonErrorCode::kAlreadyExists, "name already in use", "name=" + style.name);
   }
   styles.cell_styles.push_back(std::move(style));
   return 0;
@@ -624,10 +629,8 @@ extern "C" fm_status_t fm_workbook_remove_cell_style(fm_workbook_t* wb, const ch
   if (auto rc = check_utf8({name}); rc != 0) {
     return rc;
   }
-  const auto& styles = wb->workbook().styles().cell_styles;
-  if (std::none_of(styles.begin(), styles.end(), [&](const formulon::CellStyleRecord& s) {
-        return formulon::collection_names::equal(s.name, name);
-      })) {
+  if (formulon::sheet_names::resolve_named(wb->workbook().styles().cell_styles, name) ==
+      formulon::sheet_names::kNotFound) {
     return not_found("no cell style has that name", "name=" + std::string(name));
   }
   return finish_status(formulon::remove_cell_style(wb->workbook().mutable_styles(), name));

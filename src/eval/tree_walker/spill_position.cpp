@@ -92,11 +92,11 @@ void rect_corner_refs(const DeclaredRect& rect, const parser::Reference& lhs, bo
 //
 // Returns false when `node` is not a bare whole-axis reference, leaving the
 // out-params untouched.
-bool whole_axis_declared_rect(const parser::AstNode& node, parser::Reference* top_left,
-                              parser::Reference* bottom_right) {
+bool whole_axis_declared_rect(const parser::AstNode& node, parser::Reference* top_left, parser::Reference* bottom_right,
+                              const Workbook* wb) {
   parser::Reference lhs{};
   parser::Reference rhs{};
-  if (!declared_rect_endpoint_pair(node, &lhs, &rhs)) {
+  if (!declared_rect_endpoint_pair(node, &lhs, &rhs, wb)) {
     return false;
   }
   const Expected<DeclaredRect, ErrorCode> rect = declared_rect(lhs, rhs);
@@ -124,13 +124,14 @@ bool whole_axis_declared_rect(const parser::AstNode& node, parser::Reference* to
 // rather than being answered by the footprint.
 //
 // Returns false for anything else, leaving the out-params untouched.
-bool bounded_declared_rect(const parser::AstNode& node, parser::Reference* top_left, parser::Reference* bottom_right) {
+bool bounded_declared_rect(const parser::AstNode& node, parser::Reference* top_left, parser::Reference* bottom_right,
+                           const Workbook* wb) {
   if (node.kind() != parser::NodeKind::RangeOp) {
     return false;
   }
   parser::Reference lhs{};
   parser::Reference rhs{};
-  if (!declared_rect_endpoint_pair(node, &lhs, &rhs)) {
+  if (!declared_rect_endpoint_pair(node, &lhs, &rhs, wb)) {
     return false;
   }
   const Expected<DeclaredRect, ErrorCode> rect = declared_rect(lhs, rhs);
@@ -268,7 +269,9 @@ Shaped evaluate_bare_range_spill(const parser::Reference& top_left, const parser
 
   // The rectangle is on the formula's own sheet when it carries no
   // qualifier, or when the qualifier names that sheet.
-  const bool same_sheet = top_left.sheet.empty() || sheet_names::equal(top_left.sheet, sheet->name());
+  const Workbook* wb = ctx.workbook();
+  const bool same_sheet = top_left.sheet.empty() || (wb != nullptr ? wb->sheet_by_name(top_left.sheet) == sheet
+                                                                   : sheet_names::equal(top_left.sheet, sheet->name()));
   if (settle_circularity && same_sheet && anchor_row >= top_left.row && anchor_row <= bottom_right.row &&
       anchor_col >= top_left.col && anchor_col <= bottom_right.col) {
     // Circular, and reported as the engine reports every other cycle

@@ -1259,7 +1259,11 @@ std::string display_formula_text(const formulon::Workbook& book, std::string_vie
   if (!may_respell_formula(model)) {
     return std::string(model);
   }
-  std::string shown = formulon::parser::display_structured_refs(model, own_table);
+  const std::optional<formulon::sheet_names::NameList> table_list =
+      own_table.empty()
+          ? std::nullopt
+          : std::optional<formulon::sheet_names::NameList>(formulon::sheet_names::table_name_list(book.tables()));
+  std::string shown = formulon::parser::display_structured_refs(model, own_table, table_list ? &*table_list : nullptr);
   if (book.spells_self_book_names(shown)) {
     shown = book.spell_self_book_names(shown);
   }

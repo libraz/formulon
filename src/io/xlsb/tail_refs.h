@@ -35,7 +35,8 @@ std::optional<std::uint32_t> frt_formula_size_field(const std::uint8_t* rgce, st
 /// Maps the range of every retained x14 CF block and sparkline through
 /// `remap`. An emptied range drops the block or sparkline, then a
 /// sparkline group left without sparklines, then a container left empty.
-void remap_tail_sqrefs(XlsbSheetTail& tail, const SqrefRemap& remap);
+/// A non-null `cf_remap` maps each x14 CF block's range instead of `remap`.
+void remap_tail_sqrefs(XlsbSheetTail& tail, const SqrefRemap& remap, const SqrefRemap* cf_remap = nullptr);
 
 /// Moves the coordinates of the other retained records that name cells for
 /// `edit`: the AutoFilter block and the manual breaks by the rules the model
@@ -43,7 +44,8 @@ void remap_tail_sqrefs(XlsbSheetTail& tail, const SqrefRemap& remap);
 /// records behind the children `remap_worksheet_children` covers --
 /// BrtRangeProtection, the scenario and sort-state blocks, BrtCellWatch,
 /// BrtCellIgnoreEC and a range-sourced web-publish item -- by its rules.
-/// What an edit empties is dropped with its container.
+/// What an edit empties is dropped with its container. Under a band edit only
+/// what lies inside the band moves, and the breaks stay.
 void remap_tail_child_refs(XlsbSheetTail& tail, const StructuralEdit& edit);
 
 /// Maps every reference in the retained sparkline, x14 CF rule and x14

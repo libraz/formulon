@@ -12,6 +12,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "auto_filter.h"
@@ -53,14 +54,32 @@ inline void mark_dependents_dirty(const eval::RecalcEngine::LockedMutator& mutat
   mutator.mark_range_dependents_dirty(cell);
 }
 
-// Index of the sheet named `name` (Unicode simple fold), or `Workbook::kNoSheet`.
+// Index of the sheet `name` resolves to (`sheet_names::resolve_by`), or `Workbook::kNoSheet`.
 inline std::size_t find_sheet_index(const std::vector<Sheet>& sheets, std::string_view name) noexcept {
+  return sheet_names::resolve_by(sheets.size(), [&](std::size_t i, sheet_names::Fold fold) {
+    return sheet_names::same(sheets[i].name(), name, fold);
+  });
+}
+
+// Whether writing `candidate` as the name of the sheet at `self_index` (`Workbook::kNoSheet` for a new sheet)
+// collides with another sheet's name (`sheet_names::write_collides`).
+inline bool sheet_name_collides(const std::vector<Sheet>& sheets, std::string_view candidate, std::size_t self_index) {
   for (std::size_t i = 0; i < sheets.size(); ++i) {
-    if (sheet_names::equal(sheets[i].name(), name)) {
-      return i;
+    if (i != self_index && sheet_names::write_collides(sheets[i].name(), candidate)) {
+      return true;
     }
   }
-  return static_cast<std::size_t>(-1);
+  return false;
+}
+
+// The sheets' names, for transforms and formatters that match a formula's sheet spellings as they resolve.
+inline sheet_names::NameList sheet_name_list(const std::vector<Sheet>& sheets) {
+  std::vector<std::string> names;
+  names.reserve(sheets.size());
+  for (const Sheet& sheet : sheets) {
+    names.emplace_back(sheet.name());
+  }
+  return sheet_names::NameList(std::move(names));
 }
 
 // `op`-prefixed sheet index range check whose detail names the sheet count.
@@ -96,19 +115,21 @@ inline bool MayNameExternalBook(std::string_view formula) noexcept {
          (formula.find('\'') != std::string_view::npos && formula.find_first_of("/\\") != std::string_view::npos);
 }
 
-/// The defined name `name' (`collection_names::equal`) in scope `local_sheet_id`
-/// (-1 is workbook scope), or `names.end()`.
+/// The defined name `name` resolves to (`sheet_names::resolve_by`) in scope
+/// `local_sheet_id` (-1 is workbook scope), or `names.end()`.
 inline std::vector<DefinedName>::iterator find_defined_name(std::vector<DefinedName>& names, std::string_view name,
                                                             std::int32_t local_sheet_id) {
-  return std::find_if(names.begin(), names.end(), [name, local_sheet_id](const DefinedName& entry) {
-    return entry.local_sheet_id == local_sheet_id && collection_names::equal(entry.name, name);
+  const std::size_t index = sheet_names::resolve_by(names.size(), [&](std::size_t i, sheet_names::Fold fold) {
+    return names[i].local_sheet_id == local_sheet_id && sheet_names::same(names[i].name, name, fold);
   });
+  return index == sheet_names::kNotFound ? names.end() : names.begin() + static_cast<std::ptrdiff_t>(index);
 }
 
-/// Whether a workbook-scope name spelled `name` (`collection_names::equal`) exists.
+/// Whether writing `name` into workbook scope collides with a workbook-scope
+/// name (`sheet_names::write_collides`).
 inline bool has_book_namesake(const std::vector<DefinedName>& names, std::string_view name) {
   return std::any_of(names.begin(), names.end(), [name](const DefinedName& entry) {
-    return entry.local_sheet_id < 0 && collection_names::equal(entry.name, name);
+    return entry.local_sheet_id < 0 && sheet_names::write_collides(entry.name, name);
   });
 }
 

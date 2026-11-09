@@ -19,6 +19,8 @@
 #include <string_view>
 #include <vector>
 
+#include "sheet_name.h"
+
 namespace formulon {
 namespace parser {
 
@@ -52,6 +54,9 @@ struct StructuredRefDisplay {
   /// Display name of the table whose range holds the formula's cell; empty
   /// outside every table.
   std::string_view own_table;
+  /// The workbook's tables, among which a structured reference's table
+  /// spelling resolves; null compares it with `own_table` under the case fold.
+  const sheet_names::NameList* table_list = nullptr;
 };
 
 /// Parses the text between a structured reference's outer brackets.

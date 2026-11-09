@@ -23,7 +23,6 @@
 #include "pivot/pivot_cache.h"
 #include "pugixml.hpp"
 #include "sheet.h"
-#include "sheet_name.h"
 #include "table.h"
 #include "workbook.h"
 #include "workbook_formula_index.h"
@@ -244,7 +243,8 @@ void rewrite_sheet_metadata_formulas(std::vector<Sheet>& sheets,
       continue;
     }
     pivot::WorksheetSource& source = cache->mutable_worksheet_source();
-    if (!direct_sheet_old.empty() && sheet_names::equal(source.sheet, direct_sheet_old)) {
+    if (!direct_sheet_old.empty() &&
+        detail::find_sheet_index(sheets, source.sheet) == detail::find_sheet_index(sheets, direct_sheet_old)) {
       source.sheet.assign(direct_sheet_new);
     }
     const std::size_t owner_sheet = detail::find_sheet_index(sheets, source.sheet);
@@ -255,7 +255,8 @@ void rewrite_sheet_metadata_formulas(std::vector<Sheet>& sheets,
       source.ref = std::move(ref_result.text);
     }
     if (!removed_sheet_name.empty() && source.present &&
-        (sheet_names::equal(source.sheet, removed_sheet_name) || ref_result.changed)) {
+        ((owner_sheet != Workbook::kNoSheet && owner_sheet == detail::find_sheet_index(sheets, removed_sheet_name)) ||
+         ref_result.changed)) {
       dropped_cache_ids.push_back(cache->cache_id());
     }
   }
@@ -332,17 +333,16 @@ bool rewrite_defined_names(std::vector<DefinedName>& names, const std::vector<co
   return any_changed;
 }
 
-void shift_retained_extension_ranges(Sheet& sheet, std::uint32_t index, std::uint32_t count, bool is_delete,
-                                     bool row_axis) {
-  const io::SqrefRemap remap = [&](std::vector<MergeRange>& ranges) {
-    shift_sqref_ranges(ranges, index, count, is_delete, row_axis);
-  };
-  // An insert gives the new band a copy of each sparkline hosted next to it.
-  const bool clones = !is_delete && index > 0U;
-  const io::SparklineClone clone{row_axis, index - 1U, count};
+void shift_retained_extension_ranges(Sheet& sheet, const StructuralEdit& edit) {
+  const io::SqrefRemap remap = [&edit](std::vector<MergeRange>& ranges) { shift_sqref_ranges(ranges, edit); };
+  const io::SqrefRemap cf_remap = [&edit](std::vector<MergeRange>& ranges) { shift_cf_sqref_ranges(ranges, edit); };
+  // A row/column insert gives the new band a copy of each sparkline hosted next to it.
+  const bool clones = !edit.band.has_value() && !edit.is_delete && edit.index > 0U;
+  const io::SparklineClone clone{edit.row_axis, edit.index - 1U, edit.count};
   std::string ext_lst = sheet.ext_lst_xml();
   std::vector<std::size_t> removed_groups;
-  if (io::remap_ext_lst_sqrefs(ext_lst, remap, clones ? &clone : nullptr, rewritten_formula, &removed_groups)) {
+  if (io::remap_ext_lst_sqrefs(ext_lst, remap, clones ? &clone : nullptr, rewritten_formula, &removed_groups,
+                               &cf_remap)) {
     sheet.set_ext_lst_xml(std::move(ext_lst));
   }
   // A dropped group takes its session id along; the ids of the groups after it stay theirs.
@@ -352,11 +352,10 @@ void shift_retained_extension_ranges(Sheet& sheet, std::uint32_t index, std::uin
       group_ids.erase(group_ids.begin() + static_cast<std::ptrdiff_t>(position));
     }
   }
-  const StructuralEdit edit{index, count, is_delete, row_axis};
   io::remap_worksheet_children(sheet.mutable_raw_extensions(), edit);
   if (!sheet.xlsb_tail().empty()) {
     XlsbSheetTail tail = sheet.xlsb_tail();
-    io::xlsb::remap_tail_sqrefs(tail, remap);
+    io::xlsb::remap_tail_sqrefs(tail, remap, &cf_remap);
     io::xlsb::remap_tail_child_refs(tail, edit);
     if (clones) {
       io::xlsb::clone_tail_sparklines(tail, clone);

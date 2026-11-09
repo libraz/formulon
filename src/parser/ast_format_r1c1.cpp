@@ -176,7 +176,8 @@ struct Emitter {
       out.append(table).append("[").append(node.as_structured_ref_column()).push_back(']');
       return;
     }
-    const bool inside = !display->own_table.empty() && collection_names::equal(table, display->own_table);
+    const bool inside =
+        !display->own_table.empty() && sheet_names::NameList::denotes(display->table_list, table, display->own_table);
     out.append(display_structured_ref(table, *payload, inside));
   }
 

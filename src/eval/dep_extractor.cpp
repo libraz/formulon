@@ -210,7 +210,7 @@ void emit_rect(WalkState& state, std::uint16_t sheet_id, const DeclaredRect& rec
 // sheet; two qualified sides must agree, else the pair has no footprint.
 std::optional<Footprint> pair_footprint(const parser::Reference& lhs, const parser::Reference& rhs,
                                         const WalkState& state) {
-  const Expected<std::string_view, ErrorCode> merged = merge_sheet_qualifiers(lhs.sheet, rhs.sheet);
+  const Expected<std::string_view, ErrorCode> merged = merge_sheet_qualifiers(lhs.sheet, rhs.sheet, state.workbook);
   if (!merged) {
     return std::nullopt;
   }
@@ -538,7 +538,7 @@ std::optional<Footprint> reference_footprint(const parser::AstNode& node, WalkSt
     case parser::NodeKind::RangeOp: {
       parser::Reference lhs{};
       parser::Reference rhs{};
-      if (declared_rect_endpoint_pair(node, &lhs, &rhs)) {
+      if (declared_rect_endpoint_pair(node, &lhs, &rhs, state.workbook)) {
         return pair_footprint(lhs, rhs, state);
       }
       std::optional<Footprint> acc = reference_footprint(node.as_range_operand(0), state);
@@ -659,7 +659,7 @@ bool is_static_reference(const parser::AstNode& node, WalkState& state) {
     case parser::NodeKind::RangeOp: {
       parser::Reference lhs{};
       parser::Reference rhs{};
-      return declared_rect_endpoint_pair(node, &lhs, &rhs);
+      return declared_rect_endpoint_pair(node, &lhs, &rhs, state.workbook);
     }
     case parser::NodeKind::UnionOp:
       for (std::uint32_t i = 0; i < node.as_union_arity(); ++i) {

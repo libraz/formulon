@@ -1177,6 +1177,14 @@ def voiced(cp: int, mark: int = 0x3099) -> int | None:
     return ord(composed) if len(composed) == 1 else None
 
 
+def kana_combining_voiced(cp: int, mark: int) -> int | None:
+    """Kana `cp` (U+3041..U+30FF) canonically composed with a following U+3099 or U+309A, if any."""
+    if not 0x3041 <= cp <= 0x30FF or mark not in (0x3099, 0x309A):
+        return None
+    composed = unicodedata.normalize("NFC", chr(cp) + chr(mark))
+    return ord(composed) if len(composed) == 1 else None
+
+
 PROLONGED = (0x30FC, 0xFF70)
 HIRA_REPEAT, HIRA_REPEAT_VOICED = 0x309D, 0x309E
 KATA_REPEAT, KATA_REPEAT_VOICED = 0x30FD, 0x30FE
@@ -1302,10 +1310,12 @@ class Collator:
                 out.append(t)
                 i += 1
             toks = out
-            # A base and a following combining mark compose, repeatedly.
+            # A base and a following combining mark compose, repeatedly; a kana takes U+3099 / U+309A too.
             out = []
             for t in toks:
-                c = self.compositions.get((out[-1].cp, t.cp)) if out and out[-1].c_from is None else None
+                c = None
+                if out and out[-1].c_from is None:
+                    c = self.compositions.get((out[-1].cp, t.cp)) or kana_combining_voiced(out[-1].cp, t.cp)
                 if c is not None:
                     out[-1] = Token(c, out[-1].pos)
                     continue
@@ -1317,7 +1327,9 @@ class Collator:
                 prev, t = toks[i - 1].cp, toks[i]
                 sub = None
                 if t.cp in PROLONGED:
-                    sub = kana_vowel(prev)
+                    # The mark keeps its own weight when it is half-width or follows a half-width voicing mark.
+                    if t.cp == 0x30FC and toks[i - 1].c_from is None:
+                        sub = kana_vowel(prev)
                 elif t.cp in (HIRA_REPEAT, HIRA_REPEAT_VOICED) and is_hiragana(prev):
                     sub = prev if t.cp == HIRA_REPEAT else voiced(prev)
                 elif t.cp in (KATA_REPEAT, KATA_REPEAT_VOICED) and is_katakana(prev):

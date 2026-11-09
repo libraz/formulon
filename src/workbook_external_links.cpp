@@ -309,13 +309,15 @@ bool IsBareTableName(const void* ctx, std::string_view name) {
   if (!scope.workbook->is_table_name(name)) {
     return false;
   }
-  for (const DefinedName& entry : scope.workbook->defined_names()) {
-    if ((entry.local_sheet_id < 0 || entry.local_sheet_id == scope.sheet) &&
-        strings::case_insensitive_eq(entry.name, name)) {
-      return false;
-    }
-  }
-  return true;
+  // A defined name visible here takes the spelling: the sheet's locals first, then workbook scope.
+  const std::vector<DefinedName>& names = scope.workbook->defined_names();
+  const auto resolves_in = [&](bool local) {
+    return sheet_names::resolve_by(names.size(), [&](std::size_t i, sheet_names::Fold fold) {
+             const bool visible = local ? names[i].local_sheet_id == scope.sheet : names[i].local_sheet_id < 0;
+             return visible && sheet_names::same(names[i].name, name, fold);
+           }) != sheet_names::kNotFound;
+  };
+  return !((scope.sheet >= 0 && resolves_in(true)) || resolves_in(false));
 }
 
 }  // namespace

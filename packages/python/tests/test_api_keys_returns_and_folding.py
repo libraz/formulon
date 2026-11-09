@@ -88,14 +88,23 @@ class TableTotalsRowTests(unittest.TestCase):
         self.assertEqual(self.ws.get_value("B3"), 30.0)
         self.assertIsNone(self.ws.get_value("B4"))
 
-    def test_an_occupied_row_below_is_refused_and_nothing_changes(self) -> None:
+    def test_an_occupied_row_below_shifts_down_within_the_table_columns(self) -> None:
         self.ws.set_value("B4", 99)
+        self.table.update(totals_row=True)
+        self.assertEqual(self._rect(), CellRect(0, 0, 3, 1))
+        self.assertTrue(self.table.get_properties().totals_row)
+        self.assertEqual(self.ws.get_value("B4"), 40.0)
+        self.assertEqual(self.ws.get_value("B5"), 99.0)
+
+    def test_turning_the_row_off_is_refused_while_a_formula_references_it(self) -> None:
+        self.table.update(totals_row=True)
+        self.ws.set_formula("D1", "=B4")
         with self.assertRaises(FormulonError) as caught:
-            self.table.update(totals_row=True)
+            self.table.update(totals_row=False)
         self.assertEqual(caught.exception.code, StatusCode.PRECONDITION_FAILED)
-        self.assertEqual(self._rect(), CellRect(0, 0, 2, 1))
-        self.assertFalse(self.table.get_properties().totals_row)
-        self.assertEqual((self.ws.get_value("B3"), self.ws.get_value("B4")), (30.0, 99.0))
+        self.assertEqual(self._rect(), CellRect(0, 0, 3, 1))
+        self.assertTrue(self.table.get_properties().totals_row)
+        self.assertEqual(self.ws.get_value("B4"), 40.0)
 
     def test_a_table_on_the_last_grid_row_is_refused(self) -> None:
         edge = self.ws.add_table(TableInput(range="D1048575:E1048576", name="Edge"))
@@ -251,13 +260,22 @@ class NameFoldingTests(unittest.TestCase):
             styles = wb.list_table_styles()
             self.assertEqual(len(styles), 1)
             self.assertFalse(styles[0].pivot)
+            self.assertEqual(styles[0].name, "ä1")
             self.assertIsNone(wb.get_table_style("nope"))
 
     def test_a_defined_name_lookup_folds_non_ascii_case(self) -> None:
         with Workbook.create_default() as wb:
             wb.set_defined_name(DefinedNameInput(name="Ä", formula="=1"))
             self.assertEqual(wb.get_defined_name("ä").name, "Ä")
+            wb.set_defined_name(DefinedNameInput(name="ä", formula="=2"))
+            self.assertEqual(wb.get_defined_name("Ä").name, "ä")
             self.assertIsNone(wb.get_defined_name("ö"))
+
+    def test_a_sheet_whose_name_differs_only_by_width_is_already_exists(self) -> None:
+        with Workbook.create_default() as wb:
+            with self.assertRaises(AlreadyExistsError):
+                wb.add_sheet("\uff33\uff48\uff45\uff45\uff54\uff11")
+            self.assertEqual(len(wb.list_sheets()), 1)
 
     def test_a_renamed_table_column_collides_by_the_fold(self) -> None:
         with Workbook.create_default() as wb:

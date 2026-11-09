@@ -201,9 +201,8 @@ class Workbook {
   ///
   /// This is also the append path the OOXML and XLSB readers use, so the
   /// name validation `add_sheet` defers to the I/O boundary is in fact
-  /// enforced there. After a successful load `sheet_by_name` and
-  /// `sheet_index_by_name` therefore resolve unambiguously: no two sheets
-  /// share a case-folded name.
+  /// enforced there. No two loaded sheets share a case-folded name, though
+  /// two may still be equal under the wide fold (`sheet_names::wide_equal`).
   ///
   /// Errors:
   ///   * `kInvalidSheetName` on any name violation.
@@ -214,15 +213,17 @@ class Workbook {
 
   /// The name a sheet added without one takes: the profile's first sheet
   /// name without its trailing number (`Sheet`, `Tabelle`, `Feuil`, ...)
-  /// followed by the smallest N >= 1 that no sheet holds under Unicode simple
-  /// case folding.
+  /// followed by the smallest N >= 1 that collides with no sheet name
+  /// (`sheet_names::write_collides`).
   std::string next_default_sheet_name() const;
 
   /// Appends a new sheet whose name a user entered, validating it exactly as
-  /// `rename_sheet` does: `add_sheet_validated`'s rules, plus, under a
-  /// Windows profile, not `History` in any case, which Windows Excel's naming
-  /// UI reserves (Mac Excel accepts it). The add path of every binding goes through here; the file
-  /// readers stay on `add_sheet_validated`.
+  /// `rename_sheet` does: `add_sheet_validated`'s structural rules, a
+  /// collision under `sheet_names::write_collides` (the wide fold, not only
+  /// case), plus, under a Windows profile, not `History` in any case, which
+  /// Windows Excel's naming UI reserves (Mac Excel accepts it). The add path
+  /// of every binding goes through here; the file readers stay on
+  /// `add_sheet_validated`.
   ///
   /// Errors: as `add_sheet_validated`.
   Expected<Sheet*, Error> add_sheet_entered(std::string name);
@@ -242,10 +243,10 @@ class Workbook {
   ///     UTF-16 units, contains a forbidden character (`: \ / ? * [ ]`),
   ///     begins or ends with an apostrophe, is `History` in any case under
   ///     a Windows profile.
-  ///   * `kAlreadyExists` when `new_name` collides under Unicode simple case
-  ///     folding with another sheet's name. A no-op rename to the sheet's
-  ///     existing name under the same fold is accepted: the sheet's stored
-  ///     name is updated to the new casing, no other state changes.
+  ///   * `kAlreadyExists` when `new_name` collides with another sheet's name
+  ///     (`sheet_names::write_collides`). The sheet's own name is not
+  ///     consulted, so a rename that only changes case, width or kana type
+  ///     is accepted.
   Expected<void, Error> rename_sheet(std::uint32_t index, std::string new_name);
 
   /// Removes the sheet at `index`.
@@ -308,17 +309,16 @@ class Workbook {
   Expected<std::size_t, Error> copy_sheet(std::size_t source, std::size_t insert_before,
                                           std::optional<std::string> new_name);
 
-  /// Unicode-simple-fold lookup by display name. `"SHEET2"` and
-  /// `"Sheet2"` locate the same sheet, as do Unicode simple-fold pairs such
-  /// as `Ä` and `ä`. This is locale-independent simple folding only; it does
-  /// not claim full Excel-equivalence, normalization, or locale tailoring.
-  /// Returns `nullptr` when no sheet matches. A linear scan is used;
+  /// Lookup by display name through `sheet_names::resolve_by`: an exact
+  /// match, else a case-fold match (`"SHEET2"` for `"Sheet2"`), else the one
+  /// sheet equal under the wide fold (`"Ｓｈｅｅｔ２"`). Returns `nullptr`
+  /// when no sheet matches or two sheets match only under the wide fold. A linear scan is used;
   /// workbooks typically carry O(1)–O(10) sheets, so a hash index is
   /// premature.
   const Sheet* sheet_by_name(std::string_view name) const noexcept;
 
-  /// Returns the 0-based index of the sheet whose display name matches
-  /// `name` under Unicode simple case folding. Returns
+  /// Returns the 0-based index of the sheet `name` resolves to, as
+  /// `sheet_by_name` does. Returns
   /// `kNoSheet` when no sheet matches. Linear scan, like
   /// `sheet_by_name`.
   std::size_t sheet_index_by_name(std::string_view name) const noexcept;
@@ -704,13 +704,15 @@ class Workbook {
   /// Sets the formula text of a defined name in `local_sheet_id` scope,
   /// or appends it if it does not exist. Pass `-1` for workbook scope;
   /// pass a 0-based sheet index for sheet scope. An empty formula
-  /// removes the matching entry. Lookups are case-insensitive within
-  /// the same scope only, matching Excel's name-resolution model. The
-  /// formula passes through `bind_self_book_names`.
+  /// removes the matching entry. `name` resolves within the same scope only
+  /// (`sheet_names::resolve_by`); the entry found takes the new spelling.
+  /// The formula passes through `bind_self_book_names`.
   ///
   /// Returns `kInvalidArgument` when `name` is empty, is not a valid new
   /// name, or `local_sheet_id` names a sheet outside the workbook, and
-  /// `kAlreadyExists` when a new name equals a table's name.
+  /// `kAlreadyExists` when a new name collides (`sheet_names::write_collides`)
+  /// with a table's name or with a name of the same scope it does not
+  /// resolve to.
   Expected<void, Error> set_defined_name_scoped(std::string name, std::string formula, std::int32_t local_sheet_id);
 
   /// Sets the hidden flag of the defined name `name` in `local_sheet_id`
@@ -805,7 +807,8 @@ class Workbook {
   /// Validates and appends `table`, assigning its id, default AutoFilter and
   /// the formula reindex a new table needs; returns its index in `tables()`.
   /// `table.ref` must be a single-area A1 range as wide as `table.columns`,
-  /// whose names must be non-empty and pairwise distinct (case-insensitive).
+  /// whose names must be non-empty and pairwise free of
+  /// `sheet_names::write_collides` collisions.
   /// Returns `kInvalidArgument` for a bad sheet index, an empty or unparsable
   /// identity or range, a column mismatch, or a display name
   /// `is_valid_table_name` refuses; `kAlreadyExists` for a name or display
@@ -824,20 +827,27 @@ class Workbook {
   /// any other refusal or an out-of-range `index`.
   Expected<void, Error> check_table_resize(std::size_t index, const MergeRange& rect) const;
 
-  /// Shows or hides the totals row of table `index`. Showing it grows `ref`
-  /// by the row below and writes each column's totals cell there
-  /// (`write_table_totals_cell`); the data rows are kept. Hiding it shrinks
-  /// `ref` by its last row and clears that row's cells within the table's
-  /// columns (styles are kept). A call that changes nothing is a no-op. Every
-  /// check runs before the first change, so a refusal leaves the table and
-  /// the cells as they were. Returns `kInvalidArgument` for an out-of-range
-  /// `index` or a range that is not a single area, and `kPreconditionFailed`
-  /// when showing the row and the table ends on the grid's last row, or the
-  /// row below holds a value or formula, a spilled result, a merge, a table,
-  /// a PivotTable, a multi-cell array formula or a data table within the
-  /// table's columns, or when hiding the row would leave a header row with
-  /// no data row or its cells hold part of a multi-cell array formula or a
-  /// data table.
+  /// Shows or hides the totals row of table `index`. Showing it inserts one
+  /// row of cells below the table within its columns (`insert_cells`,
+  /// shifting down), grows `ref` by that row and writes each column's totals
+  /// cell there (`write_table_totals_cell`). When a merge, table, PivotTable,
+  /// multi-cell array formula or data table below the table straddles its
+  /// columns, nothing shifts and an empty row directly below becomes the
+  /// totals row instead. Hiding it shrinks `ref` by its last row and deletes
+  /// that row's cells within the table's columns (`delete_cells`, shifting
+  /// up), or only clears them when such a straddling object lies below; the
+  /// columns' totals settings are kept for the next show. A call that changes
+  /// nothing is a no-op. Every check runs before the first change, so a
+  /// refusal leaves the table and the cells as they were. Returns
+  /// `kInvalidArgument` for an out-of-range `index` or a range that is not a
+  /// single area, and `kPreconditionFailed` when showing the row and the
+  /// table ends on the grid's last row, the insert is refused, or a
+  /// straddling object lies below and the row below is not empty (a value,
+  /// formula, spilled result, merge or table there); or when hiding the row
+  /// would leave a header row with no data row, its cells hold part of a
+  /// multi-cell array formula or a data table, or a cell formula or defined
+  /// name references the totals row (a reference meeting it, or the table's
+  /// `[#Totals]` / `[#All]`).
   Expected<void, Error> set_table_totals_row(std::size_t index, bool shown);
 
   /// Writes column `column`'s totals cell on the last row of table `index`'s
@@ -849,7 +859,7 @@ class Workbook {
   Expected<void, Error> write_table_totals_cell(std::size_t index, std::size_t column);
 
   /// Smallest N >= 1 such that `<word><N>` is not the name or display name
-  /// of any table nor a defined name (compared case-insensitively), as
+  /// of any table nor a defined name (`sheet_names::write_collides`), as
   /// `add_table` checks.
   std::string next_default_table_name(std::string_view word) const;
 
@@ -862,8 +872,8 @@ class Workbook {
   std::optional<std::size_t> table_containing(std::size_t sheet_index, std::uint32_t row,
                                               std::uint32_t col) const noexcept;
 
-  /// True when `name` is the name or display name of a table under
-  /// `collection_names::equal`. Defined names are not consulted.
+  /// True when `name` resolves to a table through its name or display name
+  /// (`sheet_names::resolve_table`). Defined names are not consulted.
   bool is_table_name(std::string_view name) const noexcept;
 
   /// Re-registers dep-graph edges and dirties every formula cell whose
@@ -880,7 +890,7 @@ class Workbook {
   void reindex_formulas_for_table_change(const std::vector<std::string>& table_names);
 
   /// Renames table `index` and rewrites every structured reference naming its
-  /// old name or display name (case-insensitive) to `display_name`: cell,
+  /// old name or display name (`sheet_names::resolve_table`) to `display_name`: cell,
   /// defined-name, metadata (CF, DV, calculated-column, totals-row) and chart
   /// formulas, plus a pivot cache sourced from the table by name. Returns
   /// `kInvalidArgument` for an out-of-range `index` and refuses a name pair
@@ -891,7 +901,7 @@ class Workbook {
   /// Renames column `column` of table `table` from a typed header and
   /// returns the name it takes: an empty `name` becomes the profile's column
   /// word plus the lowest unused N >= 1, a name another column already uses
-  /// (`collection_names::equal`) gains the lowest unused N >= 2, and anything
+  /// (`sheet_names::write_collides`) gains the lowest unused N >= 2, and anything
   /// else, spaces and a case-only change included, is kept. Every structured
   /// reference to the old name through this table is rewritten (cell,
   /// defined-name, metadata and chart formulas), and the header cell, when
@@ -978,8 +988,8 @@ class Workbook {
   /// Appends `person`, its id stored uppercase. Fails with `kInvalidArgument`
   /// when the id is not a brace-wrapped GUID (either letter case) or the
   /// display name is empty, and with `kAlreadyExists` when the id is already
-  /// listed. Person ids compare
-  /// with `collection_names::equal` here and wherever a person is named.
+  /// listed. Person ids compare ASCII case-insensitively here and wherever
+  /// a person is named.
   Expected<void, Error> add_person(Person person);
 
   /// Removes the person with `id`. Fails with `kNotFound` when no such person
@@ -1518,12 +1528,63 @@ class Workbook {
   /// `delete_rows` along the column axis.
   Expected<void, Error> delete_cols(std::size_t sheet_index, std::uint32_t col, std::uint32_t count);
 
+  /// Inserts the cells of `range` on `sheet_index` (Insert Cells), shifting
+  /// the cells of the band — the range's columns for `kDown`, its rows for
+  /// `kRight` — from the range's edge onwards by the range's height or width.
+  /// A reference, name target or hyperlink moves (or grows across the edge)
+  /// only when its perpendicular extent lies wholly inside the band; one
+  /// straddling the band, a whole column and a whole row are left as they
+  /// are. A CF / DV sqref straddling the moving region splits into its moved
+  /// and unmoved parts; a merge straddling it is unmerged first. Inserted
+  /// cells take the XF of the cell directly above (`kDown`) or left
+  /// (`kRight`). Row/column layout, page breaks, drawing anchors and the
+  /// sheet view do not move. A range covering the whole perpendicular extent
+  /// is the whole row/column insert.
+  ///
+  /// Errors, each leaving the workbook unchanged:
+  ///   * `kInvalidArgument` for an out-of-range sheet index, a range outside
+  ///     the grid, `kUp` / `kLeft`, or a whole-column range shifted down (a
+  ///     whole-row range shifted right).
+  ///   * `kPreconditionFailed` when the moving region meets a table, a
+  ///     multi-cell array formula or a data table its band does not wholly
+  ///     cover, when the edit cuts into a PivotTable, meets one across a band
+  ///     edge or lies wholly inside one, or when a value or formula would be
+  ///     pushed off the grid.
+  Expected<void, Error> insert_cells(std::size_t sheet_index, const MergeRange& range, CellShift shift);
+
+  /// Deletes the cells of `range` on `sheet_index` (Delete Cells), shifting
+  /// the band's cells past the range back by its height (`kUp`) or width
+  /// (`kLeft`). References follow `insert_cells`' band rule; a wholly deleted
+  /// one becomes `#REF!`, a partly deleted one shrinks, and a range whose
+  /// axial extent lies in the deleted interval and that the band touches at
+  /// one perpendicular end shrinks to its part outside the band. Notes and
+  /// threaded comments go with their deleted cells; a merge partly inside
+  /// the deleted rectangle is unmerged.
+  ///
+  /// Errors, each leaving the workbook unchanged:
+  ///   * `kInvalidArgument` as `insert_cells`, with `kDown` / `kRight` the
+  ///     refused shifts.
+  ///   * `kPreconditionFailed` on the same objects as `insert_cells`; a
+  ///     delete inside a PivotTable is refused rather than hiding an item.
+  Expected<void, Error> delete_cells(std::size_t sheet_index, const MergeRange& range, CellShift shift);
+
  private:
   Workbook();
 
   // `set_cell_value` without the array / data-table write refusals.
   void put_cell_value(std::size_t sheet_index, std::uint32_t row, std::uint32_t col, Value value);
   void put_cell_text(std::size_t sheet_index, std::uint32_t row, std::uint32_t col, std::string_view text);
+  // The `put_cell_*` writes for a caller already holding the engine mutex.
+  void put_cell_value_locked(std::size_t sheet_index, std::uint32_t row, std::uint32_t col, Value value);
+  void put_cell_text_locked(std::size_t sheet_index, std::uint32_t row, std::uint32_t col, std::string_view text);
+  void put_cell_formula_locked(std::size_t sheet_index, std::uint32_t row, std::uint32_t col, std::string formula,
+                               FormulaSource source, std::uint32_t block_rows, std::uint32_t block_cols);
+  // `write_table_totals_cell` for a caller already holding the engine mutex.
+  Expected<void, Error> write_table_totals_cell_locked(std::size_t index, std::size_t column);
+  // `insert_cells` (`is_delete` false) or `delete_cells` for a caller already
+  // holding the engine mutex.
+  Expected<void, Error> apply_band_edit_locked(std::size_t sheet_index, const MergeRange& range, CellShift shift,
+                                               bool is_delete);
   // `add_merge` without the overlap refusals, for a PivotTable writing its
   // own report; `merge` must be normalized and inside the grid.
   void put_merge(std::size_t sheet_index, const MergeRange& merge);

@@ -408,14 +408,12 @@ extern "C" fm_status_t fm_workbook_get_cell_style(const fm_workbook_t* wb, const
   }
   *out_present = 0;
   *out = fm_cell_style_t{};
-  const auto& styles = wb->workbook().styles().cell_styles;
-  for (std::size_t i = 0; i < styles.size(); ++i) {
-    if (formulon::collection_names::equal(styles[i].name, name)) {
-      *out_present = 1;
-      return fm_workbook_get_cell_style_at(wb, i, out);
-    }
+  const std::size_t found = formulon::sheet_names::resolve_named(wb->workbook().styles().cell_styles, name);
+  if (found == formulon::sheet_names::kNotFound) {
+    return 0;
   }
-  return 0;
+  *out_present = 1;
+  return fm_workbook_get_cell_style_at(wb, found, out);
 }
 
 extern "C" fm_status_t fm_workbook_get_cell_style_xf_count(const fm_workbook_t* wb, size_t* out_count) {

@@ -100,7 +100,7 @@ namespace {
 // Which reference spelling `references_any` compares against its candidates.
 enum class RefKind : std::uint8_t { kName, kTable, kSheet };
 
-// True once any entry of `candidates` (case-insensitive) is named by a
+// True once any entry of `candidates` (any spelling that could resolve to it) is named by a
 // reference of `kind` in `node`'s subtree. A name is a `NameRef`, a `[0]!Name`
 // or a `Call` callee (a LAMBDA-valued defined name is called as `Fn(args)`; a
 // built-in callee simply matches no defined name); a table is a
@@ -115,9 +115,8 @@ bool references_any(const parser::AstNode& node, const std::vector<std::string>&
     if (ref_kind != kind) {
       return false;
     }
-    return std::any_of(candidates.begin(), candidates.end(), [&](const std::string& n) {
-      return kind == RefKind::kSheet ? sheet_names::equal(n, ref) : collection_names::equal(n, ref);
-    });
+    return std::any_of(candidates.begin(), candidates.end(),
+                       [&](const std::string& n) { return sheet_names::write_collides(n, ref); });
   };
   switch (node.kind()) {
     case parser::NodeKind::NameRef:
@@ -174,7 +173,7 @@ bool references_any_sheet(const parser::AstNode& root, const std::vector<std::st
 
 bool contains_affected_name(const std::vector<std::string>& affected, std::string_view candidate) {
   return std::any_of(affected.begin(), affected.end(),
-                     [&](const std::string& name) { return collection_names::equal(name, candidate); });
+                     [&](const std::string& name) { return sheet_names::write_collides(name, candidate); });
 }
 
 }  // namespace
@@ -202,23 +201,22 @@ std::vector<std::string> close_affected_names(const std::vector<DefinedName>& de
 namespace {
 
 // Appends to `found` each entry of `locals` that `node` names as a NameRef
-// qualified by `sheet`.
-void collect_local_name_refs(const parser::AstNode& node, std::string_view sheet,
+// qualified by a spelling resolving to `sheets[sheet_index]`.
+void collect_local_name_refs(const parser::AstNode& node, const std::vector<Sheet>& sheets, std::size_t sheet_index,
                              const std::vector<std::string>& locals, std::vector<std::string>& found) {
   if (node.kind() == parser::NodeKind::NameRef) {
     const std::string_view qualifier = node.as_name_sheet();
-    if (qualifier.empty() || !sheet_names::equal(qualifier, sheet)) {
+    if (qualifier.empty() || detail::find_sheet_index(sheets, qualifier) != sheet_index) {
       return;
     }
-    for (const std::string& local : locals) {
-      if (collection_names::equal(local, node.as_name()) && !contains_affected_name(found, local)) {
-        found.push_back(local);
-      }
+    const std::size_t local = sheet_names::resolve(locals, node.as_name());
+    if (local != sheet_names::kNotFound && std::find(found.begin(), found.end(), locals[local]) == found.end()) {
+      found.push_back(locals[local]);
     }
     return;
   }
   parser::any_child_node(node, [&](const parser::AstNode& child) {
-    collect_local_name_refs(child, sheet, locals, found);
+    collect_local_name_refs(child, sheets, sheet_index, locals, found);
     return false;
   });
 }
@@ -240,12 +238,11 @@ std::vector<std::string> referenced_local_names_of_removed_sheet(const std::vect
   if (locals.empty()) {
     return {};
   }
-  const std::string_view sheet_name = sheets[removed_index].name();
   std::vector<std::string> referenced;
   Arena arena;
   const auto scan = [&](std::string_view text) {
     if (const parser::AstNode* root = parse_stored_formula(text, arena); root != nullptr) {
-      collect_local_name_refs(*root, sheet_name, locals, referenced);
+      collect_local_name_refs(*root, sheets, removed_index, locals, referenced);
     }
   };
 
@@ -299,7 +296,7 @@ std::vector<std::string> referenced_local_names_of_removed_sheet(const std::vect
       continue;
     }
     for (const DefinedName& entry : defined_names) {
-      if (entry.local_sheet_id == removed_id && collection_names::equal(entry.name, name)) {
+      if (entry.local_sheet_id == removed_id && entry.name == name) {
         scan(entry.formula);
       }
     }
@@ -385,11 +382,14 @@ void mark_row_visibility_dependents_dirty_locked(const std::vector<Sheet>& sheet
           continue;
         }
         // A call must spell its name, so text scans miss nothing; a string literal costs a spare dirty mark.
-        // The scan folds ASCII only, so a non-ASCII byte on either side defers to the parse.
+        // The scan folds ASCII case only, so a non-ASCII or control byte on either side defers to the parse.
         bool affected = visibility_sensitive(cell.formula_text);
         const std::string_view text = cell.formula_text;
         const auto ascii = [](std::string_view s) {
-          return std::none_of(s.begin(), s.end(), [](char c) { return (static_cast<unsigned char>(c) & 0x80U) != 0U; });
+          return std::all_of(s.begin(), s.end(), [](char c) {
+            const auto byte = static_cast<unsigned char>(c);
+            return byte >= 0x20U && byte < 0x7FU;
+          });
         };
         const bool text_ascii = ascii(text);
         const auto spells_name = [&](const std::string& name) {

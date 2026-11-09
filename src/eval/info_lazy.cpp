@@ -40,6 +40,7 @@
 #include "parser/reference.h"
 #include "parser/structured_ref_spelling.h"
 #include "sheet.h"
+#include "sheet_name.h"
 #include "utils/arena.h"
 #include "utils/error.h"
 #include "utils/expected.h"
@@ -307,8 +308,12 @@ Value eval_formulatext_lazy(const parser::AstNode& call, Arena& arena, const Fun
       }
     }
   }
+  const std::optional<sheet_names::NameList> table_list =
+      own_table.empty() ? std::nullopt
+                        : std::optional<sheet_names::NameList>(sheet_names::table_name_list(wb->tables()));
   std::string shown =
-      localize_formula_text(parser::display_structured_refs(stripped, own_table), current_eval_profile());
+      localize_formula_text(parser::display_structured_refs(stripped, own_table, table_list ? &*table_list : nullptr),
+                            current_eval_profile());
   // The workbook's own names show under its file name, as in the formula bar.
   if (wb != nullptr && wb->spells_self_book_names(shown)) {
     shown = wb->spell_self_book_names(shown);
@@ -481,7 +486,7 @@ Value eval_single_lazy(const parser::AstNode& call, Arena& arena, const Function
   // behaviour.
   if (ctx.has_formula_cell()) {
     parser::Reference target{};
-    switch (project_implicit_intersection(arg, ctx.formula_row(), ctx.formula_col(), &target)) {
+    switch (project_implicit_intersection(arg, ctx.formula_row(), ctx.formula_col(), &target, ctx.workbook())) {
       case IntersectionProjection::kCell:
         return ctx.resolve_ref(target, arena, registry);
       case IntersectionProjection::kNoCell:

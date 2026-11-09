@@ -28,12 +28,14 @@ Value materialize_rectangle(const parser::Reference& top_left, const parser::Ref
 
 // Recovers the rectangle a bare whole-axis reference declares; false (out-params
 // untouched) when `node` is not one.
-bool whole_axis_declared_rect(const parser::AstNode& node, parser::Reference* top_left,
-                              parser::Reference* bottom_right);
+// A `:` chain's sheet qualifiers resolve among `wb`'s sheets in both.
+bool whole_axis_declared_rect(const parser::AstNode& node, parser::Reference* top_left, parser::Reference* bottom_right,
+                              const Workbook* wb);
 
 // Recovers the rectangle a bare bounded range declares (`A1:C10`); false
 // (out-params untouched) for any other shape.
-bool bounded_declared_rect(const parser::AstNode& node, parser::Reference* top_left, parser::Reference* bottom_right);
+bool bounded_declared_rect(const parser::AstNode& node, parser::Reference* top_left, parser::Reference* bottom_right,
+                           const Workbook* wb);
 
 // Reads the rectangle `[lhs : rhs]`, which spans a whole grid axis, at its
 // declared size as a `TailArray`.

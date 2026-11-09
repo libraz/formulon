@@ -16,14 +16,18 @@
 namespace formulon {
 namespace parser {
 
-SheetRenameTransform::SheetRenameTransform(std::string_view old_name, std::string_view new_name) noexcept
-    : old_name_(old_name), new_name_(new_name), new_name_needs_quotes_(local_sheet_needs_quoting_a1(new_name)) {}
+SheetRenameTransform::SheetRenameTransform(std::string_view old_name, std::string_view new_name,
+                                           const sheet_names::NameList* sheet_list) noexcept
+    : old_name_(old_name),
+      new_name_(new_name),
+      sheet_list_(sheet_list),
+      new_name_needs_quotes_(local_sheet_needs_quoting_a1(new_name)) {}
 
 std::optional<std::string_view> SheetRenameTransform::remap_sheet(std::string_view sheet) const noexcept {
   if (sheet.empty()) {
     return std::nullopt;
   }
-  if (!sheet_names::equal(sheet, old_name_)) {
+  if (!sheet_names::NameList::denotes(sheet_list_, sheet, old_name_)) {
     return std::nullopt;
   }
   return new_name_;
@@ -54,8 +58,14 @@ std::optional<std::string_view> SheetRenameTransform::apply_name_sheet(std::stri
 }
 
 SheetCopyTransform::SheetCopyTransform(std::string_view source, std::string_view copy,
-                                       std::vector<std::pair<std::string, std::string>> table_map)
-    : rename_(source, copy), source_(source), copy_(copy), table_map_(std::move(table_map)) {}
+                                       std::vector<std::pair<std::string, std::string>> table_map,
+                                       const sheet_names::NameList* sheet_list, const sheet_names::NameList* table_list)
+    : rename_(source, copy, sheet_list),
+      source_(source),
+      copy_(copy),
+      table_map_(std::move(table_map)),
+      sheet_list_(sheet_list),
+      table_list_(table_list) {}
 
 std::optional<Reference> SheetCopyTransform::apply(const Reference& ref) const {
   return rename_.apply(ref);
@@ -63,8 +73,8 @@ std::optional<Reference> SheetCopyTransform::apply(const Reference& ref) const {
 
 std::optional<RefTransform::Ref3DSheetSpan> SheetCopyTransform::apply_ref3d_span(std::string_view begin,
                                                                                  std::string_view end) const {
-  const bool begin_is_source = sheet_names::equal(begin, source_);
-  const bool end_is_source = sheet_names::equal(end, source_);
+  const bool begin_is_source = sheet_names::NameList::denotes(sheet_list_, begin, source_);
+  const bool end_is_source = sheet_names::NameList::denotes(sheet_list_, end, source_);
   if (begin_is_source && end_is_source) {
     return Ref3DSheetSpan{copy_, copy_, /*collapse=*/true};
   }
@@ -82,7 +92,7 @@ std::optional<std::string_view> SheetCopyTransform::apply_name_sheet(std::string
 std::optional<StructuredRefTarget> SheetCopyTransform::apply_structured_ref(std::string_view table,
                                                                             std::string_view /*column*/) const {
   for (const std::pair<std::string, std::string>& entry : table_map_) {
-    if (collection_names::equal(table, entry.first)) {
+    if (sheet_names::NameList::denotes(table_list_, table, entry.first)) {
       return StructuredRefTarget{entry.second, {}};
     }
   }
@@ -96,12 +106,11 @@ SheetRemovalTransform::SheetRemovalTransform(const std::vector<std::string_view>
       rebound_names_(std::move(rebound_names)) {}
 
 std::size_t SheetRemovalTransform::find_sheet(std::string_view sheet) const noexcept {
-  for (std::size_t i = 0; i < pre_removal_sheet_order_.size(); ++i) {
-    if (sheet_names::equal(sheet, pre_removal_sheet_order_[i])) {
-      return i;
-    }
-  }
-  return kInvalidSheetIndex;
+  const std::size_t index =
+      sheet_names::resolve_by(pre_removal_sheet_order_.size(), [&](std::size_t i, sheet_names::Fold fold) {
+        return sheet_names::same(pre_removal_sheet_order_[i], sheet, fold);
+      });
+  return index == sheet_names::kNotFound ? kInvalidSheetIndex : index;
 }
 
 bool SheetRemovalTransform::is_removed(std::size_t index) const noexcept {
@@ -130,8 +139,7 @@ bool SheetRemovalTransform::rebinds_name_to_book(std::string_view sheet, std::st
   if (!is_removed(find_sheet(sheet))) {
     return false;
   }
-  return std::any_of(rebound_names_.begin(), rebound_names_.end(),
-                     [name](const std::string& rebound) { return collection_names::equal(rebound, name); });
+  return sheet_names::resolve(rebound_names_, name) != sheet_names::kNotFound;
 }
 
 std::optional<RefTransform::Ref3DSheetSpan> SheetRemovalTransform::apply_ref3d_span(std::string_view begin,
@@ -182,13 +190,26 @@ std::optional<RefTransform::Ref3DSheetSpan> SheetRemovalTransform::apply_ref3d_s
 }
 
 RowColShiftTransform::RowColShiftTransform(std::string_view target_sheet, RowColAxis axis, RowColEdit edit,
-                                           std::uint32_t index, std::uint32_t count, bool local_means_target) noexcept
+                                           std::uint32_t index, std::uint32_t count, bool local_means_target,
+                                           const sheet_names::NameList* sheet_list) noexcept
     : target_sheet_(target_sheet),
       axis_(axis),
       edit_(edit),
       index_(index),
       count_(count),
-      local_means_target_(local_means_target) {}
+      local_means_target_(local_means_target),
+      sheet_list_(sheet_list) {}
+
+RowColShiftTransform::RowColShiftTransform(std::string_view target_sheet, RowColAxis axis, RowColEdit edit,
+                                           std::uint32_t index, std::uint32_t count, Band band, bool local_means_target,
+                                           const sheet_names::NameList* sheet_list) noexcept
+    : RowColShiftTransform(target_sheet, axis, edit, index, count, local_means_target, sheet_list) {
+  band_ = band;
+}
+
+bool RowColShiftTransform::inside_band(std::uint32_t first, std::uint32_t last) const noexcept {
+  return !band_.has_value() || (band_->first <= std::min(first, last) && std::max(first, last) <= band_->last);
+}
 
 bool RowColShiftTransform::sheet_in_scope(std::string_view sheet) const noexcept {
   if (sheet.empty()) {
@@ -202,7 +223,7 @@ bool RowColShiftTransform::sheet_in_scope(std::string_view sheet) const noexcept
     // reference always falls outside the local scope.
     return false;
   }
-  return sheet_names::equal(sheet, target_sheet_);
+  return sheet_names::NameList::denotes(sheet_list_, sheet, target_sheet_);
 }
 
 std::optional<std::uint32_t> RowColShiftTransform::shift_axis(std::uint32_t coord, std::uint32_t bound) const noexcept {
@@ -278,6 +299,12 @@ std::optional<Reference> RowColShiftTransform::apply(const Reference& ref) const
     return ref;
   }
   Reference out = ref;
+  // A band edit leaves whole columns and rows, and cells outside the band, alone.
+  if (band_.has_value() &&
+      (ref.is_full_col || ref.is_full_row ||
+       !inside_band(axis_ == RowColAxis::kRow ? ref.col : ref.row, axis_ == RowColAxis::kRow ? ref.col : ref.row))) {
+    return out;
+  }
   if (axis_ == RowColAxis::kRow) {
     // Whole-column references are anchored along the column axis only;
     // their row coordinate is meaningless and should not gate a #REF!
@@ -311,9 +338,18 @@ std::optional<std::pair<Reference, Reference>> RowColShiftTransform::apply_range
   // outside scope (including a cross-sheet range), retain the base contract:
   // transform each endpoint independently and let a deleted endpoint poison
   // the range.
-  if (!sheet_names::equal(lhs.sheet, rhs.sheet) || !sheet_in_scope(lhs.sheet) || lhs.is_full_col != rhs.is_full_col ||
-      lhs.is_full_row != rhs.is_full_row) {
+  if (!sheet_names::NameList::same_entry(sheet_list_, lhs.sheet, rhs.sheet) || !sheet_in_scope(lhs.sheet) ||
+      lhs.is_full_col != rhs.is_full_col || lhs.is_full_row != rhs.is_full_row) {
     return RefTransform::apply_range(lhs, rhs);
+  }
+  if (band_.has_value()) {
+    if (lhs.is_full_col || lhs.is_full_row) {
+      return std::make_pair(lhs, rhs);
+    }
+    const bool row_axis = axis_ == RowColAxis::kRow;
+    if (!inside_band(row_axis ? lhs.col : lhs.row, row_axis ? rhs.col : rhs.row)) {
+      return apply_range_across_band(lhs, rhs);
+    }
   }
   // A whole-column range is independent of row edits, and a whole-row range
   // is independent of column edits. Endpoint application is equivalent and
@@ -342,6 +378,33 @@ std::optional<std::pair<Reference, Reference>> RowColShiftTransform::apply_range
     out_lhs.col = shifted->first;
     out_rhs.col = shifted->second;
   }
+  return std::make_pair(out_lhs, out_rhs);
+}
+
+std::pair<Reference, Reference> RowColShiftTransform::apply_range_across_band(const Reference& lhs,
+                                                                              const Reference& rhs) const {
+  const bool row_axis = axis_ == RowColAxis::kRow;
+  const std::uint32_t axial_low = std::min(row_axis ? lhs.row : lhs.col, row_axis ? rhs.row : rhs.col);
+  const std::uint32_t axial_high = std::max(row_axis ? lhs.row : lhs.col, row_axis ? rhs.row : rhs.col);
+  const std::uint32_t perp_low = std::min(row_axis ? lhs.col : lhs.row, row_axis ? rhs.col : rhs.row);
+  const std::uint32_t perp_high = std::max(row_axis ? lhs.col : lhs.row, row_axis ? rhs.col : rhs.row);
+  const std::uint64_t delete_end = static_cast<std::uint64_t>(index_) + count_;
+  // A delete whose rows (columns) hold the range's whole axial extent cuts the
+  // band's part off a range the band reaches at exactly one perpendicular end.
+  const bool covers_low = band_->first <= perp_low && perp_low <= band_->last;
+  const bool covers_high = band_->first <= perp_high && perp_high <= band_->last;
+  if (edit_ != RowColEdit::kDelete || axial_low < index_ || axial_high >= delete_end || covers_low == covers_high) {
+    return std::make_pair(lhs, rhs);
+  }
+  const std::uint32_t kept_low = covers_low ? band_->last + 1U : perp_low;
+  const std::uint32_t kept_high = covers_low ? perp_high : band_->first - 1U;
+  Reference out_lhs = lhs;
+  Reference out_rhs = rhs;
+  std::uint32_t& lhs_perp = row_axis ? out_lhs.col : out_lhs.row;
+  std::uint32_t& rhs_perp = row_axis ? out_rhs.col : out_rhs.row;
+  const bool lhs_is_low = (row_axis ? lhs.col : lhs.row) <= (row_axis ? rhs.col : rhs.row);
+  lhs_perp = lhs_is_low ? kept_low : kept_high;
+  rhs_perp = lhs_is_low ? kept_high : kept_low;
   return std::make_pair(out_lhs, out_rhs);
 }
 

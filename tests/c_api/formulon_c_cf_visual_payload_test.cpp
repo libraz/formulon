@@ -157,6 +157,8 @@ TEST(FormulonCApiCfMutate, GetAtRecordStaysReadableUntilTheNextGet) {
   const char* seed_id = nullptr;
   ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &seed, &seed_id), 0) << fm_get_last_error_message();
 
+  // Take the id first: another get would end the held record's lifetime.
+  const std::string rule_id = CfRuleIdAt(wb.handle, 0, 0);
   fm_cf_rule_t held = FM_STRUCT_INIT(fm_cf_rule_t);
   ASSERT_EQ(fm_sheet_get_cf_rule_at(wb.handle, 0, 0, &held), 0);
   ASSERT_NE(held.ranges, nullptr);
@@ -164,7 +166,7 @@ TEST(FormulonCApiCfMutate, GetAtRecordStaysReadableUntilTheNextGet) {
   ASSERT_EQ(held.color_scale_count, 2U);
 
   // A removal frees the block the rule lived in.
-  ASSERT_EQ(fm_sheet_remove_cf_rule(wb.handle, 0, CfRuleIdAt(wb.handle, 0, 0).c_str()), 0);
+  ASSERT_EQ(fm_sheet_remove_cf_rule(wb.handle, 0, rule_id.c_str()), 0);
   std::size_t remaining = 0;
   ASSERT_EQ(fm_sheet_get_cf_rule_count(wb.handle, 0, &remaining), 0);
   ASSERT_EQ(remaining, 0U);

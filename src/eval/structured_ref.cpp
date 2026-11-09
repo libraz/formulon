@@ -26,15 +26,11 @@ namespace eval {
 
 namespace {
 
-/// Looks up a column by case-insensitive name. Returns a 0-based index into
-/// `t.columns` on success, `-1u` on failure.
+/// Resolves a column name (`sheet_names::resolve_named`). Returns a 0-based
+/// index into `t.columns` on success, `-1u` on failure.
 std::uint32_t find_column_index(const TableMetadata& t, std::string_view name) noexcept {
-  for (std::size_t i = 0; i < t.columns.size(); ++i) {
-    if (collection_names::equal(t.columns[i].name, name)) {
-      return static_cast<std::uint32_t>(i);
-    }
-  }
-  return static_cast<std::uint32_t>(-1);
+  const std::size_t found = sheet_names::resolve_named(t.columns, name);
+  return found == sheet_names::kNotFound ? static_cast<std::uint32_t>(-1) : static_cast<std::uint32_t>(found);
 }
 
 /// Parses the table's `ref` attribute (e.g. `"A1:C10"`) into a 0-based
@@ -78,21 +74,15 @@ Expected<StructuredRefRange, ErrorCode> resolve_structured_ref(const StructuredR
                                                                const Workbook& wb, std::uint32_t current_sheet_index,
                                                                std::uint32_t current_row) {
   (void)current_sheet_index;
-  // Locate the table by case-insensitive name. OOXML's `name` is the
+  // Resolve the table through either name. OOXML's `name` is the
   // workbook-unique programmatic name; `display_name` is what users type
   // in formulas. Excel emits the two equal in practice but the spec
   // allows them to differ; accept either to match Excel.
-  const TableMetadata* table = nullptr;
-  for (const TableMetadata& t : wb.tables()) {
-    if (collection_names::equal(t.display_name, selector.table_name) ||
-        collection_names::equal(t.name, selector.table_name)) {
-      table = &t;
-      break;
-    }
-  }
-  if (table == nullptr) {
+  const std::size_t table_index = sheet_names::resolve_table(wb.tables(), selector.table_name);
+  if (table_index == sheet_names::kNotFound) {
     return ErrorCode::Name;
   }
+  const TableMetadata* table = &wb.tables()[table_index];
   if (table->sheet_index >= wb.sheet_count()) {
     return ErrorCode::Ref;
   }

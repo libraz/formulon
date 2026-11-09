@@ -24,6 +24,7 @@
 #include "parser/parser.h"
 #include "phonetic.h"
 #include "sheet.h"
+#include "sheet_name.h"
 #include "style_resolve.h"
 #include "table.h"
 #include "utils/arena.h"
@@ -911,7 +912,9 @@ extern "C" fm_status_t fm_sheet_get_formula_r1c1(const fm_workbook_t* wb, size_t
     return set_binding_error(formulon::FormulonErrorCode::kParserUnexpectedToken, "stored formula does not parse",
                              "row=" + std::to_string(row) + " col=" + std::to_string(col));
   }
-  const formulon::parser::StructuredRefDisplay display{table_display_name_at(wb->workbook(), sheet_index, row, col)};
+  const formulon::sheet_names::NameList table_list = formulon::sheet_names::table_name_list(wb->workbook().tables());
+  const formulon::parser::StructuredRefDisplay display{table_display_name_at(wb->workbook(), sheet_index, row, col),
+                                                       &table_list};
   *out_present = 1;
   *out_formula = publish_scratch(wb, with_formula_prefix(wb->workbook().spell_self_book_names(
                                          formulon::parser::format_formula_r1c1(*root, row, col, &display))));

@@ -175,7 +175,7 @@ export function registerSheetPivot(Module, test) {
       wb.setDefinedName({ name: 'PI', formula: '3.14159' });
       assert.equal(wb.listDefinedNames().length, 1);
       const b = wb.listDefinedNames()[0];
-      assert.equal(b.name, 'Pi'); // authored case preserved
+      assert.equal(b.name, 'PI'); // the update takes the new spelling
       assert.equal(b.formula, '=3.14159');
 
       // An empty formula is refused; removal has its own call.

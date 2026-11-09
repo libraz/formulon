@@ -363,7 +363,7 @@ Expected<void, Error> emit_dv_block(std::vector<std::uint8_t>& dst, const std::v
   // entry without `sqref`, it is left out.
   std::vector<const DataValidation*> listed;
   for (const DataValidation& dv : validations) {
-    if (!dv.ranges.empty() && !data_validation_in_x14(dv, own_sheet)) {
+    if (!dv.ranges.empty() && !data_validation_in_x14(dv, own_sheet, &ctx.sheet_names)) {
       listed.push_back(&dv);
     }
   }
@@ -419,7 +419,7 @@ Expected<void, Error> place_x14_validations(XlsbSheetTail& tail, const std::vect
                                             const FeatureFormulaWriteContext& ctx, std::string_view own_sheet) {
   std::vector<const DataValidation*> pending;
   for (const DataValidation& dv : validations) {
-    if (!dv.ranges.empty() && data_validation_in_x14(dv, own_sheet)) {
+    if (!dv.ranges.empty() && data_validation_in_x14(dv, own_sheet, &ctx.sheet_names)) {
       pending.push_back(&dv);
     }
   }

@@ -168,12 +168,12 @@ bool resolve_offset_base(const parser::AstNode& raw_arg, Arena& arena, const Fun
     // A chained `:` (`A1:B2:C3`) folds to its bounding box's endpoint pair.
     parser::Reference lhs{};
     parser::Reference rhs{};
-    if (!declared_rect_endpoint_pair(arg, &lhs, &rhs)) {
+    if (!declared_rect_endpoint_pair(arg, &lhs, &rhs, ctx.workbook())) {
       *out_err = ErrorCode::Ref;
       return false;
     }
     // Sheet agreement precedes the whole-axis branches; mirrors `expand_range`.
-    const auto merged = merge_sheet_qualifiers(lhs.sheet, rhs.sheet);
+    const auto merged = merge_sheet_qualifiers(lhs.sheet, rhs.sheet, ctx.workbook());
     if (!merged) {
       *out_err = merged.error();
       return false;

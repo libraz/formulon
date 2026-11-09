@@ -262,7 +262,7 @@ bool resolve_range_arg_into(const parser::AstNode& raw_arg, Arena& arena, const 
       // the endpoint union below.
       parser::Reference chain_lhs{};
       parser::Reference chain_rhs{};
-      if (declared_rect_endpoint_pair(arg_node, &chain_lhs, &chain_rhs)) {
+      if (declared_rect_endpoint_pair(arg_node, &chain_lhs, &chain_rhs, ctx.workbook())) {
         return assign_expanded(ctx, chain_lhs, chain_rhs, arena, registry, out_cells, out_err_code, out_rows, out_cols);
       }
     }
@@ -648,7 +648,7 @@ void collect_axis_spans(const parser::AstNode& node, const EvalContext& ctx, std
     return;
   }
   AxisSpan span;
-  if (declared_rect_endpoint_pair(node, &span.lhs, &span.rhs)) {
+  if (declared_rect_endpoint_pair(node, &span.lhs, &span.rhs, ctx.workbook())) {
     const auto rect = declared_rect(span.lhs, span.rhs);
     if (!rect) {
       return;
@@ -744,7 +744,7 @@ bool static_reference_shape(const parser::AstNode& arg_node, const EvalContext& 
                             std::uint32_t* out_cols) {
   parser::Reference lhs{};
   parser::Reference rhs{};
-  if (!declared_rect_endpoint_pair(resolve_name_ast(arg_node, ctx.name_env()), &lhs, &rhs)) {
+  if (!declared_rect_endpoint_pair(resolve_name_ast(arg_node, ctx.name_env()), &lhs, &rhs, ctx.workbook())) {
     return false;
   }
   const auto rect = ctx.declared_range_rect(lhs, rhs);

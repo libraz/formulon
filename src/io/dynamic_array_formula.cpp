@@ -8,9 +8,9 @@
 #include "io/xml_utils.h"
 #include "parser/parser.h"
 #include "pugixml.hpp"
+#include "sheet_name.h"
 #include "utils/arena.h"
 #include "utils/formula_text.h"
-#include "utils/strings.h"
 
 namespace formulon {
 namespace io {
@@ -75,19 +75,17 @@ std::string_view NameOf(const parser::AstNode& node) {
 // for workbook scope) resolves it: sheet-local before workbook-wide;
 // `names.size()` when undefined.
 std::size_t FindDefinedName(const std::vector<DefinedName>& names, std::string_view name, std::int32_t scope) {
-  std::size_t found = names.size();
-  for (std::size_t i = 0; i < names.size(); ++i) {
-    if (!strings::case_insensitive_eq(names[i].name, name)) {
-      continue;
-    }
-    if (names[i].local_sheet_id == scope) {
-      return i;
-    }
-    if (names[i].local_sheet_id < 0) {
-      found = i;
-    }
+  const auto resolve_in = [&](bool local) {
+    return sheet_names::resolve_by(names.size(), [&](std::size_t i, sheet_names::Fold fold) {
+      const bool in_scope = local ? names[i].local_sheet_id == scope : names[i].local_sheet_id < 0;
+      return in_scope && sheet_names::same(names[i].name, name, fold);
+    });
+  };
+  std::size_t found = scope >= 0 ? resolve_in(true) : sheet_names::kNotFound;
+  if (found == sheet_names::kNotFound) {
+    found = resolve_in(false);
   }
-  return found;
+  return found == sheet_names::kNotFound ? names.size() : found;
 }
 
 }  // namespace

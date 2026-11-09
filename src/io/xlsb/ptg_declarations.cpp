@@ -20,6 +20,7 @@
 #include "parser/ast.h"
 #include "parser/formula_prefix.h"
 #include "parser/reference.h"
+#include "sheet_name.h"
 #include "utils/strings.h"
 
 namespace formulon {
@@ -336,12 +337,8 @@ int external_sheet_index(const XlsbLinkTables& link, std::string_view sheet) {
 }
 
 std::uint32_t external_name_ilbl(const XlsbLinkTables& link, std::string_view name) {
-  for (std::size_t i = 0; i < link.names.size(); ++i) {
-    if (strings::case_insensitive_eq(link.names[i], name)) {
-      return static_cast<std::uint32_t>(i + 1U);
-    }
-  }
-  return 0U;
+  const std::size_t index = sheet_names::resolve(link.names, name);
+  return index == sheet_names::kNotFound ? 0U : static_cast<std::uint32_t>(index + 1U);
 }
 
 void collect_ptg_sheet_ranges(const parser::AstNode& node, const std::vector<std::string>& sheet_names,

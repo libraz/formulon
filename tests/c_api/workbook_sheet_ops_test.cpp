@@ -192,11 +192,11 @@ TEST(WorkbookSheetOpsCApi, SetDefinedNameAddsAndUpdates) {
   EXPECT_STREQ(dn.name, "MyName");
   EXPECT_STREQ(dn.formula, "=42");
 
-  // Update the formula text via case-insensitive match.
+  // A case variant updates the same entry and takes the new spelling.
   ASSERT_EQ(SetDefinedName(wb.handle, "MYNAME", "=99"), 0);
   EXPECT_EQ(count_of(fm_workbook_get_defined_name_count, wb.handle), 1U);
   ASSERT_EQ(fm_workbook_get_defined_name_at(wb.handle, 0, &dn), 0);
-  EXPECT_STREQ(dn.name, "MyName");  // authored case preserved
+  EXPECT_STREQ(dn.name, "MYNAME");
   EXPECT_STREQ(dn.formula, "=99");
 }
 
@@ -222,7 +222,7 @@ TEST(WorkbookSheetOpsCApi, SetDefinedNameScopedAllowsWorkbookAndSheetNames) {
 
   ASSERT_EQ(SetDefinedName(wb.handle, "RATE", "=3", 1), 0);
   ASSERT_EQ(fm_workbook_get_defined_name_at(wb.handle, 1, &dn), 0);
-  EXPECT_STREQ(dn.name, "Rate");
+  EXPECT_STREQ(dn.name, "RATE");
   EXPECT_STREQ(dn.formula, "=3");
   EXPECT_EQ(dn.local_sheet_id, 1);
 

@@ -73,6 +73,9 @@ inline constexpr std::int64_t kSecondsPerDay = 86400;
 /// take a pinned reading from the workbook instead of calling this.
 CivilTime host_civil_time() noexcept;
 
+/// Reads the host clock as UTC civil fields, independent of the host time zone.
+CivilTime host_utc_civil_time() noexcept;
+
 /// Gap between the two Excel date systems, in days: the 1904-system serial
 /// for a calendar day is exactly this much less than its 1900-system serial.
 /// Shared by the calendar builtins and by callers that must move a serial

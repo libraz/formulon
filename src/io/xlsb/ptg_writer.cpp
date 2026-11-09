@@ -570,7 +570,7 @@ class Encoder {
         return Expected<void, Error>::Ok();
       }
     }
-    const auto it = name_table_.find(std::string(RecordName(name)));
+    const auto it = find_name_key(name_table_, RecordName(name));
     if (it == name_table_.end()) {
       return make_error(FormulonErrorCode::kIoXlsbUnsupportedPtg, "xlsb encoder: name reference not in name table",
                         std::string(kCtx) + std::string(" name=") + std::string(name));
@@ -597,6 +597,13 @@ class Encoder {
     if (it == name_table_.end()) {
       it = name_table_.find(sheet_scoped_name_key(-1, name));
     }
+    // A spelling equal only under the wide fold resolves in the same order.
+    if (it == name_table_.end()) {
+      it = find_wide_name_key(name_table_, sheet_scoped_name_key(itab, name));
+    }
+    if (it == name_table_.end()) {
+      it = find_wide_name_key(name_table_, sheet_scoped_name_key(-1, name));
+    }
     if (it == name_table_.end()) {
       return make_error(FormulonErrorCode::kIoXlsbUnsupportedPtg, "xlsb encoder: name reference not in name table",
                         std::string(kCtx) + std::string(" name=") + std::string(name));
@@ -613,8 +620,15 @@ class Encoder {
     for (std::size_t itab = 0; it == name_table_.end() && itab < sheet_names_.size(); ++itab) {
       it = name_table_.find(sheet_scoped_name_key(static_cast<std::int32_t>(itab), name));
     }
+    // A spelling equal only under the wide fold resolves in the same order.
     if (it == name_table_.end()) {
-      it = name_table_.find(std::string(name));
+      it = find_wide_name_key(name_table_, sheet_scoped_name_key(-1, name));
+    }
+    for (std::size_t itab = 0; it == name_table_.end() && itab < sheet_names_.size(); ++itab) {
+      it = find_wide_name_key(name_table_, sheet_scoped_name_key(static_cast<std::int32_t>(itab), name));
+    }
+    if (it == name_table_.end()) {
+      it = find_name_key(name_table_, name);
     }
     if (it == name_table_.end()) {
       return make_error(FormulonErrorCode::kIoXlsbUnsupportedPtg, "xlsb encoder: name reference not in name table",

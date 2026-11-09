@@ -412,7 +412,7 @@ struct StylesTable {
   std::vector<std::string> unknown_top_level_xml;
 };
 
-/// Removes the `<cellStyle>` named `name` (`collection_names::equal`) and
+/// Removes the `<cellStyle>` `name` resolves to (`sheet_names::resolve_named`) and
 /// detaches the cell xfs that used it.
 ///
 /// Every `cell_xfs` entry whose `xf_id` is the removed style's is repointed to

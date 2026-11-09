@@ -59,8 +59,8 @@ struct DefinedNameFrame {
 /// Finds the defined name `name` visible from sheet index `current_sheet_id`.
 ///
 /// A sheet-scoped definition bound to `current_sheet_id` wins over a
-/// workbook-scoped definition of the same name; names match under
-/// `collection_names::equal`, mirroring Excel's name-resolution semantics. Returns
+/// workbook-scoped definition of the same name; within a scope the name
+/// resolves through `sheet_names::resolve_by`. Returns
 /// `nullptr` when no definition matches.
 const DefinedName* find_defined_name(const Workbook& workbook, std::uint16_t current_sheet_id,
                                      std::string_view name) noexcept;

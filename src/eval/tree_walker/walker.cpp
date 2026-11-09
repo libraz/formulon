@@ -434,7 +434,7 @@ Shaped eval_node_shaped(const parser::AstNode& node, Arena& arena, const Functio
       // denote the same rectangle.
       if (ctx.has_formula_cell()) {
         parser::Reference target{};
-        switch (project_implicit_intersection(operand, ctx.formula_row(), ctx.formula_col(), &target)) {
+        switch (project_implicit_intersection(operand, ctx.formula_row(), ctx.formula_col(), &target, ctx.workbook())) {
           case IntersectionProjection::kCell:
             return Shaped{ctx.resolve_ref(target, arena, registry), nullptr};
           case IntersectionProjection::kNoCell:

@@ -9,7 +9,6 @@
 #include <vector>
 
 #include "sheet.h"
-#include "sheet_name.h"
 #include "utils/date_time.h"
 #include "utils/error.h"
 #include "utils/expected.h"
@@ -51,10 +50,10 @@ Error Invalid(std::string_view message, std::string_view value) {
   return Refuse(FormulonErrorCode::kInvalidArgument, message, value);
 }
 
-// The listed person whose id is `id` under `collection_names::equal`, or null.
+// The listed person whose id is `id` (ASCII case-insensitive), or null.
 const Person* FindPerson(const std::vector<Person>& persons, std::string_view id) noexcept {
   for (const Person& p : persons) {
-    if (collection_names::equal(p.id, id)) {
+    if (strings::case_insensitive_eq(p.id, id)) {
       return &p;
     }
   }
@@ -251,9 +250,9 @@ Expected<void, Error> Workbook::remove_person(std::string_view id) {
   const std::size_t index = static_cast<std::size_t>(person - persons_.data());
   for (std::size_t s = 0; s < sheet_count(); ++s) {
     for (const ThreadedComment& c : sheet(s).threaded_comments()) {
-      bool referenced = collection_names::equal(c.person_id, id);
+      bool referenced = strings::case_insensitive_eq(c.person_id, id);
       for (const Mention& m : c.mentions) {
-        referenced = referenced || collection_names::equal(m.person_id, id);
+        referenced = referenced || strings::case_insensitive_eq(m.person_id, id);
       }
       if (referenced) {
         return Refuse(FormulonErrorCode::kPreconditionFailed, "a threaded comment still names this person", id);
@@ -294,8 +293,11 @@ Expected<std::string, Error> Workbook::add_threaded_comment(std::size_t sheet_in
   }
   RETURN_IF_ERROR(BindPerson(persons_, comment.person_id, "author is not in the person list"));
   if (comment.created.empty()) {
-    comment.created = FormatStamp(pinned_now_.has_value() ? *pinned_now_ : date_time::host_civil_time());
-  } else if (!is_threaded_comment_timestamp(comment.created)) {
+    comment.created = FormatStamp(pinned_now_.has_value() ? *pinned_now_ : date_time::host_utc_civil_time());
+  } else if (comment.created.back() == 'Z') {
+    comment.created.pop_back();
+  }
+  if (!is_threaded_comment_timestamp(comment.created)) {
     return Invalid("created is not YYYY-MM-DDTHH:MM:SS.ss", comment.created);
   }
   RETURN_IF_ERROR(ValidateText(comment.text, comment.mentions, persons_));

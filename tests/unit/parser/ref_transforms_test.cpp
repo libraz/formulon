@@ -13,6 +13,8 @@
 #include "gtest/gtest.h"
 #include "parser/reference.h"
 #include "sheet.h"
+#include "sheet_metadata.h"
+#include "utils/a1_ref.h"
 
 namespace formulon {
 namespace parser {
@@ -456,6 +458,171 @@ TEST(SheetRemovalTransform, CollapseFormOfEachStructuralTransform) {
   EXPECT_EQ(SheetCopyTransform("Alpha", "Alpha (2)", {}).collapse_form(), RefCollapse::kKeepAddress);
   EXPECT_EQ(SheetRenameTransform("Alpha", "Beta").collapse_form(), RefCollapse::kBare);
   EXPECT_EQ(IdentityTransform().collapse_form(), RefCollapse::kBare);
+}
+
+namespace {
+
+// The Insert / Delete Cells edits on B3:C4: rows 3:4 (0-based 2..3) along the
+// row axis with band columns B:C, or columns B:C along the column axis with
+// band rows 3:4.
+constexpr std::uint32_t kEdgeRow = 2U;
+constexpr std::uint32_t kEdgeCol = 1U;
+constexpr std::uint32_t kSpan = 2U;
+constexpr Band kColumnsBC{1U, 2U};
+constexpr Band kRows34{2U, 3U};
+
+RowColShiftTransform Down() {
+  return RowColShiftTransform("Sheet1", RowColAxis::kRow, RowColEdit::kInsert, kEdgeRow, kSpan, kColumnsBC);
+}
+RowColShiftTransform Up() {
+  return RowColShiftTransform("Sheet1", RowColAxis::kRow, RowColEdit::kDelete, kEdgeRow, kSpan, kColumnsBC);
+}
+RowColShiftTransform Right() {
+  return RowColShiftTransform("Sheet1", RowColAxis::kCol, RowColEdit::kInsert, kEdgeCol, kSpan, kRows34);
+}
+RowColShiftTransform Left() {
+  return RowColShiftTransform("Sheet1", RowColAxis::kCol, RowColEdit::kDelete, kEdgeCol, kSpan, kRows34);
+}
+
+Reference Cell(std::string_view a1) {
+  Reference r;
+  r.sheet = "Sheet1";
+  EXPECT_TRUE(a1::parse_a1_ref(a1, &r.row, &r.col)) << a1;
+  return r;
+}
+
+// "#REF!" for a collapsed reference, else the A1 text.
+std::string Text(const std::optional<Reference>& ref) {
+  return ref.has_value() ? a1::encode_a1(ref->row, ref->col) : std::string("#REF!");
+}
+
+// Applies `t` to the range `first:last` and spells the result as A1 text.
+std::string Range(const RowColShiftTransform& t, std::string_view first, std::string_view last) {
+  const std::optional<std::pair<Reference, Reference>> out = t.apply_range(Cell(first), Cell(last));
+  if (!out.has_value()) {
+    return "#REF!";
+  }
+  return a1::encode_a1(out->first.row, out->first.col) + ":" + a1::encode_a1(out->second.row, out->second.col);
+}
+
+}  // namespace
+
+TEST(RowColShiftTransformBand, ACellInsideTheBandFollowsTheEdit) {
+  EXPECT_EQ(Text(Down().apply(Cell("B6"))), "B8");
+  EXPECT_EQ(Text(Up().apply(Cell("B6"))), "B4");
+  EXPECT_EQ(Text(Right().apply(Cell("D3"))), "F3");
+  EXPECT_EQ(Text(Left().apply(Cell("D3"))), "B3");
+}
+
+TEST(RowColShiftTransformBand, ACellOutsideTheBandIsUntouched) {
+  EXPECT_EQ(Text(Down().apply(Cell("D3"))), "D3");
+  EXPECT_EQ(Text(Up().apply(Cell("D3"))), "D3");
+  EXPECT_EQ(Text(Down().apply(Cell("A6"))), "A6");
+  EXPECT_EQ(Text(Right().apply(Cell("B6"))), "B6");
+  EXPECT_EQ(Text(Left().apply(Cell("B6"))), "B6");
+  EXPECT_EQ(Text(Left().apply(Cell("D5"))), "D5");
+}
+
+TEST(RowColShiftTransformBand, ADeletedCellInsideTheBandIsARefError) {
+  EXPECT_EQ(Text(Up().apply(Cell("B3"))), "#REF!");
+  EXPECT_EQ(Text(Up().apply(Cell("C4"))), "#REF!");
+  EXPECT_EQ(Text(Left().apply(Cell("B3"))), "#REF!");
+  EXPECT_EQ(Text(Left().apply(Cell("C4"))), "#REF!");
+  EXPECT_EQ(Text(Down().apply(Cell("B3"))), "B5");
+  EXPECT_EQ(Text(Right().apply(Cell("C4"))), "E4");
+}
+
+TEST(RowColShiftTransformBand, ARangeInsideTheBandMovesGrowsOrShrinks) {
+  EXPECT_EQ(Range(Down(), "B6", "C6"), "B8:C8");
+  EXPECT_EQ(Range(Up(), "B6", "C6"), "B4:C4");
+  EXPECT_EQ(Range(Down(), "B2", "C5"), "B2:C7");
+  EXPECT_EQ(Range(Up(), "B2", "C5"), "B2:C3");
+  EXPECT_EQ(Range(Down(), "B3", "B10"), "B5:B12");
+  EXPECT_EQ(Range(Up(), "B3", "B10"), "B3:B8");
+  EXPECT_EQ(Range(Down(), "B1", "C10"), "B1:C12");
+  EXPECT_EQ(Range(Up(), "B1", "C10"), "B1:C8");
+  EXPECT_EQ(Range(Right(), "D3", "E4"), "F3:G4");
+  EXPECT_EQ(Range(Left(), "D3", "E4"), "B3:C4");
+  EXPECT_EQ(Range(Right(), "A3", "D3"), "A3:F3");
+  EXPECT_EQ(Range(Left(), "A3", "D3"), "A3:B3");
+  EXPECT_EQ(Range(Down(), "B3", "C4"), "B5:C6");
+  EXPECT_EQ(Range(Right(), "B3", "C4"), "D3:E4");
+  EXPECT_EQ(Range(Right(), "A3", "C4"), "A3:E4");
+  EXPECT_EQ(Range(Right(), "B3", "D4"), "D3:F4");
+  EXPECT_EQ(Range(Left(), "B3", "D4"), "B3:B4");
+}
+
+TEST(RowColShiftTransformBand, AWhollyDeletedRangeIsARefError) {
+  EXPECT_EQ(Range(Up(), "B3", "C4"), "#REF!");
+  EXPECT_EQ(Range(Left(), "B3", "C4"), "#REF!");
+}
+
+TEST(RowColShiftTransformBand, ARangeStraddlingTheBandIsUntouched) {
+  EXPECT_EQ(Range(Down(), "A6", "C6"), "A6:C6");
+  EXPECT_EQ(Range(Up(), "A6", "C6"), "A6:C6");
+  EXPECT_EQ(Range(Down(), "D3", "E5"), "D3:E5");
+  EXPECT_EQ(Range(Right(), "D3", "E5"), "D3:E5");
+  EXPECT_EQ(Range(Left(), "D3", "E5"), "D3:E5");
+  // Insert does not grow a straddler across its edge.
+  EXPECT_EQ(Range(Down(), "A1", "C10"), "A1:C10");
+  EXPECT_EQ(Range(Down(), "A3", "C4"), "A3:C4");
+  EXPECT_EQ(Range(Down(), "B3", "D4"), "B3:D4");
+}
+
+TEST(RowColShiftTransformBand, WholeColumnsAndRowsAreUntouched) {
+  Reference col_first = Cell("B1");
+  Reference col_last = Cell("B1048576");
+  col_first.is_full_col = true;
+  col_last.is_full_col = true;
+  Reference row_first = Cell("A3");
+  Reference row_last = Cell("XFD3");
+  row_first.is_full_row = true;
+  row_last.is_full_row = true;
+  const RowColShiftTransform edits[] = {Down(), Up(), Right(), Left()};
+  for (const RowColShiftTransform& t : edits) {
+    const auto cols = t.apply_range(col_first, col_last);
+    ASSERT_TRUE(cols.has_value());
+    EXPECT_EQ(cols->first.col, 1U);
+    EXPECT_EQ(cols->second.col, 1U);
+    EXPECT_EQ(cols->first.row, 0U);
+    EXPECT_EQ(cols->second.row, Sheet::kMaxRows - 1U);
+    const auto rows = t.apply_range(row_first, row_last);
+    ASSERT_TRUE(rows.has_value());
+    EXPECT_EQ(rows->first.row, 2U);
+    EXPECT_EQ(rows->second.row, 2U);
+    const auto row_cell = t.apply(row_first);
+    ASSERT_TRUE(row_cell.has_value());
+    EXPECT_EQ(row_cell->row, 2U);
+    const auto col_cell = t.apply(col_first);
+    ASSERT_TRUE(col_cell.has_value());
+    EXPECT_EQ(col_cell->col, 1U);
+  }
+}
+
+TEST(RowColShiftTransformBand, DeleteShrinksARangeTheBandTouchesAtOneEnd) {
+  EXPECT_EQ(Range(Up(), "A3", "C4"), "A3:A4");
+  EXPECT_EQ(Range(Up(), "B3", "D4"), "D3:D4");
+  EXPECT_EQ(Range(Left(), "B3", "B10"), "B5:B10");
+}
+
+TEST(RowColShiftTransformBand, DeleteLeavesARangeTheBandSitsInsideOf) {
+  EXPECT_EQ(Range(Left(), "B2", "C5"), "B2:C5");
+  EXPECT_EQ(Range(Up(), "A3", "D3"), "A3:D3");
+  EXPECT_EQ(Range(Left(), "B1", "C10"), "B1:C10");
+}
+
+TEST(RowColShiftTransformBand, DeleteShrinksARangeTheBandOverhangs) {
+  // Band B:C overhangs the right end of A3:B3; that is the one-end case.
+  EXPECT_EQ(Range(Up(), "A3", "B3"), "A3:A3");
+}
+
+TEST(RowColShiftTransformBand, AnotherSheetIsUntouched) {
+  RowColShiftTransform t("Sheet1", RowColAxis::kRow, RowColEdit::kInsert, kEdgeRow, kSpan, kColumnsBC);
+  Reference other = Cell("B6");
+  other.sheet = "Other";
+  const auto out = t.apply(other);
+  ASSERT_TRUE(out.has_value());
+  EXPECT_EQ(out->row, 5U);
 }
 
 }  // namespace

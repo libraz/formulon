@@ -89,7 +89,10 @@ std::size_t Workbook::add_sheet(std::string name) {
 Expected<Sheet*, Error> Workbook::add_sheet_validated(std::string name) {
   std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
   RETURN_IF_ERROR(validate_sheet_name(name));
-  if (sheet_by_name(name) != nullptr) {
+  // The file readers' duplicate rule: the case fold only, so wide-fold twins Excel writes still load.
+  if (std::any_of(sheets_.begin(), sheets_.end(), [&name](const Sheet& sheet) {
+        return sheet_names::same(sheet.name(), name, sheet_names::Fold::kNarrow);
+      })) {
     return make_error(FormulonErrorCode::kAlreadyExists, "name collides with an existing sheet",
                       "name=\"" + name + "\"");
   }
@@ -101,7 +104,7 @@ Expected<Sheet*, Error> Workbook::add_sheet_validated(std::string name) {
 Expected<void, Error> Workbook::check_entered_new_sheet_name(std::string_view name) const {
   RETURN_IF_ERROR(validate_sheet_name(name));
   RETURN_IF_ERROR(validate_entered_sheet_name(name, excel_profile_.host));
-  if (sheet_by_name(name) != nullptr) {
+  if (detail::sheet_name_collides(sheets_, name, kNoSheet)) {
     return make_error(FormulonErrorCode::kAlreadyExists, "name collides with an existing sheet",
                       "name=\"" + std::string(name) + "\"");
   }
@@ -119,15 +122,18 @@ std::string Workbook::next_default_sheet_name() const {
   }
   for (std::size_t n = 1;; ++n) {
     std::string name = std::string(word) + std::to_string(n);
-    if (sheet_by_name(name) == nullptr) {
+    if (!detail::sheet_name_collides(sheets_, name, kNoSheet)) {
       return name;
     }
   }
 }
 
 Expected<Sheet*, Error> Workbook::add_sheet_entered(std::string name) {
-  RETURN_IF_ERROR(validate_entered_sheet_name(name, excel_profile_.host));
-  return add_sheet_validated(std::move(name));
+  std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
+  RETURN_IF_ERROR(check_entered_new_sheet_name(name));
+  RETURN_IF_ERROR(check_sheet_headroom(sheets_.size()));
+  append_sheet(sheets_, engine_->locked_mutator(), *this, std::move(name), new_sheet_profile());
+  return &sheets_.back();
 }
 
 namespace {
@@ -248,15 +254,11 @@ Expected<void, Error> Workbook::rename_sheet(std::uint32_t index, std::string ne
   // validators, so a rename and `add_sheet_entered` agree.
   RETURN_IF_ERROR(validate_sheet_name(new_name));
   RETURN_IF_ERROR(validate_entered_sheet_name(new_name, excel_profile_.host));
-  // Collision check (Unicode simple-fold). A no-op rename — same case-fold
-  // as the current name — bypasses the collision check so callers can
-  // change only the casing.
-  // Sheet names are unique under folding, so the one match is either the
-  // sheet being renamed or a genuine collision.
-  const std::size_t idx = sheet_index_by_name(new_name);
-  if (idx != kNoSheet && idx != static_cast<std::size_t>(index)) {
+  // Collision check against every other sheet; the sheet's own name is
+  // excluded so a rename can change only case, width or kana type.
+  if (detail::sheet_name_collides(sheets_, new_name, index)) {
     return make_error(FormulonErrorCode::kAlreadyExists, "name collides with another sheet",
-                      "name=\"" + new_name + "\" colliding_index=" + std::to_string(idx));
+                      "name=\"" + new_name + "\"");
   }
 
   const std::string old_name = sheets_[index].name();
@@ -264,7 +266,8 @@ Expected<void, Error> Workbook::rename_sheet(std::uint32_t index, std::string ne
   const eval::RecalcEngine::LockedMutator mutator = engine_->locked_mutator();
   std::vector<std::uint32_t> ignored_cache_ids;
   bool defined_names_changed = false;
-  const parser::SheetRenameTransform transform(old_name, new_name);
+  const sheet_names::NameList sheet_list = detail::sheet_name_list(sheets_);
+  const parser::SheetRenameTransform transform(old_name, new_name, &sheet_list);
   // Keep the sheet name in its pre-rename state until every formula and
   // metadata holder has been transformed. In particular, do not re-register
   // a changed formula against `new_name` before the workbook can resolve it.
@@ -388,10 +391,11 @@ Expected<void, Error> Workbook::remove_sheet_locked(std::uint32_t index) {
   std::vector<TableLoss> table_losses;
   for (const TableMetadata& table : tables_) {
     if (table.sheet_index == index) {
-      table_losses.push_back(TableLoss{table.name, table.display_name, true, {}});
+      table_losses.push_back(TableLoss{table.name, table.display_name, true, {}, {}});
     }
   }
-  const TableLossTransform transform(removal, table_losses);
+  const sheet_names::NameList table_list = sheet_names::table_name_list(tables_);
+  const TableLossTransform transform(removal, table_losses, &table_list);
   std::vector<std::uint32_t> dropped_cache_ids;
   bool defined_names_changed = false;
   rewrite_workbook_references(sheets_, defined_names_, tables_, pivot_caches_, transform, mutator, {}, {}, removed_name,

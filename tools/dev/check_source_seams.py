@@ -187,6 +187,7 @@ LAYER_BASELINE: dict[tuple[str, str], str] = {
         "Date group items show their bounds as the locale's short date, as Excel writes them."
     ),
     ("io/ooxml_writer.cpp", "eval/eval_profile_scope.h"): "Pivot write plans collate shared items like evaluation.",
+    ("sheet_name.cpp", "eval/collation.h"): "Name identity is the measured Mac '=' text collation equality.",
 }
 
 _INCLUDE_RE = re.compile(r'^\s*#\s*include\s+"([^"]+)"')

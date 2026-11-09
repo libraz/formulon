@@ -39,6 +39,7 @@
 #define FORMULON_PARSER_PARSER_H_
 
 #include <cstdint>
+#include <string>
 #include <string_view>
 #include <utility>
 #include <vector>
@@ -364,9 +365,11 @@ AstNode* parse_strict(std::string_view src, Arena& arena, ParserOptions opts);
 AstNode* parse_entry_with_diagnostics(std::string_view src, Arena& arena, ParseFailure* out);
 
 /// True when `formula` (no leading `=`) parses cleanly and holds a reference
-/// into a sheet other than `own_sheet` (see `references_other_sheet`). An
-/// empty or unparsable formula yields false.
-bool formula_references_other_sheet(std::string_view formula, std::string_view own_sheet);
+/// into a sheet other than `own_sheet` (see `references_other_sheet`, which
+/// resolves sheet spellings among `sheet_list`). An empty or unparsable
+/// formula yields false.
+bool formula_references_other_sheet(std::string_view formula, std::string_view own_sheet,
+                                    const std::vector<std::string>* sheet_list = nullptr);
 
 }  // namespace parser
 }  // namespace formulon

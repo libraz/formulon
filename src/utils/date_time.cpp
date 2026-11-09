@@ -334,6 +334,32 @@ double basis_days_between(double a, double b, int basis, bool date1904) noexcept
   return b - a;
 }
 
+namespace {
+
+CivilTime CivilFromTm(const std::tm& tm) noexcept {
+  CivilTime out{};
+  out.date.y = tm.tm_year + 1900;
+  out.date.m = static_cast<unsigned>(tm.tm_mon + 1);
+  out.date.d = static_cast<unsigned>(tm.tm_mday);
+  out.time.h = static_cast<unsigned>(tm.tm_hour);
+  out.time.m = static_cast<unsigned>(tm.tm_min);
+  out.time.s = static_cast<unsigned>(tm.tm_sec);
+  return out;
+}
+
+}  // namespace
+
+CivilTime host_utc_civil_time() noexcept {
+  const std::time_t stamp = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
+  std::tm utc{};
+#if defined(_WIN32)
+  gmtime_s(&utc, &stamp);
+#else
+  gmtime_r(&stamp, &utc);
+#endif
+  return CivilFromTm(utc);
+}
+
 CivilTime host_civil_time() noexcept {
   // Excel's clock functions are locale-bound: a worksheet shows the user's
   // local calendar, not UTC. `localtime_r` / `localtime_s` is therefore the

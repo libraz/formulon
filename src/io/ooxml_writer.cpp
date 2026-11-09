@@ -385,6 +385,12 @@ Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb) {
 
   // Per-sheet: worksheet, sheet rels (when the sheet's rels file
   // declares at least one relationship).
+  // A CF / DV formula's sheet spellings resolve among these to decide x14 placement.
+  std::vector<std::string> sheet_names;
+  sheet_names.reserve(sheet_count);
+  for (std::size_t i = 0; i < sheet_count; ++i) {
+    sheet_names.push_back(wb.sheet(i).name());
+  }
   for (std::size_t i = 0; i < sheet_count; ++i) {
     if (wb.sheet(i).is_opaque_ooxml_sheet()) {
       continue;
@@ -399,7 +405,7 @@ Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb) {
                 BuildWorksheetXml(wb.sheet(i), sheet_tables, rels_result.table_rids, rels_result.hyperlink_rids,
                                   rels_result.printer_settings_rid, rels_result.drawing_rid,
                                   rels_result.legacy_drawing_rid, &shared_strings, wb.styles().dxfs, i,
-                                  dynamic_array_cm_index, name_shapes(wb, i), &external_book_indexer),
+                                  dynamic_array_cm_index, name_shapes(wb, i), &external_book_indexer, &sheet_names),
                 &written_paths));
     // An empty rels file is invalid OOXML; Excel repairs the package and
     // drops it. `relationship_count` is the single predicate for whether

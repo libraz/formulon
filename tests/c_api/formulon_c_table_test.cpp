@@ -1046,10 +1046,31 @@ TEST(FormulonCApiTable, TotalsRowOffShrinksTheRangeAndClearsTheRow) {
   EXPECT_EQ(Value(wb.handle, 3, 1).kind, FM_VALUE_KIND_BLANK);
 }
 
-TEST(FormulonCApiTable, TotalsRowOnRefusesAnOccupiedRowBelowAndChangesNothing) {
+TEST(FormulonCApiTable, TotalsRowOnShiftsAnOccupiedRowBelowAndAppliesThePatch) {
   WorkbookGuard wb;
   CreateSalesTable(wb);
   ASSERT_EQ(fm_sheet_set_text(wb.handle, 0, 3, 0, "x"), 0);
+  fm_table_patch_t patch = TablePatch();
+  patch.header_row_op = FM_PATCH_OP_SET;
+  patch.header_row = 0;
+  patch.totals_row_op = FM_PATCH_OP_SET;
+  patch.totals_row = 1;
+  ASSERT_EQ(fm_sheet_update_table(wb.handle, 0, 0, &patch), 0) << fm_get_last_error_message();
+  const fm_table_info_t info = Info(wb.handle);
+  EXPECT_EQ(info.range.last_row, 3U);
+  EXPECT_EQ(info.header_row_count, 0U);
+  EXPECT_EQ(info.totals_row_count, 1U);
+  const fm_value_t occupant = Value(wb.handle, 4, 0);
+  ASSERT_EQ(occupant.kind, FM_VALUE_KIND_TEXT);
+  EXPECT_STREQ(occupant.u.text, "x");
+}
+
+TEST(FormulonCApiTable, TotalsRowOnRefusesAnOccupiedRowAboveAStraddlingMergeAndChangesNothing) {
+  WorkbookGuard wb;
+  CreateSalesTable(wb);
+  ASSERT_EQ(fm_sheet_set_text(wb.handle, 0, 3, 0, "x"), 0);
+  const fm_cell_rect_t merge{4, 1, 4, 2};  // B5:C5 straddles the table's columns A:B.
+  ASSERT_EQ(fm_sheet_add_merge(wb.handle, 0, &merge), 0);
   fm_table_patch_t patch = TablePatch();
   patch.header_row_op = FM_PATCH_OP_SET;
   patch.header_row = 0;

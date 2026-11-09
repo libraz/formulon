@@ -105,9 +105,12 @@ using FormulaTranslate = std::optional<std::string> (*)(std::string_view, const 
 /// each sparkline copy it describes, its source translated with `translate`
 /// (required in that case). Each sparkline group removed appends its
 /// position to a non-null `removed_groups`, counted in the list as it stood
-/// just before that removal. Returns true when `xml` changed.
+/// just before that removal. A non-null `cf_remap` maps the sqref of each
+/// `<x14:conditionalFormatting>` instead of `remap`, so it can follow the
+/// legacy rule's own sqref. Returns true when `xml` changed.
 bool remap_ext_lst_sqrefs(std::string& xml, const SqrefRemap& remap, const SparklineClone* clone = nullptr,
-                          FormulaTranslate translate = nullptr, std::vector<std::size_t>* removed_groups = nullptr);
+                          FormulaTranslate translate = nullptr, std::vector<std::size_t>* removed_groups = nullptr,
+                          const SqrefRemap* cf_remap = nullptr);
 
 }  // namespace formulon::io
 

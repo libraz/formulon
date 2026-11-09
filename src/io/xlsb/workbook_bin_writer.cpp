@@ -34,6 +34,7 @@
 #include "parser/ast.h"
 #include "parser/parser.h"
 #include "sheet.h"
+#include "sheet_name.h"
 #include "utils/arena.h"
 #include "utils/error.h"
 #include "utils/expected.h"
@@ -62,6 +63,18 @@ namespace {
 
 /// The scopes each defined-name spelling is declared in, compared like defined names.
 using DefinedScopes = std::unordered_map<std::string, std::vector<std::int32_t>, NameKeyHash, NameKeyEqual>;
+
+/// Whether exactly one key of `keys` equals `key` under the wide fold, so a
+/// spelling the case-fold key misses still resolves through it.
+bool HasUniqueWideKey(const NameSet& keys, std::string_view key) {
+  std::size_t count = 0;
+  for (const std::string& existing : keys) {
+    if (sheet_names::wide_equal(existing, key) && ++count > 1U) {
+      return false;
+    }
+  }
+  return count == 1U;
+}
 
 /// Parses `formula` (with or without a leading `=`) and folds every name
 /// `collect_ptg_names` finds into `names` / `seen`. Parse failures are
@@ -93,7 +106,7 @@ void CollectNamesFromFormula(std::string_view formula, std::int32_t scope_sheet_
     if (node.kind() != parser::NodeKind::NameRef) {
       return shape;
     }
-    const auto it = defined_scopes.find(std::string(node.as_name()));
+    const auto it = find_name_key(defined_scopes, node.as_name());
     if (it != defined_scopes.end() &&
         std::any_of(it->second.begin(), it->second.end(),
                     [scope_sheet_id](std::int32_t s) { return s < 0 || s == scope_sheet_id; })) {
@@ -108,7 +121,7 @@ void CollectNamesFromFormula(std::string_view formula, std::int32_t scope_sheet_
   NameSet referenced_seen;
   collect_scope_resolved_names(*root, referenced, referenced_seen);
   for (std::string& text : referenced) {
-    const auto it = defined_scopes.find(text);
+    const auto it = find_name_key(defined_scopes, text);
     if (it == defined_scopes.end()) {
       continue;
     }
@@ -244,8 +257,14 @@ void BuildOrderedNames(const Workbook& wb, std::vector<OrderedName>& ordered_nam
     CollectNamesFromFormula(formula, static_cast<std::int32_t>(sheet_index), defined_scopes, names, seen, invisible,
                             invisible_seen, qualified);
   });
-  for (std::string& text : names) {
-    ordered_names.push_back(OrderedName{std::move(text), -1});
+  // A referenced spelling that resolves to a defined name only under the wide
+  // fold reaches that record; a placeholder stays for genuinely unresolved text.
+  const std::size_t defined_count = wb.defined_names().size();
+  for (std::size_t i = 0; i < names.size(); ++i) {
+    if (i >= defined_count && find_wide_name_key(defined_scopes, names[i]) != defined_scopes.end()) {
+      continue;
+    }
+    ordered_names.push_back(OrderedName{std::move(names[i]), -1});
   }
   for (std::string& text : invisible) {
     ordered_names.push_back(OrderedName{std::move(text), -1});
@@ -256,8 +275,14 @@ void BuildOrderedNames(const Workbook& wb, std::vector<OrderedName>& ordered_nam
       continue;  // The encoder reports the unknown sheet.
     }
     const auto scope = static_cast<std::int32_t>(itab);
-    if (scoped_keys.count(sheet_scoped_name_key(-1, name)) == 0 &&
-        scoped_keys.insert(sheet_scoped_name_key(scope, name)).second) {
+    // A stub stands only for a name that resolves neither locally nor in workbook scope, as the encoder looks it up.
+    const std::string local_key = sheet_scoped_name_key(scope, name);
+    const std::string book_key = sheet_scoped_name_key(-1, name);
+    if (scoped_keys.count(local_key) == 0 && scoped_keys.count(book_key) == 0 &&
+        (HasUniqueWideKey(scoped_keys, local_key) || HasUniqueWideKey(scoped_keys, book_key))) {
+      continue;
+    }
+    if (scoped_keys.count(book_key) == 0 && scoped_keys.insert(local_key).second) {
       ordered_names.push_back(OrderedName{std::move(name), scope});
     }
   }

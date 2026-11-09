@@ -126,12 +126,11 @@ const Sheet* resolve_ref_target(const Sheet* current_sheet, const Workbook* work
 // The parser retains the `:` operator's qualifier on the LHS in practice, so
 // `Sheet2!A1:B2` parses as RangeOp(Ref{sheet=Sheet2}, Ref{sheet=""}) — the RHS
 // must inherit. Defensive symmetry is kept for the opposite shape. When both
-// endpoints carry a qualifier they must agree under locale-independent Unicode
-// simple case folding or the range is `#REF!`. An empty result means the
-// context's own sheet.
-Expected<std::string_view, ErrorCode> effective_range_sheet(const parser::Reference& lhs,
-                                                            const parser::Reference& rhs) {
-  return merge_sheet_qualifiers(lhs.sheet, rhs.sheet);
+// endpoints carry a qualifier they must name the same sheet of `workbook`
+// or the range is `#REF!`. An empty result means the context's own sheet.
+Expected<std::string_view, ErrorCode> effective_range_sheet(const parser::Reference& lhs, const parser::Reference& rhs,
+                                                            const Workbook* workbook) {
+  return merge_sheet_qualifiers(lhs.sheet, rhs.sheet, workbook);
 }
 
 }  // namespace
@@ -406,7 +405,7 @@ Expected<WalkedRange, ErrorCode> walk_range(const parser::Reference& lhs, const 
     return ErrorCode::Name;
   }
 
-  auto effective_sheet = effective_range_sheet(lhs, rhs);
+  auto effective_sheet = effective_range_sheet(lhs, rhs, workbook);
   if (!effective_sheet) {
     return effective_sheet.error();
   }
@@ -571,7 +570,7 @@ Expected<DeclaredRect, ErrorCode> EvalContext::declared_range_rect(const parser:
   if (current_sheet_ == nullptr) {
     return ErrorCode::Name;
   }
-  auto effective_sheet = effective_range_sheet(lhs, rhs);
+  auto effective_sheet = effective_range_sheet(lhs, rhs, workbook_);
   if (!effective_sheet) {
     return effective_sheet.error();
   }

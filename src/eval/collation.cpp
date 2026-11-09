@@ -779,6 +779,31 @@ struct Token {
   std::uint32_t mark;    // Windows: the kana mark this token substitutes, or 0
 };
 
+// Canonical composition of a kana (U+3041..U+30FF) and U+3099 or U+309A, or 0.
+std::uint32_t kana_combining_voiced(std::uint32_t cp, std::uint32_t mark) noexcept {
+  const bool katakana = cp >= 0x30A1u && cp <= 0x30FDu;
+  if (katakana && cp >= 0x30EFu && cp <= 0x30F2u) {
+    return mark == 0x3099u ? cp + 8u : 0;  // ワ ヰ ヱ ヲ
+  }
+  const std::uint32_t h = katakana ? cp - 0x60u : cp;
+  if (h < 0x3041u || h > 0x309Du) {
+    return 0;
+  }
+  const bool ha_row = h >= 0x306Fu && h <= 0x307Du && (h - 0x306Fu) % 3u == 0;
+  std::uint32_t v = 0;
+  if (mark == 0x309Au) {
+    v = ha_row ? h + 2u : 0;
+  } else if (mark == 0x3099u) {
+    if ((h >= 0x304Bu && h <= 0x3062u && (h - 0x304Bu) % 2u == 0) || (h >= 0x3064u && h <= 0x3068u && h % 2u == 0) ||
+        ha_row || h == 0x309Du) {
+      v = h + 1u;
+    } else if (h == 0x3046u) {
+      v = 0x3094u;
+    }
+  }
+  return v != 0 && katakana ? v + 0x60u : v;
+}
+
 void tokenize(const LocaleData& L, std::string_view s, CollationStrength strength, std::vector<Token>& toks) {
   toks.clear();
   toks.reserve(s.size());
@@ -798,9 +823,13 @@ void tokenize(const LocaleData& L, std::string_view s, CollationStrength strengt
         }
       }
     }
-    // A base and a following combining mark compose, repeatedly.
+    // A base and a following combining mark compose, repeatedly; on Mac a kana takes U+3099 / U+309A too.
     if (strength != CollationStrength::kClassicExact && !toks.empty() && toks.back().c_from == 0) {
-      if (const std::uint32_t c = compose_mark(toks.back().cp, cp); c != 0) {
+      std::uint32_t c = compose_mark(toks.back().cp, cp);
+      if (c == 0 && !L.win) {
+        c = kana_combining_voiced(toks.back().cp, cp);
+      }
+      if (c != 0) {
         toks.back().cp = c;
         ++pos;
         continue;
@@ -817,7 +846,10 @@ void tokenize(const LocaleData& L, std::string_view s, CollationStrength strengt
       const bool katakana = is_katakana_letter(prev) || (L.win && is_hiragana_letter(prev));
       std::uint32_t sub = 0;
       if (cp == 0x30FCu || cp == 0xFF70u) {
-        sub = kana_vowel(prev);
+        // Mac keeps the mark's own weight when it is half-width or follows a half-width voicing mark.
+        if (L.win || (cp == 0x30FCu && toks[i - 1].c_from == 0)) {
+          sub = kana_vowel(prev);
+        }
       } else if ((cp == 0x309Du || cp == 0x309Eu) && hiragana) {
         sub = cp == 0x309Du ? prev : voiced_form(prev);
       } else if ((cp == 0x30FDu || cp == 0x30FEu) && katakana) {

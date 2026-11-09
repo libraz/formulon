@@ -369,42 +369,57 @@ TEST(WorkbookTableTotalsRow, ShowingGrowsTheTableByTheRowBelowAndKeepsTheData) {
   EXPECT_EQ(wb.tables()[0].ref, "A1:B4");
 }
 
-TEST(WorkbookTableTotalsRow, AnOccupiedRowBelowIsRefusedAndNothingChanges) {
+TEST(WorkbookTableTotalsRow, AnOccupiedRowBelowShiftsDownWithinTheTableColumns) {
   {
     Workbook wb = Workbook::create();
     AddRegions(wb);
     ASSERT_TRUE(wb.set_cell_text(0, 3U, 1U, "x").has_value());  // B4
-    ExpectTotalsRowRefused(wb, "A1:B3");
-    EXPECT_EQ(At(wb, 3U, 1U).as_text(), "x");
+    ASSERT_TRUE(wb.set_table_totals_row(0, true).has_value());
+    EXPECT_EQ(wb.tables()[0].ref, "A1:B4");
+    EXPECT_EQ(At(wb, 4U, 1U).as_text(), "x");
+    EXPECT_EQ(At(wb, 3U, 0U).as_text(), "Total");
     EXPECT_EQ(At(wb, 2U, 1U), Value::number(30.0));
-    EXPECT_EQ(wb.sheet(0).cell_at(3U, 0U), nullptr);
   }
   {
     Workbook wb = Workbook::create();
     AddRegions(wb);
     ASSERT_TRUE(wb.set_cell_formula(0, 3U, 0U, "=1+1").has_value());  // A4
-    ExpectTotalsRowRefused(wb, "A1:B3");
+    ASSERT_TRUE(wb.set_table_totals_row(0, true).has_value());
+    EXPECT_EQ(wb.tables()[0].ref, "A1:B4");
+    ASSERT_NE(wb.sheet(0).cell_at(4U, 0U), nullptr);
+    EXPECT_EQ(wb.sheet(0).cell_at(4U, 0U)->formula_text, "=1+1");
   }
+}
+
+TEST(WorkbookTableTotalsRow, AStraddlingObjectOnTheRowBelowIsRefusedAndNothingChanges) {
   {
+    // B4:C5 straddles the table's columns, so nothing shifts, and the row
+    // below is part of the merge.
     Workbook wb = Workbook::create();
     AddRegions(wb);
     ASSERT_TRUE(wb.add_merge(0, MergeRange{3U, 1U, 4U, 2U}).has_value());  // B4:C5
     ExpectTotalsRowRefused(wb, "A1:B3");
+    ASSERT_EQ(wb.sheet(0).merges().size(), 1U);
+    EXPECT_EQ(wb.sheet(0).merges()[0], (MergeRange{3U, 1U, 4U, 2U}));
   }
   {
     Workbook wb = Workbook::create();
     AddRegions(wb);
     ASSERT_TRUE(wb.add_table(make_table("Below", "B4:C6", 2)).has_value());
     ExpectTotalsRowRefused(wb, "A1:B3");
+    EXPECT_EQ(wb.tables()[1].ref, "B4:C6");
   }
 }
 
-TEST(WorkbookTableTotalsRow, ASpilledResultInTheRowBelowIsRefused) {
+TEST(WorkbookTableTotalsRow, ASpillCrossingTheNewTotalsRowIsBlocked) {
   Workbook wb = Workbook::create();
   ASSERT_TRUE(wb.add_table(make_table("Right", "C1:D3", 2)).has_value());
   ASSERT_TRUE(wb.set_cell_formula(0, 3U, 0U, "=SEQUENCE(1,4)").has_value());  // A4 spills to D4
   Recalc(wb);
-  ExpectTotalsRowRefused(wb, "C1:D3");
+  ASSERT_TRUE(wb.set_table_totals_row(0, true).has_value());
+  EXPECT_EQ(wb.tables()[0].ref, "C1:D4");
+  Recalc(wb);
+  EXPECT_EQ(At(wb, 3U, 0U), Value::error(ErrorCode::Spill));
 }
 
 TEST(WorkbookTableTotalsRow, ATableOnTheLastGridRowCannotShowIt) {

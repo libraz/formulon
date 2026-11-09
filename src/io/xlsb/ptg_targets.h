@@ -48,9 +48,9 @@ inline bool UsesHiddenNameRoute(std::string_view name) {
   return IsFutureFunction(name) || xlsb_uses_hidden_name(name);
 }
 
-/// Resolves a sheet name to its 0-based ixti. Returns -1 when absent.
+/// Resolves a sheet name (`sheet_names::resolve`) to its 0-based ixti. Returns -1 when absent.
 inline int resolve_ixti(const std::vector<std::string>& sheet_names, std::string_view sheet) {
-  const std::size_t index = formulon::sheet_names::find_index(sheet_names, sheet);
+  const std::size_t index = formulon::sheet_names::resolve(sheet_names, sheet);
   return index == formulon::sheet_names::kNotFound ? -1 : static_cast<int>(index);
 }
 

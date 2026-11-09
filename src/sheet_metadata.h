@@ -6,6 +6,7 @@
 
 #include <array>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -13,6 +14,7 @@
 #include "auto_filter.h"
 #include "data_table.h"
 #include "merge_range.h"
+#include "utils/band.h"
 #include "utils/runtime_id.h"
 #include "value.h"
 
@@ -22,6 +24,10 @@ namespace pivot {
 class PivotTable;
 }  // namespace pivot
 
+/// Direction of an Insert Cells / Delete Cells edit: insert takes `kDown` or
+/// `kRight`, delete takes `kUp` or `kLeft`.
+enum class CellShift : std::uint8_t { kDown, kRight, kUp, kLeft };
+
 /// One row/column structural edit, as the coordinate mapping every
 /// sheet-attached structure derives from.
 ///
@@ -30,7 +36,7 @@ class PivotTable;
 /// `[index, index + count)` is the deleted band — a coordinate inside it is
 /// dropped or clamped, and a coordinate past it moves back by `count`.
 ///
-/// The four public `Sheet` edit methods each build one of these and hand it
+/// The public `Sheet` edit methods each build or take one of these and hand it
 /// to `Sheet::finalize_structural_edit_locked`, which invokes the single
 /// place that enumerates the modelled structures. A structure that is not
 /// listed there does not move, and that failure is silent in a user's file —
@@ -41,6 +47,9 @@ struct StructuralEdit {
   std::uint32_t count = 0;
   bool is_delete = false;
   bool row_axis = false;
+  /// Perpendicular extent the edit is confined to (Insert / Delete Cells);
+  /// absent for a whole row/column edit.
+  std::optional<Band> band{};
 };
 
 /// How a row/column edit meets a structure that moves whole or goes whole (a
@@ -60,6 +69,14 @@ StructureEditCut structure_edit_cut(std::uint32_t first, std::uint32_t last, con
 /// header row above it and the header column left of it.
 StructureEditCut data_table_structure_cut(const DataTable& table, const StructuralEdit& edit) noexcept;
 
+/// A data table's block as cells: its result range plus the header row above
+/// it and the header column left of it.
+MergeRange data_table_block(const DataTable& table) noexcept;
+
+/// A PivotTable's location range as cells; a zero span counts as the anchor
+/// line alone.
+MergeRange pivot_location(const pivot::PivotTable& pivot) noexcept;
+
 /// `structure_edit_cut` for a PivotTable's location range; a zero span counts
 /// as the anchor line alone.
 StructureEditCut pivot_structure_cut(const pivot::PivotTable& pivot, const StructuralEdit& edit) noexcept;
@@ -78,6 +95,38 @@ void shift_sqref_ranges(std::vector<MergeRange>& ranges, std::uint32_t index, st
 /// ranges this way.
 void cut_sqref_ranges(std::vector<MergeRange>& ranges, std::uint32_t index, std::uint32_t count, bool is_delete,
                       bool row_axis);
+
+/// Where a rectangle sits against a band edit's moving region: the band x
+/// from the edit's edge to the grid's end (the deleted cells included).
+enum class BandFit : std::uint8_t {
+  kOutside,    ///< Misses the moving region; it stays.
+  kInside,     ///< Within the band and reaching the moving region; it follows the edit.
+  kStraddles,  ///< Reaches the moving region across a band edge.
+};
+
+/// Classifies `rect` against `edit`, which must carry a band.
+BandFit band_fit(const MergeRange& rect, const StructuralEdit& edit) noexcept;
+
+/// `shift_sqref_ranges` for `edit`, band or not. Under a band, a range inside
+/// it follows the span rules, one straddling the moving region splits into
+/// its moved and unmoved parts, and nothing is joined.
+void shift_sqref_ranges(std::vector<MergeRange>& ranges, const StructuralEdit& edit);
+
+/// `shift_sqref_ranges` for a conditional format's sqref, legacy or x14: a
+/// band delete also joins the ranges it brings together into the one
+/// rectangle they now tile, unless they tiled it before the edit.
+void shift_cf_sqref_ranges(std::vector<MergeRange>& ranges, const StructuralEdit& edit);
+
+/// Moves retained ranges that follow references (protected ranges, sort and
+/// web-publish ranges, watched cells): `shift_sqref_ranges` for a whole
+/// row/column edit; under a band only a range inside it moves.
+void shift_reference_ranges(std::vector<MergeRange>& ranges, const StructuralEdit& edit);
+
+/// `cut_sqref_ranges` for `edit`; under a band only a range inside it is cut.
+void cut_sqref_ranges(std::vector<MergeRange>& ranges, const StructuralEdit& edit);
+
+/// `shift_auto_filter` for `edit`; under a band only a filter inside it moves.
+bool shift_auto_filter(AutoFilter& filter, const StructuralEdit& edit, bool header_delete_removes);
 
 /// Moves an AutoFilter for a row/column edit (same arguments as
 /// `shift_sqref_ranges`): its range and sort ranges follow the span rules, a

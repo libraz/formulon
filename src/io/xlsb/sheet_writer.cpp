@@ -253,7 +253,7 @@ Expected<void, Error> EmitFormattingAndValidation(std::vector<std::uint8_t>& bod
   }
   const bool listed_dvals =
       std::any_of(sheet.validations().begin(), sheet.validations().end(),
-                  [&sheet](const DataValidation& v) { return !data_validation_in_x14(v, sheet.name()); });
+                  [&](const DataValidation& v) { return !data_validation_in_x14(v, sheet.name(), &ctx.sheet_names); });
   if (raw_dvals != static_cast<std::ptrdiff_t>(retained.size()) && listed_dvals) {
     return make_error(FormulonErrorCode::kIoXlsbRetainedPartStale,
                       "retained XLSB data validations cannot be merged with model validations", kWriteXlsbContext);

@@ -1,0 +1,593 @@
+{
+  "suite": "collation_prolonged_mark",
+  "description": "Mac Excel text comparison around the prolonged sound mark: the half-width mark U+FF70 after a kana, either mark after a half-width voicing mark, and either mark at the start of the string, against full-width, hiragana and voiced twins. Each probe returns LT / EQ / GT. The last two probes are start-of-string controls.\n",
+  "environment": {
+    "excel_version": "16.114.4",
+    "excel_locale": "ja-JP",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-11-09T10:37:34Z"
+  },
+  "tolerance": {
+    "abs": 0.0,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "col_prolonged_mark_01",
+      "formula": "=IF(\"ﾃﾞｰﾀ\"<\"データ\",\"LT\",IF(\"ﾃﾞｰﾀ\"=\"データ\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "LT"
+      }
+    },
+    {
+      "id": "col_prolonged_mark_02",
+      "formula": "=IF(\"ﾃﾞｰﾀ\"<\"ﾃーﾀ\",\"LT\",IF(\"ﾃﾞｰﾀ\"=\"ﾃーﾀ\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "LT"
+      }
+    },
+    {
+      "id": "col_prolonged_mark_03",
+      "formula": "=IF(\"ﾃﾞｰﾀ\"<\"テータ\",\"LT\",IF(\"ﾃﾞｰﾀ\"=\"テータ\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "LT"
+      }
+    },
+    {
+      "id": "col_prolonged_mark_04",
+      "formula": "=IF(\"ﾃﾞｰﾀ\"<\"テー\",\"LT\",IF(\"ﾃﾞｰﾀ\"=\"テー\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "LT"
+      }
+    },
+    {
+      "id": "col_prolonged_mark_05",
+      "formula": "=IF(\"ﾃﾞｰﾀ\"<\"デー\",\"LT\",IF(\"ﾃﾞｰﾀ\"=\"デー\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "LT"
+      }
+    },
+    {
+      "id": "col_prolonged_mark_06",
+      "formula": "=IF(\"デｰタ\"<\"データ\",\"LT\",IF(\"デｰタ\"=\"データ\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "LT"
+      }
+    },
+    {
+      "id": "col_prolonged_mark_07",
+      "formula": "=IF(\"デｰタ\"<\"ﾃーﾀ\",\"LT\",IF(\"デｰタ\"=\"ﾃーﾀ\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "LT"
+      }
+    },
+    {
+      "id": "col_prolonged_mark_08",
+      "formula": "=IF(\"デｰタ\"<\"テータ\",\"LT\",IF(\"デｰタ\"=\"テータ\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "LT"
+      }
+    },
+    {
+      "id": "col_prolonged_mark_09",
+      "formula": "=IF(\"デｰタ\"<\"テー\",\"LT\",IF(\"デｰタ\"=\"テー\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "LT"
+      }
+    },
+    {
+      "id": "col_prolonged_mark_10",
+      "formula": "=IF(\"デｰタ\"<\"デー\",\"LT\",IF(\"デｰタ\"=\"デー\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "LT"
+      }
+    },
+    {
+      "id": "col_prolonged_mark_11",
+      "formula": "=IF(\"ﾃﾞーﾀ\"<\"データ\",\"LT\",IF(\"ﾃﾞーﾀ\"=\"データ\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "LT"
+      }
+    },
+    {
+      "id": "col_prolonged_mark_12",
+      "formula": "=IF(\"ﾃﾞーﾀ\"<\"ﾃーﾀ\",\"LT\",IF(\"ﾃﾞーﾀ\"=\"ﾃーﾀ\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "LT"
+      }
+    },
+    {
+      "id": "col_prolonged_mark_13",
+      "formula": "=IF(\"ﾃﾞーﾀ\"<\"テータ\",\"LT\",IF(\"ﾃﾞーﾀ\"=\"テータ\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "LT"
+      }
+    },
+    {
+      "id": "col_prolonged_mark_14",
+      "formula": "=IF(\"ﾃﾞーﾀ\"<\"テー\",\"LT\",IF(\"ﾃﾞーﾀ\"=\"テー\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "LT"
+      }
+    },
+    {
+      "id": "col_prolonged_mark_15",
+      "formula": "=IF(\"ﾃﾞーﾀ\"<\"デー\",\"LT\",IF(\"ﾃﾞーﾀ\"=\"デー\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "LT"
+      }
+    },
+    {
+      "id": "col_prolonged_mark_16",
+      "formula": "=IF(\"データ\"<\"ﾃﾞｰﾀa\",\"LT\",IF(\"データ\"=\"ﾃﾞｰﾀa\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "GT"
+      }
+    },
+    {
+      "id": "col_prolonged_mark_17",
+      "formula": "=IF(\"ﾃｰﾀ\"<\"ﾃーﾀ\",\"LT\",IF(\"ﾃｰﾀ\"=\"ﾃーﾀ\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "LT"
+      }
+    },
+    {
+      "id": "col_prolonged_mark_18",
+      "formula": "=IF(\"ﾃｰﾀ\"<\"テータ\",\"LT\",IF(\"ﾃｰﾀ\"=\"テータ\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "LT"
+      }
+    },
+    {
+      "id": "col_prolonged_mark_19",
+      "formula": "=IF(\"ﾃｰﾀ\"<\"テー\",\"LT\",IF(\"ﾃｰﾀ\"=\"テー\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "LT"
+      }
+    },
+    {
+      "id": "col_prolonged_mark_20",
+      "formula": "=IF(\"ﾃｰﾀ\"<\"デー\",\"LT\",IF(\"ﾃｰﾀ\"=\"デー\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "LT"
+      }
+    },
+    {
+      "id": "col_prolonged_mark_21",
+      "formula": "=IF(\"テｰタ\"<\"ﾃーﾀ\",\"LT\",IF(\"テｰタ\"=\"ﾃーﾀ\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "LT"
+      }
+    },
+    {
+      "id": "col_prolonged_mark_22",
+      "formula": "=IF(\"テｰタ\"<\"テータ\",\"LT\",IF(\"テｰタ\"=\"テータ\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "LT"
+      }
+    },
+    {
+      "id": "col_prolonged_mark_23",
+      "formula": "=IF(\"テｰタ\"<\"テー\",\"LT\",IF(\"テｰタ\"=\"テー\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "LT"
+      }
+    },
+    {
+      "id": "col_prolonged_mark_24",
+      "formula": "=IF(\"テｰタ\"<\"デー\",\"LT\",IF(\"テｰタ\"=\"デー\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "LT"
+      }
+    },
+    {
+      "id": "col_prolonged_mark_25",
+      "formula": "=IF(\"ﾃーﾀ\"<\"ﾃﾞｰﾀa\",\"LT\",IF(\"ﾃーﾀ\"=\"ﾃﾞｰﾀa\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "GT"
+      }
+    },
+    {
+      "id": "col_prolonged_mark_26",
+      "formula": "=IF(\"テータ\"<\"ﾃﾞｰﾀa\",\"LT\",IF(\"テータ\"=\"ﾃﾞｰﾀa\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "GT"
+      }
+    },
+    {
+      "id": "col_prolonged_mark_27",
+      "formula": "=IF(\"ｶｰ\"<\"ｶー\",\"LT\",IF(\"ｶｰ\"=\"ｶー\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "LT"
+      }
+    },
+    {
+      "id": "col_prolonged_mark_28",
+      "formula": "=IF(\"ｶｰ\"<\"カー\",\"LT\",IF(\"ｶｰ\"=\"カー\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "LT"
+      }
+    },
+    {
+      "id": "col_prolonged_mark_29",
+      "formula": "=IF(\"ｶｰ\"<\"かー\",\"LT\",IF(\"ｶｰ\"=\"かー\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "LT"
+      }
+    },
+    {
+      "id": "col_prolonged_mark_30",
+      "formula": "=IF(\"カｰ\"<\"ｶー\",\"LT\",IF(\"カｰ\"=\"ｶー\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "LT"
+      }
+    },
+    {
+      "id": "col_prolonged_mark_31",
+      "formula": "=IF(\"カｰ\"<\"カー\",\"LT\",IF(\"カｰ\"=\"カー\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "LT"
+      }
+    },
+    {
+      "id": "col_prolonged_mark_32",
+      "formula": "=IF(\"カｰ\"<\"かー\",\"LT\",IF(\"カｰ\"=\"かー\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "LT"
+      }
+    },
+    {
+      "id": "col_prolonged_mark_33",
+      "formula": "=IF(\"ｶー\"<\"ｶﾞｰ\",\"LT\",IF(\"ｶー\"=\"ｶﾞｰ\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "GT"
+      }
+    },
+    {
+      "id": "col_prolonged_mark_34",
+      "formula": "=IF(\"ｶー\"<\"ガｰ\",\"LT\",IF(\"ｶー\"=\"ガｰ\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "GT"
+      }
+    },
+    {
+      "id": "col_prolonged_mark_35",
+      "formula": "=IF(\"ｶー\"<\"ｶﾞー\",\"LT\",IF(\"ｶー\"=\"ｶﾞー\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "GT"
+      }
+    },
+    {
+      "id": "col_prolonged_mark_36",
+      "formula": "=IF(\"ｶー\"<\"ｶｰｶ\",\"LT\",IF(\"ｶー\"=\"ｶｰｶ\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "GT"
+      }
+    },
+    {
+      "id": "col_prolonged_mark_37",
+      "formula": "=IF(\"ｶー\"<\"かｰ\",\"LT\",IF(\"ｶー\"=\"かｰ\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "GT"
+      }
+    },
+    {
+      "id": "col_prolonged_mark_38",
+      "formula": "=IF(\"カー\"<\"ｶﾞｰ\",\"LT\",IF(\"カー\"=\"ｶﾞｰ\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "GT"
+      }
+    },
+    {
+      "id": "col_prolonged_mark_39",
+      "formula": "=IF(\"カー\"<\"ガｰ\",\"LT\",IF(\"カー\"=\"ガｰ\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "GT"
+      }
+    },
+    {
+      "id": "col_prolonged_mark_40",
+      "formula": "=IF(\"カー\"<\"ｶﾞー\",\"LT\",IF(\"カー\"=\"ｶﾞー\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "GT"
+      }
+    },
+    {
+      "id": "col_prolonged_mark_41",
+      "formula": "=IF(\"カー\"<\"ｶｰｶ\",\"LT\",IF(\"カー\"=\"ｶｰｶ\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "GT"
+      }
+    },
+    {
+      "id": "col_prolonged_mark_42",
+      "formula": "=IF(\"カー\"<\"かｰ\",\"LT\",IF(\"カー\"=\"かｰ\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "GT"
+      }
+    },
+    {
+      "id": "col_prolonged_mark_43",
+      "formula": "=IF(\"ｶﾞｰ\"<\"ガー\",\"LT\",IF(\"ｶﾞｰ\"=\"ガー\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "LT"
+      }
+    },
+    {
+      "id": "col_prolonged_mark_44",
+      "formula": "=IF(\"ｶﾞｰ\"<\"かー\",\"LT\",IF(\"ｶﾞｰ\"=\"かー\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "LT"
+      }
+    },
+    {
+      "id": "col_prolonged_mark_45",
+      "formula": "=IF(\"ガｰ\"<\"ガー\",\"LT\",IF(\"ガｰ\"=\"ガー\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "LT"
+      }
+    },
+    {
+      "id": "col_prolonged_mark_46",
+      "formula": "=IF(\"ガｰ\"<\"かー\",\"LT\",IF(\"ガｰ\"=\"かー\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "LT"
+      }
+    },
+    {
+      "id": "col_prolonged_mark_47",
+      "formula": "=IF(\"ｶﾞー\"<\"ガー\",\"LT\",IF(\"ｶﾞー\"=\"ガー\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "LT"
+      }
+    },
+    {
+      "id": "col_prolonged_mark_48",
+      "formula": "=IF(\"ｶﾞー\"<\"かー\",\"LT\",IF(\"ｶﾞー\"=\"かー\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "LT"
+      }
+    },
+    {
+      "id": "col_prolonged_mark_49",
+      "formula": "=IF(\"ガー\"<\"ｶｰｶ\",\"LT\",IF(\"ガー\"=\"ｶｰｶ\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "GT"
+      }
+    },
+    {
+      "id": "col_prolonged_mark_50",
+      "formula": "=IF(\"ﾊﾟｰ\"<\"パー\",\"LT\",IF(\"ﾊﾟｰ\"=\"パー\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "LT"
+      }
+    },
+    {
+      "id": "col_prolonged_mark_51",
+      "formula": "=IF(\"ｱｰ\"<\"アー\",\"LT\",IF(\"ｱｰ\"=\"アー\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "LT"
+      }
+    },
+    {
+      "id": "col_prolonged_mark_52",
+      "formula": "=IF(\"ﾃｰ\"<\"テー\",\"LT\",IF(\"ﾃｰ\"=\"テー\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "LT"
+      }
+    },
+    {
+      "id": "col_prolonged_mark_53",
+      "formula": "=IF(\"テー\"<\"ﾃﾞｰ\",\"LT\",IF(\"テー\"=\"ﾃﾞｰ\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "GT"
+      }
+    },
+    {
+      "id": "col_prolonged_mark_54",
+      "formula": "=IF(\"テー\"<\"ﾃﾞｰﾀa\",\"LT\",IF(\"テー\"=\"ﾃﾞｰﾀa\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "GT"
+      }
+    },
+    {
+      "id": "col_prolonged_mark_55",
+      "formula": "=IF(\"ﾃﾞｰ\"<\"デー\",\"LT\",IF(\"ﾃﾞｰ\"=\"デー\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "LT"
+      }
+    },
+    {
+      "id": "col_prolonged_mark_56",
+      "formula": "=IF(\"デー\"<\"ﾃﾞｰﾀa\",\"LT\",IF(\"デー\"=\"ﾃﾞｰﾀa\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "GT"
+      }
+    },
+    {
+      "id": "col_prolonged_mark_57",
+      "formula": "=IF(\"ｶｰｶ\"<\"カーカ\",\"LT\",IF(\"ｶｰｶ\"=\"カーカ\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "LT"
+      }
+    },
+    {
+      "id": "col_prolonged_mark_58",
+      "formula": "=IF(\"ｶｰｶ\"<\"かー\",\"LT\",IF(\"ｶｰｶ\"=\"かー\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "LT"
+      }
+    },
+    {
+      "id": "col_prolonged_mark_59",
+      "formula": "=IF(\"ﾃﾞｰﾀa\"<\"データa\",\"LT\",IF(\"ﾃﾞｰﾀa\"=\"データa\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "LT"
+      }
+    },
+    {
+      "id": "col_prolonged_mark_60",
+      "formula": "=IF(\"かー\"<\"かｰ\",\"LT\",IF(\"かー\"=\"かｰ\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "GT"
+      }
+    },
+    {
+      "id": "col_prolonged_mark_61",
+      "formula": "=IF(\"ｰ\"<\"ー\",\"LT\",IF(\"ｰ\"=\"ー\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "EQ"
+      }
+    },
+    {
+      "id": "col_prolonged_mark_62",
+      "formula": "=IF(\"ｰﾀ\"<\"ーﾀ\",\"LT\",IF(\"ｰﾀ\"=\"ーﾀ\",\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "EQ"
+      }
+    },
+    {
+      "id": "col_combining_voiced_mark",
+      "formula": "=IF(\"ガ\"<\"カ\"&UNICHAR(12441),\"LT\",IF(\"ガ\"=\"カ\"&UNICHAR(12441),\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "EQ"
+      }
+    },
+    {
+      "id": "col_combining_semi_voiced_mark",
+      "formula": "=IF(\"パ\"<\"ハ\"&UNICHAR(12442),\"LT\",IF(\"パ\"=\"ハ\"&UNICHAR(12442),\"EQ\",\"GT\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "EQ"
+      }
+    }
+  ]
+}

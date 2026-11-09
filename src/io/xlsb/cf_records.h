@@ -99,9 +99,11 @@ bool is_x14_icon_set_rule(const cf::CFRule& rule);
 /// True for a rule written only as a standalone x14 rule: a custom icon set,
 /// or a rule with formula slots (or none, as top10 / aboveAverage /
 /// uniqueness) whose formulas name a sheet
-/// other than `own_sheet`. Colour scales, data bars and plain icon sets stay
-/// legacy records.
-bool is_x14_only_rule(const cf::CFRule& rule, std::string_view own_sheet);
+/// other than `own_sheet` (spellings resolved among `sheet_list`, see
+/// `parser::references_other_sheet`). Colour scales, data bars and plain
+/// icon sets stay legacy records.
+bool is_x14_only_rule(const cf::CFRule& rule, std::string_view own_sheet,
+                      const std::vector<std::string>* sheet_list = nullptr);
 
 /// Moves every standalone x14 rule (iPri > 0) of the retained tail `records`
 /// the model can hold into `formats`. A custom icon set joins a block with

@@ -47,7 +47,9 @@ namespace io {
 namespace xlsb {
 
 /// Hash and equality under `collection_names::fold_key`: a name spelled in
-/// another case reaches the entry of the spelling stored first.
+/// another case reaches the entry of the spelling stored first. A spelling
+/// equal only under the wide fold misses the key; `find_name_key` adds that
+/// resolver step.
 struct NameKeyHash {
   std::size_t operator()(std::string_view name) const {
     return std::hash<std::string>{}(collection_names::fold_key(name));
@@ -69,6 +71,33 @@ using NameSet = std::unordered_set<std::string, NameKeyHash, NameKeyEqual>;
 /// `PtgName(ilbl)` for any lookup hit) and the top-level writer (which
 /// emits the matching `BrtName` records into `xl/workbook.bin`'s globals).
 using NameTable = std::unordered_map<std::string, std::uint32_t, NameKeyHash, NameKeyEqual>;
+
+/// The wide-fold step of `find_name_key` alone, for a caller that tries
+/// several case-fold keys before any wide one.
+template <typename Map>
+typename Map::const_iterator find_wide_name_key(const Map& map, std::string_view key) {
+  auto found = map.end();
+  for (auto it = map.begin(); it != map.end(); ++it) {
+    if (sheet_names::wide_equal(it->first, key)) {
+      if (found != map.end()) {
+        return map.end();
+      }
+      found = it;
+    }
+  }
+  return found;
+}
+
+/// The entry of `map` (a `NameTable` or another name-keyed map) for `key`:
+/// the case-fold key, else the one entry whose key equals `key` under the wide
+/// fold (`sheet_names::wide_equal`), else `map.end()` (none, or ambiguous).
+template <typename Map>
+typename Map::const_iterator find_name_key(const Map& map, std::string_view key) {
+  if (const auto it = map.find(std::string(key)); it != map.end()) {
+    return it;
+  }
+  return find_wide_name_key(map, key);
+}
 
 /// `NameTable` key of the defined-name record scoped to 0-based sheet
 /// `itab` (`-1`: workbook scope) spelling `name`. A sheet-qualified

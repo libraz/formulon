@@ -105,7 +105,7 @@ std::string copy_sheet_default_name(std::string_view source_name, const std::vec
     }
     bool taken = false;
     for (const std::string_view existing : existing_names) {
-      if (sheet_names::equal(existing, candidate)) {
+      if (sheet_names::write_collides(existing, candidate)) {
         taken = true;
         break;
       }

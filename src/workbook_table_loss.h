@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "parser/ref_transforms.h"
+#include "sheet_name.h"
 
 namespace formulon {
 
@@ -21,15 +22,21 @@ struct TableLoss {
   std::string display_name;
   bool whole = false;
   std::vector<std::string> columns;
+  /// Every column of the table before the edit, when `columns` is not empty: the names a column spelling resolves
+  /// among.
+  std::vector<std::string> all_columns;
 };
 
 /// A structural edit's reference transform that also sends a structured
 /// reference to a table the edit deletes, or to a column it deletes, to
-/// `#REF!`, as Excel rewrites them.
+/// `#REF!`, as Excel rewrites them. A table spelling resolves among
+/// `table_list` (the workbook's tables before the edit); without a list it
+/// matches under the case fold.
 class TableLossTransform final : public parser::RefTransform {
  public:
-  TableLossTransform(const parser::RefTransform& inner, const std::vector<TableLoss>& losses)
-      : inner_(inner), losses_(losses) {}
+  TableLossTransform(const parser::RefTransform& inner, const std::vector<TableLoss>& losses,
+                     const sheet_names::NameList* table_list = nullptr)
+      : inner_(inner), losses_(losses), table_list_(table_list) {}
 
   std::optional<parser::Reference> apply(const parser::Reference& ref) const override { return inner_.apply(ref); }
   std::optional<std::pair<parser::Reference, parser::Reference>> apply_range(
@@ -54,6 +61,7 @@ class TableLossTransform final : public parser::RefTransform {
  private:
   const parser::RefTransform& inner_;
   const std::vector<TableLoss>& losses_;
+  const sheet_names::NameList* table_list_;
 };
 
 }  // namespace formulon

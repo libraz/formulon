@@ -48,7 +48,7 @@ Expected<bool, ErrorCode> resolve_reference_table(const parser::AstNode& arg, co
     out->external_sheet = external.value().sheet;
     return true;
   }
-  if (!declared_rect_endpoint_pair(node, &out->lhs, &out->rhs)) {
+  if (!declared_rect_endpoint_pair(node, &out->lhs, &out->rhs, ctx.workbook())) {
     return false;
   }
   const auto declared = ctx.declared_range_rect(out->lhs, out->rhs);

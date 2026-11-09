@@ -55,9 +55,10 @@ pugi::xml_node FindContainer(const pugi::xml_node& ext_lst) {
 
 }  // namespace
 
-bool data_validation_in_x14(const DataValidation& v, std::string_view own_sheet) {
-  return parser::formula_references_other_sheet(v.formula1, own_sheet) ||
-         parser::formula_references_other_sheet(v.formula2, own_sheet);
+bool data_validation_in_x14(const DataValidation& v, std::string_view own_sheet,
+                            const std::vector<std::string>* sheet_list) {
+  return parser::formula_references_other_sheet(v.formula1, own_sheet, sheet_list) ||
+         parser::formula_references_other_sheet(v.formula2, own_sheet, sheet_list);
 }
 
 void append_data_validation_attrs(std::string& out, const DataValidation& v) {
@@ -102,11 +103,11 @@ void append_data_validation_attrs(std::string& out, const DataValidation& v) {
 
 std::string merge_x14_dv_entries(const std::string& ext_lst_xml, const std::vector<DataValidation>& validations,
                                  std::string_view own_sheet, const parser::ExternalBookIndexer* indexer,
-                                 std::string_view container_extra_attrs) {
+                                 std::string_view container_extra_attrs, const std::vector<std::string>* sheet_list) {
   std::string entries;
   std::size_t count = 0;
   for (const DataValidation& v : validations) {
-    if (data_validation_in_x14(v, own_sheet)) {
+    if (data_validation_in_x14(v, own_sheet, sheet_list)) {
       AppendX14Entry(entries, v, indexer);
       ++count;
     }

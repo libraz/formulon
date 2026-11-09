@@ -108,9 +108,9 @@ struct ExternalBook {
   /// column; the writers emit cached cells in this order.
   std::vector<std::uint64_t> sorted_cell_keys() const;
 
-  /// Returns the 0-based index of `sheet` in `sheet_names` under Unicode
-  /// simple case folding, the same worksheet identity used by this workbook,
-  /// or `kNoSheet` when absent. Expanding folds do not match.
+  /// Returns the 0-based index `sheet` resolves to in `sheet_names`
+  /// (`sheet_names::resolve`, as this workbook's own sheets resolve), or
+  /// `kNoSheet` when absent or ambiguous.
   std::uint32_t sheet_index(std::string_view sheet) const noexcept;
 
   /// Whether `sheet` has a cached `<sheetData>`. A sheet without one -- a
@@ -120,8 +120,8 @@ struct ExternalBook {
 
   /// Returns the entry named `name` in `scope_sheet` (`kNoSheet` for book
   /// scope), or `nullptr` when the supporting workbook declares no such
-  /// name there. Matched under ASCII case folding, the same comparison the
-  /// engine's own defined-name lookup uses.
+  /// name there. Resolved through `sheet_names::resolve_by`, as the engine's
+  /// own defined-name lookup is.
   const ExternalBookName* find_name(std::string_view name, std::uint32_t scope_sheet = kNoSheet) const noexcept;
 
   /// The last row and column holding a cached cell on `sheet`; false when

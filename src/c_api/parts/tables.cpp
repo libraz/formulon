@@ -249,7 +249,7 @@ fm_status_t table_column_names(const formulon::Workbook& book, std::size_t sheet
     const std::string word = formulon::new_workbook_defaults(book.excel_profile().locale).column_word;
     const auto taken = [names](const std::string& candidate) {
       return std::any_of(names->begin(), names->end(), [&candidate](const std::string& existing) {
-        return formulon::collection_names::equal(existing, candidate);
+        return formulon::sheet_names::write_collides(existing, candidate);
       });
     };
     std::size_t suffix = 1;
@@ -330,13 +330,15 @@ extern "C" fm_status_t fm_workbook_find_table(const fm_workbook_t* wb, const cha
   }
   *out_present = 0;
   const auto& tables = wb->workbook().tables();
-  for (std::size_t i = 0; i < tables.size(); ++i) {
-    if (formulon::collection_names::equal(tables[i].display_name, name)) {
-      *out_sheet_index = tables[i].sheet_index;
-      *out_table_index = local_table_index(wb->workbook(), i);
-      *out_present = 1;
-      return 0;
-    }
+  const std::size_t i =
+      formulon::sheet_names::resolve_by(tables.size(), [&](std::size_t at, formulon::sheet_names::Fold fold) {
+        return formulon::sheet_names::same(tables[at].display_name, name, fold);
+      });
+  if (i != formulon::sheet_names::kNotFound) {
+    *out_sheet_index = tables[i].sheet_index;
+    *out_table_index = local_table_index(wb->workbook(), i);
+    *out_present = 1;
+    return 0;
   }
   return 0;
 }

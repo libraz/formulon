@@ -12,6 +12,10 @@
 #include "utils/arena.h"
 #include "value.h"
 
+namespace formulon {
+class Workbook;
+}  // namespace formulon
+
 namespace formulon::eval {
 
 class EvalContext;
@@ -69,9 +73,11 @@ enum class IntersectionProjection : std::uint8_t {
 /// bounded `Ref:Ref`, full-axis `Ref:Ref`, and the single `Ref` the parser
 /// folds `A:A` / `1:1` into — take the projection above. A bounded single
 /// `Ref` is already the scalar `@` asks for and reports
-/// `kNotStaticReference`, as does any dynamic-array producer.
+/// `kNotStaticReference`, as does any dynamic-array producer. A `:` chain's
+/// sheet qualifiers resolve among `wb`'s sheets (`declared_rect_endpoint_pair`).
 IntersectionProjection project_implicit_intersection(const parser::AstNode& operand, std::uint32_t formula_row,
-                                                     std::uint32_t formula_col, parser::Reference* out_target);
+                                                     std::uint32_t formula_col, parser::Reference* out_target,
+                                                     const Workbook* wb);
 
 /// Projects the reference a defined name, an intersection, a
 /// reference-returning call, or a LET or lambda call yields (`@Rng`,

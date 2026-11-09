@@ -1,12 +1,18 @@
-// Worksheet-name UTF-8 decoding and Unicode simple-fold identity.
+// Worksheet-name UTF-8 decoding, the narrow and wide name folds, and the
+// by-name resolver.
+//
+// @size-budget: 4 KB
 
 #include "sheet_name.h"
 
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <string_view>
 
+#include "eval/collation.h"
+#include "excel_profile.h"
 #include "sheet_name_casefold_data.h"
 #include "utils/strings.h"
 #include "utils/text_ops.h"
@@ -31,6 +37,9 @@ bool decode_one(std::string_view text, std::size_t* offset, std::uint32_t* scala
   *offset = start + decoded.byte_len;
   return true;
 }
+
+// The wide fold is the en-US collation for every profile: no measured locale folds wider.
+constexpr ExcelProfile kNameIdentityProfile = mac_365_en_us_profile();
 
 }  // namespace
 
@@ -84,6 +93,99 @@ std::size_t find_index(const std::vector<std::string>& names, std::string_view s
     }
   }
   return kNotFound;
+}
+
+bool wide_equal(std::string_view lhs, std::string_view rhs) noexcept {
+  if (!valid_utf8(lhs) || !valid_utf8(rhs)) {
+    return false;
+  }
+  return eval::collate(lhs, rhs, kNameIdentityProfile, eval::CollationStrength::kCompare) == 0;
+}
+
+bool same(std::string_view lhs, std::string_view rhs, Fold fold) noexcept {
+  switch (fold) {
+    case Fold::kExact:
+      return lhs == rhs;
+    case Fold::kNarrow:
+      return lhs == rhs || equal(lhs, rhs);
+    case Fold::kWide:
+      return wide_equal(lhs, rhs);
+  }
+  return false;
+}
+
+std::size_t resolve_by(std::size_t count, MatchFn matches, const void* context) {
+  for (const Fold fold : {Fold::kExact, Fold::kNarrow}) {
+    for (std::size_t i = 0; i < count; ++i) {
+      if (matches(context, i, fold)) {
+        return i;
+      }
+    }
+  }
+  std::size_t found = kNotFound;
+  for (std::size_t i = 0; i < count; ++i) {
+    if (matches(context, i, Fold::kWide)) {
+      if (found != kNotFound) {
+        return kNotFound;
+      }
+      found = i;
+    }
+  }
+  return found;
+}
+
+std::size_t resolve(const std::vector<std::string>& names, std::string_view query) {
+  const detail::NamedQuery<std::string> q{&names, query};
+  return resolve_by(
+      names.size(),
+      [](const void* context, std::size_t index, Fold fold) {
+        const auto& list = *static_cast<const detail::NamedQuery<std::string>*>(context);
+        return same((*list.items)[index], list.query, fold);
+      },
+      &q);
+}
+
+std::size_t NameList::resolve(std::string_view spelling) const noexcept {
+  return sheet_names::resolve(names_, spelling);
+}
+
+bool NameList::denotes(const NameList* list, std::string_view spelling, std::string_view stored) noexcept {
+  if (list == nullptr) {
+    return same(spelling, stored, Fold::kNarrow);
+  }
+  const std::size_t index = list->resolve(spelling);
+  return index != kNotFound && list->names_[index] == stored;
+}
+
+bool NameList::same_entry(const NameList* list, std::string_view a, std::string_view b) noexcept {
+  if (a == b) {
+    return true;
+  }
+  if (list == nullptr) {
+    return same(a, b, Fold::kNarrow);
+  }
+  const std::size_t index = list->resolve(a);
+  return index != kNotFound && index == list->resolve(b);
+}
+
+std::optional<std::string> wide_key(std::string_view name) {
+  if (!valid_utf8(name)) {
+    return std::nullopt;
+  }
+  return eval::collation_key(name, kNameIdentityProfile, eval::CollationStrength::kCompare);
+}
+
+bool write_collides(std::string_view existing, std::string_view candidate) noexcept {
+  return same(existing, candidate, Fold::kNarrow) || wide_equal(existing, candidate);
+}
+
+bool write_collides(const std::vector<std::string>& names, std::string_view candidate, std::size_t self_index) {
+  for (std::size_t i = 0; i < names.size(); ++i) {
+    if (i != self_index && write_collides(names[i], candidate)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 }  // namespace sheet_names

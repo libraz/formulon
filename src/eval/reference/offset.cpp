@@ -253,7 +253,7 @@ bool expand_row_or_column_call(const parser::AstNode& call, Arena& arena, const 
   const parser::NodeKind k = arg.kind();
   parser::Reference rect_lhs{};
   parser::Reference rect_rhs{};
-  if (declared_rect_endpoint_pair(arg, &rect_lhs, &rect_rhs)) {
+  if (declared_rect_endpoint_pair(arg, &rect_lhs, &rect_rhs, ctx.workbook())) {
     // Same derivation the scalar seam in `shape_ops_lazy.cpp` uses: a
     // full-axis endpoint names a coordinate only on its bounded axis, so
     // the rectangle cannot come from the endpoints' raw row/col fields.

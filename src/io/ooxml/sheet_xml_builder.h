@@ -54,7 +54,8 @@ std::string BuildWorksheetXml(const Sheet& sheet, const std::vector<EmissionPlan
                               std::string_view drawing_rid, std::string_view legacy_drawing_rid,
                               const SharedStrings* shared_strings, const std::vector<DifferentialFormat>& dxfs,
                               std::size_t sheet_index, std::uint32_t dynamic_array_cm_index,
-                              const xlsb::NameShapes& name_shapes, const parser::ExternalBookIndexer* indexer);
+                              const xlsb::NameShapes& name_shapes, const parser::ExternalBookIndexer* indexer,
+                              const std::vector<std::string>* sheet_names = nullptr);
 
 /// Builds the `_rels` document for a single sheet, covering tables,
 /// pivot tables, hyperlinks, printer settings, comments / VML, and

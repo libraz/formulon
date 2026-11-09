@@ -445,19 +445,22 @@ TEST_F(ExternalRefEval, BookAndSheetMatchWithoutCase) {
   EXPECT_EQ(wb_.external_links()[0].book.sheet_names.size(), 4U);
 }
 
-TEST(ExternalBook, SheetIndexUsesUnicodeSimpleFoldWithoutExpansion) {
+TEST(ExternalBook, SheetAndNameLookupsResolveThroughTheWideFold) {
   ExternalBook book;
   book.sheet_names = {"\xC3\x84rea",
                       "Stra\xC3\x9F"
                       "e"};
   EXPECT_EQ(book.sheet_index("\xC3\xA4REA"), 0U);
-  EXPECT_EQ(book.sheet_index("STRASSE"), ExternalBook::kNoSheet);
+  // The one sheet equal under the wide fold, which expands \xC3\x9F to ss.
+  EXPECT_EQ(book.sheet_index("STRASSE"), 1U);
+  EXPECT_EQ(book.sheet_index("Other"), ExternalBook::kNoSheet);
 
   ExternalBookName name;
   name.name = "\xC3\x84rea";
   book.names.push_back(name);
   EXPECT_NE(book.find_name("\xC3\x84rea"), nullptr);
-  EXPECT_EQ(book.find_name("\xC3\xA4rea"), nullptr);  // defined names retain ASCII-only folding
+  EXPECT_EQ(book.find_name("\xC3\xA4rea"), book.find_name("\xC3\x84rea"));
+  EXPECT_EQ(book.find_name("Other"), nullptr);
 }
 
 TEST_F(ExternalRefEval, CachedSheetQualifierUsesUnicodeSimpleFold) {
@@ -469,7 +472,7 @@ TEST_F(ExternalRefEval, CachedSheetQualifierUsesUnicodeSimpleFold) {
   ExpectNumber("=[Src.xlsx]\xC3\xA4REA!A1", 10.0);
 }
 
-TEST_F(ExternalRefEval, CachedSheetQualifierDoesNotUseExpandingFold) {
+TEST_F(ExternalRefEval, CachedSheetQualifierResolvesThroughTheWideFold) {
   std::vector<ExternalLinkRecord> links;
   links.push_back(SourceLink());
   links[0].book.sheet_names = {
@@ -478,7 +481,7 @@ TEST_F(ExternalRefEval, CachedSheetQualifierDoesNotUseExpandingFold) {
   links[0].book.sheet_data = {true};
   wb_.set_external_links(std::move(links));
 
-  ExpectError("=[Src.xlsx]STRASSE!A1", ErrorCode::Ref);
+  ExpectNumber("=[Src.xlsx]STRASSE!A1", 10.0);
 }
 
 TEST_F(ExternalRefEval, ADecimalBookIsANameNotALinkIndex) {

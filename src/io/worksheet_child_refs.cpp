@@ -193,12 +193,8 @@ ChildRemap RuleFor(std::string_view name) {
 }  // namespace
 
 void remap_worksheet_children(WorksheetRawExtensions& children, const StructuralEdit& edit) {
-  const ChildRefRemap remap{[&edit](std::vector<MergeRange>& ranges) {
-                              shift_sqref_ranges(ranges, edit.index, edit.count, edit.is_delete, edit.row_axis);
-                            },
-                            [&edit](std::vector<MergeRange>& ranges) {
-                              cut_sqref_ranges(ranges, edit.index, edit.count, edit.is_delete, edit.row_axis);
-                            }};
+  const ChildRefRemap remap{[&edit](std::vector<MergeRange>& ranges) { shift_reference_ranges(ranges, edit); },
+                            [&edit](std::vector<MergeRange>& ranges) { cut_sqref_ranges(ranges, edit); }};
   for (auto it = children.begin(); it != children.end();) {
     // The slot names the element unless it was an unknown one parked there.
     if (it->slot >= worksheet_child::kCount || RuleFor(worksheet_child::kOrder[it->slot]) == nullptr) {

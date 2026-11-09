@@ -7,7 +7,6 @@
 
 #include "sheet_name.h"
 #include "utils/index_sort.h"
-#include "utils/strings.h"
 #include "value.h"
 
 namespace formulon {
@@ -23,17 +22,16 @@ std::vector<std::uint64_t> ExternalBook::sorted_cell_keys() const {
 }
 
 std::uint32_t ExternalBook::sheet_index(std::string_view sheet) const noexcept {
-  const std::size_t index = ::formulon::sheet_names::find_index(sheet_names, sheet);
+  const std::size_t index = ::formulon::sheet_names::resolve(sheet_names, sheet);
   return index == ::formulon::sheet_names::kNotFound ? kNoSheet : static_cast<std::uint32_t>(index);
 }
 
 const ExternalBookName* ExternalBook::find_name(std::string_view name, std::uint32_t scope_sheet) const noexcept {
-  for (const ExternalBookName& entry : names) {
-    if (entry.scope_sheet == scope_sheet && strings::case_insensitive_eq(entry.name, name)) {
-      return &entry;
-    }
-  }
-  return nullptr;
+  const std::size_t index =
+      ::formulon::sheet_names::resolve_by(names.size(), [&](std::size_t i, ::formulon::sheet_names::Fold fold) {
+        return names[i].scope_sheet == scope_sheet && ::formulon::sheet_names::same(names[i].name, name, fold);
+      });
+  return index == ::formulon::sheet_names::kNotFound ? nullptr : &names[index];
 }
 
 bool ExternalBook::cached_extent(std::uint32_t sheet, std::uint32_t* last_row, std::uint32_t* last_col) const noexcept {

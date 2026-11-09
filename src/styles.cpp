@@ -228,14 +228,8 @@ constexpr std::array<const char*, 164> kBuiltinNumFmts = {
 }  // namespace
 
 Expected<void, Error> remove_cell_style(StylesTable& styles, std::string_view name) {
-  std::size_t pos = styles.cell_styles.size();
-  for (std::size_t i = 0; i < styles.cell_styles.size(); ++i) {
-    if (collection_names::equal(styles.cell_styles[i].name, name)) {
-      pos = i;
-      break;
-    }
-  }
-  if (pos == styles.cell_styles.size()) {
+  const std::size_t pos = sheet_names::resolve_named(styles.cell_styles, name);
+  if (pos == sheet_names::kNotFound) {
     return make_error(FormulonErrorCode::kInvalidArgument, "no such cell style", "name=" + std::string(name));
   }
   if (styles.cell_styles[pos].builtin_id == 0U) {

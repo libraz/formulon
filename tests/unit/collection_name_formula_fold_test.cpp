@@ -90,10 +90,10 @@ TEST(CollectionNameFormulaFold, DefinedNameResolvesAcrossNonAsciiCase) {
   Recalc(wb);
   EXPECT_EQ(At(wb, 0, 2), Value::number(10.0));
 
-  // Redefining through another spelling keeps the entry and dirties the cell.
+  // Redefining through another spelling keeps the entry, takes the new spelling and dirties the cell.
   ASSERT_TRUE(wb.set_defined_name("ÄPFEL", "Sheet1!$A$2"));
   ASSERT_EQ(wb.defined_names().size(), 1U);
-  EXPECT_EQ(wb.defined_names()[0].name, "Äpfel");
+  EXPECT_EQ(wb.defined_names()[0].name, "ÄPFEL");
   Recalc(wb);
   EXPECT_EQ(At(wb, 0, 2), Value::number(14.0));
 }

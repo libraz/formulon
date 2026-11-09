@@ -550,6 +550,11 @@ void Sheet::shift_blocked_spills_locked(const StructuralEdit& edit) {
   const std::uint64_t delete_end = static_cast<std::uint64_t>(edit.index) + edit.count;
   for (const auto& [address, footprint] : spill_table_->blocked_by_anchor) {
     std::uint32_t coordinate = edit.row_axis ? address.row : address.col;
+    const std::uint32_t across = edit.row_axis ? address.col : address.row;
+    if (edit.band.has_value() && (across < edit.band->first || across > edit.band->last)) {
+      shifted.emplace(address, footprint);
+      continue;
+    }
     if (edit.is_delete) {
       if (static_cast<std::uint64_t>(coordinate) >= edit.index && static_cast<std::uint64_t>(coordinate) < delete_end) {
         continue;  // The formula anchor itself was deleted.

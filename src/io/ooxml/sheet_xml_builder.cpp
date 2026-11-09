@@ -99,11 +99,12 @@ std::string BuildMergeCellsBlock(const Sheet& sheet) {
   return out;
 }
 
-std::string BuildDataValidationsBlock(const Sheet& sheet, const parser::ExternalBookIndexer* indexer) {
+std::string BuildDataValidationsBlock(const Sheet& sheet, const parser::ExternalBookIndexer* indexer,
+                                      const std::vector<std::string>* sheet_names) {
   // Validations stored in the x14 extension are written by `merge_x14_dv_entries`.
   std::vector<const DataValidation*> main_dvs;
   for (const DataValidation& v : sheet.validations()) {
-    if (!data_validation_in_x14(v, sheet.name())) {
+    if (!data_validation_in_x14(v, sheet.name(), sheet_names)) {
       main_dvs.push_back(&v);
     }
   }
@@ -550,7 +551,8 @@ std::string BuildWorksheetXml(const Sheet& sheet, const std::vector<EmissionPlan
                               std::string_view drawing_rid, std::string_view legacy_drawing_rid,
                               const SharedStrings* shared_strings, const std::vector<DifferentialFormat>& dxfs,
                               std::size_t sheet_index, std::uint32_t dynamic_array_cm_index,
-                              const xlsb::NameShapes& name_shapes, const parser::ExternalBookIndexer* indexer) {
+                              const xlsb::NameShapes& name_shapes, const parser::ExternalBookIndexer* indexer,
+                              const std::vector<std::string>* sheet_names) {
   const std::string sheet_view_xml = BuildSheetViewXml(sheet.view());
   const std::string sheet_format_xml =
       BuildSheetFormatPrXml(WithDerivedOutlineLevels(sheet.format_defaults(), sheet.layout()));
@@ -615,16 +617,17 @@ std::string BuildWorksheetXml(const Sheet& sheet, const std::vector<EmissionPlan
   // in ECMA-376 document order. Empty list => empty string, no
   // wrapper.
   // Rules naming another sheet go to the x14 extension instead.
-  const CfSheetContext cf_sheet{sheet.name(), sheet_index, &dxfs};
+  const CfSheetContext cf_sheet{sheet.name(), sheet_index, &dxfs, sheet_names};
   const std::string cf_xml = write_conditional_formattings(sheet.conditional_formats(), dxfs.size(), indexer, cf_sheet);
   // Data-bar settings with no legacy attribute live in the worksheet
   // `<extLst>`, which is emitted much further down; build them here so
   // the CF model is read once.
-  const std::string dv_xml = BuildDataValidationsBlock(sheet, indexer);
+  const std::string dv_xml = BuildDataValidationsBlock(sheet, indexer, sheet_names);
   // With no `<dataValidations>` written, its attributes move to the x14 container.
   const std::string ext_lst_xml = merge_x14_dv_entries(
       merge_x14_cf_entries(sheet.ext_lst_xml(), sheet.conditional_formats(), indexer, cf_sheet), sheet.validations(),
-      sheet.name(), indexer, dv_xml.empty() ? std::string_view(sheet.validations_extra_attrs()) : std::string_view());
+      sheet.name(), indexer, dv_xml.empty() ? std::string_view(sheet.validations_extra_attrs()) : std::string_view(),
+      sheet_names);
   const std::string merges_xml = BuildMergeCellsBlock(sheet);
   const std::string hl_xml = BuildHyperlinksBlock(sheet, hyperlink_rids);
   // <sheetProtection> sits between <sheetData> and <mergeCells> per

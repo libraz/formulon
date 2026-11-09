@@ -8,6 +8,7 @@
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
+#include <utility>
 
 #include "cell.h"
 #include "utils/a1_ref.h"
@@ -63,6 +64,23 @@ void RowCells::erase_cols(std::uint32_t col, std::uint32_t count) {
   for (std::size_t i = first; i < cols_.size(); ++i) {
     cols_[i] = static_cast<std::uint16_t>(cols_[i] - count);
   }
+}
+
+void RowCells::erase_in(std::uint32_t first, std::uint64_t end) {
+  const std::size_t lo = lower_index(first);
+  const std::size_t hi = std::max(lo, lower_index(end));
+  cols_.erase(cols_.begin() + static_cast<std::ptrdiff_t>(lo), cols_.begin() + static_cast<std::ptrdiff_t>(hi));
+  cells_.erase(cells_.begin() + static_cast<std::ptrdiff_t>(lo), cells_.begin() + static_cast<std::ptrdiff_t>(hi));
+}
+
+void RowCells::move_in_to(std::uint32_t first, std::uint64_t end, RowCells& dest) {
+  dest.erase_in(first, end);
+  const std::size_t lo = lower_index(first);
+  const std::size_t hi = std::max(lo, lower_index(end));
+  for (std::size_t i = lo; i < hi; ++i) {
+    dest.ensure(cols_[i]) = std::move(cells_[i]);
+  }
+  erase_in(first, end);
 }
 
 }  // namespace formulon

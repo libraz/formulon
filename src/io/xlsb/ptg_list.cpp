@@ -75,23 +75,17 @@ const TableMetadata* FindTable(const std::vector<TableMetadata>* tables, std::st
   if (tables == nullptr) {
     return nullptr;
   }
-  for (std::size_t i = 0; i < tables->size(); ++i) {
-    const TableMetadata& t = (*tables)[i];
-    if (collection_names::equal(t.display_name, name) || collection_names::equal(t.name, name)) {
-      *index = i;
-      return &t;
-    }
+  const std::size_t found = sheet_names::resolve_table(*tables, name);
+  if (found == sheet_names::kNotFound) {
+    return nullptr;
   }
-  return nullptr;
+  *index = found;
+  return &(*tables)[found];
 }
 
 const XlsbRetainedTable* FindRetainedTable(const SheetRangeTable& ranges, std::string_view name) {
-  for (const XlsbRetainedTable& t : ranges.retained_tables) {
-    if (collection_names::equal(t.display_name, name) || collection_names::equal(t.name, name)) {
-      return &t;
-    }
-  }
-  return nullptr;
+  const std::size_t found = sheet_names::resolve_table(ranges.retained_tables, name);
+  return found == sheet_names::kNotFound ? nullptr : &ranges.retained_tables[found];
 }
 
 std::optional<std::uint8_t> RowTypeFor(std::uint8_t selectors) {
@@ -118,12 +112,11 @@ std::optional<std::uint8_t> RowTypeFor(std::uint8_t selectors) {
 }
 
 std::optional<std::uint16_t> ColumnIndex(const TableMetadata& table, const std::string& name) {
-  for (std::size_t i = 0; i < table.columns.size(); ++i) {
-    if (collection_names::equal(table.columns[i].name, name)) {
-      return static_cast<std::uint16_t>(i);
-    }
+  const std::size_t found = sheet_names::resolve_named(table.columns, name);
+  if (found == sheet_names::kNotFound) {
+    return std::nullopt;
   }
-  return std::nullopt;
+  return static_cast<std::uint16_t>(found);
 }
 
 }  // namespace

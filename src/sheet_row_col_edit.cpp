@@ -27,14 +27,16 @@ namespace {
 // insert / delete rule encoded in `count` and `is_delete`. Entries whose
 // anchor falls inside the deleted interval, or whose insert would push it
 // past `bound`, are removed. `field` names the axis coordinate, so one
-// instantiation per anchor type serves both axes.
+// instantiation per anchor type serves both axes. Under a `band`, an entry
+// whose `perp` coordinate lies outside it stays.
 template <typename Anchor>
 void ShiftAnchored(std::vector<Anchor>& items, std::uint32_t Anchor::*field, std::uint32_t index, std::uint32_t count,
-                   bool is_delete, std::uint32_t bound) {
+                   bool is_delete, std::uint32_t bound, const std::optional<Band>& band = std::nullopt,
+                   std::uint32_t Anchor::*perp = nullptr) {
   std::vector<Anchor> retained;
   retained.reserve(items.size());
   for (Anchor& item : items) {
-    if (item.*field < index) {
+    if (item.*field < index || (band.has_value() && (item.*perp < band->first || item.*perp > band->last))) {
       retained.push_back(std::move(item));
       continue;
     }
@@ -62,9 +64,16 @@ void ShiftRowAnchored(std::vector<Anchor>& items, std::uint32_t row, std::uint32
   ShiftAnchored(items, &Anchor::row, row, count, is_delete, Sheet::kMaxRows);
 }
 
+// A note or threaded comment moves with its cell.
 template <typename Anchor>
-void ShiftColAnchored(std::vector<Anchor>& items, std::uint32_t col, std::uint32_t count, bool is_delete) {
-  ShiftAnchored(items, &Anchor::col, col, count, is_delete, Sheet::kMaxCols);
+void ShiftCellAnchored(std::vector<Anchor>& items, const StructuralEdit& edit) {
+  if (edit.row_axis) {
+    ShiftAnchored(items, &Anchor::row, edit.index, edit.count, edit.is_delete, Sheet::kMaxRows, edit.band,
+                  &Anchor::col);
+  } else {
+    ShiftAnchored(items, &Anchor::col, edit.index, edit.count, edit.is_delete, Sheet::kMaxCols, edit.band,
+                  &Anchor::row);
+  }
 }
 
 // Rectangular merge / validation range shifter along one axis.
@@ -162,12 +171,44 @@ void ShiftRangeList(std::vector<MergeRange>& ranges, std::uint32_t index, std::u
   ranges.erase(ranges.begin() + static_cast<std::ptrdiff_t>(kept), ranges.end());
 }
 
+// Under a band, a merge inside it moves; one straddling the moving region, or
+// one a delete cuts into, is unmerged.
+void ShiftMerges(std::vector<MergeRange>& merges, const StructuralEdit& edit) {
+  if (!edit.band.has_value()) {
+    ShiftRangeList(merges, edit.index, edit.count, edit.is_delete, edit.row_axis);
+    return;
+  }
+  const std::uint64_t delete_end = static_cast<std::uint64_t>(edit.index) + edit.count;
+  std::size_t kept = 0;
+  for (MergeRange& merge : merges) {
+    const BandFit fit = band_fit(merge, edit);
+    bool drop = fit == BandFit::kStraddles;
+    if (fit == BandFit::kInside) {
+      const std::uint32_t first = edit.row_axis ? merge.first_row : merge.first_col;
+      const std::uint32_t last = edit.row_axis ? merge.last_row : merge.last_col;
+      drop = edit.is_delete && first < delete_end && last >= edit.index;
+      if (!drop) {
+        ShiftAxisRange(merge, edit.index, edit.count, edit.is_delete, edit.row_axis, &drop);
+      }
+    }
+    if (!drop) {
+      merges[kept++] = merge;
+    }
+  }
+  merges.erase(merges.begin() + static_cast<std::ptrdiff_t>(kept), merges.end());
+}
+
 // Moves a data table's input cell along one axis. An input cell that is
 // deleted keeps its (clamped) position and is flagged `deleted`, the way the
-// `del1` / `del2` attributes record it.
-void ShiftDataTableInput(DataTableInput& input, std::uint32_t index, std::uint32_t count, bool is_delete,
-                         bool row_axis) {
-  if (!input.present || input.deleted) {
+// `del1` / `del2` attributes record it. Under a band, a cell outside it stays.
+void ShiftDataTableInput(DataTableInput& input, const StructuralEdit& edit) {
+  const std::uint32_t index = edit.index;
+  const std::uint32_t count = edit.count;
+  const bool is_delete = edit.is_delete;
+  const bool row_axis = edit.row_axis;
+  const std::uint32_t perp = row_axis ? input.col : input.row;
+  if (!input.present || input.deleted ||
+      (edit.band.has_value() && (perp < edit.band->first || perp > edit.band->last))) {
     return;
   }
   std::uint32_t& pos = row_axis ? input.row : input.col;
@@ -194,13 +235,24 @@ void ShiftDataTableInput(DataTableInput& input, std::uint32_t index, std::uint32
 }
 
 // A table the edit misses shifts whole, its input cells with it; one the edit
-// cuts into goes (the workbook refuses a cut that would leave part of it).
-void ShiftDataTables(std::vector<DataTable>& tables, std::uint32_t index, std::uint32_t count, bool is_delete,
-                     bool row_axis) {
-  const StructuralEdit edit{index, count, is_delete, row_axis};
+// cuts into goes (the workbook refuses a cut that would leave part of it). A
+// band edit moves only a table inside its band.
+void ShiftDataTables(std::vector<DataTable>& tables, const StructuralEdit& edit) {
+  const std::uint32_t index = edit.index;
+  const std::uint32_t count = edit.count;
+  const bool is_delete = edit.is_delete;
+  const bool row_axis = edit.row_axis;
   std::size_t kept = 0;
   for (DataTable& table : tables) {
-    if (data_table_structure_cut(table, edit) != StructureEditCut::kMisses) {
+    const bool stays = edit.band.has_value() && band_fit(data_table_block(table), edit) != BandFit::kInside;
+    if (!stays && data_table_structure_cut(table, edit) != StructureEditCut::kMisses) {
+      continue;
+    }
+    if (stays) {
+      if (&tables[kept] != &table) {
+        tables[kept] = std::move(table);
+      }
+      ++kept;
       continue;
     }
     bool drop = false;
@@ -210,8 +262,8 @@ void ShiftDataTables(std::vector<DataTable>& tables, std::uint32_t index, std::u
     }
     const bool was_deleted1 = table.r1.deleted;
     const bool was_deleted2 = table.r2.deleted;
-    ShiftDataTableInput(table.r1, index, count, is_delete, row_axis);
-    ShiftDataTableInput(table.r2, index, count, is_delete, row_axis);
+    ShiftDataTableInput(table.r1, edit);
+    ShiftDataTableInput(table.r2, edit);
     if (table.r1.deleted && !was_deleted1) {
       table.explicit_attrs |= kDataTableExplicitDel1;
     }
@@ -230,13 +282,16 @@ void ShiftDataTables(std::vector<DataTable>& tables, std::uint32_t index, std::u
 // Keeping this conversion next to ShiftRangeList is intentional: row/column
 // insertions and deletions must apply the exact same shift, shrink, clamp and
 // drop rules to both metadata shapes.
-void ShiftHyperlinkList(std::vector<Hyperlink>& hyperlinks, std::uint32_t index, std::uint32_t count, bool is_delete,
-                        bool row_axis) {
+// Under a band, a hyperlink moves only when its range lies inside it; one
+// straddling the band stays with its key cell.
+void ShiftHyperlinkList(std::vector<Hyperlink>& hyperlinks, const StructuralEdit& edit) {
   std::size_t kept = 0;
   for (Hyperlink& hyperlink : hyperlinks) {
     MergeRange range{hyperlink.row, hyperlink.col, hyperlink.last_row, hyperlink.last_col};
     bool drop = false;
-    ShiftAxisRange(range, index, count, is_delete, row_axis, &drop);
+    if (!edit.band.has_value() || band_fit(range, edit) == BandFit::kInside) {
+      ShiftAxisRange(range, edit.index, edit.count, edit.is_delete, edit.row_axis, &drop);
+    }
     if (drop) {
       continue;
     }
@@ -252,8 +307,31 @@ void ShiftHyperlinkList(std::vector<Hyperlink>& hyperlinks, std::uint32_t index,
   hyperlinks.erase(hyperlinks.begin() + static_cast<std::ptrdiff_t>(kept), hyperlinks.end());
 }
 
-void ShiftConditionalFormats(std::vector<cf::ConditionalFormat>& formats, std::uint32_t index, std::uint32_t count,
-                             bool is_delete, bool row_axis) {
+// Whether `ranges` (two or more) tile exactly one rectangle.
+bool TilesOneRectangle(const std::vector<MergeRange>& ranges) {
+  if (ranges.size() < 2U) {
+    return false;
+  }
+  MergeRange bounds = ranges.front();
+  std::uint64_t area = 0;
+  for (std::size_t i = 0; i < ranges.size(); ++i) {
+    const MergeRange& r = ranges[i];
+    bounds = MergeRange{std::min(bounds.first_row, r.first_row), std::min(bounds.first_col, r.first_col),
+                        std::max(bounds.last_row, r.last_row), std::max(bounds.last_col, r.last_col)};
+    area += (static_cast<std::uint64_t>(r.last_row) - r.first_row + 1U) * (r.last_col - r.first_col + 1U);
+    for (std::size_t j = 0; j < i; ++j) {
+      const MergeRange& o = ranges[j];
+      if (r.first_row <= o.last_row && o.first_row <= r.last_row && r.first_col <= o.last_col &&
+          o.first_col <= r.last_col) {
+        return false;
+      }
+    }
+  }
+  return area == (static_cast<std::uint64_t>(bounds.last_row) - bounds.first_row + 1U) *
+                     (bounds.last_col - bounds.first_col + 1U);
+}
+
+void ShiftConditionalFormats(std::vector<cf::ConditionalFormat>& formats, const StructuralEdit& edit) {
   std::vector<cf::ConditionalFormat> retained_formats;
   retained_formats.reserve(formats.size());
   for (cf::ConditionalFormat& format : formats) {
@@ -262,7 +340,7 @@ void ShiftConditionalFormats(std::vector<cf::ConditionalFormat>& formats, std::u
     for (const cf::CFCellRange& range : format.sqref) {
       ranges.push_back(MergeRange{range.first.row, range.first.col, range.last.row, range.last.col});
     }
-    shift_sqref_ranges(ranges, index, count, is_delete, row_axis);
+    shift_cf_sqref_ranges(ranges, edit);
     format.sqref.clear();
     for (const MergeRange& range : ranges) {
       format.sqref.push_back(
@@ -295,12 +373,15 @@ void ShiftColumnLayouts(std::vector<ColumnLayout>& columns, std::uint32_t index,
 }
 
 // A pivot the edit misses shifts whole; one the edit deletes, or cuts into
-// (which the workbook refuses), goes.
-void ShiftPivotAnchors(std::vector<std::unique_ptr<pivot::PivotTable>>& pivots, std::uint32_t index,
-                       std::uint32_t count, bool is_delete, bool row_axis) {
-  const StructuralEdit edit{index, count, is_delete, row_axis};
+// (which the workbook refuses), goes. A band edit moves only a pivot inside
+// its band.
+void ShiftPivotAnchors(std::vector<std::unique_ptr<pivot::PivotTable>>& pivots, const StructuralEdit& edit) {
+  const std::uint32_t index = edit.index;
+  const std::uint32_t count = edit.count;
+  const bool is_delete = edit.is_delete;
+  const bool row_axis = edit.row_axis;
   for (std::unique_ptr<pivot::PivotTable>& pivot : pivots) {
-    if (pivot == nullptr) {
+    if (pivot == nullptr || (edit.band.has_value() && band_fit(pivot_location(*pivot), edit) != BandFit::kInside)) {
       continue;
     }
     if (pivot_structure_cut(*pivot, edit) != StructureEditCut::kMisses) {
@@ -384,6 +465,31 @@ StructureEditCut data_table_structure_cut(const DataTable& table, const Structur
   return structure_edit_cut(first == 0U ? 0U : first - 1U, last, edit);
 }
 
+MergeRange data_table_block(const DataTable& table) noexcept {
+  MergeRange block = table.ref;
+  block.first_row -= block.first_row == 0U ? 0U : 1U;
+  block.first_col -= block.first_col == 0U ? 0U : 1U;
+  return block;
+}
+
+MergeRange pivot_location(const pivot::PivotTable& pivot) noexcept {
+  const std::uint32_t rows = pivot.span_rows() == 0U ? 1U : pivot.span_rows();
+  const std::uint32_t cols = pivot.span_cols() == 0U ? 1U : pivot.span_cols();
+  return MergeRange{pivot.anchor_row(), pivot.anchor_col(), pivot.anchor_row() + rows - 1U,
+                    pivot.anchor_col() + cols - 1U};
+}
+
+BandFit band_fit(const MergeRange& rect, const StructuralEdit& edit) noexcept {
+  const Band& band = *edit.band;
+  const std::uint32_t perp_first = edit.row_axis ? rect.first_col : rect.first_row;
+  const std::uint32_t perp_last = edit.row_axis ? rect.last_col : rect.last_row;
+  const std::uint32_t axial_last = edit.row_axis ? rect.last_row : rect.last_col;
+  if (perp_last < band.first || perp_first > band.last || axial_last < edit.index) {
+    return BandFit::kOutside;
+  }
+  return band.first <= perp_first && perp_last <= band.last ? BandFit::kInside : BandFit::kStraddles;
+}
+
 StructureEditCut pivot_structure_cut(const pivot::PivotTable& pivot, const StructuralEdit& edit) noexcept {
   const std::uint32_t first = edit.row_axis ? pivot.anchor_row() : pivot.anchor_col();
   const std::uint32_t span = edit.row_axis ? pivot.span_rows() : pivot.span_cols();
@@ -418,27 +524,127 @@ void shift_sqref_ranges(std::vector<MergeRange>& ranges, std::uint32_t index, st
   }
 }
 
+namespace {
+
+// Appends `range` as an edit moves a cut sqref: the part before the edit stays
+// put, the rest moves as a range of its own.
+void CutOneRange(const MergeRange& range, std::uint32_t index, std::uint32_t count, bool is_delete, bool row_axis,
+                 std::vector<MergeRange>& out) {
+  MergeRange rest = range;
+  if ((row_axis ? range.first_row : range.first_col) < index && index <= (row_axis ? range.last_row : range.last_col)) {
+    MergeRange head = range;
+    (row_axis ? head.last_row : head.last_col) = index - 1U;
+    out.push_back(head);
+    (row_axis ? rest.first_row : rest.first_col) = index;
+  }
+  bool drop = false;
+  ShiftAxisRange(rest, index, count, is_delete, row_axis, &drop);
+  if (!drop) {
+    out.push_back(rest);
+  }
+}
+
+// How an sqref follows a `StructuralEdit`; the modes differ only under a band.
+enum class SqrefMode : std::uint8_t {
+  kShift,      // A straddling range splits into its moved and unmoved parts.
+  kCf,         // `kShift`, then a delete joins what it brings into one tiled rectangle.
+  kReference,  // Only a range inside the band moves.
+  kCut,        // Only a range inside the band is cut.
+};
+
+void EditSqrefRanges(std::vector<MergeRange>& ranges, const StructuralEdit& edit, SqrefMode mode) {
+  if (!edit.band.has_value()) {
+    if (mode == SqrefMode::kCut) {
+      cut_sqref_ranges(ranges, edit.index, edit.count, edit.is_delete, edit.row_axis);
+    } else {
+      shift_sqref_ranges(ranges, edit.index, edit.count, edit.is_delete, edit.row_axis);
+    }
+    return;
+  }
+  const bool join_tiles = mode == SqrefMode::kCf && edit.is_delete && !TilesOneRectangle(ranges);
+  const bool splits = mode == SqrefMode::kShift || mode == SqrefMode::kCf;
+  const Band band = *edit.band;
+  std::vector<MergeRange> out;
+  out.reserve(ranges.size() * 3U);
+  // `range` narrowed to the perpendicular interval [first, last].
+  const auto across = [&edit](MergeRange range, std::uint32_t first, std::uint32_t last) {
+    (edit.row_axis ? range.first_col : range.first_row) = first;
+    (edit.row_axis ? range.last_col : range.last_row) = last;
+    return range;
+  };
+  for (const MergeRange& range : ranges) {
+    const BandFit fit = band_fit(range, edit);
+    if (fit == BandFit::kOutside || (fit == BandFit::kStraddles && !splits)) {
+      out.push_back(range);
+      continue;
+    }
+    if (mode == SqrefMode::kCut) {
+      CutOneRange(range, edit.index, edit.count, edit.is_delete, edit.row_axis, out);
+      continue;
+    }
+    MergeRange moving = range;
+    if (fit == BandFit::kStraddles) {
+      const std::uint32_t first = edit.row_axis ? range.first_col : range.first_row;
+      const std::uint32_t last = edit.row_axis ? range.last_col : range.last_row;
+      if (first < band.first) {
+        out.push_back(across(range, first, band.first - 1U));
+      }
+      if (last > band.last) {
+        out.push_back(across(range, band.last + 1U, last));
+      }
+      moving = across(range, std::max(first, band.first), std::min(last, band.last));
+    }
+    bool drop = false;
+    ShiftAxisRange(moving, edit.index, edit.count, edit.is_delete, edit.row_axis, &drop);
+    if (!drop) {
+      out.push_back(moving);
+    }
+  }
+  ranges = std::move(out);
+  if (!join_tiles || !TilesOneRectangle(ranges)) {
+    return;
+  }
+  MergeRange joined = ranges.front();
+  for (const MergeRange& r : ranges) {
+    joined = MergeRange{std::min(joined.first_row, r.first_row), std::min(joined.first_col, r.first_col),
+                        std::max(joined.last_row, r.last_row), std::max(joined.last_col, r.last_col)};
+  }
+  ranges.assign(1U, joined);
+}
+
+}  // namespace
+
 void cut_sqref_ranges(std::vector<MergeRange>& ranges, std::uint32_t index, std::uint32_t count, bool is_delete,
                       bool row_axis) {
   std::vector<MergeRange> out;
   out.reserve(ranges.size() * 2U);
   for (const MergeRange& range : ranges) {
-    MergeRange rest = range;
-    // The part before the edit stays put; the rest moves as a range of its own.
-    if ((row_axis ? range.first_row : range.first_col) < index &&
-        index <= (row_axis ? range.last_row : range.last_col)) {
-      MergeRange head = range;
-      (row_axis ? head.last_row : head.last_col) = index - 1U;
-      out.push_back(head);
-      (row_axis ? rest.first_row : rest.first_col) = index;
-    }
-    bool drop = false;
-    ShiftAxisRange(rest, index, count, is_delete, row_axis, &drop);
-    if (!drop) {
-      out.push_back(rest);
-    }
+    CutOneRange(range, index, count, is_delete, row_axis, out);
   }
   ranges = std::move(out);
+}
+
+void shift_sqref_ranges(std::vector<MergeRange>& ranges, const StructuralEdit& edit) {
+  EditSqrefRanges(ranges, edit, SqrefMode::kShift);
+}
+
+void shift_cf_sqref_ranges(std::vector<MergeRange>& ranges, const StructuralEdit& edit) {
+  EditSqrefRanges(ranges, edit, SqrefMode::kCf);
+}
+
+void shift_reference_ranges(std::vector<MergeRange>& ranges, const StructuralEdit& edit) {
+  EditSqrefRanges(ranges, edit, SqrefMode::kReference);
+}
+
+void cut_sqref_ranges(std::vector<MergeRange>& ranges, const StructuralEdit& edit) {
+  EditSqrefRanges(ranges, edit, SqrefMode::kCut);
+}
+
+bool shift_auto_filter(AutoFilter& filter, const StructuralEdit& edit, bool header_delete_removes) {
+  if (edit.band.has_value() && (filter.is_opaque() || band_fit(filter.range, edit) != BandFit::kInside)) {
+    return true;
+  }
+  return shift_auto_filter(filter, edit.index, edit.count, edit.is_delete, edit.row_axis, header_delete_removes);
 }
 
 bool shift_auto_filter(AutoFilter& filter, std::uint32_t index, std::uint32_t count, bool is_delete, bool row_axis,
@@ -513,40 +719,38 @@ bool shift_auto_filter(AutoFilter& filter, std::uint32_t index, std::uint32_t co
 // Every sheet-attached structure derives its new coordinates from the one
 // `StructuralEdit` description. This list is the enumeration: a structure
 // added to `Sheet` and not added here does not follow a row/column edit.
+// A band edit leaves the row and column geometry (layout, page breaks) alone.
 void Sheet::shift_sheet_metadata(const StructuralEdit& edit) {
   const std::uint32_t index = edit.index;
   const std::uint32_t count = edit.count;
   const bool is_delete = edit.is_delete;
   const bool row_axis = edit.row_axis;
-  if (row_axis) {
-    ShiftHyperlinkList(hyperlinks_, index, count, is_delete, /*row_axis=*/true);
-    ShiftRowAnchored(comments_, index, count, is_delete);
-    ShiftRowAnchored(threaded_comments_, index, count, is_delete);
-  } else {
-    ShiftHyperlinkList(hyperlinks_, index, count, is_delete, /*row_axis=*/false);
-    ShiftColAnchored(comments_, index, count, is_delete);
-    ShiftColAnchored(threaded_comments_, index, count, is_delete);
-  }
-  ShiftRangeList(merges_, index, count, is_delete, row_axis);
-  ShiftDataTables(data_tables_, index, count, is_delete, row_axis);
+  ShiftHyperlinkList(hyperlinks_, edit);
+  ShiftCellAnchored(comments_, edit);
+  ShiftCellAnchored(threaded_comments_, edit);
+  ShiftMerges(merges_, edit);
+  ShiftDataTables(data_tables_, edit);
   for (DataValidation& dv : validations_) {
-    ShiftRangeList(dv.ranges, index, count, is_delete, row_axis);
+    if (edit.band.has_value()) {
+      shift_sqref_ranges(dv.ranges, edit);
+    } else {
+      ShiftRangeList(dv.ranges, index, count, is_delete, row_axis);
+    }
   }
   validations_.erase(std::remove_if(validations_.begin(), validations_.end(),
                                     [](const DataValidation& dv) { return dv.ranges.empty(); }),
                      validations_.end());
-  ShiftConditionalFormats(conditional_formats_, index, count, is_delete, row_axis);
-  if (row_axis) {
+  ShiftConditionalFormats(conditional_formats_, edit);
+  if (!edit.band.has_value() && row_axis) {
     ShiftRowAnchored(layout_.row_overrides, index, count, is_delete);
     ShiftAnchored(print_settings_.manual_row_breaks, &ManualBreak::id, index, count, is_delete, Sheet::kMaxRows);
-  } else {
+  } else if (!edit.band.has_value()) {
     ShiftColumnLayouts(layout_.columns, index, count, is_delete);
     ShiftAnchored(print_settings_.manual_col_breaks, &ManualBreak::id, index, count, is_delete, Sheet::kMaxCols);
   }
-  ShiftPivotAnchors(pivot_tables_, index, count, is_delete, row_axis);
+  ShiftPivotAnchors(pivot_tables_, edit);
   if (AutoFilter* filter = auto_filter_.get();
-      filter != nullptr && !shift_auto_filter(*filter, index, count, is_delete, row_axis,
-                                              /*header_delete_removes=*/true)) {
+      filter != nullptr && !shift_auto_filter(*filter, edit, /*header_delete_removes=*/true)) {
     auto_filter_.reset();
   }
 }
@@ -571,6 +775,47 @@ void Sheet::inherit_inserted_formatting_locked(const StructuralEdit& edit) {
   const std::uint32_t end =
       static_cast<std::uint32_t>(std::min<std::uint64_t>(static_cast<std::uint64_t>(edit.index) + edit.count, bound));
   const auto owns_xf = [](const Cell& cell) { return cell.has_explicit_xf || cell.xf_index != 0U; };
+  if (edit.band.has_value()) {
+    // Insert Cells: each inserted cell takes the XF of the cell above (row
+    // axis) or to the left; the row and column styles stay where they are.
+    const auto give = [&](Cell& to, std::uint32_t xf_index) {
+      to.xf_index = xf_index;
+      to.has_explicit_xf = true;
+    };
+    if (edit.row_axis) {
+      const auto it = rows_.find(source);
+      if (it == rows_.end()) {
+        return;
+      }
+      std::vector<std::pair<std::uint32_t, std::uint32_t>> styled;  // (col, xf)
+      for (const RowCells::Entry entry :
+           it->second.entries_in(edit.band->first, static_cast<std::uint64_t>(edit.band->last) + 1U)) {
+        if (owns_xf(entry.cell)) {
+          styled.emplace_back(entry.col, entry.cell.xf_index);
+        }
+      }
+      for (const auto& [col, xf_index] : styled) {
+        for (std::uint32_t row = edit.index; row < end; ++row) {
+          give(rows_[row].ensure(col), xf_index);
+        }
+      }
+      return;
+    }
+    for (auto& kv : rows_) {
+      if (kv.first < edit.band->first || kv.first > edit.band->last) {
+        continue;
+      }
+      const Cell* from = kv.second.find(source);
+      if (from == nullptr || !owns_xf(*from)) {
+        continue;
+      }
+      const std::uint32_t xf_index = from->xf_index;
+      for (std::uint32_t col = edit.index; col < end; ++col) {
+        give(kv.second.ensure(col), xf_index);
+      }
+    }
+    return;
+  }
   // Gives the cell `cell_at(i)` the style of the source for every i in the inserted band.
   const auto copy_xf = [&](std::uint32_t xf_index, auto&& cell_at) {
     for (std::uint32_t i = edit.index; i < end; ++i) {
@@ -689,6 +934,56 @@ void Sheet::insert_cols(std::uint32_t col, std::uint32_t count) {
     kv.second.shift_cols_from(col, count);
   }
   const StructuralEdit edit{col, count, /*is_delete=*/false, /*row_axis=*/false};
+  finalize_structural_edit_locked(edit);
+}
+
+void Sheet::edit_cells_in_band(const StructuralEdit& edit) {
+  if (edit.count == 0U || !edit.band.has_value()) {
+    return;
+  }
+  const std::lock_guard<std::mutex> guard(*spill_mutex_);
+  const Band band = *edit.band;
+  if (!edit.row_axis) {
+    // A horizontal shift moves each band row's tail, as a column edit moves every row's.
+    for (auto& kv : rows_) {
+      if (kv.first < band.first || kv.first > band.last) {
+        continue;
+      }
+      if (edit.is_delete) {
+        kv.second.erase_cols(edit.index, edit.count);
+      } else {
+        kv.second.shift_cols_from(edit.index, edit.count);
+      }
+    }
+  } else {
+    // A vertical shift moves the band's columns between rows: an insert from
+    // the bottom up and a delete from the top down, so a destination is
+    // always vacated before it is filled.
+    const std::uint64_t band_end = static_cast<std::uint64_t>(band.last) + 1U;
+    const std::uint64_t delete_end = static_cast<std::uint64_t>(edit.index) + edit.count;
+    const auto move = [&](std::uint32_t from, std::uint64_t to, bool drop) {
+      const auto it = rows_.find(from);
+      if (it == rows_.end() || it->second.count_in(band.first, band_end) == 0U) {
+        return;
+      }
+      RowCells& source = it->second;
+      if (drop || to >= kMaxRows) {
+        source.erase_in(band.first, band_end);
+        return;
+      }
+      source.move_in_to(band.first, band_end, rows_[static_cast<std::uint32_t>(to)]);
+    };
+    const std::vector<std::uint32_t> keys = SortedRowKeys(rows_, edit.index);
+    if (edit.is_delete) {
+      for (const std::uint32_t key : keys) {
+        move(key, key < delete_end ? key : key - edit.count, key < delete_end);
+      }
+    } else {
+      for (auto it = keys.rbegin(); it != keys.rend(); ++it) {
+        move(*it, static_cast<std::uint64_t>(*it) + edit.count, false);
+      }
+    }
+  }
   finalize_structural_edit_locked(edit);
 }
 

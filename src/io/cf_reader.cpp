@@ -29,7 +29,6 @@
 #include "parser/formula_prefix.h"
 #include "pugixml.hpp"
 #include "sheet.h"
-#include "sheet_name.h"
 #include "utils/a1_ref.h"
 #include "utils/error.h"
 #include "utils/expected.h"
@@ -677,14 +676,14 @@ std::optional<cf::CFRule> ReadX14OnlyRule(const pugi::xml_node& rule, std::vecto
   return out;
 }
 
-// Drops the qualifier that names the CF's own sheet, as Excel does on load.
+// Drops the qualifier that resolves to the CF's own sheet, as Excel does on load.
 class OwnSheetQualifierStripper final : public parser::RefTransform {
  public:
-  explicit OwnSheetQualifierStripper(std::string_view own_sheet) : own_sheet_(own_sheet) {}
+  OwnSheetQualifierStripper(const Workbook& wb, std::size_t own_sheet) : wb_(wb), own_sheet_(own_sheet) {}
 
   std::optional<parser::Reference> apply(const parser::Reference& ref) const override {
     parser::Reference out = ref;
-    if (!out.sheet.empty() && sheet_names::equal(out.sheet, own_sheet_)) {
+    if (!out.sheet.empty() && is_own(out.sheet)) {
       out.sheet = {};
       out.sheet_quoted = false;
     }
@@ -697,11 +696,14 @@ class OwnSheetQualifierStripper final : public parser::RefTransform {
   }
 
   std::optional<Ref3DSheetSpan> apply_ref3d_span(std::string_view begin, std::string_view end) const override {
-    return Ref3DSheetSpan{begin, end, sheet_names::equal(begin, own_sheet_) && sheet_names::equal(end, own_sheet_)};
+    return Ref3DSheetSpan{begin, end, is_own(begin) && is_own(end)};
   }
 
  private:
-  std::string_view own_sheet_;
+  bool is_own(std::string_view sheet) const noexcept { return wb_.sheet_index_by_name(sheet) == own_sheet_; }
+
+  const Workbook& wb_;
+  std::size_t own_sheet_;
 };
 
 }  // namespace
@@ -819,7 +821,7 @@ void ingest_feature_formulas(Workbook& wb, Workbook::FormulaSource source) {
   };
   for (std::size_t i = 0; i < wb.sheet_count(); ++i) {
     Sheet& sheet = wb.sheet(i);
-    const OwnSheetQualifierStripper strip_own_sheet(sheet.name());
+    const OwnSheetQualifierStripper strip_own_sheet(wb, i);
     const auto ingest_rule_formula = [&](std::string& formula) {
       ingest(formula);
       if (!formula.empty()) {
