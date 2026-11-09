@@ -11,6 +11,7 @@
 
 #include "chart/chart_cache.h"
 #include "chart/chart_ns.h"
+#include "chart/chart_source.h"
 #include "eval/a1_parse.h"
 #include "excel_profile.h"
 #include "io/xml_escape.h"
@@ -28,6 +29,9 @@ namespace formulon {
 namespace {
 
 namespace a1p = eval::refs_internal;
+
+/// `rect_sheet` result for a reference whose sheet does not exist.
+constexpr std::size_t kNoSheet = static_cast<std::size_t>(-1);
 
 Error invalid_ref(const char* what) {
   return make_error(FormulonErrorCode::kIoChartInvalidReference, what);
@@ -92,7 +96,7 @@ std::string rect_ref(const std::string& prefix, std::uint32_t r0, std::uint32_t 
 /// Resolves the sheet of `rect` (`host_sheet` when unqualified); size_t(-1) if none.
 std::size_t rect_sheet(const Workbook& wb, std::size_t host_sheet, const RectRef& rect) {
   const std::size_t index = rect.sheet.empty() ? host_sheet : wb.sheet_index_by_name(rect.sheet);
-  return index < wb.sheet_count() ? index : static_cast<std::size_t>(-1);
+  return index < wb.sheet_count() ? index : kNoSheet;
 }
 
 // ---------------------------------------------------------------------------
@@ -202,7 +206,7 @@ std::string canon_ref(const Workbook& wb, std::size_t host_sheet, std::string_vi
     return "?";
   }
   const std::size_t si = rect_sheet(wb, host_sheet, r);
-  if (si == static_cast<std::size_t>(-1)) {
+  if (si == kNoSheet) {
     return "?";
   }
   return std::to_string(si) + ':' + std::to_string(r.top) + ',' + std::to_string(r.left) + ',' +
@@ -342,7 +346,7 @@ Cls first_cell_class(const Workbook& wb, const std::string& formula) {
     return Cls::kBlank;
   }
   const std::size_t si = rect_sheet(wb, 0, r);
-  if (si == static_cast<std::size_t>(-1)) {
+  if (si == kNoSheet) {
     return Cls::kBlank;
   }
   Grid g;
@@ -370,7 +374,7 @@ LinkedCells linked_cells(const Workbook& wb, const std::string& formula) {
     return out;
   }
   const std::size_t si = rect_sheet(wb, 0, r);
-  if (si == static_cast<std::size_t>(-1)) {
+  if (si == kNoSheet) {
     return out;
   }
   Grid g;
@@ -477,7 +481,7 @@ Expected<ChartSplit, Error> split_chart_source(const Workbook& wb, std::size_t h
     return invalid_ref("chart source is not a rectangle reference");
   }
   const std::size_t si = rect_sheet(wb, host_sheet, rr);
-  if (si == static_cast<std::size_t>(-1)) {
+  if (si == kNoSheet) {
     return invalid_ref("chart source names no sheet");
   }
   const Sheet& sheet = wb.sheet(si);
@@ -664,8 +668,7 @@ Expected<std::string, Error> build_chart_xml(const Workbook& wb, const ChartInse
     if (is_pie) {
       const std::uint64_t points = point_count(s.val);
       if (points > Sheet::kMaxRows) {
-        return make_error(FormulonErrorCode::kSecurityResourceLimit, "chart: point count exceeds Excel row limit",
-                          "points=" + std::to_string(points) + " ceiling=" + std::to_string(Sheet::kMaxRows));
+        return chart_point_limit_error(points);
       }
       for (std::uint32_t p = 0; p < points; ++p) {
         x += "<c:dPt><c:idx val=\"" + std::to_string(p) + "\"/><c:bubble3D val=\"0\"/><c:spPr><a:solidFill>";

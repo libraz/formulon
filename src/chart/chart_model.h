@@ -162,6 +162,9 @@ inline constexpr const char* kChartCrossesTokens[] = {"", "autoZero", "min", "ma
 inline constexpr const char* kChartBlanksTokens[] = {"", "gap", "zero", "span"};
 inline constexpr const char* kChartAxisPositionTokens[] = {"b", "t", "l", "r"};
 
+/// The input children of a `c:ser`: name, categories and value inputs.
+inline constexpr const char* const kRoles[] = {"tx", "cat", "val", "xVal", "yVal", "bubbleSize"};
+
 /// Index of `token` in `table[first, count)`, or -1.
 inline int chart_token_index(const char* const* table, std::size_t count, std::string_view token,
                              std::size_t first = 0) {
@@ -171,6 +174,12 @@ inline int chart_token_index(const char* const* table, std::size_t count, std::s
     }
   }
   return -1;
+}
+
+/// Whether `index` addresses `table[first, N)`.
+template <std::size_t N>
+constexpr bool chart_token_valid(const char* const (&)[N], int index, int first = 0) {
+  return index >= first && index < static_cast<int>(N);
 }
 
 /// Forced use of a heading row / column when splitting a source range.

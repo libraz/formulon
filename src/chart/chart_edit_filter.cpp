@@ -1,7 +1,6 @@
 #include <cmath>
 #include <cstdint>
 #include <initializer_list>
-#include <iterator>
 #include <optional>
 #include <set>
 #include <string>
@@ -315,10 +314,12 @@ Expected<void, Error> patch_series(const Workbook& wb, const Chart& c, xml_node 
     const char* tag;
     bool required;  // A value input: it cannot be removed, and a literal holds numbers.
     bool allowed;
+    bool categories;  // A category input: a 2-D source is a multi-level reference.
   };
-  const Field fields[] = {{&p.name, "c:tx", false, true}, {&p.cat, "c:cat", false, !xy},
-                          {&p.val, "c:val", true, !xy},   {&p.x, "c:xVal", false, xy},
-                          {&p.y, "c:yVal", true, xy},     {&p.size, "c:bubbleSize", true, pl == "bubbleChart"}};
+  const Field fields[] = {
+      {&p.name, "c:tx", false, true, false}, {&p.cat, "c:cat", false, !xy, true},
+      {&p.val, "c:val", true, !xy, false},   {&p.x, "c:xVal", false, xy, true},
+      {&p.y, "c:yVal", true, xy, false},     {&p.size, "c:bubbleSize", true, pl == "bubbleChart", false}};
   for (const Field& f : fields) {
     if (!f.source->has_value()) {
       continue;
@@ -347,8 +348,8 @@ Expected<void, Error> patch_series(const Workbook& wb, const Chart& c, xml_node 
         }
         ASSIGN_OR_RETURN(ResolvedSource src,
                          resolve_chart_source(wb, c.host, source.formula, eval::default_registry()));
-        const bool multi = (f.tag == fields[1].tag || f.tag == fields[3].tag) && src.areas.size() == 1 &&
-                           src.areas[0].top != src.areas[0].bottom && src.areas[0].left != src.areas[0].right;
+        const bool multi = f.categories && src.areas.size() == 1 && src.areas[0].top != src.areas[0].bottom &&
+                           src.areas[0].left != src.areas[0].right;
         put_ref(ser, f.tag, source.formula, multi, ser.parent() != plot);
         break;
       }
@@ -423,8 +424,7 @@ void vary_bar(xml_node plot, bool on, const Palette& palette) {
         }
         pugi::xml_document frag;
         const xml_node point =
-            fragment(frag, data_point_open(p) + "<c:invertIfNegative val=\"0\"/><c:bubble3D val=\"0\"/>" +
-                               accent_sppr(palette, p) + "</c:dPt>");
+            fragment(frag, data_point_xml(p, std::optional<std::string_view>("0"), accent_sppr(palette, p)));
         if (next_original < original_points.size()) {
           ser.insert_copy_before(point, original_points[next_original]);
         } else if (later_schema_slot) {
@@ -483,7 +483,7 @@ void patch_display(const Chart& c, const ChartDisplayPatch& patch) {
   xml_node chart = c.chart();
   if (!patch.blanks_as.is_keep()) {
     const int b = static_cast<int>(patch.blanks_as.value);
-    if (patch.blanks_as.is_set() && b >= 1 && b < static_cast<int>(std::size(kChartBlanksTokens))) {
+    if (patch.blanks_as.is_set() && chart_token_valid(kChartBlanksTokens, b, 1)) {
       put_val(chart, "c:dispBlanksAs", kChartOrder, kChartBlanksTokens[b]);
     } else {
       drop(chart, "dispBlanksAs");

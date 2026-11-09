@@ -239,8 +239,7 @@ void convert_points(const xml_node& from, xml_node to, Family old_family, Family
   for (const xml_node& d : children_local(from, "dPt")) {
     const std::uint32_t idx = val_u(d, "idx");
     pugi::xml_document frag;
-    xml_node p = fragment(frag, data_point_open(idx) + (bar ? "<c:invertIfNegative val=\"0\"/>" : "") +
-                                    "<c:bubble3D val=\"0\"/></c:dPt>");
+    xml_node p = fragment(frag, data_point_xml(idx, bar ? std::optional<std::string_view>("0") : std::nullopt));
     if (new_family != Family::kFill) {
       if (const xml_node marker = child_local(to, "marker")) {
         copy_at(p, marker, kPointOrder);
@@ -324,9 +323,7 @@ void carry_unstyled(const xml_node& from, xml_node to, Family after, bool bar) {
     const xml_node invert = child_local(d, "invertIfNegative");
     const std::string invert_val = invert ? invert.attribute("val").value() : "0";
     pugi::xml_document frag;
-    xml_node p = fragment(frag, data_point_open(idx) +
-                                    (bar ? "<c:invertIfNegative val=\"" + invert_val + "\"/>" : std::string()) +
-                                    "<c:bubble3D val=\"0\"/></c:dPt>");
+    xml_node p = fragment(frag, data_point_xml(idx, bar ? std::optional<std::string_view>(invert_val) : std::nullopt));
     if (after == Family::kLine || after == Family::kMarker) {
       if (const xml_node marker = child_local(d, "marker")) {
         copy_at(p, marker, kPointOrder);
@@ -471,10 +468,7 @@ Expected<void, Error> patch_type(const Workbook& wb, Chart& c, std::size_t plot_
   if (c.pivot() && (scatter || old == static_cast<int>(ChartInsertKind::kScatter))) {
     return unsupported("chart: a pivot chart cannot be a scatter chart");
   }
-  std::vector<std::uint32_t> ids;
-  for (const xml_node& a : children_local(plot, "axId")) {
-    ids.push_back(a.attribute("val").as_uint());
-  }
+  const std::vector<std::uint32_t> ids = axis_ids_of(plot);
   for (const xml_node& other : plots_of(c)) {
     for (const xml_node& a : children_local(other, "axId")) {
       if (other != plot && std::count(ids.begin(), ids.end(), a.attribute("val").as_uint()) != 0) {
@@ -503,12 +497,12 @@ Expected<void, Error> patch_type(const Workbook& wb, Chart& c, std::size_t plot_
     }
     split.series.push_back(std::move(refs));
   }
-  pugi::xml_document t;
-  RETURN_IF_ERROR(template_doc(wb, c, kind, grouping, std::nullopt, ChartLegendPosition::kRight, split, t));
-  xml_node tplot = template_plot(t);
   // A chart without style parts keeps its own formatting through a type change, as Excel does.
   Palette palette;
   load_palette(wb, c.path, palette);
+  pugi::xml_document t;
+  RETURN_IF_ERROR(template_doc(wb, palette, kind, grouping, std::nullopt, ChartLegendPosition::kRight, split, t));
+  xml_node tplot = template_plot(t);
   const std::vector<xml_node> fresh = children_local(tplot, "ser");
   for (std::size_t i = 0; i < sers.size() && i < fresh.size(); ++i) {
     xml_node to = fresh[i];

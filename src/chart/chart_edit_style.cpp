@@ -40,6 +40,35 @@ xml_node ensure_shape_properties(xml_node owner, Order order) {
   return sp;
 }
 
+/// Applies a hidden / shown flag to `holder`: hidden swaps the fills for `a:noFill`, shown removes it.
+Expected<void, Error> apply_hidden(xml_node holder, Order order, const std::optional<bool>& none,
+                                   const ChartPatchField<ColorSpec>& color, const char* colour_message) {
+  if (!none.has_value()) {
+    return ok();
+  }
+  if (*none && color.is_set()) {
+    return bad_arg(colour_message);
+  }
+  if (*none) {
+    drop_fills(holder);
+    ensure(holder, "a:noFill", order);
+  } else {
+    drop(holder, "noFill");
+  }
+  return ok();
+}
+
+/// Removes every child of `node` not named `keep`.
+void remove_children_except(xml_node node, std::string_view keep) {
+  for (xml_node n = node.first_child(); n;) {
+    const xml_node next = n.next_sibling();
+    if (local_name(n) != keep) {
+      node.remove_child(n);
+    }
+    n = next;
+  }
+}
+
 /// Colour and transparency of `holder`'s solid fill (`a:spPr`, `a:ln` or `a:defRPr`).
 Expected<void, Error> apply_paint(xml_node holder, Order order, const ChartPatchField<ColorSpec>& color,
                                   const ChartPatchField<double>& transparency) {
@@ -77,33 +106,13 @@ Expected<void, Error> apply_paint(xml_node holder, Order order, const ChartPatch
 }  // namespace
 
 Expected<void, Error> apply_paint_properties(xml_node sp, const ChartFillPatch& fill, const ChartLinePatch& line) {
-  if (fill.none.has_value()) {
-    if (*fill.none && fill.color.is_set()) {
-      return bad_arg("chart: a hidden fill takes no colour");
-    }
-    if (*fill.none) {
-      drop_fills(sp);
-      ensure(sp, "a:noFill", kShapeOrder);
-    } else {
-      drop(sp, "noFill");
-    }
-  }
+  RETURN_IF_ERROR(apply_hidden(sp, kShapeOrder, fill.none, fill.color, "chart: a hidden fill takes no colour"));
   RETURN_IF_ERROR(apply_paint(sp, kShapeOrder, fill.color, fill.transparency_pct));
   if (line_empty(line)) {
     return ok();
   }
   xml_node ln = ensure(sp, "a:ln", kShapeOrder);
-  if (line.none.has_value()) {
-    if (*line.none && line.color.is_set()) {
-      return bad_arg("chart: a hidden line takes no colour");
-    }
-    if (*line.none) {
-      drop_fills(ln);
-      ensure(ln, "a:noFill", kLineOrder);
-    } else {
-      drop(ln, "noFill");
-    }
-  }
+  RETURN_IF_ERROR(apply_hidden(ln, kLineOrder, line.none, line.color, "chart: a hidden line takes no colour"));
   RETURN_IF_ERROR(apply_paint(ln, kLineOrder, line.color, line.transparency_pct));
   if (line.width_pt.is_clear()) {
     ln.remove_attribute("w");
@@ -118,7 +127,7 @@ Expected<void, Error> apply_paint_properties(xml_node sp, const ChartFillPatch& 
     drop(ln, "prstDash");
   } else if (line.dash.is_set()) {
     const int d = static_cast<int>(line.dash.value);
-    if (d < 0 || d >= static_cast<int>(std::size(kChartDashTokens))) {
+    if (!chart_token_valid(kChartDashTokens, d)) {
       return bad_arg("chart: line dash must be solid, dash, dot or dashDot");
     }
     drop(ln, "custDash");
@@ -210,13 +219,7 @@ void settle_marker(xml_node ser, xml_node owner, const Palette& p) {
     put_val(m, "c:symbol", kMarkerOrder, symbol);
   }
   if (symbol == "none") {
-    for (xml_node n = m.first_child(); n;) {
-      const xml_node next = n.next_sibling();
-      if (local_name(n) != "symbol") {
-        m.remove_child(n);
-      }
-      n = next;
-    }
+    remove_children_except(m, "symbol");
     return;
   }
   if (!child_local(m, "size")) {
@@ -311,7 +314,7 @@ Expected<void, Error> apply_labels(xml_node ser, bool pie, const std::string& la
     drop(d, "dLblPos");
   } else if (p.position.is_set()) {
     const int i = static_cast<int>(p.position.value);
-    if (i < 0 || i >= static_cast<int>(std::size(kChartLabelPositionTokens))) {
+    if (!chart_token_valid(kChartLabelPositionTokens, i)) {
       return bad_arg("chart: unknown label position");
     }
     put_val(d, "c:dLblPos", kLabelsOrder, kChartLabelPositionTokens[i]);
@@ -344,13 +347,7 @@ Expected<void, Error> apply_labels(xml_node ser, bool pie, const std::string& la
   }
   if (p.deleted.value_or(false)) {
     // CT_DLbls holds either `c:delete` or the label group; only per-label `c:dLbl` entries stay beside it.
-    for (xml_node n = d.first_child(); n;) {
-      const xml_node next = n.next_sibling();
-      if (local_name(n) != "dLbl") {
-        d.remove_child(n);
-      }
-      n = next;
-    }
+    remove_children_except(d, "dLbl");
     put_val(d, "c:delete", kLabelsOrder, "1");
   }
   return ok();

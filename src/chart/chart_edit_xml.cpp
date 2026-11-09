@@ -2,6 +2,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "chart/chart_cache.h"
@@ -242,6 +243,14 @@ void load_palette(const Workbook& wb, const std::string& chart_path, Palette& ou
 Expected<void, Error> template_doc(const Workbook& wb, const Chart& c, ChartInsertKind kind, ChartGrouping grouping,
                                    const std::optional<std::string>& title, ChartLegendPosition legend,
                                    ChartSplit split, pugi::xml_document& out) {
+  Palette palette;
+  load_palette(wb, c.path, palette);
+  return template_doc(wb, palette, kind, grouping, title, legend, std::move(split), out);
+}
+
+Expected<void, Error> template_doc(const Workbook& wb, const Palette& palette, ChartInsertKind kind,
+                                   ChartGrouping grouping, const std::optional<std::string>& title,
+                                   ChartLegendPosition legend, ChartSplit split, pugi::xml_document& out) {
   if (split.series.empty()) {
     split.series.push_back(ChartSeriesRefs{"", "", "A1", "A1", "A1"});
   }
@@ -250,8 +259,6 @@ Expected<void, Error> template_doc(const Workbook& wb, const Chart& c, ChartInse
   options.grouping = grouping;
   options.title = title;
   options.legend = legend;
-  Palette palette;
-  load_palette(wb, c.path, palette);
   ASSIGN_OR_RETURN(std::string xml, build_chart_xml(wb, options, split, palette.colors.document_element()));
   if (!load_xml(out, xml)) {
     return unparseable("chart: template does not parse");

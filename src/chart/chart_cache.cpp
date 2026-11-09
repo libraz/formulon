@@ -10,10 +10,10 @@
 #include <utility>
 #include <vector>
 
-#include "chart/chart_edit_internal.h"
 #include "chart/chart_model.h"
 #include "chart/chart_ns.h"
 #include "chart/chart_source.h"
+#include "chart/chart_template.h"
 #include "chart/chart_xml.h"
 #include "drawing/drawing_xml.h"
 #include "eval/function_registry.h"
@@ -50,7 +50,7 @@ struct Cache {
 };
 
 bool is_role(std::string_view n) {
-  return std::find(std::begin(chart_edit::kRoles), std::end(chart_edit::kRoles), n) != std::end(chart_edit::kRoles);
+  return std::find(std::begin(kRoles), std::end(kRoles), n) != std::end(kRoles);
 }
 
 bool ref_kind_of(std::string_view n, ChartRefKind& kind) {

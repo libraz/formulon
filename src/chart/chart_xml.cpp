@@ -168,6 +168,13 @@ ChartLine read_line(const ColorEnv& env, const xml_node& sp_pr) {
   return line;
 }
 
+/// Reads the fill and the line of one shape-properties element into `owner`.
+template <typename Shaped>
+void read_shape(const ColorEnv& env, const xml_node& sp_pr, Shaped& owner) {
+  owner.fill = read_fill(env, sp_pr);
+  owner.line = read_line(env, sp_pr);
+}
+
 ChartMarkerSymbol symbol_of(std::string_view name) {
   const int i = chart_token_index(kChartSymbolTokens, std::size(kChartSymbolTokens), name);
   return i < 0 ? ChartMarkerSymbol::kAuto  // Not an ST_MarkerStyle value.
@@ -181,9 +188,7 @@ ChartMarker read_marker(const ColorEnv& env, const xml_node& marker) {
     out.symbol = symbol_of(out.symbol_name);
   }
   out.size = uint_of(kid(marker, "size"));
-  const xml_node sp_pr = kid(marker, "spPr");
-  out.fill = read_fill(env, sp_pr);
-  out.line = read_line(env, sp_pr);
+  read_shape(env, kid(marker, "spPr"), out);
   return out;
 }
 
@@ -501,9 +506,7 @@ ChartSeries read_series(const ColorEnv& env, const xml_node& ser, bool filtered)
   s.x = read_data_source(kid(ser, "xVal"));
   s.y = read_data_source(kid(ser, "yVal"));
   s.size = read_data_source(kid(ser, "bubbleSize"));
-  const xml_node sp_pr = kid(ser, "spPr");
-  s.fill = read_fill(env, sp_pr);
-  s.line = read_line(env, sp_pr);
+  read_shape(env, kid(ser, "spPr"), s);
   if (const xml_node marker = kid(ser, "marker")) {
     s.marker = read_marker(env, marker);
   }
@@ -511,9 +514,7 @@ ChartSeries read_series(const ColorEnv& env, const xml_node& ser, bool filtered)
   for (const xml_node& dpt : children_local(ser, "dPt")) {
     ChartPoint point;
     point.idx = uint_of(kid(dpt, "idx")).value_or(0U);
-    const xml_node point_sp_pr = kid(dpt, "spPr");
-    point.fill = read_fill(env, point_sp_pr);
-    point.line = read_line(env, point_sp_pr);
+    read_shape(env, kid(dpt, "spPr"), point);
     if (const xml_node marker = kid(dpt, "marker")) {
       point.marker = read_marker(env, marker);
     }

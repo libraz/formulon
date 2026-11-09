@@ -85,8 +85,6 @@ inline constexpr const char* const kTextOrder[] = {"bodyPr", "lstStyle", "p", nu
 inline constexpr const char* const kFills[] = {"noFill", "solidFill", "gradFill", "blipFill", "pattFill", "grpFill", nullptr};
 // clang-format on
 
-inline constexpr const char* const kRoles[] = {"tx", "cat", "val", "xVal", "yVal", "bubbleSize"};
-
 struct Chart {
   std::string path;
   std::size_t host = kChartNoHostSheet;
@@ -324,12 +322,30 @@ inline std::string data_point_open(std::uint32_t idx) {
   return "<c:dPt><c:idx val=\"" + std::to_string(idx) + "\"/>";
 }
 
+/// A complete data-point element: the opening, an `invertIfNegative` when `invert_val` is given, `bubble3D` off,
+/// then `tail` (further children) before the close.
+inline std::string data_point_xml(std::uint32_t idx, const std::optional<std::string_view>& invert_val,
+                                  const std::string& tail = std::string()) {
+  std::string x = data_point_open(idx);
+  if (invert_val) {
+    x += "<c:invertIfNegative val=\"";
+    x += *invert_val;
+    x += "\"/>";
+  }
+  return x + "<c:bubble3D val=\"0\"/>" + tail + "</c:dPt>";
+}
+
 void load_palette(const Workbook& wb, const std::string& chart_path, Palette& out);
 
 /// A chart part from the insert template, for its default elements, in the colours of chart `c`.
 Expected<void, Error> template_doc(const Workbook& wb, const Chart& c, ChartInsertKind kind, ChartGrouping grouping,
                                    const std::optional<std::string>& title, ChartLegendPosition legend,
                                    ChartSplit split, pugi::xml_document& out);
+
+/// As above, in the colours of an already loaded `palette`.
+Expected<void, Error> template_doc(const Workbook& wb, const Palette& palette, ChartInsertKind kind,
+                                   ChartGrouping grouping, const std::optional<std::string>& title,
+                                   ChartLegendPosition legend, ChartSplit split, pugi::xml_document& out);
 
 inline xml_node template_chart(const pugi::xml_document& t) {
   return child_local(t.document_element(), "chart");
@@ -388,6 +404,15 @@ xml_node find_point(const xml_node& ser, std::uint32_t idx);
 void vary_bar(xml_node plot, bool on, const Palette& palette);
 
 void patch_display(const Chart& c, const ChartDisplayPatch& patch);
+
+/// The `c:axId` values a plot references, in order.
+inline std::vector<std::uint32_t> axis_ids_of(const xml_node& plot) {
+  std::vector<std::uint32_t> ids;
+  for (const xml_node& id : children_local(plot, "axId")) {
+    ids.push_back(id.attribute("val").as_uint());
+  }
+  return ids;
+}
 
 std::vector<xml_node> axes_of(const Chart& c, const std::vector<std::uint32_t>& ids);
 

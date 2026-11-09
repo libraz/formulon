@@ -126,10 +126,7 @@ struct Resolver {
     switch (node.kind()) {
       case parser::NodeKind::UnionOp:
         for (std::uint32_t i = 0; i < node.as_union_arity(); ++i) {
-          auto child = resolve(node.as_union_child(i), ctx);
-          if (!child) {
-            return child;
-          }
+          RETURN_IF_ERROR(resolve(node.as_union_child(i), ctx));
         }
         return Expected<void, Error>::Ok();
       case parser::NodeKind::NameRef:
@@ -219,6 +216,16 @@ bool col_hidden(const Sheet& sheet, std::uint32_t col) {
     }
   }
   return false;
+}
+
+Error chart_cell_budget_error(std::uint64_t cells) {
+  return make_error(FormulonErrorCode::kSecurityResourceLimit, "chart: source exceeds materialization limit",
+                    "cells=" + std::to_string(cells) + " ceiling=" + std::to_string(kMaxRangeExpansionCells));
+}
+
+Error chart_point_limit_error(std::uint64_t points) {
+  return make_error(FormulonErrorCode::kSecurityResourceLimit, "chart: point count exceeds Excel row limit",
+                    "points=" + std::to_string(points) + " ceiling=" + std::to_string(Sheet::kMaxRows));
 }
 
 std::string count_text(std::uint64_t n) {

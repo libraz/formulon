@@ -2,7 +2,6 @@
 
 #include <algorithm>
 #include <cmath>
-#include <iterator>
 #include <optional>
 #include <set>
 #include <string>
@@ -115,10 +114,7 @@ Expected<void, Error> patch_source(const Workbook& wb, Chart& c, std::string_vie
       }
     }
   }
-  std::vector<std::uint32_t> ids;
-  for (const xml_node& id : children_local(plot, "axId")) {
-    ids.push_back(id.attribute("val").as_uint());
-  }
+  const std::vector<std::uint32_t> ids = axis_ids_of(plot);
   std::vector<xml_node> fresh_axes;
   for (xml_node n = child_local(template_chart(t), "plotArea").first_child(); n; n = n.next_sibling()) {
     if (strings::ends_with(local_name(n), "Ax")) {
@@ -141,7 +137,6 @@ bool clears_all(const ChartPointPatch& patch) {
          patch.marker.is_clear();
 }
 
-/// True when the `c:dPt` `point` holds no fill, line colour, width, dash or marker of its own.
 bool line_patch_sets(const ChartLinePatch& p) {
   return p.color.is_set() || p.transparency_pct.is_set() || p.width_pt.is_set() || p.dash.is_set() ||
          p.none.value_or(false);
@@ -152,6 +147,7 @@ bool point_patch_sets(const ChartPointPatch& p) {
          line_patch_sets(p.line) || p.marker.is_set();
 }
 
+/// True when the `c:dPt` `point` holds no fill, line colour, width, dash or marker of its own.
 bool point_override_empty(const xml_node& point) {
   for (xml_node n = point.first_child(); n; n = n.next_sibling()) {
     const std::string_view name = local_name(n);
@@ -420,7 +416,7 @@ Expected<void, Error> set_chart_legend(Workbook& wb, std::size_t sheet, std::uin
   RETURN_IF_ERROR(open_edit(wb, sheet, object_id, c, false));
   xml_node chart = c.chart();
   const int pos = static_cast<int>(legend.position);
-  if (pos < 0 || pos >= static_cast<int>(std::size(kChartLegendTokens))) {
+  if (!chart_token_valid(kChartLegendTokens, pos)) {
     return bad_arg("chart: unknown legend position");
   }
   if (legend.position == ChartLegendPosition::kNone) {
@@ -537,7 +533,7 @@ Expected<void, Error> set_chart_axis(Workbook& wb, std::size_t sheet, std::uint3
   }
   if (patch.position.has_value()) {
     const int p = static_cast<int>(*patch.position);
-    if (p < 0 || p >= static_cast<int>(std::size(kChartAxisPositionTokens))) {
+    if (!chart_token_valid(kChartAxisPositionTokens, p)) {
       return bad_arg("chart: unknown axis position");
     }
   }
@@ -552,7 +548,7 @@ Expected<void, Error> set_chart_axis(Workbook& wb, std::size_t sheet, std::uint3
       put_val(ax, "c:crossesAt", kAxisOrder, num(patch.crosses_at));
     } else if (cr != ChartAxisCrosses::kAbsent) {
       const int i = static_cast<int>(cr);
-      if (i < 1 || i >= static_cast<int>(std::size(kChartCrossesTokens))) {
+      if (!chart_token_valid(kChartCrossesTokens, i, 1)) {
         return bad_arg("chart: unknown axis crossing");
       }
       put_val(ax, "c:crosses", kAxisOrder, kChartCrossesTokens[i]);
@@ -628,8 +624,8 @@ Expected<void, Error> set_chart_point(Workbook& wb, std::size_t sheet, std::uint
   const std::string_view name = local_name(node);
   if (!point && !is_pie(node)) {
     pugi::xml_document frag;
-    const std::string x = data_point_open(point_idx) + (is_bar(node) ? "<c:invertIfNegative val=\"0\"/>" : "") +
-                          "<c:bubble3D val=\"0\"/><c:spPr><a:effectLst/></c:spPr></c:dPt>";
+    const std::string x = data_point_xml(point_idx, is_bar(node) ? std::optional<std::string_view>("0") : std::nullopt,
+                                         "<c:spPr><a:effectLst/></c:spPr>");
     point = insert_point(ser, fragment(frag, x), point_idx);
     // As Excel saves a new point: a bar or area point repeats the series fill and line, a line point the series
     // line and marker, and a scatter point those too once it has a line or marker of its own.
@@ -647,8 +643,7 @@ Expected<void, Error> set_chart_point(Workbook& wb, std::size_t sheet, std::uint
     }
   } else if (!point) {
     pugi::xml_document frag;
-    point =
-        insert_point(ser, fragment(frag, data_point_open(point_idx) + "<c:bubble3D val=\"0\"/></c:dPt>"), point_idx);
+    point = insert_point(ser, fragment(frag, data_point_xml(point_idx, std::nullopt)), point_idx);
   }
   RETURN_IF_ERROR(apply_shape(point, kPointOrder, marker_filled(node) ? ChartFillPatch{} : patch.fill, patch.line));
   RETURN_IF_ERROR(apply_marker(point, kPointOrder, patch.marker));

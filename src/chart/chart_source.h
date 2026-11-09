@@ -62,6 +62,10 @@ inline CategoryAxis category_axis(const SheetRect& r) {
 bool row_hidden(const Sheet& sheet, std::uint32_t row);
 bool col_hidden(const Sheet& sheet, std::uint32_t col);
 
+/// The resource-limit errors for a source that expands past the cell budget / a series past Excel's row count.
+Error chart_cell_budget_error(std::uint64_t cells);
+Error chart_point_limit_error(std::uint64_t points);
+
 /// Decimal text of a point count or index.
 std::string count_text(std::uint64_t n);
 

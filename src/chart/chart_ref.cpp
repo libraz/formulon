@@ -377,7 +377,7 @@ bool lost_values(const pugi::xml_node& ser) {
   const pugi::xml_node formula = child_element(ref, kNsC, "f");
   const std::string_view text = formula.child_value();
   const std::string_view tail = "!#REF!";
-  return text == kRefError || (text.size() > tail.size() && text.substr(text.size() - tail.size()) == tail);
+  return text == kRefError || (text.size() > tail.size() && strings::ends_with(text, tail));
 }
 
 /// Whether a deleted site stays where it is. Excel keeps the name of a series

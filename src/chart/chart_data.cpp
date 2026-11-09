@@ -51,16 +51,6 @@ struct PlotRules {
   bool connects = false;  ///< Line / scatter / radar draw across a connect point.
 };
 
-Error chart_cell_budget_error(std::uint64_t cells) {
-  return make_error(FormulonErrorCode::kSecurityResourceLimit, "chart: source exceeds materialization limit",
-                    "cells=" + std::to_string(cells) + " ceiling=" + std::to_string(kMaxRangeExpansionCells));
-}
-
-Error chart_point_limit_error(std::uint64_t points) {
-  return make_error(FormulonErrorCode::kSecurityResourceLimit, "chart: point count exceeds Excel row limit",
-                    "points=" + std::to_string(points) + " ceiling=" + std::to_string(Sheet::kMaxRows));
-}
-
 bool connects(ChartPlotType type) {
   return type == ChartPlotType::kLine || type == ChartPlotType::kScatter || type == ChartPlotType::kRadar;
 }
