@@ -4460,6 +4460,9 @@ order.
   number exactly, so `0.1+0.2` matches its own list entry.
 - The threads WebAssembly build skips Binaryen's memory packing: raw size
   grows by 19 KB and the Brotli size shrinks by 1.5 KB.
+- Both WebAssembly builds are about 4.7 KB smaller raw and 1.0 to 1.5 KB
+  smaller under Brotli, from shared argument readers in the JavaScript
+  binding layer and shared helpers in the engine. Behaviour is unchanged.
 
 ### Removed
 
