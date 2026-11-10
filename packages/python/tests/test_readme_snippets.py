@@ -70,10 +70,11 @@ def expectations(lines: List[str]) -> List[str]:
     end = len(lines)
     while end > 0 and not lines[end - 1].strip():
         end -= 1
+    # The closing run may sit indented inside a ``with`` block.
     begin = end
-    while begin > 0 and lines[begin - 1].startswith("#"):
+    while begin > 0 and lines[begin - 1].lstrip().startswith("#"):
         begin -= 1
-    expected.extend(re.sub(r"^# ?", "", line).rstrip() for line in lines[begin:end])
+    expected.extend(re.sub(r"^\s*# ?", "", line).rstrip() for line in lines[begin:end])
     return expected
 
 
@@ -101,8 +102,18 @@ class ReadmeSnippetsTest(unittest.TestCase):
 
     def test_labelled_fence_is_collected_and_malformed_fence_is_reported(self) -> None:
         text = _FIXTURE_FENCES.read_text(encoding="utf-8")
-        self.assertEqual([start for start, _ in run_blocks(text)], [2])
+        self.assertEqual([start for start, _ in run_blocks(text)], [2, 18, 24])
         self.assertEqual(near_misses(text), [8, 11, 14])
+
+    def test_indented_closing_run_is_the_expectation_so_a_mismatch_fails(self) -> None:
+        matching, mismatching = run_blocks(_FIXTURE_FENCES.read_text(encoding="utf-8"))[-2:]
+        for (_, lines), passes in ((matching, True), (mismatching, False)):
+            expected = expectations(lines)
+            self.assertEqual(expected, ["1" if passes else "3"])
+            run = subprocess.run(  # noqa: S603 -- the interpreter running this test
+                [sys.executable, "-c", "\n".join(lines)], capture_output=True, text=True, check=True
+            )
+            self.assertEqual(run.stdout.rstrip().split("\n") == expected, passes)
 
     def _run(self, lines: List[str]) -> None:
         with tempfile.TemporaryDirectory(prefix="formulon-readme-") as work:

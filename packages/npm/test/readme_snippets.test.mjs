@@ -146,11 +146,12 @@ function expectations(lines) {
     const m = /console\.log\(.*\)\s*;?\s*\/\/ (.+)$/.exec(line);
     if (m) expected.push(m[1].trimEnd());
   }
+  // The closing run may sit indented inside a block; lines that only close brackets after it end the block.
   let end = lines.length;
-  while (end > 0 && lines[end - 1].trim() === '') end -= 1;
+  while (end > 0 && /^\s*(?:[\]})]+[;,)]*)?\s*$/.test(lines[end - 1])) end -= 1;
   let begin = end;
-  while (begin > 0 && /^\/\/ ?/.test(lines[begin - 1])) begin -= 1;
-  for (const line of lines.slice(begin, end)) expected.push(line.replace(/^\/\/ ?/, '').trimEnd());
+  while (begin > 0 && /^\s*\/\/ ?/.test(lines[begin - 1])) begin -= 1;
+  for (const line of lines.slice(begin, end)) expected.push(line.replace(/^\s*\/\/ ?/, '').trimEnd());
   return expected;
 }
 
@@ -226,12 +227,29 @@ test('a labelled fence is collected and a malformed runnable fence is reported',
     [
       [1, 'run'],
       [5, 'no-run'],
+      [21, 'run'],
+      [28, 'run'],
     ],
   );
   assert.deepEqual(
     nearMisses.map((m) => m.line),
     [8, 11, 14],
   );
+});
+
+test('an indented closing comment run is the expectation, so a mismatch fails', async () => {
+  const { blocks } = scanFences(await readFile(path.join(here, 'fixtures', 'fences.md'), 'utf8'));
+  const [matching, mismatching] = blocks.slice(-2);
+  for (const [block, passes] of [
+    [matching, true],
+    [mismatching, false],
+  ]) {
+    const expected = expectations(block.lines);
+    assert.deepEqual(expected, [passes ? '1' : '3']);
+    const run = spawnSync(process.execPath, ['--input-type=module', '-e', block.code], { encoding: 'utf8' });
+    assert.equal(run.status, 0, run.stderr);
+    assert.equal(run.stdout.trimEnd() === expected.join('\n'), passes);
+  }
 });
 
 test('the READMEs carry runnable examples', () => {
