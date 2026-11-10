@@ -1,0 +1,27 @@
+# Pivot edit oracle inputs: per case, before.xlsx is an Excel-saved workbook
+# whose PivotTable1 (Sheet2) is in the starting state, and after.xlsx is the
+# same workbook after Excel applied the edit and saved. Source: Sheet1!A1:E13
+# (Region, Product, Date, Amt, Qty); base layout Region on rows, Sum of Amt and
+# Sum of Qty with Values on columns, compact form.
+# Captured on Mac Excel 365 ja-JP 16.114.4.
+suite: pivot_edit
+target: mac-365-ja_JP
+cases:
+  e01_move_row_to_col: {edit: "Region rows -> columns", om: "Region.orientation = column"}
+  e02_move_col_to_row: {start: "Product on columns", edit: "Product columns -> rows (after Region)", om: "Product.orientation = row"}
+  e03_add_second_row_field: {edit: "add Product as second row field", om: "AddFields rows Product, add"}
+  e04_remove_data_field: {edit: "remove Sum of Qty", om: "DataFields('Sum of Qty').orientation = hidden"}
+  e05_add_second_data_field: {start: "Sum of Amt only", edit: "add Qty as data field (Values on columns)", om: "Qty.orientation = data"}
+  e06_date_group_months: {start: "Date on rows", edit: "group Date by months", om: "Range(A4).Group periods=months"}
+  e07_number_group: {start: "Amt on rows", edit: "group Amt by 50 (auto start/end)", om: "Range(A4).Group by=50"}
+  e08_label_filter: {edit: "Region label filter begins with E", om: "none on Mac; <filters> captionBeginsWith authored into before, then Excel RefreshTable + save"}
+  e09_value_top_n: {edit: "Region top 2 by Sum of Amt", om: "none on Mac; <filters> count top10 val=2 authored into before, then Excel RefreshTable + save"}
+  e10_page_filter_one_item: {start: "Product as page field (All)", edit: "page filter Product = Apple", om: "Product.CurrentPage = Apple"}
+  e11_hide_item: {edit: "hide Region item North", om: "PivotItems('North').Visible = False"}
+  e12_subtotals_top: {start: "Region, Product rows; subtotals at bottom", edit: "subtotals at top", om: "SubtotalLocation top"}
+  e13_subtotals_bottom: {start: "Region, Product rows", edit: "subtotals at bottom", om: "SubtotalLocation bottom"}
+  e14_subtotals_off: {start: "Region, Product rows", edit: "Region automatic subtotal off", om: "Region.Subtotals(automatic) = False"}
+  e15_compact_to_outline: {start: "Region, Product rows", edit: "layout outline", om: "RowAxisLayout outline"}
+  e16_compact_to_tabular: {start: "Region, Product rows", edit: "layout tabular", om: "RowAxisLayout tabular"}
+  e17_row_grand_off: {start: "Product on columns", edit: "RowGrand = False (removes the grand-total columns on the right; Excel writes colGrandTotals=0)", om: "RowGrand = False"}
+  e18_collapse_item: {start: "Region, Product rows", edit: "collapse East", om: "PivotItems('East').ShowDetail = False"}
