@@ -5223,12 +5223,19 @@ class PivotDateGroup:
     back, give :class:`PivotDateGroupInput` a bound only where the matching ``auto_*`` is false.
     """
 
+    #: The `PivotDatePeriod` bits the field is grouped by.
     periods: PivotDatePeriod
+    #: The calendar the periods follow.
     calendar: PivotCalendar
+    #: The length in days of each group when grouping by days alone; 1 otherwise.
     interval_days: int
+    #: The first bound as stored.
     start: datetime.datetime
+    #: The last bound as stored.
     end: datetime.datetime
+    #: The first bound follows the field's smallest value.
     auto_start: bool
+    #: The last bound follows the field's largest value.
     auto_end: bool
 
 
@@ -5240,8 +5247,11 @@ class PivotNumericGroupInput:
     field's smallest and largest value.
     """
 
+    #: The width of each group.
     interval: float
+    #: The first bound; the field's smallest value when omitted.
     start: Optional[float] = None
+    #: The last bound; the field's largest value when omitted.
     end: Optional[float] = None
 
 
@@ -5254,10 +5264,15 @@ class PivotNumericGroup:
     ``auto_*`` is false.
     """
 
+    #: The width of each group.
     interval: float
+    #: The first bound as stored.
     start: float
+    #: The last bound as stored.
     end: float
+    #: The first bound follows the field's smallest value.
     auto_start: bool
+    #: The last bound follows the field's largest value.
     auto_end: bool
 
 
@@ -5289,19 +5304,27 @@ class PivotCacheField:
 
     The ``contains_*`` flags are the field's ``<sharedItems>`` content flags, read-only: an attribute the file
     omits reads as its schema default, and a field with none of its own reads as the flags derived from its values.
-    ``contains_semi_mixed_types`` is text or a blank, ``contains_non_date`` text or a number, and
-    ``contains_mixed_types`` two or more of text, numbers and dates.
     """
 
+    #: The field name.
     name: str
+    #: A calculated field's formula, leading ``=`` included; ``None`` for a source field.
     formula: Optional[str]
+    #: The field holds a number.
     contains_number: bool = False
+    #: Every number the field holds is an integer.
     contains_integer: bool = False
+    #: The field holds text, a boolean or an error.
     contains_string: bool = False
+    #: The field holds a blank.
     contains_blank: bool = False
+    #: The field holds a date.
     contains_date: bool = False
+    #: The field mixes two or more of text, numbers and dates.
     contains_mixed_types: bool = False
+    #: The field holds text or a blank.
     contains_semi_mixed_types: bool = False
+    #: The field holds text or a number: something that is not a date.
     contains_non_date: bool = False
 
 

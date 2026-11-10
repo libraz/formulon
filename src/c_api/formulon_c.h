@@ -7156,13 +7156,21 @@ FM_API fm_status_t fm_workbook_get_pivot_cache_field_name(const fm_workbook_t* w
  */
 typedef struct {
   uint32_t struct_size;
+  /** The field holds a number. */
   int32_t contains_number;
+  /** Every number the field holds is an integer. */
   int32_t contains_integer;
+  /** The field holds text, a boolean or an error. */
   int32_t contains_string;
+  /** The field holds a blank. */
   int32_t contains_blank;
+  /** The field holds a date. */
   int32_t contains_date;
+  /** The field mixes two or more of text, numbers and dates. */
   int32_t contains_mixed_types;
+  /** The field holds text or a blank. */
   int32_t contains_semi_mixed_types;
+  /** The field holds text or a number: something that is not a date. */
   int32_t contains_non_date;
 } fm_pivot_cache_field_types_t;
 
@@ -8073,10 +8081,15 @@ FM_API fm_status_t fm_sheet_get_pivot_field_date_group(const fm_workbook_t* wb, 
  */
 typedef struct {
   uint32_t struct_size;
+  /** 1 when `start` is given; 0 takes the field's smallest value. */
   int32_t has_start;
+  /** The first bound; the field's smallest value when omitted. */
   double start;
+  /** 1 when `end` is given; 0 takes the field's largest value. */
   int32_t has_end;
+  /** The last bound; the field's largest value when omitted. */
   double end;
+  /** The width of each group. */
   double interval;
 } fm_pivot_numeric_group_spec_t;
 

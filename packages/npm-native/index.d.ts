@@ -1181,6 +1181,7 @@ export interface PivotProperties {
 
 /** One element of `PivotCache.listFields()`; its position is the cache field's index. */
 export interface PivotCacheField {
+  /** The field name. */
   readonly name: string;
   /** A calculated field's formula, leading `=` included; `null` for a source field. */
   readonly formula: string | null;
@@ -1238,20 +1239,30 @@ export interface PivotDateGroupInput {
  *  stored bounds as `Date`s. A bound holds its stored value even when `autoStart` / `autoEnd` is `true` (it then
  *  follows the field's data); write the grouping back with a bound only where the matching `auto*` is `false`. */
 export interface PivotDateGroup {
+  /** The `PivotDatePeriod` bits the field is grouped by. */
   readonly periods: PivotDatePeriodMask;
+  /** The calendar the periods follow. */
   readonly calendar: PivotCalendar;
+  /** The length in days of each group when grouping by days alone; 1 otherwise. */
   readonly intervalDays: number;
+  /** The first bound as stored. */
   readonly start: Date;
+  /** The last bound as stored. */
   readonly end: Date;
+  /** The first bound follows the field's smallest value. */
   readonly autoStart: boolean;
+  /** The last bound follows the field's largest value. */
   readonly autoEnd: boolean;
 }
 
 /** Argument of `Pivot.setFieldNumericGroup`: the width of each group, and the first and last bound (the field's
  *  smallest and largest value when omitted). */
 export interface PivotNumericGroupInput {
+  /** The width of each group. */
   interval: number;
+  /** The first bound; the field's smallest value when omitted. */
   start?: number;
+  /** The last bound; the field's largest value when omitted. */
   end?: number;
 }
 
@@ -1259,10 +1270,15 @@ export interface PivotNumericGroupInput {
  *  `autoStart` / `autoEnd` is `true` (it then follows the field's data); write the grouping back with a bound only
  *  where the matching `auto*` is `false`. */
 export interface PivotNumericGroup {
+  /** The width of each group. */
   readonly interval: number;
+  /** The first bound as stored. */
   readonly start: number;
+  /** The last bound as stored. */
   readonly end: number;
+  /** The first bound follows the field's smallest value. */
   readonly autoStart: boolean;
+  /** The last bound follows the field's largest value. */
   readonly autoEnd: boolean;
 }
 
