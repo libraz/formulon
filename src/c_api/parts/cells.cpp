@@ -603,6 +603,18 @@ extern "C" fm_status_t fm_sheet_get_lambda_text(const fm_workbook_t* wb, size_t 
 
 namespace {
 
+// The legacy array block `(row, col)` is a non-anchor member of: every member reads the block's one formula, as
+// Excel's `Range.Formula` does. A spill child is not a member and reads no formula.
+std::optional<formulon::Workbook::ArrayFormulaInfo> array_member(const formulon::Workbook& book,
+                                                                 std::size_t sheet_index, std::uint32_t row,
+                                                                 std::uint32_t col) {
+  std::optional<formulon::Workbook::ArrayFormulaInfo> info = book.array_formula_at(sheet_index, row, col);
+  if (info && info->anchor_row == row && info->anchor_col == col) {
+    info.reset();
+  }
+  return info;
+}
+
 // Returns the `(row, col)` indices of every written coordinate on `sheet`,
 // sorted by `(row, col)` ascending. Cleared cells keep their slot and stay
 // listed (the CLI filters blanks at render time); unwritten columns are not
@@ -702,6 +714,15 @@ extern "C" fm_status_t fm_sheet_get_cell_at(const fm_workbook_t* wb, size_t shee
   // their value is resolved below via `resolve_cell_value`. Only a stored
   // cell can contribute a formula pointer.
   const formulon::Cell* cell = sheet.cell_at(row, col);
+  std::uint32_t formula_row = row;
+  std::uint32_t formula_col = col;
+  if (const auto block = (cell == nullptr || cell->formula_text.empty())
+                             ? array_member(wb->workbook(), sheet_index, row, col)
+                             : std::nullopt) {
+    formula_row = block->anchor_row;
+    formula_col = block->anchor_col;
+    cell = sheet.cell_at(formula_row, formula_col);
+  }
   const formulon::DataTable* table =
       cell != nullptr && !cell->formula_text.empty() ? nullptr : sheet.data_table_covering(row, col);
   // `out_value`'s text payload goes to `read_scratch` (cleared per call,
@@ -711,7 +732,7 @@ extern "C" fm_status_t fm_sheet_get_cell_at(const fm_workbook_t* wb, size_t shee
   if (out_formula != nullptr) {
     *out_formula = (cell != nullptr && !cell->formula_text.empty())
                        ? display_formula(wb->workbook(), cell->formula_text, store,
-                                         table_display_name_at(wb->workbook(), sheet_index, row, col))
+                                         table_display_name_at(wb->workbook(), sheet_index, formula_row, formula_col))
                        : nullptr;
   }
   // Use the spill-aware accessor so phantoms surface their owning anchor's
@@ -756,6 +777,10 @@ extern "C" fm_status_t fm_sheet_get_spill(const fm_workbook_t* wb, std::size_t s
   out->struct_size = struct_size;
   *out_present = 0;
   const auto& s = wb->workbook().sheet(sheet_index);
+  // A legacy array block is not a spill, whichever of its cells is asked.
+  if (wb->workbook().array_formula_at(sheet_index, row, col)) {
+    return 0;
+  }
   // Try anchor lookup first; fall back to phantom-coverage map.
   const formulon::SpillRegion* region = s.spill_region_at_anchor(row, col);
   if (region == nullptr) {
@@ -860,7 +885,7 @@ namespace {
 // Shared front half of the two formula getters: validates, resets the outs
 // to absent, then copies the stored formula text (empty for a non-formula)
 // out under the sheet lock.
-fm_status_t read_stored_formula(const fm_workbook_t* wb, size_t sheet_index, std::uint32_t row, std::uint32_t col,
+fm_status_t read_stored_formula(const fm_workbook_t* wb, size_t sheet_index, std::uint32_t& row, std::uint32_t& col,
                                 int32_t* out_present, const char** out_formula, std::string* out_text) {
   if (out_present == nullptr || out_formula == nullptr) {
     return null_argument();
@@ -875,6 +900,10 @@ fm_status_t read_stored_formula(const fm_workbook_t* wb, size_t sheet_index, std
   }
   formulon::Sheet::CellRead read;
   const formulon::Sheet& sheet = wb->workbook().sheet(sheet_index);
+  if (const auto block = array_member(wb->workbook(), sheet_index, row, col)) {
+    row = block->anchor_row;
+    col = block->anchor_col;
+  }
   sheet.read_formula_cell(row, col, read);
   out_text->assign(read.formula_text());
   if (const formulon::DataTable* table = sheet.data_table_covering(row, col); out_text->empty() && table != nullptr) {
@@ -962,9 +991,13 @@ extern "C" fm_status_t fm_sheet_get_cells_in_range(const fm_workbook_t* wb, size
   // A data table's result cells show its `TABLE()` formula, as `fm_sheet_get_formula` does.
   const formulon::Sheet& sheet = wb->workbook().sheet(sheet_index);
   for (fm_cell_range_t::Entry& entry : handle->entries) {
-    if (const formulon::DataTable* table = sheet.data_table_covering(entry.row, entry.col);
-        entry.formula == nullptr && table != nullptr) {
+    if (entry.formula != nullptr) {
+      continue;
+    }
+    if (const formulon::DataTable* table = sheet.data_table_covering(entry.row, entry.col); table != nullptr) {
       entry.formula = handle->text.emplace_back(formulon::data_table_formula_text(*table)).c_str();
+    } else if (const auto block = array_member(wb->workbook(), sheet_index, entry.row, entry.col)) {
+      entry.formula = handle->text.emplace_back(block->formula).c_str();
     }
   }
   handle->spell_formulas(wb->workbook(), sheet_index);

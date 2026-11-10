@@ -334,6 +334,17 @@ class SheetRecordInputTests(unittest.TestCase):
             ws.set_array_formula(read)
             self.assertFalse(hasattr(read, "rect"))
 
+    def test_every_array_block_cell_reads_the_formula_and_no_spill(self) -> None:
+        with Workbook.create_default() as wb:
+            ws = wb.sheet(0)
+            ws.set_array_formula(formulon.ArrayFormula(range="E1:E3", formula="=A1:A3*2"))
+            for a1 in ("E1", "E2", "E3"):
+                self.assertEqual(ws.get_formula(a1), "=A1:A3*2", a1)
+                self.assertIsNone(ws.get_spill(a1), a1)
+            self.assertEqual([c.formula for c in ws.list_cells("E1:E3")], ["=A1:A3*2"] * 3)
+            ws.set_formula("G1", "=SEQUENCE(2)")
+            self.assertIsNone(ws.get_formula("G2"))
+
     def test_print_titles_take_span_strings(self) -> None:
         with Workbook.create_default() as wb:
             ws = wb.sheet(0)

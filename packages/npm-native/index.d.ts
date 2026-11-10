@@ -1760,7 +1760,7 @@ export interface SheetFormatDefaults extends SheetFormatDefaultsInput {
 }
 
 /** One populated cell, as `Sheet.listCells` and `Sheet.getCellsInRange` return it: its coordinates, its
- *  formula (`null` for a constant), its value as native data and that value's kind. */
+ *  formula as `Sheet.getFormula` reads it (`null` for a constant), its value as native data and that value's kind. */
 export interface RangeCell {
   readonly row: number;
   readonly col: number;
@@ -5995,7 +5995,8 @@ export interface Sheet {
   /** The stored A1 formula (leading `=` included), or `null` for a cell that holds none. The text is
    *  re-spelled from the parsed formula, so literals read normalised (`=1.50` reads `=1.5`); a formula loaded
    *  from a file shows book names, not `[N]` indexes. A data table's result cell reads the table's formula,
-   *  `=TABLE(row_input,col_input)`, with an absent input left empty (`=TABLE(,B3)`) and a deleted one as `#REF!`. */
+   *  `=TABLE(row_input,col_input)`, with an absent input left empty (`=TABLE(,B3)`) and a deleted one as `#REF!`.
+   *  Every cell of a legacy array block reads the block's formula; a spill child of a dynamic array reads `null`. */
   getFormula(row: number, col: number): string | null;
   /** `getFormula` at the A1 address `a1`. */
   getFormula(a1: string): string | null;
@@ -6680,7 +6681,8 @@ export interface Sheet {
   /** Returns dynamic-array spill info for `(row, col)`.
    *  When the cell is part of a spill region (anchor or phantom), `range` is the region; the per-cell values
    *  are read via `getValue`, which is already spill-aware. A blocked anchor reads `blocked: true` with the
-   *  rectangle it attempted. `null` when the cell is neither part of a region nor a blocked anchor. */
+   *  rectangle it attempted. `null` when the cell is neither part of a region nor a blocked anchor, and on every
+   *  cell of a legacy array block, which is not a spill. */
   getSpill(row: number, col: number): Spill | null;
   /** `getSpill` at the A1 address `a1`. */
   getSpill(a1: string): Spill | null;

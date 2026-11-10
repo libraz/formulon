@@ -178,6 +178,22 @@ describe('A1 text stands for a rectangle wherever a record holds one', () => {
     });
   });
 
+  it('every cell of a legacy array block reads its formula and no spill', () => {
+    withSheet((ws) => {
+      ws.setArrayFormula({ range: 'E1:E3', formula: '=A1:A3*2' });
+      for (const a1 of ['E1', 'E2', 'E3']) {
+        assert.equal(ws.getFormula(a1), '=A1:A3*2', a1);
+        assert.equal(ws.getSpill(a1), null, a1);
+      }
+      assert.deepEqual(
+        ws.listCells('E1:E3').map((c) => c.formula),
+        ['=A1:A3*2', '=A1:A3*2', '=A1:A3*2'],
+      );
+      ws.setFormula('G1', '=SEQUENCE(2)');
+      assert.equal(ws.getFormula('G2'), null);
+    });
+  });
+
   it('an AutoFilter takes its range as A1', () => {
     withSheet((ws) => {
       fillTable(ws);

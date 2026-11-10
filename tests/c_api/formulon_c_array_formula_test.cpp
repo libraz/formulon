@@ -126,3 +126,50 @@ TEST(FormulonCApiArrayFormula, ArgumentChecks) {
             kInvalidArgument);
   EXPECT_NE(fm_sheet_set_array_formula(wb.handle, 0, record_arg(fm_cell_rect_t{0, 0, 0U, 0U}), "=1+"), 0);
 }
+
+TEST(FormulonCApiArrayFormula, EveryMemberReadsTheBlockFormulaAndNoSpill) {
+  // No recalc runs between the block's entry and the reads.
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  ASSERT_EQ(fm_sheet_set_array_formula(wb.handle, 0, record_arg(fm_cell_rect_t{0, 4, 2U, 4U}), "=A1:A3*2"), 0);
+  for (uint32_t r = 0; r < 3; ++r) {
+    int32_t present = 0;
+    const char* formula = nullptr;
+    ASSERT_EQ(fm_sheet_get_formula(wb.handle, 0, r, 4, &present, &formula), 0);
+    ASSERT_EQ(present, 1) << "row " << r;
+    EXPECT_STREQ(formula, "=A1:A3*2");
+    fm_spill_info_t spill = FM_STRUCT_INIT(fm_spill_info_t);
+    int32_t spill_present = 7;
+    ASSERT_EQ(fm_sheet_get_spill(wb.handle, 0, r, 4, &spill_present, &spill), 0);
+    EXPECT_EQ(spill_present, 0) << "row " << r;
+  }
+  fm_cell_range_t* cells = nullptr;
+  const fm_cell_rect_t block{0, 4, 2U, 4U};
+  ASSERT_EQ(fm_sheet_get_cells_in_range(wb.handle, 0, &block, 0, 0, &cells), 0);
+  size_t count = 0;
+  ASSERT_EQ(fm_cell_range_get_cell_count(cells, &count), 0);
+  EXPECT_EQ(count, 3U);
+  for (size_t i = 0; i < count; ++i) {
+    uint32_t row = 0;
+    uint32_t col = 0;
+    const char* formula = nullptr;
+    fm_value_t value{};
+    ASSERT_EQ(fm_cell_range_get_cell_at(cells, i, &row, &col, &formula, &value), 0);
+    EXPECT_STREQ(formula, "=A1:A3*2") << "row " << row;
+  }
+  fm_cell_range_destroy(cells);
+}
+
+TEST(FormulonCApiArrayFormula, SpillChildHasNoFormula) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 0, 0, "=SEQUENCE(3)"), 0);
+  int32_t present = 7;
+  const char* formula = nullptr;
+  ASSERT_EQ(fm_sheet_get_formula(wb.handle, 0, 1, 0, &present, &formula), 0);
+  EXPECT_EQ(present, 0);
+  fm_spill_info_t spill = FM_STRUCT_INIT(fm_spill_info_t);
+  int32_t spill_present = 0;
+  ASSERT_EQ(fm_sheet_get_spill(wb.handle, 0, 1, 0, &spill_present, &spill), 0);
+  EXPECT_EQ(spill_present, 1);
+}
