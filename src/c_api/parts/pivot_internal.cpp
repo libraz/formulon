@@ -192,17 +192,19 @@ formulon::Expected<void, formulon::Error> reproject_edited_pivot(formulon::Workb
 
 namespace {
 
-// A field this edit took off every axis keeps its item list, as Excel writes it.
-void keep_left_field_items(formulon::Workbook& wb, formulon::pivot::PivotTable& table,
-                           const formulon::pivot::PivotTable& before) {
-  const formulon::pivot::PivotCache* cache = find_cache(wb, table.pivot_cache_id());
+// A field this edit put on an axis, or took off every axis, lists its items
+// as Excel writes them; a field joining an axis shares its values first.
+void list_moved_field_items(formulon::Workbook& wb, formulon::pivot::PivotTable& table,
+                            const formulon::pivot::PivotTable& before) {
+  formulon::pivot::PivotCache* cache = find_cache_mut(wb, table.pivot_cache_id());
   if (cache == nullptr) {
     return;
   }
+  formulon::pivot::share_axis_fields(*cache, table);
   const formulon::eval::ScopedEvalProfile scope(wb.excel_profile());
   const std::size_t count = std::min({table.fields().size(), before.fields().size(), cache->fields().size()});
   for (std::size_t f = 0; f < count; ++f) {
-    if (on_axis(before.fields()[f].axis) && !on_axis(table.fields()[f].axis)) {
+    if (on_axis(before.fields()[f].axis) != on_axis(table.fields()[f].axis)) {
       formulon::pivot::keep_field_items(table.mutable_fields()[f], cache->fields()[f]);
     }
   }
@@ -215,7 +217,7 @@ PivotEdit::PivotEdit(formulon::Workbook& wb, std::size_t sheet_index, std::size_
     : wb_(wb), sheet_index_(sheet_index), pivot_index_(pivot_index), table_(table), snapshot_(table.clone()) {}
 
 fm_status_t PivotEdit::commit() {
-  keep_left_field_items(wb_, table_, *snapshot_);
+  list_moved_field_items(wb_, table_, *snapshot_);
   formulon::Expected<void, formulon::Error> projected = reproject_edited_pivot(wb_, sheet_index_, pivot_index_);
   if (projected) {
     return 0;

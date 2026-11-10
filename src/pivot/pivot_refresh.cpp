@@ -668,4 +668,15 @@ void keep_field_items(PivotField& field, const PivotCacheField& cache_field) {
   }
 }
 
+void list_axis_field_items(PivotTable& table, const PivotCache& cache) {
+  const std::size_t count = std::min(table.fields().size(), cache.fields().size());
+  for (std::size_t f = 0; f < count; ++f) {
+    PivotField& field = table.mutable_fields()[f];
+    const bool on_axis = field.axis == PivotAxis::Row || field.axis == PivotAxis::Col || field.axis == PivotAxis::Page;
+    if (on_axis && field.items.empty()) {
+      keep_field_items(field, cache.fields()[f]);
+    }
+  }
+}
+
 }  // namespace formulon::pivot

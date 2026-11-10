@@ -383,8 +383,6 @@ function pivotOver(ws, wb) {
   const pivot = ws.addPivot({ name: 'P', cacheId: cache.cacheId, anchor: 'E1' });
   pivot.setFieldAxis('Region', f.PivotAxis.Row);
   const region = 0;
-  pivot.addFieldItem(region, 'East');
-  pivot.addFieldItem(region, 'West');
   pivot.setFieldAxis('Amount', f.PivotAxis.Value);
   const amount = 1;
   pivot.addDataField({ name: 'Sum of Amount', fieldIndex: amount, aggregation: f.PivotAggregation.Sum });

@@ -126,13 +126,18 @@ std::optional<std::uint32_t> find_shared_item(const PivotCacheField& field, cons
 void write_shared_record_value(PivotCache& cache, std::size_t record, std::size_t field, const Value& value,
                                bool is_date);
 
-/// Lists in `field` every item its shared items give it, as a field leaving
-/// the axes keeps them: with no items, one per shared item in the field's
+/// Lists in `field` every item its shared items give it, as a field joining or
+/// leaving the axes lists them and a save writes them: with no items, one per shared item in the field's
 /// sort order (ascending by default, blank last; shared-item order when sorted
 /// manually or by a data field); otherwise the items it has, then the shared
 /// items none of them names. Missing and calculated shared items are never
 /// added. The caller holds an `eval::ScopedEvalProfile`.
 void keep_field_items(PivotField& field, const PivotCacheField& cache_field);
+
+/// Lists (`keep_field_items`) the items of every field `table` places on the
+/// row, column or page axis that has none yet. The caller holds an
+/// `eval::ScopedEvalProfile`.
+void list_axis_field_items(PivotTable& table, const PivotCache& cache);
 
 }  // namespace formulon::pivot
 

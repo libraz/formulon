@@ -87,22 +87,26 @@ TEST(FormulonCApiPivot, ReadBackRoundTripsWhatTheSettersWrote) {
   ASSERT_EQ(fm_sheet_get_pivot_field_at(wb.handle, 0, pivot_index, 0, &region), 0);
   EXPECT_EQ(region.sort_order, FM_PIVOT_SORT_ORDER_MANUAL);
 
-  // Items: the scratch pivot added North and South by label, bound to the shared items.
+  // Items: joining the row axis listed North and South, bound to the shared items.
   std::size_t item_count = 99;
   ASSERT_EQ(fm_sheet_get_pivot_field_item_count(wb.handle, 0, pivot_index, 0, &item_count), 0);
   ASSERT_EQ(item_count, 2U);
   ASSERT_EQ(SetPivotFieldItemVisible(wb.handle, 0, pivot_index, 0, 1, 0), 0);
   fm_pivot_item_info_t item = FM_STRUCT_INIT(fm_pivot_item_info_t);
   ASSERT_EQ(fm_sheet_get_pivot_field_item_at(wb.handle, 0, pivot_index, 0, 0, &item), 0);
-  EXPECT_STREQ(item.name, "North");
+  EXPECT_EQ(item.name, nullptr) << "a joined item is bound by cache index and carries no label";
   EXPECT_EQ(item.cache_index, 0);
   EXPECT_EQ(item.visible, 1);
   ASSERT_EQ(fm_sheet_get_pivot_field_item_at(wb.handle, 0, pivot_index, 0, 1, &item), 0);
-  EXPECT_STREQ(item.name, "South");
+  EXPECT_EQ(item.name, nullptr);
   EXPECT_EQ(item.cache_index, 1);
   EXPECT_EQ(item.visible, 0);
+  // An item already listed for a shared item is refused; once cleared, one bound only by cache index is accepted.
+  EXPECT_EQ(fm_sheet_add_pivot_field_item_by_cache_index(wb.handle, 0, pivot_index, 0, 1U, 1, ignored_index()),
+            FM_STATUS_ALREADY_EXISTS);
+  ASSERT_EQ(fm_sheet_clear_pivot_field_items(wb.handle, 0, pivot_index, 0), 0);
   ASSERT_EQ(fm_sheet_add_pivot_field_item_by_cache_index(wb.handle, 0, pivot_index, 0, 1U, 1, ignored_index()), 0);
-  ASSERT_EQ(fm_sheet_get_pivot_field_item_at(wb.handle, 0, pivot_index, 0, 2, &item), 0);
+  ASSERT_EQ(fm_sheet_get_pivot_field_item_at(wb.handle, 0, pivot_index, 0, 0, &item), 0);
   EXPECT_EQ(item.name, nullptr) << "an item bound only by cache index has no label";
   EXPECT_EQ(item.cache_index, 1);
   EXPECT_EQ(item.visible, 1);

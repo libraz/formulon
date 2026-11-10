@@ -299,6 +299,7 @@ test('pivotFieldAddItemAt hides the blank item an empty label cannot name', asyn
     };
     assert.equal(sumDataCells(), 300);
 
+    wb.sheet(0).pivot(pivot).clearFieldItems(regionField);
     wb.sheet(0).pivot(pivot).addFieldItem(regionField, 'North');
     wb.sheet(0).pivot(pivot).addFieldItem(regionField, { cacheIndex: 1 }, { visible: false });
     assert.equal(sumDataCells(), 100);

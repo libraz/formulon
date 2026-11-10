@@ -88,8 +88,6 @@ function addPivot(ws, wb) {
   }
   const pivot = ws.addPivot({ name: 'P', cacheId: cache.cacheId, anchor: 'E1' });
   pivot.setFieldAxis('Region', f.PivotAxis.Row);
-  pivot.addFieldItem(0, 'East');
-  pivot.addFieldItem(0, 'West');
   pivot.setFieldAxis('Amount', f.PivotAxis.Value);
   pivot.addDataField({ name: 'Sum of Amount', fieldIndex: 1, aggregation: f.PivotAggregation.Sum });
   return { cache, pivot };

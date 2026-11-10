@@ -46,9 +46,6 @@ def _pivot(wb: Workbook) -> Any:
         wb.sheet(0).add_pivot(PivotInput(name="P1", cache_id=cache.cache_id, anchor=CellAddress(0, 6)))
     )
     pivot.set_field_axis("Region", PivotAxis.ROW)
-    region = pivot.get_field("Region").cache_field_index
-    pivot.add_field_item(region, "East", visible=True)
-    pivot.add_field_item(region, "West", visible=True)
     pivot.set_field_axis("Product", PivotAxis.ROW)
     pivot.set_field_axis("Amount", PivotAxis.VALUE)
     return pivot

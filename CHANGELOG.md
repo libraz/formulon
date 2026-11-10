@@ -274,6 +274,9 @@ Upgrading from 0.18: see [Upgrading from 0.18 to 0.19](docs/releases/upgrading-0
   record values, and a field taken off an axis keeps its items.
 - `addFieldSharedItem` fails with `AlreadyExists` for a value the field
   already holds.
+- A field placed on a pivot axis lists its items at once, in display order,
+  and `addFieldItem` fails with `AlreadyExists` for an item the field already
+  lists; `clearFieldItems` then `addFieldItem` sets a custom order.
 - A date or number grouping that cannot be placed fails with
   `PreconditionFailed`.
 - Saving a new workbook with an image or chart as `.xlsb` failed with

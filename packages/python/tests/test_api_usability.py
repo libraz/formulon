@@ -1046,7 +1046,6 @@ class PivotPatchTests(unittest.TestCase):
             ws = wb.sheet(0)
             _pivot_book(wb, ws)
             ws.pivot(0).set_field_axis("Region", formulon.PivotAxis.ROW)
-            ws.pivot(0).add_field_item(0, "East", visible=True)
             ws.pivot(0).update_field_item(0, 0, visible=False, caption="Eastern")
             item = ws.pivot(0).get_field_item(0, 0)
             self.assertFalse(item.visible)

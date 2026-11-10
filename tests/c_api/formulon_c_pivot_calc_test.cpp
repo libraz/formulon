@@ -104,24 +104,14 @@ void BuildSales(WorkbookGuard& wb, std::uint32_t* out_cache, bool product_on_col
   ASSERT_EQ(AddPivot(wb.handle, 0U, "PivotTable1", cache, 2U, 0U, &pivot), 0) << fm_get_last_error_message();
   AddField(wb.handle, "Region", FM_PIVOT_AXIS_ROW);
   AddField(wb.handle, "Amt", FM_PIVOT_AXIS_VALUE);
-  // As Excel creates the field: manual order, its items listed sorted.
+  // As Excel creates the field: manual order, its items listed sorted (East, North, South) on joining.
   ASSERT_EQ(SetPivotFieldSort(wb.handle, 0U, kPivot, kRegion, FM_PIVOT_SORT_ORDER_MANUAL, nullptr), 0)
       << fm_get_last_error_message();
-  std::size_t expected_item = 0;
-  for (const char* item : {"East", "North", "South"}) {
-    std::size_t item_index = 99;
-    ASSERT_EQ(fm_sheet_add_pivot_field_item(wb.handle, 0U, kPivot, kRegion, item, 1, &item_index), 0)
-        << fm_get_last_error_message();
-    EXPECT_EQ(item_index, expected_item++);
-  }
   const std::uint32_t rows[] = {static_cast<std::uint32_t>(kRegion)};
   ASSERT_EQ(fm_sheet_set_pivot_row_field_order(wb.handle, 0U, kPivot, rows, 1U), 0) << fm_get_last_error_message();
   if (product_on_cols) {
     AddField(wb.handle, "Product", FM_PIVOT_AXIS_COLUMN);
     ASSERT_EQ(SetPivotFieldSort(wb.handle, 0U, kPivot, kProduct, FM_PIVOT_SORT_ORDER_MANUAL, nullptr), 0);
-    for (const char* item : {"A", "B"}) {
-      ASSERT_EQ(fm_sheet_add_pivot_field_item(wb.handle, 0U, kPivot, kProduct, item, 1, ignored_index()), 0);
-    }
     const std::uint32_t cols[] = {static_cast<std::uint32_t>(kProduct)};
     ASSERT_EQ(fm_sheet_set_pivot_column_field_order(wb.handle, 0U, kPivot, cols, 1U), 0) << fm_get_last_error_message();
   } else {

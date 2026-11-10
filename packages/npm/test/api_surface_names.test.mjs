@@ -1395,11 +1395,13 @@ describe('pivot shape changes', () => {
   it('addFieldItem takes a label or a cache index and returns the item index', () => {
     withSheet((ws, wb) => {
       const { pivot } = addPivot(ws, wb);
+      pivot.clearFieldItems(0);
       const byLabel = pivot.addFieldItem(0, 'East');
       const byCache = pivot.addFieldItem(0, { cacheIndex: 1 }, { visible: false });
       assert.equal(typeof byLabel, 'number');
       assert.notEqual(byCache, byLabel);
-      assert.equal(pivot.listFieldItems(0).length >= 2, true);
+      assert.equal(pivot.listFieldItems(0).length, 2);
+      expectCode(() => pivot.addFieldItem(0, 'East'), f.StatusCode.AlreadyExists);
     });
   });
 
@@ -1414,7 +1416,6 @@ describe('pivot shape changes', () => {
   it('updateFieldItem patches an item by position', () => {
     withSheet((ws, wb) => {
       const { pivot } = addPivot(ws, wb);
-      pivot.addFieldItem(0, 'East');
       pivot.updateFieldItem(0, 0, { visible: false });
       assert.equal(pivot.getFieldItem(0, 0).visible, false);
     });

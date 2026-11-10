@@ -35,12 +35,8 @@ function buildPivot(mod) {
   const pivot = wb.sheet(0).addPivot({ name: 'Pivot1', cacheId, anchor: { row: 0, col: 6 } });
   const region = 0;
   pivot.setFieldAxis(region, 0);
-  pivot.addFieldItem(region, 'East');
-  pivot.addFieldItem(region, 'West');
   const product = 1;
   pivot.setFieldAxis(product, 2);
-  pivot.addFieldItem(product, 'Apple');
-  pivot.addFieldItem(product, 'Pear');
   const amount = 2;
   pivot.setFieldAxis(amount, 2);
   const date = 3;
@@ -471,6 +467,7 @@ const PIVOT_MUTATORS = [
   [
     'Pivot.addFieldItem',
     {
+      setup: (b) => b.pivot.clearFieldItems(b.region),
       act: (b) => b.pivot.addFieldItem(b.region, 'East', { visible: false }),
       expect: (b) => assert.deepEqual(pivotGrid(b.wb), WEST_ONLY),
     },

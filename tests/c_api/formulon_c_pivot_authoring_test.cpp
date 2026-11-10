@@ -684,6 +684,72 @@ void BuildDatePivot(fm_workbook_t* wb, bool date1904, std::uint32_t* out_cache_i
 
 }  // namespace
 
+TEST(FormulonCApiPivot, AFieldJoiningAnAxisListsItsItemsInDisplayOrder) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  std::uint32_t cache_id = 0;
+  std::size_t pivot_index = 0;
+  std::size_t date_field = 0;
+  BuildDatePivot(wb.handle, /*date1904=*/false, &cache_id, &pivot_index, &date_field);
+  if (HasFatalFailure()) {
+    return;
+  }
+  // Shared items keep record order (2024-01, 2025-01, 2024-06, 2025-06); the
+  // field's items list them ascending, and an item can be edited at once.
+  std::size_t count = 0;
+  ASSERT_EQ(fm_sheet_get_pivot_field_item_count(wb.handle, 0, pivot_index, date_field, &count), 0);
+  ASSERT_EQ(count, 4U);
+  const std::uint32_t expected[] = {0U, 2U, 1U, 3U};
+  for (std::size_t i = 0; i < count; ++i) {
+    SCOPED_TRACE(i);
+    fm_pivot_item_info_t item = FM_STRUCT_INIT(fm_pivot_item_info_t);
+    ASSERT_EQ(fm_sheet_get_pivot_field_item_at(wb.handle, 0, pivot_index, date_field, i, &item), 0);
+    EXPECT_EQ(item.has_cache_index, 1);
+    EXPECT_EQ(item.cache_index, expected[i]);
+  }
+}
+
+TEST(FormulonCApiPivot, ListedItemsRefuseDuplicatesAndClearingAllowsACustomOrder) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  std::uint32_t cache_id = 0;
+  std::size_t pivot_index = 0;
+  ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_index), 0) << fm_get_last_error_message();
+  // Region (field 0) joined the rows and lists North and South.
+  auto count_items = [&]() {
+    std::size_t count = 99;
+    EXPECT_EQ(fm_sheet_get_pivot_field_item_count(wb.handle, 0, pivot_index, 0, &count), 0);
+    return count;
+  };
+  ASSERT_EQ(count_items(), 2U);
+
+  // A shared item the field already lists is refused and nothing changes.
+  EXPECT_EQ(fm_sheet_add_pivot_field_item(wb.handle, 0, pivot_index, 0, "North", 1, ignored_index()),
+            FM_STATUS_ALREADY_EXISTS);
+  EXPECT_EQ(fm_sheet_add_pivot_field_item_by_cache_index(wb.handle, 0, pivot_index, 0, 1U, 1, ignored_index()),
+            FM_STATUS_ALREADY_EXISTS);
+  EXPECT_EQ(count_items(), 2U);
+
+  // Clearing does not re-list; adding in the wanted order sets the order.
+  ASSERT_EQ(fm_sheet_clear_pivot_field_items(wb.handle, 0, pivot_index, 0), 0);
+  ASSERT_EQ(count_items(), 0U);
+  ASSERT_EQ(fm_sheet_add_pivot_field_item(wb.handle, 0, pivot_index, 0, "South", 1, ignored_index()), 0);
+  ASSERT_EQ(fm_sheet_add_pivot_field_item(wb.handle, 0, pivot_index, 0, "North", 1, ignored_index()), 0);
+  ASSERT_EQ(count_items(), 2U);
+  const std::uint32_t expected[] = {1U, 0U};
+  for (std::size_t i = 0; i < 2U; ++i) {
+    SCOPED_TRACE(i);
+    fm_pivot_item_info_t item = FM_STRUCT_INIT(fm_pivot_item_info_t);
+    ASSERT_EQ(fm_sheet_get_pivot_field_item_at(wb.handle, 0, pivot_index, 0, i, &item), 0);
+    EXPECT_EQ(item.has_cache_index, 1);
+    EXPECT_EQ(item.cache_index, expected[i]);
+  }
+
+  // A label that binds no shared item still appends.
+  ASSERT_EQ(fm_sheet_add_pivot_field_item(wb.handle, 0, pivot_index, 0, "West", 1, ignored_index()), 0);
+  EXPECT_EQ(count_items(), 3U);
+}
+
 TEST(FormulonCApiPivot, DateGroupRejectsBadArgumentsWithoutMutation) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);

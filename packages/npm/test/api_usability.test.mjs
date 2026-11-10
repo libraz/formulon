@@ -808,12 +808,19 @@ test('criterion 6: listPivots, listPivotFieldItems and the pivot cache lists des
     assert.equal(shared.length, 3);
     assert.deepEqual(plain(shared[0]), { value: 'East', isDate: false });
     assert.equal(shared[2].isDate, true);
-    assert.deepEqual(plain(ws.pivot(pivot).listFieldItems(0)), []);
-    expectCode(() => ws.pivot(pivot).getFieldItem(0, 0), f.StatusCode.IndexOutOfRange);
-    ws.pivot(pivot).addFieldItem(0, 'East');
+    // Joining the row axis listed one item per record value, in display order.
+    assert.deepEqual(
+      ws
+        .pivot(pivot)
+        .listFieldItems(0)
+        .map((item) => item.cacheIndex),
+      [0, 1],
+    );
+    expectCode(() => ws.pivot(pivot).getFieldItem(0, 2), f.StatusCode.IndexOutOfRange);
+    ws.pivot(pivot).addFieldItem(0, { cacheIndex: 2 });
     const items = ws.pivot(pivot).listFieldItems(0);
-    assert.equal(items.length, 1);
-    assert.deepEqual(plain(ws.pivot(pivot).getFieldItem(0, 0)), plain(items[0]));
+    assert.equal(items.length, 3);
+    assert.deepEqual(plain(ws.pivot(pivot).getFieldItem(0, 2)), plain(items[2]));
   });
 });
 
@@ -1060,9 +1067,8 @@ test('criterion 7: every patch setter rejects a key that is neither in its patch
 
 test('criterion 7: updatePivotFieldItem changes the keys given and the per-field setters are gone', async () => {
   await withWorkbook((wb, f) => {
-    const { cacheId, pivot } = pivotWorkbook(wb, f);
+    const { pivot } = pivotWorkbook(wb, f);
     const ws = wb.sheet(0);
-    ws.pivot(pivot).addFieldItem(0, 'East');
     ws.pivot(pivot).updateFieldItem(0, 0, { caption: 'Eastern', visible: false });
     const item = ws.pivot(pivot).getFieldItem(0, 0);
     assert.equal(item.caption, 'Eastern');
@@ -1382,12 +1388,12 @@ test('criterion 13: setChartType defaults the grouping to Clustered', async () =
 
 test('criterion 13: setPivotFieldSort and addPivotFieldItem take an options object', async () => {
   await withWorkbook((wb, f) => {
-    const { cacheId, pivot } = pivotWorkbook(wb, f);
+    const { pivot } = pivotWorkbook(wb, f);
     const ws = wb.sheet(0);
-    ws.pivot(pivot).addFieldItem(0, 'East', { visible: false });
-    assert.equal(ws.pivot(pivot).getFieldItem(0, 0).visible, false);
-    ws.pivot(pivot).addFieldItem(0, 'West');
-    assert.equal(ws.pivot(pivot).getFieldItem(0, 1).visible, true);
+    ws.pivot(pivot).addFieldItem(0, 'North', { visible: false });
+    assert.equal(ws.pivot(pivot).getFieldItem(0, 2).visible, false);
+    ws.pivot(pivot).addFieldItem(0, 'South');
+    assert.equal(ws.pivot(pivot).getFieldItem(0, 3).visible, true);
     ws.pivot(pivot).updateField(0, { sortOrder: f.PivotSortOrder.Ascending });
     ws.pivot(pivot).updateField(0, { sortOrder: f.PivotSortOrder.Descending, sortByField: 'Sum of Amount' });
     assert.equal(ws.pivot(pivot).listFields()[0].sortByField, 'Sum of Amount');

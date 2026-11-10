@@ -8382,6 +8382,11 @@ export interface Pivot {
    *    definition, and an index that resolves to nothing yields an item with an empty label that filters
    *    nothing and is left out of a save.
    *
+   *  A field placed on the row, column or page axis already lists one item per shared item, in display order.
+   *  Adding an item for a shared item the field already lists fails with `StatusCode.AlreadyExists` and changes
+   *  nothing; a label that binds no shared item still appends. To set a custom item order, call
+   *  {@link Pivot.clearFieldItems} and add the items in that order.
+   *
    *  `options.visible` defaults to `true`. */
   addFieldItem(
     fieldIndex: PivotFieldRef,

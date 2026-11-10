@@ -394,12 +394,9 @@ TEST(FormulonCApiPivot, AddItemAtBindsTheBlankItemByCacheIndex) {
     EXPECT_DOUBLE_EQ(SumDataCells(projected.handle), 300.0);
   }
 
-  // The blank shared item is at cache index 1, so the index-addressed adder is
-  // the only way to name it: an empty label carries no binding of its own.
-  ASSERT_EQ(fm_sheet_add_pivot_field_item(wb.handle, 0, pivot_index, 0, "North", 1, ignored_index()), 0);
-  ASSERT_EQ(fm_sheet_add_pivot_field_item_by_cache_index(wb.handle, 0, pivot_index, 0, /*cache_index=*/1U,
-                                                         /*visible=*/0, ignored_index()),
-            0);
+  // Joining the row axis listed North and then the blank shared item (cache
+  // index 1); hiding the blank one leaves North.
+  ASSERT_EQ(SetPivotFieldItemVisible(wb.handle, 0, pivot_index, 0, /*item_index=*/1U, /*visible=*/0), 0);
   {
     PivotCellsGuard projected;
     ASSERT_EQ(fm_sheet_get_pivot_layout(wb.handle, 0, pivot_index, &projected.handle), 0)
@@ -419,6 +416,7 @@ TEST(FormulonCApiPivot, AddItemWithEmptyNameCannotHideTheBlankRow) {
   // "North". The item is unlabelled, so it takes its label from that binding
   // and hides North, never the blank row. This is the gap
   // `fm_sheet_add_pivot_field_item_by_cache_index` closes.
+  ASSERT_EQ(fm_sheet_clear_pivot_field_items(wb.handle, 0, pivot_index, 0), 0);
   ASSERT_EQ(fm_sheet_add_pivot_field_item(wb.handle, 0, pivot_index, 0, "North", 1, ignored_index()), 0);
   ASSERT_EQ(fm_sheet_add_pivot_field_item(wb.handle, 0, pivot_index, 0, "", 0, ignored_index()), 0);
   PivotCellsGuard projected;
@@ -564,10 +562,8 @@ TEST(FormulonCApiPivot, AFieldJoiningRowsAfterARefreshGetsSharedItems) {
   EXPECT_EQ(blank.kind, FM_VALUE_KIND_BLANK);
   EXPECT_DOUBLE_EQ(LayoutDataSum(f.wb.handle, f.pivot), 45.0);
 
-  // Hiding West by its cache index leaves East and the blank.
-  ASSERT_EQ(fm_sheet_add_pivot_field_item_by_cache_index(f.wb.handle, 0U, f.pivot, 0U, /*cache_index=*/1U,
-                                                         /*visible=*/0, ignored_index()),
-            0);
+  // Hiding West (listed second) leaves East and the blank.
+  ASSERT_EQ(SetPivotFieldItemVisible(f.wb.handle, 0U, f.pivot, 0U, /*item_index=*/1U, /*visible=*/0), 0);
   EXPECT_DOUBLE_EQ(LayoutDataSum(f.wb.handle, f.pivot), 15.0);
   // Hiding the blank instead leaves East and West.
   ASSERT_EQ(fm_sheet_clear_pivot_field_items(f.wb.handle, 0U, f.pivot, 0U), 0);

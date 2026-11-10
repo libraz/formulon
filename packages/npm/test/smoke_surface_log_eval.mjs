@@ -465,13 +465,10 @@ test('pivot definition read-backs report what the setters wrote', async () => {
     assert.equal(region.groupBaseIndex, null);
     assert.equal(wb.sheet(0).pivot(pivot).listFields()[1].axis, 2);
 
-    wb.sheet(0).pivot(pivot).addFieldItem(0, 'East', { visible: true });
-    wb.sheet(0).pivot(pivot).addFieldItem(0, 'West', { visible: true });
+    // Joining the row axis listed East and West.
     wb.sheet(0).pivot(pivot).updateFieldItem(0, 1, { visible: false });
     assert.equal(wb.sheet(0).pivot(pivot).listFieldItems(0).length, 2);
     const east = wb.sheet(0).pivot(pivot).getFieldItem(0, 0);
-    assert.equal(east.name, 'East');
-    // The row field shares its record values, so the label binds to its item.
     assert.equal(east.cacheIndex, 0);
     assert.equal(east.visible, true);
     assert.equal(wb.sheet(0).pivot(pivot).getFieldItem(0, 1).visible, false);

@@ -356,6 +356,10 @@ Expected<std::size_t, Error> Workbook::add_pivot(std::size_t sheet, std::unique_
   }
   pivot::sync_table_fields(*cache, {table.get()});
   pivot::share_axis_fields(*cache, *table);
+  {
+    const eval::ScopedEvalProfile scope(excel_profile());
+    pivot::list_axis_field_items(*table, *cache);
+  }
   target.add_pivot_table(std::move(table));
   return target.pivot_tables().size() - 1U;
 }

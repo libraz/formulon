@@ -221,8 +221,8 @@ template <typename Enum>
   if (st != 0) {
     return st;
   }
-  // The pivot carries one field per cache field. Region goes on rows with
-  // items 0 and 1 and bottom subtotals; Amount is the value-axis source.
+  // The pivot carries one field per cache field. Region goes on rows (joining lists
+  // its items 0 and 1) with bottom subtotals; Amount is the value-axis source.
   const std::size_t region_field = region_index;
   st = fm_sheet_set_pivot_field_axis(wb, 0, pivot_index, region_field, FM_PIVOT_AXIS_ROW);
   if (st != 0) {
@@ -232,14 +232,6 @@ template <typename Enum>
   region_patch.subtotal_top_op = FM_PATCH_OP_SET;
   region_patch.subtotal_top = 0;
   st = fm_sheet_update_pivot_field(wb, 0, pivot_index, region_field, &region_patch);
-  if (st != 0) {
-    return st;
-  }
-  st = fm_sheet_add_pivot_field_item(wb, 0, pivot_index, region_field, "North", 1, ignored_index());
-  if (st != 0) {
-    return st;
-  }
-  st = fm_sheet_add_pivot_field_item(wb, 0, pivot_index, region_field, "South", 1, ignored_index());
   if (st != 0) {
     return st;
   }

@@ -284,6 +284,20 @@ fm_status_t mutate_pivot_field(fm_workbook_t* wb, std::size_t sheet_index, std::
   return edit.commit();
 }
 
+// Refuses an item for shared item `cache_index` when `field` already lists one.
+fm_status_t refuse_listed_item(const formulon::pivot::PivotField& field, std::size_t field_index,
+                               std::uint32_t cache_index) {
+  for (std::size_t i = 0; i < field.items.size(); ++i) {
+    const formulon::pivot::PivotItem& item = field.items[i];
+    if (item.has_cache_index && item.cache_index == cache_index) {
+      return formulon::c_api::parts::set_binding_error(
+          formulon::FormulonErrorCode::kAlreadyExists, "the field already lists this item",
+          "field_index=" + std::to_string(field_index) + " item_index=" + std::to_string(i));
+    }
+  }
+  return 0;
+}
+
 // Resolves a field and bounds-checks one of its items.
 fm_status_t resolve_pivot_item(fm_workbook_t* wb, std::size_t sheet_index, std::size_t pivot_index,
                                std::size_t field_index, std::size_t item_index, formulon::pivot::PivotTable** table,
@@ -527,6 +541,11 @@ extern "C" fm_status_t fm_sheet_add_pivot_field_item(fm_workbook_t* wb, std::siz
       }
     }
   }
+  if (item.has_cache_index) {
+    if (fm_status_t rc = refuse_listed_item(*field, field_index, item.cache_index); rc != 0) {
+      return rc;
+    }
+  }
   PivotEdit edit(wb->workbook(), sheet_index, pivot_index, *table);
   field->items.push_back(std::move(item));
   const std::size_t added = field->items.size() - 1U;
@@ -552,6 +571,15 @@ extern "C" fm_status_t fm_sheet_add_pivot_field_item_by_cache_index(fm_workbook_
   if (cache_index > std::numeric_limits<std::uint32_t>::max()) {
     return check_limit(cache_index, static_cast<std::size_t>(std::numeric_limits<std::uint32_t>::max()) + 1U,
                        "cache_index");
+  }
+  {
+    formulon::pivot::PivotField* field = nullptr;
+    if (fm_status_t rc = resolve_pivot_field(wb, sheet_index, pivot_index, field_index, nullptr, &field); rc != 0) {
+      return rc;
+    }
+    if (fm_status_t rc = refuse_listed_item(*field, field_index, static_cast<std::uint32_t>(cache_index)); rc != 0) {
+      return rc;
+    }
   }
   std::size_t added = 0;
   const fm_status_t status = mutate_pivot_field(

@@ -16,6 +16,7 @@ import _chart_input
 
 import formulon
 from formulon import (
+    AlreadyExistsError,
     CellRect,
     ChartLegend,
     ChartLegendPosition,
@@ -1145,12 +1146,17 @@ class PivotFieldItemTests(SurfaceTestCase):
     def test_add_field_item_by_label(self) -> None:
         with Workbook.create_default() as wb:
             pivot = self._pivot(wb)
+            pivot.clear_field_items(0)
             index = pivot.add_field_item(0, "East")
             self.assertEqual(pivot.get_field_item(0, index).name, "East")
+            with self.assertRaises(AlreadyExistsError):
+                pivot.add_field_item(0, "East")
+            self.assertEqual(len(pivot.list_field_items(0)), 1)
 
     def test_add_field_item_by_cache_index(self) -> None:
         with Workbook.create_default() as wb:
             pivot = self._pivot(wb)
+            pivot.clear_field_items(0)
             index = pivot.add_field_item(0, cache_index=1)
             item = pivot.get_field_item(0, index)
             self.assertEqual(item.cache_index, 1)
@@ -1167,13 +1173,14 @@ class PivotFieldItemTests(SurfaceTestCase):
     def test_add_field_item_visible_is_keyword_only(self) -> None:
         with Workbook.create_default() as wb:
             pivot = self._pivot(wb)
+            pivot.clear_field_items(0)
             index = pivot.add_field_item(0, "East", visible=False)
             self.assertFalse(pivot.get_field_item(0, index).visible)
 
     def test_update_field_item_changes_only_the_given_attributes(self) -> None:
         with Workbook.create_default() as wb:
             pivot = self._pivot(wb)
-            index = pivot.add_field_item(0, "East")
+            index = 0
             pivot.update_field_item(0, index, visible=False)
             pivot.update_field_item(0, index, caption="Eastern")
             item = pivot.get_field_item(0, index)

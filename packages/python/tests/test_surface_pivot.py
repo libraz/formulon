@@ -147,12 +147,8 @@ class _PivotFixture:
         self.pivot = wb.sheet(0).add_pivot(PivotInput(name="Pivot1", cache_id=self.cache, anchor=CellAddress(0, 6)))
         wb.sheet(0).pivot(self.pivot).set_field_axis("Region", PivotAxis.ROW)
         self.region = wb.sheet(0).pivot(self.pivot).get_field("Region").cache_field_index
-        wb.sheet(0).pivot(self.pivot).add_field_item(self.region, "East", visible=True)
-        wb.sheet(0).pivot(self.pivot).add_field_item(self.region, "West", visible=True)
         wb.sheet(0).pivot(self.pivot).set_field_axis("Product", PivotAxis.VALUE)
         self.product = wb.sheet(0).pivot(self.pivot).get_field("Product").cache_field_index
-        wb.sheet(0).pivot(self.pivot).add_field_item(self.product, "Apple", visible=True)
-        wb.sheet(0).pivot(self.pivot).add_field_item(self.product, "Pear", visible=True)
         wb.sheet(0).pivot(self.pivot).set_field_axis("Amount", PivotAxis.VALUE)
         self.amount = wb.sheet(0).pivot(self.pivot).get_field("Amount").cache_field_index
         wb.sheet(0).pivot(self.pivot).set_field_axis("Date", PivotAxis.VALUE)
@@ -862,7 +858,7 @@ class PivotMutatorTableTests(unittest.TestCase):
                 ),
             ),
             "Pivot.add_field_item": (
-                None,
+                lambda f: f.wb.sheet(0).pivot(f.pivot).clear_field_items(f.region),
                 lambda f: f.wb.sheet(0).pivot(f.pivot).add_field_item(f.region, "East", visible=False),
                 None,
                 grid_is(_WEST_ONLY),
@@ -1170,9 +1166,10 @@ class PivotDefinitionReadBackTests(unittest.TestCase):
         eq((region.insert_blank_row, region.fill_down_labels), (False, False))
 
         eq(len(wb.sheet(0).pivot(pivot).list_field_items(f.region)), 2)
+        # A joined item is bound to its shared item without a caption; a saved item carries its label.
         for index, label in enumerate(("East", "West")):
             item = wb.sheet(0).pivot(pivot).get_field_item(f.region, index)
-            eq((item.name, item.cache_index, item.visible), (label, index, True))
+            eq((item.name, item.cache_index, item.visible), (label if saved else None, index, True))
 
         eq(len(wb.sheet(0).pivot(pivot).list_data_fields()), 1)
         data_field = wb.sheet(0).pivot(pivot).list_data_fields()[0]

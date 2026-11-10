@@ -621,6 +621,7 @@ test('patch: PivotCache.setWorksheetSource takes null to clear and {} for an att
 test('patch: Pivot.addFieldItem binds a cache item by cacheIndex and takes an options bag', async () => {
   await withWorkbook((wb, f) => {
     const { pivot } = addPivotOver(wb, f);
+    pivot.clearFieldItems(0);
     pivot.addFieldItem(0, { cacheIndex: 0 });
     pivot.addFieldItem(0, { cacheIndex: 1 }, { visible: false });
     const items = pivot.listFieldItems(0);
@@ -629,8 +630,12 @@ test('patch: Pivot.addFieldItem binds a cache item by cacheIndex and takes an op
     assert.deepEqual([items[1].cacheIndex, items[1].visible], [1, false]);
     pivot.addFieldItem(0, 'Extra', { visible: false });
     assert.equal(pivot.listFieldItems(0)[2].visible, false);
-    pivot.addFieldItem(0, { cacheIndex: 0 }, {});
-    assert.equal(pivot.listFieldItems(0)[3].visible, true);
+    assert.equal(pivot.listFieldItems(0).length, 3);
+    assertFormulonError(
+      () => pivot.addFieldItem(0, { cacheIndex: 0 }, {}),
+      f.StatusCode.AlreadyExists,
+      'an already listed item',
+    );
     assertMisuse(() => pivot.addFieldItem(0, { cacheIndex: 0 }, { visible: 'no' }), TypeError, 'non-boolean visible');
     assertMisuse(() => pivot.addFieldItem(0, { cacheIndex: 'x' }), TypeError, 'non-numeric cacheIndex');
     assert.equal('addFieldSharedItem' in pivot, false);

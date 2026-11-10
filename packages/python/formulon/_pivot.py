@@ -1085,8 +1085,15 @@ class Pivot(_NoCopy):
           resolves to nothing yields an item with an empty label that filters
           nothing and is left out of a save.
 
+        A field placed on the row, column or page axis already lists one item
+        per shared item, in display order. To set a custom item order, call
+        :meth:`clear_field_items` and add the items in that order.
+
         Raises:
           TypeError: when both or neither of ``item`` and ``cache_index`` are given.
+          AlreadyExistsError: when the field already lists an item for the
+            shared item ``item`` or ``cache_index`` names; nothing changes. A
+            label binding no shared item still appends.
         """
         visible_flag = int(_require_bool(visible, "visible"))
         if (item is None) == (cache_index is None):

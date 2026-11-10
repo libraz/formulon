@@ -548,9 +548,7 @@ const DRIVERS = {
   },
   pivot_field_item: {
     make: (ws, wb) => {
-      const pivot = addPivot(ws, addCache(wb));
-      pivot.addFieldItem(0, 'East');
-      return pivot;
+      return addPivot(ws, addCache(wb));
     },
     get: (pivot) => pivot.getFieldItem(0, 0),
     put: (pivot, record) => pivot.updateFieldItem(0, 0, record),

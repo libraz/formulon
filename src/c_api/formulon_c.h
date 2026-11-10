@@ -8491,7 +8491,14 @@ FM_API fm_status_t fm_sheet_update_pivot_field_item(fm_workbook_t* wb, size_t sh
  * `fm_sheet_add_pivot_field_item_by_cache_index` instead. `*out_item_index` receives the
  * new item's position in the field's item list.
  *
- * @return `FM_STATUS_OK` (0) on success, or a common pivot failure.
+ * A field placed on the row, column or page axis already lists one item per
+ * shared item, in display order. To set a custom item order, call
+ * `fm_sheet_clear_pivot_field_items` and add the items in that order.
+ *
+ * @return `FM_STATUS_OK` (0) on success, `FM_STATUS_ALREADY_EXISTS` (7) when
+ *         `name` binds a shared item the field already lists (nothing
+ *         changes; a label binding no shared item still appends), or a common
+ *         pivot failure.
  */
 FM_API fm_status_t fm_sheet_add_pivot_field_item(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
                                                  size_t field_index, const char* name, int32_t visible,
@@ -8515,7 +8522,9 @@ FM_API fm_status_t fm_sheet_add_pivot_field_item(fm_workbook_t* wb, size_t sheet
  * `visible` is a 32-bit boolean. `*out_item_index` receives the new item's
  * position in the field's item list.
  *
- * @return `FM_STATUS_OK` (0) on success, or a common pivot failure.
+ * @return `FM_STATUS_OK` (0) on success, `FM_STATUS_ALREADY_EXISTS` (7) when
+ *         the field already lists an item for `cache_index` (nothing
+ *         changes), or a common pivot failure.
  */
 FM_API fm_status_t fm_sheet_add_pivot_field_item_by_cache_index(fm_workbook_t* wb, size_t sheet_index,
                                                                 size_t pivot_index, size_t field_index,
