@@ -46,6 +46,10 @@ struct PivotRect {
   }
 };
 
+/// Where a pivot definition came from: assembled in memory, or read from an
+/// .xlsx or .xlsb part.
+enum class PivotDefinitionSource : std::uint8_t { kBuilt, kXlsx, kXlsb };
+
 /// One pivot table definition + most recent evaluation result.
 ///
 /// Move-only; `clone()` is the one copy. Designed to be held by the owning
@@ -272,6 +276,12 @@ class PivotTable {
   /// `has_authored_span`, a change of evaluation context leaves it alone.
   bool layout_dirty() const { return layout_dirty_; }
   void mark_layout_dirty() { layout_dirty_ = true; }
+
+  /// The reader that produced this definition, or `kBuilt` for one assembled
+  /// in memory. An .xlsb definition is read only in part, so items are never
+  /// generated for it.
+  PivotDefinitionSource definition_source() const { return definition_source_; }
+  void set_definition_source(PivotDefinitionSource source) { definition_source_ = source; }
 
   // `<location>` required / commonly-present attributes ----------------------
   //
@@ -598,6 +608,7 @@ class PivotTable {
   bool has_authored_span_ = false;
   bool span_read_ = false;
   bool layout_dirty_ = false;
+  PivotDefinitionSource definition_source_ = PivotDefinitionSource::kBuilt;
   std::optional<std::uint32_t> location_first_header_row_;
   std::optional<std::uint32_t> location_first_data_row_;
   std::optional<std::uint32_t> location_first_data_col_;

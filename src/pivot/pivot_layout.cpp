@@ -300,8 +300,11 @@ Expected<void, Error> append_item_refs(const AxisEntry& entry, const std::vector
 }  // namespace
 
 Expected<PivotCells, Error> layout(const PivotTable& table, const PivotResult& result,
-                                   const PivotLayoutOptions& options) {
+                                   const PivotLayoutOptions& options, PivotLineItems* line_items) {
   ASSIGN_OR_RETURN(const LayoutPlan plan, build_layout_plan(table, result, options));
+  if (line_items != nullptr) {
+    *line_items = build_line_items(plan);
+  }
 
   PivotCells cells;
   cells.top = plan.cells_top;

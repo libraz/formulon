@@ -911,10 +911,16 @@ void emit_col_totals_strip(const LayoutPlan& plan, PivotCells& cells) {
 
 namespace {
 
+// Leading nodes of `entry` that place it in a block: a blank row's last node
+// is the item it closes, not a level it sits under.
+std::size_t block_depth(const AxisEntry& entry) {
+  return entry.kind == EntryKind::Blank ? entry.nodes.size() - 1 : entry.nodes.size();
+}
+
 // True when row entry `entry` lies inside the block of `node`, the item at
 // level `level`, below the item's own label row; its own subtotal does not.
 bool inside_block(const AxisEntry& entry, std::size_t level, const AxisHierarchyNode* node) {
-  return entry.nodes.size() > level + 1 && entry.nodes[level] == node;
+  return block_depth(entry) > level + 1 && entry.nodes[level] == node;
 }
 
 }  // namespace
@@ -932,7 +938,7 @@ void emit_merges(const LayoutPlan& plan, PivotCells& cells) {
   const auto row_at = [&](std::size_t r) { return plan.data_top + static_cast<std::uint32_t>(r); };
   for (std::size_t r = 0; r < entries.size(); ++r) {
     const AxisEntry& entry = entries[r];
-    for (std::size_t level = 0; level + 1 < entry.nodes.size() && level < width; ++level) {
+    for (std::size_t level = 0; level + 1 < block_depth(entry) && level < width; ++level) {
       const AxisHierarchyNode* node = entry.nodes[level];
       if (node == nullptr || (r > 0 && inside_block(entries[r - 1], level, node))) {
         continue;

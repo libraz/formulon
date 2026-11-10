@@ -311,7 +311,7 @@ class AxisWalk {
     // Any other group shows its label on a row of its own: a subtotal at the
     // bottom, or none, cannot stand in for it.
     if (shape_.group_rows && (values_below || (!node.children.empty() && !first))) {
-      push(EntryKind::Group, std::nullopt);
+      push(EntryKind::Group, data_field);
     }
     if (node.children.empty()) {
       level({}, depth + 1, data_field, leaf_cursor_++);
@@ -323,7 +323,7 @@ class AxisWalk {
       skip_descendants(node, depth);
       push_collapsed_values(depth, subtotal_cursor_);
       subtotal_cursor_ += count;
-      close_node(depth);
+      close_node(depth, data_field);
       return;
     }
     const std::size_t group_begin = entries_.size();
@@ -353,7 +353,7 @@ class AxisWalk {
       std::rotate(entries_.begin() + static_cast<std::ptrdiff_t>(group_begin),
                   entries_.begin() + static_cast<std::ptrdiff_t>(subtotal_begin), entries_.end());
     }
-    close_node(depth);
+    close_node(depth, data_field);
   }
 
   // A collapsed item with the Values level below it stands in for its
@@ -377,13 +377,14 @@ class AxisWalk {
     node_path_.resize(node_path_.size() - skipped);
   }
 
-  // Leaves the node at `depth`, closing its block with a blank row when its field asks for one.
-  void close_node(std::size_t depth) {
+  // Leaves the node at `depth`, closing its block with a blank row (whose
+  // path still ends at the node) when its field asks for one.
+  void close_node(std::size_t depth, std::optional<std::size_t> data_field) {
+    if (depth < shape_.blank_after.size() && shape_.blank_after[depth]) {
+      push(EntryKind::Blank, data_field);
+    }
     path_.pop_back();
     node_path_.pop_back();
-    if (depth < shape_.blank_after.size() && shape_.blank_after[depth]) {
-      push(EntryKind::Blank, std::nullopt);
-    }
   }
 
   const PivotTable& table_;

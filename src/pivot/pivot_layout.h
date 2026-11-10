@@ -160,6 +160,55 @@ struct CellItemPath {
   std::deque<std::string> text_storage;
 };
 
+/// `ST_ItemType` of a `<rowItems>` / `<colItems>` line; `kData` writes no `t`.
+enum class PivotLineType : std::uint8_t {
+  kData,
+  kDefault,
+  kSum,
+  kCountA,
+  kAverage,
+  kMax,
+  kMin,
+  kProduct,
+  kCount,
+  kStdDev,
+  kStdDevP,
+  kVar,
+  kVarP,
+  kGrand,
+  kBlank,
+};
+
+/// One `<x>` of a line: the Values level, or an axis item by identity.
+struct PivotLineX {
+  bool values_level = false;
+  std::uint32_t data_index = 0;   ///< Values level: the data field, written as `v`.
+  std::uint32_t field_index = 0;  ///< Axis item: index into `PivotTable::fields()`.
+  /// Axis item: the node whose `identity` the item is. Null on the lone `<x/>` of a grand-total line.
+  const AxisHierarchyNode* node = nullptr;
+};
+
+/// One `<i>`: `t`, `r` (leading levels repeated from an earlier line), `i` (data field).
+struct PivotLine {
+  PivotLineType type = PivotLineType::kData;
+  std::uint32_t r = 0;
+  std::uint32_t i = 0;
+  std::vector<PivotLineX> xs;
+};
+
+/// The `<rowItems>` / `<colItems>` lines of the projected report, in order.
+///
+/// Each `node` points into the `PivotResult` given to `layout`, so the lines
+/// are valid only while that result lives. A set refusal (`kNotImplemented`)
+/// means that axis has a shape whose encoding is not known; its lines are
+/// then empty and the other axis is still produced.
+struct PivotLineItems {
+  std::vector<PivotLine> rows;
+  std::vector<PivotLine> cols;
+  std::optional<Error> row_refusal;
+  std::optional<Error> col_refusal;
+};
+
 /// Projects an evaluated pivot result into absolute sheet coordinates.
 ///
 /// The report body starts at `table.anchor_row()` / `anchor_col()`; the
@@ -170,8 +219,12 @@ struct CellItemPath {
 /// `grid_drop_zones`, `page_wrap` / `page_over_then_down`, the error and
 /// missing captions, `indent` (compact label indent) and `merge_item`
 /// (tabular label merges).
+///
+/// When `line_items` is non-null it also receives the report's row and column
+/// item lines, built from the same projection; it is left untouched on failure.
 Expected<PivotCells, Error> layout(const PivotTable& table, const PivotResult& result,
-                                   const PivotLayoutOptions& options = PivotLayoutOptions{});
+                                   const PivotLayoutOptions& options = PivotLayoutOptions{},
+                                   PivotLineItems* line_items = nullptr);
 
 /// The axis items behind the value cell `layout` places at absolute (`row`,
 /// `col`). Fails with `kInvalidArgument` for a cell outside the report and for

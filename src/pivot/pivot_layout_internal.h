@@ -42,12 +42,14 @@ struct AxisEntry {
   /// Display path, outermost first. The Values level, when it sits on this
   /// axis, contributes the data-field name at its position.
   std::vector<std::string> labels;
-  /// The node behind each of `labels`; null at the Values level.
+  /// The node behind each of `labels`; null at the Values level. A blank
+  /// entry's path ends at the item whose block it closes.
   std::vector<const AxisHierarchyNode*> nodes;
   EntryKind kind = EntryKind::Leaf;
   std::size_t leaf_index = 0;      ///< Leaf: index into the evaluated leaves.
   std::size_t subtotal_index = 0;  ///< Subtotal: index into the result's subtotals.
-  /// The data field this entry carries when Values sits on this axis.
+  /// The data field this entry carries when Values sits on this axis: its
+  /// own, or the enclosing one for any entry below the Values level.
   std::optional<std::size_t> data_field;
   /// Subtotal over a group that contains the Values level: Excel names it
   /// "<group> <data field>" in place of the localized subtotal wording.
@@ -166,6 +168,11 @@ void emit_body_rows(const LayoutPlan& plan, PivotCells& cells);
 void emit_row_totals_strip(const LayoutPlan& plan, PivotCells& cells);
 void emit_col_totals_strip(const LayoutPlan& plan, PivotCells& cells);
 void emit_merges(const LayoutPlan& plan, PivotCells& cells);
+
+// Line items (pivot_line_items.cpp).
+/// The row and column item lines of `plan`'s report, each axis either
+/// encoded or refused.
+PivotLineItems build_line_items(const LayoutPlan& plan);
 
 }  // namespace formulon::pivot::detail
 
