@@ -187,7 +187,11 @@ def convert_serial_to_civil(serial: float, *, date1904: bool = False) -> datetim
 class FunctionMetadataLocalized(TypedDict, total=False):
     """Per-locale display overrides inside a :class:`FunctionMetadataEntry`."""
 
+    #: The locale-specific signature template; it overrides the entry's default signature for that locale, and omitted
+    #: falls back to the default.
     signature: str
+    #: The locale-specific description; it overrides the entry's default description for that locale, and omitted falls
+    #: back to the default.
     description: str
 
 

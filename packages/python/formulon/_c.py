@@ -391,13 +391,6 @@ class FormulonError(Exception):
     ``str(e)`` is ``[CODE_NAME] message`` (``[INVALID_ARGUMENT] unknown
     function``); the context is only in :attr:`context`.
 
-    Attributes:
-      code: the :class:`~formulon.StatusCode` member of the failure (a plain
-        ``int`` for a value the enum does not list).
-      message: human-readable description of the failure.
-      context: structured ``key=value`` details; empty when there are none.
-      parse_error: the position of a formula syntax failure, else ``None``.
-
     The message and context are copied out when the failure is detected, so
     they stay valid whatever later calls do.
 
@@ -407,9 +400,14 @@ class FormulonError(Exception):
     imports ``LIB`` from here.
     """
 
+    #: The ``StatusCode`` member of the failure; a plain ``int`` for a value the enum does not list.
     code: Union[StatusCode, int]
+    #: The human-readable description of the failure.
     message: str
+    #: Structured detail as space-separated ``key=value`` pairs (``sheet_index=5 sheet_count=1``); empty when there is
+    #: none.
     context: str
+    #: Where the formula failed to parse; ``None`` for a failure that is not a formula syntax error.
     parse_error: Optional[ParseError]
 
     def __new__(cls, code: int, *args: object, **kwargs: object) -> "FormulonError":

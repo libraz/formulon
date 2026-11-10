@@ -3614,65 +3614,99 @@ class ChartData:
 class ChartFillPatch(TypedDict, total=False):
     """Fill patch: an omitted key is kept, ``None`` removes the element; a colour is an RGB or theme ``ColorInput`` (indexed and automatic are rejected)."""
 
+    #: The solid fill colour, an RGB or theme colour. Omitted keeps it, ``None`` removes it.
     color: Optional[ColorInput]
+    #: The fill transparency as a percentage, 0 to 100. Omitted keeps it, ``None`` removes it.
     transparency_pct: Optional[float]
+    #: ``True`` writes an explicit no-fill and ``False`` removes it; omitted keeps it, ``None`` is rejected.
     none: Optional[bool]
 
 
 class ChartLinePatch(TypedDict, total=False):
-    """Outline patch; ``none`` is a bool and rejects ``None``; a colour is an RGB or theme ``ColorInput`` (indexed and automatic are rejected)."""
+    """Outline patch; a colour is an RGB or theme ``ColorInput`` (indexed and automatic are rejected)."""
 
+    #: The outline colour, an RGB or theme colour. Omitted keeps it, ``None`` removes it.
     color: Optional[ColorInput]
+    #: The outline transparency as a percentage, 0 to 100. Omitted keeps it, ``None`` removes it.
     transparency_pct: Optional[float]
+    #: The outline width in points. Omitted keeps it, ``None`` removes it.
     width_pt: Optional[float]
+    #: The dash style of the outline. Omitted keeps it, ``None`` removes it.
     dash: Optional[ChartLineDash]
+    #: ``True`` writes an explicit no-line and ``False`` removes it. Omitted keeps it; ``None`` is rejected.
     none: Optional[bool]
 
 
 class ChartMarkerPatch(TypedDict, total=False):
-    """Marker patch; ``symbol`` rejects ``None``."""
+    """Marker patch."""
 
+    #: The marker symbol; the picture symbol is rejected. Omitted keeps it; ``None`` is rejected.
     symbol: Optional[ChartMarkerSymbol]
+    #: The marker size in points. Omitted keeps it, ``None`` removes it.
     size_pt: Optional[float]
+    #: The patch applied to the marker fill. Omitted keeps it, ``None`` removes it.
     fill: Optional[ChartFillPatch]
+    #: The patch applied to the marker outline. Omitted keeps it, ``None`` removes it.
     line: Optional[ChartLinePatch]
 
 
 class ChartLabelsPatch(TypedDict, total=False):
-    """Data-label patch; the ``show_*`` flags are bools and reject ``None``."""
+    """Data-label patch."""
 
+    #: Whether the point value is shown. Omitted keeps it; ``None`` is rejected.
     show_value: Optional[bool]
+    #: Whether the category name is shown. Omitted keeps it; ``None`` is rejected.
     show_category: Optional[bool]
+    #: Whether the series name is shown. Omitted keeps it; ``None`` is rejected.
     show_series: Optional[bool]
+    #: Whether the percentage of the whole is shown. Omitted keeps it; ``None`` is rejected.
     show_percent: Optional[bool]
+    #: Whether the legend key is shown. Omitted keeps it; ``None`` is rejected.
     show_legend_key: Optional[bool]
+    #: The text placed between the label parts. Omitted keeps it, ``None`` removes it.
     separator: Optional[str]
+    #: Where the label sits relative to its point. Omitted keeps it, ``None`` removes it.
     position: Optional[ChartLabelPosition]
+    #: The number format code of the label. Omitted keeps it, ``None`` removes it.
     number_format: Optional[str]
+    #: The label font colour, an RGB or theme colour. Omitted keeps it, ``None`` removes it.
     font_color: Optional[ColorInput]
+    #: The label font size in points. Omitted keeps it, ``None`` removes it.
     font_size_pt: Optional[float]
+    #: Whether the label number format follows the source cells. Omitted keeps it; ``None`` is rejected.
     source_linked: Optional[bool]
+    #: ``True`` hides the labels. Omitted keeps it; ``None`` is rejected.
     deleted: Optional[bool]
 
 
 class ChartSeriesPatch(TypedDict, total=False):
-    """Series patch.
+    """Series patch."""
 
-    An input is its new reference text or a :class:`ChartDataSource` (a reference, literal points, or none);
-    ``None`` removes ``name``, ``categories`` or ``x`` (it is rejected on ``values``, ``y`` and ``size``) and
-    on ``marker`` or ``labels`` removes it.
-    """
-
+    #: The series name input, a reference or a data source; an empty reference or ``None`` removes it. Omitted keeps it.
     name: Union[ChartDataSource, str, None]
+    #: The category labels input, a reference or a data source; an empty reference or ``None`` removes it. Omitted keeps
+    #: it.
     categories: Union[ChartDataSource, str, None]
+    #: The values input, a reference or a data source; an empty reference is rejected, and so is ``None``. Omitted keeps
+    #: it.
     values: Union[ChartDataSource, str, None]
+    #: The x values input, a reference or a data source; an empty reference or ``None`` removes it. Omitted keeps it.
     x: Union[ChartDataSource, str, None]
+    #: The y values input, a reference or a data source; an empty reference is rejected, and so is ``None``. Omitted
+    #: keeps it.
     y: Union[ChartDataSource, str, None]
+    #: The bubble sizes input, a reference or a data source; an empty reference is rejected, and so is ``None``. Omitted
+    #: keeps it.
     size: Union[ChartDataSource, str, None]
+    #: The patch applied to the series fill. Omitted keeps it, ``None`` removes it.
     fill: Optional[ChartFillPatch]
+    #: The patch applied to the series outline. Omitted keeps it, ``None`` removes it.
     line: Optional[ChartLinePatch]
+    #: The patch applied to the series marker. Omitted keeps it, ``None`` removes it.
     marker: Optional[ChartMarkerPatch]
+    #: Whether the line is drawn smoothed instead of as straight segments. Omitted keeps it; ``None`` is rejected.
     smooth: Optional[bool]
+    #: The patch applied to the data labels. Omitted keeps it, ``None`` removes it.
     labels: Optional[ChartLabelsPatch]
 
 
@@ -3710,58 +3744,81 @@ class ChartSeriesInput:
 class ChartPointPatch(TypedDict, total=False):
     """Data-point patch; an omitted key is kept, so an empty patch changes nothing. ``None`` on a key removes it."""
 
+    #: The patch applied to the point fill. Omitted keeps it, ``None`` removes it.
     fill: Optional[ChartFillPatch]
+    #: The patch applied to the point outline. Omitted keeps it, ``None`` removes it.
     line: Optional[ChartLinePatch]
+    #: The patch applied to the point marker. Omitted keeps it, ``None`` removes it.
     marker: Optional[ChartMarkerPatch]
 
 
 class ChartPlotPatch(TypedDict, total=False):
-    """Plot-group patch; a field the plot type does not have is rejected. ``hole_size_pct`` is 10..90 (doughnut only)."""
+    """Plot-group patch; a field the plot type does not have is rejected."""
 
+    #: The gap between bar clusters as a percentage of the bar width. Omitted keeps it; ``None`` is rejected.
     gap_width_pct: Optional[int]
+    #: The overlap between bars of a cluster as a percentage of the bar width. Omitted keeps it; ``None`` is rejected.
     overlap_pct: Optional[int]
+    #: The angle in degrees of the first pie or doughnut slice. Omitted keeps it; ``None`` is rejected.
     first_slice_angle_deg: Optional[int]
+    #: Whether each point of a single-series plot takes its own colour. Omitted keeps it; ``None`` is rejected.
     vary_colors: Optional[bool]
+    #: The doughnut hole size as a percentage of the diameter, 10 to 90; doughnut plots only. Omitted keeps it; ``None``
+    #: is rejected.
     hole_size_pct: Optional[int]
 
 
 class ChartAxisPatch(TypedDict, total=False):
-    """Axis patch.
+    """Axis patch."""
 
-    ``title`` takes the forms of :meth:`Chart.set_title`: text, or a
-    :class:`ChartTitle` (``AUTO`` leaves the text to the viewer).
-    ``None`` on ``title`` removes the axis title, on
-    ``log_base`` makes the axis linear, on ``minor_unit`` makes the unit automatic and on
-    ``tick_label_position`` (a :class:`ChartTickLabelPosition`) restores the default;
-    ``minor_gridlines``, ``position`` and ``source_linked`` reject ``None``.
-    ``crosses_at`` is read when ``crosses`` is ``AT``.
-    """
-
+    #: Whether the axis is shown. Omitted keeps it. ``None`` is rejected.
     visible: Optional[bool]
+    #: The axis title, as text or a title of the automatic kind (Excel's own title). ``None`` removes the title. Omitted
+    #: keeps it.
     title: Optional[Union[str, ChartTitle]]
+    #: The fixed minimum of the axis scale; ``None`` makes it automatic. Omitted keeps it.
     min: Optional[float]
+    #: The fixed maximum of the axis scale; ``None`` makes it automatic. Omitted keeps it.
     max: Optional[float]
+    #: The fixed distance between major ticks; ``None`` makes it automatic. Omitted keeps it.
     major_unit: Optional[float]
+    #: The number format code of the tick labels. ``None`` removes it. Omitted keeps it.
     number_format: Optional[str]
+    #: Whether major gridlines are drawn. Omitted keeps it. ``None`` is rejected.
     major_gridlines: Optional[bool]
+    #: Whether the axis runs in reverse order. Omitted keeps it. ``None`` is rejected.
     reversed: Optional[bool]
+    #: The base of a logarithmic scale; ``None`` makes the axis linear. Omitted keeps it.
     log_base: Optional[float]
+    #: Where this axis crosses its cross axis (automatic, minimum, maximum or at ``crosses_at``). Omitted keeps it.
+    #: ``None`` is rejected.
     crosses: Optional[ChartAxisCrosses]
+    #: The value on the cross axis where this axis crosses; read when ``crosses`` is the at-value kind. Omitted keeps
+    #: it. ``None`` is rejected.
     crosses_at: Optional[float]
+    #: Where the tick labels sit relative to the axis; ``None`` restores the default. Omitted keeps it.
     tick_label_position: Optional[ChartTickLabelPosition]
+    #: The fixed distance between minor ticks; ``None`` makes it automatic. Omitted keeps it.
     minor_unit: Optional[float]
+    #: Whether minor gridlines are drawn. Omitted keeps it. ``None`` is rejected.
     minor_gridlines: Optional[bool]
+    #: The side of the plot area the axis sits on. Omitted keeps it. ``None`` is rejected.
     position: Optional[ChartAxisPosition]
+    #: Whether the tick label number format follows the source cells. Omitted keeps it. ``None`` is rejected.
     source_linked: Optional[bool]
 
 
 class ChartDisplayPatch(TypedDict, total=False):
     """Display patch for :meth:`Chart.update_display`; an omitted key is kept, ``None`` removes the element."""
 
+    #: How empty cells are plotted: as gaps, as zero or by spanning them. Omitted keeps it, ``None`` removes it.
     blanks_as: Optional[BlanksAs]
+    #: Whether only visible cells are plotted. Omitted keeps it, ``None`` removes it.
     plot_visible_only: Optional[bool]
+    #: Whether ``#N/A`` points are drawn as blank cells; ``False`` and ``None`` both remove the setting, as Excel does.
+    #: Omitted keeps it.
     na_as_blank: Optional[bool]
-    #: The chart style, 1..48.
+    #: The chart style number, 1 to 48. Omitted keeps it, ``None`` removes it.
     style: Optional[int]
 
 
@@ -4803,16 +4860,18 @@ class _CfRuleInput:
     ranges: Union[List[Union[CellRect, str]], str]
     #: The rule's priority; zero or less is one past the highest priority already on the sheet.
     priority: int = 0
+    #: ``True`` stops the evaluation of lower-priority rules on a cell once this rule matches; defaults to ``False``.
     stop_if_true: bool = False
-    #: A brace-wrapped GUID (``{XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX}``, hex digits in either case); omitted, empty or
-    #: already used on the sheet, the engine generates an upper-case one, and anything else is invalid.
+    #: A GUID in braces, hex digits in either case; omitted, empty or already used on the sheet, the engine generates an
+    #: upper-case one, and anything else is invalid.
     id: str = ""
 
 
 @dataclass(kw_only=True)
 class _CfFormatRuleInput(_CfRuleInput):
-    """A rule that applies a differential format: ``dxf_index`` is an index of ``Workbook.list_dxfs()``."""
+    """A rule that applies a differential format."""
 
+    #: The index into the workbook's differential formats of the format to apply; ``None`` applies no format.
     dxf_index: Optional[int] = None
 
 
@@ -5435,29 +5494,37 @@ ColorInput = Union[str, Color]
 
 
 class FontPatch(TypedDict, total=False):
-    """The font keys of :meth:`Sheet.update_cell_format`; an omitted key keeps its value.
+    """The font keys of :meth:`Sheet.update_cell_format`; an omitted key keeps its value."""
 
-    ``None`` clears ``size_pt``, ``bold``, ``italic``, ``strike``, ``outline``, ``shadow``,
-    ``condense``, ``extend``, ``family``, ``charset`` or ``color`` (the element is removed and reads
-    back ``None``, or ``ColorKind.NONE`` for the colour). ``None`` for ``size_pt`` or ``name`` resets it to
-    the Normal style's font size or name, which every cell font carries.
-    """
-
+    #: The typeface name; omitted keeps it, ``None`` resets it to the Normal style's font name.
     name: Optional[str]
-    #: Points; finite and not negative.
+    #: The font size in points, 1 to 409; omitted keeps it, ``None`` resets it to the Normal style's font size.
     size_pt: Optional[float]
+    #: Whether the font is bold; omitted keeps it, ``None`` removes the ``<b>`` element.
     bold: Optional[bool]
+    #: Whether the font is italic; omitted keeps it, ``None`` removes the ``<i>`` element.
     italic: Optional[bool]
+    #: Whether the text is struck through; omitted keeps it, ``None`` removes the ``<strike>`` element.
     strike: Optional[bool]
+    #: Whether the glyphs are drawn as outlines; omitted keeps it, ``None`` removes the ``<outline>`` element.
     outline: Optional[bool]
+    #: Whether the glyphs carry a shadow; omitted keeps it, ``None`` removes the ``<shadow>`` element.
     shadow: Optional[bool]
+    #: Whether the glyphs are condensed; omitted keeps it, ``None`` removes the ``<condense>`` element.
     condense: Optional[bool]
+    #: Whether the glyphs are extended; omitted keeps it, ``None`` removes the ``<extend>`` element.
     extend: Optional[bool]
+    #: The underline style; omitted keeps it.
     underline: UnderlineStyle
+    #: The vertical alignment of the text run (baseline, superscript or subscript); omitted keeps it.
     vert_align: FontVerticalAlign
+    #: The font-family class; omitted keeps it, ``None`` removes the ``<family>`` element.
     family: Optional[FontFamily]
+    #: The charset codepage id; omitted keeps it, ``None`` removes the ``<charset>`` element.
     charset: Optional[int]
+    #: The theme font set the font links to; omitted keeps it.
     scheme: FontScheme
+    #: The font colour; omitted keeps it, ``None`` removes the ``<color>`` element.
     color: Optional[ColorInput]
 
 
@@ -5469,52 +5536,75 @@ class FillPatch(TypedDict, total=False):
     gradient.
     """
 
+    #: The fill pattern; omitted keeps it.
     pattern: FillPattern
+    #: The pattern's foreground colour; omitted keeps it. Setting it on a fill without a pattern makes the fill solid
+    #: unless ``pattern`` is given.
     foreground: ColorInput
+    #: The pattern's background colour; omitted keeps it. Setting it on a fill without a pattern makes the fill solid
+    #: unless ``pattern`` is given.
     background: ColorInput
-    #: ``None`` drops the gradient.
+    #: A gradient to set, which replaces the pattern; omitted keeps it, ``None`` drops the gradient.
     gradient: Optional[GradientFill]
 
 
 class BorderSidePatch(TypedDict, total=False):
     """One border side of a :class:`BorderPatch`."""
 
+    #: The line style of the side; omitted keeps it.
     style: BorderStyle
+    #: The colour of the side; omitted keeps it.
     color: ColorInput
 
 
 class BorderPatch(TypedDict, total=False):
     """The border keys of :meth:`Sheet.update_cell_format`; each side merges into the current side."""
 
+    #: Changes to the left side, merged into the current side; omitted keeps it.
     left: BorderSidePatch
+    #: Changes to the right side, merged into the current side; omitted keeps it.
     right: BorderSidePatch
+    #: Changes to the top side, merged into the current side; omitted keeps it.
     top: BorderSidePatch
+    #: Changes to the bottom side, merged into the current side; omitted keeps it.
     bottom: BorderSidePatch
+    #: Changes to the diagonal line, merged into the current line; omitted keeps it.
     diagonal: BorderSidePatch
+    #: Whether the diagonal runs from bottom left to top right; omitted keeps it.
     diagonal_up: bool
+    #: Whether the diagonal runs from top left to bottom right; omitted keeps it.
     diagonal_down: bool
 
 
 class AlignmentPatch(TypedDict, total=False):
     """The alignment keys of :meth:`Sheet.update_cell_format`."""
 
+    #: The horizontal alignment; omitted keeps it.
     horizontal: HorizontalAlign
+    #: The vertical alignment; omitted keeps it.
     vertical: VerticalAlign
+    #: Whether text wraps within the cell; omitted keeps it.
     wrap_text: bool
+    #: Whether text shrinks to fit the cell width; omitted keeps it.
     shrink_to_fit: bool
-    #: 0 to 255.
+    #: The indent level, 0 to 255; omitted keeps it.
     indent: int
-    #: 0 to 180, or 255.
+    #: The text rotation in degrees, 0 to 180, or 255 for vertical text; omitted keeps it.
     text_rotation: int
+    #: The text reading order; omitted keeps it.
     reading_order: ReadingOrder
+    #: Whether the last line is justified; effective with distributed horizontal alignment. Omitted keeps it.
     justify_last_line: bool
+    #: The signed indent relative to the parent style; omitted keeps it.
     relative_indent: int
 
 
 class CellProtectionPatch(TypedDict, total=False):
     """The protection keys of :meth:`Sheet.update_cell_format`."""
 
+    #: Whether cells are locked once the sheet is protected; omitted keeps it.
     locked: bool
+    #: Whether the formula is hidden once the sheet is protected; omitted keeps it.
     hidden: bool
 
 

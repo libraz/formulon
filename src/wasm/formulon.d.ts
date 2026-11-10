@@ -273,12 +273,14 @@ export interface ParseError {
  *  may see errors from both `@libraz/formulon` and `@libraz/formulon-native` should test
  *  `e.name === 'FormulonError'`. */
 export class FormulonError extends Error {
+  /** Builds an error from a `StatusCode`, a message, an optional structured-detail string and an optional parse
+   *  position. */
   constructor(code: StatusCode, message: string, context?: string, parseError?: ParseError);
+  /** The class name, always `'FormulonError'`. */
   readonly name: 'FormulonError';
-  /** What went wrong. */
+  /** The status code of the failure. */
   readonly code: StatusCode;
-  /** Structured detail as space-separated `key=value` pairs (`sheet_index=5 sheet_count=1`); `''` when
-   *  there is none. */
+  /** Structured detail as space-separated `key=value` pairs (`sheet_index=5 sheet_count=1`); empty when there is none. */
   readonly context: string;
   /** Where the formula failed to parse; `undefined` for a failure that is not a formula syntax error. */
   readonly parseError: ParseError | undefined;
@@ -288,6 +290,7 @@ export class FormulonError extends Error {
 
 /** An Excel cell error such as `#DIV/0!`, as a native read returns it. `setValue` stores one as a cell error. */
 export class ExcelError {
+  /** Builds the error value of an `ErrorCode` ordinal. */
   constructor(code: ErrorCode);
   /** The error, as an {@link ErrorCode} ordinal. */
   readonly code: ErrorCode;
@@ -2130,7 +2133,11 @@ export interface SheetView {
 /** Argument of `Sheet.updateView`. No key has a cleared form. `topLeft` and `paneTopLeft` take a
  *  {@link CellAddress} or an A1 cell (`'C5'`). */
 export type SheetViewPatch = Patch<Omit<SheetView, 'topLeft' | 'paneTopLeft'>> & {
+  /** The scroll origin (the first visible cell) to set, as a cell address or an A1 cell such as `'C5'`; omitted keeps
+   *  it, and there is no cleared form. */
   topLeft?: CellAddress | string;
+  /** The first visible cell of a frozen or split view's lower-right pane, as a cell address or an A1 cell; omitted
+   *  keeps it, and there is no cleared form. */
   paneTopLeft?: CellAddress | string;
 };
 
@@ -2706,9 +2713,11 @@ export interface FunctionMetadata {
 
 /** Per-locale display overrides inside a {@link FunctionMetadataEntry}. */
 export interface FunctionMetadataLocalized {
-  /** The locale-specific signature template. */
+  /** The locale-specific signature template; it overrides the entry's default signature for that locale, and omitted
+   *  falls back to the default. */
   signature?: string;
-  /** The locale-specific description. */
+  /** The locale-specific description; it overrides the entry's default description for that locale, and omitted falls
+   *  back to the default. */
   description?: string;
 }
 
@@ -2985,22 +2994,25 @@ export interface CfIcon {
   readonly iconIndex: number;
 }
 
-/** The members every {@link ConditionalFormatInput} shares. When `priority` is missing, zero, or negative, the
- *  engine assigns `existing_max + 1`. `id` is a brace-wrapped GUID (hex digits in either case); when it is missing,
- *  empty or names another rule of the sheet, the engine assigns an upper-case one, and any other text fails with
- *  `StatusCode.InvalidArgument`. */
+/** The members every {@link ConditionalFormatInput} shares. */
 interface CfRuleInputBase {
+  /** The cells the rule applies to: rectangles, unqualified A1 ranges, or one A1 string. */
   ranges: readonly (CellRect | string)[] | string;
+  /** The rule's priority; omitted, zero or less is one past the highest priority already on the sheet. */
   priority?: number;
+  /** `true` stops the evaluation of lower-priority rules on a cell once this rule matches; defaults to `false`. */
   stopIfTrue?: boolean;
+  /** A GUID in braces, hex digits in either case; omitted, empty or already used on the sheet, the engine generates an
+   *  upper-case one, and anything else is invalid. */
   id?: string;
 }
 
-/** A rule that applies a differential format: `format`, registered as a new differential format, or
- *  `dxfIndex`, an index of `Workbook.ooxml.listDxfs()`. Giving both throws `TypeError`; giving neither applies no
- *  formatting. */
+/** A rule that applies a differential format, given by `format` or `dxfIndex`. Giving both throws `TypeError`; giving
+ *  neither applies no formatting. */
 interface CfFormatRuleInputBase extends CfRuleInputBase {
+  /** A format registered as a new differential format and applied by the rule. */
   format?: CellFormatPatch;
+  /** The index into the workbook's differential formats of the format to apply; omitted applies no format. */
   dxfIndex?: number;
 }
 
@@ -3768,105 +3780,105 @@ export type ColorInput = string | Color;
 
 /** The font keys of a {@link CellFormatPatch}; an omitted key keeps its value. */
 export interface FontPatch {
-  /** The typeface name; `null` resets it to the Normal style's font name. */
+  /** The typeface name; omitted keeps it, `null` resets it to the Normal style's font name. */
   readonly name?: string | null;
-  /** The font size in points, 1 to 409; `null` resets it to the Normal style's font size. */
+  /** The font size in points, 1 to 409; omitted keeps it, `null` resets it to the Normal style's font size. */
   readonly sizePt?: number | null;
-  /** Whether the font is bold; `null` removes the `<b>` element. */
+  /** Whether the font is bold; omitted keeps it, `null` removes the `<b>` element. */
   readonly bold?: boolean | null;
-  /** Whether the font is italic; `null` removes the `<i>` element. */
+  /** Whether the font is italic; omitted keeps it, `null` removes the `<i>` element. */
   readonly italic?: boolean | null;
-  /** Whether the text is struck through; `null` removes the `<strike>` element. */
+  /** Whether the text is struck through; omitted keeps it, `null` removes the `<strike>` element. */
   readonly strike?: boolean | null;
-  /** Whether the glyphs are drawn as outlines; `null` removes the `<outline>` element. */
+  /** Whether the glyphs are drawn as outlines; omitted keeps it, `null` removes the `<outline>` element. */
   readonly outline?: boolean | null;
-  /** Whether the glyphs carry a shadow; `null` removes the `<shadow>` element. */
+  /** Whether the glyphs carry a shadow; omitted keeps it, `null` removes the `<shadow>` element. */
   readonly shadow?: boolean | null;
-  /** Whether the glyphs are condensed; `null` removes the `<condense>` element. */
+  /** Whether the glyphs are condensed; omitted keeps it, `null` removes the `<condense>` element. */
   readonly condense?: boolean | null;
-  /** Whether the glyphs are extended; `null` removes the `<extend>` element. */
+  /** Whether the glyphs are extended; omitted keeps it, `null` removes the `<extend>` element. */
   readonly extend?: boolean | null;
-  /** The underline style. */
+  /** The underline style; omitted keeps it. */
   readonly underline?: UnderlineStyle;
-  /** The vertical alignment of the text run (baseline, superscript or subscript). */
+  /** The vertical alignment of the text run (baseline, superscript or subscript); omitted keeps it. */
   readonly vertAlign?: FontVerticalAlign;
-  /** The font-family class; `null` removes the `<family>` element. */
+  /** The font-family class; omitted keeps it, `null` removes the `<family>` element. */
   readonly family?: FontFamily | null;
-  /** The charset codepage id; `null` removes the `<charset>` element. */
+  /** The charset codepage id; omitted keeps it, `null` removes the `<charset>` element. */
   readonly charset?: number | null;
-  /** The theme font set the font links to. */
+  /** The theme font set the font links to; omitted keeps it. */
   readonly scheme?: FontScheme;
-  /** The font colour; `null` removes the `<color>` element. */
+  /** The font colour; omitted keeps it, `null` removes the `<color>` element. */
   readonly color?: ColorInput | null;
 }
 
 /** The fill keys of a {@link CellFormatPatch}. Any fill key but `gradient` drops a gradient. */
 export interface FillPatch {
-  /** The fill pattern. */
+  /** The fill pattern; omitted keeps it. */
   readonly pattern?: FillPattern;
-  /** The pattern's foreground colour; setting it on a fill without a pattern makes the fill solid unless `pattern` is
-   *  given. */
+  /** The pattern's foreground colour; omitted keeps it. Setting it on a fill without a pattern makes the fill solid
+   *  unless `pattern` is given. */
   readonly foreground?: ColorInput;
-  /** The pattern's background colour; setting it on a fill without a pattern makes the fill solid unless `pattern` is
-   *  given. */
+  /** The pattern's background colour; omitted keeps it. Setting it on a fill without a pattern makes the fill solid
+   *  unless `pattern` is given. */
   readonly background?: ColorInput;
-  /** A gradient to set, which replaces the pattern; `null` drops the gradient. */
+  /** A gradient to set, which replaces the pattern; omitted keeps it, `null` drops the gradient. */
   readonly gradient?: GradientFillInput | null;
 }
 
 /** One border side of a {@link BorderPatch}. */
 export interface BorderSidePatch {
-  /** The line style of the side. */
+  /** The line style of the side; omitted keeps it. */
   readonly style?: BorderStyle;
-  /** The colour of the side. */
+  /** The colour of the side; omitted keeps it. */
   readonly color?: ColorInput;
 }
 
 /** The border keys of a {@link CellFormatPatch}; each side merges into the current side. */
 export interface BorderPatch {
-  /** Changes to the left side. */
+  /** Changes to the left side, merged into the current side; omitted keeps it. */
   readonly left?: BorderSidePatch;
-  /** Changes to the right side. */
+  /** Changes to the right side, merged into the current side; omitted keeps it. */
   readonly right?: BorderSidePatch;
-  /** Changes to the top side. */
+  /** Changes to the top side, merged into the current side; omitted keeps it. */
   readonly top?: BorderSidePatch;
-  /** Changes to the bottom side. */
+  /** Changes to the bottom side, merged into the current side; omitted keeps it. */
   readonly bottom?: BorderSidePatch;
-  /** Changes to the diagonal line. */
+  /** Changes to the diagonal line, merged into the current line; omitted keeps it. */
   readonly diagonal?: BorderSidePatch;
-  /** Whether the diagonal runs from bottom left to top right. */
+  /** Whether the diagonal runs from bottom left to top right; omitted keeps it. */
   readonly diagonalUp?: boolean;
-  /** Whether the diagonal runs from top left to bottom right. */
+  /** Whether the diagonal runs from top left to bottom right; omitted keeps it. */
   readonly diagonalDown?: boolean;
 }
 
 /** The alignment keys of a {@link CellFormatPatch}. */
 export interface AlignmentPatch {
-  /** The horizontal alignment. */
+  /** The horizontal alignment; omitted keeps it. */
   readonly horizontal?: HorizontalAlign;
-  /** The vertical alignment. */
+  /** The vertical alignment; omitted keeps it. */
   readonly vertical?: VerticalAlign;
-  /** Whether text wraps within the cell. */
+  /** Whether text wraps within the cell; omitted keeps it. */
   readonly wrapText?: boolean;
-  /** Whether text shrinks to fit the cell width. */
+  /** Whether text shrinks to fit the cell width; omitted keeps it. */
   readonly shrinkToFit?: boolean;
-  /** The indent level, 0 to 255. */
+  /** The indent level, 0 to 255; omitted keeps it. */
   readonly indent?: number;
-  /** The text rotation in degrees, 0 to 180, or 255 for vertical text. */
+  /** The text rotation in degrees, 0 to 180, or 255 for vertical text; omitted keeps it. */
   readonly textRotation?: number;
-  /** The text reading order. */
+  /** The text reading order; omitted keeps it. */
   readonly readingOrder?: ReadingOrder;
-  /** Whether the last line is justified; effective with distributed horizontal alignment. */
+  /** Whether the last line is justified; effective with distributed horizontal alignment. Omitted keeps it. */
   readonly justifyLastLine?: boolean;
-  /** The signed indent relative to the parent style. */
+  /** The signed indent relative to the parent style; omitted keeps it. */
   readonly relativeIndent?: number;
 }
 
 /** The protection keys of a {@link CellFormatPatch}. */
 export interface CellProtectionPatch {
-  /** Whether cells are locked once the sheet is protected. */
+  /** Whether cells are locked once the sheet is protected; omitted keeps it. */
   readonly locked?: boolean;
-  /** Whether the formula is hidden once the sheet is protected. */
+  /** Whether the formula is hidden once the sheet is protected; omitted keeps it. */
   readonly hidden?: boolean;
 }
 
@@ -3994,6 +4006,7 @@ export interface LogEvent {
   readonly level: LogLevel;
   /** The event name. */
   readonly event: string;
+  /** An event-specific field, keyed by its name; its value is a string, a number, a boolean or `null`. */
   readonly [field: string]: string | number | boolean | null;
 }
 
@@ -5961,8 +5974,11 @@ export interface ChartSourceInput {
  *  cell colour, `tint` in -1..1 quantised to 1e-5); indexed and automatic colours are rejected. */
 export type ChartFillPatch = Patch<
   {
+    /** The solid fill colour, an RGB or theme colour. Omitted keeps it, `null` removes it. */
     color: ColorInput;
+    /** The fill transparency as a percentage, 0 to 100. Omitted keeps it, `null` removes it. */
     transparencyPct: number;
+    /** `true` writes an explicit no-fill and `false` removes it; omitted keeps it, `null` is rejected. */
     none: boolean;
   },
   'color' | 'transparencyPct'
@@ -5973,10 +5989,15 @@ export type ChartFillPatch = Patch<
  *  that element, and `none: true` writes an explicit no-line. */
 export type ChartLinePatch = Patch<
   {
+    /** The outline colour, an RGB or theme colour. Omitted keeps it, `null` removes it. */
     color: ColorInput;
+    /** The outline transparency as a percentage, 0 to 100. Omitted keeps it, `null` removes it. */
     transparencyPct: number;
+    /** The outline width in points. Omitted keeps it, `null` removes it. */
     widthPt: number;
+    /** The dash style of the outline. Omitted keeps it, `null` removes it. */
     dash: ChartLineDash;
+    /** `true` writes an explicit no-line and `false` removes it. Omitted keeps it; `null` is rejected. */
     none: boolean;
   },
   'color' | 'transparencyPct' | 'widthPt' | 'dash'
@@ -5986,9 +6007,13 @@ export type ChartLinePatch = Patch<
  *  `sizePt`, `fill` or `line` removes that element. */
 export type ChartMarkerPatch = Patch<
   {
+    /** The marker symbol; the picture symbol is rejected. Omitted keeps it; `null` is rejected. */
     symbol: ChartMarkerSymbol;
+    /** The marker size in points. Omitted keeps it, `null` removes it. */
     sizePt: number;
+    /** The patch applied to the marker fill. Omitted keeps it, `null` removes it. */
     fill: ChartFillPatch;
+    /** The patch applied to the marker outline. Omitted keeps it, `null` removes it. */
     line: ChartLinePatch;
   },
   'sizePt' | 'fill' | 'line'
@@ -5998,17 +6023,29 @@ export type ChartMarkerPatch = Patch<
  *  `numberFormat`, `fontColor` or `fontSizePt` removes that element, and `deleted: true` hides the labels. */
 export type ChartLabelsPatch = Patch<
   {
+    /** Whether the point value is shown. Omitted keeps it; `null` is rejected. */
     showValue: boolean;
+    /** Whether the category name is shown. Omitted keeps it; `null` is rejected. */
     showCategory: boolean;
+    /** Whether the series name is shown. Omitted keeps it; `null` is rejected. */
     showSeries: boolean;
+    /** Whether the percentage of the whole is shown. Omitted keeps it; `null` is rejected. */
     showPercent: boolean;
+    /** Whether the legend key is shown. Omitted keeps it; `null` is rejected. */
     showLegendKey: boolean;
+    /** The text placed between the label parts. Omitted keeps it, `null` removes it. */
     separator: string;
+    /** Where the label sits relative to its point. Omitted keeps it, `null` removes it. */
     position: ChartLabelPosition;
+    /** The number format code of the label. Omitted keeps it, `null` removes it. */
     numberFormat: string;
+    /** Whether the label number format follows the source cells. Omitted keeps it; `null` is rejected. */
     sourceLinked: boolean;
+    /** The label font colour, an RGB or theme colour. Omitted keeps it, `null` removes it. */
     fontColor: ColorInput;
+    /** The label font size in points. Omitted keeps it, `null` removes it. */
     fontSizePt: number;
+    /** `true` hides the labels. Omitted keeps it; `null` is rejected. */
     deleted: boolean;
   },
   'separator' | 'position' | 'numberFormat' | 'fontColor' | 'fontSizePt'
@@ -6018,16 +6055,31 @@ export type ChartLabelsPatch = Patch<
  *  `null` removes `name`, `categories`, `x`, `fill`, `line`, `marker` or `labels`. */
 export type ChartSeriesPatch = Patch<
   {
+    /** The series name input, a reference or a data source; an empty reference or `null` removes it. Omitted keeps it. */
     name: ChartDataSourceInput;
+    /** The category labels input, a reference or a data source; an empty reference or `null` removes it. Omitted keeps
+     *  it. */
     categories: ChartDataSourceInput;
+    /** The values input, a reference or a data source; an empty reference is rejected, and so is `null`. Omitted keeps
+     *  it. */
     values: ChartDataSourceInput;
+    /** The x values input, a reference or a data source; an empty reference or `null` removes it. Omitted keeps it. */
     x: ChartDataSourceInput;
+    /** The y values input, a reference or a data source; an empty reference is rejected, and so is `null`. Omitted
+     *  keeps it. */
     y: ChartDataSourceInput;
+    /** The bubble sizes input, a reference or a data source; an empty reference is rejected, and so is `null`. Omitted
+     *  keeps it. */
     size: ChartDataSourceInput;
+    /** The patch applied to the series fill. Omitted keeps it, `null` removes it. */
     fill: ChartFillPatch;
+    /** The patch applied to the series outline. Omitted keeps it, `null` removes it. */
     line: ChartLinePatch;
+    /** The patch applied to the series marker. Omitted keeps it, `null` removes it. */
     marker: ChartMarkerPatch;
+    /** Whether the line is drawn smoothed instead of as straight segments. Omitted keeps it; `null` is rejected. */
     smooth: boolean;
+    /** The patch applied to the data labels. Omitted keeps it, `null` removes it. */
     labels: ChartLabelsPatch;
   },
   'name' | 'categories' | 'x' | 'fill' | 'line' | 'marker' | 'labels'
@@ -6046,8 +6098,11 @@ export interface ChartSeriesInput extends Omit<ChartSeriesPatch, 'values' | 'y'>
  *  (no fill, no line, no marker) loses its `c:dPt`; `Chart.setPoint(..., null)` removes the override. */
 export type ChartPointPatch = Patch<
   {
+    /** The patch applied to the point fill. Omitted keeps it, `null` removes it. */
     fill: ChartFillPatch;
+    /** The patch applied to the point outline. Omitted keeps it, `null` removes it. */
     line: ChartLinePatch;
+    /** The patch applied to the point marker. Omitted keeps it, `null` removes it. */
     marker: ChartMarkerPatch;
   },
   'fill' | 'line' | 'marker'
@@ -6056,10 +6111,16 @@ export type ChartPointPatch = Patch<
 /** A field the plot type does not have is rejected; `holeSizePct` is 10..90 and doughnut only. `gapWidthPct` and
  *  `overlapPct` are percentages of the bar width, `firstSliceAngleDeg` an angle in degrees. */
 export type ChartPlotPatch = Patch<{
+  /** The gap between bar clusters as a percentage of the bar width. Omitted keeps it; `null` is rejected. */
   gapWidthPct: number;
+  /** The overlap between bars of a cluster as a percentage of the bar width. Omitted keeps it; `null` is rejected. */
   overlapPct: number;
+  /** The angle in degrees of the first pie or doughnut slice. Omitted keeps it; `null` is rejected. */
   firstSliceAngleDeg: number;
+  /** Whether each point of a single-series plot takes its own colour. Omitted keeps it; `null` is rejected. */
   varyColors: boolean;
+  /** The doughnut hole size as a percentage of the diameter, 10 to 90; doughnut plots only. Omitted keeps it; `null` is
+   *  rejected. */
   holeSizePct: number;
 }>;
 
@@ -6070,21 +6131,40 @@ export type ChartPlotPatch = Patch<{
  *  form. */
 export type ChartAxisPatch = Patch<
   {
+    /** Whether the axis is shown. Omitted keeps it. `null` is rejected. */
     visible: boolean;
+    /** The axis title, as text or a title of the automatic kind (Excel's own title). `null` removes the title. Omitted
+     *  keeps it. */
     title: ChartTitleInput;
+    /** The fixed minimum of the axis scale; `null` makes it automatic. Omitted keeps it. */
     min: number;
+    /** The fixed maximum of the axis scale; `null` makes it automatic. Omitted keeps it. */
     max: number;
+    /** The fixed distance between major ticks; `null` makes it automatic. Omitted keeps it. */
     majorUnit: number;
+    /** The fixed distance between minor ticks; `null` makes it automatic. Omitted keeps it. */
     minorUnit: number;
+    /** The number format code of the tick labels. `null` removes it. Omitted keeps it. */
     numberFormat: string;
+    /** Whether the tick label number format follows the source cells. Omitted keeps it. `null` is rejected. */
     sourceLinked: boolean;
+    /** Whether major gridlines are drawn. Omitted keeps it. `null` is rejected. */
     majorGridlines: boolean;
+    /** Whether minor gridlines are drawn. Omitted keeps it. `null` is rejected. */
     minorGridlines: boolean;
+    /** The side of the plot area the axis sits on. Omitted keeps it. `null` is rejected. */
     position: ChartAxisPosition;
+    /** Whether the axis runs in reverse order. Omitted keeps it. `null` is rejected. */
     reversed: boolean;
+    /** The base of a logarithmic scale; `null` makes the axis linear. Omitted keeps it. */
     logBase: number;
+    /** Where this axis crosses its cross axis (automatic, minimum, maximum or at `crossesAt`). Omitted keeps it. `null`
+     *  is rejected. */
     crosses: ChartAxisCrosses;
+    /** The value on the cross axis where this axis crosses; read when `crosses` is the at-value kind. Omitted keeps it.
+     *  `null` is rejected. */
     crossesAt: number;
+    /** Where the tick labels sit relative to the axis; `null` restores the default. Omitted keeps it. */
     tickLabelPosition: ChartTickLabelPosition;
   },
   'title' | 'min' | 'max' | 'majorUnit' | 'minorUnit' | 'numberFormat' | 'logBase' | 'tickLabelPosition'
@@ -6096,9 +6176,14 @@ export type ChartAxisPatch = Patch<
  *  1..48 (`c:style`); `null` removes it. */
 export type ChartDisplayPatch = Patch<
   {
+    /** How empty cells are plotted: as gaps, as zero or by spanning them. Omitted keeps it, `null` removes it. */
     blanksAs: BlanksAs;
+    /** Whether only visible cells are plotted. Omitted keeps it, `null` removes it. */
     plotVisibleOnly: boolean;
+    /** Whether `#N/A` points are drawn as blank cells; `false` and `null` both remove the setting, as Excel does.
+     *  Omitted keeps it. */
     naAsBlank: boolean;
+    /** The chart style number, 1 to 48. Omitted keeps it, `null` removes it. */
     style: number;
   },
   'blanksAs' | 'plotVisibleOnly' | 'naAsBlank' | 'style'

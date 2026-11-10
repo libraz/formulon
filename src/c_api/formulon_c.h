@@ -396,31 +396,24 @@ typedef enum {
 /**
  * @brief Cell value POD shared across the C ABI boundary.
  *
- * The active union member is selected by `kind`:
- *   * `FM_VALUE_KIND_BLANK`   — no payload (other fields undefined).
- *   * `FM_VALUE_KIND_NUMBER`  — `u.number` holds the IEEE-754 double.
- *   * `FM_VALUE_KIND_BOOL`    — `u.boolean` is `0` (FALSE) or `1` (TRUE).
- *   * `FM_VALUE_KIND_ERROR`   — `u.error_code` is an `Excel ErrorCode`
- *                        ordinal (Null=0, Div0=1, Value=2, ...). The
- *                        full enumeration is `formulon::ErrorCode`
- *                        in `src/value.h`.
- *   * `FM_VALUE_KIND_TEXT`    — `u.text` is a NUL-terminated UTF-8 view. Its
- *                        backing category is specified by the API that
- *                        writes the `fm_value_t`: cell/evaluation getters
- *                        use a read-scratch-backed view, while an owned
- *                        result handle may provide an owned snapshot.
- *   * `FM_VALUE_KIND_ARRAY`   — the ABI surfaces the kind but does not
- *                        expose the array payload.
- *   * `FM_VALUE_KIND_REF`     — references are reserved.
- *   * `FM_VALUE_KIND_LAMBDA`  — lambdas are reserved.
+ * The active union member is selected by `kind`. A blank value has no payload, an array value surfaces
+ * only its kind, and reference and lambda kinds are reserved.
  */
 typedef struct {
   /** The `ValueKind` of the value; it selects which payload field is populated. */
   int32_t kind;
+  /** The payload, a union whose active member is selected by `kind`; blank, array, reference and lambda values carry
+   *  none. */
   union {
+    /** The IEEE-754 double of a number value. */
     double number;
+    /** 0 (FALSE) or 1 (TRUE) of a bool value. */
     int32_t boolean;
+    /** The Excel `ErrorCode` ordinal of an error value (Null=0, Div0=1, Value=2, ...); the enumeration is
+     *  `formulon::ErrorCode` in `src/value.h`. */
     int32_t error_code;
+    /** A NUL-terminated UTF-8 view of a text value; cell and evaluation getters back it with read scratch, while an
+     *  owned result handle may provide an owned snapshot. */
     const char* text;
   } u;
 } fm_value_t;
@@ -13369,8 +13362,7 @@ typedef struct {
 typedef struct {
   /** Patch operation for `color`: keep it, set it from `color`, or clear it. */
   fm_patch_op_t color_op;
-  /** The solid colour to set, kind None, Rgb or Theme (`theme` below 12, `tint` within [-1, 1]); needs `color_op`
-   *  set. */
+  /** The solid colour to set, kind None, Rgb or Theme (`theme` below 12, `tint` in [-1, 1]); needs `color_op` set. */
   fm_color_t color;
   /** Patch operation for `transparency_pct`: keep it, set it from `transparency_pct`, or clear it. */
   fm_patch_op_t transparency_pct_op;
