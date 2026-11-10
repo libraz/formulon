@@ -226,7 +226,7 @@ jobs:
         run: |
           set -euo pipefail
           wheel=$(ls build-py/dist/formulon-*.whl | head -1)
-          python -m pip install "${wheel}" pyyaml
+          python -m pip install "${wheel}" --group packages/python/pyproject.toml:test
           python -m unittest discover -v -s packages/python/tests
 
       - uses: actions/upload-artifact@v7

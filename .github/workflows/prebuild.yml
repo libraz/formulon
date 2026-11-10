@@ -148,8 +148,12 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             build-essential cmake ninja-build
 
-      - name: Install wasmtime and PyYAML
-        run: python -m pip install wasmtime pyyaml
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v10.2.0
+
+      - name: Install the package's test dependency group
+        # packages/python/.venv on the job's Python; `make python-test` runs the tests on it.
+        run: uv sync --project packages/python --group test --locked --python "$(command -v python)"
 
       - name: Build capi WASM, stage, and smoke-test Python binding
         # CMAKE override mirrors ci.yml's wasm job and release.yml's

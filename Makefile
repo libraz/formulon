@@ -417,6 +417,9 @@ npm-pack: npm-package
 PY_PKG_DIR := packages/python
 PY_BUILD_DIR ?= build-py
 PYTHON ?= $(shell python3 -c 'import sys; print(sys.executable)')
+# The package tests run on packages/python/.venv (`uv sync --group test`) when it exists;
+# an explicit PYTHON= still selects the interpreter.
+PY_TEST_PYTHON ?= $(if $(filter command line environment,$(origin PYTHON)),$(PYTHON),$(or $(wildcard $(abspath $(PY_PKG_DIR))/.venv/bin/python),$(PYTHON)))
 
 python-package: wasm-capi
 	@if ! command -v $(PYTHON) >/dev/null 2>&1; then \
@@ -427,22 +430,17 @@ python-package: wasm-capi
 	  --build-dir $(WASM_CAPI_BUILD_DIR)
 
 python-test: python-package
-	@if ! $(PYTHON) -c "import wasmtime" >/dev/null 2>&1; then \
-	  echo "python-test: wasmtime runtime missing; install with:"; \
-	  echo "  $(PYTHON) -m pip install wasmtime"; \
+	@if ! $(PY_TEST_PYTHON) -c "import wasmtime, yaml" >/dev/null 2>&1; then \
+	  echo "python-test: $(PY_TEST_PYTHON) lacks the test dependencies (wasmtime, PyYAML); install with:"; \
+	  echo "  (cd $(PY_PKG_DIR) && uv sync --group test)"; \
 	  exit 1; \
 	fi
-	@if ! $(PYTHON) -c "import yaml" >/dev/null 2>&1; then \
-	  echo "python-test: PyYAML missing (the API-shape test reads tools/api/names.yaml); install with:"; \
-	  echo "  $(PYTHON) -m pip install pyyaml"; \
-	  exit 1; \
-	fi
-	@(cd $(PY_PKG_DIR) && $(PYTHON) -m unittest discover -v tests)
+	@(cd $(PY_PKG_DIR) && $(PY_TEST_PYTHON) -m unittest discover -v tests)
 	@# The oracle's print round-trip fixtures are authored through this
 	@# binding, so they belong to whatever interpreter can import it. The
 	@# CTest copy runs on the oracle venv, which installs the capture
 	@# dependencies rather than the wheel, and skips the authoring half.
-	@PYTHONPATH=$(PY_PKG_DIR) $(PYTHON) -m unittest tools.oracle.print_roundtrip_test
+	@PYTHONPATH=$(PY_PKG_DIR) $(PY_TEST_PYTHON) -m unittest tools.oracle.print_roundtrip_test
 
 python-wheel: python-package
 	@if ! $(PYTHON) -m pip --version >/dev/null 2>&1; then \
@@ -501,7 +499,7 @@ docs-snippets: npm-package node-package python-package
 	@rc=0; \
 	(cd $(NPM_PKG_DIR) && FORMULON_DOCS_DIR="$(abspath $(FORMULON_DOCS_DIR))" $(NODE) --test test/readme_snippets.test.mjs) || rc=1; \
 	(cd $(NODE_NATIVE_PKG_DIR) && FORMULON_DOCS_DIR="$(abspath $(FORMULON_DOCS_DIR))" $(NODE) --test test/readme_snippets.test.mjs) || rc=1; \
-	(cd $(PY_PKG_DIR) && FORMULON_DOCS_DIR="$(abspath $(FORMULON_DOCS_DIR))" $(PYTHON) -m unittest tests.test_readme_snippets) || rc=1; \
+	(cd $(PY_PKG_DIR) && FORMULON_DOCS_DIR="$(abspath $(FORMULON_DOCS_DIR))" $(PY_TEST_PYTHON) -m unittest tests.test_readme_snippets) || rc=1; \
 	exit $$rc
 
 # -- Cross-channel parity gate ------------------------------------------------
