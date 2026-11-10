@@ -252,8 +252,9 @@ Upgrading from 0.18: see [Upgrading from 0.18 to 0.19](docs/releases/upgrading-0
   stored.
 - A cell font with no colour was saved as explicit black.
 - A pivot cache refresh named blank-header columns in English in every locale.
-- Pivot data fields were saved with `subtotal="sum"` and without
-  `baseField` / `baseItem`, and a refresh moved the base of a plain data field.
+- Pivot data fields were saved with an explicit sum subtotal and without
+  their base field and item, and a refresh moved the base of a plain data
+  field.
 - Structural edits: deleted references are spelled as Excel spells them
   (`=Sheet3!#REF!*2`, `=#REF!A1`), a deleted spill anchor is `#REF!` (it
   gave `#VALUE!`), formulas over a whole column or large range across the edit
