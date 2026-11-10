@@ -169,7 +169,8 @@ function declaredOrdinalTables(dts) {
   const blocks = dts.matchAll(/^export const (\w+): Readonly<\{([^}]*)\}>;/gm);
   for (const [, name, body] of blocks) {
     const members = {};
-    for (const line of body.split(';')) {
+    // A member may carry a doc comment; drop comments before splitting the members.
+    for (const line of body.replace(/\/\*[\s\S]*?\*\//g, '').split(';')) {
       const m = line.trim().match(/^(\w+):\s*(-?\d+)$/);
       if (m) members[m[1]] = Number(m[2]);
     }
