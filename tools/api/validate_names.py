@@ -944,7 +944,12 @@ def check_address_args(
                 "cell_args": lambda: _js_cell_pairs(member.params),
                 "rect_args": lambda: _js_rect_positions(member.params),
                 "ref_args": lambda: _js_ref_arg(member.params),
-                "span_args": lambda: _js_span_args(member.name, member.params, _overloads(surface, member)),
+                # A table's `(first, last)` count its data rows or columns, not grid lines, so they are no span.
+                "span_args": lambda: (
+                    []
+                    if owner == "interface Table"
+                    else _js_span_args(member.name, member.params, _overloads(surface, member))
+                ),
             }
             for field, want in ((f, derived[f]()) for f in fields):
                 have = entry.get(field) or []

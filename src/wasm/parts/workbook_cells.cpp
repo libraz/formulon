@@ -546,6 +546,15 @@ std::string JsWorkbook::renameTableColumn(uint32_t sheet, uint32_t idx, uint32_t
   return string_from_cstr(final_name);
 }
 
+void JsWorkbook::insertTableRows(uint32_t sheet, uint32_t idx, uint32_t first, uint32_t last) {
+  succeeded(handle_ != nullptr ? fm_sheet_insert_table_rows(handle_, sheet, idx, first, last) : kBindingInvalidHandle);
+}
+
+void JsWorkbook::insertTableColumns(uint32_t sheet, uint32_t idx, uint32_t first, uint32_t last) {
+  succeeded(handle_ != nullptr ? fm_sheet_insert_table_columns(handle_, sheet, idx, first, last)
+                               : kBindingInvalidHandle);
+}
+
 emscripten::val JsWorkbook::getDefinedName(const std::string& name, int32_t localSheetId) const {
   fm_defined_name_t d = FM_STRUCT_INIT(fm_defined_name_t);
   int32_t present = 0;

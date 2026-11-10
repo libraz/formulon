@@ -2644,6 +2644,61 @@ FM_API fm_status_t fm_sheet_rename_table_column(fm_workbook_t* wb, size_t sheet_
                                                 size_t column_index, const char* name, const char** out_name);
 
 /**
+ * @brief Inserts the data rows `[first, last]` (0-based, inclusive) into table
+ *        `table_index`, as ListRows.Add does.
+ *
+ * The cells of the table's columns from the first new row downwards move down
+ * by `last - first + 1`, the cells of other columns stay, and the table grows
+ * by that many rows. `first` equal to the table's data-row count appends: the
+ * rows go above the totals row when the table has one. Every calculated
+ * column's formula is written into the new rows with its relative references
+ * moved along; the other columns stay blank. Structured references and the
+ * table's AutoFilter follow the new extent.
+ *
+ * @param wb          The workbook handle.
+ * @param sheet_index The sheet holding the table.
+ * @param table_index The table's index among the tables of `sheet_index`.
+ * @param first       The first new data row, 0 to the current data-row count.
+ * @param last        The last new data row, not below `first`.
+ *
+ * @return `FM_STATUS_OK` (0) on success, or a common table failure;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `first` is past the data-row
+ *         count, `last` is below `first`, or the span reaches past the last row;
+ *         `FM_STATUS_PRECONDITION_FAILED` (9) when a PivotTable lies in the
+ *         shift path, a multi-cell array formula or data table is cut by the
+ *         band, or a value, formula or the table itself would be pushed past
+ *         the sheet bound; the workbook is unchanged.
+ */
+FM_API fm_status_t fm_sheet_insert_table_rows(fm_workbook_t* wb, size_t sheet_index, size_t table_index, uint32_t first,
+                                              uint32_t last);
+
+/**
+ * @brief Inserts the columns `[first, last]` (0-based, inclusive) into table
+ *        `table_index`, as ListColumns.Add does.
+ *
+ * The cells of the table's rows (header through totals row) from the first new
+ * column rightwards move right by `last - first + 1`, the cells of other rows
+ * stay, and the table grows by that many columns. `first` equal to the table's
+ * column count appends after the last column. Each new column is named from
+ * its left neighbour (`Q2` gives `Q3`; a name without trailing digits, or no
+ * left neighbour, takes the profile's column word plus the lowest free number,
+ * `Column1` / `列1`); the name is written to the header cell when the table
+ * has a header row, and the data and totals cells stay blank.
+ *
+ * @param wb          The workbook handle.
+ * @param sheet_index The sheet holding the table.
+ * @param table_index The table's index among the tables of `sheet_index`.
+ * @param first       The first new column, 0 to the current column count.
+ * @param last        The last new column, not below `first`.
+ *
+ * @return Same status codes as `fm_sheet_insert_table_rows`, with the last
+ *         column (16383) as the bound.
+ */
+FM_API fm_status_t fm_sheet_insert_table_columns(fm_workbook_t* wb, size_t sheet_index, size_t table_index,
+                                                 uint32_t first, uint32_t last);
+
+/**
  * @brief Sets column `column_index`'s totals-row function and label.
  *
  * `function` is an `fm_table_totals_row_function_t`. `formula` is required
@@ -8444,7 +8499,7 @@ FM_API fm_status_t fm_sheet_add_pivot_field_item(fm_workbook_t* wb, size_t sheet
  *
  * `cache_index` is not validated here because the cache field may be
  * populated after the pivot definition; an item whose index resolves to
- * nothing keeps an empty label and filters nothing.
+ * nothing keeps an empty label, filters nothing and is left out of a save.
  *
  * `visible` is a 32-bit boolean. `*out_item_index` receives the new item's
  * position in the field's item list.

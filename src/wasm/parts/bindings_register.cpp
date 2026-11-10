@@ -308,6 +308,8 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("getValue", &JsWorkbook::getValue)
       .function("insertColumns", &JsWorkbook::insertColumns)
       .function("insertRows", &JsWorkbook::insertRows)
+      .function("insertTableColumns", &JsWorkbook::insertTableColumns)
+      .function("insertTableRows", &JsWorkbook::insertTableRows)
       .function("insertCells", &JsWorkbook::insertCells)
       .function("deleteCells", &JsWorkbook::deleteCells)
       .function("moveSheet", &JsWorkbook::moveSheet)

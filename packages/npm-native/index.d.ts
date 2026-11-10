@@ -8234,6 +8234,40 @@ export interface Table {
    *  structured reference to the column through this table follows: cell, totals-row and defined-name formulas
    *  and chart series. Writing a value to a header cell (`setText`, `setNumber`, ...) renames the same way. */
   renameColumn(column: number, name: string): string;
+  /** Inserts data rows into the table, as ListRows.Add does. The cells of the table's columns from the first new
+   *  row downwards move down, the cells of other columns stay, and the table grows by the span. Every calculated
+   *  column's formula is written into the new rows with its relative references moved along; other columns stay
+   *  blank. Structured references and the table's AutoFilter follow the new extent.
+   *
+   *  Called with neither argument it appends one row, above the totals row when the table has one. With `first`
+   *  alone it inserts one row at `first`.
+   *
+   *  A `first` past the data-row count, or a `last` below `first`, fails with `StatusCode.InvalidArgument`. It
+   *  fails with `StatusCode.PreconditionFailed`, changing nothing, when a PivotTable lies in the shift path, a
+   *  multi-cell array formula or data table is cut by the band, or a value, formula or the table itself would be
+   *  pushed past the last sheet row.
+   *  @param first The 0-based data-row position of the first new row; the data-row count appends. Defaults to the
+   *    data-row count.
+   *  @param last The 0-based data-row position of the last new row, not below `first`; the span is inclusive.
+   *    Defaults to `first`. May be given only together with `first`.
+   *  @throws RangeError when `first` or `last` is fractional or above 4294967295.
+   *  @throws FormulonError with `StatusCode.InvalidArgument` when `first` or `last` is negative or above 2147483647,
+   *    or when `last` is given without `first`. */
+  insertRows(first?: number, last?: number): void;
+  /** Inserts columns into the table, as ListColumns.Add does. The cells of the table's rows (header through
+   *  totals row) from the first new column rightwards move right, the cells of other rows stay, and the table grows
+   *  by the span. Each new column is named from its left neighbour (`Q2` gives `Q3`; a name without trailing digits,
+   *  or no left neighbour, takes the profile's `Column<N>` / `列<N>` with the lowest free N) and the name is written
+   *  to the header cell when the table has a header row; the data and totals cells stay blank.
+   *
+   *  Called with neither argument it appends one column after the last. With `first` alone it inserts one column at
+   *  `first`. Failures as {@link Table.insertRows}, with the last sheet column as the bound.
+   *  @param first The 0-based table-column position of the first new column; the column count appends. Defaults to
+   *    the column count.
+   *  @param last The 0-based table-column position of the last new column, not below `first`; the span is inclusive.
+   *    Defaults to `first`. May be given only together with `first`.
+   *  @throws RangeError as {@link Table.insertRows}. */
+  insertColumns(first?: number, last?: number): void;
   /** Sets column `column`'s totals-row function and label. While the totals row is shown its cell follows, as the
    *  desktop application writes it: `SUBTOTAL(109,Table[Column])` and the other 1xx codes for a built-in
    *  function, the formula for `'custom'`, else the label as text, else nothing. */
@@ -8343,7 +8377,7 @@ export interface Pivot {
    *    `<item x="N">`. The label is resolved from that shared item, which makes this the form that can express
    *    the blank item. `cacheIndex` is not validated: the cache field may be filled in after the pivot
    *    definition, and an index that resolves to nothing yields an item with an empty label that filters
-   *    nothing.
+   *    nothing and is left out of a save.
    *
    *  `options.visible` defaults to `true`. */
   addFieldItem(

@@ -786,6 +786,32 @@ extern "C" fm_status_t fm_sheet_rename_table_column(fm_workbook_t* wb, size_t sh
   return 0;
 }
 
+extern "C" fm_status_t fm_sheet_insert_table_rows(fm_workbook_t* wb, size_t sheet_index, size_t table_index,
+                                                  uint32_t first, uint32_t last) {
+  clear_last_error();
+  if (wb == nullptr) {
+    return null_argument();
+  }
+  std::size_t index = 0;
+  if (auto rc = resolve_sheet_table(wb, sheet_index, table_index, &index); rc != 0) {
+    return rc;
+  }
+  return finish_status(wb->workbook().insert_table_rows(sheet_index, index, first, last));
+}
+
+extern "C" fm_status_t fm_sheet_insert_table_columns(fm_workbook_t* wb, size_t sheet_index, size_t table_index,
+                                                     uint32_t first, uint32_t last) {
+  clear_last_error();
+  if (wb == nullptr) {
+    return null_argument();
+  }
+  std::size_t index = 0;
+  if (auto rc = resolve_sheet_table(wb, sheet_index, table_index, &index); rc != 0) {
+    return rc;
+  }
+  return finish_status(wb->workbook().insert_table_columns(sheet_index, index, first, last));
+}
+
 extern "C" fm_status_t fm_sheet_set_table_column_totals(fm_workbook_t* wb, size_t sheet_index, size_t table_index,
                                                         size_t column_index, int32_t function, const char* label,
                                                         const char* formula) {

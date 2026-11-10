@@ -4951,6 +4951,28 @@ entries:
     py: rename_table_column
     surfaces: [c, wasm, native, py]
     handle: { class: Table, supplies: [sheet, table] }
+  table_rows.insert:
+    kind: op
+    scope: sheet
+    noun: table_rows
+    c: fm_sheet_insert_table_rows
+    js: insertTableRows
+    py: insert_table_rows
+    params: { first: { default: null }, last: { default: null } }
+    surfaces: [c, wasm, native, py]
+    facade: handwritten
+    handle: { class: Table, js: insertRows, py: insert_rows, supplies: [sheet, table] }
+  table_columns.insert:
+    kind: op
+    scope: sheet
+    noun: table_columns
+    c: fm_sheet_insert_table_columns
+    js: insertTableColumns
+    py: insert_table_columns
+    params: { first: { default: null }, last: { default: null } }
+    surfaces: [c, wasm, native, py]
+    facade: handwritten
+    handle: { class: Table, js: insertColumns, py: insert_columns, supplies: [sheet, table] }
   table_column_totals.set:
     kind: op
     scope: sheet

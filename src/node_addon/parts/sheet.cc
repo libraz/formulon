@@ -520,6 +520,30 @@ Napi::Value Workbook::RenameTableColumn(const Napi::CallbackInfo& info) {
   return ValueOrThrow(env, rc, JsString(env, final_name));
 }
 
+Napi::Value Workbook::InsertTableRows(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return ThrowInvalidHandle(env);
+  }
+  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
+  const std::size_t idx = static_cast<std::size_t>(ArgU32(info, 1));
+  const uint32_t first = ArgU32(info, 2);
+  const uint32_t last = ArgU32(info, 3);
+  return ValueOrThrow(env, fm_sheet_insert_table_rows(handle_, sheet, idx, first, last), env.Undefined());
+}
+
+Napi::Value Workbook::InsertTableColumns(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return ThrowInvalidHandle(env);
+  }
+  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
+  const std::size_t idx = static_cast<std::size_t>(ArgU32(info, 1));
+  const uint32_t first = ArgU32(info, 2);
+  const uint32_t last = ArgU32(info, 3);
+  return ValueOrThrow(env, fm_sheet_insert_table_columns(handle_, sheet, idx, first, last), env.Undefined());
+}
+
 Napi::Value Workbook::ListPassthroughs(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   Napi::Array arr = Napi::Array::New(env);

@@ -1736,6 +1736,8 @@ const HANDLE_FORWARDERS = Object.freeze({
   'Table.getAutoFilter': 'getTableAutoFilter',
   'Table.getProperties': 'getTable',
   'Table.getStyleOptions': 'getTableStyleOptions',
+  'Table.insertColumns': null,
+  'Table.insertRows': null,
   'Table.rename': null,
   'Table.renameColumn': 'renameTableColumn',
   'Table.setAutoFilter': 'setTableAutoFilter',
@@ -3667,6 +3669,8 @@ const METHOD_ARITY = Object.freeze({
   'Table.getAutoFilter': 0,
   'Table.getProperties': 0,
   'Table.getStyleOptions': 0,
+  'Table.insertColumns': 2,
+  'Table.insertRows': 2,
   'Table.rename': 1,
   'Table.renameColumn': 2,
   'Table.setAutoFilter': 1,
@@ -3819,6 +3823,14 @@ const DEFAULT_ARGS = Object.freeze({
   'Sheet.iterRows': [[0, null]],
   'Sheet.listCells': [[0, null]],
   'Sheet.move': [[0, null]],
+  'Table.insertColumns': [
+    [0, null],
+    [1, null],
+  ],
+  'Table.insertRows': [
+    [0, null],
+    [1, null],
+  ],
   'Workbook.addSheet': [[0, null]],
   'Workbook.recalcParallel': [[0, 0]],
 });
@@ -4335,6 +4347,8 @@ const PARAM_NAMES = Object.freeze({
   'SheetOoxml.snapshotRangeXfs': ['range'],
   'Slicer.setZOrder': ['zOrderIndex'],
   'Slicer.update': ['patch'],
+  'Table.insertColumns': ['first', 'last'],
+  'Table.insertRows': ['first', 'last'],
   'Table.rename': ['name'],
   'Table.renameColumn': ['column', 'name'],
   'Table.setAutoFilter': ['filter'],
@@ -4806,6 +4820,23 @@ function checkSparklinePatch(where, patch) {
   if (Array.isArray(patch.sparklines)) {
     for (const [i, item] of patch.sparklines.entries()) refuse(item, SPARKLINE_KEYS, `sparklines[${i}]`);
   }
+}
+
+/** The `[first, last]` of an insert call whose arguments may be omitted: both omitted appends one at `count`. */
+function insertSpan(where, first, last, count) {
+  const given = (value) => value !== undefined && value !== null;
+  if (!given(first)) {
+    if (given(last)) {
+      throw new FormulonError(
+        StatusCode.InvalidArgument,
+        `${argLabel(where, 1)} needs ${argLabel(where, 0)}`,
+        `last=${last}`,
+      );
+    }
+    return [count, count];
+  }
+  const from = requireIndex(first, argLabel(where, 0), 'coordinate');
+  return [from, given(last) ? requireIndex(last, argLabel(where, 1), 'coordinate') : from];
 }
 
 /**
@@ -6447,6 +6478,22 @@ function makeFacade(Raw, registry, runtime) {
       requireString(name, argLabel('Table.rename', 0));
       const [raw, sheet, index] = this.#locate();
       raw.renameTable(sheet, index, name);
+    }
+
+    // Both omitted appends one at the current count; `first` alone is one at `first`.
+    insertRows(first, last) {
+      const [raw, sheet, index] = this.#locate();
+      const table = raw.getTable(sheet, index);
+      const { firstRow, lastRow } = table.range.rect;
+      const count = lastRow - firstRow + 1 - (table.headerRow ? 1 : 0) - (table.totalsRow ? 1 : 0);
+      const span = insertSpan('Table.insertRows', first, last, count);
+      raw.insertTableRows(sheet, index, span[0], span[1]);
+    }
+
+    insertColumns(first, last) {
+      const [raw, sheet, index] = this.#locate();
+      const span = insertSpan('Table.insertColumns', first, last, raw.getTable(sheet, index).columns.length);
+      raw.insertTableColumns(sheet, index, span[0], span[1]);
     }
   }
 

@@ -181,6 +181,8 @@ Upgrading from 0.18: see [Upgrading from 0.18 to 0.19](docs/releases/upgrading-0
 - `parseReference` and `formatReference` convert between reference text and a
   sheet name with a 0-based rectangle.
 - `Table.renameColumn` renames a column as typing over its header does.
+- `Table.insertRows(first?, last?)` / `insertColumns(first?, last?)` insert
+  table rows and columns; new columns are named from their left neighbour.
 - `convertCivilToSerial` and `convertSerialToCivil` for the 1900 and 1904 date
   systems.
 - `FormulonOptions.wasm` takes the module as bytes or a compiled module, and

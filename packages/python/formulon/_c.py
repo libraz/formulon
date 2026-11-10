@@ -1048,6 +1048,8 @@ _STATUS_RETURNING_EXPORT_NAMES = (
     "fm_sheet_get_table_count",
     "fm_sheet_get_table_runtime_id",
     "fm_sheet_get_table_style_options",
+    "fm_sheet_insert_table_columns",
+    "fm_sheet_insert_table_rows",
     "fm_sheet_remove_table",
     "fm_sheet_rename_table",
     "fm_sheet_rename_table_column",

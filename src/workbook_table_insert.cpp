@@ -64,13 +64,14 @@ Expected<std::uint64_t, Error> check_insert_span(std::uint32_t first, std::uint3
   const std::uint64_t length = static_cast<std::uint64_t>(last) - first + 1U;
   // An append against the grid's edge has no cell to start in: content would go off the grid.
   if (start >= axis_extent) {
-    return make_error(FormulonErrorCode::kPreconditionFailed, "the table ends on the last cell of the grid");
+    return make_error(FormulonErrorCode::kPreconditionFailed,
+                      "first is past the grid: the table ends on its last row or column");
   }
   if (start + length > axis_extent) {
-    return invalid_argument("the inserted span reaches past the grid", "last=" + std::to_string(last));
+    return invalid_argument("last reaches past the grid", "last=" + std::to_string(last));
   }
   if (table_last + length >= axis_extent) {
-    return make_error(FormulonErrorCode::kPreconditionFailed, "the insert would push the table off the grid");
+    return make_error(FormulonErrorCode::kPreconditionFailed, "last would push the table off the grid");
   }
   return length;
 }

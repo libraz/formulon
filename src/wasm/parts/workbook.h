@@ -250,6 +250,10 @@ class JsWorkbook {
   void setTableColumnTotals(uint32_t sheet, uint32_t idx, uint32_t column, emscripten::val totals);
   /// Renames column `column` of table `idx`; the result is the final name.
   std::string renameTableColumn(uint32_t sheet, uint32_t idx, uint32_t column, const std::string& name);
+  /// Inserts data rows `[first, last]` into table `idx`; `first` equal to the data-row count appends.
+  void insertTableRows(uint32_t sheet, uint32_t idx, uint32_t first, uint32_t last);
+  /// Inserts columns `[first, last]` into table `idx`; `first` equal to the column count appends.
+  void insertTableColumns(uint32_t sheet, uint32_t idx, uint32_t first, uint32_t last);
 
   emscripten::val listPassthroughs() const;
   bool hasPassthrough(const std::string& path) const;

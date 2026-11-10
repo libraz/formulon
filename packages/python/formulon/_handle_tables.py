@@ -115,6 +115,8 @@ HANDLE_FORWARDERS = {
     "Table.get_auto_filter": "get_table_auto_filter",
     "Table.get_properties": "get_table",
     "Table.get_style_options": "get_table_style_options",
+    "Table.insert_columns": None,
+    "Table.insert_rows": None,
     "Table.rename": None,
     "Table.rename_column": "rename_table_column",
     "Table.set_auto_filter": "set_table_auto_filter",

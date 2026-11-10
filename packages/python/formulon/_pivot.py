@@ -1083,7 +1083,7 @@ class Pivot(_NoCopy):
           resolved from that shared item, so this is the form that can express
           the blank item. ``cache_index`` is not validated: an index that
           resolves to nothing yields an item with an empty label that filters
-          nothing.
+          nothing and is left out of a save.
 
         Raises:
           TypeError: when both or neither of ``item`` and ``cache_index`` are given.

@@ -383,6 +383,120 @@ class Table(_NoCopy):
             )
             return LIB.read_cstr(LIB.read_u32(out))
 
+    # -- Inserting rows and columns -----------------------------------------
+    def insert_rows(self, first: Optional[int] = None, last: Optional[int] = None) -> None:
+        """Insert data rows into the table, as ListRows.Add does.
+
+        The cells of the table's columns from the first new row downwards move
+        down, the cells of other columns stay, and the table grows by the
+        span. Every calculated column's formula is written into the new rows
+        with its relative references moved along; other columns stay blank.
+        Structured references and the table's AutoFilter follow the new
+        extent.
+
+        Called with neither argument it appends one row, above the totals row
+        when the table has one. With ``first`` alone it inserts one row at
+        ``first``.
+
+        Args:
+          first: the 0-based data-row position of the first new row; the
+            data-row count appends. Defaults to the data-row count.
+          last: the 0-based data-row position of the last new row, not below
+            ``first``; the span is inclusive. Defaults to ``first``. May be
+            given only together with ``first``.
+
+        Raises:
+          TypeError: when ``first`` or ``last`` is not an integer.
+          InvalidArgumentError: when ``first`` is past the data-row count,
+            ``last`` is below ``first`` or given without ``first``, either is
+            negative, or the span reaches past the last sheet row.
+          FormulonError: with ``StatusCode.PRECONDITION_FAILED`` when a
+            PivotTable lies in the shift path, a multi-cell array formula or
+            data table is cut by the band, or a value, formula or the table
+            itself would be pushed past the last sheet row; the workbook is
+            unchanged.
+          NotFoundError: when the table was removed.
+        """
+        h, sheet, index = self._locate()
+        data_rows, _ = self._extent(h, sheet, index)
+        first, last = self._insert_span(first, last, data_rows)
+        _check(
+            LIB.fm_sheet_insert_table_rows(
+                h,
+                _uint(sheet, "sheet_index", role="sheet"),
+                _uint(index, "table_index", role="position"),
+                _uint(first, "first", role="coordinate"),
+                _uint(last, "last", role="coordinate"),
+            )
+        )
+
+    def insert_columns(self, first: Optional[int] = None, last: Optional[int] = None) -> None:
+        """Insert columns into the table, as ListColumns.Add does.
+
+        The cells of the table's rows (header through totals row) from the
+        first new column rightwards move right, the cells of other rows stay,
+        and the table grows by the span. Each new column is named from its
+        left neighbour (``Q2`` gives ``Q3``; a name without trailing digits,
+        or no left neighbour, takes the profile's ``Column<N>`` / ``列<N>``
+        with the lowest free N) and the name is written to the header cell
+        when the table has a header row; the data and totals cells stay blank.
+
+        Called with neither argument it appends one column after the last.
+        With ``first`` alone it inserts one column at ``first``.
+
+        Args:
+          first: the 0-based table-column position of the first new column;
+            the column count appends. Defaults to the column count.
+          last: the 0-based table-column position of the last new column, not
+            below ``first``; the span is inclusive. Defaults to ``first``. May
+            be given only together with ``first``.
+
+        Raises:
+          InvalidArgumentError: as :meth:`insert_rows`, with the last sheet
+            column as the bound.
+          FormulonError: with ``StatusCode.PRECONDITION_FAILED`` as
+            :meth:`insert_rows`.
+          NotFoundError: when the table was removed.
+        """
+        h, sheet, index = self._locate()
+        _, column_count = self._extent(h, sheet, index)
+        first, last = self._insert_span(first, last, column_count)
+        _check(
+            LIB.fm_sheet_insert_table_columns(
+                h,
+                _uint(sheet, "sheet_index", role="sheet"),
+                _uint(index, "table_index", role="position"),
+                _uint(first, "first", role="coordinate"),
+                _uint(last, "last", role="coordinate"),
+            )
+        )
+
+    @staticmethod
+    def _extent(h: int, sheet: int, index: int) -> Tuple[int, int]:
+        """The table's data-row count and column count."""
+        with _ArgScope() as scope:
+            info_ptr = scope.struct(S.TABLE_INFO)
+            _check(
+                LIB.fm_sheet_get_table_at(
+                    h, _uint(sheet, "sheet_index", role="sheet"), _uint(index, "table_index", role="position"), info_ptr
+                )
+            )
+            info = S.TABLE_INFO.unpack(LIB, info_ptr)
+            rect = _decode_cell_rect_at(info_ptr + S.TABLE_INFO.offsets["range"][1])
+            data_rows = rect.last_row - rect.first_row + 1 - info["header_row_count"] - info["totals_row_count"]
+            return data_rows, info["column_count"]
+
+    @staticmethod
+    def _insert_span(first: Optional[int], last: Optional[int], count: int) -> Tuple[int, int]:
+        """The ``(first, last)`` of an insert: both omitted appends one at ``count``, ``first`` alone is one at it."""
+        if first is None:
+            if last is not None:
+                raise FormulonError(
+                    StatusCode.INVALID_ARGUMENT, _argument_message("last", "needs first"), f"last={last}"
+                )
+            return count, count
+        return first, first if last is None else last
+
     def set_column_totals(self, column: int, totals: Union[TableColumnTotalsInput, TableColumn]) -> None:
         """Set column ``column``'s totals-row function, label and formula from a record.
 

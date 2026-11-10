@@ -272,6 +272,8 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value RemoveTable(const Napi::CallbackInfo& info);
   Napi::Value SetTableColumnTotals(const Napi::CallbackInfo& info);
   Napi::Value RenameTableColumn(const Napi::CallbackInfo& info);
+  Napi::Value InsertTableRows(const Napi::CallbackInfo& info);
+  Napi::Value InsertTableColumns(const Napi::CallbackInfo& info);
   Napi::Value ListPassthroughs(const Napi::CallbackInfo& info);
   Napi::Value HasPassthrough(const Napi::CallbackInfo& info);
   Napi::Value PivotCount(const Napi::CallbackInfo& info);
