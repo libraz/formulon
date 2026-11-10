@@ -120,6 +120,19 @@ TEST(FormulonCApiLocale, CanonicalizeReportsSyntaxErrorsInTheLocalizedText) {
   EXPECT_EQ(error.end, 9U);
   EXPECT_EQ(error.line, 1U);
   EXPECT_EQ(error.column, 10U);
+  EXPECT_EQ(error.end_cp, 9U);
+  EXPECT_EQ(error.column_cp, 10U);
+
+  // U+1F600 is two UTF-16 units and one code point of the typed text.
+  const char* astral = "=\"\xF0\x9F\x98\x80\"&SUMME(1;";
+  EXPECT_GE(fm_canonicalize_formula(astral, "mac-365-de_DE", &out), 1000);
+  present = 0;
+  ASSERT_EQ(fm_get_last_parse_error(&present, &error), 0);
+  ASSERT_EQ(present, 1);
+  EXPECT_EQ(error.end, 14U);
+  EXPECT_EQ(error.column, 15U);
+  EXPECT_EQ(error.end_cp, 13U);
+  EXPECT_EQ(error.column_cp, 14U);
 
   // The unterminated string sits at offset 23 of the typed text, not of the canonical rewrite.
   const char* unterminated = "=WENN(A1>0;SUMME(B1:B3;\"x);0)";

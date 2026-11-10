@@ -53,10 +53,10 @@ const char* one_char(char c) noexcept {
 }
 
 // Parses `text` (stored spelling) and, on a syntax error, publishes the failure
-// placed by `place` over the text the caller passed. A leading `=` is part of
-// the offsets, as the parser counts from the body after it.
+// placed by `place` over `caller_text`, the text the caller passed. A leading
+// `=` is part of the offsets, as the parser counts from the body after it.
 template <typename PlaceFn>
-fm_status_t check_parses(std::string_view text, PlaceFn place) {
+fm_status_t check_parses(std::string_view text, std::string_view caller_text, PlaceFn place) {
   const std::string_view body = formulon::strip_formula_prefix(text);
   if (body.empty() && text.empty()) {
     return 0;
@@ -72,7 +72,7 @@ fm_status_t check_parses(std::string_view text, PlaceFn place) {
   if (failure.range.line == 1U) {
     failure.range.column += prefix;
   }
-  return formula_parse_failed(text, place(failure.range, failure), "field=formula");
+  return formula_parse_failed(caller_text, place(failure.range, failure), "field=formula");
 }
 
 // Shared body of `fm_localize_formula` / `fm_canonicalize_formula`.
@@ -91,7 +91,7 @@ fm_status_t convert_formula(const char* formula, const char* profile_id, bool lo
   thread_local std::string buffer;
   if (localize) {
     // The input is the canonical text, so the failure is already in the caller's coordinates.
-    if (auto rc = check_parses(formula,
+    if (auto rc = check_parses(formula, formula,
                                [](const formulon::parser::TextRange&, formulon::parser::ParseFailure f) { return f; });
         rc != 0) {
       return rc;
@@ -100,7 +100,7 @@ fm_status_t convert_formula(const char* formula, const char* profile_id, bool lo
   } else {
     const formulon::eval::MappedFormulaText mapped = formulon::eval::canonicalize_formula_text_mapped(formula, profile);
     const std::string_view source(formula);
-    if (auto rc = check_parses(mapped.text,
+    if (auto rc = check_parses(mapped.text, source,
                                [&](const formulon::parser::TextRange& range, formulon::parser::ParseFailure f) {
                                  f.range = mapped.source_range(source, range);
                                  return f;
