@@ -584,7 +584,8 @@ class MigrationTableTest(unittest.TestCase):
         table = _tool("api", "gen_migration_table").rows(ENUM_LEDGER)
         self.assertIn(("`SortDirection.Asc`", "`SortOrder.Ascending`"), table["js"])
         self.assertIn(("`SortOrder.ASC`", "`SortOrder.ASCENDING`"), table["py"])
-        self.assertIn(("`ChartLegend.overlap`", "`ChartLegend.overlay`"), table["js"])
+        # A field of a renamed record reads under the record's former name before, its current one after.
+        self.assertIn(("`Legend.overlap`", "`ChartLegend.overlay`"), table["js"])
         self.assertIn(("`Legend`", "`ChartLegend`"), table["js"])
 
 
