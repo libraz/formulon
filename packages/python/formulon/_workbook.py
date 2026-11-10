@@ -4502,13 +4502,14 @@ class Font:
     differential font an absent ``<b>`` means "leave the source formatting
     unchanged" while ``False`` (``<b val="0"/>``) means "switch bold off".
     ``size_pt`` (points), ``family`` and ``charset`` are ``None`` without their element;
-    an omitted or ``None`` size is 11 pt on a workbook font and absent on a
-    differential font (which leaves the size unchanged). ``color`` is ``ColorKind.NONE``
-    without a ``<color>`` element and takes a ``ColorInput`` on input.
+    an omitted or ``None`` size or name is the Normal style's on a workbook font and
+    absent on a differential font (a size then leaves the size unchanged). ``color`` is
+    ``ColorKind.NONE`` without a ``<color>`` element and takes a ``ColorInput`` (or
+    ``None``, the absent colour) on input.
     """
 
-    name: str = ""
-    size_pt: Optional[float] = 11.0
+    name: Optional[str] = None
+    size_pt: Optional[float] = None
     bold: Optional[bool] = None
     italic: Optional[bool] = None
     strike: Optional[bool] = None
@@ -4649,10 +4650,12 @@ class FontPatch(TypedDict, total=False):
     """The font keys of :meth:`Sheet.update_cell_format`; an omitted key keeps its value.
 
     ``None`` clears ``size_pt``, ``bold``, ``italic``, ``strike``, ``outline``, ``shadow``,
-    ``condense``, ``extend``, ``family`` or ``charset`` (the element is removed and reads back ``None``).
+    ``condense``, ``extend``, ``family``, ``charset`` or ``color`` (the element is removed and reads
+    back ``None``, or ``ColorKind.NONE`` for the colour). ``None`` for ``size_pt`` or ``name`` resets it to
+    the Normal style's font size or name, which every cell font carries.
     """
 
-    name: str
+    name: Optional[str]
     #: Points; finite and not negative.
     size_pt: Optional[float]
     bold: Optional[bool]
@@ -4667,7 +4670,7 @@ class FontPatch(TypedDict, total=False):
     family: Optional[FontFamily]
     charset: Optional[int]
     scheme: FontScheme
-    color: ColorInput
+    color: Optional[ColorInput]
 
 
 class FillPatch(TypedDict, total=False):
@@ -4835,7 +4838,7 @@ def _pack_font(ptr: int, record: Font, scope: _ArgScope) -> None:
         fields[name] = 0 if value is None else int(_require_bool(value, name))
         fields[f"has_{name}"] = 0 if value is None else 1
     S.FONT_RECORD.pack(LIB, ptr, fields)
-    _pack_color(ptr + S.FONT_RECORD.offsets["color"][1], record.color, "Font.color")
+    _pack_optional_color(ptr + S.FONT_RECORD.offsets["color"][1], record.color, "Font.color")
     S.write_str_field(LIB, ptr, S.FONT_RECORD, "name", record.name, scope)
 
 
@@ -9016,6 +9019,8 @@ class Workbook(_NoCopy):
         it, so this is the way a ja-JP host declares e.g. ``游ゴシック`` for
         the cells it never styles explicitly. Read it back with
         :meth:`get_default_font`.
+
+        A ``None`` size or name keeps the current one.
         """
         h = self._require()
         with _ArgScope() as scope:

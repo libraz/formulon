@@ -2993,13 +2993,13 @@ export interface Font {
 }
 
 /** Argument of `Workbook.ooxml.addFont` / `setFont` / `Workbook.setDefaultFont`, and the `font` of a
- *  {@link DxfInput}: a font record whose keys other than `name` are all optional. An omitted or `null` size,
- *  toggle, family or charset is absent (on a differential font it leaves the attribute unchanged); an omitted or
- *  `null` size is 11 pt on a workbook font and absent on a differential font; an omitted
- *  `underline`, `vertAlign` or `scheme` is `None`; an omitted `color` is `ColorKind.None`. A colour takes
- *  `"#RRGGBB"` / `"#AARRGGBB"` too. The {@link Font} a read returns passes as is. */
+ *  {@link DxfInput}: a font record whose keys are all optional. An omitted or `null` toggle, family or charset
+ *  is absent (on a differential font it leaves the attribute unchanged). An omitted or `null` size or name is
+ *  the Normal style's on a workbook font (`setDefaultFont` keeps the current one) and absent on a differential
+ *  font. An omitted `underline`, `vertAlign` or `scheme` is `None`; an omitted `color` is `ColorKind.None`. A
+ *  colour takes `"#RRGGBB"` / `"#AARRGGBB"` too. The {@link Font} a read returns passes as is. */
 export interface FontInput {
-  name: string;
+  name?: string | null;
   sizePt?: number | null;
   bold?: boolean | null;
   italic?: boolean | null;
@@ -3013,7 +3013,7 @@ export interface FontInput {
   family?: FontFamily | null;
   charset?: number | null;
   scheme?: FontScheme;
-  color?: ColorInput;
+  color?: ColorInput | null;
 }
 
 /** Plain-data shape of a fill record (OOXML `<fill>`), as `Workbook.ooxml.getFill` returns it. */
@@ -3199,10 +3199,13 @@ export type ColorInput = string | Color;
 
 /** The font keys of a {@link CellFormatPatch}; an omitted key keeps its value. `null` clears a key whose
  *  {@link Font} field is nullable (`sizePt`, `bold`, `italic`, `strike`, `outline`, `shadow`, `condense`,
- *  `extend`, `family`, `charset`), which then reads back `null`. */
+ *  `extend`, `family`, `charset`), which then reads back `null`. `null` for `name` or `sizePt` resets it to
+ *  the Normal style's font name or size, which every cell font carries; `null` for `color` removes the
+ *  `<color>` element (`ColorKind.None`). */
 export interface FontPatch {
-  readonly name?: string;
-  /** Points, 1 to 409. `null` removes the `<sz>` element. */
+  /** `null` resets to the Normal style's font name. */
+  readonly name?: string | null;
+  /** Points, 1 to 409. `null` resets to the Normal style's font size. */
   readonly sizePt?: number | null;
   /** `null` removes the `<b>` element. */
   readonly bold?: boolean | null;
@@ -3225,7 +3228,8 @@ export interface FontPatch {
   /** `null` removes the `<charset>` element. */
   readonly charset?: number | null;
   readonly scheme?: FontScheme;
-  readonly color?: ColorInput;
+  /** `null` removes the `<color>` element. */
+  readonly color?: ColorInput | null;
 }
 
 /** The fill keys of a {@link CellFormatPatch}. Setting `foreground` or `background` on a fill without a pattern

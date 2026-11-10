@@ -211,7 +211,7 @@ const SUBJECTS = {
     apply: (t, patch) => t.updateCellFormat('A1', patch),
     read: (t) => plain(t.getCellFormat('A1')),
     unknown: { top: { bogus: 1 }, nested: { font: { bogus: 1 } } },
-    nonNullable: { top: { numberFormat: null }, nested: { font: { name: null } } },
+    nonNullable: { top: { numberFormat: null }, nested: { font: { underline: null } } },
     // A cell font always carries a size, so the clearable nested key is a flag.
     nullable: { nested: { font: { bold: null } } },
     cleared: (state) => assert.equal(state.font.bold, null),

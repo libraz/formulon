@@ -58,6 +58,7 @@ uint32_t AddBoldDateStyleXf(fm_workbook_t* wb, std::uint32_t* out_font) {
   fm_font_t font{};
   font.name = "Calibri";
   font.size_pt = 11.0;
+  font.has_size_pt = 1;
   font.bold = 1;
   font.has_bold = 1;
   EXPECT_EQ(fm_workbook_add_font(wb, &font, out_font), 0);

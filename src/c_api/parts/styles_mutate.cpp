@@ -270,9 +270,15 @@ formulon::FontRecord font_from_c(const fm_font_t& record) {
 }
 
 /// Cell fonts always carry a size: only a differential font may leave it
-/// unchanged, so `has_size` is honoured by `fm_workbook_add_dxf` alone.
-formulon::FontRecord cell_font_from_c(const fm_font_t& record) {
+/// unchanged. An unstated size or a `NULL` name takes the Normal font's.
+formulon::FontRecord cell_font_from_c(const fm_font_t& record, const formulon::FontRecord& normal) {
   formulon::FontRecord out = font_from_c(record);
+  if (record.has_size_pt == 0) {
+    out.size = normal.size;
+  }
+  if (record.name == nullptr) {
+    out.name = normal.name;
+  }
   out.has_size = true;
   return out;
 }
@@ -290,7 +296,7 @@ fm_status_t validate_cell_font(const fm_font_t& record) {
   if (auto rc = validate(record); rc != 0) {
     return rc;
   }
-  return check_font_size_pt(record.size_pt);
+  return record.has_size_pt != 0 ? check_font_size_pt(record.size_pt) : 0;
 }
 
 double finite_or_zero(double value) noexcept {
@@ -363,10 +369,9 @@ extern "C" fm_status_t fm_workbook_add_font(fm_workbook_t* wb, const fm_font_t* 
   if (auto rc = validate_cell_font(*record); rc != 0) {
     return rc;
   }
-  formulon::FontRecord candidate = cell_font_from_c(*record);
-
   formulon::StylesTable& styles = wb->workbook().mutable_styles();
   ensure_default_style_roots(styles);
+  formulon::FontRecord candidate = cell_font_from_c(*record, styles.fonts[0]);
   *out_index = find_or_append_record(styles.fonts, std::move(candidate), &font_key);
   return 0;
 }
@@ -386,7 +391,7 @@ extern "C" fm_status_t fm_workbook_set_font(fm_workbook_t* wb, uint32_t font_ind
   if (auto rc = validate_cell_font(*record); rc != 0) {
     return rc;
   }
-  styles.fonts[font_index] = cell_font_from_c(*record);
+  styles.fonts[font_index] = cell_font_from_c(*record, styles.fonts[0]);
   return 0;
 }
 
@@ -403,7 +408,7 @@ extern "C" fm_status_t fm_workbook_set_default_font(fm_workbook_t* wb, const fm_
   // by construction, so a table without it is an empty table rather than one
   // whose slot the caller mis-numbered.
   ensure_default_style_roots(styles);
-  styles.fonts[0] = cell_font_from_c(*record);
+  styles.fonts[0] = cell_font_from_c(*record, styles.fonts[0]);
   return 0;
 }
 
@@ -742,7 +747,7 @@ extern "C" fm_status_t fm_workbook_add_batch(fm_workbook_t* wb, const fm_styles_
   for (uint32_t i = 0; i < staged.borders.size(); ++i)
     borders.emplace(border_key(staged.borders[i]), i);
   for (size_t i = 0; i < batch->font_count; ++i) {
-    formulon::FontRecord value = cell_font_from_c(batch->fonts[i]);
+    formulon::FontRecord value = cell_font_from_c(batch->fonts[i], staged.fonts[0]);
     const std::string key = font_key(value);
     const auto [it, inserted] = fonts.emplace(key, static_cast<uint32_t>(staged.fonts.size()));
     if (inserted)

@@ -1022,10 +1022,11 @@ def _with_cell_context(exc: FormulonError, row: int, col: int) -> FormulonError:
 _FORMAT_FLAG = ("boolean", True, None)
 _FORMAT_BOOLEAN = ("boolean", False, None)
 _FORMAT_COLOR = ("color", False, None)
+_FORMAT_COLOR_OR_NONE = ("color", True, None)
 _FORMAT_SIDE = ("side", False, None)
 _FORMAT_FIELDS: Dict[str, Dict[str, Tuple[str, bool, Any]]] = {
     "font": {
-        "name": ("string", False, None),
+        "name": ("string", True, None),
         "size_pt": ("size", True, None),
         "bold": _FORMAT_FLAG,
         "italic": _FORMAT_FLAG,
@@ -1039,7 +1040,7 @@ _FORMAT_FIELDS: Dict[str, Dict[str, Tuple[str, bool, Any]]] = {
         "family": ("enum", True, FontFamily),
         "charset": ("byte", True, None),
         "scheme": ("enum", False, FontScheme),
-        "color": _FORMAT_COLOR,
+        "color": _FORMAT_COLOR_OR_NONE,
     },
     "fill": {
         "pattern": ("enum", False, FillPattern),
@@ -6659,7 +6660,8 @@ class Sheet(_NoCopy):
         :class:`CellFormat` copies that format (its read-only ``source`` is accepted and
         ignored): ``ws.update_cell_format("B1", **vars(ws.get_cell_format("A1")))``. ``None``
         clears a key the read record reports as nullable (``bold``, ``size_pt``,
-        ``family``, ...). A colour is ``"#RRGGBB"``, ``"#AARRGGBB"`` or a
+        ``family``, ...); on a font, ``None`` for ``size_pt`` or ``name`` resets it to the Normal
+        style's and ``None`` for ``color`` removes the colour. A colour is ``"#RRGGBB"``, ``"#AARRGGBB"`` or a
         :class:`Color`; a fill colour without a pattern makes the fill solid.
         A whole-column, whole-row or whole-sheet ``range`` (``"B:B"``,
         ``"3:3"``, ``"A:XFD"``) formats the column, row or sheet, so cells

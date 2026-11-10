@@ -6028,13 +6028,14 @@ const enumField = (table, nullable = false) => ({ kind: 'enum', max: Math.max(..
 const FORMAT_BOOLEAN = Object.freeze({ kind: 'boolean' });
 const FORMAT_FLAG = Object.freeze({ kind: 'boolean', nullable: true });
 const FORMAT_COLOR = Object.freeze({ kind: 'color' });
+const FORMAT_COLOR_OR_NULL = Object.freeze({ kind: 'color', nullable: true });
 const FORMAT_SIDE = Object.freeze({ kind: 'side' });
 
 // How each key of each group of a `CellFormatPatch` is checked; a nullable key
 // takes `null` to clear the attribute. The accepted keys are `PATCH_NESTED_KEYS`.
 const FORMAT_FIELDS = Object.freeze({
   font: {
-    name: { kind: 'string' },
+    name: { kind: 'string', nullable: true },
     sizePt: { kind: 'size', nullable: true },
     bold: FORMAT_FLAG,
     italic: FORMAT_FLAG,
@@ -6048,7 +6049,7 @@ const FORMAT_FIELDS = Object.freeze({
     family: enumField(FontFamily, true),
     charset: { kind: 'enum', max: 255, nullable: true },
     scheme: enumField(FontScheme),
-    color: FORMAT_COLOR,
+    color: FORMAT_COLOR_OR_NULL,
   },
   fill: {
     pattern: enumField(FillPattern),

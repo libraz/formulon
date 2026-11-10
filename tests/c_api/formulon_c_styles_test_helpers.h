@@ -187,6 +187,7 @@ struct BufferGuard {
   fm_font_t r{};
   r.name = "Arial";
   r.size_pt = 12.0;
+  r.has_size_pt = 1;
   r.color = RgbColor(0xFF112233U);
   r.bold = 1;
   r.italic = 0;

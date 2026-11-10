@@ -423,6 +423,7 @@ PrecedenceXfs AddPrecedenceXfs(fm_workbook_t* wb) {
   fm_font_t font{};
   font.name = "Calibri";
   font.size_pt = 11.0;
+  font.has_size_pt = 1;
   font.color.kind = FM_COLOR_KIND_THEME;
   font.color.theme = 4;
   font.color.tint = 0.4;

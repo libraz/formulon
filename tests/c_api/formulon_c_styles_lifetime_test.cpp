@@ -27,6 +27,7 @@ TEST(FormulonCApiStyles, CreateEmptySeedsReservedStyleSlots) {
   fm_font_t font{};
   font.name = "Arial";
   font.size_pt = 12.0;
+  font.has_size_pt = 1;
   std::uint32_t font_index = 0;
   ASSERT_EQ(fm_workbook_add_font(wb.handle, &font, &font_index), 0);
   EXPECT_GT(font_index, 0U);
@@ -81,6 +82,7 @@ TEST(FormulonCApiStyles, DefaultFontDeclaresWhatAnUnstyledCellSavesAs) {
   fm_font_t appended{};
   appended.name = "游ゴシック";
   appended.size_pt = 11.0;
+  appended.has_size_pt = 1;
   std::uint32_t appended_index = 0;
   ASSERT_EQ(fm_workbook_add_font(wb.handle, &appended, &appended_index), 0);
   EXPECT_GT(appended_index, 0U);
@@ -88,6 +90,7 @@ TEST(FormulonCApiStyles, DefaultFontDeclaresWhatAnUnstyledCellSavesAs) {
   fm_font_t declared{};
   declared.name = "游ゴシック";
   declared.size_pt = 11.0;
+  declared.has_size_pt = 1;
   declared.has_family = 1;
   declared.family = 2;
   declared.has_charset = 1;
@@ -121,6 +124,7 @@ TEST(FormulonCApiStyles, SetFontOverwritesInPlaceAndRejectsAnAbsentIndex) {
   fm_font_t added{};
   added.name = "Meiryo";
   added.size_pt = 12.0;
+  added.has_size_pt = 1;
   std::uint32_t index = 0;
   ASSERT_EQ(fm_workbook_add_font(wb.handle, &added, &index), 0);
   ASSERT_GT(index, 0U);
@@ -128,6 +132,7 @@ TEST(FormulonCApiStyles, SetFontOverwritesInPlaceAndRejectsAnAbsentIndex) {
   fm_font_t replacement{};
   replacement.name = "MS Gothic";
   replacement.size_pt = 9.0;
+  replacement.has_size_pt = 1;
   ASSERT_EQ(fm_workbook_set_font(wb.handle, index, &replacement), 0);
 
   fm_font_t read_back{};
@@ -155,6 +160,7 @@ TEST(FormulonCApiStyles, FontSchemeSurvivesAReadModifyWriteThroughTheAbi) {
   fm_font_t body{};
   body.name = "游ゴシック";
   body.size_pt = 11.0;
+  body.has_size_pt = 1;
   body.has_charset = 1;
   body.charset = 128;
   body.scheme = 2;  // minor: the theme's body font
@@ -166,6 +172,7 @@ TEST(FormulonCApiStyles, FontSchemeSurvivesAReadModifyWriteThroughTheAbi) {
   ASSERT_EQ(fm_workbook_get_font_at(wb.handle, 0, &read_back), 0);
   EXPECT_EQ(read_back.scheme, 2);
   read_back.size_pt = 12.0;
+  read_back.has_size_pt = 1;
   ASSERT_EQ(fm_workbook_set_font(wb.handle, 0, &read_back), 0);
 
   BufferGuard saved;
@@ -178,6 +185,7 @@ TEST(FormulonCApiStyles, FontSchemeSurvivesAReadModifyWriteThroughTheAbi) {
   fm_font_t unlinked{};
   unlinked.name = "游ゴシック";
   unlinked.size_pt = 12.0;
+  unlinked.has_size_pt = 1;
   unlinked.has_charset = 1;
   unlinked.charset = 128;
   std::uint32_t unlinked_index = 0;

@@ -675,6 +675,7 @@ TEST(FormulonCApiArgumentRange, FontSizeOutsideOneToFourHundredNineIsRejected) {
   for (const double size : {0.5, 409.5, -1.0}) {
     fm_font_t sized = font;
     sized.size_pt = size;
+    sized.has_size_pt = 1;
     std::uint32_t index = 99U;
     EXPECT_EQ(fm_workbook_add_font(wb.handle, &sized, &index), kInvalidArgument) << size;
     EXPECT_EQ(fm_workbook_set_font(wb.handle, 0, &sized), kInvalidArgument) << size;
@@ -689,6 +690,7 @@ TEST(FormulonCApiArgumentRange, FontSizeOutsideOneToFourHundredNineIsRejected) {
   for (const double size : {1.0, 409.0}) {
     fm_font_t sized = font;
     sized.size_pt = size;
+    sized.has_size_pt = 1;
     std::uint32_t index = 99U;
     EXPECT_EQ(fm_workbook_add_font(wb.handle, &sized, &index), 0) << size << fm_get_last_error_message();
   }

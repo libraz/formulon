@@ -194,7 +194,7 @@ TEST(FormulonCApiStyles, AddFontRejectsInvalidSizesWithoutMutation) {
 
     fm_font_t font = MakeArial();
     font.size_pt = size;
-    font.has_size_pt = 0;  // Cell-font APIs validate size even when this bit is clear.
+    font.has_size_pt = 1;
     std::uint32_t out_index = 0xA1A2A3A4U;
     EXPECT_EQ(fm_workbook_add_font(wb.handle, &font, &out_index), kInvalidArgument);
     EXPECT_EQ(out_index, 0xA1A2A3A4U);
@@ -212,7 +212,7 @@ TEST(FormulonCApiStyles, SetFontRejectsInvalidSizesWithoutMutationAndKeepsIndexP
 
     fm_font_t font = MakeArial();
     font.size_pt = size;
-    font.has_size_pt = 0;
+    font.has_size_pt = 1;
     EXPECT_EQ(fm_workbook_set_font(wb.handle, 0U, &font), kInvalidArgument);
     EXPECT_EQ(wb.handle->workbook().styles().fonts.size(), before_count);
     EXPECT_EQ(StylesXml(wb.handle), before_xml);
@@ -238,7 +238,7 @@ TEST(FormulonCApiStyles, SetDefaultFontRejectsInvalidSizesWithoutMutation) {
 
     fm_font_t font = MakeArial();
     font.size_pt = size;
-    font.has_size_pt = 0;
+    font.has_size_pt = 1;
     EXPECT_EQ(fm_workbook_set_default_font(wb.handle, &font), kInvalidArgument);
     EXPECT_EQ(wb.handle->workbook().styles().fonts.size(), before_count);
     EXPECT_EQ(StylesXml(wb.handle), before_xml);
@@ -254,7 +254,7 @@ TEST(FormulonCApiStyles, AddBatchRejectsInvalidFontsTransactionally) {
 
     fm_font_t fonts[] = {MakeArial(), MakeArial()};
     fonts[1].size_pt = size;
-    fonts[1].has_size_pt = 0;
+    fonts[1].has_size_pt = 1;
     uint32_t font_indices[] = {0xA1A2A3A4U, 0xB1B2B3B4U};
     fm_styles_batch_spec_t batch = FM_STRUCT_INIT(fm_styles_batch_spec_t);
     batch.fonts = fonts;
@@ -318,7 +318,7 @@ TEST(FormulonCApiStyles, CellAndDifferentialFontsAcceptTheBoundarySizes) {
 
     fm_font_t font = MakeArial();
     font.size_pt = size;
-    font.has_size_pt = 0;
+    font.has_size_pt = 1;
     std::uint32_t index = 0xFFFFFFFFU;
     EXPECT_EQ(fm_workbook_add_font(wb.handle, &font, &index), 0) << fm_get_last_error_message();
     EXPECT_EQ(fm_workbook_set_font(wb.handle, 0U, &font), 0) << fm_get_last_error_message();
@@ -341,4 +341,82 @@ TEST(FormulonCApiStyles, CellAndDifferentialFontsAcceptTheBoundarySizes) {
     EXPECT_EQ(fm_workbook_add_dxf(wb.handle, &dxf, &dxf_index), 0) << fm_get_last_error_message();
     EXPECT_EQ(dxf_index, 0U);
   }
+}
+
+TEST(FormulonCApiStyles, CellFontWithoutAStatedSizeTakesTheNormalFontSize) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  fm_font_t normal = MakeArial();
+  normal.size_pt = 14.0;
+  ASSERT_EQ(fm_workbook_set_default_font(wb.handle, &normal), 0) << fm_get_last_error_message();
+
+  fm_font_t unsized = MakeArial();
+  unsized.name = "Courier New";
+  unsized.has_size_pt = 0;
+  unsized.size_pt = 0.0;  // Ignored without the flag.
+  std::uint32_t index = 0xFFFFFFFFU;
+  ASSERT_EQ(fm_workbook_add_font(wb.handle, &unsized, &index), 0) << fm_get_last_error_message();
+  fm_font_t read{};
+  ASSERT_EQ(fm_workbook_get_font_at(wb.handle, index, &read), 0);
+  EXPECT_DOUBLE_EQ(read.size_pt, 14.0);
+  EXPECT_NE(read.has_size_pt, 0);
+
+  fm_font_t stated = unsized;
+  stated.has_size_pt = 1;
+  stated.size_pt = 0.0;
+  EXPECT_EQ(fm_workbook_add_font(wb.handle, &stated, &index), kInvalidArgument);
+}
+
+TEST(FormulonCApiStyles, SetDefaultFontWithoutAStatedSizeKeepsTheCurrentSize) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  fm_font_t normal = MakeArial();
+  normal.size_pt = 14.0;
+  ASSERT_EQ(fm_workbook_set_default_font(wb.handle, &normal), 0);
+
+  fm_font_t renamed = MakeArial();
+  renamed.name = "Courier New";
+  renamed.has_size_pt = 0;
+  ASSERT_EQ(fm_workbook_set_default_font(wb.handle, &renamed), 0) << fm_get_last_error_message();
+  fm_font_t read{};
+  ASSERT_EQ(fm_workbook_get_font_at(wb.handle, 0, &read), 0);
+  EXPECT_DOUBLE_EQ(read.size_pt, 14.0);
+  EXPECT_STREQ(read.name, "Courier New");
+}
+
+TEST(FormulonCApiStyles, CellFontWithANullNameTakesTheNormalFontName) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  fm_font_t normal = MakeArial();
+  ASSERT_EQ(fm_workbook_set_default_font(wb.handle, &normal), 0);
+
+  fm_font_t unnamed = MakeArial();
+  unnamed.name = nullptr;
+  unnamed.bold = 0;
+  std::uint32_t index = 0xFFFFFFFFU;
+  ASSERT_EQ(fm_workbook_add_font(wb.handle, &unnamed, &index), 0) << fm_get_last_error_message();
+  fm_font_t read{};
+  ASSERT_EQ(fm_workbook_get_font_at(wb.handle, index, &read), 0);
+  EXPECT_STREQ(read.name, "Arial");
+
+  // The Normal font keeps its own name when the default font is set without one.
+  fm_font_t resized = MakeArial();
+  resized.name = nullptr;
+  resized.size_pt = 20.0;
+  ASSERT_EQ(fm_workbook_set_default_font(wb.handle, &resized), 0);
+  ASSERT_EQ(fm_workbook_get_font_at(wb.handle, 0, &read), 0);
+  EXPECT_STREQ(read.name, "Arial");
+  EXPECT_DOUBLE_EQ(read.size_pt, 20.0);
+}
+
+TEST(FormulonCApiStyles, CellFontWithNoColourReadsBackWithoutOne) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  fm_font_t plain = MakeArial();
+  plain.color = fm_color_t{};
+  std::uint32_t index = 0xFFFFFFFFU;
+  ASSERT_EQ(fm_workbook_add_font(wb.handle, &plain, &index), 0);
+  fm_font_t read{};
+  ASSERT_EQ(fm_workbook_get_font_at(wb.handle, index, &read), 0);
+  EXPECT_EQ(read.color.kind, FM_COLOR_KIND_NONE);
 }

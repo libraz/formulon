@@ -130,3 +130,27 @@ test('PivotCellKind spells Column out', async () => {
     assert.equal('ColSubtotal' in f.PivotCellKind, false);
   });
 });
+
+test('a cell font cleared of its size or name takes the Normal font, and of its colour has none', async () => {
+  await withWorkbook((wb, f) => {
+    wb.setDefaultFont({ name: 'Arial', sizePt: 14 });
+    assert.equal(wb.ooxml.getFont(0).sizePt, 14);
+    const ws = wb.sheet(0);
+    ws.updateCellFormat('B2', { font: { name: 'Courier New', sizePt: 20, color: '#FF0000' } });
+    assert.equal(ws.getCellFormat('B2').font.sizePt, 20);
+
+    ws.updateCellFormat('B2', { font: { name: null, sizePt: null, color: null } });
+    const font = ws.getCellFormat('B2').font;
+    assert.equal(font.sizePt, 14);
+    assert.equal(font.name, 'Arial');
+    assert.equal(font.color.kind, f.ColorKind.None);
+
+    const added = wb.ooxml.addFont({ name: 'Courier New' });
+    assert.equal(wb.ooxml.getFont(added).sizePt, 14);
+    const unnamed = wb.ooxml.addFont({ sizePt: 9 });
+    assert.equal(wb.ooxml.getFont(unnamed).name, 'Arial');
+
+    wb.setDefaultFont({ name: 'Calibri' });
+    assert.equal(wb.ooxml.getFont(0).sizePt, 14);
+  });
+});

@@ -134,6 +134,7 @@ TEST(FormulonCApiUtf8Input, FontAndStyleRecordsRefuseAMalformedName) {
     fm_font_t font{};
     font.name = bad;
     font.size_pt = 11.0;
+    font.has_size_pt = 1;
     std::uint32_t font_index = 99U;
     EXPECT_EQ(fm_workbook_add_font(wb.handle, &font, &font_index), kUtf8Error);
     EXPECT_EQ(font_index, 99U);

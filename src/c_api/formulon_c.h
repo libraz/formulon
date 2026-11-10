@@ -1855,7 +1855,7 @@ typedef struct {
  */
 typedef struct {
   uint32_t struct_size;
-  int32_t r1c1;
+  int32_t r1c1; /* fm_tristate_t */
   int32_t has_base;
   uint32_t base_row;
   uint32_t base_col;
@@ -2348,14 +2348,14 @@ typedef struct {
   const char* name;
   const char* const* column_names; /* NULL = take the headers from the sheet */
   uint32_t column_count;
-  const char* style_name; /* NULL = the workbook default; "" is invalid */
-  int32_t styled;         /* fm_tristate_t; FALSE = no table style */
-  int32_t header_row;
-  int32_t totals_row;
-  int32_t show_first_column;
-  int32_t show_last_column;
-  int32_t show_row_stripes;
-  int32_t show_column_stripes;
+  const char* style_name;      /* NULL = the workbook default; "" is invalid */
+  int32_t styled;              /* fm_tristate_t; FALSE = no table style */
+  int32_t header_row;          /* fm_tristate_t */
+  int32_t totals_row;          /* fm_tristate_t */
+  int32_t show_first_column;   /* fm_tristate_t */
+  int32_t show_last_column;    /* fm_tristate_t */
+  int32_t show_row_stripes;    /* fm_tristate_t */
+  int32_t show_column_stripes; /* fm_tristate_t */
 } fm_table_spec_t;
 
 /**
@@ -6642,7 +6642,7 @@ typedef struct {
   const char* source_name;
   const char* custom_name;
   int32_t axis;
-  int32_t subtotal_top;
+  int32_t subtotal_top; /* fm_tristate_t */
   const char* number_format;
   int32_t has_cache_field_index; /* 0/1 */
   uint32_t cache_field_index;
@@ -10505,10 +10505,16 @@ typedef enum {
  *
  * `color` is the `<color>` element, `FM_COLOR_KIND_NONE` when absent.
  *
- * `size_pt` is the font size in points, `1..409` on input. `has_size_pt` is honoured by
- * `fm_workbook_add_dxf` alone: a differential font with `has_size_pt == 0`
- * leaves the size unchanged, while every cell-font entry point writes
- * `size_pt` regardless.
+ * `size_pt` is the font size in points, `1..409` when `has_size_pt != 0`. A
+ * differential font (`fm_workbook_add_dxf`) with `has_size_pt == 0` leaves the
+ * size unchanged. A cell font with `has_size_pt == 0` takes the size of the
+ * Normal-style font (`fonts[0]`; `fm_workbook_set_default_font` keeps its current
+ * size) and `size_pt` is ignored; a cell font always stores a size.
+ *
+ * A required cell-font attribute with no absent state inherits from the Normal
+ * font when cleared: `has_size_pt == 0` for the size, `name == NULL` for the
+ * name (`fm_workbook_set_default_font` keeps the current one). An attribute
+ * with an absent state goes absent: `FM_COLOR_KIND_NONE` writes no `<color>`.
  *
  * `scheme` is the `<scheme>` link to the workbook theme's major (heading)
  * or minor (body) typeface. It needs no presence flag because OOXML has no
@@ -11284,15 +11290,14 @@ FM_API fm_status_t fm_workbook_get_cell_style_xf_at(const fm_workbook_t* wb, uin
  * returned. The dedup is `O(N)` per call; callers that bulk-build a
  * workbook should batch when possible.
  *
- * `record.name` must be a NUL-terminated UTF-8 pointer; an empty /
- * `NULL` pointer is treated as the empty string. The string is copied
- * into the styles table and may be freed by the caller after the call
- * returns.
+ * `record.name` is a NUL-terminated UTF-8 pointer, or `NULL` for the Normal
+ * font's name. The string is copied into the styles table and may be freed by
+ * the caller after the call returns.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb`, `record` or `out_font_index` is `NULL`;
  *         `FM_STATUS_BINDING_UTF8ENCODING_ERROR` (7002) when `record->name` is malformed UTF-8;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) when `size_pt` is outside `1..409` or not finite.
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when a stated `size_pt` is outside `1..409` or not finite.
  */
 FM_API fm_status_t fm_workbook_add_font(fm_workbook_t* wb, const fm_font_t* record, uint32_t* out_font_index);
 
@@ -11311,12 +11316,12 @@ FM_API fm_status_t fm_workbook_add_font(fm_workbook_t* wb, const fm_font_t* reco
  * styles writer emits both, which Excel accepts).
  *
  * `record.name` follows `fm_workbook_add_font`: NUL-terminated UTF-8, copied
- * into the styles table, `NULL` treated as the empty string.
+ * into the styles table, `NULL` for the Normal font's name.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `record` is `NULL`;
  *         `FM_STATUS_BINDING_UTF8ENCODING_ERROR` (7002) when `record->name` is malformed UTF-8;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) when `size_pt` is outside `1..409` or not finite;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when a stated `size_pt` is outside `1..409` or not finite;
  *         `FM_STATUS_INDEX_OUT_OF_RANGE` (13) when `font_index >= fonts.size()`.
  */
 FM_API fm_status_t fm_workbook_set_font(fm_workbook_t* wb, uint32_t font_index, const fm_font_t* record);
@@ -11350,7 +11355,7 @@ FM_API fm_status_t fm_workbook_set_font(fm_workbook_t* wb, uint32_t font_index, 
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `record` is `NULL`;
  *         `FM_STATUS_BINDING_UTF8ENCODING_ERROR` (7002) when `record->name` is malformed UTF-8;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) when `size_pt` is outside `1..409` or not finite.
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when a stated `size_pt` is outside `1..409` or not finite.
  */
 FM_API fm_status_t fm_workbook_set_default_font(fm_workbook_t* wb, const fm_font_t* record);
 
@@ -13397,12 +13402,12 @@ typedef struct {
   int32_t is_pivot_chart;
   int32_t on_chartsheet;
   fm_chart_title_t title;
-  int32_t auto_title_deleted;
+  int32_t auto_title_deleted; /* fm_tristate_t */
   int32_t legend_position;
   int32_t legend_overlay;
   uint32_t legend_hidden_count;
   int32_t blanks_as;
-  int32_t plot_visible_only;
+  int32_t plot_visible_only; /* fm_tristate_t */
   int32_t date1904;
   int32_t has_style;
   int32_t style;
@@ -13413,7 +13418,7 @@ typedef struct {
   int32_t source_direction;
   int32_t source_header_row;
   int32_t source_header_column;
-  int32_t na_as_blank;
+  int32_t na_as_blank; /* fm_tristate_t */
 } fm_chart_info_t;
 
 /**
@@ -13431,7 +13436,7 @@ typedef struct {
   int32_t bar_direction;
   int32_t has_grouping;
   int32_t grouping;
-  int32_t vary_colors;
+  int32_t vary_colors; /* fm_tristate_t */
   int32_t has_gap_width_pct;
   uint32_t gap_width_pct;
   int32_t has_overlap_pct;
@@ -13485,7 +13490,7 @@ typedef struct {
   fm_chart_line_t line;
   int32_t has_marker;
   fm_chart_marker_t marker;
-  int32_t smooth;
+  int32_t smooth; /* fm_tristate_t */
   uint32_t point_count;
   int32_t has_labels;
   fm_chart_labels_t labels;

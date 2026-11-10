@@ -50,9 +50,8 @@ void PullFontRecord(CheckedSpecReader& reader, const Napi::Object& record, std::
     *value = reader.Bool(record, key, false, &present) ? 1 : 0;
     *has = present ? 1 : 0;
   };
-  reader.String(record, "name", name_storage);
-  out->name = name_storage->c_str();
-  out->size_pt = reader.Double(record, "sizePt", 11.0, &present);
+  out->name = reader.String(record, "name", name_storage) ? name_storage->c_str() : nullptr;
+  out->size_pt = reader.Double(record, "sizePt", 0.0, &present);
   out->has_size_pt = present ? 1 : 0;
   flag("bold", &out->has_bold, &out->bold);
   flag("italic", &out->has_italic, &out->italic);

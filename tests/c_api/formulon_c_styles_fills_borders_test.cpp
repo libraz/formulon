@@ -267,6 +267,7 @@ TEST(FormulonCApiStyles, FontFillAndBorderOrdinalsOutsideTheirEnumerationsAreRej
   for (int32_t underline : {-1, FM_UNDERLINE_STYLE_DOUBLE_ACCOUNTING + 1, 256}) {
     fm_font_t font{};
     font.size_pt = 11.0;
+    font.has_size_pt = 1;
     font.underline = underline;
     EXPECT_EQ(fm_workbook_add_font(wb.handle, &font, &index), FM_STATUS_INVALID_ARGUMENT) << underline;
   }

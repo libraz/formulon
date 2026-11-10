@@ -178,6 +178,7 @@ TEST(FormulonCApiFontToggles, OutlineShadowCondenseExtendRoundTrip) {
   fm_font_t font{};
   font.name = "Arial";
   font.size_pt = 12.0;
+  font.has_size_pt = 1;
   font.color.kind = FM_COLOR_KIND_RGB;
   font.color.argb = 0xFF000000U;
   font.has_outline = 1;

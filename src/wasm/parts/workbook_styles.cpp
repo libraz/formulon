@@ -290,11 +290,10 @@ void js_pull_font_record(const emscripten::val& record, std::string* name_storag
     *has = js_value_present(v) ? 1 : 0;
     *value = reader.boolean_value(v, false, field.c_str()) ? 1 : 0;
   };
-  *name_storage = reader.string(record, "name", at("name").c_str());
-  out->name = name_storage->c_str();
+  out->name = reader.optional_string(record, "name", *name_storage, at("name").c_str());
   const emscripten::val size = reader.value(record, "sizePt", at("sizePt").c_str());
   out->has_size_pt = js_value_present(size) ? 1 : 0;
-  out->size_pt = reader.number_value(size, 11.0, at("sizePt").c_str());
+  out->size_pt = reader.number_value(size, 0.0, at("sizePt").c_str());
   flag("bold", &out->has_bold, &out->bold);
   flag("italic", &out->has_italic, &out->italic);
   flag("strike", &out->has_strike, &out->strike);

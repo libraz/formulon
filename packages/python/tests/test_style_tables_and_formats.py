@@ -137,5 +137,27 @@ class TableStyleDefaultsTests(_Base):
         self.assertEqual((defaults.table_style_name, defaults.pivot_style_name), ("TableStyleLight1", None))
 
 
+class NormalFontInheritanceTests(_Base):
+    def test_cleared_size_and_name_take_the_normal_font_and_cleared_colour_is_none(self) -> None:
+        self.wb.set_default_font(formulon.Font(name="Arial", size_pt=14.0))
+        self.assertEqual(self.wb.ooxml.get_font(0).size_pt, 14.0)
+        self.ws.update_cell_format("B2", font={"name": "Courier New", "size_pt": 20.0, "color": "#FF0000"})
+        self.assertEqual(self.ws.get_cell_format("B2").font.size_pt, 20.0)
+
+        self.ws.update_cell_format("B2", font={"name": None, "size_pt": None, "color": None})
+        font = self.ws.get_cell_format("B2").font
+        self.assertEqual(font.size_pt, 14.0)
+        self.assertEqual(font.name, "Arial")
+        self.assertEqual(font.color.kind, formulon.ColorKind.NONE)
+
+        added = self.wb.ooxml.add_font(formulon.Font(name="Courier New"))
+        self.assertEqual(self.wb.ooxml.get_font(added).size_pt, 14.0)
+        unnamed = self.wb.ooxml.add_font(formulon.Font(size_pt=9.0))
+        self.assertEqual(self.wb.ooxml.get_font(unnamed).name, "Arial")
+
+        self.wb.set_default_font(formulon.Font(name="Calibri"))
+        self.assertEqual(self.wb.ooxml.get_font(0).size_pt, 14.0)
+
+
 if __name__ == "__main__":
     unittest.main()

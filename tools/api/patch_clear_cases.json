@@ -35,7 +35,9 @@
       "color",
       "transparency_pct"
     ],
-    "non_clearable": []
+    "non_clearable": [
+      "none"
+    ]
   },
   "ChartLabelsPatch": {
     "clearable": [
@@ -76,11 +78,11 @@
   },
   "ChartMarkerPatch": {
     "clearable": [
+      "fill",
+      "line",
       "size_pt"
     ],
     "non_clearable": [
-      "fill",
-      "line",
       "symbol"
     ]
   },
@@ -89,35 +91,78 @@
     "non_clearable": [
       "first_slice_angle_deg",
       "gap_width_pct",
-      "hole_size",
-      "overlap",
+      "hole_size_pct",
+      "overlap_pct",
       "vary_colors"
     ]
   },
   "ChartPointPatch": {
     "clearable": [
+      "fill",
+      "line",
       "marker"
     ],
-    "non_clearable": [
-      "fill",
-      "line"
-    ]
+    "non_clearable": []
   },
   "ChartSeriesPatch": {
     "clearable": [
       "categories",
+      "fill",
       "labels",
+      "line",
       "marker",
       "name",
       "x"
     ],
     "non_clearable": [
-      "fill",
-      "line",
       "size",
       "smooth",
       "values",
       "y"
+    ]
+  },
+  "ConditionalFormatPatch": {
+    "clearable": [
+      "dxf_index",
+      "formula1",
+      "formula2"
+    ],
+    "non_clearable": [
+      "above_average",
+      "bottom",
+      "color_scale",
+      "data_bar",
+      "equal_average",
+      "icon_set",
+      "operator",
+      "percent",
+      "priority",
+      "ranges",
+      "rank",
+      "std_dev",
+      "stop_if_true",
+      "text",
+      "time_period"
+    ]
+  },
+  "DataValidationPatch": {
+    "clearable": [
+      "error_message",
+      "error_title",
+      "formula1",
+      "formula2",
+      "prompt_message",
+      "prompt_title"
+    ],
+    "non_clearable": [
+      "allow_blank",
+      "error_style",
+      "operator",
+      "ranges",
+      "show_error_message",
+      "show_in_cell_dropdown",
+      "show_input_message",
+      "type"
     ]
   },
   "FillPatch": {
@@ -134,18 +179,18 @@
     "clearable": [
       "bold",
       "charset",
+      "color",
       "condense",
       "extend",
       "family",
       "italic",
+      "name",
       "outline",
       "shadow",
       "size_pt",
       "strike"
     ],
     "non_clearable": [
-      "color",
-      "name",
       "scheme",
       "underline",
       "vert_align"
@@ -308,40 +353,23 @@
   },
   "ShapePatch": {
     "clearable": [
-      "fill_color",
-      "fill_kind",
-      "line_color",
-      "line_kind"
+      "fill",
+      "line"
     ],
     "non_clearable": [
-      "anchor_kind",
-      "edit_as",
-      "from_col",
-      "from_col_offset_emu",
-      "from_row",
-      "from_row_offset_emu",
-      "height_emu",
-      "hidden",
-      "line_width_pt",
-      "name",
       "preset_geometry",
       "rotation_deg",
       "text",
-      "text_box",
-      "to_col",
-      "to_col_offset_emu",
-      "to_row",
-      "to_row_offset_emu",
-      "width_emu"
+      "text_box"
     ]
   },
   "SheetFormatDefaultsPatch": {
     "clearable": [
-      "default_col_width_chars",
+      "default_column_width_chars",
       "default_row_height_pt"
     ],
     "non_clearable": [
-      "base_col_width_chars",
+      "base_column_width_chars",
       "custom_height",
       "zero_height"
     ]
@@ -382,44 +410,30 @@
       "show_formulas",
       "show_grid_lines",
       "show_outline_symbols",
-      "show_row_col_headers",
+      "show_row_column_headers",
       "show_zeros",
       "split_xtwips",
       "split_ytwips",
       "tab_selected",
       "top_left",
       "view_mode",
-      "visibility",
       "zoom_pct"
     ]
   },
   "SlicerPatch": {
     "clearable": [
-      "style"
+      "style_name"
     ],
     "non_clearable": [
       "caption",
       "column_count",
       "cross_filter",
-      "from_col",
-      "from_col_offset_emu",
-      "from_row",
-      "from_row_offset_emu",
-      "row_height_emu",
-      "sort_order",
-      "to_col",
-      "to_col_offset_emu",
-      "to_row",
-      "to_row_offset_emu"
+      "row_height_pt",
+      "sort_order"
     ]
   },
   "SparklineGroupPatch": {
     "clearable": [
-      "date_axis_range",
-      "manual_max",
-      "manual_min"
-    ],
-    "non_clearable": [
       "color_axis",
       "color_first",
       "color_high",
@@ -428,6 +442,11 @@
       "color_markers",
       "color_negative",
       "color_series",
+      "date_axis_range",
+      "manual_max",
+      "manual_min"
+    ],
+    "non_clearable": [
       "date_axis",
       "display_hidden",
       "display_xaxis",
@@ -435,7 +454,7 @@
       "first",
       "high",
       "last",
-      "line_weight",
+      "line_width_pt",
       "low",
       "markers",
       "max_axis_type",
@@ -455,8 +474,8 @@
   },
   "TableStyleDefaultsPatch": {
     "clearable": [
-      "pivot_style",
-      "table_style"
+      "pivot_style_name",
+      "table_style_name"
     ],
     "non_clearable": []
   },

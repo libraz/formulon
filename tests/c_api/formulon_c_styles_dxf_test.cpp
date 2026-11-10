@@ -269,9 +269,10 @@ TEST(FormulonCApiStyles, DxfFontWithoutSizeRoundTripsAndCellFontKeepsSize) {
   ASSERT_EQ(fm_workbook_get_dxf_at(wb.handle, sized, &loaded), 0);
   EXPECT_EQ(loaded.font.has_size_pt, 1);
 
-  // A cell font always keeps its size, whatever the flag says.
+  // A cell font keeps a stated size.
   fm_font_t cell{};
   cell.name = "Arial";
+  cell.has_size_pt = 1;
   cell.size_pt = 14.0;
   cell.color = RgbColor(0xFF000000U);
   std::uint32_t font_index = 0xFFFFFFFFU;
