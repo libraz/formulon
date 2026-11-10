@@ -16,6 +16,10 @@
 # `{ type, default }`: the binding may omit that trailing argument (`today`: the pinned clock, else
 # the current date). `a1_exempt` lists the JS `*Row` / `*Col` fields of an input record that stay
 # numbers instead of taking an A1 address.
+# Engine error messages: one a call reports reads `<c_field> <constraint>` (or is a capitalised
+# sentence when no argument is at fault) and the bindings print it as `<Class.method> <public path>
+# <constraint>`; one that describes file content (kIo*, kSecurity*, out of memory) reads
+# `<part or record>: <problem>` (check: binding_drift engine-messages).
 schema: 1
 collections:
   sheet: { key: index, access: handles, plural: sheets, ops: [sheet.add, sheet.copy, sheet.get_count, sheet.move, sheet.remove, sheet.rename, sheet_index.get, sheet_name.get] }
@@ -2955,6 +2959,7 @@ entries:
     js: EvalArray
     surfaces: [wasm, native]
     was: { js: EvalArrayResult }
+    drop: { js: EvalArray, closes: R8.js, note: "evaluateFormulaArray returns the rows directly" }
   record.eval_result:
     kind: record
     role: result
@@ -3947,6 +3952,7 @@ entries:
     py: ColorScale
     surfaces: [py]
     was: { py: ColorScale }
+    drop: { py: ColorScale, closes: R8.py, note: "use CfColorScaleInput to write and CfColorScale to read" }
   record.conditional_format:
     kind: record
     role: result
@@ -3960,6 +3966,7 @@ entries:
     py: DataBar
     surfaces: [py]
     was: { py: DataBar }
+    drop: { py: DataBar, closes: R8.py, note: "use CfDataBarInput to write and CfDataBar to read" }
   record.defined_name:
     kind: record
     role: result
@@ -3993,6 +4000,7 @@ entries:
     py: IconSet
     surfaces: [py]
     was: { py: IconSet }
+    drop: { py: IconSet, closes: R8.py, note: "use CfIconSetInput to write and CfIconSet to read" }
   type.invalid_argument_error:
     kind: typedef
     py: InvalidArgumentError

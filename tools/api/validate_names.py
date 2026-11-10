@@ -52,6 +52,10 @@ name in one namespace of one surface.
 `--ledger-only` runs the schema, chain, index and rule checks without reading
 src/wasm/formulon.d.ts or the C header.
 
+Reading the tree, every current record, enum or typedef name must be exported on the
+surfaces its entry lists unless a `drop:` removes it, and no other entry may drop it
+(R0.presence).
+
 `--coverage` additionally requires every symbol the current tree exports
 to be named by some entry's current or `was` name. Entries carrying `flag:` or `review: true` are listed in
 either mode; they do not fail validation.
@@ -195,7 +199,7 @@ def check_schema(data) -> List[str]:
             value = entry.get(mapping)
             if value is None:
                 continue
-            allowed = set(NAME_FIELDS) | ({"closes"} if mapping == "drop" else set())
+            allowed = set(NAME_FIELDS) | ({"closes", "note"} if mapping == "drop" else set())
             if (
                 not isinstance(value, dict)
                 or not set(value) <= allowed
@@ -949,6 +953,50 @@ def check_address_args(
     return problems
 
 
+# Entry kinds whose names are top-level exports, so a current name must exist where the entry says it does.
+_PRESENT_KINDS = frozenset({"record", "enum", "typedef"})
+_SURFACES_OF_FIELD = {"c": ("c",), "js": ("wasm", "native"), "py": ("py",)}
+_DTS_EXPORT_RE = re.compile(
+    r"^export\s+(?:declare\s+)?(?:class|interface|type|const|function|enum)\s+([A-Za-z_$][\w$]*)", re.M
+)
+
+
+def check_presence(entries: Dict[str, dict], surfaces: extract_names.Surfaces, dts_text: str) -> List[str]:
+    """Each current record, enum or typedef name exists on every surface its entry lists, and no entry drops it.
+
+    A name that leaves a surface carries `drop:` (or `replaced_by:`); a current name the tree no longer exports
+    would otherwise reach the migration table as a replacement nobody can import.
+    """
+    exported: Dict[str, set] = defaultdict(set)
+    for surface, symbol in surfaces.exported():
+        exported[surface].add(symbol)
+    for name in _DTS_EXPORT_RE.findall(dts_text):
+        exported["wasm"].add(name)
+        exported["native"].add(name)
+    dropped: Dict[tuple, List[str]] = defaultdict(list)
+    for key, entry in entries.items():
+        for field, name in (entry.get("drop") or {}).items():
+            if field in _SURFACES_OF_FIELD:
+                dropped[(field, name)].append(key)
+    problems = []
+    for key, entry in entries.items():
+        if entry.get("kind") not in _PRESENT_KINDS or "replaced_by" in entry:
+            continue
+        for field, field_surfaces in _SURFACES_OF_FIELD.items():
+            name = entry.get(field)
+            if not isinstance(name, str) or (entry.get("drop") or {}).get(field) == name:
+                continue
+            missing = [s for s in field_surfaces if s in entry.get("surfaces", []) and name not in exported[s]]
+            if missing:
+                problems.append(f"R0.presence: {key}: {field} {name} is not exported on {', '.join(missing)}")
+            others = [k for k in dropped[(field, name)] if k != key]
+            if others:
+                problems.append(
+                    f"R0.presence: {key}: {field} {name} is current here but dropped by {', '.join(others)}"
+                )
+    return problems
+
+
 def check_coverage(
     entries: Dict[str, dict], surfaces: extract_names.Surfaces, collections: Optional[Dict[str, dict]] = None
 ) -> List[str]:
@@ -1025,6 +1073,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             problems += check_address_args(entries, dts_text, data["collections"])
             problems += check_clearable(entries, dts_text)
             problems += check_read_only_keys(entries, dts_text, data["collections"])
+            problems += check_presence(entries, surfaces, dts_text)
         if args.coverage:
             problems += check_coverage(entries, surfaces, data["collections"])
         flagged = [(f"entries.{k}", e["flag"]) for k, e in entries.items() if isinstance(e, dict) and "flag" in e]

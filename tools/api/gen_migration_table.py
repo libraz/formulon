@@ -13,7 +13,7 @@ and what replaces it:
   (``addPivotField()`` -> ``ws.pivot(...).addField()``);
 * a ``drop`` name, whether or not it was also renamed: removed, pointing at the
   ``list`` entry that absorbs it, at the op that replaces it, or at the entry it
-  was an alias of, when the ledger names one;
+  was an alias of, when the ledger names one; a ``drop.note`` replaces that pointer;
 * a ``replaced_by`` type: folded into the type it names; an ``internal`` op
   with ``replaced_by``: the facade member that took it over. Any other
   ``internal`` op has no row.
@@ -214,6 +214,8 @@ def rows(data: dict) -> Dict[str, List[Row]]:
             if isinstance(drop.get(field), str):
                 instead = _absorbing_list(entries, key, field) or _parent_name(entries, key, field)
                 after = f"removed; use {_call(instead, field, 'op')}" if instead else "removed"
+                if isinstance(drop.get("note"), str):
+                    after = f"removed; {drop['note']}"
                 out[field].append((_call(old, field, kind), after))
                 continue
             new = entry.get(field)
