@@ -689,6 +689,15 @@ if(DEFINED _FORMULON_BEHAVIOR_PY)
     COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/api/check_changelog_identifiers_test.py
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
   )
+  # Every field of every public record carries its own doc comment on all
+  # three surfaces: the declaration files, the Python dataclasses and the C
+  # header's structs.
+  add_test(
+    NAME ApiFieldDocs
+    COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/api/check_field_docs.py
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  )
+  set_tests_properties(ApiFieldDocs PROPERTIES LABELS "Api")
   add_test(
     NAME ApiRoundtripCasesDrift
     COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/api/gen_roundtrip_cases.py --check
