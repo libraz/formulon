@@ -54,6 +54,10 @@ Homepage = "https://formulon.libraz.net"
 Source = "https://github.com/libraz/formulon"
 Issues = "https://github.com/libraz/formulon/issues"
 
+# The test suite reads tools/api/names.yaml (`uv sync --group test`).
+[dependency-groups]
+test = ["pyyaml"]
+
 # -- Formatter / linter (ruff) ---------------------------------------------
 # Invoked from the repo root by `make format` / `make format-check`
 # (uvx ruff format / check over packages/python). The target Python
