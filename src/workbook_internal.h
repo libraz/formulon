@@ -20,11 +20,14 @@
 #include "eval/recalc_engine.h"
 #include "sheet.h"
 #include "sheet_name.h"
+#include "styles.h"
 #include "table.h"
 #include "utils/error.h"
 #include "utils/expected.h"
 #include "utils/status_macros.h"
 #include "utils/strings.h"
+#include "value.h"
+#include "workbook.h"
 
 namespace formulon {
 class Workbook;
@@ -207,11 +210,67 @@ inline constexpr TotalsFunction kTotalsFunctions[] = {
 std::string totals_subtotal_formula(const TableMetadata& table, std::size_t column, int code);
 
 /// The bookkeeping after table `index`'s extent changed: its AutoFilter
-/// spans the header through the last data row, formulas naming it are
-/// re-indexed, spill barriers re-synced and row-visibility dependents dirtied.
+/// spans the header through the last data row, the placeholder-row and
+/// creation-shift marks clear, formulas naming it are re-indexed, spill
+/// barriers re-synced and row-visibility dependents dirtied.
 void finish_table_extent_change_locked(Workbook& wb, std::vector<Sheet>& sheets,
                                        const eval::RecalcEngine::LockedMutator& mutator,
                                        const std::vector<DefinedName>& defined_names, std::size_t index);
+
+/// Whether `value`, read from a cell formatted with `xf`, is a number shown
+/// as a date or time (elapsed `[h]:mm` included) under `profile`.
+bool cell_is_date_value(const StylesTable& styles, const CellXf* xf, ExcelProfile profile, const Value& value);
+
+/// Whether (`row`, `col`) holds a formula, a non-blank value or part of a
+/// committed spill: what keeps a cell from becoming a table's new blank row.
+bool cell_is_occupied(const Sheet& sheet, std::uint32_t row, std::uint32_t col);
+
+/// Where cell (`row`, `col`) after the shifts of `pending` sits now, or
+/// nullopt for a cell one of them inserts.
+std::optional<CellAddress> cell_before_shifts(std::size_t sheet_index, std::uint32_t row, std::uint32_t col,
+                                              const std::vector<PendingShift>& pending);
+
+/// The edit `insert_cells` (`kDown` / `kRight`) or `delete_cells` (`kUp` /
+/// `kLeft`) makes for `range`, after their argument checks.
+Expected<StructuralEdit, Error> band_edit_of(const MergeRange& range, CellShift shift);
+
+/// Where `rect` on `sheet_index` lies after the shifts of `pending`, in
+/// order, or nullopt once one deletes it. A rectangle straddling a shift's
+/// band edge stays put, or is gone with `straddle_drops` (a merge the shift
+/// unmerges).
+std::optional<MergeRange> rect_after_shifts(const MergeRange& rect, std::size_t sheet_index,
+                                            const std::vector<PendingShift>& pending, bool straddle_drops);
+
+/// The structure-intersection preflight every row/column edit passes before
+/// anything moves (data tables, legacy arrays, PivotTables, tables, and
+/// content an insert pushes off the grid).
+Expected<void, Error> check_structure_edit(const Workbook& wb, std::size_t sheet_index, const StructuralEdit& edit);
+
+/// `Workbook::check_band_edit` with the shifts of `pending` taken as applied
+/// first. The edit is mapped back onto the current cells, and an insert
+/// counts the inserts before it on the same band towards what it pushes off.
+Expected<void, Error> check_band_edit_after(const Workbook& wb, std::size_t sheet_index, const MergeRange& range,
+                                            CellShift shift, const std::vector<PendingShift>& pending);
+
+/// Refusal of `rect` on `sheet_index` as the range of a table other than
+/// `self`, on the first structure Excel keeps a table from overlapping, read
+/// where `pending` would move it. With `unmerge_inside`, as on creation, a
+/// merge wholly inside is not one.
+Expected<void, Error> check_table_range_free(const Workbook& wb, std::size_t sheet_index, const MergeRange& rect,
+                                             std::optional<std::size_t> self, bool unmerge_inside,
+                                             const std::vector<PendingShift>& pending);
+
+/// Whether a merge, table, PivotTable, multi-cell array formula or data table
+/// reaches `edit`'s moving region across its band edge after `pending`, which
+/// keeps a totals row toggle from shifting cells.
+bool band_meets_straddler(const Workbook& wb, std::size_t sheet_index, const StructuralEdit& edit,
+                          const std::vector<PendingShift>& pending);
+
+/// Refusal of the row below `assumed.rect` (within its columns) as a new
+/// totals row of table `index` after `pending`, on the first thing occupying
+/// it. `assumed.rect` must end above the grid's last row.
+Expected<void, Error> check_totals_row_free(const Workbook& wb, std::size_t index, const TableShape& assumed,
+                                            const std::vector<PendingShift>& pending);
 
 }  // namespace detail
 }  // namespace formulon

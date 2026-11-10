@@ -300,18 +300,14 @@ Expected<void, Error> ReadBeginList(ByteSpan payload, TableMetadata* table, bool
   table->totals_row = crw_totals != 0U;
   // Absent `totalsRowShown` reads as true, so only a cleared bit is spelled.
   table->totals_row_shown = (flags & kShownTotalRow) != 0U ? std::nullopt : std::optional<bool>(false);
+  table->insert_row = (flags & kForceInsertToBeVisible) != 0U;
+  table->insert_row_shift = (flags & kInsertRowInsCells) != 0U;
   std::string& extra = table->root_extra_attrs;
   AppendText(extra, "comment", comment);
   if (lt == kLtXml) {
     append_xml_attr(extra, "tableType", "xml");
   } else if (lt == kLtExtData) {
     append_xml_attr(extra, "tableType", "queryTable");
-  }
-  if ((flags & kForceInsertToBeVisible) != 0U) {
-    append_xml_attr(extra, "insertRow", "1");
-  }
-  if ((flags & kInsertRowInsCells) != 0U) {
-    append_xml_attr(extra, "insertRowShift", "1");
   }
   if ((flags & kPublished) != 0U) {
     append_xml_attr(extra, "published", "1");
@@ -449,8 +445,8 @@ void EmitBeginList(std::vector<std::uint8_t>& out, const TableMetadata& table, c
   }
   std::uint32_t flags = 0;
   flags |= table.totals_row_shown.value_or(true) ? kShownTotalRow : 0U;
-  flags |= BoolAttr(attrs, "insertRow") ? kForceInsertToBeVisible : 0U;
-  flags |= BoolAttr(attrs, "insertRowShift") ? kInsertRowInsCells : 0U;
+  flags |= table.insert_row ? kForceInsertToBeVisible : 0U;
+  flags |= table.insert_row_shift ? kInsertRowInsCells : 0U;
   flags |= BoolAttr(attrs, "published") ? kPublished : 0U;
   std::vector<std::uint8_t> payload;
   emit_rfx(payload, rfx);

@@ -199,8 +199,8 @@ test('a totals row over an occupied row below shifts that row down within the ta
     assert.deepEqual(rectOf(table), rect(0, 0, 3, 1));
     assert.equal(table.getProperties().totalsRow, true);
     assert.equal(ws.getValue('B5'), 'keep');
-    // A table without a stored totals label or function gets an empty totals row.
-    assert.equal(ws.getValue('B4'), null);
+    // A table that never showed its totals row gets the default: the last column sums its numeric data (10 + 30).
+    assert.equal(ws.getValue('B4'), 40);
   });
 });
 

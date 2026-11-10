@@ -143,6 +143,7 @@ _FACADE_FILES = frozenset(
         "workbook_row_col_edit.cpp",
         "workbook_tables.cpp",
         "workbook_table_insert.cpp",
+        "workbook_table_header.cpp",
         "workbook_table_loss.h",
         "workbook_table_loss.cpp",
         "table_calc_column.h",

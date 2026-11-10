@@ -302,11 +302,13 @@ TEST(TableCalcColumnSet, RefusalsChangeNothing) {
 }
 
 TEST(TableCalcColumnSet, ZeroDataRowsSetsOnlyTheMark) {
+  // Header and totals row only: no data row to fill.
   Workbook wb = PatternBook("");
-  AddTable(wb, "A2:C2");
+  AddTable(wb, "A2:C3", /*totals=*/true);
   ASSERT_TRUE(wb.set_table_calculated_column(0U, 0U, 2U, "=A3*10").has_value());
   EXPECT_EQ(Mark(wb, 2U), "A3*10");
-  EXPECT_EQ(FormulaAt(wb, "C3"), "");
+  // C3 keeps the default totals function of a column with no data, not the formula.
+  EXPECT_EQ(FormulaAt(wb, "C3"), "=SUBTOTAL(103,Tbl[c])");
   EXPECT_TRUE(wb.sheet(0U).shared_formula_groups().empty());
 }
 

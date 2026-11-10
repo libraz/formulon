@@ -20,7 +20,6 @@
 #include <utility>
 #include <vector>
 
-#include "chart/chart_template.h"
 #include "eval/eval_profile_scope.h"
 #include "eval/pivot_formula.h"
 #include "eval/text_format/display_text.h"
@@ -129,9 +128,7 @@ pivot::RefreshSource read_source(const Workbook& wb, const Sheet& sheet, const M
       if (value.is_number() && xf != nullptr) {
         auto it = date_format_of.find(fmt);
         if (it == date_format_of.end()) {
-          it = date_format_of
-                   .emplace(fmt, chart_is_date_format(text_format::number_format_code_for_xf(styles, xf, profile)))
-                   .first;
+          it = date_format_of.emplace(fmt, detail::cell_is_date_value(styles, xf, profile, value)).first;
         }
         is_date = it->second;
       }

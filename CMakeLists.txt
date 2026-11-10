@@ -154,6 +154,7 @@ set(FORMULON_CORE_SOURCES
   src/workbook_pivot_refresh.cpp
   src/workbook_tables.cpp
   src/workbook_table_insert.cpp
+  src/workbook_table_header.cpp
   src/table_calc_column.cpp
   src/table_totals_sync.cpp
   src/workbook_formula_index.cpp

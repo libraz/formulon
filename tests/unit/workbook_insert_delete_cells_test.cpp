@@ -1627,8 +1627,9 @@ TEST(InsertDeleteCells, TotalsOnWithAFreeRowAndNothingBelowGrowsTheTable) {
   TotalsOn(wb);
   EXPECT_EQ(wb.tables()[0].ref, "A1:B5");
   EXPECT_TRUE(wb.tables()[0].totals_row);
-  EXPECT_TRUE(At(wb, "A5").is_blank());
-  EXPECT_TRUE(At(wb, "B5").is_blank());
+  // A table that never showed a totals row gets the default label and, over numbers, sum.
+  EXPECT_EQ(TextAt(wb, "A5"), "Total");
+  EXPECT_EQ(FormulaAt(wb, "B5"), "=SUBTOTAL(109,T[V])");
 }
 
 TEST(InsertDeleteCells, TotalsOnShiftsTheTableColumnsDownEvenWhenTheRowBelowIsFree) {
@@ -1917,6 +1918,8 @@ TEST(InsertDeleteCells, TotalsOnIsRefusedWhenTheRowBelowIsBusyAndAMergeStraddles
 TEST(InsertDeleteCells, TotalsOffRemovesTheRowAndKeepsTheLabelsForTheNextOn) {
   Workbook wb = Workbook::create();
   AddKv(wb);
+  // As loaded from a file whose table has shown its totals row, so ON restores the columns' settings.
+  wb.mutable_tables()[0].totals_row_shown.reset();
   wb.mutable_tables()[0].columns[0].totals_label = "mylabel";
   wb.mutable_tables()[0].columns[1].totals_function = "sum";
   TotalsOn(wb);

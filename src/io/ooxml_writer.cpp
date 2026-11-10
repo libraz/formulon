@@ -217,6 +217,12 @@ std::string BuildTableXml(const TableMetadata& t, std::uint32_t numeric_id) {
   if (!t.header_row) {
     out.append(" headerRowCount=\"0\"");
   }
+  if (t.insert_row) {
+    out.append(" insertRow=\"1\"");
+  }
+  if (t.insert_row_shift) {
+    out.append(" insertRowShift=\"1\"");
+  }
   if (t.totals_row) {
     out.append(" totalsRowCount=\"1\"");
   }

@@ -34,6 +34,8 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/workbook_test.cpp
   unit/workbook_auto_calc_test.cpp
   unit/workbook_tables_test.cpp
+  unit/workbook_table_flow2b_test.cpp
+  unit/workbook_table_header_test.cpp
   unit/workbook_collection_identity_test.cpp
   unit/name_identity_collation_test.cpp
   unit/name_identity_resolver_test.cpp

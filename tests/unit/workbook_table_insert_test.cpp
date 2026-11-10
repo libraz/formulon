@@ -204,7 +204,8 @@ TEST(WorkbookTableInsert, CalculatedColumnsFillAnAppendAboveTheTotalsRow) {
   AddTable(wb, std::move(table));
   ASSERT_TRUE(wb.insert_table_rows(0U, 0U, 2U, 2U).has_value());
   EXPECT_EQ(FormulaAt(wb, "B4"), "=A4*2");
-  EXPECT_EQ(FormulaAt(wb, "B5"), "");
+  // The totals row, blank at creation, took the defaults: count over a column with no values, not the formula.
+  EXPECT_EQ(FormulaAt(wb, "B5"), "=SUBTOTAL(103,tbl[Double])");
 }
 
 TEST(WorkbookTableInsert, CountAboveOneGrowsByTheSpan) {

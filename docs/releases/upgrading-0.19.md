@@ -708,10 +708,38 @@ Read [Every binding](#every-binding) first, then the section for your binding. [
   row of the grid. `update({ totalsRow: false })` removes the totals row and
   shifts the cells beneath up, or only empties it when something straddles the
   columns below; it fails with `PreconditionFailed` while a formula or defined
-  name references the row, and the columns keep their saved totals labels and
-  functions. A toggle that changes nothing is a no-op, and with `range` in the
-  same patch the range is final and `totalsRow` only sets the flag.
+  name references the row, and the columns keep their saved totals settings. A toggle that changes nothing is a no-op.
   `fm_sheet_update_table` behaves the same.
+- **JavaScript, Python:** turning the totals row on writes fresh defaults when
+  the table has never shown its totals row or lost it to a row delete: the
+  first column gets the label in the profile's language (`Total`, `集計`), the
+  last column a sum when every data cell is a non-date number and a count
+  otherwise, and a one-column table gets the function only. Otherwise the
+  columns' saved settings are restored. A row or cell delete over the totals
+  row turns it off and clears every column's totals settings.
+- **JavaScript, Python:** `Table.update({ headerRow: false })`
+  (`update(header_row=False)`) deletes the header cells, shrinks the range by
+  its top row, drops the AutoFilter and keeps the column names; it used to
+  flip the flag only. While it is off `Tbl[#Headers]` evaluates to `#REF!`.
+  `headerRow: true` writes the names into the row above the data and grows the
+  range up when that row is empty in the table's columns, and otherwise shifts
+  the table's columns down one row as `insertCells` with `CellShift.Down`
+  does. Turning it off on a table with no data row fails with
+  `PreconditionFailed`.
+- **JavaScript, Python:** a patch with `range` and a toggle applies the toggle
+  first and checks `range` against the toggled shape; it used to take `range`
+  as final and flip the flag only. A `range` whose first row disagrees is
+  `InvalidArgument`, and a refused patch changes nothing. Migrate by passing
+  the range of the toggled shape (the old first row plus one for header off,
+  minus one for header on by growing up, unchanged when the columns shift down)
+  or by omitting `range`.
+- **JavaScript, Python:** `deleteRows` and `deleteCells` with `Up` over a
+  table's header row, without the whole table, fail with `PreconditionFailed`;
+  a delete covering every data row keeps the first data row, emptied. A
+  one-row `addTable` range with a header row creates the header and one empty
+  data row, shifting occupied cells of the table's columns down, and fails
+  with `PreconditionFailed` on the last grid row; `headerRow` with `totalsRow`
+  on one row is `InvalidArgument`.
 - **JavaScript, Python:** `Table.update({ columns: [...] })`
   (`update(columns=[TableColumnPatch(...)])`) replaces the column totals
   setter. Element `i` patches column `i`; each element is a partial
@@ -720,7 +748,7 @@ Read [Every binding](#every-binding) first, then the section for your binding. [
   `null` (`None`) clears it, and a read `TableColumn` is accepted as an
   element (its `name` is ignored). An array shorter than the column count
   patches the leading columns, `{}` leaves a column alone, and a longer array
-  is `InvalidArgument` (C `FM_STATUS_INDEX_OUT_OF_RANGE`). A `custom` function
+  is `IndexOutOfRange` on every surface (C `FM_STATUS_INDEX_OUT_OF_RANGE`). A `custom` function
   needs a non-empty formula, any other function reads its formula as `null`,
   and an empty string is `InvalidArgument`. `calculatedFormula` is the
   formula as typed in the column's first data row (`=A3*10`, `=[@a]*10`); a
@@ -1271,7 +1299,7 @@ These parameters can no longer be passed by position.
 | `Pivot.add_field_item` | `cache_index`, `visible` |
 | `Sheet.update_threaded_comment` | `text`, `mentions`, `done` |
 | `TableInput` | `range`, `name`, `columns`, `style_name`, `header_row`, `totals_row` and the style toggles (a dataclass passed to `Sheet.add_table`) |
-| `Table.update` | `range`, `name`, `header_row`, `totals_row`, `columns` |
+| `Table.update` | `range`, `header_row`, `totals_row`, `columns` |
 | `Table.update_style_options` | `style_name` and the style toggles |
 | `Workbook.update_table_style_defaults` | `table_style_name`, `pivot_style_name` |
 | `Workbook.update_iterative` | `enabled`, `max_iterations`, `max_change` |

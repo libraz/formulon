@@ -61,9 +61,10 @@ TableMetadata AuthoredTable() {
   t.sheet_index = 0;
   t.header_row = true;
   t.totals_row = true;
+  t.insert_row = true;
   // CT_Table attribute order, which is how the reader spells them.
   t.root_extra_attrs =
-      " comment=\"Q &amp; A\" insertRow=\"1\" published=\"1\" headerRowDxfId=\"1\" dataDxfId=\"2\""
+      " comment=\"Q &amp; A\" published=\"1\" headerRowDxfId=\"1\" dataDxfId=\"2\""
       " totalsRowDxfId=\"3\" headerRowBorderDxfId=\"5\" tableBorderDxfId=\"4\" totalsRowBorderDxfId=\"6\""
       " headerRowCellStyle=\"Heading 1\" dataCellStyle=\"Normal\" totalsRowCellStyle=\"Total\"";
   TableColumn region(1, "Region", "Total", "", "");
@@ -139,6 +140,8 @@ void ExpectSameTable(const TableMetadata& actual, const TableMetadata& expected)
   EXPECT_EQ(actual.header_row, expected.header_row);
   EXPECT_EQ(actual.totals_row, expected.totals_row);
   EXPECT_EQ(actual.totals_row_shown, expected.totals_row_shown);
+  EXPECT_EQ(actual.insert_row, expected.insert_row);
+  EXPECT_EQ(actual.insert_row_shift, expected.insert_row_shift);
   EXPECT_EQ(actual.root_extra_attrs, expected.root_extra_attrs);
   ASSERT_EQ(actual.columns.size(), expected.columns.size());
   for (std::size_t i = 0; i < expected.columns.size(); ++i) {
@@ -287,7 +290,8 @@ TEST(XlsbTableFidelity, NeverShownTotalsRowAndNoStyleNameSurvive) {
   t.ref = "A1:B4";
   t.header_row = false;
   t.totals_row_shown = false;
-  t.root_extra_attrs = " tableType=\"queryTable\" insertRowShift=\"1\"";
+  t.root_extra_attrs = " tableType=\"queryTable\"";
+  t.insert_row_shift = true;
   TableColumn a(1, "A", "", "", "");
   a.extra_attrs = " uniqueName=\"A\" queryTableFieldId=\"1\"";
   TableColumn b(2, "B", "", "", "");

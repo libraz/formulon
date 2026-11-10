@@ -791,6 +791,8 @@ TEST(SlicerFidelity, DeletingTheFramesRowsRemovesTheSlicerAndItsCache) {
   Workbook wb = LoadOrDie(SlicerPackage({true, true, "rId3", "twoCell"}));
   ASSERT_TRUE(static_cast<bool>(add_slicer(wb, 0, 0, 1, Spec(slicer_field::kAnchor))));  // frame on rows 3..13
   ASSERT_EQ(list_slicers(wb, 0).value().size(), 2U);
+  // A data row below the band keeps the delete from emptying the table, which would keep its first data row.
+  ASSERT_TRUE(static_cast<bool>(wb.resize_table(0, MergeRange{0, 0, 13, 1})));
   // The first frame spans rows 1..11 and moves with its cells; deleting them deletes it.
   ASSERT_TRUE(static_cast<bool>(wb.delete_rows(0, 1, 11)));
   auto left = list_slicers(wb, 0);
@@ -814,6 +816,8 @@ TEST(SlicerFidelity, DeletingTheFramesRowsRecalculatesFormulasNamingItsCache) {
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0, 0, 25, "=Slicer_Region")));
   ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
   ASSERT_EQ(wb.sheet(0).cell_at(0, 25)->cached_value.as_error(), ErrorCode::NA);
+  // A data row below the band keeps the delete from emptying the table, which would keep its first data row.
+  ASSERT_TRUE(static_cast<bool>(wb.resize_table(0, MergeRange{0, 0, 13, 1})));
   ASSERT_TRUE(static_cast<bool>(wb.delete_rows(0, 1, 11)));
   ASSERT_TRUE(list_slicers(wb, 0).value().empty());
   ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));

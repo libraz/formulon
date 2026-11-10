@@ -322,3 +322,252 @@ test('tables live on their sheet: sheet-local index, one workbook-wide lookup by
     release(wb);
   }
 });
+
+// ---- Header row, totals row, structural deletes and header-only creation ----
+
+/** A1:B3 `Product` / `Amount` with data x/10 and y/20, as the table `Sales`. */
+function headerWorkbook(mod, build = true) {
+  const wb = mod.Workbook.createDefault();
+  const ws = wb.sheet(0);
+  ws.setText('A1', 'Product');
+  ws.setText('B1', 'Amount');
+  ws.setText('A2', 'x');
+  ws.setNumber('B2', 10);
+  ws.setText('A3', 'y');
+  ws.setNumber('B3', 20);
+  if (build) ws.addTable({ range: 'A1:B3', name: 'Sales' });
+  return wb;
+}
+
+const rectOf = (table) => ({ ...table.getProperties().range.rect });
+const rectLike = (firstRow, firstCol, lastRow, lastCol) => ({ firstRow, firstCol, lastRow, lastCol });
+
+test('header row off deletes the header cells and keeps the names; on writes them back', async () => {
+  const mod = await getModule();
+  const wb = headerWorkbook(mod);
+  try {
+    const ws = wb.sheet(0);
+    const table = ws.table(0);
+    ws.setFormula('D1', '=Sales[[#Headers],[Amount]]');
+    wb.recalc();
+    assert.equal(ws.getValue('D1'), 'Amount');
+
+    table.update({ headerRow: false });
+    wb.recalc();
+    const off = table.getProperties();
+    assert.equal(off.headerRow, false);
+    assert.deepEqual(rectOf(table), rectLike(1, 0, 2, 1));
+    assert.deepEqual(
+      off.columns.map((c) => c.name),
+      ['Product', 'Amount'],
+    );
+    assert.equal(ws.getValue('A1'), null);
+    assert.equal(ws.getValue('B1'), null);
+    assert.equal(ws.getValue('A2'), 'x');
+    assert.equal(ws.getValue('D1').code, mod.ErrorCode.Ref);
+
+    table.update({ headerRow: true });
+    wb.recalc();
+    assert.equal(table.getProperties().headerRow, true);
+    assert.deepEqual(rectOf(table), rectLike(0, 0, 2, 1));
+    assert.equal(ws.getValue('A1'), 'Product');
+    assert.equal(ws.getValue('B1'), 'Amount');
+    assert.equal(ws.getValue('B3'), 20);
+    assert.equal(ws.getValue('D1'), 'Amount');
+  } finally {
+    release(wb);
+  }
+});
+
+test('header row on shifts the data down when the row above it is occupied', async () => {
+  const mod = await getModule();
+  const wb = headerWorkbook(mod, false);
+  try {
+    const ws = wb.sheet(0);
+    const table = ws.addTable({ range: 'A1:B3', name: 'Sales' });
+    table.update({ headerRow: false });
+    ws.setText('A1', 'note');
+    table.update({ headerRow: true });
+    assert.deepEqual(rectOf(table), rectLike(1, 0, 3, 1));
+    assert.equal(ws.getValue('A1'), 'note');
+    assert.equal(ws.getValue('A2'), 'Product');
+    assert.equal(ws.getValue('B2'), 'Amount');
+    assert.equal(ws.getValue('A3'), 'x');
+    assert.equal(ws.getValue('B4'), 20);
+  } finally {
+    release(wb);
+  }
+});
+
+test('totals row on writes defaults once and restores the saved settings afterwards', async () => {
+  const mod = await getModule();
+  const wb = headerWorkbook(mod);
+  try {
+    const ws = wb.sheet(0);
+    const table = ws.table(0);
+    table.update({ totalsRow: true });
+    wb.recalc();
+    let columns = table.getProperties().columns;
+    assert.deepEqual(rectOf(table), rectLike(0, 0, 3, 1));
+    assert.equal(columns[0].totalsRowLabel, 'Total');
+    assert.equal(columns[0].totalsRowFunction, mod.TableTotalsRowFunction.None);
+    assert.equal(columns[1].totalsRowFunction, mod.TableTotalsRowFunction.Sum);
+    assert.equal(ws.getValue('A4'), 'Total');
+    assert.equal(ws.getValue('B4'), 30);
+
+    table.update({ columns: [{}, { totalsRowFunction: mod.TableTotalsRowFunction.Max }] });
+    table.update({ totalsRow: false });
+    table.update({ totalsRow: true });
+    wb.recalc();
+    columns = table.getProperties().columns;
+    assert.equal(columns[1].totalsRowFunction, mod.TableTotalsRowFunction.Max);
+    assert.equal(ws.getValue('B4'), 20);
+  } finally {
+    release(wb);
+  }
+});
+
+test('totals row defaults count a text last column and give a one-column table the function only', async () => {
+  const mod = await getModule();
+  const wb = mod.Workbook.createDefault();
+  try {
+    const ws = wb.sheet(0);
+    ws.setValues('A1', [
+      ['Item', 'Note', 'Qty'],
+      ['a', 'p', 'q'],
+      ['b', 'r', 's'],
+    ]);
+    ws.setValues('E1', [['Solo'], [1], [2]]);
+    const wide = ws.addTable({ range: 'A1:C3', name: 'Wide' });
+    const solo = ws.addTable({ range: 'E1:E3', name: 'Solo' });
+    wide.update({ totalsRow: true });
+    solo.update({ totalsRow: true });
+    const last = wide.getProperties().columns[2];
+    assert.equal(last.totalsRowFunction, mod.TableTotalsRowFunction.Count);
+    const only = solo.getProperties().columns[0];
+    assert.equal(only.totalsRowFunction, mod.TableTotalsRowFunction.Sum);
+    assert.equal(only.totalsRowLabel, null);
+  } finally {
+    release(wb);
+  }
+});
+
+test('deleting the totals row clears the totals settings, and turning it on again writes defaults', async () => {
+  const mod = await getModule();
+  const wb = headerWorkbook(mod);
+  try {
+    const ws = wb.sheet(0);
+    const table = ws.table(0);
+    table.update({ totalsRow: true });
+    table.update({ columns: [{}, { totalsRowFunction: mod.TableTotalsRowFunction.Max }] });
+    ws.deleteRows('4');
+    const props = table.getProperties();
+    assert.equal(props.totalsRow, false);
+    assert.deepEqual(rectOf(table), rectLike(0, 0, 2, 1));
+    for (const column of props.columns) {
+      assert.equal(column.totalsRowFunction, mod.TableTotalsRowFunction.None);
+      assert.equal(column.totalsRowLabel, null);
+      assert.equal(column.totalsRowFormula, null);
+    }
+    table.update({ totalsRow: true });
+    assert.equal(table.getProperties().columns[1].totalsRowFunction, mod.TableTotalsRowFunction.Sum);
+    assert.equal(table.getProperties().columns[0].totalsRowLabel, 'Total');
+  } finally {
+    release(wb);
+  }
+});
+
+test('a row delete over the header row is refused and every data row delete keeps the first, empty', async () => {
+  const mod = await getModule();
+  const wb = headerWorkbook(mod);
+  try {
+    const ws = wb.sheet(0);
+    const table = ws.table(0);
+    assert.throws(() => ws.deleteRows('1'), failsWith(mod.StatusCode.PreconditionFailed));
+    assert.throws(() => ws.deleteRows('1:2'), failsWith(mod.StatusCode.PreconditionFailed));
+    assert.deepEqual(rectOf(table), rectLike(0, 0, 2, 1));
+    assert.equal(ws.getValue('A1'), 'Product');
+    assert.equal(ws.getValue('A2'), 'x');
+
+    ws.deleteRows('2:3');
+    assert.equal(ws.listTables().length, 1);
+    assert.deepEqual(rectOf(table), rectLike(0, 0, 1, 1));
+    assert.equal(ws.getValue('A2'), null);
+    assert.equal(ws.getValue('B2'), null);
+  } finally {
+    release(wb);
+  }
+});
+
+test('a header-only range creates the header and one empty data row', async () => {
+  const mod = await getModule();
+  const wb = mod.Workbook.createDefault();
+  try {
+    const ws = wb.sheet(0);
+    ws.setValues('A1', [['Item', 'Qty']]);
+    const table = ws.addTable({ range: 'A1:B1', name: 'Solo' });
+    assert.equal(table.getProperties().headerRow, true);
+    assert.deepEqual(rectOf(table), rectLike(0, 0, 1, 1));
+    assert.equal(ws.getValue('A2'), null);
+
+    ws.setValues('D1', [
+      ['Item', 'Qty'],
+      ['kept', 7],
+    ]);
+    const shifted = ws.addTable({ range: 'D1:E1', name: 'Shifted' });
+    assert.deepEqual(rectOf(shifted), rectLike(0, 3, 1, 4));
+    assert.equal(ws.getValue('D2'), null);
+    assert.equal(ws.getValue('D3'), 'kept');
+    assert.equal(ws.getValue('E3'), 7);
+  } finally {
+    release(wb);
+  }
+});
+
+test('a header-only range on the last grid row, or with header and totals on one row, is refused', async () => {
+  const mod = await getModule();
+  const wb = mod.Workbook.createDefault();
+  try {
+    const ws = wb.sheet(0);
+    ws.setValues('A1', [['Item', 'Qty']]);
+    ws.setValues('A1048576', [['Item', 'Qty']]);
+    assert.throws(
+      () => ws.addTable({ range: 'A1048576:B1048576', name: 'Last' }),
+      failsWith(mod.StatusCode.PreconditionFailed),
+    );
+    assert.throws(
+      () => ws.addTable({ range: 'A1:B1', name: 'Both', headerRow: true, totalsRow: true }),
+      failsWith(mod.StatusCode.InvalidArgument),
+    );
+    assert.equal(ws.listTables().length, 0);
+  } finally {
+    release(wb);
+  }
+});
+
+test('a range with a toggle applies the toggle first and refuses a first row that disagrees', async () => {
+  const mod = await getModule();
+  const wb = headerWorkbook(mod);
+  try {
+    const ws = wb.sheet(0);
+    const table = ws.table(0);
+    assert.throws(() => table.update({ headerRow: false, range: 'A1:B3' }), failsWith(mod.StatusCode.InvalidArgument));
+    assert.equal(table.getProperties().headerRow, true);
+    assert.deepEqual(rectOf(table), rectLike(0, 0, 2, 1));
+    assert.equal(ws.getValue('A1'), 'Product');
+
+    table.update({ headerRow: false, range: 'A2:B3' });
+    assert.equal(table.getProperties().headerRow, false);
+    assert.deepEqual(rectOf(table), rectLike(1, 0, 2, 1));
+    assert.equal(ws.getValue('A1'), null);
+
+    table.update({ headerRow: true, totalsRow: true, range: 'A1:B4' });
+    const props = table.getProperties();
+    assert.equal(props.headerRow, true);
+    assert.equal(props.totalsRow, true);
+    assert.deepEqual(rectOf(table), rectLike(0, 0, 3, 1));
+    assert.equal(ws.getValue('A1'), 'Product');
+  } finally {
+    release(wb);
+  }
+});

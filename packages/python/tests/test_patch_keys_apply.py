@@ -434,8 +434,9 @@ TABLE_COLUMN = PatchType(
     update=lambda table, **kw: table.update(columns=[formulon.TableColumnPatch(), formulon.TableColumnPatch(**kw)]),
     read=lambda table: table.get_properties().columns[1],
     cases={
+        # The setup's totals row is blank, so its last column already defaults to SUM; patch a different function.
         "totals_row_function": Case(
-            formulon.TableTotalsRowFunction.SUM, clear=True, cleared=formulon.TableTotalsRowFunction.NONE
+            formulon.TableTotalsRowFunction.MAX, clear=True, cleared=formulon.TableTotalsRowFunction.NONE
         ),
         "totals_row_label": Case("Total", clear=True),
         "totals_row_formula": Case(

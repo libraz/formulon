@@ -102,6 +102,13 @@ struct TableMetadata {
   /// the columns' totals settings while the row is off. `nullopt` when the
   /// attribute is absent (its default is true).
   std::optional<bool> totals_row_shown;
+  /// `insertRow`: the only data row is the blank placeholder a header-only
+  /// table was created with. Content written into it, a resize and any
+  /// structural change to the table clear it.
+  bool insert_row = false;
+  /// `insertRowShift`: creating the table shifted the cells below its header
+  /// down. Kept after the placeholder row is filled; a range change clears it.
+  bool insert_row_shift = false;
   std::vector<TableColumn> columns;
   TableStyleInfo style_info;
   /// Table AutoFilter. Keeps the name of the raw element it replaced;

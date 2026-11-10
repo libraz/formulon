@@ -72,6 +72,7 @@ set(FORMULON_C_API_TEST_SOURCES
   formulon_c_styles_mutation_test.cpp
   formulon_c_styles_num_formats_test.cpp
   formulon_c_table_test.cpp
+  formulon_c_table_toggle_test.cpp
   formulon_c_table_auto_filter_test.cpp
   formulon_c_table_insert_test.cpp
   formulon_c_tab_color_test.cpp

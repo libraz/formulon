@@ -1143,6 +1143,17 @@ entries:
     first_noted: 2026-11-10
     last_verified_excel_version: "16.114.4"
 
+  # -- Table resize after a creation shift -----------------------------------
+  - id: table_resize_refused_while_insert_row_shift
+    applies_to: [mac]
+    cause: accepted-divergence
+    mode: skip-oracle
+    scope: api-contract
+    evidence: [tests/unit/workbook_table_flow2b_test.cpp]
+    reason: "A table created from a header-only range over occupied cells carries insertRowShift. Resizing it while the mark is set is a silent no-op in Mac Excel: ListObject.Resize returns without error and the range and both marks stay. Formulon refuses that resize with PreconditionFailed instead, since a call reporting success while changing nothing gives the caller no way to tell it was ignored."
+    prefer: formulon
+    first_noted: 2026-11-10
+    last_verified_excel_version: "16.114"
 
 # -- How to add ------------------------------------------------------------
 # 1. Run `make oracle-gen` on a Mac. If a case fails the verifier, inspect

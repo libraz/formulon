@@ -555,25 +555,28 @@ TEST(FormulonCApiTable, CustomTotalsFormulaRoundTrips) {
 
 TEST(FormulonCApiTable, TurningTheTotalsRowOnRestoresItsCells) {
   // A file whose totals row was shown, then hidden, keeps the column
-  // settings; showing it again writes the cells back and drops the
-  // "never shown" marker.
+  // settings; showing it again, with the range it then has, writes the
+  // cells back.
   WorkbookGuard source;
   CreateSalesTable(source);
+  fm_table_patch_t toggle = TablePatch();
+  toggle.totals_row_op = FM_PATCH_OP_SET;
+  toggle.totals_row = 1;
+  ASSERT_EQ(fm_sheet_update_table(source.handle, 0, 0, &toggle), 0) << fm_get_last_error_message();
   ASSERT_EQ(SetTableColumnTotals(source.handle, 0, 0, 0, FM_TABLE_TOTALS_ROW_FUNCTION_NONE, "Total", nullptr), 0);
   ASSERT_EQ(SetTableColumnTotals(source.handle, 0, 0, 1, FM_TABLE_TOTALS_ROW_FUNCTION_MAX, nullptr, nullptr), 0);
+  toggle.totals_row = 0;
+  ASSERT_EQ(fm_sheet_update_table(source.handle, 0, 0, &toggle), 0) << fm_get_last_error_message();
   EXPECT_EQ(Value(source.handle, 3, 1).kind, FM_VALUE_KIND_BLANK) << "no cell while the totals row is off";
-  const std::vector<std::uint8_t> patched =
-      RewriteEntry(Save(source.handle), "xl/tables/table1.xml", [](std::string xml) {
-        return ReplaceOnce(std::move(xml), " ref=\"A1:B3\">", " ref=\"A1:B3\" totalsRowShown=\"0\">");
-      });
   WorkbookGuard wb;
-  Load(patched, wb);
+  Load(Save(source.handle), wb);
   fm_table_patch_t show_totals = TablePatch();
   show_totals.range_op = FM_PATCH_OP_SET;
   show_totals.range = fm_cell_rect_t{0, 0, 3, 1};
   show_totals.totals_row_op = FM_PATCH_OP_SET;
   show_totals.totals_row = 1;
-  ASSERT_EQ(fm_sheet_update_table(wb.handle, 0, 0, &show_totals), 0);
+  ASSERT_EQ(fm_sheet_update_table(wb.handle, 0, 0, &show_totals), 0) << fm_get_last_error_message();
+  EXPECT_EQ(Info(wb.handle).range.last_row, 3U) << "the range is the one the toggle gives";
   EXPECT_EQ(Formula(wb.handle, 3, 1), "=SUBTOTAL(104,[Amount])");
   const fm_value_t label = Value(wb.handle, 3, 0);
   ASSERT_EQ(label.kind, FM_VALUE_KIND_TEXT);
@@ -586,12 +589,11 @@ TEST(FormulonCApiTable, TurningTheTotalsRowOnRestoresItsCells) {
 TEST(FormulonCApiTable, LoadedTotalsShownMarkerRoundTrips) {
   WorkbookGuard source;
   CreateSalesTable(source);
-  const std::vector<std::uint8_t> patched =
-      RewriteEntry(Save(source.handle), "xl/tables/table1.xml", [](std::string xml) {
-        return ReplaceOnce(std::move(xml), " ref=\"A1:B3\">", " ref=\"A1:B3\" totalsRowShown=\"0\">");
-      });
+  // A table created without a totals row is saved as never having shown one.
+  const std::vector<std::uint8_t> saved = Save(source.handle);
+  ASSERT_NE(ExtractZipEntry(saved, "xl/tables/table1.xml").find("totalsRowShown=\"0\""), std::string::npos);
   WorkbookGuard wb;
-  Load(patched, wb);
+  Load(saved, wb);
   EXPECT_NE(ExtractZipEntry(Save(wb.handle), "xl/tables/table1.xml").find("totalsRowShown=\"0\""), std::string::npos);
 }
 
@@ -1041,9 +1043,11 @@ TEST(FormulonCApiTable, TotalsRowOnShiftsAnOccupiedRowBelowAndAppliesThePatch) {
   patch.totals_row = 1;
   ASSERT_EQ(fm_sheet_update_table(wb.handle, 0, 0, &patch), 0) << fm_get_last_error_message();
   const fm_table_info_t info = Info(wb.handle);
+  EXPECT_EQ(info.range.first_row, 1U) << "hiding the header moves the first row down";
   EXPECT_EQ(info.range.last_row, 3U);
   EXPECT_EQ(info.header_row_count, 0U);
   EXPECT_EQ(info.totals_row_count, 1U);
+  EXPECT_EQ(Value(wb.handle, 0, 0).kind, FM_VALUE_KIND_BLANK) << "the header cells are deleted";
   const fm_value_t occupant = Value(wb.handle, 4, 0);
   ASSERT_EQ(occupant.kind, FM_VALUE_KIND_TEXT);
   EXPECT_STREQ(occupant.u.text, "x");
@@ -1063,8 +1067,11 @@ TEST(FormulonCApiTable, TotalsRowOnRefusesAnOccupiedRowAboveAStraddlingMergeAndC
   EXPECT_EQ(fm_sheet_update_table(wb.handle, 0, 0, &patch), FM_STATUS_PRECONDITION_FAILED);
   const fm_table_info_t info = Info(wb.handle);
   EXPECT_EQ(info.range.last_row, 2U);
-  EXPECT_EQ(info.header_row_count, 1U) << "the header flag was not applied either";
+  EXPECT_EQ(info.header_row_count, 1U) << "the header toggle was not applied either";
   EXPECT_EQ(info.totals_row_count, 0U);
+  const fm_value_t header = Value(wb.handle, 0, 0);
+  ASSERT_EQ(header.kind, FM_VALUE_KIND_TEXT);
+  EXPECT_STREQ(header.u.text, "Product");
   const fm_value_t occupant = Value(wb.handle, 3, 0);
   ASSERT_EQ(occupant.kind, FM_VALUE_KIND_TEXT);
   EXPECT_STREQ(occupant.u.text, "x");
@@ -1793,7 +1800,7 @@ TEST(FormulonCApiTable, ColumnPatchAppliesSeveralColumnsInOneCall) {
   EXPECT_EQ(ReadColumn(wb.handle, 2).calc, "=A3*10");
   EXPECT_EQ(Formula(wb.handle, 5, 1), "=SUBTOTAL(109,[b])");
   EXPECT_EQ(Formula(wb.handle, 4, 2), "=A5*10");
-  EXPECT_EQ(Value(wb.handle, 5, 2).kind, FM_VALUE_KIND_BLANK) << "the totals row is not part of the fill";
+  EXPECT_NE(Formula(wb.handle, 5, 2), "=A6*10") << "the totals row is not part of the fill";
 }
 
 TEST(FormulonCApiTable, ColumnPatchTotalsClearBlanksTheShownCellAndHiddenTotalsAreMetadataOnly) {
@@ -1828,7 +1835,7 @@ TEST(FormulonCApiTable, ColumnPatchOnATableWithoutDataRowsSetsTheMarkOnly) {
   const ColumnRead read = ReadColumn(wb.handle, 2);
   EXPECT_TRUE(read.has_calc);
   EXPECT_NE(read.calc.find("*10"), std::string::npos) << read.calc;
-  EXPECT_EQ(Value(wb.handle, 2, 2).kind, FM_VALUE_KIND_BLANK) << "the totals row is not a data row";
+  EXPECT_EQ(Formula(wb.handle, 2, 2).find("*10"), std::string::npos) << "the totals row is not a data row";
   ASSERT_EQ(SetTableColumnCalculatedFormula(wb.handle, 0, 0, 2, nullptr), 0);
   EXPECT_FALSE(ReadColumn(wb.handle, 2).has_calc);
 }

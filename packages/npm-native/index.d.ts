@@ -557,12 +557,11 @@ export interface TableInput {
 export interface TablePatch {
   /** The table's new range, a `CellRect` or an A1 range on the table's sheet; it resizes the table. */
   range?: CellRect | SheetRect | string;
-  /** Turns the header row on or off; only the flag flips. */
+  /** Turns the header row on or off; it moves cells and the AutoFilter (see `Table.update`). */
   headerRow?: boolean;
-  /** Turns the totals row on or off, growing or shrinking the table by one row; with `range` in the same patch the
-   *  range is final and only the flag flips. Turning it on writes each column's totals cell in the new row below,
-   *  shifting the cells beneath down unless something straddles the table's columns, and fails with
-   *  `PreconditionFailed` when no free row is left (see `Table.update`); turning it off fails
+  /** Turns the totals row on or off, growing or shrinking the table by one row. Turning it on writes the totals cells
+   *  in the new row below, shifting the cells beneath down unless something straddles the table's columns, and fails
+   *  with `PreconditionFailed` when no free row is left (see `Table.update`); turning it off fails
    *  with `PreconditionFailed` while a formula or name references the row. */
   totalsRow?: boolean;
   /** Per-column changes, applied after the range, header and totals rows: element i patches column i. The array may
@@ -7389,7 +7388,12 @@ export interface Sheet {
    *  fall inside the deleted interval collapse to `#REF!`.
    *  Fails with `StatusCode.PreconditionFailed` when the edit cuts into a data table, legacy
    *  array block or PivotTable, or would push one of them or a table past
-   *  the sheet bound; the workbook is unchanged. */
+   *  the sheet bound; the workbook is unchanged.
+   *
+   *  A span holding a table's header row but not the whole table fails with `StatusCode.PreconditionFailed`. A span
+   *  covering every data row keeps the first data row, emptied. A span covering the totals row turns the table's totals
+   *  off and clears every column's totals settings; the next `totalsRow: true` writes fresh defaults. A span covering
+   *  the whole table removes it. */
   deleteRows(first: number, last: number): void;
   /** `deleteRows` over the rows of the A1 row span `span` (`"3"`, `"3:5"`). */
   deleteRows(span: string): void;
@@ -7443,8 +7447,9 @@ export interface Sheet {
    *
    *  `StatusCode.InvalidArgument` for `Down` / `Right`, a shift outside the enum, or a whole-column range with `Up`
    *  (whole-row with `Left`); `StatusCode.PreconditionFailed` for the refusals of `insertCells`, a partial-table
-   *  delete with `Up` and a PivotTable crossing the deleted range included. The workbook is unchanged on
-   *  failure. */
+   *  delete with `Up` and a PivotTable crossing the deleted range included. A band covering a table's columns follows
+   *  the table rules of `deleteRows` (header row refused, all data rows keep the first, totals row delete turns
+   *  totals off). The workbook is unchanged on failure. */
   deleteCells(range: CellRect | string, shift: CellShift): void;
 
   /** Reads the sheet's typed AutoFilter; `null` when absent. */
@@ -7617,6 +7622,10 @@ export interface Sheet {
    *  case, width and kana folded) keeps its own spelling and takes the smallest free number from 2, in ASCII digits
    *  (`QTY`, `ＱＴＹ` become `QTY`, `ＱＴＹ2`). Names later in the row are reserved while numbering, so `Qty`, `qty`,
    *  `QTY`, `Qty2` become `Qty`, `qty3`, `QTY4`, `Qty2`. A renamed header cell is written with its final name.
+   *
+   *  A one-row `range` with a header row creates the header plus one empty data row below it, shifting occupied cells
+   *  of the table's columns down; it fails with `StatusCode.PreconditionFailed` on the last grid row, and
+   *  `headerRow` with `totalsRow` on one row fails with `StatusCode.InvalidArgument`.
    *
    *  @example
    *  ```ts
@@ -8258,10 +8267,23 @@ export interface Table {
   /** Reads the table's name, range, header / totals flags and columns. */
   getProperties(): TableProperties;
   /** Partially updates the table's range and header / totals rows; omitted fields keep their current values. A
-   *  supplied `range` must keep the table's existing column count. With `range` in the same patch the range is
-   *  final: the table takes it, only the flag flips and no cell moves.
+   *  supplied `range` must keep the table's existing column count.
    *
-   *  Totals row on: the table grows by one row and each column's saved label and function are written there. When
+   *  Header row off: the header cells are deleted, the range shrinks by its top row, the AutoFilter is dropped and the
+   *  column names are kept; while it is off `[#Headers]` references evaluate to `#REF!`. Off on a table without data
+   *  rows fails with `StatusCode.PreconditionFailed`. Header row on: when the row above the data is empty in the
+   *  table's columns the names are written there and the range grows up by one row; when it is occupied (or is the
+   *  first sheet row) the table's columns move down one row from the first data row, as `insertCells` with
+   *  `CellShift.Down` does, and the names are written into the freed row.
+   *
+   *  With `range` and a toggle in one patch the toggle applies first (header, then totals) and `range` is checked
+   *  against the toggled shape; a `range` whose first row is not that shape's first row fails with
+   *  `StatusCode.InvalidArgument`. Any refusal leaves the whole patch unapplied.
+   *
+   *  Totals row on: the table grows by one row. A table that has never shown its totals row, or lost it to a row
+   *  delete, gets fresh defaults (the first column's label in the profile language; the last column a sum when every
+   *  data cell is a non-date number, else a count; a one-column table gets the function only); otherwise each
+   *  column's saved settings are restored. When
    *  nothing straddles the table's columns below it (a merge, another table, a PivotTable, a multi-cell array
    *  formula or a data table), a row is inserted under the table over its columns, as `insertCells` with
    *  `CellShift.Down` does, and the cells beneath move down. When something straddles, nothing moves: the row
@@ -8272,8 +8294,8 @@ export interface Table {
    *  Totals row off: fails with `StatusCode.PreconditionFailed`, changing nothing, while a cell formula or a
    *  defined name references the totals row (its cells, or the table's `[#Totals]` / `[#All]`). Otherwise the table
    *  shrinks by one row; the old totals row is deleted with the cells beneath moving up, or, when something
-   *  straddles the table's columns below, only emptied in place. The columns' saved labels and functions are kept
-   *  for the next time the row is turned on.
+   *  straddles the table's columns below, only emptied in place. The columns' saved settings are kept for the next
+   *  time the row is turned on.
    *
    *  `patch.columns` applies after those, so a column's totals settings take effect on the totals row the update
    *  leaves. Every element is checked against the table's final shape before anything changes: more elements than

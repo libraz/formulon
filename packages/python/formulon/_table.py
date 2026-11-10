@@ -192,18 +192,29 @@ class Table(_NoCopy):
         describes. The update is all-or-nothing. Rename with :meth:`rename` and
         change the style with :meth:`update_style_options`.
 
-        Turning ``totals_row`` on without ``range`` inserts one row below the table (the table's columns
-        shift down, as :meth:`Sheet.insert_cells` with ``DOWN``) and writes each column's stored totals
-        label and function there; the data rows are kept. If something straddles the table's columns
-        below it (a merge, another table, a PivotTable, an array formula, a data table), nothing shifts
-        and the row directly below is used instead when it is free (no value, formula, spill output, merge
-        or table cell; format-only cells count as free), else the call is refused. Turning it off
-        first checks that no formula or defined name references the totals row (a range meeting it, or a
-        ``[#Totals]`` / ``[#All]`` structured reference) and refuses if one does; it then shrinks the table
-        by one row and shifts the cells below up. If something straddles the table's columns below, the
-        old totals row is only emptied and nothing shifts. The per-column labels and functions are kept
-        for the next time it is turned on. With ``range`` in the same call ``range`` is the final extent
-        and only the flag changes: nothing shifts (a read record feeds back).
+        Turning ``header_row`` off deletes the header cells, shrinks the range by its top row, drops the AutoFilter
+        and keeps the column names; while it is off a ``[#Headers]`` reference evaluates to ``#REF!``. Turning it
+        on writes the names into the row above the data and grows the range up when that row is empty in the
+        table's columns; when it is occupied the table's columns shift down one row (as
+        :meth:`Sheet.insert_cells` with ``DOWN``) and the names go into the freed row.
+
+        With ``range`` and a toggle in one call the toggle applies first (header, then totals) and ``range`` is
+        checked against the toggled shape; a ``range`` whose first row disagrees raises
+        ``InvalidArgumentError``. Any refusal leaves the whole call unapplied.
+
+        Turning ``totals_row`` on inserts one row below the table (the table's columns shift down, as
+        :meth:`Sheet.insert_cells` with ``DOWN``); the data rows are kept. A table that has never shown its
+        totals row, or lost it to a row delete, gets fresh defaults there (the first column's label in the
+        profile language; the last column a sum when every data cell is a non-date number, else a count; a
+        one-column table gets the function only); otherwise each column's saved settings are restored. If
+        something straddles the table's columns below it (a merge, another table, a PivotTable, an array
+        formula, a data table), nothing shifts and the row directly below is used instead when it is free (no
+        value, formula, spill output, merge or table cell; format-only cells count as free), else the call is
+        refused. Turning it off first checks that no formula or defined name references the totals row (a range
+        meeting it, or a ``[#Totals]`` / ``[#All]`` structured reference) and refuses if one does; it then
+        shrinks the table by one row and shifts the cells below up. If something straddles the table's columns
+        below, the old totals row is only emptied and nothing shifts. The per-column settings are kept for the
+        next time it is turned on.
 
         ``columns`` is a sequence of :class:`TableColumnPatch` (a :class:`TableColumn` read back is accepted, its ``name``
         ignored), applied after the range, header and totals rows, so a column's totals settings take effect on
@@ -221,7 +232,8 @@ class Table(_NoCopy):
             type (``None`` included), or ``columns`` is not a sequence of :class:`TableColumnPatch`.
           FormulonError: with ``StatusCode.INVALID_ARGUMENT`` when ``range``
             names another sheet or is not an A1 range.
-          PreconditionFailedError: when turning the totals row on finds the row below
+          PreconditionFailedError: when turning the header row off leaves no data row, or the shift for turning it
+            on cannot be made; when turning the totals row on finds the row below
             occupied while something straddles the table's columns, or the table on the last grid row; or
             when turning it off finds a formula or defined name referencing the totals row.
         """

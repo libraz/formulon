@@ -690,7 +690,11 @@ const TABLE = {
   read: ({ table }) => table.getProperties(),
   cases: {
     range: k('A1:B4', { get: (r) => plain(r.range.rect), want: rect(0, 0, 3, 1) }),
-    headerRow: k(FLIP),
+    // Turning the header off deletes its cells and moves the range's top edge down one row.
+    headerRow: k(false, {
+      get: (r) => ({ headerRow: r.headerRow, firstRow: r.range.rect.firstRow }),
+      want: { headerRow: false, firstRow: 1 },
+    }),
     totalsRow: k(FLIP),
     columns: k([{}, { totalsRowFunction: f.TableTotalsRowFunction.Sum }], {
       get: (r) => r.columns[1].totalsRowFunction,
@@ -713,7 +717,8 @@ const TABLE_COLUMN = {
   update: ({ table }, patch) => table.update({ columns: [{}, patch] }),
   read: ({ table }) => table.getProperties().columns[1],
   cases: {
-    totalsRowFunction: k(f.TableTotalsRowFunction.Sum, { clear: true, cleared: f.TableTotalsRowFunction.None }),
+    // The setup's totals row is blank, so its last column already defaults to Sum; patch a different function.
+    totalsRowFunction: k(f.TableTotalsRowFunction.Max, { clear: true, cleared: f.TableTotalsRowFunction.None }),
     totalsRowLabel: k('Total', { clear: true }),
     totalsRowFormula: k('=5', {
       patch: (v) => ({ totalsRowFunction: f.TableTotalsRowFunction.Custom, totalsRowFormula: v }),

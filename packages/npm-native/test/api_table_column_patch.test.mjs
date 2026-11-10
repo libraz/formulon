@@ -246,7 +246,8 @@ test('several columns apply in one call and the totals row is not part of the fi
     assert.equal(column(table, 2).calculatedFormula, '=A3*10');
     assert.equal(ws.getFormula('B6'), '=SUBTOTAL(109,[b])');
     assert.equal(ws.getFormula('C5'), '=A5*10');
-    assert.equal(ws.getValue('C6'), null);
+    // The totals row holds the default total, not the calculated formula.
+    assert.ok(!(ws.getFormula('C6') ?? '').includes('*10'), ws.getFormula('C6'));
   });
 });
 
@@ -316,7 +317,7 @@ test('a table without data rows takes the calculated mark only', async () => {
     const table = ws.addTable({ range: 'A2:C3', name: 'Tbl', totalsRow: true });
     table.update({ columns: calc(2, '=A3*10') });
     assert.ok(column(table, 2).calculatedFormula.includes('*10'), column(table, 2).calculatedFormula);
-    assert.equal(ws.getValue('C3'), null, 'the totals row is not a data row');
+    assert.ok(!(ws.getFormula('C3') ?? '').includes('*10'), 'the totals row is not a data row');
     table.update({ columns: calc(2, null) });
     assert.equal(column(table, 2).calculatedFormula, null);
   });

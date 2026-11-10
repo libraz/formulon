@@ -2574,11 +2574,16 @@ class Sheet(_NoCopy):
         The anchor of an embedded OLE object or form control is not
         remapped; see the note above this method group.
 
+        A span holding a table's header row but not the whole table is refused. A span covering every
+        data row keeps the first data row, emptied. A span covering the totals row turns the table's totals
+        off and clears every column's totals settings (the next ``totals_row=True`` writes fresh defaults).
+        A span covering the whole table removes it.
+
         Raises:
           InvalidArgumentError: when ``first`` is past ``last`` or ``last`` is past the sheet bound.
           FormulonError: with ``StatusCode.PRECONDITION_FAILED`` when the edit cuts into
-            a data table, legacy array block or PivotTable, or would push one
-            of them or a table past the sheet bound; the workbook is unchanged.
+            a data table, legacy array block or PivotTable, holds a table's header row without the whole
+            table, or would push one of them or a table past the sheet bound; the workbook is unchanged.
         """
         first, last = self._span_args("delete_rows", args, kwargs, ("first", "last"))
         sheet = self._index()
@@ -2694,7 +2699,9 @@ class Sheet(_NoCopy):
         A reference to a wholly deleted cell becomes ``#REF!`` (a defined name ``=Sheet!#REF!``); a partly
         deleted one shrinks. A merge partly intersecting the deleted rectangle is unmerged and its deleted
         cells lose their values. Notes and threaded comments of a deleted cell are removed; a table, data
-        table or PivotTable the deleted rectangle contains is removed.
+        table or PivotTable the deleted rectangle contains is removed. A band covering a table's columns
+        follows the table rules of :meth:`delete_rows` (header row refused, all data rows keep the first,
+        a totals-row delete turns totals off).
 
         Raises as :meth:`insert_cells`, with the direction rule reversed (``DOWN`` and ``RIGHT`` are
         refused with ``InvalidArgumentError``) and no push-off refusal; a delete over part of a table or
@@ -6993,6 +7000,10 @@ class Sheet(_NoCopy):
 
         A ``name`` another table already has (compared case-insensitively)
         raises ``AlreadyExistsError``. See :class:`TableInput` for the defaults.
+
+        A one-row ``range`` with a header row creates the header plus one empty data row below it, shifting
+        occupied cells of the table's columns down; it is refused on the last grid row, and ``header_row``
+        with ``totals_row`` on one row raises ``InvalidArgumentError``.
 
         Column names are numbered as Excel numbers them. A blank one takes the
         profile's column word and the smallest free number from 1 (``Column1``,

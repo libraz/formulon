@@ -49,6 +49,7 @@ struct NewWorkbookDefaults {
   const char* picture_word;  ///< Default picture name word.
   const char* table_word;    ///< Default table name word.
   const char* column_word;   ///< Default table column name word ("Column1").
+  const char* totals_label;  ///< Table totals row label a never-shown totals row starts with.
 };
 
 /// The table row for `locale`.

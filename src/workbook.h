@@ -70,6 +70,23 @@ class AstNode;
 struct ExternalBookIndexer;
 }  // namespace parser
 
+/// The shape a table pre-check takes a table to have: its range and which
+/// of its header and totals rows it shows.
+struct TableShape {
+  MergeRange rect{};
+  bool header_row = true;
+  bool totals_row = false;
+};
+
+/// An Insert / Delete Cells shift a pre-check takes as already applied, as
+/// `insert_cells` / `delete_cells` would make it (`kDown` / `kRight` insert,
+/// `kUp` / `kLeft` delete).
+struct PendingShift {
+  std::size_t sheet_index = 0;
+  MergeRange range{};
+  CellShift shift = CellShift::kDown;
+};
+
 /// Move-only container representing a spreadsheet workbook.
 ///
 /// Instances are constructed via the `create()` factory, which returns a
@@ -819,15 +836,59 @@ class Workbook {
   /// range that overlaps another table, a PivotTable, a data table or a
   /// multi-cell array formula, or cuts through merged cells. Merges wholly
   /// inside the range are removed. `table.style_info` is kept as given.
+  ///
+  /// A one-row range with a header row becomes the header plus one blank
+  /// data row below it (`insert_row`). When that row holds something within
+  /// the table's columns, those columns' cells shift down first
+  /// (`insert_cells`, `insert_row_shift`); every check runs before the shift.
+  /// Such a range on the grid's last row is `kPreconditionFailed`, the shift
+  /// is refused as `insert_cells` refuses it, and a one-row range with both a
+  /// header and a totals row is `kInvalidArgument`. A table created without a
+  /// totals row is marked as never having shown one. One created with it
+  /// reads each column's settings from its own totals cell
+  /// (`sync_table_totals_cell`) when any totals-row cell holds content,
+  /// keeps the columns' given settings when the row is blank, and takes the
+  /// totals defaults `set_table_totals_row` writes only when the row is blank
+  /// and no column carries a setting.
   Expected<std::size_t, Error> add_table(TableMetadata table);
 
   /// Checks `rect` as the new range of table `index`, as Excel's resize does:
   /// the first row stays, a table with a header row keeps a data row, and the
   /// range overlaps no other table, PivotTable, data table, multi-cell array
   /// formula or merged cell. The table's current range always passes.
-  /// Returns `kPreconditionFailed` for an overlap and `kInvalidArgument` for
-  /// any other refusal or an out-of-range `index`.
+  /// Returns `kPreconditionFailed` for an overlap, or for any other range
+  /// while the table's creation shifted cells (`insert_row_shift`), and
+  /// `kInvalidArgument` for any other refusal or an out-of-range `index`.
   Expected<void, Error> check_table_resize(std::size_t index, const MergeRange& rect) const;
+
+  /// `check_table_resize` for table `index` taken to have shape `assumed`
+  /// (its range is the "current" one) after the shifts of `pending`, in
+  /// order: the structures `rect` must not overlap are read where those
+  /// shifts would move them.
+  Expected<void, Error> check_table_resize(std::size_t index, const MergeRange& rect, const TableShape& assumed,
+                                           const std::vector<PendingShift>& pending) const;
+
+  /// The refusals `set_table_totals_row(index, shown)` would report for
+  /// table `index` taken to have shape `assumed` after the shifts of
+  /// `pending`, without changing anything; `set_table_totals_row` runs the
+  /// same check. Returns the cell shift the toggle makes (the row inserted
+  /// below, or the totals row deleted), or nullopt when it shifts nothing.
+  Expected<std::optional<PendingShift>, Error> check_table_totals_row(std::size_t index, bool shown,
+                                                                      const TableShape& assumed,
+                                                                      const std::vector<PendingShift>& pending) const;
+
+  /// The refusals `insert_cells` (`kDown` / `kRight`) or `delete_cells`
+  /// (`kUp` / `kLeft`) would report for `range` on `sheet_index`, without
+  /// changing anything.
+  Expected<void, Error> check_band_edit(std::size_t sheet_index, const MergeRange& range, CellShift shift) const;
+
+  /// Sets table `index`'s range to `rect` after `check_table_resize`: a
+  /// modelled AutoFilter follows the header and data rows, the placeholder
+  /// and creation-shift marks clear, and the formulas naming the table are
+  /// re-indexed. An opaque AutoFilter the caller holds is not touched yet;
+  /// its text stays the caller's to rewrite. Errors as
+  /// `check_table_resize`, leaving the table as it was.
+  Expected<void, Error> resize_table(std::size_t index, const MergeRange& rect);
 
   /// Shows or hides the totals row of table `index`. Showing it inserts one
   /// row of cells below the table within its columns (`insert_cells`,
@@ -838,7 +899,13 @@ class Workbook {
   /// totals row instead. Hiding it shrinks `ref` by its last row and deletes
   /// that row's cells within the table's columns (`delete_cells`, shifting
   /// up), or only clears them when such a straddling object lies below; the
-  /// columns' totals settings are kept for the next show. A call that changes
+  /// columns' totals settings are kept for the next show. Showing the row of
+  /// a table that has never shown one (`totals_row_shown` false) first
+  /// replaces the columns' settings with the defaults: the profile locale's
+  /// totals label on the first column and, on the last, `sum` when every
+  /// non-blank data cell holds a number not formatted as a date or time and
+  /// there is one, else `count`; a one-column table takes the function
+  /// alone. A call that changes
   /// nothing is a no-op. Every check runs before the first change, so a
   /// refusal leaves the table and the cells as they were. Returns
   /// `kInvalidArgument` for an out-of-range `index` or a range that is not a
@@ -851,6 +918,34 @@ class Workbook {
   /// name references the totals row (a reference meeting it, or the table's
   /// `[#Totals]` / `[#All]`).
   Expected<void, Error> set_table_totals_row(std::size_t index, bool shown);
+
+  /// Shows or hides the header row of table `index`. Hiding it deletes the
+  /// header cells outright (values and formats), moves `ref`'s first row
+  /// down by one without shifting anything and removes the AutoFilter; the
+  /// column names are kept. Showing it writes the column names into the row
+  /// above the data and grows `ref` up by that row when the row holds
+  /// nothing within the table's columns and the grown range passes
+  /// `check_table_resize`'s overlap checks; otherwise it inserts one row of
+  /// cells at the first data row within the table's columns (`insert_cells`,
+  /// shifting down) and writes the names into the vacated row. Either way the
+  /// table gets a plain AutoFilter over its new range. A call that changes
+  /// nothing is a no-op, and every check runs before the first change.
+  /// Returns `kInvalidArgument` for an out-of-range `index` or a range that
+  /// is not a single area, and `kPreconditionFailed` when hiding the row
+  /// would leave a table with no data row, or when the insert is refused as
+  /// `insert_cells` refuses it.
+  Expected<void, Error> set_table_header_row(std::size_t index, bool shown);
+
+  /// The refusals `set_table_header_row(index, shown)` would report for
+  /// table `index` taken to have shape `assumed` after the shifts of
+  /// `pending`, without changing anything; `set_table_header_row` runs the
+  /// same check. Returns the cell shift showing the row makes (the insert at
+  /// the first data row), or nullopt when the toggle shifts nothing: hiding
+  /// moves the first row down by one, showing without a shift grows the
+  /// range up by one.
+  Expected<std::optional<PendingShift>, Error> check_table_header_row(std::size_t index, bool shown,
+                                                                      const TableShape& assumed,
+                                                                      const std::vector<PendingShift>& pending) const;
 
   /// Writes column `column`'s totals cell on the last row of table `index`'s
   /// range from the column's totals settings: the `SUBTOTAL` formula of a
@@ -1678,13 +1773,20 @@ class Workbook {
   /// Deletes `count` rows starting at `row` on `sheet_index`. The deleted
   /// rows are dropped wholesale; rows past `row + count` shift up by
   /// `count`. A data table, legacy array block, PivotTable or table whose
-  /// whole extent is deleted goes with it.
+  /// whole extent is deleted goes with it. Deleting a table's totals row
+  /// turns its totals row off and clears every column's totals settings.
+  /// Deleting every data row of a table with a header row keeps its first
+  /// data row: the rest go, the kept row's table cells are cleared and the
+  /// table is marked `insert_row`.
   ///
   /// Errors, each leaving the workbook unchanged:
   ///   * `kInvalidArgument` on the same argument errors as `insert_rows`,
   ///     or a `count` running past the sheet bound.
   ///   * `kPreconditionFailed` when the delete covers part, but not all, of
-  ///     a data table's block, a legacy array block or a PivotTable.
+  ///     a data table's block, a legacy array block or a PivotTable; covers
+  ///     a table's header row but not the whole table; or deletes every data
+  ///     row of one table while it covers another table's row the kept row
+  ///     would change.
   Expected<void, Error> delete_rows(std::size_t sheet_index, std::uint32_t row, std::uint32_t count);
 
   /// Inserts `count` columns at `col` on `sheet_index`. Mirrors
@@ -1706,7 +1808,9 @@ class Workbook {
   /// cells take the XF of the cell directly above (`kDown`) or left
   /// (`kRight`). Row/column layout, page breaks, drawing anchors and the
   /// sheet view do not move. A range covering the whole perpendicular extent
-  /// is the whole row/column insert.
+  /// is the whole row/column insert. A `kDown` insert over the blank
+  /// placeholder row of a header-only table (`insert_row`) pushes the cells
+  /// below and leaves the table's range as it was, clearing the mark.
   ///
   /// Errors, each leaving the workbook unchanged:
   ///   * `kInvalidArgument` for an out-of-range sheet index, a range outside
@@ -1736,6 +1840,9 @@ class Workbook {
   ///     refused shifts.
   ///   * `kPreconditionFailed` on the same objects as `insert_cells`; a
   ///     delete inside a PivotTable is refused rather than hiding an item.
+  ///     A `kUp` delete spanning a table's columns follows `delete_rows` for
+  ///     its header, totals and data rows, keeping only the table's columns
+  ///     of the kept data row.
   Expected<void, Error> delete_cells(std::size_t sheet_index, const MergeRange& range, CellShift shift);
 
  private:
@@ -1755,6 +1862,11 @@ class Workbook {
   // holding the engine mutex.
   Expected<void, Error> apply_band_edit_locked(std::size_t sheet_index, const MergeRange& range, CellShift shift,
                                                bool is_delete);
+  // Runs a row-axis delete (whole rows or a band shifting up) under the
+  // engine mutex, keeping the first data row of each table it would empty.
+  Expected<void, Error> apply_row_delete_locked(std::size_t sheet_index, const StructuralEdit& edit);
+  // Replaces the totals settings of table `index`'s columns with the defaults of a never-shown totals row.
+  void apply_totals_defaults(std::size_t index);
   // `add_merge` without the overlap refusals, for a PivotTable writing its
   // own report; `merge` must be normalized and inside the grid.
   void put_merge(std::size_t sheet_index, const MergeRange& merge);

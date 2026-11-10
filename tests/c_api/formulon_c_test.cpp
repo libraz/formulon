@@ -342,7 +342,8 @@ TEST(FormulonCApi, TableUpdatePreservesRawMetadataAcrossSaveLoad) {
   EXPECT_EQ(table.ref, "A1:B4");
   EXPECT_TRUE(table.header_row);
   EXPECT_TRUE(table.totals_row);
-  EXPECT_NE(formulon::io::auto_filter_xml(table.auto_filter_xml.get()).find("ref=\"A1:B4\""), std::string::npos);
+  // The filter covers the header and data rows; the totals row stays outside it, as Excel writes it.
+  EXPECT_NE(formulon::io::auto_filter_xml(table.auto_filter_xml.get()).find("ref=\"A1:B3\""), std::string::npos);
   EXPECT_NE(formulon::io::auto_filter_xml(table.auto_filter_xml.get()).find("filterColumn"), std::string::npos);
   EXPECT_NE(table.sort_state_xml.find("ref=\"A1:B3\""), std::string::npos);
   EXPECT_NE(table.sort_state_xml.find("sortCondition"), std::string::npos);
@@ -360,7 +361,7 @@ TEST(FormulonCApi, TableUpdatePreservesRawMetadataAcrossSaveLoad) {
   EXPECT_EQ(reloaded.ref, "A1:B4");
   EXPECT_TRUE(reloaded.header_row);
   EXPECT_TRUE(reloaded.totals_row);
-  EXPECT_NE(formulon::io::auto_filter_xml(reloaded.auto_filter_xml.get()).find("ref=\"A1:B4\""), std::string::npos);
+  EXPECT_NE(formulon::io::auto_filter_xml(reloaded.auto_filter_xml.get()).find("ref=\"A1:B3\""), std::string::npos);
   EXPECT_NE(formulon::io::auto_filter_xml(reloaded.auto_filter_xml.get()).find("filterColumn"), std::string::npos);
   EXPECT_NE(formulon::io::auto_filter_xml(reloaded.auto_filter_xml.get()).find("West"), std::string::npos);
   EXPECT_EQ(reloaded.sort_state_xml,

@@ -225,7 +225,7 @@ class ColumnPatchCalculatedFormulaTests(unittest.TestCase):
         table = ws.add_table(TableInput(range="A2:C3", name="Tbl", totals_row=True))
         table.update(columns=_calc(2, "=A3*10"))
         self.assertIn("*10", _col(table, 2).calculated_formula)
-        self.assertIsNone(ws.get_value("C3"))
+        self.assertNotIn("*10", ws.get_formula("C3") or "")
         table.update(columns=_calc(2, None))
         self.assertIsNone(_col(table, 2).calculated_formula)
 
@@ -295,7 +295,8 @@ class ColumnPatchValidationTests(unittest.TestCase):
         self.assertEqual(_col(table, 2).calculated_formula, "=A3*10")
         self.assertEqual(ws.get_formula("B6"), "=SUBTOTAL(109,[b])")
         self.assertEqual(ws.get_formula("C5"), "=A5*10")
-        self.assertIsNone(ws.get_value("C6"))
+        # The totals row holds the default total, not the calculated formula.
+        self.assertNotIn("*10", ws.get_formula("C6") or "")
 
     def test_none_clears_each_field_and_a_non_custom_function_drops_the_formula(self) -> None:
         ws, table = _calc_table(self.wb, True)

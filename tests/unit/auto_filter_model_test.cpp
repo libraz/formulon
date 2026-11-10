@@ -395,11 +395,20 @@ TEST(AutoFilterModel, TableFilterFollowsRowDelete) {
   ASSERT_TRUE(static_cast<bool>(inserted.insert_cols(0, 2U, 1U)));
   EXPECT_EQ(Describe(inserted.tables()[0].auto_filter_xml.get()), "B2:G12; colId 2: 1; colId 4: 2");
 
-  // A table filter is never dropped for its header row.
+  // A row deleted above the table moves the table and its filter up.
+  Workbook above = ProbeTableWorkbook();
+  ASSERT_TRUE(static_cast<bool>(above.delete_rows(0, 0U, 1U)));
+  EXPECT_EQ(above.tables()[0].ref, "B1:F11");
+  EXPECT_EQ(Describe(above.tables()[0].auto_filter_xml.get()), "B1:F11; colId 1: 1; colId 3: 2");
+  EXPECT_TRUE(above.defined_names().empty());
+
+  // Deleting the header row alone is refused, and the filter stays as it was.
   Workbook header = ProbeTableWorkbook();
-  ASSERT_TRUE(static_cast<bool>(header.delete_rows(0, 1U, 1U)));
-  EXPECT_NE(header.tables()[0].auto_filter_xml.get(), nullptr);
-  EXPECT_TRUE(header.defined_names().empty());
+  const auto refused = header.delete_rows(0, 1U, 1U);
+  ASSERT_FALSE(refused.has_value());
+  EXPECT_EQ(refused.error().code, FormulonErrorCode::kPreconditionFailed);
+  EXPECT_EQ(header.tables()[0].ref, "B2:F12");
+  EXPECT_EQ(Describe(header.tables()[0].auto_filter_xml.get()), "B2:F12; colId 1: 1; colId 3: 2");
 }
 
 TEST(AutoFilterModel, OpaqueFragmentSurvives) {

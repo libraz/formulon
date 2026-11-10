@@ -135,6 +135,10 @@ fm_status_t follow_table_cell(fm_workbook_t* wb, size_t sheet_index, uint32_t ro
     return 0;
   }
   const std::uint32_t first_data = rect->first_row + (meta.header_row ? 1U : 0U);
+  // A value or formula written into the blank placeholder row of a header-only table makes it a data row.
+  if (!blank && meta.insert_row && row >= first_data) {
+    book.mutable_tables()[*table].insert_row = false;
+  }
   if (blank && row >= first_data) {
     return finish_status(book.drop_calculated_column_if_empty(sheet_index, *table, column));
   }

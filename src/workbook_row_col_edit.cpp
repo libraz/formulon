@@ -390,7 +390,8 @@ void update_table_columns(TableMetadata& table, const MergeRange& before, const 
 
 // Brings the tables on the edited sheet in line with the `ref` their rewrite
 // gave them: column entries follow a column edit inside the table, the sort
-// state moves the way a worksheet one does, and a table whose whole extent was
+// state moves the way a worksheet one does, a row delete taking the totals row
+// turns it off and clears its settings, and a table whose whole extent was
 // deleted goes. A row insert that grew a table fills its calculated columns
 // into the inserted data rows. `refs_before` holds each table's `ref` before
 // the edit, by index. Returns the names of every table whose extent changed,
@@ -422,6 +423,22 @@ std::vector<std::string> update_tables_for_row_col_edit(const Workbook& wb, std:
       continue;
     }
     const std::optional<MergeRange> before = parse_a1_rectangle(refs_before[i]);
+    // Any change to the range ends the blank placeholder row and the creation shift.
+    table.insert_row = false;
+    table.insert_row_shift = false;
+    // A row delete taking the totals row leaves a table that never showed one. The totals-row toggle shrinks the
+    // range before its own delete, so that delete misses the table and never lands here.
+    if (before.has_value() && edit.row_axis && edit.is_delete && table.totals_row && before->last_row >= edit.index &&
+        before->last_row - edit.index < edit.count) {
+      table.totals_row = false;
+      table.totals_row_shown = false;
+      for (TableColumn& column : table.columns) {
+        column.totals_label.clear();
+        column.totals_function.clear();
+        column.totals_row_formula.clear();
+        column.totals_row_formula_array = false;
+      }
+    }
     if (before.has_value() && !edit.row_axis) {
       update_table_columns(table, *before, *after, sheet, sheet_index, mutator, edit, column_word);
     }
@@ -553,16 +570,20 @@ const char* insert_pushes_content_off(const Sheet& sheet, const StylesTable& sty
   return nullptr;
 }
 
-// The structure-intersection preflight every row/column edit passes before
-// anything moves. A data table, a legacy array block and a PivotTable each move
-// or go whole, so an edit cutting into one is refused, as a write into it is.
-// A table grows and shrinks with an edit inside it instead. An insert that
-// would push any of them, or a value or formula, past the grid edge is
-// refused, as Excel refuses to shift non-empty cells off the sheet. A band
-// edit is also refused when its moving region meets one of these, or a
-// table, across a band edge, and when it lies inside a PivotTable. A band
-// insert is refused when it would move a PivotTable at all, and when it cuts
-// into a table without spanning exactly that table's columns (rows).
+}  // namespace
+
+namespace detail {
+
+// A data table, a legacy array block and a PivotTable each move or go whole,
+// so an edit cutting into one is refused, as a write into it is. A table grows
+// and shrinks with an edit inside it instead, but a row delete may take its
+// header row only with the whole table. An insert that would push any of
+// them, or a value or formula, past the grid edge is refused, as Excel
+// refuses to shift non-empty cells off the sheet. A band edit is also refused
+// when its moving region meets one of these, or a table, across a band edge,
+// and when it lies inside a PivotTable. A band insert is refused when it
+// would move a PivotTable at all, and when it cuts into a table without
+// spanning exactly that table's columns (rows).
 Expected<void, Error> check_structure_edit(const Workbook& wb, std::size_t sheet_index, const StructuralEdit& edit) {
   const auto refuse = [&](StructureEditCut cut, const char* what) {
     std::string message(cut == StructureEditCut::kPushesOff ? "Cannot shift " : "Cannot change part of ");
@@ -655,6 +676,13 @@ Expected<void, Error> check_structure_edit(const Workbook& wb, std::size_t sheet
          edit.band->last != (edit.row_axis ? ref->last_col : ref->last_row))) {
       return refuse(cut, "a table");
     }
+    const std::uint64_t end = static_cast<std::uint64_t>(edit.index) + edit.count;  // exclusive
+    if (edit.is_delete && edit.row_axis && table.header_row && fit == BandFit::kInside &&
+        edit.index <= ref->first_row && ref->first_row < end && end <= ref->last_row) {
+      return make_error(FormulonErrorCode::kPreconditionFailed,
+                        "Cannot delete a table's header row without the whole table",
+                        "origin=" + std::to_string(edit.index) + " count=" + std::to_string(edit.count));
+    }
   }
   if (const char* blocker = insert_pushes_content_off(sheet, wb.styles(), edit); blocker != nullptr) {
     return refuse(StructureEditCut::kPushesOff, blocker);
@@ -662,7 +690,12 @@ Expected<void, Error> check_structure_edit(const Workbook& wb, std::size_t sheet
   return Expected<void, Error>::Ok();
 }
 
-Expected<void, Error> apply_row_col_edit(Workbook& wb, std::size_t sheet_index, const StructuralEdit& edit) {
+}  // namespace detail
+
+namespace {
+
+// The argument checks of a row/column edit on `sheet_index`.
+Expected<void, Error> check_edit_arguments(const Workbook& wb, std::size_t sheet_index, const StructuralEdit& edit) {
   RETURN_IF_ERROR(check_sheet_index(sheet_index, wb.sheet_count()));
   if (edit.count == 0U) {
     return make_error(FormulonErrorCode::kInvalidArgument, "count must be >= 1");
@@ -680,7 +713,12 @@ Expected<void, Error> apply_row_col_edit(Workbook& wb, std::size_t sheet_index, 
     return make_error(FormulonErrorCode::kInvalidArgument, "count exceeds the sheet bounds",
                       "origin=" + std::to_string(edit.index) + " count=" + std::to_string(edit.count));
   }
-  return check_structure_edit(wb, sheet_index, edit);
+  return Expected<void, Error>::Ok();
+}
+
+Expected<void, Error> apply_row_col_edit(Workbook& wb, std::size_t sheet_index, const StructuralEdit& edit) {
+  RETURN_IF_ERROR(check_edit_arguments(wb, sheet_index, edit));
+  return detail::check_structure_edit(wb, sheet_index, edit);
 }
 
 // Precondition: caller holds the engine mutex for the lifetime of the
@@ -764,6 +802,27 @@ Expected<void, Error> apply_row_col_edit(Workbook& wb, std::size_t sheet_index, 
   for (const TableMetadata& table : wb.tables()) {
     table_refs_before.push_back(table.ref);
   }
+  // A band insert at the blank placeholder row of a header-only table pushes the cells below it and leaves the
+  // table's range as it was, by table id.
+  std::vector<std::pair<std::uint32_t, std::string>> placeholders;
+  if (!edit.is_delete && edit.row_axis && edit.band.has_value()) {
+    for (const TableMetadata& table : wb.tables()) {
+      const std::optional<MergeRange> rect = detail::table_rect_on_sheet(table, sheet_index);
+      if (rect.has_value() && table.insert_row && table.header_row && !table.totals_row &&
+          rect->last_row == rect->first_row + 1U && edit.index == rect->last_row &&
+          edit.band->first == rect->first_col && edit.band->last == rect->last_col) {
+        placeholders.emplace_back(table.id, table.ref);
+      }
+    }
+  }
+  const auto placeholder_ref = [&placeholders](std::uint32_t id) -> const std::string* {
+    for (const auto& [placeholder_id, ref] : placeholders) {
+      if (placeholder_id == id) {
+        return &ref;
+      }
+    }
+    return nullptr;
+  };
   rewrite_formulas_for_row_col_edit(sheets, mutator, wb, target_sheet_name, edit, losses, &table_list);
   // Metadata formulas follow the same per-sheet policy as cell formulas: a
   // qualified reference to the edited sheet shifts no matter which sheet owns
@@ -811,6 +870,11 @@ Expected<void, Error> apply_row_col_edit(Workbook& wb, std::size_t sheet_index, 
   const std::vector<std::string> changed_tables =
       update_tables_for_row_col_edit(wb, wb.mutable_tables(), target, sheet_index, table_refs_before, mutator, edit,
                                      new_workbook_defaults(wb.excel_profile().locale).column_word);
+  for (TableMetadata& table : wb.mutable_tables()) {
+    if (const std::string* ref = placeholder_ref(table.id); ref != nullptr) {
+      table.ref = *ref;
+    }
+  }
   update_shared_formula_groups(target, local_rewrite);
   sync_table_spill_barriers_locked(sheets, mutator, wb.tables());
   std::vector<std::string> filters_after;
@@ -820,7 +884,8 @@ Expected<void, Error> apply_row_col_edit(Workbook& wb, std::size_t sheet_index, 
       continue;
     }
     if (AutoFilter* filter = table.auto_filter_xml.get();
-        filter != nullptr && !shift_auto_filter(*filter, edit, /*header_delete_removes=*/false)) {
+        filter != nullptr && placeholder_ref(table.id) == nullptr &&
+        !shift_auto_filter(*filter, edit, /*header_delete_removes=*/false)) {
       table.auto_filter_xml.reset();
     }
     filters_after.push_back(io::auto_filter_xml(table.auto_filter_xml.get()));
@@ -896,7 +961,169 @@ Expected<void, Error> apply_row_col_edit(Workbook& wb, std::size_t sheet_index, 
   return Expected<void, Error>::Ok();
 }
 
+// The ids of the tables with a header row whose every data row a row-axis
+// delete `edit` takes without taking the whole table: the delete keeps their
+// first data row, the edit's first row. Refuses the delete when it also covers
+// another table's rows that keeping that row would change, so only a table
+// lying wholly below the kept row may share the delete.
+Expected<std::vector<std::uint32_t>, Error> tables_emptied_by(const Workbook& wb, std::size_t sheet_index,
+                                                              const StructuralEdit& edit) {
+  std::vector<std::uint32_t> emptied;
+  if (!edit.is_delete || !edit.row_axis) {
+    return emptied;
+  }
+  const std::uint64_t end = static_cast<std::uint64_t>(edit.index) + edit.count;  // exclusive
+  const auto reached = [&edit](const MergeRange& rect) {
+    return !edit.band.has_value() || band_fit(rect, edit) != BandFit::kOutside;
+  };
+  for (const TableMetadata& table : wb.tables()) {
+    const std::optional<MergeRange> rect = detail::table_rect_on_sheet(table, sheet_index);
+    if (!rect.has_value() || !table.header_row || !reached(*rect)) {
+      continue;
+    }
+    const std::uint32_t last_data = rect->last_row - (table.totals_row ? 1U : 0U);
+    if (rect->first_row < last_data && edit.index == rect->first_row + 1U && end > last_data) {
+      emptied.push_back(table.id);
+    }
+  }
+  if (emptied.empty()) {
+    return emptied;
+  }
+  for (const TableMetadata& table : wb.tables()) {
+    const std::optional<MergeRange> rect = detail::table_rect_on_sheet(table, sheet_index);
+    if (!rect.has_value() || std::find(emptied.begin(), emptied.end(), table.id) != emptied.end() ||
+        rect->last_row < edit.index || rect->first_row >= end || !reached(*rect)) {
+      continue;
+    }
+    if (rect->first_row <= edit.index || rect->last_row >= end) {
+      return make_error(FormulonErrorCode::kPreconditionFailed,
+                        "Cannot delete every data row of a table together with part of another table",
+                        "origin=" + std::to_string(edit.index) + " count=" + std::to_string(edit.count));
+    }
+  }
+  return emptied;
+}
+
+// Where `rect` lies after `edit`, or nullopt once the edit deletes it or
+// pushes it off the grid. A rectangle straddling the band edge stays put, or
+// is gone with `straddle_drops`.
+std::optional<MergeRange> rect_after_edit(const MergeRange& rect, const StructuralEdit& edit, bool straddle_drops) {
+  if (edit.band.has_value()) {
+    const BandFit fit = band_fit(rect, edit);
+    if (fit == BandFit::kOutside) {
+      return rect;
+    }
+    if (fit == BandFit::kStraddles) {
+      return straddle_drops ? std::nullopt : std::optional<MergeRange>(rect);
+    }
+  }
+  MergeRange moved = rect;
+  std::uint32_t& first = edit.row_axis ? moved.first_row : moved.first_col;
+  std::uint32_t& last = edit.row_axis ? moved.last_row : moved.last_col;
+  const std::uint64_t bound = a1::axis_extent(edit.row_axis);
+  const std::uint64_t end = static_cast<std::uint64_t>(edit.index) + edit.count;  // exclusive
+  if (!edit.is_delete) {
+    const std::uint64_t new_first = first >= edit.index ? first + static_cast<std::uint64_t>(edit.count) : first;
+    const std::uint64_t new_last = last >= edit.index ? last + static_cast<std::uint64_t>(edit.count) : last;
+    if (new_first >= bound) {
+      return std::nullopt;
+    }
+    first = static_cast<std::uint32_t>(new_first);
+    last = static_cast<std::uint32_t>(std::min(new_last, bound - 1U));
+    return moved;
+  }
+  const std::int64_t new_first = first < edit.index ? first : (first >= end ? first - edit.count : edit.index);
+  const std::int64_t new_last =
+      last < edit.index ? last : (last >= end ? last - edit.count : static_cast<std::int64_t>(edit.index) - 1);
+  if (new_last < new_first) {
+    return std::nullopt;
+  }
+  first = static_cast<std::uint32_t>(new_first);
+  last = static_cast<std::uint32_t>(new_last);
+  return moved;
+}
+
 }  // namespace
+
+namespace detail {
+
+Expected<StructuralEdit, Error> band_edit_of(const MergeRange& range, CellShift shift) {
+  const bool known =
+      shift == CellShift::kDown || shift == CellShift::kRight || shift == CellShift::kUp || shift == CellShift::kLeft;
+  if (!known) {
+    return make_error(FormulonErrorCode::kInvalidArgument, "shift must be down, right, up or left");
+  }
+  if (range.first_row > range.last_row || range.first_col > range.last_col || range.last_row >= Sheet::kMaxRows ||
+      range.last_col >= Sheet::kMaxCols) {
+    return make_error(FormulonErrorCode::kInvalidArgument, "range is outside the grid");
+  }
+  const bool vertical = shift == CellShift::kDown || shift == CellShift::kUp;
+  const bool whole_cols = range.first_row == 0U && range.last_row == Sheet::kMaxRows - 1U;
+  const bool whole_rows = range.first_col == 0U && range.last_col == Sheet::kMaxCols - 1U;
+  if (vertical ? whole_cols : whole_rows) {
+    return make_error(FormulonErrorCode::kInvalidArgument,
+                      vertical ? "range covers whole columns, which cannot shift vertically"
+                               : "range covers whole rows, which cannot shift horizontally");
+  }
+  StructuralEdit edit{vertical ? range.first_row : range.first_col,
+                      vertical ? range.last_row - range.first_row + 1U : range.last_col - range.first_col + 1U,
+                      shift == CellShift::kUp || shift == CellShift::kLeft, vertical};
+  // A band over the whole perpendicular extent is the whole row/column edit.
+  if (!(vertical ? whole_rows : whole_cols)) {
+    edit.band = vertical ? Band{range.first_col, range.last_col} : Band{range.first_row, range.last_row};
+  }
+  return edit;
+}
+
+std::optional<MergeRange> rect_after_shifts(const MergeRange& rect, std::size_t sheet_index,
+                                            const std::vector<PendingShift>& pending, bool straddle_drops) {
+  std::optional<MergeRange> moved = rect;
+  for (const PendingShift& shift : pending) {
+    if (!moved.has_value()) {
+      break;
+    }
+    const Expected<StructuralEdit, Error> edit = band_edit_of(shift.range, shift.shift);
+    if (shift.sheet_index == sheet_index && edit.has_value()) {
+      moved = rect_after_edit(*moved, edit.value(), straddle_drops);
+    }
+  }
+  return moved;
+}
+
+Expected<void, Error> check_band_edit_after(const Workbook& wb, std::size_t sheet_index, const MergeRange& range,
+                                            CellShift shift, const std::vector<PendingShift>& pending) {
+  if (pending.empty()) {
+    return wb.check_band_edit(sheet_index, range, shift);
+  }
+  RETURN_IF_ERROR(check_sheet_index(sheet_index, wb.sheet_count()));
+  ASSIGN_OR_RETURN(StructuralEdit edit, band_edit_of(range, shift));
+  // Maps the edit back onto the current cells, latest shift first.
+  const std::uint32_t across = edit.band.has_value() ? edit.band->first : 0U;
+  std::uint64_t pushed = edit.count;
+  for (auto it = pending.rbegin(); it != pending.rend(); ++it) {
+    const Expected<StructuralEdit, Error> prior = band_edit_of(it->range, it->shift);
+    if (it->sheet_index != sheet_index || !prior.has_value() || prior.value().row_axis != edit.row_axis ||
+        (prior.value().band.has_value() && (across < prior.value().band->first || across > prior.value().band->last))) {
+      continue;
+    }
+    const StructuralEdit& before = prior.value();
+    if (before.is_delete) {
+      edit.index = edit.index >= before.index ? edit.index + before.count : edit.index;
+    } else {
+      edit.index =
+          edit.index >= before.index + before.count ? edit.index - before.count : std::min(edit.index, before.index);
+      // Whatever the earlier insert pushes along, this one pushes further.
+      pushed += edit.is_delete ? 0U : before.count;
+    }
+  }
+  const std::uint32_t bound = a1::axis_extent(edit.row_axis);
+  edit.index = std::min(edit.index, bound - 1U);
+  edit.count = static_cast<std::uint32_t>(std::min<std::uint64_t>(pushed, bound));
+  RETURN_IF_ERROR(check_edit_arguments(wb, sheet_index, edit));
+  return check_structure_edit(wb, sheet_index, edit);
+}
+
+}  // namespace detail
 
 Expected<void, Error> Workbook::insert_rows(std::size_t sheet_index, std::uint32_t row, std::uint32_t count) {
   // The whole edit — including the per-cell dep-graph re-keys done by
@@ -915,9 +1142,37 @@ Expected<void, Error> Workbook::insert_rows(std::size_t sheet_index, std::uint32
 
 Expected<void, Error> Workbook::delete_rows(std::size_t sheet_index, std::uint32_t row, std::uint32_t count) {
   std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
+  return apply_row_delete_locked(sheet_index, StructuralEdit{row, count, true, true});
+}
+
+Expected<void, Error> Workbook::apply_row_delete_locked(std::size_t sheet_index, const StructuralEdit& edit) {
   const eval::RecalcEngine::LockedMutator mutator = engine_->locked_mutator();
-  return apply_row_col_edit_operation(*this, sheets_, mutator, defined_names_, sheet_index,
-                                      StructuralEdit{row, count, true, true});
+  RETURN_IF_ERROR(check_edit_arguments(*this, sheet_index, edit));
+  ASSIGN_OR_RETURN(const std::vector<std::uint32_t> emptied, tables_emptied_by(*this, sheet_index, edit));
+  if (emptied.empty()) {
+    return apply_row_col_edit_operation(*this, sheets_, mutator, defined_names_, sheet_index, edit);
+  }
+  RETURN_IF_ERROR(detail::check_structure_edit(*this, sheet_index, edit));
+  // The first data row stays: only the rows below it go.
+  if (edit.count > 1U) {
+    StructuralEdit rest = edit;
+    ++rest.index;
+    --rest.count;
+    RETURN_IF_ERROR(apply_row_col_edit_operation(*this, sheets_, mutator, defined_names_, sheet_index, rest));
+  }
+  for (TableMetadata& table : tables_) {
+    const std::optional<MergeRange> rect = detail::table_rect_on_sheet(table, sheet_index);
+    if (!rect.has_value() || std::find(emptied.begin(), emptied.end(), table.id) == emptied.end()) {
+      continue;
+    }
+    for (std::uint32_t col = rect->first_col; col <= rect->last_col; ++col) {
+      if (sheets_[sheet_index].cell_at(edit.index, col) != nullptr) {
+        put_cell_value_locked(sheet_index, edit.index, col, Value::blank());
+      }
+    }
+    table.insert_row = true;
+  }
+  return Expected<void, Error>::Ok();
 }
 
 Expected<void, Error> Workbook::insert_cols(std::size_t sheet_index, std::uint32_t col, std::uint32_t count) {
@@ -955,27 +1210,21 @@ Expected<void, Error> Workbook::apply_band_edit_locked(std::size_t sheet_index, 
     return make_error(FormulonErrorCode::kInvalidArgument,
                       is_delete ? "shift must be up or left" : "shift must be down or right");
   }
-  if (range.first_row > range.last_row || range.first_col > range.last_col || range.last_row >= Sheet::kMaxRows ||
-      range.last_col >= Sheet::kMaxCols) {
-    return make_error(FormulonErrorCode::kInvalidArgument, "range is outside the grid");
-  }
-  const bool vertical = shift == CellShift::kDown || shift == CellShift::kUp;
-  const bool whole_cols = range.first_row == 0U && range.last_row == Sheet::kMaxRows - 1U;
-  const bool whole_rows = range.first_col == 0U && range.last_col == Sheet::kMaxCols - 1U;
-  if (vertical ? whole_cols : whole_rows) {
-    return make_error(FormulonErrorCode::kInvalidArgument,
-                      vertical ? "range covers whole columns, which cannot shift vertically"
-                               : "range covers whole rows, which cannot shift horizontally");
-  }
-  StructuralEdit edit{vertical ? range.first_row : range.first_col,
-                      vertical ? range.last_row - range.first_row + 1U : range.last_col - range.first_col + 1U,
-                      is_delete, vertical};
-  // A band over the whole perpendicular extent is the whole row/column edit.
-  if (!(vertical ? whole_rows : whole_cols)) {
-    edit.band = vertical ? Band{range.first_col, range.last_col} : Band{range.first_row, range.last_row};
+  ASSIGN_OR_RETURN(const StructuralEdit edit, detail::band_edit_of(range, shift));
+  if (edit.is_delete && edit.row_axis) {
+    return apply_row_delete_locked(sheet_index, edit);
   }
   const eval::RecalcEngine::LockedMutator mutator = engine_->locked_mutator();
   return apply_row_col_edit_operation(*this, sheets_, mutator, defined_names_, sheet_index, edit);
+}
+
+Expected<void, Error> Workbook::check_band_edit(std::size_t sheet_index, const MergeRange& range,
+                                                CellShift shift) const {
+  RETURN_IF_ERROR(check_sheet_index(sheet_index, sheets_.size()));
+  ASSIGN_OR_RETURN(const StructuralEdit edit, detail::band_edit_of(range, shift));
+  RETURN_IF_ERROR(check_edit_arguments(*this, sheet_index, edit));
+  RETURN_IF_ERROR(tables_emptied_by(*this, sheet_index, edit));
+  return detail::check_structure_edit(*this, sheet_index, edit);
 }
 
 }  // namespace formulon

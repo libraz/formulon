@@ -30,8 +30,8 @@ std::string CaptureExtraAttrs(const pugi::xml_node& node, bool root) {
     for (pugi::xml_attribute attr : node.attributes()) {
       const std::string_view name(attr.name());
       const bool is_known_root = name == "id" || name == "name" || name == "displayName" || name == "ref" ||
-                                 name == "headerRowCount" || name == "totalsRowCount" || name == "totalsRowShown" ||
-                                 name == "xmlns";
+                                 name == "headerRowCount" || name == "insertRow" || name == "insertRowShift" ||
+                                 name == "totalsRowCount" || name == "totalsRowShown" || name == "xmlns";
       if (is_known_root) {
         continue;
       }
@@ -147,6 +147,12 @@ Expected<TableMetadata, Error> read_table(const std::vector<std::uint8_t>& table
   }
   if (pugi::xml_attribute shown = root.attribute("totalsRowShown"); shown) {
     table.totals_row_shown = parse_xml_bool_attr(shown);
+  }
+  if (pugi::xml_attribute insert_row = root.attribute("insertRow"); insert_row) {
+    table.insert_row = parse_xml_bool_attr(insert_row);
+  }
+  if (pugi::xml_attribute insert_row_shift = root.attribute("insertRowShift"); insert_row_shift) {
+    table.insert_row_shift = parse_xml_bool_attr(insert_row_shift);
   }
 
   if (pugi::xml_node cols_node = root.child("tableColumns"); cols_node) {

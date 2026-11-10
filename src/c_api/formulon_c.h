@@ -1078,6 +1078,12 @@ FM_API fm_status_t fm_sheet_insert_rows(fm_workbook_t* wb, size_t sheet_index, u
  *        References pointing inside the deleted interval collapse to
  *        `#REF!`; references past the deletion shift back.
  *
+ *        A span holding a table's header row, without covering the whole
+ *        table, fails with `FM_STATUS_PRECONDITION_FAILED`. A span covering
+ *        every data row keeps the first data row, emptied; one covering the
+ *        totals row turns the table's totals off and clears every column's
+ *        totals settings. A span covering the whole table removes it.
+ *
  * @return Same status codes as `fm_sheet_insert_rows`.
  */
 FM_API fm_status_t fm_sheet_delete_rows(fm_workbook_t* wb, size_t sheet_index, uint32_t first, uint32_t last);
@@ -1177,6 +1183,10 @@ FM_API fm_status_t fm_sheet_insert_cells(fm_workbook_t* wb, size_t sheet_index, 
  *
  * `shift` is an `fm_cell_shift_t`; `FM_CELL_SHIFT_DOWN` (0) is not a delete
  * direction.
+ *
+ * A band covering a table's columns follows the table rules of
+ * `fm_sheet_delete_rows` (header row refused, all data rows keep the first,
+ * totals row delete turns totals off).
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `range` is `NULL`;
@@ -2400,6 +2410,13 @@ typedef struct {
  * automatically. `range` is the whole table, so with `totals_row` on its
  * last row is the totals row.
  *
+ * A one-row `range` with a header row creates the header plus one empty data
+ * row below it: the cells of the table's columns in that row shift down when
+ * occupied, and the table ends one row below `range`. That fails with
+ * `FM_STATUS_PRECONDITION_FAILED` when `range` is the last grid row, and
+ * `header_row` with `totals_row` on a one-row `range` is
+ * `FM_STATUS_INVALID_ARGUMENT`.
+ *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb`, `spec`, `spec->name` or `out_table_index` is `NULL`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
@@ -2468,12 +2485,12 @@ typedef struct {
   fm_cell_rect_t range;
   /** The operation applied to `header_row`: keep it, or set it; it cannot be cleared. */
   fm_patch_op_t header_row_op;
-  /** Turns the header row on (1) or off (0); only the flag flips. */
+  /** Turns the header row on (1) or off (0); it moves cells (see `fm_sheet_update_table`). */
   int32_t header_row;
   /** The operation applied to `totals_row`: keep it, or set it; it cannot be cleared. */
   fm_patch_op_t totals_row_op;
-  /** Turns the totals row on (1) or off (0), growing or shrinking the table by one row; with `range` in the same patch
-   *  only the flag flips. */
+  /** Turns the totals row on (1) or off (0), growing or shrinking the table by one row (see
+   *  `fm_sheet_update_table`). */
   int32_t totals_row;
   /** The operation applied to `columns`: keep the columns as they are, or apply the entries of `columns`; it cannot be
    *  cleared. */
@@ -2490,10 +2507,26 @@ typedef struct {
  * @brief Merges `patch` into table `table_index`. The whole patch is checked
  *        before anything changes.
  *
- * Totals row on (without `range`): one row is inserted below the table in
+ * Header row off: the header cells are deleted (value and style), the range
+ * shrinks by its top row, nothing shifts, the table's AutoFilter is dropped and
+ * the column names are kept; while it is off a `[#Headers]` reference
+ * evaluates to `#REF!`. Header row on: when the row above the data is empty in
+ * the table's columns, the names are written there and the range grows up by
+ * one row; when it is occupied (or is the sheet's first row), the table's
+ * columns shift down one row from the first data row, as `fm_sheet_insert_cells`
+ * with `FM_CELL_SHIFT_DOWN`, and the names are written into the freed row.
+ * Turning it off on a table without data rows fails.
+ *
+ * With `range` and a toggle in one patch the toggle (header, then totals)
+ * applies first and `range` is checked against the toggled shape; a `range`
+ * whose first row is not the toggled shape's first row is
+ * `FM_STATUS_INVALID_ARGUMENT`, and any refusal leaves the whole patch
+ * unapplied.
+ *
+ * Totals row on: one row is inserted below the table in
  * the table's columns, shifting the cells beneath down (as
  * `fm_sheet_insert_cells` with `FM_CELL_SHIFT_DOWN`), and each column's
- * stored totals label and function is written there; the data rows are kept. If a merged range, another table,
+ * stored totals settings are written there; the data rows are kept. If a merged range, another table,
  * a PivotTable, an array formula or a data table straddles the table's
  * columns below it, nothing shifts and the row directly below is used when
  * it is free (no value, formula, spill output, merged range or table cell;
@@ -2505,7 +2538,12 @@ typedef struct {
  * refused. The totals row then leaves the table's range and the cells
  * beneath shift up; if something straddles the table's columns below, the old
  * totals row is only emptied and nothing shifts. The columns' stored totals
- * labels and functions are kept for the next time it is turned on.
+ * labels and functions are kept for the next time it is turned on, and turning
+ * it on restores them. Fresh defaults are written instead only when the table
+ * has never shown its totals row or lost it to a row delete: the first column
+ * takes the profile language's label, the last column a sum when every data
+ * cell is a non-date number and a count otherwise, and a one-column table
+ * gets the function only.
  *
  * A toggle that changes nothing is a no-op.
  *
@@ -2518,7 +2556,8 @@ typedef struct {
  * @return `FM_STATUS_OK` (0) on success, or a common table failure;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `patch` is `NULL`;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when an op is out of range or `CLEAR` (a column patch's ops may clear),
- *         `range` is inverted, outside the grid or of another width, a row flag is not 0 / 1, `columns` is `NULL` with
+ *         `range` is inverted, outside the grid, of another width or does not start where the toggled shape
+ *         starts, a row flag is not 0 / 1, `columns` is `NULL` with
  *         a `columns_count`, a totals function is outside its enumeration, a label or formula to set is `NULL` or
  *         empty, the totals function that results is custom with no formula, or a calculated-column formula is an
  *         array or dynamic-array formula or moves a reference off the grid;
@@ -2527,6 +2566,7 @@ typedef struct {
  *         calculated-column formula does not parse;
  *         `FM_STATUS_PRECONDITION_FAILED` (9) when `range` overlaps another table, a
  *         PivotTable, a data table, an array formula or a merged range,
+ *         or when turning the header row on or off cannot shift or has no data row to keep,
  *         or when turning the totals row on finds the row below occupied (a
  *         non-blank cell in the table's columns, or a merged range, table,
  *         PivotTable, array formula, data table or spill over those cells,

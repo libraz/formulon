@@ -264,6 +264,19 @@ Upgrading from 0.18: see [Upgrading from 0.18 to 0.19](docs/releases/upgrading-0
   validation compares numbers exactly.
 - `addTable` numbers blank and repeated column names (`Column1`, `Qty2`)
   instead of refusing them.
+- `Table.update({ headerRow })` deletes the header cells and the AutoFilter
+  when turned off (names kept, `[#Headers]` is `#REF!`) and writes the names
+  back when turned on, growing up into an empty row or shifting the table's
+  columns down.
+- `Table.update` with `range` and a toggle applies the toggle first and checks
+  `range` against the toggled shape; a refused patch changes nothing.
+- `Table.update({ totalsRow: true })` writes defaults (a label in the profile
+  language, a sum or count) on a table that has not shown its totals row, and
+  restores the saved settings otherwise; deleting the totals row clears them.
+- Deleting rows over a table's header row without the whole table fails with
+  `PreconditionFailed`, and deleting every data row keeps the first, empty.
+- `addTable` over a one-row range with a header row adds an empty data row,
+  shifting occupied cells of the table's columns down.
 
 ### Removed
 

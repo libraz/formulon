@@ -240,10 +240,13 @@ TEST(TableTotalsSyncLoad, XlsbLoadRebuildsMetadataFromCells) {
 
 TEST(TableTotalsSyncLoad, AgreeingFileLoadsUnchanged) {
   Workbook wb = MakeWorkbook();
+  // The intended totals row: Total / max / none, every cell written to agree.
   wb.mutable_tables()[0].columns[0].totals_label = "Total";
   wb.mutable_tables()[0].columns[1].totals_function = "max";
+  wb.mutable_tables()[0].columns[2].totals_function.clear();
   ASSERT_TRUE(wb.write_table_totals_cell(0, 0).has_value());
   ASSERT_TRUE(wb.write_table_totals_cell(0, 1).has_value());
+  ASSERT_TRUE(wb.write_table_totals_cell(0, 2).has_value());
   auto bytes = io::write_ooxml(wb);
   ASSERT_TRUE(bytes.has_value());
   auto loaded = io::read_ooxml(io::ByteSpan{bytes.value().data(), bytes.value().size()});
