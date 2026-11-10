@@ -26,10 +26,25 @@ const repoRoot = path.resolve(pkgRoot, '..', '..');
 const fixtureDir = path.join(here, 'fixtures', 'readme');
 const readmes = ['README.md', 'README_ja.md', 'packages/npm/README.md'];
 
-// The same package.json "exports" resolution as the other staged-package tests.
-const entry = process.env.FORMULON_NPM_ENTRY ?? '.';
+// Each package specifier resolves to its own staged entry through package.json "exports".
+// FORMULON_NPM_ENTRY re-points the bare specifier only, re-running default-import blocks on that build.
+const entryOverride = process.env.FORMULON_NPM_ENTRY;
 const pkg = JSON.parse(await readFile(path.join(pkgRoot, 'package.json'), 'utf8'));
-const stagedEntry = pathToFileURL(path.resolve(pkgRoot, pkg.exports[entry].import)).href;
+const stagedEntries = new Map();
+for (const [subpath, target] of Object.entries(pkg.exports)) {
+  if (typeof target !== 'object' || !target.import) continue;
+  const file = subpath === '.' && entryOverride ? pkg.exports[entryOverride].import : target.import;
+  stagedEntries.set(pkg.name + subpath.slice(1), pathToFileURL(path.resolve(pkgRoot, file)).href);
+}
+
+/** Rewrites every `from '@libraz/formulon[/subpath]'` to the staged entry that specifier resolves to. */
+function rewriteImports(code) {
+  return code.replace(/from '(@libraz\/formulon(?:\/[^']*)?)'/g, (_, specifier) => {
+    const url = stagedEntries.get(specifier);
+    assert.ok(url, `'${specifier}' is not an exported entry of ${pkg.name}`);
+    return `from '${url}'`;
+  });
+}
 
 const docsDir = process.env.FORMULON_DOCS_DIR ? path.resolve(process.env.FORMULON_DOCS_DIR) : null;
 
@@ -161,6 +176,11 @@ if (docsDir) {
     sources.push({ label: path.relative(docsDir, file), file, markers: ['run', 'run:node-server'] });
   }
 }
+// Each specifier reaches its own build; under an override the bare one does not, so the fixture is skipped.
+if (!entryOverride) {
+  const file = path.join(here, 'fixtures', 'entries.md');
+  sources.push({ label: 'fixtures/entries.md', file, markers: ['run'], fixture: true });
+}
 
 let found = 0;
 let noRun = 0;
@@ -169,14 +189,12 @@ for (const source of sources) {
   reportNearMisses(source.label, text);
   for (const block of runBlocks(text, source.markers)) {
     if (/@libraz\/formulon-native/.test(block.code)) continue;
-    found += 1;
+    if (!source.fixture) found += 1;
     test(`${source.label}:${block.line} ${block.marker} runs and prints what its comments say`, async () => {
       const work = await mkdtemp(path.join(os.tmpdir(), 'formulon-readme-'));
       try {
         await cp(fixtureDir, work, { recursive: true });
-        const code = block.code
-          .replace(/from '@libraz\/formulon\/threads'/g, `from '${stagedEntry}'`)
-          .replace(/from '@libraz\/formulon'/g, `from '${stagedEntry}'`);
+        const code = rewriteImports(block.code);
         const script = path.join(work, 'snippet.mjs');
         await writeFile(script, code);
         const expected = expectations(block.lines);
