@@ -135,6 +135,20 @@ fm_status_t resolve_pivot_checked(const fm_workbook_t* wb, std::initializer_list
   return resolve_pivot(wb, sheet_index, pivot_index, out);
 }
 
+std::optional<fm_cell_rect_t> blocked_pivot_rect(const formulon::pivot::PivotTable& table) {
+  const std::optional<formulon::pivot::BlockedReport>& state = table.blocked();
+  if (!state.has_value() || state->past_edge) {
+    return std::nullopt;
+  }
+  const std::uint32_t above = std::min(state->rows_above, table.anchor_row());
+  const std::uint32_t first_row = table.anchor_row() - above;
+  if (static_cast<std::uint64_t>(first_row) + state->rows > formulon::Sheet::kMaxRows ||
+      static_cast<std::uint64_t>(table.anchor_col()) + state->cols > formulon::Sheet::kMaxCols) {
+    return std::nullopt;
+  }
+  return cell_rect_from_extent(first_row, table.anchor_col(), state->rows, state->cols);
+}
+
 void invalidate_pivot_result(formulon::Workbook& wb, formulon::pivot::PivotTable& table) {
   formulon::pivot::clear_derived_state(table);
   wb.mark_all_formulas_dirty();
@@ -155,10 +169,11 @@ std::vector<formulon::pivot::PivotTable*> cache_tables(formulon::Workbook& wb, s
 }
 
 formulon::Expected<void, formulon::Error> project_pivot(formulon::Workbook& wb, std::size_t sheet_index,
-                                                        std::size_t pivot_index) {
-  formulon::Expected<void, formulon::Error> projected = wb.project_pivot(sheet_index, pivot_index);
-  if (projected) {
-    formulon::pivot::drop_derived_location(*wb.sheet(sheet_index).mutable_pivot_tables()[pivot_index]);
+                                                        std::size_t pivot_index, formulon::ReportPlacement placement) {
+  formulon::Expected<void, formulon::Error> projected = wb.project_pivot(sheet_index, pivot_index, placement);
+  formulon::pivot::PivotTable& table = *wb.sheet(sheet_index).mutable_pivot_tables()[pivot_index];
+  if (projected && !table.blocked().has_value()) {
+    formulon::pivot::drop_derived_location(table);
   }
   return projected;
 }
@@ -183,7 +198,8 @@ formulon::Expected<void, formulon::Error> reproject_edited_pivot(formulon::Workb
     formulon::pivot::share_axis_fields(*cache, table);
   }
   invalidate_pivot_result(wb, table);
-  formulon::Expected<void, formulon::Error> projected = project_pivot(wb, sheet_index, pivot_index);
+  formulon::Expected<void, formulon::Error> projected =
+      project_pivot(wb, sheet_index, pivot_index, formulon::ReportPlacement::kBlock);
   if (!projected) {
     table.set_projection_pending(true);
   }

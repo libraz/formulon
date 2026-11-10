@@ -69,6 +69,9 @@ namespace parser {
 class AstNode;
 struct ExternalBookIndexer;
 }  // namespace parser
+namespace detail {
+struct PivotReportPlan;
+}  // namespace detail
 
 /// The shape a table pre-check takes a table to have: its range and which
 /// of its header and totals rows it shows.
@@ -85,6 +88,12 @@ struct PendingShift {
   std::size_t sheet_index = 0;
   MergeRange range{};
   CellShift shift = CellShift::kDown;
+};
+
+/// How `Workbook::project_pivot` answers a report range that an occupant covers or that overflows the sheet.
+enum class ReportPlacement : std::uint8_t {
+  kBlock,   ///< An edit of an existing report: occupants or the sheet edge block it.
+  kRefuse,  ///< Creation: occupants or the sheet edge refuse it.
 };
 
 /// Move-only container representing a spreadsheet workbook.
@@ -600,7 +609,10 @@ class Workbook {
   ///
   /// `registry` supplies the function dispatch table — typically
   /// `eval::default_registry()`. Returns the engine's `RecalcStats` on
-  /// success.
+  /// success, of the first pass. After the pass, blocked PivotTable reports
+  /// whose range came free are rendered (`settle_blocked_pivots`) and their
+  /// dependents recalculated in further passes, at most one more than the
+  /// blocked reports at the start.
   Expected<eval::RecalcStats, Error> recalc(const eval::FunctionRegistry& registry);
 
   /// Brings cached values up to date before a value read or a save: unless
@@ -625,7 +637,9 @@ class Workbook {
 
   /// Drives a parallel incremental recalc using the embedded engine.
   ///
-  /// Wrapper around `eval::recalc_parallel(*this, registry, cfg, stats)`.
+  /// Wrapper around `eval::recalc_parallel(*this, registry, cfg, stats)`,
+  /// settling blocked PivotTable reports after it as `recalc` does; `stats`
+  /// describes the first pass.
   /// Callers MUST NOT race two `recalc_parallel` invocations on the same
   /// workbook — the scheduler does not own a workbook-level lock.
   ///
@@ -1332,9 +1346,9 @@ class Workbook {
 
   /// Appends `table` to sheet `sheet` and returns its pivot index. The table
   /// is bound to its `pivot_cache_id()` cache and gets one unplaced field per
-  /// cache field; its report is not projected. Fails with `kInvalidArgument` for a bad sheet or an empty
-  /// name, `kNotFound` for an unknown cache, and `kAlreadyExists` for a name
-  /// another pivot on the sheet holds under the name identity rule.
+  /// cache field and a creation order after every existing pivot; its report is not projected. Fails with
+  /// `kInvalidArgument` for a bad sheet or an empty name, `kNotFound` for an unknown cache, and `kAlreadyExists` for a
+  /// name another pivot on the sheet holds under the name identity rule.
   Expected<std::size_t, Error> add_pivot(std::size_t sheet, std::unique_ptr<pivot::PivotTable> table);
 
   /// Renames pivot `pivot` on sheet `sheet`. Fails with `kInvalidArgument` for
@@ -1366,21 +1380,53 @@ class Workbook {
 
   /// Evaluates a pivot and writes its report range into the sheet cells.
   ///
-  /// The cells the previous projection covered (on the first one, the
-  /// location and the page area above it) and the new report range are
-  /// cleared, along with the merges inside the old range; then each report
+  /// The cells and merges the previous projection covered (on the first one,
+  /// the location and the page area above it) are cleared, then each report
   /// cell is written as a literal with the format Excel gives its role, and
-  /// the layout's merges are added. Cells outside the report keep their
-  /// content. A pivot over a cache loaded without records writes nothing.
+  /// the layout's merges are added. A report with no field at all is the
+  /// bordered placeholder frame. A pivot over a cache loaded without records
+  /// writes nothing.
+  ///
+  /// The new range is occupied when it covers, outside the pivot's current
+  /// range, a non-blank or formula cell, a spill range cell, a merge, a legacy
+  /// array block, a data-table result cell, a table or another PivotTable's
+  /// current range. An occupied range, or one past the sheet edge, refuses
+  /// the projection under `kRefuse`. Under `kBlock` the definition stays
+  /// applied but the report is withheld: its old cells are cleared, the anchor
+  /// keeps its format and holds `#SPILL!`, `useAutoFormatting` turns off and
+  /// the span shrinks to the anchor (`pivot::PivotTable::blocked`). The next
+  /// recalc renders it once the range is free (`settle_blocked_pivots`).
   ///
   /// Errors, each leaving the sheet unchanged:
   ///   * `kInvalidArgument` for an index out of range.
   ///   * `kEvalPivotMissing` when the pivot's cache is absent.
-  ///   * `kPreconditionFailed` when the new range overlaps another PivotTable,
-  ///     a table, a data table, a legacy array block, or a merge the previous
-  ///     projection did not cover.
+  ///   * `kPreconditionFailed` under `kRefuse`, naming the occupant or the edge.
   ///   * an evaluation or layout error of the pivot.
-  Expected<void, Error> project_pivot(std::size_t sheet_index, std::size_t pivot_index);
+  Expected<void, Error> project_pivot(std::size_t sheet_index, std::size_t pivot_index, ReportPlacement placement);
+
+  /// Moves a pivot's report so its anchor is (`row`, `col`), as a cut and
+  /// paste does: in the destination, the rectangle the report occupies now
+  /// moved by the same offset, values, formulas, merges, legacy array blocks
+  /// and data tables wholly inside are cleared and tables deleted. The report
+  /// then projects as `project_pivot` under `kBlock`, so only an occupant
+  /// beyond that rectangle (a page-field block wider than it) can block it.
+  ///
+  /// Errors, each leaving the workbook unchanged:
+  ///   * `kInvalidArgument` for an index or coordinate out of range.
+  ///   * `kEvalPivotMissing` when the pivot's cache is absent.
+  ///   * `kPreconditionFailed` when the destination rectangle leaves the
+  ///     grid, covers another PivotTable, or meets a legacy array block or a
+  ///     data table's result range that crosses its edge.
+  ///   * an evaluation or layout error of the pivot.
+  Expected<void, Error> move_pivot(std::size_t sheet_index, std::size_t pivot_index, std::uint32_t row,
+                                   std::uint32_t col);
+
+  /// Renders every blocked report whose needed range is now free, and
+  /// re-plans every blocked report whose size is unknown or whose cache
+  /// changed, earlier-created reports first (`pivot::PivotTable::creation_order`);
+  /// returns how many reports it projected. `recalc` and
+  /// `recalc_parallel` call it after each pass.
+  std::size_t settle_blocked_pivots();
 
   /// Projects every pivot whose cache changed since its last projection. A
   /// pivot that cannot be projected stays pending.
@@ -1403,32 +1449,17 @@ class Workbook {
   /// any edit of the cache. Nothing happens for an unknown cache.
   void invalidate_pivot_results(std::uint32_t cache_id);
 
-  /// The report range a pivot edit would give pivot `pivot` on sheet `sheet`;
-  /// an empty `extent` is an empty report.
-  struct PivotGrowth {
-    std::size_t sheet = 0;
-    std::size_t pivot = 0;
-    std::optional<MergeRange> extent;
-  };
-
-  /// Whether every planned report range of `growth` may be written: it covers
-  /// no PivotTable other than its own, table, data table, legacy array block
-  /// or foreign merge; no non-empty cell outside the pivot's current range;
-  /// and no other planned range on the same sheet.
-  ///
-  /// Errors: `kPreconditionFailed` naming the first blocking cell or pivot.
-  Expected<void, Error> check_pivot_growth(const std::vector<PivotGrowth>& growth) const;
-
   /// Rebuilds cache `cache_id` from its worksheet source and re-projects
   /// every pivot drawing from it, as Excel's Refresh does. Source values are
-  /// read after `ensure_calculated(registry)`. Either everything changes or
-  /// nothing does.
+  /// read after `ensure_calculated(registry)`. A report whose new range is
+  /// occupied is blocked (`project_pivot` under `kBlock`), reports being
+  /// projected earliest-created first; any error leaves
+  /// everything unchanged.
   ///
   /// Errors:
   ///   * `kNotFound` for an unknown cache.
   ///   * `kPreconditionFailed` when the source does not resolve
-  ///     (`pivot::resolve_worksheet_source`) or a report could not grow
-  ///     (`check_pivot_growth`).
+  ///     (`pivot::resolve_worksheet_source`).
   ///   * `kSecurityResourceLimit` when (rows - 1) x columns of the source
   ///     exceeds `kMaxPivotCacheRecordCells`.
   ///   * `kNotImplemented` as `pivot::build_refreshed_cache`.
@@ -1885,6 +1916,13 @@ class Workbook {
   // The data-table step of `recalc()` / `recalc_parallel()`.
   Expected<void, Error> recalc_data_tables_after_pass(bool evaluated_any, const eval::FunctionRegistry& registry);
   Expected<void, Error> compute_data_tables(const eval::FunctionRegistry& registry);
+
+  // `project_pivot`'s blocked state under `kBlock`: clears the report's cells and merges, leaves `#SPILL!` in the
+  // anchor's existing format and records `plan`'s size relative to the anchor.
+  Expected<void, Error> withhold_pivot_report(std::size_t sheet_index, std::size_t pivot_index,
+                                              const detail::PivotReportPlan& plan);
+  // Deletes every table on `sheet_index` meeting `rect`, as a paste over it does.
+  void remove_tables_meeting(std::size_t sheet_index, const MergeRange& rect);
 
   // `move_sheet` and `remove_sheet` past their argument checks, for a caller
   // already holding the engine mutex.

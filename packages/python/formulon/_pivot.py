@@ -50,9 +50,11 @@ from ._workbook import (
     PivotShowValuesAs,
     PivotSortOrder,
     PivotStyleOptions,
+    Spill,
     Unchanged,
     Value,
     _ArgScope,
+    _cell_rect_from,
     _check,
     _decode_cell_rect_at,
     _decode_pivot_filter_operand,
@@ -115,6 +117,21 @@ class Pivot(_NoCopy):
     raises :class:`NotFoundError`. Remove a pivot with :meth:`Sheet.remove_pivot`.
     The definition read-backs work for pivots created in-session and loaded
     from a package alike.
+
+    Every edit writes the report into the sheet cells, replacing their values
+    and formats. The report's range is occupied when it covers, outside the
+    report's own cells, a non-empty cell (a ``=""`` formula included), a spill
+    range cell, any cell of a merge, a legacy array block, a data table's
+    result cells, a table or another pivot's report; a cell holding only a
+    format is not an occupant. As in Excel, an edit, a cache refresh or
+    :meth:`project` whose range is occupied or runs past the sheet edge is not
+    refused: the change is applied, the old report's cells are cleared and the
+    anchor holds ``#SPILL!``, keeping its format. The report is then blocked
+    (:meth:`get_spill`), and the occupant is left as it is. The next recalc
+    after the range comes free renders it (in manual calculation, the next
+    explicit recalc); a format-only change such as an unmerge does not start
+    one. GETPIVOTDATA over a blocked report returns ``#REF!``. Of two reports
+    that need the same free cells, the one created first renders.
     """
 
     __slots__ = ("_sheet", "_runtime_id")
@@ -246,7 +263,10 @@ class Pivot(_NoCopy):
 
     # -- Layout ------------------------------------------------------------
     def get_layout(self) -> PivotLayout:
-        """Return the pivot's layout, computed from its cache records; the sheet cells are not written (:meth:`project` writes them)."""
+        """Return the pivot's layout, computed from its cache records; the sheet cells are not written (:meth:`project` writes them).
+
+        A blocked report returns the layout it would draw.
+        """
         h, sheet, pivot_index = self._locate()
         with _ArgScope() as scope:
             out = scope.out_ptr()
@@ -293,11 +313,17 @@ class Pivot(_NoCopy):
     def set_anchor(self, cell: Union[CellAddress, str]) -> None:
         """Move the pivot so its top-left cell is ``cell``, a :class:`CellAddress` or one A1 cell (``"C3"``).
 
-        It has the meaning of ``PivotInput.anchor``.
+        It has the meaning of ``PivotInput.anchor``. As Excel's cut and paste of a report does, the move
+        overwrites the destination (the report's current rectangle moved by the same offset): values, formulas,
+        merges, spill range cells and legacy array blocks or data tables lying wholly inside are cleared, and a table
+        meeting it is deleted.
 
         Raises:
           TypeError: when ``cell`` is neither a :class:`CellAddress` nor a ``str``.
           InvalidArgumentError: when the text is not one unqualified A1 cell.
+          FormulonError: with ``code == StatusCode.PRECONDITION_FAILED``, changing nothing, when the destination runs
+            past the sheet edge, covers another pivot, or meets a legacy array block or a data table's result range
+            that crosses its edge.
         """
         if isinstance(cell, CellAddress):
             row, col = cell.row, cell.col
@@ -549,8 +575,6 @@ class Pivot(_NoCopy):
           TypeError: when a flag is not a ``bool``, ``indent`` or
             ``page_wrap`` is not an integer, or a string argument is neither a
             ``str`` nor ``None``.
-          FormulonError: with ``code == StatusCode.PRECONDITION_FAILED`` when the
-            report would overlap another structure.
         """
         arguments = dict(locals())
         given = {name: arguments[name] for name in _PIVOT_OPTION_NAMES if arguments[name] is not UNCHANGED}
@@ -591,7 +615,8 @@ class Pivot(_NoCopy):
         """Return whether a cache change left the pivot's sheet cells stale; see :meth:`project`.
 
         Metadata only: records come from ``add_field`` / ``add_record`` / ``set_record_value`` on the cache;
-        neither :meth:`project` nor a cell edit re-reads the source range.
+        neither :meth:`project` nor a cell edit re-reads the source range. A blocked report is not pending; whether
+        it is drawn is :meth:`get_spill`'s answer.
         """
         h, sheet, pivot_index = self._locate()
         with _ArgScope() as scope:
@@ -609,7 +634,8 @@ class Pivot(_NoCopy):
     def project(self) -> None:
         """Write the pivot's report, computed from its cache records, into its sheet cells now and clear its pending flag.
 
-        It does not re-read the cache's source range. Raises when the report would overlap another structure; the pivot stays pending.
+        It does not re-read the cache's source range. A report whose range is occupied or runs past the sheet edge
+        is blocked instead (see :class:`Pivot`).
         """
         h, sheet, pivot_index = self._locate()
         _check(
@@ -617,6 +643,32 @@ class Pivot(_NoCopy):
                 h, _uint(sheet, "sheet_index", role="sheet"), _uint(pivot_index, "pivot_index", role="position")
             )
         )
+
+    def get_spill(self) -> Optional[Spill]:
+        """Return the range a blocked report needs, as ``Spill(blocked=True, range=...)``, or ``None``.
+
+        The record is the one :meth:`Sheet.get_spill` returns at the anchor. ``None`` while the report is drawn or
+        was never drawn, and for a report blocked past the sheet edge. A blocked report loaded without its cache
+        records reports its anchor alone; one whose cache changed since it was blocked reports the last range it
+        needed. Pending cells are calculated first, which renders a report whose range came free.
+        """
+        h, sheet, pivot_index = self._locate()
+        with _ArgScope() as scope:
+            present = scope.out_ptr()
+            ptr = scope.struct(S.SPILL_INFO)
+            _check(
+                LIB.fm_sheet_get_pivot_spill(
+                    h,
+                    _uint(sheet, "sheet_index", role="sheet"),
+                    _uint(pivot_index, "pivot_index", role="position"),
+                    present,
+                    ptr,
+                )
+            )
+            if LIB.read_i32(present) == 0:
+                return None
+            d = S.SPILL_INFO.unpack(LIB, ptr)
+            return Spill(blocked=bool(d["blocked"]), range=_cell_rect_from(d["rect"]))
 
     @overload
     def show_details(self, row: int, col: int) -> Sheet: ...

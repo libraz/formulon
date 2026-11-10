@@ -1141,6 +1141,7 @@ const STATUS_ACCESSORS = [
   ['Pivot.getReportLayout', null, [0, 99]],
   ['Pivot.listDataFields', null, [0, 99]],
   ['Pivot.listFilters', null, [0, 99]],
+  ['Pivot.getSpill', null, [0, 99]],
   ['PivotCache.listCalculatedItems', null, [9999]],
   ['listFonts', [], null],
   ['listFills', [], null],

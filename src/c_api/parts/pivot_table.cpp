@@ -30,6 +30,7 @@
 #include "utils/utf8_length.h"
 #include "workbook.h"
 
+using formulon::c_api::parts::blocked_pivot_rect;
 using formulon::c_api::parts::check_cell_coord;
 using formulon::c_api::parts::check_enum_domain;
 using formulon::c_api::parts::check_index;
@@ -39,6 +40,7 @@ using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::check_sheet_rect;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
+using formulon::c_api::parts::ensure_calculated;
 using formulon::c_api::parts::find_cache;
 using formulon::c_api::parts::fresh_read_scratch;
 using formulon::c_api::parts::invalid_argument;
@@ -161,7 +163,8 @@ extern "C" fm_status_t fm_sheet_add_pivot(fm_workbook_t* wb, std::size_t sheet_i
   formulon::Sheet& sheet = wb->workbook().sheet(sheet_index);
   const std::size_t pivot_index = added.value();
   // A report that cannot be placed is not created.
-  if (auto projected = project_pivot(wb->workbook(), sheet_index, pivot_index); !projected) {
+  if (auto projected = project_pivot(wb->workbook(), sheet_index, pivot_index, formulon::ReportPlacement::kRefuse);
+      !projected) {
     auto& pivots = sheet.mutable_pivot_tables();
     pivots.erase(pivots.begin() + static_cast<std::ptrdiff_t>(pivot_index));
     return set_last_error(projected.error());
@@ -230,9 +233,10 @@ extern "C" fm_status_t fm_sheet_set_pivot_anchor(fm_workbook_t* wb, std::size_t 
   if (fm_status_t rc = resolve_pivot_checked(wb, sheet_index, pivot_index, &table); rc != 0) {
     return rc;
   }
-  PivotEdit edit(wb->workbook(), sheet_index, pivot_index, *table);
-  table->set_anchor(anchor_row, anchor_col, 1U, 1U);
-  return edit.commit();
+  if (auto moved = wb->workbook().move_pivot(sheet_index, pivot_index, anchor_row, anchor_col); !moved) {
+    return set_last_error(moved.error());
+  }
+  return 0;
 }
 
 extern "C" fm_status_t fm_sheet_update_pivot_grand_totals(fm_workbook_t* wb, std::size_t sheet_index,
@@ -1109,7 +1113,8 @@ extern "C" fm_status_t fm_sheet_project_pivot(fm_workbook_t* wb, std::size_t she
   if (fm_status_t rc = resolve_pivot_checked(wb, sheet_index, pivot_index, &table); rc != 0) {
     return rc;
   }
-  if (auto projected = project_pivot(wb->workbook(), sheet_index, pivot_index); !projected) {
+  if (auto projected = project_pivot(wb->workbook(), sheet_index, pivot_index, formulon::ReportPlacement::kBlock);
+      !projected) {
     return set_last_error(projected.error());
   }
   return 0;
@@ -1123,5 +1128,32 @@ extern "C" fm_status_t fm_sheet_is_pivot_projection_pending(const fm_workbook_t*
     return rc;
   }
   *out = table->projection_pending() ? 1 : 0;
+  return 0;
+}
+
+extern "C" fm_status_t fm_sheet_get_pivot_spill(const fm_workbook_t* wb, std::size_t sheet_index,
+                                                std::size_t pivot_index, std::int32_t* out_present,
+                                                fm_spill_info_t* out) {
+  clear_last_error();
+  const formulon::pivot::PivotTable* table = nullptr;
+  if (auto rc = resolve_pivot_checked(wb, {out_present, out}, sheet_index, pivot_index, &table); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_record_size(*out); rc != 0) {
+    return rc;
+  }
+  // A recalc renders a blocked report whose range came free.
+  if (auto rc = ensure_calculated(wb); rc != 0) {
+    return rc;
+  }
+  const std::uint32_t struct_size = out->struct_size;
+  *out = FM_STRUCT_INIT(fm_spill_info_t);
+  out->struct_size = struct_size;
+  *out_present = 0;
+  if (const std::optional<fm_cell_rect_t> needed = blocked_pivot_rect(*table)) {
+    out->rect = *needed;
+    out->blocked = 1;
+    *out_present = 1;
+  }
   return 0;
 }

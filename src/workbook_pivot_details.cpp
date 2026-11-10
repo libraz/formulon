@@ -360,6 +360,14 @@ Expected<std::size_t, Error> Workbook::add_pivot(std::size_t sheet, std::unique_
     const eval::ScopedEvalProfile scope(excel_profile());
     pivot::list_axis_field_items(*table, *cache);
   }
+  // Creation order: one past every pivot of the workbook, so it stays monotonic after removals.
+  std::uint64_t order = 0;
+  for (const Sheet& each : sheets_) {
+    for (const std::unique_ptr<pivot::PivotTable>& other : each.pivot_tables()) {
+      order = other != nullptr && other->creation_order() > order ? other->creation_order() : order;
+    }
+  }
+  table->set_creation_order(order + 1U);
   target.add_pivot_table(std::move(table));
   return target.pivot_tables().size() - 1U;
 }

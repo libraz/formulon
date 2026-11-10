@@ -1342,7 +1342,7 @@ void AddProjectedPivot(Workbook& wb) {
   table->set_grand_totals(true, true);
   table->set_anchor(2U, 0U, 4U, 2U);
   wb.sheet(0).add_pivot_table(std::move(table));
-  ASSERT_TRUE(wb.project_pivot(0U, 0U).has_value());
+  ASSERT_TRUE(wb.project_pivot(0U, 0U, ReportPlacement::kBlock).has_value());
   ASSERT_EQ(PivotAt(wb), "A3:B6");
   ASSERT_EQ(At(wb, "B6"), Value::number(350.0));
 }

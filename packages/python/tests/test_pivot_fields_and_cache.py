@@ -203,9 +203,9 @@ class PivotCacheTests(unittest.TestCase):
 
 
 class PivotPlacementTests(unittest.TestCase):
-    """A report that would land on another structure is refused and the sheet stays as it was.
+    """Moving a report is a cut and paste: it overwrites the destination or is refused with the sheet unchanged.
 
-    A pivot with no fields spans no cell, so each case moves a populated report onto the structure.
+    The moving report fills G1:H4, so a move to A11 lands on A11:B14.
     """
 
     FREE = "A11"
@@ -231,38 +231,55 @@ class PivotPlacementTests(unittest.TestCase):
         self.assertEqual(len(ws.list_pivots()), before_pivots)
         self.assertEqual(ws.list_merges(), before_merges)
 
+    def _assert_moved(self, wb: Workbook, pivot: Pivot, target: str, first: tuple) -> None:
+        pivot.set_anchor(target)
+        rect = pivot.get_layout().range
+        self.assertEqual((rect.first_row, rect.first_col), first)
+        self.assertIsNone(pivot.get_spill())
+        self.assertEqual(wb.sheet(0).get_value(first[0] + 1, first[1]), "East")
+        self.assertIsNone(wb.sheet(0).get_value("G2"))
+
     def _setup(self, wb: Workbook) -> Pivot:
         return self._report(wb, _cache(wb), "Moving", "G1")
 
-    def test_over_merge(self) -> None:
+    def test_over_merge_clears_it(self) -> None:
         with Workbook.create_default() as wb:
             pivot = self._setup(wb)
             wb.sheet(0).add_merge("A11:B12")
-            self._assert_refused(wb, pivot, self.FREE)
-            self._assert_refused(wb, pivot, "B10")
+            self._assert_moved(wb, pivot, self.FREE, (10, 0))
+            self.assertEqual(wb.sheet(0).list_merges(), [])
 
     def test_over_array_formula(self) -> None:
+        # A block crossing the destination's edge refuses the move.
+        with Workbook.create_default() as wb:
+            pivot = self._setup(wb)
+            wb.sheet(0).set_array_formula(ArrayFormula(range="B13:C14", formula="=SEQUENCE(2,2)"))
+            self._assert_refused(wb, pivot, self.FREE)
+        # One wholly inside is pasted over.
         with Workbook.create_default() as wb:
             pivot = self._setup(wb)
             wb.sheet(0).set_array_formula(ArrayFormula(range="A11:A12", formula="=SEQUENCE(2)"))
-            self._assert_refused(wb, pivot, self.FREE)
+            self._assert_moved(wb, pivot, self.FREE, (10, 0))
+            self.assertIsNone(wb.sheet(0).get_array_formula("A12"))
 
     def test_over_data_table(self) -> None:
         with Workbook.create_default() as wb:
             pivot = self._setup(wb)
-            wb.sheet(0).add_data_table(DataTableInput(range="B12:C14", row_input=CellAddress(0, 0)))
-            self._assert_refused(wb, pivot, "B12")
+            ws = wb.sheet(0)
+            ws.add_data_table(DataTableInput(range="B12:C14", row_input=CellAddress(0, 0)))
             self._assert_refused(wb, pivot, "A13")
+            self._assert_moved(wb, pivot, "B12", (11, 1))
+            self.assertIsNone(ws.get_data_table("C13"))
 
-    def test_over_table(self) -> None:
+    def test_over_table_deletes_it(self) -> None:
         with Workbook.create_default() as wb:
             pivot = self._setup(wb)
             ws = wb.sheet(0)
             ws.set_text(10, 0, "Head1")
             ws.set_text(10, 1, "Head2")
             ws.add_table(TableInput(range="A11:B13", name="Blocked"))
-            self._assert_refused(wb, pivot, self.FREE)
-            self._assert_refused(wb, pivot, "B13")
+            self._assert_moved(wb, pivot, self.FREE, (10, 0))
+            self.assertEqual(ws.list_tables(), [])
 
     def test_over_pivot(self) -> None:
         with Workbook.create_default() as wb:
@@ -272,12 +289,18 @@ class PivotPlacementTests(unittest.TestCase):
             self._assert_refused(wb, moving, self.FREE)
             self._assert_refused(wb, moving, "A12")
 
+    def test_past_the_sheet_edge(self) -> None:
+        with Workbook.create_default() as wb:
+            pivot = self._setup(wb)
+            self._assert_refused(wb, pivot, "A1048574")
+
     def test_free_target_is_accepted(self) -> None:
         with Workbook.create_default() as wb:
             pivot = self._setup(wb)
             wb.sheet(0).add_merge("A11:B12")
             pivot.set_anchor("D15")
             self.assertEqual((pivot.get_layout().range.first_row, pivot.get_layout().range.first_col), (14, 3))
+            self.assertEqual(len(wb.sheet(0).list_merges()), 1)
 
 
 class PivotFilterTests(unittest.TestCase):

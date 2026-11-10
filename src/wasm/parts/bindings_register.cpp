@@ -424,6 +424,7 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("removePivotCacheCalculatedItem", &JsWorkbook::pivotCacheCalculatedItemRemove)
       .function("projectPivot", &JsWorkbook::pivotProject)
       .function("isPivotProjectionPending", &JsWorkbook::pivotProjectionPending)
+      .function("getPivotSpill", &JsWorkbook::getPivotSpill)
       .function("getPivotDataFieldDefaultName",
                 emscripten::optional_override([](const JsWorkbook& self, uint32_t sheet, uint32_t pivotIndex,
                                                  uint32_t fieldIndex, int32_t aggregation, uint32_t excludeDataField) {

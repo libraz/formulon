@@ -127,7 +127,7 @@ TEST(CApiPivotRefresh, AnUnresolvedSourceChangesNothing) {
   EXPECT_EQ(f.SharedItemCount(kRegionField), 2U);
 }
 
-TEST(CApiPivotRefresh, AReportThatCannotGrowChangesNothing) {
+TEST(CApiPivotRefresh, AReportThatCannotGrowIsBlockedUntilItsRangeIsFree) {
   RefreshFixture f;
   f.Build();
   // The report fills D1:E4; a new item makes it one row longer, into D5.
@@ -135,9 +135,31 @@ TEST(CApiPivotRefresh, AReportThatCannotGrowChangesNothing) {
     ASSERT_EQ(fm_sheet_set_text(f.wb.handle, 0U, r, 3U, "keep"), 0);
   }
   ASSERT_EQ(fm_sheet_set_text(f.wb.handle, 0U, 4U, 0U, "East"), 0);
-  EXPECT_EQ(fm_workbook_refresh_pivot_cache(f.wb.handle, f.cache_id), kPreconditionFailed);
-  EXPECT_EQ(f.SharedItemCount(kRegionField), 2U);
+  ASSERT_EQ(fm_workbook_refresh_pivot_cache(f.wb.handle, f.cache_id), 0) << fm_get_last_error_message();
+  // The cache is refreshed; the report is withheld behind `#SPILL!` and the cells stay.
+  EXPECT_EQ(f.SharedItemCount(kRegionField), 3U);
   EXPECT_FALSE(f.ReportHasText("East"));
+  fm_value_t anchor{};
+  ASSERT_EQ(fm_sheet_get_value(f.wb.handle, 0U, 0U, 3U, &anchor), 0);
+  ASSERT_EQ(anchor.kind, FM_VALUE_KIND_ERROR);
+  EXPECT_EQ(anchor.u.error_code, static_cast<std::int32_t>(formulon::ErrorCode::Spill));
+  EXPECT_TRUE(f.ReportHasText("keep"));
+  std::int32_t present = 0;
+  fm_spill_info_t spill = FM_STRUCT_INIT(fm_spill_info_t);
+  ASSERT_EQ(fm_sheet_get_pivot_spill(f.wb.handle, 0U, 0U, &present, &spill), 0) << fm_get_last_error_message();
+  ASSERT_EQ(present, 1);
+  EXPECT_EQ(spill.rect.first_row, 0U);
+  EXPECT_EQ(spill.rect.first_col, 3U);
+  EXPECT_EQ(spill.rect.last_row, 4U);
+  EXPECT_EQ(spill.rect.last_col, 4U);
+
+  // Clearing the cells renders the report on the next read.
+  for (std::uint32_t r = 4U; r < 9U; ++r) {
+    ASSERT_EQ(fm_sheet_set_blank(f.wb.handle, 0U, r, 3U), 0);
+  }
+  EXPECT_TRUE(f.ReportHasText("East"));
+  ASSERT_EQ(fm_sheet_get_pivot_spill(f.wb.handle, 0U, 0U, &present, &spill), 0) << fm_get_last_error_message();
+  EXPECT_EQ(present, 0);
 }
 
 TEST(CApiPivotRefresh, ASourceOverTheRecordCellLimitIsRefused) {

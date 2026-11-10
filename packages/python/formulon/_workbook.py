@@ -5045,12 +5045,13 @@ class CellNode:
 
 @dataclass(frozen=True)
 class Spill:
-    """Dynamic-array spill region info for a cell."""
+    """Dynamic-array spill region info for a cell, or the range a blocked PivotTable report needs."""
 
-    #: ``True`` when the cell is the anchor of a spill refused with ``#SPILL!``; the region is then the rectangle it
-    #: attempted.
+    #: ``True`` when the cell is the anchor of a spill refused with ``#SPILL!``, or of a blocked PivotTable report;
+    #: the region is then the rectangle it attempted.
     blocked: bool
-    #: The region including its anchor, whose top-left cell holds the dynamic-array formula.
+    #: The region including its anchor, whose top-left cell holds the dynamic-array formula or is a PivotTable's
+    #: anchor; a blocked report's region also takes the page-field rows above its anchor.
     range: CellRect
 
 

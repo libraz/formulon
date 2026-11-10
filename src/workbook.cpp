@@ -381,6 +381,20 @@ Expected<std::vector<std::uint8_t>, Error> Workbook::save_as(WorkbookFormat form
                     "context=workbook_save_as");
 }
 
+namespace {
+
+std::size_t count_blocked_pivots(const std::vector<Sheet>& sheets) {
+  std::size_t count = 0;
+  for (const Sheet& sheet : sheets) {
+    for (const std::unique_ptr<pivot::PivotTable>& table : sheet.pivot_tables()) {
+      count += table != nullptr && table->blocked().has_value() ? 1U : 0U;
+    }
+  }
+  return count;
+}
+
+}  // namespace
+
 bool Workbook::has_dirty_cells() const {
   // A nested call already holds the mutex; the engine rejects it as re-entrant.
   if (eval::detail::g_in_recalc) {
@@ -394,11 +408,20 @@ bool Workbook::has_dirty_cells() const {
 Expected<eval::RecalcStats, Error> Workbook::recalc(const eval::FunctionRegistry& registry) {
   // A write that dirtied only a data table's header or input cell evaluates nothing, yet changes the table.
   const bool had_dirty = has_dirty_cells();
+  const std::size_t blocked = count_blocked_pivots(sheets_);
   auto result = engine_->recalc(*this, registry);
   if (!result) {
     return result;
   }
   RETURN_IF_ERROR(recalc_data_tables_after_pass(had_dirty || result.value().cells_evaluated != 0U, registry));
+  // A blocked report projected after the pass changes cells its dependents read; each extra pass is bounded.
+  for (std::size_t rounds = blocked + 1U; rounds > 0U && settle_blocked_pivots() > 0U; --rounds) {
+    auto again = engine_->recalc(*this, registry);
+    if (!again) {
+      return again;
+    }
+    RETURN_IF_ERROR(recalc_data_tables_after_pass(true, registry));
+  }
   return result;
 }
 
@@ -422,8 +445,15 @@ Expected<void, Error> Workbook::recalc_parallel(const eval::FunctionRegistry& re
   eval::SchedulerStats local_stats;
   eval::SchedulerStats& pass_stats = stats != nullptr ? *stats : local_stats;
   const bool had_dirty = has_dirty_cells();
+  const std::size_t blocked = count_blocked_pivots(sheets_);
   RETURN_IF_ERROR(eval::recalc_parallel(*this, registry, cfg, &pass_stats));
-  return recalc_data_tables_after_pass(had_dirty || pass_stats.cells_evaluated != 0U, registry);
+  RETURN_IF_ERROR(recalc_data_tables_after_pass(had_dirty || pass_stats.cells_evaluated != 0U, registry));
+  for (std::size_t rounds = blocked + 1U; rounds > 0U && settle_blocked_pivots() > 0U; --rounds) {
+    eval::SchedulerStats again;
+    RETURN_IF_ERROR(eval::recalc_parallel(*this, registry, cfg, &again));
+    RETURN_IF_ERROR(recalc_data_tables_after_pass(true, registry));
+  }
+  return Expected<void, Error>::Ok();
 }
 
 namespace {

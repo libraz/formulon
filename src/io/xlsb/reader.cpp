@@ -35,6 +35,7 @@
 #include "io/ooxml/relationship_xml.h"
 #include "io/ooxml/rels_walker.h"
 #include "io/ooxml_defs.h"
+#include "io/pivot_table_reader.h"
 #include "io/xlsb/drawing_record.h"
 #include "io/xlsb/external_link_reader.h"
 #include "io/xlsb/metadata_bin.h"
@@ -298,6 +299,7 @@ XlsbExternalBooks CollectExternalBookTables(const Workbook& wb) {
 void LoadPivotParts(const ZipReader& zip, Workbook& wb, RetainedPartOrigins& origins) {
   std::unordered_map<std::string, std::uint32_t> loaded_caches;
   for (std::size_t i = 0; i < wb.sheet_count(); ++i) {
+    const std::size_t first_new_pivot = wb.sheet(i).pivot_tables().size();
     std::vector<std::string> pivot_table_paths;
     for (const UnknownRelationship& rel : wb.sheet(i).unknown_relationships()) {
       if (rel.type == kRelPivotTable && !rel.target_external && !rel.target.empty()) {
@@ -327,6 +329,7 @@ void LoadPivotParts(const ZipReader& zip, Workbook& wb, RetainedPartOrigins& ori
                                               wb.sheet(i).pivot_tables().size(), 0});
       wb.sheet(i).add_pivot_table(std::make_unique<pivot::PivotTable>(std::move(table)));
     }
+    assign_read_creation_orders(wb, i, first_new_pivot);
   }
   // Backfills each field's source-column name and each item's label from
   // the bound cache; without it GETPIVOTDATA cannot match a field by name.

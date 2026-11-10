@@ -23,6 +23,7 @@
 #ifndef FORMULON_IO_STYLES_WRITER_H_
 #define FORMULON_IO_STYLES_WRITER_H_
 
+#include <cstdint>
 #include <string>
 
 #include "styles.h"
@@ -67,6 +68,10 @@ std::string write_styles(const StylesTable& table);
 std::string font_fragment(const FontRecord& font);
 std::string fill_fragment(const FillRecord& fill);
 std::string border_fragment(const BorderRecord& border);
+
+/// Index of the `borders` record whose `border_fragment` equals `candidate`'s, appending `candidate` when none
+/// does.
+std::uint32_t intern_border(StylesTable& table, BorderRecord candidate);
 
 /// The children `write_styles` emits inside `dxf`'s `<dxf>` element, without
 /// the element itself; empty for a record that sets nothing.

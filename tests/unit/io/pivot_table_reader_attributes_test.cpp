@@ -164,7 +164,10 @@ TEST(PivotTableReader, RowItemsAndColItemsSurviveRoundTrip) {
   std::string xml(kXmlDecl);
   xml.append("<pivotTableDefinition").append(kPivotNs).append(" name=\"P\" cacheId=\"0\">");
   xml.append("<location ref=\"A1:B2\"/>");
-  xml.append("<pivotFields count=\"0\"/>");
+  xml.append(
+      "<pivotFields count=\"1\"><pivotField axis=\"axisRow\" showAll=\"0\"><items count=\"2\"><item x=\"0\"/>"
+      "<item t=\"default\"/></items></pivotField></pivotFields>");
+  xml.append("<rowFields count=\"1\"><field x=\"0\"/></rowFields>");
   xml.append("<rowItems count=\"2\"><i><x/></i><i t=\"grand\"><x/></i></rowItems>");
   xml.append("<colItems count=\"1\"><i><x/></i></colItems>");
   xml.append("</pivotTableDefinition>");

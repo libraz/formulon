@@ -867,6 +867,16 @@ entries:
     prefer: formulon
     first_noted: 2026-10-14
     last_verified_excel_version: "16.113.4"
+  - id: pivot_tie_after_reopen_undetermined
+    applies_to: all
+    cause: non-identifiable
+    mode: skip-oracle
+    scope: unit-test
+    evidence: [tests/unit/pivot/pivot_blocked_test.cpp]
+    reason: "Two rendered PivotTables whose new ranges overlap only each other after a refresh: in the session that created them the earlier-created one renders and the later one shows #SPILL!, and Formulon follows that rule. On a reopened workbook Excel decides by its in-memory PivotTables collection order, which after a reopen matches no part number, relationship order, uid or name in the file, so the winner is not determined by the workbook. Formulon keys a loaded book by the saved part order, which gives the earlier-created pivot the win for a file Excel saved once. A blocked state the file already carries is kept as saved."
+    prefer: formulon
+    first_noted: 2026-11-11
+    last_verified_excel_version: "16.114"
 
   - ids:
       - trig_rules_tan_below_limit

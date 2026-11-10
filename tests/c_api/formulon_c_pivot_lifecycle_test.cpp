@@ -333,7 +333,6 @@ TEST(FormulonCApiPivot, MutationAndClearExportsCompleteTheirLifecycles) {
 namespace {
 
 constexpr fm_status_t kNotFound = FM_STATUS_NOT_FOUND;
-constexpr fm_status_t kPreconditionFailed = static_cast<fm_status_t>(formulon::FormulonErrorCode::kPreconditionFailed);
 
 std::string FieldNumberFormat(const fm_workbook_t* wb, std::size_t pivot_index, std::size_t field_index) {
   fm_pivot_field_info_t info = FM_STRUCT_INIT(fm_pivot_field_info_t);
@@ -526,14 +525,18 @@ TEST(FormulonCApiPivot, RuntimeIdFollowsThePivotAcrossEditsAndIsNeverReused) {
   EXPECT_EQ(fm_sheet_resolve_pivot_runtime_id(wb.handle, 0, 0U, &index), kNotFound);
   EXPECT_EQ(index, 99U);
 
-  // A pivot edit the projection refuses is rolled back from a clone; the id stays.
+  // An edit growing the report over a merge blocks it; the id stays.
   ASSERT_EQ(fm_sheet_add_merge(wb.handle, 0U, record_arg(fm_cell_rect_t{0U, 5U, 1U, 5U}), nullptr), 0)
       << fm_get_last_error_message();
   fm_pivot_data_field_t widen = SumOfAmount("");
   widen.name = "Count of Amount";
   widen.aggregation = FM_PIVOT_AGGREGATION_COUNT;
   std::size_t df_index = 99;
-  ASSERT_EQ(fm_sheet_add_pivot_data_field(wb.handle, 0U, 0U, &widen, &df_index), kPreconditionFailed);
+  ASSERT_EQ(fm_sheet_add_pivot_data_field(wb.handle, 0U, 0U, &widen, &df_index), 0) << fm_get_last_error_message();
+  std::int32_t blocked = 0;
+  fm_spill_info_t spill = FM_STRUCT_INIT(fm_spill_info_t);
+  ASSERT_EQ(fm_sheet_get_pivot_spill(wb.handle, 0U, 0U, &blocked, &spill), 0) << fm_get_last_error_message();
+  EXPECT_EQ(blocked, 1);
   ASSERT_EQ(fm_sheet_resolve_pivot_runtime_id(wb.handle, 0, first_id, &index), 0) << fm_get_last_error_message();
   EXPECT_EQ(index, 0U);
   EXPECT_EQ(PivotRuntimeId(wb.handle, 0, 0), first_id);

@@ -747,6 +747,7 @@ Napi::Function Workbook::GetClass(Napi::Env env) {
           GuardedInstanceMethod<&Workbook::PivotDataFieldDefaultName, 0xFULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x10ULL>("getPivotDataFieldDefaultName"),
           GuardedInstanceMethod<&Workbook::PivotProject, 0x3ULL>("projectPivot"),
           GuardedInstanceMethod<&Workbook::PivotProjectionPending, 0x3ULL>("isPivotProjectionPending"),
+          GuardedInstanceMethod<&Workbook::GetPivotSpill, 0x3ULL>("getPivotSpill"),
           GuardedInstanceMethod<&Workbook::PivotShowDetails, 0xFULL>("showPivotDetails"),
           GuardedInstanceMethod<&Workbook::PivotName, 0x3ULL>("getPivotName"),
           GuardedInstanceMethod<&Workbook::PivotPageFieldOrder, 0x3ULL>("getPivotPageFieldOrder"),

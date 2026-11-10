@@ -11,7 +11,7 @@
 //
 // The cases below the fixture sweep cover what a single load cannot: the
 // merges `mergeItem` adds, a projection after rows were inserted above the
-// report, pending projections, and a refused overlap.
+// report, pending projections, and a refused move.
 
 #include <algorithm>
 #include <cstddef>
@@ -262,7 +262,7 @@ TEST(PivotProjectionFixture, EveryPivotProjectsTheCellsExcelSaved) {
             ASSERT_TRUE(static_cast<bool>(wb.set_cell_text(s, r, c, "stale")));
           }
         }
-        auto projected_or = wb.project_pivot(s, p);
+        auto projected_or = wb.project_pivot(s, p, ReportPlacement::kBlock);
         ASSERT_TRUE(static_cast<bool>(projected_or)) << relative << ": " << projected_or.error().message;
         ++pivots;
         ASSERT_TRUE(table.projected_extent().has_value()) << relative;
@@ -302,7 +302,7 @@ TEST(PivotProjectionFixture, EveryPivotProjectsTheCellsExcelSaved) {
 }
 
 // ---------------------------------------------------------------------------
-// Merges, structural edits, pending projections, refusals
+// Merges, structural edits, pending projections, a refused move
 // ---------------------------------------------------------------------------
 
 /// The fixture's only pivot sheet.
@@ -333,11 +333,11 @@ TEST(PivotProjectionFixture, MergeItemAddsTheMergesExcelSaved) {
   const std::set<std::string> excel = MergeTexts(wb.sheet(s));
   ASSERT_EQ(excel, (std::set<std::string>{"A5:B5", "A6:A7", "A8:B8", "A9:A10", "A11:B11", "A12:B12"}));
   ASSERT_TRUE(static_cast<bool>(wb.clear_merges(s)));
-  ASSERT_TRUE(static_cast<bool>(wb.project_pivot(s, 0)));
+  ASSERT_TRUE(static_cast<bool>(wb.project_pivot(s, 0, ReportPlacement::kBlock)));
   EXPECT_EQ(MergeTexts(wb.sheet(s)), excel);
   EXPECT_EQ(wb.sheet(s).pivot_tables()[0]->projected_merges().size(), 6U);
   // Projecting again replaces the merges rather than stacking them.
-  ASSERT_TRUE(static_cast<bool>(wb.project_pivot(s, 0)));
+  ASSERT_TRUE(static_cast<bool>(wb.project_pivot(s, 0, ReportPlacement::kBlock)));
   EXPECT_EQ(wb.sheet(s).merges().size(), 6U);
 }
 
@@ -347,7 +347,7 @@ TEST(PivotProjectionFixture, ReprojectionAfterARowInsertClearsTheMovedReport) {
   Workbook& wb = read->workbook;
   wb.set_excel_profile(FixtureProfile("pivot_layout/ja_c0_rows.xlsx"));
   const std::size_t s = PivotSheet(wb);
-  ASSERT_TRUE(static_cast<bool>(wb.project_pivot(s, 0)));
+  ASSERT_TRUE(static_cast<bool>(wb.project_pivot(s, 0, ReportPlacement::kBlock)));
   pivot::PivotTable& table = *wb.sheet(s).mutable_pivot_tables()[0];
   const pivot::PivotRect before = *table.projected_extent();
   const auto excel = Snapshot(wb, wb.sheet(s));
@@ -362,7 +362,7 @@ TEST(PivotProjectionFixture, ReprojectionAfterARowInsertClearsTheMovedReport) {
   // Without its grand-total row the report is one row shorter; the row it
   // left at the moved position must be cleared, not the one at the old one.
   table.set_grand_totals(table.grand_totals_rows(), false);
-  ASSERT_TRUE(static_cast<bool>(wb.project_pivot(s, 0)));
+  ASSERT_TRUE(static_cast<bool>(wb.project_pivot(s, 0, ReportPlacement::kBlock)));
   const pivot::PivotRect after = *table.projected_extent();
   EXPECT_EQ(after.row0, moved.row0);
   EXPECT_EQ(after.row1, moved.row1 - 1U);
@@ -404,21 +404,25 @@ TEST(PivotProjectionFixture, PendingPivotsAreProjectedAndCleared) {
   EXPECT_EQ(Facts(wb, wb.sheet(s), row, col).format, excel.format);
 }
 
-TEST(PivotProjectionFixture, OverlapRefusalWritesNothing) {
+TEST(PivotProjectionFixture, AMoveOntoAStraddlingArrayBlockChangesNothing) {
   std::unique_ptr<io::OoxmlReadResult> read = ReadFixture("pivot_layout/ja_c0_rows.xlsx");
   ASSERT_NE(read, nullptr);
   Workbook& wb = read->workbook;
   wb.set_excel_profile(FixtureProfile("pivot_layout/ja_c0_rows.xlsx"));
   const std::size_t s = PivotSheet(wb);
-  pivot::PivotTable& table = *wb.sheet(s).mutable_pivot_tables()[0];
-  // An array block where the report would land after a move.
-  ASSERT_TRUE(static_cast<bool>(wb.set_array_formula(s, 41U, 21U, 2U, 1U, "={1;2}")));
+  const pivot::PivotTable& table = *wb.sheet(s).pivot_tables()[0];
+  // An array block crossing the right edge of where the report would land after the move.
+  const std::uint32_t last_col = 20U + table.span_cols() - 1U;
+  ASSERT_TRUE(static_cast<bool>(wb.set_array_formula(s, 41U, last_col, 1U, 2U, "={1,2}")));
   const auto before = Snapshot(wb, wb.sheet(s));
   const std::size_t merges = wb.sheet(s).merges().size();
-  table.set_anchor(40U, 20U, table.span_rows(), table.span_cols());
-  auto projected_or = wb.project_pivot(s, 0);
-  ASSERT_FALSE(static_cast<bool>(projected_or));
-  EXPECT_EQ(projected_or.error().code, FormulonErrorCode::kPreconditionFailed);
+  const std::uint32_t anchor_row = table.anchor_row();
+  const std::uint32_t anchor_col = table.anchor_col();
+  auto moved_or = wb.move_pivot(s, 0, 40U, 20U);
+  ASSERT_FALSE(static_cast<bool>(moved_or));
+  EXPECT_EQ(moved_or.error().code, FormulonErrorCode::kPreconditionFailed);
+  EXPECT_EQ(table.anchor_row(), anchor_row);
+  EXPECT_EQ(table.anchor_col(), anchor_col);
   EXPECT_FALSE(table.projected_extent().has_value());
 
   const auto after = Snapshot(wb, wb.sheet(s));
@@ -440,7 +444,7 @@ TEST(PivotProjectionFixture, ACacheSavedWithoutRecordsWritesNothing) {
   const std::uint32_t row = wb.sheet(s).pivot_tables()[0]->anchor_row();
   const std::uint32_t col = wb.sheet(s).pivot_tables()[0]->anchor_col();
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_text(s, row, col, "kept")));
-  ASSERT_TRUE(static_cast<bool>(wb.project_pivot(s, 0)));
+  ASSERT_TRUE(static_cast<bool>(wb.project_pivot(s, 0, ReportPlacement::kBlock)));
   EXPECT_EQ(Facts(wb, wb.sheet(s), row, col).value, "s:kept");
   EXPECT_FALSE(wb.sheet(s).pivot_tables()[0]->projected_extent().has_value());
 }
@@ -451,7 +455,7 @@ TEST(PivotProjectionFixture, ClearingTheProjectionErasesItsCellsAndMerges) {
   Workbook& wb = read->workbook;
   wb.set_excel_profile(FixtureProfile("pivot_options/op_merge_tabular.xlsx"));
   const std::size_t s = PivotSheet(wb);
-  ASSERT_TRUE(static_cast<bool>(wb.project_pivot(s, 0)));
+  ASSERT_TRUE(static_cast<bool>(wb.project_pivot(s, 0, ReportPlacement::kBlock)));
   const pivot::PivotRect e = *wb.sheet(s).pivot_tables()[0]->projected_extent();
   ASSERT_TRUE(static_cast<bool>(wb.clear_pivot_projection(s, 0)));
   EXPECT_TRUE(wb.sheet(s).merges().empty());

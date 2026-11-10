@@ -40,5 +40,37 @@ TEST(XlsbPivotFieldOrder, CountLargerThanPayloadIsCorrupt) {
   EXPECT_EQ(table.error().code, FormulonErrorCode::kIoXlsbRecordCorrupt);
 }
 
+// A minimal pivot table part: BrtBeginPivotTableDef with the given flags byte at payload offset 5, one field and
+// one data field.
+std::vector<std::uint8_t> TableWithFlagsByte(std::uint8_t flags) {
+  std::vector<std::uint8_t> out;
+  const auto record = [&out](std::uint16_t type, const std::vector<std::uint8_t>& payload) {
+    out.push_back(static_cast<std::uint8_t>((type & 0x7F) | 0x80));
+    out.push_back(static_cast<std::uint8_t>(type >> 7));
+    out.push_back(static_cast<std::uint8_t>(payload.size()));
+    out.insert(out.end(), payload.begin(), payload.end());
+  };
+  std::vector<std::uint8_t> head(40U, 0U);
+  head[5] = flags;
+  record(280, head);
+  record(287, {1, 0, 0, 0});
+  record(285, {});
+  record(293, std::vector<std::uint8_t>(29U, 0U));
+  record(315, {});
+  return out;
+}
+
+TEST(XlsbPivotTableDef, UseAutoFormattingIsBitZeroOfByteFive) {
+  const auto on = TableWithFlagsByte(0x65U);
+  auto on_table = io::xlsb::read_pivot_table_bin(io::ByteSpan{on.data(), on.size()});
+  ASSERT_TRUE(static_cast<bool>(on_table)) << on_table.error().message;
+  EXPECT_TRUE(on_table.value().auto_formatting());
+
+  const auto off = TableWithFlagsByte(0x64U);
+  auto off_table = io::xlsb::read_pivot_table_bin(io::ByteSpan{off.data(), off.size()});
+  ASSERT_TRUE(static_cast<bool>(off_table)) << off_table.error().message;
+  EXPECT_FALSE(off_table.value().auto_formatting());
+}
+
 }  // namespace
 }  // namespace formulon

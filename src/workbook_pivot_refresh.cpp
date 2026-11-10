@@ -1,14 +1,14 @@
 // @size-budget: 8 KB
 //
 // `Workbook::refresh_pivot_cache`: Excel's Refresh of a worksheet-source
-// pivot cache, and `Workbook::check_pivot_growth`, the rule every edit that
-// grows a pivot report answers to.
+// pivot cache.
 //
 // The refresh runs in two phases. The first writes nothing: it resolves and
-// reads the source, builds the new cache apart from the old one, and lays out
-// a remapped copy of every dependent pivot against it to check where each
-// report would land. Only when every report may be written does the second
-// phase swap the cache and the definitions in and project each report.
+// reads the source, builds the new cache apart from the old one, and
+// evaluates and lays out a remapped copy of every dependent pivot against it,
+// so any error surfaces before a change. The second swaps the cache and the
+// definitions in and projects each report, blocking one whose new range is
+// occupied.
 
 #include <cstddef>
 #include <cstdint>
@@ -24,7 +24,6 @@
 #include "eval/pivot_formula.h"
 #include "eval/text_format/display_text.h"
 #include "merge_range.h"
-#include "parser/ast_format.h"
 #include "parser/token.h"
 #include "parser/tokenizer.h"
 #include "pivot/field_grouping.h"
@@ -40,9 +39,9 @@
 #include "sheet.h"
 #include "style_resolve.h"
 #include "styles.h"
-#include "utils/a1_ref.h"
 #include "utils/error.h"
 #include "utils/expected.h"
+#include "utils/index_sort.h"
 #include "utils/resource_budget.h"
 #include "utils/status_macros.h"
 #include "value.h"
@@ -51,15 +50,6 @@
 
 namespace formulon {
 namespace {
-
-// `Sheet!A1` for a message.
-std::string cell_name(const Sheet& sheet, std::uint32_t row, std::uint32_t col) {
-  std::string out;
-  parser::append_sheet_name(sheet.name(), /*force_quote=*/false, out);
-  out.push_back('!');
-  a1::append_a1(out, row, col);
-  return out;
-}
 
 bool inside(const MergeRange& range, std::uint32_t row, std::uint32_t col) {
   return row >= range.first_row && row <= range.last_row && col >= range.first_col && col <= range.last_col;
@@ -176,57 +166,6 @@ bool on_axis(pivot::PivotAxis axis) {
 
 }  // namespace
 
-Expected<void, Error> Workbook::check_pivot_growth(const std::vector<PivotGrowth>& growth) const {
-  for (std::size_t i = 0; i < growth.size(); ++i) {
-    const PivotGrowth& g = growth[i];
-    if (g.sheet >= sheets_.size() || g.pivot >= sheets_[g.sheet].pivot_tables().size() ||
-        sheets_[g.sheet].pivot_tables()[g.pivot] == nullptr) {
-      return make_error(FormulonErrorCode::kInvalidArgument, "pivot_index is out of range",
-                        "sheet=" + std::to_string(g.sheet) + " pivot=" + std::to_string(g.pivot));
-    }
-    if (!g.extent.has_value()) {
-      continue;
-    }
-    const Sheet& sheet = sheets_[g.sheet];
-    const MergeRange target = normalized(*g.extent);
-    const MergeRange own = detail::pivot_occupied_extent(*sheet.pivot_tables()[g.pivot]);
-    RETURN_IF_ERROR(detail::check_projection_target(*this, g.sheet, g.pivot, target, own));
-
-    // The first non-empty cell, in row-major order, the report would newly cover.
-    std::optional<std::pair<std::uint32_t, std::uint32_t>> blocking;
-    for (const auto& [row, cells] : sheet.rows()) {
-      if (row < target.first_row || row > target.last_row) {
-        continue;
-      }
-      for (const auto& [col, cell] : cells) {
-        if (col < target.first_col || col > target.last_col || inside(own, row, col) ||
-            (cell.formula_text.empty() && cell.cached_value.is_blank())) {
-          continue;
-        }
-        const std::pair<std::uint32_t, std::uint32_t> at{row, col};
-        if (!blocking.has_value() || at < *blocking) {
-          blocking = at;
-        }
-      }
-    }
-    if (blocking.has_value()) {
-      return make_error(
-          FormulonErrorCode::kPreconditionFailed,
-          "The pivot report would overwrite non-empty cell " + cell_name(sheet, blocking->first, blocking->second));
-    }
-
-    for (std::size_t j = i + 1U; j < growth.size(); ++j) {
-      const PivotGrowth& other = growth[j];
-      if (other.sheet == g.sheet && other.extent.has_value() && intersects(target, normalized(*other.extent))) {
-        return make_error(FormulonErrorCode::kPreconditionFailed,
-                          "The pivot reports of " + sheet.pivot_tables()[g.pivot]->name() + " and " +
-                              sheet.pivot_tables()[other.pivot]->name() + " would overlap");
-      }
-    }
-  }
-  return Expected<void, Error>::Ok();
-}
-
 Expected<void, Error> Workbook::refresh_pivot_cache(std::uint32_t cache_id, const eval::FunctionRegistry& registry) {
   std::size_t slot = pivot_caches_.size();
   for (std::size_t i = 0; i < pivot_caches_.size(); ++i) {
@@ -304,7 +243,6 @@ Expected<void, Error> Workbook::refresh_pivot_cache(std::uint32_t cache_id, cons
   }
   const pivot::PivotLayoutOptions options = pivot::pivot_layout_options_for(excel_profile_);
   eval::PivotFormulaEvaluator formulas;
-  std::vector<PivotGrowth> growth;
   for (const Planned& entry : planned) {
     auto result = pivot::evaluate(*entry.table, plan.cache, options,
                                   pivot::PivotFilterEnv{pinned_now(), date1904_, &styles_, &formulas});
@@ -315,18 +253,10 @@ Expected<void, Error> Workbook::refresh_pivot_cache(std::uint32_t cache_id, cons
     if (!cells) {
       return std::move(cells.error());
     }
-    PivotGrowth planned_growth;
-    planned_growth.sheet = entry.sheet;
-    planned_growth.pivot = entry.pivot;
-    const pivot::PivotCells& laid = cells.value();
-    if (laid.rows > 0U && laid.cols > 0U) {
-      planned_growth.extent = MergeRange{laid.top, laid.left, laid.top + laid.rows - 1U, laid.left + laid.cols - 1U};
-    }
-    growth.push_back(std::move(planned_growth));
   }
-  RETURN_IF_ERROR(check_pivot_growth(growth));
 
-  // Phase 2: swap the cache and the definitions in, then project every report.
+  // Phase 2: swap the cache and the definitions in, then project every report. A report whose new range meets
+  // another pivot's current range or any other occupant is blocked; which one blocks depends on position only.
   pivot_caches_[slot] = std::make_unique<pivot::PivotCache>(std::move(plan.cache));
   pivot_caches_[slot]->mark_records_from_source();
   for (Planned& entry : planned) {
@@ -337,14 +267,28 @@ Expected<void, Error> Workbook::refresh_pivot_cache(std::uint32_t cache_id, cons
     table.runtime_id().assign(runtime_id);
     pivot::clear_derived_state(table);
   }
-  for (const Planned& entry : planned) {
+  // Creation order decides which of two colliding reports renders: the earlier-created one projects first.
+  const auto earlier = [&](std::uint32_t a, std::uint32_t b) {
+    const Planned& x = planned[a];
+    const Planned& y = planned[b];
+    if (x.sheet != y.sheet) {
+      return x.sheet < y.sheet;
+    }
+    const std::vector<std::unique_ptr<pivot::PivotTable>>& tables = sheets_[x.sheet].pivot_tables();
+    return detail::created_before(*tables[x.pivot], x.pivot, *tables[y.pivot], y.pivot);
+  };
+  std::vector<std::uint32_t> order;
+  sorted_index_order(order, static_cast<std::uint32_t>(planned.size()), make_index_less(earlier));
+  for (const std::uint32_t index : order) {
+    const Planned& entry = planned[index];
     pivot::PivotTable& table = *sheets_[entry.sheet].mutable_pivot_tables()[entry.pivot];
-    if (project_pivot(entry.sheet, entry.pivot)) {
-      pivot::drop_derived_location(table);
-    } else {
+    if (!project_pivot(entry.sheet, entry.pivot, ReportPlacement::kBlock)) {
       table.set_projection_pending(true);
+    } else if (!table.blocked().has_value()) {
+      pivot::drop_derived_location(table);
     }
   }
+  (void)settle_blocked_pivots();
   mark_all_formulas_dirty();
   return Expected<void, Error>::Ok();
 }

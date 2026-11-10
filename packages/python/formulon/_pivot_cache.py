@@ -132,14 +132,17 @@ class PivotCache(_NoCopy):
         The source is a range, a defined name or a table of this workbook.
         Pending cells are calculated first and the source values are read as
         they stand, as Excel's Refresh does. The cache, the pivots'
-        definitions and their report cells change together or not at all.
+        definitions and their report cells change together or not at all. A
+        refreshed report whose new range is occupied or runs past the sheet
+        edge is blocked (see :class:`Pivot`); when two refreshed reports meet,
+        the one growing into the other's current report is blocked, and of two
+        whose new ranges alone overlap, the one created first renders.
 
         Raises:
           FormulonError: with ``code == StatusCode.PRECONDITION_FAILED`` when
             the source does not resolve (none, an external or non-worksheet
             source, a missing sheet, name or table, a ``#REF!`` or dynamic
-            name), or when a refreshed report would grow over a non-empty
-            cell, another pivot table or another refreshed report; with
+            name); with
             ``SECURITY_RESOURCE_LIMIT`` when (rows - 1) x columns of the
             source exceeds the record cell limit; with ``NOT_IMPLEMENTED``
             when a numeric group has a start, end or interval that is not an

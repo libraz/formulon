@@ -965,6 +965,7 @@ _STATUS_RETURNING_EXPORT_NAMES = (
     "fm_sheet_get_pivot_layout",
     "fm_sheet_project_pivot",
     "fm_sheet_is_pivot_projection_pending",
+    "fm_sheet_get_pivot_spill",
     "fm_sheet_remove_pivot",
     "fm_sheet_set_pivot_anchor",
     "fm_sheet_set_pivot_column_field_order",

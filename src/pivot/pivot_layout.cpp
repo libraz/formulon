@@ -307,6 +307,18 @@ Expected<PivotCells, Error> layout(const PivotTable& table, const PivotResult& r
   }
 
   PivotCells cells;
+  if (table.row_field_order().empty() && table.col_field_order().empty() && table.data_fields().empty() &&
+      table.page_field_order().empty()) {
+    cells.top = table.anchor_row();
+    cells.left = table.anchor_col();
+    cells.rows = kPlaceholderRows;
+    cells.cols = kPlaceholderCols;
+    cells.body_top = table.anchor_row();
+    cells.body_rows = kPlaceholderRows;
+    cells.body_cols = kPlaceholderCols;
+    cells.placeholder = true;
+    return cells;
+  }
   cells.top = plan.cells_top;
   cells.left = plan.left;
   cells.rows = static_cast<std::uint32_t>(plan.total_rows);

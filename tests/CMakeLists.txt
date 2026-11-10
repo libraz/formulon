@@ -451,6 +451,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/pivot/pivot_line_items_test.cpp
   unit/pivot/pivot_show_details_test.cpp
   unit/pivot/pivot_calculated_test.cpp
+  unit/pivot/pivot_blocked_test.cpp
   unit/pivot/pivot_refresh_test.cpp
   unit/pivot/pivot_show_values_as_test.cpp
   unit/pivot/pivot_types_test.cpp

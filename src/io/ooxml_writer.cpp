@@ -155,7 +155,10 @@ ProjectedPivot ProjectPivot(const Workbook& wb, const pivot::PivotTable& table, 
     return out;
   }
   const pivot::PivotCells& cells = layout_or.value();
-  out.span = PivotRenderedSpan{cells.body_rows, cells.body_cols, cells.body_top};
+  // A withheld report is saved as its anchor alone.
+  if (!table.blocked().has_value()) {
+    out.span = PivotRenderedSpan{cells.body_rows, cells.body_cols, cells.body_top};
+  }
   if (generate) {
     out.items = write_pivot_line_items(table, *cache, plan, lines);
   }

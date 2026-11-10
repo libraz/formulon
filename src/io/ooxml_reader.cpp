@@ -349,6 +349,7 @@ static Expected<void, Error> ReadSheetRelParts(ZipReader& zip, Workbook& wb, std
   // pivot-table reader and is attached to the owning sheet; the
   // workbook-level pivot caches are loaded after the sheet loop.
   ASSIGN_OR_RETURN(auto pivot_targets, ooxml::collect_sheet_pivot_table_targets(sheet_rels_doc, sheet_dir));
+  const std::size_t first_new_pivot = wb.sheet(i).pivot_tables().size();
   for (const std::string& pivot_table_path : pivot_targets) {
     ASSIGN_OR_RETURN(auto pt_bytes,
                      ReadRequiredPart(zip, pivot_table_path, FormulonErrorCode::kIoRelationshipBroken,
@@ -364,6 +365,7 @@ static Expected<void, Error> ReadSheetRelParts(ZipReader& zip, Workbook& wb, std
     const std::string pt_rels_path = ooxml::rels_path_for_part(pivot_table_path);
     ConsumeIfPresent(zip, pt_rels_path, consumed_parts);
   }
+  assign_read_creation_orders(wb, i, first_new_pivot);
 
   // Hyperlink / comments / VML auxiliary parts. Missing entries are
   // simply empty in the result. The worksheet body's own `<legacyDrawing>`

@@ -361,6 +361,7 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value PivotDataFieldDefaultName(const Napi::CallbackInfo& info);
   Napi::Value PivotProject(const Napi::CallbackInfo& info);
   Napi::Value PivotProjectionPending(const Napi::CallbackInfo& info);
+  Napi::Value GetPivotSpill(const Napi::CallbackInfo& info);
   Napi::Value PivotShowDetails(const Napi::CallbackInfo& info);
   Napi::Value PivotFieldSetSubtotalFunctions(const Napi::CallbackInfo& info);
   Napi::Value PivotFieldSetDateGroup(const Napi::CallbackInfo& info);

@@ -4,6 +4,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <memory>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -13,7 +14,9 @@
 #include "pivot/pivot_table.h"
 #include "pivot/pivot_types.h"
 #include "pivot_table_reader_test_helpers.h"
+#include "sheet.h"
 #include "utils/error.h"
+#include "workbook.h"
 
 namespace formulon::io {
 namespace {
@@ -396,6 +399,38 @@ TEST(PivotTableReader, PageAxisWithoutAPageFieldsBlockFallsBackToDocumentOrder) 
   ASSERT_TRUE(static_cast<bool>(table_or)) << "read failed: " << table_or.error().message;
   EXPECT_TRUE(table_or.value().page_fields().empty());
   EXPECT_EQ(table_or.value().page_field_order(), (std::vector<std::uint32_t>{1, 2}));
+}
+
+TEST(PivotTableReader, LastSavedPartIsTheEarliestCreated) {
+  Workbook wb = Workbook::create_empty();
+  ASSERT_TRUE(static_cast<bool>(wb.add_sheet_entered("First")));
+  ASSERT_TRUE(static_cast<bool>(wb.add_sheet_entered("Second")));
+  const auto add = [&wb](std::size_t sheet, const char* name, std::uint64_t key) {
+    auto table = std::make_unique<pivot::PivotTable>();
+    table->set_name(name);
+    table->set_creation_order(key);
+    wb.sheet(sheet).add_pivot_table(std::move(table));
+  };
+  add(0U, "A", 0U);
+  add(0U, "B", 0U);
+  add(0U, "C", 0U);
+  // A pivot already keyed elsewhere in the workbook sets the floor for the new keys.
+  add(1U, "Z", 7U);
+  assign_read_creation_orders(wb, 0U, 0U);
+  const auto& tables = wb.sheet(0U).pivot_tables();
+  ASSERT_EQ(tables.size(), 3U);
+  // The first part read is the newest and the last is the earliest created.
+  EXPECT_GT(tables[0]->creation_order(), tables[1]->creation_order());
+  EXPECT_GT(tables[1]->creation_order(), tables[2]->creation_order());
+  EXPECT_GT(tables[2]->creation_order(), 7U);
+  EXPECT_EQ(wb.sheet(1U).pivot_tables()[0]->creation_order(), 7U);
+
+  // Pivots read earlier in the same sheet keep their keys.
+  add(0U, "D", 0U);
+  const std::uint64_t first = tables[0]->creation_order();
+  assign_read_creation_orders(wb, 0U, 3U);
+  EXPECT_EQ(tables[0]->creation_order(), first);
+  EXPECT_GT(tables[3]->creation_order(), first);
 }
 
 }  // namespace

@@ -10,6 +10,7 @@
 #ifndef FORMULON_IO_PIVOT_TABLE_READER_H_
 #define FORMULON_IO_PIVOT_TABLE_READER_H_
 
+#include <cstddef>
 #include <cstdint>
 #include <string_view>
 #include <vector>
@@ -17,6 +18,10 @@
 #include "pivot/pivot_table.h"
 #include "utils/error.h"
 #include "utils/expected.h"
+
+namespace formulon {
+class Workbook;
+}  // namespace formulon
 
 namespace formulon::io {
 
@@ -96,6 +101,10 @@ Expected<pivot::PivotTable, Error> read_pivot_table_definition(const std::vector
 /// already be in place. Used by the XLSB reader, which spells each binary
 /// filter as its OOXML element. Returns false when the text does not parse.
 bool read_pivot_filters_xml(std::string_view filters_xml, pivot::PivotTable* table);
+
+/// Gives the pivots of sheet `sheet_index` from position `first_new` on their creation keys: the first of them
+/// gets the highest key, later ones lower, all unique workbook-wide and above every key already assigned.
+void assign_read_creation_orders(Workbook& wb, std::size_t sheet_index, std::size_t first_new);
 
 }  // namespace formulon::io
 

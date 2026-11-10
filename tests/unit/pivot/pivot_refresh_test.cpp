@@ -202,10 +202,10 @@ Workbook Book(int pivots = 1, ExcelProfile profile = mac_365_en_us_profile()) {
   wb.add_pivot_cache(std::make_unique<PivotCache>(BaseCache(wb.sheet(kDataSheet).name())));
   EXPECT_TRUE(static_cast<bool>(wb.add_sheet_entered("Pivot")));
   EXPECT_TRUE(static_cast<bool>(wb.add_pivot(kPivotSheet, RegionPivot("PT1", 2U, 0U))));
-  EXPECT_TRUE(static_cast<bool>(wb.project_pivot(kPivotSheet, 0U)));
+  EXPECT_TRUE(static_cast<bool>(wb.project_pivot(kPivotSheet, 0U, ReportPlacement::kBlock)));
   if (pivots > 1) {
     EXPECT_TRUE(static_cast<bool>(wb.add_pivot(kPivotSheet, RegionPivot("PT2", 2U, 6U))));
-    EXPECT_TRUE(static_cast<bool>(wb.project_pivot(kPivotSheet, 1U)));
+    EXPECT_TRUE(static_cast<bool>(wb.project_pivot(kPivotSheet, 1U, ReportPlacement::kBlock)));
   }
   return wb;
 }
@@ -1038,56 +1038,92 @@ TEST(PivotRefresh, LimitSourceWithinTheCeilingRefreshes) {
 }
 
 // ===========================================================================
-// Rollback: a report that cannot grow refuses the whole refresh
+// Growth into an occupant: the refresh applies and the report is blocked
 // ===========================================================================
+
+PivotTable& PivotNamed(Workbook& wb, const char* name) {
+  for (const auto& table : wb.sheet(kPivotSheet).mutable_pivot_tables()) {
+    if (table->name() == name) {
+      return *table;
+    }
+  }
+  ADD_FAILURE() << "no pivot " << name;
+  return PivotAt(wb);
+}
+
+bool HoldsSpill(const Workbook& wb, std::uint32_t row, std::uint32_t col) {
+  const Value v = wb.sheet(kPivotSheet).resolve_cell_value(row, col);
+  return v.is_error() && v.as_error() == ErrorCode::Spill;
+}
+
+// Two Region reports on the one cache, PT2 directly below PT1; with `lower_first` PT2 comes first on the sheet.
+Workbook StackedBook(bool lower_first) {
+  Workbook wb = Book();
+  const std::uint32_t below = PivotAt(wb, 0U).projected_extent()->row1 + 1U;
+  EXPECT_TRUE(static_cast<bool>(wb.add_pivot(kPivotSheet, RegionPivot("PT2", below, 0U))));
+  EXPECT_TRUE(static_cast<bool>(wb.project_pivot(kPivotSheet, 1U, ReportPlacement::kBlock)));
+  if (lower_first) {
+    std::swap(wb.sheet(kPivotSheet).mutable_pivot_tables()[0], wb.sheet(kPivotSheet).mutable_pivot_tables()[1]);
+  }
+  return wb;
+}
 
 TEST(PivotRefresh, RollbackSecondPivotBlockedLeavesBothUnchanged) {
   Workbook wb = Book(/*pivots=*/2);
   ASSERT_TRUE(PivotAt(wb, 1U).projected_extent().has_value());
+  const pivot::PivotRect first = *PivotAt(wb, 0U).projected_extent();
   const pivot::PivotRect second = *PivotAt(wb, 1U).projected_extent();
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_text(kPivotSheet, second.row1 + 1U, second.col0, "keep me")));
   SetText(wb, 3U, 0U, "West");  // a fourth region: each report grows one row
   SetText(wb, 1U, 0U, "Central");
-  ExpectRefused(wb, FormulonErrorCode::kPreconditionFailed);
+  const Expected<void, Error> refreshed = Refresh(wb);
+  ASSERT_TRUE(static_cast<bool>(refreshed)) << refreshed.error().message;
+  // The first report grows freely; the second keeps its new definition but is withheld.
+  EXPECT_FALSE(PivotAt(wb, 0U).blocked().has_value());
+  EXPECT_EQ(PivotAt(wb, 0U).projected_extent()->row1, first.row1 + 1U);
+  const PivotTable& blocked = PivotAt(wb, 1U);
+  ASSERT_TRUE(blocked.blocked().has_value());
+  EXPECT_EQ(blocked.blocked()->rows, second.row1 - second.row0 + 2U);
+  EXPECT_EQ(blocked.blocked()->cols, second.col1 - second.col0 + 1U);
+  EXPECT_FALSE(blocked.blocked()->past_edge);
+  EXPECT_TRUE(HoldsSpill(wb, second.row0, second.col0));
+  EXPECT_FALSE(wb.sheet(kPivotSheet).resolve_cell_value(second.row0 + 1U, second.col0).is_text());
   EXPECT_EQ(wb.sheet(kPivotSheet).resolve_cell_value(second.row1 + 1U, second.col0).as_text(), "keep me");
 }
 
-TEST(PivotRefresh, RollbackGrowthNamesTheBlockingCell) {
+TEST(PivotRefresh, GrowthOverACellBlocksWithTheRefreshedSize) {
   Workbook wb = Book();
   const pivot::PivotRect first = *PivotAt(wb, 0U).projected_extent();
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_text(kPivotSheet, first.row1 + 1U, first.col0, "x")));
   SetText(wb, 4U, 0U, "West");  // the second North becomes a fourth region
   const Expected<void, Error> refreshed = Refresh(wb);
-  ASSERT_FALSE(static_cast<bool>(refreshed));
-  EXPECT_NE(refreshed.error().message.find("The pivot report would overwrite non-empty cell Pivot!A"),
-            std::string::npos)
-      << refreshed.error().message;
+  ASSERT_TRUE(static_cast<bool>(refreshed)) << refreshed.error().message;
+  ASSERT_TRUE(PivotAt(wb, 0U).blocked().has_value());
+  EXPECT_EQ(PivotAt(wb, 0U).blocked()->rows, first.row1 - first.row0 + 2U);
+  EXPECT_FALSE(PivotAt(wb, 0U).auto_formatting());
+  EXPECT_TRUE(HoldsSpill(wb, first.row0, first.col0));
+  EXPECT_EQ(wb.sheet(kPivotSheet).resolve_cell_value(first.row1 + 1U, first.col0).as_text(), "x");
 }
 
-TEST(PivotRefresh, RollbackPlannedReportsOverlappingEachOtherAreRefused) {
-  Workbook wb = Book(/*pivots=*/2);
-  std::vector<Workbook::PivotGrowth> growth(2U);
-  growth[0].sheet = kPivotSheet;
-  growth[0].pivot = 0U;
-  growth[0].extent = MergeRange{40U, 0U, 45U, 3U};
-  growth[1].sheet = kPivotSheet;
-  growth[1].pivot = 1U;
-  growth[1].extent = MergeRange{43U, 2U, 50U, 5U};
-  const Expected<void, Error> checked = wb.check_pivot_growth(growth);
-  ASSERT_FALSE(static_cast<bool>(checked));
-  EXPECT_EQ(checked.error().code, FormulonErrorCode::kPreconditionFailed);
-  growth[1].extent = MergeRange{46U, 2U, 50U, 5U};
-  EXPECT_TRUE(static_cast<bool>(wb.check_pivot_growth(growth)));
-}
-
-TEST(PivotRefresh, RollbackPlannedReportOverAnotherPivotIsRefused) {
-  Workbook wb = Book(/*pivots=*/2);
-  const pivot::PivotRect second = *PivotAt(wb, 1U).projected_extent();
-  std::vector<Workbook::PivotGrowth> growth(1U);
-  growth[0].sheet = kPivotSheet;
-  growth[0].pivot = 0U;
-  growth[0].extent = MergeRange{second.row0, 0U, second.row1, second.col0};
-  EXPECT_FALSE(static_cast<bool>(wb.check_pivot_growth(growth)));
+TEST(PivotRefresh, TwoPivotsTheOneMeetingTheOthersCurrentRangeBlocks) {
+  for (const bool lower_first : {false, true}) {
+    SCOPED_TRACE(lower_first ? "lower pivot first" : "upper pivot first");
+    Workbook wb = StackedBook(lower_first);
+    const pivot::PivotRect upper = *PivotNamed(wb, "PT1").projected_extent();
+    const pivot::PivotRect lower = *PivotNamed(wb, "PT2").projected_extent();
+    SetText(wb, 3U, 0U, "West");  // a fourth region: each report grows one row
+    SetText(wb, 1U, 0U, "Central");
+    const Expected<void, Error> refreshed = Refresh(wb);
+    ASSERT_TRUE(static_cast<bool>(refreshed)) << refreshed.error().message;
+    // The upper report's new range reaches the lower one's first row, so it blocks; the lower one renders.
+    ASSERT_TRUE(PivotNamed(wb, "PT1").blocked().has_value());
+    EXPECT_EQ(PivotNamed(wb, "PT1").blocked()->rows, upper.row1 - upper.row0 + 2U);
+    EXPECT_TRUE(HoldsSpill(wb, upper.row0, upper.col0));
+    EXPECT_FALSE(PivotNamed(wb, "PT2").blocked().has_value());
+    ASSERT_TRUE(PivotNamed(wb, "PT2").projected_extent().has_value());
+    EXPECT_EQ(PivotNamed(wb, "PT2").projected_extent()->row0, lower.row0);
+    EXPECT_EQ(PivotNamed(wb, "PT2").projected_extent()->row1, lower.row1 + 1U);
+  }
 }
 
 // ===========================================================================

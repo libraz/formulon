@@ -118,7 +118,7 @@ test(
     assert.equal(wb.pivotCache(cache), cache);
     assert.equal(wb.listPivotCaches()[0], cache);
 
-    const pivot = addPivot(ws, cache, 'Pivot1', 0, 4);
+    const pivot = addPivot(ws, cache, 'Pivot1', 0, 10);
     assert.equal(ws.pivot(0), pivot);
     assert.equal(ws.pivot('Pivot1'), pivot);
     assert.equal(ws.listPivots()[0], pivot);
@@ -156,8 +156,8 @@ test(
     assert.equal(second.getProperties().name, 'Costs');
 
     const cache = addCache(wb);
-    const p1 = addPivot(ws, cache, 'Pivot1', 0, 4);
-    const p2 = addPivot(ws, cache, 'Pivot2', 20, 4);
+    const p1 = addPivot(ws, cache, 'Pivot1', 0, 10);
+    const p2 = addPivot(ws, cache, 'Pivot2', 20, 10);
     assert.equal(p2.index, 1);
     ws.removePivot(p1);
     assert.equal(p2.index, 0);
@@ -176,7 +176,7 @@ test(
     assert.throws(() => table.getProperties(), notFound(mod));
 
     const cache = addCache(wb);
-    const pivot = addPivot(ws, cache, 'Pivot1', 0, 4);
+    const pivot = addPivot(ws, cache, 'Pivot1', 0, 10);
     ws.removePivot(pivot);
     assert.throws(() => pivot.getProperties(), notFound(mod));
 
@@ -212,8 +212,8 @@ test(
   withBook((wb, mod) => {
     const ws = wb.sheet(0);
     const cache = addCache(wb);
-    const doomed = addPivot(ws, cache, 'Pivot1', 0, 4);
-    const kept = addPivot(ws, cache, 'Pivot2', 20, 4);
+    const doomed = addPivot(ws, cache, 'Pivot1', 0, 10);
+    const kept = addPivot(ws, cache, 'Pivot2', 20, 10);
     const rect = doomed.getLayout().range;
     ws.deleteRows(0, rect.lastRow);
     assert.throws(() => doomed.getLayout(), notFound(mod));
@@ -237,8 +237,8 @@ test(
     data.setNumber(1, 1, 10);
     const bound = addCache(wb, 'Data', 'A1:B2');
     const unrelated = addCache(wb, 'Sheet1', 'A1:B3');
-    const boundPivot = addPivot(ws, bound, 'Bound', 0, 4);
-    const otherPivot = addPivot(ws, unrelated, 'Other', 20, 4);
+    const boundPivot = addPivot(ws, bound, 'Bound', 0, 10);
+    const otherPivot = addPivot(ws, unrelated, 'Other', 20, 10);
     wb.removeSheet(data);
     assert.throws(() => boundPivot.getLayout(), notFound(mod));
     assert.throws(() => bound.getOptions(), notFound(mod));
@@ -255,7 +255,7 @@ test(
   withBook((wb, mod) => {
     const ws = wb.sheet(0);
     const cache = addCache(wb);
-    const pivot = addPivot(ws, cache, 'Pivot1', 0, 4);
+    const pivot = addPivot(ws, cache, 'Pivot1', 0, 10);
     const chart = ws.addChart({ type: mod.ChartPlotType.Bar, range: 'Sheet1!$A$1:$B$3' });
     const copied = wb.copySheet(ws, { newName: 'Copy' });
     assert.notEqual(copied, ws);
@@ -290,7 +290,7 @@ test(
   withBook((wb) => {
     const ws = wb.sheet(0);
     const cache = addCache(wb);
-    const pivot = addPivot(ws, cache, 'Pivot1', 0, 4);
+    const pivot = addPivot(ws, cache, 'Pivot1', 0, 10);
     pivot.rename('Q');
     assert.equal(pivot.name, 'Q');
     assert.equal(ws.pivot('Q'), pivot);
@@ -361,7 +361,7 @@ test(
       const ws = wb.sheet(0);
       const foreignTable = addTable(other, 'Sales', 5);
       const foreignCache = addCache(other);
-      const foreignPivot = addPivot(other.sheet(0), foreignCache, 'Pivot1', 0, 4);
+      const foreignPivot = addPivot(other.sheet(0), foreignCache, 'Pivot1', 0, 10);
       const foreignPicture = other.sheet(0).addPicture(makePng(2));
       addTable(wb, 'Sales', 5);
       addCache(wb);
@@ -386,10 +386,10 @@ test(
   withBook((wb, mod) => {
     const ws = wb.sheet(0);
     const cache = addCache(wb);
-    const p1 = addPivot(ws, cache, 'Pivot1', 0, 4);
-    const p2 = addPivot(ws, cache, 'Pivot2', 20, 4);
+    const p1 = addPivot(ws, cache, 'Pivot1', 0, 10);
+    const p2 = addPivot(ws, cache, 'Pivot2', 20, 10);
     assert.throws(
-      () => p2.setAnchor('E1'),
+      () => p2.setAnchor('K1'),
       (e) => isFormulonError(e, mod.StatusCode.PreconditionFailed),
     );
     assert.equal(ws.pivot('Pivot2'), p2);

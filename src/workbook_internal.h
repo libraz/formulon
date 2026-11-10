@@ -18,6 +18,7 @@
 #include "auto_filter.h"
 #include "defined_name.h"
 #include "eval/recalc_engine.h"
+#include "pivot/pivot_layout.h"
 #include "sheet.h"
 #include "sheet_name.h"
 #include "styles.h"
@@ -143,15 +144,53 @@ inline std::optional<MergeRange> table_rect_on_sheet(const TableMetadata& table,
 }
 
 /// The rectangle a pivot occupies: its last projection, else its location
-/// with the page fields and their gap row above it.
+/// with the page fields and their gap row above it. A blocked report holds
+/// its anchor alone.
 MergeRange pivot_occupied_extent(const pivot::PivotTable& table);
 
-/// Refusal of `target` as pivot `pivot_index`'s new report range on sheet
-/// `sheet_index`: it may cover plain cells and the pivot's own previous range,
-/// `own`, but no other PivotTable, table, data table, legacy array block or
-/// merge. `kPreconditionFailed` naming what it would overlap.
-Expected<void, Error> check_projection_target(const Workbook& wb, std::size_t sheet_index, std::size_t pivot_index,
-                                              const MergeRange& target, const MergeRange& own);
+/// A pivot report laid out at its table's current anchor, before anything is written.
+struct PivotReportPlan {
+  /// False for a cache saved without records, which cannot be re-evaluated; nothing else is set then.
+  bool evaluated = false;
+  pivot::PivotCells cells;
+  /// The report's range, clipped to the grid; nullopt for an empty layout.
+  std::optional<MergeRange> extent;
+  /// The unclipped range overflows the grid's last row or column.
+  bool past_edge = false;
+  /// Page-field rows above the anchor inside `extent`.
+  std::uint32_t rows_above = 0;
+};
+
+/// Evaluates and lays out pivot `pivot_index` on sheet `sheet_index`, publishing the result on the table and
+/// changing no cell. Ok with no `extent` for a cache saved without records. Errors: `kInvalidArgument` for an
+/// index out of range, `kEvalPivotMissing` for an absent cache, an evaluation or layout error.
+Expected<PivotReportPlan, Error> plan_pivot_report(Workbook& wb, std::size_t sheet_index, std::size_t pivot_index);
+
+/// `plan_pivot_report` for `table` as it stands, which need not be on a sheet yet (a moved copy).
+Expected<PivotReportPlan, Error> plan_pivot_report(const Workbook& wb, const pivot::PivotTable& table);
+
+/// Something a pivot report cannot be drawn over.
+struct ReportOccupant {
+  enum class Kind : std::uint8_t { kCell, kSpill, kMerge, kArray, kDataTable, kTable, kPivot };
+  Kind kind = Kind::kCell;
+  /// First occupied cell of the target, row-major.
+  std::uint32_t row = 0;
+  std::uint32_t col = 0;
+};
+
+/// The first occupant of `target` outside `own` for pivot `pivot_index` on sheet `sheet_index`: a stored cell with
+/// a formula or a non-blank value, a cell of a committed spill region, a merge not inside `own`, a cell of a legacy
+/// array block, a result cell of a data table, a table, or another pivot's occupied extent. A cell holding only a
+/// format is not one. Cost follows the rows of `target`, not the sheet.
+std::optional<ReportOccupant> find_report_occupant(const Workbook& wb, std::size_t sheet_index, std::size_t pivot_index,
+                                                   const MergeRange& target, const MergeRange& own);
+
+/// Whether pivot `a` (at `a_index` on its sheet) was created before pivot `b` (at `b_index` on the same sheet):
+/// the smaller `creation_order`, else the later position in the sheet's list, as Excel lists newer pivots first.
+inline bool created_before(const pivot::PivotTable& a, std::size_t a_index, const pivot::PivotTable& b,
+                           std::size_t b_index) {
+  return a.creation_order() != b.creation_order() ? a.creation_order() < b.creation_order() : a_index > b_index;
+}
 
 /// `stem` followed by the smallest N >= `first` whose result collides with none
 /// of `names` (`sheet_names::write_collides`).

@@ -4,9 +4,11 @@
 #include "io/styles_writer.h"
 
 #include <cmath>
+#include <cstddef>
 #include <cstdint>
 #include <string>
 #include <string_view>
+#include <utility>
 
 #include "color_resolve.h"
 #include "io/color_spec_xml.h"
@@ -687,6 +689,17 @@ std::string border_fragment(const BorderRecord& border) {
   std::string out;
   AppendBorderFragment(out, border);
   return out;
+}
+
+std::uint32_t intern_border(StylesTable& table, BorderRecord candidate) {
+  const std::string key = border_fragment(candidate);
+  for (std::size_t i = 0; i < table.borders.size(); ++i) {
+    if (border_fragment(table.borders[i]) == key) {
+      return static_cast<std::uint32_t>(i);
+    }
+  }
+  table.borders.push_back(std::move(candidate));
+  return static_cast<std::uint32_t>(table.borders.size() - 1U);
 }
 
 std::string write_styles(const StylesTable& table) {

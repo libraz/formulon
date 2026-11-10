@@ -50,6 +50,7 @@ set(FORMULON_C_API_TEST_SOURCES
   formulon_c_pivot_refresh_test.cpp
   formulon_c_pivot_report_test.cpp
   formulon_c_pivot_save_shape_test.cpp
+  formulon_c_pivot_blocked_test.cpp
   formulon_c_pivot_shared_item_limit_test.cpp
   formulon_c_print_settings_test.cpp
   formulon_c_protection_test.cpp

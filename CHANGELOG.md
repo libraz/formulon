@@ -122,6 +122,9 @@ Upgrading from 0.18: see [Upgrading from 0.18 to 0.19](docs/releases/upgrading-0
 - `PivotCache.refresh()` rebuilds a cache from its worksheet source and
   re-projects every pivot on it; cache fields report their sharedItems type
   flags.
+- `Pivot.getSpill()` (Python `get_spill`, C `fm_sheet_get_pivot_spill`) reads
+  the range a blocked pivot report needs, and `Sheet.getSpill` reports it at
+  the report's anchor, as for a blocked formula spill.
 - `Pivot.setFieldNumericGroup` groups a field into numeric ranges, and
   `getFieldDateGroup` / `getFieldNumericGroup` read a grouping back.
 - `Sheet.insertCells(range, shift)` and `deleteCells(range, shift)` shift a
@@ -240,10 +243,24 @@ Upgrading from 0.18: see [Upgrading from 0.18 to 0.19](docs/releases/upgrading-0
 - `getFunctionMetadata` reports the argument counts entry accepts for every
   built-in.
 - A conditional formatting rule added without an id gets one in Excel's form.
-- A pivot table's report is kept in the sheet cells, and an edit whose report
-  would overlap another object fails. New data fields are numbered when their
+- A pivot table's report is kept in the sheet cells. As in Excel, an edit, a
+  refresh or `Pivot.project()` whose report would grow over a value, a merge,
+  an array formula, a data table, a table, a spill range or another pivot, or
+  past the sheet edge, is applied and leaves the report blocked: its old cells
+  are cleared, the anchor shows `#SPILL!` and the occupant stays. The next
+  recalc after the range comes free draws the report. `isProjectionPending()`
+  reads false for a blocked report. New data fields are numbered when their
   name is taken ("Sum of Amt2"), API-created pivots start with Excel's
   new-pivot options, and loaded filters of every type are listed.
+- A pivot with no field draws Excel's empty placeholder, a bordered frame 3
+  columns wide and 18 rows high, so `addPivot` writes cells at once, and it
+  fails with `PreconditionFailed` when that range is occupied or runs past the
+  sheet edge.
+- `Pivot.setAnchor` moves a report as Excel's cut and paste does: values,
+  merges, spill cells and arrays or data tables wholly inside the destination
+  are overwritten and a table there is deleted. Another pivot, an array or data
+  table crossing the destination's edge, or the sheet edge refuses the move
+  with `PreconditionFailed`.
 - An edited or newly built pivot is saved with its row and column items
   instead of asking Excel to rebuild it on open; only a cache whose records
   were filled by hand, not by a refresh, still asks.

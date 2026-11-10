@@ -427,12 +427,17 @@ EmissionPlan BuildEmissionPlan(const Workbook& wb, bool generated_shared_strings
   plan.pivot_tables_by_sheet.assign(wb.sheet_count(), {});
   std::uint32_t next_pivot_table_id = 1;
   for (std::size_t s = 0; s < wb.sheet_count(); ++s) {
-    const auto& sheet_pivots = wb.sheet(s).pivot_tables();
-    for (const std::unique_ptr<pivot::PivotTable>& uptr : sheet_pivots) {
-      const pivot::PivotTable* tbl = uptr.get();
-      if (tbl == nullptr) {
-        continue;
+    // Excel numbers a sheet's pivots newest first.
+    std::vector<const pivot::PivotTable*> sheet_pivots;
+    for (const std::unique_ptr<pivot::PivotTable>& uptr : wb.sheet(s).pivot_tables()) {
+      if (uptr != nullptr) {
+        sheet_pivots.push_back(uptr.get());
       }
+    }
+    sort_by_index(sheet_pivots, [](const pivot::PivotTable* a, const pivot::PivotTable* b) {
+      return a->creation_order() > b->creation_order();
+    });
+    for (const pivot::PivotTable* tbl : sheet_pivots) {
       EmissionPlan::PivotTablePlan entry;
       entry.table = tbl;
       entry.numeric_id = next_pivot_table_id++;

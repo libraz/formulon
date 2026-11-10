@@ -1,8 +1,8 @@
 // A pivot assembled through the C ABI (cache fields, inline record values,
 // fields placed on axes without items) must save as a package Excel opens: every
 // axis field lists its items and every discrete cache field carries shared items.
-// Its report lives in the sheet cells, written on every table edit, refused
-// where it would overlap another structure, and cleared on removal.
+// Its report lives in the sheet cells, written on every table edit, blocked
+// where it would grow over another structure, and cleared on removal.
 
 #include <cstddef>
 #include <cstdint>
@@ -264,7 +264,7 @@ TEST(FormulonCApiPivotSaveShape, ApiPivotReportIsInTheCellsAndFormulasReadIt) {
   EXPECT_EQ(SheetValue(loaded.handle, 3U, kValueCol).kind, FM_VALUE_KIND_BLANK);
 }
 
-TEST(FormulonCApiPivotSaveShape, EditOverlappingAMergeIsRefusedAndUndone) {
+TEST(FormulonCApiPivotSaveShape, EditGrowingOntoAMergeBlocksTheReport) {
   WorkbookGuard wb;
   BuildScratch(wb);
   const formulon::pivot::PivotTable* table = wb.handle->wb->sheet(0U).pivot_tables()[0].get();
@@ -282,31 +282,44 @@ TEST(FormulonCApiPivotSaveShape, EditOverlappingAMergeIsRefusedAndUndone) {
   spec.has_show_as_base_field = 0;
   spec.has_show_as_base_item = 0;
   std::size_t index = 99;
-  EXPECT_EQ(fm_sheet_add_pivot_data_field(wb.handle, 0U, 0U, &spec, &index), kPreconditionFailed);
-  EXPECT_EQ(index, 99U);
+  ASSERT_EQ(fm_sheet_add_pivot_data_field(wb.handle, 0U, 0U, &spec, &index), 0) << fm_get_last_error_message();
+  EXPECT_EQ(index, 1U);
 
-  // The definition is restored in place and the sheet is untouched.
+  // The definition is applied in place; the old report is cleared, the anchor shows #SPILL! and the merge stays.
   EXPECT_EQ(wb.handle->wb->sheet(0U).pivot_tables()[0].get(), table);
   std::size_t data_fields = 0;
   ASSERT_EQ(fm_sheet_get_pivot_data_field_count(wb.handle, 0U, 0U, &data_fields), 0);
-  EXPECT_EQ(data_fields, 1U);
+  EXPECT_EQ(data_fields, 2U);
+  const fm_value_t anchor = SheetValue(wb.handle, 0U, kLabelCol);
+  ASSERT_EQ(anchor.kind, FM_VALUE_KIND_ERROR);
+  EXPECT_EQ(anchor.u.error_code, static_cast<std::int32_t>(formulon::ErrorCode::Spill));
+  EXPECT_EQ(SheetValue(wb.handle, 3U, kValueCol).kind, FM_VALUE_KIND_BLANK);
   EXPECT_EQ(SheetValue(wb.handle, 0U, 5U).kind, FM_VALUE_KIND_BLANK);
-  ExpectSheetNumber(wb.handle, 3U, kValueCol, 1000.0);
   std::size_t merges = 0;
   ASSERT_EQ(fm_sheet_get_merge_count(wb.handle, 0U, &merges), 0);
   EXPECT_EQ(merges, 1U);
   EXPECT_EQ(Pending(wb.handle), 0);
+  std::int32_t present = 0;
+  fm_spill_info_t spill = FM_STRUCT_INIT(fm_spill_info_t);
+  ASSERT_EQ(fm_sheet_get_pivot_spill(wb.handle, 0U, 0U, &present, &spill), 0) << fm_get_last_error_message();
+  ASSERT_EQ(present, 1);
+  EXPECT_EQ(spill.rect.first_row, 0U);
+  EXPECT_EQ(spill.rect.first_col, kLabelCol);
+  EXPECT_EQ(spill.rect.last_row, 3U);
+  EXPECT_EQ(spill.rect.last_col, 5U);
 
-  // Options edits roll back the same way.
+  // An options edit of the blocked report is applied too.
   fm_pivot_options_patch_t grid = FM_STRUCT_INIT(fm_pivot_options_patch_t);
   grid.grid_drop_zones_op = FM_PATCH_OP_SET;
   grid.grid_drop_zones = 1;
   ASSERT_EQ(fm_sheet_add_merge(wb.handle, 0U, record_arg(fm_cell_rect_t{4U, 3U, 4U, 4U}), &merged), 0)
       << fm_get_last_error_message();
-  EXPECT_EQ(fm_sheet_update_pivot_options(wb.handle, 0U, 0U, &grid), kPreconditionFailed);
+  ASSERT_EQ(fm_sheet_update_pivot_options(wb.handle, 0U, 0U, &grid), 0) << fm_get_last_error_message();
   fm_pivot_options_t options = FM_STRUCT_INIT(fm_pivot_options_t);
   ASSERT_EQ(fm_sheet_get_pivot_options(wb.handle, 0U, 0U, &options), 0);
-  EXPECT_EQ(options.grid_drop_zones, 0);
+  EXPECT_EQ(options.grid_drop_zones, 1);
+  ASSERT_EQ(fm_sheet_get_pivot_spill(wb.handle, 0U, 0U, &present, &spill), 0) << fm_get_last_error_message();
+  EXPECT_EQ(present, 1);
 }
 
 TEST(FormulonCApiPivotSaveShape, CreatingAPivotOverAnotherReportCreatesNothing) {
@@ -378,7 +391,7 @@ TEST(FormulonCApiPivotSaveShape, CacheEditLeavesTheReportPendingUntilProjected) 
   ExpectSheetNumber(wb.handle, 2U, kValueCol, 600.0);
 }
 
-TEST(FormulonCApiPivotSaveShape, AProjectionThatWouldOverlapStaysPending) {
+TEST(FormulonCApiPivotSaveShape, AProjectionOntoAMergeIsBlockedUntilAValueWrite) {
   WorkbookGuard wb;
   std::uint32_t cache_id = 0;
   BuildScratch(wb, &cache_id);
@@ -392,12 +405,29 @@ TEST(FormulonCApiPivotSaveShape, AProjectionThatWouldOverlapStaysPending) {
   ASSERT_EQ(fm_sheet_add_merge(wb.handle, 0U, record_arg(fm_cell_rect_t{4U, 3U, 4U, 4U}), &merged), 0)
       << fm_get_last_error_message();
 
-  EXPECT_EQ(fm_sheet_project_pivot(wb.handle, 0U, 0U), kPreconditionFailed);
-  EXPECT_EQ(Pending(wb.handle), 1);
-  ExpectSheetNumber(wb.handle, 3U, kValueCol, 1000.0);
-  // The save goes on and the pivot stays pending.
+  ASSERT_EQ(fm_sheet_project_pivot(wb.handle, 0U, 0U), 0) << fm_get_last_error_message();
+  // Blocked, not pending: the old report is cleared and the anchor shows #SPILL!.
+  EXPECT_EQ(Pending(wb.handle), 0);
+  EXPECT_EQ(SheetValue(wb.handle, 3U, kValueCol).kind, FM_VALUE_KIND_BLANK);
+  EXPECT_EQ(SheetValue(wb.handle, 0U, kLabelCol).kind, FM_VALUE_KIND_ERROR);
+  std::int32_t present = 0;
+  fm_spill_info_t spill = FM_STRUCT_INIT(fm_spill_info_t);
+  ASSERT_EQ(fm_sheet_get_pivot_spill(wb.handle, 0U, 0U, &present, &spill), 0) << fm_get_last_error_message();
+  ASSERT_EQ(present, 1);
+  EXPECT_EQ(spill.rect.last_row, 4U);
+  EXPECT_EQ(spill.rect.last_col, kValueCol);
+  // The save goes on and the report stays blocked.
   Save(wb.handle);
-  EXPECT_EQ(Pending(wb.handle), 1);
+  ASSERT_EQ(fm_sheet_get_pivot_spill(wb.handle, 0U, 0U, &present, &spill), 0) << fm_get_last_error_message();
+  EXPECT_EQ(present, 1);
+
+  // Without the merge, the next value write anywhere renders the report.
+  ASSERT_EQ(fm_sheet_remove_merge(wb.handle, 0U, record_arg(fm_cell_rect_t{4U, 3U, 4U, 4U})), 0)
+      << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_set_number(wb.handle, 0U, 20U, 0U, 1.0), 0);
+  ExpectSheetNumber(wb.handle, 4U, kValueCol, 1500.0);
+  ASSERT_EQ(fm_sheet_get_pivot_spill(wb.handle, 0U, 0U, &present, &spill), 0) << fm_get_last_error_message();
+  EXPECT_EQ(present, 0);
 }
 
 TEST(FormulonCApiPivotSaveShape, ProjectingAPivotWithoutRecordsWritesNothing) {

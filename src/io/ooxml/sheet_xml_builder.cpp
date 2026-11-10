@@ -780,12 +780,16 @@ SheetRelsResult BuildSheetRels(const Sheet& sheet, const std::vector<EmissionPla
     add_rel(rid, kRelTable, target);
     res.table_rids.push_back(rid);
   }
-  // Pivot-table relationships follow the table relationships, with rId
-  // numbering continuing in sequence so each rel id is unique within
-  // the sheet rels file.
+  // Pivot-table relationships follow the table relationships, listed with
+  // descending rIds as Excel writes them.
+  std::vector<std::string> pivot_rids;
+  pivot_rids.reserve(sheet_pivot_tables.size());
+  for (std::size_t i = 0; i < sheet_pivot_tables.size(); ++i) {
+    pivot_rids.push_back(next_unique_rid());
+  }
   for (std::size_t i = 0; i < sheet_pivot_tables.size(); ++i) {
     const std::string target = "../pivotTables/pivotTable" + std::to_string(sheet_pivot_tables[i].numeric_id) + ".xml";
-    add_rel(next_unique_rid(), kRelPivotTable, target);
+    add_rel(pivot_rids[pivot_rids.size() - 1U - i], kRelPivotTable, target);
   }
   // Hyperlink relationships. Each external hyperlink target gets one
   // entry. Relative ordering is preserved so the round-trip writes the

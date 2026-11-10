@@ -103,11 +103,16 @@ std::vector<formulon::pivot::PivotTable*> cache_tables(formulon::Workbook& wb, s
 // table whose span is no longer Excel's own also drops the location offsets
 // read with it, which would otherwise outrank the ones the writer derives.
 formulon::Expected<void, formulon::Error> project_pivot(formulon::Workbook& wb, std::size_t sheet_index,
-                                                        std::size_t pivot_index);
+                                                        std::size_t pivot_index, formulon::ReportPlacement placement);
 
 // Projects every pending pivot as `project_pivot` does; one that cannot be
 // placed stays pending.
 void project_pending_pivots(formulon::Workbook& wb);
+
+// The range a blocked report needs, anchored at the page-field rows above its
+// anchor; nullopt for a report that is not blocked and for one whose range
+// does not fit the grid, which a blocked spill does not report either.
+std::optional<fm_cell_rect_t> blocked_pivot_rect(const formulon::pivot::PivotTable& table);
 
 // Re-projects pivot `(sheet_index, pivot_index)` after an edit: shares its
 // axis fields (`pivot::share_axis_fields`), invalidates its derived state and

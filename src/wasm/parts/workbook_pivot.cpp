@@ -533,6 +533,22 @@ bool JsWorkbook::pivotProjectionPending(uint32_t sheet, uint32_t pivotIndex) con
   return pending != 0;
 }
 
+emscripten::val JsWorkbook::getPivotSpill(uint32_t sheet, uint32_t pivotIndex) const {
+  fm_spill_info_t info = FM_STRUCT_INIT(fm_spill_info_t);
+  int32_t present = 0;
+  if (!succeeded(handle_ != nullptr ? fm_sheet_get_pivot_spill(handle_, sheet, pivotIndex, &present, &info)
+                                    : kBindingInvalidHandle)) {
+    return emscripten::val::undefined();
+  }
+  if (present == 0) {
+    return emscripten::val::null();
+  }
+  emscripten::val item = emscripten::val::object();
+  item.set("blocked", info.blocked != 0);
+  item.set("rect", cell_rect_to_val(info.rect));
+  return item;
+}
+
 uint32_t JsWorkbook::pivotShowDetails(uint32_t sheet, uint32_t pivotIndex, uint32_t row, uint32_t col) {
   std::size_t newSheet = 0;
   const fm_status_t rc = handle_ != nullptr

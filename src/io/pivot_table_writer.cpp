@@ -313,9 +313,19 @@ struct LocationDefaults {
   std::optional<std::uint32_t> col_page_count;
 };
 
+/// A report with no row, column, page or data field: Excel draws its empty frame instead of a report.
+bool IsFieldless(const pivot::PivotTable& table) {
+  return table.row_field_order().empty() && table.col_field_order().empty() && table.page_field_order().empty() &&
+         table.data_fields().empty();
+}
+
 LocationDefaults ComputeLocationDefaults(const pivot::PivotTable& table, std::size_t row_entries,
                                          std::size_t col_entries, bool col_values_only) {
   LocationDefaults d;
+  if (IsFieldless(table)) {
+    d.first_data_col = 0;
+    return d;
+  }
   if (col_values_only) {
     // Only the Values marker on columns: no "Column Labels" header row.
     d.first_header_row = 0;
@@ -495,15 +505,21 @@ std::string write_pivot_table_definition(const pivot::PivotTable& table, std::op
     // A page-field block taller than the anchor's headroom pushes the body down.
     ref_top = ref_top > rendered_span->top ? ref_top : rendered_span->top;
   }
-  AppendXmlAttrEscaped(out, EncodeA1Range(ref_top, table.anchor_col(), span_rows, span_cols));
+  const bool blocked = table.blocked().has_value();
+  // A withheld report is saved as its anchor cell alone.
+  AppendXmlAttrEscaped(out, blocked ? a1::encode_a1(table.anchor_row(), table.anchor_col())
+                                    : EncodeA1Range(ref_top, table.anchor_col(), span_rows, span_cols));
   out.append("\"");
   // ECMA-376 requires firstHeaderRow / firstDataRow / firstDataCol. Preserve
   // authored values, including explicit zero, while supplying the schema's
   // independent fallback for a model built without those attributes.
+  const auto offset = [blocked](std::optional<std::uint32_t> authored, std::uint32_t derived) {
+    return blocked ? 0U : authored.value_or(derived);
+  };
   append_xml_attr_uint_if(out, "firstHeaderRow",
-                          table.location_first_header_row().value_or(loc_defaults.first_header_row));
-  append_xml_attr_uint_if(out, "firstDataRow", table.location_first_data_row().value_or(loc_defaults.first_data_row));
-  append_xml_attr_uint_if(out, "firstDataCol", table.location_first_data_col().value_or(loc_defaults.first_data_col));
+                          offset(table.location_first_header_row(), loc_defaults.first_header_row));
+  append_xml_attr_uint_if(out, "firstDataRow", offset(table.location_first_data_row(), loc_defaults.first_data_row));
+  append_xml_attr_uint_if(out, "firstDataCol", offset(table.location_first_data_col(), loc_defaults.first_data_col));
   // rowPageCount / colPageCount are optional: a table without page fields omits them.
   append_xml_attr_uint_if(
       out, "rowPageCount",
@@ -544,18 +560,20 @@ std::string write_pivot_table_definition(const pivot::PivotTable& table, std::op
   // them out only when its cache asks Excel to rebuild the report on open;
   // otherwise nothing would ever redraw it.
   const bool rebuilt_on_open = table.layout_dirty() && plan != nullptr && plan->refresh_on_load;
-  if (items != nullptr) {
+  // An empty frame carries no row or column lines.
+  const bool fieldless = IsFieldless(table);
+  if (!fieldless && items != nullptr) {
     out.append(items->row_items);
-  } else if (!rebuilt_on_open) {
+  } else if (!fieldless && !rebuilt_on_open) {
     out.append(table.raw_passthrough_after_row_fields());
   }
 
   if (!table.col_field_order().empty() || col_values_position.has_value()) {
     AppendFieldOrder(out, "colFields", table.col_field_order(), col_values_position);
   }
-  if (items != nullptr) {
+  if (!fieldless && items != nullptr) {
     out.append(items->col_items);
-  } else if (!rebuilt_on_open) {
+  } else if (!fieldless && !rebuilt_on_open) {
     out.append(table.raw_col_items());
   }
   // `<pageFields>`, which the schema places before `<dataFields>`, from the

@@ -597,6 +597,24 @@ Napi::Value Workbook::PivotProjectionPending(const Napi::CallbackInfo& info) {
   return ValueOrThrow(env, rc, Napi::Boolean::New(env, pending != 0));
 }
 
+Napi::Value Workbook::GetPivotSpill(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return ThrowInvalidHandle(env);
+  }
+  fm_spill_info_t spill = FM_STRUCT_INIT(fm_spill_info_t);
+  int32_t present = 0;
+  const fm_status_t rc = fm_sheet_get_pivot_spill(handle_, static_cast<std::size_t>(ArgU32(info, 0)),
+                                                  static_cast<std::size_t>(ArgU32(info, 1)), &present, &spill);
+  if (rc != 0 || present == 0) {
+    return OptionalOrNull(env, rc, 0, env.Null());
+  }
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("rect", RangeToJs(env, spill.rect));
+  out.Set("blocked", Napi::Boolean::New(env, spill.blocked != 0));
+  return out;
+}
+
 Napi::Value Workbook::PivotShowDetails(const Napi::CallbackInfo& info) {
   return IndexCall(info, [&](fm_workbook_t* handle, std::size_t* out) {
     const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));

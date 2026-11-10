@@ -164,6 +164,8 @@ constexpr std::size_t kLocationMinU32s = 6;
 constexpr std::size_t kPCDFieldNameOffset = 20;
 /// Bytes of `BrtBeginPivotTableDef` that precede the table's name.
 constexpr std::size_t kPivotTableDefNameOffset = 32;
+/// Payload byte of `BrtBeginPivotTableDef` whose bit 0 is `useAutoFormatting`.
+constexpr std::size_t kPivotTableDefFlagsByte = 5;
 /// Bytes of `BrtBeginPivotDataField` between the aggregation selector and
 /// the data field's display name.
 constexpr std::size_t kDataFieldNameGap = 17;
@@ -527,6 +529,7 @@ Expected<pivot::PivotTable, Error> read_pivot_table_bin(ByteSpan cursor) {
         if (payload.size < kPivotTableDefNameOffset) {
           return CorruptError("xlsb pivot table definition header truncated");
         }
+        table.set_auto_formatting((payload.data[kPivotTableDefFlagsByte] & 0x01U) != 0U);
         payload.data += kPivotTableDefNameOffset;
         payload.size -= kPivotTableDefNameOffset;
         ASSIGN_OR_RETURN(auto name, read_xlwidestring(payload));

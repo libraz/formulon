@@ -450,6 +450,7 @@ fm_sheet_get_pivot_options
 fm_sheet_update_pivot_options
 fm_sheet_project_pivot
 fm_sheet_is_pivot_projection_pending
+fm_sheet_get_pivot_spill
 fm_sheet_get_pivot_data_field_default_name
 
 # -- Function catalog ------------------------------------------------------------

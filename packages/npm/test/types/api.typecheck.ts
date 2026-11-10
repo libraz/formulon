@@ -1320,6 +1320,7 @@ export function absenceReads(): void {
   const spill = sheet.getSpill('A1');
   const blocked: boolean | undefined = spill?.blocked;
   const spillRange: CellRect | undefined = spill?.range;
+  const pivotSpill: CellRect | undefined = pivot.getSpill()?.range;
   // @ts-expect-error the read is `getSpill`
   sheet.getSpillInfo('A1');
   const rank: number | null = sheet.listCfRules()[0].rank;

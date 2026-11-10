@@ -6915,10 +6915,14 @@ class Sheet(_NoCopy):
         ``input.anchor`` is the top-left cell, a :class:`CellAddress` or one A1 cell; ``input.cache_id`` is a
         cache id or a :class:`PivotCache` of this workbook. The pivot starts with one field per cache field and none
         on an axis. Place them with :meth:`Pivot.set_field_axis` (or :meth:`Pivot.set_row_field_order` /
-        :meth:`Pivot.set_column_field_order`) and add values with :meth:`Pivot.add_data_field`.
+        :meth:`Pivot.set_column_field_order`) and add values with :meth:`Pivot.add_data_field`. Until a field is
+        placed, the report is Excel's empty placeholder: a bordered frame 3 columns wide and 18 rows high from the
+        anchor, with no values.
 
         Raises:
           InvalidArgumentError: when ``input.cache_id`` is a :class:`PivotCache` of another workbook.
+          FormulonError: with ``code == StatusCode.PRECONDITION_FAILED``, creating nothing, when the report's range is
+            occupied (see :class:`Pivot`) or runs past the sheet edge.
 
         Example::
 
@@ -7108,9 +7112,10 @@ class Sheet(_NoCopy):
 
         The region covers the anchor and every spilled cell; their values are
         read with :meth:`get_value`, which is already spill-aware. A blocked
-        anchor reads as a :class:`Spill` with ``blocked`` set and the footprint
-        it attempted. Every cell of a legacy array block reads ``None``: the
-        block is not a spill.
+        anchor, of a formula or of a PivotTable report (see :class:`Pivot`),
+        reads as a :class:`Spill` with ``blocked`` set and the footprint it
+        attempted, when that fits inside the grid. Every cell of a legacy array
+        block reads ``None``: the block is not a spill.
         """
         row, col = self._cell_args("get_spill", args, kwargs, ())
         sheet = self._index()

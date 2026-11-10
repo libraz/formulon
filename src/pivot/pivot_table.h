@@ -46,6 +46,18 @@ struct PivotRect {
   }
 };
 
+/// A report withheld because its range is occupied or overflows the sheet. The range is kept relative to the
+/// anchor so row and column edits move it with the anchor: `rows_above` page-field rows start above the anchor,
+/// and `rows` x `cols` is the size clipped to the grid. `past_edge` records the overflow; `size_known` is false
+/// for a blocked report read from a file until its layout has been computed.
+struct BlockedReport {
+  std::uint32_t rows = 1;
+  std::uint32_t cols = 1;
+  std::uint32_t rows_above = 0;
+  bool past_edge = false;
+  bool size_known = true;
+};
+
 /// Where a pivot definition came from: assembled in memory, or read from an
 /// .xlsx or .xlsb part.
 enum class PivotDefinitionSource : std::uint8_t { kBuilt, kXlsx, kXlsb };
@@ -578,6 +590,17 @@ class PivotTable {
   bool projection_pending() const { return projection_pending_; }
   void set_projection_pending(bool pending) { projection_pending_ = pending; }
 
+  /// The withheld report while an occupant or the sheet edge keeps it from rendering; nullopt once it renders.
+  /// The anchor then holds `#SPILL!` and the span is the anchor alone.
+  const std::optional<BlockedReport>& blocked() const { return blocked_; }
+  void set_blocked(std::optional<BlockedReport> state) { blocked_ = state; }
+
+  /// Creation order among the pivots of a sheet: a larger value was created later. Where two reports compete for
+  /// the same cells the earlier-created one renders. Kept across moves, renames and edits; 0 when never assigned,
+  /// which ties are broken for by sheet position (a later pivot in the sheet's list was created earlier).
+  std::uint64_t creation_order() const { return creation_order_; }
+  void set_creation_order(std::uint64_t order) { creation_order_ = order; }
+
  private:
   // Private so `clone()` is the only copy: the defaulted member-wise copy
   // shares the result mutex and cache until `clone()` replaces them.
@@ -650,6 +673,8 @@ class PivotTable {
   std::optional<PivotRect> projected_extent_;
   std::vector<PivotRect> projected_merges_;
   bool projection_pending_ = false;
+  std::optional<BlockedReport> blocked_;
+  std::uint64_t creation_order_ = 0;
   std::vector<PivotFilter> active_filters_;
   std::vector<RetainedPivotFilter> retained_filters_;
   std::optional<PivotStyleInfo> style_info_;

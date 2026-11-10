@@ -2841,12 +2841,13 @@ export interface ArrayFormulaInput {
 }
 
 /** Spill region info returned by `Sheet.getSpill(row, col)`, which returns `null` when the cell is neither
- *  part of a spill nor a blocked anchor. */
+ *  part of a spill nor a blocked anchor, and by `Pivot.getSpill()`. */
 export interface Spill {
-  /** `true` when the cell is the anchor of a spill refused with `#SPILL!`; the region is then the rectangle it
-   *  attempted. */
+  /** `true` when the cell is the anchor of a spill refused with `#SPILL!`, or of a blocked PivotTable report; the
+   *  region is then the rectangle it attempted. */
   readonly blocked: boolean;
-  /** The region including its anchor, whose top-left cell holds the dynamic-array formula. */
+  /** The region including its anchor, whose top-left cell holds the dynamic-array formula or is a PivotTable's
+   *  anchor; a blocked report's region also takes the page-field rows above its anchor. */
   readonly range: CellRect;
 }
 
@@ -7598,7 +7599,9 @@ export interface Sheet {
   pivot(pivot: PivotRef): Pivot;
   /** Creates a pivot table and returns its handle. The pivot starts with one field per cache field and none on an
    *  axis. Place them with `Pivot.setFieldAxis` (or `setRowFieldOrder` / `setColumnFieldOrder`) and add values with
-   *  `addDataField`.
+   *  `addDataField`. Until a field is placed, the report is Excel's empty placeholder: a bordered frame 3 columns
+   *  wide and 18 rows high from the anchor, with no values. When that range is occupied (see {@link Pivot}) or runs
+   *  past the sheet edge, the call fails with `StatusCode.PreconditionFailed` and creates nothing.
    *
    *  @example
    *  ```ts
@@ -7978,9 +7981,10 @@ export interface Sheet {
 
   /** Returns dynamic-array spill info for `(row, col)`.
    *  When the cell is part of a spill region (anchor or phantom), `range` is the region; the per-cell values
-   *  are read via `getValue`, which is already spill-aware. A blocked anchor reads `blocked: true` with the
-   *  rectangle it attempted. `null` when the cell is neither part of a region nor a blocked anchor, and on every
-   *  cell of a legacy array block, which is not a spill. */
+   *  are read via `getValue`, which is already spill-aware. A blocked anchor, of a formula or of a PivotTable
+   *  report (see {@link Pivot}), reads `blocked: true` with the rectangle it attempted, when that fits inside the
+   *  grid. `null` when the cell is neither part of a region nor a blocked anchor, and on every cell of a legacy
+   *  array block, which is not a spill. */
   getSpill(row: number, col: number): Spill | null;
   /** `getSpill` at the A1 address `a1`. */
   getSpill(a1: string): Spill | null;
@@ -8379,7 +8383,18 @@ export interface Table {
  *  added or removed, rows or columns are edited, or the pivot is renamed, and survives an edit that fails. Once
  *  the pivot is removed (directly, by a row or column delete over it, with its sheet, or with its cache's source
  *  sheet), every member but `sheet` fails with `StatusCode.NotFound`. Remove a pivot with `Sheet.removePivot`.
- *  The definition read-backs work for pivots created in-session and loaded from a package alike. */
+ *  The definition read-backs work for pivots created in-session and loaded from a package alike.
+ *
+ *  Every edit writes the report into the sheet cells, replacing their values and formats. The report's range is
+ *  occupied when it covers, outside the report's own cells, a non-empty cell (a `=""` formula included), a spill
+ *  range cell, any cell of a merge, a legacy array block, a data table's result cells, a table or another pivot's
+ *  report; a cell holding only a format is not an occupant. As in Excel, an edit, a `refresh()` or `project()`
+ *  whose range is occupied or runs past the sheet edge is not refused: the change is applied, the old report's
+ *  cells are cleared and the anchor holds `#SPILL!`, keeping its format. The report is then blocked
+ *  (`getSpill()`), and the occupant is left as it is. The next recalc after the range comes free renders it (in
+ *  manual calculation, the next explicit recalc); a format-only change such as an unmerge does not start one.
+ *  GETPIVOTDATA over a blocked report returns `#REF!`. Of two reports that need the same free cells, the one
+ *  created first renders. */
 export interface Pivot {
   /** The sheet this pivot is anchored on. */
   readonly sheet: Sheet;
@@ -8395,10 +8410,15 @@ export interface Pivot {
   /** The handle of the cache the pivot draws from, the same object `Workbook.pivotCache(cacheId)` returns. */
   cache(): PivotCache;
   /** Returns the pivot's layout, computed from its cache records; the sheet cells are not written (`project()`
-   *  writes them). */
+   *  writes them). A blocked report returns the layout it would draw. */
   getLayout(): PivotLayout;
   /** Moves the pivot so its top-left cell is `cell` (a {@link CellAddress} or an A1 cell, `'C3'`), the same
-   *  meaning as `PivotInput.anchor`. */
+   *  meaning as `PivotInput.anchor`. As Excel's cut and paste of a report does, the move overwrites the
+   *  destination (the report's current rectangle moved by the same offset): values, formulas, merges, spill range
+   *  cells and legacy array blocks or data tables lying wholly inside are cleared, and a table meeting it is
+   *  deleted. Fails with `StatusCode.PreconditionFailed`, changing nothing, when the destination runs past the sheet
+   *  edge, covers another pivot, or meets a legacy array block or a data table's result range that crosses its
+   *  edge. */
   setAnchor(cell: CellAddress | string): void;
   /** Reads the row / column grand total flags `updateGrandTotals` writes. */
   getGrandTotals(): PivotGrandTotals;
@@ -8417,15 +8437,22 @@ export interface Pivot {
   /** Reads the PivotTable Options `updateOptions` writes. */
   getOptions(): PivotOptions;
   /** Updates the PivotTable Options; members the patch omits keep their current value. Wrong-typed members
-   *  fail without changing the pivot. Fails with `StatusCode.PreconditionFailed` when the report would overlap
-   *  another structure. */
+   *  fail without changing the pivot. */
   updateOptions(patch: PivotOptionsPatch): void;
   /** Reads whether a cache change left the pivot's sheet cells stale; see `project`. Metadata only: records come
-   *  from `addField` / `addRecord` / `setRecordValue`; neither `project()` nor a cell edit re-reads the range. */
+   *  from `addField` / `addRecord` / `setRecordValue`; neither `project()` nor a cell edit re-reads the range. A
+   *  blocked report is not pending; whether it is drawn is `getSpill()`'s answer. */
   isProjectionPending(): boolean;
   /** Writes the pivot's report, computed from its cache records, into its sheet cells now and clears the pending
-   *  flag. It does not re-read the cache's source range. */
+   *  flag. It does not re-read the cache's source range. A report whose range is occupied or runs past the sheet
+   *  edge is blocked instead (see {@link Pivot}). */
   project(): void;
+  /** Reads the range a blocked report needs, as `{ blocked: true, range }`, the record `Sheet.getSpill` returns at
+   *  its anchor. `null` while the report is drawn or was never drawn, and for a report blocked past the sheet
+   *  edge. A blocked report loaded without its cache records reports its anchor alone; one whose cache changed
+   *  since it was blocked reports the last range it needed. Pending cells are calculated first, which renders a
+   *  report whose range came free. */
+  getSpill(): Spill | null;
   /** Writes the records behind data cell (`row`, `col`) onto a new sheet, inserted before the pivot's sheet, and
    *  activates it. Returns the new sheet's handle; the pivot's sheet and the ones after it move up one place. */
   showDetails(row: number, col: number): Sheet;
@@ -8584,9 +8611,11 @@ export interface PivotCache {
   /** Rebuilds the cache from its worksheet source (a range, a defined name or a table of this workbook) and
    *  re-projects every pivot drawing from it, as Excel's Refresh does. Pending cells are calculated first and the
    *  source values are read as they stand. The cache, the pivots' definitions and their report cells change
-   *  together or not at all. Fails with `StatusCode.PreconditionFailed` when the source does not resolve (none, an
-   *  external or non-worksheet source, a missing sheet, name or table, a `#REF!` or dynamic name) or when a
-   *  refreshed report would grow over a non-empty cell, another pivot or another refreshed report; with
+   *  together or not at all. A refreshed report whose new range is occupied or runs past the sheet edge is blocked
+   *  (see {@link Pivot}); when two refreshed reports meet, the one growing into the other's current report is
+   *  blocked, and of two whose new ranges alone overlap, the one created first renders. Fails with
+   *  `StatusCode.PreconditionFailed` when the source does not resolve (none, an external or non-worksheet source,
+   *  a missing sheet, name or table, a `#REF!` or dynamic name); with
    *  `StatusCode.SecurityResourceLimit` when (rows - 1) x columns of the source exceeds the record cell limit;
    *  with `StatusCode.NotImplemented` when a numeric group has a start, end or interval that is not an
    *  integer. */

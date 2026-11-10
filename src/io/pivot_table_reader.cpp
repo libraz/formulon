@@ -25,10 +25,12 @@
 #include "pivot/pivot_table.h"
 #include "pivot/pivot_types.h"
 #include "pugixml.hpp"
+#include "sheet.h"
 #include "utils/error.h"
 #include "utils/expected.h"
 #include "utils/status_macros.h"
 #include "utils/strings.h"
+#include "workbook.h"
 
 namespace formulon::io {
 namespace {
@@ -928,6 +930,28 @@ Expected<pivot::PivotTable, Error> read_pivot_table_definition(const std::vector
   }
 
   return table;
+}
+
+void assign_read_creation_orders(Workbook& wb, std::size_t sheet_index, std::size_t first_new) {
+  std::uint64_t highest = 0;
+  for (std::size_t i = 0; i < wb.sheet_count(); ++i) {
+    for (const auto& table : wb.sheet(i).pivot_tables()) {
+      if (table != nullptr) {
+        highest = std::max(highest, table->creation_order());
+      }
+    }
+  }
+  auto& tables = wb.sheet(sheet_index).mutable_pivot_tables();
+  std::size_t pending = 0;
+  for (std::size_t i = first_new; i < tables.size(); ++i) {
+    pending += tables[i] != nullptr ? 1U : 0U;
+  }
+  // keys preserve the saved part order on round trip
+  for (std::size_t i = first_new; i < tables.size(); ++i) {
+    if (tables[i] != nullptr) {
+      tables[i]->set_creation_order(highest + pending--);
+    }
+  }
 }
 
 }  // namespace formulon::io

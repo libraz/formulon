@@ -119,6 +119,10 @@ struct PivotCell {
   std::string number_format;
 };
 
+/// The frame Excel draws for a report with no fields at all.
+inline constexpr std::uint32_t kPlaceholderRows = 18;
+inline constexpr std::uint32_t kPlaceholderCols = 3;
+
 struct PivotCells {
   std::uint32_t top = 0;
   std::uint32_t left = 0;
@@ -128,6 +132,9 @@ struct PivotCells {
   std::uint32_t body_top = 0;
   std::uint32_t body_rows = 0;
   std::uint32_t body_cols = 0;
+  /// The report has no field on any axis and no data field: Excel draws an empty bordered frame of
+  /// `kPlaceholderRows` x `kPlaceholderCols` at the anchor, with no cells.
+  bool placeholder = false;
   std::vector<PivotCell> cells;
   /// Cell ranges Excel merges under `mergeItem`, in absolute sheet coordinates.
   std::vector<PivotRect> merges;
@@ -219,6 +226,8 @@ struct PivotLineItems {
 /// `grid_drop_zones`, `page_wrap` / `page_over_then_down`, the error and
 /// missing captions, `indent` (compact label indent) and `merge_item`
 /// (tabular label merges).
+///
+/// A report with no row, column, page or data field is the empty placeholder frame (`PivotCells::placeholder`).
 ///
 /// When `line_items` is non-null it also receives the report's row and column
 /// item lines, built from the same projection; it is left untouched on failure.

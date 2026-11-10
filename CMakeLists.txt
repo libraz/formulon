@@ -149,6 +149,7 @@ set(FORMULON_CORE_SOURCES
   src/workbook_cell_edit.cpp
   src/workbook_sheets.cpp
   src/workbook_copy_sheet.cpp
+  src/workbook_pivot_blocked.cpp
   src/workbook_pivot_details.cpp
   src/workbook_pivot_projection.cpp
   src/workbook_pivot_refresh.cpp

@@ -232,6 +232,7 @@ _PIVOT_READERS = {
     "Pivot.get_properties",
     "Pivot.get_report_layout",
     "Pivot.get_row_field_order",
+    "Pivot.get_spill",
     "Pivot.get_style_options",
     "Pivot.is_projection_pending",
     "Pivot.list_data_fields",

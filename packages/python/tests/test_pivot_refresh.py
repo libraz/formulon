@@ -8,6 +8,7 @@ from typing import List, Tuple
 
 from formulon import (
     CellAddress,
+    CellRect,
     FormulonError,
     NotFoundError,
     Pivot,
@@ -20,6 +21,7 @@ from formulon import (
     PivotNumericGroup,
     PivotNumericGroupInput,
     PivotWorksheetSourceInput,
+    Spill,
     StatusCode,
     Workbook,
 )
@@ -84,17 +86,35 @@ class PivotCacheRefreshTests(unittest.TestCase):
                 cache.refresh()
             self.assertEqual(raised.exception.code, StatusCode.PRECONDITION_FAILED)
 
-    def test_report_that_cannot_grow_fails_and_changes_nothing(self) -> None:
+    def test_report_that_cannot_grow_is_blocked_until_its_range_is_free(self) -> None:
         with Workbook.create_default() as wb:
-            cache, _ = _build(wb)
+            cache, pivot = _build(wb)
             ws = wb.sheet(0)
+            self.assertIsNone(pivot.get_spill())
+            # The report fills E1:F4; North makes it one row longer, into E5.
             for row in range(4, 9):
                 ws.set_text(row, 4, "keep")
             ws.set_text("A4", "North")
-            with self.assertRaises(FormulonError) as raised:
-                cache.refresh()
-            self.assertEqual(raised.exception.code, StatusCode.PRECONDITION_FAILED)
-            self.assertEqual(_shared(cache, "Region"), ["East", "West"])
+            self.assertIsNone(cache.refresh())
+            self.assertEqual(_shared(cache, "Region"), ["East", "West", "North"])
+            self.assertFalse(pivot.is_projection_pending())
+            needed = Spill(blocked=True, range=CellRect(0, 4, 4, 5))
+            self.assertEqual(pivot.get_spill(), needed)
+            self.assertEqual(ws.get_spill("E1"), needed)
+            self.assertIsNone(ws.get_spill("F2"))
+            self.assertEqual(ws.get_value(4, 4), "keep")
+            for row in range(4, 9):
+                ws.set_blank(row, 4)
+            self.assertIsNone(pivot.get_spill())
+            self.assertIsNone(ws.get_spill("E1"))
+            self.assertIn("North", [ws.get_value(row, 4) for row in range(6)])
+
+    def test_get_spill_of_a_removed_pivot_is_not_found(self) -> None:
+        with Workbook.create_default() as wb:
+            _, pivot = _build(wb)
+            wb.sheet(0).remove_pivot(pivot)
+            with self.assertRaises(NotFoundError):
+                pivot.get_spill()
 
     def test_source_over_the_record_cell_limit_fails(self) -> None:
         with Workbook.create_default() as wb:

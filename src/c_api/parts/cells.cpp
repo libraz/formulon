@@ -16,6 +16,7 @@
 #include "c_api/formulon_c.h"
 #include "c_api/parts/cell_range.h"
 #include "c_api/parts/common.h"
+#include "c_api/parts/pivot_internal.h"
 #include "c_api/parts/struct_v1_sizes.h"
 #include "cell.h"
 #include "eval/lambda_format.h"
@@ -35,6 +36,7 @@
 #include "value.h"
 #include "workbook.h"
 
+using formulon::c_api::parts::blocked_pivot_rect;
 using formulon::c_api::parts::cell_range_page_size;
 using formulon::c_api::parts::cell_rect_from_extent;
 using formulon::c_api::parts::check_cell_coord;
@@ -921,6 +923,19 @@ extern "C" fm_status_t fm_sheet_get_spill(const fm_workbook_t* wb, std::size_t s
       out->rect = cell_rect_from_extent(blocked->anchor_row, blocked->anchor_col, blocked->rows, blocked->cols);
       out->blocked = 1;
       *out_present = 1;
+      return 0;
+    }
+    // A blocked PivotTable report holds `#SPILL!` at its anchor as a blocked formula does.
+    for (const auto& table : s.pivot_tables()) {
+      if (table == nullptr || table->anchor_row() != row || table->anchor_col() != col) {
+        continue;
+      }
+      if (const std::optional<fm_cell_rect_t> needed = blocked_pivot_rect(*table)) {
+        out->rect = *needed;
+        out->blocked = 1;
+        *out_present = 1;
+        return 0;
+      }
     }
     return 0;
   }

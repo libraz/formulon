@@ -6861,6 +6861,8 @@ FM_API fm_status_t fm_sheet_get_pivot_count(const fm_workbook_t* wb, size_t shee
 /**
  * @brief Evaluates and projects the `pivot_index`-th PivotTable on a sheet.
  *
+ * A blocked report returns the layout it would draw.
+ *
  * On success the caller owns `*out` and must free it with
  * `fm_pivot_report_destroy`.
  *
@@ -6926,9 +6928,9 @@ FM_API fm_status_t fm_pivot_report_get_cell_at(const fm_pivot_report_t* report, 
  * UTF-8; `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) for an out-of-range
  * sheet; `FM_STATUS_NOT_FOUND` (6) for a `cache_id` no cache has;
  * `FM_STATUS_INDEX_OUT_OF_RANGE` (13) for a pivot, field, item, record,
- * data-field, filter or calculated-item index at or past its count; and
- * `FM_STATUS_PRECONDITION_FAILED` (9) for a pivot-table mutation whose report
- * would overlap another structure (Pivot tables, below).
+ * data-field, filter or calculated-item index at or past its count. A
+ * pivot-table edit whose report would grow over something else succeeds and
+ * leaves the report blocked (Pivot tables, below).
  */
 
 /**
@@ -7723,16 +7725,17 @@ FM_API fm_status_t fm_workbook_set_pivot_cache_worksheet_source(fm_workbook_t* w
  * values are read as they stand. The cache's fields, shared items, records
  * and `<sharedItems>` attributes, the definitions of the dependent pivots and
  * their report cells are replaced together; a failed call changes none of
- * them.
+ * them. A refreshed report whose new range is occupied or runs past the sheet
+ * edge is blocked (Pivot tables, below); when two refreshed reports meet, the
+ * one growing into the other's current report is blocked, and of two whose new
+ * ranges alone overlap, the one created first renders.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` is `NULL`;
  *         `FM_STATUS_NOT_FOUND` (6) when no cache matches `cache_id`;
  *         `FM_STATUS_PRECONDITION_FAILED` (9) when the source does not resolve
  *         (no source, an external or non-worksheet source, a missing sheet,
- *         name or table, a `#REF!` or dynamic name), or when a refreshed
- *         report would grow over a non-empty cell, another PivotTable or
- *         another refreshed report;
+ *         name or table, a `#REF!` or dynamic name);
  *         `FM_STATUS_SECURITY_RESOURCE_LIMIT` (6005) when (rows - 1) x columns
  *         of the source exceeds the pivot cache record cell limit;
  *         `FM_STATUS_NOT_IMPLEMENTED` (3) when a numeric group of the cache
@@ -8223,13 +8226,29 @@ FM_API fm_status_t fm_workbook_remove_pivot_cache_calculated_item(fm_workbook_t*
 /*
  * A pivot table's report is kept in its sheet's cells, as Excel keeps it.
  * Every successful pivot-table mutation below writes the report into the
- * cells: those the previous report covered and the new range are cleared,
- * then each report cell is written as a value with Excel's format for its
- * role, and formulas reading the range recalculate. A mutation whose report
- * would overlap another pivot table, a table, a data table, an array formula
- * or a merge it does not own returns `FM_STATUS_PRECONDITION_FAILED` (9) and leaves the
- * pivot table and the sheet unchanged. A pivot table read from a file keeps
- * the cells read with it until it is edited.
+ * cells: those the previous report covered are cleared, then each report cell
+ * is written as a value with Excel's format for its role (replacing any
+ * format a cell had), and formulas reading the range recalculate. A pivot
+ * table with no field on any axis draws a bordered 3 x 18 placeholder.
+ *
+ * The new range is occupied when it covers, outside the report's own cells,
+ * a non-empty cell (a `=""` formula included), a spill range cell, any cell
+ * of a merge, a legacy array block, a data table's result cells, a table or
+ * another pivot table's report; a cell holding only a format is not an
+ * occupant. As in Excel, an edit, a refresh or `fm_sheet_project_pivot` whose
+ * range is occupied or runs past the sheet edge is not refused: the change
+ * is applied, the old report's cells are cleared and the anchor holds
+ * `#SPILL!` with its own format kept. The report is then blocked
+ * (`fm_sheet_get_pivot_spill`) and the occupant is left as it is. The next
+ * recalc after the range comes free renders it (in manual calculation, the
+ * next explicit recalc); a format-only change such as an unmerge does not
+ * start one. GETPIVOTDATA over a blocked report returns `#REF!`. Of two
+ * reports that need the same free cells, the one created first renders.
+ *
+ * Creating a pivot (`fm_sheet_add_pivot`) over an occupied range is refused
+ * instead, and moving one (`fm_sheet_set_pivot_anchor`) works as a cut and
+ * paste. A pivot table read from a file keeps the cells read with it until
+ * it is edited.
  */
 
 /**
@@ -8268,8 +8287,9 @@ typedef struct {
  *         `FM_STATUS_NOT_FOUND` (6) when `spec->cache_id` does not match any existing cache;
  *         `FM_STATUS_ALREADY_EXISTS` (7) when `spec->name` equals another pivot's name on
  *         the sheet under Unicode simple case folding;
- *         `FM_STATUS_PRECONDITION_FAILED` (9), creating nothing, when the report range
- *         would overlap another structure.
+ *         `FM_STATUS_PRECONDITION_FAILED` (9), creating nothing, when the report's range
+ *         (the 3 x 18 placeholder of a pivot without fields) is occupied or runs past the
+ *         sheet edge. Creation is not an edit of an existing report, so it never blocks.
  */
 FM_API fm_status_t fm_sheet_add_pivot(fm_workbook_t* wb, size_t sheet_index, const fm_pivot_spec_t* spec,
                                       size_t* out_pivot_index);
@@ -8299,13 +8319,21 @@ FM_API fm_status_t fm_sheet_rename_pivot(fm_workbook_t* wb, size_t sheet_index, 
  * @brief Moves the pivot so its report starts at `(anchor_row, anchor_col)`,
  *        the cell `fm_sheet_add_pivot` takes; the report is rewritten there.
  *
+ * As Excel's cut and paste of a report does, the move overwrites the
+ * destination (the report's current rectangle moved by the same offset):
+ * values, formulas, merges, spill range cells and legacy array blocks or data
+ * tables lying wholly inside are cleared, and a table meeting it is deleted.
+ * The report then renders there. Only an occupant outside that rectangle,
+ * where a report that grows on the move can reach, blocks it as an edit does.
+ *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when `wb` is `NULL`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
  *         `FM_STATUS_INDEX_OUT_OF_RANGE` (13) when `pivot_index` is out of range;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when the anchor is outside the grid;
- *         `FM_STATUS_PRECONDITION_FAILED` (9) when the report would overlap another
- *           structure.
+ *         `FM_STATUS_PRECONDITION_FAILED` (9), changing nothing, when the destination
+ *           runs past the sheet edge, covers another pivot table, or meets a legacy array
+ *           block or a data table's result range that crosses its edge.
  */
 FM_API fm_status_t fm_sheet_set_pivot_anchor(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
                                              uint32_t anchor_row, uint32_t anchor_col);
@@ -8545,9 +8573,7 @@ typedef struct {
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when an op is out of range, `CLEAR` hits a field that does not accept it, a
  *           flag is not 0 / 1, `sort_order` is not an `fm_pivot_sort_order_t`, `MANUAL`
  *           meets a by-field key, `SET` carries a `NULL` string, or `custom_name` is longer
- *           than 255 UTF-16 code units;
- *         `FM_STATUS_PRECONDITION_FAILED` (9) when the report would overlap another
- *           structure.
+ *           than 255 UTF-16 code units.
  */
 FM_API fm_status_t fm_sheet_update_pivot_field(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
                                                size_t field_index, const fm_pivot_field_patch_t* patch);
@@ -8980,8 +9006,7 @@ FM_API fm_status_t fm_sheet_get_pivot_options(const fm_workbook_t* wb, size_t sh
  * @brief Merges `patch` into the pivot's options. The whole patch is checked
  *        before anything changes.
  *
- * @return `FM_STATUS_OK` (0) on success, or a common pivot failure (an
- *           overlapping report leaves the pivot unchanged);
+ * @return `FM_STATUS_OK` (0) on success, or a common pivot failure;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when an op is outside 0..2, `CLEAR` hits a field that
  *           cannot be cleared, `SET` carries a `NULL` string, or a `SET` value breaks the
  *           limits `fm_pivot_options_patch_t` states.
@@ -8992,20 +9017,22 @@ FM_API fm_status_t fm_sheet_update_pivot_options(fm_workbook_t* wb, size_t sheet
 /**
  * @brief Writes the pivot's report into its sheet cells now, as a pivot-table
  *        mutation does, and clears its pending flag. A pivot over a cache
- *        loaded without its records writes nothing.
+ *        loaded without its records writes nothing. A report whose range is
+ *        occupied or runs past the sheet edge is blocked (Pivot tables, above).
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` is `NULL`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) if `sheet_index` is out of range;
- *         `FM_STATUS_INDEX_OUT_OF_RANGE` (13) if `pivot_index` is out of range;
- *         `FM_STATUS_PRECONDITION_FAILED` (9) when the report would overlap another
- *           structure; the pivot stays pending.
+ *         `FM_STATUS_INDEX_OUT_OF_RANGE` (13) if `pivot_index` is out of range.
  */
 FM_API fm_status_t fm_sheet_project_pivot(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index);
 
 /**
  * @brief Reads into `*out` whether the pivot's sheet cells are stale after a
  *        change to its cache (`1`) or current (`0`).
+ *
+ * A blocked report is not pending; whether it is drawn is
+ * `fm_sheet_get_pivot_spill`'s answer.
  *
  * The worksheet source is metadata only: records come from
  * `fm_workbook_add_pivot_cache_field` / `fm_workbook_add_pivot_cache_record` /
@@ -9260,7 +9287,7 @@ FM_API fm_status_t fm_sheet_remove_pivot_filter(fm_workbook_t* wb, size_t sheet_
 /* -------------------------------------------------------------------------- */
 
 /**
- * @brief Result shape for `fm_sheet_get_spill`.
+ * @brief Result shape for `fm_sheet_get_spill` and `fm_sheet_get_pivot_spill`.
  *
  * Use `fm_sheet_get_value(wb, sheet_index, rect.first_row + r, rect.first_col + c, &v)`
  * to read individual cells; `fm_sheet_get_value` is already
@@ -9268,11 +9295,13 @@ FM_API fm_status_t fm_sheet_remove_pivot_filter(fm_workbook_t* wb, size_t sheet_
  */
 typedef struct {
   uint32_t struct_size;
-  /** The region including its anchor, whose top-left cell holds the dynamic-array formula. */
+  /** The region including its anchor, whose top-left cell holds the dynamic-array formula or is a PivotTable's anchor;
+   *  a blocked report's region also takes the page-field rows above its anchor. */
   fm_cell_rect_t rect;
-  /** `1` when the cell is the anchor of a spill refused with `#SPILL!` whose attempted rectangle fits inside the grid;
-   *  the region is then that rectangle. `0` when the cell is part of a registered spill region. Only the anchor reports
-   *  a blocked spill; cells inside the attempted rectangle read `*out_present == 0`. */
+  /** `1` when the cell is the anchor of a spill refused with `#SPILL!`, or of a blocked PivotTable report, whose
+   *  attempted rectangle fits inside the grid; the region is then that rectangle. `0` when the cell is part of a
+   *  registered spill region. Only the anchor reports a blocked spill; cells inside the attempted rectangle read
+   *  `*out_present == 0`. */
   int32_t blocked;
 } fm_spill_info_t;
 
@@ -9288,6 +9317,25 @@ typedef struct {
  */
 FM_API fm_status_t fm_sheet_get_spill(const fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
                                       int32_t* out_present, fm_spill_info_t* out);
+
+/**
+ * @brief Reads the range a blocked PivotTable report needs (Pivot tables,
+ *        above). `*out_present` is `1` and `*out` filled, `blocked` `1`, while
+ *        the report is blocked and that range fits inside the grid; otherwise
+ *        `0` and `*out` zeroed (still `FM_STATUS_OK` (0)), for a drawn report,
+ *        one never drawn and one blocked past the sheet edge. A blocked report
+ *        loaded without its cache records reports its anchor alone; one whose
+ *        cache changed since it was blocked reports the last range it needed.
+ *        Pending cells are calculated first, which renders a report whose
+ *        range came free.
+ *
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when any pointer argument is `NULL`;
+ *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
+ *         `FM_STATUS_INDEX_OUT_OF_RANGE` (13) when `pivot_index` is out of range.
+ */
+FM_API fm_status_t fm_sheet_get_pivot_spill(const fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
+                                            int32_t* out_present, fm_spill_info_t* out);
 
 /* -------------------------------------------------------------------------- */
 /* Legacy array (CSE) formulas                                                */

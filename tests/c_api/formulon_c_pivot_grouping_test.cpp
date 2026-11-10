@@ -10,6 +10,7 @@
 
 #include "formulon_c_out_index.h"
 #include "formulon_c_pivot_test_helpers.h"
+#include "value.h"
 
 namespace {
 
@@ -691,7 +692,6 @@ TEST(FormulonCApiPivot, NumericGroupingProjectsTheGroupedPivot) {
 
 namespace {
 
-constexpr fm_status_t kPreconditionFailed = static_cast<fm_status_t>(formulon::FormulonErrorCode::kPreconditionFailed);
 constexpr fm_status_t kAlreadyExists = static_cast<fm_status_t>(formulon::FormulonErrorCode::kAlreadyExists);
 
 // A cache filled through the record setters: Product (text) and Sales, one
@@ -811,7 +811,7 @@ TEST(FormulonCApiPivot, ADateGroupBaseSharedFromNumbersSavesItsItemsAsDates) {
   EXPECT_EQ(date_field.find("<n v="), std::string::npos) << date_field;
 }
 
-TEST(FormulonCApiPivot, AGroupedReportThatCannotBePlacedIsRefusedAndLeftPending) {
+TEST(FormulonCApiPivot, AGroupedReportThatCannotBePlacedIsBlocked) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   std::uint32_t cache_id = 0;
@@ -846,12 +846,29 @@ TEST(FormulonCApiPivot, AGroupedReportThatCannotBePlacedIsRefusedAndLeftPending)
   EXPECT_EQ(SetPivotFieldDateGroup(wb.handle, 0U, pivot_index, 0U, FM_PIVOT_PERIOD_MONTHS | FM_PIVOT_PERIOD_YEARS,
                                    FM_PIVOT_CALENDAR_GREGORIAN, 1U, std::numeric_limits<double>::quiet_NaN(),
                                    std::numeric_limits<double>::quiet_NaN()),
-            kPreconditionFailed);
-  // The cache keeps the grouping; the report waits for room.
+            0)
+      << fm_get_last_error_message();
+  // The grouping is applied and the report is blocked, not pending; the merge stays.
   std::size_t fields = 0;
   ASSERT_EQ(fm_workbook_get_pivot_cache_field_count(wb.handle, cache_id, &fields), 0);
   EXPECT_EQ(fields, 4U);
-  EXPECT_TRUE(ProjectionPending(wb.handle, pivot_index));
+  EXPECT_FALSE(ProjectionPending(wb.handle, pivot_index));
+  std::int32_t present = 0;
+  fm_spill_info_t spill = FM_STRUCT_INIT(fm_spill_info_t);
+  ASSERT_EQ(fm_sheet_get_pivot_spill(wb.handle, 0U, pivot_index, &present, &spill), 0) << fm_get_last_error_message();
+  ASSERT_EQ(present, 1);
+  EXPECT_EQ(spill.blocked, 1);
+  EXPECT_EQ(spill.rect.first_row, 0U);
+  EXPECT_EQ(spill.rect.first_col, 3U);
+  EXPECT_EQ(spill.rect.last_row, 7U);
+  EXPECT_EQ(spill.rect.last_col, 4U);
+  fm_value_t anchor{};
+  ASSERT_EQ(fm_sheet_get_value(wb.handle, 0U, 0U, 3U, &anchor), 0);
+  ASSERT_EQ(anchor.kind, FM_VALUE_KIND_ERROR);
+  EXPECT_EQ(anchor.u.error_code, static_cast<int32_t>(formulon::ErrorCode::Spill));
+  std::size_t merges = 0;
+  ASSERT_EQ(fm_sheet_get_merge_count(wb.handle, 0U, &merges), 0);
+  EXPECT_EQ(merges, 1U);
 }
 
 TEST(FormulonCApiPivot, AddingASharedItemTheFieldHoldsIsRefused) {

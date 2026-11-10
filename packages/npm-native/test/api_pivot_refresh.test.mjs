@@ -96,13 +96,34 @@ describe('PivotCache.refresh', () => {
     });
   });
 
-  it('fails with PreconditionFailed when the report cannot grow', () => {
+  it('blocks a report that cannot grow and renders it once its range is free', () => {
     withSheet((ws, wb) => {
-      const { cache } = build(ws, wb);
+      const { cache, pivot } = build(ws, wb);
+      assert.equal(pivot.getSpill(), null);
+      // The report fills E1:F4; North makes it one row longer, into E5.
       for (let row = 4; row < 9; row++) ws.setText(row, 4, 'keep');
       ws.setText('A4', 'North');
-      expectCode(() => cache.refresh(), StatusCode.PreconditionFailed);
-      assert.deepEqual(sharedValues(cache, 'Region'), ['East', 'West']);
+      assert.equal(cache.refresh(), undefined);
+      assert.deepEqual(sharedValues(cache, 'Region'), ['East', 'West', 'North']);
+      assert.equal(pivot.isProjectionPending(), false);
+      const needed = { firstRow: 0, firstCol: 4, lastRow: 4, lastCol: 5 };
+      assert.deepEqual(pivot.getSpill(), { blocked: true, range: needed });
+      assert.deepEqual(ws.getSpill('E1'), { blocked: true, range: needed });
+      assert.equal(ws.getSpill('F2'), null);
+      assert.equal(ws.getValue(4, 4), 'keep');
+      for (let row = 4; row < 9; row++) ws.setBlank(row, 4);
+      assert.equal(pivot.getSpill(), null);
+      assert.equal(ws.getSpill('E1'), null);
+      let seen = false;
+      for (let row = 0; row < 6; row++) seen ||= ws.getValue(row, 4) === 'North';
+      assert.ok(seen, 'the report shows the new item');
+    });
+  });
+
+  it('getSpill fails with IndexOutOfRange for a pivot index past the last', () => {
+    withSheet((ws, wb) => {
+      build(ws, wb);
+      expectCode(() => ws.pivot(9).getSpill(), StatusCode.IndexOutOfRange);
     });
   });
 

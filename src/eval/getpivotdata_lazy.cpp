@@ -315,7 +315,8 @@ Value eval_getpivotdata_lazy(const parser::AstNode& call, Arena& arena, const Fu
     return Value::error(kPivotRefError);
   }
   const pivot::PivotTable* table = pivot::find_pivot_at_anchor(*ctx.workbook(), sheet_name, anchor->row, anchor->col);
-  if (table == nullptr) {
+  // A report withheld behind an occupant has no cells to read.
+  if (table == nullptr || table->blocked().has_value()) {
     return Value::error(kPivotRefError);
   }
 

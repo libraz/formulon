@@ -725,6 +725,7 @@ class JsWorkbook {
                                         std::size_t excludeDataField) const;
   void pivotProject(uint32_t sheet, uint32_t pivotIndex);
   bool pivotProjectionPending(uint32_t sheet, uint32_t pivotIndex) const;
+  emscripten::val getPivotSpill(uint32_t sheet, uint32_t pivotIndex) const;
   uint32_t pivotShowDetails(uint32_t sheet, uint32_t pivotIndex, uint32_t row, uint32_t col);
   /// Appends a manual-filter item: `item` is a new item's name, or `{ cacheIndex }` for the bound cache
   /// field's shared item at that position (the only form that can express the blank item, which has no

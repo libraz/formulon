@@ -20,8 +20,10 @@
 #include "excel_profile.h"
 #include "gtest/gtest.h"
 #include "io/ooxml_reader.h"
+#include "io/ooxml_writer.h"
 #include "io/pivot_cache_writer.h"
 #include "io/pivot_table_reader.h"
+#include "io/zip_reader.h"
 #include "pivot/pivot_cache.h"
 #include "pivot/pivot_table.h"
 #include "pivot/pivot_types.h"
@@ -62,7 +64,7 @@ TEST(PivotTableWriter, EmptyTableRoundTrips) {
 TEST(PivotTableWriter, LocationRequiredAttrsDefaultIndependentlyAndPreserveZero) {
   pivot::PivotTable defaults;
   const std::string default_xml = write_pivot_table_definition(defaults);
-  EXPECT_NE(default_xml.find("<location ref=\"A1:A1\" firstHeaderRow=\"1\" firstDataRow=\"1\" firstDataCol=\"1\"/>"),
+  EXPECT_NE(default_xml.find("<location ref=\"A1:A1\" firstHeaderRow=\"1\" firstDataRow=\"1\" firstDataCol=\"0\"/>"),
             std::string::npos)
       << "xml=" << default_xml;
   EXPECT_EQ(default_xml.find("rowPageCount"), std::string::npos) << "xml=" << default_xml;
@@ -72,7 +74,7 @@ TEST(PivotTableWriter, LocationRequiredAttrsDefaultIndependentlyAndPreserveZero)
   partial.set_location_attributes(std::optional<std::uint32_t>(0U), std::nullopt, std::nullopt, std::nullopt,
                                   std::nullopt);
   const std::string partial_xml = write_pivot_table_definition(partial);
-  EXPECT_NE(partial_xml.find("<location ref=\"A1:A1\" firstHeaderRow=\"0\" firstDataRow=\"1\" firstDataCol=\"1\"/>"),
+  EXPECT_NE(partial_xml.find("<location ref=\"A1:A1\" firstHeaderRow=\"0\" firstDataRow=\"1\" firstDataCol=\"0\"/>"),
             std::string::npos)
       << "xml=" << partial_xml;
 }
@@ -2392,6 +2394,238 @@ TEST(PivotTableWriter, HiddenFieldCaptionsDropTheColumnLabelsRow) {
   table.set_show_headers(false);
   EXPECT_EQ(WrittenLocationOffsets(write_pivot_table_definition(table)),
             " firstHeaderRow=\"0\" firstDataRow=\"2\" firstDataCol=\"1\"");
+}
+
+// ---------------------------------------------------------------------------
+// Blocked reports, the empty placeholder, and part order
+// ---------------------------------------------------------------------------
+
+namespace {
+
+pivot::PivotTable ReportAtI3() {
+  pivot::PivotTable table = TableWithRowAndDataFields(1U);
+  table.set_anchor(2U, 8U, 1U, 1U);
+  return table;
+}
+
+pivot::PivotField BareField(const char* name, pivot::PivotAxis axis = pivot::PivotAxis::None) {
+  pivot::PivotField field;
+  field.source_name = name;
+  field.axis = axis;
+  return field;
+}
+
+pivot::PivotCache SalesCache(const std::string& sheet_name) {
+  pivot::PivotCache cache;
+  cache.set_cache_id(1U);
+  cache.mutable_fields().push_back(pivot::PivotCacheField{"Region", {Value::text("North"), Value::text("South")}});
+  cache.mutable_fields().push_back(pivot::PivotCacheField{"Amt", {}});
+  const double rows[][2] = {{0, 100}, {1, 200}, {0, 300}};
+  for (const auto& row : rows) {
+    pivot::PivotCacheRecord record;
+    record.cells = {Value::number(row[0]), Value::number(row[1])};
+    record.cell_is_index = {true, false};
+    cache.mutable_records().push_back(std::move(record));
+  }
+  pivot::WorksheetSource& source = cache.mutable_worksheet_source();
+  source.present = true;
+  source.ref = "A1:B4";
+  source.sheet = sheet_name;
+  return cache;
+}
+
+std::unique_ptr<pivot::PivotTable> RegionReport(const char* name, std::uint32_t row) {
+  auto table = std::make_unique<pivot::PivotTable>();
+  table->set_name(name);
+  table->set_pivot_cache_id(1U);
+  table->mutable_fields().push_back(BareField("Region", pivot::PivotAxis::Row));
+  table->mutable_fields().push_back(BareField("Amt", pivot::PivotAxis::Value));
+  for (std::uint32_t x = 0; x < 2U; ++x) {
+    pivot::PivotItem item;
+    item.has_cache_index = true;
+    item.cache_index = x;
+    table->mutable_fields()[0].items.push_back(std::move(item));
+  }
+  table->mutable_row_field_order() = {0U};
+  pivot::PivotDataField sum;
+  sum.name = "Sum of Amt";
+  sum.field_index = 1U;
+  table->mutable_data_fields().push_back(std::move(sum));
+  table->set_anchor(row, 0U, 1U, 1U);
+  return table;
+}
+
+/// Data on the first sheet; `Pivot` is the second sheet.
+Workbook SalesBook() {
+  Workbook wb = Workbook::create_for_profile(mac_365_en_us_profile());
+  EXPECT_TRUE(static_cast<bool>(wb.set_cell_text(0U, 0U, 0U, "Region")));
+  EXPECT_TRUE(static_cast<bool>(wb.set_cell_text(0U, 0U, 1U, "Amt")));
+  const char* regions[] = {"North", "South", "North"};
+  for (std::uint32_t r = 0; r < 3U; ++r) {
+    EXPECT_TRUE(static_cast<bool>(wb.set_cell_text(0U, r + 1U, 0U, regions[r])));
+    EXPECT_TRUE(static_cast<bool>(wb.set_cell_value(0U, r + 1U, 1U, Value::number(100.0 * (r + 1U)))));
+  }
+  wb.add_pivot_cache(std::make_unique<pivot::PivotCache>(SalesCache(wb.sheet(0U).name())));
+  EXPECT_TRUE(static_cast<bool>(wb.add_sheet_entered("Pivot")));
+  return wb;
+}
+
+std::string SavedPart(const Workbook& wb, std::string_view part) {
+  auto bytes_or = write_ooxml(wb);
+  EXPECT_TRUE(static_cast<bool>(bytes_or)) << (bytes_or ? "" : bytes_or.error().message);
+  if (!bytes_or) {
+    return {};
+  }
+  const std::vector<std::uint8_t>& bytes = bytes_or.value();
+  ZipReader zip;
+  EXPECT_TRUE(static_cast<bool>(zip.open(ByteSpan{bytes.data(), bytes.size()})));
+  auto entry_or = zip.read_entry(part);
+  EXPECT_TRUE(static_cast<bool>(entry_or)) << part;
+  if (!entry_or) {
+    return {};
+  }
+  return std::string(entry_or.value().begin(), entry_or.value().end());
+}
+
+std::string Between(const std::string& text, std::string_view open, std::string_view close) {
+  const std::size_t at = text.find(open);
+  if (at == std::string::npos) {
+    return "(missing " + std::string(open) + ")";
+  }
+  const std::size_t end = text.find(close, at);
+  return text.substr(at, end == std::string::npos ? std::string::npos : end + close.size() - at);
+}
+
+std::size_t CountApplyBorder(const std::string& text) {
+  std::size_t count = 0;
+  for (std::size_t at = text.find("applyBorder=\"1\""); at != std::string::npos;
+       at = text.find("applyBorder=\"1\"", at + 1U)) {
+    ++count;
+  }
+  return count;
+}
+
+}  // namespace
+
+TEST(PivotTableWriter, BlockedReportCollapsesTheLocation) {
+  pivot::PivotTable table = ReportAtI3();
+  table.set_location_attributes(1U, 1U, 1U, 1U, 2U);
+  table.set_auto_formatting(false);
+  table.set_blocked(pivot::BlockedReport{6U, 2U, 0U, false, true});
+  const std::string xml = write_pivot_table_definition(table, std::nullopt);
+  EXPECT_NE(xml.find("<location ref=\"I3\" firstHeaderRow=\"0\" firstDataRow=\"0\" firstDataCol=\"0\" "
+                     "rowPageCount=\"1\" colPageCount=\"2\"/>"),
+            std::string::npos)
+      << xml;
+  EXPECT_EQ(xml.find("useAutoFormatting"), std::string::npos) << xml;
+  // A span a caller passes in does not widen a withheld report.
+  const std::string widened = write_pivot_table_definition(table, PivotRenderedSpan{6U, 2U, 2U});
+  EXPECT_EQ(Between(widened, "<location", "/>"), Between(xml, "<location", "/>"));
+}
+
+TEST(PivotTableWriter, RecoveredBlockedReportSavesItsFullLocation) {
+  pivot::PivotTable table = ReportAtI3();
+  table.set_blocked(pivot::BlockedReport{6U, 2U, 0U, false, true});
+  table.set_auto_formatting(false);
+  table.set_blocked(std::nullopt);
+  const std::string xml = write_pivot_table_definition(table, PivotRenderedSpan{6U, 2U, 2U});
+  EXPECT_NE(xml.find("<location ref=\"I3:J8\" firstHeaderRow=\"1\" firstDataRow=\"1\" firstDataCol=\"1\"/>"),
+            std::string::npos)
+      << xml;
+  // The flag stays off once dropped.
+  EXPECT_EQ(xml.find("useAutoFormatting"), std::string::npos) << xml;
+}
+
+TEST(PivotTableWriter, PlaceholderLocationAndBorders) {
+  Workbook wb = SalesBook();
+  auto table = std::make_unique<pivot::PivotTable>();
+  table->set_name("Empty");
+  table->set_pivot_cache_id(1U);
+  table->set_anchor(2U, 0U, 1U, 1U);
+  ASSERT_TRUE(static_cast<bool>(wb.add_pivot(1U, std::move(table))));
+  ASSERT_TRUE(static_cast<bool>(wb.project_pivot(1U, 0U, ReportPlacement::kRefuse)));
+
+  const std::string pivot_xml = SavedPart(wb, "xl/pivotTables/pivotTable1.xml");
+  EXPECT_NE(pivot_xml.find("<location ref=\"A3:C20\" firstHeaderRow=\"1\" firstDataRow=\"1\" firstDataCol=\"0\"/>"),
+            std::string::npos)
+      << pivot_xml;
+  EXPECT_EQ(pivot_xml.find("<rowItems"), std::string::npos) << pivot_xml;
+  EXPECT_EQ(pivot_xml.find("<colItems"), std::string::npos) << pivot_xml;
+
+  // The nine frame positions, as Excel saved them for an empty report.
+  const char* kGrey = "<color rgb=\"FF999999\"/>";
+  const char* kInner = "<color indexed=\"65\"/>";
+  const auto side = [&](const char* tag, const char* color) {
+    return std::string("<") + tag + " style=\"thin\">" + color + "</" + tag + ">";
+  };
+  struct Edges {
+    bool left_outer;
+    bool top_outer;
+    bool right;
+    bool bottom;
+  };
+  const Edges positions[9] = {
+      {true, true, false, false},  {false, true, false, false},  {false, true, true, false},
+      {true, false, false, false}, {false, false, false, false}, {false, false, true, false},
+      {true, false, false, true},  {false, false, false, true},  {false, false, true, true},
+  };
+  const std::string styles = SavedPart(wb, "xl/styles.xml");
+  for (const Edges& e : positions) {
+    std::string border = "<border>" + side("left", e.left_outer ? kGrey : kInner);
+    border += e.right ? side("right", kGrey) : std::string("<right/>");
+    border += side("top", e.top_outer ? kGrey : kInner);
+    border += e.bottom ? side("bottom", kGrey) : std::string("<bottom/>");
+    border += "<diagonal/></border>";
+    EXPECT_NE(styles.find(border), std::string::npos) << border << "\n" << Between(styles, "<borders", "</borders>");
+  }
+  const std::string xfs = Between(styles, "<cellXfs", "</cellXfs>");
+  EXPECT_GE(CountApplyBorder(xfs), 9U) << xfs;
+}
+
+TEST(PivotTableWriter, PartsAreNumberedNewestFirstWithinASheet) {
+  Workbook wb = SalesBook();
+  const char* names[] = {"PtA", "PtB", "PtC"};
+  for (std::uint32_t i = 0; i < 3U; ++i) {
+    ASSERT_TRUE(static_cast<bool>(wb.add_pivot(1U, RegionReport(names[i], 2U + i * 10U))));
+    wb.sheet(1U).mutable_pivot_tables()[i]->set_creation_order(10U + i);
+  }
+  // The newest key is pivotTable1, the earliest created the last.
+  EXPECT_NE(SavedPart(wb, "xl/pivotTables/pivotTable1.xml").find("name=\"PtC\""), std::string::npos);
+  EXPECT_NE(SavedPart(wb, "xl/pivotTables/pivotTable2.xml").find("name=\"PtB\""), std::string::npos);
+  EXPECT_NE(SavedPart(wb, "xl/pivotTables/pivotTable3.xml").find("name=\"PtA\""), std::string::npos);
+
+  // The sheet's relationships list the pivot parts with descending rIds.
+  const std::string rels = SavedPart(wb, "xl/worksheets/_rels/sheet2.xml.rels");
+  std::vector<std::uint32_t> rids;
+  std::vector<std::string> targets;
+  for (std::size_t at = rels.find("<Relationship "); at != std::string::npos;
+       at = rels.find("<Relationship ", at + 1U)) {
+    const std::string rel = Between(rels.substr(at), "<Relationship ", "/>");
+    const std::size_t target = rel.find("../pivotTables/pivotTable");
+    if (target == std::string::npos) {
+      continue;
+    }
+    const std::size_t id = rel.find("Id=\"rId");
+    ASSERT_NE(id, std::string::npos) << rel;
+    rids.push_back(static_cast<std::uint32_t>(std::stoul(rel.substr(id + 7U))));
+    targets.push_back(rel.substr(target, rel.find('"', target) - target));
+  }
+  ASSERT_EQ(rids.size(), 3U) << rels;
+  EXPECT_GT(rids[0], rids[1]);
+  EXPECT_GT(rids[1], rids[2]);
+  EXPECT_EQ(targets[0], "../pivotTables/pivotTable1.xml");
+  EXPECT_EQ(targets[2], "../pivotTables/pivotTable3.xml");
+
+  // Reading it back keeps the saved order: the first part is the newest.
+  auto bytes_or = write_ooxml(wb);
+  ASSERT_TRUE(static_cast<bool>(bytes_or));
+  auto read_or = read_ooxml(ByteSpan{bytes_or.value().data(), bytes_or.value().size()});
+  ASSERT_TRUE(static_cast<bool>(read_or)) << read_or.error().message;
+  const auto& read_tables = read_or.value().workbook.sheet(1U).pivot_tables();
+  ASSERT_EQ(read_tables.size(), 3U);
+  EXPECT_EQ(read_tables[0]->name(), "PtC");
+  EXPECT_GT(read_tables[0]->creation_order(), read_tables[1]->creation_order());
+  EXPECT_GT(read_tables[1]->creation_order(), read_tables[2]->creation_order());
 }
 
 }  // namespace

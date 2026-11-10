@@ -1599,6 +1599,42 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
   workbook is `SheetIndexOutOfRange`.
 - A foreign handle (a `Sheet`, `Table`, `Chart` or `Pivot` of another workbook)
   is `InvalidArgument` in JavaScript and Python alike.
+- A PivotTable report lives in the sheet cells, and where it may be drawn
+  follows Excel:
+  - An edit of a pivot (a field, an item, an option, a filter, a grouping), a
+    cache refresh and `Pivot.project()` never fail because the new report
+    would grow over something. The change is applied, the old report's cells
+    are cleared and the anchor holds `#SPILL!`; the report is blocked. A value,
+    a `=""` formula, a merge (empty or not), an array formula, a data table's
+    result cells, a table, a spill range and another pivot's report all block
+    it, as does the sheet edge. A cell holding only a format does not, and
+    loses that format when the report is drawn over it. Nothing is cleared to
+    make room.
+  - The next recalc after the range comes free draws the report, so in
+    automatic calculation the first read after the clearing write shows it; in
+    manual calculation it waits for an explicit recalc. A format-only change,
+    such as removing a merge, starts no recalc.
+  - `Pivot.getSpill()` (Python `get_spill`, C `fm_sheet_get_pivot_spill`)
+    returns `{ blocked: true, range }` for a blocked report, and
+    `Sheet.getSpill` returns the same at its anchor, so `Spill.blocked` no
+    longer implies a formula at the anchor. A range past the sheet edge is not
+    reported, as for a formula spill. `isProjectionPending()` is false for a
+    blocked report, and `getLayout()` returns the layout it would draw.
+    GETPIVOTDATA over a blocked report is `#REF!`.
+  - Of two reports refreshed together, the one growing into the other's
+    current report is blocked; when only their new ranges overlap, the one
+    created first is drawn.
+  - `addPivot` draws Excel's empty placeholder for a pivot with no field, a
+    bordered frame 3 columns wide and 18 rows high with no values, so the cell
+    count, the used range and `getCellsInRange` change as soon as a pivot is
+    created. Creating a pivot whose range is occupied or runs past the sheet
+    edge fails with `PreconditionFailed` and creates nothing.
+  - `Pivot.setAnchor` moves a report as Excel's cut and paste does. In the
+    destination, values, formulas, merges, spill cells and array formulas or
+    data tables lying wholly inside are overwritten, and a table is deleted.
+    The move fails with `PreconditionFailed`, changing nothing, when the
+    destination covers another pivot, meets an array formula or data table
+    crossing its edge, or runs past the sheet edge.
 - Setters refuse what Excel refuses with `InvalidArgument`: a row height above
   409 pt, a column width above 255 characters, a font size outside 1 to 409, a
   cell text over 32,767 characters, a zoom outside 10 to 400, a print scale
@@ -3576,6 +3612,7 @@ A caller compiled against an earlier header must be recompiled.
 | `fm_workbook_set_cell_phonetic_runs`, `fm_sheet_add_threaded_comment` | `fm_sheet_set_cell_phonetic_runs`, `fm_sheet_add_threaded_comment` and `fm_sheet_update_threaded_comment` take an `int32_t offset_unit` (`fm_text_offset_unit_t`: `FM_TEXT_OFFSET_UNIT_UTF16` 0, `FM_TEXT_OFFSET_UNIT_CODE_POINT` 1) before the record, which picks the offset pair each `fm_phonetic_run_t` or `fm_mention_t` is read from. Both records carry `start` / `end` in UTF-16 units and `start_cp` / `end_cp` in code points, and reads fill both. `fm_parse_error_info_t` adds `start_cp`, `end_cp` and `column_cp` |
 | (none) | `fm_sheet_get_print_options` and `fm_sheet_get_header_footer` read the print options and header/footer back |
 | (none) | `fm_sheet_get_table_runtime_id` / `fm_workbook_resolve_table_runtime_id` and `fm_sheet_get_pivot_runtime_id` / `fm_sheet_resolve_pivot_runtime_id` map a table or pivot index to an id that survives other tables or pivots being added or removed, and back |
+| (none) | `fm_sheet_get_pivot_spill` reads the range a blocked pivot report needs into an `fm_spill_info_t`, and `fm_sheet_get_spill` reports the same at the report's anchor |
 | a pivot `number_format` (`fm_pivot_field_spec_t`, the data-field spec and the pivot field setters) given as the text of a number-format id | `number_format` is a format code (`0.00%`). A digits-only string is read as a format code, so a call written for the old form silently selects a different format |
 | `fm_sheet_set_page_setup`, `_set_page_margins`, `_set_print_options`, `_set_header_footer`, `_set_format_defaults`, `fm_styles_set_table_style_defaults` | the same names with `update` (`fm_sheet_update_page_setup` and so on) and `fm_workbook_update_table_style_defaults`; a field of the patch record that is unset keeps the stored value |
 | `fm_workbook_pivot_set_grand_totals`, `fm_workbook_pivot_set_style_info`, `fm_sheet_set_chart_axis`, `_set_chart_display`, `_set_chart_series`, `_set_chart_plot` | `fm_sheet_update_pivot_grand_totals`, `fm_sheet_update_pivot_style_options`, `fm_sheet_update_chart_axis`, `_update_chart_display`, `_update_chart_series`, `_update_chart_plot` |

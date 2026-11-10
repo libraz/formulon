@@ -456,7 +456,7 @@ extern "C" fm_status_t fm_workbook_add_border(fm_workbook_t* wb, const fm_border
 
   formulon::StylesTable& styles = wb->workbook().mutable_styles();
   ensure_default_style_roots(styles);
-  *out_index = find_or_append_record(styles.borders, std::move(candidate), &border_key);
+  *out_index = formulon::io::intern_border(styles, std::move(candidate));
   return 0;
 }
 

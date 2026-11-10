@@ -7226,6 +7226,16 @@ entries:
     returns: bool
     surfaces: [c, wasm, native, py]
     handle: { class: Pivot, js: isProjectionPending, py: is_projection_pending, supplies: [sheet, pivot] }
+  pivot_spill.get:
+    kind: op
+    scope: sheet
+    noun: pivot_spill
+    c: fm_sheet_get_pivot_spill
+    js: getPivotSpill
+    py: get_pivot_spill
+    reads_values: true
+    surfaces: [c, wasm, native, py]
+    handle: { class: Pivot, js: getSpill, py: get_spill, supplies: [sheet, pivot] }
   pivot_show_details.get:
     kind: op
     scope: sheet

@@ -51,6 +51,7 @@ HANDLE_FORWARDERS = {
     "Pivot.get_properties": None,
     "Pivot.get_report_layout": "get_pivot_report_layout",
     "Pivot.get_row_field_order": "get_pivot_row_field_order",
+    "Pivot.get_spill": "get_pivot_spill",
     "Pivot.get_style_options": "get_pivot_style_options",
     "Pivot.is_projection_pending": "is_pivot_projection_pending",
     "Pivot.list_data_fields": None,
