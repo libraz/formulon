@@ -228,7 +228,10 @@ void AppendFonts(std::string& out, const StylesTable& table) {
       }
       AppendVertAlign(out, f.vert_align);
       AppendFontSize(out, f.size);
-      AppendColor(out, "color", f.color, f.color_argb);
+      // No `<color>` is Excel's automatic colour; 0xFF000000 is the sentinel an unstated colour carries.
+      if (f.color.kind != ColorSpec::Kind::kNone || f.color_argb != 0xFF000000U) {
+        AppendColor(out, "color", f.color, f.color_argb);
+      }
       if (!f.name.empty()) {
         out.append("<name");
         append_xml_attr(out, "val", f.name);

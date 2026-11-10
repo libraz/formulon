@@ -235,6 +235,28 @@ TEST(StylesWriter, EmitsFontFields) {
   EXPECT_NE(xml.find("<name val=\"Meiryo\""), std::string::npos);
 }
 
+TEST(StylesWriter, CellFontWithoutColourWritesNoColourElementAndReadsBackAutomatic) {
+  const std::string source =
+      "<styleSheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">"
+      "<fonts count=\"1\"><font><sz val=\"11\"/><name val=\"Calibri\"/></font></fonts>"
+      "</styleSheet>";
+  auto read_or = read_styles(std::vector<std::uint8_t>(source.begin(), source.end()));
+  ASSERT_TRUE(static_cast<bool>(read_or));
+  ASSERT_EQ(read_or.value().fonts.size(), 1U);
+  EXPECT_EQ(read_or.value().fonts[0].color.kind, ColorSpec::Kind::kNone);
+
+  const std::string xml = write_styles(read_or.value());
+  const std::size_t font = xml.find("<font>");
+  const std::size_t font_end = xml.find("</font>", font);
+  ASSERT_NE(font_end, std::string::npos);
+  EXPECT_EQ(xml.substr(font, font_end - font).find("<color"), std::string::npos) << xml;
+
+  auto round_or = read_styles(std::vector<std::uint8_t>(xml.begin(), xml.end()));
+  ASSERT_TRUE(static_cast<bool>(round_or));
+  EXPECT_EQ(round_or.value().fonts[0].color.kind, ColorSpec::Kind::kNone);
+  EXPECT_EQ(round_or.value().fonts[0].color_argb, 0xFF000000U);
+}
+
 TEST(StylesWriter, InvalidDirectFontSizesUseDefaultWithoutMutatingModels) {
   const std::vector<double> invalid_sizes = {std::numeric_limits<double>::quiet_NaN(),
                                              std::numeric_limits<double>::infinity(),
