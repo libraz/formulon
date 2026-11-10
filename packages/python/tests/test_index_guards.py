@@ -315,8 +315,12 @@ def _is_non_integer(node: ast.AST) -> bool:
     """
     if isinstance(node, ast.Constant) and isinstance(node.value, float):
         return True
-    if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id in ("float", "_finite"):
-        # `_finite` range-checks and returns a float.
+    if (
+        isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id in ("float", "_finite", "_require_number")
+    ):
+        # `_finite` and `_require_number` check and return a float.
         return True
     if isinstance(node, ast.IfExp):
         return _is_non_integer(node.body) and _is_non_integer(node.orelse)

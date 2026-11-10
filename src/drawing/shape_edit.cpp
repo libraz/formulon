@@ -34,7 +34,7 @@ using chart_ns::kCtDrawing;
 using chart_ns::kNsA;
 using chart_ns::kNsXdr;
 constexpr std::int64_t kEmuLimit = std::int64_t{1} << 31;
-constexpr const char* kNoShape = "shape: no shape with that id";
+constexpr const char* kNoShape = "object_id does not name a shape";
 constexpr std::string_view kFillNames[] = {"noFill", "solidFill", "gradFill", "blipFill", "pattFill", "grpFill"};
 
 // @size-budget: 4 KB
@@ -278,11 +278,11 @@ Expected<void, Error> place(const Workbook& wb, std::size_t sheet, pugi::xml_nod
   const bool absolute = spec.anchor_kind == AnchorKind::kAbsolute;
   const bool two_cell = spec.anchor_kind == AnchorKind::kTwoCell;
   if (absolute ? !in_range(spec.from.row_off) || !in_range(spec.from.col_off) : !marker_ok(spec.from)) {
-    return invalid("shape: anchor cell or offset out of range");
+    return invalid("anchor cells and offsets must be in range");
   }
   if (two_cell ? !marker_ok(spec.to) || spec.to.row < spec.from.row || spec.to.col < spec.from.col
                : !in_range(spec.cx) || !in_range(spec.cy)) {
-    return invalid("shape: anchor box or size out of range");
+    return invalid("anchor box and size must be in range");
   }
   if (read_drawing_object(anchor, {}).anchor_kind != spec.anchor_kind) {
     convert_anchor(anchor, spec.anchor_kind);
@@ -401,18 +401,18 @@ Expected<void, Error> apply_fields(pugi::xml_node anchor, pugi::xml_node content
   const bool group = kind == "grpSp";
   pugi::xml_node props = props_of(content);
   if (!props) {
-    return invalid("shape: no shape properties");
+    return invalid("Shape has no shape properties");
   }
   if ((f & shape_field::kPrst) != 0U && (group || !is_preset(spec.prst))) {
-    return invalid("shape: preset geometry must be a DrawingML shape type on a shape or connector");
+    return invalid("preset_geometry must be a DrawingML shape type on a shape or connector");
   }
   if ((f & (shape_field::kText | shape_field::kTextBox)) != 0U && kind != "sp") {
-    return invalid("shape: only a shape holds text");
+    return invalid("text and text_box apply only to a shape");
   }
   if ((f & shape_field::kText) != 0U && std::any_of(spec.text.begin(), spec.text.end(), [](unsigned char c) {
         return c < 0x20U && c != '\n' && c != '\t';
       })) {
-    return invalid("shape: text holds a control character");
+    return invalid("text must not hold a control character");
   }
   pugi::xml_node cnvpr = anchor_cnvpr(anchor);
   if ((f & shape_field::kName) != 0U) {
@@ -493,11 +493,11 @@ Expected<std::vector<ShapeInfo>, Error> list_shapes(const Workbook& wb, std::siz
 Expected<std::uint32_t, Error> insert_shape(Workbook& wb, std::size_t sheet, const ShapeSpec& spec) {
   ASSIGN_OR_RETURN(std::string path, editable_drawing_path(wb, sheet));
   if ((spec.fields & shape_field::kAnchor) == 0U) {
-    return invalid("shape: an anchor is required");
+    return invalid("placement.anchor is required");
   }
   const std::string prst = (spec.fields & shape_field::kPrst) != 0U && !spec.prst.empty() ? spec.prst : "rect";
   if (!is_preset(prst)) {
-    return invalid("shape: preset geometry must be a DrawingML shape type");
+    return invalid("preset_geometry must be a DrawingML shape type");
   }
   const bool connector = is_connector_prst(prst);
   const bool fresh = path.empty();

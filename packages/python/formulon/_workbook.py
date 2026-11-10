@@ -29,6 +29,7 @@ import builtins
 import dataclasses
 import datetime
 import enum
+import json
 import math
 import numbers
 import operator
@@ -65,14 +66,17 @@ from ._c import (
     FormulonError,
     InvalidFileError,
     ValueKind,
+    _argument_message,
     _NoCopy,
+    _past_count,
     _public_call,
     _require_bool,
+    _require_number,
     _sint,
     _uint,
     fm_value_t_size,
 )
-from ._status import INDEX_OUT_OF_RANGE_CODES, StatusCode
+from ._status import StatusCode
 
 __all__ = [
     "Alignment",
@@ -565,35 +569,43 @@ _IDENTIFIER = re.compile(r"[a-z_][a-z0-9_]*")
 
 
 def _relabel_engine_error(error: FormulonError) -> FormulonError:
-    """Rewrite an engine argument error ``<c_path> <rest>`` as ``<Class.method> <public_path> <rest>``."""
-    if error.code != StatusCode.INVALID_ARGUMENT and error.code not in INDEX_OUT_OF_RANGE_CODES:
-        return error
+    """Label an engine error with the public call: ``<Class.method> <message>``.
+
+    When the message's first token is a C path naming one of the call's arguments (a parameter, ``sheet_index``
+    naming ``sheet``, a field of the call's one record argument, or a renamed C field), that token becomes the
+    public path; a message that leads with any other word keeps its wording.
+    """
     label, frame = _public_call()
-    path, _, rest = error.message.partition(" ")
-    if frame is None or not rest or not _PATH_TOKEN.fullmatch(path):
+    if frame is None:
         return error
     code = frame.f_code
     first = 1 if code.co_varnames[:1] in (("self",), ("cls",)) else 0
     names = code.co_varnames[first : code.co_argcount + code.co_kwonlyargcount]
-    path = _IDENTIFIER.sub(lambda m: _C_FIELD_RENAMES.get(m.group(0), m.group(0)), path)
-    root = _IDENTIFIER.match(path).group(0)  # type: ignore[union-attr]
-    tail = path[len(root) :]
+    path, _, rest = error.message.partition(" ")
+    public = _public_path(path, names, frame.f_locals) if rest and _PATH_TOKEN.fullmatch(path) else None
+    error.message = f"{label} {public} {rest}" if public is not None else f"{label} {error.message}"
+    error.args = (error.message,)
+    return error
+
+
+def _public_path(path: str, names: Sequence[str], frame_locals: Dict[str, Any]) -> Optional[str]:
+    """The public spelling of C path ``path`` rooted at the argument it names, or ``None`` when it names none."""
+    renamed = _IDENTIFIER.sub(lambda m: _C_FIELD_RENAMES.get(m.group(0), m.group(0)), path)
+    c_root = _IDENTIFIER.match(path).group(0)  # type: ignore[union-attr]
+    root = _IDENTIFIER.match(renamed).group(0)  # type: ignore[union-attr]
+    tail = renamed[len(root) :]
     stem = root[: -len("_index")] if root.endswith("_index") else root
     for candidate in (root, stem):
         if candidate in names:
-            path = candidate + tail
-            break
-    else:
-        records = [
-            n
-            for n in names
-            if dataclasses.is_dataclass(frame.f_locals.get(n)) and not isinstance(frame.f_locals.get(n), type)
-        ]
-        if len(records) == 1:
-            path = f"{records[0]}.{path}"
-    error.message = f"{label} {path} {rest}"
-    error.args = (error.message,)
-    return error
+            return candidate + tail
+    records = [
+        n for n in names if dataclasses.is_dataclass(frame_locals.get(n)) and not isinstance(frame_locals.get(n), type)
+    ]
+    if len(records) == 1:
+        fields = {f.name for f in dataclasses.fields(frame_locals[records[0]])}
+        if root in fields or c_root in _C_FIELD_RENAMES:
+            return f"{records[0]}.{renamed}"
+    return renamed if c_root in _C_FIELD_RENAMES else None
 
 
 def _check(status: int) -> None:
@@ -4733,7 +4745,7 @@ def _color_fields(spec: Color) -> Dict[str, object]:
         "kind": _uint(spec.kind, "kind", 8),
         "argb": _uint(spec.argb, "argb"),
         "theme": _uint(spec.theme, "theme"),
-        "tint": float(spec.tint),
+        "tint": _require_number(spec.tint, "tint", finite=False),
         "indexed": _uint(spec.indexed, "indexed"),
     }
 
@@ -4782,7 +4794,7 @@ def _decode_font(ptr: int) -> Font:
 
 def _pack_font(ptr: int, record: Font, scope: _ArgScope) -> None:
     fields: Dict[str, object] = {
-        "size_pt": 0.0 if record.size_pt is None else float(record.size_pt),
+        "size_pt": 0.0 if record.size_pt is None else _require_number(record.size_pt, "size_pt", finite=False),
         "has_size_pt": 0 if record.size_pt is None else 1,
         "underline": _uint(record.underline, "underline", 8),
         "vert_align": _uint(record.vert_align, "vert_align", 8),
@@ -4844,16 +4856,18 @@ def _pack_fill(ptr: int, record: Fill, scope: _ArgScope) -> None:
             LIB.write_bytes(stops_ptr, b"\x00" * (stop_size * len(gradient.stops)))
             for i, stop in enumerate(gradient.stops):
                 stop_ptr = stops_ptr + i * stop_size
-                S.GRADIENT_STOP.pack(LIB, stop_ptr, {"position": float(stop.position)})
+                S.GRADIENT_STOP.pack(
+                    LIB, stop_ptr, {"position": _require_number(stop.position, "position", finite=False)}
+                )
                 _pack_color(stop_ptr + S.GRADIENT_STOP.offsets["color"][1], stop.color, f"GradientStop[{i}].color")
         values.update(
             has_gradient=1,
             gradient_type=_sint(gradient.type, "gradient.type"),
-            gradient_angle_deg=float(gradient.angle_deg),
-            gradient_left=float(gradient.left),
-            gradient_right=float(gradient.right),
-            gradient_top=float(gradient.top),
-            gradient_bottom=float(gradient.bottom),
+            gradient_angle_deg=_require_number(gradient.angle_deg, "angle_deg", finite=False),
+            gradient_left=_require_number(gradient.left, "left", finite=False),
+            gradient_right=_require_number(gradient.right, "right", finite=False),
+            gradient_top=_require_number(gradient.top, "top", finite=False),
+            gradient_bottom=_require_number(gradient.bottom, "bottom", finite=False),
             gradient_stops=stops_ptr,
             gradient_stop_count=len(gradient.stops),
         )
@@ -4957,7 +4971,7 @@ def _alignment_to_xml(alignment: Optional[Alignment]) -> Optional[str]:
     for name, attr in _ALIGNMENT_NUMBERS:
         value = getattr(alignment, name)
         if value != getattr(default, name):
-            attrs.append(f'{attr}="{_sint(int(value), name)}"')
+            attrs.append(f'{attr}="{_sint(value, name)}"')
     for name, attr in _ALIGNMENT_FLAGS:
         if getattr(alignment, name):
             attrs.append(f'{attr}="1"')
@@ -6273,10 +6287,14 @@ def _pack_sparkline_group(
             "max_axis_type": _sint(group.max_axis_type, "max_axis_type"),
             "has_manual_min": 0 if group.manual_min is None else 1,
             "has_manual_max": 0 if group.manual_max is None else 1,
-            "manual_min": float(group.manual_min or 0.0),
-            "manual_max": float(group.manual_max or 0.0),
+            "manual_min": 0.0
+            if group.manual_min is None
+            else _require_number(group.manual_min, "manual_min", finite=False),
+            "manual_max": 0.0
+            if group.manual_max is None
+            else _require_number(group.manual_max, "manual_max", finite=False),
             "date_axis": _require_bool(group.date_axis, "date_axis"),
-            "line_width_pt": float(group.line_width_pt),
+            "line_width_pt": _require_number(group.line_width_pt, "line_width_pt", finite=False),
             "empty_cells_as": _sint(group.empty_cells_as, "empty_cells_as"),
         },
     )
@@ -6415,7 +6433,7 @@ def _enum_or_none(cls, value: int):
 
 def _tri(value: int) -> Optional[bool]:
     """Decode a chart tri-state (absent / false / true)."""
-    return None if value == S.TRISTATE_DEFAULT else value == S.TRISTATE_TRUE
+    return None if value == S.TRISTATE_DEFAULT else S.tristate_flag(value)
 
 
 def _opt_cstr(ptr: int) -> Optional[str]:
@@ -6734,7 +6752,7 @@ def _patch_scalar(kind: str, value, key: str, scope: _ArgScope):
     if kind == "bool":
         return _require_bool(value, key)
     if kind == "f64":
-        return float(value)
+        return _require_number(value, key, finite=False)
     if kind == "title":
         return _title_fields(value, scope)
     return scope.cstr(value)
@@ -6869,7 +6887,7 @@ def _encode_axis_patch(patch: Mapping, scope: _ArgScope) -> Dict[str, object]:
     out = _encode_patch(_AXIS_PATCH_SPEC, patch, ("crosses_at",), "axis patch", scope)
     if "crosses_at" in patch:
         out["crosses_at_op"] = _PATCH_SET
-        out["crosses_at"] = float(patch["crosses_at"])
+        out["crosses_at"] = _require_number(patch["crosses_at"], "crosses_at", finite=False)
     return out
 
 
@@ -7221,8 +7239,8 @@ def _table_style_from(d: Dict[str, Any]) -> TableStyle:
         )
     return TableStyle(
         name=LIB.read_cstr(d["name"]),
-        pivot=d["pivot"] != S.TRISTATE_FALSE,
-        table=d["table"] != S.TRISTATE_FALSE,
+        pivot=S.tristate_flag(d["pivot"]),
+        table=S.tristate_flag(d["table"]),
         elements=list(elements),
     )
 
@@ -7285,7 +7303,7 @@ def _pack_filter_column(ptr: int, col: AutoFilterColumn, scope: _ArgScope) -> No
     for name, c_name in _FILTER_COLUMN_INTS:
         fields[c_name] = _sint(getattr(col, name), name)
     for name, c_name in _FILTER_COLUMN_DOUBLES:
-        fields[c_name] = float(getattr(col, name))
+        fields[c_name] = _require_number(getattr(col, name), name, finite=False)
     for name, c_name, flag in _FILTER_COLUMN_OPTIONAL:
         value = getattr(col, name)
         fields[flag] = 0 if value is None else 1
@@ -7294,7 +7312,7 @@ def _pack_filter_column(ptr: int, col: AutoFilterColumn, scope: _ArgScope) -> No
         if name == "icon_index":
             fields[c_name] = _sint(value, name)
         else:
-            fields[c_name] = float(value)
+            fields[c_name] = _require_number(value, name, finite=False)
     fields["value_count"] = _uint(len(col.values), "value_count")
     fields["date_group_count"] = _uint(len(col.date_groups), "date_group_count")
     fields["condition_count"] = _uint(len(col.conditions), "condition_count")
@@ -7910,7 +7928,11 @@ class Workbook(_NoCopy):
         if isinstance(key, str):
             index = self._find_sheet(key)
             if index is None:
-                raise FormulonError(StatusCode.NOT_FOUND, f"no sheet is named {key!r}", "")
+                raise FormulonError(
+                    StatusCode.NOT_FOUND,
+                    _argument_message("key", f"{json.dumps(key, ensure_ascii=False)} names no sheet"),
+                    "",
+                )
             return self._sheet_handles()[index]
         if isinstance(key, bool):
             raise TypeError("sheet key must be a str, an int or a Sheet, got bool")
@@ -7924,7 +7946,7 @@ class Workbook(_NoCopy):
         if index >= count:
             raise FormulonError(
                 StatusCode.SHEET_INDEX_OUT_OF_RANGE,
-                f"sheet index {index} is out of range ({count} {'sheet' if count == 1 else 'sheets'})",
+                _argument_message("key", f"{index} {_past_count(count, 'sheet')}"),
                 f"sheet_index={index} sheet_count={count}",
             )
         return handles[index]
@@ -8140,10 +8162,8 @@ class Workbook(_NoCopy):
             fields["max_iterations_op"] = _PATCH_SET
             fields["max_iterations"] = _uint(max_iterations, "max_iterations")
         if max_change is not UNCHANGED:
-            if isinstance(max_change, bool) or not isinstance(max_change, numbers.Real):
-                raise TypeError(f"max_change must be a number, got {type(max_change).__name__}")
             fields["max_change_op"] = _PATCH_SET
-            fields["max_change"] = float(max_change)
+            fields["max_change"] = _require_number(max_change, "max_change", finite=False)
         h = self._require()
         with _ArgScope() as scope:
             ptr = scope.struct(S.ITERATIVE_SETTINGS_PATCH)

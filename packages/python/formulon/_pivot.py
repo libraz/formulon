@@ -693,7 +693,7 @@ class Pivot(_NoCopy):
                 source_name=LIB.read_cstr(d["source_name"]),
                 custom_name=LIB.read_cstr(d["custom_name"]) or None,
                 axis=PivotAxis(d["axis"]) if d["axis"] >= 0 else None,
-                subtotal_top=d["subtotal_top"] != 0,
+                subtotal_top=S.tristate_flag(d["subtotal_top"]),
                 number_format=LIB.read_cstr(d["number_format"]) or None,
                 cache_field_index=d["cache_field_index"] if d["has_cache_field_index"] else None,
                 sort_order=PivotSortOrder(d["sort_order"]),

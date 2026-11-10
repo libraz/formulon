@@ -194,13 +194,13 @@ void set_color(pugi::xml_node group, const std::string& prefix, const char* name
 
 Expected<void, Error> validate_items(const std::vector<SparklineItem>& items) {
   if (items.empty() || items.size() > kMaxItems) {
-    return invalid("sparkline group: needs between 1 and 65536 sparklines");
+    return invalid("count must be between 1 and 65536");
   }
   for (const SparklineItem& item : items) {
     std::vector<MergeRange> cells;
     if (item.formula.empty() || !parse_sqref_text(item.location, cells) || cells.size() != 1U ||
         cells.front().first_row != cells.front().last_row || cells.front().first_col != cells.front().last_col) {
-      return invalid("sparkline group: each sparkline needs a formula and one location cell");
+      return invalid("items each need a formula and one location cell");
     }
   }
   return Expected<void, Error>::Ok();
@@ -210,11 +210,11 @@ Expected<void, Error> validate_group(const SparklineGroup& g) {
   const auto bad_enum = [](std::int32_t v) { return v < 0 || v > 2; };
   if (bad_enum(static_cast<std::int32_t>(g.type)) || bad_enum(static_cast<std::int32_t>(g.min_axis_type)) ||
       bad_enum(static_cast<std::int32_t>(g.max_axis_type)) || bad_enum(static_cast<std::int32_t>(g.empty_cells_as))) {
-    return invalid("sparkline group: enumeration out of range");
+    return invalid("group type, axis types and empty_cells_as must be valid enumeration values");
   }
   if (!std::isfinite(g.manual_min) || !std::isfinite(g.manual_max) || !std::isfinite(g.line_weight) ||
       g.line_weight < 0.0) {
-    return invalid("sparkline group: number is not finite or the line weight is negative");
+    return invalid("group manual_min, manual_max and line_width_pt must be finite and line_width_pt non-negative");
   }
   return Expected<void, Error>::Ok();
 }
@@ -327,11 +327,11 @@ pugi::xml_node ensure_groups_list(pugi::xml_document& doc) {
 // not parse holds no group.
 Expected<pugi::xml_node, Error> group_at(pugi::xml_document& doc, const std::string& xml, std::size_t index) {
   if (!load(doc, xml)) {
-    return invalid("sparkline group: index out of range");
+    return invalid("group_index is out of range");
   }
   const std::vector<pugi::xml_node> groups = group_nodes(doc);
   if (index >= groups.size()) {
-    return invalid("sparkline group: index out of range");
+    return invalid("group_index is out of range");
   }
   return groups[index];
 }
@@ -355,7 +355,7 @@ Expected<void, Error> add_sparkline_group(std::string& ext_lst_xml, const Sparkl
   RETURN_IF_ERROR(validate_items(group.items));
   pugi::xml_document doc;
   if (!ext_lst_xml.empty() && !load(doc, ext_lst_xml)) {
-    return invalid("sparkline group: the worksheet extension list does not parse");
+    return invalid("The worksheet extension list does not parse");
   }
   pugi::xml_node list = ensure_groups_list(doc);
   const std::string px(qname_prefix_colon(list.name()));
@@ -439,7 +439,8 @@ Expected<void, Error> remove_sheet_sparkline_group(Workbook& wb, std::size_t she
   }
   const std::optional<std::size_t> index = wb.find_sparkline_group(sheet, id);
   if (!index.has_value()) {
-    return make_error(FormulonErrorCode::kNotFound, "no sparkline group has that id", "id=" + std::to_string(id));
+    return make_error(FormulonErrorCode::kNotFound, "group_id does not name a sparkline group",
+                      "id=" + std::to_string(id));
   }
   Sheet& target = wb.sheet(sheet);
   std::string xml = target.ext_lst_xml();

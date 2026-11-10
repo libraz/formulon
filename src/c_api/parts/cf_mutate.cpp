@@ -645,13 +645,13 @@ void assign_id(const fm_cf_rule_t& rule, const formulon::Sheet& sheet, std::size
 // The colour-scale, data-bar or icon-set payload the rule's type carries.
 fm_status_t copy_payloads(const fm_cf_rule_t& rule, formulon::cf::CFRule* out) {
   if (out->type == formulon::cf::RuleType::ColorScale && !copy_color_scale_payload(rule, out)) {
-    return invalid_argument("colour scale thresholds or colours are invalid");
+    return invalid_argument("rule colour scale thresholds or colours are invalid");
   }
   if (out->type == formulon::cf::RuleType::DataBar && !copy_data_bar_payload(rule, out)) {
     return invalid_argument("data bar fields are invalid");
   }
   if (out->type == formulon::cf::RuleType::IconSet && !copy_icon_set_payload(rule, out)) {
-    return invalid_argument("icon set fields are invalid");
+    return invalid_argument("rule icon set fields are invalid");
   }
   return 0;
 }

@@ -452,12 +452,12 @@ Expected<void, Error> patch_type(const Workbook& wb, Chart& c, std::size_t plot_
                                  ChartGrouping grouping) {
   const int k = static_cast<int>(kind);
   if (!valid_kind_grouping(kind, grouping)) {
-    return bad_arg("chart: unknown chart kind or grouping");
+    return bad_arg("type and grouping must be a known chart kind and grouping");
   }
   ASSIGN_OR_RETURN(xml_node plot, plot_at(c, plot_index));
   const int old = kind_of(plot);
   if (old < 0) {
-    return unsupported("chart: only column, bar, line, area, pie, doughnut and scatter plots change type");
+    return unsupported("Only column, bar, line, area, pie, doughnut and scatter plots change type");
   }
   const bool scatter = kind == ChartInsertKind::kScatter;
   const auto ring = [](int x) {
@@ -466,13 +466,13 @@ Expected<void, Error> patch_type(const Workbook& wb, Chart& c, std::size_t plot_
   const bool old_ring = ring(old);
   const bool new_ring = ring(k);
   if (c.pivot() && (scatter || old == static_cast<int>(ChartInsertKind::kScatter))) {
-    return unsupported("chart: a pivot chart cannot be a scatter chart");
+    return unsupported("A pivot chart cannot be a scatter chart");
   }
   const std::vector<std::uint32_t> ids = axis_ids_of(plot);
   for (const xml_node& other : plots_of(c)) {
     for (const xml_node& a : children_local(other, "axId")) {
       if (other != plot && std::count(ids.begin(), ids.end(), a.attribute("val").as_uint()) != 0) {
-        return unsupported("chart: the plot shares its axes with another plot");
+        return unsupported("The plot shares its axes with another plot");
       }
     }
   }
@@ -493,7 +493,7 @@ Expected<void, Error> patch_type(const Workbook& wb, Chart& c, std::size_t plot_
     (scatter ? refs.x : refs.cat) = formula_of(cat);
     (scatter ? refs.y : refs.val) = formula_of(val);
     if (formula_of(val).empty()) {
-      return unsupported("chart: a series without a value reference cannot change type");
+      return unsupported("A series without a value reference cannot change type");
     }
     split.series.push_back(std::move(refs));
   }

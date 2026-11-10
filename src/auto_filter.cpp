@@ -64,20 +64,20 @@ bool append_a1_rectangle(std::string& out, const MergeRange& rect) {
 
 Expected<void, Error> validate_auto_filter(const AutoFilter& filter) {
   if (filter.is_opaque()) {
-    return invalid("autoFilter: model holds an unparsed fragment");
+    return invalid("filter holds an unparsed fragment");
   }
   if (filter.range.first_row > filter.range.last_row || filter.range.first_col > filter.range.last_col ||
       filter.range.last_row >= a1::kMaxRows || filter.range.last_col >= a1::kMaxCols) {
-    return invalid("autoFilter: range is not an in-grid rectangle");
+    return invalid("filter.range is not an in-grid rectangle");
   }
   const std::uint64_t width = static_cast<std::uint64_t>(filter.range.last_col) - filter.range.first_col + 1U;
   for (std::size_t i = 0; i < filter.columns.size(); ++i) {
     const FilterColumn& col = filter.columns[i];
     if (col.col_id >= width || (i > 0U && col.col_id <= filter.columns[i - 1U].col_id)) {
-      return invalid("autoFilter: column ids must be ascending and inside the range");
+      return invalid("filter.columns must have ascending col_id values inside the range");
     }
     if (col.kind == FilterKind::kCustom && (col.custom.filters.empty() || col.custom.filters.size() > 2U)) {
-      return invalid("autoFilter: a custom filter holds one or two conditions");
+      return invalid("filter.columns custom filter must hold one or two conditions");
     }
     for (const DateGroupItem& item : col.values.date_groups) {
       const auto level = static_cast<std::size_t>(item.grouping);
@@ -85,7 +85,7 @@ Expected<void, Error> validate_auto_filter(const AutoFilter& filter) {
           (level >= 1U && (item.month < 1U || item.month > 12U)) ||
           (level >= 2U && (item.day < 1U || item.day > 31U)) || item.hour > 23U || item.minute > 59U ||
           item.second > 59U) {
-        return invalid("autoFilter: date group item fields do not fit its grouping");
+        return invalid("filter.columns date_groups fields do not fit their grouping");
       }
     }
   }

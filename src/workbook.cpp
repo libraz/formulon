@@ -83,10 +83,10 @@ namespace {
 using detail::check_cell_target;
 }  // namespace
 
-// `op`-prefixed range check for a mutator addressing one sheet.
-Expected<void, Error> check_sheet_index(const char* op, std::size_t sheet_index, std::size_t sheet_count) {
+// Range check for a mutator addressing one sheet.
+Expected<void, Error> check_sheet_index(std::size_t sheet_index, std::size_t sheet_count) {
   if (sheet_index >= sheet_count) {
-    return make_error(FormulonErrorCode::kInvalidArgument, std::string(op) + ": sheet_index out of range",
+    return make_error(FormulonErrorCode::kInvalidArgument, "sheet_index is out of range",
                       "sheet_index=" + std::to_string(sheet_index));
   }
   return Expected<void, Error>::Ok();
@@ -110,7 +110,7 @@ void Workbook::set_passthrough_parts(std::vector<PassthroughPart> parts) {
 
 Expected<void, Error> Workbook::add_passthrough_part(PassthroughPart part) {
   if (part.path.empty()) {
-    return make_error(FormulonErrorCode::kInvalidArgument, "empty part path");
+    return make_error(FormulonErrorCode::kInvalidArgument, "Part path is empty");
   }
 
   if (passthrough_parts_sorted_) {
@@ -127,7 +127,7 @@ Expected<void, Error> Workbook::add_passthrough_part(PassthroughPart part) {
       }
     }
     if (first < passthrough_parts_.size() && passthrough_parts_[first].path == part.path) {
-      return make_error(FormulonErrorCode::kInvalidArgument, "part already present", "path=" + part.path);
+      return make_error(FormulonErrorCode::kInvalidArgument, "Part is already present", "path=" + part.path);
     }
     passthrough_parts_.insert(passthrough_parts_.begin() + static_cast<std::ptrdiff_t>(first), std::move(part));
     return Expected<void, Error>::Ok();
@@ -138,7 +138,7 @@ Expected<void, Error> Workbook::add_passthrough_part(PassthroughPart part) {
   // path, and only mark the invariant restored after the successful sort.
   for (const PassthroughPart& existing : passthrough_parts_) {
     if (existing.path == part.path) {
-      return make_error(FormulonErrorCode::kInvalidArgument, "part already present", "path=" + part.path);
+      return make_error(FormulonErrorCode::kInvalidArgument, "Part is already present", "path=" + part.path);
     }
   }
   passthrough_parts_.push_back(std::move(part));
@@ -149,7 +149,7 @@ Expected<void, Error> Workbook::add_passthrough_part(PassthroughPart part) {
 
 Expected<void, Error> Workbook::erase_passthrough_parts(std::vector<std::uint8_t> tombstones) {
   if (tombstones.size() != passthrough_parts_.size()) {
-    return make_error(FormulonErrorCode::kInvalidArgument, "tombstone mask size does not match part count");
+    return make_error(FormulonErrorCode::kInvalidArgument, "Tombstone mask size does not match the part count");
   }
   auto write = passthrough_parts_.begin();
   for (std::size_t i = 0; i < passthrough_parts_.size(); ++i) {
@@ -173,7 +173,7 @@ Expected<void, Error> Workbook::replace_passthrough_part(std::string_view path, 
       return Expected<void, Error>::Ok();
     }
   }
-  return make_error(FormulonErrorCode::kInvalidArgument, "no such part", "path=" + std::string(path));
+  return make_error(FormulonErrorCode::kInvalidArgument, "No part has that path", "path=" + std::string(path));
 }
 
 void Workbook::add_workbook_relationship(std::string type, std::string target) {
@@ -377,7 +377,7 @@ Expected<std::vector<std::uint8_t>, Error> Workbook::save_as(WorkbookFormat form
     case WorkbookFormat::Unknown:
       break;
   }
-  return make_error(FormulonErrorCode::kInvalidArgument, "the requested save format is not supported",
+  return make_error(FormulonErrorCode::kInvalidArgument, "format is not a supported save format",
                     "context=workbook_save_as");
 }
 
@@ -531,7 +531,7 @@ void Workbook::mark_all_formulas_dirty() {
 
 Expected<void, Error> Workbook::set_cell_xf_index(std::size_t sheet_index, std::uint32_t row, std::uint32_t col,
                                                   std::uint32_t xf_index) {
-  RETURN_IF_ERROR(check_cell_target("set_cell_xf_index", sheet_index, sheets_.size(), row, col));
+  RETURN_IF_ERROR(check_cell_target(sheet_index, sheets_.size(), row, col));
   // A style write can grow the sheet's sparse row store, so serialize it
   // with recalc just like all other workbook-level cell mutations. The
   // sheet-level setter deliberately bypasses literal-write spill invalidation
@@ -542,7 +542,7 @@ Expected<void, Error> Workbook::set_cell_xf_index(std::size_t sheet_index, std::
 }
 
 Expected<void, Error> Workbook::clear_cell_xf_index(std::size_t sheet_index, std::uint32_t row, std::uint32_t col) {
-  RETURN_IF_ERROR(check_cell_target("clear_cell_xf_index", sheet_index, sheets_.size(), row, col));
+  RETURN_IF_ERROR(check_cell_target(sheet_index, sheets_.size(), row, col));
   std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
   sheets_[sheet_index].clear_cell_xf_index(row, col);
   return Expected<void, Error>::Ok();
@@ -550,11 +550,10 @@ Expected<void, Error> Workbook::clear_cell_xf_index(std::size_t sheet_index, std
 
 namespace {
 
-Expected<void, Error> check_style_rect(const char* op, std::size_t sheet_index, std::size_t sheet_count,
-                                       const StyleRect& rect) {
-  RETURN_IF_ERROR(check_cell_target(op, sheet_index, sheet_count, rect.last_row, rect.last_col));
+Expected<void, Error> check_style_rect(std::size_t sheet_index, std::size_t sheet_count, const StyleRect& rect) {
+  RETURN_IF_ERROR(check_cell_target(sheet_index, sheet_count, rect.last_row, rect.last_col));
   if (rect.first_row > rect.last_row || rect.first_col > rect.last_col) {
-    return make_error(FormulonErrorCode::kInvalidArgument, std::string(op) + ": inverted range");
+    return make_error(FormulonErrorCode::kInvalidArgument, "range is inverted");
   }
   return Expected<void, Error>::Ok();
 }
@@ -563,17 +562,17 @@ Expected<void, Error> check_style_rect(const char* op, std::size_t sheet_index, 
 
 Expected<std::vector<std::uint32_t>, Error> Workbook::range_style_bases(std::size_t sheet_index, const StyleRect& rect,
                                                                         std::vector<StyleCell> excluded) const {
-  RETURN_IF_ERROR(check_style_rect("range_style_bases", sheet_index, sheets_.size(), rect));
+  RETURN_IF_ERROR(check_style_rect(sheet_index, sheets_.size(), rect));
   return formulon::range_style_bases(sheets_[sheet_index], rect, std::move(excluded));
 }
 
 Expected<void, Error> Workbook::remap_range_style(std::size_t sheet_index, const StyleRect& rect,
                                                   std::vector<XfRemap> map) {
-  RETURN_IF_ERROR(check_style_rect("remap_range_style", sheet_index, sheets_.size(), rect));
+  RETURN_IF_ERROR(check_style_rect(sheet_index, sheets_.size(), rect));
   sort_by_index(map, [](const XfRemap& lhs, const XfRemap& rhs) { return lhs.from < rhs.from; });
   for (std::size_t i = 0; i < map.size(); ++i) {
     if (map[i].to >= styles_.cell_xfs.size() || (i > 0U && map[i - 1U].from == map[i].from)) {
-      return make_error(FormulonErrorCode::kInvalidArgument, "repeated or out-of-range xf");
+      return make_error(FormulonErrorCode::kInvalidArgument, "pairs holds a repeated or out-of-range xf");
     }
   }
   std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
@@ -582,7 +581,7 @@ Expected<void, Error> Workbook::remap_range_style(std::size_t sheet_index, const
 
 Expected<std::vector<std::uint8_t>, Error> Workbook::snapshot_range_style(std::size_t sheet_index,
                                                                           const StyleRect& rect) const {
-  RETURN_IF_ERROR(check_style_rect("snapshot_range_style", sheet_index, sheets_.size(), rect));
+  RETURN_IF_ERROR(check_style_rect(sheet_index, sheets_.size(), rect));
   return formulon::snapshot_range_style(sheets_[sheet_index], rect);
 }
 
@@ -645,7 +644,7 @@ Expected<void, Error> Workbook::remove_validation(std::size_t sheet, std::uint32
   }
   const std::optional<std::size_t> index = find_validation(sheet, id);
   if (!index.has_value()) {
-    return make_error(FormulonErrorCode::kNotFound, "no validation has that id", "id=" + std::to_string(id));
+    return make_error(FormulonErrorCode::kNotFound, "id does not name a validation", "id=" + std::to_string(id));
   }
   std::vector<DataValidation>& validations = sheets_[sheet].mutable_validations();
   validations.erase(validations.begin() + static_cast<std::ptrdiff_t>(*index));

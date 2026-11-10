@@ -39,37 +39,35 @@ namespace {
 using detail::check_cell_target;
 using detail::MayNameExternalBook;
 
-// `op`-prefixed refusal of a write into part of a legacy array formula
+// Refusal of a write into part of a legacy array formula
 // block: a block is only ever replaced as a whole, so a write into one of
 // its non-anchor cells leaves it unchanged. A write to the anchor replaces
 // the whole block.
-Expected<void, Error> check_not_part_of_array(const char* op, const Sheet& sheet, std::uint32_t row,
-                                              std::uint32_t col) {
+Expected<void, Error> check_not_part_of_array(const Sheet& sheet, std::uint32_t row, std::uint32_t col) {
   const std::optional<SpillFootprint> block = sheet.array_block_covering(row, col);
   if (block.has_value() && (block->anchor_row != row || block->anchor_col != col)) {
-    return make_error(FormulonErrorCode::kPreconditionFailed, std::string(op) + ": cannot change part of an array",
+    return make_error(FormulonErrorCode::kPreconditionFailed, "Cannot change part of an array",
                       "row=" + std::to_string(row) + " col=" + std::to_string(col));
   }
   return Expected<void, Error>::Ok();
 }
 
-// `op`-prefixed refusal of a write into a What-If data table's result range:
+// Refusal of a write into a What-If data table's result range:
 // unlike an array, the whole table is only ever replaced or removed as one.
-Expected<void, Error> check_not_part_of_data_table(const char* op, const Sheet& sheet, std::uint32_t row,
-                                                   std::uint32_t col) {
+Expected<void, Error> check_not_part_of_data_table(const Sheet& sheet, std::uint32_t row, std::uint32_t col) {
   if (sheet.data_table_covering(row, col) != nullptr) {
-    return make_error(FormulonErrorCode::kPreconditionFailed, std::string(op) + ": cannot change part of a data table",
+    return make_error(FormulonErrorCode::kPreconditionFailed, "Cannot change part of a data table",
                       "row=" + std::to_string(row) + " col=" + std::to_string(col));
   }
   return Expected<void, Error>::Ok();
 }
 
 // Target and block checks shared by the cell value, text and formula setters.
-Expected<void, Error> check_cell_writable(const char* op, const std::vector<Sheet>& sheets, std::size_t sheet_index,
-                                          std::uint32_t row, std::uint32_t col) {
-  RETURN_IF_ERROR(check_cell_target(op, sheet_index, sheets.size(), row, col));
-  RETURN_IF_ERROR(check_not_part_of_array(op, sheets[sheet_index], row, col));
-  return check_not_part_of_data_table(op, sheets[sheet_index], row, col);
+Expected<void, Error> check_cell_writable(const std::vector<Sheet>& sheets, std::size_t sheet_index, std::uint32_t row,
+                                          std::uint32_t col) {
+  RETURN_IF_ERROR(check_cell_target(sheet_index, sheets.size(), row, col));
+  RETURN_IF_ERROR(check_not_part_of_array(sheets[sheet_index], row, col));
+  return check_not_part_of_data_table(sheets[sheet_index], row, col);
 }
 
 // When `(row, col)` is a *phantom* of a committed spill region (i.e. a
@@ -141,7 +139,7 @@ void prepare_cell_overwrite(const eval::RecalcEngine::LockedMutator& mutator, st
 
 Expected<void, Error> Workbook::set_cell_value(std::size_t sheet_index, std::uint32_t row, std::uint32_t col,
                                                Value value) {
-  RETURN_IF_ERROR(check_cell_writable("set_cell_value", sheets_, sheet_index, row, col));
+  RETURN_IF_ERROR(check_cell_writable(sheets_, sheet_index, row, col));
   put_cell_value(sheet_index, row, col, value);
   return Expected<void, Error>::Ok();
 }
@@ -177,7 +175,7 @@ void Workbook::put_cell_value_locked(std::size_t sheet_index, std::uint32_t row,
 
 Expected<void, Error> Workbook::set_cell_text(std::size_t sheet_index, std::uint32_t row, std::uint32_t col,
                                               std::string_view text) {
-  RETURN_IF_ERROR(check_cell_writable("set_cell_text", sheets_, sheet_index, row, col));
+  RETURN_IF_ERROR(check_cell_writable(sheets_, sheet_index, row, col));
   put_cell_text(sheet_index, row, col, text);
   return Expected<void, Error>::Ok();
 }
@@ -273,7 +271,7 @@ std::string Workbook::normalize_formula_text(std::string formula, FormulaSource 
 
 Expected<void, Error> Workbook::set_cell_formula(std::size_t sheet_index, std::uint32_t row, std::uint32_t col,
                                                  std::string formula, FormulaSource source) {
-  RETURN_IF_ERROR(check_cell_writable("set_cell_formula", sheets_, sheet_index, row, col));
+  RETURN_IF_ERROR(check_cell_writable(sheets_, sheet_index, row, col));
   put_cell_formula(sheet_index, row, col, std::move(formula), source, 0U, 0U);
   return Expected<void, Error>::Ok();
 }

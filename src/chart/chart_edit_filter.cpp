@@ -60,16 +60,16 @@ void put_ref(xml_node ser, const char* tag, const std::string& formula, bool mul
 /// else `c:strLit`. `c:ptCount` is one past the highest idx; blank points are left out.
 Expected<void, Error> put_literal(xml_node ser, const char* tag, std::vector<ChartValue> points, bool numeric) {
   if (points.empty()) {
-    return bad_arg("chart: a literal source needs points");
+    return bad_arg("literal must hold at least one point");
   }
   sort_by_index(points, [](const ChartValue& l, const ChartValue& r) { return l.idx < r.idx; });
   bool all_numbers = true;
   for (std::size_t i = 0; i < points.size(); ++i) {
     if (i > 0 && points[i].idx == points[i - 1].idx) {
-      return bad_arg("chart: literal points need distinct indices");
+      return bad_arg("literal indices must be distinct");
     }
     if (points[i].kind == ChartValue::Kind::kNumber && !std::isfinite(points[i].number)) {
-      return bad_arg("chart: literal numbers must be finite");
+      return bad_arg("literal numbers must be finite");
     }
     all_numbers = all_numbers && points[i].kind != ChartValue::Kind::kText;
   }
@@ -84,10 +84,10 @@ Expected<void, Error> put_literal(xml_node ser, const char* tag, std::vector<Cha
   };
   const bool name = local_name(tag) == "tx";
   if (name && (points.size() != 1 || points[0].kind == ChartValue::Kind::kBlank)) {
-    return bad_arg("chart: a literal series name is one point");
+    return bad_arg("literal must hold exactly one point for a series name");
   }
   if (numeric && !all_numbers) {
-    return bad_arg("chart: a literal value input holds numbers");
+    return bad_arg("literal must hold numbers for a value input");
   }
   drop(ser, local_name(tag));
   xml_node holder = ensure(ser, tag, kSerOrder);
@@ -249,7 +249,7 @@ Expected<void, Error> patch_category_filter(const Workbook& wb, const Chart& c, 
         for (std::size_t a = 0; a < src.areas.size(); ++a) {
           const SheetRect& r = src.areas[a];
           if (r.top != r.bottom && r.left != r.right) {
-            return unsupported("chart: a two-dimensional reference cannot be filtered");
+            return unsupported("A two-dimensional reference cannot be filtered");
           }
           for (std::uint32_t col = r.left; col <= r.right; ++col) {
             for (std::uint32_t row = r.top; row <= r.bottom; ++row) {
@@ -258,7 +258,7 @@ Expected<void, Error> patch_category_filter(const Workbook& wb, const Chart& c, 
           }
         }
         if (*hidden.rbegin() >= cells.size() || hidden.size() >= cells.size()) {
-          return bad_arg("chart: hidden categories must leave one of the chart's categories");
+          return bad_arg("hidden_categories must leave at least one category of the chart");
         }
         std::vector<std::string> runs;
         for (std::size_t i = 0; i < cells.size();) {
@@ -325,17 +325,17 @@ Expected<void, Error> patch_series(const Workbook& wb, const Chart& c, xml_node 
       continue;
     }
     if (c.pivot()) {
-      return unsupported("chart: a pivot chart's series follow its pivot table");
+      return unsupported("A pivot chart's series follow its pivot table");
     }
     if (!f.allowed) {
-      return bad_arg("chart: the plot has no such series input");
+      return bad_arg("The plot has no such series input");
     }
     *refs = true;
     const ChartSeriesSource& source = **f.source;
     switch (source.kind) {
       case ChartDataSource::Kind::kNone:
         if (f.required) {
-          return bad_arg("chart: a series needs its values");
+          return bad_arg("values must be set for a series (y for a scatter plot)");
         }
         drop(ser, local_name(f.tag));
         break;
@@ -344,7 +344,7 @@ Expected<void, Error> patch_series(const Workbook& wb, const Chart& c, xml_node 
         break;
       case ChartDataSource::Kind::kRef: {
         if (source.formula.empty()) {
-          return bad_arg("chart: a reference source needs a formula");
+          return bad_arg("formula must not be empty for a reference source");
         }
         ASSIGN_OR_RETURN(ResolvedSource src,
                          resolve_chart_source(wb, c.host, source.formula, eval::default_registry()));
@@ -356,7 +356,7 @@ Expected<void, Error> patch_series(const Workbook& wb, const Chart& c, xml_node 
     }
   }
   if ((!p.marker.is_keep() || p.smooth.has_value()) && !has_markers(plot)) {
-    return bad_arg("chart: markers and smoothing need a line, scatter or radar plot");
+    return bad_arg("marker and smooth need a line, scatter or radar plot");
   }
   RETURN_IF_ERROR(apply_shape(ser, kSerOrder, marker_filled(plot) ? ChartFillPatch{} : p.fill, p.line));
   RETURN_IF_ERROR(apply_marker(ser, kSerOrder, p.marker));

@@ -214,7 +214,7 @@ std::vector<xml_node> plots_of(const Chart& c);
 inline Expected<xml_node, Error> plot_at(const Chart& c, std::size_t index) {
   const std::vector<xml_node> plots = plots_of(c);
   if (index >= plots.size()) {
-    return make_error(FormulonErrorCode::kIndexOutOfRange, "chart: plot index out of range");
+    return make_error(FormulonErrorCode::kIndexOutOfRange, "plot_index must be less than the plot count");
   }
   return plots[index];
 }

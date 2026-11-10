@@ -17,7 +17,7 @@ namespace formulon {
 namespace {
 
 Error unsupported(const char* what) {
-  return make_error(FormulonErrorCode::kNotImplemented, "drawing content cannot be copied", what);
+  return make_error(FormulonErrorCode::kNotImplemented, "Drawing content cannot be copied", what);
 }
 
 bool is_pivot_chart(const Workbook& wb, const std::string& path) {

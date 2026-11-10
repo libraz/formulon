@@ -29,8 +29,7 @@ using pugi::xml_node;
 constexpr double kNaN = std::numeric_limits<double>::quiet_NaN();
 
 Error unparseable(std::string_view what, std::string_view detail) {
-  return make_error(FormulonErrorCode::kIoChartUnparseable, std::string("chart: ") + std::string(what),
-                    std::string(detail));
+  return make_error(FormulonErrorCode::kIoChartUnparseable, std::string(what), std::string(detail));
 }
 
 xml_node kid(const xml_node& parent, std::string_view name) {
@@ -928,10 +927,10 @@ void read_chartex(const xml_node& root, ChartModel& model) {
 
 Expected<void, Error> parse_chart_part(const std::vector<std::uint8_t>& bytes, pugi::xml_document& doc) {
   if (!io::load_xml_buffer(doc, bytes, "chart", "chart")) {
-    return unparseable("part is not well-formed XML", {});
+    return unparseable("Chart part is not well-formed XML", {});
   }
   if (local_name(doc.document_element()) != "chartSpace") {
-    return unparseable("part root is not chartSpace", doc.document_element().name());
+    return unparseable("Chart part root is not chartSpace", doc.document_element().name());
   }
   return Expected<void, Error>::Ok();
 }
@@ -945,7 +944,7 @@ bool is_filtered_series_group(const pugi::xml_node& node) {
 Expected<ChartModel, Error> read_chart_model(const Workbook& wb, const pugi::xml_document& doc) {
   const xml_node root = doc.document_element();
   if (local_name(root) != "chartSpace") {
-    return unparseable("part root is not chartSpace", root.name());
+    return unparseable("Chart part root is not chartSpace", root.name());
   }
   ChartModel model;
   if (kid(root, "chartData")) {

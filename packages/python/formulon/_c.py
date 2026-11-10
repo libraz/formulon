@@ -42,6 +42,8 @@ undefined per the C ABI contract.
 
 from __future__ import annotations
 
+import math
+import numbers
 import operator
 import struct
 import sys
@@ -132,11 +134,33 @@ def _argument_message(path: str, constraint: str) -> str:
     return " ".join(part for part in (_call_label(), path, constraint) if part)
 
 
+def _past_count(count: int, noun: str) -> str:
+    """``is out of range (<count> <noun>)``, the noun plural unless ``count`` is 1: the wording every binding uses."""
+    return f"is out of range ({count} {noun if count == 1 else noun + 's'})"
+
+
 def _require_bool(value: Any, path: str) -> bool:
     """Return ``value`` when it is a ``bool``; an ``int``, ``None``, ``str`` or anything else is a ``TypeError``."""
     if not isinstance(value, bool):
         raise TypeError(_argument_message(path, "must be a boolean"))
     return value
+
+
+def _require_number(value: Any, path: str, *, finite: bool = True) -> float:
+    """Return ``value`` as a ``float`` when it is a real number.
+
+    A ``bool``, ``None``, ``str`` or anything not a ``numbers.Real`` is a ``TypeError``; with
+    ``finite`` a NaN or infinity is a ``ValueError``.
+    """
+    if isinstance(value, bool) or not isinstance(value, numbers.Real):
+        raise TypeError(_argument_message(path, "must be a number"))
+    try:
+        number = float(value)
+    except OverflowError:
+        raise ValueError(_argument_message(path, "must be finite")) from None
+    if finite and not math.isfinite(number):
+        raise ValueError(_argument_message(path, "must be finite"))
+    return number
 
 
 def _coerce_integral(value: int, name: str) -> int:

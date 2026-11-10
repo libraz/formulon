@@ -349,21 +349,21 @@ Expected<void, Error> Workbook::set_file_name(std::string_view name) {
       return make_error(FormulonErrorCode::kInvalidArgument, std::string(reason), "name=" + std::string(name));
     };
     if (!parser::detail::HasWorkbookExtension(name)) {
-      return refuse("no workbook extension");
+      return refuse("name has no workbook extension");
     }
     if (name.find_first_of(std::string_view("[]:/\\?*\0", 8)) != std::string_view::npos) {
-      return refuse("forbidden character");
+      return refuse("name holds a forbidden character");
     }
     if (!sheet_names::valid_utf8(name)) {
-      return refuse("not valid UTF-8");
+      return refuse("name is not valid UTF-8");
     }
     if (name.size() > kMaxFileNameBytes) {
-      return refuse("longer than 218 bytes");
+      return refuse("name is longer than 218 bytes");
     }
     std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
     for (const ExternalLinkRecord& link : external_links_) {
       if (strings::case_insensitive_eq(LinkBookName(link), name)) {
-        return refuse("an external link names the same book");
+        return refuse("name is the book of an external link");
       }
     }
   }

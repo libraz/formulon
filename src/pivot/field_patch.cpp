@@ -60,31 +60,31 @@ bool field_show_detail(const PivotField& field) noexcept {
 Expected<void, Error> check_field_patch(const Workbook& wb, const PivotTable& table, std::size_t field_index,
                                         const PivotFieldPatch& patch) {
   if (field_index >= table.fields().size()) {
-    return invalid("pivot: field index out of range");
+    return invalid("field_index is out of range");
   }
   const PivotField& field = table.fields()[field_index];
   if (patch.custom_name.has_value() && !patch.custom_name->empty()) {
     const std::string& name = *patch.custom_name;
     if (utf16_units_in(name) > kMaxPivotNameUnits) {
-      return invalid("pivot: name longer than 255 UTF-16 code units");
+      return invalid("patch.custom_name is longer than 255 UTF-16 code units");
     }
     const auto taken = [&](const std::string& existing) { return !existing.empty() && same_label(wb, name, existing); };
     for (std::size_t i = 0; i < table.fields().size(); ++i) {
       const PivotField& other = table.fields()[i];
       if (i != field_index && (taken(other.source_name) || taken(other.custom_name))) {
-        return name_taken("pivot: name matches another field", "field_index=" + std::to_string(i));
+        return name_taken("patch.custom_name matches another field", "field_index=" + std::to_string(i));
       }
     }
     for (std::size_t i = 0; i < table.data_fields().size(); ++i) {
       if (taken(table.data_fields()[i].name)) {
-        return name_taken("pivot: name matches a data field", "data_field_index=" + std::to_string(i));
+        return name_taken("patch.custom_name matches a data field", "data_field_index=" + std::to_string(i));
       }
     }
   }
   const bool manual = patch.sort_order.has_value() ? *patch.sort_order == FieldSortOrder::kManual : field.sort.manual;
   const std::string& by_field = patch.sort_by_field.has_value() ? *patch.sort_by_field : field.sort.by_field;
   if (manual && !by_field.empty()) {
-    return invalid("pivot: manual order takes no by-field");
+    return invalid("patch.sort_by_field must be empty for a manual order");
   }
   return ok();
 }
@@ -137,18 +137,18 @@ Expected<void, Error> apply_field_patch(const Workbook& wb, PivotTable& table, s
 Expected<void, Error> check_item_patch(const Workbook& wb, const PivotTable& table, std::size_t field_index,
                                        std::size_t item_index, const PivotItemPatch& patch) {
   if (field_index >= table.fields().size()) {
-    return invalid("pivot: field index out of range");
+    return invalid("field_index is out of range");
   }
   const PivotField& field = table.fields()[field_index];
   if (item_index >= field.items.size()) {
-    return invalid("pivot: item index out of range");
+    return invalid("item_index is out of range");
   }
   if (!patch.caption.has_value()) {
     return ok();
   }
   const std::string& caption = *patch.caption;
   if (utf16_units_in(caption) > kMaxPivotNameUnits) {
-    return invalid("pivot: caption longer than 255 UTF-16 code units");
+    return invalid("patch.caption is longer than 255 UTF-16 code units");
   }
   if (caption_clears(wb, table, field_index, field.items[item_index], caption)) {
     return ok();
@@ -157,7 +157,7 @@ Expected<void, Error> check_item_patch(const Workbook& wb, const PivotTable& tab
     const PivotItem& other = field.items[i];
     const std::string shown = !other.caption.empty() ? other.caption : value_label(wb, table, field_index, other);
     if (i != item_index && same_label(wb, caption, shown)) {
-      return name_taken("pivot: caption matches another item of the field", "item_index=" + std::to_string(i));
+      return name_taken("patch.caption matches another item of the field", "item_index=" + std::to_string(i));
     }
   }
   return ok();

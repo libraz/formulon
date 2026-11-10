@@ -632,6 +632,8 @@ if(DEFINED _FORMULON_BEHAVIOR_PY)
   formulon_add_binding_drift_test(binding_drift_readme_identifiers readme-identifiers)
   formulon_add_binding_drift_test(binding_drift_dts_enums dts-enums)
   formulon_add_binding_drift_test(binding_drift_style_record_fields style-record-fields)
+  formulon_add_binding_drift_test(binding_drift_engine_messages engine-messages)
+  formulon_add_binding_drift_test(binding_drift_tristate_reads tristate-reads)
   # Byte-compares the files `stage.mjs` copies verbatim into the native
   # package against their sources. Unlike the sibling checks this one has an
   # input that need not exist: `dist/` is a build output, so in an unstaged
@@ -668,6 +670,12 @@ if(DEFINED _FORMULON_BEHAVIOR_PY)
   add_test(
     NAME ApiCaseTables
     COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/api/check_case_tables.py
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  )
+  # The CHANGELOG migration table is what the ledger generates.
+  add_test(
+    NAME ApiMigrationTableDrift
+    COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/api/gen_migration_table.py --check
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
   )
   add_test(

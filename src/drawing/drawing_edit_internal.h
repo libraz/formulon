@@ -45,9 +45,9 @@ void for_each_element(const pugi::xml_node& node, const Fn& fn) {
   });
 }
 
-inline constexpr const char* kNoObject = "drawing: no picture or chart with that id";
-inline constexpr const char* kNoShapeOrObject = "drawing: no picture, chart or shape with that id";
-inline constexpr const char* kNoOrderable = "drawing: no picture, chart, shape or slicer with that id";
+inline constexpr const char* kNoObject = "object_id does not name a picture or chart";
+inline constexpr const char* kNoShapeOrObject = "object_id does not name a picture, chart or shape";
+inline constexpr const char* kNoOrderable = "object_id does not name a picture, chart, shape or slicer";
 
 // The refusal of `object_id` by an edit whose kinds exclude it:
 // `kInvalidArgument` when an object of another kind holds the id under `root`,

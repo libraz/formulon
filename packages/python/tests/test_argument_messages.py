@@ -14,6 +14,7 @@ from formulon import (
     AnchorKind,
     CellAddress,
     CellRect,
+    DefinedNameInput,
     DrawingAnchorInput,
     IndexOutOfRangeError,
     InvalidArgumentError,
@@ -61,6 +62,21 @@ class _MessageCase(unittest.TestCase):
             self.assertNotIn(token, message)
         self.assertNotRegex(message, r"\b\w+_op\b")
         self.assertNotRegex(message, r"^[\w.]+: ")
+
+
+class EngineProseMessageTests(_MessageCase):
+    def test_a_message_leading_with_no_argument_keeps_its_wording(self) -> None:
+        with Workbook.create_default() as wb:
+            message = _raised(
+                InvalidArgumentError, lambda: wb.set_defined_name(DefinedNameInput(name="A1", formula="1"))
+            )
+            self.assertEqual(message, "Workbook.set_defined_name defined_name.name is not a valid defined name")
+            message = _raised(
+                InvalidArgumentError,
+                lambda: wb.sheet(0).add_table(TableInput(range="A1:B3", name="Has Space", columns=["a", "b"])),
+            )
+            self.assertEqual(message, "Sheet.add_table input.name is not a valid table name")
+            self.assert_public_words(message)
 
 
 class IterativeTests(_MessageCase):

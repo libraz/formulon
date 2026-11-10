@@ -33,7 +33,7 @@ Expected<std::string, Error> ReadHyperlinkWideString(ByteSpan& cursor, const cha
   const std::uint32_t cch = load_u32(cursor.data);
   if (cch > max_units) {
     return make_error(FormulonErrorCode::kIoXlsbRecordCorrupt,
-                      std::string("xlsb BrtHLink ") + field + " exceeds string limit",
+                      std::string("XLSB hyperlink ") + field + " exceeds string limit",
                       "context=xlsb_reader cch=" + std::to_string(cch));
   }
   return read_xlwidestring(cursor);
@@ -47,7 +47,7 @@ Expected<void, Error> EmitBoundedHyperlinkWideString(std::vector<std::uint8_t>& 
   if (cch > max_units) {
     dst.resize(start);
     return make_error(FormulonErrorCode::kInvalidArgument,
-                      std::string("xlsb BrtHLink ") + field + " exceeds string limit",
+                      std::string("XLSB hyperlink ") + field + " exceeds string limit",
                       "context=xlsb_sheet_writer cch=" + std::to_string(cch));
   }
   return Expected<void, Error>::Ok();
@@ -118,7 +118,7 @@ Expected<void, Error> decode_hyperlink(const XlsbRecord& rec, Sheet& sheet) {
 
 Expected<void, Error> emit_hyperlink(std::vector<std::uint8_t>& dst, const Hyperlink& hyperlink, std::string_view rid) {
   if (!Sheet::rect_in_grid(hyperlink.row, hyperlink.col, hyperlink.last_row, hyperlink.last_col)) {
-    return make_error(FormulonErrorCode::kInvalidArgument, "xlsb hyperlink rectangle out of grid",
+    return make_error(FormulonErrorCode::kInvalidArgument, "XLSB hyperlink rectangle is outside the grid",
                       "context=xlsb_sheet_writer row=" + std::to_string(hyperlink.row) +
                           " col=" + std::to_string(hyperlink.col) + " last_row=" + std::to_string(hyperlink.last_row) +
                           " last_col=" + std::to_string(hyperlink.last_col));

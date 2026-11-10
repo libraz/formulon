@@ -279,18 +279,18 @@ Expected<void, Error> check_projection_target(const Workbook& wb, std::size_t sh
   for (std::size_t i = 0; i < sheet.pivot_tables().size(); ++i) {
     const std::unique_ptr<pivot::PivotTable>& other = sheet.pivot_tables()[i];
     if (i != pivot_index && other != nullptr && intersects(detail::pivot_occupied_extent(*other), target)) {
-      return refuse("the report would overlap another PivotTable");
+      return refuse("The report would overlap another PivotTable");
     }
   }
   for (const TableMetadata& table : wb.tables()) {
     const std::optional<MergeRange> ref = detail::table_rect_on_sheet(table, sheet_index);
     if (ref.has_value() && intersects(normalized(*ref), target)) {
-      return refuse("the report would overlap a table");
+      return refuse("The report would overlap a table");
     }
   }
   for (const DataTable& table : sheet.data_tables()) {
     if (intersects(normalized(table.ref), target)) {
-      return refuse("the report would overlap a data table");
+      return refuse("The report would overlap a data table");
     }
   }
   for (const CellAddress address : sheet.formula_cells_in(0U, 0U, target.last_row, target.last_col)) {
@@ -301,13 +301,13 @@ Expected<void, Error> check_projection_target(const Workbook& wb, std::size_t sh
     const MergeRange block{address.row, address.col, address.row + cell->array_block_rows - 1U,
                            address.col + cell->array_block_cols - 1U};
     if (intersects(block, target)) {
-      return refuse("the report would overlap an array formula");
+      return refuse("The report would overlap an array formula");
     }
   }
   for (const MergeRange& merge : sheet.merges()) {
     const MergeRange m = normalized(merge);
     if (intersects(m, target) && !contains(own, m)) {
-      return refuse("the report would overlap merged cells");
+      return refuse("The report would overlap merged cells");
     }
   }
   return Expected<void, Error>::Ok();

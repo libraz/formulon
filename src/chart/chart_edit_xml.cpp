@@ -70,11 +70,11 @@ Expected<void, Error> open_chart(const Workbook& wb, std::size_t sheet, std::uin
   const auto it =
       std::find_if(parts.begin(), parts.end(), [&](const ChartPartRef& p) { return p.object_id == object_id; });
   if (it == parts.end()) {
-    return no_such("chart: no chart with that id");
+    return no_such("No chart with that id");
   }
   const PassthroughPart* part = it->part_path.empty() ? nullptr : io::ooxml::find_passthrough_part(wb, it->part_path);
   if (part == nullptr) {
-    return unparseable("chart: chart part is missing");
+    return unparseable("Chart part is missing");
   }
   RETURN_IF_ERROR(parse_chart_part(part->bytes, c.doc));
   c.path = it->part_path;
@@ -88,13 +88,13 @@ Expected<void, Error> open_edit(const Workbook& wb, std::size_t sheet, std::uint
   RETURN_IF_ERROR(open_chart(wb, sheet, object_id, c));
   const auto& rels = wb.sheet(sheet).unknown_relationships();
   if (std::any_of(rels.begin(), rels.end(), [](const UnknownRelationship& r) { return r.type == io::kRelDrawing; })) {
-    return make_error(FormulonErrorCode::kIoDrawingUnparseable, "chart: a chart retained from xlsb is not editable");
+    return make_error(FormulonErrorCode::kIoDrawingUnparseable, "A chart retained from xlsb is not editable");
   }
   if (c.chartex) {
-    return unsupported("chart: chartex charts are not editable");
+    return unsupported("Chartex charts are not editable");
   }
   if (series_op && c.pivot()) {
-    return unsupported("chart: a pivot chart's series follow its pivot table");
+    return unsupported("A pivot chart's series follow its pivot table");
   }
   c.before = io::raw_xml(c.root());
   return ok();
@@ -160,7 +160,7 @@ Expected<xml_node, Error> series_at(const xml_node& plot, std::uint32_t idx) {
       return s;
     }
   }
-  return no_such("chart: no series with that idx");
+  return no_such("No series with that idx");
 }
 
 xml_node find_ext(const xml_node& ext_list, std::string_view uri) {
@@ -261,7 +261,7 @@ Expected<void, Error> template_doc(const Workbook& wb, const Palette& palette, C
   options.legend = legend;
   ASSIGN_OR_RETURN(std::string xml, build_chart_xml(wb, options, split, palette.colors.document_element()));
   if (!load_xml(out, xml)) {
-    return unparseable("chart: template does not parse");
+    return unparseable("Template does not parse");
   }
   return ok();
 }

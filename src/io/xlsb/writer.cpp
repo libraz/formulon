@@ -244,7 +244,7 @@ DynamicArrayMetadataPlan BuildDynamicArrayMetadataPlan(const Workbook& wb) {
 Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook) {
   const std::size_t sheet_count = workbook.sheet_count();
   if (sheet_count == 0) {
-    return make_error(FormulonErrorCode::kInvalidArgument, "workbook has zero sheets", kWriteXlsbContext);
+    return make_error(FormulonErrorCode::kInvalidArgument, "Workbook has zero sheets", kWriteXlsbContext);
   }
 
   // Pre-pass: emit each sheet body so we know whether the SST will be

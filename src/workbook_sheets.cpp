@@ -55,7 +55,7 @@ namespace {
 // dep graph's 16-bit `sheet_id` is lossless by construction.
 Expected<void, Error> check_sheet_headroom(std::size_t current_count) {
   if (current_count >= Workbook::kMaxSheets) {
-    return make_error(FormulonErrorCode::kSheetCountLimitExceeded, "workbook already holds the maximum sheets",
+    return make_error(FormulonErrorCode::kSheetCountLimitExceeded, "Workbook already holds the maximum sheets",
                       "limit=" + std::to_string(Workbook::kMaxSheets));
   }
   return {};
@@ -335,7 +335,7 @@ Expected<void, Error> Workbook::remove_sheet(std::uint32_t index) {
                       "index=" + std::to_string(index) + " sheet_count=" + std::to_string(sheets_.size()));
   }
   if (sheets_.size() <= 1U) {
-    return make_error(FormulonErrorCode::kPreconditionFailed, "cannot remove the only sheet",
+    return make_error(FormulonErrorCode::kPreconditionFailed, "Cannot remove the only sheet",
                       "sheet_count=" + std::to_string(sheets_.size()));
   }
   return remove_sheet_locked(index);

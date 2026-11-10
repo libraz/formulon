@@ -161,7 +161,7 @@ struct DrawingSnapshot {
 };
 
 Expected<DrawingSnapshot, Error> decode_snapshot(const std::uint8_t* bytes, std::size_t len) {
-  const Error malformed = invalid("drawing: malformed drawing snapshot");
+  const Error malformed = invalid("bytes is not a drawing snapshot");
   if (bytes == nullptr || len < sizeof(kSnapshotMagic) ||
       !std::equal(kSnapshotMagic, kSnapshotMagic + sizeof(kSnapshotMagic), bytes)) {
     return malformed;
@@ -308,7 +308,7 @@ std::size_t plan_index(const std::vector<PlannedPart>& plan, const std::string& 
 // The captured part graph, top-level parts first, then breadth-first through
 // the captured rels parts.
 Expected<std::vector<PlannedPart>, Error> plan_parts(const DrawingSnapshot& snap) {
-  const Error malformed = invalid("drawing: malformed drawing snapshot");
+  const Error malformed = invalid("bytes is not a drawing snapshot");
   const auto captured = [&snap](const std::string& path) -> const SnapshotPart* {
     for (const SnapshotPart& part : snap.parts) {
       if (part.path == path) {
@@ -423,7 +423,7 @@ Expected<void, Error> write_parts(Workbook& wb, const std::vector<PlannedPart>& 
     bool moved = false;
     const pugi::xml_node root = io::ooxml::relationship_root(rels_doc);
     if (!root) {
-      return unparseable("drawing: rels part has an invalid Relationships root", rels_path);
+      return unparseable("Drawing rels part has an invalid Relationships root", rels_path);
     }
     for (pugi::xml_node rel = root.first_child(); rel; rel = rel.next_sibling()) {
       if (!io::ooxml::is_relationship_element(rel, root)) {
@@ -500,7 +500,7 @@ Expected<std::vector<std::uint8_t>, Error> snapshot_drawing(const Workbook& wb, 
       }
     }
     if (!node) {
-      return unparseable("drawing: relationship is missing from rels part", rel->id);
+      return unparseable("Drawing relationship is missing from rels part", rel->id);
     }
     const std::string target_text = node.attribute("Target").value();
     const PassthroughPart* part = rel->external ? nullptr : io::ooxml::find_passthrough_part(wb, rel->target);
@@ -533,7 +533,7 @@ Expected<std::vector<std::uint8_t>, Error> snapshot_drawing(const Workbook& wb, 
            put_blob(out, part->bytes.data(), part->bytes.size());
   }
   if (!fits) {
-    return invalid("drawing: object is too large to snapshot");
+    return invalid("Object is too large to snapshot");
   }
   return out;
 }
@@ -542,7 +542,7 @@ Expected<std::uint32_t, Error> restore_drawing(Workbook& wb, std::size_t sheet, 
                                                std::size_t len, std::uint32_t flags) {
   ASSIGN_OR_RETURN(std::string path, editable_drawing_path(wb, sheet));
   if ((flags & ~kDrawingRestoreNewId) != 0) {
-    return invalid("drawing: unknown drawing restore flags");
+    return invalid("flags must be a known restore flag");
   }
   ASSIGN_OR_RETURN(DrawingSnapshot snap, decode_snapshot(bytes, len));
   ASSIGN_OR_RETURN(std::vector<PlannedPart> plan, plan_parts(snap));
@@ -562,7 +562,7 @@ Expected<std::uint32_t, Error> restore_drawing(Workbook& wb, std::size_t sheet, 
     }
   }
   if (!object) {
-    return invalid("drawing: snapshot holds no picture, chart or shape");
+    return invalid("bytes holds no picture, chart or shape");
   }
   std::uint32_t id = read_drawing_object(object, {}).object_id;
   const bool new_id = (flags & kDrawingRestoreNewId) != 0;
@@ -579,7 +579,7 @@ Expected<std::uint32_t, Error> restore_drawing(Workbook& wb, std::size_t sheet, 
   }
   if (wb.passthrough_parts().size() + wb.sheet_count() + snap.rels.size() + snap.parts.size() + 2U > io::kMaxParts ||
       total_bytes > io::kMaxTotalExtractedBytes) {
-    return invalid("drawing: package would exceed the reader's limits");
+    return invalid("Package would exceed the reader's limits");
   }
 
   const bool fresh = path.empty();
@@ -616,7 +616,7 @@ Expected<std::uint32_t, Error> restore_drawing(Workbook& wb, std::size_t sheet, 
                         holder != "nvGraphicFramePr" && holder != "nvSpPr" && !(replaced && is_within(node, replaced)));
     });
     if (clash) {
-      return invalid("drawing: the id belongs to an object that is not a picture, chart or shape");
+      return invalid("The snapshot id belongs to an object that is not a picture, chart or shape");
     }
   }
 
@@ -636,7 +636,7 @@ Expected<std::uint32_t, Error> restore_drawing(Workbook& wb, std::size_t sheet, 
     }
     auto target = io::ooxml::resolve_relative_path(dir, rel.target);
     if (!target) {
-      return invalid("drawing: snapshot target does not resolve");
+      return invalid("bytes holds a target that does not resolve");
     }
     resolved[i] = std::move(target.value());
   }

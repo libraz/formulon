@@ -326,7 +326,7 @@ Expected<bool, Error> emit_book_protection(std::vector<std::uint8_t>& dst, const
   }
   pugi::xml_document doc;
   if (!doc.load_string(xml.c_str()) || !doc.child("workbookProtection")) {
-    return make_error(FormulonErrorCode::kInvalidArgument, "workbook protection is not a <workbookProtection> element",
+    return make_error(FormulonErrorCode::kInvalidArgument, "Workbook protection is not a <workbookProtection> element",
                       kWriteXlsbContext);
   }
   const WorkbookProtection prot = parse_workbook_protection(xml);
@@ -334,7 +334,7 @@ Expected<bool, Error> emit_book_protection(std::vector<std::uint8_t>& dst, const
   std::uint16_t rev_pwd = 0;
   if ((!prot.workbook_password.empty() && !ParseLegacyHex(prot.workbook_password, book_pwd)) ||
       (!prot.revisions_password.empty() && !ParseLegacyHex(prot.revisions_password, rev_pwd))) {
-    return make_error(FormulonErrorCode::kInvalidArgument, "workbook password is not a 16-bit hex hash",
+    return make_error(FormulonErrorCode::kInvalidArgument, "Workbook password is not a 16-bit hex hash",
                       kWriteXlsbContext);
   }
   std::uint16_t flags = 0U;
@@ -350,7 +350,7 @@ Expected<bool, Error> emit_book_protection(std::vector<std::uint8_t>& dst, const
     emit_u16(iso, flags);
     if (!EncodeIsoPassword(iso, prot.workbook_algorithm_name, prot.workbook_hash_value, prot.workbook_salt_value) ||
         !EncodeIsoPassword(iso, prot.revisions_algorithm_name, prot.revisions_hash_value, prot.revisions_salt_value)) {
-      return make_error(FormulonErrorCode::kInvalidArgument, "workbook protection hash or salt is not base64",
+      return make_error(FormulonErrorCode::kInvalidArgument, "Workbook protection hash or salt is not base64",
                         kWriteXlsbContext);
     }
     emit_record(dst, kBrtBookProtectionIso, iso);
@@ -488,7 +488,7 @@ Expected<void, Error> emit_range_protections(std::vector<std::uint8_t>& dst,
     (void)parse_sqref_text(range.sqref, rfx);
     std::uint16_t pwd = 0;
     if (!range.password.empty() && !ParseLegacyHex(range.password, pwd)) {
-      return make_error(FormulonErrorCode::kInvalidArgument, "protected range password is not a 16-bit hex hash",
+      return make_error(FormulonErrorCode::kInvalidArgument, "Protected range password is not a 16-bit hex hash",
                         kWriteXlsbContext);
     }
     std::vector<std::uint8_t> payload;
@@ -497,7 +497,7 @@ Expected<void, Error> emit_range_protections(std::vector<std::uint8_t>& dst,
       std::vector<std::uint8_t> salt;
       if (!base64_decode(range.hash_value, hash) || !base64_decode(range.salt_value, salt) ||
           hash.size() > kMaxBlobBytes || salt.size() > kMaxBlobBytes) {
-        return make_error(FormulonErrorCode::kInvalidArgument, "protected range hash or salt is not base64",
+        return make_error(FormulonErrorCode::kInvalidArgument, "Protected range hash or salt is not base64",
                           kWriteXlsbContext);
       }
       emit_u32(payload, range.spin_count);

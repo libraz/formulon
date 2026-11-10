@@ -128,7 +128,7 @@ extern "C" fm_status_t fm_workbook_format_reference(const fm_workbook_t* wb, con
     return rc;
   }
   if (row0 > row1 || col0 > col1) {
-    return invalid_argument("inverted rectangle");
+    return invalid_argument("range first_row and first_col must not exceed last_row and last_col");
   }
   if (auto rc = check_enum_domain(absolute, 0, 1, "absolute"); rc != 0) {
     return rc;

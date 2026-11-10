@@ -104,7 +104,7 @@ TEST(WorkbookTables, AddTableRejectsADisplayNameExcelRefuses) {
     auto bad = wb.add_table(make_table(name, "A1:B5", 2));
     ASSERT_FALSE(bad.has_value()) << name;
     EXPECT_EQ(bad.error().code, FormulonErrorCode::kInvalidArgument);
-    EXPECT_EQ(bad.error().message, "invalid table name");
+    EXPECT_EQ(bad.error().message, "name is not a valid table name");
   }
   // Excel keeps an off-grid `name` and repairs only the display name.
   TableMetadata table = make_table("T1", "A1:B5", 2);
@@ -152,7 +152,7 @@ TEST(WorkbookTables, AddTableRefusesWhatExcelKeepsATableOffAndUnmergesTheRest) {
     auto r = wb.add_table(make_table("T_x", ref, 2));
     return r.has_value() ? std::string("accepted") : r.error().message;
   };
-  EXPECT_EQ(refused("A9:B11"), "multi-cell array formulas are not valid in a table");
+  EXPECT_EQ(refused("A9:B11"), "range must not hold a multi-cell array formula");
   EXPECT_EQ(refused("A20:B22"), "table range cuts through merged cells");
   EXPECT_EQ(refused("B43:C44"), "table range overlaps a data table");
   EXPECT_EQ(refused("B52:C53"), "table range overlaps a PivotTable");

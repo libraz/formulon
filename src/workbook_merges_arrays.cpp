@@ -39,11 +39,10 @@ using detail::check_cell_target;
 // Refusal of `target` as the extent of a new legacy array formula, on the
 // first structure it collides with. A legacy array block wholly inside
 // `target` is replaced, so only one it partially overlaps counts.
-Expected<void, Error> check_array_target_free(const char* op, const Workbook& wb, std::size_t sheet_index,
-                                              const MergeRange& target) {
+Expected<void, Error> check_array_target_free(const Workbook& wb, std::size_t sheet_index, const MergeRange& target) {
   const Sheet& sheet = wb.sheet(sheet_index);
   const auto refuse = [&](const char* what) {
-    return make_error(FormulonErrorCode::kPreconditionFailed, std::string(op) + ": " + what,
+    return make_error(FormulonErrorCode::kPreconditionFailed, what,
                       "row=" + std::to_string(target.first_row) + " col=" + std::to_string(target.first_col));
   };
   for (const CellAddress address : sheet.all_formula_cells()) {
@@ -54,7 +53,7 @@ Expected<void, Error> check_array_target_free(const char* op, const Workbook& wb
     const MergeRange block{address.row, address.col, address.row + cell->array_block_rows - 1U,
                            address.col + cell->array_block_cols - 1U};
     if (intersects(block, target) && !contains(target, block)) {
-      return refuse("cannot change part of an array");
+      return refuse("range overlaps part of an array formula");
     }
   }
   for (const MergeRange& merge : sheet.merges()) {
@@ -64,7 +63,7 @@ Expected<void, Error> check_array_target_free(const char* op, const Workbook& wb
   }
   for (const DataTable& table : sheet.data_tables()) {
     if (intersects(normalized(table.ref), target)) {
-      return refuse("cannot change part of a data table");
+      return refuse("range overlaps part of a data table");
     }
   }
   for (const std::unique_ptr<pivot::PivotTable>& pivot : sheet.pivot_tables()) {
@@ -74,14 +73,14 @@ Expected<void, Error> check_array_target_free(const char* op, const Workbook& wb
     const MergeRange area{pivot->anchor_row(), pivot->anchor_col(), pivot->anchor_row() + pivot->span_rows() - 1U,
                           pivot->anchor_col() + pivot->span_cols() - 1U};
     if (intersects(area, target)) {
-      return refuse("cannot change part of a PivotTable");
+      return refuse("range overlaps part of a PivotTable");
     }
   }
   if (target.first_row != target.last_row || target.first_col != target.last_col) {
     for (const TableMetadata& table : wb.tables()) {
       const std::optional<MergeRange> ref = detail::table_rect_on_sheet(table, sheet_index);
       if (ref.has_value() && intersects(*ref, target)) {
-        return refuse("multi-cell array formulas are not valid in a table");
+        return refuse("range must not span several cells inside a table");
       }
     }
   }
@@ -109,18 +108,18 @@ Expected<void, Error> check_merge_target_free(const Workbook& wb, std::size_t sh
   for (const TableMetadata& table : wb.tables()) {
     const std::optional<MergeRange> ref = detail::table_rect_on_sheet(table, sheet_index);
     if (ref.has_value() && intersects(*ref, merge)) {
-      return refuse("cannot merge cells in a table");
+      return refuse("merge overlaps a table");
     }
   }
   for (const io::xlsb::XlsbRetainedTable& kept : io::xlsb::xlsb_retained_tables(wb)) {
     const std::optional<MergeRange> kept_rect = parse_a1_rectangle(kept.ref);
     if (kept.sheet_index == sheet_index && kept_rect && intersects(*kept_rect, merge)) {
-      return refuse("cannot merge cells in a table");
+      return refuse("merge overlaps a table");
     }
   }
   for (const std::unique_ptr<pivot::PivotTable>& pivot : sheet.pivot_tables()) {
     if (pivot != nullptr && intersects(detail::pivot_occupied_extent(*pivot), merge)) {
-      return refuse("cannot change part of a PivotTable");
+      return refuse("merge overlaps part of a PivotTable");
     }
   }
   for (const CellAddress address : sheet.formula_cells_in(0U, 0U, merge.last_row, merge.last_col)) {
@@ -136,7 +135,7 @@ Expected<void, Error> check_merge_target_free(const Workbook& wb, std::size_t sh
   }
   for (const DataTable& table : sheet.data_tables()) {
     if (intersects(normalized(table.ref), merge)) {
-      return refuse("cannot change part of a data table");
+      return refuse("merge overlaps part of a data table");
     }
   }
   return Expected<void, Error>::Ok();
@@ -195,7 +194,7 @@ std::optional<Workbook::ArrayFormulaInfo> Workbook::array_formula_at(std::size_t
 Expected<void, Error> Workbook::set_array_formula(std::size_t sheet_index, std::uint32_t row, std::uint32_t col,
                                                   std::uint32_t rows, std::uint32_t cols, std::string formula,
                                                   FormulaSource source) {
-  RETURN_IF_ERROR(check_cell_target("set_array_formula", sheet_index, sheets_.size(), row, col));
+  RETURN_IF_ERROR(check_cell_target(sheet_index, sheets_.size(), row, col));
   if (rows == 0U || cols == 0U) {
     return make_error(FormulonErrorCode::kInvalidArgument, "rows and cols must be >= 1",
                       "rows=" + std::to_string(rows) + " cols=" + std::to_string(cols));
@@ -207,7 +206,7 @@ Expected<void, Error> Workbook::set_array_formula(std::size_t sheet_index, std::
                           " cols=" + std::to_string(cols));
   }
   const MergeRange target{row, col, row + rows - 1U, col + cols - 1U};
-  RETURN_IF_ERROR(check_array_target_free("set_array_formula", *this, sheet_index, target));
+  RETURN_IF_ERROR(check_array_target_free(*this, sheet_index, target));
 
   // The block's own cells must hold nothing: a stored value or formula would
   // make the distributed result a #SPILL!. Only populated coordinates are
@@ -240,7 +239,7 @@ Expected<void, Error> Workbook::set_array_formula(std::size_t sheet_index, std::
 }
 
 Expected<void, Error> Workbook::add_merge(std::size_t sheet_index, MergeRange merge) {
-  RETURN_IF_ERROR(check_sheet_index("add_merge", sheet_index, sheets_.size()));
+  RETURN_IF_ERROR(check_sheet_index(sheet_index, sheets_.size()));
   merge = normalized(merge);
   if (!Sheet::rect_in_grid(merge.first_row, merge.first_col, merge.last_row, merge.last_col)) {
     return make_error(FormulonErrorCode::kInvalidArgument, "range out of grid",
@@ -265,7 +264,7 @@ void Workbook::put_merge(std::size_t sheet_index, const MergeRange& merge) {
 }
 
 Expected<void, Error> Workbook::remove_merges_intersecting(std::size_t sheet_index, MergeRange merge) {
-  RETURN_IF_ERROR(check_sheet_index("remove_merges_intersecting", sheet_index, sheets_.size()));
+  RETURN_IF_ERROR(check_sheet_index(sheet_index, sheets_.size()));
   merge = normalized(merge);
   std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
   const eval::RecalcEngine::LockedMutator mutator = engine_->locked_mutator();
@@ -278,7 +277,7 @@ Expected<void, Error> Workbook::remove_merges_intersecting(std::size_t sheet_ind
 }
 
 Expected<void, Error> Workbook::remove_merge_at(std::size_t sheet_index, std::size_t index) {
-  RETURN_IF_ERROR(check_sheet_index("remove_merge_at", sheet_index, sheets_.size()));
+  RETURN_IF_ERROR(check_sheet_index(sheet_index, sheets_.size()));
   std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
   const eval::RecalcEngine::LockedMutator mutator = engine_->locked_mutator();
   MergeRange removed;
@@ -291,7 +290,7 @@ Expected<void, Error> Workbook::remove_merge_at(std::size_t sheet_index, std::si
 }
 
 Expected<void, Error> Workbook::clear_merges(std::size_t sheet_index) {
-  RETURN_IF_ERROR(check_sheet_index("clear_merges", sheet_index, sheets_.size()));
+  RETURN_IF_ERROR(check_sheet_index(sheet_index, sheets_.size()));
   std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
   const eval::RecalcEngine::LockedMutator mutator = engine_->locked_mutator();
   for (const CellAddress anchor : sheets_[sheet_index].blocked_spill_anchors()) {

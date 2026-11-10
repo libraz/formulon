@@ -667,7 +667,7 @@ Error invalid(std::string message) {
 
 static Expected<AutoFilter, Error> parse_auto_filter_node(const pugi::xml_node& root) {
   if (!is_element(root) || std::string_view(root.name()) != "autoFilter") {
-    return invalid("autoFilter: fragment is not a single autoFilter element");
+    return invalid("xml is not a single autoFilter element");
   }
   Reader r;
   AutoFilter filter;
@@ -690,7 +690,7 @@ static Expected<AutoFilter, Error> parse_auto_filter_node(const pugi::xml_node& 
     }
   }
   if (!r.ok) {
-    return invalid("autoFilter: element carries content the model cannot represent");
+    return invalid("xml carries content the model cannot represent");
   }
   return filter;
 }
@@ -704,7 +704,7 @@ Expected<AutoFilter, Error> parse_auto_filter_xml(std::string_view xml) {
   }
   const pugi::xml_node root = doc.first_child();
   if (root.next_sibling()) {
-    return invalid("autoFilter: fragment is not a single autoFilter element");
+    return invalid("xml is not a single autoFilter element");
   }
   return parse_auto_filter_node(root);
 }

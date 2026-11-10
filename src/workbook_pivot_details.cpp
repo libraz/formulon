@@ -139,7 +139,7 @@ Expected<std::size_t, Error> Workbook::show_pivot_details(std::size_t sheet, std
   }
   const pivot::PivotTable& table = *sheets_[sheet].pivot_tables()[pivot];
   if (!table.enable_drill()) {
-    return make_error(FormulonErrorCode::kPreconditionFailed, "the pivot disables drill-down");
+    return make_error(FormulonErrorCode::kPreconditionFailed, "The pivot disables drill-down");
   }
   const pivot::PivotCache* cache = find_pivot_cache(table.pivot_cache_id());
   if (cache == nullptr) {
@@ -283,17 +283,18 @@ std::vector<pivot::PivotTable*> pivots_of_cache(Workbook& wb, std::uint32_t cach
 }
 
 Error unknown_cache(std::uint32_t cache_id) {
-  return make_error(FormulonErrorCode::kNotFound, "pivot: no cache with this id",
+  return make_error(FormulonErrorCode::kNotFound, "cache_id does not name a pivot cache",
                     "cache_id=" + std::to_string(cache_id));
 }
 
 // Refuses an empty pivot name or one another pivot on `sheet` holds.
 Expected<void, Error> check_pivot_name(const Sheet& sheet, std::string_view name, std::size_t self) {
   if (name.empty()) {
-    return make_error(FormulonErrorCode::kInvalidArgument, "pivot: empty name");
+    return make_error(FormulonErrorCode::kInvalidArgument, "name is empty");
   }
   if (pivot::pivot_name_taken(sheet, name, self)) {
-    return make_error(FormulonErrorCode::kAlreadyExists, "pivot: name already in use", "name=" + std::string(name));
+    return make_error(FormulonErrorCode::kAlreadyExists, "name is already in use by another pivot",
+                      "name=" + std::string(name));
   }
   return Expected<void, Error>::Ok();
 }
@@ -318,7 +319,7 @@ Expected<std::size_t, Error> Workbook::add_pivot_cache_field(std::uint32_t cache
 
 Expected<std::size_t, Error> Workbook::add_pivot(std::size_t sheet, std::unique_ptr<pivot::PivotTable> table) {
   if (sheet >= sheet_count() || table == nullptr) {
-    return make_error(FormulonErrorCode::kInvalidArgument, "pivot: bad sheet or table",
+    return make_error(FormulonErrorCode::kInvalidArgument, "sheet_index is out of range or the pivot is missing",
                       "sheet=" + std::to_string(sheet));
   }
   Sheet& target = this->sheet(sheet);
@@ -334,12 +335,12 @@ Expected<std::size_t, Error> Workbook::add_pivot(std::size_t sheet, std::unique_
 
 Expected<void, Error> Workbook::rename_pivot(std::size_t sheet, std::size_t pivot, std::string_view name) {
   if (sheet >= sheet_count()) {
-    return make_error(FormulonErrorCode::kInvalidArgument, "pivot: sheet index out of range",
+    return make_error(FormulonErrorCode::kInvalidArgument, "sheet_index is out of range",
                       "sheet=" + std::to_string(sheet));
   }
   Sheet& target = this->sheet(sheet);
   if (pivot >= target.pivot_tables().size()) {
-    return make_error(FormulonErrorCode::kIndexOutOfRange, "pivot: pivot index out of range",
+    return make_error(FormulonErrorCode::kIndexOutOfRange, "pivot_index is out of range",
                       "pivot=" + std::to_string(pivot));
   }
   RETURN_IF_ERROR(check_pivot_name(target, name, pivot));

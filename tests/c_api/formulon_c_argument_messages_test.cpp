@@ -103,7 +103,8 @@ TEST(FormulonCApiArgumentMessages, BindingReachableBodiesLeadWithTheField) {
   ASSERT_EQ(fm_sheet_get_pivot_data_field_count(wb.handle, 0, pivot, &data_fields), 0);
   fm_pivot_data_field_t field = FM_STRUCT_INIT(fm_pivot_data_field_t);
   EXPECT_EQ(fm_sheet_get_pivot_data_field_at(wb.handle, 0, pivot, 99U, &field), kIndexOutOfRange);
-  EXPECT_EQ(LastError(), "data_field_index 99 is out of range (" + std::to_string(data_fields) + " items)");
+  EXPECT_EQ(LastError(), "data_field_index 99 is out of range (" + std::to_string(data_fields) +
+                             (data_fields == 1 ? " item)" : " items)"));
   ExpectNoCOnlyVocabulary(LastError());
 
   // max_iterations above the Excel limit.
@@ -120,7 +121,7 @@ TEST(FormulonCApiArgumentMessages, SheetIndexNamesTheFieldAndTheSheetCount) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   std::size_t cells = 0;
   EXPECT_EQ(fm_sheet_get_cell_count(wb.handle, 99, &cells), kSheetIndexOutOfRange);
-  EXPECT_EQ(LastError(), "sheet_index 99 is out of range (1 sheets)");
+  EXPECT_EQ(LastError(), "sheet_index 99 is out of range (1 sheet)");
   ExpectNoCOnlyVocabulary(LastError());
   EXPECT_EQ(FirstToken(LastError()), "sheet_index");
 }

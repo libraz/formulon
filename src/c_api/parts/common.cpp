@@ -90,6 +90,11 @@ thread_local std::string g_last_error_context;
 thread_local ParseErrorRecord g_last_parse_error;
 thread_local bool g_has_last_parse_error = false;
 
+// `is out of range (<count> <noun>)`, the noun plural unless `count` is 1: the wording every binding uses.
+std::string past_count(std::size_t count, const char* noun) {
+  return "is out of range (" + std::to_string(count) + " " + noun + (count == 1U ? ")" : "s)");
+}
+
 }  // namespace
 
 const char* store_cstr(TextStore& store, std::string_view text) {
@@ -832,11 +837,9 @@ fm_status_t check_sheet_index(const fm_workbook_t* wb, std::size_t sheet_index) 
   }
   const std::size_t count = wb->workbook().sheet_count();
   if (sheet_index >= count) {
-    return set_binding_error(
-        formulon::FormulonErrorCode::kSheetIndexOutOfRange,
-        ("sheet_index " + std::to_string(sheet_index) + " is out of range (" + std::to_string(count) + " sheets)")
-            .c_str(),
-        "sheet_index=" + std::to_string(sheet_index) + " sheet_count=" + std::to_string(count));
+    return set_binding_error(formulon::FormulonErrorCode::kSheetIndexOutOfRange,
+                             ("sheet_index " + std::to_string(sheet_index) + " " + past_count(count, "sheet")).c_str(),
+                             "sheet_index=" + std::to_string(sheet_index) + " sheet_count=" + std::to_string(count));
   }
   return 0;
 }
@@ -867,11 +870,9 @@ fm_status_t check_index(std::size_t index, std::size_t size, const char* field) 
   if (index < size) {
     return 0;
   }
-  return set_binding_error(
-      formulon::FormulonErrorCode::kIndexOutOfRange,
-      (std::string(field) + " " + std::to_string(index) + " is out of range (" + std::to_string(size) + " items)")
-          .c_str(),
-      std::string(field) + "=" + std::to_string(index) + " count=" + std::to_string(size));
+  return set_binding_error(formulon::FormulonErrorCode::kIndexOutOfRange,
+                           (std::string(field) + " " + std::to_string(index) + " " + past_count(size, "item")).c_str(),
+                           std::string(field) + "=" + std::to_string(index) + " count=" + std::to_string(size));
 }
 
 fm_status_t check_limit(std::size_t value, std::size_t bound, const char* field) {

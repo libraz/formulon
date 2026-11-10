@@ -93,10 +93,10 @@ Expected<void, Error> apply_paint(xml_node holder, Order order, const ChartPatch
     return ok();
   }
   if (!clr) {
-    return bad_arg("chart: transparency needs a solid colour");
+    return bad_arg("transparency_pct needs a solid colour");
   }
   if (!in_range(transparency.value, 0.0, 100.0)) {
-    return bad_arg("chart: transparency must be 0..100");
+    return bad_arg("transparency_pct must be 0..100");
   }
   xml_node alpha = child_local(clr, "alpha");
   io::set_attr(alpha ? alpha : clr.append_child("a:alpha"), "val", rounded((100.0 - transparency.value) * 1000.0));
@@ -106,19 +106,19 @@ Expected<void, Error> apply_paint(xml_node holder, Order order, const ChartPatch
 }  // namespace
 
 Expected<void, Error> apply_paint_properties(xml_node sp, const ChartFillPatch& fill, const ChartLinePatch& line) {
-  RETURN_IF_ERROR(apply_hidden(sp, kShapeOrder, fill.none, fill.color, "chart: a hidden fill takes no colour"));
+  RETURN_IF_ERROR(apply_hidden(sp, kShapeOrder, fill.none, fill.color, "A hidden fill takes no colour"));
   RETURN_IF_ERROR(apply_paint(sp, kShapeOrder, fill.color, fill.transparency_pct));
   if (line_empty(line)) {
     return ok();
   }
   xml_node ln = ensure(sp, "a:ln", kShapeOrder);
-  RETURN_IF_ERROR(apply_hidden(ln, kLineOrder, line.none, line.color, "chart: a hidden line takes no colour"));
+  RETURN_IF_ERROR(apply_hidden(ln, kLineOrder, line.none, line.color, "A hidden line takes no colour"));
   RETURN_IF_ERROR(apply_paint(ln, kLineOrder, line.color, line.transparency_pct));
   if (line.width_pt.is_clear()) {
     ln.remove_attribute("w");
   } else if (line.width_pt.is_set()) {
     if (!in_range(line.width_pt.value, 0.0, 1584.0)) {
-      return bad_arg("chart: line width must be 0..1584 pt");
+      return bad_arg("width_pt must be 0..1584");
     }
     pugi::xml_attribute w = ln.attribute("w");
     (w ? w : ln.prepend_attribute("w")).set_value(rounded(line.width_pt.value * 12700.0).c_str());
@@ -128,7 +128,7 @@ Expected<void, Error> apply_paint_properties(xml_node sp, const ChartFillPatch& 
   } else if (line.dash.is_set()) {
     const int d = static_cast<int>(line.dash.value);
     if (!chart_token_valid(kChartDashTokens, d)) {
-      return bad_arg("chart: line dash must be solid, dash, dot or dashDot");
+      return bad_arg("dash must be solid, dash, dot or dashDot");
     }
     drop(ln, "custDash");
     put_val(ln, "a:prstDash", kLineOrder, kChartDashTokens[d]);
@@ -171,7 +171,7 @@ Expected<void, Error> apply_marker(xml_node owner, Order order, const ChartPatch
   if (m.symbol.has_value()) {
     const int s = static_cast<int>(*m.symbol);
     if (s < 0 || s > static_cast<int>(ChartMarkerSymbol::kDash)) {
-      return bad_arg("chart: marker symbol must be a named shape");
+      return bad_arg("symbol must be a named marker shape");
     }
     put_val(node, "c:symbol", kMarkerOrder, kChartSymbolTokens[s]);
   }
@@ -179,7 +179,7 @@ Expected<void, Error> apply_marker(xml_node owner, Order order, const ChartPatch
     drop(node, "size");
   } else if (m.size.is_set()) {
     if (!in_range(m.size.value, 2.0, 72.0)) {
-      return bad_arg("chart: marker size must be 2..72");
+      return bad_arg("size_pt must be 2..72");
     }
     put_val(node, "c:size", kMarkerOrder, rounded(m.size.value));
   }
@@ -289,7 +289,7 @@ Expected<void, Error> apply_labels(xml_node ser, bool pie, const std::string& la
     const bool touches = p.show_val || p.show_cat || p.show_ser || p.show_pct || p.show_legend_key ||
                          !p.separator.is_keep() || !p.position.is_keep() || !p.number_format.is_keep() ||
                          !p.font_color.is_keep() || !p.font_size_pt.is_keep() || p.source_linked;
-    return touches ? bad_arg("chart: the labels are deleted; set deleted to false to change them") : ok();
+    return touches ? bad_arg("deleted must be false to change labels that are deleted") : ok();
   }
   if (!d) {
     d = copy_at(ser, defaults, kSerOrder);
@@ -315,7 +315,7 @@ Expected<void, Error> apply_labels(xml_node ser, bool pie, const std::string& la
   } else if (p.position.is_set()) {
     const int i = static_cast<int>(p.position.value);
     if (!chart_token_valid(kChartLabelPositionTokens, i)) {
-      return bad_arg("chart: unknown label position");
+      return bad_arg("position must be a known label position");
     }
     put_val(d, "c:dLblPos", kLabelsOrder, kChartLabelPositionTokens[i]);
   }
@@ -339,7 +339,7 @@ Expected<void, Error> apply_labels(xml_node ser, bool pie, const std::string& la
       rpr.remove_attribute("sz");
     } else if (p.font_size_pt.is_set()) {
       if (!in_range(p.font_size_pt.value, 1.0, 4000.0)) {
-        return bad_arg("chart: label font size must be 1..4000 pt");
+        return bad_arg("font_size_pt must be 1..4000");
       }
       io::set_attr(rpr, "sz", rounded(p.font_size_pt.value * 100.0));
     }

@@ -62,7 +62,7 @@ namespace {
 // An inclusive span `[first, last]` inside a sheet with `limit` lines.
 fm_status_t check_span(std::uint32_t first, std::uint32_t last, std::uint32_t limit) {
   if (last < first || last >= limit) {
-    return invalid_argument("span is outside the grid",
+    return invalid_argument("first and last must be an ordered span inside the grid",
                             "first=" + std::to_string(first) + " last=" + std::to_string(last));
   }
   return 0;

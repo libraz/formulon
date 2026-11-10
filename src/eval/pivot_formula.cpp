@@ -201,7 +201,7 @@ class Rewriter {
     std::string name;
     const std::optional<std::size_t> end = read_quoted(i, &name);
     if (!end) {
-      return invalid("unterminated quoted name in pivot formula");
+      return invalid("formula has an unterminated quoted name");
     }
     if (*end < src_.size() && src_[*end] == '[') {
       return bracket_ref(name, *end);
@@ -223,7 +223,7 @@ class Rewriter {
       return end;
     }
     if (strings::case_insensitive_starts_with(run, kSyntheticPrefix)) {
-      return invalid("reserved identifier in pivot formula", run);
+      return invalid("formula uses a reserved identifier", run);
     }
     if (end < src_.size() && src_[end] == '[') {
       return bracket_ref(run, end);
@@ -253,7 +253,7 @@ class Rewriter {
       return {};
     }
     if (quoted) {
-      return invalid("unknown name in pivot formula", name);
+      return invalid("formula uses an unknown name", name);
     }
     out_.append(name);
     return {};
@@ -269,7 +269,7 @@ class Rewriter {
     }
     const std::optional<std::size_t> field = find_field(field_name);
     if (!field) {
-      return invalid("unknown field in pivot formula", field_name);
+      return invalid("formula uses an unknown field", field_name);
     }
     if (*field != *scope_.item_field) {
       return invalid("a calculated item formula can reference only items of its own field", field_name);
@@ -285,21 +285,21 @@ class Rewriter {
     if (i < src_.size() && src_[i] == '\'') {
       const std::optional<std::size_t> end = read_quoted(i, &quoted);
       if (!end) {
-        return invalid("unterminated quoted name in pivot formula");
+        return invalid("formula has an unterminated quoted name");
       }
       i = *end;
       while (i < src_.size() && src_[i] == ' ') {
         ++i;
       }
       if (i >= src_.size() || src_[i] != ']') {
-        return invalid("malformed Field[Item] reference in pivot formula", field_name);
+        return invalid("formula has a malformed Field[Item] reference", field_name);
       }
       content = quoted;
       is_quoted = true;
     } else {
       const std::size_t close = src_.find(']', i);
       if (close == std::string_view::npos) {
-        return invalid("unterminated Field[Item] reference in pivot formula", field_name);
+        return invalid("formula has an unterminated Field[Item] reference", field_name);
       }
       content = trim_spaces(src_.substr(i, close - i));
       i = close;
@@ -309,7 +309,7 @@ class Rewriter {
     std::int32_t position = 0;
     const Position parsed = is_quoted ? Position::kNotPosition : parse_position(content, &position);
     if (parsed == Position::kOverflow) {
-      return invalid("item position out of range in pivot formula", content);
+      return invalid("formula has an item position out of range", content);
     }
     if (parsed == Position::kOk) {
       const bool signed_offset = content.front() == '+' || content.front() == '-';
@@ -322,7 +322,7 @@ class Rewriter {
     }
     const std::optional<std::size_t> item = find_item(content);
     if (!item) {
-      return invalid("unknown item in pivot formula", content);
+      return invalid("formula uses an unknown item", content);
     }
     emit(pivot::FormulaRef{pivot::FormulaRef::Kind::Item, *field, *item, 0});
     return after;
@@ -425,7 +425,7 @@ Expected<void, Error> check_node(const parser::AstNode& node, std::size_t ref_co
       return {};
     case parser::NodeKind::NameRef:
       if (!node.as_name_sheet().empty() || !is_bound_synthetic(node.as_name(), ref_count)) {
-        return invalid("defined names and unknown names are not allowed in a pivot formula", node.as_name());
+        return invalid("formula must not use defined names or unknown names", node.as_name());
       }
       return {};
     case parser::NodeKind::UnaryOp:
@@ -469,7 +469,7 @@ Expected<void, Error> check_node(const parser::AstNode& node, std::size_t ref_co
     case parser::NodeKind::ExternalRef:
       break;
   }
-  return invalid("cell, range, structured and external references are not allowed in a pivot formula");
+  return invalid("formula must not use cell, range, structured or external references");
 }
 
 }  // namespace
@@ -483,7 +483,7 @@ Expected<std::uint32_t, Error> PivotFormulaEvaluator::compile(std::string_view f
     return invalid("pivot formula scope has no cache");
   }
   if (scope.item_field && *scope.item_field >= scope.cache->fields().size()) {
-    return invalid("calculated item field out of range");
+    return invalid("field_index is out of range for the calculated item");
   }
   formula = strip_formula_prefix(formula);
   if (utf16_units_in(formula) > kMaxFormulaUnits) {
@@ -503,7 +503,7 @@ Expected<std::uint32_t, Error> PivotFormulaEvaluator::compile(std::string_view f
   parse_opts.max_formula_length_utf16 = std::max(parse_opts.max_formula_length_utf16, utf16_units_in(text.value()));
   compiled.root = parser::parse_strict(text.value(), compiled.arena, parse_opts);
   if (compiled.root == nullptr) {
-    return make_error(FormulonErrorCode::kParserUnexpectedToken, "syntax error in pivot formula", std::string(formula));
+    return make_error(FormulonErrorCode::kParserUnexpectedToken, "formula has a syntax error", std::string(formula));
   }
   if (auto st = check_node(*compiled.root, refs->size()); !st) {
     return st.error();

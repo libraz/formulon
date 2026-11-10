@@ -30,10 +30,10 @@ namespace {
 using detail::find_defined_name;
 using detail::kFilterDatabaseName;
 
-// `op`-prefixed range check for a mutator addressing one table.
-Expected<void, Error> check_table_index(const char* op, std::size_t table_index, std::size_t table_count) {
+// Range check for a mutator addressing one table.
+Expected<void, Error> check_table_index(std::size_t table_index, std::size_t table_count) {
   if (table_index >= table_count) {
-    return make_error(FormulonErrorCode::kInvalidArgument, std::string(op) + ": table_index out of range",
+    return make_error(FormulonErrorCode::kInvalidArgument, "table_index is out of range",
                       "table_index=" + std::to_string(table_index));
   }
   return Expected<void, Error>::Ok();
@@ -61,7 +61,7 @@ std::string filter_database_formula(std::string_view sheet_name, const MergeRang
 
 Expected<void, Error> Workbook::set_sheet_auto_filter(std::size_t sheet_index, AutoFilter filter) {
   std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
-  RETURN_IF_ERROR(check_sheet_index("set_sheet_auto_filter", sheet_index, sheets_.size()));
+  RETURN_IF_ERROR(check_sheet_index(sheet_index, sheets_.size()));
   RETURN_IF_ERROR(validate_auto_filter(filter));
   std::string formula = filter_database_formula(sheets_[sheet_index].name(), filter.range);
   sheets_[sheet_index].set_auto_filter(std::move(filter));
@@ -86,7 +86,7 @@ Expected<void, Error> Workbook::set_sheet_auto_filter(std::size_t sheet_index, A
 
 Expected<void, Error> Workbook::remove_sheet_auto_filter(std::size_t sheet_index) {
   std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
-  RETURN_IF_ERROR(check_sheet_index("remove_sheet_auto_filter", sheet_index, sheets_.size()));
+  RETURN_IF_ERROR(check_sheet_index(sheet_index, sheets_.size()));
   sheets_[sheet_index].clear_auto_filter_model();
   const eval::RecalcEngine::LockedMutator mutator = engine_->locked_mutator();
   if (erase_filter_database_name(defined_names_, sheet_index)) {
@@ -105,7 +105,7 @@ Expected<void, Error> Workbook::set_sheet_auto_filter_xml(std::size_t sheet_inde
     return set_sheet_auto_filter(sheet_index, std::move(parsed.value()));
   }
   std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
-  RETURN_IF_ERROR(check_sheet_index("set_sheet_auto_filter_xml", sheet_index, sheets_.size()));
+  RETURN_IF_ERROR(check_sheet_index(sheet_index, sheets_.size()));
   sheets_[sheet_index].set_auto_filter(io::auto_filter_from_xml(xml));
   mark_row_visibility_dependents_dirty_locked(sheets_, engine_->locked_mutator(), defined_names_);
   return Expected<void, Error>::Ok();
@@ -113,7 +113,7 @@ Expected<void, Error> Workbook::set_sheet_auto_filter_xml(std::size_t sheet_inde
 
 Expected<void, Error> Workbook::set_table_auto_filter(std::size_t table_index, AutoFilter filter) {
   std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
-  RETURN_IF_ERROR(check_table_index("set_table_auto_filter", table_index, tables_.size()));
+  RETURN_IF_ERROR(check_table_index(table_index, tables_.size()));
   RETURN_IF_ERROR(validate_auto_filter(filter));
   tables_[table_index].auto_filter_xml.set(std::move(filter));
   mark_row_visibility_dependents_dirty_locked(sheets_, engine_->locked_mutator(), defined_names_);
@@ -122,7 +122,7 @@ Expected<void, Error> Workbook::set_table_auto_filter(std::size_t table_index, A
 
 Expected<void, Error> Workbook::remove_table_auto_filter(std::size_t table_index) {
   std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
-  RETURN_IF_ERROR(check_table_index("remove_table_auto_filter", table_index, tables_.size()));
+  RETURN_IF_ERROR(check_table_index(table_index, tables_.size()));
   tables_[table_index].auto_filter_xml.reset();
   mark_row_visibility_dependents_dirty_locked(sheets_, engine_->locked_mutator(), defined_names_);
   return Expected<void, Error>::Ok();

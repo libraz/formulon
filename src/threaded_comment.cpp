@@ -133,12 +133,12 @@ Expected<void, Error> ValidateText(std::string_view text, std::vector<Mention>& 
   const std::uint64_t units = utf16_units_in(text);
   for (Mention& m : mentions) {
     if (!is_threaded_comment_guid(m.mention_id)) {
-      return Invalid("threaded comment: mention id is not a GUID", m.mention_id);
+      return Invalid("mentions.mention_id is not a GUID", m.mention_id);
     }
     m.mention_id = CanonicalGuid(m.mention_id);
-    RETURN_IF_ERROR(BindPerson(persons, m.person_id, "threaded comment: mention names an unknown person"));
+    RETURN_IF_ERROR(BindPerson(persons, m.person_id, "mentions.person_id names an unknown person"));
     if (static_cast<std::uint64_t>(m.start) + m.length > units) {
-      return Invalid("threaded comment: mention range lies outside the text", m.mention_id);
+      return Invalid("mentions.end lies outside the text", m.mention_id);
     }
   }
   return Expected<void, Error>::Ok();
@@ -146,7 +146,7 @@ Expected<void, Error> ValidateText(std::string_view text, std::vector<Mention>& 
 
 Expected<Sheet*, Error> SheetAt(Workbook& wb, std::size_t sheet) {
   if (sheet >= wb.sheet_count()) {
-    return make_error(FormulonErrorCode::kInvalidArgument, "threaded comment: sheet index out of range",
+    return make_error(FormulonErrorCode::kInvalidArgument, "sheet_index is out of range",
                       "sheet=" + std::to_string(sheet));
   }
   return &wb.sheet(sheet);
@@ -231,7 +231,7 @@ Expected<void, Error> Workbook::add_person(Person person) {
     return Refuse(FormulonErrorCode::kAlreadyExists, "id already listed", person.id);
   }
   if (person.display_name.empty()) {
-    return Invalid("empty display name", person.id);
+    return Invalid("display_name is empty", person.id);
   }
   persons_.push_back(std::move(person));
   return Expected<void, Error>::Ok();
@@ -294,7 +294,7 @@ Expected<std::string, Error> Workbook::add_threaded_comment(std::size_t sheet_in
   if (find_threaded_comment(list, comment.id) != list.size()) {
     return Refuse(FormulonErrorCode::kAlreadyExists, "id already used on this sheet", comment.id);
   }
-  RETURN_IF_ERROR(BindPerson(persons_, comment.person_id, "author is not in the person list"));
+  RETURN_IF_ERROR(BindPerson(persons_, comment.person_id, "person_id is not in the person list"));
   if (comment.created.empty()) {
     comment.created = FormatStamp(pinned_now_.has_value() ? *pinned_now_ : date_time::host_utc_civil_time());
   } else if (comment.created.back() == 'Z') {
@@ -309,7 +309,7 @@ Expected<std::string, Error> Workbook::add_threaded_comment(std::size_t sheet_in
   std::size_t insert_at = list.size();
   if (comment.parent_id.empty()) {
     if (!Sheet::coord_in_grid(comment.row, comment.col)) {
-      return make_error(FormulonErrorCode::kInvalidArgument, "coordinate out of grid",
+      return make_error(FormulonErrorCode::kInvalidArgument, "row and col lie outside the grid",
                         "row=" + std::to_string(comment.row) + " col=" + std::to_string(comment.col));
     }
     if (find_thread_at(list, comment.row, comment.col) != list.size()) {
@@ -323,7 +323,7 @@ Expected<std::string, Error> Workbook::add_threaded_comment(std::size_t sheet_in
   } else {
     const std::size_t root = find_threaded_comment(list, comment.parent_id);
     if (root == list.size() || !list[root].parent_id.empty()) {
-      return Invalid("parent is not a thread on this sheet", comment.parent_id);
+      return Invalid("parent_id is not a thread on this sheet", comment.parent_id);
     }
     comment.parent_id = list[root].id;
     comment.row = list[root].row;
@@ -364,7 +364,7 @@ Expected<void, Error> Workbook::set_thread_resolved(std::size_t sheet_index, std
     return Refuse(FormulonErrorCode::kNotFound, "no comment with this id", thread_id);
   }
   if (!list[index].parent_id.empty()) {
-    return Invalid("the id names a reply, not a thread", thread_id);
+    return Invalid("id names a reply, not a thread", thread_id);
   }
   list[index].done = done;
   return Expected<void, Error>::Ok();

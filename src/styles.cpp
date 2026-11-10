@@ -230,10 +230,11 @@ constexpr std::array<const char*, 164> kBuiltinNumFmts = {
 Expected<void, Error> remove_cell_style(StylesTable& styles, std::string_view name) {
   const std::size_t pos = sheet_names::resolve_named(styles.cell_styles, name);
   if (pos == sheet_names::kNotFound) {
-    return make_error(FormulonErrorCode::kInvalidArgument, "no such cell style", "name=" + std::string(name));
+    return make_error(FormulonErrorCode::kInvalidArgument, "name does not name a cell style",
+                      "name=" + std::string(name));
   }
   if (styles.cell_styles[pos].builtin_id == 0U) {
-    return make_error(FormulonErrorCode::kInvalidArgument, "the Normal style cannot be removed",
+    return make_error(FormulonErrorCode::kInvalidArgument, "Normal style cannot be removed",
                       "name=" + std::string(name));
   }
   const std::uint32_t removed_xf = styles.cell_styles[pos].xf_id;
@@ -278,12 +279,12 @@ Expected<void, Error> remove_cell_style(StylesTable& styles, std::string_view na
 
 Expected<void, Error> set_cell_style_xf(StylesTable& styles, std::uint32_t index, const CellXf& record) {
   if (index >= styles.cell_style_xfs.size()) {
-    return make_error(FormulonErrorCode::kIndexOutOfRange, "cell style xf index past the table",
+    return make_error(FormulonErrorCode::kIndexOutOfRange, "cell_style_xf_index is past the table",
                       "index=" + std::to_string(index));
   }
   if (record.font_index >= styles.fonts.size() || record.fill_index >= styles.fills.size() ||
       record.border_index >= styles.borders.size()) {
-    return make_error(FormulonErrorCode::kInvalidArgument, "cell style xf names a missing font, fill or border", "");
+    return make_error(FormulonErrorCode::kInvalidArgument, "record names a missing font, fill or border", "");
   }
   styles.cell_style_xfs[index] = record;
   // A `<cellStyleXfs>` record has no parent style.

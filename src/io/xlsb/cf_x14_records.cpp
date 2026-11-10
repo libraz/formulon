@@ -439,7 +439,7 @@ Expected<void, Error> add_x14_data_bars(std::vector<std::uint8_t>& records,
       }
       std::array<std::uint8_t, kGuidBytes> guid{};
       if (!ParseGuid(rule.id, guid)) {
-        return refuse_write("xlsb conditional format x14 link id is not a GUID: " + rule.id);
+        return refuse_write("XLSB conditional format x14 link id is not a GUID: " + rule.id);
       }
       const cf::DataBarSpec& bar = *rule.data_bar;
       EmitBlockHead(groups, format, 1U);
@@ -454,7 +454,7 @@ Expected<void, Error> add_x14_data_bars(std::vector<std::uint8_t>& records,
       for (const cf::CfValueObject* v : {&bar.min, &bar.max}) {
         double num = 0;
         if (v->type == cf::CfvoType::Formula) {
-          return refuse_write("xlsb x14 data bar with a formula threshold has no known record form");
+          return refuse_write("XLSB x14 data bar with a formula threshold has no known record form");
         }
         if (v->type == cf::CfvoType::Number || v->type == cf::CfvoType::Percent ||
             v->type == cf::CfvoType::Percentile) {
@@ -636,10 +636,10 @@ Expected<void, Error> EmitFormulaRule14(std::vector<std::uint8_t>& dst, const cf
   ASSIGN_OR_RETURN(CfRuleFields fields, encode_cf_rule_fields(rule));
   std::array<std::uint8_t, kGuidBytes> guid{};
   if (!ParseGuid(id, guid)) {
-    return refuse_write("xlsb conditional format x14 rule id is not a GUID: " + id);
+    return refuse_write("XLSB conditional format x14 rule id is not a GUID: " + id);
   }
   if (rule.priority <= 0) {
-    return refuse_write("xlsb conditional format x14 rule needs a positive priority");
+    return refuse_write("XLSB conditional format x14 rule needs a positive priority");
   }
   std::array<std::uint32_t, 2> cb{};
   std::vector<std::uint8_t> list;

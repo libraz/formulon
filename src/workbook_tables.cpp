@@ -85,7 +85,7 @@ bool name_in_use(const std::vector<TableMetadata>& tables, const std::vector<io:
 Expected<void, Error> check_table_identity(const Workbook& wb, std::string_view name, std::string_view display_name,
                                            std::optional<std::size_t> self) {
   if (name.empty() || !is_valid_table_name(display_name)) {
-    return invalid_table("invalid table name",
+    return invalid_table("name is not a valid table name",
                          "name=" + std::string(name) + " display_name=" + std::string(display_name));
   }
   if (name_in_use(wb.tables(), io::xlsb::xlsb_retained_tables(wb), wb.defined_names(), name, display_name, self)) {
@@ -136,7 +136,7 @@ Expected<void, Error> check_table_range_free(const Workbook& wb, std::size_t she
     const MergeRange block{address.row, address.col, address.row + cell->array_block_rows - 1U,
                            address.col + cell->array_block_cols - 1U};
     if (intersects(block, rect)) {
-      return refuse("multi-cell array formulas are not valid in a table");
+      return refuse("range must not hold a multi-cell array formula");
     }
   }
   for (const MergeRange& merge : sheet.merges()) {
@@ -154,7 +154,7 @@ Expected<std::size_t, Error> Workbook::add_table(TableMetadata table) {
   const auto rect = parse_a1_rectangle(table.ref);
   if (table.sheet_index >= sheet_count() || table.ref.empty() || table.name.empty() || table.display_name.empty() ||
       table.columns.empty()) {
-    return invalid_table("invalid sheet, table identity, range, or columns");
+    return invalid_table("sheet_index is out of range, or name, range, or column_names is empty");
   }
   const std::size_t width = rect ? static_cast<std::size_t>(rect->last_col - rect->first_col) + 1U : 0U;
   if (width != table.columns.size()) {
@@ -248,10 +248,10 @@ Expected<void, Error> check_totals_row_free(const Workbook& wb, std::size_t inde
   for (std::uint32_t col = below.first_col; col <= below.last_col; ++col) {
     const Cell* cell = sheet.cell_at(below.first_row, col);
     if (cell != nullptr && (!cell->formula_text.empty() || !cell->cached_value.is_blank())) {
-      return refuse("the row below the table is not empty");
+      return refuse("patch.totals_row needs the row below the table to be empty");
     }
     if (sheet.committed_spill_footprint_covering(below.first_row, col).has_value()) {
-      return refuse("the row below the table holds a spilled result");
+      return refuse("patch.totals_row needs the row below the table free of a spilled result");
     }
   }
   MergeRange grown = rect;
@@ -411,7 +411,8 @@ Expected<void, Error> Workbook::set_table_totals_row(std::size_t index, bool sho
   MergeRange next = *rect;
   if (shown) {
     if (rect->last_row + 1U >= Sheet::kMaxRows) {
-      return make_error(FormulonErrorCode::kPreconditionFailed, "the table ends on the last row of the grid",
+      return make_error(FormulonErrorCode::kPreconditionFailed,
+                        "patch.totals_row cannot be shown on a table ending on the last row of the grid",
                         "ref=" + tables_[index].ref);
     }
     const MergeRange below{rect->last_row + 1U, rect->first_col, rect->last_row + 1U, rect->last_col};
@@ -426,7 +427,8 @@ Expected<void, Error> Workbook::set_table_totals_row(std::size_t index, bool sho
   } else {
     const std::uint32_t data_rows = rect->last_row - rect->first_row - (tables_[index].header_row ? 1U : 0U);
     if (data_rows == 0U) {
-      return make_error(FormulonErrorCode::kPreconditionFailed, "the table would keep no data row",
+      return make_error(FormulonErrorCode::kPreconditionFailed,
+                        "patch.totals_row cannot be hidden when the table would keep no data row",
                         "ref=" + tables_[index].ref);
     }
     for (std::uint32_t col = rect->first_col; col <= rect->last_col; ++col) {
@@ -434,7 +436,8 @@ Expected<void, Error> Workbook::set_table_totals_row(std::size_t index, bool sho
       if ((block && (block->rows != 1U || block->cols != 1U)) ||
           data_table_at(sheet_index, rect->last_row, col) != nullptr) {
         return make_error(FormulonErrorCode::kPreconditionFailed,
-                          "the totals row holds part of a multi-cell array formula or data table",
+                          "patch.totals_row cannot be hidden while the totals row holds part of a multi-cell array "
+                          "formula or data table",
                           "ref=" + tables_[index].ref);
       }
     }

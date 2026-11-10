@@ -277,18 +277,18 @@ Expected<TableResult, Error> compute_table(Workbook& wb, std::size_t sheet_index
 
 Expected<void, Error> Workbook::add_data_table(std::size_t sheet_index, MergeRange ref, DataTableInput row_input,
                                                DataTableInput col_input) {
-  RETURN_IF_ERROR(detail::check_sheet_in_range("add_data_table", sheet_index, sheets_.size()));
+  RETURN_IF_ERROR(detail::check_sheet_in_range(sheet_index, sheets_.size()));
   ref = normalized(ref);
   if (!Sheet::coord_in_grid(ref.first_row, ref.first_col) || !Sheet::coord_in_grid(ref.last_row, ref.last_col)) {
     return make_error(FormulonErrorCode::kInvalidArgument, "ref outside grid");
   }
   for (const DataTableInput* input : {&row_input, &col_input}) {
     if (input->present && !Sheet::coord_in_grid(input->row, input->col)) {
-      return make_error(FormulonErrorCode::kInvalidArgument, "input cell outside grid");
+      return make_error(FormulonErrorCode::kInvalidArgument, "spec input cells lie outside the grid");
     }
   }
   if (!row_input.present && !col_input.present) {
-    return make_error(FormulonErrorCode::kDataTableInvalid, "no input cell");
+    return make_error(FormulonErrorCode::kDataTableInvalid, "spec needs has_row_input or has_column_input");
   }
   if (ref.first_row == 0U || ref.first_col == 0U) {
     return make_error(FormulonErrorCode::kDataTableInvalid, "ref needs a row above and a column left of it");
@@ -298,7 +298,7 @@ Expected<void, Error> Workbook::add_data_table(std::size_t sheet_index, MergeRan
   }
   for (const DataTableInput* input : {&row_input, &col_input}) {
     if (input->present && range_contains(ref, input->row, input->col)) {
-      return make_error(FormulonErrorCode::kDataTableInvalid, "input cell inside ref");
+      return make_error(FormulonErrorCode::kDataTableInvalid, "spec input cell lies inside rect");
     }
   }
   for (const DataTable& other : sheets_[sheet_index].data_tables()) {
@@ -308,7 +308,7 @@ Expected<void, Error> Workbook::add_data_table(std::size_t sheet_index, MergeRan
   }
 
   if (intersects_array_or_spill(sheets_[sheet_index], ref)) {
-    return make_error(FormulonErrorCode::kPreconditionFailed, "cannot change part of an array");
+    return make_error(FormulonErrorCode::kPreconditionFailed, "rect overlaps part of an array formula");
   }
 
   DataTable table;
@@ -345,7 +345,7 @@ const DataTable* Workbook::data_table_at(std::size_t sheet_index, std::uint32_t 
 Expected<void, Error> Workbook::remove_data_table(std::size_t sheet_index, std::uint32_t row, std::uint32_t col) {
   const DataTable* found = data_table_at(sheet_index, row, col);
   if (found == nullptr) {
-    return make_error(FormulonErrorCode::kDataTableInvalid, "no data table at cell",
+    return make_error(FormulonErrorCode::kDataTableInvalid, "row and col do not address a data table",
                       "row=" + std::to_string(row) + " col=" + std::to_string(col));
   }
   const MergeRange ref = found->ref;

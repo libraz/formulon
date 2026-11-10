@@ -27,7 +27,8 @@ Expected<void, Error> load_part_dom(const Workbook& wb, std::string_view path, s
                                     pugi::xml_document& doc) {
   const PassthroughPart* part = find_passthrough_part(wb, path);
   if (part == nullptr) {
-    return make_error(FormulonErrorCode::kInvalidArgument, "no such part", "part=" + std::string(path));
+    return make_error(FormulonErrorCode::kInvalidArgument, "path does not name a passthrough part",
+                      "part=" + std::string(path));
   }
   return load_xml_buffer(doc, part->bytes, reader_module, path);
 }

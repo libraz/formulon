@@ -269,6 +269,22 @@ test('boolean arguments and fields refuse non-booleans', async () => {
   });
 });
 
+test('an engine message that leads with no argument keeps its wording under the call label', async () => {
+  await withWorkbook((wb, f) => {
+    const invalid = f.StatusCode.InvalidArgument;
+    failsWith(
+      () => wb.setDefinedName({ name: 'A1', formula: '1' }),
+      invalid,
+      'Workbook.setDefinedName definedName.name is not a valid defined name',
+    );
+    failsWith(
+      () => wb.sheet(0).addTable({ range: 'A1:B3', name: 'Has Space', columns: ['a', 'b'] }),
+      invalid,
+      'Sheet.addTable input.name is not a valid table name',
+    );
+  });
+});
+
 test('updateAxis with an unknown id is NotFound and names the kind form', async () => {
   await withWorkbook((wb, f) => {
     const { chart } = makeHandles(f, wb);

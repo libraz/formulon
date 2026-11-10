@@ -127,6 +127,17 @@ Checks:
                   admits `null` on, and the Python `update_*` keywords whose
                   annotation admits `None`, are exactly that list. `description`
                   on a drawing-family update is the documented exception.
+  engine-messages
+                  Every engine error literal under src/ that a call can report
+                  leads with a C parameter or struct field formulon_c.h declares
+                  (`<field> <constraint>`), or is a capitalised sentence; no
+                  `<op>:` prefix and no lowercase prose lead. File-content
+                  diagnostics (kIo*, kSecurity*, out of memory) are exempt.
+  tristate-reads
+                  Every read of an `fm_tristate_t` field in the WASM / Node
+                  glue and the Python package decodes it explicitly (compared
+                  with a TRISTATE constant or handed to a tristate helper);
+                  FM_TRISTATE_FALSE is 1, so a truthiness test reads it as true.
   style-record-fields
                   Every public type that projects a style record
                   (`Color` / `Font` / `Fill` /
@@ -206,6 +217,7 @@ from binding_drift.declaration_checks import (
     check_readme_counts,
     check_staged_dist,
 )
+from binding_drift.engine_messages import check_engine_messages
 from binding_drift.patch_nullability import check_patch_nullability
 from binding_drift.python_checks import (
     check_python_call_signatures,
@@ -217,6 +229,7 @@ from binding_drift.readme_checks import check_readme_facts
 from binding_drift.readme_identifiers import check_readme_identifiers
 from binding_drift.shape_checks import check_dts_shared_shapes, check_style_record_fields
 from binding_drift.surface_files import _SKIPPED
+from binding_drift.tristate_reads import check_tristate_reads
 
 
 def check_parse_error_codes() -> List[str]:
@@ -242,6 +255,8 @@ CHECKS = {
     "dts-enums": check_dts_enums,
     "facade-patch-keys": check_facade_patch_keys,
     "patch-nullability": check_patch_nullability,
+    "engine-messages": check_engine_messages,
+    "tristate-reads": check_tristate_reads,
     "style-record-fields": check_style_record_fields,
     "staged-dist": check_staged_dist,
     "abi-baseline": check_abi_baseline,

@@ -41,7 +41,9 @@ from ._c import (
     _argument_message,
     _call_label,
     _NoCopy,
+    _past_count,
     _require_bool,
+    _require_number,
     _sint,
     _uint,
     fm_value_t_size,
@@ -1127,11 +1129,7 @@ def _format_value(spec: Tuple[str, bool, Any], value: Any, label: str) -> Any:
     if kind == "side":
         return _format_group("side", value, label)
     if kind == "size":
-        if isinstance(value, bool) or not isinstance(value, numbers.Real):
-            raise TypeError(_argument_message(label, "must be a number"))
-        if not math.isfinite(value):
-            raise ValueError(_argument_message(label, "must be finite"))
-        return float(value)
+        return _require_number(value, label)
     if kind == "enum":
         number = _format_count(value, label)
         if number > max(arg):
@@ -1597,7 +1595,7 @@ class Sheet(_NoCopy):
             _uint(sheet, "sheet_index", role="sheet"),
             _uint(row, "row", role="coordinate"),
             _uint(col, "col", role="coordinate"),
-            float(value),
+            _require_number(value, "value", finite=False),
         )
         _check(status)
 
@@ -3243,10 +3241,10 @@ class Sheet(_NoCopy):
             type=d["type"],
             operator=d["op"],
             error_style=d["error_style"],
-            allow_blank=d["allow_blank"] == S.TRISTATE_TRUE,
-            show_input_message=d["show_input_message"] == S.TRISTATE_TRUE,
-            show_error_message=d["show_error_message"] == S.TRISTATE_TRUE,
-            show_in_cell_dropdown=d["show_in_cell_dropdown"] == S.TRISTATE_TRUE,
+            allow_blank=S.tristate_flag(d["allow_blank"]),
+            show_input_message=S.tristate_flag(d["show_input_message"]),
+            show_error_message=S.tristate_flag(d["show_error_message"]),
+            show_in_cell_dropdown=S.tristate_flag(d["show_in_cell_dropdown"]),
             formula1=LIB.read_cstr(d["formula1"]) or None,
             formula2=LIB.read_cstr(d["formula2"]) or None,
             error_title=LIB.read_cstr(d["error_title"]) or None,
@@ -3458,7 +3456,7 @@ class Sheet(_NoCopy):
                 spin_count=d["spin_count"],
                 legacy_password_hash=LIB.read_cstr(d["legacy_password_hash"]) or None,
                 **{
-                    flag: d[flag] == S.TRISTATE_TRUE if flag in self._PROTECT_TRISTATE else d[flag] != 0
+                    flag: S.tristate_flag(d[flag]) if flag in self._PROTECT_TRISTATE else d[flag] != 0
                     for flag in S.SHEET_PROTECTION_ALLOW_FLAGS
                 },
             )
@@ -3766,7 +3764,11 @@ class Sheet(_NoCopy):
         sheet = self._index()
         h = self._workbook._require()
         return self._read_f64_out(
-            LIB.fm_sheet_convert_column_chars_to_pt, h, _uint(sheet, "sheet_index", role="sheet"), float(chars), mode_c
+            LIB.fm_sheet_convert_column_chars_to_pt,
+            h,
+            _uint(sheet, "sheet_index", role="sheet"),
+            _require_number(chars, "chars", finite=False),
+            mode_c,
         )
 
     def convert_column_pt_to_chars(self, pt: float, mode: GeometryMode = GeometryMode.DISPLAY) -> float:
@@ -3779,7 +3781,11 @@ class Sheet(_NoCopy):
         sheet = self._index()
         h = self._workbook._require()
         return self._read_f64_out(
-            LIB.fm_sheet_convert_column_pt_to_chars, h, _uint(sheet, "sheet_index", role="sheet"), float(pt), mode_c
+            LIB.fm_sheet_convert_column_pt_to_chars,
+            h,
+            _uint(sheet, "sheet_index", role="sheet"),
+            _require_number(pt, "pt", finite=False),
+            mode_c,
         )
 
     def _read_formula_text(self, fn, sheet: int, row: int, col: int) -> Optional[str]:
@@ -3839,26 +3845,22 @@ class Sheet(_NoCopy):
         ``None`` or ``0`` means the engine maximum.
         """
         rect = self._range_or_used(range)
-        if rect is None:
-            return CellsInRange([], None)
         cells, next_cursor = self._cell_page(rect, cursor, limit)
         return CellsInRange([_range_cell(*cell) for cell in cells], next_cursor)
 
     def _cell_page(
-        self, rect: CellRect, cursor: Optional[int], limit: Optional[int]
+        self, rect: Optional[CellRect], cursor: Optional[int], limit: Optional[int]
     ) -> Tuple[List[Tuple[int, int, Optional[str], Value]], Optional[int]]:
         sheet = self._index()
         h = self._workbook._require()
+        page = _uint(cursor or 0, "cursor", 64), _uint(limit or 0, "limit")
+        if rect is None:
+            return [], None
         with _ArgScope() as scope:
             rp = scope.struct(S.CELL_RECT)
             _pack_cell_rect_at(rp, rect)
             return self._read_cell_range_page(
-                LIB.fm_sheet_get_cells_in_range,
-                h,
-                _uint(sheet, "sheet_index", role="sheet"),
-                rp,
-                _uint(cursor or 0, "cursor", 64),
-                _uint(limit or 0, "limit"),
+                LIB.fm_sheet_get_cells_in_range, h, _uint(sheet, "sheet_index", role="sheet"), rp, *page
             )
 
     @staticmethod
@@ -4974,7 +4976,9 @@ class Sheet(_NoCopy):
                     )
                     brk = S.ROW_BREAK.unpack(LIB, row_break_ptr)
                     row_breaks.append(
-                        RowBreak(row=brk["row"], first=brk["first"], last=brk["last"], manual=bool(brk["manual"]))
+                        RowBreak(
+                            row=brk["row"], first=brk["first"], last=brk["last"], manual=S.tristate_flag(brk["manual"])
+                        )
                     )
                 column_breaks = []
                 column_break_ptr = scope.struct(S.COLUMN_BREAK)
@@ -4986,7 +4990,9 @@ class Sheet(_NoCopy):
                     )
                     brk = S.COLUMN_BREAK.unpack(LIB, column_break_ptr)
                     column_breaks.append(
-                        ColumnBreak(col=brk["col"], first=brk["first"], last=brk["last"], manual=bool(brk["manual"]))
+                        ColumnBreak(
+                            col=brk["col"], first=brk["first"], last=brk["last"], manual=S.tristate_flag(brk["manual"])
+                        )
                     )
                 _check(LIB.fm_pagination_get_scale(pagination, scale_ptr))
                 scale_pct = LIB.read_f64(scale_ptr)
@@ -5449,7 +5455,7 @@ class Sheet(_NoCopy):
             for i in range(count):
                 _check(at_fn(h, _uint(sheet, "sheet_index", role="sheet"), _uint(i, "index", role="position"), ptr))
                 d = layout.unpack(LIB, ptr)
-                manual = d["manual"] == S.TRISTATE_TRUE
+                manual = S.tristate_flag(d["manual"])
                 out.append(record(**{key: d[key]}, first=d["first"], last=d["last"], manual=manual))
         return out
 
@@ -5553,7 +5559,7 @@ class Sheet(_NoCopy):
                 if value is None:
                     raise TypeError(_argument_message(name, "must not be null"))
                 values[f"{name}_op"] = _PATCH_SET
-                values[name] = float(value)
+                values[name] = _require_number(value, name, finite=False)
             S.PAGE_MARGINS_PATCH.pack(LIB, ptr, values)
             _check(LIB.fm_sheet_update_page_margins(h, _uint(sheet, "sheet_index", role="sheet"), ptr))
 
@@ -5779,7 +5785,7 @@ class Sheet(_NoCopy):
                 _uint(sheet, "sheet_index", role="sheet"),
                 _uint(first, "first", role="coordinate"),
                 _uint(last, "last", role="coordinate"),
-                float(width_chars),
+                _require_number(width_chars, "width_chars", finite=False),
             )
         )
 
@@ -5887,7 +5893,7 @@ class Sheet(_NoCopy):
                 _uint(sheet, "sheet_index", role="sheet"),
                 _uint(first, "first", role="coordinate"),
                 _uint(last, "last", role="coordinate"),
-                float(height_pt),
+                _require_number(height_pt, "height_pt", finite=False),
             )
         )
 
@@ -5913,7 +5919,7 @@ class Sheet(_NoCopy):
                 _uint(sheet, "sheet_index", role="sheet"),
                 _uint(first, "first", role="coordinate"),
                 _uint(last, "last", role="coordinate"),
-                float(height_pt),
+                _require_number(height_pt, "height_pt", finite=False),
             )
         )
 
@@ -6030,7 +6036,9 @@ class Sheet(_NoCopy):
                 {
                     "time_period_rules": 0 if time_period_rules else 1,
                     "has_today_serial": 0 if today_serial is None else 1,
-                    "today_serial": 0.0 if today_serial is None else float(today_serial),
+                    "today_serial": 0.0
+                    if today_serial is None
+                    else _require_number(today_serial, "today_serial", finite=False),
                 },
             )
             out = scope.out_ptr()
@@ -6099,7 +6107,7 @@ class Sheet(_NoCopy):
     def _decode_cfvo(ptr: int) -> CfValueObject:
         d = S.CFVO.unpack(LIB, ptr)
         return CfValueObject(
-            type=d["type"], value=LIB.read_cstr(d["value"]) if d["value"] else None, gte=d["gte"] == S.TRISTATE_TRUE
+            type=d["type"], value=LIB.read_cstr(d["value"]) if d["value"] else None, gte=S.tristate_flag(d["gte"])
         )
 
     @staticmethod
@@ -6265,7 +6273,7 @@ class Sheet(_NoCopy):
                     "above_average": int(_require_bool(getattr(rule, "above_average", False), "rule.above_average")),
                     "equal_average": int(_require_bool(getattr(rule, "equal_average", False), "rule.equal_average")),
                     "has_std_dev": 1 if std_dev is not None else 0,
-                    "std_dev": float(std_dev or 0.0),
+                    "std_dev": 0.0 if std_dev is None else _require_number(std_dev, "rule.std_dev", finite=False),
                     "has_time_period": 1 if time_period is not None else 0,
                 },
             )
@@ -6743,7 +6751,7 @@ class Sheet(_NoCopy):
         if pivot_index >= self._pivot_count():
             raise FormulonError(
                 StatusCode.INDEX_OUT_OF_RANGE,
-                _argument_message("pivot", f"{pivot_index} is out of range ({self._pivot_count()} items)"),
+                _argument_message("pivot", f"{pivot_index} {_past_count(self._pivot_count(), 'item')}"),
                 "",
             )
         return self._pivot_at(pivot_index)

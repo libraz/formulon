@@ -115,7 +115,7 @@ Expected<void, Error> load_drawing(const Workbook& wb, std::size_t sheet, pugi::
   }
   const PassthroughPart* part = io::ooxml::find_passthrough_part(wb, path);
   if (part == nullptr) {
-    return unparseable("slicer: drawing part is missing");
+    return unparseable("Slicer drawing part is missing");
   }
   return parse_drawing_part(part->bytes, drawing);
 }
@@ -125,7 +125,7 @@ Expected<void, Error> load_drawing(const Workbook& wb, std::size_t sheet, pugi::
 Expected<bool, Error> scan(const Workbook& wb, std::size_t sheet, std::size_t want, Slot* out,
                            std::vector<SlicerInfo>* all) {
   if (sheet >= wb.sheet_count()) {
-    return invalid("slicer: sheet index out of range");
+    return invalid("sheet_index must be less than the sheet count");
   }
   pugi::xml_document drawing;
   bool drawing_loaded = false;
@@ -194,7 +194,7 @@ Expected<bool, Error> scan(const Workbook& wb, std::size_t sheet, std::size_t wa
 Expected<void, Error> slot_at(const Workbook& wb, std::size_t sheet, std::size_t index, Slot& slot) {
   ASSIGN_OR_RETURN(const bool found, scan(wb, sheet, index, &slot, nullptr));
   if (!found) {
-    return make_error(FormulonErrorCode::kIndexOutOfRange, "slicer: index out of range");
+    return make_error(FormulonErrorCode::kIndexOutOfRange, "index must be less than the slicer count");
   }
   return Expected<void, Error>::Ok();
 }
@@ -207,7 +207,7 @@ Expected<pugi::xml_node, Error> load_slicer_node(const Workbook& wb, const Slot&
       return node;
     }
   }
-  return invalid("slicer: slicer element is missing");
+  return invalid("Slicer element is missing");
 }
 
 // Sets `name` to `value`, or removes it when `value` is the schema default.
@@ -281,15 +281,15 @@ Expected<void, Error> check_spec(const SlicerSpec& s) {
   using namespace slicer_field;
   if ((s.fields & ~kAll) != 0U || has_control(s.name) || has_control(s.caption) || has_control(s.style) ||
       ((s.fields & kName) != 0U && s.name.empty())) {
-    return invalid("slicer: unknown field bit, empty name or control character in text");
+    return invalid("Slicer spec has an unknown field bit, an empty name or a control character in its text");
   }
   if (((s.fields & kColumnCount) != 0U && (s.column_count == 0U || s.column_count > kMaxColumnCount)) ||
       ((s.fields & kRowHeight) != 0U && (s.row_height <= 0 || s.row_height >= kEmuLimit))) {
-    return invalid("slicer: column count or row height out of range");
+    return invalid("column_count or row_height_pt is out of range");
   }
   if ((s.fields & kAnchor) != 0U &&
       (bad_marker(s.from) || bad_marker(s.to) || s.to.row < s.from.row || s.to.col < s.from.col)) {
-    return invalid("slicer: anchor lies outside the sheet or ends before it starts");
+    return invalid("placement.anchor must lie within the sheet and not end before it starts");
   }
   return Expected<void, Error>::Ok();
 }
@@ -480,15 +480,15 @@ Expected<std::uint32_t, Error> add_slicer(Workbook& wb, std::size_t sheet, std::
   RETURN_IF_ERROR(check_spec(spec));
   if (sheet >= wb.sheet_count() || wb.sheet(sheet).is_opaque_ooxml_sheet() || table_index >= wb.tables().size() ||
       (spec.fields & kAnchor) == 0U) {
-    return invalid("slicer: bad sheet or table, or no anchor");
+    return invalid("sheet_index or table_index is out of range, or placement.anchor is missing");
   }
   if (column >= wb.tables()[table_index].columns.size()) {
-    return make_error(FormulonErrorCode::kIndexOutOfRange, "slicer: column index out of range");
+    return make_error(FormulonErrorCode::kIndexOutOfRange, "column_index must be less than the table column count");
   }
   const std::vector<UnknownRelationship>& sheet_rels = wb.sheet(sheet).unknown_relationships();
   if (std::any_of(sheet_rels.begin(), sheet_rels.end(),
                   [](const UnknownRelationship& rel) { return rel.type == io::kRelDrawing; })) {
-    return unparseable("slicer: drawing retained from an xlsb package is not editable");
+    return unparseable("Drawing retained from an xlsb package is not editable");
   }
   const TableMetadata& table = wb.tables()[table_index];
   const TableColumn& col = table.columns[column];
@@ -508,7 +508,7 @@ Expected<std::uint32_t, Error> add_slicer(Workbook& wb, std::size_t sheet, std::
   }
   const std::string cache_name = unique_name(cache_base, "", cache_names);
   if (!is_valid_defined_name(cache_name)) {
-    return invalid("slicer: the column name yields no valid cache name");
+    return invalid("The column name yields no valid cache name");
   }
   if ((spec.fields & kCaption) == 0U) {
     spec.caption = col.name;
@@ -532,7 +532,7 @@ Expected<std::uint32_t, Error> add_slicer(Workbook& wb, std::size_t sheet, std::
   io::ensure_attr(drawing_root, "xmlns:xdr", chart_ns::kNsXdr);
   io::ensure_attr(drawing_root, "xmlns:a", chart_ns::kNsA);
   if (!drawing_root.append_buffer(kFrameXml, std::char_traits<char>::length(kFrameXml))) {
-    return invalid("slicer: frame could not be built");
+    return invalid("Frame could not be built");
   }
   const pugi::xml_node frame = drawing_root.last_child();
   const pugi::xml_node cnvpr = find_element(frame, "cNvPr");
@@ -607,12 +607,12 @@ Expected<void, Error> check_update(const Workbook& wb, std::size_t sheet, std::s
   RETURN_IF_ERROR(check_spec(spec));
   RETURN_IF_ERROR(slot_at(wb, sheet, index, slot));
   if ((spec.fields & kName) != 0U) {
-    return invalid("slicer: a slicer cannot be renamed");
+    return invalid("name cannot be changed on a slicer");
   }
   RETURN_IF_ERROR(load_drawing(wb, sheet, drawing));
   frame = find_frame(drawing, slot.info.name);
   if ((spec.fields & kAnchor) != 0U && (!frame || !is_element(frame, "twoCellAnchor"))) {
-    return invalid("slicer: the slicer has no two-cell frame to move");
+    return invalid("placement.anchor needs a slicer with a two-cell frame");
   }
   return Expected<void, Error>::Ok();
 }
@@ -655,7 +655,7 @@ Expected<void, Error> update_slicer(Workbook& wb, std::size_t sheet, std::uint32
     }
   }
   if (index == slicers.size()) {
-    return make_error(FormulonErrorCode::kNotFound, "slicer: no slicer frame with that id");
+    return make_error(FormulonErrorCode::kNotFound, "object_id does not name a slicer");
   }
   if (slicer != nullptr) {
     Slot slot;

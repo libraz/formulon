@@ -489,11 +489,10 @@ bool insert_pushes_content_off(const Sheet& sheet, const StructuralEdit& edit) {
 // refused, as Excel refuses to shift non-empty cells off the sheet. A band
 // edit is also refused when its moving region meets one of these, or a
 // table, across a band edge, and when it lies inside a PivotTable.
-Expected<void, Error> check_structure_edit(const Workbook& wb, std::size_t sheet_index, const StructuralEdit& edit,
-                                           const char* op_name) {
+Expected<void, Error> check_structure_edit(const Workbook& wb, std::size_t sheet_index, const StructuralEdit& edit) {
   const auto refuse = [&](StructureEditCut cut, const char* what) {
-    std::string message(op_name);
-    message.append(cut == StructureEditCut::kPushesOff ? ": cannot shift " : ": cannot change part of ").append(what);
+    std::string message(cut == StructureEditCut::kPushesOff ? "Cannot shift " : "Cannot change part of ");
+    message.append(what);
     if (cut == StructureEditCut::kPushesOff) {
       message.append(" off the sheet");
     }
@@ -579,15 +578,14 @@ Expected<void, Error> check_structure_edit(const Workbook& wb, std::size_t sheet
   return Expected<void, Error>::Ok();
 }
 
-Expected<void, Error> apply_row_col_edit(Workbook& wb, std::size_t sheet_index, const StructuralEdit& edit,
-                                         const char* op_name) {
-  RETURN_IF_ERROR(check_sheet_index(op_name, sheet_index, wb.sheet_count()));
+Expected<void, Error> apply_row_col_edit(Workbook& wb, std::size_t sheet_index, const StructuralEdit& edit) {
+  RETURN_IF_ERROR(check_sheet_index(sheet_index, wb.sheet_count()));
   if (edit.count == 0U) {
-    return make_error(FormulonErrorCode::kInvalidArgument, std::string(op_name) + ": count must be >= 1");
+    return make_error(FormulonErrorCode::kInvalidArgument, "count must be >= 1");
   }
   const std::uint32_t bound = a1::axis_extent(edit.row_axis);
   if (edit.index >= bound) {
-    return make_error(FormulonErrorCode::kInvalidArgument, std::string(op_name) + ": origin out of bounds",
+    return make_error(FormulonErrorCode::kInvalidArgument, "first is out of bounds",
                       "origin=" + std::to_string(edit.index));
   }
   // Deletion helpers use `origin + count` as their exclusive endpoint.
@@ -595,10 +593,10 @@ Expected<void, Error> apply_row_col_edit(Workbook& wb, std::size_t sheet_index, 
   // count received through the C/WASM ABI cannot wrap and turn a delete
   // into a corrupting row/column move.
   if (edit.is_delete && edit.count > bound - edit.index) {
-    return make_error(FormulonErrorCode::kInvalidArgument, std::string(op_name) + ": count exceeds sheet bounds",
+    return make_error(FormulonErrorCode::kInvalidArgument, "count exceeds the sheet bounds",
                       "origin=" + std::to_string(edit.index) + " count=" + std::to_string(edit.count));
   }
-  return check_structure_edit(wb, sheet_index, edit, op_name);
+  return check_structure_edit(wb, sheet_index, edit);
 }
 
 // Precondition: caller holds the engine mutex for the lifetime of the
@@ -620,8 +618,8 @@ Expected<void, Error> apply_row_col_edit(Workbook& wb, std::size_t sheet_index, 
                                                                      const eval::RecalcEngine::LockedMutator& mutator,
                                                                      std::vector<DefinedName>& defined_names,
                                                                      std::size_t sheet_index,
-                                                                     const StructuralEdit& edit, const char* op_name) {
-  RETURN_IF_ERROR(apply_row_col_edit(wb, sheet_index, edit, op_name));
+                                                                     const StructuralEdit& edit) {
+  RETURN_IF_ERROR(apply_row_col_edit(wb, sheet_index, edit));
   const std::uint32_t origin = edit.index;
   const std::uint32_t count = edit.count;
   const std::string target_sheet_name = sheets[sheet_index].name();
@@ -827,28 +825,28 @@ Expected<void, Error> Workbook::insert_rows(std::size_t sheet_index, std::uint32
   std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
   const eval::RecalcEngine::LockedMutator mutator = engine_->locked_mutator();
   return apply_row_col_edit_operation(*this, sheets_, mutator, defined_names_, sheet_index,
-                                      StructuralEdit{row, count, false, true}, "insert_rows");
+                                      StructuralEdit{row, count, false, true});
 }
 
 Expected<void, Error> Workbook::delete_rows(std::size_t sheet_index, std::uint32_t row, std::uint32_t count) {
   std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
   const eval::RecalcEngine::LockedMutator mutator = engine_->locked_mutator();
   return apply_row_col_edit_operation(*this, sheets_, mutator, defined_names_, sheet_index,
-                                      StructuralEdit{row, count, true, true}, "delete_rows");
+                                      StructuralEdit{row, count, true, true});
 }
 
 Expected<void, Error> Workbook::insert_cols(std::size_t sheet_index, std::uint32_t col, std::uint32_t count) {
   std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
   const eval::RecalcEngine::LockedMutator mutator = engine_->locked_mutator();
   return apply_row_col_edit_operation(*this, sheets_, mutator, defined_names_, sheet_index,
-                                      StructuralEdit{col, count, false, false}, "insert_cols");
+                                      StructuralEdit{col, count, false, false});
 }
 
 Expected<void, Error> Workbook::delete_cols(std::size_t sheet_index, std::uint32_t col, std::uint32_t count) {
   std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
   const eval::RecalcEngine::LockedMutator mutator = engine_->locked_mutator();
   return apply_row_col_edit_operation(*this, sheets_, mutator, defined_names_, sheet_index,
-                                      StructuralEdit{col, count, true, false}, "delete_cols");
+                                      StructuralEdit{col, count, true, false});
 }
 
 // @size-budget: 13 KB
@@ -865,26 +863,24 @@ Expected<void, Error> Workbook::delete_cells(std::size_t sheet_index, const Merg
 
 Expected<void, Error> Workbook::apply_band_edit_locked(std::size_t sheet_index, const MergeRange& range,
                                                        CellShift shift, bool is_delete) {
-  const char* op_name = is_delete ? "delete_cells" : "insert_cells";
-  RETURN_IF_ERROR(check_sheet_index(op_name, sheet_index, sheets_.size()));
+  RETURN_IF_ERROR(check_sheet_index(sheet_index, sheets_.size()));
   const bool known =
       shift == CellShift::kDown || shift == CellShift::kRight || shift == CellShift::kUp || shift == CellShift::kLeft;
   if (!known || (shift == CellShift::kDown || shift == CellShift::kRight) == is_delete) {
-    return make_error(
-        FormulonErrorCode::kInvalidArgument,
-        std::string(op_name) + (is_delete ? ": shift must be up or left" : ": shift must be down or right"));
+    return make_error(FormulonErrorCode::kInvalidArgument,
+                      is_delete ? "shift must be up or left" : "shift must be down or right");
   }
   if (range.first_row > range.last_row || range.first_col > range.last_col || range.last_row >= Sheet::kMaxRows ||
       range.last_col >= Sheet::kMaxCols) {
-    return make_error(FormulonErrorCode::kInvalidArgument, std::string(op_name) + ": range outside the grid");
+    return make_error(FormulonErrorCode::kInvalidArgument, "range is outside the grid");
   }
   const bool vertical = shift == CellShift::kDown || shift == CellShift::kUp;
   const bool whole_cols = range.first_row == 0U && range.last_row == Sheet::kMaxRows - 1U;
   const bool whole_rows = range.first_col == 0U && range.last_col == Sheet::kMaxCols - 1U;
   if (vertical ? whole_cols : whole_rows) {
     return make_error(FormulonErrorCode::kInvalidArgument,
-                      std::string(op_name) + (vertical ? ": whole columns cannot shift vertically"
-                                                       : ": whole rows cannot shift horizontally"));
+                      vertical ? "range covers whole columns, which cannot shift vertically"
+                               : "range covers whole rows, which cannot shift horizontally");
   }
   StructuralEdit edit{vertical ? range.first_row : range.first_col,
                       vertical ? range.last_row - range.first_row + 1U : range.last_col - range.first_col + 1U,
@@ -894,7 +890,7 @@ Expected<void, Error> Workbook::apply_band_edit_locked(std::size_t sheet_index, 
     edit.band = vertical ? Band{range.first_col, range.last_col} : Band{range.first_row, range.last_row};
   }
   const eval::RecalcEngine::LockedMutator mutator = engine_->locked_mutator();
-  return apply_row_col_edit_operation(*this, sheets_, mutator, defined_names_, sheet_index, edit, op_name);
+  return apply_row_col_edit_operation(*this, sheets_, mutator, defined_names_, sheet_index, edit);
 }
 
 }  // namespace formulon

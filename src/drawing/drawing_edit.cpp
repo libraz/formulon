@@ -68,7 +68,7 @@ Expected<std::uint32_t, Error> allocate_drawing_id(Sheet& sheet, const pugi::xml
     ++id;
   }
   if (id == std::numeric_limits<std::uint32_t>::max()) {
-    return make_error(FormulonErrorCode::kPreconditionFailed, "drawing: object id space exhausted");
+    return make_error(FormulonErrorCode::kPreconditionFailed, "The drawing's object id space is exhausted");
   }
   sheet.set_next_drawing_id(id + 1U);
   return id;
@@ -157,7 +157,7 @@ Expected<void, Error> drop_objects(Workbook& wb, const std::string& path, pugi::
   std::vector<std::string> candidates;
   pugi::xml_node root = io::ooxml::relationship_root(rels_doc);
   if (!root) {
-    return unparseable("drawing: rels part has an invalid Relationships root", rels_path);
+    return unparseable("Drawing rels part has an invalid Relationships root", rels_path);
   }
   for (pugi::xml_node rel = root.first_child(); rel;) {
     pugi::xml_node next = rel.next_sibling();
@@ -405,10 +405,10 @@ struct InsertBox {
 Expected<InsertBox, Error> insert_box(const Workbook& wb, std::size_t sheet, const ImageInsertOptions& options,
                                       std::int64_t cx, std::int64_t cy, std::size_t parts, std::size_t len) {
   if (options.anchor_kind == AnchorKind::kAbsolute) {
-    return invalid("drawing: inserted objects are anchored to one or two cells");
+    return invalid("anchor.kind must be a one-cell or two-cell anchor");
   }
   if (!box_in_range(options.row_off, options.col_off, cx, cy, options.row, options.col)) {
-    return invalid("drawing: object offset, size or cell out of range");
+    return invalid("anchor offsets, size and cells must be in range");
   }
   std::size_t total_bytes = len;
   for (const PassthroughPart& part : wb.passthrough_parts()) {
@@ -416,17 +416,17 @@ Expected<InsertBox, Error> insert_box(const Workbook& wb, std::size_t sheet, con
   }
   if (wb.passthrough_parts().size() + wb.sheet_count() + parts + 2U > io::kMaxParts ||
       total_bytes > io::kMaxTotalExtractedBytes) {
-    return invalid("drawing: package would exceed the reader's limits");
+    return invalid("Package would exceed the reader's limits");
   }
   const Geometry geo(wb, wb.sheet(sheet));
   InsertBox box;
   box.from = AnchorPoint{options.row, options.col, options.row_off, options.col_off};
   if (!geo.advance(true, box.from.row, box.from.row_off, 0) || !geo.advance(false, box.from.col, box.from.col_off, 0)) {
-    return invalid("drawing: anchor lies outside the sheet");
+    return invalid("anchor must lie within the sheet");
   }
   box.to = box.from;
   if (!geo.advance(true, box.to.row, box.to.row_off, cy) || !geo.advance(false, box.to.col, box.to.col_off, cx)) {
-    return invalid("drawing: object extends past the sheet");
+    return invalid("anchor.width_emu and anchor.height_emu must keep the object within the sheet");
   }
   box.off_x = geo.offset(false, box.from.col) + box.from.col_off;
   box.off_y = geo.offset(true, box.from.row) + box.from.row_off;
@@ -461,11 +461,11 @@ Expected<void, Error> append_anchor(pugi::xml_document& doc, const std::string& 
   pugi::xml_node root = doc.document_element();
   const pugi::xml_node last = root.last_child();
   if (!root.append_buffer(xml.data(), xml.size())) {
-    return invalid("drawing: anchor could not be built");
+    return invalid("Anchor could not be built");
   }
   const pugi::xml_node added = last ? last.next_sibling() : root.first_child();
   if (!added || added != root.last_child() || !anchor_cnvpr(added)) {
-    return invalid("drawing: anchor could not be built");
+    return invalid("Anchor could not be built");
   }
   io::ensure_attr(root, "xmlns:xdr", chart_ns::kNsXdr);
   io::ensure_attr(root, "xmlns:a", chart_ns::kNsA);
@@ -525,7 +525,7 @@ Expected<std::uint32_t, Error> insert_image(Workbook& wb, std::size_t sheet, con
                                             const ImageInsertOptions& options) {
   ASSIGN_OR_RETURN(std::string path, editable_drawing_path(wb, sheet));
   if (len > kMaxImageBytes) {
-    return invalid("drawing: image exceeds 32 MiB");
+    return invalid("len must not exceed 32 MiB");
   }
   ASSIGN_OR_RETURN(ImageInfo info, probe_image(bytes, len));
   const std::int64_t cx = options.width_emu != 0 ? options.width_emu : info.px_width * kEmuPerPixel;
@@ -562,10 +562,10 @@ Expected<std::uint32_t, Error> insert_graphic_frame(Workbook& wb, std::size_t sh
                                                     std::string_view target_part_path, std::string_view rel_type) {
   ASSIGN_OR_RETURN(std::string path, editable_drawing_path(wb, sheet));
   if (placement.width_emu == 0 || placement.height_emu == 0) {
-    return invalid("drawing: a graphic frame needs a width and a height");
+    return invalid("anchor.width_emu and anchor.height_emu must be non-zero");
   }
   if (!io::ooxml::is_safe_part_name(target_part_path) || rel_type.empty()) {
-    return invalid("drawing: graphic frame target is not a part name");
+    return invalid("Graphic frame target is not a part name");
   }
   const std::int64_t cx = placement.width_emu;
   const std::int64_t cy = placement.height_emu;
@@ -688,7 +688,7 @@ std::int64_t sheet_offset_emu(const Workbook& wb, std::size_t sheet, bool row_ax
 Expected<void, Error> set_drawing_name(Workbook& wb, std::size_t sheet, std::uint32_t object_id,
                                        std::string_view name) {
   if (name.empty()) {
-    return invalid("drawing: an object name cannot be empty");
+    return invalid("name must not be empty");
   }
   pugi::xml_document doc;
   ASSIGN_OR_RETURN(std::string path, load_object_drawing(wb, sheet, doc));
@@ -711,7 +711,7 @@ Expected<void, Error> set_drawing_anchor(Workbook& wb, std::size_t sheet, std::u
                                          const DrawingAnchor& anchor) {
   ASSIGN_OR_RETURN(std::string path, editable_drawing_path(wb, sheet));
   if (anchor.anchor_kind == AnchorKind::kAbsolute) {
-    return invalid("drawing: objects are anchored to one or two cells");
+    return invalid("anchor.kind must be a one-cell or two-cell anchor");
   }
   pugi::xml_document doc;
   if (path.empty()) {
@@ -738,7 +738,7 @@ Expected<void, Error> set_drawing_anchor(Workbook& wb, std::size_t sheet, std::u
   p.cx = anchor.width_emu != 0 ? anchor.width_emu : cur_cx;
   p.cy = anchor.height_emu != 0 ? anchor.height_emu : cur_cy;
   if (!box_in_range(anchor.row_off, anchor.col_off, p.cx, p.cy, anchor.row, anchor.col)) {
-    return invalid("drawing: object offset, size or cell out of range");
+    return invalid("anchor offsets, size and cells must be in range");
   }
   p.from = AnchorPoint{anchor.row, anchor.col, anchor.row_off, anchor.col_off};
   const bool two = p.kind == AnchorKind::kTwoCell;
@@ -748,14 +748,14 @@ Expected<void, Error> set_drawing_anchor(Workbook& wb, std::size_t sheet, std::u
   }
 
   if (!geo.advance(true, p.from.row, p.from.row_off, 0) || !geo.advance(false, p.from.col, p.from.col_off, 0)) {
-    return invalid("drawing: anchor lies outside the sheet");
+    return invalid("anchor must lie within the sheet");
   }
   const bool swap = swaps_box(object_xfrm(target));
   p.box_w = swap ? p.cy : p.cx;
   p.box_h = swap ? p.cx : p.cy;
   p.to = p.from;
   if (!geo.advance(true, p.to.row, p.to.row_off, p.box_h) || !geo.advance(false, p.to.col, p.to.col_off, p.box_w)) {
-    return invalid("drawing: object extends past the sheet");
+    return invalid("anchor.width_emu and anchor.height_emu must keep the object within the sheet");
   }
   // `a:off` is the unrotated rectangle sharing the box's centre.
   p.off_x = geo.offset(false, p.from.col) + p.from.col_off + (p.box_w - p.cx) / 2;
@@ -781,7 +781,7 @@ Expected<void, Error> set_drawing_z_order(Workbook& wb, std::size_t sheet, std::
   }
   const std::vector<pugi::xml_node> items = drawing_anchors(root, false);
   if (index >= items.size()) {
-    return make_error(FormulonErrorCode::kIndexOutOfRange, "drawing: z-order position out of range");
+    return make_error(FormulonErrorCode::kIndexOutOfRange, "z_order_index must be less than the object count");
   }
   const pugi::xml_node top = top_of(root, target);
   std::size_t current = 0;
@@ -802,7 +802,7 @@ Expected<void, Error> set_drawing_z_order(Workbook& wb, std::size_t sheet, std::
 
 namespace {
 
-constexpr const char* kNoDrawingObject = "drawing: no picture, chart, shape or slicer with that id";
+constexpr const char* kNoDrawingObject = "object_id does not name a picture, chart, shape or slicer";
 
 enum class DrawingRoute { kFrame, kShape, kSlicer };
 
@@ -828,17 +828,17 @@ Expected<MergedAnchor, Error> merge_anchor(const Geometry& geo, const DrawingObj
   m.kind = p.kind.value_or(obj.anchor_kind);
   m.edit_as = p.edit_as.value_or(obj.edit_as);
   if (p.kind && m.kind == AnchorKind::kAbsolute) {
-    return invalid("drawing: objects are anchored to one or two cells");
+    return invalid("anchor.kind must be a one-cell or two-cell anchor");
   }
   const bool two = m.kind == AnchorKind::kTwoCell;
   const bool has_to = p.to_row || p.to_col || p.to_row_off || p.to_col_off;
   const bool has_size = p.width_emu || p.height_emu;
   // A read anchor carries both the end marker and the size: the field the resulting kind holds wins.
   if (two && has_size && !has_to) {
-    return invalid("drawing: a two-cell anchor takes its size from its markers");
+    return invalid("anchor.width_emu and anchor.height_emu do not apply to a two-cell anchor");
   }
   if (!two && has_to && !has_size) {
-    return invalid("drawing: only a two-cell anchor has an end marker");
+    return invalid("anchor.to_row and anchor.to_col apply only to a two-cell anchor");
   }
   m.from = obj.from;
   m.from.row = p.from_row.value_or(m.from.row);
@@ -857,7 +857,7 @@ Expected<MergedAnchor, Error> merge_anchor(const Geometry& geo, const DrawingObj
     m.to = m.from;
     if (m.from.row >= Sheet::kMaxRows || m.from.col >= Sheet::kMaxCols ||
         !geo.advance(true, m.to.row, m.to.row_off, box_cy) || !geo.advance(false, m.to.col, m.to.col_off, box_cx)) {
-      return invalid("drawing: anchor lies outside the sheet");
+      return invalid("anchor must lie within the sheet");
     }
   }
   m.to.row = p.to_row.value_or(m.to.row);
@@ -865,12 +865,12 @@ Expected<MergedAnchor, Error> merge_anchor(const Geometry& geo, const DrawingObj
   m.to.row_off = p.to_row_off.value_or(m.to.row_off);
   m.to.col_off = p.to_col_off.value_or(m.to.col_off);
   if (!cell_in_range(m.to.row, m.to.col)) {
-    return invalid("drawing: object offset, size or cell out of range");
+    return invalid("anchor offsets, size and cells must be in range");
   }
   m.cx = geo.span(false, m.from, m.to);
   m.cy = geo.span(true, m.from, m.to);
   if (m.cx < 0 || m.cy < 0) {
-    return invalid("drawing: the end marker lies before the start marker");
+    return invalid("anchor.to_row and anchor.to_col must not precede anchor.from_row and anchor.from_col");
   }
   return m;
 }
@@ -891,7 +891,7 @@ Expected<void, Error> apply_merged_anchor(Workbook& wb, std::size_t sheet, std::
       a.width_emu = swapped ? m.cy : m.cx;
       a.height_emu = swapped ? m.cx : m.cy;
       if (a.width_emu == 0 || a.height_emu == 0) {
-        return invalid("drawing: an object needs a non-zero size");
+        return invalid("anchor.width_emu and anchor.height_emu must be non-zero");
       }
       return set_drawing_anchor(wb, sheet, object_id, a);
     }
@@ -908,7 +908,7 @@ Expected<void, Error> apply_merged_anchor(Workbook& wb, std::size_t sheet, std::
     }
     case DrawingRoute::kSlicer: {
       if (m.kind != AnchorKind::kTwoCell) {
-        return invalid("drawing: a slicer frame is anchored to two cells");
+        return invalid("anchor.kind must be a two-cell anchor for a slicer");
       }
       ASSIGN_OR_RETURN(std::vector<SlicerInfo> slicers, list_slicers(wb, sheet));
       for (std::size_t i = 0; i < slicers.size(); ++i) {
@@ -979,10 +979,10 @@ Expected<void, Error> update_drawing(Workbook& wb, std::size_t sheet, std::uint3
     return refuse_object(root, object_id, kNoDrawingObject);
   }
   if (patch.name && route == DrawingRoute::kSlicer) {
-    return make_error(FormulonErrorCode::kPreconditionFailed, "drawing: a slicer's name ties it to its slicer part");
+    return make_error(FormulonErrorCode::kPreconditionFailed, "name cannot be changed on a slicer");
   }
   if (patch.name && patch.name->empty()) {
-    return invalid("drawing: an object name cannot be empty");
+    return invalid("name must not be empty");
   }
 
   std::optional<MergedAnchor> merged;

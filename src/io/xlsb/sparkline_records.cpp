@@ -295,7 +295,7 @@ Expected<EncodedFeatureFormula, Error> EncodeReference(const std::string& text, 
   }
   if (!(tag == 0x03U && single(5U)) && !(tag == 0x19U && single(7U)) && !(tag == 0x1AU && single(9U)) &&
       !(tag == 0x1BU && single(15U))) {
-    return refuse_write("xlsb sparkline formula is not a single reference or name: " + text);
+    return refuse_write("XLSB sparkline formula is not a single reference or name: " + text);
   }
   return f;
 }
@@ -361,7 +361,7 @@ Expected<void, Error> EmitGroup(std::vector<std::uint8_t>& dst, const SparklineG
     std::vector<MergeRange> cells;
     if (!parse_sqref_text(item.location, cells) || cells.size() != 1U || cells[0].first_row != cells[0].last_row ||
         cells[0].first_col != cells[0].last_col) {
-      return refuse_write("xlsb sparkline location is not one cell: " + item.location);
+      return refuse_write("XLSB sparkline location is not one cell: " + item.location);
     }
     auto formula = EncodeReference(item.formula, ctx, sheet_name);
     if (!formula) {

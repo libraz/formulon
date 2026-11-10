@@ -388,7 +388,7 @@ Expected<void, Error> recalc_parallel_impl(Workbook& wb, const FunctionRegistry&
   }
   if (cfg.num_threads > kMaxSchedulerThreads) {
     return make_error(
-        FormulonErrorCode::kInvalidArgument, "recalc_parallel thread count exceeds the scheduler limit",
+        FormulonErrorCode::kInvalidArgument, "Parallel recalc thread count exceeds the scheduler limit",
         "thread_count=" + std::to_string(cfg.num_threads) + " max=" + std::to_string(kMaxSchedulerThreads));
   }
 
@@ -399,7 +399,7 @@ Expected<void, Error> recalc_parallel_impl(Workbook& wb, const FunctionRegistry&
   // host-callable function family cannot accidentally race the dirty set
   // by attempting nested recalc.
   if (g_in_recalc) {
-    return make_error(FormulonErrorCode::kGraphRecalcReentrant, "recalc_parallel called recursively on the same thread",
+    return make_error(FormulonErrorCode::kGraphRecalcReentrant, "Parallel recalc called recursively on the same thread",
                       "the scheduler does not support nested recalc; the inner call is rejected");
   }
   RecalcReentryGuard guard;

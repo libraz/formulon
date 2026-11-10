@@ -32,7 +32,7 @@ TEST(FormulonCApiErrorText, SheetIndexOutOfRangeNamesTheIndexAndTheSheetCount) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   std::size_t count = 0;
   ASSERT_EQ(fm_sheet_get_cell_count(wb.handle, 5, &count), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
-  EXPECT_EQ(Message(), "sheet_index 5 is out of range (1 sheets)");
+  EXPECT_EQ(Message(), "sheet_index 5 is out of range (1 sheet)");
   EXPECT_EQ(Context(), "sheet_index=5 sheet_count=1");
   ExpectNoInternalNames(Message());
   ExpectNoInternalNames(Context());
@@ -55,7 +55,8 @@ TEST(FormulonCApiErrorText, FontIndexOutOfRangeNamesTheFieldTheIndexAndTheCount)
   ASSERT_EQ(fm_workbook_get_font_count(wb.handle, &font_count), 0);
   fm_font_t record{};
   ASSERT_EQ(fm_workbook_get_font_at(wb.handle, 999, &record), FM_STATUS_INDEX_OUT_OF_RANGE);
-  EXPECT_EQ(Message(), "font_index 999 is out of range (" + std::to_string(font_count) + " items)");
+  EXPECT_EQ(Message(),
+            "font_index 999 is out of range (" + std::to_string(font_count) + (font_count == 1 ? " item)" : " items)"));
   EXPECT_EQ(Context(), "font_index=999 count=" + std::to_string(font_count));
   ExpectNoInternalNames(Message());
   ExpectNoInternalNames(Context());

@@ -135,7 +135,7 @@ TEST(WorkbookArrayFormula, WriteIntoNonAnchorIsRefusedAndAnchorBlankClearsTheBlo
   const auto refused = wb.set_cell_value(0, 1, 2, Value::number(1.0));
   ASSERT_FALSE(static_cast<bool>(refused));
   EXPECT_EQ(refused.error().code, FormulonErrorCode::kPreconditionFailed);
-  EXPECT_NE(refused.error().message.find("cannot change part of an array"), std::string::npos);
+  EXPECT_NE(refused.error().message.find("Cannot change part of an array"), std::string::npos);
 
   ASSERT_TRUE(wb.set_cell_value(0, 0, 2, Value::blank()));
   Recalc(wb);
@@ -172,7 +172,7 @@ TEST(WorkbookArrayFormula, PartialOverlapIsRefusedAndLeavesTheSheetUnchanged) {
     const auto refused = wb.set_array_formula(0, rect.row, rect.col, rect.rows, rect.cols, "=1");
     ASSERT_FALSE(static_cast<bool>(refused)) << rect.row << "," << rect.col;
     EXPECT_EQ(refused.error().code, FormulonErrorCode::kPreconditionFailed);
-    EXPECT_NE(refused.error().message.find("cannot change part of an array"), std::string::npos);
+    EXPECT_NE(refused.error().message.find("overlaps part of an array formula"), std::string::npos);
   }
   Recalc(wb);
   const auto info = wb.array_formula_at(0, 1, 2);

@@ -73,8 +73,7 @@ Expected<void, Error> patch_source(const Workbook& wb, Chart& c, std::string_vie
   const std::vector<xml_node> plots = plots_of(c);
   const int kind = plots.size() == 1 ? kind_of(plots[0]) : -1;
   if (kind < 0) {
-    return unsupported(
-        "chart: only a single column, bar, line, area, pie, doughnut or scatter plot takes a data range");
+    return unsupported("Only a single column, bar, line, area, pie, doughnut or scatter plot takes a data range");
   }
   xml_node plot = plots[0];
   ASSIGN_OR_RETURN(ChartSplit split, split_chart_source(wb, c.host, source, static_cast<ChartInsertKind>(kind),
@@ -180,13 +179,13 @@ bool point_override_empty(const xml_node& point) {
 Expected<std::optional<std::string>, Error> title_text(const Workbook& wb, const Chart& c, const ChartTitle& title) {
   if (title.kind == ChartTitleKind::kRef) {
     if (title.ref_formula.empty()) {
-      return bad_arg("chart: a reference title needs a formula");
+      return bad_arg("title.formula must not be empty for a reference title");
     }
     RETURN_IF_ERROR(resolve_chart_source(wb, c.host, title.ref_formula, eval::default_registry()));
   } else if (title.kind == ChartTitleKind::kText && title.text.empty()) {
-    return bad_arg("chart: a text title needs text");
+    return bad_arg("title.text must not be empty for a text title");
   } else if (title.kind != ChartTitleKind::kText && title.kind != ChartTitleKind::kAuto) {
-    return bad_arg("chart: unknown title kind");
+    return bad_arg("title.kind must be a known title kind");
   }
   return title.kind == ChartTitleKind::kText ? std::optional<std::string>(title.text) : std::nullopt;
 }
@@ -281,20 +280,20 @@ Expected<ChartData, Error> preview_chart_data(const Workbook& wb, std::size_t sh
   Chart c;
   RETURN_IF_ERROR(open_chart(wb, sheet, object_id, c));
   if (c.chartex) {
-    return unsupported("chart: chartex charts are not editable");
+    return unsupported("Chartex charts are not editable");
   }
   const ChartPreviewOverrides& o = overrides;
   const bool resplit = o.source || o.direction || o.header_row || o.header_column;
   if (resplit) {
     if (c.pivot()) {
-      return unsupported("chart: a pivot chart's series follow its pivot table");
+      return unsupported("A pivot chart's series follow its pivot table");
     }
     std::optional<ChartSource> base;
     if (!o.source) {
       ASSIGN_OR_RETURN(ChartModel model, model_of(wb, sheet, object_id, c, true));
       base = model.source;
       if (!base) {
-        return unsupported("chart: the series do not share one data range");
+        return unsupported("The series do not share one data range");
       }
     }
     const auto mode = [&](const std::optional<bool>& v, bool derived) {
@@ -328,17 +327,17 @@ Expected<ChartData, Error> preview_chart_data(const Workbook& wb, std::size_t sh
 
 Expected<std::uint32_t, Error> insert_chart(Workbook& wb, std::size_t sheet, const ChartInsertOptions& options) {
   if (sheet >= wb.sheet_count()) {
-    return bad_arg("chart: sheet index out of range");
+    return bad_arg("sheet_index must be less than the sheet count");
   }
   if (!valid_kind_grouping(options.kind, options.grouping)) {
-    return bad_arg("chart: unknown chart kind or grouping");
+    return bad_arg("type and grouping must be a known chart kind and grouping");
   }
   ASSIGN_OR_RETURN(ChartSplit split, split_chart_source(wb, sheet, options.source, options.kind, options.direction,
                                                         options.header_row, options.header_column));
   ASSIGN_OR_RETURN(std::string xml, build_chart_xml(wb, options, split));
   pugi::xml_document doc;
   if (!load_xml(doc, xml)) {
-    return unparseable("chart: template does not parse");
+    return unparseable("Template does not parse");
   }
   refresh_chart_caches(wb, sheet, doc);
   std::string path;
@@ -373,10 +372,10 @@ Expected<ChartInsertKind, Error> chart_insert_kind(ChartPlotType type, ChartBarD
       case ChartBarDirection::kBar:
         return ChartInsertKind::kBar;
     }
-    return bad_arg("chart: unknown bar direction");
+    return bad_arg("bar_direction must be a known bar direction");
   }
   if (bar_direction != ChartBarDirection::kAbsent) {
-    return bad_arg("chart: a bar direction needs a bar plot");
+    return bad_arg("bar_direction needs a bar plot");
   }
   switch (type) {
     case ChartPlotType::kLine:
@@ -390,7 +389,7 @@ Expected<ChartInsertKind, Error> chart_insert_kind(ChartPlotType type, ChartBarD
     case ChartPlotType::kScatter:
       return ChartInsertKind::kScatter;
     default:
-      return bad_arg("chart: only bar, line, area, pie, doughnut and scatter plots are written");
+      return bad_arg("type must be a bar, line, area, pie, doughnut or scatter plot");
   }
 }
 
@@ -417,7 +416,7 @@ Expected<void, Error> set_chart_legend(Workbook& wb, std::size_t sheet, std::uin
   xml_node chart = c.chart();
   const int pos = static_cast<int>(legend.position);
   if (!chart_token_valid(kChartLegendTokens, pos)) {
-    return bad_arg("chart: unknown legend position");
+    return bad_arg("position must be a known legend position");
   }
   if (legend.position == ChartLegendPosition::kNone) {
     drop(chart, "legend");
@@ -456,7 +455,7 @@ Expected<void, Error> set_chart_axis(Workbook& wb, std::size_t sheet, std::uint3
   RETURN_IF_ERROR(open_edit(wb, sheet, object_id, c, false));
   const std::vector<xml_node> found = axes_of(c, {axis_id});
   if (found.empty()) {
-    return no_such("chart: no axis with that id");
+    return no_such("No axis with that id");
   }
   xml_node ax = found[0];
   const std::string_view kind = local_name(ax);
@@ -479,7 +478,7 @@ Expected<void, Error> set_chart_axis(Workbook& wb, std::size_t sheet, std::uint3
       drop(scaling(), local_name(bound_names[i]));
     } else if (bounds[i]->is_set()) {
       if (!std::isfinite(bounds[i]->value)) {
-        return bad_arg("chart: axis bounds must be finite");
+        return bad_arg("min and max must be finite");
       }
       put_val(scaling(), bound_names[i], kScalingOrder, num(bounds[i]->value));
     }
@@ -491,7 +490,7 @@ Expected<void, Error> set_chart_axis(Workbook& wb, std::size_t sheet, std::uint3
     drop(scaling(), "logBase");
   } else if (patch.log_base.is_set()) {
     if (!in_range(patch.log_base.value, 2.0, 1000.0)) {
-      return bad_arg("chart: log base must be 2..1000");
+      return bad_arg("log_base must be 2..1000");
     }
     put_val(scaling(), "c:logBase", kScalingOrder, num(patch.log_base.value));
   }
@@ -499,13 +498,13 @@ Expected<void, Error> set_chart_axis(Workbook& wb, std::size_t sheet, std::uint3
   const char* unit_names[] = {"c:majorUnit", "c:minorUnit"};
   for (int i = 0; i < 2; ++i) {
     if (units[i]->is_set() && (kind == "catAx" || kind == "serAx")) {
-      return bad_arg("chart: a category axis has no major or minor unit");
+      return bad_arg("major_unit and minor_unit do not apply to a category axis");
     }
     if (units[i]->is_clear()) {
       drop(ax, local_name(unit_names[i]));
     } else if (units[i]->is_set()) {
       if (!(std::isfinite(units[i]->value) && units[i]->value > 0.0)) {
-        return bad_arg("chart: axis units must be positive");
+        return bad_arg("major_unit and minor_unit must be positive");
       }
       put_val(ax, unit_names[i], kAxisOrder, num(units[i]->value));
     }
@@ -534,7 +533,7 @@ Expected<void, Error> set_chart_axis(Workbook& wb, std::size_t sheet, std::uint3
   if (patch.position.has_value()) {
     const int p = static_cast<int>(*patch.position);
     if (!chart_token_valid(kChartAxisPositionTokens, p)) {
-      return bad_arg("chart: unknown axis position");
+      return bad_arg("position must be a known axis position");
     }
   }
   if (patch.crosses.has_value()) {
@@ -543,13 +542,13 @@ Expected<void, Error> set_chart_axis(Workbook& wb, std::size_t sheet, std::uint3
     drop(ax, "crossesAt");
     if (cr == ChartAxisCrosses::kAt) {
       if (!std::isfinite(patch.crosses_at)) {
-        return bad_arg("chart: crossing point must be finite");
+        return bad_arg("crosses_at must be finite");
       }
       put_val(ax, "c:crossesAt", kAxisOrder, num(patch.crosses_at));
     } else if (cr != ChartAxisCrosses::kAbsent) {
       const int i = static_cast<int>(cr);
       if (!chart_token_valid(kChartCrossesTokens, i, 1)) {
-        return bad_arg("chart: unknown axis crossing");
+        return bad_arg("crosses must be a known axis crossing");
       }
       put_val(ax, "c:crosses", kAxisOrder, kChartCrossesTokens[i]);
     }
@@ -557,7 +556,7 @@ Expected<void, Error> set_chart_axis(Workbook& wb, std::size_t sheet, std::uint3
   if (!patch.tick_label_pos.is_keep()) {
     const std::string pos = patch.tick_label_pos.is_set() ? patch.tick_label_pos.value : "nextTo";
     if (pos != "nextTo" && pos != "low" && pos != "high" && pos != "none") {
-      return bad_arg("chart: tick label position must be nextTo, low, high or none");
+      return bad_arg("tick_label_position must be nextTo, low, high or none");
     }
     put_val(ax, "c:tickLblPos", kAxisOrder, pos);
   }
@@ -581,10 +580,10 @@ Expected<void, Error> set_chart_display(Workbook& wb, std::size_t sheet, std::ui
   RETURN_IF_ERROR(open_edit(wb, sheet, object_id, c, false));
   if (patch.blanks_as.is_set() &&
       (static_cast<int>(patch.blanks_as.value) < 0 || static_cast<int>(patch.blanks_as.value) > 3)) {
-    return bad_arg("chart: unknown display option");
+    return bad_arg("blanks_as must be a known blank display option");
   }
   if (patch.style.is_set() && (patch.style.value < 1 || patch.style.value > 48)) {
-    return bad_arg("chart: style must be 1..48");
+    return bad_arg("style must be 1..48");
   }
   patch_display(c, patch);
   return commit(wb, c, false);
@@ -619,7 +618,7 @@ Expected<void, Error> set_chart_point(Workbook& wb, std::size_t sheet, std::uint
   }
   // A plot without markers has none to set; clearing one (a read record passed back) changes nothing.
   if (patch.marker.is_set() && !has_markers(node)) {
-    return bad_arg("chart: markers need a line, scatter or radar plot");
+    return bad_arg("marker needs a line, scatter or radar plot");
   }
   const std::string_view name = local_name(node);
   if (!point && !is_pie(node)) {
@@ -667,25 +666,25 @@ Expected<void, Error> set_chart_plot(Workbook& wb, std::size_t sheet, std::uint3
   const std::string_view name = local_name(node);
   if (patch.gap_width) {
     if (!(is_bar(node) || name == "ofPieChart") || *patch.gap_width > 500U) {
-      return bad_arg("chart: gap width needs a bar plot and 0..500");
+      return bad_arg("gap_width_pct needs a bar plot and 0..500");
     }
     put_val(node, "c:gapWidth", kPlotOrder, std::to_string(*patch.gap_width));
   }
   if (patch.overlap) {
     if (name != "barChart" || *patch.overlap < -100 || *patch.overlap > 100) {
-      return bad_arg("chart: overlap needs a 2-D bar plot and -100..100");
+      return bad_arg("overlap_pct needs a 2-D bar plot and -100..100");
     }
     put_val(node, "c:overlap", kPlotOrder, std::to_string(*patch.overlap));
   }
   if (patch.first_slice_angle) {
     if ((name != "pieChart" && name != "doughnutChart") || *patch.first_slice_angle > 360U) {
-      return bad_arg("chart: first slice angle needs a pie plot and 0..360");
+      return bad_arg("first_slice_angle_deg needs a pie plot and 0..360");
     }
     put_val(node, "c:firstSliceAng", kPlotOrder, std::to_string(*patch.first_slice_angle));
   }
   if (patch.hole_size) {
     if (name != "doughnutChart" || *patch.hole_size < 10U || *patch.hole_size > 90U) {
-      return bad_arg("chart: hole size needs a doughnut plot and 10..90");
+      return bad_arg("hole_size_pct needs a doughnut plot and 10..90");
     }
     put_val(node, "c:holeSize", kPlotOrder, std::to_string(*patch.hole_size));
   }
@@ -715,7 +714,7 @@ Expected<void, Error> set_chart_filter(Workbook& wb, std::size_t sheet, std::uin
   const std::set<std::uint32_t> hidden(hidden_series_idx.begin(), hidden_series_idx.end());
   for (const std::uint32_t idx : hidden) {
     if (all.count(idx) == 0) {
-      return no_such("chart: no series with that idx");
+      return no_such("No series with that idx");
     }
   }
   patch_series_filter(c, hidden);
@@ -731,12 +730,12 @@ Expected<std::uint32_t, Error> add_chart_series(Workbook& wb, std::size_t sheet,
   ASSIGN_OR_RETURN(xml_node node, plot_at(c, plot));
   const int kind = kind_of(node);
   if (kind < 0) {
-    return unsupported("chart: series are added to column, bar, line, area, pie, doughnut and scatter plots");
+    return unsupported("Series are added to column, bar, line, area, pie, doughnut and scatter plots");
   }
   const bool scatter = kind == static_cast<int>(ChartInsertKind::kScatter);
   const std::optional<ChartSeriesSource>& values = scatter ? patch.y : patch.val;
   if (!values || values->kind == ChartDataSource::Kind::kNone) {
-    return bad_arg("chart: a series needs its values");
+    return bad_arg("values must be set for a series (y for a scatter plot)");
   }
   std::uint32_t idx = 0;
   std::uint32_t order = 0;

@@ -82,21 +82,21 @@ inline sheet_names::NameList sheet_name_list(const std::vector<Sheet>& sheets) {
   return sheet_names::NameList(std::move(names));
 }
 
-// `op`-prefixed sheet index range check whose detail names the sheet count.
-inline Expected<void, Error> check_sheet_in_range(const char* op, std::size_t sheet_index, std::size_t sheet_count) {
+// Sheet index range check whose detail names the sheet count.
+inline Expected<void, Error> check_sheet_in_range(std::size_t sheet_index, std::size_t sheet_count) {
   if (sheet_index >= sheet_count) {
-    return make_error(FormulonErrorCode::kInvalidArgument, std::string(op) + ": sheet_index out of range",
+    return make_error(FormulonErrorCode::kInvalidArgument, "sheet_index is out of range",
                       "sheet_index=" + std::to_string(sheet_index) + " sheet_count=" + std::to_string(sheet_count));
   }
   return Expected<void, Error>::Ok();
 }
 
-// `op`-prefixed target check for a cell setter: the sheet index, then the grid coordinate.
-inline Expected<void, Error> check_cell_target(const char* op, std::size_t sheet_index, std::size_t sheet_count,
-                                               std::uint32_t row, std::uint32_t col) {
-  RETURN_IF_ERROR(check_sheet_in_range(op, sheet_index, sheet_count));
+// Target check for a cell setter: the sheet index, then the grid coordinate.
+inline Expected<void, Error> check_cell_target(std::size_t sheet_index, std::size_t sheet_count, std::uint32_t row,
+                                               std::uint32_t col) {
+  RETURN_IF_ERROR(check_sheet_in_range(sheet_index, sheet_count));
   if (!Sheet::coord_in_grid(row, col)) {
-    return make_error(FormulonErrorCode::kInvalidArgument, std::string(op) + ": coordinate out of grid",
+    return make_error(FormulonErrorCode::kInvalidArgument, "row and col lie outside the grid",
                       "row=" + std::to_string(row) + " col=" + std::to_string(col));
   }
   return Expected<void, Error>::Ok();

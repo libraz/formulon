@@ -67,7 +67,8 @@ Expected<std::size_t, Error> Workbook::copy_sheet(std::size_t source, std::size_
   RETURN_IF_ERROR(check_sheet_capacity());
   const Sheet& src = sheets_[source];
   if (src.view().visibility() == SheetVisibility::kVeryHidden) {
-    return make_error(FormulonErrorCode::kPreconditionFailed, "cannot copy a very hidden sheet",
+    return make_error(FormulonErrorCode::kPreconditionFailed,
+                      "source_index names a very hidden sheet, which cannot be copied",
                       "source=" + std::to_string(source));
   }
   if (src.is_opaque_ooxml_sheet()) {

@@ -51,13 +51,13 @@ bool same_name(std::string_view a, std::string_view b) {
 
 Expected<void, Error> check_name(std::string_view name) {
   if (name.empty()) {
-    return invalid("calculated name is empty");
+    return invalid("name is empty");
   }
   if (name.find('[') != std::string_view::npos || name.find(']') != std::string_view::npos) {
-    return invalid("calculated name contains a bracket", name);
+    return invalid("name contains a bracket", name);
   }
   if (same_name(name, "All") || same_name(name, "Blank")) {
-    return invalid("calculated name is reserved", name);
+    return invalid("name is reserved", name);
   }
   return Expected<void, Error>::Ok();
 }
@@ -278,11 +278,11 @@ Expected<void, Error> set_calculated_field_formula(PivotCache& cache, std::size_
     return out_of_range("field_index", field_index, cache.fields().size());
   }
   if (!cache.fields()[field_index].formula.has_value()) {
-    return invalid("not a calculated field");
+    return invalid("field_index does not name a calculated field");
   }
   ASSIGN_OR_RETURN(std::vector<FormulaRef> refs, compile_refs(host, cache, std::nullopt, formula));
   if (field_refs_reach(host, cache, refs, field_index)) {
-    return invalid("calculated field refers to itself", formula);
+    return invalid("formula refers to its own field", formula);
   }
   cache.mutable_fields()[field_index].formula = std::string(without_equals(formula));
   return Expected<void, Error>::Ok();
@@ -294,7 +294,7 @@ Expected<void, Error> remove_calculated_field(PivotCache& cache, const std::vect
     return out_of_range("field_index", field_index, cache.fields().size());
   }
   if (!cache.fields()[field_index].formula.has_value()) {
-    return invalid("not a calculated field");
+    return invalid("field_index does not name a calculated field");
   }
   for (std::size_t f = 0; f < cache.fields().size(); ++f) {
     if (f == field_index || !cache.fields()[f].formula.has_value()) {
@@ -452,7 +452,7 @@ Expected<void, Error> set_calculated_item_formula(PivotCache& cache, std::size_t
   ASSIGN_OR_RETURN(std::vector<FormulaRef> refs, compile_refs(host, cache, field, formula, &canonical));
   if (const std::optional<std::uint32_t> item = entry_item(entry);
       item.has_value() && item_refs_reach(host, cache, field, refs, *item)) {
-    return invalid("calculated item refers to itself", formula);
+    return invalid("formula refers to its own item", formula);
   }
   cache.mutable_calculated_items()[index].formula = std::move(canonical);
   return Expected<void, Error>::Ok();

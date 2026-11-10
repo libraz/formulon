@@ -190,8 +190,9 @@ extern "C" fm_status_t fm_sheet_update_view(fm_workbook_t* wb, size_t sheet_inde
   if (patch->freeze_rows_op == FM_PATCH_OP_SET || patch->freeze_cols_op == FM_PATCH_OP_SET) {
     // The first unfrozen cell must lie inside the grid.
     if (!formulon::Sheet::coord_in_grid(freeze_rows, freeze_cols)) {
-      return invalid_argument("freeze past the grid", "freeze_rows=" + std::to_string(freeze_rows) +
-                                                          " freeze_cols=" + std::to_string(freeze_cols));
+      return invalid_argument(
+          "freeze_rows and freeze_cols must leave the first unfrozen cell inside the grid",
+          "freeze_rows=" + std::to_string(freeze_rows) + " freeze_cols=" + std::to_string(freeze_cols));
     }
     next.set_freeze(freeze_rows, freeze_cols);
   }

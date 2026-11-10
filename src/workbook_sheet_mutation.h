@@ -16,7 +16,7 @@
 
 namespace formulon {
 
-Expected<void, Error> check_sheet_index(const char* op, std::size_t sheet_index, std::size_t sheet_count);
+Expected<void, Error> check_sheet_index(std::size_t sheet_index, std::size_t sheet_count);
 bool erase_filter_database_name(std::vector<DefinedName>& names, std::size_t sheet_index);
 bool erase_slicer_cache_names(std::vector<DefinedName>& names, const std::vector<std::string>& cache_names);
 

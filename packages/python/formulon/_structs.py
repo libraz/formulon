@@ -427,6 +427,12 @@ TRISTATE_DEFAULT = 0
 TRISTATE_FALSE = 1
 TRISTATE_TRUE = 2
 
+
+def tristate_flag(value: int) -> bool:
+    """Decode an ``fm_tristate_t`` a read returns: ``TRUE`` is ``True``; ``FALSE`` (1) is ``False``, not truthy."""
+    return value == TRISTATE_TRUE
+
+
 # The ``allow_*`` flags of ``fm_sheet_protection_t`` in field order. The two
 # select flags are ``fm_tristate_t``; the others are 0 / 1.
 SHEET_PROTECTION_ALLOW_FLAGS = (

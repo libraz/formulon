@@ -20,8 +20,7 @@ namespace formulon {
 namespace {
 
 Error unparseable(std::string_view what, std::string_view detail) {
-  return make_error(FormulonErrorCode::kIoDrawingUnparseable, std::string("drawing: ") + std::string(what),
-                    std::string(detail));
+  return make_error(FormulonErrorCode::kIoDrawingUnparseable, std::string(what), std::string(detail));
 }
 
 constexpr std::string_view kSlicerUri = "http://schemas.microsoft.com/office/drawing/2010/slicer";
@@ -115,10 +114,10 @@ std::string relative_target(std::string_view from_dir, std::string_view target) 
 
 Expected<void, Error> parse_drawing_part(const std::vector<std::uint8_t>& bytes, pugi::xml_document& doc) {
   if (!io::load_xml_buffer(doc, bytes, "drawing", "drawing")) {
-    return unparseable("part is not well-formed XML", {});
+    return unparseable("Drawing part is not well-formed XML", {});
   }
   if (local_name(doc.document_element()) != "wsDr") {
-    return unparseable("part root is not wsDr", doc.document_element().name());
+    return unparseable("Drawing part root is not wsDr", doc.document_element().name());
   }
   return Expected<void, Error>::Ok();
 }
@@ -301,7 +300,7 @@ namespace {
 
 Expected<const Sheet*, Error> checked_sheet(const Workbook& wb, std::size_t sheet) {
   if (sheet >= wb.sheet_count()) {
-    return make_error(FormulonErrorCode::kInvalidArgument, "drawing: sheet index out of range");
+    return make_error(FormulonErrorCode::kInvalidArgument, "sheet_index must be less than the sheet count");
   }
   return &wb.sheet(sheet);
 }
@@ -333,7 +332,7 @@ Expected<std::string, Error> sheet_drawing_path(const Workbook& wb, std::size_t 
 Expected<void, Error> load_drawing_part(const Workbook& wb, std::string_view path, pugi::xml_document& doc) {
   const PassthroughPart* part = io::ooxml::find_passthrough_part(wb, path);
   if (part == nullptr) {
-    return unparseable("part is missing", path);
+    return unparseable("Drawing part is missing", path);
   }
   return parse_drawing_part(part->bytes, doc);
 }
@@ -343,11 +342,11 @@ Expected<std::string, Error> editable_drawing_path(const Workbook& wb, std::size
   const Sheet& ws = *sheet_ptr;
   for (const UnknownRelationship& rel : ws.unknown_relationships()) {
     if (rel.type == io::kRelDrawing) {
-      return unparseable("drawing retained from an xlsb package is not editable", ws.name());
+      return unparseable("Drawing retained from an xlsb package is not editable", ws.name());
     }
   }
   if (ws.is_opaque_ooxml_sheet()) {
-    return make_error(FormulonErrorCode::kInvalidArgument, "drawing: only a worksheet's drawing is editable");
+    return make_error(FormulonErrorCode::kInvalidArgument, "Only a worksheet's drawing is editable");
   }
   return ws.drawing_rel_target();
 }

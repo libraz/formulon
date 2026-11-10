@@ -4739,7 +4739,7 @@ function chartAxisId(raw, sheet, id, axis, label) {
   if (group === undefined) {
     throw new FormulonError(
       StatusCode.IndexOutOfRange,
-      `${label}.plot ${plot} is out of range (${properties.plots.length} items)`,
+      `${label}.plot ${plot} ${pastCount(properties.plots.length, 'item')}`,
       `plot=${plot}`,
     );
   }
@@ -4916,6 +4916,11 @@ function argLabel(where, position, ...fields) {
   return `${where} ${argumentPath(where, position, ...fields)}`;
 }
 
+/** `is out of range (<count> <noun>)`, the noun plural unless `count` is 1: the wording every binding uses. */
+function pastCount(count, noun) {
+  return `is out of range (${count} ${count === 1 ? noun : `${noun}s`})`;
+}
+
 /** The label of `fields` of the record (patch or input) argument of `where`; `source` is the row of its keys. */
 function recordLabel(where, fields = [], source = where) {
   const position = (tableEntry(PATCH_KEYS, source) ?? tableEntry(INPUT_KEYS, source))?.[0] ?? 0;
@@ -4924,12 +4929,21 @@ function recordLabel(where, fields = [], source = where) {
 
 const CALL_TOKEN = /^[A-Z][A-Za-z0-9]*\.[A-Za-z0-9]+(?= )/;
 const C_PATH = /^[a-z][a-z0-9_]*(?:\[\d+\])*(?:\.[a-z][a-z0-9_]*(?:\[\d+\])*)*$/;
-const ENGINE_BODY_CODES = new Set([
-  StatusCode.InvalidArgument,
-  StatusCode.SheetIndexOutOfRange,
-  StatusCode.IndexOutOfRange,
-]);
 const camelCase = (snake) => snake.replace(/_([a-z0-9])/g, (_, c) => c.toUpperCase());
+
+/**
+ * Whether `cPath` leads with a name `where` takes: one of its parameters (`sheet_index` names `sheet`), a key of
+ * its input or patch record, or a C field a record publishes under another name. A message that leads with any
+ * other word is prose and keeps its wording.
+ */
+function namesArgument(where, cPath) {
+  const root = cPath.split(/[.[]/)[0];
+  if (Object.hasOwn(C_FIELD_NAMES, root)) return true;
+  const params = tableEntry(PARAM_NAMES, where) ?? [];
+  if ([root, root.replace(/_index$/, '')].some((name) => params.includes(camelCase(name)))) return true;
+  const keys = (tableEntry(PATCH_KEYS, where) ?? tableEntry(INPUT_KEYS, where))?.[1] ?? [];
+  return keys.includes(camelCase(root));
+}
 
 /** The public path of an engine body's C path: renamed fields, camelCase, rooted at the parameter it names. */
 function publicPath(where, cPath) {
@@ -4971,9 +4985,9 @@ function withMessage(error, message) {
 
 /**
  * `error` as the call `where` (`Class.method`) words it: a binding-layer message that leads with another call is
- * rewritten to lead with `where`, and an engine body `<c_path> <rest>` (an InvalidArgument or out-of-range
- * `FormulonError` that leads with no call) to `where`, the public path of `c_path`, and `rest`. Anything else
- * passes as it is.
+ * rewritten to lead with `where`, and an engine `FormulonError` that leads with no call is labelled with `where`;
+ * when its first token is a C path naming one of the call's arguments (`<c_path> <rest>`), that token becomes
+ * the public path. Anything else passes as it is.
  */
 function relabelArgumentError(error, where) {
   if (calledBackErrors.has(error)) return error;
@@ -4983,10 +4997,11 @@ function relabelArgumentError(error, where) {
   if (!isFormulon && !(error instanceof TypeError) && !(error instanceof RangeError)) return error;
   const call = CALL_TOKEN.exec(message);
   if (call !== null) return call[0] === where ? error : withMessage(error, where + message.slice(call[0].length));
-  if (!isFormulon || !ENGINE_BODY_CODES.has(error.code)) return error;
+  if (!isFormulon) return error;
   const space = message.indexOf(' ');
-  if (space < 0 || !C_PATH.test(message.slice(0, space))) return error;
-  return withMessage(error, `${where} ${publicPath(where, message.slice(0, space))}${message.slice(space)}`);
+  const head = space < 0 ? '' : message.slice(0, space);
+  if (!C_PATH.test(head) || !namesArgument(where, head)) return withMessage(error, `${where} ${message}`);
+  return withMessage(error, `${where} ${publicPath(where, head)}${message.slice(space)}`);
 }
 
 /**
@@ -5526,7 +5541,7 @@ function resolveRef(raw, sheet, where, [at, kind], args, handleIndex) {
     if (value >= count) {
       throw new FormulonError(
         StatusCode.IndexOutOfRange,
-        `${label} ${value} is out of range (${count} items)`,
+        `${label} ${value} ${pastCount(count, 'item')}`,
         `position=${value}`,
       );
     }
@@ -7255,7 +7270,7 @@ function makeFacade(Raw, registry, runtime) {
       if (index >= raw.getTableCount(sheet)) {
         throw new FormulonError(
           StatusCode.IndexOutOfRange,
-          `${argLabel('Sheet.table', 0)} ${index} is out of range (${raw.getTableCount(sheet)} items)`,
+          `${argLabel('Sheet.table', 0)} ${index} ${pastCount(raw.getTableCount(sheet), 'item')}`,
           `table_index=${index}`,
         );
       }
@@ -7361,7 +7376,7 @@ function makeFacade(Raw, registry, runtime) {
       if (ref >= count) {
         throw new FormulonError(
           StatusCode.IndexOutOfRange,
-          `${argLabel(where, 0)} ${ref} is out of range (${count} items)`,
+          `${argLabel(where, 0)} ${ref} ${pastCount(count, 'item')}`,
           `position=${ref}`,
         );
       }
@@ -7443,7 +7458,7 @@ function makeFacade(Raw, registry, runtime) {
       if (index >= raw.getPivotCount(sheet)) {
         throw new FormulonError(
           StatusCode.IndexOutOfRange,
-          `${argLabel('Sheet.pivot', 0)} ${index} is out of range (${raw.getPivotCount(sheet)} items)`,
+          `${argLabel('Sheet.pivot', 0)} ${index} ${pastCount(raw.getPivotCount(sheet), 'item')}`,
           `pivot_index=${index}`,
         );
       }
@@ -8330,7 +8345,11 @@ function makeFacade(Raw, registry, runtime) {
         this.#alive();
         const index = this.#raw.getSheetIndex(ref);
         if (index === null) {
-          throw new FormulonError(StatusCode.NotFound, `no sheet is named ${JSON.stringify(ref)}`, `sheet_name=${ref}`);
+          throw new FormulonError(
+            StatusCode.NotFound,
+            `${where} ${JSON.stringify(ref)} names no sheet`,
+            `sheet_name=${ref}`,
+          );
         }
         return index;
       }
@@ -8340,7 +8359,7 @@ function makeFacade(Raw, registry, runtime) {
         if (ref >= this.#sheets.length) {
           throw new FormulonError(
             StatusCode.SheetIndexOutOfRange,
-            `${where} ${ref} is out of range (${this.#sheets.length} sheets)`,
+            `${where} ${ref} ${pastCount(this.#sheets.length, 'sheet')}`,
             `sheet_index=${ref}`,
           );
         }

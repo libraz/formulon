@@ -128,7 +128,7 @@ Expected<void, Error> Workbook::set_defined_name_scoped(std::string name, std::s
     return make_error(FormulonErrorCode::kInvalidArgument, "name is empty");
   }
   if (local_sheet_id < -1 || (local_sheet_id >= 0 && static_cast<std::size_t>(local_sheet_id) >= sheets_.size())) {
-    return make_error(FormulonErrorCode::kInvalidArgument, "scope sheet index out of range",
+    return make_error(FormulonErrorCode::kInvalidArgument, "local_sheet_id is out of range",
                       scope_context(local_sheet_id) + " sheet_count=" + std::to_string(sheets_.size()));
   }
   if (!file_name_.empty()) {
@@ -171,7 +171,7 @@ Expected<void, Error> Workbook::set_defined_name_scoped(std::string name, std::s
   };
   const std::vector<io::xlsb::XlsbRetainedTable> retained = io::xlsb::xlsb_retained_tables(*this);
   if (!is_valid_defined_name(name)) {
-    return make_error(FormulonErrorCode::kInvalidArgument, "invalid name", "name=" + name);
+    return make_error(FormulonErrorCode::kInvalidArgument, "name is not a valid defined name", "name=" + name);
   }
   if (std::any_of(tables_.begin(), tables_.end(), table_named) ||
       std::any_of(retained.begin(), retained.end(), table_named)) {
@@ -201,7 +201,7 @@ Expected<void, Error> Workbook::set_defined_name_hidden(std::string_view name, s
     it->hidden = hidden;
     return Expected<void, Error>::Ok();
   }
-  return make_error(FormulonErrorCode::kInvalidArgument, "no such defined name",
+  return make_error(FormulonErrorCode::kInvalidArgument, "name matches no defined name",
                     "name=" + std::string(name) + " " + scope_context(local_sheet_id));
 }
 
@@ -212,7 +212,7 @@ Expected<void, Error> Workbook::set_defined_name_comment(std::string_view name, 
     it->comment = std::move(comment);
     return Expected<void, Error>::Ok();
   }
-  return make_error(FormulonErrorCode::kInvalidArgument, "no such defined name",
+  return make_error(FormulonErrorCode::kInvalidArgument, "name matches no defined name",
                     "name=" + std::string(name) + " " + scope_context(local_sheet_id));
 }
 

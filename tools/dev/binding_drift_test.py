@@ -39,11 +39,17 @@ from tools.dev.binding_drift.api_conventions_bindings_test import (  # noqa: F40
     ResultShapeTest,
     ValueUnionTest,
 )
-
-# The fixture tests of the patch-nullability check run here as well.
+from tools.dev.binding_drift.engine_messages_test import (  # noqa: F401
+    EngineMessagesTest,
+)
 from tools.dev.binding_drift.patch_nullability_test import (  # noqa: F401
     DtsNullKeysTest,
     PatchNullabilityTest,
+)
+
+# The fixture tests of the patch-nullability check run here as well.
+from tools.dev.binding_drift.tristate_reads_test import (  # noqa: F401
+    TristateReadsTest,
 )
 
 

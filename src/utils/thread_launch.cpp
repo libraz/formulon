@@ -125,7 +125,7 @@ void Thread::join() noexcept {
 
 Expected<Thread, Error> launch_thread(ThreadStart& start) {
   if (start.entry == nullptr) {
-    return make_error(FormulonErrorCode::kInvalidArgument, "thread start record has no entry point",
+    return make_error(FormulonErrorCode::kInvalidArgument, "Thread start record has no entry point",
                       "context=thread_launch");
   }
   if (ConsumeInjectedFailure()) {

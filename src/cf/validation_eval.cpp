@@ -299,7 +299,7 @@ Expected<ValidationOutcome, Error> validate_value(const Workbook& wb, const Shee
                                                   const ValidationEvalDeps& deps) {
   using Result = Expected<ValidationOutcome, Error>;
   if (!Sheet::rect_in_grid(row, col, row, col)) {
-    return Result::Err(make_error(FormulonErrorCode::kInvalidArgument, "cell out of grid"));
+    return Result::Err(make_error(FormulonErrorCode::kInvalidArgument, "row and col must lie inside the grid"));
   }
   ValidationOutcome out;
   const std::vector<DataValidation>& rules = sheet.validations();
