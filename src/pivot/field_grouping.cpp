@@ -18,6 +18,7 @@
 #include "pivot/field_grouping_internal.h"
 #include "pivot/pivot_cache.h"
 #include "pivot/pivot_locale.h"
+#include "pivot/pivot_refresh.h"
 #include "pivot/pivot_types.h"
 #include "pivot/record_access.h"
 #include "utils/checked_index.h"
@@ -337,6 +338,37 @@ bool is_era_year_group(const PivotCache& cache, const PivotCacheField& field, bo
   return true;
 }
 
+// The values a base field holds, as `base_values`, without the shared items
+// the source no longer has.
+std::vector<BaseValue> present_base_values(const PivotCache& cache, std::size_t base) {
+  const PivotCacheField& field = cache.fields()[base];
+  if (field.shared_items.empty()) {
+    return base_values(cache, base);
+  }
+  std::vector<BaseValue> values;
+  for (std::size_t i = 0; i < field.shared_items.size(); ++i) {
+    if (!flag_at(field.shared_item_is_missing, i)) {
+      values.push_back({field.shared_items[i], flag_at(field.shared_item_is_date, i)});
+    }
+  }
+  return values;
+}
+
+// Excel's unique-item limit of a pivot field.
+constexpr std::size_t kMaxFieldItems = 1048576U;
+
+// Magnitude from which a whole number no longer prints with 15 digits.
+constexpr double kMaxLabelInteger = 1e15;
+
+bool is_label_integer(double v) noexcept {
+  return std::floor(v) == v && std::fabs(v) < kMaxLabelInteger;
+}
+
+// Ranges of `state`: one per `a` from the start in steps of the interval while `a <= end`.
+std::size_t numeric_bucket_count(const NumericGroupState& state) noexcept {
+  return static_cast<std::size_t>(std::floor((state.end - state.start) / state.interval)) + 1U;
+}
+
 }  // namespace
 
 namespace detail {
@@ -406,6 +438,66 @@ Expected<GroupBounds, Error> resolve_date_group_bounds(const PivotCache& cache, 
     return group_error(FormulonErrorCode::kInvalidArgument, "a date group's start must not follow its end");
   }
   return bounds;
+}
+
+Expected<void, Error> check_numeric_labels(const NumericGroupState& state) {
+  if (!is_label_integer(state.start) || !is_label_integer(state.end) || !is_label_integer(state.interval)) {
+    return group_error(FormulonErrorCode::kNotImplemented,
+                       "numeric group labels for a non-integer start, end or interval are not implemented");
+  }
+  if (state.interval < 1.0) {
+    return group_error(FormulonErrorCode::kInvalidArgument, "a numeric group's interval must be positive");
+  }
+  if (state.start <= state.end && numeric_bucket_count(state) + 2U > kMaxFieldItems) {
+    return group_error(FormulonErrorCode::kSecurityResourceLimit, "the numeric group has more items than a field holds",
+                       "items=" + std::to_string(numeric_bucket_count(state) + 2U));
+  }
+  return Expected<void, Error>::Ok();
+}
+
+Expected<NumericGroupState, Error> resolve_numeric_group(const PivotCache& cache, std::size_t base,
+                                                         std::optional<double> start, std::optional<double> end,
+                                                         double interval) {
+  if (base >= cache.fields().size()) {
+    return group_error(FormulonErrorCode::kIndexOutOfRange, "no such cache field",
+                       "field=" + std::to_string(base) + " count=" + std::to_string(cache.fields().size()));
+  }
+  const PivotCacheField& field = cache.fields()[base];
+  if (!field.is_database_field) {
+    return group_error(FormulonErrorCode::kInvalidArgument, "numeric grouping needs a database field",
+                       "field=" + std::to_string(base));
+  }
+  if (!std::isfinite(interval) || !(interval > 0.0)) {
+    return group_error(FormulonErrorCode::kInvalidArgument, "a numeric group's interval must be finite and positive");
+  }
+  for (const std::optional<double>& bound : {start, end}) {
+    if (bound.has_value() && !std::isfinite(*bound)) {
+      return group_error(FormulonErrorCode::kInvalidArgument, "a numeric group's bound must be finite");
+    }
+  }
+  SerialRange range;
+  for (const BaseValue& v : present_base_values(cache, base)) {
+    if (!v.value.is_number() || v.is_date) {
+      return group_error(FormulonErrorCode::kInvalidArgument, "only a field holding nothing but numbers can be grouped",
+                         "field=" + field.name);
+    }
+    range.add(v.value.as_number());
+  }
+  if (!range.any && (!start.has_value() || !end.has_value())) {
+    return group_error(FormulonErrorCode::kInvalidArgument, "the field holds no number to take a bound from",
+                       "field=" + field.name);
+  }
+  NumericGroupState state;
+  state.start = start.value_or(range.lo);
+  state.end = end.value_or(range.hi);
+  state.interval = interval;
+  state.auto_start = !start.has_value();
+  state.auto_end = !end.has_value();
+  if (state.start > state.end) {
+    return group_error(FormulonErrorCode::kInvalidArgument, "a numeric group's start must not follow its end");
+  }
+  RETURN_IF_ERROR(check_numeric_labels(state));
+  return state;
 }
 
 }  // namespace detail
@@ -592,7 +684,7 @@ Expected<GroupRun, Error> group_run(const PivotCache& cache, std::size_t base) {
   }
   if (run.count != 0U && run.first + run.count != fields.size()) {
     return group_error(FormulonErrorCode::kPreconditionFailed,
-                       "the group fields of a date field can be removed only while they are the last cache fields",
+                       "the group fields of a field can be removed only while they are the last cache fields",
                        "base=" + std::to_string(base));
   }
   return run;
@@ -718,6 +810,123 @@ Expected<std::size_t, Error> ungroup_cache_field(PivotCache& cache, std::size_t 
     }
   }
   return run.count;
+}
+
+namespace detail {
+
+Expected<void, Error> set_numeric_range(PivotCache& cache, FieldGroup& group, const NumericGroupState& state) {
+  RETURN_IF_ERROR(check_numeric_labels(state));
+  const auto step = static_cast<long long>(state.interval);
+  const auto first = static_cast<long long>(state.start);
+  const std::size_t buckets = state.start <= state.end ? numeric_bucket_count(state) : 0U;
+  std::vector<Value> items;
+  items.reserve(buckets + 2U);
+  items.push_back(cache_text(cache, "<" + std::to_string(first)));
+  for (std::size_t n = 0; n < buckets; ++n) {
+    const long long a = first + static_cast<long long>(n) * step;
+    items.push_back(cache_text(cache, std::to_string(a) + "-" + std::to_string(a + step - 1)));
+  }
+  items.push_back(cache_text(cache, ">" + std::to_string(first + static_cast<long long>(buckets) * step)));
+  group.kind = GroupKind::Range;
+  group.range = RangeGroup{};
+  group.range.start_num = state.start;
+  group.range.end_num = state.end;
+  group.range.interval = state.interval;
+  group.range.auto_start = state.auto_start;
+  group.range.auto_end = state.auto_end;
+  group.discrete_map.clear();
+  group.group_items = std::move(items);
+  group.group_item_is_date.clear();
+  return Expected<void, Error>::Ok();
+}
+
+Expected<std::size_t, Error> group_cache_by_number(PivotCache& cache, std::size_t base, const NumericGroupState& state,
+                                                   bool date1904) {
+  const std::optional<FieldGroup>& existing = cache.fields()[base].field_group;
+  if (existing.has_value() && existing->par.has_value()) {
+    return group_error(FormulonErrorCode::kPreconditionFailed, "the field is grouped already",
+                       "field=" + cache.fields()[base].name);
+  }
+  const std::string& base_name = cache.fields()[base].name;
+  const auto taken = [&cache](std::string_view name) {
+    return std::any_of(cache.fields().begin(), cache.fields().end(),
+                       [name](const PivotCacheField& other) { return same_header(other.name, name); });
+  };
+  std::string name = base_name + "2";
+  for (std::size_t n = 3; taken(name); ++n) {
+    name = base_name + std::to_string(n);
+  }
+  PivotCacheField field{std::move(name), {}};
+  field.is_database_field = false;
+  field.num_fmt_id = 0U;
+  FieldGroup group;
+  group.base = static_cast<std::uint32_t>(base);
+  RETURN_IF_ERROR(set_numeric_range(cache, group, state));
+  field.field_group = std::move(group);
+  const std::size_t index = cache.fields().size();
+  cache.mutable_fields().push_back(std::move(field));
+  std::optional<FieldGroup>& base_group = cache.mutable_fields()[base].field_group;
+  if (!base_group.has_value()) {
+    base_group.emplace();
+  }
+  base_group->par = static_cast<std::uint32_t>(index);
+  materialize_group_fields(cache, date1904);
+  return index;
+}
+
+}  // namespace detail
+
+std::optional<DateGroupState> date_group_state(const PivotCache& cache, std::size_t field, bool date1904) {
+  const std::size_t base = group_base_index(cache, field);
+  DateGroupState state;
+  state.periods = date_group_periods(cache, base, date1904);
+  if (state.periods == 0U) {
+    return std::nullopt;
+  }
+  state.calendar = date_group_calendar(cache, base, date1904);
+  RangeGroup range;
+  range.is_date = true;
+  for (const PivotCacheField& candidate : cache.fields()) {
+    if (!is_group_field(candidate) || *candidate.field_group->base != base ||
+        candidate.field_group->kind != GroupKind::Range || candidate.field_group->range.by == GroupBy::Range) {
+      continue;
+    }
+    range = candidate.field_group->range;
+    if (range.by == GroupBy::Days) {
+      break;
+    }
+  }
+  if (range.by == GroupBy::Days && range.interval >= 1.0) {
+    state.interval_days = static_cast<std::uint32_t>(range.interval);
+  }
+  // An era-year grouping alone states no bounds and follows the data.
+  const GroupBounds bounds = resolve_bounds(cache, base, range, date1904);
+  state.start = bounds.start;
+  state.end = bounds.end;
+  state.auto_start = range.auto_start;
+  state.auto_end = range.auto_end;
+  return state;
+}
+
+std::optional<NumericGroupState> numeric_group_state(const PivotCache& cache, std::size_t field) {
+  const std::size_t base = group_base_index(cache, field);
+  for (const PivotCacheField& candidate : cache.fields()) {
+    if (!is_group_field(candidate) || *candidate.field_group->base != base) {
+      continue;
+    }
+    const FieldGroup& group = *candidate.field_group;
+    if (group.kind != GroupKind::Range || group.range.is_date || group.range.by != GroupBy::Range) {
+      continue;
+    }
+    NumericGroupState state;
+    state.start = group.range.start_num;
+    state.end = group.range.end_num;
+    state.interval = group.range.interval;
+    state.auto_start = group.range.auto_start;
+    state.auto_end = group.range.auto_end;
+    return state;
+  }
+  return std::nullopt;
 }
 
 }  // namespace formulon::pivot

@@ -441,6 +441,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/pivot/pivot_layout_page_test.cpp
   unit/pivot/pivot_layout_subtotals_test.cpp
   unit/pivot/field_grouping_test.cpp
+  unit/pivot/numeric_group_test.cpp
   unit/pivot/pivot_layout_options_test.cpp
   unit/pivot/pivot_line_items_test.cpp
   unit/pivot/pivot_show_details_test.cpp

@@ -80,9 +80,15 @@ bool same_header(std::string_view a, std::string_view b);
 
 /// Rebuilds `old` from `source`.
 ///
+/// A numeric range group with an automatic bound takes the base's current
+/// minimum or maximum and regenerates its items as `set_numeric_group` does;
+/// one with both bounds fixed keeps its items, values outside falling in the
+/// first or last.
+///
 /// Errors, none of which builds anything: `kNotImplemented` for a numeric
-/// range group, for a years or multi-day date group whose bounds move, and for
-/// a blank header in a locale whose word is unmeasured.
+/// range group with a non-integer start, end or interval, for a years or
+/// multi-day date group whose bounds move, and for a blank header in a locale
+/// whose word is unmeasured.
 Expected<RefreshPlan, Error> build_refreshed_cache(const PivotCache& old, const RefreshSource& source,
                                                    const RefreshContext& context);
 

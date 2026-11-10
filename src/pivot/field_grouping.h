@@ -147,6 +147,57 @@ Expected<void, Error> set_date_group(Workbook& wb, std::size_t sheet, std::size_
 /// `ungroup_cache_field`.
 Expected<void, Error> clear_date_group(Workbook& wb, std::size_t sheet, std::size_t pivot, std::size_t field);
 
+/// A date grouping as stored, for reading back: the settings `set_date_group`
+/// takes, with the stored bounds even where they are automatic.
+struct DateGroupState {
+  std::uint32_t periods = 0;
+  CalendarSystem calendar = CalendarSystem::Gregorian;
+  std::uint32_t interval_days = 1;
+  double start = 0.0;
+  double end = 0.0;
+  bool auto_start = true;
+  bool auto_end = true;
+};
+
+/// A numeric grouping as stored: `startNum`, `endNum`, `groupInterval` and
+/// whether each bound follows the data.
+struct NumericGroupState {
+  double start = 0.0;
+  double end = 0.0;
+  double interval = 1.0;
+  bool auto_start = true;
+  bool auto_end = true;
+};
+
+/// The date grouping over cache field `field` (a base field or one of its
+/// group fields); empty when it is not date-grouped.
+std::optional<DateGroupState> date_group_state(const PivotCache& cache, std::size_t field, bool date1904);
+
+/// The numeric grouping over cache field `field` (a base field or its group
+/// field); empty when it is not numerically grouped.
+std::optional<NumericGroupState> numeric_group_state(const PivotCache& cache, std::size_t field);
+
+/// Groups field `field` (a base field or its group field) of pivot `pivot` on
+/// sheet `sheet` into numeric ranges of `interval`, replacing any grouping it
+/// has, and re-projects every pivot on its cache. An empty bound follows the
+/// base's present values. The group items are `<start`, `a-(a+interval-1)`
+/// from `start` while `a <= end`, then `>start+n*interval`, as a refresh
+/// regenerates them.
+///
+/// `kInvalidArgument` for a non-finite or non-positive interval, a non-finite
+/// bound, a start after the end, or a base holding a value that is not a
+/// number; `kNotImplemented` for a non-integer start, end or interval, or a
+/// bound of 1e15 or more in magnitude, whose item labels are not measured;
+/// `kSecurityResourceLimit` for more group items than a field holds;
+/// `kSheetIndexOutOfRange` / `kIndexOutOfRange` for an index out of range.
+Expected<void, Error> set_numeric_group(Workbook& wb, std::size_t sheet, std::size_t pivot, std::size_t field,
+                                        std::optional<double> start, std::optional<double> end, double interval);
+
+/// Removes the numeric grouping of `field` from every pivot on its cache, as
+/// `clear_date_group` does for a date grouping. A field without one is left
+/// as it is.
+Expected<void, Error> clear_numeric_group(Workbook& wb, std::size_t sheet, std::size_t pivot, std::size_t field);
+
 }  // namespace formulon::pivot
 
 #endif  // FORMULON_PIVOT_FIELD_GROUPING_H_

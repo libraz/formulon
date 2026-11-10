@@ -23,6 +23,7 @@
 #include "num_fmt_locale.h"
 #include "pivot/date_serial.h"
 #include "pivot/field_grouping.h"
+#include "pivot/field_grouping_internal.h"
 #include "pivot/field_remap.h"
 #include "pivot/pivot_cache.h"
 #include "pivot/pivot_locale.h"
@@ -96,11 +97,6 @@ bool is_date_range(const FieldGroup& group) {
   return group.kind == GroupKind::Range && (group.range.is_date || group.range.by != GroupBy::Range);
 }
 
-bool is_numeric_range(const PivotCacheField& field) {
-  return field.field_group.has_value() && field.field_group->kind == GroupKind::Range &&
-         !is_date_range(*field.field_group);
-}
-
 std::string short_date_text(double serial, const RefreshContext& context) {
   return text_format::format_value_for_display(Value::number(std::floor(serial)),
                                                localized_builtin_num_fmt(14U, context.profile), context.date1904,
@@ -149,6 +145,53 @@ Expected<void, Error> refresh_date_bounds(PivotCache& cache, FieldGroup& group, 
         intern_text(cache.mutable_text_storage(), date_group_before_label(short_date_text(start, context)));
     group.group_items.back() =
         intern_text(cache.mutable_text_storage(), date_group_after_label(short_date_text(end, context)));
+  }
+  return Expected<void, Error>::Ok();
+}
+
+// Regenerates a numeric range group's automatic bounds and items from the
+// base's current numbers; with both bounds fixed the items stay verbatim.
+// `items` maps each old group item to the new one of the same label while the
+// two lists agree from the start.
+Expected<void, Error> refresh_numeric_range(PivotCache& cache, FieldGroup& group, const std::vector<Value>& base,
+                                            IndexMap& items) {
+  const RangeGroup& range = group.range;
+  NumericGroupState state;
+  state.start = range.start_num;
+  state.end = range.end_num;
+  state.interval = range.interval;
+  state.auto_start = range.auto_start;
+  state.auto_end = range.auto_end;
+  std::optional<double> lo;
+  std::optional<double> hi;
+  for (const Value& v : base) {
+    if (v.is_number()) {
+      lo = lo.has_value() ? std::min(*lo, v.as_number()) : v.as_number();
+      hi = hi.has_value() ? std::max(*hi, v.as_number()) : v.as_number();
+    }
+  }
+  const std::size_t old_count = group.group_items.size();
+  items.clear();
+  for (std::size_t k = 0; k < old_count; ++k) {
+    items.push_back(static_cast<std::uint32_t>(k));
+  }
+  if ((!state.auto_start && !state.auto_end) || !lo.has_value()) {
+    return detail::check_numeric_labels(state);
+  }
+  state.start = state.auto_start ? *lo : state.start;
+  state.end = state.auto_end ? *hi : state.end;
+  if (state.start > state.end) {
+    return make_error(FormulonErrorCode::kNotImplemented,
+                      "Refreshing a numeric group whose fixed bound passes the data's other end is not implemented");
+  }
+  const std::vector<Value> old_items = group.group_items;
+  RETURN_IF_ERROR(detail::set_numeric_range(cache, group, state));
+  std::size_t same = 0;
+  while (same < old_count && same < group.group_items.size() && old_items[same] == group.group_items[same]) {
+    ++same;
+  }
+  for (std::size_t k = same; k < old_count; ++k) {
+    items[k] = std::nullopt;
   }
   return Expected<void, Error>::Ok();
 }
@@ -210,11 +253,6 @@ Expected<RefreshPlan, Error> build_refreshed_cache(const PivotCache& old, const 
                                                    const RefreshContext& context) {
   const std::vector<PivotCacheField>& old_fields = old.fields();
   const std::size_t old_count = old_fields.size();
-  for (const PivotCacheField& field : old_fields) {
-    if (is_numeric_range(field)) {
-      return make_error(FormulonErrorCode::kNotImplemented, "Refreshing a numeric group is not implemented");
-    }
-  }
   std::vector<std::string> names = refreshed_field_names(source.headers, context.blank_header_word);
   const std::uint32_t columns = source.columns;
 
@@ -401,6 +439,8 @@ Expected<RefreshPlan, Error> build_refreshed_cache(const PivotCache& old, const 
     const std::uint32_t base = *group.base;
     if (is_date_range(group)) {
       RETURN_IF_ERROR(refresh_date_bounds(cache, group, column_values[base], column_dates[base], context));
+    } else if (group.kind == GroupKind::Range) {
+      RETURN_IF_ERROR(refresh_numeric_range(cache, group, column_values[base], plan.remap.items[old_of[j]]));
     } else if (group.kind == GroupKind::Discrete && old_of[base] < old_count) {
       const std::size_t old_group_items = group.group_items.size();
       refresh_discrete_map(cache, group, fields[base], plan.remap.items[old_of[base]]);

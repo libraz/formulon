@@ -1,5 +1,6 @@
-// Workbook-facing date-group editing: the pivot-field and axis rewiring that
-// follows a cache regroup, behind set_date_group and clear_date_group.
+// Workbook-facing date- and numeric-group editing: the pivot-field and axis
+// rewiring that follows a cache regroup, behind set_date_group /
+// clear_date_group and set_numeric_group / clear_numeric_group.
 
 #include <algorithm>
 #include <cstddef>
@@ -29,6 +30,7 @@ using detail::group_error;
 using detail::group_run;
 using detail::GroupRun;
 using detail::resolve_date_group_bounds;
+using detail::resolve_numeric_group;
 
 // A row or column axis in document order, the Values marker included.
 std::vector<std::int64_t> axis_entries(const PivotTable& table, bool row) {
@@ -207,7 +209,7 @@ Expected<GroupTarget, Error> resolve_group_target(Workbook& wb, std::size_t shee
 
 // Takes the group fields over `base` off every pivot on `cache` and out of
 // the cache; `run` is their checked position.
-void remove_date_group(Workbook& wb, PivotCache& cache, std::size_t base, const GroupRun& run) {
+void remove_group(Workbook& wb, PivotCache& cache, std::size_t base, const GroupRun& run) {
   for_each_cache_table(wb, cache.cache_id(),
                        [&](PivotTable& table) { remove_group_pivot_fields(table, base, run.first); });
   (void)ungroup_cache_field(cache, base);
@@ -224,7 +226,7 @@ Expected<void, Error> set_date_group(Workbook& wb, std::size_t sheet, std::size_
   const DateGroupSpec spec{periods, calendar, interval_days, start, end};
   RETURN_IF_ERROR(resolve_date_group_bounds(cache, base, spec, wb.date1904()));
   ASSIGN_OR_RETURN(GroupRun run, group_run(cache, base));
-  remove_date_group(wb, cache, base, run);
+  remove_group(wb, cache, base, run);
   ASSIGN_OR_RETURN(std::size_t first, group_cache_by_date(cache, base, spec, wb.date1904(), wb.excel_profile()));
   for_each_cache_table(wb, cache.cache_id(), [&](PivotTable& table) {
     add_group_pivot_fields(table, cache, base, first, &table == target.table);
@@ -241,7 +243,36 @@ Expected<void, Error> clear_date_group(Workbook& wb, std::size_t sheet, std::siz
   if (run.count == 0U) {
     return Expected<void, Error>::Ok();
   }
-  remove_date_group(wb, cache, target.base, run);
+  remove_group(wb, cache, target.base, run);
+  invalidate_tables(wb, cache.cache_id());
+  return Expected<void, Error>::Ok();
+}
+
+Expected<void, Error> set_numeric_group(Workbook& wb, std::size_t sheet, std::size_t pivot, std::size_t field,
+                                        std::optional<double> start, std::optional<double> end, double interval) {
+  ASSIGN_OR_RETURN(GroupTarget target, resolve_group_target(wb, sheet, pivot, field));
+  PivotCache& cache = *target.cache;
+  const std::size_t base = target.base;
+  ASSIGN_OR_RETURN(NumericGroupState state, resolve_numeric_group(cache, base, start, end, interval));
+  ASSIGN_OR_RETURN(GroupRun run, group_run(cache, base));
+  remove_group(wb, cache, base, run);
+  ASSIGN_OR_RETURN(std::size_t first, detail::group_cache_by_number(cache, base, state, wb.date1904()));
+  for_each_cache_table(wb, cache.cache_id(), [&](PivotTable& table) {
+    add_group_pivot_fields(table, cache, base, first, &table == target.table);
+    resolve_pivot_names(table, cache);
+  });
+  invalidate_tables(wb, cache.cache_id());
+  return Expected<void, Error>::Ok();
+}
+
+Expected<void, Error> clear_numeric_group(Workbook& wb, std::size_t sheet, std::size_t pivot, std::size_t field) {
+  ASSIGN_OR_RETURN(GroupTarget target, resolve_group_target(wb, sheet, pivot, field));
+  PivotCache& cache = *target.cache;
+  if (!numeric_group_state(cache, target.base).has_value()) {
+    return Expected<void, Error>::Ok();
+  }
+  ASSIGN_OR_RETURN(GroupRun run, group_run(cache, target.base));
+  remove_group(wb, cache, target.base, run);
   invalidate_tables(wb, cache.cache_id());
   return Expected<void, Error>::Ok();
 }

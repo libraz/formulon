@@ -17,6 +17,7 @@
 #include "io/ooxml_reader.h"
 #include "io/ooxml_writer.h"
 #include "merge_range.h"
+#include "pivot/field_grouping.h"
 #include "pivot/field_remap.h"
 #include "pivot/pivot_cache.h"
 #include "pivot/pivot_locale.h"
@@ -449,7 +450,7 @@ TEST(PivotRefresh, RulesFieldsMatchByHeaderFoldAndFollowSourceOrder) {
   EXPECT_EQ(plan.remap.names, (std::vector<std::string>{"Amt", "ＲＥＧＩＯＮ", "Prod"}));
 }
 
-TEST(PivotRefresh, RulesNumericGroupIsNotImplemented) {
+TEST(PivotRefresh, RulesNonIntegerNumericGroupIsNotImplemented) {
   PivotCache old = RegionCache({});
   PivotCacheField group;
   group.name = "Amt2";
@@ -461,7 +462,7 @@ TEST(PivotRefresh, RulesNumericGroupIsNotImplemented) {
   group.field_group->range.end_num = 400.0;
   group.field_group->range.interval = 100.0;
   old.mutable_fields().push_back(std::move(group));
-  const auto plan = pivot::build_refreshed_cache(old, Source({"Region"}, {{Value::number(5)}}), Context({true}));
+  const auto plan = pivot::build_refreshed_cache(old, Source({"Region"}, {{Value::number(5.5)}}), Context({true}));
   ASSERT_FALSE(static_cast<bool>(plan));
   EXPECT_EQ(plan.error().code, FormulonErrorCode::kNotImplemented);
 }
@@ -1146,6 +1147,121 @@ TEST(PivotRefresh, HintsMixedDateSlotsFollowRecordOrder) {
 
 TEST(PivotRefresh, HintsEmptyValuesAreNotPresent) {
   EXPECT_FALSE(Hints({}).present);
+}
+
+// ===========================================================================
+// Numeric groups: automatic bounds regenerate, fixed ones keep their items
+// ===========================================================================
+
+std::vector<std::string> GroupTexts(const PivotCacheField& field) {
+  std::vector<std::string> out;
+  for (const Value& v : field.field_group->group_items) {
+    out.emplace_back(v.is_text() ? std::string(v.as_text()) : std::string("#"));
+  }
+  return out;
+}
+
+// Amt (inline) and its numeric group Amt2 over [0..400] by 100.
+PivotCache AmountGroupCache(bool fixed, std::vector<const char*> labels) {
+  PivotCache old;
+  old.set_cache_id(kCacheId);
+  old.mutable_fields().push_back(PivotCacheField{"Amt", {}});
+  old.mutable_fields()[0].field_group = pivot::FieldGroup{};
+  old.mutable_fields()[0].field_group->par = 1U;
+  PivotCacheField group;
+  group.name = "Amt2";
+  group.is_database_field = false;
+  group.field_group = pivot::FieldGroup{};
+  group.field_group->base = 0U;
+  group.field_group->kind = pivot::GroupKind::Range;
+  group.field_group->range.start_num = 0.0;
+  group.field_group->range.end_num = 400.0;
+  group.field_group->range.interval = 100.0;
+  group.field_group->range.auto_start = !fixed;
+  group.field_group->range.auto_end = !fixed;
+  for (const char* label : labels) {
+    group.field_group->group_items.push_back(Value::text(label));
+  }
+  old.mutable_fields().push_back(std::move(group));
+  return old;
+}
+
+TEST(PivotRefresh, RulesNumericGroupAutoBoundsRegenerateItems) {
+  const PivotCache old = AmountGroupCache(false, {"<0", "0-99", "100-199", "200-299", "300-399", "400-499", ">500"});
+  const RefreshPlan plan = Build(
+      old, Source({"Amt"}, {{Value::number(20)}, {Value::number(300)}, {Value::number(140)}}), Context({false, true}));
+  const pivot::FieldGroup& group = *plan.cache.fields()[1].field_group;
+  EXPECT_EQ(group.range.start_num, 20.0);
+  EXPECT_EQ(group.range.end_num, 300.0);
+  EXPECT_TRUE(group.range.auto_start);
+  EXPECT_TRUE(group.range.auto_end);
+  EXPECT_EQ(GroupTexts(plan.cache.fields()[1]),
+            (std::vector<std::string>{"<20", "20-119", "120-219", "220-319", ">320"}));
+  // No label survives, so every old item goes and the pivot field takes the new ones in order.
+  EXPECT_EQ(plan.remap.items[1], (std::vector<std::optional<std::uint32_t>>(7U, std::nullopt)));
+}
+
+TEST(PivotRefresh, RulesNumericGroupKeepsItemsWhoseLabelsStay) {
+  const PivotCache old = AmountGroupCache(false, {"<0", "0-99", "100-199", "200-299", "300-399", "400-499", ">500"});
+  const RefreshPlan plan =
+      Build(old, Source({"Amt"}, {{Value::number(0)}, {Value::number(550)}}), Context({false, true}));
+  EXPECT_EQ(GroupTexts(plan.cache.fields()[1]),
+            (std::vector<std::string>{"<0", "0-99", "100-199", "200-299", "300-399", "400-499", "500-599", ">600"}));
+  EXPECT_EQ(plan.remap.items[1],
+            (std::vector<std::optional<std::uint32_t>>{At(0U), At(1U), At(2U), At(3U), At(4U), At(5U), std::nullopt}));
+}
+
+TEST(PivotRefresh, RulesNumericGroupFixedBoundsKeepLabelsVerbatim) {
+  // Excel keeps an authored label as it is.
+  const PivotCache old = AmountGroupCache(true, {"<0", "0-99", "100-199", "200-299", "300-400", ">400"});
+  RefreshPlan plan = Build(old, Source({"Amt"}, {{Value::number(-10)}, {Value::number(150)}, {Value::number(999)}}),
+                           Context({false, true}));
+  const pivot::FieldGroup& group = *plan.cache.fields()[1].field_group;
+  EXPECT_EQ(group.range.start_num, 0.0);
+  EXPECT_EQ(group.range.end_num, 400.0);
+  EXPECT_EQ(GroupTexts(plan.cache.fields()[1]),
+            (std::vector<std::string>{"<0", "0-99", "100-199", "200-299", "300-400", ">400"}));
+  pivot::materialize_group_fields(plan.cache, /*date1904=*/false);
+  std::vector<double> numbers;
+  for (const PivotCacheRecord& record : plan.cache.records()) {
+    numbers.push_back(record.cells[1].as_number());
+  }
+  EXPECT_EQ(numbers, (std::vector<double>{0, 2, 5}));
+}
+
+TEST(PivotRefresh, RulesNumericGroupFixedNonIntegerBoundIsNotImplemented) {
+  PivotCache old = AmountGroupCache(true, {"<0", "0-99", ">100"});
+  old.mutable_fields()[1].field_group->range.end_num = 99.5;
+  const auto plan = pivot::build_refreshed_cache(old, Source({"Amt"}, {{Value::number(5)}}), Context({false, true}));
+  ASSERT_FALSE(static_cast<bool>(plan));
+  EXPECT_EQ(plan.error().code, FormulonErrorCode::kNotImplemented);
+}
+
+TEST(PivotRefresh, NumericGroupRefreshFollowsTheSourceOnEveryPivot) {
+  Workbook wb = Book(2);
+  {
+    const eval::ScopedEvalProfile scope(wb.excel_profile());
+    ASSERT_TRUE(
+        static_cast<bool>(pivot::set_numeric_group(wb, kPivotSheet, 0U, kAmt, std::nullopt, std::nullopt, 100.0)));
+  }
+  EXPECT_EQ(GroupTexts(CacheOf(wb).fields()[3]),
+            (std::vector<std::string>{"<100", "100-199", "200-299", "300-399", "400-499", "500-599", ">600"}));
+  SetNumber(wb, 1U, 2U, 1000.0);  // 100 -> 1000: the data now spans 200..1000
+  const Expected<void, Error> refreshed = Refresh(wb);
+  ASSERT_TRUE(static_cast<bool>(refreshed)) << refreshed.error().message;
+  const PivotCache& cache = *wb.find_pivot_cache(kCacheId);
+  ASSERT_EQ(cache.fields().size(), 4U);
+  EXPECT_EQ(cache.fields()[3].field_group->range.start_num, 200.0);
+  EXPECT_EQ(cache.fields()[3].field_group->range.end_num, 1000.0);
+  EXPECT_EQ(cache.fields()[3].field_group->group_items.size(), 11U);
+  EXPECT_EQ(cache.records()[0].cells[3].as_number(), 9.0);  // 1000 in 1000-1099
+  for (std::size_t p = 0; p < 2U; ++p) {
+    const std::vector<PivotItem>& items = PivotAt(wb, p).fields()[3].items;
+    ASSERT_EQ(items.size(), 11U);
+    for (std::uint32_t x = 0; x < 11U; ++x) {
+      EXPECT_EQ(items[x].cache_index, x);
+    }
+  }
 }
 
 }  // namespace
