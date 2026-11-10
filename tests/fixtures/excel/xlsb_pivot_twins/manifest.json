@@ -1,0 +1,418 @@
+{
+ "A1_ja_d10_tabular_two_rows": {
+  "edit": "Excel re-save of pivot_layout/ja_d10_tabular_two_rows.xlsx, no edit",
+  "ok": true,
+  "source": "ja_d10_tabular_two_rows.xlsx"
+ },
+ "A2_ja_d11_outline_two_rows": {
+  "edit": "Excel re-save of pivot_layout/ja_d11_outline_two_rows.xlsx, no edit",
+  "ok": true,
+  "source": "ja_d11_outline_two_rows.xlsx"
+ },
+ "A3_ja_d8_two_rows_values_rows": {
+  "edit": "Excel re-save of pivot_layout/ja_d8_two_rows_values_rows.xlsx, no edit",
+  "ok": true,
+  "source": "ja_d8_two_rows_values_rows.xlsx"
+ },
+ "A4_ja_c3_cols_values_cols": {
+  "edit": "Excel re-save of pivot_layout/ja_c3_cols_values_cols.xlsx, no edit",
+  "ok": true,
+  "source": "ja_c3_cols_values_cols.xlsx"
+ },
+ "A5_C9__sum": {
+  "edit": "Excel re-save of pivot_aggregation/C9__sum.xlsx, no edit",
+  "ok": true,
+  "source": "C9__sum.xlsx"
+ },
+ "A6_blank_row_outer_compact": {
+  "edit": "Excel re-save of pivot_options/blank_row_outer_compact.xlsx, no edit",
+  "ok": true,
+  "source": "blank_row_outer_compact.xlsx"
+ },
+ "A7_collapse_item_tabular": {
+  "edit": "Excel re-save of pivot_options/collapse_item_tabular.xlsx, no edit",
+  "ok": true,
+  "source": "collapse_item_tabular.xlsx"
+ },
+ "A8_custom_subtotal_countA": {
+  "edit": "pivot_edit base, Region+Product rows, Region custom subtotal countA only",
+  "ok": true,
+  "source": "base_edit.xlsx"
+ },
+ "A8_custom_subtotal_max": {
+  "edit": "pivot_edit base, Region+Product rows, Region custom subtotal max only",
+  "ok": true,
+  "source": "base_edit.xlsx"
+ },
+ "A8_custom_subtotal_min": {
+  "edit": "pivot_edit base, Region+Product rows, Region custom subtotal min only",
+  "ok": true,
+  "source": "base_edit.xlsx"
+ },
+ "A8_custom_subtotal_stdDev": {
+  "edit": "pivot_edit base, Region+Product rows, Region custom subtotal stdDev only",
+  "ok": true,
+  "source": "base_edit.xlsx"
+ },
+ "A8_custom_subtotal_stdDevP": {
+  "edit": "pivot_edit base, Region+Product rows, Region custom subtotal stdDevP only",
+  "ok": true,
+  "source": "base_edit.xlsx"
+ },
+ "A8_custom_subtotal_varP": {
+  "edit": "pivot_edit base, Region+Product rows, Region custom subtotal varP only",
+  "ok": true,
+  "source": "base_edit.xlsx"
+ },
+ "A9_ja_d13_values_only": {
+  "edit": "Excel re-save of pivot_layout/ja_d13_values_only.xlsx, no edit",
+  "ok": true,
+  "source": "ja_d13_values_only.xlsx"
+ },
+ "B01_base": {
+  "edit": "pivot_edit base re-saved, no edit",
+  "ok": true,
+  "source": "base_edit.xlsx"
+ },
+ "B02_outline": {
+  "edit": "RowAxisLayout outline",
+  "ok": true,
+  "source": "base_edit.xlsx"
+ },
+ "B03_tabular": {
+  "edit": "RowAxisLayout tabular",
+  "ok": true,
+  "source": "base_edit.xlsx"
+ },
+ "B04_rowgrand_off": {
+  "edit": "Product on cols; RowGrand=False (XML colGrandTotals=0)",
+  "ok": true,
+  "source": "base_edit.xlsx"
+ },
+ "B05_colgrand_off": {
+  "edit": "Product on cols; ColumnGrand=False (XML rowGrandTotals=0)",
+  "ok": true,
+  "source": "base_edit.xlsx"
+ },
+ "B06_values_on_rows": {
+  "edit": "Values pseudo-field moved to rows",
+  "ok": true,
+  "source": "base_edit.xlsx"
+ },
+ "B07_data_position": {
+  "edit": "Product on cols; Values moved after Product on cols",
+  "ok": true,
+  "source": "base_edit.xlsx"
+ },
+ "B08_headers_off": {
+  "edit": "DisplayFieldCaptions=False",
+  "ok": true,
+  "source": "base_edit.xlsx"
+ },
+ "B09_grid_drop_zones": {
+  "edit": "InGridDropZones=True (classic layout)",
+  "ok": true,
+  "source": "base_edit.xlsx"
+ },
+ "B10_data_caption": {
+  "edit": "Values caption -> Measures",
+  "ok": true,
+  "source": "base_edit.xlsx"
+ },
+ "B11_grand_total_caption": {
+  "edit": "GrandTotalName -> All Regions",
+  "ok": true,
+  "source": "base_edit.xlsx"
+ },
+ "B12_error_caption": {
+  "edit": "DisplayErrorString=True, ErrorString=ERR",
+  "ok": true,
+  "source": "base_edit.xlsx"
+ },
+ "B13_missing_caption": {
+  "edit": "DisplayNullString=True, NullString=n/a",
+  "ok": true,
+  "source": "base_edit.xlsx"
+ },
+ "B14_merge_items": {
+  "edit": "Region+Product rows, tabular, MergeLabels=True",
+  "ok": true,
+  "source": "base_edit.xlsx"
+ },
+ "B15_indent": {
+  "edit": "Region+Product rows, compact indent 3",
+  "ok": true,
+  "source": "base_edit.xlsx"
+ },
+ "B16a_style": {
+  "edit": "TableStyle2=PivotStyleMedium9",
+  "ok": true,
+  "source": "base_edit.xlsx"
+ },
+ "B16b_style_row_headers_off": {
+  "edit": "ShowTableStyleRowHeaders=False",
+  "ok": true,
+  "source": "base_edit.xlsx"
+ },
+ "B16c_style_col_headers_off": {
+  "edit": "ShowTableStyleColumnHeaders=False",
+  "ok": true,
+  "source": "base_edit.xlsx"
+ },
+ "B16d_style_row_stripes_on": {
+  "edit": "ShowTableStyleRowStripes=True",
+  "ok": true,
+  "source": "base_edit.xlsx"
+ },
+ "B16e_style_col_stripes_on": {
+  "edit": "ShowTableStyleColumnStripes=True",
+  "ok": true,
+  "source": "base_edit.xlsx"
+ },
+ "B16f_style_last_column_off": {
+  "edit": "ShowTableStyleLastColumn=False",
+  "ok": true,
+  "source": "base_edit.xlsx"
+ },
+ "B17_page_field": {
+  "edit": "Product as page field",
+  "ok": true,
+  "source": "base_edit.xlsx"
+ },
+ "B18_name": {
+  "edit": "PivotTable name -> SalesPivot",
+  "ok": true,
+  "source": "base_edit.xlsx"
+ },
+ "C01_subtotal_bottom": {
+  "edit": "Region+Product rows compact; SubtotalLocation bottom",
+  "ok": true,
+  "source": "base_edit.xlsx"
+ },
+ "C02_insert_blank_row": {
+  "edit": "Region+Product rows; Region LayoutBlankLine=True",
+  "ok": true,
+  "source": "base_edit.xlsx"
+ },
+ "C03_default_subtotal_off": {
+  "edit": "Region+Product rows; Region automatic subtotal off",
+  "ok": true,
+  "source": "base_edit.xlsx"
+ },
+ "C04_show_all": {
+  "edit": "Region ShowAllItems=True",
+  "ok": true,
+  "source": "base_edit.xlsx"
+ },
+ "C05_sort_asc": {
+  "edit": "Region AutoSort ascending by Region",
+  "ok": true,
+  "source": "base_edit.xlsx"
+ },
+ "C06_sort_desc": {
+  "edit": "Region AutoSort descending by Region",
+  "ok": true,
+  "source": "base_edit.xlsx"
+ },
+ "C07_sort_by_data": {
+  "edit": "Region AutoSort descending by Sum of Amt",
+  "ok": true,
+  "source": "base_edit.xlsx"
+ },
+ "C08_field_caption": {
+  "edit": "Region caption -> Area",
+  "ok": true,
+  "source": "base_edit.xlsx"
+ },
+ "C09_field_numfmt": {
+  "edit": "Qty on rows; field number format 0.00",
+  "ok": true,
+  "source": "base_edit.xlsx"
+ },
+ "C10_item_hidden": {
+  "edit": "Region item North hidden",
+  "ok": true,
+  "source": "base_edit.xlsx"
+ },
+ "C11_item_collapsed": {
+  "edit": "Region+Product rows; East collapsed",
+  "ok": true,
+  "source": "base_edit.xlsx"
+ },
+ "C12_item_caption": {
+  "edit": "Region item East caption -> Eastern",
+  "ok": true,
+  "source": "base_edit.xlsx"
+ },
+ "C13_calc_item": {
+  "edit": "Region calculated item EW = East+West",
+  "ok": true,
+  "source": "base_edit.xlsx"
+ },
+ "C14a_drag_flags": {
+  "edit": "Region DragToColumn=False, DragToPage=False",
+  "ok": true,
+  "source": "base_edit.xlsx"
+ },
+ "C14b_multi_page_items": {
+  "edit": "Product page field; EnableMultiplePageItems=True",
+  "error": " raise RuntimeError('; '.join(errs))\nRuntimeError: enable_multiple_page_items: Command failed:\n\t\tOSERROR: -1708\n\t\tMESSAGE: Application could not handle this command.\n\t\tCOMMAND: app(pid=56492).workboo\n",
+  "ok": false,
+  "source": "base_edit.xlsx"
+ },
+ "D01_agg_average": {
+  "edit": "Sum of Amt -> average",
+  "ok": true,
+  "source": "base_edit.xlsx"
+ },
+ "D01_agg_count": {
+  "edit": "Sum of Amt -> count",
+  "ok": true,
+  "source": "base_edit.xlsx"
+ },
+ "D01_agg_countNums": {
+  "edit": "Sum of Amt -> countNums",
+  "ok": true,
+  "source": "base_edit.xlsx"
+ },
+ "D01_agg_max": {
+  "edit": "Sum of Amt -> max",
+  "ok": true,
+  "source": "base_edit.xlsx"
+ },
+ "D01_agg_min": {
+  "edit": "Sum of Amt -> min",
+  "ok": true,
+  "source": "base_edit.xlsx"
+ },
+ "D01_agg_product": {
+  "edit": "Sum of Amt -> product",
+  "ok": true,
+  "source": "base_edit.xlsx"
+ },
+ "D01_agg_stdDev": {
+  "edit": "Sum of Amt -> stdDev",
+  "ok": true,
+  "source": "base_edit.xlsx"
+ },
+ "D01_agg_stdDevP": {
+  "edit": "Sum of Amt -> stdDevP",
+  "ok": true,
+  "source": "base_edit.xlsx"
+ },
+ "D01_agg_var": {
+  "edit": "Sum of Amt -> var",
+  "ok": true,
+  "source": "base_edit.xlsx"
+ },
+ "D01_agg_varP": {
+  "edit": "Sum of Amt -> varP",
+  "ok": true,
+  "source": "base_edit.xlsx"
+ },
+ "D02_showas_difference_from": {
+  "edit": "Sum of Amt difference from Region/West",
+  "ok": true,
+  "source": "base_edit.xlsx"
+ },
+ "D02_showas_index": {
+  "edit": "Sum of Amt show values as index",
+  "ok": true,
+  "source": "base_edit.xlsx"
+ },
+ "D02_showas_percent_difference_from": {
+  "edit": "Sum of Amt % difference from Region/West",
+  "ok": true,
+  "source": "base_edit.xlsx"
+ },
+ "D02_showas_percent_of": {
+  "edit": "Sum of Amt % of Region/West",
+  "ok": true,
+  "source": "base_edit.xlsx"
+ },
+ "D02_showas_percent_of_column": {
+  "edit": "Sum of Amt show values as percent_of_column",
+  "ok": true,
+  "source": "base_edit.xlsx"
+ },
+ "D02_showas_percent_of_row": {
+  "edit": "Sum of Amt show values as percent_of_row",
+  "ok": true,
+  "source": "base_edit.xlsx"
+ },
+ "D02_showas_percent_of_total": {
+  "edit": "Sum of Amt show values as percent_of_total",
+  "ok": true,
+  "source": "base_edit.xlsx"
+ },
+ "D02_showas_running_total": {
+  "edit": "Product on cols; Sum of Amt running total in Product",
+  "ok": true,
+  "source": "base_edit.xlsx"
+ },
+ "D03_data_numfmt": {
+  "edit": "Sum of Amt number format #,##0.0",
+  "ok": true,
+  "source": "base_edit.xlsx"
+ },
+ "D04_data_renamed": {
+  "edit": "Sum of Amt renamed Total Amount",
+  "ok": true,
+  "source": "base_edit.xlsx"
+ },
+ "E_date_between": {
+  "edit": "pivot_edit e06 before (Date on rows) with an authored between date filter, Excel RefreshTable + save",
+  "ok": true,
+  "source": "E_date_between_inj.xlsx"
+ },
+ "E_date_dynamic_M3": {
+  "edit": "pivot_edit e06 before (Date on rows) with an authored dynamic_M3 date filter, Excel RefreshTable + save",
+  "ok": true,
+  "source": "E_date_dynamic_M3_inj.xlsx"
+ },
+ "E_ft_l08_bw": {
+  "edit": "Excel re-save of pivot_filters/ft_l08_bw.xlsx",
+  "ok": true,
+  "source": "ft_l08_bw.xlsx"
+ },
+ "E_ft_l21_between": {
+  "edit": "Excel re-save of pivot_filters/ft_l21_between.xlsx",
+  "ok": true,
+  "source": "ft_l21_between.xlsx"
+ },
+ "E_ft_m02_two_filters_mff1": {
+  "edit": "Excel re-save of pivot_filters/ft_m02_two_filters_mff1.xlsx",
+  "ok": true,
+  "source": "ft_m02_two_filters_mff1.xlsx"
+ },
+ "E_ft_n01_gt3": {
+  "edit": "Excel re-save of pivot_filters/ft_n01_gt3.xlsx",
+  "ok": true,
+  "source": "ft_n01_gt3.xlsx"
+ },
+ "E_ft_t01_top2": {
+  "edit": "Excel re-save of pivot_filters/ft_t01_top2.xlsx",
+  "ok": true,
+  "source": "ft_t01_top2.xlsx"
+ },
+ "E_ft_t03_toppct50": {
+  "edit": "Excel re-save of pivot_filters/ft_t03_toppct50.xlsx",
+  "ok": true,
+  "source": "ft_t03_toppct50.xlsx"
+ },
+ "E_ft_t05_topsum700": {
+  "edit": "Excel re-save of pivot_filters/ft_t05_topsum700.xlsx",
+  "ok": true,
+  "source": "ft_t05_topsum700.xlsx"
+ },
+ "E_ft_v01_eq": {
+  "edit": "Excel re-save of pivot_filters/ft_v01_eq.xlsx",
+  "ok": true,
+  "source": "ft_v01_eq.xlsx"
+ },
+ "E_ft_v06_between": {
+  "edit": "Excel re-save of pivot_filters/ft_v06_between.xlsx",
+  "ok": true,
+  "source": "ft_v06_between.xlsx"
+ }
+}
