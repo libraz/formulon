@@ -679,6 +679,13 @@ if(DEFINED _FORMULON_BEHAVIOR_PY)
     COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/api/gen_migration_table.py --check
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
   )
+  # The CHANGELOG names only current or previous-release identifiers; the
+  # unit tests include the check over the repository's CHANGELOG.
+  add_test(
+    NAME ApiChangelogIdentifiers
+    COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/api/check_changelog_identifiers_test.py
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  )
   add_test(
     NAME ApiRoundtripCasesDrift
     COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/api/gen_roundtrip_cases.py --check
