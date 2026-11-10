@@ -1105,8 +1105,8 @@ const AstNode* call_taking(const AstNode& node, const AstNode* arg) {
 // AST of formula body `src` (no leading '=') as entry accepts it, or nullptr
 // with `*failure` set in `src`'s coordinates: the parse diagnostic, a
 // qualified built-in, and with `refusals` a non-reference argument to a
-// reference-only parameter (`SUBTOTAL(9,)`) or an argument count the callee
-// does not take (`ROWS()`), the last two over the call.
+// reference-only parameter (`SUBTOTAL(9,)`), an argument count the callee
+// does not take (`ROWS()`), or a newer error literal (`#CALC!`).
 const AstNode* diagnose_entry(std::string_view src, formulon::Arena& arena, bool refusals, ParseFailure* failure) {
   const AstNode* root = formulon::eval::parse_formula_entry_with_diagnostics(src, arena, failure);
   if (root == nullptr || !refusals) {
@@ -1118,6 +1118,8 @@ const AstNode* diagnose_entry(std::string_view src, formulon::Arena& arena, bool
     call = call_taking(*root, arg);
   } else if ((call = formulon::eval::find_wrong_arity_call(*root)) != nullptr) {
     code = ParseErrorCode::EntryWrongArity;
+  } else if ((call = formulon::eval::find_refused_error_literal(*root)) != nullptr) {
+    code = ParseErrorCode::LexerInvalidErrorLiteral;
   } else {
     return root;
   }

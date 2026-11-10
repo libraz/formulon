@@ -67,6 +67,13 @@ const parser::AstNode* find_non_reference_argument(const parser::AstNode& root);
 /// none.
 const parser::AstNode* find_wrong_arity_call(const parser::AstNode& root);
 
+/// Returns the first error literal in `root` that Excel refuses when typed
+/// (`#CALC!`, `#SPILL!`, `#FIELD!`, `#BLOCKED!`, `#CONNECT!`, `#BUSY!`,
+/// `#UNKNOWN!`), wherever it sits in the formula. nullptr when there is none.
+/// Meaningful for entered text only: files and cached values carry these
+/// codes legitimately.
+const parser::AstNode* find_refused_error_literal(const parser::AstNode& root);
+
 /// Parses a formula body at a public formula-entry boundary. The parser
 /// accepts qualified names syntactically because they may denote defined
 /// names; a qualified built-in is nevertheless invalid formula entry and is

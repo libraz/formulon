@@ -287,6 +287,29 @@ const AstNode* find_wrong_arity_call(const AstNode& root) {
   return hit;
 }
 
+const AstNode* find_refused_error_literal(const AstNode& root) {
+  if (root.kind() == NodeKind::ErrorLiteral) {
+    switch (root.as_error_literal()) {
+      case ErrorCode::Calc:
+      case ErrorCode::Spill:
+      case ErrorCode::Field:
+      case ErrorCode::Blocked:
+      case ErrorCode::Connect:
+      case ErrorCode::Busy:
+      case ErrorCode::Unknown:
+        return &root;
+      default:
+        break;
+    }
+  }
+  const AstNode* hit = nullptr;
+  parser::any_child_node(root, [&](const AstNode& child) {
+    hit = find_refused_error_literal(child);
+    return hit != nullptr;
+  });
+  return hit;
+}
+
 AstNode* parse_formula_entry(std::string_view src, Arena& arena) {
   AstNode* root = parser::parse_strict(src, arena);
   if (root == nullptr || find_qualified_builtin_call(*root) != nullptr) {

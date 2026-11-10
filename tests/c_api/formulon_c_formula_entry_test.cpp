@@ -62,11 +62,11 @@ void ExpectParseRefusal(fm_status_t rc, const std::string& formula) {
 
 const std::vector<std::string>& RejectedFormulas() {
   static const std::vector<std::string> formulas = {
-      "=TRUE!A1",        "=SUM(",      "=1+",           "=Data!SUM(A1:A2)",   "=SUM(Data:Sheet1!A1",
-      "=(1+2",           "SUM(",       "=1\t+2",        "=SUM(1,\r\n2)",      "=SUM (1)",
-      "=SUBTOTAL(9,)",   "=SUMIF(,1)", "=COUNTIF(1,1)", "=OFFSET(A1+0,0,0)",  "=ROWS()",
-      "=ABS(1,2)",       "=SUM()",     "=IF(1)",        "=COUNTIFS(A1,1,A1)", "=1+ROWS()",
-      "=LARGE(A1,A1,1)",
+      "=TRUE!A1",        "=SUM(",      "=1+",           "=Data!SUM(A1:A2)",        "=SUM(Data:Sheet1!A1",
+      "=(1+2",           "SUM(",       "=1\t+2",        "=SUM(1,\r\n2)",           "=SUM (1)",
+      "=SUBTOTAL(9,)",   "=SUMIF(,1)", "=COUNTIF(1,1)", "=OFFSET(A1+0,0,0)",       "=ROWS()",
+      "=ABS(1,2)",       "=SUM()",     "=IF(1)",        "=COUNTIFS(A1,1,A1)",      "=1+ROWS()",
+      "=LARGE(A1,A1,1)", "=#CALC!+1",  "={#CALC!}",     "=IFERROR(#SPILL!,\"x\")", "=#UNKNOWN!",
   };
   return formulas;
 }
@@ -114,6 +114,9 @@ const std::vector<std::string>& AcceptedFormulas() {
       "=AGGREGATE(9,4,)",
       "=SUBTOTAL(9,INDIRECT(\"A1\"))",
       "=SUMIF(Nope,1)",
+      "=#N/A",
+      "=#DIV/0!+1",
+      "=#GETTING_DATA",
   };
   return formulas;
 }
@@ -450,6 +453,35 @@ TEST(FormulonCApiFormulaEntry, LoadedWrongArityFormulaKeepsEvaluatingButIsRefuse
   EXPECT_EQ(value.kind, FM_VALUE_KIND_ERROR);
   EXPECT_EQ(fm_sheet_set_formula(loaded.handle, 0, 0, 1, "=ROWS()"), kParserUnexpectedToken);
   EXPECT_EQ(GetFormula(loaded.handle, 0, 1), "=ROWS()");
+}
+
+TEST(FormulonCApiFormulaEntry, NewerErrorLiteralsAreRefusedOnEntryButLoadAndStoreAsValues) {
+  constexpr std::int32_t kCalc = static_cast<std::int32_t>(formulon::ErrorCode::Calc);
+  WorkbookGuard source;
+  MakeWorkbook(&source);
+  ASSERT_TRUE(source.handle->workbook().set_cell_formula(0, 0, 1, "=#CALC!+1"));
+  ASSERT_EQ(fm_sheet_set_error(source.handle, 0, 1, 1, kCalc), 0);
+  fm_value_t stored{};
+  ASSERT_EQ(fm_sheet_get_value(source.handle, 0, 1, 1, &stored), 0);
+  ASSERT_EQ(stored.kind, FM_VALUE_KIND_ERROR);
+  EXPECT_EQ(stored.u.error_code, kCalc);
+
+  std::uint8_t* bytes = nullptr;
+  std::size_t len = 0;
+  ASSERT_EQ(fm_workbook_save(source.handle, FM_WORKBOOK_FORMAT_XLSX, &bytes, &len), 0) << fm_get_last_error_message();
+  WorkbookGuard loaded;
+  const fm_status_t rc = fm_workbook_load(bytes, len, &loaded.handle);
+  fm_buffer_destroy(bytes);
+  ASSERT_EQ(rc, 0) << fm_get_last_error_message();
+
+  ASSERT_EQ(fm_workbook_recalc(loaded.handle), 0);
+  EXPECT_EQ(GetFormula(loaded.handle, 0, 1), "=#CALC!+1");
+  fm_value_t value{};
+  ASSERT_EQ(fm_sheet_get_value(loaded.handle, 0, 0, 1, &value), 0);
+  ASSERT_EQ(value.kind, FM_VALUE_KIND_ERROR);
+  EXPECT_EQ(value.u.error_code, kCalc);
+  EXPECT_EQ(fm_sheet_set_formula(loaded.handle, 0, 0, 1, "=#CALC!+1"), kParserUnexpectedToken);
+  EXPECT_EQ(GetFormula(loaded.handle, 0, 1), "=#CALC!+1");
 }
 
 }  // namespace
