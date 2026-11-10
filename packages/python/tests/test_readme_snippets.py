@@ -6,7 +6,9 @@ comment lines closing the block. A block with no expectation only has to exit
 0. Each block runs in a scratch copy of ``fixtures/readme/``.
 
 With ``FORMULON_DOCS_DIR`` set, every ``.md`` under it is walked as well and its
-``python run`` fences run the same way. ``python no-run`` fences are not executed.
+``python run`` fences run the same way. ``python no-run`` fences are not executed. A fence may
+carry a VitePress code-group label (``python run [Python]``); a ``python`` fence that mentions
+``run`` but does not match that grammar fails instead of being skipped.
 """
 
 from __future__ import annotations
@@ -27,7 +29,9 @@ REPO_ROOT = PKG_ROOT.parent.parent
 FIXTURE_DIR = HERE / "fixtures" / "readme"
 READMES = ("README.md", "README_ja.md", "packages/python/README.md")
 
-_FENCE = re.compile(r"^```python run\s*$")
+# A ``python run`` / ``python no-run`` fence, optionally with a VitePress code-group label (``python run [Python]``).
+_FENCE = re.compile(r"^```python (run|no-run)(?:\s+\[[^\]]*\])?\s*$")
+_FIXTURE_FENCES = HERE / "fixtures" / "fences.md"
 _DOCS_ENV = "FORMULON_DOCS_DIR"
 _INLINE = re.compile(r"print\(.*\)\s*# (.+)$")
 
@@ -38,7 +42,8 @@ def run_blocks(markdown: str) -> List[Tuple[int, List[str]]]:
     blocks: List[Tuple[int, List[str]]] = []
     i = 0
     while i < len(lines):
-        if _FENCE.match(lines[i]):
+        fence = _FENCE.match(lines[i])
+        if fence and fence.group(1) == "run":
             start = i + 2
             body: List[str] = []
             i += 1
@@ -48,6 +53,15 @@ def run_blocks(markdown: str) -> List[Tuple[int, List[str]]]:
             blocks.append((start, body))
         i += 1
     return blocks
+
+
+def near_misses(markdown: str) -> List[int]:
+    """1-based lines of ``python`` fences that mention ``run`` but do not match the fence grammar."""
+    return [
+        n
+        for n, line in enumerate(markdown.split("\n"), start=1)
+        if line.startswith("```python") and re.search(r"\brun\b", line) and not _FENCE.match(line)
+    ]
 
 
 def expectations(lines: List[str]) -> List[str]:
@@ -75,12 +89,20 @@ class ReadmeSnippetsTest(unittest.TestCase):
         readme_blocks = 0
         for label, path in sources:
             text = path.read_text(encoding="utf-8")
+            for line_no in near_misses(text):
+                with self.subTest(fence=f"{label}:{line_no}"):
+                    self.fail(f"{label}:{line_no}: fence mentions run but is not ```python run [label]")
             for line_no, lines in run_blocks(text):
                 if label in READMES:
                     readme_blocks += 1
                 with self.subTest(block=f"{label}:{line_no}"):
                     self._run(lines)
         self.assertGreaterEqual(readme_blocks, 3, f"found {readme_blocks} `python run` blocks")
+
+    def test_labelled_fence_is_collected_and_malformed_fence_is_reported(self) -> None:
+        text = _FIXTURE_FENCES.read_text(encoding="utf-8")
+        self.assertEqual([start for start, _ in run_blocks(text)], [2])
+        self.assertEqual(near_misses(text), [8, 11, 14])
 
     def _run(self, lines: List[str]) -> None:
         with tempfile.TemporaryDirectory(prefix="formulon-readme-") as work:

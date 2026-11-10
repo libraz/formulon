@@ -4,6 +4,8 @@
 // POSTs fixtures/readme/input.xlsx to `/` once, requires a 2xx response containing every
 // expectation line, then stops it; `js no-run` is type-checked by tools/typecheck/typecheck.mjs.
 // A block importing @libraz/formulon-native belongs to the native runner and is skipped here.
+// A fence may carry a VitePress code-group label (`js run [JavaScript]`); a `js` fence that mentions
+// `run` but does not match that grammar fails instead of being skipped.
 // A block is a program: its stdout must equal the expectations written in it,
 // either as a trailing `// value` comment on a `console.log(...)` line or as
 // a run of comment lines closing the block. A block with no expectation only
@@ -31,19 +33,48 @@ const stagedEntry = pathToFileURL(path.resolve(pkgRoot, pkg.exports[entry].impor
 
 const docsDir = process.env.FORMULON_DOCS_DIR ? path.resolve(process.env.FORMULON_DOCS_DIR) : null;
 
+/** A `js <marker>` fence, optionally followed by a VitePress code-group label (`js run [JavaScript]`). */
+const FENCE = /^```js (\S+)(?:\s+\[[^\]]*\])?\s*$/;
+const KNOWN_MARKERS = new Set(['run', 'run:node-server', 'no-run']);
+
 /** Returns the fenced `js <marker>` blocks of a Markdown text with their first line and marker. */
 function runBlocks(markdown, markers = ['run']) {
+  return scanFences(markdown, markers).blocks;
+}
+
+/**
+ * The `js <marker>` blocks of a Markdown text, plus the 1-based lines of `js` fences that mention `run` but do not
+ * match the fence grammar; those would otherwise be skipped silently.
+ */
+function scanFences(markdown, markers = ['run']) {
   const blocks = [];
+  const nearMisses = [];
   const lines = markdown.split('\n');
   for (let i = 0; i < lines.length; i += 1) {
-    const open = /^```js (\S+)\s*$/.exec(lines[i]);
-    if (!open || !markers.includes(open[1])) continue;
+    if (!/^```js(?!on)/.test(lines[i])) continue;
+    const open = FENCE.exec(lines[i]);
+    if (!open || !KNOWN_MARKERS.has(open[1])) {
+      if (/\brun\b/.test(lines[i])) nearMisses.push({ line: i + 1, text: lines[i] });
+      continue;
+    }
+    if (!markers.includes(open[1])) continue;
     const start = i + 1;
     const body = [];
     for (i += 1; i < lines.length && !lines[i].startsWith('```'); i += 1) body.push(lines[i]);
     blocks.push({ line: start, marker: open[1], code: body.join('\n'), lines: body });
   }
-  return blocks;
+  return { blocks, nearMisses };
+}
+
+/** Registers a failing test for each fence of `source` that looks runnable but does not parse. */
+function reportNearMisses(label, text) {
+  for (const miss of scanFences(text).nearMisses) {
+    test(`${label}:${miss.line} fence matches the runner grammar`, () => {
+      assert.fail(
+        `${label}:${miss.line}: \`${miss.text}\` mentions run but is not \`\`\`js <marker> [label]\` with a known marker`,
+      );
+    });
+  }
 }
 
 /** Every .md file under a directory, recursively and in a stable order. */
@@ -134,6 +165,7 @@ let found = 0;
 let noRun = 0;
 for (const source of sources) {
   const text = await readFile(source.file, 'utf8');
+  reportNearMisses(source.label, text);
   for (const block of runBlocks(text, source.markers)) {
     if (/@libraz\/formulon-native/.test(block.code)) continue;
     found += 1;
@@ -183,6 +215,24 @@ if (docsDir && noRun > 0) {
     assert.equal(run.status, 0, `${run.stdout}${run.stderr}`);
   });
 }
+
+test('a labelled fence is collected and a malformed runnable fence is reported', async () => {
+  const { blocks, nearMisses } = scanFences(await readFile(path.join(here, 'fixtures', 'fences.md'), 'utf8'), [
+    'run',
+    'no-run',
+  ]);
+  assert.deepEqual(
+    blocks.map((b) => [b.line, b.marker]),
+    [
+      [1, 'run'],
+      [5, 'no-run'],
+    ],
+  );
+  assert.deepEqual(
+    nearMisses.map((m) => m.line),
+    [8, 11, 14],
+  );
+});
 
 test('the READMEs carry runnable examples', () => {
   assert.ok(found >= 3, `found ${found} \`js run\` blocks`);

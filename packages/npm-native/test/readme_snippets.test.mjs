@@ -1,6 +1,8 @@
 // Runs the ```js run blocks of the native package README against the staged package.
 // With FORMULON_DOCS_DIR set, the `js run` and `js run:node-server` fences under that directory
 // that import @libraz/formulon-native run too (see the npm runner for the marker rules).
+// A fence may carry a VitePress code-group label (`js run [JavaScript]`); a `js` fence that mentions
+// `run` but does not match that grammar fails instead of being skipped.
 // A block is a program: its stdout must equal the expectations written in it,
 // either as a trailing `// value` comment on a `console.log(...)` line or as
 // a run of comment lines closing the block. A block with no expectation only
@@ -28,19 +30,48 @@ const stagedEntry = pathToFileURL(path.resolve(pkgRoot, pkg.main)).href;
 
 const docsDir = process.env.FORMULON_DOCS_DIR ? path.resolve(process.env.FORMULON_DOCS_DIR) : null;
 
+/** A `js <marker>` fence, optionally followed by a VitePress code-group label (`js run [JavaScript]`). */
+const FENCE = /^```js (\S+)(?:\s+\[[^\]]*\])?\s*$/;
+const KNOWN_MARKERS = new Set(['run', 'run:node-server', 'no-run']);
+
 /** Returns the fenced `js <marker>` blocks of a Markdown text with their first line and marker. */
 function runBlocks(markdown, markers = ['run']) {
+  return scanFences(markdown, markers).blocks;
+}
+
+/**
+ * The `js <marker>` blocks of a Markdown text, plus the 1-based lines of `js` fences that mention `run` but do not
+ * match the fence grammar; those would otherwise be skipped silently.
+ */
+function scanFences(markdown, markers = ['run']) {
   const blocks = [];
+  const nearMisses = [];
   const lines = markdown.split('\n');
   for (let i = 0; i < lines.length; i += 1) {
-    const open = /^```js (\S+)\s*$/.exec(lines[i]);
-    if (!open || !markers.includes(open[1])) continue;
+    if (!/^```js(?!on)/.test(lines[i])) continue;
+    const open = FENCE.exec(lines[i]);
+    if (!open || !KNOWN_MARKERS.has(open[1])) {
+      if (/\brun\b/.test(lines[i])) nearMisses.push({ line: i + 1, text: lines[i] });
+      continue;
+    }
+    if (!markers.includes(open[1])) continue;
     const start = i + 1;
     const body = [];
     for (i += 1; i < lines.length && !lines[i].startsWith('```'); i += 1) body.push(lines[i]);
     blocks.push({ line: start, marker: open[1], code: body.join('\n'), lines: body });
   }
-  return blocks;
+  return { blocks, nearMisses };
+}
+
+/** Registers a failing test for each fence of `source` that looks runnable but does not parse. */
+function reportNearMisses(label, text) {
+  for (const miss of scanFences(text).nearMisses) {
+    test(`${label}:${miss.line} fence matches the runner grammar`, () => {
+      assert.fail(
+        `${label}:${miss.line}: \`${miss.text}\` mentions run but is not \`\`\`js <marker> [label]\` with a known marker`,
+      );
+    });
+  }
 }
 
 /** Every .md file under a directory, recursively and in a stable order. */
@@ -129,7 +160,9 @@ if (docsDir) {
 
 let readmeBlocks = 0;
 for (const source of sources) {
-  for (const block of runBlocks(await readFile(source.file, 'utf8'), source.markers)) {
+  const text = await readFile(source.file, 'utf8');
+  if (!source.native) reportNearMisses(source.label, text);
+  for (const block of runBlocks(text, source.markers)) {
     if (source.native && !/@libraz\/formulon-native/.test(block.code)) continue;
     if (!source.native) readmeBlocks += 1;
     test(`${source.label}:${block.line} ${block.marker} runs and prints what its comments say`, async () => {
@@ -157,6 +190,22 @@ for (const source of sources) {
     });
   }
 }
+
+test('a labelled fence is collected and a malformed runnable fence is reported', async () => {
+  const fences = path.resolve(pkgRoot, '..', 'npm', 'test', 'fixtures', 'fences.md');
+  const { blocks, nearMisses } = scanFences(await readFile(fences, 'utf8'), ['run', 'no-run']);
+  assert.deepEqual(
+    blocks.map((b) => [b.line, b.marker]),
+    [
+      [1, 'run'],
+      [5, 'no-run'],
+    ],
+  );
+  assert.deepEqual(
+    nearMisses.map((m) => m.line),
+    [8, 11, 14],
+  );
+});
 
 test('the native README carries runnable examples', () => {
   assert.ok(readmeBlocks >= 1, `found ${readmeBlocks} \`js run\` blocks`);
