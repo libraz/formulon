@@ -239,7 +239,8 @@ void remap_table(PivotTable& table, const PivotCache& cache, const FieldRemap& r
 
   for (PivotDataField& data_field : table.mutable_data_fields()) {
     data_field.field_index = mapped(fields, data_field.field_index).value_or(data_field.field_index);
-    if (!data_field.show_as_base_field.has_value()) {
+    // Excel leaves the base of a plain data field as it was: it addresses nothing.
+    if (!data_field.show_as_base_field.has_value() || data_field.show_as == ShowValuesAs::Normal) {
       continue;
     }
     const std::uint32_t base = *data_field.show_as_base_field;

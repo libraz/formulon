@@ -519,7 +519,7 @@ std::string SweepDefinition() {
   xml.append("<colItems count=\"1\"><i/></colItems>");
   xml.append("<pageFields count=\"1\"><pageField fld=\"2\" item=\"0\" hier=\"-1\"/></pageFields>");
   xml.append(
-      "<dataFields count=\"2\"><dataField name=\"Sum of Amt\" fld=\"3\" subtotal=\"sum\" "
+      "<dataFields count=\"2\"><dataField name=\"Sum of Amt\" fld=\"3\" "
       "showDataAs=\"percentOfTotal\" baseField=\"0\" baseItem=\"0\" numFmtId=\"10\"><extLst>"
       "<ext uri=\"{E15A36E0-9728-4e99-A89B-3F7291B0FE68}\" xmlns:x14=\"");
   xml.append(kX14).append(

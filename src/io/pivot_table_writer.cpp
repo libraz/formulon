@@ -246,12 +246,11 @@ void AppendDataFields(std::string& out, const std::vector<pivot::PivotDataField>
     AppendXmlAttrEscaped(out, df.name);
     out.append("\" fld=\"");
     out.append(std::to_string(df.field_index));
-    // Always emit the subtotal attribute, even for the implicit Sum
-    // default. Real Excel files emit it explicitly and tests are
-    // clearer when the round trip preserves the spelling.
-    out.append("\" subtotal=\"");
-    out.append(enum_name(kPivotAggregationNames, df.aggregation, "sum"));
     out.append("\"");
+    // Excel omits `subtotal` at its `sum` default.
+    if (df.aggregation != pivot::Aggregation::Sum) {
+      append_xml_attr(out, "subtotal", enum_name(kPivotAggregationNames, df.aggregation, "sum"));
+    }
     if (!df.number_format.empty()) {
       // Pass through verbatim; the reader stored whatever string was
       // in the source attribute (typically a numFmtId integer in
@@ -267,12 +266,9 @@ void AppendDataFields(std::string& out, const std::vector<pivot::PivotDataField>
       out.append(enum_name(kPivotShowDataAsNames, show_as));
       out.append("\"");
     }
-    if (df.show_as_base_field.has_value()) {
-      append_xml_attr_uint(out, "baseField", *df.show_as_base_field);
-    }
-    if (df.show_as_base_item.has_value()) {
-      append_xml_attr_uint(out, "baseItem", *df.show_as_base_item);
-    }
+    // Excel writes both on every data field, `0` when nothing set them.
+    append_xml_attr_uint(out, "baseField", df.show_as_base_field.value_or(0U));
+    append_xml_attr_uint(out, "baseItem", df.show_as_base_item.value_or(0U));
     // The show-as extension carries the x14 mode plus whatever else the
     // source's `<x14:dataField>` held.
     const bool x14_ext = !x14_show_as.empty() || !df.x14_attrs.empty() || !df.x14_children_xml.empty();
