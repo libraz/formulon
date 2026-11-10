@@ -70,9 +70,8 @@ std::string data_field_default_name(const PivotTable& table, const PivotCache& c
 std::string date_group_field_name(GroupBy period, std::string_view base_name, ExcelProfile profile);
 
 /// The word a refresh names a field with blank header text by, followed by
-/// the field's 1-based column in the source (`フィールド2`, `Field2`). Empty
-/// for a locale whose word has not been measured.
-std::optional<std::string_view> blank_header_field_word(ExcelProfile profile);
+/// the field's 1-based column in the source (`フィールド2`, `Field2`).
+std::string_view blank_header_field_word(ExcelProfile profile);
 
 /// Label of the in-range group item `index` of a calendar-unit `period`, in
 /// the order Excel lists them: second / minute 0-59, hour 0-23, day 0-365 of

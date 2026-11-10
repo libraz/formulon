@@ -601,15 +601,35 @@ std::string date_group_field_name(GroupBy period, std::string_view base_name, Ex
   return out;
 }
 
-std::optional<std::string_view> blank_header_field_word(ExcelProfile profile) {
+std::string_view blank_header_field_word(ExcelProfile profile) {
   switch (profile.locale) {
     case ExcelLocale::kJaJP:
-      return std::string_view("フィールド");
+      return "フィールド";
     case ExcelLocale::kEnUS:
-      return std::string_view("Field");
-    default:
-      return std::nullopt;
+      return "Field";
+    case ExcelLocale::kDeDE:
+      return "Feld";
+    case ExcelLocale::kFrFR:
+      return "Champ";
+    case ExcelLocale::kEsES:
+    case ExcelLocale::kEsMX:
+    case ExcelLocale::kItIT:
+    case ExcelLocale::kPtBR:
+      return "Campo";
+    case ExcelLocale::kZhCN:
+      return "字段";
+    case ExcelLocale::kZhTW:
+      return "欄位";
+    case ExcelLocale::kKoKR:
+      return "필드";
+    case ExcelLocale::kThTH:
+      return "เขตข้อมูล";
+    case ExcelLocale::kRuRU:
+      return "Поле";
+    case ExcelLocale::kNlNL:
+      return "Veld";
   }
+  return "Field";
 }
 
 std::string date_group_unit_label(GroupBy period, unsigned index, ExcelProfile profile) {

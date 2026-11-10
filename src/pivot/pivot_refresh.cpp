@@ -181,8 +181,7 @@ bool same_header(std::string_view a, std::string_view b) {
   return header_key(a) == header_key(b);
 }
 
-Expected<std::vector<std::string>, Error> refreshed_field_names(const std::vector<std::string>& headers,
-                                                                std::optional<std::string_view> blank_word) {
+std::vector<std::string> refreshed_field_names(const std::vector<std::string>& headers, std::string_view blank_word) {
   std::vector<std::string> names(headers.size());
   std::unordered_set<std::string> taken;
   const auto claim = [&](std::size_t column, const std::string& base) {
@@ -202,11 +201,7 @@ Expected<std::vector<std::string>, Error> refreshed_field_names(const std::vecto
     if (!headers[c].empty()) {
       continue;
     }
-    if (!blank_word.has_value()) {
-      return make_error(FormulonErrorCode::kNotImplemented,
-                        "A blank source header has no measured field name in this locale");
-    }
-    claim(c, std::string(*blank_word) + std::to_string(c + 1U));
+    claim(c, std::string(blank_word) + std::to_string(c + 1U));
   }
   return names;
 }
@@ -220,7 +215,7 @@ Expected<RefreshPlan, Error> build_refreshed_cache(const PivotCache& old, const 
       return make_error(FormulonErrorCode::kNotImplemented, "Refreshing a numeric group is not implemented");
     }
   }
-  ASSIGN_OR_RETURN(std::vector<std::string> names, refreshed_field_names(source.headers, context.blank_header_word));
+  std::vector<std::string> names = refreshed_field_names(source.headers, context.blank_header_word);
   const std::uint32_t columns = source.columns;
 
   // Old database fields meet the new columns by name.

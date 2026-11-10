@@ -24,7 +24,6 @@
 
 #include <cstdint>
 #include <deque>
-#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -59,8 +58,8 @@ struct RefreshContext {
   /// Per old cache field, true when a table on the cache places it on the
   /// row, column or page axis.
   std::vector<bool> axis_fields;
-  /// The word a blank header is named by; empty for an unmeasured locale.
-  std::optional<std::string_view> blank_header_word;
+  /// The word a blank header is named by.
+  std::string_view blank_header_word;
   ExcelProfile profile;
   bool date1904 = false;
 };
@@ -72,10 +71,8 @@ struct RefreshPlan {
 };
 
 /// Names for source columns with displayed headers `headers`, as the header
-/// rules give them. `kNotImplemented` when a header is blank and `blank_word`
-/// is empty.
-Expected<std::vector<std::string>, Error> refreshed_field_names(const std::vector<std::string>& headers,
-                                                                std::optional<std::string_view> blank_word);
+/// rules give them; a blank header is `blank_word` plus its 1-based column.
+std::vector<std::string> refreshed_field_names(const std::vector<std::string>& headers, std::string_view blank_word);
 
 /// True when `a` and `b` name the same field: equal under case, width and
 /// kana-type folding, spaces significant.

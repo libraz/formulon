@@ -286,18 +286,13 @@ bool ReportShows(Workbook& wb, std::size_t pivot_index, double value) {
 // ===========================================================================
 
 TEST(PivotRefresh, RulesBlankHeaderTakesLocaleWordAfterLiterals) {
-  const auto ja = pivot::refreshed_field_names({"", "フィールド1"}, std::string_view("フィールド"));
-  ASSERT_TRUE(static_cast<bool>(ja));
-  EXPECT_EQ(ja.value(), (std::vector<std::string>{"フィールド12", "フィールド1"}));
-  const auto en = pivot::refreshed_field_names({"Region", ""}, std::string_view("Field"));
-  ASSERT_TRUE(static_cast<bool>(en));
-  EXPECT_EQ(en.value(), (std::vector<std::string>{"Region", "Field2"}));
+  EXPECT_EQ(pivot::refreshed_field_names({"", "フィールド1"}, "フィールド"),
+            (std::vector<std::string>{"フィールド12", "フィールド1"}));
+  EXPECT_EQ(pivot::refreshed_field_names({"Region", ""}, "Field"), (std::vector<std::string>{"Region", "Field2"}));
 }
 
 TEST(PivotRefresh, RulesDuplicateHeadersTakeSmallestFreeSuffix) {
-  const auto names = [](std::vector<std::string> headers) {
-    return pivot::refreshed_field_names(headers, std::string_view("Field")).value();
-  };
+  const auto names = [](std::vector<std::string> headers) { return pivot::refreshed_field_names(headers, "Field"); };
   EXPECT_EQ(names({"Dup", "Dup", "dup"}), (std::vector<std::string>{"Dup", "Dup2", "dup3"}));
   EXPECT_EQ(names({"Dup", "Dup", "Dup2"}), (std::vector<std::string>{"Dup", "Dup2", "Dup22"}));
   EXPECT_EQ(names({"Amt", "Amt", "Amt"}), (std::vector<std::string>{"Amt", "Amt2", "Amt3"}));
@@ -313,12 +308,20 @@ TEST(PivotRefresh, RulesHeaderFoldIgnoresCaseWidthAndKanaButNotSpaces) {
   EXPECT_FALSE(pivot::same_header("Amt", "Amt "));
 }
 
-TEST(PivotRefresh, RulesBlankHeaderInUnmeasuredLocaleIsNotImplemented) {
-  const ExcelProfile de{ExcelHost::kMac365, ExcelLocale::kDeDE};
-  EXPECT_FALSE(pivot::blank_header_field_word(de).has_value());
-  const auto names = pivot::refreshed_field_names({"Region", ""}, pivot::blank_header_field_word(de));
-  ASSERT_FALSE(static_cast<bool>(names));
-  EXPECT_EQ(names.error().code, FormulonErrorCode::kNotImplemented);
+TEST(PivotRefresh, RulesBlankHeaderTakesTheLocaleFieldWordAndColumn) {
+  const std::vector<std::pair<ExcelLocale, std::string>> expected = {
+      {ExcelLocale::kJaJP, "フィールド2"}, {ExcelLocale::kEnUS, "Field2"}, {ExcelLocale::kDeDE, "Feld2"},
+      {ExcelLocale::kFrFR, "Champ2"},      {ExcelLocale::kEsES, "Campo2"}, {ExcelLocale::kEsMX, "Campo2"},
+      {ExcelLocale::kItIT, "Campo2"},      {ExcelLocale::kPtBR, "Campo2"}, {ExcelLocale::kZhCN, "字段2"},
+      {ExcelLocale::kZhTW, "欄位2"},       {ExcelLocale::kKoKR, "필드2"},  {ExcelLocale::kThTH, "เขตข้อมูล2"},
+      {ExcelLocale::kRuRU, "Поле2"},       {ExcelLocale::kNlNL, "Veld2"},
+  };
+  for (const auto& [locale, name] : expected) {
+    for (const ExcelHost host : {ExcelHost::kMac365, ExcelHost::kWin365}) {
+      const auto names = pivot::refreshed_field_names({"Region", ""}, pivot::blank_header_field_word({host, locale}));
+      EXPECT_EQ(names, (std::vector<std::string>{"Region", name})) << static_cast<int>(locale);
+    }
+  }
 }
 
 TEST(PivotRefresh, RulesItemFoldIsCaseOnlyAndKeepsFirstSpelling) {
