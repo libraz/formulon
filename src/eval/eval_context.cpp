@@ -14,6 +14,7 @@
 
 #include "eval/builtin_names.h"
 #include "eval/declared_rect.h"
+#include "eval/error_origin.h"
 #include "eval/eval_state.h"
 #include "eval/formula_abandon.h"
 #include "eval/function_registry.h"
@@ -519,6 +520,7 @@ Expected<std::vector<Value>, ErrorCode> EvalContext::expand_range(const parser::
   // is still well above any realistic aggregator footprint and rejects
   // `A1:XFD1048576`-shaped inputs uniformly across native and WASM.
   if (total > kMaxRangeExpansionCells) {
+    note_unknown_error_origin();
     return ErrorCode::Calc;
   }
   out.reserve(static_cast<std::size_t>(total));

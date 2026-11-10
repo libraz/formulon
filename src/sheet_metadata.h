@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -292,8 +293,38 @@ struct SpillFootprint {
   std::uint32_t cols = 0;
 };
 
-/// Backwards-compatible name for the blocked-spill reverse-index record.
-using BlockedSpillFootprint = SpillFootprint;
+/// What refused a spill: the first obstructed cell in row-major order is in a
+/// merge (`kMerged`) or holds anything else (`kOccupied`), or the rectangle
+/// leaves the grid (`kBeyondEdge`), which wins over any in-grid obstruction.
+enum class SpillCause : std::uint8_t { kOccupied, kMerged, kBeyondEdge };
+
+/// A refused spill: the rectangle the anchor needs, which may run past the
+/// grid when `cause` is `kBeyondEdge`, and why it was refused.
+struct BlockedSpillFootprint {
+  std::uint32_t anchor_row = 0;
+  std::uint32_t anchor_col = 0;
+  std::uint32_t rows = 0;
+  std::uint32_t cols = 0;
+  SpillCause cause = SpillCause::kOccupied;
+};
+
+/// The rich detail of an error cell that a spill footprint or a blocked pivot
+/// does not already carry: a measured `#CALC!` / `#VALUE!` origin, or an error
+/// that arrived from another cell, shaped for `#VALUE!` by the formula's root.
+struct CellErrorDetail {
+  enum class Shape : std::uint8_t { kSubType, kIftab, kPropagated, kPropagatedPtg, kPropagatedIftab };
+  ErrorCode code = ErrorCode::Calc;  // Calc or Value; Spill only with kPropagated
+  Shape shape = Shape::kSubType;
+  std::uint32_t sub_type = 0;  // kSubType, kIftab
+  std::uint32_t iftab = 0;     // kIftab, kPropagatedIftab
+  std::uint32_t ptg = 0;       // kPropagatedPtg read from a file: the root operator's Ptg id
+  // kPropagatedPtg from the engine: 1 + the root operator's parser::BinOp; the writer maps it to the Ptg id.
+  std::uint8_t root_binop = 0;
+  // kPropagatedIftab from the engine: the root function's canonical name, in static storage.
+  std::string_view root_function{};
+  std::uint8_t root_argpos = 0;  // 1-based root argument that carried the error; 0 when not determined
+  bool elements = false;         // also applies to the error elements of the spill anchored here
+};
 
 }  // namespace formulon
 

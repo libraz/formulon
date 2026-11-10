@@ -233,8 +233,13 @@ std::string BuildContentTypes(const Workbook& wb, const EmissionPlan& plan) {
     AppendOverride(out, SheetPartPath(i), kCtWorksheet);
   }
   AppendOverride(out, kStylesPartPath, kCtStyles);
-  if (plan.generated_dynamic_metadata) {
+  if (plan.generated_metadata) {
     AppendOverride(out, kMetadataPartPath, kCtSheetMetadata);
+  }
+  if (!plan.rich_errors.empty()) {
+    AppendOverride(out, kRdRichValuePartPath, kCtRdRichValue);
+    AppendOverride(out, kRdRichValueStructurePartPath, kCtRdRichValueStructure);
+    AppendOverride(out, kRdRichValueTypesPartPath, kCtRdRichValueTypes);
   }
   if (plan.generated_shared_strings) {
     AppendOverride(out, kSharedStringsPartPath, kCtSharedStrings);
@@ -660,8 +665,14 @@ std::string BuildWorkbookRels(std::size_t sheet_count, const EmissionPlan& plan,
   if (!plan.generated_shared_strings && HasPassthroughPart(plan, kSharedStringsPartPath)) {
     AppendRelationship(out, next_rid++, kRelSharedStrings, "sharedStrings.xml");
   }
-  if (plan.generated_dynamic_metadata) {
+  if (plan.generated_metadata) {
     AppendRelationship(out, next_rid++, kRelSheetMetadata, "metadata.xml");
+  }
+  if (!plan.rich_errors.empty()) {
+    AppendRelationship(out, next_rid++, kRelRdRichValue, TargetRelativeToWorkbook(kRdRichValuePartPath));
+    AppendRelationship(out, next_rid++, kRelRdRichValueStructure,
+                       TargetRelativeToWorkbook(kRdRichValueStructurePartPath));
+    AppendRelationship(out, next_rid++, kRelRdRichValueTypes, TargetRelativeToWorkbook(kRdRichValueTypesPartPath));
   }
   if (plan.generated_persons) {
     AppendRelationship(out, next_rid++, kRelPerson, TargetRelativeToWorkbook(kPersonsPartPath));

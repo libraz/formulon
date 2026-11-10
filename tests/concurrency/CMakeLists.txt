@@ -87,6 +87,7 @@ gtest_discover_tests(formulon_concurrency_stress_tests
 set(FORMULON_CONCURRENCY_TSAN_SOURCES
   recalc_lifetime_test.cpp
   registry_thread_safety_test.cpp
+  error_detail_thread_test.cpp
   iterative_solver_thread_test.cpp
   parallel_dynamic_ref_test.cpp
   pivot_getpivotdata_test.cpp

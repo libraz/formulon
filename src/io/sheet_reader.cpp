@@ -142,6 +142,16 @@ void RecordCellMetadata(SheetReadContext& ctx, std::uint32_t row, std::uint32_t 
   ctx.cell_metadata.emplace_back(row, col, cm);
 }
 
+/// Records the `vm` (value metadata) attribute of a cell; a malformed value is
+/// recorded as 0.
+void RecordValueMetadata(SheetReadContext& ctx, std::uint32_t row, std::uint32_t col, std::string_view vm_text) {
+  std::uint32_t vm = 0;
+  if (!parse_xsd_nonneg_int(vm_text, &vm)) {
+    vm = 0;
+  }
+  ctx.value_metadata.push_back(RichErrorCell{row, col, vm});
+}
+
 /// Decodes a shared-formula `si` attribute under the shared XSD
 /// non-negative-integer lexer.
 ///
@@ -489,6 +499,9 @@ Expected<void, Error> read_sheet_data(const pugi::xml_document& sheet_doc, std::
       if (const pugi::xml_attribute cm = c.attribute("cm"); cm && !formula_text.empty()) {
         RecordCellMetadata(ctx, parsed.row, parsed.col, cm.value());
       }
+      if (const pugi::xml_attribute vm = c.attribute("vm"); vm) {
+        RecordValueMetadata(ctx, parsed.row, parsed.col, vm.value());
+      }
     }
   }
   // Spill registration is the caller's job (see `SheetReadContext::
@@ -630,6 +643,9 @@ Expected<void, Error> ApplyCellRecord(const CellRecord& rec, std::size_t sheet_i
   }
   if (!rec.cm.empty() && !formula_text.empty()) {
     RecordCellMetadata(ctx, rec.row, rec.col, rec.cm);
+  }
+  if (!rec.vm.empty()) {
+    RecordValueMetadata(ctx, rec.row, rec.col, rec.vm);
   }
   return applied;
 }

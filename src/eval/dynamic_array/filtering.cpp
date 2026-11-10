@@ -13,6 +13,7 @@
 #include "eval/array_context.h"
 #include "eval/coerce.h"
 #include "eval/dynamic_array/common.h"
+#include "eval/error_origin.h"
 #include "eval/lazy_impls.h"
 #include "eval/omitted_arg.h"
 #include "eval/range_args.h"
@@ -82,6 +83,7 @@ Value eval_filter_lazy(const parser::AstNode& call, Arena& arena, const Function
     if (arity == 3U) {
       return eval_node(call.as_call_arg(2), arena, registry, ctx);
     }
+    note_calc_sub_type(3U);
     return Value::error(ErrorCode::Calc);
   }
 
@@ -154,6 +156,7 @@ Value eval_unique_lazy(const parser::AstNode& call, Arena& arena, const Function
     }
   }
   if (kept.empty()) {
+    note_calc_sub_type(3U);
     return Value::error(ErrorCode::Calc);
   }
 

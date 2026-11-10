@@ -368,7 +368,7 @@ TEST(BuiltinsRow, WholeColumnSpillsFromTheTopRowOnly) {
   Cell anchored;
   anchored.formula_text = "=ROW(A:A)";
   Arena arena;
-  const Value at_top = evaluate_cell_for_recalc(wb, sheet, anchored, 0U, 0U, default_registry(), arena);
+  const Value at_top = evaluate_cell_for_recalc(wb, sheet, anchored, 0U, 0U, default_registry(), arena).value;
   ASSERT_TRUE(at_top.is_number()) << "kind=" << static_cast<int>(at_top.kind());
   EXPECT_DOUBLE_EQ(at_top.as_number(), 1.0);
   ASSERT_NE(sheet.spill_region_at_anchor(0U, 0U), nullptr);
@@ -383,7 +383,8 @@ TEST(BuiltinsRow, WholeColumnSpillsFromTheTopRowOnly) {
   Cell below;
   below.formula_text = "=ROW(A:A)";
   Arena lower_arena;
-  const Value off_top = evaluate_cell_for_recalc(lower, lower_sheet, below, 5U, 3U, default_registry(), lower_arena);
+  const Value off_top =
+      evaluate_cell_for_recalc(lower, lower_sheet, below, 5U, 3U, default_registry(), lower_arena).value;
   ASSERT_TRUE(off_top.is_error()) << "kind=" << static_cast<int>(off_top.kind());
   EXPECT_EQ(off_top.as_error(), ErrorCode::Spill);
 }

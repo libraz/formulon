@@ -10,6 +10,7 @@
 #include "eval/builtin_names.h"
 #include "eval/coerce.h"
 #include "eval/dynamic_array/common.h"
+#include "eval/error_origin.h"
 #include "eval/eval_context.h"
 #include "eval/name_env_resolve.h"
 #include "eval/omitted_arg.h"
@@ -182,6 +183,7 @@ bool resolve_take_drop_reference(const parser::AstNode& call, Arena& arena, cons
     return false;
   }
   if (row_lo >= row_hi || col_lo >= col_hi) {
+    note_unknown_error_origin();
     *out_err = ErrorCode::Calc;
     return false;
   }

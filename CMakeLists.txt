@@ -149,6 +149,7 @@ set(FORMULON_CORE_SOURCES
   src/workbook_cell_edit.cpp
   src/workbook_sheets.cpp
   src/workbook_copy_sheet.cpp
+  src/workbook_error_detail.cpp
   src/workbook_pivot_blocked.cpp
   src/workbook_pivot_details.cpp
   src/workbook_pivot_projection.cpp
@@ -215,6 +216,7 @@ set(FORMULON_CORE_SOURCES
   src/io/pivot_filter_writer.cpp
   src/io/pivot_items_binding.cpp
   src/io/pivot_line_items_writer.cpp
+  src/io/rich_value_errors.cpp
   src/io/format_detect.cpp
   src/io/sax_xml_reader.cpp
   src/io/sheet_layout_reader.cpp
@@ -366,6 +368,7 @@ set(FORMULON_CORE_SOURCES
   src/eval/recalc_engine_partial.cpp
   src/eval/recalc_engine_spill.cpp
   src/eval/cell_evaluator.cpp
+  src/eval/error_origin.cpp
   src/eval/adhoc_eval.cpp
   src/eval/scheduler.cpp
   src/eval/layer_worker_pool.cpp

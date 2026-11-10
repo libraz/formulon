@@ -111,6 +111,25 @@ struct FreshMutex : std::unique_ptr<std::mutex> {
   FreshMutex& operator=(FreshMutex&&) noexcept = default;
 };
 
+/// A count mutators change under a lock and observers read without one; a
+/// copy keeps the value, as the record it counts is copied with it.
+class GuardedCount {
+ public:
+  GuardedCount() = default;
+  GuardedCount(const GuardedCount& other) noexcept : value_(other.get()) {}
+  GuardedCount(GuardedCount&& other) noexcept : value_(other.get()) {}
+  GuardedCount& operator=(GuardedCount&& other) noexcept {
+    value_.store(other.get(), std::memory_order_relaxed);
+    return *this;
+  }
+
+  std::uint32_t get() const noexcept { return value_.load(std::memory_order_relaxed); }
+  void set(std::size_t value) noexcept { value_.store(static_cast<std::uint32_t>(value), std::memory_order_relaxed); }
+
+ private:
+  std::atomic<std::uint32_t> value_{0};
+};
+
 /// Lazily built spill table; a copy starts without one (the next recalc rebuilds it).
 struct SpillTablePtr : std::unique_ptr<SpillTable> {
   SpillTablePtr() = default;
@@ -595,6 +614,14 @@ class Sheet {
     kBlocked,
   };
 
+  /// A probe's verdict plus, when it is not admissible, why: `kOutsideGrid`
+  /// is always `kBeyondEdge`, and `kBlocked` takes the first obstruction in
+  /// row-major order.
+  struct SpillProbe {
+    SpillAdmission admission = SpillAdmission::kAdmissible;
+    SpillCause cause = SpillCause::kOccupied;
+  };
+
   /// Decides whether a `rows` x `cols` footprint anchored at `(anchor_row,
   /// anchor_col)` could commit, **without building or committing any
   /// values**.
@@ -622,10 +649,13 @@ class Sheet {
   /// scan that probes a million empty rows inspects almost nothing while
   /// doing a million lookups, so the row visits have to be counted too.
   ///
+  /// Only a `kBlocked` verdict pays for the cause, a second row-major scan
+  /// bounded by the same stored cells; the admissible path is unchanged.
+  ///
   /// Pure: no cached state is built or updated, and the sheet is unchanged.
   /// The only shared state touched is `spill_mutex_`, held for the read.
-  SpillAdmission probe_spill_footprint(std::uint32_t anchor_row, std::uint32_t anchor_col, std::uint32_t rows,
-                                       std::uint32_t cols, std::uint64_t* scan_steps = nullptr) const noexcept;
+  SpillProbe probe_spill_footprint(std::uint32_t anchor_row, std::uint32_t anchor_col, std::uint32_t rows,
+                                   std::uint32_t cols, std::uint64_t* scan_steps = nullptr) const noexcept;
 
   /// Records a refused footprint: writes `#SPILL!` to the anchor cell and
   /// remembers the rectangle so the anchor is retried once whatever occupies
@@ -637,9 +667,9 @@ class Sheet {
   /// the registration leaves the anchor with no remembered rectangle, and the
   /// blocked-spill release machinery then has nothing to retry when the
   /// blocker is cleared. `commit_spill` refuses through this same body, so
-  /// the two paths cannot drift.
+  /// the two paths cannot drift. `cause` is the probe's.
   void reject_spill_footprint(std::uint32_t anchor_row, std::uint32_t anchor_col, std::uint32_t rows,
-                              std::uint32_t cols);
+                              std::uint32_t cols, SpillCause cause);
 
   /// Returns the spill region anchored at `(row, col)`, or `nullptr` when
   /// no region is anchored there. The returned pointer is valid until the
@@ -749,7 +779,7 @@ class Sheet {
   /// Returns a copy of the committed spill rectangle covering `(row, col)`.
   /// The anchor itself is included, unlike `spill_region_covering`, because
   /// mutation callers need the complete rectangle before they clear it.
-  std::optional<BlockedSpillFootprint> committed_spill_footprint_covering(std::uint32_t row, std::uint32_t col) const;
+  std::optional<SpillFootprint> committed_spill_footprint_covering(std::uint32_t row, std::uint32_t col) const;
 
   /// Returns the legacy array formula (CSE) block containing `(row, col)`,
   /// anchor included, as its anchor and extent (`Cell::array_block_rows`),
@@ -762,9 +792,39 @@ class Sheet {
   std::vector<SpillFootprint> committed_spill_footprints() const;
 
   /// Restores blocked-footprint records at their already-mapped coordinates.
-  /// Invalid/degenerate records are ignored.  Intended for the workbook's
-  /// lock-aware structural-edit path.
+  /// Degenerate records and anchors off the grid are ignored; a rectangle
+  /// running past the edge is kept, as the refusal recorded it. Intended for
+  /// the workbook's lock-aware structural-edit path.
   void restore_blocked_spill_footprints(std::vector<BlockedSpillFootprint> footprints);
+
+  // ---------------------------------------------------------------------------
+  // Error-detail side record
+  // ---------------------------------------------------------------------------
+  //
+  // The rich detail of an error cell, keyed by address. A blocked spill
+  // anchor is never in it (its footprint is the detail), nor is a pivot
+  // anchor (its `BlockedReport` is). The accessors take `spill_mutex_`; the
+  // readers and `clear_error_detail` return after one relaxed load of the
+  // count when the record is empty.
+
+  /// The detail recorded for `(row, col)`, or nullopt.
+  std::optional<CellErrorDetail> error_detail_at(std::uint32_t row, std::uint32_t col) const;
+
+  /// Records `detail` for `(row, col)`, replacing any earlier one.
+  void set_error_detail(std::uint32_t row, std::uint32_t col, CellErrorDetail detail);
+
+  /// Drops the detail of `(row, col)`, if any.
+  void clear_error_detail(std::uint32_t row, std::uint32_t col);
+
+  /// True when any cell of the sheet has a detail.
+  bool has_error_details() const noexcept { return error_detail_count_.get() != 0U; }
+
+  /// Copies of every recorded detail with its address, in (row, col) order.
+  std::vector<std::pair<CellAddress, CellErrorDetail>> error_details() const;
+
+  /// Replaces the whole record with `entries`; the structural-edit path uses
+  /// it to put the details back at their mapped addresses.
+  void replace_error_details(std::vector<std::pair<CellAddress, CellErrorDetail>> entries);
 
   /// Returns the spill-aware effective value of `(row, col)`:
   ///
@@ -1312,13 +1372,24 @@ class Sheet {
   std::size_t materialised_cells_in_rect_locked(std::uint32_t row_begin, std::uint64_t row_end, std::uint32_t col_begin,
                                                 std::uint64_t col_end) const noexcept;
 
-  /// `probe_spill_footprint` body; assumes `spill_mutex_` is held.
+  /// The admission verdict of `probe_spill_footprint`; assumes `spill_mutex_` is held.
   SpillAdmission probe_spill_footprint_locked(std::uint32_t anchor_row, std::uint32_t anchor_col, std::uint32_t rows,
                                               std::uint32_t cols, std::uint64_t* scan_steps) const noexcept;
 
+  /// `probe_spill_footprint` body: the verdict plus its cause. Assumes
+  /// `spill_mutex_` is held.
+  SpillProbe probe_with_cause_locked(std::uint32_t anchor_row, std::uint32_t anchor_col, std::uint32_t rows,
+                                     std::uint32_t cols, std::uint64_t* scan_steps) const noexcept;
+
+  /// Why an in-grid footprint the probe refused is blocked: `kMerged` when
+  /// its first obstructed cell in row-major order lies in a merge, else
+  /// `kOccupied`. Refusal path only. Assumes `spill_mutex_` is held.
+  SpillCause first_blocker_cause_locked(std::uint32_t anchor_row, std::uint32_t anchor_col, std::uint32_t rows,
+                                        std::uint32_t cols) const noexcept;
+
   /// `reject_spill_footprint` body; assumes `spill_mutex_` is held.
   void reject_spill_footprint_locked(std::uint32_t anchor_row, std::uint32_t anchor_col, std::uint32_t rows,
-                                     std::uint32_t cols);
+                                     std::uint32_t cols, SpillCause cause);
 
   /// True when a stored cell other than the anchor is occupied anywhere in
   /// the half-open rectangle `[anchor_row, row_end) x [anchor_col, col_end)`.
@@ -1407,6 +1478,10 @@ class Sheet {
   // Rectangles of the workbook's tables on this sheet, kept by the workbook
   // for spill admission. Guarded by `spill_mutex_`.
   std::vector<MergeRange> table_spill_barriers_;
+  // Rich error details sorted by (row, col); a copied sheet keeps them.
+  // Guarded by `spill_mutex_`; the count mirrors its size for the lock-free checks.
+  std::vector<std::pair<CellAddress, CellErrorDetail>> error_details_;
+  sheet_copy::GuardedCount error_detail_count_;
   // What-If data tables (`<f t="dataTable">`), shifted with row/column edits.
   std::vector<DataTable> data_tables_;
   // See `shared_formula_groups()`; not read from files.

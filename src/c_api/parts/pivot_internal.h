@@ -109,10 +109,12 @@ formulon::Expected<void, formulon::Error> project_pivot(formulon::Workbook& wb, 
 // placed stays pending.
 void project_pending_pivots(formulon::Workbook& wb);
 
-// The range a blocked report needs, anchored at the page-field rows above its
-// anchor; nullopt for a report that is not blocked and for one whose range
-// does not fit the grid, which a blocked spill does not report either.
-std::optional<fm_cell_rect_t> blocked_pivot_rect(const formulon::pivot::PivotTable& table);
+// Fills `rect`, `blocked` and `cause` of `*out` with what the report reports
+// as a spill: a blocked report's needed range, from the page-field rows above
+// its anchor and clipped to the grid, or the range a drawn report was last
+// drawn over, else the location it was read with. False, `*out` untouched,
+// for a report with neither.
+bool pivot_spill_info(const formulon::pivot::PivotTable& table, fm_spill_info_t* out);
 
 // Re-projects pivot `(sheet_index, pivot_index)` after an edit: shares its
 // axis fields (`pivot::share_axis_fields`), invalidates its derived state and

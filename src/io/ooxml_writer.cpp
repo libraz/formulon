@@ -52,6 +52,7 @@
 #include "io/pivot_cache_writer.h"
 #include "io/pivot_line_items_writer.h"
 #include "io/pivot_table_writer.h"
+#include "io/rich_value_errors.h"
 #include "io/styles_writer.h"
 #include "io/threaded_comments_io.h"
 #include "io/writer_common.h"
@@ -312,23 +313,6 @@ std::string BuildTableXml(const TableMetadata& t, std::uint32_t numeric_id) {
   return out;
 }
 
-/// `xl/metadata.xml` carrying only the XLDAPR entry, byte for byte as Excel
-/// 365 writes it for a workbook whose metadata is dynamic arrays alone.
-std::string BuildDynamicArrayMetadataXml() {
-  std::string out("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\r\n<metadata");
-  append_xml_ns_decl(out, "", kNsSpreadsheetMl);
-  append_xml_ns_decl(out, "xda", kNsDynamicArray);
-  out.append(
-      "><metadataTypes count=\"1\">"
-      "<metadataType name=\"XLDAPR\" minSupportedVersion=\"120000\" copy=\"1\" pasteAll=\"1\" pasteValues=\"1\" "
-      "merge=\"1\" splitFirst=\"1\" rowColShift=\"1\" clearFormats=\"1\" clearComments=\"1\" assign=\"1\" "
-      "coerce=\"1\" cellMeta=\"1\"/></metadataTypes><futureMetadata name=\"XLDAPR\" count=\"1\"><bk><extLst>"
-      "<ext uri=\"{bdbb8cdc-fa1e-496e-a857-3c3f30c029c3}\"><xda:dynamicArrayProperties fDynamic=\"1\" "
-      "fCollapsed=\"0\"/></ext></extLst></bk></futureMetadata><cellMetadata count=\"1\"><bk><rc t=\"1\" v=\"0\"/>"
-      "</bk></cellMetadata></metadata>");
-  return out;
-}
-
 /// Finds the 1-based `<cellMetadata>/<bk>` index a saved dynamic-array
 /// spill anchor's `<c cm="N">` must name to link it to a retained
 /// `xl/metadata.xml` passthrough part's XLDAPR entry.
@@ -372,17 +356,13 @@ Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb) {
   }
 
   const SharedStrings shared_strings = BuildSharedStrings(wb);
-  EmissionPlan plan = BuildEmissionPlan(wb, !shared_strings.empty(), &diagnostics);
-  // The XLDAPR entry dynamic-array formulas' `cm=` names: a retained
-  // `xl/metadata.xml`'s own, else a generated part's first entry. A retained
-  // part without one leaves `cm=` off, as does a workbook with no such
-  // formula.
-  std::uint32_t dynamic_array_cm_index = FindDynamicArrayCellMetadataIndex(wb.passthrough_parts());
-  const bool retained_metadata = source_index.find(kMetadataPartPath) != nullptr;
-  if (!retained_metadata && has_dynamic_array_formula(wb)) {
-    plan.generated_dynamic_metadata = true;
-    dynamic_array_cm_index = 1U;
-  }
+  const EmissionPlan plan = BuildEmissionPlan(wb, !shared_strings.empty(), &diagnostics);
+  // The XLDAPR entry dynamic-array formulas' `cm=` names: a generated part's
+  // first entry, else a retained `xl/metadata.xml`'s own. A retained part
+  // without one leaves `cm=` off, as does a workbook with no such formula.
+  const std::uint32_t dynamic_array_cm_index = plan.generated_metadata
+                                                   ? (plan.metadata_dynamic_arrays ? 1U : 0U)
+                                                   : FindDynamicArrayCellMetadataIndex(wb.passthrough_parts());
 
   // Numbers each external book a formula names by its written link.
   const parser::ExternalBookIndexer external_book_indexer = plan.external_link_ordinals.indexer();
@@ -430,7 +410,8 @@ Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb) {
                 BuildWorksheetXml(wb.sheet(i), sheet_tables, rels_result.table_rids, rels_result.hyperlink_rids,
                                   rels_result.printer_settings_rid, rels_result.drawing_rid,
                                   rels_result.legacy_drawing_rid, &shared_strings, wb.styles().dxfs, i,
-                                  dynamic_array_cm_index, name_shapes(wb, i), &external_book_indexer, &sheet_names),
+                                  dynamic_array_cm_index, name_shapes(wb, i), &external_book_indexer, &sheet_names,
+                                  plan.rich_errors.empty() ? nullptr : &plan.rich_errors.vm_by_sheet[i]),
                 &written_paths));
     // An empty rels file is invalid OOXML; Excel repairs the package and
     // drops it. `relationship_count` is the single predicate for whether
@@ -446,9 +427,20 @@ Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb) {
   // xl/styles.xml
   RETURN_IF_ERROR(AddPart(writer.get(), kStylesPartPath, write_styles(wb.styles()), &written_paths));
 
-  // xl/metadata.xml — the dynamic-array metadata, as Excel 365 writes it.
-  if (plan.generated_dynamic_metadata) {
-    RETURN_IF_ERROR(AddPart(writer.get(), kMetadataPartPath, BuildDynamicArrayMetadataXml(), &written_paths));
+  // xl/metadata.xml — the dynamic-array and rich-value metadata, and the
+  // rich values themselves, as Excel 365 writes them.
+  if (plan.generated_metadata) {
+    RETURN_IF_ERROR(AddPart(writer.get(), kMetadataPartPath,
+                            build_metadata_xml(plan.metadata_dynamic_arrays, plan.rich_errors.values.size()),
+                            &written_paths));
+  }
+  if (!plan.rich_errors.empty()) {
+    RETURN_IF_ERROR(
+        AddPart(writer.get(), kRdRichValuePartPath, serialize_rdrichvalue(plan.rich_errors), &written_paths));
+    RETURN_IF_ERROR(AddPart(writer.get(), kRdRichValueStructurePartPath,
+                            serialize_rdrichvaluestructure(plan.rich_errors), &written_paths));
+    RETURN_IF_ERROR(
+        AddPart(writer.get(), kRdRichValueTypesPartPath, std::string(rich_value_types_xml()), &written_paths));
   }
 
   // xl/sharedStrings.xml — emitted only when literal text cells are

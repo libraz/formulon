@@ -113,6 +113,7 @@ export {
   SortMethod,
   SparklineAxisType,
   SparklineType,
+  SpillCause,
   StatusCode,
   TableStyleElementType,
   TableTotalsRowFunction,

@@ -15,6 +15,7 @@
 #include <vector>
 
 #include "eval/collation.h"
+#include "eval/error_origin.h"
 #include "eval/eval_context.h"
 #include "eval/eval_profile_scope.h"
 #include "eval/function_registry.h"
@@ -532,6 +533,8 @@ Value PivotFormulaEvaluator::evaluate(std::uint32_t formula_id, const Value* ref
     env = env.extend(names_[i], ref_values[i], scratch_);
   }
   const EvalContext ctx = EvalContext().with_name_env(&env);
+  // A calculated field evaluated inside a cell's formula leaves that cell's origin as it was.
+  const ErrorOriginScope origin_scope;
   return evaluate_first_element(*formulas_[formula_id].root, scratch_, default_registry(), ctx);
 }
 

@@ -1,0 +1,311 @@
+[
+ {
+  "fn": "SUMIFS",
+  "ftab_or_internal_id": 482,
+  "argpos": 6,
+  "form": "filler",
+  "result": "not-error",
+  "iftab": null,
+  "cm": false,
+  "formula": "=SUMIFS(AZ1,AZ1,1,AZ1,1,C5,1)",
+  "stored_formula": "=SUMIFS(AZ1,AZ1,1,AZ1,1,C5,1)",
+  "shown": "0",
+  "rv": null,
+  "raw": "<c r=\"E10\"><f>SUMIFS(AZ1,AZ1,1,AZ1,1,C5,1)</f><v>0</v></c>",
+  "pos1_2_results": [
+   "plain-error",
+   "not-error"
+  ]
+ },
+ {
+  "fn": "SUMIFS",
+  "ftab_or_internal_id": 482,
+  "argpos": 7,
+  "form": "filler",
+  "result": "not-error",
+  "iftab": null,
+  "cm": false,
+  "formula": "=SUMIFS(AZ1,AZ1,1,AZ1,1,AZ1,C5)",
+  "stored_formula": "=SUMIFS(AZ1,AZ1,1,AZ1,1,AZ1,C5)",
+  "shown": "0",
+  "rv": null,
+  "raw": "<c r=\"E30\"><f>SUMIFS(AZ1,AZ1,1,AZ1,1,AZ1,C5)</f><v>0</v></c>",
+  "pos1_2_results": [
+   "plain-error",
+   "not-error"
+  ]
+ },
+ {
+  "fn": "AVERAGEIFS",
+  "ftab_or_internal_id": 484,
+  "argpos": 6,
+  "form": "filler",
+  "result": "plain-error",
+  "iftab": null,
+  "cm": false,
+  "formula": "=AVERAGEIFS(AZ1,AZ1,1,AZ1,1,C5,1)",
+  "stored_formula": "=AVERAGEIFS(AZ1,AZ1,1,AZ1,1,C5,1)",
+  "shown": "#DIV/0!",
+  "rv": null,
+  "raw": "<c r=\"E50\" t=\"e\"><f>AVERAGEIFS(AZ1,AZ1,1,AZ1,1,C5,1)</f><v>#DIV/0!</v></c>",
+  "pos1_2_results": [
+   "plain-error",
+   "plain-error"
+  ]
+ },
+ {
+  "fn": "AVERAGEIFS",
+  "ftab_or_internal_id": 484,
+  "argpos": 7,
+  "form": "filler",
+  "result": "plain-error",
+  "iftab": null,
+  "cm": false,
+  "formula": "=AVERAGEIFS(AZ1,AZ1,1,AZ1,1,AZ1,C5)",
+  "stored_formula": "=AVERAGEIFS(AZ1,AZ1,1,AZ1,1,AZ1,C5)",
+  "shown": "#DIV/0!",
+  "rv": null,
+  "raw": "<c r=\"E70\" t=\"e\"><f>AVERAGEIFS(AZ1,AZ1,1,AZ1,1,AZ1,C5)</f><v>#DIV/0!</v></c>",
+  "pos1_2_results": [
+   "plain-error",
+   "plain-error"
+  ]
+ },
+ {
+  "fn": "SUM",
+  "ftab_or_internal_id": 4,
+  "argpos": 9,
+  "form": "filler",
+  "result": "none",
+  "iftab": null,
+  "cm": false,
+  "formula": "=SUM(1,1,1,1,1,1,1,1,C5)",
+  "stored_formula": "=SUM(1,1,1,1,1,1,1,1,C5)",
+  "shown": "#VALUE!",
+  "rv": {
+   "errorType": "2",
+   "propagated": "1"
+  },
+  "raw": "<c r=\"E90\" t=\"e\" vm=\"2\"><f>SUM(1,1,1,1,1,1,1,1,C5)</f><v>#VALUE!</v></c>",
+  "pos1_2_results": [
+   "none",
+   "none"
+  ]
+ },
+ {
+  "fn": "CHOOSE",
+  "ftab_or_internal_id": 100,
+  "argpos": 8,
+  "form": "filler",
+  "result": "not-error",
+  "iftab": null,
+  "cm": false,
+  "formula": "=CHOOSE(1,1,1,1,1,1,1,C5)",
+  "stored_formula": "=CHOOSE(1,1,1,1,1,1,1,C5)",
+  "shown": "1",
+  "rv": null,
+  "raw": "<c r=\"E110\"><f>CHOOSE(1,1,1,1,1,1,1,C5)</f><v>1</v></c>",
+  "pos1_2_results": [
+   "none",
+   "none"
+  ]
+ },
+ {
+  "fn": "CHOOSE",
+  "ftab_or_internal_id": 100,
+  "argpos": 8,
+  "form": "reaching",
+  "result": "none",
+  "iftab": null,
+  "cm": false,
+  "formula": "=CHOOSE(7,1,1,1,1,1,1,C5)",
+  "stored_formula": "=CHOOSE(7,1,1,1,1,1,1,C5)",
+  "shown": "#VALUE!",
+  "rv": {
+   "errorType": "2",
+   "propagated": "1"
+  },
+  "raw": "<c r=\"E130\" t=\"e\" vm=\"2\"><f>CHOOSE(7,1,1,1,1,1,1,C5)</f><v>#VALUE!</v></c>",
+  "pos1_2_results": [
+   "none",
+   "none"
+  ]
+ },
+ {
+  "fn": "IFS",
+  "ftab_or_internal_id": null,
+  "argpos": 7,
+  "form": "filler",
+  "result": "not-error",
+  "iftab": null,
+  "cm": true,
+  "formula": "=IFS(1,1,1,1,1,1,C5,1)",
+  "stored_formula": "=IFS(1,1,1,1,1,1,C5,1)",
+  "shown": "1",
+  "rv": null,
+  "raw": "<c r=\"E150\" cm=\"1\"><f t=\"array\" ref=\"E150\">_xlfn.IFS(1,1,1,1,1,1,C5,1)</f><v>1</v></c>",
+  "pos1_2_results": [
+   "none",
+   "none"
+  ]
+ },
+ {
+  "fn": "IFS",
+  "ftab_or_internal_id": null,
+  "argpos": 8,
+  "form": "filler",
+  "result": "not-error",
+  "iftab": null,
+  "cm": true,
+  "formula": "=IFS(1,1,1,1,1,1,1,C5)",
+  "stored_formula": "=IFS(1,1,1,1,1,1,1,C5)",
+  "shown": "1",
+  "rv": null,
+  "raw": "<c r=\"E170\" cm=\"1\"><f t=\"array\" ref=\"E170\">_xlfn.IFS(1,1,1,1,1,1,1,C5)</f><v>1</v></c>",
+  "pos1_2_results": [
+   "none",
+   "none"
+  ]
+ },
+ {
+  "fn": "IFS",
+  "ftab_or_internal_id": null,
+  "argpos": 7,
+  "form": "reaching",
+  "result": "none",
+  "iftab": null,
+  "cm": true,
+  "formula": "=IFS(FALSE,1,FALSE,1,FALSE,1,C5,1)",
+  "stored_formula": "=IFS(FALSE,1,FALSE,1,FALSE,1,C5,1)",
+  "shown": "#VALUE!",
+  "rv": {
+   "errorType": "2",
+   "propagated": "1"
+  },
+  "raw": "<c r=\"E190\" t=\"e\" cm=\"1\" vm=\"2\"><f t=\"array\" ref=\"E190\">_xlfn.IFS(FALSE,1,FALSE,1,FALSE,1,C5,1)</f><v>#VALUE!</v></c>",
+  "pos1_2_results": [
+   "none",
+   "none"
+  ]
+ },
+ {
+  "fn": "IFS",
+  "ftab_or_internal_id": null,
+  "argpos": 8,
+  "form": "reaching",
+  "result": "none",
+  "iftab": null,
+  "cm": true,
+  "formula": "=IFS(FALSE,1,FALSE,1,FALSE,1,TRUE,C5)",
+  "stored_formula": "=IFS(FALSE,1,FALSE,1,FALSE,1,TRUE,C5)",
+  "shown": "#VALUE!",
+  "rv": {
+   "errorType": "2",
+   "propagated": "1"
+  },
+  "raw": "<c r=\"E210\" t=\"e\" cm=\"1\" vm=\"2\"><f t=\"array\" ref=\"E210\">_xlfn.IFS(FALSE,1,FALSE,1,FALSE,1,TRUE,C5)</f><v>#VALUE!</v></c>",
+  "pos1_2_results": [
+   "none",
+   "none"
+  ]
+ },
+ {
+  "fn": "SWITCH",
+  "ftab_or_internal_id": null,
+  "argpos": 8,
+  "form": "filler",
+  "result": "not-error",
+  "iftab": null,
+  "cm": true,
+  "formula": "=SWITCH(1,1,1,1,1,1,1,C5,1)",
+  "stored_formula": "=SWITCH(1,1,1,1,1,1,1,C5,1)",
+  "shown": "1",
+  "rv": null,
+  "raw": "<c r=\"E230\" cm=\"1\"><f t=\"array\" ref=\"E230\">_xlfn.SWITCH(1,1,1,1,1,1,1,C5,1)</f><v>1</v></c>",
+  "pos1_2_results": [
+   "none",
+   "none"
+  ]
+ },
+ {
+  "fn": "SWITCH",
+  "ftab_or_internal_id": null,
+  "argpos": 9,
+  "form": "filler",
+  "result": "not-error",
+  "iftab": null,
+  "cm": true,
+  "formula": "=SWITCH(1,1,1,1,1,1,1,1,C5)",
+  "stored_formula": "=SWITCH(1,1,1,1,1,1,1,1,C5)",
+  "shown": "1",
+  "rv": null,
+  "raw": "<c r=\"E250\" cm=\"1\"><f t=\"array\" ref=\"E250\">_xlfn.SWITCH(1,1,1,1,1,1,1,1,C5)</f><v>1</v></c>",
+  "pos1_2_results": [
+   "none",
+   "none"
+  ]
+ },
+ {
+  "fn": "SWITCH",
+  "ftab_or_internal_id": null,
+  "argpos": 8,
+  "form": "reaching",
+  "result": "none",
+  "iftab": null,
+  "cm": true,
+  "formula": "=SWITCH(1,2,1,3,1,4,1,C5,1)",
+  "stored_formula": "=SWITCH(1,2,1,3,1,4,1,C5,1)",
+  "shown": "#VALUE!",
+  "rv": {
+   "errorType": "2",
+   "propagated": "1"
+  },
+  "raw": "<c r=\"E270\" t=\"e\" cm=\"1\" vm=\"2\"><f t=\"array\" ref=\"E270\">_xlfn.SWITCH(1,2,1,3,1,4,1,C5,1)</f><v>#VALUE!</v></c>",
+  "pos1_2_results": [
+   "none",
+   "none"
+  ]
+ },
+ {
+  "fn": "SWITCH",
+  "ftab_or_internal_id": null,
+  "argpos": 9,
+  "form": "reaching",
+  "result": "none",
+  "iftab": null,
+  "cm": true,
+  "formula": "=SWITCH(1,2,1,3,1,4,1,1,C5)",
+  "stored_formula": "=SWITCH(1,2,1,3,1,4,1,1,C5)",
+  "shown": "#VALUE!",
+  "rv": {
+   "errorType": "2",
+   "propagated": "1"
+  },
+  "raw": "<c r=\"E290\" t=\"e\" cm=\"1\" vm=\"2\"><f t=\"array\" ref=\"E290\">_xlfn.SWITCH(1,2,1,3,1,4,1,1,C5)</f><v>#VALUE!</v></c>",
+  "pos1_2_results": [
+   "none",
+   "none"
+  ]
+ },
+ {
+  "fn": "MAX",
+  "ftab_or_internal_id": 7,
+  "argpos": 10,
+  "form": "filler",
+  "result": "none",
+  "iftab": null,
+  "cm": false,
+  "formula": "=MAX(1,1,1,1,1,1,1,1,1,C5)",
+  "stored_formula": "=MAX(1,1,1,1,1,1,1,1,1,C5)",
+  "shown": "#VALUE!",
+  "rv": {
+   "errorType": "2",
+   "propagated": "1"
+  },
+  "raw": "<c r=\"E310\" t=\"e\" vm=\"2\"><f>MAX(1,1,1,1,1,1,1,1,1,C5)</f><v>#VALUE!</v></c>",
+  "pos1_2_results": [
+   "none",
+   "none"
+  ]
+ }
+]

@@ -216,6 +216,10 @@ struct PivotLineItems {
   std::optional<Error> col_refusal;
 };
 
+/// The rows the page-field block of `table` takes above its body with `page_count` page fields: the block's
+/// lines under `page_wrap` / `page_over_then_down` plus the blank row under them, and 0 with no page field.
+std::uint32_t page_block_rows(const PivotTable& table, std::size_t page_count);
+
 /// Projects an evaluated pivot result into absolute sheet coordinates.
 ///
 /// The report body starts at `table.anchor_row()` / `anchor_col()`; the

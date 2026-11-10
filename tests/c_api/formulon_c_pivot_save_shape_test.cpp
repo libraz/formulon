@@ -427,7 +427,8 @@ TEST(FormulonCApiPivotSaveShape, AProjectionOntoAMergeIsBlockedUntilAValueWrite)
   ASSERT_EQ(fm_sheet_set_number(wb.handle, 0U, 20U, 0U, 1.0), 0);
   ExpectSheetNumber(wb.handle, 4U, kValueCol, 1500.0);
   ASSERT_EQ(fm_sheet_get_pivot_spill(wb.handle, 0U, 0U, &present, &spill), 0) << fm_get_last_error_message();
-  EXPECT_EQ(present, 0);
+  EXPECT_EQ(present, 1);
+  EXPECT_EQ(spill.blocked, 0);
 }
 
 TEST(FormulonCApiPivotSaveShape, ProjectingAPivotWithoutRecordsWritesNothing) {

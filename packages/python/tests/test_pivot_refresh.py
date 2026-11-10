@@ -22,6 +22,7 @@ from formulon import (
     PivotNumericGroupInput,
     PivotWorksheetSourceInput,
     Spill,
+    SpillCause,
     StatusCode,
     Workbook,
 )
@@ -90,23 +91,25 @@ class PivotCacheRefreshTests(unittest.TestCase):
         with Workbook.create_default() as wb:
             cache, pivot = _build(wb)
             ws = wb.sheet(0)
-            self.assertIsNone(pivot.get_spill())
             # The report fills E1:F4; North makes it one row longer, into E5.
+            self.assertEqual(pivot.get_spill(), Spill(blocked=False, cause=None, range=CellRect(0, 4, 3, 5)))
             for row in range(4, 9):
                 ws.set_text(row, 4, "keep")
             ws.set_text("A4", "North")
             self.assertIsNone(cache.refresh())
             self.assertEqual(_shared(cache, "Region"), ["East", "West", "North"])
             self.assertFalse(pivot.is_projection_pending())
-            needed = Spill(blocked=True, range=CellRect(0, 4, 4, 5))
+            needed = Spill(blocked=True, cause=SpillCause.OCCUPIED, range=CellRect(0, 4, 4, 5))
             self.assertEqual(pivot.get_spill(), needed)
             self.assertEqual(ws.get_spill("E1"), needed)
             self.assertIsNone(ws.get_spill("F2"))
             self.assertEqual(ws.get_value(4, 4), "keep")
             for row in range(4, 9):
                 ws.set_blank(row, 4)
-            self.assertIsNone(pivot.get_spill())
-            self.assertIsNone(ws.get_spill("E1"))
+            drawn = Spill(blocked=False, cause=None, range=CellRect(0, 4, 4, 5))
+            self.assertEqual(pivot.get_spill(), drawn)
+            self.assertEqual(ws.get_spill("E1"), drawn)
+            self.assertIsNone(ws.get_spill("F2"))
             self.assertIn("North", [ws.get_value(row, 4) for row in range(6)])
 
     def test_get_spill_of_a_removed_pivot_is_not_found(self) -> None:

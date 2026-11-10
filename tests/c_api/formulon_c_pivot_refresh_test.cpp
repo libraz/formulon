@@ -148,18 +148,23 @@ TEST(CApiPivotRefresh, AReportThatCannotGrowIsBlockedUntilItsRangeIsFree) {
   fm_spill_info_t spill = FM_STRUCT_INIT(fm_spill_info_t);
   ASSERT_EQ(fm_sheet_get_pivot_spill(f.wb.handle, 0U, 0U, &present, &spill), 0) << fm_get_last_error_message();
   ASSERT_EQ(present, 1);
+  EXPECT_EQ(spill.blocked, 1);
+  EXPECT_EQ(spill.cause, FM_SPILL_CAUSE_OCCUPIED);
   EXPECT_EQ(spill.rect.first_row, 0U);
   EXPECT_EQ(spill.rect.first_col, 3U);
   EXPECT_EQ(spill.rect.last_row, 4U);
   EXPECT_EQ(spill.rect.last_col, 4U);
 
-  // Clearing the cells renders the report on the next read.
+  // Clearing the cells renders the report on the next read, over the range it needed.
   for (std::uint32_t r = 4U; r < 9U; ++r) {
     ASSERT_EQ(fm_sheet_set_blank(f.wb.handle, 0U, r, 3U), 0);
   }
   EXPECT_TRUE(f.ReportHasText("East"));
   ASSERT_EQ(fm_sheet_get_pivot_spill(f.wb.handle, 0U, 0U, &present, &spill), 0) << fm_get_last_error_message();
-  EXPECT_EQ(present, 0);
+  EXPECT_EQ(present, 1);
+  EXPECT_EQ(spill.blocked, 0);
+  EXPECT_EQ(spill.cause, FM_SPILL_CAUSE_ABSENT);
+  EXPECT_EQ(spill.rect.last_row, 4U);
 }
 
 TEST(CApiPivotRefresh, ASourceOverTheRecordCellLimitIsRefused) {

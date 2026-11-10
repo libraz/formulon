@@ -183,8 +183,7 @@ std::optional<BlockedSpillFootprint> Sheet::blocked_spill_footprint_at(std::uint
   return it->second;
 }
 
-std::optional<BlockedSpillFootprint> Sheet::committed_spill_footprint_covering(std::uint32_t row,
-                                                                               std::uint32_t col) const {
+std::optional<SpillFootprint> Sheet::committed_spill_footprint_covering(std::uint32_t row, std::uint32_t col) const {
   const std::lock_guard<std::mutex> guard(*spill_mutex_);
   if (spill_table_ == nullptr) {
     return std::nullopt;
@@ -193,7 +192,7 @@ std::optional<BlockedSpillFootprint> Sheet::committed_spill_footprint_covering(s
   if (covering == nullptr) {
     return std::nullopt;
   }
-  return BlockedSpillFootprint{covering->anchor_row, covering->anchor_col, covering->rows, covering->cols};
+  return SpillFootprint{covering->anchor_row, covering->anchor_col, covering->rows, covering->cols};
 }
 
 std::optional<SpillFootprint> Sheet::array_block_covering(std::uint32_t row, std::uint32_t col) const {
@@ -234,9 +233,7 @@ std::vector<SpillFootprint> Sheet::committed_spill_footprints() const {
 void Sheet::restore_blocked_spill_footprints(std::vector<BlockedSpillFootprint> footprints) {
   const std::lock_guard<std::mutex> guard(*spill_mutex_);
   for (const BlockedSpillFootprint& footprint : footprints) {
-    if (footprint.rows == 0U || footprint.cols == 0U || !coord_in_grid(footprint.anchor_row, footprint.anchor_col) ||
-        static_cast<std::uint64_t>(footprint.anchor_row) + footprint.rows > kMaxRows ||
-        static_cast<std::uint64_t>(footprint.anchor_col) + footprint.cols > kMaxCols) {
+    if (footprint.rows == 0U || footprint.cols == 0U || !coord_in_grid(footprint.anchor_row, footprint.anchor_col)) {
       continue;
     }
     if (spill_table_ == nullptr) {
@@ -342,11 +339,98 @@ bool Sheet::footprint_holds_occupied_cell_locked(std::uint32_t anchor_row, std::
   return false;
 }
 
-Sheet::SpillAdmission Sheet::probe_spill_footprint(std::uint32_t anchor_row, std::uint32_t anchor_col,
-                                                   std::uint32_t rows, std::uint32_t cols,
-                                                   std::uint64_t* scan_steps) const noexcept {
+Sheet::SpillProbe Sheet::probe_spill_footprint(std::uint32_t anchor_row, std::uint32_t anchor_col, std::uint32_t rows,
+                                               std::uint32_t cols, std::uint64_t* scan_steps) const noexcept {
   const std::lock_guard<std::mutex> guard(*spill_mutex_);
-  return probe_spill_footprint_locked(anchor_row, anchor_col, rows, cols, scan_steps);
+  return probe_with_cause_locked(anchor_row, anchor_col, rows, cols, scan_steps);
+}
+
+Sheet::SpillProbe Sheet::probe_with_cause_locked(std::uint32_t anchor_row, std::uint32_t anchor_col, std::uint32_t rows,
+                                                 std::uint32_t cols, std::uint64_t* scan_steps) const noexcept {
+  SpillProbe probe;
+  probe.admission = probe_spill_footprint_locked(anchor_row, anchor_col, rows, cols, scan_steps);
+  if (probe.admission == SpillAdmission::kOutsideGrid) {
+    probe.cause = SpillCause::kBeyondEdge;
+  } else if (probe.admission == SpillAdmission::kBlocked) {
+    probe.cause = first_blocker_cause_locked(anchor_row, anchor_col, rows, cols);
+  }
+  return probe;
+}
+
+SpillCause Sheet::first_blocker_cause_locked(std::uint32_t anchor_row, std::uint32_t anchor_col, std::uint32_t rows,
+                                             std::uint32_t cols) const noexcept {
+  const std::uint64_t row_end = static_cast<std::uint64_t>(anchor_row) + rows;
+  const std::uint64_t col_end = static_cast<std::uint64_t>(anchor_col) + cols;
+  // Row-major key of the earliest obstructed cell seen so far.
+  std::uint64_t best = UINT64_MAX;
+  const auto consider = [&](std::uint64_t row, std::uint64_t col) noexcept {
+    const std::uint64_t key = (row << 32U) | col;
+    best = key < best ? key : best;
+  };
+  // A rectangle obstructs from the top-left cell it shares with the footprint.
+  const auto consider_rect = [&](std::uint64_t first_row, std::uint64_t first_col) noexcept {
+    consider(first_row > anchor_row ? first_row : anchor_row, first_col > anchor_col ? first_col : anchor_col);
+  };
+  const auto well_formed = [](const MergeRange& merge) noexcept {
+    return merge.first_row <= merge.last_row && merge.first_col <= merge.last_col;
+  };
+  if (spill_table_ != nullptr) {
+    spill_table_->any_region_near_rows(anchor_row, row_end, [&](const SpillRegion& region) {
+      if (!(region.anchor_row == anchor_row && region.anchor_col == anchor_col) &&
+          RectIntersectsSpan(region, anchor_row, row_end, anchor_col, col_end)) {
+        consider_rect(region.anchor_row, region.anchor_col);
+      }
+      return false;
+    });
+  }
+  for (const MergeRange& merge : merges_) {
+    if (well_formed(merge) && RectsIntersect(anchor_row, row_end, anchor_col, col_end, merge.first_row,
+                                             static_cast<std::uint64_t>(merge.last_row) + 1U, merge.first_col,
+                                             static_cast<std::uint64_t>(merge.last_col) + 1U)) {
+      consider_rect(merge.first_row, merge.first_col);
+    }
+  }
+  if (static_cast<std::uint64_t>(rows) * cols > 1U) {
+    for (const MergeRange& table : table_spill_barriers_) {
+      if (RectsIntersect(anchor_row, row_end, anchor_col, col_end, table.first_row,
+                         static_cast<std::uint64_t>(table.last_row) + 1U, table.first_col,
+                         static_cast<std::uint64_t>(table.last_col) + 1U)) {
+        consider_rect(table.first_row, table.first_col);
+      }
+    }
+  }
+  // The first occupied stored cell of one row, the anchor excepted; entries are in column order.
+  const auto consider_row = [&](std::uint32_t row, const RowCells& cells) noexcept {
+    for (const auto& [col, cell] : cells.entries_in(anchor_col, col_end)) {
+      if ((row != anchor_row || col != anchor_col) && IsCellOccupied(&cell)) {
+        consider(row, col);
+        return;
+      }
+    }
+  };
+  if (static_cast<std::uint64_t>(rows_.size()) <= row_end - anchor_row) {
+    for (const auto& [row, cells] : rows_) {
+      if (row >= anchor_row && static_cast<std::uint64_t>(row) < row_end && (best >> 32U) >= row) {
+        consider_row(row, cells);
+      }
+    }
+  } else {
+    for (std::uint64_t row = anchor_row; row < row_end && (best >> 32U) >= row; ++row) {
+      const auto it = rows_.find(static_cast<std::uint32_t>(row));
+      if (it != rows_.end()) {
+        consider_row(static_cast<std::uint32_t>(row), it->second);
+      }
+    }
+  }
+  const auto best_row = static_cast<std::uint32_t>(best >> 32U);
+  const auto best_col = static_cast<std::uint32_t>(best);
+  for (const MergeRange& merge : merges_) {
+    if (well_formed(merge) && best_row >= merge.first_row && best_row <= merge.last_row &&
+        best_col >= merge.first_col && best_col <= merge.last_col) {
+      return SpillCause::kMerged;
+    }
+  }
+  return SpillCause::kOccupied;
 }
 
 Sheet::SpillAdmission Sheet::probe_spill_footprint_locked(std::uint32_t anchor_row, std::uint32_t anchor_col,
@@ -417,13 +501,13 @@ std::vector<MergeRange> Sheet::set_table_spill_barriers(std::vector<MergeRange> 
 }
 
 void Sheet::reject_spill_footprint(std::uint32_t anchor_row, std::uint32_t anchor_col, std::uint32_t rows,
-                                   std::uint32_t cols) {
+                                   std::uint32_t cols, SpillCause cause) {
   const std::lock_guard<std::mutex> guard(*spill_mutex_);
-  reject_spill_footprint_locked(anchor_row, anchor_col, rows, cols);
+  reject_spill_footprint_locked(anchor_row, anchor_col, rows, cols, cause);
 }
 
 void Sheet::reject_spill_footprint_locked(std::uint32_t anchor_row, std::uint32_t anchor_col, std::uint32_t rows,
-                                          std::uint32_t cols) {
+                                          std::uint32_t cols, SpillCause cause) {
   if (!coord_in_grid(anchor_row, anchor_col)) {
     return;
   }
@@ -438,7 +522,7 @@ void Sheet::reject_spill_footprint_locked(std::uint32_t anchor_row, std::uint32_
   // Remembering the rectangle is what lets the release machinery retry this
   // anchor once the blocker goes away; dropping it strands the #SPILL!.
   spill_table_->blocked_by_anchor[CellAddress{anchor_row, anchor_col}] =
-      BlockedSpillFootprint{anchor_row, anchor_col, rows, cols};
+      BlockedSpillFootprint{anchor_row, anchor_col, rows, cols, cause};
   cell_enumeration_revision_.bump();
 }
 
@@ -503,9 +587,9 @@ bool Sheet::commit_spill(std::uint32_t anchor_row, std::uint32_t anchor_col, std
   // Admission is shared with the read-only/ad-hoc evaluation path and with
   // producers that probe before materialising, so a refusal here and a
   // refusal there record the same thing.
-  if (probe_spill_footprint_locked(anchor_row, anchor_col, rows, cols, /*scan_steps=*/nullptr) !=
-      SpillAdmission::kAdmissible) {
-    reject_spill_footprint_locked(anchor_row, anchor_col, rows, cols);
+  const SpillProbe probe = probe_with_cause_locked(anchor_row, anchor_col, rows, cols, /*scan_steps=*/nullptr);
+  if (probe.admission != SpillAdmission::kAdmissible) {
+    reject_spill_footprint_locked(anchor_row, anchor_col, rows, cols, probe.cause);
     return false;
   }
 

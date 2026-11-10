@@ -13,6 +13,7 @@
 #include "eval/coerce.h"
 #include "eval/declared_rect.h"
 #include "eval/dynamic_array/anchor.h"
+#include "eval/error_origin.h"
 #include "eval/eval_context.h"
 #include "eval/external_ref.h"
 #include "eval/function_registry.h"
@@ -61,6 +62,7 @@ bool absorb_arg_error(const FunctionDef& def, const Value& err, std::vector<Valu
   if (def.propagate_errors) {
     return false;
   }
+  forget_error_origin();
   values->push_back(err);
   return true;
 }
@@ -472,9 +474,12 @@ RangeArgOutcome collect_range_arg(const FunctionDef& def, const parser::AstNode&
     }
     if (picked.value().from_scalar && picked.value().cells.size() == 1U) {
       const Value& direct = picked.value().cells[0];
-      if (def.propagate_errors && direct.is_error()) {
-        result = direct;
-        return RangeArgOutcome::kReturn;
+      if (direct.is_error()) {
+        if (def.propagate_errors) {
+          result = direct;
+          return RangeArgOutcome::kReturn;
+        }
+        forget_error_origin();
       }
       values.push_back(direct);
       return RangeArgOutcome::kCollected;
@@ -495,9 +500,12 @@ RangeArgOutcome collect_range_arg(const FunctionDef& def, const parser::AstNode&
     // range-filter pipeline). The array-shaped path applies the filters
     // exactly like the RangeOp / SpillRef branches.
     Value sr_val = eval_node(arg_node, arena, registry, ctx);
-    if (def.propagate_errors && sr_val.is_error()) {
-      result = sr_val;
-      return RangeArgOutcome::kReturn;
+    if (sr_val.is_error()) {
+      if (def.propagate_errors) {
+        result = sr_val;
+        return RangeArgOutcome::kReturn;
+      }
+      forget_error_origin();
     }
     if (sr_val.is_array()) {
       had_range_shaped_arg = true;

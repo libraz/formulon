@@ -8,6 +8,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "io/xlsb/ptg_reader.h"
@@ -192,6 +193,9 @@ Expected<RecordDisposition, Error> DecodeLiteralCell(const XlsbRecord& rec, Xlsb
   }
   ByteSpan p = rec.payload;
   ASSIGN_OR_RETURN(auto col, ReadCellHeader(p));
+  if (const std::uint32_t vm = std::exchange(state.pending_value_meta, 0U); vm != 0U) {
+    state.value_metadata.push_back(RichErrorCell{state.current_row, col.col, vm});
+  }
   Value value = Value::blank();
   std::uint32_t sst_index = 0;
   switch (type) {

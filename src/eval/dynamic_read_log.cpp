@@ -117,7 +117,9 @@ void DynamicReadLog::restore_prior_values(Workbook& workbook, const std::vector<
     const auto kept = prior_values_.find(c);
     if (kept != prior_values_.end()) {
       const Value& prior = kept->second.value;
-      workbook.sheet(c.sheet_id).set_cell_cached_value(c.row, c.col, prior.is_blank() ? Value::number(0.0) : prior);
+      Sheet& sheet = workbook.sheet(c.sheet_id);
+      sheet.set_cell_cached_value(c.row, c.col, prior.is_blank() ? Value::number(0.0) : prior);
+      sheet.clear_error_detail(c.row, c.col);
     }
   }
 }

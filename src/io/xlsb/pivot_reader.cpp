@@ -43,6 +43,12 @@ enum : std::uint16_t {
   kBeginPCDFAtbl = 189,
   kEndPCDFAtbl = 190,
   kPCDIString = 24,
+  /// A shared string item that carries an attribute block (observed only as
+  /// `u="1"`, an item a refresh kept though the source no longer holds it).
+  kPCDIStringAttr = 31,
+  /// A shared-item array of one type (doubles or strings) and its end marker.
+  kPCDIArray = 191,
+  kEndPCDIArray = 192,
 
   // Cache records part.
   kBeginPCRecords = 193,
@@ -154,10 +160,12 @@ constexpr std::uint32_t kNoIndex = 0xFFFFFFFFU;
 
 /// `BrtPivotTableLocation`: an `RfX` (first row, last row, first column,
 /// last column) followed by the `<location>` offsets. Only the rectangle
-/// and the two row offsets are decoded -- the third offset was observed
-/// holding an absolute column where the XML form carries one relative to
-/// the pivot, and nothing here needs it, so it is left unset rather than
-/// converted on an unverified reading.
+/// and the three first-row / first-data offsets are decoded. The binary form
+/// holds them as absolute sheet coordinates where the XML form carries them
+/// relative to the pivot's own first row and column (a report anchored at A3
+/// stores 2, 2, 0 for the twin's `firstHeaderRow="0" firstDataRow="0"
+/// firstDataCol="0"`), so each is taken relative to the rectangle's origin. A
+/// payload too short to carry the column offset leaves it unset.
 constexpr std::size_t kLocationMinU32s = 6;
 
 /// Bytes of `BrtBeginPCDField` that precede the field's name.
@@ -176,6 +184,13 @@ constexpr std::size_t kDataFieldNameGap = 17;
 /// value is refused rather than ignored -- silently dropping a hidden-item
 /// filter would over-count every aggregate on that field.
 constexpr std::size_t kPivotFieldItemSize = 7;
+/// Item flag bit of a `<item m="1">`: the entry names a cache item the source no longer holds.
+constexpr std::uint16_t kPivotFieldItemMissing = 0x0008;
+/// Shared-item array element types, and the attribute block of a `kPCDIStringAttr` item
+/// (`01 00 00 00 00 00`) the twin `.xlsx` shows as `u="1"`.
+constexpr std::uint16_t kArrayOfDoubles = 1;
+constexpr std::uint16_t kArrayOfStrings = 2;
+constexpr std::uint8_t kUnusedItemAttrs[6] = {1, 0, 0, 0, 0, 0};
 /// Item kind for an entry that names a cache item; other kinds are the
 /// automatic default / subtotal rows, which carry no cache index.
 constexpr std::uint8_t kPivotFieldItemKindData = 0;
@@ -230,8 +245,11 @@ Expected<pivot::Aggregation, Error> AggregationFromSelector(std::uint32_t select
 
 /// Reads `count` little-endian u32s that follow a leading count in an
 /// axis-field-order record, rejecting a payload that is not exactly the
-/// size the count implies.
-Expected<std::vector<std::uint32_t>, Error> ReadFieldOrder(ByteSpan payload) {
+/// size the count implies. The Values pseudo-field (`x="-2"` in the `.xlsx`
+/// twin, stored as 0xFFFFFFFE) is kept out of the order; its position among
+/// the entries goes to `*values_position`, as the `.xlsx` reader records it.
+Expected<std::vector<std::uint32_t>, Error> ReadFieldOrder(ByteSpan payload,
+                                                           std::optional<std::size_t>* values_position) {
   ASSIGN_OR_RETURN(const std::uint32_t count, read_u32(payload));
   // Divide first: `count * 4` wraps on wasm32.
   if (count > payload.size / sizeof(std::uint32_t) || payload.size != count * sizeof(std::uint32_t)) {
@@ -241,6 +259,12 @@ Expected<std::vector<std::uint32_t>, Error> ReadFieldOrder(ByteSpan payload) {
   order.reserve(count);
   for (std::uint32_t i = 0; i < count; ++i) {
     ASSIGN_OR_RETURN(auto index, read_u32(payload));
+    if (index == static_cast<std::uint32_t>(pivot::kValuesFieldPosition)) {
+      if (!values_position->has_value()) {
+        *values_position = i;
+      }
+      continue;
+    }
     order.push_back(index);
   }
   return order;
@@ -264,7 +288,7 @@ Expected<void, Error> DecodeCacheDefinition(ByteSpan cursor, pivot::PivotCache* 
     // accepted. Anything else (a grouping block, a non-string shared item)
     // has an unsupported layout and would otherwise be skipped silently.
     if (in_field && rec.type != kEndPCDField && rec.type != kBeginPCDFAtbl && rec.type != kEndPCDFAtbl &&
-        rec.type != kPCDIString) {
+        rec.type != kPCDIString && rec.type != kPCDIStringAttr && rec.type != kPCDIArray && rec.type != kEndPCDIArray) {
       return make_error(FormulonErrorCode::kIoXlsbRecordCorrupt,
                         "xlsb pivot cache field carries an uncharacterised record (grouping?)",
                         "context=xlsb_pivot_reader record_id=" + std::to_string(rec.type));
@@ -330,6 +354,58 @@ Expected<void, Error> DecodeCacheDefinition(ByteSpan cursor, pivot::PivotCache* 
         field_has_shared_items = true;
         break;
       }
+      case kPCDIStringAttr: {
+        if (!in_shared_items || cache->mutable_fields().empty()) {
+          return CorruptError("xlsb pivot cache shared item outside a field's item table");
+        }
+        ByteSpan payload = rec.payload;
+        auto text_or = read_xlwidestring(payload);
+        if (!text_or) {
+          return std::move(text_or.error());
+        }
+        // Only the attribute block the twin pins is read; any other is refused, not guessed.
+        if (payload.size != sizeof(kUnusedItemAttrs) ||
+            !std::equal(payload.data, payload.data + payload.size, std::begin(kUnusedItemAttrs))) {
+          return CorruptError("xlsb pivot cache shared item carries attributes this reader has not characterised");
+        }
+        cache->mutable_text_storage().emplace_back(std::move(text_or.value()));
+        pivot::PivotCacheField& field = cache->mutable_fields().back();
+        field.shared_items.push_back(Value::text(cache->text_storage().back()));
+        field.shared_item_is_missing.resize(field.shared_items.size(), false);
+        field.shared_item_is_missing.back() = true;
+        field_has_shared_items = true;
+        break;
+      }
+      case kPCDIArray: {
+        if (!in_shared_items || cache->mutable_fields().empty()) {
+          return CorruptError("xlsb pivot cache shared item outside a field's item table");
+        }
+        ByteSpan payload = rec.payload;
+        ASSIGN_OR_RETURN(const std::uint16_t element_type, read_u16(payload));
+        ASSIGN_OR_RETURN(const std::uint32_t count, read_u32(payload));
+        if (element_type != kArrayOfDoubles && element_type != kArrayOfStrings) {
+          return CorruptError(
+              "xlsb pivot cache shared item array has an element type this reader has not characterised");
+        }
+        pivot::PivotCacheField& field = cache->mutable_fields().back();
+        for (std::uint32_t i = 0; i < count; ++i) {
+          if (element_type == kArrayOfDoubles) {
+            ASSIGN_OR_RETURN(auto value, read_double(payload));
+            field.shared_items.push_back(Value::number(value));
+          } else {
+            ASSIGN_OR_RETURN(auto text, read_xlwidestring(payload));
+            cache->mutable_text_storage().emplace_back(std::move(text));
+            field.shared_items.push_back(Value::text(cache->text_storage().back()));
+          }
+        }
+        if (payload.size != 0U) {
+          return CorruptError("xlsb pivot cache shared item array length does not match its count");
+        }
+        field_has_shared_items = true;
+        break;
+      }
+      case kEndPCDIArray:
+        break;
       default:
         // Records outside a cache field (source range, styling,
         // future-record wrappers) are outside this module's remit and are
@@ -562,7 +638,16 @@ Expected<pivot::PivotTable, Error> read_pivot_table_bin(ByteSpan cursor) {
         // Excel wrote this extent for the report as it stood, so it is
         // preserved rather than re-projected on write.
         table.mark_span_authored();
-        table.set_location_attributes(bounds[4], bounds[5], std::nullopt, std::nullopt, std::nullopt);
+        const auto relative = [](std::uint32_t absolute, std::uint32_t origin) {
+          return absolute >= origin ? absolute - origin : absolute;
+        };
+        std::optional<std::uint32_t> first_data_col;
+        if (payload.size >= sizeof(std::uint32_t)) {
+          ASSIGN_OR_RETURN(auto value, read_u32(payload));
+          first_data_col = relative(value, bounds[2]);
+        }
+        table.set_location_attributes(relative(bounds[4], bounds[0]), relative(bounds[5], bounds[0]), first_data_col,
+                                      std::nullopt, std::nullopt);
         break;
       }
       case kBeginPivotFields: {
@@ -600,10 +685,10 @@ Expected<pivot::PivotTable, Error> read_pivot_table_bin(ByteSpan cursor) {
         if (!flags_or) {
           return std::move(flags_or.error());
         }
-        if (flags_or.value() != 0U) {
-          // Hidden / missing / expanded state lives here. Dropping a
-          // hidden-item filter would over-count every aggregate on the
-          // field, so an unknown flag refuses the table instead.
+        if ((flags_or.value() & ~kPivotFieldItemMissing) != 0U) {
+          // Hidden / expanded state lives here. Dropping a hidden-item
+          // filter would over-count every aggregate on the field, so an
+          // unknown flag refuses the table instead.
           return CorruptError("xlsb pivot field item carries flags this reader has not characterised");
         }
         ASSIGN_OR_RETURN(auto index, read_u32(payload));
@@ -615,17 +700,24 @@ Expected<pivot::PivotTable, Error> read_pivot_table_bin(ByteSpan cursor) {
         pivot::PivotItem item;
         item.has_cache_index = true;
         item.cache_index = index;
+        if ((flags_or.value() & kPivotFieldItemMissing) != 0U) {
+          item.passthrough_attrs.emplace_back("m", "1");
+        }
         table.mutable_fields().back().items.push_back(std::move(item));
         break;
       }
       case kPivotRowFields: {
-        ASSIGN_OR_RETURN(auto order, ReadFieldOrder(rec.payload));
+        std::optional<std::size_t> values_position;
+        ASSIGN_OR_RETURN(auto order, ReadFieldOrder(rec.payload, &values_position));
         row_order = std::move(order);
+        table.set_row_values_position(values_position);
         break;
       }
       case kPivotColFields: {
-        ASSIGN_OR_RETURN(auto order, ReadFieldOrder(rec.payload));
+        std::optional<std::size_t> values_position;
+        ASSIGN_OR_RETURN(auto order, ReadFieldOrder(rec.payload, &values_position));
         col_order = std::move(order);
+        table.set_col_values_position(values_position);
         break;
       }
       case kBeginPivotDataField: {

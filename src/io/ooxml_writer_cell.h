@@ -14,6 +14,7 @@
 #include <cstdint>
 #include <string>
 
+#include "io/rich_value_errors.h"
 #include "io/xlsb/ptg_writer.h"
 
 namespace formulon {
@@ -47,10 +48,13 @@ bool CellIsEmitted(const Cell& cell);
 /// XLDAPR-typed `xl/metadata.xml` for it to reference. `name_shapes`
 /// feeds a legacy formula's `xlsb::legacy_intersections`. `indexer` numbers
 /// the external books formulas name; null spells them by name.
+/// `rich_error_vm` gives the `vm=` of each cell saved with a rich error
+/// (null when the save writes none); it follows `cm=`.
 void AppendSheetDataXml(std::string& out, const Sheet& sheet, const SharedStrings* shared_strings = nullptr,
                         std::uint32_t dynamic_array_cm_index = 0U,
                         const xlsb::NameShapes& name_shapes = xlsb::NameShapes(),
-                        const parser::ExternalBookIndexer* indexer = nullptr);
+                        const parser::ExternalBookIndexer* indexer = nullptr,
+                        const RichErrorVmMap* rich_error_vm = nullptr);
 
 }  // namespace io
 }  // namespace formulon

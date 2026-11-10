@@ -19,6 +19,7 @@
 
 #include "io/ooxml/external_link_writer.h"
 #include "io/package_diagnostics.h"
+#include "io/rich_value_errors.h"
 
 namespace formulon {
 
@@ -103,9 +104,14 @@ struct EmissionPlan {
   // True when the writer generated xl/sharedStrings.xml from literal text
   // cells. This also reserves the path from passthrough collision handling.
   bool generated_shared_strings = false;
-  // True when the writer generates xl/metadata.xml (the XLDAPR entry a
-  // dynamic-array formula's `cm=` names) because no retained part carries it.
-  bool generated_dynamic_metadata = false;
+  // True when the writer generates xl/metadata.xml because no retained part
+  // carries it: the XLDAPR entry a dynamic-array formula's `cm=` names when
+  // `metadata_dynamic_arrays`, and the XLRICHVALUE blocks `rich_errors` needs.
+  bool generated_metadata = false;
+  bool metadata_dynamic_arrays = false;
+  // The rich errors the save writes, with the `xl/richData/` parts; empty
+  // when the book keeps foreign rich data or has none.
+  RichErrorTable rich_errors;
   // True when the writer generates `kPersonsPartPath` from `Workbook::persons()`.
   bool generated_persons = false;
   // For each sheet (by 0-based index), the in-source TableMetadata

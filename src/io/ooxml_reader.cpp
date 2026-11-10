@@ -51,6 +51,7 @@
 #include "io/ooxml_defs.h"
 #include "io/pivot_cache_reader.h"
 #include "io/pivot_table_reader.h"
+#include "io/rich_value_errors.h"
 #include "io/sheet_overlay_reader.h"
 #include "io/sheet_reader.h"
 #include "io/sst_reader.h"
@@ -683,6 +684,81 @@ static Expected<void, Error> ResolveSharedStrings(Workbook& wb, const std::vecto
   return Expected<void, Error>::Ok();
 }
 
+/// Consumes `xl/metadata.xml` and the `xl/richData/` parts into `*set` when
+/// they hold nothing but standard dynamic-array metadata and measured rich
+/// errors, no sheet is kept opaque and no external link carries `vm=`; their
+/// workbook relationships go with them, and the writer regenerates the parts.
+/// Otherwise every part stays passthrough and false is returned.
+static bool ConsumeRichValueParts(ZipReader& zip, const Workbook& wb, RichErrorSet* set,
+                                  std::unordered_set<std::string>& consumed_parts,
+                                  std::vector<UnknownRelationship>& unknown_rels) {
+  constexpr std::string_view kMetadata = "xl/metadata.xml";
+  constexpr std::string_view kExternalLinks = "xl/externalLinks/";
+  if (!zip.has_entry(kMetadata)) {
+    return false;
+  }
+  for (std::size_t i = 0; i < wb.sheet_count(); ++i) {
+    if (wb.sheet(i).is_opaque_ooxml_sheet()) {
+      return false;
+    }
+  }
+  std::vector<std::string> parts{std::string(kMetadata)};
+  for (const std::string& name : zip.list_entries()) {
+    if (name.compare(0, kExternalLinks.size(), kExternalLinks) == 0) {
+      auto bytes = zip.read_entry(name);
+      if (!bytes ||
+          std::string_view(reinterpret_cast<const char*>(bytes.value().data()), bytes.value().size()).find(" vm=\"") !=
+              std::string_view::npos) {
+        return false;
+      }
+    }
+    if (name.compare(0, kRichDataDirPrefix.size(), kRichDataDirPrefix) == 0 && name.back() != '/') {
+      if (name != kRdRichValuePartPath && name != kRdRichValueStructurePartPath && name != kRdRichValueTypesPartPath) {
+        return false;
+      }
+      parts.push_back(name);
+    }
+  }
+  auto metadata = zip.read_entry(kMetadata);
+  if (!metadata) {
+    return false;
+  }
+  RichValueMetadata info = parse_metadata_xml(metadata.value());
+  if (!info.consumable) {
+    return false;
+  }
+  if (zip.has_entry(kRdRichValuePartPath) || !info.vm_rv.empty()) {
+    auto values = zip.read_entry(kRdRichValuePartPath);
+    auto structures = zip.read_entry(kRdRichValueStructurePartPath);
+    if (!values || !structures) {
+      return false;
+    }
+    for (const std::optional<RichError>& v : parse_rich_errors(values.value(), structures.value())) {
+      if (!v.has_value()) {
+        return false;
+      }
+      set->values.push_back(*v);
+    }
+  }
+  for (const std::uint32_t rv : info.vm_rv) {
+    if (rv >= set->values.size()) {
+      set->values.clear();
+      return false;
+    }
+  }
+  set->vm_rv = std::move(info.vm_rv);
+  for (const std::string& part : parts) {
+    consumed_parts.insert(part);
+  }
+  unknown_rels.erase(std::remove_if(unknown_rels.begin(), unknown_rels.end(),
+                                    [&parts](const UnknownRelationship& r) {
+                                      return !r.target_external &&
+                                             std::find(parts.begin(), parts.end(), r.target) != parts.end();
+                                    }),
+                     unknown_rels.end());
+  return true;
+}
+
 /// A formula is a dynamic-array formula exactly when its `cm=` names the
 /// XLDAPR entry of `xl/metadata.xml`; any other (a legacy CSE block, an
 /// implicit-intersection formula) keeps its legacy meaning.
@@ -942,6 +1018,19 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
   std::uint32_t pending_sst_count = 0;
   RETURN_IF_ERROR(ResolveSharedStrings(wb, sheet_contexts, sst, !wb_rels.sst_path.empty(), &pending_sst_count));
 
+  // 6a. Restore the rich errors the file saved, before the spill regions are
+  // registered: a blocked anchor keeps its footprint rather than a one-cell
+  // region, and a phantom's real error is captured into its region. A
+  // constant saved with a spill rich value waits for the pivots (step 9).
+  RichErrorSet rich_errors;
+  std::vector<DeferredSpillAnchor> deferred_spill_anchors;
+  if (ConsumeRichValueParts(zip, wb, &rich_errors, consumed_parts, wb_rels.unknown_rels)) {
+    for (std::size_t i = 0; i < sheet_contexts.size(); ++i) {
+      restore_rich_error_cells(wb, i, sheet_contexts[i].value_metadata, sheet_contexts[i].array_anchors, rich_errors,
+                               &deferred_spill_anchors);
+    }
+  }
+
   // 6b. Register each sheet's dynamic-array spill regions, now that every
   // SST reference is resolved. This must run after step 6: a spill
   // region's phantom cells capture their footprint's `cached_value` at
@@ -988,6 +1077,9 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
   // name (the pivot-table part links to the cache only by index). The
   // loop body lives in the pivot layer to keep this reader hook minimal.
   pivot::resolve_all_pivot_names(wb);
+  // A pivot saved blocked is recognised by its anchor's rich value; one whose
+  // anchor has none (an older file, or rich parts left passthrough) by its shape.
+  restore_deferred_spill_anchors(wb, deferred_spill_anchors);
   wb.adopt_saved_blocked_pivots();
   // Cells and tables are both loaded, so the totals cells settle the columns' totals metadata.
   wb.normalize_table_totals_cells();

@@ -466,20 +466,20 @@ TEST(SheetSpillTest, PopulatedExtentExcludesBlockedSpillFootprints) {
 TEST(SheetSpillTest, ProbeAcceptsAClearFootprint) {
   Sheet s("Sheet1");
   s.set_cell_value(0U, 0U, Value::number(1.0));
-  EXPECT_EQ(s.probe_spill_footprint(0U, 25U, 4U, 2U), Sheet::SpillAdmission::kAdmissible);
+  EXPECT_EQ(s.probe_spill_footprint(0U, 25U, 4U, 2U).admission, Sheet::SpillAdmission::kAdmissible);
 }
 TEST(SheetSpillTest, ProbeReportsAFootprintThatLeavesTheGrid) {
   Sheet s("Sheet1");
   // A whole-column rectangle only fits when it starts at row 1; one row down
   // its far edge is past the last row of the grid.
-  EXPECT_EQ(s.probe_spill_footprint(0U, 25U, Sheet::kMaxRows, 1U), Sheet::SpillAdmission::kAdmissible);
-  EXPECT_EQ(s.probe_spill_footprint(1U, 25U, Sheet::kMaxRows, 1U), Sheet::SpillAdmission::kOutsideGrid);
+  EXPECT_EQ(s.probe_spill_footprint(0U, 25U, Sheet::kMaxRows, 1U).admission, Sheet::SpillAdmission::kAdmissible);
+  EXPECT_EQ(s.probe_spill_footprint(1U, 25U, Sheet::kMaxRows, 1U).admission, Sheet::SpillAdmission::kOutsideGrid);
   // Same rule on the other axis for a whole-row rectangle.
-  EXPECT_EQ(s.probe_spill_footprint(4U, 0U, 2U, Sheet::kMaxCols), Sheet::SpillAdmission::kAdmissible);
-  EXPECT_EQ(s.probe_spill_footprint(4U, 1U, 2U, Sheet::kMaxCols), Sheet::SpillAdmission::kOutsideGrid);
+  EXPECT_EQ(s.probe_spill_footprint(4U, 0U, 2U, Sheet::kMaxCols).admission, Sheet::SpillAdmission::kAdmissible);
+  EXPECT_EQ(s.probe_spill_footprint(4U, 1U, 2U, Sheet::kMaxCols).admission, Sheet::SpillAdmission::kOutsideGrid);
   // Degenerate shapes never commit either.
-  EXPECT_EQ(s.probe_spill_footprint(0U, 0U, 0U, 1U), Sheet::SpillAdmission::kOutsideGrid);
-  EXPECT_EQ(s.probe_spill_footprint(0U, 0U, 1U, 0U), Sheet::SpillAdmission::kOutsideGrid);
+  EXPECT_EQ(s.probe_spill_footprint(0U, 0U, 0U, 1U).admission, Sheet::SpillAdmission::kOutsideGrid);
+  EXPECT_EQ(s.probe_spill_footprint(0U, 0U, 1U, 0U).admission, Sheet::SpillAdmission::kOutsideGrid);
 }
 TEST(SheetSpillTest, ProbeFindsABlockerFarOutsideThePopulatedData) {
   Sheet s("Sheet1");
@@ -493,7 +493,7 @@ TEST(SheetSpillTest, ProbeFindsABlockerFarOutsideThePopulatedData) {
   s.set_cell_value(499U, 25U, Value::number(7.0));
 
   std::uint64_t steps = 0;
-  EXPECT_EQ(s.probe_spill_footprint(0U, 25U, Sheet::kMaxRows, 1U, &steps), Sheet::SpillAdmission::kBlocked);
+  EXPECT_EQ(s.probe_spill_footprint(0U, 25U, Sheet::kMaxRows, 1U, &steps).admission, Sheet::SpillAdmission::kBlocked);
 
   // The verdict alone cannot tell a sparse scan from an area-proportional
   // one — both refuse, one merely takes a million probes to do it. Bound the
@@ -506,8 +506,8 @@ TEST(SheetSpillTest, ProbeRefusesAFullWidthRectangleOnABlockedRow) {
   s.set_cell_value(2U, 1U, Value::number(30.0));
   s.set_cell_value(4U, 25U, Value::number(9.0));  // blocker inside the full-width span
 
-  EXPECT_EQ(s.probe_spill_footprint(4U, 0U, 1U, Sheet::kMaxCols), Sheet::SpillAdmission::kBlocked);
-  EXPECT_EQ(s.probe_spill_footprint(5U, 0U, 1U, Sheet::kMaxCols), Sheet::SpillAdmission::kAdmissible);
+  EXPECT_EQ(s.probe_spill_footprint(4U, 0U, 1U, Sheet::kMaxCols).admission, Sheet::SpillAdmission::kBlocked);
+  EXPECT_EQ(s.probe_spill_footprint(5U, 0U, 1U, Sheet::kMaxCols).admission, Sheet::SpillAdmission::kAdmissible);
 
   // No step bound here on purpose. The proportionality claim lives on the row
   // axis: a row's cells are one dense run, so a blocker inside the span is
@@ -543,7 +543,7 @@ TEST(SheetSpillTest, WouldCollideIsTheProbeVerdictInBooleanForm) {
   for (const SpillFootprint& shape : shapes) {
     const bool collides = s.spill_would_collide(shape.anchor_row, shape.anchor_col, shape.rows, shape.cols);
     const Sheet::SpillAdmission admission =
-        s.probe_spill_footprint(shape.anchor_row, shape.anchor_col, shape.rows, shape.cols);
+        s.probe_spill_footprint(shape.anchor_row, shape.anchor_col, shape.rows, shape.cols).admission;
     EXPECT_EQ(collides, admission != Sheet::SpillAdmission::kAdmissible)
         << "at (" << shape.anchor_row << "," << shape.anchor_col << ") " << shape.rows << "x" << shape.cols;
   }
@@ -554,8 +554,8 @@ TEST(SheetSpillTest, ProbeLeavesTheSheetUnchanged) {
   const std::uint64_t revision_before = s.cell_enumeration_revision();
   const std::size_t cells_before = s.cell_count();
 
-  EXPECT_EQ(s.probe_spill_footprint(0U, 25U, Sheet::kMaxRows, 1U), Sheet::SpillAdmission::kBlocked);
-  EXPECT_EQ(s.probe_spill_footprint(0U, 25U, 2U, 1U), Sheet::SpillAdmission::kAdmissible);
+  EXPECT_EQ(s.probe_spill_footprint(0U, 25U, Sheet::kMaxRows, 1U).admission, Sheet::SpillAdmission::kBlocked);
+  EXPECT_EQ(s.probe_spill_footprint(0U, 25U, 2U, 1U).admission, Sheet::SpillAdmission::kAdmissible);
 
   // No blocked record, no #SPILL! written, no row materialised by probing.
   EXPECT_TRUE(s.blocked_spill_footprints().empty());
@@ -566,9 +566,9 @@ TEST(SheetSpillTest, ProbeLeavesTheSheetUnchanged) {
 TEST(SheetSpillTest, RejectRecordsTheFootprintTheReleasePathRetries) {
   Sheet s("Sheet1");
   s.set_cell_value(499U, 25U, Value::number(7.0));
-  ASSERT_EQ(s.probe_spill_footprint(0U, 25U, Sheet::kMaxRows, 1U), Sheet::SpillAdmission::kBlocked);
+  ASSERT_EQ(s.probe_spill_footprint(0U, 25U, Sheet::kMaxRows, 1U).admission, Sheet::SpillAdmission::kBlocked);
 
-  s.reject_spill_footprint(0U, 25U, Sheet::kMaxRows, 1U);
+  s.reject_spill_footprint(0U, 25U, Sheet::kMaxRows, 1U, SpillCause::kOccupied);
 
   // The anchor reads #SPILL! and the rectangle is remembered, which is what
   // the blocked-spill release machinery retries once the blocker is gone.
@@ -592,8 +592,8 @@ TEST(SheetSpillTest, CommitRefusalRecordsTheSameFootprintAsAnExplicitReject) {
 
   Sheet other("Sheet1");
   other.set_cell_value(1U, 0U, Value::number(9.0));
-  ASSERT_EQ(other.probe_spill_footprint(0U, 0U, 3U, 1U), Sheet::SpillAdmission::kBlocked);
-  other.reject_spill_footprint(0U, 0U, 3U, 1U);
+  ASSERT_EQ(other.probe_spill_footprint(0U, 0U, 3U, 1U).admission, Sheet::SpillAdmission::kBlocked);
+  other.reject_spill_footprint(0U, 0U, 3U, 1U, SpillCause::kOccupied);
   const std::vector<BlockedSpillFootprint> from_reject = other.blocked_spill_footprints();
 
   ASSERT_EQ(from_commit.size(), 1U);

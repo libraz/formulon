@@ -33,6 +33,7 @@
 #include <string_view>
 #include <vector>
 
+#include "io/rich_value_errors.h"
 #include "io/xlsb/ptg_writer.h"
 #include "io/xlsb/sst_writer.h"
 #include "sheet.h"
@@ -78,13 +79,16 @@ std::size_t unwritten_protected_range_count(const Sheet& sheet);
 /// also needs for the sheet's relationships part.
 /// `owns_drawing` drops every retained BrtDrawing record; a non-empty
 /// `drawing_rel_id` then writes the one record naming the sheet's drawing.
+/// `rich_error_vm` gives the value-metadata index of each error cell saved
+/// with a rich error (null when the save writes none); its `BrtValueMeta`
+/// follows a cell's `BrtCellMeta`.
 Expected<std::vector<std::uint8_t>, Error> emit_sheet(
     const Sheet& sheet, SstBuilder& sst, const std::vector<std::string>& sheet_names,
     const SheetRangeTable& sheet_ranges, const NameTable& name_table, const std::vector<std::string>& hyperlink_ids,
     std::uint32_t* downgraded_formula_count = nullptr, std::uint32_t dynamic_array_ifmd = 0,
     const NameShapes& name_shapes = NameShapes(), const std::vector<std::string>& table_part_rel_ids = {},
     std::uint32_t workbook_views = 1U, std::uint32_t* deferred_sparkline_groups = nullptr,
-    std::string_view drawing_rel_id = {}, bool owns_drawing = false);
+    std::string_view drawing_rel_id = {}, bool owns_drawing = false, const RichErrorVmMap* rich_error_vm = nullptr);
 
 }  // namespace xlsb
 }  // namespace io

@@ -8,6 +8,7 @@
 
 #include "eval/array_alloc.h"
 #include "eval/declared_rect.h"
+#include "eval/error_origin.h"
 #include "eval/eval_context.h"
 #include "eval/lazy_impls.h"
 #include "external_book.h"
@@ -136,6 +137,7 @@ bool WholeAxisTail(const parser::AstNode& node, Arena& arena, const EvalContext&
   const std::uint32_t tail_len = by_rows ? rect.cols() : rect.rows();
   const std::uint64_t head_cells = static_cast<std::uint64_t>(head) * tail_len;
   if (head_cells > kMaxRangeExpansionCells) {
+    note_unknown_error_origin();
     *out = Shaped{Value::error(ErrorCode::Calc), nullptr};
     return true;
   }

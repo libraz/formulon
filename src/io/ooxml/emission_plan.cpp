@@ -19,6 +19,7 @@
 
 #include "default_content_type.h"
 #include "external_link.h"
+#include "io/dynamic_array_formula.h"
 #include "io/ooxml/external_link_writer.h"
 #include "io/ooxml/package_validator.h"
 #include "io/ooxml/relationship_writer.h"
@@ -159,7 +160,8 @@ std::unordered_set<std::string> BuildGeneratedPathSet(
     const std::vector<EmissionPlan::PivotCachePlan>& pivot_caches,
     const std::vector<std::vector<EmissionPlan::PivotTablePlan>>& pivot_tables_by_sheet,
     const std::vector<EmissionPlan::CommentsPlan>& comments_by_sheet,
-    const std::vector<EmissionPlan::ExternalLinkPlan>& external_links, bool generated_shared_strings) {
+    const std::vector<EmissionPlan::ExternalLinkPlan>& external_links, bool generated_shared_strings,
+    bool generated_metadata, bool generated_rich_values) {
   std::unordered_set<std::string> paths;
   paths.insert("[Content_Types].xml");
   paths.insert("_rels/.rels");
@@ -168,6 +170,14 @@ std::unordered_set<std::string> BuildGeneratedPathSet(
   paths.insert(std::string(kStylesPartPath));
   if (generated_shared_strings) {
     paths.insert(std::string(kSharedStringsPartPath));
+  }
+  if (generated_metadata) {
+    paths.insert(std::string(kMetadataPartPath));
+  }
+  if (generated_rich_values) {
+    paths.insert(std::string(kRdRichValuePartPath));
+    paths.insert(std::string(kRdRichValueStructurePartPath));
+    paths.insert(std::string(kRdRichValueTypesPartPath));
   }
   for (std::size_t i = 0; i < wb.sheet_count(); ++i) {
     if (!wb.sheet(i).is_opaque_ooxml_sheet()) {
@@ -311,6 +321,16 @@ EmissionPlan BuildEmissionPlan(const Workbook& wb, bool generated_shared_strings
   plan.generated_shared_strings = generated_shared_strings;
   plan.generated_persons = !wb.persons().empty();
   plan.tables_by_sheet.assign(wb.sheet_count(), {});
+  // A retained `xl/metadata.xml` keeps today's meaning and blocks generated
+  // rich errors (`keeps_foreign_rich_data`); otherwise the writer generates
+  // the part for dynamic-array formulas and rich errors alike.
+  plan.rich_errors = build_rich_error_table(wb);
+  bool retained_metadata = false;
+  for (const PassthroughPart& part : wb.passthrough_parts()) {
+    retained_metadata = retained_metadata || part.path == kMetadataPartPath;
+  }
+  plan.metadata_dynamic_arrays = !retained_metadata && has_dynamic_array_formula(wb);
+  plan.generated_metadata = plan.metadata_dynamic_arrays || !plan.rich_errors.empty();
 
   // The source workbook list is stable for the lifetime of this plan. Keep a
   // pointer view so external-link and comment-VML lookups share one sorted
@@ -532,9 +552,9 @@ EmissionPlan BuildEmissionPlan(const Workbook& wb, bool generated_shared_strings
 
   // Collision detection between generated paths and passthrough paths.
   // Generated paths win; passthrough copy is dropped with a warning.
-  std::unordered_set<std::string> generated =
-      BuildGeneratedPathSet(wb, flat_tables, plan.pivot_caches, plan.pivot_tables_by_sheet, plan.comments_by_sheet,
-                            plan.external_links, generated_shared_strings);
+  std::unordered_set<std::string> generated = BuildGeneratedPathSet(
+      wb, flat_tables, plan.pivot_caches, plan.pivot_tables_by_sheet, plan.comments_by_sheet, plan.external_links,
+      generated_shared_strings, plan.generated_metadata, !plan.rich_errors.empty());
 
   for (const PassthroughPart& part : wb.passthrough_parts()) {
     // A stale external-link body is superseded by the one generated from

@@ -237,6 +237,7 @@ from ._workbook import (
     _read_count,
     _read_cstr_out,
     _read_optional_cstr_out,
+    _spill_from,
     _threaded_comment_from,
     _tristate_default,
     _write_mentions,
@@ -7112,10 +7113,12 @@ class Sheet(_NoCopy):
 
         The region covers the anchor and every spilled cell; their values are
         read with :meth:`get_value`, which is already spill-aware. A blocked
-        anchor, of a formula or of a PivotTable report (see :class:`Pivot`),
-        reads as a :class:`Spill` with ``blocked`` set and the footprint it
-        attempted, when that fits inside the grid. Every cell of a legacy array
-        block reads ``None``: the block is not a spill.
+        formula anchor reads as a :class:`Spill` with ``blocked`` set, the
+        footprint it attempted clipped to the grid, and its ``cause``. A
+        PivotTable report's anchor (see :class:`Pivot`) reads what
+        :meth:`Pivot.get_spill` returns; the report's other cells are ordinary
+        cells. Every cell of a legacy array block reads ``None``: the block is
+        not a spill.
         """
         row, col = self._cell_args("get_spill", args, kwargs, ())
         sheet = self._index()
@@ -7135,8 +7138,7 @@ class Sheet(_NoCopy):
             )
             if LIB.read_i32(present) == 0:
                 return None
-            d = S.SPILL_INFO.unpack(LIB, ptr)
-            return Spill(blocked=bool(d["blocked"]), range=_cell_rect_from(d["rect"]))
+            return _spill_from(S.SPILL_INFO.unpack(LIB, ptr))
 
     # -- Legacy array (CSE) formulas ---------------------------------------
     @overload

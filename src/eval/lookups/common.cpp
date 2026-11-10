@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "eval/declared_rect.h"
+#include "eval/error_origin.h"
 #include "eval/eval_context.h"
 #include "eval/external_ref.h"
 #include "eval/function_registry.h"
@@ -97,6 +98,7 @@ Expected<std::vector<Value>, ErrorCode> read_table_block(const ReferenceTable& t
     const std::uint64_t rows = static_cast<std::uint64_t>(row_last - row_first) + 1U;
     const std::uint64_t total = rows * (static_cast<std::uint64_t>(col_last - col_first) + 1U);
     if (total > kMaxRangeExpansionCells) {
+      note_unknown_error_origin();
       return ErrorCode::Calc;
     }
     std::vector<Value> cells;

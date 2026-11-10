@@ -10,6 +10,7 @@
 #include "eval/array_context.h"
 #include "eval/coerce.h"
 #include "eval/declared_rect.h"
+#include "eval/error_origin.h"
 #include "eval/eval_context.h"
 #include "eval/lambda_value.h"
 #include "eval/lazy_impls.h"
@@ -223,6 +224,7 @@ Value byrow_or_bycol(const parser::AstNode& call, bool by_row, Arena& arena, con
   const SourceOrigin origin = source_origin(call.as_call_arg(0), in, arena, registry, ctx);
   if (in->rows == 0U || in->cols == 0U) {
     // Mac Excel: an empty input has no row / column to apply the lambda to.
+    note_unknown_error_origin();
     return Value::error(ErrorCode::Calc);
   }
 
@@ -275,6 +277,7 @@ Value byrow_or_bycol(const parser::AstNode& call, bool by_row, Arena& arena, con
     // the other slices' results, which Excel still spills. A 1x1 Array is
     // anchor-unwrapped; a multi-cell Array or lambda has no slot (#CALC!).
     if (!store_scalar_result(res, &out_cells[i])) {
+      note_calc_sub_type(2U);
       return Value::error(ErrorCode::Calc);
     }
   }
@@ -380,6 +383,7 @@ Value eval_map_lazy(const parser::AstNode& call, Arena& arena, const FunctionReg
   }
 
   if (rows == 0U || cols == 0U) {
+    note_unknown_error_origin();
     return Value::error(ErrorCode::Calc);
   }
 
@@ -412,6 +416,7 @@ Value eval_map_lazy(const parser::AstNode& call, Arena& arena, const FunctionReg
     }
     const Value res = invoke_lambda_values_with_ast(lv, array_count, args, arg_asts, arena, registry, ctx);
     if (!store_scalar_result(res, &out_cells[idx])) {
+      note_calc_sub_type(1U);
       return Value::error(ErrorCode::Calc);
     }
   }
@@ -471,6 +476,7 @@ Value eval_scan_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
   if (rows == 0U || cols == 0U) {
     // SCAN must emit a shape-preserving result; an empty input has no
     // shape to spill into, so #CALC! mirrors BYROW / BYCOL.
+    note_unknown_error_origin();
     return Value::error(ErrorCode::Calc);
   }
 
@@ -485,6 +491,7 @@ Value eval_scan_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
     const Value res = fold_step(fi, i, acc, arena, registry, ctx);
     // A single output slot per cell: a multi-cell lambda return would need nested spilling.
     if (!store_scalar_result(res, &out_cells[i])) {
+      note_calc_sub_type(1U);
       return Value::error(ErrorCode::Calc);
     }
     acc = out_cells[i];
@@ -537,6 +544,7 @@ Value eval_makearray_lazy(const parser::AstNode& call, Arena& arena, const Funct
       // hint is needed because no consumer would ever see them as a range.
       const Value res = invoke_lambda_values(lv, 2U, args, arena, registry, ctx);
       if (!store_scalar_result(res, &out_cells[static_cast<std::size_t>(r) * static_cast<std::size_t>(cols) + c])) {
+        note_calc_sub_type(1U);
         return Value::error(ErrorCode::Calc);
       }
     }

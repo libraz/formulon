@@ -40,6 +40,7 @@ inline constexpr std::string_view kNsXr2 = "http://schemas.microsoft.com/office/
 inline constexpr std::string_view kNsXxl21 = "http://schemas.microsoft.com/office/spreadsheetml/2021/extlinks2021";
 inline constexpr std::string_view kNsDynamicArray =
     "http://schemas.microsoft.com/office/spreadsheetml/2017/dynamicarray";
+inline constexpr std::string_view kNsRichData = "http://schemas.microsoft.com/office/spreadsheetml/2017/richdata";
 
 // Relationship type URIs used by Excel-produced packages. The values
 // are the canonical ECMA-376 strings; comparison is case-sensitive and
@@ -90,6 +91,12 @@ inline constexpr std::string_view kRelSheetMetadata =
     "http://schemas.openxmlformats.org/officeDocument/2006/relationships/sheetMetadata";
 inline constexpr std::string_view kRelCalcChain =
     "http://schemas.openxmlformats.org/officeDocument/2006/relationships/calcChain";
+inline constexpr std::string_view kRelRdRichValue =
+    "http://schemas.microsoft.com/office/2017/06/relationships/rdRichValue";
+inline constexpr std::string_view kRelRdRichValueStructure =
+    "http://schemas.microsoft.com/office/2017/06/relationships/rdRichValueStructure";
+inline constexpr std::string_view kRelRdRichValueTypes =
+    "http://schemas.microsoft.com/office/2017/06/relationships/rdRichValueTypes";
 inline constexpr std::string_view kRelCoreProperties =
     "http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties";
 inline constexpr std::string_view kRelExtendedProperties =
@@ -110,6 +117,15 @@ inline constexpr std::string_view kCtWorkbookXlsbAlt = "application/vnd.ms-excel
 inline bool is_xlsb_workbook_content_type(std::string_view content_type) {
   return content_type == kCtWorkbookXlsb || content_type == kCtWorkbookXlsbAlt;
 }
+
+// Rich-value parts: XML in both package formats, at fixed paths.
+inline constexpr std::string_view kRdRichValuePartPath = "xl/richData/rdrichvalue.xml";
+inline constexpr std::string_view kRdRichValueStructurePartPath = "xl/richData/rdrichvaluestructure.xml";
+inline constexpr std::string_view kRdRichValueTypesPartPath = "xl/richData/rdRichValueTypes.xml";
+inline constexpr std::string_view kRichDataDirPrefix = "xl/richData/";
+inline constexpr std::string_view kCtRdRichValue = "application/vnd.ms-excel.rdrichvalue+xml";
+inline constexpr std::string_view kCtRdRichValueStructure = "application/vnd.ms-excel.rdrichvaluestructure+xml";
+inline constexpr std::string_view kCtRdRichValueTypes = "application/vnd.ms-excel.rdrichvaluetypes+xml";
 
 // Worksheet drawing part content type; an XML part in both package formats.
 inline constexpr std::string_view kCtDrawing = "application/vnd.openxmlformats-officedocument.drawing+xml";

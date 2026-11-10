@@ -14,6 +14,7 @@
 
 #include "io/array_anchor_budget.h"
 #include "io/protection_xml.h"
+#include "io/rich_value_errors.h"
 #include "io/xlsb/cf_records.h"
 #include "io/xlsb/dv_records.h"
 #include "io/xlsb/feature_formula.h"
@@ -463,6 +464,9 @@ Expected<RecordDisposition, Error> DispatchSheetRecord(const XlsbRecord& rec, Xl
       if (const std::uint32_t ifmd = std::exchange(state.pending_cell_meta, 0U); ifmd != 0U) {
         state.cell_metadata.emplace_back(state.current_row, col.col, ifmd);
       }
+      if (const std::uint32_t vm = std::exchange(state.pending_value_meta, 0U); vm != 0U) {
+        state.value_metadata.push_back(RichErrorCell{state.current_row, col.col, vm});
+      }
       // Decode the formula's cached result so we can PRESERVE it on the
       // cell even when the Ptg stream cannot be decoded to a formula.
       Value cached = Value::blank();
@@ -552,6 +556,15 @@ Expected<RecordDisposition, Error> DispatchSheetRecord(const XlsbRecord& rec, Xl
       ByteSpan p = rec.payload;
       if (auto ifmd = read_u32(p); ifmd) {
         state.pending_cell_meta = ifmd.value();
+      }
+      return RecordDisposition::kRegenerated;
+    }
+    case XlsbRecordType::BrtValueMeta: {
+      // The value-metadata index (the rich value) of the next cell; the
+      // record itself is re-derived by the writer.
+      ByteSpan p = rec.payload;
+      if (auto vm = read_u32(p); vm) {
+        state.pending_value_meta = vm.value();
       }
       return RecordDisposition::kRegenerated;
     }
@@ -651,7 +664,8 @@ Expected<SheetDecodeState, Error> DecodeSheetBin(
     const std::vector<PhoneticProperties>& sst_phonetic_props, std::deque<std::string>& text_storage,
     const std::vector<std::string>& sheet_names, const std::vector<XlsbName>& name_table,
     const std::vector<XlsbSheetRange>& sheet_ranges, const XlsbExternalBooks& external_books,
-    std::uint32_t* undecoded_formula_count) {
+    std::uint32_t* undecoded_formula_count, const RichErrorSet* rich_errors,
+    std::vector<DeferredSpillAnchor>* deferred) {
   SheetDecodeState state;
   const FeatureFormulaReadContext feature_ctx{sheet_names, name_table, sheet_ranges, external_books, sheet_index};
   const SheetDecodeInputs inputs{sst_entries, sst_phonetic, sst_phonetic_props, text_storage,           sheet_names,
@@ -703,6 +717,9 @@ Expected<SheetDecodeState, Error> DecodeSheetBin(
   ApplyDecodedRowHeaders(wb.sheet(sheet_index), state.row_headers);
   if (!state.protected_ranges.empty()) {
     write_protected_ranges(wb.sheet(sheet_index).mutable_raw_extensions(), state.protected_ranges);
+  }
+  if (rich_errors != nullptr && deferred != nullptr) {
+    restore_rich_error_cells(wb, sheet_index, state.value_metadata, state.array_anchors, *rich_errors, deferred);
   }
   auto spills = RegisterArraySpills(wb, sheet_index, state.array_anchors);
   if (!spills) {

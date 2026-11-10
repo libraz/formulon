@@ -374,6 +374,7 @@ __all__ = [
     "SparklineInput",
     "SparklineType",
     "Spill",
+    "SpillCause",
     "TableColumn",
     "TableColumnPatch",
     "TableInput",
@@ -1914,6 +1915,18 @@ class CellShift(IntEnum):
     RIGHT = 1
     UP = 2
     LEFT = 3
+
+
+class SpillCause(IntEnum):
+    """What keeps a spill or a PivotTable report from being drawn, a :class:`Spill`'s ``cause``.
+
+    ``OCCUPIED`` covers every obstruction other than a merge. A range running past the sheet edge is
+    ``BEYOND_EDGE`` whatever lies inside the grid; otherwise the first obstruction in row-major order decides.
+    """
+
+    OCCUPIED = 0
+    MERGED = 1
+    BEYOND_EDGE = 2
 
 
 class WorkbookFormat(IntEnum):
@@ -5045,13 +5058,16 @@ class CellNode:
 
 @dataclass(frozen=True)
 class Spill:
-    """Dynamic-array spill region info for a cell, or the range a blocked PivotTable report needs."""
+    """Dynamic-array spill region info for a cell, or the range of a PivotTable report."""
 
     #: ``True`` when the cell is the anchor of a spill refused with ``#SPILL!``, or of a blocked PivotTable report;
-    #: the region is then the rectangle it attempted.
+    #: the region is then the rectangle it attempted. ``False`` for a drawn spill or report.
     blocked: bool
+    #: What blocks the region; ``None`` when ``blocked`` is ``False``.
+    cause: Optional[SpillCause]
     #: The region including its anchor, whose top-left cell holds the dynamic-array formula or is a PivotTable's
-    #: anchor; a blocked report's region also takes the page-field rows above its anchor.
+    #: anchor; a report's region also takes the page-field rows above its anchor. A blocked region running past the
+    #: sheet edge is clipped to the grid.
     range: CellRect
 
 
@@ -8222,6 +8238,12 @@ def _cell_rect_fields(r: CellRect) -> Dict[str, int]:
 
 def _cell_rect_from(d: Dict[str, int]) -> CellRect:
     return CellRect(d["first_row"], d["first_col"], d["last_row"], d["last_col"])
+
+
+def _spill_from(d: Dict[str, Any]) -> Spill:
+    return Spill(
+        blocked=bool(d["blocked"]), cause=_enum_or_none(SpillCause, d["cause"]), range=_cell_rect_from(d["rect"])
+    )
 
 
 def _hyperlink_from(d: Dict[str, Any]) -> Hyperlink:

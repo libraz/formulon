@@ -25,6 +25,7 @@ from formulon import (
     PivotFilterKind,
     PivotInput,
     PivotWorksheetSourceInput,
+    Spill,
     StatusCode,
     TableInput,
     Workbook,
@@ -235,7 +236,7 @@ class PivotPlacementTests(unittest.TestCase):
         pivot.set_anchor(target)
         rect = pivot.get_layout().range
         self.assertEqual((rect.first_row, rect.first_col), first)
-        self.assertIsNone(pivot.get_spill())
+        self.assertEqual(pivot.get_spill(), Spill(blocked=False, cause=None, range=rect))
         self.assertEqual(wb.sheet(0).get_value(first[0] + 1, first[1]), "East")
         self.assertIsNone(wb.sheet(0).get_value("G2"))
 

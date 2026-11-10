@@ -46,6 +46,7 @@
 #include "eval/array_alloc.h"
 #include "eval/array_context.h"
 #include "eval/coerce.h"
+#include "eval/error_origin.h"
 #include "eval/eval_context.h"
 #include "eval/lazy_impls.h"
 #include "eval/regex_program.h"
@@ -328,6 +329,7 @@ Value substitute_global(const CompiledPattern& program, std::string_view subject
     return Value::error(kMatchLimitError);
   }
   if (end == ScanEnd::kError) {
+    note_unknown_error_origin();
     return Value::error(kResourceError);
   }
   out.append(subject.substr(copied));
@@ -543,6 +545,7 @@ Value eval_regexextract_lazy(const parser::AstNode& call, Arena& arena, const Fu
 
   // Array broadcast (only meaningful for scalar-yielding modes).
   if (mode_yields_array) {
+    note_unknown_error_origin();
     return Value::error(ErrorCode::Calc);
   }
 

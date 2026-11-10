@@ -129,6 +129,7 @@ _FACADE_FILES = frozenset(
         "workbook.cpp",
         "workbook_internal.h",
         "workbook_defined_names.cpp",
+        "workbook_error_detail.cpp",
         "workbook_external_links.cpp",
         "workbook_merges_arrays.cpp",
         "workbook_formula_index.h",

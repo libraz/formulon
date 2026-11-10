@@ -828,6 +828,7 @@ struct CellScratch {
   std::string c_attr_s;
   std::string c_attr_cm;
   std::string c_attr_ph;
+  std::string c_attr_vm;
   std::string f_attr_t;
   std::string f_attr_si;
   std::string f_attr_ref;
@@ -960,7 +961,7 @@ bool ScanCell(const char* begin, const char* end, const char** p, const TagHeade
   // Decode r=, t=, s=. Attributes are routed through `AttrOfDecoded` so
   // entity-encoded values (e.g. `r="A&amp;1"`) decode to canonical text
   // before the A1 / type-token validation runs.
-  static constexpr std::string_view kCellAttrNames[] = {"r", "t", "s", "cm", "ph"};
+  static constexpr std::string_view kCellAttrNames[] = {"r", "t", "s", "cm", "ph", "vm"};
   std::string_view cell_attrs[std::size(kCellAttrNames)];
   AttrsOfRaw(cell_header, kCellAttrNames, cell_attrs);
   const std::string_view r_attr = DecodeAttr(cell_attrs[0], &scratch->c_attr_r);
@@ -982,6 +983,7 @@ bool ScanCell(const char* begin, const char* end, const char** p, const TagHeade
   record->s = DecodeAttr(cell_attrs[2], &scratch->c_attr_s);
   record->cm = DecodeAttr(cell_attrs[3], &scratch->c_attr_cm);
   record->ph = DecodeAttr(cell_attrs[4], &scratch->c_attr_ph);
+  record->vm = DecodeAttr(cell_attrs[5], &scratch->c_attr_vm);
   record->formula = std::string_view{};
   record->f_t = std::string_view{};
   record->has_formula = false;

@@ -17,6 +17,7 @@
 #include "eval/array_alloc.h"
 #include "eval/coerce.h"
 #include "eval/collation.h"
+#include "eval/error_origin.h"
 #include "eval/eval_context.h"
 #include "eval/eval_profile_scope.h"
 #include "eval/external_ref.h"
@@ -362,6 +363,7 @@ Value replace_array_errors(const parser::AstNode& call, const Value& primary, bo
   if (!any_caught) {
     return primary;
   }
+  forget_error_origin();
   const Value fallback = eval_node(call.as_call_arg(1), arena, registry, ctx);
   Value fallback_slot = Value::blank();
   const ArrayView fv = as_array_view(fallback, &fallback_slot);
@@ -400,6 +402,8 @@ Value eval_error_handler_lazy(const parser::AstNode& call, bool na_only, Arena& 
   if (!is_caught_error(primary, na_only)) {
     return primary;
   }
+  // The caught error's origin goes with it; the fallback notes its own.
+  forget_error_origin();
   return eval_node(call.as_call_arg(1), arena, registry, ctx);
 }
 

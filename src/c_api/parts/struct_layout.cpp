@@ -266,9 +266,10 @@ static_assert(offsetof(fm_pivot_grand_totals_patch_t, rows) == 8U);
 static_assert(offsetof(fm_pivot_grand_totals_patch_t, columns_op) == 12U);
 static_assert(offsetof(fm_pivot_grand_totals_patch_t, columns) == 16U);
 
-static_assert(sizeof(fm_spill_info_t) == 24U);
+static_assert(sizeof(fm_spill_info_t) == 28U);
 static_assert(offsetof(fm_spill_info_t, rect) == 4U);
 static_assert(offsetof(fm_spill_info_t, blocked) == 20U);
+static_assert(offsetof(fm_spill_info_t, cause) == 24U);
 
 static_assert(sizeof(fm_sheet_view_info_t) == 80U);
 static_assert(offsetof(fm_sheet_view_info_t, zoom_pct) == 4U);

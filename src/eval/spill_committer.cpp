@@ -10,6 +10,7 @@
 #include <utility>
 #include <vector>
 
+#include "eval/error_origin.h"
 #include "sheet.h"
 #include "utils/error.h"
 #include "value.h"
@@ -44,16 +45,17 @@ Value SpillCommitter::commit(Value v) const {
         return commit_cells(block->rows, block->cols, std::move(cells));
       }
       // One scalar is not a producer giving up its array shape: a `#SPILL!`
-      // means a producer measured its own footprint, refused it, and
-      // recorded the rectangle so the anchor can be retried once whatever
-      // occupies it goes away (`Sheet::reject_spill_footprint`). That record
-      // lives in the same table `clear_spill` empties, so it is captured
-      // here and re-applied below — the stale region still goes away and
-      // the release notification still fires, but the anchor keeps the
-      // rectangle it must be retried from. Only a `#SPILL!` pays for the
-      // lookup; every other scalar takes the original path untouched.
+      // from a refusal made at this anchor means a producer measured its own
+      // footprint, refused it, and recorded the rectangle so the anchor can
+      // be retried once whatever occupies it goes away
+      // (`Sheet::reject_spill_footprint`). That record lives in the same
+      // table `clear_spill` empties, so it is captured here and re-applied
+      // below — the stale region still goes away and the release
+      // notification still fires, but the anchor keeps the rectangle it must
+      // be retried from. A `#SPILL!` that arrived from elsewhere drops a
+      // stale record instead. Every other scalar takes the original path.
       std::optional<BlockedSpillFootprint> refused;
-      if (v.is_error() && v.as_error() == ErrorCode::Spill) {
+      if (v.is_error() && v.as_error() == ErrorCode::Spill && error_origin() == ErrorOrigin::kRefusedHere) {
         for (const BlockedSpillFootprint& blocked : sheet_->blocked_spill_footprints()) {
           if (blocked.anchor_row == row_ && blocked.anchor_col == col_) {
             refused = blocked;
@@ -64,7 +66,7 @@ Value SpillCommitter::commit(Value v) const {
       notify_release();
       sheet_->clear_spill(row_, col_);
       if (refused.has_value()) {
-        sheet_->reject_spill_footprint(row_, col_, refused->rows, refused->cols);
+        sheet_->reject_spill_footprint(row_, col_, refused->rows, refused->cols, refused->cause);
       }
     }
     return v;
@@ -93,10 +95,11 @@ Value SpillCommitter::commit(Value v) const {
   // and `kMaxCols - col_` are >= 1 and the comparison cannot wrap — clear
   // any region already anchored here, and surface the deterministic
   // `#SPILL!` Excel returns when a dynamic array runs off the sheet.
+  // The refusal is recorded with the needed rectangle, as an in-grid one is.
   if (rows > Sheet::kMaxRows - row_ || cols > Sheet::kMaxCols - col_) {
     notify_release();
     sheet_->clear_spill(row_, col_);
-    sheet_->set_cell_cached_value(row_, col_, Value::error(ErrorCode::Spill));
+    sheet_->reject_spill_footprint(row_, col_, rows, cols, SpillCause::kBeyondEdge);
     return Value::error(ErrorCode::Spill);
   }
 

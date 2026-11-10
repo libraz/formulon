@@ -381,6 +381,11 @@ bool find_lazy_arity(std::string_view name, std::uint32_t* min_arity, std::uint3
   return true;
 }
 
+std::string_view find_lazy_canonical_name(std::string_view name) noexcept {
+  const LazyEntry* entry = find_lazy_entry(name);
+  return entry != nullptr ? std::string_view(entry->name) : std::string_view();
+}
+
 const char* const* lazy_table_names() {
   // Storage has static duration and is initialized exactly once
   // (C++11 magic statics); the lambda builds the nullptr-terminated view

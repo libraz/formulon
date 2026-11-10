@@ -81,6 +81,7 @@ enum class XlsbRecordType : std::uint16_t {
   BrtFmlaError = 11,   ///< Formula cell with error result.
   BrtSSTItem = 19,     ///< One entry of the shared-string table.
   BrtCellMeta = 49,    ///< Cell metadata index (for dynamic-array anchors).
+  BrtValueMeta = 50,   ///< Value metadata index (for rich-value errors); precedes a cell record.
   BrtColInfo = 60,     ///< Column width / visibility / outline span.
   BrtMergeCell = 176,  ///< One merged-cell rectangle.
   BrtHLink = 494,      ///< One hyperlink rectangle plus relationship/text fields.

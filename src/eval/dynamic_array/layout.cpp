@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "eval/dynamic_array/common.h"
+#include "eval/error_origin.h"
 #include "eval/lazy_impls.h"
 #include "eval/omitted_arg.h"
 #include "eval/range_args.h"
@@ -155,6 +156,7 @@ Value eval_to_vector(const parser::AstNode& call, Arena& arena, const FunctionRe
   kept.reserve(reserve_or.value());
   collect_tocol_torow_cells(*array, ignore_mask, scan_by_column, kept);
   if (kept.empty()) {
+    note_unknown_error_origin();
     return Value::error(ErrorCode::Calc);
   }
   ArrayValue* out = dynamic_array::materialise_vector(std::move(kept), as_column, arena);
@@ -183,6 +185,7 @@ Value eval_wrap(const parser::AstNode& call, Arena& arena, const FunctionRegistr
   // `cells` (since rows or cols == 1). Total cell count is rows * cols.
   const std::size_t count = static_cast<std::size_t>(vector_arr->rows) * static_cast<std::size_t>(vector_arr->cols);
   if (count == 0U) {
+    note_unknown_error_origin();
     return Value::error(ErrorCode::Calc);
   }
   // Excel does not extend the final shape beyond the source length when the

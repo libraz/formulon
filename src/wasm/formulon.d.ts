@@ -2840,14 +2840,28 @@ export interface ArrayFormulaInput {
   formula: string;
 }
 
+/** What keeps a spill or a PivotTable report from being drawn, a {@link Spill}'s `cause`. `Occupied` covers every
+ *  obstruction other than a merge. A range running past the sheet edge is `BeyondEdge` whatever lies inside the
+ *  grid; otherwise the first obstruction in row-major order decides. */
+export const SpillCause: Readonly<{
+  Occupied: 0;
+  Merged: 1;
+  BeyondEdge: 2;
+}>;
+/** Union of the {@link SpillCause} ordinals. */
+export type SpillCause = 0 | 1 | 2;
+
 /** Spill region info returned by `Sheet.getSpill(row, col)`, which returns `null` when the cell is neither
- *  part of a spill nor a blocked anchor, and by `Pivot.getSpill()`. */
+ *  part of a spill, a blocked anchor nor a PivotTable report's anchor, and by `Pivot.getSpill()`. */
 export interface Spill {
   /** `true` when the cell is the anchor of a spill refused with `#SPILL!`, or of a blocked PivotTable report; the
-   *  region is then the rectangle it attempted. */
+   *  region is then the rectangle it attempted. `false` for a drawn spill or report. */
   readonly blocked: boolean;
+  /** What blocks the region; `null` when `blocked` is `false`. */
+  readonly cause: SpillCause | null;
   /** The region including its anchor, whose top-left cell holds the dynamic-array formula or is a PivotTable's
-   *  anchor; a blocked report's region also takes the page-field rows above its anchor. */
+   *  anchor; a report's region also takes the page-field rows above its anchor. A blocked region running past the
+   *  sheet edge is clipped to the grid. */
   readonly range: CellRect;
 }
 
@@ -7981,10 +7995,10 @@ export interface Sheet {
 
   /** Returns dynamic-array spill info for `(row, col)`.
    *  When the cell is part of a spill region (anchor or phantom), `range` is the region; the per-cell values
-   *  are read via `getValue`, which is already spill-aware. A blocked anchor, of a formula or of a PivotTable
-   *  report (see {@link Pivot}), reads `blocked: true` with the rectangle it attempted, when that fits inside the
-   *  grid. `null` when the cell is neither part of a region nor a blocked anchor, and on every cell of a legacy
-   *  array block, which is not a spill. */
+   *  are read via `getValue`, which is already spill-aware. A blocked formula anchor reads `blocked: true` with
+   *  the rectangle it attempted, clipped to the grid, and its `cause`. A PivotTable report's anchor (see
+   *  {@link Pivot}) reads what `Pivot.getSpill()` returns; the report's other cells are ordinary cells. `null`
+   *  when the cell is none of these, and on every cell of a legacy array block, which is not a spill. */
   getSpill(row: number, col: number): Spill | null;
   /** `getSpill` at the A1 address `a1`. */
   getSpill(a1: string): Spill | null;
@@ -8447,11 +8461,14 @@ export interface Pivot {
    *  flag. It does not re-read the cache's source range. A report whose range is occupied or runs past the sheet
    *  edge is blocked instead (see {@link Pivot}). */
   project(): void;
-  /** Reads the range a blocked report needs, as `{ blocked: true, range }`, the record `Sheet.getSpill` returns at
-   *  its anchor. `null` while the report is drawn or was never drawn, and for a report blocked past the sheet
-   *  edge. A blocked report loaded without its cache records reports its anchor alone; one whose cache changed
-   *  since it was blocked reports the last range it needed. Pending cells are calculated first, which renders a
-   *  report whose range came free. */
+  /** Reads the report's range, the record `Sheet.getSpill` returns at its anchor. A drawn report reads
+   *  `blocked: false` with the range it was last drawn over, also while a cache change has left it pending; a
+   *  blocked report reads `blocked: true` with the range it needs, clipped to the grid, and its `cause`. A drawn
+   *  report read from a file and not laid out since reads the location it was read with; `null` for a report
+   *  neither drawn nor read from a file. A blocked report loaded from a file reports the range the file recorded,
+   *  the anchor alone when it records none, until a recalc lays it out again; one whose cache has no records keeps
+   *  it, and one whose cache changed since it was blocked reports the last range it needed. Pending cells are
+   *  calculated first, which renders a report whose range came free. */
   getSpill(): Spill | null;
   /** Writes the records behind data cell (`row`, `col`) onto a new sheet, inserted before the pivot's sheet, and
    *  activates it. Returns the new sheet's handle; the pivot's sheet and the ones after it move up one place. */
@@ -8904,6 +8921,8 @@ export interface Formulon {
   WorkbookFormat: typeof WorkbookFormat;
   /** The `CellShift` enum. */
   CellShift: typeof CellShift;
+  /** The `SpillCause` enum. */
+  SpillCause: typeof SpillCause;
   /** The `PivotCellKind` enum. */
   PivotCellKind: typeof PivotCellKind;
   /** The `PivotAxis` enum. */

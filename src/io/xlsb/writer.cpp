@@ -33,6 +33,7 @@
 #include "io/ooxml/zip_part_writer.h"
 #include "io/ooxml_defs.h"
 #include "io/passthrough_part_index.h"
+#include "io/rich_value_errors.h"
 #include "io/writer_common.h"
 #include "io/xlsb/drawing_record.h"
 #include "io/xlsb/emission_plan.h"
@@ -199,25 +200,39 @@ std::string FreshRelId(const std::unordered_set<std::string>& taken) {
   }
 }
 
-// Whether a dynamic-array metadata part is needed, and which cell-metadata
-// entry a spill anchor's `BrtCellMeta` record must name.
+// The metadata part the package ships: whether it is generated, which
+// cell-metadata entry a spill anchor's `BrtCellMeta` record must name, and
+// the rich errors the cells' `BrtValueMeta` records name.
 //
 // `ifmd` is 1-based, and 0 means no anchor may emit a `BrtCellMeta` record at
 // all: either the workbook has no spill anchors, or the metadata part that
 // ships is a retained passthrough whose dynamic-array entry could not be
 // identified. Both the index and the part are decided here, once, so the
 // worksheet bodies and the package can never disagree about which entry a
-// cell names.
-struct DynamicArrayMetadataPlan {
+// cell names. A retained part carries a numbering of its own, so no rich
+// error is generated over it.
+struct MetadataPlan {
   bool generate_part = false;
+  bool dynamic_arrays = false;
   std::uint32_t ifmd = 0;
+  RichErrorTable rich;
 };
 
-DynamicArrayMetadataPlan BuildDynamicArrayMetadataPlan(const Workbook& wb) {
-  DynamicArrayMetadataPlan plan;
-  if (!has_dynamic_array_formula(wb)) {
-    return plan;
+// True when the package carries the pivot table part that
+// `sheet.pivot_tables()[index]` was loaded from.
+bool PivotPartIsWritten(const Workbook& wb, std::size_t sheet, std::size_t index) {
+  for (const PassthroughPart& part : wb.passthrough_parts()) {
+    if (part.retained_origin == PassthroughPart::RetainedOrigin::kPivotTable && part.origin_sheet_index == sheet &&
+        part.origin_pivot_index == index) {
+      return true;
+    }
   }
+  return false;
+}
+
+MetadataPlan BuildMetadataPlan(const Workbook& wb) {
+  MetadataPlan plan;
+  plan.dynamic_arrays = has_dynamic_array_formula(wb);
   // The first passthrough part wins the path; `BuildEmissionPlan` drops any
   // later duplicate, so that is the one whose numbering ships.
   const PassthroughPart* retained = nullptr;
@@ -228,14 +243,18 @@ DynamicArrayMetadataPlan BuildDynamicArrayMetadataPlan(const Workbook& wb) {
     }
   }
   if (retained == nullptr) {
-    plan.generate_part = true;
-    plan.ifmd = 1U;  // The generated part declares exactly one entry.
+    // A blocked pivot's anchor is written plain unless its pivot part is: only a part kept from an XLSB source says so.
+    plan.rich = build_rich_error_table(wb, PivotPartIsWritten);
+    plan.generate_part = plan.dynamic_arrays || !plan.rich.empty();
+    plan.ifmd = plan.dynamic_arrays ? 1U : 0U;  // The generated part's XLDAPR entry comes first.
     return plan;
   }
-  // A retained part carries its own numbering, and its first entry is not
-  // necessarily the dynamic-array one — it may hold rich-value or
-  // cube-function metadata instead, or no dynamic-array type at all.
-  plan.ifmd = find_dynamic_array_cell_meta_index(ByteSpan{retained->bytes.data(), retained->bytes.size()});
+  if (plan.dynamic_arrays) {
+    // A retained part carries its own numbering, and its first entry is not
+    // necessarily the dynamic-array one — it may hold rich-value or
+    // cube-function metadata instead, or no dynamic-array type at all.
+    plan.ifmd = find_dynamic_array_cell_meta_index(ByteSpan{retained->bytes.data(), retained->bytes.size()});
+  }
   return plan;
 }
 
@@ -278,7 +297,7 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
   const SheetRangeTable& sheet_ranges = sheet_ranges_or.value();
 
   SstBuilder sst;
-  const DynamicArrayMetadataPlan dynamic_array = BuildDynamicArrayMetadataPlan(workbook);
+  const MetadataPlan metadata = BuildMetadataPlan(workbook);
   WriteDiagnostics diagnostics;
   std::uint32_t downgraded_formula_count = 0;
   diagnostics.deferred_feature_count = ReportDeferredSheetFeatures(workbook);
@@ -325,10 +344,10 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
       sheet_drawing_rids[i] = FreshRelId(taken_rel_ids);
     }
     std::uint32_t sparklines_lost = 0;
-    auto sheet_body_or =
-        emit_sheet(workbook.sheet(i), sst, sheet_names, sheet_ranges, sheet_name_table, sheet_hyperlink_rids[i],
-                   &downgraded_formula_count, dynamic_array.ifmd, name_shapes(workbook, i), table_rel_ids, views,
-                   &sparklines_lost, sheet_drawing_rids[i], sheet_owns_drawing[i]);
+    auto sheet_body_or = emit_sheet(
+        workbook.sheet(i), sst, sheet_names, sheet_ranges, sheet_name_table, sheet_hyperlink_rids[i],
+        &downgraded_formula_count, metadata.ifmd, name_shapes(workbook, i), table_rel_ids, views, &sparklines_lost,
+        sheet_drawing_rids[i], sheet_owns_drawing[i], metadata.rich.empty() ? nullptr : &metadata.rich.vm_by_sheet[i]);
     ReportDeferred(&diagnostics.deferred_feature_count, "sparklines", sparklines_lost, i);
     if (!sheet_body_or) {
       return std::move(sheet_body_or.error());
@@ -337,8 +356,8 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
   }
   const bool emit_sst_part = !sst.empty();
 
-  auto plan_or =
-      BuildEmissionPlan(workbook, emit_sst_part, dynamic_array.generate_part, sheet_ranges.links.size(), &diagnostics);
+  auto plan_or = BuildEmissionPlan(workbook, emit_sst_part, metadata.generate_part, !metadata.rich.empty(),
+                                   sheet_ranges.links.size(), &diagnostics);
   if (!plan_or) {
     return std::move(plan_or.error());
   }
@@ -386,11 +405,19 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
     const std::vector<std::uint8_t> styles_bytes = write_styles_bin(workbook.styles());
     RETURN_IF_ERROR(AddPartBytes(writer.get(), kStylesBinPath, styles_bytes));
   }
-  // 4c. xl/metadata.bin for dynamic-array spill anchors. The worksheet
-  // BrtCellMeta records and workbook relationship are emitted in lockstep.
-  if (plan.has_generated_dynamic_metadata) {
-    const std::vector<std::uint8_t> metadata_bytes = build_dynamic_array_metadata_bin();
+  // 4c. xl/metadata.bin for dynamic-array spill anchors and rich errors, with
+  // the rich values themselves. The worksheet BrtCellMeta / BrtValueMeta
+  // records and workbook relationships are emitted in lockstep.
+  if (plan.has_generated_metadata) {
+    const std::vector<std::uint8_t> metadata_bytes =
+        build_metadata_bin(metadata.dynamic_arrays, metadata.rich.values.size());
     RETURN_IF_ERROR(AddPartBytes(writer.get(), kMetadataBinPath, metadata_bytes));
+  }
+  if (plan.has_generated_rich_values) {
+    RETURN_IF_ERROR(AddPart(writer.get(), kRdRichValuePartPath, serialize_rdrichvalue(metadata.rich)));
+    RETURN_IF_ERROR(
+        AddPart(writer.get(), kRdRichValueStructurePartPath, serialize_rdrichvaluestructure(metadata.rich)));
+    RETURN_IF_ERROR(AddPart(writer.get(), kRdRichValueTypesPartPath, std::string(rich_value_types_xml())));
   }
   // 5. xl/worksheets/sheet<N>.bin, plus its rels when the sheet's retained
   // records reference other parts (hyperlinks, drawings, table definitions).

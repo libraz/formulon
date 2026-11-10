@@ -255,6 +255,7 @@ void RecalcEngine::commit_unresolved_cycle_locked(const SerialEvalPass& pass,
       Sheet& sheet = pass.workbook.sheet(c.sheet_id);
       SpillCommitter committer(&sheet, c.row, c.col, pass.release_callback, pass.release_user_data);
       sheet.set_cell_cached_value(c.row, c.col, committer.commit(unresolved));
+      sheet.clear_error_detail(c.row, c.col);
     }
     pass.dynamic.log().note_commit(c, ordinal);
     ++pass.stats.cycle_cells;
@@ -289,13 +290,13 @@ Expected<void, Error> RecalcEngine::evaluate_formula_cell_locked(const SerialEva
   opts.spill_release_user_data = pass.release_user_data;
   const std::uint64_t ordinal = pass.dynamic.next_ordinal();
   pass.dynamic.log().observe(cell, ordinal, opts, &sheet);
-  Value result =
+  const CellResult result =
       evaluate_cell_for_recalc(pass.workbook, sheet, staged, cell.row, cell.col, pass.registry, *arena_, opts);
   pass.dynamic.log().end();
   if (arena_->exhausted()) {
     return make_error(FormulonErrorCode::kOutOfMemory, pass.oom_message);
   }
-  sheet.set_cell_cached_value(cell.row, cell.col, result);
+  commit_cell_result(sheet, cell.row, cell.col, result);
   pass.dynamic.log().note_commit(cell, ordinal);
   ++pass.stats.cells_evaluated;
   return Expected<void, Error>::Ok();

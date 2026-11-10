@@ -9287,6 +9287,22 @@ FM_API fm_status_t fm_sheet_remove_pivot_filter(fm_workbook_t* wb, size_t sheet_
 /* -------------------------------------------------------------------------- */
 
 /**
+ * @brief What keeps a spill or a PivotTable report from being drawn, the
+ *        `cause` of an `fm_spill_info_t`.
+ *
+ * `OCCUPIED` covers every obstruction other than a merge: a value, a formula,
+ * another spill, a table, a PivotTable, a legacy array block or a data table.
+ * Of several obstructions the first in row-major order decides, and a range
+ * running past the sheet edge is `BEYOND_EDGE` whatever lies inside the grid.
+ */
+typedef enum {
+  FM_SPILL_CAUSE_ABSENT = -1,
+  FM_SPILL_CAUSE_OCCUPIED = 0,
+  FM_SPILL_CAUSE_MERGED = 1,
+  FM_SPILL_CAUSE_BEYOND_EDGE = 2,
+} fm_spill_cause_t;
+
+/**
  * @brief Result shape for `fm_sheet_get_spill` and `fm_sheet_get_pivot_spill`.
  *
  * Use `fm_sheet_get_value(wb, sheet_index, rect.first_row + r, rect.first_col + c, &v)`
@@ -9296,20 +9312,26 @@ FM_API fm_status_t fm_sheet_remove_pivot_filter(fm_workbook_t* wb, size_t sheet_
 typedef struct {
   uint32_t struct_size;
   /** The region including its anchor, whose top-left cell holds the dynamic-array formula or is a PivotTable's anchor;
-   *  a blocked report's region also takes the page-field rows above its anchor. */
+   *  a PivotTable report's region also takes the page-field rows above its anchor. A blocked region running past the
+   *  sheet edge is clipped to the grid. */
   fm_cell_rect_t rect;
-  /** `1` when the cell is the anchor of a spill refused with `#SPILL!`, or of a blocked PivotTable report, whose
-   *  attempted rectangle fits inside the grid; the region is then that rectangle. `0` when the cell is part of a
-   *  registered spill region. Only the anchor reports a blocked spill; cells inside the attempted rectangle read
+  /** `1` when the cell is the anchor of a spill refused with `#SPILL!`, or of a blocked PivotTable report; the region
+   *  is then the rectangle it attempted. `0` when the cell is part of a registered spill region or is a drawn report's
+   *  anchor. Only the anchor reports a blocked spill; cells inside the attempted rectangle read
    *  `*out_present == 0`. */
   int32_t blocked;
+  /** What blocks the region, an `fm_spill_cause_t`; `FM_SPILL_CAUSE_ABSENT` when `blocked` is `0` and when nothing is
+   *  reported. */
+  int32_t cause;
 } fm_spill_info_t;
 
 /**
  * @brief Reads the spill region at `(sheet, row, col)`. `*out_present` is `1`
  *        and `*out` filled when the cell is the anchor or a phantom of a
- *        region, or a blocked anchor (see `blocked`); otherwise `0` and
- *        `*out` zeroed (still `FM_STATUS_OK` (0)).
+ *        region, a blocked anchor (see `blocked`), or a PivotTable report's
+ *        anchor, which reports what `fm_sheet_get_pivot_spill` does; otherwise
+ *        `0` and `*out` zeroed (still `FM_STATUS_OK` (0)). The other cells of
+ *        a drawn report are ordinary cells and read `0`.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when any pointer argument is `NULL`;
@@ -9319,12 +9341,17 @@ FM_API fm_status_t fm_sheet_get_spill(const fm_workbook_t* wb, size_t sheet_inde
                                       int32_t* out_present, fm_spill_info_t* out);
 
 /**
- * @brief Reads the range a blocked PivotTable report needs (Pivot tables,
- *        above). `*out_present` is `1` and `*out` filled, `blocked` `1`, while
- *        the report is blocked and that range fits inside the grid; otherwise
- *        `0` and `*out` zeroed (still `FM_STATUS_OK` (0)), for a drawn report,
- *        one never drawn and one blocked past the sheet edge. A blocked report
- *        loaded without its cache records reports its anchor alone; one whose
+ * @brief Reads the range of a PivotTable report (Pivot tables, above).
+ *        `*out_present` is `1` and `*out` filled for a drawn report, with the
+ *        range it was last drawn over (also while a cache change has left it
+ *        pending) and `blocked` `0`, and for a blocked report, with the range
+ *        it needs clipped to the grid, `blocked` `1` and the `cause`. A drawn
+ *        report read from a file and not laid out since reports the location
+ *        it was read with. Otherwise `0` and `*out` zeroed (still
+ *        `FM_STATUS_OK` (0)), for a report neither drawn nor read from a file.
+ *        A blocked report loaded from a file reports the range the file
+ *        recorded, the anchor alone when it records none, until a recalc lays
+ *        it out again; one whose cache has no records keeps it, and one whose
  *        cache changed since it was blocked reports the last range it needed.
  *        Pending cells are calculated first, which renders a report whose
  *        range came free.

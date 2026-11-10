@@ -27,6 +27,7 @@
 #include "eval/builtins/numeric_helpers.h"
 #include "eval/builtins/registration_helpers.h"
 #include "eval/coerce.h"
+#include "eval/error_origin.h"
 #include "eval/function_registry.h"
 #include "eval/rng.h"
 #include "sheet.h"
@@ -53,6 +54,7 @@ Expected<GridShape, ErrorCode> validate_grid_shape(double rows_d, double cols_d,
   const double rows_t = std::trunc(snap_near_integer(rows_d));
   const double cols_t = std::trunc(snap_near_integer(cols_d));
   if (zero_is_calc && (rows_t == 0.0 || cols_t == 0.0)) {
+    note_unknown_error_origin();
     return ErrorCode::Calc;
   }
   if (!(rows_t > 0.0) || !(cols_t > 0.0)) {

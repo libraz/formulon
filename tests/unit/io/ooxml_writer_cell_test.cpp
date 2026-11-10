@@ -472,9 +472,9 @@ TEST(BuildSheetDataXml, DynamicArrayFormulaKeepsItsFormWithoutSpilling) {
 }
 
 TEST(BuildSheetDataXml, NewerErrorsAreStoredAsTheirLegacyFallback) {
-  // On Excel 365: it writes a cached #SPILL! or
-  // #CALC! as <v>#VALUE!</v> (the real error lives in a rich value this
-  // writer does not produce) and #GETTING_DATA as <v>#N/A</v>.
+  // Excel 365 caches #SPILL! and #CALC! as <v>#VALUE!</v>, the real error
+  // living in the rich value the cell's `vm=` names, and #GETTING_DATA as
+  // <v>#N/A</v>. Without a rich value the cell is the plain #VALUE!.
   Sheet s("Sheet1");
   s.set_cell_value(0U, 0U, Value::error(ErrorCode::Calc));
   s.set_cell_formula(1U, 0U, "=A1:A2");
@@ -486,6 +486,29 @@ TEST(BuildSheetDataXml, NewerErrorsAreStoredAsTheirLegacyFallback) {
   EXPECT_NE(xml.find("<c r=\"A3\" t=\"e\"><v>#N/A</v></c>"), std::string::npos) << xml;
   EXPECT_EQ(xml.find("#CALC!"), std::string::npos) << xml;
   EXPECT_EQ(xml.find("#SPILL!"), std::string::npos) << xml;
+
+  const RichErrorVmMap vm = {{rich_error_cell_key(0U, 0U), 2U}, {rich_error_cell_key(1U, 0U), 1U}};
+  std::string rich;
+  AppendSheetDataXml(rich, s, nullptr, 0U, xlsb::NameShapes(), nullptr, &vm);
+  EXPECT_NE(rich.find("<c r=\"A1\" t=\"e\" vm=\"2\"><v>#VALUE!</v></c>"), std::string::npos) << rich;
+  EXPECT_NE(rich.find("<c r=\"A2\" t=\"e\" vm=\"1\"><f>A1:A2</f><v>#VALUE!</v></c>"), std::string::npos) << rich;
+  EXPECT_NE(rich.find("<c r=\"A3\" t=\"e\"><v>#N/A</v></c>"), std::string::npos) << rich;
+}
+
+// A rich error's `vm=` follows Excel's attribute order, `s t cm vm`, and only
+// an error cell carries one.
+TEST(BuildSheetDataXml, RichErrorValueMetadataFollowsCellMetadata) {
+  Sheet s("Sheet1");
+  s.set_cell_formula(0U, 0U, "=SEQUENCE(3)");
+  s.set_cell_dynamic_array(0U, 0U, true);
+  s.set_cell_cached_value(0U, 0U, Value::error(ErrorCode::Spill));
+  s.set_cell_xf_index(0U, 0U, 3U);
+  s.set_cell_value(0U, 1U, Value::number(1.0));
+  const RichErrorVmMap vm = {{rich_error_cell_key(0U, 0U), 4U}, {rich_error_cell_key(0U, 1U), 1U}};
+  std::string xml;
+  AppendSheetDataXml(xml, s, nullptr, 1U, xlsb::NameShapes(), nullptr, &vm);
+  EXPECT_NE(xml.find("<c r=\"A1\" s=\"3\" t=\"e\" cm=\"1\" vm=\"4\"><f t=\"array\""), std::string::npos) << xml;
+  EXPECT_NE(xml.find("<c r=\"B1\"><v>1</v></c>"), std::string::npos) << xml;
 }
 
 // Literal cell bodies used to be written twice — once by the helper and

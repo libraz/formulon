@@ -31,6 +31,11 @@ using namespace detail;
 
 namespace {
 
+// Page fields per line of the page-field block: `pageWrap` of them, or all on one line when it is 0.
+std::size_t page_line_length(const PivotTable& table, std::size_t page_count) {
+  return table.page_wrap() == 0 ? page_count : std::min<std::size_t>(table.page_wrap(), page_count);
+}
+
 Expected<void, Error> validate_result_shape(const PivotTable& table, const PivotResult& result,
                                             std::size_t row_leaf_count, std::size_t col_leaf_count) {
   if (result.values.size() != row_leaf_count) {
@@ -202,12 +207,10 @@ Expected<LayoutPlan, Error> build_layout_plan(const PivotTable& table, const Piv
   // even over a narrower report, because the selection cell has to land
   // somewhere.
   const std::size_t page_count = result.page_selections.size();
-  const std::size_t page_lines =
-      table.page_wrap() == 0 ? page_count : std::min<std::size_t>(table.page_wrap(), page_count);
+  const std::size_t page_lines = page_line_length(table, page_count);
   const std::size_t page_line_count = page_lines == 0 ? 0 : (page_count + page_lines - 1) / page_lines;
-  const std::size_t page_grid_rows = table.page_over_then_down() ? page_line_count : page_lines;
   const std::size_t page_grid_cols = table.page_over_then_down() ? page_lines : page_line_count;
-  const std::size_t page_rows = page_count == 0 ? 0 : page_grid_rows + 1;
+  const std::size_t page_rows = page_block_rows(table, page_count);
   const std::size_t page_cols = page_count == 0 ? 0 : page_grid_cols * (kPageHeaderCols + 1) - 1;
   const std::size_t body_rows = header_rows + row_entries.size() + total_strip_rows;
   const std::size_t body_cols = row_header_cols + data_cols + total_strip_cols;
@@ -298,6 +301,15 @@ Expected<void, Error> append_item_refs(const AxisEntry& entry, const std::vector
 }
 
 }  // namespace
+
+std::uint32_t page_block_rows(const PivotTable& table, std::size_t page_count) {
+  const std::size_t page_lines = page_line_length(table, page_count);
+  if (page_lines == 0) {
+    return 0U;
+  }
+  const std::size_t page_line_count = (page_count + page_lines - 1) / page_lines;
+  return static_cast<std::uint32_t>((table.page_over_then_down() ? page_line_count : page_lines) + 1U);
+}
 
 Expected<PivotCells, Error> layout(const PivotTable& table, const PivotResult& result,
                                    const PivotLayoutOptions& options, PivotLineItems* line_items) {

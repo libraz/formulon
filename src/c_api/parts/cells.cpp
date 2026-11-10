@@ -16,6 +16,7 @@
 #include "c_api/formulon_c.h"
 #include "c_api/parts/cell_range.h"
 #include "c_api/parts/common.h"
+#include "c_api/parts/enum_map.h"
 #include "c_api/parts/pivot_internal.h"
 #include "c_api/parts/struct_v1_sizes.h"
 #include "cell.h"
@@ -36,7 +37,6 @@
 #include "value.h"
 #include "workbook.h"
 
-using formulon::c_api::parts::blocked_pivot_rect;
 using formulon::c_api::parts::cell_range_page_size;
 using formulon::c_api::parts::cell_rect_from_extent;
 using formulon::c_api::parts::check_cell_coord;
@@ -63,11 +63,13 @@ using formulon::c_api::parts::invalid_error_code;
 using formulon::c_api::parts::is_valid_error_code;
 using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::null_field;
+using formulon::c_api::parts::pivot_spill_info;
 using formulon::c_api::parts::publish_scratch;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::set_last_error;
 using formulon::c_api::parts::table_display_name_at;
 using formulon::c_api::parts::TextStore;
+using formulon::c_api::parts::to_c;
 using formulon::c_api::parts::utf16_units_to_code_points;
 using formulon::c_api::parts::value_to_fm;
 using formulon::c_api::parts::with_formula_prefix;
@@ -903,6 +905,7 @@ extern "C" fm_status_t fm_sheet_get_spill(const fm_workbook_t* wb, std::size_t s
   const std::uint32_t struct_size = out->struct_size;
   *out = FM_STRUCT_INIT(fm_spill_info_t);
   out->struct_size = struct_size;
+  out->cause = FM_SPILL_CAUSE_ABSENT;
   *out_present = 0;
   const auto& s = wb->workbook().sheet(sheet_index);
   // A legacy array block is not a spill, whichever of its cells is asked.
@@ -915,27 +918,25 @@ extern "C" fm_status_t fm_sheet_get_spill(const fm_workbook_t* wb, std::size_t s
     region = s.spill_region_covering(row, col);
   }
   if (region == nullptr) {
-    // Only a footprint that fits the grid is reported: an overflowing one is
-    // recorded on some spill paths and not others.
-    const auto blocked = s.blocked_spill_footprint_at(row, col);
-    if (blocked && static_cast<std::uint64_t>(blocked->anchor_row) + blocked->rows <= formulon::Sheet::kMaxRows &&
-        static_cast<std::uint64_t>(blocked->anchor_col) + blocked->cols <= formulon::Sheet::kMaxCols) {
-      out->rect = cell_rect_from_extent(blocked->anchor_row, blocked->anchor_col, blocked->rows, blocked->cols);
+    if (const auto blocked = s.blocked_spill_footprint_at(row, col)) {
+      // A footprint past the edge is clipped to the grid.
+      const std::uint32_t rows = std::min(blocked->rows, formulon::Sheet::kMaxRows - blocked->anchor_row);
+      const std::uint32_t cols = std::min(blocked->cols, formulon::Sheet::kMaxCols - blocked->anchor_col);
+      out->rect = cell_rect_from_extent(blocked->anchor_row, blocked->anchor_col, rows, cols);
       out->blocked = 1;
+      out->cause = to_c(blocked->cause);
       *out_present = 1;
       return 0;
     }
-    // A blocked PivotTable report holds `#SPILL!` at its anchor as a blocked formula does.
+    // A PivotTable report is reported at its anchor only; its other cells are ordinary cells.
     for (const auto& table : s.pivot_tables()) {
       if (table == nullptr || table->anchor_row() != row || table->anchor_col() != col) {
         continue;
       }
-      if (const std::optional<fm_cell_rect_t> needed = blocked_pivot_rect(*table)) {
-        out->rect = *needed;
-        out->blocked = 1;
+      if (pivot_spill_info(*table, out)) {
         *out_present = 1;
-        return 0;
       }
+      return 0;
     }
     return 0;
   }

@@ -361,6 +361,20 @@ std::vector<BlockedSpillFootprint> remap_blocked_spill_footprints(const std::vec
   return mapped;
 }
 
+// The error details of `details` at their cells' coordinates after `edit`; a deleted cell's detail is dropped.
+std::vector<std::pair<CellAddress, CellErrorDetail>> remap_error_details(
+    const std::vector<std::pair<CellAddress, CellErrorDetail>>& details, const StructuralEdit& edit) {
+  std::vector<std::pair<CellAddress, CellErrorDetail>> mapped;
+  mapped.reserve(details.size());
+  for (const auto& [address, error_detail] : details) {
+    const ShiftedCell shift = shift_cell_coords_for_row_col_edit(edit, address.row, address.col);
+    if (shift.kept) {
+      mapped.emplace_back(CellAddress{shift.new_row, shift.new_col}, error_detail);
+    }
+  }
+  return mapped;
+}
+
 // Gives a table the column entries its rewritten `ref` spans: a column delete
 // removes the deleted columns' entries, and an insert inside the table adds
 // entries named from their left neighbour (`detail::add_table_columns_locked`).
@@ -784,6 +798,7 @@ Expected<void, Error> apply_row_col_edit(Workbook& wb, std::size_t sheet_index, 
   }
   Sheet& target = sheets[sheet_index];
   const std::vector<BlockedSpillFootprint> blocked_before = blocked_before_all[sheet_index];
+  const std::vector<std::pair<CellAddress, CellErrorDetail>> details_before = target.error_details();
   // The edit clears committed spills; snapshot their anchors so those formulas are re-dirtied.
   const std::vector<SpillFootprint> committed_before = target.committed_spill_footprints();
   // AutoFilters on the edited sheet, serialized before the move, to detect a
@@ -950,6 +965,9 @@ Expected<void, Error> apply_row_col_edit(Workbook& wb, std::size_t sheet_index, 
                                       }),
                        blocked_mapped.end());
   target.restore_blocked_spill_footprints(std::move(blocked_mapped));
+  if (!details_before.empty()) {
+    target.replace_error_details(remap_error_details(details_before, edit));
+  }
   // Sheet-local row/column edits remap the pending spill-footprint reverse
   // index alongside formula cells.  Dirty the surviving anchors at their new
   // coordinates; the next recalc retries each formula against the moved

@@ -24,6 +24,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <map>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -40,6 +41,7 @@
 #include "parser/parser.h"
 #include "sheet.h"
 #include "utils/arena.h"
+#include "value.h"
 #include "workbook.h"
 
 #ifndef FORMULON_FIXTURES_DIR
@@ -240,6 +242,48 @@ TEST(XlsbPtgClassFixture, EntryMarksMatchExcelAcrossBuiltins) {
       }
     }
     EXPECT_EQ(checked, expected) << file;
+  }
+}
+
+// The fixture's value-metadata records name three rich errors, which a load
+// restores without recalculating: a spill blocked by cells in its way, a
+// `#CALC!` with its subtype, and a spill that runs past the sheet's edge.
+TEST(XlsbPtgClassFixture, RichErrorsExcelSavedAreRestoredOnLoad) {
+  const Workbook wb = LoadFixture(ReadFixture());
+  const Sheet& sheet = wb.sheet(0);
+  const auto expect_error = [&sheet](std::uint32_t row, std::uint32_t col, ErrorCode code) {
+    const Cell* cell = sheet.cell_at(row, col);
+    ASSERT_NE(cell, nullptr) << row;
+    ASSERT_TRUE(cell->cached_value.is_error()) << row;
+    EXPECT_EQ(cell->cached_value.as_error(), code) << row;
+  };
+
+  // E205: {colOffset 0, #SPILL!, rwOffset 4, subType 1}.
+  expect_error(204U, 4U, ErrorCode::Spill);
+  const std::optional<BlockedSpillFootprint> blocked = sheet.blocked_spill_footprint_at(204U, 4U);
+  ASSERT_TRUE(blocked.has_value());
+  EXPECT_EQ(blocked->rows, 5U);
+  EXPECT_EQ(blocked->cols, 1U);
+  EXPECT_EQ(blocked->cause, SpillCause::kOccupied);
+
+  // E274 and E277: {#CALC!, subType 24}.
+  for (const std::uint32_t row : {273U, 276U}) {
+    expect_error(row, 4U, ErrorCode::Calc);
+    const std::optional<CellErrorDetail> detail = sheet.error_detail_at(row, 4U);
+    ASSERT_TRUE(detail.has_value()) << row;
+    EXPECT_EQ(detail->code, ErrorCode::Calc);
+    EXPECT_EQ(detail->shape, CellErrorDetail::Shape::kSubType);
+    EXPECT_EQ(detail->sub_type, 24U);
+  }
+
+  // E421, E424, E430 and E433: {colOffset 0, #SPILL!, rwOffset 0, subType 3}.
+  for (const std::uint32_t row : {420U, 423U, 429U, 432U}) {
+    expect_error(row, 4U, ErrorCode::Spill);
+    const std::optional<BlockedSpillFootprint> edge = sheet.blocked_spill_footprint_at(row, 4U);
+    ASSERT_TRUE(edge.has_value()) << row;
+    EXPECT_EQ(edge->rows, 1U);
+    EXPECT_EQ(edge->cols, 1U);
+    EXPECT_EQ(edge->cause, SpillCause::kBeyondEdge);
   }
 }
 

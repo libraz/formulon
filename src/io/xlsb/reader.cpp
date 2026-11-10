@@ -19,6 +19,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <deque>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -36,6 +37,7 @@
 #include "io/ooxml/rels_walker.h"
 #include "io/ooxml_defs.h"
 #include "io/pivot_table_reader.h"
+#include "io/rich_value_errors.h"
 #include "io/xlsb/drawing_record.h"
 #include "io/xlsb/external_link_reader.h"
 #include "io/xlsb/metadata_bin.h"
@@ -162,6 +164,7 @@ std::optional<std::uint32_t> LoadPivotCacheFor(const ZipReader& zip, Workbook& w
   auto cache_or =
       read_pivot_cache_bin(ByteSpan{def_bytes.data(), def_bytes.size()}, ByteSpan{rec_bytes.data(), rec_bytes.size()});
   if (!cache_or) {
+    StructuredLog("xlsb.pivot.skipped").field("part", def_path).field("reason", cache_or.error().message).warn();
     return std::nullopt;
   }
   const auto cache_id = static_cast<std::uint32_t>(wb.pivot_caches().size());
@@ -287,6 +290,81 @@ XlsbExternalBooks CollectExternalBookTables(const Workbook& wb) {
   return books;
 }
 
+/// Consumes `xl/metadata.bin` and the `xl/richData/` parts into `*set` when
+/// they hold nothing but standard dynamic-array metadata and measured rich
+/// errors; their workbook relationships go with them, and the writer
+/// regenerates the parts. Otherwise every part stays passthrough and false is
+/// returned. No sheet of a binary workbook is kept opaque, so that condition
+/// of the shared consumption rule always holds.
+bool ConsumeRichValueParts(const ZipReader& zip, RichErrorSet* set, std::unordered_set<std::string>& consumed_parts,
+                           std::vector<UnknownRelationship>& unknown_rels) {
+  if (!zip.has_entry(kMetadataBinPath)) {
+    return false;
+  }
+  constexpr std::string_view kExternalLinks = "xl/externalLinks/";
+  std::vector<std::string> parts{std::string(kMetadataBinPath)};
+  for (const std::string& name : zip.list_entries()) {
+    // An external link's cached cells naming a value-metadata entry belong to a set this reader does not own.
+    if (name.compare(0, kExternalLinks.size(), kExternalLinks) == 0 && name.size() > 4U &&
+        name.compare(name.size() - 4U, 4U, ".bin") == 0) {
+      auto link = zip.read_entry(name);
+      if (!link) {
+        return false;
+      }
+      for (ByteSpan cursor{link.value().data(), link.value().size()}; cursor.size > 0U;) {
+        auto record = read_record(cursor);
+        if (!record || record.value().type == static_cast<std::uint16_t>(XlsbRecordType::BrtValueMeta)) {
+          return false;
+        }
+      }
+    }
+    if (name.compare(0, kRichDataDirPrefix.size(), kRichDataDirPrefix) == 0 && name.back() != '/') {
+      if (name != kRdRichValuePartPath && name != kRdRichValueStructurePartPath && name != kRdRichValueTypesPartPath) {
+        return false;
+      }
+      parts.push_back(name);
+    }
+  }
+  auto metadata = zip.read_entry(kMetadataBinPath);
+  if (!metadata) {
+    return false;
+  }
+  RichValueMetadata info = parse_metadata_bin(ByteSpan{metadata.value().data(), metadata.value().size()});
+  if (!info.consumable) {
+    return false;
+  }
+  if (zip.has_entry(kRdRichValuePartPath) || !info.vm_rv.empty()) {
+    auto values = zip.read_entry(kRdRichValuePartPath);
+    auto structures = zip.read_entry(kRdRichValueStructurePartPath);
+    if (!values || !structures) {
+      return false;
+    }
+    for (const std::optional<RichError>& v : parse_rich_errors(values.value(), structures.value())) {
+      if (!v.has_value()) {
+        return false;
+      }
+      set->values.push_back(*v);
+    }
+  }
+  for (const std::uint32_t rv : info.vm_rv) {
+    if (rv >= set->values.size()) {
+      set->values.clear();
+      return false;
+    }
+  }
+  set->vm_rv = std::move(info.vm_rv);
+  for (const std::string& part : parts) {
+    consumed_parts.insert(part);
+  }
+  unknown_rels.erase(std::remove_if(unknown_rels.begin(), unknown_rels.end(),
+                                    [&parts](const UnknownRelationship& r) {
+                                      return !r.target_external &&
+                                             std::find(parts.begin(), parts.end(), r.target) != parts.end();
+                                    }),
+                     unknown_rels.end());
+  return true;
+}
+
 /// Decodes every pivot table reachable from a sheet's relationships.
 ///
 /// A pivot this reader cannot account for is skipped, not failed. Before
@@ -296,7 +374,8 @@ XlsbExternalBooks CollectExternalBookTables(const Workbook& wb) {
 /// the parts are left out of `consumed_parts`: the XLSB writer has no
 /// pivot output, so a decoded-but-not-consumed part still round-trips
 /// verbatim, and a skipped one is indistinguishable from before.
-void LoadPivotParts(const ZipReader& zip, Workbook& wb, RetainedPartOrigins& origins) {
+void LoadPivotParts(const ZipReader& zip, Workbook& wb, RetainedPartOrigins& origins,
+                    const std::vector<DeferredSpillAnchor>& deferred_spill_anchors) {
   std::unordered_map<std::string, std::uint32_t> loaded_caches;
   for (std::size_t i = 0; i < wb.sheet_count(); ++i) {
     const std::size_t first_new_pivot = wb.sheet(i).pivot_tables().size();
@@ -317,6 +396,8 @@ void LoadPivotParts(const ZipReader& zip, Workbook& wb, RetainedPartOrigins& ori
       const std::vector<std::uint8_t>& bytes = bytes_or.value();
       auto table_or = read_pivot_table_bin(ByteSpan{bytes.data(), bytes.size()});
       if (!table_or) {
+        // Not modelled: the part stays passthrough and the report is not a model pivot.
+        StructuredLog("xlsb.pivot.skipped").field("part", path).field("reason", table_or.error().message).warn();
         continue;
       }
       const std::optional<std::uint32_t> cache_id = LoadPivotCacheFor(zip, wb, path, loaded_caches, origins);
@@ -334,6 +415,9 @@ void LoadPivotParts(const ZipReader& zip, Workbook& wb, RetainedPartOrigins& ori
   // Backfills each field's source-column name and each item's label from
   // the bound cache; without it GETPIVOTDATA cannot match a field by name.
   pivot::resolve_all_pivot_names(wb);
+  // A pivot saved blocked is recognised by its anchor's rich value; one whose
+  // anchor has none (an older file, or rich parts left passthrough) by its shape.
+  restore_deferred_spill_anchors(wb, deferred_spill_anchors);
   wb.adopt_saved_blocked_pivots();
   // Cells and tables are both loaded, so the totals cells settle the columns' totals metadata.
   wb.normalize_table_totals_cells();
@@ -682,6 +766,12 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
     }
   }
 
+  // Rich errors are restored while each sheet is decoded, before its spill
+  // regions are registered; a constant saved with a spill value waits for the pivots.
+  RichErrorSet rich_errors;
+  std::vector<DeferredSpillAnchor> deferred_spill_anchors;
+  const bool rich_consumed = ConsumeRichValueParts(zip, &rich_errors, consumed_parts, wb_rels_or.value().unknown_rels);
+
   for (std::size_t i = 0; i < sheet_part_paths.size(); ++i) {
     const std::string& sheet_path = sheet_part_paths[i];
     if (!zip.has_entry(sheet_path)) {
@@ -691,7 +781,8 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
     }
     ASSIGN_OR_RETURN(auto sheet_bytes, zip.read_entry(sheet_path));
     auto state_or = DecodeSheetBin(sheet_bytes, i, wb, sst_entries, sst_phonetic, sst_phonetic_props, text_storage,
-                                   sheet_names, name_table, sheet_ranges, external_books, &undecoded_formula_count);
+                                   sheet_names, name_table, sheet_ranges, external_books, &undecoded_formula_count,
+                                   rich_consumed ? &rich_errors : nullptr, &deferred_spill_anchors);
     if (!state_or) {
       return std::move(state_or.error());
     }
@@ -748,7 +839,7 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
   // Pivot caches and tables, reached through the sheet relationships the
   // loop above stored. Runs after every sheet is decoded because a table
   // is attached to its sheet and its cache is workbook-level.
-  LoadPivotParts(zip, wb, retained_part_origins);
+  LoadPivotParts(zip, wb, retained_part_origins, deferred_spill_anchors);
 
   // 8. Passthrough parts. First capture every Override-listed part the
   // reader did not consume, retaining its explicit content type. A second

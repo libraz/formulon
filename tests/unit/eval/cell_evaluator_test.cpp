@@ -39,7 +39,7 @@ TEST(EvaluateCellForRecalc, BarePrefixIsStripped) {
   cell.formula_text = "=1+2";
 
   Arena arena;
-  const Value v = evaluate_cell_for_recalc(wb, sheet, cell, /*row=*/0U, /*col=*/0U, default_registry(), arena);
+  const Value v = evaluate_cell_for_recalc(wb, sheet, cell, /*row=*/0U, /*col=*/0U, default_registry(), arena).value;
   ASSERT_TRUE(v.is_number());
   EXPECT_DOUBLE_EQ(v.as_number(), 3.0);
 }
@@ -54,7 +54,7 @@ TEST(EvaluateCellForRecalc, ParseFailureSurfacesNameError) {
   cell.formula_text = "=";  // strip leaves an empty string
 
   Arena arena;
-  const Value v = evaluate_cell_for_recalc(wb, sheet, cell, 0U, 0U, default_registry(), arena);
+  const Value v = evaluate_cell_for_recalc(wb, sheet, cell, 0U, 0U, default_registry(), arena).value;
   ASSERT_TRUE(v.is_error());
   EXPECT_EQ(v.as_error(), ErrorCode::Name);
 }
@@ -68,7 +68,7 @@ TEST(EvaluateCellForRecalc, QualifiedBuiltinCallFailsLikeAParseError) {
   cell.formula_text = "=Sheet1!SUM(1)+1";
 
   Arena arena;
-  const Value v = evaluate_cell_for_recalc(wb, sheet, cell, 0U, 0U, default_registry(), arena);
+  const Value v = evaluate_cell_for_recalc(wb, sheet, cell, 0U, 0U, default_registry(), arena).value;
   ASSERT_TRUE(v.is_error());
   EXPECT_EQ(v.as_error(), ErrorCode::Name);
 }
@@ -82,7 +82,7 @@ TEST(EvaluateCellForRecalc, ErrorPropagatesFromExpression) {
   cell.formula_text = "=1/0";
 
   Arena arena;
-  const Value v = evaluate_cell_for_recalc(wb, sheet, cell, 0U, 0U, default_registry(), arena);
+  const Value v = evaluate_cell_for_recalc(wb, sheet, cell, 0U, 0U, default_registry(), arena).value;
   ASSERT_TRUE(v.is_error());
   EXPECT_EQ(v.as_error(), ErrorCode::Div0);
 }
@@ -97,7 +97,7 @@ TEST(EvaluateCellForRecalc, ArrayResultSpillsAndReturnsAnchor) {
   cell.formula_text = "=SEQUENCE(3)";
 
   Arena arena;
-  const Value v = evaluate_cell_for_recalc(wb, sheet, cell, /*row=*/0U, /*col=*/0U, default_registry(), arena);
+  const Value v = evaluate_cell_for_recalc(wb, sheet, cell, /*row=*/0U, /*col=*/0U, default_registry(), arena).value;
   // Anchor scalar is the first SEQUENCE element (1).
   ASSERT_TRUE(v.is_number()) << "SEQUENCE anchor should be the first element";
   EXPECT_DOUBLE_EQ(v.as_number(), 1.0);
@@ -123,7 +123,8 @@ TEST(EvaluateCellForRecalc, FormulaCellReadTakesTheCachedValueInsteadOfRecursing
 
   EvaluateCellOptions opts;
   Arena arena;
-  const Value v = evaluate_cell_for_recalc(wb, sheet, cell, /*row=*/1U, /*col=*/0U, default_registry(), arena, opts);
+  const Value v =
+      evaluate_cell_for_recalc(wb, sheet, cell, /*row=*/1U, /*col=*/0U, default_registry(), arena, opts).value;
   ASSERT_TRUE(v.is_number());
   EXPECT_DOUBLE_EQ(v.as_number(), 8.0);
 }

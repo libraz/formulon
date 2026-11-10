@@ -671,7 +671,7 @@ TEST(BuiltinsAreas, SpilledRangeReferenceIsOneArea) {
   Cell cell;
   cell.formula_text = "=SEQUENCE(3)";
   Arena arena;
-  const Value anchor = evaluate_cell_for_recalc(wb, sheet, cell, 0U, 0U, default_registry(), arena);
+  const Value anchor = evaluate_cell_for_recalc(wb, sheet, cell, 0U, 0U, default_registry(), arena).value;
   ASSERT_TRUE(anchor.is_number());
   ASSERT_NE(sheet.spill_region_at_anchor(0U, 0U), nullptr);
 

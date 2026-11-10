@@ -10,6 +10,7 @@
 
 #include "eval/array_alloc.h"
 #include "eval/dynamic_array/anchor.h"
+#include "eval/error_origin.h"
 #include "eval/eval_clock_scope.h"
 #include "eval/eval_context.h"
 #include "eval/eval_profile_scope.h"
@@ -199,10 +200,13 @@ Value evaluate_top_body(const parser::AstNode& node, Arena& arena, const Functio
     }
     const bool spills = mode == TopResult::kSpill;
     if (has_footprint && !footprint_probed && spills && ctx.has_formula_cell() && ctx.current_sheet() != nullptr) {
-      if (ctx.current_sheet()->probe_spill_footprint(ctx.formula_row(), ctx.formula_col(), footprint_rows,
-                                                     footprint_cols) != Sheet::SpillAdmission::kAdmissible) {
+      const Sheet::SpillProbe probe = ctx.current_sheet()->probe_spill_footprint(ctx.formula_row(), ctx.formula_col(),
+                                                                                 footprint_rows, footprint_cols);
+      if (probe.admission != Sheet::SpillAdmission::kAdmissible) {
         if (Sheet* target = ctx.mutable_sheet(); target == ctx.current_sheet()) {
-          target->reject_spill_footprint(ctx.formula_row(), ctx.formula_col(), footprint_rows, footprint_cols);
+          target->reject_spill_footprint(ctx.formula_row(), ctx.formula_col(), footprint_rows, footprint_cols,
+                                         probe.cause);
+          note_spill_refused_here();
         }
         return Value::error(ErrorCode::Spill);
       }
@@ -229,7 +233,7 @@ Value evaluate_top_body(const parser::AstNode& node, Arena& arena, const Functio
       // at a cost proportional to what the sheet stores rather than to the
       // rectangle's area, which matters now that a grid-axis result can reach
       // here with 1,048,576 cells.
-      if (ctx.current_sheet()->probe_spill_footprint(ctx.formula_row(), ctx.formula_col(), rows, cols) !=
+      if (ctx.current_sheet()->probe_spill_footprint(ctx.formula_row(), ctx.formula_col(), rows, cols).admission !=
           Sheet::SpillAdmission::kAdmissible) {
         return Value::error(ErrorCode::Spill);
       }
@@ -244,6 +248,7 @@ Value evaluate_top_body(const parser::AstNode& node, Arena& arena, const Functio
   // Sub-expression Lambdas (a callee subtree, a LET initialiser) do not
   // pass through here.
   if (v.is_lambda()) {
+    note_calc_sub_type(24U);
     return Value::error(ErrorCode::Calc);
   }
   // Mac Excel 365 displays a blank-cell-resolved formula result as 0 in

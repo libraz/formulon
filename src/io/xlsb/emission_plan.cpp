@@ -141,7 +141,7 @@ bool HasModelledStyles(const Workbook& wb) {
 }
 
 std::unordered_set<std::string> BuildGeneratedPathSet(const Workbook& wb, bool emit_sst_part, bool emit_styles_part,
-                                                      bool emit_dynamic_metadata_part,
+                                                      bool emit_metadata_part, bool emit_rich_value_parts,
                                                       std::size_t external_link_count) {
   std::unordered_set<std::string> paths;
   paths.insert("[Content_Types].xml");
@@ -158,8 +158,13 @@ std::unordered_set<std::string> BuildGeneratedPathSet(const Workbook& wb, bool e
   if (emit_styles_part) {
     paths.insert(std::string(kStylesBinPath));
   }
-  if (emit_dynamic_metadata_part) {
+  if (emit_metadata_part) {
     paths.insert(std::string(kMetadataBinPath));
+  }
+  if (emit_rich_value_parts) {
+    paths.insert(std::string(kRdRichValuePartPath));
+    paths.insert(std::string(kRdRichValueStructurePartPath));
+    paths.insert(std::string(kRdRichValueTypesPartPath));
   }
   for (std::size_t i = 1; i <= external_link_count; ++i) {
     paths.insert(external_link_part_path(i));
@@ -170,8 +175,9 @@ std::unordered_set<std::string> BuildGeneratedPathSet(const Workbook& wb, bool e
 
 }  // namespace
 
-Expected<EmissionPlan, Error> BuildEmissionPlan(const Workbook& wb, bool sst_present, bool generate_dynamic_metadata,
-                                                std::size_t external_link_count, WriteDiagnostics* diagnostics) {
+Expected<EmissionPlan, Error> BuildEmissionPlan(const Workbook& wb, bool sst_present, bool generate_metadata,
+                                                bool generate_rich_values, std::size_t external_link_count,
+                                                WriteDiagnostics* diagnostics) {
   EmissionPlan plan;
   plan.has_text_cells = sst_present;
   // A retained styles.bin that still matches the model is emitted verbatim,
@@ -182,13 +188,15 @@ Expected<EmissionPlan, Error> BuildEmissionPlan(const Workbook& wb, bool sst_pre
   const PassthroughPart* raw_styles = FindRawStylesPart(wb);
   const bool raw_styles_fresh = raw_styles != nullptr && static_cast<bool>(CheckRetainedPartFreshness(wb, *raw_styles));
   plan.has_generated_styles = !raw_styles_fresh && (raw_styles != nullptr || HasModelledStyles(wb));
-  // Decided by `BuildDynamicArrayMetadataPlan`, which the sheet bodies were
-  // already emitted against.
-  plan.has_generated_dynamic_metadata = generate_dynamic_metadata;
+  // Decided by `BuildMetadataPlan`, which the sheet bodies were already
+  // emitted against.
+  plan.has_generated_metadata = generate_metadata;
+  plan.has_generated_rich_values = generate_rich_values;
   plan.external_link_count = external_link_count;
 
-  const std::unordered_set<std::string> generated = BuildGeneratedPathSet(
-      wb, sst_present, plan.has_generated_styles, plan.has_generated_dynamic_metadata, external_link_count);
+  const std::unordered_set<std::string> generated =
+      BuildGeneratedPathSet(wb, sst_present, plan.has_generated_styles, plan.has_generated_metadata,
+                            plan.has_generated_rich_values, external_link_count);
 
   // The reader rejects conflicting defaults, but Workbook is also a public
   // construction surface. Validate that hand-built workbooks cannot produce
@@ -348,8 +356,13 @@ std::string BuildContentTypes(const Workbook& wb, const EmissionPlan& plan) {
   if (plan.has_text_cells) {
     AppendOverride(out, kSharedStringsBinPath, kCtSharedStringsXlsb);
   }
-  if (plan.has_generated_dynamic_metadata) {
+  if (plan.has_generated_metadata) {
     AppendOverride(out, kMetadataBinPath, kCtSheetMetadataXlsb);
+  }
+  if (plan.has_generated_rich_values) {
+    AppendOverride(out, kRdRichValuePartPath, kCtRdRichValue);
+    AppendOverride(out, kRdRichValueStructurePartPath, kCtRdRichValueStructure);
+    AppendOverride(out, kRdRichValueTypesPartPath, kCtRdRichValueTypes);
   }
   if (plan.has_generated_styles) {
     AppendOverride(out, kStylesBinPath, kCtStylesXlsb);
@@ -465,10 +478,16 @@ std::string BuildWorkbookRels(std::size_t sheet_count, bool emit_sst, const Emis
     AppendRelationship(out, next_rid++, kRelTheme, "theme/theme1.xml", /*target_external=*/false,
                        /*escape_target=*/true);
   }
-  if (plan.has_generated_dynamic_metadata ||
-      plan.passthrough_path_index.contains(plan.passthrough_kept, kMetadataBinPath)) {
+  if (plan.has_generated_metadata || plan.passthrough_path_index.contains(plan.passthrough_kept, kMetadataBinPath)) {
     AppendRelationship(out, next_rid++, kRelSheetMetadata, "metadata.bin", /*target_external=*/false,
                        /*escape_target=*/true);
+  }
+  if (plan.has_generated_rich_values) {
+    for (const auto& [type, path] : {std::pair{kRelRdRichValue, kRdRichValuePartPath},
+                                     std::pair{kRelRdRichValueStructure, kRdRichValueStructurePartPath},
+                                     std::pair{kRelRdRichValueTypes, kRdRichValueTypesPartPath}}) {
+      AppendRelationship(out, next_rid++, type, TargetRelativeToWorkbook(path));
+    }
   }
   // Preserve relationships to raw XLSB parts that the reader does not model
   // (drawings, VBA, custom XML, etc.).  Internal targets are stored as

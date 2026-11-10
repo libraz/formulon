@@ -65,8 +65,9 @@ inline Expected<void, Error> consume_array_anchor_budget(ResourceBudget& budget,
 /// Registers each anchor's footprint as a spill region on `sheet`: captures
 /// the footprint's current cached values, blanks the non-anchor cells so
 /// they block neither the commit's collision scan nor the anchor's re-spill
-/// on recalc, then commits the region. Must run after the whole sheet has
-/// been decoded. `reader` and `format` name the caller in error context.
+/// on recalc, then commits the region. An anchor restored as a blocked spill
+/// keeps its footprint instead. Must run after the whole sheet has been
+/// decoded. `reader` and `format` name the caller in error context.
 inline Expected<void, Error> register_array_spills(Sheet& sheet, const std::vector<ArrayAnchor>& anchors,
                                                    FormulonErrorCode error_code, std::string_view reader,
                                                    std::string_view format) {
@@ -103,6 +104,9 @@ inline Expected<void, Error> register_array_spills(Sheet& sheet, const std::vect
   }
 
   for (const ArrayAnchor& a : anchors) {
+    if (sheet.blocked_spill_footprint_at(a.row, a.col).has_value()) {
+      continue;
+    }
     const std::uint32_t rows = a.last_row - a.row + 1U;
     const std::uint32_t cols = a.last_col - a.col + 1U;
     const std::uint64_t cell_count = static_cast<std::uint64_t>(rows) * cols;

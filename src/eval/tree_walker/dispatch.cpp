@@ -38,6 +38,7 @@
 #include "eval/declared_rect.h"
 #include "eval/defined_name_resolve.h"
 #include "eval/dynamic_array/anchor.h"
+#include "eval/error_origin.h"
 #include "eval/eval_context.h"
 #include "eval/external_ref.h"
 #include "eval/function_registry.h"
@@ -97,6 +98,14 @@ bool is_full_axis_range(const parser::Reference& lhs, const parser::Reference& r
 }
 
 namespace {
+
+// The `#VALUE!` of a text literal that failed ahead of an error argument, with the origin slot as it stood then.
+Value literal_text_failure(const std::optional<ErrorOriginSnapshot>& origin) {
+  if (origin.has_value()) {
+    restore_error_origin(*origin);
+  }
+  return Value::error(ErrorCode::Value);
+}
 
 // The body of `dispatch_call`. A scalar function applied over a whole column /
 // row returns through `*tail_out` (the returned value is then unused).
@@ -201,6 +210,8 @@ Value dispatch_call_impl(const parser::AstNode& node, Arena& arena, const Functi
   // Set once a direct text literal that does not coerce to a number has been
   // seen by a numeric or A-family aggregator.
   bool literal_text_not_numeric = false;
+  // The origin slot when that literal failed: its #VALUE! is the left error and keeps that state.
+  std::optional<ErrorOriginSnapshot> literal_text_origin;
   // The array a `last_arg_scalar` function's last argument evaluated to; the
   // call is then evaluated once per element.
   const ArrayValue* lifted_last_arg = nullptr;
@@ -218,8 +229,11 @@ Value dispatch_call_impl(const parser::AstNode& node, Arena& arena, const Functi
     }
     if (def->last_arg_scalar && i > 0U && i + 1U == evaluated_arity) {
       const Value v = densify(eval_node_shaped(raw_arg, arena, registry, ctx), arena);
-      if (def->propagate_errors && v.is_error()) {
-        return literal_text_not_numeric ? Value::error(ErrorCode::Value) : v;
+      if (v.is_error()) {
+        if (def->propagate_errors) {
+          return literal_text_not_numeric ? literal_text_failure(literal_text_origin) : v;
+        }
+        forget_error_origin();
       }
       if (v.is_array()) {
         lifted_last_arg = v.as_array();
@@ -280,13 +294,20 @@ Value dispatch_call_impl(const parser::AstNode& node, Arena& arena, const Functi
       continue;
     }
     Value v = densify(shaped_arg, arena);
-    if (def->propagate_errors && v.is_error()) {
+    if (v.is_error()) {
       // A text literal that cannot be a number already failed ahead of this
       // error, and the earlier failure is the one reported.
-      return literal_text_not_numeric ? Value::error(ErrorCode::Value) : v;
+      if (def->propagate_errors) {
+        return literal_text_not_numeric ? literal_text_failure(literal_text_origin) : v;
+      }
+      // A function that inspects its error arguments consumes this one.
+      forget_error_origin();
     }
     if ((def->range_filter_numeric_only || def->range_filter_a_coerce) &&
         arg_node.kind() == parser::NodeKind::Literal && v.is_text() && !coerce_to_number(v)) {
+      if (!literal_text_not_numeric) {
+        literal_text_origin = snapshot_error_origin();
+      }
       literal_text_not_numeric = true;
     }
     // Generic Array-result flatten for range-aware aggregators. Lazy

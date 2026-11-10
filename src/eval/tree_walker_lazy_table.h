@@ -56,6 +56,10 @@ LazyResultShape find_lazy_result_shape(std::string_view name) noexcept;
 /// form.
 bool find_lazy_arity(std::string_view name, std::uint32_t* min_arity, std::uint32_t* max_arity) noexcept;
 
+/// The canonical UPPERCASE spelling of the lazy form `name`, in static
+/// storage, or an empty view when `name` is not a lazy form.
+std::string_view find_lazy_canonical_name(std::string_view name) noexcept;
+
 /// Returns a nullptr-terminated array of canonical UPPERCASE names in
 /// the lazy dispatch table. Storage has static duration; callers must
 /// not free the array. Used by `tree_walker.cpp::lazy_form_names`

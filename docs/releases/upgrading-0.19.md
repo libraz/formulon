@@ -400,8 +400,8 @@ Read [Every binding](#every-binding) first, then the section for your binding. [
   whose old value was `ABSENT` and set the others; `ABSENT` as a set value is
   now `FM_STATUS_INVALID_ARGUMENT`. `fm_chart_info_t` gains `na_as_blank`,
   `fm_chart_preview_overrides_spec_t` gains `na_as_blank_op` / `na_as_blank`, and
-  `fm_spill_info_t` gains `blocked`, each at its end. A caller compiled
-  against an earlier header must be recompiled.
+  `fm_spill_info_t` gains `blocked` and `cause`, each at its end. A caller
+  compiled against an earlier header must be recompiled.
 - **C ABI:** every input and output record starts with `uint32_t struct_size`.
   Set it with `FM_STRUCT_INIT(T)` (`{.struct_size = sizeof(T)}` in C,
   `fm_struct_init<T>()` in C++) before passing the record; a size below the
@@ -467,7 +467,7 @@ Read [Every binding](#every-binding) first, then the section for your binding. [
   phonetic run list is read with `getCellPhoneticRuns(row, col)` instead of
   `getCellPhoneticRunCount` and `getCellPhoneticRun`.
 - **JavaScript, Python:** `spillInfo` (`spill_info`) is `getSpill`
-  (`get_spill`) and returns `{ blocked, range }` or `null`. The constants
+  (`get_spill`) and returns `{ blocked, cause, range }` or `null`. The constants
   `PIVOT_SHOW_AS_BASE_PREVIOUS` and `PIVOT_SHOW_AS_BASE_NEXT` are
   `PivotShowAsBase.Previous` and `PivotShowAsBase.Next` (Python an `IntEnum`
   with `PREVIOUS` and `NEXT`). `pivotFieldClearDateGroup`
@@ -1516,6 +1516,29 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
   table, its anchor cell included, is `#SPILL!`, as in Excel. Adding,
   resizing or removing a table, and row or column edits that move one,
   recalculate the spills it blocks or releases.
+- `Spill.cause` (C `fm_spill_info_t.cause`, an `fm_spill_cause_t`) says what
+  blocks a spill: `SpillCause.Occupied` for a value, formula, table, pivot,
+  array formula or other spill in the way, `Merged` for a merge and
+  `BeyondEdge` for the sheet edge. Of several obstructions the first in
+  row-major order decides, and a range running past the edge is `BeyondEdge`
+  whatever lies inside the grid. It is `null` (`None`, `FM_SPILL_CAUSE_ABSENT`)
+  when `blocked` is false. `getSpill` now reports a formula spill blocked past
+  the sheet edge (it returned `null`), with the range clipped to the grid.
+- Saved files carry Excel's rich error values. A `#SPILL!`, a `#CALC!` or a
+  `#VALUE!` with a reason was written as a plain `#VALUE!`, which Excel showed
+  until it recalculated and which a blocked pivot report's anchor kept for
+  good; it is now stored as Excel stores it, in `.xlsx` and `.xlsb` alike.
+  Loading reads the rich values back, so a cell holds its real error, a
+  blocked formula keeps its spill range and a blocked pivot report is blocked
+  again, before any recalc. Through the bindings this shows in a manual-calc
+  workbook, where a loaded `#SPILL!` or `#CALC!` read as `#VALUE!` until an
+  explicit recalc, and at a blocked pivot report's anchor. A loaded blocked
+  report reports the range the file recorded, rather than its anchor alone,
+  until a recalc lays it out again; one whose cache was saved without records
+  keeps it. A formula blocked past the edge reads its anchor alone until a
+  recalc. A workbook holding other rich values (images in cells, linked data
+  types) or metadata the library does not know keeps them as they were and
+  gets no rich errors.
 
 - An empty patch changes nothing on every patch method. `Chart.updatePoint`
   with no key used to remove the point's formatting; it leaves the point as it
@@ -1615,12 +1638,17 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
     manual calculation it waits for an explicit recalc. A format-only change,
     such as removing a merge, starts no recalc.
   - `Pivot.getSpill()` (Python `get_spill`, C `fm_sheet_get_pivot_spill`)
-    returns `{ blocked: true, range }` for a blocked report, and
-    `Sheet.getSpill` returns the same at its anchor, so `Spill.blocked` no
-    longer implies a formula at the anchor. A range past the sheet edge is not
-    reported, as for a formula spill. `isProjectionPending()` is false for a
-    blocked report, and `getLayout()` returns the layout it would draw.
-    GETPIVOTDATA over a blocked report is `#REF!`.
+    returns `{ blocked: true, cause, range }` for a blocked report, with the
+    range it needs, and `{ blocked: false, cause: null, range }` for a drawn
+    one, with the range it was last drawn over, also while a cache change has
+    left it pending, or with its location for a report read from a file and
+    not laid out since. It returns `null` only for a report neither drawn nor
+    read from a file. `Sheet.getSpill` returns the same at the
+    report's anchor and `null` on its other cells, so a `Spill` no longer
+    implies a formula at the anchor. A range past the sheet edge is reported
+    with `SpillCause.BeyondEdge`, clipped to the grid. `isProjectionPending()`
+    is false for a blocked report, and `getLayout()` returns the layout it
+    would draw. GETPIVOTDATA over a blocked report is `#REF!`.
   - Of two reports refreshed together, the one growing into the other's
     current report is blocked; when only their new ranges overlap, the one
     created first is drawn.
@@ -3612,7 +3640,8 @@ A caller compiled against an earlier header must be recompiled.
 | `fm_workbook_set_cell_phonetic_runs`, `fm_sheet_add_threaded_comment` | `fm_sheet_set_cell_phonetic_runs`, `fm_sheet_add_threaded_comment` and `fm_sheet_update_threaded_comment` take an `int32_t offset_unit` (`fm_text_offset_unit_t`: `FM_TEXT_OFFSET_UNIT_UTF16` 0, `FM_TEXT_OFFSET_UNIT_CODE_POINT` 1) before the record, which picks the offset pair each `fm_phonetic_run_t` or `fm_mention_t` is read from. Both records carry `start` / `end` in UTF-16 units and `start_cp` / `end_cp` in code points, and reads fill both. `fm_parse_error_info_t` adds `start_cp`, `end_cp` and `column_cp` |
 | (none) | `fm_sheet_get_print_options` and `fm_sheet_get_header_footer` read the print options and header/footer back |
 | (none) | `fm_sheet_get_table_runtime_id` / `fm_workbook_resolve_table_runtime_id` and `fm_sheet_get_pivot_runtime_id` / `fm_sheet_resolve_pivot_runtime_id` map a table or pivot index to an id that survives other tables or pivots being added or removed, and back |
-| (none) | `fm_sheet_get_pivot_spill` reads the range a blocked pivot report needs into an `fm_spill_info_t`, and `fm_sheet_get_spill` reports the same at the report's anchor |
+| (none) | `fm_sheet_get_pivot_spill` reads the range a pivot report covers, or needs when blocked, into an `fm_spill_info_t`, and `fm_sheet_get_spill` reports the same at the report's anchor |
+| (none) | `fm_spill_info_t.cause`, an `fm_spill_cause_t` (`FM_SPILL_CAUSE_ABSENT` -1, `FM_SPILL_CAUSE_OCCUPIED` 0, `FM_SPILL_CAUSE_MERGED` 1, `FM_SPILL_CAUSE_BEYOND_EDGE` 2), says what blocks a spill or a report; a range past the sheet edge is reported, clipped to the grid |
 | a pivot `number_format` (`fm_pivot_field_spec_t`, the data-field spec and the pivot field setters) given as the text of a number-format id | `number_format` is a format code (`0.00%`). A digits-only string is read as a format code, so a call written for the old form silently selects a different format |
 | `fm_sheet_set_page_setup`, `_set_page_margins`, `_set_print_options`, `_set_header_footer`, `_set_format_defaults`, `fm_styles_set_table_style_defaults` | the same names with `update` (`fm_sheet_update_page_setup` and so on) and `fm_workbook_update_table_style_defaults`; a field of the patch record that is unset keeps the stored value |
 | `fm_workbook_pivot_set_grand_totals`, `fm_workbook_pivot_set_style_info`, `fm_sheet_set_chart_axis`, `_set_chart_display`, `_set_chart_series`, `_set_chart_plot` | `fm_sheet_update_pivot_grand_totals`, `fm_sheet_update_pivot_style_options`, `fm_sheet_update_chart_axis`, `_update_chart_display`, `_update_chart_series`, `_update_chart_plot` |

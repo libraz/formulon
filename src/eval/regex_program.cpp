@@ -11,6 +11,7 @@
 #include <string_view>
 #include <vector>
 
+#include "eval/error_origin.h"
 #include "eval/regex_lazy.h"
 #include "utils/resource_budget.h"
 
@@ -152,6 +153,7 @@ KernelResult regex_kernel(const CompiledPattern& program, std::string_view subje
     // Resource exhaustion (match-slot budget, depth / heap limit): REGEXTEST
     // degrades to "no match", the extract / replace pair reports #CALC!.
     if (!on_match_limit_returns_no_match) {
+      note_unknown_error_origin();
       result.ok = false;
       result.err = Value::error(kResourceError);
     }

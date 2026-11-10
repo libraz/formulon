@@ -42,7 +42,11 @@ struct EmissionPlan {
   bool workbook_bin_override = false;
   bool has_text_cells = false;  // gates emission of xl/sharedStrings.bin
   bool has_generated_styles = false;
-  bool has_generated_dynamic_metadata = false;
+  /// The writer generates `xl/metadata.bin` (the XLDAPR entry dynamic-array
+  /// anchors name, the XLRICHVALUE blocks rich errors name) and, with
+  /// `has_generated_rich_values`, the `xl/richData/` parts.
+  bool has_generated_metadata = false;
+  bool has_generated_rich_values = false;
   /// External link parts generated from the model, in written order.
   std::size_t external_link_count = 0;
   /// Table parts generated from the model, per sheet.
@@ -63,8 +67,9 @@ std::string sheet_part_path(std::size_t position);
 std::string sheet_rels_part_path(std::size_t position);
 std::string ExternalLinkRelsPath(std::size_t position);
 
-Expected<EmissionPlan, Error> BuildEmissionPlan(const Workbook& wb, bool sst_present, bool generate_dynamic_metadata,
-                                                std::size_t external_link_count, WriteDiagnostics* diagnostics);
+Expected<EmissionPlan, Error> BuildEmissionPlan(const Workbook& wb, bool sst_present, bool generate_metadata,
+                                                bool generate_rich_values, std::size_t external_link_count,
+                                                WriteDiagnostics* diagnostics);
 
 std::string BuildContentTypes(const Workbook& wb, const EmissionPlan& plan);
 

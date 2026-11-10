@@ -19,6 +19,7 @@
 
 #include "pivot/pivot_result.h"
 #include "pivot/pivot_types.h"
+#include "sheet_metadata.h"
 #include "utils/runtime_id.h"
 
 namespace formulon::pivot {
@@ -49,13 +50,15 @@ struct PivotRect {
 /// A report withheld because its range is occupied or overflows the sheet. The range is kept relative to the
 /// anchor so row and column edits move it with the anchor: `rows_above` page-field rows start above the anchor,
 /// and `rows` x `cols` is the size clipped to the grid. `past_edge` records the overflow; `size_known` is false
-/// for a blocked report read from a file until its layout has been computed.
+/// for a blocked report read from a file until its layout has been computed. `cause` is what blocks it, by the
+/// rule a formula spill's refusal follows.
 struct BlockedReport {
   std::uint32_t rows = 1;
   std::uint32_t cols = 1;
   std::uint32_t rows_above = 0;
   bool past_edge = false;
   bool size_known = true;
+  SpillCause cause = SpillCause::kOccupied;
 };
 
 /// Where a pivot definition came from: assembled in memory, or read from an

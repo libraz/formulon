@@ -100,6 +100,8 @@ Napi::Value Workbook::GetSpill(const Napi::CallbackInfo& info) {
   Napi::Object out = Napi::Object::New(env);
   out.Set("rect", RangeToJs(env, spill.rect));
   out.Set("blocked", Napi::Boolean::New(env, spill.blocked != 0));
+  out.Set("cause",
+          spill.cause != FM_SPILL_CAUSE_ABSENT ? Napi::Value(Napi::Number::New(env, spill.cause)) : env.Null());
   return out;
 }
 

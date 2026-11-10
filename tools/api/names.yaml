@@ -18356,6 +18356,38 @@ entries:
     js: Left
     py: LEFT
     surfaces: [c, wasm, native, py]
+  enum.spill_cause:
+    kind: enum
+    c: fm_spill_cause_t
+    js: SpillCause
+    py: SpillCause
+    surfaces: [c, wasm, native, py]
+  constant.fm_spill_cause_absent:
+    kind: constant
+    c: FM_SPILL_CAUSE_ABSENT
+    enum: enum.spill_cause
+    surfaces: [c]
+  constant.fm_spill_cause_occupied:
+    kind: constant
+    c: FM_SPILL_CAUSE_OCCUPIED
+    enum: enum.spill_cause
+    js: Occupied
+    py: OCCUPIED
+    surfaces: [c, wasm, native, py]
+  constant.fm_spill_cause_merged:
+    kind: constant
+    c: FM_SPILL_CAUSE_MERGED
+    enum: enum.spill_cause
+    js: Merged
+    py: MERGED
+    surfaces: [c, wasm, native, py]
+  constant.fm_spill_cause_beyond_edge:
+    kind: constant
+    c: FM_SPILL_CAUSE_BEYOND_EDGE
+    enum: enum.spill_cause
+    js: BeyondEdge
+    py: BEYOND_EDGE
+    surfaces: [c, wasm, native, py]
   record.mention_input:
     kind: record
     role: input

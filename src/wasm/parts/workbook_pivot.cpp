@@ -545,6 +545,7 @@ emscripten::val JsWorkbook::getPivotSpill(uint32_t sheet, uint32_t pivotIndex) c
   }
   emscripten::val item = emscripten::val::object();
   item.set("blocked", info.blocked != 0);
+  item.set("cause", info.cause != FM_SPILL_CAUSE_ABSENT ? emscripten::val(info.cause) : emscripten::val::null());
   item.set("rect", cell_rect_to_val(info.rect));
   return item;
 }

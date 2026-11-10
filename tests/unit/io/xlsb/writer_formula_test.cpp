@@ -556,10 +556,10 @@ TEST(XlsbWriter, FutureFunctionCallRegistersHiddenName) {
   EXPECT_TRUE(ContainsUtf16Le(workbook_or.value(), "_xlfn.XLOOKUP"));
 }
 
-// On Excel 365: it stores a cached #SPILL! or
-// #CALC! as #VALUE! (the real error lives in a rich value this writer does
-// not produce) and #GETTING_DATA as #N/A. A newer error byte in a cell made
-// Excel refuse the whole file.
+// On Excel 365: it stores a cached #SPILL! or #CALC! as #VALUE! (the real
+// error lives in the rich value the cell's `BrtValueMeta` names; a cell with
+// no recorded detail is the plain #VALUE!) and #GETTING_DATA as #N/A. A newer
+// error byte in a cell made Excel refuse the whole file.
 TEST(XlsbWriter, NewerErrorsAreStoredAsTheirLegacyFallback) {
   Workbook wb = Workbook::create_empty();
   Sheet& s = wb.sheet(wb.add_sheet("E"));

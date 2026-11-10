@@ -102,6 +102,18 @@ void AppendStyleAttr(std::string& out, std::uint32_t xf_index, bool force, bool 
   }
 }
 
+// The `vm=` of `(row, col)` in `rich_error_vm`, or 0 for none.
+std::uint32_t VmAt(const RichErrorVmMap* rich_error_vm, std::uint32_t row, std::uint32_t col) {
+  return rich_error_vm == nullptr ? 0U : rich_error_vm_at(*rich_error_vm, row, col);
+}
+
+// Emits `vm="N"` (a rich error's value metadata) when `vm` is non-zero.
+void AppendVmAttr(std::string& out, std::uint32_t vm) {
+  if (vm != 0U) {
+    append_xml_attr_uint(out, "vm", vm);
+  }
+}
+
 // Emits the <c> element for an Error value at `addr`.
 void AppendErrorCellXml(std::string& out, std::string_view addr, ErrorCode code, std::uint32_t xf_index,
                         bool force_style, bool show_phonetic) {
@@ -136,7 +148,7 @@ void AppendErrorCellXml(std::string& out, std::string_view addr, ErrorCode code,
 // block would read kana over characters it does not cover.
 void AppendLiteralCellBody(std::string& out, const Value& value, const std::vector<PhoneticRun>& phonetic,
                            PhoneticProperties phonetic_props, const SharedStrings* shared_strings,
-                           std::uint32_t xf_index, bool force_style, bool show_phonetic) {
+                           std::uint32_t xf_index, bool force_style, bool show_phonetic, std::uint32_t vm) {
   out.push_back('"');
   AppendStyleAttr(out, xf_index, force_style, show_phonetic);
   if (value.is_number()) {
@@ -166,7 +178,9 @@ void AppendLiteralCellBody(std::string& out, const Value& value, const std::vect
     return;
   }
   if (value.is_error()) {
-    out.append(" t=\"e\"><v>");
+    out.append(" t=\"e\"");
+    AppendVmAttr(out, vm);
+    out.append("><v>");
     out.append(display_name(stored_cell_error(value.as_error())));
     out.append("</v></c>");
     return;
@@ -237,12 +251,13 @@ void AppendFormulaValue(std::string& out, const Value& cv) {
 // value typed as a formula result's, and `<f ca="1"/>` when the anchor is
 // recalculated every time.
 void AppendPhantomCellXml(std::string& out, std::uint32_t row, std::uint32_t col, std::uint32_t xf_index,
-                          bool force_style, const Value& value, bool always_calculates) {
+                          bool force_style, const Value& value, bool always_calculates, std::uint32_t vm) {
   out.append("<c r=\"");
   AppendCellRefForRef(out, row, col);
   out.append("\"");
   AppendStyleAttr(out, xf_index, force_style);
   AppendFormulaValueType(out, value);
+  AppendVmAttr(out, value.is_error() ? vm : 0U);
   out.push_back('>');
   if (always_calculates) {
     out.append("<f ca=\"1\"/>");
@@ -336,11 +351,12 @@ SharedRoles CollectSharedRoles(const Sheet& sheet, const xlsb::NameShapes& name_
 // <v>. Phantoms are suppressed by the caller via spill_region_covering;
 // this function trusts the caller and never re-checks.
 //
-// `shared` is the cell's verified shared-formula role, or null.
+// `shared` is the cell's verified shared-formula role, or null. `vm` is the
+// cell's rich-error value metadata, 0 for none.
 bool AppendCellXml(std::string& out, const Sheet& sheet, std::uint32_t row, std::uint32_t col, const Cell& cell,
                    const SharedStrings* shared_strings, std::uint32_t dynamic_array_cm_index,
                    const xlsb::NameShapes& name_shapes, const parser::ExternalBookIndexer* indexer,
-                   const SharedRole* shared) {
+                   const SharedRole* shared, std::uint32_t vm) {
   const bool has_formula = !cell.formula_text.empty();
   if (!CellIsEmitted(cell)) {
     return false;
@@ -415,6 +431,7 @@ bool AppendCellXml(std::string& out, const Sheet& sheet, std::uint32_t row, std:
     if (dynamic) {
       append_xml_attr_uint(out, "cm", dynamic_array_cm_index);
     }
+    AppendVmAttr(out, cell.cached_value.is_error() ? vm : 0U);
     out.push_back('>');
 
     // <f> with optional t="array" ref="..." for spill anchors. Modern
@@ -506,7 +523,7 @@ bool AppendCellXml(std::string& out, const Sheet& sheet, std::uint32_t row, std:
   out.append("<c r=\"");
   out.append(addr);
   AppendLiteralCellBody(out, cell.cached_value, cell.phonetic_runs, cell.phonetic_props, shared_strings, cell.xf_index,
-                        ForcesDefaultStyle(cell), cell.show_phonetic);
+                        ForcesDefaultStyle(cell), cell.show_phonetic, vm);
   return true;
 }
 
@@ -565,7 +582,8 @@ bool AppendRowXml(std::string& out, const Sheet& sheet, std::uint32_t row, const
                   const std::vector<std::uint32_t>& phantom_cols, std::string_view override_attrs,
                   const SharedStrings* shared_strings, std::uint32_t dynamic_array_cm_index,
                   const xlsb::NameShapes& name_shapes, std::unordered_map<std::uint64_t, bool>& always_by_anchor,
-                  const parser::ExternalBookIndexer* indexer, const SharedRoles& shared_roles) {
+                  const parser::ExternalBookIndexer* indexer, const SharedRoles& shared_roles,
+                  const RichErrorVmMap* rich_error_vm) {
   // Write straight into `out`; a row that ends up with no content is truncated away.
   const std::size_t row_start = out.size();
   out.append("<row r=\"");
@@ -594,7 +612,8 @@ bool AppendRowXml(std::string& out, const Sheet& sheet, std::uint32_t row, const
     const Value value = idx < region->cells.size() ? region->cells[idx] : Value::blank();
     const bool force_style =
         stored != nullptr && ForcesDefaultStyle(*stored) && InheritsNonDefaultStyle(sheet, row, col);
-    AppendPhantomCellXml(out, row, col, select_effective_xf(sheet, row, col).xf_index, force_style, value, it->second);
+    AppendPhantomCellXml(out, row, col, select_effective_xf(sheet, row, col).xf_index, force_style, value, it->second,
+                         VmAt(rich_error_vm, row, col));
   };
   auto entry = row_cells.begin();
   const auto entries_end = row_cells.end();
@@ -613,7 +632,7 @@ bool AppendRowXml(std::string& out, const Sheet& sheet, std::uint32_t row, const
     const RowCells::Entry e = *entry;
     const auto role = shared_roles.find(CellKey(row, e.col));
     (void)AppendCellXml(out, sheet, row, e.col, e.cell, shared_strings, dynamic_array_cm_index, name_shapes, indexer,
-                        role != shared_roles.end() ? &role->second : nullptr);
+                        role != shared_roles.end() ? &role->second : nullptr, VmAt(rich_error_vm, row, e.col));
     ++entry;
   }
   if (out.size() == body_start) {
@@ -638,7 +657,7 @@ bool CellIsEmitted(const Cell& cell) {
 
 void AppendSheetDataXml(std::string& out, const Sheet& sheet, const SharedStrings* shared_strings,
                         std::uint32_t dynamic_array_cm_index, const xlsb::NameShapes& name_shapes,
-                        const parser::ExternalBookIndexer* indexer) {
+                        const parser::ExternalBookIndexer* indexer, const RichErrorVmMap* rich_error_vm) {
   // Collect populated row indices and sort ascending so the output is
   // deterministic regardless of unordered_map iteration order.
   const auto& rows_map = sheet.rows();
@@ -693,7 +712,7 @@ void AppendSheetDataXml(std::string& out, const Sheet& sheet, const SharedString
     const auto phantoms_it = phantom_cols.find(row);
     AppendRowXml(out, sheet, row, row_cells, phantoms_it != phantom_cols.end() ? phantoms_it->second : kNoPhantoms,
                  override_attrs, shared_strings, dynamic_array_cm_index, name_shapes, always_by_anchor, indexer,
-                 shared_roles);
+                 shared_roles, rich_error_vm);
   }
 
   if (out.size() == rows_start) {

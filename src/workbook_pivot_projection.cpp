@@ -503,6 +503,10 @@ Expected<void, Error> Workbook::withhold_pivot_report(std::size_t sheet_index, s
   const std::uint32_t anchor_row = table.anchor_row();
   const std::uint32_t anchor_col = table.anchor_col();
   const MergeRange own = detail::pivot_occupied_extent(table);
+  // Decided before the report's own cells go, against the occupants the block decision saw.
+  const SpillCause cause = plan.past_edge
+                               ? SpillCause::kBeyondEdge
+                               : detail::report_blocker_cause(*this, sheet_index, pivot_index, *plan.extent, own);
   const Cell* anchor_cell = sheets_[sheet_index].cell_at(anchor_row, anchor_col);
   const std::uint32_t anchor_xf = anchor_cell != nullptr ? anchor_cell->xf_index : 0U;
   std::vector<MergeRange> own_merges;
@@ -530,6 +534,7 @@ Expected<void, Error> Workbook::withhold_pivot_report(std::size_t sheet_index, s
   state.rows_above = plan.rows_above;
   state.past_edge = plan.past_edge;
   state.size_known = true;
+  state.cause = cause;
   table.set_projected_extent(PivotRect{anchor_row, anchor_col, anchor_row, anchor_col});
   table.mutable_projected_merges().clear();
   table.set_blocked(state);

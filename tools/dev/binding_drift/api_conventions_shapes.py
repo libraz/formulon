@@ -1010,6 +1010,7 @@ ABSENT_MEMBERS = {
     "ChartAxisCrosses": ("Absent", True),
     "ShapePaint": ("Unset", True),
     "ChartBarDirection": ("Absent", True),
+    "SpillCause": ("Absent", True),
     "ChartTitleKind": ("None", False),
     "ChartLegendPosition": ("None", False),
 }

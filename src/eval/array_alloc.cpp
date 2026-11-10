@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <cstdint>
 
+#include "eval/error_origin.h"
 #include "eval/tail_array.h"
 #include "sheet.h"
 #include "utils/arena.h"
@@ -137,6 +138,7 @@ Value densify(const Shaped& s, Arena& arena) {
   }
   const TailArray& ta = *s.tail_array;
   if (ta.from_reference && static_cast<std::uint64_t>(ta.rows) * ta.cols > kMaxRangeExpansionCells) {
+    note_unknown_error_origin();
     return Value::error(ErrorCode::Calc);
   }
   Value* buffer = nullptr;

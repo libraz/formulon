@@ -17,6 +17,7 @@
 #include "eval/coerce.h"
 #include "eval/collation.h"
 #include "eval/dynamic_array/common.h"
+#include "eval/error_origin.h"
 #include "eval/eval_context.h"
 #include "eval/eval_profile_scope.h"
 #include "eval/function_registry.h"
@@ -297,6 +298,10 @@ bool resolve_aggregator(const parser::AstNode& arg, Arena& arena, const Function
   const Value peek = eval_node(arg, arena, registry, ctx);
   const std::uint32_t arity = peek.is_lambda() ? aggregator_arity(*peek.as_lambda(), registry) : 1U;
   out->fn = resolve_callable_value(peek, arity, arena, out_err);
+  if (out->fn == nullptr && !peek.is_lambda() && !peek.is_error()) {
+    // A function argument that is not a lambda.
+    note_error_origin(CellErrorDetail{ErrorCode::Value, CellErrorDetail::Shape::kSubType, 37U, 0U});
+  }
   out->arity = arity;
   out->all_by_column.clear();
   out->all_ast_by_column.clear();
@@ -596,6 +601,7 @@ Expected<HeaderLayout, ErrorCode> resolve_header_layout(int field_headers, std::
   }
   layout.data_start_row = layout.inputs_have_header ? 1U : 0U;
   if (input_rows < layout.data_start_row) {
+    note_unknown_error_origin();
     return Expected<HeaderLayout, ErrorCode>::Err(ErrorCode::Calc);
   }
   layout.data_row_count = input_rows - layout.data_start_row;
@@ -740,6 +746,7 @@ Value invoke_aggregator_for_group(const Aggregator& agg, std::uint32_t value_col
     return Value::error(ErrorCode::Value);
   }
   if (res.is_lambda()) {
+    note_unknown_error_origin();
     return Value::error(ErrorCode::Calc);
   }
   return res;
@@ -750,6 +757,7 @@ std::vector<Value> aggregate_value_columns(const ArrayValue& values, std::uint32
                                            Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx) {
   std::vector<Value> cells(val_cols, Value::blank());
   if (row_indices.empty()) {
+    note_unknown_error_origin();
     for (std::uint32_t v = 0; v < val_cols; ++v) {
       cells[v] = Value::error(ErrorCode::Calc);
     }
@@ -768,6 +776,7 @@ std::vector<Value> aggregate_value_columns(const ArrayValue& values, std::uint32
 
 Value rows_to_array_value(const std::vector<std::vector<Value>>& rows, std::uint32_t out_cols, Arena& arena) {
   if (rows.empty()) {
+    note_unknown_error_origin();
     return Value::error(ErrorCode::Calc);
   }
   const std::uint32_t out_rows_n = static_cast<std::uint32_t>(rows.size());

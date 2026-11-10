@@ -11,6 +11,7 @@
 #include "eval/array_alloc.h"
 #include "eval/declared_rect.h"
 #include "eval/dep_graph.h"
+#include "eval/error_origin.h"
 #include "eval/eval_context.h"
 #include "eval/function_registry.h"
 #include "eval/lazy_impls.h"
@@ -303,13 +304,15 @@ Shaped evaluate_bare_range_spill(const parser::Reference& top_left, const parser
 
   const std::uint32_t rows = bottom_right.row - top_left.row + 1U;
   const std::uint32_t cols = bottom_right.col - top_left.col + 1U;
-  if (sheet->probe_spill_footprint(anchor_row, anchor_col, rows, cols) != Sheet::SpillAdmission::kAdmissible) {
+  const Sheet::SpillProbe probe = sheet->probe_spill_footprint(anchor_row, anchor_col, rows, cols);
+  if (probe.admission != Sheet::SpillAdmission::kAdmissible) {
     // A refusal has to be recorded, not just returned: the remembered
     // rectangle is what lets the release machinery retry this anchor once
     // the blocker goes away. A read-only context cannot record anything,
     // and commits nothing either, so it simply reports the error.
     if (Sheet* target = ctx.mutable_sheet(); target == sheet) {
-      target->reject_spill_footprint(anchor_row, anchor_col, rows, cols);
+      target->reject_spill_footprint(anchor_row, anchor_col, rows, cols, probe.cause);
+      note_spill_refused_here();
     }
     return Shaped{Value::error(ErrorCode::Spill), nullptr};
   }

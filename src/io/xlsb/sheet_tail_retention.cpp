@@ -40,8 +40,10 @@ bool IsWriterRegeneratedSheetRecord(XlsbRecordType type) {
     // Re-derived for every spilled dynamic array from the sheet's spill
     // regions, keyed to the workbook's own XLDAPR metadata entry. The
     // entry travels with the workbook, so a package that carried these
-    // records carries the metadata part that makes them meaningful.
+    // records carries the metadata part that makes them meaningful. The
+    // value-metadata record likewise names a rich value of the regenerated part.
     case XlsbRecordType::BrtCellMeta:
+    case XlsbRecordType::BrtValueMeta:
       return true;
     default:
       return false;

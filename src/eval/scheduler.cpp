@@ -152,26 +152,29 @@ std::vector<LayerProducer> misordered_spill_producers(const Workbook& wb, const 
     return {};
   }
   const std::vector<SpillFootprint> committed = sheet.committed_spill_footprints();
-  const auto footprint_at = [](const std::vector<SpillFootprint>& footprints,
-                               CellNodeId anchor) -> const SpillFootprint* {
-    for (const SpillFootprint& footprint : footprints) {
+  // Blocked and committed snapshots carry different record types over the same rectangle fields.
+  const auto footprint_at = [](const auto& footprints, CellNodeId anchor) {
+    decltype(footprints.data()) found = nullptr;
+    for (const auto& footprint : footprints) {
       if (footprint.anchor_row == anchor.row && footprint.anchor_col == anchor.col) {
-        return &footprint;
+        found = &footprint;
+        break;
       }
     }
-    return nullptr;
+    return found;
   };
   for (const LayerProducer& loser : on_sheet) {
-    const SpillFootprint* refused = footprint_at(blocked, loser.anchor);
+    const BlockedSpillFootprint* refused = footprint_at(blocked, loser.anchor);
     if (refused == nullptr) {
       continue;
     }
+    const SpillFootprint refused_rect{refused->anchor_row, refused->anchor_col, refused->rows, refused->cols};
     for (const LayerProducer& winner : on_sheet) {
       if (winner.scc_id <= loser.scc_id) {
         continue;
       }
       const SpillFootprint* region = footprint_at(committed, winner.anchor);
-      if (region != nullptr && footprints_overlap(*refused, *region)) {
+      if (region != nullptr && footprints_overlap(refused_rect, *region)) {
         return on_sheet;
       }
     }
@@ -244,7 +247,7 @@ CellEvalStatus evaluate_formula_cell(Workbook& wb, Sheet& sheet, CellNodeId cell
   opts.spill_release_callback = release_callback;
   opts.spill_release_user_data = release_user_data;
   obs.observe(cell, opts, &sheet);
-  Value result = evaluate_cell_for_recalc(wb, sheet, staged, cell.row, cell.col, registry, arena, opts);
+  const CellResult result = evaluate_cell_for_recalc(wb, sheet, staged, cell.row, cell.col, registry, arena, opts);
   if (obs.log != nullptr) {
     obs.log->end();
   }
@@ -253,9 +256,9 @@ CellEvalStatus evaluate_formula_cell(Workbook& wb, Sheet& sheet, CellNodeId cell
   }
   if (commit_mutex != nullptr) {
     const std::lock_guard<std::mutex> guard(*commit_mutex);
-    sheet.set_cell_cached_value(cell.row, cell.col, result);
+    commit_cell_result(sheet, cell.row, cell.col, result);
   } else {
-    sheet.set_cell_cached_value(cell.row, cell.col, result);
+    commit_cell_result(sheet, cell.row, cell.col, result);
   }
   obs.note_commit(cell);
   return CellEvalStatus::kCommitted;
@@ -317,6 +320,7 @@ SccOutcome process_scc(const std::vector<CellNodeId>& component, Workbook& wb, c
         std::lock_guard<std::mutex> guard(write_mutex);
         SpillCommitter committer(&sheet, c.row, c.col, release_callback, release_user_data);
         sheet.set_cell_cached_value(c.row, c.col, committer.commit(unresolved));
+        sheet.clear_error_detail(c.row, c.col);
       }
       return out;
     }

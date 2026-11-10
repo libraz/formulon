@@ -3,12 +3,14 @@
 // edge is applied and leaves the report blocked behind `#SPILL!`; creating a
 // report there is refused; moving one is a cut and paste that overwrites the
 // destination or is refused. `fm_sheet_get_spill` and
-// `fm_sheet_get_pivot_spill` report the range a blocked report needs.
+// `fm_sheet_get_pivot_spill` report the range a blocked report needs, and the
+// range a drawn report covers.
 //
 // Each case first runs its trigger on a book without the occupant (the
 // control) to learn the range the report grows to, then places the occupant at
 // that range's bottom-right cell, outside the report's current range.
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <limits>
@@ -245,6 +247,27 @@ std::optional<fm_spill_info_t> PivotSpill(const fm_workbook_t* wb, std::size_t p
   }
   EXPECT_EQ(present, 1);
   return info;
+}
+
+// True when `spill` reports a blocked report.
+bool Blocked(const std::optional<fm_spill_info_t>& spill) {
+  return spill.has_value() && spill->blocked != 0;
+}
+
+// Expects `spill` to report a drawn report over `rect`.
+void ExpectDrawn(const std::optional<fm_spill_info_t>& spill, const fm_cell_rect_t& rect) {
+  ASSERT_TRUE(spill.has_value());
+  EXPECT_EQ(spill->blocked, 0);
+  EXPECT_EQ(spill->cause, FM_SPILL_CAUSE_ABSENT);
+  ExpectRect(spill->rect, rect);
+}
+
+// Expects `spill` to report a report blocked by `cause` that needs `rect`.
+void ExpectBlocked(const std::optional<fm_spill_info_t>& spill, std::int32_t cause, const fm_cell_rect_t& rect) {
+  ASSERT_TRUE(spill.has_value());
+  EXPECT_EQ(spill->blocked, 1);
+  EXPECT_EQ(spill->cause, cause);
+  ExpectRect(spill->rect, rect);
 }
 
 // `fm_sheet_get_spill` at a cell, as nullopt when nothing is reported.
@@ -491,7 +514,7 @@ void RunEdit(const Case& c) {
     control.AddMainPivot(c.kind, &pivot);
     current = Bounds(control.wb.handle, pivot);
     ASSERT_EQ(control.Edit(c.trigger, c.kind, pivot), 0) << fm_get_last_error_message();
-    ASSERT_FALSE(PivotSpill(control.wb.handle, pivot).has_value());
+    ASSERT_FALSE(Blocked(PivotSpill(control.wb.handle, pivot)));
     grown = Bounds(control.wb.handle, pivot);
     ASSERT_FALSE(Inside(current, grown.last_row, grown.last_col)) << "the trigger must grow the report";
   }
@@ -525,29 +548,32 @@ void RunEdit(const Case& c) {
   const std::optional<fm_spill_info_t> spill = PivotSpill(book.wb.handle, pivot);
   switch (c.expected) {
     case Outcome::kRendered:
-      EXPECT_FALSE(spill.has_value());
+      ExpectDrawn(spill, grown);
       ExpectRect(Bounds(book.wb.handle, pivot), grown);
       EXPECT_FALSE(IsSpillError(anchor));
       break;
     case Outcome::kBlocked: {
-      ASSERT_TRUE(spill.has_value());
-      EXPECT_EQ(spill->blocked, 1);
-      ExpectRect(spill->rect, grown);
+      // A merge is the one occupant with a cause of its own.
+      const std::int32_t cause = c.occupant == Occupant::kEmptyMerge ? FM_SPILL_CAUSE_MERGED : FM_SPILL_CAUSE_OCCUPIED;
+      ExpectBlocked(spill, cause, grown);
       EXPECT_TRUE(IsSpillError(anchor));
       // The occupant is left as it was.
       EXPECT_TRUE(Take(book.wb.handle, grown.last_row, grown.last_col) == before);
-      const std::optional<fm_spill_info_t> at_anchor = CellSpill(book.wb.handle, anchor_row, anchor_col);
-      ASSERT_TRUE(at_anchor.has_value());
-      EXPECT_EQ(at_anchor->blocked, 1);
-      ExpectRect(at_anchor->rect, grown);
+      ExpectBlocked(CellSpill(book.wb.handle, anchor_row, anchor_col), cause, grown);
       break;
     }
-    case Outcome::kBlockedPastEdge:
-      // A range past the edge is not reported, as for a formula's spill.
-      EXPECT_FALSE(spill.has_value());
+    case Outcome::kBlockedPastEdge: {
+      // The range is the grown one moved with the anchor, clipped to the grid.
+      const std::uint32_t down = anchor_row - kAnchorRow;
+      const std::uint32_t right = anchor_col - kAnchorCol;
+      const fm_cell_rect_t clipped{grown.first_row + down, grown.first_col + right,
+                                   std::min(grown.last_row + down, kMaxRows - 1U),
+                                   std::min(grown.last_col + right, kMaxCols - 1U)};
+      ExpectBlocked(spill, FM_SPILL_CAUSE_BEYOND_EDGE, clipped);
       EXPECT_TRUE(IsSpillError(anchor));
-      EXPECT_FALSE(CellSpill(book.wb.handle, anchor_row, anchor_col).has_value());
+      ExpectBlocked(CellSpill(book.wb.handle, anchor_row, anchor_col), FM_SPILL_CAUSE_BEYOND_EDGE, clipped);
       break;
+    }
     case Outcome::kRefused:
     case Outcome::kMoved:
       ADD_FAILURE() << "an edit is never refused or moved";
@@ -576,7 +602,7 @@ void RunMove(const Case& c) {
     case Outcome::kMoved: {
       ASSERT_EQ(rc, 0) << fm_get_last_error_message();
       ExpectRect(Bounds(book.wb.handle, pivot), dest);
-      EXPECT_FALSE(PivotSpill(book.wb.handle, pivot).has_value());
+      ExpectDrawn(PivotSpill(book.wb.handle, pivot), dest);
       EXPECT_FALSE(IsSpillError(ValueAt(book.wb.handle, row, kAnchorCol)));
       // The old range is empty.
       EXPECT_EQ(ValueAt(book.wb.handle, current.last_row, current.first_col).kind, FM_VALUE_KIND_BLANK);
@@ -634,7 +660,7 @@ void RunCreate(const Case& c) {
       ASSERT_EQ(rc, 0) << fm_get_last_error_message();
       EXPECT_EQ(PivotCount(book.wb.handle), pivots + 1U);
       ExpectRect(Bounds(book.wb.handle, created), needed);
-      EXPECT_FALSE(PivotSpill(book.wb.handle, created).has_value());
+      ExpectDrawn(PivotSpill(book.wb.handle, created), needed);
       break;
     case Outcome::kRefused:
       EXPECT_EQ(rc, kPreconditionFailed);
@@ -684,23 +710,19 @@ TEST(FormulonCApiPivotBlocked, GetSpillReportsTheBlockedAnchor) {
   std::size_t pivot = 0;
   book.AddMainPivot(Kind::kNormal, &pivot);
   fm_workbook_t* wb = book.wb.handle;
-  // A drawn report reports nothing.
-  EXPECT_FALSE(PivotSpill(wb, pivot).has_value());
-  EXPECT_FALSE(CellSpill(wb, kAnchorRow, kAnchorCol).has_value());
+  // A drawn report reports the range it covers, at its anchor only.
+  const fm_cell_rect_t drawn = Bounds(wb, pivot);
+  ExpectDrawn(PivotSpill(wb, pivot), drawn);
+  ExpectDrawn(CellSpill(wb, kAnchorRow, kAnchorCol), drawn);
+  EXPECT_FALSE(CellSpill(wb, kAnchorRow + 1U, kAnchorCol).has_value());
   book.Place(Occupant::kValue, grown, std::nullopt);
   ASSERT_EQ(book.Edit(Trigger::kRefresh, Kind::kNormal, pivot), 0) << fm_get_last_error_message();
 
   // The anchor reports the needed range; a cleared body cell and the occupant do not.
-  const std::optional<fm_spill_info_t> at_anchor = CellSpill(wb, kAnchorRow, kAnchorCol);
-  ASSERT_TRUE(at_anchor.has_value());
-  EXPECT_EQ(at_anchor->blocked, 1);
-  ExpectRect(at_anchor->rect, grown);
+  ExpectBlocked(CellSpill(wb, kAnchorRow, kAnchorCol), FM_SPILL_CAUSE_OCCUPIED, grown);
   EXPECT_FALSE(CellSpill(wb, kAnchorRow + 1U, kAnchorCol).has_value());
   EXPECT_FALSE(CellSpill(wb, grown.last_row, grown.last_col).has_value());
-  const std::optional<fm_spill_info_t> own = PivotSpill(wb, pivot);
-  ASSERT_TRUE(own.has_value());
-  EXPECT_EQ(own->blocked, 1);
-  ExpectRect(own->rect, grown);
+  ExpectBlocked(PivotSpill(wb, pivot), FM_SPILL_CAUSE_OCCUPIED, grown);
 
   // Argument checks.
   std::int32_t present = -1;
@@ -717,25 +739,38 @@ TEST(FormulonCApiPivotBlocked, GetSpillReportsTheBlockedAnchor) {
   info.struct_size = 4U;
   EXPECT_EQ(fm_sheet_get_pivot_spill(wb, kSheet, pivot, &present, &info), kInvalidArgument);
 
-  // Clearing the occupant renders the report on the next read; nothing is reported then.
+  // Clearing the occupant renders the report on the next read, which reports the range it covers.
   ASSERT_EQ(fm_sheet_set_blank(wb, kSheet, grown.last_row, grown.last_col), 0);
-  EXPECT_FALSE(CellSpill(wb, kAnchorRow, kAnchorCol).has_value());
-  EXPECT_FALSE(PivotSpill(wb, pivot).has_value());
+  ExpectDrawn(CellSpill(wb, kAnchorRow, kAnchorCol), grown);
+  ExpectDrawn(PivotSpill(wb, pivot), grown);
   EXPECT_FALSE(IsSpillError(ValueAt(wb, kAnchorRow, kAnchorCol)));
   ExpectRect(Bounds(wb, pivot), grown);
 }
 
-TEST(FormulonCApiPivotBlocked, GetSpillDoesNotReportARangePastTheEdge) {
+TEST(FormulonCApiPivotBlocked, GetSpillReportsARangePastTheEdgeClipped) {
+  // A grouping growing the report runs it past the last row.
+  fm_cell_rect_t grown{};
+  {
+    Book control;
+    control.Build();
+    std::size_t pivot = 0;
+    control.AddMainPivot(Kind::kNormal, &pivot);
+    ASSERT_EQ(control.Edit(Trigger::kGrouping, Kind::kNormal, pivot), 0) << fm_get_last_error_message();
+    grown = Bounds(control.wb.handle, pivot);
+  }
   Book book;
   book.Build();
   std::size_t pivot = 0;
   book.AddMainPivot(Kind::kNormal, &pivot);
   const fm_cell_rect_t current = Bounds(book.wb.handle, pivot);
-  const std::uint32_t anchor_row = kAnchorRow + (kMaxRows - 1U) - current.last_row;
+  ASSERT_GT(grown.last_row, current.last_row);
+  const std::uint32_t down = (kMaxRows - 1U) - current.last_row;
+  const std::uint32_t anchor_row = kAnchorRow + down;
   ASSERT_EQ(fm_sheet_set_pivot_anchor(book.wb.handle, kSheet, pivot, anchor_row, kAnchorCol), 0)
       << fm_get_last_error_message();
   ASSERT_EQ(book.Edit(Trigger::kGrouping, Kind::kNormal, pivot), 0) << fm_get_last_error_message();
   EXPECT_TRUE(IsSpillError(ValueAt(book.wb.handle, anchor_row, kAnchorCol)));
-  EXPECT_FALSE(CellSpill(book.wb.handle, anchor_row, kAnchorCol).has_value());
-  EXPECT_FALSE(PivotSpill(book.wb.handle, pivot).has_value());
+  const fm_cell_rect_t clipped{grown.first_row + down, grown.first_col, kMaxRows - 1U, grown.last_col};
+  ExpectBlocked(CellSpill(book.wb.handle, anchor_row, kAnchorCol), FM_SPILL_CAUSE_BEYOND_EDGE, clipped);
+  ExpectBlocked(PivotSpill(book.wb.handle, pivot), FM_SPILL_CAUSE_BEYOND_EDGE, clipped);
 }

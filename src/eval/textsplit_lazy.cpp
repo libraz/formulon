@@ -10,6 +10,7 @@
 #include "eval/array_alloc.h"
 #include "eval/array_context.h"
 #include "eval/coerce.h"
+#include "eval/error_origin.h"
 #include "eval/lazy_impls.h"
 #include "eval/scalar_args.h"
 #include "parser/ast.h"
@@ -304,6 +305,11 @@ Value eval_textsplit_lazy(const parser::AstNode& call, Arena& arena, const Funct
 
   // Mac Excel surfaces #CALC! when ignore_empty wipes the grid clean.
   if (grid.empty()) {
+    if (ignore_empty) {
+      note_calc_sub_type(3U);
+    } else {
+      note_unknown_error_origin();
+    }
     return Value::error(ErrorCode::Calc);
   }
 

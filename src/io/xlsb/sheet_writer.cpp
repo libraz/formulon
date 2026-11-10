@@ -327,7 +327,8 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(
     const SheetRangeTable& sheet_ranges, const NameTable& name_table, const std::vector<std::string>& hyperlink_ids,
     std::uint32_t* downgraded_formula_count, std::uint32_t dynamic_array_ifmd, const NameShapes& name_shapes,
     const std::vector<std::string>& table_part_rel_ids, std::uint32_t workbook_views,
-    std::uint32_t* deferred_sparkline_groups, std::string_view drawing_rel_id, bool owns_drawing) {
+    std::uint32_t* deferred_sparkline_groups, std::string_view drawing_rel_id, bool owns_drawing,
+    const RichErrorVmMap* rich_error_vm) {
   std::vector<std::uint8_t> body;
 
   // Frame: BrtBeginSheet | BrtBeginSheetData | ... | BrtEndSheetData |
@@ -410,6 +411,19 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(
 
   std::vector<ColSpan> spans;
   std::vector<std::uint8_t> cell_payload;
+  // Writes the `BrtValueMeta` of an error cell saved with a rich error, ahead of its cell record.
+  const auto emit_value_meta = [&](std::uint32_t row, std::uint32_t col, const Value& shown) {
+    if (rich_error_vm == nullptr || !shown.is_error()) {
+      return;
+    }
+    const std::uint32_t vm = rich_error_vm_at(*rich_error_vm, row, col);
+    if (vm == 0U) {
+      return;
+    }
+    cell_payload.clear();
+    emit_u32(cell_payload, vm);
+    emit_record(body, static_cast<std::uint16_t>(XlsbRecordType::BrtValueMeta), cell_payload);
+  };
   for (const std::uint32_t row : row_indices) {
     const RowLayout* row_layout = find_row_override(sheet.layout(), row);
     const auto stored_it = sheet.rows().find(row);
@@ -515,6 +529,7 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(
             emit_u32(cell_payload, dynamic_array_ifmd);  // XLDAPR dynamic-array metadata entry
             emit_record(body, static_cast<std::uint16_t>(XlsbRecordType::BrtCellMeta), cell_payload);
           }
+          emit_value_meta(row, col, anchor_value);
           if (auto r = emit_array_anchor(body, cell_payload, *cell, anchor_value, always, col, row, last_row, last_col,
                                          sheet_names, sheet_ranges, name_table, sst, downgraded_formula_count,
                                          &downgraded_to_literal, name_shapes);
@@ -527,10 +542,13 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(
         } else if (const DataTable* table = sheet.data_table_anchored_at(row, col);
                    table != nullptr && cell->formula_text.empty()) {
           emit_data_table_anchor(body, cell_payload, *cell, col, *table, sst);
-        } else if (auto r = emit_cell(body, cell_payload, *cell, row, col, always, sst, sheet_names, sheet_ranges,
-                                      name_table, downgraded_formula_count, name_shapes);
-                   !r) {
-          return std::move(r.error());
+        } else {
+          emit_value_meta(row, col, cell->cached_value);
+          if (auto r = emit_cell(body, cell_payload, *cell, row, col, always, sst, sheet_names, sheet_ranges,
+                                 name_table, downgraded_formula_count, name_shapes);
+              !r) {
+            return std::move(r.error());
+          }
         }
         continue;
       }
@@ -539,6 +557,7 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(
           continue;
         }
         const std::uint32_t xf_index = select_effective_xf(sheet, row, col).xf_index;
+        emit_value_meta(row, col, *cur_ph->second.value);
         emit_array_phantom(body, cell_payload, col, xf_index, *cur_ph->second.value, cur_ph->second.anchor_row,
                            cur_ph->second.anchor_col, cur_ph->second.always_calculates);
       }

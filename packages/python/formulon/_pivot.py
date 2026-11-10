@@ -54,7 +54,6 @@ from ._workbook import (
     Unchanged,
     Value,
     _ArgScope,
-    _cell_rect_from,
     _check,
     _decode_cell_rect_at,
     _decode_pivot_filter_operand,
@@ -68,6 +67,7 @@ from ._workbook import (
     _pack_pivot_style_options_patch,
     _read_count,
     _read_cstr_out,
+    _spill_from,
     to_native,
 )
 
@@ -645,12 +645,15 @@ class Pivot(_NoCopy):
         )
 
     def get_spill(self) -> Optional[Spill]:
-        """Return the range a blocked report needs, as ``Spill(blocked=True, range=...)``, or ``None``.
+        """Return the report's range as a :class:`Spill`, or ``None`` for a report neither drawn nor read from a file.
 
-        The record is the one :meth:`Sheet.get_spill` returns at the anchor. ``None`` while the report is drawn or
-        was never drawn, and for a report blocked past the sheet edge. A blocked report loaded without its cache
-        records reports its anchor alone; one whose cache changed since it was blocked reports the last range it
-        needed. Pending cells are calculated first, which renders a report whose range came free.
+        The record is the one :meth:`Sheet.get_spill` returns at the anchor. A drawn report reads ``blocked=False``
+        with the range it was last drawn over, also while a cache change has left it pending, and one read from a
+        file and not laid out since reads the location it was read with. A blocked report reads ``blocked=True``
+        with the range it needs, clipped to the grid, and its ``cause``. A blocked report loaded from a file reports
+        the range the file recorded, the anchor alone when it records none, until a recalc lays it out again; one
+        whose cache has no records keeps it, and one whose cache changed since it was blocked reports the last range
+        it needed. Pending cells are calculated first, which renders a report whose range came free.
         """
         h, sheet, pivot_index = self._locate()
         with _ArgScope() as scope:
@@ -667,8 +670,7 @@ class Pivot(_NoCopy):
             )
             if LIB.read_i32(present) == 0:
                 return None
-            d = S.SPILL_INFO.unpack(LIB, ptr)
-            return Spill(blocked=bool(d["blocked"]), range=_cell_rect_from(d["rect"]))
+            return _spill_from(S.SPILL_INFO.unpack(LIB, ptr))
 
     @overload
     def show_details(self, row: int, col: int) -> Sheet: ...

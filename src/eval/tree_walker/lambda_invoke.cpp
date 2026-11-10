@@ -11,6 +11,7 @@
 #include <string_view>
 #include <vector>
 
+#include "eval/error_origin.h"
 #include "eval/eval_context.h"
 #include "eval/function_registry.h"
 #include "eval/lambda_value.h"
@@ -91,6 +92,7 @@ class LambdaCall {
       return;
     }
     if (guard_.exceeded()) {
+      note_unknown_error_origin();
       error_ = ErrorCode::Calc;
       return;
     }

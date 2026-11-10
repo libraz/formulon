@@ -98,7 +98,7 @@ void mark_spill_anchor_dirty_if_covered(const eval::RecalcEngine::LockedMutator&
 // own lock; marking happens after that lock is released, preserving the
 // workbook's engine-mutex -> sheet/spill-mutex order.
 void mark_blocked_spill_anchors_intersecting(const eval::RecalcEngine::LockedMutator& mutator, std::size_t sheet_index,
-                                             const std::vector<Sheet>& sheets, const BlockedSpillFootprint& rectangle) {
+                                             const std::vector<Sheet>& sheets, const SpillFootprint& rectangle) {
   for (const CellAddress anchor : sheets[sheet_index].blocked_spill_anchors_intersecting(
            rectangle.anchor_row, rectangle.anchor_col, rectangle.rows, rectangle.cols)) {
     mutator.mark_dirty(make_node(sheet_index, anchor.row, anchor.col));
@@ -107,7 +107,7 @@ void mark_blocked_spill_anchors_intersecting(const eval::RecalcEngine::LockedMut
 
 void mark_blocked_spill_anchors_intersecting(const eval::RecalcEngine::LockedMutator& mutator, std::size_t sheet_index,
                                              const std::vector<Sheet>& sheets, std::uint32_t row, std::uint32_t col) {
-  mark_blocked_spill_anchors_intersecting(mutator, sheet_index, sheets, BlockedSpillFootprint{row, col, 1U, 1U});
+  mark_blocked_spill_anchors_intersecting(mutator, sheet_index, sheets, SpillFootprint{row, col, 1U, 1U});
 }
 
 void mark_blocked_spill_anchors_released_by_cell(const eval::RecalcEngine::LockedMutator& mutator,
@@ -123,10 +123,11 @@ void mark_blocked_spill_anchors_released_by_cell(const eval::RecalcEngine::Locke
 }
 
 // Dirties the cell, its dependents and every spill anchor the write wakes,
-// and drops the cell's outgoing edges. Precondition: caller holds the engine
-// mutex; call before the sheet write.
+// drops the cell's outgoing edges and its error detail. Precondition: caller
+// holds the engine mutex; call before the sheet write.
 void prepare_cell_overwrite(const eval::RecalcEngine::LockedMutator& mutator, std::size_t sheet_index,
-                            const std::vector<Sheet>& sheets, std::uint32_t row, std::uint32_t col) {
+                            std::vector<Sheet>& sheets, std::uint32_t row, std::uint32_t col) {
+  sheets[sheet_index].clear_error_detail(row, col);
   const eval::CellNodeId node = make_node(sheet_index, row, col);
   mutator.mark_dirty(node);
   detail::mark_dependents_dirty(mutator, node);
@@ -322,6 +323,7 @@ void Workbook::put_cell_formula_locked(std::size_t sheet_index, std::uint32_t ro
     // into a live spill's phantom re-dirties the anchor.
     mark_spill_anchor_dirty_if_covered(mutator, sheet_index, sheets_, row, col);
     mark_blocked_spill_anchors_released_by_cell(mutator, sheet_index, sheets_, row, col);
+    sheets_[sheet_index].clear_error_detail(row, col);
     // Persist the formula text on the sheet first so a later `recalc()`
     // reads what the user actually typed. This also resets `cached_value`
     // to blank.

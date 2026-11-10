@@ -21,12 +21,14 @@
 #include <cstdint>
 #include <functional>
 #include <mutex>
+#include <optional>
 #include <vector>
 
 #include "cell.h"
 #include "eval/dep_graph.h"
 #include "eval/eval_context.h"
 #include "eval/spill_committer.h"
+#include "sheet_metadata.h"
 #include "value.h"
 
 namespace formulon {
@@ -80,9 +82,22 @@ struct EvaluateCellOptions {
 /// outside the loop rather than per iteration.
 bool stage_formula_cell(const Sheet& sheet, std::uint32_t row, std::uint32_t col, Cell& staged);
 
+/// One formula cell's evaluation as the recalc driver commits it: the value,
+/// and the cell's rich error detail, or `clear` to drop an earlier one.
+struct CellResult {
+  Value value = Value::blank();
+  std::optional<CellErrorDetail> detail;
+  bool clear = true;
+};
+
+/// Writes `result` to `(row, col)`: the cached value and, with it, the
+/// error detail. Every recalc commit of an evaluated formula goes through here.
+void commit_cell_result(Sheet& sheet, std::uint32_t row, std::uint32_t col, const CellResult& result);
+
 /// Re-parses and evaluates the formula at `(row, col)` on `sheet`. Returns
-/// the result `Value` (or an Excel error sentinel on parse failure). The
-/// caller is responsible for writing the result back to the cell.
+/// the result (an Excel error sentinel on parse failure) with its error
+/// detail, classified by where the error came from (`eval/error_origin.h`).
+/// The caller is responsible for writing the result back to the cell.
 ///
 /// `arena` MUST be safe to mutate from the calling thread — the scheduler
 /// uses one arena per worker so concurrent invocations do not race on the
@@ -95,9 +110,9 @@ bool stage_formula_cell(const Sheet& sheet, std::uint32_t row, std::uint32_t col
 /// `EvalContext::dispatch_array_result` and the anchor scalar is
 /// returned, mirroring the behaviour of recursive Array results inside
 /// `EvalContext::resolve_ref`.
-Value evaluate_cell_for_recalc(Workbook& workbook, Sheet& sheet, const Cell& cell_data, std::uint32_t row,
-                               std::uint32_t col, const FunctionRegistry& registry, Arena& arena,
-                               const EvaluateCellOptions& opts = {});
+CellResult evaluate_cell_for_recalc(Workbook& workbook, Sheet& sheet, const Cell& cell_data, std::uint32_t row,
+                                    std::uint32_t col, const FunctionRegistry& registry, Arena& arena,
+                                    const EvaluateCellOptions& opts = {});
 
 /// Evaluation and commit glue for the members of a cyclic component, shared
 /// by the serial engine and the parallel scheduler. `evaluate` stages the
@@ -125,7 +140,8 @@ class CyclicComponentEvaluator {
   /// `EvaluateCellOptions::read_observer`.
   Value evaluate(CellNodeId cell, EvalState* observer);
 
-  /// Writes `value` to `cell`'s cached value.
+  /// Writes `value` to `cell`'s cached value, with the error detail of the
+  /// evaluation that produced it when that was the last one, else none.
   void commit(CellNodeId cell, Value value);
 
  private:
@@ -141,6 +157,9 @@ class CyclicComponentEvaluator {
   // returned Value as a view into this buffer, and the caller consumes each
   // result before asking for the next one (which resets the arena).
   Cell staged_;
+  // The last evaluation's cell and detail; drivers commit right after evaluating.
+  std::optional<CellNodeId> last_cell_;
+  std::optional<CellErrorDetail> last_detail_;
 };
 
 /// Settles the cells of a statically cyclic component by what they read (see

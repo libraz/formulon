@@ -16,7 +16,7 @@ async function loadPackage() {
 }
 
 const f = await (await loadPackage()).createFormulon();
-const { PivotAxis, PivotAggregation, StatusCode } = f;
+const { PivotAxis, PivotAggregation, SpillCause, StatusCode } = f;
 
 /** Runs `body(ws, wb)` on a default workbook, then disposes it. */
 function withSheet(body) {
@@ -99,21 +99,23 @@ describe('PivotCache.refresh', () => {
   it('blocks a report that cannot grow and renders it once its range is free', () => {
     withSheet((ws, wb) => {
       const { cache, pivot } = build(ws, wb);
-      assert.equal(pivot.getSpill(), null);
       // The report fills E1:F4; North makes it one row longer, into E5.
+      const drawn = { firstRow: 0, firstCol: 4, lastRow: 3, lastCol: 5 };
+      assert.deepEqual(pivot.getSpill(), { blocked: false, cause: null, range: drawn });
       for (let row = 4; row < 9; row++) ws.setText(row, 4, 'keep');
       ws.setText('A4', 'North');
       assert.equal(cache.refresh(), undefined);
       assert.deepEqual(sharedValues(cache, 'Region'), ['East', 'West', 'North']);
       assert.equal(pivot.isProjectionPending(), false);
       const needed = { firstRow: 0, firstCol: 4, lastRow: 4, lastCol: 5 };
-      assert.deepEqual(pivot.getSpill(), { blocked: true, range: needed });
-      assert.deepEqual(ws.getSpill('E1'), { blocked: true, range: needed });
+      assert.deepEqual(pivot.getSpill(), { blocked: true, cause: SpillCause.Occupied, range: needed });
+      assert.deepEqual(ws.getSpill('E1'), { blocked: true, cause: SpillCause.Occupied, range: needed });
       assert.equal(ws.getSpill('F2'), null);
       assert.equal(ws.getValue(4, 4), 'keep');
       for (let row = 4; row < 9; row++) ws.setBlank(row, 4);
-      assert.equal(pivot.getSpill(), null);
-      assert.equal(ws.getSpill('E1'), null);
+      assert.deepEqual(pivot.getSpill(), { blocked: false, cause: null, range: needed });
+      assert.deepEqual(ws.getSpill('E1'), { blocked: false, cause: null, range: needed });
+      assert.equal(ws.getSpill('F2'), null);
       let seen = false;
       for (let row = 0; row < 6; row++) seen ||= ws.getValue(row, 4) === 'North';
       assert.ok(seen, 'the report shows the new item');

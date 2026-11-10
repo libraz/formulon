@@ -520,13 +520,16 @@ std::string write_pivot_table_definition(const pivot::PivotTable& table, std::op
                           offset(table.location_first_header_row(), loc_defaults.first_header_row));
   append_xml_attr_uint_if(out, "firstDataRow", offset(table.location_first_data_row(), loc_defaults.first_data_row));
   append_xml_attr_uint_if(out, "firstDataCol", offset(table.location_first_data_col(), loc_defaults.first_data_col));
-  // rowPageCount / colPageCount are optional: a table without page fields omits them.
-  append_xml_attr_uint_if(
-      out, "rowPageCount",
-      table.location_row_page_count() ? table.location_row_page_count() : loc_defaults.row_page_count);
-  append_xml_attr_uint_if(
-      out, "colPageCount",
-      table.location_col_page_count() ? table.location_col_page_count() : loc_defaults.col_page_count);
+  // rowPageCount / colPageCount are optional: a table without page fields omits them, and so does a
+  // withheld report, whose page cells are empty; the model keeps the counts.
+  if (!blocked) {
+    append_xml_attr_uint_if(
+        out, "rowPageCount",
+        table.location_row_page_count() ? table.location_row_page_count() : loc_defaults.row_page_count);
+    append_xml_attr_uint_if(
+        out, "colPageCount",
+        table.location_col_page_count() ? table.location_col_page_count() : loc_defaults.col_page_count);
+  }
   out.append("/>");
 
   // `<pivotFields>` is always emitted (even for an empty count) so the

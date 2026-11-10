@@ -31,6 +31,7 @@
 #include "eval/defined_name_resolve.h"
 #include "eval/dep_graph.h"
 #include "eval/dynamic_array/anchor.h"
+#include "eval/error_origin.h"
 #include "eval/eval_clock_scope.h"
 #include "eval/eval_context.h"
 #include "eval/eval_profile_scope.h"
@@ -310,6 +311,16 @@ Value snap_array_result(const Value& out, const Value& lhs, const Value& rhs, Ar
   return Value::array(snapped);
 }
 
+// A scalar error on the left is the result whatever the right operand holds,
+// so the right operand's evaluation leaves the left error's origin in place.
+Shaped eval_operand_after_left_error(const parser::AstNode& operand, Arena& arena, const FunctionRegistry& registry,
+                                     const EvalContext& ctx) {
+  const ErrorOriginSnapshot left_origin = snapshot_error_origin();
+  Shaped rhs = eval_node_shaped(operand, arena, registry, ctx);
+  restore_error_origin(left_origin);
+  return rhs;
+}
+
 // A binary operator chain, folded left to right. `snap_cancellation_result`
 // applies Excel's near-zero cancellation snap to the last `+` / `-` result,
 // cell by cell when it is an array.
@@ -320,7 +331,9 @@ Shaped eval_binary_op(const parser::AstNode& node, Arena& arena, const FunctionR
   Shaped lhs = eval_node_shaped(node.as_binary_operand(0), arena, registry, ctx);
   const std::uint32_t arity = node.as_binary_arity();
   for (std::uint32_t i = 1; i < arity; ++i) {
-    const Shaped rhs = eval_node_shaped(node.as_binary_operand(i), arena, registry, ctx);
+    const Shaped rhs = lhs.tail_array == nullptr && lhs.value.is_error()
+                           ? eval_operand_after_left_error(node.as_binary_operand(i), arena, registry, ctx)
+                           : eval_node_shaped(node.as_binary_operand(i), arena, registry, ctx);
     const bool lhs_array = lhs.tail_array != nullptr || lhs.value.is_array();
     const bool rhs_array = rhs.tail_array != nullptr || rhs.value.is_array();
     if (!rhs_array && lhs.tail_array == nullptr && lhs.value.is_error()) {
@@ -360,6 +373,7 @@ Shaped eval_root_shaped(const parser::AstNode& node, Arena& arena, const Functio
       (node.as_binary_op(0) == parser::BinOp::Add || node.as_binary_op(0) == parser::BinOp::Sub)) {
     EvalDepthGuard depth_guard(ctx.eval_depth_counter(), kMaxEvalDepth);
     if (depth_guard.exceeded()) {
+      note_unknown_error_origin();
       return Shaped{Value::error(ErrorCode::Calc), nullptr};
     }
     return eval_binary_op(node, arena, registry, ctx, /*snap_cancellation_result=*/true);
@@ -386,6 +400,7 @@ Shaped eval_node_shaped(const parser::AstNode& node, Arena& arena, const Functio
   // and any other re-entrant evaluator path. See `kMaxEvalDepth`.
   EvalDepthGuard depth_guard(ctx.eval_depth_counter(), kMaxEvalDepth);
   if (depth_guard.exceeded()) {
+    note_unknown_error_origin();
     return Shaped{Value::error(ErrorCode::Calc), nullptr};
   }
   switch (node.kind()) {

@@ -18,6 +18,7 @@
 #include "eval/builtins/numeric_helpers.h"
 #include "eval/builtins/registration_helpers.h"
 #include "eval/coerce.h"
+#include "eval/error_origin.h"
 #include "eval/eval_context.h"
 #include "eval/function_registry.h"
 #include "eval/lazy_impls.h"
@@ -108,6 +109,7 @@ Value Concat(const Value* args, std::uint32_t arity, Arena& arena) {
     return Value::error(joined.error());
   }
   if (utf16_units_in(joined.value()) > kExcelTextCapUnits) {
+    note_error_origin(CellErrorDetail{ErrorCode::Calc, CellErrorDetail::Shape::kIftab, 9U, 606U});
     return Value::error(ErrorCode::Calc);
   }
   return Value::text(arena.intern(joined.value()));

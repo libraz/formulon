@@ -185,6 +185,11 @@ struct ReportOccupant {
 std::optional<ReportOccupant> find_report_occupant(const Workbook& wb, std::size_t sheet_index, std::size_t pivot_index,
                                                    const MergeRange& target, const MergeRange& own);
 
+/// Why `target` is blocked for pivot `pivot_index`, over the occupants `find_report_occupant` sees: `kMerged` when
+/// the first obstructed cell in row-major order lies in a merge not inside `own`, else `kOccupied`.
+SpillCause report_blocker_cause(const Workbook& wb, std::size_t sheet_index, std::size_t pivot_index,
+                                const MergeRange& target, const MergeRange& own);
+
 /// Whether pivot `a` (at `a_index` on its sheet) was created before pivot `b` (at `b_index` on the same sheet):
 /// the smaller `creation_order`, else the later position in the sheet's list, as Excel lists newer pivots first.
 inline bool created_before(const pivot::PivotTable& a, std::size_t a_index, const pivot::PivotTable& b,

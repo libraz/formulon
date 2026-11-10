@@ -13,6 +13,7 @@
 
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
+#include "c_api/parts/enum_map.h"
 #include "eval/eval_profile_scope.h"
 #include "pivot/field_remap.h"
 #include "pivot/pivot_cache.h"
@@ -22,6 +23,7 @@
 #include "utils/expected.h"
 #include "value.h"
 #include "workbook.h"
+#include "workbook_internal.h"
 
 namespace formulon {
 namespace c_api {
@@ -135,18 +137,27 @@ fm_status_t resolve_pivot_checked(const fm_workbook_t* wb, std::initializer_list
   return resolve_pivot(wb, sheet_index, pivot_index, out);
 }
 
-std::optional<fm_cell_rect_t> blocked_pivot_rect(const formulon::pivot::PivotTable& table) {
+bool pivot_spill_info(const formulon::pivot::PivotTable& table, fm_spill_info_t* out) {
   const std::optional<formulon::pivot::BlockedReport>& state = table.blocked();
-  if (!state.has_value() || state->past_edge) {
-    return std::nullopt;
+  if (state.has_value()) {
+    const std::uint32_t above = std::min(state->rows_above, table.anchor_row());
+    const std::uint32_t first_row = table.anchor_row() - above;
+    const std::uint32_t rows = std::min(state->rows, formulon::Sheet::kMaxRows - first_row);
+    const std::uint32_t cols = std::min(state->cols, formulon::Sheet::kMaxCols - table.anchor_col());
+    out->rect = cell_rect_from_extent(first_row, table.anchor_col(), rows, cols);
+    out->blocked = 1;
+    out->cause = to_c(state->cause);
+    return true;
   }
-  const std::uint32_t above = std::min(state->rows_above, table.anchor_row());
-  const std::uint32_t first_row = table.anchor_row() - above;
-  if (static_cast<std::uint64_t>(first_row) + state->rows > formulon::Sheet::kMaxRows ||
-      static_cast<std::uint64_t>(table.anchor_col()) + state->cols > formulon::Sheet::kMaxCols) {
-    return std::nullopt;
+  if (!table.projected_extent().has_value() && !table.span_read()) {
+    return false;
   }
-  return cell_rect_from_extent(first_row, table.anchor_col(), state->rows, state->cols);
+  // A report read from a file and not laid out since covers its location.
+  const formulon::MergeRange drawn = formulon::detail::pivot_occupied_extent(table);
+  out->rect = fm_cell_rect_t{drawn.first_row, drawn.first_col, drawn.last_row, drawn.last_col};
+  out->blocked = 0;
+  out->cause = FM_SPILL_CAUSE_ABSENT;
+  return true;
 }
 
 void invalidate_pivot_result(formulon::Workbook& wb, formulon::pivot::PivotTable& table) {

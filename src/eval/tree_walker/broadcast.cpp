@@ -34,6 +34,7 @@
 
 #include "eval/array_alloc.h"
 #include "eval/coerce.h"
+#include "eval/error_origin.h"
 #include "eval/function_registry.h"
 #include "eval/scalar_ops.h"
 #include "parser/ast.h"
@@ -323,8 +324,11 @@ Value eval_broadcast_cell(const FunctionDef& def, const std::vector<BroadcastArg
                           std::uint32_t r, std::uint32_t c, Arena& arena) {
   for (std::size_t a = 0; a < views.size(); ++a) {
     cell_args[a] = broadcast_element(views[a], r, c);
-    if (def.propagate_errors && cell_args[a].is_error()) {
-      return cell_args[a];
+    if (cell_args[a].is_error()) {
+      if (def.propagate_errors) {
+        return cell_args[a];
+      }
+      forget_error_origin();
     }
   }
   return def.impl(cell_args.data(), static_cast<std::uint32_t>(cell_args.size()), arena);

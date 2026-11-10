@@ -1051,6 +1051,7 @@ SPILL_INFO = Struct(
     [
         ("rect", nested(CELL_RECT)),
         ("blocked", I32),
+        ("cause", I32),
     ],
 )
 

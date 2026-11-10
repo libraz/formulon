@@ -15,6 +15,7 @@
 #include <vector>
 
 #include "io/array_anchor_budget.h"
+#include "io/rich_value_errors.h"
 #include "io/xlsb/ptg_reader.h"
 #include "phonetic.h"
 #include "protection.h"
@@ -92,19 +93,27 @@ struct SheetDecodeState {
   /// caller keeps as dynamic-array formulas those whose `ifmd` is the
   /// workbook's dynamic-array entry (`apply_loaded_dynamic_array_marks`).
   std::vector<std::tuple<std::uint32_t, std::uint32_t, std::uint32_t>> cell_metadata;
+  /// Value-metadata index of the `BrtValueMeta` just read, which applies to
+  /// the next cell record of either kind; 0 when none is pending.
+  std::uint32_t pending_value_meta = 0;
+  /// Every cell a `BrtValueMeta` preceded, for the rich-error restore.
+  std::vector<RichErrorCell> value_metadata;
 };
 
 /// Decodes one sheet binary part. Cells (literal + formula) flow into
 /// `wb.sheet(sheet_index)`. SST indices are resolved against
 /// `sst_entries`; out-of-range indices are returned as
-/// `kIoXlsbCorrupt`.
+/// `kIoXlsbCorrupt`. A non-null `rich_errors` restores the sheet's rich errors
+/// before its spill regions are registered; a constant saved with a spill
+/// value is appended to `*deferred` for the pivot hook.
 Expected<SheetDecodeState, Error> DecodeSheetBin(
     const std::vector<std::uint8_t>& body, std::size_t sheet_index, Workbook& wb,
     const std::vector<std::string_view>& sst_entries, const std::vector<std::vector<PhoneticRun>>& sst_phonetic,
     const std::vector<PhoneticProperties>& sst_phonetic_props, std::deque<std::string>& text_storage,
     const std::vector<std::string>& sheet_names, const std::vector<XlsbName>& name_table,
     const std::vector<XlsbSheetRange>& sheet_ranges, const XlsbExternalBooks& external_books,
-    std::uint32_t* undecoded_formula_count);
+    std::uint32_t* undecoded_formula_count, const RichErrorSet* rich_errors = nullptr,
+    std::vector<DeferredSpillAnchor>* deferred = nullptr);
 
 /// True for a worksheet-tail record the grammar places after the hyperlinks
 /// (print setup through the LISTPARTS block).

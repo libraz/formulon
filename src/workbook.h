@@ -1433,6 +1433,22 @@ class Workbook {
   /// range is free. Readers call it after the pivots and their caches are loaded.
   void adopt_saved_blocked_pivots();
 
+  /// Restores a formula anchor saved as a blocked spill: the anchor caches `#SPILL!` and keeps the `rows` x `cols`
+  /// footprint with `cause`, which the next recalc recomputes. Readers call it while decoding cells, before array
+  /// spills are registered.
+  Expected<void, Error> restore_blocked_spill(std::size_t sheet_index, std::uint32_t row, std::uint32_t col,
+                                              std::uint32_t rows, std::uint32_t cols, SpillCause cause);
+
+  /// Restores a cell saved with a rich error: its cached value becomes `code` and `error_detail` is recorded for it.
+  Expected<void, Error> restore_error_detail(std::size_t sheet_index, std::uint32_t row, std::uint32_t col,
+                                             ErrorCode code, CellErrorDetail error_detail);
+
+  /// Restores pivot `pivot_index` of `sheet_index` saved blocked with a body of `body_rows` x `cols` and the rich
+  /// error `sub_type` at its anchor (3 past the edge, else an occupant). The report is blocked with an unknown size,
+  /// its page-field rows added above the body, and the anchor caches `#SPILL!`; the next settle re-plans it.
+  Expected<void, Error> restore_blocked_pivot(std::size_t sheet_index, std::size_t pivot_index, std::uint32_t body_rows,
+                                              std::uint32_t cols, std::uint32_t sub_type);
+
   /// Projects every pivot whose cache changed since its last projection. A
   /// pivot that cannot be projected stays pending.
   void project_pending_pivots();

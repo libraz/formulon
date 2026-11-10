@@ -22,6 +22,7 @@
 #include "drawing/drawing_xml.h"
 #include "drawing/slicer_edit.h"
 #include "io/sparkline_groups.h"
+#include "sheet_metadata.h"
 
 namespace formulon {
 namespace c_api {
@@ -480,6 +481,20 @@ inline std::int32_t to_c(cf::TimePeriod value) {
       break;
   }
   return FM_DATE_PERIOD_TODAY;
+}
+
+// --- spill cause --------------------------------------------------------------
+
+inline std::int32_t to_c(SpillCause value) {
+  switch (value) {
+    case SpillCause::kMerged:
+      return FM_SPILL_CAUSE_MERGED;
+    case SpillCause::kBeyondEdge:
+      return FM_SPILL_CAUSE_BEYOND_EDGE;
+    case SpillCause::kOccupied:
+      break;
+  }
+  return FM_SPILL_CAUSE_OCCUPIED;
 }
 
 // --- closed sets the model keeps as OOXML tokens ------------------------------

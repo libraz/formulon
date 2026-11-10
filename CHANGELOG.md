@@ -123,8 +123,19 @@ Upgrading from 0.18: see [Upgrading from 0.18 to 0.19](docs/releases/upgrading-0
   re-projects every pivot on it; cache fields report their sharedItems type
   flags.
 - `Pivot.getSpill()` (Python `get_spill`, C `fm_sheet_get_pivot_spill`) reads
-  the range a blocked pivot report needs, and `Sheet.getSpill` reports it at
-  the report's anchor, as for a blocked formula spill.
+  the range a pivot report covers when drawn, or needs when blocked, and
+  `Sheet.getSpill` reports it at the report's anchor; the report's other cells
+  read `null`.
+- `Spill.cause` (C `fm_spill_info_t.cause`) says what blocks a spill or a pivot
+  report: `SpillCause.Occupied`, `Merged` or `BeyondEdge`, and `null` when
+  nothing does. A spill or report blocked past the sheet edge is reported, with
+  its range clipped to the grid.
+- Saved `.xlsx` and `.xlsb` files carry Excel's rich error values: a `#SPILL!`,
+  a `#CALC!` or a `#VALUE!` with a reason is stored as Excel stores it, so Excel
+  shows the error itself rather than `#VALUE!` before it recalculates. Loading
+  reads them back: the cell's real error, a blocked spill's range and a blocked
+  pivot report. A book holding other rich values (images in cells, linked data
+  types) keeps them unchanged and gets no rich errors.
 - `Pivot.setFieldNumericGroup` groups a field into numeric ranges, and
   `getFieldDateGroup` / `getFieldNumericGroup` read a grouping back.
 - `Sheet.insertCells(range, shift)` and `deleteCells(range, shift)` shift a

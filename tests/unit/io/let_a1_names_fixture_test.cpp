@@ -272,6 +272,29 @@ TEST(LetA1NamesFixture, LoadKeepsCanonicalStoredTextAndDisplay) {
   }
 }
 
+// Excel saved each blocked spill as #VALUE! with a rich value naming the
+// spill; the .xlsx load restores #SPILL! and the needed footprint before any
+// recalculation.
+TEST(LetA1NamesFixture, LoadedSpillErrorsAreRestoredBeforeRecalc) {
+  for (const FixtureCase& c : kCases) {
+    const std::string file = std::string(c.base) + ".xlsx";
+    SCOPED_TRACE(file);
+    Workbook wb = Workbook::create_empty();
+    ASSERT_TRUE(LoadFixture(file, &wb));
+    for (const ExpectedRow& r : c.rows()) {
+      if (r.kind != ExpectedRow::kError || r.error_type != 9) {
+        continue;
+      }
+      SCOPED_TRACE("E" + std::to_string(r.row));
+      const Cell* cell = wb.sheet(0).cell_at(r.row - 1U, kColE);
+      ASSERT_NE(cell, nullptr);
+      ASSERT_TRUE(cell->cached_value.is_error());
+      EXPECT_EQ(cell->cached_value.as_error(), ErrorCode::Spill);
+      EXPECT_TRUE(wb.sheet(0).blocked_spill_footprint_at(r.row - 1U, kColE).has_value());
+    }
+  }
+}
+
 TEST(LetA1NamesFixture, RecalculatedValuesMatchExcel) {
   for (const FixtureCase& c : kCases) {
     for (const std::string& file : FixtureFiles(c)) {

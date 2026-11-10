@@ -30,7 +30,6 @@
 #include "utils/utf8_length.h"
 #include "workbook.h"
 
-using formulon::c_api::parts::blocked_pivot_rect;
 using formulon::c_api::parts::check_cell_coord;
 using formulon::c_api::parts::check_enum_domain;
 using formulon::c_api::parts::check_index;
@@ -55,6 +54,7 @@ using formulon::c_api::parts::pivot_count;
 using formulon::c_api::parts::pivot_num_fmt_code;
 using formulon::c_api::parts::pivot_num_fmt_id_text;
 using formulon::c_api::parts::pivot_show_as_from_fm;
+using formulon::c_api::parts::pivot_spill_info;
 using formulon::c_api::parts::PivotEdit;
 using formulon::c_api::parts::project_pivot;
 using formulon::c_api::parts::publish_scratch;
@@ -1149,10 +1149,9 @@ extern "C" fm_status_t fm_sheet_get_pivot_spill(const fm_workbook_t* wb, std::si
   const std::uint32_t struct_size = out->struct_size;
   *out = FM_STRUCT_INIT(fm_spill_info_t);
   out->struct_size = struct_size;
+  out->cause = FM_SPILL_CAUSE_ABSENT;
   *out_present = 0;
-  if (const std::optional<fm_cell_rect_t> needed = blocked_pivot_rect(*table)) {
-    out->rect = *needed;
-    out->blocked = 1;
+  if (pivot_spill_info(*table, out)) {
     *out_present = 1;
   }
   return 0;

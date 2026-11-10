@@ -9,13 +9,20 @@
 #include <string_view>
 #include <vector>
 
+#include "eval/function_registry.h"
+#include "eval/recalc_engine.h"
 #include "gtest/gtest.h"
+#include "io/ooxml_reader.h"
 #include "io/pivot_table_writer.h"
+#include "io/zip_reader.h"
+#include "miniz.h"
 #include "pivot/pivot_table.h"
 #include "pivot/pivot_types.h"
 #include "pivot_table_reader_test_helpers.h"
 #include "sheet.h"
+#include "support/roundtrip_symmetry.h"
 #include "utils/error.h"
+#include "value.h"
 #include "workbook.h"
 
 namespace formulon::io {
@@ -431,6 +438,80 @@ TEST(PivotTableReader, LastSavedPartIsTheEarliestCreated) {
   assign_read_creation_orders(wb, 0U, 3U);
   EXPECT_EQ(tables[0]->creation_order(), first);
   EXPECT_GT(tables[3]->creation_order(), first);
+}
+
+// Excel's pivot_blocked.xlsx: a report saved blocked, a one-cell location with
+// zero offsets over the anchor A3 of Sheet2, whose rich value is {6, 8, 8, 7}.
+std::vector<std::uint8_t> PivotBlockedSample() {
+  return test::read_file_bytes(std::string(FORMULON_FIXTURES_DIR) + "/excel/rich_errors/pivot_blocked.xlsx");
+}
+
+std::vector<std::uint8_t> ReplacePart(const std::vector<std::uint8_t>& package, const std::string& name,
+                                      const std::string& body) {
+  ZipReader zip;
+  EXPECT_TRUE(static_cast<bool>(zip.open(test::span_of(package))));
+  mz_zip_archive writer{};
+  EXPECT_TRUE(mz_zip_writer_init_heap(&writer, 0, 4096) != MZ_FALSE);
+  for (const std::string& entry : zip.list_entries()) {
+    auto part_or = zip.read_entry(entry);
+    EXPECT_TRUE(static_cast<bool>(part_or));
+    const std::vector<std::uint8_t> part =
+        entry == name ? std::vector<std::uint8_t>(body.begin(), body.end()) : part_or.value();
+    EXPECT_TRUE(mz_zip_writer_add_mem(&writer, entry.c_str(), part.data(), part.size(),
+                                      static_cast<mz_uint>(MZ_DEFAULT_COMPRESSION)) != MZ_FALSE);
+  }
+  void* archive = nullptr;
+  std::size_t archive_size = 0;
+  EXPECT_TRUE(mz_zip_writer_finalize_heap_archive(&writer, &archive, &archive_size) != MZ_FALSE);
+  std::vector<std::uint8_t> out(static_cast<std::uint8_t*>(archive),
+                                static_cast<std::uint8_t*>(archive) + archive_size);
+  mz_free(archive);
+  mz_zip_writer_end(&writer);
+  return out;
+}
+
+TEST(PivotTableReader, BlockedAnchorRestoresTheBlockedState) {
+  auto loaded = read_ooxml(test::span_of(PivotBlockedSample()));
+  ASSERT_TRUE(static_cast<bool>(loaded)) << loaded.error().message;
+  Workbook& wb = loaded.value().workbook;
+  const Sheet* sheet = wb.sheet_by_name("Sheet2");
+  ASSERT_NE(sheet, nullptr);
+  ASSERT_EQ(sheet->pivot_tables().size(), 1U);
+  const pivot::PivotTable& table = *sheet->pivot_tables()[0];
+  ASSERT_TRUE(table.blocked().has_value());
+  const pivot::BlockedReport loaded_state = *table.blocked();
+  // The body rows and columns come from the rich value's offsets; the size is re-planned.
+  EXPECT_EQ(loaded_state.rows - loaded_state.rows_above, 9U);
+  EXPECT_EQ(loaded_state.cols, 7U);
+  EXPECT_FALSE(loaded_state.size_known);
+  EXPECT_FALSE(loaded_state.past_edge);
+  EXPECT_EQ(loaded_state.cause, SpillCause::kOccupied);
+  const Cell* anchor = sheet->cell_at(table.anchor_row(), table.anchor_col());
+  ASSERT_NE(anchor, nullptr);
+  EXPECT_TRUE(anchor->cached_value.is_error() && anchor->cached_value.as_error() == ErrorCode::Spill);
+
+  // The first recalc plans the report; it is still blocked, now with a known size.
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  ASSERT_TRUE(table.blocked().has_value());
+  EXPECT_TRUE(table.blocked()->size_known);
+  EXPECT_EQ(table.blocked()->cols, 7U);
+  EXPECT_EQ(table.blocked()->rows - table.blocked()->rows_above, 9U);
+}
+
+TEST(PivotTableReader, AOneCellReportWithoutARichErrorIsNotBlocked) {
+  const std::vector<std::uint8_t> sample = PivotBlockedSample();
+  std::string sheet_xml;
+  ASSERT_TRUE(test::extract_part(test::span_of(sample), "xl/worksheets/sheet1.xml", &sheet_xml));
+  const std::string anchor = "<c r=\"A3\" s=\"1\" t=\"e\" vm=\"1\"><v>#VALUE!</v></c>";
+  const std::size_t at = sheet_xml.find(anchor);
+  ASSERT_NE(at, std::string::npos) << sheet_xml;
+  sheet_xml.replace(at, anchor.size(), "<c r=\"A3\" s=\"1\"/>");
+  auto loaded = read_ooxml(test::span_of(ReplacePart(sample, "xl/worksheets/sheet1.xml", sheet_xml)));
+  ASSERT_TRUE(static_cast<bool>(loaded)) << loaded.error().message;
+  const Sheet* sheet = loaded.value().workbook.sheet_by_name("Sheet2");
+  ASSERT_NE(sheet, nullptr);
+  ASSERT_EQ(sheet->pivot_tables().size(), 1U);
+  EXPECT_FALSE(sheet->pivot_tables()[0]->blocked().has_value());
 }
 
 }  // namespace

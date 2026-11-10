@@ -9,6 +9,7 @@
 
 #include "eval/array_context.h"
 #include "eval/coerce.h"
+#include "eval/error_origin.h"
 #include "eval/eval_context.h"
 #include "eval/lazy_impls.h"
 #include "eval/name_env_resolve.h"
@@ -297,6 +298,7 @@ Value eval_textjoin_lazy(const parser::AstNode& call, Arena& arena, const Functi
         // on the piece: the cap is a property of the whole string, and the
         // first piece that carries it over is the one that fails the call.
         if (counter.units_of(out) > kExcelTextCapUnits) {
+          note_error_origin(CellErrorDetail{ErrorCode::Calc, CellErrorDetail::Shape::kIftab, 9U, 605U});
           return Value::error(ErrorCode::Calc);
         }
       }

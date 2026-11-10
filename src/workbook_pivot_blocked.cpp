@@ -165,6 +165,61 @@ std::optional<detail::ReportOccupant> detail::find_report_occupant(const Workboo
   return cell_in(sheet, target, own);
 }
 
+SpillCause detail::report_blocker_cause(const Workbook& wb, std::size_t sheet_index, std::size_t pivot_index,
+                                        const MergeRange& target, const MergeRange& own) {
+  const Sheet& sheet = wb.sheet(sheet_index);
+  std::optional<CellAddress> first;
+  const auto consider = [&first](const Occupant& hit) {
+    if (!first.has_value() || hit.row < first->row || (hit.row == first->row && hit.col < first->col)) {
+      first = CellAddress{hit.row, hit.col};
+    }
+  };
+  const auto consider_rect = [&](const MergeRange& rect) {
+    if (intersects(rect, target)) {
+      consider(occupant_at(Occupant::Kind::kCell, rect, target));
+    }
+  };
+  for (std::size_t i = 0; i < sheet.pivot_tables().size(); ++i) {
+    if (i != pivot_index && sheet.pivot_tables()[i] != nullptr) {
+      consider_rect(detail::pivot_occupied_extent(*sheet.pivot_tables()[i]));
+    }
+  }
+  for (const TableMetadata& table : wb.tables()) {
+    if (const std::optional<MergeRange> ref = table_rect_on_sheet(table, sheet_index); ref.has_value()) {
+      consider_rect(normalized(*ref));
+    }
+  }
+  for (const DataTable& table : sheet.data_tables()) {
+    consider_rect(normalized(table.ref));
+  }
+  for (const CellAddress address : sheet.formula_cells_in(0U, 0U, target.last_row, target.last_col)) {
+    const Cell* cell = sheet.cell_at(address.row, address.col);
+    if (cell != nullptr && cell->array_block_rows != 0U) {
+      consider_rect(MergeRange{address.row, address.col, address.row + cell->array_block_rows - 1U,
+                               address.col + cell->array_block_cols - 1U});
+    }
+  }
+  for (const MergeRange& merge : sheet.merges()) {
+    if (!contains(own, normalized(merge))) {
+      consider_rect(normalized(merge));
+    }
+  }
+  if (const std::optional<Occupant> hit = cell_in(sheet, target, own)) {
+    consider(*hit);
+  }
+  if (!first.has_value()) {
+    return SpillCause::kOccupied;
+  }
+  for (const MergeRange& merge : sheet.merges()) {
+    const MergeRange m = normalized(merge);
+    if (!contains(own, m) && first->row >= m.first_row && first->row <= m.last_row && first->col >= m.first_col &&
+        first->col <= m.last_col) {
+      return SpillCause::kMerged;
+    }
+  }
+  return SpillCause::kOccupied;
+}
+
 void Workbook::adopt_saved_blocked_pivots() {
   const auto zero = [](std::optional<std::uint32_t> v) { return v.has_value() && *v == 0U; };
   for (std::size_t s = 0; s < sheets_.size(); ++s) {
@@ -177,7 +232,9 @@ void Workbook::adopt_saved_blocked_pivots() {
       const std::uint32_t row = table->anchor_row();
       const std::uint32_t col = table->anchor_col();
       const Cell* anchor = sheets_[s].cell_at(row, col);
-      if (anchor == nullptr || !anchor->formula_text.empty() || !anchor->cached_value.is_error()) {
+      // An anchor whose rich value was read is decided by that value, not by this shape test.
+      if (anchor == nullptr || !anchor->formula_text.empty() || !anchor->cached_value.is_error() ||
+          sheets_[s].error_detail_at(row, col).has_value()) {
         continue;
       }
       pivot::BlockedReport state;

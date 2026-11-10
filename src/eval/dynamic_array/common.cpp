@@ -13,6 +13,7 @@
 
 #include "eval/coerce.h"
 #include "eval/collation.h"
+#include "eval/error_origin.h"
 #include "eval/eval_profile_scope.h"
 #include "eval/lazy_impls.h"
 #include "eval/omitted_arg.h"
@@ -46,6 +47,7 @@ const ArrayValue* resolve_array_prelude(const parser::AstNode& call, std::uint32
     return nullptr;
   }
   if (reject_empty && (array->rows == 0U || array->cols == 0U)) {
+    note_unknown_error_origin();
     error_out = Value::error(ErrorCode::Calc);
     return nullptr;
   }
@@ -303,6 +305,7 @@ bool resolve_take_drop_range(const parser::AstNode* node, std::uint32_t axis_siz
   }
   if (take) {
     if (count == 0.0) {
+      note_calc_sub_type(3U);
       error_out = Value::error(ErrorCode::Calc);
       return false;
     }
@@ -321,6 +324,7 @@ bool resolve_take_drop_range(const parser::AstNode* node, std::uint32_t axis_siz
   }
   if (count >= 0.0) {
     if (count >= static_cast<double>(axis_size)) {
+      note_calc_sub_type(3U);
       error_out = Value::error(ErrorCode::Calc);
       return false;
     }
@@ -330,6 +334,7 @@ bool resolve_take_drop_range(const parser::AstNode* node, std::uint32_t axis_siz
   }
   const double abs_count = -count;
   if (abs_count >= static_cast<double>(axis_size)) {
+    note_calc_sub_type(3U);
     error_out = Value::error(ErrorCode::Calc);
     return false;
   }

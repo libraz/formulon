@@ -26,6 +26,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/sheet_clone_test.cpp
   unit/sheet_copy_names_test.cpp
   unit/sheet_spill_test.cpp
+  unit/sheet_spill_cause_test.cpp
   unit/sheet_spill_validation_test.cpp
   unit/sheet_read_range_test.cpp
   unit/sheet_spill_lifetime_test.cpp
@@ -142,6 +143,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/io/xlsb_roundtrip_symmetry_test.cpp
   unit/io/xlsb_roundtrip_defined_names_test.cpp
   unit/io/let_a1_names_fixture_test.cpp
+  unit/io/rich_value_errors_test.cpp
   unit/io/xlsb_roundtrip_numeric_layout_test.cpp
   unit/io/xlsb/book_protection_fixture_test.cpp
   unit/io/xlsb/workbook_fidelity_test.cpp
@@ -184,6 +186,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/io/xlsb/sheet_fidelity_test.cpp
   unit/io/sheet_format_pr_roundtrip_test.cpp
   unit/io/xlsb/writer_metadata_test.cpp
+  unit/io/xlsb/rich_value_errors_test.cpp
   unit/io/xlsb/cf_icons_fidelity_test.cpp
   unit/io/xlsb/sparkline_fidelity_test.cpp
   unit/io/xlsb/table_fidelity_test.cpp
@@ -259,6 +262,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/eval/partial_recalc_test.cpp
   unit/eval/recalc_engine_test.cpp
   unit/eval/cell_evaluator_test.cpp
+  unit/eval/error_detail_test.cpp
   unit/eval/display_text_test.cpp
   unit/eval/builtins_subtotal_filter_hidden_test.cpp
   unit/eval/volatile_tracker_test.cpp
@@ -693,6 +697,12 @@ if(DEFINED _FORMULON_BEHAVIOR_PY)
   add_test(
     NAME ApiChangelogIdentifiers
     COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/api/check_changelog_identifiers_test.py
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  )
+  # The propagated rich-value table and its test rows are what the measured sweep generates.
+  add_test(
+    NAME RichValueErrorIftabDrift
+    COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/catalog/gen_rich_value_iftab.py --check
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
   )
   # Every field of every public record carries its own doc comment on all

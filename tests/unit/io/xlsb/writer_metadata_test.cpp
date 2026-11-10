@@ -1,5 +1,6 @@
 // XLSB writer round-trip tests: metadata parts and dynamic-array spills.
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <string>
@@ -7,6 +8,8 @@
 #include <vector>
 
 #include "cell.h"
+#include "eval/function_registry.h"
+#include "eval/recalc_engine.h"
 #include "gtest/gtest.h"
 #include "io/xlsb/metadata_bin.h"
 #include "io/xlsb/reader.h"
@@ -367,6 +370,46 @@ TEST(XlsbMetadataBin, GeneratedPartResolvesToIndexOne) {
   EXPECT_EQ(find_dynamic_array_cell_meta_index(SpanOf(part)), 1U);
 }
 
+TEST(XlsbMetadataBin, ParsesTheValueMetadataItBuilds) {
+  for (const auto& [dynamic_arrays, rich_values] :
+       {std::pair{true, std::size_t{0}}, std::pair{false, std::size_t{2}}, std::pair{true, std::size_t{3}}}) {
+    const std::vector<std::uint8_t> part = build_metadata_bin(dynamic_arrays, rich_values);
+    const RichValueMetadata parsed = parse_metadata_bin(SpanOf(part));
+    EXPECT_TRUE(parsed.consumable) << dynamic_arrays << "/" << rich_values;
+    ASSERT_EQ(parsed.vm_rv.size(), rich_values);
+    for (std::size_t i = 0; i < rich_values; ++i) {
+      EXPECT_EQ(parsed.vm_rv[i], i);
+    }
+    EXPECT_EQ(find_dynamic_array_cell_meta_index(SpanOf(part)), dynamic_arrays ? 1U : 0U);
+  }
+}
+
+TEST(XlsbMetadataBin, ADynamicArrayPartAloneIsWhatTheOldBuilderWrote) {
+  EXPECT_EQ(build_dynamic_array_metadata_bin(), build_metadata_bin(true, 0U));
+}
+
+TEST(XlsbMetadataBin, ParsingRefusesWhatExcelDoesNotWrite) {
+  // A type Excel pairs with other metadata, and a cell list naming two entries.
+  EXPECT_FALSE(parse_metadata_bin(SpanOf(BuildMetadataPart({"XLMDX"}))).consumable);
+  EXPECT_FALSE(parse_metadata_bin(SpanOf(BuildMetadataPart({"XLRICHVALUE", "XLDAPR"}))).consumable);
+  EXPECT_FALSE(parse_metadata_bin(ByteSpan{}).consumable);
+  // A rich-value block of another set: its first payload word is non-zero.
+  std::vector<std::uint8_t> foreign = build_metadata_bin(false, 1U);
+  const std::vector<std::uint8_t> block(8U, 0U);
+  const auto at = std::search(foreign.begin(), foreign.end(), block.begin(), block.end());
+  ASSERT_NE(at, foreign.end());
+  *at = 1U;
+  EXPECT_FALSE(parse_metadata_bin(SpanOf(foreign)).consumable);
+}
+
+TEST(XlsbMetadataBin, ParsingReportsNothingForEveryTruncation) {
+  const std::vector<std::uint8_t> part = build_metadata_bin(true, 2U);
+  ASSERT_TRUE(parse_metadata_bin(SpanOf(part)).consumable);
+  for (std::size_t length = 0; length < part.size(); ++length) {
+    EXPECT_FALSE(parse_metadata_bin(ByteSpan{part.data(), length}).consumable) << "prefix length " << length;
+  }
+}
+
 TEST(XlsbMetadataBin, ReportsZeroForEveryTruncationOfAValidPart) {
   const std::vector<std::uint8_t> part = BuildMetadataPart({"XLRICHVALUE", "XLDAPR"});
   ASSERT_EQ(find_dynamic_array_cell_meta_index(SpanOf(part)), 2U);
@@ -434,6 +477,83 @@ TEST(XlsbWriter, RetainedMetadataPartShipsVerbatimAndIsNotRegenerated) {
   const SheetMetaScan scan = ScanSheetForCellMeta(sheet_or.value());
   ASSERT_EQ(scan.cell_meta_indices.size(), 1U);
   EXPECT_EQ(scan.cell_meta_indices[0], find_dynamic_array_cell_meta_index(SpanOf(shipped_or.value())));
+}
+
+// A blocked spill anchor, the rich error Excel saves it as, and the cell
+// records that name it.
+TEST(XlsbWriter, EmitsRichValueMetadataForABlockedSpill) {
+  Workbook wb = Workbook::create_empty();
+  wb.add_sheet("Sheet1");
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0, 0, 0, "=SEQUENCE(3)")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0, 1, 0, Value::number(9.0))));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+
+  auto bytes_or = write_xlsb(wb);
+  ASSERT_TRUE(static_cast<bool>(bytes_or)) << bytes_or.error().message;
+  ZipReader zip;
+  ASSERT_TRUE(static_cast<bool>(zip.open(SpanOf(bytes_or.value()))));
+  auto metadata_or = zip.read_entry("xl/metadata.bin");
+  ASSERT_TRUE(static_cast<bool>(metadata_or));
+  EXPECT_EQ(metadata_or.value(), build_metadata_bin(true, 1U));
+  for (const char* part :
+       {"xl/richData/rdrichvalue.xml", "xl/richData/rdrichvaluestructure.xml", "xl/richData/rdRichValueTypes.xml"}) {
+    EXPECT_TRUE(zip.has_entry(part)) << part;
+  }
+
+  auto sheet_or = zip.read_entry("xl/worksheets/sheet1.bin");
+  ASSERT_TRUE(static_cast<bool>(sheet_or));
+  // The anchor's shell record is preceded by its cell metadata, then its value metadata.
+  std::vector<std::uint16_t> before_anchor;
+  ByteSpan cursor = SpanOf(sheet_or.value());
+  while (cursor.size > 0U) {
+    auto record_or = read_record(cursor);
+    ASSERT_TRUE(static_cast<bool>(record_or));
+    const std::uint16_t type = record_or.value().type;
+    if (type == static_cast<std::uint16_t>(XlsbRecordType::BrtValueMeta)) {
+      ByteSpan payload = record_or.value().payload;
+      auto index_or = read_u32(payload);
+      ASSERT_TRUE(static_cast<bool>(index_or));
+      EXPECT_EQ(index_or.value(), 1U);
+    }
+    before_anchor.push_back(type);
+  }
+  const auto value_meta =
+      std::find(before_anchor.begin(), before_anchor.end(), static_cast<std::uint16_t>(XlsbRecordType::BrtValueMeta));
+  ASSERT_NE(value_meta, before_anchor.end());
+  ASSERT_NE(value_meta, before_anchor.begin());
+  EXPECT_EQ(*(value_meta - 1), static_cast<std::uint16_t>(XlsbRecordType::BrtCellMeta));
+  EXPECT_EQ(*(value_meta + 1), static_cast<std::uint16_t>(XlsbRecordType::BrtFmlaError));
+}
+
+TEST(XlsbWriter, GeneratesNoRichErrorOverARetainedMetadataPart) {
+  Workbook wb = Workbook::create_empty();
+  wb.add_sheet("Sheet1");
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0, 0, 0, "=SEQUENCE(3)")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0, 1, 0, Value::number(9.0))));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  const std::vector<std::uint8_t> part = BuildMetadataPart({"XLRICHVALUE", "XLDAPR"});
+  PassthroughPart metadata;
+  metadata.path = "xl/metadata.bin";
+  metadata.content_type = "application/vnd.ms-excel.sheetMetadata";
+  metadata.bytes = part;
+  wb.set_passthrough_parts({metadata});
+
+  auto bytes_or = write_xlsb(wb);
+  ASSERT_TRUE(static_cast<bool>(bytes_or)) << bytes_or.error().message;
+  ZipReader zip;
+  ASSERT_TRUE(static_cast<bool>(zip.open(SpanOf(bytes_or.value()))));
+  auto shipped_or = zip.read_entry("xl/metadata.bin");
+  ASSERT_TRUE(static_cast<bool>(shipped_or));
+  EXPECT_EQ(shipped_or.value(), part);
+  EXPECT_FALSE(zip.has_entry("xl/richData/rdrichvalue.xml"));
+  auto sheet_or = zip.read_entry("xl/worksheets/sheet1.bin");
+  ASSERT_TRUE(static_cast<bool>(sheet_or));
+  ByteSpan cursor = SpanOf(sheet_or.value());
+  while (cursor.size > 0U) {
+    auto record_or = read_record(cursor);
+    ASSERT_TRUE(static_cast<bool>(record_or));
+    EXPECT_NE(record_or.value().type, static_cast<std::uint16_t>(XlsbRecordType::BrtValueMeta));
+  }
 }
 
 TEST(XlsbWriter, EmitsDynamicArrayMetadataForSingleCellArrayAnchors) {

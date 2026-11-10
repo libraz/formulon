@@ -835,5 +835,128 @@ TEST(PivotBlocked, NewRangesMeetingOnlyEachOtherLeaveTheEarlierCreatedReportRend
   }
 }
 
+// ---------------------------------------------------------------------------
+// Cause and page cells
+// ---------------------------------------------------------------------------
+
+// Puts Product on the page axis and draws the report again, two page rows above the anchor.
+void AddPageField(Workbook& wb) {
+  PivotTable& table = PivotAt(wb);
+  table.set_field_axis(1U, PivotAxis::Page);
+  pivot::clear_derived_state(table);
+  const Expected<void, Error> projected = wb.project_pivot(kPivotSheet, 0U, ReportPlacement::kRefuse);
+  ASSERT_TRUE(static_cast<bool>(projected)) << projected.error().message;
+}
+
+TEST(PivotBlocked, BlockedReportEmptiesItsPageCells) {
+  Workbook control_book = Book();
+  AddPageField(control_book);
+  ASSERT_TRUE(static_cast<bool>(AddDataField(control_book)));
+  const PivotRect control = Extent(control_book);
+
+  Workbook wb = Book();
+  AddPageField(wb);
+  const PivotRect drawn = Extent(wb);
+  const std::uint32_t anchor = PivotAt(wb).anchor_row();
+  ASSERT_LT(drawn.row0, anchor);
+  ASSERT_FALSE(At(wb, drawn.row0, drawn.col0).is_blank());
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_text(kPivotSheet, control.row1, control.col1, "blocker")));
+  ASSERT_TRUE(static_cast<bool>(AddDataField(wb)));
+  ExpectBlockedAt(wb, anchor, drawn.col0);
+  EXPECT_EQ(PivotAt(wb).blocked()->rows_above, anchor - drawn.row0);
+  EXPECT_FALSE(PivotAt(wb).page_field_order().empty());
+  for (std::uint32_t r = drawn.row0; r < anchor; ++r) {
+    for (std::uint32_t c = drawn.col0; c <= drawn.col1; ++c) {
+      EXPECT_TRUE(At(wb, r, c).is_blank()) << A1(r, c);
+    }
+  }
+}
+
+TEST(PivotBlocked, CauseIsTheFirstBlockerInRowMajorOrder) {
+  const PivotRect control = ControlExtent();
+  struct Case {
+    const char* name;
+    void (*place)(Workbook& wb, const PivotRect& control);
+    SpillCause cause;
+  };
+  const Case cases[] = {
+      {"value",
+       [](Workbook& wb, const PivotRect& at) {
+         ASSERT_TRUE(static_cast<bool>(wb.set_cell_text(kPivotSheet, at.row1, at.col1, "v")));
+       },
+       SpillCause::kOccupied},
+      {"empty merge",
+       [](Workbook& wb, const PivotRect& at) {
+         ASSERT_TRUE(static_cast<bool>(wb.add_merge(kPivotSheet, MergeRange{at.row1 - 1U, at.col1, at.row1, at.col1})));
+       },
+       SpillCause::kMerged},
+      {"value before a merge",
+       [](Workbook& wb, const PivotRect& at) {
+         ASSERT_TRUE(static_cast<bool>(wb.set_cell_text(kPivotSheet, at.row0 + 1U, at.col1, "v")));
+         ASSERT_TRUE(static_cast<bool>(wb.add_merge(kPivotSheet, MergeRange{at.row1 - 1U, at.col1, at.row1, at.col1})));
+       },
+       SpillCause::kOccupied},
+      {"merge before a value",
+       [](Workbook& wb, const PivotRect& at) {
+         ASSERT_TRUE(
+             static_cast<bool>(wb.add_merge(kPivotSheet, MergeRange{at.row0 + 1U, at.col1, at.row0 + 2U, at.col1})));
+         ASSERT_TRUE(static_cast<bool>(wb.set_cell_text(kPivotSheet, at.row1, at.col1, "v")));
+       },
+       SpillCause::kMerged},
+  };
+  for (const Case& entry : cases) {
+    SCOPED_TRACE(entry.name);
+    Workbook wb = Book();
+    entry.place(wb, control);
+    ASSERT_TRUE(static_cast<bool>(AddDataField(wb)));
+    ASSERT_TRUE(PivotAt(wb).blocked().has_value());
+    EXPECT_EQ(PivotAt(wb).blocked()->cause, entry.cause);
+  }
+}
+
+TEST(PivotBlocked, GrowthPastTheEdgeIsBeyondEdge) {
+  Workbook wb = Book();
+  const PivotRect before = Extent(wb);
+  const std::uint32_t width = before.col1 - before.col0 + 1U;
+  ASSERT_TRUE(static_cast<bool>(wb.move_pivot(kPivotSheet, 0U, before.row0, Sheet::kMaxCols - width)));
+  ASSERT_TRUE(static_cast<bool>(AddDataField(wb)));
+  ASSERT_TRUE(PivotAt(wb).blocked().has_value());
+  EXPECT_EQ(PivotAt(wb).blocked()->cause, SpillCause::kBeyondEdge);
+}
+
+TEST(PivotBlocked, FormulaSpillOverAReportIsOccupied) {
+  Workbook wb = Book();
+  const PivotRect drawn = Extent(wb);
+  ASSERT_GT(drawn.row0, 0U);
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(kPivotSheet, drawn.row0 - 1U, drawn.col0, "=SEQUENCE(3)")));
+  Recalc(wb);
+  const std::optional<BlockedSpillFootprint> footprint =
+      wb.sheet(kPivotSheet).blocked_spill_footprint_at(drawn.row0 - 1U, drawn.col0);
+  ASSERT_TRUE(footprint.has_value());
+  EXPECT_EQ(footprint->cause, SpillCause::kOccupied);
+  EXPECT_FALSE(PivotAt(wb).blocked().has_value());
+}
+
+TEST(PivotBlocked, RestoredBlockedReportCarriesTheFileRange) {
+  Workbook wb = Book();
+  PivotAt(wb).set_field_axis(1U, PivotAxis::Page);
+  // A body of 10 x 3 under a content blocker; one page field adds two rows above it.
+  ASSERT_TRUE(static_cast<bool>(wb.restore_blocked_pivot(kPivotSheet, 0U, 10U, 3U, 7U)));
+  const PivotTable& table = PivotAt(wb);
+  ASSERT_TRUE(table.blocked().has_value());
+  EXPECT_EQ(table.blocked()->rows_above, 2U);
+  EXPECT_EQ(table.blocked()->rows, 12U);
+  EXPECT_EQ(table.blocked()->cols, 3U);
+  EXPECT_FALSE(table.blocked()->size_known);
+  EXPECT_FALSE(table.blocked()->past_edge);
+  EXPECT_EQ(table.blocked()->cause, SpillCause::kOccupied);
+  EXPECT_TRUE(HoldsSpill(wb, table.anchor_row(), table.anchor_col()));
+
+  ASSERT_TRUE(static_cast<bool>(wb.restore_blocked_pivot(kPivotSheet, 0U, 10U, 3U, 3U)));
+  EXPECT_TRUE(PivotAt(wb).blocked()->past_edge);
+  EXPECT_EQ(PivotAt(wb).blocked()->cause, SpillCause::kBeyondEdge);
+  EXPECT_FALSE(static_cast<bool>(wb.restore_blocked_pivot(kPivotSheet, 5U, 10U, 3U, 7U)));
+}
+
 }  // namespace
 }  // namespace formulon

@@ -12,6 +12,7 @@
 #include <utility>
 #include <vector>
 
+#include "eval/error_origin.h"
 #include "eval/eval_context.h"
 #include "eval/function_registry.h"
 #include "eval/groupby_pivotby/common.h"
@@ -92,6 +93,7 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
     return Value::error(ErrorCode::Value);
   }
   if (row_fields->rows == 0U || row_fields->cols == 0U || col_fields->cols == 0U || values->cols == 0U) {
+    note_unknown_error_origin();
     return Value::error(ErrorCode::Calc);
   }
 

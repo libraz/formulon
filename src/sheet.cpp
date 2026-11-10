@@ -691,6 +691,80 @@ std::size_t Sheet::clear_merges() {
   return removed;
 }
 
+namespace {
+
+bool error_detail_key_less(const std::pair<CellAddress, CellErrorDetail>& entry, CellAddress key) noexcept {
+  return entry.first.row != key.row ? entry.first.row < key.row : entry.first.col < key.col;
+}
+
+}  // namespace
+
+std::optional<CellErrorDetail> Sheet::error_detail_at(std::uint32_t row, std::uint32_t col) const {
+  if (error_detail_count_.get() == 0U) {
+    return std::nullopt;
+  }
+  const std::lock_guard<std::mutex> guard(*spill_mutex_);
+  const CellAddress key{row, col};
+  const auto it = std::lower_bound(error_details_.begin(), error_details_.end(), key, error_detail_key_less);
+  if (it == error_details_.end() || it->first != key) {
+    return std::nullopt;
+  }
+  return it->second;
+}
+
+void Sheet::set_error_detail(std::uint32_t row, std::uint32_t col, CellErrorDetail detail) {
+  const std::lock_guard<std::mutex> guard(*spill_mutex_);
+  const CellAddress key{row, col};
+  const auto it = std::lower_bound(error_details_.begin(), error_details_.end(), key, error_detail_key_less);
+  if (it != error_details_.end() && it->first == key) {
+    it->second = detail;
+  } else {
+    error_details_.emplace(it, key, detail);
+  }
+  error_detail_count_.set(error_details_.size());
+}
+
+void Sheet::clear_error_detail(std::uint32_t row, std::uint32_t col) {
+  if (error_detail_count_.get() == 0U) {
+    return;
+  }
+  const std::lock_guard<std::mutex> guard(*spill_mutex_);
+  const CellAddress key{row, col};
+  const auto it = std::lower_bound(error_details_.begin(), error_details_.end(), key, error_detail_key_less);
+  if (it != error_details_.end() && it->first == key) {
+    error_details_.erase(it);
+    error_detail_count_.set(error_details_.size());
+  }
+}
+
+std::vector<std::pair<CellAddress, CellErrorDetail>> Sheet::error_details() const {
+  if (error_detail_count_.get() == 0U) {
+    return {};
+  }
+  const std::lock_guard<std::mutex> guard(*spill_mutex_);
+  return error_details_;
+}
+
+void Sheet::replace_error_details(std::vector<std::pair<CellAddress, CellErrorDetail>> entries) {
+  // Stable order by address; of duplicate addresses the last entry wins.
+  sort_by_index(entries, [](const std::pair<CellAddress, CellErrorDetail>& lhs,
+                            const std::pair<CellAddress, CellErrorDetail>& rhs) {
+    return error_detail_key_less(lhs, rhs.first);
+  });
+  std::size_t kept = 0U;
+  for (std::size_t i = 0U; i < entries.size(); ++i) {
+    if (kept != 0U && entries[kept - 1U].first == entries[i].first) {
+      entries[kept - 1U] = entries[i];
+    } else {
+      entries[kept++] = entries[i];
+    }
+  }
+  entries.resize(kept);
+  const std::lock_guard<std::mutex> guard(*spill_mutex_);
+  error_details_ = std::move(entries);
+  error_detail_count_.set(error_details_.size());
+}
+
 Value Sheet::resolve_cell_value(std::uint32_t row, std::uint32_t col) const noexcept {
   const std::lock_guard<std::mutex> guard(*spill_mutex_);
   if (const SpillRegion* covering = spill_region_covering_locked(row, col); covering != nullptr) {

@@ -19,6 +19,7 @@ import createFormulon, {
   PivotShowAsBase,
   PivotSortOrder,
   SlicerSortOrder,
+  SpillCause,
   TableStyleElementType,
   TableTotalsRowFunction,
   WidthPlatform,
@@ -1320,6 +1321,10 @@ export function absenceReads(): void {
   const spill = sheet.getSpill('A1');
   const blocked: boolean | undefined = spill?.blocked;
   const spillRange: CellRect | undefined = spill?.range;
+  const cause: SpillCause | null | undefined = spill?.cause;
+  const pastEdge: boolean = pivot.getSpill()?.cause === SpillCause.BeyondEdge;
+  // @ts-expect-error absence is `null`, not a member
+  SpillCause.Absent;
   const pivotSpill: CellRect | undefined = pivot.getSpill()?.range;
   // @ts-expect-error the read is `getSpill`
   sheet.getSpillInfo('A1');

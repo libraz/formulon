@@ -23,11 +23,13 @@
 #include "io/ooxml_writer.h"
 #include "io/pivot_cache_writer.h"
 #include "io/pivot_table_reader.h"
+#include "io/rich_value_errors.h"
 #include "io/zip_reader.h"
 #include "pivot/pivot_cache.h"
 #include "pivot/pivot_table.h"
 #include "pivot/pivot_types.h"
 #include "sheet.h"
+#include "value.h"
 #include "workbook.h"
 
 namespace formulon::io {
@@ -2511,12 +2513,14 @@ TEST(PivotTableWriter, BlockedReportCollapsesTheLocation) {
   pivot::PivotTable table = ReportAtI3();
   table.set_location_attributes(1U, 1U, 1U, 1U, 2U);
   table.set_auto_formatting(false);
-  table.set_blocked(pivot::BlockedReport{6U, 2U, 0U, false, true});
+  table.set_blocked(pivot::BlockedReport{6U, 2U, 0U, false, true, SpillCause::kOccupied});
   const std::string xml = write_pivot_table_definition(table, std::nullopt);
-  EXPECT_NE(xml.find("<location ref=\"I3\" firstHeaderRow=\"0\" firstDataRow=\"0\" firstDataCol=\"0\" "
-                     "rowPageCount=\"1\" colPageCount=\"2\"/>"),
+  // The withheld location drops the page counts, whose page cells are empty; the model keeps them.
+  EXPECT_NE(xml.find("<location ref=\"I3\" firstHeaderRow=\"0\" firstDataRow=\"0\" firstDataCol=\"0\"/>"),
             std::string::npos)
       << xml;
+  EXPECT_EQ(table.location_row_page_count().value_or(0U), 1U);
+  EXPECT_EQ(table.location_col_page_count().value_or(0U), 2U);
   EXPECT_EQ(xml.find("useAutoFormatting"), std::string::npos) << xml;
   // A span a caller passes in does not widen a withheld report.
   const std::string widened = write_pivot_table_definition(table, PivotRenderedSpan{6U, 2U, 2U});
@@ -2525,7 +2529,7 @@ TEST(PivotTableWriter, BlockedReportCollapsesTheLocation) {
 
 TEST(PivotTableWriter, RecoveredBlockedReportSavesItsFullLocation) {
   pivot::PivotTable table = ReportAtI3();
-  table.set_blocked(pivot::BlockedReport{6U, 2U, 0U, false, true});
+  table.set_blocked(pivot::BlockedReport{6U, 2U, 0U, false, true, SpillCause::kOccupied});
   table.set_auto_formatting(false);
   table.set_blocked(std::nullopt);
   const std::string xml = write_pivot_table_definition(table, PivotRenderedSpan{6U, 2U, 2U});
@@ -2626,6 +2630,40 @@ TEST(PivotTableWriter, PartsAreNumberedNewestFirstWithinASheet) {
   EXPECT_EQ(read_tables[0]->name(), "PtC");
   EXPECT_GT(read_tables[0]->creation_order(), read_tables[1]->creation_order());
   EXPECT_GT(read_tables[1]->creation_order(), read_tables[2]->creation_order());
+}
+
+// ---------------------------------------------------------------------------
+// A withheld report's anchor and its rich error.
+// ---------------------------------------------------------------------------
+
+/// The rich value the anchor of a pivot at (`row`, `col`) withheld with `state` is saved with.
+std::string BlockedAnchorRichValue(std::uint32_t row, std::uint32_t col, pivot::BlockedReport state) {
+  Workbook wb = Workbook::create_empty();
+  wb.add_sheet("Sheet1");
+  auto table = std::make_unique<pivot::PivotTable>();
+  table->set_name("P1");
+  table->set_anchor(row, col, 1U, 1U);
+  table->set_blocked(state);
+  wb.sheet(0).add_pivot_table(std::move(table));
+  wb.sheet(0).set_cell_value(row, col, Value::error(ErrorCode::Spill));
+  const RichErrorTable rich = build_rich_error_table(wb);
+  EXPECT_NE(rich_error_vm_at(rich.vm_by_sheet.at(0), row, col), 0U);
+  const std::string rv = serialize_rdrichvalue(rich);
+  const std::size_t open = rv.find("<rv ");
+  return open == std::string::npos ? std::string() : rv.substr(open, rv.find("</rv>", open) + 5U - open);
+}
+
+TEST(PivotTableWriter, BlockedAnchorWritesItsRichError) {
+  // Blocked by content: {colOffset, 8, rwOffset, 7}, the rows counting the body only.
+  EXPECT_EQ(BlockedAnchorRichValue(2U, 0U, pivot::BlockedReport{9U, 7U, 0U, false, true, SpillCause::kOccupied}),
+            "<rv s=\"0\"><v>6</v><v>8</v><v>8</v><v>7</v></rv>");
+  EXPECT_EQ(BlockedAnchorRichValue(2U, 0U, pivot::BlockedReport{12U, 3U, 2U, false, true, SpillCause::kOccupied}),
+            "<rv s=\"0\"><v>2</v><v>8</v><v>9</v><v>7</v></rv>");
+  // Past the edge: the fitting dimension is the size less one, the overflowing one the room left.
+  EXPECT_EQ(BlockedAnchorRichValue(1048570U, 0U, pivot::BlockedReport{9U, 7U, 0U, true, true, SpillCause::kBeyondEdge}),
+            "<rv s=\"0\"><v>6</v><v>8</v><v>5</v><v>3</v></rv>");
+  EXPECT_EQ(BlockedAnchorRichValue(2U, 16380U, pivot::BlockedReport{9U, 7U, 0U, true, true, SpillCause::kBeyondEdge}),
+            "<rv s=\"0\"><v>3</v><v>8</v><v>8</v><v>3</v></rv>");
 }
 
 }  // namespace

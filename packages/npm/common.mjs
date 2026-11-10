@@ -15,6 +15,7 @@ export const ValueKind = Object.freeze({
 });
 export const WorkbookFormat = Object.freeze({ Xlsx: 0, Xlsb: 1 });
 export const CellShift = Object.freeze({ Down: 0, Right: 1, Up: 2, Left: 3 });
+export const SpillCause = Object.freeze({ Occupied: 0, Merged: 1, BeyondEdge: 2 });
 export const TableTotalsRowFunction = Object.freeze({
   None: 0,
   Sum: 1,
@@ -860,6 +861,7 @@ export const FORMULON_MEMBERS = Object.freeze([
   'ParseErrorCode',
   'WorkbookFormat',
   'CellShift',
+  'SpillCause',
   'PivotCellKind',
   'PivotAxis',
   'PivotAggregation',

@@ -309,15 +309,42 @@ TEST(OoxmlDynamicArrayMetadata, FreshWorkbookGeneratesTheMetadataItsCmNames) {
                       "Target=\"metadata.xml\""),
             std::string::npos);
 
-  // The mark survives a reload, and the reloaded workbook (which now retains
-  // the part) names it again rather than generating a second one.
+  // The mark survives a reload. The reader consumes the standard part rather
+  // than keeping it verbatim, and the resave generates the same part again.
   auto saved = io::write_ooxml(wb);
   ASSERT_TRUE(static_cast<bool>(saved)) << saved.error().message;
   auto reloaded = io::read_ooxml(test::span_of(saved.value()));
   ASSERT_TRUE(static_cast<bool>(reloaded)) << reloaded.error().message;
   EXPECT_TRUE(reloaded.value().workbook.sheet(0).cell_at(0, 1)->dynamic_array);
+  for (const PassthroughPart& part : reloaded.value().workbook.passthrough_parts()) {
+    EXPECT_NE(part.path, "xl/metadata.xml");
+  }
   const std::string resaved = SavedPart(reloaded.value().workbook, "xl/worksheets/sheet1.xml");
   EXPECT_NE(resaved.find("<c r=\"B1\" cm=\"1\"><f t=\"array\" ref=\"B1\">"), std::string::npos) << resaved;
+  EXPECT_EQ(SavedPart(reloaded.value().workbook, "xl/metadata.xml"), metadata);
+}
+
+TEST(OoxmlDynamicArrayMetadata, ARichErrorJoinsTheGeneratedMetadata) {
+  // A blocked spill is saved as Excel saves it: the XLDAPR entry first, the
+  // XLRICHVALUE block after it, and the anchor naming both.
+  Workbook wb = Workbook::create_empty();
+  wb.add_sheet("Sheet1");
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0, 0, 0, "=SEQUENCE(3)")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0, 1, 0, Value::number(9.0))));
+  (void)wb.recalc(eval::default_registry());
+  const std::string sheet_xml = SavedPart(wb, "xl/worksheets/sheet1.xml");
+  EXPECT_NE(sheet_xml.find("<c r=\"A1\" t=\"e\" cm=\"1\" vm=\"1\">"), std::string::npos) << sheet_xml;
+  const std::string metadata = SavedPart(wb, "xl/metadata.xml");
+  EXPECT_NE(metadata.find("<valueMetadata count=\"1\"><bk><rc t=\"2\" v=\"0\"/></bk></valueMetadata>"),
+            std::string::npos)
+      << metadata;
+  EXPECT_NE(SavedPart(wb, "xl/richData/rdrichvalue.xml").find("<rv s=\"0\"><v>0</v><v>8</v><v>2</v><v>1</v></rv>"),
+            std::string::npos);
+  const std::string rels = SavedPart(wb, "xl/_rels/workbook.xml.rels");
+  for (const char* target :
+       {"richData/rdrichvalue.xml", "richData/rdrichvaluestructure.xml", "richData/rdRichValueTypes.xml"}) {
+    EXPECT_NE(rels.find(std::string("Target=\"") + target + "\""), std::string::npos) << target;
+  }
 }
 
 // ---------------------------------------------------------------------------

@@ -121,6 +121,9 @@ struct CellRecord {
   bool phonetic_pr_present = false;
   /// Decoded `ph=` attribute of the `<c>`, or empty.
   std::string_view ph;
+  /// Decoded `vm=` attribute (1-based value-metadata index of a rich value),
+  /// or empty.
+  std::string_view vm;
 };
 
 /// One `<row>` element's opening attributes, surfaced to `on_row_start`

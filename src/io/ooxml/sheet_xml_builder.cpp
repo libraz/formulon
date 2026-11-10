@@ -541,7 +541,7 @@ std::string BuildWorksheetXml(const Sheet& sheet, const std::vector<EmissionPlan
                               const SharedStrings* shared_strings, const std::vector<DifferentialFormat>& dxfs,
                               std::size_t sheet_index, std::uint32_t dynamic_array_cm_index,
                               const xlsb::NameShapes& name_shapes, const parser::ExternalBookIndexer* indexer,
-                              const std::vector<std::string>* sheet_names) {
+                              const std::vector<std::string>* sheet_names, const RichErrorVmMap* rich_error_vm) {
   const std::string sheet_view_xml = BuildSheetViewXml(sheet.view());
   const std::string sheet_format_xml =
       BuildSheetFormatPrXml(WithDerivedOutlineLevels(sheet.format_defaults(), sheet.layout()));
@@ -600,7 +600,7 @@ std::string BuildWorksheetXml(const Sheet& sheet, const std::vector<EmissionPlan
   // Built after the preceding parts and before the blocks below; external
   // book numbering depends on that order.
   out.append("  ");
-  AppendSheetDataXml(out, sheet, shared_strings, dynamic_array_cm_index, name_shapes, indexer);
+  AppendSheetDataXml(out, sheet, shared_strings, dynamic_array_cm_index, name_shapes, indexer, rich_error_vm);
   out.push_back('\n');
   // Conditional-format blocks live between <sheetData> and <tableParts>
   // in ECMA-376 document order. Empty list => empty string, no
