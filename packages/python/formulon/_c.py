@@ -703,6 +703,7 @@ _STATUS_RETURNING_EXPORT_NAMES = (
     "fm_sheet_get_protected_range_count",
     "fm_sheet_get_range_xf_bases",
     "fm_sheet_get_range_xf_bases_excluding",
+    "fm_sheet_get_cell_xf_indices",
     "fm_sheet_remap_range_xfs",
     "fm_sheet_remove_chart_series",
     "fm_sheet_remove_data_table",

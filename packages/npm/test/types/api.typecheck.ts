@@ -97,6 +97,7 @@ import createFormulon, {
   type Pagination,
   type ParseError,
   type ProfileId,
+  type CellXfIndex,
   type RangeCell,
   type Pivot,
   type PivotCache,
@@ -579,6 +580,10 @@ export function ooxmlLayer(): void {
   sheet.ooxml.resetRowXfIndex('3');
   sheet.ooxml.resetCellXfIndex('A1');
   const bases: readonly number[] = sheet.ooxml.getRangeXfBases('A1:B2');
+  const styledCells: readonly CellXfIndex[] = sheet.ooxml.getCellXfIndices();
+  sheet.ooxml.getCellXfIndices('A1:B2');
+  sheet.ooxml.getCellXfIndices(null);
+  const styledXf: number = styledCells[0].xfIndex;
   sheet.ooxml.remapRangeXfs('A1:B2', new Map(bases.map((index) => [index, index])));
   sheet.ooxml.restoreRangeXfs(sheet.ooxml.snapshotRangeXfs('A1:B2'));
   const effective: EffectiveStyle = sheet.ooxml.getEffectiveStyle('A1');

@@ -109,6 +109,9 @@ Upgrading from 0.18: see [Upgrading from 0.18 to 0.19](docs/releases/upgrading-0
 
 ### Added
 
+- `Sheet.ooxml.getCellXfIndices(range?)` (`fm_sheet_get_cell_xf_indices`, Python
+  `get_cell_xf_indices`) lists the stored cells with a non-default cell XF,
+  styled blanks included, which `listCells` leaves out.
 - `PivotCache.refresh()` rebuilds a cache from its worksheet source and
   re-projects every pivot on it; cache fields report their sharedItems type
   flags.

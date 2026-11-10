@@ -204,6 +204,7 @@ RECT_TABLE: Dict[str, Case] = {
     "Sheet.get_values": Case(),
     "Sheet.get_typed_values": Case(),
     "Sheet.get_range_xf_bases_excluding": Case(tail=lambda: ([(1, 1)],)),
+    "Sheet.get_cell_xf_indices": Case(),
     "Sheet.recalc_viewport": Case(),
     "Sheet.remap_range_xfs": Case(tail=lambda: ({0: 0},)),
     "Sheet.remove_merge": Case(setup=_merged),

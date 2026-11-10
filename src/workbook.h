@@ -1556,6 +1556,10 @@ class Workbook {
   Expected<std::vector<std::uint32_t>, Error> range_style_bases(std::size_t sheet_index, const StyleRect& rect,
                                                                 std::vector<StyleCell> excluded = {}) const;
 
+  /// Every stored cell of `rect` holding a non-zero xf, row-major. Errors as
+  /// `range_style_bases`.
+  Expected<std::vector<StyleCellXf>, Error> cell_xf_indices(std::size_t sheet_index, const StyleRect& rect) const;
+
   /// Applies an xf remap to a selection the way Excel applies an
   /// attribute-only format change (see `formulon::remap_range_style`).
   /// `from` must not repeat and every `to` must address `cellXfs`, else

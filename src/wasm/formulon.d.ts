@@ -2035,6 +2035,16 @@ export interface RangeCell {
   readonly kind: ValueKind;
 }
 
+/** One stored cell and its own non-default cell XF, as `SheetOoxml.getCellXfIndices` returns it. */
+export interface CellXfIndex {
+  /** The 0-based row. */
+  readonly row: number;
+  /** The 0-based column. */
+  readonly col: number;
+  /** The cell's own cell-XF index into `Workbook.ooxml.listCellXfs()`; never 0. */
+  readonly xfIndex: number;
+}
+
 /** Paging options of `Sheet.getCellsInRange` and `Sheet.getInvalidCells`. */
 export interface PageOptions {
   /** The `nextCursor` of the previous page; omitted or `null` starts at the first page. */
@@ -7243,7 +7253,8 @@ export interface Sheet {
    *  Sheet.getUsedRange}; an empty sheet gives an empty page with `nextCursor: null`. */
   getCellsInRange(range?: CellRect | string | null, options?: PageOptions): CellsInRange;
   /** Lists every populated cell (formula or non-blank value, spill phantoms included) inside `range`, row-major.
-   *  `range` defaults as for {@link Sheet.getUsedRange}. */
+   *  `range` defaults as for {@link Sheet.getUsedRange}. Cells with content only; for formatted cells see
+   *  `ooxml.getCellXfIndices`. */
   listCells(range?: CellRect | string | null): readonly RangeCell[];
   /** The text Excel displays for the cell, from its value and number format under the workbook's date
    *  system.
@@ -8140,6 +8151,14 @@ export interface SheetOoxml {
    * `remapRangeXfs`.
    */
   getRangeXfBases(range: CellRect | string): readonly number[];
+  /**
+   * Lists, row-major (row, then column, ascending), every stored cell inside `range` whose own cell XF is not 0:
+   * styled blank cells and cells with content alike. A cell explicitly set to XF 0 is not listed, nor is a spill
+   * cell, which has no stored record. An omitted or `null` `range` covers every stored cell of the sheet, so a
+   * formatted cell outside {@link Sheet.getUsedRange} is listed. Complements `Sheet.listCells`, which lists cells
+   * with content only. A rectangle outside the grid fails with `StatusCode.InvalidArgument`.
+   */
+  getCellXfIndices(range?: CellRect | string | null): readonly CellXfIndex[];
   /**
    * `getRangeXfBases` over the selection less the cells of `excluded` (each a {@link CellAddress} or an A1
    * cell): an excluded cell contributes no XF, neither its own nor the row, column or default style

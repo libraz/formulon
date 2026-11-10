@@ -265,6 +265,18 @@ void clear_row_style_span(SheetLayout& layout, std::uint32_t first, std::uint32_
       layout, first, last, default_hidden, [](void*, std::uint32_t, RowDecision) { return RowDecision{}; }, nullptr);
 }
 
+std::vector<StyleCellXf> cell_xf_indices(const Sheet& sheet, const StyleRect& rect) {
+  std::vector<StyleCellXf> out;
+  for (const CapturedCell& cell : stored_cells(sheet, rect)) {
+    if (cell.xf != 0U) {
+      out.push_back({cell.row, cell.col, cell.xf});
+    }
+  }
+  sort_by_index(
+      out, [](const StyleCellXf& a, const StyleCellXf& b) { return a.row != b.row ? a.row < b.row : a.col < b.col; });
+  return out;
+}
+
 std::vector<std::uint32_t> range_style_bases(const Sheet& sheet, const StyleRect& rect,
                                              std::vector<StyleCell> excluded) {
   const auto cell_less = [](const StyleCell& a, const StyleCell& b) {

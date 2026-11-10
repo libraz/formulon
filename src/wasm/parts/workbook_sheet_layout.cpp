@@ -552,6 +552,38 @@ emscripten::val JsWorkbook::rangeStyleBases(uint32_t sheet, emscripten::val rang
   return range_style_bases_result(handle_, sheet, rect, {});
 }
 
+emscripten::val JsWorkbook::getCellXfIndices(uint32_t sheet, emscripten::val range) const {
+  if (handle_ == nullptr) {
+    record_invalid_handle();
+    return emscripten::val::undefined();
+  }
+  JsNarrowNumericReader reader("Sheet.getCellXfIndices");
+  const bool bounded = js_value_present(range);
+  const fm_cell_rect_t rect = bounded ? js_pull_range(range, &reader) : fm_cell_rect_t{};
+  if (!reader.ok()) {
+    return emscripten::val::undefined();
+  }
+  const fm_cell_rect_t* where = bounded ? &rect : nullptr;
+  size_t len = 0;
+  fm_status_t rc = fm_sheet_get_cell_xf_indices(handle_, sheet, where, nullptr, 0, &len);
+  std::vector<fm_cell_xf_index_t> cells(len);
+  if (rc == 0 && len > 0) {
+    rc = fm_sheet_get_cell_xf_indices(handle_, sheet, where, cells.data(), cells.size(), &len);
+  }
+  if (!succeeded(rc)) {
+    return emscripten::val::undefined();
+  }
+  emscripten::val list = emscripten::val::array();
+  for (const fm_cell_xf_index_t& cell : cells) {
+    emscripten::val item = emscripten::val::object();
+    item.set("row", cell.row);
+    item.set("col", cell.col);
+    item.set("xfIndex", cell.xf_index);
+    list.call<void>("push", item);
+  }
+  return list;
+}
+
 emscripten::val JsWorkbook::rangeStyleBasesExcluding(uint32_t sheet, emscripten::val range,
                                                      emscripten::val excludedRows, emscripten::val excludedCols) const {
   if (handle_ == nullptr) {

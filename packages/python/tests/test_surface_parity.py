@@ -218,6 +218,7 @@ class SurfaceParityTests(unittest.TestCase):
         "reset_row_xf_index",
         "get_range_xf_bases",
         "get_range_xf_bases_excluding",
+        "get_cell_xf_indices",
         "remap_range_xfs",
         "snapshot_range_xfs",
         "restore_range_xfs",

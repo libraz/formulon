@@ -504,6 +504,35 @@ extern "C" fm_status_t fm_sheet_get_range_xf_bases_excluding(const fm_workbook_t
   return range_style_bases_into(wb, sheet_index, range, excluded, excluded_count, out, capacity, out_count);
 }
 
+extern "C" fm_status_t fm_sheet_get_cell_xf_indices(const fm_workbook_t* wb, size_t sheet_index,
+                                                    const fm_cell_rect_t* range, fm_cell_xf_index_t* out,
+                                                    size_t capacity, size_t* out_count) {
+  clear_last_error();
+  if (out_count == nullptr || (out == nullptr && capacity > 0U)) {
+    return null_argument();
+  }
+  *out_count = 0U;
+  formulon::StyleRect rect{0U, 0U, formulon::Sheet::kMaxRows - 1U, formulon::Sheet::kMaxCols - 1U};
+  if (range != nullptr) {
+    if (auto rc = resolve_style_rect(wb, sheet_index, range, &rect); rc != 0) {
+      return rc;
+    }
+  } else if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  auto cells = wb->workbook().cell_xf_indices(sheet_index, rect);
+  if (!cells) {
+    return set_last_error(cells.error());
+  }
+  const size_t total = cells.value().size();
+  *out_count = total;
+  for (size_t i = 0; i < std::min(capacity, total); ++i) {
+    const formulon::StyleCellXf& cell = cells.value()[i];
+    out[i] = {cell.row, cell.col, cell.xf};
+  }
+  return 0;
+}
+
 extern "C" fm_status_t fm_sheet_remap_range_xfs(fm_workbook_t* wb, size_t sheet_index, const fm_cell_rect_t* range,
                                                 const fm_xf_remap_t* pairs, size_t count) {
   clear_last_error();

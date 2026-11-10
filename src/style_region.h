@@ -70,6 +70,16 @@ void clear_row_style_span(SheetLayout& layout, std::uint32_t first, std::uint32_
 std::vector<std::uint32_t> range_style_bases(const Sheet& sheet, const StyleRect& rect,
                                              std::vector<StyleCell> excluded);
 
+/// One stored cell and the xf it holds.
+struct StyleCellXf {
+  std::uint32_t row = 0;
+  std::uint32_t col = 0;
+  std::uint32_t xf = 0;
+};
+
+/// Every stored cell of `rect` holding a non-zero xf, in row-major order.
+std::vector<StyleCellXf> cell_xf_indices(const Sheet& sheet, const StyleRect& rect);
+
 /// Rewrites the selection so each cell resolves to `map(its xf before)`;
 /// an xf not in `map` maps to itself. Fails with `kPreconditionFailed`, and
 /// changes nothing, when more than `cell_limit` cells would be written.

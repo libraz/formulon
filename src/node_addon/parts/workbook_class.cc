@@ -820,6 +820,7 @@ Napi::Function Workbook::GetClass(Napi::Env env) {
           GuardedInstanceMethod<&Workbook::SetRowCollapsed, 0x7ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x8ULL>("setRowCollapsed"),
           GuardedInstanceMethod<&Workbook::SetRowStyle, 0xFULL>("setRowXfIndex"),
           GuardedInstanceMethod<&Workbook::RangeStyleBases, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x2ULL>("getRangeXfBases"),
+          GuardedInstanceMethod<&Workbook::ListCellXfIndices, 0x1ULL>("getCellXfIndices"),
           GuardedInstanceMethod<&Workbook::RangeStyleBasesExcluding, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0xEULL>("getRangeXfBasesExcluding"),
           GuardedInstanceMethod<&Workbook::RemapRangeStyle, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0xEULL>("remapRangeXfs"),
           GuardedInstanceMethod<&Workbook::SnapshotRangeStyle, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x2ULL>("snapshotRangeXfs"),

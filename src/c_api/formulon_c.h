@@ -10640,6 +10640,39 @@ FM_API fm_status_t fm_sheet_get_range_xf_bases_excluding(const fm_workbook_t* wb
                                                          size_t excluded_count, uint32_t* out, size_t capacity,
                                                          size_t* out_count);
 
+/** @brief One stored cell and its non-default cell-XF index, as
+ *         `fm_sheet_get_cell_xf_indices` writes it. */
+typedef struct {
+  /** The 0-based row. */
+  uint32_t row;
+  /** The 0-based column. */
+  uint32_t col;
+  /** The cell's own cell-XF index; never 0. */
+  uint32_t xf_index;
+} fm_cell_xf_index_t;
+
+/**
+ * @brief Lists every stored cell of `range` whose own cell-XF index is not 0,
+ *        in row-major order (row, then column, ascending).
+ *
+ * Styled blank cells and cells with content are both listed; a cell holding
+ * the default XF 0 is not, even when it was assigned explicitly, and a spill
+ * cell with no stored record is not either. A `NULL` `range` covers every
+ * stored cell of the sheet, format-only cells outside the used range included.
+ * `*out_count` always receives the number of cells; at most `capacity` are
+ * written. Call with `capacity == 0` (`out` may then be `NULL`) to size the
+ * buffer first.
+ *
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `out_count` is `NULL`, or
+ *         `out` is `NULL` while `capacity > 0`;
+ *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when the rect is out of range.
+ */
+FM_API fm_status_t fm_sheet_get_cell_xf_indices(const fm_workbook_t* wb, size_t sheet_index,
+                                                const fm_cell_rect_t* range, fm_cell_xf_index_t* out, size_t capacity,
+                                                size_t* out_count);
+
 /** @brief One pair of `fm_sheet_remap_range_xfs`: a cell resolving to
  *         `from_xf` ends at `to_xf`. */
 typedef struct {

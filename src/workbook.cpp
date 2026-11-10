@@ -566,6 +566,12 @@ Expected<std::vector<std::uint32_t>, Error> Workbook::range_style_bases(std::siz
   return formulon::range_style_bases(sheets_[sheet_index], rect, std::move(excluded));
 }
 
+Expected<std::vector<StyleCellXf>, Error> Workbook::cell_xf_indices(std::size_t sheet_index,
+                                                                    const StyleRect& rect) const {
+  RETURN_IF_ERROR(check_style_rect(sheet_index, sheets_.size(), rect));
+  return formulon::cell_xf_indices(sheets_[sheet_index], rect);
+}
+
 Expected<void, Error> Workbook::remap_range_style(std::size_t sheet_index, const StyleRect& rect,
                                                   std::vector<XfRemap> map) {
   RETURN_IF_ERROR(check_style_rect(sheet_index, sheets_.size(), rect));

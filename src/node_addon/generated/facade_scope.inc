@@ -65,6 +65,7 @@ constexpr const char* kSheetMethods[] = {
     "getCellRectPt",
     "getCellShowPhonetic",
     "getCellXfIndex",
+    "getCellXfIndices",
     "getCellsInRange",
     "getCfRule",
     "getCfRuleCount",

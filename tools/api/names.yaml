@@ -3353,6 +3353,13 @@ entries:
     was: { js: PivotWorksheetSourceResult }
     replaced_by: record.pivot_worksheet_source
     closes: R8.js
+  record.cell_xf_index:
+    kind: record
+    role: result
+    c: fm_cell_xf_index_t
+    js: CellXfIndex
+    py: CellXfIndex
+    surfaces: [c, wasm, native, py]
   record.range_cell:
     kind: record
     role: result
@@ -7893,6 +7900,17 @@ entries:
     rect_args: [0]
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_range_style_bases, js: rangeStyleBases, py: range_style_bases }
+  cell_xf_indices.get:
+    kind: op
+    scope: sheet
+    namespace: ooxml
+    noun: cell_xf_indices
+    c: fm_sheet_get_cell_xf_indices
+    js: getCellXfIndices
+    py: get_cell_xf_indices
+    params: { range: { default: null } }
+    rect_args: [0]
+    surfaces: [c, wasm, native, py]
   range_style_bases_excluding.get:
     kind: op
     scope: sheet

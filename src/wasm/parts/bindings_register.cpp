@@ -554,6 +554,7 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("setRowXfIndex", &JsWorkbook::setRowStyle)
       .function("getRangeXfBases", &JsWorkbook::rangeStyleBases)
       .function("getRangeXfBasesExcluding", &JsWorkbook::rangeStyleBasesExcluding)
+      .function("getCellXfIndices", &JsWorkbook::getCellXfIndices)
       .function("remapRangeXfs", &JsWorkbook::remapRangeStyle)
       .function("snapshotRangeXfs", &JsWorkbook::snapshotRangeStyle)
       .function("restoreRangeXfs", &JsWorkbook::restoreRangeStyle)

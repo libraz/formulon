@@ -695,8 +695,10 @@ PHONETIC_PROPERTIES = Struct(
 )
 
 # Frozen value types (no ``struct_size``): array elements of
-# ``fm_sheet_get_range_xf_bases_excluding`` / ``fm_sheet_remap_range_xfs``.
+# ``fm_sheet_get_range_xf_bases_excluding`` / ``fm_sheet_remap_range_xfs``, and of
+# ``fm_sheet_get_cell_xf_indices``.
 CELL_ADDRESS = Struct("fm_cell_address_t", [("row", U32), ("col", U32)])
+CELL_XF_INDEX = Struct("fm_cell_xf_index_t", [("row", U32), ("col", U32), ("xf_index", U32)])
 XF_REMAP = Struct("fm_xf_remap_t", [("from_xf", U32), ("to_xf", U32)])
 
 CF_RANGE_EVALUATION_SPEC = Struct(

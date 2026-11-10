@@ -295,3 +295,74 @@ describe('the XF remap pair takes cells and a Map', () => {
     });
   });
 });
+
+describe('getCellXfIndices', () => {
+  /** Two XFs beyond the default, and a mix of styled blanks, styled content, unstyled content and an explicit 0. */
+  function styledCells(ws, wb) {
+    const a = wb.ooxml.addCellXf({ ...wb.ooxml.getCellXf(0), numFmtId: 2 });
+    const b = wb.ooxml.addCellXf({ ...wb.ooxml.getCellXf(0), numFmtId: 3 });
+    ws.ooxml.setCellXfIndex('U1001', a); // styled blank, far from the content
+    ws.ooxml.setCellXfIndex('D6', b); // styled blank
+    ws.setNumber('H3', 4);
+    ws.ooxml.setCellXfIndex('H3', a); // content with a style
+    ws.setNumber('B5', 9); // content, unstyled
+    ws.ooxml.setCellXfIndex('G7', 0); // explicit default
+    return { a, b };
+  }
+
+  it('lists styled blank and styled content cells row-major, and leaves out xf 0 and unstyled content', () => {
+    withSheet((ws, wb) => {
+      const { a, b } = styledCells(ws, wb);
+      assert.deepEqual(plain(ws.ooxml.getCellXfIndices()), [
+        { row: 2, col: 7, xfIndex: a },
+        { row: 5, col: 3, xfIndex: b },
+        { row: 1000, col: 20, xfIndex: a },
+      ]);
+    });
+  });
+
+  it('the default range covers a format-only cell outside the used range', () => {
+    withSheet((ws, wb) => {
+      styledCells(ws, wb);
+      const used = ws.getUsedRange();
+      assert.ok(used.lastRow < 1000);
+      assert.equal(ws.ooxml.getCellXfIndices(null).length, 3);
+      assert.equal(ws.ooxml.getCellXfIndices(undefined).length, 3);
+    });
+  });
+
+  it('clips to a CellRect or an A1 range', () => {
+    withSheet((ws, wb) => {
+      const { a, b } = styledCells(ws, wb);
+      const clipped = [
+        { row: 2, col: 7, xfIndex: a },
+        { row: 5, col: 3, xfIndex: b },
+      ];
+      assert.deepEqual(plain(ws.ooxml.getCellXfIndices(rect(0, 0, 5, 1000))), clipped);
+      assert.deepEqual(plain(ws.ooxml.getCellXfIndices('A1:Z6')), clipped);
+      assert.deepEqual(plain(ws.ooxml.getCellXfIndices('D6')), [{ row: 5, col: 3, xfIndex: b }]);
+      assert.deepEqual(plain(ws.ooxml.getCellXfIndices('A8:C10')), []);
+    });
+  });
+
+  it('survives a save and a load', () => {
+    withSheet((ws, wb) => {
+      const before = plain(ws.ooxml.getCellXfIndices());
+      assert.equal(before.length, 0);
+      styledCells(ws, wb);
+      const expected = plain(ws.ooxml.getCellXfIndices());
+      const reloaded = f.Workbook.load(wb.save());
+      try {
+        assert.deepEqual(plain(reloaded.sheet(0).ooxml.getCellXfIndices()), expected);
+      } finally {
+        reloaded.dispose();
+      }
+    });
+  });
+
+  it('refuses a rectangle outside the grid', () => {
+    withSheet((ws) => {
+      assert.throws(() => ws.ooxml.getCellXfIndices(rect(0, 0, 1048576, 0)));
+    });
+  });
+});

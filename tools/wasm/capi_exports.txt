@@ -241,6 +241,7 @@ fm_sheet_set_row_xf_index
 fm_sheet_reset_row_xf_index
 fm_sheet_get_range_xf_bases
 fm_sheet_get_range_xf_bases_excluding
+fm_sheet_get_cell_xf_indices
 fm_sheet_remap_range_xfs
 fm_sheet_snapshot_range_xfs
 fm_sheet_restore_range_xfs

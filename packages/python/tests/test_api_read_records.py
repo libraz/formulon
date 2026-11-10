@@ -11,6 +11,8 @@ import formulon
 from formulon import (
     CellAddress,
     CellRect,
+    CellXfIndex,
+    CellXfInput,
     ComparisonOperator,
     FilterKind,
     FormulonError,
@@ -180,6 +182,66 @@ class XfRemapTests(unittest.TestCase):
             ws.ooxml.remap_range_xfs("A1:B2", types.MappingProxyType({base: base}))
             self.assertEqual(ws.ooxml.get_range_xf_bases("A1:B2")[0], base)
             ws.ooxml.remap_range_xfs("A1:B2", {base: base})
+
+
+class ListCellXfIndicesTests(unittest.TestCase):
+    @staticmethod
+    def _styled(wb: Workbook) -> Any:
+        """Styled blanks, styled content, unstyled content and an explicit XF 0; returns the two XFs used."""
+        ws = wb.sheet(0)
+        xfs = [
+            wb.ooxml.add_cell_xf(
+                CellXfInput(font_index=0, fill_index=0, border_index=0, num_fmt_id=num_fmt_id, wrap_text=None)
+            )
+            for num_fmt_id in (2, 3)
+        ]
+        ws.ooxml.set_cell_xf_index("U1001", xfs[0])  # styled blank, far from the content
+        ws.ooxml.set_cell_xf_index("D6", xfs[1])  # styled blank
+        ws.set_number("H3", 4.0)
+        ws.ooxml.set_cell_xf_index("H3", xfs[0])  # content with a style
+        ws.set_number("B5", 9.0)  # content, unstyled
+        ws.ooxml.set_cell_xf_index("G7", 0)  # explicit default
+        return xfs
+
+    def test_lists_styled_blank_and_content_cells_row_major(self) -> None:
+        with Workbook.create_default() as wb:
+            a, b = self._styled(wb)
+            self.assertEqual(
+                wb.sheet(0).ooxml.get_cell_xf_indices(),
+                [CellXfIndex(2, 7, a), CellXfIndex(5, 3, b), CellXfIndex(1000, 20, a)],
+            )
+
+    def test_the_default_range_covers_format_only_cells_outside_the_used_range(self) -> None:
+        with Workbook.create_default() as wb:
+            self._styled(wb)
+            ws = wb.sheet(0)
+            self.assertLess(ws.get_used_range().last_row, 1000)
+            self.assertEqual(len(ws.ooxml.get_cell_xf_indices(None)), 3)
+
+    def test_clips_to_a_rect_or_an_a1_range(self) -> None:
+        with Workbook.create_default() as wb:
+            a, b = self._styled(wb)
+            ooxml = wb.sheet(0).ooxml
+            clipped = [CellXfIndex(2, 7, a), CellXfIndex(5, 3, b)]
+            self.assertEqual(ooxml.get_cell_xf_indices(CellRect(0, 0, 5, 1000)), clipped)
+            self.assertEqual(ooxml.get_cell_xf_indices("A1:Z6"), clipped)
+            self.assertEqual(ooxml.get_cell_xf_indices("D6"), [CellXfIndex(5, 3, b)])
+            self.assertEqual(ooxml.get_cell_xf_indices("A8:C10"), [])
+
+    def test_the_record_is_frozen_and_survives_save_and_load(self) -> None:
+        with Workbook.create_default() as wb:
+            self._styled(wb)
+            expected = wb.sheet(0).ooxml.get_cell_xf_indices()
+            with self.assertRaises(dataclasses.FrozenInstanceError):
+                expected[0].row = 1  # type: ignore[misc]
+            saved = wb.save()
+        with Workbook.load(saved) as reloaded:
+            self.assertEqual(reloaded.sheet(0).ooxml.get_cell_xf_indices(), expected)
+
+    def test_an_out_of_grid_rect_is_refused(self) -> None:
+        with Workbook.create_default() as wb:
+            with self.assertRaises(FormulonError):
+                wb.sheet(0).ooxml.get_cell_xf_indices(CellRect(0, 0, 1048576, 0))
 
 
 class AutoFilterConditionTests(unittest.TestCase):

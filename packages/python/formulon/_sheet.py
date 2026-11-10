@@ -80,6 +80,7 @@ from ._workbook import (
     CellShift,
     CellsInRange,
     CellXf,
+    CellXfIndex,
     CellXfInput,
     CfCell,
     CfColorScale,
@@ -548,6 +549,7 @@ OOXML_WORKBOOK_METHODS = (
 OOXML_SHEET_METHODS = (
     "get_auto_filter_xml",
     "get_cell_xf_index",
+    "get_cell_xf_indices",
     "get_column_xf_index",
     "get_effective_style",
     "get_header_footer_xml",
@@ -717,6 +719,7 @@ RECT_ARGS = {
     "Sheet.delete_cells": (0,),
     "Sheet.evaluate_cf_range": (0,),
     "Sheet.get_cell_rect_pt": (0,),
+    "Sheet.get_cell_xf_indices": (0,),
     "Sheet.get_cells_in_range": (0,),
     "Sheet.get_merges_in_range": (0,),
     "Sheet.get_range_xf_bases": (0,),
@@ -2458,7 +2461,8 @@ class Sheet(_NoCopy):
 
         Cells come in row-major order; each carries its stored formula, its
         value as native data and the value's kind, as
-        :meth:`get_cells_in_range` pages them.
+        :meth:`get_cells_in_range` pages them. Cells with content only; for
+        formatted cells see ``ooxml.get_cell_xf_indices``.
         """
         rect = self._range_or_used(range)
         if rect is None:
@@ -7440,6 +7444,46 @@ class SheetOoxml(_NoCopy):
         """
         rect = self._sheet._rect(range)
         return self.get_range_xf_bases_excluding(rect, ())
+
+    def get_cell_xf_indices(self, range: Union[CellRect, str, None] = None) -> List[CellXfIndex]:
+        """List every stored cell of ``range`` whose own cell XF is not 0, row-major.
+
+        Styled blank cells and cells with content are both listed; a cell
+        explicitly set to XF 0 is not, nor is a spill cell, which has no
+        stored record. ``range=None`` covers every stored cell of the sheet,
+        so a formatted cell outside the used range is listed. Complements
+        :meth:`Sheet.list_cells`, which lists cells with content only.
+
+        Raises:
+          InvalidArgumentError: when ``range`` is outside the grid.
+        """
+        sheet = self._sheet._index()
+        h = self._sheet._workbook._require()
+        rect = None if range is None else self._sheet._rect(range)
+        with _ArgScope() as scope:
+            rp = 0
+            if rect is not None:
+                rp = scope.struct(S.CELL_RECT)
+                _pack_cell_rect_at(rp, rect)
+            len_ptr = scope.out_ptr()
+            # Size the buffer first, then fetch.
+            _check(LIB.fm_sheet_get_cell_xf_indices(h, _uint(sheet, "sheet_index", role="sheet"), rp, 0, 0, len_ptr))
+            total = LIB.read_u32(len_ptr)
+            if total == 0:
+                return []
+            size = S.CELL_XF_INDEX.size
+            buf = scope.struct_array(S.CELL_XF_INDEX, total)
+            _check(
+                LIB.fm_sheet_get_cell_xf_indices(
+                    h, _uint(sheet, "sheet_index", role="sheet"), rp, buf, _uint(total, "cap"), len_ptr
+                )
+            )
+            n = min(total, LIB.read_u32(len_ptr))
+            raw = LIB.read_bytes(buf, size * n)
+            cells = (
+                S.CELL_XF_INDEX.unpack_from(raw, i * size) for i in builtins.range(n)
+            )  # `range` is the parameter here
+            return [CellXfIndex(row=c["row"], col=c["col"], xf_index=c["xf_index"]) for c in cells]
 
     def get_range_xf_bases_excluding(
         self,

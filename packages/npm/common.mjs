@@ -1501,6 +1501,7 @@ const OOXML_WORKBOOK_METHODS = Object.freeze([
 const OOXML_SHEET_METHODS = Object.freeze([
   'getAutoFilterXml',
   'getCellXfIndex',
+  'getCellXfIndices',
   'getColumnXfIndex',
   'getEffectiveStyle',
   'getHeaderFooterXml',
@@ -1805,6 +1806,7 @@ const RECT_ARGS = Object.freeze({
   'Sheet.deleteCells': [0],
   'Sheet.evaluateCfRange': [0],
   'Sheet.getCellRectPt': [0],
+  'Sheet.getCellXfIndices': [0],
   'Sheet.getCellsInRange': [0],
   'Sheet.getMergesInRange': [0],
   'Sheet.getRangeXfBases': [0],
@@ -3500,6 +3502,7 @@ const METHOD_ARITY = Object.freeze({
   'Sheet.getCellRectPt': 2,
   'Sheet.getCellShowPhonetic': 2,
   'Sheet.getCellXfIndex': 2,
+  'Sheet.getCellXfIndices': 1,
   'Sheet.getCellsInRange': 2,
   'Sheet.getCfRule': 1,
   'Sheet.getColumnWidthPt': 2,
@@ -3816,6 +3819,7 @@ const TYPED_ARGS = Object.freeze({
   'Table.setAutoFilter': [[0, 'AutoFilterInput']],
 });
 const DEFAULT_ARGS = Object.freeze({
+  'Sheet.getCellXfIndices': [[0, null]],
   'Sheet.getCellsInRange': [[0, null]],
   'Sheet.getDependents': [[2, 1]],
   'Sheet.getPrecedents': [[2, 1]],
@@ -4325,6 +4329,7 @@ const PARAM_NAMES = Object.freeze({
   'Sheet.updateView': ['patch'],
   'Sheet.validateValue': ['row', 'col', 'value'],
   'SheetOoxml.getCellXfIndex': ['row', 'col'],
+  'SheetOoxml.getCellXfIndices': ['range'],
   'SheetOoxml.getColumnXfIndex': ['col'],
   'SheetOoxml.getEffectiveStyle': ['row', 'col'],
   'SheetOoxml.getRangeXfBases': ['range'],

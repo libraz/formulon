@@ -620,3 +620,116 @@ TEST(FormulonCApiRangeXfRecords, RepeatedFromXfInvalid) {
   EXPECT_EQ(fm_sheet_remap_range_xfs(wb.handle, 0, record_arg(fm_cell_rect_t{0U, 0U, 0U, 0U}), repeated, 2U),
             kInvalidArgument);
 }
+
+namespace {
+
+struct XfCell {
+  std::uint32_t row;
+  std::uint32_t col;
+  std::uint32_t xf;
+  bool operator==(const XfCell& other) const { return row == other.row && col == other.col && xf == other.xf; }
+};
+
+std::vector<XfCell> ListXfCells(const WorkbookGuard& wb, const fm_cell_rect_t* range, fm_status_t* status = nullptr) {
+  size_t total = 0;
+  const fm_status_t rc = fm_sheet_get_cell_xf_indices(wb.handle, 0, range, nullptr, 0U, &total);
+  if (status != nullptr) {
+    *status = rc;
+  }
+  std::vector<fm_cell_xf_index_t> raw(total);
+  size_t again = 0;
+  if (rc == 0 && total > 0) {
+    EXPECT_EQ(fm_sheet_get_cell_xf_indices(wb.handle, 0, range, raw.data(), raw.size(), &again), 0);
+    EXPECT_EQ(again, total);
+  }
+  std::vector<XfCell> out;
+  for (const fm_cell_xf_index_t& cell : raw) {
+    out.push_back({cell.row, cell.col, cell.xf_index});
+  }
+  return out;
+}
+
+void StyleCells(WorkbookGuard& wb) {
+  ASSERT_EQ(fm_sheet_set_cell_xf_index(wb.handle, 0, 1000U, 20U, 1U), 0);  // styled blank, far from the content
+  ASSERT_EQ(fm_sheet_set_cell_xf_index(wb.handle, 0, 5U, 3U, 2U), 0);      // styled blank
+  ASSERT_EQ(fm_sheet_set_number(wb.handle, 0, 2U, 7U, 4.0), 0);
+  ASSERT_EQ(fm_sheet_set_cell_xf_index(wb.handle, 0, 2U, 7U, 3U), 0);  // content with a style
+  ASSERT_EQ(fm_sheet_set_number(wb.handle, 0, 4U, 1U, 9.0), 0);        // content, unstyled
+  ASSERT_EQ(fm_sheet_set_cell_xf_index(wb.handle, 0, 6U, 6U, 0U), 0);  // explicit default
+}
+
+}  // namespace
+
+TEST(FormulonCApiRangeXfRecords, ListsStoredCellsWithAnOwnXfRowMajor) {
+  WorkbookGuard wb;
+  MakeWorkbook(wb);
+  StyleCells(wb);
+  const std::vector<XfCell> all = {{2U, 7U, 3U}, {5U, 3U, 2U}, {1000U, 20U, 1U}};
+  EXPECT_EQ(ListXfCells(wb, nullptr), all);
+  const fm_cell_rect_t whole{0U, 0U, kLastRow, kLastCol};
+  EXPECT_EQ(ListXfCells(wb, &whole), all);
+}
+
+TEST(FormulonCApiRangeXfRecords, ClipsToTheRange) {
+  WorkbookGuard wb;
+  MakeWorkbook(wb);
+  StyleCells(wb);
+  const fm_cell_rect_t rows_to_five{0U, 0U, 5U, kLastCol};
+  EXPECT_EQ(ListXfCells(wb, &rows_to_five), (std::vector<XfCell>{{2U, 7U, 3U}, {5U, 3U, 2U}}));
+  const fm_cell_rect_t one{5U, 3U, 5U, 3U};
+  EXPECT_EQ(ListXfCells(wb, &one), (std::vector<XfCell>{{5U, 3U, 2U}}));
+  const fm_cell_rect_t empty{7U, 0U, 9U, 5U};
+  EXPECT_TRUE(ListXfCells(wb, &empty).empty());
+}
+
+TEST(FormulonCApiRangeXfRecords, ListsNothingForAnUnstyledSheet) {
+  WorkbookGuard wb;
+  MakeWorkbook(wb);
+  ASSERT_EQ(fm_sheet_set_number(wb.handle, 0, 0U, 0U, 1.0), 0);
+  EXPECT_TRUE(ListXfCells(wb, nullptr).empty());
+}
+
+TEST(FormulonCApiRangeXfRecords, CountsTheTotalAndWritesAtMostCapacity) {
+  WorkbookGuard wb;
+  MakeWorkbook(wb);
+  StyleCells(wb);
+  size_t total = 99;
+  ASSERT_EQ(fm_sheet_get_cell_xf_indices(wb.handle, 0, nullptr, nullptr, 0U, &total), 0);
+  EXPECT_EQ(total, 3U);
+  fm_cell_xf_index_t out[2] = {{0U, 0U, 0U}, {0U, 0U, 0U}};
+  ASSERT_EQ(fm_sheet_get_cell_xf_indices(wb.handle, 0, nullptr, out, 2U, &total), 0);
+  EXPECT_EQ(total, 3U);
+  EXPECT_EQ(out[0].row, 2U);
+  EXPECT_EQ(out[1].row, 5U);
+}
+
+TEST(FormulonCApiRangeXfRecords, RejectsNullArgumentsAndBadRects) {
+  WorkbookGuard wb;
+  MakeWorkbook(wb);
+  StyleCells(wb);
+  constexpr fm_status_t kNullPointer = static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer);
+  size_t total = 0;
+  fm_cell_xf_index_t out[1];
+  EXPECT_EQ(fm_sheet_get_cell_xf_indices(wb.handle, 0, nullptr, out, 1U, nullptr), kNullPointer);
+  EXPECT_EQ(fm_sheet_get_cell_xf_indices(wb.handle, 0, nullptr, nullptr, 1U, &total), kNullPointer);
+  EXPECT_EQ(fm_sheet_get_cell_xf_indices(nullptr, 0, nullptr, nullptr, 0U, &total), kNullPointer);
+  EXPECT_NE(fm_sheet_get_cell_xf_indices(wb.handle, 5, nullptr, nullptr, 0U, &total), 0);
+  const fm_cell_rect_t past_grid{0U, 0U, kLastRow + 1U, 0U};
+  EXPECT_EQ(fm_sheet_get_cell_xf_indices(wb.handle, 0, &past_grid, nullptr, 0U, &total), kInvalidArgument);
+  const fm_cell_rect_t inverted{5U, 0U, 4U, 0U};
+  EXPECT_EQ(fm_sheet_get_cell_xf_indices(wb.handle, 0, &inverted, nullptr, 0U, &total), kInvalidArgument);
+}
+
+TEST(FormulonCApiRangeXfRecords, SurvivesSaveLoad) {
+  WorkbookGuard wb;
+  MakeWorkbook(wb);
+  StyleCells(wb);
+  for (const std::int32_t format : {FM_WORKBOOK_FORMAT_XLSX, FM_WORKBOOK_FORMAT_XLSB}) {
+    BufferGuard saved;
+    ASSERT_EQ(fm_workbook_save(wb.handle, format, &saved.data, &saved.len), 0);
+    WorkbookGuard reloaded;
+    ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &reloaded.handle), 0);
+    EXPECT_EQ(ListXfCells(reloaded, nullptr), (std::vector<XfCell>{{2U, 7U, 3U}, {5U, 3U, 2U}, {1000U, 20U, 1U}}))
+        << format;
+  }
+}

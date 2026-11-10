@@ -383,6 +383,7 @@ const RECT_METHODS = {
   'Sheet.getMergesInRange': { args: (r) => [r] },
   'Sheet.getRangeXfBases': { args: (r) => [r] },
   'Sheet.getRangeXfBasesExcluding': { args: (r) => [r, [], []] },
+  'Sheet.getCellXfIndices': { args: (r) => [r] },
   'Workbook.formatReference': { args: (r) => [r, { absolute: true }] },
   'Sheet.getTypedValues': { args: (r) => [r] },
   'Sheet.getValues': { args: (r) => [r] },
