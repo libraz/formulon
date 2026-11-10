@@ -7875,6 +7875,17 @@ export interface Sheet {
   clearHyperlinks(): void;
   /** Returns every hyperlink on the sheet. */
   listHyperlinks(): readonly Hyperlink[];
+  /** Inserts `link` at position `index` of the list `listHyperlinks()` returns, in that same order so a host can
+   *  map a list entry to its index, replacing nothing: a link covering the same range is kept (unlike
+   *  `setHyperlink`). `index` equal to the count appends; above it fails with `StatusCode.IndexOutOfRange` and
+   *  changes nothing. There is no anchor argument, so `link.range` is
+   *  required (a `CellRect` or an A1 range; its top-left cell is the anchor); a missing one fails with
+   *  `StatusCode.InvalidArgument`. Pairs with {@link Sheet.removeHyperlinkAt} for a lossless undo. */
+  insertHyperlinkAt(index: number, link: HyperlinkInput): void;
+  /** Removes the hyperlink at position `index` of the list `listHyperlinks()` returns, in that same order, so a
+   *  host can map a list entry to its index. An `index` at or above the count fails with
+   *  `StatusCode.IndexOutOfRange`. */
+  removeHyperlinkAt(index: number): void;
   /** Reads the hyperlink whose range starts at `(row, col)`, the first in list order when several do; `null` when
    *  none does. */
   getHyperlink(row: number, col: number): Hyperlink | null;

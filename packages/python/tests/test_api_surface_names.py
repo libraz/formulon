@@ -246,7 +246,10 @@ class RenamedMemberTests(SurfaceTestCase):
     def test_hyperlink_and_break_adders_are_gone(self) -> None:
         with Workbook.create_default() as wb:
             ws = wb.sheet(0)
-            self.assertHasMembers(ws, ("set_hyperlink", "set_row_break", "set_column_break"))
+            self.assertHasMembers(
+                ws,
+                ("set_hyperlink", "insert_hyperlink_at", "remove_hyperlink_at", "set_row_break", "set_column_break"),
+            )
             self.assertLacksMembers(
                 ws,
                 (
@@ -645,6 +648,36 @@ class SingletonRemovalTests(SurfaceTestCase):
             self.assertIsNone(ws.get_hyperlink("A1"))
             self.assertEqual(ws.list_hyperlinks(), [])
             ws.set_hyperlink("A1", None)
+
+    def test_remove_then_insert_hyperlink_at_restores_a_list_with_duplicates(self) -> None:
+        with Workbook.create_default() as wb:
+            ws = wb.sheet(0)
+            cell = CellRect(2, 1, 2, 1)
+            ws.insert_hyperlink_at(
+                0,
+                formulon.HyperlinkInput(target="https://a.example", display="A", tooltip="ta", range=cell),
+            )
+            ws.insert_hyperlink_at(
+                1, formulon.HyperlinkInput(target=None, location="Sheet1!B2", display="B", range=CellRect(2, 1, 3, 2))
+            )
+            ws.insert_hyperlink_at(2, formulon.HyperlinkInput(target="https://c.example", range="E5"))
+            before = ws.list_hyperlinks()
+            self.assertEqual(len(before), 3)
+            for index, link in enumerate(before):
+                ws.remove_hyperlink_at(index)
+                self.assertEqual(len(ws.list_hyperlinks()), 2)
+                ws.insert_hyperlink_at(index, link)
+                self.assertEqual(ws.list_hyperlinks(), before)
+            ws.insert_hyperlink_at(0, formulon.HyperlinkInput(target="https://z.example", range=cell))
+            self.assertEqual(ws.list_hyperlinks()[0].target, "https://z.example")
+            self.assertEqual(len(ws.list_hyperlinks()), 4)
+            with self.assertRaises(formulon.IndexOutOfRangeError):
+                ws.insert_hyperlink_at(5, formulon.HyperlinkInput(target="https://x.example", range=cell))
+            with self.assertRaises(formulon.IndexOutOfRangeError):
+                ws.remove_hyperlink_at(4)
+            with self.assertRaises(formulon.InvalidArgumentError):
+                ws.insert_hyperlink_at(0, formulon.HyperlinkInput(target="https://x.example"))
+            self.assertEqual(len(ws.list_hyperlinks()), 4)
 
 
 # ---- SheetProtection and DataValidation defaults ---------------------------------

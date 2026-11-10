@@ -79,6 +79,26 @@ fm_status_t remove_sheet_item_at(fm_workbook_t* wb, std::size_t sheet_index, std
   return 0;
 }
 
+/// Validates a hyperlink record (rect inside the grid, utf8 strings) and converts it to the model type.
+fm_status_t convert_hyperlink(const fm_hyperlink_t& hl, formulon::Hyperlink* out) {
+  if (auto rc = check_sheet_rect(hl.rect); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_utf8({hl.target, hl.location, hl.display, hl.tooltip}); rc != 0) {
+    return rc;
+  }
+  out->row = hl.rect.first_row;
+  out->col = hl.rect.first_col;
+  out->last_row = hl.rect.last_row;
+  out->last_col = hl.rect.last_col;
+  out->target = text_or_empty(hl.target);
+  out->location = text_or_empty(hl.location);
+  out->display = text_or_empty(hl.display);
+  out->tooltip = text_or_empty(hl.tooltip);
+  // rid stays empty; the writer mints a fresh rIdN on save.
+  return 0;
+}
+
 void fill_comment(const formulon::CellComment& c, fm_comment_t* out) {
   out->row = c.row;
   out->col = c.col;
@@ -122,25 +142,13 @@ extern "C" fm_status_t fm_sheet_set_hyperlink(fm_workbook_t* wb, std::size_t she
     hls.erase(std::remove_if(hls.begin(), hls.end(), anchored), hls.end());
     return 0;
   }
-  if (auto rc = check_sheet_rect(hl->rect); rc != 0) {
+  formulon::Hyperlink out;
+  if (auto rc = convert_hyperlink(*hl, &out); rc != 0) {
     return rc;
   }
-  if (hl->rect.first_row != row || hl->rect.first_col != col) {
+  if (out.row != row || out.col != col) {
     return formulon::c_api::parts::invalid_argument("hyperlink.rect must start at row and col");
   }
-  if (auto rc = check_utf8({hl->target, hl->location, hl->display, hl->tooltip}); rc != 0) {
-    return rc;
-  }
-  formulon::Hyperlink out;
-  out.row = hl->rect.first_row;
-  out.col = hl->rect.first_col;
-  out.last_row = hl->rect.last_row;
-  out.last_col = hl->rect.last_col;
-  out.target = text_or_empty(hl->target);
-  out.location = text_or_empty(hl->location);
-  out.display = text_or_empty(hl->display);
-  out.tooltip = text_or_empty(hl->tooltip);
-  // rid stays empty; the writer mints a fresh rIdN on save.
   // As Excel adds a link: one covering exactly the same range is replaced, any other is kept.
   const auto same_range = [&out](const formulon::Hyperlink& h) {
     return h.row == out.row && h.col == out.col && h.last_row == out.last_row && h.last_col == out.last_col;
@@ -153,6 +161,30 @@ extern "C" fm_status_t fm_sheet_set_hyperlink(fm_workbook_t* wb, std::size_t she
     // A repeated range from a loaded file would otherwise survive the replacement.
     hls.erase(std::remove_if(existing + 1, hls.end(), same_range), hls.end());
   }
+  return 0;
+}
+
+extern "C" fm_status_t fm_sheet_insert_hyperlink_at(fm_workbook_t* wb, std::size_t sheet_index, std::size_t index,
+                                                    const fm_hyperlink_t* hl) {
+  clear_last_error();
+  if (hl == nullptr) {
+    return null_argument("hl");
+  }
+  if (auto rc = check_record_size(*hl); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  auto& hls = wb->workbook().sheet(sheet_index).mutable_hyperlinks();
+  if (auto rc = check_index(index, hls.size() + 1, "index"); rc != 0) {
+    return rc;
+  }
+  formulon::Hyperlink out;
+  if (auto rc = convert_hyperlink(*hl, &out); rc != 0) {
+    return rc;
+  }
+  hls.insert(hls.begin() + static_cast<std::ptrdiff_t>(index), std::move(out));
   return 0;
 }
 

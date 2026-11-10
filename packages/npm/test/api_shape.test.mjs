@@ -1294,6 +1294,38 @@ test('a second hyperlink on a cell is appended unless it covers the same range',
   });
 });
 
+test('removeHyperlinkAt then insertHyperlinkAt at the same index restores a list with duplicates', async () => {
+  await withWorkbook((wb, formulon) => {
+    const ws = wb.sheet(0);
+    const cell = { firstRow: 2, firstCol: 1, lastRow: 2, lastCol: 1 };
+    const wide = { firstRow: 2, firstCol: 1, lastRow: 3, lastCol: 2 };
+    ws.insertHyperlinkAt(0, { target: 'https://a.example', display: 'A', tooltip: 'ta', range: cell });
+    ws.insertHyperlinkAt(1, { target: null, location: 'Sheet1!B2', display: 'B', range: wide });
+    ws.insertHyperlinkAt(2, { target: 'https://c.example', range: 'E5' });
+    const before = ws.listHyperlinks();
+    assert.equal(before.length, 3);
+    for (let index = 0; index < before.length; index++) {
+      ws.removeHyperlinkAt(index);
+      assert.equal(ws.listHyperlinks().length, 2);
+      ws.insertHyperlinkAt(index, before[index]);
+      assert.deepEqual(ws.listHyperlinks(), before);
+    }
+    ws.insertHyperlinkAt(0, { target: 'https://z.example', range: cell });
+    assert.equal(ws.listHyperlinks()[0].target, 'https://z.example');
+    assert.equal(ws.listHyperlinks().length, 4);
+    expectFormulonError(
+      () => ws.insertHyperlinkAt(5, { target: 'https://x.example', range: cell }),
+      formulon.StatusCode.IndexOutOfRange,
+    );
+    expectFormulonError(() => ws.removeHyperlinkAt(4), formulon.StatusCode.IndexOutOfRange);
+    expectFormulonError(
+      () => ws.insertHyperlinkAt(0, { target: 'https://x.example' }),
+      formulon.StatusCode.InvalidArgument,
+    );
+    assert.equal(ws.listHyperlinks().length, 4);
+  });
+});
+
 // A one-pivot workbook: Region on rows, Sum of Amount as the data field.
 function pivotWorkbook(formulon) {
   const wb = formulon.Workbook.createDefault();

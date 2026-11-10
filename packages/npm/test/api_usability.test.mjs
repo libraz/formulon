@@ -1344,10 +1344,11 @@ test('criterion 13: column geometry takes mode last and defaults to Display', as
   });
 });
 
-test('criterion 13: removeMergeAt and removeHyperlinkAt are gone', async () => {
+test('criterion 13: removeMergeAt is gone and removeHyperlinkAt takes a list position', async () => {
   await withWorkbook((wb) => {
     assert.equal('removeMergeAt' in wb.sheet(0), false);
-    assert.equal('removeHyperlinkAt' in wb.sheet(0), false);
+    assert.equal(typeof wb.sheet(0).removeHyperlinkAt, 'function');
+    assert.equal(typeof wb.sheet(0).insertHyperlinkAt, 'function');
   });
 });
 

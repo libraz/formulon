@@ -220,7 +220,15 @@ describe('method names', () => {
 
   it('Sheet break and hyperlink upserts are set* and the add*/remove* spellings are gone', () => {
     withSheet((ws) => {
-      present(ws, ['setRowBreak', 'setColumnBreak', 'listRowBreaks', 'listColumnBreaks', 'setHyperlink']);
+      present(ws, [
+        'setRowBreak',
+        'setColumnBreak',
+        'listRowBreaks',
+        'listColumnBreaks',
+        'setHyperlink',
+        'insertHyperlinkAt',
+        'removeHyperlinkAt',
+      ]);
       absent(ws, [
         'addRowBreak',
         'addColumnBreak',

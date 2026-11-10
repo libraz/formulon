@@ -2836,8 +2836,27 @@ FM_API fm_status_t fm_sheet_set_hyperlink(fm_workbook_t* wb, size_t sheet_index,
                                           const fm_hyperlink_t* hl);
 
 /**
- * @brief Removes the hyperlink at `index` on `sheet_index`. Mirrors the
- *        index domain of fm_sheet_get_hyperlink_at.
+ * @brief Inserts `hl` at list position `index` of the hyperlinks on
+ *        `sheet_index`, replacing nothing (duplicates are allowed).
+ *
+ * `index` is a position in the order `fm_sheet_get_hyperlink_at` enumerates;
+ * `index == count` appends. The rectangle's top-left cell is the anchor. `hl`
+ * is validated as in `fm_sheet_set_hyperlink`. Pairs with
+ * `fm_sheet_remove_hyperlink_at` for a lossless undo.
+ *
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `hl` is `NULL`;
+ *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
+ *         `FM_STATUS_INDEX_OUT_OF_RANGE` (13) when `index` is above the count (nothing changes);
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when the rectangle is inverted or outside the grid, or
+ *         a string is not valid UTF-8.
+ */
+FM_API fm_status_t fm_sheet_insert_hyperlink_at(fm_workbook_t* wb, size_t sheet_index, size_t index,
+                                                const fm_hyperlink_t* hl);
+
+/**
+ * @brief Removes the hyperlink at `index` on `sheet_index`. `index` is a
+ *        position in the order `fm_sheet_get_hyperlink_at` enumerates.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`;

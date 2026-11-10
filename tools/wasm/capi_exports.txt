@@ -152,6 +152,7 @@ fm_sheet_get_merge_at
 fm_sheet_get_merge_count
 fm_sheet_get_merges_in_range
 fm_sheet_set_hyperlink
+fm_sheet_insert_hyperlink_at
 fm_sheet_remove_hyperlink_at
 fm_sheet_clear_hyperlinks
 fm_sheet_get_hyperlink_at

@@ -158,6 +158,7 @@ constexpr const char* kSheetMethods[] = {
     "getWidthModel",
     "insertCells",
     "insertColumns",
+    "insertHyperlinkAt",
     "insertRows",
     "insertTableColumns",
     "insertTableRows",

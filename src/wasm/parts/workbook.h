@@ -504,6 +504,8 @@ class JsWorkbook {
   /// Sets the hyperlink `{ target, location?, display?, tooltip?, range? }` anchored at `(row, col)`; an omitted
   /// or `null` `range` is the key cell. `null` removes the link anchored there and is a no-op when there is none.
   void setHyperlink(uint32_t sheet, uint32_t row, uint32_t col, emscripten::val link);
+  /// Inserts the hyperlink `link` at list position `index`; `link.range` is required.
+  void insertHyperlinkAt(uint32_t sheet, uint32_t index, emscripten::val link);
   void removeHyperlinkAt(uint32_t sheet, uint32_t index);
   void clearHyperlinks(uint32_t sheet);
   emscripten::val getHyperlinks(uint32_t sheet) const;

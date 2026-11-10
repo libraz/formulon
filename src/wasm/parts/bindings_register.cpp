@@ -467,6 +467,7 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("recalcParallel", &JsWorkbook::recalcParallel)
       .function("hasDirtyCells", &JsWorkbook::hasDirtyCells)
       .function("removeCfRule", &JsWorkbook::removeConditionalFormatAt)
+      .function("insertHyperlinkAt", &JsWorkbook::insertHyperlinkAt)
       .function("removeHyperlinkAt", &JsWorkbook::removeHyperlinkAt)
       .function("removeMerge", &JsWorkbook::removeMerge)
       .function("removeMergeAt", &JsWorkbook::removeMergeAt)

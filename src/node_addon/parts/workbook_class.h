@@ -528,6 +528,7 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value SetHyperlink(const Napi::CallbackInfo& info);
   Napi::Value GetHyperlinks(const Napi::CallbackInfo& info);
   Napi::Value GetHyperlink(const Napi::CallbackInfo& info);
+  Napi::Value InsertHyperlinkAt(const Napi::CallbackInfo& info);
   Napi::Value RemoveHyperlinkAt(const Napi::CallbackInfo& info);
   Napi::Value ClearHyperlinks(const Napi::CallbackInfo& info);
   Napi::Value GetValidationCount(const Napi::CallbackInfo& info);

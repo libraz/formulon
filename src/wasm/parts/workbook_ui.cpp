@@ -415,6 +415,26 @@ void JsWorkbook::removeProtectedRange(uint32_t sheet, const std::string& name) {
 
 // ---- Hyperlinks --------------------------------------------------------
 
+namespace {
+
+/// Reads a `HyperlinkInput` into `hl`; `text` backs the borrowed string views. `hl->rect` keeps its value when
+/// `link` has no `range`. Returns false once `reader` has recorded an error.
+bool read_hyperlink(JsNarrowNumericReader& reader, const emscripten::val& link, std::string (&text)[4],
+                    fm_hyperlink_t* hl) {
+  // An omitted or `null` string is no stored value.
+  hl->target = reader.optional_string(link, "target", text[0], "link.target");
+  hl->location = reader.optional_string(link, "location", text[1], "link.location");
+  hl->display = reader.optional_string(link, "display", text[2], "link.display");
+  hl->tooltip = reader.optional_string(link, "tooltip", text[3], "link.tooltip");
+  const emscripten::val range = reader.value(link, "range", "link.range");
+  if (reader.ok() && js_value_present(range)) {
+    hl->rect = js_pull_range(range, &reader);
+  }
+  return reader.ok();
+}
+
+}  // namespace
+
 void JsWorkbook::setHyperlink(uint32_t sheet, uint32_t row, uint32_t col, emscripten::val link) {
   if (handle_ == nullptr) {
     record_invalid_handle();
@@ -428,22 +448,36 @@ void JsWorkbook::setHyperlink(uint32_t sheet, uint32_t row, uint32_t col, emscri
   if (!reader.require_object(link, "link")) {
     return;
   }
-  // An omitted or `null` string is no stored value.
   std::string text[4];
   fm_hyperlink_t hl = FM_STRUCT_INIT(fm_hyperlink_t);
   hl.rect = fm_cell_rect_t{row, col, row, col};
-  hl.target = reader.optional_string(link, "target", text[0], "link.target");
-  hl.location = reader.optional_string(link, "location", text[1], "link.location");
-  hl.display = reader.optional_string(link, "display", text[2], "link.display");
-  hl.tooltip = reader.optional_string(link, "tooltip", text[3], "link.tooltip");
-  const emscripten::val range = reader.value(link, "range", "link.range");
-  if (reader.ok() && js_value_present(range)) {
-    hl.rect = js_pull_range(range, &reader);
-  }
-  if (!reader.ok()) {
+  if (!read_hyperlink(reader, link, text, &hl)) {
     return;
   }
   succeeded(fm_sheet_set_hyperlink(handle_, sheet, row, col, &hl));
+}
+
+void JsWorkbook::insertHyperlinkAt(uint32_t sheet, uint32_t index, emscripten::val link) {
+  if (handle_ == nullptr) {
+    record_invalid_handle();
+    return;
+  }
+  JsNarrowNumericReader reader("Sheet.insertHyperlinkAt");
+  if (!reader.require_object(link, "link")) {
+    return;
+  }
+  std::string text[4];
+  fm_hyperlink_t hl = FM_STRUCT_INIT(fm_hyperlink_t);
+  if (!js_value_present(reader.value(link, "range", "link.range"))) {
+    if (reader.ok()) {
+      record_binding_failure(FM_STATUS_INVALID_ARGUMENT, "link.range is required", "link.range");
+    }
+    return;
+  }
+  if (!read_hyperlink(reader, link, text, &hl)) {
+    return;
+  }
+  succeeded(fm_sheet_insert_hyperlink_at(handle_, sheet, index, &hl));
 }
 
 void JsWorkbook::removeHyperlinkAt(uint32_t sheet, uint32_t index) {

@@ -761,6 +761,7 @@ Napi::Function Workbook::GetClass(Napi::Env env) {
           GuardedInstanceMethod<&Workbook::RecalcParallel>("recalcParallel"),
           GuardedInstanceMethod<&Workbook::HasDirtyCells>("hasDirtyCells"),
           GuardedInstanceMethod<&Workbook::RemoveConditionalFormatAt, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x2ULL>("removeCfRule"),
+          GuardedInstanceMethod<&Workbook::InsertHyperlinkAt, 0x3ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x4ULL>("insertHyperlinkAt"),
           GuardedInstanceMethod<&Workbook::RemoveHyperlinkAt, 0x3ULL>("removeHyperlinkAt"),
           GuardedInstanceMethod<&Workbook::RemoveMerge, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x2ULL>("removeMerge"),
           GuardedInstanceMethod<&Workbook::RemoveMergeAt, 0x3ULL>("removeMergeAt"),

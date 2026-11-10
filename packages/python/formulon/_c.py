@@ -621,6 +621,7 @@ _STATUS_RETURNING_EXPORT_NAMES = (
     "fm_sheet_add_chart_series",
     "fm_sheet_add_data_table",
     "fm_sheet_set_hyperlink",
+    "fm_sheet_insert_hyperlink_at",
     "fm_sheet_add_merge",
     "fm_sheet_add_protected_range",
     "fm_sheet_set_row_break",

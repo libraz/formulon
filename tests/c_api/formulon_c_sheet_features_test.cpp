@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <cstring>
 #include <string>
+#include <vector>
 
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
@@ -222,6 +223,114 @@ TEST_F(FormulonCApiSheetFeatures, HyperlinkRectangleMustBeAnchoredAtTheGivenCell
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kSheetIndexOutOfRange));
   EXPECT_EQ(fm_sheet_set_hyperlink(nullptr, 0, 1U, 1U, &hl),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
+}
+
+namespace {
+
+fm_hyperlink_t MakeLink(fm_cell_rect_t rect, const char* target, const char* display) {
+  fm_hyperlink_t hl = FM_STRUCT_INIT(fm_hyperlink_t);
+  hl.rect = rect;
+  hl.target = target;
+  hl.display = display;
+  return hl;
+}
+
+std::vector<std::string> HyperlinkTargets(const fm_workbook_t* wb) {
+  std::size_t count = 0;
+  EXPECT_EQ(fm_sheet_get_hyperlink_count(wb, 0, &count), 0);
+  std::vector<std::string> out;
+  for (std::size_t i = 0; i < count; ++i) {
+    fm_hyperlink_t got = FM_STRUCT_INIT(fm_hyperlink_t);
+    EXPECT_EQ(fm_sheet_get_hyperlink_at(wb, 0, i, &got), 0);
+    out.emplace_back(got.target != nullptr ? got.target : "");
+  }
+  return out;
+}
+
+}  // namespace
+
+TEST_F(FormulonCApiSheetFeatures, HyperlinkInsertAtStartMiddleAndEnd) {
+  const fm_hyperlink_t b = MakeLink({1U, 1U, 1U, 1U}, "b", nullptr);
+  const fm_hyperlink_t a = MakeLink({0U, 0U, 0U, 0U}, "a", nullptr);
+  const fm_hyperlink_t d = MakeLink({3U, 0U, 3U, 0U}, "d", nullptr);
+  const fm_hyperlink_t c = MakeLink({2U, 0U, 2U, 0U}, "c", nullptr);
+  ASSERT_EQ(fm_sheet_insert_hyperlink_at(wb_, 0, 0, &b), 0);
+  ASSERT_EQ(fm_sheet_insert_hyperlink_at(wb_, 0, 0, &a), 0);
+  ASSERT_EQ(fm_sheet_insert_hyperlink_at(wb_, 0, 2, &d), 0);
+  ASSERT_EQ(fm_sheet_insert_hyperlink_at(wb_, 0, 2, &c), 0);
+  EXPECT_EQ(HyperlinkTargets(wb_), (std::vector<std::string>{"a", "b", "c", "d"}));
+}
+
+TEST_F(FormulonCApiSheetFeatures, HyperlinkInsertAtRejectsBadArgumentsAndChangesNothing) {
+  const fm_hyperlink_t a = MakeLink({0U, 0U, 0U, 0U}, "a", nullptr);
+  ASSERT_EQ(fm_sheet_insert_hyperlink_at(wb_, 0, 0, &a), 0);
+  const fm_status_t out_of_range = static_cast<fm_status_t>(formulon::FormulonErrorCode::kIndexOutOfRange);
+  EXPECT_EQ(fm_sheet_insert_hyperlink_at(wb_, 0, 2, &a), out_of_range);
+  EXPECT_EQ(fm_sheet_insert_hyperlink_at(wb_, 0, 0, nullptr),
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
+  EXPECT_EQ(fm_sheet_insert_hyperlink_at(wb_, 4, 0, &a),
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kSheetIndexOutOfRange));
+  const fm_hyperlink_t inverted = MakeLink({5U, 5U, 4U, 5U}, "x", nullptr);
+  EXPECT_EQ(fm_sheet_insert_hyperlink_at(wb_, 0, 0, &inverted),
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
+  EXPECT_EQ(HyperlinkTargets(wb_), (std::vector<std::string>{"a"}));
+}
+
+TEST_F(FormulonCApiSheetFeatures, HyperlinkRemoveThenInsertAtSameIndexRestoresDuplicates) {
+  // Two links anchored at A1 (different extents), then one elsewhere.
+  fm_hyperlink_t first = MakeLink({0U, 0U, 0U, 0U}, "https://first.example", "First");
+  first.tooltip = "tip1";
+  fm_hyperlink_t second = MakeLink({0U, 0U, 2U, 2U}, nullptr, "Second");
+  second.location = "Sheet1!B2";
+  second.tooltip = "tip2";
+  const fm_hyperlink_t third = MakeLink({4U, 4U, 4U, 4U}, "https://third.example", nullptr);
+  ASSERT_EQ(fm_sheet_insert_hyperlink_at(wb_, 0, 0, &first), 0);
+  ASSERT_EQ(fm_sheet_insert_hyperlink_at(wb_, 0, 1, &second), 0);
+  ASSERT_EQ(fm_sheet_insert_hyperlink_at(wb_, 0, 2, &third), 0);
+
+  struct Snapshot {
+    fm_cell_rect_t rect;
+    std::string target, location, display, tooltip;
+  };
+  const auto read_all = [&]() {
+    std::size_t count = 0;
+    EXPECT_EQ(fm_sheet_get_hyperlink_count(wb_, 0, &count), 0);
+    std::vector<Snapshot> out;
+    for (std::size_t i = 0; i < count; ++i) {
+      fm_hyperlink_t got = FM_STRUCT_INIT(fm_hyperlink_t);
+      EXPECT_EQ(fm_sheet_get_hyperlink_at(wb_, 0, i, &got), 0);
+      const auto text = [](const char* p) { return std::string(p != nullptr ? p : "<null>"); };
+      out.push_back({got.rect, text(got.target), text(got.location), text(got.display), text(got.tooltip)});
+    }
+    return out;
+  };
+  const std::vector<Snapshot> before = read_all();
+  ASSERT_EQ(before.size(), 3U);
+
+  for (std::size_t index = 0; index < before.size(); ++index) {
+    // The snapshot owns its strings, so it outlives the model storage the remove frees.
+    const Snapshot& snap = before[index];
+    fm_hyperlink_t again = FM_STRUCT_INIT(fm_hyperlink_t);
+    again.rect = snap.rect;
+    again.target = snap.target == "<null>" ? nullptr : snap.target.c_str();
+    again.location = snap.location == "<null>" ? nullptr : snap.location.c_str();
+    again.display = snap.display == "<null>" ? nullptr : snap.display.c_str();
+    again.tooltip = snap.tooltip == "<null>" ? nullptr : snap.tooltip.c_str();
+    ASSERT_EQ(fm_sheet_remove_hyperlink_at(wb_, 0, index), 0);
+    ASSERT_EQ(fm_sheet_insert_hyperlink_at(wb_, 0, index, &again), 0);
+    const std::vector<Snapshot> after = read_all();
+    ASSERT_EQ(after.size(), before.size());
+    for (std::size_t i = 0; i < before.size(); ++i) {
+      EXPECT_EQ(after[i].rect.first_row, before[i].rect.first_row) << index << "/" << i;
+      EXPECT_EQ(after[i].rect.first_col, before[i].rect.first_col) << index << "/" << i;
+      EXPECT_EQ(after[i].rect.last_row, before[i].rect.last_row) << index << "/" << i;
+      EXPECT_EQ(after[i].rect.last_col, before[i].rect.last_col) << index << "/" << i;
+      EXPECT_EQ(after[i].target, before[i].target) << index << "/" << i;
+      EXPECT_EQ(after[i].location, before[i].location) << index << "/" << i;
+      EXPECT_EQ(after[i].display, before[i].display) << index << "/" << i;
+      EXPECT_EQ(after[i].tooltip, before[i].tooltip) << index << "/" << i;
+    }
+  }
 }
 
 TEST_F(FormulonCApiSheetFeatures, CommentSetGetAndRemove) {

@@ -1377,6 +1377,7 @@ const SHEET_METHODS = Object.freeze([
   'getWidthModel',
   'insertCells',
   'insertColumns',
+  'insertHyperlinkAt',
   'insertRows',
   'iterRows',
   'listCells',
@@ -1405,6 +1406,7 @@ const SHEET_METHODS = Object.freeze([
   'removeCfRule',
   'removeDataTable',
   'removeDrawing',
+  'removeHyperlinkAt',
   'removeMerge',
   'removePivot',
   'removeProtectedRange',
@@ -1586,6 +1588,7 @@ const HANDWRITTEN = Object.freeze([
   'getUsedRange',
   'getValues',
   'hasSheet',
+  'insertHyperlinkAt',
   'iterRows',
   'listCells',
   'listCharts',
@@ -2591,6 +2594,7 @@ const INPUT_KEYS = Object.freeze({
   'Sheet.evaluateCfRange': [1, ['timePeriodRules', 'today']],
   'Sheet.getCellsInRange': [1, ['cursor', 'limit']],
   'Sheet.getInvalidCells': [0, ['cursor', 'limit']],
+  'Sheet.insertHyperlinkAt': [1, ['display', 'location', 'range', 'target', 'tooltip']],
   'Sheet.restoreDrawing': [1, ['assignNewId']],
   'Sheet.setArrayFormula': [0, ['formula', 'range']],
   'Sheet.setAutoFilter': [0, ['columns', 'range', 'sort']],
@@ -3556,6 +3560,7 @@ const METHOD_ARITY = Object.freeze({
   'Sheet.getWidthModel': 1,
   'Sheet.insertCells': 2,
   'Sheet.insertColumns': 2,
+  'Sheet.insertHyperlinkAt': 2,
   'Sheet.insertRows': 2,
   'Sheet.iterRows': 1,
   'Sheet.listCells': 1,
@@ -3586,6 +3591,7 @@ const METHOD_ARITY = Object.freeze({
   'Sheet.removeCfRule': 1,
   'Sheet.removeDataTable': 2,
   'Sheet.removeDrawing': 1,
+  'Sheet.removeHyperlinkAt': 1,
   'Sheet.removeMerge': 1,
   'Sheet.removePivot': 1,
   'Sheet.removeProtectedRange': 1,
@@ -3808,6 +3814,7 @@ const TYPED_ARGS = Object.freeze({
   'Sheet.addThreadedComment': [[0, 'ThreadedCommentInput']],
   'Sheet.addValidation': [[0, 'DataValidationInput']],
   'Sheet.getRangeXfBasesExcluding': [[1, 'CellAddress[]']],
+  'Sheet.insertHyperlinkAt': [[1, 'HyperlinkInput']],
   'Sheet.setArrayFormula': [[0, 'ArrayFormulaInput']],
   'Sheet.setAutoFilter': [[0, 'AutoFilterInput']],
   'Sheet.setHyperlink': [
@@ -3970,6 +3977,7 @@ const ARG_ROLES = Object.freeze({
     [0, 'coordinate'],
     [1, 'coordinate'],
   ],
+  'Sheet.removeHyperlinkAt': [[0, 'position']],
   'Sheet.resetCellXfIndex': [
     [0, 'coordinate'],
     [1, 'coordinate'],
@@ -4256,6 +4264,7 @@ const PARAM_NAMES = Object.freeze({
   'Sheet.getWidthModel': ['mode'],
   'Sheet.insertCells': ['range', 'shift'],
   'Sheet.insertColumns': ['first', 'last'],
+  'Sheet.insertHyperlinkAt': ['index', 'link'],
   'Sheet.insertRows': ['first', 'last'],
   'Sheet.iterRows': ['range'],
   'Sheet.listCells': ['range'],
@@ -4266,6 +4275,7 @@ const PARAM_NAMES = Object.freeze({
   'Sheet.removeCfRule': ['cfRule'],
   'Sheet.removeDataTable': ['row', 'col'],
   'Sheet.removeDrawing': ['objectId'],
+  'Sheet.removeHyperlinkAt': ['index'],
   'Sheet.removeMerge': ['range'],
   'Sheet.removePivot': ['pivot'],
   'Sheet.removeProtectedRange': ['protectedRange'],
@@ -8057,6 +8067,23 @@ function makeFacade(Raw, registry, runtime) {
       const raw = rawOf(this.#workbook);
       const sheet = this.#current();
       raw.setHyperlink(sheet, row, col, link === null ? null : hyperlinkInput(raw, link, 'Sheet.setHyperlink', 2));
+    }
+
+    // Replaces nothing; the anchor is the top-left of `link.range`, which is therefore required.
+    insertHyperlinkAt(index, link) {
+      const where = 'Sheet.insertHyperlinkAt';
+      const raw = rawOf(this.#workbook);
+      const sheet = this.#current();
+      const at = requireIndex(index, argLabel(where, 0), 'position');
+      const input = hyperlinkInput(raw, link, where, 1);
+      if (!present(input.range)) {
+        throw new FormulonError(
+          StatusCode.InvalidArgument,
+          `${argLabel(where, 1)}.range is required`,
+          'link.range=undefined',
+        );
+      }
+      raw.insertHyperlinkAt(sheet, at, input);
     }
 
     insertCells(range, shift) {

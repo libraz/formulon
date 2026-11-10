@@ -425,6 +425,7 @@ SHEET_METHODS = (
     "get_width_model",
     "insert_cells",
     "insert_columns",
+    "insert_hyperlink_at",
     "insert_rows",
     "iter_rows",
     "list_cells",
@@ -453,6 +454,7 @@ SHEET_METHODS = (
     "remove_cf_rule",
     "remove_data_table",
     "remove_drawing",
+    "remove_hyperlink_at",
     "remove_merge",
     "remove_pivot",
     "remove_protected_range",
@@ -627,6 +629,7 @@ HANDWRITTEN = (
     "get_typed_values",
     "get_used_range",
     "get_values",
+    "insert_hyperlink_at",
     "iter_rows",
     "list_cells",
     "list_charts",
@@ -2789,26 +2792,32 @@ class Sheet(_NoCopy):
         row, col, link = self._cell_args("set_hyperlink", args, kwargs, ("link",))
         self._set_hyperlink(row, col, link)
 
+    def _pack_hyperlink(self, scope: _ArgScope, link: Union[HyperlinkInput, Hyperlink], rect: CellRect) -> int:
+        ptr = scope.struct(S.HYPERLINK)
+        S.HYPERLINK.pack(LIB, ptr, {"rect": _cell_rect_fields(rect)})
+        S.write_str_field(LIB, ptr, S.HYPERLINK, "target", link.target, scope)
+        S.write_str_field(LIB, ptr, S.HYPERLINK, "location", link.location, scope)
+        S.write_str_field(LIB, ptr, S.HYPERLINK, "display", link.display, scope)
+        S.write_str_field(LIB, ptr, S.HYPERLINK, "tooltip", link.tooltip, scope)
+        return ptr
+
+    @staticmethod
+    def _check_hyperlink(link: object) -> None:
+        if not isinstance(link, (HyperlinkInput, Hyperlink)):
+            raise TypeError(_argument_message("link", "must be a HyperlinkInput, a Hyperlink or null"))
+        if link.target is None and link.location is None:
+            raise TypeError(_argument_message("link", "needs a target or a location"))
+
     def _set_hyperlink(self, row: int, col: int, link: Union[HyperlinkInput, Hyperlink, None]) -> None:
         rect = CellRect(row, col, row, col)
         if link is not None:
-            if not isinstance(link, (HyperlinkInput, Hyperlink)):
-                raise TypeError(_argument_message("link", "must be a HyperlinkInput, a Hyperlink or null"))
-            if link.target is None and link.location is None:
-                raise TypeError(_argument_message("link", "needs a target or a location"))
+            self._check_hyperlink(link)
             if link.range is not None:
                 rect = self._rect(link.range)
         sheet = self._index()
         h = self._workbook._require()
         with _ArgScope() as scope:
-            ptr = 0
-            if link is not None:
-                ptr = scope.struct(S.HYPERLINK)
-                S.HYPERLINK.pack(LIB, ptr, {"rect": _cell_rect_fields(rect)})
-                S.write_str_field(LIB, ptr, S.HYPERLINK, "target", link.target, scope)
-                S.write_str_field(LIB, ptr, S.HYPERLINK, "location", link.location, scope)
-                S.write_str_field(LIB, ptr, S.HYPERLINK, "display", link.display, scope)
-                S.write_str_field(LIB, ptr, S.HYPERLINK, "tooltip", link.tooltip, scope)
+            ptr = 0 if link is None else self._pack_hyperlink(scope, link, rect)
             _check(
                 LIB.fm_sheet_set_hyperlink(
                     h,
@@ -2818,6 +2827,53 @@ class Sheet(_NoCopy):
                     ptr,
                 )
             )
+
+    def insert_hyperlink_at(self, index: int, link: Union[HyperlinkInput, Hyperlink]) -> None:
+        """Insert ``link`` at position ``index`` of :meth:`list_hyperlinks`, replacing nothing.
+
+        A link covering the same range is kept (unlike :meth:`set_hyperlink`).
+        ``index`` is a position in the order :meth:`list_hyperlinks` returns, so
+        a host can map a list entry to its index; ``index == len(list_hyperlinks())``
+        appends. There is no anchor argument, so ``link.range`` is required and
+        its top-left cell is the anchor. Pairs with :meth:`remove_hyperlink_at`
+        for a lossless undo.
+
+        Raises:
+          TypeError: when ``link`` is neither a :class:`HyperlinkInput` nor a :class:`Hyperlink`,
+            or its ``target`` and ``location`` are both ``None``.
+          InvalidArgumentError: when ``link.range`` is ``None`` or lies outside the grid.
+          IndexOutOfRangeError: when ``index`` is above the number of hyperlinks; nothing changes.
+        """
+        self._check_hyperlink(link)
+        if link.range is None:
+            raise FormulonError(StatusCode.INVALID_ARGUMENT, _argument_message("link.range", "is required"), "")
+        rect = self._rect(link.range)
+        sheet = self._index()
+        h = self._workbook._require()
+        with _ArgScope() as scope:
+            ptr = self._pack_hyperlink(scope, link, rect)
+            _check(
+                LIB.fm_sheet_insert_hyperlink_at(
+                    h, _uint(sheet, "sheet_index", role="sheet"), _uint(index, "index", role="position"), ptr
+                )
+            )
+
+    def remove_hyperlink_at(self, index: int) -> None:
+        """Remove the hyperlink at position ``index`` of :meth:`list_hyperlinks`.
+
+        ``index`` is a position in the order :meth:`list_hyperlinks` returns, so
+        a host can map a list entry to its index.
+
+        Raises:
+          IndexOutOfRangeError: when ``index`` is not below the number of hyperlinks.
+        """
+        sheet = self._index()
+        h = self._workbook._require()
+        _check(
+            LIB.fm_sheet_remove_hyperlink_at(
+                h, _uint(sheet, "sheet_index", role="sheet"), _uint(index, "index", role="position")
+            )
+        )
 
     def clear_hyperlinks(self) -> None:
         """Drop every hyperlink on the sheet."""

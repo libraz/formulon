@@ -1336,8 +1336,11 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
   extension raises `InvalidArgumentError`. `save_with_diagnostics` takes `dest`. `add_batch`
   and `has_phonetic_properties` are removed (`PhoneticProperties.stated`
   replaces the last).
-- **JavaScript, Python:** `removeMergeAt` and `removeHyperlinkAt` are removed
-  in favour of `removeMerge` and `removeHyperlink`. `getDefinedName` and
+- **JavaScript, Python:** `removeMergeAt` is removed in favour of
+  `removeMerge(range)`. `removeHyperlink(cell)` is removed in favour of
+  `setHyperlink(cell, null)`, which clears every link anchored at the cell.
+  `removeHyperlinkAt(index)` and `insertHyperlinkAt(index, link)` are public,
+  where `index` is the position in `listHyperlinks()` order. `getDefinedName` and
   `removeDefinedName` take an optional `scope`, `getThemeScriptFont` and
   `setThemeScriptFont` take `{ scheme, script }`, `Chart.setType` takes
   `{ barDirection, grouping }` options, and `Pivot.addFieldItem` takes an
@@ -2855,7 +2858,6 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
 | `removeChartSeries()` | `ws.chart(...).removeSeries()` |
 | `removeConditionalFormatAt()` | `removeCfRule()` |
 | `removeHyperlink()` | removed; use `setHyperlink()` |
-| `removeHyperlinkAt()` | removed |
 | `removeMergeAt()` | removed |
 | `removeShape()` | `removeDrawing()` |
 | `removeSheetColBreak()` | removed |
@@ -3356,7 +3358,6 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
 | `remove_col_break()` | removed |
 | `remove_conditional_format_at()` | `remove_cf_rule()` |
 | `remove_hyperlink()` | removed; use `set_hyperlink()` |
-| `remove_hyperlink_at()` | removed |
 | `remove_merge_at()` | removed |
 | `remove_row_break()` | removed |
 | `remove_shape()` | `remove_drawing()` |

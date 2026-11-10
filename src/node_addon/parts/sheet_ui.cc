@@ -399,6 +399,28 @@ Napi::Value Workbook::RemoveProtectedRange(const Napi::CallbackInfo& info) {
 
 // ---- Hyperlinks -----------------------------------------------------
 
+namespace {
+
+// Reads a `HyperlinkInput` into `hl`; `text` backs the borrowed string views. `hl->rect` keeps its value when
+// `in` has no `range`, which the result reports.
+bool ReadHyperlinkInput(CheckedSpecReader& reader, const Napi::Object& in, std::string (&text)[4], fm_hyperlink_t* hl) {
+  const auto optional = [&](const char* key, std::string* store) {
+    return reader.String(in, key, store) ? store->c_str() : nullptr;
+  };
+  hl->target = optional("target", &text[0]);
+  hl->location = optional("location", &text[1]);
+  hl->display = optional("display", &text[2]);
+  hl->tooltip = optional("tooltip", &text[3]);
+  Napi::Object range;
+  if (!reader.Object(in, "range", &range)) {
+    return false;
+  }
+  (void)ReadCellRect(reader, range, &hl->rect);
+  return true;
+}
+
+}  // namespace
+
 // `(sheet, row, col, link)`: `link` is a `HyperlinkInput` whose `range` (a `CellRect`, or omitted / `null` for the
 // key cell) must start at `(row, col)`; `null` removes the hyperlink anchored there and does nothing when there
 // is none. A missing or `null` string is no stored value.
@@ -418,23 +440,35 @@ Napi::Value Workbook::SetHyperlink(const Napi::CallbackInfo& info) {
   }
   // The std::string buffers keep the borrowed `const char*` views of `fm_hyperlink_t` alive across the C call.
   std::string text[4];
-  const auto optional = [&](const char* key, std::string* store) {
-    return reader.String(in, key, store) ? store->c_str() : nullptr;
-  };
   fm_hyperlink_t hl = FM_STRUCT_INIT(fm_hyperlink_t);
-  hl.target = optional("target", &text[0]);
-  hl.location = optional("location", &text[1]);
-  hl.display = optional("display", &text[2]);
-  hl.tooltip = optional("tooltip", &text[3]);
   hl.rect = fm_cell_rect_t{row, col, row, col};
-  Napi::Object range;
-  if (reader.Object(in, "range", &range)) {
-    (void)ReadCellRect(reader, range, &hl.rect);
-  }
+  (void)ReadHyperlinkInput(reader, in, text, &hl);
   if (!reader.ok()) {
     return env.Undefined();
   }
   return ValueOrThrow(env, fm_sheet_set_hyperlink(handle_, sheet, row, col, &hl), env.Undefined());
+}
+
+// `(sheet, index, link)`: `link.range` is required; its top-left cell is the anchor.
+Napi::Value Workbook::InsertHyperlinkAt(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return ThrowInvalidHandle(env);
+  }
+  const uint32_t sheet = ArgU32(info, 0);
+  const uint32_t index = ArgU32(info, 1);
+  CheckedSpecReader reader(env);
+  Napi::Object in;
+  std::string text[4];
+  fm_hyperlink_t hl = FM_STRUCT_INIT(fm_hyperlink_t);
+  const bool has_range = reader.Object(info[2], "", &in) && ReadHyperlinkInput(reader, in, text, &hl);
+  if (!reader.ok()) {
+    return env.Undefined();
+  }
+  if (!has_range) {
+    return ThrowBindingStatus(env, FM_STATUS_INVALID_ARGUMENT, "link.range is required");
+  }
+  return ValueOrThrow(env, fm_sheet_insert_hyperlink_at(handle_, sheet, index, &hl), env.Undefined());
 }
 
 namespace {

@@ -169,6 +169,8 @@ class SurfaceParityTests(unittest.TestCase):
         "clear_merges",
         "list_merges",
         "set_hyperlink",
+        "insert_hyperlink_at",
+        "remove_hyperlink_at",
         "clear_hyperlinks",
         "list_hyperlinks",
         "get_comment",

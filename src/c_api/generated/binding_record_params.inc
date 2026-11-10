@@ -53,6 +53,7 @@ constexpr RecordParam kRecordParams[] = {
     {"Sheet.evaluateCfRange", "options"},
     {"Sheet.getCellsInRange", "options"},
     {"Sheet.getInvalidCells", "options"},
+    {"Sheet.insertHyperlinkAt", "link"},
     {"Sheet.restoreDrawing", "opts"},
     {"Sheet.setArrayFormula", "arrayFormula"},
     {"Sheet.setAutoFilter", "filter"},

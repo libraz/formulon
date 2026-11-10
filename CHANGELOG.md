@@ -109,6 +109,10 @@ Upgrading from 0.18: see [Upgrading from 0.18 to 0.19](docs/releases/upgrading-0
 
 ### Added
 
+- `Sheet.insertHyperlinkAt(index, link)` (`fm_sheet_insert_hyperlink_at`, Python
+  `insert_hyperlink_at`) inserts a hyperlink at a list position without replacing
+  one on the same range; `removeHyperlinkAt` / `remove_hyperlink_at` is published
+  beside it for a lossless undo.
 - `Sheet.ooxml.getCellXfIndices(range?)` (`fm_sheet_get_cell_xf_indices`, Python
   `get_cell_xf_indices`) lists the stored cells with a non-default cell XF,
   styled blanks included, which `listCells` leaves out.
