@@ -1208,7 +1208,7 @@ export interface PivotField {
   /** Whether every item and the default marker of the field are expanded; true for a field without items. Writing
    *  applies to all of them. */
   readonly showDetail: boolean;
-  /** The custom subtotal functions, in ascending aggregation order; empty when there are none. */
+  /** The custom subtotal functions, in ascending aggregation order; a field without custom subtotals lists none. */
   readonly subtotalFunctions: readonly PivotAggregation[];
 }
 
@@ -1847,9 +1847,9 @@ export interface CfCell {
 
 /** Resolved print geometry for one worksheet. All coordinates are 0-based. */
 export interface Pagination {
-  /** The sheet's declared `_xlnm.Print_Area`; empty when the sheet declares none, and not backfilled with the used
-   *  range. Pagination still falls back to the used range in that case, so `pageCount` can be non-zero while this is
-   *  empty. */
+  /** The rectangles of the sheet's declared `_xlnm.Print_Area`, none when the sheet declares no print area; it is not
+   *  backfilled with the used range. Pagination still falls back to the used range in that case, so `pageCount` can
+   *  be non-zero while this lists no rectangle. */
   readonly printArea: readonly CellRect[];
   /** The row breaks in effect, ascending by `row`. */
   readonly rowBreaks: readonly RowBreak[];
