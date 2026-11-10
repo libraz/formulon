@@ -459,8 +459,8 @@ namespace {
 emscripten::val hyperlink_to_val(const fm_hyperlink_t& h) {
   emscripten::val item = emscripten::val::object();
   item.set("rect", cell_rect_to_val(h.rect));
-  js_set_cstr(item, "target", h.target);
-  js_set_cstr_or_null_fields(item, {{"location", h.location}, {"display", h.display}, {"tooltip", h.tooltip}});
+  js_set_cstr_or_null_fields(
+      item, {{"target", h.target}, {"location", h.location}, {"display", h.display}, {"tooltip", h.tooltip}});
   return item;
 }
 

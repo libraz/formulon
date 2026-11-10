@@ -1265,6 +1265,15 @@ test('T1: non-ASCII text round-trips and a lone surrogate becomes U+FFFD', async
   });
 });
 
+test('an in-workbook hyperlink reads a null target', async () => {
+  await withWorkbook((wb) => {
+    const ws = wb.sheet(0);
+    ws.setHyperlink(0, 0, { location: 'Sheet1!B2', target: null });
+    assert.equal(ws.getHyperlink(0, 0).target, null);
+    assert.equal(ws.listHyperlinks()[0].target, null);
+  });
+});
+
 // A one-pivot workbook: Region on rows, Sum of Amount as the data field.
 function pivotWorkbook(formulon) {
   const wb = formulon.Workbook.createDefault();

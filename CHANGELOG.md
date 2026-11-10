@@ -283,6 +283,8 @@ Upgrading from 0.18: see [Upgrading from 0.18 to 0.19](docs/releases/upgrading-0
   cell at the edge, so the blank shifted there keeps its look.
 - A pivot item's `name` reads its shared item's label before a save as after
   a load; an item bound only by cache index no longer reads `null`.
+- In JavaScript an in-workbook hyperlink reads `target: null`, as the native
+  addon and Python already did; it read `""`.
 - Saving a new workbook with an image or chart as `.xlsb` failed with
   `IoContentTypeInvalid`.
 - `PivotField.subtotalTop` and several Python flags read true when false was
