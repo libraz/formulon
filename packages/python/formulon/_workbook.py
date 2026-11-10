@@ -476,7 +476,7 @@ CfRuleRef = Union[int, CfRuleId]
 #: A protected range: its position or its name; a ``str`` is always a name.
 ProtectedRangeRef = Union[int, str]
 
-#: Excel profile id accepted by `Workbook.set_profile_id`.
+#: Excel profile id accepted by ``Workbook.set_profile_id``.
 ProfileId = Literal[
     "mac-365-ja_JP",
     "win-365-ja_JP",
@@ -523,23 +523,21 @@ class SaveDiagnostics:
     the underlying event exists in only one container, the other simply
     never raises it. Coverage is partial by design -- an all-zero result
     means none of these losses occurred, not that nothing was logged.
-
-    Summing the fields does **not** give "how many things did I lose":
-    ``dropped_part_count`` and ``dropped_relationship_count`` both rise
-    for one dropped part.
     """
 
+    #: The written workbook.
     bytes: bytes
-    #: Formula cells emitted as cached literals. Zero for XLSX.
+    #: The number of formula cells emitted as cached literals. Always 0 for XLSX.
     downgraded_formula_count: int
-    #: Sheet features not lowered to records. Zero for XLSX.
+    #: The number of sheet features not lowered to records. Always 0 for XLSX.
     deferred_feature_count: int
-    #: Passthrough parts dropped for a path collision. Both containers.
+    #: The number of passthrough parts dropped for colliding with a generated path, or for two entries claiming one
+    #: path. Applies to both containers.
     dropped_part_count: int
-    #: Relationships dropped because their target part is gone. Both
-    #: containers. Rises with ``dropped_part_count`` for one dropped part.
+    #: The number of relationships dropped because their target part is gone, at package, workbook or (XLSB) sheet
+    #: scope. Rises with ``dropped_part_count`` for one dropped part, so do not add them.
     dropped_relationship_count: int
-    #: Tables emitted under a writer-assigned id. Zero for XLSB.
+    #: The number of tables emitted under a writer-assigned id. Always 0 for XLSB.
     renumbered_part_count: int
 
 
@@ -551,17 +549,17 @@ class ReadDiagnostics:
     across both containers, partial coverage by design.
     """
 
-    #: Formula cells whose stored formula could not be decoded. XLSB only.
+    #: The number of formula cells whose stored formula could not be decoded. XLSB only.
     undecoded_formula_count: int
-    #: Defined names skipped for the same reason. XLSB only.
+    #: The number of defined names skipped because their stored formula could not be decoded. XLSB only.
     undecoded_defined_name_count: int
-    #: Package parts whose content type could not be resolved. XLSB only;
-    #: the XLSX reader keeps unmodelled parts as passthrough.
+    #: The number of package parts whose content type could not be resolved, so they were not decoded. XLSB only; the
+    #: XLSX reader keeps unmodelled parts as passthrough.
     undecoded_part_count: int
-    #: Presentation-overlay entries dropped for an unusable reference.
-    #: XLSX only.
+    #: The number of presentation-overlay entries dropped for an unusable reference: one per merge, hyperlink or data
+    #: validation, and one per conditional-format block. XLSX only.
     skipped_feature_count: int
-    #: Workbook parts with an unrecognised content type. Max 1. XLSX only.
+    #: The number of workbook parts whose content type was unrecognised; at most 1. XLSX only.
     unknown_content_type_count: int
 
 
@@ -644,6 +642,7 @@ class ExcelError:
     stores one as a cell error. Its string form is the en-US display literal.
     """
 
+    #: The error, an ``ErrorCode`` value.
     code: ErrorCode
 
     def __post_init__(self) -> None:
@@ -665,19 +664,23 @@ NativeValue = Union[None, float, bool, str, ExcelError, List[List["NativeValue"]
 class Value:
     """A cell or formula value tagged with its kind (the ``*_typed_*`` reads return it).
 
-    Exactly one of ``number`` / ``boolean`` / ``text`` / ``error_code`` /
-    ``array`` is populated according to ``kind``; ``array`` holds the rows of
-    an array result, each a tuple of scalar values of equal length. The
+    Exactly one payload field is populated, according to ``kind``. The
     constructor enforces the invariant: ``kind`` is coerced to
     :class:`ValueKind`, a missing or extra payload raises ``ValueError`` and a
     payload of the wrong type raises ``TypeError``.
     """
 
+    #: The ``ValueKind`` of the value; it selects which payload field is populated.
     kind: ValueKind
+    #: The numeric payload; set only for the number kind.
     number: Optional[float] = None
+    #: The logical payload; set only for the bool kind.
     boolean: Optional[bool] = None
+    #: The text payload; set only for the text kind.
     text: Optional[str] = None
+    #: The error payload, an ``ErrorCode``; set only for the error kind.
     error_code: Optional[ErrorCode] = None
+    #: The rows of an array result, each a tuple of scalar values of equal length; set only for the array kind.
     array: Optional[Tuple[Tuple["Value", ...], ...]] = None
 
     def __post_init__(self) -> None:
@@ -810,16 +813,17 @@ def _folded(grid: List[List[Value]]) -> Value:
 
 @dataclass(frozen=True)
 class RangeCell:
-    """One written coordinate, as :meth:`Sheet.list_cells` returns it.
+    """One written coordinate, as :meth:`Sheet.list_cells` returns it."""
 
-    ``value`` is the computed value as native data and ``kind`` its
-    :class:`ValueKind`; ``formula`` is ``None`` for a constant.
-    """
-
+    #: The 0-based row.
     row: int
+    #: The 0-based column.
     col: int
+    #: The formula text as the sheet formula getter spells it; ``None`` for a constant.
     formula: Optional[str]
+    #: The computed value as native data.
     value: NativeValue
+    #: The ``ValueKind`` of ``value``.
     kind: ValueKind
 
 
@@ -827,29 +831,31 @@ class RangeCell:
 class DefinedName:
     """One defined name, as ``Workbook.list_defined_names()`` and ``Workbook.get_defined_name()`` return it."""
 
+    #: The name as stored.
     name: str
-    #: The formula text, with a leading ``=``.
+    #: The formula text, spelled as the sheet formula getter spells formulas.
     formula: str
-    #: The 0-based index of the scope sheet; ``None`` for workbook scope.
+    #: ``None`` for workbook scope; otherwise the 0-based index of the sheet the name is local to.
     scope: Optional[int]
     #: The note Excel shows in the Name Manager; ``None`` when none.
     comment: Optional[str] = None
-    #: Whether the name is hidden from the Name Manager.
+    #: ``True`` when the name is hidden from the Name Manager.
     hidden: bool = False
 
 
 @dataclass
 class DefinedNameInput:
-    """A defined name :meth:`Workbook.set_defined_name` writes.
+    """A defined name :meth:`Workbook.set_defined_name` writes."""
 
-    ``formula`` takes the text with or without a leading ``=``; ``scope`` is
-    the sheet the name is local to, ``None`` for workbook scope.
-    """
-
+    #: The name to define.
     name: str
+    #: The formula text; a leading ``=`` is optional.
     formula: str
+    #: The sheet the name is local to; omitted or ``None`` makes it workbook scope.
     scope: Optional[SheetRef] = None
+    #: The Name Manager note; omitted or ``None`` means no comment.
     comment: Optional[str] = None
+    #: ``True`` hides the name from the Name Manager; omitted means visible.
     hidden: bool = False
 
 
@@ -882,16 +888,15 @@ class TableTotalsRowFunction(IntEnum):
 
 @dataclass(frozen=True)
 class TableColumn:
-    """One column of :attr:`TableProperties.columns`.
+    """One column of :attr:`TableProperties.columns`."""
 
-    ``totals_row_function`` is the column's :class:`TableTotalsRowFunction`
-    (``NONE`` when absent); ``totals_row_formula`` is the ``custom``
-    function's formula.
-    """
-
+    #: The column's name, the text of its header cell.
     name: str
+    #: The function the column's totals-row cell applies; the none member when the column has no totals-row function.
     totals_row_function: TableTotalsRowFunction = TableTotalsRowFunction.NONE
+    #: The column's totals-row label text; ``None`` when the column has none.
     totals_row_label: Optional[str] = None
+    #: The formula of the ``custom`` totals-row function, leading ``=`` included; ``None`` for any other function.
     totals_row_formula: Optional[str] = None
 
     def __post_init__(self) -> None:
@@ -900,13 +905,16 @@ class TableColumn:
 
 @dataclass
 class TableColumnTotalsInput:
-    """The totals-row entry :meth:`Table.set_column_totals` writes for one column. An omitted or ``None``
-    ``totals_row_label`` or ``totals_row_formula`` means none; ``""`` is an ``InvalidArgumentError``. A
-    :class:`TableColumn` read back is accepted in its place; its ``name`` is ignored.
+    """The totals-row entry :meth:`Table.set_column_totals` writes for one column. A :class:`TableColumn` read
+    back is accepted in its place; its ``name`` is ignored.
     """
 
+    #: The totals-row function of the column; defaults to the none member.
     totals_row_function: TableTotalsRowFunction = TableTotalsRowFunction.NONE
+    #: The totals-row label text; an omitted or ``None`` value means no label, and an empty string is rejected.
     totals_row_label: Optional[str] = None
+    #: The totals-row formula for the custom function, required with it; an omitted or ``None`` value means none, and an
+    #: empty string is rejected.
     totals_row_formula: Optional[str] = None
 
     def __post_init__(self) -> None:
@@ -917,16 +925,18 @@ class TableColumnTotalsInput:
 class TableProperties:
     """One table, as :meth:`Table.get_properties` returns it.
 
-    ``name`` is the one table name, the name formulas and :meth:`Workbook.table`
-    use. ``header_row`` and ``totals_row`` say whether the table has those
-    rows. The style is read through :meth:`Table.get_style_options`.
+    The style is read through :meth:`Table.get_style_options`.
     """
 
+    #: The table's one name: the name formulas and ``Workbook.table`` use, also written as the file's name attribute.
     name: str
-    #: The table's sheet and range.
+    #: The table's sheet and range, header and totals rows included.
     range: SheetRect
+    #: ``True`` when the table has a header row.
     header_row: bool = True
+    #: ``True`` when the table has a totals row.
     totals_row: bool = False
+    #: The table's columns, in sheet order.
     columns: List[TableColumn] = field(default_factory=list)
 
 
@@ -934,61 +944,62 @@ class TableProperties:
 class TableStyleOptions:
     """The style element of a table (``<tableStyleInfo>``), as :meth:`Table.get_style_options` returns it.
 
-    ``style_name`` is ``None`` for an element without a named style and may
-    name a custom style (:meth:`Workbook.get_table_style`).
-    :meth:`Table.update_style_options` takes these fields as keyword arguments; an empty ``style_name`` is an
-    ``InvalidArgumentError``.
+    :meth:`Table.update_style_options` takes these fields as keyword arguments.
     """
 
+    #: The name of the applied table style; ``None`` for an element without a named style. It may name a custom style.
     style_name: Optional[str] = None
+    #: Whether the first column is formatted specially.
     show_first_column: bool = False
+    #: Whether the last column is formatted specially.
     show_last_column: bool = False
+    #: Whether odd and even rows are banded.
     show_row_stripes: bool = False
+    #: Whether odd and even columns are banded.
     show_column_stripes: bool = False
 
 
 @dataclass
 class TableInput:
-    """A table :meth:`Sheet.add_table` creates.
+    """A table :meth:`Sheet.add_table` creates."""
 
-    ``range`` is a :class:`CellRect` or an unqualified A1 range on the sheet.
-    Omitted ``columns`` take their names from the header cells, an empty one
-    named as Excel does (``Column1``, ...). Given, ``columns`` holds one
-    name per column of the range: a non-empty header cell must already hold
-    that name, and an empty one receives it. Blank and repeated names are
-    numbered as :meth:`Sheet.add_table` describes.
-    ``style_name`` ``None`` applies the workbook's table-style default
-    (:meth:`Workbook.get_table_style_defaults`), else ``TableStyleMedium2``;
-    ``""`` is an ``InvalidArgumentError``. ``styled=False`` creates the table
-    without a style element and needs ``style_name`` ``None``. A styled table
-    starts with row stripes on and the other toggles off; a ``show_*`` that is
-    not ``None`` overrides that.
-    """
-
+    #: The cells the table covers, header row included, as a ``CellRect`` or an unqualified A1 range on the receiving
+    #: sheet.
     range: Union[CellRect, str]
+    #: The new table's name; it must not be one another table already uses.
     name: str
+    #: One name per column of the range; each non-empty header cell must already hold its name and an empty one receives
+    #: it. When omitted the names come from the header cells, an empty one named as Excel does (``Column1``, ...). Blank
+    #: and repeated names are numbered as :meth:`Sheet.add_table` describes.
     columns: Optional[Sequence[str]] = None
+    #: The built-in or custom table style to apply; omitted or ``None`` is the workbook's table-style default
+    #: (:meth:`Workbook.get_table_style_defaults`), else ``TableStyleMedium2``; an empty string is invalid.
     style_name: Optional[str] = None
+    #: ``False`` creates the table without a style element, which needs ``style_name`` omitted; default ``True``.
     styled: bool = True
+    #: Whether the first column is emphasized; omitted takes the creation default, which is off.
     show_first_column: Optional[bool] = None
+    #: Whether the last column is emphasized; omitted takes the creation default, which is off.
     show_last_column: Optional[bool] = None
+    #: Whether odd rows are banded; omitted takes the creation default, which is on for a styled table.
     show_row_stripes: Optional[bool] = None
+    #: Whether odd columns are banded; omitted takes the creation default, which is off.
     show_column_stripes: Optional[bool] = None
+    #: ``True`` when the table has a header row; default ``True``.
     header_row: bool = True
+    #: ``True`` when the table has a totals row; default ``False``.
     totals_row: bool = False
 
 
 @dataclass(frozen=True)
 class TableStyleElement:
-    """One region of a custom table style.
+    """One region of a custom table style."""
 
-    ``type`` is the :class:`TableStyleElementType` region; ``size`` is the
-    stripe band size; ``dxf_index`` indexes the differential formats,
-    ``None`` for a region listed without formatting.
-    """
-
+    #: The table region this element formats (a table style element type).
     type: TableStyleElementType
+    #: The stripe band size in rows or columns, at least 1; 1 for a region that is not a stripe.
     size: int = 1
+    #: Index of the differential format applied to the region; ``None`` for a region listed without formatting.
     dxf_index: Optional[int] = None
 
     def __post_init__(self) -> None:
@@ -999,9 +1010,13 @@ class TableStyleElement:
 class TableStyle:
     """A custom table / PivotTable style from ``<tableStyles>``."""
 
+    #: The style name.
     name: str
+    #: Whether PivotTables may use the style.
     pivot: bool = True
+    #: Whether tables may use the style.
     table: bool = True
+    #: The formatted regions of the style.
     elements: List[TableStyleElement] = field(default_factory=list)
 
 
@@ -1140,13 +1155,11 @@ class CollationStrength(IntEnum):
 
 @dataclass(frozen=True)
 class CollationClasses:
-    """Result of :func:`get_collation_classes`.
+    """Result of :func:`get_collation_classes`."""
 
-    ``class_ids`` holds one id per input value, dense from 0 in ascending
-    SORT order; ``class_count`` is the number of distinct classes.
-    """
-
+    #: One class id per input value, dense from 0 in ascending sort order.
     class_ids: List[int]
+    #: The number of distinct classes.
     class_count: int
 
 
@@ -1429,23 +1442,35 @@ class AnchorEditAs(IntEnum):
 class DrawingAnchor:
     """The placement of a drawing object as read; sizes and offsets are in EMU.
 
-    ``from_*`` is the top-left marker (an absolute anchor reports its position from A1 as
-    ``from_col_offset_emu`` (x) and ``from_row_offset_emu`` (y)); ``to_*`` is the bottom-right marker of a
-    two-cell anchor and zero otherwise. ``width_emu`` / ``height_emu`` are the object's own unrotated size.
-    ``edit_as`` is the stored editAs.
+    ``from_*`` is the top-left marker; ``to_*`` is the bottom-right marker of a two-cell anchor and zero otherwise.
     """
 
+    #: The anchor kind: absolute, one-cell or two-cell.
     kind: AnchorKind
+    #: How the object follows row and column edits (it moves and resizes, moves only, or stays put); written for a
+    #: two-cell anchor only.
     edit_as: AnchorEditAs
+    #: 0-based row of the top-left marker.
     from_row: int
+    #: 0-based column of the top-left marker.
     from_col: int
+    #: Vertical offset of the top-left corner within ``from_row``, in EMU; for an absolute anchor, the y position from
+    #: A1.
     from_row_offset_emu: int
+    #: Horizontal offset of the top-left corner within ``from_col``, in EMU; for an absolute anchor, the x position from
+    #: A1.
     from_col_offset_emu: int
+    #: 0-based row of the bottom-right marker of a two-cell anchor. 0 unless the anchor is two-cell.
     to_row: int
+    #: 0-based column of the bottom-right marker of a two-cell anchor. 0 unless the anchor is two-cell.
     to_col: int
+    #: Vertical offset of the bottom-right corner within ``to_row``, in EMU. 0 unless the anchor is two-cell.
     to_row_offset_emu: int
+    #: Horizontal offset of the bottom-right corner within ``to_col``, in EMU. 0 unless the anchor is two-cell.
     to_col_offset_emu: int
+    #: The object's own unrotated width in EMU; a two-cell anchor's width is its box.
     width_emu: int
+    #: The object's own unrotated height in EMU; a two-cell anchor's height is its box.
     height_emu: int
 
 
@@ -1462,17 +1487,34 @@ class DrawingAnchorInput:
     and a ``to_*`` field on a one-cell anchor or a size on a two-cell one is refused.
     """
 
+    #: The anchor kind: absolute, one-cell or two-cell; an absolute kind is not added.
     kind: Optional[AnchorKind] = None
+    #: How the object follows row and column edits (it moves and resizes, moves only, or stays put); written for a
+    #: two-cell anchor only.
     edit_as: Optional[AnchorEditAs] = None
+    #: 0-based row of the top-left marker.
     from_row: Optional[int] = None
+    #: 0-based column of the top-left marker.
     from_col: Optional[int] = None
+    #: Vertical offset of the top-left corner within ``from_row``, in EMU; for an absolute anchor, the y position from
+    #: A1.
     from_row_offset_emu: Optional[int] = None
+    #: Horizontal offset of the top-left corner within ``from_col``, in EMU; for an absolute anchor, the x position from
+    #: A1.
     from_col_offset_emu: Optional[int] = None
+    #: 0-based row of the bottom-right marker of a two-cell anchor. Not accepted on a one-cell anchor.
     to_row: Optional[int] = None
+    #: 0-based column of the bottom-right marker of a two-cell anchor. Not accepted on a one-cell anchor.
     to_col: Optional[int] = None
+    #: Vertical offset of the bottom-right corner within ``to_row``, in EMU. Not accepted on a one-cell anchor.
     to_row_offset_emu: Optional[int] = None
+    #: Horizontal offset of the bottom-right corner within ``to_col``, in EMU. Not accepted on a one-cell anchor.
     to_col_offset_emu: Optional[int] = None
+    #: The object's own unrotated width in EMU. Not accepted on a two-cell anchor, except as the size of an all-zero
+    #: bottom-right marker box on add.
     width_emu: Optional[int] = None
+    #: The object's own unrotated height in EMU. Not accepted on a two-cell anchor, except as the size of an all-zero
+    #: bottom-right marker box on add.
     height_emu: Optional[int] = None
 
 
@@ -2051,9 +2093,13 @@ _PIVOT_NO_DATA_FIELD = 0xFFFFFFFF
 class CellRect:
     """Cell rectangle: 0-based, inclusive corners ``(first_row, first_col)`` through ``(last_row, last_col)``."""
 
+    #: The 0-based first row.
     first_row: int
+    #: The 0-based first column.
     first_col: int
+    #: The 0-based last row, inclusive.
     last_row: int
+    #: The 0-based last column, inclusive.
     last_col: int
 
 
@@ -2061,7 +2107,9 @@ class CellRect:
 class CellAddress:
     """One cell: 0-based ``row`` and ``col``. A record field of this type also takes an A1 string (``"C3"``)."""
 
+    #: The 0-based row.
     row: int
+    #: The 0-based column.
     col: int
 
 
@@ -2069,7 +2117,9 @@ class CellAddress:
 class SheetRect:
     """A cell rectangle on sheet index ``sheet``."""
 
+    #: The 0-based index of the sheet.
     sheet: int
+    #: The cell rectangle on that sheet.
     rect: CellRect
 
 
@@ -2077,10 +2127,15 @@ class SheetRect:
 class Hyperlink:
     """A sheet hyperlink covering the cells of ``range``; an attribute the link does not state is ``None``."""
 
+    #: The cells the hyperlink covers.
     range: CellRect
+    #: The absolute or relative target (URL, email address, file); ``None`` for an in-workbook link.
     target: Optional[str]
+    #: The in-workbook destination; ``None`` for an external target.
     location: Optional[str]
+    #: The display text override; ``None`` when the hyperlink has none.
     display: Optional[str]
+    #: The tooltip text; ``None`` when the hyperlink has none.
     tooltip: Optional[str]
 
 
@@ -2088,28 +2143,33 @@ class Hyperlink:
 class HyperlinkInput:
     """A hyperlink :meth:`Sheet.set_hyperlink` sets.
 
-    ``target`` ``None`` is a link inside the workbook and needs ``location``
-    (its destination); a ``None`` ``display`` or ``tooltip`` is the same as
-    omitting it. ``range`` is the extent the link covers, a :class:`CellRect` or an A1 range that starts at
-    the key cell; ``None`` covers the key cell alone. A :class:`Hyperlink` read back is accepted in its
-    place and keeps its extent.
+    A :class:`Hyperlink` read back is accepted in its place and keeps its extent.
     """
 
+    #: The absolute or relative target (URL, email address, file); ``None`` makes an in-workbook link, which needs
+    #: ``location``.
     target: Optional[str]
+    #: The in-workbook destination as an A1 reference; omitted or ``None`` for an external target.
     location: Optional[str] = None
+    #: The display text override; omitted or ``None`` is none.
     display: Optional[str] = None
+    #: The tooltip text; omitted or ``None`` is none.
     tooltip: Optional[str] = None
+    #: The cells the link covers, a ``CellRect`` or an A1 range starting at the key cell; ``None`` covers the key cell
+    #: alone.
     range: Union[CellRect, str, None] = None
 
 
 @dataclass
 class CommentInput:
-    """The note :meth:`Sheet.set_comment` writes; an omitted ``author`` is ``""``.
+    """The note :meth:`Sheet.set_comment` writes.
 
     A :class:`Comment` read back is accepted in its place.
     """
 
+    #: The comment's text.
     text: str
+    #: The comment's author; omitted is the empty string.
     author: str = ""
 
 
@@ -2117,7 +2177,9 @@ class CommentInput:
 class Comment:
     """A cell comment; an omitted ``author`` is the empty string."""
 
+    #: The comment's text.
     text: str
+    #: The comment's author; the empty string when none.
     author: str = field(default="", kw_only=True)
 
 
@@ -2125,32 +2187,48 @@ class Comment:
 class SheetComment:
     """One enumerated sheet comment, including its anchor cell."""
 
+    #: The cell the comment is anchored to.
     cell: CellAddress
+    #: The comment's author; the empty string when none.
     author: str
+    #: The comment's text.
     text: str
 
 
 @dataclass(frozen=True)
 class DataValidation:
-    """A sheet ``<dataValidation>`` rule (getter result); a text the rule does not state is ``None``.
+    """A sheet ``<dataValidation>`` rule (getter result); a text the rule does not state is ``None``."""
 
-    ``id`` is the rule's :data:`ValidationId`.
-    """
-
+    #: The rule's id: stable while the workbook is open, across structural edits; assigned again on load and not saved.
     id: str
+    #: The cell ranges the rule applies to.
     ranges: List[CellRect]
+    #: The kind of value the rule allows.
     type: ValidationType
+    #: The comparison the rule applies between the entered value and its formulas.
     operator: ComparisonOperator
+    #: How an invalid entry is reported: stop, warning or information.
     error_style: ValidationErrorStyle
+    #: A blank cell passes the rule.
     allow_blank: bool
+    #: The prompt (``prompt_title`` and ``prompt_message``) shows when the cell is selected.
     show_input_message: bool
+    #: The error alert (``error_title`` and ``error_message``) shows on an invalid entry.
     show_error_message: bool
+    #: The in-cell dropdown arrow is shown (``list`` rules only).
     show_in_cell_dropdown: bool
+    #: The first formula or value of the rule, leading ``=`` included; ``None`` when the rule states none.
     formula1: Optional[str]
+    #: The second formula or value of the rule (the upper bound of a between rule), leading ``=`` included; ``None``
+    #: when the rule states none.
     formula2: Optional[str]
+    #: The title of the error alert; ``None`` when the rule has none.
     error_title: Optional[str]
+    #: The text of the error alert; ``None`` when the rule has none.
     error_message: Optional[str]
+    #: The title of the input prompt; ``None`` when the rule has none.
     prompt_title: Optional[str]
+    #: The text of the input prompt; ``None`` when the rule has none.
     prompt_message: Optional[str]
 
     def __post_init__(self) -> None:
@@ -2162,26 +2240,38 @@ class DataValidation:
 class DataValidationInput:
     """Argument shape for :meth:`Sheet.add_validation`.
 
-    Every field except ``type`` and ``ranges`` (at least one rectangle) has a
-    default. ``allow_blank``, ``show_input_message``, ``show_error_message``
-    and ``show_in_cell_dropdown`` default to ``True`` as in Excel's Data
-    Validation dialog; the texts default to empty.
+    Every field except ``type`` and ``ranges`` has a default; the texts default to empty.
     """
 
+    #: The kind of value the rule allows.
     type: ValidationType
-    #: Rectangles, unqualified A1 ranges, or one A1 string.
+    #: The cell ranges the rule applies to: rectangles, unqualified A1 ranges, or one A1 string; at least one is
+    #: required.
     ranges: Union[List[Union[CellRect, str]], str]
+    #: The comparison the rule applies between the entered value and its formulas; default is between.
     operator: ComparisonOperator = ComparisonOperator.BETWEEN
+    #: How an invalid entry is reported; default is stop.
     error_style: ValidationErrorStyle = ValidationErrorStyle.STOP
+    #: A blank cell passes the rule; default ``True``.
     allow_blank: bool = True
+    #: Show the prompt when the cell is selected; default ``True``.
     show_input_message: bool = True
+    #: Show the error alert on an invalid entry; default ``True``.
     show_error_message: bool = True
+    #: Show the in-cell dropdown arrow (``list`` rules only); default ``True``.
     show_in_cell_dropdown: bool = True
+    #: The first formula or value of the rule; the leading ``=`` is optional and an empty string is none.
     formula1: str = ""
+    #: The second formula or value of the rule (the upper bound of a between rule); the leading ``=`` is optional and an
+    #: empty string is none.
     formula2: str = ""
+    #: The title of the error alert; an empty string is none.
     error_title: str = ""
+    #: The text of the error alert; an empty string is none.
     error_message: str = ""
+    #: The title of the input prompt; an empty string is none.
     prompt_title: str = ""
+    #: The text of the input prompt; an empty string is none.
     prompt_message: str = ""
 
 
@@ -2189,23 +2279,29 @@ class DataValidationInput:
 class AutoFilterDateGroup:
     """One ``<dateGroupItem>`` of a values filter; finer fields than ``grouping`` are zero."""
 
+    #: Calendar year.
     year: int = 0
+    #: Month of the year, 1-12; 0 when the item is coarser than month.
     month: int = 0
+    #: Day of the month, 1-31; 0 when the item is coarser than day.
     day: int = 0
+    #: Hour of the day, 0-23; 0 when the item is coarser than hour.
     hour: int = 0
+    #: Minute of the hour, 0-59; 0 when the item is coarser than minute.
     minute: int = 0
+    #: Second of the minute, 0-59; 0 when the item is coarser than second.
     second: int = 0
+    #: The granularity the item matches at; fields finer than it are zero.
     grouping: DateTimeGrouping = DateTimeGrouping.YEAR
 
 
 @dataclass(frozen=True)
 class AutoFilterCondition:
-    """One custom condition of an AutoFilter column: a comparison ``operator`` and its ``value`` text.
+    """One custom condition of an AutoFilter column: a comparison ``operator`` and its ``value`` text."""
 
-    ``operator`` is a :class:`ComparisonOperator` other than ``BETWEEN`` and ``NOT_BETWEEN``.
-    """
-
+    #: The comparison applied to the cell; any comparison other than between and not-between.
     operator: ComparisonOperator
+    #: The text the cell is compared with (``customFilter val``).
     value: str = ""
 
     def __post_init__(self) -> None:
@@ -2218,32 +2314,48 @@ class AutoFilterColumn:
 
     #: The column's 0-based offset from the filter range's first column.
     column_offset: int
+    #: ``True`` when the column's filter button is hidden.
     hidden_button: bool = False
+    #: ``True`` when the column's filter button is shown; default ``True``.
     show_button: bool = True
+    #: Which criterion the column filters on; only that criterion's fields are meaningful.
     kind: FilterKind = FilterKind.NONE
+    #: ``True`` when the values filter also matches blank cells.
     filter_blank: bool = False
+    #: The displayed texts the values filter keeps.
     values: List[str] = field(default_factory=list)
+    #: The date-group items the values filter keeps.
     date_groups: List[AutoFilterDateGroup] = field(default_factory=list)
+    #: ``True`` when the two custom conditions are joined by AND, ``False`` when by OR.
     custom_and: bool = False
-    #: One or two conditions for a ``CUSTOM`` kind, joined by AND when ``custom_and``; empty for any other kind.
+    #: The one or two custom conditions; empty unless the kind is custom.
     conditions: List[AutoFilterCondition] = field(default_factory=list)
+    #: ``True`` when the top-10 filter keeps the top items, ``False`` for the bottom ones.
     top: bool = True
+    #: ``True`` when ``top_value`` is a percentage rather than an item count.
     percent: bool = False
-    #: The top-10 count or percent (``val``).
+    #: The top-10 filter's rank: how many items, or what percentage.
     top_value: float = 0.0
-    #: The top-10 ``filterVal``; ``None`` when absent.
+    #: The cell value Excel last stored as the top-10 threshold; ``None`` when absent.
     filter_value: Optional[float] = None
+    #: Which dynamic criterion the column filters on, such as above average or this month.
     dynamic_type: DynamicFilterType = DynamicFilterType.NULL
-    #: The dynamic filter's ``val`` / ``maxVal``; ``None`` when absent.
+    #: The lower bound Excel last stored for the dynamic filter; ``None`` when absent.
     dynamic_value: Optional[float] = None
+    #: The upper bound Excel last stored for the dynamic filter; ``None`` when absent.
     dynamic_max_value: Optional[float] = None
+    #: The ISO date text of the dynamic filter's lower bound, kept as written; empty when absent.
     value_iso: str = ""
+    #: The ISO date text of the dynamic filter's upper bound, kept as written; empty when absent.
     max_value_iso: str = ""
-    #: ``None`` when the column names no differential format.
+    #: The index of the differential format whose fill or font colour the color filter matches; ``None`` when the column
+    #: names none.
     dxf_index: Optional[int] = None
+    #: ``True`` when the color filter matches the cell fill, ``False`` when it matches the font colour.
     cell_color: bool = False
+    #: The icon set the icon filter's icon comes from.
     icon_set: int = 0
-    #: ``None`` when the icon filter names no icon.
+    #: The index of the icon the icon filter keeps; ``None`` when the filter names no icon.
     icon_index: Optional[int] = None
 
 
@@ -2251,14 +2363,19 @@ class AutoFilterColumn:
 class AutoFilterSortCondition:
     """One ``<sortCondition>`` of an AutoFilter sort state."""
 
+    #: The cells the condition sorts by, the key column of the sorted range.
     range: CellRect
+    #: ``True`` sorts in descending order.
     descending: bool = False
+    #: What the condition sorts by: the value, the cell colour, the font colour or the icon.
     sort_by: SortBy = SortBy.VALUE
+    #: The custom sort list, as comma-separated items; empty when the condition uses none.
     custom_list: str = ""
-    #: ``None`` when the condition names no differential format.
+    #: The index of the differential format whose colour the condition sorts by; ``None`` when it names none.
     dxf_index: Optional[int] = None
+    #: The icon set the condition's icon comes from.
     icon_set: int = 0
-    #: ``None`` when the condition names no icon.
+    #: The index of the icon the condition sorts by; ``None`` when it names no icon.
     icon_index: Optional[int] = None
 
 
@@ -2266,10 +2383,15 @@ class AutoFilterSortCondition:
 class AutoFilterSortState:
     """The ``<sortState>`` of an AutoFilter; ``sort_method`` is a :class:`SortMethod`."""
 
+    #: The cells the sort applies to.
     range: CellRect
+    #: ``True`` when the sort is by columns (left to right) rather than by rows.
     column_sort: bool = False
+    #: ``True`` when text comparison is case-sensitive.
     case_sensitive: bool = False
+    #: How East Asian text is ordered: by default order, by pinyin or by stroke count.
     sort_method: SortMethod = SortMethod.NONE
+    #: The sort conditions, in priority order.
     conditions: List[AutoFilterSortCondition] = field(default_factory=list)
 
 
@@ -2277,8 +2399,11 @@ class AutoFilterSortState:
 class AutoFilter:
     """A sheet or table AutoFilter; ``range`` includes the header row, ``sort`` may be ``None``."""
 
+    #: The filtered range, header row included.
     range: CellRect
+    #: The filter columns, in strictly ascending column-offset order.
     columns: List[AutoFilterColumn] = field(default_factory=list)
+    #: The AutoFilter's sort state; ``None`` when it has none.
     sort: Optional[AutoFilterSortState] = None
 
 
@@ -2286,12 +2411,14 @@ class AutoFilter:
 class AutoFilterInput:
     """An AutoFilter :meth:`Sheet.set_auto_filter` writes.
 
-    ``range`` is a :class:`CellRect` or an unqualified A1 range and includes the header row.
     An :class:`AutoFilter` read back is accepted in its place.
     """
 
+    #: The filtered range, header row included, as a ``CellRect`` or an unqualified A1 range.
     range: Union[CellRect, str]
+    #: The filter columns, in strictly ascending column-offset order; omitted is empty.
     columns: Sequence[AutoFilterColumn] = ()
+    #: The AutoFilter's sort state; omitted or ``None`` is none.
     sort: Optional[AutoFilterSortState] = None
 
 
@@ -2299,7 +2426,9 @@ class AutoFilterInput:
 class DisplayText:
     """The text Excel displays for a value and the rendering outcome (``display_status``)."""
 
+    #: The text Excel displays for the value.
     text: str
+    #: The rendering outcome, a ``DisplayStatus`` value: ok, overflow or invalid format.
     display_status: DisplayStatus
 
 
@@ -2307,7 +2436,9 @@ class DisplayText:
 class AutoFilterEval:
     """Rows an AutoFilter shows: body row ``first_row + i`` matches when ``match[i]`` is true."""
 
+    #: The sheet row of the first body row the result covers.
     first_row: int
+    #: One entry per body row: ``True`` when body row ``first_row + i`` satisfies the criteria.
     match: List[bool]
 
 
@@ -2315,21 +2446,21 @@ class AutoFilterEval:
 class CellsInRange:
     """One page of populated cells; ``next_cursor`` is ``None`` once no further cell exists."""
 
+    #: The populated cells of this page.
     cells: List[RangeCell]
+    #: The resume position for the next page; ``None`` when the range is exhausted.
     next_cursor: Optional[int]
 
 
 @dataclass(frozen=True)
 class ValidationOutcome:
-    """Result of :meth:`Sheet.validate_value`.
+    """Result of :meth:`Sheet.validate_value`."""
 
-    ``rule_id`` and ``error_style`` are ``None`` (and ``valid`` ``True``)
-    when no rule covers the cell; otherwise they describe the applied rule,
-    ``rule_id`` being its :data:`ValidationId`.
-    """
-
+    #: ``True`` when the value passes the rule, or when no rule covers the cell.
     valid: bool
+    #: The id of the rule that was applied; ``None`` when no rule covers the cell.
     rule_id: Optional[str]
+    #: The applied rule's error style; ``None`` when no rule covers the cell.
     error_style: Optional[ValidationErrorStyle]
 
 
@@ -2337,22 +2468,30 @@ class ValidationOutcome:
 class Mention:
     """One ``@person`` mention covering the half-open span ``[start, end)`` of the text, in code points."""
 
+    #: The id of the mentioned person.
     person_id: str
+    #: The mention's own id, a brace-wrapped GUID.
     mention_id: str
+    #: The start of the mentioned span in the comment text, as a code point offset (inclusive).
     start: int
+    #: The end of the mentioned span in the comment text, as a code point offset (exclusive).
     end: int
 
 
 @dataclass
 class MentionInput:
-    """A mention of a new or updated threaded comment; an omitted ``mention_id`` is generated
-    (``{XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX}``). ``start`` / ``end`` are code points into the comment
-    text. A :class:`Mention` read back is accepted in its place.
+    """A mention of a new or updated threaded comment. A :class:`Mention` read back is accepted in its
+    place.
     """
 
+    #: The id of the mentioned person.
     person_id: str
+    #: The start of the mentioned span in the comment text, as a code point offset (inclusive).
     start: int
+    #: The end of the mentioned span in the comment text, as a code point offset (exclusive); it must not be less than
+    #: ``start``.
     end: int
+    #: The mention's own id, a brace-wrapped GUID; omitted, one is generated.
     mention_id: Optional[str] = None
 
 
@@ -2360,16 +2499,21 @@ class MentionInput:
 class ThreadedComment:
     """A threaded comment: a thread opener, or a reply to the thread ``parent_id`` names."""
 
+    #: The comment's id, a brace-wrapped GUID stored in upper case.
     id: str
-    #: The anchor cell.
+    #: The cell the thread is anchored to.
     cell: CellAddress
+    #: The id of the person who wrote the comment.
     person_id: str
-    #: The UTC time it was created, as a naive ``datetime``; whole seconds. ``None`` when the comment states
-    #: none, including a stored stamp with a numeric offset (a trailing ``Z`` is dropped on load).
+    #: The creation time as a naive UTC ``datetime``, in whole seconds; ``None`` when the comment states none.
     created: Optional[datetime.datetime]
+    #: The comment's text.
     text: str
+    #: The id of the thread's opening comment this comment replies to; ``None`` for an opening comment.
     parent_id: Optional[str]
+    #: ``True`` when the thread is resolved; meaningful on an opening comment only.
     done: bool
+    #: The people mentioned in the text.
     mentions: List[Mention]
 
 
@@ -2377,23 +2521,28 @@ class ThreadedComment:
 class ThreadedCommentInput:
     """A threaded comment :meth:`Sheet.add_threaded_comment` adds.
 
-    ``parent_id`` ``None`` opens a new thread at ``cell`` (``A1`` when
-    omitted); otherwise the comment replies to that thread, taking its anchor
-    and ignoring ``cell`` and ``done``. An empty ``parent_id`` is an ``InvalidArgumentError``. ``created`` is UTC: a naive ``datetime`` is
-    read as UTC, an aware one is converted to UTC, and a ``date`` is midnight UTC; fractions of a second are dropped.
-    The stored stamp is ``YYYY-MM-DDTHH:MM:SS.00`` without a zone designator. An omitted ``id`` is generated
-    (``{XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX}``) and an omitted ``created`` is the current UTC time, or, with the
-    clock pinned by :meth:`Workbook.set_pinned_now`, the pinned time written as-is (the pin is a local wall clock
-    and is not converted).
+    A reply takes the anchor of the thread it answers.
     """
 
+    #: The id of the person who wrote the comment.
     person_id: str
+    #: The comment's text.
     text: str
+    #: The comment's id, a brace-wrapped GUID; omitted, one is generated.
     id: Optional[str] = None
+    #: The cell a new thread is anchored to, a ``CellAddress`` or an A1 cell; omitted is A1. Ignored on a reply.
     cell: Union[CellAddress, str, None] = None
+    #: The creation time, in UTC: a naive ``datetime`` is read as UTC, an aware one is converted to UTC and a ``date``
+    #: is midnight UTC; fractions of a second are dropped. Stored as ``YYYY-MM-DDTHH:MM:SS.00`` without a zone
+    #: designator. Omitted is the current UTC time, or, with the clock pinned by :meth:`Workbook.set_pinned_now`, the
+    #: pinned time written as-is (the pin is a local wall clock and is not converted).
     created: Optional[Union[datetime.datetime, datetime.date]] = None
+    #: The id of the thread's opening comment to reply to; omitted or ``None`` opens a new thread, and an empty string
+    #: is rejected.
     parent_id: Optional[str] = None
+    #: ``True`` marks a new thread as resolved; default ``False``. Ignored on a reply.
     done: bool = False
+    #: The people mentioned in the text; omitted is none.
     mentions: Sequence[Union[MentionInput, Mention]] = ()
 
 
@@ -2401,21 +2550,29 @@ class ThreadedCommentInput:
 class Person:
     """One entry of the workbook's person list."""
 
+    #: The person's id.
     id: str
+    #: The person's display name.
     display_name: str
+    #: The user id; ``None`` when the person has none.
     user_id: Optional[str] = None
+    #: The identity provider id; ``None`` when the person has none.
     provider_id: Optional[str] = None
 
 
 @dataclass
 class PersonInput:
-    """A person :meth:`Workbook.add_person` appends; an omitted ``id`` is generated
-    (``{XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX}``). A :class:`Person` read back is accepted in its place.
+    """A person :meth:`Workbook.add_person` appends. A :class:`Person` read back is accepted in its
+    place.
     """
 
+    #: The person's display name.
     display_name: str
+    #: The id; omitted generates a brace-wrapped GUID.
     id: Optional[str] = None
+    #: The user id; omitted or ``None`` means none.
     user_id: Optional[str] = None
+    #: The identity provider id; omitted or ``None`` means none.
     provider_id: Optional[str] = None
 
 
@@ -2423,8 +2580,11 @@ class PersonInput:
 class ImageInfo:
     """Format and pixel size of an image."""
 
+    #: The image's file format.
     format: ImageFormat
+    #: Image width in pixels.
     width_px: int
+    #: Image height in pixels.
     height_px: int
 
 
@@ -2432,6 +2592,7 @@ class ImageInfo:
 class PictureProperties(ImageInfo):
     """A picture's :class:`ImageInfo` and a copy of its media bytes (:meth:`Picture.get_properties`)."""
 
+    #: A copy of the picture's media bytes.
     bytes: bytes
 
 
@@ -2440,11 +2601,17 @@ class DrawingProperties:
     """The fields every anchored object of a sheet's drawing has; sizes and offsets are in EMU. ``description``
     is ``None`` when the object has none."""
 
+    #: The object's id in the sheet's drawing.
     object_id: int
+    #: The object's kind: picture, shape, chart, group, connector, other graphic frame or other.
     kind: DrawingObjectKind
+    #: The object's name.
     name: str
+    #: The object's alternative text; ``None`` when it has none.
     description: Optional[str]
+    #: ``True`` when the object is hidden.
     hidden: bool
+    #: Where the object sits on the sheet.
     anchor: DrawingAnchor
 
 
@@ -2452,19 +2619,23 @@ class DrawingProperties:
 class ShapeProperties:
     """The shape fields of a shape, connector or group; the anchor, name, description and visibility are on
     :class:`DrawingProperties`.
-
-    ``fill`` and ``line`` are the shape's own paint as the chart records state it (``other`` for a gradient,
-    pattern or picture paint), and ``None`` when the shape states none of its own, so it draws its style's.
-    ``rotation_deg`` is in degrees; ``preset_geometry`` is empty for custom geometry or a group.
     """
 
+    #: The object's id in the sheet's drawing.
     object_id: int
+    #: The object's kind: shape, connector or group.
     kind: DrawingObjectKind
+    #: Name of the preset geometry; empty for custom geometry or a group.
     preset_geometry: str
+    #: The shape's text, paragraphs joined with a newline.
     text: str
+    #: ``True`` when the shape is a text box.
     text_box: bool
+    #: The shape's own fill; ``None`` when it has none and draws its style's.
     fill: Optional[ChartFill]
+    #: The shape's own outline; ``None`` when it has none and draws its style's.
     line: Optional[ChartLine]
+    #: Clockwise rotation in degrees.
     rotation_deg: float
 
 
@@ -2472,14 +2643,15 @@ class ShapeProperties:
 class DrawingPlacementInput:
     """Name, description, visibility and placement of a new drawing object (:meth:`Sheet.add_picture`, the
     placement of a :class:`ChartInput`; :class:`ShapeInput` and :class:`SlicerInput` extend it).
-
-    An empty ``name`` becomes the kind's default (``Picture <id>``); ``hidden`` ``None`` is shown;
-    ``anchor`` ``None`` is the operation's default anchor at A1.
     """
 
+    #: The object's name; empty or omitted takes the kind's default.
     name: str = ""
+    #: The object's alternative text; empty or omitted means none.
     description: str = ""
+    #: Whether the object is hidden; unset means shown.
     hidden: Optional[bool] = None
+    #: Where the object is placed; unset takes the operation's default anchor kind at A1.
     anchor: Optional[DrawingAnchorInput] = None
 
 
@@ -2487,17 +2659,20 @@ class DrawingPlacementInput:
 class ShapeInput(DrawingPlacementInput):
     """A shape :meth:`Sheet.add_shape` appends; a ``None`` field is not applied.
 
-    ``preset_geometry`` defaults to ``rect`` and ``name`` to ``Shape <id>``; a ``preset_geometry`` naming a
-    line or connector geometry makes a connector, which holds no text. The anchor is two-cell by default;
-    an absolute anchor is not added. ``fill`` and ``line`` are :class:`ChartFill` / :class:`ChartLine`
-    records (``None`` draws the shape style's; ``other`` is read only). ``rotation_deg`` is in degrees.
+    ``name`` defaults to ``Shape <id>``. The anchor is two-cell by default; an absolute anchor is not added.
     """
 
+    #: Name of the preset geometry; defaults to rect, and a line or connector geometry makes a connector.
     preset_geometry: Optional[str] = None
+    #: The shape's text, paragraphs joined with a newline; a connector holds none.
     text: Optional[str] = None
+    #: Whether the shape is a text box.
     text_box: Optional[bool] = None
+    #: The shape's own fill; unset draws the shape style's.
     fill: Optional[ChartFill] = None
+    #: The shape's own outline; unset draws the shape style's.
     line: Optional[ChartLine] = None
+    #: Clockwise rotation in degrees.
     rotation_deg: Optional[float] = None
 
 
@@ -2506,20 +2681,29 @@ class SlicerProperties:
     """The slicer fields of a table slicer; the frame's anchor, name, description and visibility are on
     :class:`DrawingProperties`.
 
-    ``object_id`` is the slicer's frame in the sheet's drawing. ``cache_name``, ``table_name`` and
-    ``column_name`` identify the slicer cache and the table column it filters; the selection itself lives in
-    the table's AutoFilter. ``style_name`` is ``None`` without a style.
+    The selection itself lives in the table's AutoFilter.
     """
 
+    #: The id of the slicer's frame in the sheet's drawing.
     object_id: int
+    #: The caption shown in the slicer header.
     caption: str
+    #: The name of the slicer cache the slicer belongs to.
     cache_name: str
+    #: The name of the table the slicer filters.
     table_name: str
+    #: The name of the table column the slicer filters.
     column_name: str
+    #: The name of the slicer style; ``None`` without a style.
     style_name: Optional[str]
+    #: The number of columns the slicer lays its item buttons out in.
     column_count: int
+    #: The height of each item row in points.
     row_height_pt: float
+    #: The order the slicer lists its items in.
     sort_order: SlicerSortOrder
+    #: How the slicer cross-filters its items (items with data listed first, items without data shown in place, or no
+    #: cross-filtering).
     cross_filter: SlicerCrossFilter
 
 
@@ -2528,15 +2712,22 @@ class SlicerInput(DrawingPlacementInput):
     """A slicer :meth:`Sheet.add_slicer` adds; a ``None`` field is not applied.
 
     The frame is always two-cell (``anchor.kind`` ``None`` or ``TWO_CELL``) and needs a box or a size. The
-    name and caption default to the column name (the name is made unique), ``row_height_pt`` to 19
-    and ``column_count`` to 1. ``style_name`` ``None`` is no style; an empty one is an ``InvalidArgumentError``.
+    name and caption default to the column name (the name is made unique).
     """
 
+    #: The caption shown in the slicer header; the column name when omitted.
     caption: Optional[str] = None
+    #: The name of the slicer style; ``None`` creates the slicer without a style and an empty string is rejected.
+    #: Omitted leaves the default.
     style_name: Optional[str] = None
+    #: The number of columns the slicer lays its item buttons out in; 1 when omitted.
     column_count: Optional[int] = None
+    #: The height of each item row in points, finite and not negative; 19 when omitted.
     row_height_pt: Optional[float] = None
+    #: The order the slicer lists its items in; ascending when omitted.
     sort_order: Optional[SlicerSortOrder] = None
+    #: How the slicer cross-filters its items (items with data listed first, items without data shown in place, or no
+    #: cross-filtering); the default cross filter when omitted.
     cross_filter: Optional[SlicerCrossFilter] = None
 
 
@@ -2544,8 +2735,11 @@ class SlicerInput(DrawingPlacementInput):
 class DataTableInputCell:
     """An input cell of a data table; ``deleted`` marks one removed by a row or column delete."""
 
+    #: The input cell's 0-based row.
     row: int
+    #: The input cell's 0-based column.
     col: int
+    #: ``True`` when a row or column delete removed the input cell; ignored on input.
     deleted: bool
 
 
@@ -2558,11 +2752,16 @@ class DataTable:
     two-variable table both. A deleted input makes the table evaluate to ``#REF!``.
     """
 
-    #: The result range.
+    #: The result range of the table, 0-based and inclusive.
     range: CellRect
+    #: ``True`` for a two-variable table, which has both a row and a column input cell.
     two_dimensional: bool
+    #: For a one-variable table, ``True`` when its input is the row input cell and ``False`` when it is the column input
+    #: cell.
     row_oriented: bool
+    #: The cell that receives the values of the row above the range; ``None`` when the table has none.
     row_input: Optional[DataTableInputCell]
+    #: The cell that receives the values of the column left of the range; ``None`` when the table has none.
     column_input: Optional[DataTableInputCell]
 
 
@@ -2570,39 +2769,39 @@ class DataTable:
 class DataTableInput:
     """A data table :meth:`Sheet.add_data_table` creates.
 
-    ``range`` is the result range, a :class:`CellRect` or an unqualified A1
-    range. ``row_input`` / ``column_input`` are the input cells that receive the
-    values of the row above / the column left of the range, each a
-    :class:`CellAddress`, a :class:`DataTableInputCell` read back or one A1
-    cell; give one for a one-variable table, both for a two-variable one.
+    ``row_input`` / ``column_input`` each take a :class:`CellAddress`, a :class:`DataTableInputCell` read back or
+    one A1 cell.
     """
 
+    #: The result range of the table, a ``CellRect`` or an unqualified A1 range.
     range: Union[CellRect, str]
+    #: The cell that receives the values of the row above the range; omitted or ``None`` for none. Give it alone or with
+    #: ``column_input``.
     row_input: Union[CellAddress, DataTableInputCell, str, None] = None
+    #: The cell that receives the values of the column left of the range; omitted or ``None`` for none. Give it alone or
+    #: with ``row_input``.
     column_input: Union[CellAddress, DataTableInputCell, str, None] = None
 
 
 @dataclass(frozen=True)
 class Sparkline:
-    """One sparkline: the data ``source`` and its single ``location`` cell.
+    """One sparkline: the data ``source`` and its single ``location`` cell."""
 
-    ``source`` is ``None`` when the stored text is not a range of a sheet of this workbook; that text is kept for
-    writing the sparkline back unchanged.
-    """
-
+    #: The data range the sparkline plots; ``None`` when the stored range text does not parse, in which case that text
+    #: is kept so the sparkline is written back unchanged.
     source: Optional[SheetRect]
+    #: The single cell that shows the sparkline.
     location: CellAddress
     _stored_source: Optional[str] = field(default=None, init=False, repr=False, compare=False)
 
 
 @dataclass
 class SparklineInput:
-    """One sparkline of an input: ``source`` is a :class:`SheetRect` or a sheet-qualified A1 range (an unqualified
-    one resolves on the receiving sheet) and ``location`` a :class:`CellAddress` or an A1 cell. A
-    :class:`Sparkline` read back is accepted in its place.
-    """
+    """One sparkline of an input. A :class:`Sparkline` read back is accepted in its place."""
 
+    #: The data range, as a range record or sheet-qualified A1 text; unqualified text resolves on the receiving sheet.
     source: Union[SheetRect, str, None]
+    #: The cell that shows the sparkline, as an address record or A1 text.
     location: Union[CellAddress, str]
 
 
@@ -2616,40 +2815,62 @@ class BlanksAs(IntEnum):
 
 @dataclass(frozen=True)
 class SparklineGroup:
-    """A sparkline group of a sheet's worksheet extension list.
+    """A sparkline group of a sheet's worksheet extension list."""
 
-    Each colour is ``None`` when absent; ``manual_min`` / ``manual_max`` are
-    ``None`` when the axis bound is not set. ``date_axis_range`` is the group's
-    date range, ``None`` when absent or when its stored text does not parse. ``id`` is the group's
-    :data:`SparklineGroupId`; an input that states none leaves it empty.
-    """
-
+    #: The group's id: an opaque string, unique on its sheet, stable while the workbook is open and not saved; empty
+    #: when an input states none.
     id: str = ""
+    #: The sparkline type: line, column or stacked (win/loss).
     type: SparklineType = SparklineType.LINE
+    #: Colour of the line or columns; ``None`` when the group states none.
     color_series: Optional[Color] = None
+    #: Colour of negative points; ``None`` when the group states none.
     color_negative: Optional[Color] = None
+    #: Colour of the horizontal axis; ``None`` when the group states none.
     color_axis: Optional[Color] = None
+    #: Colour of the markers; ``None`` when the group states none.
     color_markers: Optional[Color] = None
+    #: Colour of the first point; ``None`` when the group states none.
     color_first: Optional[Color] = None
+    #: Colour of the last point; ``None`` when the group states none.
     color_last: Optional[Color] = None
+    #: Colour of the highest point; ``None`` when the group states none.
     color_high: Optional[Color] = None
+    #: Colour of the lowest point; ``None`` when the group states none.
     color_low: Optional[Color] = None
+    #: ``True`` to show a marker at every point of a line sparkline.
     markers: bool = False
+    #: ``True`` to highlight the highest point.
     high: bool = False
+    #: ``True`` to highlight the lowest point.
     low: bool = False
+    #: ``True`` to highlight the first point.
     first: bool = False
+    #: ``True`` to highlight the last point.
     last: bool = False
+    #: ``True`` to highlight negative points.
     negative: bool = False
+    #: ``True`` to show the horizontal axis.
     display_x_axis: bool = False
+    #: ``True`` to plot data in hidden rows and columns.
     display_hidden: bool = False
+    #: How the vertical axis minimum is chosen: per sparkline, shared by the group, or the custom value.
     min_axis_type: SparklineAxisType = SparklineAxisType.INDIVIDUAL
+    #: How the vertical axis maximum is chosen: per sparkline, shared by the group, or the custom value.
     max_axis_type: SparklineAxisType = SparklineAxisType.INDIVIDUAL
+    #: The custom vertical axis minimum; ``None`` when not set.
     manual_min: Optional[float] = None
+    #: The custom vertical axis maximum; ``None`` when not set.
     manual_max: Optional[float] = None
+    #: ``True`` to space points by a date axis.
     date_axis: bool = False
+    #: The group's date range; ``None`` when absent or when its stored text does not parse.
     date_axis_range: Optional[SheetRect] = None
+    #: Line width in points; 0.75 for a new group.
     line_width_pt: float = 0.75
+    #: How empty cells are plotted: as a gap, as zero, or by connecting the neighbours.
     empty_cells_as: BlanksAs = BlanksAs.GAP
+    #: The sparklines of the group.
     sparklines: List[Sparkline] = field(default_factory=list)
     _stored_date_axis: Optional[str] = field(default=None, init=False, repr=False, compare=False)
 
@@ -2660,36 +2881,60 @@ class SparklineGroup:
 @dataclass
 class SparklineGroupInput:
     """A sparkline group :meth:`Sheet.add_sparkline_group` adds: every :class:`SparklineGroup` field, each
-    defaulting as a new line group does. ``sparklines`` needs at least one entry on an add and takes
-    :class:`SparklineInput` or :class:`Sparkline` items; ``date_axis_range`` is a :class:`SheetRect`, a
-    sheet-qualified A1 range or ``None``. A :class:`SparklineGroup` read back is accepted in its place.
+    defaulting as a new line group does. A :class:`SparklineGroup` read back is accepted in its place.
     """
 
+    #: The sparkline type: line, column or stacked (win/loss).
     type: SparklineType = SparklineType.LINE
+    #: Colour of the line or columns; ``None`` for no colour.
     color_series: Optional[ColorInput] = None
+    #: Colour of negative points; ``None`` for no colour.
     color_negative: Optional[ColorInput] = None
+    #: Colour of the horizontal axis; ``None`` for no colour.
     color_axis: Optional[ColorInput] = None
+    #: Colour of the markers; ``None`` for no colour.
     color_markers: Optional[ColorInput] = None
+    #: Colour of the first point; ``None`` for no colour.
     color_first: Optional[ColorInput] = None
+    #: Colour of the last point; ``None`` for no colour.
     color_last: Optional[ColorInput] = None
+    #: Colour of the highest point; ``None`` for no colour.
     color_high: Optional[ColorInput] = None
+    #: Colour of the lowest point; ``None`` for no colour.
     color_low: Optional[ColorInput] = None
+    #: ``True`` to show a marker at every point of a line sparkline.
     markers: bool = False
+    #: ``True`` to highlight the highest point.
     high: bool = False
+    #: ``True`` to highlight the lowest point.
     low: bool = False
+    #: ``True`` to highlight the first point.
     first: bool = False
+    #: ``True`` to highlight the last point.
     last: bool = False
+    #: ``True`` to highlight negative points.
     negative: bool = False
+    #: ``True`` to show the horizontal axis.
     display_x_axis: bool = False
+    #: ``True`` to plot data in hidden rows and columns.
     display_hidden: bool = False
+    #: How the vertical axis minimum is chosen: per sparkline, shared by the group, or the custom value.
     min_axis_type: SparklineAxisType = SparklineAxisType.INDIVIDUAL
+    #: How the vertical axis maximum is chosen: per sparkline, shared by the group, or the custom value.
     max_axis_type: SparklineAxisType = SparklineAxisType.INDIVIDUAL
+    #: The custom vertical axis minimum; ``None`` when not set.
     manual_min: Optional[float] = None
+    #: The custom vertical axis maximum; ``None`` when not set.
     manual_max: Optional[float] = None
+    #: ``True`` to space points by a date axis.
     date_axis: bool = False
+    #: The group's date range, as a range record or sheet-qualified A1 text; ``None`` for none.
     date_axis_range: Union[SheetRect, str, None] = None
+    #: Line width in points; 0.75 for a new group.
     line_width_pt: float = 0.75
+    #: How empty cells are plotted: as a gap, as zero, or by connecting the neighbours.
     empty_cells_as: BlanksAs = BlanksAs.GAP
+    #: The sparklines of the group; an add needs at least one.
     sparklines: Sequence[Union[SparklineInput, Sparkline]] = ()
 
     def __post_init__(self) -> None:
@@ -2878,48 +3123,59 @@ class ChartSourceKind(IntEnum):
 class ChartDataSource:
     """One series input: ``kind`` is ``NONE``, ``REF`` (``formula`` set) or ``LITERAL`` (``literal`` set)."""
 
+    #: Whether the input is empty, a range reference or literal points.
     kind: ChartSourceKind
+    #: The reference text of a range-reference input; empty for another kind.
     formula: str = ""
+    #: The literal points of a literal input, numbers or strings in order; empty for another kind.
     literal: List[Union[float, str]] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
 class ChartTitle:
-    """A chart or axis title; ``text`` is the flattened rich text (``TEXT``), ``formula`` the reference (``REF``).
+    """A chart or axis title.
 
-    The member the ``kind`` does not use is ``None``; a ``TEXT`` title needs ``text``.
+    A ``TEXT`` title needs ``text``.
     """
 
+    #: Whether the title is absent, automatic, literal text or a cell reference.
     kind: ChartTitleKind
+    #: The flattened rich text of a text title; ``None`` for another kind.
     text: Optional[str] = None
+    #: The reference of a reference title; ``None`` for another kind.
     formula: Optional[str] = None
 
 
 @dataclass(frozen=True)
 class ChartFill:
-    """Solid fill; ``color`` is an RGB or theme :class:`Color` and ``transparency_pct`` a percentage, each ``None`` when absent.
+    """Solid fill of a chart element."""
 
-    ``none`` is an explicit no-fill. ``other`` is read only: a gradient, pattern or picture fill the record cannot state.
-    """
-
+    #: The solid fill colour, an RGB or theme colour; ``None`` when the element states none.
     color: Optional[Color] = None
+    #: The fill transparency as a percentage (0..100); ``None`` when the colour has no alpha.
     transparency_pct: Optional[float] = None
+    #: ``True`` for an explicit no-fill.
     none: bool = False
+    #: ``True`` on a read when the stored paint cannot be stated by this record (a gradient, pattern or picture); read
+    #: only.
     other: bool = False
 
 
 @dataclass(frozen=True)
 class ChartLine:
-    """Outline; ``color`` is an RGB or theme :class:`Color` (``None`` when absent) and ``none`` an explicit no-line.
+    """Outline of a chart element."""
 
-    ``other`` is read only: an outline fill the record cannot state (a gradient or pattern).
-    """
-
+    #: The outline colour, an RGB or theme colour; ``None`` when the element states none.
     color: Optional[Color] = None
+    #: The outline transparency as a percentage (0..100); ``None`` when the colour has no alpha.
     transparency_pct: Optional[float] = None
+    #: The outline width in points; ``None`` when the element states none.
     width_pt: Optional[float] = None
+    #: The dash style of the outline; ``None`` when the element states none.
     dash: Optional[ChartLineDash] = None
+    #: ``True`` for an explicit no-line.
     none: bool = False
+    #: ``True`` on a read when the outline fill cannot be stated by this record (a gradient or pattern); read only.
     other: bool = False
 
 
@@ -2927,9 +3183,13 @@ class ChartLine:
 class ChartMarker:
     """Series or point marker; ``size_pt`` is in points."""
 
+    #: The marker symbol.
     symbol: ChartMarkerSymbol
+    #: The marker size in points; ``None`` when the marker states none.
     size_pt: Optional[int]
+    #: The marker fill; ``None`` when the marker states none of its own.
     fill: ChartFill
+    #: The marker outline; ``None`` when the marker states none of its own.
     line: ChartLine
 
 
@@ -2937,17 +3197,29 @@ class ChartMarker:
 class ChartLabels:
     """Data labels of a series."""
 
+    #: ``True`` when the label shows the point value.
     show_value: bool
+    #: ``True`` when the label shows the category name.
     show_category: bool
+    #: ``True`` when the label shows the series name.
     show_series: bool
+    #: ``True`` when the label shows the percentage of the whole (pie-type plots).
     show_percent: bool
+    #: ``True`` when the label shows the legend key.
     show_legend_key: bool
+    #: The text placed between the label parts; ``None`` when the chart states none.
     separator: Optional[str]
+    #: Where the label sits relative to its point; ``None`` when the chart states none.
     position: Optional[ChartLabelPosition]
+    #: The number format code of the label; ``None`` when the chart states none.
     number_format: Optional[str]
+    #: ``True`` when the label number format follows the source cells.
     source_linked: bool
+    #: The label font colour; ``None`` when the chart states none.
     font_color: Optional[Color]
+    #: The label font size in points; ``None`` when the chart states none.
     font_size_pt: Optional[float]
+    #: ``True`` when the labels are deleted (c:delete) for the series.
     deleted: bool
 
 
@@ -2955,9 +3227,13 @@ class ChartLabels:
 class ChartPoint:
     """One formatted data point (``c:dPt``)."""
 
+    #: The 0-based index of the data point within its series.
     index: int
+    #: The point fill; ``None`` when the point states none of its own.
     fill: Optional[ChartFill]
+    #: The point outline; ``None`` when the point states none of its own.
     line: Optional[ChartLine]
+    #: The point marker; ``None`` when the point states none of its own.
     marker: Optional[ChartMarker]
 
 
@@ -2965,41 +3241,63 @@ class ChartPoint:
 class ChartSeries:
     """One series of a plot group; ``series_id`` is its ``c:idx``, the key the series methods take."""
 
+    #: The series' ``c:idx``, the key the series update and remove operations take.
     series_id: int
+    #: The plotting order of the series within the chart (``c:order``).
     order: int
+    #: ``True`` when the chart filter hides the series.
     filtered: bool
+    #: The input that supplies the series name.
     name: ChartDataSource
+    #: The input that supplies the category labels.
     categories: ChartDataSource
+    #: The input that supplies the values of a category plot.
     values: ChartDataSource
+    #: The input that supplies the x values of a scatter or bubble series.
     x: ChartDataSource
+    #: The input that supplies the y values of a scatter or bubble series.
     y: ChartDataSource
+    #: The input that supplies the bubble sizes of a bubble series.
     size: ChartDataSource
+    #: The series fill; ``None`` when the series states none of its own.
     fill: Optional[ChartFill]
+    #: The series outline; ``None`` when the series states none of its own.
     line: Optional[ChartLine]
+    #: The series marker; ``None`` when the series has none.
     marker: Optional[ChartMarker]
+    #: ``True`` when a line or scatter series draws a smoothed line; ``None`` when the series states none.
     smooth: Optional[bool]
+    #: The formatted data points of the series.
     points: List[ChartPoint]
+    #: The data labels of the series; ``None`` when the series has none.
     labels: Optional[ChartLabels]
 
 
 @dataclass(frozen=True)
 class ChartPlot:
-    """One plot group; ``bar_direction`` is ``None`` outside the bar family or when the file omits it.
+    """One plot group."""
 
-    ``extended_layout`` is ``None`` unless ``type`` is ``EXTENDED``. ``gap_width_pct`` is a percentage of
-    the bar width and ``first_slice_angle_deg`` is in degrees.
-    """
-
+    #: The plot type of the group.
     type: ChartPlotType
+    #: The series layout of an extended plot; ``None`` for any other plot type.
     extended_layout: Optional[ChartExtendedLayout]
+    #: Whether bars run vertically (column) or horizontally; ``None`` outside the bar family or when the file omits it.
     bar_direction: Optional[ChartBarDirection]
+    #: How the series are stacked or grouped (standard, stacked, percent-stacked); ``None`` when the plot type has none.
     grouping: Optional[ChartGrouping]
+    #: ``True`` when each point of a single-series plot takes its own colour.
     vary_colors: bool
+    #: The gap between bar clusters as a percentage of the bar width; ``None`` when the plot type has none.
     gap_width_pct: Optional[int]
+    #: The overlap between bars of a cluster as a percentage of the bar width; ``None`` when the plot type has none.
     overlap_pct: Optional[int]
+    #: The doughnut hole size as a percentage of the doughnut diameter; ``None`` when the plot type has none.
     hole_size_pct: Optional[int]
+    #: The angle in degrees of the first pie or doughnut slice; ``None`` when the plot type has none.
     first_slice_angle_deg: Optional[int]
+    #: The ids of the axes the plot group uses.
     axis_ids: List[int]
+    #: The series of the plot group, in order.
     series: List[ChartSeries]
 
 
@@ -3007,24 +3305,44 @@ class ChartPlot:
 class ChartAxis:
     """One axis; ``crosses_at`` is ``None`` unless ``crosses`` is ``AT``, and ``title`` is ``None`` without a title."""
 
+    #: The axis id (c:axId) that ``cross_axis`` and a plot group's axis ids refer to.
     id: int
+    #: The kind of the axis (category, value, date or series).
     kind: ChartAxisKind
+    #: The side of the plot area the axis sits on.
     position: ChartAxisPosition
+    #: ``True`` when the axis is shown; ``False`` for a deleted axis (``c:delete``).
     visible: bool
+    #: The id of the axis this axis crosses.
     cross_axis: int
+    #: Where this axis crosses its cross axis (automatic, minimum, maximum or at ``crosses_at``); ``None`` when the file
+    #: omits it.
     crosses: Optional[ChartAxisCrosses]
+    #: The value on the cross axis where this axis crosses; ``None`` unless ``crosses`` is the at-value kind.
     crosses_at: Optional[float]
+    #: The fixed minimum of the axis scale; ``None`` when it is automatic.
     min: Optional[float]
+    #: The fixed maximum of the axis scale; ``None`` when it is automatic.
     max: Optional[float]
+    #: The fixed distance between major ticks; ``None`` when it is automatic.
     major_unit: Optional[float]
+    #: The fixed distance between minor ticks; ``None`` when it is automatic.
     minor_unit: Optional[float]
+    #: The base of a logarithmic scale; ``None`` for a linear axis.
     log_base: Optional[float]
+    #: ``True`` when the axis runs in reverse order.
     reversed: bool
+    #: The number format code of the tick labels; ``None`` when the axis states none.
     number_format: Optional[str]
+    #: ``True`` when the tick label number format follows the source cells.
     source_linked: bool
+    #: The axis title; ``None`` when the axis has none.
     title: Optional[ChartTitle]
+    #: ``True`` when major gridlines are drawn.
     major_gridlines: bool
+    #: ``True`` when minor gridlines are drawn.
     minor_gridlines: bool
+    #: Where the tick labels sit relative to the axis; ``None`` when the axis element is absent.
     tick_label_position: Optional[ChartTickLabelPosition]
 
 
@@ -3032,7 +3350,9 @@ class ChartAxis:
 class ChartAxisKey:
     """An axis addressed by its kind within plot group ``plot`` (the first by default)."""
 
+    #: The kind of axis to address.
     kind: ChartAxisKind
+    #: The 0-based position of the plot group; 0 when omitted.
     plot: int = 0
 
 
@@ -3069,8 +3389,11 @@ def _resolve_chart_axis(axis: ChartAxisRef, properties: ChartProperties) -> int:
 class ChartLegend:
     """Legend state; ``hidden_entries`` lists the ``c:idx`` of series whose legend entry is hidden."""
 
+    #: Where the legend sits relative to the plot.
     position: ChartLegendPosition
+    #: ``True`` when the legend overlays the plot area.
     overlay: bool
+    #: The ``c:idx`` values of the series whose legend entry is hidden.
     hidden_entries: List[int] = field(default_factory=list)
 
 
@@ -3078,22 +3401,29 @@ class ChartLegend:
 class ChartSource:
     """The rectangle every series was split from and how it was split."""
 
+    #: The rectangle every series was split from.
     range: SheetRect
+    #: Whether the series run along rows or columns of ``range``.
     direction: ChartSeriesDirection
+    #: ``True`` when the first row of ``range`` holds series or category names rather than data.
     header_row: bool
+    #: ``True`` when the first column of ``range`` holds series or category names rather than data.
     header_column: bool
 
 
 @dataclass
 class ChartSourceInput:
-    """A chart source :meth:`Chart.set_source` takes: ``range`` is a :class:`SheetRect` or an A1 range (an
-    unqualified one resolves on the chart's sheet); ``header_row`` / ``header_column`` ``None`` follow Excel's
-    detection. A :class:`ChartSource` read back is accepted in its place.
+    """A chart source :meth:`Chart.set_source` takes. A :class:`ChartSource` read back is accepted in its
+    place.
     """
 
+    #: The source range, a rectangle or an A1 range (an unqualified one resolves on the chart's sheet).
     range: Union[SheetRect, str]
+    #: Whether the series run along rows or columns of the range; automatic when omitted.
     direction: ChartSeriesDirection = ChartSeriesDirection.AUTO
+    #: ``True`` when the first row holds names; ``None`` or omitted follows Excel's detection.
     header_row: Optional[bool] = None
+    #: ``True`` when the first column holds names; ``None`` or omitted follows Excel's detection.
     header_column: Optional[bool] = None
 
 
@@ -3101,7 +3431,9 @@ class ChartSourceInput:
 class ChartFilter:
     """The series and categories a chart filter hides, as ``c:idx`` / category indices; both empty when unfiltered."""
 
+    #: The ``c:idx`` values of the series the filter hides.
     hidden_series: List[int] = field(default_factory=list)
+    #: The 0-based indexes of the categories the filter hides.
     hidden_categories: List[int] = field(default_factory=list)
 
 
@@ -3110,24 +3442,27 @@ class ChartInput(DrawingPlacementInput):
     """A chart :meth:`Sheet.add_chart` creates; the name, description, visibility and ``anchor`` are those of
     :class:`DrawingPlacementInput`.
 
-    ``type`` is a writable :class:`ChartPlotType` (``BAR``, ``LINE``, ``AREA``, ``PIE``, ``DOUGHNUT``,
-    ``SCATTER``); ``bar_direction`` (default ``COLUMN``) applies to ``BAR`` only. ``range`` is a
-    :class:`SheetRect` or an A1 range (an unqualified one resolves on the sheet); ``header_row`` /
-    ``header_column`` ``None`` follow Excel's detection. ``title`` is a :class:`ChartTitle`, or its text as a
-    ``str``; the default ``ChartTitle(ChartTitleKind.AUTO)`` is Excel's automatic title, ``None`` no title and
-    ``""`` an ``InvalidArgumentError``; ``legend`` ``None`` is no legend and the default is the bottom, Excel's default for a new
-    chart. The anchor reads as for :meth:`Sheet.add_picture`, except that a zero ``width_emu`` or
-    ``height_emu`` means Excel's default 360 x 216 pt frame and an omitted anchor kind is two-cell.
+    The anchor reads as for :meth:`Sheet.add_picture`, except that a zero ``width_emu`` or ``height_emu`` means
+    Excel's default 360 x 216 pt frame and an omitted anchor kind is two-cell.
     """
 
+    #: The plot type of the new chart: bar, line, area, pie, doughnut or scatter.
     type: ChartPlotType = field(kw_only=True)
+    #: The source range, a rectangle or an A1 range (an unqualified one resolves on the receiving sheet).
     range: Union[SheetRect, str] = field(kw_only=True)
+    #: Whether bars run vertically (column) or horizontally; applies to bar plots only, column when omitted.
     bar_direction: Optional[ChartBarDirection] = None
+    #: How the series are stacked or grouped; applies to bar, line and area plots.
     grouping: ChartGrouping = ChartGrouping.CLUSTERED
+    #: Whether the series run along rows or columns of the source range; automatic when omitted.
     direction: ChartSeriesDirection = ChartSeriesDirection.AUTO
+    #: ``True`` when the first row of the source holds names; ``None`` or omitted follows Excel's detection.
     header_row: Optional[bool] = None
+    #: ``True`` when the first column of the source holds names; ``None`` or omitted follows Excel's detection.
     header_column: Optional[bool] = None
+    #: The chart title; omitted is Excel's automatic title, ``None`` is no title, and empty text is rejected.
     title: Union[str, ChartTitle, None] = ChartTitle(ChartTitleKind.AUTO)
+    #: The legend position; omitted is the bottom (Excel's default for a new chart), ``None`` is no legend.
     legend: Optional[ChartLegendPosition] = ChartLegendPosition.BOTTOM
 
 
@@ -3135,27 +3470,39 @@ class ChartInput(DrawingPlacementInput):
 class ChartProperties:
     """The typed view of a chart (:meth:`Chart.get_properties`); the anchor, name and description are on
     :class:`DrawingProperties`.
-
-    ``title`` and ``legend`` are ``None`` when the chart has none, ``blanks_as``
-    when the file omits it, and ``source`` when the series share no rectangle.
     """
 
+    #: The id of the chart's drawing object on its sheet.
     object_id: int
+    #: ``True`` for an extended (``cx:``) chart.
     is_extended: bool
+    #: ``True`` when the chart is bound to a pivot table.
     is_pivot_chart: bool
+    #: ``True`` when the chart lives on a chartsheet rather than as an embedded object.
     on_chartsheet: bool
+    #: The chart title; ``None`` when the chart has none.
     title: Optional[ChartTitle]
+    #: ``True`` when the automatic title is deleted; ``None`` when the chart states none.
     auto_title_deleted: Optional[bool]
+    #: The chart legend; ``None`` when the chart has none.
     legend: Optional[ChartLegend]
+    #: How empty cells are plotted (gap, zero or span); ``None`` when the file omits it.
     blanks_as: Optional[BlanksAs]
+    #: ``True`` when only visible cells are plotted; ``None`` when the chart states none.
     plot_visible_only: Optional[bool]
+    #: ``True`` when the chart uses the 1904 date system.
     date1904: bool
+    #: The chart style number (1..48); ``None`` when the chart states none.
     style: Optional[int]
+    #: The plot groups of the chart.
     plots: List[ChartPlot]
+    #: The axes of the chart.
     axes: List[ChartAxis]
+    #: The series and categories the chart filter hides.
     filter: ChartFilter
+    #: The range every series was split from; ``None`` when the series share no such rectangle.
     source: Optional[ChartSource]
-    #: ``c16r3:dataDisplayOptions16/dispNaAsBlank``; ``None`` when the element is absent.
+    #: ``True`` when ``#N/A`` points draw as blank cells; ``None`` when the chart carries no setting.
     na_as_blank: Optional[bool]
 
 
@@ -3163,34 +3510,45 @@ class ChartProperties:
 class ChartSeriesRanges:
     """The resolved rectangles of each series input."""
 
+    #: The rectangles the series name reads.
     name: List[SheetRect] = field(default_factory=list)
+    #: The rectangles the category labels read.
     categories: List[SheetRect] = field(default_factory=list)
+    #: The rectangles the values read.
     values: List[SheetRect] = field(default_factory=list)
+    #: The rectangles the x values read.
     x: List[SheetRect] = field(default_factory=list)
+    #: The rectangles the y values read.
     y: List[SheetRect] = field(default_factory=list)
+    #: The rectangles the bubble sizes read.
     size: List[SheetRect] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
 class ChartDataSeries:
-    """One resolved series; ``values`` and ``states`` (:class:`ChartPointState`) are parallel.
+    """One resolved series; ``values`` and ``states`` (:class:`ChartPointState`) are parallel."""
 
-    ``values`` is the y value in the XY domain; ``x`` is ``None`` outside it
-    and ``sizes`` is ``None`` unless the series is a bubble series.
-    ``number_format`` is the number format of the values; ``x_number_format`` is
-    that of the x values, empty outside the XY domain.
-    """
-
+    #: The 0-based position of the series' plot group.
     plot_index: int
+    #: The series' ``c:idx``.
     series_id: int
+    #: The resolved series name; ``None`` when the series has no name reference.
     name: Optional[str]
+    #: The number format code of the values (the y values in the XY domain).
     number_format: str
+    #: The number format code of the x values; empty outside the XY domain.
     x_number_format: str
+    #: ``True`` when the chart filter hides the series.
     filtered: bool
+    #: The resolved values, one per point (the y values in the XY domain).
     values: List[float]
+    #: The state of each point, parallel to ``values``.
     states: List[ChartPointState]
+    #: The resolved x values, one per point; ``None`` outside the XY domain.
     x: Optional[List[float]]
+    #: The resolved bubble sizes, one per point; ``None`` unless the series is a bubble series.
     sizes: Optional[List[float]]
+    #: The cell ranges each input of the series reads.
     ranges: ChartSeriesRanges
 
 
@@ -3198,10 +3556,16 @@ class ChartDataSeries:
 class ChartCategories:
     """Resolved categories; ``values`` is set for numeric (date) categories and ``generated`` when the labels are 1..n."""
 
+    #: The category labels, one per category.
     labels: List[str]
+    #: The labels of the upper levels of a multi-level category axis, outermost first; the lowest level is ``labels``. A
+    #: group label sits at the points where it is not blank and is empty elsewhere.
     levels: List[List[str]]
+    #: The numeric (date) category values; ``None`` when the categories are not numeric.
     values: Optional[List[Optional[float]]]
+    #: The number format code of the numeric category values; empty when not numeric.
     number_format: str
+    #: ``True`` when the chart has no category reference and the labels are generated as 1..n.
     generated: bool
 
 
@@ -3209,19 +3573,21 @@ class ChartCategories:
 class ChartAxisTitleText:
     """Resolved title text of one axis."""
 
+    #: The id of the axis the title belongs to.
     axis_id: int
+    #: The resolved title text.
     text: str
 
 
 @dataclass(frozen=True)
 class ChartUnresolved:
-    """An input that did not resolve; its points read as gaps.
+    """An input that did not resolve; its points read as gaps."""
 
-    ``role`` is the role of the input; ``axis_id`` names the axis of an ``AXIS_TITLE``.
-    """
-
+    #: The ``c:idx`` of the series the input belongs to; 0 for a title.
     series_id: int
+    #: The role of the input that did not resolve.
     role: ChartRole
+    #: The id of the axis when the role is an axis title.
     axis_id: int
 
 
@@ -3229,12 +3595,19 @@ class ChartUnresolved:
 class ChartData:
     """A chart's series resolved against the current cell values (:meth:`Chart.get_data`)."""
 
+    #: Whether the data is in the category domain or the XY domain.
     domain: ChartDomain
+    #: The number of points per series.
     point_count: int
+    #: The resolved category labels.
     categories: ChartCategories
+    #: The resolved series.
     series: List[ChartDataSeries]
+    #: The resolved chart title text; ``None`` when the chart has none.
     title_text: Optional[str]
+    #: The resolved title text of each axis that has one.
     axis_title_texts: List[ChartAxisTitleText]
+    #: The inputs that did not resolve; their points read as gaps.
     unresolved: List[ChartUnresolved]
 
 
@@ -3307,20 +3680,30 @@ class ChartSeriesPatch(TypedDict, total=False):
 class ChartSeriesInput:
     """A new series for :meth:`Chart.add_series`.
 
-    ``values`` is required (``y`` for a scatter plot); every other field is optional and reads as the
-    same key of :class:`ChartSeriesPatch`.
+    Every field other than ``values`` and ``y`` is optional and reads as the same key of :class:`ChartSeriesPatch`.
     """
 
+    #: The values input; required on a category plot, rejected on a scatter or bubble plot.
     values: Union[ChartDataSource, str, None] = None
+    #: The series name input; omitted adds none.
     name: Union[ChartDataSource, str, None] = None
+    #: The category labels input; omitted adds none.
     categories: Union[ChartDataSource, str, None] = None
+    #: The x values input of a scatter or bubble series; omitted adds none.
     x: Union[ChartDataSource, str, None] = None
+    #: The y values input; required on a scatter or bubble plot, rejected on a category plot.
     y: Union[ChartDataSource, str, None] = None
+    #: The bubble sizes input of a bubble series; omitted adds none.
     size: Union[ChartDataSource, str, None] = None
+    #: The series fill to set; omitted states none.
     fill: Optional[ChartFillPatch] = None
+    #: The series outline to set; omitted states none.
     line: Optional[ChartLinePatch] = None
+    #: The series marker to set; omitted states none.
     marker: Optional[ChartMarkerPatch] = None
+    #: ``True`` to draw a smoothed line; omitted states none.
     smooth: Optional[bool] = None
+    #: The data labels to set; omitted states none.
     labels: Optional[ChartLabelsPatch] = None
 
 
@@ -3389,20 +3772,31 @@ class WorkbookProtection:
     A text field the element does not state is ``None``.
     """
 
+    #: ``True`` when the workbook structure is locked, so sheets cannot be added, deleted, renamed, moved or hidden.
     lock_structure: bool = False
+    #: ``True`` when the workbook windows are locked, so they cannot be moved or resized.
     lock_windows: bool = False
+    #: ``True`` when the workbook is locked for revisions (shared-workbook tracking cannot be switched off).
     lock_revision: bool = False
-    #: The legacy 16-bit password hash (hex, ``workbookPassword``).
+    #: The legacy 16-bit hash of the structure-lock password, as the hex text Excel writes; ``None`` when absent.
     workbook_legacy_password_hash: Optional[str] = None
+    #: The name of the hash algorithm of the structure-lock password; ``None`` when absent.
     workbook_algorithm_name: Optional[str] = None
+    #: The hash of the structure-lock password, stored as given; ``None`` when absent.
     workbook_hash_value: Optional[str] = None
+    #: The salt of the structure-lock password hash, stored as given; ``None`` when absent.
     workbook_salt_value: Optional[str] = None
+    #: The number of hash iterations of the structure-lock password; 0 when absent.
     workbook_spin_count: int = 0
-    #: The legacy 16-bit password hash (hex, ``revisionsPassword``).
+    #: The legacy 16-bit hash of the revision-lock password, as the hex text Excel writes; ``None`` when absent.
     revisions_legacy_password_hash: Optional[str] = None
+    #: The name of the hash algorithm of the revision-lock password; ``None`` when absent.
     revisions_algorithm_name: Optional[str] = None
+    #: The hash of the revision-lock password, stored as given; ``None`` when absent.
     revisions_hash_value: Optional[str] = None
+    #: The salt of the revision-lock password hash, stored as given; ``None`` when absent.
     revisions_salt_value: Optional[str] = None
+    #: The number of hash iterations of the revision-lock password; 0 when absent.
     revisions_spin_count: int = 0
 
 
@@ -3412,18 +3806,33 @@ class WorkbookProtectionInput:
     :class:`WorkbookProtection`. A :class:`WorkbookProtection` read back is accepted in its place.
     """
 
+    #: ``True`` locks the workbook structure; omitted is ``False``.
     lock_structure: bool = False
+    #: ``True`` locks the workbook windows; omitted is ``False``.
     lock_windows: bool = False
+    #: ``True`` locks the workbook for revisions; omitted is ``False``.
     lock_revision: bool = False
+    #: The legacy 16-bit hash of the structure-lock password, as the hex text Excel writes; omitted or ``None`` is
+    #: absent.
     workbook_legacy_password_hash: Optional[str] = None
+    #: The name of the hash algorithm of the structure-lock password; omitted or ``None`` is absent.
     workbook_algorithm_name: Optional[str] = None
+    #: The hash of the structure-lock password, stored as given; omitted or ``None`` is absent.
     workbook_hash_value: Optional[str] = None
+    #: The salt of the structure-lock password hash, stored as given; omitted or ``None`` is absent.
     workbook_salt_value: Optional[str] = None
+    #: The number of hash iterations of the structure-lock password; omitted is 0, which is absent.
     workbook_spin_count: int = 0
+    #: The legacy 16-bit hash of the revision-lock password, as the hex text Excel writes; omitted or ``None`` is
+    #: absent.
     revisions_legacy_password_hash: Optional[str] = None
+    #: The name of the hash algorithm of the revision-lock password; omitted or ``None`` is absent.
     revisions_algorithm_name: Optional[str] = None
+    #: The hash of the revision-lock password, stored as given; omitted or ``None`` is absent.
     revisions_hash_value: Optional[str] = None
+    #: The salt of the revision-lock password hash, stored as given; omitted or ``None`` is absent.
     revisions_salt_value: Optional[str] = None
+    #: The number of hash iterations of the revision-lock password; omitted is 0, which is absent.
     revisions_spin_count: int = 0
 
 
@@ -3431,31 +3840,47 @@ class WorkbookProtectionInput:
 class ProtectedRange:
     """A sheet ``<protectedRange>`` covering the rectangles of ``ranges``."""
 
+    #: The range's name, unique among the sheet's protected ranges.
     name: str
+    #: The rectangles the protected range covers.
     ranges: Union[Sequence[Union[CellRect, str]], str]
-    #: The legacy 16-bit password hash (hex, ``password``); ``None`` when absent.
+    #: The legacy 16-bit password hash, as the hex text Excel writes; ``None`` when absent.
     legacy_password_hash: Optional[str] = None
+    #: The name of the hash algorithm that produced ``hash_value``; ``None`` when absent.
     algorithm_name: Optional[str] = None
+    #: The password hash, stored as given; ``None`` when absent.
     hash_value: Optional[str] = None
+    #: The salt the password hash was computed with, stored as given; ``None`` when absent.
     salt_value: Optional[str] = None
+    #: The number of hash iterations; 0 when absent.
     spin_count: int = 0
+    #: The security descriptor (SDDL text) naming who may edit the range without a password; ``None`` when absent.
     security_descriptor: Optional[str] = None
 
 
 @dataclass
 class ProtectedRangeInput:
-    """A protected range :meth:`Sheet.add_protected_range` adds; ``ranges`` is a :class:`CellRect` list, A1
-    strings, or one A1 string. A :class:`ProtectedRange` read back is accepted in its place.
+    """A protected range :meth:`Sheet.add_protected_range` adds. A :class:`ProtectedRange` read back is
+    accepted in its place.
     """
 
+    #: The range's name; it must be non-empty and unused by the sheet's other protected ranges.
     name: str
+    #: The rectangles the range covers: a sequence of ``CellRect``s and A1 ranges, or one A1 string; at least one is
+    #: required.
     ranges: Union[Sequence[Union[CellRect, str]], str]
-    #: The legacy 16-bit password hash (hex, ``password``); ``None`` when absent.
+    #: The legacy 16-bit password hash, as the hex text Excel writes; omitted or ``None`` is absent.
     legacy_password_hash: Optional[str] = None
+    #: The name of the hash algorithm that produced ``hash_value``; omitted or ``None`` is absent.
     algorithm_name: Optional[str] = None
+    #: The password hash, stored as given; omitted or ``None`` is absent.
     hash_value: Optional[str] = None
+    #: The salt the password hash was computed with, stored as given; omitted or ``None`` is absent.
     salt_value: Optional[str] = None
+    #: The number of hash iterations; omitted is 0, which is absent.
     spin_count: int = 0
+    #: The security descriptor (SDDL text) naming who may edit the range without a password; omitted or ``None`` is
+    #: absent.
     security_descriptor: Optional[str] = None
 
 
@@ -3469,26 +3894,46 @@ class SheetProtection:
     sheet does not state is ``None``.
     """
 
+    #: The name of the hash algorithm that produced ``hash_value``; ``None`` when the sheet states none.
     algorithm_name: Optional[str] = None
+    #: The password hash, stored as given; ``None`` when the sheet states none.
     hash_value: Optional[str] = None
+    #: The salt the password hash was computed with, stored as given; ``None`` when the sheet states none.
     salt_value: Optional[str] = None
+    #: The number of hash iterations; 0 when the sheet states none.
     spin_count: int = 0
-    #: The legacy 16-bit password hash (hex, ``password``).
+    #: The legacy 16-bit password hash, as the hex text Excel writes; ``None`` when the sheet states none.
     legacy_password_hash: Optional[str] = None
+    #: ``True`` when users may edit objects (shapes, charts, pictures) on the protected sheet; Excel's default
+    #: ``False``.
     allow_edit_objects: bool = False
+    #: ``True`` when users may edit scenarios on the protected sheet; Excel's default ``False``.
     allow_edit_scenarios: bool = False
+    #: ``True`` when users may format cells on the protected sheet; Excel's default ``False``.
     allow_format_cells: bool = False
+    #: ``True`` when users may format columns on the protected sheet; Excel's default ``False``.
     allow_format_columns: bool = False
+    #: ``True`` when users may format rows on the protected sheet; Excel's default ``False``.
     allow_format_rows: bool = False
+    #: ``True`` when users may insert columns on the protected sheet; Excel's default ``False``.
     allow_insert_columns: bool = False
+    #: ``True`` when users may insert rows on the protected sheet; Excel's default ``False``.
     allow_insert_rows: bool = False
+    #: ``True`` when users may insert hyperlinks on the protected sheet; Excel's default ``False``.
     allow_insert_hyperlinks: bool = False
+    #: ``True`` when users may delete columns on the protected sheet; Excel's default ``False``.
     allow_delete_columns: bool = False
+    #: ``True`` when users may delete rows on the protected sheet; Excel's default ``False``.
     allow_delete_rows: bool = False
+    #: ``True`` when users may select locked cells on the protected sheet; Excel's default ``True``.
     allow_select_locked_cells: bool = True
+    #: ``True`` when users may select unlocked cells on the protected sheet; Excel's default ``True``.
     allow_select_unlocked_cells: bool = True
+    #: ``True`` when users may sort on the protected sheet; Excel's default ``False``.
     allow_sort: bool = False
+    #: ``True`` when users may use AutoFilter on the protected sheet; Excel's default ``False``.
     allow_auto_filter: bool = False
+    #: ``True`` when users may use PivotTables on the protected sheet; Excel's default ``False``.
     allow_pivot_tables: bool = False
 
 
@@ -3496,25 +3941,45 @@ class SheetProtection:
 class SheetProtectionInput:
     """The protection :meth:`Sheet.set_sheet_protection` applies; the fields and defaults of :class:`SheetProtection`."""
 
+    #: The name of the hash algorithm that produced ``hash_value``; omitted or ``None`` is absent.
     algorithm_name: Optional[str] = None
+    #: The password hash, stored as given; omitted or ``None`` is absent.
     hash_value: Optional[str] = None
+    #: The salt the password hash was computed with, stored as given; omitted or ``None`` is absent.
     salt_value: Optional[str] = None
+    #: The number of hash iterations; omitted is 0, which is absent.
     spin_count: int = 0
+    #: The legacy 16-bit password hash, as the hex text Excel writes; omitted or ``None`` is absent.
     legacy_password_hash: Optional[str] = None
+    #: ``True`` when users may edit objects (shapes, charts, pictures) on the protected sheet; default ``False``.
     allow_edit_objects: bool = False
+    #: ``True`` when users may edit scenarios on the protected sheet; default ``False``.
     allow_edit_scenarios: bool = False
+    #: ``True`` when users may format cells on the protected sheet; default ``False``.
     allow_format_cells: bool = False
+    #: ``True`` when users may format columns on the protected sheet; default ``False``.
     allow_format_columns: bool = False
+    #: ``True`` when users may format rows on the protected sheet; default ``False``.
     allow_format_rows: bool = False
+    #: ``True`` when users may insert columns on the protected sheet; default ``False``.
     allow_insert_columns: bool = False
+    #: ``True`` when users may insert rows on the protected sheet; default ``False``.
     allow_insert_rows: bool = False
+    #: ``True`` when users may insert hyperlinks on the protected sheet; default ``False``.
     allow_insert_hyperlinks: bool = False
+    #: ``True`` when users may delete columns on the protected sheet; default ``False``.
     allow_delete_columns: bool = False
+    #: ``True`` when users may delete rows on the protected sheet; default ``False``.
     allow_delete_rows: bool = False
+    #: ``True`` when users may select locked cells on the protected sheet; default ``True``.
     allow_select_locked_cells: bool = True
+    #: ``True`` when users may select unlocked cells on the protected sheet; default ``True``.
     allow_select_unlocked_cells: bool = True
+    #: ``True`` when users may sort on the protected sheet; default ``False``.
     allow_sort: bool = False
+    #: ``True`` when users may use AutoFilter on the protected sheet; default ``False``.
     allow_auto_filter: bool = False
+    #: ``True`` when users may use PivotTables on the protected sheet; default ``False``.
     allow_pivot_tables: bool = False
 
 
@@ -3524,24 +3989,39 @@ class SheetView:
     ``<sheetView>``. A sheet's visibility is :meth:`Sheet.get_visibility`.
     """
 
-    #: The zoom as a percentage (100 is 100%).
+    #: The zoom as a percentage, 10 to 400; 100 is 100%.
     zoom_pct: int
+    #: The number of frozen rows at the top; 0 means no frozen rows.
     freeze_rows: int
+    #: The number of frozen columns at the left; 0 means no frozen columns.
     freeze_cols: int
+    #: ``True`` when the cell gridlines are shown; the default is ``True``.
     show_grid_lines: bool = True
+    #: ``True`` when the row and column headers are shown; the default is ``True``.
     show_row_column_headers: bool = True
+    #: ``True`` when cells holding zero show the 0; the default is ``True``.
     show_zeros: bool = True
+    #: ``True`` when the sheet is laid out right to left; the default is ``False``.
     right_to_left: bool = False
+    #: ``True`` when the sheet's tab is selected; the default is ``False``. Plain metadata: it does not by itself make
+    #: the sheet the active one.
     tab_selected: bool = False
+    #: The view mode (normal, page break preview or page layout); the normal view when the attribute is absent.
     view_mode: SheetViewMode = SheetViewMode.NORMAL
-    #: The top-left visible cell.
+    #: The scroll origin of the sheet view (the first visible cell, ``topLeftCell``); A1 by default.
     top_left: CellAddress = field(default_factory=lambda: CellAddress(0, 0))
-    #: The top-left cell of the scrolling pane of a frozen or split view.
+    #: The first visible cell of a frozen or split view's lower-right pane (``<pane topLeftCell>``): the first cell past
+    #: the frozen rows and columns until a host scrolls it. A1 without panes.
     pane_top_left: CellAddress = field(default_factory=lambda: CellAddress(0, 0))
-    #: The split position of a split (unfrozen) pane, in twips.
+    #: The horizontal position of an unfrozen split in twips; 0 means no split on that axis, and it is always 0 while
+    #: the view is frozen.
     split_x_twips: float = 0.0
+    #: The vertical position of an unfrozen split in twips; 0 means no split on that axis, and it is always 0 while the
+    #: view is frozen.
     split_y_twips: float = 0.0
+    #: ``True`` when cells show their formula text instead of the value; the default is ``False``.
     show_formulas: bool = False
+    #: ``True`` when the outline gutter's group symbols are shown; the default is ``True``.
     show_outline_symbols: bool = True
 
 
@@ -3549,18 +4029,21 @@ class SheetView:
 class ColumnLayout:
     """A per-column-range layout override (inclusive ``[first, last]``).
 
-    ``width_chars`` is the explicit width in characters (the raw source bit or
-    a legacy non-zero width), ``None`` when the span states none; an explicit
-    zero stays distinguishable from an absent width. The column XF is read
-    through :meth:`SheetOoxml.get_column_xf_index`.
+    The column XF is read through :meth:`SheetOoxml.get_column_xf_index`.
     """
 
+    #: 0-based index of the first column of the span.
     first: int
+    #: 0-based index of the last column of the span, inclusive.
     last: int
+    #: The explicit width in characters of the Normal font (raw presence or a non-zero legacy width); ``None`` when the
+    #: span states none, and an explicit zero stays distinguishable from an absent width.
     width_chars: Optional[float]
+    #: ``True`` when the columns of the span are hidden.
     hidden: bool
+    #: The outline level of the span; 0 means not grouped.
     outline_level: int
-    #: ``collapsed="1"``: the outline group this span summarises is collapsed.
+    #: ``True`` when the outline group this span summarises is collapsed (the ``collapsed`` attribute).
     collapsed: bool = False
 
 
@@ -3568,14 +4051,18 @@ class ColumnLayout:
 class RowLayout:
     """A per-row layout override; the row XF is read through :meth:`SheetOoxml.get_row_xf_index`."""
 
+    #: 0-based index of the row.
     row: int
     #: The stored height in points; ``None`` when the row stores none.
     height_pt: Optional[float]
+    #: ``True`` when the row is hidden.
     hidden: bool
+    #: The outline level of the row; 0 means not grouped.
     outline_level: int
-    #: ``customHeight="1"``: an explicit override rather than a cached auto height.
+    #: ``True`` when the height is an explicit override (``customHeight="1"``) rather than an auto height that Excel
+    #: recomputes on its own.
     custom_height: bool = False
-    #: ``collapsed="1"``: the outline group this row summarises is collapsed.
+    #: ``True`` when the outline group this row summarises is collapsed (the ``collapsed`` attribute).
     collapsed: bool = False
 
 
@@ -3583,8 +4070,11 @@ class RowLayout:
 class IterativeSettings:
     """Iterative-calculation settings read back by ``get_iterative``."""
 
+    #: ``True`` when iterative calculation is on; off by default, when cyclic components surface ``#REF!``.
     enabled: bool
+    #: The iteration cap, 1 to 32767; meaningful even while ``enabled`` is ``False``.
     max_iterations: int
+    #: The absolute convergence threshold, finite and non-negative; meaningful even while ``enabled`` is ``False``.
     max_change: float
 
 
@@ -3592,18 +4082,22 @@ class IterativeSettings:
 class SheetSelection:
     """The active pane's selection read back by ``get_selection``."""
 
+    #: The active cell.
     active: CellAddress
+    #: The selected ranges.
     ranges: List[CellRect] = field(default_factory=list)
 
 
 @dataclass
 class SheetSelectionInput:
-    """A selection :meth:`Sheet.set_selection` writes: the ``active`` cell and the selected ``ranges`` (a
-    :class:`CellRect` list or A1 strings, or one A1 string). A :class:`SheetSelection` read back is accepted
+    """A selection :meth:`Sheet.set_selection` writes. A :class:`SheetSelection` read back is accepted
     in its place.
     """
 
+    #: The active cell, as a cell address or an A1 string.
     active: Union[CellAddress, str]
+    #: The selected ranges, as rectangles or A1 strings, or one A1 string; empty or omitted selects the active cell
+    #: alone.
     ranges: Union[Sequence[Union[CellRect, str]], str] = ()
 
 
@@ -3611,7 +4105,9 @@ class SheetSelectionInput:
 class TableStyleDefaults:
     """Default table and pivot style names read back by ``get_table_style_defaults``; ``None`` when unset."""
 
+    #: The style a new table takes when none is given; ``None`` when unset.
     table_style_name: Optional[str]
+    #: The style a new PivotTable takes; ``None`` when unset.
     pivot_style_name: Optional[str]
 
 
@@ -3619,7 +4115,9 @@ class TableStyleDefaults:
 class PivotGrandTotals:
     """Grand-total flags read back by :meth:`Pivot.get_grand_totals`."""
 
+    #: Whether the grand total band for the rows shows.
     rows: bool
+    #: Whether the grand total band for the columns shows.
     columns: bool
 
 
@@ -3627,26 +4125,34 @@ class PivotGrandTotals:
 class Pagination:
     """Resolved physical pagination for one worksheet.
 
-    ``print_area`` is the sheet's declared ``_xlnm.Print_Area`` as
-    :class:`CellRect` rectangles. It is empty when the sheet declares no print area and is
-    not backfilled with the used range; pagination itself still falls back
-    to the used range, so ``page_count`` can be non-zero while this is
-    empty. The break lists hold the breaks in effect, ascending, each before
-    the zero-based row or column a new physical page begins with.
+    The break lists hold the breaks in effect, ascending, each before the zero-based row or column a new
+    physical page begins with.
     """
 
+    #: The number of physical pages.
     page_count: int
+    #: The sheet's declared ``_xlnm.Print_Area``; empty when the sheet declares none, and not backfilled with the used
+    #: range. Pagination still falls back to the used range in that case, so ``page_count`` can be non-zero while this
+    #: is empty.
     print_area: List[CellRect]
+    #: The row breaks in effect, ascending by ``row``.
     row_breaks: List["RowBreak"]
+    #: The column breaks in effect, ascending by ``col``.
     column_breaks: List["ColumnBreak"]
+    #: The paper the layout ran on, after the orientation swap. Its ``known`` is false when the stored paper size was
+    #: unrecognised and A4 was substituted.
     paper: "PaginationPaper"
+    #: The page margins.
     margins: "PaginationMargins"
+    #: The cell-body rectangle before print-title reservation, measured from the page's top-left corner.
     printable: "RectPt"
-    #: Effective print scale as a percentage (100 is 100%).
+    #: The effective print scale as a percentage (100 is 100%).
     scale_pct: float
+    #: The order in which pages are numbered over the print area, a ``PageOrder`` value.
     page_order: PageOrder
-    #: ``None`` when the sheet repeats neither rows nor columns.
+    #: The repeat rows and columns in effect; ``None`` when neither axis repeats.
     print_titles: Optional["PrintTitles"]
+    #: The physical pages in print order.
     pages: List["PaginationPage"]
 
     def __post_init__(self) -> None:
@@ -3657,9 +4163,13 @@ class Pagination:
 class RectPt:
     """A rectangle in points."""
 
+    #: The distance in points from the rectangle's origin to its left edge.
     x: float
+    #: The distance in points from the rectangle's origin to its top edge.
     y: float
+    #: The width in points.
     width_pt: float
+    #: The height in points.
     height_pt: float
 
 
@@ -3667,10 +4177,13 @@ class RectPt:
 class PaginationPaper:
     """The paper a sheet prints on, after the orientation swap."""
 
+    #: The paper width in points, after the orientation swap.
     width_pt: float
+    #: The paper height in points, after the orientation swap.
     height_pt: float
+    #: ``True`` when the paper is laid out landscape.
     landscape: bool
-    #: False when ``paperSize`` was unrecognised and A4 substituted.
+    #: ``False`` when the stored paper size was unrecognised and A4 was substituted.
     known: bool
 
 
@@ -3678,11 +4191,17 @@ class PaginationPaper:
 class PaginationMargins:
     """Page margins in inches."""
 
+    #: The left page margin in inches.
     left_in: float
+    #: The right page margin in inches.
     right_in: float
+    #: The top page margin in inches.
     top_in: float
+    #: The bottom page margin in inches.
     bottom_in: float
+    #: The distance in inches from the page top edge to the header band.
     header_in: float
+    #: The distance in inches from the page bottom edge to the footer band.
     footer_in: float
 
 
@@ -3690,7 +4209,9 @@ class PaginationMargins:
 class Span:
     """A 0-based, inclusive run of rows or columns."""
 
+    #: The 0-based first row or column.
     first: int
+    #: The 0-based last row or column, inclusive.
     last: int
 
 
@@ -3698,18 +4219,21 @@ class Span:
 class PrintTitles:
     """The rows and columns repeated on every printed page; ``None`` for an axis that repeats nothing."""
 
+    #: The rows repeated at the top of every printed page; ``None`` when no rows repeat.
     rows: Optional[Span]
+    #: The columns repeated at the left of every printed page; ``None`` when no columns repeat.
     columns: Optional[Span]
 
 
 @dataclass
 class PrintTitlesInput:
-    """The print titles :meth:`Sheet.set_print_titles` writes: ``rows`` and ``columns`` each a :class:`Span`,
-    a span string (``"1:2"``, ``"3"``; ``"A:B"``, ``"B"``; ``$`` allowed) or ``None`` for none. A
-    :class:`PrintTitles` read back is accepted in its place.
+    """The print titles :meth:`Sheet.set_print_titles` writes. A :class:`PrintTitles` read back is accepted
+    in its place.
     """
 
+    #: The rows to repeat: a span, a row span string (such as ``'3'`` or ``'1:2'``), or ``None`` for no repeat.
     rows: Union[Span, str, None]
+    #: The columns to repeat: a span, a column span string (such as ``'B'`` or ``'A:B'``), or ``None`` for no repeat.
     columns: Union[Span, str, None]
 
 
@@ -3717,12 +4241,17 @@ class PrintTitlesInput:
 class PaginationPage:
     """One physical page: the cell block it carries and where it sits."""
 
+    #: 0-based index of the print area this page belongs to (0 for the used-range fallback).
     area_index: int
-    #: The page's cell block.
+    #: The cell block the page carries.
     range: CellRect
+    #: Horizontal position in points of the cell block's left edge on the paper.
     origin_x_pt: float
+    #: Vertical position in points of the cell block's top edge on the paper.
     origin_y_pt: float
+    #: Scaled width in points of the page's cell block, repeated title columns excluded.
     width_pt: float
+    #: Scaled height in points of the page's cell block, repeated title rows excluded.
     height_pt: float
 
 
@@ -3730,29 +4259,28 @@ class PaginationPage:
 class SheetFormatDefaults:
     """Sheet default column / row metrics (``<sheetFormatPr>``).
 
-    ``default_column_width_chars`` is a stored width (characters with the column
-    padding included) and ``default_row_height_pt`` in points; each is ``None``
-    when the sheet stores none. ``Sheet.update_format_defaults`` takes these
-    fields as keyword arguments: ``None`` clears the stored value and
-    :data:`UNCHANGED` (the default) keeps it.
-    ``effective_default_column_width_chars`` / ``effective_default_row_height_pt``
-    are read-only values the sheet lays out with: the stated default, else the
-    column Excel derives from ``base_column_width_chars`` and the Normal font
-    (Calibri 11, base 8: 9.140625, shown as 8.43) and 102/7 pt; the row height is 0 when
-    ``zero_height`` hides rows by default. They are ignored when setting.
+    ``Sheet.update_format_defaults`` takes these fields as keyword arguments: ``None`` clears the stored value
+    and :data:`UNCHANGED` (the default) keeps it. The ``effective_*`` fields are ignored when setting.
     """
 
+    #: The stored default column width in characters, column padding included; ``None`` when the sheet stores none.
     default_column_width_chars: Optional[float] = None
+    #: The stored default row height in points; ``None`` when the sheet stores none.
     default_row_height_pt: Optional[float] = None
+    #: The base column width in characters, from which Excel derives the default column width when none is stored;
+    #: always present, the OOXML default is 8.
     base_column_width_chars: float = 8.0
+    #: Stored width in characters the sheet lays columns out with: the stated default column width when set, else the
+    #: width Excel derives from the base column width and the Normal font (Calibri 11, base 8: 9.140625, shown as 8.43).
+    #: Read-only.
     effective_default_column_width_chars: float = 0.0
+    #: Points the sheet lays rows out with: the stated default row height when set, else 102/7 (about 14.57); 0 when the
+    #: sheet hides rows by default. Read-only.
     effective_default_row_height_pt: float = 0.0
-    #: ``customHeight``: ``default_row_height_pt`` is an explicit override rather
-    #: than a cached figure Excel recomputes from the Normal font. ``None``
-    #: keeps the stored flag when setting.
+    #: ``True`` when ``default_row_height_pt`` is an explicit override that stays as written, rather than a cached
+    #: figure Excel recomputes from the Normal font; ``None`` keeps the stored flag when setting.
     custom_height: Optional[bool] = None
-    #: ``zeroHeight``: rows are hidden unless they say otherwise. ``None``
-    #: keeps the stored flag when setting.
+    #: ``True`` when rows are hidden by default unless they say otherwise; ``None`` keeps the stored flag when setting.
     zero_height: Optional[bool] = None
 
 
@@ -3760,17 +4288,21 @@ class SheetFormatDefaults:
 class WidthModel:
     """Column-width conversion model for the workbook's Normal font.
 
-    ``points_per_char`` and ``padding_pt`` are per displayed character:
-    ``chars * points_per_char + padding_pt``; stored widths go through
+    A width of ``chars`` characters is ``chars * points_per_char + padding_pt``; stored widths go through
     ``column_chars_to_pt``.
     """
 
+    #: The points added per displayed character.
     points_per_char: float
+    #: The constant padding in points.
     padding_pt: float
+    #: The point size of the Normal font.
     normal_font_size_pt: float
-    #: False when the Normal font is not a measured calibration point.
+    #: ``False`` when the Normal font is not a measured calibration point and the Calibri 11 figure was extrapolated.
     calibrated: bool
+    #: The name of the Normal font.
     normal_font_name: str
+    #: The ``WidthPlatform`` whose metrics the model uses.
     platform: WidthPlatform
 
     def __post_init__(self) -> None:
@@ -3781,16 +4313,18 @@ class WidthModel:
 class RowBreak:
     """One row break (``<rowBreaks><brk>``).
 
-    The break sits before the zero-based row ``row`` and covers the columns
-    ``first..last`` (OOXML ``min`` / ``max``). ``manual`` is False for a
-    break Excel computed rather than one a user placed. As the argument of
+    The break covers the columns ``first..last`` (OOXML ``min`` / ``max``). As the argument of
     :meth:`Sheet.set_row_break`, ``row`` is ignored and ``first == last == 0``
     covers the whole row.
     """
 
+    #: 0-based row the break sits before.
     row: int
+    #: The first column the break covers (OOXML ``min``).
     first: int = 0
+    #: The last column the break covers (OOXML ``max``).
     last: int = 0
+    #: ``True`` for a break a user placed, ``False`` for one Excel computed.
     manual: bool = True
 
 
@@ -3799,24 +4333,32 @@ class PageBreakInput:
     """The break :meth:`Sheet.set_row_break` / :meth:`Sheet.set_column_break` write.
 
     It covers the cross-axis span ``first..last``; ``first == last == 0`` covers the whole row or column.
-    ``manual`` is False for a break Excel would compute rather than one a user placed.
     """
 
+    #: The first row or column the break covers on the perpendicular axis; 0 together with ``last`` covers the whole row
+    #: or column.
     first: int = 0
+    #: The last row or column the break covers on the perpendicular axis; 0 together with ``first`` covers the whole row
+    #: or column.
     last: int = 0
+    #: ``True`` for a break a user placed, ``False`` for one Excel would compute; defaults to ``True``.
     manual: bool = True
 
 
 @dataclass(frozen=True)
 class ColumnBreak:
-    """One column break (``<colBreaks><brk>``): before the zero-based column ``col``, covering the rows ``first..last``.
+    """One column break (``<colBreaks><brk>``), covering the rows ``first..last``.
 
     ``manual`` and the argument form of :meth:`Sheet.set_column_break` are as in :class:`RowBreak`.
     """
 
+    #: 0-based column the break sits before.
     col: int
+    #: The first row the break covers (OOXML ``min``).
     first: int = 0
+    #: The last row the break covers (OOXML ``max``).
     last: int = 0
+    #: ``True`` for a break a user placed, ``False`` for one Excel computed.
     manual: bool = True
 
 
@@ -3827,24 +4369,33 @@ class PageSetup:
     Every value field carries the setting in force. The ``*_stated`` flags
     say whether the XML actually declares it, which is the only way to tell
     ``scale="100"`` from an absent attribute that defaults to 100.
-    ``scale_pct`` is the print scale as a percentage.
 
     ``fit_to_page`` lives in ``<sheetPr><pageSetUpPr>`` rather than
     ``<pageSetup>``; it is reported here because callers reason about it as
     part of one page-setup decision.
     """
 
-    #: ``None`` when the sheet states no orientation (Excel prints portrait).
+    #: The page orientation; ``None`` when the sheet states none (Excel prints portrait).
     orientation: Optional[PageOrientation]
+    #: The OOXML paperSize code in force; an open set, so unknown codes round-trip.
     paper_size: int
+    #: The print scale as a percentage, 10 to 400; 100 when the attribute is absent.
     scale_pct: int
+    #: The number of pages across the fit-to-page mode targets.
     fit_to_width: int
+    #: The number of pages down the fit-to-page mode targets.
     fit_to_height: int
+    #: ``True`` when the fit-to-page mode is selected; read from ``<sheetPr><pageSetUpPr>``, not ``<pageSetup>``.
     fit_to_page: bool
+    #: ``True`` when the XML states ``paper_size``; ``False`` means it reads a default.
     paper_size_stated: bool
+    #: ``True`` when the XML states ``scale_pct``; ``False`` means it reads a default.
     scale_pct_stated: bool
+    #: ``True`` when the XML states ``fit_to_width``; ``False`` means it reads a default.
     fit_to_width_stated: bool
+    #: ``True`` when the XML states ``fit_to_height``; ``False`` means it reads a default.
     fit_to_height_stated: bool
+    #: ``True`` when the XML states ``fit_to_page``; ``False`` means it reads a default.
     fit_to_page_stated: bool
 
 
@@ -3852,17 +4403,29 @@ class PageSetup:
 class PageMargins:
     """Effective ``<pageMargins>`` values in inches, with presence flags."""
 
+    #: The left margin in inches.
     left_in: float
+    #: The right margin in inches.
     right_in: float
+    #: The top margin in inches.
     top_in: float
+    #: The bottom margin in inches.
     bottom_in: float
+    #: The distance in inches from the top edge of the paper to the header.
     header_in: float
+    #: The distance in inches from the bottom edge of the paper to the footer.
     footer_in: float
+    #: ``True`` when the XML states ``left_in``; ``False`` means it reads a default.
     left_in_stated: bool
+    #: ``True`` when the XML states ``right_in``; ``False`` means it reads a default.
     right_in_stated: bool
+    #: ``True`` when the XML states ``top_in``; ``False`` means it reads a default.
     top_in_stated: bool
+    #: ``True`` when the XML states ``bottom_in``; ``False`` means it reads a default.
     bottom_in_stated: bool
+    #: ``True`` when the XML states ``header_in``; ``False`` means it reads a default.
     header_in_stated: bool
+    #: ``True`` when the XML states ``footer_in``; ``False`` means it reads a default.
     footer_in_stated: bool
 
 
@@ -3870,13 +4433,21 @@ class PageMargins:
 class PrintOptions:
     """Effective ``<printOptions>`` values; an attribute the sheet does not state reads false with its flag false."""
 
+    #: ``True`` when the cell gridlines are printed.
     grid_lines: bool
+    #: ``True`` when the row and column headings are printed.
     headings: bool
+    #: ``True`` when the print area is centered horizontally on the page.
     horizontal_centered: bool
+    #: ``True`` when the print area is centered vertically on the page.
     vertical_centered: bool
+    #: ``True`` when the XML states ``grid_lines``; ``False`` means it reads a default.
     grid_lines_stated: bool
+    #: ``True`` when the XML states ``headings``; ``False`` means it reads a default.
     headings_stated: bool
+    #: ``True`` when the XML states ``horizontal_centered``; ``False`` means it reads a default.
     horizontal_centered_stated: bool
+    #: ``True`` when the XML states ``vertical_centered``; ``False`` means it reads a default.
     vertical_centered_stated: bool
 
 
@@ -3886,40 +4457,63 @@ class HeaderFooter:
 
     A section the sheet does not have is ``None``; the text is decoded as
     :meth:`Sheet.update_header_footer` takes it. A flag the sheet does not state
-    reads its schema default (``different_odd_even`` / ``different_first``
-    false, ``scale_with_doc`` / ``align_with_margins`` true) with its
-    ``*_stated`` flag false.
+    reads its schema default with its ``*_stated`` flag false.
     """
 
+    #: The decoded text of the header of odd pages (every page unless ``different_odd_even`` or ``different_first``
+    #: apply); ``None`` when the sheet has no such section.
     odd_header: Optional[str]
+    #: The decoded text of the footer of odd pages (every page unless ``different_odd_even`` or ``different_first``
+    #: apply); ``None`` when the sheet has no such section.
     odd_footer: Optional[str]
+    #: The decoded text of the header of even pages, used when ``different_odd_even`` is set; ``None`` when the sheet
+    #: has no such section.
     even_header: Optional[str]
+    #: The decoded text of the footer of even pages, used when ``different_odd_even`` is set; ``None`` when the sheet
+    #: has no such section.
     even_footer: Optional[str]
+    #: The decoded text of the header of the first page, used when ``different_first`` is set; ``None`` when the sheet
+    #: has no such section.
     first_header: Optional[str]
+    #: The decoded text of the footer of the first page, used when ``different_first`` is set; ``None`` when the sheet
+    #: has no such section.
     first_footer: Optional[str]
+    #: ``True`` when odd and even pages use different headers and footers; reads ``False`` when unstated.
     different_odd_even: bool
+    #: ``True`` when the first page uses its own header and footer; reads ``False`` when unstated.
     different_first: bool
+    #: ``True`` when the header and footer scale with the document's print scale; reads ``True`` when unstated.
     scale_with_doc: bool
+    #: ``True`` when the header and footer align with the page margins; reads ``True`` when unstated.
     align_with_margins: bool
+    #: ``True`` when the XML states ``different_odd_even``; ``False`` means it reads a default.
     different_odd_even_stated: bool
+    #: ``True`` when the XML states ``different_first``; ``False`` means it reads a default.
     different_first_stated: bool
+    #: ``True`` when the XML states ``scale_with_doc``; ``False`` means it reads a default.
     scale_with_doc_stated: bool
+    #: ``True`` when the XML states ``align_with_margins``; ``False`` means it reads a default.
     align_with_margins_stated: bool
 
 
 @dataclass(frozen=True)
 class CfMatchBar:
-    """The data bar of a data-bar :class:`CfMatch`.
+    """The data bar of a data-bar :class:`CfMatch`."""
 
-    ``border`` is ``None`` for a bar without a border; ``length_pct`` and ``axis_position_pct`` are percentages.
-    """
-
+    #: Length of the bar as a percentage (0 to 100) of the cell width.
     length_pct: float
+    #: Position of the axis as a percentage of the cell width, measured from the left edge: 0 for an axis at the left
+    #: edge, 50 for a centred axis.
     axis_position_pct: float
+    #: ``True`` when the bar draws in the negative direction.
     is_negative: bool
+    #: The fill colour of the bar, resolved to RGB.
     fill: Color
+    #: The border colour, resolved to RGB; ``None`` when the bar draws no border.
     border: Optional[Color]
+    #: ``True`` when the bar is filled with a gradient.
     gradient: bool
+    #: The direction of the rule; the geometry is stated from the left edge and a host mirrors a right-to-left bar.
     direction: CfDataBarDirection = CfDataBarDirection.CONTEXT
 
 
@@ -3927,7 +4521,9 @@ class CfMatchBar:
 class CfMatchIcon:
     """The icon of an icon-set :class:`CfMatch`: its set and the 0-based icon index within it."""
 
+    #: The icon set the icon comes from.
     icon_set: IconSetName
+    #: The 0-based index of the icon within the set, after the rule's reverse setting has been applied.
     icon_index: int
 
     def __post_init__(self) -> None:
@@ -3936,18 +4532,21 @@ class CfMatchIcon:
 
 @dataclass(frozen=True)
 class CfMatch:
-    """A resolved conditional-format match for one cell.
+    """A resolved conditional-format match for one cell."""
 
-    Which members are set depends on ``kind``: ``dxf_index`` (``None`` when the rule names no differential
-    format) for a format match, ``color`` for a colour scale, ``bar`` for a data bar, ``icon`` for an icon set.
-    The others are ``None``.
-    """
-
+    #: The kind of match; selects which of the other members carry data.
     kind: CfMatchKind
+    #: The workbook-global priority of the matching rule; a smaller number ranks higher, and matches of a cell come in
+    #: ascending order.
     priority: int
+    #: The 0-based index of the differential format the rule applies; ``None`` when the rule applies no format. Set for
+    #: a differential-format match.
     dxf_index: Optional[int] = None
+    #: The interpolated fill colour of a colour-scale match, resolved to RGB; ``None`` for other kinds.
     color: Optional[Color] = None
+    #: The data bar of a data-bar match; ``None`` for other kinds.
     bar: Optional[CfMatchBar] = None
+    #: The icon of an icon-set match; ``None`` for other kinds.
     icon: Optional[CfMatchIcon] = None
 
 
@@ -3955,8 +4554,11 @@ class CfMatch:
 class CfCell:
     """One cell's CF matches inside a viewport-range evaluation."""
 
+    #: The 0-based row of the cell.
     row: int
+    #: The 0-based column of the cell.
     col: int
+    #: The rules that match the cell, in ascending priority order, so the first entry is the highest priority.
     matches: List[CfMatch]
 
 
@@ -3964,8 +4566,13 @@ class CfCell:
 class CfValueObject:
     """One conditional-format threshold."""
 
+    #: The kind of threshold, which decides how ``value`` is read (a number, a percentage, a percentile, a formula, or
+    #: the minimum or maximum of the data).
     type: CfValueObjectType
+    #: The number, percentage or formula the ``type`` reads, with a leading ``=`` on a formula; ``None`` for a type that
+    #: reads none (minimum, maximum).
     value: Optional[str] = None
+    #: Whether the threshold is inclusive: ``True`` compares with ``>=``, ``False`` with ``>``.
     gte: bool = True
 
     def __post_init__(self) -> None:
@@ -3976,7 +4583,9 @@ class CfValueObject:
 class CfColorScale:
     """``<colorScale>`` payload of a conditional-format rule as read: one colour per threshold."""
 
+    #: The two or three thresholds of the scale, from lowest to highest.
     thresholds: List[CfValueObject]
+    #: The colour at each threshold, in the same order and count as ``thresholds``.
     colors: List[Color]
 
 
@@ -3984,7 +4593,9 @@ class CfColorScale:
 class CfColorScaleInput:
     """``<colorScale>`` payload of a rule to add: two or three thresholds with as many colours."""
 
+    #: The two or three thresholds of the scale, from lowest to highest.
     thresholds: List[CfValueObject]
+    #: The colour at each threshold, in the same order and count as ``thresholds``.
     colors: List[ColorInput]
 
 
@@ -3996,17 +4607,31 @@ class CfDataBar:
     ``None`` is a setting the rule does not state.
     """
 
+    #: The threshold at which the bar is shortest.
     min: CfValueObject
+    #: The threshold at which the bar is longest.
     max: CfValueObject
+    #: The fill colour of the bar.
     fill: Color
+    #: ``True`` (the default) shows the cell value beside the bar; ``False`` hides it.
     show_value: bool = True
+    #: The shortest bar length as a percentage of the cell width; defaults to 10.
     min_length_pct: int = 10
+    #: The longest bar length as a percentage of the cell width; defaults to 90.
     max_length_pct: int = 90
+    #: ``True`` fills the bar with a gradient, ``False`` with a solid colour; ``None`` when the rule does not state it,
+    #: which means a gradient.
     gradient: Optional[bool] = None
+    #: Where the axis between negative and positive bars sits; ``None`` when the rule does not state it, which means
+    #: automatic.
     axis_position: Optional[CfDataBarAxisPosition] = None
+    #: The fill colour of negative bars; ``None`` when the rule does not state it, which means the same as ``fill``.
     negative_fill: Optional[Color] = None
+    #: The border colour of positive bars; ``None`` when the rule states none, which means no border.
     border: Optional[Color] = None
+    #: The border colour of negative bars; ``None`` when the rule states none, which means no negative border.
     negative_border: Optional[Color] = None
+    #: The colour of the axis line; ``None`` when the rule states none, which means black.
     axis_color: Optional[Color] = None
     #: The edge the bar grows from.
     direction: CfDataBarDirection = CfDataBarDirection.CONTEXT
@@ -4014,43 +4639,56 @@ class CfDataBar:
 
 @dataclass
 class CfDataBarInput:
-    """``<dataBar>`` payload of a rule to add.
+    """``<dataBar>`` payload of a rule to add."""
 
-    ``None`` in a field after ``max_length_pct`` keeps the model default: gradient fill on, automatic axis,
-    negative fill equal to ``fill``, no border and a black axis. Each colour takes a ``ColorInput``.
-    """
-
+    #: The threshold at which the bar is shortest.
     min: CfValueObject
+    #: The threshold at which the bar is longest.
     max: CfValueObject
+    #: The fill colour of the bar.
     fill: ColorInput
+    #: ``True`` (the default) shows the cell value beside the bar; ``False`` hides it.
     show_value: bool = True
+    #: The shortest bar length as a percentage of the cell width; defaults to 10.
     min_length_pct: int = 10
+    #: The longest bar length as a percentage of the cell width; defaults to 90.
     max_length_pct: int = 90
+    #: ``True`` fills the bar with a gradient, ``False`` with a solid colour; omitted or ``None`` keeps the default, a
+    #: gradient.
     gradient: Optional[bool] = None
+    #: Where the axis between negative and positive bars sits; omitted or ``None`` keeps the default, automatic.
     axis_position: Optional[CfDataBarAxisPosition] = None
+    #: The fill colour of negative bars; omitted or ``None`` keeps the default, the same as ``fill``.
     negative_fill: Optional[ColorInput] = None
+    #: The border colour of positive bars; omitted or ``None`` keeps the default, no border.
     border: Optional[ColorInput] = None
+    #: The border colour of negative bars; omitted or ``None`` keeps the default, no negative border.
     negative_border: Optional[ColorInput] = None
+    #: The colour of the axis line; omitted or ``None`` keeps the default, black.
     axis_color: Optional[ColorInput] = None
+    #: The edge the bar grows from; defaults to the context direction (the sheet's reading direction).
     direction: CfDataBarDirection = CfDataBarDirection.CONTEXT
 
 
 @dataclass(frozen=True)
 class CfIconSet:
-    """``<iconSet>`` payload of a conditional-format rule as read.
+    """``<iconSet>`` payload of a conditional-format rule as read."""
 
-    ``percent`` is round-trip only: it is preserved across load and save but never consulted during
-    evaluation. Each threshold in ``thresholds`` carries its own ``type``, and that type is what
-    interprets it. ``floor`` is the lower bound of the lowest icon's bucket; a cell below it gets no icon.
-    ``icons`` is the icon drawn for each level of a custom icon set, empty when the set draws its own.
-    """
-
+    #: The icon set the rule draws from.
     name: IconSetName
+    #: The thresholds between the icons: N-1 for an icon set of N icons; the lowest bound is ``floor``, not a threshold.
+    #: A formula value carries its leading ``=`` on read.
     thresholds: List[CfValueObject]
+    #: ``True`` draws the icons in reverse order; defaults to ``False``.
     reverse: bool = False
+    #: ``True`` (the default) shows the cell value beside the icon; ``False`` hides it.
     show_value: bool = True
+    #: Round-trip only: preserved across load and save but never consulted during evaluation, since each threshold's own
+    #: type decides how it is read. Defaults to ``True``.
     percent: bool = True
+    #: The lower bound of the lowest icon's bucket; a cell below it gets no icon. ``None`` when the rule states none.
     floor: Optional[CfValueObject] = None
+    #: For a custom icon set, the icon drawn for each level; empty or ``None`` when the set draws its own icons.
     icons: List["CfIcon"] = field(default_factory=list)
 
     def __post_init__(self) -> None:
@@ -4059,18 +4697,26 @@ class CfIconSet:
 
 @dataclass
 class CfIconSetInput:
-    """``<iconSet>`` payload of a rule to add.
+    """``<iconSet>`` payload of a rule to add."""
 
-    ``thresholds`` holds N-1 values for an N-icon set. ``floor`` ``None`` is Excel's default, ``percent 0``;
-    ``icons`` is one icon per level of a custom set, or empty for the set's own icons.
-    """
-
+    #: The icon set the rule draws from.
     name: IconSetName
+    #: The thresholds between the icons: exactly N-1 for an icon set of N icons (the lowest bound is ``floor``, not a
+    #: threshold); any other count is rejected as an invalid argument. A formula value takes a leading ``=`` with or
+    #: without it.
     thresholds: List[CfValueObject]
+    #: ``True`` draws the icons in reverse order; defaults to ``False``.
     reverse: bool = False
+    #: ``True`` (the default) shows the cell value beside the icon; ``False`` hides it.
     show_value: bool = True
+    #: Round-trip only: preserved across load and save but never consulted during evaluation, since each threshold's own
+    #: type decides how it is read. Defaults to ``True``.
     percent: bool = True
+    #: The lower bound of the lowest icon's bucket; a cell below it gets no icon. Omitted or ``None`` keeps Excel's
+    #: default, a percent threshold of 0.
     floor: Optional[CfValueObject] = None
+    #: For a custom icon set, one icon per level (the set's icon count); omitted, empty or ``None`` uses the set's own
+    #: icons. Evaluation still buckets against ``name``.
     icons: List["CfIcon"] = field(default_factory=list)
 
     def __post_init__(self) -> None:
@@ -4079,14 +4725,11 @@ class CfIconSetInput:
 
 @dataclass(frozen=True)
 class CfIcon:
-    """One level of a custom icon set.
+    """One level of a custom icon set."""
 
-    ``icon_set`` is the :class:`IconSetName` the icon comes from
-    (``NO_ICONS`` for a level that draws nothing); ``icon_index`` is the
-    zero-based icon within it.
-    """
-
+    #: The icon set the icon comes from; the no-icons member for a level that draws nothing.
     icon_set: IconSetName
+    #: The 0-based index of the icon within ``icon_set``.
     icon_index: int = 0
 
     def __post_init__(self) -> None:
@@ -4097,25 +4740,51 @@ class CfIcon:
 class ConditionalFormat:
     """A conditional-format rule (getter result, flattened priority order)."""
 
+    #: The rule's identifier, unique within the workbook.
     id: str
+    #: The kind of rule; selects which of the other members apply.
     type: CfRuleType
+    #: The workbook-global priority of the rule; a smaller number ranks higher.
     priority: int
+    #: ``True`` when lower-priority rules are not applied to a cell this rule matches.
     stop_if_true: bool
+    #: The cell ranges the rule applies to.
     ranges: List[CellRect]
+    #: The 0-based index of the differential format the rule applies; ``None`` when the rule applies no format.
     dxf_index: Optional[int]
+    #: The first formula of the rule, leading ``=`` included; ``None`` when the rule has none. Used by expression and
+    #: cell-is rules, and stored by the text and blank/error/duplicate kinds.
     formula1: Optional[str]
+    #: The second formula of the rule, leading ``=`` included, for the between and not-between operators; ``None``
+    #: otherwise.
     formula2: Optional[str]
+    #: The comparison operator; ``None`` unless the rule is a cell-is rule.
     operator: Optional[ComparisonOperator]
+    #: The number of values (or percent of values with ``percent``) a top/bottom rule selects; ``None`` unless the rule
+    #: is a top/bottom rule.
     rank: Optional[int]
+    #: ``True`` when ``rank`` is a percentage of the values rather than a count; ``None`` unless the rule is a
+    #: top/bottom rule.
     percent: bool
+    #: ``True`` when a top/bottom rule selects the lowest values; ``None`` unless the rule is a top/bottom rule.
     bottom: bool
+    #: ``True`` for values above the average, ``False`` for below; ``None`` unless the rule is an above-average rule.
     above_average: bool
+    #: ``True`` when values equal to the average also match; ``None`` unless the rule is an above-average rule.
     equal_average: bool
+    #: The number of standard deviations from the average the rule requires; ``None`` for a plain comparison with the
+    #: average, and unless the rule is an above-average rule.
     std_dev: Optional[float]
+    #: The text a text rule tests for; ``None`` unless the rule is a contains, not-contains, begins-with or ends-with
+    #: rule.
     text: Optional[str]
+    #: The date period a time-period rule matches; ``None`` unless the rule is a time-period rule.
     time_period: Optional[DatePeriod]
+    #: The colour-scale payload; ``None`` unless the rule is a colour-scale rule.
     color_scale: Optional[CfColorScale]
+    #: The data-bar payload; ``None`` unless the rule is a data-bar rule.
     data_bar: Optional[CfDataBar]
+    #: The icon-set payload; ``None`` unless the rule is an icon-set rule.
     icon_set: Optional[CfIconSet]
 
     def __post_init__(self) -> None:
@@ -4128,17 +4797,15 @@ class ConditionalFormat:
 
 @dataclass(kw_only=True)
 class _CfRuleInput:
-    """The members every rule input shares.
-
-    A ``priority`` of zero or less is ``existing_max + 1``. ``id`` is a brace-wrapped GUID
-    (``{XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX}``, hex digits in either case); omitted, empty or already used on
-    the sheet, the engine generates an upper-case one; anything else is an ``InvalidArgumentError``.
-    """
+    """The members every rule input shares."""
 
     #: Rectangles, unqualified A1 ranges, or one A1 string.
     ranges: Union[List[Union[CellRect, str]], str]
+    #: The rule's priority; zero or less is one past the highest priority already on the sheet.
     priority: int = 0
     stop_if_true: bool = False
+    #: A brace-wrapped GUID (``{XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX}``, hex digits in either case); omitted, empty or
+    #: already used on the sheet, the engine generates an upper-case one, and anything else is invalid.
     id: str = ""
 
 
@@ -4153,7 +4820,9 @@ class _CfFormatRuleInput(_CfRuleInput):
 class CfExpressionRuleInput(_CfFormatRuleInput):
     """``EXPRESSION``: formats a cell where ``formula1`` (leading ``=`` optional) is true."""
 
+    #: The formula that decides whether the cell is formatted; a leading ``=`` is optional.
     formula1: str
+    #: Discriminant: always the expression rule kind.
     type: CfRuleType = field(default=CfRuleType.EXPRESSION, init=False)
 
 
@@ -4161,9 +4830,14 @@ class CfExpressionRuleInput(_CfFormatRuleInput):
 class CfCellIsRuleInput(_CfFormatRuleInput):
     """``CELL_IS``: compares the cell with ``formula1``, and ``formula2`` for ``BETWEEN`` / ``NOT_BETWEEN``."""
 
+    #: How the cell is compared with ``formula1`` (and ``formula2`` for between and not-between).
     operator: ComparisonOperator
+    #: The value or formula the cell is compared with; a leading ``=`` is optional.
     formula1: str
+    #: The upper bound for the between and not-between operators; a leading ``=`` is optional. Omitted for other
+    #: operators.
     formula2: Optional[str] = None
+    #: Discriminant: always the cell-is rule kind.
     type: CfRuleType = field(default=CfRuleType.CELL_IS, init=False)
 
 
@@ -4171,7 +4845,9 @@ class CfCellIsRuleInput(_CfFormatRuleInput):
 class CfColorScaleRuleInput(_CfRuleInput):
     """``COLOR_SCALE``: two or three thresholds with as many colours."""
 
+    #: The colour-scale payload.
     color_scale: CfColorScaleInput
+    #: Discriminant: always the colour-scale rule kind.
     type: CfRuleType = field(default=CfRuleType.COLOR_SCALE, init=False)
 
 
@@ -4179,7 +4855,9 @@ class CfColorScaleRuleInput(_CfRuleInput):
 class CfDataBarRuleInput(_CfRuleInput):
     """``DATA_BAR``."""
 
+    #: The data-bar payload.
     data_bar: CfDataBarInput
+    #: Discriminant: always the data-bar rule kind.
     type: CfRuleType = field(default=CfRuleType.DATA_BAR, init=False)
 
 
@@ -4187,7 +4865,9 @@ class CfDataBarRuleInput(_CfRuleInput):
 class CfIconSetRuleInput(_CfRuleInput):
     """``ICON_SET``: the cell's bucket among the thresholds picks an icon of the set."""
 
+    #: The icon-set payload.
     icon_set: CfIconSetInput
+    #: Discriminant: always the icon-set rule kind.
     type: CfRuleType = field(default=CfRuleType.ICON_SET, init=False)
 
 
@@ -4195,33 +4875,40 @@ class CfIconSetRuleInput(_CfRuleInput):
 class CfTop10RuleInput(_CfFormatRuleInput):
     """``TOP10``: the top (or with ``bottom``, the bottom) ``rank`` values, or ``rank`` percent with ``percent``."""
 
+    #: The number of values to select, or the percentage of values when ``percent`` is set.
     rank: Optional[int] = None
+    #: ``True`` reads ``rank`` as a percentage of the values rather than a count; defaults to ``False``.
     percent: bool = False
+    #: ``True`` selects the lowest values instead of the highest; defaults to ``False``.
     bottom: bool = False
+    #: Discriminant: always the top/bottom rule kind.
     type: CfRuleType = field(default=CfRuleType.TOP10, init=False)
 
 
 @dataclass(kw_only=True)
 class CfAboveAverageRuleInput(_CfFormatRuleInput):
-    """``ABOVE_AVERAGE``: values above (or with ``above_average=False``, below) the mean, optionally by ``std_dev``
-    standard deviations.
-    """
+    """``ABOVE_AVERAGE``: values above (or with ``above_average=False``, below) the mean."""
 
+    #: ``True`` (the default) matches values above the average, ``False`` values below it.
     above_average: bool = True
+    #: ``True`` also matches values equal to the average; defaults to ``False``.
     equal_average: bool = False
+    #: The number of standard deviations from the average a value must differ by; omitted compares with the average
+    #: itself.
     std_dev: Optional[float] = None
+    #: Discriminant: always the above-average rule kind.
     type: CfRuleType = field(default=CfRuleType.ABOVE_AVERAGE, init=False)
 
 
 @dataclass(kw_only=True)
 class CfTextRuleInput(_CfFormatRuleInput):
-    """``CONTAINS_TEXT`` / ``NOT_CONTAINS_TEXT`` / ``BEGINS_WITH`` / ``ENDS_WITH``: a text test against ``text``.
+    """``CONTAINS_TEXT`` / ``NOT_CONTAINS_TEXT`` / ``BEGINS_WITH`` / ``ENDS_WITH``: a text test."""
 
-    ``formula1`` is the stored test formula Excel writes beside it; ``None`` derives it.
-    """
-
+    #: The text test: contains, not-contains, begins-with or ends-with.
     type: CfRuleType
+    #: The text the cell is tested against.
     text: str
+    #: The stored test formula Excel writes beside the rule; omitted or ``None`` derives it.
     formula1: Optional[str] = None
 
 
@@ -4229,8 +4916,11 @@ class CfTextRuleInput(_CfFormatRuleInput):
 class CfTimePeriodRuleInput(_CfFormatRuleInput):
     """``TIME_PERIOD``: a date in ``time_period`` relative to today."""
 
+    #: The date period, relative to today, that a cell's date must fall in.
     time_period: DatePeriod
+    #: The stored test formula Excel writes beside the rule; omitted or ``None`` derives it.
     formula1: Optional[str] = None
+    #: Discriminant: always the time-period rule kind.
     type: CfRuleType = field(default=CfRuleType.TIME_PERIOD, init=False)
 
 
@@ -4238,11 +4928,11 @@ class CfTimePeriodRuleInput(_CfFormatRuleInput):
 class CfPlainRuleInput(_CfFormatRuleInput):
     """``CONTAINS_BLANKS`` / ``NOT_CONTAINS_BLANKS`` / ``CONTAINS_ERRORS`` / ``NOT_CONTAINS_ERRORS`` /
     ``DUPLICATE_VALUES`` / ``UNIQUE_VALUES``: a test with no operand.
-
-    ``formula1`` is the stored test formula, derived when ``None``.
     """
 
+    #: The test: blanks, errors, duplicate values or unique values, or the negation of blanks or errors.
     type: CfRuleType
+    #: The stored test formula; omitted or ``None`` derives it.
     formula1: Optional[str] = None
 
 
@@ -4265,8 +4955,11 @@ ConditionalFormatInput = Union[
 class CellNode:
     """A workbook-wide cell coordinate (precedents / dependents trace)."""
 
+    #: The 0-based index of the sheet.
     sheet: int
+    #: The 0-based row.
     row: int
+    #: The 0-based column.
     col: int
 
 
@@ -4274,9 +4967,10 @@ class CellNode:
 class Spill:
     """Dynamic-array spill region info for a cell."""
 
-    #: ``True`` when the cell anchors a spill that could not fill its footprint.
+    #: ``True`` when the cell is the anchor of a spill refused with ``#SPILL!``; the region is then the rectangle it
+    #: attempted.
     blocked: bool
-    #: The region including its anchor (for a blocked anchor, the footprint it attempted).
+    #: The region including its anchor, whose top-left cell holds the dynamic-array formula.
     range: CellRect
 
 
@@ -4284,7 +4978,9 @@ class Spill:
 class ParsedReference:
     """A parsed reference: the rectangle ``range`` and its sheet qualifier (``None`` when unqualified)."""
 
+    #: The unquoted sheet qualifier; ``None`` when the text has none.
     sheet_name: Optional[str]
+    #: The 0-based inclusive rectangle, with a whole column or row expanded to the grid edge.
     range: CellRect
 
 
@@ -4295,8 +4991,9 @@ class ArrayFormula:
     As the argument of :meth:`Sheet.set_array_formula`, ``range`` also takes an unqualified A1 range.
     """
 
-    #: The block; its top-left cell holds the formula.
+    #: The block the formula fills; its top-left cell holds the formula.
     range: Union[CellRect, str]
+    #: The formula text, with a leading ``=``; the ``=`` is optional on input.
     formula: str
 
 
@@ -4304,26 +5001,30 @@ class ArrayFormula:
 class FunctionMetadata:
     """Catalog metadata for a single Formulon function."""
 
+    #: The canonical function name.
     name: str
+    #: The minimum number of arguments written at entry.
     min_arity: int
-    #: ``None`` denotes an unbounded variadic.
+    #: The maximum number of arguments written at entry; ``None`` for an open argument list.
     max_arity: Optional[int]
+    #: How far the engine implements the function: a real implementation, host-bound, or an intentionally unavailable
+    #: fixed-error stub.
     availability: FunctionAvailability
+    #: The signature template; ``None`` until a host metadata document fills it in.
     signature: Optional[str]
+    #: The human-readable description; ``None`` until a host metadata document fills it in.
     description: Optional[str]
 
 
 @dataclass(frozen=True)
 class LocaleErrorName:
-    """One error value's spelling under a profile.
+    """One error value's spelling under a profile."""
 
-    ``canonical`` is the en-invariant text and ``localized`` the profile's
-    Excel spelling. ``measured`` is ``False`` when the localized spelling
-    is assumed rather than captured from Excel.
-    """
-
+    #: The canonical (en-invariant) error text.
     canonical: str
+    #: The profile's Excel spelling of the error.
     localized: str
+    #: ``False`` when the localized spelling is assumed rather than captured from Excel.
     measured: bool
 
 
@@ -4331,33 +5032,40 @@ class LocaleErrorName:
 class LocaleFacts:
     """Scalar locale facts of one :data:`ProfileId`.
 
-    ``measured`` is ``True`` for the profiles captured from Excel (every
-    ``mac-*`` id and ``win-365-ja_JP``) and ``False`` for the estimated
-    ``win-*`` ids. Every scalar field is captured in each Mac locale, so
-    ``measured`` covers them all; only ``error_names`` carries per-entry
-    flags.
-    ``error_names`` is indexed by error-code ordinal.
+    Every scalar field is captured in each Mac locale, so ``measured`` covers them all; only ``error_names``
+    carries per-entry flags.
     """
 
+    #: The decimal separator.
     decimal_separator: str
+    #: The digit group (thousands) separator.
     group_separator: str
+    #: The separator between function arguments in formulas.
     list_separator: str
+    #: The separator between columns in an array constant.
     array_column_separator: str
+    #: The separator between rows in an array constant.
     array_row_separator: str
+    #: The spelling of the logical value TRUE.
     true_name: str
+    #: The spelling of the logical value FALSE.
     false_name: str
+    #: The order of year, month and day in short dates, a ``LocaleDateOrder`` value.
     date_order: LocaleDateOrder
+    #: The currency symbol.
     currency_symbol: str
     #: ``True`` when the currency symbol follows the number.
     currency_suffix: bool
-    #: ``True`` when one space separates the symbol and the number.
+    #: ``True`` when one space separates the currency symbol and the number.
     currency_space: bool
+    #: The number of decimal places the currency format shows by default.
     currency_default_decimals: int
+    #: ``True`` for an Excel-backed profile (every mac profile and win-365-ja_JP); ``False`` for an estimated one.
     measured: bool
-    #: ``True`` when the collation order of the profile was measured in Excel
-    #: (every ``mac-*`` id); ``False`` for the estimated ``win-*`` ids, even
-    #: ``win-365-ja_JP``, whose ``measured`` is ``True``.
+    #: ``True`` when the text collation of the profile was captured from Excel (every mac profile); ``False`` for the
+    #: estimated win profiles, including win-365-ja_JP, whose ``measured`` is ``True`` for the other facts.
     collation_measured: bool
+    #: The spelling of each error value under the profile, indexed by error-code ordinal.
     error_names: List[LocaleErrorName]
 
 
@@ -4368,32 +5076,57 @@ class CellXf:
     An alignment or protection attribute is ``None`` when the record does
     not state it; the ``<alignment>`` child exists when any alignment
     attribute is stated, and the ``<protection>`` child when ``locked`` or
-    ``hidden`` is (without it a cell is locked and not hidden).
+    ``hidden`` is.
     """
 
+    #: Index of the font in the workbook font table.
     font_index: int
+    #: Index of the fill in the workbook fill table.
     fill_index: int
+    #: Index of the border in the workbook border table.
     border_index: int
+    #: The number format id: a built-in id or one declared in ``<numFmts>``.
     num_fmt_id: int
+    #: The horizontal alignment. ``None`` when the attribute is absent.
     horizontal: Optional[HorizontalAlign] = None
+    #: The vertical alignment; bottom when the attribute is absent. ``None`` when the attribute is absent.
     vertical: Optional[VerticalAlign] = None
+    #: Whether text wraps within the cell. ``None`` when the attribute is absent.
     wrap_text: Optional[bool] = None
+    #: Whether the last line is justified; effective with distributed horizontal alignment. ``None`` when the attribute
+    #: is absent.
     justify_last_line: Optional[bool] = None
-    #: The ``<cellStyleXfs>`` entry the format inherits from.
+    #: Index into ``<cellStyleXfs>`` of the named style this format inherits from.
     style_xf_index: int = 0
+    #: The text rotation in degrees, 0 to 180, or 255 for vertical text. ``None`` when the attribute is absent.
     text_rotation: Optional[int] = None
+    #: The indent level, 0 to 255. ``None`` when the attribute is absent.
     indent: Optional[int] = None
+    #: The signed indent relative to the parent style. ``None`` when the attribute is absent.
     relative_indent: Optional[int] = None
+    #: Whether text shrinks to fit the cell width. ``None`` when the attribute is absent.
     shrink_to_fit: Optional[bool] = None
+    #: The text reading order. ``None`` when the attribute is absent.
     reading_order: Optional[ReadingOrder] = None
+    #: Whether this record's number format overrides the one of its parent named style.
     apply_number_format: bool = False
+    #: Whether this record's font overrides the one of its parent named style.
     apply_font: bool = False
+    #: Whether this record's fill overrides the one of its parent named style.
     apply_fill: bool = False
+    #: Whether this record's border overrides the one of its parent named style.
     apply_border: bool = False
+    #: Whether this record's alignment overrides the one of its parent named style.
     apply_alignment: bool = False
+    #: Whether this record's protection overrides the one of its parent named style.
     apply_protection: bool = False
+    #: Whether the cell text carries a leading apostrophe that marks it as text.
     quote_prefix: bool = False
+    #: Whether cells are locked once the sheet is protected; ``None`` without a ``<protection>`` child, which means
+    #: locked.
     locked: Optional[bool] = None
+    #: Whether the formula is hidden once the sheet is protected; ``None`` without a ``<protection>`` child, which means
+    #: not hidden.
     hidden: Optional[bool] = None
 
 
@@ -4402,35 +5135,59 @@ class CellXfInput:
     """An ``<xf>`` record :meth:`WorkbookOoxml.add_cell_xf` and :meth:`WorkbookOoxml.add_cell_style_xf` write.
 
     An optional attribute left ``None`` is not written: ``<alignment>`` is written when any alignment
-    attribute is given and ``<protection>`` when ``locked`` or ``hidden`` is; without ``<protection>`` a cell is
-    locked and not hidden. A :class:`CellXf` read back is accepted in its place. ``style_xf_index`` names the
-    ``<cellStyleXfs>`` entry the format inherits from (``add_cell_xf`` only).
+    attribute is given and ``<protection>`` when ``locked`` or ``hidden`` is. A :class:`CellXf` read back is
+    accepted in its place. ``style_xf_index`` applies to ``add_cell_xf`` only.
     """
 
+    #: Index of the font in the workbook font table.
     font_index: int
+    #: Index of the fill in the workbook fill table.
     fill_index: int
+    #: Index of the border in the workbook border table.
     border_index: int
+    #: The number format id: a built-in id or one declared in ``<numFmts>``.
     num_fmt_id: int
+    #: The horizontal alignment; omitted or ``None`` is an absent attribute.
     horizontal: Optional[HorizontalAlign] = None
+    #: The vertical alignment; omitted or ``None`` is an absent attribute (bottom).
     vertical: Optional[VerticalAlign] = None
+    #: Whether text wraps within the cell; omitted or ``None`` is an absent attribute.
     wrap_text: Optional[bool] = None
+    #: Whether the last line is justified, effective with distributed alignment; omitted or ``None`` is an absent
+    #: attribute.
     justify_last_line: Optional[bool] = None
+    #: Whether this record's number format overrides the one of its parent named style; omitted is ``False``.
     apply_number_format: bool = False
+    #: Whether this record's font overrides the one of its parent named style; omitted is ``False``.
     apply_font: bool = False
+    #: Whether this record's fill overrides the one of its parent named style; omitted is ``False``.
     apply_fill: bool = False
+    #: Whether this record's border overrides the one of its parent named style; omitted is ``False``.
     apply_border: bool = False
+    #: Whether this record's alignment overrides the one of its parent named style; omitted is ``False``.
     apply_alignment: bool = False
+    #: Whether this record's protection overrides the one of its parent named style; omitted is ``False``.
     apply_protection: bool = False
+    #: Whether the cell text carries a leading apostrophe that marks it as text; omitted is ``False``.
     quote_prefix: bool = False
+    #: Whether cells are locked once the sheet is protected; omitted or ``None`` is an absent attribute, which means
+    #: locked.
     locked: Optional[bool] = None
+    #: Whether the formula is hidden once the sheet is protected; omitted or ``None`` is an absent attribute, which
+    #: means not hidden.
     hidden: Optional[bool] = None
-    #: 0..180, or 255 for vertical text.
+    #: The text rotation in degrees, 0 to 180, or 255 for vertical text; omitted or ``None`` when absent.
     text_rotation: Optional[int] = None
-    #: 0..255.
+    #: The indent level, 0 to 255; omitted or ``None`` when absent.
     indent: Optional[int] = None
+    #: The signed indent relative to the parent style; omitted or ``None`` when absent.
     relative_indent: Optional[int] = None
+    #: Whether text shrinks to fit the cell width; omitted or ``None`` when absent, so an explicit ``False`` is kept.
     shrink_to_fit: Optional[bool] = None
+    #: The text reading order; omitted or ``None`` when absent.
     reading_order: Optional[ReadingOrder] = None
+    #: Index into ``<cellStyleXfs>`` of the named style this format inherits from; it must name an entry added as a
+    #: named-style format. Defaults to 0.
     style_xf_index: int = 0
 
 
@@ -4438,18 +5195,20 @@ class CellXfInput:
 class Color:
     """A colour as an OOXML ``<color>`` element states it.
 
-    ``kind`` selects the meaningful field: ``argb`` (``0xAARRGGBB``) for
-    ``ColorKind.RGB``, ``theme`` and ``tint`` for ``ColorKind.THEME``,
-    ``indexed`` for ``ColorKind.INDEXED``; ``ColorKind.NONE`` is no colour.
     Records read from a file keep the specification as written, so a theme
     colour stays a theme reference. An input that takes a colour also takes
     ``"#RRGGBB"`` or ``"#AARRGGBB"`` (:data:`ColorInput`).
     """
 
+    #: Which selector the colour carries; only the matching field below is meaningful.
     kind: ColorKind = ColorKind.NONE
+    #: The colour as 0xAARRGGBB; meaningful when ``kind`` is RGB.
     argb: int = 0
+    #: The theme colour index; meaningful when ``kind`` is theme.
     theme: int = 0
+    #: The theme tint from -1 (darker) to 1 (lighter); meaningful when ``kind`` is theme.
     tint: float = 0.0
+    #: The legacy palette index; meaningful when ``kind`` is indexed.
     indexed: int = 0
 
 
@@ -4461,23 +5220,28 @@ class PhoneticRun:
     the single run ``PhoneticRun(0, len(<cell text>), kana)``.
     """
 
+    #: The inclusive start of the span, in code points.
     start: int = 0
+    #: The exclusive end of the span, in code points.
     end: int = 0
+    #: The kana reading of the span.
     text: str = ""
 
 
 @dataclass(frozen=True)
 class PhoneticProperties:
-    """Result of :meth:`Sheet.get_cell_phonetic_properties`; the fields are those of ``set_cell_phonetic_properties``.
-
-    ``stated`` is true when the properties are explicit (a ``<phoneticPr>``
-    element or :meth:`Sheet.set_cell_phonetic_properties`, an all-zero triple
-    included), false for the state an absent element resolves to.
+    """Result of :meth:`Sheet.get_cell_phonetic_properties`; the fields are those of
+    ``set_cell_phonetic_properties``.
     """
 
+    #: The index into the workbook's font table of the ruby text.
     font_index: int = 0
+    #: The kana form, a ``PhoneticType`` value.
     type: PhoneticType = PhoneticType.HALFWIDTH_KATAKANA
+    #: How the kana is distributed over the characters it covers, a ``PhoneticAlignment`` value.
     alignment: PhoneticAlignment = PhoneticAlignment.NO_CONTROL
+    #: ``True`` when the properties are explicit: a phoneticPr element or a set call, an all-zero triple included;
+    #: ``False`` for the state an absent element resolves to. Ignored on input.
     stated: bool = False
 
     def __post_init__(self) -> None:
@@ -4487,34 +5251,41 @@ class PhoneticProperties:
 
 @dataclass(frozen=True)
 class Font:
-    """A font record (``add_font`` input / ``get_font`` result).
+    """A font record (``add_font`` input / ``get_font`` result)."""
 
-    A toggle (``bold``, ``italic``, ``strike``, ``outline``, ``shadow``,
-    ``condense``, ``extend``) is ``None`` without its OOXML element: on a
-    differential font an absent ``<b>`` means "leave the source formatting
-    unchanged" while ``False`` (``<b val="0"/>``) means "switch bold off".
-    ``size_pt`` (points), ``family`` and ``charset`` are ``None`` without their element;
-    an omitted or ``None`` size or name is the Normal style's on a workbook font and
-    absent on a differential font (a size then leaves the size unchanged). ``color`` is
-    ``ColorKind.NONE`` without a ``<color>`` element and takes a ``ColorInput`` (or
-    ``None``, the absent colour) on input.
-    """
-
+    #: The typeface name; ``None`` when the font names none.
     name: Optional[str] = None
+    #: The font size in points; ``None`` without a ``<sz>`` element, which on a differential font leaves the size
+    #: unchanged (a workbook font always has one).
     size_pt: Optional[float] = None
+    #: Whether the font is bold (``<b>``); ``None`` without the element, which on a differential font leaves bold
+    #: unchanged, while ``False`` switches it off.
     bold: Optional[bool] = None
+    #: Whether the font is italic (``<i>``), with the same ``None`` rule as ``bold``.
     italic: Optional[bool] = None
+    #: Whether the text is struck through (``<strike>``), with the same ``None`` rule as ``bold``.
     strike: Optional[bool] = None
+    #: Whether the glyphs are drawn as outlines (``<outline>``), with the same ``None`` rule as ``bold``.
     outline: Optional[bool] = None
+    #: Whether the glyphs carry a shadow (``<shadow>``), with the same ``None`` rule as ``bold``.
     shadow: Optional[bool] = None
+    #: Whether the glyphs are condensed (``<condense>``), with the same ``None`` rule as ``bold``.
     condense: Optional[bool] = None
+    #: Whether the glyphs are extended (``<extend>``), with the same ``None`` rule as ``bold``.
     extend: Optional[bool] = None
+    #: The underline style.
     underline: UnderlineStyle = UnderlineStyle.NONE
+    #: The vertical alignment of the text run (baseline, superscript or subscript).
     vert_align: FontVerticalAlign = FontVerticalAlign.BASELINE
+    #: The font-family class; ``None`` without a ``<family>`` element.
     family: Optional[FontFamily] = None
+    #: The charset codepage id (for example 128 for Shift_JIS); ``None`` without a ``<charset>`` element.
     charset: Optional[int] = None
-    #: ``<scheme>`` theme link; ``FontScheme.NONE`` when absent.
+    #: The theme font set the font links to (major or minor); none when the font has no ``<scheme>`` element. Meaningful
+    #: only on a workbook that carries a theme part.
     scheme: FontScheme = FontScheme.NONE
+    #: The ``<color>`` element, a ``ColorInput`` (or ``None``, the absent colour) on input; the none kind without one,
+    #: which renders as the automatic colour.
     color: Color = field(default_factory=Color)
 
 
@@ -4522,39 +5293,43 @@ class Font:
 class GradientStop:
     """One ``<stop>`` of a gradient fill: a colour at ``position`` (0..1)."""
 
+    #: The position of the stop along the gradient, 0..1.
     position: float = 0.0
+    #: The colour at the stop.
     color: Color = field(default_factory=Color)
 
 
 @dataclass(frozen=True)
 class GradientFill:
-    """A ``<gradientFill>``.
+    """A ``<gradientFill>``."""
 
-    ``angle_deg`` is a linear gradient's angle in degrees; ``left`` / ``right`` / ``top`` /
-    ``bottom`` (0..1) locate a path gradient's focus.
-    """
-
+    #: Whether the gradient is linear or path.
     type: GradientType = GradientType.LINEAR
+    #: The angle of a linear gradient in degrees.
     angle_deg: float = 0.0
+    #: The left edge (0..1) of a path gradient's focus.
     left: float = 0.0
+    #: The right edge (0..1) of a path gradient's focus.
     right: float = 0.0
+    #: The top edge (0..1) of a path gradient's focus.
     top: float = 0.0
+    #: The bottom edge (0..1) of a path gradient's focus.
     bottom: float = 0.0
+    #: The gradient's colour stops.
     stops: List[GradientStop] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
 class Fill:
-    """A fill record.
+    """A fill record."""
 
-    ``foreground`` and ``background`` are the pattern's colours, each a
-    ``ColorInput`` on input. A ``gradient`` makes the record a
-    ``<gradientFill>`` and the pattern fields are ignored.
-    """
-
+    #: The fill pattern (none, solid or one of the standard patterns).
     pattern: FillPattern = FillPattern.NONE
+    #: The pattern's ``<fgColor>``, a ``ColorInput`` on input; the none kind when the element is absent.
     foreground: Color = field(default_factory=Color)
+    #: The pattern's ``<bgColor>``, a ``ColorInput`` on input; the none kind when the element is absent.
     background: Color = field(default_factory=Color)
+    #: The gradient of a ``<gradientFill>``, which makes the pattern fields ignored; ``None`` for a pattern fill.
     gradient: Optional[GradientFill] = None
 
 
@@ -4562,7 +5337,9 @@ class Fill:
 class BorderSide:
     """One side of a border: its style and colour (a ``ColorInput`` on input)."""
 
+    #: The line style of the side (none, thin, medium, dashed, ...).
     style: BorderStyle = BorderStyle.NONE
+    #: The side's ``<color>``; the none kind without one.
     color: Color = field(default_factory=Color)
 
 
@@ -4570,12 +5347,19 @@ class BorderSide:
 class Border:
     """A border record of the style table: four sides, the diagonal and its directions."""
 
+    #: The left side.
     left: BorderSide = field(default_factory=BorderSide)
+    #: The right side.
     right: BorderSide = field(default_factory=BorderSide)
+    #: The top side.
     top: BorderSide = field(default_factory=BorderSide)
+    #: The bottom side.
     bottom: BorderSide = field(default_factory=BorderSide)
+    #: The line drawn diagonally; ``diagonal_up`` and ``diagonal_down`` choose its directions.
     diagonal: BorderSide = field(default_factory=BorderSide)
+    #: Whether the diagonal runs from bottom left to top right.
     diagonal_up: bool = False
+    #: Whether the diagonal runs from top left to bottom right.
     diagonal_down: bool = False
 
 
@@ -4590,17 +5374,23 @@ class Alignment:
     false and every number 0, with ``ReadingOrder.CONTEXT``.
     """
 
+    #: The horizontal alignment.
     horizontal: HorizontalAlign = HorizontalAlign.GENERAL
+    #: The vertical alignment.
     vertical: VerticalAlign = VerticalAlign.BOTTOM
+    #: Whether text wraps within the cell.
     wrap_text: bool = False
+    #: Whether text shrinks to fit the cell width.
     shrink_to_fit: bool = False
-    #: Indent level, 0 to 255.
+    #: The indent level, 0 to 255.
     indent: int = 0
-    #: Degrees, 0 to 180, or 255 for vertical text.
+    #: The text rotation in degrees, 0 to 180, or 255 for vertical text.
     text_rotation: int = 0
+    #: The text reading order.
     reading_order: ReadingOrder = ReadingOrder.CONTEXT
-    #: Effective with distributed horizontal alignment.
+    #: Whether the last line is justified; effective with distributed horizontal alignment.
     justify_last_line: bool = False
+    #: The signed indent relative to the parent style.
     relative_indent: int = 0
 
 
@@ -4608,7 +5398,9 @@ class Alignment:
 class CellProtection:
     """Whether a cell is locked and its formula hidden while the sheet is protected (OOXML ``<protection>``)."""
 
+    #: ``True`` when the cell is locked, so it cannot be edited while its sheet is protected.
     locked: bool = True
+    #: ``True`` when the cell's formula is hidden from the formula bar while its sheet is protected.
     hidden: bool = False
 
 
@@ -4617,19 +5409,23 @@ class CellFormat:
     """The format a cell shows, as :meth:`Sheet.get_cell_format` reads it.
 
     Read from the cell's effective XF (cell, then row, then column, then the
-    default); conditional formatting is not applied. ``source`` is the layer it
-    came from; the XF index is :meth:`SheetOoxml.get_cell_xf_index`.
-    ``number_format`` is the format code, ``"General"`` for General;
-    ``alignment`` and ``protection`` hold the defaults when the XF has no such
-    element.
+    default); conditional formatting is not applied. The XF index is
+    :meth:`SheetOoxml.get_cell_xf_index`.
     """
 
+    #: Which layer (cell, row, column or default) the effective XF came from.
     source: EffectiveStyleSource
+    #: The number format code; ``General`` for General.
     number_format: str
+    #: The cell's font.
     font: Font
+    #: The cell's fill.
     fill: Fill
+    #: The cell's border.
     border: Border
+    #: The XF's alignment; the defaults when it has none.
     alignment: Alignment
+    #: The XF's protection; locked and not hidden when it has none.
     protection: CellProtection
 
 
@@ -4726,16 +5522,20 @@ class CellProtectionPatch(TypedDict, total=False):
 class Dxf:
     """A differential format (``<dxf>``), the formatting a conditional format or table style applies.
 
-    The record :meth:`WorkbookOoxml.get_dxf` returns. A part is ``None`` when
-    the format does not set it. ``number_format`` is the format code; the
-    workbook assigns its number-format id.
+    The record :meth:`WorkbookOoxml.get_dxf` returns.
     """
 
+    #: The font part; ``None`` when the format sets none.
     font: Optional[Font] = None
+    #: The fill part; ``None`` when the format sets none.
     fill: Optional[Fill] = None
+    #: The border part; ``None`` when the format sets none.
     border: Optional[Border] = None
+    #: The number format code; ``None`` when the format sets none. The format's id is assigned on save.
     number_format: Optional[str] = None
+    #: The alignment part; ``None`` when the format sets none.
     alignment: Optional[Alignment] = None
+    #: The protection part; ``None`` when the format sets none.
     protection: Optional[CellProtection] = None
 
 
@@ -4743,11 +5543,17 @@ class Dxf:
 class DxfInput:
     """The differential format :meth:`WorkbookOoxml.add_dxf` takes; the parts and defaults of :class:`Dxf`."""
 
+    #: The font part; omitted or ``None`` is not set.
     font: Optional[Font] = None
+    #: The fill part; omitted or ``None`` is not set.
     fill: Optional[Fill] = None
+    #: The border part; omitted or ``None`` is not set.
     border: Optional[Border] = None
+    #: A number format code; omitted or ``None`` is not set. The format's id is assigned on save.
     number_format: Optional[str] = None
+    #: The alignment part; omitted or ``None`` is not set.
     alignment: Optional[Alignment] = None
+    #: The protection part; omitted or ``None`` is not set.
     protection: Optional[CellProtection] = None
 
 
@@ -5027,22 +5833,27 @@ def _protection_to_xml(protection: Optional[CellProtection]) -> Optional[str]:
 class NumberFormat:
     """One declared number format: its id and format code (:meth:`WorkbookOoxml.list_number_formats`)."""
 
+    #: The number format id.
     num_fmt_id: int
+    #: The number format code.
     number_format: str
 
 
 @dataclass(frozen=True)
 class CellStyle:
-    """A named cell style (``<cellStyle>`` entry); ``style_xf_index`` is its ``<cellStyleXfs>`` entry.
+    """A named cell style (``<cellStyle>`` entry); ``style_xf_index`` is its ``<cellStyleXfs>`` entry."""
 
-    ``outline_level`` (0..6) is the level of the ``RowLevel_n`` / ``ColLevel_n`` styles and ``0`` otherwise.
-    """
-
+    #: The display name of the style.
     name: str
+    #: Index into the ``<cellStyleXfs>`` table of the format the style applies.
     style_xf_index: int = 0
+    #: The built-in style ordinal (0..53); ``None`` for a custom style.
     builtin_id: Optional[int] = None
+    #: The outline level (0..6) of the RowLevel_n / ColLevel_n styles; 0 for other styles.
     outline_level: int = 0
+    #: Whether the style is hidden from the style gallery.
     hidden: bool = False
+    #: Whether this is a built-in style the workbook has changed.
     custom_builtin: bool = False
 
 
@@ -5050,35 +5861,37 @@ class CellStyle:
 class ThemeFonts:
     """The theme's major (heading) and minor (body) typefaces."""
 
+    #: The Latin typeface of the major (heading) font set.
     major_latin: str
+    #: The East Asian typeface of the major (heading) font set: the ``a:ea`` face, else the Jpan script face.
     major_east_asian: str
+    #: The Latin typeface of the minor (body) font set.
     minor_latin: str
+    #: The East Asian typeface of the minor (body) font set: the ``a:ea`` face, else the Jpan script face.
     minor_east_asian: str
 
 
 @dataclass(frozen=True)
 class ThemeScriptFont:
-    """One ``a:font`` entry of the major (``FontScheme.MAJOR``, heading) or minor (``FontScheme.MINOR``, body) theme font set.
+    """One ``a:font`` entry of the major (``FontScheme.MAJOR``, heading) or minor (``FontScheme.MINOR``, body) theme font set."""
 
-    ``script`` is an ISO 15924 code (``Jpan``) and ``typeface`` its font.
-    """
-
+    #: The font set the face belongs to: major (heading) or minor (body).
     scheme: FontScheme
+    #: The ISO 15924 script code, such as Jpan.
     script: str
+    #: The typeface used for the script.
     typeface: str
 
 
 @dataclass(frozen=True)
 class ThemeColors:
-    """The theme's 12 scheme colours as ``0xFFRRGGBB`` values in ``a:clrScheme`` order.
+    """The theme's 12 scheme colours as ``0xFFRRGGBB`` values in ``a:clrScheme`` order."""
 
-    ``source`` says whether they come from the theme part or are the default
-    theme's (the part is absent or unparseable). This is not the order of a
-    colour's theme index, which swaps the first two pairs (0 = lt1, 1 = dk1,
-    2 = lt2, 3 = dk2).
-    """
-
+    #: Where the theme came from: the theme part, or the default theme when the part is absent or unparseable.
     source: ThemeSource
+    #: The 12 scheme colours as 0xFFRRGGBB in ``a:clrScheme`` order: dk1, lt1, dk2, lt2, accent1 to accent6, hlink,
+    #: folHlink. This is not the order of a colour's theme index, which swaps the first two pairs (0 = lt1, 1 = dk1, 2 =
+    #: lt2, 3 = dk2).
     colors: List[int]
 
 
@@ -5089,6 +5902,8 @@ class ThemeColorsInput:
     ``source`` is ignored.
     """
 
+    #: The 12 scheme colours in ``a:clrScheme`` order: dk1, lt1, dk2, lt2, accent1 to accent6, hlink, folHlink. Each is
+    #: an RGB colour.
     colors: Sequence[int]
 
 
@@ -5096,7 +5911,9 @@ class ThemeColorsInput:
 class ResolvedColor:
     """A colour resolved to ``0xAARRGGBB`` and how it was resolved."""
 
+    #: The resolved colour as 0xAARRGGBB.
     argb: int
+    #: How the colour was obtained (exact, default theme, out-of-range index, unparseable theme or automatic).
     resolution: ColorResolution
 
 
@@ -5104,29 +5921,41 @@ class ResolvedColor:
 class EffectiveBorders:
     """The resolved colour of each border of an effective style; ``diagonal`` is the diagonal border."""
 
+    #: The resolved colour of the left border.
     left: ResolvedColor
+    #: The resolved colour of the right border.
     right: ResolvedColor
+    #: The resolved colour of the top border.
     top: ResolvedColor
+    #: The resolved colour of the bottom border.
     bottom: ResolvedColor
+    #: The resolved colour of the diagonal border.
     diagonal: ResolvedColor
 
 
 @dataclass(frozen=True)
 class EffectiveStyle:
-    """The formatting a cell shows, read from its selected xf record.
+    """The formatting a cell shows, read from its selected xf record."""
 
-    ``borders`` holds the colour of each border.
-    """
-
+    #: The index of the selected cell format record.
     xf_index: int
+    #: The level that supplied the format record, an ``EffectiveStyleSource`` value.
     source: EffectiveStyleSource
+    #: The index into the font table.
     font_index: int
+    #: The index into the fill table.
     fill_index: int
+    #: The index into the border table.
     border_index: int
+    #: The resolved font color.
     font_color: ResolvedColor
+    #: The resolved foreground (pattern) color of the fill.
     fill_foreground: ResolvedColor
+    #: The resolved background color of the fill.
     fill_background: ResolvedColor
+    #: The resolved color of each border.
     borders: EffectiveBorders
+    #: The cell protection flags.
     protection: CellProtection
     #: The number format code.
     number_format: str
@@ -5134,17 +5963,19 @@ class EffectiveStyle:
 
 @dataclass(frozen=True)
 class ExternalLink:
-    """An external-link record (``<externalReferences>`` entry).
+    """An external-link record (``<externalReferences>`` entry)."""
 
-    ``book_number`` is 1-based, the ``[n]`` of formula text.
-    """
-
+    #: The 1-based document order in the externalReferences list: the ``[n]`` of formula text, as in ``=[1]Sheet1!A1``.
     book_number: int
+    #: The id of the link in the workbook relationships, such as ``rId3``.
     rel_id: str
+    #: The resolved package-relative path of the body part, such as ``xl/externalLinks/externalLink1.xml``.
     part_path: str
-    #: ``None`` when the link's relationship part names no target.
+    #: The URL or path of the remote workbook; ``None`` when the link's relationship names no target.
     target: Optional[str]
+    #: ``True`` when the relationship's TargetMode is External.
     target_external: bool
+    #: The kind of link, an ``ExternalLinkKind`` value.
     kind: ExternalLinkKind
 
 
@@ -5152,14 +5983,20 @@ class ExternalLink:
 class PivotCell:
     """One projected PivotTable layout cell."""
 
+    #: The absolute 0-based sheet row of the cell.
     row: int
+    #: The absolute 0-based sheet column of the cell.
     col: int
-    #: A date item label reads as its serial number; ``number_format`` tells it is a date.
+    #: The cell's value; a date item label reads as its serial number, and ``number_format`` tells it is a date.
     value: NativeValue
+    #: What the cell is in the layout: a header, a row or column label, a data value, a subtotal, a grand total or a
+    #: blank.
     kind: PivotCellKind
+    #: The nesting depth of a header cell; 0 for data cells.
     depth: int
-    #: ``None`` for a cell with no source field.
+    #: The name of the source field the cell belongs to; ``None`` when the cell has no source field.
     field_name: Optional[str]
+    #: The data field's number format code of the cell; ``None`` when it has none.
     number_format: Optional[str]
 
 
@@ -5169,18 +6006,18 @@ class PivotLayout:
 
     #: The rectangle the layout covers in absolute sheet coordinates; ``None`` when it spans no cell.
     range: Optional[CellRect]
+    #: The projected cells, sparse and in row-major order.
     cells: List[PivotCell]
 
 
 @dataclass(frozen=True)
 class PivotWorksheetSource:
-    """A pivot cache's worksheet source, as :meth:`PivotCache.get_worksheet_source` reads it.
+    """A pivot cache's worksheet source, as :meth:`PivotCache.get_worksheet_source` reads it."""
 
-    ``range`` is ``None`` when the cache names no range or its sheet is not a sheet of this workbook; ``name``
-    is the defined name or table the source reads, ``None`` when absent.
-    """
-
+    #: The source range with its sheet; ``None`` when the source has no reference or names a sheet the workbook does not
+    #: have.
     range: Optional[SheetRect] = None
+    #: The defined name or table the source reads; ``None`` when absent.
     name: Optional[str] = None
 
 
@@ -5188,29 +6025,35 @@ class PivotWorksheetSource:
 class PivotWorksheetSourceInput:
     """A pivot cache's worksheet source for :meth:`PivotCache.set_worksheet_source`.
 
-    ``range`` is a :class:`SheetRect` or an A1 range; ``sheet`` qualifies an unqualified A1 ``range`` and may
-    name a sheet the workbook does not have. A qualified range or ``SheetRect`` whose sheet disagrees with
-    ``sheet`` is an ``InvalidArgumentError``. A :class:`PivotWorksheetSource` read back is accepted in its place.
+    A qualified range or ``SheetRect`` whose sheet disagrees with ``sheet`` is an ``InvalidArgumentError``. A
+    :class:`PivotWorksheetSource` read back is accepted in its place.
     """
 
+    #: The source range, a rectangle or an A1 range; omitted leaves the attribute off. An unqualified A1 range takes its
+    #: sheet from ``sheet``.
     range: Union[SheetRect, str, None] = None
+    #: The sheet that qualifies an unqualified A1 ``range``; it may name a sheet the workbook does not have. Omitted
+    #: leaves the attribute off.
     sheet: Optional[SheetRef] = None
+    #: The defined name or table the source reads; omitted leaves the attribute off.
     name: Optional[str] = None
 
 
 @dataclass
 class PivotDateGroupInput:
-    """A date grouping :meth:`Pivot.set_field_date_group` applies.
+    """A date grouping :meth:`Pivot.set_field_date_group` applies."""
 
-    ``periods`` is an OR of :class:`PivotDatePeriod`; ``interval_days`` above 1 groups by runs of days and needs
-    ``periods`` to be ``DAYS`` alone. ``start`` / ``end`` are a ``date`` or ``datetime`` (a naive local wall
-    clock); ``None`` takes the field's first value and its last.
-    """
-
+    #: The date periods to group by, an OR of ``PivotDatePeriod`` bits.
     periods: PivotDatePeriod
+    #: The calendar the periods follow; Gregorian by default.
     calendar: PivotCalendar = PivotCalendar.GREGORIAN
+    #: The length in days of each group when grouping by days alone; 1 groups by single days.
     interval_days: int = 1
+    #: The first bound of the grouping, a ``date`` or a ``datetime`` (a naive local wall clock); the field's first value
+    #: when not given.
     start: Optional[Union[datetime.datetime, datetime.date]] = None
+    #: The last bound of the grouping, a ``date`` or a ``datetime`` (a naive local wall clock); the field's last value
+    #: when not given.
     end: Optional[Union[datetime.datetime, datetime.date]] = None
 
 
@@ -5218,40 +6061,35 @@ class PivotDateGroupInput:
 class PivotDateGroup:
     """A date grouping as :meth:`Pivot.get_field_date_group` reads it.
 
-    The members are those of :class:`PivotDateGroupInput`. ``start`` / ``end`` hold the stored bounds (naive local
-    wall clock) even where ``auto_start`` / ``auto_end`` says the bound follows the data; to write the grouping
-    back, give :class:`PivotDateGroupInput` a bound only where the matching ``auto_*`` is false.
+    The members are those of :class:`PivotDateGroupInput`. To write the grouping back, give
+    :class:`PivotDateGroupInput` a bound only where the matching ``auto_*`` is false.
     """
 
-    #: The `PivotDatePeriod` bits the field is grouped by.
+    #: The ``PivotDatePeriod`` bits the field is grouped by.
     periods: PivotDatePeriod
     #: The calendar the periods follow.
     calendar: PivotCalendar
     #: The length in days of each group when grouping by days alone; 1 otherwise.
     interval_days: int
-    #: The first bound as stored.
+    #: The first bound as stored (a naive local wall clock), even where ``auto_start`` says it follows the data.
     start: datetime.datetime
-    #: The last bound as stored.
+    #: The last bound as stored (a naive local wall clock), even where ``auto_end`` says it follows the data.
     end: datetime.datetime
-    #: The first bound follows the field's smallest value.
+    #: Whether the first bound follows the field's smallest value.
     auto_start: bool
-    #: The last bound follows the field's largest value.
+    #: Whether the last bound follows the field's largest value.
     auto_end: bool
 
 
 @dataclass
 class PivotNumericGroupInput:
-    """A numeric grouping :meth:`Pivot.set_field_numeric_group` applies.
-
-    ``interval`` is the width of each group; ``start`` / ``end`` are the first and last bound, ``None`` taking the
-    field's smallest and largest value.
-    """
+    """A numeric grouping :meth:`Pivot.set_field_numeric_group` applies."""
 
     #: The width of each group.
     interval: float
-    #: The first bound; the field's smallest value when omitted.
+    #: The first bound; the field's smallest value when not given.
     start: Optional[float] = None
-    #: The last bound; the field's largest value when omitted.
+    #: The last bound; the field's largest value when not given.
     end: Optional[float] = None
 
 
@@ -5259,20 +6097,19 @@ class PivotNumericGroupInput:
 class PivotNumericGroup:
     """A numeric grouping as :meth:`Pivot.get_field_numeric_group` reads it.
 
-    ``start`` / ``end`` hold the stored bounds even where ``auto_start`` / ``auto_end`` says the bound follows the
-    data; to write the grouping back, give :class:`PivotNumericGroupInput` a bound only where the matching
-    ``auto_*`` is false.
+    To write the grouping back, give :class:`PivotNumericGroupInput` a bound only where the matching ``auto_*`` is
+    false.
     """
 
     #: The width of each group.
     interval: float
-    #: The first bound as stored.
+    #: The first bound as stored, even where ``auto_start`` says it follows the data.
     start: float
-    #: The last bound as stored.
+    #: The last bound as stored, even where ``auto_end`` says it follows the data.
     end: float
-    #: The first bound follows the field's smallest value.
+    #: Whether the first bound follows the field's smallest value.
     auto_start: bool
-    #: The last bound follows the field's largest value.
+    #: Whether the last bound follows the field's largest value.
     auto_end: bool
 
 
@@ -5280,9 +6117,11 @@ class PivotNumericGroup:
 class PivotInput:
     """A pivot table :meth:`Sheet.add_pivot` creates: its name, its cache and its top-left cell."""
 
+    #: The new pivot's name.
     name: str
+    #: The id of the pivot cache the pivot draws from.
     cache_id: PivotCacheRef
-    #: The top-left cell, or its A1 text (``"C3"``).
+    #: The top-left cell of the report, a cell address or its A1 text such as ``C3``.
     anchor: Union[CellAddress, str]
 
 
@@ -5291,40 +6130,45 @@ class PivotProperties:
     """A pivot table's definition, as :meth:`Pivot.get_properties` returns it, composed of what the separate
     getters read. ``style_options`` is ``None`` when the definition has no style element."""
 
+    #: The pivot's name.
     name: str
+    #: The id of the pivot cache the pivot draws from.
     cache_id: int
+    #: The report layout form: compact, outline or tabular.
     report_layout: PivotReportLayout
+    #: Whether the row and column grand total bands show.
     grand_totals: PivotGrandTotals
+    #: The table style of the pivot; ``None`` when the definition has no style element.
     style_options: Optional[PivotStyleOptions]
 
 
 @dataclass(frozen=True)
 class PivotCacheField:
-    """One pivot-cache field; ``formula`` (with a leading ``=``) is ``None`` unless the field is calculated.
+    """One pivot-cache field.
 
     The ``contains_*`` flags are the field's ``<sharedItems>`` content flags, read-only: an attribute the file
     omits reads as its schema default, and a field with none of its own reads as the flags derived from its values.
     """
 
-    #: The field name.
+    #: The name of the field.
     name: str
     #: A calculated field's formula, leading ``=`` included; ``None`` for a source field.
     formula: Optional[str]
-    #: The field holds a number.
+    #: Whether the field holds a number.
     contains_number: bool = False
-    #: Every number the field holds is an integer.
+    #: Whether every number the field holds is an integer.
     contains_integer: bool = False
-    #: The field holds text, a boolean or an error.
+    #: Whether the field holds text, a boolean or an error.
     contains_string: bool = False
-    #: The field holds a blank.
+    #: Whether the field holds a blank.
     contains_blank: bool = False
-    #: The field holds a date.
+    #: Whether the field holds a date.
     contains_date: bool = False
-    #: The field mixes two or more of text, numbers and dates.
+    #: Whether the field mixes two or more of text, numbers and dates.
     contains_mixed_types: bool = False
-    #: The field holds text or a blank.
+    #: Whether the field holds text or a blank.
     contains_semi_mixed_types: bool = False
-    #: The field holds text or a number: something that is not a date.
+    #: Whether the field holds text or a number, something that is not a date.
     contains_non_date: bool = False
 
 
@@ -5332,7 +6176,9 @@ class PivotCacheField:
 class PivotCacheValue:
     """One pivot-cache value, a shared item or a record value; a date reads as its serial number and has ``is_date`` set."""
 
+    #: The cache value; a blank is ``None`` and a date reads as its serial number, which ``is_date`` tells apart.
     value: NativeValue
+    #: Whether the value is a date.
     is_date: bool
 
 
@@ -5340,51 +6186,58 @@ class PivotCacheValue:
 class PivotField:
     """A pivot field's definition, as read by :meth:`Pivot.list_fields`.
 
-    ``axis`` is ``None`` for a field that sits on no axis. ``cache_field_index``
-    is the bound pivot-cache field (pivot field ``i`` binds to cache field
-    ``i``), ``None`` when the cache does not cover the field. ``group_base_index`` is
-    the field a group field groups, ``None`` for any other field; read a
-    grouping with :meth:`Pivot.get_field_date_group` or
-    :meth:`Pivot.get_field_numeric_group`. A text the
+    Read a grouping with :meth:`Pivot.get_field_date_group` or :meth:`Pivot.get_field_numeric_group`. A text the
     field does not state is ``None``.
-    ``subtotal_functions`` lists the custom subtotal functions in ascending
-    aggregation order; ``default_subtotal`` is false whenever it is non-empty,
-    since custom functions replace the automatic subtotal.
     """
 
+    #: The name of the bound cache field.
     source_name: str
+    #: The report name of the field; ``None`` when the field has no report name.
     custom_name: Optional[str]
+    #: The axis the field sits on; ``None`` when it sits on no axis.
     axis: Optional[PivotAxis]
+    #: Whether subtotals show on the group's own heading row (true) or at the bottom (false).
     subtotal_top: bool
+    #: The number format code of the field in the workbook profile's vocabulary; ``None`` for none or an unregistered
+    #: id.
     number_format: Optional[str]
+    #: The index of the bound pivot-cache field, ``None`` when the cache does not cover this field. Pivot field i binds
+    #: to cache field i.
     cache_field_index: Optional[int]
+    #: How the field's items are ordered.
     sort_order: PivotSortOrder
+    #: The data field the items sort by; ``None`` sorts by label.
     sort_by_field: Optional[str]
+    #: For a group field, the index of the field it groups; ``None`` otherwise.
     group_base_index: Optional[int]
+    #: Whether the automatic subtotal shows; false whenever ``subtotal_functions`` is non-empty, since custom functions
+    #: replace it.
     default_subtotal: bool
+    #: The custom subtotal functions, in ascending aggregation order; empty when there are none.
     subtotal_functions: List[PivotAggregation]
+    #: Whether a blank row follows each item block of the field.
     insert_blank_row: bool = False
+    #: Whether the field's item labels repeat on every row of its block.
     fill_down_labels: bool = False
+    #: Whether the field lists items without data.
     show_all: bool = False
-    #: True only when every item and the field's expand marker are expanded.
+    #: True only when every item and the field's default expand marker are expanded; a field without items reads true.
     show_detail: bool = True
 
 
 @dataclass(frozen=True)
 class PivotItem:
-    """One pivot-field item, as read by :meth:`Pivot.get_field_item`.
+    """One pivot-field item, as read by :meth:`Pivot.get_field_item`."""
 
-    ``name`` is the item's own label (``None`` for an item bound only by cache
-    index); ``cache_index`` indexes the bound cache field's shared items and
-    is ``None`` for an item bound by label only. ``caption`` is the text shown
-    instead of the item's value (``None`` when it has none); ``show_detail``
-    is false for a collapsed item.
-    """
-
+    #: The item's own label; ``None`` for an item bound only by cache index.
     name: Optional[str]
+    #: The index into the bound cache field's shared items, ``None`` for an item bound by label only.
     cache_index: Optional[int]
+    #: Whether the item is shown.
     visible: bool
+    #: The caption shown instead of the item's value; ``None`` when it has none.
     caption: Optional[str] = None
+    #: Whether the item is expanded; false for a collapsed item.
     show_detail: bool = True
 
 
@@ -5396,11 +6249,17 @@ class PivotStyleOptions:
     :meth:`Pivot.update_style_options` takes these fields as keyword arguments.
     """
 
+    #: The name of the table style; ``None`` when the style element carries no name.
     style_name: Optional[str]
+    #: Whether the style formats the row headers.
     show_row_headers: bool
+    #: Whether the style formats the column headers.
     show_column_headers: bool
+    #: Whether the style bands the rows.
     show_row_stripes: bool
+    #: Whether the style bands the columns.
     show_column_stripes: bool
+    #: Whether the style formats the last column.
     show_last_column: bool
 
 
@@ -5410,100 +6269,130 @@ class PivotOptions:
 
     A read fills every member; a string option reads ``None`` when unset.
     :meth:`Pivot.update_options` takes these fields as keyword arguments.
-    A ``missing_caption`` of exactly ``-`` is written as the number 0.
-    ``indent`` runs 0-126 and ``page_wrap`` 0-255 (0 does not wrap).
     """
 
+    #: Whether error cells show ``error_caption``; the caption is kept while this is off.
     show_error: bool
+    #: The text error cells show while ``show_error`` is on; ``None`` when unset.
     error_caption: Optional[str]
+    #: Whether empty value cells show ``missing_caption``.
     show_missing: bool
+    #: The text empty value cells show while ``show_missing`` is on; a caption of exactly ``-`` is written as the number
+    #: 0. ``None`` when unset.
     missing_caption: Optional[str]
+    #: Whether field captions and filter drop-downs show.
     show_headers: bool
+    #: Whether the expand / collapse buttons show.
     show_drill: bool
+    #: Whether contextual tooltips show.
     show_data_tips: bool
+    #: Whether the classic layout with drop zones drawn on the grid is used.
     grid_drop_zones: bool
+    #: Whether items without data show on rows; the layout follows each field's own show-all setting.
     show_empty_row: bool
+    #: Whether items without data show on columns; the layout follows each field's own show-all setting.
     show_empty_column: bool
+    #: Whether the field drop-down buttons show.
     show_data_drop_down: bool
+    #: Whether the expand / collapse buttons are printed.
     print_drill: bool
+    #: Whether field captions repeat as print titles on each printed page.
     field_print_titles: bool
+    #: Whether row labels repeat on each printed page.
     item_print_titles: bool
+    #: Whether item labels are merged and centered.
     merge_item: bool
+    #: The indent per level of compact-form labels, 0 to 126 (the dialog shows this plus one).
     indent: int
+    #: Whether report filter fields fill across before they go down.
     page_over_then_down: bool
+    #: The number of report filter fields per column or row before wrapping, 0 to 255; 0 does not wrap.
     page_wrap: int
+    #: Whether a field may carry more than one filter type.
     multiple_field_filters: bool
+    #: Whether cell formatting is kept when the report updates.
     preserve_formatting: bool
+    #: Whether custom lists take part in sorting.
     custom_list_sort: bool
+    #: The alternative-text title of the PivotTable; ``None`` when unset.
     alt_text: Optional[str]
+    #: The alternative-text description of the PivotTable; ``None`` when unset.
     alt_text_summary: Optional[str]
+    #: The grand total label shown in place of the locale's word; ``None`` when unset.
     grand_total_caption: Optional[str]
+    #: Whether column widths autofit when the report updates.
     auto_formatting: bool
+    #: Whether Show Details is allowed.
     enable_drill: bool
 
 
 @dataclass(frozen=True)
 class PivotCacheOptions:
-    """The options of one pivot cache, as read by :meth:`PivotCache.get_options`.
+    """The options of one pivot cache, as read by :meth:`PivotCache.get_options`."""
 
-    ``missing_items_limit`` is ``None`` for automatic, ``0`` for none, or up to 1048576.
-    """
-
+    #: Whether the source records are saved with the file; off, the records part is left out and the reports keep their
+    #: sheet cells.
     save_data: bool
+    #: The number of items kept per field after they leave the source, 0 to 1048576; ``None`` is automatic.
     missing_items_limit: Optional[int]
+    #: Whether the data refreshes when the file opens.
     refresh_on_load: bool
 
 
 @dataclass(frozen=True)
 class PivotCalculatedItem:
-    """One calculated item, as read by :meth:`PivotCache.list_calculated_items`.
+    """One calculated item, as read by :meth:`PivotCache.list_calculated_items`."""
 
-    ``formula`` has a leading ``=``; ``scoped`` is true for an entry read from
-    a file that applies the formula only where the item meets items of other fields.
-    """
-
+    #: The index of the cache field the item belongs to.
     field_index: int
+    #: The item's name.
     name: str
+    #: The formula text, leading ``=`` included.
     formula: str
+    #: Whether the entry was read from a file and applies its formula only where the item meets items of other fields.
     scoped: bool
 
 
 @dataclass
 class PivotDataFieldInput:
-    """Argument shape for :meth:`Pivot.add_data_field` / :meth:`Pivot.set_data_field`.
+    """Argument shape for :meth:`Pivot.add_data_field` / :meth:`Pivot.set_data_field`."""
 
-    An empty or ``None`` ``name`` asks the engine to name the data field from
-    the workbook profile's pivot wording (``"Sum of Sales"`` under en-US,
-    ``"合計 / Sales"`` under ja-JP); that needs ``field_index`` to be in range.
-    ``show_as_base_field`` / ``show_as_base_item`` are ``None`` when unset; ``show_as_base_item`` is an item
-    index or a :class:`PivotShowAsBase` member. ``field_index`` is a :data:`PivotFieldRef`.
-    """
-
+    #: The index of the source pivot field the data field aggregates; it must be in range.
     field_index: PivotFieldRef
+    #: The display name of the data field, the key GETPIVOTDATA looks it up by. When ``None`` or empty the engine names
+    #: it from the workbook profile's pivot wording, such as ``Sum of Sales`` (en-US) or ``合計 / Sales`` (ja-JP),
+    #: numbered 2, 3, ... while the name repeats another data field's or a field's display name; that needs
+    #: ``field_index`` to be in range.
     name: Optional[str] = None
+    #: The aggregation function applied to the source field; ``PivotAggregation.SUM`` by default.
     aggregation: PivotAggregation = PivotAggregation.SUM
+    #: The number format code of the data field's values; ``None`` or empty for none.
     number_format: Optional[str] = None
+    #: How the value is derived from the data: as is, or as a difference, percentage, running total or rank against a
+    #: base.
     show_as: PivotShowValuesAs = PivotShowValuesAs.NORMAL
+    #: The index of the base pivot field a relative show-as mode compares against; ``None`` when unset. It must be in
+    #: range.
     show_as_base_field: Optional[int] = None
+    #: The base item of a relative show-as mode: an item index or a ``PivotShowAsBase`` member; ``None`` when unset.
     show_as_base_item: Optional[int] = None
 
 
 @dataclass(kw_only=True)
 class PivotFilterInput:
-    """Argument shape for :meth:`Pivot.add_filter`.
+    """Argument shape for :meth:`Pivot.add_filter`."""
 
-    ``value`` is the operand: a number for a value filter (an integer count
-    for the top / bottom count types) or a date filter, a ``str`` for a label
-    filter, ``None`` for a relative-period type. ``value_high`` is the upper
-    bound of a range type (a ``str`` for ``LABEL_BETWEEN`` / ``LABEL_NOT_BETWEEN``),
-    ``None`` otherwise. A ``bool`` is rejected. ``field_index`` is the filtered field (a
-    :data:`PivotFieldRef`); the filter's axis is the field's.
-    """
-
+    #: The index of the pivot field the filter applies to; the filter takes that field's axis.
     field_index: PivotFieldRef
+    #: The kind of the filter: a value, label, date or relative-period filter, and its comparison.
     kind: PivotFilterKind
+    #: The operand: a number for a value or date filter (an integer count for the top and bottom count kinds), a string
+    #: for a label filter, and ``None`` for a relative-period kind. For a range kind this is the lower bound. A ``bool``
+    #: is rejected.
     value: Union[int, float, str, None] = None
+    #: The upper bound of a range kind, a string for the label ranges; ``None`` for every other kind.
     value_high: Union[int, float, str, None] = None
+    #: The index of the data field a value filter scores; label and date filters ignore it. 0 by default.
     data_field_index: int = 0
 
 
@@ -5547,16 +6436,24 @@ def _print_titles_from(d: Dict[str, int]) -> PrintTitles:
 class PivotDataField:
     """One data field of a pivot, as :meth:`Pivot.list_data_fields` reads it.
 
-    The fields read as in :class:`PivotDataFieldInput`; ``number_format``,
-    ``show_as_base_field`` and ``show_as_base_item`` are ``None`` when unset.
+    The fields read as in :class:`PivotDataFieldInput`.
     """
 
+    #: The display name of the data field, the key GETPIVOTDATA looks it up by.
     name: str
+    #: The index of the pivot field the data field aggregates.
     field_index: int
+    #: The aggregation function applied to the source field.
     aggregation: PivotAggregation
+    #: The number format code of the data field's values; ``None`` for none.
     number_format: Optional[str]
+    #: How the value is derived from the data: as is, or as a difference, percentage, running total or rank against a
+    #: base.
     show_as: PivotShowValuesAs
+    #: The index of the base pivot field a relative show-as mode compares against; ``None`` when unset.
     show_as_base_field: Optional[int]
+    #: The base item of a relative show-as mode: an index into the base field's items, or the previous or next marker;
+    #: ``None`` when unset.
     show_as_base_item: Optional[int]
 
 
@@ -5564,14 +6461,19 @@ class PivotDataField:
 class PivotFilter:
     """One stored filter of a pivot, as :meth:`Pivot.list_filters` reads it.
 
-    The fields read as in :class:`PivotFilterInput`; ``value`` and
-    ``value_high`` are ``None`` when the filter has no such operand.
+    The fields read as in :class:`PivotFilterInput`.
     """
 
+    #: The index of the filtered pivot field.
     field_index: int
+    #: The kind of the filter: a value, label, date or relative-period filter, and its comparison.
     kind: PivotFilterKind
+    #: The operand, a number or a string; ``None`` when the filter has no operand. For a range kind this is the lower
+    #: bound.
     value: Optional[Union[float, str]]
+    #: The upper bound of a range kind; ``None`` when the filter has no upper bound.
     value_high: Optional[Union[float, str]]
+    #: The index of the data field a value filter scores; label and date filters ignore it.
     data_field_index: int
 
 

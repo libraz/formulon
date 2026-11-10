@@ -222,13 +222,19 @@ class MergedFunctionMetadata:
     ``localized_name``.
     """
 
+    #: The canonical upper-case function name.
     name: str
+    #: The smallest number of arguments the function accepts.
     min_arity: int
+    #: The largest number of arguments the function accepts; ``None`` denotes an unbounded variadic.
     max_arity: Optional[int]
+    #: How far the engine implements the function.
     availability: FunctionAvailability
+    #: The merged signature text; ``None`` when neither the host document nor the engine supplies one.
     signature: Optional[str]
+    #: The merged description text; ``None`` when neither the host document nor the engine supplies one.
     description: Optional[str]
-    #: ``entry.aliases[locale]`` when present, else the canonical ``name``.
+    #: ``entry.aliases[locale]`` when present, else the canonical function name.
     localized_name: str
 
 

@@ -242,14 +242,18 @@ export type ParseErrorCode =
   | 35
   | 36;
 
-/** Where and why a formula failed to parse. `start` / `end` are UTF-16 offsets into the text the caller passed,
- *  `end` exclusive; `line` and `column` are 1-based, `column` in UTF-16 code units. A failure that cannot be
+/** Where and why a formula failed to parse. A failure that cannot be
  *  placed in the caller's text covers all of it. */
 export interface ParseError {
+  /** The parse error code identifying the kind of failure. */
   readonly code: ParseErrorCode;
+  /** Offset of the first character of the offending span in the caller's text, in UTF-16 code units. */
   readonly start: number;
+  /** Offset one past the last character of the offending span, in UTF-16 code units. */
   readonly end: number;
+  /** The 1-based line of the failure. */
   readonly line: number;
+  /** The 1-based column of the failure within its line, in UTF-16 code units. */
   readonly column: number;
 }
 
@@ -299,12 +303,20 @@ export type CellValueInput = number | string | boolean | null | Date | ExcelErro
  * JavaScript `number` values. They are exact through
  * `Number.MAX_SAFE_INTEGER` (2^53 - 1). */
 export interface ParallelRecalcStats {
+  /** The number of cells whose formula was executed. */
   readonly cellsEvaluated: number;
+  /** The number of dirty strongly connected components the scheduler processed. */
   readonly sccsProcessed: number;
+  /** The number of layers dispatched to the worker pool. */
   readonly parallelSteps: number;
+  /** The number of serial batches processed on the calling thread, including the dynamic-reference tail of a pooled
+   *  layer. */
   readonly serialFallbackSteps: number;
+  /** The number of cyclic components resolved by the iterative solver, not counting those that fell back to `#REF!`. */
   readonly cycleRecoveries: number;
+  /** The number of worker threads successfully started for this call; 0 when everything ran on the calling thread. */
   readonly workerThreadsStarted: number;
+  /** The number of started worker threads that claimed at least one task. */
   readonly workerThreadsUsed: number;
 }
 
@@ -316,42 +328,57 @@ export type Patch<T, Clearable extends keyof T = never> = { [K in keyof T]?: K e
 
 /** A blank cell or argument. */
 export interface BlankValue {
+  /** Always `ValueKind.Blank`. */
   readonly kind: typeof ValueKind.Blank;
 }
 /** A number. */
 export interface NumberValue {
+  /** Always `ValueKind.Number`. */
   readonly kind: typeof ValueKind.Number;
+  /** The numeric value. */
   readonly number: number;
 }
 /** A logical value. */
 export interface BoolValue {
+  /** Always `ValueKind.Bool`. */
   readonly kind: typeof ValueKind.Bool;
+  /** The logical value. */
   readonly boolean: boolean;
 }
 /** A text value. */
 export interface TextValue {
+  /** Always `ValueKind.Text`. */
   readonly kind: typeof ValueKind.Text;
+  /** The text. */
   readonly text: string;
 }
 /** An Excel error value such as `#DIV/0!`. */
 export interface ErrorValue {
+  /** Always `ValueKind.Error`. */
   readonly kind: typeof ValueKind.Error;
+  /** The error, as an `ErrorCode` value. */
   readonly errorCode: ErrorCode;
 }
 /** An array result: `rows` x `cols` elements in row-major order (`cells[r * cols + c]`), each a scalar
  *  value. */
 export interface ArrayValue {
+  /** Always `ValueKind.Array`. */
   readonly kind: typeof ValueKind.Array;
+  /** The number of rows. */
   readonly rows: number;
+  /** The number of columns. */
   readonly cols: number;
+  /** The elements in row-major order, each a scalar value; its length is `rows` times `cols`. */
   readonly cells: readonly Value[];
 }
 /** A reference result; the referenced cells are not carried on this value. */
 export interface RefValue {
+  /** Always `ValueKind.Ref`. */
   readonly kind: typeof ValueKind.Ref;
 }
 /** A `LAMBDA` result. */
 export interface LambdaValue {
+  /** Always `ValueKind.Lambda`. */
   readonly kind: typeof ValueKind.Lambda;
 }
 
@@ -382,18 +409,17 @@ export type NativeValue = null | number | boolean | string | ExcelError | readon
 export interface SaveDiagnostics {
   /** The written workbook. */
   readonly bytes: Uint8Array<ArrayBuffer>;
-  /** Formula cells emitted as cached literals. Always zero for XLSX. */
+  /** The number of formula cells emitted as cached literals. Always 0 for XLSX. */
   readonly downgradedFormulaCount: number;
-  /** Sheet features not lowered to records. Always zero for XLSX. */
+  /** The number of sheet features not lowered to records. Always 0 for XLSX. */
   readonly deferredFeatureCount: number;
-  /** Passthrough parts dropped for colliding with a generated path, or
-   *  for two entries claiming one path. Both containers. */
+  /** The number of passthrough parts dropped for colliding with a generated path, or for two entries claiming one path.
+   *  Applies to both containers. */
   readonly droppedPartCount: number;
-  /** Relationships dropped because their target part is gone. Both
-   *  containers, at package / workbook / (XLSB) sheet scope. Rises with
-   *  `droppedPartCount` for one dropped part — do not add them. */
+  /** The number of relationships dropped because their target part is gone, at package, workbook or (XLSB) sheet scope.
+   *  Rises with `droppedPartCount` for one dropped part, so do not add them. */
   readonly droppedRelationshipCount: number;
-  /** Tables emitted under a writer-assigned id. Always zero for XLSB. */
+  /** The number of tables emitted under a writer-assigned id. Always 0 for XLSB. */
   readonly renumberedPartCount: number;
 }
 
@@ -403,19 +429,17 @@ export interface SaveDiagnostics {
  * partial coverage by design.
  */
 export interface ReadDiagnostics {
-  /** Formula cells whose stored formula could not be decoded. XLSB only. */
+  /** The number of formula cells whose stored formula could not be decoded. XLSB only. */
   readonly undecodedFormulaCount: number;
-  /** Defined names skipped for the same reason. XLSB only. */
+  /** The number of defined names skipped because their stored formula could not be decoded. XLSB only. */
   readonly undecodedDefinedNameCount: number;
-  /** Package parts whose content type could not be resolved, so they were
-   *  not decoded. XLSB only — the XLSX reader keeps unmodelled parts as
-   *  passthrough instead of dropping them. */
+  /** The number of package parts whose content type could not be resolved, so they were not decoded. XLSB only; the
+   *  XLSX reader keeps unmodelled parts as passthrough. */
   readonly undecodedPartCount: number;
-  /** Presentation-overlay entries dropped for an unusable reference: one
-   *  per merge / hyperlink / data validation, one per conditional-format
-   *  block (a block can carry several rules). XLSX only. */
+  /** The number of presentation-overlay entries dropped for an unusable reference: one per merge, hyperlink or data
+   *  validation, and one per conditional-format block. XLSX only. */
   readonly skippedFeatureCount: number;
-  /** Workbook parts whose content type was unrecognised. Max 1. XLSX only. */
+  /** The number of workbook parts whose content type was unrecognised; at most 1. XLSX only. */
   readonly unknownContentTypeCount: number;
 }
 
@@ -429,25 +453,29 @@ export type WorkbookFormat = 0 | 1;
 
 /** A defined name, as `Workbook.getDefinedName` and `Workbook.listDefinedNames` return it. */
 export interface DefinedName {
+  /** The name as stored. */
   readonly name: string;
-  /** Formula text spelled as `getFormula` spells formulas. */
+  /** The formula text, spelled as the sheet formula getter spells formulas. */
   readonly formula: string;
   /** `null` for workbook scope; otherwise the 0-based index of the sheet the name is local to. */
   readonly scope: number | null;
   /** The note Excel shows in the Name Manager; `null` when none. */
   readonly comment: string | null;
-  /** Whether the name is hidden from the Name Manager. */
+  /** `true` when the name is hidden from the Name Manager. */
   readonly hidden: boolean;
 }
 
-/** Argument of `Workbook.setDefinedName`: the whole defined name. `scope` is the sheet the name is local to; an
- *  omitted (or `null`) `scope` is workbook scope. An omitted `comment` / `hidden` is no comment / visible. The
- *  leading `=` of `formula` is optional. */
+/** Argument of `Workbook.setDefinedName`: the whole defined name. */
 export interface DefinedNameInput {
+  /** The name to define. */
   name: string;
+  /** The formula text; a leading `=` is optional. */
   formula: string;
+  /** The sheet the name is local to; omitted or `null` makes it workbook scope. */
   scope?: SheetRef | null;
+  /** The Name Manager note; omitted or `null` means no comment. */
   comment?: string | null;
+  /** `true` hides the name from the Name Manager; omitted means visible. */
   hidden?: boolean;
 }
 
@@ -467,77 +495,89 @@ export const TableTotalsRowFunction: Readonly<{
 /** Union of the {@link TableTotalsRowFunction} ordinals. */
 export type TableTotalsRowFunction = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
 
-/** One column of `TableProperties.columns`. `totalsRowLabel` is `null` when the column has no totals-row label;
- *  `totalsRowFormula` is the `custom` function's formula (leading `=` included), `null` otherwise. */
+/** One column of `TableProperties.columns`. */
 export interface TableColumn {
+  /** The column's name, the text of its header cell. */
   readonly name: string;
+  /** The function the column's totals-row cell applies; the none member when the column has no totals-row function. */
   readonly totalsRowFunction: TableTotalsRowFunction;
+  /** The column's totals-row label text; `null` when the column has none. */
   readonly totalsRowLabel: string | null;
+  /** The formula of the `custom` totals-row function, leading `=` included; `null` for any other function. */
   readonly totalsRowFormula: string | null;
 }
 
-/** Return type of `Table.getProperties()`. `name` is the table's one name: the name formulas and
- *  `Workbook.table` use, also written as the file's name attribute. `headerRow` and `totalsRow` say whether the
- *  table has a header row and a totals row. The style lives in `Table.getStyleOptions()`. */
+/** Return type of `Table.getProperties()`. The style lives in `Table.getStyleOptions()`. */
 export interface TableProperties {
+  /** The table's one name: the name formulas and `Workbook.table` use, also written as the file's name attribute. */
   readonly name: string;
-  /** The table's sheet and range. */
+  /** The table's sheet and range, header and totals rows included. */
   readonly range: SheetRect;
+  /** `true` when the table has a header row. */
   readonly headerRow: boolean;
+  /** `true` when the table has a totals row. */
   readonly totalsRow: boolean;
+  /** The table's columns, in sheet order. */
   readonly columns: readonly TableColumn[];
 }
 
-/** Argument of `Sheet.addTable`: a worksheet table over `range` on the receiving sheet, a {@link CellRect} or an
- * A1 range (`'A1:C9'`). Without `columns` the column names are the header row's cell texts, and an empty header
- * cell takes the profile's column word and a number (`Column2`). With `columns`, one name per column of the
- * range, each non-empty header cell must equal its name (otherwise `StatusCode.InvalidArgument`) and an empty
- * one is written with it. A `name` another table already uses (by name identity, see {@link Workbook}) fails with
- * `StatusCode.AlreadyExists`.
- *
- * `styleName` names a built-in TableStyle or a custom style; omitted or `null`, it is the workbook default
- * (`getTableStyleDefaults().tableStyleName`), else `TableStyleMedium2`; `''` is `StatusCode.InvalidArgument`.
- * `styled: false` (default `true`) creates the table without a style element; with a `styleName` it is
- * `StatusCode.InvalidArgument`. A styled table starts with row stripes on and the other toggles off; a supplied
- * toggle overrides that. */
+/** Argument of `Sheet.addTable`: a worksheet table over `range` on the receiving sheet. */
 export interface TableInput {
+  /** The cells the table covers, header row included, as a `CellRect` or an A1 range on the receiving sheet. */
   range: CellRect | string;
+  /** The new table's name; a name another table already uses (by name identity, see {@link Workbook}) fails with
+   *  `StatusCode.AlreadyExists`. */
   name: string;
+  /** One name per column of the range; each non-empty header cell must already hold its name (otherwise
+   *  `StatusCode.InvalidArgument`) and an empty one receives it. When omitted the names come from the header cells, and
+   *  an empty header cell takes the profile's column word and a number (`Column2`). */
   columns?: readonly string[];
+  /** The built-in or custom table style to apply; omitted or `null` is the workbook's table-style default, else
+   *  `TableStyleMedium2`; an empty string is invalid. */
   styleName?: string | null;
+  /** `false` creates the table without a style element, which needs `styleName` omitted; default `true`. */
   styled?: boolean;
+  /** Whether the first column is emphasized; omitted takes the creation default, which is off. */
   showFirstColumn?: boolean;
+  /** Whether the last column is emphasized; omitted takes the creation default, which is off. */
   showLastColumn?: boolean;
+  /** Whether odd rows are banded; omitted takes the creation default, which is on for a styled table. */
   showRowStripes?: boolean;
+  /** Whether odd columns are banded; omitted takes the creation default, which is off. */
   showColumnStripes?: boolean;
+  /** `true` when the table has a header row; default `true`. */
   headerRow?: boolean;
+  /** `true` when the table has a totals row; default `false`. */
   totalsRow?: boolean;
 }
 
 /** Argument of `Table.update`. An omitted key leaves the field unchanged and no key accepts `null` (a
- * `TypeError`). `range` takes a {@link CellRect} or an A1 range on the table's sheet and resizes the table.
- * `headerRow` and `totalsRow` update their flags only when supplied; turning `totalsRow` on grows the table by one
- * row below and writes each column's totals cell there, shifting the cells beneath down unless something straddles
- * the table's columns, and the update fails with `PreconditionFailed` when no free row is left to use (see
- * `Table.update` for the totals row rules, `Table.setColumnTotals`). Turning it off fails with `PreconditionFailed`
- * while a formula or name references the row. With `range` in the same patch the range is final and only the flag
- * flips. The update is all-or-nothing. The
- * record `Table.getProperties()` returns is also accepted: its `name` and `columns` are ignored. Renaming goes
- * through `Table.rename`, the style through `Table.updateStyleOptions`. */
+ * `TypeError`). The update is all-or-nothing. The record `Table.getProperties()` returns is also accepted: its `name`
+ * and `columns` are ignored. Renaming goes through `Table.rename`, the style through `Table.updateStyleOptions`. */
 export interface TablePatch {
+  /** The table's new range, a `CellRect` or an A1 range on the table's sheet; it resizes the table. */
   range?: CellRect | SheetRect | string;
+  /** Turns the header row on or off; only the flag flips. */
   headerRow?: boolean;
+  /** Turns the totals row on or off, growing or shrinking the table by one row; with `range` in the same patch the
+   *  range is final and only the flag flips. Turning it on writes each column's totals cell in the new row below,
+   *  shifting the cells beneath down unless something straddles the table's columns, and fails with
+   *  `PreconditionFailed` when no free row is left (see `Table.update`, `Table.setColumnTotals`); turning it off fails
+   *  with `PreconditionFailed` while a formula or name references the row. */
   totalsRow?: boolean;
 }
 
-/** Return type of `Table.getStyleOptions()`, which returns `null` when the table has no style element.
- *  `styleName` is `null` for a style element without a named style and may name a custom style
- *  (`Workbook.getTableStyle`). */
+/** Return type of `Table.getStyleOptions()`, which returns `null` when the table has no style element. */
 export interface TableStyleOptions {
+  /** The name of the applied table style; `null` for an element without a named style. It may name a custom style. */
   readonly styleName: string | null;
+  /** Whether the first column is formatted specially. */
   readonly showFirstColumn: boolean;
+  /** Whether the last column is formatted specially. */
   readonly showLastColumn: boolean;
+  /** Whether odd and even rows are banded. */
   readonly showRowStripes: boolean;
+  /** Whether odd and even columns are banded. */
   readonly showColumnStripes: boolean;
 }
 
@@ -546,12 +586,14 @@ export interface TableStyleOptions {
 export type TableStyleOptionsPatch = Patch<TableStyleOptions, 'styleName'>;
 
 /** Totals-row settings of one table column (`Table.setColumnTotals`); the `totalsRow*` keys are the ones of
- *  {@link TableColumn}. `totalsRowFunction` defaults to `TableTotalsRowFunction.None`; `totalsRowFormula` is
- *  required for `TableTotalsRowFunction.Custom`. An omitted or `null` label or formula means none, so a read
- *  passes back as is; `''` is `StatusCode.InvalidArgument`. The {@link TableColumn} a read returns passes as is; its `name` is ignored. */
+ *  {@link TableColumn}. The {@link TableColumn} a read returns passes as is; its `name` is ignored. */
 export interface TableColumnTotalsInput {
+  /** The totals-row function of the column; defaults to `TableTotalsRowFunction.None`. */
   totalsRowFunction?: TableTotalsRowFunction;
+  /** The totals-row label text; an omitted or `null` value means no label, and an empty string is rejected. */
   totalsRowLabel?: string | null;
+  /** The totals-row formula for `TableTotalsRowFunction.Custom`, required with it; an omitted or `null` value means
+   *  none, and an empty string is rejected. */
   totalsRowFormula?: string | null;
 }
 
@@ -618,48 +660,58 @@ export type TableStyleElementType =
   | 26
   | 27;
 
-/** One element of a custom table style, as `getTableStyle` returns it. `size` is the stripe band size;
- *  `dxfIndex` indexes the differential formats (`addDxf`) and is `null` for a region the style lists without
- *  formatting. */
+/** One element of a custom table style, as `getTableStyle` returns it. */
 export interface TableStyleElement {
+  /** The table region this element formats (a table style element type). */
   readonly type: TableStyleElementType;
+  /** The stripe band size in rows or columns, at least 1; 1 for a region that is not a stripe. */
   readonly size: number;
+  /** Index of the differential format applied to the region; `null` for a region listed without formatting. */
   readonly dxfIndex: number | null;
 }
 
-/** One element of a custom table style, as `setTableStyle` takes it. An omitted `size` is 1; an omitted or
- *  `null` `dxfIndex` lists the region without formatting. The {@link TableStyleElement} a read returns
- *  passes as is. */
+/** One element of a custom table style, as `setTableStyle` takes it. The {@link TableStyleElement} a read
+ *  returns passes as is. */
 export interface TableStyleElementInput {
+  /** The table region this element formats (a table style element type). */
   type: TableStyleElementType;
+  /** The stripe band size in rows or columns; an omitted value is 1. */
   size?: number;
+  /** Index of the differential format applied to the region; omitted or `null` lists the region without formatting. */
   dxfIndex?: number | null;
 }
 
 /** A custom table / PivotTable style, as `getTableStyle` returns it. `pivot` / `table` say which objects may
  *  use it. */
 export interface TableStyle {
+  /** The style name. */
   readonly name: string;
+  /** Whether PivotTables may use the style. */
   readonly pivot: boolean;
+  /** Whether tables may use the style. */
   readonly table: boolean;
+  /** The formatted regions of the style. */
   readonly elements: readonly TableStyleElement[];
 }
 
-/** A custom table / PivotTable style, as `setTableStyle` takes it. An omitted `pivot` / `table` is `true`
- *  (the style may be used by both) and an omitted `elements` is none. The {@link TableStyle} a read returns
+/** A custom table / PivotTable style, as `setTableStyle` takes it. The {@link TableStyle} a read returns
  *  passes as is. */
 export interface TableStyleInput {
+  /** The style name. */
   name: string;
+  /** Whether PivotTables may use the style; omitted is `true`. */
   pivot?: boolean;
+  /** Whether tables may use the style; omitted is `true`. */
   table?: boolean;
+  /** The formatted regions of the style; omitted is none. */
   elements?: readonly TableStyleElementInput[];
 }
 
-/** Return type of `Workbook.getTableStyleDefaults()`; a name is `null` when unset. `tableStyleName` is the style
- *  `Sheet.addTable` applies when `styleName` is omitted (unset: `TableStyleMedium2`), `pivotStyleName` the style
- *  `Sheet.addPivot` applies (unset: `PivotStyleLight16`). */
+/** Return type of `Workbook.getTableStyleDefaults()`; a name is `null` when unset. */
 export interface TableStyleDefaults {
+  /** The style a new table takes when none is given; `null` when unset (Excel then uses TableStyleMedium2). */
   readonly tableStyleName: string | null;
+  /** The style a new PivotTable takes; `null` when unset (Excel then uses PivotStyleLight16). */
   readonly pivotStyleName: string | null;
 }
 
@@ -682,18 +734,20 @@ export type PivotCellKind = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
 
 /** One concrete cell in a projected PivotTable layout. */
 export interface PivotCell {
-  /** Absolute 0-based sheet row. */
+  /** The absolute 0-based sheet row of the cell. */
   readonly row: number;
-  /** Absolute 0-based sheet column. */
+  /** The absolute 0-based sheet column of the cell. */
   readonly col: number;
   /** The cell's value; a date item label reads as its serial number, and `numberFormat` tells it is a date. */
   readonly value: NativeValue;
+  /** What the cell is in the layout: a header, a row or column label, a data value, a subtotal, a grand total or a
+   *  blank. */
   readonly kind: PivotCellKind;
-  /** Header nesting depth; 0 for data cells. */
+  /** The nesting depth of a header cell; 0 for data cells. */
   readonly depth: number;
-  /** Source field name when known; `null` otherwise. */
+  /** The name of the source field the cell belongs to; `null` when the cell has no source field. */
   readonly fieldName: string | null;
-  /** The data field's number format code; `null` when unset. */
+  /** The data field's number format code of the cell; `null` when it has none. */
   readonly numberFormat: string | null;
 }
 
@@ -701,7 +755,7 @@ export interface PivotCell {
 export interface PivotLayout {
   /** The rectangle the layout covers in absolute sheet coordinates; `null` when it spans no cell. */
   readonly range: CellRect | null;
-  /** Sparse projected cells in row-major order. */
+  /** The projected cells, sparse and in row-major order. */
   readonly cells: readonly PivotCell[];
 }
 
@@ -952,53 +1006,66 @@ export type PivotReportLayout = 0 | 1 | 2;
 
 /** Worksheet source metadata for a pivot cache (`PivotCache.setWorksheetSource`). Omitted keys leave the
  *  attribute off; an empty object writes a source with no attributes. Pass `null` to
- *  `setWorksheetSource` to remove the source.
- *
- *  `range` is a {@link SheetRect} or an A1 range; `sheet` (a {@link SheetRef}) qualifies an unqualified A1
- *  `range`. A qualified string or a `SheetRect` whose sheet disagrees with `sheet` fails with
- *  `StatusCode.InvalidArgument`. The {@link PivotWorksheetSource} a read returns passes as is. */
+ *  `setWorksheetSource` to remove the source. The {@link PivotWorksheetSource} a read returns passes as is. */
 export interface PivotWorksheetSourceInput {
+  /** The source range, a rectangle or an A1 range; omitted leaves the attribute off. An unqualified A1 range takes its
+   *  sheet from `sheet`. */
   range?: SheetRect | string | null;
+  /** The sheet ({@link SheetRef}) that qualifies an unqualified A1 `range`; it may name a sheet the workbook does not
+   *  have. A qualified string or a `SheetRect` whose sheet disagrees with it fails with `StatusCode.InvalidArgument`.
+   *  Omitted leaves the attribute off. */
   sheet?: SheetRef;
+  /** The defined name or table the source reads; omitted leaves the attribute off. */
   name?: string | null;
 }
 
 /** Return type of `PivotCache.getWorksheetSource()`, which returns `null` when the cache has no worksheet
- *  source. `range` folds the source's sheet and reference into one {@link SheetRect}; it is `null` when the
- *  source has no reference or names a sheet the workbook does not have. `name` is `null` when absent. */
+ *  source. */
 export interface PivotWorksheetSource {
+  /** The source's sheet and reference folded into one rectangle; `null` when the source has no reference or names a
+   *  sheet the workbook does not have. */
   readonly range: SheetRect | null;
+  /** The defined name or table the source reads; `null` when absent. */
   readonly name: string | null;
 }
 
-/** Plain-data spec for `Pivot.addDataField` /
- *  `Pivot.setDataField`. A `showAsBaseField` / `showAsBaseItem` that is omitted or `null` is unset.
- *  `showAsBaseItem` is an item index or a {@link PivotShowAsBase} member. */
+/** Plain-data spec for `Pivot.addDataField` / `Pivot.setDataField`. */
 export interface PivotDataFieldInput {
-  /** Display name (key for GETPIVOTDATA). Omit it to let the
-   *  engine name the data field from the Excel profile's pivot wording,
-   *  e.g. `"Sum of Sales"` (en-US) or `"合計 / Sales"` (ja-JP). That needs
-   *  `fieldIndex` to resolve. */
+  /** The display name of the data field, the key GETPIVOTDATA looks it up by. When `null` or empty the engine names it
+   *  from the workbook profile's pivot wording, such as `Sum of Sales` (en-US) or `合計 / Sales` (ja-JP), numbered 2, 3,
+   *  ... while the name repeats another data field's or a field's display name; that needs `fieldIndex` to be in range. */
   readonly name?: string;
-  /** The field the data field aggregates. */
+  /** The index of the source pivot field the data field aggregates; it must be in range. */
   readonly fieldIndex: PivotFieldRef;
-  /** The aggregation function; omitted is `PivotAggregation.Sum`. */
+  /** The aggregation function applied to the source field; omitted is `PivotAggregation.Sum`. */
   readonly aggregation?: PivotAggregation;
-  /** Number format code of the data field's values; omitted, `null` or empty for none. */
+  /** The number format code of the data field's values; `null` or empty for none. */
   readonly numberFormat?: string | null;
+  /** How the value is derived from the data: as is, or as a difference, percentage, running total or rank against a
+   *  base. */
   readonly showAs?: PivotShowValuesAs;
+  /** The index of the base pivot field a relative show-as mode compares against; `null` when unset. It must be in
+   *  range. */
   readonly showAsBaseField?: PivotFieldRef | null;
+  /** The base item of a relative show-as mode: an item index or a `PivotShowAsBase` member; omitted or `null` when
+   *  unset. */
   readonly showAsBaseItem?: number | null;
 }
 
 /** Return type of `Pivot.getStyleOptions()`, which returns `null` when the definition has no style element.
  *  `styleName` is `null` for a style element without a named style. */
 export interface PivotStyleOptions {
+  /** The name of the table style; `null` when the style element carries no name. */
   readonly styleName: string | null;
+  /** Whether the style formats the row headers. */
   readonly showRowHeaders: boolean;
+  /** Whether the style formats the column headers. */
   readonly showColumnHeaders: boolean;
+  /** Whether the style bands the rows. */
   readonly showRowStripes: boolean;
+  /** Whether the style bands the columns. */
   readonly showColumnStripes: boolean;
+  /** Whether the style formats the last column. */
   readonly showLastColumn: boolean;
 }
 
@@ -1008,7 +1075,9 @@ export type PivotStyleOptionsPatch = Patch<PivotStyleOptions, 'styleName'>;
 
 /** Return type of `Pivot.getGrandTotals()`: whether the row and the column grand total bands show. */
 export interface PivotGrandTotals {
+  /** Whether the grand total band for the rows shows. */
   readonly rows: boolean;
+  /** Whether the grand total band for the columns shows. */
   readonly columns: boolean;
 }
 
@@ -1020,42 +1089,58 @@ export type PivotGrandTotalsPatch = Patch<PivotGrandTotals>;
  *  the option is unset. `updateOptions` takes any subset of the members:
  *  an omitted member keeps its current value, and `null` unsets a string. */
 export interface PivotOptions {
-  /** Error cells show `errorCaption`; the caption is kept while this is off. */
+  /** Whether error cells show `errorCaption`; the caption is kept while this is off. */
   readonly showError: boolean;
+  /** The text error cells show while `showError` is on; `null` when unset. */
   readonly errorCaption: string | null;
-  /** Empty value cells show `missingCaption` (`"-"` is written as the number 0). */
+  /** Whether empty value cells show `missingCaption`. */
   readonly showMissing: boolean;
+  /** The text empty value cells show while `showMissing` is on; a caption of exactly `-` is written as the number 0.
+   *  `null` when unset. */
   readonly missingCaption: string | null;
-  /** Field captions and filter drop-downs. */
+  /** Whether field captions and filter drop-downs show. */
   readonly showHeaders: boolean;
-  /** Expand / collapse buttons. */
+  /** Whether the expand / collapse buttons show. */
   readonly showDrill: boolean;
+  /** Whether contextual tooltips show. */
   readonly showDataTips: boolean;
-  /** Classic layout with grid drop zones. */
+  /** Whether the classic layout with drop zones drawn on the grid is used. */
   readonly gridDropZones: boolean;
+  /** Whether items without data show on rows; the layout follows each field's own show-all setting. */
   readonly showEmptyRow: boolean;
+  /** Whether items without data show on columns; the layout follows each field's own show-all setting. */
   readonly showEmptyColumn: boolean;
+  /** Whether the field drop-down buttons show. */
   readonly showDataDropDown: boolean;
+  /** Whether the expand / collapse buttons are printed. */
   readonly printDrill: boolean;
+  /** Whether field captions repeat as print titles on each printed page. */
   readonly fieldPrintTitles: boolean;
+  /** Whether row labels repeat on each printed page. */
   readonly itemPrintTitles: boolean;
-  /** Merge and center cells with labels. */
+  /** Whether item labels are merged and centered. */
   readonly mergeItem: boolean;
-  /** Compact-form indent per level, 0 to 126. */
+  /** The indent per level of compact-form labels, 0 to 126 (the dialog shows this plus one). */
   readonly indent: number;
+  /** Whether report filter fields fill across before they go down. */
   readonly pageOverThenDown: boolean;
-  /** Report filter fields per column or row, 0 to 255; 0 does not wrap. */
+  /** The number of report filter fields per column or row before wrapping, 0 to 255; 0 does not wrap. */
   readonly pageWrap: number;
+  /** Whether a field may carry more than one filter type. */
   readonly multipleFieldFilters: boolean;
+  /** Whether cell formatting is kept when the report updates. */
   readonly preserveFormatting: boolean;
+  /** Whether custom lists take part in sorting. */
   readonly customListSort: boolean;
+  /** The alternative-text title of the PivotTable; `null` when unset. */
   readonly altText: string | null;
+  /** The alternative-text description of the PivotTable; `null` when unset. */
   readonly altTextSummary: string | null;
-  /** The grand total label in place of the locale's word. */
+  /** The grand total label shown in place of the locale's word; `null` when unset. */
   readonly grandTotalCaption: string | null;
-  /** Autofit column widths on update. */
+  /** Whether column widths autofit when the report updates. */
   readonly autoFormatting: boolean;
-  /** Show Details is allowed. */
+  /** Whether Show Details is allowed. */
   readonly enableDrill: boolean;
 }
 
@@ -1068,10 +1153,12 @@ export type PivotOptionsPatch = Patch<
 /** The options of one pivot cache (`PivotCache.getOptions` /
  *  `PivotCache.updateOptions`). */
 export interface PivotCacheOptions {
-  /** Save the source records with the file. */
+  /** Whether the source records are saved with the file; off, the records part is left out and the reports keep their
+   *  sheet cells. */
   readonly saveData: boolean;
-  /** Items kept per field after they leave the source, `0` none up to `1048576`; `null` is automatic. */
+  /** The number of items kept per field after they leave the source, 0 to 1048576; `null` is automatic. */
   readonly missingItemsLimit: number | null;
+  /** Whether the data refreshes when the file opens. */
   readonly refreshOnLoad: boolean;
 }
 
@@ -1080,49 +1167,51 @@ export type PivotCacheOptionsPatch = Patch<PivotCacheOptions, 'missingItemsLimit
 
 /** One element of `PivotCache.listCalculatedItems()`. */
 export interface PivotCalculatedItem {
-  /** The cache field the item belongs to. */
+  /** The index of the cache field the item belongs to. */
   readonly fieldIndex: number;
+  /** The item's name. */
   readonly name: string;
-  /** Formula text, leading `=` included. */
+  /** The formula text, leading `=` included. */
   readonly formula: string;
-  /** `true` for an entry read from a file that applies the formula only where the item meets items of other fields. */
+  /** Whether the entry was read from a file and applies its formula only where the item meets items of other fields. */
   readonly scoped: boolean;
 }
 
 /** One element of `Pivot.listFields()`. A pivot has one field per cache field: field `i` mirrors the cache field
- *  at index `i`, from the pivot's creation on. `axis` is `null` for a field that sits on no axis; `subtotalTop`
- *  `true` puts the subtotal on the group's own heading row, as in Excel; the field's index is its position in the
- *  list. */
+ *  at index `i`, from the pivot's creation on; the field's index is its position in the list. */
 export interface PivotField {
+  /** The name of the bound cache field. */
   readonly sourceName: string;
+  /** The report name of the field; `null` when the field has no report name. */
   readonly customName: string | null;
+  /** The axis the field sits on; `null` when it sits on no axis. */
   readonly axis: PivotAxis | null;
+  /** Whether subtotals show on the group's own heading row, as in Excel (true), or at the bottom (false). */
   readonly subtotalTop: boolean;
+  /** The number format code of the field in the workbook profile's vocabulary; `null` for none or an unregistered id. */
   readonly numberFormat: string | null;
-  /** Index of the bound pivot-cache field, `null` when the cache does not
-   *  cover this field. Pivot field `i` binds to cache field `i`. */
+  /** The index of the bound pivot-cache field, `null` when the cache does not cover this field. Pivot field i binds to
+   *  cache field i. */
   readonly cacheFieldIndex: number | null;
   /** How the field's items are ordered. */
   readonly sortOrder: PivotSortOrder;
   /** The data field the items sort by; `null` sorts by label. */
   readonly sortByField: string | null;
-  /** For a group field, the index of the field it groups; `null` otherwise. The grouping itself reads through
-   *  `Pivot.getFieldDateGroup` / `Pivot.getFieldNumericGroup`. */
+  /** For a group field, the index of the field it groups; `null` otherwise. */
   readonly groupBaseIndex: number | null;
-  /** Whether the automatic subtotal shows; `false` whenever `subtotalFunctions`
-   *  is non-empty, since custom functions replace it. */
+  /** Whether the automatic subtotal shows; false whenever `subtotalFunctions` is non-empty, since custom functions
+   *  replace it. */
   readonly defaultSubtotal: boolean;
-  /** Whether a blank row follows each item. */
+  /** Whether a blank row follows each item block of the field. */
   readonly insertBlankRow: boolean;
-  /** Whether item labels repeat on every row. */
+  /** Whether the field's item labels repeat on every row of its block. */
   readonly fillDownLabels: boolean;
   /** Whether the field lists items without data. */
   readonly showAll: boolean;
-  /** Whether every item and the default marker are expanded; `true` for a field without items. Writing
+  /** Whether every item and the default marker of the field are expanded; true for a field without items. Writing
    *  applies to all of them. */
   readonly showDetail: boolean;
-  /** Custom subtotal functions (`Pivot.setFieldSubtotalFunctions`), in ascending
-   *  `PivotAggregation` order. */
+  /** The custom subtotal functions, in ascending aggregation order; empty when there are none. */
   readonly subtotalFunctions: readonly PivotAggregation[];
 }
 
@@ -1151,13 +1240,13 @@ export type PivotFieldPatch = Patch<
 export interface PivotItem {
   /** The item's own label; `null` for an item bound only by cache index. */
   readonly name: string | null;
-  /** Index into the bound cache field's shared items, `null` for an item
-   *  bound by label only. */
+  /** The index into the bound cache field's shared items, `null` for an item bound by label only. */
   readonly cacheIndex: number | null;
+  /** Whether the item is shown. */
   readonly visible: boolean;
-  /** Caption shown instead of the item's value; `null` when none. */
+  /** The caption shown instead of the item's value; `null` when it has none. */
   readonly caption: string | null;
-  /** Whether the item is expanded. */
+  /** Whether the item is expanded; false for a collapsed item. */
   readonly showDetail: boolean;
 }
 
@@ -1165,79 +1254,99 @@ export interface PivotItem {
  *  have no cleared form. */
 export type PivotItemPatch = Patch<Pick<PivotItem, 'visible' | 'showDetail' | 'caption'>, 'caption'>;
 
-/** Argument of `Sheet.addPivot`: a new pivot named `name`, drawing from cache `cacheId` (a
- *  {@link PivotCacheRef}), with its top-left cell at `anchor` (a {@link CellAddress} or an A1 cell, `'C3'`). The pivot takes the workbook's PivotTable style default (`getTableStyleDefaults().pivotStyleName`),
- *  else `PivotStyleLight16`. The pivot starts with one field per cache field and none on an axis. Place them with
- *  `Pivot.setFieldAxis` (or `setRowFieldOrder` / `setColumnFieldOrder`) and add values with `addDataField`. */
+/** Argument of `Sheet.addPivot`: a new pivot named `name`, drawing from cache `cacheId` (a {@link PivotCacheRef}), with
+ *  its top-left cell at `anchor` (a {@link CellAddress} or an A1 cell, `'C3'`). The pivot takes the workbook's
+ *  PivotTable style default (`getTableStyleDefaults().pivotStyleName`), else `PivotStyleLight16`. The pivot starts with
+ *  one field per cache field and none on an axis. Place them with `Pivot.setFieldAxis` (or `setRowFieldOrder` /
+ *  `setColumnFieldOrder`) and add values with `addDataField`. */
 export interface PivotInput {
+  /** The new pivot's name. */
   name: string;
+  /** The id of the pivot cache the pivot draws from. */
   cacheId: PivotCacheRef;
+  /** The top-left cell of the report, a cell address or its A1 text such as `C3`. */
   anchor: CellAddress | string;
 }
 
 /** Return type of `Pivot.getProperties()`: the pivot's definition, composed of what the separate getters read.
  *  `styleOptions` is `null` when the definition has no style element. */
 export interface PivotProperties {
+  /** The pivot's name. */
   readonly name: string;
+  /** The id of the pivot cache the pivot draws from. */
   readonly cacheId: number;
+  /** The report layout form: compact, outline or tabular. */
   readonly reportLayout: PivotReportLayout;
+  /** Whether the row and column grand total bands show. */
   readonly grandTotals: PivotGrandTotals;
+  /** The table style of the pivot; `null` when the definition has no style element. */
   readonly styleOptions: PivotStyleOptions | null;
 }
 
 /** One element of `PivotCache.listFields()`; its position is the cache field's index. */
 export interface PivotCacheField {
-  /** The field name. */
+  /** The name of the field. */
   readonly name: string;
   /** A calculated field's formula, leading `=` included; `null` for a source field. */
   readonly formula: string | null;
-  /** The field holds a number. */
+  /** Whether the field holds a number. */
   readonly containsNumber: boolean;
-  /** Every number the field holds is an integer. */
+  /** Whether every number the field holds is an integer. */
   readonly containsInteger: boolean;
-  /** The field holds text, a boolean or an error. */
+  /** Whether the field holds text, a boolean or an error. */
   readonly containsString: boolean;
-  /** The field holds a blank. */
+  /** Whether the field holds a blank. */
   readonly containsBlank: boolean;
-  /** The field holds a date. */
+  /** Whether the field holds a date. */
   readonly containsDate: boolean;
-  /** The field mixes two or more of text, numbers and dates. */
+  /** Whether the field mixes two or more of text, numbers and dates. */
   readonly containsMixedTypes: boolean;
-  /** The field holds text or a blank. */
+  /** Whether the field holds text or a blank. */
   readonly containsSemiMixedTypes: boolean;
-  /** The field holds text or a number: something that is not a date. */
+  /** Whether the field holds text or a number, something that is not a date. */
   readonly containsNonDate: boolean;
 }
 
 /** A cache value, as `PivotCache.listFieldSharedItems(...)` (its position is the shared item's index) and
  *  `PivotCache.getRecordValue` return it. */
 export interface PivotCacheValue {
-  /** The value; a blank is `null` and a date reads as its serial number, and `isDate` tells it apart. */
+  /** The cache value; a blank is `null` and a date reads as its serial number, which `isDate` tells apart. */
   readonly value: NativeValue;
+  /** Whether the value is a date. */
   readonly isDate: boolean;
 }
 
-/** One element of `Pivot.listDataFields()`. Same shape as
- *  `PivotDataFieldInput` with every member present; `showAsBaseField` /
- *  `showAsBaseItem` are `null` when unset and `numberFormat` is `null` for none. */
+/** One element of `Pivot.listDataFields()`. Same shape as `PivotDataFieldInput` with every member present. */
 export interface PivotDataField {
+  /** The display name of the data field, the key GETPIVOTDATA looks it up by. */
   readonly name: string;
+  /** The index of the pivot field the data field aggregates. */
   readonly fieldIndex: number;
+  /** The aggregation function applied to the source field. */
   readonly aggregation: PivotAggregation;
+  /** The number format code of the data field's values; `null` for none. */
   readonly numberFormat: string | null;
+  /** How the value is derived from the data: as is, or as a difference, percentage, running total or rank against a
+   *  base. */
   readonly showAs: PivotShowValuesAs;
+  /** The index of the base pivot field a relative show-as mode compares against; `null` when unset. */
   readonly showAsBaseField: number | null;
+  /** The base item of a relative show-as mode: an index into the base field's items, or the previous or next marker;
+   *  `null` when unset. */
   readonly showAsBaseItem: number | null;
 }
 
-/** Argument of `Pivot.setFieldDateGroup`: the `PivotDatePeriod` bits to group by, the calendar
- *  (`Gregorian` when omitted), the day interval (`1` when omitted) and the {@link DateInput} bounds (the field's
- *  first and last value when omitted). */
+/** Argument of `Pivot.setFieldDateGroup`. */
 export interface PivotDateGroupInput {
+  /** The date periods to group by, an OR of `PivotDatePeriod` bits. */
   periods: PivotDatePeriodMask;
+  /** The calendar the periods follow; Gregorian when omitted. */
   calendar?: PivotCalendar;
+  /** The length in days of each group when grouping by days alone; 1 when omitted. */
   intervalDays?: number;
+  /** The first bound of the grouping, a {@link DateInput}; the field's first value when not given. */
   start?: DateInput;
+  /** The last bound of the grouping, a {@link DateInput}; the field's last value when not given. */
   end?: DateInput;
 }
 
@@ -1255,20 +1364,19 @@ export interface PivotDateGroup {
   readonly start: Date;
   /** The last bound as stored. */
   readonly end: Date;
-  /** The first bound follows the field's smallest value. */
+  /** Whether the first bound follows the field's smallest value. */
   readonly autoStart: boolean;
-  /** The last bound follows the field's largest value. */
+  /** Whether the last bound follows the field's largest value. */
   readonly autoEnd: boolean;
 }
 
-/** Argument of `Pivot.setFieldNumericGroup`: the width of each group, and the first and last bound (the field's
- *  smallest and largest value when omitted). */
+/** Argument of `Pivot.setFieldNumericGroup`. */
 export interface PivotNumericGroupInput {
   /** The width of each group. */
   interval: number;
-  /** The first bound; the field's smallest value when omitted. */
+  /** The first bound; the field's smallest value when not given. */
   start?: number;
-  /** The last bound; the field's largest value when omitted. */
+  /** The last bound; the field's largest value when not given. */
   end?: number;
 }
 
@@ -1282,29 +1390,32 @@ export interface PivotNumericGroup {
   readonly start: number;
   /** The last bound as stored. */
   readonly end: number;
-  /** The first bound follows the field's smallest value. */
+  /** Whether the first bound follows the field's smallest value. */
   readonly autoStart: boolean;
-  /** The last bound follows the field's largest value. */
+  /** Whether the last bound follows the field's largest value. */
   readonly autoEnd: boolean;
 }
 
-/** Plain-data spec for `Pivot.addFilter`. `value` is a `number` for a value filter (a count, a percent, a sum or
- *  a measure threshold) and a `string` for a label filter; a mismatch is `StatusCode.InvalidArgument`. The range filters (`ValueBetween`, `ValueNotBetween`, `LabelBetween`,
- *  `LabelNotBetween`, `DateBetween`, `DateNotBetween`) take their upper bound in `valueHigh`, and no other kind may
- *  set it. Omitted `value` / `valueHigh` and `null` mean no operand. */
+/** Plain-data spec for `Pivot.addFilter`. */
 export interface PivotFilterInput {
-  /** The field the filter applies to; its axis is the field's. */
+  /** The index of the pivot field the filter applies to; the filter takes that field's axis. */
   readonly fieldIndex: PivotFieldRef;
+  /** The kind of the filter: a value, label, date or relative-period filter, and its comparison. */
   readonly kind: PivotFilterKind;
-  /** Data-field aggregate scored by value filters. Defaults to 0. */
+  /** The index of the data field a value filter scores; label and date filters ignore it. 0 when omitted. */
   readonly dataFieldIndex?: number;
+  /** The operand: a number for a value filter (a count, a percent, a sum or a measure threshold) or a date filter (an
+   *  integer count for the top and bottom count kinds), a string for a label filter; a mismatch is
+   *  `StatusCode.InvalidArgument`. Omitted or `null` for a kind with no operand. For a range kind this is the lower
+   *  bound. */
   readonly value?: number | string | null;
+  /** The upper bound of a range kind (`ValueBetween`, `ValueNotBetween`, `LabelBetween`, `LabelNotBetween`,
+   *  `DateBetween`, `DateNotBetween`), a string for the label ranges; no other kind may set it. Omitted or `null` means
+   *  no upper bound. */
   readonly valueHigh?: number | string | null;
 }
 
-/** One element of `Pivot.listFilters()`: the stored filter. Semantics match `PivotFilterInput`; `fieldIndex` is
- *  the index of the filtered field.
- *  `value` and `valueHigh` are `null` when the filter has no operand / no high bound.
+/** One element of `Pivot.listFilters()`: the stored filter. Semantics match `PivotFilterInput`.
  *
  *  The filter list is saved as the definition's `<filters>` block. Every entry of a loaded block whose kind
  *  the engine enumerates appears here, and `Pivot.clearFilters` /
@@ -1312,10 +1423,16 @@ export interface PivotFilterInput {
  *  OLAP measure filter, criteria that do not decode) are not listed; they filter nothing and are saved verbatim in
  *  their original position. */
 export interface PivotFilter {
+  /** The index of the filtered pivot field. */
   readonly fieldIndex: number;
+  /** The kind of the filter: a value, label, date or relative-period filter, and its comparison. */
   readonly kind: PivotFilterKind;
+  /** The index of the data field a value filter scores; label and date filters ignore it. */
   readonly dataFieldIndex: number;
+  /** The operand, a number or a string; `null` when the filter has no operand. For a range kind this is the lower
+   *  bound. */
   readonly value: number | string | null;
+  /** The upper bound of a range kind; `null` when the filter has no upper bound. */
   readonly valueHigh: number | string | null;
 }
 
@@ -1462,27 +1579,39 @@ export type ProfileId =
  * fields follow the usual 24-hour ranges.
  */
 export interface CivilTime {
+  /** The calendar year, 1900 to 9999 (1904 to 9999 in a 1904 date-system conversion). */
   readonly year: number;
+  /** The month, 1 to 12. */
   readonly month: number;
+  /** The day of the month, 1 to the length of that month. */
   readonly day: number;
+  /** The hour, 0 to 23. */
   readonly hour: number;
+  /** The minute, 0 to 59. */
   readonly minute: number;
+  /** The second, 0 to 59. */
   readonly second: number;
 }
 
 /** A {@link CivilTime} whose time of day may be left out; an omitted `hour`, `minute` or `second` is 0. */
 export interface CivilTimeInput {
+  /** The calendar year, 1900 to 9999 (1904 to 9999 in a 1904 date-system conversion). */
   readonly year: number;
+  /** The month, 1 to 12. */
   readonly month: number;
+  /** The day of the month, 1 to the length of that month. */
   readonly day: number;
+  /** The hour, 0 to 23; omitted is 0. */
   readonly hour?: number;
+  /** The minute, 0 to 59; omitted is 0. */
   readonly minute?: number;
+  /** The second, 0 to 59; omitted is 0. */
   readonly second?: number;
 }
 
 /** Options of `Formulon.convertCivilToSerial` / `convertSerialToCivil`. */
 export interface DateSystemOptions {
-  /** The 1904 date system when `true`; default `false`. A non-boolean value throws `TypeError`. */
+  /** `true` selects the 1904 date system; omitted is the 1900 system. A non-boolean value throws `TypeError`. */
   date1904?: boolean;
 }
 
@@ -1594,20 +1723,27 @@ export const IconSetName: Readonly<{
 /** Union of the {@link IconSetName} ordinals. */
 export type IconSetName = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20;
 
-/** A conditional-format threshold (`<cfvo>`). `value` is the number, percentage or formula the `type` reads; a
- *  formula carries its leading `=` on read and takes it with or without on input. `gte` (default `true`) makes the
- *  threshold inclusive. */
+/** A conditional-format threshold (`<cfvo>`). */
 export interface CfValueObjectInput {
+  /** The kind of threshold, which decides how `value` is read (a number, a percentage, a percentile, a formula, or the
+   *  minimum or maximum of the data). */
   type: CfValueObjectType;
+  /** The number, percentage or formula the `type` reads, with or without a leading `=` for a formula; `null` or omitted
+   *  for a type that reads none (minimum, maximum). */
   value?: string | null;
+  /** Whether the threshold is inclusive: `true` (the default) compares with `>=`, `false` with `>`. */
   gte?: boolean;
 }
 
-/** A conditional-format threshold (`<cfvo>`), as a read returns it. `value` is `null` for a `type` that reads
- *  none (`Min`, `Max`, ...). The record passes back to a rule input as is. */
+/** A conditional-format threshold (`<cfvo>`), as a read returns it. The record passes back to a rule input as is. */
 export interface CfValueObject {
+  /** The kind of threshold, which decides how `value` is read (a number, a percentage, a percentile, a formula, or the
+   *  minimum or maximum of the data). */
   readonly type: CfValueObjectType;
+  /** The number, percentage or formula the `type` reads, with a leading `=` on a formula; `null` for a type that reads
+   *  none (minimum, maximum). */
   readonly value: string | null;
+  /** Whether the threshold is inclusive: `true` compares with `>=`, `false` with `>`. */
   readonly gte: boolean;
 }
 
@@ -1631,50 +1767,69 @@ export type CfDataBarAxisPosition = 0 | 1 | 2;
 
 /** The data bar of a {@link CfDataBarMatch}. The geometry is stated from the left edge. */
 export interface CfMatchBar {
+  /** Length of the bar as a percentage (0 to 100) of the cell width. */
   readonly lengthPct: number;
+  /** Position of the axis as a percentage of the cell width, measured from the left edge: 0 for an axis at the left
+   *  edge, 50 for a centred axis. */
   readonly axisPositionPct: number;
   /** `true` when the bar draws in the negative direction. */
   readonly isNegative: boolean;
+  /** The fill colour of the bar, resolved to RGB. */
   readonly fill: Color;
-  /** The border colour; `null` when the bar draws no border. */
+  /** The border colour, resolved to RGB; `null` when the bar draws no border. */
   readonly border: Color | null;
   /** `true` when the bar is filled with a gradient. */
   readonly gradient: boolean;
-  /** The rule's direction. */
+  /** The direction of the rule; the geometry is stated from the left edge and a host mirrors a right-to-left bar. */
   readonly direction: CfDataBarDirection;
 }
 
 /** The icon of a {@link CfIconSetMatch}. */
 export interface CfMatchIcon {
+  /** The icon set the icon comes from. */
   readonly iconSet: IconSetName;
+  /** The 0-based index of the icon within the set, after the rule's reverse setting has been applied. */
   readonly iconIndex: number;
 }
 
 /** A differential-format match. `dxfIndex` is `null` when the rule applies no format. */
 export interface CfFormatMatch {
+  /** The kind of match; always the differential-format kind. */
   readonly kind: typeof CfMatchKind.DifferentialFormat;
+  /** The workbook-global priority of the matching rule; a smaller number ranks higher. */
   readonly priority: number;
+  /** The 0-based index of the differential format the rule applies; `null` when the rule applies no format. */
   readonly dxfIndex: number | null;
 }
 
-/** A colour-scale match; `color` is resolved against the theme and palette, so its `kind` is `ColorKind.Rgb`. */
+/** A colour-scale match. */
 export interface CfColorScaleMatch {
+  /** The kind of match; always the colour-scale kind. */
   readonly kind: typeof CfMatchKind.ColorScale;
+  /** The workbook-global priority of the matching rule; a smaller number ranks higher. */
   readonly priority: number;
+  /** The interpolated fill colour for the cell, resolved against the theme and palette so its `kind` is
+   *  `ColorKind.Rgb`. */
   readonly color: Color;
 }
 
 /** A data-bar match. */
 export interface CfDataBarMatch {
+  /** The kind of match; always the data-bar kind. */
   readonly kind: typeof CfMatchKind.DataBar;
+  /** The workbook-global priority of the matching rule; a smaller number ranks higher. */
   readonly priority: number;
+  /** The data bar to draw for the cell. */
   readonly bar: CfMatchBar;
 }
 
 /** An icon-set match. */
 export interface CfIconSetMatch {
+  /** The kind of match; always the icon-set kind. */
   readonly kind: typeof CfMatchKind.IconSet;
+  /** The workbook-global priority of the matching rule; a smaller number ranks higher. */
   readonly priority: number;
+  /** The icon to draw for the cell. */
   readonly icon: CfMatchIcon;
 }
 
@@ -1685,35 +1840,40 @@ export type CfMatch = CfFormatMatch | CfColorScaleMatch | CfDataBarMatch | CfIco
 
 /** One cell's CF result inside a viewport-range evaluation. */
 export interface CfCell {
+  /** The 0-based row of the cell. */
   readonly row: number;
+  /** The 0-based column of the cell. */
   readonly col: number;
+  /** The rules that match the cell, in ascending priority order, so the first entry is the highest priority. */
   readonly matches: readonly CfMatch[];
 }
 
 /** Resolved print geometry for one worksheet. All coordinates are 0-based. */
 export interface Pagination {
-  /** The sheet's declared `_xlnm.Print_Area`; no rectangles when the sheet declares
-   *  none -- it is not backfilled with the used range. Pagination itself
-   *  still falls back to the used range in that case, so `pageCount` can be
-   *  non-zero without a declared area. */
+  /** The sheet's declared `_xlnm.Print_Area`; empty when the sheet declares none, and not backfilled with the used
+   *  range. Pagination still falls back to the used range in that case, so `pageCount` can be non-zero while this is
+   *  empty. */
   readonly printArea: readonly CellRect[];
   /** The row breaks in effect, ascending by `row`. */
   readonly rowBreaks: readonly RowBreak[];
   /** The column breaks in effect, ascending by `col`. */
   readonly columnBreaks: readonly ColumnBreak[];
+  /** The number of physical pages. */
   readonly pageCount: number;
-  /** Paper the layout ran on, after the orientation swap. `known` is false
-   *  when the stored `paperSize` was unrecognised and A4 was substituted. */
+  /** The paper the layout ran on, after the orientation swap. Its `known` is false when the stored paper size was
+   *  unrecognised and A4 was substituted. */
   readonly paper: PaginationPaper;
+  /** The page margins. */
   readonly margins: PaginationMargins;
-  /** Cell-body rectangle before print-title reservation, from the page's top-left corner. */
+  /** The cell-body rectangle before print-title reservation, measured from the page's top-left corner. */
   readonly printable: RectPt;
-  /** Effective print scale as a percentage (100 is 100%). */
+  /** The effective print scale as a percentage (100 is 100%). */
   readonly scalePct: number;
+  /** The order in which pages are numbered over the print area, a `PageOrder` value. */
   readonly pageOrder: PageOrder;
-  /** Repeat rows / columns in effect; `null` when neither axis repeats. */
+  /** The repeat rows and columns in effect; `null` when neither axis repeats. */
   readonly printTitles: PrintTitles | null;
-  /** Physical pages in print order. */
+  /** The physical pages in print order. */
   readonly pages: readonly PaginationPage[];
 }
 
@@ -1728,42 +1888,58 @@ export type PageOrder = 0 | 1;
 /** `Pagination.paper`. `known` is false when the stored `paperSize` was
  *  unrecognised and A4 was substituted. */
 export interface PaginationPaper {
+  /** The paper width in points, after the orientation swap. */
   readonly widthPt: number;
+  /** The paper height in points, after the orientation swap. */
   readonly heightPt: number;
+  /** `true` when the paper is laid out landscape. */
   readonly landscape: boolean;
+  /** `false` when the stored paper size was unrecognised and A4 was substituted. */
   readonly known: boolean;
 }
 
 /** `Pagination.margins`, in inches; `headerIn` / `footerIn` are measured
  *  from the page edge to the header / footer band. */
 export interface PaginationMargins {
+  /** The left page margin in inches. */
   readonly leftIn: number;
+  /** The right page margin in inches. */
   readonly rightIn: number;
+  /** The top page margin in inches. */
   readonly topIn: number;
+  /** The bottom page margin in inches. */
   readonly bottomIn: number;
+  /** The distance in inches from the page top edge to the header band. */
   readonly headerIn: number;
+  /** The distance in inches from the page bottom edge to the footer band. */
   readonly footerIn: number;
 }
 
 /** A rectangle in points. */
 export interface RectPt {
+  /** The distance in points from the rectangle's origin to its left edge. */
   readonly x: number;
+  /** The distance in points from the rectangle's origin to its top edge. */
   readonly y: number;
+  /** The width in points. */
   readonly widthPt: number;
+  /** The height in points. */
   readonly heightPt: number;
 }
 
-/** One physical page of a `Pagination`. `widthPt` / `heightPt` are the
- *  scaled extent of the page's own cell block (repeated titles excluded) and
- *  `originXPt` / `originYPt` is that block's top-left corner on the paper. */
+/** One physical page of a `Pagination`. */
 export interface PaginationPage {
-  /** Index into `Pagination.printArea` (0 for the used-range fallback). */
+  /** 0-based index of the print area this page belongs to (0 for the used-range fallback). */
   readonly areaIndex: number;
-  /** The page's cell block. */
+  /** The cell block the page carries. */
   readonly range: CellRect;
+  /** Horizontal position in points of the cell block's left edge on the paper. */
   readonly originXPt: number;
+  /** Vertical position in points of the cell block's top edge on the paper. */
   readonly originYPt: number;
+  /** Scaled width in points of the page's cell block, repeated title columns excluded. */
   readonly widthPt: number;
+  /** Scaled height in points of the page's cell block, repeated title rows excluded. */
   readonly heightPt: number;
 }
 
@@ -1788,31 +1964,36 @@ export type WidthPlatform = 0 | 1;
 /** Return type of `Sheet.getWidthModel(...)`. `pointsPerChar` and `paddingPt` are per displayed
  *  character: `chars * pointsPerChar + paddingPt`; stored widths go through `convertColumnCharsToPt`. */
 export interface WidthModel {
+  /** The points added per displayed character. */
   readonly pointsPerChar: number;
+  /** The constant padding in points. */
   readonly paddingPt: number;
-  /** Point size of the Normal font. */
+  /** The point size of the Normal font. */
   readonly normalFontSizePt: number;
-  /** False when the Normal font is not a measured calibration point and the Calibri 11 figure was extrapolated. */
+  /** `false` when the Normal font is not a measured calibration point and the Calibri 11 figure was extrapolated. */
   readonly calibrated: boolean;
+  /** The name of the Normal font. */
   readonly normalFontName: string;
+  /** The `WidthPlatform` whose metrics the model uses. */
   readonly platform: WidthPlatform;
 }
 
 /** Sheet default column / row metrics (`<sheetFormatPr>`). `defaultColumnWidthChars` and `defaultRowHeightPt`
  *  are `null` when the sheet stores none; on update, `null` clears the stored value and an omitted key keeps it. */
 export interface SheetFormatDefaultsInput {
-  /** Characters, 0 to 255. */
+  /** The stored default column width in characters, column padding included, 0 to 255; `null` when the sheet stores
+   *  none (on update, `null` clears it). */
   readonly defaultColumnWidthChars: number | null;
-  /** Points, 0 to 409. */
+  /** The stored default row height in points, 0 to 409; `null` when the sheet stores none (on update, `null` clears
+   *  it). */
   readonly defaultRowHeightPt: number | null;
-  /** Characters; OOXML default 8. */
+  /** The base column width in characters, from which Excel derives the default column width when none is stored; the
+   *  OOXML default is 8. */
   readonly baseColumnWidthChars: number;
-  /** `<sheetFormatPr customHeight>`: `defaultRowHeightPt` is an explicit override that stays as
-   *  written, rather than a cached figure Excel recomputes from the Normal font. An omitted key
-   *  on set keeps the stored flag. */
+  /** `true` when `defaultRowHeightPt` is an explicit override that stays as written, rather than a cached figure Excel
+   *  recomputes from the Normal font; an omitted key on update keeps the stored flag. */
   readonly customHeight: boolean;
-  /** `<sheetFormatPr zeroHeight>`: rows are hidden unless they say otherwise. An omitted key
-   *  on set keeps the stored flag. */
+  /** `true` when rows are hidden by default unless they say otherwise; an omitted key on update keeps the stored flag. */
   readonly zeroHeight: boolean;
 }
 
@@ -1826,35 +2007,43 @@ export type SheetFormatDefaultsPatch = Patch<
 /** Return type of `Sheet.getFormatDefaults()`. The effective
  *  values are read-only and ignored by `updateFormatDefaults`. */
 export interface SheetFormatDefaults extends SheetFormatDefaultsInput {
-  /** Stored width in characters the sheet lays columns out with: `defaultColumnWidthChars` when set, else the column
-   *  Excel derives from `baseColumnWidthChars` and the Normal font (Calibri 11, base 8: 9.140625, shown as 8.43). */
+  /** Stored width in characters the sheet lays columns out with: the stated default column width when set, else the
+   *  width Excel derives from the base column width and the Normal font (Calibri 11, base 8: 9.140625, shown as 8.43).
+   *  Read-only. */
   readonly effectiveDefaultColumnWidthChars: number;
-  /** Points the sheet lays rows out with: `defaultRowHeightPt` when set, else 102/7 (about 14.57); 0 when `zeroHeight` hides rows by default. */
+  /** Points the sheet lays rows out with: the stated default row height when set, else 102/7 (about 14.57); 0 when the
+   *  sheet hides rows by default. Read-only. */
   readonly effectiveDefaultRowHeightPt: number;
 }
 
 /** One populated cell, as `Sheet.listCells` and `Sheet.getCellsInRange` return it: its coordinates, its
  *  formula as `Sheet.getFormula` reads it (`null` for a constant), its value as native data and that value's kind. */
 export interface RangeCell {
+  /** The 0-based row. */
   readonly row: number;
+  /** The 0-based column. */
   readonly col: number;
+  /** The formula text as the sheet formula getter spells it; `null` for a constant. */
   readonly formula: string | null;
+  /** The computed value as native data. */
   readonly value: NativeValue;
+  /** The `ValueKind` of `value`. */
   readonly kind: ValueKind;
 }
 
 /** Paging options of `Sheet.getCellsInRange` and `Sheet.getInvalidCells`. */
 export interface PageOptions {
-  /** The `nextCursor` of the previous page; omitted or `null` starts at the first. */
+  /** The `nextCursor` of the previous page; omitted or `null` starts at the first page. */
   cursor?: number | null;
-  /** Page size; omitted, `null` or 0 is the engine maximum. */
+  /** The page size; omitted, `null` or 0 is the engine maximum. */
   limit?: number | null;
 }
 
 /** Return type of `Sheet.getCellsInRange(...)`. */
 export interface CellsInRange {
+  /** The populated cells of this page. */
   readonly cells: readonly RangeCell[];
-  /** Resume position for the next page, or `null` when the range is exhausted. */
+  /** The resume position for the next page; `null` when the range is exhausted. */
   readonly nextCursor: number | null;
 }
 
@@ -1872,7 +2061,9 @@ export type DisplayStatus = 0 | 1 | 2;
 
 /** Return type of `Sheet.getDisplayText` / `formatValue`. */
 export interface DisplayText {
+  /** The text Excel displays for the value. */
   readonly text: string;
+  /** The rendering outcome, a `DisplayStatus` value: ok, overflow or invalid format. */
   readonly displayStatus: DisplayStatus;
 }
 
@@ -1898,39 +2089,41 @@ export const SheetViewMode: Readonly<{
 /** Union of the {@link SheetViewMode} ordinals. */
 export type SheetViewMode = 0 | 1 | 2;
 
-/** Per-sheet view: zoom percentage (10..400, default 100), frozen-pane row/col
- *  counts, and the display / orientation flags mirrored
- *  from OOXML `<sheetView>` (gridlines, row/col headers, zero display,
- *  right-to-left, tab-selected, view mode). */
+/** Per-sheet view, mirrored from OOXML `<sheetView>`. */
 export interface SheetView {
+  /** The zoom as a percentage, 10 to 400; 100 is 100%. */
   readonly zoomPct: number;
+  /** The number of frozen rows at the top; 0 means no frozen rows. */
   readonly freezeRows: number;
+  /** The number of frozen columns at the left; 0 means no frozen columns. */
   readonly freezeCols: number;
-  /** `showGridLines`; default true. */
+  /** `true` when the cell gridlines are shown; the default is `true`. */
   readonly showGridLines: boolean;
-  /** `showRowColumnHeaders`; default true. */
+  /** `true` when the row and column headers are shown; the default is `true`. */
   readonly showRowColumnHeaders: boolean;
-  /** `showZeros`; default true. */
+  /** `true` when cells holding zero show the 0; the default is `true`. */
   readonly showZeros: boolean;
-  /** `rightToLeft`; default false. */
+  /** `true` when the sheet is laid out right to left; the default is `false`. */
   readonly rightToLeft: boolean;
-  /** `tabSelected`; default false. */
+  /** `true` when the sheet's tab is selected; the default is `false`. Plain metadata: it does not by itself make the
+   *  sheet the active one. */
   readonly tabSelected: boolean;
-  /** `view` mode; `Normal` when the attribute is absent. */
+  /** The view mode (normal, page break preview or page layout); the normal view when the attribute is absent. */
   readonly viewMode: SheetViewMode;
-  /** Scroll origin of the sheet view (`topLeftCell`); A1 by default. */
+  /** The scroll origin of the sheet view (the first visible cell, `topLeftCell`); A1 by default. */
   readonly topLeft: CellAddress;
-  /** First visible cell of a frozen or split view's lower-right pane
-   *  (`<pane topLeftCell>`): the first cell past the frozen rows and columns
-   *  (A1 for a split) until a host scrolls it. A1 without panes. */
+  /** The first visible cell of a frozen or split view's lower-right pane (`<pane topLeftCell>`): the first cell past
+   *  the frozen rows and columns until a host scrolls it. A1 without panes. */
   readonly paneTopLeft: CellAddress;
-  /** An unfrozen split's position in twips (`<pane xSplit ySplit>`); `0` for no
-   *  split on that axis, and always `0` while the view is frozen. */
+  /** The horizontal position of an unfrozen split in twips; 0 means no split on that axis, and it is always 0 while the
+   *  view is frozen. */
   readonly splitXTwips: number;
+  /** The vertical position of an unfrozen split in twips; 0 means no split on that axis, and it is always 0 while the
+   *  view is frozen. */
   readonly splitYTwips: number;
-  /** `showFormulas`: cells show their formula text; default false. */
+  /** `true` when cells show their formula text instead of the value; the default is `false`. */
   readonly showFormulas: boolean;
-  /** `showOutlineSymbols`: the outline gutter's group symbols are shown; default true. */
+  /** `true` when the outline gutter's group symbols are shown; the default is `true`. */
   readonly showOutlineSymbols: boolean;
 }
 
@@ -1941,11 +2134,12 @@ export type SheetViewPatch = Patch<Omit<SheetView, 'topLeft' | 'paneTopLeft'>> &
   paneTopLeft?: CellAddress | string;
 };
 
-/** The active pane's selection: the active cell and the selected ranges.
- *  Input of `Sheet.setSelection`; `ranges` may be empty or omitted,
- *  which selects the active cell alone. */
+/** The active pane's selection: the active cell and the selected ranges. Input of `Sheet.setSelection`. */
 export interface SheetSelectionInput {
+  /** The active cell, as a cell address or an A1 string. */
   active: CellAddress | string;
+  /** The selected ranges, as rectangles or A1 strings, or one A1 string; empty or omitted selects the active cell
+   *  alone. */
   ranges?: readonly (CellRect | string)[] | string;
 }
 
@@ -1954,7 +2148,9 @@ export interface SheetSelectionInput {
  *  pane's top-left cell for a frozen or split view's active pane), and an
  *  active cell outside every range moves to the first range's top-left. */
 export interface SheetSelection {
+  /** The active cell. */
   readonly active: CellAddress;
+  /** The selected ranges. */
   readonly ranges: readonly CellRect[];
 }
 
@@ -1962,73 +2158,95 @@ export interface SheetSelection {
  * Protection of one sheet (`<sheetProtection>`, ECMA-376 §18.3.1.85), as `Sheet.getSheetProtection()` returns
  * it; that getter returns `null` for an unprotected sheet, so the record's presence is the protection.
  *
- * Round-trip metadata only: the engine does not enforce locks at evaluation time. Each `allow*` flag is `true`
- * when users may perform that action on the protected sheet, as the "Protect Sheet" dialog shows it. Hash fields
- * are stored exactly as given; the host computes them. A string is `null` when absent.
+ * Round-trip metadata only: the engine does not enforce locks at evaluation time. The `allow*` flags follow the
+ * "Protect Sheet" dialog; the host computes the hash fields.
  */
 export interface SheetProtection {
+  /** The name of the hash algorithm that produced `hashValue`; `null` when the sheet states none. */
   readonly algorithmName: string | null;
+  /** The password hash, stored as given; `null` when the sheet states none. */
   readonly hashValue: string | null;
+  /** The salt the password hash was computed with, stored as given; `null` when the sheet states none. */
   readonly saltValue: string | null;
+  /** The number of hash iterations; 0 when the sheet states none. */
   readonly spinCount: number;
-  /** Legacy 16-bit password hash, as the hex text Excel writes. */
+  /** The legacy 16-bit password hash, as the hex text Excel writes; `null` when the sheet states none. */
   readonly legacyPasswordHash: string | null;
-  /** Users may edit objects (shapes, charts, pictures) on the protected sheet; Excel's default `false`. */
+  /** `true` when users may edit objects (shapes, charts, pictures) on the protected sheet; Excel's default `false`. */
   readonly allowEditObjects: boolean;
-  /** Users may edit scenarios on the protected sheet; Excel's default `false`. */
+  /** `true` when users may edit scenarios on the protected sheet; Excel's default `false`. */
   readonly allowEditScenarios: boolean;
-  /** Users may format cells on the protected sheet; Excel's default `false`. */
+  /** `true` when users may format cells on the protected sheet; Excel's default `false`. */
   readonly allowFormatCells: boolean;
-  /** Users may format columns on the protected sheet; Excel's default `false`. */
+  /** `true` when users may format columns on the protected sheet; Excel's default `false`. */
   readonly allowFormatColumns: boolean;
-  /** Users may format rows on the protected sheet; Excel's default `false`. */
+  /** `true` when users may format rows on the protected sheet; Excel's default `false`. */
   readonly allowFormatRows: boolean;
-  /** Users may insert columns on the protected sheet; Excel's default `false`. */
+  /** `true` when users may insert columns on the protected sheet; Excel's default `false`. */
   readonly allowInsertColumns: boolean;
-  /** Users may insert rows on the protected sheet; Excel's default `false`. */
+  /** `true` when users may insert rows on the protected sheet; Excel's default `false`. */
   readonly allowInsertRows: boolean;
-  /** Users may insert hyperlinks on the protected sheet; Excel's default `false`. */
+  /** `true` when users may insert hyperlinks on the protected sheet; Excel's default `false`. */
   readonly allowInsertHyperlinks: boolean;
-  /** Users may delete columns on the protected sheet; Excel's default `false`. */
+  /** `true` when users may delete columns on the protected sheet; Excel's default `false`. */
   readonly allowDeleteColumns: boolean;
-  /** Users may delete rows on the protected sheet; Excel's default `false`. */
+  /** `true` when users may delete rows on the protected sheet; Excel's default `false`. */
   readonly allowDeleteRows: boolean;
-  /** Users may select locked cells on the protected sheet; Excel's default `true`. */
+  /** `true` when users may select locked cells on the protected sheet; Excel's default `true`. */
   readonly allowSelectLockedCells: boolean;
-  /** Users may select unlocked cells on the protected sheet; Excel's default `true`. */
+  /** `true` when users may select unlocked cells on the protected sheet; Excel's default `true`. */
   readonly allowSelectUnlockedCells: boolean;
-  /** Users may sort on the protected sheet; Excel's default `false`. */
+  /** `true` when users may sort on the protected sheet; Excel's default `false`. */
   readonly allowSort: boolean;
-  /** Users may use AutoFilter on the protected sheet; Excel's default `false`. */
+  /** `true` when users may use AutoFilter on the protected sheet; Excel's default `false`. */
   readonly allowAutoFilter: boolean;
-  /** Users may use PivotTables on the protected sheet; Excel's default `false`. */
+  /** `true` when users may use PivotTables on the protected sheet; Excel's default `false`. */
   readonly allowPivotTables: boolean;
 }
 
-/** Argument of `Sheet.setSheetProtection`: the whole protection of a protected sheet. Every key is optional; an
- *  omitted `allow*` flag takes Excel's dialog default (`allowSelectLockedCells` and `allowSelectUnlockedCells`
- *  `true`, every other flag `false`), an omitted string is absent and an omitted `spinCount` is 0. The record
- *  `Sheet.getSheetProtection()` returns is accepted as is. */
+/** Argument of `Sheet.setSheetProtection`: the whole protection of a protected sheet. Every key is optional and an
+ *  omitted `allow*` flag takes Excel's dialog default. The record `Sheet.getSheetProtection()` returns is accepted as
+ *  is. */
 export interface SheetProtectionInput {
+  /** The name of the hash algorithm that produced `hashValue`; omitted or `null` is absent. */
   algorithmName?: string | null;
+  /** The password hash, stored as given; omitted or `null` is absent. */
   hashValue?: string | null;
+  /** The salt the password hash was computed with, stored as given; omitted or `null` is absent. */
   saltValue?: string | null;
+  /** The number of hash iterations; omitted is 0, which is absent. */
   spinCount?: number;
+  /** The legacy 16-bit password hash, as the hex text Excel writes; omitted or `null` is absent. */
   legacyPasswordHash?: string | null;
+  /** `true` when users may edit objects (shapes, charts, pictures) on the protected sheet; default `false`. */
   allowEditObjects?: boolean;
+  /** `true` when users may edit scenarios on the protected sheet; default `false`. */
   allowEditScenarios?: boolean;
+  /** `true` when users may format cells on the protected sheet; default `false`. */
   allowFormatCells?: boolean;
+  /** `true` when users may format columns on the protected sheet; default `false`. */
   allowFormatColumns?: boolean;
+  /** `true` when users may format rows on the protected sheet; default `false`. */
   allowFormatRows?: boolean;
+  /** `true` when users may insert columns on the protected sheet; default `false`. */
   allowInsertColumns?: boolean;
+  /** `true` when users may insert rows on the protected sheet; default `false`. */
   allowInsertRows?: boolean;
+  /** `true` when users may insert hyperlinks on the protected sheet; default `false`. */
   allowInsertHyperlinks?: boolean;
+  /** `true` when users may delete columns on the protected sheet; default `false`. */
   allowDeleteColumns?: boolean;
+  /** `true` when users may delete rows on the protected sheet; default `false`. */
   allowDeleteRows?: boolean;
+  /** `true` when users may select locked cells on the protected sheet; default `true`. */
   allowSelectLockedCells?: boolean;
+  /** `true` when users may select unlocked cells on the protected sheet; default `true`. */
   allowSelectUnlockedCells?: boolean;
+  /** `true` when users may sort on the protected sheet; default `false`. */
   allowSort?: boolean;
+  /** `true` when users may use AutoFilter on the protected sheet; default `false`. */
   allowAutoFilter?: boolean;
+  /** `true` when users may use PivotTables on the protected sheet; default `false`. */
   allowPivotTables?: boolean;
 }
 
@@ -2043,26 +2261,35 @@ export type SheetProtectionPatch = Patch<
 /** Per-column-range layout override. Inclusive `[first, last]` columns
  *  carry the same width / hidden / outline level. */
 export interface ColumnLayout {
+  /** 0-based index of the first column of the span. */
   readonly first: number;
+  /** 0-based index of the last column of the span, inclusive. */
   readonly last: number;
-  /** The explicit width in characters (raw presence or non-zero legacy width); `null` when the span states none. */
+  /** The explicit width in characters of the Normal font (raw presence or a non-zero legacy width); `null` when the
+   *  span states none, and an explicit zero stays distinguishable from an absent width. */
   readonly widthChars: number | null;
+  /** `true` when the columns of the span are hidden. */
   readonly hidden: boolean;
+  /** The outline level of the span; 0 means not grouped. */
   readonly outlineLevel: number;
-  /** The outline group this span summarises is collapsed. */
+  /** `true` when the outline group this span summarises is collapsed (the `collapsed` attribute). */
   readonly collapsed: boolean;
 }
 
 /** Per-row layout override. */
 export interface RowLayout {
+  /** 0-based index of the row. */
   readonly row: number;
   /** The stored height in points; `null` when the row stores none. */
   readonly heightPt: number | null;
+  /** `true` when the row is hidden. */
   readonly hidden: boolean;
+  /** The outline level of the row; 0 means not grouped. */
   readonly outlineLevel: number;
-  /** The outline group this row summarises is collapsed. */
+  /** `true` when the outline group this row summarises is collapsed (the `collapsed` attribute). */
   readonly collapsed: boolean;
-  /** An explicit override (`customHeight="1"`) rather than an auto height Excel recomputes. */
+  /** `true` when the height is an explicit override (`customHeight="1"`) rather than an auto height that Excel
+   *  recomputes on its own. */
   readonly customHeight: boolean;
 }
 
@@ -2082,15 +2309,21 @@ export type CellShift = 0 | 1 | 2 | 3;
  *  (`'A1:B2'`) is accepted too, and a list of them also takes one A1 range; a space-separated multi-area
  *  string is not. */
 export interface CellRect {
+  /** The 0-based first row. */
   readonly firstRow: number;
+  /** The 0-based first column. */
   readonly firstCol: number;
+  /** The 0-based last row, inclusive. */
   readonly lastRow: number;
+  /** The 0-based last column, inclusive. */
   readonly lastCol: number;
 }
 
 /** One cell: 0-based `row` and `col`. A record field of this type also takes an A1 cell (`'C3'`). */
 export interface CellAddress {
+  /** The 0-based row. */
   readonly row: number;
+  /** The 0-based column. */
   readonly col: number;
 }
 
@@ -2098,7 +2331,9 @@ export interface CellAddress {
  *  (`'Sheet1!A1:B2'`); an unqualified one resolves on the record's own sheet, and fails with
  *  `StatusCode.InvalidArgument` where the record has none. */
 export interface SheetRect {
+  /** The 0-based index of the sheet. */
   readonly sheet: number;
+  /** The cell rectangle on that sheet. */
   readonly rect: CellRect;
 }
 
@@ -2106,108 +2341,150 @@ export interface SheetRect {
 export interface Hyperlink {
   /** The cells the hyperlink covers. */
   readonly range: CellRect;
-  /** Absolute or relative target (URL, email, internal ref, …); `null` for an in-workbook link. */
+  /** The absolute or relative target (URL, email address, file); `null` for an in-workbook link. */
   readonly target: string | null;
-  /** In-workbook destination; `null` for an external target. */
+  /** The in-workbook destination; `null` for an external target. */
   readonly location: string | null;
-  /** Display text override; `null` when default. */
+  /** The display text override; `null` when the hyperlink has none. */
   readonly display: string | null;
-  /** Tooltip text; `null` when none. */
+  /** The tooltip text; `null` when the hyperlink has none. */
   readonly tooltip: string | null;
 }
 
-/** Argument of `Sheet.setHyperlink`. A `null` `target` is an in-workbook link and needs `location`, its A1
- *  destination. A `null` `display` or `tooltip` is the same as omitting it, so a read `Hyperlink` can be passed
- *  back. `range` (a {@link CellRect} or an A1 range) is the cells the link covers; omitted or `null` it is the key
- *  cell alone, and a range that does not start at the key cell fails with `StatusCode.InvalidArgument`. */
+/** Argument of `Sheet.setHyperlink`. A `null` `display` or `tooltip` is the same as omitting it, so a read
+ *  `Hyperlink` can be passed back. */
 export interface HyperlinkInput {
+  /** The absolute or relative target (URL, email address, file); `null` makes an in-workbook link, which needs
+   *  `location`. */
   target: string | null;
+  /** The in-workbook destination as an A1 reference; omitted or `null` for an external target. */
   location?: string | null;
+  /** The display text override; omitted or `null` is none. */
   display?: string | null;
+  /** The tooltip text; omitted or `null` is none. */
   tooltip?: string | null;
+  /** The cells the link covers, a `CellRect` or an A1 range starting at the key cell; a range that does not start there
+   *  fails with `StatusCode.InvalidArgument`. Omitted or `null` covers the key cell alone. */
   range?: CellRect | string | null;
 }
 
 /** Cell comment entry returned by `Sheet.getComment(row, col)`. */
 export interface Comment {
+  /** The comment's author; the empty string when none. */
   readonly author: string;
+  /** The comment's text. */
   readonly text: string;
 }
 
 /** Argument of `Sheet.setComment`. An omitted `author` is `""`. The {@link Comment} a read returns passes as
  *  is. */
 export interface CommentInput {
+  /** The comment's text. */
   text: string;
+  /** The comment's author; omitted is the empty string. */
   author?: string;
 }
 
-/** Workbook-level protection (`<workbookProtection>`).
- *  Hash fields are stored exactly as given; the host computes them. A zero
- *  spin count and an empty string are absent. */
+/** Workbook-level protection (`<workbookProtection>`). The host computes the hash fields. */
 export interface WorkbookProtection {
+  /** `true` when the workbook structure is locked, so sheets cannot be added, deleted, renamed, moved or hidden. */
   readonly lockStructure: boolean;
+  /** `true` when the workbook windows are locked, so they cannot be moved or resized. */
   readonly lockWindows: boolean;
+  /** `true` when the workbook is locked for revisions (shared-workbook tracking cannot be switched off). */
   readonly lockRevision: boolean;
-  /** Legacy 16-bit password hash, as the hex text Excel writes. */
+  /** The legacy 16-bit hash of the structure-lock password, as the hex text Excel writes; `null` when absent. */
   readonly workbookLegacyPasswordHash: string | null;
+  /** The name of the hash algorithm of the structure-lock password; `null` when absent. */
   readonly workbookAlgorithmName: string | null;
+  /** The hash of the structure-lock password, stored as given; `null` when absent. */
   readonly workbookHashValue: string | null;
+  /** The salt of the structure-lock password hash, stored as given; `null` when absent. */
   readonly workbookSaltValue: string | null;
+  /** The number of hash iterations of the structure-lock password; 0 when absent. */
   readonly workbookSpinCount: number;
-  /** Legacy 16-bit password hash of the revision lock, as the hex text Excel writes. */
+  /** The legacy 16-bit hash of the revision-lock password, as the hex text Excel writes; `null` when absent. */
   readonly revisionsLegacyPasswordHash: string | null;
+  /** The name of the hash algorithm of the revision-lock password; `null` when absent. */
   readonly revisionsAlgorithmName: string | null;
+  /** The hash of the revision-lock password, stored as given; `null` when absent. */
   readonly revisionsHashValue: string | null;
+  /** The salt of the revision-lock password hash, stored as given; `null` when absent. */
   readonly revisionsSaltValue: string | null;
+  /** The number of hash iterations of the revision-lock password; 0 when absent. */
   readonly revisionsSpinCount: number;
 }
 
-/** Argument of `Workbook.setWorkbookProtection`. Every key is optional: an omitted flag is `false`, an omitted
- *  spin count is `0` and an omitted or `null` string is absent. The {@link WorkbookProtection} a read returns
- *  passes as is. */
+/** Argument of `Workbook.setWorkbookProtection`. Every key is optional. The {@link WorkbookProtection} a read
+ *  returns passes as is. */
 export interface WorkbookProtectionInput {
+  /** `true` locks the workbook structure; omitted is `false`. */
   lockStructure?: boolean;
+  /** `true` locks the workbook windows; omitted is `false`. */
   lockWindows?: boolean;
+  /** `true` locks the workbook for revisions; omitted is `false`. */
   lockRevision?: boolean;
+  /** The legacy 16-bit hash of the structure-lock password, as the hex text Excel writes; omitted or `null` is absent. */
   workbookLegacyPasswordHash?: string | null;
+  /** The name of the hash algorithm of the structure-lock password; omitted or `null` is absent. */
   workbookAlgorithmName?: string | null;
+  /** The hash of the structure-lock password, stored as given; omitted or `null` is absent. */
   workbookHashValue?: string | null;
+  /** The salt of the structure-lock password hash, stored as given; omitted or `null` is absent. */
   workbookSaltValue?: string | null;
+  /** The number of hash iterations of the structure-lock password; omitted is 0, which is absent. */
   workbookSpinCount?: number;
+  /** The legacy 16-bit hash of the revision-lock password, as the hex text Excel writes; omitted or `null` is absent. */
   revisionsLegacyPasswordHash?: string | null;
+  /** The name of the hash algorithm of the revision-lock password; omitted or `null` is absent. */
   revisionsAlgorithmName?: string | null;
+  /** The hash of the revision-lock password, stored as given; omitted or `null` is absent. */
   revisionsHashValue?: string | null;
+  /** The salt of the revision-lock password hash, stored as given; omitted or `null` is absent. */
   revisionsSaltValue?: string | null;
+  /** The number of hash iterations of the revision-lock password; omitted is 0, which is absent. */
   revisionsSpinCount?: number;
 }
 
 /** One `<protectedRange>`: a named range users may edit on a protected sheet,
  *  covering the rectangles of `ranges`. */
 export interface ProtectedRange {
+  /** The range's name, unique among the sheet's protected ranges. */
   readonly name: string;
+  /** The rectangles the protected range covers. */
   readonly ranges: readonly CellRect[];
-  /** Legacy 16-bit password hash, as the hex text Excel writes; `null` when absent. */
+  /** The legacy 16-bit password hash, as the hex text Excel writes; `null` when absent. */
   readonly legacyPasswordHash: string | null;
-  /** Each of the four strings is `null` when the range does not state it. */
+  /** The name of the hash algorithm that produced `hashValue`; `null` when absent. */
   readonly algorithmName: string | null;
+  /** The password hash, stored as given; `null` when absent. */
   readonly hashValue: string | null;
+  /** The salt the password hash was computed with, stored as given; `null` when absent. */
   readonly saltValue: string | null;
+  /** The number of hash iterations; 0 when absent. */
   readonly spinCount: number;
+  /** The security descriptor (SDDL text) naming who may edit the range without a password; `null` when absent. */
   readonly securityDescriptor: string | null;
 }
 
-/** Argument of `Sheet.addProtectedRange`: `name` and `ranges` (a {@link CellRect}, an A1 range or a list of
- *  them) are required, every other key is optional and absent when omitted. The {@link ProtectedRange} a read
- *  returns passes as is. */
+/** Argument of `Sheet.addProtectedRange`: `name` and `ranges` are required, every other key is optional. The
+ *  {@link ProtectedRange} a read returns passes as is. */
 export interface ProtectedRangeInput {
+  /** The range's name; it must be non-empty and unused by the sheet's other protected ranges. */
   name: string;
+  /** The rectangles the range covers: a list of `CellRect`s and A1 ranges, or one A1 string; at least one is required. */
   ranges: readonly (CellRect | string)[] | string;
-  /** Legacy 16-bit password hash, as the hex text Excel writes. */
+  /** The legacy 16-bit password hash, as the hex text Excel writes; omitted or `null` is absent. */
   legacyPasswordHash?: string | null;
+  /** The name of the hash algorithm that produced `hashValue`; omitted or `null` is absent. */
   algorithmName?: string | null;
+  /** The password hash, stored as given; omitted or `null` is absent. */
   hashValue?: string | null;
+  /** The salt the password hash was computed with, stored as given; omitted or `null` is absent. */
   saltValue?: string | null;
+  /** The number of hash iterations; omitted is 0, which is absent. */
   spinCount?: number;
+  /** The security descriptor (SDDL text) naming who may edit the range without a password; omitted or `null` is absent. */
   securityDescriptor?: string | null;
 }
 
@@ -2226,6 +2503,7 @@ export type ProtectedRangePatch = Patch<
 /** Sheet-wide comment entry returned by `Sheet.listComments()`. Extends `Comment` with the anchor `cell`, so
  *  comments on otherwise-empty cells can be found without already knowing their address. */
 export interface SheetComment extends Comment {
+  /** The cell the comment is anchored to. */
   readonly cell: CellAddress;
 }
 
@@ -2245,53 +2523,72 @@ export type ValidationType = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
 
 /** One sheet `<dataValidation>` block as returned by `Sheet.listValidations()` (OOXML `dataValidations.xsd`). */
 export interface DataValidation {
-  /** The rule's id: stable while the workbook is open, across structural edits; assigned again on load. */
+  /** The rule's id: stable while the workbook is open, across structural edits; assigned again on load and not saved. */
   readonly id: ValidationId;
+  /** The cell ranges the rule applies to. */
   readonly ranges: readonly CellRect[];
+  /** The kind of value the rule allows. */
   readonly type: ValidationType;
+  /** The comparison the rule applies between the entered value and its formulas. */
   readonly operator: ComparisonOperator;
+  /** How an invalid entry is reported: stop, warning or information. */
   readonly errorStyle: ValidationErrorStyle;
   /** A blank cell passes the rule. */
   readonly allowBlank: boolean;
-  /** The prompt (`promptTitle` / `promptMessage`) shows when the cell is selected. */
+  /** The prompt (`promptTitle` and `promptMessage`) shows when the cell is selected. */
   readonly showInputMessage: boolean;
-  /** The error alert (`errorTitle` / `errorMessage`) shows on invalid entry. */
+  /** The error alert (`errorTitle` and `errorMessage`) shows on an invalid entry. */
   readonly showErrorMessage: boolean;
-  /** The in-cell dropdown arrow is shown (`List` type only). */
+  /** The in-cell dropdown arrow is shown (`list` rules only). */
   readonly showInCellDropdown: boolean;
-  /** Formula text, leading `=` included; `null` when the rule states none. */
+  /** The first formula or value of the rule, leading `=` included; `null` when the rule states none. */
   readonly formula1: string | null;
+  /** The second formula or value of the rule (the upper bound of a between rule), leading `=` included; `null` when the
+   *  rule states none. */
   readonly formula2: string | null;
-  /** Each of the four texts is `null` when the rule has none. */
+  /** The title of the error alert; `null` when the rule has none. */
   readonly errorTitle: string | null;
+  /** The text of the error alert; `null` when the rule has none. */
   readonly errorMessage: string | null;
+  /** The title of the input prompt; `null` when the rule has none. */
   readonly promptTitle: string | null;
+  /** The text of the input prompt; `null` when the rule has none. */
   readonly promptMessage: string | null;
 }
 
-/** Argument of `Sheet.addValidation(validation)`. Every field except `ranges` and `type` is optional. An omitted
- *  field takes Excel's dialog default: `Between` / `Stop`, `true` for `allowBlank`, `showInputMessage`,
- *  `showErrorMessage` and `showInCellDropdown`, and `""` for strings. `ranges` must hold at least one
- *  rectangle. A formula that does not parse fails with its parser status and `FormulonError.parseError`. */
+/** Argument of `Sheet.addValidation(validation)`. Every field except `ranges` and `type` is optional and takes
+ *  Excel's dialog default when omitted. A formula that does not parse fails with its parser status and
+ *  `FormulonError.parseError`. */
 export interface DataValidationInput {
+  /** The cell ranges the rule applies to: rectangles, unqualified A1 ranges, or one A1 string; at least one is
+   *  required. */
   ranges: readonly (CellRect | string)[] | string;
+  /** The kind of value the rule allows. */
   type: ValidationType;
+  /** The comparison the rule applies between the entered value and its formulas; default is between. */
   operator?: ComparisonOperator;
+  /** How an invalid entry is reported; default is stop. */
   errorStyle?: ValidationErrorStyle;
   /** A blank cell passes the rule; default `true`. */
   allowBlank?: boolean;
   /** Show the prompt when the cell is selected; default `true`. */
   showInputMessage?: boolean;
-  /** Show the error alert on invalid entry; default `true`. */
+  /** Show the error alert on an invalid entry; default `true`. */
   showErrorMessage?: boolean;
-  /** Show the in-cell dropdown arrow (`List` type only); default `true`. */
+  /** Show the in-cell dropdown arrow (`list` rules only); default `true`. */
   showInCellDropdown?: boolean;
-  /** Formula text; the leading `=` is optional. */
+  /** The first formula or value of the rule; the leading `=` is optional; omitted or `null` is none. */
   formula1?: string | null;
+  /** The second formula or value of the rule (the upper bound of a between rule); the leading `=` is optional; omitted
+   *  or `null` is none. */
   formula2?: string | null;
+  /** The title of the error alert; omitted or `null` is none. */
   errorTitle?: string | null;
+  /** The text of the error alert; omitted or `null` is none. */
   errorMessage?: string | null;
+  /** The title of the input prompt; omitted or `null` is none. */
   promptTitle?: string | null;
+  /** The text of the input prompt; omitted or `null` is none. */
   promptMessage?: string | null;
 }
 
@@ -2307,17 +2604,21 @@ export type DataValidationPatch = Patch<
 /** Workbook-wide cell coordinate used by trace results. `sheet` is the
  *  0-based sheet index. */
 export interface CellNode {
+  /** The 0-based index of the sheet. */
   readonly sheet: number;
+  /** The 0-based row. */
   readonly row: number;
+  /** The 0-based column. */
   readonly col: number;
 }
 
-/** One error value's spelling under an Excel profile: the canonical (en-invariant)
- *  text and the profile's Excel spelling. `measured` is `false` when the
- *  localized spelling is assumed rather than captured from Excel. */
+/** One error value's spelling under an Excel profile. */
 export interface LocaleErrorName {
+  /** The canonical (en-invariant) error text. */
   readonly canonical: string;
+  /** The profile's Excel spelling of the error. */
   readonly localized: string;
+  /** `false` when the localized spelling is assumed rather than captured from Excel. */
   readonly measured: boolean;
 }
 
@@ -2330,39 +2631,47 @@ export const LocaleDateOrder: Readonly<{
 /** Union of the {@link LocaleDateOrder} ordinals. */
 export type LocaleDateOrder = 0 | 1 | 2;
 
-/** Scalar locale facts of one {@link ProfileId}. `measured` is `true`
- *  for the profiles captured from Excel (every `mac-*` id and
- *  `win-365-ja_JP`) and `false` for the estimated `win-*` ids. Every
- *  scalar field is captured in each Mac locale, so `measured` covers them
- *  all; only `errorNames` carries per-entry flags.
- *  `errorNames` is indexed by error-code ordinal. */
+/** Scalar locale facts of one {@link ProfileId}. Every scalar field is captured in each Mac locale, so `measured`
+ *  covers them all; only `errorNames` carries per-entry flags. */
 export interface LocaleFacts {
+  /** The decimal separator. */
   readonly decimalSeparator: string;
+  /** The digit group (thousands) separator. */
   readonly groupSeparator: string;
+  /** The separator between function arguments in formulas. */
   readonly listSeparator: string;
+  /** The separator between columns in an array constant. */
   readonly arrayColumnSeparator: string;
+  /** The separator between rows in an array constant. */
   readonly arrayRowSeparator: string;
+  /** The spelling of the logical value TRUE. */
   readonly trueName: string;
+  /** The spelling of the logical value FALSE. */
   readonly falseName: string;
+  /** The order of year, month and day in short dates, a `LocaleDateOrder` value. */
   readonly dateOrder: LocaleDateOrder;
+  /** The currency symbol. */
   readonly currencySymbol: string;
   /** `true` when the currency symbol follows the number. */
   readonly currencySuffix: boolean;
-  /** `true` when one space separates the symbol and the number. */
+  /** `true` when one space separates the currency symbol and the number. */
   readonly currencySpace: boolean;
+  /** The number of decimal places the currency format shows by default. */
   readonly currencyDefaultDecimals: number;
+  /** `true` for an Excel-backed profile (every mac profile and win-365-ja_JP); `false` for an estimated one. */
   readonly measured: boolean;
-  /** `true` when the text collation of this profile was captured from Excel
-   *  (every `mac-*` id); `false` for the estimated `win-*` ids, including
-   *  `win-365-ja_JP`, whose `measured` is `true` for the other facts. */
+  /** `true` when the text collation of the profile was captured from Excel (every mac profile); `false` for the
+   *  estimated win profiles, including win-365-ja_JP, whose `measured` is `true` for the other facts. */
   readonly collationMeasured: boolean;
+  /** The spelling of each error value under the profile, indexed by error-code ordinal. */
   readonly errorNames: readonly LocaleErrorName[];
 }
 
 /** Result of `Formulon.getCollationClasses`. */
 export interface CollationClasses {
-  /** One class id per input value. */
+  /** One class id per input value, dense from 0 in ascending sort order. */
   readonly classIds: Uint32Array;
+  /** The number of distinct classes. */
   readonly classCount: number;
 }
 
@@ -2376,26 +2685,30 @@ export const FunctionAvailability: Readonly<{
 /** Union of the {@link FunctionAvailability} ordinals. */
 export type FunctionAvailability = 0 | 1 | 2 | 3;
 
-/** Metadata of a registered function, as `getFunctionMetadata(name)` returns it.
- *  `signature` and `description` are null until mergeFunctionMetadata fills them from a
- *  host-supplied provider document (`docs/function-metadata-schema.md`): the engine ships no
- *  human-readable function text. */
+/** Metadata of a registered function, as `getFunctionMetadata(name)` returns it. `mergeFunctionMetadata` fills
+ *  `signature` and `description` from a host-supplied provider document (`docs/function-metadata-schema.md`): the
+ *  engine ships no human-readable function text. */
 export interface FunctionMetadata {
+  /** The canonical function name. */
   readonly name: string;
+  /** The minimum number of arguments written at entry. */
   readonly minArity: number;
-  /** `null` denotes an unbounded variadic. */
+  /** The maximum number of arguments written at entry; `null` for an open argument list. */
   readonly maxArity: number | null;
-  /** How far the engine implements the function. */
+  /** How far the engine implements the function: a real implementation, host-bound, or an intentionally unavailable
+   *  fixed-error stub. */
   readonly availability: FunctionAvailability;
-  /** null until mergeFunctionMetadata fills it from a host metadata document. */
+  /** The signature template; `null` until a host metadata document fills it in. */
   readonly signature: string | null;
-  /** null until mergeFunctionMetadata fills it from a host metadata document. */
+  /** The human-readable description; `null` until a host metadata document fills it in. */
   readonly description: string | null;
 }
 
 /** Per-locale display overrides inside a {@link FunctionMetadataEntry}. */
 export interface FunctionMetadataLocalized {
+  /** The locale-specific signature template. */
   signature?: string;
+  /** The locale-specific description. */
   description?: string;
 }
 
@@ -2404,13 +2717,13 @@ export interface FunctionMetadataLocalized {
  *  (see `docs/function-metadata-schema.md`); it never affects formula
  *  parsing or evaluation. */
 export interface FunctionMetadataEntry {
-  /** Default (locale-agnostic) signature template. */
+  /** The default (locale-agnostic) signature template. */
   signature?: string;
-  /** Default (locale-agnostic) description. */
+  /** The default (locale-agnostic) description. */
   description?: string;
-  /** Map of BCP-47 locale tag -> localized display name. */
+  /** A map from BCP-47 locale tag to the localized display name. */
   aliases?: Record<string, string>;
-  /** Map of BCP-47 locale tag -> per-locale signature/description overrides. */
+  /** A map from BCP-47 locale tag to the per-locale signature and description overrides. */
   localized?: Record<string, FunctionMetadataLocalized>;
 }
 
@@ -2422,7 +2735,7 @@ export type FunctionMetadataProvider = Record<string, FunctionMetadataEntry>;
  *  {@link FunctionMetadata} with the resolved localized display name
  *  attached. */
 export interface MergedFunctionMetadata extends FunctionMetadata {
-  /** `entry.aliases[locale]` when present, else the canonical `name`. */
+  /** `entry.aliases[locale]` when present, else the canonical function name. */
   readonly localizedName: string;
 }
 
@@ -2449,13 +2762,12 @@ export function mergeFunctionMetadata(
   locale: string,
 ): MergedFunctionMetadata;
 
-/** Maps a {@link Value} to its native JS value, as the primary reads return it: Blank to `null`, Number to a
- *  `number`, Bool to a `boolean`, Text to a `string`, Error to an {@link ExcelError} and an `ArrayValue` to its
- *  rows. A `RefValue` or `LambdaValue`, which no read returns, and anything that is not a `Value` throw
- *  `TypeError`.
+/** Maps a {@link Value} to its native JS value, as the primary reads return it: Blank to `null`, Number to a `number`,
+ *  Bool to a `boolean`, Text to a `string`, Error to an {@link ExcelError} and an `ArrayValue` to its rows. A
+ *  `RefValue` or `LambdaValue`, which no read returns, and anything that is not a `Value` throw `TypeError`.
  *
- *  A pure host-side helper, reached as `Formulon.toNative` and as a named export of both packages; Python's counterpart is
- *  `formulon.to_native`. */
+ *  A pure host-side helper, reached as `Formulon.toNative` and as a named export of both packages; Python's counterpart
+ *  is `formulon.to_native`. */
 export function toNative(value: BlankValue): null;
 export function toNative(value: NumberValue): number;
 export function toNative(value: BoolValue): boolean;
@@ -2464,9 +2776,9 @@ export function toNative(value: ErrorValue): ExcelError;
 export function toNative(value: ArrayValue): readonly (readonly NativeValue[])[];
 export function toNative(value: Value): NativeValue;
 
-/** The key `value` has in the ordinal table `enumType` (`enumName(CfRuleType, 3)` is `'DataBar'`); `null` when
- *  no key has it (`enumName(StatusCode, 2)` is the status spelling, `'InvalidArgument'`). A pure host-side helper, reached
- *  as `Formulon.enumName` and as a named export of both packages. */
+/** The key `value` has in the ordinal table `enumType` (`enumName(CfRuleType, 3)` is `'DataBar'`); `null` when no key
+ *  has it (`enumName(StatusCode, 2)` is the status spelling, `'InvalidArgument'`). A pure host-side helper, reached as
+ *  `Formulon.enumName` and as a named export of both packages. */
 export function enumName<T extends Readonly<Record<string, number>>>(
   enumType: T,
   value: number,
@@ -2482,55 +2794,64 @@ export type MergeFunctionMetadata = typeof mergeFunctionMetadata;
 /** A legacy array (CSE) formula: the block it fills and its stored text. The top-left cell of `range`
  *  holds the formula; every cell of the block reports the same value. */
 export interface ArrayFormula {
+  /** The block the formula fills; its top-left cell holds the formula. */
   readonly range: CellRect;
-  /** Formula text, leading `=` included (optional on input). */
+  /** The formula text, with a leading `=`; the `=` is optional on input. */
   readonly formula: string;
 }
 
 /** Argument of `Sheet.setArrayFormula`: the block as a {@link CellRect} or an A1 range on the receiving sheet,
  *  and the formula text (the leading `=` is optional). The {@link ArrayFormula} a read returns passes as is. */
 export interface ArrayFormulaInput {
+  /** The block, as a rectangle or an A1 range on the receiving sheet. */
   range: CellRect | string;
+  /** The formula text; the leading `=` is optional. */
   formula: string;
 }
 
 /** Spill region info returned by `Sheet.getSpill(row, col)`, which returns `null` when the cell is neither
  *  part of a spill nor a blocked anchor. */
 export interface Spill {
-  /** `true` when the cell is the anchor of a spill that failed with `#SPILL!`; then `range` is the rectangle
-   *  it attempted. */
+  /** `true` when the cell is the anchor of a spill refused with `#SPILL!`; the region is then the rectangle it
+   *  attempted. */
   readonly blocked: boolean;
-  /** The region including its anchor, whose top-left cell holds the formula. */
+  /** The region including its anchor, whose top-left cell holds the dynamic-array formula. */
   readonly range: CellRect;
 }
 
 /** A parsed reference: the rectangle `range`, with a whole column or row expanded to the grid edge.
  *  `sheetName` is the unquoted local qualifier (a text qualifier, not a workbook sheet), `null` when none. */
 export interface ParsedReference {
+  /** The unquoted sheet qualifier; `null` when the text has none. */
   readonly sheetName: string | null;
+  /** The 0-based inclusive rectangle, with a whole column or row expanded to the grid edge. */
   readonly range: CellRect;
 }
 
 /** Options for `parseReference`. `baseRow` and `baseCol` anchor R1C1 relative axes and are given together. */
 export interface ParseReferenceOptions {
+  /** Parses the text as R1C1 when `true`; omitted parses A1. */
   r1c1?: boolean;
+  /** The 0-based row that R1C1 relative axes are measured from; given together with `baseCol`. */
   baseRow?: number;
+  /** The 0-based column that R1C1 relative axes are measured from; given together with `baseRow`. */
   baseCol?: number;
 }
 
 /** Options for `formatReference`. */
 export interface FormatReferenceOptions {
-  /** The qualifier to write; it overrides the `sheetName` of a {@link ParsedReference}. Omitted, `null` or `""`
+  /** The qualifier to write; it overrides the sheet name of a parsed reference. Omitted, `null` or an empty string
    *  writes no qualifier. */
   sheetName?: string | null;
+  /** `true` prefixes every component with `$`; default `false`. */
   absolute?: boolean;
 }
 
 /** Options of `Sheet.evaluateCfRange`. */
 export interface CfRangeEvaluationOptions {
-  /** The date basis for `TimePeriod` rules (default: the pinned clock, else today). */
+  /** The date basis for time-period rules; the pinned clock when one is set, else today. */
   today?: DateInput;
-  /** `false` passes no date, so no `TimePeriod` rule matches; default `true`. */
+  /** Whether time-period rules are evaluated; `false` makes none of them match. Defaults to `true`. */
   timePeriodRules?: boolean;
 }
 
@@ -2543,95 +2864,124 @@ export interface CfRangeEvaluationOptions {
  *  `addCfRule`.
  */
 export interface ConditionalFormat {
+  /** The rule's identifier, unique within the workbook. */
   readonly id: string;
+  /** The kind of rule; selects which of the other members apply. */
   readonly type: CfRuleType;
+  /** The workbook-global priority of the rule; a smaller number ranks higher. */
   readonly priority: number;
+  /** `true` when lower-priority rules are not applied to a cell this rule matches. */
   readonly stopIfTrue: boolean;
+  /** The cell ranges the rule applies to. */
   readonly ranges: readonly CellRect[];
+  /** The 0-based index of the differential format the rule applies; `null` when the rule applies no format. */
   readonly dxfIndex: number | null;
-  /** Formula text, leading `=` included. */
+  /** The first formula of the rule, leading `=` included; `null` when the rule has none. Used by expression and cell-is
+   *  rules, and stored by the text and blank/error/duplicate kinds. */
   readonly formula1: string | null;
+  /** The second formula of the rule, leading `=` included, for the between and not-between operators; `null` otherwise. */
   readonly formula2: string | null;
-  /** `null` unless the rule is `CellIs`. */
+  /** The comparison operator; `null` unless the rule is a cell-is rule. */
   readonly operator: ComparisonOperator | null;
-  /** `null` unless the rule is `Top10`. */
+  /** The number of values (or percent of values with `percent`) a top/bottom rule selects; `null` unless the rule is a
+   *  top/bottom rule. */
   readonly rank: number | null;
+  /** `true` when `rank` is a percentage of the values rather than a count; `null` unless the rule is a top/bottom rule. */
   readonly percent: boolean | null;
+  /** `true` when a top/bottom rule selects the lowest values; `null` unless the rule is a top/bottom rule. */
   readonly bottom: boolean | null;
-  /** `null` unless the rule is `AboveAverage`. */
+  /** `true` for values above the average, `false` for below; `null` unless the rule is an above-average rule. */
   readonly aboveAverage: boolean | null;
+  /** `true` when values equal to the average also match; `null` unless the rule is an above-average rule. */
   readonly equalAverage: boolean | null;
+  /** The number of standard deviations from the average the rule requires; `null` for a plain comparison with the
+   *  average, and unless the rule is an above-average rule. */
   readonly stdDev: number | null;
-  /** `null` unless the rule is `ContainsText` / `BeginsWith` / `EndsWith` /
-   *  `NotContainsText`. */
+  /** The text a text rule tests for; `null` unless the rule is a contains, not-contains, begins-with or ends-with rule. */
   readonly text: string | null;
-  /** `null` unless the rule is `TimePeriod`. */
+  /** The date period a time-period rule matches; `null` unless the rule is a time-period rule. */
   readonly timePeriod: DatePeriod | null;
-  /** `null` unless the rule is `ColorScale`. */
+  /** The colour-scale payload; `null` unless the rule is a colour-scale rule. */
   readonly colorScale: CfColorScale | null;
-  /** `null` unless the rule is `DataBar`. */
+  /** The data-bar payload; `null` unless the rule is a data-bar rule. */
   readonly dataBar: CfDataBar | null;
-  /** `null` unless the rule is `IconSet`. */
+  /** The icon-set payload; `null` unless the rule is an icon-set rule. */
   readonly iconSet: CfIconSet | null;
 }
 
 /** The payload of a `ColorScale` rule, as a read returns it. */
 export interface CfColorScale {
+  /** The two or three thresholds of the scale, from lowest to highest. */
   readonly thresholds: readonly CfValueObject[];
+  /** The colour at each threshold, in the same order and count as `thresholds`. */
   readonly colors: readonly Color[];
 }
 
 /** The payload of a `DataBar` rule, as a read returns it. */
 export interface CfDataBar {
+  /** The threshold at which the bar is shortest. */
   readonly min: CfValueObject;
+  /** The threshold at which the bar is longest. */
   readonly max: CfValueObject;
+  /** The fill colour of the bar. */
   readonly fill: Color;
+  /** `true` (the default) shows the cell value beside the bar; `false` hides it. */
   readonly showValue: boolean;
+  /** The shortest bar length as a percentage of the cell width; defaults to 10. */
   readonly minLengthPct: number;
+  /** The longest bar length as a percentage of the cell width; defaults to 90. */
   readonly maxLengthPct: number;
-  /**
-   * `x14` extension payload. A key is `null` when the rule does not state the
-   * setting; the object can be handed straight to `addCfRule`.
-   */
+  /** `true` fills the bar with a gradient, `false` with a solid colour; `null` when the rule does not state it, which
+   *  means a gradient. */
   readonly gradient: boolean | null;
+  /** Where the axis between negative and positive bars sits; `null` when the rule does not state it, which means
+   *  automatic. */
   readonly axisPosition: CfDataBarAxisPosition | null;
+  /** The fill colour of negative bars; `null` when the rule does not state it, which means the same as `fill`. */
   readonly negativeFill: Color | null;
+  /** The border colour of positive bars; `null` when the rule states none, which means no border. */
   readonly border: Color | null;
+  /** The border colour of negative bars; `null` when the rule states none, which means no negative border. */
   readonly negativeBorder: Color | null;
+  /** The colour of the axis line; `null` when the rule states none, which means black. */
   readonly axisColor: Color | null;
-  /** Edge the bar grows from. */
+  /** The edge the bar grows from. */
   readonly direction: CfDataBarDirection;
 }
 
 /** The payload of an `IconSet` rule, as a read returns it. */
 export interface CfIconSet {
+  /** The icon set the rule draws from. */
   readonly name: IconSetName;
-  /** Exactly N-1 thresholds for an N-icon set (the floor is `floor`, not a threshold). A formula-typed value carries its leading `=` on read. */
+  /** The thresholds between the icons: N-1 for an icon set of N icons; the lowest bound is `floor`, not a threshold. A
+   *  formula value carries its leading `=` on read. */
   readonly thresholds: readonly CfValueObject[];
+  /** `true` draws the icons in reverse order; defaults to `false`. */
   readonly reverse: boolean;
+  /** `true` (the default) shows the cell value beside the icon; `false` hides it. */
   readonly showValue: boolean;
-  /** Round-trip only: the `percent` attribute is preserved across load
-   *  and save but never consulted during evaluation. Each threshold
-   *  carries its own `type`, and that type is what interprets it. */
+  /** Round-trip only: preserved across load and save but never consulted during evaluation, since each threshold's own
+   *  type decides how it is read. Defaults to `true`. */
   readonly percent: boolean;
-  /** Lower bound of the lowest icon's bucket; a cell below it gets no
-   *  icon. `null` when the rule states no floor. */
+  /** The lower bound of the lowest icon's bucket; a cell below it gets no icon. `null` when the rule states none. */
   readonly floor: CfValueObject | null;
-  /** Custom icon set: the icon drawn for each level; `null` when the
-   *  set draws its own icons. */
+  /** For a custom icon set, the icon drawn for each level; empty or `null` when the set draws its own icons. */
   readonly icons: readonly CfIcon[] | null;
 }
 
-/** One level of a custom icon set. `iconSet` is the set the icon comes from
- *  (`IconSetName.NoIcons` for a level that draws nothing); `iconIndex` is the zero-based icon within it. */
+/** One level of a custom icon set. */
 export interface CfIconInput {
+  /** The icon set the icon comes from; the no-icons member for a level that draws nothing. */
   iconSet: IconSetName;
+  /** The 0-based index of the icon within `iconSet`. */
   iconIndex: number;
 }
 
 /** One level of a custom icon set, as a read returns it; it passes back to a rule input as is. */
 export interface CfIcon {
+  /** The icon set the icon comes from; the no-icons member for a level that draws nothing. */
   readonly iconSet: IconSetName;
+  /** The 0-based index of the icon within `iconSet`. */
   readonly iconIndex: number;
 }
 
@@ -2656,125 +3006,167 @@ interface CfFormatRuleInputBase extends CfRuleInputBase {
 
 /** `Expression`: formats a cell where `formula1` (leading `=` optional) is true. */
 export interface CfExpressionRuleInput extends CfFormatRuleInputBase {
+  /** Discriminant: always the expression rule kind. */
   type: typeof CfRuleType.Expression;
+  /** The formula that decides whether the cell is formatted; a leading `=` is optional. */
   formula1: string;
 }
 
 /** `CellIs`: compares the cell with `formula1`, and `formula2` for `Between` / `NotBetween`. */
 export interface CfCellIsRuleInput extends CfFormatRuleInputBase {
+  /** Discriminant: always the cell-is rule kind. */
   type: typeof CfRuleType.CellIs;
+  /** How the cell is compared with `formula1` (and `formula2` for between and not-between). */
   operator: ComparisonOperator;
+  /** The value or formula the cell is compared with; a leading `=` is optional. */
   formula1: string;
+  /** The upper bound for the between and not-between operators; a leading `=` is optional. Omitted for other operators. */
   formula2?: string;
 }
 
 /** The payload of a `ColorScale` rule input. A {@link CfColorScale} read back passes as is. */
 export interface CfColorScaleInput {
+  /** The two or three thresholds of the scale, from lowest to highest. */
   thresholds: readonly CfValueObjectInput[];
+  /** The colour at each threshold, in the same order and count as `thresholds`. */
   colors: readonly ColorInput[];
 }
 
 /** The payload of a `DataBar` rule input. A {@link CfDataBar} read back passes as is; `null` on an optional key
  *  is the same as leaving it out. */
 export interface CfDataBarInput {
+  /** The threshold at which the bar is shortest. */
   min: CfValueObjectInput;
+  /** The threshold at which the bar is longest. */
   max: CfValueObjectInput;
+  /** The fill colour of the bar. */
   fill: ColorInput;
+  /** `true` (the default) shows the cell value beside the bar; `false` hides it. */
   showValue?: boolean;
+  /** The shortest bar length as a percentage of the cell width; defaults to 10. */
   minLengthPct?: number;
+  /** The longest bar length as a percentage of the cell width; defaults to 90. */
   maxLengthPct?: number;
-  /**
-   * `x14` extension payload. Omit a key to keep the model default:
-   * gradient fill on, automatic axis, negative fill equal to `fill`, no
-   * border, and a black axis.
-   */
+  /** `true` fills the bar with a gradient, `false` with a solid colour; omitted or `null` keeps the default, a
+   *  gradient. */
   gradient?: boolean | null;
+  /** Where the axis between negative and positive bars sits; omitted or `null` keeps the default, automatic. */
   axisPosition?: CfDataBarAxisPosition | null;
+  /** The fill colour of negative bars; omitted or `null` keeps the default, the same as `fill`. */
   negativeFill?: ColorInput | null;
+  /** The border colour of positive bars; omitted or `null` keeps the default, no border. */
   border?: ColorInput | null;
+  /** The border colour of negative bars; omitted or `null` keeps the default, no negative border. */
   negativeBorder?: ColorInput | null;
+  /** The colour of the axis line; omitted or `null` keeps the default, black. */
   axisColor?: ColorInput | null;
-  /** Defaults to `CfDataBarDirection.Context`. */
+  /** The edge the bar grows from; defaults to the context direction (the sheet's reading direction). */
   direction?: CfDataBarDirection;
 }
 
 /** The payload of an `IconSet` rule input. A {@link CfIconSet} read back passes as is; `null` on an optional key
  *  is the same as leaving it out. */
 export interface CfIconSetInput {
+  /** The icon set the rule draws from. */
   name: IconSetName;
-  /** Exactly N-1 thresholds for an N-icon set (the floor is `floor`, not a threshold); any other count is rejected with `StatusCode.InvalidArgument`. A formula-typed value takes its leading `=` with or without. */
+  /** The thresholds between the icons: exactly N-1 for an icon set of N icons (the lowest bound is `floor`, not a
+   *  threshold); any other count is rejected as an invalid argument. A formula value takes a leading `=` with or
+   *  without it. */
   thresholds: readonly CfValueObjectInput[];
+  /** `true` draws the icons in reverse order; defaults to `false`. */
   reverse?: boolean;
+  /** `true` (the default) shows the cell value beside the icon; `false` hides it. */
   showValue?: boolean;
-  /** Round-trip only: preserved across load and save but never
-   *  consulted during evaluation (each threshold's own `type` is
-   *  authoritative). */
+  /** Round-trip only: preserved across load and save but never consulted during evaluation, since each threshold's own
+   *  type decides how it is read. Defaults to `true`. */
   percent?: boolean;
-  /** Lower bound of the lowest icon's bucket; a cell below it gets no
-   *  icon. Omit for Excel's default, `percent 0`. */
+  /** The lower bound of the lowest icon's bucket; a cell below it gets no icon. Omitted or `null` keeps Excel's
+   *  default, a percent threshold of 0. */
   floor?: CfValueObjectInput | null;
-  /** Custom icon set: one icon per level (the set's icon count), or omit
-   *  for the set's own icons. Evaluation still buckets against `name`. */
+  /** For a custom icon set, one icon per level (the set's icon count); omitted, empty or `null` uses the set's own
+   *  icons. Evaluation still buckets against `name`. */
   icons?: readonly CfIconInput[] | null;
 }
 
 /** `ColorScale`: two or three thresholds with as many colours. */
 export interface CfColorScaleRuleInput extends CfRuleInputBase {
+  /** Discriminant: always the colour-scale rule kind. */
   type: typeof CfRuleType.ColorScale;
+  /** The colour-scale payload. */
   colorScale: CfColorScaleInput;
 }
 
 /** `DataBar`. */
 export interface CfDataBarRuleInput extends CfRuleInputBase {
+  /** Discriminant: always the data-bar rule kind. */
   type: typeof CfRuleType.DataBar;
+  /** The data-bar payload. */
   dataBar: CfDataBarInput;
 }
 
 /** `IconSet`: the cell's bucket among the thresholds picks an icon of `name`. */
 export interface CfIconSetRuleInput extends CfRuleInputBase {
+  /** Discriminant: always the icon-set rule kind. */
   type: typeof CfRuleType.IconSet;
+  /** The icon-set payload. */
   iconSet: CfIconSetInput;
 }
 
 /** `Top10`: the top (or with `bottom`, the bottom) `rank` values, or `rank` percent with `percent`. */
 export interface CfTop10RuleInput extends CfFormatRuleInputBase {
+  /** Discriminant: always the top/bottom rule kind. */
   type: typeof CfRuleType.Top10;
+  /** The number of values to select, or the percentage of values when `percent` is set. */
   rank?: number;
+  /** `true` reads `rank` as a percentage of the values rather than a count; defaults to `false`. */
   percent?: boolean;
+  /** `true` selects the lowest values instead of the highest; defaults to `false`. */
   bottom?: boolean;
 }
 
 /** `AboveAverage`: values above (or with `aboveAverage: false`, below) the mean, optionally by `stdDev`
  *  standard deviations. */
 export interface CfAboveAverageRuleInput extends CfFormatRuleInputBase {
+  /** Discriminant: always the above-average rule kind. */
   type: typeof CfRuleType.AboveAverage;
+  /** `true` (the default) matches values above the average, `false` values below it. */
   aboveAverage?: boolean;
+  /** `true` also matches values equal to the average; defaults to `false`. */
   equalAverage?: boolean;
+  /** The number of standard deviations from the average a value must differ by; omitted compares with the average
+   *  itself. */
   stdDev?: number;
 }
 
 /** `ContainsText` / `NotContainsText` / `BeginsWith` / `EndsWith`: a text test against `text`. `formula1` is the
  *  stored test formula Excel writes beside it; omit it to have it derived. */
 export interface CfTextRuleInput extends CfFormatRuleInputBase {
+  /** The text test: contains, not-contains, begins-with or ends-with. */
   type:
     | typeof CfRuleType.ContainsText
     | typeof CfRuleType.NotContainsText
     | typeof CfRuleType.BeginsWith
     | typeof CfRuleType.EndsWith;
+  /** The text the cell is tested against. */
   text: string;
+  /** The stored test formula Excel writes beside the rule; omitted or `null` derives it. */
   formula1?: string;
 }
 
 /** `TimePeriod`: a date in `timePeriod` relative to today. */
 export interface CfTimePeriodRuleInput extends CfFormatRuleInputBase {
+  /** Discriminant: always the time-period rule kind. */
   type: typeof CfRuleType.TimePeriod;
+  /** The date period, relative to today, that a cell's date must fall in. */
   timePeriod: DatePeriod;
+  /** The stored test formula Excel writes beside the rule; omitted or `null` derives it. */
   formula1?: string;
 }
 
 /** `ContainsBlanks` / `NotContainsBlanks` / `ContainsErrors` / `NotContainsErrors` / `DuplicateValues` /
  *  `UniqueValues`: a test with no operand. `formula1` is the stored test formula, derived when omitted. */
 export interface CfPlainRuleInput extends CfFormatRuleInputBase {
+  /** The test: blanks, errors, duplicate values or unique values, or the negation of blanks or errors. */
   type:
     | typeof CfRuleType.ContainsBlanks
     | typeof CfRuleType.NotContainsBlanks
@@ -2782,6 +3174,7 @@ export interface CfPlainRuleInput extends CfFormatRuleInputBase {
     | typeof CfRuleType.NotContainsErrors
     | typeof CfRuleType.DuplicateValues
     | typeof CfRuleType.UniqueValues;
+  /** The stored test formula; omitted or `null` derives it. */
   formula1?: string;
 }
 
@@ -2803,23 +3196,41 @@ export type ConditionalFormatInput =
 /** The keys of every {@link ConditionalFormatInput} kind except `type`, `id` and `format` (a patch sets
  *  `dxfIndex`); see {@link ConditionalFormatPatch}. */
 export interface ConditionalFormatPatchFields {
+  /** The cell ranges the rule applies to, as rectangles or A1 text. */
   ranges: readonly (CellRect | string)[] | string;
+  /** The workbook-global priority of the rule; a smaller number ranks higher. */
   priority: number;
+  /** `true` stops lower-priority rules from applying to a cell this rule matches. */
   stopIfTrue: boolean;
+  /** The 0-based index of the differential format the rule applies. */
   dxfIndex: number;
+  /** The comparison operator of a cell-is rule. */
   operator: ComparisonOperator;
+  /** The first formula of the rule; a leading `=` is optional. */
   formula1: string;
+  /** The second formula of the rule, for the between and not-between operators; a leading `=` is optional. */
   formula2: string;
+  /** The payload of a colour-scale rule. */
   colorScale: CfColorScaleInput;
+  /** The payload of a data-bar rule. */
   dataBar: CfDataBarInput;
+  /** The payload of an icon-set rule. */
   iconSet: CfIconSetInput;
+  /** The number of values (or percentage with `percent`) a top/bottom rule selects. */
   rank: number;
+  /** `true` reads `rank` as a percentage of the values. */
   percent: boolean;
+  /** `true` selects the lowest values. */
   bottom: boolean;
+  /** `true` matches values above the average, `false` below. */
   aboveAverage: boolean;
+  /** `true` also matches values equal to the average. */
   equalAverage: boolean;
+  /** The number of standard deviations from the average a value must differ by. */
   stdDev: number;
+  /** The text a text rule tests for. */
   text: string;
+  /** The date period a time-period rule matches. */
   timePeriod: DatePeriod;
 }
 
@@ -2960,45 +3371,54 @@ export type BorderStyle = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 |
 
 /** Return type of `Workbook.ooxml.getCellXf(xfIndex)`. */
 export interface CellXf {
+  /** Index of the font in the workbook font table. */
   readonly fontIndex: number;
+  /** Index of the fill in the workbook fill table. */
   readonly fillIndex: number;
+  /** Index of the border in the workbook border table. */
   readonly borderIndex: number;
+  /** The number format id: a built-in id or one declared in `<numFmts>`. */
   readonly numFmtId: number;
-  /** OOXML `horizontal`; `null` when the attribute is absent. */
+  /** The horizontal alignment. `null` when the attribute is absent. */
   readonly horizontal: HorizontalAlign | null;
-  /** OOXML `vertical`; `null` when the attribute is absent. */
+  /** The vertical alignment; bottom when the attribute is absent. `null` when the attribute is absent. */
   readonly vertical: VerticalAlign | null;
-  /** OOXML `wrapText`; `null` when the attribute is absent. */
+  /** Whether text wraps within the cell. `null` when the attribute is absent. */
   readonly wrapText: boolean | null;
-  /** OOXML `justifyLastLine`; effective with distributed horizontal alignment. `null` when the attribute is absent. */
+  /** Whether the last line is justified; effective with distributed horizontal alignment. `null` when the attribute is
+   *  absent. */
   readonly justifyLastLine: boolean | null;
-  /** OOXML `applyNumberFormat` / `applyFont` / `applyFill` / `applyBorder` /
-   *  `applyAlignment` / `applyProtection`: whether this record's value for
-   *  the group overrides its parent named style. */
+  /** Whether this record's number format overrides the one of its parent named style. */
   readonly applyNumberFormat: boolean;
+  /** Whether this record's font overrides the one of its parent named style. */
   readonly applyFont: boolean;
+  /** Whether this record's fill overrides the one of its parent named style. */
   readonly applyFill: boolean;
+  /** Whether this record's border overrides the one of its parent named style. */
   readonly applyBorder: boolean;
+  /** Whether this record's alignment overrides the one of its parent named style. */
   readonly applyAlignment: boolean;
+  /** Whether this record's protection overrides the one of its parent named style. */
   readonly applyProtection: boolean;
-  /** OOXML `quotePrefix`. */
+  /** Whether the cell text carries a leading apostrophe that marks it as text. */
   readonly quotePrefix: boolean;
-  /** `<protection locked>`; `null` without a `<protection>` child, which means locked. */
+  /** Whether cells are locked once the sheet is protected; `null` without a `<protection>` child, which means locked. */
   readonly locked: boolean | null;
-  /** `<protection hidden>`; `null` without a `<protection>` child, which means not hidden. */
+  /** Whether the formula is hidden once the sheet is protected; `null` without a `<protection>` child, which means not
+   *  hidden. */
   readonly hidden: boolean | null;
-  /** OOXML `textRotation`; `null` when the source attribute is absent. */
+  /** The text rotation in degrees, 0 to 180, or 255 for vertical text. `null` when the attribute is absent. */
   readonly textRotation: number | null;
-  /** OOXML `indent`; `null` when the source attribute is absent. */
+  /** The indent level, 0 to 255. `null` when the attribute is absent. */
   readonly indent: number | null;
-  /** OOXML signed `relativeIndent`; `null` when the source attribute is absent. */
+  /** The signed indent relative to the parent style. `null` when the attribute is absent. */
   readonly relativeIndent: number | null;
-  /** OOXML `shrinkToFit`; `null` when the source attribute is absent. */
+  /** Whether text shrinks to fit the cell width. `null` when the attribute is absent. */
   readonly shrinkToFit: boolean | null;
-  /** OOXML `readingOrder`; `null` when the source attribute is absent. */
+  /** The text reading order. `null` when the attribute is absent. */
   readonly readingOrder: ReadingOrder | null;
-  /** Index into `<cellStyleXfs>` of the named style this format inherits
-   *  from. Always 0 for a record read back from `getCellStyleXf`. */
+  /** Index into `<cellStyleXfs>` of the named style this format inherits from; always 0 for a record read back from a
+   *  named style. */
   readonly styleXfIndex?: number;
 }
 
@@ -3017,207 +3437,277 @@ export type ColorKind = 0 | 1 | 2 | 3 | 4;
  *  is no colour. A theme, indexed or automatic colour is not resolved here; `Workbook.resolveColor` renders
  *  it. Where an input takes a {@link ColorInput}, `"#RRGGBB"` / `"#AARRGGBB"` is accepted too. */
 export interface Color {
-  /** Which selector the colour carries. */
+  /** Which selector the colour carries; only the matching field below is meaningful. */
   readonly kind: ColorKind;
-  /** AARRGGBB; meaningful when `kind` is `Rgb`. */
+  /** The colour as 0xAARRGGBB; meaningful when `kind` is RGB. */
   readonly argb: number;
-  /** Theme index; meaningful when `kind` is `Theme`. */
+  /** The theme colour index; meaningful when `kind` is theme. */
   readonly theme: number;
-  /** Theme tint in -1..1; meaningful when `kind` is `Theme`. */
+  /** The theme tint from -1 (darker) to 1 (lighter); meaningful when `kind` is theme. */
   readonly tint: number;
-  /** Legacy palette index; meaningful when `kind` is `Indexed`. */
+  /** The legacy palette index; meaningful when `kind` is indexed. */
   readonly indexed: number;
 }
 
 /** Plain-data shape of a font record (OOXML `<font>`), as `Workbook.ooxml.getFont` returns it. */
 export interface Font {
+  /** The typeface name; `null` when the font names none. */
   readonly name: string;
-  /** The `<sz>` size in points; `null` without the element, which on a differential font leaves the size
-   *  unchanged (a workbook font always has one). */
+  /** The font size in points; `null` without a `<sz>` element, which on a differential font leaves the size unchanged
+   *  (a workbook font always has one). */
   readonly sizePt: number | null;
-  /** The `<b>` element: `null` without it, which on a differential font means "leave bold unchanged";
-   *  `false` means "switch bold off". */
+  /** Whether the font is bold (`<b>`); `null` without the element, which on a differential font leaves bold unchanged,
+   *  while `false` switches it off. */
   readonly bold: boolean | null;
-  /** The `<i>` element, with the same `null` rule as `bold`. */
+  /** Whether the font is italic (`<i>`), with the same `null` rule as `bold`. */
   readonly italic: boolean | null;
-  /** The `<strike>` element, with the same `null` rule as `bold`. */
+  /** Whether the text is struck through (`<strike>`), with the same `null` rule as `bold`. */
   readonly strike: boolean | null;
-  /** `<outline>`, `<shadow>`, `<condense>` and `<extend>` toggles, with the
-   *  same `null` rule as `bold`. */
+  /** Whether the glyphs are drawn as outlines (`<outline>`), with the same `null` rule as `bold`. */
   readonly outline: boolean | null;
+  /** Whether the glyphs carry a shadow (`<shadow>`), with the same `null` rule as `bold`. */
   readonly shadow: boolean | null;
+  /** Whether the glyphs are condensed (`<condense>`), with the same `null` rule as `bold`. */
   readonly condense: boolean | null;
+  /** Whether the glyphs are extended (`<extend>`), with the same `null` rule as `bold`. */
   readonly extend: boolean | null;
+  /** The underline style. */
   readonly underline: UnderlineStyle;
+  /** The vertical alignment of the text run (baseline, superscript or subscript). */
   readonly vertAlign: FontVerticalAlign;
-  /** OOXML font-family class; `null` without a `<family>` element. */
+  /** The font-family class; `null` without a `<family>` element. */
   readonly family: FontFamily | null;
-  /** OOXML charset codepage id (e.g. 128 = Shift_JIS); `null` without a `<charset>` element. */
+  /** The charset codepage id (for example 128 for Shift_JIS); `null` without a `<charset>` element. */
   readonly charset: number | null;
-  /** `<scheme>` theme link; `None` when absent. Meaningful only on a workbook that carries a theme part. */
+  /** The theme font set the font links to (major or minor); the none value when the font has no `<scheme>` element.
+   *  Meaningful only on a workbook that carries a theme part. */
   readonly scheme: FontScheme;
-  /** The `<color>` element; `ColorKind.None` without one, which renders as the automatic colour. */
+  /** The `<color>` element; the none kind without one, which renders as the automatic colour. */
   readonly color: Color;
 }
 
-/** Argument of `Workbook.ooxml.addFont` / `setFont` / `Workbook.setDefaultFont`, and the `font` of a
- *  {@link DxfInput}: a font record whose keys are all optional. An omitted or `null` toggle, family or charset
- *  is absent (on a differential font it leaves the attribute unchanged). An omitted or `null` size or name is
- *  the Normal style's on a workbook font (`setDefaultFont` keeps the current one) and absent on a differential
- *  font. An omitted `underline`, `vertAlign` or `scheme` is `None`; an omitted `color` is `ColorKind.None`. A
- *  colour takes `"#RRGGBB"` / `"#AARRGGBB"` too. The {@link Font} a read returns passes as is. */
+/** Argument of `Workbook.ooxml.addFont` / `setFont` / `Workbook.setDefaultFont`, and the `font` of a {@link DxfInput}:
+ *  a font record whose keys are all optional. A colour takes `"#RRGGBB"` / `"#AARRGGBB"` too. The {@link Font} a read
+ *  returns passes as is. */
 export interface FontInput {
+  /** The typeface name; omitted or `null` takes the Normal style's name on a workbook font and is absent on a
+   *  differential font. */
   name?: string | null;
+  /** The font size in points; omitted or `null` takes the Normal style's size on a workbook font and leaves the size
+   *  unchanged on a differential font. */
   sizePt?: number | null;
+  /** Whether the font is bold; omitted or `null` is absent, which on a differential font leaves bold unchanged. */
   bold?: boolean | null;
+  /** Whether the font is italic; omitted or `null` is absent. */
   italic?: boolean | null;
+  /** Whether the text is struck through; omitted or `null` is absent. */
   strike?: boolean | null;
+  /** Whether the glyphs are drawn as outlines; omitted or `null` is absent. */
   outline?: boolean | null;
+  /** Whether the glyphs carry a shadow; omitted or `null` is absent. */
   shadow?: boolean | null;
+  /** Whether the glyphs are condensed; omitted or `null` is absent. */
   condense?: boolean | null;
+  /** Whether the glyphs are extended; omitted or `null` is absent. */
   extend?: boolean | null;
+  /** The underline style; omitted is none. */
   underline?: UnderlineStyle;
+  /** The vertical alignment of the text run; omitted is none. */
   vertAlign?: FontVerticalAlign;
+  /** The font-family class; omitted or `null` is absent. */
   family?: FontFamily | null;
+  /** The charset codepage id; omitted or `null` is absent. */
   charset?: number | null;
+  /** The theme font set the font links to; omitted is none. */
   scheme?: FontScheme;
+  /** The font colour; omitted is no colour, and a hex string such as #RRGGBB is accepted. */
   color?: ColorInput | null;
 }
 
 /** Plain-data shape of a fill record (OOXML `<fill>`), as `Workbook.ooxml.getFill` returns it. */
 export interface Fill {
+  /** The fill pattern (none, solid or one of the standard patterns). */
   readonly pattern: FillPattern;
-  /** The `<fgColor>` element; `ColorKind.None` without one. */
+  /** The pattern's `<fgColor>`; the none kind when the element is absent. */
   readonly foreground: Color;
-  /** The `<bgColor>` element; `ColorKind.None` without one. */
+  /** The pattern's `<bgColor>`; the none kind when the element is absent. */
   readonly background: Color;
-  /** A `<gradientFill>`, which makes the pattern fields ignored; `null` for a pattern fill. */
+  /** The gradient of a `<gradientFill>`, which makes the pattern fields ignored; `null` for a pattern fill. */
   readonly gradient: GradientFill | null;
 }
 
-/** A gradient fill. `angleDeg` is a linear gradient's angle in degrees; `left` / `right` /
- *  `top` / `bottom` (0..1) locate a path gradient's focus. */
+/** A gradient fill. */
 export interface GradientFill {
+  /** Whether the gradient is linear or path. */
   readonly type: GradientType;
+  /** The angle of a linear gradient in degrees. */
   readonly angleDeg: number;
+  /** The left edge (0..1) of a path gradient's focus. */
   readonly left: number;
+  /** The right edge (0..1) of a path gradient's focus. */
   readonly right: number;
+  /** The top edge (0..1) of a path gradient's focus. */
   readonly top: number;
+  /** The bottom edge (0..1) of a path gradient's focus. */
   readonly bottom: number;
+  /** The gradient's colour stops. */
   readonly stops: readonly GradientStop[];
 }
 
 /** One stop of a `GradientFill`. */
 export interface GradientStop {
-  /** 0..1 along the gradient. */
+  /** The position of the stop along the gradient, 0..1. */
   readonly position: number;
+  /** The colour at the stop. */
   readonly color: Color;
 }
 
 /** Argument of `Workbook.ooxml.addFill`, and the `fill` of a {@link DxfInput}: a fill record whose keys are all
- *  optional. An omitted `pattern` is `None`; an omitted colour is `ColorKind.None`; a colour takes `"#RRGGBB"` /
- *  `"#AARRGGBB"` too. The {@link Fill} a read returns passes as is. */
+ *  optional. A colour takes `"#RRGGBB"` / `"#AARRGGBB"` too. The {@link Fill} a read returns passes as is. */
 export interface FillInput {
+  /** The fill pattern; omitted is none. */
   pattern?: FillPattern;
+  /** The pattern's foreground colour; omitted is no colour. */
   foreground?: ColorInput;
+  /** The pattern's background colour; omitted is no colour. */
   background?: ColorInput;
+  /** A gradient; when given, the record is a gradient fill and the pattern fields are ignored. */
   gradient?: GradientFillInput | null;
 }
 
 /** A gradient of a {@link FillInput}; an omitted key is 0 (`type` linear). */
 export interface GradientFillInput {
+  /** Whether the gradient is linear or path; omitted is linear. */
   type?: GradientType;
+  /** The angle of a linear gradient in degrees; omitted is 0. */
   angleDeg?: number;
+  /** The left edge (0..1) of a path gradient's focus. */
   left?: number;
+  /** The right edge (0..1) of a path gradient's focus. */
   right?: number;
+  /** The top edge (0..1) of a path gradient's focus. */
   top?: number;
+  /** The bottom edge (0..1) of a path gradient's focus. */
   bottom?: number;
+  /** The gradient's colour stops; omitted is none. */
   stops?: readonly GradientStopInput[];
 }
 
 /** One stop of a {@link GradientFillInput}; an omitted key is 0 (`color` none). */
 export interface GradientStopInput {
+  /** The position of the stop along the gradient, 0..1; omitted is 0. */
   position?: number;
+  /** The colour at the stop; omitted is no colour. */
   color?: ColorInput;
 }
 
 /** One side of a `Border`. */
 export interface BorderSide {
+  /** The line style of the side (none, thin, medium, dashed, ...). */
   readonly style: BorderStyle;
-  /** The side's `<color>`; `ColorKind.None` without one. */
+  /** The side's `<color>`; the none kind without one. */
   readonly color: Color;
 }
 
 /** Argument of `Workbook.ooxml.addBorder`, and the `border` of a {@link DxfInput}: a border record whose keys
- *  are all optional. An omitted side has `BorderStyle.None` and no colour. The {@link Border} a read returns
+ *  are all optional. The {@link Border} a read returns
  *  passes as is. */
 export interface BorderInput {
+  /** The left side; omitted has no line style and no colour. */
   left?: BorderSideInput;
+  /** The right side; omitted has no line style and no colour. */
   right?: BorderSideInput;
+  /** The top side; omitted has no line style and no colour. */
   top?: BorderSideInput;
+  /** The bottom side; omitted has no line style and no colour. */
   bottom?: BorderSideInput;
+  /** The diagonal line; omitted has no line style and no colour. */
   diagonal?: BorderSideInput;
+  /** Whether the diagonal runs from bottom left to top right; omitted is `false`. */
   diagonalUp?: boolean;
+  /** Whether the diagonal runs from top left to bottom right; omitted is `false`. */
   diagonalDown?: boolean;
 }
 
 /** One side of a {@link BorderInput}; an omitted `style` is `None`. */
 export interface BorderSideInput {
+  /** The line style of the side; omitted is none. */
   style?: BorderStyle;
+  /** The side's colour; omitted is no colour. */
   color?: ColorInput;
 }
 
 /** Plain-data shape of a border record (OOXML `<border>`), as `Workbook.ooxml.getBorder` returns it. */
 export interface Border {
+  /** The left side. */
   readonly left: BorderSide;
+  /** The right side. */
   readonly right: BorderSide;
+  /** The top side. */
   readonly top: BorderSide;
+  /** The bottom side. */
   readonly bottom: BorderSide;
+  /** The line drawn diagonally; `diagonalUp` and `diagonalDown` choose its directions. */
   readonly diagonal: BorderSide;
+  /** Whether the diagonal runs from bottom left to top right. */
   readonly diagonalUp: boolean;
+  /** Whether the diagonal runs from top left to bottom right. */
   readonly diagonalDown: boolean;
 }
 
-/** Argument of `Workbook.ooxml.addCellXf`: an `<xf>` record. An omitted or `null` `horizontal`, `vertical`,
- *  `wrapText`, `justifyLastLine`, `locked` or `hidden` is an absent attribute, as {@link CellXf} reads it.
+/** Argument of `Workbook.ooxml.addCellXf`: an `<xf>` record.
  *  `<alignment>` is written when any alignment key is present and `<protection>` when `locked` or `hidden` is.
  *  The {@link CellXf} a read returns passes as is. */
 export interface CellXfInput {
+  /** Index of the font in the workbook font table. */
   readonly fontIndex: number;
+  /** Index of the fill in the workbook fill table. */
   readonly fillIndex: number;
+  /** Index of the border in the workbook border table. */
   readonly borderIndex: number;
+  /** The number format id: a built-in id or one declared in `<numFmts>`. */
   readonly numFmtId: number;
+  /** The horizontal alignment; omitted or `null` is an absent attribute. */
   readonly horizontal?: HorizontalAlign | null;
+  /** The vertical alignment; omitted or `null` is an absent attribute (bottom). */
   readonly vertical?: VerticalAlign | null;
+  /** Whether text wraps within the cell; omitted or `null` is an absent attribute. */
   readonly wrapText?: boolean | null;
-  /** OOXML `justifyLastLine`; effective with distributed alignment. */
+  /** Whether the last line is justified, effective with distributed alignment; omitted or `null` is an absent
+   *  attribute. */
   readonly justifyLastLine?: boolean | null;
-  /** OOXML `apply*` flags; each defaults to false. */
+  /** Whether this record's number format overrides the one of its parent named style; omitted is `false`. */
   readonly applyNumberFormat?: boolean;
+  /** Whether this record's font overrides the one of its parent named style; omitted is `false`. */
   readonly applyFont?: boolean;
+  /** Whether this record's fill overrides the one of its parent named style; omitted is `false`. */
   readonly applyFill?: boolean;
+  /** Whether this record's border overrides the one of its parent named style; omitted is `false`. */
   readonly applyBorder?: boolean;
+  /** Whether this record's alignment overrides the one of its parent named style; omitted is `false`. */
   readonly applyAlignment?: boolean;
+  /** Whether this record's protection overrides the one of its parent named style; omitted is `false`. */
   readonly applyProtection?: boolean;
-  /** OOXML `quotePrefix`; defaults to false. */
+  /** Whether the cell text carries a leading apostrophe that marks it as text; omitted is `false`. */
   readonly quotePrefix?: boolean;
-  /** `<protection locked>`; an absent attribute means locked. */
+  /** Whether cells are locked once the sheet is protected; omitted or `null` is an absent attribute, which means
+   *  locked. */
   readonly locked?: boolean | null;
-  /** `<protection hidden>`; an absent attribute means not hidden. */
+  /** Whether the formula is hidden once the sheet is protected; omitted or `null` is an absent attribute, which means
+   *  not hidden. */
   readonly hidden?: boolean | null;
-  /** OOXML `textRotation` (0..180 or 255). Omitted or `null` when absent. */
+  /** The text rotation in degrees, 0 to 180, or 255 for vertical text; omitted or `null` when absent. */
   readonly textRotation?: number | null;
-  /** OOXML `indent` (0..255). Omitted or `null` when absent. */
+  /** The indent level, 0 to 255; omitted or `null` when absent. */
   readonly indent?: number | null;
-  /** OOXML signed `relativeIndent`. Omitted or `null` when absent. */
+  /** The signed indent relative to the parent style; omitted or `null` when absent. */
   readonly relativeIndent?: number | null;
-  /** OOXML `shrinkToFit`; omitted or `null` when absent so explicit false is retained. */
+  /** Whether text shrinks to fit the cell width; omitted or `null` when absent, so an explicit `false` is kept. */
   readonly shrinkToFit?: boolean | null;
-  /** OOXML `readingOrder`. Omitted or `null` when absent. */
+  /** The text reading order; omitted or `null` when absent. */
   readonly readingOrder?: ReadingOrder | null;
-  /** Index of the named style in `<cellStyleXfs>` this format inherits from.
-   *  Only meaningful for `addCellXf`; must name an entry created by
-   *  `addCellStyleXf`. Defaults to 0. */
+  /** Index into `<cellStyleXfs>` of the named style this format inherits from; it must name an entry added as a
+   *  named-style format. Defaults to 0. */
   readonly styleXfIndex?: number;
 }
 
@@ -3225,12 +3715,15 @@ export interface CellXfInput {
  *  then column, then the default). Conditional formatting is not applied. The XF indexes live under
  *  `Sheet.ooxml`: the effective one in `getEffectiveStyle`, the cell's own in `getCellXfIndex`. */
 export interface CellFormat {
-  /** Which layer the effective XF came from. */
+  /** Which layer (cell, row, column or default) the effective XF came from. */
   readonly source: EffectiveStyleSource;
-  /** The number format code; `"General"` for General. */
+  /** The number format code; `General` for General. */
   readonly numberFormat: string;
+  /** The cell's font. */
   readonly font: Font;
+  /** The cell's fill. */
   readonly fill: Fill;
+  /** The cell's border. */
   readonly border: Border;
   /** The XF's alignment; the defaults when it has none. */
   readonly alignment: Alignment;
@@ -3241,23 +3734,31 @@ export interface CellFormat {
 /** How a cell's text is placed (OOXML `<alignment>`). A format without the element reads `General` / `Bottom`,
  *  every flag `false` and every number 0, with `ReadingOrder.Context`. */
 export interface Alignment {
+  /** The horizontal alignment. */
   readonly horizontal: HorizontalAlign;
+  /** The vertical alignment. */
   readonly vertical: VerticalAlign;
+  /** Whether text wraps within the cell. */
   readonly wrapText: boolean;
+  /** Whether text shrinks to fit the cell width. */
   readonly shrinkToFit: boolean;
-  /** Indent level, 0 to 255. */
+  /** The indent level, 0 to 255. */
   readonly indent: number;
-  /** Degrees, 0 to 180, or 255 for vertical text. */
+  /** The text rotation in degrees, 0 to 180, or 255 for vertical text. */
   readonly textRotation: number;
+  /** The text reading order. */
   readonly readingOrder: ReadingOrder;
-  /** Effective with distributed horizontal alignment. */
+  /** Whether the last line is justified; effective with distributed horizontal alignment. */
   readonly justifyLastLine: boolean;
+  /** The signed indent relative to the parent style. */
   readonly relativeIndent: number;
 }
 
 /** Whether a cell is locked and its formula hidden while the sheet is protected (OOXML `<protection>`). */
 export interface CellProtection {
+  /** `true` when the cell is locked, so it cannot be edited while its sheet is protected. */
   readonly locked: boolean;
+  /** `true` when the cell's formula is hidden from the formula bar while its sheet is protected. */
   readonly hidden: boolean;
 }
 
@@ -3265,86 +3766,107 @@ export interface CellProtection {
  *  {@link Color}. */
 export type ColorInput = string | Color;
 
-/** The font keys of a {@link CellFormatPatch}; an omitted key keeps its value. `null` clears a key whose
- *  {@link Font} field is nullable (`sizePt`, `bold`, `italic`, `strike`, `outline`, `shadow`, `condense`,
- *  `extend`, `family`, `charset`), which then reads back `null`. `null` for `name` or `sizePt` resets it to
- *  the Normal style's font name or size, which every cell font carries; `null` for `color` removes the
- *  `<color>` element (`ColorKind.None`). */
+/** The font keys of a {@link CellFormatPatch}; an omitted key keeps its value. */
 export interface FontPatch {
-  /** `null` resets to the Normal style's font name. */
+  /** The typeface name; `null` resets it to the Normal style's font name. */
   readonly name?: string | null;
-  /** Points, 1 to 409. `null` resets to the Normal style's font size. */
+  /** The font size in points, 1 to 409; `null` resets it to the Normal style's font size. */
   readonly sizePt?: number | null;
-  /** `null` removes the `<b>` element. */
+  /** Whether the font is bold; `null` removes the `<b>` element. */
   readonly bold?: boolean | null;
-  /** `null` removes the `<i>` element. */
+  /** Whether the font is italic; `null` removes the `<i>` element. */
   readonly italic?: boolean | null;
-  /** `null` removes the `<strike>` element. */
+  /** Whether the text is struck through; `null` removes the `<strike>` element. */
   readonly strike?: boolean | null;
-  /** `null` removes the `<outline>` element. */
+  /** Whether the glyphs are drawn as outlines; `null` removes the `<outline>` element. */
   readonly outline?: boolean | null;
-  /** `null` removes the `<shadow>` element. */
+  /** Whether the glyphs carry a shadow; `null` removes the `<shadow>` element. */
   readonly shadow?: boolean | null;
-  /** `null` removes the `<condense>` element. */
+  /** Whether the glyphs are condensed; `null` removes the `<condense>` element. */
   readonly condense?: boolean | null;
-  /** `null` removes the `<extend>` element. */
+  /** Whether the glyphs are extended; `null` removes the `<extend>` element. */
   readonly extend?: boolean | null;
+  /** The underline style. */
   readonly underline?: UnderlineStyle;
+  /** The vertical alignment of the text run (baseline, superscript or subscript). */
   readonly vertAlign?: FontVerticalAlign;
-  /** `null` removes the `<family>` element. */
+  /** The font-family class; `null` removes the `<family>` element. */
   readonly family?: FontFamily | null;
-  /** `null` removes the `<charset>` element. */
+  /** The charset codepage id; `null` removes the `<charset>` element. */
   readonly charset?: number | null;
+  /** The theme font set the font links to. */
   readonly scheme?: FontScheme;
-  /** `null` removes the `<color>` element. */
+  /** The font colour; `null` removes the `<color>` element. */
   readonly color?: ColorInput | null;
 }
 
-/** The fill keys of a {@link CellFormatPatch}. Setting `foreground` or `background` on a fill without a pattern
- *  makes it `FillPattern.Solid` unless `pattern` is given; any fill key but `gradient` drops a gradient. `gradient`
- *  sets a gradient fill, `null` drops it. */
+/** The fill keys of a {@link CellFormatPatch}. Any fill key but `gradient` drops a gradient. */
 export interface FillPatch {
+  /** The fill pattern. */
   readonly pattern?: FillPattern;
+  /** The pattern's foreground colour; setting it on a fill without a pattern makes the fill solid unless `pattern` is
+   *  given. */
   readonly foreground?: ColorInput;
+  /** The pattern's background colour; setting it on a fill without a pattern makes the fill solid unless `pattern` is
+   *  given. */
   readonly background?: ColorInput;
+  /** A gradient to set, which replaces the pattern; `null` drops the gradient. */
   readonly gradient?: GradientFillInput | null;
 }
 
 /** One border side of a {@link BorderPatch}. */
 export interface BorderSidePatch {
+  /** The line style of the side. */
   readonly style?: BorderStyle;
+  /** The colour of the side. */
   readonly color?: ColorInput;
 }
 
 /** The border keys of a {@link CellFormatPatch}; each side merges into the current side. */
 export interface BorderPatch {
+  /** Changes to the left side. */
   readonly left?: BorderSidePatch;
+  /** Changes to the right side. */
   readonly right?: BorderSidePatch;
+  /** Changes to the top side. */
   readonly top?: BorderSidePatch;
+  /** Changes to the bottom side. */
   readonly bottom?: BorderSidePatch;
+  /** Changes to the diagonal line. */
   readonly diagonal?: BorderSidePatch;
+  /** Whether the diagonal runs from bottom left to top right. */
   readonly diagonalUp?: boolean;
+  /** Whether the diagonal runs from top left to bottom right. */
   readonly diagonalDown?: boolean;
 }
 
 /** The alignment keys of a {@link CellFormatPatch}. */
 export interface AlignmentPatch {
+  /** The horizontal alignment. */
   readonly horizontal?: HorizontalAlign;
+  /** The vertical alignment. */
   readonly vertical?: VerticalAlign;
+  /** Whether text wraps within the cell. */
   readonly wrapText?: boolean;
+  /** Whether text shrinks to fit the cell width. */
   readonly shrinkToFit?: boolean;
-  /** 0 to 255. */
+  /** The indent level, 0 to 255. */
   readonly indent?: number;
-  /** 0 to 180, or 255. */
+  /** The text rotation in degrees, 0 to 180, or 255 for vertical text. */
   readonly textRotation?: number;
+  /** The text reading order. */
   readonly readingOrder?: ReadingOrder;
+  /** Whether the last line is justified; effective with distributed horizontal alignment. */
   readonly justifyLastLine?: boolean;
+  /** The signed indent relative to the parent style. */
   readonly relativeIndent?: number;
 }
 
 /** The protection keys of a {@link CellFormatPatch}. */
 export interface CellProtectionPatch {
+  /** Whether cells are locked once the sheet is protected. */
   readonly locked?: boolean;
+  /** Whether the formula is hidden once the sheet is protected. */
   readonly hidden?: boolean;
 }
 
@@ -3355,20 +3877,28 @@ export interface CellProtectionPatch {
  *  `updateCellFormat(range, ws.getCellFormat(cell))` copies a format (`source` is ignored); any
  *  other key throws `TypeError`. */
 export interface CellFormatPatch {
-  /** A number format code; `"General"` resets it. */
+  /** A number format code; `General` resets it. */
   readonly numberFormat?: string;
+  /** Changes to the font. */
   readonly font?: FontPatch;
+  /** Changes to the fill. */
   readonly fill?: FillPatch;
+  /** Changes to the border. */
   readonly border?: BorderPatch;
+  /** Changes to the alignment. */
   readonly alignment?: AlignmentPatch;
+  /** Changes to the protection. */
   readonly protection?: CellProtectionPatch;
 }
 
 /** One `<rPh>` block: `text` reads the half-open span `[start, end)` of the
  *  cell's surface text, measured in UTF-16 code units. */
 export interface PhoneticRun {
+  /** The inclusive start of the span, in UTF-16 code units. */
   readonly start: number;
+  /** The exclusive end of the span, in UTF-16 code units. */
   readonly end: number;
+  /** The kana reading of the span. */
   readonly text: string;
 }
 
@@ -3398,40 +3928,51 @@ export type PhoneticAlignment = 0 | 1 | 2 | 3;
  *  (`HalfwidthKatakana`, `NoControl`) is what Excel infers for a guide written
  *  with no `<phoneticPr>` element. */
 export interface PhoneticPropertiesInput {
+  /** The index into the workbook's font table of the ruby text. */
   fontIndex: number;
+  /** The kana form, a `PhoneticType` value. */
   type: PhoneticType;
+  /** How the kana is distributed over the characters it covers, a `PhoneticAlignment` value. */
   alignment: PhoneticAlignment;
 }
 
 /** Return type of `Sheet.getCellPhoneticProperties(row, col)`. */
 export interface PhoneticProperties extends PhoneticPropertiesInput {
-  /** `true` when the triple came from an explicit `<phoneticPr>` element or
-   *  `setCellPhoneticProperties` (an all-zero triple included); `false` for
-   *  the state an absent element resolves to. Not an input key. */
+  /** `true` when the properties are explicit: a phoneticPr element or a set call, an all-zero triple included; `false`
+   *  for the state an absent element resolves to. Ignored on input. */
   readonly stated: boolean;
 }
 
-/** Return type of `Workbook.ooxml.getDxf(dxfIndex)`.
- *  A part is `null` when that `<dxf>` child does not exist. */
+/** Return type of `Workbook.ooxml.getDxf(dxfIndex)`. */
 export interface Dxf {
+  /** The font part; `null` when the format sets none. */
   readonly font: Font | null;
+  /** The fill part; `null` when the format sets none. */
   readonly fill: Fill | null;
+  /** The border part; `null` when the format sets none. */
   readonly border: Border | null;
   /** The number format code; `null` when the format sets none. The format's id is assigned on save. */
   readonly numberFormat: string | null;
+  /** The alignment part; `null` when the format sets none. */
   readonly alignment: Alignment | null;
+  /** The protection part; `null` when the format sets none. */
   readonly protection: CellProtection | null;
 }
 
-/** Argument of `Workbook.ooxml.addDxf`: the parts of a differential format, each optional; an omitted or `null`
- *  part (and a `null` or omitted `numberFormat`) is not set. The {@link Dxf} record `getDxf` returns is accepted as is. */
+/** Argument of `Workbook.ooxml.addDxf`: the parts of a differential format, each optional; each is optional. The {@link
+ *  Dxf} record `getDxf` returns is accepted as is. */
 export interface DxfInput {
+  /** The font part; omitted or `null` is not set. */
   readonly font?: FontInput | null;
+  /** The fill part; omitted or `null` is not set. */
   readonly fill?: FillInput | null;
+  /** The border part; omitted or `null` is not set. */
   readonly border?: BorderInput | null;
-  /** A number format code; the format's id is assigned on save. */
+  /** A number format code; omitted or `null` is not set. The format's id is assigned on save. */
   readonly numberFormat?: string | null;
+  /** The alignment part; omitted or `null` is not set. */
   readonly alignment?: Alignment | null;
+  /** The protection part; omitted or `null` is not set. */
   readonly protection?: CellProtection | null;
 }
 
@@ -3449,7 +3990,9 @@ export type LogLevel = 0 | 1 | 2 | 3 | 4;
 
 /** One engine log event, as `Formulon.setLogSink` delivers it: `level` and `event` plus the event's own fields. */
 export interface LogEvent {
+  /** The severity, a `LogLevel` value. */
   readonly level: LogLevel;
+  /** The event name. */
   readonly event: string;
   readonly [field: string]: string | number | boolean | null;
 }
@@ -3469,13 +4012,11 @@ export type ExternalLinkKind = 0 | 1 | 2 | 3;
  *  this surface only enumerates the cross-workbook references and
  *  their resolved target URLs. */
 export interface ExternalLink {
-  /** 1-based document order matching `<externalReferences>` in
-   *  `xl/workbook.xml`: the `[n]` of formula text (`=[1]Sheet1!A1`). */
+  /** The 1-based document order in the externalReferences list: the `[n]` of formula text, as in `=[1]Sheet1!A1`. */
   readonly bookNumber: number;
-  /** Workbook-rels Id ("rId3" etc.). */
+  /** The id of the link in the workbook relationships, such as `rId3`. */
   readonly relId: string;
-  /** Resolved package-relative path of the body part (e.g.
-   *  `xl/externalLinks/externalLink1.xml`). */
+  /** The resolved package-relative path of the body part, such as `xl/externalLinks/externalLink1.xml`. */
   readonly partPath: string;
   /** Remote workbook URL (e.g. `file:///path/book.xlsx`,
    *  `https://example/sheet.xlsx`); `null` when the per-link rels file
@@ -3490,34 +4031,34 @@ export interface ExternalLink {
 
 /** The record `listCellStyles` and `getCellStyle` return. */
 export interface CellStyle {
-  /** Display name of the style. */
+  /** The display name of the style. */
   readonly name: string;
-  /** Index into the `<cellStyleXfs>` table (`Workbook.ooxml.listCellStyleXfs`). */
+  /** Index into the `<cellStyleXfs>` table of the format the style applies. */
   readonly styleXfIndex: number;
-  /** OOXML built-in ordinal (`0..53`); `null` for a custom style. */
+  /** The built-in style ordinal (0..53); `null` for a custom style. */
   readonly builtinId: number | null;
-  /** Outline level of the `RowLevel_n` / `ColLevel_n` styles. */
+  /** The outline level (0..6) of the RowLevel_n / ColLevel_n styles; 0 for other styles. */
   readonly outlineLevel: number;
-  /** `true` for a style hidden from the style gallery. */
+  /** Whether the style is hidden from the style gallery. */
   readonly hidden: boolean;
-  /** `true` for a built-in style the workbook changed. */
+  /** Whether this is a built-in style the workbook has changed. */
   readonly customBuiltin: boolean;
 }
 
 /** Argument of `Workbook.setCellStyle`. Only `name` is required. The {@link CellStyle} a read returns passes as
  *  is. */
 export interface CellStyleInput {
-  /** Display name of the style. */
+  /** The display name of the style. */
   readonly name: string;
-  /** Index into the `<cellStyleXfs>` table (`Workbook.ooxml.listCellStyleXfs`); defaults to 0. */
+  /** Index into the `<cellStyleXfs>` table of the format the style applies; defaults to 0. */
   readonly styleXfIndex?: number;
-  /** OOXML built-in ordinal (`0..53`); omitted or `null` is a custom style (not built-in). */
+  /** The built-in style ordinal (0..53); omitted or `null` is a custom style. */
   readonly builtinId?: number | null;
-  /** Outline level of the `RowLevel_n` / `ColLevel_n` styles; defaults to 0. */
+  /** The outline level (0..6) of the RowLevel_n / ColLevel_n styles; defaults to 0. */
   readonly outlineLevel?: number;
-  /** `true` hides the style from the style gallery; defaults to `false`. */
+  /** Whether the style is hidden from the style gallery; defaults to `false`. */
   readonly hidden?: boolean;
-  /** `true` marks a built-in style the workbook changed; defaults to `false`. */
+  /** Whether this is a built-in style the workbook has changed; defaults to `false`. */
   readonly customBuiltin?: boolean;
 }
 
@@ -3955,15 +4496,19 @@ export type EffectiveStyleSource = 0 | 1 | 2 | 3;
 
 /** The theme's typefaces; `*EastAsian` is the `a:ea` face, else the `Jpan` script face. */
 export interface ThemeFonts {
+  /** The Latin typeface of the major (heading) font set. */
   readonly majorLatin: string;
+  /** The East Asian typeface of the major (heading) font set: the `a:ea` face, else the Jpan script face. */
   readonly majorEastAsian: string;
+  /** The Latin typeface of the minor (body) font set. */
   readonly minorLatin: string;
+  /** The East Asian typeface of the minor (body) font set: the `a:ea` face, else the Jpan script face. */
   readonly minorEastAsian: string;
 }
 
 /**
  * One `a:font script="..." typeface="..."` entry of the theme's major or minor
- * font set. `script` is an ISO 15924 code such as `Jpan`.
+ * font set.
  *
  * To pick the face for text whose font has `scheme` major or minor, choose the
  * script from the font's `charset`: 128 -> `Jpan`, 129 -> `Hang`, 134 -> `Hans`,
@@ -3972,31 +4517,39 @@ export interface ThemeFonts {
  * entry). Use the same table when choosing by the script of the characters.
  */
 export interface ThemeScriptFont {
-  /** The font set the face belongs to: `FontScheme.Major` or `FontScheme.Minor`. */
+  /** The font set the face belongs to: major (heading) or minor (body). */
   readonly scheme: FontScheme;
+  /** The ISO 15924 script code, such as Jpan. */
   readonly script: string;
+  /** The typeface used for the script. */
   readonly typeface: string;
 }
 
 /** Return type of `Workbook.getThemeColors()`. */
 export interface ThemeColors {
-  /** Where the theme came from: the part, or the default theme when the part is absent or unparseable. */
+  /** Where the theme came from: the theme part, or the default theme when the part is absent or unparseable. */
   readonly source: ThemeSource;
-  /** 0xFFRRGGBB in `clrScheme` order: dk1, lt1, dk2, lt2, accent1..6, hlink, folHlink. This is not the order of a
-   *  colour's `Color.theme` index, which swaps the first two pairs (0 = lt1, 1 = dk1, 2 = lt2, 3 = dk2). */
+  /** The 12 scheme colours as 0xFFRRGGBB in `a:clrScheme` order: dk1, lt1, dk2, lt2, accent1 to accent6, hlink,
+   *  folHlink. This is not the order of a colour's theme index, which swaps the first two pairs (0 = lt1, 1 = dk1, 2 =
+   *  lt2, 3 = dk2). */
   readonly colors: readonly number[];
 }
 
 /** Argument of `Workbook.setThemeColors`: the 12 scheme colours, each a {@link ColorInput} (an RGB colour). */
 export interface ThemeColorsInput {
+  /** The 12 scheme colours in `a:clrScheme` order: dk1, lt1, dk2, lt2, accent1 to accent6, hlink, folHlink. Each is an
+   *  RGB colour. */
   readonly colors: readonly ColorInput[];
 }
 
 /** Argument of `Workbook.setThemeScriptFont`: one script's typeface in the major (`FontScheme.Major`) or minor
- *  (`FontScheme.Minor`) font set; `FontScheme.None` is `StatusCode.InvalidArgument`. */
+ *  (`FontScheme.Minor`) font set. */
 export interface ThemeScriptFontInput {
+  /** The font set to change: major (heading) or minor (body); the none value is rejected. */
   scheme: FontScheme;
+  /** The ISO 15924 script code, such as Jpan. */
   script: string;
+  /** The typeface used for the script. */
   typeface: string;
 }
 
@@ -4005,31 +4558,47 @@ export type ThemeScriptFontKey = Pick<ThemeScriptFontInput, 'scheme' | 'script'>
 
 /** A resolved colour: 0xFFRRGGBB plus how it was obtained. */
 export interface ResolvedColor {
+  /** The resolved colour as 0xAARRGGBB. */
   readonly argb: number;
+  /** How the colour was obtained (exact, default theme, out-of-range index, unparseable theme or automatic). */
   readonly resolution: ColorResolution;
 }
 
 /** The resolved colour of each border side of an {@link EffectiveStyle}. */
 export interface EffectiveBorders {
+  /** The resolved colour of the left border. */
   readonly left: ResolvedColor;
+  /** The resolved colour of the right border. */
   readonly right: ResolvedColor;
+  /** The resolved colour of the top border. */
   readonly top: ResolvedColor;
+  /** The resolved colour of the bottom border. */
   readonly bottom: ResolvedColor;
+  /** The resolved colour of the diagonal border. */
   readonly diagonal: ResolvedColor;
 }
 
 /** Return type of `Sheet.ooxml.getEffectiveStyle(...)`. */
 export interface EffectiveStyle {
+  /** The index of the selected cell format record. */
   readonly xfIndex: number;
-  /** One of `EffectiveStyleSource.*`. */
+  /** The level that supplied the format record, an `EffectiveStyleSource` value. */
   readonly source: EffectiveStyleSource;
+  /** The index into the font table. */
   readonly fontIndex: number;
+  /** The index into the fill table. */
   readonly fillIndex: number;
+  /** The index into the border table. */
   readonly borderIndex: number;
+  /** The resolved font color. */
   readonly fontColor: ResolvedColor;
+  /** The resolved foreground (pattern) color of the fill. */
   readonly fillForeground: ResolvedColor;
+  /** The resolved background color of the fill. */
   readonly fillBackground: ResolvedColor;
+  /** The resolved color of each border. */
   readonly borders: EffectiveBorders;
+  /** The cell protection flags. */
   readonly protection: CellProtection;
   /** The number format code. */
   readonly numberFormat: string;
@@ -4037,11 +4606,11 @@ export interface EffectiveStyle {
 
 /** Return type of `Workbook.getIterative()`. */
 export interface IterativeSettings {
-  /** Whether iterative calculation is switched on. */
+  /** `true` when iterative calculation is switched on. */
   readonly enabled: boolean;
-  /** Stored iteration cap, 1..32767; meaningful even while `enabled` is false. */
+  /** The stored iteration cap, 1 to 32767; meaningful even while `enabled` is `false`. */
   readonly maxIterations: number;
-  /** Stored convergence threshold; meaningful even while `enabled` is false. */
+  /** The stored absolute convergence threshold; meaningful even while `enabled` is `false`. */
   readonly maxChange: number;
 }
 
@@ -4051,103 +4620,149 @@ export type IterativeSettingsPatch = Patch<IterativeSettings>;
 /** One `<dateGroupItem>` of a values filter. `grouping` is the granularity
  *  the item matches at (a `DateTimeGrouping`); fields finer than `grouping` are zero. */
 export interface AutoFilterDateGroup {
+  /** Calendar year. */
   readonly year: number;
+  /** Month of the year, 1-12; 0 when the item is coarser than month. */
   readonly month: number;
+  /** Day of the month, 1-31; 0 when the item is coarser than day. */
   readonly day: number;
+  /** Hour of the day, 0-23; 0 when the item is coarser than hour. */
   readonly hour: number;
+  /** Minute of the hour, 0-59; 0 when the item is coarser than minute. */
   readonly minute: number;
+  /** Second of the minute, 0-59; 0 when the item is coarser than second. */
   readonly second: number;
+  /** The granularity the item matches at; fields finer than it are zero. */
   readonly grouping: DateTimeGrouping;
 }
 
 /** One condition of a custom AutoFilter column (`<customFilter>`). `operator` is a `ComparisonOperator` other
  *  than `Between` and `NotBetween` (`StatusCode.InvalidArgument`); `value` is the `<customFilter val>` text. */
 export interface AutoFilterCondition {
+  /** The comparison applied to the cell; any comparison other than between and not-between. */
   readonly operator: ComparisonOperator;
+  /** The text the cell is compared with (`customFilter val`). */
   readonly value: string;
 }
 
 /** Input form of {@link AutoFilterCondition}. */
 export interface AutoFilterConditionInput {
+  /** The comparison applied to the cell; any comparison other than between and not-between. */
   operator: ComparisonOperator;
+  /** The text the cell is compared with (`customFilter val`). */
   value: string;
 }
 
-/** One `<filterColumn>`. `columnOffset` is the 0-based offset from the first column
- *  of the AutoFilter range. `kind` selects the criterion and only that
- *  criterion's fields are read on input (a `FilterKind`); on output every other criterion's
- *  fields are zero. `conditions` holds the one or two custom conditions, empty unless `kind` is `Custom`;
- *  `dynamicType` is a `DynamicFilterType`. */
+/** One `<filterColumn>`. `kind` selects the criterion and only that criterion's fields are read on input; on
+ *  output every other criterion's fields are zero. */
 export interface AutoFilterColumn {
+  /** The column's 0-based offset from the filter range's first column. */
   readonly columnOffset: number;
+  /** `true` when the column's filter button is hidden. */
   readonly hiddenButton: boolean;
+  /** `true` when the column's filter button is shown; default `true`. */
   readonly showButton: boolean;
+  /** Which criterion the column filters on; only that criterion's fields are meaningful. */
   readonly kind: FilterKind;
+  /** `true` when the values filter also matches blank cells. */
   readonly filterBlank: boolean;
+  /** The displayed texts the values filter keeps. */
   readonly values: readonly string[];
+  /** The date-group items the values filter keeps. */
   readonly dateGroups: readonly AutoFilterDateGroup[];
+  /** `true` when the two custom conditions are joined by AND, `false` when by OR. */
   readonly customAnd: boolean;
+  /** The one or two custom conditions; empty unless the kind is custom. */
   readonly conditions: readonly AutoFilterCondition[];
+  /** `true` when the top-10 filter keeps the top items, `false` for the bottom ones. */
   readonly top: boolean;
+  /** `true` when `topValue` is a percentage rather than an item count. */
   readonly percent: boolean;
+  /** The top-10 filter's rank: how many items, or what percentage. */
   readonly topValue: number;
-  /** The top-10 `<top10 filterVal>`; `null` when absent. */
+  /** The cell value Excel last stored as the top-10 threshold; `null` when absent. */
   readonly filterValue: number | null;
+  /** Which dynamic criterion the column filters on, such as above average or this month. */
   readonly dynamicType: DynamicFilterType;
-  /** The dynamic filter's `val`; `null` when absent. */
+  /** The lower bound Excel last stored for the dynamic filter; `null` when absent. */
   readonly dynamicValue: number | null;
-  /** The dynamic filter's `<dynamicFilter maxVal>`; `null` when absent. */
+  /** The upper bound Excel last stored for the dynamic filter; `null` when absent. */
   readonly dynamicMaxValue: number | null;
+  /** The ISO date text of the dynamic filter's lower bound, kept as written; empty when absent. */
   readonly valueIso: string;
+  /** The ISO date text of the dynamic filter's upper bound, kept as written; empty when absent. */
   readonly maxValueIso: string;
-  /** The color filter's differential format; `null` for a column that filters on anything else. */
+  /** The index of the differential format whose fill or font colour the color filter matches; `null` when the column
+   *  names none. */
   readonly dxfIndex: number | null;
+  /** `true` when the color filter matches the cell fill, `false` when it matches the font colour. */
   readonly cellColor: boolean;
+  /** The icon set the icon filter's icon comes from. */
   readonly iconSet: IconSetName;
-  /** `null` when the icon filter names no icon. */
+  /** The index of the icon the icon filter keeps; `null` when the filter names no icon. */
   readonly iconIndex: number | null;
 }
 
 /** One `<sortCondition>`. `sortBy` is a `SortBy`. */
 export interface AutoFilterSortCondition {
+  /** The cells the condition sorts by, the key column of the sorted range. */
   readonly range: CellRect;
+  /** `true` sorts in descending order. */
   readonly descending: boolean;
+  /** What the condition sorts by: the value, the cell colour, the font colour or the icon. */
   readonly sortBy: SortBy;
+  /** The custom sort list, as comma-separated items; empty when the condition uses none. */
   readonly customList: string;
-  /** `null` when the condition names no differential format. */
+  /** The index of the differential format whose colour the condition sorts by; `null` when it names none. */
   readonly dxfIndex: number | null;
+  /** The icon set the condition's icon comes from. */
   readonly iconSet: IconSetName;
-  /** `null` when the condition names no icon. */
+  /** The index of the icon the condition sorts by; `null` when it names no icon. */
   readonly iconIndex: number | null;
 }
 
 /** The `<sortState>` of an AutoFilter. `sortMethod` is a
  *  `SortMethod`. */
 export interface AutoFilterSortState {
+  /** The cells the sort applies to. */
   readonly range: CellRect;
+  /** `true` when the sort is by columns (left to right) rather than by rows. */
   readonly columnSort: boolean;
+  /** `true` when text comparison is case-sensitive. */
   readonly caseSensitive: boolean;
+  /** How East Asian text is ordered: by default order, by pinyin or by stroke count. */
   readonly sortMethod: SortMethod;
+  /** The sort conditions, in priority order. */
   readonly conditions: readonly AutoFilterSortCondition[];
 }
 
 /** A sheet or table AutoFilter. `range` includes the header row; `columns`
  *  must be in strictly ascending `columnOffset` order inside it. */
 export interface AutoFilter {
+  /** The filtered range, header row included. */
   readonly range: CellRect;
+  /** The filter columns, in strictly ascending column-offset order. */
   readonly columns: readonly AutoFilterColumn[];
+  /** The AutoFilter's sort state; `null` when it has none. */
   readonly sort: AutoFilterSortState | null;
 }
 
 /** Input form of {@link AutoFilterDateGroup}; omitted fields read as zero,
  *  and `grouping` as `DateTimeGrouping.Year`. */
 export interface AutoFilterDateGroupInput {
+  /** Calendar year; omitted reads as 0. */
   year?: number;
+  /** Month of the year, 1-12; omitted reads as 0. */
   month?: number;
+  /** Day of the month, 1-31; omitted reads as 0. */
   day?: number;
+  /** Hour of the day, 0-23; omitted reads as 0. */
   hour?: number;
+  /** Minute of the hour, 0-59; omitted reads as 0. */
   minute?: number;
+  /** Second of the minute, 0-59; omitted reads as 0. */
   second?: number;
+  /** The granularity the item matches at; omitted reads as year. */
   grouping?: DateTimeGrouping;
 }
 
@@ -4155,224 +4770,316 @@ export interface AutoFilterDateGroupInput {
  *  fields read as zero / false / empty / `null`, except `showButton` and `top`
  *  (true) and `dxfIndex` (absent). */
 export interface AutoFilterColumnInput {
+  /** 0-based offset of the column from the first column of the AutoFilter range. */
   columnOffset: number;
+  /** `true` to hide the column's filter dropdown button; omitted reads as `false`. */
   hiddenButton?: boolean;
+  /** `true` to show the column's filter dropdown button; omitted reads as `true`. */
   showButton?: boolean;
+  /** The kind of criterion the column filters on; only that criterion's fields are read. */
   kind?: FilterKind;
+  /** `true` to match blank cells (value filters). */
   filterBlank?: boolean;
+  /** The displayed texts to match (value filters). */
   values?: readonly string[];
+  /** The date-group items to match (value filters). */
   dateGroups?: readonly AutoFilterDateGroupInput[];
+  /** `true` to join the two custom conditions with AND, `false` to join them with OR. */
   customAnd?: boolean;
-  /** One or two conditions for `FilterKind.Custom`; any other count fails with `StatusCode.InvalidArgument`. */
+  /** One or two conditions for the custom kind; any other count fails with `StatusCode.InvalidArgument`. */
   conditions?: readonly AutoFilterConditionInput[];
+  /** `true` for a top-N filter, `false` for a bottom-N one; omitted reads as `true`. */
   top?: boolean;
+  /** `true` when the top / bottom rank is a percentage rather than a count. */
   percent?: boolean;
+  /** The rank N of the top / bottom filter (items or percent). */
   topValue?: number;
+  /** The threshold Excel last stored for the top / bottom filter; omitted or `null` means none. */
   filterValue?: number | null;
+  /** The kind of dynamic filter (above average, a date period and so on). */
   dynamicType?: DynamicFilterType;
+  /** The dynamic filter's stored lower bound; omitted or `null` means none. */
   dynamicValue?: number | null;
+  /** The dynamic filter's stored upper bound; omitted or `null` means none. */
   dynamicMaxValue?: number | null;
+  /** The ISO spelling of the dynamic filter's lower bound. */
   valueIso?: string;
+  /** The ISO spelling of the dynamic filter's upper bound. */
   maxValueIso?: string;
+  /** The differential format whose fill or font colour the color filter matches; omitted or `null` means none. */
   dxfIndex?: number | null;
+  /** `true` when the color filter matches the cell fill, `false` when it matches the font colour. */
   cellColor?: boolean;
+  /** The icon set the icon filter picks from. */
   iconSet?: IconSetName;
+  /** The 0-based icon within `iconSet` the icon filter matches; omitted or `null` means no icon. */
   iconIndex?: number | null;
 }
 
 /** Input form of {@link AutoFilterSortCondition}; only `range` is required.
  *  Omitted fields read as false / zero / empty / `null`, and `sortBy` as `SortBy.Value`. */
 export interface AutoFilterSortConditionInput {
+  /** The cells the condition sorts by, a `CellRect` or an A1 range. */
   range: CellRect | string;
+  /** `true` sorts in descending order; omitted is `false`. */
   descending?: boolean;
+  /** What the condition sorts by; omitted is the value. */
   sortBy?: SortBy;
+  /** The custom sort list, as comma-separated items; omitted is empty. */
   customList?: string;
+  /** The index of the differential format whose colour the condition sorts by; omitted or `null` is none. */
   dxfIndex?: number | null;
+  /** The icon set the condition's icon comes from; omitted is the first set. */
   iconSet?: IconSetName;
+  /** The index of the icon the condition sorts by; omitted or `null` is none. */
   iconIndex?: number | null;
 }
 
 /** Input form of {@link AutoFilterSortState}; only `range` is required.
  *  Omitted fields read as false / empty, and `sortMethod` as `SortMethod.None`. */
 export interface AutoFilterSortStateInput {
+  /** The cells the sort applies to, a `CellRect` or an A1 range. */
   range: CellRect | string;
+  /** `true` when the sort is by columns rather than by rows; omitted is `false`. */
   columnSort?: boolean;
+  /** `true` when text comparison is case-sensitive; omitted is `false`. */
   caseSensitive?: boolean;
+  /** How East Asian text is ordered; omitted is the default order. */
   sortMethod?: SortMethod;
+  /** The sort conditions, in priority order; omitted is empty. */
   conditions?: readonly AutoFilterSortConditionInput[];
 }
 
-/** Argument of `setAutoFilter`; only `range` is required. Omitted `columns`
- *  reads as empty and omitted `sort` as none. The {@link AutoFilter} result is
- *  assignable to it. */
+/** Argument of `setAutoFilter`; only `range` is required. The {@link AutoFilter} result is assignable to it. */
 export interface AutoFilterInput {
+  /** The filtered range, header row included, as a `CellRect` or an A1 range. */
   range: CellRect | string;
+  /** The filter columns, in strictly ascending column-offset order; omitted is empty. */
   columns?: readonly AutoFilterColumnInput[];
+  /** The AutoFilter's sort state; omitted or `null` is none. */
   sort?: AutoFilterSortStateInput | null;
 }
 
-/** Result of `Sheet.evaluateAutoFilter` / `Table.evaluateAutoFilter`.
- *  `match[i]` tells whether body row `firstRow + i` satisfies the criteria. */
+/** Result of `Sheet.evaluateAutoFilter` / `Table.evaluateAutoFilter`. */
 export interface AutoFilterEval {
+  /** The sheet row of the first body row the result covers. */
   readonly firstRow: number;
+  /** One entry per body row: `true` when body row `first_row + i` satisfies the criteria. */
   readonly match: readonly boolean[];
 }
 
-/** Result of `Sheet.validateValue`. `ruleId` is `null` when no rule covers
- *  the cell, and `valid` is then true; otherwise it is the applied rule's `DataValidation.id`. `errorStyle` is
- *  `null` without a rule. */
+/** Result of `Sheet.validateValue`. */
 export interface ValidationOutcome {
+  /** `true` when the value passes the rule, or when no rule covers the cell. */
   readonly valid: boolean;
+  /** The id of the rule that was applied; `null` when no rule covers the cell. */
   readonly ruleId: ValidationId | null;
+  /** The applied rule's error style; `null` when no rule covers the cell. */
   readonly errorStyle: ValidationErrorStyle | null;
 }
 
 /** One `@person` mention in a threaded comment's text: the half-open span `[start, end)` in UTF-16 code
  *  units. */
 export interface Mention {
+  /** The id of the mentioned person. */
   readonly personId: string;
+  /** The mention's own id, a brace-wrapped GUID. */
   readonly mentionId: string;
+  /** The start of the mentioned span in the comment text, as a UTF-16 code unit offset (inclusive). */
   readonly start: number;
+  /** The end of the mentioned span in the comment text, as a UTF-16 code unit offset (exclusive). */
   readonly end: number;
 }
 
-/** A mention of a {@link ThreadedCommentInput} or {@link ThreadedCommentPatch}. An omitted `mentionId` is
- *  generated (a brace-wrapped GUID, deterministic under a pinned clock); `end < start` fails with
- *  `StatusCode.InvalidArgument`. The {@link Mention} a read returns passes as is. */
+/** A mention of a {@link ThreadedCommentInput} or {@link ThreadedCommentPatch}. The {@link Mention} a read
+ *  returns passes as is. */
 export interface MentionInput {
+  /** The id of the mentioned person. */
   personId: string;
+  /** The mention's own id, a brace-wrapped GUID; omitted, one is generated (deterministic under a pinned clock). */
   mentionId?: string;
+  /** The start of the mentioned span in the comment text, as a UTF-16 code unit offset (inclusive). */
   start: number;
+  /** The end of the mentioned span in the comment text, as a UTF-16 code unit offset (exclusive); less than `start`
+   *  fails with `StatusCode.InvalidArgument`. */
   end: number;
 }
 
-/** One threaded comment: a thread's opening comment (`parentId` is `null`), or a reply. Ids are brace-wrapped GUIDs,
- *  taken in either letter case, matched across it and stored uppercase; `created` is a UTC {@link CivilTime} (whole
- *  seconds), `null` when the stamp is absent; the caller supplies both. `done` is the thread's resolved state,
- *  meaningful on the opening comment only. */
+/** One threaded comment: a thread's opening comment, or a reply. Ids are brace-wrapped GUIDs, taken in either
+ *  letter case, matched across it and stored uppercase. */
 export interface ThreadedComment {
+  /** The comment's id, a brace-wrapped GUID stored in upper case. */
   readonly id: string;
   /** The cell the thread is anchored to. */
   readonly cell: CellAddress;
+  /** The id of the person who wrote the comment. */
   readonly personId: string;
-  /** The stamp, in UTC and whole seconds (no zone conversion applies); `null` when the stamp is absent. */
+  /** The creation time, in UTC and whole seconds (no zone conversion applies); `null` when the comment states none. */
   readonly created: CivilTime | null;
+  /** The comment's text. */
   readonly text: string;
+  /** The id of the thread's opening comment this comment replies to; `null` for an opening comment. */
   readonly parentId: string | null;
+  /** `true` when the thread is resolved; meaningful on an opening comment only. */
   readonly done: boolean;
+  /** The people mentioned in the text. */
   readonly mentions: readonly Mention[];
 }
 
-/** Argument of `Sheet.addThreadedComment`: `text` and `personId` are required; an omitted `id` is generated
- *  (`{XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX}`), and an omitted `created` is the pinned clock if one is set, else now.
- *  An omitted or `null` `parentId` opens a new thread (`''` is `StatusCode.InvalidArgument`) at `cell` (a {@link CellAddress} or an A1 cell, `'B2'`; A1 when omitted). `cell` is ignored on a
- *  reply. The {@link ThreadedComment} a read returns passes as is. */
+/** Argument of `Sheet.addThreadedComment`: `text` and `personId` are required. The {@link ThreadedComment} a read
+ *  returns passes as is. */
 export interface ThreadedCommentInput {
+  /** The comment's id, a brace-wrapped GUID; omitted, one is generated. */
   id?: string;
+  /** The comment's text. */
   text: string;
+  /** The cell a new thread is anchored to, a `CellAddress` or an A1 cell; omitted is A1. Ignored on a reply. */
   cell?: CellAddress | string;
+  /** The id of the person who wrote the comment. */
   personId: string;
-  /** The stamp, in UTC: a `Date` is read through its UTC getters and a {@link CivilTimeInput} is taken as UTC (the
-   *  other date inputs read a `Date` through its local getters). Milliseconds are dropped. An omitted `created` is
-   *  stamped with the current UTC time; a pinned clock (`Workbook.setPinnedNow`) is written as it is, its local
-   *  wall-clock fields unconverted. A trailing `Z` is accepted and a numeric UTC offset is refused with
-   *  `StatusCode.InvalidArgument`. */
+  /** The creation time, in UTC: a `Date` is read through its UTC getters and a `CivilTimeInput` is taken as UTC;
+   *  milliseconds are dropped. Omitted is the current UTC time; a pinned clock (`Workbook.setPinnedNow`) is written as
+   *  it is. A trailing `Z` is accepted and a numeric UTC offset is refused with `StatusCode.InvalidArgument`. */
   created?: DateInput | null;
+  /** The id of the thread's opening comment to reply to; omitted or `null` opens a new thread, and `''` is
+   *  `StatusCode.InvalidArgument`. */
   parentId?: string | null;
+  /** `true` marks a new thread as resolved; default `false`. Ignored on a reply. */
   done?: boolean;
+  /** The people mentioned in the text; omitted is none. */
   mentions?: readonly MentionInput[];
 }
 
 /** Argument of `Sheet.updateThreadedComment`: the keys to change; an omitted key keeps its value. No key has a
- *  cleared form, so `null` throws `TypeError`. `done` resolves or reopens a thread and is accepted only on a
- *  thread's opening comment; on a reply it fails with `StatusCode.InvalidArgument`. */
+ *  cleared form, so `null` throws `TypeError`. */
 export interface ThreadedCommentPatch {
+  /** The new comment text; omitted leaves it unchanged, and an empty string empties it. */
   readonly text?: string;
+  /** The new mention list, replacing the whole list; omitted leaves it unchanged. */
   readonly mentions?: readonly MentionInput[];
+  /** Resolves (`true`) or reopens (`false`) the thread; accepted only on an opening comment, on a reply it fails with
+   *  `StatusCode.InvalidArgument`. */
   readonly done?: boolean;
 }
 
 /** One entry of the workbook's person list. */
 export interface Person {
+  /** The person's id. */
   readonly id: string;
+  /** The person's display name. */
   readonly displayName: string;
-  /** `null` when the person has none. */
+  /** The user id; `null` when the person has none. */
   readonly userId: string | null;
+  /** The identity provider id; `null` when the person has none. */
   readonly providerId: string | null;
 }
 
-/** Argument of `Workbook.addPerson`. An omitted `id` is generated (a brace-wrapped GUID, deterministic under a
- *  pinned clock). An omitted or `null` `userId` or `providerId` is absent. The {@link Person} a read returns
- *  passes as is. */
+/** Argument of `Workbook.addPerson`. The {@link Person} a read returns passes as is. */
 export interface PersonInput {
+  /** The id; omitted generates a brace-wrapped GUID (deterministic under a pinned clock). */
   id?: string;
+  /** The person's display name. */
   displayName: string;
+  /** The user id; omitted or `null` means none. */
   userId?: string | null;
+  /** The identity provider id; omitted or `null` means none. */
   providerId?: string | null;
 }
 
 /** Format and pixel size of an image. */
 export interface ImageInfo {
+  /** The image's file format. */
   readonly format: ImageFormat;
+  /** Image width in pixels. */
   readonly widthPx: number;
+  /** Image height in pixels. */
   readonly heightPx: number;
 }
 
 /** Return type of `Picture.getProperties()`: the picture's format, pixel size and a copy of its media bytes. */
 export interface PictureProperties extends ImageInfo {
+  /** A copy of the picture's media bytes. */
   readonly bytes: Uint8Array<ArrayBuffer>;
 }
 
 /** Return type of `Drawing.getDrawingProperties()`: the fields every anchored object of a sheet's drawing has,
- *  whatever its kind. `description` is the object's alternative text, `null` when it has none (`DrawingPatch`
- *  removes it with `null`). */
+ *  whatever its kind. */
 export interface DrawingProperties {
+  /** The object's id in the sheet's drawing. */
   readonly objectId: number;
+  /** The object's kind: picture, shape, chart, group, connector, other graphic frame or other. */
   readonly kind: DrawingObjectKind;
+  /** The object's name. */
   readonly name: string;
+  /** The object's alternative text; `null` when it has none. */
   readonly description: string | null;
+  /** `true` when the object is hidden. */
   readonly hidden: boolean;
+  /** Where the object sits on the sheet. */
   readonly anchor: DrawingAnchor;
 }
 
-/** The anchor of a drawing object, as a read returns it: every field is present. An absolute anchor reports its
- *  position from A1 as `fromColOffsetEmu` (x) and `fromRowOffsetEmu` (y); `toRow` / `toCol` and their offsets
- *  are zero unless the anchor is two-cell. Offsets, `widthEmu` and `heightEmu` are in EMU; the size is the
- *  object's own unrotated size, and a two-cell anchor's size is its box. */
+/** The anchor of a drawing object, as a read returns it: every field is present. */
 export interface DrawingAnchor {
+  /** The anchor kind: absolute, one-cell or two-cell. */
   readonly kind: AnchorKind;
+  /** How the object follows row and column edits (it moves and resizes, moves only, or stays put); written for a
+   *  two-cell anchor only. */
   readonly editAs: AnchorEditAs;
+  /** 0-based row of the top-left marker. */
   readonly fromRow: number;
+  /** 0-based column of the top-left marker. */
   readonly fromCol: number;
+  /** Vertical offset of the top-left corner within `fromRow`, in EMU; for an absolute anchor, the y position from A1. */
   readonly fromRowOffsetEmu: number;
+  /** Horizontal offset of the top-left corner within `fromCol`, in EMU; for an absolute anchor, the x position from A1. */
   readonly fromColOffsetEmu: number;
+  /** 0-based row of the bottom-right marker of a two-cell anchor. 0 unless the anchor is two-cell. */
   readonly toRow: number;
+  /** 0-based column of the bottom-right marker of a two-cell anchor. 0 unless the anchor is two-cell. */
   readonly toCol: number;
+  /** Vertical offset of the bottom-right corner within `toRow`, in EMU. 0 unless the anchor is two-cell. */
   readonly toRowOffsetEmu: number;
+  /** Horizontal offset of the bottom-right corner within `toCol`, in EMU. 0 unless the anchor is two-cell. */
   readonly toColOffsetEmu: number;
+  /** The object's own unrotated width in EMU; a two-cell anchor's width is its box. */
   readonly widthEmu: number;
+  /** The object's own unrotated height in EMU; a two-cell anchor's height is its box. */
   readonly heightEmu: number;
 }
 
-/** The anchor of a new drawing object: the keys of {@link DrawingAnchor}, each optional. An omitted `kind` is the
- *  operation's default (`OneCell` for a picture, `TwoCell` for a chart, shape or slicer) and an omitted `editAs`
- *  is the anchor's own kind; `editAs` applies to a two-cell anchor only. A two-cell anchor takes its box from
- *  `toRow` / `toCol` and their offsets, and ignores `widthEmu` / `heightEmu` unless all four `to*` keys are 0,
+/** The anchor of a new drawing object: the keys of {@link DrawingAnchor}, each optional. A two-cell anchor takes its
+ *  box from `toRow` / `toCol` and their offsets, and ignores `widthEmu` / `heightEmu` unless all four `to*` keys are 0,
  *  when the size sizes the box; a one-cell anchor takes the size and ignores `to*`. A zero size is the image's pixel
- *  size times 9525 for a picture and Excel's default frame for a chart; a shape or slicer needs a non-zero
- *  one. An `Absolute` kind is not added. */
+ *  size times 9525 for a picture and Excel's default frame for a chart; a shape or slicer needs a non-zero one. */
 export interface DrawingAnchorInput {
+  /** The anchor kind: absolute, one-cell or two-cell; an absolute kind is not added. Omitted is the operation's
+   *  default: `OneCell` for a picture, `TwoCell` for a chart, shape or slicer. */
   kind?: AnchorKind;
+  /** How the object follows row and column edits (it moves and resizes, moves only, or stays put); written for a
+   *  two-cell anchor only. Omitted is the anchor's own kind. */
   editAs?: AnchorEditAs;
+  /** 0-based row of the top-left marker. */
   fromRow?: number;
+  /** 0-based column of the top-left marker. */
   fromCol?: number;
+  /** Vertical offset of the top-left corner within `fromRow`, in EMU; for an absolute anchor, the y position from A1. */
   fromRowOffsetEmu?: number;
+  /** Horizontal offset of the top-left corner within `fromCol`, in EMU; for an absolute anchor, the x position from A1. */
   fromColOffsetEmu?: number;
+  /** 0-based row of the bottom-right marker of a two-cell anchor. Not accepted on a one-cell anchor. */
   toRow?: number;
+  /** 0-based column of the bottom-right marker of a two-cell anchor. Not accepted on a one-cell anchor. */
   toCol?: number;
+  /** Vertical offset of the bottom-right corner within `toRow`, in EMU. Not accepted on a one-cell anchor. */
   toRowOffsetEmu?: number;
+  /** Horizontal offset of the bottom-right corner within `toCol`, in EMU. Not accepted on a one-cell anchor. */
   toColOffsetEmu?: number;
+  /** The object's own unrotated width in EMU. Not accepted on a two-cell anchor, except as the size of an all-zero
+   *  bottom-right marker box on add. */
   widthEmu?: number;
+  /** The object's own unrotated height in EMU. Not accepted on a two-cell anchor, except as the size of an all-zero
+   *  bottom-right marker box on add. */
   heightEmu?: number;
 }
 
@@ -4383,251 +5090,372 @@ export interface DrawingAnchorInput {
  *  an anchor that ends up one-cell, or a size key on one that ends up two-cell, fails with
  *  `StatusCode.InvalidArgument`. No key accepts `null`; an unknown key fails with a `TypeError`. */
 export interface DrawingAnchorPatch {
+  /** The anchor kind: absolute, one-cell or two-cell; an absolute kind is not added. */
   kind?: AnchorKind;
+  /** How the object follows row and column edits (it moves and resizes, moves only, or stays put); written for a
+   *  two-cell anchor only. */
   editAs?: AnchorEditAs;
+  /** 0-based row of the top-left marker. */
   fromRow?: number;
+  /** 0-based column of the top-left marker. */
   fromCol?: number;
+  /** Vertical offset of the top-left corner within `fromRow`, in EMU; for an absolute anchor, the y position from A1. */
   fromRowOffsetEmu?: number;
+  /** Horizontal offset of the top-left corner within `fromCol`, in EMU; for an absolute anchor, the x position from A1. */
   fromColOffsetEmu?: number;
+  /** 0-based row of the bottom-right marker of a two-cell anchor. Not accepted on a one-cell anchor. */
   toRow?: number;
+  /** 0-based column of the bottom-right marker of a two-cell anchor. Not accepted on a one-cell anchor. */
   toCol?: number;
+  /** Vertical offset of the bottom-right corner within `toRow`, in EMU. Not accepted on a one-cell anchor. */
   toRowOffsetEmu?: number;
+  /** Horizontal offset of the bottom-right corner within `toCol`, in EMU. Not accepted on a one-cell anchor. */
   toColOffsetEmu?: number;
+  /** The object's own unrotated width in EMU. Not accepted on a two-cell anchor, except as the size of an all-zero
+   *  bottom-right marker box on add. */
   widthEmu?: number;
+  /** The object's own unrotated height in EMU. Not accepted on a two-cell anchor, except as the size of an all-zero
+   *  bottom-right marker box on add. */
   heightEmu?: number;
 }
 
 /** The placement of a new drawing object: a picture (`Sheet.addPicture`), and the base of {@link ChartInput},
- *  {@link ShapeInput} and {@link SlicerInput}. An omitted or empty
- *  `name` becomes the kind's default (`Picture <id>`; a chart or shape has its own); `hidden` defaults to
- *  `false`; an omitted `anchor` is the operation's default kind at A1. */
+ *  {@link ShapeInput} and {@link SlicerInput}. */
 export interface DrawingPlacementInput {
+  /** The object's name; empty or omitted takes the kind's default (`Picture <id>` for a picture; a chart or shape has
+   *  its own). */
   name?: string;
+  /** The object's alternative text; empty or omitted means none. */
   description?: string;
+  /** Whether the object is hidden; unset means shown. */
   hidden?: boolean;
+  /** Where the object is placed; unset takes the operation's default anchor kind at A1. */
   anchor?: DrawingAnchorInput;
 }
 
 /** Argument of `Drawing.update`, valid for every kind: the fields every drawing object has. A key left out is
- *  unchanged. `description: null` (or an empty string) removes the description; no other key accepts `null`,
- *  and a `null` there fails with a `TypeError`. `name` cannot be empty and duplicates are allowed; a slicer's
- *  `name` cannot be set (it ties the frame to the slicer part) and fails with `StatusCode.PreconditionFailed`.
- *  `anchor` merges as {@link DrawingAnchorPatch} describes. The keys of a {@link DrawingProperties} that cannot be
- *  updated (`objectId`, `kind`) are ignored; any other unknown key fails with a `TypeError`. */
+ *  unchanged; no key other than `description` accepts `null` (a `TypeError`). The keys of a {@link DrawingProperties}
+ *  that cannot be updated (`objectId`, `kind`) are ignored; any other unknown key fails with a `TypeError`. */
 export interface DrawingPatch {
+  /** The new name; it cannot be empty and duplicates are allowed. A slicer's name cannot be set (it ties the frame to
+   *  the slicer part) and fails with `StatusCode.PreconditionFailed`. */
   name?: string;
+  /** The new alternative text; clearing it, or an empty string, removes the description. */
   description?: string | null;
+  /** Whether the object is hidden. */
   hidden?: boolean;
+  /** Update merged into the object's current anchor, as {@link DrawingAnchorPatch} describes. */
   anchor?: DrawingAnchorPatch;
 }
 
-/** Return type of `Shape.getProperties()`: the shape-specific fields of a shape, connector or group. The anchor,
- *  name, description and visibility are read with `getDrawingProperties()`. `fill` / `line` are the shape's own
- *  paint, read as a chart's is ({@link ChartFill}, {@link ChartLine}), and `null` when the shape has no element
- *  of its own and draws its style's. `rotationDeg` is in degrees. `presetGeometry` is the preset geometry, empty
- *  for custom geometry or a group; `text` joins paragraphs with `\n`. */
+/** Return type of `Shape.getProperties()`: the shape-specific fields of a shape, connector or group. The anchor, name,
+ *  description and visibility are read with `getDrawingProperties()`. `fill` / `line` read as a chart's paint does
+ *  ({@link ChartFill}, {@link ChartLine}). */
 export interface ShapeProperties {
+  /** The object's id in the sheet's drawing. */
   readonly objectId: number;
+  /** The object's kind: shape, connector or group. */
   readonly kind: DrawingObjectKind;
+  /** Name of the preset geometry; empty for custom geometry or a group. */
   readonly presetGeometry: string;
+  /** The shape's text, paragraphs joined with a newline. */
   readonly text: string;
+  /** `true` when the shape is a text box. */
   readonly textBox: boolean;
+  /** The shape's own fill; `null` when it has none and draws its style's. */
   readonly fill: ChartFill | null;
+  /** The shape's own outline; `null` when it has none and draws its style's. */
   readonly line: ChartLine | null;
+  /** Clockwise rotation in degrees. */
   readonly rotationDeg: number;
 }
 
 /** Argument of `Sheet.addShape`: the {@link DrawingPlacementInput} keys (its anchor needs a non-zero size or a
- *  `to*` box) and the shape fields; a key left out is not applied. `fill` / `line` take the chart paint patches
- *  ({@link ChartFillPatch}, {@link ChartLinePatch}); omitted or `null`, the shape draws its style's paint.
- *  `presetGeometry` defaults to `rect` and `name` to `Shape <id>`; a `presetGeometry` naming a line or connector
- *  geometry makes a connector, which holds no text. `rotationDeg` is in degrees. */
+ *  `to*` box; `name` defaults to `Shape <id>`) and the shape fields; a key left out is not applied. `fill` / `line`
+ *  take the chart paint patches ({@link ChartFillPatch}, {@link ChartLinePatch}). */
 export interface ShapeInput extends DrawingPlacementInput {
+  /** Name of the preset geometry; defaults to rect, and a line or connector geometry makes a connector. */
   presetGeometry?: string;
+  /** The shape's text, paragraphs joined with a newline; a connector holds none. */
   text?: string;
+  /** Whether the shape is a text box. */
   textBox?: boolean;
+  /** The shape's own fill; omitted or `null` draws the shape style's. */
   fill?: ChartFillPatch | null;
+  /** The shape's own outline; omitted or `null` draws the shape style's. */
   line?: ChartLinePatch | null;
+  /** Clockwise rotation in degrees. */
   rotationDeg?: number;
 }
 
-/** The shape-specific keys of `Shape.update`: those of {@link ShapeInput} except the placement keys, each
- *  optional. A key left out is unchanged. `fill` / `line` merge as a chart series' do; `null` removes the
- *  shape's own paint, so it draws its style's, and no other key accepts `null`. `Shape.update` also takes the
- *  {@link DrawingPatch} keys. `objectId` and `kind` of a {@link ShapeProperties} are ignored; any other unknown
- *  key fails with a `TypeError`. */
+/** The shape-specific keys of `Shape.update`: those of {@link ShapeInput} except the placement keys, each optional. A
+ *  key left out is unchanged and no key other than `fill` / `line` accepts `null`. `fill` / `line` merge as a chart
+ *  series' do. `Shape.update` also takes the {@link DrawingPatch} keys. `objectId` and `kind` of a {@link
+ *  ShapeProperties} are ignored; any other unknown key fails with a `TypeError`. */
 export interface ShapePatch {
+  /** The new preset geometry name. */
   presetGeometry?: string;
+  /** The new text, paragraphs joined with a newline; applies to a shape only. */
   text?: string;
+  /** Whether the shape is a text box. */
   textBox?: boolean;
+  /** Update merged into the shape's own fill; `null`, or clearing every member, removes it so the shape draws its
+   *  style's. */
   fill?: ChartFillPatch | null;
+  /** Update merged into the shape's own outline; `null`, or clearing every member, removes it so the shape draws its
+   *  style's. */
   line?: ChartLinePatch | null;
+  /** The new clockwise rotation in degrees. */
   rotationDeg?: number;
 }
 
-/** Return type of `Slicer.getProperties()`: the slicer-specific fields of a table slicer of a worksheet.
- *  `objectId` is the slicer's frame in the sheet's drawing; its anchor, name, description and visibility are read
- *  with `getDrawingProperties()`. `cacheName`, `tableName` and `columnName` identify the slicer cache and the
- *  table column it filters; the selection itself lives in the table's AutoFilter. `styleName` is `null` without
- *  a style. `rowHeightPt` is the item row height in points. */
+/** Return type of `Slicer.getProperties()`: the slicer-specific fields of a table slicer of a worksheet. Its anchor,
+ *  name, description and visibility are read with `getDrawingProperties()`; the selection itself lives in the
+ *  table's AutoFilter. */
 export interface SlicerProperties {
+  /** The id of the slicer's frame in the sheet's drawing. */
   readonly objectId: number;
+  /** The caption shown in the slicer header. */
   readonly caption: string;
+  /** The name of the slicer cache the slicer belongs to. */
   readonly cacheName: string;
+  /** The name of the table the slicer filters. */
   readonly tableName: string;
+  /** The name of the table column the slicer filters. */
   readonly columnName: string;
+  /** The name of the slicer style; `null` without a style. */
   readonly styleName: string | null;
+  /** The number of columns the slicer lays its item buttons out in. */
   readonly columnCount: number;
+  /** The height of each item row in points. */
   readonly rowHeightPt: number;
+  /** The order the slicer lists its items in. */
   readonly sortOrder: SlicerSortOrder;
+  /** How the slicer cross-filters its items (items with data listed first, items without data shown in place, or no
+   *  cross-filtering). */
   readonly crossFilter: SlicerCrossFilter;
 }
 
 /** Argument of `Sheet.addSlicer`: the {@link DrawingPlacementInput} keys and the slicer fields; a key left out is
  *  not applied. The anchor is two-cell (`kind` omitted or `TwoCell`) and needs its `to*` box or a non-zero size.
- *  `name` and `caption` default to the column name (the name is made unique), `rowHeightPt` (points) to Excel's
- *  default of 19 and `columnCount` to 1; `name` cannot be updated. A negative or non-finite `rowHeightPt` fails
- *  with `StatusCode.InvalidArgument`. A `null` `styleName` creates the slicer without a style; `''` is
- *  `StatusCode.InvalidArgument`. */
+ *  `name` defaults to the column name (made unique) and cannot be updated. */
 export interface SlicerInput extends DrawingPlacementInput {
+  /** The caption shown in the slicer header; the column name when omitted. */
   caption?: string;
+  /** The name of the slicer style; `null` creates the slicer without a style and an empty string is rejected. Omitted
+   *  leaves the default. */
   styleName?: string | null;
+  /** The number of columns the slicer lays its item buttons out in; 1 when omitted. */
   columnCount?: number;
+  /** The height of each item row in points, finite and not negative (otherwise `StatusCode.InvalidArgument`); Excel's
+   *  default of 19 when omitted. */
   rowHeightPt?: number;
+  /** The order the slicer lists its items in; ascending when omitted. */
   sortOrder?: SlicerSortOrder;
+  /** How the slicer cross-filters its items (items with data listed first, items without data shown in place, or no
+   *  cross-filtering); the default cross filter when omitted. */
   crossFilter?: SlicerCrossFilter;
 }
 
-/** The slicer-specific keys of `Slicer.update`: those of {@link SlicerInput} except the placement keys, each
- *  optional. A key left out is unchanged and `styleName: null` removes the style (the only key that accepts
- *  `null`; any other `null` fails with a `TypeError`); `styleName: ''` is `StatusCode.InvalidArgument`. `Slicer.update` also takes the {@link DrawingPatch} keys except
- *  `name`. The keys of a {@link SlicerProperties} that cannot be updated (`objectId`, `cacheName`, `tableName`,
- *  `columnName`) are ignored; any other unknown key fails with a `TypeError`. */
+/** The slicer-specific keys of `Slicer.update`: those of {@link SlicerInput} except the placement keys, each optional.
+ *  A key left out is unchanged and no key other than `styleName` accepts `null` (a `TypeError`). `Slicer.update` also
+ *  takes the {@link DrawingPatch} keys except `name`. The keys of a {@link SlicerProperties} that cannot be updated
+ *  (`objectId`, `cacheName`, `tableName`, `columnName`) are ignored; any other unknown key fails with a `TypeError`. */
 export interface SlicerPatch {
+  /** The caption shown in the slicer header. Left out, the value is unchanged. */
   caption?: string;
+  /** The name of the slicer style; `null` removes the style and an empty string is `StatusCode.InvalidArgument`. Left
+   *  out, the style is unchanged. */
   styleName?: string | null;
+  /** The number of columns the slicer lays its item buttons out in. Left out, the value is unchanged. */
   columnCount?: number;
+  /** The height of each item row in points, finite and not negative. Left out, the value is unchanged. */
   rowHeightPt?: number;
+  /** The order the slicer lists its items in. Left out, the value is unchanged. */
   sortOrder?: SlicerSortOrder;
+  /** How the slicer cross-filters its items (items with data listed first, items without data shown in place, or no
+   *  cross-filtering). Left out, the value is unchanged. */
   crossFilter?: SlicerCrossFilter;
 }
 
 /** An input cell of a {@link DataTable}. `deleted` is set once a row or column delete removed the cell. */
 export interface DataTableInputCell {
+  /** The input cell's 0-based row. */
   readonly row: number;
+  /** The input cell's 0-based column. */
   readonly col: number;
-  /** Ignored on input. */
+  /** `true` when a row or column delete removed the input cell; ignored on input. */
   readonly deleted: boolean;
 }
 
-/** A What-If data table (`TABLE()`); every coordinate is 0-based and the range inclusive. The row input
- *  cell receives the values of the row above the range and the column input cell those of the column left
- *  of it. A one-variable table has one input (`rowOriented` says which) and the other is `null`; a
- *  two-variable table has both. A deleted input makes the table evaluate to `#REF!`. */
+/** A What-If data table (`TABLE()`); every coordinate is 0-based and the range inclusive. A one-variable table
+ *  has one input (`rowOriented` says which) and the other is `null`; a two-variable table has both. A deleted input
+ *  makes the table evaluate to `#REF!`. */
 export interface DataTable {
+  /** The result range of the table, 0-based and inclusive. */
   readonly range: CellRect;
+  /** `true` for a two-variable table, which has both a row and a column input cell. */
   readonly twoDimensional: boolean;
+  /** For a one-variable table, `true` when its input is the row input cell and `false` when it is the column input
+   *  cell. */
   readonly rowOriented: boolean;
+  /** The cell that receives the values of the row above the range; `null` when the table has none. */
   readonly rowInput: DataTableInputCell | null;
+  /** The cell that receives the values of the column left of the range; `null` when the table has none. */
   readonly columnInput: DataTableInputCell | null;
 }
 
 /** Argument of `addDataTable`: the result range plus the input cells (`{ row, col }`). Give `rowInput`
- *  or `columnInput` for a one-variable table, both for a two-variable one. `range` and each input cell also take
- *  an A1 string (`'B2:D6'`, `'A1'`); an input cell string names a single cell. The {@link DataTable} a read
- *  returns passes as is; the `deleted` flag of its input cells is ignored. */
+ *  or `columnInput` for a one-variable table, both for a two-variable one; an input cell string names a single cell.
+ *  The {@link DataTable} a read returns passes as is; the `deleted` flag of its input cells is ignored. */
 export interface DataTableInput {
+  /** The result range of the table, a `CellRect` or an A1 range. */
   range: CellRect | string;
+  /** The cell that receives the values of the row above the range, an object with row and col or an A1 cell; omitted or
+   *  `null` for none. */
   rowInput?: CellAddress | string | null;
+  /** The cell that receives the values of the column left of the range, an object with row and col or an A1 cell;
+   *  omitted or `null` for none. */
   columnInput?: CellAddress | string | null;
 }
 
-/** One sparkline: the data `source` range and the `location` cell that shows it. `source` is `null` when the
- *  stored range text does not parse. */
+/** One sparkline: the data `source` range and the `location` cell that shows it. */
 export interface Sparkline {
+  /** The data range the sparkline plots; `null` when the stored range text does not parse. */
   readonly source: SheetRect | null;
+  /** The single cell that shows the sparkline. */
   readonly location: CellAddress;
 }
 
-/** One sparkline of an input: `source` is a {@link SheetRect} or a sheet-qualified A1 range (an unqualified one
- *  resolves on the receiving sheet) and `location` a {@link CellAddress} or an A1 cell. The {@link Sparkline} a
- *  read returns passes as is. */
+/** One sparkline of an input. The {@link Sparkline} a read returns passes as is. */
 export interface SparklineInput {
+  /** The data range, as a range record or sheet-qualified A1 text; unqualified text resolves on the receiving sheet. */
   source: SheetRect | string | null;
+  /** The cell that shows the sparkline, as an address record or A1 text. */
   location: CellAddress | string;
 }
 
-/** A sparkline group of the sheet's worksheet extension list. A colour is `null` when the group states none.
- *  `manualMin` / `manualMax` are `null` when the axis bound is not set.
- *  `dateAxisRange` is the group's date range, `null` when absent or when its stored text does not parse. */
+/** A sparkline group of the sheet's worksheet extension list. */
 export interface SparklineGroup {
-  /** The group's id: stable while the workbook is open, across structural edits; assigned again on load. */
+  /** The group's id: an opaque string, unique on its sheet, stable while the workbook is open and not saved; empty when
+   *  an input states none. */
   readonly id: SparklineGroupId;
+  /** The sparkline type: line, column or stacked (win/loss). */
   readonly type: SparklineType;
+  /** Colour of the line or columns; `null` when the group states none. */
   readonly colorSeries: Color | null;
+  /** Colour of negative points; `null` when the group states none. */
   readonly colorNegative: Color | null;
+  /** Colour of the horizontal axis; `null` when the group states none. */
   readonly colorAxis: Color | null;
+  /** Colour of the markers; `null` when the group states none. */
   readonly colorMarkers: Color | null;
+  /** Colour of the first point; `null` when the group states none. */
   readonly colorFirst: Color | null;
+  /** Colour of the last point; `null` when the group states none. */
   readonly colorLast: Color | null;
+  /** Colour of the highest point; `null` when the group states none. */
   readonly colorHigh: Color | null;
+  /** Colour of the lowest point; `null` when the group states none. */
   readonly colorLow: Color | null;
+  /** `true` to show a marker at every point of a line sparkline. */
   readonly markers: boolean;
+  /** `true` to highlight the highest point. */
   readonly high: boolean;
+  /** `true` to highlight the lowest point. */
   readonly low: boolean;
+  /** `true` to highlight the first point. */
   readonly first: boolean;
+  /** `true` to highlight the last point. */
   readonly last: boolean;
+  /** `true` to highlight negative points. */
   readonly negative: boolean;
+  /** `true` to show the horizontal axis. */
   readonly displayXAxis: boolean;
+  /** `true` to plot data in hidden rows and columns. */
   readonly displayHidden: boolean;
+  /** How the vertical axis minimum is chosen: per sparkline, shared by the group, or the custom value. */
   readonly minAxisType: SparklineAxisType;
+  /** How the vertical axis maximum is chosen: per sparkline, shared by the group, or the custom value. */
   readonly maxAxisType: SparklineAxisType;
+  /** The custom vertical axis minimum; `null` when not set. */
   readonly manualMin: number | null;
+  /** The custom vertical axis maximum; `null` when not set. */
   readonly manualMax: number | null;
+  /** `true` to space points by a date axis. */
   readonly dateAxis: boolean;
+  /** The group's date range; `null` when absent or when its stored text does not parse. */
   readonly dateAxisRange: SheetRect | null;
-  /** The sparkline line width in points. */
+  /** Line width in points; 0.75 for a new group. */
   readonly lineWidthPt: number;
+  /** How empty cells are plotted: as a gap, as zero, or by connecting the neighbours. */
   readonly emptyCellsAs: BlanksAs;
+  /** The sparklines of the group. */
   readonly sparklines: readonly Sparkline[];
 }
 
-/** Input of `addSparklineGroup`: every modelled field, each defaulting as a new line group does when left
- *  out; a colour of `null` is no colour. `sparklines` is required by an add. A `SparklineGroup` read back passes as is. */
+/** Input of `addSparklineGroup`: every modelled field, each defaulting as a new line group does when left out; a colour
+ *  of `null` is no colour. `sparklines` is required by an add. A `SparklineGroup` read back passes as is. */
 export interface SparklineGroupInput {
+  /** The sparkline type: line, column or stacked (win/loss). */
   readonly type?: SparklineType;
+  /** Colour of the line or columns; `null` for no colour. */
   readonly colorSeries?: ColorInput | null;
+  /** Colour of negative points; `null` for no colour. */
   readonly colorNegative?: ColorInput | null;
+  /** Colour of the horizontal axis; `null` for no colour. */
   readonly colorAxis?: ColorInput | null;
+  /** Colour of the markers; `null` for no colour. */
   readonly colorMarkers?: ColorInput | null;
+  /** Colour of the first point; `null` for no colour. */
   readonly colorFirst?: ColorInput | null;
+  /** Colour of the last point; `null` for no colour. */
   readonly colorLast?: ColorInput | null;
+  /** Colour of the highest point; `null` for no colour. */
   readonly colorHigh?: ColorInput | null;
+  /** Colour of the lowest point; `null` for no colour. */
   readonly colorLow?: ColorInput | null;
+  /** `true` to show a marker at every point of a line sparkline. */
   readonly markers?: boolean;
+  /** `true` to highlight the highest point. */
   readonly high?: boolean;
+  /** `true` to highlight the lowest point. */
   readonly low?: boolean;
+  /** `true` to highlight the first point. */
   readonly first?: boolean;
+  /** `true` to highlight the last point. */
   readonly last?: boolean;
+  /** `true` to highlight negative points. */
   readonly negative?: boolean;
+  /** `true` to show the horizontal axis. */
   readonly displayXAxis?: boolean;
+  /** `true` to plot data in hidden rows and columns. */
   readonly displayHidden?: boolean;
+  /** How the vertical axis minimum is chosen: per sparkline, shared by the group, or the custom value. */
   readonly minAxisType?: SparklineAxisType;
+  /** How the vertical axis maximum is chosen: per sparkline, shared by the group, or the custom value. */
   readonly maxAxisType?: SparklineAxisType;
+  /** The custom vertical axis minimum; `null` when not set. */
   readonly manualMin?: number | null;
+  /** The custom vertical axis maximum; `null` when not set. */
   readonly manualMax?: number | null;
+  /** `true` to space points by a date axis. */
   readonly dateAxis?: boolean;
+  /** The group's date range, as a range record or sheet-qualified A1 text; `null` for none. */
   readonly dateAxisRange?: SheetRect | string | null;
+  /** Line width in points; 0.75 for a new group. */
   readonly lineWidthPt?: number;
+  /** How empty cells are plotted: as a gap, as zero, or by connecting the neighbours. */
   readonly emptyCellsAs?: BlanksAs;
+  /** The sparklines of the group; an add needs at least one. */
   readonly sparklines?: readonly SparklineInput[];
 }
 
 /** Argument of `updateSparklineGroup`: every {@link SparklineGroupInput} key, each optional. A key left out is
- *  unchanged; `manualMin`, `manualMax`, `dateAxisRange` and the eight colours accept `null` to clear them and no
- *  other key does (a `TypeError`). `sparklines` replaces the group's sparklines when present, keeps them when absent and
- *  must not be empty (`StatusCode.InvalidArgument`). A `SparklineGroup` read back passes as is; any
- *  unknown key fails with a `TypeError`. */
+ *  unchanged; `manualMin`, `manualMax`, `dateAxisRange` and the eight colours accept `null` to clear them and no other
+ *  key does (a `TypeError`). `sparklines` replaces the group's sparklines when present, keeps them when absent and must
+ *  not be empty (`StatusCode.InvalidArgument`). A `SparklineGroup` read back passes as is; any unknown key fails with a
+ *  `TypeError`. */
 export type SparklineGroupPatch = Patch<
   SparklineGroupInput,
   | 'manualMin'
@@ -4669,8 +5497,11 @@ export type ChartRole = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
 
 /** One series input: nothing, a range reference, or literal points. */
 export interface ChartDataSource {
+  /** Whether the input is empty, a range reference or literal points. */
   readonly kind: ChartSourceKind;
+  /** The reference text of a range-reference input; empty for another kind. */
   readonly formula: string;
+  /** The literal points of a literal input, numbers or strings in order; empty for another kind. */
   readonly literal: readonly (number | string)[];
 }
 
@@ -4678,105 +5509,156 @@ export interface ChartDataSource {
  *  source sets its `formula`, a `None` source an empty reference, a `Literal` source writes its points). */
 export type ChartDataSourceInput = ChartDataSource | string;
 
-/** A fill, as a chart element or a shape reads it. `color` is a solid fill's colour: `ColorKind.Rgb`, or
- *  `ColorKind.Theme` for a theme reference (a colour with other transforms reads as its rendered `Rgb`), `null`
- *  when the element states none; `transparencyPct` is a percentage (0..100). `none` is an explicit no-fill.
- *  `other` is `true` for a paint the record cannot state (gradient, pattern or picture); it is read only. */
+/** A fill, as a chart element or a shape reads it. */
 export interface ChartFill {
+  /** The solid fill colour: `ColorKind.Rgb`, or `ColorKind.Theme` for a theme reference (a colour with other
+   *  transforms reads as its rendered `Rgb`); `null` when the element states none. */
   readonly color: Color | null;
+  /** The fill transparency as a percentage (0..100); `null` when the colour has no alpha. */
   readonly transparencyPct: number | null;
+  /** `true` for an explicit no-fill. */
   readonly none: boolean;
+  /** `true` on a read when the stored paint cannot be stated by this record (a gradient, pattern or picture); read
+   *  only. */
   readonly other: boolean;
 }
 
-/** A line: `transparencyPct` as in {@link ChartFill}, `widthPt` in points. `none` is an explicit no-line;
- *  `other` is `true` for a line paint the record cannot state, and is read only. */
+/** A line, read as a {@link ChartFill} is. */
 export interface ChartLine {
+  /** The outline colour, an RGB or theme colour; `null` when the element states none. */
   readonly color: Color | null;
+  /** The outline transparency as a percentage (0..100); `null` when the colour has no alpha. */
   readonly transparencyPct: number | null;
+  /** The outline width in points; `null` when the element states none. */
   readonly widthPt: number | null;
+  /** The dash style of the outline; `null` when the element states none. */
   readonly dash: ChartLineDash | null;
+  /** `true` for an explicit no-line. */
   readonly none: boolean;
+  /** `true` on a read when the outline fill cannot be stated by this record (a gradient or pattern); read only. */
   readonly other: boolean;
 }
 
-/** A series or point marker; `sizePt` is the marker size in points. `fill` / `line` are `null` when the marker
- *  states no element of its own. */
+/** A series or point marker. */
 export interface ChartMarker {
+  /** The marker symbol. */
   readonly symbol: ChartMarkerSymbol;
+  /** The marker size in points; `null` when the marker states none. */
   readonly sizePt: number | null;
+  /** The marker fill; `null` when the marker states none of its own. */
   readonly fill: ChartFill | null;
+  /** The marker outline; `null` when the marker states none of its own. */
   readonly line: ChartLine | null;
 }
 
 /** Data labels of a series, as `Chart.getData` returns them; `null` where the series has none. Written through
  *  `ChartLabelsPatch`. */
 export interface ChartLabels {
+  /** `true` when the label shows the point value. */
   readonly showValue: boolean;
+  /** `true` when the label shows the category name. */
   readonly showCategory: boolean;
+  /** `true` when the label shows the series name. */
   readonly showSeries: boolean;
+  /** `true` when the label shows the percentage of the whole (pie-type plots). */
   readonly showPercent: boolean;
+  /** `true` when the label shows the legend key. */
   readonly showLegendKey: boolean;
+  /** The text placed between the label parts; `null` when the chart states none. */
   readonly separator: string | null;
+  /** Where the label sits relative to its point; `null` when the chart states none. */
   readonly position: ChartLabelPosition | null;
+  /** The number format code of the label; `null` when the chart states none. */
   readonly numberFormat: string | null;
+  /** `true` when the label number format follows the source cells. */
   readonly sourceLinked: boolean;
+  /** The label font colour; `null` when the chart states none. */
   readonly fontColor: Color | null;
+  /** The label font size in points; `null` when the chart states none. */
   readonly fontSizePt: number | null;
+  /** `true` when the labels are deleted (c:delete) for the series. */
   readonly deleted: boolean;
 }
 
-/** A formatted data point (`c:dPt`). `fill` / `line` are `null` when the point states no element of its own. */
+/** A formatted data point (`c:dPt`). */
 export interface ChartPoint {
+  /** The 0-based index of the data point within its series. */
   readonly index: number;
+  /** The point fill; `null` when the point states none of its own. */
   readonly fill: ChartFill | null;
+  /** The point outline; `null` when the point states none of its own. */
   readonly line: ChartLine | null;
+  /** The point marker; `null` when the point states none of its own. */
   readonly marker: ChartMarker | null;
 }
 
 /** One series of a plot group. `fill` / `line` are `null` when the series states no element of its own. */
 export interface ChartSeries {
-  /** The series' `c:idx`, the key `Chart.updateSeries` and `Chart.removeSeries` take. */
+  /** The series' `c:idx`, the key the series update and remove operations take. */
   readonly seriesId: number;
+  /** The plotting order of the series within the chart (`c:order`). */
   readonly order: number;
+  /** `true` when the chart filter hides the series. */
   readonly filtered: boolean;
+  /** The input that supplies the series name. */
   readonly name: ChartDataSource;
+  /** The input that supplies the category labels. */
   readonly categories: ChartDataSource;
+  /** The input that supplies the values of a category plot. */
   readonly values: ChartDataSource;
+  /** The input that supplies the x values of a scatter or bubble series. */
   readonly x: ChartDataSource;
+  /** The input that supplies the y values of a scatter or bubble series. */
   readonly y: ChartDataSource;
+  /** The input that supplies the bubble sizes of a bubble series. */
   readonly size: ChartDataSource;
+  /** The series fill; `null` when the series states none of its own. */
   readonly fill: ChartFill | null;
+  /** The series outline; `null` when the series states none of its own. */
   readonly line: ChartLine | null;
+  /** The series marker; `null` when the series has none. */
   readonly marker: ChartMarker | null;
+  /** `true` when a line or scatter series draws a smoothed line; `null` when the series states none. */
   readonly smooth: boolean | null;
+  /** The formatted data points of the series. */
   readonly points: readonly ChartPoint[];
+  /** The data labels of the series; `null` when the series has none. */
   readonly labels: ChartLabels | null;
 }
 
-/** One plot group. `extendedLayout` is the series layout of an `Extended` plot, `null` for any other type;
- *  `gapWidthPct` and `overlapPct` are percentages of the bar width, `holeSizePct` a percentage of the doughnut's
- *  diameter and `firstSliceAngleDeg` an angle in degrees. */
+/** One plot group. */
 export interface ChartPlot {
+  /** The plot type of the group. */
   readonly type: ChartPlotType;
+  /** The series layout of an extended plot; `null` for any other plot type. */
   readonly extendedLayout: ChartExtendedLayout | null;
+  /** Whether bars run vertically (column) or horizontally; `null` outside the bar family or when the file omits it. */
   readonly barDirection: ChartBarDirection | null;
+  /** How the series are stacked or grouped (standard, stacked, percent-stacked); `null` when the plot type has none. */
   readonly grouping: ChartGrouping | null;
+  /** `true` when each point of a single-series plot takes its own colour. */
   readonly varyColors: boolean;
+  /** The gap between bar clusters as a percentage of the bar width; `null` when the plot type has none. */
   readonly gapWidthPct: number | null;
+  /** The overlap between bars of a cluster as a percentage of the bar width; `null` when the plot type has none. */
   readonly overlapPct: number | null;
+  /** The doughnut hole size as a percentage of the doughnut diameter; `null` when the plot type has none. */
   readonly holeSizePct: number | null;
+  /** The angle in degrees of the first pie or doughnut slice; `null` when the plot type has none. */
   readonly firstSliceAngleDeg: number | null;
+  /** The ids of the axes the plot group uses. */
   readonly axisIds: readonly number[];
+  /** The series of the plot group, in order. */
   readonly series: readonly ChartSeries[];
 }
 
 /** A chart or axis title: `text` for `Text`, `formula` for `Ref`, each `null` for another kind. */
 export interface ChartTitle {
+  /** Whether the title is absent, automatic, literal text or a cell reference. */
   readonly kind: ChartTitleKind;
-  /** The literal text of a `Text` title; `null` for another kind. */
+  /** The flattened rich text of a text title; `null` for another kind. */
   readonly text: string | null;
-  /** The reference of a `Ref` title; `null` for another kind. */
+  /** The reference of a reference title; `null` for another kind. */
   readonly formula: string | null;
 }
 
@@ -4786,8 +5668,11 @@ export type ChartTitleInput = ChartTitle | string;
 /** A chart's legend: where it sits, whether it overlays the plot, and the legend entries it hides (the `c:idx`
  *  values of the entries, which are independent of the series {@link ChartFilter} hides). */
 export interface ChartLegend {
+  /** Where the legend sits relative to the plot. */
   readonly position: ChartLegendPosition;
+  /** `true` when the legend overlays the plot area. */
   readonly overlay: boolean;
+  /** The `c:idx` values of the series whose legend entry is hidden. */
   readonly hiddenEntries: readonly number[];
 }
 
@@ -4814,35 +5699,55 @@ export const ChartDomain: Readonly<{
 /** Union of the {@link ChartDomain} ordinals. */
 export type ChartDomain = 0 | 1;
 
-/** One chart axis. `visible` is `false` for a deleted axis (`c:delete`), the same key `ChartAxisPatch` takes. */
+/** One chart axis. */
 export interface ChartAxis {
+  /** The axis id (c:axId) that `crossAxis` and a plot group's axis ids refer to. */
   readonly id: number;
+  /** The kind of the axis (category, value, date or series). */
   readonly kind: ChartAxisKind;
+  /** The side of the plot area the axis sits on. */
   readonly position: ChartAxisPosition;
+  /** `true` when the axis is shown; `false` for a deleted axis (`c:delete`). */
   readonly visible: boolean;
+  /** The id of the axis this axis crosses. */
   readonly crossAxis: number;
+  /** Where this axis crosses its cross axis (automatic, minimum, maximum or at `crossesAt`); `null` when the file omits
+   *  it. */
   readonly crosses: ChartAxisCrosses | null;
+  /** The value on the cross axis where this axis crosses; `null` unless `crosses` is the at-value kind. */
   readonly crossesAt: number | null;
+  /** The fixed minimum of the axis scale; `null` when it is automatic. */
   readonly min: number | null;
+  /** The fixed maximum of the axis scale; `null` when it is automatic. */
   readonly max: number | null;
+  /** The fixed distance between major ticks; `null` when it is automatic. */
   readonly majorUnit: number | null;
+  /** The fixed distance between minor ticks; `null` when it is automatic. */
   readonly minorUnit: number | null;
+  /** The base of a logarithmic scale; `null` for a linear axis. */
   readonly logBase: number | null;
+  /** `true` when the axis runs in reverse order. */
   readonly reversed: boolean;
+  /** The number format code of the tick labels; `null` when the axis states none. */
   readonly numberFormat: string | null;
+  /** `true` when the tick label number format follows the source cells. */
   readonly sourceLinked: boolean;
+  /** The axis title; `null` when the axis has none. */
   readonly title: ChartTitle | null;
+  /** `true` when major gridlines are drawn. */
   readonly majorGridlines: boolean;
+  /** `true` when minor gridlines are drawn. */
   readonly minorGridlines: boolean;
-  /** `null` when the axis element is absent. */
+  /** Where the tick labels sit relative to the axis; `null` when the axis element is absent. */
   readonly tickLabelPosition: ChartTickLabelPosition | null;
 }
 
-/** Names the axis of a given kind of a plot group: `plot` is the plot group's position (0 by default). The axis is
- *  found through `ChartPlot.axisIds` and {@link ChartAxis.kind}; a chart without an axis of that kind fails with
- *  `StatusCode.NotFound`. */
+/** Names the axis of a given kind of a plot group. The axis is found through `ChartPlot.axisIds` and
+ *  {@link ChartAxis.kind}; a chart without an axis of that kind fails with `StatusCode.NotFound`. */
 export interface ChartAxisKey {
+  /** The kind of axis to address. */
   kind: ChartAxisKind;
+  /** The 0-based position of the plot group; 0 when omitted. */
   plot?: number;
 }
 
@@ -4851,140 +5756,202 @@ export type ChartAxisRef = number | ChartAxisKey;
 
 /** The range every series of a chart was split from, as `Chart.getProperties()` returns it in `source`. */
 export interface ChartSource {
+  /** The rectangle every series was split from. */
   readonly range: SheetRect;
+  /** Whether the series run along rows or columns of `range`. */
   readonly direction: ChartSeriesDirection;
+  /** `true` when the first row of `range` holds series or category names rather than data. */
   readonly headerRow: boolean;
+  /** `true` when the first column of `range` holds series or category names rather than data. */
   readonly headerColumn: boolean;
 }
 
-/** The series and categories a chart filter hides, as `Chart.getProperties()` returns it in `filter`.
- *  `hiddenSeries` holds series `c:idx` values and `hiddenCategories` category indexes; an unfiltered chart
- *  reads two zero-length lists. */
+/** The series and categories a chart filter hides, as `Chart.getProperties()` returns it in `filter`. An unfiltered
+ *  chart reads two zero-length lists. */
 export interface ChartFilter {
+  /** The `c:idx` values of the series the filter hides. */
   readonly hiddenSeries: readonly number[];
+  /** The 0-based indexes of the categories the filter hides. */
   readonly hiddenCategories: readonly number[];
 }
 
 /** Argument of `Chart.setFilter`: an omitted list hides nothing. The {@link ChartFilter} a read returns passes
  *  as is. */
 export interface ChartFilterInput {
+  /** The `c:idx` values of the series to hide; omitted hides none. */
   hiddenSeries?: readonly number[];
+  /** The 0-based indexes of the categories to hide; omitted hides none. */
   hiddenCategories?: readonly number[];
 }
 
 /** Return type of `Chart.getProperties()`: the typed view of a chart. `source` is the range every series was
  *  split from, `null` when they share none. */
 export interface ChartProperties {
+  /** The id of the chart's drawing object on its sheet. */
   readonly objectId: number;
-  /** An extended (`cx:`) chart. */
+  /** `true` for an extended (`cx:`) chart. */
   readonly isExtended: boolean;
+  /** `true` when the chart is bound to a pivot table. */
   readonly isPivotChart: boolean;
+  /** `true` when the chart lives on a chartsheet rather than as an embedded object. */
   readonly onChartsheet: boolean;
+  /** The chart title; `null` when the chart has none. */
   readonly title: ChartTitle | null;
+  /** `true` when the automatic title is deleted; `null` when the chart states none. */
   readonly autoTitleDeleted: boolean | null;
+  /** The chart legend; `null` when the chart has none. */
   readonly legend: ChartLegend | null;
+  /** How empty cells are plotted (gap, zero or span); `null` when the file omits it. */
   readonly blanksAs: BlanksAs | null;
+  /** `true` when only visible cells are plotted; `null` when the chart states none. */
   readonly plotVisibleOnly: boolean | null;
-  /** Whether `#N/A` points draw as blank cells; `null` when the chart carries no setting. */
+  /** `true` when `#N/A` points draw as blank cells; `null` when the chart carries no setting. */
   readonly naAsBlank: boolean | null;
+  /** `true` when the chart uses the 1904 date system. */
   readonly date1904: boolean;
+  /** The chart style number (1..48); `null` when the chart states none. */
   readonly style: number | null;
+  /** The plot groups of the chart. */
   readonly plots: readonly ChartPlot[];
+  /** The axes of the chart. */
   readonly axes: readonly ChartAxis[];
+  /** The series and categories the chart filter hides. */
   readonly filter: ChartFilter;
+  /** The range every series was split from; `null` when the series share no such rectangle. */
   readonly source: ChartSource | null;
 }
 
-/** One resolved series; `values`, `states` (a {@link ChartPointState} each) and the optional `x` / `sizes` have `pointCount` entries. */
+/** One resolved series; `values`, `states` (a {@link ChartPointState} each) and the optional `x` / `sizes` have
+ *  `pointCount` entries. */
 export interface ChartDataSeries {
+  /** The 0-based position of the series' plot group. */
   readonly plotIndex: number;
+  /** The series' `c:idx`. */
   readonly seriesId: number;
+  /** The resolved series name; `null` when the series has no name reference. */
   readonly name: string | null;
-  /** Number format code of the values (the y values in the XY domain). */
+  /** The number format code of the values (the y values in the XY domain). */
   readonly numberFormat: string;
-  /** Number format code of the x values; empty outside the XY domain. */
+  /** The number format code of the x values; empty outside the XY domain. */
   readonly xNumberFormat: string;
+  /** `true` when the chart filter hides the series. */
   readonly filtered: boolean;
+  /** The resolved values, one per point (the y values in the XY domain). */
   readonly values: Float64Array;
+  /** The state of each point, parallel to `values`. */
   readonly states: Uint8Array;
+  /** The resolved x values, one per point; `null` outside the XY domain. */
   readonly x: Float64Array | null;
+  /** The resolved bubble sizes, one per point; `null` unless the series is a bubble series. */
   readonly sizes: Float64Array | null;
+  /** The cell ranges each input of the series reads. */
   readonly ranges: ChartSeriesRanges;
 }
 
 /** The cell ranges a resolved series reads; an empty list is a literal or absent source. */
 export interface ChartSeriesRanges {
+  /** The rectangles the series name reads. */
   readonly name: readonly SheetRect[];
+  /** The rectangles the category labels read. */
   readonly categories: readonly SheetRect[];
+  /** The rectangles the values read. */
   readonly values: readonly SheetRect[];
+  /** The rectangles the x values read. */
   readonly x: readonly SheetRect[];
+  /** The rectangles the y values read. */
   readonly y: readonly SheetRect[];
+  /** The rectangles the bubble sizes read. */
   readonly size: readonly SheetRect[];
 }
 
 /** The resolved category axis labels of a chart. */
 export interface ChartCategories {
+  /** The category labels, one per category. */
   readonly labels: readonly string[];
+  /** The labels of the upper levels of a multi-level category axis, outermost first; the lowest level is `labels`. A
+   *  group label sits at the points where it is not blank and is empty elsewhere. */
   readonly levels: readonly (readonly string[])[];
+  /** The numeric (date) category values; `null` when the categories are not numeric. */
   readonly values: Float64Array | null;
+  /** The number format code of the numeric category values; empty when not numeric. */
   readonly numberFormat: string;
+  /** `true` when the chart has no category reference and the labels are generated as 1..n. */
   readonly generated: boolean;
 }
 
 /** The resolved text of an axis title. */
 export interface ChartAxisTitleText {
+  /** The id of the axis the title belongs to. */
   readonly axisId: number;
+  /** The resolved title text. */
   readonly text: string;
 }
 
 /** A chart input that did not resolve: `role` is the input's {@link ChartRole}, `seriesId` the series' `c:idx`
  *  (0 for a title) and `axisId` the axis of a `ChartRole.AxisTitle` entry. */
 export interface ChartUnresolved {
+  /** The `c:idx` of the series the input belongs to; 0 for a title. */
   readonly seriesId: number;
+  /** The role of the input that did not resolve. */
   readonly role: ChartRole;
+  /** The id of the axis when the role is an axis title. */
   readonly axisId: number;
 }
 
 /** Series resolved against the current cell values by Excel's rules. `unresolved` lists the inputs that did not
  *  resolve. */
 export interface ChartData {
+  /** Whether the data is in the category domain or the XY domain. */
   readonly domain: ChartDomain;
+  /** The number of points per series. */
   readonly pointCount: number;
+  /** The resolved category labels. */
   readonly categories: ChartCategories;
+  /** The resolved series. */
   readonly series: readonly ChartDataSeries[];
+  /** The resolved chart title text; `null` when the chart has none. */
   readonly titleText: string | null;
+  /** The resolved title text of each axis that has one. */
   readonly axisTitleTexts: readonly ChartAxisTitleText[];
+  /** The inputs that did not resolve; their points read as gaps. */
   readonly unresolved: readonly ChartUnresolved[];
 }
 
-/** Options of `Sheet.addChart`. `type` is one of `Bar`, `Line`, `Area`, `Pie`, `Doughnut` and `Scatter` (any
- *  other {@link ChartPlotType} fails with `StatusCode.InvalidArgument`); `barDirection` is for `Bar` only, `Column`
- *  when omitted. `range` is a {@link SheetRect} or an A1 range (an unqualified one resolves on the receiving
- *  sheet). A `headerRow` / `headerColumn` that is omitted or `null` follows Excel's detection. An omitted `title`
- *  is Excel's automatic title, `null` is no title, a string or {@link ChartTitle} sets that title and an empty
- *  string fails with `StatusCode.InvalidArgument`. An omitted `legend` is
- *  `ChartLegendPosition.Bottom`, Excel's default for a new chart; `null` is no legend. The
- *  {@link DrawingPlacementInput} keys name the frame, set its description and visibility, and place it; the
- *  anchor defaults to a two-cell anchor, and a zero `widthEmu` / `heightEmu` means Excel's default frame. */
+/** Options of `Sheet.addChart`. The {@link DrawingPlacementInput} keys name the frame, set its description and
+ *  visibility, and place it; the anchor defaults to a two-cell anchor, and a zero `widthEmu` / `heightEmu` means
+ *  Excel's default frame. */
 export interface ChartInput extends DrawingPlacementInput {
+  /** The plot type of the new chart: `Bar`, `Line`, `Area`, `Pie`, `Doughnut` or `Scatter`; any other
+   *  {@link ChartPlotType} fails with `StatusCode.InvalidArgument`. */
   type: ChartPlotType;
+  /** Whether bars run vertically (column) or horizontally; applies to bar plots only, column when omitted. */
   barDirection?: ChartBarDirection;
+  /** How the series are stacked or grouped; applies to bar, line and area plots. */
   grouping?: ChartGrouping;
+  /** The source range, a rectangle or an A1 range (an unqualified one resolves on the receiving sheet). */
   range: SheetRect | string;
+  /** Whether the series run along rows or columns of the source range; automatic when omitted. */
   direction?: ChartSeriesDirection;
+  /** `true` when the first row of the source holds names; `null` or omitted follows Excel's detection. */
   headerRow?: boolean | null;
+  /** `true` when the first column of the source holds names; `null` or omitted follows Excel's detection. */
   headerColumn?: boolean | null;
+  /** The chart title; omitted is Excel's automatic title, `null` is no title, a string or {@link ChartTitle} sets that
+   *  title, and empty text is rejected with `StatusCode.InvalidArgument`. */
   title?: string | ChartTitle | null;
+  /** The legend position; omitted is the bottom (Excel's default for a new chart), `null` is no legend. */
   legend?: ChartLegendPosition | null;
 }
 
-/** Argument of `Chart.setSource`: the source range, a {@link SheetRect} or an A1 range (an unqualified one
- *  resolves on the chart's sheet), and its series direction (default `Auto`). A header flag that is omitted or
- *  `null` follows Excel's detection. The {@link ChartSource} a read returns passes as is. */
+/** Argument of `Chart.setSource`. The {@link ChartSource} a read returns passes as is. */
 export interface ChartSourceInput {
+  /** The source range, a rectangle or an A1 range (an unqualified one resolves on the chart's sheet). */
   range: SheetRect | string;
+  /** Whether the series run along rows or columns of the range; automatic when omitted. */
   direction?: ChartSeriesDirection;
+  /** `true` when the first row holds names; `null` or omitted follows Excel's detection. */
   headerRow?: boolean | null;
+  /** `true` when the first column holds names; `null` or omitted follows Excel's detection. */
   headerColumn?: boolean | null;
 }
 
@@ -5069,7 +6036,9 @@ export type ChartSeriesPatch = Patch<
 /** Argument of `Chart.addSeries`: the {@link ChartSeriesPatch} keys with the value reference required, `values`
  *  on a category plot or `y` on a scatter or bubble plot (the other is rejected when absent). */
 export interface ChartSeriesInput extends Omit<ChartSeriesPatch, 'values' | 'y'> {
+  /** The values input; required on a category plot, rejected on a scatter or bubble plot. */
   values?: ChartDataSourceInput | null;
+  /** The y values input; required on a scatter or bubble plot, rejected on a category plot. */
   y?: ChartDataSourceInput | null;
 }
 
@@ -5138,68 +6107,90 @@ export type ChartDisplayPatch = Patch<
 /** Overrides `Chart.getPreview` applies to a copy of the chart; an omitted field keeps the chart's own value.
  *  `range` is a {@link SheetRect} or an A1 range on the chart's sheet. */
 export interface ChartPreviewOverridesInput {
+  /** The source range to preview, a rectangle or an A1 range on the chart's sheet; omitted keeps the chart's own. */
   range?: SheetRect | string;
+  /** Whether the series run along rows or columns; omitted keeps the chart's own. */
   direction?: ChartSeriesDirection;
+  /** `true` when the first row holds names; omitted keeps the chart's own. */
   headerRow?: boolean;
+  /** `true` when the first column holds names; omitted keeps the chart's own. */
   headerColumn?: boolean;
+  /** How empty cells are plotted; omitted keeps the chart's own. */
   blanksAs?: BlanksAs;
+  /** `true` to plot only visible cells; omitted keeps the chart's own. */
   plotVisibleOnly?: boolean;
+  /** `true` to draw `#N/A` points as blank cells; omitted keeps the chart's own. */
   naAsBlank?: boolean;
 }
 
 /** Options of `Sheet.restoreDrawing`. With `assignNewId` the capture is added on top as a
  *  copy with a fresh id; otherwise the object with the same id is replaced. */
 export interface RestoreDrawingOptions {
+  /** `true` to add the capture as a copy with a fresh id; otherwise the object with the same id is replaced. */
   assignNewId?: boolean;
 }
 
 /** An inclusive 0-based span of rows or columns. */
 export interface Span {
+  /** The 0-based first row or column. */
   readonly first: number;
+  /** The 0-based last row or column, inclusive. */
   readonly last: number;
 }
 
 /** The rows and columns repeated on every printed page (`_xlnm.Print_Titles`); an axis that does not repeat is
  *  `null`. */
 export interface PrintTitles {
+  /** The rows repeated at the top of every printed page; `null` when no rows repeat. */
   readonly rows: Span | null;
+  /** The columns repeated at the left of every printed page; `null` when no columns repeat. */
   readonly columns: Span | null;
 }
 
-/** Argument of `Sheet.setPrintTitles`: each axis is a {@link Span}, a span string (rows `'3'` / `'1:2'`, columns
- *  `'B'` / `'A:B'`, `$` allowed; the wrong axis or a malformed string fails with `StatusCode.InvalidArgument`) or
- *  `null` for no repeat. The {@link PrintTitles} a read returns passes as is. */
+/** Argument of `Sheet.setPrintTitles`: each axis is a {@link Span}, a span string (`$` allowed; the wrong axis or a
+ *  malformed string fails with `StatusCode.InvalidArgument`) or `null` for no repeat. The {@link PrintTitles} a read
+ *  returns passes as is. */
 export interface PrintTitlesInput {
+  /** The rows to repeat: a span, a row span string (such as `'3'` or `'1:2'`), or `null` for no repeat. */
   rows: Span | string | null;
+  /** The columns to repeat: a span, a column span string (such as `'B'` or `'A:B'`), or `null` for no repeat. */
   columns: Span | string | null;
 }
 
-/** One row break (`<rowBreaks><brk>`): the break sits before the 0-based row `row` and covers the columns
- *  `first..last` (OOXML `min` / `max`). `manual` is `false` for a break Excel computed rather than one a user
- *  placed. */
+/** One row break (`<rowBreaks><brk>`). */
 export interface RowBreak {
+  /** 0-based row the break sits before. */
   readonly row: number;
+  /** The first column the break covers (OOXML `min`). */
   readonly first: number;
+  /** The last column the break covers (OOXML `max`). */
   readonly last: number;
+  /** `true` for a break a user placed, `false` for one Excel computed. */
   readonly manual: boolean;
 }
 
-/** One column break (`<colBreaks><brk>`): the break sits before the 0-based column `col` and covers the rows
- *  `first..last`; `manual` as in {@link RowBreak}. */
+/** One column break (`<colBreaks><brk>`). */
 export interface ColumnBreak {
+  /** 0-based column the break sits before. */
   readonly col: number;
+  /** The first row the break covers (OOXML `min`). */
   readonly first: number;
+  /** The last row the break covers (OOXML `max`). */
   readonly last: number;
+  /** `true` for a break a user placed, `false` for one Excel computed. */
   readonly manual: boolean;
 }
 
-/** Argument of `Sheet.setRowBreak` / `Sheet.setColumnBreak`: the span the break covers on the perpendicular
- *  axis and whether it is a manual break. Omitting both `first` and `last` (or giving both as 0) covers the
- *  whole sheet; `manual` defaults to `true`. A {@link RowBreak} / {@link ColumnBreak} read back is accepted;
- *  its `row` / `col` is ignored. */
+/** Argument of `Sheet.setRowBreak` / `Sheet.setColumnBreak`. A {@link RowBreak} / {@link ColumnBreak} read back is
+ *  accepted; its `row` / `col` is ignored. */
 export interface PageBreakInput {
+  /** The first row or column the break covers on the perpendicular axis; 0 together with `last` covers the whole row or
+   *  column. */
   first?: number;
+  /** The last row or column the break covers on the perpendicular axis; 0 together with `first` covers the whole row or
+   *  column. */
   last?: number;
+  /** `true` for a break a user placed, `false` for one Excel would compute; defaults to `true`. */
   manual?: boolean;
 }
 
@@ -5216,19 +6207,20 @@ export type PageOrientation = 0 | 1;
  * other attribute in the stored XML — including ones this engine does not
  * model, such as `r:id`, `horizontalDpi` and `copies` — is left alone.
  *
- * `fitToPage` is not a `<pageSetup>` attribute: it is routed to
- * `<sheetPr><pageSetUpPr>`. It selects the fit-to-page mode, and
- * `fitToWidth` / `fitToHeight` state the target, so "fit onto one page"
- * needs all three. */
+ * "Fit onto one page" needs `fitToPage`, `fitToWidth` and `fitToHeight` together. */
 export interface PageSetupInput {
+  /** The page orientation (portrait or landscape). */
   readonly orientation: PageOrientation;
-  /** OOXML paperSize code, a number so that unknown codes round-trip; the known ones are named in {@link PaperSize}
-   *  (`PaperSize.A4` is 9). */
+  /** OOXML paperSize code, a number so that unknown codes round-trip; the known ones are named in `PaperSize` (A4 is
+   *  9). */
   readonly paperSize: number;
-  /** Print scale percentage. Outside `[10, 400]` is rejected, not clamped. */
+  /** Print scale percentage; a value outside [10, 400] is rejected, not clamped. */
   readonly scalePct: number;
+  /** The number of pages across the fit-to-page mode targets. */
   readonly fitToWidth: number;
+  /** The number of pages down the fit-to-page mode targets. */
   readonly fitToHeight: number;
+  /** `true` selects the fit-to-page mode, stored on `<sheetPr><pageSetUpPr>` rather than `<pageSetup>`. */
   readonly fitToPage: boolean;
 }
 
@@ -5251,29 +6243,46 @@ export type PageSetupPatch = Patch<PageSetupInput, 'orientation'>;
 
 /** Result of `Sheet.getPageSetup`. Every value carries the setting
  * in force; the `*Stated` flags say whether the XML declares it, which is
- * the only way to tell `scale="100"` from an absent attribute. `scalePct` is a percentage. `orientation` is `null` without the attribute. */
+ * the only way to tell `scale="100"` from an absent attribute. */
 export interface PageSetup {
+  /** The page orientation (portrait or landscape); `null` when the sheet states none (Excel prints portrait). */
   readonly orientation: PageOrientation | null;
+  /** The OOXML paperSize code in force; an open set, so unknown codes round-trip. */
   readonly paperSize: number;
+  /** The print scale as a percentage, 10 to 400; 100 when the attribute is absent. */
   readonly scalePct: number;
+  /** The number of pages across the fit-to-page mode targets. */
   readonly fitToWidth: number;
+  /** The number of pages down the fit-to-page mode targets. */
   readonly fitToHeight: number;
+  /** `true` when the fit-to-page mode is selected; read from `<sheetPr><pageSetUpPr>`, not `<pageSetup>`. */
   readonly fitToPage: boolean;
+  /** `true` when the XML states `paperSize`; `false` means it reads a default. */
   readonly paperSizeStated: boolean;
+  /** `true` when the XML states `scalePct`; `false` means it reads a default. */
   readonly scalePctStated: boolean;
+  /** `true` when the XML states `fitToWidth`; `false` means it reads a default. */
   readonly fitToWidthStated: boolean;
+  /** `true` when the XML states `fitToHeight`; `false` means it reads a default. */
   readonly fitToHeightStated: boolean;
+  /** `true` when the XML states `fitToPage`; `false` means it reads a default. */
   readonly fitToPageStated: boolean;
 }
 
 /** The `<pageMargins>` values `Sheet.updatePageMargins` accepts, in inches. A negative, infinite or NaN
  * margin is rejected: the paginator subtracts these from the paper. */
 export interface PageMarginsInput {
+  /** The left margin in inches. */
   readonly leftIn: number;
+  /** The right margin in inches. */
   readonly rightIn: number;
+  /** The top margin in inches. */
   readonly topIn: number;
+  /** The bottom margin in inches. */
   readonly bottomIn: number;
+  /** The distance in inches from the top edge of the paper to the header. */
   readonly headerIn: number;
+  /** The distance in inches from the bottom edge of the paper to the footer. */
   readonly footerIn: number;
 }
 
@@ -5282,25 +6291,41 @@ export type PageMarginsPatch = Patch<PageMarginsInput>;
 
 /** Result of `Sheet.getPageMargins`, in inches. */
 export interface PageMargins {
+  /** The left margin in inches. */
   readonly leftIn: number;
+  /** The right margin in inches. */
   readonly rightIn: number;
+  /** The top margin in inches. */
   readonly topIn: number;
+  /** The bottom margin in inches. */
   readonly bottomIn: number;
+  /** The distance in inches from the top edge of the paper to the header. */
   readonly headerIn: number;
+  /** The distance in inches from the bottom edge of the paper to the footer. */
   readonly footerIn: number;
+  /** `true` when the XML states `leftIn`; `false` means it reads a default. */
   readonly leftInStated: boolean;
+  /** `true` when the XML states `rightIn`; `false` means it reads a default. */
   readonly rightInStated: boolean;
+  /** `true` when the XML states `topIn`; `false` means it reads a default. */
   readonly topInStated: boolean;
+  /** `true` when the XML states `bottomIn`; `false` means it reads a default. */
   readonly bottomInStated: boolean;
+  /** `true` when the XML states `headerIn`; `false` means it reads a default. */
   readonly headerInStated: boolean;
+  /** `true` when the XML states `footerIn`; `false` means it reads a default. */
   readonly footerInStated: boolean;
 }
 
 /** The `<printOptions>` flags `Sheet.updatePrintOptions` accepts. */
 export interface PrintOptionsInput {
+  /** `true` to print the cell gridlines. */
   gridLines: boolean;
+  /** `true` to print the row and column headings. */
   headings: boolean;
+  /** `true` to center the print area horizontally on the page. */
   horizontalCentered: boolean;
+  /** `true` to center the print area vertically on the page. */
   verticalCentered: boolean;
 }
 
@@ -5310,27 +6335,45 @@ export type PrintOptionsPatch = Patch<PrintOptionsInput>;
 /** Result of `Sheet.getPrintOptions`. An attribute the XML does not state reads `false`, with its `*Stated` flag
  *  `false`. */
 export interface PrintOptions {
+  /** `true` when the cell gridlines are printed. */
   readonly gridLines: boolean;
+  /** `true` when the row and column headings are printed. */
   readonly headings: boolean;
+  /** `true` when the print area is centered horizontally on the page. */
   readonly horizontalCentered: boolean;
+  /** `true` when the print area is centered vertically on the page. */
   readonly verticalCentered: boolean;
+  /** `true` when the XML states `gridLines`; `false` means it reads a default. */
   readonly gridLinesStated: boolean;
+  /** `true` when the XML states `headings`; `false` means it reads a default. */
   readonly headingsStated: boolean;
+  /** `true` when the XML states `horizontalCentered`; `false` means it reads a default. */
   readonly horizontalCenteredStated: boolean;
+  /** `true` when the XML states `verticalCentered`; `false` means it reads a default. */
   readonly verticalCenteredStated: boolean;
 }
 
 /** The `<headerFooter>` values `Sheet.updateHeaderFooter` accepts. Section text is the decoded string. */
 export interface HeaderFooterInput {
+  /** The decoded text of the header of odd pages (every page unless `differentOddEven` or `differentFirst` apply). */
   oddHeader: string;
+  /** The decoded text of the footer of odd pages (every page unless `differentOddEven` or `differentFirst` apply). */
   oddFooter: string;
+  /** The decoded text of the header of even pages, used when `differentOddEven` is set. */
   evenHeader: string;
+  /** The decoded text of the footer of even pages, used when `differentOddEven` is set. */
   evenFooter: string;
+  /** The decoded text of the header of the first page, used when `differentFirst` is set. */
   firstHeader: string;
+  /** The decoded text of the footer of the first page, used when `differentFirst` is set. */
   firstFooter: string;
+  /** `true` when odd and even pages use different headers and footers. */
   differentOddEven: boolean;
+  /** `true` when the first page uses its own header and footer. */
   differentFirst: boolean;
+  /** `true` when the header and footer scale with the document's print scale. */
   scaleWithDoc: boolean;
+  /** `true` when the header and footer align with the page margins. */
   alignWithMargins: boolean;
 }
 
@@ -5344,23 +6387,42 @@ export type HeaderFooterPatch = Patch<
   'oddHeader' | 'oddFooter' | 'evenHeader' | 'evenFooter' | 'firstHeader' | 'firstFooter'
 >;
 
-/** Result of `Sheet.getHeaderFooter`. A section the sheet does not have is `null`; section text is decoded as
- *  `updateHeaderFooter` takes it. A flag the XML does not state reads its schema default (`differentOddEven` /
- *  `differentFirst` `false`, `scaleWithDoc` / `alignWithMargins` `true`), with its `*Stated` flag `false`. */
+/** Result of `Sheet.getHeaderFooter`. Section text is decoded as `updateHeaderFooter` takes it. A flag the XML does
+ *  not state reads its schema default, with its `*Stated` flag `false`. */
 export interface HeaderFooter {
+  /** The decoded text of the header of odd pages (every page unless `differentOddEven` or `differentFirst` apply);
+   *  `null` when the sheet has no such section. */
   readonly oddHeader: string | null;
+  /** The decoded text of the footer of odd pages (every page unless `differentOddEven` or `differentFirst` apply);
+   *  `null` when the sheet has no such section. */
   readonly oddFooter: string | null;
+  /** The decoded text of the header of even pages, used when `differentOddEven` is set; `null` when the sheet has no
+   *  such section. */
   readonly evenHeader: string | null;
+  /** The decoded text of the footer of even pages, used when `differentOddEven` is set; `null` when the sheet has no
+   *  such section. */
   readonly evenFooter: string | null;
+  /** The decoded text of the header of the first page, used when `differentFirst` is set; `null` when the sheet has no
+   *  such section. */
   readonly firstHeader: string | null;
+  /** The decoded text of the footer of the first page, used when `differentFirst` is set; `null` when the sheet has no
+   *  such section. */
   readonly firstFooter: string | null;
+  /** `true` when odd and even pages use different headers and footers; reads `false` when unstated. */
   readonly differentOddEven: boolean;
+  /** `true` when the first page uses its own header and footer; reads `false` when unstated. */
   readonly differentFirst: boolean;
+  /** `true` when the header and footer scale with the document's print scale; reads `true` when unstated. */
   readonly scaleWithDoc: boolean;
+  /** `true` when the header and footer align with the page margins; reads `true` when unstated. */
   readonly alignWithMargins: boolean;
+  /** `true` when the XML states `differentOddEven`; `false` means it reads a default. */
   readonly differentOddEvenStated: boolean;
+  /** `true` when the XML states `differentFirst`; `false` means it reads a default. */
   readonly differentFirstStated: boolean;
+  /** `true` when the XML states `scaleWithDoc`; `false` means it reads a default. */
   readonly scaleWithDocStated: boolean;
+  /** `true` when the XML states `alignWithMargins`; `false` means it reads a default. */
   readonly alignWithMarginsStated: boolean;
 }
 
@@ -5400,7 +6462,7 @@ export interface AddSheetOptions {
 export interface CopySheetOptions {
   /** The sheet the copy goes before; omitted, `null` or the sheet count appends. */
   insertBefore?: SheetRef | null;
-  /** The copy's name; `Src (2)` style when omitted. */
+  /** The copy's name; a name of the form `Src (2)` when omitted. */
   newName?: string;
 }
 
@@ -5408,11 +6470,11 @@ export interface CopySheetOptions {
  *  else throws `TypeError`. */
 export type BytesInput = Uint8Array | ArrayBuffer | ArrayBufferView;
 
-/** A table passed by its sheet-local position (its index in `Sheet.listTables()`), its name (the name formulas
- *  use, resolved by name identity, see {@link Workbook}) or its `Table` handle. A string is always a name, digits included. A position
- *  past the end fails with `StatusCode.IndexOutOfRange`, a name no table of the sheet has with
- *  `StatusCode.NotFound`, and a handle of another sheet with `StatusCode.InvalidArgument`. Resolving a name reads
- *  the table list, so removing tables by name in a loop is quadratic. */
+/** A table passed by its sheet-local position (its index in `Sheet.listTables()`), its name (the name formulas use,
+ *  resolved by name identity, see {@link Workbook}) or its `Table` handle. A string is always a name, digits included.
+ *  A position past the end fails with `StatusCode.IndexOutOfRange`, a name no table of the sheet has with
+ *  `StatusCode.NotFound`, and a handle of another sheet with `StatusCode.InvalidArgument`. Resolving a name reads the
+ *  table list, so removing tables by name in a loop is quadratic. */
 export type TableRef = number | string | Table;
 /** A pivot table passed by its index on the sheet (its position in `listPivots()`), its name (the first of
  *  several pivots with that name) or its `Pivot` handle. Resolved as {@link TableRef} is; a handle of another
@@ -5421,9 +6483,9 @@ export type PivotRef = number | string | Pivot;
 /** A pivot cache passed by its `cacheId` or its `PivotCache` handle. A cache id the workbook has none of fails
  *  with `StatusCode.NotFound`, and a handle of another workbook with `StatusCode.InvalidArgument`. */
 export type PivotCacheRef = number | PivotCache;
-/** A pivot field passed by its index (the pivot field index, which is the cache field index) or by its source
- *  name, resolved by name identity (see {@link Workbook}); a calculated field is named by its name. An index past the last field fails
- *  with `StatusCode.IndexOutOfRange`, a name no field has with `StatusCode.NotFound`. */
+/** A pivot field passed by its index (the pivot field index, which is the cache field index) or by its source name,
+ *  resolved by name identity (see {@link Workbook}); a calculated field is named by its name. An index past the last
+ *  field fails with `StatusCode.IndexOutOfRange`, a name no field has with `StatusCode.NotFound`. */
 export type PivotFieldRef = number | string;
 /** The id of a conditional-format rule, as `ConditionalFormat.id` reads it and `Sheet.addCfRule` returns it: a
  *  brace-wrapped GUID. */
@@ -5519,8 +6581,8 @@ export type ProtectedRangeRef = number | string;
 export interface Workbook {
   /** `true` once `dispose()` has run. The only member that still answers after disposal. */
   readonly disposed: boolean;
-  /** Deterministically releases the native workbook handle. Idempotent; every later call, on the workbook or on
-   *  one of its `Sheet` handles, throws `FormulonError` with `StatusCode.BindingInvalidHandle`. Throws `FormulonError` with
+  /** Deterministically releases the native workbook handle. Idempotent; every later call, on the workbook or on one of
+   *  its `Sheet` handles, throws `FormulonError` with `StatusCode.BindingInvalidHandle`. Throws `FormulonError` with
    *  `StatusCode.GraphRecalcReentrant`, and leaves the handle intact, if called from inside this workbook's own
    *  iterative-progress callback or another active method call. */
   dispose(): void;
@@ -5528,16 +6590,14 @@ export interface Workbook {
   [Symbol.dispose](): void;
   /** Iterates the sheets' handles in sheet order, as `listSheets()` lists them. */
   [Symbol.iterator](): IterableIterator<Sheet>;
-  /** The number of sheets; `listSheets().length`. */
+  /** The number of sheets. */
   readonly sheetCount: number;
   /** Whether `ref` addresses a sheet of this workbook: `false` for a name no sheet has (by name
    *  identity, see {@link Workbook}), a position past the end or a `Sheet` of another workbook. A value that is not a
    *  {@link SheetRef} throws `TypeError`. */
   hasSheet(ref: SheetRef): boolean;
-  /** The OOXML-level layer of the workbook: the style record tables addressed by index (`listFonts`, ...,
-   *  `addNumberFormat`, `getNumberFormat`, `listCellStyleXfs`, `addCellStyleXf`) and the passthrough parts
-   *  (`listPassthroughs`, `hasPassthrough`). Named styles are on the workbook (`listCellStyles`, `getCellStyle`,
-   *  `setCellStyle`, `removeCellStyle`). Always the same object. */
+  /** The OOXML-level layer of the workbook: the style record tables addressed by index and the passthrough parts.
+   *  Always the same object. */
   readonly ooxml: WorkbookOoxml;
 
   /** Serialises the workbook to an in-memory byte stream in `format` (default `WorkbookFormat.Xlsx`). Dirty
@@ -5572,12 +6632,12 @@ export interface Workbook {
   /** Adds a sheet before `options.insertBefore` (a `Sheet`, an index or a name; omitted, `null` or
    *  `listSheets().length` appends) and returns its handle. An omitted or `null` `name` takes `<base><N>`: the
    *  profile's first sheet name without its trailing `1` (`Sheet`, `Tabelle`, `Feuil`, ...) and the smallest free
-   *  number N, taken as a sheet name is: a sheet whose name is equal under name identity (see {@link Workbook})
-   *  makes N used. An unknown `insertBefore` name fails with `StatusCode.NotFound`.
-   *  Fails with `StatusCode.InvalidSheetName` when the name is empty, longer
-   *  than 31 UTF-16 units, contains one of `: \ / ? * [ ]`, begins or ends with an apostrophe or is `History` in any
-   *  case, with `StatusCode.AlreadyExists` when it collides with an
-   *  existing sheet under name identity (see {@link Workbook}), and with `StatusCode.SheetCountLimitExceeded` at the maximum sheet count. */
+   *  number N, taken as a sheet name is: a sheet whose name is equal under name identity (see {@link Workbook}) makes N
+   *  used. An unknown `insertBefore` name fails with `StatusCode.NotFound`. Fails with `StatusCode.InvalidSheetName`
+   *  when the name is empty, longer than 31 UTF-16 units, contains one of `: \ / ? * [ ]`, begins or ends with an
+   *  apostrophe or is `History` in any case, with `StatusCode.AlreadyExists` when it collides with an existing sheet
+   *  under name identity (see {@link Workbook}), and with `StatusCode.SheetCountLimitExceeded` at the maximum sheet
+   *  count. */
   addSheet(name?: string | null, options?: AddSheetOptions): Sheet;
   /** Removes `sheet`; its handle then throws `StatusCode.NotFound`, and the handles after it move down one place.
    *  References to it are rewritten to `#REF!` at the affected subexpression (cell formulas, defined names,
@@ -5586,14 +6646,14 @@ export interface Workbook {
    *  `StatusCode.PreconditionFailed` when only one sheet remains or the sheet is the only visible one, and leaves
    *  the workbook unchanged. */
   removeSheet(sheet: SheetRef): void;
-  /** Copies the worksheet `source` into the workbook before `options.insertBefore` (a `Sheet`, an index or a
-   *  name; omitted, `null` or `listSheets().length` appends) and returns the copy's
-   *  handle. Without `options.newName` the copy
-   *  is named `Src (2)`; an explicit name follows the `addSheet` rules. References qualified with the source
-   *  sheet are re-pointed at the copy, tables are renamed, and the active sheet does not change. Fails with
+  /** Copies the worksheet `source` into the workbook before `options.insertBefore` (a `Sheet`, an index or a name;
+   *  omitted, `null` or `listSheets().length` appends) and returns the copy's handle. Without `options.newName` the
+   *  copy is named `Src (2)`; an explicit name follows the `addSheet` rules. References qualified with the source sheet
+   *  are re-pointed at the copy, tables are renamed, and the active sheet does not change. Fails with
    *  `StatusCode.SheetIndexOutOfRange`, `StatusCode.InvalidSheetName`, `StatusCode.AlreadyExists` (the name is taken),
-   *  `StatusCode.SheetCountLimitExceeded`, `StatusCode.PreconditionFailed` (very hidden source) or `StatusCode.NotImplemented` (slicers, shapes, pivot
-   *  charts and other content the copy cannot model); the workbook is unchanged when it throws. */
+   *  `StatusCode.SheetCountLimitExceeded`, `StatusCode.PreconditionFailed` (very hidden source) or
+   *  `StatusCode.NotImplemented` (slicers, shapes, pivot charts and other content the copy cannot model); the workbook
+   *  is unchanged when it throws. */
   copySheet(source: SheetRef, options?: CopySheetOptions): Sheet;
   /** Returns the sheet the first `<workbookView>` marks active (`activeTab`); without workbook views (an XLSB
    *  load) the first tab-selected sheet; the first sheet when neither is recorded. Removing or hiding the
@@ -5647,10 +6707,10 @@ export interface Workbook {
    *  clear it, and a recalc that throws leaves it set. */
   hasDirtyCells(): boolean;
 
-  /** Updates the iterative-calculation settings; an omitted key keeps its value. When disabled (the default)
-   *  cyclic references surface `#REF!`. `maxIterations` is `1..32767` (Excel's own limit): 0 or a larger value fails with
-   *  `StatusCode.InvalidArgument`, and a fractional one throws `RangeError`; `maxChange` is the absolute
-   *  convergence threshold, and a negative or non-finite value fails with `StatusCode.InvalidArgument`. */
+  /** Updates the iterative-calculation settings; an omitted key keeps its value. When disabled (the default) cyclic
+   *  references surface `#REF!`. `maxIterations` is `1..32767` (Excel's own limit): 0 or a larger value fails with
+   *  `StatusCode.InvalidArgument`, and a fractional one throws `RangeError`; `maxChange` is the absolute convergence
+   *  threshold, and a negative or non-finite value fails with `StatusCode.InvalidArgument`. */
   updateIterative(patch: IterativeSettingsPatch): void;
   /** Reads back the stored iterative-calculation settings. The cap and
    *  threshold are the stored values even while `enabled` is false, so a
@@ -5728,15 +6788,16 @@ export interface Workbook {
    *  as `Book.xlsx!Name`, quoted when needed (`'My Book.xlsx'!Name`); unset, it reads `[0]!Name`.
    *  Loading from bytes leaves it unset. */
   getFileName(): string | null;
-  /** Sets `getFileName()`; `null` (or `""`) unsets it. Entered formulas then read `Book.xlsx!Name` and `[Book.xlsx]Sheet1!A1`
-   *  as this workbook and create no external link. A changed name marks every formula dirty. `StatusCode.InvalidArgument` when the name lacks a workbook extension,
-   *  holds one of `[ ] : / \ ? *`, is longer than 218 bytes, or equals an external link's book name. */
+  /** Sets `getFileName()`; `null` (or `""`) unsets it. Entered formulas then read `Book.xlsx!Name` and
+   *  `[Book.xlsx]Sheet1!A1` as this workbook and create no external link. A changed name marks every formula dirty.
+   *  `StatusCode.InvalidArgument` when the name lacks a workbook extension, holds one of `[ ] : / \ ? *`, is longer
+   *  than 218 bytes, or equals an external link's book name. */
   setFileName(name: string | null): void;
 
   /** Lists the defined names, workbook- and sheet-scoped alike, in file order. */
   listDefinedNames(): readonly DefinedName[];
-  /** Reads the defined name `name` (resolved by name identity, see {@link Workbook}) in the sheet scope `scope`, or the workbook scope when
-   *  `scope` is omitted or `null`; `null` when the scope has no such name. */
+  /** Reads the defined name `name` (resolved by name identity, see {@link Workbook}) in the sheet scope `scope`, or the
+   *  workbook scope when `scope` is omitted or `null`; `null` when the scope has no such name. */
   getDefinedName(name: string, scope?: SheetRef | null): DefinedName | null;
   /** Removes the defined name `name` in scope `scope` (as `getDefinedName`); `StatusCode.NotFound` when the scope
    *  has no such name. */
@@ -5747,22 +6808,25 @@ export interface Workbook {
    *  a table fails with `StatusCode.AlreadyExists`, a malformed one with `StatusCode.InvalidArgument`, and a
    *  `scope` past the last sheet with `StatusCode.SheetIndexOutOfRange`; `removeDefinedName` removes a name. */
   setDefinedName(definedName: DefinedNameInput): void;
-  /** The handle of the table named `name` on any sheet, resolved by name identity (see {@link Workbook}); the one workbook-wide table
-   *  lookup (tables are added, listed and removed on their `Sheet`). A name no table has fails with
+  /** The handle of the table named `name` on any sheet, resolved by name identity (see {@link Workbook}); the one
+   *  workbook-wide table lookup (tables are added, listed and removed on their `Sheet`). A name no table has fails with
    *  `StatusCode.NotFound`. */
   table(name: string): Table;
   /** Lists the workbook's persons. */
   listPeople(): readonly Person[];
   /** Appends a person to the workbook's person list and returns the id as stored; the id is a brace-wrapped GUID in
-   *  either letter case, stored uppercase, and an omitted one is generated. Fails with `StatusCode.InvalidArgument` when the id is not a GUID, `StatusCode.AlreadyExists` when
-   *  it is already listed (in any case) and `StatusCode.InvalidArgument` when the display name is empty. */
+   *  either letter case, stored uppercase, and an omitted one is generated. Fails with `StatusCode.InvalidArgument`
+   *  when the id is not a GUID, `StatusCode.AlreadyExists` when it is already listed (in any case) and
+   *  `StatusCode.InvalidArgument` when the display name is empty. */
   addPerson(person: PersonInput): string;
   /** Fails with `StatusCode.PreconditionFailed` while a threaded comment or mention still names the person. */
   removePerson(id: string): void;
   /** Reads the person with `id`; `null` when the list has none. */
   getPerson(id: string): Person | null;
 
-  /** Recomputes every data table now, whatever the calc mode. `recalc()` does the same after a pass that had a dirty cell or a volatile formula, except under `CalcMode.AutoNoTable`, which leaves it to this call; `recalcViewport()` never computes tables. */
+  /** Recomputes every data table now, whatever the calc mode. `recalc()` does the same after a pass that had a dirty
+   *  cell or a volatile formula, except under `CalcMode.AutoNoTable`, which leaves it to this call; `recalcViewport()`
+   *  never computes tables. */
   recalcDataTables(): void;
 
   /** Estimated heap bytes the workbook occupies: the cell store, shared strings, passthrough parts and workbook
@@ -5780,11 +6844,11 @@ export interface Workbook {
   listPivotCaches(): readonly PivotCache[];
   /** The handle of the pivot cache `cacheId`; `StatusCode.NotFound` when the workbook has no such cache. */
   pivotCache(cacheId: PivotCacheRef): PivotCache;
-  /** Creates a new empty pivot cache and returns its handle; its id is `requestedId` when given, else one the
-   *  engine assigns. A cache id is never 0: an explicit 0 fails with `StatusCode.InvalidArgument`, and omission
-   *  or `null` asks the engine to assign one; an id already in use fails with `StatusCode.AlreadyExists`. A new cache has no worksheet source: call
-   *  `PivotCache.setWorksheetSource` before a pivot uses it. Saving fails while a pivot uses a cache without a
-   *  worksheet source. A cache no pivot or slicer uses is not written. */
+  /** Creates a new empty pivot cache and returns its handle; its id is `requestedId` when given, else one the engine
+   *  assigns. A cache id is never 0: an explicit 0 fails with `StatusCode.InvalidArgument`, and omission or `null` asks
+   *  the engine to assign one; an id already in use fails with `StatusCode.AlreadyExists`. A new cache has no worksheet
+   *  source: call `PivotCache.setWorksheetSource` before a pivot uses it. Saving fails while a pivot uses a cache
+   *  without a worksheet source. A cache no pivot or slicer uses is not written. */
   addPivotCache(requestedId?: number | null): PivotCache;
   /** Removes the pivot cache `cacheId`; its handle then fails with `StatusCode.NotFound` until a cache with the
    *  same id is added. Fails with `StatusCode.PreconditionFailed` if any pivot table still references it. */
@@ -5802,8 +6866,9 @@ export interface Workbook {
   listCellStyles(): readonly CellStyle[];
   /** Reads the named cell style `name` (resolved by name identity, see {@link Workbook}); `null` when there is none. */
   getCellStyle(name: string): CellStyle | null;
-  /** Adds or replaces the `<cellStyle>` entry named `record.name` (names collide by name identity, see {@link Workbook}). Absent fields default to `styleXfIndex` 0, a
-   *  custom style (`0xFFFFFFFF`), level 0 and both flags false. */
+  /** Adds or replaces the `<cellStyle>` entry named `record.name` (names collide by name identity, see {@link
+   *  Workbook}). Absent fields default to `styleXfIndex` 0, a custom style (`0xFFFFFFFF`), level 0 and both flags
+   *  false. */
   setCellStyle(record: CellStyleInput): void;
   /** Removes the `<cellStyle>` named `name`; cell formats that used it are repointed at the Normal style. */
   removeCellStyle(name: string): void;
@@ -5879,33 +6944,32 @@ export interface Workbook {
   formatReference(range: ParsedReference | CellRect | string, options?: FormatReferenceOptions): string;
 }
 
-/** One worksheet: the sheet-scope operations, addressed without a sheet argument, and the `Pivot` and `Drawing`
- *  handles of its pivots and drawing objects. Get it from
- *  `Workbook.sheet(key)`, `listSheets()`, `addSheet` or `copySheet`; the workbook keeps one handle per sheet, so
- *  `wb.sheet(0) === wb.sheet('Data')` for the sheet named `Data` at index 0.
+/** One worksheet: the sheet-scope operations, addressed without a sheet argument, and the `Pivot` and `Drawing` handles
+ *  of its pivots and drawing objects. Get it from `Workbook.sheet(key)`, `listSheets()`, `addSheet` or `copySheet`; the
+ *  workbook keeps one handle per sheet, so `wb.sheet(0) === wb.sheet('Data')` for the sheet named `Data` at index 0.
  *
- *  A handle follows its sheet when sheets are added, copied, moved or renamed. Once its sheet is removed, every
- *  member but `workbook` fails with `StatusCode.NotFound`; once the workbook is disposed, with
+ *  A handle follows its sheet when sheets are added, copied, moved or renamed. Once its sheet is removed, every member
+ *  but `workbook` fails with `StatusCode.NotFound`; once the workbook is disposed, with
  *  `StatusCode.BindingInvalidHandle`. Rows, columns and every index are 0-based, as on `Workbook`.
  *
- *  A method taking a cell takes it as a `(row, col)` pair or as one A1 address, every cell of a call in the same
- *  form; mixing them throws `TypeError`. An A1 address is one cell without a sheet name (`B3`, `$B$3`, `b3`), read
- *  as `Workbook.parseReference` reads it: an address that does not parse fails with
- *  `StatusCode.ParserInvalidReference`, and one that names a sheet or spans more than one cell with
- *  `StatusCode.InvalidArgument`. A rectangle argument takes a `CellRect` or an A1 range (`A1:B2`,
- *  or one cell as 1 x 1) read the same way. A row or column span (`first, last`, or a start and a `count`) also
- *  takes one A1 span string read the same way: columns as `B` or `B:D`, rows as `3` or `3:5`, `$` allowed. A
- *  string that does not parse fails with `StatusCode.ParserInvalidReference`; one that names a sheet, or is not
- *  whole columns (for a column method) or whole rows (for a row method), fails with `StatusCode.InvalidArgument`; the whole sheet (`A:XFD`, `1:1048576`) is both.
+ *  A method taking a cell takes it as a `(row, col)` pair or as one A1 address, every cell of a call in the same form;
+ *  mixing them throws `TypeError`. An A1 address is one cell without a sheet name (`B3`, `$B$3`, `b3`), read as
+ *  `Workbook.parseReference` reads it: an address that does not parse fails with `StatusCode.ParserInvalidReference`,
+ *  and one that names a sheet or spans more than one cell with `StatusCode.InvalidArgument`. A rectangle argument takes
+ *  a `CellRect` or an A1 range (`A1:B2`, or one cell as 1 x 1) read the same way. A row or column span (`first, last`,
+ *  or a start and a `count`) also takes one A1 span string read the same way: columns as `B` or `B:D`, rows as `3` or
+ *  `3:5`, `$` allowed. A string that does not parse fails with `StatusCode.ParserInvalidReference`; one that names a
+ *  sheet, or is not whole columns (for a column method) or whole rows (for a row method), fails with
+ *  `StatusCode.InvalidArgument`; the whole sheet (`A:XFD`, `1:1048576`) is both.
  *
  *  Every row or column span is the closed interval `(first, last)`, as a pair of numbers or an A1 span string.
  *
  *  To read cells, pick by shape: `getValues` for a dense grid of values, `listCells` for the populated cells of a
- *  range, `getCellsInRange` to page through a large range with a cursor, and `iterRows` for the rows of the
- *  used range. A read returns native values ({@link NativeValue}); its `*Typed*` variant returns tagged
- *  {@link Value}s. A read computes dirty cells first under `CalcMode.Auto` and returns the values as of the last
- *  recalc under `CalcMode.Manual`; `evaluateFormula` computes every precedent it reads, even in Manual mode,
- *  without storing the results.
+ *  range, `getCellsInRange` to page through a large range with a cursor, and `iterRows` for the rows of the used range.
+ *  A read returns native values ({@link NativeValue}); its `*Typed*` variant returns tagged {@link Value}s. A read
+ *  computes dirty cells first under `CalcMode.Auto` and returns the values as of the last recalc under
+ *  `CalcMode.Manual`; `evaluateFormula` computes every precedent it reads, even in Manual mode, without storing the
+ *  results.
  *
  *  The cell, row and column XF indices and the raw worksheet XML are reached through `ooxml`. */
 export interface Sheet {
@@ -5946,14 +7010,14 @@ export interface Sheet {
   setText(row: number, col: number, text: string): void;
   /** `setText` at the A1 address `a1`. */
   setText(a1: string, text: string): void;
-  /** Stores the cell's OOXML phonetic guide (`<rPh>`); `null` (or `""`) clears it. Text above 32,767 UTF-16 units fails with `StatusCode.InvalidArgument`. */
+  /** Stores the cell's OOXML phonetic guide (`<rPh>`); `null` (or `""`) clears it. Text above 32,767 UTF-16 units fails
+   *  with `StatusCode.InvalidArgument`. */
   setCellPhonetic(row: number, col: number, phonetic: string | null): void;
   /** `setCellPhonetic` at the A1 address `a1`. */
   setCellPhonetic(a1: string, phonetic: string | null): void;
-  /** Stores the cell's phonetic guide as one `<rPh>` block per run; `null` (or `[]`) clears it. Unlike `setCellPhonetic`, which annotates the whole cell,
-   *  this keeps the span each reading covers. The runs must be ordered: each
-   *  run needs `start <= end` and must start at or after the previous run's
-   *  `end`. */
+  /** Stores the cell's phonetic guide as one `<rPh>` block per run; `null` (or `[]`) clears it. Unlike
+   *  `setCellPhonetic`, which annotates the whole cell, this keeps the span each reading covers. The runs must be
+   *  ordered: each run needs `start <= end` and must start at or after the previous run's `end`. */
   setCellPhoneticRuns(row: number, col: number, runs: readonly PhoneticRun[] | null): void;
   /** `setCellPhoneticRuns` at the A1 address `a1`. */
   setCellPhoneticRuns(a1: string, runs: readonly PhoneticRun[] | null): void;
@@ -6054,10 +7118,10 @@ export interface Sheet {
   /** `getValues` with each value tagged with its kind; `setValues` stores the grid back unchanged. `range`
    *  defaults as for {@link Sheet.getUsedRange}. */
   getTypedValues(range?: CellRect | string | null): readonly (readonly Value[])[];
-  /** Reads the cell as a date: the serial's calendar date under the workbook's date system, its fraction
-   *  rounded to the millisecond, as a `Date` whose local fields carry it (the wall clock a `Date` input means). `null` for an empty cell; a cell that
-   *  holds no number, or a serial outside the date system (below 1 in the 1900 system, below 0 in the 1904 one, or
-   *  past 9999-12-31), fails with `StatusCode.InvalidArgument`. */
+  /** Reads the cell as a date: the serial's calendar date under the workbook's date system, its fraction rounded to the
+   *  millisecond, as a `Date` whose local fields carry it (the wall clock a `Date` input means). `null` for an empty
+   *  cell; a cell that holds no number, or a serial outside the date system (below 1 in the 1900 system, below 0 in the
+   *  1904 one, or past 9999-12-31), fails with `StatusCode.InvalidArgument`. */
   getDate(row: number, col: number): Date | null;
   /** `getDate` at the A1 address `a1`. */
   getDate(a1: string): Date | null;
@@ -6080,17 +7144,17 @@ export interface Sheet {
   getFormula(row: number, col: number): string | null;
   /** `getFormula` at the A1 address `a1`. */
   getFormula(a1: string): string | null;
-  /** The formula in R1C1 notation relative to the cell, leading `=` included; `null` when the cell holds none.
-   *  A formula loaded from a file that does not parse is kept verbatim, evaluates to `#NAME?`, and fails here with
-   *  a parser status (1000-1014; `FormulonError.parseError` gives the position); `setFormula` never produces that state.
+  /** The formula in R1C1 notation relative to the cell, leading `=` included; `null` when the cell holds none. A
+   *  formula loaded from a file that does not parse is kept verbatim, evaluates to `#NAME?`, and fails here with a
+   *  parser status (1000-1014; `FormulonError.parseError` gives the position); `setFormula` never produces that state.
    *  Sheet and external qualifiers are quoted as a whole only when the path, book or sheet name needs it. */
   getFormulaR1C1(row: number, col: number): string | null;
   /** `getFormulaR1C1` at the A1 address `a1`. */
   getFormulaR1C1(a1: string): string | null;
-  /** One page of the populated cells (formula or non-blank value, spill phantoms included) inside
-   *  `range`, row-major, each a {@link RangeCell}. `options.cursor` is the `nextCursor` of the previous page (omit for the
-   *  first); `options.limit` caps the page (omit, `null` or 0 for the maximum, 65536). `range` defaults as for
-   *  {@link Sheet.getUsedRange}; an empty sheet gives an empty page with `nextCursor: null`. */
+  /** One page of the populated cells (formula or non-blank value, spill phantoms included) inside `range`, row-major,
+   *  each a {@link RangeCell}. `options.cursor` is the `nextCursor` of the previous page (omit for the first);
+   *  `options.limit` caps the page (omit, `null` or 0 for the maximum, 65536). `range` defaults as for {@link
+   *  Sheet.getUsedRange}; an empty sheet gives an empty page with `nextCursor: null`. */
   getCellsInRange(range?: CellRect | string | null, options?: PageOptions): CellsInRange;
   /** Lists every populated cell (formula or non-blank value, spill phantoms included) inside `range`, row-major.
    *  `range` defaults as for {@link Sheet.getUsedRange}. */
@@ -6235,26 +7299,24 @@ export interface Sheet {
   deleteColumns(first: number, last: number): void;
   /** `deleteColumns` over the columns of the A1 column span `span` (`"B"`, `"B:D"`). */
   deleteColumns(span: string): void;
-  /** Inserts blank cells over `range` and moves the cells there and beyond `CellShift.Down` or `CellShift.Right`
-   *  by the range's height or width; a range covering every column (or row) behaves as `insertRows` (or
-   *  `insertColumns`).
+  /** Inserts blank cells over `range` and moves the cells there and beyond `CellShift.Down` or `CellShift.Right` by the
+   *  range's height or width; a range covering every column (or row) behaves as `insertRows` (or `insertColumns`).
    *
-   *  The band is the range's columns for `Down` and its rows for `Right`; only the cells of the band from the
-   *  range's edge to the end of the grid move. A reference (cell, range, defined-name target, hyperlink range)
-   *  follows only when its extent across the band lies wholly inside the band: past the edge it moves, across the
-   *  edge it stretches; a range crossing the band, a whole-column and a whole-row reference are unchanged. A
-   *  conditional-format or validation range crossing the shifted region is split into one range per part. Notes
-   *  and threaded comments move with their cells; a merge wholly inside the shifted region moves, one crossing it
-   *  across the band is unmerged. Inserted cells take the format of the cell above (`Down`) or to the left
-   *  (`Right`), none when that cell is absent or unformatted. Row and column layout, page breaks, drawing anchors
-   *  and the sheet view do not move.
+   *  The band is the range's columns for `Down` and its rows for `Right`; only the cells of the band from the range's
+   *  edge to the end of the grid move. A reference (cell, range, defined-name target, hyperlink range) follows only
+   *  when its extent across the band lies wholly inside the band: past the edge it moves, across the edge it stretches;
+   *  a range crossing the band, a whole-column and a whole-row reference are unchanged. A conditional-format or
+   *  validation range crossing the shifted region is split into one range per part. Notes and threaded comments move
+   *  with their cells; a merge wholly inside the shifted region moves, one crossing it across the band is unmerged.
+   *  Inserted cells take the format of the cell above (`Down`) or to the left (`Right`), none when that cell is absent
+   *  or unformatted. Row and column layout, page breaks, drawing anchors and the sheet view do not move.
    *
    *  `StatusCode.InvalidArgument` for `Up` / `Left`, a shift outside the enum, or a whole-column range with `Down`
-   *  (whole-row with `Right`). `StatusCode.PreconditionFailed` when the shifted region meets a table, a
-   *  multi-cell array formula or a data table that extends beyond the band; a PivotTable that straddles the
-   *  region or lies inside the range (one whose full width the band covers, and that is not inside the range, moves
-   *  as one block; one outside the region stays); when the insert would push a cell holding a value or formula off the grid; or when Excel returns success
-   *  without changing anything. The workbook is unchanged on failure. */
+   *  (whole-row with `Right`). `StatusCode.PreconditionFailed` when the shifted region meets a table, a multi-cell
+   *  array formula or a data table that extends beyond the band; a PivotTable that straddles the region or lies inside
+   *  the range (one whose full width the band covers, and that is not inside the range, moves as one block; one outside
+   *  the region stays); when the insert would push a cell holding a value or formula off the grid; or when Excel
+   *  returns success without changing anything. The workbook is unchanged on failure. */
   insertCells(range: CellRect | string, shift: CellShift): void;
   /** Deletes the cells of `range` and moves the cells beyond `CellShift.Up` or `CellShift.Left` into the gap; a
    *  range covering every column (or row) behaves as `deleteRows` (or `deleteColumns`).
@@ -6305,9 +7367,10 @@ export interface Sheet {
   listThreadedComments(row: number, col: number): readonly ThreadedComment[];
   /** `listThreadedComments` of the cell at the A1 address `a1`. */
   listThreadedComments(a1: string): readonly ThreadedComment[];
-  /** Adds a threaded comment and returns its id (the given one, or the generated one). A `parentId` that is omitted or `null` opens a new thread at
-   *  `cell`, which must hold neither a note nor a thread (else `StatusCode.AlreadyExists`);
-   *  otherwise it replies to that thread. An `id` the sheet already uses fails with `StatusCode.AlreadyExists`. */
+  /** Adds a threaded comment and returns its id (the given one, or the generated one). A `parentId` that is omitted or
+   *  `null` opens a new thread at `cell`, which must hold neither a note nor a thread (else
+   *  `StatusCode.AlreadyExists`); otherwise it replies to that thread. An `id` the sheet already uses fails with
+   *  `StatusCode.AlreadyExists`. */
   addThreadedComment(comment: ThreadedCommentInput): string;
   /** Updates the text, mentions and resolved state of the comment with `id`; an omitted key keeps its value.
    *  `done` applies to a thread's opening comment only. */
@@ -6349,11 +7412,11 @@ export interface Sheet {
   /** Appends a shape on top and returns its handle; a sheet without a drawing gets one and existing drawing
    *  content is kept. */
   addShape(spec: ShapeInput): Shape;
-  /** Adds a slicer over column `column` of the table `table`, passed as its `Table` handle or its name
-   *  (resolved by name identity, see {@link Workbook}), and returns its handle. `column` is the column's 0-based
-   *  position or its name (resolved the same way); a name the table lacks fails with `StatusCode.NotFound`. It creates the slicer and cache parts, the `Slicer_*`
-   *  defined name and the drawing frame; the table may live on another sheet. A name no table has fails with
-   *  `StatusCode.NotFound`. */
+  /** Adds a slicer over column `column` of the table `table`, passed as its `Table` handle or its name (resolved by
+   *  name identity, see {@link Workbook}), and returns its handle. `column` is the column's 0-based position or its
+   *  name (resolved the same way); a name the table lacks fails with `StatusCode.NotFound`. It creates the slicer and
+   *  cache parts, the `Slicer_*` defined name and the drawing frame; the table may live on another sheet. A name no
+   *  table has fails with `StatusCode.NotFound`. */
   addSlicer(table: Table | string, column: number | string, spec: SlicerInput): Slicer;
   /** Puts a `snapshot` capture of a picture, chart or shape back and returns the object's handle: in place of
    *  an object with the same id at its recorded position, where a handle of that id addresses it again, or as a
@@ -6366,13 +7429,18 @@ export interface Sheet {
   removeDrawing(objectId: number | Drawing): void;
 
   // What-If data tables. The formulas sit in the row above the result range and the substitution values in the column left of it (or the other way round); each result cell is found by substituting into the input cell(s), recalculating the cells that read them and restoring the inputs.
-  /** Creates a data table over `spec`'s result range. The result cells read 0 until the next recalc and refuse writes ("cannot change part of a data table") until the table is removed. Returns the top-left cell of the result range, the cell `getDataTable` and `removeDataTable` take. `StatusCode.DataTableInvalid` (8005) when no input is given, the range has no row above or column left of it, an input lies inside the range, or the range overlaps another data table. */
+  /** Creates a data table over `spec`'s result range. The result cells read 0 until the next recalc and refuse writes
+   *  ("cannot change part of a data table") until the table is removed. Returns the top-left cell of the result range,
+   *  the cell `getDataTable` and `removeDataTable` take. `StatusCode.DataTableInvalid` (8005) when no input is given,
+   *  the range has no row above or column left of it, an input lies inside the range, or the range overlaps another
+   *  data table. */
   addDataTable(spec: DataTableInput): CellAddress;
   /** Reads the data table whose result range contains `(row, col)`; `null` when no table covers the cell. */
   getDataTable(row: number, col: number): DataTable | null;
   /** `getDataTable` at the A1 address `a1`. */
   getDataTable(a1: string): DataTable | null;
-  /** Removes the data table containing `(row, col)` and blanks its result cells. `StatusCode.NotFound` when none covers the cell. */
+  /** Removes the data table containing `(row, col)` and blanks its result cells. `StatusCode.NotFound` when none covers
+   *  the cell. */
   removeDataTable(row: number, col: number): void;
   /** `removeDataTable` at the A1 address `a1`. */
   removeDataTable(a1: string): void;
@@ -6507,14 +7575,14 @@ export interface Sheet {
   /** Reads the full per-sheet view (zoom, freeze, and the
    *  display / orientation flags). The tab's visibility is `getVisibility()`. */
   getView(): SheetView;
-  /** Updates the view with the keys `patch` names; an empty patch changes nothing. A freeze or split key takes
-   *  its partner from the current view (`{ freezeRows: 2 }` keeps `freezeCols`), and a non-zero freeze with a
-   *  non-zero split fails with `StatusCode.InvalidArgument`. Applied in a fixed order: freeze or split (each replaces the other, and a
-   *  freeze change resets the pane origin), `paneTopLeft*`, `topLeft*`, the display flags, `zoomPct` (outside
-   *  `[10, 400]` is rejected), `viewMode`, `rightToLeft`, `tabSelected`. The pane origin must lie past the
-   *  frozen rows and columns. Every key is checked before anything is written; a failure changes nothing. A
-   *  `zoomPct` outside `[10, 400]` or a pane origin other than `0, 0` without panes is checked against the merged
-   *  view and fails with `StatusCode.InvalidArgument`. An unknown key (`visibility` included) throws `TypeError`. */
+  /** Updates the view with the keys `patch` names; an empty patch changes nothing. A freeze or split key takes its
+   *  partner from the current view (`{ freezeRows: 2 }` keeps `freezeCols`), and a non-zero freeze with a non-zero
+   *  split fails with `StatusCode.InvalidArgument`. Applied in a fixed order: freeze or split (each replaces the other,
+   *  and a freeze change resets the pane origin), `paneTopLeft*`, `topLeft*`, the display flags, `zoomPct` (outside
+   *  `[10, 400]` is rejected), `viewMode`, `rightToLeft`, `tabSelected`. The pane origin must lie past the frozen rows
+   *  and columns. Every key is checked before anything is written; a failure changes nothing. A `zoomPct` outside `[10,
+   *  400]` or a pane origin other than `0, 0` without panes is checked against the merged view and fails with
+   *  `StatusCode.InvalidArgument`. An unknown key (`visibility` included) throws `TypeError`. */
   updateView(patch: SheetViewPatch): void;
   /** The sheet's tab colour (`<sheetPr><tabColor>`); `null` when the tab has none. */
   getTabColor(): Color | null;
@@ -6686,11 +7754,13 @@ export interface Sheet {
   setCommentVisible(row: number, col: number, visible: boolean): void;
   /** `setCommentVisible` at the A1 address `a1`. */
   setCommentVisible(a1: string, visible: boolean): void;
-  /** Lists the sheet's protected ranges; a range's position, or its name, is the `protectedRange` argument of the other protected-range methods. */
+  /** Lists the sheet's protected ranges; a range's position, or its name, is the `protectedRange` argument of the other
+   *  protected-range methods. */
   listProtectedRanges(): readonly ProtectedRange[];
   /** Reads the protected range `protectedRange`; `null` when the sheet has none. */
   getProtectedRange(protectedRange: ProtectedRangeRef): ProtectedRange | null;
-  /** Appends a protected range and returns its name. `name` must be non-empty (`StatusCode.InvalidArgument`) and unique on the sheet (`StatusCode.AlreadyExists`); `ranges` must hold at least one rectangle. */
+  /** Appends a protected range and returns its name. `name` must be non-empty (`StatusCode.InvalidArgument`) and unique
+   *  on the sheet (`StatusCode.AlreadyExists`); `ranges` must hold at least one rectangle. */
   addProtectedRange(input: ProtectedRangeInput): string;
   /** Updates the protected range `protectedRange` with the keys `patch` names; the others keep their value.
    *  Leaving `ranges` out keeps the stored ranges. See {@link ProtectedRangePatch}. */
@@ -6729,7 +7799,8 @@ export interface Sheet {
   removeValidation(validation: ValidationRef): void;
   /** Drops every validation rule on the sheet. */
   clearValidations(): void;
-  /** Lists the sheet's conditional-format rules in flattened order; a rule's position, or its id, is the `cfRule` argument of `removeCfRule`. */
+  /** Lists the sheet's conditional-format rules in flattened order; a rule's position, or its id, is the `cfRule`
+   *  argument of `removeCfRule`. */
   listCfRules(): readonly ConditionalFormat[];
   /** Reads the CF rule `cfRule`; `null` when the sheet has none. */
   getCfRule(cfRule: CfRuleRef): ConditionalFormat | null;
@@ -6794,7 +7865,9 @@ export interface Sheet {
 
 /** One element of `WorkbookOoxml.listNumberFormats()`: a number format the workbook declares in `<numFmts>`. */
 export interface NumberFormat {
+  /** The number format id. */
   readonly numFmtId: number;
+  /** The number format code. */
   readonly numberFormat: string;
 }
 
@@ -6945,8 +8018,9 @@ export interface SheetOoxml {
   /** OOXML fragment for round trips; normally use `updatePageSetup`, which writes its `fitToPage`. Replaces
    *  `<sheetPr>`; `null` (or `""`) removes it. */
   setSheetPrXml(xml: string | null): void;
-  /** Sets / replaces the cell XF on `[first, last]`; index 0 is the default XF. A value later entered into an
-   *  unstyled cell of the span takes this XF, unless its row has one. An index not below `Workbook.ooxml.listCellXfs().length` fails with `StatusCode.IndexOutOfRange`. */
+  /** Sets / replaces the cell XF on `[first, last]`; index 0 is the default XF. A value later entered into an unstyled
+   *  cell of the span takes this XF, unless its row has one. An index not below `Workbook.ooxml.listCellXfs().length`
+   *  fails with `StatusCode.IndexOutOfRange`. */
   setColumnXfIndex(first: number, last: number, xfIndex: number): void;
   /** `setColumnXfIndex` over the A1 column span `span` (`"B"`, `"B:D"`). */
   setColumnXfIndex(span: string, xfIndex: number): void;
@@ -6955,8 +8029,9 @@ export interface SheetOoxml {
   resetColumnXfIndex(first: number, last: number): void;
   /** `resetColumnXfIndex` over the A1 column span `span` (`"B"`, `"B:D"`). */
   resetColumnXfIndex(span: string): void;
-  /** Sets / replaces the cell XF of the inclusive row span `first..last`; index 0 is the default XF. A value
-   *  later entered into an unstyled cell of a covered row takes this XF. An index not below `Workbook.ooxml.listCellXfs().length` fails with `StatusCode.IndexOutOfRange`. Nothing changes when it throws. */
+  /** Sets / replaces the cell XF of the inclusive row span `first..last`; index 0 is the default XF. A value later
+   *  entered into an unstyled cell of a covered row takes this XF. An index not below
+   *  `Workbook.ooxml.listCellXfs().length` fails with `StatusCode.IndexOutOfRange`. Nothing changes when it throws. */
   setRowXfIndex(first: number, last: number, xfIndex: number): void;
   /** `setRowXfIndex` over the A1 row span `span` (`"3"`, `"3:5"`). */
   setRowXfIndex(span: string, xfIndex: number): void;
@@ -7043,7 +8118,7 @@ export interface Table {
   readonly sheet: Sheet;
   /** The table's current index on its sheet (its position in `Sheet.listTables()`). */
   readonly index: number;
-  /** The table's current name: the name formulas and `Workbook.table` use. */
+  /** The table's one name: the name formulas and `Workbook.table` use, also written as the file's name attribute. */
   readonly name: string;
   /** Reads the table's name, range, header / totals flags and columns. */
   getProperties(): TableProperties;
@@ -7107,7 +8182,7 @@ export interface Table {
 export interface Pivot {
   /** The sheet this pivot is anchored on. */
   readonly sheet: Sheet;
-  /** The pivot's current index on its sheet (its position in `listPivots()`). */
+  /** The pivot's current index on its sheet, its position in the sheet's pivot list. */
   readonly index: number;
   /** The pivot's current name. */
   readonly name: string;
@@ -7291,7 +8366,7 @@ export interface Pivot {
 export interface PivotCache {
   /** The workbook this cache belongs to. */
   readonly workbook: Workbook;
-  /** The cache's id, the `cacheId` a `PivotInput` takes (as does the handle itself). */
+  /** The cache's id, the one a pivot input takes as its cache id. */
   readonly cacheId: number;
   /** Reads the cache's worksheet source range / defined-name metadata; `null` when the cache has no worksheet
    *  source. */
@@ -7340,9 +8415,9 @@ export interface PivotCache {
   removeCalculatedItem(calculatedItemIndex: number): void;
   /** Lists the shared items of cache field `field`; an item's position is its index. */
   listFieldSharedItems(field: PivotFieldRef): readonly PivotCacheValue[];
-  /** Appends `value` as a shared item of cache field `field` and returns the new item's index. A `Date` is stored as a date in the
-   *  workbook's date system (not before 1900, not past 9999-12-31, else `StatusCode.InvalidArgument`), saved with
-   *  seconds precision, and read through its local getters (see {@link DateInput}); a number is a number. */
+  /** Appends `value` as a shared item of cache field `field` and returns the new item's index. A `Date` is stored as a
+   *  date in the workbook's date system (not before 1900, not past 9999-12-31, else `StatusCode.InvalidArgument`),
+   *  saved with seconds precision, and read through its local getters (see {@link DateInput}); a number is a number. */
   addFieldSharedItem(field: PivotFieldRef, value: number | string | boolean | null | Date | ErrorValue): number;
   /** Drops every shared item from cache field `field`. */
   clearFieldSharedItems(field: PivotFieldRef): void;
@@ -7558,128 +8633,223 @@ export interface WorkbookCtor {
  *  `@libraz/formulon` (WASM) passes them to the module loader. `@libraz/formulon-native` validates them, then
  *  does not use them: the addon loads no files at run time and writes nothing to stdout or stderr. */
 export interface FormulonOptions {
-  /** WASM: maps a file the module loads (`formulon.wasm`) and the directory it would load it from to the
-   *  URL or path to use instead. */
+  /** WASM: maps a file the module loads (`formulon.wasm`) and the directory it would load it from to the URL or path to
+   *  use instead. */
   locateFile?: (path: string, prefix: string) => string;
   /** WASM: receives each line the runtime writes to stdout, instead of `console.log`. */
   print?: (msg: string) => void;
   /** WASM: receives each line the runtime writes to stderr, instead of `console.error`. */
   printErr?: (msg: string) => void;
-  /** WASM: the module to run, for hosts that cannot fetch or locate `formulon.wasm` (a Worker, an edge
-   *  runtime, a bundler that inlines assets). A `BufferSource` holds the module bytes and is compiled here; a
-   *  `WebAssembly.Module` is instantiated as is, which lets one compiled module serve several instances. An
-   *  empty `BufferSource`, or a value that is neither, fails with a `TypeError`. */
+  /** WASM: the module to run, for hosts that cannot fetch or locate `formulon.wasm` (a Worker, an edge runtime, a
+   *  bundler that inlines assets). A `BufferSource` holds the module bytes and is compiled here; a `WebAssembly.Module`
+   *  is instantiated as is, which lets one compiled module serve several instances. An empty `BufferSource`, or a value
+   *  that is neither, fails with a `TypeError`. */
   wasm?: BufferSource | WebAssembly.Module;
 }
 
 /** The engine surface {@link createFormulon} resolves to: a frozen object with the same members on both
  *  packages. */
 export interface Formulon {
-  /** The `Workbook` class: its static factories (`createDefault`, `createEmpty`, `load`, ...) create workbooks. A
-   *  new class per `createFormulon()` result. */
+  /** The `Workbook` class: its static factories create workbooks. A new class per `createFormulon()` result. */
   Workbook: WorkbookCtor;
   /** The error class this package throws; the same class as the named export. */
   FormulonError: typeof FormulonError;
   /** The cell-error class native reads return; the same class as the named export. */
   ExcelError: typeof ExcelError;
 
-  /** Value tables and helpers; the tables are also exported by name from the package. */
+  /** The `ValueKind` enum. */
   ValueKind: typeof ValueKind;
+  /** The `StatusCode` enum. */
   StatusCode: typeof StatusCode;
+  /** The `ParseErrorCode` enum. */
   ParseErrorCode: typeof ParseErrorCode;
+  /** The `WorkbookFormat` enum. */
   WorkbookFormat: typeof WorkbookFormat;
+  /** The `CellShift` enum. */
   CellShift: typeof CellShift;
+  /** The `PivotCellKind` enum. */
   PivotCellKind: typeof PivotCellKind;
+  /** The `PivotAxis` enum. */
   PivotAxis: typeof PivotAxis;
+  /** The `PivotAggregation` enum. */
   PivotAggregation: typeof PivotAggregation;
+  /** The `PivotShowValuesAs` enum. */
   PivotShowValuesAs: typeof PivotShowValuesAs;
+  /** The `PivotFilterKind` enum. */
   PivotFilterKind: typeof PivotFilterKind;
+  /** The `PivotDatePeriod` enum. */
   PivotDatePeriod: typeof PivotDatePeriod;
+  /** The `PivotCalendar` enum. */
   PivotCalendar: typeof PivotCalendar;
+  /** The `PivotSortOrder` enum. */
   PivotSortOrder: typeof PivotSortOrder;
+  /** The `PivotReportLayout` enum. */
   PivotReportLayout: typeof PivotReportLayout;
+  /** The `CfMatchKind` enum. */
   CfMatchKind: typeof CfMatchKind;
+  /** The `CfRuleType` enum. */
   CfRuleType: typeof CfRuleType;
+  /** The `DatePeriod` enum. */
   DatePeriod: typeof DatePeriod;
+  /** The `CfValueObjectType` enum. */
   CfValueObjectType: typeof CfValueObjectType;
+  /** The `IconSetName` enum. */
   IconSetName: typeof IconSetName;
+  /** The `ErrorCode` enum. */
   ErrorCode: typeof ErrorCode;
+  /** The `ErrorDisplayName` enum. */
   ErrorDisplayName: typeof ErrorDisplayName;
+  /** The `CalcMode` enum. */
   CalcMode: typeof CalcMode;
+  /** The `RefMode` enum. */
   RefMode: typeof RefMode;
+  /** The `CollationStrength` enum. */
   CollationStrength: typeof CollationStrength;
+  /** The `GeometryMode` enum. */
   GeometryMode: typeof GeometryMode;
+  /** The `DisplayStatus` enum. */
   DisplayStatus: typeof DisplayStatus;
+  /** The `SheetVisibility` enum. */
   SheetVisibility: typeof SheetVisibility;
+  /** The `LogLevel` enum. */
   LogLevel: typeof LogLevel;
+  /** The `ExternalLinkKind` enum. */
   ExternalLinkKind: typeof ExternalLinkKind;
+  /** The `FilterKind` enum. */
   FilterKind: typeof FilterKind;
+  /** The `ComparisonOperator` enum. */
   ComparisonOperator: typeof ComparisonOperator;
+  /** The `DynamicFilterType` enum. */
   DynamicFilterType: typeof DynamicFilterType;
+  /** The `SortBy` enum. */
   SortBy: typeof SortBy;
+  /** The `SortMethod` enum. */
   SortMethod: typeof SortMethod;
+  /** The `DateTimeGrouping` enum. */
   DateTimeGrouping: typeof DateTimeGrouping;
+  /** The `ValidationErrorStyle` enum. */
   ValidationErrorStyle: typeof ValidationErrorStyle;
+  /** The `ValidationType` enum. */
   ValidationType: typeof ValidationType;
+  /** The `ColorContext` enum. */
   ColorContext: typeof ColorContext;
+  /** The `ImageFormat` enum. */
   ImageFormat: typeof ImageFormat;
+  /** The `DrawingObjectKind` enum. */
   DrawingObjectKind: typeof DrawingObjectKind;
+  /** The `AnchorKind` enum. */
   AnchorKind: typeof AnchorKind;
+  /** The `AnchorEditAs` enum. */
   AnchorEditAs: typeof AnchorEditAs;
+  /** The `SlicerSortOrder` enum. */
   SlicerSortOrder: typeof SlicerSortOrder;
+  /** The `SlicerCrossFilter` enum. */
   SlicerCrossFilter: typeof SlicerCrossFilter;
+  /** The `SparklineType` enum. */
   SparklineType: typeof SparklineType;
+  /** The `SparklineAxisType` enum. */
   SparklineAxisType: typeof SparklineAxisType;
+  /** The `ChartPlotType` enum. */
   ChartPlotType: typeof ChartPlotType;
+  /** The `ChartExtendedLayout` enum. */
   ChartExtendedLayout: typeof ChartExtendedLayout;
+  /** The `ChartGrouping` enum. */
   ChartGrouping: typeof ChartGrouping;
+  /** The `BlanksAs` enum. */
   BlanksAs: typeof BlanksAs;
+  /** The `PhoneticType` enum. */
   PhoneticType: typeof PhoneticType;
+  /** The `PhoneticAlignment` enum. */
   PhoneticAlignment: typeof PhoneticAlignment;
+  /** The `PageOrder` enum. */
   PageOrder: typeof PageOrder;
+  /** The `PaperSize` enum. */
   PaperSize: typeof PaperSize;
+  /** The `TableTotalsRowFunction` enum. */
   TableTotalsRowFunction: typeof TableTotalsRowFunction;
+  /** The `TableStyleElementType` enum. */
   TableStyleElementType: typeof TableStyleElementType;
+  /** The `ChartTickLabelPosition` enum. */
   ChartTickLabelPosition: typeof ChartTickLabelPosition;
+  /** The `ChartDomain` enum. */
   ChartDomain: typeof ChartDomain;
+  /** The `WidthPlatform` enum. */
   WidthPlatform: typeof WidthPlatform;
+  /** The `ChartPointState` enum. */
   ChartPointState: typeof ChartPointState;
+  /** The `ChartAxisKind` enum. */
   ChartAxisKind: typeof ChartAxisKind;
+  /** The `ChartAxisCrosses` enum. */
   ChartAxisCrosses: typeof ChartAxisCrosses;
+  /** The `ChartTitleKind` enum. */
   ChartTitleKind: typeof ChartTitleKind;
+  /** The `ChartSeriesDirection` enum. */
   ChartSeriesDirection: typeof ChartSeriesDirection;
+  /** The `ChartSourceKind` enum. */
   ChartSourceKind: typeof ChartSourceKind;
+  /** The `ChartRole` enum. */
   ChartRole: typeof ChartRole;
+  /** The `ChartLegendPosition` enum. */
   ChartLegendPosition: typeof ChartLegendPosition;
+  /** The `ChartLineDash` enum. */
   ChartLineDash: typeof ChartLineDash;
+  /** The `ChartMarkerSymbol` enum. */
   ChartMarkerSymbol: typeof ChartMarkerSymbol;
+  /** The `ChartLabelPosition` enum. */
   ChartLabelPosition: typeof ChartLabelPosition;
+  /** The `ColorResolution` enum. */
   ColorResolution: typeof ColorResolution;
+  /** The `ThemeSource` enum. */
   ThemeSource: typeof ThemeSource;
+  /** The `EffectiveStyleSource` enum. */
   EffectiveStyleSource: typeof EffectiveStyleSource;
+  /** The `PageOrientation` enum. */
   PageOrientation: typeof PageOrientation;
+  /** The `SheetViewMode` enum. */
   SheetViewMode: typeof SheetViewMode;
+  /** The `ChartBarDirection` enum. */
   ChartBarDirection: typeof ChartBarDirection;
+  /** The `ChartAxisPosition` enum. */
   ChartAxisPosition: typeof ChartAxisPosition;
+  /** The `LocaleDateOrder` enum. */
   LocaleDateOrder: typeof LocaleDateOrder;
+  /** The `CfDataBarDirection` enum. */
   CfDataBarDirection: typeof CfDataBarDirection;
+  /** The `CfDataBarAxisPosition` enum. */
   CfDataBarAxisPosition: typeof CfDataBarAxisPosition;
+  /** The `ColorKind` enum. */
   ColorKind: typeof ColorKind;
+  /** The `HorizontalAlign` enum. */
   HorizontalAlign: typeof HorizontalAlign;
+  /** The `VerticalAlign` enum. */
   VerticalAlign: typeof VerticalAlign;
+  /** The `ReadingOrder` enum. */
   ReadingOrder: typeof ReadingOrder;
+  /** The `UnderlineStyle` enum. */
   UnderlineStyle: typeof UnderlineStyle;
+  /** The `FontVerticalAlign` enum. */
   FontVerticalAlign: typeof FontVerticalAlign;
+  /** The `FontScheme` enum. */
   FontScheme: typeof FontScheme;
+  /** The `FontFamily` enum. */
   FontFamily: typeof FontFamily;
+  /** The `FillPattern` enum. */
   FillPattern: typeof FillPattern;
+  /** The `GradientType` enum. */
   GradientType: typeof GradientType;
+  /** The `BorderStyle` enum. */
   BorderStyle: typeof BorderStyle;
+  /** The `FunctionAvailability` enum. */
   FunctionAvailability: typeof FunctionAvailability;
+  /** The `PivotShowAsBase` enum. */
   PivotShowAsBase: typeof PivotShowAsBase;
+  /** The pivot field id of the Σ Values level in the row and column field order lists. */
   PIVOT_VALUES_FIELD: typeof PIVOT_VALUES_FIELD;
+  /** The helper that merges host metadata into a function metadata record. */
   mergeFunctionMetadata: typeof mergeFunctionMetadata;
+  /** The helper that maps a `Value` to its native JS value. */
   toNative: typeof toNative;
+  /** The helper that returns the key an ordinal has in an enum table. */
   enumName: typeof enumName;
 
   /** Convenience: evaluates `formula` read-only against a fresh

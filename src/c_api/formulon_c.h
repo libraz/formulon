@@ -305,21 +305,29 @@ typedef enum {
  * `first_* == last_*`.
  */
 typedef struct {
+  /** The 0-based first row. */
   uint32_t first_row;
+  /** The 0-based first column. */
   uint32_t first_col;
+  /** The 0-based last row, inclusive. */
   uint32_t last_row;
+  /** The 0-based last column, inclusive. */
   uint32_t last_col;
 } fm_cell_rect_t;
 
 /** @brief A cell address: 0-based `row` and `col`. */
 typedef struct {
+  /** The 0-based row. */
   uint32_t row;
+  /** The 0-based column. */
   uint32_t col;
 } fm_cell_address_t;
 
 /** @brief A cell rectangle on sheet `sheet_index`. */
 typedef struct {
+  /** The 0-based index of the sheet. */
   uint32_t sheet_index;
+  /** The cell rectangle on that sheet. */
   fm_cell_rect_t rect;
 } fm_sheet_rect_t;
 
@@ -337,8 +345,7 @@ typedef enum {
  *        field of the API takes this type; a resolved colour (for example in
  *        `fm_effective_style_info_t`) is a plain `0xAARRGGBB` integer.
  *
- * Only the members `kind` names are meaningful. A theme,
- * indexed or auto colour is a selector, not a rendered colour: resolve it
+ * A theme, indexed or auto colour is a selector, not a rendered colour: resolve it
  * with `fm_workbook_resolve_color`. A field documented as "None or Rgb"
  * (CF evaluation colours) never carries a selector, and its `argb` is the
  * colour as drawn. A chart or shape colour is "None, Rgb or Theme": Theme
@@ -346,11 +353,16 @@ typedef enum {
  * luminance tint, Rgb as drawn for any other colour.
  */
 typedef struct {
-  double tint;      /* theme tint (-1..1); meaningful when kind == FM_COLOR_KIND_THEME */
-  uint32_t argb;    /* AARRGGBB; meaningful when kind == FM_COLOR_KIND_RGB */
-  uint32_t theme;   /* theme index; meaningful when kind == FM_COLOR_KIND_THEME */
-  uint32_t indexed; /* palette index; meaningful when kind == FM_COLOR_KIND_INDEXED */
-  int32_t kind;     /* fm_color_kind_t */
+  /** The theme tint from -1 (darker) to 1 (lighter); meaningful when `kind` is theme. */
+  double tint;
+  /** The colour as 0xAARRGGBB; meaningful when `kind` is RGB. */
+  uint32_t argb;
+  /** The theme colour index; meaningful when `kind` is theme. */
+  uint32_t theme;
+  /** The legacy palette index; meaningful when `kind` is indexed. */
+  uint32_t indexed;
+  /** Which selector the colour carries; only the matching field below is meaningful. */
+  int32_t kind;
 } fm_color_t;
 
 /** @brief Opaque result of one sheet pagination operation. */
@@ -403,7 +415,8 @@ typedef enum {
  *   * `FM_VALUE_KIND_LAMBDA`  — lambdas are reserved.
  */
 typedef struct {
-  int32_t kind; /* fm_value_kind_t */
+  /** The `ValueKind` of the value; it selects which payload field is populated. */
+  int32_t kind;
   union {
     double number;
     int32_t boolean;
@@ -549,30 +562,17 @@ FM_API fm_status_t fm_workbook_load(const uint8_t* bytes, size_t len, fm_workboo
  */
 typedef struct {
   uint32_t struct_size;
-  /** Formula cells whose stored formula could not be decoded; the cached
-   *  value survives, the formula does not. XLSB only.
-   *  Fed by: `xlsb.formula.not_decoded`. */
+  /** The number of formula cells whose stored formula could not be decoded. XLSB only. */
   uint32_t undecoded_formula_count;
-  /** Defined names skipped for the same reason. XLSB only.
-   *  Fed by: `xlsb.defined_name.not_decoded`. */
+  /** The number of defined names skipped because their stored formula could not be decoded. XLSB only. */
   uint32_t undecoded_defined_name_count;
-  /** Package parts whose content type could not be resolved, so they were
-   *  not decoded and are absent from the loaded model. XLSB only: the
-   *  OOXML reader carries every unmodelled part through passthrough
-   *  instead of dropping it.
-   *  Fed by: `xlsb.package.parts_dropped`. */
+  /** The number of package parts whose content type could not be resolved, so they were not decoded. XLSB only; the
+   *  XLSX reader keeps unmodelled parts as passthrough. */
   uint32_t undecoded_part_count;
-  /** Presentation-overlay entries dropped because their reference was
-   *  missing or unparseable. One per dropped `<mergeCells>` /
-   *  `<hyperlinks>` / `<dataValidations>` entry, and one per dropped
-   *  `<conditionalFormatting>` block — a block carries several rules, so
-   *  one increment can cost more than one rule. OOXML only.
-   *  Fed by: `io.sheet.overlay.skip`, `io.cf.skip`. */
+  /** The number of presentation-overlay entries dropped for an unusable reference: one per merge, hyperlink or data
+   *  validation, and one per conditional-format block. XLSX only. */
   uint32_t skipped_feature_count;
-  /** Workbook parts whose declared content type was unrecognised, so the
-   *  read fell back to the plain `.xlsx` kind. At most 1 per load.
-   *  OOXML only.
-   *  Fed by: `ooxml.reader.unknown_workbook_content_type`. */
+  /** The number of workbook parts whose content type was unrecognised; at most 1. XLSX only. */
   uint32_t unknown_content_type_count;
 } fm_read_diagnostics_info_t;
 
@@ -691,48 +691,17 @@ FM_API fm_status_t fm_workbook_save(const fm_workbook_t* wb, int32_t format, uin
  */
 typedef struct {
   uint32_t struct_size;
-  /** Formula cells emitted as their cached literal because the AST could
-   *  not be lowered to the container's encoding. XLSB only: the OOXML
-   *  writer emits formula text verbatim.
-   *  Fed by: `xlsb.writer.formula_downgraded`,
-   *  `xlsb.writer.array_formula_downgraded`. */
+  /** The number of formula cells emitted as cached literals. Always 0 for XLSX. */
   uint32_t downgraded_formula_count;
-  /** Modelled sheet features the writer could not lower to records at
-   *  all. XLSB only: the OOXML writer represents every modelled feature,
-   *  and rejects the one case it cannot (a table whose metadata names a
-   *  removed sheet) with `FM_STATUS_IO_WRITE_FAILED` (5016) before building any part, so
-   *  the caller loses the save rather than the table.
-   *  Fed by: `xlsb.writer.deferred`. */
+  /** The number of sheet features not lowered to records. Always 0 for XLSX. */
   uint32_t deferred_feature_count;
-  /** Passthrough parts dropped, either because their package path
-   *  collided with a path the writer generates itself (the generated copy
-   *  wins) or because two passthrough entries claimed the same path.
-   *  Fed by: `ooxml_writer.passthrough_collision`,
-   *  `xlsb.writer.passthrough_collision`. */
+  /** The number of passthrough parts dropped for colliding with a generated path, or for two entries claiming one path.
+   *  Applies to both containers. */
   uint32_t dropped_part_count;
-  /** Round-tripped relationships not re-emitted because the part they
-   *  target is no longer in the package. Emitting them would leave a
-   *  dangling relationship and Excel would open the package in repair
-   *  mode, so dropping is the correct write.
-   *
-   *  This observes a loss rather than being an independent one. A part
-   *  dropped while a relationship pointed at it raises BOTH this counter
-   *  and `dropped_part_count` by one, for that single part; the two are
-   *  separate observations of one event and must not be added together.
-   *  It is deliberately not suppressed in that case, because a
-   *  relationship can equally dangle for a part that was never captured
-   *  at all, and a suppressed count would make those indistinguishable.
-   *  Fed by: `ooxml_writer.package_rel_skipped`,
-   *  `ooxml_writer.workbook_rel_skipped`,
-   *  `xlsb.writer.package_rel_skipped`,
-   *  `xlsb.writer.workbook_rel_skipped`,
-   *  `xlsb.writer.sheet_rel_skipped`. */
+  /** The number of relationships dropped because their target part is gone, at package, workbook or (XLSB) sheet scope.
+   *  Rises with `dropped_part_count` for one dropped part, so do not add them. */
   uint32_t dropped_relationship_count;
-  /** Parts emitted under a writer-assigned id rather than the id the
-   *  model carried. The part still ships; an external reference to the
-   *  old id does not survive. OOXML only: the binary writer does not
-   *  reassign part ids.
-   *  Fed by: `ooxml_writer.table_id_fallback`. */
+  /** The number of tables emitted under a writer-assigned id. Always 0 for XLSB. */
   uint32_t renumbered_part_count;
 } fm_save_diagnostics_info_t;
 
@@ -1019,21 +988,23 @@ FM_API fm_status_t fm_workbook_rename_sheet(fm_workbook_t* wb, size_t sheet_inde
  *        `fm_workbook_get_defined_name` / `fm_workbook_get_defined_name_at`
  *        read it.
  *
- * On input `name` and `formula` are non-empty UTF-8, `formula` accepts one
- * leading `=`, `local_sheet_id` is `FM_DEFINED_NAME_SCOPE_WORKBOOK` for workbook
- * scope or a 0-based sheet index, `comment` `NULL` or "" means none, and `hidden` is 0/1 (non-zero
- * hides the name from the Name Manager). On read `name` and `comment` are
- * model-backed views, `comment` `NULL` when the name has none, and `formula`
- * a read-scratch-backed view with its
- * leading `=`; see `fm_workbook_get_defined_name_at` for the lifetimes.
+ * On read `name` and `comment` are model-backed views and `formula` is a
+ * read-scratch-backed view; see `fm_workbook_get_defined_name_at` for the
+ * lifetimes.
  */
 typedef struct {
   uint32_t struct_size;
-  const char* name;       /* stored spelling on read; model-backed view */
-  const char* formula;    /* as `fm_sheet_get_formula` spells it on read, `=` included */
-  int32_t local_sheet_id; /* FM_DEFINED_NAME_SCOPE_WORKBOOK, else the 0-based sheet index of the scope */
-  const char* comment;    /* Name Manager comment, NULL on read when none; model-backed view */
-  int32_t hidden;         /* 0/1 */
+  /** The name, non-empty UTF-8; on read, the stored spelling as a model-backed view. */
+  const char* name;
+  /** The formula text, non-empty on input with at most one leading `=`; on read, spelled as the sheet formula getter
+   *  spells it, with the `=`. */
+  const char* formula;
+  /** The 0-based index of the sheet the name is local to, or `FM_DEFINED_NAME_SCOPE_WORKBOOK` for workbook scope. */
+  int32_t local_sheet_id;
+  /** The Name Manager note; `NULL` or empty on input means none, and a read returns `NULL` when there is none. */
+  const char* comment;
+  /** 1 hides the name from the Name Manager; 0 leaves it visible. */
+  int32_t hidden;
 } fm_defined_name_t;
 
 /**
@@ -1350,9 +1321,8 @@ typedef enum { FM_TEXT_OFFSET_UNIT_UTF16 = 0, FM_TEXT_OFFSET_UNIT_CODE_POINT = 1
  * @brief One `<rPh>` block: the kana reading `text` covers the half-open
  *        span `[start, end)` of the cell's surface text.
  *
- * Offsets are text positions in UTF-16 code units (`start`, `end`) and in
- * code points (`start_cp`, `end_cp`). A read fills both pairs; a write reads
- * the pair its `fm_text_offset_unit_t` argument names and ignores the other.
+ * A read fills both offset pairs; a write reads the pair its
+ * `fm_text_offset_unit_t` argument names and ignores the other.
  * A cell whose reading was typed in one go carries the single run
  * `{0, <length of the text>, kana}`.
  *
@@ -1364,11 +1334,16 @@ typedef enum { FM_TEXT_OFFSET_UNIT_UTF16 = 0, FM_TEXT_OFFSET_UNIT_CODE_POINT = 1
  * Frozen value type: no `struct_size`.
  */
 typedef struct {
-  uint32_t start;    /* inclusive span start, in UTF-16 code units */
-  uint32_t end;      /* exclusive span end, in UTF-16 code units   */
-  uint32_t start_cp; /* inclusive span start, in code points       */
-  uint32_t end_cp;   /* exclusive span end, in code points         */
-  const char* text;  /* NUL-terminated UTF-8 kana                  */
+  /** The inclusive start of the span, in UTF-16 code units. */
+  uint32_t start;
+  /** The exclusive end of the span, in UTF-16 code units. */
+  uint32_t end;
+  /** The inclusive start of the span, in code points. */
+  uint32_t start_cp;
+  /** The exclusive end of the span, in code points. */
+  uint32_t end_cp;
+  /** The kana reading of the span. */
+  const char* text;
 } fm_phonetic_run_t;
 
 /**
@@ -1474,20 +1449,19 @@ FM_API fm_status_t fm_sheet_set_cell_show_phonetic(fm_workbook_t* wb, size_t she
  *        `fm_sheet_get_cell_phonetic_properties` and written back by
  *        `fm_sheet_set_cell_phonetic_properties`.
  *
- * `font_index` indexes the workbook's font table for the ruby text; `type` is
- * an `fm_phonetic_type_t`, the kana form Excel generates readings in, and
- * `alignment` an `fm_phonetic_alignment_t`, how the kana is distributed over
- * the characters it covers. `stated` is read only (ignored on input): `1`
- * when the triple came from a `<phoneticPr>` element or a set (an all-zero
- * triple included), `0` when it is the state an absent element resolves to.
  * The all-zero triple is what Excel infers for a guide that arrived with no
  * `<phoneticPr>` at all.
  */
 typedef struct {
   uint32_t struct_size;
+  /** The index into the workbook's font table of the ruby text. */
   uint32_t font_index;
-  int32_t type;      /* fm_phonetic_type_t */
-  int32_t alignment; /* fm_phonetic_alignment_t */
+  /** The kana form Excel generates readings in, an `fm_phonetic_type_t`. */
+  int32_t type;
+  /** How the kana is distributed over the characters it covers, an `fm_phonetic_alignment_t`. */
+  int32_t alignment;
+  /** `1` when the properties are explicit: a phoneticPr element or a set call, an all-zero triple included; `0` for the
+   *  state an absent element resolves to. Ignored on input. */
   int32_t stated;
 } fm_phonetic_properties_t;
 
@@ -1848,30 +1822,26 @@ FM_API fm_status_t fm_value_array_get_value_at(const fm_value_array_t* array, si
  * @brief A parsed reference: a 0-based, inclusive rectangle with an optional
  *        sheet qualifier.
  *
- * `sheet_name` is `NULL` when the text has no sheet qualifier, else the
- * unquoted UTF-8 name as a read-scratch-backed view. A whole column or row
- * is expanded to the grid edge in `rect`. Text that is not a reference is a
- * parser status, never a record.
+ * Text that is not a reference is a parser status, never a record.
  */
 typedef struct {
   uint32_t struct_size;
-  const char* sheet_name; /* NULL when unqualified */
+  /** The unquoted UTF-8 sheet qualifier as a read-scratch-backed view; `NULL` when the text has none. */
+  const char* sheet_name;
+  /** The 0-based inclusive rectangle, with a whole column or row expanded to the grid edge. */
   fm_cell_rect_t rect;
 } fm_parsed_reference_info_t;
 
-/**
- * @brief Options of `fm_workbook_parse_reference`.
- *
- * `r1c1` is an `fm_tristate_t`: `FM_TRISTATE_DEFAULT` and `FM_TRISTATE_FALSE`
- * parse A1, `FM_TRISTATE_TRUE` parses R1C1. `has_base` is 0/1 and states the
- * `(base_row, base_col)` pair that R1C1 relative axes are measured from; it is
- * ignored when `r1c1` selects A1.
- */
+/** @brief Options of `fm_workbook_parse_reference`. */
 typedef struct {
   uint32_t struct_size;
-  int32_t r1c1; /* fm_tristate_t */
+  /** The notation, an `fm_tristate_t`: default and false parse A1, true parses R1C1. */
+  int32_t r1c1;
+  /** 1 when `base_row` and `base_col` are set; 0 means no base. Ignored when A1 is parsed. */
   int32_t has_base;
+  /** The 0-based row that R1C1 relative axes are measured from. */
   uint32_t base_row;
+  /** The 0-based column that R1C1 relative axes are measured from. */
   uint32_t base_col;
 } fm_parse_reference_spec_t;
 
@@ -2264,15 +2234,7 @@ FM_API fm_status_t fm_sheet_get_table_count(const fm_workbook_t* wb, size_t shee
 /**
  * @brief One table as `fm_sheet_get_table_at` reads it.
  *
- *   * `name`          — the table name formulas use.
- *   * `range`         — the table's range, header and totals rows included.
- *   * `style_name`    — `NULL` when the table has no style element or the
- *                       element names no style. It may name a built-in style
- *                       or a custom one (`fm_table_style_t`).
- *   * the `show_*` toggles are `0` or `1`, and `0` without the element.
- *   * `header_row_count` / `totals_row_count` are `0` or `1`.
- *   * `column_count` bounds `fm_sheet_get_table_column_at`'s `column_index`.
- *
+ * `column_count` bounds `fm_sheet_get_table_column_at`'s `column_index`.
  * `name` and `style_name` are model-backed views into the workbook handle,
  * valid until the next mutation of the table list -- `fm_sheet_add_table` /
  * `fm_sheet_update_table` / `fm_sheet_remove_table` / `fm_sheet_rename_table`,
@@ -2282,15 +2244,26 @@ FM_API fm_status_t fm_sheet_get_table_count(const fm_workbook_t* wb, size_t shee
  */
 typedef struct {
   uint32_t struct_size;
+  /** The table name formulas use. */
   const char* name;
+  /** The table's range, header and totals rows included. */
   fm_cell_rect_t range;
-  const char* style_name; /* NULL when absent */
+  /** The name of the table's style, a built-in or custom one; `NULL` when the table has no style element or the element
+   *  names no style. */
+  const char* style_name;
+  /** 1 when the first column is emphasized; 0 also when the style element is absent. */
   int32_t show_first_column;
+  /** 1 when the last column is emphasized; 0 also when the style element is absent. */
   int32_t show_last_column;
+  /** 1 when odd rows are banded; 0 also when the style element is absent. */
   int32_t show_row_stripes;
+  /** 1 when odd columns are banded; 0 also when the style element is absent. */
   int32_t show_column_stripes;
+  /** 1 when the table has a header row, else 0. */
   uint32_t header_row_count;
+  /** 1 when the table has a totals row, else 0. */
   uint32_t totals_row_count;
+  /** The number of columns in the table. */
   uint32_t column_count;
 } fm_table_info_t;
 
@@ -2348,28 +2321,34 @@ FM_API fm_status_t fm_sheet_get_table_runtime_id(const fm_workbook_t* wb, size_t
 FM_API fm_status_t fm_workbook_resolve_table_runtime_id(const fm_workbook_t* wb, uint32_t id, size_t* out_sheet_index,
                                                         size_t* out_table_index);
 
-/**
- * @brief A worksheet table to create (`fm_sheet_add_table`).
- *
- * The seven flags are `fm_tristate_t`s: `styled` `DEFAULT` is on,
- * `header_row` `DEFAULT` is on, `totals_row` `DEFAULT` is off, and the four
- * style toggles `DEFAULT` to the creation default (row stripes on for a styled
- * table, the others off).
- */
+/** @brief A worksheet table to create (`fm_sheet_add_table`). */
 typedef struct {
   uint32_t struct_size;
+  /** The cells the table covers, header row included, on the receiving sheet. */
   fm_cell_rect_t range;
+  /** The new table's name; it must not be one another table already uses. */
   const char* name;
-  const char* const* column_names; /* NULL = take the headers from the sheet */
+  /** One name per column of the range, as for `columns`; `NULL` takes the names from the header cells of the sheet. */
+  const char* const* column_names;
+  /** The number of entries in `column_names`. */
   uint32_t column_count;
-  const char* style_name;      /* NULL = the workbook default; "" is invalid */
-  int32_t styled;              /* fm_tristate_t; FALSE = no table style */
-  int32_t header_row;          /* fm_tristate_t */
-  int32_t totals_row;          /* fm_tristate_t */
-  int32_t show_first_column;   /* fm_tristate_t */
-  int32_t show_last_column;    /* fm_tristate_t */
-  int32_t show_row_stripes;    /* fm_tristate_t */
-  int32_t show_column_stripes; /* fm_tristate_t */
+  /** The built-in or custom table style to apply; `NULL` is the workbook's table-style default, else
+   *  `TableStyleMedium2`; an empty string is invalid. */
+  const char* style_name;
+  /** Tristate: default and true create a styled table, false creates the table without a style element. */
+  int32_t styled;
+  /** Tristate: whether the table has a header row; default is on. */
+  int32_t header_row;
+  /** Tristate: whether the table has a totals row; default is off. */
+  int32_t totals_row;
+  /** Tristate: whether the first column is emphasized; default takes the creation default, which is off. */
+  int32_t show_first_column;
+  /** Tristate: whether the last column is emphasized; default takes the creation default, which is off. */
+  int32_t show_last_column;
+  /** Tristate: whether odd rows are banded; default takes the creation default, which is on for a styled table. */
+  int32_t show_row_stripes;
+  /** Tristate: whether odd columns are banded; default takes the creation default, which is off. */
+  int32_t show_column_stripes;
 } fm_table_spec_t;
 
 /**
@@ -2423,22 +2402,24 @@ FM_API fm_status_t fm_sheet_add_table(fm_workbook_t* wb, size_t sheet_index, con
  *        (`fm_sheet_update_table`).
  *
  * Each field has an `fm_patch_op_t` companion (Patches, in the header
- * preamble); no field can be cleared. `range` is checked as for
- * `fm_sheet_add_table`, keeps the width the table's column list describes,
- * and may not overlap the objects `fm_sheet_add_table` lists. `header_row`
- * and `totals_row` are `0` / `1`. `header_row` only flips the flag;
- * `totals_row` grows or shrinks the table by one row (`fm_sheet_update_table`).
- * With `range` in the same patch, `range` is the final extent the caller
- * chose: nothing shifts and `totals_row` only flips the flag. The style is patched through
+ * preamble); no field can be cleared. The style is patched through
  * `fm_sheet_update_table_style_options`.
  */
 typedef struct {
   uint32_t struct_size;
+  /** The operation applied to `range`: keep it, or set it; it cannot be cleared. */
   fm_patch_op_t range_op;
+  /** The table's new range; it is checked as for `fm_sheet_add_table`, resizes the table, keeps the width the column
+   *  list describes and may not overlap the objects `fm_sheet_add_table` lists. */
   fm_cell_rect_t range;
+  /** The operation applied to `header_row`: keep it, or set it; it cannot be cleared. */
   fm_patch_op_t header_row_op;
+  /** Turns the header row on (1) or off (0); only the flag flips. */
   int32_t header_row;
+  /** The operation applied to `totals_row`: keep it, or set it; it cannot be cleared. */
   fm_patch_op_t totals_row_op;
+  /** Turns the totals row on (1) or off (0), growing or shrinking the table by one row; with `range` in the same patch
+   *  only the flag flips. */
   int32_t totals_row;
 } fm_table_patch_t;
 
@@ -2515,24 +2496,19 @@ typedef enum {
 /**
  * @brief One table column (`fm_sheet_get_table_column_at`).
  *
- *   * `totals_row_function` — an `fm_table_totals_row_function_t`.
- *   * `totals_row_label`    — the totals-row label, `NULL` when absent.
- *   * `totals_row_formula`  — the `custom` function's formula with its
- *                             leading `=`, `NULL` otherwise, spelled as
- *                             `fm_sheet_get_formula` spells formulas.
- *
- * `totals_row_formula` is spelled as at the column's totals cell, inside
- * the table (`=SUBTOTAL(109,[Qty])`).
- *
  * `name` and `totals_row_label` share the lifetime of `fm_table_info_t`'s
  * views; a present `totals_row_formula` is read-scratch-backed instead.
- * `name` is never `NULL`.
  */
 typedef struct {
   uint32_t struct_size;
+  /** The column name; never `NULL`. */
   const char* name;
-  int32_t totals_row_function; /* fm_table_totals_row_function_t */
+  /** The totals-row function of the column, an `fm_table_totals_row_function_t`. */
+  int32_t totals_row_function;
+  /** The totals-row label; `NULL` when absent. */
   const char* totals_row_label;
+  /** The formula of the custom totals-row function with its leading `=`, spelled as at the column's totals cell inside
+   *  the table (such as `=SUBTOTAL(109,[Qty])`); `NULL` for any other function. */
   const char* totals_row_formula;
 } fm_table_column_info_t;
 
@@ -2551,41 +2527,55 @@ FM_API fm_status_t fm_sheet_get_table_column_at(const fm_workbook_t* wb, size_t 
  * @brief A table's applied style (`<tableStyleInfo>`), the counterpart of
  *        `fm_pivot_style_options_t` (`fm_sheet_get_table_style_options`).
  *
- *   * `style_name` — model-backed view sharing `fm_table_info_t`'s
- *                    lifetime; `NULL` when the element names no style.
- *   * the `show_*` toggles are `0` or `1`.
+ * `style_name` is a model-backed view sharing `fm_table_info_t`'s lifetime.
  */
 typedef struct {
   uint32_t struct_size;
+  /** The name of the applied table style; `NULL` for an element without a named style. It may name a custom style. */
   const char* style_name;
+  /** Whether the first column is formatted specially. */
   int32_t show_first_column;
+  /** Whether the last column is formatted specially. */
   int32_t show_last_column;
+  /** Whether odd and even rows are banded. */
   int32_t show_row_stripes;
+  /** Whether odd and even columns are banded. */
   int32_t show_column_stripes;
 } fm_table_style_options_t;
 
 /**
  * @brief Partial update of a table's style (`fm_sheet_update_table_style_options`).
  *
- * Each field has an `fm_patch_op_t` companion: `KEEP` (0) leaves it,
- * `SET` writes the value beside it, `CLEAR` on `style_name` removes the style
- * name (the element stays); a `SET` `style_name` is non-empty. The toggles are
- * `0` / `1` and reject `CLEAR`. A
- * patch on a table without `<tableStyleInfo>` creates the element, the
- * fields it leaves at `KEEP` taking the creation defaults of
- * `fm_sheet_add_table`. A patch whose ops are all `KEEP` changes nothing.
+ * Each field has an `fm_patch_op_t` companion. A patch on a table without
+ * `<tableStyleInfo>` creates the element, the fields it leaves at `KEEP` taking
+ * the creation defaults of `fm_sheet_add_table`. A patch whose ops are all
+ * `KEEP` changes nothing.
  */
 typedef struct {
   uint32_t struct_size;
+  /** The update operation for `style_name`: keep it, clear it, or set it to the value beside it. */
   fm_patch_op_t style_name_op;
+  /** The new style name when the operation is set, non-empty; clearing removes the name and keeps the element. */
   const char* style_name;
+  /** The update operation for `show_first_column`: keep it, clear it, or set it to the value beside it. Clear is
+   *  rejected. */
   fm_patch_op_t show_first_column_op;
+  /** Whether the first column is formatted specially. */
   int32_t show_first_column;
+  /** The update operation for `show_last_column`: keep it, clear it, or set it to the value beside it. Clear is
+   *  rejected. */
   fm_patch_op_t show_last_column_op;
+  /** Whether the last column is formatted specially. */
   int32_t show_last_column;
+  /** The update operation for `show_row_stripes`: keep it, clear it, or set it to the value beside it. Clear is
+   *  rejected. */
   fm_patch_op_t show_row_stripes_op;
+  /** Whether odd and even rows are banded. */
   int32_t show_row_stripes;
+  /** The update operation for `show_column_stripes`: keep it, clear it, or set it to the value beside it. Clear is
+   *  rejected. */
   fm_patch_op_t show_column_stripes_op;
+  /** Whether odd and even columns are banded. */
   int32_t show_column_stripes;
 } fm_table_style_options_patch_t;
 
@@ -2734,15 +2724,20 @@ FM_API fm_status_t fm_workbook_has_passthrough(const fm_workbook_t* wb, const ch
  *        until the next mutation that touches the sheet's hyperlink
  *        list or until the handle is destroyed. Reads do not invalidate
  *        them. `target`, `location`, `display` and `tooltip` are each
- *        optional: on input `NULL` and `""` both mean absent, and a read
- *        returns `NULL` for one the hyperlink does not carry.
+ *        optional: on input `NULL` and `""` both mean absent.
  */
 typedef struct {
   uint32_t struct_size;
+  /** The cells the hyperlink covers. */
   fm_cell_rect_t rect;
+  /** The absolute or relative target (URL, email address, file); `NULL` for an in-workbook link or when the hyperlink
+   *  carries none. */
   const char* target;
+  /** The in-workbook destination; `NULL` for an external target. */
   const char* location;
+  /** The display text override; `NULL` when the hyperlink has none. */
   const char* display;
+  /** The tooltip text; `NULL` when the hyperlink has none. */
   const char* tooltip;
 } fm_hyperlink_t;
 
@@ -2751,16 +2746,18 @@ typedef struct {
  *        `fm_sheet_get_comment_at` and written back by
  *        `fm_sheet_set_comment`.
  *
- * On output `row` / `col` are the anchor, and `author` and `text` are
- * model-backed UTF-8 views with the same lifetime contract as
- * `fm_hyperlink_t`. On input `row` / `col` are ignored (the key is the
- * call's cell), and a `NULL` `author` or `text` means empty.
+ * `author` and `text` are model-backed UTF-8 views with the same lifetime
+ * contract as `fm_hyperlink_t`; on input a `NULL` `author` or `text` means empty.
  */
 typedef struct {
   uint32_t struct_size;
+  /** The 0-based row of the cell the comment is anchored to; ignored on input, where the call's cell is the key. */
   uint32_t row;
+  /** The 0-based column of the cell the comment is anchored to; ignored on input, where the call's cell is the key. */
   uint32_t col;
+  /** The comment's author; the empty string when none. */
   const char* author;
+  /** The comment's text. */
   const char* text;
 } fm_comment_t;
 
@@ -3046,24 +3043,36 @@ FM_API fm_status_t fm_sheet_set_comment_visible(fm_workbook_t* wb, size_t sheet_
  * @brief `<workbookProtection>`. The host computes every hash; the engine
  *        stores the strings as given. On input a `NULL` string and an empty
  *        string both mean absent, and a zero spin count means absent. On
- *        output an absent string reads `NULL`, and the others are views valid
- *        until the next successful scratch-backed read on the handle.
+ *        output the strings are views valid until the next successful
+ *        scratch-backed read on the handle.
  */
 typedef struct {
   uint32_t struct_size;
+  /** `1` when the workbook structure is locked, so sheets cannot be added, deleted, renamed, moved or hidden. */
   int32_t lock_structure;
+  /** `1` when the workbook windows are locked, so they cannot be moved or resized. */
   int32_t lock_windows;
+  /** `1` when the workbook is locked for revisions (shared-workbook tracking cannot be switched off). */
   int32_t lock_revision;
+  /** The number of hash iterations of the structure-lock password; 0 when absent. */
   uint32_t workbook_spin_count;
+  /** The number of hash iterations of the revision-lock password; 0 when absent. */
   uint32_t revisions_spin_count;
-  /** Legacy 16-bit password hash, as the hex text Excel writes. */
+  /** The legacy 16-bit hash of the structure-lock password, as the hex text Excel writes; `NULL` when absent. */
   const char* workbook_legacy_password_hash;
+  /** The name of the hash algorithm of the structure-lock password; `NULL` when absent. */
   const char* workbook_algorithm_name;
+  /** The hash of the structure-lock password, stored as given; `NULL` when absent. */
   const char* workbook_hash_value;
+  /** The salt of the structure-lock password hash, stored as given; `NULL` when absent. */
   const char* workbook_salt_value;
+  /** The legacy 16-bit hash of the revision-lock password, as the hex text Excel writes; `NULL` when absent. */
   const char* revisions_legacy_password_hash;
+  /** The name of the hash algorithm of the revision-lock password; `NULL` when absent. */
   const char* revisions_algorithm_name;
+  /** The hash of the revision-lock password, stored as given; `NULL` when absent. */
   const char* revisions_hash_value;
+  /** The salt of the revision-lock password hash, stored as given; `NULL` when absent. */
   const char* revisions_salt_value;
 } fm_workbook_protection_t;
 
@@ -3094,23 +3103,29 @@ FM_API fm_status_t fm_workbook_set_workbook_protection(fm_workbook_t* wb, const 
 
 /**
  * @brief One `<protectedRange>`: a named range users may edit on a protected
- *        sheet, covering the `range_count` rectangles of `ranges`. Input
- *        handling, the `NULL` of an absent string on output and output
- *        lifetime follow `fm_workbook_protection_t`; the `ranges` of a getter
- *        result are read-scratch-backed, and a stored range that does not
- *        parse is left out of them.
+ *        sheet. Input handling, the `NULL` of an absent string on output and
+ *        output lifetime follow `fm_workbook_protection_t`; the `ranges` of a
+ *        getter result are read-scratch-backed.
  */
 typedef struct {
   uint32_t struct_size;
+  /** The number of hash iterations; 0 when absent. */
   uint32_t spin_count;
+  /** The range's name, unique among the sheet's protected ranges. */
   const char* name;
+  /** The rectangles the protected range covers; a stored range that does not parse is left out. */
   const fm_cell_rect_t* ranges;
+  /** The number of entries in `ranges`. */
   uint32_t range_count;
-  /** Legacy 16-bit password hash, as the hex text Excel writes; `NULL` when none. */
+  /** The legacy 16-bit password hash, as the hex text Excel writes; `NULL` when absent. */
   const char* legacy_password_hash;
+  /** The name of the hash algorithm that produced `hash_value`; `NULL` when absent. */
   const char* algorithm_name;
+  /** The password hash, stored as given; `NULL` when absent. */
   const char* hash_value;
+  /** The salt the password hash was computed with, stored as given; `NULL` when absent. */
   const char* salt_value;
+  /** The security descriptor (SDDL text) naming who may edit the range without a password; `NULL` when absent. */
   const char* security_descriptor;
 } fm_protected_range_t;
 
@@ -3121,30 +3136,44 @@ typedef struct {
  *
  * Each field of `fm_protected_range_t` has its `<field>_op`. A `SET` string
  * follows the input rule of `fm_protected_range_t` (an empty string writes
- * the attribute absent); a `SET` name must be non-empty and unused by the
- * sheet's other ranges. `ranges_op` `SET` replaces every rectangle with the
- * `range_count` ones of `ranges` (at least one); `KEEP` leaves the stored
- * rectangles, including any stored token the reader could not parse. The
- * five password strings can be cleared, which writes the attribute absent.
+ * the attribute absent).
  */
 typedef struct {
   uint32_t struct_size;
+  /** The operation applied to `spin_count`: keep it, set it; it cannot be cleared. */
   fm_patch_op_t spin_count_op;
+  /** The new number of hash iterations. */
   uint32_t spin_count;
+  /** The operation applied to `name`: keep it, set it; it cannot be cleared. */
   fm_patch_op_t name_op;
+  /** The new name; it must be non-empty and unused by the sheet's other protected ranges. */
   const char* name;
+  /** The operation applied to `ranges`: keep it, set it; it cannot be cleared. */
   fm_patch_op_t ranges_op;
+  /** The new rectangles, replacing every stored one; at least one. Keep leaves the stored rectangles, including any
+   *  token the reader could not parse. */
   const fm_cell_rect_t* ranges;
+  /** The number of entries in `ranges`. */
   uint32_t range_count;
+  /** The operation applied to `legacy_password_hash`: keep it, set it, or clear it. */
   fm_patch_op_t legacy_password_hash_op;
+  /** The new legacy 16-bit password hash, as the hex text Excel writes. */
   const char* legacy_password_hash;
+  /** The operation applied to `algorithm_name`: keep it, set it, or clear it. */
   fm_patch_op_t algorithm_name_op;
+  /** The new name of the hash algorithm that produced `hash_value`. */
   const char* algorithm_name;
+  /** The operation applied to `hash_value`: keep it, set it, or clear it. */
   fm_patch_op_t hash_value_op;
+  /** The new password hash, stored as given. */
   const char* hash_value;
+  /** The operation applied to `salt_value`: keep it, set it, or clear it. */
   fm_patch_op_t salt_value_op;
+  /** The new salt the password hash was computed with. */
   const char* salt_value;
+  /** The operation applied to `security_descriptor`: keep it, set it, or clear it. */
   fm_patch_op_t security_descriptor_op;
+  /** The new security descriptor (SDDL text). */
   const char* security_descriptor;
 } fm_protected_range_patch_t;
 
@@ -3286,55 +3315,55 @@ typedef enum {
 /**
  * @brief Data-validation rule descriptor.
  *
- * Mirrors `formulon::DataValidation`:
- *   * `id` — the rule's engine id: an opaque string, unique on its sheet,
- *     stable for the open workbook across structural edits and never reused
- *     within the session; a load or a sheet copy assigns fresh ones. It is
- *     not saved. A read-scratch-backed view on getter results; ignored on
- *     the add path, which assigns a new id.
- *   * `ranges` / `range_count` — the cell-range list this rule applies to.
- *     For getter results the pointer is a model-backed view into the
- *     workbook handle (see `fm_sheet_get_validation_at` for the lifetime
- *     contract). For `fm_sheet_add_validation` the caller owns the buffer and
- *     must keep
- *     it alive for the duration of the call only; the implementation
- *     deep-copies every range into the sheet's owned storage.
- *   * `type` — an `fm_validation_type_t`.
- *   * `op`   — an `fm_comparison_operator_t`.
- *   * `error_style` — an `fm_validation_error_style_t`.
- *   * `allow_blank` / `show_in_cell_dropdown` — `fm_tristate_t`s whose
- *     `FM_TRISTATE_DEFAULT` is Excel's default, true for both: blanks pass,
- *     and a `list` validation shows its in-cell dropdown arrow.
- *     `show_in_cell_dropdown` is the inverse of the raw OOXML `showDropDown`
- *     attribute, which the reader/writer translate. Getters return
- *     `FM_TRISTATE_FALSE` or `FM_TRISTATE_TRUE`.
- *   * `show_input_message` / `show_error_message` — `fm_tristate_t`s whose
- *     `FM_TRISTATE_DEFAULT` is Excel's dialog default, true for both.
- *   * `formula1` / `formula2` / `error_title` / `error_message` /
- *     `prompt_title` / `prompt_message` — views on getter results (see
- *     `fm_sheet_get_validation_at` for their lifetime), and caller-owned input
- *     strings on the add path. On the input path (`fm_sheet_add_validation`)
- *     `NULL` and the empty string both mean "absent". Getters return `NULL`
- *     for an absent string. A formula reads back with a leading `=`; input
- *     takes it with or without one.
+ * Mirrors `formulon::DataValidation`. On getter results `formula1`, `formula2`,
+ * `error_title`, `error_message`, `prompt_title` and `prompt_message` are views
+ * (see `fm_sheet_get_validation_at` for their lifetime); on the add path
+ * (`fm_sheet_add_validation`) they are caller-owned input strings, where `NULL`
+ * and the empty string both mean absent. A formula reads back with a leading
+ * `=`; input takes it with or without one. The tristate fields read back as
+ * `FM_TRISTATE_FALSE` or `FM_TRISTATE_TRUE`.
  */
 typedef struct {
   uint32_t struct_size;
+  /** The rule's engine id: an opaque string, unique on its sheet, stable while the workbook is open across structural
+   *  edits and never reused within the session; assigned again on load or sheet copy and not saved. A
+   *  read-scratch-backed view on getter results; ignored on the add path, which assigns a new id. */
   const char* id;
+  /** The cell ranges the rule applies to. On getter results a model-backed view (lifetime: see
+   *  `fm_sheet_get_validation_at`); on `fm_sheet_add_validation` the caller owns the buffer, which need live only for
+   *  the call, and every range is deep-copied. */
   const fm_cell_rect_t* ranges;
+  /** The number of entries in `ranges`. */
   uint32_t range_count;
-  int32_t type;                  /* fm_validation_type_t */
-  int32_t op;                    /* fm_comparison_operator_t */
-  int32_t error_style;           /* fm_validation_error_style_t */
-  int32_t allow_blank;           /* fm_tristate_t */
-  int32_t show_input_message;    /* fm_tristate_t */
-  int32_t show_error_message;    /* fm_tristate_t */
-  int32_t show_in_cell_dropdown; /* fm_tristate_t */
+  /** The kind of value the rule allows, an `fm_validation_type_t`. */
+  int32_t type;
+  /** The comparison the rule applies between the entered value and its formulas, an `fm_comparison_operator_t`. */
+  int32_t op;
+  /** How an invalid entry is reported: stop, warning or information, an `fm_validation_error_style_t`. */
+  int32_t error_style;
+  /** Tristate: whether a blank cell passes the rule; default is yes. */
+  int32_t allow_blank;
+  /** Tristate: whether the prompt (`prompt_title` and `prompt_message`) shows when the cell is selected; default is
+   *  yes. */
+  int32_t show_input_message;
+  /** Tristate: whether the error alert (`error_title` and `error_message`) shows on an invalid entry; default is yes.
+   */
+  int32_t show_error_message;
+  /** Tristate: whether the in-cell dropdown arrow is shown (`list` rules only); default is yes. The inverse of the raw
+   *  OOXML `showDropDown` attribute, which the reader and writer translate. */
+  int32_t show_in_cell_dropdown;
+  /** The first formula or value of the rule, leading `=` included; `NULL` when the rule states none. */
   const char* formula1;
+  /** The second formula or value of the rule (the upper bound of a between rule), leading `=` included; `NULL` when the
+   *  rule states none. */
   const char* formula2;
+  /** The title of the error alert; `NULL` when the rule has none. */
   const char* error_title;
+  /** The text of the error alert; `NULL` when the rule has none. */
   const char* error_message;
+  /** The title of the input prompt; `NULL` when the rule has none. */
   const char* prompt_title;
+  /** The text of the input prompt; `NULL` when the rule has none. */
   const char* prompt_message;
 } fm_data_validation_t;
 
@@ -3430,43 +3459,68 @@ FM_API fm_status_t fm_sheet_add_validation(fm_workbook_t* wb, size_t sheet_index
  *        (Patches, above).
  *
  * Each field of `fm_data_validation_t` but `id` has its `<field>_op`, with the
- * domains `fm_sheet_add_validation` checks. `formula1`, `formula2`,
- * `error_title`, `error_message`, `prompt_title` and `prompt_message` can be
- * cleared, which makes them absent; a `SET` string follows the add path's
- * input rule. `ranges_op` `SET` replaces every rectangle with the
- * `range_count` ones of `ranges` (at least one); `CLEAR` on `ranges` is
- * refused like any other non-clearable field.
+ * domains `fm_sheet_add_validation` checks. A `SET` string follows the add
+ * path's input rule.
  */
 typedef struct {
   uint32_t struct_size;
+  /** The operation applied to `ranges`: keep it, set it; it cannot be cleared. */
   fm_patch_op_t ranges_op;
+  /** The new cell ranges, replacing every stored one; at least one. */
   const fm_cell_rect_t* ranges;
+  /** The number of entries in `ranges`. */
   uint32_t range_count;
+  /** The operation applied to `type`: keep it, set it; it cannot be cleared. */
   fm_patch_op_t type_op;
-  int32_t type; /* fm_validation_type_t */
+  /** The new kind of value the rule allows. */
+  int32_t type;
+  /** The operation applied to `op`: keep it, or set it; it cannot be cleared. */
   fm_patch_op_t op_op;
-  int32_t op; /* fm_comparison_operator_t */
+  /** The new comparison between the entered value and the formulas. */
+  int32_t op;
+  /** The operation applied to `error_style`: keep it, set it; it cannot be cleared. */
   fm_patch_op_t error_style_op;
-  int32_t error_style; /* fm_validation_error_style_t */
+  /** The new error style: stop, warning or information. */
+  int32_t error_style;
+  /** The operation applied to `allow_blank`: keep it, set it; it cannot be cleared. */
   fm_patch_op_t allow_blank_op;
-  int32_t allow_blank; /* fm_tristate_t */
+  /** Tristate: whether a blank cell passes the rule. */
+  int32_t allow_blank;
+  /** The operation applied to `show_input_message`: keep it, set it; it cannot be cleared. */
   fm_patch_op_t show_input_message_op;
-  int32_t show_input_message; /* fm_tristate_t */
+  /** Tristate: whether the prompt shows when the cell is selected. */
+  int32_t show_input_message;
+  /** The operation applied to `show_error_message`: keep it, set it; it cannot be cleared. */
   fm_patch_op_t show_error_message_op;
-  int32_t show_error_message; /* fm_tristate_t */
+  /** Tristate: whether the error alert shows on an invalid entry. */
+  int32_t show_error_message;
+  /** The operation applied to `show_in_cell_dropdown`: keep it, set it; it cannot be cleared. */
   fm_patch_op_t show_in_cell_dropdown_op;
-  int32_t show_in_cell_dropdown; /* fm_tristate_t */
+  /** Tristate: whether the in-cell dropdown arrow is shown. */
+  int32_t show_in_cell_dropdown;
+  /** The operation applied to `formula1`: keep it, set it, or clear it. */
   fm_patch_op_t formula1_op;
+  /** The new first formula or value, with or without a leading `=`. */
   const char* formula1;
+  /** The operation applied to `formula2`: keep it, set it, or clear it. */
   fm_patch_op_t formula2_op;
+  /** The new second formula or value, with or without a leading `=`. */
   const char* formula2;
+  /** The operation applied to `error_title`: keep it, set it, or clear it. */
   fm_patch_op_t error_title_op;
+  /** The new title of the error alert. */
   const char* error_title;
+  /** The operation applied to `error_message`: keep it, set it, or clear it. */
   fm_patch_op_t error_message_op;
+  /** The new text of the error alert. */
   const char* error_message;
+  /** The operation applied to `prompt_title`: keep it, set it, or clear it. */
   fm_patch_op_t prompt_title_op;
+  /** The new title of the input prompt. */
   const char* prompt_title;
+  /** The operation applied to `prompt_message`: keep it, set it, or clear it. */
   fm_patch_op_t prompt_message_op;
+  /** The new text of the input prompt. */
   const char* prompt_message;
 } fm_data_validation_patch_t;
 
@@ -3514,17 +3568,17 @@ FM_API fm_status_t fm_sheet_clear_validations(fm_workbook_t* wb, size_t sheet_in
 /**
  * @brief Result of checking a value against the data-validation rule that
  *        covers a cell.
- *
- * `has_rule` is 0 when no rule covers the cell, and `valid` is then 1 and
- * `rule_id` `NULL`. Otherwise `rule_id` is the applied rule's id
- * (`fm_data_validation_t::id`), a read-scratch-backed view, and
- * `error_style` its error style (an `fm_validation_error_style_t`).
  */
 typedef struct {
   uint32_t struct_size;
+  /** 1 when a rule covers the cell; 0 means none, and `valid` is then 1. */
   int32_t has_rule;
+  /** 1 when the value passes the rule, or when no rule covers the cell. */
   int32_t valid;
-  int32_t error_style; /* fm_validation_error_style_t */
+  /** The applied rule's error style, an `fm_validation_error_style_t`; 0 (stop) when no rule covers the cell. */
+  int32_t error_style;
+  /** The id of the rule that was applied (`fm_data_validation_t::id`), a read-scratch-backed view; `NULL` when no rule
+   *  covers the cell. */
   const char* rule_id;
 } fm_validation_outcome_info_t;
 
@@ -3580,19 +3634,24 @@ FM_API fm_status_t fm_sheet_get_invalid_cells(const fm_workbook_t* wb, size_t sh
 /**
  * @brief One `@person` mention inside a threaded comment's text.
  *
- * The mention covers the half-open span `[start, end)` of the text, in UTF-16
- * code units, or `[start_cp, end_cp)` in code points; a read fills both pairs,
- * a write reads the pair its `fm_text_offset_unit_t` argument names and
- * ignores the other. `end < start` is `FM_STATUS_INVALID_ARGUMENT` (2). On input a
- * `NULL` or empty `mention_id` takes an engine-generated GUID, as
- * `fm_threaded_comment_t.id` does. Frozen value type: no `struct_size`.
+ * A read fills both offset pairs; a write reads the pair its
+ * `fm_text_offset_unit_t` argument names and ignores the other.
+ * `end < start` is `FM_STATUS_INVALID_ARGUMENT` (2). Frozen value type: no
+ * `struct_size`.
  */
 typedef struct {
+  /** The id of the mentioned person. */
   const char* person_id;
+  /** The mention's own id, a brace-wrapped GUID; on input `NULL` or empty takes an engine-generated GUID, as
+   *  `fm_threaded_comment_t.id` does. */
   const char* mention_id;
+  /** The start of the mentioned span in the comment text, as a UTF-16 code unit offset (inclusive). */
   uint32_t start;
+  /** The end of the mentioned span in the comment text, as a UTF-16 code unit offset (exclusive). */
   uint32_t end;
+  /** The start of the mentioned span in the comment text, as a code point offset (inclusive). */
   uint32_t start_cp;
+  /** The end of the mentioned span in the comment text, as a code point offset (exclusive). */
   uint32_t end_cp;
 } fm_mention_t;
 
@@ -3601,47 +3660,52 @@ typedef struct {
  *        `parent_id` names its thread.
  *
  * Ids are brace-wrapped GUIDs, taken in either letter case, matched across
- * it, and stored uppercase as Excel writes them; `created` is UTC,
- * `YYYY-MM-DDTHH:MM:SS.ss` with no zone designator, absent on read for a
- * loaded comment with no time (written without `dT`). On add, a trailing `Z`
- * on `created` is accepted and dropped, and a numeric offset (`+09:00`) or a
- * three-digit fraction is `FM_STATUS_INVALID_ARGUMENT`. A `NULL` or empty
- * `id` takes an engine-generated GUID and a `NULL` or empty `created` takes
- * the current UTC time, or, when a clock is pinned (`fm_workbook_set_pinned_now`),
- * the pinned time written as-is (the pin carries no time zone, so it is not
- * converted); with the clock pinned the generated GUIDs are deterministic.
- * On load a `dT` is normalised as at `fm_workbook_load`. `done` is the thread's resolved state and is
- * meaningful on the opening comment only. On input every other `const char*` may be `NULL`, meaning empty; a `NULL`
- * `parent_id` opens a thread and an empty one is `FM_STATUS_INVALID_ARGUMENT` (2). `mentions` may be `NULL` only with a
- * zero `mentions_count`. On output an opening comment's `parent_id` and an absent `created` read `NULL`.
+ * it, and stored uppercase as Excel writes them. On input every other
+ * `const char*` may be `NULL`, meaning empty.
  */
 typedef struct {
   uint32_t struct_size;
+  /** The comment's id, a brace-wrapped GUID stored in upper case; on add a `NULL` or empty id takes an engine-generated
+   *  GUID (deterministic with a pinned clock). */
   const char* id;
+  /** The 0-based row of the cell the thread is anchored to. */
   uint32_t row;
+  /** The 0-based column of the cell the thread is anchored to. */
   uint32_t col;
+  /** The id of the person who wrote the comment. */
   const char* person_id;
+  /** The creation time as UTC text `YYYY-MM-DDTHH:MM:SS.ss` with no zone designator; `NULL` when a loaded comment
+   *  states none. On add a trailing `Z` is accepted and dropped, a numeric offset (`+09:00`) or a three-digit fraction
+   *  is `FM_STATUS_INVALID_ARGUMENT`, and `NULL` or empty takes the current UTC time, or the pinned time written as-is
+   *  when a clock is pinned (`fm_workbook_set_pinned_now`). */
   const char* created;
+  /** The comment's text. */
   const char* text;
+  /** The id of the thread's opening comment this comment replies to; `NULL` for an opening comment; on input `NULL`
+   * opens a thread and an empty string is `FM_STATUS_INVALID_ARGUMENT` (2). */
   const char* parent_id;
+  /** `1` when the thread is resolved; meaningful on an opening comment only. */
   int32_t done;
+  /** The people mentioned in the text; `NULL` only with a zero `mentions_count`. */
   const fm_mention_t* mentions;
+  /** The number of entries in `mentions`. */
   uint32_t mentions_count;
 } fm_threaded_comment_t;
 
 /**
- * @brief One entry of the workbook's person list. `display_name` is required.
- *        On add a `NULL` or empty `id` takes an engine-generated GUID, as
- *        `fm_threaded_comment_t.id` does (deterministic with the clock
- *        pinned); a read always carries the id. `user_id` and `provider_id`
- *        are optional: on input `NULL` and `""` both mean absent, and a read
- *        returns `NULL` for an absent one.
+ * @brief One entry of the workbook's person list. On input `user_id` and
+ *        `provider_id` take `NULL` and `""` alike as absent.
  */
 typedef struct {
   uint32_t struct_size;
+  /** The person's id; on add a `NULL` or empty id takes an engine-generated GUID, as `fm_threaded_comment_t.id` does
+   *  (deterministic with the clock pinned); a read always carries it. */
   const char* id;
+  /** The person's display name; required. */
   const char* display_name;
+  /** The user id; `NULL` when the person has none. */
   const char* user_id;
+  /** The identity provider id; `NULL` when the person has none. */
   const char* provider_id;
 } fm_person_t;
 
@@ -3723,23 +3787,23 @@ FM_API fm_status_t fm_sheet_add_threaded_comment(fm_workbook_t* wb, size_t sheet
  * @brief Partial update of one threaded comment
  *        (`fm_sheet_update_threaded_comment`), following the header's patch
  *        rules (Patches, above). No field can be cleared.
- *
- *   * `text`             — `SET` replaces the text (`""` empties it).
- *   * `mentions`         — `SET` replaces the mention list with the
- *                          `mentions_count` entries of `mentions` (`NULL` with a
- *                          zero count empties it); a `NULL` or empty
- *                          `mention_id` is generated.
- *   * `done`             — `SET` writes the thread's resolved state, `0` or `1`.
- *                          Only an opening comment carries it.
  */
 typedef struct {
   uint32_t struct_size;
+  /** The operation applied to `text`: keep it, or set it; it cannot be cleared. */
   fm_patch_op_t text_op;
+  /** The new comment text; omitted leaves it unchanged, and an empty string empties it. */
   const char* text;
+  /** The operation applied to `mentions`: keep it, or set it; it cannot be cleared. */
   fm_patch_op_t mentions_op;
+  /** The new mention list, replacing the whole list (`NULL` with a zero count empties it; a `NULL` or empty
+   *  `mention_id` is generated); omitted leaves it unchanged. */
   const fm_mention_t* mentions;
+  /** The number of entries in `mentions`. */
   uint32_t mentions_count;
+  /** The operation applied to `done`: keep it, or set it; it cannot be cleared. */
   fm_patch_op_t done_op;
+  /** Resolves (`1`) or reopens (`0`) the thread; accepted only on an opening comment. */
   int32_t done;
 } fm_threaded_comment_patch_t;
 
@@ -3880,12 +3944,20 @@ FM_API fm_status_t fm_workbook_has_dirty_cells(const fm_workbook_t* wb, int32_t*
 /** @brief Per-call telemetry returned by `fm_workbook_recalc_parallel`. */
 typedef struct {
   uint32_t struct_size;
+  /** The number of cells whose formula was executed. */
   uint64_t cells_evaluated;
+  /** The number of dirty strongly connected components the scheduler processed. */
   uint64_t sccs_processed;
+  /** The number of layers dispatched to the worker pool. */
   uint64_t parallel_steps;
+  /** The number of serial batches processed on the calling thread, including the dynamic-reference tail of a pooled
+   *  layer. */
   uint64_t serial_fallback_steps;
+  /** The number of cyclic components resolved by the iterative solver, not counting those that fell back to `#REF!`. */
   uint64_t cycle_recoveries;
+  /** The number of worker threads successfully started for this call; 0 when everything ran on the calling thread. */
   uint32_t worker_threads_started;
+  /** The number of started worker threads that claimed at least one task. */
   uint32_t worker_threads_used;
 } fm_parallel_recalc_stats_info_t;
 
@@ -3923,29 +3995,32 @@ FM_API fm_status_t fm_workbook_recalc_parallel(fm_workbook_t* wb, uint32_t threa
  */
 typedef struct {
   uint32_t struct_size;
-  int32_t enabled;         /* 0 when iterative calc is off (the default: cyclic SCCs surface `#REF!`), else 1 */
-  uint32_t max_iterations; /* iteration cap, 1..32767 */
-  double max_change;       /* absolute convergence threshold, finite and non-negative */
+  /** `1` when iterative calculation is on; off by default, when cyclic components surface `#REF!`. */
+  int32_t enabled;
+  /** The iteration cap, 1 to 32767; meaningful even while `enabled` is `0`. */
+  uint32_t max_iterations;
+  /** The absolute convergence threshold, finite and non-negative; meaningful even while `enabled` is `0`. */
+  double max_change;
 } fm_iterative_settings_info_t;
 
 /**
  * @brief A partial update of the iterative-calculation settings
  *        (`fm_workbook_update_iterative`), following the header's patch rules
  *        (Patches, above). No field can be cleared.
- *
- *   * `enabled`        — `SET` `0` disables iterative calc, any other value enables it.
- *   * `max_iterations` — `SET` writes the iteration cap, 1..32767; 0 or above 32767 is
- *                        `FM_STATUS_INVALID_ARGUMENT`.
- *   * `max_change`     — `SET` writes the absolute convergence threshold, finite
- *                        and non-negative.
  */
 typedef struct {
   uint32_t struct_size;
+  /** What to do with `enabled`: keep, or set (clear is not supported). */
   fm_patch_op_t enabled_op;
+  /** With a set operation, 0 disables iterative calculation and any other value enables it. */
   int32_t enabled;
+  /** What to do with `max_iterations`: keep, or set (clear is not supported). */
   fm_patch_op_t max_iterations_op;
+  /** With a set operation, the iteration cap, 1 to 32767; 0 or above 32767 is an invalid argument. */
   uint32_t max_iterations;
+  /** What to do with `max_change`: keep, or set (clear is not supported). */
   fm_patch_op_t max_change_op;
+  /** With a set operation, the absolute convergence threshold, finite and non-negative. */
   double max_change;
 } fm_iterative_settings_patch_t;
 
@@ -4088,20 +4163,23 @@ FM_API fm_status_t fm_workbook_set_date1904(fm_workbook_t* wb, int32_t date1904)
  * `int32_t` for ABI stability, matching the wide-POD convention used by
  * the other structs in this header.
  *
- * Ranges accepted by `fm_workbook_set_pinned_now`: `year` in
- * `[1900, 9999]`, `month` in `[1, 12]`, `day` in `[1, N]` where `N` is the
- * length of that month under the Gregorian leap rule, `hour` in `[0, 23]`,
- * `minute` and `second` in `[0, 59]`. The pin is a calendar instant, not a
- * normalising constructor: a month of `13` is rejected rather than rolled
- * into the next year, because silently moving a host's pin would make the
- * results it pinned unexplainable.
+ * The ranges are those `fm_workbook_set_pinned_now` accepts. The pin is a
+ * calendar instant, not a normalising constructor: a month of `13` is rejected
+ * rather than rolled into the next year, because silently moving a host's pin
+ * would make the results it pinned unexplainable.
  */
 typedef struct {
+  /** The calendar year, 1900 to 9999 (1904 to 9999 in a 1904 date-system conversion). */
   int32_t year;
+  /** The month, 1 to 12. */
   int32_t month;
+  /** The day of the month, 1 to the length of that month under the Gregorian leap rule. */
   int32_t day;
+  /** The hour, 0 to 23. */
   int32_t hour;
+  /** The minute, 0 to 59. */
   int32_t minute;
+  /** The second, 0 to 59. */
   int32_t second;
 } fm_civil_time_t;
 
@@ -4313,42 +4391,57 @@ FM_API fm_status_t fm_workbook_set_file_name(fm_workbook_t* wb, const char* name
  * Strings are NUL-terminated UTF-8. On the read path the pointers are
  * model-backed views into the workbook's own storage and remain valid until
  * the next mutation of the same sheet's protection record or handle
- * destruction. Reads do not invalidate them, and an absent string reads
- * `NULL`. On the write path the strings are copied into the workbook; the
- * caller's buffers may be released after the call. Pass `NULL` for any
- * string field to leave it absent.
+ * destruction. Reads do not invalidate them. On the write path the strings are
+ * copied into the workbook; the caller's buffers may be released after the
+ * call. Pass `NULL` for any string field to leave it absent.
  *
- * Each `allow_*` flag permits one action on the protected sheet, as the
- * "Protect Sheet" dialog words it; it is the inverse of the OOXML attribute
- * of the same action (`allow_format_cells` is `formatCells="0"`). Excel's
- * defaults allow selecting locked and unlocked cells and nothing else, so
- * the two select flags are `fm_tristate_t`s whose `FM_TRISTATE_DEFAULT`
- * allows (a getter returns `FM_TRISTATE_FALSE` or `FM_TRISTATE_TRUE`), and
- * the other flags are `0` (not allowed, the default) or `1`. A record zeroed
- * by `FM_STRUCT_INIT` is Excel's default protection without a password.
+ * Each `allow_*` flag is the inverse of the OOXML attribute of the same action
+ * (`allow_format_cells` is `formatCells="0"`). A getter returns
+ * `FM_TRISTATE_FALSE` or `FM_TRISTATE_TRUE` for the two tristate select flags.
+ * A record zeroed by `FM_STRUCT_INIT` is Excel's default protection without a
+ * password.
  */
 typedef struct {
   uint32_t struct_size;
+  /** The name of the hash algorithm that produced `hash_value`; `NULL` when the sheet states none. */
   const char* algorithm_name;
+  /** The password hash, stored as given; `NULL` when the sheet states none. */
   const char* hash_value;
+  /** The salt the password hash was computed with, stored as given; `NULL` when the sheet states none. */
   const char* salt_value;
+  /** The number of hash iterations; 0 when the sheet states none. */
   uint32_t spin_count;
-  /** Legacy 16-bit password hash, as the hex text Excel writes. */
+  /** The legacy 16-bit password hash, as the hex text Excel writes; `NULL` when the sheet states none. */
   const char* legacy_password_hash;
+  /** 1 when users may edit objects (shapes, charts, pictures) on the protected sheet; Excel's default 0. */
   int32_t allow_edit_objects;
+  /** 1 when users may edit scenarios on the protected sheet; Excel's default 0. */
   int32_t allow_edit_scenarios;
+  /** 1 when users may format cells on the protected sheet; Excel's default 0. */
   int32_t allow_format_cells;
+  /** 1 when users may format columns on the protected sheet; Excel's default 0. */
   int32_t allow_format_columns;
+  /** 1 when users may format rows on the protected sheet; Excel's default 0. */
   int32_t allow_format_rows;
+  /** 1 when users may insert columns on the protected sheet; Excel's default 0. */
   int32_t allow_insert_columns;
+  /** 1 when users may insert rows on the protected sheet; Excel's default 0. */
   int32_t allow_insert_rows;
+  /** 1 when users may insert hyperlinks on the protected sheet; Excel's default 0. */
   int32_t allow_insert_hyperlinks;
+  /** 1 when users may delete columns on the protected sheet; Excel's default 0. */
   int32_t allow_delete_columns;
+  /** 1 when users may delete rows on the protected sheet; Excel's default 0. */
   int32_t allow_delete_rows;
-  int32_t allow_select_locked_cells;   /* fm_tristate_t */
-  int32_t allow_select_unlocked_cells; /* fm_tristate_t */
+  /** Tristate: whether users may select locked cells on the protected sheet; default allows. */
+  int32_t allow_select_locked_cells;
+  /** Tristate: whether users may select unlocked cells on the protected sheet; default allows. */
+  int32_t allow_select_unlocked_cells;
+  /** 1 when users may sort on the protected sheet; Excel's default 0. */
   int32_t allow_sort;
+  /** 1 when users may use AutoFilter on the protected sheet; Excel's default 0. */
   int32_t allow_auto_filter;
+  /** 1 when users may use PivotTables on the protected sheet; Excel's default 0. */
   int32_t allow_pivot_tables;
 } fm_sheet_protection_t;
 
@@ -4357,51 +4450,103 @@ typedef struct {
  *        (`fm_sheet_update_sheet_protection`), following the header's patch
  *        rules (Patches, above).
  *
- * Each field of `fm_sheet_protection_t` has its `<field>_op`. The strings and
- * the spin count can be cleared; the `allow_*` flags are `0` / `1` and
- * cannot.
+ * Each field of `fm_sheet_protection_t` has its `<field>_op`.
  */
 typedef struct {
   uint32_t struct_size;
+  /** The update operation for `algorithm_name`: keep it, clear it, or set it to the value beside it. */
   fm_patch_op_t algorithm_name_op;
+  /** The password hash algorithm name (for example SHA-512). */
   const char* algorithm_name;
+  /** The update operation for `hash_value`: keep it, clear it, or set it to the value beside it. */
   fm_patch_op_t hash_value_op;
+  /** The base64 password hash. */
   const char* hash_value;
+  /** The update operation for `salt_value`: keep it, clear it, or set it to the value beside it. */
   fm_patch_op_t salt_value_op;
+  /** The base64 salt the password hash was computed with. */
   const char* salt_value;
+  /** The update operation for `spin_count`: keep it, clear it, or set it to the value beside it. */
   fm_patch_op_t spin_count_op;
+  /** The number of hash iterations. */
   uint32_t spin_count;
+  /** The update operation for `legacy_password_hash`: keep it, clear it, or set it to the value beside it. */
   fm_patch_op_t legacy_password_hash_op;
+  /** The legacy 16-bit password hash, as the hex text Excel writes. */
   const char* legacy_password_hash;
+  /** The update operation for `allow_edit_objects`: keep it, clear it, or set it to the value beside it. Clear is
+   *  rejected. */
   fm_patch_op_t allow_edit_objects_op;
+  /** Whether the protected sheet allows editing objects. */
   int32_t allow_edit_objects;
+  /** The update operation for `allow_edit_scenarios`: keep it, clear it, or set it to the value beside it. Clear is
+   *  rejected. */
   fm_patch_op_t allow_edit_scenarios_op;
+  /** Whether the protected sheet allows editing scenarios. */
   int32_t allow_edit_scenarios;
+  /** The update operation for `allow_format_cells`: keep it, clear it, or set it to the value beside it. Clear is
+   *  rejected. */
   fm_patch_op_t allow_format_cells_op;
+  /** Whether the protected sheet allows formatting cells. */
   int32_t allow_format_cells;
+  /** The update operation for `allow_format_columns`: keep it, clear it, or set it to the value beside it. Clear is
+   *  rejected. */
   fm_patch_op_t allow_format_columns_op;
+  /** Whether the protected sheet allows formatting columns. */
   int32_t allow_format_columns;
+  /** The update operation for `allow_format_rows`: keep it, clear it, or set it to the value beside it. Clear is
+   *  rejected. */
   fm_patch_op_t allow_format_rows_op;
+  /** Whether the protected sheet allows formatting rows. */
   int32_t allow_format_rows;
+  /** The update operation for `allow_insert_columns`: keep it, clear it, or set it to the value beside it. Clear is
+   *  rejected. */
   fm_patch_op_t allow_insert_columns_op;
+  /** Whether the protected sheet allows inserting columns. */
   int32_t allow_insert_columns;
+  /** The update operation for `allow_insert_rows`: keep it, clear it, or set it to the value beside it. Clear is
+   *  rejected. */
   fm_patch_op_t allow_insert_rows_op;
+  /** Whether the protected sheet allows inserting rows. */
   int32_t allow_insert_rows;
+  /** The update operation for `allow_insert_hyperlinks`: keep it, clear it, or set it to the value beside it. Clear is
+   *  rejected. */
   fm_patch_op_t allow_insert_hyperlinks_op;
+  /** Whether the protected sheet allows inserting hyperlinks. */
   int32_t allow_insert_hyperlinks;
+  /** The update operation for `allow_delete_columns`: keep it, clear it, or set it to the value beside it. Clear is
+   *  rejected. */
   fm_patch_op_t allow_delete_columns_op;
+  /** Whether the protected sheet allows deleting columns. */
   int32_t allow_delete_columns;
+  /** The update operation for `allow_delete_rows`: keep it, clear it, or set it to the value beside it. Clear is
+   *  rejected. */
   fm_patch_op_t allow_delete_rows_op;
+  /** Whether the protected sheet allows deleting rows. */
   int32_t allow_delete_rows;
+  /** The update operation for `allow_select_locked_cells`: keep it, clear it, or set it to the value beside it. Clear
+   *  is rejected. */
   fm_patch_op_t allow_select_locked_cells_op;
+  /** Whether the protected sheet allows selecting locked cells. */
   int32_t allow_select_locked_cells;
+  /** The update operation for `allow_select_unlocked_cells`: keep it, clear it, or set it to the value beside it. Clear
+   *  is rejected. */
   fm_patch_op_t allow_select_unlocked_cells_op;
+  /** Whether the protected sheet allows selecting unlocked cells. */
   int32_t allow_select_unlocked_cells;
+  /** The update operation for `allow_sort`: keep it, clear it, or set it to the value beside it. Clear is rejected. */
   fm_patch_op_t allow_sort_op;
+  /** Whether the protected sheet allows sorting. */
   int32_t allow_sort;
+  /** The update operation for `allow_auto_filter`: keep it, clear it, or set it to the value beside it. Clear is
+   *  rejected. */
   fm_patch_op_t allow_auto_filter_op;
+  /** Whether the protected sheet allows using the AutoFilter. */
   int32_t allow_auto_filter;
+  /** The update operation for `allow_pivot_tables`: keep it, clear it, or set it to the value beside it. Clear is
+   *  rejected. */
   fm_patch_op_t allow_pivot_tables_op;
+  /** Whether the protected sheet allows using PivotTables. */
   int32_t allow_pivot_tables;
 } fm_sheet_protection_patch_t;
 
@@ -4575,14 +4720,12 @@ typedef enum {
 
 /**
  * @brief The icon drawn for one level of a custom icon set (x14 `cfIcon`).
- *
- * `icon_set` is an `fm_icon_set_name_t`, the set the icon comes from;
- * `FM_ICON_SET_NAME_NO_ICONS` is a level that draws nothing (`icon_index` 0).
- * A file spelling outside the enumeration reads as -1. `icon_index` is the
- * zero-based icon within that set.
  */
 typedef struct {
-  int32_t icon_set; /* fm_icon_set_name_t */
+  /** The icon set the icon comes from, an `fm_icon_set_name_t`; `FM_ICON_SET_NAME_NO_ICONS` for a level that draws
+   *  nothing, -1 for a file spelling outside the enumeration. */
+  int32_t icon_set;
+  /** The 0-based index of the icon within `icon_set`; 0 for a level that draws nothing. */
   int32_t icon_index;
 } fm_cf_icon_t;
 
@@ -4603,47 +4746,50 @@ typedef enum {
 /**
  * @brief Resolved CF match for one rule on one cell.
  *
- * The active fields depend on `kind`:
- *   * `FM_CF_MATCH_KIND_DIFFERENTIAL_FORMAT` — `has_dxf_index` is `1` when the
- *     rule carries a dxf reference, in which case `dxf_index` indexes
- *     `styles.dxfs[]`.
- *   * `FM_CF_MATCH_KIND_COLOR_SCALE` — `color` is the interpolated cell fill.
- *   * `FM_CF_MATCH_KIND_DATA_BAR` — `bar_length_pct`, `bar_axis_position_pct`,
- *     `bar_is_negative`, `bar_fill`, `bar_border` (`FM_COLOR_KIND_NONE`
- *     when the bar has no border), `bar_gradient`, and `bar_direction`
- *     (the rule's `data_bar_direction`; the geometry is stated from the
- *     left edge, and a host mirrors it for a right-to-left bar).
- *   * `FM_CF_MATCH_KIND_ICON_SET` — `icon_set` is an `fm_icon_set_name_t`;
- *     `icon_index` is `0..N-1` after the rule's `reverse` flag has been
- *     applied.
- *
- * The colours are resolved against the workbook theme and palette, so
+ * The active fields depend on `kind`; all non-active fields carry default-zero
+ * values. The colours are resolved against the workbook theme and palette, so
  * their kind is `FM_COLOR_KIND_RGB` (`FM_COLOR_KIND_NONE` when inactive).
- * All non-active fields carry default-zero values. `priority` is the
- * workbook-global priority lifted from `CFRule::priority` (smaller
- * numbers ranked higher); per-cell match lists are returned in
- * priority-ascending order, so `matches[0]` is the highest-priority
- * match. Fold first-wins: walk the list in the returned order and apply
- * each property only where nothing has set it yet, so a lower-priority
- * match fills what a higher-priority one left unset and never overwrites
- * it.
+ * Per-cell match lists are returned in priority-ascending order, so
+ * `matches[0]` is the highest-priority match. Fold first-wins: walk the list
+ * in the returned order and apply each property only where nothing has set it
+ * yet, so a lower-priority match fills what a higher-priority one left unset
+ * and never overwrites it.
  */
 typedef struct {
   uint32_t struct_size;
-  int32_t kind; /* fm_cf_match_kind_t */
+  /** The kind of match; selects which of the other members carry data. */
+  int32_t kind;
+  /** The workbook-global priority of the matching rule; a smaller number ranks higher, and matches of a cell come in
+   *  ascending order. */
   int32_t priority;
-  int32_t has_dxf_index; /* 0/1 */
+  /** 1 when `dxf_index` is set; 0 means the rule applies no differential format. */
+  int32_t has_dxf_index;
+  /** The 0-based index of the differential format the rule applies; read only when `has_dxf_index` is 1. Active for a
+   *  differential-format match; otherwise 0. */
   uint32_t dxf_index;
-  fm_color_t color; /* ColorScale fill */
+  /** The interpolated fill colour of a colour-scale match, resolved to RGB; kind `NONE` for other kinds. */
+  fm_color_t color;
+  /** Length of the data bar as a percentage (0 to 100) of the cell width. Active for a data-bar match; otherwise 0. */
   double bar_length_pct;
+  /** Position of the data-bar axis as a percentage of the cell width from the left edge: 0 at the left edge, 50 when
+   *  centred. Active for a data-bar match; otherwise 0. */
   double bar_axis_position_pct;
-  int32_t bar_is_negative; /* 0/1 */
+  /** 1 when the data bar draws in the negative direction; 0 otherwise. */
+  int32_t bar_is_negative;
+  /** The fill colour of the data bar, resolved to RGB; kind `NONE` for other kinds. */
   fm_color_t bar_fill;
-  fm_color_t bar_border; /* kind NONE when the bar has no border */
-  int32_t bar_gradient;  /* 0/1 */
-  int32_t icon_set;      /* fm_icon_set_name_t */
+  /** The border colour of the data bar, resolved to RGB; kind `NONE` when the bar draws no border. */
+  fm_color_t bar_border;
+  /** 1 when the data bar is filled with a gradient; 0 for a solid fill. */
+  int32_t bar_gradient;
+  /** The icon set an icon-set match draws from, an `fm_icon_set_name_t`. */
+  int32_t icon_set;
+  /** The 0-based index of the icon within the set, after the rule's reverse setting has been applied. Active for an
+   *  icon-set match; otherwise 0. */
   uint8_t icon_index;
-  int32_t bar_direction; /* fm_cf_data_bar_direction_t */
+  /** The direction of the data-bar rule, an `fm_cf_data_bar_direction_t`; the geometry is stated from the left edge and
+   *  a host mirrors a right-to-left bar. */
+  int32_t bar_direction;
 } fm_cf_match_info_t;
 
 /* -------------------------------------------------------------------------- */
@@ -4716,32 +4862,32 @@ FM_API fm_status_t fm_pagination_get_print_area_at(const fm_pagination_t* pagina
  */
 FM_API fm_status_t fm_pagination_get_row_break_count(const fm_pagination_t* pagination, size_t* out_count);
 
-/**
- * @brief One row break as the worksheet declares it (`<rowBreaks><brk>`):
- *        the break sits before row `row` (0-based) and covers columns
- *        `first..last` (OOXML `min` / `max`). `manual` is an
- *        `fm_tristate_t`: `DEFAULT` or `TRUE` is a user break, `FALSE` an
- *        automatic one (`man` absent); a read returns `TRUE` or `FALSE`.
- */
+/** @brief One row break as the worksheet declares it (`<rowBreaks><brk>`). */
 typedef struct {
   uint32_t struct_size;
+  /** 0-based row the break sits before. */
   uint32_t row;
+  /** The first column the break covers (OOXML `min`). */
   uint32_t first;
+  /** The last column the break covers (OOXML `max`). */
   uint32_t last;
-  int32_t manual; /* fm_tristate_t */
+  /** An `fm_tristate_t`: default or true is a user-placed break, false an automatic one; a read returns true or false.
+   * `man` is absent for an automatic break. */
+  int32_t manual;
 } fm_row_break_t;
 
-/**
- * @brief One column break (`<colBreaks><brk>`): the break sits before column
- *        `col` (0-based) and covers rows `first..last`; `manual` as in
- *        `fm_row_break_t`.
- */
+/** @brief One column break (`<colBreaks><brk>`), the counterpart of `fm_row_break_t`. */
 typedef struct {
   uint32_t struct_size;
+  /** 0-based column the break sits before. */
   uint32_t col;
+  /** The first row the break covers (OOXML `min`). */
   uint32_t first;
+  /** The last row the break covers (OOXML `max`). */
   uint32_t last;
-  int32_t manual; /* fm_tristate_t */
+  /** An `fm_tristate_t`: default or true is a user-placed break, false an automatic one; a read returns true or false.
+   */
+  int32_t manual;
 } fm_column_break_t;
 
 /**
@@ -4784,63 +4930,80 @@ FM_API fm_status_t fm_pagination_get_column_break_at(const fm_pagination_t* pagi
  *         of cell A1; pagination measures from the page's top-left corner. */
 typedef struct {
   uint32_t struct_size;
+  /** The distance in points from the rectangle's origin to its left edge. */
   double x;
+  /** The distance in points from the rectangle's origin to its top edge. */
   double y;
+  /** The width in points. */
   double width_pt;
+  /** The height in points. */
   double height_pt;
 } fm_rect_pt_info_t;
 
-/** @brief The paper a sheet prints on, after the orientation swap. */
+/** @brief The paper a sheet prints on. */
 typedef struct {
   uint32_t struct_size;
+  /** The paper width in points, after the orientation swap. */
   double width_pt;
+  /** The paper height in points, after the orientation swap. */
   double height_pt;
-  int32_t landscape; /* 0/1 */
-  int32_t known;     /* 0 when `paperSize` was unrecognised and A4 substituted */
+  /** `1` when the paper is laid out landscape. */
+  int32_t landscape;
+  /** `0` when the stored paper size was unrecognised and A4 was substituted. */
+  int32_t known;
 } fm_paper_info_t;
 
-/** @brief Page margins in inches, as `<pageMargins>` states them;
- *         `header_in` / `footer_in` are measured from the page edge to the
- *         header / footer band. */
+/** @brief Page margins in inches, as `<pageMargins>` states them. */
 typedef struct {
   uint32_t struct_size;
+  /** The left page margin in inches. */
   double left_in;
+  /** The right page margin in inches. */
   double right_in;
+  /** The top page margin in inches. */
   double top_in;
+  /** The bottom page margin in inches. */
   double bottom_in;
+  /** The distance in inches from the page top edge to the header band. */
   double header_in;
+  /** The distance in inches from the page bottom edge to the footer band. */
   double footer_in;
 } fm_margins_pt_info_t;
 
 /** @brief Repeat rows / repeat columns (0-based, inclusive), as
  *         `fm_sheet_set_print_titles` takes them and `fm_sheet_get_print_titles`
- *         and `fm_pagination_get_print_titles` report them. A span is
- *         meaningful only when its `has_*` flag is non-zero. */
+ *         and `fm_pagination_get_print_titles` report them. */
 typedef struct {
   uint32_t struct_size;
-  int32_t has_rows; /* 0/1 */
+  /** 1 when rows repeat; 0 means no rows repeat. */
+  int32_t has_rows;
+  /** 0-based index of the first repeated row; meaningful only when `has_rows` is 1. */
   uint32_t first_row;
+  /** 0-based index of the last repeated row, inclusive; meaningful only when `has_rows` is 1. */
   uint32_t last_row;
-  int32_t has_columns; /* 0/1 */
+  /** 1 when columns repeat; 0 means no columns repeat. */
+  int32_t has_columns;
+  /** 0-based index of the first repeated column; meaningful only when `has_columns` is 1. */
   uint32_t first_col;
+  /** 0-based index of the last repeated column, inclusive; meaningful only when `has_columns` is 1. */
   uint32_t last_col;
 } fm_print_titles_t;
 
-/**
- * @brief One physical page: the cell block it carries and where it sits.
- *
- * `area_index` indexes `fm_pagination_get_print_area_at` (0 for the used-range
- * fallback). `rect` is the page's cell block. `width_pt` / `height_pt` are the
- * scaled extent of that block, repeated titles excluded; `origin_*_pt` is that block's
- * top-left corner on the paper.
- */
+/** @brief One physical page: the cell block it carries and where it sits. */
 typedef struct {
   uint32_t struct_size;
+  /** 0-based index of the print area this page belongs to, as `fm_pagination_get_print_area_at` indexes them (0 for the
+   *  used-range fallback). */
   uint32_t area_index;
+  /** The cell block the page carries. */
   fm_cell_rect_t rect;
+  /** Horizontal position in points of the cell block's left edge on the paper. */
   double origin_x_pt;
+  /** Vertical position in points of the cell block's top edge on the paper. */
   double origin_y_pt;
+  /** Scaled width in points of the page's cell block, repeated title columns excluded. */
   double width_pt;
+  /** Scaled height in points of the page's cell block, repeated title rows excluded. */
   double height_pt;
 } fm_page_layout_info_t;
 
@@ -5236,27 +5399,36 @@ typedef enum { FM_PAGE_ORIENTATION_PORTRAIT = 0, FM_PAGE_ORIENTATION_LANDSCAPE =
  *
  * Every value field carries the effective value, and its `has_`
  * companion is non-zero when the attribute is stated in the XML, so a caller
- * can tell an explicit setting from an inherited default. An absent
- * `orientation` prints portrait, as does the file value `default`.
- *
- * `paper_size` is an open OOXML `paperSize` code, and an unknown code round
- * trips. The engine lays out the eight it knows: 1 Letter, 5 Legal, 8 A3,
- * 9 A4, 11 A5, 12 B4 (JIS), 13 B5 (JIS), 70 A6.
+ * can tell an explicit setting from an inherited default.
  */
 typedef struct {
   uint32_t struct_size;
+  /** 1 when the XML states `orientation`; 0 means no orientation is stated. */
   int32_t has_orientation;
-  int32_t orientation; /* fm_page_orientation_t */
+  /** The page orientation, an `fm_page_orientation_t`; meaningful only when `has_orientation` is 1, otherwise the sheet
+   *  prints portrait, as does the file value `default`. */
+  int32_t orientation;
+  /** 1 when the XML states `paper_size`; 0 means it reads a default. */
   int32_t has_paper_size;
-  uint32_t paper_size; /* OOXML paperSize code */
+  /** The OOXML paperSize code in force; an open set, so unknown codes round-trip. The engine lays out the eight it
+   *  knows: 1 Letter, 5 Legal, 8 A3, 9 A4, 11 A5, 12 B4 (JIS), 13 B5 (JIS), 70 A6. */
+  uint32_t paper_size;
+  /** `1` when the XML states `scale_pct`; `0` means it reads a default. */
   int32_t has_scale_pct;
-  uint32_t scale_pct; /* [10, 400] */
+  /** The print scale as a percentage, 10 to 400; 100 when the attribute is absent. */
+  uint32_t scale_pct;
+  /** 1 when the XML states `fit_to_width`; 0 means it reads a default. */
   int32_t has_fit_to_width;
+  /** The number of pages across the fit-to-page mode targets. */
   uint32_t fit_to_width;
+  /** 1 when the XML states `fit_to_height`; 0 means it reads a default. */
   int32_t has_fit_to_height;
+  /** The number of pages down the fit-to-page mode targets. */
   uint32_t fit_to_height;
+  /** 1 when the XML states `fit_to_page`; 0 means it reads a default. */
   int32_t has_fit_to_page;
-  int32_t fit_to_page; /* from <sheetPr><pageSetUpPr>, not <pageSetup> */
+  /** `1` when the fit-to-page mode is selected; read from `<sheetPr><pageSetUpPr>`, not `<pageSetup>`. */
+  int32_t fit_to_page;
 } fm_page_setup_t;
 
 /**
@@ -5265,30 +5437,34 @@ typedef struct {
  *
  * An attribute the patch keeps stays exactly as the file had it, and so do
  * the attributes the engine does not model (`r:id`, `horizontalDpi`,
- * `copies`). Only `orientation` can be cleared: `CLEAR` removes the
- * attribute, and the sheet prints portrait.
- *
- *   * `orientation`   — an `fm_page_orientation_t`.
- *   * `paper_size`    — an OOXML `paperSize` code; any code is stored.
- *   * `scale_pct`     — in [10, 400].
- *   * `fit_to_width` / `fit_to_height` — the pages across / down that
- *                       fit-to-page mode targets.
- *   * `fit_to_page`   — non-zero selects fit-to-page mode; it is stored on
- *                       `<sheetPr><pageSetUpPr fitToPage>`, not `<pageSetup>`.
+ * `copies`).
  */
 typedef struct {
   uint32_t struct_size;
+  /** Operation on `orientation`: keep leaves it, set writes it, clear removes the attribute and the sheet prints
+   * portrait. */
   fm_patch_op_t orientation_op;
-  int32_t orientation; /* fm_page_orientation_t */
+  /** The page orientation to set, an `fm_page_orientation_t`; read when `orientation_op` is set. */
+  int32_t orientation;
+  /** Operation on `paper_size`: keep leaves it, set writes it; it cannot be cleared. */
   fm_patch_op_t paper_size_op;
+  /** The OOXML paperSize code to set; any code is stored. */
   uint32_t paper_size;
+  /** Operation on `scale_pct`: keep leaves it, set writes it; it cannot be cleared. */
   fm_patch_op_t scale_pct_op;
+  /** The print scale percentage to set, in [10, 400]. */
   uint32_t scale_pct;
+  /** Operation on `fit_to_width`: keep leaves it, set writes it; it cannot be cleared. */
   fm_patch_op_t fit_to_width_op;
+  /** The number of pages across the fit-to-page mode targets. */
   uint32_t fit_to_width;
+  /** Operation on `fit_to_height`: keep leaves it, set writes it; it cannot be cleared. */
   fm_patch_op_t fit_to_height_op;
+  /** The number of pages down the fit-to-page mode targets. */
   uint32_t fit_to_height;
+  /** Operation on `fit_to_page`: keep leaves it, set writes it; it cannot be cleared. */
   fm_patch_op_t fit_to_page_op;
+  /** Non-zero selects the fit-to-page mode, stored on `<sheetPr><pageSetUpPr>`. */
   int32_t fit_to_page;
 } fm_page_setup_patch_t;
 
@@ -5297,39 +5473,62 @@ typedef struct {
  *         as in `fm_page_setup_t`. */
 typedef struct {
   uint32_t struct_size;
+  /** `1` when the XML states `left_in`; `0` means it reads a default. */
   int32_t has_left_in;
+  /** The left margin in inches. */
   double left_in;
+  /** `1` when the XML states `right_in`; `0` means it reads a default. */
   int32_t has_right_in;
+  /** The right margin in inches. */
   double right_in;
+  /** `1` when the XML states `top_in`; `0` means it reads a default. */
   int32_t has_top_in;
+  /** The top margin in inches. */
   double top_in;
+  /** `1` when the XML states `bottom_in`; `0` means it reads a default. */
   int32_t has_bottom_in;
+  /** The bottom margin in inches. */
   double bottom_in;
+  /** `1` when the XML states `header_in`; `0` means it reads a default. */
   int32_t has_header_in;
+  /** The distance in inches from the top edge of the paper to the header. */
   double header_in;
+  /** `1` when the XML states `footer_in`; `0` means it reads a default. */
   int32_t has_footer_in;
+  /** The distance in inches from the bottom edge of the paper to the footer. */
   double footer_in;
 } fm_page_margins_t;
 
 /**
  * @brief Partial `<pageMargins>` update in inches
  *        (`fm_sheet_update_page_margins`), following the header's patch rules
- *        (Patches, above). A `SET` margin is finite and non-negative; no field
- *        can be cleared.
+ *        (Patches, above). No field can be cleared.
  */
 typedef struct {
   uint32_t struct_size;
+  /** Operation on `left_in`: keep leaves it, set writes it; it cannot be cleared. */
   fm_patch_op_t left_in_op;
+  /** The left margin in inches; finite and non-negative. */
   double left_in;
+  /** Operation on `right_in`: keep leaves it, set writes it; it cannot be cleared. */
   fm_patch_op_t right_in_op;
+  /** The right margin in inches; finite and non-negative. */
   double right_in;
+  /** Operation on `top_in`: keep leaves it, set writes it; it cannot be cleared. */
   fm_patch_op_t top_in_op;
+  /** The top margin in inches; finite and non-negative. */
   double top_in;
+  /** Operation on `bottom_in`: keep leaves it, set writes it; it cannot be cleared. */
   fm_patch_op_t bottom_in_op;
+  /** The bottom margin in inches; finite and non-negative. */
   double bottom_in;
+  /** Operation on `header_in`: keep leaves it, set writes it; it cannot be cleared. */
   fm_patch_op_t header_in_op;
+  /** The distance in inches from the top edge of the paper to the header; finite and non-negative. */
   double header_in;
+  /** Operation on `footer_in`: keep leaves it, set writes it; it cannot be cleared. */
   fm_patch_op_t footer_in_op;
+  /** The distance in inches from the bottom edge of the paper to the footer; finite and non-negative. */
   double footer_in;
 } fm_page_margins_patch_t;
 
@@ -5337,13 +5536,21 @@ typedef struct {
  *         `has_` flag reports whether the XML states the attribute. */
 typedef struct {
   uint32_t struct_size;
+  /** 1 when the XML states `grid_lines`; 0 means it reads 0. */
   int32_t has_grid_lines;
+  /** `1` when the cell gridlines are printed. */
   int32_t grid_lines;
+  /** 1 when the XML states `headings`; 0 means it reads 0. */
   int32_t has_headings;
+  /** `1` when the row and column headings are printed. */
   int32_t headings;
+  /** 1 when the XML states `horizontal_centered`; 0 means it reads 0. */
   int32_t has_horizontal_centered;
+  /** `1` when the print area is centered horizontally on the page. */
   int32_t horizontal_centered;
+  /** 1 when the XML states `vertical_centered`; 0 means it reads 0. */
   int32_t has_vertical_centered;
+  /** `1` when the print area is centered vertically on the page. */
   int32_t vertical_centered;
 } fm_print_options_t;
 
@@ -5352,49 +5559,71 @@ typedef struct {
  *         is 0 or non-zero; no field can be cleared. */
 typedef struct {
   uint32_t struct_size;
+  /** Operation on `grid_lines`: keep leaves it, set writes it; it cannot be cleared. */
   fm_patch_op_t grid_lines_op;
+  /** Non-zero prints the cell gridlines. */
   int32_t grid_lines;
+  /** Operation on `headings`: keep leaves it, set writes it; it cannot be cleared. */
   fm_patch_op_t headings_op;
+  /** Non-zero prints the row and column headings. */
   int32_t headings;
+  /** Operation on `horizontal_centered`: keep leaves it, set writes it; it cannot be cleared. */
   fm_patch_op_t horizontal_centered_op;
+  /** Non-zero centers the print area horizontally on the page. */
   int32_t horizontal_centered;
+  /** Operation on `vertical_centered`: keep leaves it, set writes it; it cannot be cleared. */
   fm_patch_op_t vertical_centered_op;
+  /** Non-zero centers the print area vertically on the page. */
   int32_t vertical_centered;
 } fm_print_options_patch_t;
 
 /**
  * @brief The `<headerFooter>` part (`fm_sheet_get_header_footer`).
  *
- * A section the XML does not carry reads `NULL`; a present one is its
- * decoded text, as `fm_header_footer_patch_t` takes it. Each `has_` flag
- * reports whether the XML states the attribute; an absent attribute reads its
- * schema default (`different_odd_even` / `different_first` `0`,
- * `scale_with_doc` / `align_with_margins` `1`).
+ * A present section is its decoded text, as `fm_header_footer_patch_t` takes
+ * it. Each `has_` flag reports whether the XML states the attribute.
  */
 typedef struct {
   uint32_t struct_size;
+  /** The decoded text of the header of odd pages (every page unless `different_odd_even` or `different_first` apply);
+   *  `NULL` when the sheet has no such section. */
   const char* odd_header;
+  /** The decoded text of the footer of odd pages (every page unless `different_odd_even` or `different_first` apply);
+   *  `NULL` when the sheet has no such section. */
   const char* odd_footer;
+  /** The decoded text of the header of even pages, used when `different_odd_even` is set; `NULL` when the sheet has no
+   *  such section. */
   const char* even_header;
+  /** The decoded text of the footer of even pages, used when `different_odd_even` is set; `NULL` when the sheet has no
+   *  such section. */
   const char* even_footer;
+  /** The decoded text of the header of the first page, used when `different_first` is set; `NULL` when the sheet has no
+   *  such section. */
   const char* first_header;
+  /** The decoded text of the footer of the first page, used when `different_first` is set; `NULL` when the sheet has no
+   *  such section. */
   const char* first_footer;
+  /** 1 when the XML states `different_odd_even`; 0 means it reads its schema default. */
   int32_t has_different_odd_even;
+  /** `1` when odd and even pages use different headers and footers; reads `0` when unstated. */
   int32_t different_odd_even;
+  /** 1 when the XML states `different_first`; 0 means it reads its schema default. */
   int32_t has_different_first;
+  /** `1` when the first page uses its own header and footer; reads `0` when unstated. */
   int32_t different_first;
+  /** 1 when the XML states `scale_with_doc`; 0 means it reads its schema default. */
   int32_t has_scale_with_doc;
+  /** `1` when the header and footer scale with the document's print scale; reads `1` when unstated. */
   int32_t scale_with_doc;
+  /** 1 when the XML states `align_with_margins`; 0 means it reads its schema default. */
   int32_t has_align_with_margins;
+  /** `1` when the header and footer align with the page margins; reads `1` when unstated. */
   int32_t align_with_margins;
 } fm_header_footer_t;
 
 /**
  * @brief Partial `<headerFooter>` update (`fm_sheet_update_header_footer`),
  *        following the header's patch rules (Patches, above).
- *
- * The six sections can be cleared: `CLEAR` removes the section, and so does
- * `SET` with an empty string. The four flags cannot be cleared.
  *
  * Section text is the decoded string, so Excel's formatting codes are
  * written plainly: `"&C&\"MS Gothic\"Report &P/&N"`. The engine applies XML
@@ -5403,25 +5632,47 @@ typedef struct {
  */
 typedef struct {
   uint32_t struct_size;
+  /** Operation on `odd_header`: keep leaves it, set writes it, clear removes it. */
   fm_patch_op_t odd_header_op;
+  /** The decoded text to set for the header of odd pages (every page unless `different_odd_even` or `different_first`
+   *  apply); an empty string also removes the section. */
   const char* odd_header;
+  /** Operation on `odd_footer`: keep leaves it, set writes it, clear removes it. */
   fm_patch_op_t odd_footer_op;
+  /** The decoded text to set for the footer of odd pages (every page unless `different_odd_even` or `different_first`
+   *  apply); an empty string also removes the section. */
   const char* odd_footer;
+  /** Operation on `even_header`: keep leaves it, set writes it, clear removes it. */
   fm_patch_op_t even_header_op;
+  /** The decoded text to set for the header of even pages; an empty string also removes the section. */
   const char* even_header;
+  /** Operation on `even_footer`: keep leaves it, set writes it, clear removes it. */
   fm_patch_op_t even_footer_op;
+  /** The decoded text to set for the footer of even pages; an empty string also removes the section. */
   const char* even_footer;
+  /** Operation on `first_header`: keep leaves it, set writes it, clear removes it. */
   fm_patch_op_t first_header_op;
+  /** The decoded text to set for the header of the first page; an empty string also removes the section. */
   const char* first_header;
+  /** Operation on `first_footer`: keep leaves it, set writes it, clear removes it. */
   fm_patch_op_t first_footer_op;
+  /** The decoded text to set for the footer of the first page; an empty string also removes the section. */
   const char* first_footer;
+  /** Operation on `different_odd_even`: keep leaves it, set writes it; it cannot be cleared. */
   fm_patch_op_t different_odd_even_op;
+  /** Non-zero uses different headers and footers for odd and even pages. */
   int32_t different_odd_even;
+  /** Operation on `different_first`: keep leaves it, set writes it; it cannot be cleared. */
   fm_patch_op_t different_first_op;
+  /** Non-zero gives the first page its own header and footer. */
   int32_t different_first;
+  /** Operation on `scale_with_doc`: keep leaves it, set writes it; it cannot be cleared. */
   fm_patch_op_t scale_with_doc_op;
+  /** Non-zero scales the header and footer with the document's print scale. */
   int32_t scale_with_doc;
+  /** Operation on `align_with_margins`: keep leaves it, set writes it; it cannot be cleared. */
   fm_patch_op_t align_with_margins_op;
+  /** Non-zero aligns the header and footer with the page margins. */
   int32_t align_with_margins;
 } fm_header_footer_patch_t;
 
@@ -5544,16 +5795,15 @@ typedef struct fm_cf_results fm_cf_results_t;
 /**
  * @brief Options of `fm_sheet_evaluate_cf_range`; the zero record is the
  *        default.
- *
- * `time_period_rules` is an `fm_tristate_t`: `DEFAULT` or `TRUE` evaluates
- * `TimePeriod` rules, `FALSE` makes none of them match. They measure from
- * `today_serial` when `has_today_serial` is non-zero, else from the pinned
- * clock (`fm_workbook_set_pinned_now`) when one is set, else from today.
  */
 typedef struct {
   uint32_t struct_size;
-  int32_t time_period_rules; /* fm_tristate_t */
+  /** An `fm_tristate_t`: `DEFAULT` or `TRUE` evaluates time-period rules, `FALSE` makes none of them match. */
+  int32_t time_period_rules;
+  /** 1 when `today_serial` is set; 0 means time-period rules measure from the pinned clock when one is set, else from
+   *  today. */
   int32_t has_today_serial;
+  /** The date serial that time-period rules measure from. */
   double today_serial;
 } fm_cf_range_evaluation_spec_t;
 
@@ -5675,17 +5925,16 @@ typedef enum {
 
 /**
  * @brief Conditional-format value object used by visual rule authoring.
- *
- * `type` is an `fm_cf_value_object_type_t`. `value` is optional and is
- * copied by `fm_sheet_add_cf_rule`; pass `NULL` for valueless min/max
- * thresholds. A `FM_CF_VALUE_OBJECT_TYPE_FORMULA` value reads with a leading
- * `=`, and input takes it with or without one. `gte` is an `fm_tristate_t`
- * mapping OOXML `gte`: `DEFAULT` or `TRUE` is an inclusive threshold, `FALSE`
- * an exclusive one; a read returns `TRUE` or `FALSE`.
  */
 typedef struct {
-  int32_t type; /* fm_cf_value_object_type_t */
-  int32_t gte;  /* fm_tristate_t */
+  /** The kind of threshold, which decides how `value` is read (a number, a percentage, a percentile, a formula, or the
+   *  minimum or maximum of the data). */
+  int32_t type;
+  /** An `fm_tristate_t`: `DEFAULT` or `TRUE` is an inclusive threshold, `FALSE` an exclusive one; a read returns `TRUE`
+   *  or `FALSE`. */
+  int32_t gte;
+  /** The number, percentage or formula the `type` reads, copied on add; `NULL` for a type that reads none (minimum,
+   *  maximum). A formula reads back with a leading `=` and may be given with or without it. */
   const char* value;
 } fm_cfvo_t;
 
@@ -5747,75 +5996,118 @@ typedef struct {
    *
    * Only rules that need such a block put their id in the saved file, so
    * for most rules this is an in-memory handle and nothing more. */
+  /** The rule's identifier, a GUID unique within the workbook; empty or `NULL` on add lets the engine assign one. */
   const char* id;
-  int32_t type;        /* fm_cf_rule_type_t */
-  int32_t op;          /* fm_comparison_operator_t */
-  int32_t time_period; /* fm_date_period_t */
+  /** The kind of rule, an `fm_cf_rule_type_t`; selects which of the other fields apply. */
+  int32_t type;
+  /** The comparison operator of a cell-is rule, an `fm_comparison_operator_t`; read only when `has_op` is 1. */
+  int32_t op;
+  /** The date period of a time-period rule, an `fm_date_period_t`; read only when `has_time_period` is 1. */
+  int32_t time_period;
+  /** The workbook-global priority of the rule; a smaller number ranks higher. On add, 0 or less lets the engine assign
+   *  one after the existing rules. */
   int32_t priority;
-  int32_t stop_if_true;  /* 0/1 */
-  int32_t has_dxf_index; /* 0/1 */
+  /** 1 when lower-priority rules are not applied to a cell this rule matches; 0 otherwise. */
+  int32_t stop_if_true;
+  /** 1 when `dxf_index` is set; 0 means the rule applies no differential format. */
+  int32_t has_dxf_index;
+  /** The 0-based index of the differential format the rule applies; read only when `has_dxf_index` is 1. */
   uint32_t dxf_index;
 
   /* sqref union — at least one entry. On input, must be non-NULL with
    * range_count >= 1. On output, points to `fm_sheet_get_cf_rule_at`'s
    * handle-owned storage (see that function's doc), not the model. */
+  /** The cell ranges the rule applies to; `range_count` entries. */
   const fm_cell_rect_t* ranges;
+  /** The number of entries in `ranges`. */
   uint32_t range_count;
 
   /* Formula sources (Expression / CellIs / containsText-derived). On
    * output each non-empty one carries a leading `=`; input takes it with or
    * without one. */
+  /** The first formula of the rule; leading `=` included on read, optional on input. `NULL` when the rule has none. */
   const char* formula1;
+  /** The second formula, for the between and not-between operators; `NULL` otherwise. */
   const char* formula2;
-  int32_t has_op; /* 0/1 (CellIs) */
+  /** 1 when `op` is set; 0 means the rule has no comparison operator. */
+  int32_t has_op;
 
   /* Top10 payload */
-  int32_t has_rank; /* 0/1 */
+  /** 1 when `rank` is set; 0 means the rule has no rank. */
+  int32_t has_rank;
+  /** The number of values (or percent of values with `percent`) a top/bottom rule selects; read only when `has_rank` is
+   *  1. */
   int32_t rank;
-  int32_t percent; /* 0/1 */
-  int32_t bottom;  /* 0/1 */
+  /** 1 when `rank` is a percentage of the values rather than a count; 0 otherwise. */
+  int32_t percent;
+  /** 1 when a top/bottom rule selects the lowest values; 0 selects the highest. */
+  int32_t bottom;
 
   /* AboveAverage payload */
-  int32_t above_average; /* 0/1 (default 1) */
-  int32_t equal_average; /* 0/1 */
-  int32_t has_std_dev;   /* 0/1 */
+  /** 1 for values above the average, 0 for values below it; defaults to 1. */
+  int32_t above_average;
+  /** 1 when values equal to the average also match; 0 otherwise. */
+  int32_t equal_average;
+  /** 1 when `std_dev` is set; 0 means a plain comparison with the average. */
+  int32_t has_std_dev;
+  /** The number of standard deviations from the average a value must differ by; read only when `has_std_dev` is 1. */
   double std_dev;
 
   /* ContainsText / BeginsWith / EndsWith / NotContainsText literal */
+  /** The text a text rule tests for; `NULL` when the rule has none. */
   const char* text;
 
   /* TimePeriod */
-  int32_t has_time_period; /* 0/1 */
+  /** 1 when `time_period` is set; 0 means the rule has no date period. */
+  int32_t has_time_period;
 
   /* ColorScale payload. Counts must match and be 2 or 3 on input. */
+  /** The two or three thresholds of a colour-scale rule, from lowest to highest; `color_scale_count` entries. */
   const fm_cfvo_t* color_scale_thresholds;
+  /** The colour at each colour-scale threshold, in the same order; `color_scale_count` entries. */
   const fm_color_t* color_scale_colors;
+  /** The number of entries in `color_scale_thresholds` and in `color_scale_colors`, 2 or 3. */
   uint32_t color_scale_count;
 
   /* DataBar payload. */
-  int32_t has_data_bar; /* 0/1 */
+  /** 1 when the data-bar fields are set; 0 means the rule has no data-bar payload. */
+  int32_t has_data_bar;
+  /** The threshold at which the data bar is shortest. */
   fm_cfvo_t data_bar_min;
+  /** The threshold at which the data bar is longest. */
   fm_cfvo_t data_bar_max;
+  /** The fill colour of the data bar. */
   fm_color_t data_bar_fill;
-  int32_t data_bar_show_value; /* 0/1, default 1 */
+  /** 1 (the default) shows the cell value beside the data bar; 0 hides it. */
+  int32_t data_bar_show_value;
+  /** The shortest data-bar length as a percentage of the cell width; defaults to 10. */
   uint8_t data_bar_min_length_pct;
+  /** The longest data-bar length as a percentage of the cell width; defaults to 90. */
   uint8_t data_bar_max_length_pct;
+  /** Padding; always 0. */
   uint8_t _pad1[2];
 
   /* IconSet payload. */
-  int32_t has_icon_set; /* 0/1 */
-  int32_t icon_set;     /* fm_icon_set_name_t */
+  /** 1 when the icon-set fields are set; 0 means the rule has no icon-set payload. */
+  int32_t has_icon_set;
+  /** The icon set the rule draws from, an `fm_icon_set_name_t`. */
+  int32_t icon_set;
+  /** The thresholds between the icons, N-1 for an icon set of N icons; `icon_set_threshold_count` entries. */
   const fm_cfvo_t* icon_set_thresholds;
+  /** The number of entries in `icon_set_thresholds`. */
   uint32_t icon_set_threshold_count;
-  int32_t icon_set_reverse;    /* 0/1 */
-  int32_t icon_set_show_value; /* 0/1, default 1 */
+  /** 1 draws the icons in reverse order; 0 otherwise. */
+  int32_t icon_set_reverse;
+  /** 1 (the default) shows the cell value beside the icon; 0 hides it. */
+  int32_t icon_set_show_value;
   /* `percent` attribute on `<iconSet>`, carried round-trip only: it is read,
    * exposed and re-emitted verbatim, and is never consulted during
    * evaluation. Each `fm_cfvo_t` names its own `type`, and that type is the
    * authoritative interpretation of the threshold, so setting this field
    * changes the saved XML but not the icon bucketing. To change the
    * interpretation, change the `fm_cfvo_t::type` values instead. */
-  int32_t icon_set_percent; /* 0/1, default 1 */
+  /** Round-trip only: preserved across load and save but never consulted during evaluation. Defaults to 1. */
+  int32_t icon_set_percent;
 
   /* DataBar extension payload.
    *
@@ -5836,14 +6128,23 @@ typedef struct {
    * `fm_sheet_get_cf_rule_at` engages both flags and fills every colour that
    * is set, so feeding its output straight back into `fm_sheet_add_cf_rule`
    * reproduces the rule exactly. */
-  int32_t has_data_bar_gradient;       /* 0/1 */
-  int32_t data_bar_gradient;           /* 0/1; model default 1 (gradient fill) */
-  int32_t has_data_bar_axis_position;  /* 0/1 */
-  int32_t data_bar_axis_position;      /* fm_cf_data_bar_axis_position_t */
-  fm_color_t data_bar_negative_fill;   /* NONE: the positive fill is reused */
-  fm_color_t data_bar_border;          /* NONE: no border */
-  fm_color_t data_bar_negative_border; /* NONE: no negative border */
-  fm_color_t data_bar_axis_color;      /* NONE: black axis */
+  /** 1 when `data_bar_gradient` is set; 0 means the rule states none, which means a gradient fill. */
+  int32_t has_data_bar_gradient;
+  /** 1 fills the data bar with a gradient, 0 with a solid colour; read only when `has_data_bar_gradient` is 1. */
+  int32_t data_bar_gradient;
+  /** 1 when `data_bar_axis_position` is set; 0 means the rule states none, which means automatic. */
+  int32_t has_data_bar_axis_position;
+  /** Where the axis between negative and positive bars sits, an `fm_cf_data_bar_axis_position_t`; read only when
+   *  `has_data_bar_axis_position` is 1. */
+  int32_t data_bar_axis_position;
+  /** The fill colour of negative bars; kind `NONE` reuses the positive fill. */
+  fm_color_t data_bar_negative_fill;
+  /** The border colour of positive bars; kind `NONE` draws no border. */
+  fm_color_t data_bar_border;
+  /** The border colour of negative bars; kind `NONE` draws no negative border. */
+  fm_color_t data_bar_negative_border;
+  /** The colour of the axis line; kind `NONE` draws a black axis. */
+  fm_color_t data_bar_axis_color;
 
   /* Appended after the extension block for the same reason: every earlier
    * field keeps its offset.
@@ -5854,15 +6155,23 @@ typedef struct {
    * which every value clears. `fm_sheet_get_cf_rule_at` always engages it.
    *
    * `data_bar_direction` is the edge the bar grows from. */
-  int32_t has_icon_set_floor; /* 0/1 */
+  /** 1 when `icon_set_floor` is set; 0 means the rule states none, which means Excel's default, a percent threshold of
+   *  0. */
+  int32_t has_icon_set_floor;
+  /** The lower bound of the lowest icon's bucket; a cell below it gets no icon. Read only when `has_icon_set_floor` is
+   *  1. */
   fm_cfvo_t icon_set_floor;
-  int32_t data_bar_direction; /* fm_cf_data_bar_direction_t */
+  /** The edge the data bar grows from, an `fm_cf_data_bar_direction_t`. */
+  int32_t data_bar_direction;
 
   /* Custom icons of the icon set (x14 `cfIcon`), appended for the same
    * reason: one entry per icon of the set, or none when the set draws its
    * own icons. `icon_set_icons` may be NULL only with a zero count. On
    * output it points into `fm_sheet_get_cf_rule_at`'s handle-owned storage. */
+  /** For a custom icon set, the icon drawn for each level; `icon_set_icon_count` entries, `NULL` when the set draws its
+   *  own icons. */
   const fm_cf_icon_t* icon_set_icons;
+  /** The number of entries in `icon_set_icons`. */
   uint32_t icon_set_icon_count;
 } fm_cf_rule_t;
 
@@ -6000,98 +6309,191 @@ FM_API fm_status_t fm_sheet_add_cf_rule(fm_workbook_t* wb, size_t sheet_index, c
  *
  * The fields are those of `fm_cf_rule_t` except `id` and `type`: a rule
  * keeps its type, and `SET` on a field its type does not use (the
- * "Active fields by `type`" list of `fm_cf_rule_t`) is refused. `dxf_index`,
- * `formula1` and `formula2` can be cleared. A `SET` value follows the input
- * rule of `fm_sheet_add_cf_rule`, and the merged rule must pass its checks:
- * the colour-scale thresholds and colours end with the same count, 2 or 3.
- * A setting the record flags with `has_<field>` is `SET` here with an
- * explicit value: `data_bar_gradient` `1`, `data_bar_axis_position`
+ * "Active fields by `type`" list of `fm_cf_rule_t`) is refused. A `SET` value
+ * follows the input rule of `fm_sheet_add_cf_rule`, and the merged rule must
+ * pass its checks: the colour-scale thresholds and colours end with the same
+ * count, 2 or 3. A setting the record flags with `has_<field>` is `SET` here
+ * with an explicit value: `data_bar_gradient` `1`, `data_bar_axis_position`
  * automatic, an `FM_COLOR_KIND_NONE` colour and a `percent 0`
  * `icon_set_floor` restore the defaults `fm_sheet_add_cf_rule` applies.
  */
 typedef struct {
   uint32_t struct_size;
+  /** How an update treats `priority`: `KEEP` leaves it, `SET` writes the value beside it; `CLEAR` is refused. */
   fm_patch_op_t priority_op;
+  /** The workbook-global priority of the rule; a smaller number ranks higher. */
   int32_t priority;
+  /** How an update treats `stop_if_true`: `KEEP` leaves it, `SET` writes the value beside it; `CLEAR` is refused. */
   fm_patch_op_t stop_if_true_op;
-  int32_t stop_if_true; /* 0/1 */
+  /** 1 when lower-priority rules are not applied to a cell this rule matches; 0 otherwise. */
+  int32_t stop_if_true;
+  /** How an update treats `dxf_index`: `KEEP` leaves it, `SET` writes the value beside it, `CLEAR` removes it. */
   fm_patch_op_t dxf_index_op;
+  /** The 0-based index of the differential format the rule applies. */
   uint32_t dxf_index;
+  /** How an update treats `ranges`: `KEEP` leaves it, `SET` replaces the whole array; `CLEAR` is refused. */
   fm_patch_op_t ranges_op;
+  /** The cell ranges the rule applies to; `range_count` entries. */
   const fm_cell_rect_t* ranges;
+  /** The number of entries in `ranges`. */
   uint32_t range_count;
+  /** How an update treats `formula1`: `KEEP` leaves it, `SET` writes the value beside it, `CLEAR` removes it. */
   fm_patch_op_t formula1_op;
+  /** The first formula of the rule; leading `=` optional. */
   const char* formula1;
+  /** How an update treats `formula2`: `KEEP` leaves it, `SET` writes the value beside it, `CLEAR` removes it. */
   fm_patch_op_t formula2_op;
+  /** The second formula of the rule, for the between and not-between operators; leading `=` optional. */
   const char* formula2;
+  /** How an update treats `op`: `KEEP` leaves it, `SET` writes the value beside it; `CLEAR` is refused. */
   fm_patch_op_t op_op;
-  int32_t op; /* fm_comparison_operator_t */
+  /** The comparison operator of a cell-is rule, an `fm_comparison_operator_t`. */
+  int32_t op;
+  /** How an update treats `rank`: `KEEP` leaves it, `SET` writes the value beside it; `CLEAR` is refused. */
   fm_patch_op_t rank_op;
+  /** The number of values (or percent of values with `percent`) a top/bottom rule selects. */
   int32_t rank;
+  /** How an update treats `percent`: `KEEP` leaves it, `SET` writes the value beside it; `CLEAR` is refused. */
   fm_patch_op_t percent_op;
-  int32_t percent; /* 0/1 */
+  /** 1 when `rank` is a percentage of the values rather than a count; 0 otherwise. */
+  int32_t percent;
+  /** How an update treats `bottom`: `KEEP` leaves it, `SET` writes the value beside it; `CLEAR` is refused. */
   fm_patch_op_t bottom_op;
-  int32_t bottom; /* 0/1 */
+  /** 1 when a top/bottom rule selects the lowest values; 0 selects the highest. */
+  int32_t bottom;
+  /** How an update treats `above_average`: `KEEP` leaves it, `SET` writes the value beside it; `CLEAR` is refused. */
   fm_patch_op_t above_average_op;
-  int32_t above_average; /* 0/1 */
+  /** 1 for values above the average, 0 for values below it. */
+  int32_t above_average;
+  /** How an update treats `equal_average`: `KEEP` leaves it, `SET` writes the value beside it; `CLEAR` is refused. */
   fm_patch_op_t equal_average_op;
-  int32_t equal_average; /* 0/1 */
+  /** 1 when values equal to the average also match; 0 otherwise. */
+  int32_t equal_average;
+  /** How an update treats `std_dev`: `KEEP` leaves it, `SET` writes the value beside it; `CLEAR` is refused. */
   fm_patch_op_t std_dev_op;
+  /** The number of standard deviations from the average a value must differ by. */
   double std_dev;
+  /** How an update treats `text`: `KEEP` leaves it, `SET` writes the value beside it; `CLEAR` is refused. */
   fm_patch_op_t text_op;
+  /** The text a text rule tests for. */
   const char* text;
+  /** How an update treats `time_period`: `KEEP` leaves it, `SET` writes the value beside it; `CLEAR` is refused. */
   fm_patch_op_t time_period_op;
-  int32_t time_period; /* fm_date_period_t */
+  /** The date period of a time-period rule, an `fm_date_period_t`. */
+  int32_t time_period;
 
+  /** How an update treats `color_scale_thresholds`: `KEEP` leaves it, `SET` replaces the whole array; `CLEAR` is
+   *  refused. */
   fm_patch_op_t color_scale_thresholds_op;
+  /** The two or three thresholds of a colour-scale rule; `color_scale_thresholds_count` entries. */
   const fm_cfvo_t* color_scale_thresholds;
+  /** The number of entries in `color_scale_thresholds`. */
   uint32_t color_scale_thresholds_count;
+  /** How an update treats `color_scale_colors`: `KEEP` leaves it, `SET` replaces the whole array; `CLEAR` is refused.
+   */
   fm_patch_op_t color_scale_colors_op;
+  /** The colour at each colour-scale threshold; `color_scale_colors_count` entries. */
   const fm_color_t* color_scale_colors;
+  /** The number of entries in `color_scale_colors`. */
   uint32_t color_scale_colors_count;
 
+  /** How an update treats `data_bar_min`: `KEEP` leaves it, `SET` writes the value beside it; `CLEAR` is refused. */
   fm_patch_op_t data_bar_min_op;
+  /** The threshold at which the data bar is shortest. */
   fm_cfvo_t data_bar_min;
+  /** How an update treats `data_bar_max`: `KEEP` leaves it, `SET` writes the value beside it; `CLEAR` is refused. */
   fm_patch_op_t data_bar_max_op;
+  /** The threshold at which the data bar is longest. */
   fm_cfvo_t data_bar_max;
+  /** How an update treats `data_bar_fill`: `KEEP` leaves it, `SET` writes the value beside it; `CLEAR` is refused. */
   fm_patch_op_t data_bar_fill_op;
+  /** The fill colour of the data bar. */
   fm_color_t data_bar_fill;
+  /** How an update treats `data_bar_show_value`: `KEEP` leaves it, `SET` writes the value beside it; `CLEAR` is
+   *  refused. */
   fm_patch_op_t data_bar_show_value_op;
-  int32_t data_bar_show_value; /* 0/1 */
+  /** 1 shows the cell value beside the data bar; 0 hides it. */
+  int32_t data_bar_show_value;
+  /** How an update treats `data_bar_min_length_pct`: `KEEP` leaves it, `SET` writes the value beside it; `CLEAR` is
+   *  refused. */
   fm_patch_op_t data_bar_min_length_pct_op;
+  /** The shortest data-bar length as a percentage of the cell width. */
   uint32_t data_bar_min_length_pct;
+  /** How an update treats `data_bar_max_length_pct`: `KEEP` leaves it, `SET` writes the value beside it; `CLEAR` is
+   *  refused. */
   fm_patch_op_t data_bar_max_length_pct_op;
+  /** The longest data-bar length as a percentage of the cell width. */
   uint32_t data_bar_max_length_pct;
+  /** How an update treats `data_bar_gradient`: `KEEP` leaves it, `SET` writes the value beside it; `CLEAR` is refused.
+   */
   fm_patch_op_t data_bar_gradient_op;
-  int32_t data_bar_gradient; /* 0/1 */
+  /** 1 fills the data bar with a gradient, 0 with a solid colour. */
+  int32_t data_bar_gradient;
+  /** How an update treats `data_bar_axis_position`: `KEEP` leaves it, `SET` writes the value beside it; `CLEAR` is
+   *  refused. */
   fm_patch_op_t data_bar_axis_position_op;
-  int32_t data_bar_axis_position; /* fm_cf_data_bar_axis_position_t */
+  /** Where the axis between negative and positive bars sits, an `fm_cf_data_bar_axis_position_t`. */
+  int32_t data_bar_axis_position;
+  /** How an update treats `data_bar_negative_fill`: `KEEP` leaves it, `SET` writes the value beside it; `CLEAR` is
+   *  refused. */
   fm_patch_op_t data_bar_negative_fill_op;
+  /** The fill colour of negative bars; kind `NONE` reuses the positive fill. */
   fm_color_t data_bar_negative_fill;
+  /** How an update treats `data_bar_border`: `KEEP` leaves it, `SET` writes the value beside it; `CLEAR` is refused. */
   fm_patch_op_t data_bar_border_op;
+  /** The border colour of positive bars; kind `NONE` draws no border. */
   fm_color_t data_bar_border;
+  /** How an update treats `data_bar_negative_border`: `KEEP` leaves it, `SET` writes the value beside it; `CLEAR` is
+   *  refused. */
   fm_patch_op_t data_bar_negative_border_op;
+  /** The border colour of negative bars; kind `NONE` draws no negative border. */
   fm_color_t data_bar_negative_border;
+  /** How an update treats `data_bar_axis_color`: `KEEP` leaves it, `SET` writes the value beside it; `CLEAR` is
+   *  refused. */
   fm_patch_op_t data_bar_axis_color_op;
+  /** The colour of the axis line; kind `NONE` draws a black axis. */
   fm_color_t data_bar_axis_color;
+  /** How an update treats `data_bar_direction`: `KEEP` leaves it, `SET` writes the value beside it; `CLEAR` is refused.
+   */
   fm_patch_op_t data_bar_direction_op;
-  int32_t data_bar_direction; /* fm_cf_data_bar_direction_t */
+  /** The edge the data bar grows from, an `fm_cf_data_bar_direction_t`. */
+  int32_t data_bar_direction;
 
+  /** How an update treats `icon_set`: `KEEP` leaves it, `SET` writes the value beside it; `CLEAR` is refused. */
   fm_patch_op_t icon_set_op;
-  int32_t icon_set; /* fm_icon_set_name_t */
+  /** The icon set the rule draws from, an `fm_icon_set_name_t`. */
+  int32_t icon_set;
+  /** How an update treats `icon_set_thresholds`: `KEEP` leaves it, `SET` replaces the whole array; `CLEAR` is refused.
+   */
   fm_patch_op_t icon_set_thresholds_op;
+  /** The thresholds between the icons, N-1 for an icon set of N icons; `icon_set_thresholds_count` entries. */
   const fm_cfvo_t* icon_set_thresholds;
+  /** The number of entries in `icon_set_thresholds`. */
   uint32_t icon_set_thresholds_count;
+  /** How an update treats `icon_set_reverse`: `KEEP` leaves it, `SET` writes the value beside it; `CLEAR` is refused.
+   */
   fm_patch_op_t icon_set_reverse_op;
-  int32_t icon_set_reverse; /* 0/1 */
+  /** 1 draws the icons in reverse order; 0 otherwise. */
+  int32_t icon_set_reverse;
+  /** How an update treats `icon_set_show_value`: `KEEP` leaves it, `SET` writes the value beside it; `CLEAR` is
+   *  refused. */
   fm_patch_op_t icon_set_show_value_op;
-  int32_t icon_set_show_value; /* 0/1 */
+  /** 1 shows the cell value beside the icon; 0 hides it. */
+  int32_t icon_set_show_value;
+  /** How an update treats `icon_set_percent`: `KEEP` leaves it, `SET` writes the value beside it; `CLEAR` is refused.
+   */
   fm_patch_op_t icon_set_percent_op;
-  int32_t icon_set_percent; /* 0/1 */
+  /** Round-trip only: preserved across load and save but never consulted during evaluation. */
+  int32_t icon_set_percent;
+  /** How an update treats `icon_set_floor`: `KEEP` leaves it, `SET` writes the value beside it; `CLEAR` is refused. */
   fm_patch_op_t icon_set_floor_op;
+  /** The lower bound of the lowest icon's bucket; a percent threshold of 0 restores Excel's default. */
   fm_cfvo_t icon_set_floor;
+  /** How an update treats `icon_set_icons`: `KEEP` leaves it, `SET` replaces the whole array; `CLEAR` is refused. */
   fm_patch_op_t icon_set_icons_op;
+  /** For a custom icon set, the icon drawn for each level; `icon_set_icons_count` entries. */
   const fm_cf_icon_t* icon_set_icons;
+  /** The number of entries in `icon_set_icons`. */
   uint32_t icon_set_icons_count;
 } fm_cf_rule_patch_t;
 
@@ -6143,13 +6545,15 @@ FM_API fm_status_t fm_sheet_clear_cf_rules(fm_workbook_t* wb, size_t sheet_index
 /**
  * @brief Workbook-wide cell coordinate used by the trace API.
  *
- * Mirrors `formulon::eval::CellNodeId`: `sheet_index` is the 0-based sheet
- * index, `row` and `col` are 0-based cell coordinates.
+ * Mirrors `formulon::eval::CellNodeId`.
  */
 typedef struct {
   uint32_t struct_size;
+  /** The 0-based index of the sheet. */
   uint32_t sheet_index;
+  /** The 0-based row. */
   uint32_t row;
+  /** The 0-based column. */
   uint32_t col;
 } fm_cell_node_info_t;
 
@@ -6245,20 +6649,26 @@ typedef enum {
 /**
  * @brief One projected PivotTable cell.
  *
- * `row` / `col` are absolute 0-based sheet coordinates. `field_name` is the
- * name of the field the cell belongs to and `number_format` the cell's format
- * code; each is `NULL` when the cell has none. Both are NUL-terminated UTF-8
- * strings owned by the containing `fm_pivot_report_t` handle and remain valid
- * until that handle is destroyed.
+ * `field_name` and `number_format` are NUL-terminated UTF-8 strings owned by
+ * the containing `fm_pivot_report_t` handle and remain valid until that handle
+ * is destroyed.
  */
 typedef struct {
   uint32_t struct_size;
+  /** The absolute 0-based sheet row of the cell. */
   uint32_t row;
+  /** The absolute 0-based sheet column of the cell. */
   uint32_t col;
+  /** The cell's value; a date item label reads as its serial number, and `number_format` tells it is a date. */
   fm_value_t value;
-  int32_t kind; /* fm_pivot_cell_kind_t */
+  /** What the cell is in the layout, an `fm_pivot_cell_kind_t`: a header, a row or column label, a data value, a
+   *  subtotal, a grand total or a blank. */
+  int32_t kind;
+  /** The nesting depth of a header cell; 0 for data cells. */
   uint32_t depth;
+  /** The name of the source field the cell belongs to; `NULL` when the cell has no source field. */
   const char* field_name;
+  /** The data field's number format code of the cell; `NULL` when it has none. */
   const char* number_format;
 } fm_pivot_cell_info_t;
 
@@ -6574,40 +6984,34 @@ typedef enum {
 /**
  * @brief Plain-data spec for `fm_sheet_add_pivot_data_field` /
  *        `fm_sheet_set_pivot_data_field`.
- *
- *   * `name`          — display name (key for GETPIVOTDATA). `NULL` or the
- *                       empty string asks the engine to name the data field
- *                       from the workbook profile's pivot wording, e.g.
- *                       "Sum of Sales" (en-US) or "合計 / Sales" (ja-JP):
- *                       the aggregation label, the locale's separator and
- *                       the source pivot field's display name, followed by
- *                       2, 3, ... while that repeats another data field's
- *                       name or a field's display name under the profile's
- *                       collation ("Sum of Amt2").
- *   * `field_index`   — index into `PivotTable::fields()` of the source
- *                       pivot field; must be in range.
- *   * `aggregation`   — aggregation function applied to the source.
- *   * `number_format` — nullable; the data field's number-format code, under
- *                       the same rules as `fm_pivot_field_patch_t::number_format`.
- *   * `show_as`       — derivation mode.
- *   * `show_as_base_field` — when `has_show_as_base_field` is non-zero, an
- *                       index into `PivotTable::fields()`, which must be in
- *                       range; unset otherwise.
- *   * `show_as_base_item`  — when `has_show_as_base_item` is non-zero,
- *                       `FM_PIVOT_SHOW_AS_BASE_PREVIOUS`,
- *                       `FM_PIVOT_SHOW_AS_BASE_NEXT` or an index into the
- *                       base field's `items[]`; unset otherwise.
  */
 typedef struct {
   uint32_t struct_size;
+  /** The display name of the data field, the key GETPIVOTDATA looks it up by. When `NULL` or empty the engine names it
+   *  from the workbook profile's pivot wording, such as `Sum of Sales` (en-US) or `合計 / Sales` (ja-JP), numbered 2,
+   * 3,
+   *  ... while the name repeats another data field's or a field's display name; that needs `field_index` to be in
+   *  range. */
   const char* name;
+  /** The index of the source pivot field the data field aggregates; it must be in range. */
   uint32_t field_index;
-  int32_t aggregation; /* fm_pivot_aggregation_t */
+  /** The aggregation function applied to the source field. */
+  int32_t aggregation;
+  /** The number format code of the data field's values, under the rules of `fm_pivot_field_patch_t.number_format`;
+   *  `NULL` or empty for none. */
   const char* number_format;
-  int32_t show_as;                /* fm_pivot_show_values_as_t */
-  int32_t has_show_as_base_field; /* 0/1 */
+  /** How the value is derived from the data: as is, or as a difference, percentage, running total or rank against a
+   *  base. */
+  int32_t show_as;
+  /** 1 when `show_as_base_field` is set; 0 means no base field. */
+  int32_t has_show_as_base_field;
+  /** The index of the base pivot field a relative show-as mode compares against; read only when
+   *  `has_show_as_base_field` is 1. It must be in range. */
   uint32_t show_as_base_field;
-  int32_t has_show_as_base_item; /* 0/1 */
+  /** 1 when `show_as_base_item` is set; 0 means no base item. */
+  int32_t has_show_as_base_item;
+  /** The base item of a relative show-as mode: `FM_PIVOT_SHOW_AS_BASE_PREVIOUS`, `FM_PIVOT_SHOW_AS_BASE_NEXT` or an
+   *  index into the base field's items; read only when `has_show_as_base_item` is 1. */
   uint32_t show_as_base_item;
 } fm_pivot_data_field_t;
 
@@ -6615,153 +7019,122 @@ typedef struct {
  * @brief Read-back of a pivot field definition (`fm_sheet_get_pivot_field_at`).
  *
  * A pivot carries one field per field of its cache, at the same index, from
- * the moment it is created. `source_name` is the bound cache field's name,
- * `custom_name` the report name, `axis` an `fm_pivot_axis_t`
- * (`FM_PIVOT_AXIS_ABSENT` for a field that sits on no axis) and
- * `subtotal_top` an `fm_tristate_t` (`TRUE` renders subtotals at the group
- * head, `FALSE` at the bottom). Strings are
- * model-backed views, valid until the next mutation; `source_name` is never
- * `NULL`, and `custom_name` reads `NULL` when the field has no report name.
- * `number_format` is the format code the field's numFmtId resolves to (as
- * `fm_workbook_get_number_format` resolves it, in the profile's vocabulary),
- * `NULL` for none or an unregistered id; writing it back selects the same id.
- *
- *   * `cache_field_index` — index of the bound pivot-cache field;
- *                           `has_cache_field_index` is `0` when the cache
- *                           does not cover this field. Pivot field `i` binds
- *                           to cache field `i`.
- *   * `sort_order`        — `fm_pivot_sort_order_t`, as written by
- *                           `fm_sheet_update_pivot_field`.
- *   * `sort_by_field`     — the by-field key; `NULL` for label order.
- *   * `group_base_index`  — for a group field, the index of the field it
- *                           groups; `has_group_base_index` is `0` otherwise.
- *                           The grouping itself reads through
- *                           `fm_sheet_get_pivot_field_date_group` /
- *                           `fm_sheet_get_pivot_field_numeric_group`.
- *   * `default_subtotal`  — non-zero when the field shows the automatic
- *                           subtotal (OOXML `defaultSubtotal`). Custom
- *                           functions replace it, so it reads `0` whenever
- *                           `subtotal_functions` is non-zero.
- *   * `subtotal_functions` — bit `1u << aggregation` is set for each
- *                           `fm_pivot_aggregation_t` selected through
- *                           `fm_sheet_set_pivot_field_subtotal_functions` or read
- *                           from the `*Subtotal` attributes; `0` for none.
- *   * `insert_blank_row`  — non-zero when a blank row follows each of the
- *                           field's item blocks (OOXML `insertBlankRow`).
- *   * `fill_down_labels`  — non-zero when the field's label repeats on every
- *                           row of its block (x14 `fillDownLabels`).
- *   * `show_all`          — non-zero when items without data are listed
- *                           (OOXML `showAll`; absent in a file reads `1`, a
- *                           field created through the API starts at `0`).
- *   * `show_detail`       -- `1` only when every item and the field's default
- *                           expand marker are expanded, else `0`; a field
- *                           with no items reads `1`. Writing it through
- *                           `fm_pivot_field_patch_t` applies to all of them.
+ * the moment it is created. Strings are model-backed views, valid until the
+ * next mutation.
  */
 typedef struct {
   uint32_t struct_size;
+  /** The name of the bound cache field; never `NULL`. */
   const char* source_name;
+  /** The report name of the field; `NULL` when the field has no report name. */
   const char* custom_name;
+  /** The axis the field sits on, an `fm_pivot_axis_t`; `FM_PIVOT_AXIS_ABSENT` when it sits on no axis. */
   int32_t axis;
-  int32_t subtotal_top; /* fm_tristate_t */
+  /** Where subtotals render, an `fm_tristate_t`: true at the group head, false at the bottom. */
+  int32_t subtotal_top;
+  /** The number format code the field's numFmtId resolves to, as `fm_workbook_get_number_format` resolves it in the
+   *  workbook profile's vocabulary; `NULL` for none or an unregistered id. Writing it back selects the same id. */
   const char* number_format;
-  int32_t has_cache_field_index; /* 0/1 */
+  /** 1 when `cache_field_index` is set; 0 means the cache does not cover this field. */
+  int32_t has_cache_field_index;
+  /** The index of the bound pivot-cache field; read only when `has_cache_field_index` is 1. Pivot field i binds to
+   *  cache field i. */
   uint32_t cache_field_index;
+  /** How the field's items are ordered, an `fm_pivot_sort_order_t`. */
   int32_t sort_order;
+  /** The key of the data field the items sort by; `NULL` sorts by label. */
   const char* sort_by_field;
-  int32_t has_group_base_index; /* 0/1 */
+  /** 1 when `group_base_index` is set; 0 means the field is not a group field. */
+  int32_t has_group_base_index;
+  /** For a group field, the index of the field it groups; read only when `has_group_base_index` is 1. */
   uint32_t group_base_index;
+  /** Whether the automatic subtotal shows; 0 whenever `subtotal_functions` is non-zero, since custom functions replace
+   *  it. */
   int32_t default_subtotal;
+  /** A bit mask of the custom subtotal functions: bit `1u << aggregation` is set for each `fm_pivot_aggregation_t`
+   *  selected; 0 for none. */
   uint32_t subtotal_functions;
+  /** Whether a blank row follows each item block of the field. */
   int32_t insert_blank_row;
+  /** Whether the field's item labels repeat on every row of its block. */
   int32_t fill_down_labels;
+  /** Whether the field lists items without data. */
   int32_t show_all;
+  /** Whether every item and the default marker of the field are expanded; true for a field without items. Writing
+   *  applies to all of them. */
   int32_t show_detail;
 } fm_pivot_field_info_t;
 
 /**
  * @brief Read-back of one pivot-field item (`fm_sheet_get_pivot_field_item_at`).
- *
- *   * `name`        — the item's own label, a model-backed view; `NULL` for
- *                     an item bound only by cache index.
- *   * `cache_index` — index into the bound cache field's shared items (the
- *                     OOXML `<item x="N">`); `has_cache_index` is `0` for an
- *                     item bound by label only.
- *   * `visible`     — non-zero when the item is shown.
- *   * `caption`     — the caption shown instead of the item's value, a
- *                     model-backed view; `NULL` when the item has none.
- *   * `show_detail` — non-zero when the item is expanded, `0` when it is
- *                     collapsed.
  */
 typedef struct {
   uint32_t struct_size;
+  /** The item's own label; `NULL` for an item bound only by cache index. */
   const char* name;
-  int32_t has_cache_index; /* 0/1 */
+  /** 1 when `cache_index` is set; 0 means the item is bound by label only. */
+  int32_t has_cache_index;
+  /** The index into the bound cache field's shared items; read only when `has_cache_index` is 1. */
   uint32_t cache_index;
+  /** Whether the item is shown. */
   int32_t visible;
+  /** The caption shown instead of the item's value; `NULL` when it has none. */
   const char* caption;
+  /** Whether the item is expanded; false for a collapsed item. */
   int32_t show_detail;
 } fm_pivot_item_info_t;
 
 /**
  * @brief Read-back of a pivot table's `<pivotTableStyleInfo>`
  *        (`fm_sheet_get_pivot_style_options`).
- *
- *   * `style_name` — the table style name, a model-backed view; `NULL` when
- *                    the element carries no name.
- *   * the `show_*` flags are `0` or `1`.
  */
 typedef struct {
   uint32_t struct_size;
+  /** The name of the table style, a model-backed view; `NULL` when the style element carries no name. */
   const char* style_name;
+  /** Whether the style formats the row headers. */
   int32_t show_row_headers;
+  /** Whether the style formats the column headers. */
   int32_t show_column_headers;
+  /** Whether the style bands the rows. */
   int32_t show_row_stripes;
+  /** Whether the style bands the columns. */
   int32_t show_column_stripes;
+  /** Whether the style formats the last column. */
   int32_t show_last_column;
 } fm_pivot_style_options_t;
 
 /**
  * @brief Plain-data spec for `fm_sheet_add_pivot_filter`.
- *
- *   * `field_index`    — the pivot field the filter applies to (the pivot
- *                        field index, equal to the cache field index); the
- *                        filter takes that field's axis.
- *   * `kind`           — filter kind, an `fm_pivot_filter_kind_t`.
- *   * `value_kind`     — discriminator for the primary `value` payload, the
- *                        lower bound of a range type.
- *                        `FM_PIVOT_FILTER_OPERAND_KIND_ABSENT` for the
- *                        relative-period and calendar-position types and
- *                        rejected for every other type; `TEXT` for a label
- *                        type, `INT` or `DOUBLE` for a value or date type.
- *   * `value_int`      — int payload; consulted iff `value_kind == INT`.
- *   * `value_double`   — double payload; consulted iff `value_kind == DOUBLE`.
- *   * `value_text`     — UTF-8 payload; consulted iff `value_kind == TEXT`.
- *                        Must be non-NULL when `value_kind == TEXT`.
- *   * `value_high_kind` — discriminator for the upper-bound payload.
- *                        `FM_PIVOT_FILTER_OPERAND_KIND_ABSENT` for non-range filters.
- *                        `TEXT` for `LABEL_BETWEEN` / `LABEL_NOT_BETWEEN`;
- *                        `INT` or `DOUBLE` for the other range types.
- *   * `value_high_int` / `value_high_double` — upper bound payload.
- *   * `data_field_index` — which data-field aggregate a value filter scores.
- *                        Validated against the pivot's data fields for the
- *                        value filter types; label/date filters ignore it.
- *   * `value_high_text` — UTF-8 upper bound of `LABEL_BETWEEN` /
- *                        `LABEL_NOT_BETWEEN`; must be non-NULL for them and
- *                        NULL for every other type.
  */
 typedef struct {
   uint32_t struct_size;
+  /** The index of the pivot field the filter applies to; the filter takes that field's axis. */
   uint32_t field_index;
-  int32_t kind;       /* fm_pivot_filter_kind_t */
-  int32_t value_kind; /* fm_pivot_filter_operand_kind_t */
+  /** The kind of the filter: a value, label, date or relative-period filter, and its comparison. */
+  int32_t kind;
+  /** Which payload carries the operand: `FM_PIVOT_FILTER_OPERAND_KIND_INT`, `FM_PIVOT_FILTER_OPERAND_KIND_DOUBLE`,
+   *  `FM_PIVOT_FILTER_OPERAND_KIND_TEXT`, or `FM_PIVOT_FILTER_OPERAND_KIND_ABSENT` for a relative-period or
+   *  calendar-position kind. It is the lower bound of a range kind. */
+  int32_t value_kind;
+  /** The integer operand; read only when `value_kind` is `FM_PIVOT_FILTER_OPERAND_KIND_INT`. */
   int32_t value_int;
+  /** The floating-point operand; read only when `value_kind` is `FM_PIVOT_FILTER_OPERAND_KIND_DOUBLE`. */
   double value_double;
+  /** The UTF-8 text operand; read only when `value_kind` is `FM_PIVOT_FILTER_OPERAND_KIND_TEXT`, and then non-`NULL`.
+   */
   const char* value_text;
-  int32_t value_high_kind; /* fm_pivot_filter_operand_kind_t */
+  /** Which payload carries the upper bound: `FM_PIVOT_FILTER_OPERAND_KIND_TEXT` for the label range kinds, INT or
+   *  DOUBLE for the other range kinds, and `FM_PIVOT_FILTER_OPERAND_KIND_ABSENT` for a kind that is not a range. */
+  int32_t value_high_kind;
+  /** The integer upper bound; read only when `value_high_kind` is `FM_PIVOT_FILTER_OPERAND_KIND_INT`. */
   int32_t value_high_int;
+  /** The floating-point upper bound; read only when `value_high_kind` is `FM_PIVOT_FILTER_OPERAND_KIND_DOUBLE`. */
   double value_high_double;
+  /** The index of the data field a value filter scores, validated against the pivot's data fields for value filter
+   *  kinds; label and date filters ignore it. */
   uint32_t data_field_index;
+  /** The UTF-8 text upper bound of a label range kind, non-`NULL` for those and `NULL` for every other kind. */
   const char* value_high_text;
 } fm_pivot_filter_t;
 
@@ -6770,83 +7143,65 @@ typedef struct {
  *        (`fm_sheet_get_pivot_options`; `fm_pivot_options_patch_t` changes
  *        them).
  *
- * Flags read `0` or `1`. A string reads `NULL` when the option is unset.
- * Strings read back are read-scratch-backed views.
- *
- *   * `show_error` / `error_caption`     — error cells show `error_caption`
- *                                          (`showError`, `errorCaption`). The
- *                                          caption is kept while `show_error`
- *                                          is `0`.
- *   * `show_missing` / `missing_caption` — empty value cells show
- *                                          `missing_caption`; a caption of
- *                                          exactly `-` is written as the
- *                                          number 0 (`showMissing`,
- *                                          `missingCaption`).
- *   * `show_headers`         — field captions and filter drop-downs
- *                              (`showHeaders`).
- *   * `show_drill`           — expand / collapse buttons (`showDrill`).
- *   * `show_data_tips`       — contextual tooltips (`showDataTips`).
- *   * `grid_drop_zones`      — classic layout with grid drop zones
- *                              (`gridDropZones`).
- *   * `show_empty_row` / `show_empty_column` — `showEmptyRow` / `showEmptyCol`;
- *                              the layout follows each field's `show_all`.
- *   * `show_data_drop_down`  — `showDataDropDown`.
- *   * `print_drill`          — print expand / collapse buttons (`printDrill`).
- *   * `field_print_titles`   — repeat field titles on each printed page
- *                              (`fieldPrintTitles`).
- *   * `item_print_titles`    — repeat row labels on each printed page
- *                              (`itemPrintTitles`).
- *   * `merge_item`           — merge and center cells with labels
- *                              (`mergeItem`).
- *   * `indent`               — compact-form indent per level, 0 to 126
- *                              (`indent`; the dialog's characters minus one).
- *   * `page_over_then_down`  — report filter fields run across, then down
- *                              (`pageOverThenDown`).
- *   * `page_wrap`            — report filter fields per column or row, 0 to
- *                              255; 0 does not wrap (`pageWrap`).
- *   * `multiple_field_filters` — allow several filters per field
- *                              (`multipleFieldFilters`).
- *   * `preserve_formatting`  — keep cell formatting on update
- *                              (`preserveFormatting`).
- *   * `custom_list_sort`     — sort by custom lists (`customListSort`).
- *   * `alt_text` / `alt_text_summary` — alternative text title and
- *                              description (x14 `altText`, `altTextSummary`).
- *   * `grand_total_caption`  — the grand total label in place of the
- *                              locale's word (`grandTotalCaption`).
- *   * `auto_formatting`      — autofit column widths on update
- *                              (`useAutoFormatting`).
- *   * `enable_drill`         — Show Details is allowed (`enableDrill`).
+ * Flags read `0` or `1`. Strings read back are read-scratch-backed views.
  *
  * A pivot created through the API starts with `item_print_titles` on,
  * `indent` 0 and `multiple_field_filters` off, as Excel creates one.
  */
 typedef struct {
   uint32_t struct_size;
+  /** Whether error cells show `error_caption`; the caption is kept while this is off. */
   int32_t show_error;
+  /** The text error cells show while `show_error` is on; `NULL` when unset. */
   const char* error_caption;
+  /** Whether empty value cells show `missing_caption`. */
   int32_t show_missing;
+  /** The text empty value cells show while `show_missing` is on; a caption of exactly `-` is written as the number 0.
+   *  `NULL` when unset. */
   const char* missing_caption;
+  /** Whether field captions and filter drop-downs show. */
   int32_t show_headers;
+  /** Whether the expand / collapse buttons show. */
   int32_t show_drill;
+  /** Whether contextual tooltips show. */
   int32_t show_data_tips;
+  /** Whether the classic layout with drop zones drawn on the grid is used. */
   int32_t grid_drop_zones;
+  /** Whether items without data show on rows; the layout follows each field's own show-all setting. */
   int32_t show_empty_row;
+  /** Whether items without data show on columns; the layout follows each field's own show-all setting. */
   int32_t show_empty_column;
+  /** Whether the field drop-down buttons show. */
   int32_t show_data_drop_down;
+  /** Whether the expand / collapse buttons are printed. */
   int32_t print_drill;
+  /** Whether field captions repeat as print titles on each printed page. */
   int32_t field_print_titles;
+  /** Whether row labels repeat on each printed page. */
   int32_t item_print_titles;
+  /** Whether item labels are merged and centered. */
   int32_t merge_item;
+  /** The indent per level of compact-form labels, 0 to 126 (the dialog shows this plus one). */
   uint32_t indent;
+  /** Whether report filter fields fill across before they go down. */
   int32_t page_over_then_down;
+  /** The number of report filter fields per column or row before wrapping, 0 to 255; 0 does not wrap. */
   uint32_t page_wrap;
+  /** Whether a field may carry more than one filter type. */
   int32_t multiple_field_filters;
+  /** Whether cell formatting is kept when the report updates. */
   int32_t preserve_formatting;
+  /** Whether custom lists take part in sorting. */
   int32_t custom_list_sort;
+  /** The alternative-text title of the PivotTable; `NULL` when unset. */
   const char* alt_text;
+  /** The alternative-text description of the PivotTable; `NULL` when unset. */
   const char* alt_text_summary;
+  /** The grand total label shown in place of the locale's word; `NULL` when unset. */
   const char* grand_total_caption;
+  /** Whether column widths autofit when the report updates. */
   int32_t auto_formatting;
+  /** Whether Show Details is allowed. */
   int32_t enable_drill;
 } fm_pivot_options_t;
 
@@ -6855,69 +7210,162 @@ typedef struct {
  *        (`fm_sheet_update_pivot_options`), following the header's patch
  *        rules (Patches, above); the members mean what they mean in
  *        `fm_pivot_options_t`.
- *
- * A `SET` flag is `0` or non-zero. The five strings (`error_caption`,
- * `missing_caption`, `alt_text`, `alt_text_summary`, `grand_total_caption`)
- * can be cleared: `CLEAR` unsets the option, and so does `SET` with an empty
- * string. A `SET` `error_caption`, `missing_caption`, `alt_text` or
- * `grand_total_caption` is at most 255 UTF-16 code units. A `SET` `indent`
- * is at most 126 and a `SET` `page_wrap` at most 255, unless it equals the
- * pivot's current value (a definition read from a file keeps its value).
- * No other field can be cleared.
  */
 typedef struct {
   uint32_t struct_size;
+  /** How `show_error` is patched: `FM_PATCH_OP_KEEP` leaves it, `FM_PATCH_OP_SET` writes it; `FM_PATCH_OP_CLEAR` is
+   *  rejected. */
   fm_patch_op_t show_error_op;
+  /** Whether error cells show `error_caption`; the caption is kept while this is off (0 or non-zero when written). Read
+   *  when `show_error_op` is `FM_PATCH_OP_SET`. */
   int32_t show_error;
+  /** How `error_caption` is patched: `FM_PATCH_OP_KEEP` leaves it, `FM_PATCH_OP_SET` writes it (an empty string unsets
+   *  it), `FM_PATCH_OP_CLEAR` unsets it. */
   fm_patch_op_t error_caption_op;
+  /** The text to write to the option. A set value is at most 255 UTF-16 code units. Read when `error_caption_op` is
+   *  `FM_PATCH_OP_SET`. */
   const char* error_caption;
+  /** How `show_missing` is patched: `FM_PATCH_OP_KEEP` leaves it, `FM_PATCH_OP_SET` writes it; `FM_PATCH_OP_CLEAR` is
+   *  rejected. */
   fm_patch_op_t show_missing_op;
+  /** Whether empty value cells show `missing_caption` (0 or non-zero when written). Read when `show_missing_op` is
+   *  `FM_PATCH_OP_SET`. */
   int32_t show_missing;
+  /** How `missing_caption` is patched: `FM_PATCH_OP_KEEP` leaves it, `FM_PATCH_OP_SET` writes it (an empty string
+   *  unsets it), `FM_PATCH_OP_CLEAR` unsets it. */
   fm_patch_op_t missing_caption_op;
+  /** The text to write to the option. A set value is at most 255 UTF-16 code units. Read when `missing_caption_op` is
+   *  `FM_PATCH_OP_SET`. */
   const char* missing_caption;
+  /** How `show_headers` is patched: `FM_PATCH_OP_KEEP` leaves it, `FM_PATCH_OP_SET` writes it; `FM_PATCH_OP_CLEAR` is
+   *  rejected. */
   fm_patch_op_t show_headers_op;
+  /** Whether field captions and filter drop-downs show (0 or non-zero when written). Read when `show_headers_op` is
+   *  `FM_PATCH_OP_SET`. */
   int32_t show_headers;
+  /** How `show_drill` is patched: `FM_PATCH_OP_KEEP` leaves it, `FM_PATCH_OP_SET` writes it; `FM_PATCH_OP_CLEAR` is
+   *  rejected. */
   fm_patch_op_t show_drill_op;
+  /** Whether the expand / collapse buttons show (0 or non-zero when written). Read when `show_drill_op` is
+   *  `FM_PATCH_OP_SET`. */
   int32_t show_drill;
+  /** How `show_data_tips` is patched: `FM_PATCH_OP_KEEP` leaves it, `FM_PATCH_OP_SET` writes it; `FM_PATCH_OP_CLEAR` is
+   *  rejected. */
   fm_patch_op_t show_data_tips_op;
+  /** Whether contextual tooltips show (0 or non-zero when written). Read when `show_data_tips_op` is `FM_PATCH_OP_SET`.
+   */
   int32_t show_data_tips;
+  /** How `grid_drop_zones` is patched: `FM_PATCH_OP_KEEP` leaves it, `FM_PATCH_OP_SET` writes it; `FM_PATCH_OP_CLEAR`
+   *  is rejected. */
   fm_patch_op_t grid_drop_zones_op;
+  /** Whether the classic layout with drop zones drawn on the grid is used (0 or non-zero when written). Read when
+   *  `grid_drop_zones_op` is `FM_PATCH_OP_SET`. */
   int32_t grid_drop_zones;
+  /** How `show_empty_row` is patched: `FM_PATCH_OP_KEEP` leaves it, `FM_PATCH_OP_SET` writes it; `FM_PATCH_OP_CLEAR` is
+   *  rejected. */
   fm_patch_op_t show_empty_row_op;
+  /** Whether items without data show on rows; the layout follows each field's own show-all setting (0 or non-zero when
+   *  written). Read when `show_empty_row_op` is `FM_PATCH_OP_SET`. */
   int32_t show_empty_row;
+  /** How `show_empty_column` is patched: `FM_PATCH_OP_KEEP` leaves it, `FM_PATCH_OP_SET` writes it; `FM_PATCH_OP_CLEAR`
+   *  is rejected. */
   fm_patch_op_t show_empty_column_op;
+  /** Whether items without data show on columns; the layout follows each field's own show-all setting (0 or non-zero
+   *  when written). Read when `show_empty_column_op` is `FM_PATCH_OP_SET`. */
   int32_t show_empty_column;
+  /** How `show_data_drop_down` is patched: `FM_PATCH_OP_KEEP` leaves it, `FM_PATCH_OP_SET` writes it;
+   *  `FM_PATCH_OP_CLEAR` is rejected. */
   fm_patch_op_t show_data_drop_down_op;
+  /** Whether the field drop-down buttons show (0 or non-zero when written). Read when `show_data_drop_down_op` is
+   *  `FM_PATCH_OP_SET`. */
   int32_t show_data_drop_down;
+  /** How `print_drill` is patched: `FM_PATCH_OP_KEEP` leaves it, `FM_PATCH_OP_SET` writes it; `FM_PATCH_OP_CLEAR` is
+   *  rejected. */
   fm_patch_op_t print_drill_op;
+  /** Whether the expand / collapse buttons are printed (0 or non-zero when written). Read when `print_drill_op` is
+   *  `FM_PATCH_OP_SET`. */
   int32_t print_drill;
+  /** How `field_print_titles` is patched: `FM_PATCH_OP_KEEP` leaves it, `FM_PATCH_OP_SET` writes it;
+   *  `FM_PATCH_OP_CLEAR` is rejected. */
   fm_patch_op_t field_print_titles_op;
+  /** Whether field captions repeat as print titles on each printed page (0 or non-zero when written). Read when
+   *  `field_print_titles_op` is `FM_PATCH_OP_SET`. */
   int32_t field_print_titles;
+  /** How `item_print_titles` is patched: `FM_PATCH_OP_KEEP` leaves it, `FM_PATCH_OP_SET` writes it; `FM_PATCH_OP_CLEAR`
+   *  is rejected. */
   fm_patch_op_t item_print_titles_op;
+  /** Whether row labels repeat on each printed page (0 or non-zero when written). Read when `item_print_titles_op` is
+   *  `FM_PATCH_OP_SET`. */
   int32_t item_print_titles;
+  /** How `merge_item` is patched: `FM_PATCH_OP_KEEP` leaves it, `FM_PATCH_OP_SET` writes it; `FM_PATCH_OP_CLEAR` is
+   *  rejected. */
   fm_patch_op_t merge_item_op;
+  /** Whether item labels are merged and centered (0 or non-zero when written). Read when `merge_item_op` is
+   *  `FM_PATCH_OP_SET`. */
   int32_t merge_item;
+  /** How `indent` is patched: `FM_PATCH_OP_KEEP` leaves it, `FM_PATCH_OP_SET` writes it; `FM_PATCH_OP_CLEAR` is
+   *  rejected. */
   fm_patch_op_t indent_op;
+  /** The indent per level to write, at most 126 unless it equals the current value. Read when `indent_op` is
+   *  `FM_PATCH_OP_SET`. */
   uint32_t indent;
+  /** How `page_over_then_down` is patched: `FM_PATCH_OP_KEEP` leaves it, `FM_PATCH_OP_SET` writes it;
+   *  `FM_PATCH_OP_CLEAR` is rejected. */
   fm_patch_op_t page_over_then_down_op;
+  /** Whether report filter fields fill across before they go down (0 or non-zero when written). Read when
+   *  `page_over_then_down_op` is `FM_PATCH_OP_SET`. */
   int32_t page_over_then_down;
+  /** How `page_wrap` is patched: `FM_PATCH_OP_KEEP` leaves it, `FM_PATCH_OP_SET` writes it; `FM_PATCH_OP_CLEAR` is
+   *  rejected. */
   fm_patch_op_t page_wrap_op;
+  /** The number of report filter fields per column or row to write, at most 255 unless it equals the current value; 0
+   *  does not wrap. Read when `page_wrap_op` is `FM_PATCH_OP_SET`. */
   uint32_t page_wrap;
+  /** How `multiple_field_filters` is patched: `FM_PATCH_OP_KEEP` leaves it, `FM_PATCH_OP_SET` writes it;
+   *  `FM_PATCH_OP_CLEAR` is rejected. */
   fm_patch_op_t multiple_field_filters_op;
+  /** Whether a field may carry more than one filter type (0 or non-zero when written). Read when
+   *  `multiple_field_filters_op` is `FM_PATCH_OP_SET`. */
   int32_t multiple_field_filters;
+  /** How `preserve_formatting` is patched: `FM_PATCH_OP_KEEP` leaves it, `FM_PATCH_OP_SET` writes it;
+   *  `FM_PATCH_OP_CLEAR` is rejected. */
   fm_patch_op_t preserve_formatting_op;
+  /** Whether cell formatting is kept when the report updates (0 or non-zero when written). Read when
+   *  `preserve_formatting_op` is `FM_PATCH_OP_SET`. */
   int32_t preserve_formatting;
+  /** How `custom_list_sort` is patched: `FM_PATCH_OP_KEEP` leaves it, `FM_PATCH_OP_SET` writes it; `FM_PATCH_OP_CLEAR`
+   *  is rejected. */
   fm_patch_op_t custom_list_sort_op;
+  /** Whether custom lists take part in sorting (0 or non-zero when written). Read when `custom_list_sort_op` is
+   *  `FM_PATCH_OP_SET`. */
   int32_t custom_list_sort;
+  /** How `alt_text` is patched: `FM_PATCH_OP_KEEP` leaves it, `FM_PATCH_OP_SET` writes it (an empty string unsets it),
+   *  `FM_PATCH_OP_CLEAR` unsets it. */
   fm_patch_op_t alt_text_op;
+  /** The text to write to the option. A set value is at most 255 UTF-16 code units. Read when `alt_text_op` is
+   *  `FM_PATCH_OP_SET`. */
   const char* alt_text;
+  /** How `alt_text_summary` is patched: `FM_PATCH_OP_KEEP` leaves it, `FM_PATCH_OP_SET` writes it (an empty string
+   *  unsets it), `FM_PATCH_OP_CLEAR` unsets it. */
   fm_patch_op_t alt_text_summary_op;
+  /** The text to write to the option. Read when `alt_text_summary_op` is `FM_PATCH_OP_SET`. */
   const char* alt_text_summary;
+  /** How `grand_total_caption` is patched: `FM_PATCH_OP_KEEP` leaves it, `FM_PATCH_OP_SET` writes it (an empty string
+   *  unsets it), `FM_PATCH_OP_CLEAR` unsets it. */
   fm_patch_op_t grand_total_caption_op;
+  /** The text to write to the option. A set value is at most 255 UTF-16 code units. Read when `grand_total_caption_op`
+   *  is `FM_PATCH_OP_SET`. */
   const char* grand_total_caption;
+  /** How `auto_formatting` is patched: `FM_PATCH_OP_KEEP` leaves it, `FM_PATCH_OP_SET` writes it; `FM_PATCH_OP_CLEAR`
+   *  is rejected. */
   fm_patch_op_t auto_formatting_op;
+  /** Whether column widths autofit when the report updates (0 or non-zero when written). Read when `auto_formatting_op`
+   *  is `FM_PATCH_OP_SET`. */
   int32_t auto_formatting;
+  /** How `enable_drill` is patched: `FM_PATCH_OP_KEEP` leaves it, `FM_PATCH_OP_SET` writes it; `FM_PATCH_OP_CLEAR` is
+   *  rejected. */
   fm_patch_op_t enable_drill_op;
+  /** Whether Show Details is allowed (0 or non-zero when written). Read when `enable_drill_op` is `FM_PATCH_OP_SET`. */
   int32_t enable_drill;
 } fm_pivot_options_patch_t;
 
@@ -6925,23 +7373,18 @@ typedef struct {
  * @brief The options of one pivot cache, shared by every pivot table drawing
  *        from it (`fm_workbook_get_pivot_cache_options`;
  *        `fm_pivot_cache_options_patch_t` changes them).
- *
- *   * `save_data`           — save the source records with the file
- *                             (`saveData`). Off, the records part is left out
- *                             and the reports keep their sheet cells.
- *   * `missing_items_limit` — items kept per field after they leave the
- *                             source (`missingItemsLimit`): `0` none, up to
- *                             `1048576`; `has_missing_items_limit` is `0`
- *                             when automatic (no attribute). Excel's "Max"
- *                             writes 32500.
- *   * `refresh_on_load`     — refresh the data when the file opens
- *                             (`refreshOnLoad`).
  */
 typedef struct {
   uint32_t struct_size;
+  /** Whether the source records are saved with the file; off, the records part is left out and the reports keep their
+   *  sheet cells. */
   int32_t save_data;
-  int32_t has_missing_items_limit; /* 0/1 */
+  /** 1 when `missing_items_limit` is set; 0 means automatic. */
+  int32_t has_missing_items_limit;
+  /** The number of items kept per field after they leave the source, 0 to 1048576; read only when
+   *  `has_missing_items_limit` is 1. */
   uint32_t missing_items_limit;
+  /** Whether the data refreshes when the file opens. */
   int32_t refresh_on_load;
 } fm_pivot_cache_options_t;
 
@@ -6950,42 +7393,43 @@ typedef struct {
  *        (`fm_workbook_update_pivot_cache_options`), following the header's
  *        patch rules (Patches, above); the members mean what they mean in
  *        `fm_pivot_cache_options_t`.
- *
- * A `SET` flag is `0` or non-zero. `missing_items_limit` can be cleared:
- * `CLEAR` makes it automatic (`has_missing_items_limit == 0` on the read
- * record). A `SET` limit is
- * `0` to `1048576`, or the limit the cache already holds when a file gave
- * one outside that range. No other field can be cleared.
  */
 typedef struct {
   uint32_t struct_size;
+  /** How `save_data` is patched: `FM_PATCH_OP_KEEP` leaves it, `FM_PATCH_OP_SET` writes it; `FM_PATCH_OP_CLEAR` is
+   *  rejected. */
   fm_patch_op_t save_data_op;
+  /** Whether the source records are saved with the file; 0 or non-zero. Read when `save_data_op` is `FM_PATCH_OP_SET`.
+   */
   int32_t save_data;
+  /** How `missing_items_limit` is patched: `FM_PATCH_OP_KEEP` leaves it, `FM_PATCH_OP_SET` writes it,
+   *  `FM_PATCH_OP_CLEAR` makes the limit automatic. */
   fm_patch_op_t missing_items_limit_op;
+  /** The number of items kept per field after they leave the source, 0 to 1048576 or the limit the cache already holds.
+   *  Read when `missing_items_limit_op` is `FM_PATCH_OP_SET`. Clearing makes the limit automatic
+   *  (`has_missing_items_limit` is 0 on the read record). */
   uint32_t missing_items_limit;
+  /** How `refresh_on_load` is patched: `FM_PATCH_OP_KEEP` leaves it, `FM_PATCH_OP_SET` writes it; `FM_PATCH_OP_CLEAR`
+   *  is rejected. */
   fm_patch_op_t refresh_on_load_op;
+  /** Whether the data refreshes when the file opens; 0 or non-zero. Read when `refresh_on_load_op` is
+   *  `FM_PATCH_OP_SET`. */
   int32_t refresh_on_load;
 } fm_pivot_cache_options_patch_t;
 
 /**
  * @brief Read-back of one calculated item
  *        (`fm_workbook_get_pivot_cache_calculated_item_at`).
- *
- *   * `field_index` — the cache field the item belongs to.
- *   * `name`        — the item's name, a read-scratch-backed view; `NULL`
- *                     for an entry read from a file whose item is not a text
- *                     item of the field.
- *   * `formula`     — its formula with its leading `=`, a
- *                     read-scratch-backed view.
- *   * `scoped`      — non-zero for an entry read from a file that applies the
- *                     formula only where the item meets items of other
- *                     fields.
  */
 typedef struct {
   uint32_t struct_size;
+  /** The index of the cache field the item belongs to. */
   uint32_t field_index;
+  /** The item's name; `NULL` for an entry read from a file whose item is not a text item of the field. */
   const char* name;
+  /** The formula text, leading `=` included. */
   const char* formula;
+  /** Whether the entry was read from a file and applies its formula only where the item meets items of other fields. */
   int32_t scoped;
 } fm_pivot_calculated_item_info_t;
 
@@ -7048,14 +7492,17 @@ FM_API fm_status_t fm_workbook_remove_pivot_cache(fm_workbook_t* wb, uint32_t ca
  *        reads it and `fm_workbook_set_pivot_cache_worksheet_source` writes it.
  *
  * `ref`, `sheet` and `name` are the element's attributes as text; each may
- * be `NULL` (absent) on input, and reads `NULL` when absent. The sheet is
- * kept as written: it may name a sheet the workbook does not have. On read
- * the strings are model-backed views owned by the workbook handle.
+ * be `NULL` (absent) on input. On read the strings are model-backed views
+ * owned by the workbook handle.
  */
 typedef struct {
   uint32_t struct_size;
+  /** The source range as A1 text; `NULL` when absent. */
   const char* ref;
+  /** The name of the source sheet, kept as written (it may name a sheet the workbook does not have); `NULL` when
+   *  absent. */
   const char* sheet;
+  /** The defined name or table the source reads; `NULL` when absent. */
   const char* name;
 } fm_pivot_worksheet_source_t;
 
@@ -7156,21 +7603,21 @@ FM_API fm_status_t fm_workbook_get_pivot_cache_field_name(const fm_workbook_t* w
  */
 typedef struct {
   uint32_t struct_size;
-  /** The field holds a number. */
+  /** Whether the field holds a number. */
   int32_t contains_number;
-  /** Every number the field holds is an integer. */
+  /** Whether every number the field holds is an integer. */
   int32_t contains_integer;
-  /** The field holds text, a boolean or an error. */
+  /** Whether the field holds text, a boolean or an error. */
   int32_t contains_string;
-  /** The field holds a blank. */
+  /** Whether the field holds a blank. */
   int32_t contains_blank;
-  /** The field holds a date. */
+  /** Whether the field holds a date. */
   int32_t contains_date;
-  /** The field mixes two or more of text, numbers and dates. */
+  /** Whether the field mixes two or more of text, numbers and dates. */
   int32_t contains_mixed_types;
-  /** The field holds text or a blank. */
+  /** Whether the field holds text or a blank. */
   int32_t contains_semi_mixed_types;
-  /** The field holds text or a number: something that is not a date. */
+  /** Whether the field holds text or a number, something that is not a date. */
   int32_t contains_non_date;
 } fm_pivot_cache_field_types_t;
 
@@ -7614,9 +8061,13 @@ FM_API fm_status_t fm_workbook_remove_pivot_cache_calculated_item(fm_workbook_t*
  */
 typedef struct {
   uint32_t struct_size;
+  /** The new pivot's name. */
   const char* name;
+  /** The id of the pivot cache the pivot draws from. */
   uint32_t cache_id;
+  /** The 0-based row of the top-left cell of the report. */
   uint32_t anchor_row;
+  /** The 0-based column of the top-left cell of the report. */
   uint32_t anchor_col;
 } fm_pivot_spec_t;
 
@@ -7685,14 +8136,19 @@ FM_API fm_status_t fm_sheet_set_pivot_anchor(fm_workbook_t* wb, size_t sheet_ind
 /**
  * @brief Partial update of the row / column grand total bands
  *        (`fm_sheet_update_pivot_grand_totals`), following the header's patch
- *        rules (Patches, above). A `SET` flag is `0` or non-zero; neither
- *        field can be cleared.
+ *        rules (Patches, above). Neither field can be cleared.
  */
 typedef struct {
   uint32_t struct_size;
+  /** How `rows` is patched: `FM_PATCH_OP_KEEP` leaves it, `FM_PATCH_OP_SET` writes it; `FM_PATCH_OP_CLEAR` is rejected.
+   */
   fm_patch_op_t rows_op;
+  /** Whether the grand total band for the rows shows; 0 or non-zero. Read when `rows_op` is `FM_PATCH_OP_SET`. */
   int32_t rows;
+  /** How `columns` is patched: `FM_PATCH_OP_KEEP` leaves it, `FM_PATCH_OP_SET` writes it; `FM_PATCH_OP_CLEAR` is
+   *  rejected. */
   fm_patch_op_t columns_op;
+  /** Whether the grand total band for the columns shows; 0 or non-zero. Read when `columns_op` is `FM_PATCH_OP_SET`. */
   int32_t columns;
 } fm_pivot_grand_totals_patch_t;
 
@@ -7709,27 +8165,43 @@ FM_API fm_status_t fm_sheet_update_pivot_grand_totals(fm_workbook_t* wb, size_t 
 /**
  * @brief Partial update of a pivot table's style (`fm_sheet_update_pivot_style_options`).
  *
- * Each field has an `fm_patch_op_t` companion: `KEEP` (0) leaves it,
- * `SET` writes the value beside it, `CLEAR` on `style_name` writes the
- * element without a style name (no table style; the element stays); a `SET`
- * `style_name` is non-empty. The toggles are `0` / `1` and reject `CLEAR`. A patch on a pivot without the
+ * Each field has an `fm_patch_op_t` companion. A patch on a pivot without the
  * style element creates it, the fields it leaves at `KEEP` taking the
  * creation defaults of `fm_sheet_add_pivot`. A patch whose ops are all
  * `KEEP` changes nothing.
  */
 typedef struct {
   uint32_t struct_size;
+  /** How `style_name` is patched: `FM_PATCH_OP_KEEP` leaves it, `FM_PATCH_OP_SET` writes it, `FM_PATCH_OP_CLEAR` writes
+   *  the element without a style name (no table style). */
   fm_patch_op_t style_name_op;
+  /** The name of the table style to write; it must be non-empty. Read when `style_name_op` is `FM_PATCH_OP_SET`. */
   const char* style_name;
+  /** How `show_row_headers` is patched: `FM_PATCH_OP_KEEP` leaves it, `FM_PATCH_OP_SET` writes it; `FM_PATCH_OP_CLEAR`
+   *  is rejected. */
   fm_patch_op_t show_row_headers_op;
+  /** Whether the style formats the row headers; 0 or non-zero. Read when `show_row_headers_op` is `FM_PATCH_OP_SET`. */
   int32_t show_row_headers;
+  /** How `show_column_headers` is patched: `FM_PATCH_OP_KEEP` leaves it, `FM_PATCH_OP_SET` writes it;
+   *  `FM_PATCH_OP_CLEAR` is rejected. */
   fm_patch_op_t show_column_headers_op;
+  /** Whether the style formats the column headers; 0 or non-zero. Read when `show_column_headers_op` is
+   *  `FM_PATCH_OP_SET`. */
   int32_t show_column_headers;
+  /** How `show_row_stripes` is patched: `FM_PATCH_OP_KEEP` leaves it, `FM_PATCH_OP_SET` writes it; `FM_PATCH_OP_CLEAR`
+   *  is rejected. */
   fm_patch_op_t show_row_stripes_op;
+  /** Whether the style bands the rows; 0 or non-zero. Read when `show_row_stripes_op` is `FM_PATCH_OP_SET`. */
   int32_t show_row_stripes;
+  /** How `show_column_stripes` is patched: `FM_PATCH_OP_KEEP` leaves it, `FM_PATCH_OP_SET` writes it;
+   *  `FM_PATCH_OP_CLEAR` is rejected. */
   fm_patch_op_t show_column_stripes_op;
+  /** Whether the style bands the columns; 0 or non-zero. Read when `show_column_stripes_op` is `FM_PATCH_OP_SET`. */
   int32_t show_column_stripes;
+  /** How `show_last_column` is patched: `FM_PATCH_OP_KEEP` leaves it, `FM_PATCH_OP_SET` writes it; `FM_PATCH_OP_CLEAR`
+   *  is rejected. */
   fm_patch_op_t show_last_column_op;
+  /** Whether the style formats the last column; 0 or non-zero. Read when `show_last_column_op` is `FM_PATCH_OP_SET`. */
   int32_t show_last_column;
 } fm_pivot_style_options_patch_t;
 
@@ -7813,57 +8285,69 @@ FM_API fm_status_t fm_sheet_set_pivot_field_axis(fm_workbook_t* wb, size_t sheet
  *
  * Each field has an `fm_patch_op_t` companion: `KEEP` (0) leaves it,
  * `SET` writes the value beside it, `CLEAR` is accepted only where stated.
- *
- *   * `custom_name`    -- the report name; `CLEAR` restores the source name.
- *                         A `SET` name is non-`NULL`, at most 255 UTF-16 code
- *                         units, and must not equal under the profile's
- *                         collation another field's source or custom name or
- *                         a data field's name (the field's own source name is
- *                         allowed). Data field names are not changed.
- *   * `number_format`  -- the field's number-format code, e.g. `"0.0%"`, in
- *                         the workbook profile's vocabulary and registered as
- *                         `fm_workbook_add_number_format` does; a string of
- *                         digits is a format code, not an id. `CLEAR`
- *                         removes the format.
- *   * `default_subtotal` -- `0` / `1`; custom subtotal functions replace the
- *                         automatic subtotal whatever this says.
- *   * `insert_blank_row`, `fill_down_labels`, `show_all`, `subtotal_top` --
- *                         `0` / `1` (`fm_pivot_field_info_t` reads the first
- *                         three as `0` / `1` and `subtotal_top` as an
- *                         `fm_tristate_t`).
- *   * `sort_order`     -- an `fm_pivot_sort_order_t`. `MANUAL` keeps sibling
- *                         items in the field's item document order and takes
- *                         no by-field key: it with a non-empty `sort_by_field`
- *                         (set by this patch or already stored and not
- *                         cleared) is `FM_STATUS_INVALID_ARGUMENT` (2).
- *   * `sort_by_field`  -- the by-field key; `CLEAR` sorts by label.
- *   * `show_detail`    -- `0` / `1`: expands or collapses every item of the
- *                         field together with its subtotal row.
- *
- * `CLEAR` is accepted on `custom_name`, `number_format` and `sort_by_field`
- * only.
  */
 typedef struct {
   uint32_t struct_size;
+  /** How `custom_name` is patched: `FM_PATCH_OP_KEEP` leaves it, `FM_PATCH_OP_SET` writes it, `FM_PATCH_OP_CLEAR`
+   *  clears it. */
   fm_patch_op_t custom_name_op;
+  /** The report name to write; it is non-`NULL`, at most 255 UTF-16 code units, and must not equal another field's
+   *  source or custom name or a data field's name under the profile's collation (the field's own source name is
+   *  allowed). `FM_PATCH_OP_CLEAR` restores the source name. Read when `custom_name_op` is `FM_PATCH_OP_SET`. */
   const char* custom_name;
+  /** How `number_format` is patched: `FM_PATCH_OP_KEEP` leaves it, `FM_PATCH_OP_SET` writes it, `FM_PATCH_OP_CLEAR`
+   *  clears it. */
   fm_patch_op_t number_format_op;
+  /** The number format code to write, in the workbook profile's vocabulary; a string of digits is a format code, not an
+   *  id. `FM_PATCH_OP_CLEAR` removes the format. Read when `number_format_op` is `FM_PATCH_OP_SET`. */
   const char* number_format;
+  /** How `default_subtotal` is patched: `FM_PATCH_OP_KEEP` leaves it, `FM_PATCH_OP_SET` writes it; `FM_PATCH_OP_CLEAR`
+   *  is rejected. */
   fm_patch_op_t default_subtotal_op;
+  /** Whether the automatic subtotal shows; 0 or non-zero. Custom subtotal functions replace it whatever this says. Read
+   *  when `default_subtotal_op` is `FM_PATCH_OP_SET`. */
   int32_t default_subtotal;
+  /** How `insert_blank_row` is patched: `FM_PATCH_OP_KEEP` leaves it, `FM_PATCH_OP_SET` writes it; `FM_PATCH_OP_CLEAR`
+   *  is rejected. */
   fm_patch_op_t insert_blank_row_op;
+  /** Whether a blank row follows each item block of the field; 0 or non-zero. Read when `insert_blank_row_op` is
+   *  `FM_PATCH_OP_SET`. */
   int32_t insert_blank_row;
+  /** How `fill_down_labels` is patched: `FM_PATCH_OP_KEEP` leaves it, `FM_PATCH_OP_SET` writes it; `FM_PATCH_OP_CLEAR`
+   *  is rejected. */
   fm_patch_op_t fill_down_labels_op;
+  /** Whether the field's item labels repeat on every row of its block; 0 or non-zero. Read when `fill_down_labels_op`
+   *  is `FM_PATCH_OP_SET`. */
   int32_t fill_down_labels;
+  /** How `show_all` is patched: `FM_PATCH_OP_KEEP` leaves it, `FM_PATCH_OP_SET` writes it; `FM_PATCH_OP_CLEAR` is
+   *  rejected. */
   fm_patch_op_t show_all_op;
+  /** Whether the field lists items without data; 0 or non-zero. Read when `show_all_op` is `FM_PATCH_OP_SET`. */
   int32_t show_all;
+  /** How `subtotal_top` is patched: `FM_PATCH_OP_KEEP` leaves it, `FM_PATCH_OP_SET` writes it; `FM_PATCH_OP_CLEAR` is
+   *  rejected. */
   fm_patch_op_t subtotal_top_op;
+  /** Whether subtotals show on the group's own heading row; 0 or non-zero. Read when `subtotal_top_op` is
+   *  `FM_PATCH_OP_SET`. */
   int32_t subtotal_top;
+  /** How `sort_order` is patched: `FM_PATCH_OP_KEEP` leaves it, `FM_PATCH_OP_SET` writes it; `FM_PATCH_OP_CLEAR` is
+   *  rejected. */
   fm_patch_op_t sort_order_op;
+  /** How the field's items are ordered, an `fm_pivot_sort_order_t`. Manual keeps sibling items in the field's item
+   *  order and is rejected together with a non-empty `sort_by_field`. Read when `sort_order_op` is `FM_PATCH_OP_SET`.
+   */
   int32_t sort_order;
+  /** How `sort_by_field` is patched: `FM_PATCH_OP_KEEP` leaves it, `FM_PATCH_OP_SET` writes it, `FM_PATCH_OP_CLEAR`
+   *  clears it. */
   fm_patch_op_t sort_by_field_op;
+  /** The key of the data field the items sort by. `FM_PATCH_OP_CLEAR` sorts by label. Read when `sort_by_field_op` is
+   *  `FM_PATCH_OP_SET`. */
   const char* sort_by_field;
+  /** How `show_detail` is patched: `FM_PATCH_OP_KEEP` leaves it, `FM_PATCH_OP_SET` writes it; `FM_PATCH_OP_CLEAR` is
+   *  rejected. */
   fm_patch_op_t show_detail_op;
+  /** Whether every item of the field is expanded together with its subtotal row; 0 or non-zero. Read when
+   *  `show_detail_op` is `FM_PATCH_OP_SET`. */
   int32_t show_detail;
 } fm_pivot_field_patch_t;
 
@@ -7895,26 +8379,25 @@ FM_API fm_status_t fm_sheet_update_pivot_field(fm_workbook_t* wb, size_t sheet_i
  * @brief Partial update of a pivot field item (`fm_sheet_update_pivot_field_item`).
  *
  * Ops as for `fm_pivot_field_patch_t`.
- *
- *   * `visible`     -- `0` / `1`: shows or hides the item.
- *   * `show_detail` -- `0` / `1`: expands or collapses the item.
- *   * `caption`     -- shown instead of the item's value; `CLEAR` removes it,
- *                      as does a `SET` caption equal to the item's own value.
- *                      The item's value, not the caption, still decides
- *                      hidden-item matching and ordering. A caption is at most
- *                      255 UTF-16 code units and must not match, under the
- *                      workbook profile's text collation, the label another
- *                      item of the field shows.
- *
- * `CLEAR` is accepted on `caption` only.
  */
 typedef struct {
   uint32_t struct_size;
+  /** How `visible` is patched: `FM_PATCH_OP_KEEP` leaves it, `FM_PATCH_OP_SET` writes it; `FM_PATCH_OP_CLEAR` is
+   *  rejected. */
   fm_patch_op_t visible_op;
+  /** Whether the item is shown; 0 or non-zero. Read when `visible_op` is `FM_PATCH_OP_SET`. */
   int32_t visible;
+  /** How `show_detail` is patched: `FM_PATCH_OP_KEEP` leaves it, `FM_PATCH_OP_SET` writes it; `FM_PATCH_OP_CLEAR` is
+   *  rejected. */
   fm_patch_op_t show_detail_op;
+  /** Whether the item is expanded; 0 or non-zero. Read when `show_detail_op` is `FM_PATCH_OP_SET`. */
   int32_t show_detail;
+  /** How `caption` is patched: `FM_PATCH_OP_KEEP` leaves it, `FM_PATCH_OP_SET` writes it, `FM_PATCH_OP_CLEAR` removes
+   *  the caption. */
   fm_patch_op_t caption_op;
+  /** The caption to show instead of the item's value, at most 255 UTF-16 code units and distinct from the label another
+   *  item of the field shows under the profile's text collation; a caption equal to the item's own value removes it.
+   *  Read when `caption_op` is `FM_PATCH_OP_SET`. */
   const char* caption;
 } fm_pivot_item_patch_t;
 
@@ -8005,22 +8488,24 @@ FM_API fm_status_t fm_sheet_set_pivot_field_subtotal_functions(fm_workbook_t* wb
                                                                size_t pivot_index, size_t field_index,
                                                                const int32_t* aggregations, size_t count);
 
-/**
- * @brief A date grouping to apply (`fm_sheet_set_pivot_field_date_group`).
- *
- * `periods` is an OR of `FM_PIVOT_PERIOD_*`; `calendar` an
- * `fm_pivot_calendar_t`. `start` / `end` are date serials, read only when
- * `has_start` / `has_end` is 1; with `0` the grouping takes the field's first
- * value and its last (the midnight after it for a date without a time).
- */
+/** @brief A date grouping to apply (`fm_sheet_set_pivot_field_date_group`). */
 typedef struct {
   uint32_t struct_size;
+  /** The date periods to group by, an OR of `FM_PIVOT_PERIOD_*` bits. */
   uint32_t periods;
+  /** The calendar the periods follow, an `fm_pivot_calendar_t`. */
   int32_t calendar;
+  /** The length in days of each group when grouping by days alone; 1 groups by single days. */
   uint32_t interval_days;
+  /** 1 when `start` is given; 0 takes the field's first value. */
   int32_t has_start;
+  /** The first bound of the grouping as a date serial, read only when `has_start` is 1; with 0 the grouping takes the
+   *  field's first value. */
   double start;
+  /** 1 when `end` is given; 0 takes the field's last value. */
   int32_t has_end;
+  /** The last bound of the grouping as a date serial, read only when `has_end` is 1; with 0 the grouping takes the
+   *  field's last value (the midnight after it for a date without a time). */
   double end;
 } fm_pivot_date_group_spec_t;
 
@@ -8074,20 +8559,16 @@ FM_API fm_status_t fm_sheet_get_pivot_field_date_group(const fm_workbook_t* wb, 
 /**
  * @brief A numeric grouping, as `fm_sheet_set_pivot_field_numeric_group` takes
  *        it and `fm_sheet_get_pivot_field_numeric_group` returns it.
- *
- * `start` / `end` are read only when `has_start` / `has_end` is 1; with `0`
- * the bound follows the field's present values. `interval` is the width of
- * each group.
  */
 typedef struct {
   uint32_t struct_size;
   /** 1 when `start` is given; 0 takes the field's smallest value. */
   int32_t has_start;
-  /** The first bound; the field's smallest value when omitted. */
+  /** The first bound; the field's smallest value when not given. */
   double start;
   /** 1 when `end` is given; 0 takes the field's largest value. */
   int32_t has_end;
-  /** The last bound; the field's largest value when omitted. */
+  /** The last bound; the field's largest value when not given. */
   double end;
   /** The width of each group. */
   double interval;
@@ -8378,8 +8859,10 @@ FM_API fm_status_t fm_sheet_show_pivot_details(fm_workbook_t* wb, size_t sheet_i
  */
 typedef struct {
   uint32_t struct_size;
-  int32_t rows;    /* 0/1 */
-  int32_t columns; /* 0/1 */
+  /** Whether the grand total band for the rows shows. */
+  int32_t rows;
+  /** Whether the grand total band for the columns shows. */
+  int32_t columns;
 } fm_pivot_grand_totals_t;
 
 /**
@@ -8593,23 +9076,18 @@ FM_API fm_status_t fm_sheet_remove_pivot_filter(fm_workbook_t* wb, size_t sheet_
 /**
  * @brief Result shape for `fm_sheet_get_spill`.
  *
- *   * `blocked` — `0` when `(row, col)` is part of a registered spill
- *     region; `1` when it is the anchor of a spill refused with `#SPILL!`
- *     whose attempted rectangle fits inside the grid. Only the anchor
- *     reports a blocked spill; cells inside the attempted rectangle read
- *     `*out_present == 0`.
- *   * `rect` — the region including the anchor, whose top-left cell holds
- *     the dynamic-array formula; for a blocked anchor, the rectangle the
- *     spill attempted.
- *
  * Use `fm_sheet_get_value(wb, sheet_index, rect.first_row + r, rect.first_col + c, &v)`
  * to read individual cells; `fm_sheet_get_value` is already
  * spill-aware and returns the per-cell value verbatim.
  */
 typedef struct {
   uint32_t struct_size;
+  /** The region including its anchor, whose top-left cell holds the dynamic-array formula. */
   fm_cell_rect_t rect;
-  int32_t blocked; /* 0/1 */
+  /** `1` when the cell is the anchor of a spill refused with `#SPILL!` whose attempted rectangle fits inside the grid;
+   *  the region is then that rectangle. `0` when the cell is part of a registered spill region. Only the anchor reports
+   *  a blocked spill; cells inside the attempted rectangle read `*out_present == 0`. */
+  int32_t blocked;
 } fm_spill_info_t;
 
 /**
@@ -8632,17 +9110,14 @@ FM_API fm_status_t fm_sheet_get_spill(const fm_workbook_t* wb, size_t sheet_inde
 /**
  * @brief Result shape for `fm_sheet_get_array_formula`.
  *
- *   * `rect` — the block (`<f t="array" ref=...>`); its top-left cell holds
- *     the formula.
- *   * `formula` — the anchor's stored formula text, spelled as
- *     `fm_sheet_get_formula` returns it. Scratch-backed: valid until the
- *     next call on `wb` that publishes scratch text.
- *
  * Every cell of the block reports the same values.
  */
 typedef struct {
   uint32_t struct_size;
+  /** The block the formula fills (`<f t="array" ref=...>`); its top-left cell holds the formula. */
   fm_cell_rect_t rect;
+  /** The anchor's stored formula text, spelled as `fm_sheet_get_formula` returns it, with a leading `=` (optional on
+   *  input). Scratch-backed: valid until the next call on `wb` that publishes scratch text. */
   const char* formula;
 } fm_array_formula_info_t;
 
@@ -8721,14 +9196,6 @@ typedef enum {
 /**
  * @brief Result shape for `fm_get_function_metadata`.
  *
- * `canonical_name` is always populated when the function is known.
- * `min_arity` / `max_arity` bound the written argument count Excel
- * accepts at entry, the bounds formula entry enforces; `has_max_arity` is
- * `0` for an open argument list.
- * `availability` reports whether the function is a real implementation,
- * host/environment-bound, or an intentionally unavailable fixed-error
- * stub (see `fm_function_availability_t`).
- *
  * `description` and `signature_template` are **always `NULL`**. They are
  * host-injected display metadata, not engine-owned data: the engine ships
  * no human-readable function text at all, and expects a host (editor /
@@ -8749,14 +9216,23 @@ typedef enum {
  */
 typedef struct {
   uint32_t struct_size;
+  /** The canonical function name; always populated when the function is known. */
   const char* canonical_name;
+  /** The minimum number of arguments Excel accepts at entry, the bound formula entry enforces. */
   uint32_t min_arity;
-  int32_t has_max_arity; /* 0/1; 0 for an open argument list */
+  /** 1 when `max_arity` bounds the argument count; 0 for an open argument list. */
+  int32_t has_max_arity;
+  /** The maximum number of arguments Excel accepts at entry, the bound formula entry enforces; meaningful only when
+   *  `has_max_arity` is 1. */
   uint32_t max_arity;
-  int32_t availability; /* fm_function_availability_t */
+  /** How far the engine implements the function: a real implementation, host-bound, or an intentionally unavailable
+   *  fixed-error stub, an `fm_function_availability_t`. */
+  int32_t availability;
   /* Always `NULL` - supplied by the host's provider document. */
+  /** Always `NULL`: display text is host-injected, not engine-owned. */
   const char* signature_template;
   /* Always `NULL` - supplied by the host's provider document. */
+  /** The human-readable description; `NULL` until a host metadata document fills it in. */
   const char* description;
 } fm_function_metadata_info_t;
 
@@ -8908,28 +9384,38 @@ typedef enum { FM_DATE_ORDER_MDY = 0, FM_DATE_ORDER_YMD = 1, FM_DATE_ORDER_DMY =
  * @brief Scalar locale facts of one profile (`fm_get_locale_facts`).
  *
  * Every string is a NUL-terminated UTF-8 view into process-static storage.
- * `measured` is `1` for the profiles backed by Excel (every `mac-*`
- * profile and `win-365-ja_JP`) and `0` for the estimated `win-*` ones; the
- * other facts hold in every Mac locale. Collation backing is
- * separate: `collation_measured` is `1` only for `mac-*` profiles, so
- * `win-365-ja_JP` is Excel-backed for facts but its collation order is estimated.
  */
 typedef struct {
   uint32_t struct_size;
+  /** The decimal separator. */
   const char* decimal_separator;
+  /** The digit group (thousands) separator. */
   const char* group_separator;
+  /** The separator between function arguments in formulas. */
   const char* list_separator;
+  /** The separator between columns in an array constant. */
   const char* array_column_separator;
+  /** The separator between rows in an array constant. */
   const char* array_row_separator;
+  /** The spelling of the logical value TRUE. */
   const char* true_name;
+  /** The spelling of the logical value FALSE. */
   const char* false_name;
-  int32_t date_order; /* fm_date_order_t */
+  /** The order of year, month and day in short dates, a `LocaleDateOrder` value. */
+  int32_t date_order;
+  /** The currency symbol. */
   const char* currency_symbol;
-  int32_t currency_suffix; /* 1: the symbol follows the number */
-  int32_t currency_space;  /* 1: one space between symbol and number */
+  /** `1` when the currency symbol follows the number. */
+  int32_t currency_suffix;
+  /** `1` when one space separates the currency symbol and the number. */
+  int32_t currency_space;
+  /** The number of decimal places the currency format shows by default. */
   int32_t currency_default_decimals;
-  int32_t measured;           /* 1: Excel-backed profile; 0: estimated */
-  int32_t collation_measured; /* 1: collation order Excel-backed (mac-*); 0: estimated (win-*) */
+  /** `1` for an Excel-backed profile (every mac profile and win-365-ja_JP); `0` for an estimated one. */
+  int32_t measured;
+  /** `1` when the text collation of the profile was captured from Excel (every mac profile); `0` for the estimated win
+   *  profiles, including win-365-ja_JP, whose `measured` is `1` for the other facts. */
+  int32_t collation_measured;
 } fm_locale_facts_info_t;
 
 /**
@@ -9057,41 +9543,51 @@ typedef enum {
  * @brief Per-sheet view state surfaced over the C ABI.
  *
  * Mirrors `formulon::SheetView` in full. Fields that are at their default
- * value still surface (zoom_pct defaults to `100`, freeze_rows /
- * freeze_cols default to `0`).
- *
- * `top_left_*` is the scroll origin (`<sheetView topLeftCell>`, A1 when
- * absent). `pane_top_left_*` is `<pane topLeftCell>` of a frozen view: the
- * first visible cell of the unfrozen area, which is the first cell past the
- * frozen rows and columns until a host scrolls it; `0, 0` when nothing is
- * frozen.
- *
- * `split_x_twips` / `split_y_twips` are an unfrozen split's position in twips
- * (`<pane xSplit ySplit>`); `0` for no split on that axis, and always `0` while the
- * view is frozen.
- *
- * `view_mode` is an `fm_sheet_view_mode_t`; a `view` value outside the
- * OOXML set reads as `FM_SHEET_VIEW_MODE_NORMAL` and is kept verbatim on save.
+ * value still surface.
  */
 typedef struct {
   uint32_t struct_size;
+  /** The zoom as a percentage, 10 to 400; 100 is 100%. */
   uint32_t zoom_pct;
+  /** The number of frozen rows at the top; 0 means no frozen rows. */
   uint32_t freeze_rows;
+  /** The number of frozen columns at the left; 0 means no frozen columns. */
   uint32_t freeze_cols;
-  int32_t show_grid_lines;         /* 0/1; OOXML default 1 */
-  int32_t show_row_column_headers; /* 0/1; OOXML default 1 */
-  int32_t show_zeros;              /* 0/1; OOXML default 1 */
-  int32_t right_to_left;           /* 0/1; OOXML default 0 */
-  int32_t tab_selected;            /* 0/1; OOXML default 0 */
-  int32_t view_mode;               /* fm_sheet_view_mode_t */
-  uint32_t top_left_row;           /* scroll origin of the sheet view (`topLeftCell`), 0-based */
+  /** `1` when the cell gridlines are shown; the default is `1`. */
+  int32_t show_grid_lines;
+  /** `1` when the row and column headers are shown; the default is `1`. */
+  int32_t show_row_column_headers;
+  /** `1` when cells holding zero show the 0; the default is `1`. */
+  int32_t show_zeros;
+  /** `1` when the sheet is laid out right to left; the default is `0`. */
+  int32_t right_to_left;
+  /** `1` when the sheet's tab is selected; the default is `0`. Plain metadata: it does not by itself make the sheet the
+   *  active one. */
+  int32_t tab_selected;
+  /** The view mode, an `fm_sheet_view_mode_t`; the normal view when the attribute is absent. A `view` value outside the
+   *  OOXML set reads as the normal view and is kept verbatim on save. */
+  int32_t view_mode;
+  /** 0-based row of the scroll origin (`topLeftCell`); 0 by default. */
+  uint32_t top_left_row;
+  /** 0-based column of the scroll origin (`topLeftCell`); 0 by default. */
   uint32_t top_left_col;
-  uint32_t pane_top_left_row; /* first visible cell of a frozen or split view's lower-right pane */
+  /** 0-based row of the first visible cell of a frozen or split view's lower-right pane (`<pane topLeftCell>`); in a
+   *  frozen view the first row past the frozen rows until a host scrolls it. 0 when nothing is frozen or split. */
+  uint32_t pane_top_left_row;
+  /** 0-based column of the first visible cell of a frozen or split view's lower-right pane (`<pane topLeftCell>`);
+   *  in a frozen view the first column past the frozen columns until a host scrolls it. 0 when nothing is frozen or
+   *  split. */
   uint32_t pane_top_left_col;
-  double split_x_twips; /* unfrozen split position in twips; 0 = none on that axis */
+  /** The horizontal position of an unfrozen split in twips; 0 means no split on that axis, and it is always 0 while the
+   *  view is frozen. */
+  double split_x_twips;
+  /** The vertical position of an unfrozen split in twips; 0 means no split on that axis, and it is always 0 while the
+   *  view is frozen. */
   double split_y_twips;
-  int32_t show_formulas;        /* 0/1; OOXML default 0 */
-  int32_t show_outline_symbols; /* 0/1; OOXML default 1 */
+  /** `1` when cells show their formula text instead of the value; the default is `0`. */
+  int32_t show_formulas;
+  /** `1` when the outline gutter's group symbols are shown; the default is `1`. */
+  int32_t show_outline_symbols;
 } fm_sheet_view_info_t;
 
 /**
@@ -9099,126 +9595,152 @@ typedef struct {
  *        header's patch rules (Patches, above). Fields are those of
  *        `fm_sheet_view_info_t`; no field can be cleared.
  *
- *   * `zoom_pct` -- `[10, 400]`; a value outside it is refused, not clamped.
- *   * `freeze_rows` / `freeze_cols` -- `0` removes that axis; the first
- *     unfrozen cell `(freeze_rows, freeze_cols)` must lie inside the grid
- *     (`freeze_rows` at most 1048575, `freeze_cols` at most 16383).
- *   * `split_x_twips` / `split_y_twips` -- an unfrozen split in twips (`<pane xSplit
- *     ySplit>`), finite and non-negative; `0` for no split on that axis, and
- *     `(0, 0)` removes the split.
- *   * `top_left_*` -- the scroll origin (`<sheetView topLeftCell>`), a cell
- *     inside the grid.
- *   * `pane_top_left_*` -- `<pane topLeftCell>`: the view (with this patch's
- *     panes applied) must be frozen or split, and in a frozen view the cell
- *     must lie in the unfrozen area (`row >= freeze_rows`,
- *     `col >= freeze_cols`). A view without panes accepts only its default
- *     origin `(0, 0)`.
- *   * the `show_*` flags, `right_to_left` and `tab_selected` -- 0 or
- *     non-zero. `tab_selected` is plain metadata: setting it on more than one
- *     sheet affects only what a host reproduces as the active tab.
- *   * `view_mode` -- an `fm_sheet_view_mode_t`; `FM_SHEET_VIEW_MODE_NORMAL`
- *     removes the `view` attribute.
- *
  * A freeze replaces a split and a split replaces a freeze, so one patch may
- * not state a non-zero freeze and a non-zero split together. Changing the
- * panes resets the pane origin and active pane and keeps only the active
- * selection, re-homed to the new active pane; a `pane_top_left_*` in the same
- * patch applies after that reset. Setting the current freeze or split is a
- * no-op.
+ * not state a non-zero freeze and a non-zero split together; a split of
+ * `(0, 0)` removes the split. A view without panes accepts only the default
+ * pane origin `(0, 0)`. Changing the panes resets the pane origin and active
+ * pane and keeps only the active selection, re-homed to the new active pane; a
+ * `pane_top_left_*` in the same patch applies after that reset. Setting the
+ * current freeze or split is a no-op.
  */
 typedef struct {
   uint32_t struct_size;
+  /** Operation on `zoom_pct`: keep leaves it, set writes it; it cannot be cleared. */
   fm_patch_op_t zoom_pct_op;
+  /** The zoom percentage to set, in [10, 400]; a value outside it is refused, not clamped. */
   uint32_t zoom_pct;
+  /** Operation on `freeze_rows`: keep leaves it, set writes it; it cannot be cleared. */
   fm_patch_op_t freeze_rows_op;
+  /** The number of frozen rows to set; 0 removes the frozen rows. The first unfrozen cell (`freeze_rows`,
+   *  `freeze_cols`) must lie inside the grid: `freeze_rows` is at most 1048575. */
   uint32_t freeze_rows;
+  /** Operation on `freeze_cols`: keep leaves it, set writes it; it cannot be cleared. */
   fm_patch_op_t freeze_cols_op;
+  /** The number of frozen columns to set; 0 removes the frozen columns. `freeze_cols` is at most 16383. */
   uint32_t freeze_cols;
+  /** Operation on `show_grid_lines`: keep leaves it, set writes it; it cannot be cleared. */
   fm_patch_op_t show_grid_lines_op;
+  /** Non-zero shows the cell gridlines. */
   int32_t show_grid_lines;
+  /** Operation on `show_row_column_headers`: keep leaves it, set writes it; it cannot be cleared. */
   fm_patch_op_t show_row_column_headers_op;
+  /** Non-zero shows the row and column headers. */
   int32_t show_row_column_headers;
+  /** Operation on `show_zeros`: keep leaves it, set writes it; it cannot be cleared. */
   fm_patch_op_t show_zeros_op;
+  /** Non-zero shows zero values. */
   int32_t show_zeros;
+  /** Operation on `right_to_left`: keep leaves it, set writes it; it cannot be cleared. */
   fm_patch_op_t right_to_left_op;
+  /** Non-zero lays the sheet out right to left. */
   int32_t right_to_left;
+  /** Operation on `tab_selected`: keep leaves it, set writes it; it cannot be cleared. */
   fm_patch_op_t tab_selected_op;
+  /** Non-zero selects the sheet's tab; plain metadata that does not by itself make the sheet active; setting it on
+   *  more than one sheet affects only what a host reproduces as the active tab. */
   int32_t tab_selected;
+  /** Operation on `view_mode`: keep leaves it, set writes it; it cannot be cleared. */
   fm_patch_op_t view_mode_op;
-  int32_t view_mode; /* fm_sheet_view_mode_t */
+  /** The view mode to set, an `fm_sheet_view_mode_t`; the normal view removes the `view` attribute. */
+  int32_t view_mode;
+  /** Operation on `top_left_row`: keep leaves it, set writes it; it cannot be cleared. */
   fm_patch_op_t top_left_row_op;
+  /** 0-based row of the scroll origin to set; the cell must lie inside the grid. */
   uint32_t top_left_row;
+  /** Operation on `top_left_col`: keep leaves it, set writes it; it cannot be cleared. */
   fm_patch_op_t top_left_col_op;
+  /** 0-based column of the scroll origin to set; the cell must lie inside the grid. */
   uint32_t top_left_col;
+  /** Operation on `pane_top_left_row`: keep leaves it, set writes it; it cannot be cleared. */
   fm_patch_op_t pane_top_left_row_op;
+  /** 0-based row of the pane's first visible cell; the view must be frozen or split, and in a frozen view the row is at
+   *  least `freeze_rows`. */
   uint32_t pane_top_left_row;
+  /** Operation on `pane_top_left_col`: keep leaves it, set writes it; it cannot be cleared. */
   fm_patch_op_t pane_top_left_col_op;
+  /** 0-based column of the pane's first visible cell; the view must be frozen or split, and in a frozen view the column
+   *  is at least `freeze_cols`. */
   uint32_t pane_top_left_col;
+  /** Operation on `split_x_twips`: keep leaves it, set writes it; it cannot be cleared. */
   fm_patch_op_t split_x_twips_op;
+  /** The horizontal position in twips of an unfrozen split; finite and non-negative, 0 for no split on that axis. */
   double split_x_twips;
+  /** Operation on `split_y_twips`: keep leaves it, set writes it; it cannot be cleared. */
   fm_patch_op_t split_y_twips_op;
+  /** The vertical position in twips of an unfrozen split; finite and non-negative, 0 for no split on that axis. */
   double split_y_twips;
+  /** Operation on `show_formulas`: keep leaves it, set writes it; it cannot be cleared. */
   fm_patch_op_t show_formulas_op;
+  /** Non-zero shows the formula text instead of the value. */
   int32_t show_formulas;
+  /** Operation on `show_outline_symbols`: keep leaves it, set writes it; it cannot be cleared. */
   fm_patch_op_t show_outline_symbols_op;
+  /** Non-zero shows the outline gutter's group symbols. */
   int32_t show_outline_symbols;
 } fm_sheet_view_patch_t;
 
 /**
  * @brief Per-column layout override surfaced over the C ABI.
  *
- * Both endpoints are 0-based and
- * inclusive (matches the engine-side type; OOXML's `min`/`max`
- * 1-based conversion stays inside the writer). `width_chars` is in
- * characters of the Normal font. `has_width_chars` is logical
- * presence: it is true for the raw presence bit or a legacy non-zero width,
- * while an explicit zero is preserved by the raw bit. `has_xf_index`
- * preserves style attribute presence, including explicit style="0";
- * `xf_index` is the cell XF the column applies.
+ * The OOXML `min` / `max` 1-based conversion stays inside the writer.
  */
 typedef struct {
   uint32_t struct_size;
+  /** 0-based index of the first column of the span. */
   uint32_t first;
+  /** 0-based index of the last column of the span, inclusive. */
   uint32_t last;
+  /** The explicit width in characters of the Normal font; meaningful only when `has_width_chars` is 1. */
   double width_chars;
-  int32_t hidden; /* 0/1 */
+  /** `1` when the columns of the span are hidden. */
+  int32_t hidden;
+  /** The outline level of the span; 0 means not grouped. */
   uint8_t outline_level;
+  /** Padding; always 0. */
   uint8_t _pad[3];
-  int32_t collapsed; /* 0/1; `collapsed` attribute of the span */
+  /** `1` when the outline group this span summarises is collapsed (the `collapsed` attribute). */
+  int32_t collapsed;
   /* Attribute-presence flags. has_width_chars distinguishes width="0" from an
    * omitted width and is normalized true for legacy non-zero widths;
    * has_xf_index keeps an explicit style="0". */
-  int32_t has_width_chars; /* 0/1 */
-  int32_t has_xf_index;    /* 0/1 */
+  /** 1 when `width_chars` is set; 0 means the span states no width. True for the raw presence bit or a legacy non-zero
+   *  width; an explicit zero width is preserved by the raw bit. */
+  int32_t has_width_chars;
+  /** 1 when the span states a column style (including an explicit style 0); 0 means it states none. */
+  int32_t has_xf_index;
+  /** The cell XF index the columns of the span apply; meaningful only when `has_xf_index` is 1. */
   uint32_t xf_index;
 } fm_column_layout_info_t;
 
 /**
  * @brief Per-row layout override surfaced over the C ABI.
  *
- * Mirrors `formulon::RowLayout`. The row index is 0-based; `height_pt` is
- * in points (matches OOXML `<row ht=...>`). `has_xf_index` is set only when
- * OOXML `customFormat="1"` makes the row `s` attribute effective; `xf_index`
- * is then the cell XF the row applies.
- *
- * `has_height_pt` is the presence of a stored height; `height_pt` is meaningful
- * only when it is set. `custom_height` separates an explicit override
- * (`customHeight="1"`, the state `fm_sheet_set_row_height` produces) from an
- * auto height that merely caches `ht`, which Excel recomputes on its own.
+ * Mirrors `formulon::RowLayout`.
  */
 typedef struct {
   uint32_t struct_size;
+  /** 0-based index of the row. */
   uint32_t row;
+  /** The stored height in points; meaningful only when `has_height_pt` is 1. */
   double height_pt;
-  int32_t hidden; /* 0/1 */
+  /** `1` when the row is hidden. */
+  int32_t hidden;
+  /** The outline level of the row; 0 means not grouped. */
   uint8_t outline_level;
+  /** Padding; always 0. */
   uint8_t _pad[3];
-  int32_t collapsed; /* 0/1; `collapsed` attribute of the row */
+  /** `1` when the outline group this row summarises is collapsed (the `collapsed` attribute). */
+  int32_t collapsed;
   /* Row s= is effective only when customFormat=1 in OOXML. */
-  int32_t has_xf_index; /* 0/1 */
+  /** 1 when the row's style applies (`customFormat="1"`); 0 means the row has no style of its own. */
+  int32_t has_xf_index;
+  /** The cell XF index the row applies; meaningful only when `has_xf_index` is 1. */
   uint32_t xf_index;
-  int32_t has_height_pt; /* 0/1 */
-  int32_t custom_height; /* 0/1 */
+  /** 1 when the row stores a height; 0 means none is stored. */
+  int32_t has_height_pt;
+  /** `1` when the height is an explicit override (`customHeight="1"`) rather than an auto height that Excel recomputes
+   *  on its own; the state `fm_sheet_set_row_height` produces. */
+  int32_t custom_height;
 } fm_row_layout_info_t;
 
 /**
@@ -9467,121 +9989,130 @@ typedef enum {
   FM_SORT_METHOD_STROKE = 2,
 } fm_sort_method_t;
 
-/**
- * @brief One `<dateGroupItem>` of a values filter.
- *
- * `grouping` is the granularity the item matches at, an
- * `fm_date_time_grouping_t`. Fields finer than `grouping` are zero.
- */
+/** @brief One `<dateGroupItem>` of a values filter. */
 typedef struct {
+  /** Calendar year. */
   uint16_t year;
+  /** Month of the year, 1-12; 0 when the item is coarser than month. */
   uint8_t month;
+  /** Day of the month, 1-31; 0 when the item is coarser than day. */
   uint8_t day;
+  /** Hour of the day, 0-23; 0 when the item is coarser than hour. */
   uint8_t hour;
+  /** Minute of the hour, 0-59; 0 when the item is coarser than minute. */
   uint8_t minute;
+  /** Second of the minute, 0-59; 0 when the item is coarser than second. */
   uint8_t second;
-  int32_t grouping; /* fm_date_time_grouping_t */
+  /** The granularity the item matches at; fields finer than it are zero. */
+  int32_t grouping;
 } fm_date_group_item_t;
 
-/**
- * @brief One custom condition of an AutoFilter column (`<customFilter>`).
- *
- * `op` is an `fm_comparison_operator_t` other than `BETWEEN` /
- * `NOT_BETWEEN`; `value` is the `<customFilter val>` text, `NULL` meaning
- * empty on input.
- */
+/** @brief One custom condition of an AutoFilter column (`<customFilter>`). */
 typedef struct {
+  /** The comparison applied to the cell, an `fm_comparison_operator_t` other than between and not-between. */
   int32_t op;
+  /** The text the cell is compared with (`customFilter val`); `NULL` means empty on input. */
   const char* value;
 } fm_filter_condition_t;
 
 /**
  * @brief One `<filterColumn>` of an AutoFilter.
  *
- * `column_offset` is the 0-based offset from the AutoFilter range's first column.
  * `kind` selects the criterion, and only that criterion's fields are read on
- * input; on output the fields of every other criterion are zero.
- *   * `kind` -- an `fm_filter_kind_t`.
- *   * values -- `filter_blank` matches blank cells; `values` lists displayed
- *     texts and `date_groups` date-group items.
- *   * custom -- `condition_count` (1 or 2) `conditions`, joined by AND when
- *     `custom_and` is set. Operators are `fm_comparison_operator_t` members
- *     other than `BETWEEN` / `NOT_BETWEEN`, which the setter rejects with
- *     `FM_STATUS_INVALID_ARGUMENT` (2), as it does any other
- *     `condition_count` for a custom kind. Other kinds read `condition_count`
- *     0 and ignore it on input. The read `conditions` array shares the
- *     AutoFilter getter's lifetime.
- *   * top10 -- `top` (else bottom), `percent`, the rank `top_val`, and the
- *     `filter_val` threshold Excel last stored when `has_filter_val`.
- *   * dynamic -- `dynamic_type` is an `fm_dynamic_filter_type_t`; `dyn_val` / `dyn_max_val` are the
- *     stored bounds when their `has_` flag is set, and `val_iso` /
- *     `max_val_iso` their ISO spellings.
- *   * color -- `dxf_index` names the differential format whose fill
- *     (`cell_color` set) or font colour matches, when `has_dxf_index`.
- *   * icon -- `icon_set` is an `fm_icon_set_name_t` and
- *     `icon_index` the icon index when `has_icon_index` (else "no icon").
- *
- * On input every `const char*` may be `NULL`, meaning empty, and an array
- * pointer may be `NULL` only with a zero count.
+ * input; on output the fields of every other criterion are zero. On input
+ * every `const char*` may be `NULL`, meaning empty, and an array pointer may
+ * be `NULL` only with a zero count.
  */
 typedef struct {
+  /** The column's 0-based offset from the filter range's first column. */
   uint32_t column_offset;
+  /** 1 when the column's filter button is hidden. */
   int32_t hidden_button;
+  /** 1 when the column's filter button is shown. */
   int32_t show_button;
+  /** Which criterion the column filters on, an `fm_filter_kind_t`; only that criterion's fields are meaningful. */
   int32_t kind;
+  /** 1 when the values filter also matches blank cells. */
   int32_t filter_blank;
+  /** The displayed texts the values filter keeps. */
   const char* const* values;
+  /** The number of entries in `values`. */
   uint32_t value_count;
+  /** The date-group items the values filter keeps. */
   const fm_date_group_item_t* date_groups;
+  /** The number of entries in `date_groups`. */
   uint32_t date_group_count;
+  /** 1 when the two custom conditions are joined by AND, 0 when by OR. */
   int32_t custom_and;
+  /** The custom conditions; empty unless the kind is custom. The read array shares the lifetime of the AutoFilter
+   *  getter. The setter rejects a between or not-between operator with `FM_STATUS_INVALID_ARGUMENT` (2). */
   const fm_filter_condition_t* conditions;
+  /** The number of entries in `conditions`: 1 or 2 for a custom kind, else 0. The setter rejects any other count for a
+   *  custom kind with `FM_STATUS_INVALID_ARGUMENT` (2) and ignores it for other kinds. */
   uint32_t condition_count;
+  /** 1 when the top-10 filter keeps the top items, 0 for the bottom ones. */
   int32_t top;
+  /** 1 when `top_val` is a percentage rather than an item count. */
   int32_t percent;
+  /** 1 when `filter_val` is set; 0 means Excel stored no top-10 threshold. */
   int32_t has_filter_val;
+  /** The top-10 filter's rank: how many items, or what percentage. */
   double top_val;
+  /** The cell value Excel last stored as the top-10 threshold. */
   double filter_val;
+  /** Which dynamic criterion the column filters on, such as above average or this month, an
+   *  `fm_dynamic_filter_type_t`. */
   int32_t dynamic_type;
+  /** 1 when `dyn_val` is set; 0 means Excel stored no lower bound. */
   int32_t has_dyn_val;
+  /** 1 when `dyn_max_val` is set; 0 means Excel stored no upper bound. */
   int32_t has_dyn_max_val;
+  /** The lower bound Excel last stored for the dynamic filter. */
   double dyn_val;
+  /** The upper bound Excel last stored for the dynamic filter. */
   double dyn_max_val;
+  /** The ISO date text of the dynamic filter's lower bound, kept as written; empty when absent. */
   const char* val_iso;
+  /** The ISO date text of the dynamic filter's upper bound, kept as written; empty when absent. */
   const char* max_val_iso;
+  /** 1 when `dxf_index` is set; 0 means the color filter names no differential format. */
   int32_t has_dxf_index;
+  /** The index of the differential format whose fill or font colour the color filter matches. */
   uint32_t dxf_index;
+  /** 1 when the color filter matches the cell fill, 0 when it matches the font colour. */
   int32_t cell_color;
+  /** The icon set the icon filter's icon comes from, an `fm_icon_set_name_t`. */
   int32_t icon_set;
+  /** The index of the icon the icon filter keeps. */
   int32_t icon_index;
+  /** 1 when `icon_index` is set; 0 means the icon filter names no icon. */
   int32_t has_icon_index;
 } fm_filter_column_t;
 
-/**
- * @brief One `<sortCondition>` of an AutoFilter's sort state.
- *
- * `sort_by` is an `fm_sort_by_t`. `dxf_index` is read
- * only when `has_dxf_index`, `icon_index` only when `has_icon_index`; `icon_set` is
- * an `fm_icon_set_name_t`.
- */
+/** @brief One `<sortCondition>` of an AutoFilter's sort state. */
 typedef struct {
+  /** The cells the condition sorts by, the key column of the sorted range. */
   fm_cell_rect_t ref;
+  /** 1 sorts in descending order. */
   int32_t descending;
+  /** What the condition sorts by: the value, the cell colour, the font colour or the icon, an `fm_sort_by_t`. */
   int32_t sort_by;
+  /** The custom sort list, as comma-separated items; empty when the condition uses none. */
   const char* custom_list;
+  /** The index of the differential format whose colour the condition sorts by. */
   uint32_t dxf_index;
+  /** 1 when `dxf_index` is set; 0 means the condition names no differential format. */
   int32_t has_dxf_index;
+  /** The icon set the condition's icon comes from, an `fm_icon_set_name_t`. */
   int32_t icon_set;
+  /** The index of the icon the condition sorts by. */
   int32_t icon_index;
+  /** 1 when `icon_index` is set; 0 means the condition names no icon. */
   int32_t has_icon_index;
 } fm_sort_condition_t;
 
 /**
  * @brief A sheet or table AutoFilter.
- *
- * `range` includes the header row. `columns` must be in strictly ascending
- * `column_offset` order inside the range. The sort state is present when
- * `has_sort`; `sort_method` is an `fm_sort_method_t`.
  *
  * Attributes and extensions the record does not carry (`xr:uid`, unknown
  * `filterColumn` children, `extLst` payloads, a values filter's
@@ -9591,15 +10122,25 @@ typedef struct {
  */
 typedef struct {
   uint32_t struct_size;
+  /** The filtered range, header row included. */
   fm_cell_rect_t range;
+  /** The filter columns, in strictly ascending column-offset order. */
   const fm_filter_column_t* columns;
+  /** The number of entries in `columns`. */
   uint32_t column_count;
+  /** 1 when the AutoFilter has a sort state, described by the sort fields; 0 means it has none. */
   int32_t has_sort;
+  /** The cells the sort state applies to. */
   fm_cell_rect_t sort_ref;
+  /** 1 when the sort is by columns (left to right) rather than by rows. */
   int32_t column_sort;
+  /** 1 when text comparison in the sort is case-sensitive. */
   int32_t case_sensitive;
+  /** How East Asian text is ordered: by default order, by pinyin or by stroke count, an `fm_sort_method_t`. */
   int32_t sort_method;
+  /** The sort conditions, in priority order. */
   const fm_sort_condition_t* conditions;
+  /** The number of entries in `conditions`. */
   uint32_t condition_count;
 } fm_auto_filter_t;
 
@@ -10033,7 +10574,9 @@ FM_API fm_status_t fm_sheet_get_range_xf_bases_excluding(const fm_workbook_t* wb
 /** @brief One pair of `fm_sheet_remap_range_xfs`: a cell resolving to
  *         `from_xf` ends at `to_xf`. */
 typedef struct {
+  /** The cell-XF index a cell resolves to before the remap. */
   uint32_t from_xf;
+  /** The cell-XF index the cell resolves to after the remap. */
   uint32_t to_xf;
 } fm_xf_remap_t;
 
@@ -10112,34 +10655,34 @@ FM_API fm_status_t fm_sheet_reset_row_height(fm_workbook_t* wb, size_t sheet_ind
 /**
  * @brief Sheet default column / row metrics (`<sheetFormatPr>`).
  *
- * `default_column_width_chars` is a stored column width (character units with the
- * column padding included, as OOXML writes it) and `default_row_height_pt` is
- * in points; each is meaningful only when its `has_*` flag is non-zero,
+ * Each stored default is meaningful only when its `has_*` flag is non-zero,
  * since an absent attribute and an explicit `0` are different states.
- * `base_column_width_chars` is in characters and always present (OOXML default 8).
- *
- * `effective_default_column_width_chars` (stored width) and
- * `effective_default_row_height_pt` (points) are the values the sheet actually
- * lays out with: the stated default when its `has_*` flag is set, else the
- * column Excel derives from `base_column_width_chars` and the Normal font (Calibri
- * 11, base 8: 9.140625, shown as 8.43) and 102/7 pt; the row height is 0 when
- * the sheet's zeroHeight hides rows by default. They are read-only.
- *
- * `custom_height` is `<sheetFormatPr customHeight>`: the stated
- * `default_row_height_pt` is an explicit override that stays as written, rather
- * than a cached figure Excel recomputes from the Normal font. `zero_height`
- * is `<sheetFormatPr zeroHeight>`: rows are hidden unless they say otherwise.
  */
 typedef struct {
   uint32_t struct_size;
+  /** The stored default column width in characters, column padding included; meaningful only when
+   *  `has_default_column_width_chars` is 1. */
   double default_column_width_chars;
+  /** The stored default row height in points; meaningful only when `has_default_row_height_pt` is 1. */
   double default_row_height_pt;
+  /** The base column width in characters, from which Excel derives the default column width when none is stored; always
+   *  present, the OOXML default is 8. */
   double base_column_width_chars;
-  int32_t has_default_column_width_chars; /* 0/1 */
-  int32_t has_default_row_height_pt;      /* 0/1 */
-  int32_t custom_height;                  /* 0/1; `customHeight` */
-  int32_t zero_height;                    /* 0/1; `zeroHeight` */
+  /** 1 when `default_column_width_chars` is stored; 0 means the sheet stores none. */
+  int32_t has_default_column_width_chars;
+  /** 1 when `default_row_height_pt` is stored; 0 means the sheet stores none. */
+  int32_t has_default_row_height_pt;
+  /** `1` when `default_row_height_pt` is an explicit override that stays as written, rather than a cached figure Excel
+   *  recomputes from the Normal font. */
+  int32_t custom_height;
+  /** `1` when rows are hidden by default unless they say otherwise. */
+  int32_t zero_height;
+  /** Stored width in characters the sheet lays columns out with: the stated default column width when set, else the
+   *  width Excel derives from the base column width and the Normal font (Calibri 11, base 8: 9.140625, shown as 8.43).
+   *  Read-only. */
   double effective_default_column_width_chars;
+  /** Points the sheet lays rows out with: the stated default row height when set, else 102/7 (about 14.57); 0 when the
+   *  sheet hides rows by default. Read-only. */
   double effective_default_row_height_pt;
 } fm_sheet_format_defaults_t;
 
@@ -10160,21 +10703,29 @@ FM_API fm_status_t fm_sheet_get_format_defaults(const fm_workbook_t* wb, size_t 
  *
  * `default_column_width_chars` and `default_row_height_pt` can be cleared,
  * which removes the attribute (the sheet then lays out with the derived
- * default); a `SET` number is finite and non-negative. `base_column_width_chars`
- * is the same kind of number and cannot be cleared; `custom_height` and
- * `zero_height` are 0 or non-zero flags.
+ * default).
  */
 typedef struct {
   uint32_t struct_size;
+  /** Operation on `default_column_width_chars`: keep leaves it, set writes it, clear removes it. */
   fm_patch_op_t default_column_width_chars_op;
+  /** The default column width in characters to set, finite and non-negative. */
   double default_column_width_chars;
+  /** Operation on `default_row_height_pt`: keep leaves it, set writes it, clear removes it. */
   fm_patch_op_t default_row_height_pt_op;
+  /** The default row height in points to set, finite and non-negative. */
   double default_row_height_pt;
+  /** Operation on `base_column_width_chars`: keep leaves it, set writes it; it cannot be cleared. */
   fm_patch_op_t base_column_width_chars_op;
+  /** The base column width in characters to set, finite and non-negative. */
   double base_column_width_chars;
+  /** Operation on `custom_height`: keep leaves it, set writes it; it cannot be cleared. */
   fm_patch_op_t custom_height_op;
+  /** Non-zero marks the default row height as an explicit override. */
   int32_t custom_height;
+  /** Operation on `zero_height`: keep leaves it, set writes it; it cannot be cleared. */
   fm_patch_op_t zero_height_op;
+  /** Non-zero hides rows by default. */
   int32_t zero_height;
 } fm_sheet_format_defaults_patch_t;
 
@@ -10221,19 +10772,20 @@ typedef enum {
  * characters (`Range.ColumnWidth`): `width_pt = chars * points_per_char +
  * padding_pt`. Stored widths go through `fm_sheet_convert_column_chars_to_pt`,
  * which also snaps to whole screen pixels.
- *
- * `calibrated` is `0` when the Normal font is not a tabulated calibration
- * point and the Calibri 11 figure was extrapolated. `platform` is the
- * `fm_width_platform_t` whose metrics the model uses. `normal_font_name` is a
- * read-scratch-backed view.
  */
 typedef struct {
   uint32_t struct_size;
+  /** The points added per displayed character. */
   double points_per_char;
+  /** The constant padding in points. */
   double padding_pt;
+  /** The point size of the Normal font. */
   double normal_font_size_pt;
-  int32_t calibrated; /* 0/1 */
-  int32_t platform;   /* fm_width_platform_t */
+  /** `0` when the Normal font is not a measured calibration point and the Calibri 11 figure was extrapolated. */
+  int32_t calibrated;
+  /** The `fm_width_platform_t` whose metrics the model uses. */
+  int32_t platform;
+  /** The name of the Normal font, a read-scratch-backed view. */
   const char* normal_font_name;
 } fm_width_model_info_t;
 
@@ -10404,23 +10956,27 @@ typedef enum {
 /**
  * @brief Where and why the most recent formula syntax failure happened.
  *
- * `start` / `end` are UTF-16 code-unit offsets into the text the caller
- * passed (a supplementary-plane character counts 2); `line` and `column` are
- * 1-based, `column` in UTF-16 code units. `start_cp`, `end_cp` and
- * `column_cp` give the same positions in code points (a supplementary-plane
- * character counts 1). When the failure cannot be placed in the caller's text
+ * When the failure cannot be placed in the caller's text
  * the range covers all of it.
  */
 typedef struct {
   uint32_t struct_size;
-  int32_t code;   /* fm_parse_error_code_t */
-  uint32_t start; /* first UTF-16 code unit of the offending span */
-  uint32_t end;   /* one past its last UTF-16 code unit */
-  uint32_t line;  /* 1-based */
+  /** The parse error code identifying the kind of failure. */
+  int32_t code;
+  /** Offset of the first UTF-16 code unit of the offending span in the caller's text. */
+  uint32_t start;
+  /** Offset one past the last UTF-16 code unit of the offending span. */
+  uint32_t end;
+  /** The 1-based line of the failure. */
+  uint32_t line;
+  /** The 1-based column of the failure within its line, in UTF-16 code units. */
   uint32_t column;
-  uint32_t start_cp;  /* `start` in code points */
-  uint32_t end_cp;    /* `end` in code points */
-  uint32_t column_cp; /* `column` in code points, 1-based */
+  /** The same position as `start`, in code points. */
+  uint32_t start_cp;
+  /** The same position as `end`, in code points. */
+  uint32_t end_cp;
+  /** The same position as `column`, in code points (1-based). */
+  uint32_t column_cp;
 } fm_parse_error_info_t;
 
 /**
@@ -10566,8 +11122,6 @@ typedef enum {
  * This record is a fixed 136-byte C ABI layout carrying every optional
  * alignment attribute represented by Formulon's style model, the six
  * `apply*` flags, `quotePrefix`, and the `<protection>` child.
- * `has_alignment` is the presence of the `<alignment>` child itself, so an
- * explicit empty child is distinct from an omitted child.
  * Each `has_*` flag below distinguishes an omitted OOXML attribute from an
  * explicit zero / false value. For the four core alignment attributes,
  * values are ignored when their corresponding flag is zero; insertion
@@ -10575,54 +11129,88 @@ typedef enum {
  * `vertical=2` (bottom), `wrap_text=0`, and
  * `justify_last_line=0`). Thus a zero-initialized record means an omitted
  * alignment child and is deduplicated with the default XF; getters return
- * those canonical defaults. `relative_indent` is signed, matching the
- * OOXML `relativeIndent` attribute.
+ * those canonical defaults.
  *
- * `apply_*` mirror the `<xf apply*>` attributes, which say whether the
- * record's own value for that group overrides its parent named style.
- * `has_protection` is the presence of the `<protection>` child; when it is
- * zero `locked` / `hidden` are ignored on insertion and getters report the
- * model defaults (`locked=1`, `hidden=0`). All of these take part in XF
- * deduplication, so two records differing only in protection stay distinct.
+ * When `has_protection` is zero `locked` / `hidden` are ignored on insertion
+ * and getters report the model defaults (`locked=1`, `hidden=0`). The
+ * protection fields take part in XF deduplication, so two records differing
+ * only in protection stay distinct.
  *
  * Bindings copy the struct out of the workbook's styles table; subsequent
  * mutations to the workbook do not invalidate the copy.
  */
 typedef struct {
+  /** Index of the font in the workbook font table. */
   uint32_t font_index;
+  /** Index of the fill in the workbook fill table. */
   uint32_t fill_index;
+  /** Index of the border in the workbook border table. */
   uint32_t border_index;
-  uint32_t num_fmt_id;       /* 0..65535 */
-  int32_t horizontal;        /* fm_horizontal_align_t */
-  int32_t vertical;          /* fm_vertical_align_t; 2=bottom is the default */
-  int32_t wrap_text;         /* 0=false, 1=true */
-  int32_t justify_last_line; /* 0=false, 1=true */
-  uint32_t style_xf_index;   /* parent `<cellStyleXfs>` index for named styles */
-  int32_t has_alignment;     /* 0= no `<alignment>` child, 1= child present */
+  /** The number format id (0 to 65535): a built-in id or one declared in `<numFmts>`. */
+  uint32_t num_fmt_id;
+  /** The horizontal alignment. Read only when `has_horizontal` is 1. */
+  int32_t horizontal;
+  /** The vertical alignment; bottom when the attribute is absent. Read only when `has_vertical` is 1. */
+  int32_t vertical;
+  /** Whether text wraps within the cell. Read only when `has_wrap_text` is 1. */
+  int32_t wrap_text;
+  /** Whether the last line is justified; effective with distributed horizontal alignment. Read only when
+   *  `has_justify_last_line` is 1. */
+  int32_t justify_last_line;
+  /** Index into `<cellStyleXfs>` of the named style this format inherits from. */
+  uint32_t style_xf_index;
+  /** 1 when the record has an `<alignment>` child, even an empty one; 0 means the child is omitted. */
+  int32_t has_alignment;
+  /** 1 when the text rotation is stated, so `text_rotation` is read; 0 means the attribute is omitted. */
   int32_t has_text_rotation;
-  uint32_t text_rotation; /* 0..180, or 255 for vertical text */
+  /** The text rotation in degrees, 0 to 180, or 255 for vertical text. Read only when `has_text_rotation` is 1. */
+  uint32_t text_rotation;
+  /** 1 when the indent is stated, so `indent` is read; 0 means the attribute is omitted. */
   int32_t has_indent;
-  uint32_t indent; /* 0..255 */
+  /** The indent level, 0 to 255. Read only when `has_indent` is 1. */
+  uint32_t indent;
+  /** 1 when the relative indent is stated, so `relative_indent` is read; 0 means the attribute is omitted. */
   int32_t has_relative_indent;
+  /** The signed indent relative to the parent style. Read only when `has_relative_indent` is 1. */
   int32_t relative_indent;
+  /** 1 when the shrink-to-fit flag is stated, so `shrink_to_fit` is read; 0 means the attribute is omitted. */
   int32_t has_shrink_to_fit;
-  int32_t shrink_to_fit; /* 0=false, 1=true */
+  /** Whether text shrinks to fit the cell width. Read only when `has_shrink_to_fit` is 1. */
+  int32_t shrink_to_fit;
+  /** 1 when the reading order is stated, so `reading_order` is read; 0 means the attribute is omitted. */
   int32_t has_reading_order;
-  int32_t reading_order;         /* fm_reading_order_t */
-  int32_t has_horizontal;        /* 0=omitted, 1=explicit `horizontal` */
-  int32_t has_vertical;          /* 0=omitted, 1=explicit `vertical` */
-  int32_t has_wrap_text;         /* 0=omitted, 1=explicit `wrapText` */
-  int32_t has_justify_last_line; /* 0=omitted, 1=explicit `justifyLastLine` */
-  int32_t apply_number_format;   /* 0/1 */
-  int32_t apply_font;            /* 0/1 */
-  int32_t apply_fill;            /* 0/1 */
-  int32_t apply_border;          /* 0/1 */
-  int32_t apply_alignment;       /* 0/1 */
-  int32_t apply_protection;      /* 0/1 */
-  int32_t quote_prefix;          /* 0/1 */
-  int32_t has_protection;        /* 0= no `<protection>` child, 1= child present */
-  int32_t locked;                /* 0/1; ignored unless has_protection */
-  int32_t hidden;                /* 0/1; ignored unless has_protection */
+  /** The text reading order. Read only when `has_reading_order` is 1. */
+  int32_t reading_order;
+  /** 1 when the horizontal alignment is stated, so `horizontal` is read; 0 means the attribute is omitted. */
+  int32_t has_horizontal;
+  /** 1 when the vertical alignment is stated, so `vertical` is read; 0 means the attribute is omitted. */
+  int32_t has_vertical;
+  /** 1 when the wrap-text flag is stated, so `wrap_text` is read; 0 means the attribute is omitted. */
+  int32_t has_wrap_text;
+  /** 1 when the justify-last-line flag is stated, so `justify_last_line` is read; 0 means the attribute is omitted. */
+  int32_t has_justify_last_line;
+  /** Whether this record's number format overrides the one of its parent named style. */
+  int32_t apply_number_format;
+  /** Whether this record's font overrides the one of its parent named style. */
+  int32_t apply_font;
+  /** Whether this record's fill overrides the one of its parent named style. */
+  int32_t apply_fill;
+  /** Whether this record's border overrides the one of its parent named style. */
+  int32_t apply_border;
+  /** Whether this record's alignment overrides the one of its parent named style. */
+  int32_t apply_alignment;
+  /** Whether this record's protection overrides the one of its parent named style. */
+  int32_t apply_protection;
+  /** Whether the cell text carries a leading apostrophe that marks it as text. */
+  int32_t quote_prefix;
+  /** 1 when the record has an `<protection>` child, even an empty one; 0 means the child is omitted. */
+  int32_t has_protection;
+  /** Whether cells are locked once the sheet is protected. Read only when `has_protection` is 1; otherwise a cell is
+   *  locked. */
+  int32_t locked;
+  /** Whether the formula is hidden once the sheet is protected. Read only when `has_protection` is 1; otherwise it is
+   *  not hidden. */
+  int32_t hidden;
 } fm_cell_xf_t;
 
 /** @brief `fm_font_t::underline` values (OOXML `ST_UnderlineValues` order). */
@@ -10671,59 +11259,72 @@ typedef enum {
  * means "switch bold off"; on a cell font a `has_*` flag without its
  * value emits the explicit-off form.
  *
- * `outline`, `shadow`, `condense` and `extend` are the matching toggle
- * elements and follow the same `has_*` rule as `bold`.
- *
- * `color` is the `<color>` element, `FM_COLOR_KIND_NONE` when absent.
- *
- * `size_pt` is the font size in points, `1..409` when `has_size_pt != 0`. A
- * differential font (`fm_workbook_add_dxf`) with `has_size_pt == 0` leaves the
- * size unchanged. A cell font with `has_size_pt == 0` takes the size of the
- * Normal-style font (`fonts[0]`; `fm_workbook_set_default_font` keeps its current
- * size) and `size_pt` is ignored; a cell font always stores a size.
- *
  * A required cell-font attribute with no absent state inherits from the Normal
  * font when cleared: `has_size_pt == 0` for the size, `name == NULL` for the
  * name (`fm_workbook_set_default_font` keeps the current one). An attribute
  * with an absent state goes absent: `FM_COLOR_KIND_NONE` writes no `<color>`.
- *
- * `scheme` is the `<scheme>` link to the workbook theme's major (heading)
- * or minor (body) typeface. It needs no presence flag because OOXML has no
- * "absent value" spelling for it: `0` is exactly "no `<scheme>` element".
- * Set it only on a workbook that carries a theme part — a link into a
- * theme that is not there resolves to nothing.
  */
 typedef struct {
-  const char* name; /* NUL-terminated UTF-8, model-backed view */
+  /** The typeface name as UTF-8; NULL when the font names none, which on a cell font takes the Normal style's name. */
+  const char* name;
+  /** The font size in points, 1 to 409. Read only when `has_size_pt` is 1; a cell font without one takes the Normal
+   *  style's size. */
   double size_pt;
-  int32_t bold;         /* 0=false, 1=true */
-  int32_t italic;       /* 0=false, 1=true */
-  int32_t strike;       /* 0=false, 1=true */
-  int32_t has_bold;     /* 0= no `<b>` element, 1= element present */
-  int32_t has_italic;   /* 0= no `<i>` element, 1= element present */
-  int32_t has_strike;   /* 0= no `<strike>` element, 1= element present */
-  int32_t has_family;   /* 0= no `<family>` element, 1= element present */
-  int32_t has_charset;  /* 0= no `<charset>` element, 1= element present */
-  int32_t has_size_pt;  /* 0= no `<sz>` element, 1= element present */
-  int32_t outline;      /* 0=false, 1=true */
-  int32_t shadow;       /* 0=false, 1=true */
-  int32_t condense;     /* 0=false, 1=true */
-  int32_t extend;       /* 0=false, 1=true */
-  int32_t has_outline;  /* 0= no `<outline>` element, 1= element present */
-  int32_t has_shadow;   /* 0= no `<shadow>` element, 1= element present */
-  int32_t has_condense; /* 0= no `<condense>` element, 1= element present */
-  int32_t has_extend;   /* 0= no `<extend>` element, 1= element present */
-  int32_t underline;    /* fm_underline_style_t */
-  int32_t vert_align;   /* fm_font_vertical_align_t */
-  int32_t family;       /* fm_font_family_t */
-  uint8_t charset;      /* `<charset>` codepage id (e.g. 128 = Shift_JIS) */
-  int32_t scheme;       /* fm_font_scheme_t; `<scheme>` theme link, 0=absent */
+  /** Whether the font is bold. Read only when `has_bold` is 1. */
+  int32_t bold;
+  /** Whether the font is italic. Read only when `has_italic` is 1. */
+  int32_t italic;
+  /** Whether the text is struck through. Read only when `has_strike` is 1. */
+  int32_t strike;
+  /** 1 when the font has a `<b>` element, so `bold` is read; 0 means the element is absent. */
+  int32_t has_bold;
+  /** 1 when the font has a `<i>` element, so `italic` is read; 0 means the element is absent. */
+  int32_t has_italic;
+  /** 1 when the font has a `<strike>` element, so `strike` is read; 0 means the element is absent. */
+  int32_t has_strike;
+  /** 1 when the font has a `<family>` element, so `family` is read; 0 means the element is absent. */
+  int32_t has_family;
+  /** 1 when the font has a `<charset>` element, so `charset` is read; 0 means the element is absent. */
+  int32_t has_charset;
+  /** 1 when the font has a `<sz>` element, so `size_pt` is read; 0 means the element is absent. */
+  int32_t has_size_pt;
+  /** Whether the glyphs are drawn as outlines. Read only when `has_outline` is 1. */
+  int32_t outline;
+  /** Whether the glyphs carry a shadow. Read only when `has_shadow` is 1. */
+  int32_t shadow;
+  /** Whether the glyphs are condensed. Read only when `has_condense` is 1. */
+  int32_t condense;
+  /** Whether the glyphs are extended. Read only when `has_extend` is 1. */
+  int32_t extend;
+  /** 1 when the font has a `<outline>` element, so `outline` is read; 0 means the element is absent. */
+  int32_t has_outline;
+  /** 1 when the font has a `<shadow>` element, so `shadow` is read; 0 means the element is absent. */
+  int32_t has_shadow;
+  /** 1 when the font has a `<condense>` element, so `condense` is read; 0 means the element is absent. */
+  int32_t has_condense;
+  /** 1 when the font has a `<extend>` element, so `extend` is read; 0 means the element is absent. */
+  int32_t has_extend;
+  /** The underline style. */
+  int32_t underline;
+  /** The vertical alignment of the text run (baseline, superscript or subscript). */
+  int32_t vert_align;
+  /** The font-family class. Read only when `has_family` is 1. */
+  int32_t family;
+  /** The charset codepage id (for example 128 for Shift_JIS). Read only when `has_charset` is 1. */
+  uint8_t charset;
+  /** The `<scheme>` link to the workbook theme's major (heading) or minor (body) typeface; `0` is exactly "no
+   *  `<scheme>` element", so it needs no presence flag. Set it only on a workbook that carries a theme part: a link
+   *  into a theme that is not there resolves to nothing. */
+  int32_t scheme;
+  /** The `<color>` element; the none kind without one, which renders as the automatic colour. */
   fm_color_t color;
 } fm_font_t;
 
 /** @brief One `<stop>` of a gradient fill: a colour at `position` (0..1). */
 typedef struct {
+  /** The position of the stop along the gradient, 0..1. */
   double position;
+  /** The colour at the stop. */
   fm_color_t color;
 } fm_gradient_stop_t;
 
@@ -10758,32 +11359,33 @@ typedef enum {
  *
  * Frozen value type (an element of `fm_styles_batch_spec_t`): its layout never
  * changes, and extension goes through new functions.
- *
- * `pattern` is the OOXML pattern index: `0=none`, `1=solid`,
- * `2..18=standard pattern set`. `foreground` and `background` are the `<fgColor>` /
- * `<bgColor>` colours, `FM_COLOR_KIND_NONE` when the element is absent.
- *
- * With `has_gradient` set the record is a `<gradientFill>` and the pattern
- * fields are ignored: `gradient_type` is FM_GRADIENT_TYPE_LINEAR or
- * FM_GRADIENT_TYPE_PATH, `gradient_angle_deg` is a linear gradient's angle in degrees,
- * `gradient_left/right/top/bottom` (0..1) locate a path gradient's focus.
- * `gradient_stops` points at `gradient_stop_count` stops; on a read it is
- * valid until the next `fm_workbook_get_fill_at` / `fm_workbook_get_dxf_at` call, a
- * mutation or handle destruction, on a write it is borrowed for the call. A non-finite number
- * is stored as 0 and at most 1024 stops are kept.
  */
 typedef struct {
-  int32_t pattern; /* fm_fill_pattern_t */
+  /** The fill pattern (none, solid or one of the standard patterns). */
+  int32_t pattern;
+  /** The pattern's `<fgColor>`; the none kind when the element is absent. */
   fm_color_t foreground;
+  /** The pattern's `<bgColor>`; the none kind when the element is absent. */
   fm_color_t background;
-  int32_t has_gradient;  /* 0=pattern fill, 1=`<gradientFill>` */
-  int32_t gradient_type; /* fm_gradient_type_t */
+  /** 1 when the record is a `<gradientFill>`, in which case the pattern fields are ignored; 0 means a pattern fill. */
+  int32_t has_gradient;
+  /** Whether the gradient is linear or path; read only when `has_gradient` is 1. */
+  int32_t gradient_type;
+  /** The angle of a linear gradient in degrees. */
   double gradient_angle_deg;
+  /** The left edge (0..1) of a path gradient's focus. */
   double gradient_left;
+  /** The right edge (0..1) of a path gradient's focus. */
   double gradient_right;
+  /** The top edge (0..1) of a path gradient's focus. */
   double gradient_top;
+  /** The bottom edge (0..1) of a path gradient's focus. */
   double gradient_bottom;
+  /** The gradient's colour stops; at most 1024 are kept and a non-finite number is stored as 0. On a read the array is
+   *  valid until the next `fm_workbook_get_fill_at` / `fm_workbook_get_dxf_at` call, a mutation or handle destruction;
+   *  on a write it is borrowed for the call. */
   const fm_gradient_stop_t* gradient_stops;
+  /** The number of entries in `gradient_stops`. */
   uint32_t gradient_stop_count;
 } fm_fill_t;
 
@@ -10808,13 +11410,11 @@ typedef enum {
 /**
  * @brief Plain-data projection of one side of a
  *        `formulon::io::BorderRecord`.
- *
- * `style` is the OOXML border-style ordinal: `0=none`, `1=thin`,
- * `2=medium`, `3=dashed`, ..., `13=slantDashDot`. `color` is the side's
- * `<color>`, `FM_COLOR_KIND_NONE` when absent.
  */
 typedef struct {
-  int32_t style; /* fm_border_style_t */
+  /** The line style of the side (none, thin, medium, dashed, ...). */
+  int32_t style;
+  /** The side's `<color>`; the none kind without one. */
   fm_color_t color;
 } fm_border_side_t;
 
@@ -10824,18 +11424,24 @@ typedef struct {
  * Frozen value type (an element of `fm_styles_batch_spec_t`): its layout never
  * changes, and extension goes through new functions.
  *
- * Each side mirrors the OOXML schema. `diagonal_up` / `diagonal_down`
- * carry the boolean flags as `0`/`1` int32_t to match the rest of the
- * binding surface.
+ * `diagonal_up` / `diagonal_down` carry the boolean flags as `0`/`1` int32_t to
+ * match the rest of the binding surface.
  */
 typedef struct {
+  /** The left side. */
   fm_border_side_t left;
+  /** The right side. */
   fm_border_side_t right;
+  /** The top side. */
   fm_border_side_t top;
+  /** The bottom side. */
   fm_border_side_t bottom;
+  /** The line drawn diagonally; `diagonal_up` and `diagonal_down` choose its directions. */
   fm_border_side_t diagonal;
-  int32_t diagonal_up;   /* 0=false, 1=true */
-  int32_t diagonal_down; /* 0=false, 1=true */
+  /** Whether the diagonal runs from bottom left to top right. */
+  int32_t diagonal_up;
+  /** Whether the diagonal runs from top left to bottom right. */
+  int32_t diagonal_down;
 } fm_border_t;
 
 /**
@@ -10852,20 +11458,35 @@ typedef struct {
  */
 typedef struct {
   uint32_t struct_size;
+  /** The fonts to insert. */
   const fm_font_t* fonts;
+  /** The number of entries in `fonts`. */
   uint32_t font_count;
+  /** The output array that receives the index of each font, one per entry of `fonts`. */
   uint32_t* font_indices;
+  /** The fills to insert. */
   const fm_fill_t* fills;
+  /** The number of entries in `fills`. */
   uint32_t fill_count;
+  /** The output array that receives the index of each fill, one per entry of `fills`. */
   uint32_t* fill_indices;
+  /** The borders to insert. */
   const fm_border_t* borders;
+  /** The number of entries in `borders`. */
   uint32_t border_count;
+  /** The output array that receives the index of each border, one per entry of `borders`. */
   uint32_t* border_indices;
+  /** The cell formats to insert. */
   const fm_cell_xf_t* cell_xfs;
+  /** The number of entries in `cell_xfs`. */
   uint32_t cell_xf_count;
+  /** The output array that receives the index of each cell format, one per entry of `cell_xfs`. */
   uint32_t* cell_xf_indices;
+  /** The number format codes to insert, as UTF-8 strings. */
   const char* const* num_fmt_codes;
+  /** The number of entries in `num_fmt_codes`. */
   uint32_t num_fmt_count;
+  /** The output array that receives the id of each number format, one per entry of `num_fmt_codes`. */
   uint32_t* num_fmt_ids;
 } fm_styles_batch_spec_t;
 
@@ -10875,27 +11496,32 @@ typedef struct {
  * Frozen value type: its layout never
  * changes, and extension goes through new functions.
  *
- * Each `has_*` flag mirrors whether the corresponding child element
- * exists in the source `<dxf>`. `number_format` is the `<numFmt>` format
- * code (UTF-8), `NULL` when the dxf has none; the engine assigns its numFmt
- * id. `number_format`, `alignment_xml`, and
- * `protection_xml` are model-backed views, valid until the next styles-table
- * mutation (including `fm_workbook_add_dxf`) or until the handle is destroyed;
- * reads do not invalidate them. The XML fields are never `NULL` and are empty
- * when their child is absent. Their semantic content is preserved without a
- * typed projection, but XML parsing may normalize lexical formatting such as
+ * `number_format`, `alignment_xml`, and `protection_xml` are model-backed
+ * views, valid until the next styles-table mutation (including
+ * `fm_workbook_add_dxf`) or until the handle is destroyed; reads do not
+ * invalidate them. The semantic content of the XML fields is preserved without
+ * a typed projection, but XML parsing may normalize lexical formatting such as
  * whitespace, quotes, and empty-element spelling.
  */
 typedef struct {
-  int32_t has_font; /* 0=false, 1=true */
+  /** 1 when the format sets a font; 0 means it does not. */
+  int32_t has_font;
+  /** The font part; read only when `has_font` is 1. */
   fm_font_t font;
-  int32_t has_fill; /* 0=false, 1=true */
+  /** 1 when the format sets a fill; 0 means it does not. */
+  int32_t has_fill;
+  /** The fill part; read only when `has_fill` is 1. */
   fm_fill_t fill;
-  int32_t has_border; /* 0=false, 1=true */
+  /** 1 when the format sets a border; 0 means it does not. */
+  int32_t has_border;
+  /** The border part; read only when `has_border` is 1. */
   fm_border_t border;
-  const char* number_format;  /* UTF-8, NUL-terminated; NULL = none */
-  const char* alignment_xml;  /* UTF-8 serialized `<alignment/>`; never NULL */
-  const char* protection_xml; /* UTF-8 serialized `<protection/>`; never NULL */
+  /** The number format code as UTF-8; NULL when the format sets none. The format's id is assigned on save. */
+  const char* number_format;
+  /** The serialized `<alignment/>` element as UTF-8; empty when the format sets no alignment, never NULL. */
+  const char* alignment_xml;
+  /** The serialized `<protection/>` element as UTF-8; empty when the format sets no protection, never NULL. */
+  const char* protection_xml;
 } fm_dxf_t;
 
 /**
@@ -10908,27 +11534,27 @@ typedef struct {
  * `name` is a NUL-terminated UTF-8 model-backed view into the workbook's
  * styles table; it is valid until the next mutation of the cell-style
  * list (`fm_workbook_set_cell_style`, `fm_workbook_remove_cell_style`) or
- * until the handle is destroyed. `style_xf_index` indexes into the parallel
- * `<cellStyleXfs>` table (queryable via
- * `fm_workbook_get_cell_style_xf_count` / `fm_workbook_get_cell_style_xf_at`).
+ * until the handle is destroyed.
  *
- * `builtin_id` carries the OOXML built-in style ordinal (`0..53`) and is
- * read only when `has_builtin_id` is set; `has_builtin_id == 0` is a custom
- * style (no `builtinId` attribute on the element). `outline_level`
- * is the outline level of the `RowLevel_n` / `ColLevel_n` styles
- * (`builtin_id` 1 / 2, `0..6`) and `0` for everything else. `hidden` is
- * non-zero for a style hidden from the style gallery, and `custom_builtin`
- * for a built-in style the workbook changed. The boolean flags follow the
+ * The boolean flags follow the
  * wide-POD convention used elsewhere on this surface.
  */
 typedef struct {
-  const char* name;        /* UTF-8, NUL-terminated; never NULL */
-  uint32_t style_xf_index; /* index into cell_style_xfs */
-  int32_t has_builtin_id;  /* 0= custom style, 1= `builtinId` present */
-  uint32_t builtin_id;     /* 0..53 */
-  uint32_t outline_level;  /* outline level for heading styles */
-  int32_t hidden;          /* 0=false, 1=true */
-  int32_t custom_builtin;  /* 0=false, 1=true */
+  /** The display name of the style as UTF-8; never NULL. */
+  const char* name;
+  /** Index into the `<cellStyleXfs>` table of the format the style applies, queryable via
+   *  `fm_workbook_get_cell_style_xf_count` / `fm_workbook_get_cell_style_xf_at`. */
+  uint32_t style_xf_index;
+  /** 1 when the style is a built-in one, so `builtin_id` is read; 0 means a custom style. */
+  int32_t has_builtin_id;
+  /** The built-in style ordinal (0..53). Read only when `has_builtin_id` is 1. */
+  uint32_t builtin_id;
+  /** The outline level (0..6) of the RowLevel_n / ColLevel_n styles; 0 for other styles. */
+  uint32_t outline_level;
+  /** Whether the style is hidden from the style gallery. */
+  int32_t hidden;
+  /** Whether this is a built-in style the workbook has changed. */
+  int32_t custom_builtin;
 } fm_cell_style_t;
 
 /**
@@ -11063,7 +11689,9 @@ FM_API fm_status_t fm_workbook_get_number_format(const fm_workbook_t* wb, uint32
  */
 typedef struct {
   uint32_t struct_size;
+  /** The number format id. */
   uint32_t num_fmt_id;
+  /** The number format code. */
   const char* number_format;
 } fm_number_format_info_t;
 
@@ -11206,34 +11834,38 @@ typedef enum {
 
 /**
  * @brief One region of a custom table style (`fm_table_style_t`).
- *
- *   * `type`   — an `fm_table_style_element_type_t`; a file spelling outside
- *                the enumeration reads as -1.
- *   * `size`   — stripe band size, at least 1 (1 for non-stripe regions).
- *   * `dxf_index` — read only when `has_dxf_index`; indexes `<dxfs>`
- *                (`fm_workbook_add_dxf`).
  */
 typedef struct {
-  int32_t type; /* fm_table_style_element_type_t */
+  /** The table region this element formats (an `fm_table_style_element_type_t`); a file spelling outside the
+   *  enumeration reads as -1. */
+  int32_t type;
+  /** The stripe band size in rows or columns, at least 1; 1 for a region that is not a stripe. */
   uint32_t size;
+  /** 1 when `dxf_index` is set; 0 means the region is listed without formatting. */
   int32_t has_dxf_index;
+  /** Index of the differential format applied to the region; read only when `has_dxf_index` is 1. */
   uint32_t dxf_index;
 } fm_table_style_element_t;
 
 /**
  * @brief A custom table / PivotTable style from `<tableStyles>`.
  *
- * `pivot` / `table` are `fm_tristate_t`s saying whether PivotTables / tables
- * may use the style: `DEFAULT` or `TRUE` is usable, `FALSE` not; a read
- * returns `TRUE` or `FALSE`. On read, `name` is a model-backed view valid until the next styles
+ * On read, `name` is a model-backed view valid until the next styles
  * mutation, and `elements` is a read-scratch-backed array.
  */
 typedef struct {
   uint32_t struct_size;
+  /** The style name. */
   const char* name;
-  int32_t pivot; /* fm_tristate_t */
-  int32_t table; /* fm_tristate_t */
+  /** Whether PivotTables may use the style (an `fm_tristate_t`): default or true is usable, false is not; a read
+   *  returns true or false. */
+  int32_t pivot;
+  /** Whether tables may use the style (an `fm_tristate_t`): default or true is usable, false is not; a read returns
+   *  true or false. */
+  int32_t table;
+  /** The formatted regions of the style. */
   const fm_table_style_element_t* elements;
+  /** The number of entries in `elements`. */
   uint32_t element_count;
 } fm_table_style_t;
 
@@ -11310,7 +11942,9 @@ FM_API fm_status_t fm_workbook_remove_table_style(fm_workbook_t* wb, const char*
  */
 typedef struct {
   uint32_t struct_size;
+  /** The style a new table takes when none is given; `NULL` when unset. */
   const char* table_style_name;
+  /** The style a new PivotTable takes; `NULL` when unset. */
   const char* pivot_style_name;
 } fm_table_style_defaults_t;
 
@@ -11328,13 +11962,17 @@ FM_API fm_status_t fm_workbook_get_table_style_defaults(const fm_workbook_t* wb,
  * @brief Partial update of the default table and PivotTable style names
  *        (`fm_workbook_update_table_style_defaults`), following the header's
  *        patch rules (Patches, above). Both names can be cleared, which unsets
- *        the default; a `SET` name is non-empty.
+ *        the default.
  */
 typedef struct {
   uint32_t struct_size;
+  /** The update operation for `table_style_name`: keep it, clear it, or set it to the value beside it. */
   fm_patch_op_t table_style_name_op;
+  /** The new default table style name when the operation is set; non-empty. */
   const char* table_style_name;
+  /** The update operation for `pivot_style_name`: keep it, clear it, or set it to the value beside it. */
   fm_patch_op_t pivot_style_name_op;
+  /** The new default PivotTable style name when the operation is set; non-empty. */
   const char* pivot_style_name;
 } fm_table_style_defaults_patch_t;
 
@@ -11762,32 +12400,31 @@ FM_API fm_status_t fm_workbook_add_batch(fm_workbook_t* wb, const fm_styles_batc
 /* Theme, colour resolution and effective style                               */
 /* -------------------------------------------------------------------------- */
 
-/**
- * @brief The 12 theme colours as 0xFFRRGGBB, in `a:clrScheme` order:
- *        dk1, lt1, dk2, lt2, accent1..accent6, hlink, folHlink.
- *
- * This is not the order of a spreadsheet colour's `theme` index
- * (`fm_color_t::theme`), which swaps the first two pairs
- * (0=lt1, 1=dk1, 2=lt2, 3=dk2).
- */
+/** @brief The theme's 12 colours (`a:clrScheme`). */
 typedef struct {
   uint32_t struct_size;
+  /** The 12 scheme colours as 0xFFRRGGBB in `a:clrScheme` order: dk1, lt1, dk2, lt2, accent1 to accent6, hlink,
+   *  folHlink. This is not the order of a colour's theme index, which swaps the first two pairs (0 = lt1, 1 = dk1, 2 =
+   *  lt2, 3 = dk2). */
   uint32_t argb[12];
 } fm_theme_colors_t;
 
 /**
  * @brief The theme's major (heading) and minor (body) typefaces.
  *
- * `*_east_asian` is the `a:ea` face when it names one, otherwise the
- * `a:font script="Jpan"` face. Getter strings are read-scratch-backed views.
+ * Getter strings are read-scratch-backed views.
  * An empty face writes `typeface=""`, as the Office theme's East Asian
  * entries are.
  */
 typedef struct {
   uint32_t struct_size;
+  /** The Latin typeface of the major (heading) font set. */
   const char* major_latin;
+  /** The East Asian typeface of the major (heading) font set: the `a:ea` face, else the Jpan script face. */
   const char* major_east_asian;
+  /** The Latin typeface of the minor (body) font set. */
   const char* minor_latin;
+  /** The East Asian typeface of the minor (body) font set: the `a:ea` face, else the Jpan script face. */
   const char* minor_east_asian;
 } fm_theme_fonts_t;
 
@@ -11831,32 +12468,45 @@ typedef enum {
  * @brief The formatting a cell shows, read from the selected `<cellXfs>`
  *        record directly.
  *
- * `source` is an `fm_effective_style_source_t` naming the level that
- * supplied `xf_index`: the cell, its row (a row style takes effect only with
- * `customFormat`), its column, or the default xf 0. An xf, font, fill or border index beyond its table reads as
- * 0. Colours are resolved against the theme and `<indexedColors>`; each
- * `*_resolution` is an `fm_color_resolution_t`. `border_*[5]` are left,
- * right, top, bottom, diagonal. Named-style inheritance is not recomputed
- * and conditional formatting is not applied. `number_format` is a
- * read-scratch-backed view.
+ * An xf, font, fill or border index beyond its table reads as 0. Colours are
+ * resolved against the theme and `<indexedColors>`. Named-style inheritance is
+ * not recomputed and conditional formatting is not applied.
  */
 typedef struct {
   uint32_t struct_size;
+  /** The index of the selected cell format record. */
   uint32_t xf_index;
-  int32_t source; /* fm_effective_style_source_t */
+  /** The level that supplied `xf_index`, an `fm_effective_style_source_t`: the cell, its row (a row style takes effect
+   *  only with `customFormat`), its column, or the default xf 0. */
+  int32_t source;
+  /** The index into the font table. */
   uint32_t font_index;
+  /** The index into the fill table. */
   uint32_t fill_index;
+  /** The index into the border table. */
   uint32_t border_index;
+  /** The resolved font color as ARGB. */
   uint32_t font_argb;
+  /** How the font color was resolved, an `fm_color_resolution_t`. */
   int32_t font_resolution;
+  /** The resolved fill foreground color as ARGB. */
   uint32_t fill_foreground_argb;
+  /** How the fill foreground color was resolved, an `fm_color_resolution_t`. */
   int32_t fill_foreground_resolution;
+  /** The resolved fill background color as ARGB. */
   uint32_t fill_background_argb;
+  /** How the fill background color was resolved, an `fm_color_resolution_t`. */
   int32_t fill_background_resolution;
+  /** The resolved border colors as ARGB: left, right, top, bottom, diagonal. */
   uint32_t border_argb[5];
+  /** How each border color was resolved, `fm_color_resolution_t` values in the order left, right, top, bottom,
+   *  diagonal. */
   int32_t border_resolution[5];
-  int32_t locked; /* 0/1 */
-  int32_t hidden; /* 0/1 */
+  /** 1 when the cell is locked; 0 when it is not. */
+  int32_t locked;
+  /** 1 when the cell formula is hidden; 0 when it is not. */
+  int32_t hidden;
+  /** The number format code, a read-scratch-backed view. */
   const char* number_format;
 } fm_effective_style_info_t;
 
@@ -12102,21 +12752,21 @@ typedef enum {
  * replaced (the OOXML reader replaces it; entering a formula that names a
  * new book appends to it). `target_external` follows the wide-POD
  * convention used elsewhere on this surface.
- *
- * `book_number` is the 1-based position in `<externalReferences>` document
- * order: the `n` a formula spells as `[n]` (`=[1]Sheet1!A1` names book 1).
- * `kind` is an `fm_external_link_kind_t`.
- * `target` is `NULL` when the per-link rels file was missing or
- * unparseable.
  */
 typedef struct {
   uint32_t struct_size;
-  uint32_t book_number;    /* 1-based document order, the `[n]` of formula text */
-  const char* rel_id;      /* workbook.xml.rels rId for this link */
-  const char* part_path;   /* resolved package-relative body path */
-  const char* target;      /* remote workbook URL, or NULL */
-  int32_t target_external; /* TargetMode="External" => 1 */
-  int32_t kind;            /* fm_external_link_kind_t */
+  /** The 1-based document order in the externalReferences list: the `[n]` of formula text, as in `=[1]Sheet1!A1`. */
+  uint32_t book_number;
+  /** The id of the link in the workbook relationships, such as `rId3`. */
+  const char* rel_id;
+  /** The resolved package-relative path of the body part, such as `xl/externalLinks/externalLink1.xml`. */
+  const char* part_path;
+  /** The URL or path of the remote workbook; `NULL` when the link's relationship names no target. */
+  const char* target;
+  /** `1` when the relationship's TargetMode is External. */
+  int32_t target_external;
+  /** The kind of link, an `fm_external_link_kind_t`. */
+  int32_t kind;
 } fm_external_link_info_t;
 
 /**
@@ -12213,27 +12863,20 @@ typedef enum {
   FM_ANCHOR_EDIT_AS_ABSOLUTE = 3,
 } fm_anchor_edit_as_t;
 
-/**
- * @brief Format and pixel size of an image. `format` is an
- *        `fm_image_format_t`.
- */
+/** @brief Format and pixel size of an image. */
 typedef struct {
   uint32_t struct_size;
+  /** The image's file format, an `fm_image_format_t`. */
   int32_t format;
+  /** Image width in pixels. */
   uint32_t width_px;
+  /** Image height in pixels. */
   uint32_t height_px;
 } fm_image_info_t;
 
 /**
  * @brief The anchor of a drawing object: read back by every drawing record
  *        and taken by every add (`fm_drawing_placement_spec_t::anchor`).
- *
- * `kind` is an `fm_anchor_kind_t` and `edit_as` an `fm_anchor_edit_as_t`,
- * written for a two-cell anchor only. `from_*` is the top-left marker (an
- * absolute anchor reports its position from A1 as `from_col_offset_emu` = x
- * and `from_row_offset_emu` = y); `to_*` is the bottom-right marker of a
- * two-cell anchor and zero otherwise. `width_emu` / `height_emu` are the
- * object's own unrotated size; a two-cell anchor's size is its box.
  *
  * On add, a two-cell anchor takes its box from `to_*` and ignores the size,
  * except that an all-zero `to_*` marker sizes the box from `width_emu` /
@@ -12244,36 +12887,59 @@ typedef struct {
  * An absolute kind is not added.
  */
 typedef struct {
+  /** The anchor kind: absolute, one-cell or two-cell, an `fm_anchor_kind_t`. */
   int32_t kind;
+  /** How the object follows row and column edits (it moves and resizes, moves only, or stays put), an
+   *  `fm_anchor_edit_as_t`; written for a two-cell anchor only. */
   int32_t edit_as;
+  /** 0-based row of the top-left marker. */
   uint32_t from_row;
+  /** 0-based column of the top-left marker. */
   uint32_t from_col;
+  /** Vertical offset of the top-left corner within `from_row`, in EMU; for an absolute anchor, the y position from A1.
+   */
   int64_t from_row_offset_emu;
+  /** Horizontal offset of the top-left corner within `from_col`, in EMU; for an absolute anchor, the x position from
+   *  A1. */
   int64_t from_col_offset_emu;
+  /** 0-based row of the bottom-right marker of a two-cell anchor. 0 unless the anchor is two-cell. */
   uint32_t to_row;
+  /** 0-based column of the bottom-right marker of a two-cell anchor. 0 unless the anchor is two-cell. */
   uint32_t to_col;
+  /** Vertical offset of the bottom-right corner within `to_row`, in EMU. 0 unless the anchor is two-cell. */
   int64_t to_row_offset_emu;
+  /** Horizontal offset of the bottom-right corner within `to_col`, in EMU. 0 unless the anchor is two-cell. */
   int64_t to_col_offset_emu;
+  /** The object's own unrotated width in EMU; a two-cell anchor's width is its box. */
   int64_t width_emu;
+  /** The object's own unrotated height in EMU; a two-cell anchor's height is its box. */
   int64_t height_emu;
 } fm_drawing_anchor_t;
 
 /**
  * @brief One anchored object of a sheet's drawing.
  *
- * `kind` is an `fm_drawing_object_kind_t`; `hidden` is 0 / 1. `name`,
- * `description` and `media_path` are read-scratch-backed views (the lifetime
- * `fm_sheet_get_auto_filter` describes); `media_path` is `NULL` for a
- * non-picture. A picture's format is read with `fm_sheet_get_picture`.
+ * `name`, `description` and `media_path` are read-scratch-backed views (the
+ * lifetime `fm_sheet_get_auto_filter` describes). A picture's format is read
+ * with `fm_sheet_get_picture`.
  */
 typedef struct {
   uint32_t struct_size;
+  /** The object's id in the sheet's drawing. */
   uint32_t object_id;
+  /** The object's kind: picture, shape, chart, group, connector, other graphic frame or other, an
+   *  `fm_drawing_object_kind_t`. */
   int32_t kind;
+  /** `1` when the object is hidden. */
   int32_t hidden;
+  /** Where the object sits on the sheet. */
   fm_drawing_anchor_t anchor;
+  /** The object's name. */
   const char* name;
+  /** The object's alternative text; `NULL` when it has none. */
   const char* description;
+  /** Package path the picture's image resolves to; `NULL` when there is none, as for an object that is not a picture.
+   */
   const char* media_path;
 } fm_drawing_object_info_t;
 
@@ -12282,17 +12948,18 @@ typedef struct {
  *        (`fm_sheet_add_picture`), and embedded as `placement` in
  *        `fm_chart_spec_t`, `fm_shape_spec_t` and `fm_slicer_spec_t`.
  *        An embedded copy sets its own `struct_size` too.
- *
- * `name` and `description` may be `NULL`, meaning empty; an empty name
- * becomes the kind's default (`Picture <n>`, n being the object id minus
- * one, for a picture). `hidden` is an `fm_tristate_t` (default shown).
- * `anchor` follows the add rules of `fm_drawing_anchor_t`.
  */
 typedef struct {
   uint32_t struct_size;
+  /** The object's name; `NULL`, empty or omitted takes the kind's default (`Picture <n>`, n being the object id minus
+   *  one, for a picture). */
   const char* name;
+  /** The object's alternative text; `NULL`, empty or omitted means none. */
   const char* description;
-  int32_t hidden; /* fm_tristate_t */
+  /** Whether the object is hidden; unset means shown. */
+  int32_t hidden;
+  /** Where the object is placed, following the add rules of `fm_drawing_anchor_t`; unset takes the operation's default
+   *  anchor kind at A1. */
   fm_drawing_anchor_t anchor;
 } fm_drawing_placement_spec_t;
 
@@ -12314,29 +12981,58 @@ typedef struct {
  * ends up two-cell, is `FM_STATUS_INVALID_ARGUMENT` (2).
  */
 typedef struct {
+  /** Patch operation for `kind`: leave it unchanged, set it, or (where it can be cleared) remove it. */
   fm_patch_op_t kind_op;
-  int32_t kind; /* fm_anchor_kind_t */
+  /** The anchor kind: absolute, one-cell or two-cell; an absolute kind is not added. */
+  int32_t kind;
+  /** Patch operation for `edit_as`: leave it unchanged, set it, or (where it can be cleared) remove it. */
   fm_patch_op_t edit_as_op;
-  int32_t edit_as; /* fm_anchor_edit_as_t */
+  /** How the object follows row and column edits (it moves and resizes, moves only, or stays put); written for a
+   *  two-cell anchor only. */
+  int32_t edit_as;
+  /** Patch operation for `from_row`: leave it unchanged, set it, or (where it can be cleared) remove it. */
   fm_patch_op_t from_row_op;
+  /** 0-based row of the top-left marker. */
   uint32_t from_row;
+  /** Patch operation for `from_col`: leave it unchanged, set it, or (where it can be cleared) remove it. */
   fm_patch_op_t from_col_op;
+  /** 0-based column of the top-left marker. */
   uint32_t from_col;
+  /** Patch operation for `from_row_offset_emu`: leave it unchanged, set it, or (where it can be cleared) remove it. */
   fm_patch_op_t from_row_offset_emu_op;
+  /** Vertical offset of the top-left corner within `from_row`, in EMU; for an absolute anchor, the y position from A1.
+   */
   int64_t from_row_offset_emu;
+  /** Patch operation for `from_col_offset_emu`: leave it unchanged, set it, or (where it can be cleared) remove it. */
   fm_patch_op_t from_col_offset_emu_op;
+  /** Horizontal offset of the top-left corner within `from_col`, in EMU; for an absolute anchor, the x position from
+   *  A1. */
   int64_t from_col_offset_emu;
+  /** Patch operation for `to_row`: leave it unchanged, set it, or (where it can be cleared) remove it. */
   fm_patch_op_t to_row_op;
+  /** 0-based row of the bottom-right marker of a two-cell anchor. Not accepted on a one-cell anchor. */
   uint32_t to_row;
+  /** Patch operation for `to_col`: leave it unchanged, set it, or (where it can be cleared) remove it. */
   fm_patch_op_t to_col_op;
+  /** 0-based column of the bottom-right marker of a two-cell anchor. Not accepted on a one-cell anchor. */
   uint32_t to_col;
+  /** Patch operation for `to_row_offset_emu`: leave it unchanged, set it, or (where it can be cleared) remove it. */
   fm_patch_op_t to_row_offset_emu_op;
+  /** Vertical offset of the bottom-right corner within `to_row`, in EMU. Not accepted on a one-cell anchor. */
   int64_t to_row_offset_emu;
+  /** Patch operation for `to_col_offset_emu`: leave it unchanged, set it, or (where it can be cleared) remove it. */
   fm_patch_op_t to_col_offset_emu_op;
+  /** Horizontal offset of the bottom-right corner within `to_col`, in EMU. Not accepted on a one-cell anchor. */
   int64_t to_col_offset_emu;
+  /** Patch operation for `width_emu`: leave it unchanged, set it, or (where it can be cleared) remove it. */
   fm_patch_op_t width_emu_op;
+  /** The object's own unrotated width in EMU. Not accepted on a two-cell anchor, except as the size of an all-zero
+   *  bottom-right marker box on add. */
   int64_t width_emu;
+  /** Patch operation for `height_emu`: leave it unchanged, set it, or (where it can be cleared) remove it. */
   fm_patch_op_t height_emu_op;
+  /** The object's own unrotated height in EMU. Not accepted on a two-cell anchor, except as the size of an all-zero
+   *  bottom-right marker box on add. */
   int64_t height_emu;
 } fm_drawing_anchor_patch_t;
 
@@ -12345,20 +13041,23 @@ typedef struct {
  *        (`fm_sheet_update_drawing`, and the `common` half of
  *        `fm_sheet_update_shape` / `fm_sheet_update_slicer`), following the
  *        header's patch rules (Patches, above).
- *
- * `name` cannot be empty, and duplicate names are allowed; a slicer's name
- * cannot be `SET` (it ties the frame to the slicer part). `description` is
- * the one clearable field: `CLEAR` removes it, as a `SET` empty string does.
- * `hidden` is 0 / 1. `anchor` follows `fm_drawing_anchor_patch_t`.
  */
 typedef struct {
   uint32_t struct_size;
+  /** Patch operation for `name`: leave it unchanged, set it, or (where it can be cleared) remove it. */
   fm_patch_op_t name_op;
+  /** The new name; it cannot be empty, though duplicate names are allowed, and a slicer's name cannot be set (it ties
+   *  the frame to the slicer part). */
   const char* name;
+  /** Patch operation for `description`: leave it unchanged, set it, or (where it can be cleared) remove it. */
   fm_patch_op_t description_op;
+  /** The new alternative text; clearing it, or an empty string, removes the description. */
   const char* description;
+  /** Patch operation for `hidden`: leave it unchanged, set it, or (where it can be cleared) remove it. */
   fm_patch_op_t hidden_op;
+  /** Whether the object is hidden. */
   int32_t hidden;
+  /** Update merged into the object's current anchor, following `fm_drawing_anchor_patch_t`. */
   fm_drawing_anchor_patch_t anchor;
 } fm_drawing_patch_t;
 
@@ -12617,81 +13316,98 @@ FM_API fm_status_t fm_sheet_restore_drawing(fm_workbook_t* wb, size_t sheet_inde
  * @brief Fill of a shape's or chart element's `spPr`, as the shape and
  *        chart reads report it and `fm_shape_spec_t` takes it.
  *
- * `color` is None, Rgb or Theme (`FM_COLOR_KIND_NONE` without a solid
- * colour); `has_transparency_pct` is 0 when the colour has no alpha. `none`
- * is 1 for an explicit `a:noFill`. `other` is 1 on a read when the stored
- * paint cannot be stated exactly by this record: a gradient, pattern or
- * picture fill (the other fields are then zero), or a solid colour whose form
- * the record cannot hold (`color` then carries the nearest rendered colour).
- * Such a fill passes through a save untouched; on input `other` must be 0. An all-zero record states no fill of its
- * own: a shape then draws its style's fill.
+ * An all-zero record states no fill of its own: a shape then draws its style's fill.
  */
 typedef struct {
+  /** The solid fill colour, None, Rgb or Theme; kind NONE when there is no solid colour. */
   fm_color_t color;
+  /** 1 when `transparency_pct` is set; 0 means the colour has no alpha. */
   int32_t has_transparency_pct;
+  /** The fill transparency as a percentage (0..100); meaningful when `has_transparency_pct` is set. */
   double transparency_pct;
+  /** `1` for an explicit no-fill. */
   int32_t none;
+  /** 1 on a read when the stored paint cannot be stated exactly: a gradient, pattern or picture fill (the other fields
+   *  are then zero), or a solid colour form the record cannot hold (`color` then carries the nearest rendered colour).
+   *  It passes through a save untouched and must be 0 on input. */
   int32_t other;
 } fm_chart_fill_t;
 
 /**
  * @brief Outline (`a:ln`) of a shape's or chart element's `spPr`.
  *
- * `color` is None, Rgb or Theme (`FM_COLOR_KIND_NONE` without a solid
- * colour); `width_pt`, `transparency_pct` and `dash` (an
- * `fm_chart_line_dash_t`) are meaningful when their `has_*` flag is set;
- * `none` is 1 for an explicit no-line. `other` is 1 on a read when the
- * outline's fill cannot be stated exactly (a gradient or pattern, or a colour
- * form the record cannot hold, with `color` as the nearest rendering); on
- * input it must be 0. An all-zero record states no outline of its own: a shape
- * then draws its style's outline.
+ * An all-zero record states no outline of its own: a shape then draws its
+ * style's outline.
  */
 typedef struct {
+  /** The outline colour, None, Rgb or Theme; kind NONE when there is no solid colour. */
   fm_color_t color;
+  /** 1 when `transparency_pct` is set; 0 means the colour has no alpha. */
   int32_t has_transparency_pct;
+  /** The outline transparency as a percentage (0..100); meaningful when `has_transparency_pct` is set. */
   double transparency_pct;
+  /** 1 when `width_pt` is set; 0 means the outline states no width. */
   int32_t has_width_pt;
+  /** The outline width in points; meaningful when `has_width_pt` is set. */
   double width_pt;
+  /** 1 when `dash` is set; 0 means the outline states no dash style. */
   int32_t has_dash;
+  /** The dash style of the outline, an `fm_chart_line_dash_t`; meaningful when `has_dash` is set. */
   int32_t dash;
+  /** `1` for an explicit no-line. */
   int32_t none;
+  /** 1 on a read when the outline fill cannot be stated exactly (a gradient, pattern or a colour form the record cannot
+   *  hold, with `color` as the nearest rendering); it
+   *  must be 0 on input. */
   int32_t other;
 } fm_chart_line_t;
 
 /**
- * @brief Fill patch; a `SET` `color` is kind None, Rgb or Theme (`theme`
- *        below 12, `tint` within [-1, 1]), and `transparency_pct` needs a
- *        solid colour. `none` 0/1 writes or removes `a:noFill` (`CLEAR`
- *        resets it to 0); a `SET` colour with `none` 1 is
- *        `FM_STATUS_INVALID_ARGUMENT` (2). A fill whose members are all
- *        `CLEAR` states no fill of its own (a shape draws its style's).
+ * @brief Fill patch. A fill whose members are all `CLEAR` states no fill of
+ *        its own (a shape draws its style's).
  */
 typedef struct {
+  /** Patch operation for `color`: keep it, set it from `color`, or clear it. */
   fm_patch_op_t color_op;
+  /** The solid colour to set, kind None, Rgb or Theme (`theme` below 12, `tint` within [-1, 1]); needs `color_op`
+   *  set. */
   fm_color_t color;
+  /** Patch operation for `transparency_pct`: keep it, set it from `transparency_pct`, or clear it. */
   fm_patch_op_t transparency_pct_op;
+  /** The transparency percentage to set (0..100); needs a solid colour. */
   double transparency_pct;
+  /** Patch operation for `none`: keep it, set it from `none`, or clear it. */
   fm_patch_op_t none_op;
+  /** 1 to write an explicit no-fill (`a:noFill`), 0 to remove it; `CLEAR` resets it to 0. A set colour with `none` 1 is
+   *  `FM_STATUS_INVALID_ARGUMENT` (2). */
   int32_t none;
 } fm_chart_fill_patch_t;
 
 /**
- * @brief Outline patch; a `SET` `color` is kind None, Rgb or Theme
- *        (`theme` below 12, `tint` within [-1, 1]), `dash` is an
- *        `fm_chart_line_dash_t`, `none` 0/1 (`CLEAR` resets it to 0). An
- *        outline whose members are all `CLEAR` states no outline of its own
- *        (a shape draws its style's).
+ * @brief Outline patch. An outline whose members are all `CLEAR` states no
+ *        outline of its own (a shape draws its style's).
  */
 typedef struct {
+  /** Patch operation for `color`: keep it, set it from `color`, or clear it. */
   fm_patch_op_t color_op;
+  /** The outline colour to set, kind None, Rgb or Theme (`theme` below 12, `tint` within [-1, 1]); needs `color_op`
+   *  set. */
   fm_color_t color;
+  /** Patch operation for `transparency_pct`: keep it, set it from `transparency_pct`, or clear it. */
   fm_patch_op_t transparency_pct_op;
+  /** The transparency percentage to set (0..100); needs a solid colour. */
   double transparency_pct;
+  /** Patch operation for `width_pt`: keep it, set it from `width_pt`, or clear it. */
   fm_patch_op_t width_pt_op;
+  /** The outline width to set, in points. */
   double width_pt;
+  /** Patch operation for `dash`: keep it, set it from `dash`, or clear it. */
   fm_patch_op_t dash_op;
+  /** The dash style to set, an `fm_chart_line_dash_t`. */
   int32_t dash;
+  /** Patch operation for `none`: keep it, set it from `none`, or clear it. */
   fm_patch_op_t none_op;
+  /** 1 to write an explicit no-line, 0 to remove it; `CLEAR` resets it to 0. */
   int32_t none;
 } fm_chart_line_patch_t;
 
@@ -12701,31 +13417,31 @@ typedef struct {
  *        name, description and visibility are read with
  *        `fm_sheet_get_drawing_object`.
  *
- * `kind` is an `fm_drawing_object_kind_t` (shape, connector or group).
- * `fill` and `line` are the `spPr` fill and outline in the chart paint
- * records; all-zero when the shape has no element of its own and draws its
- * style's paint, `other` set for a paint the records cannot state. Their
- * colours are None, Rgb or Theme (Indexed and Auto are rejected on write).
- * `line.width_pt` is at most 1584 points (a larger, negative or non-finite
- * value is `FM_STATUS_INVALID_ARGUMENT` (2)). `rotation_deg` is clockwise in
- * degrees: an input in [-3600, 3600] is stored normalised to [0, 360) (a
- * value outside that range or not finite is `FM_STATUS_INVALID_ARGUMENT`
- * (2)); widths and angles convert to and from the file's EMU and 60000ths of
- * a degree at the boundary. `preset_geometry` is the `prst` name, an
- * ECMA-376 `ST_ShapeType` name, empty for custom geometry or a group; `text`
- * joins paragraphs with `\n`.
- *
  * The strings are read-scratch-backed views.
  */
 typedef struct {
   uint32_t struct_size;
+  /** The object's id in the sheet's drawing. */
   uint32_t object_id;
+  /** The object's kind: shape, connector or group, an `fm_drawing_object_kind_t`. */
   int32_t kind;
+  /** The shape's own fill; all zero when the shape has no element of its own and draws its style's paint, `other`
+   *  set for a paint the record cannot state. Its colour is None, Rgb or Theme (Indexed and Auto are rejected on
+   *  write). */
   fm_chart_fill_t fill;
+  /** The shape's own outline; all zero when the shape has no element of its own and draws its style's paint, `other`
+   *  set for a paint the record cannot state. Its colour is None, Rgb or Theme (Indexed and Auto are rejected on
+   *  write); `width_pt` is at most 1584 points (a larger, negative or non-finite value is
+   *  `FM_STATUS_INVALID_ARGUMENT` (2)). */
   fm_chart_line_t line;
+  /** Clockwise rotation in degrees; an input in [-3600, 3600] is stored normalised to [0, 360), and a value outside
+   *  that range or not finite is `FM_STATUS_INVALID_ARGUMENT` (2). */
   double rotation_deg;
+  /** `1` when the shape is a text box. */
   int32_t text_box;
+  /** The `prst` name of the preset geometry, an ECMA-376 `ST_ShapeType` name; empty for custom geometry or a group. */
   const char* preset_geometry;
+  /** The shape's text, paragraphs joined with a newline. */
   const char* text;
 } fm_shape_info_t;
 
@@ -12733,21 +13449,25 @@ typedef struct {
  * @brief A shape to add (`fm_sheet_add_shape`): the common `placement` and
  *        the shape fields of `fm_shape_info_t`, in its units and domains.
  *
- * Every field left zero takes Excel's default for a new shape: a two-cell
- * anchor, `name` `Shape <id>`, shown, `preset_geometry` `rect` (`NULL` or
- * empty), no text (`NULL`), no rotation, not a text box, and the shape
- * style's fill and outline (all-zero `fill` / `line`). A `preset_geometry`
- * that is not an ECMA-376 `ST_ShapeType` name is
- * `FM_STATUS_INVALID_ARGUMENT` (2); so is `other` set on `fill` or `line`.
+ * Every field left zero takes Excel's default for a new shape.
  */
 typedef struct {
   uint32_t struct_size;
+  /** Name, description, visibility and anchor of the new shape; the default is a two-cell anchor and the name
+   *  `Shape <id>`. */
   fm_drawing_placement_spec_t placement;
+  /** The shape's own fill; all zero draws the shape style's. `other` set is `FM_STATUS_INVALID_ARGUMENT` (2). */
   fm_chart_fill_t fill;
+  /** The shape's own outline; all zero draws the shape style's. `other` set is `FM_STATUS_INVALID_ARGUMENT` (2). */
   fm_chart_line_t line;
+  /** Clockwise rotation in degrees; 0 for none. */
   double rotation_deg;
+  /** 1 to make the shape a text box; 0 for a plain shape. */
   int32_t text_box;
+  /** Name of the preset geometry; `NULL` or empty means rect. A name that is not an ECMA-376 `ST_ShapeType` name is
+   *  `FM_STATUS_INVALID_ARGUMENT` (2). */
   const char* preset_geometry;
+  /** The shape's text, paragraphs joined with a newline; `NULL` for none. */
   const char* text;
 } fm_shape_spec_t;
 
@@ -12759,23 +13479,30 @@ typedef struct {
  *        description and visibility are the `common` half of
  *        `fm_sheet_update_shape`.
  *
- * `fill` and `line` are the chart paint patches: each member merges into the
- * stored paint, and a fill or outline whose members are all `CLEAR` removes
- * the shape's own element, so it draws its style's paint again. The other
- * fields cannot be cleared. `text` applies to a shape only and keeps the
- * first paragraph's properties and first run's formatting.
+ * Apart from `fill` and `line`, no field can be cleared.
  */
 typedef struct {
   uint32_t struct_size;
+  /** Update merged into the shape's own fill; clearing every member removes it so the shape draws its style's. */
   fm_chart_fill_patch_t fill;
+  /** Update merged into the shape's own outline; clearing every member removes it so the shape draws its style's. */
   fm_chart_line_patch_t line;
+  /** Patch operation for `rotation_deg`: leave it unchanged, set it, or (where it can be cleared) remove it. */
   fm_patch_op_t rotation_deg_op;
+  /** The new clockwise rotation in degrees. */
   double rotation_deg;
+  /** Patch operation for `text_box`: leave it unchanged, set it, or (where it can be cleared) remove it. */
   fm_patch_op_t text_box_op;
+  /** Whether the shape is a text box. */
   int32_t text_box;
+  /** Patch operation for `preset_geometry`: leave it unchanged, set it, or (where it can be cleared) remove it. */
   fm_patch_op_t preset_geometry_op;
+  /** The new preset geometry name. */
   const char* preset_geometry;
+  /** Patch operation for `text`: leave it unchanged, set it, or (where it can be cleared) remove it. */
   fm_patch_op_t text_op;
+  /** The new text, paragraphs joined with a newline; applies to a shape only and keeps the first paragraph's properties
+   *  and the first run's formatting. */
   const char* text;
 } fm_shape_patch_t;
 
@@ -12874,27 +13601,31 @@ typedef enum {
  *        `fm_sheet_get_slicer` reads. The frame's anchor, name, description
  *        and visibility are read with `fm_sheet_get_drawing_object`.
  *
- * `object_id` is the slicer's frame in the sheet's drawing.
- * `sort_order` is an `fm_slicer_sort_order_t` and `cross_filter` an
- * `fm_slicer_cross_filter_t`. `cache_name`, `table_name` and `column_name`
- * identify the slicer cache and the table column it filters; the selection
- * itself lives in the table's AutoFilter, not here. `row_height_pt` is the
- * item row height in points (the file's EMU / 12700). `style_name` is `NULL`
- * without a style.
- *
- * The strings are read-scratch-backed views.
+ * The selection itself lives in the table's AutoFilter, not here. The strings
+ * are read-scratch-backed views.
  */
 typedef struct {
   uint32_t struct_size;
+  /** The id of the slicer's frame in the sheet's drawing. */
   uint32_t object_id;
+  /** The number of columns the slicer lays its item buttons out in. */
   uint32_t column_count;
+  /** The order the slicer lists its items in, an `fm_slicer_sort_order_t`. */
   int32_t sort_order;
+  /** How the slicer cross-filters its items (items with data listed first, items without data shown in place, or no
+   *  cross-filtering), an `fm_slicer_cross_filter_t`: shown first, shown as unavailable, or not cross-filtered. */
   int32_t cross_filter;
+  /** The height of each item row in points (the file's EMU / 12700). */
   double row_height_pt;
+  /** The caption shown in the slicer header. */
   const char* caption;
+  /** The name of the slicer cache the slicer belongs to. */
   const char* cache_name;
+  /** The name of the table the slicer filters. */
   const char* table_name;
+  /** The name of the table column the slicer filters. */
   const char* column_name;
+  /** The name of the slicer style; `NULL` without a style. */
   const char* style_name;
 } fm_slicer_info_t;
 
@@ -12904,21 +13635,26 @@ typedef struct {
  *        units and domains.
  *
  * The frame is always two-cell (`placement.anchor.kind` `DEFAULT` or
- * `TWO_CELL`). Every field left zero takes Excel's default for a new slicer:
- * `name` and `caption` the column name (the name made unique), shown,
- * `column_count` 1, ascending sort, the default cross filter, Excel's
- * default row height (`row_height_pt` 0; a negative or non-finite height is
- * `FM_STATUS_INVALID_ARGUMENT` (2)), no style (`NULL`; an empty `style_name`
- * is `FM_STATUS_INVALID_ARGUMENT` (2)).
+ * `TWO_CELL`). Every field left zero takes Excel's default for a new slicer.
  */
 typedef struct {
   uint32_t struct_size;
+  /** The frame placement and common drawing properties of the slicer: its anchor, name, description and visibility;
+   *  the name defaults to the column name (made unique). */
   fm_drawing_placement_spec_t placement;
+  /** The number of columns the slicer lays its item buttons out in; 0 takes 1. */
   uint32_t column_count;
-  int32_t sort_order;   /* fm_slicer_sort_order_t */
-  int32_t cross_filter; /* fm_slicer_cross_filter_t */
+  /** The order the slicer lists its items in, an `fm_slicer_sort_order_t`; 0 is ascending. */
+  int32_t sort_order;
+  /** How the slicer cross-filters its items (items with data listed first, items without data shown in place, or no
+   *  cross-filtering), an `fm_slicer_cross_filter_t`; 0 is the default cross filter. */
+  int32_t cross_filter;
+  /** The height of each item row in points; 0 takes Excel's default, and a negative or non-finite height is rejected.
+   */
   double row_height_pt;
+  /** The caption shown in the slicer header; `NULL` takes the column name. */
   const char* caption;
+  /** The name of the slicer style; `NULL` for no style and an empty string is rejected. */
   const char* style_name;
 } fm_slicer_spec_t;
 
@@ -12929,24 +13665,41 @@ typedef struct {
  *        `fm_slicer_info_t`, in its units and domains; the frame's anchor,
  *        description and visibility are the `common` half of
  *        `fm_sheet_update_slicer`.
- *
- * `style_name` is the one clearable field: `CLEAR` removes the style; a `SET`
- * empty string is `FM_STATUS_INVALID_ARGUMENT` (2), as is a negative or
- * non-finite `SET` `row_height_pt`.
  */
 typedef struct {
   uint32_t struct_size;
+  /** How `column_count` is patched: `FM_PATCH_OP_KEEP` leaves it, `FM_PATCH_OP_SET` writes it; `FM_PATCH_OP_CLEAR` is
+   *  rejected. */
   fm_patch_op_t column_count_op;
+  /** The number of columns the slicer lays its item buttons out in. Read when `column_count_op` is `FM_PATCH_OP_SET`.
+   */
   uint32_t column_count;
+  /** How `sort_order` is patched: `FM_PATCH_OP_KEEP` leaves it, `FM_PATCH_OP_SET` writes it; `FM_PATCH_OP_CLEAR` is
+   *  rejected. */
   fm_patch_op_t sort_order_op;
+  /** The order the slicer lists its items in. Read when `sort_order_op` is `FM_PATCH_OP_SET`. */
   int32_t sort_order;
+  /** How `cross_filter` is patched: `FM_PATCH_OP_KEEP` leaves it, `FM_PATCH_OP_SET` writes it; `FM_PATCH_OP_CLEAR` is
+   *  rejected. */
   fm_patch_op_t cross_filter_op;
+  /** How the slicer cross-filters its items (items with data listed first, items without data shown in place, or no
+   *  cross-filtering). Read when `cross_filter_op` is `FM_PATCH_OP_SET`. */
   int32_t cross_filter;
+  /** How `row_height_pt` is patched: `FM_PATCH_OP_KEEP` leaves it, `FM_PATCH_OP_SET` writes it; `FM_PATCH_OP_CLEAR` is
+   *  rejected. */
   fm_patch_op_t row_height_pt_op;
+  /** The height of each item row in points, finite and not negative. Read when `row_height_pt_op` is `FM_PATCH_OP_SET`.
+   */
   double row_height_pt;
+  /** How `caption` is patched: `FM_PATCH_OP_KEEP` leaves it, `FM_PATCH_OP_SET` writes it; `FM_PATCH_OP_CLEAR` is
+   *  rejected. */
   fm_patch_op_t caption_op;
+  /** The caption shown in the slicer header. Read when `caption_op` is `FM_PATCH_OP_SET`. */
   const char* caption;
+  /** How `style_name` is patched: `FM_PATCH_OP_KEEP` leaves it, `FM_PATCH_OP_SET` writes it, `FM_PATCH_OP_CLEAR`
+   *  removes the style. */
   fm_patch_op_t style_name_op;
+  /** The name of the slicer style to write, non-empty. Read when `style_name_op` is `FM_PATCH_OP_SET`. */
   const char* style_name;
 } fm_slicer_patch_t;
 
@@ -13057,61 +13810,81 @@ typedef enum {
 /**
  * @brief One sparkline: the data `formula` (`xm:f`, a sheet-qualified range)
  *        and the single-cell `location` (`xm:sqref`, A1 text) that shows it.
- *        Read-scratch-backed views on read. `formula` reads with a leading
- *        `=`; input takes it with or without one.
+ *        Read-scratch-backed views on read.
  */
 typedef struct {
+  /** The data range as sheet-qualified text, read with a leading `=`; input takes it with or without one. */
   const char* formula;
+  /** The single cell that shows the sparkline. */
   const char* location;
 } fm_sparkline_t;
 
-/**
- * @brief A sparkline group (`x14:sparklineGroup`) of the sheet's worksheet
- *        extension list.
- *
- * `id` is the group's engine id: an opaque string, unique on its sheet,
- * stable for the open workbook across structural edits and never reused
- * within the session; a load or a sheet copy assigns fresh ones. It is not
- * saved. A read-scratch-backed view on read; ignored on the add path, which
- * assigns a new id. Each colour has `kind == FM_COLOR_KIND_NONE` when the element is absent.
- * `has_manual_min` / `has_manual_max` say whether `manualMin` / `manualMax`
- * are present. `date_axis_ref` is the group's own `xm:f` date range, `NULL`
- * when absent (`NULL` or empty writes none); it reads with a leading `=`, and
- * input takes it with or without one. `line_width_pt` is in points (default 0.75). `sparkline_count`
- * is filled on read and ignored on input. `empty_cells_as` is an
- * `fm_blanks_as_t` other than `FM_BLANKS_AS_ABSENT`; the other enumerations
- * are the `fm_sparkline_*_t` types; flags are 0/1.
- */
+/** @brief A sparkline group (`x14:sparklineGroup`) of the sheet's worksheet extension list. */
 typedef struct {
   uint32_t struct_size;
+  /** The group's engine id: an opaque string, unique on its sheet, stable while the workbook is open across structural
+   *  edits and never reused within the session; assigned again on load or sheet copy and not saved. A
+   *  read-scratch-backed view on read; ignored on the add path, which assigns a new id. */
   const char* id;
+  /** Colour of the line or columns; kind `NONE` when the group states none. */
   fm_color_t color_series;
+  /** Colour of negative points; kind `NONE` when the group states none. */
   fm_color_t color_negative;
+  /** Colour of the horizontal axis; kind `NONE` when the group states none. */
   fm_color_t color_axis;
+  /** Colour of the markers; kind `NONE` when the group states none. */
   fm_color_t color_markers;
+  /** Colour of the first point; kind `NONE` when the group states none. */
   fm_color_t color_first;
+  /** Colour of the last point; kind `NONE` when the group states none. */
   fm_color_t color_last;
+  /** Colour of the highest point; kind `NONE` when the group states none. */
   fm_color_t color_high;
+  /** Colour of the lowest point; kind `NONE` when the group states none. */
   fm_color_t color_low;
+  /** The custom vertical axis minimum; read only when `has_manual_min` is 1. */
   double manual_min;
+  /** The custom vertical axis maximum; read only when `has_manual_max` is 1. */
   double manual_max;
+  /** Line width in points; 0.75 for a new group. */
   double line_width_pt;
+  /** The sparkline type: line, column or stacked (win/loss), an `fm_sparkline_type_t`. */
   int32_t type;
+  /** `1` to show a marker at every point of a line sparkline. */
   int32_t markers;
+  /** `1` to highlight the highest point. */
   int32_t high;
+  /** `1` to highlight the lowest point. */
   int32_t low;
+  /** `1` to highlight the first point. */
   int32_t first;
+  /** `1` to highlight the last point. */
   int32_t last;
+  /** `1` to highlight negative points. */
   int32_t negative;
+  /** `1` to show the horizontal axis. */
   int32_t display_x_axis;
+  /** `1` to plot data in hidden rows and columns. */
   int32_t display_hidden;
+  /** How the vertical axis minimum is chosen: per sparkline, shared by the group, or the custom value, an
+   *  `fm_sparkline_axis_type_t`. */
   int32_t min_axis_type;
+  /** How the vertical axis maximum is chosen: per sparkline, shared by the group, or the custom value, an
+   *  `fm_sparkline_axis_type_t`. */
   int32_t max_axis_type;
+  /** 1 when `manual_min` is set; 0 means the axis minimum is not set. */
   int32_t has_manual_min;
+  /** 1 when `manual_max` is set; 0 means the axis maximum is not set. */
   int32_t has_manual_max;
+  /** `1` to space points by a date axis. */
   int32_t date_axis;
-  int32_t empty_cells_as; /* fm_blanks_as_t */
+  /** How empty cells are plotted: as a gap, as zero, or by connecting the neighbours, an `fm_blanks_as_t` other than
+   *  `FM_BLANKS_AS_ABSENT`. */
+  int32_t empty_cells_as;
+  /** The group's date range as sheet-qualified text, read with a leading `=`; `NULL` when absent. Input takes it with
+   *  or without one, and `NULL` or empty writes none. */
   const char* date_axis_ref;
+  /** The number of sparklines in the group; filled on read and ignored on input. */
   uint32_t sparkline_count;
 } fm_sparkline_group_t;
 
@@ -13131,58 +13904,115 @@ typedef struct {
  */
 typedef struct {
   uint32_t struct_size;
+  /** Patch operation for `color_series`: leave it unchanged, set it, or (where it can be cleared) remove it. */
   fm_patch_op_t color_series_op;
+  /** Colour of the line or columns. Applies when `color_series_op` sets it. */
   fm_color_t color_series;
+  /** Patch operation for `color_negative`: leave it unchanged, set it, or (where it can be cleared) remove it. */
   fm_patch_op_t color_negative_op;
+  /** Colour of negative points. Applies when `color_negative_op` sets it. */
   fm_color_t color_negative;
+  /** Patch operation for `color_axis`: leave it unchanged, set it, or (where it can be cleared) remove it. */
   fm_patch_op_t color_axis_op;
+  /** Colour of the horizontal axis. Applies when `color_axis_op` sets it. */
   fm_color_t color_axis;
+  /** Patch operation for `color_markers`: leave it unchanged, set it, or (where it can be cleared) remove it. */
   fm_patch_op_t color_markers_op;
+  /** Colour of the markers. Applies when `color_markers_op` sets it. */
   fm_color_t color_markers;
+  /** Patch operation for `color_first`: leave it unchanged, set it, or (where it can be cleared) remove it. */
   fm_patch_op_t color_first_op;
+  /** Colour of the first point. Applies when `color_first_op` sets it. */
   fm_color_t color_first;
+  /** Patch operation for `color_last`: leave it unchanged, set it, or (where it can be cleared) remove it. */
   fm_patch_op_t color_last_op;
+  /** Colour of the last point. Applies when `color_last_op` sets it. */
   fm_color_t color_last;
+  /** Patch operation for `color_high`: leave it unchanged, set it, or (where it can be cleared) remove it. */
   fm_patch_op_t color_high_op;
+  /** Colour of the highest point. Applies when `color_high_op` sets it. */
   fm_color_t color_high;
+  /** Patch operation for `color_low`: leave it unchanged, set it, or (where it can be cleared) remove it. */
   fm_patch_op_t color_low_op;
+  /** Colour of the lowest point. Applies when `color_low_op` sets it. */
   fm_color_t color_low;
+  /** Patch operation for `manual_min`: leave it unchanged, set it, or (where it can be cleared) remove it. */
   fm_patch_op_t manual_min_op;
+  /** The custom vertical axis minimum. Applies when `manual_min_op` sets it. */
   double manual_min;
+  /** Patch operation for `manual_max`: leave it unchanged, set it, or (where it can be cleared) remove it. */
   fm_patch_op_t manual_max_op;
+  /** The custom vertical axis maximum. Applies when `manual_max_op` sets it. */
   double manual_max;
+  /** Patch operation for `line_width_pt`: leave it unchanged, set it, or (where it can be cleared) remove it. */
   fm_patch_op_t line_width_pt_op;
+  /** Line width in points. Applies when `line_width_pt_op` sets it. */
   double line_width_pt;
+  /** Patch operation for `type`: leave it unchanged, set it, or (where it can be cleared) remove it. */
   fm_patch_op_t type_op;
+  /** The sparkline type: line, column or stacked (win/loss). Applies when `type_op` sets it. */
   int32_t type;
+  /** Patch operation for `markers`: leave it unchanged, set it, or (where it can be cleared) remove it. */
   fm_patch_op_t markers_op;
+  /** `1` to show a marker at every point of a line sparkline. Applies when `markers_op` sets it. */
   int32_t markers;
+  /** Patch operation for `high`: leave it unchanged, set it, or (where it can be cleared) remove it. */
   fm_patch_op_t high_op;
+  /** `1` to highlight the highest point. Applies when `high_op` sets it. */
   int32_t high;
+  /** Patch operation for `low`: leave it unchanged, set it, or (where it can be cleared) remove it. */
   fm_patch_op_t low_op;
+  /** `1` to highlight the lowest point. Applies when `low_op` sets it. */
   int32_t low;
+  /** Patch operation for `first`: leave it unchanged, set it, or (where it can be cleared) remove it. */
   fm_patch_op_t first_op;
+  /** `1` to highlight the first point. Applies when `first_op` sets it. */
   int32_t first;
+  /** Patch operation for `last`: leave it unchanged, set it, or (where it can be cleared) remove it. */
   fm_patch_op_t last_op;
+  /** `1` to highlight the last point. Applies when `last_op` sets it. */
   int32_t last;
+  /** Patch operation for `negative`: leave it unchanged, set it, or (where it can be cleared) remove it. */
   fm_patch_op_t negative_op;
+  /** `1` to highlight negative points. Applies when `negative_op` sets it. */
   int32_t negative;
+  /** Patch operation for `display_x_axis`: leave it unchanged, set it, or (where it can be cleared) remove it. */
   fm_patch_op_t display_x_axis_op;
+  /** `1` to show the horizontal axis. Applies when `display_x_axis_op` sets it. */
   int32_t display_x_axis;
+  /** Patch operation for `display_hidden`: leave it unchanged, set it, or (where it can be cleared) remove it. */
   fm_patch_op_t display_hidden_op;
+  /** `1` to plot data in hidden rows and columns. Applies when `display_hidden_op` sets it. */
   int32_t display_hidden;
+  /** Patch operation for `min_axis_type`: leave it unchanged, set it, or (where it can be cleared) remove it. */
   fm_patch_op_t min_axis_type_op;
+  /** How the vertical axis minimum is chosen: per sparkline, shared by the group, or the custom value. Applies when
+   *  `min_axis_type_op` sets it. */
   int32_t min_axis_type;
+  /** Patch operation for `max_axis_type`: leave it unchanged, set it, or (where it can be cleared) remove it. */
   fm_patch_op_t max_axis_type_op;
+  /** How the vertical axis maximum is chosen: per sparkline, shared by the group, or the custom value. Applies when
+   *  `max_axis_type_op` sets it. */
   int32_t max_axis_type;
+  /** Patch operation for `date_axis`: leave it unchanged, set it, or (where it can be cleared) remove it. */
   fm_patch_op_t date_axis_op;
+  /** `1` to space points by a date axis. Applies when `date_axis_op` sets it. */
   int32_t date_axis;
+  /** Patch operation for `empty_cells_as`: leave it unchanged, set it, or (where it can be cleared) remove it. */
   fm_patch_op_t empty_cells_as_op;
-  int32_t empty_cells_as; /* fm_blanks_as_t */
+  /** How empty cells are plotted: as a gap, as zero, or by connecting the neighbours. Applies when `empty_cells_as_op`
+   *  sets it. */
+  int32_t empty_cells_as;
+  /** Patch operation for `date_axis_ref`: leave it unchanged, set it, or (where it can be cleared) remove it. */
   fm_patch_op_t date_axis_ref_op;
+  /** The new date range as sheet-qualified text, with or without a leading `=`. Applies when `date_axis_ref_op` sets
+   *  it. */
   const char* date_axis_ref;
+  /** Patch operation for `items`: leave it unchanged, set it, or (where it can be cleared) remove it. */
   fm_patch_op_t items_op;
+  /** The new sparklines of the group (at least one). */
   const fm_sparkline_t* items;
+  /** The number of entries in `items`. */
   uint32_t items_count;
 } fm_sparkline_group_patch_t;
 
@@ -13509,48 +14339,60 @@ typedef enum {
 /** @brief Opaque snapshot of a chart's typed view. Release with `fm_chart_destroy`. */
 typedef struct fm_chart fm_chart_t;
 
-/**
- * @brief A chart or axis title. `kind` is an `fm_chart_title_kind_t`;
- *        `text` is the flattened rich text (`TEXT`) and `formula` the
- *        reference (`REF`); a field the kind does not use reads `NULL`. As
- *        input, `NULL` and `""` both read as empty.
- */
+/** @brief A chart or axis title. As input, `NULL` and `""` both read as empty. */
 typedef struct {
+  /** Whether the title is absent, automatic, literal text or a cell reference, an `fm_chart_title_kind_t`. */
   int32_t kind;
+  /** The flattened rich text of a text title; `NULL` for another kind. */
   const char* text;
+  /** The reference of a reference title; `NULL` for another kind. */
   const char* formula;
 } fm_chart_title_t;
 
 /** @brief Marker; `symbol` is an `fm_chart_marker_symbol_t`, `size_pt` the size in points. */
 typedef struct {
+  /** The marker symbol. */
   int32_t symbol;
+  /** 1 when `size_pt` is set; 0 means the marker states no size. */
   int32_t has_size_pt;
+  /** The marker size in points; meaningful when `has_size_pt` is set. */
   uint32_t size_pt;
+  /** The marker fill. */
   fm_chart_fill_t fill;
+  /** The marker outline. */
   fm_chart_line_t line;
 } fm_chart_marker_t;
 
-/**
- * @brief Data labels of a series. `separator` and `number_format` are
- *        `NULL` when absent; `position` (an `fm_chart_label_position_t`) is
- *        meaningful when `has_position`; `font_color` is None, Rgb or Theme
- *        (`FM_COLOR_KIND_NONE` when absent); `font_size_pt` is meaningful when
- *        `has_font_size_pt`.
- */
+/** @brief Data labels of a series. */
 typedef struct {
+  /** 1 when the label shows the point value. */
   int32_t show_value;
+  /** 1 when the label shows the category name. */
   int32_t show_category;
+  /** 1 when the label shows the series name. */
   int32_t show_series;
+  /** 1 when the label shows the percentage of the whole (pie-type plots). */
   int32_t show_percent;
+  /** 1 when the label shows the legend key. */
   int32_t show_legend_key;
+  /** The text placed between the label parts; `NULL` when absent. */
   const char* separator;
+  /** 1 when `position` is set; 0 means the chart states no label position. */
   int32_t has_position;
+  /** Where the label sits relative to its point, an `fm_chart_label_position_t`; meaningful when `has_position` is
+   *  set. */
   int32_t position;
+  /** The number format code of the label; `NULL` when absent. */
   const char* number_format;
+  /** 1 when the label number format follows the source cells. */
   int32_t source_linked;
+  /** The label font colour, None, Rgb or Theme; kind NONE when absent. */
   fm_color_t font_color;
+  /** 1 when `font_size_pt` is set; 0 means the chart states no font size. */
   int32_t has_font_size_pt;
+  /** The label font size in points; meaningful when `has_font_size_pt` is set. */
   double font_size_pt;
+  /** 1 when the labels are deleted (c:delete) for the series. */
   int32_t deleted;
 } fm_chart_labels_t;
 
@@ -13558,65 +14400,95 @@ typedef struct {
  * @brief Top-level fields of a chart.
  *
  * The anchor, name and description are read with
- * `fm_sheet_get_drawing_object`. `legend_position` is
- * `FM_CHART_LEGEND_POSITION_ABSENT` when the chart has no legend. `auto_title_deleted`,
- * `plot_visible_only` and `na_as_blank` (`c16r3:dispNaAsBlank`, whether `#N/A`
- * points draw as blank cells) are `fm_tristate_t`; `blanks_as` an
- * `fm_blanks_as_t`. `source_range` is the sheet-qualified rectangle
- * every series was split from, `NULL` (with the other `source_*` fields
- * zero) when the series share no such rectangle.
+ * `fm_sheet_get_drawing_object`.
  */
 typedef struct {
   uint32_t struct_size;
+  /** The id of the chart's drawing object on its sheet. */
   uint32_t object_id;
+  /** `1` for an extended (`cx:`) chart. */
   int32_t is_extended;
+  /** `1` when the chart is bound to a pivot table. */
   int32_t is_pivot_chart;
+  /** `1` when the chart lives on a chartsheet rather than as an embedded object. */
   int32_t on_chartsheet;
+  /** The chart title; kind NONE when the chart has none. */
   fm_chart_title_t title;
-  int32_t auto_title_deleted; /* fm_tristate_t */
+  /** Whether the automatic title is deleted, a tri-state value (default when the chart states none). */
+  int32_t auto_title_deleted;
+  /** The legend position; `FM_CHART_LEGEND_POSITION_ABSENT` when the chart has no legend. */
   int32_t legend_position;
+  /** 1 when the legend overlays the plot area; 0 when it does not or there is no legend. */
   int32_t legend_overlay;
+  /** The number of series whose legend entry is hidden. */
   uint32_t legend_hidden_count;
+  /** How empty cells are plotted (gap, zero or span), an `fm_blanks_as_t`; the absent value when the file omits it. */
   int32_t blanks_as;
-  int32_t plot_visible_only; /* fm_tristate_t */
+  /** Whether only visible cells are plotted, a tri-state value (default when the chart states none). */
+  int32_t plot_visible_only;
+  /** `1` when the chart uses the 1904 date system. */
   int32_t date1904;
+  /** 1 when `style` is set; 0 means the chart states no style. */
   int32_t has_style;
+  /** The chart style number (1..48); meaningful when `has_style` is set. */
   int32_t style;
+  /** The number of plot groups of the chart. */
   uint32_t plot_count;
+  /** The number of axes of the chart. */
   uint32_t axis_count;
+  /** The number of categories the chart filter hides. */
   uint32_t hidden_category_count;
+  /** The sheet-qualified rectangle every series was split from; `NULL` (with the other `source_*` fields zero) when the
+   *  series share none. */
   const char* source_range;
+  /** Whether the series run along rows or columns of `source_range`. */
   int32_t source_direction;
+  /** 1 when the first row of `source_range` holds names rather than data. */
   int32_t source_header_row;
+  /** 1 when the first column of `source_range` holds names rather than data. */
   int32_t source_header_column;
-  int32_t na_as_blank; /* fm_tristate_t */
+  /** Whether `#N/A` points draw as blank cells (`c16r3:dispNaAsBlank`), a tri-state value (default when the chart
+   *  carries no setting). */
+  int32_t na_as_blank;
 } fm_chart_info_t;
 
-/**
- * @brief One plot group. `type` is an `fm_chart_plot_type_t`, `bar_direction` an
- *        `fm_chart_bar_direction_t`, `vary_colors` an `fm_tristate_t`.
- *        `extended_layout` is an `fm_chart_extended_layout_t` for an extended
- *        plot and `FM_CHART_EXTENDED_LAYOUT_ABSENT` otherwise. `gap_width_pct` and
- *        `overlap_pct` are percentages of the bar width, `hole_size_pct` a percentage
- *        of a doughnut's diameter, and `first_slice_angle_deg` in degrees.
- */
+/** @brief One plot group. */
 typedef struct {
   uint32_t struct_size;
+  /** The plot type of the group, an `fm_chart_plot_type_t`. */
   int32_t type;
+  /** The series layout of an extended plot, an `fm_chart_extended_layout_t`; `FM_CHART_EXTENDED_LAYOUT_ABSENT` for any
+   *  other plot type. */
   int32_t extended_layout;
+  /** Whether bars run vertically (column) or horizontally, an `fm_chart_bar_direction_t`; 0 when the plot is not in the
+   *  bar family. */
   int32_t bar_direction;
+  /** 1 when `grouping` is set; 0 means the plot type has no grouping. */
   int32_t has_grouping;
+  /** How the series are stacked or grouped; meaningful when `has_grouping` is set. */
   int32_t grouping;
-  int32_t vary_colors; /* fm_tristate_t */
+  /** Whether each point of a single-series plot takes its own colour, a tri-state value. */
+  int32_t vary_colors;
+  /** 1 when `gap_width_pct` is set; 0 means the plot type has none. */
   int32_t has_gap_width_pct;
+  /** The gap between bar clusters as a percentage of the bar width; meaningful when `has_gap_width_pct` is set. */
   uint32_t gap_width_pct;
+  /** 1 when `overlap_pct` is set; 0 means the plot type has none. */
   int32_t has_overlap_pct;
+  /** The overlap between bars of a cluster as a percentage of the bar width; meaningful when `has_overlap_pct` is set.
+   */
   int32_t overlap_pct;
+  /** 1 when `hole_size_pct` is set; 0 means the plot type has none. */
   int32_t has_hole_size_pct;
+  /** The doughnut hole size as a percentage of the doughnut diameter; meaningful when `has_hole_size_pct` is set. */
   uint32_t hole_size_pct;
+  /** 1 when `first_slice_angle_deg` is set; 0 means the plot type has none. */
   int32_t has_first_slice_angle_deg;
+  /** The angle in degrees of the first pie or doughnut slice; meaningful when `has_first_slice_angle_deg` is set. */
   uint32_t first_slice_angle_deg;
+  /** The number of axis ids of the plot group. */
   uint32_t axis_id_count;
+  /** The number of series of the plot group. */
   uint32_t series_count;
 } fm_chart_plot_info_t;
 
@@ -13627,119 +14499,160 @@ typedef enum {
   FM_CHART_SOURCE_KIND_LITERAL = 2,
 } fm_chart_source_kind_t;
 
-/**
- * @brief One series input. `kind` is an `fm_chart_source_kind_t`;
- *        `formula` is the reference text (empty unless `REF`);
- *        `literal_count` counts the points `fm_chart_get_series_literal_at`
- *        reads (`LITERAL` only).
- */
+/** @brief One series input. */
 typedef struct {
+  /** Whether the input is empty, a range reference or literal points, an `fm_chart_source_kind_t`. */
   int32_t kind;
+  /** The reference text of a range-reference input; empty for another kind. */
   const char* formula;
+  /** The number of literal points of a literal input, as `fm_chart_get_series_literal_at` reads them; 0 for another
+   *  kind. */
   uint32_t literal_count;
 } fm_chart_data_source_t;
 
-/**
- * @brief One series of a plot group. `series_id` is the series' `c:idx`,
- *        the key the series functions take. `smooth` is an `fm_tristate_t`;
- *        `marker` and `labels` are meaningful when their `has_*` flag is
- *        set. `point_count` counts the formatted points
- *        `fm_chart_get_series_point_at` reads.
- */
+/** @brief One series of a plot group. */
 typedef struct {
   uint32_t struct_size;
+  /** The series' `c:idx`, the key the series functions take. */
   uint32_t series_id;
+  /** The plotting order of the series within the chart (`c:order`). */
   uint32_t order;
+  /** 1 when the chart filter hides the series. */
   int32_t filtered;
+  /** The input that supplies the series name. */
   fm_chart_data_source_t name;
+  /** The input that supplies the category labels. */
   fm_chart_data_source_t categories;
+  /** The input that supplies the values of a category plot. */
   fm_chart_data_source_t values;
+  /** The input that supplies the x values of a scatter or bubble series. */
   fm_chart_data_source_t x;
+  /** The input that supplies the y values of a scatter or bubble series. */
   fm_chart_data_source_t y;
+  /** The input that supplies the bubble sizes of a bubble series. */
   fm_chart_data_source_t size;
+  /** The series fill. */
   fm_chart_fill_t fill;
+  /** The series outline. */
   fm_chart_line_t line;
+  /** 1 when `marker` is set; 0 means the series has no marker. */
   int32_t has_marker;
+  /** The series marker; meaningful when `has_marker` is set. */
   fm_chart_marker_t marker;
-  int32_t smooth; /* fm_tristate_t */
+  /** Whether a line or scatter series draws a smoothed line, a tri-state value. */
+  int32_t smooth;
+  /** The number of formatted points of the series, as `fm_chart_get_series_point_at` reads them. */
   uint32_t point_count;
+  /** 1 when `labels` is set; 0 means the series has no data labels. */
   int32_t has_labels;
+  /** The data labels of the series; meaningful when `has_labels` is set. */
   fm_chart_labels_t labels;
 } fm_chart_series_info_t;
 
 /** @brief A literal point: a number, or `text` when `is_text`. */
 typedef struct {
   uint32_t struct_size;
+  /** The 0-based index of the point within the input. */
   uint32_t idx;
+  /** 1 when the point is `text`; 0 when it is `number`. */
   int32_t is_text;
+  /** The numeric value of the point; meaningful when `is_text` is 0. */
   double number;
+  /** The text of the point; meaningful when `is_text` is 1. */
   const char* text;
 } fm_chart_literal_info_t;
 
 /**
  * @brief One series input to write (`fm_chart_series_patch_t`).
  *
- * `kind` is an `fm_chart_source_kind_t`. `REF` writes the reference text
- * `formula`; `LITERAL` writes the `literal_count` points of `literal` (each
- * element carries its `struct_size`): a series name is one point written as
- * `<c:tx><c:v>` (`CT_SerTx` has no `c:strLit`), `values` / `y` / `size` hold
- * numbers (`c:numLit`), and `categories` / `x` are `c:numLit` when every
- * point is a number, else `c:strLit`; `NONE` writes no input. `formula` is read for `REF` only and
- * `literal` for `LITERAL` only.
+ * `REF` writes the reference text `formula`; `LITERAL` writes the
+ * `literal_count` points of `literal` (each element carries its
+ * `struct_size`): a series name is one point written as `<c:tx><c:v>`
+ * (`CT_SerTx` has no `c:strLit`), `values` / `y` / `size` hold numbers
+ * (`c:numLit`), and `categories` / `x` are `c:numLit` when every point is a
+ * number, else `c:strLit`; `NONE` writes no input.
  */
 typedef struct {
+  /** Whether the input is empty, a range reference or literal points, an `fm_chart_source_kind_t`. */
   int32_t kind;
+  /** The reference text to write; read for a range-reference input only. */
   const char* formula;
+  /** The literal points to write; read for a literal input only. */
   const fm_chart_literal_info_t* literal;
+  /** The number of entries in `literal`. */
   uint32_t literal_count;
 } fm_chart_data_source_spec_t;
 
 /** @brief One formatted data point (`c:dPt`). */
 typedef struct {
   uint32_t struct_size;
+  /** The 0-based index of the data point within its series. */
   uint32_t idx;
+  /** The point fill. */
   fm_chart_fill_t fill;
+  /** The point outline. */
   fm_chart_line_t line;
+  /** 1 when `marker` is set; 0 means the point states no marker. */
   int32_t has_marker;
+  /** The point marker; meaningful when `has_marker` is set. */
   fm_chart_marker_t marker;
 } fm_chart_point_info_t;
 
-/**
- * @brief One axis. `kind` is an `fm_chart_axis_kind_t`, `position` an
- *        `fm_chart_axis_position_t`, `crosses` an `fm_chart_axis_crosses_t`.
- *        `crosses_at`, `log_base`, `min`, `max`, `major_unit` and
- *        `minor_unit` are meaningful when their `has_*` flag is set;
- *        `number_format` is `NULL` when absent. `tick_label_position` is an `fm_chart_tick_label_position_t`,
- *        `FM_CHART_TICK_LABEL_POSITION_ABSENT` when absent. `visible` is `1`
- *        for a shown axis and `0` for a deleted one (`c:delete`).
- */
+/** @brief One axis. */
 typedef struct {
   uint32_t struct_size;
+  /** The axis id (c:axId) that `cross_axis` and a plot group's axis ids refer to. */
   uint32_t id;
+  /** The kind of the axis (category, value, date or series), an `fm_chart_axis_kind_t`. */
   int32_t kind;
+  /** The side of the plot area the axis sits on, an `fm_chart_axis_position_t`. */
   int32_t position;
+  /** 1 when the axis is shown; 0 for a deleted axis (c:delete). */
   int32_t visible;
+  /** The id of the axis this axis crosses. */
   uint32_t cross_axis;
+  /** Where this axis crosses its cross axis (automatic, minimum, maximum or at `crosses_at`), an
+   *  `fm_chart_axis_crosses_t`. */
   int32_t crosses;
+  /** 1 when `crosses_at` is set; 0 means the axis states no crossing value. */
   int32_t has_crosses_at;
+  /** The value on the cross axis where this axis crosses; meaningful when `has_crosses_at` is set. */
   double crosses_at;
+  /** 1 when the axis runs in reverse order. */
   int32_t reversed;
+  /** 1 when `log_base` is set; 0 means a linear axis. */
   int32_t has_log_base;
+  /** The base of a logarithmic scale; meaningful when `has_log_base` is set. */
   double log_base;
+  /** 1 when `min` is set; 0 means the minimum is automatic. */
   int32_t has_min;
+  /** The fixed minimum of the axis scale; meaningful when `has_min` is set. */
   double min;
+  /** 1 when `max` is set; 0 means the maximum is automatic. */
   int32_t has_max;
+  /** The fixed maximum of the axis scale; meaningful when `has_max` is set. */
   double max;
+  /** 1 when `major_unit` is set; 0 means the major unit is automatic. */
   int32_t has_major_unit;
+  /** The fixed distance between major ticks; meaningful when `has_major_unit` is set. */
   double major_unit;
+  /** 1 when `minor_unit` is set; 0 means the minor unit is automatic. */
   int32_t has_minor_unit;
+  /** The fixed distance between minor ticks; meaningful when `has_minor_unit` is set. */
   double minor_unit;
+  /** The number format code of the tick labels; `NULL` when absent. */
   const char* number_format;
+  /** 1 when the tick label number format follows the source cells. */
   int32_t source_linked;
+  /** The axis title; kind NONE when the axis has none. */
   fm_chart_title_t title;
+  /** 1 when major gridlines are drawn. */
   int32_t major_gridlines;
+  /** 1 when minor gridlines are drawn. */
   int32_t minor_gridlines;
-  int32_t tick_label_position; /* fm_chart_tick_label_position_t */
+  /** Where the tick labels sit relative to the axis, an `fm_chart_tick_label_position_t`;
+   *  `FM_CHART_TICK_LABEL_POSITION_ABSENT` when the axis element is absent. */
+  int32_t tick_label_position;
 } fm_chart_axis_info_t;
 
 /**
@@ -13871,109 +14784,126 @@ typedef struct fm_chart_data fm_chart_data_t;
 /**
  * @brief Overrides `fm_sheet_get_chart_preview` applies to a copy of the
  *        chart. Each field applies when its `_op` is `FM_PATCH_OP_SET`
- *        (`KEEP` keeps the chart's own value; `CLEAR` is rejected); `source`
- *        is then an A1 range. `direction` is an `fm_chart_series_direction_t`,
- *        `blanks_as` an `fm_blanks_as_t`; the rest are 0/1.
- *        `na_as_blank` overrides whether `#N/A` points draw as blank cells.
+ *        (`KEEP` keeps the chart's own value; `CLEAR` is rejected).
  */
 typedef struct {
   uint32_t struct_size;
+  /** Patch operation for `source`: keep it, set it from `source`; clear is rejected. */
   fm_patch_op_t source_op;
+  /** The A1 range of the source, applied when `source_op` is set. */
   const char* source;
+  /** Patch operation for `direction`: keep it, set it from `direction`; clear is rejected. */
   fm_patch_op_t direction_op;
+  /** Whether the series run along rows or columns, an `fm_chart_series_direction_t`, applied when `direction_op` is
+   *  set. */
   int32_t direction;
+  /** Patch operation for `header_row`: keep it, set it from `header_row`; clear is rejected. */
   fm_patch_op_t header_row_op;
+  /** 1 when the first row holds names, applied when `header_row_op` is set. */
   int32_t header_row;
+  /** Patch operation for `header_column`: keep it, set it from `header_column`; clear is rejected. */
   fm_patch_op_t header_column_op;
+  /** 1 when the first column holds names, applied when `header_column_op` is set. */
   int32_t header_column;
+  /** Patch operation for `blanks_as`: keep it, set it from `blanks_as`; clear is rejected. */
   fm_patch_op_t blanks_as_op;
+  /** How empty cells are plotted, an `fm_blanks_as_t`, applied when `blanks_as_op` is set. */
   int32_t blanks_as;
+  /** Patch operation for `plot_visible_only`: keep it, set it from `plot_visible_only`; clear is rejected. */
   fm_patch_op_t plot_visible_only_op;
+  /** 1 to plot only visible cells, applied when `plot_visible_only_op` is set. */
   int32_t plot_visible_only;
+  /** Patch operation for `na_as_blank`: keep it, set it from `na_as_blank`; clear is rejected. */
   fm_patch_op_t na_as_blank_op;
+  /** 1 to draw `#N/A` points as blank cells, applied when `na_as_blank_op` is set. */
   int32_t na_as_blank;
 } fm_chart_preview_overrides_spec_t;
 
-/**
- * @brief Summary of resolved chart data.
- *
- * `is_xy` is non-zero for the XY domain (scatter, bubble), where points
- * carry an x value. `category_value_count` is non-zero only for numeric
- * (date) categories and then equals `category_label_count`.
- * `categories_generated` is set when no category reference exists and the
- * labels are 1..n. `title_text` is `NULL` when the chart has no resolved
- * title text.
- */
+/** @brief Summary of resolved chart data. */
 typedef struct {
   uint32_t struct_size;
+  /** 1 for the XY domain (scatter, bubble), where points carry an x value; 0 for the category domain. */
   int32_t is_xy;
+  /** The number of points per series. */
   uint32_t point_count;
+  /** The number of resolved series. */
   uint32_t series_count;
+  /** The number of category labels. */
   uint32_t category_label_count;
+  /** The number of numeric (date) category values; 0 unless the categories are numeric, then equal to
+   *  `category_label_count`. */
   uint32_t category_value_count;
+  /** The number of upper levels of a multi-level category axis (the lowest level is the category labels); 0 for a
+   *  single-level axis. */
   uint32_t category_level_count;
+  /** The number format code of numeric category values; empty when not numeric. */
   const char* category_number_format;
+  /** 1 when no category reference exists and the labels are generated as 1..n. */
   int32_t categories_generated;
+  /** The resolved chart title text; `NULL` when the chart has none. */
   const char* title_text;
+  /** The number of resolved axis titles. */
   uint32_t axis_title_count;
+  /** The number of inputs that did not resolve. */
   uint32_t unresolved_count;
 } fm_chart_data_info_t;
 
-/**
- * @brief One resolved series. `name` is `NULL` when the series has no name
- *        reference. `point_count` is the length of the arrays
- *        `fm_chart_data_get_series_points` returns. `range_count[role]` counts
- *        the resolved rectangles of each `fm_chart_role_t` input.
- *        `number_format` is the number format of the values (the y values in
- *        the XY domain); `x_number_format` is that of the x values, empty
- *        outside the XY domain.
- */
+/** @brief One resolved series. */
 typedef struct {
   uint32_t struct_size;
+  /** The 0-based position of the series' plot group. */
   uint32_t plot_index;
+  /** The series' `c:idx`. */
   uint32_t series_id;
+  /** The resolved series name; `NULL` when the series has no name reference. */
   const char* name;
+  /** The number format code of the values (the y values in the XY domain). */
   const char* number_format;
+  /** `1` when the chart filter hides the series. */
   int32_t filtered;
+  /** The number of points of the series: the length of the arrays `fm_chart_data_get_series_points` returns. */
   uint32_t point_count;
+  /** 1 when the series is a bubble series with sizes; 0 otherwise. */
   int32_t has_sizes;
+  /** The number of resolved rectangles of each series input, indexed by `fm_chart_role_t`: 0 name, 1 categories, 2
+   *  values, 3 x, 4 y, 5 size. */
   uint32_t range_count[6];
+  /** The number format code of the x values; empty outside the XY domain. */
   const char* x_number_format;
 } fm_chart_data_series_info_t;
 
-/**
- * @brief Parallel point arrays of one series, owned by the handle.
- *
- * `values` (the y value in the XY domain) and `states` (each an
- * `fm_chart_point_state_t`) have `count` entries. `x` is `NULL` outside the
- * XY domain; `sizes` is `NULL` unless the series is a bubble series.
- */
+/** @brief Parallel point arrays of one series, owned by the handle. */
 typedef struct {
   uint32_t struct_size;
+  /** The number of entries in each array. */
   uint32_t count;
+  /** The resolved values (the y values in the XY domain), `count` entries. */
   const double* values;
+  /** The state of each point, an `fm_chart_point_state_t`, `count` entries parallel to `values`. */
   const uint8_t* states;
+  /** The resolved x values, `count` entries; `NULL` outside the XY domain. */
   const double* x;
+  /** The resolved bubble sizes, `count` entries; `NULL` unless the series is a bubble series. */
   const double* sizes;
 } fm_chart_data_points_info_t;
 
 /** @brief Resolved title text of one axis. */
 typedef struct {
   uint32_t struct_size;
+  /** The id of the axis the title belongs to. */
   uint32_t axis_id;
+  /** The resolved title text. */
   const char* text;
 } fm_chart_axis_title_text_info_t;
 
-/**
- * @brief An input that did not resolve; its points read as gaps. `role`
- *        is an `fm_chart_role_t`; `series_id` is the series' `c:idx`
- *        (0 for a title) and `axis_id` the axis of an
- *        `FM_CHART_ROLE_AXIS_TITLE`.
- */
+/** @brief An input that did not resolve; its points read as gaps. */
 typedef struct {
   uint32_t struct_size;
+  /** The `c:idx` of the series the input belongs to; 0 for a title. */
   uint32_t series_id;
-  int32_t role; /* fm_chart_role_t */
+  /** The role of the input that did not resolve, an `fm_chart_role_t`. */
+  int32_t role;
+  /** The id of the axis when the role is an axis title. */
   uint32_t axis_id;
 } fm_chart_unresolved_info_t;
 
@@ -14136,88 +15066,107 @@ FM_API fm_status_t fm_chart_data_get_unresolved_at(const fm_chart_data_t* data, 
 
 /* ---- Creation and edits -------------------------------------------------- */
 
-/**
- * @brief Options of `fm_sheet_add_chart`.
- *
- * `type` is an `fm_chart_plot_type_t` of `BAR`, `LINE`, `AREA`, `PIE`,
- * `DOUGHNUT` or `SCATTER` (any other is `FM_STATUS_INVALID_ARGUMENT` (2)).
- * `bar_direction` is an `fm_chart_bar_direction_t` read for `BAR` only (zero
- * is `COLUMN`); `FM_CHART_BAR_DIRECTION_BAR` with any other type is
- * `FM_STATUS_INVALID_ARGUMENT` (2). `grouping` (an
- * `fm_chart_grouping_t`) applies to bar, line and area. `source` is
- * one A1 rectangle, sheet-qualified or on the target sheet. `direction` is
- * an `fm_chart_series_direction_t`, `header_row`/`header_column`
- * `fm_tristate_t`s (`FM_TRISTATE_DEFAULT` follows Excel's detection).
- * `has_title` `0` (the `FM_STRUCT_INIT` default) gives Excel's automatic
- * title; `1` writes `title` as `fm_sheet_set_chart_title` does (`NONE` for no
- * title, a `TEXT` title with empty text is `FM_STATUS_INVALID_ARGUMENT` (2));
- * a `REF` title is resolved before the insert, so a bad reference fails with
- * no chart added.
- * `legend` is an `fm_chart_legend_position_t`; zero is
- * `FM_CHART_LEGEND_POSITION_RIGHT`, the OOXML default, while Excel's insert
- * default is `FM_CHART_LEGEND_POSITION_BOTTOM`, which the bindings pass for an
- * omitted option. `placement` reads as for
- * `fm_sheet_add_picture`, its `name` and `description` naming the chart (an
- * empty name becomes `Chart <n>`, n being the object id minus one); a
- * `DEFAULT` anchor kind is two-cell, as Excel inserts charts, and a zero
- * size means Excel's default 360 x 216 pt frame.
- */
+/** @brief Options of `fm_sheet_add_chart`. */
 typedef struct {
   uint32_t struct_size;
+  /** The plot type of the new chart, an `fm_chart_plot_type_t`: `BAR`, `LINE`, `AREA`, `PIE`, `DOUGHNUT` or
+   *  `SCATTER` (any other is `FM_STATUS_INVALID_ARGUMENT` (2)). */
   int32_t type;
+  /** Whether bars run vertically (column) or horizontally, an `fm_chart_bar_direction_t`; read for `BAR` only, 0 is
+   *  column, and `FM_CHART_BAR_DIRECTION_BAR` with any other type is `FM_STATUS_INVALID_ARGUMENT` (2). */
   int32_t bar_direction;
+  /** How the series are stacked or grouped, an `fm_chart_grouping_t`; applies to bar, line and area plots. */
   int32_t grouping;
+  /** One A1 rectangle, sheet-qualified or on the target sheet. */
   const char* source;
+  /** Whether the series run along rows or columns of the source range, an `fm_chart_series_direction_t`; automatic when
+   *  omitted. */
   int32_t direction;
-  int32_t header_row;    /* fm_tristate_t */
-  int32_t header_column; /* fm_tristate_t */
+  /** Whether the first row of the source holds names, a tri-state value (default follows Excel's detection). */
+  int32_t header_row;
+  /** Whether the first column of the source holds names, a tri-state value (default follows Excel's detection). */
+  int32_t header_column;
+  /** 1 when `title` is written; 0 gives Excel's automatic title. */
   int32_t has_title;
+  /** The chart title, written when `has_title` is 1 as `fm_sheet_set_chart_title` does (`NONE` for no title; a `TEXT`
+   *  title with empty text is `FM_STATUS_INVALID_ARGUMENT` (2)). A `REF` title is resolved before the insert, so a bad
+   *  reference fails with no chart added. */
   fm_chart_title_t title;
+  /** The legend position, an `fm_chart_legend_position_t`; 0 is the right (the OOXML default) while Excel's insert
+   *  default is the bottom, which the bindings pass for an omitted option. */
   int32_t legend;
+  /** The placement, name and description of the chart frame, read as for `fm_sheet_add_picture` (an empty name becomes
+   *  `Chart <n>`, n being the object id minus one). A `DEFAULT` anchor kind is two-cell, as Excel inserts charts, and a
+   *  zero size means Excel's default 360 x 216 pt frame. */
   fm_drawing_placement_spec_t placement;
 } fm_chart_spec_t;
 
 /** @brief Marker patch; `symbol` is an `fm_chart_marker_symbol_t` other than `FM_CHART_MARKER_SYMBOL_PICTURE` (`CLEAR`
  * rejected). */
 typedef struct {
+  /** Patch operation for `symbol`: keep it, set it from `symbol`; clear is rejected. */
   fm_patch_op_t symbol_op;
+  /** The marker symbol to set; the picture symbol is rejected. */
   int32_t symbol;
+  /** Patch operation for `size_pt`: keep it, set it from `size_pt`, or clear it. */
   fm_patch_op_t size_pt_op;
+  /** The marker size to set, in points. */
   double size_pt;
+  /** The patch applied to the marker fill. */
   fm_chart_fill_patch_t fill;
+  /** The patch applied to the marker outline. */
   fm_chart_line_patch_t line;
 } fm_chart_marker_patch_t;
 
-/**
- * @brief Data-label patch. The `show_*`, `source_linked` and `deleted`
- *        flags are 0/1 (`CLEAR` rejected); `position` is an
- *        `fm_chart_label_position_t`; a `SET` `font_color` is kind None, Rgb
- *        or Theme.
- */
+/** @brief Data-label patch. A `SET` `font_color` is kind None, Rgb or Theme. */
 typedef struct {
+  /** Patch operation for `show_value`: keep it, set it from `show_value`; clear is rejected. */
   fm_patch_op_t show_value_op;
+  /** 1 to show the point value, 0 to hide it. */
   int32_t show_value;
+  /** Patch operation for `show_category`: keep it, set it from `show_category`; clear is rejected. */
   fm_patch_op_t show_category_op;
+  /** 1 to show the category name, 0 to hide it. */
   int32_t show_category;
+  /** Patch operation for `show_series`: keep it, set it from `show_series`; clear is rejected. */
   fm_patch_op_t show_series_op;
+  /** 1 to show the series name, 0 to hide it. */
   int32_t show_series;
+  /** Patch operation for `show_percent`: keep it, set it from `show_percent`; clear is rejected. */
   fm_patch_op_t show_percent_op;
+  /** 1 to show the percentage of the whole, 0 to hide it. */
   int32_t show_percent;
+  /** Patch operation for `show_legend_key`: keep it, set it from `show_legend_key`; clear is rejected. */
   fm_patch_op_t show_legend_key_op;
+  /** 1 to show the legend key, 0 to hide it. */
   int32_t show_legend_key;
+  /** Patch operation for `separator`: keep it, set it from `separator`, or clear it. */
   fm_patch_op_t separator_op;
+  /** The text placed between the label parts. */
   const char* separator;
+  /** Patch operation for `position`: keep it, set it from `position`, or clear it. */
   fm_patch_op_t position_op;
+  /** Where the label sits relative to its point, an `fm_chart_label_position_t`. */
   int32_t position;
+  /** Patch operation for `number_format`: keep it, set it from `number_format`, or clear it. */
   fm_patch_op_t number_format_op;
+  /** The number format code of the label. */
   const char* number_format;
+  /** Patch operation for `font_color`: keep it, set it from `font_color`, or clear it. */
   fm_patch_op_t font_color_op;
+  /** The label font colour to set, kind None, RGB or theme. */
   fm_color_t font_color;
+  /** Patch operation for `font_size_pt`: keep it, set it from `font_size_pt`, or clear it. */
   fm_patch_op_t font_size_pt_op;
+  /** The label font size to set, in points. */
   double font_size_pt;
+  /** Patch operation for `source_linked`: keep it, set it from `source_linked`; clear is rejected. */
   fm_patch_op_t source_linked_op;
+  /** 1 when the label number format follows the source cells. */
   int32_t source_linked;
+  /** Patch operation for `deleted`: keep it, set it from `deleted`; clear is rejected. */
   fm_patch_op_t deleted_op;
+  /** 1 to delete the labels, 0 to keep them. */
   int32_t deleted;
 } fm_chart_labels_patch_t;
 
@@ -14230,31 +15179,50 @@ typedef struct {
  * `FM_STATUS_INVALID_ARGUMENT` (2)); with `LITERAL` writes the points
  * (`literal_count` 0 is `FM_STATUS_INVALID_ARGUMENT` (2)); with `NONE`, like
  * `CLEAR`, removes the input of `name`, `categories` or `x` and is
- * `FM_STATUS_INVALID_ARGUMENT` (2) on `values`, `y` and `size`.
- * `marker_op`/`labels_op` `CLEAR` removes
- * the marker or the data labels; `smooth` is 0/1 (`CLEAR` rejected).
+ * `FM_STATUS_INVALID_ARGUMENT` (2) on `values`, `y` and `size`. `smooth` is
+ * 0/1 (`CLEAR` rejected).
  */
 typedef struct {
   uint32_t struct_size;
+  /** Patch operation for `name`: keep it, set it from `name`, or clear it. */
   fm_patch_op_t name_op;
+  /** The series name input to write. */
   fm_chart_data_source_spec_t name;
+  /** Patch operation for `categories`: keep it, set it from `categories`, or clear it. */
   fm_patch_op_t categories_op;
+  /** The category labels input to write. */
   fm_chart_data_source_spec_t categories;
+  /** Patch operation for `values`: keep it, set it from `values`, or clear it. */
   fm_patch_op_t values_op;
+  /** The values input to write. */
   fm_chart_data_source_spec_t values;
+  /** Patch operation for `x`: keep it, set it from `x`, or clear it. */
   fm_patch_op_t x_op;
+  /** The x values input to write. */
   fm_chart_data_source_spec_t x;
+  /** Patch operation for `y`: keep it, set it from `y`, or clear it. */
   fm_patch_op_t y_op;
+  /** The y values input to write. */
   fm_chart_data_source_spec_t y;
+  /** Patch operation for `size`: keep it, set it from `size`, or clear it. */
   fm_patch_op_t size_op;
+  /** The bubble sizes input to write. */
   fm_chart_data_source_spec_t size;
+  /** The patch applied to the series fill. */
   fm_chart_fill_patch_t fill;
+  /** The patch applied to the series outline. */
   fm_chart_line_patch_t line;
+  /** Patch operation for `marker`: keep it, set it from `marker`, or clear it. */
   fm_patch_op_t marker_op;
+  /** The patch applied to the series marker; clearing it with `marker_op` removes the marker. */
   fm_chart_marker_patch_t marker;
+  /** Patch operation for `smooth`: keep it, set it from `smooth`; clear is rejected. */
   fm_patch_op_t smooth_op;
+  /** 1 to draw a smoothed line, 0 for straight segments. */
   int32_t smooth;
+  /** Patch operation for `labels`: keep it, set it from `labels`, or clear it. */
   fm_patch_op_t labels_op;
+  /** The patch applied to the data labels; clearing it with `labels_op` removes them. */
   fm_chart_labels_patch_t labels;
 } fm_chart_series_patch_t;
 
@@ -14268,141 +15236,187 @@ typedef struct {
  */
 typedef struct {
   uint32_t struct_size;
+  /** The patch applied to the point fill. */
   fm_chart_fill_patch_t fill;
+  /** The patch applied to the point outline. */
   fm_chart_line_patch_t line;
+  /** Patch operation for `marker`: keep it, set it from `marker`, or clear it. */
   fm_patch_op_t marker_op;
+  /** The patch applied to the point marker. */
   fm_chart_marker_patch_t marker;
 } fm_chart_point_patch_t;
 
 /**
  * @brief Plot-group patch (`CLEAR` rejected on every field). A field the
- *        plot type does not have is `FM_STATUS_INVALID_ARGUMENT` (2); `hole_size_pct` is
- *        10..90 and doughnut only.
+ *        plot type does not have is `FM_STATUS_INVALID_ARGUMENT` (2).
  */
 typedef struct {
   uint32_t struct_size;
+  /** Patch operation for `gap_width_pct`: keep it, set it from `gap_width_pct`; clear is rejected. */
   fm_patch_op_t gap_width_pct_op;
+  /** The gap between bar clusters as a percentage of the bar width. */
   uint32_t gap_width_pct;
+  /** Patch operation for `overlap_pct`: keep it, set it from `overlap_pct`; clear is rejected. */
   fm_patch_op_t overlap_pct_op;
+  /** The overlap between bars of a cluster as a percentage of the bar width. */
   int32_t overlap_pct;
+  /** Patch operation for `first_slice_angle_deg`: keep it, set it from `first_slice_angle_deg`; clear is rejected. */
   fm_patch_op_t first_slice_angle_deg_op;
+  /** The angle in degrees of the first pie or doughnut slice. */
   uint32_t first_slice_angle_deg;
+  /** Patch operation for `vary_colors`: keep it, set it from `vary_colors`; clear is rejected. */
   fm_patch_op_t vary_colors_op;
+  /** 1 when each point of a single-series plot takes its own colour. */
   int32_t vary_colors;
+  /** Patch operation for `hole_size_pct`: keep it, set it from `hole_size_pct`; clear is rejected. */
   fm_patch_op_t hole_size_pct_op;
+  /** The doughnut hole size as a percentage of the diameter (10..90); doughnut plots only. */
   uint32_t hole_size_pct;
 } fm_chart_plot_patch_t;
 
 /**
  * @brief Axis patch.
  *
- * `visible`, `major_gridlines` and `reversed` are 0/1 and `crosses` an
- * `fm_chart_axis_crosses_t` (`CLEAR` rejected on these four); a `SET`
- * `crosses_at` (`CLEAR` rejected) is read when `crosses` is set to
- * `FM_CHART_AXIS_CROSSES_AT`. `title` takes the
- * kinds of `fm_sheet_set_chart_title` (`NONE` removes the axis title, `AUTO`
- * leaves the text to the viewer). `CLEAR` on `title` removes the axis
- * title, on `log_base` makes the axis linear, on `tick_label_position`
- * restores the default, and on `minor_unit` makes the unit automatic. A set
- * `tick_label_position` is an `fm_chart_tick_label_position_t` other than
- * `ABSENT`. `minor_gridlines` and `source_linked` are 0/1 and `position` an
- * `fm_chart_axis_position_t` (`CLEAR` rejected on these three; an axis always
- * has `c:axPos`).
+ * `CLEAR` is rejected on `visible`, `major_gridlines`, `reversed`, `crosses`,
+ * `crosses_at`, `minor_gridlines`, `source_linked` and `position`; on `title`
+ * it removes the axis title, on `log_base` it makes the axis linear, on
+ * `tick_label_position` it restores the default, and on `minor_unit` it makes
+ * the unit automatic.
  */
 typedef struct {
   uint32_t struct_size;
+  /** Patch operation for `visible`: keep it, set it from `visible`; clear is rejected. */
   fm_patch_op_t visible_op;
+  /** 1 to show the axis, 0 to delete it. */
   int32_t visible;
+  /** Patch operation for `title`: keep it, set it from `title`, or clear it. */
   fm_patch_op_t title_op;
+  /** The axis title to set, taking the kinds of `fm_sheet_set_chart_title`; none removes the title and automatic leaves
+   *  the text to the viewer. */
   fm_chart_title_t title;
+  /** Patch operation for `min`: keep it, set it from `min`, or clear it. */
   fm_patch_op_t min_op;
+  /** The fixed minimum of the axis scale. */
   double min;
+  /** Patch operation for `max`: keep it, set it from `max`, or clear it. */
   fm_patch_op_t max_op;
+  /** The fixed maximum of the axis scale. */
   double max;
+  /** Patch operation for `major_unit`: keep it, set it from `major_unit`, or clear it. */
   fm_patch_op_t major_unit_op;
+  /** The fixed distance between major ticks. */
   double major_unit;
+  /** Patch operation for `number_format`: keep it, set it from `number_format`, or clear it. */
   fm_patch_op_t number_format_op;
+  /** The number format code of the tick labels. */
   const char* number_format;
+  /** Patch operation for `major_gridlines`: keep it, set it from `major_gridlines`; clear is rejected. */
   fm_patch_op_t major_gridlines_op;
+  /** 1 to draw major gridlines, 0 to remove them. */
   int32_t major_gridlines;
+  /** Patch operation for `reversed`: keep it, set it from `reversed`; clear is rejected. */
   fm_patch_op_t reversed_op;
+  /** 1 to run the axis in reverse order. */
   int32_t reversed;
+  /** Patch operation for `log_base`: keep it, set it from `log_base`, or clear it. */
   fm_patch_op_t log_base_op;
+  /** The base of a logarithmic scale; clearing it makes the axis linear. */
   double log_base;
+  /** Patch operation for `crosses`: keep it, set it from `crosses`; clear is rejected. */
   fm_patch_op_t crosses_op;
+  /** Where this axis crosses its cross axis (automatic, minimum, maximum or at `crosses_at`), an
+   *  `fm_chart_axis_crosses_t`. */
   int32_t crosses;
+  /** Patch operation for `crosses_at`: keep it, set it from `crosses_at`; clear is rejected. */
   fm_patch_op_t crosses_at_op;
+  /** The value on the cross axis where this axis crosses; read when `crosses` is set to `FM_CHART_AXIS_CROSSES_AT`. */
   double crosses_at;
+  /** Patch operation for `tick_label_position`: keep it, set it from `tick_label_position`, or clear it. */
   fm_patch_op_t tick_label_position_op;
-  int32_t tick_label_position; /* fm_chart_tick_label_position_t */
+  /** Where the tick labels sit relative to the axis, an `fm_chart_tick_label_position_t` other than `ABSENT`. */
+  int32_t tick_label_position;
+  /** Patch operation for `minor_unit`: keep it, set it from `minor_unit`, or clear it. */
   fm_patch_op_t minor_unit_op;
+  /** The fixed distance between minor ticks; clearing it makes the unit automatic. */
   double minor_unit;
+  /** Patch operation for `minor_gridlines`: keep it, set it from `minor_gridlines`; clear is rejected. */
   fm_patch_op_t minor_gridlines_op;
+  /** 1 to draw minor gridlines, 0 to remove them. */
   int32_t minor_gridlines;
+  /** Patch operation for `position`: keep it, set it from `position`; clear is rejected. */
   fm_patch_op_t position_op;
-  int32_t position; /* fm_chart_axis_position_t */
+  /** The side of the plot area the axis sits on, an `fm_chart_axis_position_t`; an axis always has `c:axPos`. */
+  int32_t position;
+  /** Patch operation for `source_linked`: keep it, set it from `source_linked`; clear is rejected. */
   fm_patch_op_t source_linked_op;
+  /** 1 when the tick label number format follows the source cells. */
   int32_t source_linked;
 } fm_chart_axis_patch_t;
 
 /**
  * @brief A chart legend as a whole (`fm_sheet_set_chart_legend`).
  *
- * `position` is an `fm_chart_legend_position_t` other than
- * `FM_CHART_LEGEND_POSITION_ABSENT` (a chart without a legend takes `NULL`
- * instead); `overlay` is `0` / `1`; the `hidden_entries_count` series `c:idx`
- * values of `hidden_entries` are the entries hidden from the legend
- * (`hidden_entries` may be `NULL` when the count is 0). The read side is
- * `fm_chart_info_t`'s `legend_*` fields and `fm_chart_get_legend_hidden_at`.
+ * The read side is `fm_chart_info_t`'s `legend_*` fields and
+ * `fm_chart_get_legend_hidden_at`.
  */
 typedef struct {
   uint32_t struct_size;
+  /** Where the legend sits relative to the plot, an `fm_chart_legend_position_t` other than
+   *  `FM_CHART_LEGEND_POSITION_ABSENT` (a chart without a legend takes `NULL` for the whole record instead). */
   int32_t position;
+  /** `1` when the legend overlays the plot area. */
   int32_t overlay;
+  /** The `c:idx` values of the series whose legend entry is hidden; may be `NULL` when `hidden_entries_count` is 0. */
   const uint32_t* hidden_entries;
+  /** The number of entries in `hidden_entries`. */
   uint32_t hidden_entries_count;
 } fm_chart_legend_t;
 
 /**
- * @brief Legend merge (`fm_sheet_update_chart_legend`). A `SET` `position` is
- *        an `fm_chart_legend_position_t` other than
- *        `FM_CHART_LEGEND_POSITION_ABSENT` (`fm_sheet_set_chart_legend(..., NULL)`
- *        removes the legend); a `SET` `overlay` is `0` / `1`. With
- *        `hidden_entries_op` `SET` the `hidden_entries_count` series `c:idx`
- *        values replace the hidden legend entries (`hidden_entries` may be
- *        `NULL` when the count is 0, which shows every entry). No field can be
- *        cleared. On a chart without a legend the update creates one, and a
- *        `KEEP` field takes Excel's default: `FM_CHART_LEGEND_POSITION_RIGHT`,
- *        no overlay, no hidden entry.
+ * @brief Legend merge (`fm_sheet_update_chart_legend`);
+ *        `fm_sheet_set_chart_legend(..., NULL)` removes the legend.
+ *
+ * No field can be cleared. On a chart without a legend the update creates one,
+ * and a `KEEP` field takes Excel's default: `FM_CHART_LEGEND_POSITION_RIGHT`,
+ * no overlay, no hidden entry.
  */
 typedef struct {
   uint32_t struct_size;
+  /** Patch operation for `position`: keep it or set it from `position`; clear is rejected. */
   fm_patch_op_t position_op;
+  /** Where the legend sits relative to the plot, an `fm_chart_legend_position_t`; the absent value is rejected. */
   int32_t position;
+  /** Patch operation for `overlay`: keep it or set it from `overlay`; clear is rejected. */
   fm_patch_op_t overlay_op;
+  /** 1 when the legend overlays the plot area, 0 otherwise. */
   int32_t overlay;
+  /** Patch operation for `hidden_entries`: keep it or set it from `hidden_entries`; clear is rejected. */
   fm_patch_op_t hidden_entries_op;
+  /** The series `c:idx` values whose legend entry is hidden; `NULL` when `hidden_entries_count` is 0, which shows
+   *  every entry. */
   const uint32_t* hidden_entries;
+  /** The number of entries in `hidden_entries`. */
   uint32_t hidden_entries_count;
 } fm_chart_legend_patch_t;
 
-/**
- * @brief Display-option patch. `blanks_as` (`c:dispBlanksAs`) is an
- *        `fm_blanks_as_t` of `GAP`, `ZERO` or `SPAN`; `plot_visible_only`
- *        (`c:plotVisOnly`) and `na_as_blank` (`c16r3:dispNaAsBlank`, `#N/A`
- *        points drawn as blank cells) are 0/1. `style` (`c:style`) is 1..48
- *        (`ST_Style`). `CLEAR` removes the element;
- *        `na_as_blank` set to 0 removes it too, as Excel writes it.
- */
+/** @brief Display-option patch. `CLEAR` removes the element. */
 typedef struct {
   uint32_t struct_size;
+  /** Patch operation for `blanks_as`: keep it, set it from `blanks_as`, or clear (remove) it. */
   fm_patch_op_t blanks_as_op;
+  /** How empty cells are plotted (`c:dispBlanksAs`): an `fm_blanks_as_t` of `GAP`, `ZERO` or `SPAN`. */
   int32_t blanks_as;
+  /** Patch operation for `plot_visible_only`: keep it, set it from `plot_visible_only`, or clear (remove) it. */
   fm_patch_op_t plot_visible_only_op;
+  /** 1 to plot only visible cells (`c:plotVisOnly`), 0 to plot all. */
   int32_t plot_visible_only;
+  /** Patch operation for `na_as_blank`: keep it, set it from `na_as_blank`, or clear (remove) it. */
   fm_patch_op_t na_as_blank_op;
+  /** 1 to draw `#N/A` points as blank cells (`c16r3:dispNaAsBlank`); 0 removes the setting, as Excel writes it. */
   int32_t na_as_blank;
+  /** Patch operation for `style`: keep it, set it from `style`, or clear (remove) it. */
   fm_patch_op_t style_op;
+  /** The chart style number (`c:style`), 1..48 (`ST_Style`). */
   int32_t style;
 } fm_chart_display_patch_t;
 
@@ -14599,31 +15613,40 @@ FM_API fm_status_t fm_sheet_set_chart_source(fm_workbook_t* wb, size_t sheet_ind
  * @brief A What-If data table (`TABLE()`): the record `fm_sheet_get_data_table`
  *        reads and `fm_sheet_add_data_table` takes.
  *
- * `rect` is the result range; the
- * formulas and substitution values sit in the row above and the column left
- * of it. The row input cell receives the values of the top row, the column
+ * The formulas and substitution values sit in the row above and the column left
+ * of `rect`. The row input cell receives the values of the top row, the column
  * input cell those of the left column: a one-variable table has one of them
  * (`row_oriented` says which, on read), a two-variable table both
  * (`two_dimensional`). A flag is `0` or `1`.
  *
  * On add only the range and the `has_*` flags and inputs are read; the
- * result cells are set to 0 and filled by the next recalc. On read
- * `row_input_deleted` / `column_input_deleted` mark an input cell removed by a
- * row or column delete; the table then evaluates to `#REF!`. An input that is
- * absent reads as row and column 0.
+ * result cells are set to 0 and filled by the next recalc.
  */
 typedef struct {
   uint32_t struct_size;
+  /** The result range of the table, 0-based and inclusive. */
   fm_cell_rect_t rect;
+  /** The 0-based row of the row input cell; 0 when `has_row_input` is 0. */
   uint32_t row_input_row;
+  /** The 0-based column of the row input cell; 0 when `has_row_input` is 0. */
   uint32_t row_input_col;
+  /** The 0-based row of the column input cell; 0 when `has_column_input` is 0. */
   uint32_t column_input_row;
+  /** The 0-based column of the column input cell; 0 when `has_column_input` is 0. */
   uint32_t column_input_col;
+  /** 1 when the table has a row input cell; 0 means it has none. */
   int32_t has_row_input;
+  /** 1 when the table has a column input cell; 0 means it has none. */
   int32_t has_column_input;
+  /** 1 for a two-variable table, which has both a row and a column input cell. */
   int32_t two_dimensional;
+  /** For a one-variable table, 1 when its input is the row input cell and 0 when it is the column input cell. */
   int32_t row_oriented;
+  /** 1 when a row or column delete removed the row input cell; the table then evaluates to `#REF!`. Ignored on input.
+   */
   int32_t row_input_deleted;
+  /** 1 when a row or column delete removed the column input cell; the table then evaluates to `#REF!`. Ignored on
+   *  input. */
   int32_t column_input_deleted;
 } fm_data_table_t;
 

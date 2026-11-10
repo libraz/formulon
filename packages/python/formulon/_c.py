@@ -335,17 +335,17 @@ class ParseErrorCode(IntEnum):
 
 @dataclass(frozen=True)
 class ParseError:
-    """Position of a formula syntax failure (``fm_parse_error_info_t``).
+    """Position of a formula syntax failure (``fm_parse_error_info_t``)."""
 
-    ``start`` / ``end`` are code-point offsets into the text the caller passed,
-    as ``len`` and slicing count; ``line`` and ``column`` are 1-based, ``column``
-    in code points too.
-    """
-
+    #: The parse error code identifying the kind of failure.
     code: ParseErrorCode
+    #: Offset of the first character of the offending span in the caller's text, in code points.
     start: int
+    #: Offset one past the last character of the offending span, in code points.
     end: int
+    #: The 1-based line of the failure.
     line: int
+    #: The 1-based column of the failure within its line, in code points.
     column: int
 
 
