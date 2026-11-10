@@ -16,7 +16,7 @@ std::vector<pivot::PivotItem> BoundItems(const pivot::PivotField& field, const P
   if (bound_by_position != nullptr) {
     bound_by_position->clear();
   }
-  if (fp == nullptr || !fp->derived) {
+  if (fp == nullptr || !fp->completes_items) {
     if (bound_by_position != nullptr) {
       bound_by_position->assign(field.items.size(), false);
     }
@@ -25,6 +25,7 @@ std::vector<pivot::PivotItem> BoundItems(const pivot::PivotField& field, const P
   const std::size_t shared = fp->items.size();
   const bool on_axis = field.axis == pivot::PivotAxis::Row || field.axis == pivot::PivotAxis::Col ||
                        field.axis == pivot::PivotAxis::Page;
+  const auto unlisted = [fp](std::size_t k) { return k < fp->item_is_unlisted.size() && fp->item_is_unlisted[k]; };
   std::vector<pivot::PivotItem> bound;
   std::vector<bool> used(shared, false);
   if (field.items.empty()) {
@@ -40,6 +41,9 @@ std::vector<pivot::PivotItem> BoundItems(const pivot::PivotField& field, const P
       std::reverse(order.begin(), order.end());
     }
     for (const std::uint32_t k : order) {
+      if (unlisted(k)) {
+        continue;
+      }
       pivot::PivotItem item;
       item.has_cache_index = true;
       item.cache_index = k;
@@ -68,16 +72,18 @@ std::vector<pivot::PivotItem> BoundItems(const pivot::PivotField& field, const P
       item.has_cache_index = true;
       item.cache_index = static_cast<std::uint32_t>(target);
     }
-    if (item.cache_index < shared) {
-      used[item.cache_index] = true;
+    // An index past the shared items filters nothing and would be an invalid `x`.
+    if (item.cache_index >= shared) {
+      continue;
     }
+    used[item.cache_index] = true;
     bound.push_back(std::move(item));
     if (bound_by_position != nullptr) {
       bound_by_position->push_back(by_position);
     }
   }
   for (std::size_t k = 0; k < shared; ++k) {
-    if (!used[k]) {
+    if (!used[k] && !unlisted(k)) {
       pivot::PivotItem item;
       item.has_cache_index = true;
       item.cache_index = static_cast<std::uint32_t>(k);

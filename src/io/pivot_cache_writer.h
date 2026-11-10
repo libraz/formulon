@@ -33,8 +33,16 @@ struct PivotCacheFieldWritePlan {
   /// True when the writer emits the field as a discrete one with shared items
   /// built from its record values; false keeps the model's own encoding.
   bool derived = false;
-  /// Distinct record values in first-appearance order (the shared items).
+  /// True when the pivot-table writer completes the field's `<items>` against
+  /// `items` (`detail::BoundItems`): a derived field, or one with shared items
+  /// that some table puts on the Row / Col / Page axis.
+  bool completes_items = false;
+  /// The shared items: for a derived field its distinct record values in
+  /// first-appearance order, otherwise the cache field's own.
   std::vector<Value> items;
+  /// Per item of `items`, true for a missing or calculated shared item, which
+  /// completion never adds.
+  std::vector<bool> item_is_unlisted;
   /// `<sharedItems>` content hints: those of `items` for a derived field; for
   /// any other field with neither shared items nor captured hints, the hints
   /// to emit in place of the range placeholder when `present`.
@@ -73,6 +81,9 @@ struct PivotCacheWritePlan {
 /// hints derived from its record values and date marks (see
 /// `PivotCacheFieldWritePlan::hints`); with no records it keeps the
 /// `containsNumber="1"` placeholder.
+///
+/// A database field with shared items that some table puts on the Row / Col /
+/// Page axis keeps its encoding and only completes its items.
 ///
 /// The base of a date group with neither shared items nor captured hints gets
 /// date hints (`minDate` at the earliest record date, `maxDate` at the day

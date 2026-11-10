@@ -27,6 +27,7 @@
 #include "pivot/field_remap.h"
 #include "pivot/pivot_cache.h"
 #include "pivot/pivot_locale.h"
+#include "pivot/record_access.h"
 #include "pivot/shared_items_hints.h"
 #include "pivot/value_order.h"
 #include "sheet_name.h"
@@ -354,8 +355,18 @@ Expected<RefreshPlan, Error> build_refreshed_cache(const PivotCache& old, const 
       field.field_group = previous.field_group;
     }
     if (!from.has_value() || !shared[*from]) {
+      // Inline text still folds to the first spelling of its item.
+      std::unordered_map<std::string, Value> first_text;
       for (std::size_t r = 0; r < source.rows; ++r) {
-        records[r].cells[c] = owned(cache, values[r]);
+        if (values[r].is_text()) {
+          const auto first = first_text.emplace(item_key(values[r], false), Value::blank());
+          if (first.second) {
+            first.first->second = owned(cache, values[r]);
+          }
+          records[r].cells[c] = first.first->second;
+        } else {
+          records[r].cells[c] = owned(cache, values[r]);
+        }
         records[r].cell_is_date[c] = dates[r];
       }
       if (from.has_value() && !old_fields[*from].shared_items.empty()) {
@@ -489,6 +500,56 @@ Expected<RefreshPlan, Error> build_refreshed_cache(const PivotCache& old, const 
     plan.remap.names.push_back(field.name);
   }
   return plan;
+}
+
+bool share_field_items(PivotCache& cache, std::size_t field) {
+  if (field >= cache.fields().size() || cache.records().empty()) {
+    return false;
+  }
+  const PivotCacheField& current = cache.fields()[field];
+  if (!current.is_database_field || current.formula.has_value() || !current.shared_items.empty() ||
+      !current.shared_items_hints.present) {
+    return false;
+  }
+  // The values stay as the source gave them, so a refreshed cache stays refreshed.
+  const bool from_source = cache.records_from_source();
+  const std::size_t field_count = cache.fields().size();
+  std::vector<PivotCacheRecord>& records = cache.mutable_records();
+  PivotCacheField& target = cache.mutable_fields()[field];
+  std::unordered_map<std::string, std::uint32_t> index_of;
+  for (PivotCacheRecord& record : records) {
+    if (record.cells.size() <= field) {
+      record.cells.resize(field + 1U, Value::blank());
+    }
+    if (record.cell_is_index.size() < record.cells.size()) {
+      // Pin the encodings inferred so far before this field turns shared.
+      std::vector<bool> pinned(record.cells.size(), false);
+      for (std::size_t fi = 0; fi < pinned.size() && fi < field_count; ++fi) {
+        pinned[fi] = cell_is_shared_index(record, cache.fields()[fi], fi);
+      }
+      record.cell_is_index = std::move(pinned);
+    }
+    const Value value = record.cell_is_index[field] ? Value::blank() : record.cells[field];
+    const bool is_date = value.is_number() && flag_at(record.cell_is_date, field);
+    const auto inserted =
+        index_of.emplace(item_key(value, is_date), static_cast<std::uint32_t>(target.shared_items.size()));
+    if (inserted.second) {
+      append_item(target, value, is_date, false, false);
+    }
+    record.cells[field] = Value::number(static_cast<double>(inserted.first->second));
+    record.cell_is_index[field] = true;
+    if (field < record.cell_is_date.size()) {
+      record.cell_is_date[field] = false;
+    }
+    // The shared item now views this cell's text, so a later write must not reuse its storage.
+    if (field < record.cell_text_slot.size()) {
+      record.cell_text_slot[field] = kNoCacheTextSlot;
+    }
+  }
+  if (from_source) {
+    cache.mark_records_from_source();
+  }
+  return true;
 }
 
 }  // namespace formulon::pivot

@@ -25,6 +25,7 @@
 #include "utils/expected.h"
 
 using formulon::c_api::parts::c_str_or_null;
+using formulon::c_api::parts::cache_tables;
 using formulon::c_api::parts::check_enum_domain;
 using formulon::c_api::parts::check_finite;
 using formulon::c_api::parts::check_index;
@@ -49,10 +50,12 @@ using formulon::c_api::parts::pivot_num_fmt_code;
 using formulon::c_api::parts::pivot_num_fmt_id_text;
 using formulon::c_api::parts::pivot_subtotal_from_fm;
 using formulon::c_api::parts::PivotEdit;
+using formulon::c_api::parts::reproject_edited_pivot;
 using formulon::c_api::parts::resolve_pivot;
 using formulon::c_api::parts::resolve_pivot_checked;
 using formulon::c_api::parts::resolve_pivot_mut;
 using formulon::c_api::parts::set_values_position;
+using formulon::c_api::parts::share_axis_fields;
 using formulon::c_api::parts::text_or_null;
 
 namespace {
@@ -253,12 +256,20 @@ fm_status_t resolve_pivot_field(fm_workbook_t* wb, std::size_t sheet_index, std:
 }
 
 // Grouping edits the shared cache, so every pivot drawing from it is left
-// pending rather than projected.
+// pending; the grouped pivot itself is then projected. Its definition cannot
+// be restored apart from the cache, so a report that cannot be placed stays
+// pending.
 fm_status_t finish_cache_grouping(fm_workbook_t* wb, std::size_t sheet_index, std::size_t pivot_index,
                                   const formulon::Expected<void, formulon::Error>& grouped) {
   if (grouped) {
-    mark_cache_pivots_pending(wb->workbook(),
-                              wb->workbook().sheet(sheet_index).pivot_tables()[pivot_index]->pivot_cache_id());
+    formulon::Workbook& book = wb->workbook();
+    const std::uint32_t cache_id = book.sheet(sheet_index).pivot_tables()[pivot_index]->pivot_cache_id();
+    mark_cache_pivots_pending(book, cache_id);
+    // A cleared group puts its base back on the axes of every pivot on the cache.
+    for (const formulon::pivot::PivotTable* table : cache_tables(book, cache_id)) {
+      share_axis_fields(book, *table);
+    }
+    static_cast<void>(reproject_edited_pivot(book, sheet_index, pivot_index));
   }
   return finish_status(grouped);
 }

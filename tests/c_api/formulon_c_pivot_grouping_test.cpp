@@ -1,7 +1,12 @@
 // Stable C ABI PivotTable grouping and item-binding tests.
 
+#include <cstddef>
+#include <cstdint>
 #include <limits>
+#include <string>
+#include <string_view>
 #include <utility>
+#include <vector>
 
 #include "formulon_c_out_index.h"
 #include "formulon_c_pivot_test_helpers.h"
@@ -465,4 +470,225 @@ TEST(FormulonCApiPivot, SoleVisiblePageItemAddedByCacheIndexNamesItsValue) {
                                                          /*visible=*/1, ignored_index()),
             0);
   EXPECT_TRUE(LayoutHasText(wb.handle, pivot_index, "South"));
+}
+
+namespace {
+
+// Whether column `col` of sheet 0 holds the text `needle` in its first 100 rows.
+bool SheetColumnHasText(const fm_workbook_t* wb, std::uint32_t col, std::string_view needle) {
+  for (std::uint32_t r = 0; r < 100U; ++r) {
+    fm_value_t v{};
+    if (fm_sheet_get_value(wb, 0U, r, col, &v) == 0 && v.kind == FM_VALUE_KIND_TEXT && needle == v.u.text) {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool ProjectionPending(const fm_workbook_t* wb, std::size_t pivot_index) {
+  std::int32_t pending = -1;
+  EXPECT_EQ(fm_sheet_is_pivot_projection_pending(wb, 0U, pivot_index, &pending), 0);
+  return pending == 1;
+}
+
+double LayoutDataSum(fm_workbook_t* wb, std::size_t pivot_index) {
+  PivotCellsGuard projected;
+  EXPECT_EQ(fm_sheet_get_pivot_layout(wb, 0U, pivot_index, &projected.handle), 0) << fm_get_last_error_message();
+  return projected.handle != nullptr ? SumDataCells(projected.handle) : 0.0;
+}
+
+// A two-column source on Sheet1 from A1, a NULL first-column entry being a
+// blank cell, refreshed into a new cache; the pivot at F1 sums the second
+// column with no field on an axis.
+struct RefreshedPivot {
+  WorkbookGuard wb;
+  std::uint32_t cache_id = 0;
+  std::size_t pivot = 0;
+
+  void Build(const char* label_header, const std::vector<const char*>& labels) {
+    ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+    ASSERT_EQ(fm_sheet_set_text(wb.handle, 0U, 0U, 0U, label_header), 0);
+    ASSERT_EQ(fm_sheet_set_text(wb.handle, 0U, 0U, 1U, "Sales"), 0);
+    const double sales[] = {10.0, 30.0, 5.0, 1.0, 2.0, 3.0, 4.0, 6.0, 7.0, 8.0, 9.0, 11.0};
+    ASSERT_LE(labels.size(), sizeof(sales) / sizeof(sales[0]));
+    for (std::uint32_t i = 0; i < labels.size(); ++i) {
+      if (labels[i] != nullptr) {
+        ASSERT_EQ(fm_sheet_set_text(wb.handle, 0U, i + 1U, 0U, labels[i]), 0);
+      }
+      ASSERT_EQ(fm_sheet_set_number(wb.handle, 0U, i + 1U, 1U, sales[i]), 0);
+    }
+    ASSERT_EQ(fm_workbook_add_pivot_cache(wb.handle, 0U, &cache_id), 0);
+    const std::string ref = "A1:B" + std::to_string(labels.size() + 1U);
+    ASSERT_EQ(SetPivotCacheWorksheetSource(wb.handle, cache_id, /*present=*/1, ref.c_str(), "Sheet1", nullptr), 0);
+    ASSERT_EQ(fm_workbook_refresh_pivot_cache(wb.handle, cache_id), 0) << fm_get_last_error_message();
+    ASSERT_EQ(AddPivot(wb.handle, 0U, "PT", cache_id, /*anchor_row=*/0U, /*anchor_col=*/5U, &pivot), 0)
+        << fm_get_last_error_message();
+    ASSERT_EQ(fm_sheet_set_pivot_field_axis(wb.handle, 0U, pivot, 1U, FM_PIVOT_AXIS_VALUE), 0);
+    fm_pivot_data_field_t sum = FM_STRUCT_INIT(fm_pivot_data_field_t);
+    sum.name = "Sum of Sales";
+    sum.field_index = 1U;
+    sum.aggregation = FM_PIVOT_AGGREGATION_SUM;
+    sum.number_format = "";
+    sum.show_as = FM_PIVOT_SHOW_VALUES_AS_NORMAL;
+    ASSERT_EQ(fm_sheet_add_pivot_data_field(wb.handle, 0U, pivot, &sum, ignored_index()), 0)
+        << fm_get_last_error_message();
+  }
+
+  std::size_t SharedCount(const fm_workbook_t* book, std::uint32_t id) const {
+    std::size_t count = 99;
+    EXPECT_EQ(fm_workbook_get_pivot_cache_field_shared_item_count(book, id, 0U, &count), 0);
+    return count;
+  }
+};
+
+}  // namespace
+
+TEST(FormulonCApiPivot, AFieldJoiningRowsAfterARefreshGetsSharedItems) {
+  RefreshedPivot f;
+  f.Build("Region", {"East", "West", nullptr});
+  // Refreshed with no pivot placing it, Region holds its values inline.
+  ASSERT_EQ(f.SharedCount(f.wb.handle, f.cache_id), 0U);
+
+  ASSERT_EQ(fm_sheet_set_pivot_field_axis(f.wb.handle, 0U, f.pivot, 0U, FM_PIVOT_AXIS_ROW), 0)
+      << fm_get_last_error_message();
+  ASSERT_EQ(f.SharedCount(f.wb.handle, f.cache_id), 3U);
+  const char* const expected[] = {"East", "West"};
+  for (std::size_t i = 0; i < 2U; ++i) {
+    fm_value_t v{};
+    ASSERT_EQ(fm_workbook_get_pivot_cache_field_shared_item_value(f.wb.handle, f.cache_id, 0U, i, &v), 0);
+    ASSERT_EQ(v.kind, FM_VALUE_KIND_TEXT);
+    EXPECT_STREQ(v.u.text, expected[i]);
+  }
+  fm_value_t blank{};
+  ASSERT_EQ(fm_workbook_get_pivot_cache_field_shared_item_value(f.wb.handle, f.cache_id, 0U, 2U, &blank), 0);
+  EXPECT_EQ(blank.kind, FM_VALUE_KIND_BLANK);
+  EXPECT_DOUBLE_EQ(LayoutDataSum(f.wb.handle, f.pivot), 45.0);
+
+  // Hiding West by its cache index leaves East and the blank.
+  ASSERT_EQ(fm_sheet_add_pivot_field_item_by_cache_index(f.wb.handle, 0U, f.pivot, 0U, /*cache_index=*/1U,
+                                                         /*visible=*/0, ignored_index()),
+            0);
+  EXPECT_DOUBLE_EQ(LayoutDataSum(f.wb.handle, f.pivot), 15.0);
+  // Hiding the blank instead leaves East and West.
+  ASSERT_EQ(fm_sheet_clear_pivot_field_items(f.wb.handle, 0U, f.pivot, 0U), 0);
+  ASSERT_EQ(fm_sheet_add_pivot_field_item_by_cache_index(f.wb.handle, 0U, f.pivot, 0U, /*cache_index=*/2U,
+                                                         /*visible=*/0, ignored_index()),
+            0);
+  EXPECT_DOUBLE_EQ(LayoutDataSum(f.wb.handle, f.pivot), 40.0);
+
+  // The saved items name the shared items, so a reload hides the same member.
+  BufferGuard saved;
+  ASSERT_EQ(fm_workbook_save(f.wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0)
+      << fm_get_last_error_message();
+  WorkbookGuard reloaded;
+  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &reloaded.handle), 0) << fm_get_last_error_message();
+  std::uint32_t cache_id = 0;
+  ASSERT_EQ(fm_sheet_get_pivot_cache_id(reloaded.handle, 0U, f.pivot, &cache_id), 0);
+  ASSERT_EQ(f.SharedCount(reloaded.handle, cache_id), 3U);
+  std::size_t item_count = 0;
+  ASSERT_EQ(fm_sheet_get_pivot_field_item_count(reloaded.handle, 0U, f.pivot, 0U, &item_count), 0);
+  EXPECT_EQ(item_count, 3U);
+  for (std::size_t i = 0; i < item_count; ++i) {
+    fm_pivot_item_info_t item = FM_STRUCT_INIT(fm_pivot_item_info_t);
+    ASSERT_EQ(fm_sheet_get_pivot_field_item_at(reloaded.handle, 0U, f.pivot, 0U, i, &item), 0);
+    EXPECT_EQ(item.has_cache_index, 1) << i;
+    EXPECT_LT(item.cache_index, 3U) << i;
+    EXPECT_EQ(item.visible, item.cache_index == 2U ? 0 : 1) << i;
+  }
+  EXPECT_DOUBLE_EQ(LayoutDataSum(reloaded.handle, f.pivot), 40.0);
+}
+
+TEST(FormulonCApiPivot, AFieldJoiningRowsSavesItsItemsInDisplayOrder) {
+  // Excel 365 measured: the joined field's shared items keep the first
+  // spelling in source order with the blank in place, and its <items> list
+  // them sorted ascending, blank last, then the default subtotal.
+  RefreshedPivot f;
+  f.Build("Product",
+          {"pear", "Apple", nullptr, "Pear", "apple", "Fig", nullptr, "Apple", "Fig", "PEAR", "fig", "Apple"});
+  ASSERT_EQ(fm_sheet_set_pivot_field_axis(f.wb.handle, 0U, f.pivot, 0U, FM_PIVOT_AXIS_ROW), 0)
+      << fm_get_last_error_message();
+  BufferGuard saved;
+  ASSERT_EQ(fm_workbook_save(f.wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0)
+      << fm_get_last_error_message();
+  const std::vector<std::uint8_t> package(saved.data, saved.data + saved.len);
+  const std::string cache = ExtractZipEntry(package, "xl/pivotCache/pivotCacheDefinition1.xml");
+  EXPECT_NE(cache.find("<sharedItems containsBlank=\"1\" count=\"4\"><s v=\"pear\"/><s v=\"Apple\"/><m/>"
+                       "<s v=\"Fig\"/></sharedItems>"),
+            std::string::npos)
+      << cache;
+  const std::string table = ExtractZipEntry(package, "xl/pivotTables/pivotTable1.xml");
+  EXPECT_NE(table.find("<items count=\"5\"><item x=\"1\"/><item x=\"3\"/><item x=\"0\"/><item x=\"2\"/>"
+                       "<item t=\"default\"/></items>"),
+            std::string::npos)
+      << table;
+}
+
+TEST(FormulonCApiPivot, AnItemPastTheSharedItemsIsLeftOutOfASave) {
+  RefreshedPivot f;
+  f.Build("Region", {"East", "West", nullptr});
+  ASSERT_EQ(fm_sheet_set_pivot_field_axis(f.wb.handle, 0U, f.pivot, 0U, FM_PIVOT_AXIS_ROW), 0);
+  ASSERT_EQ(fm_sheet_add_pivot_field_item_by_cache_index(f.wb.handle, 0U, f.pivot, 0U, /*cache_index=*/7U,
+                                                         /*visible=*/0, ignored_index()),
+            0);
+  EXPECT_DOUBLE_EQ(LayoutDataSum(f.wb.handle, f.pivot), 45.0);
+  BufferGuard saved;
+  ASSERT_EQ(fm_workbook_save(f.wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0)
+      << fm_get_last_error_message();
+  const std::vector<std::uint8_t> package(saved.data, saved.data + saved.len);
+  const std::string table = ExtractZipEntry(package, "xl/pivotTables/pivotTable1.xml");
+  EXPECT_EQ(table.find("x=\"7\""), std::string::npos) << table;
+  EXPECT_NE(table.find("<items count=\"4\">"), std::string::npos) << table;
+}
+
+TEST(FormulonCApiPivot, AFieldLeavingTheAxisKeepsItsSharedItems) {
+  RefreshedPivot f;
+  f.Build("Region", {"East", "West", nullptr});
+  ASSERT_EQ(fm_sheet_set_pivot_field_axis(f.wb.handle, 0U, f.pivot, 0U, FM_PIVOT_AXIS_ROW), 0);
+  ASSERT_EQ(fm_sheet_set_pivot_field_axis(f.wb.handle, 0U, f.pivot, 0U, FM_PIVOT_AXIS_ABSENT), 0);
+  EXPECT_EQ(f.SharedCount(f.wb.handle, f.cache_id), 3U);
+}
+
+TEST(FormulonCApiPivot, DateGroupingProjectsTheGroupedPivotAndLeavesTheOthersPending) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_set_profile_id(wb.handle, "win-365-ja_JP"), 0);
+  std::size_t pivot_index = 0;
+  // The fixture's last step groups the Date field (D) by 7 days.
+  ASSERT_EQ(BuildDaysGroupedPivot(wb.handle, std::numeric_limits<double>::quiet_NaN(), &pivot_index), 0)
+      << fm_get_last_error_message();
+  EXPECT_FALSE(ProjectionPending(wb.handle, pivot_index));
+  EXPECT_TRUE(SheetColumnHasText(wb.handle, 3U, "1900/1/0 - 1900/1/6"));
+
+  std::uint32_t cache_id = 0;
+  ASSERT_EQ(fm_sheet_get_pivot_cache_id(wb.handle, 0U, pivot_index, &cache_id), 0);
+  std::size_t other = 0;
+  ASSERT_EQ(AddPivot(wb.handle, 0U, "PT2", cache_id, /*anchor_row=*/0U, /*anchor_col=*/10U, &other), 0)
+      << fm_get_last_error_message();
+  ASSERT_FALSE(ProjectionPending(wb.handle, other));
+
+  // Clearing through the group field (2) puts the dates back on the rows.
+  ASSERT_EQ(fm_sheet_set_pivot_field_date_group(wb.handle, 0U, pivot_index, 2U, nullptr), 0)
+      << fm_get_last_error_message();
+  EXPECT_FALSE(ProjectionPending(wb.handle, pivot_index));
+  EXPECT_FALSE(SheetColumnHasText(wb.handle, 3U, "1900/1/0 - 1900/1/6"));
+  EXPECT_TRUE(ProjectionPending(wb.handle, other));
+}
+
+TEST(FormulonCApiPivot, NumericGroupingProjectsTheGroupedPivot) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  std::uint32_t cache_id = 0;
+  std::size_t pivot_index = 0;
+  ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_index), 0) << fm_get_last_error_message();
+  // Amount (100, 200, 300, 400) joins Region on the rows, then groups by 100.
+  ASSERT_EQ(fm_sheet_set_pivot_field_axis(wb.handle, 0U, pivot_index, 1U, FM_PIVOT_AXIS_ROW), 0)
+      << fm_get_last_error_message();
+  ASSERT_FALSE(SheetColumnHasText(wb.handle, 3U, "100-199"));
+  fm_pivot_numeric_group_spec_t spec = FM_STRUCT_INIT(fm_pivot_numeric_group_spec_t);
+  spec.interval = 100.0;
+  ASSERT_EQ(fm_sheet_set_pivot_field_numeric_group(wb.handle, 0U, pivot_index, 1U, &spec), 0)
+      << fm_get_last_error_message();
+  EXPECT_FALSE(ProjectionPending(wb.handle, pivot_index));
+  EXPECT_TRUE(SheetColumnHasText(wb.handle, 3U, "100-199"));
+  EXPECT_TRUE(SheetColumnHasText(wb.handle, 3U, "400-499"));
 }

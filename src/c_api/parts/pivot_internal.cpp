@@ -15,6 +15,7 @@
 #include "c_api/parts/common.h"
 #include "pivot/field_remap.h"
 #include "pivot/pivot_cache.h"
+#include "pivot/pivot_refresh.h"
 #include "pivot/pivot_table.h"
 #include "utils/error.h"
 #include "utils/expected.h"
@@ -169,13 +170,38 @@ void project_pending_pivots(formulon::Workbook& wb) {
   }
 }
 
+void share_axis_fields(formulon::Workbook& wb, const formulon::pivot::PivotTable& table) {
+  formulon::pivot::PivotCache* cache = find_cache_mut(wb, table.pivot_cache_id());
+  if (cache == nullptr) {
+    return;
+  }
+  for (std::size_t f = 0; f < table.fields().size(); ++f) {
+    const formulon::pivot::PivotAxis axis = table.fields()[f].axis;
+    if (axis == formulon::pivot::PivotAxis::Row || axis == formulon::pivot::PivotAxis::Col ||
+        axis == formulon::pivot::PivotAxis::Page) {
+      formulon::pivot::share_field_items(*cache, f);
+    }
+  }
+}
+
+formulon::Expected<void, formulon::Error> reproject_edited_pivot(formulon::Workbook& wb, std::size_t sheet_index,
+                                                                 std::size_t pivot_index) {
+  formulon::pivot::PivotTable& table = *wb.sheet(sheet_index).mutable_pivot_tables()[pivot_index];
+  share_axis_fields(wb, table);
+  invalidate_pivot_result(wb, table);
+  formulon::Expected<void, formulon::Error> projected = project_pivot(wb, sheet_index, pivot_index);
+  if (!projected) {
+    table.set_projection_pending(true);
+  }
+  return projected;
+}
+
 PivotEdit::PivotEdit(formulon::Workbook& wb, std::size_t sheet_index, std::size_t pivot_index,
                      formulon::pivot::PivotTable& table)
     : wb_(wb), sheet_index_(sheet_index), pivot_index_(pivot_index), table_(table), snapshot_(table.clone()) {}
 
 fm_status_t PivotEdit::commit() {
-  invalidate_pivot_result(wb_, table_);
-  formulon::Expected<void, formulon::Error> projected = project_pivot(wb_, sheet_index_, pivot_index_);
+  formulon::Expected<void, formulon::Error> projected = reproject_edited_pivot(wb_, sheet_index_, pivot_index_);
   if (projected) {
     return 0;
   }
@@ -186,7 +212,6 @@ fm_status_t PivotEdit::commit() {
     table_.runtime_id().assign(runtime_id);
     return set_last_error(projected.error());
   }
-  table_.set_projection_pending(true);
   return 0;
 }
 

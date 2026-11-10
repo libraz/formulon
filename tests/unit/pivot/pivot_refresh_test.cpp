@@ -23,6 +23,7 @@
 #include "pivot/pivot_locale.h"
 #include "pivot/pivot_table.h"
 #include "pivot/pivot_types.h"
+#include "pivot/record_access.h"
 #include "pivot/shared_items_hints.h"
 #include "sheet.h"
 #include "styles.h"
@@ -1277,6 +1278,169 @@ TEST(PivotRefresh, NumericGroupRefreshFollowsTheSourceOnEveryPivot) {
       EXPECT_EQ(items[x].cache_index, x);
     }
   }
+}
+
+// ===========================================================================
+// Inline fold and sharing a field that joins an axis
+// ===========================================================================
+
+// The source column measured in Excel: pear, Apple, (blank), Pear, apple, Fig,
+// (blank), Apple, Fig, PEAR, fig, Apple.
+std::vector<Value> MeasuredProducts() {
+  return {Value::text("pear"),  Value::text("Apple"), Value::blank(),     Value::text("Pear"),
+          Value::text("apple"), Value::text("Fig"),   Value::blank(),     Value::text("Apple"),
+          Value::text("Fig"),   Value::text("PEAR"),  Value::text("fig"), Value::text("Apple")};
+}
+
+// A cache whose one field, Product, holds `values` inline, one record each,
+// with the hints a read or refreshed field carries; `dates` marks the cells
+// spelled as dates.
+PivotCache InlineCache(const std::vector<Value>& values, const std::vector<bool>& dates = {}) {
+  PivotCache cache;
+  cache.set_cache_id(kCacheId);
+  cache.mutable_fields().push_back(PivotCacheField{"Product", {}});
+  cache.mutable_fields()[0].shared_items_hints.present = true;
+  for (std::size_t r = 0; r < values.size(); ++r) {
+    PivotCacheRecord record;
+    record.cells = {values[r]};
+    record.cell_is_index = {false};
+    record.cell_is_date = {r < dates.size() && dates[r]};
+    cache.mutable_records().push_back(std::move(record));
+  }
+  return cache;
+}
+
+std::vector<double> RecordIndices(const PivotCache& cache, std::size_t field) {
+  std::vector<double> out;
+  for (const PivotCacheRecord& record : cache.records()) {
+    EXPECT_TRUE(record.cell_is_index[field]);
+    out.push_back(record.cells[field].as_number());
+  }
+  return out;
+}
+
+TEST(PivotRefresh, RulesInlineTextFoldsToTheFirstSpelling) {
+  const eval::ScopedEvalProfile scope(mac_365_ja_jp_profile());
+  std::vector<std::vector<Value>> rows;
+  for (const Value& v : MeasuredProducts()) {
+    rows.push_back({v});
+  }
+  const RefreshPlan plan = Build(RegionCache({}), Source({"Product"}, rows), Context({false}));
+  ASSERT_TRUE(plan.cache.fields()[0].shared_items.empty());
+  std::vector<std::string> cells;
+  for (const PivotCacheRecord& record : plan.cache.records()) {
+    EXPECT_FALSE(record.cell_is_index[0]);
+    cells.emplace_back(record.cells[0].is_text() ? std::string(record.cells[0].as_text()) : std::string("#"));
+  }
+  EXPECT_EQ(cells, (std::vector<std::string>{"pear", "Apple", "#", "pear", "Apple", "Fig", "#", "Apple", "Fig", "pear",
+                                             "Fig", "Apple"}));
+}
+
+TEST(PivotRefresh, ShareKeepsFirstSpellingAndPutsTheBlankInRecordOrder) {
+  PivotCache cache = InlineCache(MeasuredProducts());
+  ASSERT_TRUE(pivot::share_field_items(cache, 0U));
+  const PivotCacheField& field = cache.fields()[0];
+  ASSERT_EQ(field.shared_items.size(), 4U);
+  EXPECT_EQ(field.shared_items[0].as_text(), "pear");
+  EXPECT_EQ(field.shared_items[1].as_text(), "Apple");
+  EXPECT_TRUE(field.shared_items[2].is_blank());
+  EXPECT_EQ(field.shared_items[3].as_text(), "Fig");
+  EXPECT_EQ(RecordIndices(cache, 0U), (std::vector<double>{0, 1, 2, 0, 1, 3, 2, 1, 3, 0, 3, 1}));
+  EXPECT_EQ(field.shared_item_is_date, (std::vector<bool>(4U, false)));
+  EXPECT_EQ(field.shared_item_is_missing, (std::vector<bool>(4U, false)));
+  EXPECT_EQ(field.shared_item_is_calculated, (std::vector<bool>(4U, false)));
+}
+
+TEST(PivotRefresh, ShareKeepsNumbersAndTextApart) {
+  PivotCache cache = InlineCache({Value::number(30), Value::number(10), Value::number(30), Value::text("10"),
+                                  Value::number(-0.0), Value::number(0)});
+  ASSERT_TRUE(pivot::share_field_items(cache, 0U));
+  const PivotCacheField& field = cache.fields()[0];
+  ASSERT_EQ(field.shared_items.size(), 4U);
+  EXPECT_EQ(field.shared_items[0].as_number(), 30.0);
+  EXPECT_EQ(field.shared_items[1].as_number(), 10.0);
+  EXPECT_EQ(field.shared_items[2].as_text(), "10");
+  EXPECT_EQ(field.shared_items[3].as_number(), 0.0);
+  EXPECT_EQ(RecordIndices(cache, 0U), (std::vector<double>{0, 1, 0, 2, 3, 3}));
+}
+
+TEST(PivotRefresh, ShareKeepsTheDateMarkPerItem) {
+  PivotCache cache =
+      InlineCache({Value::number(kJan1), Value::number(kJan1), Value::number(kMar1), Value::number(kJan1)},
+                  {true, false, true, true});
+  ASSERT_TRUE(pivot::share_field_items(cache, 0U));
+  const PivotCacheField& field = cache.fields()[0];
+  ASSERT_EQ(field.shared_items.size(), 3U);
+  EXPECT_EQ(field.shared_items[0].as_number(), kJan1);
+  EXPECT_EQ(field.shared_items[1].as_number(), kJan1);
+  EXPECT_EQ(field.shared_items[2].as_number(), kMar1);
+  EXPECT_EQ(field.shared_item_is_date, (std::vector<bool>{true, false, true}));
+  EXPECT_EQ(RecordIndices(cache, 0U), (std::vector<double>{0, 1, 2, 0}));
+  for (const PivotCacheRecord& record : cache.records()) {
+    EXPECT_FALSE(record.cell_is_date[0]);
+  }
+}
+
+TEST(PivotRefresh, ShareLeavesASharedFieldAsItIs) {
+  PivotCache cache = RegionCache({Value::text("North"), Value::text("South")});
+  for (const double x : {1.0, 0.0}) {
+    PivotCacheRecord record;
+    record.cells = {Value::number(x)};
+    record.cell_is_index = {true};
+    cache.mutable_records().push_back(std::move(record));
+  }
+  EXPECT_FALSE(pivot::share_field_items(cache, 0U));
+  EXPECT_EQ(ItemTexts(cache.fields()[0]), (std::vector<std::string>{"North", "South"}));
+  EXPECT_EQ(RecordIndices(cache, 0U), (std::vector<double>{1, 0}));
+}
+
+TEST(PivotRefresh, ShareRefusesFieldsItDoesNotOwn) {
+  PivotCache empty = InlineCache({});
+  EXPECT_FALSE(pivot::share_field_items(empty, 0U));
+  // Filled in memory: the writer derives its shared items at save.
+  PivotCache hand_filled = InlineCache({Value::text("A")});
+  hand_filled.mutable_fields()[0].shared_items_hints.present = false;
+  EXPECT_FALSE(pivot::share_field_items(hand_filled, 0U));
+  EXPECT_FALSE(hand_filled.records()[0].cell_is_index[0]);
+  PivotCache cache = InlineCache({Value::text("A")});
+  cache.mutable_fields().push_back(PivotCacheField{"Calc", {}});
+  cache.mutable_fields().back().formula = "Product*2";
+  cache.mutable_fields().back().is_database_field = false;
+  EXPECT_FALSE(pivot::share_field_items(cache, 1U));
+  EXPECT_FALSE(pivot::share_field_items(cache, 2U));
+  EXPECT_TRUE(cache.fields()[1].shared_items.empty());
+}
+
+TEST(PivotRefresh, SharePinsTheOtherFieldsAndKeepsTheCacheRefreshed) {
+  // Region is shared with its encoding inferred (no per-cell flags), Product inline.
+  PivotCache cache = RegionCache({Value::text("North"), Value::text("South")});
+  cache.mutable_fields().push_back(PivotCacheField{"Product", {}});
+  cache.mutable_fields()[1].shared_items_hints.present = true;
+  const double regions_in[] = {1.0, 0.0, 1.0};
+  const char* const products[] = {"B", "A", "b"};
+  for (std::size_t r = 0; r < 3U; ++r) {
+    PivotCacheRecord record;
+    record.cells = {Value::number(regions_in[r]), Value::text(products[r])};
+    cache.mutable_records().push_back(std::move(record));
+  }
+  cache.mark_records_from_source();
+  ASSERT_TRUE(pivot::share_field_items(cache, 1U));
+  EXPECT_TRUE(cache.records_from_source());
+  EXPECT_EQ(ItemTexts(cache.fields()[1]), (std::vector<std::string>{"B", "A"}));
+  EXPECT_EQ(RecordIndices(cache, 1U), (std::vector<double>{0, 1, 0}));
+  std::vector<std::string> regions;
+  for (const PivotCacheRecord& record : cache.records()) {
+    regions.emplace_back(pivot::cell_value(cache, record, 0U).as_text());
+  }
+  EXPECT_EQ(regions, (std::vector<std::string>{"South", "North", "South"}));
+}
+
+TEST(PivotRefresh, ShareSurvivesALaterWriteToTheSameCell) {
+  PivotCache cache = InlineCache({Value::blank()});
+  ASSERT_TRUE(cache.set_record_text(0U, 0U, "First"));
+  ASSERT_TRUE(pivot::share_field_items(cache, 0U));
+  ASSERT_TRUE(cache.set_record_text(0U, 0U, "Second"));
+  EXPECT_EQ(ItemTexts(cache.fields()[0]), (std::vector<std::string>{"First"}));
 }
 
 }  // namespace

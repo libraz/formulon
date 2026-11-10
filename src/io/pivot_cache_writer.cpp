@@ -176,6 +176,14 @@ bool OnDiscreteAxis(pivot::PivotAxis axis) {
   return axis == pivot::PivotAxis::Row || axis == pivot::PivotAxis::Col || axis == pivot::PivotAxis::Page;
 }
 
+/// Fills `fp.asc_order` with the indices of `fp.items` in ascending `value_less` order.
+void SortItems(PivotCacheFieldWritePlan& fp) {
+  const auto item_less = [&fp](std::uint32_t a, std::uint32_t b) {
+    return pivot::value_less(fp.items[a], fp.items[b]);
+  };
+  sorted_index_order(fp.asc_order, static_cast<std::uint32_t>(fp.items.size()), make_index_less(item_less));
+}
+
 /// True for a range group that buckets dates: one with ISO bounds, or one
 /// grouping by a calendar unit.
 bool IsDateRange(const pivot::FieldGroup& group) {
@@ -375,7 +383,23 @@ PivotCacheWritePlan build_pivot_cache_write_plan(const pivot::PivotCache& cache,
   plan.fields.resize(cache.fields().size());
   for (std::size_t fi = 0; fi < cache.fields().size(); ++fi) {
     const pivot::PivotCacheField& field = cache.fields()[fi];
-    if (!field.is_database_field || !field.shared_items.empty() || field.shared_items_hints.present) {
+    if (field.is_database_field && !field.shared_items.empty()) {
+      const bool on_axis = std::any_of(tables.begin(), tables.end(), [fi](const pivot::PivotTable* table) {
+        return table != nullptr && fi < table->fields().size() && OnDiscreteAxis(table->fields()[fi].axis);
+      });
+      if (on_axis) {
+        PivotCacheFieldWritePlan& fp = plan.fields[fi];
+        fp.completes_items = true;
+        fp.items = field.shared_items;
+        for (std::size_t k = 0; k < field.shared_items.size(); ++k) {
+          fp.item_is_unlisted.push_back(FlagAt(field.shared_item_is_missing, k) ||
+                                        FlagAt(field.shared_item_is_calculated, k));
+        }
+        SortItems(fp);
+      }
+      continue;
+    }
+    if (!field.is_database_field || field.shared_items_hints.present) {
       continue;
     }
     if (field.field_group.has_value()) {
@@ -420,11 +444,9 @@ PivotCacheWritePlan build_pivot_cache_write_plan(const pivot::PivotCache& cache,
       fp.record_index.push_back(inserted.first->second);
     }
     fp.derived = true;
+    fp.completes_items = true;
     fp.hints = pivot::derive_shared_items_hints(fp.items, fp.item_is_date, date1904);
-    const auto item_less = [&fp](std::uint32_t a, std::uint32_t b) {
-      return pivot::value_less(fp.items[a], fp.items[b]);
-    };
-    sorted_index_order(fp.asc_order, static_cast<std::uint32_t>(fp.items.size()), make_index_less(item_less));
+    SortItems(fp);
   }
   return plan;
 }

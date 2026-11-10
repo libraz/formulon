@@ -13,13 +13,14 @@
 
 namespace formulon::io::detail {
 
-/// The items of a field the plan derives as discrete, bound to the derived
-/// shared items; `field.items` verbatim for any other field.
+/// The items of a field the plan completes (`completes_items`), bound to the
+/// plan's shared items; `field.items` verbatim for any other field.
 ///
 /// An axis field with no authored items gets one per shared item, in its sort
 /// order. Authored items resolve to a shared item by their cache index, else
 /// by label (as `fm_sheet_add_pivot_field_item` binds), else by position;
-/// shared items none of them names follow, visible.
+/// shared items none of them names follow, visible. A missing or calculated
+/// shared item is never added.
 ///
 /// `bound_by_position`, when non-null, receives one flag per returned item:
 /// true for an authored item that neither a cache index nor a label bound.

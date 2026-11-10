@@ -260,6 +260,11 @@ Upgrading from 0.18: see [Upgrading from 0.18 to 0.19](docs/releases/upgrading-0
 
 ### Fixed
 
+- A pivot field placed on an axis after a refresh gets shared items, so
+  cache-index filters apply and its saved items resolve.
+- Grouping a pivot field by dates or numbers updates that pivot's cells at once.
+- Refresh folds case variants of a field's values to their first spelling.
+- A pivot item whose cache index resolves to nothing is no longer saved.
 - Saving a new workbook with an image or chart as `.xlsb` failed with
   `IoContentTypeInvalid`.
 - `PivotField.subtotalTop` and several Python flags read true when false was

@@ -109,13 +109,24 @@ formulon::Expected<void, formulon::Error> project_pivot(formulon::Workbook& wb, 
 // placed stays pending.
 void project_pending_pivots(formulon::Workbook& wb);
 
+// Gives every cache field `table` places on the row, column or page axis
+// shared items when it holds its values inline (`pivot::share_field_items`).
+void share_axis_fields(formulon::Workbook& wb, const formulon::pivot::PivotTable& table);
+
+// Re-projects pivot `(sheet_index, pivot_index)` after an edit: shares its
+// axis fields, invalidates its derived state and projects the report. A failed
+// projection leaves the report pending and is returned.
+formulon::Expected<void, formulon::Error> reproject_edited_pivot(formulon::Workbook& wb, std::size_t sheet_index,
+                                                                 std::size_t pivot_index);
+
 // One table-level pivot edit. Construct it before touching the table; it keeps
-// a `clone()` of the definition. `commit()` invalidates the derived state and
-// projects the report: when the projection is refused (`kPreconditionFailed`,
+// a `clone()` of the definition. `commit()` re-projects the report
+// (`reproject_edited_pivot`): when the projection is refused (`kPreconditionFailed`,
 // an overlap) the definition is restored in place, so the table's address is
-// unchanged, and that status is returned with the error populated. Any other
-// projection failure keeps the edit, leaves the report pending and returns 0;
-// the layout API reports that error.
+// unchanged, and that status is returned with the error populated; cache fields
+// it shared stay shared, their values unchanged. Any other projection failure
+// keeps the edit, leaves the report pending and returns 0; the layout API
+// reports that error.
 class PivotEdit {
  public:
   PivotEdit(formulon::Workbook& wb, std::size_t sheet_index, std::size_t pivot_index,

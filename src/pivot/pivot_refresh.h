@@ -17,11 +17,16 @@
 // values in first-appearance order under the item fold (case only; numbers,
 // dates and text never fold together), the first spelling kept; then the old
 // items the source lost, kept as missing unless `missingItemsLimit` is 0; then
-// the calculated items. Every other field holds its values in the records.
+// the calculated items. Every other field holds its values in the records,
+// each text folded to the first spelling of its item.
+//
+// A field that joins an axis later takes shared items by the same rule
+// (`share_field_items`), and keeps them when it leaves the axis.
 
 #ifndef FORMULON_PIVOT_PIVOT_REFRESH_H_
 #define FORMULON_PIVOT_PIVOT_REFRESH_H_
 
+#include <cstddef>
 #include <cstdint>
 #include <deque>
 #include <string>
@@ -91,6 +96,19 @@ bool same_header(std::string_view a, std::string_view b);
 /// whose word is unmeasured.
 Expected<RefreshPlan, Error> build_refreshed_cache(const PivotCache& old, const RefreshSource& source,
                                                    const RefreshContext& context);
+
+/// Gives database field `field` of `cache`, when it holds its values inline,
+/// the shared items a refresh would: its record values in record order under
+/// the item fold, a blank included, each item keeping its first spelling and
+/// date mark. Every record cell of the field then names its item by index.
+/// The values, and so the field's hints, are unchanged.
+///
+/// Returns false, changing nothing, for a field that already has shared
+/// items, a calculated or group field, a field index out of range, and a
+/// cache without records. A field without captured hints (one filled in
+/// memory rather than read or refreshed) is also left inline: the writer
+/// derives its shared items at save (`io::build_pivot_cache_write_plan`).
+bool share_field_items(PivotCache& cache, std::size_t field);
 
 }  // namespace formulon::pivot
 
