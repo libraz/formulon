@@ -15,11 +15,14 @@
 //   packages/npm/common.mjs         -> <out-dir>/common.mjs
 //   packages/npm-native/index.d.ts  -> <out-dir>/index.d.ts
 //
+// Removes <out-dir>/formulon.node first: index.mjs falls back to that slot when the
+// platform has no prebuild, and nothing stages it, so any file there is stale.
+//
 // Run via `make node-package` (or `--source-only` from release bundling).
 // No npm dependencies; Node 18 stdlib only.
 
 import { constants as FS } from 'node:fs';
-import { access, copyFile, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { access, copyFile, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -87,6 +90,7 @@ async function main() {
   }
 
   await mkdir(sourceOnly ? absOutDir : prebuildDir, { recursive: true });
+  await rm(path.join(absOutDir, 'formulon.node'), { force: true });
 
   if (!sourceOnly) await copyFile(nodeSrc, path.join(prebuildDir, 'formulon.node'));
   const mjs = await readFile(mjsSrc, 'utf8');
