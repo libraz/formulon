@@ -1,0 +1,14 @@
+{
+ "_comment": "Cases the engine does not match yet (cause: engine-gap). `run` reports a listed case as a CTest skip while it still differs and fails once it matches, so the entry is removed together with the fix.",
+ "gaps": {
+  "e01_move_row_to_col": "the edit gives the untouched off-axis field Product (inline records in the cache) shared items and indexed records; Excel leaves the cache as it was",
+  "e04_remove_data_field": "removing one of two data fields: Excel drops the Values field from colFields and re-lays out the body (firstHeaderRow 0, one column field); the engine keeps the two-data-field layout and writes refreshOnLoad. Also: the edit gives the untouched off-axis field Product (inline records in the cache) shared items and indexed records; Excel leaves the cache as it was",
+  "e05_add_second_data_field": "the edit gives the untouched off-axis field Product (inline records in the cache) shared items and indexed records; Excel leaves the cache as it was",
+  "e06_date_group_months": "date grouping by months also converts the off-axis fields Region and Product to shared items and indexed records; Excel leaves those fields inline",
+  "e07_number_group": "numeric grouping: Excel groups Amt in place (fieldGroup base on the same cache field, 5 cache fields); the engine appends a group field (6 cache fields, par). Also converts off-axis inline fields to shared items",
+  "e08_label_filter": "label filter + refresh: Excel's refresh writes the Date field numFmtId 14 in the cache and pivot field; the engine keeps 179",
+  "e09_value_top_n": "top-N value filter + refresh: Excel's refresh writes the Date field numFmtId 14 in the cache and pivot field; the engine keeps 179",
+  "e10_page_filter_one_item": "selecting one page item: Excel writes <pageField item=\"0\"> with no hidden items; the C API has no current-page setter, so the apply tool hides every other item (h=\"1\") and no item attribute is written",
+  "e11_hide_item": "the edit gives the untouched off-axis field Product (inline records in the cache) shared items and indexed records; Excel leaves the cache as it was"
+ }
+}

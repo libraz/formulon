@@ -966,3 +966,34 @@ if(DEFINED _FORMULON_BEHAVIOR_PY)
   )
   set_tests_properties(pivot_refresh_golden_integrity PROPERTIES LABELS "oracle;oracle-metadata")
 endif()
+
+# ---------------------------------------------------------------------------
+# Pivot-edit oracle: Excel-saved before/after pairs under
+# cases_wb/pivot_edit/<case>/. The apply tool replays the case's `ops` from
+# cases.yaml through the pivot C API; pivot_edit_golden.py compares its output
+# with golden.json.
+add_executable(formulon_pivot_edit_apply pivot_edit_apply.cpp)
+target_link_libraries(formulon_pivot_edit_apply PRIVATE formulon_static)
+target_include_directories(formulon_pivot_edit_apply PRIVATE ${CMAKE_SOURCE_DIR}/src)
+formulon_apply_warnings(formulon_pivot_edit_apply)
+if(DEFINED _FORMULON_BEHAVIOR_PY)
+  file(GLOB _pivot_edit_cases LIST_DIRECTORIES true "${CMAKE_CURRENT_SOURCE_DIR}/cases_wb/pivot_edit/*")
+  foreach(_case_dir IN LISTS _pivot_edit_cases)
+    if(EXISTS "${_case_dir}/golden.json")
+      get_filename_component(_case "${_case_dir}" NAME)
+      add_test(
+        NAME pivot_edit_${_case}
+        COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/oracle/pivot_edit_golden.py run
+                --apply $<TARGET_FILE:formulon_pivot_edit_apply> ${_case_dir}
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+      )
+      set_tests_properties(pivot_edit_${_case} PROPERTIES LABELS "oracle" SKIP_RETURN_CODE 77)
+    endif()
+  endforeach()
+  add_test(
+    NAME pivot_edit_golden_integrity
+    COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/oracle/pivot_edit_golden.py check
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  )
+  set_tests_properties(pivot_edit_golden_integrity PROPERTIES LABELS "oracle;oracle-metadata")
+endif()

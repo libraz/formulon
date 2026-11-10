@@ -1,0 +1,911 @@
+{
+ "meta": {
+  "case": "e07_number_group",
+  "description": "group Amt by 50 (auto start/end)",
+  "excel_version": "16.114.4",
+  "target": "mac-365-ja_JP"
+ },
+ "projection": {
+  "caches": [
+   {
+    "definition": [
+     "pivotCacheDefinition",
+     {
+      "recordCount": "12"
+     },
+     [
+      [
+       "cacheSource",
+       {
+        "type": "worksheet"
+       },
+       [
+        [
+         "worksheetSource",
+         {
+          "ref": "A1:E13",
+          "sheet": "Sheet1"
+         },
+         []
+        ]
+       ]
+      ],
+      [
+       "cacheFields",
+       {
+        "count": "5"
+       },
+       [
+        [
+         "cacheField",
+         {
+          "name": "Region",
+          "numFmtId": "0"
+         },
+         [
+          [
+           "sharedItems",
+           {},
+           []
+          ]
+         ]
+        ],
+        [
+         "cacheField",
+         {
+          "name": "Product",
+          "numFmtId": "0"
+         },
+         [
+          [
+           "sharedItems",
+           {},
+           []
+          ]
+         ]
+        ],
+        [
+         "cacheField",
+         {
+          "name": "Date",
+          "numFmtId": "14"
+         },
+         [
+          [
+           "sharedItems",
+           {
+            "containsDate": "1",
+            "containsNonDate": "0",
+            "containsSemiMixedTypes": "0",
+            "containsString": "0",
+            "maxDate": "2024-12-17T00:00:00",
+            "minDate": "2024-01-05T00:00:00"
+           },
+           []
+          ]
+         ]
+        ],
+        [
+         "cacheField",
+         {
+          "name": "Amt",
+          "numFmtId": "0"
+         },
+         [
+          [
+           "sharedItems",
+           {
+            "containsInteger": "1",
+            "containsNumber": "1",
+            "containsSemiMixedTypes": "0",
+            "containsString": "0",
+            "count": "12",
+            "maxValue": "120",
+            "minValue": "10"
+           },
+           [
+            [
+             "n",
+             {
+              "v": "10"
+             },
+             []
+            ],
+            [
+             "n",
+             {
+              "v": "20"
+             },
+             []
+            ],
+            [
+             "n",
+             {
+              "v": "30"
+             },
+             []
+            ],
+            [
+             "n",
+             {
+              "v": "40"
+             },
+             []
+            ],
+            [
+             "n",
+             {
+              "v": "50"
+             },
+             []
+            ],
+            [
+             "n",
+             {
+              "v": "60"
+             },
+             []
+            ],
+            [
+             "n",
+             {
+              "v": "70"
+             },
+             []
+            ],
+            [
+             "n",
+             {
+              "v": "80"
+             },
+             []
+            ],
+            [
+             "n",
+             {
+              "v": "90"
+             },
+             []
+            ],
+            [
+             "n",
+             {
+              "v": "100"
+             },
+             []
+            ],
+            [
+             "n",
+             {
+              "v": "110"
+             },
+             []
+            ],
+            [
+             "n",
+             {
+              "v": "120"
+             },
+             []
+            ]
+           ]
+          ],
+          [
+           "fieldGroup",
+           {
+            "base": "3"
+           },
+           [
+            [
+             "rangePr",
+             {
+              "endNum": "120",
+              "groupInterval": "50",
+              "startNum": "10"
+             },
+             []
+            ],
+            [
+             "groupItems",
+             {
+              "count": "5"
+             },
+             [
+              [
+               "s",
+               {
+                "v": "<10"
+               },
+               []
+              ],
+              [
+               "s",
+               {
+                "v": "10-59"
+               },
+               []
+              ],
+              [
+               "s",
+               {
+                "v": "60-109"
+               },
+               []
+              ],
+              [
+               "s",
+               {
+                "v": "110-159"
+               },
+               []
+              ],
+              [
+               "s",
+               {
+                "v": ">160"
+               },
+               []
+              ]
+             ]
+            ]
+           ]
+          ]
+         ]
+        ],
+        [
+         "cacheField",
+         {
+          "name": "Qty",
+          "numFmtId": "0"
+         },
+         [
+          [
+           "sharedItems",
+           {
+            "containsInteger": "1",
+            "containsNumber": "1",
+            "containsSemiMixedTypes": "0",
+            "containsString": "0",
+            "maxValue": "4",
+            "minValue": "1"
+           },
+           []
+          ]
+         ]
+        ]
+       ]
+      ]
+     ]
+    ],
+    "records": [
+     [
+      [
+       "s",
+       "East"
+      ],
+      [
+       "s",
+       "Apple"
+      ],
+      [
+       "d",
+       "2024-01-05T00:00:00"
+      ],
+      [
+       "x",
+       "0"
+      ],
+      [
+       "n",
+       "1"
+      ]
+     ],
+     [
+      [
+       "s",
+       "West"
+      ],
+      [
+       "s",
+       "Apple"
+      ],
+      [
+       "d",
+       "2024-02-06T00:00:00"
+      ],
+      [
+       "x",
+       "1"
+      ],
+      [
+       "n",
+       "2"
+      ]
+     ],
+     [
+      [
+       "s",
+       "North"
+      ],
+      [
+       "s",
+       "Apple"
+      ],
+      [
+       "d",
+       "2024-03-07T00:00:00"
+      ],
+      [
+       "x",
+       "2"
+      ],
+      [
+       "n",
+       "3"
+      ]
+     ],
+     [
+      [
+       "s",
+       "East"
+      ],
+      [
+       "s",
+       "Pear"
+      ],
+      [
+       "d",
+       "2024-04-08T00:00:00"
+      ],
+      [
+       "x",
+       "3"
+      ],
+      [
+       "n",
+       "4"
+      ]
+     ],
+     [
+      [
+       "s",
+       "West"
+      ],
+      [
+       "s",
+       "Pear"
+      ],
+      [
+       "d",
+       "2024-05-09T00:00:00"
+      ],
+      [
+       "x",
+       "4"
+      ],
+      [
+       "n",
+       "1"
+      ]
+     ],
+     [
+      [
+       "s",
+       "North"
+      ],
+      [
+       "s",
+       "Pear"
+      ],
+      [
+       "d",
+       "2024-06-10T00:00:00"
+      ],
+      [
+       "x",
+       "5"
+      ],
+      [
+       "n",
+       "2"
+      ]
+     ],
+     [
+      [
+       "s",
+       "East"
+      ],
+      [
+       "s",
+       "Apple"
+      ],
+      [
+       "d",
+       "2024-07-11T00:00:00"
+      ],
+      [
+       "x",
+       "6"
+      ],
+      [
+       "n",
+       "3"
+      ]
+     ],
+     [
+      [
+       "s",
+       "West"
+      ],
+      [
+       "s",
+       "Apple"
+      ],
+      [
+       "d",
+       "2024-08-12T00:00:00"
+      ],
+      [
+       "x",
+       "7"
+      ],
+      [
+       "n",
+       "4"
+      ]
+     ],
+     [
+      [
+       "s",
+       "North"
+      ],
+      [
+       "s",
+       "Apple"
+      ],
+      [
+       "d",
+       "2024-09-13T00:00:00"
+      ],
+      [
+       "x",
+       "8"
+      ],
+      [
+       "n",
+       "1"
+      ]
+     ],
+     [
+      [
+       "s",
+       "East"
+      ],
+      [
+       "s",
+       "Pear"
+      ],
+      [
+       "d",
+       "2024-10-14T00:00:00"
+      ],
+      [
+       "x",
+       "9"
+      ],
+      [
+       "n",
+       "2"
+      ]
+     ],
+     [
+      [
+       "s",
+       "West"
+      ],
+      [
+       "s",
+       "Pear"
+      ],
+      [
+       "d",
+       "2024-11-15T00:00:00"
+      ],
+      [
+       "x",
+       "10"
+      ],
+      [
+       "n",
+       "3"
+      ]
+     ],
+     [
+      [
+       "s",
+       "North"
+      ],
+      [
+       "s",
+       "Pear"
+      ],
+      [
+       "d",
+       "2024-12-16T00:00:00"
+      ],
+      [
+       "x",
+       "11"
+      ],
+      [
+       "n",
+       "4"
+      ]
+     ]
+    ]
+   }
+  ],
+  "formula_cells": {},
+  "pivots": [
+   {
+    "cache": 0,
+    "cells": {
+     "A3": [
+      "s",
+      "行ラベル"
+     ],
+     "A4": [
+      "s",
+      "10-59"
+     ],
+     "A5": [
+      "s",
+      "60-109"
+     ],
+     "A6": [
+      "s",
+      "110-159"
+     ],
+     "A7": [
+      "s",
+      "総計"
+     ],
+     "B3": [
+      "s",
+      "Sum of Amt"
+     ],
+     "B4": [
+      "n",
+      150.0
+     ],
+     "B5": [
+      "n",
+      400.0
+     ],
+     "B6": [
+      "n",
+      230.0
+     ],
+     "B7": [
+      "n",
+      780.0
+     ],
+     "C3": [
+      "s",
+      "Sum of Qty"
+     ],
+     "C4": [
+      "n",
+      11.0
+     ],
+     "C5": [
+      "n",
+      12.0
+     ],
+     "C6": [
+      "n",
+      7.0
+     ],
+     "C7": [
+      "n",
+      30.0
+     ]
+    },
+    "definition": [
+     "pivotTableDefinition",
+     {
+      "applyAlignmentFormats": "0",
+      "applyBorderFormats": "0",
+      "applyFontFormats": "0",
+      "applyNumberFormats": "0",
+      "applyPatternFormats": "0",
+      "applyWidthHeightFormats": "1",
+      "dataCaption": "Values",
+      "indent": "0",
+      "itemPrintTitles": "1",
+      "multipleFieldFilters": "0",
+      "name": "PivotTable1",
+      "outline": "1",
+      "outlineData": "1",
+      "useAutoFormatting": "1"
+     },
+     [
+      [
+       "location",
+       {
+        "firstDataCol": "1",
+        "firstDataRow": "1",
+        "firstHeaderRow": "0",
+        "ref": "A3:C7"
+       },
+       []
+      ],
+      [
+       "pivotFields",
+       {
+        "count": "5"
+       },
+       [
+        [
+         "pivotField",
+         {
+          "showAll": "0"
+         },
+         []
+        ],
+        [
+         "pivotField",
+         {
+          "showAll": "0"
+         },
+         []
+        ],
+        [
+         "pivotField",
+         {
+          "numFmtId": "14",
+          "showAll": "0"
+         },
+         []
+        ],
+        [
+         "pivotField",
+         {
+          "axis": "axisRow",
+          "dataField": "1",
+          "showAll": "0"
+         },
+         [
+          [
+           "items",
+           {
+            "count": "6"
+           },
+           [
+            [
+             "item",
+             {
+              "x": "0"
+             },
+             []
+            ],
+            [
+             "item",
+             {
+              "x": "1"
+             },
+             []
+            ],
+            [
+             "item",
+             {
+              "x": "2"
+             },
+             []
+            ],
+            [
+             "item",
+             {
+              "x": "3"
+             },
+             []
+            ],
+            [
+             "item",
+             {
+              "x": "4"
+             },
+             []
+            ],
+            [
+             "item",
+             {
+              "t": "default"
+             },
+             []
+            ]
+           ]
+          ]
+         ]
+        ],
+        [
+         "pivotField",
+         {
+          "dataField": "1",
+          "showAll": "0"
+         },
+         []
+        ]
+       ]
+      ],
+      [
+       "rowFields",
+       {
+        "count": "1"
+       },
+       [
+        [
+         "field",
+         {
+          "x": "3"
+         },
+         []
+        ]
+       ]
+      ],
+      [
+       "rowItems",
+       {
+        "count": "4"
+       },
+       [
+        [
+         "i",
+         {},
+         [
+          [
+           "x",
+           {
+            "v": "1"
+           },
+           []
+          ]
+         ]
+        ],
+        [
+         "i",
+         {},
+         [
+          [
+           "x",
+           {
+            "v": "2"
+           },
+           []
+          ]
+         ]
+        ],
+        [
+         "i",
+         {},
+         [
+          [
+           "x",
+           {
+            "v": "3"
+           },
+           []
+          ]
+         ]
+        ],
+        [
+         "i",
+         {
+          "t": "grand"
+         },
+         [
+          [
+           "x",
+           {},
+           []
+          ]
+         ]
+        ]
+       ]
+      ],
+      [
+       "colFields",
+       {
+        "count": "1"
+       },
+       [
+        [
+         "field",
+         {
+          "x": "-2"
+         },
+         []
+        ]
+       ]
+      ],
+      [
+       "colItems",
+       {
+        "count": "2"
+       },
+       [
+        [
+         "i",
+         {},
+         [
+          [
+           "x",
+           {},
+           []
+          ]
+         ]
+        ],
+        [
+         "i",
+         {
+          "i": "1"
+         },
+         [
+          [
+           "x",
+           {
+            "v": "1"
+           },
+           []
+          ]
+         ]
+        ]
+       ]
+      ],
+      [
+       "dataFields",
+       {
+        "count": "2"
+       },
+       [
+        [
+         "dataField",
+         {
+          "baseField": "0",
+          "baseItem": "0",
+          "fld": "3",
+          "name": "Sum of Amt"
+         },
+         []
+        ],
+        [
+         "dataField",
+         {
+          "baseField": "0",
+          "baseItem": "0",
+          "fld": "4",
+          "name": "Sum of Qty"
+         },
+         []
+        ]
+       ]
+      ],
+      [
+       "pivotTableStyleInfo",
+       {
+        "name": "PivotStyleLight16",
+        "showColHeaders": "1",
+        "showColStripes": "0",
+        "showLastColumn": "1",
+        "showRowHeaders": "1",
+        "showRowStripes": "0"
+       },
+       []
+      ]
+     ]
+    ],
+    "sheet": "Sheet2"
+   }
+  ]
+ }
+}
