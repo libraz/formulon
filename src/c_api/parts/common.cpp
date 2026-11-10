@@ -38,6 +38,7 @@
 #include "utils/formula_text.h"
 #include "utils/number_text.h"
 #include "utils/strings.h"
+#include "utils/text_ops.h"
 #include "utils/utf8_length.h"
 #include "value.h"
 #include "workbook.h"
@@ -151,12 +152,49 @@ const ParseErrorRecord* last_parse_error() {
   return g_has_last_parse_error ? &g_last_parse_error : nullptr;
 }
 
-fm_status_t formula_parse_failed(const formulon::parser::ParseFailure& failure, std::string context) {
+std::uint32_t utf16_units_to_code_points(std::string_view text, std::uint32_t units) {
+  const std::uint32_t total_units = formulon::text_index_length(text, formulon::TextIndexUnit::kUtf16Units);
+  const std::uint32_t total_points = formulon::text_index_length(text, formulon::TextIndexUnit::kCodePoints);
+  if (units >= total_units) {
+    return total_points + (units - total_units);
+  }
+  return formulon::text_index_length(text.substr(0, formulon::utf16_to_byte_offset(text, units)),
+                                     formulon::TextIndexUnit::kCodePoints);
+}
+
+std::uint32_t code_points_to_utf16_units(std::string_view text, std::uint32_t code_points) {
+  const std::uint32_t total_points = formulon::text_index_length(text, formulon::TextIndexUnit::kCodePoints);
+  if (code_points >= total_points) {
+    return formulon::text_index_length(text, formulon::TextIndexUnit::kUtf16Units) + (code_points - total_points);
+  }
+  return formulon::text_index_length(
+      text.substr(0, formulon::text_index_to_byte_offset(text, code_points, formulon::TextIndexUnit::kCodePoints)),
+      formulon::TextIndexUnit::kUtf16Units);
+}
+
+fm_status_t formula_parse_failed(std::string_view text, const formulon::parser::ParseFailure& failure,
+                                 std::string context) {
+  // Code points in the first `units` UTF-16 units of `span`.
+  const auto code_points = [](std::string_view span, std::uint32_t units) {
+    return formulon::text_index_length(span.substr(0, formulon::utf16_to_byte_offset(span, units)),
+                                       formulon::TextIndexUnit::kCodePoints);
+  };
+  std::size_t line_begin = 0;
+  for (std::uint32_t line = 1; line < failure.range.line; ++line) {
+    const std::size_t newline = text.find('\n', line_begin);
+    if (newline == std::string_view::npos) {
+      break;
+    }
+    line_begin = newline + 1U;
+  }
   g_last_parse_error.code = static_cast<std::int32_t>(failure.code);
   g_last_parse_error.start = failure.range.start;
   g_last_parse_error.end = failure.range.end;
   g_last_parse_error.line = failure.range.line;
   g_last_parse_error.column = failure.range.column;
+  g_last_parse_error.start_cp = code_points(text, failure.range.start);
+  g_last_parse_error.end_cp = code_points(text, failure.range.end);
+  g_last_parse_error.column_cp = code_points(text.substr(line_begin), failure.range.column - 1U) + 1U;
   g_has_last_parse_error = true;
   formulon::Error err;
   err.code = formulon::parser::parse_error_status(failure.code);
@@ -1154,13 +1192,13 @@ fm_status_t check_entered_formula_parses(std::string_view formula, std::string_v
     return rc;
   }
   if (formulon::eval::has_entered_cell_shaped_param(formula)) {
-    return formula_parse_failed(whole_text_failure(ParseErrorCode::EntryParamShapedName, formula),
+    return formula_parse_failed(formula, whole_text_failure(ParseErrorCode::EntryParamShapedName, formula),
                                 std::string(context));
   }
   formulon::Arena arena;
   ParseFailure failure;
   if (parse_entered_formula(formula, formula, arena, stored, &failure) == nullptr) {
-    return formula_parse_failed(failure, std::string(context));
+    return formula_parse_failed(formula, failure, std::string(context));
   }
   return 0;
 }
@@ -1174,7 +1212,7 @@ fm_status_t check_stored_formula(std::string_view formula, std::string_view cont
   }
   // The parser skips one '=' of its own, so a second one is refused here.
   if (const std::optional<ParseFailure> refused = refused_entry_prefix(formula)) {
-    return formula_parse_failed(*refused, std::string(context));
+    return formula_parse_failed(formula, *refused, std::string(context));
   }
   std::string stored;
   if (auto rc = check_entered_formula_parses(formula, context, &stored); rc != 0) {
@@ -1221,11 +1259,11 @@ fm_status_t check_entered_cell_formula(const fm_workbook_t* wb, std::size_t shee
     return rc;
   }
   if (const std::optional<ParseFailure> refused = refused_entry_prefix(formula)) {
-    return formula_parse_failed(*refused, std::string(context));
+    return formula_parse_failed(formula, *refused, std::string(context));
   }
   *bound = wb->workbook().bind_entered_structured_refs(formula, sheet, row, col);
   if (formulon::eval::has_entered_cell_shaped_param(*bound)) {
-    return formula_parse_failed(whole_text_failure(ParseErrorCode::EntryParamShapedName, formula),
+    return formula_parse_failed(formula, whole_text_failure(ParseErrorCode::EntryParamShapedName, formula),
                                 std::string(context));
   }
   std::string stored;
@@ -1252,7 +1290,8 @@ fm_status_t check_entered_cell_formula(const fm_workbook_t* wb, std::size_t shee
   }
   // A failed A1 reading is the one the caller's text locates; text that read
   // as A1 failed only as the R1C1 reference it names.
-  return formula_parse_failed(a1_failed ? a1_failure : whole_text_failure(ParseErrorCode::InvalidReference, formula),
+  return formula_parse_failed(formula,
+                              a1_failed ? a1_failure : whole_text_failure(ParseErrorCode::InvalidReference, formula),
                               std::string(context));
 }
 
@@ -1260,8 +1299,9 @@ const formulon::parser::AstNode* parse_evaluated_formula(std::string_view formul
                                                          formulon::Arena& arena, fm_status_t* rc) {
   ParseFailure raw;
   const AstNode* root = diagnose_entry(strip_formula_prefix(bound), arena, /*refusals=*/false, &raw);
-  *rc =
-      root == nullptr ? formula_parse_failed(place_failure(formula, bound, /*refusals=*/false, raw), std::string()) : 0;
+  *rc = root == nullptr
+            ? formula_parse_failed(formula, place_failure(formula, bound, /*refusals=*/false, raw), std::string())
+            : 0;
   return root;
 }
 

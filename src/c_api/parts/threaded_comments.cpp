@@ -6,6 +6,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -24,6 +25,7 @@ using formulon::c_api::parts::check_record_size;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
+using formulon::c_api::parts::code_points_to_utf16_units;
 using formulon::c_api::parts::finish_status;
 using formulon::c_api::parts::fresh_read_scratch;
 using formulon::c_api::parts::invalid_argument;
@@ -35,12 +37,15 @@ using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::set_last_error;
 using formulon::c_api::parts::store_cstr;
 using formulon::c_api::parts::text_or_empty;
+using formulon::c_api::parts::utf16_units_to_code_points;
 
 namespace {
 
-// Copies `count` caller mentions into the model shape; a span ending before
-// it starts is refused. An empty mention id is left for the engine to generate.
-fm_status_t mentions_from_fm(const fm_mention_t* mentions, uint32_t count, std::vector<formulon::Mention>* out) {
+// Copies `count` caller mentions into the model shape, taking the code-point
+// pair when `by_code_point`; a span ending before it starts is refused. An
+// empty mention id is left for the engine to generate.
+fm_status_t mentions_from_fm(const fm_mention_t* mentions, uint32_t count, bool by_code_point,
+                             std::vector<formulon::Mention>* out) {
   if (mentions == nullptr && count != 0U) {
     return null_field("mentions");
   }
@@ -48,19 +53,31 @@ fm_status_t mentions_from_fm(const fm_mention_t* mentions, uint32_t count, std::
     if (auto rc = check_utf8({mentions[i].person_id, mentions[i].mention_id}); rc != 0) {
       return rc;
     }
-    if (mentions[i].end < mentions[i].start) {
-      return invalid_argument(("mentions[" + std::to_string(i) + "].end must not be before start").c_str(),
-                              "mentions[" + std::to_string(i) + "] start=" + std::to_string(mentions[i].start) +
-                                  " end=" + std::to_string(mentions[i].end));
+    const std::uint32_t start = by_code_point ? mentions[i].start_cp : mentions[i].start;
+    const std::uint32_t end = by_code_point ? mentions[i].end_cp : mentions[i].end;
+    if (end < start) {
+      return invalid_argument(
+          ("mentions[" + std::to_string(i) + "].end must not be before start").c_str(),
+          "mentions[" + std::to_string(i) + "] start=" + std::to_string(start) + " end=" + std::to_string(end));
     }
     formulon::Mention m;
     m.person_id = text_or_empty(mentions[i].person_id);
     m.mention_id = text_or_empty(mentions[i].mention_id);
-    m.start = mentions[i].start;
-    m.length = mentions[i].end - mentions[i].start;
+    m.start = start;
+    m.length = end - start;
     out->push_back(std::move(m));
   }
   return 0;
+}
+
+// Re-expresses mentions given as code-point spans over `text` in UTF-16 units.
+void mentions_to_utf16(std::string_view text, std::vector<formulon::Mention>* mentions) {
+  for (formulon::Mention& m : *mentions) {
+    const std::uint32_t start = code_points_to_utf16_units(text, m.start);
+    const std::uint32_t end = code_points_to_utf16_units(text, m.start + m.length);
+    m.start = start;
+    m.length = end - start;
+  }
 }
 
 // Resets the read scratch and the arenas this file publishes through, and
@@ -114,7 +131,9 @@ extern "C" fm_status_t fm_sheet_get_threaded_comment_at(const fm_workbook_t* wb,
   mentions.reserve(c.mentions.size());
   for (const formulon::Mention& m : c.mentions) {
     mentions.push_back(fm_mention_t{store_cstr(scratch->read_scratch, m.person_id),
-                                    store_cstr(scratch->read_scratch, m.mention_id), m.start, m.start + m.length});
+                                    store_cstr(scratch->read_scratch, m.mention_id), m.start, m.start + m.length,
+                                    utf16_units_to_code_points(c.text, m.start),
+                                    utf16_units_to_code_points(c.text, m.start + m.length)});
   }
   const std::uint32_t struct_size = out->struct_size;
   *out = fm_threaded_comment_t{};
@@ -160,7 +179,7 @@ extern "C" fm_status_t fm_sheet_get_threaded_comment(const fm_workbook_t* wb, si
   return fm_sheet_get_threaded_comment_at(wb, sheet_index, idx, out);
 }
 
-extern "C" fm_status_t fm_sheet_add_threaded_comment(fm_workbook_t* wb, size_t sheet_index,
+extern "C" fm_status_t fm_sheet_add_threaded_comment(fm_workbook_t* wb, size_t sheet_index, int32_t offset_unit,
                                                      const fm_threaded_comment_t* comment, const char** out_id) {
   clear_last_error();
   if (comment == nullptr || out_id == nullptr) {
@@ -168,6 +187,11 @@ extern "C" fm_status_t fm_sheet_add_threaded_comment(fm_workbook_t* wb, size_t s
                              comment == nullptr ? "comment must not be NULL" : "out_id must not be NULL");
   }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc =
+          check_enum_domain(offset_unit, FM_TEXT_OFFSET_UNIT_UTF16, FM_TEXT_OFFSET_UNIT_CODE_POINT, "offset_unit");
+      rc != 0) {
     return rc;
   }
   if (auto rc = check_record_size(*comment); rc != 0) {
@@ -182,8 +206,13 @@ extern "C" fm_status_t fm_sheet_add_threaded_comment(fm_workbook_t* wb, size_t s
     return invalid_argument("parent_id must not be empty", "field=parent_id");
   }
   formulon::ThreadedComment model;
-  if (auto rc = mentions_from_fm(comment->mentions, comment->mentions_count, &model.mentions); rc != 0) {
+  if (auto rc = mentions_from_fm(comment->mentions, comment->mentions_count,
+                                 offset_unit == FM_TEXT_OFFSET_UNIT_CODE_POINT, &model.mentions);
+      rc != 0) {
     return rc;
+  }
+  if (offset_unit == FM_TEXT_OFFSET_UNIT_CODE_POINT) {
+    mentions_to_utf16(text_or_empty(comment->text), &model.mentions);
   }
   if (comment->parent_id != nullptr) {
     const auto& list = wb->workbook().sheet(sheet_index).threaded_comments();
@@ -208,7 +237,7 @@ extern "C" fm_status_t fm_sheet_add_threaded_comment(fm_workbook_t* wb, size_t s
 }
 
 extern "C" fm_status_t fm_sheet_update_threaded_comment(fm_workbook_t* wb, size_t sheet_index, const char* id,
-                                                        const fm_threaded_comment_patch_t* patch) {
+                                                        int32_t offset_unit, const fm_threaded_comment_patch_t* patch) {
   clear_last_error();
   if (id == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "id must not be NULL");
@@ -217,6 +246,11 @@ extern "C" fm_status_t fm_sheet_update_threaded_comment(fm_workbook_t* wb, size_
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "patch must not be NULL");
   }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc =
+          check_enum_domain(offset_unit, FM_TEXT_OFFSET_UNIT_UTF16, FM_TEXT_OFFSET_UNIT_CODE_POINT, "offset_unit");
+      rc != 0) {
     return rc;
   }
   if (auto rc = check_record_size(*patch); rc != 0) {
@@ -251,7 +285,9 @@ extern "C" fm_status_t fm_sheet_update_threaded_comment(fm_workbook_t* wb, size_
     if (patch->mentions == nullptr && patch->mentions_count != 0U) {
       return null_field("mentions");
     }
-    if (auto rc = mentions_from_fm(patch->mentions, patch->mentions_count, &mentions); rc != 0) {
+    if (auto rc = mentions_from_fm(patch->mentions, patch->mentions_count,
+                                   offset_unit == FM_TEXT_OFFSET_UNIT_CODE_POINT, &mentions);
+        rc != 0) {
       return rc;
     }
   }
@@ -268,6 +304,8 @@ extern "C" fm_status_t fm_sheet_update_threaded_comment(fm_workbook_t* wb, size_
     std::string text = set_text ? std::string(patch->text) : comments[index].text;
     if (!set_mentions) {
       mentions = comments[index].mentions;
+    } else if (offset_unit == FM_TEXT_OFFSET_UNIT_CODE_POINT) {
+      mentions_to_utf16(text, &mentions);
     }
     if (auto rc = finish_status(book.edit_threaded_comment(sheet_index, id, std::move(text), std::move(mentions)));
         rc != 0) {

@@ -368,10 +368,11 @@ TEST(FormulonCApi, CellTextIsLimitedTo32767Utf16Units) {
   EXPECT_EQ(fm_sheet_set_cell_phonetic(wb.handle, 0, 0, 0, at_limit.c_str()), 0);
   EXPECT_EQ(fm_sheet_set_cell_phonetic(wb.handle, 0, 0, 0, past_limit.c_str()), FM_STATUS_INVALID_ARGUMENT);
 
-  const fm_phonetic_run_t fits[] = {{0, 1, at_limit.c_str()}};
-  EXPECT_EQ(fm_sheet_set_cell_phonetic_runs(wb.handle, 0, 0, 0, fits, 1), 0);
-  const fm_phonetic_run_t too_long[] = {{0, 1, "a"}, {1, 2, past_limit.c_str()}};
-  EXPECT_EQ(fm_sheet_set_cell_phonetic_runs(wb.handle, 0, 0, 0, too_long, 2), FM_STATUS_INVALID_ARGUMENT);
+  const fm_phonetic_run_t fits[] = {{0, 1, 0U, 0U, at_limit.c_str()}};
+  EXPECT_EQ(fm_sheet_set_cell_phonetic_runs(wb.handle, 0, 0, 0, FM_TEXT_OFFSET_UNIT_UTF16, fits, 1), 0);
+  const fm_phonetic_run_t too_long[] = {{0, 1, 0U, 0U, "a"}, {1, 2, 0U, 0U, past_limit.c_str()}};
+  EXPECT_EQ(fm_sheet_set_cell_phonetic_runs(wb.handle, 0, 0, 0, FM_TEXT_OFFSET_UNIT_UTF16, too_long, 2),
+            FM_STATUS_INVALID_ARGUMENT);
   size_t runs = 0;
   ASSERT_EQ(fm_sheet_get_cell_phonetic_run_count(wb.handle, 0, 0, 0, &runs), 0);
   EXPECT_EQ(runs, 1U);
@@ -492,8 +493,9 @@ namespace {
 // "東京" with one kana run per character.
 void WriteAnnotatedTokyo(fm_workbook_t* wb, std::uint32_t row) {
   ASSERT_EQ(fm_sheet_set_text(wb, 0, row, 0, "東京"), 0);
-  const fm_phonetic_run_t runs[] = {{0, 1, "トウ"}, {1, 2, "キョウ"}};
-  ASSERT_EQ(fm_sheet_set_cell_phonetic_runs(wb, 0, row, 0, runs, 2), 0) << fm_get_last_error_message();
+  const fm_phonetic_run_t runs[] = {{0, 1, 0U, 0U, "トウ"}, {1, 2, 0U, 0U, "キョウ"}};
+  ASSERT_EQ(fm_sheet_set_cell_phonetic_runs(wb, 0, row, 0, FM_TEXT_OFFSET_UNIT_UTF16, runs, 2), 0)
+      << fm_get_last_error_message();
 }
 
 fm_phonetic_properties_t ReadPhoneticProperties(const fm_workbook_t* wb, std::uint32_t row) {
@@ -513,8 +515,9 @@ TEST(FormulonCApiPhoneticRecord, RunFieldsStartEnd) {
   EXPECT_EQ(run.start, 1U);
   EXPECT_EQ(run.end, 2U);
   EXPECT_STREQ(run.text, "キョウ");
-  const fm_phonetic_run_t inverted[] = {{2, 1, "x"}};
-  EXPECT_EQ(fm_sheet_set_cell_phonetic_runs(wb.handle, 0, 0, 0, inverted, 1), FM_STATUS_INVALID_ARGUMENT);
+  const fm_phonetic_run_t inverted[] = {{2, 1, 0U, 0U, "x"}};
+  EXPECT_EQ(fm_sheet_set_cell_phonetic_runs(wb.handle, 0, 0, 0, FM_TEXT_OFFSET_UNIT_UTF16, inverted, 1),
+            FM_STATUS_INVALID_ARGUMENT);
 }
 
 TEST(FormulonCApiPhoneticRecord, GetSetRecordRoundTrip) {

@@ -41,6 +41,7 @@ using formulon::c_api::parts::check_cell_coord;
 using formulon::c_api::parts::check_cell_cursor;
 using formulon::c_api::parts::check_cell_text_length;
 using formulon::c_api::parts::check_entered_cell_formula;
+using formulon::c_api::parts::check_enum_domain;
 using formulon::c_api::parts::check_finite;
 using formulon::c_api::parts::check_index;
 using formulon::c_api::parts::check_limit;
@@ -49,6 +50,7 @@ using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::check_sheet_rect;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
+using formulon::c_api::parts::code_points_to_utf16_units;
 using formulon::c_api::parts::display_formula;
 using formulon::c_api::parts::display_formula_text;
 using formulon::c_api::parts::ensure_calculated;
@@ -64,6 +66,7 @@ using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::set_last_error;
 using formulon::c_api::parts::table_display_name_at;
 using formulon::c_api::parts::TextStore;
+using formulon::c_api::parts::utf16_units_to_code_points;
 using formulon::c_api::parts::value_to_fm;
 using formulon::c_api::parts::with_formula_prefix;
 
@@ -242,7 +245,8 @@ extern "C" fm_status_t fm_sheet_set_cell_phonetic(fm_workbook_t* wb, size_t shee
 }
 
 extern "C" fm_status_t fm_sheet_set_cell_phonetic_runs(fm_workbook_t* wb, size_t sheet_index, uint32_t row,
-                                                       uint32_t col, const fm_phonetic_run_t* runs, size_t count) {
+                                                       uint32_t col, int32_t offset_unit, const fm_phonetic_run_t* runs,
+                                                       size_t count) {
   clear_last_error();
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
@@ -253,6 +257,16 @@ extern "C" fm_status_t fm_sheet_set_cell_phonetic_runs(fm_workbook_t* wb, size_t
   if (auto rc = check_cell_coord(row, col); rc != 0) {
     return rc;
   }
+  if (auto rc =
+          check_enum_domain(offset_unit, FM_TEXT_OFFSET_UNIT_UTF16, FM_TEXT_OFFSET_UNIT_CODE_POINT, "offset_unit");
+      rc != 0) {
+    return rc;
+  }
+  // The surface text the spans index; a cell without text yet has none.
+  const formulon::Cell* existing = wb->workbook().sheet(sheet_index).cell_at(row, col);
+  const std::string_view surface =
+      existing != nullptr && existing->cached_value.is_text() ? existing->cached_value.as_text() : std::string_view();
+  const bool by_code_point = offset_unit == FM_TEXT_OFFSET_UNIT_CODE_POINT;
 
   std::vector<formulon::PhoneticRun> parsed;
   parsed.reserve(count);
@@ -273,18 +287,20 @@ extern "C" fm_status_t fm_sheet_set_cell_phonetic_runs(fm_workbook_t* wb, size_t
     if (auto rc = check_cell_text_length(run.text, ("runs[" + std::to_string(i) + "].text").c_str()); rc != 0) {
       return rc;
     }
-    if (run.end < run.start) {
+    const std::uint32_t start = by_code_point ? code_points_to_utf16_units(surface, run.start_cp) : run.start;
+    const std::uint32_t end = by_code_point ? code_points_to_utf16_units(surface, run.end_cp) : run.end;
+    if (end < start) {
       return invalid_argument(
           ("runs[" + std::to_string(i) + "].end must not be before start").c_str(),
-          "run_index=" + std::to_string(i) + " start=" + std::to_string(run.start) + " end=" + std::to_string(run.end));
+          "run_index=" + std::to_string(i) + " start=" + std::to_string(start) + " end=" + std::to_string(end));
     }
-    if (i != 0U && run.start < previous_end) {
+    if (i != 0U && start < previous_end) {
       return invalid_argument(("runs[" + std::to_string(i) + "].start must not be before the previous end").c_str(),
-                              "run_index=" + std::to_string(i) + " start=" + std::to_string(run.start) +
+                              "run_index=" + std::to_string(i) + " start=" + std::to_string(start) +
                                   " previous_end=" + std::to_string(previous_end));
     }
-    previous_end = run.end;
-    parsed.push_back(formulon::PhoneticRun{run.start, run.end, std::string(run.text)});
+    previous_end = end;
+    parsed.push_back(formulon::PhoneticRun{start, end, std::string(run.text)});
   }
 
   wb->workbook().sheet(sheet_index).set_cell_phonetic_runs(row, col, std::move(parsed));
@@ -530,8 +546,11 @@ extern "C" fm_status_t fm_sheet_get_cell_phonetic_run_at(const fm_workbook_t* wb
     return rc;
   }
   const formulon::PhoneticRun& run = cell->phonetic_runs[run_index];
+  const std::string_view surface = cell->cached_value.is_text() ? cell->cached_value.as_text() : std::string_view();
   out->start = run.sb;
   out->end = run.eb;
+  out->start_cp = utf16_units_to_code_points(surface, run.sb);
+  out->end_cp = utf16_units_to_code_points(surface, run.eb);
   out->text = publish_scratch(wb, run.text);
   return 0;
 }

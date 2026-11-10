@@ -69,7 +69,8 @@ int main(void) {
   fm_cf_rule_t rule = FM_STRUCT_INIT(fm_cf_rule_t);
   _Static_assert(offsetof(fm_cf_rule_t, struct_size) == 0, "struct_size must lead a record");
   int version_matches = FM_CHECK_VERSION();
-  fm_status_t (*parallel_recalc)(fm_workbook_t*, uint32_t, fm_parallel_recalc_stats_info_t*) = fm_workbook_recalc_parallel;
+  fm_status_t (*parallel_recalc)(fm_workbook_t*, uint32_t, fm_parallel_recalc_stats_info_t*) =
+      fm_workbook_recalc_parallel;
   fm_status_t (*save_diagnostics)(const fm_workbook_t*, int32_t, uint8_t**, size_t*, fm_save_diagnostics_info_t*) =
       fm_workbook_save_with_diagnostics;
   fm_status_t (*read_diagnostics)(const fm_workbook_t*, fm_read_diagnostics_info_t*) = fm_workbook_get_diagnostics;
@@ -80,8 +81,11 @@ int main(void) {
   fm_status_t (*insert_cells)(fm_workbook_t*, size_t, const fm_cell_rect_t*, int32_t) = fm_sheet_insert_cells;
   fm_status_t (*delete_cells)(fm_workbook_t*, size_t, const fm_cell_rect_t*, int32_t) = fm_sheet_delete_cells;
   _Static_assert(FM_CELL_SHIFT_DOWN == 0 && FM_CELL_SHIFT_LEFT == 3, "fm_cell_shift_t ordinals changed");
-  _Static_assert(offsetof(fm_phonetic_run_t, start) == 0 && offsetof(fm_phonetic_run_t, end) == 4,
+  _Static_assert(offsetof(fm_phonetic_run_t, start) == 0 && offsetof(fm_phonetic_run_t, end) == 4 &&
+                     offsetof(fm_phonetic_run_t, start_cp) == 8 && offsetof(fm_phonetic_run_t, end_cp) == 12,
                  "fm_phonetic_run_t field layout changed");
+  _Static_assert(FM_TEXT_OFFSET_UNIT_UTF16 == 0 && FM_TEXT_OFFSET_UNIT_CODE_POINT == 1,
+                 "fm_text_offset_unit_t ordinals changed");
   // Written out in full because these are the entry points a third-party C
   // consumer binds by signature: the XF record is read through a const
   // pointer, and the sheet-view record is written through a caller-supplied
@@ -106,8 +110,10 @@ int main(void) {
   // Both counter structs must lay out identically on native and wasm32, so a
   // binding's hand-written offsets cannot drift from the compiler's.
   // `struct_size` and five 4-byte counters, no padding, in either target.
-  _Static_assert(sizeof(fm_read_diagnostics_info_t) == 6 * sizeof(uint32_t), "fm_read_diagnostics_info_t must be packed");
-  _Static_assert(sizeof(fm_save_diagnostics_info_t) == 6 * sizeof(uint32_t), "fm_save_diagnostics_info_t must be packed");
+  _Static_assert(sizeof(fm_read_diagnostics_info_t) == 6 * sizeof(uint32_t),
+                 "fm_read_diagnostics_info_t must be packed");
+  _Static_assert(sizeof(fm_save_diagnostics_info_t) == 6 * sizeof(uint32_t),
+                 "fm_save_diagnostics_info_t must be packed");
   // Pinned from C as well as C++: a C consumer built against a narrower
   // definition of either record is miscompiled rather than diagnosed.
   _Static_assert(sizeof(fm_cell_xf_t) == 136, "fm_cell_xf_t ABI layout changed");
@@ -167,7 +173,7 @@ int main(void) {
   _Static_assert(sizeof(fm_auto_filter_t) == (sizeof(void*) == 4 ? 68 : 88), "fm_auto_filter_t ABI layout changed");
   _Static_assert(sizeof(fm_validation_outcome_info_t) == (sizeof(void*) == 4 ? 20 : 24),
                  "fm_validation_outcome_info_t ABI layout changed");
-  _Static_assert(sizeof(fm_mention_t) == (sizeof(void*) == 4 ? 16 : 24), "fm_mention_t ABI layout changed");
+  _Static_assert(sizeof(fm_mention_t) == (sizeof(void*) == 4 ? 24 : 32), "fm_mention_t ABI layout changed");
   _Static_assert(sizeof(fm_threaded_comment_t) == (sizeof(void*) == 4 ? 44 : 80),
                  "fm_threaded_comment_t ABI layout changed");
   _Static_assert(sizeof(fm_person_t) == 5 * sizeof(void*), "fm_person_t ABI layout changed");
@@ -291,10 +297,10 @@ int main(void) {
                                 fm_validation_outcome_info_t*) = fm_sheet_validate_value;
   fm_status_t (*list_invalid_cells)(const fm_workbook_t*, size_t, uint64_t, uint32_t, fm_cell_range_t**) =
       fm_sheet_get_invalid_cells;
-  fm_status_t (*add_threaded_comment)(fm_workbook_t*, size_t, const fm_threaded_comment_t*, const char**) =
+  fm_status_t (*add_threaded_comment)(fm_workbook_t*, size_t, int32_t, const fm_threaded_comment_t*, const char**) =
       fm_sheet_add_threaded_comment;
-  fm_status_t (*edit_threaded_comment)(fm_workbook_t*, size_t, const char*, const fm_threaded_comment_patch_t*) =
-      fm_sheet_update_threaded_comment;
+  fm_status_t (*edit_threaded_comment)(fm_workbook_t*, size_t, const char*, int32_t,
+                                       const fm_threaded_comment_patch_t*) = fm_sheet_update_threaded_comment;
   fm_status_t (*person_at)(const fm_workbook_t*, size_t, fm_person_t*) = fm_workbook_get_person_at;
   fm_status_t (*insert_image)(fm_workbook_t*, size_t, const uint8_t*, size_t, const fm_drawing_placement_spec_t*,
                               uint32_t*) = fm_sheet_add_picture;
@@ -331,7 +337,8 @@ int main(void) {
   fm_status_t (*get_print_area)(const fm_workbook_t*, size_t, fm_cell_rect_t*, size_t, size_t*) =
       fm_sheet_get_print_area;
   fm_status_t (*evaluate_cf_range)(const fm_workbook_t*, size_t, const fm_cell_rect_t*,
-                                   const fm_cf_range_evaluation_spec_t*, fm_cf_results_t**) = fm_sheet_evaluate_cf_range;
+                                   const fm_cf_range_evaluation_spec_t*, fm_cf_results_t**) =
+      fm_sheet_evaluate_cf_range;
   fm_page_setup_patch_t setup_patch = FM_STRUCT_INIT(fm_page_setup_patch_t);
   setup_patch.orientation_op = FM_PATCH_OP_CLEAR;
   fm_header_footer_patch_t hf_patch = FM_STRUCT_INIT(fm_header_footer_patch_t);

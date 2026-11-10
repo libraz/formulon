@@ -667,7 +667,16 @@ CELL_NODE = Struct(
 
 PARSE_ERROR = Struct(
     "fm_parse_error_info_t",
-    [("code", I32), ("start", U32), ("end", U32), ("line", U32), ("column", U32)],
+    [
+        ("code", I32),
+        ("start", U32),
+        ("end", U32),
+        ("line", U32),
+        ("column", U32),
+        ("start_cp", U32),
+        ("end_cp", U32),
+        ("column_cp", U32),
+    ],
 )
 
 # One ``<rPh>`` block. Passed both ways: as an element of the array
@@ -675,7 +684,7 @@ PARSE_ERROR = Struct(
 # ``fm_sheet_get_cell_phonetic_run_at``.
 PHONETIC_RUN = Struct(
     "fm_phonetic_run_t",
-    [("start", U32), ("end", U32), ("text", PTR)],
+    [("start", U32), ("end", U32), ("start_cp", U32), ("end_cp", U32), ("text", PTR)],
 )
 
 PHONETIC_PROPERTIES = Struct(
@@ -1668,7 +1677,7 @@ VALIDATION_OUTCOME = Struct(
 
 MENTION = Struct(
     "fm_mention_t",
-    [("person_id", PTR), ("mention_id", PTR), ("start", U32), ("end", U32)],
+    [("person_id", PTR), ("mention_id", PTR), ("start", U32), ("end", U32), ("start_cp", U32), ("end_cp", U32)],
 )
 
 THREADED_COMMENT = Struct(

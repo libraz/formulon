@@ -51,6 +51,9 @@ extern "C" fm_status_t fm_get_last_parse_error(int32_t* out_present, fm_parse_er
   out->end = record->end;
   out->line = record->line;
   out->column = record->column;
+  out->start_cp = record->start_cp;
+  out->end_cp = record->end_cp;
+  out->column_cp = record->column_cp;
   return 0;
 }
 

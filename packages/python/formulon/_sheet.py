@@ -770,6 +770,8 @@ CellValueInput = Union[
 
 _LAST_ROW = 1048575
 _LAST_COL = 16383
+# ``fm_text_offset_unit_t``: text offsets are passed to the engine in UTF-16 units.
+_TEXT_OFFSET_UNIT_UTF16 = 0
 # The built-in number format each en-US date code a date write gives a General cell names.
 _BUILTIN_DATE_NUM_FMT_IDS = {"m/d/yyyy": 14, "m/d/yyyy h:mm": 22, "h:mm:ss": 21}
 # Largest rectangle :meth:`Sheet.get_values` reads.
@@ -1883,6 +1885,7 @@ class Sheet(_NoCopy):
                 _uint(sheet, "sheet_index", role="sheet"),
                 _uint(row, "row", role="coordinate"),
                 _uint(col, "col", role="coordinate"),
+                _TEXT_OFFSET_UNIT_UTF16,
                 ptr,
                 _uint(len(runs), "count"),
             )
@@ -4139,7 +4142,11 @@ class Sheet(_NoCopy):
             S.write_str_field(LIB, ptr, S.THREADED_COMMENT, "parent_id", comment.parent_id, scope, allow_empty=True)
             _write_mentions(ptr, S.THREADED_COMMENT, comment.mentions, comment.text, scope)
             out = scope.out_ptr()
-            _check(LIB.fm_sheet_add_threaded_comment(h, _uint(sheet, "sheet_index", role="sheet"), ptr, out))
+            _check(
+                LIB.fm_sheet_add_threaded_comment(
+                    h, _uint(sheet, "sheet_index", role="sheet"), _TEXT_OFFSET_UNIT_UTF16, ptr, out
+                )
+            )
             return LIB.read_cstr(LIB.read_u32(out))
 
     def update_threaded_comment(
@@ -4186,7 +4193,11 @@ class Sheet(_NoCopy):
                 values["mentions_count"] = _uint(len(mentions), "mentions_count")
             ptr = scope.struct(S.THREADED_COMMENT_PATCH)
             S.THREADED_COMMENT_PATCH.pack(LIB, ptr, values)
-            _check(LIB.fm_sheet_update_threaded_comment(h, _uint(sheet, "sheet_index", role="sheet"), id_ptr, ptr))
+            _check(
+                LIB.fm_sheet_update_threaded_comment(
+                    h, _uint(sheet, "sheet_index", role="sheet"), id_ptr, _TEXT_OFFSET_UNIT_UTF16, ptr
+                )
+            )
 
     def get_threaded_comment(self, id: str) -> Optional[ThreadedComment]:
         """Return the threaded comment ``id``, or ``None`` when the sheet has none."""

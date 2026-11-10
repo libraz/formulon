@@ -72,7 +72,7 @@ fm_status_t check_parses(std::string_view text, PlaceFn place) {
   if (failure.range.line == 1U) {
     failure.range.column += prefix;
   }
-  return formula_parse_failed(place(failure.range, failure), "field=formula");
+  return formula_parse_failed(text, place(failure.range, failure), "field=formula");
 }
 
 // Shared body of `fm_localize_formula` / `fm_canonicalize_formula`.

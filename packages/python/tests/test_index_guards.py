@@ -101,10 +101,15 @@ def _is_int_call(node: ast.AST) -> bool:
 # `ResolverGuardTests`), so the names a call site unpacks from one are guarded.
 _GUARDED_RESOLVERS = {"_at", "_call"}
 
-# Module-level encoders that only ever return literal integers, and the patch
-# operation constants (`BoundedEncoderTests` verifies both).
+# Module-level encoders that only ever return literal integers, and the
+# module-level integer constants with the module that binds each
+# (`BoundedEncoderTests` verifies both).
 _BOUNDED_ENCODERS = {"_tristate", "_tristate_default"}
-_PATCH_OP_CONSTANTS = {"_PATCH_SET", "_PATCH_CLEAR"}
+_INT_CONSTANTS = {
+    "_PATCH_SET": "_workbook.py",
+    "_PATCH_CLEAR": "_workbook.py",
+    "_TEXT_OFFSET_UNIT_UTF16": "_sheet.py",
+}
 
 
 def _is_bool_check(node: ast.AST) -> bool:
@@ -120,7 +125,7 @@ def _is_guarded(node: ast.AST, known: "frozenset[str]" = frozenset()) -> bool:
     if _is_literal_int(node):
         return True
     if isinstance(node, ast.Name):
-        return node.id in known or node.id in _PATCH_OP_CONSTANTS
+        return node.id in known or node.id in _INT_CONSTANTS
     if isinstance(node, ast.IfExp):
         return _is_guarded(node.body, known) and _is_guarded(node.orelse, known)
     if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and f"{node.func.id}()" in known:
@@ -541,16 +546,16 @@ class ArgumentSweepTests(unittest.TestCase):
             for value in returns:
                 arms = [value.body, value.orelse] if isinstance(value, ast.IfExp) else [value]
                 self.assertTrue(all(_is_literal_int(v) for v in arms), f"{name} returns {ast.unparse(value)}")
-        source = (_PKG_ROOT / "formulon" / "_workbook.py").read_text(encoding="utf-8")
-        constants = {
-            t.id: n.value.value
-            for n in ast.parse(source).body
-            if isinstance(n, ast.Assign) and isinstance(n.value, ast.Constant) and isinstance(n.value.value, int)
-            for t in n.targets
-            if isinstance(t, ast.Name)
-        }
-        for name in _PATCH_OP_CONSTANTS:
-            self.assertIn(name, constants)
+        for name, module in _INT_CONSTANTS.items():
+            source = (_PKG_ROOT / "formulon" / module).read_text(encoding="utf-8")
+            constants = {
+                t.id: n.value.value
+                for n in ast.parse(source).body
+                if isinstance(n, ast.Assign) and isinstance(n.value, ast.Constant) and isinstance(n.value.value, int)
+                for t in n.targets
+                if isinstance(t, ast.Name)
+            }
+            self.assertIn(name, constants, module)
 
     def test_sweep_actually_inspects_call_sites(self) -> None:
         # Guards the guard: a header-parsing or AST-walking regression would

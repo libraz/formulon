@@ -156,7 +156,8 @@ TEST(FormulonCApiNaturalKey, PersonAndThreadedCommentById) {
   comment.person_id = kAlice;
   comment.created = "2026-01-02T03:04:05.67";
   comment.text = "Check this";
-  ASSERT_EQ(fm_sheet_add_threaded_comment(wb.handle, 0, &comment, ignored_id()), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_add_threaded_comment(wb.handle, 0, FM_TEXT_OFFSET_UNIT_UTF16, &comment, ignored_id()), 0)
+      << fm_get_last_error_message();
 
   int32_t present = 0;
   fm_person_t person = FM_STRUCT_INIT(fm_person_t);

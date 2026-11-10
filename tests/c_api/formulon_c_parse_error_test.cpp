@@ -191,6 +191,35 @@ TEST(FormulonCApiParseError, RecordIsClearedByTheNextCall) {
   EXPECT_EQ(error.struct_size, sizeof(fm_parse_error_info_t));
 }
 
+TEST(FormulonCApiParseError, CodePointPositionsCountASupplementaryCharacterOnce) {
+  struct Case {
+    const char* formula;
+    uint32_t astral_before;  // supplementary-plane characters before the failure on its line
+  };
+  // U+1F600 is two UTF-16 units and one code point.
+  const Case cases[] = {
+      {"=\"\xF0\x9F\x98\x80\"&)", 1U},
+      {"=\"\xF0\x9F\x98\x80\xF0\x9F\x98\x80\"&)", 2U},
+      {"=(1+2", 0U},
+      {"=\"\xF0\x9F\x98\x80\"&\n1+)", 0U},
+  };
+  for (const Case& c : cases) {
+    SCOPED_TRACE(c.formula);
+    WorkbookGuard wb;
+    ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+    ASSERT_NE(fm_sheet_set_formula(wb.handle, 0, 0, 0, c.formula), 0);
+    fm_parse_error_info_t error = FM_STRUCT_INIT(fm_parse_error_info_t);
+    int32_t present = 0;
+    ASSERT_EQ(fm_get_last_parse_error(&present, &error), 0);
+    ASSERT_EQ(present, 1);
+    const bool second_line = error.line == 2U;
+    const uint32_t before_start = second_line ? 1U : c.astral_before;
+    EXPECT_EQ(error.start_cp, error.start - before_start);
+    EXPECT_EQ(error.end_cp, error.end - before_start);
+    EXPECT_EQ(error.column_cp, error.column - c.astral_before);
+  }
+}
+
 TEST(FormulonCApiParseError, ReadersLeaveEachOtherUntouched) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);

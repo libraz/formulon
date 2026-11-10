@@ -766,7 +766,8 @@ Napi::Value Workbook::AddThreadedComment(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   const char* new_id = nullptr;
-  const fm_status_t rc = fm_sheet_add_threaded_comment(handle_, ArgU32(info, 0), &c, &new_id);
+  const fm_status_t rc =
+      fm_sheet_add_threaded_comment(handle_, ArgU32(info, 0), FM_TEXT_OFFSET_UNIT_UTF16, &c, &new_id);
   return ValueOrThrow(env, rc, JsString(env, new_id));
 }
 
@@ -794,7 +795,8 @@ Napi::Value Workbook::EditThreadedComment(const Napi::CallbackInfo& info) {
   }
   out.mentions = mentions.empty() ? nullptr : mentions.data();
   out.mentions_count = static_cast<uint32_t>(mentions.size());
-  const fm_status_t rc = fm_sheet_update_threaded_comment(handle_, ArgU32(info, 0), id.c_str(), &out);
+  const fm_status_t rc =
+      fm_sheet_update_threaded_comment(handle_, ArgU32(info, 0), id.c_str(), FM_TEXT_OFFSET_UNIT_UTF16, &out);
   return ValueOrThrow(env, rc, env.Undefined());
 }
 

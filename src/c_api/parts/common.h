@@ -240,16 +240,29 @@ struct ParseErrorRecord {
   std::uint32_t end = 0;
   std::uint32_t line = 1;
   std::uint32_t column = 1;
+  std::uint32_t start_cp = 0;
+  std::uint32_t end_cp = 0;
+  std::uint32_t column_cp = 1;
 };
 
 // The thread-local parse-error record of the current call, or NULL when it
 // recorded none.
 const ParseErrorRecord* last_parse_error();
 
-// Fails a formula entry point on `failure`: records its code and range as the
-// parse-error record and sets the status `parser/parse_status.h` maps the code
-// to, with `failure.message` and `context` (`field=<name>` for a record field).
-fm_status_t formula_parse_failed(const formulon::parser::ParseFailure& failure, std::string context);
+// Fails a formula entry point on `failure`: records its code and range, an
+// offset into the caller's `text`, as the parse-error record and sets the
+// status `parser/parse_status.h` maps the code to, with `failure.message` and
+// `context` (`field=<name>` for a record field).
+fm_status_t formula_parse_failed(std::string_view text, const formulon::parser::ParseFailure& failure,
+                                 std::string context);
+
+// Code points in the first `units` UTF-16 units of `text`; a position past the
+// end counts one code point per unit.
+std::uint32_t utf16_units_to_code_points(std::string_view text, std::uint32_t units);
+
+// UTF-16 units in the first `code_points` code points of `text`; a position
+// past the end counts one unit per code point.
+std::uint32_t code_points_to_utf16_units(std::string_view text, std::uint32_t code_points);
 
 // Rejects a record whose caller-set `struct_size` is below `v1_size`, the
 // layout this field set first shipped with, as kInvalidArgument with context

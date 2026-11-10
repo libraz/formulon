@@ -69,7 +69,8 @@ TEST_F(FormulonCApiRemoveMissingKey, UpdatingAnAbsentThreadedCommentIsNotFound) 
   fm_threaded_comment_patch_t patch = FM_STRUCT_INIT(fm_threaded_comment_patch_t);
   patch.done_op = FM_PATCH_OP_SET;
   patch.done = 1;
-  ExpectNotFound(fm_sheet_update_threaded_comment(wb(), 0, kAbsentId, &patch), "threaded comment update");
+  ExpectNotFound(fm_sheet_update_threaded_comment(wb(), 0, kAbsentId, FM_TEXT_OFFSET_UNIT_UTF16, &patch),
+                 "threaded comment update");
 }
 
 TEST_F(FormulonCApiRemoveMissingKey, UpdatingAnAbsentCfRuleOrProtectedRangeIsNotFound) {

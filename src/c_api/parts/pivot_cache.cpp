@@ -960,7 +960,7 @@ fm_status_t entered_formula_syntax(std::string_view formula) {
   if (failure.range.line == 1U) {
     failure.range.column += prefix;
   }
-  return formula_parse_failed(failure, "field=formula");
+  return formula_parse_failed(formula, failure, "field=formula");
 }
 
 // Runs one calculated-field / -item model edit on cache `cache_id` and every

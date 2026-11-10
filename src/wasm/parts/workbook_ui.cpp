@@ -689,7 +689,7 @@ void pull_mentions(const emscripten::val& list, MentionStore& st, JsNarrowNumeri
     const char* mention_id = reader.optional_string(m, "mentionId", st.mention_ids[i], "mention.mentionId");
     const uint32_t start = reader.u32(m, "start", 0U, "mention.start");
     const uint32_t end = reader.u32(m, "end", 0U, "mention.end");
-    st.items[i] = {st.person_ids[i].c_str(), mention_id, start, end};
+    st.items[i] = {st.person_ids[i].c_str(), mention_id, start, end, 0U, 0U};
     if (!reader.ok()) {
       break;
     }
@@ -801,7 +801,7 @@ emscripten::val JsWorkbook::addThreadedComment(uint32_t sheet, emscripten::val c
   c.mentions = mentions.items.empty() ? nullptr : mentions.items.data();
   c.mentions_count = static_cast<uint32_t>(mentions.items.size());
   const char* out_id = nullptr;
-  if (!succeeded(fm_sheet_add_threaded_comment(handle_, sheet, &c, &out_id))) {
+  if (!succeeded(fm_sheet_add_threaded_comment(handle_, sheet, FM_TEXT_OFFSET_UNIT_UTF16, &c, &out_id))) {
     return emscripten::val::undefined();
   }
   return emscripten::val(string_from_cstr(out_id));
@@ -828,7 +828,7 @@ void JsWorkbook::editThreadedComment(uint32_t sheet, const std::string& id, emsc
   }
   out.mentions = store.items.empty() ? nullptr : store.items.data();
   out.mentions_count = static_cast<uint32_t>(store.items.size());
-  succeeded(fm_sheet_update_threaded_comment(handle_, sheet, id.c_str(), &out));
+  succeeded(fm_sheet_update_threaded_comment(handle_, sheet, id.c_str(), FM_TEXT_OFFSET_UNIT_UTF16, &out));
 }
 
 void JsWorkbook::removeThreadedComment(uint32_t sheet, const std::string& id) {

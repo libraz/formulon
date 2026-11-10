@@ -486,20 +486,74 @@ TEST(FormulonCApi, CellPhoneticSettersDirtyPhoneticFormulaDependents) {
   EXPECT_STREQ(v.u.text, "べつのよみ") << "changing A1's phonetic reading must dirty PHONETIC(A1)";
 
   // The runs and properties setters are the same seam and must dirty too.
-  const fm_phonetic_run_t run{0U, 3U, "らん"};
-  ASSERT_EQ(fm_sheet_set_cell_phonetic_runs(wb.handle, 0, 0, 0, &run, 1U), 0);
+  const fm_phonetic_run_t run{0U, 3U, 0U, 0U, "らん"};
+  ASSERT_EQ(fm_sheet_set_cell_phonetic_runs(wb.handle, 0, 0, 0, FM_TEXT_OFFSET_UNIT_UTF16, &run, 1U), 0);
   ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
   ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, 0, 1, &v), 0);
   ASSERT_EQ(v.kind, FM_VALUE_KIND_TEXT);
   EXPECT_STREQ(v.u.text, "らん") << "changing A1's phonetic runs must dirty PHONETIC(A1)";
 }
+TEST(FormulonCApi, CellPhoneticRunsAcceptCodePointOffsets) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  // U+1F600 is two UTF-16 units and one code point, so "東京" spans units [2, 4) and code points [1, 3).
+  ASSERT_EQ(fm_sheet_set_text(wb.handle, 0, 0, 0, "\xF0\x9F\x98\x80東京"), 0);
+  ASSERT_EQ(fm_sheet_set_text(wb.handle, 0, 1, 0, "\xF0\x9F\x98\x80東京"), 0);
+
+  const fm_phonetic_run_t by_units[] = {{2U, 4U, 0U, 0U, "トウキョウ"}};
+  const fm_phonetic_run_t by_points[] = {{0U, 0U, 1U, 3U, "トウキョウ"}};
+  ASSERT_EQ(fm_sheet_set_cell_phonetic_runs(wb.handle, 0, 0, 0, FM_TEXT_OFFSET_UNIT_UTF16, by_units, 1U), 0);
+  ASSERT_EQ(fm_sheet_set_cell_phonetic_runs(wb.handle, 0, 1, 0, FM_TEXT_OFFSET_UNIT_CODE_POINT, by_points, 1U), 0)
+      << fm_get_last_error_message();
+
+  for (const uint32_t row : {0U, 1U}) {
+    fm_phonetic_run_t read{};
+    ASSERT_EQ(fm_sheet_get_cell_phonetic_run_at(wb.handle, 0, row, 0, 0U, &read), 0);
+    EXPECT_EQ(read.start, 2U) << row;
+    EXPECT_EQ(read.end, 4U) << row;
+    EXPECT_EQ(read.start_cp, 1U) << row;
+    EXPECT_EQ(read.end_cp, 3U) << row;
+    EXPECT_STREQ(read.text, "トウキョウ");
+  }
+
+  // A span past the end of the text counts one unit per code point beyond it.
+  const fm_phonetic_run_t overshoot[] = {{0U, 0U, 1U, 5U, "x"}};
+  ASSERT_EQ(fm_sheet_set_cell_phonetic_runs(wb.handle, 0, 0, 0, FM_TEXT_OFFSET_UNIT_CODE_POINT, overshoot, 1U), 0);
+  fm_phonetic_run_t read{};
+  ASSERT_EQ(fm_sheet_get_cell_phonetic_run_at(wb.handle, 0, 0, 0, 0U, &read), 0);
+  EXPECT_EQ(read.start, 2U);
+  EXPECT_EQ(read.end, 6U);
+}
+
+TEST(FormulonCApi, CellPhoneticRunsRejectAnUnknownOffsetUnit) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  ASSERT_EQ(fm_sheet_set_text(wb.handle, 0, 0, 0, "東京都"), 0);
+  const fm_phonetic_run_t runs[] = {{0U, 2U, 0U, 2U, "トウキョウ"}, {2U, 3U, 2U, 3U, "ト"}};
+  ASSERT_EQ(fm_sheet_set_cell_phonetic_runs(wb.handle, 0, 0, 0, FM_TEXT_OFFSET_UNIT_UTF16, runs, 2U), 0);
+
+  const fm_phonetic_run_t other[] = {{0U, 3U, 0U, 3U, "x"}};
+  for (const int32_t bad : {2, -1}) {
+    EXPECT_EQ(fm_sheet_set_cell_phonetic_runs(wb.handle, 0, 0, 0, bad, other, 1U), FM_STATUS_INVALID_ARGUMENT) << bad;
+    // The unit is checked even when there are no runs to convert.
+    EXPECT_EQ(fm_sheet_set_cell_phonetic_runs(wb.handle, 0, 0, 0, bad, nullptr, 0U), FM_STATUS_INVALID_ARGUMENT) << bad;
+  }
+  std::size_t count = 0;
+  ASSERT_EQ(fm_sheet_get_cell_phonetic_run_count(wb.handle, 0, 0, 0, &count), 0);
+  EXPECT_EQ(count, 2U);
+  fm_phonetic_run_t read{};
+  ASSERT_EQ(fm_sheet_get_cell_phonetic_run_at(wb.handle, 0, 0, 0, 0U, &read), 0);
+  EXPECT_EQ(read.end, 2U);
+  EXPECT_STREQ(read.text, "トウキョウ");
+}
+
 TEST(FormulonCApi, CellPhoneticRunsPreserveTheirSpans) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   ASSERT_EQ(fm_sheet_set_text(wb.handle, 0, 0, 0, "東京都"), 0);
 
-  const fm_phonetic_run_t runs[] = {{0U, 2U, "トウキョウ"}, {2U, 3U, "ト"}};
-  ASSERT_EQ(fm_sheet_set_cell_phonetic_runs(wb.handle, 0, 0, 0, runs, 2U), 0);
+  const fm_phonetic_run_t runs[] = {{0U, 2U, 0U, 0U, "トウキョウ"}, {2U, 3U, 0U, 0U, "ト"}};
+  ASSERT_EQ(fm_sheet_set_cell_phonetic_runs(wb.handle, 0, 0, 0, FM_TEXT_OFFSET_UNIT_UTF16, runs, 2U), 0);
 
   std::size_t count = 0;
   ASSERT_EQ(fm_sheet_get_cell_phonetic_run_count(wb.handle, 0, 0, 0, &count), 0);
@@ -527,7 +581,7 @@ TEST(FormulonCApi, CellPhoneticRunsPreserveTheirSpans) {
   EXPECT_EQ(count, 1U);
 
   // An empty batch clears; a cell that was never annotated reports zero runs.
-  ASSERT_EQ(fm_sheet_set_cell_phonetic_runs(wb.handle, 0, 0, 0, nullptr, 0U), 0);
+  ASSERT_EQ(fm_sheet_set_cell_phonetic_runs(wb.handle, 0, 0, 0, FM_TEXT_OFFSET_UNIT_UTF16, nullptr, 0U), 0);
   ASSERT_EQ(fm_sheet_get_cell_phonetic_run_count(wb.handle, 0, 0, 0, &count), 0);
   EXPECT_EQ(count, 0U);
   ASSERT_EQ(fm_sheet_get_cell_phonetic_run_count(wb.handle, 0, 5, 5, &count), 0);
@@ -538,21 +592,23 @@ TEST(FormulonCApi, CellPhoneticRunsRejectMalformedInput) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   ASSERT_EQ(fm_sheet_set_text(wb.handle, 0, 0, 0, "東京都"), 0);
 
-  const fm_phonetic_run_t backwards[] = {{2U, 1U, "ト"}};
-  EXPECT_NE(fm_sheet_set_cell_phonetic_runs(wb.handle, 0, 0, 0, backwards, 1U), 0);
-  const fm_phonetic_run_t overlapping[] = {{0U, 2U, "トウキョウ"}, {1U, 3U, "ト"}};
-  EXPECT_NE(fm_sheet_set_cell_phonetic_runs(wb.handle, 0, 0, 0, overlapping, 2U), 0);
-  const fm_phonetic_run_t null_text[] = {{0U, 2U, nullptr}};
-  EXPECT_NE(fm_sheet_set_cell_phonetic_runs(wb.handle, 0, 0, 0, null_text, 1U), 0);
+  const fm_phonetic_run_t backwards[] = {{2U, 1U, 0U, 0U, "ト"}};
+  EXPECT_NE(fm_sheet_set_cell_phonetic_runs(wb.handle, 0, 0, 0, FM_TEXT_OFFSET_UNIT_UTF16, backwards, 1U), 0);
+  const fm_phonetic_run_t overlapping[] = {{0U, 2U, 0U, 0U, "トウキョウ"}, {1U, 3U, 0U, 0U, "ト"}};
+  EXPECT_NE(fm_sheet_set_cell_phonetic_runs(wb.handle, 0, 0, 0, FM_TEXT_OFFSET_UNIT_UTF16, overlapping, 2U), 0);
+  const fm_phonetic_run_t null_text[] = {{0U, 2U, 0U, 0U, nullptr}};
+  EXPECT_NE(fm_sheet_set_cell_phonetic_runs(wb.handle, 0, 0, 0, FM_TEXT_OFFSET_UNIT_UTF16, null_text, 1U), 0);
 
-  const fm_phonetic_run_t ok[] = {{0U, 3U, "トウキョウト"}};
-  EXPECT_NE(fm_sheet_set_cell_phonetic_runs(nullptr, 0, 0, 0, ok, 1U), 0);
-  EXPECT_NE(fm_sheet_set_cell_phonetic_runs(wb.handle, 0, 0, 0, nullptr, 1U), 0);
-  EXPECT_NE(fm_sheet_set_cell_phonetic_runs(wb.handle, 0, formulon::Sheet::kMaxRows, 0, ok, 1U), 0);
+  const fm_phonetic_run_t ok[] = {{0U, 3U, 0U, 0U, "トウキョウト"}};
+  EXPECT_NE(fm_sheet_set_cell_phonetic_runs(nullptr, 0, 0, 0, FM_TEXT_OFFSET_UNIT_UTF16, ok, 1U), 0);
+  EXPECT_NE(fm_sheet_set_cell_phonetic_runs(wb.handle, 0, 0, 0, FM_TEXT_OFFSET_UNIT_UTF16, nullptr, 1U), 0);
+  EXPECT_NE(
+      fm_sheet_set_cell_phonetic_runs(wb.handle, 0, formulon::Sheet::kMaxRows, 0, FM_TEXT_OFFSET_UNIT_UTF16, ok, 1U),
+      0);
 
   // A rejected batch leaves the previous annotation intact.
-  ASSERT_EQ(fm_sheet_set_cell_phonetic_runs(wb.handle, 0, 0, 0, ok, 1U), 0);
-  EXPECT_NE(fm_sheet_set_cell_phonetic_runs(wb.handle, 0, 0, 0, overlapping, 2U), 0);
+  ASSERT_EQ(fm_sheet_set_cell_phonetic_runs(wb.handle, 0, 0, 0, FM_TEXT_OFFSET_UNIT_UTF16, ok, 1U), 0);
+  EXPECT_NE(fm_sheet_set_cell_phonetic_runs(wb.handle, 0, 0, 0, FM_TEXT_OFFSET_UNIT_UTF16, overlapping, 2U), 0);
   std::size_t count = 0;
   ASSERT_EQ(fm_sheet_get_cell_phonetic_run_count(wb.handle, 0, 0, 0, &count), 0);
   EXPECT_EQ(count, 1U);
@@ -594,8 +650,8 @@ TEST(FormulonCApi, CellPhoneticPropertiesAreIndependentOfTheRuns) {
   ASSERT_EQ(SetPhoneticProperties(wb.handle, 0, 0, 0, 3U, FM_PHONETIC_TYPE_HIRAGANA, FM_PHONETIC_ALIGNMENT_CENTER), 0);
   // Writing the readings must not reset the rendering, which is the whole
   // reason the two entry points are separate.
-  const fm_phonetic_run_t runs[] = {{0U, 2U, "おおさか"}};
-  ASSERT_EQ(fm_sheet_set_cell_phonetic_runs(wb.handle, 0, 0, 0, runs, 1U), 0);
+  const fm_phonetic_run_t runs[] = {{0U, 2U, 0U, 0U, "おおさか"}};
+  ASSERT_EQ(fm_sheet_set_cell_phonetic_runs(wb.handle, 0, 0, 0, FM_TEXT_OFFSET_UNIT_UTF16, runs, 1U), 0);
   ASSERT_EQ(fm_sheet_get_cell_phonetic_properties(wb.handle, 0, 0, 0, &read), 0);
   EXPECT_EQ(read.font_index, 3U);
   EXPECT_EQ(read.type, FM_PHONETIC_TYPE_HIRAGANA);

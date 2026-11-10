@@ -83,7 +83,7 @@ void JsWorkbook::setCellPhoneticRuns(uint32_t sheet, uint32_t row, uint32_t col,
     const uint32_t start = reader.u32_value(start_value, 0U, "runs[].start");
     const uint32_t end = reader.u32_value(end_value, 0U, "runs[].end");
     texts.push_back(reader.string_value(text_value, "runs[].text"));
-    records.push_back(fm_phonetic_run_t{start, end, nullptr});
+    records.push_back(fm_phonetic_run_t{start, end, 0U, 0U, nullptr});
   }
   if (!reader.ok()) {
     return;
@@ -91,7 +91,8 @@ void JsWorkbook::setCellPhoneticRuns(uint32_t sheet, uint32_t row, uint32_t col,
   for (uint32_t i = 0; i < count; ++i) {
     records[i].text = texts[i].c_str();
   }
-  const fm_status_t rc = fm_sheet_set_cell_phonetic_runs(handle_, sheet, row, col, records.data(), records.size());
+  const fm_status_t rc = fm_sheet_set_cell_phonetic_runs(handle_, sheet, row, col, FM_TEXT_OFFSET_UNIT_UTF16,
+                                                         records.data(), records.size());
   succeeded(rc);
 }
 

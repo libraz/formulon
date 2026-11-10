@@ -133,7 +133,7 @@ enum_distinct:
   - { enums: [enum.pivot_sort_order, enum.slicer_sort], reason: "share Ascending / Descending: each zero is its OOXML default, Manual for a pivot field and Ascending for a slicer" }
   - { enums: [enum.chart_axis_position, enum.chart_legend_position], reason: "share Bottom / Top / Left / Right: axis side vs legend placement; the legend's zero is its OOXML default Right" }
 # R42: field and parameter names that carry a dimension word but no unit; reasons in the R42-11 row.
-unitless: [indent, relative_indent, text_rotation, fit_to_width, fit_to_height, custom_height, zero_height, scale_with_doc, align_with_margins, struct_size, column_offset]
+unitless: [indent, relative_indent, text_rotation, fit_to_width, fit_to_height, custom_height, zero_height, scale_with_doc, align_with_margins, struct_size, column_offset, offset_unit]
 entries:
   type.status:
     kind: typedef
@@ -8209,6 +8209,20 @@ entries:
     js: ParseError
     py: ParseError
     surfaces: [c, wasm, native, py]
+  enum.text_offset_unit:
+    kind: enum
+    c: fm_text_offset_unit_t
+    surfaces: [c]
+  constant.fm_text_offset_unit_utf16:
+    kind: constant
+    c: FM_TEXT_OFFSET_UNIT_UTF16
+    enum: enum.text_offset_unit
+    surfaces: [c]
+  constant.fm_text_offset_unit_code_point:
+    kind: constant
+    c: FM_TEXT_OFFSET_UNIT_CODE_POINT
+    enum: enum.text_offset_unit
+    surfaces: [c]
   enum.parse_error_code:
     kind: enum
     c: fm_parse_error_code_t

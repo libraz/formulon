@@ -116,7 +116,7 @@ Napi::Value Workbook::SetCellPhoneticRuns(const Napi::CallbackInfo& info) {
     std::string text;
     (void)reader.String(run, "text", &text);
     texts.push_back(std::move(text));
-    records.push_back(fm_phonetic_run_t{reader.U32(run, "start", 0U), reader.U32(run, "end", 0U), nullptr});
+    records.push_back(fm_phonetic_run_t{reader.U32(run, "start", 0U), reader.U32(run, "end", 0U), 0U, 0U, nullptr});
   }
   for (uint32_t i = 0; i < count; ++i) {
     records[i].text = texts[i].c_str();
@@ -126,8 +126,8 @@ Napi::Value Workbook::SetCellPhoneticRuns(const Napi::CallbackInfo& info) {
     // call commits a default value for it.
     return env.Undefined();
   }
-  fm_status_t rc =
-      fm_sheet_set_cell_phonetic_runs(handle_, address.sheet, address.row, address.col, records.data(), records.size());
+  fm_status_t rc = fm_sheet_set_cell_phonetic_runs(handle_, address.sheet, address.row, address.col,
+                                                   FM_TEXT_OFFSET_UNIT_UTF16, records.data(), records.size());
   return ValueOrThrow(env, rc, env.Undefined());
 }
 

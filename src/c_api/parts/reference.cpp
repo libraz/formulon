@@ -94,7 +94,7 @@ extern "C" fm_status_t fm_workbook_parse_reference(const fm_workbook_t* wb, cons
     failure.code = formulon::parser::ParseErrorCode::InvalidReference;
     failure.range.end = formulon::utf16_units_in(text);
     failure.message = formulon::parser::default_message(failure.code);
-    return formula_parse_failed(failure, std::string());
+    return formula_parse_failed(text, failure, std::string());
   }
   const std::uint32_t row2 = parsed.is_range ? parsed.row2 : parsed.row;
   const std::uint32_t col2 = parsed.is_range ? parsed.col2 : parsed.col;

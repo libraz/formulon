@@ -1340,12 +1340,21 @@ FM_API fm_status_t fm_sheet_set_value(fm_workbook_t* wb, size_t sheet_index, uin
                                       const fm_value_t* value);
 
 /**
+ * @brief What a text offset counts: UTF-16 code units, which is how Excel
+ *        indexes string positions, or Unicode code points. A character outside
+ *        the Basic Multilingual Plane is 2 UTF-16 units and 1 code point.
+ */
+typedef enum { FM_TEXT_OFFSET_UNIT_UTF16 = 0, FM_TEXT_OFFSET_UNIT_CODE_POINT = 1 } fm_text_offset_unit_t;
+
+/**
  * @brief One `<rPh>` block: the kana reading `text` covers the half-open
  *        span `[start, end)` of the cell's surface text.
  *
- * Offsets are UTF-16 code units, which is how Excel indexes string
- * positions everywhere else. A cell whose reading was typed in one go
- * carries the single run `{0, <length of the text>, kana}`.
+ * Offsets are text positions in UTF-16 code units (`start`, `end`) and in
+ * code points (`start_cp`, `end_cp`). A read fills both pairs; a write reads
+ * the pair its `fm_text_offset_unit_t` argument names and ignores the other.
+ * A cell whose reading was typed in one go carries the single run
+ * `{0, <length of the text>, kana}`.
  *
  * The spans are observable rather than presentation detail: `PHONETIC`
  * substitutes each annotated span with its kana and passes the text
@@ -1355,9 +1364,11 @@ FM_API fm_status_t fm_sheet_set_value(fm_workbook_t* wb, size_t sheet_index, uin
  * Frozen value type: no `struct_size`.
  */
 typedef struct {
-  uint32_t start;   /* inclusive span start, in UTF-16 code units */
-  uint32_t end;     /* exclusive span end, in UTF-16 code units   */
-  const char* text; /* NUL-terminated UTF-8 kana                  */
+  uint32_t start;    /* inclusive span start, in UTF-16 code units */
+  uint32_t end;      /* exclusive span end, in UTF-16 code units   */
+  uint32_t start_cp; /* inclusive span start, in code points       */
+  uint32_t end_cp;   /* exclusive span end, in code points         */
+  const char* text;  /* NUL-terminated UTF-8 kana                  */
 } fm_phonetic_run_t;
 
 /**
@@ -1386,7 +1397,10 @@ FM_API fm_status_t fm_sheet_set_cell_phonetic(fm_workbook_t* wb, size_t sheet_in
  *        spans included.
  *
  * `count == 0` clears the annotation (`runs` may be `NULL` in that case).
- * Each run's `text` is copied, so the array and its strings do not need to
+ * `offset_unit` names the pair of offsets each run supplies (`start`/`end` or
+ * `start_cp`/`end_cp`); code-point offsets are counted against the cell's
+ * current surface text, and a position past its end counts one unit per
+ * code point. Each run's `text` is copied, so the array and its strings do not need to
  * outlive the call.
  *
  * The runs must describe a partition of the surface text in reading order:
@@ -1406,11 +1420,11 @@ FM_API fm_status_t fm_sheet_set_cell_phonetic(fm_workbook_t* wb, size_t sheet_in
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` is `NULL`, if `runs` is `NULL` with
  *         a non-zero `count`, or if any run's `text` is `NULL`;
  *         `FM_STATUS_BINDING_UTF8ENCODING_ERROR` (7002) when a run's `text` is malformed UTF-8;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) when the runs are not an ordered partition, or
- *         a run's `text` exceeds 32,767 UTF-16 units.
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `offset_unit` is not a `fm_text_offset_unit_t`
+ *         member, the runs are not an ordered partition, or a run's `text` exceeds 32,767 UTF-16 units.
  */
 FM_API fm_status_t fm_sheet_set_cell_phonetic_runs(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
-                                                   const fm_phonetic_run_t* runs, size_t count);
+                                                   int32_t offset_unit, const fm_phonetic_run_t* runs, size_t count);
 
 /**
  * @brief Kana form a phonetic guide generates readings in (OOXML
@@ -3567,7 +3581,9 @@ FM_API fm_status_t fm_sheet_get_invalid_cells(const fm_workbook_t* wb, size_t sh
  * @brief One `@person` mention inside a threaded comment's text.
  *
  * The mention covers the half-open span `[start, end)` of the text, in UTF-16
- * code units; `end < start` is `FM_STATUS_INVALID_ARGUMENT` (2). On input a
+ * code units, or `[start_cp, end_cp)` in code points; a read fills both pairs,
+ * a write reads the pair its `fm_text_offset_unit_t` argument names and
+ * ignores the other. `end < start` is `FM_STATUS_INVALID_ARGUMENT` (2). On input a
  * `NULL` or empty `mention_id` takes an engine-generated GUID, as
  * `fm_threaded_comment_t.id` does. Frozen value type: no `struct_size`.
  */
@@ -3576,6 +3592,8 @@ typedef struct {
   const char* mention_id;
   uint32_t start;
   uint32_t end;
+  uint32_t start_cp;
+  uint32_t end_cp;
 } fm_mention_t;
 
 /**
@@ -3678,7 +3696,8 @@ FM_API fm_status_t fm_sheet_get_threaded_comment(const fm_workbook_t* wb, size_t
  *        ignoring `row`, `col` and `done`. The comment's id, given or
  *        generated (`fm_threaded_comment_t`), is written to `*out_id`, a
  *        read-scratch-backed view valid until the next scratch-backed read.
- *        On any failure the sheet is unchanged.
+ *        On any failure the sheet is unchanged. `offset_unit` names the pair
+ *        of offsets each mention supplies, counted against `comment->text`.
  *
  * Lifetime: transient.
  *
@@ -3686,7 +3705,8 @@ FM_API fm_status_t fm_sheet_get_threaded_comment(const fm_workbook_t* wb, size_t
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb`, `comment` or `out_id` is `NULL`, or
  *         `comment->mentions` is `NULL` with a non-zero count;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) when a new thread's cell is outside the
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `offset_unit` is not a `fm_text_offset_unit_t`
+ *         member, a new thread's cell is outside the
  *         grid, the id or a mention id is not a GUID, `created` is malformed
  *         (including a numeric offset), a
  *         mention ends before it starts or lies outside the text, `parent_id`
@@ -3696,7 +3716,7 @@ FM_API fm_status_t fm_sheet_get_threaded_comment(const fm_workbook_t* wb, size_t
  *         `FM_STATUS_NOT_FOUND` (6) when `comment->person_id` names no person of the workbook
  *         or `parent_id` no comment of the sheet.
  */
-FM_API fm_status_t fm_sheet_add_threaded_comment(fm_workbook_t* wb, size_t sheet_index,
+FM_API fm_status_t fm_sheet_add_threaded_comment(fm_workbook_t* wb, size_t sheet_index, int32_t offset_unit,
                                                  const fm_threaded_comment_t* comment, const char** out_id);
 
 /**
@@ -3726,20 +3746,23 @@ typedef struct {
 /**
  * @brief Merges `patch` into the comment with `id`. The kept text and
  *        mentions are validated together with the replaced ones; on any
- *        failure the sheet is unchanged.
+ *        failure the sheet is unchanged. `offset_unit` names the pair of
+ *        offsets each replaced mention supplies, counted against the new text,
+ *        or the kept text when the patch does not set one.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb`, `id` or `patch` is `NULL`, or a `SET`
  *           `mentions` is `NULL` with a non-zero count;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) when an op is outside 0..2 or `CLEAR`,
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `offset_unit` is not a `fm_text_offset_unit_t`
+ *           member, an op is outside 0..2 or `CLEAR`,
  *           `SET` carries a `NULL` `text`, a `SET` `done` is not `0` or `1`, a
  *           mention id is not a GUID, a mention ends before it starts or lies
  *           outside the text, or `done` is set on a reply;
  *         `FM_STATUS_NOT_FOUND` (6) when no comment has `id`.
  */
 FM_API fm_status_t fm_sheet_update_threaded_comment(fm_workbook_t* wb, size_t sheet_index, const char* id,
-                                                    const fm_threaded_comment_patch_t* patch);
+                                                    int32_t offset_unit, const fm_threaded_comment_patch_t* patch);
 
 /**
  * @brief Removes the comment with `id`; removing an opening comment removes
@@ -10240,8 +10263,10 @@ typedef enum {
  *
  * `start` / `end` are UTF-16 code-unit offsets into the text the caller
  * passed (a supplementary-plane character counts 2); `line` and `column` are
- * 1-based, `column` in UTF-16 code units. When the failure cannot be placed
- * in the caller's text the range covers all of it.
+ * 1-based, `column` in UTF-16 code units. `start_cp`, `end_cp` and
+ * `column_cp` give the same positions in code points (a supplementary-plane
+ * character counts 1). When the failure cannot be placed in the caller's text
+ * the range covers all of it.
  */
 typedef struct {
   uint32_t struct_size;
@@ -10250,6 +10275,9 @@ typedef struct {
   uint32_t end;   /* one past its last UTF-16 code unit */
   uint32_t line;  /* 1-based */
   uint32_t column;
+  uint32_t start_cp;  /* `start` in code points */
+  uint32_t end_cp;    /* `end` in code points */
+  uint32_t column_cp; /* `column` in code points, 1-based */
 } fm_parse_error_info_t;
 
 /**
