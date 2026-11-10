@@ -151,7 +151,8 @@ emscripten::val JsWorkbook::getComment(uint32_t sheet, uint32_t row, uint32_t co
     return optional_or_null(rc, present, emscripten::val::null());
   }
   emscripten::val comment = emscripten::val::object();
-  js_set_cstr_fields(comment, {{"author", c.author}, {"text", c.text}});
+  js_set_cstr(comment, "text", c.text);
+  js_set_cstr_or_null(comment, "author", c.author);
   return optional_or_null(rc, present, comment);
 }
 
@@ -168,7 +169,8 @@ fm_status_t comment_item(const fm_workbook_t* wb, uint32_t sheet, std::size_t in
   cell.set("col", c.col);
   emscripten::val o = emscripten::val::object();
   o.set("cell", cell);
-  js_set_cstr_fields(o, {{"author", c.author}, {"text", c.text}});
+  js_set_cstr(o, "text", c.text);
+  js_set_cstr_or_null(o, "author", c.author);
   *out = o;
   return 0;
 }

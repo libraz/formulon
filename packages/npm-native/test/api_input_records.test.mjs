@@ -299,10 +299,13 @@ describe('a record a getter returns is accepted by the matching setter', () => {
   it('a comment author is optional and a read comment passes back', () => {
     withSheet((ws) => {
       ws.setComment('B2', { text: 'check this' });
-      assert.equal(ws.getComment('B2').author, '');
+      assert.equal(ws.getComment('B2').author, null);
       ws.setComment('C3', { text: 'by', author: 'Ann' });
       ws.setComment('D4', ws.getComment('C3'));
       assert.deepEqual(plain(ws.getComment('D4')), plain(ws.getComment('C3')));
+      // A read with no author passes back too.
+      ws.setComment('E5', ws.getComment('B2'));
+      assert.equal(ws.getComment('E5').author, null);
     });
   });
 

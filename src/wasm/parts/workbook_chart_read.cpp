@@ -540,7 +540,7 @@ val chart_data_to_val(const fm_chart_data_t* data, fm_status_t& rc) {
   categories.set("labels", labels);
   categories.set("levels", levels);
   categories.set("values", numeric ? copy_doubles(numbers.data(), numbers.size()) : val::null());
-  categories.set("numberFormat", val(string_from_cstr(info.category_number_format)));
+  categories.set("numberFormat", cstr_or_null(info.category_number_format));
   categories.set("generated", val(info.categories_generated != 0));
   o.set("categories", categories);
 

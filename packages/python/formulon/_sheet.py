@@ -2886,7 +2886,7 @@ class Sheet(_NoCopy):
                 return None
             d = S.COMMENT.unpack(LIB, ptr)
             return Comment(
-                author=LIB.read_cstr(d["author"]),
+                author=LIB.read_cstr(d["author"]) or None,
                 text=LIB.read_cstr(d["text"]),
             )
 
@@ -2954,7 +2954,7 @@ class Sheet(_NoCopy):
                 out.append(
                     SheetComment(
                         cell=CellAddress(row=d["row"], col=d["col"]),
-                        author=LIB.read_cstr(d["author"]),
+                        author=LIB.read_cstr(d["author"]) or None,
                         text=LIB.read_cstr(d["text"]),
                     )
                 )

@@ -143,7 +143,7 @@ Napi::Value Workbook::GetComment(const Napi::CallbackInfo& info) {
     return OptionalOrNull(env, rc, present, env.Null());
   }
   Napi::Object comment = Napi::Object::New(env);
-  comment.Set("author", JsString(env, c.author));
+  comment.Set("author", JsStringOrNull(env, c.author));
   comment.Set("text", JsString(env, c.text));
   return OptionalOrNull(env, rc, present, comment);
 }
@@ -157,7 +157,7 @@ Napi::Object CommentToJs(Napi::Env env, const fm_comment_t& c) {
   cell.Set("col", Napi::Number::New(env, c.col));
   Napi::Object item = Napi::Object::New(env);
   item.Set("cell", cell);
-  item.Set("author", JsString(env, c.author));
+  item.Set("author", JsStringOrNull(env, c.author));
   item.Set("text", JsString(env, c.text));
   return item;
 }

@@ -8033,7 +8033,7 @@ function makeFacade(Raw, registry, runtime) {
       raw.remapRangeXfs(sheet, rect, bases, xfs);
     }
 
-    // An omitted `author` is empty text; `null` removes the comment and does nothing when there is none.
+    // An omitted or `null` `author` means none; `null` removes the comment and does nothing when there is none.
     setComment(row, col, comment) {
       const where = 'Sheet.setComment';
       const raw = rawOf(this.#workbook);
@@ -8041,7 +8041,7 @@ function makeFacade(Raw, registry, runtime) {
       if (comment === null) return raw.setComment(sheet, row, col, null);
       const label = argLabel(where, 2);
       requireObject(comment, label);
-      const author = comment.author === undefined ? '' : requireString(comment.author, `${label}.author`);
+      const author = comment.author == null ? '' : requireString(comment.author, `${label}.author`);
       const text = requireString(comment.text, `${label}.text`);
       raw.setComment(sheet, row, col, { author, text });
     }

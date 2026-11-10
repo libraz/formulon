@@ -86,8 +86,8 @@ Napi::Object FilterColumnToJs(Napi::Env env, const fm_filter_column_t& c) {
   o.Set("dynamicType", JsNumber(env, c.dynamic_type));
   o.Set("dynamicValue", JsNumberOrNull(env, c.has_dyn_val, c.dyn_val));
   o.Set("dynamicMaxValue", JsNumberOrNull(env, c.has_dyn_max_val, c.dyn_max_val));
-  o.Set("valueIso", JsString(env, c.val_iso));
-  o.Set("maxValueIso", JsString(env, c.max_val_iso));
+  o.Set("valueIso", JsStringOrNull(env, c.val_iso));
+  o.Set("maxValueIso", JsStringOrNull(env, c.max_val_iso));
   o.Set("dxfIndex", JsNumberOrNull(env, c.has_dxf_index, c.dxf_index));
   o.Set("cellColor", JsBool(env, c.cell_color));
   o.Set("iconSet", JsNumber(env, c.icon_set));
@@ -119,7 +119,7 @@ Napi::Object AutoFilterToJs(Napi::Env env, const fm_auto_filter_t& f) {
     item.Set("ref", RangeToJs(env, c.ref));
     item.Set("descending", JsBool(env, c.descending));
     item.Set("sortBy", JsNumber(env, c.sort_by));
-    item.Set("customList", JsString(env, c.custom_list));
+    item.Set("customList", JsStringOrNull(env, c.custom_list));
     item.Set("dxfIndex", JsNumberOrNull(env, c.has_dxf_index, c.dxf_index));
     item.Set("iconSet", JsNumber(env, c.icon_set));
     item.Set("iconIndex", JsNumberOrNull(env, c.has_icon_index, c.icon_index));

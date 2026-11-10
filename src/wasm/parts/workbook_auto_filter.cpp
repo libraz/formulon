@@ -124,7 +124,7 @@ emscripten::val filter_column_to_val(const fm_filter_column_t& c) {
   o.set("cellColor", c.cell_color != 0);
   o.set("iconSet", c.icon_set);
   js_set_present_or_null(o, "iconIndex", c.has_icon_index, c.icon_index);
-  js_set_cstr_fields(o, {{"valueIso", c.val_iso}, {"maxValueIso", c.max_val_iso}});
+  js_set_cstr_or_null_fields(o, {{"valueIso", c.val_iso}, {"maxValueIso", c.max_val_iso}});
   return o;
 }
 
@@ -136,7 +136,7 @@ emscripten::val sort_condition_to_val(const fm_sort_condition_t& c) {
   js_set_present_or_null(o, "dxfIndex", c.has_dxf_index, c.dxf_index);
   o.set("iconSet", c.icon_set);
   js_set_present_or_null(o, "iconIndex", c.has_icon_index, c.icon_index);
-  js_set_cstr(o, "customList", c.custom_list);
+  js_set_cstr_or_null(o, "customList", c.custom_list);
   return o;
 }
 

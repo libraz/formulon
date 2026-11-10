@@ -2377,19 +2377,19 @@ export interface HyperlinkInput {
 
 /** Cell comment entry returned by `Sheet.getComment(row, col)`. */
 export interface Comment {
-  /** The comment's author; the empty string when none. */
-  readonly author: string;
+  /** The comment's author; `null` when none. */
+  readonly author: string | null;
   /** The comment's text. */
   readonly text: string;
 }
 
-/** Argument of `Sheet.setComment`. An omitted `author` is `""`. The {@link Comment} a read returns passes as
- *  is. */
+/** Argument of `Sheet.setComment`. An omitted or `null` `author` means none. The {@link Comment} a read returns
+ *  passes as is. */
 export interface CommentInput {
   /** The comment's text. */
   text: string;
-  /** The comment's author; omitted is the empty string. */
-  author?: string;
+  /** The comment's author; omitted or `null` means none. */
+  author?: string | null;
 }
 
 /** Workbook-level protection (`<workbookProtection>`). The host computes the hash fields. */
@@ -4701,10 +4701,10 @@ export interface AutoFilterColumn {
   readonly dynamicValue: number | null;
   /** The upper bound Excel last stored for the dynamic filter; `null` when absent. */
   readonly dynamicMaxValue: number | null;
-  /** The ISO date text of the dynamic filter's lower bound, kept as written; empty when absent. */
-  readonly valueIso: string;
-  /** The ISO date text of the dynamic filter's upper bound, kept as written; empty when absent. */
-  readonly maxValueIso: string;
+  /** The ISO date text of the dynamic filter's lower bound, kept as written; `null` when absent. */
+  readonly valueIso: string | null;
+  /** The ISO date text of the dynamic filter's upper bound, kept as written; `null` when absent. */
+  readonly maxValueIso: string | null;
   /** The index of the differential format whose fill or font colour the color filter matches; `null` when the column
    *  names none. */
   readonly dxfIndex: number | null;
@@ -4724,8 +4724,8 @@ export interface AutoFilterSortCondition {
   readonly descending: boolean;
   /** What the condition sorts by: the value, the cell colour, the font colour or the icon. */
   readonly sortBy: SortBy;
-  /** The custom sort list, as comma-separated items; empty when the condition uses none. */
-  readonly customList: string;
+  /** The custom sort list, as comma-separated items; `null` when the condition uses none. */
+  readonly customList: string | null;
   /** The index of the differential format whose colour the condition sorts by; `null` when it names none. */
   readonly dxfIndex: number | null;
   /** The icon set the condition's icon comes from. */
@@ -4815,10 +4815,10 @@ export interface AutoFilterColumnInput {
   dynamicValue?: number | null;
   /** The dynamic filter's stored upper bound; omitted or `null` means none. */
   dynamicMaxValue?: number | null;
-  /** The ISO spelling of the dynamic filter's lower bound. */
-  valueIso?: string;
-  /** The ISO spelling of the dynamic filter's upper bound. */
-  maxValueIso?: string;
+  /** The ISO spelling of the dynamic filter's lower bound; omitted or `null` means none. */
+  valueIso?: string | null;
+  /** The ISO spelling of the dynamic filter's upper bound; omitted or `null` means none. */
+  maxValueIso?: string | null;
   /** The differential format whose fill or font colour the color filter matches; omitted or `null` means none. */
   dxfIndex?: number | null;
   /** `true` when the color filter matches the cell fill, `false` when it matches the font colour. */
@@ -4838,8 +4838,8 @@ export interface AutoFilterSortConditionInput {
   descending?: boolean;
   /** What the condition sorts by; omitted is the value. */
   sortBy?: SortBy;
-  /** The custom sort list, as comma-separated items; omitted is empty. */
-  customList?: string;
+  /** The custom sort list, as comma-separated items; omitted or `null` means none. */
+  customList?: string | null;
   /** The index of the differential format whose colour the condition sorts by; omitted or `null` is none. */
   dxfIndex?: number | null;
   /** The icon set the condition's icon comes from; omitted is the first set. */
@@ -5350,8 +5350,8 @@ export interface SparklineInput {
 
 /** A sparkline group of the sheet's worksheet extension list. */
 export interface SparklineGroup {
-  /** The group's id: an opaque string, unique on its sheet, stable while the workbook is open and not saved; empty when
-   *  an input states none. */
+  /** The group's id: an opaque string, unique on its sheet, stable while the workbook is open and not saved; a read
+   *  always carries one. */
   readonly id: SparklineGroupId;
   /** The sparkline type: line, column or stacked (win/loss). */
   readonly type: SparklineType;
@@ -5886,8 +5886,8 @@ export interface ChartCategories {
   readonly levels: readonly (readonly string[])[];
   /** The numeric (date) category values; `null` when the categories are not numeric. */
   readonly values: Float64Array | null;
-  /** The number format code of the numeric category values; empty when not numeric. */
-  readonly numberFormat: string;
+  /** The number format code of the numeric category values; `null` when not numeric. */
+  readonly numberFormat: string | null;
   /** `true` when the chart has no category reference and the labels are generated as 1..n. */
   readonly generated: boolean;
 }

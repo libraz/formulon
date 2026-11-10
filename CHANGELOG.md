@@ -30,6 +30,10 @@ Upgrading from 0.18: see [Upgrading from 0.18 to 0.19](docs/releases/upgrading-0
 - `fm_cell_rect_t` (`CellRect`) replaces the per-feature range records, and
   conditional-format, validation, protected and print ranges take `CellRect`
   arrays instead of A1 text. An absent value reads `NULL`, `null` or `None`.
+- `Comment.author`, `AutoFilterColumn.valueIso` / `maxValueIso`,
+  `AutoFilterSortCondition.customList` and `ChartCategories.numberFormat` read
+  `null` (Python `None`) when absent instead of `''`
+  ([result fields](docs/releases/upgrading-0.19.md#result-fields)).
 - Units are named by suffix: row heights in points (`heightPt`), column widths
   in characters (`widthChars`), margins in inches (`leftIn`), print scale as a
   percentage (`scalePct`).

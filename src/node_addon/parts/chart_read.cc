@@ -411,7 +411,7 @@ Napi::Object ChartDataToJs(Napi::Env env, const fm_chart_data_t* data, fm_status
   categories.Set("labels", labels);
   categories.Set("levels", levels);
   categories.Set("values", numeric ? Napi::Value(values) : env.Null());
-  categories.Set("numberFormat", JsString(env, info.category_number_format));
+  categories.Set("numberFormat", JsStringOrNull(env, info.category_number_format));
   categories.Set("generated", JsBool(env, info.categories_generated));
   o.Set("categories", categories);
 

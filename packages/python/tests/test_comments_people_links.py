@@ -53,7 +53,7 @@ class NoteTests(_Base):
 
     def test_set_comment_takes_comment_input_and_a_read_comment(self) -> None:
         self.ws.set_comment("A1", CommentInput("plain"))
-        self.assertEqual(self.ws.get_comment("A1"), Comment("plain", author=""))
+        self.assertEqual(self.ws.get_comment("A1"), Comment("plain"))
         self.ws.set_comment(0, 1, CommentInput("signed", "ann"))
         self.assertEqual(self.ws.get_comment(0, 1), Comment("signed", author="ann"))
         read = self.ws.get_comment(0, 1)

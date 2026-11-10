@@ -2169,18 +2169,18 @@ class CommentInput:
 
     #: The comment's text.
     text: str
-    #: The comment's author; omitted is the empty string.
-    author: str = ""
+    #: The comment's author; omitted or ``None`` means none.
+    author: Optional[str] = None
 
 
 @dataclass(frozen=True)
 class Comment:
-    """A cell comment; an omitted ``author`` is the empty string."""
+    """A cell comment; an omitted ``author`` means none."""
 
     #: The comment's text.
     text: str
-    #: The comment's author; the empty string when none.
-    author: str = field(default="", kw_only=True)
+    #: The comment's author; ``None`` when none.
+    author: Optional[str] = field(default=None, kw_only=True)
 
 
 @dataclass(frozen=True)
@@ -2189,8 +2189,8 @@ class SheetComment:
 
     #: The cell the comment is anchored to.
     cell: CellAddress
-    #: The comment's author; the empty string when none.
-    author: str
+    #: The comment's author; ``None`` when none.
+    author: Optional[str]
     #: The comment's text.
     text: str
 
@@ -2344,10 +2344,10 @@ class AutoFilterColumn:
     dynamic_value: Optional[float] = None
     #: The upper bound Excel last stored for the dynamic filter; ``None`` when absent.
     dynamic_max_value: Optional[float] = None
-    #: The ISO date text of the dynamic filter's lower bound, kept as written; empty when absent.
-    value_iso: str = ""
-    #: The ISO date text of the dynamic filter's upper bound, kept as written; empty when absent.
-    max_value_iso: str = ""
+    #: The ISO date text of the dynamic filter's lower bound, kept as written; ``None`` when absent.
+    value_iso: Optional[str] = None
+    #: The ISO date text of the dynamic filter's upper bound, kept as written; ``None`` when absent.
+    max_value_iso: Optional[str] = None
     #: The index of the differential format whose fill or font colour the color filter matches; ``None`` when the column
     #: names none.
     dxf_index: Optional[int] = None
@@ -2369,8 +2369,8 @@ class AutoFilterSortCondition:
     descending: bool = False
     #: What the condition sorts by: the value, the cell colour, the font colour or the icon.
     sort_by: SortBy = SortBy.VALUE
-    #: The custom sort list, as comma-separated items; empty when the condition uses none.
-    custom_list: str = ""
+    #: The custom sort list, as comma-separated items; ``None`` when the condition uses none.
+    custom_list: Optional[str] = None
     #: The index of the differential format whose colour the condition sorts by; ``None`` when it names none.
     dxf_index: Optional[int] = None
     #: The icon set the condition's icon comes from.
@@ -2817,8 +2817,8 @@ class BlanksAs(IntEnum):
 class SparklineGroup:
     """A sparkline group of a sheet's worksheet extension list."""
 
-    #: The group's id: an opaque string, unique on its sheet, stable while the workbook is open and not saved; empty
-    #: when an input states none.
+    #: The group's id: an opaque string, unique on its sheet, stable while the workbook is open and not saved; a read
+    #: always carries one.
     id: str = ""
     #: The sparkline type: line, column or stacked (win/loss).
     type: SparklineType = SparklineType.LINE
@@ -3563,8 +3563,8 @@ class ChartCategories:
     levels: List[List[str]]
     #: The numeric (date) category values; ``None`` when the categories are not numeric.
     values: Optional[List[Optional[float]]]
-    #: The number format code of the numeric category values; empty when not numeric.
-    number_format: str
+    #: The number format code of the numeric category values; ``None`` when not numeric.
+    number_format: Optional[str]
     #: ``True`` when the chart has no category reference and the labels are generated as 1..n.
     generated: bool
 
@@ -7802,7 +7802,7 @@ def _read_chart_data(data: int) -> ChartData:
             labels=labels,
             levels=levels,
             values=values if info["category_value_count"] else None,
-            number_format=LIB.read_cstr(info["category_number_format"]),
+            number_format=LIB.read_cstr(info["category_number_format"]) or None,
             generated=bool(info["categories_generated"]),
         ),
         series=series,
@@ -8520,7 +8520,7 @@ def _decode_filter_column(ptr: int) -> AutoFilterColumn:
         )
     ]
     kwargs.update({name: d[c_name] if d[flag] else None for name, c_name, flag in _FILTER_COLUMN_OPTIONAL})
-    kwargs.update({name: LIB.read_cstr(d[c_name]) for name, c_name in _FILTER_COLUMN_STRINGS})
+    kwargs.update({name: LIB.read_cstr(d[c_name]) or None for name, c_name in _FILTER_COLUMN_STRINGS})
     return AutoFilterColumn(
         column_offset=d["column_offset"],
         dxf_index=d["dxf_index"] if d["has_dxf_index"] else None,
@@ -8537,7 +8537,7 @@ def _decode_sort_condition(ptr: int) -> AutoFilterSortCondition:
         range=_decode_cell_rect_at(ptr + S.SORT_CONDITION.offsets["ref"][1]),
         descending=bool(d["descending"]),
         sort_by=d["sort_by"],
-        custom_list=LIB.read_cstr(d["custom_list"]),
+        custom_list=LIB.read_cstr(d["custom_list"]) or None,
         dxf_index=d["dxf_index"] if d["has_dxf_index"] else None,
         icon_set=d["icon_set"],
         icon_index=d["icon_index"] if d["has_icon_index"] else None,

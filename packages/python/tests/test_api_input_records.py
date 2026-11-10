@@ -368,7 +368,7 @@ class SheetRecordInputTests(unittest.TestCase):
             ws.add_data_table(formulon.DataTableInput(range="F2:H6", row_input=table.row_input))
 
     def test_comment_author_is_keyword_only_and_optional(self) -> None:
-        self.assertEqual(formulon.Comment("check this").author, "")
+        self.assertIsNone(formulon.Comment("check this").author)
         self.assertEqual(formulon.Comment("check this", author="ann").author, "ann")
         with self.assertRaises(TypeError):
             formulon.Comment("ann", "check this")  # type: ignore[misc]
@@ -379,9 +379,10 @@ class SheetRecordInputTests(unittest.TestCase):
         with Workbook.create_default() as wb:
             ws = wb.sheet(0)
             ws.set_comment("B2", formulon.Comment("check this"))
-            self.assertEqual(ws.get_comment("B2"), formulon.Comment(text="check this", author=""))
+            self.assertEqual(ws.get_comment("B2"), formulon.Comment(text="check this"))
             ws.set_comment("C3", ws.get_comment("B2"))
             self.assertEqual(ws.get_comment("C3").text, "check this")
+            self.assertIsNone(ws.get_comment("C3").author)
 
     def test_workbook_protection_input_defaults_and_union(self) -> None:
         with Workbook.create_default() as wb:
