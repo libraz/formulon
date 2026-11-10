@@ -2778,7 +2778,7 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
 | `EffectiveStyle.numFmtCode` | `EffectiveStyle.numberFormat` |
 | `EffectiveStyleResult` | `EffectiveStyle` |
 | `errorDisplayName()` | removed |
-| `EvalArrayResult` | `EvalArray` |
+| `EvalArrayResult` | removed; evaluateFormulaArray returns the rows directly |
 | `evalFormula()` | `evaluateFormula()` |
 | `EvalResult` | removed |
 | `evaluateConditionalFormula()` | `evaluateCfFormula()` |
@@ -3385,6 +3385,7 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
 | `clear_row_height()` | `reset_row_height()` |
 | `clear_row_style()` | `reset_row_xf_index()` |
 | `clear_table_auto_filter()` | `ws.table(...).clear_auto_filter_criteria()` |
+| `ColorScale` | removed; use CfColorScaleInput to write and CfColorScale to read |
 | `ColorSpec` | `Color` |
 | `cols` | `columns` |
 | `column_chars_to_pt()` | `convert_column_chars_to_pt()` |
@@ -3394,6 +3395,7 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
 | `CommentEntry` | `SheetComment` |
 | `ConditionalFormat.dxf_id` | `ConditionalFormat.dxf_index` |
 | `ConditionalFormatInput.dxf_id` | `ConditionalFormatInput.dxf_index` |
+| `DataBar` | removed; use CfDataBarInput to write and CfDataBar to read |
 | `DataTable.col_input` | `DataTable.column_input` |
 | `DataTable.rect` | `DataTable.range` |
 | `DataTableInput.rect` | `DataTableInput.range` |
@@ -3472,6 +3474,7 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
 | `has_phonetic_properties()` | removed; use `get_cell_phonetic_properties()` |
 | `Hyperlink.rect` | `Hyperlink.range` |
 | `hyperlink_count()` | removed; use `list_hyperlinks()` |
+| `IconSet` | removed; use CfIconSetInput to write and CfIconSet to read |
 | `ImageInfo.px_height` | `ImageInfo.height_px` |
 | `ImageInfo.px_width` | `ImageInfo.width_px` |
 | `insert_chart()` | `add_chart()` |
@@ -4688,6 +4691,31 @@ order.
   file is accepted, and a stamp with a UTC offset or an unparseable stamp reads
   as absent (`null`) on load; the attribute text used to be kept as it was
   read.
+- Engine error messages a call reports lead with the parameter or field they
+  are about (`name is not a valid defined name`, `shift must be down or
+  right`), or are a sentence when no argument is at fault (`Cannot change part
+  of an array`). They used to lead with a prose word or an operation prefix
+  (`insert_cells: ...`), which the bindings turned into a path that does not
+  exist (`Workbook.setDefinedName definedName.invalid name`) or showed in its
+  C spelling. Every engine error now carries the call's label
+  (`Sheet.setValue Cannot change part of an array`), whatever its status, and
+  a leading C path becomes the public path only when it names one of the call's
+  arguments. File diagnostics keep their `<part>: <problem>` form.
+- An out-of-range index reads alike in every binding:
+  `Workbook.sheet key 5 is out of range (1 sheet)`, with the noun singular for
+  a count of one. Python labels its sheet lookups as JavaScript does.
+- Python: a number parameter given a string, `None` or a `bool` raises
+  `TypeError` (`Sheet.set_number value must be a number`) instead of
+  converting the string or failing with an unlabelled error.
+- Python: page breaks, validation flags, the protection select flags, a
+  colour-scale threshold's `gte`, table-style `pivot` / `table` and a pivot
+  field's `subtotal_top` read `False` when the stored value is false; they used
+  to read `True`.
+- Every cell of a legacy array formula reads the block's formula from
+  `getFormula`, `listCells` and `getCellsInRange`, as Excel's `Range.Formula`
+  does; only the top-left cell did. `getSpill` returns `null` on every cell of
+  a legacy array block, which is not a spill. A spill child still reads no
+  formula.
 
 ## [0.18.0] - 2026-10-26
 
