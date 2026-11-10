@@ -1,4 +1,4 @@
-"""Text positions are code points in Python and UTF-16 code units in the engine."""
+"""Text positions are code points in Python; the file and the JavaScript binding keep UTF-16 code units."""
 
 from __future__ import annotations
 
@@ -8,8 +8,7 @@ import unittest
 import zipfile
 
 import formulon
-from formulon import MentionInput, PhoneticRun, ThreadedCommentInput, Workbook
-from formulon._workbook import _code_point_offset, _utf16_offset
+from formulon import FormulaSyntaxError, MentionInput, PhoneticRun, ThreadedCommentInput, Workbook
 
 ALICE = "{11111111-1111-4111-8111-111111111111}"
 THREAD = "{33333333-3333-4333-8333-333333333333}"
@@ -17,21 +16,15 @@ THREAD = "{33333333-3333-4333-8333-333333333333}"
 EMOJI = "\U0001f600"
 
 
-class OffsetHelperTests(unittest.TestCase):
-    def test_round_trip_over_astral_and_bmp_text(self) -> None:
-        text = f"a{EMOJI}b{EMOJI}{EMOJI}c"
-        units = [0, 1, 3, 4, 6, 8, 9]
-        for index, unit in enumerate(units):
-            self.assertEqual(_utf16_offset(text, index), unit)
-            self.assertEqual(_code_point_offset(text, unit), index)
-
-    def test_past_the_end_counts_one_each(self) -> None:
-        text = f"{EMOJI}x"
-        self.assertEqual(_utf16_offset(text, 5), 6)
-        self.assertEqual(_code_point_offset(text, 6), 5)
-
-    def test_offset_inside_a_pair_rounds_to_the_next_character(self) -> None:
-        self.assertEqual(_code_point_offset(f"{EMOJI}x", 1), 1)
+class ParseErrorPositionTests(unittest.TestCase):
+    def test_start_end_and_column_are_code_points(self) -> None:
+        for formula, column in ((f'="{EMOJI}{EMOJI}"+)', 7), (f'="{EMOJI}"&\n1+)', 3)):
+            with self.subTest(formula=formula), Workbook.create_default() as wb:
+                with self.assertRaises(FormulaSyntaxError) as caught:
+                    wb.sheet(0).set_formula(0, 0, formula)
+                error = caught.exception.parse_error
+                self.assertEqual(formula[error.start : error.end], ")")
+                self.assertEqual(error.column, column)
 
 
 class PhoneticRunPositionTests(unittest.TestCase):

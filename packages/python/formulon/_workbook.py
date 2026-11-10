@@ -2330,21 +2330,6 @@ class ValidationOutcome:
     error_style: Optional[ValidationErrorStyle]
 
 
-def _utf16_offset(text: str, index: int) -> int:
-    """The engine's UTF-16 offset of code-point offset ``index`` into ``text``; past the end counts one unit each."""
-    return index + sum(1 for ch in text[:index] if ord(ch) > 0xFFFF)
-
-
-def _code_point_offset(text: str, offset: int) -> int:
-    """The code-point offset into ``text`` of the engine's UTF-16 offset ``offset``; past the end counts one each."""
-    units = 0
-    for index, ch in enumerate(text):
-        if units >= offset:
-            return index
-        units += 2 if ord(ch) > 0xFFFF else 1
-    return len(text) + max(0, offset - units)
-
-
 @dataclass(frozen=True)
 class Mention:
     """One ``@person`` mention covering the half-open span ``[start, end)`` of the text, in code points."""
@@ -7059,8 +7044,8 @@ def _write_value_input(value: Value, value_ptr: int, scope: _ArgScope) -> None:
     LIB.write_bytes(value_ptr, struct.pack("<i", value.kind) + b"\x00" * 4 + payload)
 
 
-def _pack_mentions(mentions: Sequence[Union[MentionInput, Mention]], text: str, scope: _ArgScope) -> int:
-    """Pack ``mentions`` of the comment ``text`` into a contiguous mention struct array (0 when empty).
+def _pack_mentions(mentions: Sequence[Union[MentionInput, Mention]], scope: _ArgScope) -> int:
+    """Pack ``mentions`` into a contiguous mention struct array (0 when empty), spans in code points.
 
     A ``None`` or empty ``mention_id`` is left ``NULL`` and takes an engine-generated id.
     """
@@ -7071,24 +7056,22 @@ def _pack_mentions(mentions: Sequence[Union[MentionInput, Mention]], text: str, 
         if not isinstance(m, (MentionInput, Mention)):
             raise TypeError(f"expected a MentionInput, got {type(m).__name__}")
         ptr = base + i * S.MENTION.size
-        start = _utf16_offset(text, _uint(m.start, "start"))
-        end = _utf16_offset(text, _uint(m.end, "end"))
-        S.MENTION.pack(LIB, ptr, {"start": _uint(start, "start"), "end": _uint(end, "end")})
+        S.MENTION.pack(LIB, ptr, {"start_cp": _uint(m.start, "start"), "end_cp": _uint(m.end, "end")})
         S.write_str_field(LIB, ptr, S.MENTION, "person_id", m.person_id, scope)
         S.write_str_field(LIB, ptr, S.MENTION, "mention_id", m.mention_id, scope)
     return base
 
 
 def _write_mentions(
-    struct_ptr: int, layout: S.Struct, mentions: Sequence[Union[MentionInput, Mention]], text: str, scope: _ArgScope
+    struct_ptr: int, layout: S.Struct, mentions: Sequence[Union[MentionInput, Mention]], scope: _ArgScope
 ) -> None:
-    """Store the mention array of the comment ``text`` and its count into ``mentions`` / ``mentions_count``."""
-    packed = _pack_mentions(mentions, text, scope)
+    """Store the mention array and its count into ``mentions`` / ``mentions_count``."""
+    packed = _pack_mentions(mentions, scope)
     LIB.write_bytes(struct_ptr + layout.offsets["mentions"][1], struct.pack("<I", packed))
     LIB.write_bytes(struct_ptr + layout.offsets["mentions_count"][1], struct.pack("<I", len(mentions)))
 
 
-def _decode_mentions(base: int, count: int, text: str) -> List[Mention]:
+def _decode_mentions(base: int, count: int) -> List[Mention]:
     out: List[Mention] = []
     for i in range(count):
         d = S.MENTION.unpack(LIB, base + i * S.MENTION.size)
@@ -7096,8 +7079,8 @@ def _decode_mentions(base: int, count: int, text: str) -> List[Mention]:
             Mention(
                 person_id=LIB.read_cstr(d["person_id"]),
                 mention_id=LIB.read_cstr(d["mention_id"]),
-                start=_code_point_offset(text, d["start"]),
-                end=_code_point_offset(text, d["end"]),
+                start=d["start_cp"],
+                end=d["end_cp"],
             )
         )
     return out
@@ -7163,7 +7146,7 @@ def _threaded_comment_from(d: Dict[str, Any]) -> ThreadedComment:
         text=text,
         parent_id=LIB.read_cstr(d["parent_id"]) or None,
         done=bool(d["done"]),
-        mentions=_decode_mentions(d["mentions"], d["mentions_count"], text),
+        mentions=_decode_mentions(d["mentions"], d["mentions_count"]),
     )
 
 
@@ -7505,8 +7488,8 @@ def _decode_auto_filter(ptr: int) -> AutoFilter:
     )
 
 
-def _pack_phonetic_run_array(runs: Sequence[PhoneticRun], text: str, scope: _ArgScope) -> int:
-    """Pack a list of ``PhoneticRun`` over the cell ``text`` into a contiguous engine-memory array.
+def _pack_phonetic_run_array(runs: Sequence[PhoneticRun], scope: _ArgScope) -> int:
+    """Pack a list of ``PhoneticRun`` into a contiguous engine-memory array, spans in code points.
 
     Returns the array pointer (0 when empty). Every buffer allocated here --
     the array and each run's kana string -- goes through ``scope``.
@@ -7517,9 +7500,7 @@ def _pack_phonetic_run_array(runs: Sequence[PhoneticRun], text: str, scope: _Arg
     ptr = scope.alloc(size * len(runs))
     for i, run in enumerate(runs):
         slot = ptr + i * size
-        start = _utf16_offset(text, _uint(run.start, "start"))
-        end = _utf16_offset(text, _uint(run.end, "end"))
-        S.PHONETIC_RUN.pack(LIB, slot, {"start": _uint(start, "start"), "end": _uint(end, "end")})
+        S.PHONETIC_RUN.pack(LIB, slot, {"start_cp": _uint(run.start, "start"), "end_cp": _uint(run.end, "end")})
         S.write_str_field(LIB, slot, S.PHONETIC_RUN, "text", run.text, scope, allow_empty=True)
     return ptr
 
@@ -10075,7 +10056,7 @@ def localize_formula(formula: str, profile_id: ProfileId) -> str:
 
     Raises:
       FormulaSyntaxError: when ``formula`` does not parse; ``parse_error`` locates the
-        failure as UTF-16 offsets into ``formula``.
+        failure as code-point offsets into ``formula``.
       InvalidArgumentError: when ``profile_id`` is not a documented profile.
     """
     return _map_profile_text("fm_localize_formula", formula, profile_id)
@@ -10087,7 +10068,7 @@ def canonicalize_formula(formula: str, profile_id: ProfileId) -> str:
 
     Raises:
       FormulaSyntaxError: when ``formula`` does not parse under the profile; ``parse_error``
-        locates the failure as UTF-16 offsets into ``formula``, the text as passed.
+        locates the failure as code-point offsets into ``formula``, the text as passed.
       InvalidArgumentError: when ``profile_id`` is not a documented profile.
     """
     return _map_profile_text("fm_canonicalize_formula", formula, profile_id)

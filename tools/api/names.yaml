@@ -21,8 +21,9 @@
 # <constraint>`; one that describes file content (kIo*, kSecurity*, out of memory) reads
 # `<part or record>: <problem>` (check: binding_drift engine-messages).
 # `was_semantics: inverted` marks a renamed field whose `true` means the opposite of the former one's.
-# Text positions: C and JS index strings in UTF-16 code units; Python in code points, converted
-# at the binding boundary. Length limits are UTF-16 code units on every surface.
+# Text positions: C and JS index strings in UTF-16 code units; Python in code points, which the
+# C ABI takes and returns through `fm_text_offset_unit_t` and the `*_cp` fields. Length limits are
+# UTF-16 code units on every surface.
 # Cleared cell-font attributes: one with no absent state (`size_pt`, `name`) takes the Normal
 # font's value (C: `has_size_pt == 0`, `name == NULL`); one with an absent state (`color`, toggles)
 # goes absent.

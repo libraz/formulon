@@ -108,7 +108,7 @@ _BOUNDED_ENCODERS = {"_tristate", "_tristate_default"}
 _INT_CONSTANTS = {
     "_PATCH_SET": "_workbook.py",
     "_PATCH_CLEAR": "_workbook.py",
-    "_TEXT_OFFSET_UNIT_UTF16": "_sheet.py",
+    "_TEXT_OFFSET_UNIT_CODE_POINT": "_sheet.py",
 }
 
 

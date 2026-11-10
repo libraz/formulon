@@ -28,9 +28,10 @@ out of memory) raise :class:`FormulonError`.
 
 Numbers read back as ``float``: every Excel number is an IEEE double.
 
-Text positions -- :class:`Mention` and :class:`PhoneticRun` spans -- are
-code-point offsets into the Python ``str``, as ``len`` and slicing count; the
-engine's UTF-16 offsets are converted at the binding boundary. Length limits
+Text positions -- :class:`Mention` and :class:`PhoneticRun` spans and
+:class:`ParseError` positions -- are code-point offsets into the Python
+``str``, as ``len`` and slicing count; the engine takes and returns them in
+code points. Length limits
 (a 31-unit sheet name, 32,767-unit cell text) stay in UTF-16 code units, as
 Excel counts them, so a character outside the BMP counts 2 there.
 """

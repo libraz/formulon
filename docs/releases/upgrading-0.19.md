@@ -972,10 +972,11 @@ Read [Every binding](#every-binding) first, then the section for your binding. [
   `PivotDataFieldInput(field_index, name=None, ...)` takes the field first.
   `Sheet.set_comment` takes a `CommentInput(text, author="")`, as JavaScript
   takes `CommentInput`; a `Comment` read back is still accepted.
-- **Python:** `Mention` / `MentionInput` and `PhoneticRun` spans are code-point
-  offsets into the Python `str`, as `len` and slicing count, instead of UTF-16
-  code units; a character outside the BMP counts 1. JavaScript keeps UTF-16
-  offsets, and length limits stay in UTF-16 code units on every surface.
+- **Python:** `Mention` / `MentionInput` and `PhoneticRun` spans and the
+  `ParseError` positions (`start`, `end`, `column`) are code-point offsets into
+  the Python `str`, as `len` and slicing count, instead of UTF-16 code units; a
+  character outside the BMP counts 1. JavaScript keeps UTF-16 offsets, and
+  length limits stay in UTF-16 code units on every surface.
 - **Python:** the status ranges have exception classes. `IoError`,
   `EvaluationError`, `FunctionError`, `RecalcError`, `SecurityError`,
   `BindingError`, `PivotError` and `PrintError` are `FormulonError` subclasses,

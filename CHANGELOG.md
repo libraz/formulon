@@ -95,7 +95,8 @@ Upgrading from 0.18: see [Upgrading from 0.18 to 0.19](docs/releases/upgrading-0
 - Python: failures raise one `FormulonError` subclass per status range, and
   `FormulaSyntaxError` is no longer an `InvalidArgumentError`. Tuple results
   are frozen dataclasses, nine signatures take a record in place of keywords,
-  and Python 3.10 or later is required
+  mention, phonetic-run and parse-error positions are code points, and Python
+  3.10 or later is required
   ([details](docs/releases/upgrading-0.19.md#python-callers)).
 - Command line: `dump` takes `--view`, `paginate` prints new keys, a usage
   error exits 64 and a formula syntax error 65

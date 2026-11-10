@@ -337,8 +337,9 @@ class ParseErrorCode(IntEnum):
 class ParseError:
     """Position of a formula syntax failure (``fm_parse_error_info_t``).
 
-    ``start`` / ``end`` are UTF-16 code units into the text the caller passed;
-    ``line`` and ``column`` are 1-based.
+    ``start`` / ``end`` are code-point offsets into the text the caller passed,
+    as ``len`` and slicing count; ``line`` and ``column`` are 1-based, ``column``
+    in code points too.
     """
 
     code: ParseErrorCode
@@ -1430,7 +1431,7 @@ class _WasmInstance:
             return None
         raw = raw[4:]
         d = PARSE_ERROR.unpack_from(raw)
-        return ParseError(ParseErrorCode(d["code"]), d["start"], d["end"], d["line"], d["column"])
+        return ParseError(ParseErrorCode(d["code"]), d["start_cp"], d["end_cp"], d["line"], d["column_cp"])
 
     def _parse_error_slot(self) -> threading.local:
         # Lazy for the same seam as `_export_wrappers`: tests build this
