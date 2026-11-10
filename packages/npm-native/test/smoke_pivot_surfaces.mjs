@@ -155,8 +155,8 @@ test('pivot definition read-backs report what the setters wrote', async () => {
     assert.equal(pivot.listFieldItems(0).length, 2);
     const east = pivot.getFieldItem(0, 0);
     assert.equal(east.name, 'East');
-    // The scratch cache holds no shared items, so a label binds to nothing.
-    assert.equal(east.cacheIndex, null);
+    // The row field shares its record values, so the label binds to its item.
+    assert.equal(east.cacheIndex, 0);
     assert.equal(east.visible, true);
     assert.equal(pivot.getFieldItem(0, 1).visible, false);
     pivot.addFieldItem(0, { cacheIndex: 5 }, { visible: true });

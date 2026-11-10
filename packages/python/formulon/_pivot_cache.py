@@ -425,6 +425,9 @@ class PivotCache(_NoCopy):
 
         Raises:
           TypeError: when ``value`` is none of the above.
+          AlreadyExistsError: when the field already holds ``value``; text
+            that differs only in case is the same item, while a date and the
+            number of its serial are different items.
         """
         kind, value = self._typed_value(value)
         h, cache_id = self._call()

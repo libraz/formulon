@@ -191,6 +191,11 @@ struct PivotCacheField {
   /// Numeric / date range + grouping hints from `<sharedItems>`. Preserved
   /// verbatim so Excel's Refresh keeps its grouping boundaries.
   SharedItemsHints shared_items_hints;
+  /// True when the shared items were built from the record values (a refresh
+  /// or `share_field_items`) rather than listed by the caller: a record write
+  /// then stores a value through its item, where with a listed set a number
+  /// names an item by index. Not saved; a field read from a file is listed.
+  bool items_follow_values = false;
 
   /// Whether this cache field is a *database* field (backed by a source
   /// column) rather than one derived by grouping. OOXML marks a derived

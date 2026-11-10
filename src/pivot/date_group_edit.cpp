@@ -15,6 +15,7 @@
 #include "pivot/field_grouping_internal.h"
 #include "pivot/pivot_cache.h"
 #include "pivot/pivot_index.h"
+#include "pivot/pivot_refresh.h"
 #include "pivot/pivot_table.h"
 #include "pivot/pivot_types.h"
 #include "sheet.h"
@@ -161,6 +162,22 @@ void for_each_cache_table(Workbook& wb, std::uint32_t cache_id, Fn&& fn) {
   }
 }
 
+// Shares the fields every pivot on `cache` places on an axis, as a pivot edit
+// does: a cleared group puts its base back on the axes.
+void share_cache_axis_fields(Workbook& wb, PivotCache& cache) {
+  for_each_cache_table(wb, cache.cache_id(), [&](const PivotTable& table) { share_axis_fields(cache, table); });
+}
+
+// Marks the shared items of a date group's base as dates, so the base keeps
+// its date-ness when it was shared from numbers.
+void mark_base_dates(PivotCache& cache, std::size_t base) {
+  PivotCacheField& field = cache.mutable_fields()[base];
+  field.shared_item_is_date.resize(field.shared_items.size(), false);
+  for (std::size_t k = 0; k < field.shared_items.size(); ++k) {
+    field.shared_item_is_date[k] = field.shared_item_is_date[k] || field.shared_items[k].is_number();
+  }
+}
+
 void invalidate_tables(Workbook& wb, std::uint32_t cache_id) {
   for_each_cache_table(wb, cache_id, [](PivotTable& table) {
     table.clear_last_result();
@@ -232,6 +249,8 @@ Expected<void, Error> set_date_group(Workbook& wb, std::size_t sheet, std::size_
     add_group_pivot_fields(table, cache, base, first, &table == target.table);
     resolve_pivot_names(table, cache);
   });
+  share_cache_axis_fields(wb, cache);
+  mark_base_dates(cache, base);
   invalidate_tables(wb, cache.cache_id());
   return Expected<void, Error>::Ok();
 }
@@ -244,6 +263,7 @@ Expected<void, Error> clear_date_group(Workbook& wb, std::size_t sheet, std::siz
     return Expected<void, Error>::Ok();
   }
   remove_group(wb, cache, target.base, run);
+  share_cache_axis_fields(wb, cache);
   invalidate_tables(wb, cache.cache_id());
   return Expected<void, Error>::Ok();
 }
@@ -261,6 +281,7 @@ Expected<void, Error> set_numeric_group(Workbook& wb, std::size_t sheet, std::si
     add_group_pivot_fields(table, cache, base, first, &table == target.table);
     resolve_pivot_names(table, cache);
   });
+  share_cache_axis_fields(wb, cache);
   invalidate_tables(wb, cache.cache_id());
   return Expected<void, Error>::Ok();
 }
@@ -273,6 +294,7 @@ Expected<void, Error> clear_numeric_group(Workbook& wb, std::size_t sheet, std::
   }
   ASSIGN_OR_RETURN(GroupRun run, group_run(cache, target.base));
   remove_group(wb, cache, target.base, run);
+  share_cache_axis_fields(wb, cache);
   invalidate_tables(wb, cache.cache_id());
   return Expected<void, Error>::Ok();
 }

@@ -813,12 +813,12 @@ test('criterion 6: listPivots, listPivotFieldItems and the pivot cache lists des
         .map((x) => x.name),
       ['Region', 'Amount'],
     );
-    wb.pivotCache(cacheId).addFieldSharedItem(0, 'East');
+    // The row field's record values are already its shared items.
     wb.pivotCache(cacheId).addFieldSharedItem(0, new Date(2024, 0, 1));
     const shared = wb.pivotCache(cacheId).listFieldSharedItems(0);
-    assert.equal(shared.length, 2);
+    assert.equal(shared.length, 3);
     assert.deepEqual(plain(shared[0]), { value: 'East', isDate: false });
-    assert.equal(shared[1].isDate, true);
+    assert.equal(shared[2].isDate, true);
     assert.deepEqual(plain(ws.pivot(pivot).listFieldItems(0)), []);
     expectCode(() => ws.pivot(pivot).getFieldItem(0, 0), f.StatusCode.IndexOutOfRange);
     ws.pivot(pivot).addFieldItem(0, 'East');
@@ -1073,7 +1073,6 @@ test('criterion 7: updatePivotFieldItem changes the keys given and the per-field
   await withWorkbook((wb, f) => {
     const { cacheId, pivot } = pivotWorkbook(wb, f);
     const ws = wb.sheet(0);
-    wb.pivotCache(cacheId).addFieldSharedItem(0, 'East');
     ws.pivot(pivot).addFieldItem(0, 'East');
     ws.pivot(pivot).updateFieldItem(0, 0, { caption: 'Eastern', visible: false });
     const item = ws.pivot(pivot).getFieldItem(0, 0);
@@ -1399,7 +1398,6 @@ test('criterion 13: setPivotFieldSort and addPivotFieldItem take an options obje
   await withWorkbook((wb, f) => {
     const { cacheId, pivot } = pivotWorkbook(wb, f);
     const ws = wb.sheet(0);
-    wb.pivotCache(cacheId).addFieldSharedItem(0, 'East');
     ws.pivot(pivot).addFieldItem(0, 'East', { visible: false });
     assert.equal(ws.pivot(pivot).getFieldItem(0, 0).visible, false);
     ws.pivot(pivot).addFieldItem(0, 'West');

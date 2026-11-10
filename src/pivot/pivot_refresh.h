@@ -21,7 +21,7 @@
 // each text folded to the first spelling of its item.
 //
 // A field that joins an axis later takes shared items by the same rule
-// (`share_field_items`), and keeps them when it leaves the axis.
+// (`share_field_items`), and keeps them, and its item list, when it leaves.
 
 #ifndef FORMULON_PIVOT_PIVOT_REFRESH_H_
 #define FORMULON_PIVOT_PIVOT_REFRESH_H_
@@ -29,6 +29,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <deque>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -36,6 +37,7 @@
 #include "excel_profile.h"
 #include "pivot/field_remap.h"
 #include "pivot/pivot_cache.h"
+#include "pivot/pivot_table.h"
 #include "utils/error.h"
 #include "utils/expected.h"
 #include "value.h"
@@ -100,15 +102,37 @@ Expected<RefreshPlan, Error> build_refreshed_cache(const PivotCache& old, const 
 /// Gives database field `field` of `cache`, when it holds its values inline,
 /// the shared items a refresh would: its record values in record order under
 /// the item fold, a blank included, each item keeping its first spelling and
-/// date mark. Every record cell of the field then names its item by index.
-/// The values, and so the field's hints, are unchanged.
+/// date mark. Every record cell of the field then names its item by index, and
+/// later record writes go through the items (`items_follow_values`). The
+/// values, and so the field's hints, are unchanged.
 ///
 /// Returns false, changing nothing, for a field that already has shared
 /// items, a calculated or group field, a field index out of range, and a
-/// cache without records. A field without captured hints (one filled in
-/// memory rather than read or refreshed) is also left inline: the writer
-/// derives its shared items at save (`io::build_pivot_cache_write_plan`).
+/// cache without records.
 bool share_field_items(PivotCache& cache, std::size_t field);
+
+/// Shares (`share_field_items`) every field `table` places on the row, column
+/// or page axis.
+void share_axis_fields(PivotCache& cache, const PivotTable& table);
+
+/// The shared item of `field` that `value` (a date when `is_date`) is under the
+/// item fold, if any.
+std::optional<std::uint32_t> find_shared_item(const PivotCacheField& field, const Value& value, bool is_date);
+
+/// Writes `value` (a date when `is_date`) to cell `(record, field)` of a field
+/// whose items follow its values: the cell names the item `value` is under the
+/// item fold, appended with its own spelling when there is none. `record` and
+/// `field` must be in range.
+void write_shared_record_value(PivotCache& cache, std::size_t record, std::size_t field, const Value& value,
+                               bool is_date);
+
+/// Lists in `field` every item its shared items give it, as a field leaving
+/// the axes keeps them: with no items, one per shared item in the field's
+/// sort order (ascending by default, blank last; shared-item order when sorted
+/// manually or by a data field); otherwise the items it has, then the shared
+/// items none of them names. Missing and calculated shared items are never
+/// added. The caller holds an `eval::ScopedEvalProfile`.
+void keep_field_items(PivotField& field, const PivotCacheField& cache_field);
 
 }  // namespace formulon::pivot
 

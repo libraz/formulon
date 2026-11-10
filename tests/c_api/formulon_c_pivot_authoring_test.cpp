@@ -1,5 +1,6 @@
 // Stable C ABI PivotTable authoring and cache tests.
 
+#include <cmath>
 #include <iterator>
 #include <limits>
 
@@ -722,19 +723,26 @@ TEST(FormulonCApiPivot, DateGroupRejectsBadArgumentsWithoutMutation) {
   EXPECT_EQ(SetPivotFieldDateGroup(wb.handle, 0, pivot_index, date_field, FM_PIVOT_PERIOD_DAYS,
                                    FM_PIVOT_CALENDAR_GREGORIAN, 7, jan1 + 0.9, jan1 + 0.1),
             expected);
-  // A field holding anything but dates.
-  EXPECT_EQ(fm_workbook_set_pivot_cache_record_text(wb.handle, cache_id, 0, 0, "n/a"), 0)
-      << fm_get_last_error_message();
-  EXPECT_EQ(SetPivotFieldDateGroup(wb.handle, 0, pivot_index, date_field, FM_PIVOT_PERIOD_YEARS,
-                                   FM_PIVOT_CALENDAR_GREGORIAN, 1, kAutoBound, kAutoBound),
-            expected);
-  ASSERT_EQ(fm_workbook_set_pivot_cache_record_number(wb.handle, cache_id, 0, 0, jan1), 0)
-      << fm_get_last_error_message();
-
   BufferGuard after;
   ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &after.data, &after.len), 0)
       << fm_get_last_error_message();
   EXPECT_EQ(std::vector<std::uint8_t>(after.data, after.data + after.len), snapshot);
+
+  // A field holding anything but dates. The text joins the field's shared
+  // items, so the refusal is checked against a save taken after the write.
+  ASSERT_EQ(fm_workbook_set_pivot_cache_record_text(wb.handle, cache_id, 0, 0, "n/a"), 0)
+      << fm_get_last_error_message();
+  BufferGuard with_text;
+  ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &with_text.data, &with_text.len), 0)
+      << fm_get_last_error_message();
+  EXPECT_EQ(SetPivotFieldDateGroup(wb.handle, 0, pivot_index, date_field, FM_PIVOT_PERIOD_YEARS,
+                                   FM_PIVOT_CALENDAR_GREGORIAN, 1, kAutoBound, kAutoBound),
+            expected);
+  BufferGuard refused;
+  ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &refused.data, &refused.len), 0)
+      << fm_get_last_error_message();
+  EXPECT_EQ(std::vector<std::uint8_t>(refused.data, refused.data + refused.len),
+            std::vector<std::uint8_t>(with_text.data, with_text.data + with_text.len));
 }
 
 TEST(FormulonCApiPivot, DateGroupRejectsInvalidSerialBoundsWithoutMutation) {
@@ -1147,13 +1155,16 @@ TEST(FormulonCApiPivot, PivotCacheDateSerialBoundsAreValidated) {
     }
     for (const double serial : good) {
       SCOPED_TRACE(serial);
-      EXPECT_EQ(fm_workbook_add_pivot_cache_field_shared_item_date(wb.handle, cache_id, 0, serial, ignored_index()), 0)
+      // -0 is the same date as 0, so the field already holds it.
+      const int added_status = std::signbit(serial) ? FM_STATUS_ALREADY_EXISTS : 0;
+      EXPECT_EQ(fm_workbook_add_pivot_cache_field_shared_item_date(wb.handle, cache_id, 0, serial, ignored_index()),
+                added_status)
           << fm_get_last_error_message();
       EXPECT_EQ(fm_workbook_set_pivot_cache_record_date(wb.handle, cache_id, record, 0, serial), 0)
           << fm_get_last_error_message();
     }
     ASSERT_EQ(fm_workbook_get_pivot_cache_field_shared_item_count(wb.handle, cache_id, 0, &count), 0);
-    EXPECT_EQ(count, good.size());
+    EXPECT_EQ(count, good.size() - 1U);
   }
 }
 

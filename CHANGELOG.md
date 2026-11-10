@@ -265,6 +265,12 @@ Upgrading from 0.18: see [Upgrading from 0.18 to 0.19](docs/releases/upgrading-0
 - Grouping a pivot field by dates or numbers updates that pivot's cells at once.
 - Refresh folds case variants of a field's values to their first spelling.
 - A pivot item whose cache index resolves to nothing is no longer saved.
+- A field placed on an axis of a hand-built pivot gets shared items from its
+  record values, and a field taken off an axis keeps its items.
+- `addFieldSharedItem` fails with `AlreadyExists` for a value the field
+  already holds.
+- A date or number grouping that cannot be placed fails with
+  `PreconditionFailed`.
 - Saving a new workbook with an image or chart as `.xlsb` failed with
   `IoContentTypeInvalid`.
 - `PivotField.subtotalTop` and several Python flags read true when false was

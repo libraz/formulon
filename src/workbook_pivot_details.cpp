@@ -26,6 +26,7 @@
 #include "pivot/pivot_index.h"
 #include "pivot/pivot_layout.h"
 #include "pivot/pivot_locale.h"
+#include "pivot/pivot_refresh.h"
 #include "pivot/pivot_result.h"
 #include "pivot/pivot_table.h"
 #include "pivot/record_access.h"
@@ -343,11 +344,18 @@ Expected<std::size_t, Error> Workbook::add_pivot(std::size_t sheet, std::unique_
   }
   Sheet& target = this->sheet(sheet);
   RETURN_IF_ERROR(check_pivot_name(target, table->name(), target.pivot_tables().size()));
-  const pivot::PivotCache* cache = find_pivot_cache(table->pivot_cache_id());
+  pivot::PivotCache* cache = nullptr;
+  for (std::unique_ptr<pivot::PivotCache>& c : pivot_caches_) {
+    if (c != nullptr && c->cache_id() == table->pivot_cache_id()) {
+      cache = c.get();
+      break;
+    }
+  }
   if (cache == nullptr) {
     return unknown_cache(table->pivot_cache_id());
   }
   pivot::sync_table_fields(*cache, {table.get()});
+  pivot::share_axis_fields(*cache, *table);
   target.add_pivot_table(std::move(table));
   return target.pivot_tables().size() - 1U;
 }

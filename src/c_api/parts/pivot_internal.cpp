@@ -13,6 +13,7 @@
 
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
+#include "eval/eval_profile_scope.h"
 #include "pivot/field_remap.h"
 #include "pivot/pivot_cache.h"
 #include "pivot/pivot_refresh.h"
@@ -39,6 +40,11 @@ std::vector<formulon::pivot::PivotTable*> all_pivots(formulon::Workbook& wb) {
     }
   }
   return tables;
+}
+
+bool on_axis(formulon::pivot::PivotAxis axis) {
+  return axis == formulon::pivot::PivotAxis::Row || axis == formulon::pivot::PivotAxis::Col ||
+         axis == formulon::pivot::PivotAxis::Page;
 }
 
 }  // namespace
@@ -170,24 +176,12 @@ void project_pending_pivots(formulon::Workbook& wb) {
   }
 }
 
-void share_axis_fields(formulon::Workbook& wb, const formulon::pivot::PivotTable& table) {
-  formulon::pivot::PivotCache* cache = find_cache_mut(wb, table.pivot_cache_id());
-  if (cache == nullptr) {
-    return;
-  }
-  for (std::size_t f = 0; f < table.fields().size(); ++f) {
-    const formulon::pivot::PivotAxis axis = table.fields()[f].axis;
-    if (axis == formulon::pivot::PivotAxis::Row || axis == formulon::pivot::PivotAxis::Col ||
-        axis == formulon::pivot::PivotAxis::Page) {
-      formulon::pivot::share_field_items(*cache, f);
-    }
-  }
-}
-
 formulon::Expected<void, formulon::Error> reproject_edited_pivot(formulon::Workbook& wb, std::size_t sheet_index,
                                                                  std::size_t pivot_index) {
   formulon::pivot::PivotTable& table = *wb.sheet(sheet_index).mutable_pivot_tables()[pivot_index];
-  share_axis_fields(wb, table);
+  if (formulon::pivot::PivotCache* cache = find_cache_mut(wb, table.pivot_cache_id()); cache != nullptr) {
+    formulon::pivot::share_axis_fields(*cache, table);
+  }
   invalidate_pivot_result(wb, table);
   formulon::Expected<void, formulon::Error> projected = project_pivot(wb, sheet_index, pivot_index);
   if (!projected) {
@@ -196,11 +190,32 @@ formulon::Expected<void, formulon::Error> reproject_edited_pivot(formulon::Workb
   return projected;
 }
 
+namespace {
+
+// A field this edit took off every axis keeps its item list, as Excel writes it.
+void keep_left_field_items(formulon::Workbook& wb, formulon::pivot::PivotTable& table,
+                           const formulon::pivot::PivotTable& before) {
+  const formulon::pivot::PivotCache* cache = find_cache(wb, table.pivot_cache_id());
+  if (cache == nullptr) {
+    return;
+  }
+  const formulon::eval::ScopedEvalProfile scope(wb.excel_profile());
+  const std::size_t count = std::min({table.fields().size(), before.fields().size(), cache->fields().size()});
+  for (std::size_t f = 0; f < count; ++f) {
+    if (on_axis(before.fields()[f].axis) && !on_axis(table.fields()[f].axis)) {
+      formulon::pivot::keep_field_items(table.mutable_fields()[f], cache->fields()[f]);
+    }
+  }
+}
+
+}  // namespace
+
 PivotEdit::PivotEdit(formulon::Workbook& wb, std::size_t sheet_index, std::size_t pivot_index,
                      formulon::pivot::PivotTable& table)
     : wb_(wb), sheet_index_(sheet_index), pivot_index_(pivot_index), table_(table), snapshot_(table.clone()) {}
 
 fm_status_t PivotEdit::commit() {
+  keep_left_field_items(wb_, table_, *snapshot_);
   formulon::Expected<void, formulon::Error> projected = reproject_edited_pivot(wb_, sheet_index_, pivot_index_);
   if (projected) {
     return 0;

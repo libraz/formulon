@@ -692,3 +692,188 @@ TEST(FormulonCApiPivot, NumericGroupingProjectsTheGroupedPivot) {
   EXPECT_TRUE(SheetColumnHasText(wb.handle, 3U, "100-199"));
   EXPECT_TRUE(SheetColumnHasText(wb.handle, 3U, "400-499"));
 }
+
+namespace {
+
+constexpr fm_status_t kPreconditionFailed = static_cast<fm_status_t>(formulon::FormulonErrorCode::kPreconditionFailed);
+constexpr fm_status_t kAlreadyExists = static_cast<fm_status_t>(formulon::FormulonErrorCode::kAlreadyExists);
+
+// A cache filled through the record setters: Product (text) and Sales, one
+// record per entry; the pivot at D1 sums Sales with no field on an axis.
+struct HandFilledPivot {
+  WorkbookGuard wb;
+  std::uint32_t cache_id = 0;
+  std::size_t pivot = 0;
+
+  void Build(const std::vector<const char*>& products) {
+    ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+    ASSERT_EQ(fm_workbook_add_pivot_cache(wb.handle, 0U, &cache_id), 0);
+    ASSERT_EQ(SetPivotCacheWorksheetSource(wb.handle, cache_id, /*present=*/1, "A1:B5", "Sheet1", nullptr), 0);
+    ASSERT_EQ(fm_workbook_add_pivot_cache_field(wb.handle, cache_id, "Product", ignored_index()), 0);
+    ASSERT_EQ(fm_workbook_add_pivot_cache_field(wb.handle, cache_id, "Sales", ignored_index()), 0);
+    for (std::size_t i = 0; i < products.size(); ++i) {
+      AddRecord(products[i], static_cast<double>(i + 1U));
+    }
+    ASSERT_EQ(AddPivot(wb.handle, 0U, "PT", cache_id, /*anchor_row=*/0U, /*anchor_col=*/3U, &pivot), 0)
+        << fm_get_last_error_message();
+  }
+
+  void AddRecord(const char* product, double sales) {
+    std::size_t record = 0;
+    ASSERT_EQ(fm_workbook_add_pivot_cache_record(wb.handle, cache_id, &record), 0);
+    ASSERT_EQ(fm_workbook_set_pivot_cache_record_text(wb.handle, cache_id, record, 0U, product), 0);
+    ASSERT_EQ(fm_workbook_set_pivot_cache_record_number(wb.handle, cache_id, record, 1U, sales), 0);
+  }
+
+  std::size_t SharedCount(std::size_t field) const {
+    std::size_t count = 99;
+    EXPECT_EQ(fm_workbook_get_pivot_cache_field_shared_item_count(wb.handle, cache_id, field, &count), 0);
+    return count;
+  }
+
+  fm_value_t RecordValue(std::size_t record, std::size_t field) const {
+    fm_value_t v{};
+    EXPECT_EQ(fm_workbook_get_pivot_cache_record_value(wb.handle, cache_id, record, field, &v), 0);
+    return v;
+  }
+};
+
+}  // namespace
+
+TEST(FormulonCApiPivot, AFieldLeavingEveryAxisSavesItsItems) {
+  // Excel 365 measured: a field taken off the axes keeps its <items>, only
+  // the axis attribute goes.
+  RefreshedPivot f;
+  f.Build("Product",
+          {"pear", "Apple", nullptr, "Pear", "apple", "Fig", nullptr, "Apple", "Fig", "PEAR", "fig", "Apple"});
+  ASSERT_EQ(fm_sheet_set_pivot_field_axis(f.wb.handle, 0U, f.pivot, 0U, FM_PIVOT_AXIS_ROW), 0);
+  ASSERT_EQ(fm_sheet_set_pivot_field_axis(f.wb.handle, 0U, f.pivot, 0U, FM_PIVOT_AXIS_ABSENT), 0)
+      << fm_get_last_error_message();
+  std::size_t item_count = 0;
+  ASSERT_EQ(fm_sheet_get_pivot_field_item_count(f.wb.handle, 0U, f.pivot, 0U, &item_count), 0);
+  EXPECT_EQ(item_count, 4U);
+  const std::string table = SavedPivotXml(f.wb.handle);
+  EXPECT_NE(table.find("<pivotField showAll=\"0\"><items count=\"5\"><item x=\"1\"/><item x=\"3\"/><item x=\"0\"/>"
+                       "<item x=\"2\"/><item t=\"default\"/></items></pivotField>"),
+            std::string::npos)
+      << table;
+}
+
+TEST(FormulonCApiPivot, AHandFilledFieldJoiningRowsSharesItsValuesAndRecordWritesStayValues) {
+  HandFilledPivot f;
+  f.Build({"pear", "Apple", "PEAR"});
+  ASSERT_EQ(f.SharedCount(0U), 0U);
+  ASSERT_EQ(fm_sheet_set_pivot_field_axis(f.wb.handle, 0U, f.pivot, 0U, FM_PIVOT_AXIS_ROW), 0)
+      << fm_get_last_error_message();
+  ASSERT_EQ(f.SharedCount(0U), 2U);
+
+  // A later text write reuses the item of its case variant.
+  f.AddRecord("apple", 4.0);
+  EXPECT_EQ(f.SharedCount(0U), 2U);
+  fm_value_t apple = f.RecordValue(3U, 0U);
+  ASSERT_EQ(apple.kind, FM_VALUE_KIND_TEXT);
+  EXPECT_STREQ(apple.u.text, "Apple");
+  // A number is stored as a number, not read as an item index.
+  ASSERT_EQ(fm_workbook_set_pivot_cache_record_number(f.wb.handle, f.cache_id, 3U, 0U, 7.0), 0);
+  EXPECT_EQ(f.SharedCount(0U), 3U);
+  const fm_value_t seven = f.RecordValue(3U, 0U);
+  ASSERT_EQ(seven.kind, FM_VALUE_KIND_NUMBER);
+  EXPECT_EQ(seven.u.number, 7.0);
+  ASSERT_EQ(fm_workbook_set_pivot_cache_record_number(f.wb.handle, f.cache_id, 0U, 0U, 1.0), 0);
+  const fm_value_t one = f.RecordValue(0U, 0U);
+  ASSERT_EQ(one.kind, FM_VALUE_KIND_NUMBER);
+  EXPECT_EQ(one.u.number, 1.0);
+  EXPECT_EQ(f.SharedCount(0U), 4U);
+}
+
+TEST(FormulonCApiPivot, ADateGroupBaseSharedFromNumbersSavesItsItemsAsDates) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_set_profile_id(wb.handle, "win-365-ja_JP"), 0);
+  std::size_t pivot_index = 0;
+  ASSERT_EQ(BuildDaysGroupedPivot(wb.handle, std::numeric_limits<double>::quiet_NaN(), &pivot_index), 0)
+      << fm_get_last_error_message();
+  std::uint32_t cache_id = 0;
+  ASSERT_EQ(fm_sheet_get_pivot_cache_id(wb.handle, 0U, pivot_index, &cache_id), 0);
+  std::size_t count = 0;
+  ASSERT_EQ(fm_workbook_get_pivot_cache_field_shared_item_count(wb.handle, cache_id, 0U, &count), 0);
+  ASSERT_EQ(count, 71U);
+  for (std::size_t i = 0; i < count; ++i) {
+    std::int32_t is_date = 0;
+    ASSERT_EQ(fm_workbook_is_pivot_cache_field_shared_item_date(wb.handle, cache_id, 0U, i, &is_date), 0);
+    EXPECT_EQ(is_date, 1) << i;
+  }
+  BufferGuard saved;
+  ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0)
+      << fm_get_last_error_message();
+  const std::string cache = ExtractZipEntry(std::vector<std::uint8_t>(saved.data, saved.data + saved.len),
+                                            "xl/pivotCache/pivotCacheDefinition1.xml");
+  const std::size_t first_field = cache.find("<cacheField name=\"Date\"");
+  ASSERT_NE(first_field, std::string::npos) << cache;
+  const std::string date_field = cache.substr(first_field, cache.find("</cacheField>", first_field) - first_field);
+  EXPECT_NE(date_field.find("<d v="), std::string::npos) << date_field;
+  EXPECT_EQ(date_field.find("<n v="), std::string::npos) << date_field;
+}
+
+TEST(FormulonCApiPivot, AGroupedReportThatCannotBePlacedIsRefusedAndLeftPending) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  std::uint32_t cache_id = 0;
+  ASSERT_EQ(fm_workbook_add_pivot_cache(wb.handle, 0U, &cache_id), 0);
+  ASSERT_EQ(SetPivotCacheWorksheetSource(wb.handle, cache_id, /*present=*/1, "A1:B4", "Sheet1", nullptr), 0);
+  ASSERT_EQ(fm_workbook_add_pivot_cache_field(wb.handle, cache_id, "Date", ignored_index()), 0);
+  ASSERT_EQ(fm_workbook_add_pivot_cache_field(wb.handle, cache_id, "Amount", ignored_index()), 0);
+  // One date in each of 1901, 1902 and 1903.
+  const double serials[] = {400.0, 800.0, 1200.0};
+  for (std::size_t i = 0; i < 3U; ++i) {
+    std::size_t record = 0;
+    ASSERT_EQ(fm_workbook_add_pivot_cache_record(wb.handle, cache_id, &record), 0);
+    ASSERT_EQ(fm_workbook_set_pivot_cache_record_number(wb.handle, cache_id, record, 0U, serials[i]), 0);
+    ASSERT_EQ(fm_workbook_set_pivot_cache_record_number(wb.handle, cache_id, record, 1U, 1.0), 0);
+  }
+  std::size_t pivot_index = 0;
+  ASSERT_EQ(AddPivot(wb.handle, 0U, "PT", cache_id, /*anchor_row=*/0U, /*anchor_col=*/3U, &pivot_index), 0);
+  ASSERT_EQ(fm_sheet_set_pivot_field_axis(wb.handle, 0U, pivot_index, 0U, FM_PIVOT_AXIS_ROW), 0);
+  ASSERT_EQ(fm_sheet_set_pivot_field_axis(wb.handle, 0U, pivot_index, 1U, FM_PIVOT_AXIS_VALUE), 0);
+  fm_pivot_data_field_t sum = FM_STRUCT_INIT(fm_pivot_data_field_t);
+  sum.name = "Sum of Amount";
+  sum.field_index = 1U;
+  sum.aggregation = FM_PIVOT_AGGREGATION_SUM;
+  sum.number_format = "";
+  sum.show_as = FM_PIVOT_SHOW_VALUES_AS_NORMAL;
+  ASSERT_EQ(fm_sheet_add_pivot_data_field(wb.handle, 0U, pivot_index, &sum, ignored_index()), 0)
+      << fm_get_last_error_message();
+  // Three dates fill D1:E5; a year and a month row each need D1:E8, which D7:D8 blocks.
+  const fm_cell_rect_t merge{6U, 3U, 7U, 3U};
+  ASSERT_EQ(fm_sheet_add_merge(wb.handle, 0U, &merge, nullptr), 0) << fm_get_last_error_message();
+
+  EXPECT_EQ(SetPivotFieldDateGroup(wb.handle, 0U, pivot_index, 0U, FM_PIVOT_PERIOD_MONTHS | FM_PIVOT_PERIOD_YEARS,
+                                   FM_PIVOT_CALENDAR_GREGORIAN, 1U, std::numeric_limits<double>::quiet_NaN(),
+                                   std::numeric_limits<double>::quiet_NaN()),
+            kPreconditionFailed);
+  // The cache keeps the grouping; the report waits for room.
+  std::size_t fields = 0;
+  ASSERT_EQ(fm_workbook_get_pivot_cache_field_count(wb.handle, cache_id, &fields), 0);
+  EXPECT_EQ(fields, 4U);
+  EXPECT_TRUE(ProjectionPending(wb.handle, pivot_index));
+}
+
+TEST(FormulonCApiPivot, AddingASharedItemTheFieldHoldsIsRefused) {
+  RefreshedPivot f;
+  f.Build("Region", {"East", "West", nullptr});
+  ASSERT_EQ(fm_sheet_set_pivot_field_axis(f.wb.handle, 0U, f.pivot, 0U, FM_PIVOT_AXIS_ROW), 0);
+  ASSERT_EQ(f.SharedCount(f.wb.handle, f.cache_id), 3U);
+  EXPECT_EQ(fm_workbook_add_pivot_cache_field_shared_item_text(f.wb.handle, f.cache_id, 0U, "EAST", ignored_index()),
+            kAlreadyExists);
+  EXPECT_EQ(fm_workbook_add_pivot_cache_field_shared_item_blank(f.wb.handle, f.cache_id, 0U, ignored_index()),
+            kAlreadyExists);
+  EXPECT_EQ(f.SharedCount(f.wb.handle, f.cache_id), 3U);
+  std::size_t added = 0;
+  ASSERT_EQ(fm_workbook_add_pivot_cache_field_shared_item_text(f.wb.handle, f.cache_id, 0U, "North", &added), 0);
+  EXPECT_EQ(added, 3U);
+  // A date and the number of its serial are two items.
+  ASSERT_EQ(fm_workbook_add_pivot_cache_field_shared_item_number(f.wb.handle, f.cache_id, 0U, 5.0, ignored_index()), 0);
+  EXPECT_EQ(fm_workbook_add_pivot_cache_field_shared_item_date(f.wb.handle, f.cache_id, 0U, 5.0, ignored_index()), 0);
+  EXPECT_EQ(fm_workbook_add_pivot_cache_field_shared_item_number(f.wb.handle, f.cache_id, 0U, 5.0, ignored_index()),
+            kAlreadyExists);
+}

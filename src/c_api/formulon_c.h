@@ -7727,7 +7727,8 @@ FM_API fm_status_t fm_workbook_get_pivot_cache_field_shared_item_value(const fm_
  *        and writes its index to `*out_shared_item_index`.
  *
  * @return `FM_STATUS_OK` (0) on success, or a common pivot failure;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) when `value` is NaN or infinite.
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `value` is NaN or infinite;
+ *         `FM_STATUS_ALREADY_EXISTS` (7) when the field already holds the value.
  */
 FM_API fm_status_t fm_workbook_add_pivot_cache_field_shared_item_number(fm_workbook_t* wb, uint32_t cache_id,
                                                                         size_t field_index, double value,
@@ -7737,11 +7738,13 @@ FM_API fm_status_t fm_workbook_add_pivot_cache_field_shared_item_number(fm_workb
  * @brief Appends a date shared item to cache field `field_index`. and writes
  *        its index to `*out_shared_item_index`. `serial` is a
  *        date serial in the workbook's date system, as a cell holds it.
- *        Saved with seconds precision.
+ *        Saved with seconds precision. A date and the number of its serial
+ *        are different items.
  *
  * @return `FM_STATUS_OK` (0) on success, or a common pivot failure;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when `serial` is not finite, is
- *         negative or is past 9999-12-31.
+ *         negative or is past 9999-12-31;
+ *         `FM_STATUS_ALREADY_EXISTS` (7) when the field already holds the value.
  */
 FM_API fm_status_t fm_workbook_add_pivot_cache_field_shared_item_date(fm_workbook_t* wb, uint32_t cache_id,
                                                                       size_t field_index, double serial,
@@ -7759,9 +7762,11 @@ FM_API fm_status_t fm_workbook_is_pivot_cache_field_shared_item_date(const fm_wo
 
 /**
  * @brief Appends a text shared item to cache field `field_index`
- *        and writes its index to `*out_shared_item_index`.
+ *        and writes its index to `*out_shared_item_index`. Text that differs
+ *        from an item only in case is that item.
  *
- * @return `FM_STATUS_OK` (0) on success, or a common pivot failure.
+ * @return `FM_STATUS_OK` (0) on success, or a common pivot failure;
+ *         `FM_STATUS_ALREADY_EXISTS` (7) when the field already holds the value.
  */
 FM_API fm_status_t fm_workbook_add_pivot_cache_field_shared_item_text(fm_workbook_t* wb, uint32_t cache_id,
                                                                       size_t field_index, const char* text,
@@ -7771,7 +7776,8 @@ FM_API fm_status_t fm_workbook_add_pivot_cache_field_shared_item_text(fm_workboo
  * @brief Appends a boolean shared item to cache field `field_index`
  *        and writes its index to `*out_shared_item_index`.
  *
- * @return `FM_STATUS_OK` (0) on success, or a common pivot failure.
+ * @return `FM_STATUS_OK` (0) on success, or a common pivot failure;
+ *         `FM_STATUS_ALREADY_EXISTS` (7) when the field already holds the value.
  */
 FM_API fm_status_t fm_workbook_add_pivot_cache_field_shared_item_bool(fm_workbook_t* wb, uint32_t cache_id,
                                                                       size_t field_index, int32_t value,
@@ -7781,7 +7787,8 @@ FM_API fm_status_t fm_workbook_add_pivot_cache_field_shared_item_bool(fm_workboo
  * @brief Appends a blank shared item to cache field `field_index`
  *        and writes its index to `*out_shared_item_index`.
  *
- * @return `FM_STATUS_OK` (0) on success, or a common pivot failure.
+ * @return `FM_STATUS_OK` (0) on success, or a common pivot failure;
+ *         `FM_STATUS_ALREADY_EXISTS` (7) when the field already holds the value.
  */
 FM_API fm_status_t fm_workbook_add_pivot_cache_field_shared_item_blank(fm_workbook_t* wb, uint32_t cache_id,
                                                                        size_t field_index,
@@ -7792,7 +7799,8 @@ FM_API fm_status_t fm_workbook_add_pivot_cache_field_shared_item_blank(fm_workbo
  *        and writes its index to `*out_shared_item_index`.
  *
  * @return `FM_STATUS_OK` (0) on success, or a common pivot failure;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) when `error` names no `fm_error_code_t`.
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `error` names no `fm_error_code_t`;
+ *         `FM_STATUS_ALREADY_EXISTS` (7) when the field already holds the value.
  */
 FM_API fm_status_t fm_workbook_add_pivot_cache_field_shared_item_error(fm_workbook_t* wb, uint32_t cache_id,
                                                                        size_t field_index, fm_error_code_t error,

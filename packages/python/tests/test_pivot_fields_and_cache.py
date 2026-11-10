@@ -157,9 +157,9 @@ class PivotCacheTests(unittest.TestCase):
             cache.add_calculated_field("Double", "Amount*2")
             cache.set_calculated_field_formula("Double", "Amount*3")
             # A calculated item needs its field on an axis of a pivot over the cache and the items it names.
+            # Joining the row axis gives the field its record values as shared items.
             _pivot(wb, cache).set_field_axis("Region", PivotAxis.ROW)
-            for name in ("East", "West"):
-                cache.add_field_shared_item("Region", name)
+            self.assertEqual([i.value for i in cache.list_field_shared_items("Region")], ["East", "West"])
             item = cache.add_calculated_item("Region", "Both", "East+West")
             self.assertGreaterEqual(item, 0)
             cache.remove_calculated_field("Double")

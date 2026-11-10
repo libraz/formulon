@@ -25,7 +25,6 @@
 #include "utils/expected.h"
 
 using formulon::c_api::parts::c_str_or_null;
-using formulon::c_api::parts::cache_tables;
 using formulon::c_api::parts::check_enum_domain;
 using formulon::c_api::parts::check_finite;
 using formulon::c_api::parts::check_index;
@@ -54,8 +53,8 @@ using formulon::c_api::parts::reproject_edited_pivot;
 using formulon::c_api::parts::resolve_pivot;
 using formulon::c_api::parts::resolve_pivot_checked;
 using formulon::c_api::parts::resolve_pivot_mut;
+using formulon::c_api::parts::set_last_error;
 using formulon::c_api::parts::set_values_position;
-using formulon::c_api::parts::share_axis_fields;
 using formulon::c_api::parts::text_or_null;
 
 namespace {
@@ -256,20 +255,18 @@ fm_status_t resolve_pivot_field(fm_workbook_t* wb, std::size_t sheet_index, std:
 }
 
 // Grouping edits the shared cache, so every pivot drawing from it is left
-// pending; the grouped pivot itself is then projected. Its definition cannot
-// be restored apart from the cache, so a report that cannot be placed stays
-// pending.
+// pending; the grouped pivot itself is then projected. A report that cannot be
+// placed returns the refusal as a pivot edit does, but the grouping stays: it
+// cannot be undone apart from the cache, so the report is left pending.
 fm_status_t finish_cache_grouping(fm_workbook_t* wb, std::size_t sheet_index, std::size_t pivot_index,
                                   const formulon::Expected<void, formulon::Error>& grouped) {
   if (grouped) {
     formulon::Workbook& book = wb->workbook();
-    const std::uint32_t cache_id = book.sheet(sheet_index).pivot_tables()[pivot_index]->pivot_cache_id();
-    mark_cache_pivots_pending(book, cache_id);
-    // A cleared group puts its base back on the axes of every pivot on the cache.
-    for (const formulon::pivot::PivotTable* table : cache_tables(book, cache_id)) {
-      share_axis_fields(book, *table);
+    mark_cache_pivots_pending(book, book.sheet(sheet_index).pivot_tables()[pivot_index]->pivot_cache_id());
+    const formulon::Expected<void, formulon::Error> projected = reproject_edited_pivot(book, sheet_index, pivot_index);
+    if (!projected && projected.error().code == formulon::FormulonErrorCode::kPreconditionFailed) {
+      return set_last_error(projected.error());
     }
-    static_cast<void>(reproject_edited_pivot(book, sheet_index, pivot_index));
   }
   return finish_status(grouped);
 }

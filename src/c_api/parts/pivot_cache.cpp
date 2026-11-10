@@ -27,6 +27,7 @@
 #include "pivot/calculated.h"
 #include "pivot/date_serial.h"
 #include "pivot/pivot_formula_host.h"
+#include "pivot/pivot_refresh.h"
 #include "pivot/record_access.h"
 #include "pivot/shared_items_hints.h"
 #include "sheet.h"
@@ -478,6 +479,25 @@ formulon::pivot::PivotCacheField* lookup_cache_field_mut(fm_workbook_t* wb, std:
   return &cache->mutable_fields()[field_index];
 }
 
+// Refuses a shared item cache field `field_index` already holds under the
+// item fold (case only; a date and a number of one serial are two items).
+fm_status_t refuse_held_item(const fm_workbook_t* wb, std::uint32_t cache_id, std::size_t field_index,
+                             const formulon::Value& value, bool is_date) {
+  if (wb == nullptr) {
+    return null_argument("wb");
+  }
+  fm_status_t status = 0;
+  const auto* field = lookup_cache_field(wb, cache_id, field_index, &status);
+  if (field == nullptr) {
+    return status;
+  }
+  if (const std::optional<std::uint32_t> held = formulon::pivot::find_shared_item(*field, value, is_date)) {
+    return set_binding_error(formulon::FormulonErrorCode::kAlreadyExists, "the field already holds this shared item",
+                             "field_index=" + std::to_string(field_index) + " item_index=" + std::to_string(*held));
+  }
+  return 0;
+}
+
 }  // namespace
 
 extern "C" fm_status_t fm_workbook_add_pivot_cache_field_shared_item_number(fm_workbook_t* wb, std::uint32_t cache_id,
@@ -489,6 +509,9 @@ extern "C" fm_status_t fm_workbook_add_pivot_cache_field_shared_item_number(fm_w
   }
   if (const fm_status_t st = check_finite(value, "value")) {
     return st;
+  }
+  if (fm_status_t rc = refuse_held_item(wb, cache_id, field_index, formulon::Value::number(value), false); rc != 0) {
+    return rc;
   }
   fm_status_t status = 0;
   auto* field = lookup_cache_field_mut(wb, cache_id, field_index, &status);
@@ -512,6 +535,9 @@ extern "C" fm_status_t fm_workbook_add_pivot_cache_field_shared_item_date(fm_wor
   }
   if (const fm_status_t st = check_date_serial(wb, serial)) {
     return st;
+  }
+  if (fm_status_t rc = refuse_held_item(wb, cache_id, field_index, formulon::Value::number(serial), true); rc != 0) {
+    return rc;
   }
   fm_status_t status = 0;
   auto* field = lookup_cache_field_mut(wb, cache_id, field_index, &status);
@@ -538,6 +564,11 @@ extern "C" fm_status_t fm_workbook_add_pivot_cache_field_shared_item_text(fm_wor
   if (auto rc = check_utf8({utf8}); rc != 0) {
     return rc;
   }
+  if (fm_status_t rc =
+          refuse_held_item(wb, cache_id, field_index, formulon::Value::text(std::string_view(utf8)), false);
+      rc != 0) {
+    return rc;
+  }
   formulon::pivot::PivotCache* cache = nullptr;
   fm_status_t status = 0;
   auto* field = lookup_cache_field_mut(wb, cache_id, field_index, &status, &cache);
@@ -556,6 +587,10 @@ extern "C" fm_status_t fm_workbook_add_pivot_cache_field_shared_item_bool(fm_wor
   if (out_shared_item_index == nullptr) {
     return null_argument("out_shared_item_index");
   }
+  if (fm_status_t rc = refuse_held_item(wb, cache_id, field_index, formulon::Value::boolean(value != 0), false);
+      rc != 0) {
+    return rc;
+  }
   fm_status_t status = 0;
   auto* field = lookup_cache_field_mut(wb, cache_id, field_index, &status);
   if (field == nullptr) {
@@ -572,6 +607,9 @@ extern "C" fm_status_t fm_workbook_add_pivot_cache_field_shared_item_blank(fm_wo
   clear_last_error();
   if (out_shared_item_index == nullptr) {
     return null_argument("out_shared_item_index");
+  }
+  if (fm_status_t rc = refuse_held_item(wb, cache_id, field_index, formulon::Value::blank(), false); rc != 0) {
+    return rc;
   }
   fm_status_t status = 0;
   auto* field = lookup_cache_field_mut(wb, cache_id, field_index, &status);
@@ -594,12 +632,16 @@ extern "C" fm_status_t fm_workbook_add_pivot_cache_field_shared_item_error(fm_wo
   if (!is_valid_error_code(error)) {
     return invalid_error_code(error);
   }
+  const formulon::Value error_value = formulon::Value::error(static_cast<formulon::ErrorCode>(error));
+  if (fm_status_t rc = refuse_held_item(wb, cache_id, field_index, error_value, false); rc != 0) {
+    return rc;
+  }
   fm_status_t status = 0;
   auto* field = lookup_cache_field_mut(wb, cache_id, field_index, &status);
   if (field == nullptr) {
     return status;
   }
-  field->shared_items.push_back(formulon::Value::error(static_cast<formulon::ErrorCode>(error)));
+  field->shared_items.push_back(error_value);
   *out_shared_item_index = field->shared_items.size() - 1U;
   return 0;
 }
@@ -614,6 +656,7 @@ extern "C" fm_status_t fm_workbook_clear_pivot_cache_field_shared_items(fm_workb
   }
   field->shared_items.clear();
   field->shared_item_is_date.clear();
+  field->items_follow_values = false;
   return 0;
 }
 
@@ -790,6 +833,10 @@ fm_status_t set_record_cell(fm_workbook_t* wb, std::uint32_t cache_id, std::size
   if (rec == nullptr) {
     return status;
   }
+  if (cache->fields()[field_index].items_follow_values) {
+    formulon::pivot::write_shared_record_value(*cache, record_index, field_index, value, false);
+    return 0;
+  }
   reset_cell_encoding(*rec, cache->fields()[field_index], field_index, value);
   rec->cells[field_index] = std::move(value);
   return 0;
@@ -818,9 +865,15 @@ extern "C" fm_status_t fm_workbook_set_pivot_cache_record_date(fm_workbook_t* wb
     return st;
   }
   fm_status_t status = 0;
-  auto* rec = lookup_record_mut(wb, cache_id, record_index, field_index, nullptr, &status);
+  formulon::pivot::PivotCache* cache = nullptr;
+  auto* rec = lookup_record_mut(wb, cache_id, record_index, field_index, &cache, &status);
   if (rec == nullptr) {
     return status;
+  }
+  if (cache->fields()[field_index].items_follow_values) {
+    formulon::pivot::write_shared_record_value(*cache, record_index, field_index, formulon::Value::number(serial),
+                                               true);
+    return 0;
   }
   rec->cells[field_index] = formulon::Value::number(serial);
   rec->cell_is_date.resize(rec->cells.size(), false);
@@ -846,6 +899,11 @@ extern "C" fm_status_t fm_workbook_set_pivot_cache_record_text(fm_workbook_t* wb
   auto* rec = lookup_record_mut(wb, cache_id, record_index, field_index, &cache, &status);
   if (rec == nullptr) {
     return status;
+  }
+  if (cache->fields()[field_index].items_follow_values) {
+    formulon::pivot::write_shared_record_value(*cache, record_index, field_index,
+                                               formulon::Value::text(std::string_view(utf8)), false);
+    return 0;
   }
   // Overwrite-aware: the cache reuses this coordinate's existing storage
   // slot, so repeated writes to one cell do not grow the text store.

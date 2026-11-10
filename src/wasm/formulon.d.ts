@@ -8536,7 +8536,9 @@ export interface PivotCache {
   listFieldSharedItems(field: PivotFieldRef): readonly PivotCacheValue[];
   /** Appends `value` as a shared item of cache field `field` and returns the new item's index. A `Date` is stored as a
    *  date in the workbook's date system (not before 1900, not past 9999-12-31, else `StatusCode.InvalidArgument`),
-   *  saved with seconds precision, and read through its local getters (see {@link DateInput}); a number is a number. */
+   *  saved with seconds precision, and read through its local getters (see {@link DateInput}); a number is a number.
+   *  Fails with `StatusCode.AlreadyExists` when the field already holds `value`: text that differs only in case is the
+   *  same item, while a `Date` and the number of its serial are different items. */
   addFieldSharedItem(field: PivotFieldRef, value: number | string | boolean | null | Date | ErrorValue): number;
   /** Drops every shared item from cache field `field`. */
   clearFieldSharedItems(field: PivotFieldRef): void;
