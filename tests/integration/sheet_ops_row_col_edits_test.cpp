@@ -991,15 +991,15 @@ TEST(WorkbookRowColEdits, ColumnEditsInsideATableKeepItsColumnsAndSortState) {
   EXPECT_EQ(widened.ref, "B2:E5");
   ASSERT_EQ(widened.columns.size(), 4U);
   EXPECT_EQ(widened.columns[0].name, "c1");
-  EXPECT_EQ(widened.columns[1].name, "Column1");
+  EXPECT_EQ(widened.columns[1].name, "c12");
   EXPECT_EQ(widened.columns[1].id, 4U);
   EXPECT_EQ(widened.columns[2].name, "c2");
   ASSERT_NE(wb.sheet(0).cell_at(1, 2), nullptr);
-  EXPECT_EQ(wb.sheet(0).cell_at(1, 2)->cached_value.as_text(), "Column1");
+  EXPECT_EQ(wb.sheet(0).cell_at(1, 2)->cached_value.as_text(), "c12");
   EXPECT_NE(widened.sort_state_xml.find("ref=\"B3:E5\""), std::string::npos) << widened.sort_state_xml;
   EXPECT_NE(widened.sort_state_xml.find("ref=\"D3:D5\""), std::string::npos) << widened.sort_state_xml;
 
-  ASSERT_TRUE(static_cast<bool>(wb.delete_cols(0, 2, 2)));  // Column1 and c2.
+  ASSERT_TRUE(static_cast<bool>(wb.delete_cols(0, 2, 2)));  // c12 and c2.
   const TableMetadata& narrowed = wb.tables()[0];
   EXPECT_EQ(narrowed.ref, "B2:C5");
   ASSERT_EQ(narrowed.columns.size(), 2U);

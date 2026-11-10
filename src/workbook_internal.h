@@ -160,6 +160,42 @@ std::string first_free_numbered_name(std::string_view stem, std::size_t first, c
 /// included, stays reserved while numbering.
 void name_new_table_columns(std::vector<std::string>& names, std::string_view column_word);
 
+/// Name of a table column inserted right of `left_name` (empty for none):
+/// a name ending in ASCII digits counts on (`Q2` -> `Q3`, `Q09` -> `Q10`),
+/// falling back to `left_name` plus the smallest free N >= 2 when that is
+/// taken; any other takes `column_word` plus the smallest free N >= 1. Taken
+/// means colliding with one of `taken` (`sheet_names::write_collides`).
+std::string next_table_column_name(std::string_view left_name, std::string_view column_word,
+                                   const std::vector<std::string>& taken);
+
+/// Inserts `count` column entries at `offset` in `table.columns`, with fresh
+/// ids and names from `next_table_column_name` applied left to right. With a
+/// header row, writes each name into its header cell on `rect`, the table's
+/// extent after the insert, and marks the cell's dependents dirty. The new
+/// data and totals cells are left blank.
+void add_table_columns_locked(TableMetadata& table, std::size_t offset, std::uint32_t count, const MergeRange& rect,
+                              Sheet& sheet, std::size_t sheet_index, const eval::RecalcEngine::LockedMutator& mutator,
+                              std::string_view column_word);
+
+/// Writes each calculated column's formula into rows `[first_row, last_row]`
+/// of `table` on `sheet`, its relative references moved from the first data
+/// row to the target row; the array flag stores a one-cell array formula.
+/// A formula that does not parse leaves its cells as they are.
+void fill_calculated_columns_locked(const Workbook& wb, Sheet& sheet, const eval::RecalcEngine::LockedMutator& mutator,
+                                    const TableMetadata& table, std::uint32_t first_row, std::uint32_t last_row);
+
+/// Moves the relative references of every calculated-column formula of
+/// `table` by `row_delta` rows, re-anchoring them on the first data row after
+/// rows were inserted at it. A formula that does not parse stays as it is.
+void shift_calculated_column_anchor(TableMetadata& table, std::int32_t row_delta);
+
+/// The bookkeeping after table `index`'s extent changed: its AutoFilter
+/// spans the header through the last data row, formulas naming it are
+/// re-indexed, spill barriers re-synced and row-visibility dependents dirtied.
+void finish_table_extent_change_locked(Workbook& wb, std::vector<Sheet>& sheets,
+                                       const eval::RecalcEngine::LockedMutator& mutator,
+                                       const std::vector<DefinedName>& defined_names, std::size_t index);
+
 }  // namespace detail
 }  // namespace formulon
 

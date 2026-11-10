@@ -14,6 +14,8 @@
 #include "defined_name.h"
 #include "excel_profile.h"
 #include "gtest/gtest.h"
+#include "merge_range.h"
+#include "sheet_metadata.h"
 #include "table.h"
 #include "utils/error.h"
 #include "value.h"
@@ -256,6 +258,70 @@ TEST(WorkbookTableColumnRename, InsertedColumnTakesProfileWord) {
   ASSERT_EQ(wb.tables()[0].columns.size(), 7U);
   EXPECT_EQ(wb.tables()[0].columns[1].name, "列2");
   EXPECT_EQ(TextAt(wb, 0, 0, 1), "列2");
+}
+
+// A ja-JP book holding table tblN on B1 with `columns` as its headers and
+// three data rows.
+Workbook MakeInsertBook(const std::vector<std::string>& columns) {
+  Workbook wb = Workbook::create_for_profile(ProfileOf("mac-365-ja_JP"));
+  const std::string last = std::string(1, static_cast<char>('A' + columns.size())) + "4";
+  EXPECT_TRUE(wb.add_table(MakeTable("tblN", "B1:" + last, columns)).has_value());
+  for (std::uint32_t c = 0; c < columns.size(); ++c) {
+    EXPECT_TRUE(static_cast<bool>(wb.set_cell_text(0, 0, c + 1U, columns[c])));
+  }
+  return wb;
+}
+
+std::vector<std::string> ColumnNames(const Workbook& wb) {
+  std::vector<std::string> names;
+  for (const TableColumn& column : wb.tables()[0].columns) {
+    names.push_back(column.name);
+  }
+  return names;
+}
+
+TEST(WorkbookTableColumnRename, InsertedColumnCountsOnFromItsLeftNeighbour) {
+  struct Case {
+    std::vector<std::string> columns;
+    std::uint32_t col;
+    std::uint32_t count;
+    std::vector<std::string> expected;
+  };
+  const Case cases[] = {
+      {{"Item", "Q2", "Qty"}, 3U, 1U, {"Item", "Q2", "Q3", "Qty"}},
+      {{"Item", "Qty"}, 2U, 1U, {"Item", "列1", "Qty"}},
+      {{"Item", "Q2", "Q3"}, 3U, 1U, {"Item", "Q2", "Q22", "Q3"}},
+      {{"Item", "列1", "Qty"}, 3U, 1U, {"Item", "列1", "列2", "Qty"}},
+      {{"Item", "Q09", "Qty"}, 3U, 1U, {"Item", "Q09", "Q10", "Qty"}},
+      {{"Item", "q3", "Q2", "Qty"}, 4U, 1U, {"Item", "q3", "Q2", "Q22", "Qty"}},
+      {{"Item", "Q2", "Qty"}, 3U, 2U, {"Item", "Q2", "Q3", "Q4", "Qty"}},
+      {{"Q3", "Q2", "Qty"}, 3U, 2U, {"Q3", "Q2", "Q22", "Q23", "Qty"}},
+  };
+  for (const Case& c : cases) {
+    SCOPED_TRACE(c.columns[1] + " at " + std::to_string(c.col));
+    Workbook wb = MakeInsertBook(c.columns);
+    ASSERT_TRUE(static_cast<bool>(wb.insert_cols(0, c.col, c.count)));
+    EXPECT_EQ(ColumnNames(wb), c.expected);
+    for (std::uint32_t i = 0; i < c.count; ++i) {
+      EXPECT_EQ(TextAt(wb, 0, 0, c.col + i), c.expected[c.col - 1U + i]);
+    }
+  }
+}
+
+TEST(WorkbookTableColumnRename, SecondInsertAtTheSameColumnTakesTheDuplicateForm) {
+  Workbook wb = MakeInsertBook({"Item", "Q2", "Qty"});
+  ASSERT_TRUE(static_cast<bool>(wb.insert_cols(0, 3, 1)));
+  ASSERT_TRUE(static_cast<bool>(wb.insert_cols(0, 3, 1)));
+  EXPECT_EQ(ColumnNames(wb), (std::vector<std::string>{"Item", "Q2", "Q22", "Q3", "Qty"}));
+}
+
+TEST(WorkbookTableColumnRename, InsertCellsRightInsideATableNamesTheColumnFromItsLeft) {
+  Workbook wb = MakeInsertBook({"Item", "Q2", "Qty"});
+  ASSERT_TRUE(static_cast<bool>(wb.insert_cells(0, MergeRange{0U, 3U, 3U, 3U}, CellShift::kRight)));
+  EXPECT_EQ(wb.tables()[0].ref, "B1:E4");
+  EXPECT_EQ(ColumnNames(wb), (std::vector<std::string>{"Item", "Q2", "Q3", "Qty"}));
+  EXPECT_EQ(TextAt(wb, 0, 0, 3), "Q3");
+  EXPECT_EQ(TextAt(wb, 0, 0, 4), "Qty");
 }
 
 TEST(WorkbookTableColumnRename, IngestBindsThisRowAndBareTableName) {

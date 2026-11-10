@@ -6,7 +6,6 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
-#include <iterator>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -363,7 +362,7 @@ std::vector<BlockedSpillFootprint> remap_blocked_spill_footprints(const std::vec
 
 // Gives a table the column entries its rewritten `ref` spans: a column delete
 // removes the deleted columns' entries, and an insert inside the table adds
-// `<column_word>N` entries with fresh ids, writing their header cells.
+// entries named from their left neighbour (`detail::add_table_columns_locked`).
 // `before` is the table's extent before the edit.
 void update_table_columns(TableMetadata& table, const MergeRange& before, const MergeRange& after, Sheet& sheet,
                           std::size_t sheet_index, const eval::RecalcEngine::LockedMutator& mutator,
@@ -384,48 +383,28 @@ void update_table_columns(TableMetadata& table, const MergeRange& before, const 
   if (edit.index <= before.first_col || edit.index > before.last_col) {
     return;
   }
-  std::uint32_t next_id = 1;
-  for (const TableColumn& column : table.columns) {
-    next_id = std::max(next_id, column.id + 1U);
-  }
-  const std::size_t offset = std::min<std::size_t>(edit.index - before.first_col, table.columns.size());
-  std::vector<TableColumn> added;
-  added.reserve(edit.count);
-  std::uint32_t suffix = 1;
-  const auto name_taken = [&](const std::string& name) {
-    const auto same = [&name](const TableColumn& column) { return sheet_names::write_collides(column.name, name); };
-    return std::any_of(table.columns.begin(), table.columns.end(), same) ||
-           std::any_of(added.begin(), added.end(), same);
-  };
-  for (std::uint32_t i = 0; i < edit.count; ++i) {
-    TableColumn column;
-    column.id = next_id++;
-    do {
-      column.name = std::string(column_word) + std::to_string(suffix++);
-    } while (name_taken(column.name));
-    if (table.header_row) {
-      const std::uint32_t col = edit.index + i;
-      sheet.set_cell_text(after.first_row, col, column.name);
-      const eval::CellNodeId node = make_node(sheet_index, after.first_row, col);
-      detail::mark_dependents_dirty(mutator, node);
-    }
-    added.push_back(std::move(column));
-  }
-  table.columns.insert(table.columns.begin() + static_cast<std::ptrdiff_t>(offset),
-                       std::make_move_iterator(added.begin()), std::make_move_iterator(added.end()));
+  detail::add_table_columns_locked(table, edit.index - before.first_col, edit.count, after, sheet, sheet_index, mutator,
+                                   column_word);
 }
 
 // Brings the tables on the edited sheet in line with the `ref` their rewrite
 // gave them: column entries follow a column edit inside the table, the sort
 // state moves the way a worksheet one does, and a table whose whole extent was
-// deleted goes. `refs_before` holds each table's `ref` before the edit, by
-// index. Returns the names of every table whose extent changed, for the
-// re-index of the structured references that resolve through it.
-std::vector<std::string> update_tables_for_row_col_edit(std::vector<TableMetadata>& tables, Sheet& sheet,
-                                                        std::size_t sheet_index,
+// deleted goes. A row insert that grew a table fills its calculated columns
+// into the inserted data rows. `refs_before` holds each table's `ref` before
+// the edit, by index. Returns the names of every table whose extent changed,
+// for the re-index of the structured references that resolve through it.
+std::vector<std::string> update_tables_for_row_col_edit(const Workbook& wb, std::vector<TableMetadata>& tables,
+                                                        Sheet& sheet, std::size_t sheet_index,
                                                         const std::vector<std::string>& refs_before,
                                                         const eval::RecalcEngine::LockedMutator& mutator,
                                                         const StructuralEdit& edit, std::string_view column_word) {
+  struct Fill {
+    std::size_t table;
+    std::uint32_t first_row;
+    std::uint32_t last_row;
+  };
+  std::vector<Fill> fills;
   std::vector<std::string> changed;
   std::vector<TableMetadata> retained;
   retained.reserve(tables.size());
@@ -445,6 +424,20 @@ std::vector<std::string> update_tables_for_row_col_edit(std::vector<TableMetadat
     if (before.has_value() && !edit.row_axis) {
       update_table_columns(table, *before, *after, sheet, sheet_index, mutator, edit, column_word);
     }
+    if (before.has_value() && edit.row_axis && !edit.is_delete && before->first_row == after->first_row &&
+        after->last_row > before->last_row) {
+      const std::uint64_t first = std::max<std::uint64_t>(edit.index, after->first_row + (table.header_row ? 1U : 0U));
+      const std::uint64_t last =
+          std::min<std::uint64_t>(edit.index + static_cast<std::uint64_t>(edit.count) - 1U,
+                                  static_cast<std::uint64_t>(after->last_row) - (table.totals_row ? 1U : 0U));
+      // Rows inserted at the first data row moved the formulas' anchor cell down; the anchor stays put.
+      if (table.header_row && edit.index == after->first_row + 1U) {
+        detail::shift_calculated_column_anchor(table, -static_cast<std::int32_t>(edit.count));
+      }
+      if (first <= last) {
+        fills.push_back(Fill{retained.size(), static_cast<std::uint32_t>(first), static_cast<std::uint32_t>(last)});
+      }
+    }
     if (!table.sort_state_xml.empty()) {
       WorksheetRawExtensions sort_state{WorksheetRawChild{
           static_cast<std::uint32_t>(worksheet_child::slot_of("sortState")), std::move(table.sort_state_xml)}};
@@ -454,6 +447,10 @@ std::vector<std::string> update_tables_for_row_col_edit(std::vector<TableMetadat
     retained.push_back(std::move(table));
   }
   tables = std::move(retained);
+  // Filled once every table is back in place, as structured references resolve through them.
+  for (const Fill& fill : fills) {
+    detail::fill_calculated_columns_locked(wb, sheet, mutator, tables[fill.table], fill.first_row, fill.last_row);
+  }
   return changed;
 }
 
@@ -488,7 +485,9 @@ bool insert_pushes_content_off(const Sheet& sheet, const StructuralEdit& edit) {
 // would push any of them, or a value or formula, past the grid edge is
 // refused, as Excel refuses to shift non-empty cells off the sheet. A band
 // edit is also refused when its moving region meets one of these, or a
-// table, across a band edge, and when it lies inside a PivotTable.
+// table, across a band edge, and when it lies inside a PivotTable. A band
+// insert is refused when it would move a PivotTable at all, and when it cuts
+// into a table without spanning exactly that table's columns (rows).
 Expected<void, Error> check_structure_edit(const Workbook& wb, std::size_t sheet_index, const StructuralEdit& edit) {
   const auto refuse = [&](StructureEditCut cut, const char* what) {
     std::string message(cut == StructureEditCut::kPushesOff ? "Cannot shift " : "Cannot change part of ");
@@ -542,6 +541,10 @@ Expected<void, Error> check_structure_edit(const Workbook& wb, std::size_t sheet
     if (fit == BandFit::kStraddles) {
       return refuse(StructureEditCut::kSplits, "a PivotTable");
     }
+    // Insert Cells never shifts a PivotTable along.
+    if (edit.band.has_value() && !edit.is_delete && fit == BandFit::kInside) {
+      return refuse(StructureEditCut::kSplits, "a PivotTable");
+    }
     // Cells selected inside a report are the report's own to change.
     if (edit.band.has_value()) {
       const std::uint32_t last = edit.index + edit.count - 1U;
@@ -569,6 +572,12 @@ Expected<void, Error> check_structure_edit(const Workbook& wb, std::size_t sheet
     const StructureEditCut cut = edit.row_axis ? structure_edit_cut(ref->first_row, ref->last_row, edit)
                                                : structure_edit_cut(ref->first_col, ref->last_col, edit);
     if (fit == BandFit::kInside && cut == StructureEditCut::kPushesOff) {
+      return refuse(cut, "a table");
+    }
+    // Insert Cells growing a table spans exactly its columns (rows), totals row included.
+    if (edit.band.has_value() && !edit.is_delete && fit == BandFit::kInside && cut == StructureEditCut::kSplits &&
+        (edit.band->first != (edit.row_axis ? ref->first_col : ref->first_row) ||
+         edit.band->last != (edit.row_axis ? ref->last_col : ref->last_row))) {
       return refuse(cut, "a table");
     }
   }
@@ -725,7 +734,7 @@ Expected<void, Error> apply_row_col_edit(Workbook& wb, std::size_t sheet_index, 
     }
   }
   const std::vector<std::string> changed_tables =
-      update_tables_for_row_col_edit(wb.mutable_tables(), target, sheet_index, table_refs_before, mutator, edit,
+      update_tables_for_row_col_edit(wb, wb.mutable_tables(), target, sheet_index, table_refs_before, mutator, edit,
                                      new_workbook_defaults(wb.excel_profile().locale).column_word);
   sync_table_spill_barriers_locked(sheets, mutator, wb.tables());
   std::vector<std::string> filters_after;

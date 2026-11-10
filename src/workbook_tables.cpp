@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <iterator>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -21,6 +22,9 @@
 #include "io/xml_escape.h"
 #include "merge_range.h"
 #include "new_workbook_defaults.h"
+#include "parser/ast.h"
+#include "parser/ast_format.h"
+#include "parser/ast_shift.h"
 #include "parser/ref_transforms.h"
 #include "parser/reference.h"
 #include "parser/structured_ref_payload.h"
@@ -31,6 +35,7 @@
 #include "sheet_metadata.h"
 #include "sheet_name.h"
 #include "table.h"
+#include "utils/arena.h"
 #include "utils/error.h"
 #include "utils/expected.h"
 #include "utils/name_syntax.h"
@@ -480,12 +485,8 @@ Expected<void, Error> Workbook::set_table_totals_row(std::size_t index, bool sho
     // Shown now, so the "never shown" marker no longer applies.
     table.totals_row_shown.reset();
   }
-  // The extent changed, so every structured reference into the table may
-  // resolve differently; reindex the formulas that name it.
   const eval::RecalcEngine::LockedMutator mutator = engine_->locked_mutator();
-  reindex_formulas_referencing_table(sheets_, mutator, *this, {table.name, table.display_name});
-  sync_table_spill_barriers_locked(sheets_, mutator, tables_);
-  mark_row_visibility_dependents_dirty_locked(sheets_, mutator, defined_names_);
+  detail::finish_table_extent_change_locked(*this, sheets_, mutator, defined_names_, index);
   if (!shown) {
     return Expected<void, Error>::Ok();
   }
@@ -790,6 +791,141 @@ void name_new_table_columns(std::vector<std::string>& names, std::string_view co
       reserved.push_back(names[i]);
     }
   }
+}
+
+std::string next_table_column_name(std::string_view left_name, std::string_view column_word,
+                                   const std::vector<std::string>& taken) {
+  std::size_t stem = left_name.size();
+  while (stem > 0U && left_name[stem - 1U] >= '0' && left_name[stem - 1U] <= '9') {
+    --stem;
+  }
+  if (stem == left_name.size()) {
+    return first_free_numbered_name(column_word, 1U, taken);
+  }
+  // Counts the trailing digits on in place, so leading zeros keep the width.
+  std::string next(left_name);
+  std::size_t at = next.size();
+  while (at > stem && next[at - 1U] == '9') {
+    next[--at] = '0';
+  }
+  if (at > stem) {
+    ++next[at - 1U];
+  } else {
+    next.insert(stem, 1U, '1');
+  }
+  if (!sheet_names::write_collides(taken, next, sheet_names::kNotFound)) {
+    return next;
+  }
+  return first_free_numbered_name(left_name, 2U, taken);
+}
+
+void add_table_columns_locked(TableMetadata& table, std::size_t offset, std::uint32_t count, const MergeRange& rect,
+                              Sheet& sheet, std::size_t sheet_index, const eval::RecalcEngine::LockedMutator& mutator,
+                              std::string_view column_word) {
+  offset = std::min(offset, table.columns.size());
+  std::uint32_t next_id = 1;
+  std::vector<std::string> taken;
+  taken.reserve(table.columns.size() + count);
+  for (const TableColumn& column : table.columns) {
+    next_id = std::max(next_id, column.id + 1U);
+    taken.push_back(column.name);
+  }
+  std::string left = offset == 0U ? std::string() : table.columns[offset - 1U].name;
+  std::vector<TableColumn> added;
+  added.reserve(count);
+  for (std::uint32_t i = 0; i < count; ++i) {
+    TableColumn column;
+    column.id = next_id++;
+    column.name = next_table_column_name(left, column_word, taken);
+    taken.push_back(column.name);
+    left = column.name;
+    if (table.header_row) {
+      const std::uint32_t col = rect.first_col + static_cast<std::uint32_t>(offset) + i;
+      sheet.set_cell_text(rect.first_row, col, column.name);
+      mark_dependents_dirty(mutator, make_node(sheet_index, rect.first_row, col));
+    }
+    added.push_back(std::move(column));
+  }
+  table.columns.insert(table.columns.begin() + static_cast<std::ptrdiff_t>(offset),
+                       std::make_move_iterator(added.begin()), std::make_move_iterator(added.end()));
+}
+
+void fill_calculated_columns_locked(const Workbook& wb, Sheet& sheet, const eval::RecalcEngine::LockedMutator& mutator,
+                                    const TableMetadata& table, std::uint32_t first_row, std::uint32_t last_row) {
+  const std::optional<MergeRange> rect = parse_a1_rectangle(table.ref);
+  if (!rect.has_value() || first_row > last_row) {
+    return;
+  }
+  // The stored formula reads as entered in the first data row.
+  const std::uint32_t anchor_row = rect->first_row + (table.header_row ? 1U : 0U);
+  Arena formula_arena;
+  Arena shift_arena;
+  for (std::size_t i = 0; i < table.columns.size(); ++i) {
+    const TableColumn& column = table.columns[i];
+    if (column.calculated_column_formula.empty()) {
+      continue;
+    }
+    const std::string text =
+        Workbook::normalize_formula_text("=" + column.calculated_column_formula, Workbook::FormulaSource::kRendered);
+    const parser::AstNode* root = parse_stored_formula(text, formula_arena);
+    if (root == nullptr) {
+      continue;
+    }
+    const std::uint32_t col = rect->first_col + static_cast<std::uint32_t>(i);
+    const std::uint32_t block = column.calculated_column_formula_array ? 1U : 0U;
+    for (std::uint32_t row = first_row; row <= last_row; ++row) {
+      shift_arena.reset();
+      const parser::AstNode* shifted = parser::shift_relative_refs(
+          *root, shift_arena, static_cast<std::int32_t>(row) - static_cast<std::int32_t>(anchor_row), 0);
+      if (shifted == nullptr) {
+        continue;
+      }
+      sheet.set_cell_formula(row, col, "=" + parser::format_formula(*shifted));
+      sheet.set_cell_array_block(row, col, block, block);
+      const eval::CellNodeId node = make_node(table.sheet_index, row, col);
+      mutator.register_formula(node, *shifted, wb);
+      mutator.mark_dirty(node);
+      mark_dependents_dirty(mutator, node);
+    }
+  }
+}
+
+void shift_calculated_column_anchor(TableMetadata& table, std::int32_t row_delta) {
+  Arena formula_arena;
+  Arena shift_arena;
+  for (TableColumn& column : table.columns) {
+    if (column.calculated_column_formula.empty()) {
+      continue;
+    }
+    const std::string text =
+        Workbook::normalize_formula_text("=" + column.calculated_column_formula, Workbook::FormulaSource::kRendered);
+    const parser::AstNode* root = parse_stored_formula(text, formula_arena);
+    if (root == nullptr) {
+      continue;
+    }
+    shift_arena.reset();
+    const parser::AstNode* shifted = parser::shift_relative_refs(*root, shift_arena, row_delta, 0);
+    if (shifted != nullptr) {
+      column.calculated_column_formula = parser::format_formula(*shifted);
+    }
+  }
+}
+
+void finish_table_extent_change_locked(Workbook& wb, std::vector<Sheet>& sheets,
+                                       const eval::RecalcEngine::LockedMutator& mutator,
+                                       const std::vector<DefinedName>& defined_names, std::size_t index) {
+  TableMetadata& table = wb.mutable_tables()[index];
+  const std::optional<MergeRange> rect = parse_a1_rectangle(table.ref);
+  if (AutoFilter* filter = table.auto_filter_xml.get(); filter != nullptr && !filter->is_opaque() && rect) {
+    filter->range = *rect;
+    if (table.totals_row && rect->last_row > rect->first_row) {
+      filter->range.last_row = rect->last_row - 1U;
+    }
+  }
+  // Every structured reference into the table may resolve differently now.
+  reindex_formulas_referencing_table(sheets, mutator, wb, {table.name, table.display_name});
+  sync_table_spill_barriers_locked(sheets, mutator, wb.tables());
+  mark_row_visibility_dependents_dirty_locked(sheets, mutator, defined_names);
 }
 
 }  // namespace detail

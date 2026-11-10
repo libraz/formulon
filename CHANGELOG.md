@@ -111,7 +111,11 @@ Upgrading from 0.18: see [Upgrading from 0.18 to 0.19](docs/releases/upgrading-0
   `getFieldDateGroup` / `getFieldNumericGroup` read a grouping back.
 - `Sheet.insertCells(range, shift)` and `deleteCells(range, shift)` shift a
   band of cells in a `CellShift` direction; a reference moves only when its
-  extent across the band lies wholly inside it.
+  extent across the band lies wholly inside it. An insert that would move a
+  PivotTable, or cut into a table without spanning its full width or height,
+  is refused.
+- Rows inserted inside a table, by `insertCells` or `Sheet.insertRows`, take
+  its calculated-column formulas.
 - Lookups and accessors: `Workbook.sheetCount`, `hasSheet`,
   `formulon.listProfileIds()`, `listThemeScriptFonts`, `activeSheet()`,
   `getDefaultFont()`, `PivotCache.getRecordValue`, `Pivot.getField`,
@@ -187,6 +191,8 @@ Upgrading from 0.18: see [Upgrading from 0.18 to 0.19](docs/releases/upgrading-0
 
 ### Changed
 
+- A column inserted inside a table is named from its left neighbour (`Q2`
+  gives `Q3`, else `Q22`); otherwise it takes the locale's column word.
 - Chart and shape colours accept and return theme references
   (`ColorKind.Theme`); indexed and automatic colours are rejected.
 - Chart type changes follow Excel: bar, column and area keep series fills,

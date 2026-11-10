@@ -1208,8 +1208,6 @@ TEST(InsertDeleteCells, APivotTheBandCoversMovesAsABlock) {
     const char* total;
   };
   const Case cases[] = {
-      {"A1:B1", CellShift::kDown, "A4:B7", "B7"},
-      {"A1:A9", CellShift::kRight, "B3:C6", "C6"},
       {"A1:B1", CellShift::kUp, "A2:B5", "B5"},
   };
   for (const Case& c : cases) {
@@ -1249,6 +1247,183 @@ TEST(InsertDeleteCells, AnInsertInsideAPivotIsRefused) {
 TEST(InsertDeleteCells, ADeleteInsideAPivotIsRefused) {
   ExpectPivotEditRefused("A4:B4", CellShift::kUp);
   ExpectPivotEditRefused("A4", CellShift::kLeft);
+}
+
+TEST(InsertDeleteCells, AnInsertWhosePathHoldsAPivotIsRefused) {
+  ExpectPivotEditRefused("A1:B1", CellShift::kDown);
+  ExpectPivotEditRefused("A1:A9", CellShift::kRight);
+  ExpectPivotEditRefused("A1:C2", CellShift::kDown);
+}
+
+TEST(InsertDeleteCells, AnInsertAboveAPivotOutsideItsColumnsSucceeds) {
+  Workbook wb = Workbook::create();
+  AddBarePivot(wb, "A6:B7");
+  ExpectOk(Edit(wb, "C2:D2", CellShift::kDown));
+  EXPECT_EQ(PivotAt(wb), "A6:B7");
+  ExpectRefused(Edit(wb, "B2", CellShift::kDown));
+  EXPECT_EQ(PivotAt(wb), "A6:B7");
+}
+
+// ---------------------------------------------------------------------------
+// Insert Cells across a table
+// ---------------------------------------------------------------------------
+
+// Table T on A1:E4: Item / Qty / Dbl (B*2) / Arr (B+1, array) / Bad (does
+// not parse), data rows 2-4 with column C's formulas written.
+void AddCalcTable(Workbook& wb, bool totals_row = false) {
+  TableMetadata table = MakeTable("T", totals_row ? "A1:E5" : "A1:E4");
+  table.totals_row = totals_row;
+  const char* names[] = {"Item", "Qty", "Dbl", "Arr", "Bad"};
+  for (std::size_t c = 0; c < 5U; ++c) {
+    table.columns[c].name = names[c];
+    SetText(wb, std::string(1, static_cast<char>('A' + c)) + "1", names[c]);
+  }
+  table.columns[2].calculated_column_formula = "B2*2";
+  table.columns[3].calculated_column_formula = "B2+1";
+  table.columns[3].calculated_column_formula_array = true;
+  table.columns[4].calculated_column_formula = "SUM(";
+  for (int r = 2; r <= 4; ++r) {
+    const std::string row = std::to_string(r);
+    SetText(wb, "A" + row, "i" + row);
+    SetNumber(wb, "B" + row, static_cast<double>(r));
+    SetFormula(wb, "C" + row, "=B" + row + "*2");
+  }
+  if (totals_row) {
+    SetText(wb, "A5", "Total");
+  }
+  ASSERT_TRUE(wb.add_table(std::move(table)).has_value());
+}
+
+TEST(InsertDeleteCells, AnInsertDownInsideATableFillsItsCalculatedColumns) {
+  Workbook wb = Workbook::create();
+  AddCalcTable(wb);
+  ExpectOk(Edit(wb, "A3:E3", CellShift::kDown));
+  EXPECT_EQ(TableRef(wb, "T"), "A1:E5");
+  EXPECT_EQ(FormulaAt(wb, "C3"), "=B3*2");
+  EXPECT_EQ(FormulaAt(wb, "C4"), "=B4*2");
+  EXPECT_EQ(FormulaAt(wb, "D3"), "=B3+1");
+  EXPECT_EQ(ArrayAt(wb, "D3"), "D3");
+  EXPECT_TRUE(At(wb, "A3").is_blank());
+  EXPECT_TRUE(At(wb, "B3").is_blank());
+  EXPECT_TRUE(FormulaAt(wb, "E3").empty());
+  EXPECT_TRUE(FormulaAt(wb, "D4").empty());
+  SetNumber(wb, "B3", 5.0);
+  Recalc(wb);
+  EXPECT_EQ(At(wb, "C3"), Value::number(10.0));
+  EXPECT_EQ(At(wb, "D3"), Value::number(6.0));
+}
+
+TEST(InsertDeleteCells, AnInsertDownBesideATableLeavesItsCalculatedColumnsAlone) {
+  Workbook wb = Workbook::create();
+  AddCalcTable(wb);
+  SetNumber(wb, "C3", 99.0);
+  ExpectOk(Edit(wb, "G3:H3", CellShift::kDown));
+  EXPECT_EQ(TableRef(wb, "T"), "A1:E4");
+  EXPECT_TRUE(FormulaAt(wb, "C3").empty());
+  EXPECT_EQ(At(wb, "C3"), Value::number(99.0));
+}
+
+TEST(InsertDeleteCells, AnInsertAtTheTotalsRowAddsDataRowsAboveIt) {
+  Workbook wb = Workbook::create();
+  AddCalcTable(wb, /*totals_row=*/true);
+  ExpectOk(Edit(wb, "A5:E6", CellShift::kDown));
+  EXPECT_EQ(TableRef(wb, "T"), "A1:E7");
+  EXPECT_TRUE(wb.tables()[0].totals_row);
+  EXPECT_EQ(TextAt(wb, "A7"), "Total");
+  EXPECT_EQ(FormulaAt(wb, "C5"), "=B5*2");
+  EXPECT_EQ(FormulaAt(wb, "C6"), "=B6*2");
+  EXPECT_TRUE(FormulaAt(wb, "C7").empty());
+}
+
+TEST(InsertDeleteCells, AnInsertDirectlyBelowATableLeavesItUnchanged) {
+  Workbook wb = Workbook::create();
+  AddCalcTable(wb);
+  SetText(wb, "A5", "below");
+  ExpectOk(Edit(wb, "A5:E5", CellShift::kDown));
+  EXPECT_EQ(TableRef(wb, "T"), "A1:E4");
+  EXPECT_EQ(TextAt(wb, "A6"), "below");
+  EXPECT_TRUE(FormulaAt(wb, "C5").empty());
+}
+
+TEST(InsertDeleteCells, AWholeRowInsertInsideATableFillsItsCalculatedColumns) {
+  Workbook wb = Workbook::create();
+  AddCalcTable(wb);
+  ExpectOk(wb.insert_rows(0U, 2U, 2U));
+  EXPECT_EQ(TableRef(wb, "T"), "A1:E6");
+  EXPECT_EQ(FormulaAt(wb, "C3"), "=B3*2");
+  EXPECT_EQ(FormulaAt(wb, "C4"), "=B4*2");
+  EXPECT_EQ(FormulaAt(wb, "C5"), "=B5*2");
+}
+
+TEST(InsertDeleteCells, AWholeRowInsertAtTheFirstDataRowKeepsTheFormulasAnchored) {
+  Workbook wb = Workbook::create();
+  AddCalcTable(wb);
+  ExpectOk(wb.insert_rows(0U, 1U, 1U));
+  EXPECT_EQ(TableRef(wb, "T"), "A1:E5");
+  EXPECT_EQ(wb.tables()[0].columns[2].calculated_column_formula, "B2*2");
+  EXPECT_EQ(FormulaAt(wb, "C2"), "=B2*2");
+  EXPECT_EQ(FormulaAt(wb, "C3"), "=B3*2");
+  EXPECT_EQ(FormulaAt(wb, "D2"), "=B2+1");
+}
+
+TEST(InsertDeleteCells, AnInsertOverhangingATableIsRefused) {
+  struct Case {
+    const char* range;
+    CellShift shift;
+  };
+  const Case cases[] = {
+      {"A3:F3", CellShift::kDown},
+      {"A3:E3", CellShift::kRight},
+      {"B1:B5", CellShift::kRight},
+      {"B2:B4", CellShift::kRight},
+  };
+  for (const Case& c : cases) {
+    SCOPED_TRACE(std::string(c.range) + " " + ShiftName(c.shift));
+    Workbook wb = Workbook::create();
+    AddCalcTable(wb);
+    ExpectRefused(Edit(wb, c.range, c.shift));
+    EXPECT_EQ(TableRef(wb, "T"), "A1:E4");
+    EXPECT_EQ(wb.tables()[0].columns.size(), 5U);
+  }
+}
+
+TEST(InsertDeleteCells, AnInsertRightMustCoverTheTotalsRow) {
+  Workbook wb = Workbook::create();
+  AddCalcTable(wb, /*totals_row=*/true);
+  ExpectRefused(Edit(wb, "B1:B4", CellShift::kRight));
+  EXPECT_EQ(TableRef(wb, "T"), "A1:E5");
+  ExpectOk(Edit(wb, "B1:B5", CellShift::kRight));
+  EXPECT_EQ(TableRef(wb, "T"), "A1:F5");
+  EXPECT_EQ(wb.tables()[0].columns.size(), 6U);
+}
+
+TEST(InsertDeleteCells, AnInsertRightAtATablesFirstColumnMovesItWhole) {
+  Workbook wb = Workbook::create();
+  AddCalcTable(wb);
+  ExpectOk(Edit(wb, "A1:A4", CellShift::kRight));
+  EXPECT_EQ(TableRef(wb, "T"), "B1:F4");
+  EXPECT_EQ(wb.tables()[0].columns.size(), 5U);
+  EXPECT_EQ(TextAt(wb, "B1"), "Item");
+}
+
+TEST(InsertDeleteCells, AnInsertRightInsideATableAddsANamedColumn) {
+  Workbook wb = Workbook::create();
+  AddCalcTable(wb);
+  ExpectOk(Edit(wb, "C1:C4", CellShift::kRight));
+  EXPECT_EQ(TableRef(wb, "T"), "A1:F4");
+  ASSERT_EQ(wb.tables()[0].columns.size(), 6U);
+  EXPECT_EQ(wb.tables()[0].columns[2].name, "Column1");
+  EXPECT_EQ(TextAt(wb, "C1"), "Column1");
+  EXPECT_EQ(TextAt(wb, "D1"), "Dbl");
+}
+
+TEST(InsertDeleteCells, AnotherTableInsideTheShiftedRegionMovesAlong) {
+  Workbook wb = Workbook::create();
+  AddCalcTable(wb);
+  AddTable(wb, "Below", "A8:B9");
+  ExpectOk(Edit(wb, "A3:E3", CellShift::kDown));
+  EXPECT_EQ(TableRef(wb, "T"), "A1:E5");
+  EXPECT_EQ(TableRef(wb, "Below"), "A9:B10");
 }
 
 // ---------------------------------------------------------------------------
@@ -1485,6 +1660,14 @@ TEST(InsertDeleteCells, TotalsOnAndOffMoveASecondTableInsideTheBand) {
   EXPECT_EQ(TableRef(wb, "Below"), "A8:B9");
   TotalsOff(wb);
   EXPECT_EQ(TableRef(wb, "Below"), "A7:B8");
+}
+
+TEST(InsertDeleteCells, TotalsOnIsRefusedWithAPivotBelowInTheTableColumns) {
+  Workbook wb = Workbook::create();
+  AddKv(wb);
+  AddBarePivot(wb, "A7:B8");
+  ExpectTotalsRefused(wb, true, "A1:B4");
+  EXPECT_EQ(PivotAt(wb), "A7:B8");
 }
 
 TEST(InsertDeleteCells, TotalsOnTakesTheFreeRowAboveAStraddlingTable) {
