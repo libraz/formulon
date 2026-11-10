@@ -150,6 +150,16 @@ MergeRange pivot_occupied_extent(const pivot::PivotTable& table);
 Expected<void, Error> check_projection_target(const Workbook& wb, std::size_t sheet_index, std::size_t pivot_index,
                                               const MergeRange& target, const MergeRange& own);
 
+/// `stem` followed by the smallest N >= `first` whose result collides with none
+/// of `names` (`sheet_names::write_collides`).
+std::string first_free_numbered_name(std::string_view stem, std::size_t first, const std::vector<std::string>& names);
+
+/// Names a new table's columns: a blank one takes `column_word` plus the
+/// smallest free N >= 1, and one colliding with a column to its left takes its
+/// own spelling plus the smallest free N >= 2. Every given name, later ones
+/// included, stays reserved while numbering.
+void name_new_table_columns(std::vector<std::string>& names, std::string_view column_word);
+
 }  // namespace detail
 }  // namespace formulon
 

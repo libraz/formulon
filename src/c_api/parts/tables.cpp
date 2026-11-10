@@ -21,7 +21,6 @@
 #include "eval/text_format/display_text.h"
 #include "io/auto_filter_xml.h"
 #include "io/xml_escape.h"
-#include "new_workbook_defaults.h"
 #include "sheet_name.h"
 #include "table.h"
 #include "utils/error.h"
@@ -214,8 +213,8 @@ std::string table_auto_filter_xml(std::string_view raw_xml, std::string_view ref
 }
 
 /// Column names of a new table over `rect`. Without `column_names` each name is
-/// its header cell's displayed text, and a blank header (every column of a
-/// table without a header row) takes the first free `<column word>N`. With
+/// its header cell's displayed text, empty for a blank header (every column of
+/// a table without a header row), which `Workbook::add_table` then names. With
 /// them, a non-blank header cell must already read as its column's name.
 /// `*blank` marks the header cells the names are to be written into.
 fm_status_t table_column_names(const formulon::Workbook& book, std::size_t sheet_index, const fm_cell_rect_t& rect,
@@ -245,25 +244,6 @@ fm_status_t table_column_names(const formulon::Workbook& book, std::size_t sheet
         return invalid_argument(("column_names[" + std::to_string(i) + "] must match its header cell").c_str(),
                                 "column_names[" + std::to_string(i) + "]=" + (*names)[i] + " header=" + header);
       }
-    }
-  }
-  if (column_names == nullptr) {
-    const std::string word = formulon::new_workbook_defaults(book.excel_profile().locale).column_word;
-    const auto taken = [names](const std::string& candidate) {
-      return std::any_of(names->begin(), names->end(), [&candidate](const std::string& existing) {
-        return formulon::sheet_names::write_collides(existing, candidate);
-      });
-    };
-    std::size_t suffix = 1;
-    for (std::string& column : *names) {
-      if (!column.empty()) {
-        continue;
-      }
-      std::string candidate;
-      do {
-        candidate = word + std::to_string(suffix++);
-      } while (taken(candidate));
-      column = std::move(candidate);
     }
   }
   return 0;
@@ -482,8 +462,9 @@ extern "C" fm_status_t fm_sheet_add_table(fm_workbook_t* wb, size_t sheet_index,
     if (!blank_headers[i]) {
       continue;
     }
+    const std::string& name = book.tables()[added.value()].columns[i].name;
     if (auto rc = finish_status(
-            book.set_cell_text(sheet_index, rect.first_row, rect.first_col + static_cast<std::uint32_t>(i), names[i]));
+            book.set_cell_text(sheet_index, rect.first_row, rect.first_col + static_cast<std::uint32_t>(i), name));
         rc != 0) {
       return rc;
     }

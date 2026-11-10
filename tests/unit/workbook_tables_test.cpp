@@ -8,6 +8,7 @@
 #include "defined_name.h"
 #include "eval/function_registry.h"
 #include "eval/recalc_engine.h"
+#include "excel_profile.h"
 #include "gtest/gtest.h"
 #include "merge_range.h"
 #include "pivot/pivot_table.h"
@@ -73,13 +74,86 @@ TEST(WorkbookTables, AddTableRejectsBadSheet) {
   EXPECT_EQ(bad.error().code, FormulonErrorCode::kInvalidArgument);
 }
 
-TEST(WorkbookTables, AddTableRejectsDuplicateColumnNames) {
+TableMetadata table_with_columns(std::string ref, const std::vector<std::string>& names) {
+  TableMetadata table = make_table("Sales", std::move(ref), names.size());
+  for (std::size_t i = 0; i < names.size(); ++i) {
+    table.columns[i].name = names[i];
+  }
+  return table;
+}
+
+std::string text_at(const Workbook& wb, std::uint32_t row, std::uint32_t col) {
+  const Value value = wb.sheet(0).resolve_cell_value(row, col);
+  return value.is_text() ? std::string(value.as_text()) : std::string();
+}
+
+std::vector<std::string> column_names(const TableMetadata& table) {
+  std::vector<std::string> names;
+  for (const TableColumn& column : table.columns) {
+    names.push_back(column.name);
+  }
+  return names;
+}
+
+TEST(WorkbookTables, AddTableNumbersDuplicateColumnsPastNamesLaterInTheRow) {
   Workbook wb = Workbook::create();
-  TableMetadata table = make_table("Sales", "A1:B5", 2);
-  table.columns[1].name = "c1";
-  auto bad = wb.add_table(std::move(table));
-  ASSERT_FALSE(bad.has_value());
-  EXPECT_EQ(bad.error().message, "column name is duplicated");
+  ASSERT_TRUE(wb.add_table(table_with_columns("A1:D5", {"Qty", "qty", "QTY", "Qty2"})).has_value());
+  EXPECT_EQ(column_names(wb.tables()[0]), (std::vector<std::string>{"Qty", "qty3", "QTY4", "Qty2"}));
+  EXPECT_EQ(wb.tables()[0].columns[3].id, 4U);
+}
+
+TEST(WorkbookTables, AddTableNumbersRepeatedColumnsFromTwo) {
+  Workbook wb = Workbook::create();
+  ASSERT_TRUE(wb.add_table(table_with_columns("A1:C5", {"Qty", "Qty", "Qty"})).has_value());
+  EXPECT_EQ(column_names(wb.tables()[0]), (std::vector<std::string>{"Qty", "Qty2", "Qty3"}));
+}
+
+TEST(WorkbookTables, AddTableFoldsWidthKanaAndDakutenAndKeepsTheRepeatSpelling) {
+  const std::vector<std::pair<std::vector<std::string>, std::string>> cases = {
+      {{"QTY", "\xEF\xBC\xB1\xEF\xBC\xB4\xEF\xBC\xB9"},
+       "\xEF\xBC\xB1\xEF\xBC\xB4\xEF\xBC\xB9"
+       "2"},  // ＱＴＹ
+      {{"\xE3\x81\x8B\xE3\x81\xAA", "\xE3\x82\xAB\xE3\x83\x8A"},
+       "\xE3\x82\xAB\xE3\x83\x8A"
+       "2"},  // かな / カナ
+      {{"\xE3\x82\xAC", "\xEF\xBD\xB6\xEF\xBE\x9E"},
+       "\xEF\xBD\xB6\xEF\xBE\x9E"
+       "2"},  // ガ / ｶﾞ
+  };
+  for (const auto& [given, second] : cases) {
+    SCOPED_TRACE(given[0] + " / " + given[1]);
+    Workbook wb = Workbook::create();
+    ASSERT_TRUE(wb.add_table(table_with_columns("A1:B5", given)).has_value());
+    EXPECT_EQ(wb.tables()[0].columns[0].name, given[0]);
+    EXPECT_EQ(wb.tables()[0].columns[1].name, second);
+  }
+}
+
+TEST(WorkbookTables, AddTableNamesBlankColumnsWithTheProfileColumnWord) {
+  ExcelProfile profile;
+  ASSERT_TRUE(parse_excel_profile_id("mac-365-ja_JP", &profile));
+  Workbook wb = Workbook::create_for_profile(profile);
+  ASSERT_TRUE(wb.add_table(table_with_columns("A1:C5", {"", "列1", ""})).has_value());
+  EXPECT_EQ(column_names(wb.tables()[0]), (std::vector<std::string>{"列2", "列1", "列3"}));
+}
+
+TEST(WorkbookTables, AddTableWritesRenamedColumnsIntoTheHeaderRow) {
+  Workbook wb = Workbook::create();
+  ASSERT_TRUE(wb.set_cell_text(0, 0, 0, "Qty").has_value());
+  ASSERT_TRUE(wb.set_cell_text(0, 0, 1, "qty").has_value());
+  ASSERT_TRUE(wb.add_table(table_with_columns("A1:C5", {"Qty", "qty", ""})).has_value());
+  EXPECT_EQ(text_at(wb, 0, 0), "Qty");
+  EXPECT_EQ(text_at(wb, 0, 1), "qty2");
+  EXPECT_EQ(text_at(wb, 0, 2), "Column1");
+}
+
+TEST(WorkbookTables, AddTableWithoutHeaderRowWritesNoHeaderCell) {
+  Workbook wb = Workbook::create();
+  TableMetadata table = table_with_columns("A1:B5", {"", ""});
+  table.header_row = false;
+  ASSERT_TRUE(wb.add_table(std::move(table)).has_value());
+  EXPECT_EQ(column_names(wb.tables()[0]), (std::vector<std::string>{"Column1", "Column2"}));
+  EXPECT_TRUE(text_at(wb, 0, 0).empty());
 }
 
 TEST(WorkbookTables, NextDefaultTableNameFillsGaps) {

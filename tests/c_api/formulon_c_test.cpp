@@ -224,9 +224,11 @@ TEST(FormulonCApi, TableRangeMustMatchTheColumnList) {
   EXPECT_NE(UpdateTableRange(wb.handle, 0, index, fm_cell_rect_t{0, 0, 8, 2}), 0);
 
   const char* duplicate_columns[] = {"Product", "product"};
-  EXPECT_NE(
+  ASSERT_EQ(
       AddTable(wb.handle, 0, record_arg(fm_cell_rect_t{0, 3, 2, 4}), "Other", duplicate_columns, 2, "", 1, 0, &index),
-      0);
+      0)
+      << fm_get_last_error_message();
+  EXPECT_EQ(wb.handle->workbook().tables().back().columns[1].name, "product2");
 }
 
 TEST(FormulonCApi, GetTableRejectsARefThatIsNotARange) {
@@ -255,19 +257,29 @@ TEST(FormulonCApi, TableNamesShareOneCaseInsensitiveNamespace) {
   EXPECT_EQ(count_of(fm_sheet_get_table_count, wb.handle, 0), 1U);
 }
 
-TEST(FormulonCApi, TableDuplicateColumnAtEndRejectsAtomicallyAndUniqueNamesRoundTrip) {
+TEST(FormulonCApi, TableDuplicateColumnTakesANumberAndWritesItsHeaderCell) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
 
   const char* duplicate_columns[] = {"Product", "Amount", "Region", "Year", "Status", "pRODUCT"};
   std::size_t index = 99U;
-  EXPECT_EQ(AddTable(wb.handle, 0U, record_arg(fm_cell_rect_t{0, 0, 2, 5}), "Invalid", duplicate_columns, 6U, "", 1, 0,
+  ASSERT_EQ(AddTable(wb.handle, 0U, record_arg(fm_cell_rect_t{0, 0, 2, 5}), "Numbered", duplicate_columns, 6U, "", 1, 0,
                      &index),
-            static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
-  EXPECT_STREQ(fm_get_last_error_message(), "column name is duplicated");
-  EXPECT_EQ(index, 99U);
-  EXPECT_EQ(count_of(fm_sheet_get_table_count, wb.handle, 0), 0U);
+            0)
+      << fm_get_last_error_message();
+  EXPECT_EQ(index, 0U);
+  const formulon::TableMetadata& table = wb.handle->workbook().tables()[0];
+  EXPECT_EQ(table.columns[0].name, "Product");
+  EXPECT_EQ(table.columns[5].name, "pRODUCT2");
+  const formulon::Value header = wb.handle->workbook().sheet(0).resolve_cell_value(0, 5);
+  ASSERT_TRUE(header.is_text());
+  EXPECT_EQ(header.as_text(), "pRODUCT2");
+}
 
+TEST(FormulonCApi, TableWithUniqueNamesRoundTrips) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  std::size_t index = 99U;
   const char* unique_columns[] = {"Product", "Area", "商品"};
   ASSERT_EQ(
       AddTable(wb.handle, 0U, record_arg(fm_cell_rect_t{0, 0, 2, 2}), "Valid", unique_columns, 3U, "", 1, 0, &index),

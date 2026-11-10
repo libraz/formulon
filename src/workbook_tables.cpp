@@ -6,7 +6,6 @@
 #include <optional>
 #include <string>
 #include <string_view>
-#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -164,22 +163,20 @@ Expected<std::size_t, Error> Workbook::add_table(TableMetadata table) {
   RETURN_IF_ERROR(check_table_identity(*this, table.name, table.display_name, std::nullopt));
   RETURN_IF_ERROR(check_table_range_free(*this, table.sheet_index, *rect, std::nullopt, /*unmerge_inside=*/true));
   table.id = next_free_table_id(0);
-  // Headers collide under either fold, as `sheet_names::write_collides` does.
-  std::unordered_set<std::string> column_keys;
-  std::unordered_set<std::string> column_wide_keys;
-  column_keys.reserve(table.columns.size());
-  column_wide_keys.reserve(table.columns.size());
-  std::uint32_t column_id = 1;
-  for (TableColumn& column : table.columns) {
-    if (column.name.empty()) {
-      return invalid_table("column name is empty");
+  std::vector<std::string> names;
+  names.reserve(table.columns.size());
+  for (const TableColumn& column : table.columns) {
+    names.push_back(column.name);
+  }
+  detail::name_new_table_columns(names, new_workbook_defaults(excel_profile_.locale).column_word);
+  std::vector<std::uint32_t> renamed_columns;
+  for (std::size_t i = 0; i < names.size(); ++i) {
+    TableColumn& column = table.columns[i];
+    if (column.name != names[i]) {
+      renamed_columns.push_back(static_cast<std::uint32_t>(i));
+      column.name = std::move(names[i]);
     }
-    std::optional<std::string> wide = sheet_names::wide_key(column.name);
-    if (!column_keys.insert(collection_names::fold_key(column.name)).second ||
-        (wide.has_value() && !column_wide_keys.insert(std::move(*wide)).second)) {
-      return invalid_table("column name is duplicated");
-    }
-    column.id = column_id++;
+    column.id = static_cast<std::uint32_t>(i) + 1U;
   }
   // Excel unmerges the merges a new table covers.
   RETURN_IF_ERROR(remove_merges_intersecting(table.sheet_index, *rect));
@@ -187,9 +184,14 @@ Expected<std::size_t, Error> Workbook::add_table(TableMetadata table) {
   io::AppendXmlAttrEscaped(escaped_ref, table.ref);
   table.auto_filter_xml.set(io::auto_filter_from_xml("<autoFilter ref=\"" + escaped_ref + "\"/>"));
   tables_.push_back(std::move(table));
+  const TableMetadata& created = tables_.back();
+  if (created.header_row) {
+    for (const std::uint32_t i : renamed_columns) {
+      put_cell_text(created.sheet_index, rect->first_row, rect->first_col + i, created.columns[i].name);
+    }
+  }
   // A structured reference can already exist in a formula authored ahead of
   // its table, so both names need the scoped reindex a defined-name edit gets.
-  const TableMetadata& created = tables_.back();
   reindex_formulas_for_table_change({created.name, created.display_name});
   return tables_.size() - 1U;
 }
@@ -719,25 +721,19 @@ Expected<std::string, Error> Workbook::rename_table_column(std::size_t table, st
     return make_error(FormulonErrorCode::kInvalidArgument, "column index out of range",
                       "column=" + std::to_string(column) + " column_count=" + std::to_string(columns.size()));
   }
-  const auto taken = [&columns, column](std::string_view candidate) {
-    for (std::size_t i = 0; i < columns.size(); ++i) {
-      if (i != column && sheet_names::write_collides(columns[i].name, candidate)) {
-        return true;
-      }
+  std::vector<std::string> others;
+  others.reserve(columns.size());
+  for (std::size_t i = 0; i < columns.size(); ++i) {
+    if (i != column) {
+      others.push_back(columns[i].name);
     }
-    return false;
-  };
+  }
   // An empty header takes `<word>N` from N = 1; a duplicate takes `<name>N` from N = 2.
   std::string final_name(name);
-  if (name.empty() || taken(name)) {
-    const std::string stem =
-        name.empty() ? std::string(new_workbook_defaults(excel_profile_.locale).column_word) : std::string(name);
-    for (std::size_t n = name.empty() ? 1U : 2U;; ++n) {
-      final_name = stem + std::to_string(n);
-      if (!taken(final_name)) {
-        break;
-      }
-    }
+  if (name.empty()) {
+    final_name = detail::first_free_numbered_name(new_workbook_defaults(excel_profile_.locale).column_word, 1U, others);
+  } else if (sheet_names::write_collides(others, name, sheet_names::kNotFound)) {
+    final_name = detail::first_free_numbered_name(name, 2U, others);
   }
 
   const eval::RecalcEngine::LockedMutator mutator = engine_->locked_mutator();
@@ -767,5 +763,35 @@ Expected<std::string, Error> Workbook::rename_table_column(std::size_t table, st
   }
   return final_name;
 }
+
+namespace detail {
+
+std::string first_free_numbered_name(std::string_view stem, std::size_t first, const std::vector<std::string>& names) {
+  for (std::size_t n = first;; ++n) {
+    std::string candidate(stem);
+    candidate += std::to_string(n);
+    if (!sheet_names::write_collides(names, candidate, sheet_names::kNotFound)) {
+      return candidate;
+    }
+  }
+}
+
+void name_new_table_columns(std::vector<std::string>& names, std::string_view column_word) {
+  std::vector<std::string> reserved = names;
+  for (std::size_t i = 0; i < names.size(); ++i) {
+    const bool blank = names[i].empty();
+    bool repeats = false;
+    for (std::size_t j = 0; j < i && !blank && !repeats; ++j) {
+      repeats = sheet_names::write_collides(names[j], names[i]);
+    }
+    if (blank || repeats) {
+      names[i] = blank ? first_free_numbered_name(column_word, 1U, reserved)
+                       : first_free_numbered_name(names[i], 2U, reserved);
+      reserved.push_back(names[i]);
+    }
+  }
+}
+
+}  // namespace detail
 
 }  // namespace formulon

@@ -369,8 +369,8 @@ TEST(NameIdentityCollation, ColumnHeaderClashGainsSuffixUnderCollationEquality) 
       EXPECT_EQ(wb.tables()[0].columns[1].name, expected);
 
       Workbook fresh = ForProfile(id);
-      EXPECT_EQ(Code(fresh.add_table(Table("Tbl", "A1:B3", {p.first, p.second}))),
-                p.same ? FormulonErrorCode::kInvalidArgument : FormulonErrorCode::kOk);
+      ASSERT_EQ(Code(fresh.add_table(Table("Tbl", "A1:B3", {p.first, p.second}))), FormulonErrorCode::kOk);
+      EXPECT_EQ(fresh.tables()[0].columns[1].name, expected);
     }
   }
 }

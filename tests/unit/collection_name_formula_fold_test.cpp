@@ -132,11 +132,11 @@ TEST(CollectionNameFormulaFold, ColumnRenameRewritesReferenceSpelledInOtherCase)
   EXPECT_EQ(FormulaAt(wb, 0, 4), "=SUM(TÄBLE1[Öl])");
 }
 
-TEST(CollectionNameFormulaFold, NewTableRefusesColumnsEqualAcrossNonAsciiCase) {
+TEST(CollectionNameFormulaFold, NewTableNumbersColumnsEqualAcrossNonAsciiCase) {
   Workbook wb = Workbook::create();
   Expected<std::size_t, Error> added = wb.add_table(MakeTable("Tbl", "A1:B3", {"Ärger", "äRGER"}));
-  ASSERT_FALSE(added.has_value());
-  EXPECT_EQ(added.error().code, FormulonErrorCode::kInvalidArgument);
+  ASSERT_TRUE(added.has_value());
+  EXPECT_EQ(wb.tables()[0].columns[1].name, "äRGER2");
 }
 
 }  // namespace
