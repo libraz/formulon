@@ -52,6 +52,7 @@ RECORD_RANGE_FIELDS = {
     "DataValidationInput": {"ranges": "CellRect[]"},
     "HyperlinkInput": {"range": "CellRect"},
     "PivotInput": {"anchor": "CellAddress"},
+    "PivotWorksheetSource": {"range": "SheetRect"},
     "PivotWorksheetSourceInput": {"range": "SheetRect"},
     "ProtectedRangeInput": {"ranges": "CellRect[]"},
     "SheetSelectionInput": {"active": "CellAddress", "ranges": "CellRect[]"},

@@ -564,11 +564,14 @@ _SCOPED_NAME_KINDS = frozenset({"op", "list", "free", "factory"})
 def _namespace(entry: dict, name_field: str) -> str:
     """The namespace of the entry's raw (or former) `name_field` name.
 
-    C names share one namespace; a binding name of an op, list, factory or free function is unique within
-    its scope (`process` included), and every other binding name within its language.
+    C names share one namespace, except that a record's C members form their own beside its binding fields;
+    a binding name of an op, list, factory or free function is unique within its scope (`process` included),
+    and every other binding name within its language.
     """
     if entry.get("kind") == "field":
-        return f"field:{entry.get('record')}"
+        # C struct members are a namespace of their own: a binding field renamed away from `local_sheet_id`
+        # leaves the C member of that name in place.
+        return f"field:{entry.get('record')}" + (":c" if name_field == "c" else "")
     if entry.get("kind") == "constant" and "enum" in entry and name_field != "c":
         return f"member:{name_field}:{entry.get('enum')}"
     if name_field != "c" and entry.get("kind") in _SCOPED_NAME_KINDS:

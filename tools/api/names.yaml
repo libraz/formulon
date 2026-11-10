@@ -1038,12 +1038,6 @@ entries:
     py: SortMethod
     surfaces: [c, wasm, native, py]
     was: { c: fm_sort_method_t, js: SortMethod, py: SortMethod }
-  record.date_group_item:
-    kind: record
-    role: result
-    c: fm_date_group_item_t
-    surfaces: [c]
-    was: { c: fm_date_group_item }
   record.filter_column:
     kind: record
     role: result
@@ -1996,6 +1990,13 @@ entries:
     surfaces: [wasm, native, py]
     was: { js: localSheetId, py: local_sheet_id }
     closes: R8.js
+    note: "the binding form of C `local_sheet_id`"
+  field.defined_name_local_sheet_id:
+    kind: field
+    record: record.defined_name
+    c: local_sheet_id
+    surfaces: [c]
+    note: "the C form of `scope`: the 0-based index of the sheet the name is local to, or `FM_DEFINED_NAME_SCOPE_WORKBOOK` for workbook scope"
   field.sheet_selection_active:
     kind: field
     record: record.sheet_selection
@@ -2079,6 +2080,19 @@ entries:
     surfaces: [wasm, native, py]
     was: { js: ref, py: ref }
     closes: R8.js
+    note: "the binding form of C `ref` and `sheet`"
+  field.pivot_worksheet_source_ref:
+    kind: field
+    record: record.pivot_worksheet_source
+    c: ref
+    surfaces: [c]
+    note: "with `sheet`, the C form of `range`: the source range as A1 text"
+  field.pivot_worksheet_source_sheet_name:
+    kind: field
+    record: record.pivot_worksheet_source
+    c: sheet
+    surfaces: [c]
+    note: "with `ref`, the C form of `range`: the source sheet name as stored, which may name a sheet that no longer exists"
   field.pivot_worksheet_source_sheet:
     kind: field
     record: record.pivot_worksheet_source
@@ -2671,10 +2685,12 @@ entries:
   record.auto_filter_date_group:
     kind: record
     role: both
+    c: fm_date_group_item_t
     js: AutoFilterDateGroup
     py: AutoFilterDateGroup
-    surfaces: [wasm, native, py]
-    was: { js: AutoFilterDateGroup, py: AutoFilterDateGroup }
+    surfaces: [c, wasm, native, py]
+    was: { c: fm_date_group_item, js: AutoFilterDateGroup, py: AutoFilterDateGroup }
+    exception: "the bindings name the record after the AutoFilter it belongs to; the C typedef keeps the item noun"
   record.auto_filter_eval_result:
     kind: record
     role: result
@@ -3323,16 +3339,12 @@ entries:
     closes: R8.js
   record.pivot_worksheet_source:
     kind: record
-    role: result
-    js: PivotWorksheetSource
-    py: PivotWorksheetSource
-    surfaces: [wasm, native, py]
-    was: { js: PivotWorksheetSource, py: PivotWorksheetSource }
-  record.pivot_worksheet_source_item:
-    kind: record
     role: both
     c: fm_pivot_worksheet_source_t
-    surfaces: [c]
+    js: PivotWorksheetSource
+    py: PivotWorksheetSource
+    surfaces: [c, wasm, native, py]
+    was: { js: PivotWorksheetSource, py: PivotWorksheetSource }
   record.pivot_worksheet_source_result:
     kind: record
     role: result
@@ -3842,10 +3854,11 @@ entries:
     drop: { py: DataBar, closes: R8.py, note: "use CfDataBarInput to write and CfDataBar to read" }
   record.defined_name:
     kind: record
-    role: result
+    role: both
+    c: fm_defined_name_t
     js: DefinedName
     py: DefinedName
-    surfaces: [wasm, native, py]
+    surfaces: [c, wasm, native, py]
     was: { py: DefinedName }
   record.differential_format:
     kind: record
@@ -14406,11 +14419,6 @@ entries:
     py: DefinedNameInput
     surfaces: [c, wasm, native, py]
     drop: { c: fm_defined_name_input_t, closes: R0.coverage }
-  record.defined_name_item:
-    kind: record
-    role: both
-    c: fm_defined_name_t
-    surfaces: [c]
   record.iterative_settings_patch:
     kind: record
     role: patch
