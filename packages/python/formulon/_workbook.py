@@ -951,8 +951,9 @@ class TableInput:
     ``range`` is a :class:`CellRect` or an unqualified A1 range on the sheet.
     Omitted ``columns`` take their names from the header cells, an empty one
     named as Excel does (``Column1``, ...). Given, ``columns`` holds one
-    non-empty, table-unique name per column of the range: a non-empty header
-    cell must already hold that name, and an empty one receives it.
+    name per column of the range: a non-empty header cell must already hold
+    that name, and an empty one receives it. Blank and repeated names are
+    numbered as :meth:`Sheet.add_table` describes.
     ``style_name`` ``None`` applies the workbook's table-style default
     (:meth:`Workbook.get_table_style_defaults`), else ``TableStyleMedium2``;
     ``""`` is an ``InvalidArgumentError``. ``styled=False`` creates the table

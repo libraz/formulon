@@ -6363,6 +6363,12 @@ export interface Sheet {
    *  name another table already uses fails with `StatusCode.AlreadyExists`, and a range that overlaps a table,
    *  pivot table, data table, array formula or merged range with `StatusCode.PreconditionFailed`.
    *
+   *  Column names are numbered as Excel numbers them. A blank one takes the profile's column word and the smallest
+   *  free number from 1 (`Column1`, `列1`); one equal to a name on its left by name identity (see {@link Workbook}:
+   *  case, width and kana folded) keeps its own spelling and takes the smallest free number from 2, in ASCII digits
+   *  (`QTY`, `ＱＴＹ` become `QTY`, `ＱＴＹ2`). Names later in the row are reserved while numbering, so `Qty`, `qty`,
+   *  `QTY`, `Qty2` become `Qty`, `qty3`, `QTY4`, `Qty2`. A renamed header cell is written with its final name.
+   *
    *  @example
    *  ```ts
    *  ws.setValues('A1', [['Item', 'Qty'], ['Apple', 3]]);

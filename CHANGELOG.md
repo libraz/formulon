@@ -4145,6 +4145,17 @@ order.
   `#VALUE!`. A list validation whose source is a range compares the proposed
   number exactly, so `0.1+0.2` matches its own list entry.
 
+- `addTable` (Python `add_table`, C `fm_sheet_add_table`) numbers blank and
+  repeated column names as Excel does instead of refusing them; previously a
+  duplicate name failed with "column name is duplicated" and an empty name in
+  `columns` was rejected. A blank name takes the profile's column word and the
+  smallest free number from 1 (`Column1`, `列1`); a name equal to one on its
+  left by name identity (case, width and kana folded) keeps its own spelling
+  and takes the smallest free number from 2 in ASCII digits (`QTY`, `ＱＴＹ`
+  become `QTY`, `ＱＴＹ2`), with names later in the row reserved (`Qty`, `qty`,
+  `QTY`, `Qty2` become `Qty`, `qty3`, `QTY4`, `Qty2`). The renamed header cells are
+  written.
+
 ### Removed
 
 - `fm_cf_color_t` and the `*_argb` fields of the chart and shape records

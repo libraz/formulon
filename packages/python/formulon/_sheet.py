@@ -6883,6 +6883,17 @@ class Sheet(_NoCopy):
         A ``name`` another table already has (compared case-insensitively)
         raises ``AlreadyExistsError``. See :class:`TableInput` for the defaults.
 
+        Column names are numbered as Excel numbers them. A blank one takes the
+        profile's column word and the smallest free number from 1 (``Column1``,
+        ``列1``); one equal to a name on its left by name identity (case, width,
+        half- and full-width kana, hiragana and katakana, and composed voicing
+        marks folded) keeps its own spelling and takes the smallest free number
+        from 2, in ASCII digits (``QTY``, ``ＱＴＹ`` become ``QTY``, ``ＱＴＹ2``;
+        ``かな``, ``カナ`` become ``かな``, ``カナ2``). Names later in the row are
+        reserved while numbering, so ``Qty``, ``qty``, ``QTY``, ``Qty2`` become ``Qty``,
+        ``qty3``, ``QTY4``, ``Qty2``. A renamed header cell is written with its
+        final name.
+
         Example::
 
             ws.set_values("A1", [["Item", "Qty"], ["Apple", 3]])
