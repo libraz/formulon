@@ -47,6 +47,7 @@ set(FORMULON_C_API_TEST_SOURCES
   formulon_c_pivot_grouping_test.cpp
   formulon_c_pivot_lifecycle_test.cpp
   formulon_c_pivot_read_test.cpp
+  formulon_c_pivot_refresh_test.cpp
   formulon_c_pivot_report_test.cpp
   formulon_c_pivot_save_shape_test.cpp
   formulon_c_pivot_shared_item_limit_test.cpp

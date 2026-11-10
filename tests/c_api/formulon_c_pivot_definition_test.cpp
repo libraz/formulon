@@ -78,8 +78,6 @@ TEST(FormulonCApiPivot, ReadBackRoundTripsWhatTheSettersWrote) {
   EXPECT_EQ(region.cache_field_index, 0);
   EXPECT_EQ(region.sort_order, FM_PIVOT_SORT_ORDER_DESCENDING);
   EXPECT_STREQ(region.sort_by_field, "Sum of Amount");
-  EXPECT_EQ(region.date_periods, 0U);
-  EXPECT_EQ(region.date_calendar, FM_PIVOT_CALENDAR_GREGORIAN);
   EXPECT_EQ(region.has_group_base_index, 0);
   EXPECT_EQ(region.insert_blank_row, 0);
   EXPECT_EQ(region.fill_down_labels, 0);
@@ -88,7 +86,6 @@ TEST(FormulonCApiPivot, ReadBackRoundTripsWhatTheSettersWrote) {
   ASSERT_EQ(fm_sheet_set_pivot_field_date_group(wb.handle, 0, pivot_index, 0, nullptr), 0);
   ASSERT_EQ(fm_sheet_get_pivot_field_at(wb.handle, 0, pivot_index, 0, &region), 0);
   EXPECT_EQ(region.sort_order, FM_PIVOT_SORT_ORDER_MANUAL);
-  EXPECT_EQ(region.date_periods, 0U);
 
   // Items: the scratch pivot added North and South by label, bound to the shared items.
   std::size_t item_count = 99;

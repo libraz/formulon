@@ -21,11 +21,14 @@
 #include "c_api/parts/struct_v1_sizes.h"
 #include "eval/builtin_names.h"
 #include "eval/eval_profile_scope.h"
+#include "eval/function_registry.h"
 #include "eval/pivot_formula.h"
 #include "parser/parse_status.h"
 #include "pivot/calculated.h"
 #include "pivot/date_serial.h"
 #include "pivot/pivot_formula_host.h"
+#include "pivot/record_access.h"
+#include "pivot/shared_items_hints.h"
 #include "sheet.h"
 #include "utils/arena.h"
 #include "utils/error.h"
@@ -83,6 +86,34 @@ const formulon::pivot::PivotCacheField* lookup_cache_field(const fm_workbook_t* 
     return nullptr;
   }
   return &cache->fields()[field_index];
+}
+
+// The flag `has` marks as written, else the schema default `fallback`.
+std::int32_t effective_flag(bool has, bool value, bool fallback) {
+  return (has ? value : fallback) ? 1 : 0;
+}
+
+// The `<sharedItems>` hints of cache field `field_index` as the file spells
+// them, else the hints derived from the values it holds: its shared items, or
+// the record column when it has none.
+formulon::pivot::SharedItemsHints field_hints(const formulon::pivot::PivotCache& cache, std::size_t field_index,
+                                              bool date1904) {
+  const formulon::pivot::PivotCacheField& field = cache.fields()[field_index];
+  if (field.shared_items_hints.present) {
+    return field.shared_items_hints;
+  }
+  if (!field.shared_items.empty()) {
+    return formulon::pivot::derive_shared_items_hints(field.shared_items, field.shared_item_is_date, date1904);
+  }
+  std::vector<formulon::Value> values;
+  std::vector<bool> is_date;
+  values.reserve(cache.records().size());
+  is_date.reserve(cache.records().size());
+  for (const formulon::pivot::PivotCacheRecord& record : cache.records()) {
+    values.push_back(formulon::pivot::cell_value(cache, record, field_index));
+    is_date.push_back(field_index < record.cell_is_date.size() && record.cell_is_date[field_index]);
+  }
+  return formulon::pivot::derive_shared_items_hints(values, is_date, date1904);
 }
 
 }  // namespace
@@ -237,6 +268,19 @@ extern "C" fm_status_t fm_workbook_set_pivot_cache_worksheet_source(fm_workbook_
   return 0;
 }
 
+extern "C" fm_status_t fm_workbook_refresh_pivot_cache(fm_workbook_t* wb, std::uint32_t cache_id) {
+  clear_last_error();
+  formulon::pivot::PivotCache* cache = nullptr;
+  if (fm_status_t rc = resolve_cache_mut(wb, cache_id, &cache); rc != 0) {
+    return rc;
+  }
+  auto refreshed = wb->workbook().refresh_pivot_cache(cache_id, formulon::eval::default_registry());
+  if (!refreshed) {
+    return set_last_error(refreshed.error());
+  }
+  return 0;
+}
+
 // ---------------------------------------------------------------------------
 // PivotCache fields + shared items
 // ---------------------------------------------------------------------------
@@ -267,6 +311,38 @@ extern "C" fm_status_t fm_workbook_get_pivot_cache_field_name(const fm_workbook_
     return status;
   }
   *out_utf8 = field->name.c_str();
+  return 0;
+}
+
+extern "C" fm_status_t fm_workbook_get_pivot_cache_field_types(const fm_workbook_t* wb, std::uint32_t cache_id,
+                                                               std::size_t field_index,
+                                                               fm_pivot_cache_field_types_t* out) {
+  clear_last_error();
+  if (wb == nullptr || out == nullptr) {
+    return null_argument();
+  }
+  if (auto rc = check_record_size(*out); rc != 0) {
+    return rc;
+  }
+  const formulon::pivot::PivotCache* cache = nullptr;
+  if (fm_status_t rc = resolve_cache(wb, cache_id, &cache); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_index(field_index, cache->fields().size(), "field_index"); rc != 0) {
+    return rc;
+  }
+  const formulon::pivot::SharedItemsHints h = field_hints(*cache, field_index, wb->workbook().date1904());
+  fm_pivot_cache_field_types_t result{};
+  result.struct_size = out->struct_size;
+  result.contains_number = effective_flag(h.has_contains_number, h.contains_number, false);
+  result.contains_integer = effective_flag(h.has_contains_integer, h.contains_integer, false);
+  result.contains_string = effective_flag(h.has_contains_string, h.contains_string, true);
+  result.contains_blank = effective_flag(h.has_contains_blank, h.contains_blank, false);
+  result.contains_date = effective_flag(h.has_contains_date, h.contains_date, false);
+  result.contains_mixed_types = effective_flag(h.has_contains_mixed_types, h.contains_mixed_types, false);
+  result.contains_semi_mixed_types = effective_flag(h.has_contains_semi_mixed, h.contains_semi_mixed, true);
+  result.contains_non_date = effective_flag(h.has_contains_non_date, h.contains_non_date, true);
+  *out = result;
   return 0;
 }
 

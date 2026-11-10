@@ -158,7 +158,7 @@ Vite may warn that `node:module` "has been externalized for browser compatibilit
 
 ## Non-goals
 
-VBA execution, legacy `.xls`, chart rendering, Power Query / DAX, pivot cache refresh from source data, live external connections, and a spreadsheet UI are permanently out of scope. See [Non-goals](https://formulon.libraz.net/compatibility/non-goals).
+VBA execution, legacy `.xls`, chart rendering, Power Query / DAX, live external connections, and a spreadsheet UI are permanently out of scope. See [Non-goals](https://formulon.libraz.net/compatibility/non-goals).
 
 ## License
 

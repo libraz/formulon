@@ -112,9 +112,10 @@ class PivotCache(_NoCopy):
         A :class:`PivotWorksheetSource` read back is accepted in place of a
         :class:`PivotWorksheetSourceInput`.
 
-        Metadata only: records come from :meth:`add_field` / :meth:`add_record` /
-        :meth:`set_record_value`; neither :meth:`Pivot.project` nor a cell edit
-        re-reads the range.
+        Records come from :meth:`add_field` / :meth:`add_record` /
+        :meth:`set_record_value`. Setting the source does not re-read the
+        range, and neither does :meth:`Pivot.project` or a cell edit;
+        :meth:`refresh` rebuilds the records from it.
 
         Raises:
           TypeError: when ``source`` is neither a source record nor ``None``.
@@ -124,6 +125,28 @@ class PivotCache(_NoCopy):
         with _ArgScope() as scope:
             ptr = 0 if source is None else _pack_pivot_worksheet_source(scope, self._workbook, source)
             _check(LIB.fm_workbook_set_pivot_cache_worksheet_source(h, cache_id, ptr))
+
+    def refresh(self) -> None:
+        """Rebuild the cache from its worksheet source and re-project every pivot table drawing from it.
+
+        The source is a range, a defined name or a table of this workbook.
+        Pending cells are calculated first and the source values are read as
+        they stand, as Excel's Refresh does. The cache, the pivots'
+        definitions and their report cells change together or not at all.
+
+        Raises:
+          FormulonError: with ``code == StatusCode.PRECONDITION_FAILED`` when
+            the source does not resolve (none, an external or non-worksheet
+            source, a missing sheet, name or table, a ``#REF!`` or dynamic
+            name), or when a refreshed report would grow over a non-empty
+            cell, another pivot table or another refreshed report; with
+            ``SECURITY_RESOURCE_LIMIT`` when (rows - 1) x columns of the
+            source exceeds the record cell limit; with ``NOT_IMPLEMENTED``
+            when a numeric group has a start, end or interval that is not an
+            integer.
+        """
+        h, cache_id = self._call()
+        _check(LIB.fm_workbook_refresh_pivot_cache(h, cache_id))
 
     def get_options(self) -> PivotCacheOptions:
         """Read the options of the cache; see :class:`PivotCacheOptions`."""
@@ -193,6 +216,11 @@ class PivotCache(_NoCopy):
         h, cache_id = self._call()
         fields: List[PivotCacheField] = []
         for i in range(_read_count(LIB.fm_workbook_get_pivot_cache_field_count, h, cache_id)):
+            with _ArgScope() as scope:
+                ptr = scope.struct(S.PIVOT_CACHE_FIELD_TYPES)
+                field_index = _uint(i, "field_index", role="position")
+                _check(LIB.fm_workbook_get_pivot_cache_field_types(h, cache_id, field_index, ptr))
+                types = S.PIVOT_CACHE_FIELD_TYPES.unpack(LIB, ptr)
             fields.append(
                 PivotCacheField(
                     name=_read_cstr_out(
@@ -207,6 +235,14 @@ class PivotCache(_NoCopy):
                         cache_id,
                         _uint(i, "field_index", role="position"),
                     ),
+                    contains_number=types["contains_number"] != 0,
+                    contains_integer=types["contains_integer"] != 0,
+                    contains_string=types["contains_string"] != 0,
+                    contains_blank=types["contains_blank"] != 0,
+                    contains_date=types["contains_date"] != 0,
+                    contains_mixed_types=types["contains_mixed_types"] != 0,
+                    contains_semi_mixed_types=types["contains_semi_mixed_types"] != 0,
+                    contains_non_date=types["contains_non_date"] != 0,
                 )
             )
         return fields

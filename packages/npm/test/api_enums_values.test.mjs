@@ -756,7 +756,14 @@ describe('numbers that were bare become enum members', () => {
       const { pivot, date } = buildPivot(wb);
       const periods = f.PivotDatePeriod.Months | f.PivotDatePeriod.Years;
       pivot.setFieldDateGroup(date, { periods });
-      assert.equal(pivot.listFields()[date].datePeriods, periods);
+      const group = pivot.getFieldDateGroup(date);
+      assert.equal(group.periods, periods);
+      assert.equal(group.autoStart, true);
+      assert.equal(group.autoEnd, true);
+      assert.ok(group.start instanceof Date && group.end instanceof Date);
+      // A group read back can be written again, the automatic bounds left out.
+      pivot.setFieldDateGroup(date, { periods: group.periods, calendar: group.calendar });
+      assert.deepEqual(pivot.getFieldDateGroup(date), group);
     });
   });
 

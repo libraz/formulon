@@ -126,12 +126,14 @@ RECORD_NAMES = frozenset(
         "fm_parsed_reference_info_t",
         "fm_person_t",
         "fm_phonetic_properties_t",
+        "fm_pivot_cache_field_types_t",
         "fm_pivot_cache_options_patch_t",
         "fm_pivot_cache_options_t",
         "fm_pivot_calculated_item_info_t",
         "fm_pivot_cell_info_t",
         "fm_pivot_data_field_t",
         "fm_pivot_date_group_spec_t",
+        "fm_pivot_numeric_group_spec_t",
         "fm_pivot_field_info_t",
         "fm_pivot_field_patch_t",
         "fm_pivot_filter_t",
@@ -746,8 +748,6 @@ PIVOT_FIELD_INFO = Struct(
         ("cache_field_index", U32),
         ("sort_order", I32),
         ("sort_by_field", PTR),
-        ("date_periods", U32),
-        ("date_calendar", I32),
         ("has_group_base_index", I32),
         ("group_base_index", U32),
         ("default_subtotal", I32),
@@ -943,6 +943,11 @@ PIVOT_DATE_GROUP_SPEC = Struct(
     ],
 )
 
+PIVOT_NUMERIC_GROUP_SPEC = Struct(
+    "fm_pivot_numeric_group_spec_t",
+    [("has_start", I32), ("start", F64), ("has_end", I32), ("end", F64), ("interval", F64)],
+)
+
 PIVOT_FILTER_SPEC = Struct(
     "fm_pivot_filter_t",
     [
@@ -995,6 +1000,20 @@ PIVOT_OPTIONS = Struct(
 PIVOT_CACHE_OPTIONS = Struct(
     "fm_pivot_cache_options_t",
     [("save_data", I32), ("has_missing_items_limit", I32), ("missing_items_limit", U32), ("refresh_on_load", I32)],
+)
+
+PIVOT_CACHE_FIELD_TYPES = Struct(
+    "fm_pivot_cache_field_types_t",
+    [
+        ("contains_number", I32),
+        ("contains_integer", I32),
+        ("contains_string", I32),
+        ("contains_blank", I32),
+        ("contains_date", I32),
+        ("contains_mixed_types", I32),
+        ("contains_semi_mixed_types", I32),
+        ("contains_non_date", I32),
+    ],
 )
 
 PIVOT_CALCULATED_ITEM = Struct(

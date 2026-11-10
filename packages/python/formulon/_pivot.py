@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Sequence, Tuple, Un
 from . import _structs as S
 from ._c import LIB, FormulonError, _argument_message, _NoCopy, _require_bool, _sint, _uint
 from ._handle_tables import CELL_ARGS
+from ._inputs import serial_datetime
 from ._status import StatusCode
 from ._workbook import (
     _PATCH_CLEAR,
@@ -31,6 +32,7 @@ from ._workbook import (
     PivotCellKind,
     PivotDataField,
     PivotDataFieldInput,
+    PivotDateGroup,
     PivotDateGroupInput,
     PivotDatePeriod,
     PivotField,
@@ -41,6 +43,8 @@ from ._workbook import (
     PivotGrandTotals,
     PivotItem,
     PivotLayout,
+    PivotNumericGroup,
+    PivotNumericGroupInput,
     PivotOptions,
     PivotReportLayout,
     PivotShowValuesAs,
@@ -53,6 +57,7 @@ from ._workbook import (
     _decode_cell_rect_at,
     _decode_pivot_filter_operand,
     _encode_pivot_filter_operands,
+    _finite,
     _install_workbook_locks,
     _nullable_enum,
     _pack_pivot_date_group,
@@ -698,8 +703,6 @@ class Pivot(_NoCopy):
                 cache_field_index=d["cache_field_index"] if d["has_cache_field_index"] else None,
                 sort_order=PivotSortOrder(d["sort_order"]),
                 sort_by_field=LIB.read_cstr(d["sort_by_field"]) or None,
-                date_periods=PivotDatePeriod(d["date_periods"]),
-                date_calendar=PivotCalendar(d["date_calendar"]),
                 group_base_index=d["group_base_index"] if d["has_group_base_index"] else None,
                 default_subtotal=d["default_subtotal"] != 0,
                 subtotal_functions=[agg for agg in PivotAggregation if d["subtotal_functions"] & (1 << int(agg))],
@@ -854,6 +857,112 @@ class Pivot(_NoCopy):
             )
             _check(
                 LIB.fm_sheet_set_pivot_field_date_group(
+                    h,
+                    _uint(sheet, "sheet_index", role="sheet"),
+                    _uint(pivot_index, "pivot_index", role="position"),
+                    _uint(field_index, "field_index", role="position"),
+                    ptr,
+                )
+            )
+
+    def get_field_date_group(self, field_index: PivotFieldRef) -> Optional[PivotDateGroup]:
+        """The date grouping over pivot field ``field_index`` (a source field or one of its group fields).
+
+        ``None`` when the field is not date-grouped. The record holds what :meth:`set_field_date_group` takes;
+        see :class:`PivotDateGroup` for the bounds.
+        """
+        field_index = self._field_index(field_index)
+        h, sheet, pivot_index = self._locate()
+        with _ArgScope() as scope:
+            present = scope.out_ptr()
+            ptr = scope.struct(S.PIVOT_DATE_GROUP_SPEC)
+            _check(
+                LIB.fm_sheet_get_pivot_field_date_group(
+                    h,
+                    _uint(sheet, "sheet_index", role="sheet"),
+                    _uint(pivot_index, "pivot_index", role="position"),
+                    _uint(field_index, "field_index", role="position"),
+                    present,
+                    ptr,
+                )
+            )
+            if not LIB.read_i32(present):
+                return None
+            d = S.PIVOT_DATE_GROUP_SPEC.unpack(LIB, ptr)
+        date1904 = self._sheet._workbook.get_date1904()
+        return PivotDateGroup(
+            periods=PivotDatePeriod(d["periods"]),
+            calendar=PivotCalendar(d["calendar"]),
+            interval_days=d["interval_days"],
+            start=serial_datetime(d["start"], date1904=date1904),
+            end=serial_datetime(d["end"], date1904=date1904),
+            auto_start=not d["has_start"],
+            auto_end=not d["has_end"],
+        )
+
+    def get_field_numeric_group(self, field_index: PivotFieldRef) -> Optional[PivotNumericGroup]:
+        """The numeric grouping over pivot field ``field_index`` (a source field or its group field).
+
+        ``None`` when the field is not numerically grouped. The record holds what
+        :meth:`set_field_numeric_group` takes; see :class:`PivotNumericGroup` for the bounds.
+        """
+        field_index = self._field_index(field_index)
+        h, sheet, pivot_index = self._locate()
+        with _ArgScope() as scope:
+            present = scope.out_ptr()
+            ptr = scope.struct(S.PIVOT_NUMERIC_GROUP_SPEC)
+            _check(
+                LIB.fm_sheet_get_pivot_field_numeric_group(
+                    h,
+                    _uint(sheet, "sheet_index", role="sheet"),
+                    _uint(pivot_index, "pivot_index", role="position"),
+                    _uint(field_index, "field_index", role="position"),
+                    present,
+                    ptr,
+                )
+            )
+            if not LIB.read_i32(present):
+                return None
+            d = S.PIVOT_NUMERIC_GROUP_SPEC.unpack(LIB, ptr)
+        return PivotNumericGroup(
+            interval=d["interval"],
+            start=d["start"],
+            end=d["end"],
+            auto_start=not d["has_start"],
+            auto_end=not d["has_end"],
+        )
+
+    def set_field_numeric_group(self, field_index: PivotFieldRef, group: Optional[PivotNumericGroupInput]) -> None:
+        """Group the number field ``field_index`` into ranges of ``group.interval``, or ungroup it with ``None``.
+
+        ``field_index`` is a source field or its group field; any grouping it has is replaced. The group field's
+        items are ``<start``, then ``a-(a+interval-1)`` from ``start`` while ``a <= end``, then ``>`` the first
+        bound past the last range. ``start`` / ``end`` of ``None`` take the field's smallest and largest value.
+        ``None`` removes the grouping from every pivot on the cache; a field that is not grouped is left as it is.
+
+        Raises:
+          TypeError: when ``group`` is neither ``None`` nor a :class:`PivotNumericGroupInput`.
+          FormulonError: with ``code == StatusCode.INVALID_ARGUMENT`` for a non-positive or non-finite interval, a
+            non-finite bound, a start after the end or a field holding a value that is not a number; with
+            ``NOT_IMPLEMENTED`` when the start, end or interval is not an integer (or a bound reaches 1e15);
+            with ``SECURITY_RESOURCE_LIMIT`` when the grouping would make more items than a field holds.
+        """
+        if group is not None and not isinstance(group, PivotNumericGroupInput):
+            raise TypeError(_argument_message("group", "must be a PivotNumericGroupInput"))
+        field_index = self._field_index(field_index)
+        h, sheet, pivot_index = self._locate()
+        with _ArgScope() as scope:
+            ptr = 0
+            if group is not None:
+                fields: Dict[str, object] = {"interval": _finite(group.interval, "interval")}
+                for name, bound in (("start", group.start), ("end", group.end)):
+                    if bound is not None:
+                        fields["has_" + name] = 1
+                        fields[name] = _finite(bound, name)
+                ptr = scope.struct(S.PIVOT_NUMERIC_GROUP_SPEC)
+                S.PIVOT_NUMERIC_GROUP_SPEC.pack(LIB, ptr, fields)
+            _check(
+                LIB.fm_sheet_set_pivot_field_numeric_group(
                     h,
                     _uint(sheet, "sheet_index", role="sheet"),
                     _uint(pivot_index, "pivot_index", role="position"),

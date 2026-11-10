@@ -114,7 +114,7 @@ try {
 
 ## 対象外
 
-VBA の実行、旧形式の `.xls`、グラフの描画、Power Query / DAX、元データからのピボットキャッシュ更新、外部データへのライブ接続、表計算 UI は、恒久的に対象外です。詳しくは [対象外の機能](https://formulon.libraz.net/ja/compatibility/non-goals) を参照してください。
+VBA の実行、旧形式の `.xls`、グラフの描画、Power Query / DAX、外部データへのライブ接続、表計算 UI は、恒久的に対象外です。詳しくは [対象外の機能](https://formulon.libraz.net/ja/compatibility/non-goals) を参照してください。
 
 ## コントリビュート
 

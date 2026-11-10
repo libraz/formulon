@@ -6531,8 +6531,7 @@ typedef enum {
 
 /**
  * @brief Calendar periods of a date group, as bits of the `periods` of
- *        `fm_pivot_date_group_spec_t` and the `date_periods` of
- *        `fm_pivot_field_info_t`.
+ *        `fm_pivot_date_group_spec_t`.
  */
 #define FM_PIVOT_PERIOD_SECONDS 1u
 #define FM_PIVOT_PERIOD_MINUTES 2u
@@ -6634,12 +6633,11 @@ typedef struct {
  *   * `sort_order`        — `fm_pivot_sort_order_t`, as written by
  *                           `fm_sheet_update_pivot_field`.
  *   * `sort_by_field`     — the by-field key; `NULL` for label order.
- *   * `date_periods`      — for a date-grouped field, the `FM_PIVOT_PERIOD_*`
- *                           bits of its group fields; `0` otherwise.
- *   * `date_calendar`     — `fm_pivot_calendar_t` of that grouping;
- *                           `FM_PIVOT_CALENDAR_GREGORIAN` when ungrouped.
  *   * `group_base_index`  — for a group field, the index of the field it
  *                           groups; `has_group_base_index` is `0` otherwise.
+ *                           The grouping itself reads through
+ *                           `fm_sheet_get_pivot_field_date_group` /
+ *                           `fm_sheet_get_pivot_field_numeric_group`.
  *   * `default_subtotal`  — non-zero when the field shows the automatic
  *                           subtotal (OOXML `defaultSubtotal`). Custom
  *                           functions replace it, so it reads `0` whenever
@@ -6671,8 +6669,6 @@ typedef struct {
   uint32_t cache_field_index;
   int32_t sort_order;
   const char* sort_by_field;
-  uint32_t date_periods;
-  int32_t date_calendar;
   int32_t has_group_base_index; /* 0/1 */
   uint32_t group_base_index;
   int32_t default_subtotal;
@@ -7088,9 +7084,11 @@ FM_API fm_status_t fm_workbook_get_pivot_cache_worksheet_source(const fm_workboo
  * source: any other `<cacheSource>` type, attribute or child captured on
  * load is dropped.
  *
- * Metadata only: records come from `fm_workbook_add_pivot_cache_field` /
+ * Records come from `fm_workbook_add_pivot_cache_field` /
  * `fm_workbook_add_pivot_cache_record` / `fm_workbook_set_pivot_cache_record_*`;
- * neither `fm_sheet_project_pivot` nor a cell edit re-reads the range.
+ * setting the source does not re-read the range, and neither
+ * `fm_sheet_project_pivot` nor a cell edit does. `fm_workbook_refresh_pivot_cache`
+ * rebuilds the records from the source.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` is `NULL`;
@@ -7099,6 +7097,32 @@ FM_API fm_status_t fm_workbook_get_pivot_cache_worksheet_source(const fm_workboo
  */
 FM_API fm_status_t fm_workbook_set_pivot_cache_worksheet_source(fm_workbook_t* wb, uint32_t cache_id,
                                                                 const fm_pivot_worksheet_source_t* source);
+
+/**
+ * @brief Rebuilds the cache from its worksheet source and re-projects every
+ *        PivotTable drawing from it, as Excel's Refresh does.
+ *
+ * The source is the cache's `<worksheetSource>`: a range, a defined name or a
+ * table of this workbook. Pending cells are calculated first and the source
+ * values are read as they stand. The cache's fields, shared items, records
+ * and `<sharedItems>` attributes, the definitions of the dependent pivots and
+ * their report cells are replaced together; a failed call changes none of
+ * them.
+ *
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` is `NULL`;
+ *         `FM_STATUS_NOT_FOUND` (6) when no cache matches `cache_id`;
+ *         `FM_STATUS_PRECONDITION_FAILED` (9) when the source does not resolve
+ *         (no source, an external or non-worksheet source, a missing sheet,
+ *         name or table, a `#REF!` or dynamic name), or when a refreshed
+ *         report would grow over a non-empty cell, another PivotTable or
+ *         another refreshed report;
+ *         `FM_STATUS_SECURITY_RESOURCE_LIMIT` (6005) when (rows - 1) x columns
+ *         of the source exceeds the pivot cache record cell limit;
+ *         `FM_STATUS_NOT_IMPLEMENTED` (3) when a numeric group of the cache
+ *         has a start, end or interval that is not an integer.
+ */
+FM_API fm_status_t fm_workbook_refresh_pivot_cache(fm_workbook_t* wb, uint32_t cache_id);
 
 /**
  * @brief Number of fields on the cache identified by `cache_id`.
@@ -7120,6 +7144,38 @@ FM_API fm_status_t fm_workbook_get_pivot_cache_field_count(const fm_workbook_t* 
  */
 FM_API fm_status_t fm_workbook_get_pivot_cache_field_name(const fm_workbook_t* wb, uint32_t cache_id,
                                                           size_t field_index, const char** out_name);
+
+/**
+ * @brief The `<sharedItems>` content flags of one cache field
+ *        (`fm_workbook_get_pivot_cache_field_types`). Each is `0` or `1`.
+ *
+ * They are effective values: a flag the file omits reads as its schema default
+ * (`contains_string`, `contains_semi_mixed_types` and `contains_non_date` are
+ * `1`, the rest `0`), and a field with no flags of its own reads as the flags
+ * derived from the values it holds.
+ */
+typedef struct {
+  uint32_t struct_size;
+  int32_t contains_number;
+  int32_t contains_integer;
+  int32_t contains_string;
+  int32_t contains_blank;
+  int32_t contains_date;
+  int32_t contains_mixed_types;
+  int32_t contains_semi_mixed_types;
+  int32_t contains_non_date;
+} fm_pivot_cache_field_types_t;
+
+/**
+ * @brief Reads the content flags of the cache field at `field_index` into `*out`.
+ *
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `out` is `NULL`;
+ *         `FM_STATUS_NOT_FOUND` (6) when no cache matches `cache_id`;
+ *         `FM_STATUS_INDEX_OUT_OF_RANGE` (13) when `field_index` is not below the field count.
+ */
+FM_API fm_status_t fm_workbook_get_pivot_cache_field_types(const fm_workbook_t* wb, uint32_t cache_id,
+                                                           size_t field_index, fm_pivot_cache_field_types_t* out);
 
 /**
  * @brief Appends a new field with the given UTF-8 name to the cache.
@@ -7988,6 +8044,80 @@ typedef struct {
  */
 FM_API fm_status_t fm_sheet_set_pivot_field_date_group(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
                                                        size_t field_index, const fm_pivot_date_group_spec_t* group);
+
+/**
+ * @brief Reads the date grouping over the field `field_index` (a source field,
+ *        or one of its group fields) into `*out`.
+ *
+ * `*out_present` is `0` when the field is not date-grouped, and `*out` is then
+ * left zeroed apart from `struct_size`. Otherwise `*out` holds what
+ * `fm_sheet_set_pivot_field_date_group` takes, so a value read can be written
+ * back unchanged: `has_start` / `has_end` are `1` when the bound is set
+ * explicitly and `0` when it follows the data, and `start` / `end` hold the
+ * stored bounds either way.
+ *
+ * @return `FM_STATUS_OK` (0) on success, or a common pivot failure;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb`, `out_present` or `out` is `NULL`.
+ */
+FM_API fm_status_t fm_sheet_get_pivot_field_date_group(const fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
+                                                       size_t field_index, int32_t* out_present,
+                                                       fm_pivot_date_group_spec_t* out);
+
+/**
+ * @brief A numeric grouping, as `fm_sheet_set_pivot_field_numeric_group` takes
+ *        it and `fm_sheet_get_pivot_field_numeric_group` returns it.
+ *
+ * `start` / `end` are read only when `has_start` / `has_end` is 1; with `0`
+ * the bound follows the field's present values. `interval` is the width of
+ * each group.
+ */
+typedef struct {
+  uint32_t struct_size;
+  int32_t has_start;
+  double start;
+  int32_t has_end;
+  double end;
+  double interval;
+} fm_pivot_numeric_group_spec_t;
+
+/**
+ * @brief Groups the number field `field_index` (a source field, or its group
+ *        field) into ranges of `group->interval`, replacing any grouping it
+ *        has; a `NULL` `group` removes the grouping.
+ *
+ * The group field's items are `<start`, then `a-(a+interval-1)` from `start`
+ * while `a <= end`, then `>` the first bound past the last range, as a refresh
+ * regenerates them. Every pivot on the cache gains the group field and is left
+ * pending. With `group == NULL` the grouping is removed from every pivot on
+ * the cache; a field that is not grouped is left as it is.
+ *
+ * @return `FM_STATUS_OK` (0) on success, or a common pivot failure;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) for a non-positive or non-finite `interval`,
+ *         `has_start` / `has_end` not 0 / 1, a NaN or infinite bound with its flag set,
+ *         a start after the end, or a field holding a value that is not a number;
+ *         `FM_STATUS_NOT_IMPLEMENTED` (3) for a start, end or interval that is not an integer,
+ *         or a bound of 1e15 or more in magnitude;
+ *         `FM_STATUS_SECURITY_RESOURCE_LIMIT` (6005) for more group items than a field holds.
+ */
+FM_API fm_status_t fm_sheet_set_pivot_field_numeric_group(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
+                                                          size_t field_index,
+                                                          const fm_pivot_numeric_group_spec_t* group);
+
+/**
+ * @brief Reads the numeric grouping over the field `field_index` (a source
+ *        field, or its group field) into `*out`.
+ *
+ * `*out_present` is `0` when the field is not numerically grouped, and `*out`
+ * is then left zeroed apart from `struct_size`. Otherwise `*out` can be written
+ * back unchanged: `has_start` / `has_end` are `1` when the bound is set
+ * explicitly, and `start` / `end` hold the stored bounds either way.
+ *
+ * @return `FM_STATUS_OK` (0) on success, or a common pivot failure;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb`, `out_present` or `out` is `NULL`.
+ */
+FM_API fm_status_t fm_sheet_get_pivot_field_numeric_group(const fm_workbook_t* wb, size_t sheet_index,
+                                                          size_t pivot_index, size_t field_index, int32_t* out_present,
+                                                          fm_pivot_numeric_group_spec_t* out);
 
 /**
  * @brief Replaces the row-axis field order with `indices[0..count)`.

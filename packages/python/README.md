@@ -109,7 +109,7 @@ New workbooks use `win-365-en_US`; `wb.set_profile_id(id)` takes any of `{mac,wi
 
 ## Non-goals
 
-VBA execution, legacy `.xls`, chart rendering, Power Query / DAX, pivot cache refresh from source data, live external connections, and a spreadsheet UI are permanently out of scope. See [Non-goals](https://formulon.libraz.net/compatibility/non-goals).
+VBA execution, legacy `.xls`, chart rendering, Power Query / DAX, live external connections, and a spreadsheet UI are permanently out of scope. See [Non-goals](https://formulon.libraz.net/compatibility/non-goals).
 
 ## License
 

@@ -107,6 +107,10 @@ void JsWorkbook::pivotCacheSetWorksheetSource(uint32_t cacheId, emscripten::val 
   succeeded(fm_workbook_set_pivot_cache_worksheet_source(handle_, cacheId, &c_source));
 }
 
+void JsWorkbook::pivotCacheRefresh(uint32_t cacheId) {
+  succeeded(handle_ != nullptr ? fm_workbook_refresh_pivot_cache(handle_, cacheId) : kBindingInvalidHandle);
+}
+
 double JsWorkbook::pivotCacheFieldCount(uint32_t cacheId) const {
   std::size_t count = 0;
   if (!succeeded(handle_ != nullptr ? fm_workbook_get_pivot_cache_field_count(handle_, cacheId, &count)
@@ -123,6 +127,24 @@ std::string JsWorkbook::pivotCacheFieldName(uint32_t cacheId, uint32_t fieldInde
     return std::string();
   }
   return string_from_cstr(name);
+}
+
+emscripten::val JsWorkbook::pivotCacheFieldTypes(uint32_t cacheId, uint32_t fieldIndex) const {
+  fm_pivot_cache_field_types_t types = FM_STRUCT_INIT(fm_pivot_cache_field_types_t);
+  if (!succeeded(handle_ != nullptr ? fm_workbook_get_pivot_cache_field_types(handle_, cacheId, fieldIndex, &types)
+                                    : kBindingInvalidHandle)) {
+    return emscripten::val::undefined();
+  }
+  emscripten::val o = emscripten::val::object();
+  o.set("containsNumber", types.contains_number != 0);
+  o.set("containsInteger", types.contains_integer != 0);
+  o.set("containsString", types.contains_string != 0);
+  o.set("containsBlank", types.contains_blank != 0);
+  o.set("containsDate", types.contains_date != 0);
+  o.set("containsMixedTypes", types.contains_mixed_types != 0);
+  o.set("containsSemiMixedTypes", types.contains_semi_mixed_types != 0);
+  o.set("containsNonDate", types.contains_non_date != 0);
+  return o;
 }
 
 uint32_t JsWorkbook::pivotCacheFieldAdd(uint32_t cacheId, const std::string& name) {

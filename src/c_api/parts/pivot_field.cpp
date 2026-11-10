@@ -651,6 +651,121 @@ extern "C" fm_status_t fm_sheet_set_pivot_field_date_group(fm_workbook_t* wb, st
                                       group->interval_days, start, end));
 }
 
+extern "C" fm_status_t fm_sheet_set_pivot_field_numeric_group(fm_workbook_t* wb, std::size_t sheet_index,
+                                                              std::size_t pivot_index, std::size_t field_index,
+                                                              const fm_pivot_numeric_group_spec_t* group) {
+  clear_last_error();
+  if (wb == nullptr) {
+    return null_argument("wb");
+  }
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (group == nullptr) {
+    return finish_cache_grouping(
+        wb, sheet_index, pivot_index,
+        formulon::pivot::clear_numeric_group(wb->workbook(), sheet_index, pivot_index, field_index));
+  }
+  if (auto rc = check_record_size(*group); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_enum_domain(group->has_start, 0, 1, "has_start"); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_enum_domain(group->has_end, 0, 1, "has_end"); rc != 0) {
+    return rc;
+  }
+  std::optional<double> start;
+  std::optional<double> end;
+  if (group->has_start == 1) {
+    if (auto rc = check_finite(group->start, "start"); rc != 0) {
+      return rc;
+    }
+    start = group->start;
+  }
+  if (group->has_end == 1) {
+    if (auto rc = check_finite(group->end, "end"); rc != 0) {
+      return rc;
+    }
+    end = group->end;
+  }
+  if (auto rc = check_finite(group->interval, "interval"); rc != 0) {
+    return rc;
+  }
+  return finish_cache_grouping(wb, sheet_index, pivot_index,
+                               formulon::pivot::set_numeric_group(wb->workbook(), sheet_index, pivot_index, field_index,
+                                                                  start, end, group->interval));
+}
+
+extern "C" fm_status_t fm_sheet_get_pivot_field_date_group(const fm_workbook_t* wb, std::size_t sheet_index,
+                                                           std::size_t pivot_index, std::size_t field_index,
+                                                           std::int32_t* out_present, fm_pivot_date_group_spec_t* out) {
+  clear_last_error();
+  if (wb == nullptr || out_present == nullptr || out == nullptr) {
+    return null_argument();
+  }
+  const formulon::pivot::PivotTable* table = nullptr;
+  const formulon::pivot::PivotField* field = nullptr;
+  if (auto rc = lookup_pivot_field(wb, sheet_index, pivot_index, field_index, &table, &field); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_record_size(*out); rc != 0) {
+    return rc;
+  }
+  fm_pivot_date_group_spec_t result{};
+  result.struct_size = out->struct_size;
+  *out_present = 0;
+  const auto* cache = find_cache(wb->workbook(), table->pivot_cache_id());
+  if (cache != nullptr) {
+    if (const auto state = formulon::pivot::date_group_state(*cache, field_index, wb->workbook().date1904())) {
+      result.periods = state->periods;
+      result.calendar = static_cast<std::int32_t>(state->calendar);
+      result.interval_days = state->interval_days;
+      result.has_start = state->auto_start ? 0 : 1;
+      result.start = state->start;
+      result.has_end = state->auto_end ? 0 : 1;
+      result.end = state->end;
+      *out_present = 1;
+    }
+  }
+  *out = result;
+  return 0;
+}
+
+extern "C" fm_status_t fm_sheet_get_pivot_field_numeric_group(const fm_workbook_t* wb, std::size_t sheet_index,
+                                                              std::size_t pivot_index, std::size_t field_index,
+                                                              std::int32_t* out_present,
+                                                              fm_pivot_numeric_group_spec_t* out) {
+  clear_last_error();
+  if (wb == nullptr || out_present == nullptr || out == nullptr) {
+    return null_argument();
+  }
+  const formulon::pivot::PivotTable* table = nullptr;
+  const formulon::pivot::PivotField* field = nullptr;
+  if (auto rc = lookup_pivot_field(wb, sheet_index, pivot_index, field_index, &table, &field); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_record_size(*out); rc != 0) {
+    return rc;
+  }
+  fm_pivot_numeric_group_spec_t result{};
+  result.struct_size = out->struct_size;
+  *out_present = 0;
+  const auto* cache = find_cache(wb->workbook(), table->pivot_cache_id());
+  if (cache != nullptr) {
+    if (const auto state = formulon::pivot::numeric_group_state(*cache, field_index)) {
+      result.has_start = state->auto_start ? 0 : 1;
+      result.start = state->start;
+      result.has_end = state->auto_end ? 0 : 1;
+      result.end = state->end;
+      result.interval = state->interval;
+      *out_present = 1;
+    }
+  }
+  *out = result;
+  return 0;
+}
+
 extern "C" fm_status_t fm_sheet_get_pivot_field_at(const fm_workbook_t* wb, std::size_t sheet_index,
                                                    std::size_t pivot_index, std::size_t field_index,
                                                    fm_pivot_field_info_t* out) {
@@ -682,15 +797,10 @@ extern "C" fm_status_t fm_sheet_get_pivot_field_at(const fm_workbook_t* wb, std:
                                               : FM_PIVOT_SORT_ORDER_DESCENDING;
   result.sort_by_field = text_or_null(field->sort.by_field.c_str());
   if (result.has_cache_field_index != 0) {
-    const bool date1904 = wb->workbook().date1904();
     const std::size_t base = formulon::pivot::group_base_index(*cache, field_index);
     if (base != field_index) {
       result.has_group_base_index = 1;
       result.group_base_index = static_cast<std::uint32_t>(base);
-    } else {
-      result.date_periods = formulon::pivot::date_group_periods(*cache, field_index, date1904);
-      result.date_calendar =
-          static_cast<std::int32_t>(formulon::pivot::date_group_calendar(*cache, field_index, date1904));
     }
   }
   // Custom functions replace the automatic subtotal, as the writer and the

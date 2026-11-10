@@ -84,6 +84,7 @@ import createFormulon, {
   type DrawingProperties,
   type CellValueInput,
   type PivotDatePeriodMask,
+  type PivotNumericGroup,
   type Dxf,
   type DxfInput,
   type EffectiveStyle,
@@ -1295,8 +1296,13 @@ export function nativeBooleansAndDates(): void {
   pivot.setFieldDateGroup(0, null);
   // @ts-expect-error the grouping is removed with `setFieldDateGroup(field, null)`
   pivot.clearFieldDateGroup(0);
-  const mask: PivotDatePeriodMask = pivot.listFields()[0].datePeriods;
+  const group = pivot.getFieldDateGroup(0);
+  const mask: PivotDatePeriodMask | undefined = group?.periods;
   void mask;
+  const numeric: PivotNumericGroup | null = pivot.getFieldNumericGroup(0);
+  void numeric;
+  pivot.setFieldNumericGroup(0, { interval: 100, start: 20 });
+  pivot.setFieldNumericGroup(0, null);
   // @ts-expect-error a bound is a DateInput, not a serial
   pivot.setFieldDateGroup(0, { periods: 16, start: 45292 });
 }

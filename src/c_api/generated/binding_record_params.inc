@@ -29,6 +29,7 @@ constexpr RecordParam kRecordParams[] = {
     {"Pivot.addFilter", "spec"},
     {"Pivot.setDataField", "spec"},
     {"Pivot.setFieldDateGroup", "group"},
+    {"Pivot.setFieldNumericGroup", "group"},
     {"Pivot.updateField", "patch"},
     {"Pivot.updateFieldItem", "patch"},
     {"Pivot.updateGrandTotals", "patch"},

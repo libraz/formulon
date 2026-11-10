@@ -277,7 +277,10 @@ __all__ = [
     "PhoneticAlignment",
     "PhoneticType",
     "DrawingPlacementInput",
+    "PivotDateGroup",
     "PivotDateGroupInput",
+    "PivotNumericGroup",
+    "PivotNumericGroupInput",
     "PivotStyleOptions",
     "PivotWorksheetSourceInput",
     "PrintTitlesInput",
@@ -5211,6 +5214,53 @@ class PivotDateGroupInput:
     end: Optional[Union[datetime.datetime, datetime.date]] = None
 
 
+@dataclass(frozen=True)
+class PivotDateGroup:
+    """A date grouping as :meth:`Pivot.get_field_date_group` reads it.
+
+    The members are those of :class:`PivotDateGroupInput`. ``start`` / ``end`` hold the stored bounds (naive local
+    wall clock) even where ``auto_start`` / ``auto_end`` says the bound follows the data; to write the grouping
+    back, give :class:`PivotDateGroupInput` a bound only where the matching ``auto_*`` is false.
+    """
+
+    periods: PivotDatePeriod
+    calendar: PivotCalendar
+    interval_days: int
+    start: datetime.datetime
+    end: datetime.datetime
+    auto_start: bool
+    auto_end: bool
+
+
+@dataclass
+class PivotNumericGroupInput:
+    """A numeric grouping :meth:`Pivot.set_field_numeric_group` applies.
+
+    ``interval`` is the width of each group; ``start`` / ``end`` are the first and last bound, ``None`` taking the
+    field's smallest and largest value.
+    """
+
+    interval: float
+    start: Optional[float] = None
+    end: Optional[float] = None
+
+
+@dataclass(frozen=True)
+class PivotNumericGroup:
+    """A numeric grouping as :meth:`Pivot.get_field_numeric_group` reads it.
+
+    ``start`` / ``end`` hold the stored bounds even where ``auto_start`` / ``auto_end`` says the bound follows the
+    data; to write the grouping back, give :class:`PivotNumericGroupInput` a bound only where the matching
+    ``auto_*`` is false.
+    """
+
+    interval: float
+    start: float
+    end: float
+    auto_start: bool
+    auto_end: bool
+
+
 @dataclass
 class PivotInput:
     """A pivot table :meth:`Sheet.add_pivot` creates: its name, its cache and its top-left cell."""
@@ -5235,10 +5285,24 @@ class PivotProperties:
 
 @dataclass(frozen=True)
 class PivotCacheField:
-    """One pivot-cache field; ``formula`` (with a leading ``=``) is ``None`` unless the field is calculated."""
+    """One pivot-cache field; ``formula`` (with a leading ``=``) is ``None`` unless the field is calculated.
+
+    The ``contains_*`` flags are the field's ``<sharedItems>`` content flags, read-only: an attribute the file
+    omits reads as its schema default, and a field with none of its own reads as the flags derived from its values.
+    ``contains_semi_mixed_types`` is text or a blank, ``contains_non_date`` text or a number, and
+    ``contains_mixed_types`` two or more of text, numbers and dates.
+    """
 
     name: str
     formula: Optional[str]
+    contains_number: bool = False
+    contains_integer: bool = False
+    contains_string: bool = False
+    contains_blank: bool = False
+    contains_date: bool = False
+    contains_mixed_types: bool = False
+    contains_semi_mixed_types: bool = False
+    contains_non_date: bool = False
 
 
 @dataclass(frozen=True)
@@ -5255,10 +5319,10 @@ class PivotField:
 
     ``axis`` is ``None`` for a field that sits on no axis. ``cache_field_index``
     is the bound pivot-cache field (pivot field ``i`` binds to cache field
-    ``i``), ``None`` when the cache does not cover the field. For a date-grouped
-    field, ``date_periods`` holds the periods of its group fields (empty when
-    ungrouped) and ``date_calendar`` their calendar; ``group_base_index`` is
-    the field a group field groups, ``None`` for any other field. A text the
+    ``i``), ``None`` when the cache does not cover the field. ``group_base_index`` is
+    the field a group field groups, ``None`` for any other field; read a
+    grouping with :meth:`Pivot.get_field_date_group` or
+    :meth:`Pivot.get_field_numeric_group`. A text the
     field does not state is ``None``.
     ``subtotal_functions`` lists the custom subtotal functions in ascending
     aggregation order; ``default_subtotal`` is false whenever it is non-empty,
@@ -5273,8 +5337,6 @@ class PivotField:
     cache_field_index: Optional[int]
     sort_order: PivotSortOrder
     sort_by_field: Optional[str]
-    date_periods: PivotDatePeriod
-    date_calendar: PivotCalendar
     group_base_index: Optional[int]
     default_subtotal: bool
     subtotal_functions: List[PivotAggregation]

@@ -631,9 +631,13 @@ class JsWorkbook {
   /// when the cache has no worksheet source.
   emscripten::val pivotCacheGetWorksheetSource(uint32_t cacheId) const;
   void pivotCacheSetWorksheetSource(uint32_t cacheId, emscripten::val source);
+  /// Rebuilds the cache from its worksheet source and re-projects the pivots drawing from it.
+  void pivotCacheRefresh(uint32_t cacheId);
 
   double pivotCacheFieldCount(uint32_t cacheId) const;
   std::string pivotCacheFieldName(uint32_t cacheId, uint32_t fieldIndex) const;
+  /// The eight `<sharedItems>` content flags of a cache field as `{ containsNumber, ... }` booleans.
+  emscripten::val pivotCacheFieldTypes(uint32_t cacheId, uint32_t fieldIndex) const;
   uint32_t pivotCacheFieldAdd(uint32_t cacheId, const std::string& name);
   void pivotCacheFieldClear(uint32_t cacheId);
 
@@ -729,6 +733,17 @@ class JsWorkbook {
                               uint32_t calendar, uint32_t intervalDays, double start, double end);
   /// The `null` form of `pivotFieldSetDateGroup`: removes the grouping; any other `group` is a type error.
   void pivotFieldRemoveDateGroup(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex, emscripten::val group);
+  /// Groups a number field into ranges of `interval`; NaN bounds follow the field's own values.
+  void pivotFieldSetNumericGroup(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex, double interval,
+                                 double start, double end);
+  /// The `null` form of `pivotFieldSetNumericGroup`: removes the grouping; any other `group` is a type error.
+  void pivotFieldRemoveNumericGroup(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex, emscripten::val group);
+  /// The stored date grouping over a field as `{ periods, calendar, intervalDays, start, end, autoStart, autoEnd }`;
+  /// `null` when the field is not date-grouped.
+  emscripten::val pivotFieldGetDateGroup(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex) const;
+  /// The stored numeric grouping over a field as `{ start, end, interval, autoStart, autoEnd }`; `null` when the
+  /// field is not numerically grouped.
+  emscripten::val pivotFieldGetNumericGroup(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex) const;
 
   void pivotSetRowFieldOrder(uint32_t sheet, uint32_t pivotIndex, emscripten::val indices);
   void pivotSetColFieldOrder(uint32_t sheet, uint32_t pivotIndex, emscripten::val indices);

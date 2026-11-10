@@ -218,7 +218,9 @@ class PivotInputTests(unittest.TestCase):
                     end=datetime.date(2024, 12, 31),
                 ),
             )
-            self.assertTrue(pivot.list_fields()[0].date_periods & formulon.PivotDatePeriod.MONTHS)
+            group = pivot.get_field_date_group(0)
+            assert group is not None
+            self.assertTrue(group.periods & formulon.PivotDatePeriod.MONTHS)
             with self.assertRaises(TypeError):
                 pivot.set_field_date_group(0, periods=formulon.PivotDatePeriod.YEARS)  # type: ignore[call-overload]
 

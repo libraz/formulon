@@ -154,6 +154,33 @@ Napi::Value Workbook::PivotCacheFieldClear(const Napi::CallbackInfo& info) {
   return InvokeSheetCall(info, &fm_workbook_clear_pivot_cache_fields);
 }
 
+Napi::Value Workbook::PivotCacheRefresh(const Napi::CallbackInfo& info) {
+  return InvokeSheetCall(info, &fm_workbook_refresh_pivot_cache);
+}
+
+Napi::Value Workbook::PivotCacheFieldTypes(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return ThrowInvalidHandle(env);
+  }
+  fm_pivot_cache_field_types_t t = FM_STRUCT_INIT(fm_pivot_cache_field_types_t);
+  const fm_status_t rc =
+      fm_workbook_get_pivot_cache_field_types(handle_, ArgU32(info, 0), static_cast<std::size_t>(ArgU32(info, 1)), &t);
+  if (rc != 0) {
+    return ThrowStatus(env, rc);
+  }
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("containsNumber", Napi::Boolean::New(env, t.contains_number != 0));
+  out.Set("containsInteger", Napi::Boolean::New(env, t.contains_integer != 0));
+  out.Set("containsString", Napi::Boolean::New(env, t.contains_string != 0));
+  out.Set("containsBlank", Napi::Boolean::New(env, t.contains_blank != 0));
+  out.Set("containsDate", Napi::Boolean::New(env, t.contains_date != 0));
+  out.Set("containsMixedTypes", Napi::Boolean::New(env, t.contains_mixed_types != 0));
+  out.Set("containsSemiMixedTypes", Napi::Boolean::New(env, t.contains_semi_mixed_types != 0));
+  out.Set("containsNonDate", Napi::Boolean::New(env, t.contains_non_date != 0));
+  return out;
+}
+
 Napi::Value Workbook::PivotCacheFieldSharedItemCount(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {

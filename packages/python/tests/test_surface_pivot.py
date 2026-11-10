@@ -32,6 +32,7 @@ from formulon import (
     PivotFilterKind,
     PivotGrandTotals,
     PivotInput,
+    PivotNumericGroupInput,
     PivotReportLayout,
     PivotSortOrder,
     PivotWorksheetSourceInput,
@@ -224,7 +225,9 @@ _PIVOT_READERS = {
     "Pivot.get_data_field",
     "Pivot.get_data_field_default_name",
     "Pivot.get_field",
+    "Pivot.get_field_date_group",
     "Pivot.get_field_item",
+    "Pivot.get_field_numeric_group",
     "Pivot.get_filter",
     "Pivot.get_grand_totals",
     "Pivot.get_layout",
@@ -262,6 +265,23 @@ def _first_number_cell(f: _PivotFixture) -> Tuple[int, int]:
 
 def _two_levels(f: _PivotFixture) -> None:
     f.wb.sheet(0).pivot(f.pivot).set_row_field_order([f.region, f.product])
+
+
+def _write_refresh_source(f: _PivotFixture) -> None:
+    """Fill the source range A1:D5 with cells whose last row names a region the cache has not seen."""
+    rows = [
+        ("Region", "Product", "Amount", "Date"),
+        ("East", "Apple", 10, 45292),
+        ("West", "Apple", 30, 45323),
+        ("East", "Pear", 5, 45658),
+        ("North", "Pear", 7, 45689),
+    ]
+    for r, row in enumerate(rows):
+        for c, v in enumerate(row):
+            if isinstance(v, str):
+                f.wb.sheet(0).set_text(r, c, v)
+            else:
+                f.wb.sheet(0).set_number(r, c, v)
 
 
 def _date_rows(f: _PivotFixture) -> None:
@@ -906,6 +926,22 @@ class PivotMutatorTableTests(unittest.TestCase):
                 None,
                 grid_is(["行ラベル|Sum of Amount", "45292|10", "45323|30", "45658|5", "45689|7", "総計|52"]),
             ),
+            "Pivot.set_field_numeric_group": (
+                lambda f: f.wb.sheet(0).pivot(f.pivot).set_row_field_order([f.amount]),
+                lambda f: (
+                    f.wb.sheet(0)
+                    .pivot(f.pivot)
+                    .set_field_numeric_group(f.amount, PivotNumericGroupInput(interval=10, start=0, end=39))
+                ),
+                None,
+                grid_is(["行ラベル|Sum of Amount", "0-9|12", "10-19|10", "30-39|30", "総計|52"]),
+            ),
+            "PivotCache.refresh": (
+                _write_refresh_source,
+                lambda f: f.wb.pivot_cache(f.cache).refresh(),
+                None,
+                grid_is(["行ラベル|Sum of Amount", "East|15", "North|7", "West|30", "総計|52"]),
+            ),
             "Pivot.update_field#number_format": (
                 None,
                 lambda f: f.wb.sheet(0).pivot(f.pivot).update_field(f.amount, number_format="#,##0.00"),
@@ -1117,7 +1153,7 @@ class PivotMutatorTableTests(unittest.TestCase):
 
 
 class PivotDefinitionReadBackTests(unittest.TestCase):
-    def _assert_fixture_definition(self, wb: Workbook, f: _PivotFixture, pivot: int) -> None:
+    def _assert_fixture_definition(self, wb: Workbook, f: _PivotFixture, pivot: int, saved: bool = False) -> None:
         eq = self.assertEqual
         eq(wb.sheet(0).pivot(pivot).name, "Pivot1")
         eq(wb.sheet(0).pivot(pivot).get_grand_totals(), PivotGrandTotals(rows=True, columns=True))
@@ -1129,7 +1165,7 @@ class PivotDefinitionReadBackTests(unittest.TestCase):
         eq(region.axis, PivotAxis.ROW)
         eq(region.cache_field_index, 0)
         eq(region.sort_order, PivotSortOrder.ASCENDING)
-        eq(region.date_periods, PivotDatePeriod(0))
+        eq(wb.sheet(0).pivot(pivot).get_field_date_group(f.region), None)
         eq(region.group_base_index, None)
         eq((region.insert_blank_row, region.fill_down_labels), (False, False))
 
@@ -1143,7 +1179,8 @@ class PivotDefinitionReadBackTests(unittest.TestCase):
         eq(data_field.name, "Sum of Amount")
         eq(data_field.field_index, f.amount)
         eq(data_field.aggregation, PivotAggregation.SUM)
-        eq((data_field.show_as_base_field, data_field.show_as_base_item), (None, None))
+        # A saved data field always carries baseField / baseItem, as Excel writes them.
+        eq((data_field.show_as_base_field, data_field.show_as_base_item), (0, 0) if saved else (None, None))
 
     def test_reads_back_what_the_setters_wrote(self) -> None:
         with Workbook.create_default() as wb:
@@ -1164,8 +1201,11 @@ class PivotDefinitionReadBackTests(unittest.TestCase):
             self.assertEqual((region.sort_order, region.sort_by_field), (PivotSortOrder.DESCENDING, "Sum of Amount"))
             self.assertFalse(wb.sheet(0).pivot(f.pivot).get_field_item(f.region, 1).visible)
             date = wb.sheet(0).pivot(f.pivot).list_fields()[f.date]
-            self.assertEqual(date.date_periods, PivotDatePeriod.YEARS)
-            self.assertEqual(date.date_calendar, PivotCalendar.GREGORIAN)
+            group = wb.sheet(0).pivot(f.pivot).get_field_date_group(f.date)
+            assert group is not None
+            self.assertEqual(group.periods, PivotDatePeriod.YEARS)
+            self.assertEqual(group.calendar, PivotCalendar.GREGORIAN)
+            self.assertTrue(group.auto_start and group.auto_end)
             self.assertEqual(date.axis, PivotAxis.VALUE)
 
             wb.sheet(0).pivot(f.pivot).set_field_axis(f.product, PivotAxis.COLUMN)
@@ -1282,7 +1322,7 @@ class PivotDefinitionReadBackTests(unittest.TestCase):
         with Workbook.load(data) as loaded:
             self.assertEqual(len(loaded.sheet(0).list_pivots()), 1)
             self.assertEqual(loaded.sheet(0).pivot(0).cache().cache_id, f.cache)
-            self._assert_fixture_definition(loaded, f, 0)
+            self._assert_fixture_definition(loaded, f, 0, saved=True)
 
     def test_filters_and_subtotal_functions_survive_save_and_reload(self) -> None:
         with Workbook.create_default() as wb:

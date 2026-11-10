@@ -330,8 +330,15 @@ TEST(FormulonCApiPivot, DateGroupRegroupsByPeriodsAndClearsThroughAGroupField) {
   EXPECT_EQ(field_count, 4U);
   fm_pivot_field_info_t date = FM_STRUCT_INIT(fm_pivot_field_info_t);
   ASSERT_EQ(fm_sheet_get_pivot_field_at(wb.handle, 0, pivot_index, 0, &date), 0);
-  EXPECT_EQ(date.date_periods, FM_PIVOT_PERIOD_MONTHS | FM_PIVOT_PERIOD_YEARS);
-  EXPECT_EQ(date.date_calendar, FM_PIVOT_CALENDAR_GREGORIAN);
+  fm_pivot_date_group_spec_t state = FM_STRUCT_INIT(fm_pivot_date_group_spec_t);
+  std::int32_t present = 0;
+  ASSERT_EQ(fm_sheet_get_pivot_field_date_group(wb.handle, 0, pivot_index, 0, &present, &state), 0);
+  EXPECT_EQ(present, 1);
+  EXPECT_EQ(state.periods, FM_PIVOT_PERIOD_MONTHS | FM_PIVOT_PERIOD_YEARS);
+  EXPECT_EQ(state.calendar, FM_PIVOT_CALENDAR_GREGORIAN);
+  EXPECT_EQ(state.interval_days, 1U);
+  EXPECT_EQ(state.has_start, 0);
+  EXPECT_EQ(state.has_end, 0);
   EXPECT_EQ(date.has_group_base_index, 0);
   EXPECT_EQ(date.axis, FM_PIVOT_AXIS_ABSENT);
   fm_pivot_field_info_t months = FM_STRUCT_INIT(fm_pivot_field_info_t);
@@ -339,7 +346,6 @@ TEST(FormulonCApiPivot, DateGroupRegroupsByPeriodsAndClearsThroughAGroupField) {
   EXPECT_STREQ(months.source_name, "\xE6\x9C\x88 (Date)");  // 月 (Date)
   EXPECT_EQ(months.has_group_base_index, 1);
   EXPECT_EQ(months.group_base_index, 0U);
-  EXPECT_EQ(months.date_periods, 0U);
   EXPECT_EQ(months.axis, FM_PIVOT_AXIS_ROW);
   std::uint32_t order[8] = {};
   std::size_t order_count = 0;
@@ -355,7 +361,8 @@ TEST(FormulonCApiPivot, DateGroupRegroupsByPeriodsAndClearsThroughAGroupField) {
   ASSERT_EQ(fm_sheet_get_pivot_field_count(wb.handle, 0, pivot_index, &field_count), 0);
   EXPECT_EQ(field_count, 2U);
   ASSERT_EQ(fm_sheet_get_pivot_field_at(wb.handle, 0, pivot_index, 0, &date), 0);
-  EXPECT_EQ(date.date_periods, 0U);
+  ASSERT_EQ(fm_sheet_get_pivot_field_date_group(wb.handle, 0, pivot_index, 0, &present, &state), 0);
+  EXPECT_EQ(present, 0);
   EXPECT_EQ(date.axis, FM_PIVOT_AXIS_ROW);
   ASSERT_EQ(fm_sheet_get_pivot_row_field_order(wb.handle, 0, pivot_index, order, 8U, &order_count), 0);
   ASSERT_EQ(order_count, 1U);

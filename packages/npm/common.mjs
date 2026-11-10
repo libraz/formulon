@@ -1661,7 +1661,9 @@ const HANDLE_FORWARDERS = Object.freeze({
   'Pivot.getDataField': 'getPivotDataField',
   'Pivot.getDataFieldDefaultName': 'getPivotDataFieldDefaultName',
   'Pivot.getField': 'getPivotField',
+  'Pivot.getFieldDateGroup': null,
   'Pivot.getFieldItem': 'getPivotFieldItem',
+  'Pivot.getFieldNumericGroup': 'getPivotFieldNumericGroup',
   'Pivot.getFilter': 'getPivotFilter',
   'Pivot.getGrandTotals': 'getPivotGrandTotals',
   'Pivot.getLayout': 'getPivotLayout',
@@ -1684,6 +1686,7 @@ const HANDLE_FORWARDERS = Object.freeze({
   'Pivot.setDataField': 'setPivotDataField',
   'Pivot.setFieldAxis': 'setPivotFieldAxis',
   'Pivot.setFieldDateGroup': null,
+  'Pivot.setFieldNumericGroup': null,
   'Pivot.setFieldSubtotalFunctions': 'setPivotFieldSubtotalFunctions',
   'Pivot.setPageFieldOrder': 'setPivotPageFieldOrder',
   'Pivot.setReportLayout': 'setPivotReportLayout',
@@ -1710,6 +1713,7 @@ const HANDLE_FORWARDERS = Object.freeze({
   'PivotCache.listFieldSharedItems': null,
   'PivotCache.listFields': null,
   'PivotCache.moveCalculatedItem': 'movePivotCacheCalculatedItem',
+  'PivotCache.refresh': 'refreshPivotCache',
   'PivotCache.removeCalculatedField': 'removePivotCacheCalculatedField',
   'PivotCache.removeCalculatedItem': 'removePivotCacheCalculatedItem',
   'PivotCache.setCalculatedFieldFormula': 'setPivotCacheCalculatedFieldFormula',
@@ -1953,8 +1957,6 @@ const PATCH_KEYS = Object.freeze({
       'axis',
       'cacheFieldIndex',
       'customName',
-      'dateCalendar',
-      'datePeriods',
       'defaultSubtotal',
       'fillDownLabels',
       'groupBaseIndex',
@@ -2414,6 +2416,7 @@ const INPUT_KEYS = Object.freeze({
     ['aggregation', 'fieldIndex', 'name', 'numberFormat', 'showAs', 'showAsBaseField', 'showAsBaseItem'],
   ],
   'Pivot.setFieldDateGroup': [1, ['calendar', 'end', 'intervalDays', 'periods', 'start']],
+  'Pivot.setFieldNumericGroup': [1, ['end', 'interval', 'start']],
   'PivotCache.setWorksheetSource': [0, ['name', 'range', 'sheet']],
   'Sheet.addCfRule': [
     0,
@@ -3189,15 +3192,7 @@ const READ_ONLY_KEYS = Object.freeze({
   'Chart.updatePoint': ['index'],
   'Chart.updateSeries': ['filtered', 'order', 'points', 'seriesId'],
   'Drawing.update': ['kind', 'objectId'],
-  'Pivot.updateField': [
-    'axis',
-    'cacheFieldIndex',
-    'dateCalendar',
-    'datePeriods',
-    'groupBaseIndex',
-    'sourceName',
-    'subtotalFunctions',
-  ],
+  'Pivot.updateField': ['axis', 'cacheFieldIndex', 'groupBaseIndex', 'sourceName', 'subtotalFunctions'],
   'Pivot.updateFieldItem': ['cacheIndex', 'name'],
   'Shape.update': ['kind', 'objectId'],
   'Sheet.addDataTable': ['columnInput.deleted', 'rowInput.deleted', 'rowOriented', 'twoDimensional'],
@@ -3393,7 +3388,9 @@ const METHOD_ARITY = Object.freeze({
   'Pivot.getDataField': 1,
   'Pivot.getDataFieldDefaultName': 3,
   'Pivot.getField': 1,
+  'Pivot.getFieldDateGroup': 1,
   'Pivot.getFieldItem': 2,
+  'Pivot.getFieldNumericGroup': 1,
   'Pivot.getFilter': 1,
   'Pivot.getGrandTotals': 0,
   'Pivot.getLayout': 0,
@@ -3416,6 +3413,7 @@ const METHOD_ARITY = Object.freeze({
   'Pivot.setDataField': 2,
   'Pivot.setFieldAxis': 2,
   'Pivot.setFieldDateGroup': 2,
+  'Pivot.setFieldNumericGroup': 2,
   'Pivot.setFieldSubtotalFunctions': 2,
   'Pivot.setPageFieldOrder': 1,
   'Pivot.setReportLayout': 1,
@@ -3442,6 +3440,7 @@ const METHOD_ARITY = Object.freeze({
   'PivotCache.listFieldSharedItems': 1,
   'PivotCache.listFields': 0,
   'PivotCache.moveCalculatedItem': 2,
+  'PivotCache.refresh': 0,
   'PivotCache.removeCalculatedField': 1,
   'PivotCache.removeCalculatedItem': 1,
   'PivotCache.setCalculatedFieldFormula': 2,
@@ -4138,7 +4137,9 @@ const PARAM_NAMES = Object.freeze({
   'Pivot.getDataField': ['dataFieldIndex'],
   'Pivot.getDataFieldDefaultName': ['fieldIndex', 'aggregation', 'excludeDataField'],
   'Pivot.getField': ['fieldIndex'],
+  'Pivot.getFieldDateGroup': ['fieldIndex'],
   'Pivot.getFieldItem': ['fieldIndex', 'itemIndex'],
+  'Pivot.getFieldNumericGroup': ['fieldIndex'],
   'Pivot.getFilter': ['filterIndex'],
   'Pivot.listFieldItems': ['fieldIndex'],
   'Pivot.removeFilter': ['filterIndex'],
@@ -4148,6 +4149,7 @@ const PARAM_NAMES = Object.freeze({
   'Pivot.setDataField': ['dataFieldIndex', 'spec'],
   'Pivot.setFieldAxis': ['fieldIndex', 'axis'],
   'Pivot.setFieldDateGroup': ['fieldIndex', 'group'],
+  'Pivot.setFieldNumericGroup': ['fieldIndex', 'group'],
   'Pivot.setFieldSubtotalFunctions': ['fieldIndex', 'aggregations'],
   'Pivot.setPageFieldOrder': ['fields'],
   'Pivot.setReportLayout': ['layout'],
@@ -5498,6 +5500,9 @@ const PIVOT_FIELD_ARGUMENTS = Object.freeze([
   'clearFieldItems',
   'setFieldSubtotalFunctions',
   'setFieldDateGroup',
+  'getFieldDateGroup',
+  'setFieldNumericGroup',
+  'getFieldNumericGroup',
   'getDataFieldDefaultName',
 ]);
 
@@ -6609,6 +6614,34 @@ function makeFacade(Raw, registry, runtime) {
       while (tail.length > 0 && (tail.length === 1 ? tail[0] === 1 : Number.isNaN(tail.at(-1)))) tail.pop();
       raw.setPivotFieldDateGroup(sheet, pivot, field, ...args, ...tail);
     }
+
+    // The stored bounds read back as `Date`s, so a read group can be written back through `setFieldDateGroup`.
+    getFieldDateGroup(field) {
+      const [raw, sheet, pivot] = this.#locate();
+      const group = raw.getPivotFieldDateGroup(sheet, pivot, field);
+      if (group === null) return null;
+      const date1904 = raw.getDate1904();
+      return {
+        ...group,
+        start: serialDate(runtime, group.start, date1904),
+        end: serialDate(runtime, group.end, date1904),
+      };
+    }
+
+    setFieldNumericGroup(field, group) {
+      const where = 'Pivot.setFieldNumericGroup';
+      const [raw, sheet, pivot] = this.#locate();
+      if (group === null) {
+        raw.setPivotFieldNumericGroup(sheet, pivot, field, null);
+        return;
+      }
+      const label = argLabel(where, 1);
+      requireObject(group, label);
+      const interval = requireNumber(group.interval, `${label}.interval`);
+      const bound = (key) => (group[key] === undefined ? Number.NaN : requireNumber(group[key], `${label}.${key}`));
+      // The raw call is positional: a NaN bound is an omitted one.
+      raw.setPivotFieldNumericGroup(sheet, pivot, field, interval, bound('start'), bound('end'));
+    }
   }
 
   class PivotCache {
@@ -6646,7 +6679,11 @@ function makeFacade(Raw, registry, runtime) {
       const n = raw.getPivotCacheFieldCount(id);
       const fields = [];
       for (let i = 0; i < n; i++) {
-        fields.push({ name: raw.getPivotCacheFieldName(id, i), formula: raw.getPivotCacheFieldFormula(id, i) });
+        fields.push({
+          name: raw.getPivotCacheFieldName(id, i),
+          formula: raw.getPivotCacheFieldFormula(id, i),
+          ...raw.getPivotCacheFieldTypes(id, i),
+        });
       }
       return fields;
     }

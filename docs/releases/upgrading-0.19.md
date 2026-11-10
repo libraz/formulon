@@ -377,8 +377,10 @@ Read [Every binding](#every-binding) first, then the section for your binding. [
   calendar, an interval in days and start and end serials (NaN for automatic)
   in place of a granularity and year arguments. `fm_pivot_date_grouping_t` and
   the `date_*` members of `fm_pivot_field_info_t` are gone; the struct now
-  reports `date_periods`, `date_calendar`, `group_base_index`,
-  `insert_blank_row` and `fill_down_labels`. The old "year and month" grouping
+  reports `group_base_index`, `insert_blank_row` and `fill_down_labels`, and
+  a field's date grouping is read with `fm_sheet_get_pivot_field_date_group`
+  (`Pivot.getFieldDateGroup`, `Pivot.get_field_date_group`), which returns
+  the settings `fm_sheet_set_pivot_field_date_group` takes. The old "year and month" grouping
   is not the same thing as Excel's months period, so it has no replacement.
   `fm_pivot_item_info_t` gains `caption` and `show_detail` at its end. A caller
   compiled against an earlier header must be recompiled.

@@ -893,6 +893,25 @@ entries:
     js: PivotDateGroupInput
     py: PivotDateGroupInput
     surfaces: [c, wasm, native, py]
+  record.pivot_date_group:
+    kind: record
+    role: result
+    js: PivotDateGroup
+    py: PivotDateGroup
+    surfaces: [wasm, native, py]
+  record.pivot_numeric_group_input:
+    kind: record
+    role: input
+    c: fm_pivot_numeric_group_spec_t
+    js: PivotNumericGroupInput
+    py: PivotNumericGroupInput
+    surfaces: [c, wasm, native, py]
+  record.pivot_numeric_group:
+    kind: record
+    role: result
+    js: PivotNumericGroup
+    py: PivotNumericGroup
+    surfaces: [wasm, native, py]
   record.pivot_cache_options:
     kind: record
     role: result
@@ -6370,6 +6389,15 @@ entries:
     was: { c: fm_workbook_pivot_cache_set_worksheet_source, js: pivotCacheSetWorksheetSource, py: set_pivot_cache_worksheet_source }
     handle: { class: PivotCache, supplies: [cache_id] }
     facade: handwritten
+  pivot_cache.refresh:
+    kind: op
+    scope: workbook
+    noun: pivot_cache
+    c: fm_workbook_refresh_pivot_cache
+    js: refreshPivotCache
+    py: refresh_pivot_cache
+    surfaces: [c, wasm, native, py]
+    handle: { class: PivotCache, supplies: [cache_id] }
   pivot_cache_field.get_count:
     kind: op
     scope: workbook
@@ -6664,6 +6692,15 @@ entries:
     py: get_pivot_cache_field_formula
     surfaces: [c, wasm, native, py]
     drop: { js: getPivotCacheFieldFormula, py: get_pivot_cache_field_formula, closes: R23.list }
+  pivot_cache_field_types.get:
+    kind: op
+    scope: workbook
+    noun: pivot_cache_field_types
+    c: fm_workbook_get_pivot_cache_field_types
+    js: getPivotCacheFieldTypes
+    py: get_pivot_cache_field_types
+    surfaces: [c, wasm, native, py]
+    drop: { js: getPivotCacheFieldTypes, py: get_pivot_cache_field_types, closes: R23.list }
   pivot_cache_calculated_item.add:
     kind: op
     scope: workbook
@@ -7071,6 +7108,37 @@ entries:
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_field_set_date_group, js: pivotFieldSetDateGroup, py: pivot_field_set_date_group }
     facade: handwritten
+    handle: { class: Pivot, supplies: [sheet, pivot] }
+  pivot_field_date_group.get:
+    kind: op
+    scope: sheet
+    noun: pivot_field_date_group
+    c: fm_sheet_get_pivot_field_date_group
+    js: getPivotFieldDateGroup
+    py: get_pivot_field_date_group
+    surfaces: [c, wasm, native, py]
+    missing: null
+    handle: { class: Pivot, supplies: [sheet, pivot] }
+    facade: handwritten
+  pivot_field_numeric_group.set:
+    kind: op
+    scope: sheet
+    noun: pivot_field_numeric_group
+    c: fm_sheet_set_pivot_field_numeric_group
+    js: setPivotFieldNumericGroup
+    py: set_pivot_field_numeric_group
+    surfaces: [c, wasm, native, py]
+    handle: { class: Pivot, supplies: [sheet, pivot] }
+    facade: handwritten
+  pivot_field_numeric_group.get:
+    kind: op
+    scope: sheet
+    noun: pivot_field_numeric_group
+    c: fm_sheet_get_pivot_field_numeric_group
+    js: getPivotFieldNumericGroup
+    py: get_pivot_field_numeric_group
+    surfaces: [c, wasm, native, py]
+    missing: null
     handle: { class: Pivot, supplies: [sheet, pivot] }
   pivot_field_date_group.clear:
     kind: op
@@ -13901,7 +13969,7 @@ entries:
     js: PivotFieldPatch
     surfaces: [c, wasm, native]
     clearable: [custom_name, number_format, sort_by_field]
-    read_only_keys: [axis, cache_field_index, source_name, subtotal_functions, date_calendar, date_periods, group_base_index]
+    read_only_keys: [axis, cache_field_index, source_name, subtotal_functions, group_base_index]
   record.pivot_item_patch:
     kind: record
     role: patch
@@ -13934,6 +14002,59 @@ entries:
     js: PivotCacheField
     py: PivotCacheField
     surfaces: [wasm, native, py]
+  field.pivot_cache_field_contains_number:
+    kind: field
+    record: record.pivot_cache_field
+    js: containsNumber
+    py: contains_number
+    surfaces: [wasm, native, py]
+  field.pivot_cache_field_contains_integer:
+    kind: field
+    record: record.pivot_cache_field
+    js: containsInteger
+    py: contains_integer
+    surfaces: [wasm, native, py]
+  field.pivot_cache_field_contains_string:
+    kind: field
+    record: record.pivot_cache_field
+    js: containsString
+    py: contains_string
+    surfaces: [wasm, native, py]
+  field.pivot_cache_field_contains_blank:
+    kind: field
+    record: record.pivot_cache_field
+    js: containsBlank
+    py: contains_blank
+    surfaces: [wasm, native, py]
+  field.pivot_cache_field_contains_date:
+    kind: field
+    record: record.pivot_cache_field
+    js: containsDate
+    py: contains_date
+    surfaces: [wasm, native, py]
+  field.pivot_cache_field_contains_mixed_types:
+    kind: field
+    record: record.pivot_cache_field
+    js: containsMixedTypes
+    py: contains_mixed_types
+    surfaces: [wasm, native, py]
+  field.pivot_cache_field_contains_semi_mixed_types:
+    kind: field
+    record: record.pivot_cache_field
+    js: containsSemiMixedTypes
+    py: contains_semi_mixed_types
+    surfaces: [wasm, native, py]
+  field.pivot_cache_field_contains_non_date:
+    kind: field
+    record: record.pivot_cache_field
+    js: containsNonDate
+    py: contains_non_date
+    surfaces: [wasm, native, py]
+  record.pivot_cache_field_types:
+    kind: record
+    role: result
+    c: fm_pivot_cache_field_types_t
+    surfaces: [c]
   record.pivot_cache_shared_item:
     kind: record
     role: result

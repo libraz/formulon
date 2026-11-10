@@ -104,6 +104,11 @@ Upgrading from 0.18: see [Upgrading from 0.18 to 0.19](docs/releases/upgrading-0
 
 ### Added
 
+- `PivotCache.refresh()` rebuilds a cache from its worksheet source and
+  re-projects every pivot on it; cache fields report their sharedItems type
+  flags.
+- `Pivot.setFieldNumericGroup` groups a field into numeric ranges, and
+  `getFieldDateGroup` / `getFieldNumericGroup` read a grouping back.
 - `Sheet.insertCells(range, shift)` and `deleteCells(range, shift)` shift a
   band of cells in a `CellShift` direction; a reference moves only when its
   extent across the band lies wholly inside it.

@@ -544,9 +544,10 @@ std::vector<std::string> RowLabels(const fm_workbook_t* wb) {
 }
 
 std::uint32_t DatePeriods(const fm_workbook_t* wb) {
-  fm_pivot_field_info_t info = FM_STRUCT_INIT(fm_pivot_field_info_t);
-  EXPECT_EQ(fm_sheet_get_pivot_field_at(wb, 0, kPivot, 0, &info), FM_STATUS_OK);
-  return info.date_periods;
+  fm_pivot_date_group_spec_t group = FM_STRUCT_INIT(fm_pivot_date_group_spec_t);
+  std::int32_t present = 0;
+  EXPECT_EQ(fm_sheet_get_pivot_field_date_group(wb, 0, kPivot, 0, &present, &group), FM_STATUS_OK);
+  return present != 0 ? group.periods : 0U;
 }
 
 TEST(FormulonCApiPivotPatch, DateGroupWithoutABoundStartsAtTheFirstValue) {

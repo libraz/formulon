@@ -250,6 +250,16 @@ static_assert(offsetof(fm_pivot_cache_options_t, has_missing_items_limit) == 8U)
 static_assert(offsetof(fm_pivot_cache_options_t, missing_items_limit) == 12U);
 static_assert(offsetof(fm_pivot_cache_options_t, refresh_on_load) == 16U);
 
+static_assert(sizeof(fm_pivot_cache_field_types_t) == 36U);
+static_assert(offsetof(fm_pivot_cache_field_types_t, contains_number) == 4U);
+static_assert(offsetof(fm_pivot_cache_field_types_t, contains_integer) == 8U);
+static_assert(offsetof(fm_pivot_cache_field_types_t, contains_string) == 12U);
+static_assert(offsetof(fm_pivot_cache_field_types_t, contains_blank) == 16U);
+static_assert(offsetof(fm_pivot_cache_field_types_t, contains_date) == 20U);
+static_assert(offsetof(fm_pivot_cache_field_types_t, contains_mixed_types) == 24U);
+static_assert(offsetof(fm_pivot_cache_field_types_t, contains_semi_mixed_types) == 28U);
+static_assert(offsetof(fm_pivot_cache_field_types_t, contains_non_date) == 32U);
+
 static_assert(sizeof(fm_pivot_cache_options_patch_t) == 28U);
 static_assert(offsetof(fm_pivot_cache_options_patch_t, save_data_op) == 4U);
 static_assert(offsetof(fm_pivot_cache_options_patch_t, save_data) == 8U);

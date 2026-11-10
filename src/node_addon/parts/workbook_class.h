@@ -283,7 +283,9 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value PivotCacheRemove(const Napi::CallbackInfo& info);
   Napi::Value PivotCacheGetWorksheetSource(const Napi::CallbackInfo& info);
   Napi::Value PivotCacheSetWorksheetSource(const Napi::CallbackInfo& info);
+  Napi::Value PivotCacheRefresh(const Napi::CallbackInfo& info);
   Napi::Value PivotCacheFieldCount(const Napi::CallbackInfo& info);
+  Napi::Value PivotCacheFieldTypes(const Napi::CallbackInfo& info);
   Napi::Value PivotCacheFieldName(const Napi::CallbackInfo& info);
   Napi::Value PivotCacheFieldAdd(const Napi::CallbackInfo& info);
   Napi::Value PivotCacheFieldClear(const Napi::CallbackInfo& info);
@@ -361,6 +363,9 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value PivotShowDetails(const Napi::CallbackInfo& info);
   Napi::Value PivotFieldSetSubtotalFunctions(const Napi::CallbackInfo& info);
   Napi::Value PivotFieldSetDateGroup(const Napi::CallbackInfo& info);
+  Napi::Value PivotFieldSetNumericGroup(const Napi::CallbackInfo& info);
+  Napi::Value PivotFieldGetDateGroup(const Napi::CallbackInfo& info);
+  Napi::Value PivotFieldGetNumericGroup(const Napi::CallbackInfo& info);
   Napi::Value PivotSetRowFieldOrder(const Napi::CallbackInfo& info);
   Napi::Value PivotSetColFieldOrder(const Napi::CallbackInfo& info);
   Napi::Value PivotSetPageFieldOrder(const Napi::CallbackInfo& info);

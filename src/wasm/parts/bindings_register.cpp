@@ -328,6 +328,8 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("isPivotCacheFieldSharedItemDate", &JsWorkbook::pivotCacheFieldSharedItemIsDate)
       .function("addPivotCacheFieldSharedItemText", &JsWorkbook::pivotCacheFieldAddSharedItemText)
       .function("clearPivotCacheFields", &JsWorkbook::pivotCacheFieldClear)
+      .function("refreshPivotCache", &JsWorkbook::pivotCacheRefresh)
+      .function("getPivotCacheFieldTypes", &JsWorkbook::pivotCacheFieldTypes)
       .function("clearPivotCacheFieldSharedItems", &JsWorkbook::pivotCacheFieldClearSharedItems)
       .function("getPivotCacheFieldCount", &JsWorkbook::pivotCacheFieldCount)
       .function("getPivotCacheFieldName", &JsWorkbook::pivotCacheFieldName)
@@ -394,6 +396,15 @@ EMSCRIPTEN_BINDINGS(formulon) {
                   return self.pivotFieldSetDateGroup(sheet, pivotIndex, fieldIndex, periods, calendar, 1U,
                                                      std::numeric_limits<double>::quiet_NaN(),
                                                      std::numeric_limits<double>::quiet_NaN());
+                }))
+      .function("getPivotFieldDateGroup", &JsWorkbook::pivotFieldGetDateGroup)
+      .function("getPivotFieldNumericGroup", &JsWorkbook::pivotFieldGetNumericGroup)
+      .function("setPivotFieldNumericGroup", &JsWorkbook::pivotFieldSetNumericGroup)
+      // `null` as the fourth argument removes the grouping.
+      .function("setPivotFieldNumericGroup",
+                emscripten::optional_override([](JsWorkbook& self, uint32_t sheet, uint32_t pivotIndex,
+                                                 uint32_t fieldIndex, emscripten::val group) {
+                  return self.pivotFieldRemoveNumericGroup(sheet, pivotIndex, fieldIndex, group);
                 }))
       .function("getPivotOptions", &JsWorkbook::pivotGetOptions)
       .function("updatePivotOptions", &JsWorkbook::pivotSetOptions)

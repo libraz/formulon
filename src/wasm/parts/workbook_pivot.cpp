@@ -301,8 +301,6 @@ emscripten::val JsWorkbook::pivotFieldAt(uint32_t sheet, uint32_t pivotIndex, ui
   o.set("sortOrder", info.sort_order);
   js_set_cstr_or_null(o, "sortByField",
                       info.sort_by_field != nullptr && info.sort_by_field[0] != '\0' ? info.sort_by_field : nullptr);
-  o.set("datePeriods", info.date_periods);
-  o.set("dateCalendar", info.date_calendar);
   js_set_present_or_null(o, "groupBaseIndex", info.has_group_base_index, info.group_base_index);
   o.set("defaultSubtotal", info.default_subtotal != 0);
   o.set("insertBlankRow", info.insert_blank_row != 0);
@@ -635,6 +633,77 @@ void JsWorkbook::pivotFieldRemoveDateGroup(uint32_t sheet, uint32_t pivotIndex, 
     return;
   }
   succeeded(fm_sheet_set_pivot_field_date_group(handle_, sheet, pivotIndex, fieldIndex, nullptr));
+}
+
+void JsWorkbook::pivotFieldSetNumericGroup(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex, double interval,
+                                           double start, double end) {
+  if (handle_ == nullptr) {
+    record_invalid_handle();
+    return;
+  }
+  // A NaN bound is an absent one: the group follows the field's own values.
+  fm_pivot_numeric_group_spec_t group = FM_STRUCT_INIT(fm_pivot_numeric_group_spec_t);
+  group.has_start = std::isnan(start) ? 0 : 1;
+  group.start = std::isnan(start) ? 0.0 : start;
+  group.has_end = std::isnan(end) ? 0 : 1;
+  group.end = std::isnan(end) ? 0.0 : end;
+  group.interval = interval;
+  succeeded(fm_sheet_set_pivot_field_numeric_group(handle_, sheet, pivotIndex, fieldIndex, &group));
+}
+
+void JsWorkbook::pivotFieldRemoveNumericGroup(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex,
+                                              emscripten::val group) {
+  if (handle_ == nullptr) {
+    record_invalid_handle();
+    return;
+  }
+  if (!group.isNull()) {
+    record_type_error("Pivot.setFieldNumericGroup group must be null or a numeric group");
+    return;
+  }
+  succeeded(fm_sheet_set_pivot_field_numeric_group(handle_, sheet, pivotIndex, fieldIndex, nullptr));
+}
+
+emscripten::val JsWorkbook::pivotFieldGetDateGroup(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex) const {
+  fm_pivot_date_group_spec_t group = FM_STRUCT_INIT(fm_pivot_date_group_spec_t);
+  int32_t present = 0;
+  if (!succeeded(handle_ != nullptr
+                     ? fm_sheet_get_pivot_field_date_group(handle_, sheet, pivotIndex, fieldIndex, &present, &group)
+                     : kBindingInvalidHandle)) {
+    return emscripten::val::undefined();
+  }
+  if (present == 0) {
+    return emscripten::val::null();
+  }
+  emscripten::val o = emscripten::val::object();
+  o.set("periods", group.periods);
+  o.set("calendar", group.calendar);
+  o.set("intervalDays", group.interval_days);
+  o.set("start", group.start);
+  o.set("end", group.end);
+  o.set("autoStart", group.has_start == 0);
+  o.set("autoEnd", group.has_end == 0);
+  return o;
+}
+
+emscripten::val JsWorkbook::pivotFieldGetNumericGroup(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex) const {
+  fm_pivot_numeric_group_spec_t group = FM_STRUCT_INIT(fm_pivot_numeric_group_spec_t);
+  int32_t present = 0;
+  if (!succeeded(handle_ != nullptr
+                     ? fm_sheet_get_pivot_field_numeric_group(handle_, sheet, pivotIndex, fieldIndex, &present, &group)
+                     : kBindingInvalidHandle)) {
+    return emscripten::val::undefined();
+  }
+  if (present == 0) {
+    return emscripten::val::null();
+  }
+  emscripten::val o = emscripten::val::object();
+  o.set("start", group.start);
+  o.set("end", group.end);
+  o.set("interval", group.interval);
+  o.set("autoStart", group.has_start == 0);
+  o.set("autoEnd", group.has_end == 0);
+  return o;
 }
 
 namespace {

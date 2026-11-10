@@ -461,7 +461,7 @@ test('pivot definition read-backs report what the setters wrote', async () => {
     assert.equal(region.cacheFieldIndex, 0);
     assert.equal(region.sortOrder, Module.PivotSortOrder.Descending);
     assert.equal(region.sortByField, 'Sum of Amount');
-    assert.equal(region.datePeriods, 0);
+    assert.equal(wb.sheet(0).pivot(pivot).getFieldDateGroup(0), null);
     assert.equal(region.groupBaseIndex, null);
     assert.equal(wb.sheet(0).pivot(pivot).listFields()[1].axis, 2);
 

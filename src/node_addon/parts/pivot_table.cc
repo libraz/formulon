@@ -314,8 +314,6 @@ Napi::Value Workbook::PivotFieldAt(const Napi::CallbackInfo& info) {
   out.Set("cacheFieldIndex", JsNumberOrNull(env, field.has_cache_field_index, field.cache_field_index));
   out.Set("sortOrder", Napi::Number::New(env, field.sort_order));
   out.Set("sortByField", JsStringOrNull(env, field.sort_by_field));
-  out.Set("datePeriods", Napi::Number::New(env, field.date_periods));
-  out.Set("dateCalendar", Napi::Number::New(env, field.date_calendar));
   out.Set("groupBaseIndex", JsNumberOrNull(env, field.has_group_base_index, field.group_base_index));
   out.Set("defaultSubtotal", Napi::Boolean::New(env, field.default_subtotal != 0));
   out.Set("insertBlankRow", Napi::Boolean::New(env, field.insert_blank_row != 0));
@@ -664,6 +662,88 @@ Napi::Value Workbook::PivotFieldSetDateGroup(const Napi::CallbackInfo& info) {
   return ValueOrThrow(
       env, fm_sheet_set_pivot_field_date_group(handle_, field.sheet, field.pivot_index, field.field_index, &group),
       env.Undefined());
+}
+
+Napi::Value Workbook::PivotFieldSetNumericGroup(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return ThrowInvalidHandle(env);
+  }
+  const PivotFieldArgs field = ReadPivotField(info);
+  // A null grouping removes the field's numeric grouping.
+  if (info[3].IsNull() || info[3].IsUndefined()) {
+    return ValueOrThrow(
+        env,
+        fm_sheet_set_pivot_field_numeric_group(handle_, field.sheet, field.pivot_index, field.field_index, nullptr),
+        env.Undefined());
+  }
+  CheckedSpecReader reader(env);
+  fm_pivot_numeric_group_spec_t group = FM_STRUCT_INIT(fm_pivot_numeric_group_spec_t);
+  group.interval = reader.Double(info[3], "interval", 0.0);
+  bool has_start = false;
+  bool has_end = false;
+  group.start = ReadOptionalBound(reader, info[4], "start", &has_start);
+  group.end = ReadOptionalBound(reader, info[5], "end", &has_end);
+  group.has_start = has_start ? 1 : 0;
+  group.has_end = has_end ? 1 : 0;
+  if (!reader.ok()) {
+    return env.Undefined();
+  }
+  return ValueOrThrow(
+      env, fm_sheet_set_pivot_field_numeric_group(handle_, field.sheet, field.pivot_index, field.field_index, &group),
+      env.Undefined());
+}
+
+Napi::Value Workbook::PivotFieldGetDateGroup(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return ThrowInvalidHandle(env);
+  }
+  const PivotFieldArgs field = ReadPivotField(info);
+  fm_pivot_date_group_spec_t group = FM_STRUCT_INIT(fm_pivot_date_group_spec_t);
+  int32_t present = 0;
+  const fm_status_t rc =
+      fm_sheet_get_pivot_field_date_group(handle_, field.sheet, field.pivot_index, field.field_index, &present, &group);
+  if (rc != 0) {
+    return ThrowStatus(env, rc);
+  }
+  if (present == 0) {
+    return env.Null();
+  }
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("periods", Napi::Number::New(env, group.periods));
+  out.Set("calendar", Napi::Number::New(env, group.calendar));
+  out.Set("intervalDays", Napi::Number::New(env, group.interval_days));
+  out.Set("start", Napi::Number::New(env, group.start));
+  out.Set("end", Napi::Number::New(env, group.end));
+  out.Set("autoStart", Napi::Boolean::New(env, group.has_start == 0));
+  out.Set("autoEnd", Napi::Boolean::New(env, group.has_end == 0));
+  return out;
+}
+
+Napi::Value Workbook::PivotFieldGetNumericGroup(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return ThrowInvalidHandle(env);
+  }
+  const PivotFieldArgs field = ReadPivotField(info);
+  fm_pivot_numeric_group_spec_t group = FM_STRUCT_INIT(fm_pivot_numeric_group_spec_t);
+  int32_t present = 0;
+  const fm_status_t rc = fm_sheet_get_pivot_field_numeric_group(handle_, field.sheet, field.pivot_index,
+                                                                field.field_index, &present, &group);
+  if (rc != 0) {
+    return ThrowStatus(env, rc);
+  }
+  if (present == 0) {
+    return env.Null();
+  }
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("start", Napi::Number::New(env, group.start));
+  out.Set("end", Napi::Number::New(env, group.end));
+  out.Set("interval", Napi::Number::New(env, group.interval));
+  out.Set("autoStart", Napi::Boolean::New(env, group.has_start == 0));
+  out.Set("autoEnd", Napi::Boolean::New(env, group.has_end == 0));
+  return out;
 }
 
 Napi::Value Workbook::InvokePivotFieldOrder(const Napi::CallbackInfo& info, PivotFieldOrderFn fn) {

@@ -1100,12 +1100,8 @@ export interface PivotField {
   readonly sortOrder: PivotSortOrder;
   /** The data field the items sort by; `null` sorts by label. */
   readonly sortByField: string | null;
-  /** For a date-grouped field, the `PivotDatePeriod` bits of its group
-   *  fields; `0` otherwise. */
-  readonly datePeriods: PivotDatePeriodMask;
-  /** Calendar of that grouping; `Gregorian` when ungrouped. */
-  readonly dateCalendar: PivotCalendar;
-  /** For a group field, the index of the field it groups; `null` otherwise. */
+  /** For a group field, the index of the field it groups; `null` otherwise. The grouping itself reads through
+   *  `Pivot.getFieldDateGroup` / `Pivot.getFieldNumericGroup`. */
   readonly groupBaseIndex: number | null;
   /** Whether the automatic subtotal shows; `false` whenever `subtotalFunctions`
    *  is non-empty, since custom functions replace it. */
@@ -1188,6 +1184,22 @@ export interface PivotCacheField {
   readonly name: string;
   /** A calculated field's formula, leading `=` included; `null` for a source field. */
   readonly formula: string | null;
+  /** The field holds a number. */
+  readonly containsNumber: boolean;
+  /** Every number the field holds is an integer. */
+  readonly containsInteger: boolean;
+  /** The field holds text, a boolean or an error. */
+  readonly containsString: boolean;
+  /** The field holds a blank. */
+  readonly containsBlank: boolean;
+  /** The field holds a date. */
+  readonly containsDate: boolean;
+  /** The field mixes two or more of text, numbers and dates. */
+  readonly containsMixedTypes: boolean;
+  /** The field holds text or a blank. */
+  readonly containsSemiMixedTypes: boolean;
+  /** The field holds text or a number: something that is not a date. */
+  readonly containsNonDate: boolean;
 }
 
 /** A cache value, as `PivotCache.listFieldSharedItems(...)` (its position is the shared item's index) and
@@ -1220,6 +1232,38 @@ export interface PivotDateGroupInput {
   intervalDays?: number;
   start?: DateInput;
   end?: DateInput;
+}
+
+/** A date grouping as `Pivot.getFieldDateGroup` returns it: the members of {@link PivotDateGroupInput} with the
+ *  stored bounds as `Date`s. A bound holds its stored value even when `autoStart` / `autoEnd` is `true` (it then
+ *  follows the field's data); write the grouping back with a bound only where the matching `auto*` is `false`. */
+export interface PivotDateGroup {
+  readonly periods: PivotDatePeriodMask;
+  readonly calendar: PivotCalendar;
+  readonly intervalDays: number;
+  readonly start: Date;
+  readonly end: Date;
+  readonly autoStart: boolean;
+  readonly autoEnd: boolean;
+}
+
+/** Argument of `Pivot.setFieldNumericGroup`: the width of each group, and the first and last bound (the field's
+ *  smallest and largest value when omitted). */
+export interface PivotNumericGroupInput {
+  interval: number;
+  start?: number;
+  end?: number;
+}
+
+/** A numeric grouping as `Pivot.getFieldNumericGroup` returns it. A bound holds its stored value even when
+ *  `autoStart` / `autoEnd` is `true` (it then follows the field's data); write the grouping back with a bound only
+ *  where the matching `auto*` is `false`. */
+export interface PivotNumericGroup {
+  readonly interval: number;
+  readonly start: number;
+  readonly end: number;
+  readonly autoStart: boolean;
+  readonly autoEnd: boolean;
 }
 
 /** Plain-data spec for `Pivot.addFilter`. `value` is a `number` for a value filter (a count, a percent, a sum or
@@ -7156,6 +7200,23 @@ export interface Pivot {
    *  grouped is left as it is. `StatusCode.PreconditionFailed` when the group fields are not the last fields of the
    *  cache. */
   setFieldDateGroup(fieldIndex: PivotFieldRef, group: PivotDateGroupInput | null): void;
+  /** Reads the date grouping over pivot field `fieldIndex` (a source field, or one of its group fields); `null`
+   *  when the field is not date-grouped. */
+  getFieldDateGroup(fieldIndex: PivotFieldRef): PivotDateGroup | null;
+  /** Groups the number field `fieldIndex` (a source field, or its group field) into ranges of `group.interval`,
+   *  replacing any grouping it has. The group field's items are `<start`, then `a-(a+interval-1)` from `start` while
+   *  `a <= end`, then `>` the first bound past the last range; an omitted `start` / `end` follows the field's
+   *  smallest and largest value. A non-positive or non-finite interval, a non-finite bound, a start after the end or
+   *  a field holding anything but numbers is `StatusCode.InvalidArgument`; a start, end or interval that is not an
+   *  integer is `StatusCode.NotImplemented`; more group items than a field holds is
+   *  `StatusCode.SecurityResourceLimit`.
+   *
+   *  A `group` of `null` removes the numeric grouping of the field from every pivot on its cache; a field that is not
+   *  grouped is left as it is. */
+  setFieldNumericGroup(fieldIndex: PivotFieldRef, group: PivotNumericGroupInput | null): void;
+  /** Reads the numeric grouping over pivot field `fieldIndex` (a source field, or its group field); `null` when the
+   *  field is not numerically grouped. */
+  getFieldNumericGroup(fieldIndex: PivotFieldRef): PivotNumericGroup | null;
   /** Reads the row-axis field order (the list `setRowFieldOrder` takes). */
   getRowFieldOrder(): readonly number[];
   /** Replaces the row-axis field order with `fields` (each a {@link PivotFieldRef} or {@link PIVOT_VALUES_FIELD},
@@ -7214,9 +7275,19 @@ export interface PivotCache {
    *  source. */
   getWorksheetSource(): PivotWorksheetSource | null;
   /** Sets the cache's worksheet source metadata, or removes the source with `null`. An empty object writes a
-   *  source with no attributes. Metadata only: records come from `addField` / `addRecord` / `setRecordValue`;
-   *  neither `project()` nor a cell edit re-reads the range. */
+   *  source with no attributes. Setting the source does not re-read the range, and neither does `project()` or a
+   *  cell edit; `refresh()` rebuilds the records from it. */
   setWorksheetSource(source: PivotWorksheetSourceInput | null): void;
+  /** Rebuilds the cache from its worksheet source (a range, a defined name or a table of this workbook) and
+   *  re-projects every pivot drawing from it, as Excel's Refresh does. Pending cells are calculated first and the
+   *  source values are read as they stand. The cache, the pivots' definitions and their report cells change
+   *  together or not at all. Fails with `StatusCode.PreconditionFailed` when the source does not resolve (none, an
+   *  external or non-worksheet source, a missing sheet, name or table, a `#REF!` or dynamic name) or when a
+   *  refreshed report would grow over a non-empty cell, another pivot or another refreshed report; with
+   *  `StatusCode.SecurityResourceLimit` when (rows - 1) x columns of the source exceeds the record cell limit;
+   *  with `StatusCode.NotImplemented` when a numeric group has a start, end or interval that is not an
+   *  integer. */
+  refresh(): void;
   /** Reads the cache's options. */
   getOptions(): PivotCacheOptions;
   /** Updates the cache's options; members the patch omits keep their current value. */

@@ -75,7 +75,7 @@ export function registerPivotRegressions(Module, test) {
     const { wb, pivot, region } = makeCheckedPivot(Module);
     try {
       wb.setPivotFieldDateGroup(0, pivot, region, null);
-      assert.equal(wb.getPivotField(0, pivot, region).datePeriods, 0);
+      assert.equal(wb.getPivotFieldDateGroup(0, pivot, region), null);
       assert.equal('clearPivotFieldDateGroup' in wb, false);
     } finally {
       wb.delete();

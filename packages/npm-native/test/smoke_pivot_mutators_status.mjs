@@ -552,6 +552,38 @@ const PIVOT_MUTATORS = [
     },
   ],
   [
+    'Pivot.setFieldNumericGroup',
+    {
+      setup: (b) => b.pivot.setRowFieldOrder([b.amount]),
+      act: (b) => b.pivot.setFieldNumericGroup(b.amount, { start: 0, end: 39, interval: 10 }),
+      expect: (b) =>
+        assert.deepEqual(pivotGrid(b.wb), ['行ラベル|Sum of Amount', '0-9|12', '10-19|10', '30-39|30', '総計|52']),
+    },
+  ],
+  [
+    'PivotCache.refresh',
+    {
+      // The source range A1:D5 gets cells whose last row names a region the cache has not seen.
+      setup: (b) => {
+        const rows = [
+          ['Region', 'Product', 'Amount', 'Date'],
+          ['East', 'Apple', 10, 45292],
+          ['West', 'Apple', 30, 45323],
+          ['East', 'Pear', 5, 45658],
+          ['North', 'Pear', 7, 45689],
+        ];
+        rows.forEach((row, r) =>
+          row.forEach((v, c) =>
+            typeof v === 'number' ? b.wb.sheet(0).setNumber(r, c, v) : b.wb.sheet(0).setText(r, c, v),
+          ),
+        );
+      },
+      act: (b) => b.wb.pivotCache(b.cacheId).refresh(),
+      expect: (b) =>
+        assert.deepEqual(pivotGrid(b.wb), ['行ラベル|Sum of Amount', 'East|15', 'North|7', 'West|30', '総計|52']),
+    },
+  ],
+  [
     'Pivot.updateField (numberFormat)',
     {
       act: (b) => b.pivot.updateField(b.amount, { numberFormat: '#,##0.00' }),
@@ -1163,7 +1195,7 @@ test('setPivotFieldDateGroup defaults its optional group fields', async () => {
     });
     defaulted.wb.sheet(0).pivot(defaulted.pivot).setFieldDateGroup(defaulted.date, { periods: days });
     const field = defaulted.wb.sheet(0).pivot(defaulted.pivot).listFields()[defaulted.date];
-    assert.equal(field.datePeriods, days);
+    assert.equal(defaulted.wb.sheet(0).pivot(defaulted.pivot).getFieldDateGroup(defaulted.date).periods, days);
     assert.deepEqual(field, explicit.wb.sheet(0).pivot(explicit.pivot).listFields()[explicit.date]);
     assert.deepEqual(pivotGrid(defaulted.wb), pivotGrid(explicit.wb));
   } finally {

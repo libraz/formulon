@@ -35,7 +35,7 @@ FACADE_SCOPE_INC = REPO_ROOT / "src/node_addon/generated/facade_scope.inc"
 PARAM_NAMES_INC = REPO_ROOT / "src/c_api/generated/binding_param_names.inc"
 DEFAULT_NODE_SOURCE = REPO_ROOT / "src/node_addon/parts/workbook_class.cc"
 DEFAULT_WASM_SOURCE = REPO_ROOT / "src/wasm/parts/bindings_register.cpp"
-EXPECTED_NODE_REGISTRATIONS = 412
+EXPECTED_NODE_REGISTRATIONS = 417
 
 MASK_NAMES = (
     "u32",
