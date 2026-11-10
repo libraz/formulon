@@ -177,17 +177,34 @@ void add_table_columns_locked(TableMetadata& table, std::size_t offset, std::uin
                               Sheet& sheet, std::size_t sheet_index, const eval::RecalcEngine::LockedMutator& mutator,
                               std::string_view column_word);
 
-/// Writes each calculated column's formula into rows `[first_row, last_row]`
-/// of `table` on `sheet`, its relative references moved from the first data
-/// row to the target row; the array flag stores a one-cell array formula.
-/// A formula that does not parse leaves its cells as they are.
+/// Writes the calculated-column formula of each column in table-relative
+/// `[first_column, last_column]` into rows `[first_row, last_row]` of `table`
+/// on `sheet`, its relative references moved from the first data row to the
+/// target row; the array flag stores a one-cell array formula. A formula that
+/// does not parse leaves its cells as they are.
 void fill_calculated_columns_locked(const Workbook& wb, Sheet& sheet, const eval::RecalcEngine::LockedMutator& mutator,
-                                    const TableMetadata& table, std::uint32_t first_row, std::uint32_t last_row);
+                                    const TableMetadata& table, std::uint32_t first_row, std::uint32_t last_row,
+                                    std::size_t first_column, std::size_t last_column);
 
 /// Moves the relative references of every calculated-column formula of
 /// `table` by `row_delta` rows, re-anchoring them on the first data row after
 /// rows were inserted at it. A formula that does not parse stays as it is.
 void shift_calculated_column_anchor(TableMetadata& table, std::int32_t row_delta);
+
+/// A built-in `ST_TotalsRowFunction` token and its `SUBTOTAL` function number;
+/// the 1xx forms skip hidden rows, as the desktop application writes them.
+struct TotalsFunction {
+  std::string_view token;
+  int subtotal_code;
+};
+inline constexpr TotalsFunction kTotalsFunctions[] = {
+    {"sum", 109},   {"min", 105},       {"max", 104},    {"average", 101},
+    {"count", 103}, {"countNums", 102}, {"stdDev", 107}, {"var", 110},
+};
+
+/// The `=SUBTOTAL(code,Table[Column])` formula the totals row of `table`
+/// holds for function number `code` in column `column`.
+std::string totals_subtotal_formula(const TableMetadata& table, std::size_t column, int code);
 
 /// The bookkeeping after table `index`'s extent changed: its AutoFilter
 /// spans the header through the last data row, formulas naming it are

@@ -331,6 +331,8 @@ void LoadPivotParts(const ZipReader& zip, Workbook& wb, RetainedPartOrigins& ori
   // Backfills each field's source-column name and each item's label from
   // the bound cache; without it GETPIVOTDATA cannot match a field by name.
   pivot::resolve_all_pivot_names(wb);
+  // Cells and tables are both loaded, so the totals cells settle the columns' totals metadata.
+  wb.normalize_table_totals_cells();
 }
 
 /// Resolves the relationship ids carried by model-owned BrtHLink records.

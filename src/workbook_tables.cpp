@@ -35,6 +35,7 @@
 #include "sheet_metadata.h"
 #include "sheet_name.h"
 #include "table.h"
+#include "table_calc_column.h"
 #include "utils/arena.h"
 #include "utils/error.h"
 #include "utils/expected.h"
@@ -188,6 +189,17 @@ Expected<std::size_t, Error> Workbook::add_table(TableMetadata table) {
   std::string escaped_ref;
   io::AppendXmlAttrEscaped(escaped_ref, table.ref);
   table.auto_filter_xml.set(io::auto_filter_from_xml("<autoFilter ref=\"" + escaped_ref + "\"/>"));
+  // A column already holding one formula becomes a calculated column; its cells stay as they are.
+  for (std::size_t i = 0; i < table.columns.size(); ++i) {
+    TableColumn& column = table.columns[i];
+    if (!column.calculated_column_formula.empty()) {
+      continue;
+    }
+    if (std::optional<std::string> inferred = infer_calculated_column(sheets_[table.sheet_index], table, i)) {
+      column.calculated_column_formula = std::move(*inferred);
+      column.calculated_column_formula_array = false;
+    }
+  }
   tables_.push_back(std::move(table));
   const TableMetadata& created = tables_.back();
   if (created.header_row) {
@@ -221,19 +233,8 @@ Expected<void, Error> Workbook::check_table_resize(std::size_t index, const Merg
 
 namespace {
 
-/// `SUBTOTAL` function number of each built-in `ST_TotalsRowFunction` token;
-/// the 1xx forms skip hidden rows, as the desktop application writes them.
-struct TotalsFunction {
-  std::string_view token;
-  int subtotal_code;
-};
-constexpr TotalsFunction kTotalsFunctions[] = {
-    {"sum", 109},   {"min", 105},       {"max", 104},    {"average", 101},
-    {"count", 103}, {"countNums", 102}, {"stdDev", 107}, {"var", 110},
-};
-
 int subtotal_code_of(std::string_view token) {
-  for (const TotalsFunction& entry : kTotalsFunctions) {
+  for (const detail::TotalsFunction& entry : detail::kTotalsFunctions) {
     if (entry.token == token) {
       return entry.subtotal_code;
     }
@@ -518,12 +519,8 @@ Expected<void, Error> Workbook::write_table_totals_cell_locked(std::size_t index
   const std::uint32_t row = rect->last_row;
   const std::uint32_t cell_col = rect->first_col + static_cast<std::uint32_t>(column);
   if (const int code = subtotal_code_of(col.totals_function); code != 0) {
-    parser::StructuredRefPayload payload;
-    payload.columns.push_back(col.name);
-    put_cell_formula_locked(
-        table.sheet_index, row, cell_col,
-        "=SUBTOTAL(" + std::to_string(code) + "," + table.display_name + "[" + parser::stored_payload(payload) + "])",
-        FormulaSource::kEntered, 0U, 0U);
+    put_cell_formula_locked(table.sheet_index, row, cell_col, detail::totals_subtotal_formula(table, column, code),
+                            FormulaSource::kEntered, 0U, 0U);
   } else if (col.totals_function == "custom" && !col.totals_row_formula.empty()) {
     put_cell_formula_locked(table.sheet_index, row, cell_col, "=" + col.totals_row_formula, FormulaSource::kEntered, 0U,
                             0U);
@@ -767,6 +764,12 @@ Expected<std::string, Error> Workbook::rename_table_column(std::size_t table, st
 
 namespace detail {
 
+std::string totals_subtotal_formula(const TableMetadata& table, std::size_t column, int code) {
+  parser::StructuredRefPayload payload;
+  payload.columns.push_back(table.columns[column].name);
+  return "=SUBTOTAL(" + std::to_string(code) + "," + table.display_name + "[" + parser::stored_payload(payload) + "])";
+}
+
 std::string first_free_numbered_name(std::string_view stem, std::size_t first, const std::vector<std::string>& names) {
   for (std::size_t n = first;; ++n) {
     std::string candidate(stem);
@@ -851,7 +854,8 @@ void add_table_columns_locked(TableMetadata& table, std::size_t offset, std::uin
 }
 
 void fill_calculated_columns_locked(const Workbook& wb, Sheet& sheet, const eval::RecalcEngine::LockedMutator& mutator,
-                                    const TableMetadata& table, std::uint32_t first_row, std::uint32_t last_row) {
+                                    const TableMetadata& table, std::uint32_t first_row, std::uint32_t last_row,
+                                    std::size_t first_column, std::size_t last_column) {
   const std::optional<MergeRange> rect = parse_a1_rectangle(table.ref);
   if (!rect.has_value() || first_row > last_row) {
     return;
@@ -860,7 +864,7 @@ void fill_calculated_columns_locked(const Workbook& wb, Sheet& sheet, const eval
   const std::uint32_t anchor_row = rect->first_row + (table.header_row ? 1U : 0U);
   Arena formula_arena;
   Arena shift_arena;
-  for (std::size_t i = 0; i < table.columns.size(); ++i) {
+  for (std::size_t i = first_column; i <= last_column && i < table.columns.size(); ++i) {
     const TableColumn& column = table.columns[i];
     if (column.calculated_column_formula.empty()) {
       continue;

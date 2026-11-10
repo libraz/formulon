@@ -45,6 +45,7 @@
 #include "io/xsd_bool.h"
 #include "parser/ast.h"
 #include "parser/ast_format.h"
+#include "parser/ast_shift.h"
 #include "parser/parser.h"
 #include "phonetic.h"
 #include "sheet.h"
@@ -250,6 +251,82 @@ void AppendPhantomCellXml(std::string& out, std::uint32_t row, std::uint32_t col
   out.append("</c>");
 }
 
+// ---------------------------------------------------------------------------
+// Shared formulas
+// ---------------------------------------------------------------------------
+
+// A cell's part in a shared-formula group the save writes: the master holds
+// the text and the group's `ref`, a member only the group's `si`.
+struct SharedRole {
+  std::uint32_t si = 0;
+  bool master = false;
+  MergeRange ref;
+};
+
+using SharedRoles = std::unordered_map<std::uint64_t, SharedRole>;
+
+std::uint64_t CellKey(std::uint32_t row, std::uint32_t col) {
+  return (static_cast<std::uint64_t>(row) << 32) | col;
+}
+
+// Whether the cell at `(row, col)` may sit in a shared formula: a formula
+// that is no CSE block, dynamic-array formula or spill anchor.
+bool SharableFormulaCell(const Sheet& sheet, std::uint32_t row, std::uint32_t col, const Cell* cell) {
+  return cell != nullptr && !cell->formula_text.empty() && cell->array_block_rows == 0U &&
+         !is_dynamic_array_formula(*cell) && sheet.spill_region_at_anchor(row, col) == nullptr &&
+         sheet.data_table_anchored_at(row, col) == nullptr;
+}
+
+const parser::AstNode* ParseCellFormula(std::string_view formula_text, Arena& arena) {
+  arena.reset();
+  return parser::parse_strict(strip_formula_prefix(formula_text), arena);
+}
+
+// The role of each cell of the sheet's shared-formula groups, verified now:
+// a group whose master (top-left cell) is no sharable formula, or is
+// recalculated every time, is written individually; a member is shared only
+// when its formula is the master's moved to its cell, as text. `si` counts
+// from 0 over the groups written; a cell keeps the first group claiming it.
+SharedRoles CollectSharedRoles(const Sheet& sheet, const xlsb::NameShapes& name_shapes) {
+  SharedRoles roles;
+  std::uint32_t next_si = 0;
+  Arena master_arena;
+  Arena member_arena;
+  Arena shift_arena;
+  for (const SharedFormulaGroup& group : sheet.shared_formula_groups()) {
+    const MergeRange& ref = group.ref;
+    const Cell* master = sheet.cell_at(ref.first_row, ref.first_col);
+    if (!SharableFormulaCell(sheet, ref.first_row, ref.first_col, master) ||
+        roles.count(CellKey(ref.first_row, ref.first_col)) != 0U) {
+      continue;
+    }
+    const parser::AstNode* root = ParseCellFormula(master->formula_text, master_arena);
+    if (root == nullptr ||
+        formula_cell_always_calculates(sheet, ref.first_row, ref.first_col, *master, root, name_shapes)) {
+      continue;
+    }
+    const std::uint32_t si = next_si++;
+    roles.emplace(CellKey(ref.first_row, ref.first_col), SharedRole{si, true, ref});
+    for (std::uint32_t row = ref.first_row; row <= ref.last_row; ++row) {
+      for (std::uint32_t col = ref.first_col; col <= ref.last_col; ++col) {
+        const Cell* cell = sheet.cell_at(row, col);
+        if (!SharableFormulaCell(sheet, row, col, cell) || roles.count(CellKey(row, col)) != 0U) {
+          continue;
+        }
+        const parser::AstNode* own = ParseCellFormula(cell->formula_text, member_arena);
+        shift_arena.reset();
+        const parser::AstNode* moved =
+            parser::shift_relative_refs(*root, shift_arena, static_cast<std::int32_t>(row - ref.first_row),
+                                        static_cast<std::int32_t>(col - ref.first_col));
+        if (own != nullptr && moved != nullptr && parser::format_formula(*own) == parser::format_formula(*moved)) {
+          roles.emplace(CellKey(row, col), SharedRole{si, false, ref});
+        }
+      }
+    }
+  }
+  return roles;
+}
+
 // Emits the <c> element for `(row, col)` into `out`. Returns true when a
 // cell was written, false when the cell was suppressed (blank literal,
 // phantom of a spill region).
@@ -258,9 +335,12 @@ void AppendPhantomCellXml(std::string& out, std::uint32_t row, std::uint32_t col
 // emitted with t="array" and the cached value (cells[0]) becomes the
 // <v>. Phantoms are suppressed by the caller via spill_region_covering;
 // this function trusts the caller and never re-checks.
+//
+// `shared` is the cell's verified shared-formula role, or null.
 bool AppendCellXml(std::string& out, const Sheet& sheet, std::uint32_t row, std::uint32_t col, const Cell& cell,
                    const SharedStrings* shared_strings, std::uint32_t dynamic_array_cm_index,
-                   const xlsb::NameShapes& name_shapes, const parser::ExternalBookIndexer* indexer) {
+                   const xlsb::NameShapes& name_shapes, const parser::ExternalBookIndexer* indexer,
+                   const SharedRole* shared) {
   const bool has_formula = !cell.formula_text.empty();
   if (!CellIsEmitted(cell)) {
     return false;
@@ -359,6 +439,24 @@ bool AppendCellXml(std::string& out, const Sheet& sheet, std::uint32_t row, std:
         out.append(a1::encode_a1(last_row, last_col));
       }
       out.append(always_calculates ? "\" ca=\"1\">" : "\">");
+    } else if (shared != nullptr && !shared->master) {
+      // A member carries no text: a reader moves the master's to this cell.
+      out.append("<f t=\"shared\"");
+      append_xml_attr_uint(out, "si", shared->si);
+      out.append("/>");
+      AppendFormulaValue(out, cell.cached_value);
+      out.append("</c>");
+      return true;
+    } else if (shared != nullptr) {
+      out.append("<f t=\"shared\" ref=\"");
+      out.append(a1::encode_a1(shared->ref.first_row, shared->ref.first_col));
+      if (shared->ref.last_row != shared->ref.first_row || shared->ref.last_col != shared->ref.first_col) {
+        out.push_back(':');
+        out.append(a1::encode_a1(shared->ref.last_row, shared->ref.last_col));
+      }
+      out.push_back('"');
+      append_xml_attr_uint(out, "si", shared->si);
+      out.push_back('>');
     } else {
       out.append(always_calculates ? "<f ca=\"1\">" : "<f>");
     }
@@ -467,7 +565,7 @@ bool AppendRowXml(std::string& out, const Sheet& sheet, std::uint32_t row, const
                   const std::vector<std::uint32_t>& phantom_cols, std::string_view override_attrs,
                   const SharedStrings* shared_strings, std::uint32_t dynamic_array_cm_index,
                   const xlsb::NameShapes& name_shapes, std::unordered_map<std::uint64_t, bool>& always_by_anchor,
-                  const parser::ExternalBookIndexer* indexer) {
+                  const parser::ExternalBookIndexer* indexer, const SharedRoles& shared_roles) {
   // Write straight into `out`; a row that ends up with no content is truncated away.
   const std::size_t row_start = out.size();
   out.append("<row r=\"");
@@ -513,7 +611,9 @@ bool AppendRowXml(std::string& out, const Sheet& sheet, std::uint32_t row, const
       continue;
     }
     const RowCells::Entry e = *entry;
-    (void)AppendCellXml(out, sheet, row, e.col, e.cell, shared_strings, dynamic_array_cm_index, name_shapes, indexer);
+    const auto role = shared_roles.find(CellKey(row, e.col));
+    (void)AppendCellXml(out, sheet, row, e.col, e.cell, shared_strings, dynamic_array_cm_index, name_shapes, indexer,
+                        role != shared_roles.end() ? &role->second : nullptr);
     ++entry;
   }
   if (out.size() == body_start) {
@@ -582,6 +682,7 @@ void AppendSheetDataXml(std::string& out, const Sheet& sheet, const SharedString
   static const RowCells kEmptyRow;
   static const std::vector<std::uint32_t> kNoPhantoms;
   std::unordered_map<std::uint64_t, bool> always_by_anchor;
+  const SharedRoles shared_roles = CollectSharedRoles(sheet, name_shapes);
   for (std::uint32_t row : row_indices) {
     std::string override_attrs;
     if (const RowLayout* row_layout = find_row_override(sheet.layout(), row); row_layout != nullptr) {
@@ -591,7 +692,8 @@ void AppendSheetDataXml(std::string& out, const Sheet& sheet, const SharedString
     const RowCells& row_cells = (cells_it != rows_map.end()) ? cells_it->second : kEmptyRow;
     const auto phantoms_it = phantom_cols.find(row);
     AppendRowXml(out, sheet, row, row_cells, phantoms_it != phantom_cols.end() ? phantoms_it->second : kNoPhantoms,
-                 override_attrs, shared_strings, dynamic_array_cm_index, name_shapes, always_by_anchor, indexer);
+                 override_attrs, shared_strings, dynamic_array_cm_index, name_shapes, always_by_anchor, indexer,
+                 shared_roles);
   }
 
   if (out.size() == rows_start) {

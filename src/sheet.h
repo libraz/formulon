@@ -130,6 +130,13 @@ struct PivotList : std::vector<std::unique_ptr<pivot::PivotTable>> {
 
 }  // namespace sheet_copy
 
+/// Cells a save may write as one `.xlsx` shared formula: the top-left cell of
+/// `ref` is the master, and the writer shares only the members whose formula
+/// is the master's moved to their cell, writing the rest individually.
+struct SharedFormulaGroup {
+  MergeRange ref;
+};
+
 /// A single worksheet inside a `Workbook`.
 ///
 /// Owns the worksheet's display name and its cell store. The cell store is
@@ -958,6 +965,11 @@ class Sheet {
   /// the tables non-overlapping.
   std::vector<DataTable>& mutable_data_tables() noexcept { return data_tables_; }
 
+  /// The shared-formula groups a calculated-column set registered, in
+  /// registration order; their `ref`s move with row and column edits.
+  const std::vector<SharedFormulaGroup>& shared_formula_groups() const noexcept { return shared_formula_groups_; }
+  std::vector<SharedFormulaGroup>& mutable_shared_formula_groups() noexcept { return shared_formula_groups_; }
+
   /// The data table whose result range starts at `(row, col)`, or null: the
   /// cell the table's formula is stored on.
   const DataTable* data_table_anchored_at(std::uint32_t row, std::uint32_t col) const noexcept {
@@ -1397,6 +1409,8 @@ class Sheet {
   std::vector<MergeRange> table_spill_barriers_;
   // What-If data tables (`<f t="dataTable">`), shifted with row/column edits.
   std::vector<DataTable> data_tables_;
+  // See `shared_formula_groups()`; not read from files.
+  std::vector<SharedFormulaGroup> shared_formula_groups_;
   // Hyperlinks from `<hyperlinks>` plus the sheet's rels file. Empty by default.
   std::vector<Hyperlink> hyperlinks_;
   // Per-cell text comments aggregated from `xl/comments<N>.xml`. Empty by default.

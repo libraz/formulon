@@ -119,7 +119,7 @@ Expected<void, Error> Workbook::insert_table_rows(std::size_t sheet_index, std::
   const eval::RecalcEngine::LockedMutator mutator = engine_->locked_mutator();
   if (!filled) {
     detail::fill_calculated_columns_locked(*this, sheets_[sheet_index], mutator, table, band_first,
-                                           band_first + count - 1U);
+                                           band_first + count - 1U, 0U, table.columns.size() - 1U);
   }
   detail::finish_table_extent_change_locked(*this, sheets_, mutator, defined_names_, table_index);
   return Expected<void, Error>::Ok();

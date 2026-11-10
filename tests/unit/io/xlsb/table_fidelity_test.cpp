@@ -500,7 +500,7 @@ Workbook StructuredRefBook() {
   t.totals_row = true;
   t.columns = {TableColumn(1, "Region", "Total", "", ""), TableColumn(2, "Amount", "", "sum", ""),
                TableColumn(3, "Tax", "", "custom", "Sales[[#This Row],[Amount]]*0.08")};
-  t.columns[2].totals_row_formula = "SUBTOTAL(109,Sales[Tax])";
+  t.columns[2].totals_row_formula = "SUM(Sales[Tax])";
   t.style_info.present = true;
   t.style_info.name = "TableStyleLight1";
   wb.mutable_tables().push_back(t);
@@ -515,7 +515,7 @@ Workbook StructuredRefBook() {
   }
   EXPECT_TRUE(static_cast<bool>(wb.set_cell_text(0, 6, 1, "Total")));
   EXPECT_TRUE(static_cast<bool>(wb.set_cell_formula(0, 6, 2, "=SUBTOTAL(109,Sales[Amount])")));
-  EXPECT_TRUE(static_cast<bool>(wb.set_cell_formula(0, 6, 3, "=SUBTOTAL(109,Sales[Tax])")));
+  EXPECT_TRUE(static_cast<bool>(wb.set_cell_formula(0, 6, 3, "=SUM(Sales[Tax])")));
   EXPECT_TRUE(static_cast<bool>(wb.set_cell_formula(1, 0, 0, "=SUM(Sales[Amount])")));
   EXPECT_TRUE(static_cast<bool>(wb.set_cell_formula(1, 1, 0, "=ROWS(Sales[#All])")));
   EXPECT_TRUE(static_cast<bool>(wb.set_cell_formula(1, 2, 0, "=SUM(Sales[[#Data],[#Totals],[Amount]])")));

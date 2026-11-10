@@ -895,6 +895,55 @@ class Workbook {
   Expected<void, Error> insert_table_columns(std::size_t sheet_index, std::size_t table_index, std::uint32_t first,
                                              std::uint32_t last);
 
+  /// Makes `formula` (with or without a leading `=`) the calculated column of
+  /// column `column` of table `table_index` of `sheet_index`, as entered in
+  /// the column's first data row: the mark takes that spelling without `=`
+  /// (a this-row reference in its stored long form), and every data cell of
+  /// the column, constants included and the totals row excluded, takes the
+  /// formula moved to its row. A formula with no structured reference that is
+  /// not recalculated every time is registered as a shared-formula group over
+  /// those cells. A table with no data row only takes the mark.
+  ///
+  /// Returns `kInvalidArgument` for a missing sheet, table or column, an
+  /// empty formula, a dynamic-array formula, or one whose references would
+  /// leave the grid in the last data row; the parse status for text that does
+  /// not parse. Nothing changes on a refusal.
+  Expected<void, Error> set_table_calculated_column(std::size_t sheet_index, std::size_t table_index,
+                                                    std::size_t column, std::string_view formula);
+
+  /// Removes the calculated-column mark of column `column` of table
+  /// `table_index` of `sheet_index`; the cells keep what they hold. Errors as
+  /// `set_table_calculated_column` for the target.
+  Expected<void, Error> clear_table_calculated_column(std::size_t sheet_index, std::size_t table_index,
+                                                      std::size_t column);
+
+  /// Removes the calculated-column mark of column `column` of table
+  /// `table_index` of `sheet_index` when it has at least one data row and
+  /// every data cell of the column is blank. Errors as
+  /// `set_table_calculated_column` for the target.
+  Expected<void, Error> drop_calculated_column_if_empty(std::size_t sheet_index, std::size_t table_index,
+                                                        std::size_t column);
+
+  /// Brings the calculated columns of table `table_index` of `sheet_index` in
+  /// line with its current range: an unmarked column takes the mark
+  /// `infer_calculated_column` finds, leaving its cells as they are, and a
+  /// marked column keeps its mark and fills its blank data cells from sheet
+  /// row `first_new_row` down (the rows a resize added) with it.
+  /// Returns `kInvalidArgument` for a missing sheet or table.
+  Expected<void, Error> infer_table_calculated_columns(std::size_t sheet_index, std::size_t table_index,
+                                                       std::uint32_t first_new_row);
+
+  /// Re-reads the totals cell of column `column` of table `table_index` (an
+  /// index into `tables()`) into the column's totals settings
+  /// (`classify_totals_cell`); a value becomes a label and its cell text. Does
+  /// nothing while the table's totals row is hidden or for a missing column.
+  void sync_table_totals_cell(std::size_t table_index, std::size_t column);
+
+  /// `sync_table_totals_cell` for every column of every table showing its
+  /// totals row that stores a cell there; the readers call it once cells and
+  /// tables are both loaded.
+  void normalize_table_totals_cells();
+
   /// Smallest N >= 1 such that `<word><N>` is not the name or display name
   /// of any table nor a defined name (`sheet_names::write_collides`), as
   /// `add_table` checks.

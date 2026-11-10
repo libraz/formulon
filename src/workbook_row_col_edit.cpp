@@ -450,9 +450,30 @@ std::vector<std::string> update_tables_for_row_col_edit(const Workbook& wb, std:
   tables = std::move(retained);
   // Filled once every table is back in place, as structured references resolve through them.
   for (const Fill& fill : fills) {
-    detail::fill_calculated_columns_locked(wb, sheet, mutator, tables[fill.table], fill.first_row, fill.last_row);
+    detail::fill_calculated_columns_locked(wb, sheet, mutator, tables[fill.table], fill.first_row, fill.last_row, 0U,
+                                           tables[fill.table].columns.size() - 1U);
   }
   return changed;
+}
+
+// Moves each shared-formula group of `sheet` through `transform` the way a
+// table's `ref` moves; a group the edit deletes or leaves non-rectangular goes.
+void update_shared_formula_groups(Sheet& sheet, const parser::RefTransform& transform) {
+  std::vector<SharedFormulaGroup>& groups = sheet.mutable_shared_formula_groups();
+  std::vector<SharedFormulaGroup> kept;
+  kept.reserve(groups.size());
+  for (const SharedFormulaGroup& group : groups) {
+    std::string ref;
+    if (!append_a1_rectangle(ref, group.ref)) {
+      continue;
+    }
+    const FormulaRewriteResult result = rewrite_formula(ref, transform);
+    const std::optional<MergeRange> moved = result.error ? std::nullopt : parse_a1_rectangle(result.text);
+    if (moved.has_value()) {
+      kept.push_back(SharedFormulaGroup{*moved});
+    }
+  }
+  groups = std::move(kept);
 }
 
 // Whether cell format `xf_index` draws something: a fill or a border. Fill
@@ -790,6 +811,7 @@ Expected<void, Error> apply_row_col_edit(Workbook& wb, std::size_t sheet_index, 
   const std::vector<std::string> changed_tables =
       update_tables_for_row_col_edit(wb, wb.mutable_tables(), target, sheet_index, table_refs_before, mutator, edit,
                                      new_workbook_defaults(wb.excel_profile().locale).column_word);
+  update_shared_formula_groups(target, local_rewrite);
   sync_table_spill_barriers_locked(sheets, mutator, wb.tables());
   std::vector<std::string> filters_after;
   filters_after.push_back(io::auto_filter_xml(target.auto_filter()));
