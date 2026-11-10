@@ -258,6 +258,8 @@ Upgrading from 0.18: see [Upgrading from 0.18 to 0.19](docs/releases/upgrading-0
   stored.
 - A cell font with no colour was saved as explicit black.
 - A pivot cache refresh named blank-header columns in English in every locale.
+- A pivot label or date filter on a field off every axis filtered records; it is
+  now kept but inert, as in Excel.
 - Pivot data fields were saved with an explicit sum subtotal and without
   their base field and item, and a refresh moved the base of a plain data
   field.

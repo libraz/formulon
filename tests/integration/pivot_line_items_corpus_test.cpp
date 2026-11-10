@@ -100,12 +100,6 @@ const std::set<std::string>& PinnedRefused() {
 const std::set<std::string>& PinnedDivergent() {
   static const std::set<std::string> kDivergent = {
       "pivot_options/op_savedata_off.xlsx#s0p0",
-      "pivot_refresh/g2_numgroup_auto_widen/after.xlsx#s3p0",
-      "pivot_refresh/g2_numgroup_auto_widen/before.xlsx#s3p0",
-      "pivot_refresh/g3_numgroup_fixed_widen/after.xlsx#s3p0",
-      "pivot_refresh/g3_numgroup_fixed_widen/before.xlsx#s3p0",
-      "pivot_refresh/g4_numgroup_auto_control/after.xlsx#s3p0",
-      "pivot_refresh/g4_numgroup_auto_control/before.xlsx#s3p0",
       "xlsb_pivot_twins/C07_sort_by_data.xlsx#s0p0",
   };
   return kDivergent;

@@ -652,6 +652,8 @@ TEST(PivotEvaluator, ManualFilterHidesNumericItemBeyondIntegerRange) {
 TEST(PivotEvaluator, LabelContainsFilterMatchesNumericItemLabel) {
   PivotCache cache = build_non_integral_amount_cache();
   PivotTable table = build_sum_amount_table(/*row=*/{0}, /*col=*/{});
+  // A caption or date filter acts only on a field placed on an axis.
+  table.set_field_axis(2, PivotAxis::Page);
   table.set_grand_totals(/*rows=*/false, /*cols=*/false);
   PivotFilter f;
   f.axis = PivotAxis::Row;
@@ -853,6 +855,8 @@ TEST(PivotEvaluator, LabelFilterResolvesFieldByCustomName) {
 TEST(PivotEvaluator, LabelFilterResolvesFieldByDataFieldName) {
   PivotCache cache = build_basic_cache();
   PivotTable table = build_sum_amount_table(/*row=*/{0}, /*col=*/{});
+  // A caption or date filter acts only on a field placed on an axis.
+  table.set_field_axis(2, PivotAxis::Page);
 
   // "Sum of Amount" is the data field's display name for the Amount field,
   // so the filter applies to Amount's own values.

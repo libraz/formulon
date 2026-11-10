@@ -191,6 +191,8 @@ TEST(RelativePeriod, TheWeekWindowFollowsTheWorkbookEpoch) {
 TEST(PivotEvaluator, RecurringMonthFilterKeepsEveryYearsMatchingMonth) {
   PivotCache cache = build_basic_cache();
   PivotTable table = build_sum_amount_table(/*row=*/{0}, /*col=*/{});
+  // A caption or date filter acts only on a field placed on an axis.
+  table.set_field_axis(2, PivotAxis::Page);
   table.set_grand_totals(/*rows=*/false, /*cols=*/false);
   // Field 2 holds North 100 / 50 / 25 and South 200 / 300, read here as
   // date serials: 25 is 1900-01-25, 50 is 1900-02-19, 100 is 1900-04-09,
@@ -209,6 +211,8 @@ TEST(PivotEvaluator, RecurringMonthFilterKeepsEveryYearsMatchingMonth) {
 TEST(PivotEvaluator, ARecurringQuarterSpansItsThreeMonths) {
   PivotCache cache = build_basic_cache();
   PivotTable table = build_sum_amount_table(/*row=*/{0}, /*col=*/{});
+  // A caption or date filter acts only on a field placed on an axis.
+  table.set_field_axis(2, PivotAxis::Page);
   table.set_grand_totals(/*rows=*/false, /*cols=*/false);
   // Q2 is months 4..6; serial 100 is 1900-04-09, so North's 100 survives
   // and its January pair does not.
@@ -226,6 +230,8 @@ TEST(PivotEvaluator, ARecurringFilterIsIndependentOfTheClock) {
   // very different readings selects the same records.
   PivotCache cache = build_basic_cache();
   PivotTable table = build_sum_amount_table(/*row=*/{0}, /*col=*/{});
+  // A caption or date filter acts only on a field placed on an axis.
+  table.set_field_axis(2, PivotAxis::Page);
   table.set_grand_totals(/*rows=*/false, /*cols=*/false);
   table.mutable_active_filters().push_back(decoded_filter(2, FilterType::DateM1));
 
@@ -244,6 +250,8 @@ TEST(PivotEvaluator, ARecurringFilterIsIndependentOfTheClock) {
 TEST(PivotEvaluator, AuthoredPeriodFilterPrunesRecordsAgainstThePinnedClock) {
   PivotCache cache = build_basic_cache();
   PivotTable table = build_sum_amount_table(/*row=*/{0}, /*col=*/{});
+  // A caption or date filter acts only on a field placed on an axis.
+  table.set_field_axis(2, PivotAxis::Page);
   table.set_grand_totals(/*rows=*/false, /*cols=*/false);
   // Field 2 carries the amounts (North 100 / 50 / 25, South 200 / 300),
   // read here as date serials. Pinning to 1900-02-15 makes "this quarter"
@@ -268,6 +276,8 @@ TEST(PivotEvaluator, MovingThePinnedClockMovesWhichRecordsSurvive) {
   // which admits North's 100 alone and still excludes South.
   PivotCache cache = build_basic_cache();
   PivotTable table = build_sum_amount_table(/*row=*/{0}, /*col=*/{});
+  // A caption or date filter acts only on a field placed on an axis.
+  table.set_field_axis(2, PivotAxis::Page);
   table.set_grand_totals(/*rows=*/false, /*cols=*/false);
   table.mutable_active_filters().push_back(decoded_filter(2, FilterType::DateThisQuarter));
 
@@ -499,6 +509,8 @@ TEST(PivotEvaluator, ValueFiltersRetainNonFiniteComparisonSemantics) {
 TEST(PivotEvaluator, AuthoredDateFilterPrunesRecordsByTheirSerial) {
   PivotCache cache = build_basic_cache();
   PivotTable table = build_sum_amount_table(/*row=*/{0}, /*col=*/{});
+  // A caption or date filter acts only on a field placed on an axis.
+  table.set_field_axis(2, PivotAxis::Page);
   table.set_grand_totals(/*rows=*/false, /*cols=*/false);
   // Field 2 holds the amounts, which are plain numbers -- the date pass
   // reads whatever serial the bound cell carries, so a range that spans
@@ -509,6 +521,19 @@ TEST(PivotEvaluator, AuthoredDateFilterPrunesRecordsByTheirSerial) {
   ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
   ASSERT_EQ(r_or.value().rows.size(), 1U);
   EXPECT_EQ(r_or.value().rows[0].label, "North");
+}
+
+TEST(PivotEvaluator, ADateFilterOnAFieldOffEveryAxisFiltersNothing) {
+  PivotCache cache = build_basic_cache();
+  PivotTable table = build_sum_amount_table(/*row=*/{0}, /*col=*/{});
+  table.set_grand_totals(/*rows=*/false, /*cols=*/false);
+  // Field 2 is only a data field: the filter is kept but drops no record.
+  table.mutable_active_filters().push_back(decoded_filter(2, FilterType::LabelDate, 0.0, 100.0));
+
+  auto r_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  ASSERT_EQ(r_or.value().rows.size(), 2U);
+  EXPECT_EQ(table.active_filters().size(), 1U);
 }
 
 // Sum of Amount over the Date rows that survive `filter`, over a cache of

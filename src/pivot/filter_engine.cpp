@@ -152,6 +152,22 @@ std::vector<bool> remap_leaf_sets(std::vector<std::vector<std::size_t>>& leaf_se
   return keep_set;
 }
 
+// True when table field `field`, or a field sharing its group base, sits on
+// the row, column or page axis.
+bool placed_on_axis(const PivotTable& table, const PivotCache& cache, std::size_t field) {
+  const std::size_t base = field < cache.fields().size() ? group_base_index(cache, field) : field;
+  for (std::size_t fi = 0; fi < table.fields().size(); ++fi) {
+    const PivotAxis axis = table.fields()[fi].axis;
+    if (axis != PivotAxis::Row && axis != PivotAxis::Col && axis != PivotAxis::Page) {
+      continue;
+    }
+    if (fi == field || (fi < cache.fields().size() && group_base_index(cache, fi) == base)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 }  // namespace
 
 void drop_field_aggregates(PivotTable& table, std::size_t field_index) {
@@ -259,6 +275,12 @@ PreparedRecordFilter::PreparedRecordFilter(const PivotTable& table, const PivotC
     }
     const std::optional<std::size_t> fi = filter_field_index(table, f);
     if (!fi.has_value()) {
+      continue;
+    }
+    // A caption or date filter acts only on a field placed on the row, column
+    // or page axis, directly or through a group field over the same base; on
+    // any other field it stays inert and is kept as written.
+    if (!placed_on_axis(table, cache, *fi)) {
       continue;
     }
     ResolvedFilter resolved;
