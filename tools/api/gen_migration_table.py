@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate the CHANGELOG's name migration table from ``tools/api/names.yaml``.
+"""Generate the upgrade guide's name migration table from ``tools/api/names.yaml``.
 
 One Markdown table per surface (C, JavaScript, Python), each row a former name
 and what replaces it:
@@ -20,12 +20,14 @@ and what replaces it:
   with ``replaced_by``: the facade member that took it over. Any other
   ``internal`` op has no row.
 
-The table lives in ``CHANGELOG.md`` between the two marker comments below, so
-the generated rows and the hand-written notes around them never overlap.
+The table lives in the upgrade guide of the newest ``CHANGELOG.md`` release
+(``docs/releases/upgrading-<major>.<minor>.md``) between the two marker comments
+below, so the generated rows and the hand-written notes around them never
+overlap. A former name is one the previous release shipped.
 
 Modes:
   (default)  print the table
-  --write    replace the marked region of CHANGELOG.md with the table
+  --write    replace the marked region of the upgrade guide with the table
   --check    exit 1 when the marked region differs from the table, or is missing
 """
 
@@ -47,7 +49,7 @@ from binding_drift.api_conventions import (  # noqa: E402
     handle_classes,
     handle_name,
 )
-from check_changelog_identifiers import previous_release, released_names  # noqa: E402
+from check_changelog_identifiers import previous_release, released_names, upgrade_guide  # noqa: E402
 
 LEDGER_PATH = REPO_ROOT / "tools" / "api" / "names.yaml"
 CHANGELOG = REPO_ROOT / "CHANGELOG.md"
@@ -264,28 +266,31 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--ledger", type=Path, default=LEDGER_PATH)
     parser.add_argument("--changelog", type=Path, default=CHANGELOG)
+    parser.add_argument("--guide", type=Path, help="the upgrade guide (default: the newest release's)")
     mode = parser.add_mutually_exclusive_group()
-    mode.add_argument("--write", action="store_true", help="replace the marked CHANGELOG region")
-    mode.add_argument("--check", action="store_true", help="fail when the marked CHANGELOG region is stale")
+    mode.add_argument("--write", action="store_true", help="replace the marked region of the guide")
+    mode.add_argument("--check", action="store_true", help="fail when the marked region of the guide is stale")
     args = parser.parse_args(argv)
-    released = released_names(previous_release(args.changelog.read_text(encoding="utf-8")))
+    changelog = args.changelog.read_text(encoding="utf-8")
+    released = released_names(previous_release(changelog))
     body = "\n" + render(load_ledger(args.ledger), released)
     if not (args.write or args.check):
         sys.stdout.write(body.lstrip("\n"))
         return 0
-    text = args.changelog.read_text(encoding="utf-8")
+    guide: Path = args.guide or upgrade_guide(changelog)
+    text = guide.read_text(encoding="utf-8") if guide.is_file() else ""
     span = _region(text)
     if span is None:
-        print(f"gen_migration_table: {args.changelog.name} has no `{BEGIN}` ... `{END}` region")
+        print(f"gen_migration_table: {guide.name} has no `{BEGIN}` ... `{END}` region")
         return 1
     current = text[span[0] : span[1]]
     if args.check:
         if current != body:
-            print(f"gen_migration_table: the migration table in {args.changelog.name} differs from the ledger")
+            print(f"gen_migration_table: the migration table in {guide.name} differs from the ledger")
             return 1
         print("gen_migration_table: the migration table matches the ledger")
         return 0
-    args.changelog.write_text(text[: span[0]] + body + text[span[1] :], encoding="utf-8")
+    guide.write_text(text[: span[0]] + body + text[span[1] :], encoding="utf-8")
     return 0
 
 

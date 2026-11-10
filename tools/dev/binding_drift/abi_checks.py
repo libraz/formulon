@@ -75,7 +75,7 @@ def check_abi_baseline() -> List[str]:
                     f"{CAPI_HEADER.relative_to(REPO_ROOT)}. A consumer built against the release "
                     f"loses it at link time. Record the break as `removed {name} :: <reason>` in "
                     f"{C_ABI_BREAKS.relative_to(REPO_ROOT)} and carry it into the CHANGELOG's "
-                    "Removed section, or restore the entry point."
+                    "Removed section and the upgrade guide's C ABI changes, or restore the entry point."
                 )
             continue
         if current[name] != declared:

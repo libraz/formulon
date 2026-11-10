@@ -58,6 +58,16 @@ class MissesTest(unittest.TestCase):
     def test_previous_release_is_the_second_versioned_section(self) -> None:
         self.assertEqual(check.previous_release(CHANGELOG), "1.0.0")
 
+    def test_the_upgrade_guide_is_named_after_the_newest_release(self) -> None:
+        self.assertEqual(check.upgrade_guide(CHANGELOG), check.RELEASES_DIR / "upgrading-2.0.md")
+
+    def test_a_guide_is_checked_on_every_line(self) -> None:
+        guide = (
+            "# Upgrading\n\n## Old notes\n\n- `neverShipped` x\n\n| Before | After |\n|---|---|\n| `newName` | y |\n"
+        )
+        found = [(t, f) for _, t, f in check.misses(guide, {"newName"}, {"oldName"}, whole=True)]
+        self.assertEqual(found, [("neverShipped", False), ("newName", True)])
+
 
 class RepositoryTest(unittest.TestCase):
     def test_the_changelog_names_only_shipped_identifiers(self) -> None:

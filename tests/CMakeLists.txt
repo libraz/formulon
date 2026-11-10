@@ -673,14 +673,14 @@ if(DEFINED _FORMULON_BEHAVIOR_PY)
     COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/api/check_case_tables.py
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
   )
-  # The CHANGELOG migration table is what the ledger generates.
+  # The upgrade guide's migration table is what the ledger generates.
   add_test(
     NAME ApiMigrationTableDrift
     COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/api/gen_migration_table.py --check
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
   )
-  # The CHANGELOG names only current or previous-release identifiers; the
-  # unit tests include the check over the repository's CHANGELOG.
+  # The CHANGELOG and the upgrade guide name only current or previous-release
+  # identifiers; the unit tests include the check over the repository's files.
   add_test(
     NAME ApiChangelogIdentifiers
     COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/api/check_changelog_identifiers_test.py

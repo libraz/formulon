@@ -619,7 +619,7 @@ class LedgerHandleTest(unittest.TestCase):
 
 
 class MigrationTableTest(unittest.TestCase):
-    """Rows of the CHANGELOG migration table for handle methods, absorbed raws and removed ops."""
+    """Rows of the upgrade guide's migration table for handle methods, absorbed raws and removed ops."""
 
     @staticmethod
     def _gen():

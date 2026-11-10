@@ -47,7 +47,7 @@ PREAMBLE = """# Released C ABI surface, as shipped in {tag}.
 # file). One generation only -- rebasing onto a newer tag replaces it.
 # Do NOT hand-edit to make a check pass. A deliberate break is recorded in
 # tools/dev/c_abi_breaks.txt instead, so it stays visible in review and can be
-# carried into the CHANGELOG and the migration notes.
+# carried into the CHANGELOG and the release's upgrade guide.
 #
 # Format: one declaration per line, `<return-type> <name>(<param-types>)`,
 # parameter names stripped, sorted by name. Struct *layout* is not covered

@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
-"""Check that the API identifiers the current CHANGELOG release names exist.
+"""Check that the API identifiers the current release notes name exist.
 
-Every identifier inside a code span of the ``[Unreleased]`` section and the
-newest released section must be one of:
+The release notes are the ``[Unreleased]`` section and the newest released
+section of ``CHANGELOG.md``, and the whole upgrade guide of that release,
+``docs/releases/upgrading-<major>.<minor>.md`` (see :func:`upgrade_guide`).
+Every identifier inside a code span of them must be one of:
 
 * a current public name: a token of ``src/wasm/formulon.d.ts``,
   ``packages/npm-native/index.d.ts``, the JavaScript entry modules, the Python
@@ -45,6 +47,7 @@ SURFACE_FILES = (
 PYTHON_PACKAGE = "packages/python/formulon"
 
 RELEASED_DIR = REPO_ROOT / "tools" / "api" / "released"
+RELEASES_DIR = REPO_ROOT / "docs" / "releases"
 # The files a release's public names are read from; `error.h` holds the status names `fm_status_string` returned.
 SNAPSHOT_FILES = SURFACE_FILES + ("packages/npm/index.mjs", "src/utils/error.h")
 
@@ -136,6 +139,12 @@ def previous_release(text: str) -> str:
     return versions[1]
 
 
+def upgrade_guide(text: str) -> Path:
+    """The upgrade guide of the newest released section: ``docs/releases/upgrading-<major>.<minor>.md``."""
+    newest = re.findall(r"^## \[(\d+)\.(\d+)\.\d+\]", text, flags=re.M)[0]
+    return RELEASES_DIR / f"upgrading-{newest[0]}.{newest[1]}.md"
+
+
 def released_names(version: str) -> Set[str]:
     lines = (RELEASED_DIR / f"{version}.txt").read_text(encoding="utf-8").splitlines()
     return {line for line in lines if line and not line.startswith("#")}
@@ -171,10 +180,14 @@ def current_names() -> Set[str]:
     return names
 
 
-def misses(text: str, current: Set[str], released: Set[str]) -> List[Tuple[int, str, bool]]:
-    """``(line, identifier, former column)`` of every identifier that does not resolve."""
+def misses(text: str, current: Set[str], released: Set[str], *, whole: bool = False) -> List[Tuple[int, str, bool]]:
+    """``(line, identifier, former column)`` of every identifier that does not resolve.
+
+    ``whole`` checks every line (an upgrade guide); otherwise only the current release sections.
+    """
+    lines = enumerate(text.splitlines(), start=1) if whole else release_lines(text)
     out: List[Tuple[int, str, bool]] = []
-    for number, piece, is_former in checked_text(release_lines(text)):
+    for number, piece, is_former in checked_text(lines):
         allowed = released if is_former else current | released
         for span in SPAN.findall(piece):
             out.extend((number, t, is_former) for t in span_identifiers(span) if t not in allowed)
@@ -194,10 +207,14 @@ def main(argv: Optional[List[str]] = None) -> int:
     for group in NOT_API.values():
         current |= group
         released |= group
-    found = misses(text, current, released)
-    for number, token, is_former in found:
+    found = [(CHANGELOG, miss) for miss in misses(text, current, released)]
+    guide = upgrade_guide(text)
+    if guide.is_file():
+        guide_text = guide.read_text(encoding="utf-8")
+        found += [(guide, miss) for miss in misses(guide_text, current, released, whole=True)]
+    for path, (number, token, is_former) in found:
         what = "no previous-release name" if is_former else "neither a current nor a previous-release name"
-        print(f"CHANGELOG.md:{number}: `{token}` is {what}")
+        print(f"{path.relative_to(REPO_ROOT)}:{number}: `{token}` is {what}")
     return 1 if found else 0
 
 

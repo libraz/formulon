@@ -4,9 +4,9 @@
 # `src/c_api/formulon_c.h` with the same signature, unless it is listed here.
 # The list is a ledger, not an allowlist to grow at will: adding a line is the
 # act of deciding that a break is worth making, and a `removed` or `signature`
-# line has to reach the CHANGELOG's Removed / Changed sections and the
-# migration notes, because a third-party consumer has no other way to learn
-# about it.
+# line has to reach the CHANGELOG's Removed / Changed sections and the C ABI
+# changes of the release's upgrade guide (docs/releases/upgrading-<major>.<minor>.md),
+# because a third-party consumer has no other way to learn about it.
 #
 # The check also fails on a *stale* entry -- one naming a divergence that no
 # longer exists -- so the ledger cannot quietly accumulate excuses for breaks
