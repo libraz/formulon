@@ -165,6 +165,30 @@ std::optional<detail::ReportOccupant> detail::find_report_occupant(const Workboo
   return cell_in(sheet, target, own);
 }
 
+void Workbook::adopt_saved_blocked_pivots() {
+  const auto zero = [](std::optional<std::uint32_t> v) { return v.has_value() && *v == 0U; };
+  for (std::size_t s = 0; s < sheets_.size(); ++s) {
+    for (const std::unique_ptr<pivot::PivotTable>& table : sheets_[s].mutable_pivot_tables()) {
+      if (table == nullptr || table->blocked().has_value() || !table->span_read() || table->span_rows() != 1U ||
+          table->span_cols() != 1U || !zero(table->location_first_header_row()) ||
+          !zero(table->location_first_data_row()) || !zero(table->location_first_data_col())) {
+        continue;
+      }
+      const std::uint32_t row = table->anchor_row();
+      const std::uint32_t col = table->anchor_col();
+      const Cell* anchor = sheets_[s].cell_at(row, col);
+      if (anchor == nullptr || !anchor->formula_text.empty() || !anchor->cached_value.is_error()) {
+        continue;
+      }
+      pivot::BlockedReport state;
+      state.size_known = false;
+      table->set_projected_extent(pivot::PivotRect{row, col, row, col});
+      table->set_blocked(state);
+      put_cell_value(s, row, col, Value::error(ErrorCode::Spill));
+    }
+  }
+}
+
 std::size_t Workbook::settle_blocked_pivots() {
   std::size_t projected = 0;
   bool rendered = false;

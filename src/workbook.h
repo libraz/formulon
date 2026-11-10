@@ -1428,6 +1428,11 @@ class Workbook {
   /// `recalc_parallel` call it after each pass.
   std::size_t settle_blocked_pivots();
 
+  /// Marks each loaded report saved in Excel's blocked form (a one-cell location with zero first-row and first-column
+  /// offsets over an error anchor) as blocked with an unknown size, so the next recalc plans it and draws it once its
+  /// range is free. Readers call it after the pivots and their caches are loaded.
+  void adopt_saved_blocked_pivots();
+
   /// Projects every pivot whose cache changed since its last projection. A
   /// pivot that cannot be projected stays pending.
   void project_pending_pivots();

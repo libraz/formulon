@@ -18,6 +18,8 @@
 #include "eval/recalc_engine.h"
 #include "excel_profile.h"
 #include "gtest/gtest.h"
+#include "io/ooxml_reader.h"
+#include "io/ooxml_writer.h"
 #include "merge_range.h"
 #include "pivot/field_remap.h"
 #include "pivot/pivot_cache.h"
@@ -239,6 +241,56 @@ TEST(PivotBlocked, EditOverAValueBlocksAndKeepsTheDefinition) {
   EXPECT_EQ(*table.projected_extent(), (PivotRect{before.row0, before.col0, before.row0, before.col0}));
   EXPECT_EQ(At(wb, control.row1, control.col1).as_text(), "blocker");
   EXPECT_TRUE(At(wb, before.row0 + 1U, before.col0).is_blank());
+}
+
+Workbook ReloadXlsx(const Workbook& wb) {
+  auto bytes = io::write_ooxml(wb);
+  if (!bytes) {
+    ADD_FAILURE() << bytes.error().message;
+    return Workbook::create();
+  }
+  auto read = io::read_ooxml(io::ByteSpan{bytes.value().data(), bytes.value().size()});
+  if (!read) {
+    ADD_FAILURE() << read.error().message;
+    return Workbook::create();
+  }
+  return std::move(read.value().workbook);
+}
+
+// Excel keeps a saved report blocked on reopen and draws it once the range comes free.
+void ExpectReloadedBlockedReportRedrawsWhenFreed(Workbook (*reload)(const Workbook&)) {
+  const PivotRect control = ControlExtent();
+  Workbook wb = Book();
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_text(kPivotSheet, control.row1, control.col1, "blocker")));
+  ASSERT_TRUE(static_cast<bool>(AddDataField(wb)));
+  Recalc(wb);
+  ASSERT_TRUE(PivotAt(wb).blocked().has_value());
+
+  Workbook loaded = reload(wb);
+  ASSERT_GT(loaded.sheet_count(), kPivotSheet);
+  ASSERT_EQ(loaded.sheet(kPivotSheet).pivot_tables().size(), 1U);
+  Recalc(loaded);
+  ASSERT_TRUE(PivotAt(loaded).blocked().has_value());
+  EXPECT_TRUE(At(loaded, control.row0, control.col0).is_error());
+  EXPECT_EQ(At(loaded, control.row1, control.col1).as_text(), "blocker");
+  ASSERT_TRUE(static_cast<bool>(loaded.set_cell_value(kPivotSheet, control.row1, control.col1, Value::blank())));
+  Recalc(loaded);
+  ExpectRendered(loaded, control);
+  EXPECT_EQ(PivotAt(loaded).data_fields().size(), 2U);
+}
+
+TEST(PivotBlocked, ReloadedXlsxBlockedReportRedrawsWhenItsRangeIsFreed) {
+  ExpectReloadedBlockedReportRedrawsWhenFreed(&ReloadXlsx);
+}
+
+TEST(PivotBlocked, ReloadedDrawnReportIsNotBlocked) {
+  Workbook wb = Book();
+  Recalc(wb);
+  const PivotRect drawn = Extent(wb);
+  Workbook loaded = ReloadXlsx(wb);
+  Recalc(loaded);
+  EXPECT_FALSE(PivotAt(loaded).blocked().has_value());
+  EXPECT_FALSE(HoldsSpill(loaded, drawn.row0, drawn.col0));
 }
 
 TEST(PivotBlocked, ClearingTheBlockerRendersOnRecalc) {

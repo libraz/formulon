@@ -988,6 +988,7 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
   // name (the pivot-table part links to the cache only by index). The
   // loop body lives in the pivot layer to keep this reader hook minimal.
   pivot::resolve_all_pivot_names(wb);
+  wb.adopt_saved_blocked_pivots();
   // Cells and tables are both loaded, so the totals cells settle the columns' totals metadata.
   wb.normalize_table_totals_cells();
 
