@@ -2,12 +2,12 @@
   "suite": "print_roundtrip",
   "kind": "workbook",
   "environment": {
-    "excel_version": "16.0.20430",
+    "excel_version": "16.0.20527",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-23T13:04:23Z",
-    "capture_id": "win-365-ja_JP:16.0.20430:ja-JP:2026-10-23T13:04:23Z"
+    "generated_at": "2026-11-10T05:36:02Z",
+    "capture_id": "win-365-ja_JP:16.0.20527:ja-JP:2026-11-10T05:36:02Z"
   },
   "cases": [
     {
@@ -90,8 +90,8 @@
           "print_title_cols": "",
           "manual_row_breaks": [],
           "manual_col_breaks": [],
-          "xlsx_sha256": "6cd5738ea98010c71f4d9eac2602ec1a687de11cb1a84c79de52f9e5279b2022",
-          "xlsx_bytes": 2634
+          "xlsx_sha256": "452e6da6599e5ac36bb6796bcdd3c49ea3833fd67019335d51d8812a91e60ebc",
+          "xlsx_bytes": 2620
         }
       }
     },
@@ -174,8 +174,8 @@
           "print_title_cols": "",
           "manual_row_breaks": [],
           "manual_col_breaks": [],
-          "xlsx_sha256": "4d3378077795e654df8f41bc2fafced62683cf626034194a91d52e39b162d22b",
-          "xlsx_bytes": 2602
+          "xlsx_sha256": "344c04a029b0b716b9fbba28a43b196e99d8062467a92415408f17b9a2f126f8",
+          "xlsx_bytes": 2588
         }
       }
     },
@@ -266,8 +266,8 @@
           "print_title_cols": "",
           "manual_row_breaks": [],
           "manual_col_breaks": [],
-          "xlsx_sha256": "ccbb482a0541e7315afbb6351faac4858d129dc74336098532ad9041bbe1646a",
-          "xlsx_bytes": 2654
+          "xlsx_sha256": "b619da2d21c5ccda33bc804a39acad54162cf9982eeb8b0a2975a542c65201f5",
+          "xlsx_bytes": 2640
         }
       }
     },
@@ -354,8 +354,8 @@
           "print_title_cols": "",
           "manual_row_breaks": [],
           "manual_col_breaks": [],
-          "xlsx_sha256": "93afbd352201e3065342b744bec7624ea36b1fb43d72358076f71af8a1c8ed1c",
-          "xlsx_bytes": 2762
+          "xlsx_sha256": "66ad959022a00d83e2cc96d3db88b2eeaae74b2f55e8b9674cb7822840f58c8b",
+          "xlsx_bytes": 2748
         }
       }
     },
@@ -437,8 +437,8 @@
           "print_title_cols": "A:A",
           "manual_row_breaks": [],
           "manual_col_breaks": [],
-          "xlsx_sha256": "0981daf09ea83ef320204a35062c7c809717a473662e58d485164046e00ee718",
-          "xlsx_bytes": 2640
+          "xlsx_sha256": "bbde5dceac359eaa5233d5052db3e9535e10d041ea9041b70d27ee5923e4216f",
+          "xlsx_bytes": 2626
         }
       }
     },
@@ -528,8 +528,8 @@
           "manual_col_breaks": [
             3
           ],
-          "xlsx_sha256": "69267d863151f425212ec638fd66d7db06c2f86212b17e61e009e7fa20077235",
-          "xlsx_bytes": 2704
+          "xlsx_sha256": "bb995124f72a34b664c36aa025c9ffa14e0586a37425b1796e3eac0bd88340fc",
+          "xlsx_bytes": 2690
         }
       }
     }
