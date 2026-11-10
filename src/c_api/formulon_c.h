@@ -1829,7 +1829,7 @@ typedef struct {
 typedef struct {
   uint32_t struct_size;
   /** The notation, an `fm_tristate_t`: default and false parse A1, true parses R1C1. */
-  int32_t r1c1;
+  int32_t r1c1; /* fm_tristate_t */
   /** 1 when `base_row` and `base_col` are set; 0 means no base. Ignored when A1 is parsed. */
   int32_t has_base;
   /** The 0-based row that R1C1 relative axes are measured from. */
@@ -2329,19 +2329,19 @@ typedef struct {
    *  `TableStyleMedium2`; an empty string is invalid. */
   const char* style_name;
   /** Tristate: default and true create a styled table, false creates the table without a style element. */
-  int32_t styled;
+  int32_t styled; /* fm_tristate_t */
   /** Tristate: whether the table has a header row; default is on. */
-  int32_t header_row;
+  int32_t header_row; /* fm_tristate_t */
   /** Tristate: whether the table has a totals row; default is off. */
-  int32_t totals_row;
+  int32_t totals_row; /* fm_tristate_t */
   /** Tristate: whether the first column is emphasized; default takes the creation default, which is off. */
-  int32_t show_first_column;
+  int32_t show_first_column; /* fm_tristate_t */
   /** Tristate: whether the last column is emphasized; default takes the creation default, which is off. */
-  int32_t show_last_column;
+  int32_t show_last_column; /* fm_tristate_t */
   /** Tristate: whether odd rows are banded; default takes the creation default, which is on for a styled table. */
-  int32_t show_row_stripes;
+  int32_t show_row_stripes; /* fm_tristate_t */
   /** Tristate: whether odd columns are banded; default takes the creation default, which is off. */
-  int32_t show_column_stripes;
+  int32_t show_column_stripes; /* fm_tristate_t */
 } fm_table_spec_t;
 
 /**
@@ -3390,16 +3390,16 @@ typedef struct {
   /** How an invalid entry is reported: stop, warning or information, an `fm_validation_error_style_t`. */
   int32_t error_style;
   /** Tristate: whether a blank cell passes the rule; default is yes. */
-  int32_t allow_blank;
+  int32_t allow_blank; /* fm_tristate_t */
   /** Tristate: whether the prompt (`prompt_title` and `prompt_message`) shows when the cell is selected; default is
    *  yes. */
-  int32_t show_input_message;
+  int32_t show_input_message; /* fm_tristate_t */
   /** Tristate: whether the error alert (`error_title` and `error_message`) shows on an invalid entry; default is yes.
    */
-  int32_t show_error_message;
+  int32_t show_error_message; /* fm_tristate_t */
   /** Tristate: whether the in-cell dropdown arrow is shown (`list` rules only); default is yes. The inverse of the raw
    *  OOXML `showDropDown` attribute, which the reader and writer translate. */
-  int32_t show_in_cell_dropdown;
+  int32_t show_in_cell_dropdown; /* fm_tristate_t */
   /** The first formula or value of the rule, leading `=` included; `NULL` when the rule states none. */
   const char* formula1;
   /** The second formula or value of the rule (the upper bound of a between rule), leading `=` included; `NULL` when the
@@ -3533,19 +3533,19 @@ typedef struct {
   /** The operation applied to `allow_blank`: keep it, set it; it cannot be cleared. */
   fm_patch_op_t allow_blank_op;
   /** Tristate: whether a blank cell passes the rule. */
-  int32_t allow_blank;
+  int32_t allow_blank; /* fm_tristate_t */
   /** The operation applied to `show_input_message`: keep it, set it; it cannot be cleared. */
   fm_patch_op_t show_input_message_op;
   /** Tristate: whether the prompt shows when the cell is selected. */
-  int32_t show_input_message;
+  int32_t show_input_message; /* fm_tristate_t */
   /** The operation applied to `show_error_message`: keep it, set it; it cannot be cleared. */
   fm_patch_op_t show_error_message_op;
   /** Tristate: whether the error alert shows on an invalid entry. */
-  int32_t show_error_message;
+  int32_t show_error_message; /* fm_tristate_t */
   /** The operation applied to `show_in_cell_dropdown`: keep it, set it; it cannot be cleared. */
   fm_patch_op_t show_in_cell_dropdown_op;
   /** Tristate: whether the in-cell dropdown arrow is shown. */
-  int32_t show_in_cell_dropdown;
+  int32_t show_in_cell_dropdown; /* fm_tristate_t */
   /** The operation applied to `formula1`: keep it, set it, or clear it. */
   fm_patch_op_t formula1_op;
   /** The new first formula or value, with or without a leading `=`. */
@@ -4482,9 +4482,9 @@ typedef struct {
   /** 1 when users may delete rows on the protected sheet; Excel's default 0. */
   int32_t allow_delete_rows;
   /** Tristate: whether users may select locked cells on the protected sheet; default allows. */
-  int32_t allow_select_locked_cells;
+  int32_t allow_select_locked_cells; /* fm_tristate_t */
   /** Tristate: whether users may select unlocked cells on the protected sheet; default allows. */
-  int32_t allow_select_unlocked_cells;
+  int32_t allow_select_unlocked_cells; /* fm_tristate_t */
   /** 1 when users may sort on the protected sheet; Excel's default 0. */
   int32_t allow_sort;
   /** 1 when users may use AutoFilter on the protected sheet; Excel's default 0. */
@@ -4921,7 +4921,7 @@ typedef struct {
   uint32_t last;
   /** An `fm_tristate_t`: default or true is a user-placed break, false an automatic one; a read returns true or false.
    * `man` is absent for an automatic break. */
-  int32_t manual;
+  int32_t manual; /* fm_tristate_t */
 } fm_row_break_t;
 
 /** @brief One column break (`<colBreaks><brk>`), the counterpart of `fm_row_break_t`. */
@@ -4935,7 +4935,7 @@ typedef struct {
   uint32_t last;
   /** An `fm_tristate_t`: default or true is a user-placed break, false an automatic one; a read returns true or false.
    */
-  int32_t manual;
+  int32_t manual; /* fm_tristate_t */
 } fm_column_break_t;
 
 /**
@@ -5847,7 +5847,7 @@ typedef struct fm_cf_results fm_cf_results_t;
 typedef struct {
   uint32_t struct_size;
   /** An `fm_tristate_t`: `DEFAULT` or `TRUE` evaluates time-period rules, `FALSE` makes none of them match. */
-  int32_t time_period_rules;
+  int32_t time_period_rules; /* fm_tristate_t */
   /** 1 when `today_serial` is set; 0 means time-period rules measure from the pinned clock when one is set, else from
    *  today. */
   int32_t has_today_serial;
@@ -5980,7 +5980,7 @@ typedef struct {
   int32_t type;
   /** An `fm_tristate_t`: `DEFAULT` or `TRUE` is an inclusive threshold, `FALSE` an exclusive one; a read returns `TRUE`
    *  or `FALSE`. */
-  int32_t gte;
+  int32_t gte; /* fm_tristate_t */
   /** The number, percentage or formula the `type` reads, copied on add; `NULL` for a type that reads none (minimum,
    *  maximum). A formula reads back with a leading `=` and may be given with or without it. */
   const char* value;
@@ -7079,7 +7079,7 @@ typedef struct {
   /** The axis the field sits on, an `fm_pivot_axis_t`; `FM_PIVOT_AXIS_ABSENT` when it sits on no axis. */
   int32_t axis;
   /** Where subtotals render, an `fm_tristate_t`: true at the group head, false at the bottom. */
-  int32_t subtotal_top;
+  int32_t subtotal_top; /* fm_tristate_t */
   /** The number format code the field's numFmtId resolves to, as `fm_workbook_get_number_format` resolves it in the
    *  workbook profile's vocabulary; `NULL` for none or an unregistered id. Writing it back selects the same id. */
   const char* number_format;
@@ -11907,10 +11907,10 @@ typedef struct {
   const char* name;
   /** Whether PivotTables may use the style (an `fm_tristate_t`): default or true is usable, false is not; a read
    *  returns true or false. */
-  int32_t pivot;
+  int32_t pivot; /* fm_tristate_t */
   /** Whether tables may use the style (an `fm_tristate_t`): default or true is usable, false is not; a read returns
    *  true or false. */
-  int32_t table;
+  int32_t table; /* fm_tristate_t */
   /** The formatted regions of the style. */
   const fm_table_style_element_t* elements;
   /** The number of entries in `elements`. */
@@ -12805,7 +12805,7 @@ typedef struct {
   uint32_t struct_size;
   /** The 1-based document order in the externalReferences list: the `[n]` of formula text, as in `=[1]Sheet1!A1`. */
   uint32_t book_number;
-  /** The id of the link in the workbook relationships, such as `rId3`. */
+  /** The id of the link in the workbook relationships, such as "rId3". */
   const char* rel_id;
   /** The resolved package-relative path of the body part, such as `xl/externalLinks/externalLink1.xml`. */
   const char* part_path;
@@ -13005,7 +13005,7 @@ typedef struct {
   /** The object's alternative text; `NULL`, empty or omitted means none. */
   const char* description;
   /** Whether the object is hidden; unset means shown. */
-  int32_t hidden;
+  int32_t hidden; /* fm_tristate_t */
   /** Where the object is placed, following the add rules of `fm_drawing_anchor_t`; unset takes the operation's default
    *  anchor kind at A1. */
   fm_drawing_anchor_t anchor;
@@ -14462,7 +14462,7 @@ typedef struct {
   /** The chart title; kind NONE when the chart has none. */
   fm_chart_title_t title;
   /** Whether the automatic title is deleted, a tri-state value (default when the chart states none). */
-  int32_t auto_title_deleted;
+  int32_t auto_title_deleted; /* fm_tristate_t */
   /** The legend position; `FM_CHART_LEGEND_POSITION_ABSENT` when the chart has no legend. */
   int32_t legend_position;
   /** 1 when the legend overlays the plot area; 0 when it does not or there is no legend. */
@@ -14472,7 +14472,7 @@ typedef struct {
   /** How empty cells are plotted (gap, zero or span), an `fm_blanks_as_t`; the absent value when the file omits it. */
   int32_t blanks_as;
   /** Whether only visible cells are plotted, a tri-state value (default when the chart states none). */
-  int32_t plot_visible_only;
+  int32_t plot_visible_only; /* fm_tristate_t */
   /** `1` when the chart uses the 1904 date system. */
   int32_t date1904;
   /** 1 when `style` is set; 0 means the chart states no style. */
@@ -14496,7 +14496,7 @@ typedef struct {
   int32_t source_header_column;
   /** Whether `#N/A` points draw as blank cells (`c16r3:dispNaAsBlank`), a tri-state value (default when the chart
    *  carries no setting). */
-  int32_t na_as_blank;
+  int32_t na_as_blank; /* fm_tristate_t */
 } fm_chart_info_t;
 
 /** @brief One plot group. */
@@ -14515,7 +14515,7 @@ typedef struct {
   /** How the series are stacked or grouped; meaningful when `has_grouping` is set. */
   int32_t grouping;
   /** Whether each point of a single-series plot takes its own colour, a tri-state value. */
-  int32_t vary_colors;
+  int32_t vary_colors; /* fm_tristate_t */
   /** 1 when `gap_width_pct` is set; 0 means the plot type has none. */
   int32_t has_gap_width_pct;
   /** The gap between bar clusters as a percentage of the bar width; meaningful when `has_gap_width_pct` is set. */
@@ -14587,7 +14587,7 @@ typedef struct {
   /** The series marker; meaningful when `has_marker` is set. */
   fm_chart_marker_t marker;
   /** Whether a line or scatter series draws a smoothed line, a tri-state value. */
-  int32_t smooth;
+  int32_t smooth; /* fm_tristate_t */
   /** The number of formatted points of the series, as `fm_chart_get_series_point_at` reads them. */
   uint32_t point_count;
   /** 1 when `labels` is set; 0 means the series has no data labels. */
@@ -15130,9 +15130,9 @@ typedef struct {
    *  omitted. */
   int32_t direction;
   /** Whether the first row of the source holds names, a tri-state value (default follows Excel's detection). */
-  int32_t header_row;
+  int32_t header_row; /* fm_tristate_t */
   /** Whether the first column of the source holds names, a tri-state value (default follows Excel's detection). */
-  int32_t header_column;
+  int32_t header_column; /* fm_tristate_t */
   /** 1 when `title` is written; 0 gives Excel's automatic title. */
   int32_t has_title;
   /** The chart title, written when `has_title` is 1 as `fm_sheet_set_chart_title` does (`NONE` for no title; a `TEXT`

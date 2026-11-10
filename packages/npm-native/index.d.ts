@@ -4021,7 +4021,7 @@ export type ExternalLinkKind = 0 | 1 | 2 | 3;
 export interface ExternalLink {
   /** The 1-based document order in the externalReferences list: the `[n]` of formula text, as in `=[1]Sheet1!A1`. */
   readonly bookNumber: number;
-  /** The id of the link in the workbook relationships, such as `rId3`. */
+  /** The id of the link in the workbook relationships, such as "rId3". */
   readonly relId: string;
   /** The resolved package-relative path of the body part, such as `xl/externalLinks/externalLink1.xml`. */
   readonly partPath: string;
