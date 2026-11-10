@@ -130,9 +130,13 @@ test('an integer that is not a GeometryMode is InvalidArgument, a non-number is 
 test('a table column total function that is not a member is InvalidArgument, a wrong type is TypeError', async () => {
   await withWorkbook((wb, { StatusCode, TableTotalsRowFunction }) => {
     withTable(wb, (_ws, table) => {
-      rejectsWith(() => table.setColumnTotals(1, { totalsRowFunction: 42 }), StatusCode.InvalidArgument, 'ordinal 42');
-      assert.throws(() => table.setColumnTotals(1, { totalsRowFunction: 'sum' }), TypeError);
-      table.setColumnTotals(1, { totalsRowFunction: TableTotalsRowFunction.Sum });
+      rejectsWith(
+        () => table.update({ columns: [{}, { totalsRowFunction: 42 }] }),
+        StatusCode.InvalidArgument,
+        'ordinal 42',
+      );
+      assert.throws(() => table.update({ columns: [{}, { totalsRowFunction: 'sum' }] }), TypeError);
+      table.update({ columns: [{}, { totalsRowFunction: TableTotalsRowFunction.Sum }] });
     });
   });
 });

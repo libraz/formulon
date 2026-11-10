@@ -177,7 +177,7 @@ test('a totals row toggle grows the table by one row below and shrinks it back',
   await withWorkbook((wb) => {
     const ws = wb.sheet(0);
     const table = salesTable(ws);
-    table.setColumnTotals(1, { totalsRowFunction: 1 });
+    table.update({ columns: [{}, { totalsRowFunction: 1 }] });
     table.update({ totalsRow: true });
     const props = table.getProperties();
     assert.equal(props.totalsRow, true);
@@ -222,7 +222,7 @@ test('turning the totals row off is PreconditionFailed while a formula reference
   await withWorkbook((wb, { StatusCode }) => {
     const ws = wb.sheet(0);
     const table = salesTable(ws);
-    table.setColumnTotals(1, { totalsRowFunction: 1 });
+    table.update({ columns: [{}, { totalsRowFunction: 1 }] });
     table.update({ totalsRow: true });
     ws.setFormula('D1', '=B4');
     rejectsWith(() => table.update({ totalsRow: false }), StatusCode.PreconditionFailed, 'referenced totals row');

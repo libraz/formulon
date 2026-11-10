@@ -15,7 +15,7 @@ The addon is built directly against the engine's static archive and exposes the 
 - **Multithreaded recalc** — pthreads are wired in by default through the engine's parallel scheduler.
 - **No V8 / WASM heap copies** — `load` and `save`, the most expensive operations on large workbooks, marshal straight to the engine.
 - **Larger workbooks** — not bound by the WASM package's 2 GiB growth ceiling.
-- **Same surface** — the declarations and the native class table register 422 instance methods plus the four static factories. Of those instance methods, 422 are shared with WASM; zero remain WASM-only. [Package surfaces](https://formulon.libraz.net/api/surfaces)
+- **Same surface** — the declarations and the native class table register 421 instance methods plus the four static factories. Of those instance methods, 421 are shared with WASM; zero remain WASM-only. [Package surfaces](https://formulon.libraz.net/api/surfaces)
 - **Excel profiles** — a new workbook and the one-shot `evaluateFormula` start on the default `win-365-en_US` profile; `wb.setProfileId()` selects any of the 28 `{mac,win}-365-{ja_JP,en_US,de_DE,fr_FR,zh_CN,ko_KR,th_TH,es_ES,es_MX,pt_BR,ru_RU,zh_TW,it_IT,nl_NL}` profiles. [Locale profiles](https://formulon.libraz.net/compatibility/locale-profiles)
 
 ## Installation

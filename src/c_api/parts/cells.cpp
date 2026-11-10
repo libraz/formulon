@@ -115,6 +115,50 @@ std::optional<HeaderCell> table_header_cell(const formulon::Workbook& book, size
   return HeaderCell{*table, static_cast<std::size_t>(col - rect->first_col)};
 }
 
+// After a write to (`row`, `col`) through a C setter: a totals-row cell sets its column's totals settings, and a
+// blank data cell drops the calculated-column mark of a column left with no data. The readers write through the
+// Workbook setters and keep what the file declares.
+fm_status_t follow_table_cell(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col, bool blank) {
+  formulon::Workbook& book = wb->workbook();
+  const std::optional<std::size_t> table = book.table_containing(sheet_index, row, col);
+  if (!table) {
+    return 0;
+  }
+  const formulon::TableMetadata& meta = book.tables()[*table];
+  const std::optional<formulon::MergeRange> rect = formulon::parse_a1_rectangle(meta.ref);
+  if (!rect) {
+    return 0;
+  }
+  const std::size_t column = col - rect->first_col;
+  if (meta.totals_row && row == rect->last_row) {
+    book.sync_table_totals_cell(*table, column);
+    return 0;
+  }
+  const std::uint32_t first_data = rect->first_row + (meta.header_row ? 1U : 0U);
+  if (blank && row >= first_data) {
+    return finish_status(book.drop_calculated_column_if_empty(sheet_index, *table, column));
+  }
+  return 0;
+}
+
+// `follow_table_cell` for every totals-row cell of a multi-cell write over `rect`.
+void follow_table_totals_cells(fm_workbook_t* wb, size_t sheet_index, const fm_cell_rect_t& rect) {
+  formulon::Workbook& book = wb->workbook();
+  for (std::size_t i = 0; i < book.tables().size(); ++i) {
+    const formulon::TableMetadata& meta = book.tables()[i];
+    const std::optional<formulon::MergeRange> table = formulon::parse_a1_rectangle(meta.ref);
+    if (meta.sheet_index != sheet_index || !meta.totals_row || !table || table->last_row < rect.first_row ||
+        table->last_row > rect.last_row) {
+      continue;
+    }
+    const std::uint32_t first = std::max(table->first_col, rect.first_col);
+    const std::uint32_t last = std::min(table->last_col, rect.last_col);
+    for (std::uint32_t col = first; col <= last; ++col) {
+      book.sync_table_totals_cell(i, col - table->first_col);
+    }
+  }
+}
+
 // A value entered into a table's header cell renames the column to its text,
 // as Excel does; the header cell then holds the final name.
 fm_status_t rename_from_header(fm_workbook_t* wb, const HeaderCell& header, std::string_view text) {
@@ -141,9 +185,14 @@ extern "C" fm_status_t fm_sheet_set_number(fm_workbook_t* wb, size_t sheet_index
     formulon::format_double(text, value);
     return rename_from_header(wb, *header, text);
   }
-  return enter_cell(wb, sheet_index, row, col, [&](formulon::Workbook& book) {
-    return book.set_cell_value(sheet_index, row, col, formulon::Value::number(value));
-  });
+  if (auto rc = enter_cell(wb, sheet_index, row, col,
+                           [&](formulon::Workbook& book) {
+                             return book.set_cell_value(sheet_index, row, col, formulon::Value::number(value));
+                           });
+      rc != 0) {
+    return rc;
+  }
+  return follow_table_cell(wb, sheet_index, row, col, false);
 }
 
 extern "C" fm_status_t fm_sheet_set_bool(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
@@ -158,9 +207,14 @@ extern "C" fm_status_t fm_sheet_set_bool(fm_workbook_t* wb, size_t sheet_index, 
   if (const auto header = table_header_cell(wb->workbook(), sheet_index, row, col)) {
     return rename_from_header(wb, *header, value != 0 ? "TRUE" : "FALSE");
   }
-  return enter_cell(wb, sheet_index, row, col, [&](formulon::Workbook& book) {
-    return book.set_cell_value(sheet_index, row, col, formulon::Value::boolean(value != 0));
-  });
+  if (auto rc = enter_cell(wb, sheet_index, row, col,
+                           [&](formulon::Workbook& book) {
+                             return book.set_cell_value(sheet_index, row, col, formulon::Value::boolean(value != 0));
+                           });
+      rc != 0) {
+    return rc;
+  }
+  return follow_table_cell(wb, sheet_index, row, col, false);
 }
 
 extern "C" fm_status_t fm_sheet_set_error(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
@@ -178,9 +232,16 @@ extern "C" fm_status_t fm_sheet_set_error(fm_workbook_t* wb, size_t sheet_index,
   if (const auto header = table_header_cell(wb->workbook(), sheet_index, row, col)) {
     return rename_from_header(wb, *header, formulon::display_name(static_cast<formulon::ErrorCode>(error)));
   }
-  return enter_cell(wb, sheet_index, row, col, [&](formulon::Workbook& book) {
-    return book.set_cell_value(sheet_index, row, col, formulon::Value::error(static_cast<formulon::ErrorCode>(error)));
-  });
+  if (auto rc = enter_cell(wb, sheet_index, row, col,
+                           [&](formulon::Workbook& book) {
+                             return book.set_cell_value(
+                                 sheet_index, row, col,
+                                 formulon::Value::error(static_cast<formulon::ErrorCode>(error)));
+                           });
+      rc != 0) {
+    return rc;
+  }
+  return follow_table_cell(wb, sheet_index, row, col, false);
 }
 
 extern "C" fm_status_t fm_sheet_set_text(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
@@ -209,8 +270,12 @@ extern "C" fm_status_t fm_sheet_set_text(fm_workbook_t* wb, size_t sheet_index, 
   }
   // Copy directly into the destination cell. Keeping every overwritten
   // input in a handle-global deque leaked one string per C-ABI write.
-  return enter_cell(wb, sheet_index, row, col,
-                    [&](formulon::Workbook& book) { return book.set_cell_text(sheet_index, row, col, utf8); });
+  if (auto rc = enter_cell(wb, sheet_index, row, col,
+                           [&](formulon::Workbook& book) { return book.set_cell_text(sheet_index, row, col, utf8); });
+      rc != 0) {
+    return rc;
+  }
+  return follow_table_cell(wb, sheet_index, row, col, false);
 }
 
 extern "C" fm_status_t fm_sheet_set_cell_phonetic(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
@@ -444,7 +509,11 @@ extern "C" fm_status_t fm_sheet_set_blank(fm_workbook_t* wb, size_t sheet_index,
   if (const auto header = table_header_cell(wb->workbook(), sheet_index, row, col)) {
     return rename_from_header(wb, *header, std::string_view());
   }
-  return finish_status(wb->workbook().set_cell_value(sheet_index, row, col, formulon::Value::blank()));
+  if (auto rc = finish_status(wb->workbook().set_cell_value(sheet_index, row, col, formulon::Value::blank()));
+      rc != 0) {
+    return rc;
+  }
+  return follow_table_cell(wb, sheet_index, row, col, true);
 }
 
 extern "C" fm_status_t fm_sheet_set_value(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
@@ -496,9 +565,13 @@ extern "C" fm_status_t fm_sheet_set_formula(fm_workbook_t* wb, size_t sheet_inde
       rc != 0) {
     return rc;
   }
-  return enter_cell(wb, sheet_index, row, col, [&](formulon::Workbook& book) {
-    return book.set_cell_formula(sheet_index, row, col, std::move(bound));
-  });
+  if (auto rc = enter_cell(
+          wb, sheet_index, row, col,
+          [&](formulon::Workbook& book) { return book.set_cell_formula(sheet_index, row, col, std::move(bound)); });
+      rc != 0) {
+    return rc;
+  }
+  return follow_table_cell(wb, sheet_index, row, col, false);
 }
 
 // ---------------------------------------------------------------------------
@@ -920,9 +993,15 @@ extern "C" fm_status_t fm_sheet_set_array_formula(fm_workbook_t* wb, std::size_t
       rc != 0) {
     return rc;
   }
-  return enter_cell(wb, sheet_index, row, col, [&](formulon::Workbook& book) {
-    return book.set_array_formula(sheet_index, row, col, rows, cols, std::move(bound));
-  });
+  if (auto rc = enter_cell(wb, sheet_index, row, col,
+                           [&](formulon::Workbook& book) {
+                             return book.set_array_formula(sheet_index, row, col, rows, cols, std::move(bound));
+                           });
+      rc != 0) {
+    return rc;
+  }
+  follow_table_totals_cells(wb, sheet_index, *range);
+  return 0;
 }
 
 // ---------------------------------------------------------------------------

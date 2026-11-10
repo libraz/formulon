@@ -2115,30 +2115,6 @@ entries:
     surfaces: [wasm, native, py]
     was: { js: ref }
     closes: R8.js
-  field.table_column_totals_input_totals_row_function:
-    kind: field
-    record: record.table_column_totals_input
-    js: totalsRowFunction
-    py: totals_row_function
-    surfaces: [wasm, native, py]
-    was: { js: function }
-    closes: R8.js
-  field.table_column_totals_input_totals_row_label:
-    kind: field
-    record: record.table_column_totals_input
-    js: totalsRowLabel
-    py: totals_row_label
-    surfaces: [wasm, native, py]
-    was: { js: label }
-    closes: R8.js
-  field.table_column_totals_input_totals_row_formula:
-    kind: field
-    record: record.table_column_totals_input
-    js: totalsRowFormula
-    py: totals_row_formula
-    surfaces: [wasm, native, py]
-    was: { js: formula }
-    closes: R8.js
   field.pivot_field_info_show_detail:
     kind: field
     record: record.pivot_field_info
@@ -3589,7 +3565,8 @@ entries:
     py: TableColumnTotalsInput
     surfaces: [wasm, native, py]
     was: { js: TableColumnTotalsInput }
-    read_only_keys: [name]
+    drop: { js: TableColumnTotalsInput, py: TableColumnTotalsInput, closes: R18.all }
+    replaced_by: record.table_column_patch
   record.auto_filter_column_input:
     kind: record
     role: input
@@ -3667,7 +3644,16 @@ entries:
     js: TablePatch
     surfaces: [c, wasm, native]
     clearable: []
-    read_only_keys: [name, columns]
+    read_only_keys: [name]
+  record.table_column_patch:
+    kind: record
+    role: patch
+    c: fm_table_column_patch_t
+    js: TableColumnPatch
+    py: TableColumnPatch
+    surfaces: [c, wasm, native, py]
+    clearable: [totals_row_function, totals_row_label, totals_row_formula, calculated_formula]
+    read_only_keys: [name]
   record.sparkline_group_patch:
     kind: record
     role: patch
@@ -4888,6 +4874,8 @@ entries:
     py: set_table_column_totals
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_table_set_column_totals, js: setTableColumnTotals, py: table_set_column_totals }
+    drop: { c: fm_sheet_set_table_column_totals, js: setTableColumnTotals, py: set_table_column_totals, closes: R28.handles }
+    replaced_by: table.update
     handle: { class: Table, supplies: [sheet, table] }
   passthrough.get_count:
     kind: op

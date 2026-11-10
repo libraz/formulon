@@ -393,7 +393,7 @@ describe('a read record passes back to its setter', () => {
     });
   });
 
-  it('setColumnTotals takes a read column and ignores its name', () => {
+  it('a column patch takes a read column and ignores its name', () => {
     withSheet((ws) => {
       ws.setText('A1', 'Id');
       ws.setText('B1', 'Amount');
@@ -401,8 +401,10 @@ describe('a read record passes back to its setter', () => {
       ws.setNumber(1, 1, 5);
       const table = ws.addTable({ range: 'A1:B2', name: 'Sales' });
       const columns = table.getProperties().columns;
-      table.setColumnTotals(0, columns[0]);
-      table.setColumnTotals(1, { ...columns[1], totalsRowFunction: TableTotalsRowFunction.Sum });
+      table.update({ columns: [columns[0]] });
+      table.update({
+        columns: [{}, { ...columns[1], totalsRowFunction: TableTotalsRowFunction.Sum }],
+      });
       const after = table.getProperties().columns;
       assert.deepEqual(
         after.map((c) => c.name),
@@ -410,7 +412,7 @@ describe('a read record passes back to its setter', () => {
       );
       assert.equal(after[0].totalsRowFunction, columns[0].totalsRowFunction);
       assert.equal(after[1].totalsRowFunction, TableTotalsRowFunction.Sum);
-      table.setColumnTotals(1, { ...after[1], name: 'Renamed' });
+      table.update({ columns: [{}, { ...after[1], name: 'Renamed' }] });
       assert.equal(table.getProperties().columns[1].name, 'Amount');
       assert.equal(table.getProperties().columns[1].totalsRowFunction, TableTotalsRowFunction.Sum);
     });

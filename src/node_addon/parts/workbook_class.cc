@@ -856,7 +856,6 @@ Napi::Function Workbook::GetClass(Napi::Env env) {
           GuardedInstanceMethod<&Workbook::RenameTableColumn, 0x7ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x8ULL>("renameTableColumn"),
           GuardedInstanceMethod<&Workbook::InsertTableRows, 0xFULL>("insertTableRows"),
           GuardedInstanceMethod<&Workbook::InsertTableColumns, 0xFULL>("insertTableColumns"),
-          GuardedInstanceMethod<&Workbook::SetTableColumnTotals, 0x7ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x8ULL>("setTableColumnTotals"),
           GuardedInstanceMethod<&Workbook::TableCount, 0x1ULL>("getTableCount"),
           GuardedInstanceMethod<&Workbook::XfCount>("getCellXfCount"),
       });

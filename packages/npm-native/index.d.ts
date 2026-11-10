@@ -502,6 +502,9 @@ export interface TableColumn {
   readonly totalsRowLabel: string | null;
   /** The formula of the `custom` totals-row function, leading `=` included; `null` for any other function. */
   readonly totalsRowFormula: string | null;
+  /** The column's calculated-column formula as it reads in the first data row, leading `=` included (`=[@Qty]*10`);
+   *  `null` when the column has none. */
+  readonly calculatedFormula: string | null;
 }
 
 /** Return type of `Table.getProperties()`. The style lives in `Table.getStyleOptions()`. */
@@ -549,8 +552,8 @@ export interface TableInput {
 }
 
 /** Argument of `Table.update`. An omitted key leaves the field unchanged and no key accepts `null` (a
- * `TypeError`). The update is all-or-nothing. The record `Table.getProperties()` returns is also accepted: its `name`
- * and `columns` are ignored. Renaming goes through `Table.rename`, the style through `Table.updateStyleOptions`. */
+ * `TypeError`). The record `Table.getProperties()` returns is also accepted: its `name` is ignored and its `columns`
+ * change nothing. Renaming goes through `Table.rename`, the style through `Table.updateStyleOptions`. */
 export interface TablePatch {
   /** The table's new range, a `CellRect` or an A1 range on the table's sheet; it resizes the table. */
   range?: CellRect | SheetRect | string;
@@ -559,10 +562,31 @@ export interface TablePatch {
   /** Turns the totals row on or off, growing or shrinking the table by one row; with `range` in the same patch the
    *  range is final and only the flag flips. Turning it on writes each column's totals cell in the new row below,
    *  shifting the cells beneath down unless something straddles the table's columns, and fails with
-   *  `PreconditionFailed` when no free row is left (see `Table.update`, `Table.setColumnTotals`); turning it off fails
+   *  `PreconditionFailed` when no free row is left (see `Table.update`); turning it off fails
    *  with `PreconditionFailed` while a formula or name references the row. */
   totalsRow?: boolean;
+  /** Per-column changes, applied after the range, header and totals rows: element i patches column i. The array may
+   *  be shorter than the table's column count and an empty element `{}` changes nothing; a longer one fails with
+   *  `StatusCode.IndexOutOfRange`. */
+  columns?: readonly TableColumnPatch[];
 }
+
+/** One element of {@link TablePatch.columns}: a partial {@link TableColumn}. An omitted key keeps the setting and
+ *  `null` clears it (`totalsRowFunction: null` is `TableTotalsRowFunction.None`); the `name` of a read record is
+ *  ignored (rename with `Table.renameColumn`). The result is checked as a whole: the custom function needs a
+ *  non-empty `totalsRowFormula`, any other function drops the formula, and an empty string for a label or formula
+ *  is `StatusCode.InvalidArgument` (clear with `null`). The totals-row settings are stored while the totals row is
+ *  off and written into its cell while it is shown.
+ *
+ *  `calculatedFormula` is the column's mark, a state rather than an action: a formula that differs from the mark
+ *  (as entered in the first data row, `[@Qty]*10` binding to this table, after binding and normalizing) marks the
+ *  column and fills every data cell, constants included, with it moved to its row; the same formula changes
+ *  nothing and refills nothing; `null` removes the mark and leaves the cells; a table with no data row only takes
+ *  the mark. */
+export type TableColumnPatch = Patch<
+  Omit<TableColumn, 'name'>,
+  'totalsRowFunction' | 'totalsRowLabel' | 'totalsRowFormula' | 'calculatedFormula'
+>;
 
 /** Return type of `Table.getStyleOptions()`, which returns `null` when the table has no style element. */
 export interface TableStyleOptions {
@@ -581,18 +605,6 @@ export interface TableStyleOptions {
 /** Argument of `Table.updateStyleOptions`. `styleName: null` removes the style name (the only key that accepts
  *  `null`) and `''` is `StatusCode.InvalidArgument`; a new `styleName` keeps the four toggles. */
 export type TableStyleOptionsPatch = Patch<TableStyleOptions, 'styleName'>;
-
-/** Totals-row settings of one table column (`Table.setColumnTotals`); the `totalsRow*` keys are the ones of
- *  {@link TableColumn}. The {@link TableColumn} a read returns passes as is; its `name` is ignored. */
-export interface TableColumnTotalsInput {
-  /** The totals-row function of the column; defaults to `TableTotalsRowFunction.None`. */
-  totalsRowFunction?: TableTotalsRowFunction;
-  /** The totals-row label text; an omitted or `null` value means no label, and an empty string is rejected. */
-  totalsRowLabel?: string | null;
-  /** The totals-row formula for `TableTotalsRowFunction.Custom`, required with it; an omitted or `null` value means
-   *  none, and an empty string is rejected. */
-  totalsRowFormula?: string | null;
-}
 
 /** A region of a custom table style, in `ST_TableStyleType` order. The PivotTable
  *  regions apply only to styles a PivotTable uses. */
@@ -8261,7 +8273,15 @@ export interface Table {
    *  defined name references the totals row (its cells, or the table's `[#Totals]` / `[#All]`). Otherwise the table
    *  shrinks by one row; the old totals row is deleted with the cells beneath moving up, or, when something
    *  straddles the table's columns below, only emptied in place. The columns' saved labels and functions are kept
-   *  for the next time the row is turned on. */
+   *  for the next time the row is turned on.
+   *
+   *  `patch.columns` applies after those, so a column's totals settings take effect on the totals row the update
+   *  leaves. Every element is checked against the table's final shape before anything changes: more elements than
+   *  columns fails with `StatusCode.IndexOutOfRange`; an empty label, formula or `calculatedFormula`, the custom
+   *  function without a formula, or a `calculatedFormula` that is an array or dynamic-array formula or whose
+   *  references would leave the grid in the last data row fails with `StatusCode.InvalidArgument`, and a formula that
+   *  does not parse with its parser status. A resize first gives each unmarked column the calculated-column mark its
+   *  cells imply, and fills the blank cells of a marked one in the added rows. */
   update(patch: TablePatch): void;
   /** Renames the table. A name another table already uses (by name identity, see {@link Workbook}) fails with
    *  `StatusCode.AlreadyExists`, an empty or malformed one with `StatusCode.InvalidArgument`. Structured
@@ -8312,10 +8332,6 @@ export interface Table {
    *    Defaults to `first`. May be given only together with `first`.
    *  @throws RangeError as {@link Table.insertRows}. */
   insertColumns(first?: number, last?: number): void;
-  /** Sets column `column`'s totals-row function and label. While the totals row is shown its cell follows, as the
-   *  desktop application writes it: `SUBTOTAL(109,Table[Column])` and the other 1xx codes for a built-in
-   *  function, the formula for `'custom'`, else the label as text, else nothing. */
-  setColumnTotals(column: number, totals: TableColumnTotalsInput): void;
   /** Reads the table's AutoFilter; `null` when it has none. */
   getAutoFilter(): AutoFilter | null;
   /** Replaces the table's AutoFilter, or with `null` removes it (a table without one is left as it is). Row

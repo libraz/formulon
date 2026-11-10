@@ -668,8 +668,9 @@ Read [Every binding](#every-binding) first, then the section for your binding. [
   otherwise `{ range, name }` with `range` a `SheetRect` or `null`;
   `setWorksheetSource({ range, sheet, name })` takes the same. A table column's
   totals use the keys of `TableColumn`: `totalsRowFunction`, `totalsRowLabel`
-  and `totalsRowFormula` replace `function`, `label` and `formula` in
-  `Table.setColumnTotals`.
+  and `totalsRowFormula` replace `function`, `label` and `formula` in the
+  elements of `Table.update`'s `columns`; `setTableColumnTotals` and
+  `TableColumnTotalsInput` are removed.
 - **JavaScript, Python:** `ExternalLink.index` is `bookNumber` (`book_number`),
   the `n` of `[n]` in formula text. `pivotFieldAdd` (`pivot_field_add`) is
   removed: a pivot has one field per cache field, and a field is named by a
@@ -711,6 +712,28 @@ Read [Every binding](#every-binding) first, then the section for your binding. [
   functions. A toggle that changes nothing is a no-op, and with `range` in the
   same patch the range is final and `totalsRow` only sets the flag.
   `fm_sheet_update_table` behaves the same.
+- **JavaScript, Python:** `Table.update({ columns: [...] })`
+  (`update(columns=[TableColumnPatch(...)])`) replaces the column totals
+  setter. Element `i` patches column `i`; each element is a partial
+  `TableColumn` with the same names (`totalsRowFunction`, `totalsRowLabel`,
+  `totalsRowFormula`, `calculatedFormula`), an omitted key keeps its setting,
+  `null` (`None`) clears it, and a read `TableColumn` is accepted as an
+  element (its `name` is ignored). An array shorter than the column count
+  patches the leading columns, `{}` leaves a column alone, and a longer array
+  is `InvalidArgument` (C `FM_STATUS_INDEX_OUT_OF_RANGE`). A `custom` function
+  needs a non-empty formula, any other function reads its formula as `null`,
+  and an empty string is `InvalidArgument`. `calculatedFormula` is the
+  formula as typed in the column's first data row (`=A3*10`, `=[@a]*10`); a
+  formula that differs from the column's current one fills every data cell,
+  constants included, while the same formula is no change and keeps the
+  constants placed in the column, and `null` removes the mark and leaves the
+  cells. The patch is checked as a whole before anything changes; an array,
+  dynamic-array or off-grid formula is `InvalidArgument` and one that does not
+  parse reports its parse error. A malformed element (an unknown key) is a
+  `TypeError`. `TableColumn.calculatedFormula` (`calculated_formula`) reads
+  the formula in the same spelling, or `null`. In C, `fm_table_patch_t.columns`
+  holds `columns_count` `fm_table_column_patch_t` elements, each field with its
+  own op, and `fm_table_column_info_t.calculated_formula` reads the formula.
 - **JavaScript, Python:** `null` (`None`) for a patch key that the patch type
   does not declare clearable throws `TypeError` in the facade, the raw
   WebAssembly and native layers and Python. `Sheet.updateView({
@@ -791,9 +814,8 @@ Read [Every binding](#every-binding) first, then the section for your binding. [
   `wasm`; the native package then ignores the values.
 - **TypeScript:** `evaluateCfRange(range, options?: CfRangeEvaluationOptions)`,
   `PivotFilterInput.value` and `valueHigh` accept `null` for absent, so a read
-  filter passes back to `addFilter`, and `TableColumnTotalsInput` carries the
-  totals fields only, so a read `TableColumn` passes to `setColumnTotals`
-  (its `name` is ignored). `Sheet.addProtectedRange(input)` names its
+  filter passes back to `addFilter`, and a read `TableColumn` passes as an
+  element of `Table.update`'s `columns` (its `name` is ignored). `Sheet.addProtectedRange(input)` names its
   parameter `input`.
 - **Patches (JavaScript):** `TableUpdateInput` is `TablePatch`, and its `rect`
   is `range` (an A1 string or a `SheetRect`). `TableProperties.headerRowCount`
@@ -955,14 +977,13 @@ Read [Every binding](#every-binding) first, then the section for your binding. [
   `save` picks `.xlsx` or `.xlsb` from the file extension and refuses any
   other extension unless `format=` is given. Python 3.9 is no longer
   supported; the package requires 3.10 or later.
-- **Python:** nine signatures take a record in place of keywords:
+- **Python:** eight signatures take a record in place of keywords:
   `set_cell_phonetic_properties(row, col, properties)` takes a
   `PhoneticProperties`, `add_chart(input)` a `ChartInput`,
   `Chart.set_source(source)` a `ChartSourceInput`,
   `PivotCache.set_worksheet_source(source)` a `PivotWorksheetSourceInput` or
   `None`, `Pivot.set_field_date_group(field_index, group)` a
   `PivotDateGroupInput`, `set_selection(selection)` a `SheetSelectionInput`,
-  `Table.set_column_totals(column, totals)` a `TableColumnTotalsInput`,
   `set_theme_colors(colors)` a `ThemeColorsInput` and
   `set_theme_script_font(font)` a `ThemeScriptFont`. The old keyword forms
   raise `TypeError`.
@@ -1172,7 +1193,7 @@ these fields throws `TypeError`:
 
 | Enum | Field | Before | After |
 |---|---|---|---|
-| `TableTotalsRowFunction` | `TableColumn.totalsRowFunction`, `TableColumnTotalsInput.totalsRowFunction` | `'none'`, `'sum'`, `'min'`, `'max'`, `'average'`, `'count'`, `'countNums'`, `'stdDev'`, `'var'`, `'custom'` | `None` 0, `Sum` 1, `Min` 2, `Max` 3, `Average` 4, `Count` 5, `CountNumbers` 6, `StdDev` 7, `Var` 8, `Custom` 9 |
+| `TableTotalsRowFunction` | `TableColumn.totalsRowFunction`, `TableColumnPatch.totalsRowFunction` | `'none'`, `'sum'`, `'min'`, `'max'`, `'average'`, `'count'`, `'countNums'`, `'stdDev'`, `'var'`, `'custom'` | `None` 0, `Sum` 1, `Min` 2, `Max` 3, `Average` 4, `Count` 5, `CountNumbers` 6, `StdDev` 7, `Var` 8, `Custom` 9 |
 | `TableStyleElementType` | `TableStyleElement.type` | the OOXML text (`'wholeTable'`, `'headerRow'`, `'firstRowStripe'` and the rest) | `WholeTable` 0, `HeaderRow` 1, `TotalRow` 2, `FirstColumn` 3, `LastColumn` 4, `FirstRowStripe` 5, `SecondRowStripe` 6 and so on in the order of the OOXML schema, to `PageFieldValues` 27 |
 | `ChartTickLabelPosition` | `ChartAxis.tickLabelPosition` and its patch | `'nextTo'`, `'high'`, `'low'`, `'none'` | `NextTo` 0, `High` 1, `Low` 2, `None` 3 |
 | `ChartDomain` | `ChartData.domain` | `'category'`, `'xy'` | `Category` 0, `Xy` 1 |
@@ -1250,13 +1271,13 @@ These parameters can no longer be passed by position.
 | `Pivot.add_field_item` | `cache_index`, `visible` |
 | `Sheet.update_threaded_comment` | `text`, `mentions`, `done` |
 | `TableInput` | `range`, `name`, `columns`, `style_name`, `header_row`, `totals_row` and the style toggles (a dataclass passed to `Sheet.add_table`) |
-| `Table.update` | `range`, `name`, `header_row`, `totals_row` |
+| `Table.update` | `range`, `name`, `header_row`, `totals_row`, `columns` |
 | `Table.update_style_options` | `style_name` and the style toggles |
 | `Workbook.update_table_style_defaults` | `table_style_name`, `pivot_style_name` |
 | `Workbook.update_iterative` | `enabled`, `max_iterations`, `max_change` |
 | `Workbook.get_theme_script_font` | `scheme`, `script` |
 
-`Chart.set_source`, `Table.set_column_totals`, `Sheet.set_selection`,
+`Chart.set_source`, `Sheet.set_selection`,
 `Sheet.add_chart` and the other signatures listed under BREAKING take one
 record instead of keywords. `Sheet.add_table` takes the fields of the JavaScript `TableInput` (`range` is a
 `SheetRect`, `columns` the column names); `Sheet.set_selection` takes a
@@ -1355,6 +1376,17 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
   array-formula text and `getLambdaText`. C reads carry it too. Ranges (chart titles and series,
   print areas) stay without it. Input accepts text with or without the `=`,
   in C as well.
+- A table column carries a calculated-column formula when the last data row
+  holds a formula and at least all but one of the last five data rows hold the
+  same formula moved to their row; a new table, a resize and a loaded file
+  recognise it. It survives a one-cell write and goes when the last non-blank
+  cell of the column is cleared. Writing a value, a formula or a blank to a
+  visible totals-row cell updates the column's totals settings to match: a
+  value becomes the label (a number is stored as its text), a `SUBTOTAL` over
+  the column with one of the eight built-in codes becomes that function, any
+  other formula, a constant `=5` included, is custom, and a blank clears the
+  setting.
+  A loaded file's totals-row cells are read the same way.
 - A sparkline group reads an absent `displayEmptyCellsAs` as zero, the schema
   default, and leaves zero implicit on write. It used to read as gap and leave
   gap implicit, so a file without the attribute now draws blanks as zero, as
@@ -2417,7 +2449,7 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
 | `fm_workbook_table_get_info` | removed |
 | `fm_workbook_table_remove` | `fm_sheet_remove_table` |
 | `fm_workbook_table_rename` | `fm_sheet_rename_table` |
-| `fm_workbook_table_set_column_totals` | `fm_sheet_set_table_column_totals` |
+| `fm_workbook_table_set_column_totals` | removed; use `fm_sheet_update_table` |
 | `fm_workbook_table_set_style_info` | `fm_sheet_update_table_style_options` |
 | `fm_workbook_table_update` | `fm_sheet_update_table` |
 | `fm_workbook_theme_script_font_at` | `fm_workbook_get_theme_script_font_at` |
@@ -2925,7 +2957,7 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
 | `setSheetZoom()` | removed |
 | `setSparklineGroupSparklines()` | removed; use `updateSparklineGroup()` |
 | `setTableAutoFilter()` | `ws.table(...).setAutoFilter()` |
-| `setTableColumnTotals()` | `ws.table(...).setColumnTotals()` |
+| `setTableColumnTotals()` | removed; use `ws.table(...).update()` |
 | `setTableStyleDefaults()` | `updateTableStyleDefaults()` |
 | `setThreadResolved()` | removed; use `updateThreadedComment()` |
 | `Shape.rotation` | `ShapeProperties.rotationDeg` |
@@ -2993,9 +3025,7 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
 | `StringResult` | removed |
 | `tableAt()` | `ws.table(...).getProperties()` |
 | `TableColumnEntry` | `TableColumn` |
-| `TableColumnTotalsInput.formula` | `TableColumnTotalsInput.totalsRowFormula` |
-| `TableColumnTotalsInput.function` | `TableColumnTotalsInput.totalsRowFunction` |
-| `TableColumnTotalsInput.label` | `TableColumnTotalsInput.totalsRowLabel` |
+| `TableColumnTotalsInput` | folded into `TableColumnPatch` |
 | `tableCount()` | removed |
 | `TableEntry.headerRowCount` | `TableProperties.headerRow` |
 | `TableEntry.totalsRowCount` | `TableProperties.totalsRow` |
@@ -3468,12 +3498,13 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
 | `table_create()` | `add_table()` |
 | `table_remove()` | `remove_table()` |
 | `table_rename()` | `ws.table(...).rename()` |
-| `table_set_column_totals()` | `ws.table(...).set_column_totals()` |
+| `table_set_column_totals()` | removed; use `ws.table(...).update()` |
 | `table_set_style_info()` | `ws.table(...).update_style_options()` |
 | `table_style_count()` | removed; use `list_table_styles()` |
 | `table_style_defaults()` | `get_table_style_defaults()` |
 | `table_update()` | `ws.table(...).update()` |
 | `Table` | `TableProperties` |
+| `TableColumnTotalsInput` | folded into `TableColumnPatch` |
 | `TableStyleElement.dxf_id` | `TableStyleElement.dxf_index` |
 | `Theme` | removed |
 | `ThreadedComment.row` | `ThreadedComment.cell` |
@@ -3664,7 +3695,7 @@ current spelling is in the [Name migration](#name-migration) table.
 | `fm_fill_record` | `gradient_stop_count` is `uint32_t` |
 | `fm_sparkline_group` | `sparkline_count` is `uint32_t` |
 | `fm_cell_xf` | `reading_order` is `int32_t` (an `fm_reading_order_t`) |
-| `fm_table_column_info_t` | `totals_row_function` is an `int32_t` `fm_table_totals_row_function_t` instead of text; the totals setter's function argument is the same enum |
+| `fm_table_column_info_t` | `totals_row_function` is an `int32_t` `fm_table_totals_row_function_t` instead of text; `fm_table_column_patch_t.totals_row_function` is the same enum |
 | `fm_table_style_element_t` | `type` is an `int32_t` `fm_table_style_element_type_t` instead of text |
 | `fm_chart_axis_t`, `fm_chart_axis_patch` | `tick_label_pos` is `tick_label_position`, an `int32_t` `fm_chart_tick_label_position_t` (`FM_CHART_TICK_LABEL_POSITION_ABSENT` -1 when the axis has no element) instead of text |
 | `fm_width_model` | `platform` is an `int32_t` `fm_width_platform_t` instead of text |

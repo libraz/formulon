@@ -3,6 +3,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <vector>
 
 #include "c_api/formulon_c.h"
 
@@ -76,6 +77,72 @@ inline fm_status_t UpdateTableRange(fm_workbook_t* wb, std::size_t sheet_index, 
   patch.range_op = FM_PATCH_OP_SET;
   patch.range = range;
   return fm_sheet_update_table(wb, sheet_index, table_index, &patch);
+}
+
+// Element builders for `fm_table_patch_t::columns`: element i patches column i, an element with every op at KEEP
+// leaves its column alone.
+using TableColumnElement = fm_table_column_patch_t;
+
+inline TableColumnElement TableColumnKeep() {
+  return TableColumnElement{};
+}
+
+// Totals fields as `SetTableColumnTotals` takes them: the function is set, a null label or formula clears it.
+inline TableColumnElement TableColumnTotals(std::int32_t function, const char* label = nullptr,
+                                            const char* formula = nullptr) {
+  TableColumnElement element{};
+  element.totals_row_function_op = FM_PATCH_OP_SET;
+  element.totals_row_function = function;
+  element.totals_row_label_op = label != nullptr ? FM_PATCH_OP_SET : FM_PATCH_OP_CLEAR;
+  element.totals_row_label = label;
+  element.totals_row_formula_op = formula != nullptr ? FM_PATCH_OP_SET : FM_PATCH_OP_CLEAR;
+  element.totals_row_formula = formula;
+  return element;
+}
+
+inline TableColumnElement TableColumnTotalsClear() {
+  TableColumnElement element{};
+  element.totals_row_function_op = FM_PATCH_OP_CLEAR;
+  element.totals_row_label_op = FM_PATCH_OP_CLEAR;
+  element.totals_row_formula_op = FM_PATCH_OP_CLEAR;
+  return element;
+}
+
+// Sets (`formula` non-null) or clears (`formula` null) the calculated-column formula, leaving the totals.
+inline TableColumnElement TableColumnCalculated(const char* formula) {
+  TableColumnElement element{};
+  element.calculated_formula_op = formula != nullptr ? FM_PATCH_OP_SET : FM_PATCH_OP_CLEAR;
+  element.calculated_formula = formula;
+  return element;
+}
+
+// Applies `columns` (element i for column i) through `fm_sheet_update_table`, on top of `patch`.
+inline fm_status_t UpdateTableColumns(fm_workbook_t* wb, std::size_t sheet_index, std::size_t table_index,
+                                      const std::vector<TableColumnElement>& columns,
+                                      fm_table_patch_t patch = FM_STRUCT_INIT(fm_table_patch_t)) {
+  patch.columns_op = FM_PATCH_OP_SET;
+  patch.columns = columns.empty() ? nullptr : columns.data();
+  patch.columns_count = static_cast<uint32_t>(columns.size());
+  return fm_sheet_update_table(wb, sheet_index, table_index, &patch);
+}
+
+// `element` as element `column_index`, with the columns before it left alone.
+inline std::vector<TableColumnElement> TableColumnsAt(std::size_t column_index, const TableColumnElement& element) {
+  std::vector<TableColumnElement> columns(column_index, TableColumnKeep());
+  columns.push_back(element);
+  return columns;
+}
+
+inline fm_status_t SetTableColumnTotals(fm_workbook_t* wb, std::size_t sheet_index, std::size_t table_index,
+                                        std::size_t column_index, std::int32_t function, const char* label,
+                                        const char* formula) {
+  return UpdateTableColumns(wb, sheet_index, table_index,
+                            TableColumnsAt(column_index, TableColumnTotals(function, label, formula)));
+}
+
+inline fm_status_t SetTableColumnCalculatedFormula(fm_workbook_t* wb, std::size_t sheet_index, std::size_t table_index,
+                                                   std::size_t column_index, const char* formula) {
+  return UpdateTableColumns(wb, sheet_index, table_index, TableColumnsAt(column_index, TableColumnCalculated(formula)));
 }
 
 // Creates a pivot table named `name` over cache `cache_id`, anchored at

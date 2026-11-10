@@ -270,7 +270,6 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value CreateTable(const Napi::CallbackInfo& info);
   Napi::Value UpdateTable(const Napi::CallbackInfo& info);
   Napi::Value RemoveTable(const Napi::CallbackInfo& info);
-  Napi::Value SetTableColumnTotals(const Napi::CallbackInfo& info);
   Napi::Value RenameTableColumn(const Napi::CallbackInfo& info);
   Napi::Value InsertTableRows(const Napi::CallbackInfo& info);
   Napi::Value InsertTableColumns(const Napi::CallbackInfo& info);

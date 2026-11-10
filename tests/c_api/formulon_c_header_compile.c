@@ -236,8 +236,10 @@ int main(void) {
   drawing_patch.anchor.from_row = 3;
   // Table and custom table-style records, pinned per target.
   _Static_assert(sizeof(fm_table_info_t) == (sizeof(void*) == 4 ? 56 : 72), "fm_table_info_t ABI layout changed");
-  _Static_assert(sizeof(fm_table_patch_t) == 40, "fm_table_patch_t ABI layout changed");
-  _Static_assert(sizeof(fm_table_column_info_t) == 5 * sizeof(void*), "fm_table_column_info_t ABI layout changed");
+  _Static_assert(sizeof(fm_table_patch_t) == (sizeof(void*) == 4 ? 52 : 64), "fm_table_patch_t ABI layout changed");
+  _Static_assert(sizeof(fm_table_column_patch_t) == (sizeof(void*) == 4 ? 32 : 56),
+                 "fm_table_column_patch_t ABI layout changed");
+  _Static_assert(sizeof(fm_table_column_info_t) == 6 * sizeof(void*), "fm_table_column_info_t ABI layout changed");
   _Static_assert(sizeof(fm_table_style_element_t) == 16, "fm_table_style_element_t ABI layout changed");
   _Static_assert(sizeof(fm_table_style_t) == (sizeof(void*) == 4 ? 24 : 40), "fm_table_style_t ABI layout changed");
   // Protection records, pinned per target.
@@ -313,13 +315,18 @@ int main(void) {
       fm_sheet_restore_drawing;
   fm_status_t (*reset_theme)(fm_workbook_t*) = fm_workbook_reset_theme;
   fm_status_t (*set_table_style)(fm_workbook_t*, const fm_table_style_t*) = fm_workbook_set_table_style;
-  fm_status_t (*set_column_totals)(fm_workbook_t*, size_t, size_t, size_t, int32_t, const char*, const char*) =
-      fm_sheet_set_table_column_totals;
   fm_status_t (*table_at)(const fm_workbook_t*, size_t, size_t, fm_table_info_t*) = fm_sheet_get_table_at;
   fm_status_t (*update_table)(fm_workbook_t*, size_t, size_t, const fm_table_patch_t*) = fm_sheet_update_table;
   fm_table_patch_t table_patch = FM_STRUCT_INIT(fm_table_patch_t);
   table_patch.header_row_op = FM_PATCH_OP_SET;
   table_patch.header_row = 1;
+  fm_table_column_patch_t column_patch = {0};
+  column_patch.totals_row_function_op = FM_PATCH_OP_SET;
+  column_patch.totals_row_function = FM_TABLE_TOTALS_ROW_FUNCTION_SUM;
+  column_patch.calculated_formula_op = FM_PATCH_OP_CLEAR;
+  table_patch.columns_op = FM_PATCH_OP_SET;
+  table_patch.columns = &column_patch;
+  table_patch.columns_count = 1;
   // Print settings: each typed setter takes its own patch, and the print area
   // is copied into a caller buffer.
   _Static_assert(sizeof(fm_page_setup_patch_t) == 52, "fm_page_setup_patch_t ABI layout changed");
@@ -502,7 +509,6 @@ int main(void) {
   (void)pivot_filter;
   (void)cells_in_range;
   (void)set_table_style;
-  (void)set_column_totals;
   (void)table_at;
   (void)update_table;
   (void)table_patch;

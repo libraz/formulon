@@ -80,7 +80,6 @@ constexpr RecordParam kRecordParams[] = {
     {"Sheet.updateView", "patch"},
     {"Slicer.update", "patch"},
     {"Table.setAutoFilter", "filter"},
-    {"Table.setColumnTotals", "totals"},
     {"Table.update", "patch"},
     {"Table.updateStyleOptions", "patch"},
     {"Workbook.addBorder", "record"},

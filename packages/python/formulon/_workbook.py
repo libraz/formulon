@@ -375,7 +375,7 @@ __all__ = [
     "SparklineType",
     "Spill",
     "TableColumn",
-    "TableColumnTotalsInput",
+    "TableColumnPatch",
     "TableInput",
     "TableProperties",
     "TableRef",
@@ -911,27 +911,35 @@ class TableColumn:
     totals_row_label: Optional[str] = None
     #: The formula of the ``custom`` totals-row function, leading ``=`` included; ``None`` for any other function.
     totals_row_formula: Optional[str] = None
+    #: The column's calculated-column formula as it reads in the first data row, leading ``=`` included
+    #: (``=[@Qty]*10``); ``None`` when the column has none.
+    calculated_formula: Optional[str] = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "totals_row_function", _enum(TableTotalsRowFunction, self.totals_row_function))
 
 
-@dataclass
-class TableColumnTotalsInput:
-    """The totals-row entry :meth:`Table.set_column_totals` writes for one column. A :class:`TableColumn` read
-    back is accepted in its place; its ``name`` is ignored.
+class TableColumnPatch(TypedDict, total=False):
+    """One element of :meth:`Table.update`'s ``columns``, a partial :class:`TableColumn`.
+
+    An omitted key keeps the setting and ``None`` clears it (``totals_row_function=None`` is the none member). A
+    :class:`TableColumn` read back is accepted in its place; its ``name`` is ignored. The result is checked as a
+    whole: the custom function needs a non-empty ``totals_row_formula``, any other function drops the formula, and an
+    empty string for a label or formula raises ``InvalidArgumentError`` (clear with ``None``).
     """
 
-    #: The totals-row function of the column; defaults to the none member.
-    totals_row_function: TableTotalsRowFunction = TableTotalsRowFunction.NONE
-    #: The totals-row label text; an omitted or ``None`` value means no label, and an empty string is rejected.
-    totals_row_label: Optional[str] = None
-    #: The totals-row formula for the custom function, required with it; an omitted or ``None`` value means none, and an
-    #: empty string is rejected.
-    totals_row_formula: Optional[str] = None
-
-    def __post_init__(self) -> None:
-        self.totals_row_function = _enum(TableTotalsRowFunction, self.totals_row_function)
+    #: The function the column's totals-row cell applies; ``None`` is the none member.
+    totals_row_function: Optional[TableTotalsRowFunction]
+    #: The totals-row label text.
+    totals_row_label: Optional[str]
+    #: The formula of the ``custom`` totals-row function, with or without a leading ``=``.
+    totals_row_formula: Optional[str]
+    #: The column's calculated-column formula, with or without a leading ``=``, as entered in the first data row
+    #: (``[@Qty]*10`` binds to this table). The mark is the state: a formula that differs from the column's mark (after
+    #: binding and normalizing) marks the column and fills every data cell, constants included, with it moved to its
+    #: row; the same formula changes nothing and refills nothing; ``None`` removes the mark and leaves the cells; a
+    #: table with no data row only takes the mark.
+    calculated_formula: Optional[str]
 
 
 @dataclass(frozen=True)
@@ -7894,6 +7902,23 @@ def _encode_patch(
             out[op_field] = _PATCH_SET
             out[field_name] = _patch_scalar(kind, value, key, scope)
     return out
+
+
+_TABLE_COLUMN_PATCH_SPEC = (
+    ("totals_row_function", "totals_row_function", "i32"),
+    ("totals_row_label", "totals_row_label", "str"),
+    ("totals_row_formula", "totals_row_formula", "str"),
+    ("calculated_formula", "calculated_formula", "str"),
+)
+
+
+def _encode_table_column_patch(entry: Union[TableColumnPatch, TableColumn], scope: _ArgScope) -> Dict[str, object]:
+    """Encode one element of ``Table.update``'s ``columns``: a patch mapping, or a read :class:`TableColumn`."""
+    if isinstance(entry, TableColumn):
+        entry = {key: getattr(entry, key) for key, _, _ in _TABLE_COLUMN_PATCH_SPEC}
+    elif not isinstance(entry, Mapping):
+        raise TypeError("columns must be a sequence of TableColumnPatch")
+    return _encode_patch(_TABLE_COLUMN_PATCH_SPEC, entry, ("name",), "column patch", scope)
 
 
 def _encode_paint_patches(out: Dict[str, object], patch: Mapping, scope: _ArgScope) -> None:

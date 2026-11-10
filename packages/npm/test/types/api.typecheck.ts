@@ -1184,9 +1184,9 @@ export function sharedOrdinalTables(): void {
 declare const chart: Chart;
 
 export function stringUnionsBecameTables(): void {
-  table.setColumnTotals(0, { totalsRowFunction: TableTotalsRowFunction.CountNumbers, totalsRowLabel: 'n' });
+  table.update({ columns: [{ totalsRowFunction: TableTotalsRowFunction.CountNumbers, totalsRowLabel: 'n' }] });
   // @ts-expect-error the totals function is an ordinal, not its token
-  table.setColumnTotals(0, { totalsRowFunction: 'sum' });
+  table.update({ columns: [{ totalsRowFunction: 'sum' }] });
   const fn: TableTotalsRowFunction = tableProps.columns[0].totalsRowFunction;
   // @ts-expect-error the totals function reads back as an ordinal
   const token: string = tableProps.columns[0].totalsRowFunction;
@@ -1534,7 +1534,7 @@ export function readRecordsPassBackAsInput(): void {
   sheet.addThreadedComment(threaded);
   sheet.addSparklineGroup(sparklineGroup);
   sheet.addDataTable(dataTable);
-  table.setColumnTotals(0, tableColumn);
+  table.update({ columns: [tableColumn] });
   chart.setSource(chartProps.source!);
   chart.setFilter(chartProps.filter);
   pivot.updateField(0, pivotField);
@@ -1565,7 +1565,7 @@ export function writableOnlyInputs(): void {
   sheet.addThreadedComment({ id: 'g', text: 't', personId: 'p', cell: 'B2' });
   sheet.addSparklineGroup({ sparklines: [{ source: 'Sheet1!A1:D1', location: 'E1' }], dateAxisRange: sheetRect });
   sheet.addDataTable({ range: 'B2:D6', rowInput: { row: 0, col: 0 }, columnInput: 'A1' });
-  table.setColumnTotals(0, { totalsRowFunction: 0, totalsRowLabel: 'Total' });
+  table.update({ columns: [{ totalsRowFunction: 0, totalsRowLabel: 'Total' }] });
   cache.setWorksheetSource({ range: 'A1:C9', sheet: 'Data' });
   cache.setWorksheetSource({ range: sheetRect });
   cache.setWorksheetSource(null);
@@ -1573,7 +1573,7 @@ export function writableOnlyInputs(): void {
   // @ts-expect-error the old keys of the renamed records are unknown
   sheet.addDataTable({ rect: 'B2:D6', rowInput: 'A1' });
   // @ts-expect-error `function` became totalsRowFunction
-  table.setColumnTotals(0, { function: 0 });
+  table.update({ columns: [{ function: 0 }] });
   // @ts-expect-error `ref` became `range`
   cache.setWorksheetSource({ ref: 'A1:C9' });
   // @ts-expect-error activeRow / activeCol became `active`
@@ -1901,7 +1901,7 @@ export function pivotCacheAndFieldRefs(): void {
 }
 
 export function emptyStringsAreNotClears(): void {
-  table.setColumnTotals(0, { totalsRowLabel: null, totalsRowFormula: null });
+  table.update({ columns: [{ totalsRowLabel: null, totalsRowFormula: null }] });
   wb.updateTableStyleDefaults({ tableStyleName: null, pivotStyleName: 'PivotStyleLight16' });
   sheet.addThreadedComment({ text: 't', personId: 'p', parentId: null });
 }
@@ -2077,9 +2077,9 @@ export function inputsAndOptions(): void {
   sheet.ooxml.getRowXfIndex('3');
 
   pivot.addFilter(pivot.listFilters()[0]);
-  table.setColumnTotals(0, table.getProperties().columns[0]);
-  // @ts-expect-error a totals column has no `name`
-  table.setColumnTotals(0, { name: 'x' });
+  table.update({ columns: [table.getProperties().columns[0]] });
+  // @ts-expect-error a column patch has no `title` key
+  table.update({ columns: [{ title: 'x' }] });
 
   sheet.addProtectedRange({ name: 'p', ranges: 'A1' });
   sheet.addThreadedComment({ text: 't', personId: 'p', created: new Date(Date.UTC(2024, 0, 31)) });

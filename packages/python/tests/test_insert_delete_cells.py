@@ -13,7 +13,7 @@ from formulon import (
     ExcelError,
     FormulonError,
     StatusCode,
-    TableColumnTotalsInput,
+    TableColumnPatch,
     TableInput,
     TableTotalsRowFunction,
     Workbook,
@@ -119,7 +119,7 @@ class InsertDeleteCellsTests(unittest.TestCase):
         for a1, value in (("A1", "Region"), ("B1", "Amt"), ("A2", "East"), ("B2", 10), ("A3", "West"), ("B3", 30)):
             self.ws.set_value(a1, value)
         table = self.ws.add_table(TableInput(range="A1:B3", name="Sales"))
-        table.set_column_totals(1, TableColumnTotalsInput(totals_row_function=TableTotalsRowFunction.SUM))
+        table.update(columns=[TableColumnPatch(), TableColumnPatch(totals_row_function=TableTotalsRowFunction.SUM)])
         self.ws.set_value("B4", 5)
         table.update(totals_row=True)
         self.assertEqual(table.get_properties().range.rect, CellRect(0, 0, 3, 1))

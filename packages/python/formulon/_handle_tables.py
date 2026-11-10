@@ -120,7 +120,6 @@ HANDLE_FORWARDERS = {
     "Table.rename": None,
     "Table.rename_column": "rename_table_column",
     "Table.set_auto_filter": "set_table_auto_filter",
-    "Table.set_column_totals": "set_table_column_totals",
     "Table.update": None,
     "Table.update_style_options": "update_table_style_options",
 }
@@ -205,8 +204,7 @@ READ_ONLY_KEYS = {
     "Sheet.update_threaded_comment": ("cell", "created", "id", "parent_id", "person_id"),
     "Sheet.update_validation": ("id",),
     "Slicer.update": ("cache_name", "column_name", "kind", "object_id", "table_name"),
-    "Table.set_column_totals": ("name",),
-    "Table.update": ("columns", "name"),
+    "Table.update": ("name",),
     "Workbook.set_theme_colors": ("source",),
 }
 C_FIELD_NAMES = {

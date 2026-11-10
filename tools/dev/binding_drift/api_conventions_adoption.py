@@ -458,7 +458,7 @@ VALUE_STRUCTS = frozenset(
         "fm_cell_rect_t", "fm_sheet_rect_t", "fm_value_t", "fm_civil_time_t",
         "fm_color_t", "fm_phonetic_run_t", "fm_gradient_stop_t", "fm_mention_t", "fm_date_group_item_t",
         "fm_filter_column_t", "fm_sort_condition_t", "fm_sparkline_t", "fm_cfvo_t", "fm_cf_icon_t",
-        "fm_drawing_anchor_t",
+        "fm_drawing_anchor_t", "fm_table_column_patch_t",
         "fm_font_t", "fm_fill_t", "fm_border_t", "fm_border_side_t", "fm_cell_xf_t",
         "fm_dxf_t", "fm_cell_style_t", "fm_table_style_element_t",
         "fm_chart_data_source_t", "fm_chart_title_t", "fm_chart_line_t", "fm_chart_line_patch_t", "fm_chart_fill_t",

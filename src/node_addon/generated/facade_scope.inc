@@ -429,7 +429,6 @@ constexpr HandleMethod kHandleMethods[] = {
     {"setPivotReportLayout", "Pivot.setReportLayout", 2},
     {"setPivotRowFieldOrder", "Pivot.setRowFieldOrder", 2},
     {"setTableAutoFilter", "Table.setAutoFilter", 2},
-    {"setTableColumnTotals", "Table.setColumnTotals", 2},
     {"showPivotDetails", "Pivot.showDetails", 2},
     {"snapshotDrawing", "Drawing.snapshot", 2},
     {"updateChartAxis", "Chart.updateAxis", 2},

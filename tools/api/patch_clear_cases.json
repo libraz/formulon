@@ -464,9 +464,19 @@
       "type"
     ]
   },
+  "TableColumnPatch": {
+    "clearable": [
+      "calculated_formula",
+      "totals_row_formula",
+      "totals_row_function",
+      "totals_row_label"
+    ],
+    "non_clearable": []
+  },
   "TablePatch": {
     "clearable": [],
     "non_clearable": [
+      "columns",
       "header_row",
       "range",
       "totals_row"

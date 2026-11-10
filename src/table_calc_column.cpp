@@ -126,6 +126,39 @@ Expected<MergeRange, Error> table_column_rect(const Workbook& wb, std::size_t sh
   return rect;
 }
 
+/// `formula` as entered in a calculated column's first data row, checked for a table that has `data_rows` data rows:
+/// bound at (`bind_row`, `col`), which must lie inside the table, normalized and parsed into `arena`. Returns the
+/// stored text in `*text` and its AST, or the refusal `set_table_calculated_column` reports.
+Expected<const parser::AstNode*, Error> parse_calculated_formula(const Workbook& wb, std::size_t sheet_index,
+                                                                 std::uint32_t bind_row, std::uint32_t col,
+                                                                 std::uint32_t data_rows, std::string_view formula,
+                                                                 Arena& arena, std::string* text) {
+  const std::string_view body = strip_formula_prefix(formula);
+  if (body.empty()) {
+    return invalid_argument("formula is empty");
+  }
+  *text = Workbook::normalize_formula_text(
+      wb.bind_entered_structured_refs("=" + std::string(body), sheet_index, bind_row, col),
+      Workbook::FormulaSource::kEntered);
+  if (!wb.file_name().empty()) {
+    *text = parser::bind_self_book_names(*text, wb.file_name());
+  }
+  parser::ParseFailure failure;
+  const parser::AstNode* root =
+      eval::parse_formula_entry_with_diagnostics(strip_formula_prefix(*text), arena, &failure);
+  if (root == nullptr) {
+    return make_error(parser::parse_error_status(failure.code), "formula does not parse", std::string(formula));
+  }
+  if (io::entered_as_dynamic_array(wb, sheet_index, *root)) {
+    return invalid_argument("formula must not be a dynamic-array formula", std::string(formula));
+  }
+  Arena shift_arena;
+  if (data_rows > 1U && !moved_text(*root, static_cast<std::int32_t>(data_rows - 1U), shift_arena).has_value()) {
+    return invalid_argument("formula moves a reference off the grid", std::string(formula));
+  }
+  return root;
+}
+
 }  // namespace
 
 std::optional<std::string> infer_calculated_column(const Sheet& sheet, const TableMetadata& table, std::size_t column) {
@@ -174,36 +207,36 @@ std::optional<std::string> infer_calculated_column(const Sheet& sheet, const Tab
   return moved_text(*formula, -static_cast<std::int32_t>(last - rows.first), shift_arena);
 }
 
+Expected<std::string, Error> Workbook::check_table_calculated_formula(std::size_t sheet_index, std::size_t table_index,
+                                                                      std::size_t column, std::string_view formula,
+                                                                      std::uint32_t first_data_row,
+                                                                      std::uint32_t last_data_row) const {
+  ASSIGN_OR_RETURN(const MergeRange rect, table_column_rect(*this, sheet_index, table_index, column));
+  const DataRows current = data_rows_of(tables_[table_index], rect);
+  // The table still has its current range, which the binder looks the cell up in.
+  const std::uint32_t bind_row = current.count > 0U ? current.first : rect.first_row;
+  const std::uint32_t rows = last_data_row >= first_data_row ? last_data_row - first_data_row + 1U : 0U;
+  Arena arena;
+  std::string text;
+  ASSIGN_OR_RETURN(
+      const parser::AstNode* root,
+      parse_calculated_formula(*this, sheet_index, bind_row, rect.first_col + static_cast<std::uint32_t>(column), rows,
+                               formula, arena, &text));
+  return parser::format_formula(*root);
+}
+
 Expected<void, Error> Workbook::set_table_calculated_column(std::size_t sheet_index, std::size_t table_index,
                                                             std::size_t column, std::string_view formula) {
   std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
   ASSIGN_OR_RETURN(const MergeRange rect, table_column_rect(*this, sheet_index, table_index, column));
-  const std::string_view body = strip_formula_prefix(formula);
-  if (body.empty()) {
-    return invalid_argument("formula is empty");
-  }
   const DataRows rows = data_rows_of(tables_[table_index], rect);
   const std::uint32_t col = rect.first_col + static_cast<std::uint32_t>(column);
   // Bound inside the table, so an unqualified `[@x]` names it even with no data row.
   const std::uint32_t bind_row = rows.count > 0U ? rows.first : rect.first_row;
-  std::string text = normalize_formula_text(
-      bind_entered_structured_refs("=" + std::string(body), sheet_index, bind_row, col), FormulaSource::kEntered);
-  if (!file_name_.empty()) {
-    text = parser::bind_self_book_names(text, file_name_);
-  }
   Arena arena;
-  parser::ParseFailure failure;
-  const parser::AstNode* root = eval::parse_formula_entry_with_diagnostics(strip_formula_prefix(text), arena, &failure);
-  if (root == nullptr) {
-    return make_error(parser::parse_error_status(failure.code), "formula does not parse", std::string(formula));
-  }
-  if (io::entered_as_dynamic_array(*this, sheet_index, *root)) {
-    return invalid_argument("formula must not be a dynamic-array formula", std::string(formula));
-  }
-  Arena shift_arena;
-  if (rows.count > 1U && !moved_text(*root, static_cast<std::int32_t>(rows.count - 1U), shift_arena).has_value()) {
-    return invalid_argument("formula moves a reference off the grid", std::string(formula));
-  }
+  std::string text;
+  ASSIGN_OR_RETURN(const parser::AstNode* root,
+                   parse_calculated_formula(*this, sheet_index, bind_row, col, rows.count, formula, arena, &text));
 
   const eval::RecalcEngine::LockedMutator mutator = engine_->locked_mutator();
   if (detail::MayNameExternalBook(text)) {

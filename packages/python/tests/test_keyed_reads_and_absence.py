@@ -15,7 +15,7 @@ from formulon import (
     SlicerInput,
     SparklineGroupInput,
     SparklineInput,
-    TableColumnTotalsInput,
+    TableColumnPatch,
     TableInput,
     TableTotalsRowFunction,
     ThreadedCommentInput,
@@ -118,13 +118,18 @@ class EmptyStringTests(unittest.TestCase):
         with _sales() as wb:
             table = wb.table("Sales")
             with self.assertRaises(InvalidArgumentError):
-                table.set_column_totals(
-                    1, TableColumnTotalsInput(totals_row_function=TableTotalsRowFunction.NONE, totals_row_label="")
+                table.update(
+                    columns=[
+                        TableColumnPatch(),
+                        TableColumnPatch(totals_row_function=TableTotalsRowFunction.NONE, totals_row_label=""),
+                    ]
                 )
             with self.assertRaises(InvalidArgumentError):
-                table.set_column_totals(
-                    1,
-                    TableColumnTotalsInput(totals_row_function=TableTotalsRowFunction.CUSTOM, totals_row_formula=""),
+                table.update(
+                    columns=[
+                        TableColumnPatch(),
+                        TableColumnPatch(totals_row_function=TableTotalsRowFunction.CUSTOM, totals_row_formula=""),
+                    ]
                 )
             wb.add_person(Person(id=PERSON, display_name="Alice"))
             ws = wb.sheet(0)

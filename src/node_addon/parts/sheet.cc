@@ -288,9 +288,11 @@ Napi::Value Workbook::FindTable(const Napi::CallbackInfo& info) {
 Napi::Value Workbook::TableAt(const Napi::CallbackInfo& info) {
   fm_table_info_t table = FM_STRUCT_INIT(fm_table_info_t);
   std::vector<fm_table_column_info_t> columns;
-  // A respelled totals formula lives in read scratch, which the next column's read may recycle.
+  // A respelled formula lives in read scratch, which the next column's read may recycle.
   std::vector<std::string> totals_formulas;
   std::vector<bool> has_totals_formula;
+  std::vector<std::string> calculated_formulas;
+  std::vector<bool> has_calculated_formula;
   return StatusObject(
       info,
       [&](fm_workbook_t* handle) {
@@ -300,12 +302,18 @@ Napi::Value Workbook::TableAt(const Napi::CallbackInfo& info) {
         columns.resize(rc == 0 ? table.column_count : 0U, FM_STRUCT_INIT(fm_table_column_info_t));
         totals_formulas.resize(columns.size());
         has_totals_formula.assign(columns.size(), false);
+        calculated_formulas.resize(columns.size());
+        has_calculated_formula.assign(columns.size(), false);
         for (std::size_t i = 0; rc == 0 && i < columns.size(); ++i) {
           rc = fm_sheet_get_table_column_at(handle, sheet, idx, i, &columns[i]);
           if (rc == 0) {
             has_totals_formula[i] = columns[i].totals_row_formula != nullptr;
             if (has_totals_formula[i]) {
               totals_formulas[i] = columns[i].totals_row_formula;
+            }
+            has_calculated_formula[i] = columns[i].calculated_formula != nullptr;
+            if (has_calculated_formula[i]) {
+              calculated_formulas[i] = columns[i].calculated_formula;
             }
           }
         }
@@ -328,6 +336,8 @@ Napi::Value Workbook::TableAt(const Napi::CallbackInfo& info) {
           c.Set("totalsRowLabel",
                 columns[i].totals_row_label != nullptr ? JsString(env, columns[i].totals_row_label) : env.Null());
           c.Set("totalsRowFormula", has_totals_formula[i] ? Napi::String::New(env, totals_formulas[i]) : env.Null());
+          c.Set("calculatedFormula",
+                has_calculated_formula[i] ? Napi::String::New(env, calculated_formulas[i]) : env.Null());
           list.Set(static_cast<uint32_t>(i), c);
         }
         out.Set("columns", list);
@@ -417,6 +427,37 @@ Napi::Value Workbook::CreateTable(const Napi::CallbackInfo& info) {
   return ValueOrThrow(env, rc, Napi::Number::New(env, static_cast<uint32_t>(index)));
 }
 
+namespace {
+
+// Reads `[{ totalsRowFunction?, totalsRowLabel?, totalsRowFormula?, calculatedFormula? }]`, entry i patching column i;
+// `texts` keeps the strings `items` points into.
+bool PullTableColumnPatches(CheckedSpecReader& reader, const Napi::Array& array, std::vector<std::string>& texts,
+                            std::vector<fm_table_column_patch_t>& items) {
+  const uint32_t count = array.Length();
+  texts.reserve(3U * count);
+  items.reserve(count);
+  for (uint32_t i = 0; reader.ok() && i < count; ++i) {
+    Napi::Value element;
+    if (!reader.ArrayElement(array, i, &element) || !element.IsObject()) {
+      reader.FailType("columns[]", "an object");
+      return false;
+    }
+    const Napi::Object entry = element.As<Napi::Object>();
+    fm_table_column_patch_t item{};
+    item.totals_row_function_op = PatchNullableI32(reader, entry, "totalsRowFunction", &item.totals_row_function);
+    item.totals_row_label_op =
+        PatchString(reader, entry, "totalsRowLabel", true, &texts.emplace_back(), &item.totals_row_label);
+    item.totals_row_formula_op =
+        PatchString(reader, entry, "totalsRowFormula", true, &texts.emplace_back(), &item.totals_row_formula);
+    item.calculated_formula_op =
+        PatchString(reader, entry, "calculatedFormula", true, &texts.emplace_back(), &item.calculated_formula);
+    items.push_back(item);
+  }
+  return reader.ok();
+}
+
+}  // namespace
+
 Napi::Value Workbook::UpdateTable(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
@@ -434,6 +475,15 @@ Napi::Value Workbook::UpdateTable(const Napi::CallbackInfo& info) {
   }
   patch.header_row_op = PatchBool(reader, spec, "headerRow", &patch.header_row);
   patch.totals_row_op = PatchBool(reader, spec, "totalsRow", &patch.totals_row);
+  std::vector<std::string> texts;
+  std::vector<fm_table_column_patch_t> columns;
+  Napi::Array columns_array;
+  if (ClassifyPatchKey(reader, reader.Get(spec, "columns"), "columns", false) == PatchKey::kSet &&
+      reader.Array(spec, "columns", &columns_array) && PullTableColumnPatches(reader, columns_array, texts, columns)) {
+    patch.columns_op = FM_PATCH_OP_SET;
+    patch.columns = columns.empty() ? nullptr : columns.data();
+    patch.columns_count = static_cast<uint32_t>(columns.size());
+  }
   if (!reader.ok()) {
     return env.Undefined();
   }
@@ -480,30 +530,6 @@ Napi::Value Workbook::RemoveTable(const Napi::CallbackInfo& info) {
                       fm_sheet_remove_table(handle_, static_cast<std::size_t>(ArgU32(info, 0)),
                                             static_cast<std::size_t>(ArgU32(info, 1))),
                       env.Undefined());
-}
-
-Napi::Value Workbook::SetTableColumnTotals(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return ThrowInvalidHandle(env);
-  }
-  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
-  const std::size_t idx = static_cast<std::size_t>(ArgU32(info, 1));
-  const std::size_t column = static_cast<std::size_t>(ArgU32(info, 2));
-  const Napi::Object totals = ArgObject(info, 3);
-  CheckedSpecReader reader(env);
-  std::string label;
-  std::string formula;
-  const int32_t function = reader.I32(totals, "totalsRowFunction", FM_TABLE_TOTALS_ROW_FUNCTION_NONE);
-  const bool has_label = reader.String(totals, "totalsRowLabel", &label);
-  const bool has_formula = reader.String(totals, "totalsRowFormula", &formula);
-  if (!reader.ok()) {
-    return env.Undefined();
-  }
-  const fm_status_t rc =
-      fm_sheet_set_table_column_totals(handle_, sheet, idx, column, function, has_label ? label.c_str() : nullptr,
-                                       has_formula ? formula.c_str() : nullptr);
-  return ValueOrThrow(env, rc, env.Undefined());
 }
 
 Napi::Value Workbook::RenameTableColumn(const Napi::CallbackInfo& info) {

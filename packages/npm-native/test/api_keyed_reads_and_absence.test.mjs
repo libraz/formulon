@@ -120,8 +120,8 @@ describe('an empty string is never a clear', () => {
   it('empty totals label and parentId are InvalidArgument', () => {
     withSheet((ws, wb) => {
       const table = ws.addTable({ range: 'A1:B2', name: 'Tbl' });
-      expectCode(() => table.setColumnTotals(0, { totalsRowLabel: '' }), StatusCode.InvalidArgument);
-      expectCode(() => table.setColumnTotals(1, { totalsRowFormula: '' }), StatusCode.InvalidArgument);
+      expectCode(() => table.update({ columns: [{ totalsRowLabel: '' }] }), StatusCode.InvalidArgument);
+      expectCode(() => table.update({ columns: [{}, { totalsRowFormula: '' }] }), StatusCode.InvalidArgument);
       wb.addPerson({ id: PERSON, displayName: 'Alice' });
       expectCode(
         () => ws.addThreadedComment({ cell: 'D4', personId: PERSON, text: 'Hi', parentId: '' }),

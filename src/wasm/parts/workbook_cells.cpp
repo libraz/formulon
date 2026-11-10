@@ -368,6 +368,7 @@ emscripten::val JsWorkbook::tableAt(uint32_t sheet, uint32_t idx) const {
       c.set("totalsRowFunction", column.totals_row_function);
       js_set_cstr_or_null(c, "totalsRowLabel", column.totals_row_label);
       js_set_cstr_or_null(c, "totalsRowFormula", column.totals_row_formula);
+      js_set_cstr_or_null(c, "calculatedFormula", column.calculated_formula);
       columns.call<void>("push", c);
     }
   }
@@ -489,6 +490,37 @@ uint32_t JsWorkbook::createTable(uint32_t sheet, emscripten::val spec) {
   return static_cast<uint32_t>(index);
 }
 
+namespace {
+
+/// Reads `[{ totalsRowFunction?, totalsRowLabel?, totalsRowFormula?, calculatedFormula? }]`, entry i patching column
+/// i; `texts` keeps the strings `items` points into.
+bool pull_table_column_patches(JsNarrowNumericReader& reader, const emscripten::val& array,
+                               std::vector<std::string>& texts, std::vector<fm_table_column_patch_t>& items) {
+  if (!reader.require_array(array, "columns")) {
+    return false;
+  }
+  const uint32_t count = reader.length(array, "columns");
+  texts.reserve(3U * count);
+  items.reserve(count);
+  for (uint32_t i = 0; reader.ok() && i < count; ++i) {
+    const emscripten::val entry = reader.array_element(array, i, "columns[]");
+    reader.require_object(entry, "columns[]");
+    fm_table_column_patch_t item{};
+    js_patch_int(reader, entry, "totalsRowFunction", "columns[].totalsRowFunction", true, &item.totals_row_function_op,
+                 &item.totals_row_function);
+    js_patch_string(reader, entry, "totalsRowLabel", "columns[].totalsRowLabel", true, texts.emplace_back(),
+                    &item.totals_row_label_op, &item.totals_row_label);
+    js_patch_string(reader, entry, "totalsRowFormula", "columns[].totalsRowFormula", true, texts.emplace_back(),
+                    &item.totals_row_formula_op, &item.totals_row_formula);
+    js_patch_string(reader, entry, "calculatedFormula", "columns[].calculatedFormula", true, texts.emplace_back(),
+                    &item.calculated_formula_op, &item.calculated_formula);
+    items.push_back(item);
+  }
+  return reader.ok();
+}
+
+}  // namespace
+
 void JsWorkbook::updateTable(uint32_t sheet, uint32_t idx, emscripten::val spec) {
   if (handle_ == nullptr) {
     record_invalid_handle();
@@ -504,6 +536,15 @@ void JsWorkbook::updateTable(uint32_t sheet, uint32_t idx, emscripten::val spec)
   }
   js_patch_flag(reader, spec, "headerRow", "headerRow", &patch.header_row_op, &patch.header_row);
   js_patch_flag(reader, spec, "totalsRow", "totalsRow", &patch.totals_row_op, &patch.totals_row);
+  std::vector<std::string> texts;
+  std::vector<fm_table_column_patch_t> columns;
+  const emscripten::val columns_value = reader.value(spec, "columns", "columns");
+  if (reader.ok() && js_patch_key(reader, columns_value, "columns", false) == JsPatchKey::kSet &&
+      pull_table_column_patches(reader, columns_value, texts, columns)) {
+    patch.columns_op = FM_PATCH_OP_SET;
+    patch.columns = columns.empty() ? nullptr : columns.data();
+    patch.columns_count = static_cast<uint32_t>(columns.size());
+  }
   if (!reader.ok()) {
     return;
   }
@@ -512,24 +553,6 @@ void JsWorkbook::updateTable(uint32_t sheet, uint32_t idx, emscripten::val spec)
 
 void JsWorkbook::renameTable(uint32_t sheet, uint32_t idx, const std::string& name) {
   succeeded(handle_ != nullptr ? fm_sheet_rename_table(handle_, sheet, idx, name.c_str()) : kBindingInvalidHandle);
-}
-
-void JsWorkbook::setTableColumnTotals(uint32_t sheet, uint32_t idx, uint32_t column, emscripten::val totals) {
-  if (handle_ == nullptr) {
-    record_invalid_handle();
-    return;
-  }
-  JsNarrowNumericReader reader("Table.setColumnTotals");
-  std::string label;
-  std::string formula;
-  const int32_t function =
-      reader.i32(totals, "totalsRowFunction", FM_TABLE_TOTALS_ROW_FUNCTION_NONE, "totals.totalsRowFunction");
-  const char* label_ptr = reader.optional_string(totals, "totalsRowLabel", label, "totals.totalsRowLabel");
-  const char* formula_ptr = reader.optional_string(totals, "totalsRowFormula", formula, "totals.totalsRowFormula");
-  if (!reader.ok()) {
-    return;
-  }
-  succeeded(fm_sheet_set_table_column_totals(handle_, sheet, idx, column, function, label_ptr, formula_ptr));
 }
 
 void JsWorkbook::removeTable(uint32_t sheet, uint32_t idx) {

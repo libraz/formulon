@@ -58,6 +58,7 @@ class Case:
     patch: Optional[Callable[[Any], Dict[str, Any]]] = None
     clear: bool = False
     cleared: Any = None
+    clear_patch: Optional[Dict[str, Any]] = None
     make: Optional[Callable[[Any, Any], Any]] = None
 
 
@@ -417,6 +418,37 @@ ALIGNMENT = _format_type(
 
 PROTECTION = _format_type("protection", {"locked": Case(FLIP), "hidden": Case(FLIP)})
 
+
+def _column_table(sheet: Any, wb: Any) -> Any:
+    """Table Tbl over A1:B4 with a totals row: headers Item / Qty, data rows 2..3."""
+    sheet.set_text("A1", "Item")
+    sheet.set_text("B1", "Qty")
+    for row, qty in ((2, 1.0), (3, 2.0)):
+        sheet.set_text(f"A{row}", f"r{row}")
+        sheet.set_number(f"B{row}", qty)
+    return sheet.add_table(formulon.TableInput(range="A1:B4", name="Tbl", totals_row=True))
+
+
+TABLE_COLUMN = PatchType(
+    make=_column_table,
+    update=lambda table, **kw: table.update(columns=[formulon.TableColumnPatch(), formulon.TableColumnPatch(**kw)]),
+    read=lambda table: table.get_properties().columns[1],
+    cases={
+        "totals_row_function": Case(
+            formulon.TableTotalsRowFunction.SUM, clear=True, cleared=formulon.TableTotalsRowFunction.NONE
+        ),
+        "totals_row_label": Case("Total", clear=True),
+        "totals_row_formula": Case(
+            "=5",
+            patch=lambda v: {"totals_row_function": formulon.TableTotalsRowFunction.CUSTOM, "totals_row_formula": v},
+            clear=True,
+            clear_patch={"totals_row_function": formulon.TableTotalsRowFunction.MAX, "totals_row_formula": None},
+        ),
+        "calculated_formula": Case("=[@Qty]*10", clear=True),
+    },
+)
+
+
 TYPES: Dict[str, PatchType] = {
     "ChartFillPatch": CHART_FILL,
     "ChartLinePatch": CHART_LINE,
@@ -433,6 +465,7 @@ TYPES: Dict[str, PatchType] = {
     "BorderPatch": BORDER,
     "AlignmentPatch": ALIGNMENT,
     "CellProtectionPatch": PROTECTION,
+    "TableColumnPatch": TABLE_COLUMN,
 }
 
 #: Keys with no public readback, by type; each value is the reason.
@@ -457,7 +490,7 @@ def _apply(test: unittest.TestCase, type_name: str, key: str) -> None:
         spec.update(target, **patch)
         test.assertEqual(get(spec.read(target)), want, f"{type_name}.{key} was not applied")
         if case.clear:
-            spec.update(target, **{key: None})
+            spec.update(target, **(case.clear_patch if case.clear_patch is not None else {key: None}))
             test.assertEqual(get(spec.read(target)), case.cleared, f"{type_name}.{key} was not cleared")
 
 

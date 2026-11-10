@@ -80,25 +80,50 @@ test('updateStyleOptions keeps the toggles across a style name change', async ()
   }
 });
 
-test('setTableColumnTotals writes the totals-row cells', async () => {
+test('a column totals patch writes the totals-row cells', async () => {
   const mod = await getModule();
   const wb = salesWorkbook(mod, { firstRow: 0, firstCol: 0, lastRow: 3, lastCol: 1 }, true);
   try {
-    wb.sheet(0).table(0).setColumnTotals(0, { totalsRowLabel: 'Total' });
-    wb.sheet(0).table(0).setColumnTotals(1, { totalsRowFunction: mod.TableTotalsRowFunction.Sum });
+    wb.sheet(0)
+      .table(0)
+      .update({ columns: [{ totalsRowLabel: 'Total' }] });
+    wb.sheet(0)
+      .table(0)
+      .update({ columns: [{}, { totalsRowFunction: mod.TableTotalsRowFunction.Sum }] });
     assert.equal(wb.sheet(0).getFormula(3, 1), '=SUBTOTAL(109,[Amount])');
     wb.recalc();
     assert.equal(wb.sheet(0).getTypedValue(3, 1).number, 30);
     assert.equal(wb.sheet(0).getTypedValue(3, 0).text, 'Total');
-    assert.throws(() => wb.sheet(0).table(0).setColumnTotals(1, { totalsRowFunction: 'median' }), TypeError);
-    assert.throws(() => wb.sheet(0).table(0).setColumnTotals(1, { totalsRowFunction: 99 }), isFormulonError);
+    assert.throws(
+      () =>
+        wb
+          .sheet(0)
+          .table(0)
+          .update({ columns: [{}, { totalsRowFunction: 'median' }] }),
+      TypeError,
+    );
+    assert.throws(
+      () =>
+        wb
+          .sheet(0)
+          .table(0)
+          .update({ columns: [{}, { totalsRowFunction: 99 }] }),
+      isFormulonError,
+    );
     const columns = wb.sheet(0).listTables()[0].getProperties().columns;
     assert.equal(columns[0].totalsRowLabel, 'Total');
     assert.equal(columns[1].totalsRowFunction, mod.TableTotalsRowFunction.Sum);
-    wb.sheet(0).table(0).setColumnTotals(1, {
-      totalsRowFunction: mod.TableTotalsRowFunction.Custom,
-      totalsRowFormula: '=MAX(Sales[Amount])',
-    });
+    wb.sheet(0)
+      .table(0)
+      .update({
+        columns: [
+          {},
+          {
+            totalsRowFunction: mod.TableTotalsRowFunction.Custom,
+            totalsRowFormula: '=MAX(Sales[Amount])',
+          },
+        ],
+      });
     assert.equal(wb.sheet(0).listTables()[0].getProperties().columns[1].totalsRowFormula, '=MAX([Amount])');
   } finally {
     release(wb);

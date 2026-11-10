@@ -440,8 +440,7 @@ TEST(FormulonCApiExternalLinks, FileNameTableTotalsStoreAndSpellTheName) {
   std::size_t table = 99;
   ASSERT_EQ(AddTable(wb.handle, 0, record_arg(fm_cell_rect_t{0, 3, 3, 4}), "Tbl", names, 2, nullptr, 1, 1, &table), 0)
       << fm_get_last_error_message();
-  ASSERT_EQ(fm_sheet_set_table_column_totals(wb.handle, 0, table, 0, FM_TABLE_TOTALS_ROW_FUNCTION_CUSTOM, nullptr,
-                                             "M5.xlsx!LN+1"),
+  ASSERT_EQ(SetTableColumnTotals(wb.handle, 0, table, 0, FM_TABLE_TOTALS_ROW_FUNCTION_CUSTOM, nullptr, "M5.xlsx!LN+1"),
             0)
       << fm_get_last_error_message();
   EXPECT_EQ(LinkCount(wb.handle), 0U);

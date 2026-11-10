@@ -432,10 +432,8 @@ TEST(FormulonCApiTable, AddWithAnEmptyStyleNameCreatesNoStyleElement) {
 TEST(FormulonCApiTable, ColumnTotalsWriteTheTotalsRowCells) {
   WorkbookGuard wb;
   CreateSalesTable(wb, "TableStyleMedium2", 1, {0, 0, 3, 1});
-  ASSERT_EQ(fm_sheet_set_table_column_totals(wb.handle, 0, 0, 0, FM_TABLE_TOTALS_ROW_FUNCTION_NONE, "Total", nullptr),
-            0);
-  ASSERT_EQ(fm_sheet_set_table_column_totals(wb.handle, 0, 0, 1, FM_TABLE_TOTALS_ROW_FUNCTION_SUM, nullptr, nullptr),
-            0);
+  ASSERT_EQ(SetTableColumnTotals(wb.handle, 0, 0, 0, FM_TABLE_TOTALS_ROW_FUNCTION_NONE, "Total", nullptr), 0);
+  ASSERT_EQ(SetTableColumnTotals(wb.handle, 0, 0, 1, FM_TABLE_TOTALS_ROW_FUNCTION_SUM, nullptr, nullptr), 0);
   EXPECT_EQ(Formula(wb.handle, 3, 1), "=SUBTOTAL(109,[Amount])");
   ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
   fm_value_t total = Value(wb.handle, 3, 1);
@@ -476,13 +474,10 @@ TEST(FormulonCApiTable, ColumnTotalsWriteTheTotalsRowCells) {
                 {FM_TABLE_TOTALS_ROW_FUNCTION_STD_DEV, "=SUBTOTAL(107,[Amount])"},
                 {FM_TABLE_TOTALS_ROW_FUNCTION_VAR, "=SUBTOTAL(110,[Amount])"}};
   for (const auto& c : kCases) {
-    ASSERT_EQ(fm_sheet_set_table_column_totals(reloaded.handle, 0, 0, 1, c.function, nullptr, nullptr), 0)
-        << c.function;
+    ASSERT_EQ(SetTableColumnTotals(reloaded.handle, 0, 0, 1, c.function, nullptr, nullptr), 0) << c.function;
     EXPECT_EQ(Formula(reloaded.handle, 3, 1), c.formula);
   }
-  ASSERT_EQ(
-      fm_sheet_set_table_column_totals(reloaded.handle, 0, 0, 1, FM_TABLE_TOTALS_ROW_FUNCTION_NONE, nullptr, nullptr),
-      0);
+  ASSERT_EQ(SetTableColumnTotals(reloaded.handle, 0, 0, 1, FM_TABLE_TOTALS_ROW_FUNCTION_NONE, nullptr, nullptr), 0);
   EXPECT_EQ(Formula(reloaded.handle, 3, 1), "");
   EXPECT_EQ(Value(reloaded.handle, 3, 1).kind, FM_VALUE_KIND_BLANK);
 }
@@ -503,12 +498,10 @@ TEST(FormulonCApiTable, TotalsRowFunctionOrdinalsFollowTheSchemaOrder) {
 TEST(FormulonCApiTable, ColumnTotalsRejectAFunctionOutsideTheEnumeration) {
   WorkbookGuard wb;
   CreateSalesTable(wb, "TableStyleMedium2", 1, {0, 0, 3, 1});
-  ASSERT_EQ(fm_sheet_set_table_column_totals(wb.handle, 0, 0, 1, FM_TABLE_TOTALS_ROW_FUNCTION_SUM, nullptr, nullptr),
-            0);
-  EXPECT_EQ(fm_sheet_set_table_column_totals(wb.handle, 0, 0, 1, -1, nullptr, nullptr), kInvalidArgument);
-  EXPECT_EQ(
-      fm_sheet_set_table_column_totals(wb.handle, 0, 0, 1, FM_TABLE_TOTALS_ROW_FUNCTION_CUSTOM + 1, nullptr, nullptr),
-      kInvalidArgument);
+  ASSERT_EQ(SetTableColumnTotals(wb.handle, 0, 0, 1, FM_TABLE_TOTALS_ROW_FUNCTION_SUM, nullptr, nullptr), 0);
+  EXPECT_EQ(SetTableColumnTotals(wb.handle, 0, 0, 1, -1, nullptr, nullptr), kInvalidArgument);
+  EXPECT_EQ(SetTableColumnTotals(wb.handle, 0, 0, 1, FM_TABLE_TOTALS_ROW_FUNCTION_CUSTOM + 1, nullptr, nullptr),
+            kInvalidArgument);
   fm_table_column_info_t column = FM_STRUCT_INIT(fm_table_column_info_t);
   ASSERT_EQ(fm_sheet_get_table_column_at(wb.handle, 0, 0, 1, &column), 0);
   EXPECT_EQ(column.totals_row_function, FM_TABLE_TOTALS_ROW_FUNCTION_SUM);
@@ -517,11 +510,11 @@ TEST(FormulonCApiTable, ColumnTotalsRejectAFunctionOutsideTheEnumeration) {
 TEST(FormulonCApiTable, ColumnTotalsRefuseAnOutOfRangeTableSheetOrColumn) {
   WorkbookGuard wb;
   CreateSalesTable(wb, "TableStyleMedium2", 1, {0, 0, 3, 1});
-  EXPECT_EQ(fm_sheet_set_table_column_totals(wb.handle, 0, 0, 2, FM_TABLE_TOTALS_ROW_FUNCTION_SUM, nullptr, nullptr),
+  EXPECT_EQ(SetTableColumnTotals(wb.handle, 0, 0, 2, FM_TABLE_TOTALS_ROW_FUNCTION_SUM, nullptr, nullptr),
             FM_STATUS_INDEX_OUT_OF_RANGE);
-  EXPECT_EQ(fm_sheet_set_table_column_totals(wb.handle, 0, 1, 0, FM_TABLE_TOTALS_ROW_FUNCTION_SUM, nullptr, nullptr),
+  EXPECT_EQ(SetTableColumnTotals(wb.handle, 0, 1, 0, FM_TABLE_TOTALS_ROW_FUNCTION_SUM, nullptr, nullptr),
             FM_STATUS_INDEX_OUT_OF_RANGE);
-  EXPECT_EQ(fm_sheet_set_table_column_totals(wb.handle, 6, 0, 0, FM_TABLE_TOTALS_ROW_FUNCTION_SUM, nullptr, nullptr),
+  EXPECT_EQ(SetTableColumnTotals(wb.handle, 6, 0, 0, FM_TABLE_TOTALS_ROW_FUNCTION_SUM, nullptr, nullptr),
             FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
   fm_table_column_info_t column = FM_STRUCT_INIT(fm_table_column_info_t);
   EXPECT_EQ(fm_sheet_get_table_column_at(wb.handle, 6, 0, 0, &column), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
@@ -531,13 +524,12 @@ TEST(FormulonCApiTable, ColumnTotalsRefuseAnOutOfRangeTableSheetOrColumn) {
 TEST(FormulonCApiTable, CustomTotalsFormulaRoundTrips) {
   WorkbookGuard wb;
   CreateSalesTable(wb, "TableStyleMedium2", 1, {0, 0, 3, 1});
-  EXPECT_EQ(fm_sheet_set_table_column_totals(wb.handle, 0, 0, 1, FM_TABLE_TOTALS_ROW_FUNCTION_CUSTOM, nullptr, nullptr),
+  EXPECT_EQ(SetTableColumnTotals(wb.handle, 0, 0, 1, FM_TABLE_TOTALS_ROW_FUNCTION_CUSTOM, nullptr, nullptr),
             kInvalidArgument);
-  EXPECT_NE(
-      fm_sheet_set_table_column_totals(wb.handle, 0, 0, 1, FM_TABLE_TOTALS_ROW_FUNCTION_CUSTOM, nullptr, "=SUM(("), 0);
-  ASSERT_EQ(fm_sheet_set_table_column_totals(wb.handle, 0, 0, 1, FM_TABLE_TOTALS_ROW_FUNCTION_CUSTOM, nullptr,
-                                             "=SUM(Sales[Amount])*2"),
-            0);
+  EXPECT_NE(SetTableColumnTotals(wb.handle, 0, 0, 1, FM_TABLE_TOTALS_ROW_FUNCTION_CUSTOM, nullptr, "=SUM(("), 0);
+  ASSERT_EQ(
+      SetTableColumnTotals(wb.handle, 0, 0, 1, FM_TABLE_TOTALS_ROW_FUNCTION_CUSTOM, nullptr, "=SUM(Sales[Amount])*2"),
+      0);
   fm_table_column_info_t column = FM_STRUCT_INIT(fm_table_column_info_t);
   ASSERT_EQ(fm_sheet_get_table_column_at(wb.handle, 0, 0, 1, &column), 0);
   EXPECT_EQ(column.totals_row_function, FM_TABLE_TOTALS_ROW_FUNCTION_CUSTOM);
@@ -567,10 +559,8 @@ TEST(FormulonCApiTable, TurningTheTotalsRowOnRestoresItsCells) {
   // "never shown" marker.
   WorkbookGuard source;
   CreateSalesTable(source);
-  ASSERT_EQ(
-      fm_sheet_set_table_column_totals(source.handle, 0, 0, 0, FM_TABLE_TOTALS_ROW_FUNCTION_NONE, "Total", nullptr), 0);
-  ASSERT_EQ(
-      fm_sheet_set_table_column_totals(source.handle, 0, 0, 1, FM_TABLE_TOTALS_ROW_FUNCTION_MAX, nullptr, nullptr), 0);
+  ASSERT_EQ(SetTableColumnTotals(source.handle, 0, 0, 0, FM_TABLE_TOTALS_ROW_FUNCTION_NONE, "Total", nullptr), 0);
+  ASSERT_EQ(SetTableColumnTotals(source.handle, 0, 0, 1, FM_TABLE_TOTALS_ROW_FUNCTION_MAX, nullptr, nullptr), 0);
   EXPECT_EQ(Value(source.handle, 3, 1).kind, FM_VALUE_KIND_BLANK) << "no cell while the totals row is off";
   const std::vector<std::uint8_t> patched =
       RewriteEntry(Save(source.handle), "xl/tables/table1.xml", [](std::string xml) {
@@ -615,10 +605,8 @@ TEST(FormulonCApiTable, TotalsFormulaEscapesSpecialColumnNames) {
   const char* columns[] = {"Q1 #est", "a,b"};
   std::size_t index = 0;
   ASSERT_EQ(AddTable(wb.handle, 0, record_arg(fm_cell_rect_t{0, 0, 2, 1}), "T", columns, 2, "", 1, 1, &index), 0);
-  ASSERT_EQ(fm_sheet_set_table_column_totals(wb.handle, 0, 0, 0, FM_TABLE_TOTALS_ROW_FUNCTION_SUM, nullptr, nullptr),
-            0);
-  ASSERT_EQ(fm_sheet_set_table_column_totals(wb.handle, 0, 0, 1, FM_TABLE_TOTALS_ROW_FUNCTION_SUM, nullptr, nullptr),
-            0);
+  ASSERT_EQ(SetTableColumnTotals(wb.handle, 0, 0, 0, FM_TABLE_TOTALS_ROW_FUNCTION_SUM, nullptr, nullptr), 0);
+  ASSERT_EQ(SetTableColumnTotals(wb.handle, 0, 0, 1, FM_TABLE_TOTALS_ROW_FUNCTION_SUM, nullptr, nullptr), 0);
   EXPECT_EQ(Formula(wb.handle, 2, 0), "=SUBTOTAL(109,[Q1 '#est])");
   EXPECT_EQ(Formula(wb.handle, 2, 1), "=SUBTOTAL(109,[a,b])");
   ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
@@ -1007,8 +995,7 @@ TEST(FormulonCApiTable, UpdateWritesOnlyTheFieldsItSets) {
 TEST(FormulonCApiTable, TotalsRowOnGrowsTheRangeAndKeepsTheDataRows) {
   WorkbookGuard wb;
   CreateSalesTable(wb);
-  ASSERT_EQ(fm_sheet_set_table_column_totals(wb.handle, 0, 0, 1, FM_TABLE_TOTALS_ROW_FUNCTION_SUM, nullptr, nullptr),
-            0);
+  ASSERT_EQ(SetTableColumnTotals(wb.handle, 0, 0, 1, FM_TABLE_TOTALS_ROW_FUNCTION_SUM, nullptr, nullptr), 0);
   fm_table_patch_t patch = TablePatch();
   patch.totals_row_op = FM_PATCH_OP_SET;
   patch.totals_row = 1;
@@ -1030,8 +1017,7 @@ TEST(FormulonCApiTable, TotalsRowOnGrowsTheRangeAndKeepsTheDataRows) {
 TEST(FormulonCApiTable, TotalsRowOffShrinksTheRangeAndClearsTheRow) {
   WorkbookGuard wb;
   CreateSalesTable(wb);
-  ASSERT_EQ(fm_sheet_set_table_column_totals(wb.handle, 0, 0, 1, FM_TABLE_TOTALS_ROW_FUNCTION_SUM, nullptr, nullptr),
-            0);
+  ASSERT_EQ(SetTableColumnTotals(wb.handle, 0, 0, 1, FM_TABLE_TOTALS_ROW_FUNCTION_SUM, nullptr, nullptr), 0);
   fm_table_patch_t patch = TablePatch();
   patch.totals_row_op = FM_PATCH_OP_SET;
   patch.totals_row = 1;
@@ -1504,9 +1490,9 @@ TEST(FormulonCApiEmptyStyleName, TableSpecPivotSlicerDefaultsRefuseEmpty) {
   defaults.pivot_style_name = "";
   EXPECT_EQ(fm_workbook_update_table_style_defaults(wb.handle, &defaults), kInvalidArgument);
 
-  EXPECT_EQ(fm_sheet_set_table_column_totals(wb.handle, 0, index, 0, FM_TABLE_TOTALS_ROW_FUNCTION_NONE, "", nullptr),
+  EXPECT_EQ(SetTableColumnTotals(wb.handle, 0, index, 0, FM_TABLE_TOTALS_ROW_FUNCTION_NONE, "", nullptr),
             kInvalidArgument);
-  EXPECT_EQ(fm_sheet_set_table_column_totals(wb.handle, 0, index, 1, FM_TABLE_TOTALS_ROW_FUNCTION_CUSTOM, nullptr, ""),
+  EXPECT_EQ(SetTableColumnTotals(wb.handle, 0, index, 1, FM_TABLE_TOTALS_ROW_FUNCTION_CUSTOM, nullptr, ""),
             kInvalidArgument);
 
   WorkbookGuard pivots;
@@ -1518,6 +1504,681 @@ TEST(FormulonCApiEmptyStyleName, TableSpecPivotSlicerDefaultsRefuseEmpty) {
   pivot_patch.style_name_op = FM_PATCH_OP_SET;
   pivot_patch.style_name = "";
   EXPECT_EQ(fm_sheet_update_pivot_style_options(pivots.handle, 0, pivot_index, &pivot_patch), kInvalidArgument);
+}
+
+// --- Column patches: calculated columns and totals -------------------------------------------------------------
+
+/// Header `a b c` on row 1 (Excel row 2), data rows 2..4 with `a` = 1..3 and `b` = 10..30 and `c` empty; table `Tbl`
+/// over A2:C5, or A2:C6 with a totals row. The first data row is Excel row 3, so `=A3*10` is the first-row form.
+void CreateCalcTable(WorkbookGuard& wb, int32_t totals = 0) {
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  const char* columns[] = {"a", "b", "c"};
+  for (std::uint32_t col = 0; col < 3; ++col) {
+    ASSERT_EQ(fm_sheet_set_text(wb.handle, 0, 1, col, columns[col]), 0);
+  }
+  for (std::uint32_t row = 2; row <= 4; ++row) {
+    ASSERT_EQ(fm_sheet_set_number(wb.handle, 0, row, 0, static_cast<double>(row - 1)), 0);
+    ASSERT_EQ(fm_sheet_set_number(wb.handle, 0, row, 1, static_cast<double>((row - 1) * 10)), 0);
+  }
+  const fm_cell_rect_t ref{1, 0, static_cast<std::uint32_t>(totals != 0 ? 5 : 4), 2};
+  std::size_t index = 99U;
+  ASSERT_EQ(AddTable(wb.handle, 0, &ref, "Tbl", columns, 3, "TableStyleMedium2", 1, totals, &index), 0)
+      << fm_get_last_error_message();
+  ASSERT_EQ(index, 0U);
+}
+
+struct ColumnRead {
+  std::int32_t function = 0;
+  bool has_label = false;
+  std::string label;
+  bool has_formula = false;
+  std::string formula;
+  bool has_calc = false;
+  std::string calc;
+};
+
+ColumnRead ReadColumn(const fm_workbook_t* wb, std::size_t column) {
+  fm_table_column_info_t info = FM_STRUCT_INIT(fm_table_column_info_t);
+  EXPECT_EQ(fm_sheet_get_table_column_at(wb, 0, 0, column, &info), 0);
+  ColumnRead read;
+  read.function = info.totals_row_function;
+  read.has_label = info.totals_row_label != nullptr;
+  read.label = read.has_label ? info.totals_row_label : "";
+  read.has_formula = info.totals_row_formula != nullptr;
+  read.formula = read.has_formula ? info.totals_row_formula : "";
+  read.has_calc = info.calculated_formula != nullptr;
+  read.calc = read.has_calc ? info.calculated_formula : "";
+  return read;
+}
+
+fm_status_t PatchColumns(fm_workbook_t* wb, const std::vector<TableColumnElement>& columns,
+                         fm_table_patch_t patch = TablePatch()) {
+  return UpdateTableColumns(wb, 0, 0, columns, patch);
+}
+
+std::vector<std::uint8_t> SaveAs(fm_workbook_t* wb, fm_workbook_format_t format) {
+  BufferGuard saved;
+  EXPECT_EQ(fm_workbook_save(wb, format, &saved.data, &saved.len), 0);
+  return std::vector<std::uint8_t>(saved.data, saved.data + saved.len);
+}
+
+double Number(fm_workbook_t* wb, std::uint32_t row, std::uint32_t col) {
+  const fm_value_t v = Value(wb, row, col);
+  EXPECT_EQ(v.kind, FM_VALUE_KIND_NUMBER) << row << "," << col;
+  return v.u.number;
+}
+
+TEST(FormulonCApiTable, ColumnPatchSetsTheCalculatedFormulaAndFillsTheColumn) {
+  WorkbookGuard wb;
+  CreateCalcTable(wb);
+  EXPECT_FALSE(ReadColumn(wb.handle, 2).has_calc);
+  ASSERT_EQ(fm_sheet_set_number(wb.handle, 0, 3, 2, 99.0), 0);  // a constant in the column is overwritten
+  ASSERT_EQ(SetTableColumnCalculatedFormula(wb.handle, 0, 0, 2, "=A3*10"), 0) << fm_get_last_error_message();
+  const ColumnRead read = ReadColumn(wb.handle, 2);
+  ASSERT_TRUE(read.has_calc);
+  EXPECT_EQ(read.calc, "=A3*10");
+  EXPECT_EQ(Formula(wb.handle, 2, 2), "=A3*10");
+  EXPECT_EQ(Formula(wb.handle, 3, 2), "=A4*10");
+  EXPECT_EQ(Formula(wb.handle, 4, 2), "=A5*10");
+  ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
+  EXPECT_DOUBLE_EQ(Number(wb.handle, 2, 2), 10.0);
+  EXPECT_DOUBLE_EQ(Number(wb.handle, 3, 2), 20.0);
+  EXPECT_DOUBLE_EQ(Number(wb.handle, 4, 2), 30.0);
+  EXPECT_FALSE(ReadColumn(wb.handle, 0).has_calc);
+  EXPECT_FALSE(ReadColumn(wb.handle, 1).has_calc);
+  EXPECT_EQ(Value(wb.handle, 1, 2).kind, FM_VALUE_KIND_TEXT) << "the header cell is not part of the fill";
+}
+
+TEST(FormulonCApiTable, ColumnPatchCalculatedFormulaAcceptsEveryInputForm) {
+  const struct {
+    const char* input;
+    const char* read;
+  } kCases[] = {
+      {"=A3*10", "=A3*10"},                      // with the equals sign
+      {"A3*10", "=A3*10"},                       // without it
+      {"=[@a]*10", "=[@a]*10"},                  // short this-row form
+      {"=Tbl[[#This Row],[a]]*10", "=[@a]*10"},  // long this-row form reads back short
+      {"=$A$3*10", "=$A$3*10"},                  // absolute references do not move
+      {"=A$3*10+$B3", "=A$3*10+$B3"},            // mixed references move their relative part only
+  };
+  for (const auto& c : kCases) {
+    WorkbookGuard wb;
+    CreateCalcTable(wb);
+    ASSERT_EQ(SetTableColumnCalculatedFormula(wb.handle, 0, 0, 2, c.input), 0)
+        << c.input << ": " << fm_get_last_error_message();
+    EXPECT_EQ(ReadColumn(wb.handle, 2).calc, c.read) << c.input;
+  }
+  WorkbookGuard wb;
+  CreateCalcTable(wb);
+  ASSERT_EQ(SetTableColumnCalculatedFormula(wb.handle, 0, 0, 2, "=$A$3*10"), 0);
+  ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
+  EXPECT_DOUBLE_EQ(Number(wb.handle, 4, 2), 10.0) << "an absolute reference stays on A3 in every row";
+  ASSERT_EQ(SetTableColumnCalculatedFormula(wb.handle, 0, 0, 2, "=[@a]*10"), 0);
+  ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
+  EXPECT_DOUBLE_EQ(Number(wb.handle, 2, 2), 10.0);
+  EXPECT_DOUBLE_EQ(Number(wb.handle, 4, 2), 30.0);
+}
+
+TEST(FormulonCApiTable, ColumnPatchClearingTheCalculatedFormulaLeavesTheCells) {
+  WorkbookGuard wb;
+  CreateCalcTable(wb);
+  ASSERT_EQ(SetTableColumnCalculatedFormula(wb.handle, 0, 0, 2, "=A3*10"), 0);
+  ASSERT_EQ(SetTableColumnCalculatedFormula(wb.handle, 0, 0, 2, nullptr), 0) << fm_get_last_error_message();
+  EXPECT_FALSE(ReadColumn(wb.handle, 2).has_calc);
+  EXPECT_EQ(Formula(wb.handle, 2, 2), "=A3*10");
+  EXPECT_EQ(Formula(wb.handle, 3, 2), "=A4*10");
+  EXPECT_EQ(Formula(wb.handle, 4, 2), "=A5*10");
+  ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
+  EXPECT_DOUBLE_EQ(Number(wb.handle, 4, 2), 30.0);
+  EXPECT_EQ(ExtractZipEntry(Save(wb.handle), "xl/tables/table1.xml").find("calculatedColumnFormula"),
+            std::string::npos);
+}
+
+TEST(FormulonCApiTable, ColumnPatchRefusesAnEmptyCalculatedFormulaAndKeepsTheMark) {
+  WorkbookGuard wb;
+  CreateCalcTable(wb);
+  ASSERT_EQ(SetTableColumnCalculatedFormula(wb.handle, 0, 0, 2, "=A3*10"), 0);
+  EXPECT_EQ(SetTableColumnCalculatedFormula(wb.handle, 0, 0, 2, ""), kInvalidArgument) << "clearing is CLEAR, not \"\"";
+  EXPECT_EQ(ReadColumn(wb.handle, 2).calc, "=A3*10");
+  EXPECT_EQ(Formula(wb.handle, 3, 2), "=A4*10");
+}
+
+TEST(FormulonCApiTable, ColumnPatchRefusesUnusableCalculatedFormulasWithoutChanging) {
+  WorkbookGuard wb;
+  CreateCalcTable(wb);
+  ASSERT_EQ(fm_sheet_set_number(wb.handle, 0, 3, 2, 99.0), 0);
+  EXPECT_NE(SetTableColumnCalculatedFormula(wb.handle, 0, 0, 2, "=SUM(("), 0)
+      << "a parse failure carries its own status";
+  // A dynamic-array result, and a reference that the shift to the data rows pushes off the grid.
+  EXPECT_EQ(SetTableColumnCalculatedFormula(wb.handle, 0, 0, 2, "=SEQUENCE(3)"), kInvalidArgument);
+  EXPECT_EQ(SetTableColumnCalculatedFormula(wb.handle, 0, 0, 2, "=FILTER(A3:A5,A3:A5>1)"), kInvalidArgument);
+  EXPECT_EQ(SetTableColumnCalculatedFormula(wb.handle, 0, 0, 2, "=A1048576+1"), kInvalidArgument);
+  EXPECT_FALSE(ReadColumn(wb.handle, 2).has_calc);
+  const fm_value_t kept = Value(wb.handle, 3, 2);
+  ASSERT_EQ(kept.kind, FM_VALUE_KIND_NUMBER);
+  EXPECT_DOUBLE_EQ(kept.u.number, 99.0);
+  EXPECT_EQ(Formula(wb.handle, 2, 2), "");
+}
+
+TEST(FormulonCApiTable, ColumnPatchRefusesAnArrayLongerThanTheColumnCountAndAppliesNothing) {
+  WorkbookGuard wb;
+  CreateCalcTable(wb, 1);
+  const TableColumnElement keep = TableColumnKeep();
+  EXPECT_EQ(PatchColumns(wb.handle, {keep, TableColumnTotals(FM_TABLE_TOTALS_ROW_FUNCTION_SUM),
+                                     TableColumnCalculated("=A3*10"), keep}),
+            FM_STATUS_INDEX_OUT_OF_RANGE)
+      << "four elements for three columns";
+  EXPECT_FALSE(ReadColumn(wb.handle, 2).has_calc);
+  EXPECT_EQ(ReadColumn(wb.handle, 1).function, FM_TABLE_TOTALS_ROW_FUNCTION_NONE);
+  EXPECT_EQ(Formula(wb.handle, 2, 2), "");
+  EXPECT_EQ(Formula(wb.handle, 5, 1), "");
+  // Exactly the column count is fine.
+  EXPECT_EQ(PatchColumns(wb.handle, {keep, keep, keep}), 0);
+}
+
+TEST(FormulonCApiTable, ColumnPatchIsCheckedWholeBeforeTheGeometryChanges) {
+  WorkbookGuard wb;
+  CreateCalcTable(wb);
+  fm_table_patch_t grow = TablePatch();
+  grow.totals_row_op = FM_PATCH_OP_SET;
+  grow.totals_row = 1;
+  EXPECT_EQ(PatchColumns(wb.handle, std::vector<TableColumnElement>(7, TableColumnKeep()), grow),
+            FM_STATUS_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(Info(wb.handle).totals_row_count, 0U) << "a refused column patch leaves the totals row off";
+  EXPECT_EQ(Info(wb.handle).range.last_row, 4U);
+  EXPECT_NE(PatchColumns(wb.handle, TableColumnsAt(2, TableColumnCalculated("=SUM((")), grow), 0);
+  EXPECT_EQ(PatchColumns(wb.handle, TableColumnsAt(2, TableColumnCalculated("=SEQUENCE(3)")), grow), kInvalidArgument);
+  EXPECT_EQ(PatchColumns(wb.handle, TableColumnsAt(2, TableColumnCalculated("=A1048576+1")), grow), kInvalidArgument);
+  EXPECT_EQ(Info(wb.handle).totals_row_count, 0U);
+  EXPECT_EQ(Info(wb.handle).range.last_row, 4U);
+}
+
+TEST(FormulonCApiTable, ColumnPatchWithoutColumnsChangesNothing) {
+  WorkbookGuard wb;
+  CreateCalcTable(wb, 1);
+  ASSERT_EQ(SetTableColumnCalculatedFormula(wb.handle, 0, 0, 2, "=A3*10"), 0);
+  ASSERT_EQ(SetTableColumnTotals(wb.handle, 0, 0, 1, FM_TABLE_TOTALS_ROW_FUNCTION_SUM, nullptr, nullptr), 0);
+  EXPECT_EQ(PatchColumns(wb.handle, {}), 0);
+  fm_table_patch_t patch = TablePatch();
+  patch.columns_op = FM_PATCH_OP_SET;
+  patch.columns = nullptr;
+  patch.columns_count = 0;
+  EXPECT_EQ(fm_sheet_update_table(wb.handle, 0, 0, &patch), 0);
+  EXPECT_EQ(ReadColumn(wb.handle, 2).calc, "=A3*10");
+  EXPECT_EQ(ReadColumn(wb.handle, 1).function, FM_TABLE_TOTALS_ROW_FUNCTION_SUM);
+  EXPECT_EQ(Formula(wb.handle, 5, 1), "=SUBTOTAL(109,[b])");
+  // An all-KEEP element is a no-op, and `columns_op` KEEP ignores the array.
+  const TableColumnElement keep = TableColumnKeep();
+  EXPECT_EQ(PatchColumns(wb.handle, {keep, keep, keep}), 0);
+  const TableColumnElement clear = TableColumnTotalsClear();
+  fm_table_patch_t ignored = TablePatch();
+  ignored.columns = &clear;
+  ignored.columns_count = 1;
+  EXPECT_EQ(fm_sheet_update_table(wb.handle, 0, 0, &ignored), 0);
+  EXPECT_EQ(ReadColumn(wb.handle, 1).function, FM_TABLE_TOTALS_ROW_FUNCTION_SUM);
+  EXPECT_EQ(ReadColumn(wb.handle, 2).calc, "=A3*10");
+  // CLEAR is not an operation of the array itself.
+  ignored.columns_op = FM_PATCH_OP_CLEAR;
+  EXPECT_EQ(fm_sheet_update_table(wb.handle, 0, 0, &ignored), kInvalidArgument);
+}
+
+TEST(FormulonCApiTable, ColumnPatchReapplyingTheSameCalculatedFormulaKeepsConstants) {
+  WorkbookGuard wb;
+  CreateCalcTable(wb);
+  ASSERT_EQ(SetTableColumnCalculatedFormula(wb.handle, 0, 0, 2, "=A3*10"), 0);
+  ASSERT_EQ(fm_sheet_set_number(wb.handle, 0, 3, 2, 99.0), 0);
+  ASSERT_EQ(SetTableColumnCalculatedFormula(wb.handle, 0, 0, 2, "=A3*10"), 0);
+  EXPECT_EQ(Value(wb.handle, 3, 2).kind, FM_VALUE_KIND_NUMBER) << "the same formula is no change";
+  EXPECT_DOUBLE_EQ(Value(wb.handle, 3, 2).u.number, 99.0);
+  ASSERT_EQ(SetTableColumnCalculatedFormula(wb.handle, 0, 0, 2, "=A$3*10"), 0);
+  EXPECT_EQ(Formula(wb.handle, 3, 2), "=A$3*10") << "a different formula fills every data cell";
+  EXPECT_EQ(ReadColumn(wb.handle, 2).calc, "=A$3*10");
+}
+
+TEST(FormulonCApiTable, ColumnPatchClearsEachFieldAndANonCustomFunctionDropsTheFormula) {
+  WorkbookGuard wb;
+  CreateCalcTable(wb, 1);
+  TableColumnElement function_only{};
+  function_only.totals_row_function_op = FM_PATCH_OP_SET;
+  function_only.totals_row_function = FM_TABLE_TOTALS_ROW_FUNCTION_SUM;
+  TableColumnElement label_only{};
+  label_only.totals_row_label_op = FM_PATCH_OP_SET;
+  label_only.totals_row_label = "Sum";
+  ASSERT_EQ(PatchColumns(wb.handle, {TableColumnKeep(), function_only}), 0);
+  ASSERT_EQ(PatchColumns(wb.handle, {TableColumnKeep(), label_only}), 0) << "the label key leaves the function";
+  EXPECT_EQ(ReadColumn(wb.handle, 1).function, FM_TABLE_TOTALS_ROW_FUNCTION_SUM);
+  EXPECT_EQ(ReadColumn(wb.handle, 1).label, "Sum");
+
+  TableColumnElement clear_function{};
+  clear_function.totals_row_function_op = FM_PATCH_OP_CLEAR;
+  ASSERT_EQ(PatchColumns(wb.handle, {TableColumnKeep(), clear_function}), 0);
+  EXPECT_EQ(ReadColumn(wb.handle, 1).function, FM_TABLE_TOTALS_ROW_FUNCTION_NONE);
+  EXPECT_EQ(ReadColumn(wb.handle, 1).label, "Sum") << "clearing the function leaves the label";
+  TableColumnElement clear_label{};
+  clear_label.totals_row_label_op = FM_PATCH_OP_CLEAR;
+  ASSERT_EQ(PatchColumns(wb.handle, {TableColumnKeep(), clear_label}), 0);
+  EXPECT_FALSE(ReadColumn(wb.handle, 1).has_label);
+
+  ASSERT_EQ(PatchColumns(wb.handle, {TableColumnKeep(), TableColumnTotals(FM_TABLE_TOTALS_ROW_FUNCTION_CUSTOM, nullptr,
+                                                                          "=SUM(Tbl[b])*2")}),
+            0);
+  EXPECT_EQ(ReadColumn(wb.handle, 1).formula, "=SUM([b])*2");
+  TableColumnElement to_max{};
+  to_max.totals_row_function_op = FM_PATCH_OP_SET;
+  to_max.totals_row_function = FM_TABLE_TOTALS_ROW_FUNCTION_MAX;
+  ASSERT_EQ(PatchColumns(wb.handle, {TableColumnKeep(), to_max}), 0);
+  EXPECT_FALSE(ReadColumn(wb.handle, 1).has_formula) << "a non-custom function reads its formula as null";
+
+  TableColumnElement custom_without_formula{};
+  custom_without_formula.totals_row_function_op = FM_PATCH_OP_SET;
+  custom_without_formula.totals_row_function = FM_TABLE_TOTALS_ROW_FUNCTION_CUSTOM;
+  EXPECT_EQ(PatchColumns(wb.handle, {TableColumnKeep(), custom_without_formula}), kInvalidArgument);
+  TableColumnElement empty_formula{};
+  empty_formula.totals_row_formula_op = FM_PATCH_OP_SET;
+  empty_formula.totals_row_formula = "";
+  EXPECT_EQ(PatchColumns(wb.handle, {TableColumnKeep(), empty_formula}), kInvalidArgument);
+  EXPECT_EQ(ReadColumn(wb.handle, 1).function, FM_TABLE_TOTALS_ROW_FUNCTION_MAX);
+}
+
+TEST(FormulonCApiTable, ColumnPatchAppliesSeveralColumnsInOneCall) {
+  WorkbookGuard wb;
+  CreateCalcTable(wb, 1);
+  ASSERT_EQ(
+      PatchColumns(wb.handle, {TableColumnTotals(FM_TABLE_TOTALS_ROW_FUNCTION_NONE, "Total"),
+                               TableColumnTotals(FM_TABLE_TOTALS_ROW_FUNCTION_SUM), TableColumnCalculated("=A3*10")}),
+      0)
+      << fm_get_last_error_message();
+  EXPECT_EQ(ReadColumn(wb.handle, 0).label, "Total");
+  EXPECT_EQ(ReadColumn(wb.handle, 1).function, FM_TABLE_TOTALS_ROW_FUNCTION_SUM);
+  EXPECT_EQ(ReadColumn(wb.handle, 2).calc, "=A3*10");
+  EXPECT_EQ(Formula(wb.handle, 5, 1), "=SUBTOTAL(109,[b])");
+  EXPECT_EQ(Formula(wb.handle, 4, 2), "=A5*10");
+  EXPECT_EQ(Value(wb.handle, 5, 2).kind, FM_VALUE_KIND_BLANK) << "the totals row is not part of the fill";
+}
+
+TEST(FormulonCApiTable, ColumnPatchTotalsClearBlanksTheShownCellAndHiddenTotalsAreMetadataOnly) {
+  WorkbookGuard wb;
+  CreateCalcTable(wb, 1);
+  ASSERT_EQ(PatchColumns(wb.handle, TableColumnsAt(1, TableColumnTotals(FM_TABLE_TOTALS_ROW_FUNCTION_SUM))), 0);
+  EXPECT_EQ(Formula(wb.handle, 5, 1), "=SUBTOTAL(109,[b])");
+  ASSERT_EQ(PatchColumns(wb.handle, TableColumnsAt(1, TableColumnTotalsClear())), 0) << fm_get_last_error_message();
+  EXPECT_EQ(ReadColumn(wb.handle, 1).function, FM_TABLE_TOTALS_ROW_FUNCTION_NONE);
+  EXPECT_EQ(Value(wb.handle, 5, 1).kind, FM_VALUE_KIND_BLANK);
+
+  WorkbookGuard hidden;
+  CreateCalcTable(hidden);
+  ASSERT_EQ(PatchColumns(hidden.handle, TableColumnsAt(1, TableColumnTotals(FM_TABLE_TOTALS_ROW_FUNCTION_MAX))), 0);
+  EXPECT_EQ(ReadColumn(hidden.handle, 1).function, FM_TABLE_TOTALS_ROW_FUNCTION_MAX);
+  EXPECT_EQ(Value(hidden.handle, 5, 1).kind, FM_VALUE_KIND_BLANK) << "no totals row, so no cell";
+  EXPECT_EQ(Info(hidden.handle).range.last_row, 4U);
+}
+
+TEST(FormulonCApiTable, ColumnPatchOnATableWithoutDataRowsSetsTheMarkOnly) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  const char* columns[] = {"a", "b", "c"};
+  for (std::uint32_t col = 0; col < 3; ++col) {
+    ASSERT_EQ(fm_sheet_set_text(wb.handle, 0, 1, col, columns[col]), 0);
+  }
+  const fm_cell_rect_t ref{1, 0, 2, 2};  // header row and totals row only
+  std::size_t index = 99U;
+  ASSERT_EQ(AddTable(wb.handle, 0, &ref, "Tbl", columns, 3, "TableStyleMedium2", 1, 1, &index), 0)
+      << fm_get_last_error_message();
+  ASSERT_EQ(SetTableColumnCalculatedFormula(wb.handle, 0, 0, 2, "=A3*10"), 0) << fm_get_last_error_message();
+  const ColumnRead read = ReadColumn(wb.handle, 2);
+  EXPECT_TRUE(read.has_calc);
+  EXPECT_NE(read.calc.find("*10"), std::string::npos) << read.calc;
+  EXPECT_EQ(Value(wb.handle, 2, 2).kind, FM_VALUE_KIND_BLANK) << "the totals row is not a data row";
+  ASSERT_EQ(SetTableColumnCalculatedFormula(wb.handle, 0, 0, 2, nullptr), 0);
+  EXPECT_FALSE(ReadColumn(wb.handle, 2).has_calc);
+}
+
+TEST(FormulonCApiTable, CalculatedColumnSurvivesSingleCellWrites) {
+  const struct {
+    const char* what;
+    std::function<void(fm_workbook_t*)> write;
+  } kCases[] = {
+      {"a constant", [](fm_workbook_t* wb) { EXPECT_EQ(fm_sheet_set_number(wb, 0, 3, 2, 7.0), 0); }},
+      {"a text", [](fm_workbook_t* wb) { EXPECT_EQ(fm_sheet_set_text(wb, 0, 3, 2, "x"), 0); }},
+      {"a cleared cell", [](fm_workbook_t* wb) { EXPECT_EQ(fm_sheet_set_blank(wb, 0, 3, 2), 0); }},
+      {"another formula", [](fm_workbook_t* wb) { EXPECT_EQ(fm_sheet_set_formula(wb, 0, 3, 2, "=B4+1"), 0); }},
+  };
+  for (const auto& c : kCases) {
+    WorkbookGuard wb;
+    CreateCalcTable(wb);
+    ASSERT_EQ(SetTableColumnCalculatedFormula(wb.handle, 0, 0, 2, "=A3*10"), 0);
+    c.write(wb.handle);
+    EXPECT_EQ(ReadColumn(wb.handle, 2).calc, "=A3*10") << c.what;
+    EXPECT_EQ(Formula(wb.handle, 2, 2), "=A3*10") << c.what << ": the neighbours are untouched";
+    EXPECT_EQ(Formula(wb.handle, 4, 2), "=A5*10") << c.what << ": the neighbours are untouched";
+  }
+}
+
+TEST(FormulonCApiTable, CalculatedColumnIsDroppedWhenItsLastNonBlankCellIsBlanked) {
+  WorkbookGuard wb;
+  CreateCalcTable(wb);
+  ASSERT_EQ(SetTableColumnCalculatedFormula(wb.handle, 0, 0, 2, "=A3*10"), 0);
+  ASSERT_EQ(fm_sheet_set_blank(wb.handle, 0, 2, 2), 0);
+  ASSERT_EQ(fm_sheet_set_blank(wb.handle, 0, 4, 2), 0);
+  EXPECT_TRUE(ReadColumn(wb.handle, 2).has_calc) << "one non-blank cell is left";
+  ASSERT_EQ(fm_sheet_set_blank(wb.handle, 0, 3, 2), 0);
+  EXPECT_FALSE(ReadColumn(wb.handle, 2).has_calc);
+  EXPECT_EQ(ExtractZipEntry(Save(wb.handle), "xl/tables/table1.xml").find("calculatedColumnFormula"),
+            std::string::npos);
+  // A column that never carried the mark is unaffected by blanking.
+  ASSERT_EQ(fm_sheet_set_blank(wb.handle, 0, 2, 0), 0);
+  EXPECT_FALSE(ReadColumn(wb.handle, 0).has_calc);
+}
+
+TEST(FormulonCApiTable, BlankingATotalsCellDoesNotDropTheCalculatedColumn) {
+  WorkbookGuard wb;
+  CreateCalcTable(wb, 1);
+  ASSERT_EQ(SetTableColumnCalculatedFormula(wb.handle, 0, 0, 2, "=A3*10"), 0);
+  ASSERT_EQ(fm_sheet_set_text(wb.handle, 0, 5, 2, "x"), 0);
+  ASSERT_EQ(fm_sheet_set_blank(wb.handle, 0, 5, 2), 0);
+  EXPECT_EQ(ReadColumn(wb.handle, 2).calc, "=A3*10");
+}
+
+TEST(FormulonCApiTable, TotalsCellWritesSetTheColumnMetadata) {
+  WorkbookGuard wb;
+  CreateCalcTable(wb, 1);
+  constexpr std::uint32_t kTotalsRow = 5;
+
+  ASSERT_EQ(fm_sheet_set_number(wb.handle, 0, kTotalsRow, 1, 5.0), 0);
+  ColumnRead read = ReadColumn(wb.handle, 1);
+  EXPECT_EQ(read.function, FM_TABLE_TOTALS_ROW_FUNCTION_NONE);
+  EXPECT_EQ(read.label, "5");
+  EXPECT_EQ(Value(wb.handle, kTotalsRow, 1).kind, FM_VALUE_KIND_TEXT) << "a numeric label is stored as text";
+  EXPECT_STREQ(Value(wb.handle, kTotalsRow, 1).u.text, "5");
+
+  ASSERT_EQ(fm_sheet_set_number(wb.handle, 0, kTotalsRow, 1, 5.5), 0);
+  EXPECT_EQ(ReadColumn(wb.handle, 1).label, "5.5");
+
+  ASSERT_EQ(fm_sheet_set_text(wb.handle, 0, kTotalsRow, 0, "Total"), 0);
+  read = ReadColumn(wb.handle, 0);
+  EXPECT_EQ(read.function, FM_TABLE_TOTALS_ROW_FUNCTION_NONE);
+  EXPECT_TRUE(read.has_label);
+  EXPECT_EQ(read.label, "Total");
+
+  ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, kTotalsRow, 1, "=SUBTOTAL(109,Tbl[b])"), 0);
+  read = ReadColumn(wb.handle, 1);
+  EXPECT_EQ(read.function, FM_TABLE_TOTALS_ROW_FUNCTION_SUM);
+  EXPECT_FALSE(read.has_formula);
+
+  ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, kTotalsRow, 1, "=5"), 0);
+  read = ReadColumn(wb.handle, 1);
+  EXPECT_EQ(read.function, FM_TABLE_TOTALS_ROW_FUNCTION_CUSTOM) << "a constant formula is custom, not a label";
+  EXPECT_EQ(read.formula, "=5");
+
+  ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, kTotalsRow, 1, "=SUBTOTAL(9,Tbl[b])"), 0);
+  read = ReadColumn(wb.handle, 1);
+  EXPECT_EQ(read.function, FM_TABLE_TOTALS_ROW_FUNCTION_CUSTOM) << "only the 100-series codes are built-in functions";
+  EXPECT_EQ(read.formula, "=SUBTOTAL(9,[b])");
+
+  ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, kTotalsRow, 1, "=SUM(Tbl[b])*2"), 0);
+  read = ReadColumn(wb.handle, 1);
+  EXPECT_EQ(read.function, FM_TABLE_TOTALS_ROW_FUNCTION_CUSTOM);
+  EXPECT_EQ(read.formula, "=SUM([b])*2");
+
+  ASSERT_EQ(fm_sheet_set_bool(wb.handle, 0, kTotalsRow, 1, 1), 0);
+  read = ReadColumn(wb.handle, 1);
+  EXPECT_EQ(read.function, FM_TABLE_TOTALS_ROW_FUNCTION_NONE);
+  EXPECT_EQ(read.label, "TRUE");
+
+  ASSERT_EQ(fm_sheet_set_blank(wb.handle, 0, kTotalsRow, 1), 0);
+  read = ReadColumn(wb.handle, 1);
+  EXPECT_EQ(read.function, FM_TABLE_TOTALS_ROW_FUNCTION_NONE);
+  EXPECT_FALSE(read.has_label);
+  EXPECT_FALSE(read.has_formula);
+
+  // Neither a data cell nor a cell under a table without a totals row is a totals cell.
+  ASSERT_EQ(PatchColumns(wb.handle, TableColumnsAt(1, TableColumnTotals(FM_TABLE_TOTALS_ROW_FUNCTION_SUM))), 0);
+  ASSERT_EQ(fm_sheet_set_text(wb.handle, 0, 4, 1, "x"), 0);
+  EXPECT_EQ(ReadColumn(wb.handle, 1).function, FM_TABLE_TOTALS_ROW_FUNCTION_SUM);
+  fm_table_patch_t hide = TablePatch();
+  hide.totals_row_op = FM_PATCH_OP_SET;
+  hide.totals_row = 0;
+  ASSERT_EQ(fm_sheet_update_table(wb.handle, 0, 0, &hide), 0);
+  ASSERT_EQ(fm_sheet_set_text(wb.handle, 0, 5, 1, "below"), 0);
+  EXPECT_EQ(ReadColumn(wb.handle, 1).function, FM_TABLE_TOTALS_ROW_FUNCTION_SUM)
+      << "the row below is outside the table";
+}
+
+enum class TotalsWrite {
+  kNumber,
+  kText,
+  kBool,
+  kSubtotalOwn,
+  kSubtotalOtherColumn,
+  kConstantFormula,
+  kCustomFormula,
+  kBlank
+};
+enum class TotalsPrior { kNone, kLabel, kFunction, kCustom };
+
+struct TotalsStep {
+  TotalsWrite write;
+  std::uint32_t column;
+  TotalsPrior prior;
+};
+
+// Pairwise rows over write kind x column x prior state.
+constexpr TotalsStep kTotalsSteps[] = {
+    {TotalsWrite::kBlank, 2, TotalsPrior::kLabel},
+    {TotalsWrite::kConstantFormula, 2, TotalsPrior::kFunction},
+    {TotalsWrite::kSubtotalOwn, 1, TotalsPrior::kNone},
+    {TotalsWrite::kCustomFormula, 0, TotalsPrior::kLabel},
+    {TotalsWrite::kNumber, 1, TotalsPrior::kCustom},
+    {TotalsWrite::kSubtotalOtherColumn, 2, TotalsPrior::kNone},
+    {TotalsWrite::kConstantFormula, 0, TotalsPrior::kCustom},
+    {TotalsWrite::kCustomFormula, 1, TotalsPrior::kFunction},
+    {TotalsWrite::kSubtotalOwn, 0, TotalsPrior::kFunction},
+    {TotalsWrite::kBool, 1, TotalsPrior::kLabel},
+    {TotalsWrite::kConstantFormula, 1, TotalsPrior::kNone},
+    {TotalsWrite::kNumber, 0, TotalsPrior::kNone},
+    {TotalsWrite::kNumber, 2, TotalsPrior::kLabel},
+    {TotalsWrite::kBlank, 0, TotalsPrior::kNone},
+    {TotalsWrite::kBool, 0, TotalsPrior::kNone},
+    {TotalsWrite::kSubtotalOtherColumn, 1, TotalsPrior::kLabel},
+    {TotalsWrite::kConstantFormula, 2, TotalsPrior::kLabel},
+    {TotalsWrite::kCustomFormula, 2, TotalsPrior::kNone},
+    {TotalsWrite::kText, 2, TotalsPrior::kNone},
+    {TotalsWrite::kSubtotalOwn, 2, TotalsPrior::kCustom},
+    {TotalsWrite::kBool, 2, TotalsPrior::kFunction},
+    {TotalsWrite::kBlank, 1, TotalsPrior::kFunction},
+    {TotalsWrite::kSubtotalOtherColumn, 0, TotalsPrior::kCustom},
+    {TotalsWrite::kText, 0, TotalsPrior::kCustom},
+    {TotalsWrite::kCustomFormula, 0, TotalsPrior::kCustom},
+    {TotalsWrite::kText, 1, TotalsPrior::kNone},
+    {TotalsWrite::kNumber, 2, TotalsPrior::kFunction},
+    {TotalsWrite::kText, 1, TotalsPrior::kFunction},
+    {TotalsWrite::kBlank, 0, TotalsPrior::kCustom},
+    {TotalsWrite::kBool, 2, TotalsPrior::kCustom},
+    {TotalsWrite::kSubtotalOtherColumn, 0, TotalsPrior::kFunction},
+    {TotalsWrite::kSubtotalOwn, 0, TotalsPrior::kLabel},
+    {TotalsWrite::kText, 0, TotalsPrior::kLabel},
+};
+
+constexpr const char* kColumnNames[] = {"a", "b", "c"};
+constexpr std::uint32_t kCalcTotalsRow = 5;
+
+void WriteTotalsCell(fm_workbook_t* wb, std::uint32_t column, TotalsWrite write) {
+  const std::string own = std::string("Tbl[") + kColumnNames[column] + "]";
+  const std::string other = std::string("Tbl[") + kColumnNames[(column + 1) % 3] + "]";
+  switch (write) {
+    case TotalsWrite::kNumber:
+      ASSERT_EQ(fm_sheet_set_number(wb, 0, kCalcTotalsRow, column, 5.5), 0);
+      break;
+    case TotalsWrite::kText:
+      ASSERT_EQ(fm_sheet_set_text(wb, 0, kCalcTotalsRow, column, "Total"), 0);
+      break;
+    case TotalsWrite::kBool:
+      ASSERT_EQ(fm_sheet_set_bool(wb, 0, kCalcTotalsRow, column, 1), 0);
+      break;
+    case TotalsWrite::kSubtotalOwn:
+      ASSERT_EQ(fm_sheet_set_formula(wb, 0, kCalcTotalsRow, column, ("=SUBTOTAL(104," + own + ")").c_str()), 0);
+      break;
+    case TotalsWrite::kSubtotalOtherColumn:
+      ASSERT_EQ(fm_sheet_set_formula(wb, 0, kCalcTotalsRow, column, ("=SUBTOTAL(109," + other + ")").c_str()), 0);
+      break;
+    case TotalsWrite::kConstantFormula:
+      ASSERT_EQ(fm_sheet_set_formula(wb, 0, kCalcTotalsRow, column, "=5"), 0);
+      break;
+    case TotalsWrite::kCustomFormula:
+      ASSERT_EQ(fm_sheet_set_formula(wb, 0, kCalcTotalsRow, column, ("=SUM(" + own + ")*2").c_str()), 0);
+      break;
+    case TotalsWrite::kBlank:
+      ASSERT_EQ(fm_sheet_set_blank(wb, 0, kCalcTotalsRow, column), 0);
+      break;
+  }
+}
+
+void ApplyPrior(fm_workbook_t* wb, std::uint32_t column, TotalsPrior prior) {
+  switch (prior) {
+    case TotalsPrior::kNone:
+      WriteTotalsCell(wb, column, TotalsWrite::kBlank);
+      break;
+    case TotalsPrior::kLabel:
+      WriteTotalsCell(wb, column, TotalsWrite::kText);
+      break;
+    case TotalsPrior::kFunction:
+      WriteTotalsCell(wb, column, TotalsWrite::kSubtotalOwn);
+      break;
+    case TotalsPrior::kCustom:
+      WriteTotalsCell(wb, column, TotalsWrite::kConstantFormula);
+      break;
+  }
+}
+
+/// The column's totals metadata, judged against what its totals cell holds now.
+void ExpectTotalsAgreeWithTheCell(fm_workbook_t* wb, std::uint32_t column, const std::string& where) {
+  static const struct {
+    std::int32_t function;
+    int code;
+  } kBuiltIns[] = {{FM_TABLE_TOTALS_ROW_FUNCTION_SUM, 109},     {FM_TABLE_TOTALS_ROW_FUNCTION_MIN, 105},
+                   {FM_TABLE_TOTALS_ROW_FUNCTION_MAX, 104},     {FM_TABLE_TOTALS_ROW_FUNCTION_AVERAGE, 101},
+                   {FM_TABLE_TOTALS_ROW_FUNCTION_COUNT, 103},   {FM_TABLE_TOTALS_ROW_FUNCTION_COUNT_NUMBERS, 102},
+                   {FM_TABLE_TOTALS_ROW_FUNCTION_STD_DEV, 107}, {FM_TABLE_TOTALS_ROW_FUNCTION_VAR, 110}};
+  const ColumnRead read = ReadColumn(wb, column);
+  const std::string formula = Formula(wb, kCalcTotalsRow, column);
+  const fm_value_t cell = Value(wb, kCalcTotalsRow, column);
+  if (!formula.empty()) {
+    std::int32_t expected = FM_TABLE_TOTALS_ROW_FUNCTION_CUSTOM;
+    for (const auto& b : kBuiltIns) {
+      if (formula == "=SUBTOTAL(" + std::to_string(b.code) + ",[" + kColumnNames[column] + "])") {
+        expected = b.function;
+      }
+    }
+    EXPECT_EQ(read.function, expected) << where << ": " << formula;
+    EXPECT_EQ(read.has_formula, expected == FM_TABLE_TOTALS_ROW_FUNCTION_CUSTOM) << where;
+    if (expected == FM_TABLE_TOTALS_ROW_FUNCTION_CUSTOM) {
+      EXPECT_EQ(read.formula, formula) << where;
+    }
+  } else if (cell.kind == FM_VALUE_KIND_BLANK) {
+    EXPECT_EQ(read.function, FM_TABLE_TOTALS_ROW_FUNCTION_NONE) << where;
+    EXPECT_FALSE(read.has_label) << where;
+    EXPECT_FALSE(read.has_formula) << where;
+  } else {
+    EXPECT_EQ(read.function, FM_TABLE_TOTALS_ROW_FUNCTION_NONE) << where;
+    EXPECT_EQ(cell.kind, FM_VALUE_KIND_TEXT) << where << ": a value in a totals cell is stored as its label text";
+    EXPECT_TRUE(read.has_label) << where;
+    if (cell.kind == FM_VALUE_KIND_TEXT) {
+      EXPECT_EQ(read.label, cell.u.text) << where;
+    }
+  }
+}
+
+const char* ExpectedLabel(TotalsWrite write) {
+  switch (write) {
+    case TotalsWrite::kNumber:
+      return "5.5";
+    case TotalsWrite::kText:
+      return "Total";
+    case TotalsWrite::kBool:
+      return "TRUE";
+    default:
+      return nullptr;
+  }
+}
+
+TEST(FormulonCApiTable, TotalsMetadataAgreesWithTheCellAfterEveryWrite) {
+  // Each step on a fresh workbook: bring the column to the prior state, then write.
+  int index = 0;
+  for (const TotalsStep& step : kTotalsSteps) {
+    WorkbookGuard wb;
+    CreateCalcTable(wb, 1);
+    const std::string where = "step " + std::to_string(index++);
+    ApplyPrior(wb.handle, step.column, step.prior);
+    ExpectTotalsAgreeWithTheCell(wb.handle, step.column, where + " prior");
+    WriteTotalsCell(wb.handle, step.column, step.write);
+    ExpectTotalsAgreeWithTheCell(wb.handle, step.column, where + " write");
+    if (const char* label = ExpectedLabel(step.write)) {
+      EXPECT_EQ(ReadColumn(wb.handle, step.column).label, label) << where;
+    }
+  }
+
+  // The same writes as one running sequence: every column stays consistent after every step.
+  WorkbookGuard wb;
+  CreateCalcTable(wb, 1);
+  index = 0;
+  for (const TotalsStep& step : kTotalsSteps) {
+    WriteTotalsCell(wb.handle, step.column, step.write);
+    for (std::uint32_t column = 0; column < 3; ++column) {
+      ExpectTotalsAgreeWithTheCell(wb.handle, column,
+                                   "sequence " + std::to_string(index) + " column " + std::to_string(column));
+    }
+    ++index;
+  }
+}
+
+TEST(FormulonCApiTable, CalculatedColumnAndTotalsRoundTripThroughXlsx) {
+  WorkbookGuard wb;
+  CreateCalcTable(wb, 1);
+  ASSERT_EQ(
+      PatchColumns(wb.handle, {TableColumnTotals(FM_TABLE_TOTALS_ROW_FUNCTION_NONE, "Total"),
+                               TableColumnTotals(FM_TABLE_TOTALS_ROW_FUNCTION_SUM), TableColumnCalculated("=A3*10")}),
+      0);
+  const std::vector<std::uint8_t> saved = Save(wb.handle);
+  const std::string table_xml = ExtractZipEntry(saved, "xl/tables/table1.xml");
+  EXPECT_NE(table_xml.find("A3*10</calculatedColumnFormula>"), std::string::npos) << table_xml;
+  EXPECT_NE(ExtractZipEntry(saved, "xl/worksheets/sheet1.xml").find("t=\"shared\""), std::string::npos)
+      << "an equal-in-R1C1 column is written as a shared formula";
+
+  WorkbookGuard reloaded;
+  Load(saved, reloaded);
+  EXPECT_EQ(ReadColumn(reloaded.handle, 2).calc, "=A3*10");
+  EXPECT_EQ(ReadColumn(reloaded.handle, 0).label, "Total");
+  EXPECT_EQ(ReadColumn(reloaded.handle, 1).function, FM_TABLE_TOTALS_ROW_FUNCTION_SUM);
+  for (std::uint32_t row = 2; row <= 4; ++row) {
+    EXPECT_EQ(Formula(reloaded.handle, row, 2), "=A" + std::to_string(row + 1) + "*10");
+  }
+  EXPECT_EQ(Formula(reloaded.handle, 5, 1), "=SUBTOTAL(109,[b])");
+  ASSERT_EQ(fm_workbook_recalc(reloaded.handle), 0);
+  EXPECT_DOUBLE_EQ(Number(reloaded.handle, 4, 2), 30.0);
+  EXPECT_DOUBLE_EQ(Number(reloaded.handle, 5, 1), 60.0);
+  // The reloaded column still behaves as a calculated column: a one-cell write keeps it.
+  ASSERT_EQ(fm_sheet_set_number(reloaded.handle, 0, 3, 2, 7.0), 0);
+  EXPECT_EQ(ReadColumn(reloaded.handle, 2).calc, "=A3*10");
+}
+
+TEST(FormulonCApiTable, CalculatedColumnAndTotalsRoundTripThroughXlsb) {
+  WorkbookGuard wb;
+  CreateCalcTable(wb, 1);
+  ASSERT_EQ(
+      PatchColumns(wb.handle, {TableColumnTotals(FM_TABLE_TOTALS_ROW_FUNCTION_NONE, "Total"),
+                               TableColumnTotals(FM_TABLE_TOTALS_ROW_FUNCTION_SUM), TableColumnCalculated("=A3*10")}),
+      0);
+  const std::vector<std::uint8_t> saved = SaveAs(wb.handle, FM_WORKBOOK_FORMAT_XLSB);
+  WorkbookGuard reloaded;
+  Load(saved, reloaded);
+  EXPECT_EQ(ReadColumn(reloaded.handle, 2).calc, "=A3*10");
+  EXPECT_EQ(ReadColumn(reloaded.handle, 0).label, "Total");
+  EXPECT_EQ(ReadColumn(reloaded.handle, 1).function, FM_TABLE_TOTALS_ROW_FUNCTION_SUM);
+  EXPECT_EQ(Formula(reloaded.handle, 2, 2), "=A3*10");
+  EXPECT_EQ(Formula(reloaded.handle, 4, 2), "=A5*10");
+  EXPECT_EQ(Formula(reloaded.handle, 5, 1), "=SUBTOTAL(109,[b])");
+  ASSERT_EQ(fm_workbook_recalc(reloaded.handle), 0);
+  EXPECT_DOUBLE_EQ(Number(reloaded.handle, 5, 1), 60.0);
 }
 
 }  // namespace

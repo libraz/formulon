@@ -381,13 +381,13 @@ describe('a record a getter returns is accepted by the matching setter', () => {
     withSheet((ws) => {
       fillTable(ws);
       const table = ws.addTable({ range: 'A1:B3', name: 'T' });
-      table.setColumnTotals(1, { totalsRowFunction: f.TableTotalsRowFunction.Sum });
+      table.update({ columns: [{}, { totalsRowFunction: f.TableTotalsRowFunction.Sum }] });
       const column = table.getProperties().columns[1];
       assert.equal(column.totalsRowFunction, f.TableTotalsRowFunction.Sum);
-      table.setColumnTotals(0, { totalsRowLabel: 'Total' });
-      table.setColumnTotals(1, table.getProperties().columns[1]);
+      table.update({ columns: [{ totalsRowLabel: 'Total' }] });
+      table.update({ columns: [{}, table.getProperties().columns[1]] });
       assert.equal(table.getProperties().columns[1].totalsRowFunction, f.TableTotalsRowFunction.Sum);
-      expectTypeError(() => table.setColumnTotals(1, { function: f.TableTotalsRowFunction.Sum }));
+      expectTypeError(() => table.update({ columns: [{}, { function: f.TableTotalsRowFunction.Sum }] }));
     });
   });
 

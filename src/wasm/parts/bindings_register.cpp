@@ -602,7 +602,6 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("resolveTableRuntimeId", &JsWorkbook::resolveTableRuntimeId)
       .function("getTableCount", &JsWorkbook::tableCount)
       .function("updateTable", &JsWorkbook::updateTable)
-      .function("setTableColumnTotals", &JsWorkbook::setTableColumnTotals)
       .function("getCellXfCount", &JsWorkbook::xfCount);
 
   // ---- Free functions ------------------------------------------------------

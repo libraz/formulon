@@ -911,6 +911,17 @@ class Workbook {
   Expected<void, Error> set_table_calculated_column(std::size_t sheet_index, std::size_t table_index,
                                                     std::size_t column, std::string_view formula);
 
+  /// The refusals `set_table_calculated_column` would report for `formula`,
+  /// without changing anything, for a table whose data rows are
+  /// `first_data_row` to `last_data_row` inclusive (none when the last is
+  /// below the first). The table itself keeps its current range, in which
+  /// the formula is bound; `set_table_calculated_column` runs the same check.
+  /// Returns the mark the column would take, as `TableColumn` stores it.
+  Expected<std::string, Error> check_table_calculated_formula(std::size_t sheet_index, std::size_t table_index,
+                                                              std::size_t column, std::string_view formula,
+                                                              std::uint32_t first_data_row,
+                                                              std::uint32_t last_data_row) const;
+
   /// Removes the calculated-column mark of column `column` of table
   /// `table_index` of `sheet_index`; the cells keep what they hold. Errors as
   /// `set_table_calculated_column` for the target.

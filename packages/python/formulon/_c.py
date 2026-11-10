@@ -1059,7 +1059,6 @@ _STATUS_RETURNING_EXPORT_NAMES = (
     "fm_sheet_set_chart_legend",
     "fm_sheet_set_column_break",
     "fm_sheet_set_table_auto_filter",
-    "fm_sheet_set_table_column_totals",
     "fm_sheet_update_sheet_protection",
     "fm_sheet_update_table",
     "fm_sheet_update_table_style_options",

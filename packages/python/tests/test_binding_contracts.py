@@ -65,7 +65,7 @@ from formulon import (
     SheetRect,
     SheetSelection,
     SheetSelectionInput,
-    TableColumnTotalsInput,
+    TableColumnPatch,
     TableInput,
     TableStyle,
     TableStyleDefaults,
@@ -668,15 +668,15 @@ class WasmOnlyCapabilityTests(unittest.TestCase):
                     totals_row=True,
                 )
             )
-            table.set_column_totals(0, TableColumnTotalsInput(totals_row_label="Total"))
-            table.set_column_totals(1, TableColumnTotalsInput(totals_row_function=TableTotalsRowFunction.SUM))
+            table.update(columns=[TableColumnPatch(totals_row_label="Total")])
+            table.update(columns=[TableColumnPatch(), TableColumnPatch(totals_row_function=TableTotalsRowFunction.SUM)])
             self.assertEqual(wb.sheet(0).get_formula(3, 1), "=SUBTOTAL(109,[Amount])")
             wb.recalc()
             self.assertEqual(wb.sheet(0).get_value(3, 1), 30.0)
             with self.assertRaises(FormulonError):
-                table.set_column_totals(1, TableColumnTotalsInput(totals_row_function=99))  # type: ignore[arg-type]
+                table.update(columns=[TableColumnPatch(), TableColumnPatch(totals_row_function=99)])  # type: ignore[arg-type]
             with self.assertRaises(TypeError):
-                table.set_column_totals(1, TableColumnTotalsInput(totals_row_function="sum"))  # type: ignore[arg-type]
+                table.update(columns=[TableColumnPatch(), TableColumnPatch(totals_row_function="sum")])  # type: ignore[arg-type]
             with Workbook.load(wb.save()) as reloaded:
                 columns = reloaded.sheet(0).list_tables()[0].get_properties().columns
                 self.assertEqual(columns[0].totals_row_label, "Total")

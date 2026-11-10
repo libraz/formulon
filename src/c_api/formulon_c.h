@@ -2415,7 +2415,44 @@ FM_API fm_status_t fm_sheet_add_table(fm_workbook_t* wb, size_t sheet_index, con
                                       size_t* out_table_index);
 
 /**
- * @brief Partial update of a table's range and header / totals rows
+ * @brief A partial update of one table column (an entry of
+ *        `fm_table_patch_t::columns`), with the fields of `fm_table_column_info_t`
+ *        a column's settings are read through.
+ *
+ * A fixed-stride array element: it has no `struct_size`. Each field has an
+ * `fm_patch_op_t` companion; `CLEAR` removes a setting and `KEEP` leaves it.
+ * The result is checked as a whole: a custom totals function needs a non-empty
+ * formula, and any other function drops the formula. A `SET` of a label or
+ * formula that is `NULL` or empty is `FM_STATUS_INVALID_ARGUMENT` (2).
+ */
+typedef struct {
+  /** The operation applied to the totals-row function: keep it, set `totals_row_function`, or clear it to
+   *  `FM_TABLE_TOTALS_ROW_FUNCTION_NONE`. */
+  fm_patch_op_t totals_row_function_op;
+  /** The totals-row function to set, an `fm_table_totals_row_function_t`. */
+  int32_t totals_row_function;
+  /** The operation applied to the totals-row label. */
+  fm_patch_op_t totals_row_label_op;
+  /** The totals-row label to set. */
+  const char* totals_row_label;
+  /** The operation applied to the formula of the custom totals-row function. */
+  fm_patch_op_t totals_row_formula_op;
+  /** The formula to set, with or without one leading `=`; structured references bind as `fm_sheet_set_formula` binds
+   *  them at the column's totals cell (`SUBTOTAL(109,[Qty])` stores `SUBTOTAL(109,Table[Qty])`). Applies only while
+   *  the function is `FM_TABLE_TOTALS_ROW_FUNCTION_CUSTOM`. */
+  const char* totals_row_formula;
+  /** The operation applied to the calculated-column formula: keep it, set `calculated_formula`, or clear the mark
+   *  (the cells keep what they hold). */
+  fm_patch_op_t calculated_formula_op;
+  /** The calculated-column formula to set, with or without one leading `=`, as entered in the column's first data row
+   *  (`[@Qty]` binds to this table). The mark is the state: a formula that differs from the column's mark (after
+   *  binding and normalizing) marks the column and fills every data cell, constants included, with it moved to its
+   *  row; the same formula changes nothing and refills nothing. A table with no data row only takes the mark. */
+  const char* calculated_formula;
+} fm_table_column_patch_t;
+
+/**
+ * @brief Partial update of a table's range, header / totals rows and columns
  *        (`fm_sheet_update_table`).
  *
  * Each field has an `fm_patch_op_t` companion (Patches, in the header
@@ -2438,6 +2475,15 @@ typedef struct {
   /** Turns the totals row on (1) or off (0), growing or shrinking the table by one row; with `range` in the same patch
    *  only the flag flips. */
   int32_t totals_row;
+  /** The operation applied to `columns`: keep the columns as they are, or apply the entries of `columns`; it cannot be
+   *  cleared. */
+  fm_patch_op_t columns_op;
+  /** The `columns_count` column patches `columns_op` `SET` applies: entry i patches column i, so the array may be
+   *  shorter than the table's column count and an entry with every op `KEEP` changes nothing; `NULL` with a zero
+   *  count. */
+  const fm_table_column_patch_t* columns;
+  /** The number of entries of `columns`; more than the table has columns is `FM_STATUS_INDEX_OUT_OF_RANGE` (13). */
+  uint32_t columns_count;
 } fm_table_patch_t;
 
 /**
@@ -2447,8 +2493,7 @@ typedef struct {
  * Totals row on (without `range`): one row is inserted below the table in
  * the table's columns, shifting the cells beneath down (as
  * `fm_sheet_insert_cells` with `FM_CELL_SHIFT_DOWN`), and each column's
- * stored totals label and function (`fm_sheet_set_table_column_totals`) is
- * written there; the data rows are kept. If a merged range, another table,
+ * stored totals label and function is written there; the data rows are kept. If a merged range, another table,
  * a PivotTable, an array formula or a data table straddles the table's
  * columns below it, nothing shifts and the row directly below is used when
  * it is free (no value, formula, spill output, merged range or table cell;
@@ -2464,10 +2509,22 @@ typedef struct {
  *
  * A toggle that changes nothing is a no-op.
  *
+ * Column patches apply after the range, header and totals rows, so a column's
+ * totals settings take effect on the totals row the patch leaves. They are
+ * checked against that final shape before anything changes. A resize first gives each unmarked column the
+ * calculated-column mark its cells imply and fills the blank cells of a marked
+ * one in the added rows. An empty `columns` changes nothing.
+ *
  * @return `FM_STATUS_OK` (0) on success, or a common table failure;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `patch` is `NULL`;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) when an op is out of range or `CLEAR`, `range` is
- *         inverted, outside the grid or of another width, or a row flag is not 0 / 1;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when an op is out of range or `CLEAR` (a column patch's ops may clear),
+ *         `range` is inverted, outside the grid or of another width, a row flag is not 0 / 1, `columns` is `NULL` with
+ *         a `columns_count`, a totals function is outside its enumeration, a label or formula to set is `NULL` or
+ *         empty, the totals function that results is custom with no formula, or a calculated-column formula is an
+ *         array or dynamic-array formula or moves a reference off the grid;
+ *         `FM_STATUS_INDEX_OUT_OF_RANGE` (13) when `columns_count` exceeds the table's column count;
+ *         a parser status (1000-1014; `fm_get_last_parse_error` gives the code and position) when a totals or
+ *         calculated-column formula does not parse;
  *         `FM_STATUS_PRECONDITION_FAILED` (9) when `range` overlaps another table, a
  *         PivotTable, a data table, an array formula or a merged range,
  *         or when turning the totals row on finds the row below occupied (a
@@ -2514,7 +2571,8 @@ typedef enum {
  * @brief One table column (`fm_sheet_get_table_column_at`).
  *
  * `name` and `totals_row_label` share the lifetime of `fm_table_info_t`'s
- * views; a present `totals_row_formula` is read-scratch-backed instead.
+ * views; a present `totals_row_formula` or `calculated_formula` is
+ * read-scratch-backed instead.
  */
 typedef struct {
   uint32_t struct_size;
@@ -2527,6 +2585,9 @@ typedef struct {
   /** The formula of the custom totals-row function with its leading `=`, spelled as at the column's totals cell inside
    *  the table (such as `=SUBTOTAL(109,[Qty])`); `NULL` for any other function. */
   const char* totals_row_formula;
+  /** The calculated-column formula with its leading `=`, spelled as in the column's first data row inside the table
+   *  (such as `=[@Qty]*10`); `NULL` when the column has none. Read-scratch-backed. */
+  const char* calculated_formula;
 } fm_table_column_info_t;
 
 /**
@@ -2722,34 +2783,6 @@ FM_API fm_status_t fm_sheet_insert_table_rows(fm_workbook_t* wb, size_t sheet_in
  */
 FM_API fm_status_t fm_sheet_insert_table_columns(fm_workbook_t* wb, size_t sheet_index, size_t table_index,
                                                  uint32_t first, uint32_t last);
-
-/**
- * @brief Sets column `column_index`'s totals-row function and label.
- *
- * `function` is an `fm_table_totals_row_function_t`. `formula` is required
- * for `FM_TABLE_TOTALS_ROW_FUNCTION_CUSTOM` and ignored
- * otherwise; it is taken with or without one leading `=` and stored without
- * it (`fm_sheet_get_table_column_at` reads it back with it), its structured
- * references bound as `fm_sheet_set_formula` binds them at the column's totals
- * cell (`SUBTOTAL(109,[Qty])` stores `SUBTOTAL(109,Table[Qty])`). A `NULL`
- * `label` or `formula` means none; an empty one is
- * `FM_STATUS_INVALID_ARGUMENT` (2).
- *
- * While the totals row is shown its cell on the last row of the table's
- * range follows, as the desktop application writes it: a built-in function
- * becomes `SUBTOTAL(<101..110>,Table[Column])`, `custom` becomes `formula`,
- * otherwise the label is written as text, or the cell is cleared.
- *
- * @return `FM_STATUS_OK` (0) on success, or a common table failure;
- *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` is `NULL`;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) when `function` is outside its enumeration,
- *         `label` or `formula` is empty, or `custom` has no formula;
- *         a parser status (1000-1014; `fm_get_last_parse_error` gives the code and position) when
- *         `formula` does not parse.
- */
-FM_API fm_status_t fm_sheet_set_table_column_totals(fm_workbook_t* wb, size_t sheet_index, size_t table_index,
-                                                    size_t column_index, int32_t function, const char* label,
-                                                    const char* formula);
 
 /**
  * @brief Writes the number of passthrough OOXML parts the reader carried

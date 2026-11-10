@@ -692,6 +692,35 @@ const TABLE = {
     range: k('A1:B4', { get: (r) => plain(r.range.rect), want: rect(0, 0, 3, 1) }),
     headerRow: k(FLIP),
     totalsRow: k(FLIP),
+    columns: k([{}, { totalsRowFunction: f.TableTotalsRowFunction.Sum }], {
+      get: (r) => r.columns[1].totalsRowFunction,
+      want: f.TableTotalsRowFunction.Sum,
+    }),
+  },
+};
+
+/** Table Tbl over A1:B4 with a totals row: headers Item / Qty, data rows 2..3. Element 1 patches the Qty column. */
+const TABLE_COLUMN = {
+  make: (ws) => {
+    ws.setText('A1', 'Item');
+    ws.setText('B1', 'Qty');
+    ws.setText('A2', 'r2');
+    ws.setNumber('B2', 1);
+    ws.setText('A3', 'r3');
+    ws.setNumber('B3', 2);
+    return { table: ws.addTable({ range: 'A1:B4', name: 'Tbl', totalsRow: true }) };
+  },
+  update: ({ table }, patch) => table.update({ columns: [{}, patch] }),
+  read: ({ table }) => table.getProperties().columns[1],
+  cases: {
+    totalsRowFunction: k(f.TableTotalsRowFunction.Sum, { clear: true, cleared: f.TableTotalsRowFunction.None }),
+    totalsRowLabel: k('Total', { clear: true }),
+    totalsRowFormula: k('=5', {
+      patch: (v) => ({ totalsRowFunction: f.TableTotalsRowFunction.Custom, totalsRowFormula: v }),
+      clear: true,
+      clearPatch: { totalsRowFunction: f.TableTotalsRowFunction.Max, totalsRowFormula: null },
+    }),
+    calculatedFormula: k('=[@Qty]*10', { clear: true }),
   },
 };
 
@@ -961,6 +990,7 @@ const TYPES = {
   PivotGrandTotalsPatch: PIVOT_GRAND_TOTALS,
   TableStyleDefaultsPatch: TABLE_STYLE_DEFAULTS,
   TablePatch: TABLE,
+  TableColumnPatch: TABLE_COLUMN,
   SparklineGroupPatch: SPARKLINE_GROUP,
   ProtectedRangePatch: PROTECTED_RANGE,
   DrawingPatch: DRAWING,

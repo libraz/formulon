@@ -547,7 +547,7 @@ describe('closed string sets are numeric tables on input and output', () => {
           fn === f.TableTotalsRowFunction.Custom
             ? { totalsRowFunction: fn, totalsRowFormula: '=SUM(Sales[Amount])' }
             : { totalsRowFunction: fn };
-        table.setColumnTotals(1, totals);
+        table.update({ columns: [{}, totals] });
         const column = table.getProperties().columns[1];
         assert.equal(column.totalsRowFunction, fn, name);
         assert.equal(typeof column.totalsRowFunction, 'number');
@@ -558,8 +558,8 @@ describe('closed string sets are numeric tables on input and output', () => {
   it('a totals-row function given as a name or out of range is rejected', () => {
     withSheet((ws) => {
       const table = totalsTable(ws);
-      assert.throws(() => table.setColumnTotals(1, { totalsRowFunction: 'sum' }), TypeError);
-      expectInvalid(() => table.setColumnTotals(1, { totalsRowFunction: 10 }));
+      assert.throws(() => table.update({ columns: [{}, { totalsRowFunction: 'sum' }] }), TypeError);
+      expectInvalid(() => table.update({ columns: [{}, { totalsRowFunction: 10 }] }));
     });
   });
 
@@ -1011,14 +1011,24 @@ describe('formula reads carry the leading equals sign and inputs take it either 
     withSheet((ws) => {
       fillColumns(ws);
       const table = ws.addTable({ range: 'A1:B4', name: 'Sales', totalsRow: true });
-      table.setColumnTotals(1, {
-        totalsRowFunction: f.TableTotalsRowFunction.Custom,
-        totalsRowFormula: 'SUM(Sales[Amount])',
+      table.update({
+        columns: [
+          {},
+          {
+            totalsRowFunction: f.TableTotalsRowFunction.Custom,
+            totalsRowFormula: 'SUM(Sales[Amount])',
+          },
+        ],
       });
       const bare = table.getProperties().columns[1].totalsRowFormula;
-      table.setColumnTotals(1, {
-        totalsRowFunction: f.TableTotalsRowFunction.Custom,
-        totalsRowFormula: '=SUM(Sales[Amount])',
+      table.update({
+        columns: [
+          {},
+          {
+            totalsRowFunction: f.TableTotalsRowFunction.Custom,
+            totalsRowFormula: '=SUM(Sales[Amount])',
+          },
+        ],
       });
       const prefixed = table.getProperties().columns[1].totalsRowFormula;
       assert.equal(bare, '=SUM([Amount])');

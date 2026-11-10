@@ -20,7 +20,7 @@ from formulon import (
     Person,
     ProtectedRangeInput,
     StatusCode,
-    TableColumnTotalsInput,
+    TableColumnPatch,
     TableInput,
     TableStyle,
     TableTotalsRowFunction,
@@ -67,7 +67,9 @@ class TableTotalsRowTests(unittest.TestCase):
         for a1, value in (("A1", "Region"), ("B1", "Amt"), ("A2", "East"), ("B2", 10), ("A3", "West"), ("B3", 30)):
             self.ws.set_value(a1, value)
         self.table = self.ws.add_table(TableInput(range="A1:B3", name="Sales"))
-        self.table.set_column_totals(1, TableColumnTotalsInput(totals_row_function=TableTotalsRowFunction.SUM))
+        self.table.update(
+            columns=[TableColumnPatch(), TableColumnPatch(totals_row_function=TableTotalsRowFunction.SUM)]
+        )
 
     def _rect(self) -> CellRect:
         return self.table.get_properties().range.rect

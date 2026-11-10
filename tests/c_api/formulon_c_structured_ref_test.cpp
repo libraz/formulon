@@ -226,14 +226,12 @@ TEST(FormulonCApiStructuredRef, ArrayFormulaReadsAtItsAnchor) {
 TEST(FormulonCApiStructuredRef, TotalsRowShowsTheInsideForm) {
   WorkbookGuard wb;
   BuildSales(wb);
-  ASSERT_EQ(fm_sheet_set_table_column_totals(wb.handle, 0, 0, 0, FM_TABLE_TOTALS_ROW_FUNCTION_SUM, nullptr, nullptr),
-            0);
+  ASSERT_EQ(SetTableColumnTotals(wb.handle, 0, 0, 0, FM_TABLE_TOTALS_ROW_FUNCTION_SUM, nullptr, nullptr), 0);
   EXPECT_EQ(Stored(wb, 0, 4, 0), "=SUBTOTAL(109,tblSales[Qty])");
   EXPECT_EQ(Formula(wb, 0, 4, 0), "=SUBTOTAL(109,[Qty])");
 
   // A custom formula entered in the display form binds at the totals cell.
-  ASSERT_EQ(fm_sheet_set_table_column_totals(wb.handle, 0, 0, 3, FM_TABLE_TOTALS_ROW_FUNCTION_CUSTOM, nullptr,
-                                             "=SUM([Price])*2"),
+  ASSERT_EQ(SetTableColumnTotals(wb.handle, 0, 0, 3, FM_TABLE_TOTALS_ROW_FUNCTION_CUSTOM, nullptr, "=SUM([Price])*2"),
             0)
       << fm_get_last_error_message();
   fm_table_column_info_t column = FM_STRUCT_INIT(fm_table_column_info_t);
@@ -319,8 +317,7 @@ TEST(FormulonCApiStructuredRef, RenameColumnRewritesEveryReference) {
   ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 2, kInsideCol, "=SUM(tblSales[[#This Row],[Qty]:[Price]])"), 0);
   ASSERT_EQ(fm_sheet_set_formula(wb.handle, kOtherSheet, 1, 1, "=SUM(tblSales[Qty])"), 0);
   ASSERT_EQ(SetDefinedName(wb.handle, "NmQ", "=tblSales[Qty]"), 0);
-  ASSERT_EQ(fm_sheet_set_table_column_totals(wb.handle, 0, 0, 0, FM_TABLE_TOTALS_ROW_FUNCTION_SUM, nullptr, nullptr),
-            0);
+  ASSERT_EQ(SetTableColumnTotals(wb.handle, 0, 0, 0, FM_TABLE_TOTALS_ROW_FUNCTION_SUM, nullptr, nullptr), 0);
 
   EXPECT_EQ(Rename(wb, 0, "Amount"), "Amount");
   EXPECT_EQ(ColumnName(wb, 0), "Amount");
@@ -350,9 +347,8 @@ TEST(FormulonCApiStructuredRef, RenamedColumnSavesInExcelsStoredForm) {
   WorkbookGuard wb;
   BuildSales(wb);
   ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, kInsideRow, kInsideCol, "=[@Qty]"), 0);
-  ASSERT_EQ(fm_sheet_set_table_column_totals(wb.handle, 0, 0, 0, FM_TABLE_TOTALS_ROW_FUNCTION_CUSTOM, nullptr,
-                                             "=SUBTOTAL(109,[Qty])"),
-            0)
+  ASSERT_EQ(
+      SetTableColumnTotals(wb.handle, 0, 0, 0, FM_TABLE_TOTALS_ROW_FUNCTION_CUSTOM, nullptr, "=SUBTOTAL(109,[Qty])"), 0)
       << fm_get_last_error_message();
   ASSERT_EQ(Rename(wb, 0, "Amount"), "Amount");
 

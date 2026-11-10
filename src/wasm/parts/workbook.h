@@ -247,7 +247,6 @@ class JsWorkbook {
   void removeTable(uint32_t sheet, uint32_t idx);
   /// Sets column `column`'s totals-row function / label from
   /// `{ function?, label?, formula? }`.
-  void setTableColumnTotals(uint32_t sheet, uint32_t idx, uint32_t column, emscripten::val totals);
   /// Renames column `column` of table `idx`; the result is the final name.
   std::string renameTableColumn(uint32_t sheet, uint32_t idx, uint32_t column, const std::string& name);
   /// Inserts data rows `[first, last]` into table `idx`; `first` equal to the data-row count appends.

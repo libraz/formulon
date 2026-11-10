@@ -6,10 +6,10 @@ pointing at the same table as the table list changes; see :class:`Table`.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Mapping, Optional, Sequence, Tuple, Union
 
 from . import _structs as S
-from ._c import LIB, FormulonError, _argument_message, _NoCopy, _require_bool, _sint, _uint
+from ._c import LIB, FormulonError, _argument_message, _NoCopy, _require_bool, _uint
 from ._sheet import _normalize_auto_filter, _read_auto_filter
 from ._status import StatusCode
 from ._workbook import (
@@ -22,13 +22,14 @@ from ._workbook import (
     CellRect,
     SheetRect,
     TableColumn,
-    TableColumnTotalsInput,
+    TableColumnPatch,
     TableStyleOptions,
     TableTotalsRowFunction,
     Unchanged,
     _ArgScope,
     _check,
     _decode_cell_rect_at,
+    _encode_table_column_patch,
     _pack_cell_rect_at,
 )
 
@@ -164,6 +165,7 @@ class Table(_NoCopy):
                         totals_row_function=col["totals_row_function"],
                         totals_row_label=LIB.read_optional_cstr(col["totals_row_label"]),
                         totals_row_formula=LIB.read_optional_cstr(col["totals_row_formula"]),
+                        calculated_formula=LIB.read_optional_cstr(col["calculated_formula"]),
                     )
                 )
             return TableProperties(
@@ -180,8 +182,9 @@ class Table(_NoCopy):
         range: Union[SheetRect, CellRect, str, Unchanged] = UNCHANGED,
         header_row: Union[bool, Unchanged] = UNCHANGED,
         totals_row: Union[bool, Unchanged] = UNCHANGED,
+        columns: Union[Sequence[Union[TableColumnPatch, TableColumn]], Unchanged] = UNCHANGED,
     ) -> None:
-        """Update the table's range and header / totals rows; an omitted argument keeps its setting.
+        """Update the table's range, header / totals rows and columns; an omitted argument keeps its setting.
 
         ``range`` is a :class:`CellRect`, an A1 range (``"A1:C5"``,
         optionally sheet-qualified) or a :class:`SheetRect`; it must lie on
@@ -202,9 +205,20 @@ class Table(_NoCopy):
         for the next time it is turned on. With ``range`` in the same call ``range`` is the final extent
         and only the flag changes: nothing shifts (a read record feeds back).
 
+        ``columns`` is a sequence of :class:`TableColumnPatch` (a :class:`TableColumn` read back is accepted, its ``name``
+        ignored), applied after the range, header and totals rows, so a column's totals settings take effect on
+        the totals row the update leaves: element ``i`` patches column ``i``. The sequence may be shorter than the
+        table's column count and an element with every field unchanged changes nothing; a longer one raises
+        ``IndexOutOfRangeError``. Every element is checked against the table's final shape before anything changes:
+        an empty label, formula or ``calculated_formula``, the custom function without a formula, or a
+        ``calculated_formula`` that is an array or dynamic-array formula or whose references would leave the grid in
+        the last data row raises ``InvalidArgumentError``, and a formula that does not parse raises its parser error.
+        A resize first gives each unmarked column the calculated-column mark its cells imply and fills the blank
+        cells of a marked one in the added rows.
+
         Raises:
-          TypeError: when a flag is not a ``bool`` or ``range`` has the wrong
-            type (``None`` included).
+          TypeError: when a flag is not a ``bool``, ``range`` has the wrong
+            type (``None`` included), or ``columns`` is not a sequence of :class:`TableColumnPatch`.
           FormulonError: with ``StatusCode.INVALID_ARGUMENT`` when ``range``
             names another sheet or is not an A1 range.
           PreconditionFailedError: when turning the totals row on finds the row below
@@ -216,6 +230,12 @@ class Table(_NoCopy):
                 _require_bool(flag, key)
         if range is not UNCHANGED and not isinstance(range, (SheetRect, CellRect, str)):
             raise TypeError(_argument_message("range", "must be a string, a CellRect or a SheetRect"))
+        if columns is not UNCHANGED:
+            if isinstance(columns, (str, bytes)) or not isinstance(columns, Sequence):
+                raise TypeError(_argument_message("columns", "must be a sequence of TableColumnPatch"))
+            for entry in columns:
+                if not isinstance(entry, (Mapping, TableColumn)):
+                    raise TypeError(_argument_message("columns", "must be a sequence of TableColumnPatch"))
         h, sheet, index = self._locate()
         values = {}
         if range is not UNCHANGED:
@@ -228,6 +248,10 @@ class Table(_NoCopy):
             ptr = scope.struct(S.TABLE_PATCH)
             if range is not UNCHANGED:
                 _pack_cell_rect_at(ptr + S.TABLE_PATCH.offsets["range"][1], self._range_rect(range, sheet))
+            if columns is not UNCHANGED:
+                values["columns_op"] = _PATCH_SET
+                values["columns"] = self._pack_column_patches(scope, columns)
+                values["columns_count"] = _uint(len(columns), "count")
             raw = bytearray(LIB.read_bytes(ptr, S.TABLE_PATCH.size))
             S.TABLE_PATCH.pack_into(raw, 0, values)
             LIB.write_bytes(ptr, bytes(raw))
@@ -236,6 +260,19 @@ class Table(_NoCopy):
                     h, _uint(sheet, "sheet_index", role="sheet"), _uint(index, "table_index", role="position"), ptr
                 )
             )
+
+    @staticmethod
+    def _pack_column_patches(scope: _ArgScope, columns: Sequence[Union[TableColumnPatch, TableColumn]]) -> int:
+        """The engine-memory array of ``fm_table_column_patch_t`` for ``columns``; 0 for none."""
+        if not columns:
+            return 0
+        layout = S.TABLE_COLUMN_PATCH
+        raw = bytearray(layout.size * len(columns))
+        for i, entry in enumerate(columns):
+            layout.pack_into(raw, i * layout.size, _encode_table_column_patch(entry, scope))
+        ptr = scope.alloc(len(raw))
+        LIB.write_bytes(ptr, bytes(raw))
+        return ptr
 
     def _range_rect(self, range: Union[SheetRect, CellRect, str], sheet: int) -> CellRect:
         """The rectangle ``range`` names, which must lie on sheet index ``sheet``."""
@@ -496,37 +533,6 @@ class Table(_NoCopy):
                 )
             return count, count
         return first, first if last is None else last
-
-    def set_column_totals(self, column: int, totals: Union[TableColumnTotalsInput, TableColumn]) -> None:
-        """Set column ``column``'s totals-row function, label and formula from a record.
-
-        ``totals.totals_row_function`` is a :class:`TableTotalsRowFunction`;
-        ``totals_row_formula`` is required for ``CUSTOM``. A ``None``
-        label or formula means none; ``""`` raises ``InvalidArgumentError``. A :class:`TableColumn` read back is
-        accepted in place of a :class:`TableColumnTotalsInput`; its ``name`` is
-        ignored. While the totals row is shown its cell follows:
-        ``SUBTOTAL(109,Table[Column])`` and the other 1xx codes for a built-in
-        function, the formula for ``CUSTOM``, else the label as text, else
-        nothing.
-
-        Raises:
-          TypeError: when ``totals`` is not one of the two record types.
-        """
-        if not isinstance(totals, (TableColumnTotalsInput, TableColumn)):
-            raise TypeError(_argument_message("totals", "must be a TableColumnTotalsInput"))
-        h, sheet, index = self._locate()
-        with _ArgScope() as scope:
-            _check(
-                LIB.fm_sheet_set_table_column_totals(
-                    h,
-                    _uint(sheet, "sheet_index", role="sheet"),
-                    _uint(index, "table_index", role="position"),
-                    _uint(column, "column", role="position"),
-                    _sint(totals.totals_row_function, "totals_row_function"),
-                    0 if totals.totals_row_label is None else scope.cstr(totals.totals_row_label),
-                    0 if totals.totals_row_formula is None else scope.cstr(totals.totals_row_formula),
-                )
-            )
 
     # -- AutoFilter --------------------------------------------------------
     def get_auto_filter(self) -> Optional[AutoFilter]:

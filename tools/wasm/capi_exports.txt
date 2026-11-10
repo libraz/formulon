@@ -110,7 +110,6 @@ fm_sheet_rename_table
 fm_sheet_rename_table_column
 fm_sheet_insert_table_rows
 fm_sheet_insert_table_columns
-fm_sheet_set_table_column_totals
 fm_workbook_get_passthrough_count
 fm_workbook_get_passthrough_at
 fm_workbook_has_passthrough

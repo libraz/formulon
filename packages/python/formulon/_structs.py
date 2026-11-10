@@ -841,6 +841,7 @@ TABLE_COLUMN_INFO = Struct(
         ("totals_row_function", I32),
         ("totals_row_label", PTR),
         ("totals_row_formula", PTR),
+        ("calculated_formula", PTR),
     ],
 )
 
@@ -2772,6 +2773,23 @@ TABLE_PATCH = Struct(
         ("header_row", I32),
         ("totals_row_op", I32),
         ("totals_row", I32),
+        ("columns_op", I32),
+        ("columns", PTR),
+        ("columns_count", U32),
+    ],
+)
+
+TABLE_COLUMN_PATCH = Struct(
+    "fm_table_column_patch_t",
+    [
+        ("totals_row_function_op", I32),
+        ("totals_row_function", I32),
+        ("totals_row_label_op", I32),
+        ("totals_row_label", PTR),
+        ("totals_row_formula_op", I32),
+        ("totals_row_formula", PTR),
+        ("calculated_formula_op", I32),
+        ("calculated_formula", PTR),
     ],
 )
 

@@ -33,7 +33,7 @@ from formulon import (
     PrintTitlesInput,
     SparklineGroupInput,
     SparklineInput,
-    TableColumnTotalsInput,
+    TableColumnPatch,
     TableInput,
     Workbook,
     get_function_metadata,
@@ -199,7 +199,7 @@ class TableAbsenceTests(unittest.TestCase):
             table = sheet.add_table(TableInput(name="Totals", range=CellRect(0, 0, 1, 0)))
             column = table.get_properties().columns[0]
             self.assertEqual((column.totals_row_label, column.totals_row_formula), (None, None))
-            table.set_column_totals(0, TableColumnTotalsInput(totals_row_label="Total"))
+            table.update(columns=[TableColumnPatch(totals_row_label="Total")])
             column = table.get_properties().columns[0]
             self.assertEqual((column.totals_row_label, column.totals_row_formula), ("Total", None))
 

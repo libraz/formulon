@@ -238,27 +238,29 @@ class PivotInputTests(unittest.TestCase):
         built = formulon.PivotFilterInput(field_index="Product", kind=PivotFilterKind.LABEL_EQUAL)
         self.assertEqual(built.field_index, "Product")
 
-    def test_set_column_totals_takes_the_column_record(self) -> None:
+    def test_column_patch_takes_the_column_record(self) -> None:
         with Workbook.create_default() as wb:
             ws = wb.sheet(0)
             _grid(ws)
             table = ws.add_table(TableInput(range="A1:C4", name="T"))
-            table.set_column_totals(
-                1,
-                formulon.TableColumnTotalsInput(totals_row_function=formulon.TableTotalsRowFunction.SUM),
+            table.update(
+                columns=[
+                    formulon.TableColumnPatch(),
+                    formulon.TableColumnPatch(totals_row_function=formulon.TableTotalsRowFunction.SUM),
+                ]
             )
             column = table.get_properties().columns[1]
             self.assertEqual(column.totals_row_function, formulon.TableTotalsRowFunction.SUM)
-            table.set_column_totals(2, column)
+            table.update(columns=[formulon.TableColumnPatch(), formulon.TableColumnPatch(), column])
             self.assertEqual(table.get_properties().columns[2].totals_row_function, formulon.TableTotalsRowFunction.SUM)
 
-    def test_set_column_totals_refuses_the_old_keyword_form(self) -> None:
+    def test_column_patch_refuses_the_old_key(self) -> None:
         with Workbook.create_default() as wb:
             ws = wb.sheet(0)
             _grid(ws)
             table = ws.add_table(TableInput(range="A1:C4", name="T"))
             with self.assertRaises(TypeError):
-                table.set_column_totals(1, function=formulon.TableTotalsRowFunction.SUM)  # type: ignore[call-overload]
+                table.update(columns=[{"function": formulon.TableTotalsRowFunction.SUM}])  # type: ignore[list-item]
 
 
 class SheetRecordInputTests(unittest.TestCase):

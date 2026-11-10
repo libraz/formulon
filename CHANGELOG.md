@@ -198,6 +198,16 @@ Upgrading from 0.18: see [Upgrading from 0.18 to 0.19](docs/releases/upgrading-0
 - `Table.renameColumn` renames a column as typing over its header does.
 - `Table.insertRows(first?, last?)` / `insertColumns(first?, last?)` insert
   table rows and columns; new columns are named from their left neighbour.
+- `Table.update({ columns })` patches columns element by element: element `i`
+  is a partial `TableColumn` (`totalsRowFunction`, `totalsRowLabel`,
+  `totalsRowFormula`, `calculatedFormula`) for column `i`, `null` clears a
+  field, and a read `TableColumn` passes back as is. A `calculatedFormula`
+  different from the column's fills every data cell, the same one is no
+  change, and a column whose last data rows hold one formula is recognised as
+  calculated. `TableColumn.calculatedFormula` reads it; Python takes
+  `TableColumnPatch` and reads `calculated_formula`; C takes
+  `fm_table_column_patch_t` elements in `fm_table_patch_t.columns` and reads
+  `fm_table_column_info_t.calculated_formula`.
 - `convertCivilToSerial` and `convertSerialToCivil` for the 1900 and 1904 date
   systems.
 - `FormulonOptions.wasm` takes the module as bytes or a compiled module, and
@@ -210,6 +220,9 @@ Upgrading from 0.18: see [Upgrading from 0.18 to 0.19](docs/releases/upgrading-0
 
 - A column inserted inside a table is named from its left neighbour (`Q2`
   gives `Q3`, else `Q22`); otherwise it takes the locale's column word.
+- Writing a value, formula or blank to a visible totals-row cell updates the
+  column's totals setting to match, and clearing the last non-blank cell of a
+  calculated column removes its mark.
 - Chart and shape colours accept and return theme references
   (`ColorKind.Theme`); indexed and automatic colours are rejected.
 - Chart type changes follow Excel: bar, column and area keep series fills,
@@ -260,6 +273,8 @@ Upgrading from 0.18: see [Upgrading from 0.18 to 0.19](docs/releases/upgrading-0
 - `fm_workbook_evaluate_formula`, `fm_workbook_evaluate_formula_array_cell`,
   `fm_workbook_probe_image` and other replaced C functions
   ([C ABI changes](docs/releases/upgrading-0.19.md#c-abi-changes)).
+- `setTableColumnTotals` and `TableColumnTotalsInput`: the column totals
+  settings are keys of the `Table.update` `columns` elements.
 - The singleton `remove*` / `clear*` methods, `addHyperlink`,
   `addHyperlinkRange`, `addSheetRowBreak`, `addSheetColBreak` and
   `pivotFieldAddItemAt`, the `enabled` field of sheet protection and

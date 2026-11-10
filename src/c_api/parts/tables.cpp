@@ -40,6 +40,7 @@ using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::display_formula_text;
 using formulon::c_api::parts::finish_status;
+using formulon::c_api::parts::fresh_read_scratch;
 using formulon::c_api::parts::invalid_argument;
 using formulon::c_api::parts::kTotalsRowFunctionTokens;
 using formulon::c_api::parts::local_table_index;
@@ -50,8 +51,11 @@ using formulon::c_api::parts::ordinal_of;
 using formulon::c_api::parts::patch_op_ok_without_clear;
 using formulon::c_api::parts::publish_scratch;
 using formulon::c_api::parts::resolve_sheet_table;
+using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::set_last_error;
+using formulon::c_api::parts::store_cstr;
 using formulon::c_api::parts::text_or_empty;
+using formulon::c_api::parts::TextStore;
 using formulon::c_api::parts::to_cell_rect;
 using formulon::c_api::parts::to_merge_range;
 using formulon::c_api::parts::token_of;
@@ -243,6 +247,208 @@ fm_status_t table_column_names(const formulon::Workbook& book, std::size_t sheet
       } else if ((*names)[i] != header) {
         return invalid_argument(("column_names[" + std::to_string(i) + "] must match its header cell").c_str(),
                                 "column_names[" + std::to_string(i) + "]=" + (*names)[i] + " header=" + header);
+      }
+    }
+  }
+  return 0;
+}
+
+/// One column patch after its checks and its merge into the column's current settings: what
+/// `fm_sheet_update_table` applies once the table's shape is settled.
+struct ColumnPlan {
+  std::size_t column = 0;
+  /// The totals settings that result; the formula is the text to bind when `bind_formula`, else the stored one is kept.
+  std::string totals_function;
+  std::string totals_label;
+  std::string totals_formula;
+  bool bind_formula = false;
+  fm_patch_op_t calculated_formula_op = FM_PATCH_OP_KEEP;
+  std::string calculated_formula;
+  /// The mark `calculated_formula` gives the column, as the engine stores it.
+  std::string calculated_mark;
+};
+
+/// The table's range and header / totals rows once the rest of the patch is applied.
+struct NextShape {
+  formulon::MergeRange rect;
+  bool header_row = false;
+  bool totals_row = false;
+};
+
+/// Checks `patch->columns` against the table at global index `index` and its shape after the patch, merges each entry
+/// into its column's current settings and fills `plans`; nothing changes. A formula is parsed at the next totals cell
+/// (or the next last data row without a totals row); it is bound where it is stored, once the table has its final
+/// shape.
+fm_status_t plan_column_patches(const fm_workbook_t* wb, std::size_t index, const fm_table_patch_t* patch,
+                                const NextShape& next, std::vector<ColumnPlan>* plans) {
+  if (patch->columns_op != FM_PATCH_OP_SET || patch->columns_count == 0U) {
+    return 0;
+  }
+  if (patch->columns == nullptr) {
+    return null_field("columns");
+  }
+  const formulon::Workbook& book = wb->workbook();
+  const formulon::TableMetadata& table = book.tables()[index];
+  if (patch->columns_count > table.columns.size()) {
+    return set_binding_error(
+        formulon::FormulonErrorCode::kIndexOutOfRange,
+        ("columns_count " + std::to_string(patch->columns_count) + " is out of range (" +
+         std::to_string(table.columns.size()) + " columns)")
+            .c_str(),
+        "columns_count=" + std::to_string(patch->columns_count) + " count=" + std::to_string(table.columns.size()));
+  }
+  const std::uint32_t first_data_row = next.rect.first_row + (next.header_row ? 1U : 0U);
+  const std::uint32_t data_end = next.rect.last_row + 1U - (next.totals_row ? 1U : 0U);
+  // A table with no data row passes the empty span 1..0.
+  const std::uint32_t span_first = data_end > first_data_row ? first_data_row : 1U;
+  const std::uint32_t span_last = data_end > first_data_row ? data_end - 1U : 0U;
+  plans->reserve(patch->columns_count);
+  for (std::size_t i = 0; i < patch->columns_count; ++i) {
+    const fm_table_column_patch_t& entry = patch->columns[i];
+    const formulon::TableColumn& current = table.columns[i];
+    const std::string at = "columns[" + std::to_string(i) + "].";
+    for (const auto& [op, field] :
+         {std::pair<fm_patch_op_t, const char*>{entry.totals_row_function_op, "totals_row_function"},
+          {entry.totals_row_label_op, "totals_row_label"},
+          {entry.totals_row_formula_op, "totals_row_formula"},
+          {entry.calculated_formula_op, "calculated_formula"}}) {
+      if (auto rc = check_patch_op(op, (at + field).c_str(), true); rc != 0) {
+        return rc;
+      }
+    }
+    ColumnPlan plan;
+    plan.column = i;
+    plan.totals_function = current.totals_function;
+    plan.totals_label = current.totals_label;
+    plan.totals_formula = current.totals_row_formula;
+    if (entry.totals_row_function_op == FM_PATCH_OP_CLEAR) {
+      plan.totals_function.clear();
+    } else if (entry.totals_row_function_op == FM_PATCH_OP_SET) {
+      if (auto rc = check_enum_domain(entry.totals_row_function, FM_TABLE_TOTALS_ROW_FUNCTION_NONE,
+                                      FM_TABLE_TOTALS_ROW_FUNCTION_CUSTOM, (at + "totals_row_function").c_str());
+          rc != 0) {
+        return rc;
+      }
+      const std::string_view token = token_of(kTotalsRowFunctionTokens, entry.totals_row_function);
+      plan.totals_function = token == "none" ? std::string() : std::string(token);
+    }
+    // A text to set is not `NULL` and not empty; clearing is the op, not an empty string.
+    const auto text_to_set = [&](fm_patch_op_t op, const char* text, const char* field,
+                                 std::string* out) -> fm_status_t {
+      if (op == FM_PATCH_OP_CLEAR) {
+        out->clear();
+        return 0;
+      }
+      if (op != FM_PATCH_OP_SET) {
+        return 0;
+      }
+      if (text == nullptr) {
+        return null_field(at + field);
+      }
+      if (auto rc = check_utf8({text}); rc != 0) {
+        return rc;
+      }
+      if (text[0] == '\0') {
+        return invalid_argument((at + field + " must not be empty").c_str(), std::string(field) + "=");
+      }
+      *out = text;
+      return 0;
+    };
+    if (auto rc =
+            text_to_set(entry.totals_row_label_op, entry.totals_row_label, "totals_row_label", &plan.totals_label);
+        rc != 0) {
+      return rc;
+    }
+    if (auto rc = text_to_set(entry.totals_row_formula_op, entry.totals_row_formula, "totals_row_formula",
+                              &plan.totals_formula);
+        rc != 0) {
+      return rc;
+    }
+    if (plan.totals_function == "custom") {
+      if (plan.totals_formula.empty()) {
+        return invalid_argument((at + "totals_row_formula is required for a custom function").c_str(),
+                                "totals_row_formula=");
+      }
+      if (entry.totals_row_formula_op == FM_PATCH_OP_SET) {
+        std::string checked;
+        if (auto rc = check_entered_cell_formula(wb, table.sheet_index, next.rect.last_row,
+                                                 next.rect.first_col + static_cast<std::uint32_t>(i),
+                                                 plan.totals_formula, "field=" + at + "totals_row_formula", &checked);
+            rc != 0) {
+          return rc;
+        }
+        plan.bind_formula = true;
+      }
+    } else {
+      plan.totals_formula.clear();
+    }
+    plan.calculated_formula_op = entry.calculated_formula_op;
+    std::string calculated;
+    if (auto rc = text_to_set(entry.calculated_formula_op, entry.calculated_formula, "calculated_formula", &calculated);
+        rc != 0) {
+      return rc;
+    }
+    if (entry.calculated_formula_op == FM_PATCH_OP_SET) {
+      auto mark = book.check_table_calculated_formula(table.sheet_index, index, i, calculated, span_first, span_last);
+      if (!mark) {
+        return set_last_error(mark.error());
+      }
+      plan.calculated_formula = std::move(calculated);
+      plan.calculated_mark = std::move(mark.value());
+    }
+    plans->push_back(std::move(plan));
+  }
+  return 0;
+}
+
+/// Applies the column patches `plan_column_patches` accepted, once the table has its final shape. A setting that
+/// equals the column's current one changes nothing.
+fm_status_t apply_column_plans(fm_workbook_t* wb, std::size_t index, const std::vector<ColumnPlan>& plans) {
+  formulon::Workbook& book = wb->workbook();
+  for (const ColumnPlan& plan : plans) {
+    formulon::TableMetadata& table = book.mutable_tables()[index];
+    formulon::TableColumn& col = table.columns[plan.column];
+    std::string stored_formula = plan.totals_formula;
+    if (plan.bind_formula) {
+      // Entered at the column's cell on the table's last row, so `[Qty]` and `[@Qty]` bind to this table.
+      const std::optional<formulon::MergeRange> rect = formulon::parse_a1_rectangle(table.ref);
+      if (!rect) {
+        return invalid_argument("ref is not a range", "ref=" + table.ref);
+      }
+      std::string bound;
+      if (auto rc = check_entered_cell_formula(wb, table.sheet_index, rect->last_row,
+                                               rect->first_col + static_cast<std::uint32_t>(plan.column),
+                                               plan.totals_formula, "field=totals_row_formula", &bound);
+          rc != 0) {
+        return rc;
+      }
+      stored_formula = book.bind_self_book_names(
+          formulon::Workbook::normalize_formula_text(std::move(bound), formulon::Workbook::FormulaSource::kEntered));
+      book.bind_external_books(std::string_view(stored_formula));
+      stored_formula = std::string(formulon::strip_formula_prefix(stored_formula));
+    }
+    if (col.totals_function != plan.totals_function || col.totals_label != plan.totals_label ||
+        col.totals_row_formula != stored_formula) {
+      col.totals_function = plan.totals_function;
+      col.totals_label = plan.totals_label;
+      col.totals_row_formula = std::move(stored_formula);
+      if (table.totals_row) {
+        if (auto rc = finish_status(book.write_table_totals_cell(index, plan.column)); rc != 0) {
+          return rc;
+        }
+      }
+    }
+    if (plan.calculated_formula_op == FM_PATCH_OP_SET) {
+      if (plan.calculated_mark != col.calculated_column_formula) {
+        if (auto rc = finish_status(
+                book.set_table_calculated_column(table.sheet_index, index, plan.column, plan.calculated_formula));
+            rc != 0) {
+          return rc;
+        }
+      }
+    } else if (plan.calculated_formula_op == FM_PATCH_OP_CLEAR && !col.calculated_column_formula.empty()) {
+      if (auto rc = finish_status(book.clear_table_calculated_column(table.sheet_index, index, plan.column)); rc != 0) {
+        return rc;
       }
     }
   }
@@ -489,7 +695,8 @@ extern "C" fm_status_t fm_sheet_update_table(fm_workbook_t* wb, size_t sheet_ind
   // The whole patch is checked before anything changes; no field is clearable.
   for (const auto& [op, field] : {std::pair<fm_patch_op_t, const char*>{patch->range_op, "range"},
                                   {patch->header_row_op, "header_row"},
-                                  {patch->totals_row_op, "totals_row"}}) {
+                                  {patch->totals_row_op, "totals_row"},
+                                  {patch->columns_op, "columns"}}) {
     if (auto rc = check_patch_op(op, field, false); rc != 0) {
       return rc;
     }
@@ -504,15 +711,9 @@ extern "C" fm_status_t fm_sheet_update_table(fm_workbook_t* wb, size_t sheet_ind
     }
   }
   const bool range_set = patch->range_op == FM_PATCH_OP_SET;
-  // Without a range, the totals toggle resizes the table; it checks everything
-  // before changing anything, so a refusal leaves the whole patch unapplied.
-  if (!range_set && patch->totals_row_op == FM_PATCH_OP_SET) {
-    if (auto rc = finish_status(wb->workbook().set_table_totals_row(index, patch->totals_row == 1)); rc != 0) {
-      return rc;
-    }
-  }
-  formulon::TableMetadata& table = wb->workbook().mutable_tables()[index];
-  std::string next_ref = table.ref;
+  formulon::Workbook& book = wb->workbook();
+  formulon::TableMetadata& table = book.mutable_tables()[index];
+  std::string next_ref;
   formulon::AutoFilterSlot next_auto_filter = table.auto_filter_xml;
   if (range_set) {
     if (auto rc = table_ref_text(patch->range, &next_ref); rc != 0) {
@@ -524,7 +725,7 @@ extern "C" fm_status_t fm_sheet_update_table(fm_workbook_t* wb, size_t sheet_ind
     }
     const std::optional<formulon::MergeRange> next_range = formulon::parse_a1_rectangle(next_ref);
     if (next_range) {
-      if (auto checked = wb->workbook().check_table_resize(index, *next_range); !checked) {
+      if (auto checked = book.check_table_resize(index, *next_range); !checked) {
         return finish_status(checked);
       }
     }
@@ -536,41 +737,79 @@ extern "C" fm_status_t fm_sheet_update_table(fm_workbook_t* wb, size_t sheet_ind
           table_auto_filter_xml(formulon::io::auto_filter_xml(next_auto_filter.get()), next_ref)));
     }
   }
-  const bool next_header_row = patch->header_row_op == FM_PATCH_OP_SET ? patch->header_row == 1 : table.header_row;
-  const bool next_totals_row = patch->totals_row_op == FM_PATCH_OP_SET ? patch->totals_row == 1 : table.totals_row;
-  if (!range_set && next_header_row == table.header_row) {
-    return 0;
+  // The shape the table has once the patch is applied, which the column patches are checked against.
+  NextShape next_shape;
+  next_shape.header_row = patch->header_row_op == FM_PATCH_OP_SET ? patch->header_row == 1 : table.header_row;
+  next_shape.totals_row = patch->totals_row_op == FM_PATCH_OP_SET ? patch->totals_row == 1 : table.totals_row;
+  const std::optional<formulon::MergeRange> shape_rect = formulon::parse_a1_rectangle(range_set ? next_ref : table.ref);
+  if (!shape_rect) {
+    return invalid_argument("ref is not a range", "ref=" + (range_set ? next_ref : table.ref));
   }
-  const bool totals_turned_on = range_set && next_totals_row && !table.totals_row;
+  next_shape.rect = *shape_rect;
+  // Without a range the totals toggle adds or drops the last row.
+  if (!range_set && next_shape.totals_row != table.totals_row) {
+    next_shape.rect.last_row = next_shape.totals_row ? shape_rect->last_row + 1U : shape_rect->last_row - 1U;
+  }
+  std::vector<ColumnPlan> column_plans;
+  if (auto rc = plan_column_patches(wb, index, patch, next_shape, &column_plans); rc != 0) {
+    return rc;
+  }
+  // Without a range, the totals toggle resizes the table; it checks everything
+  // before changing anything, so a refusal leaves the whole patch unapplied.
+  if (!range_set && patch->totals_row_op == FM_PATCH_OP_SET) {
+    if (auto rc = finish_status(book.set_table_totals_row(index, patch->totals_row == 1)); rc != 0) {
+      return rc;
+    }
+  }
+  // The toggle can shift cells and rebuild the table list, so look the table up again.
+  formulon::TableMetadata& shaped = book.mutable_tables()[index];
+  if (!range_set) {
+    next_ref = shaped.ref;
+  }
+  const bool next_header_row = patch->header_row_op == FM_PATCH_OP_SET ? patch->header_row == 1 : shaped.header_row;
+  const bool next_totals_row = patch->totals_row_op == FM_PATCH_OP_SET ? patch->totals_row == 1 : shaped.totals_row;
+  if (range_set || next_header_row != shaped.header_row) {
+    const std::optional<formulon::MergeRange> old_range = formulon::parse_a1_rectangle(shaped.ref);
+    // The first row the new range adds below the old data rows.
+    const std::uint32_t first_new_row = old_range ? old_range->last_row + (shaped.totals_row ? 0U : 1U) : 0U;
+    const bool resized = range_set && next_ref != shaped.ref;
+    const bool totals_turned_on = range_set && next_totals_row && !shaped.totals_row;
 
-  table.ref = std::move(next_ref);
-  table.header_row = next_header_row;
-  table.totals_row = next_totals_row;
-  if (totals_turned_on) {
-    // Shown now, so the "never shown" marker no longer applies.
-    table.totals_row_shown.reset();
-  }
-  if (range_set) {
-    table.auto_filter_xml = std::move(next_auto_filter);
-  }
-  // The table's extent or row layout changed, so every structured reference
-  // into it may resolve differently (`eval/dep_extractor.cpp`); reindex the
-  // formulas that name it rather than leave their dep-graph edges and cached
-  // values pointing at the pre-edit shape.
-  wb->workbook().reindex_formulas_for_table_change({table.name, table.display_name});
-  wb->workbook().mark_row_visibility_dependents_dirty();
-  if (totals_turned_on) {
-    for (std::size_t column = 0; column < table.columns.size(); ++column) {
-      const formulon::TableColumn& col = table.columns[column];
-      if (col.totals_function.empty() && col.totals_label.empty()) {
-        continue;
+    shaped.ref = std::move(next_ref);
+    shaped.header_row = next_header_row;
+    shaped.totals_row = next_totals_row;
+    if (totals_turned_on) {
+      // Shown now, so the "never shown" marker no longer applies.
+      shaped.totals_row_shown.reset();
+    }
+    if (range_set) {
+      shaped.auto_filter_xml = std::move(next_auto_filter);
+    }
+    // The table's extent or row layout changed, so every structured reference
+    // into it may resolve differently (`eval/dep_extractor.cpp`); reindex the
+    // formulas that name it rather than leave their dep-graph edges and cached
+    // values pointing at the pre-edit shape.
+    book.reindex_formulas_for_table_change({shaped.name, shaped.display_name});
+    book.mark_row_visibility_dependents_dirty();
+    if (totals_turned_on) {
+      for (std::size_t column = 0; column < shaped.columns.size(); ++column) {
+        const formulon::TableColumn& col = shaped.columns[column];
+        if (col.totals_function.empty() && col.totals_label.empty()) {
+          continue;
+        }
+        if (auto rc = finish_status(book.write_table_totals_cell(index, column)); rc != 0) {
+          return rc;
+        }
       }
-      if (auto rc = finish_status(wb->workbook().write_table_totals_cell(index, column)); rc != 0) {
+    }
+    if (resized) {
+      if (auto rc = finish_status(book.infer_table_calculated_columns(shaped.sheet_index, index, first_new_row));
+          rc != 0) {
         return rc;
       }
     }
   }
-  return 0;
+  return apply_column_plans(wb, index, column_plans);
 }
 
 extern "C" fm_status_t fm_sheet_remove_table(fm_workbook_t* wb, size_t sheet_index, size_t table_index) {
@@ -621,12 +860,19 @@ extern "C" fm_status_t fm_sheet_get_table_column_at(const fm_workbook_t* wb, siz
   out->totals_row_function =
       ordinal_of(kTotalsRowFunctionTokens, col.totals_function, FM_TABLE_TOTALS_ROW_FUNCTION_NONE);
   out->totals_row_label = c_str_or_null(col.totals_label);
-  // The formula sits in the table's totals row, so it is shown from inside the table.
+  // Both formulas are shown from inside the table: the totals formula as in its totals row, the calculated-column
+  // formula as in the column's first data row.
+  TextStore& scratch = fresh_read_scratch(wb);
+  const std::string& own_table = tables[index].display_name;
   out->totals_row_formula =
       col.totals_row_formula.empty()
           ? nullptr
-          : publish_scratch(wb, with_formula_prefix(display_formula_text(wb->workbook(), col.totals_row_formula,
-                                                                         tables[index].display_name)));
+          : store_cstr(scratch,
+                       with_formula_prefix(display_formula_text(wb->workbook(), col.totals_row_formula, own_table)));
+  out->calculated_formula = col.calculated_column_formula.empty()
+                                ? nullptr
+                                : store_cstr(scratch, with_formula_prefix(display_formula_text(
+                                                          wb->workbook(), col.calculated_column_formula, own_table)));
   return 0;
 }
 
@@ -810,62 +1056,4 @@ extern "C" fm_status_t fm_sheet_insert_table_columns(fm_workbook_t* wb, size_t s
     return rc;
   }
   return finish_status(wb->workbook().insert_table_columns(sheet_index, index, first, last));
-}
-
-extern "C" fm_status_t fm_sheet_set_table_column_totals(fm_workbook_t* wb, size_t sheet_index, size_t table_index,
-                                                        size_t column_index, int32_t function, const char* label,
-                                                        const char* formula) {
-  clear_last_error();
-  if (wb == nullptr) {
-    return null_argument("wb");
-  }
-  formulon::Workbook& book = wb->workbook();
-  std::size_t index = 0;
-  if (auto rc = resolve_sheet_table(wb, sheet_index, table_index, &index); rc != 0) {
-    return rc;
-  }
-  auto& tables = book.mutable_tables();
-  if (auto rc = check_index(column_index, tables[index].columns.size(), "column_index"); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_utf8({label}); rc != 0) {
-    return rc;
-  }
-  if ((label != nullptr && label[0] == '\0') || (formula != nullptr && formula[0] == '\0')) {
-    return invalid_argument("label and formula must not be empty");
-  }
-  if (auto rc = check_enum_domain(function, FM_TABLE_TOTALS_ROW_FUNCTION_NONE, FM_TABLE_TOTALS_ROW_FUNCTION_CUSTOM,
-                                  "function");
-      rc != 0) {
-    return rc;
-  }
-  const std::string_view token = token_of(kTotalsRowFunctionTokens, function);
-  std::string stored_formula;
-  if (token == "custom") {
-    if (formula == nullptr) {
-      return invalid_argument("formula is required for a custom function");
-    }
-    // Entered at the column's totals cell, so `[Qty]` and `[@Qty]` bind to this table.
-    const std::optional<formulon::MergeRange> rect = formulon::parse_a1_rectangle(tables[index].ref);
-    if (!rect) {
-      return invalid_argument("ref is not a range", "ref=" + tables[index].ref);
-    }
-    std::string bound;
-    if (auto rc = check_entered_cell_formula(wb, tables[index].sheet_index, rect->last_row,
-                                             rect->first_col + static_cast<std::uint32_t>(column_index), formula,
-                                             "field=formula", &bound);
-        rc != 0) {
-      return rc;
-    }
-    stored_formula = book.bind_self_book_names(
-        formulon::Workbook::normalize_formula_text(std::move(bound), formulon::Workbook::FormulaSource::kEntered));
-    book.bind_external_books(std::string_view(stored_formula));
-    stored_formula = std::string(formulon::strip_formula_prefix(stored_formula));
-  }
-  formulon::TableColumn& col = tables[index].columns[column_index];
-  col.totals_function = token == "none" ? std::string() : std::string(token);
-  col.totals_label = text_or_empty(label);
-  col.totals_row_formula = std::move(stored_formula);
-  const formulon::TableMetadata& table = tables[index];
-  return table.totals_row ? finish_status(book.write_table_totals_cell(index, column_index)) : 0;
 }

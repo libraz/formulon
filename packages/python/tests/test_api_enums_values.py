@@ -49,7 +49,7 @@ from formulon import (
     PivotInput,
     PivotSortOrder,
     SlicerSortOrder,
-    TableColumnTotalsInput,
+    TableColumnPatch,
     TableInput,
     TableStyle,
     TableStyleElement,
@@ -434,11 +434,11 @@ class EnumRecordFieldTests(unittest.TestCase):
             table = sheet.add_table(
                 TableInput(range=CellRect(0, 0, 3, 1), name="Sales", columns=["Product", "Amount"], totals_row=True)
             )
-            table.set_column_totals(1, TableColumnTotalsInput(totals_row_function=TableTotalsRowFunction.SUM))
+            table.update(columns=[TableColumnPatch(), TableColumnPatch(totals_row_function=TableTotalsRowFunction.SUM)])
             with self.assertRaises(TypeError):
-                table.set_column_totals(1, TableColumnTotalsInput(totals_row_function="sum"))  # type: ignore[arg-type]
+                table.update(columns=[TableColumnPatch(), TableColumnPatch(totals_row_function="sum")])  # type: ignore[arg-type]
             with self.assertRaises(FormulonError):
-                table.set_column_totals(1, TableColumnTotalsInput(totals_row_function=99))  # type: ignore[arg-type]
+                table.update(columns=[TableColumnPatch(), TableColumnPatch(totals_row_function=99)])  # type: ignore[arg-type]
             saved = wb.save()
         with Workbook.load(saved) as reloaded:
             columns = reloaded.sheet(0).list_tables()[0].get_properties().columns

@@ -442,7 +442,7 @@ Expected<void, Error> check_node(const parser::AstNode& node, std::size_t ref_co
     case parser::NodeKind::Call: {
       for (const std::string_view banned : kDisallowedFunctions) {
         if (strings::case_insensitive_eq(node.as_call_name(), banned)) {
-          return invalid("function not allowed in a pivot formula", node.as_call_name());
+          return invalid("formula uses a function not allowed in a pivot formula", node.as_call_name());
         }
       }
       for (std::uint32_t i = 0; i < node.as_call_arity(); ++i) {

@@ -30,14 +30,6 @@ static_assert(offsetof(fm_xf_remap_t, to_xf) == 4U);
 
 static_assert(sizeof(fm_patch_op_t) == 4U);
 
-static_assert(sizeof(fm_table_patch_t) == 40U);
-static_assert(offsetof(fm_table_patch_t, range_op) == 4U);
-static_assert(offsetof(fm_table_patch_t, range) == 8U);
-static_assert(offsetof(fm_table_patch_t, header_row_op) == 24U);
-static_assert(offsetof(fm_table_patch_t, header_row) == 28U);
-static_assert(offsetof(fm_table_patch_t, totals_row_op) == 32U);
-static_assert(offsetof(fm_table_patch_t, totals_row) == 36U);
-
 static_assert(sizeof(fm_read_diagnostics_info_t) == 24U);
 static_assert(offsetof(fm_read_diagnostics_info_t, undecoded_formula_count) == 4U);
 static_assert(offsetof(fm_read_diagnostics_info_t, undecoded_defined_name_count) == 8U);
