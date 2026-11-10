@@ -29,6 +29,7 @@
 #include "utils/error.h"
 #include "utils/expected.h"
 #include "utils/formula_text.h"
+#include "utils/number_text.h"
 
 namespace formulon {
 namespace io {
@@ -120,20 +121,7 @@ void append_xml_attr_number(std::string& out, std::string_view name, double valu
 /// the owning XML document.
 std::string_view find_namespace_binding(const pugi::xml_node& node, std::string_view prefix);
 
-/// Appends a double spelled the way Excel writes it into sheet `<v>` and
-/// chart `c:v` (the two are byte-identical).
-///
-///   * Zero and denormals are `0`.
-///   * Leading-digit decimal exponent in [-1, 15]: fixed notation with 15
-///     significant digits when that round-trips, else 17.
-///   * Otherwise: 17 significant digits in exponential form, `E` plus an
-///     explicit sign, no exponent padding (`1.23E-2`, `1E+16`).
-///   * Trailing zeros (and a bare `.`) are stripped in both forms.
-///
-/// NaN and the infinities are NOT handled: callers must screen them out
-/// upstream (a cell holds an Error value instead; a pivot-cache record
-/// holds `<e>`).
-void append_xml_number(std::string& out, double value);
+using formulon::append_xml_number;
 
 /// Parses a non-negative decimal integer attribute body. Missing, empty,
 /// malformed, signed, or out-of-range input returns `default_value` so a

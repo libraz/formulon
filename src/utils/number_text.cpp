@@ -11,7 +11,10 @@
 #include <cmath>
 #include <cstdarg>
 #include <cstdint>
+#include <cstdlib>
 #include <cstring>
+#include <limits>
+#include <string>
 
 #include "double-conversion/double-conversion.h"
 
@@ -369,6 +372,85 @@ int format_unsigned(char* buf, std::size_t cap, unsigned long long v, int min_wi
 
 int format_hex(char* buf, std::size_t cap, unsigned long long v, int min_width, bool upper) {
   return format_unsigned_base(buf, cap, v, min_width, false, 16U, upper);
+}
+
+namespace {
+
+// Decimal digits (no trailing zeros) and exponent of the leading digit.
+struct Sci {
+  char digits[24];
+  int n = 0;
+  int exp10 = 0;
+};
+
+// Rounds |value| to `sig` significant digits through format_exponential.
+Sci SplitSci(double value, int sig) {
+  char buf[48];
+  const int len = format_exponential(buf, sizeof(buf), value, sig - 1);
+  Sci r;
+  int i = buf[0] == '-' ? 1 : 0;
+  for (; i < len && buf[i] != 'e'; ++i) {
+    if (buf[i] != '.') {
+      r.digits[r.n++] = buf[i];
+    }
+  }
+  const bool neg = buf[i + 1] == '-';
+  for (i += 2; i < len; ++i) {
+    r.exp10 = r.exp10 * 10 + (buf[i] - '0');
+  }
+  if (neg) {
+    r.exp10 = -r.exp10;
+  }
+  while (r.n > 1 && r.digits[r.n - 1] == '0') {
+    --r.n;
+  }
+  return r;
+}
+
+}  // namespace
+
+void append_xml_number(std::string& out, double value) {
+  // Zero and denormals read back as 0 in Excel.
+  if (!(std::fabs(value) >= std::numeric_limits<double>::min())) {
+    out.push_back('0');
+    return;
+  }
+  if (value < 0) {
+    out.push_back('-');
+  }
+  const double mag = std::fabs(value);
+  Sci s = SplitSci(mag, 17);
+  if (s.exp10 < -1 || s.exp10 > 15) {
+    out.push_back(s.digits[0]);
+    if (s.n > 1) {
+      out.push_back('.');
+      out.append(s.digits + 1, static_cast<std::size_t>(s.n - 1));
+    }
+    out.push_back('E');
+    out.push_back(s.exp10 < 0 ? '-' : '+');
+    char eb[8];
+    const int el = format_signed(eb, sizeof(eb), s.exp10 < 0 ? -s.exp10 : s.exp10);
+    out.append(eb, static_cast<std::size_t>(el));
+    return;
+  }
+  // Fixed notation: 15 significant digits when they round-trip, else 17.
+  char buf[48];
+  format_exponential(buf, sizeof(buf), mag, 14);
+  if (std::strtod(buf, nullptr) == mag) {
+    s = SplitSci(mag, 15);
+  }
+  if (s.exp10 < 0) {
+    out.append("0.");
+    out.append(static_cast<std::size_t>(-s.exp10 - 1), '0');
+    out.append(s.digits, static_cast<std::size_t>(s.n));
+  } else if (s.n <= s.exp10 + 1) {
+    out.append(s.digits, static_cast<std::size_t>(s.n));
+    out.append(static_cast<std::size_t>(s.exp10 + 1 - s.n), '0');
+  } else {
+    out.append(s.digits, static_cast<std::size_t>(s.exp10 + 1));
+    out.push_back('.');
+    out.append(s.digits + s.exp10 + 1, static_cast<std::size_t>(s.n - s.exp10 - 1));
+  }
 }
 
 }  // namespace formulon

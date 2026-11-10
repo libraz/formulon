@@ -46,6 +46,21 @@ int format_unsigned(char* buf, std::size_t cap, unsigned long long v, int min_wi
 /// Equivalent of `"%0<min_width>X"` (`upper`) or `"%0<min_width>x"`.
 int format_hex(char* buf, std::size_t cap, unsigned long long v, int min_width, bool upper);
 
+/// Appends a double spelled the way Excel writes it into sheet `<v>` and
+/// chart `c:v` (the two are byte-identical).
+///
+///   * Zero and denormals are `0`.
+///   * Leading-digit decimal exponent in [-1, 15]: fixed notation with 15
+///     significant digits when that round-trips, else 17.
+///   * Otherwise: 17 significant digits in exponential form, `E` plus an
+///     explicit sign, no exponent padding (`1.23E-2`, `1E+16`).
+///   * Trailing zeros (and a bare `.`) are stripped in both forms.
+///
+/// NaN and the infinities are NOT handled: callers must screen them out
+/// upstream (a cell holds an Error value instead; a pivot-cache record
+/// holds `<e>`).
+void append_xml_number(std::string& out, double value);
+
 }  // namespace formulon
 
 #endif  // FORMULON_UTILS_NUMBER_TEXT_H_
