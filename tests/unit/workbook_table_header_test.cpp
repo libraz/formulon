@@ -270,6 +270,16 @@ TEST(WorkbookTableHeaderToggle, HidingWithoutFilterCriteriaKeepsRowsHiddenByHand
   EXPECT_TRUE(RowHidden(wb, 4U));
 }
 
+TEST(WorkbookTableHeaderToggle, ShowingAddsAnEmptyFilterEvenWhenTheTableHadNone) {
+  Workbook wb = Book();
+  AddS(wb, "B3:D8");
+  ASSERT_TRUE(wb.remove_table_auto_filter(0).has_value());
+  ASSERT_TRUE(wb.tables()[0].auto_filter_xml.empty());
+  ASSERT_TRUE(wb.set_table_header_row(0, false).has_value());
+  ASSERT_TRUE(wb.set_table_header_row(0, true).has_value());
+  EXPECT_EQ(FilterXml(wb), "<autoFilter ref=\"B3:D8\"/>");
+}
+
 TEST(WorkbookTableHeaderToggle, ShowingIntoAnEmptyRowAboveGrowsTheRangeUp) {
   Workbook wb = Book();
   AddS(wb, "B2:D5");
