@@ -179,6 +179,7 @@ class SurfaceParityTests(unittest.TestCase):
         "list_protected_ranges",
         "list_sparkline_groups",
         "get_cell_phonetic_runs",
+        "get_show_phonetic_cells",
         "list_tables",
         "add_validation",
         "remove_validation",

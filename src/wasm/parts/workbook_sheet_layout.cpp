@@ -584,6 +584,37 @@ emscripten::val JsWorkbook::getCellXfIndices(uint32_t sheet, emscripten::val ran
   return list;
 }
 
+emscripten::val JsWorkbook::getShowPhoneticCells(uint32_t sheet, emscripten::val range) const {
+  if (handle_ == nullptr) {
+    record_invalid_handle();
+    return emscripten::val::undefined();
+  }
+  JsNarrowNumericReader reader("Sheet.getShowPhoneticCells");
+  const bool bounded = js_value_present(range);
+  const fm_cell_rect_t rect = bounded ? js_pull_range(range, &reader) : fm_cell_rect_t{};
+  if (!reader.ok()) {
+    return emscripten::val::undefined();
+  }
+  const fm_cell_rect_t* where = bounded ? &rect : nullptr;
+  size_t len = 0;
+  fm_status_t rc = fm_sheet_get_show_phonetic_cells(handle_, sheet, where, nullptr, 0, &len);
+  std::vector<fm_cell_address_t> cells(len);
+  if (rc == 0 && len > 0) {
+    rc = fm_sheet_get_show_phonetic_cells(handle_, sheet, where, cells.data(), cells.size(), &len);
+  }
+  if (!succeeded(rc)) {
+    return emscripten::val::undefined();
+  }
+  emscripten::val list = emscripten::val::array();
+  for (const fm_cell_address_t& cell : cells) {
+    emscripten::val item = emscripten::val::object();
+    item.set("row", cell.row);
+    item.set("col", cell.col);
+    list.call<void>("push", item);
+  }
+  return list;
+}
+
 emscripten::val JsWorkbook::rangeStyleBasesExcluding(uint32_t sheet, emscripten::val range,
                                                      emscripten::val excludedRows, emscripten::val excludedCols) const {
   if (handle_ == nullptr) {

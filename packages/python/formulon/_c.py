@@ -853,6 +853,7 @@ _STATUS_RETURNING_EXPORT_NAMES = (
     "fm_sheet_get_cell_phonetic_run_at",
     "fm_sheet_get_cell_phonetic_run_count",
     "fm_sheet_get_cell_show_phonetic",
+    "fm_sheet_get_show_phonetic_cells",
     "fm_sheet_get_display_text",
     "fm_sheet_get_formula",
     "fm_sheet_get_formula_r1c1",

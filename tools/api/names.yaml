@@ -4484,6 +4484,16 @@ entries:
     cell_args: [[0, 1]]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_get_cell_show_phonetic, js: getCellShowPhonetic, py: get_show_phonetic }
+  show_phonetic_cells.get:
+    kind: op
+    scope: sheet
+    noun: show_phonetic_cells
+    c: fm_sheet_get_show_phonetic_cells
+    js: getShowPhoneticCells
+    py: get_show_phonetic_cells
+    params: { range: { default: null } }
+    rect_args: [0]
+    surfaces: [c, wasm, native, py]
   lambda_text.get:
     kind: op
     scope: sheet

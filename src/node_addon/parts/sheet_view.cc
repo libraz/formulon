@@ -667,6 +667,40 @@ Napi::Value Workbook::ListCellXfIndices(const Napi::CallbackInfo& info) {
   return list;
 }
 
+Napi::Value Workbook::ListShowPhoneticCells(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return ThrowInvalidHandle(env);
+  }
+  const uint32_t sheet = ArgU32(info, 0);
+  fm_cell_rect_t rect{};
+  const fm_cell_rect_t* where = nullptr;
+  if (!info[1].IsUndefined() && !info[1].IsNull()) {
+    CheckedSpecReader reader(env);
+    if (!ReadCellRect(reader, ArgObject(info, 1), &rect)) {
+      return env.Undefined();
+    }
+    where = &rect;
+  }
+  size_t len = 0;
+  fm_status_t rc = fm_sheet_get_show_phonetic_cells(handle_, sheet, where, nullptr, 0, &len);
+  std::vector<fm_cell_address_t> cells(len);
+  if (rc == 0 && len > 0) {
+    rc = fm_sheet_get_show_phonetic_cells(handle_, sheet, where, cells.data(), cells.size(), &len);
+  }
+  if (rc != 0) {
+    return ThrowStatus(env, rc);
+  }
+  Napi::Array list = Napi::Array::New(env, cells.size());
+  for (size_t i = 0; i < cells.size(); ++i) {
+    Napi::Object item = Napi::Object::New(env);
+    item.Set("row", JsNumber(env, cells[i].row));
+    item.Set("col", JsNumber(env, cells[i].col));
+    list.Set(static_cast<uint32_t>(i), item);
+  }
+  return list;
+}
+
 Napi::Value Workbook::RangeStyleBasesExcluding(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {

@@ -80,6 +80,9 @@ struct StyleCellXf {
 /// Every stored cell of `rect` holding a non-zero xf, in row-major order.
 std::vector<StyleCellXf> cell_xf_indices(const Sheet& sheet, const StyleRect& rect);
 
+/// Every stored cell of `rect` whose Show Phonetic flag is set, row-major.
+std::vector<StyleCell> show_phonetic_cells(const Sheet& sheet, const StyleRect& rect);
+
 /// Rewrites the selection so each cell resolves to `map(its xf before)`;
 /// an xf not in `map` maps to itself. Fails with `kPreconditionFailed`, and
 /// changes nothing, when more than `cell_limit` cells would be written.

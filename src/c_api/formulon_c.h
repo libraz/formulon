@@ -1639,13 +1639,35 @@ FM_API fm_status_t fm_sheet_get_cell_phonetic_properties(const fm_workbook_t* wb
 
 /**
  * @brief Reads the cell's "Show Phonetic" flag into `*out_show` (`0` or `1`).
- *        An absent cell reports `0`.
+ *        An absent cell reports `0`. To enumerate the flagged cells, use
+ *        `fm_sheet_get_show_phonetic_cells`.
  *
  * @return `FM_STATUS_OK` (0) on success, or a common cell-read failure;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `out_show` is `NULL`.
  */
 FM_API fm_status_t fm_sheet_get_cell_show_phonetic(const fm_workbook_t* wb, size_t sheet_index, uint32_t row,
                                                    uint32_t col, int32_t* out_show);
+
+/**
+ * @brief Lists every stored cell of `range` whose "Show Phonetic" flag is set
+ *        (the flag `fm_sheet_get_cell_show_phonetic` reads), in row-major
+ *        order (row, then column, ascending).
+ *
+ * A blank cell that carries only the flag is listed. A `NULL` `range` covers
+ * every stored cell of the sheet, cells outside the used range included.
+ * `*out_count` always receives the number of cells; at most `capacity` are
+ * written. Call with `capacity == 0` (`out` may then be `NULL`) to size the
+ * buffer first.
+ *
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `out_count` is `NULL`, or
+ *         `out` is `NULL` while `capacity > 0`;
+ *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when the rect is out of range.
+ */
+FM_API fm_status_t fm_sheet_get_show_phonetic_cells(const fm_workbook_t* wb, size_t sheet_index,
+                                                    const fm_cell_rect_t* range, fm_cell_address_t* out,
+                                                    size_t capacity, size_t* out_count);
 
 /**
  * @brief Renders the lambda closure stored at `(sheet_index, row, col)`

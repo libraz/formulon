@@ -277,6 +277,23 @@ std::vector<StyleCellXf> cell_xf_indices(const Sheet& sheet, const StyleRect& re
   return out;
 }
 
+std::vector<StyleCell> show_phonetic_cells(const Sheet& sheet, const StyleRect& rect) {
+  std::vector<StyleCell> out;
+  for (const auto& [row, cells] : sheet.rows()) {
+    if (row < rect.first_row || row > rect.last_row || cells.empty()) {
+      continue;
+    }
+    for (const auto& [col, cell] : cells.entries_in(rect.first_col, static_cast<std::uint64_t>(rect.last_col) + 1U)) {
+      if (cell.show_phonetic) {
+        out.push_back({row, col});
+      }
+    }
+  }
+  sort_by_index(out,
+                [](const StyleCell& a, const StyleCell& b) { return a.row != b.row ? a.row < b.row : a.col < b.col; });
+  return out;
+}
+
 std::vector<std::uint32_t> range_style_bases(const Sheet& sheet, const StyleRect& rect,
                                              std::vector<StyleCell> excluded) {
   const auto cell_less = [](const StyleCell& a, const StyleCell& b) {

@@ -410,6 +410,7 @@ SHEET_METHODS = (
     "get_row_height_pt",
     "get_selection",
     "get_sheet_protection",
+    "get_show_phonetic_cells",
     "get_sparkline_group",
     "get_spill",
     "get_tab_color",
@@ -727,6 +728,7 @@ RECT_ARGS = {
     "Sheet.get_merges_in_range": (0,),
     "Sheet.get_range_xf_bases": (0,),
     "Sheet.get_range_xf_bases_excluding": (0,),
+    "Sheet.get_show_phonetic_cells": (0,),
     "Sheet.get_typed_values": (0,),
     "Sheet.get_values": (0,),
     "Sheet.insert_cells": (0,),
@@ -2031,7 +2033,10 @@ class Sheet(_NoCopy):
     def get_cell_show_phonetic(self, a1: str) -> bool: ...
 
     def get_cell_show_phonetic(self, *args: Any, **kwargs: Any) -> bool:
-        """Whether the cell shows its phonetic guide (``<c ph="1">``)."""
+        """Whether the cell shows its phonetic guide (``<c ph="1">``).
+
+        To enumerate the flagged cells, use :meth:`get_show_phonetic_cells`.
+        """
         row, col = self._cell_args("get_cell_show_phonetic", args, kwargs, ())
         sheet = self._index()
         h = self._workbook._require()
@@ -2044,6 +2049,46 @@ class Sheet(_NoCopy):
                 _uint(col, "col", role="coordinate"),
             )
         )
+
+    def get_show_phonetic_cells(self, range: Union[CellRect, str, None] = None) -> List[CellAddress]:
+        """List every stored cell of ``range`` whose Show Phonetic flag is set, row-major.
+
+        This is the flag :meth:`get_cell_show_phonetic` reads. A blank cell
+        carrying only the flag is listed. ``range=None`` covers every stored
+        cell of the sheet, so a flagged cell outside the used range is listed.
+
+        Raises:
+          InvalidArgumentError: when ``range`` is outside the grid.
+        """
+        sheet = self._index()
+        h = self._workbook._require()
+        rect = None if range is None else self._rect(range)
+        with _ArgScope() as scope:
+            rp = 0
+            if rect is not None:
+                rp = scope.struct(S.CELL_RECT)
+                _pack_cell_rect_at(rp, rect)
+            len_ptr = scope.out_ptr()
+            # Size the buffer first, then fetch.
+            _check(
+                LIB.fm_sheet_get_show_phonetic_cells(h, _uint(sheet, "sheet_index", role="sheet"), rp, 0, 0, len_ptr)
+            )
+            total = LIB.read_u32(len_ptr)
+            if total == 0:
+                return []
+            size = S.CELL_ADDRESS.size
+            buf = scope.struct_array(S.CELL_ADDRESS, total)
+            _check(
+                LIB.fm_sheet_get_show_phonetic_cells(
+                    h, _uint(sheet, "sheet_index", role="sheet"), rp, buf, _uint(total, "cap"), len_ptr
+                )
+            )
+            n = min(total, LIB.read_u32(len_ptr))
+            raw = LIB.read_bytes(buf, size * n)
+            cells = (
+                S.CELL_ADDRESS.unpack_from(raw, i * size) for i in builtins.range(n)
+            )  # `range` is the parameter here
+            return [CellAddress(row=c["row"], col=c["col"]) for c in cells]
 
     @overload
     @_coordinate_form
@@ -2465,7 +2510,8 @@ class Sheet(_NoCopy):
         Cells come in row-major order; each carries its stored formula, its
         value as native data and the value's kind, as
         :meth:`get_cells_in_range` pages them. Cells with content only; for
-        formatted cells see ``ooxml.get_cell_xf_indices``.
+        formatted cells see ``ooxml.get_cell_xf_indices``; for blanks carrying
+        only a Show Phonetic flag, :meth:`get_show_phonetic_cells`.
         """
         rect = self._range_or_used(range)
         if rect is None:
@@ -7512,7 +7558,8 @@ class SheetOoxml(_NoCopy):
         explicitly set to XF 0 is not, nor is a spill cell, which has no
         stored record. ``range=None`` covers every stored cell of the sheet,
         so a formatted cell outside the used range is listed. Complements
-        :meth:`Sheet.list_cells`, which lists cells with content only.
+        :meth:`Sheet.list_cells`, which lists cells with content only; for
+        flag-only cells see :meth:`Sheet.get_show_phonetic_cells`.
 
         Raises:
           InvalidArgumentError: when ``range`` is outside the grid.

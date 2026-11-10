@@ -299,6 +299,110 @@ TEST(FormulonCApiWorkbookView, ShowPhoneticSurvivesValueWritesAndRoundTrips) {
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
 }
 
+// A flagged constant (B2), a flag-only blank (A3), a flagged text (H5) and a far flag-only blank (U1001), beside an
+// unflagged number (C2) and an unflagged stored blank (D6).
+void FlagShowPhoneticCells(fm_workbook_t* wb) {
+  ASSERT_EQ(fm_sheet_set_blank(wb, 0, 1000, 20), 0);
+  ASSERT_EQ(fm_sheet_set_cell_show_phonetic(wb, 0, 1000, 20, 1), 0);
+  ASSERT_EQ(fm_sheet_set_number(wb, 0, 1, 1, 5.0), 0);
+  ASSERT_EQ(fm_sheet_set_cell_show_phonetic(wb, 0, 1, 1, 1), 0);
+  ASSERT_EQ(fm_sheet_set_cell_show_phonetic(wb, 0, 2, 0, 1), 0);
+  ASSERT_EQ(fm_sheet_set_text(wb, 0, 4, 7, "x"), 0);
+  ASSERT_EQ(fm_sheet_set_cell_show_phonetic(wb, 0, 4, 7, 1), 0);
+  ASSERT_EQ(fm_sheet_set_number(wb, 0, 1, 2, 1.0), 0);
+  ASSERT_EQ(fm_sheet_set_blank(wb, 0, 5, 3), 0);
+}
+
+std::vector<fm_cell_address_t> ShowPhoneticCells(const fm_workbook_t* wb, const fm_cell_rect_t* range) {
+  size_t total = 0;
+  EXPECT_EQ(fm_sheet_get_show_phonetic_cells(wb, 0, range, nullptr, 0, &total), 0);
+  std::vector<fm_cell_address_t> cells(total);
+  size_t written = 0;
+  if (total > 0) {
+    EXPECT_EQ(fm_sheet_get_show_phonetic_cells(wb, 0, range, cells.data(), cells.size(), &written), 0);
+    EXPECT_EQ(written, total);
+  }
+  return cells;
+}
+
+void ExpectCells(const std::vector<fm_cell_address_t>& got, const std::vector<fm_cell_address_t>& want) {
+  ASSERT_EQ(got.size(), want.size());
+  for (size_t i = 0; i < want.size(); ++i) {
+    EXPECT_EQ(got[i].row, want[i].row) << "cell " << i;
+    EXPECT_EQ(got[i].col, want[i].col) << "cell " << i;
+  }
+}
+
+const std::vector<fm_cell_address_t> kAllFlagged = {{1, 1}, {2, 0}, {4, 7}, {1000, 20}};
+
+TEST(FormulonCApiWorkbookView, ShowPhoneticCellsListsFlaggedCellsRowMajorWithoutAnUnflaggedOne) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  EXPECT_TRUE(ShowPhoneticCells(wb.handle, nullptr).empty());
+  FlagShowPhoneticCells(wb.handle);
+  ExpectCells(ShowPhoneticCells(wb.handle, nullptr), kAllFlagged);
+
+  // Clearing the flag removes the cell from the list.
+  ASSERT_EQ(fm_sheet_set_cell_show_phonetic(wb.handle, 0, 1, 1, 0), 0);
+  ExpectCells(ShowPhoneticCells(wb.handle, nullptr), {{2, 0}, {4, 7}, {1000, 20}});
+}
+
+TEST(FormulonCApiWorkbookView, ShowPhoneticCellsClipsToTheRange) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  FlagShowPhoneticCells(wb.handle);
+  const fm_cell_rect_t top_left{0, 0, 2, 1};
+  ExpectCells(ShowPhoneticCells(wb.handle, &top_left), {{1, 1}, {2, 0}});
+  const fm_cell_rect_t one_cell{4, 7, 4, 7};
+  ExpectCells(ShowPhoneticCells(wb.handle, &one_cell), {{4, 7}});
+  const fm_cell_rect_t none{7, 0, 9, 2};
+  EXPECT_TRUE(ShowPhoneticCells(wb.handle, &none).empty());
+}
+
+TEST(FormulonCApiWorkbookView, ShowPhoneticCellsCountsPastTheCapacity) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  FlagShowPhoneticCells(wb.handle);
+  std::vector<fm_cell_address_t> out(2, fm_cell_address_t{99, 99});
+  size_t total = 0;
+  ASSERT_EQ(fm_sheet_get_show_phonetic_cells(wb.handle, 0, nullptr, out.data(), out.size(), &total), 0);
+  EXPECT_EQ(total, 4U);
+  ExpectCells(out, {{1, 1}, {2, 0}});
+  out.assign(2, fm_cell_address_t{99, 99});
+  ASSERT_EQ(fm_sheet_get_show_phonetic_cells(wb.handle, 0, nullptr, out.data(), 0, &total), 0);
+  EXPECT_EQ(total, 4U);
+  ExpectCells(out, {{99, 99}, {99, 99}});
+}
+
+TEST(FormulonCApiWorkbookView, ShowPhoneticCellsKeepsAFlagOnlyBlankThroughASaveAndLoad) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  FlagShowPhoneticCells(wb.handle);
+  for (const fm_workbook_format_t format : {FM_WORKBOOK_FORMAT_XLSX, FM_WORKBOOK_FORMAT_XLSB}) {
+    WorkbookGuard reloaded;
+    Load(Save(wb.handle, format), reloaded);
+    SCOPED_TRACE(format);
+    ExpectCells(ShowPhoneticCells(reloaded.handle, nullptr), kAllFlagged);
+  }
+}
+
+TEST(FormulonCApiWorkbookView, ShowPhoneticCellsRefusesBadArguments) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  fm_cell_address_t cell{};
+  size_t total = 0;
+  EXPECT_EQ(fm_sheet_get_show_phonetic_cells(wb.handle, 0, nullptr, nullptr, 0, nullptr),
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
+  EXPECT_EQ(fm_sheet_get_show_phonetic_cells(wb.handle, 0, nullptr, nullptr, 1, &total),
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
+  EXPECT_EQ(fm_sheet_get_show_phonetic_cells(nullptr, 0, nullptr, &cell, 1, &total),
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
+  EXPECT_EQ(fm_sheet_get_show_phonetic_cells(wb.handle, 9, nullptr, &cell, 1, &total),
+            FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
+  const fm_cell_rect_t outside{0, 0, 1048576, 0};
+  EXPECT_EQ(fm_sheet_get_show_phonetic_cells(wb.handle, 0, &outside, &cell, 1, &total), kInvalidArgument);
+}
+
 TEST(FormulonCApiWorkbookView, RowColumnAndCellPhoneticFlagsAreReadAndPreserved) {
   const std::string sheet =
       "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n"

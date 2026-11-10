@@ -368,3 +368,74 @@ describe('getCellXfIndices', () => {
     });
   });
 });
+
+describe('getShowPhoneticCells', () => {
+  /** A flagged constant, a flag-only blank, a flagged text, a far flagged blank, and unflagged content and blank. */
+  function flaggedCells(ws) {
+    ws.setBlank('U1001');
+    ws.setCellShowPhonetic('U1001', true); // flag-only blank, far from the content
+    ws.setNumber('B2', 5);
+    ws.setCellShowPhonetic('B2', true); // flagged constant
+    ws.setCellShowPhonetic('A3', true); // flag-only blank
+    ws.setText('H5', 'x');
+    ws.setCellShowPhonetic('H5', true); // flagged text
+    ws.setNumber('C2', 1); // content, no flag
+    ws.setBlank('D6'); // stored blank, no flag
+  }
+  const all = [
+    { row: 1, col: 1 },
+    { row: 2, col: 0 },
+    { row: 4, col: 7 },
+    { row: 1000, col: 20 },
+  ];
+
+  it('lists flagged constants and flag-only blanks row-major and leaves out unflagged cells', () => {
+    withSheet((ws) => {
+      flaggedCells(ws);
+      assert.deepEqual(plain(ws.getShowPhoneticCells()), all);
+      for (const { row, col } of all) assert.equal(ws.getCellShowPhonetic(row, col), true);
+    });
+  });
+
+  it('the default range covers a flagged cell outside the used range', () => {
+    withSheet((ws) => {
+      flaggedCells(ws);
+      assert.ok(ws.getUsedRange().lastRow < 1000);
+      assert.equal(ws.getShowPhoneticCells(null).length, 4);
+      assert.equal(ws.getShowPhoneticCells(undefined).length, 4);
+    });
+  });
+
+  it('clips to a CellRect or an A1 range', () => {
+    withSheet((ws) => {
+      flaggedCells(ws);
+      const clipped = [
+        { row: 1, col: 1 },
+        { row: 2, col: 0 },
+      ];
+      assert.deepEqual(plain(ws.getShowPhoneticCells(rect(0, 0, 2, 1))), clipped);
+      assert.deepEqual(plain(ws.getShowPhoneticCells('A1:B3')), clipped);
+      assert.deepEqual(plain(ws.getShowPhoneticCells('H5')), [{ row: 4, col: 7 }]);
+      assert.deepEqual(plain(ws.getShowPhoneticCells('A8:C10')), []);
+    });
+  });
+
+  it('survives a save and a load, flag-only A3 included', () => {
+    withSheet((ws, wb) => {
+      assert.equal(ws.getShowPhoneticCells().length, 0);
+      flaggedCells(ws);
+      const reloaded = f.Workbook.load(wb.save());
+      try {
+        assert.deepEqual(plain(reloaded.sheet(0).getShowPhoneticCells()), all);
+      } finally {
+        reloaded.dispose();
+      }
+    });
+  });
+
+  it('refuses a rectangle outside the grid', () => {
+    withSheet((ws) => {
+      assert.throws(() => ws.getShowPhoneticCells(rect(0, 0, 1048576, 0)));
+    });
+  });
+});

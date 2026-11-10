@@ -363,6 +363,7 @@ class JsWorkbook {
   void clearRowStyle(uint32_t sheet, uint32_t first, uint32_t last);
   emscripten::val rangeStyleBases(uint32_t sheet, emscripten::val range) const;
   emscripten::val getCellXfIndices(uint32_t sheet, emscripten::val range) const;
+  emscripten::val getShowPhoneticCells(uint32_t sheet, emscripten::val range) const;
   emscripten::val rangeStyleBasesExcluding(uint32_t sheet, emscripten::val range, emscripten::val excludedRows,
                                            emscripten::val excludedCols) const;
   void remapRangeStyle(uint32_t sheet, emscripten::val range, emscripten::val fromXfs, emscripten::val toXfs);

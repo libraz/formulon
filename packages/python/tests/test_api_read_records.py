@@ -244,6 +244,62 @@ class ListCellXfIndicesTests(unittest.TestCase):
                 wb.sheet(0).ooxml.get_cell_xf_indices(CellRect(0, 0, 1048576, 0))
 
 
+class ListShowPhoneticCellsTests(unittest.TestCase):
+    @staticmethod
+    def _flagged(wb: Workbook) -> None:
+        """A flagged constant, a flag-only blank, a flagged text, a far flagged blank, and unflagged cells."""
+        ws = wb.sheet(0)
+        ws.set_blank("U1001")
+        ws.set_cell_show_phonetic("U1001", True)  # flag-only blank, far from the content
+        ws.set_number("B2", 5.0)
+        ws.set_cell_show_phonetic("B2", True)  # flagged constant
+        ws.set_cell_show_phonetic("A3", True)  # flag-only blank
+        ws.set_text("H5", "x")
+        ws.set_cell_show_phonetic("H5", True)  # flagged text
+        ws.set_number("C2", 1.0)  # content, no flag
+        ws.set_blank("D6")  # stored blank, no flag
+
+    ALL = [CellAddress(1, 1), CellAddress(2, 0), CellAddress(4, 7), CellAddress(1000, 20)]
+
+    def test_lists_flagged_cells_row_major_and_leaves_out_unflagged_ones(self) -> None:
+        with Workbook.create_default() as wb:
+            self._flagged(wb)
+            ws = wb.sheet(0)
+            self.assertEqual(ws.get_show_phonetic_cells(), self.ALL)
+            for cell in self.ALL:
+                self.assertTrue(ws.get_cell_show_phonetic(cell.row, cell.col))
+
+    def test_the_default_range_covers_flagged_cells_outside_the_used_range(self) -> None:
+        with Workbook.create_default() as wb:
+            self._flagged(wb)
+            ws = wb.sheet(0)
+            self.assertLess(ws.get_used_range().last_row, 1000)
+            self.assertEqual(len(ws.get_show_phonetic_cells(None)), 4)
+
+    def test_clips_to_a_rect_or_an_a1_range(self) -> None:
+        with Workbook.create_default() as wb:
+            self._flagged(wb)
+            ws = wb.sheet(0)
+            clipped = [CellAddress(1, 1), CellAddress(2, 0)]
+            self.assertEqual(ws.get_show_phonetic_cells(CellRect(0, 0, 2, 1)), clipped)
+            self.assertEqual(ws.get_show_phonetic_cells("A1:B3"), clipped)
+            self.assertEqual(ws.get_show_phonetic_cells("H5"), [CellAddress(4, 7)])
+            self.assertEqual(ws.get_show_phonetic_cells("A8:C10"), [])
+
+    def test_the_flag_only_blank_survives_save_and_load(self) -> None:
+        with Workbook.create_default() as wb:
+            self.assertEqual(wb.sheet(0).get_show_phonetic_cells(), [])
+            self._flagged(wb)
+            saved = wb.save()
+        with Workbook.load(saved) as reloaded:
+            self.assertEqual(reloaded.sheet(0).get_show_phonetic_cells(), self.ALL)
+
+    def test_an_out_of_grid_rect_is_refused(self) -> None:
+        with Workbook.create_default() as wb:
+            with self.assertRaises(FormulonError):
+                wb.sheet(0).get_show_phonetic_cells(CellRect(0, 0, 1048576, 0))
+
+
 class AutoFilterConditionTests(unittest.TestCase):
     def _filter(self, conditions: Any) -> Any:
         return formulon.AutoFilterInput(

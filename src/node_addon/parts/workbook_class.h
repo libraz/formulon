@@ -442,6 +442,7 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value ClearRowStyle(const Napi::CallbackInfo& info);
   Napi::Value RangeStyleBases(const Napi::CallbackInfo& info);
   Napi::Value ListCellXfIndices(const Napi::CallbackInfo& info);
+  Napi::Value ListShowPhoneticCells(const Napi::CallbackInfo& info);
   Napi::Value RangeStyleBasesExcluding(const Napi::CallbackInfo& info);
   Napi::Value RemapRangeStyle(const Napi::CallbackInfo& info);
   Napi::Value SnapshotRangeStyle(const Napi::CallbackInfo& info);

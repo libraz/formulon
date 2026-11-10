@@ -135,6 +135,7 @@ constexpr const char* kSheetMethods[] = {
     "getShape",
     "getSheetPrXml",
     "getSheetProtection",
+    "getShowPhoneticCells",
     "getSlicer",
     "getSparklineGroup",
     "getSparklineGroupCount",

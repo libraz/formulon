@@ -1069,6 +1069,10 @@ export function styleRecords(dxf: Dxf): void {
   const parent: number | undefined = xf.styleXfIndex;
   const format = sheet.getCellFormat('A1');
   const xfIndex: number | null = sheet.ooxml.getCellXfIndex('A1');
+  const flagged: readonly CellAddress[] = sheet.getShowPhoneticCells();
+  sheet.getShowPhoneticCells('A1:B2');
+  sheet.getShowPhoneticCells(null);
+  const flaggedRow: number = flagged[0].row;
   const run = sheet.getCellPhoneticRuns('A1')[0];
   const span: number = run.end - run.start;
   sheet.setCellPhoneticProperties('A1', { fontIndex: 0, type: PhoneticType.Hiragana, alignment: PhoneticAlignment.Left });

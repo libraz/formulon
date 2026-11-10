@@ -7254,7 +7254,7 @@ export interface Sheet {
   getCellsInRange(range?: CellRect | string | null, options?: PageOptions): CellsInRange;
   /** Lists every populated cell (formula or non-blank value, spill phantoms included) inside `range`, row-major.
    *  `range` defaults as for {@link Sheet.getUsedRange}. Cells with content only; for formatted cells see
-   *  `ooxml.getCellXfIndices`. */
+   *  `ooxml.getCellXfIndices`; for blanks carrying only a Show Phonetic flag, `getShowPhoneticCells`. */
   listCells(range?: CellRect | string | null): readonly RangeCell[];
   /** The text Excel displays for the cell, from its value and number format under the workbook's date
    *  system.
@@ -7330,10 +7330,17 @@ export interface Sheet {
   /** `getCellPhoneticProperties` at the A1 address `a1`. */
   getCellPhoneticProperties(a1: string): PhoneticProperties;
   /** Reads the cell's "Show Phonetic" flag (`<c ph="1">`); `false` for an
-   *  absent cell. */
+   *  absent cell. To enumerate the flagged cells, use `getShowPhoneticCells`. */
   getCellShowPhonetic(row: number, col: number): boolean;
   /** `getCellShowPhonetic` at the A1 address `a1`. */
   getCellShowPhonetic(a1: string): boolean;
+  /**
+   * Lists, row-major (row, then column, ascending), every stored cell inside `range` whose "Show Phonetic" flag is
+   * set, the flag `getCellShowPhonetic` reads. A blank cell carrying only the flag is listed. An omitted or `null`
+   * `range` covers every stored cell of the sheet, so a flagged cell outside {@link Sheet.getUsedRange} is listed.
+   * A rectangle outside the grid fails with `StatusCode.InvalidArgument`.
+   */
+  getShowPhoneticCells(range?: CellRect | string | null): readonly CellAddress[];
   /** Sets the cell's "Show Phonetic" display flag. It is independent of the
    *  readings and survives value writes; a formula cell's flag is neither
    *  saved nor read from a file. */
@@ -8169,7 +8176,8 @@ export interface SheetOoxml {
    * styled blank cells and cells with content alike. A cell explicitly set to XF 0 is not listed, nor is a spill
    * cell, which has no stored record. An omitted or `null` `range` covers every stored cell of the sheet, so a
    * formatted cell outside {@link Sheet.getUsedRange} is listed. Complements `Sheet.listCells`, which lists cells
-   * with content only. A rectangle outside the grid fails with `StatusCode.InvalidArgument`.
+   * with content only; for flag-only cells see `Sheet.getShowPhoneticCells`. A rectangle outside the grid fails with
+   * `StatusCode.InvalidArgument`.
    */
   getCellXfIndices(range?: CellRect | string | null): readonly CellXfIndex[];
   /**

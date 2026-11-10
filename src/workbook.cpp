@@ -572,6 +572,12 @@ Expected<std::vector<StyleCellXf>, Error> Workbook::cell_xf_indices(std::size_t 
   return formulon::cell_xf_indices(sheets_[sheet_index], rect);
 }
 
+Expected<std::vector<StyleCell>, Error> Workbook::show_phonetic_cells(std::size_t sheet_index,
+                                                                      const StyleRect& rect) const {
+  RETURN_IF_ERROR(check_style_rect(sheet_index, sheets_.size(), rect));
+  return formulon::show_phonetic_cells(sheets_[sheet_index], rect);
+}
+
 Expected<void, Error> Workbook::remap_range_style(std::size_t sheet_index, const StyleRect& rect,
                                                   std::vector<XfRemap> map) {
   RETURN_IF_ERROR(check_style_rect(sheet_index, sheets_.size(), rect));
