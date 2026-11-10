@@ -203,8 +203,9 @@ Upgrading from 0.18: see [Upgrading from 0.18 to 0.19](docs/releases/upgrading-0
   would overlap another object fails. New data fields are numbered when their
   name is taken ("Sum of Amt2"), API-created pivots start with Excel's
   new-pivot options, and loaded filters of every type are listed.
-- An edited pivot is saved with its row and column items instead of asking
-  Excel to rebuild it on open; a cache built in Formulon still asks.
+- An edited or newly built pivot is saved with its row and column items
+  instead of asking Excel to rebuild it on open; only a cache whose records
+  were filled by hand, not by a refresh, still asks.
 - Formula text spells structured references as the formula bar does (`@`,
   locale specifiers), and setters accept that form.
 - Writing into a table header cell renames the column.
