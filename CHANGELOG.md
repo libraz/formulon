@@ -4191,6 +4191,11 @@ order.
   fails with `IoContentTypeInvalid`.
 - `PivotField.subtotalTop` reads `false` after it is set to `false` in
   JavaScript. It used to read `true` whatever was set.
+- A cell font with no colour is saved with no `<color>` element, so it reads
+  back as automatic. It used to be saved as explicit black.
+- Refreshing a pivot cache names a source column with a blank header in the
+  workbook's locale (`フィールド1` in Japanese, `Feld1` in German) instead
+  of always in English.
 - A reference deleted by a structural edit is spelled as Excel spells it. A
   row or column deletion keeps the qualifier the reference was written with
   (`=Sheet3!#REF!*2`, `='Data 1'!#REF!`, a defined name `Sheet3!#REF!`), and
