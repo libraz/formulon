@@ -184,6 +184,10 @@ struct PivotCacheField {
   /// Per shared item, true when it is a calculated item (`<s v=".." f="1"/>`);
   /// shorter than `shared_items` means the rest are not.
   std::vector<bool> shared_item_is_calculated;
+  /// Per shared item, true when a refresh kept it although the source no
+  /// longer holds it (`<s v=".." u="1"/>`); shorter than `shared_items` means
+  /// the rest are present.
+  std::vector<bool> shared_item_is_missing;
   /// Numeric / date range + grouping hints from `<sharedItems>`. Preserved
   /// verbatim so Excel's Refresh keeps its grouping boundaries.
   SharedItemsHints shared_items_hints;
@@ -372,6 +376,23 @@ class PivotCache {
   /// `saveData`: false drops the records part on save.
   bool save_data() const { return save_data_; }
   void set_save_data(bool value) { save_data_ = value; }
+
+  /// Every `<pivotCacheDefinition>` property a refresh keeps: the root and
+  /// `<cacheSource>` attributes, the retained children, the source, the
+  /// options and the id. Fields, records, text and calculated items are not
+  /// copied.
+  void copy_definition_from(const PivotCache& other) {
+    cache_id_ = other.cache_id_;
+    worksheet_source_ = other.worksheet_source_;
+    passthrough_attrs_ = other.passthrough_attrs_;
+    cache_source_attrs_ = other.cache_source_attrs_;
+    cache_source_children_xml_ = other.cache_source_children_xml_;
+    trailing_children_xml_ = other.trailing_children_xml_;
+    trailing_children_after_calculated_xml_ = other.trailing_children_after_calculated_xml_;
+    save_data_ = other.save_data_;
+    missing_items_limit_ = other.missing_items_limit_;
+    refresh_on_load_ = other.refresh_on_load_;
+  }
 
   /// `missingItemsLimit`; absent is Excel's automatic limit, 0 none.
   std::optional<std::uint32_t> missing_items_limit() const { return missing_items_limit_; }

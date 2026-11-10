@@ -18,6 +18,8 @@
 #include "eval/eval_profile_scope.h"
 #include "new_workbook_defaults.h"
 #include "pivot/calculated.h"
+#include "pivot/field_grouping.h"
+#include "pivot/field_remap.h"
 #include "pivot/filter_engine.h"
 #include "pivot/pivot_cache.h"
 #include "pivot/pivot_evaluator.h"
@@ -267,13 +269,10 @@ Expected<std::size_t, Error> Workbook::show_pivot_details(std::size_t sheet, std
   return sheet;
 }
 
-namespace {
-
-// Every pivot table, across all sheets, bound to cache `cache_id`.
-std::vector<pivot::PivotTable*> pivots_of_cache(Workbook& wb, std::uint32_t cache_id) {
+std::vector<pivot::PivotTable*> Workbook::pivots_of_cache(std::uint32_t cache_id) {
   std::vector<pivot::PivotTable*> tables;
-  for (std::size_t s = 0; s < wb.sheet_count(); ++s) {
-    for (std::unique_ptr<pivot::PivotTable>& table : wb.sheet(s).mutable_pivot_tables()) {
+  for (Sheet& sheet : sheets_) {
+    for (std::unique_ptr<pivot::PivotTable>& table : sheet.mutable_pivot_tables()) {
       if (table != nullptr && table->pivot_cache_id() == cache_id) {
         tables.push_back(table.get());
       }
@@ -281,6 +280,26 @@ std::vector<pivot::PivotTable*> pivots_of_cache(Workbook& wb, std::uint32_t cach
   }
   return tables;
 }
+
+void Workbook::invalidate_pivot_results(std::uint32_t cache_id) {
+  // Group fields follow their base, so an edited cache re-derives them.
+  for (std::unique_ptr<pivot::PivotCache>& cache : pivot_caches_) {
+    if (cache != nullptr && cache->cache_id() == cache_id) {
+      pivot::materialize_group_fields(*cache, date1904_);
+      break;
+    }
+  }
+  const std::vector<pivot::PivotTable*> tables = pivots_of_cache(cache_id);
+  for (pivot::PivotTable* table : tables) {
+    pivot::clear_derived_state(*table);
+    table->set_projection_pending(true);
+  }
+  if (!tables.empty()) {
+    mark_all_formulas_dirty();
+  }
+}
+
+namespace {
 
 Error unknown_cache(std::uint32_t cache_id) {
   return make_error(FormulonErrorCode::kNotFound, "cache_id does not name a pivot cache",
@@ -313,7 +332,7 @@ Expected<std::size_t, Error> Workbook::add_pivot_cache_field(std::uint32_t cache
     return unknown_cache(cache_id);
   }
   cache->mutable_fields().push_back(std::move(field));
-  pivot::sync_table_fields(*cache, pivots_of_cache(*this, cache_id));
+  pivot::sync_table_fields(*cache, pivots_of_cache(cache_id));
   return cache->fields().size() - 1U;
 }
 

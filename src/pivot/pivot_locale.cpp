@@ -601,6 +601,17 @@ std::string date_group_field_name(GroupBy period, std::string_view base_name, Ex
   return out;
 }
 
+std::optional<std::string_view> blank_header_field_word(ExcelProfile profile) {
+  switch (profile.locale) {
+    case ExcelLocale::kJaJP:
+      return std::string_view("フィールド");
+    case ExcelLocale::kEnUS:
+      return std::string_view("Field");
+    default:
+      return std::nullopt;
+  }
+}
+
 std::string date_group_unit_label(GroupBy period, unsigned index, ExcelProfile profile) {
   const PivotDateWords& words = date_words(profile);
   switch (period) {

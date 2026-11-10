@@ -267,10 +267,11 @@ std::vector<ProjectedCell> project_cells(const pivot::PivotTable& table, const p
   return out;
 }
 
-// Refusal of `target` as a pivot's new report range: it may cover plain cells
-// and the pivot's own previous range, `own`, but no other structure.
-Expected<void, Error> check_projection_target(const Workbook& wb, std::size_t sheet_index, std::size_t pivot_index,
-                                              const MergeRange& target, const MergeRange& own) {
+}  // namespace
+
+Expected<void, Error> detail::check_projection_target(const Workbook& wb, std::size_t sheet_index,
+                                                      std::size_t pivot_index, const MergeRange& target,
+                                                      const MergeRange& own) {
   const Sheet& sheet = wb.sheet(sheet_index);
   const auto refuse = [&](const char* what) {
     return make_error(FormulonErrorCode::kPreconditionFailed, std::string(what),
@@ -312,6 +313,8 @@ Expected<void, Error> check_projection_target(const Workbook& wb, std::size_t sh
   }
   return Expected<void, Error>::Ok();
 }
+
+namespace {
 
 // Refuses a (sheet, pivot) pair that names no pivot table.
 Expected<void, Error> check_pivot_slot(const Workbook& wb, std::size_t sheet_index, std::size_t pivot_index) {
@@ -359,7 +362,7 @@ Expected<void, Error> Workbook::project_pivot(std::size_t sheet_index, std::size
   std::optional<MergeRange> new_extent;
   if (cells.rows > 0U && cells.cols > 0U) {
     new_extent = MergeRange{cells.top, cells.left, cells.top + cells.rows - 1U, cells.left + cells.cols - 1U};
-    RETURN_IF_ERROR(check_projection_target(*this, sheet_index, pivot_index, *new_extent, old_extent));
+    RETURN_IF_ERROR(detail::check_projection_target(*this, sheet_index, pivot_index, *new_extent, old_extent));
   }
   std::vector<ProjectedCell> projected = project_cells(table, *cache, cells);
 

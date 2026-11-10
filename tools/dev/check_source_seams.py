@@ -139,6 +139,7 @@ _FACADE_FILES = frozenset(
         "workbook_data_table.cpp",
         "workbook_pivot_details.cpp",
         "workbook_pivot_projection.cpp",
+        "workbook_pivot_refresh.cpp",
         "workbook_row_col_edit.cpp",
         "workbook_tables.cpp",
         "workbook_table_loss.h",
@@ -185,6 +186,12 @@ LAYER_BASELINE: dict[tuple[str, str], str] = {
     ),
     ("pivot/field_grouping.cpp", "eval/text_format/display_text.h"): (
         "Date group items show their bounds as the locale's short date, as Excel writes them."
+    ),
+    ("pivot/pivot_refresh.cpp", "eval/text_format/display_text.h"): (
+        "A refreshed field is named by its header cell's displayed text, as Excel names it."
+    ),
+    ("pivot/pivot_source.cpp", "eval/a1_parse.h"): (
+        "A worksheet source ref is A1 text read with the grammar INDIRECT and names use."
     ),
     ("io/ooxml_writer.cpp", "eval/eval_profile_scope.h"): "Pivot write plans collate shared items like evaluation.",
     ("sheet_name.cpp", "eval/collation.h"): "Name identity is the measured Mac '=' text collation equality.",

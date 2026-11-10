@@ -151,6 +151,7 @@ set(FORMULON_CORE_SOURCES
   src/workbook_copy_sheet.cpp
   src/workbook_pivot_details.cpp
   src/workbook_pivot_projection.cpp
+  src/workbook_pivot_refresh.cpp
   src/workbook_tables.cpp
   src/workbook_formula_index.cpp
   src/workbook_ref_rewrite.cpp
@@ -311,6 +312,10 @@ set(FORMULON_CORE_SOURCES
   src/pivot/date_group_edit.cpp
   src/pivot/calculated.cpp
   src/pivot/calculated_edit.cpp
+  src/pivot/field_remap.cpp
+  src/pivot/pivot_refresh.cpp
+  src/pivot/pivot_source.cpp
+  src/pivot/shared_items_hints.cpp
   src/pivot/pivot_layout.cpp
   src/pivot/pivot_layout_axis.cpp
   src/pivot/pivot_layout_emit.cpp

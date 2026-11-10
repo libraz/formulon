@@ -27,6 +27,7 @@
 #include "utils/strings.h"
 
 namespace formulon {
+class Workbook;
 namespace pivot {
 class PivotTable;
 }  // namespace pivot
@@ -141,6 +142,13 @@ inline std::optional<MergeRange> table_rect_on_sheet(const TableMetadata& table,
 /// The rectangle a pivot occupies: its last projection, else its location
 /// with the page fields and their gap row above it.
 MergeRange pivot_occupied_extent(const pivot::PivotTable& table);
+
+/// Refusal of `target` as pivot `pivot_index`'s new report range on sheet
+/// `sheet_index`: it may cover plain cells and the pivot's own previous range,
+/// `own`, but no other PivotTable, table, data table, legacy array block or
+/// merge. `kPreconditionFailed` naming what it would overlap.
+Expected<void, Error> check_projection_target(const Workbook& wb, std::size_t sheet_index, std::size_t pivot_index,
+                                              const MergeRange& target, const MergeRange& own);
 
 }  // namespace detail
 }  // namespace formulon

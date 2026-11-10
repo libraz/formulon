@@ -15,6 +15,7 @@
 #include "pivot/calculated.h"
 #include "pivot/calculated_internal.h"
 #include "pivot/field_lookup.h"
+#include "pivot/field_remap.h"
 #include "pivot/filter_engine.h"
 #include "pivot/pivot_cache.h"
 #include "pivot/pivot_errors.h"
@@ -167,18 +168,6 @@ bool on_axis(const PivotField& field) {
   return field.axis == PivotAxis::Row || field.axis == PivotAxis::Col || field.axis == PivotAxis::Page;
 }
 
-/// Position of `field` on its axis in `table`, for the `<pivotArea>` Excel
-/// writes with a calculated item.
-std::optional<std::uint32_t> axis_position(const PivotTable& table, std::size_t field) {
-  for (const std::vector<std::uint32_t>& order :
-       {table.row_field_order(), table.col_field_order(), table.page_field_order()}) {
-    if (const auto position = field_position_in_order(order, field)) {
-      return static_cast<std::uint32_t>(*position);
-    }
-  }
-  return std::nullopt;
-}
-
 /// Renumbers field indices after cache field `removed` is erased; `true` when
 /// `index` named it.
 bool renumber_field(std::uint32_t& index, std::size_t removed) {
@@ -191,56 +180,13 @@ bool renumber_field(std::uint32_t& index, std::size_t removed) {
   return false;
 }
 
-void erase_field_from_table(PivotTable& table, std::size_t field) {
-  drop_field_aggregates(table, field);
-  for (PivotDataField& data_field : table.mutable_data_fields()) {
-    renumber_field(data_field.field_index, field);
-    if (data_field.show_as_base_field.has_value() && renumber_field(*data_field.show_as_base_field, field)) {
-      data_field.show_as_base_field.reset();
-    }
-  }
-
-  for (PivotFilter& filter : table.mutable_active_filters()) {
-    if (filter.source.has_value() && filter.source->field_index > field) {
-      filter.source.reset();
-    }
-  }
-
-  for (std::vector<std::uint32_t>* order : {&table.mutable_row_field_order(), &table.mutable_col_field_order()}) {
-    std::vector<std::uint32_t> renumbered;
-    for (std::uint32_t index : *order) {
-      if (!renumber_field(index, field)) {
-        renumbered.push_back(index);
-      }
-    }
-    *order = std::move(renumbered);
-  }
-  std::vector<PivotPageField> pages;
-  for (PivotPageField page : table.mutable_page_fields()) {
-    if (!renumber_field(page.field_index, field)) {
-      pages.push_back(page);
-    }
-  }
-  table.mutable_page_fields() = std::move(pages);
-
-  erase_at(table.mutable_fields(), field);
-}
-
 }  // namespace
 
 void sync_table_fields(const PivotCache& cache, const std::vector<PivotTable*>& tables) {
   for (PivotTable* table : tables) {
     std::vector<PivotField>& fields = table->mutable_fields();
     while (fields.size() < cache.fields().size()) {
-      const PivotCacheField& cache_field = cache.fields()[fields.size()];
-      PivotField field;
-      field.source_name = cache_field.name;
-      field.axis = PivotAxis::None;
-      if (cache_field.formula.has_value()) {
-        field.default_subtotal = false;
-        field.passthrough_attrs = {{"dragToRow", "0"}, {"dragToCol", "0"}, {"dragToPage", "0"}};
-      }
-      fields.push_back(std::move(field));
+      fields.push_back(unplaced_pivot_field(cache.fields()[fields.size()]));
     }
   }
 }
@@ -311,9 +257,6 @@ Expected<void, Error> remove_calculated_field(PivotCache& cache, const std::vect
     }
   }
 
-  for (PivotTable* table : tables) {
-    erase_field_from_table(*table, field_index);
-  }
   std::vector<PivotCacheField>& fields = cache.mutable_fields();
   erase_at(fields, field_index);
   for (PivotCacheField& field : fields) {
@@ -338,6 +281,16 @@ Expected<void, Error> remove_calculated_field(PivotCache& cache, const std::vect
         renumber_field(*reference.field, field_index);
       }
     }
+  }
+  // Every table drops the field and renumbers the ones after it.
+  FieldRemap remap;
+  for (std::size_t f = 0; f <= fields.size(); ++f) {
+    remap.fields.push_back(
+        f == field_index ? std::nullopt
+                         : std::optional<std::uint32_t>(static_cast<std::uint32_t>(f < field_index ? f : f - 1U)));
+  }
+  for (PivotTable* table : tables) {
+    remap_table(*table, cache, remap);
   }
   return Expected<void, Error>::Ok();
 }
@@ -507,6 +460,7 @@ Expected<void, Error> remove_calculated_item(PivotCache& cache, const std::vecto
   erase_at(cache_field.shared_items, removed);
   erase_at(cache_field.shared_item_is_calculated, removed);
   erase_at(cache_field.shared_item_is_date, removed);
+  erase_at(cache_field.shared_item_is_missing, removed);
   for (PivotCacheRecord& record : cache.mutable_records()) {
     if (field >= record.cells.size() || !record.cells[field].is_number()) {
       continue;

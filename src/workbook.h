@@ -1203,6 +1203,48 @@ class Workbook {
   /// Errors: `kInvalidArgument` for an index out of range.
   Expected<void, Error> clear_pivot_projection(std::size_t sheet_index, std::size_t pivot_index);
 
+  /// Every pivot table, across all sheets in sheet order, drawing from cache
+  /// `cache_id`.
+  std::vector<pivot::PivotTable*> pivots_of_cache(std::uint32_t cache_id);
+
+  /// Re-derives the group fields of cache `cache_id` and forgets every result
+  /// and authored span of the pivots drawing from it, leaving their reports
+  /// pending; formulas are dirtied when there is such a pivot. Called after
+  /// any edit of the cache. Nothing happens for an unknown cache.
+  void invalidate_pivot_results(std::uint32_t cache_id);
+
+  /// The report range a pivot edit would give pivot `pivot` on sheet `sheet`;
+  /// an empty `extent` is an empty report.
+  struct PivotGrowth {
+    std::size_t sheet = 0;
+    std::size_t pivot = 0;
+    std::optional<MergeRange> extent;
+  };
+
+  /// Whether every planned report range of `growth` may be written: it covers
+  /// no PivotTable other than its own, table, data table, legacy array block
+  /// or foreign merge; no non-empty cell outside the pivot's current range;
+  /// and no other planned range on the same sheet.
+  ///
+  /// Errors: `kPreconditionFailed` naming the first blocking cell or pivot.
+  Expected<void, Error> check_pivot_growth(const std::vector<PivotGrowth>& growth) const;
+
+  /// Rebuilds cache `cache_id` from its worksheet source and re-projects
+  /// every pivot drawing from it, as Excel's Refresh does. Source values are
+  /// read after `ensure_calculated(registry)`. Either everything changes or
+  /// nothing does.
+  ///
+  /// Errors:
+  ///   * `kNotFound` for an unknown cache.
+  ///   * `kPreconditionFailed` when the source does not resolve
+  ///     (`pivot::resolve_worksheet_source`) or a report could not grow
+  ///     (`check_pivot_growth`).
+  ///   * `kSecurityResourceLimit` when (rows - 1) x columns of the source
+  ///     exceeds `kMaxPivotCacheRecordCells`.
+  ///   * `kNotImplemented` as `pivot::build_refreshed_cache`.
+  ///   * an evaluation error of `ensure_calculated` or of a pivot.
+  Expected<void, Error> refresh_pivot_cache(std::uint32_t cache_id, const eval::FunctionRegistry& registry);
+
   /// Returns the OOXML workbook variant this instance round-trips as.
   /// Defaults to `WorkbookKind::kXlsx`; the reader updates it from the
   /// workbook part's content type, and the writer consults it when

@@ -24,6 +24,7 @@
 #include "pivot/pivot_cache.h"
 #include "pivot/pivot_table.h"
 #include "pivot/record_access.h"
+#include "pivot/shared_items_hints.h"
 #include "pivot/value_order.h"
 #include "utils/index_sort.h"
 #include "value.h"
@@ -87,11 +88,18 @@ void AppendInlineTypedValue(std::string& out, const Value& v, bool as_date, bool
   out.append("<m/>");
 }
 
-/// `AppendInlineTypedValue` for a shared item, adding `f="1"` to a calculated
-/// one.
-void AppendSharedItem(std::string& out, const Value& v, bool as_date, bool calculated, bool date1904) {
+/// `AppendInlineTypedValue` for a shared item, adding `u="1"` to one a
+/// refresh kept although the source no longer holds it and `f="1"` to a
+/// calculated one.
+void AppendSharedItem(std::string& out, const Value& v, bool as_date, bool missing, bool calculated, bool date1904) {
   AppendInlineTypedValue(out, v, as_date, date1904);
-  if (calculated && out.size() >= 2U && out.compare(out.size() - 2U, 2U, "/>") == 0) {
+  if (out.size() < 2U || out.compare(out.size() - 2U, 2U, "/>") != 0) {
+    return;
+  }
+  if (missing) {
+    out.insert(out.size() - 2U, " u=\"1\"");
+  }
+  if (calculated) {
     out.insert(out.size() - 2U, " f=\"1\"");
   }
 }
@@ -159,95 +167,9 @@ void SetHint(bool& flag, bool& has, bool value) {
   has = true;
 }
 
-/// Spells `v` the way `<n v>` does, for `minValue` / `maxValue`.
-std::string NumberText(double v) {
-  std::string text;
-  append_xml_number(text, v);
-  return text;
-}
-
 /// True when bit `i` of `flags` is set; a shorter vector reads as unset.
 bool FlagAt(const std::vector<bool>& flags, std::size_t i) {
   return i < flags.size() && flags[i];
-}
-
-/// The `<sharedItems>` hints Excel writes for the kinds `values` holds;
-/// `is_date[i]` marks value `i` as a date serial (a shorter vector reads as
-/// unset). Not `present` when `values` is empty or holds a boolean or error.
-pivot::SharedItemsHints DeriveHints(const std::vector<Value>& values, const std::vector<bool>& is_date, bool date1904) {
-  std::size_t dates = 0;
-  std::size_t numbers = 0;
-  std::size_t texts = 0;
-  std::size_t blanks = 0;
-  std::size_t others = 0;
-  bool integral = true;
-  double num_lo = 0.0;
-  double num_hi = 0.0;
-  double date_lo = 0.0;
-  double date_hi = 0.0;
-  for (std::size_t i = 0; i < values.size(); ++i) {
-    const Value& v = values[i];
-    if (v.is_number()) {
-      const double d = v.as_number();
-      if (FlagAt(is_date, i) && pivot::is_valid_date_serial(d, date1904)) {
-        date_lo = dates == 0 ? d : std::min(date_lo, d);
-        date_hi = dates == 0 ? d : std::max(date_hi, d);
-        ++dates;
-        continue;
-      }
-      num_lo = numbers == 0 ? d : std::min(num_lo, d);
-      num_hi = numbers == 0 ? d : std::max(num_hi, d);
-      integral = integral && std::isfinite(d) && d == std::floor(d);
-      ++numbers;
-    } else if (v.is_text()) {
-      ++texts;
-    } else if (v.is_blank()) {
-      ++blanks;
-    } else {
-      ++others;
-    }
-  }
-  pivot::SharedItemsHints h;
-  if (others > 0 || values.empty()) {
-    return h;
-  }
-  if (texts == 0 && blanks == 0) {
-    SetHint(h.contains_semi_mixed, h.has_contains_semi_mixed, false);
-  }
-  if (dates > 0 && numbers == 0 && texts == 0) {
-    SetHint(h.contains_non_date, h.has_contains_non_date, false);
-  }
-  if (dates > 0) {
-    SetHint(h.contains_date, h.has_contains_date, true);
-  }
-  if (texts == 0) {
-    SetHint(h.contains_string, h.has_contains_string, false);
-  }
-  if (blanks > 0) {
-    SetHint(h.contains_blank, h.has_contains_blank, true);
-  }
-  if ((dates > 0 ? 1 : 0) + (numbers > 0 ? 1 : 0) + (texts > 0 ? 1 : 0) >= 2) {
-    SetHint(h.contains_mixed_types, h.has_contains_mixed_types, true);
-  }
-  if (numbers > 0 && dates == 0) {
-    SetHint(h.contains_number, h.has_contains_number, true);
-    if (integral) {
-      SetHint(h.contains_integer, h.has_contains_integer, true);
-    }
-    h.has_min_value = true;
-    h.min_value = NumberText(num_lo);
-    h.has_max_value = true;
-    h.max_value = NumberText(num_hi);
-  }
-  if (dates > 0 && numbers == 0) {
-    const pivot::GroupBounds bounds = pivot::auto_date_group_bounds(date_lo, date_hi, date1904);
-    h.has_min_date = true;
-    h.min_date = pivot::group_date_iso(bounds.start, date1904);
-    h.has_max_date = true;
-    h.max_date = pivot::group_date_iso(bounds.end, date1904);
-  }
-  h.present = true;
-  return h;
 }
 
 bool OnDiscreteAxis(pivot::PivotAxis axis) {
@@ -484,7 +406,7 @@ PivotCacheWritePlan build_pivot_cache_write_plan(const pivot::PivotCache& cache,
         values.push_back(pivot::cell_value(cache, record, fi));
         marks.push_back(FlagAt(record.cell_is_date, fi));
       }
-      fp.hints = DeriveHints(values, marks, date1904);
+      fp.hints = pivot::derive_shared_items_hints(values, marks, date1904);
       continue;
     }
     std::map<Value, std::uint32_t, pivot::ValueLess> seen;
@@ -499,7 +421,7 @@ PivotCacheWritePlan build_pivot_cache_write_plan(const pivot::PivotCache& cache,
       fp.record_index.push_back(inserted.first->second);
     }
     fp.derived = true;
-    fp.hints = DeriveHints(fp.items, fp.item_is_date, date1904);
+    fp.hints = pivot::derive_shared_items_hints(fp.items, fp.item_is_date, date1904);
     const auto item_less = [&fp](std::uint32_t a, std::uint32_t b) {
       return pivot::value_less(fp.items[a], fp.items[b]);
     };
@@ -665,13 +587,14 @@ std::string write_pivot_cache_definition(const pivot::PivotCache& cache, const P
       } else {
         // A field built without captured hints: Excel asks to repair shared
         // items that carry no content hints.
-        AppendSharedItemsHints(out, DeriveHints(field.shared_items, field.shared_item_is_date, date1904));
+        AppendSharedItemsHints(
+            out, pivot::derive_shared_items_hints(field.shared_items, field.shared_item_is_date, date1904));
       }
       append_xml_attr_uint(out, "count", field.shared_items.size());
       out.append(">");
       for (std::size_t i = 0; i < field.shared_items.size(); ++i) {
         AppendSharedItem(out, field.shared_items[i], FlagAt(field.shared_item_is_date, i),
-                         FlagAt(field.shared_item_is_calculated, i), date1904);
+                         FlagAt(field.shared_item_is_missing, i), FlagAt(field.shared_item_is_calculated, i), date1904);
       }
       out.append("</sharedItems>");
     }
