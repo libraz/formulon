@@ -370,9 +370,6 @@ PivotCacheWritePlan build_pivot_cache_write_plan(const pivot::PivotCache& cache,
   PivotCacheWritePlan plan;
   plan.date1904 = date1904;
   plan.refresh_on_load = cache.passthrough_attrs().empty();
-  for (const pivot::PivotTable* table : tables) {
-    plan.refresh_on_load = plan.refresh_on_load || (table != nullptr && table->layout_dirty());
-  }
   plan.fields.resize(cache.fields().size());
   for (std::size_t fi = 0; fi < cache.fields().size(); ++fi) {
     const pivot::PivotCacheField& field = cache.fields()[fi];
@@ -451,9 +448,10 @@ std::string write_pivot_cache_definition(const pivot::PivotCache& cache, const P
     append_xml_attr(out, "r:id", "rId1");
   }
   append_xml_attr_uint(out, "recordCount", cache.records().size());
-  // A cache built in memory has no rendered pivot cells behind it, and an
-  // edited table drops the ones it was read with, so either asks Excel to
-  // rebuild the report on open. Otherwise the captured attributes stand.
+  // A cache built in memory has no rendered pivot cells behind it, so it asks
+  // Excel to rebuild the report on open, as does a plan whose caller found an
+  // edited table it could not write lines for. Otherwise the captured
+  // attributes stand.
   const bool refresh_on_load =
       (plan != nullptr ? plan->refresh_on_load : cache.passthrough_attrs().empty()) || cache.refresh_on_load();
   if (refresh_on_load) {

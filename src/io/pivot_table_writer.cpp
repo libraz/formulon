@@ -12,12 +12,12 @@
 #include <optional>
 #include <string>
 #include <string_view>
-#include <utility>
 #include <variant>
 #include <vector>
 
 #include "io/ooxml_defs.h"
 #include "io/pivot_attr_names.h"
+#include "io/pivot_items_binding.h"
 #include "io/pivot_table_writer_internal.h"
 #include "io/xml_escape.h"
 #include "io/xml_utils.h"
@@ -26,7 +26,6 @@
 #include "pivot/filter_engine.h"
 #include "pivot/pivot_table.h"
 #include "pivot/pivot_types.h"
-#include "pivot/value_order.h"
 #include "utils/a1_ref.h"
 #include "utils/strings.h"
 
@@ -37,6 +36,7 @@ using detail::AppendAttrsInOrder;
 using detail::AppendFilters;
 using detail::AppendPivotField;
 using detail::AttrList;
+using detail::BoundItems;
 using detail::FilterFieldIndex;
 using detail::HasFormOverride;
 using detail::HasRawAttr;
@@ -183,73 +183,6 @@ constexpr std::string_view kPivotTableAttrOrder[] = {
     "mdxSubqueries",
     "customListSort",
 };
-
-/// The items of a field the plan derives as discrete, bound to the derived
-/// shared items; `field.items` verbatim for any other field.
-///
-/// An axis field with no authored items gets one per shared item, in its sort
-/// order. Authored items resolve to a shared item by their cache index, else
-/// by label (as `fm_sheet_add_pivot_field_item` binds), else by position;
-/// shared items none of them names follow, visible.
-std::vector<pivot::PivotItem> BoundItems(const pivot::PivotField& field, const PivotCacheFieldWritePlan* fp) {
-  if (fp == nullptr || !fp->derived) {
-    return field.items;
-  }
-  const std::size_t shared = fp->items.size();
-  const bool on_axis = field.axis == pivot::PivotAxis::Row || field.axis == pivot::PivotAxis::Col ||
-                       field.axis == pivot::PivotAxis::Page;
-  std::vector<pivot::PivotItem> bound;
-  std::vector<bool> used(shared, false);
-  if (field.items.empty()) {
-    if (!on_axis || !field.marker_items.empty()) {
-      return bound;
-    }
-    std::vector<std::uint32_t> order = fp->asc_order;
-    if (field.sort.manual || !field.sort.by_field.empty()) {
-      for (std::size_t k = 0; k < order.size(); ++k) {
-        order[k] = static_cast<std::uint32_t>(k);
-      }
-    } else if (!field.sort.ascending) {
-      std::reverse(order.begin(), order.end());
-    }
-    for (const std::uint32_t k : order) {
-      pivot::PivotItem item;
-      item.has_cache_index = true;
-      item.cache_index = k;
-      bound.push_back(std::move(item));
-    }
-    return bound;
-  }
-  for (std::size_t pos = 0; pos < field.items.size(); ++pos) {
-    pivot::PivotItem item = field.items[pos];
-    if (!item.has_cache_index) {
-      std::size_t target = pos;
-      if (!item.name.empty()) {
-        for (std::size_t k = 0; k < shared; ++k) {
-          if (pivot::display_string(fp->items[k]) == item.name) {
-            target = k;
-            break;
-          }
-        }
-      }
-      item.has_cache_index = true;
-      item.cache_index = static_cast<std::uint32_t>(target);
-    }
-    if (item.cache_index < shared) {
-      used[item.cache_index] = true;
-    }
-    bound.push_back(std::move(item));
-  }
-  for (std::size_t k = 0; k < shared; ++k) {
-    if (!used[k]) {
-      pivot::PivotItem item;
-      item.has_cache_index = true;
-      item.cache_index = static_cast<std::uint32_t>(k);
-      bound.push_back(std::move(item));
-    }
-  }
-  return bound;
-}
 
 /// Emits `<rowFields>` or `<colFields>` block. Only called when `order`
 /// is non-empty or `values_position` is set.
@@ -431,7 +364,7 @@ LocationDefaults ComputeLocationDefaults(const pivot::PivotTable& table, std::si
 }  // namespace
 
 std::string write_pivot_table_definition(const pivot::PivotTable& table, std::optional<PivotRenderedSpan> rendered_span,
-                                         const PivotCacheWritePlan* plan) {
+                                         const PivotCacheWritePlan* plan, const PivotItemsXml* items) {
   std::string out;
   // Pre-reserve a rough lower bound. The XML declaration + root + location
   // run ~200B; per-field cost is ~80B with a few items each, per data-
@@ -610,18 +543,23 @@ std::string write_pivot_table_definition(const pivot::PivotTable& table, std::op
   if (!table.row_field_order().empty() || table.row_values_position().has_value()) {
     AppendFieldOrder(out, "rowFields", table.row_field_order(), table.row_values_position());
   }
-  // `<rowItems>` and `<colItems>` render the report as it was read. An edited
-  // table leaves them out only when its cache asks Excel to rebuild the report
-  // on open; otherwise nothing would ever redraw it.
+  // `<rowItems>` and `<colItems>`: the lines generated for an edited table, else
+  // the report as it was read. An edited table without generated lines leaves
+  // them out only when its cache asks Excel to rebuild the report on open;
+  // otherwise nothing would ever redraw it.
   const bool rebuilt_on_open = table.layout_dirty() && plan != nullptr && plan->refresh_on_load;
-  if (!rebuilt_on_open) {
+  if (items != nullptr) {
+    out.append(items->row_items);
+  } else if (!rebuilt_on_open) {
     out.append(table.raw_passthrough_after_row_fields());
   }
 
   if (!table.col_field_order().empty() || col_values_position.has_value()) {
     AppendFieldOrder(out, "colFields", table.col_field_order(), col_values_position);
   }
-  if (!rebuilt_on_open) {
+  if (items != nullptr) {
+    out.append(items->col_items);
+  } else if (!rebuilt_on_open) {
     out.append(table.raw_col_items());
   }
   // `<pageFields>`, which the schema places before `<dataFields>`, from the

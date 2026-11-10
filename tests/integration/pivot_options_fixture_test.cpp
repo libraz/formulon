@@ -325,15 +325,31 @@ TEST(PivotOptionsFixture, RoundTripUntouchedTableKeepsItsRenderedItems) {
   EXPECT_EQ(cache_xml.find("refreshOnLoad"), std::string::npos) << cache_xml;
 }
 
-TEST(PivotOptionsFixture, RoundTripEditedTableDropsItsItemsAndRefreshesOnLoad) {
+TEST(PivotOptionsFixture, RoundTripEditedTableSavesItsProjectedItems) {
   LoadedTable loaded = LoadForEdit();
   ASSERT_NE(loaded.table, nullptr);
+  // A caption leaves the report's lines as Excel wrote them.
+  const std::string row_items = loaded.table->raw_passthrough_after_row_fields();
+  const std::string col_items = loaded.table->raw_col_items();
+  ASSERT_FALSE(row_items.empty());
+  ASSERT_FALSE(col_items.empty());
   loaded.table->set_grand_total_caption(std::string("ALL"));
   loaded.table->mark_layout_dirty();
   const auto [table_xml, cache_xml] = SavedPivotParts(loaded.read->workbook);
+  EXPECT_NE(table_xml.find("</rowFields>" + row_items), std::string::npos) << table_xml;
+  EXPECT_NE(table_xml.find("</colFields>" + col_items), std::string::npos) << table_xml;
+  EXPECT_NE(table_xml.find(" grandTotalCaption=\"ALL\""), std::string::npos) << table_xml;
+  EXPECT_EQ(cache_xml.find("refreshOnLoad"), std::string::npos) << cache_xml;
+}
+
+TEST(PivotOptionsFixture, RoundTripEditedTableWithoutItemsRefreshesOnLoad) {
+  LoadedTable loaded = LoadForEdit();
+  ASSERT_NE(loaded.table, nullptr);
+  loaded.table->mark_layout_dirty();
+  loaded.table->set_projection_pending(true);
+  const auto [table_xml, cache_xml] = SavedPivotParts(loaded.read->workbook);
   EXPECT_EQ(table_xml.find("<rowItems"), std::string::npos) << table_xml;
   EXPECT_EQ(table_xml.find("<colItems"), std::string::npos) << table_xml;
-  EXPECT_NE(table_xml.find(" grandTotalCaption=\"ALL\""), std::string::npos) << table_xml;
   EXPECT_NE(cache_xml.find(" refreshOnLoad=\"1\""), std::string::npos) << cache_xml;
 }
 
@@ -343,10 +359,13 @@ TEST(PivotOptionsFixture, RoundTripEditedTableOverAnOutsideSourceKeepsItsItems) 
   ASSERT_NE(loaded.cache, nullptr);
   ASSERT_TRUE(loaded.cache->worksheet_source().present);
   loaded.cache->mutable_worksheet_source().sheet = "No Such Sheet";
+  const std::string row_items = loaded.table->raw_passthrough_after_row_fields();
   loaded.table->mark_layout_dirty();
+  // No lines can be generated, and Excel would not rebuild the report, so the
+  // items read with it stay.
+  loaded.table->set_projection_pending(true);
   const auto [table_xml, cache_xml] = SavedPivotParts(loaded.read->workbook);
-  // Excel would not rebuild the report, so the items read with it stay.
-  EXPECT_NE(table_xml.find("<rowItems"), std::string::npos) << table_xml;
+  EXPECT_NE(table_xml.find("</rowFields>" + row_items), std::string::npos) << table_xml;
   EXPECT_NE(table_xml.find("<colItems"), std::string::npos) << table_xml;
   EXPECT_EQ(cache_xml.find("refreshOnLoad"), std::string::npos) << cache_xml;
 }

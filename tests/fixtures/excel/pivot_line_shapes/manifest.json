@@ -1,0 +1,77 @@
+{
+ "M1a_values_above_two_rows_compact": {
+  "edit": "rows [Values, Region, Product], compact, 2 data fields",
+  "ok": true,
+  "source": "base_edit.xlsx"
+ },
+ "M1b_values_above_two_rows_outline": {
+  "edit": "rows [Values, Region, Product], outline",
+  "ok": true,
+  "source": "base_edit.xlsx"
+ },
+ "M1c_values_above_two_rows_tabular": {
+  "edit": "rows [Values, Region, Product], tabular",
+  "ok": true,
+  "source": "base_edit.xlsx"
+ },
+ "M2a_collapsed_outer_values_below": {
+  "edit": "rows [Region, Values], East collapsed, compact",
+  "ok": true,
+  "source": "base_edit.xlsx"
+ },
+ "M2b_collapsed_outer_mid_values_below": {
+  "edit": "rows [Region, Product, Values], East collapsed, compact",
+  "ok": true,
+  "source": "base_edit.xlsx"
+ },
+ "M2c_collapsed_outer_mid_values_below_outline": {
+  "edit": "rows [Region, Product, Values], East collapsed, outline",
+  "ok": true,
+  "source": "base_edit.xlsx"
+ },
+ "M3_collapsed_inner_tabular": {
+  "edit": "rows [Region, Product, Qty], tabular, Product item Apple collapsed",
+  "ok": true,
+  "source": "base_edit.xlsx"
+ },
+ "M4a_custom_subtotals_outer_values_below": {
+  "edit": "rows [Region, Product, Values], Region subtotals Sum+Count, compact",
+  "ok": true,
+  "source": "base_edit.xlsx"
+ },
+ "M4b_custom_subtotals_outer_values_below_tabular": {
+  "edit": "rows [Region, Product, Values], Region subtotals Sum+Count, tabular",
+  "ok": true,
+  "source": "base_edit.xlsx"
+ },
+ "M5_custom_subtotals_col_field": {
+  "edit": "1 data field, cols [Region, Product], Region subtotals Sum+Count, no row fields",
+  "ok": true,
+  "source": "base_edit.xlsx"
+ },
+ "M5b_custom_subtotals_col_field_with_rows": {
+  "edit": "1 data field, rows [Qty], cols [Region, Product], Region subtotals Sum+Count",
+  "ok": true,
+  "source": "base_edit.xlsx"
+ },
+ "M6a_page_field_only": {
+  "edit": "no data, row or col fields; Product page field",
+  "ok": true,
+  "source": "base_edit.xlsx"
+ },
+ "M6b_completely_empty": {
+  "edit": "no fields at all",
+  "ok": true,
+  "source": "base_edit.xlsx"
+ },
+ "M7a_outer_outline_inner_compact": {
+  "edit": "rows [Region, Product]; RowAxisLayout outline, then Product LayoutCompactRow=True",
+  "ok": true,
+  "source": "base_edit.xlsx"
+ },
+ "M7b_outer_tabular_inner_outline": {
+  "edit": "rows [Region, Product, Qty] outline (Excel-saved), then outline=\"0\" authored on Region pivotField; Excel RefreshTable + save",
+  "ok": true,
+  "source": "m7b_inj.xlsx"
+ }
+}

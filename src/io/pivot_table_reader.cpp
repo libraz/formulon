@@ -670,6 +670,7 @@ Expected<pivot::PivotTable, Error> read_pivot_table_definition(const std::vector
   }
 
   pivot::PivotTable table;
+  table.set_definition_source(pivot::PivotDefinitionSource::kXlsx);
   if (pugi::xml_attribute name_attr = root.attribute("name"); name_attr) {
     table.set_name(name_attr.value());
   }

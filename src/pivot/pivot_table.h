@@ -271,9 +271,10 @@ class PivotTable {
   bool span_read() const { return span_read_; }
 
   /// True once the definition was edited after load, so the `<rowItems>` /
-  /// `<colItems>` read with it no longer describe the report. The writer then
-  /// drops them and asks Excel to rebuild the report on open. Unlike
-  /// `has_authored_span`, a change of evaluation context leaves it alone.
+  /// `<colItems>` read with it no longer describe the report; never cleared.
+  /// The .xlsx writer then emits item lines generated from the projected
+  /// report, or, when it cannot, none and asks Excel to rebuild the report on
+  /// open. Unlike `has_authored_span`, a change of evaluation context leaves it alone.
   bool layout_dirty() const { return layout_dirty_; }
   void mark_layout_dirty() { layout_dirty_ = true; }
 
@@ -409,10 +410,13 @@ class PivotTable {
   const std::string& raw_passthrough_before_style_info() const { return raw_passthrough_before_style_info_; }
   std::string& mutable_raw_passthrough_before_style_info() { return raw_passthrough_before_style_info_; }
 
+  /// `<rowItems>` as read. The writer re-emits it unless the table is
+  /// `layout_dirty()` and generated lines or a refresh on open replace it.
   const std::string& raw_passthrough_after_row_fields() const { return raw_passthrough_after_row_fields_; }
   std::string& mutable_raw_passthrough_after_row_fields() { return raw_passthrough_after_row_fields_; }
 
-  /// `<colItems>`, which the writer drops from a `layout_dirty()` table.
+  /// `<colItems>` as read. The writer re-emits it unless the table is
+  /// `layout_dirty()` and generated lines or a refresh on open replace it.
   const std::string& raw_col_items() const { return raw_col_items_; }
   std::string& mutable_raw_col_items() { return raw_col_items_; }
 

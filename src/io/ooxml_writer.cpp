@@ -50,6 +50,7 @@
 #include "io/ooxml_defs.h"
 #include "io/passthrough_part_index.h"
 #include "io/pivot_cache_writer.h"
+#include "io/pivot_line_items_writer.h"
 #include "io/pivot_table_writer.h"
 #include "io/styles_writer.h"
 #include "io/threaded_comments_io.h"
@@ -90,7 +91,18 @@ std::string BuildSingleRelationshipRels(std::string_view type, std::string_view 
   return out;
 }
 
-/// Projects the grid `table` will actually occupy, for `<location ref>`.
+/// What the save writes for one pivot table from its projected report.
+struct ProjectedPivot {
+  /// The grid the report occupies; nullopt when it cannot be established.
+  std::optional<PivotRenderedSpan> span;
+  /// `<rowItems>` / `<colItems>` generated for an edited table.
+  std::optional<PivotItemsXml> items;
+  /// The table was edited, so the items read with it no longer describe it.
+  bool needs_items = false;
+};
+
+/// Projects `table`: the grid it will occupy, for `<location ref>`, and for an
+/// edited table the `<rowItems>` / `<colItems>` of that report.
 ///
 /// The saved `ref` has to describe the report Excel draws, and only the
 /// layout layer knows how many rows and columns that is. This is the one
@@ -105,36 +117,48 @@ std::string BuildSingleRelationshipRels(std::string_view type, std::string_view 
 /// workbook's own profile is what makes the emitted `ref` agree with the
 /// grid Excel renders.
 ///
-/// Returns `nullopt` when the extent cannot be established — no resolvable
-/// cache, or evaluation or projection failed. Saving then falls back to
-/// the table's own span, which is what it has always emitted; a workbook
-/// must not fail to save because one pivot could not be evaluated.
-std::optional<PivotRenderedSpan> ProjectPivotSpan(const Workbook& wb, const pivot::PivotTable& table) {
+/// Lines are generated only for an edited table whose definition was not read
+/// from .xlsb (that reader decodes it in part) and whose projection is not
+/// pending, from the same projection while its result is alive; a refused
+/// shape or an item the written `<items>` lack leaves them out. `plan` is the
+/// write plan of the table's cache, whose `<items>` the lines address, and the
+/// caller holds the workbook's `ScopedEvalProfile`.
+///
+/// A failed evaluation or projection leaves the span and the lines unset:
+/// saving then falls back to the table's own span, and a workbook must not
+/// fail to save because one pivot could not be evaluated.
+ProjectedPivot ProjectPivot(const Workbook& wb, const pivot::PivotTable& table, const PivotCacheWritePlan* plan) {
+  ProjectedPivot out;
+  out.needs_items = table.layout_dirty();
   const pivot::PivotLayoutOptions options = pivot::pivot_layout_options_for(wb.excel_profile());
+  const pivot::PivotCache* cache = wb.find_pivot_cache(table.pivot_cache_id());
   // Reuse the result a host evaluation left behind; otherwise evaluate
   // without memoising, since this path has no formula host.
   std::shared_ptr<const pivot::PivotResult> result = table.last_result();
   if (!result) {
-    const pivot::PivotCache* cache = wb.find_pivot_cache(table.pivot_cache_id());
     if (cache == nullptr) {
-      return std::nullopt;
+      return out;
     }
     auto eval_or =
         pivot::evaluate(table, *cache, options, pivot::PivotFilterEnv{wb.pinned_now(), wb.date1904(), &wb.styles()});
     if (!eval_or) {
-      return std::nullopt;
+      return out;
     }
     result = std::make_shared<const pivot::PivotResult>(std::move(eval_or.value()));
   }
-  if (!result) {
-    return std::nullopt;
-  }
-  auto layout_or = pivot::layout(table, *result, options);
+  const bool generate = out.needs_items && cache != nullptr &&
+                        table.definition_source() != pivot::PivotDefinitionSource::kXlsb && !table.projection_pending();
+  pivot::PivotLineItems lines;
+  auto layout_or = pivot::layout(table, *result, options, generate ? &lines : nullptr);
   if (!layout_or) {
-    return std::nullopt;
+    return out;
   }
   const pivot::PivotCells& cells = layout_or.value();
-  return PivotRenderedSpan{cells.body_rows, cells.body_cols, cells.body_top};
+  out.span = PivotRenderedSpan{cells.body_rows, cells.body_cols, cells.body_top};
+  if (generate) {
+    out.items = write_pivot_line_items(table, *cache, plan, lines);
+  }
+  return out;
 }
 
 /// True when `cache` reads a worksheet range or name of `wb` itself, so Excel
@@ -433,8 +457,15 @@ Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb) {
 
   // Write plans bind each cache's inline text and blank columns to shared
   // items. Dedupe and ordering collate text, so they run under the workbook's
-  // profile.
+  // profile, as does the projection of each written table, whose lines
+  // address the `<items>` those plans bind.
   std::map<std::uint32_t, PivotCacheWritePlan> cache_plans;
+  const auto plan_for = [&cache_plans](std::uint32_t cache_id) -> const PivotCacheWritePlan* {
+    const auto it = cache_plans.find(cache_id);
+    return it == cache_plans.end() ? nullptr : &it->second;
+  };
+  // Parallel to `plan.pivot_tables_by_sheet`.
+  std::vector<std::vector<ProjectedPivot>> projected(plan.pivot_tables_by_sheet.size());
   {
     const eval::ScopedEvalProfile profile_scope(wb.excel_profile());
     for (const std::unique_ptr<pivot::PivotCache>& cache : wb.pivot_caches()) {
@@ -449,19 +480,38 @@ Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb) {
           }
         }
       }
-      PivotCacheWritePlan cache_plan = build_pivot_cache_write_plan(*cache, users, wb.date1904());
-      // An edited table is rebuilt only from a source Excel can re-read; any
-      // other loaded cache keeps its attributes as read.
-      if (!cache->passthrough_attrs().empty() && !CacheSourceInWorkbook(wb, *cache)) {
-        cache_plan.refresh_on_load = false;
+      cache_plans.emplace(cache->cache_id(), build_pivot_cache_write_plan(*cache, users, wb.date1904()));
+    }
+    for (std::size_t si = 0; si < plan.pivot_tables_by_sheet.size(); ++si) {
+      for (const EmissionPlan::PivotTablePlan& t : plan.pivot_tables_by_sheet[si]) {
+        projected[si].push_back(ProjectPivot(wb, *t.table, plan_for(t.table->pivot_cache_id())));
       }
-      cache_plans.emplace(cache->cache_id(), std::move(cache_plan));
     }
   }
-  const auto plan_for = [&cache_plans](std::uint32_t cache_id) -> const PivotCacheWritePlan* {
-    const auto it = cache_plans.find(cache_id);
-    return it == cache_plans.end() ? nullptr : &it->second;
-  };
+  // A cache read or set to refresh on load keeps doing so, and one an edited
+  // table draws on without generated lines asks Excel to rebuild the report on
+  // open. That rebuild needs a source Excel can re-read; any other loaded cache
+  // keeps its attributes as read.
+  for (const std::unique_ptr<pivot::PivotCache>& cache : wb.pivot_caches()) {
+    const auto it = cache == nullptr ? cache_plans.end() : cache_plans.find(cache->cache_id());
+    if (it == cache_plans.end()) {
+      continue;
+    }
+    PivotCacheWritePlan& cache_plan = it->second;
+    cache_plan.refresh_on_load = cache_plan.refresh_on_load || cache->refresh_on_load();
+    for (std::size_t si = 0; si < projected.size(); ++si) {
+      for (std::size_t ti = 0; ti < projected[si].size(); ++ti) {
+        const ProjectedPivot& projection = projected[si][ti];
+        if (plan.pivot_tables_by_sheet[si][ti].table->pivot_cache_id() == cache->cache_id() && projection.needs_items &&
+            !projection.items.has_value()) {
+          cache_plan.refresh_on_load = true;
+        }
+      }
+    }
+    if (!cache->passthrough_attrs().empty() && !CacheSourceInWorkbook(wb, *cache)) {
+      cache_plan.refresh_on_load = false;
+    }
+  }
 
   // Pivot caches — for each planned cache, emit the definition, the
   // records, and the definition's own rels file (which points at the
@@ -504,12 +554,15 @@ Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb) {
 
   // Pivot tables — one per planned pivot-table entry, package-wide.
   // The per-sheet rels already wired a rId to each part.
-  for (const auto& per_sheet : plan.pivot_tables_by_sheet) {
-    for (const EmissionPlan::PivotTablePlan& t : per_sheet) {
-      RETURN_IF_ERROR(AddPart(
-          writer.get(), t.path,
-          write_pivot_table_definition(*t.table, ProjectPivotSpan(wb, *t.table), plan_for(t.table->pivot_cache_id())),
-          &written_paths));
+  for (std::size_t si = 0; si < plan.pivot_tables_by_sheet.size(); ++si) {
+    for (std::size_t ti = 0; ti < plan.pivot_tables_by_sheet[si].size(); ++ti) {
+      const EmissionPlan::PivotTablePlan& t = plan.pivot_tables_by_sheet[si][ti];
+      const ProjectedPivot& projection = projected[si][ti];
+      RETURN_IF_ERROR(
+          AddPart(writer.get(), t.path,
+                  write_pivot_table_definition(*t.table, projection.span, plan_for(t.table->pivot_cache_id()),
+                                               projection.items ? &*projection.items : nullptr),
+                  &written_paths));
       // The table's own rels file names the cache definition it draws
       // from. A table whose cache id resolved to no planned cache gets
       // no rels part, so the package never carries a dangling target.

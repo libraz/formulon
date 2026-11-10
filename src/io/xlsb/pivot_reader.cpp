@@ -508,6 +508,7 @@ Expected<pivot::PivotCache, Error> read_pivot_cache_bin(ByteSpan definition, Byt
 
 Expected<pivot::PivotTable, Error> read_pivot_table_bin(ByteSpan cursor) {
   pivot::PivotTable table;
+  table.set_definition_source(pivot::PivotDefinitionSource::kXlsb);
   std::vector<std::uint32_t> row_order;
   std::vector<std::uint32_t> col_order;
   std::size_t declared_field_count = 0;

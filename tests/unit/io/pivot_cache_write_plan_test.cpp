@@ -261,14 +261,24 @@ TEST(PivotCacheWritePlan, UntouchedLoadedCacheKeepsItsRefreshAttribute) {
   EXPECT_FALSE(Contains(xml, "refreshOnLoad=\"1\"")) << xml;
 }
 
-TEST(PivotCacheWritePlan, EditedTableAsksExcelToRebuildALoadedCache) {
+TEST(PivotCacheWritePlan, EditedTableLeavesALoadedCacheRefreshToTheSave) {
+  // Whether an edited table needs a rebuild on open depends on whether its
+  // lines could be generated, which only the save knows.
   const eval::ScopedEvalProfile scope(default_excel_profile());
   const pivot::PivotCache cache = LoadedCache();
   const pivot::PivotTable untouched = TableWithAxes({pivot::PivotAxis::Value});
   pivot::PivotTable edited = TableWithAxes({pivot::PivotAxis::Value});
   edited.mark_layout_dirty();
   const PivotCacheWritePlan plan = build_pivot_cache_write_plan(cache, {&untouched, &edited});
-  EXPECT_TRUE(plan.refresh_on_load);
+  EXPECT_FALSE(plan.refresh_on_load);
+}
+
+TEST(PivotCacheWritePlan, ARefreshingPlanReplacesTheCapturedAttribute) {
+  const eval::ScopedEvalProfile scope(default_excel_profile());
+  const pivot::PivotCache cache = LoadedCache();
+  const pivot::PivotTable table = TableWithAxes({pivot::PivotAxis::Value});
+  PivotCacheWritePlan plan = build_pivot_cache_write_plan(cache, {&table});
+  plan.refresh_on_load = true;
   const std::string xml = write_pivot_cache_definition(cache, &plan);
   // The authored value is replaced, not duplicated.
   EXPECT_TRUE(Contains(xml, " refreshOnLoad=\"1\"")) << xml;

@@ -1825,6 +1825,25 @@ TEST(PivotTableWriter, ACloneKeepsTheDirtyFlag) {
   EXPECT_TRUE(table.clone()->layout_dirty());
 }
 
+TEST(PivotTableWriter, GeneratedItemsReplaceTheReadOnesAtTheirSchemaSlots) {
+  pivot::PivotTable table = ReadLoaded();
+  table.mark_layout_dirty();
+  PivotCacheWritePlan plan;
+  PivotItemsXml items;
+  items.row_items = "<rowItems count=\"2\"><i><x v=\"1\"/></i><i t=\"grand\"><x/></i></rowItems>";
+  items.col_items = "<colItems count=\"1\"><i/></colItems>";
+  // Whatever the plan says, the generated lines stand in for the read ones.
+  for (const bool refresh : {true, false}) {
+    plan.refresh_on_load = refresh;
+    const std::string xml = write_pivot_table_definition(table, std::nullopt, &plan, &items);
+    EXPECT_NE(xml.find("</rowFields>" + items.row_items), std::string::npos) << xml;
+    EXPECT_NE(xml.find(items.col_items + "<pageFields"), std::string::npos) << xml;
+    EXPECT_EQ(xml.find("<rowItems count=\"1\">"), std::string::npos) << xml;
+    EXPECT_EQ(xml.find("<rowItems"), xml.rfind("<rowItems")) << xml;
+    EXPECT_EQ(xml.find("<colItems"), xml.rfind("<colItems")) << xml;
+  }
+}
+
 // The x14 field extension under an unusual shape is kept whole and never
 // duplicated by a generated one.
 pivot::PivotTable ReadFieldExtLst(std::string_view ext_xml) {

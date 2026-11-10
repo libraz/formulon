@@ -46,6 +46,13 @@ struct PivotRenderedSpan {
   std::uint32_t top = 0;  ///< First row of the report body when the page-field block pushes it below the anchor.
 };
 
+/// `<rowItems>` and `<colItems>` elements generated from a table's projected
+/// report (see `pivot_line_items_writer.h`), each written at its schema slot.
+struct PivotItemsXml {
+  std::string row_items;
+  std::string col_items;
+};
+
 /// Emits a complete `xl/pivotTables/pivotTable*.xml` document.
 ///
 /// Output structure (only the elements the reader currently consumes):
@@ -95,15 +102,19 @@ struct PivotRenderedSpan {
 /// derives as discrete gets `<items>` bound to the derived shared items: for
 /// an axis field with none authored they are synthesized in the field's sort
 /// order, and authored items are bound by label with the missing shared items
-/// appended. Null emits the items the model holds. An edited table
-/// (`layout_dirty()`) drops its `<rowItems>` / `<colItems>` only when the plan
-/// asks Excel to refresh the cache on load.
+/// appended. Null emits the items the model holds.
+///
+/// `items`, when non-null, is written in place of the `<rowItems>` /
+/// `<colItems>` read with the table. Without it an edited table
+/// (`layout_dirty()`) drops the ones it was read with only when the plan asks
+/// Excel to refresh the cache on load; any other table re-emits them.
 ///
 /// Returns an owning `std::string`; there is no error channel because
 /// the inputs are pure-data (no I/O, no allocation failure surfaced).
 std::string write_pivot_table_definition(const pivot::PivotTable& table,
                                          std::optional<PivotRenderedSpan> rendered_span = std::nullopt,
-                                         const PivotCacheWritePlan* plan = nullptr);
+                                         const PivotCacheWritePlan* plan = nullptr,
+                                         const PivotItemsXml* items = nullptr);
 
 }  // namespace formulon::io
 

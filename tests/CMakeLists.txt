@@ -92,6 +92,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/io/pivot_cache_reader_test.cpp
   unit/io/pivot_cache_writer_test.cpp
   unit/io/pivot_cache_write_plan_test.cpp
+  unit/io/pivot_save_items_test.cpp
   unit/io/package_rels_reader_test.cpp
   unit/io/pivot_target_reader_test.cpp
   unit/io/pivot_table_reader_test.cpp
