@@ -279,6 +279,8 @@ Upgrading from 0.18: see [Upgrading from 0.18 to 0.19](docs/releases/upgrading-0
   lists; `clearFieldItems` then `addFieldItem` sets a custom order.
 - A date or number grouping that cannot be placed fails with
   `PreconditionFailed`.
+- Inserting cells toward a styled last row or column writes a default-style
+  cell at the edge, so the blank shifted there keeps its look.
 - Saving a new workbook with an image or chart as `.xlsb` failed with
   `IoContentTypeInvalid`.
 - `PivotField.subtotalTop` and several Python flags read true when false was

@@ -22,7 +22,10 @@ EffectiveXf select_effective_xf(const Sheet& sheet, std::uint32_t row, std::uint
       return {cell->xf_index, StyleSource::kCell};
     }
   }
-  const SheetLayout& layout = sheet.layout();
+  return select_axis_xf(sheet.layout(), row, col);
+}
+
+EffectiveXf select_axis_xf(const SheetLayout& layout, std::uint32_t row, std::uint32_t col) {
   if (const RowLayout* row_entry = find_row_override(layout, row); row_entry != nullptr && row_entry->has_style) {
     return {row_entry->style_xf, StyleSource::kRow};
   }

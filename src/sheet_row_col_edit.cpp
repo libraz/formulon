@@ -17,6 +17,7 @@
 #include "pivot/pivot_table.h"
 #include "sheet.h"
 #include "sheet_layout_edit.h"
+#include "style_resolve.h"
 #include "utils/index_sort.h"
 
 namespace formulon {
@@ -935,6 +936,24 @@ void Sheet::edit_cells_in_band(const StructuralEdit& edit) {
   }
   const std::lock_guard<std::mutex> guard(*spill_mutex_);
   const Band band = *edit.band;
+  // The blank an insert shifts into the edge cell keeps the style it showed;
+  // where the edge's row or column style differs, it becomes a cell record.
+  std::vector<std::pair<std::uint32_t, std::uint32_t>> edge_xfs;  // (band line, xf)
+  const std::uint32_t edge = a1::axis_extent(edit.row_axis) - 1U;
+  if (!edit.is_delete && static_cast<std::uint64_t>(edit.index) + edit.count <= edge) {
+    const std::uint32_t from = edge - edit.count;
+    for (std::uint32_t line = band.first; line <= band.last; ++line) {
+      const std::uint32_t row = edit.row_axis ? from : line;
+      const std::uint32_t col = edit.row_axis ? line : from;
+      if (const Cell* cell = cell_at_locked(row, col); cell != nullptr && cell_owns_style(*cell)) {
+        continue;
+      }
+      const std::uint32_t shown = select_axis_xf(layout_, row, col).xf_index;
+      if (shown != select_axis_xf(layout_, edit.row_axis ? edge : line, edit.row_axis ? line : edge).xf_index) {
+        edge_xfs.emplace_back(line, shown);
+      }
+    }
+  }
   if (!edit.row_axis) {
     // A horizontal shift moves each band row's tail, as a column edit moves every row's.
     for (auto& kv : rows_) {
@@ -975,6 +994,11 @@ void Sheet::edit_cells_in_band(const StructuralEdit& edit) {
         move(*it, static_cast<std::uint64_t>(*it) + edit.count, false);
       }
     }
+  }
+  for (const auto& [line, xf_index] : edge_xfs) {
+    Cell& cell = edit.row_axis ? rows_[edge].ensure(line) : rows_[line].ensure(edge);
+    cell.xf_index = xf_index;
+    cell.has_explicit_xf = true;
   }
   finalize_structural_edit_locked(edit);
 }

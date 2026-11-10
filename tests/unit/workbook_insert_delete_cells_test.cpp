@@ -26,6 +26,8 @@
 #include "pivot/pivot_table.h"
 #include "pivot/pivot_types.h"
 #include "sheet.h"
+#include "sheet_layout.h"
+#include "sheet_layout_edit.h"
 #include "sheet_metadata.h"
 #include "styles.h"
 #include "table.h"
@@ -600,6 +602,101 @@ TEST(InsertDeleteCells, InsertDropsAHyperlinkPushedOffTheGrid) {
   AddLink(wb, "B1048576", "https://pushed.example");
   ExpectOk(Edit(wb, "B3:C4", CellShift::kDown));
   EXPECT_EQ(LinkAt(wb, "https://pushed.example"), "");
+}
+
+// A cell format with a fill, for whole-row and whole-column styles.
+std::uint32_t FillXf(Workbook& wb) {
+  FillRecord fill;
+  fill.pattern = 1U;
+  fill.fg_argb = 0xFFFFFF00U;
+  wb.mutable_styles().fills.push_back(fill);
+  CellXf xf;
+  xf.fill_index = static_cast<std::uint32_t>(wb.styles().fills.size() - 1U);
+  return intern_cell_xf(wb.mutable_styles(), xf);
+}
+
+void StyleColumn(Workbook& wb, std::uint32_t col, std::uint32_t xf_index) {
+  ColumnLayout column;
+  column.first = col;
+  column.last = col;
+  column.has_style = true;
+  column.style_xf = xf_index;
+  wb.sheet(0).mutable_layout().columns.push_back(column);
+}
+
+void StyleRow(Workbook& wb, std::uint32_t row, std::uint32_t xf_index) {
+  RowLayout& entry = upsert_row_override(wb.sheet(0).mutable_layout(), row, /*initial_hidden=*/false);
+  entry.has_style = true;
+  entry.style_xf = xf_index;
+}
+
+// The cell record at `a1`, which must be an explicit default-style one.
+void ExpectDefaultStyleRecord(Workbook& wb, std::string_view a1) {
+  SCOPED_TRACE(std::string(a1));
+  const Cell* cell = wb.sheet(0).cell_at(Rect(a1).first_row, Rect(a1).first_col);
+  ASSERT_NE(cell, nullptr);
+  EXPECT_TRUE(cell->has_explicit_xf);
+  EXPECT_EQ(cell->xf_index, 0U);
+  EXPECT_TRUE(cell->cached_value.is_blank());
+}
+
+// Shifting a band's cells toward a styled last column or row stays inside the
+// grid: the style stays, and the blank shifted into the edge cell becomes an
+// explicit default-style record that overrides it there.
+TEST(InsertDeleteCells, ShiftTowardAStyledEdgeWritesADefaultCellThere) {
+  {
+    Workbook wb = Workbook::create();
+    StyleColumn(wb, Sheet::kMaxCols - 1U, FillXf(wb));
+    ExpectOk(Edit(wb, "B3:C4", CellShift::kRight));
+    ExpectDefaultStyleRecord(wb, "XFD3");
+    ExpectDefaultStyleRecord(wb, "XFD4");
+    EXPECT_EQ(wb.sheet(0).cell_at(1U, Sheet::kMaxCols - 1U), nullptr) << "XFD2 lies outside the band";
+    ASSERT_EQ(wb.sheet(0).layout().columns.size(), 1U);
+    EXPECT_EQ(wb.sheet(0).layout().columns.front().first, Sheet::kMaxCols - 1U);
+  }
+  {
+    Workbook wb = Workbook::create();
+    StyleRow(wb, Sheet::kMaxRows - 1U, FillXf(wb));
+    ExpectOk(Edit(wb, "B3:C4", CellShift::kDown));
+    ExpectDefaultStyleRecord(wb, "B1048576");
+    ExpectDefaultStyleRecord(wb, "C1048576");
+    EXPECT_EQ(wb.sheet(0).cell_at(Sheet::kMaxRows - 1U, 0U), nullptr) << "A1048576 lies outside the band";
+    ASSERT_NE(find_row_override(wb.sheet(0).layout(), Sheet::kMaxRows - 1U), nullptr);
+  }
+  {
+    // A style on the other axis covers the source and the edge alike, so nothing is written.
+    Workbook wb = Workbook::create();
+    StyleRow(wb, 2U, FillXf(wb));
+    StyleColumn(wb, 0U, FillXf(wb));
+    ExpectOk(Edit(wb, "B3:C4", CellShift::kRight));
+    ExpectOk(Edit(wb, "B3:C4", CellShift::kDown));
+    EXPECT_EQ(wb.sheet(0).cell_at(2U, Sheet::kMaxCols - 1U), nullptr);
+    EXPECT_EQ(wb.sheet(0).cell_at(Sheet::kMaxRows - 1U, 0U), nullptr);
+    ASSERT_NE(find_row_override(wb.sheet(0).layout(), 2U), nullptr);
+  }
+}
+
+// A whole-column or whole-row style pushed off the grid is dropped and does
+// not block; a style on the other axis stays where it is.
+TEST(InsertDeleteCells, InsertDropsAnAxisStylePushedOffTheGrid) {
+  {
+    Workbook wb = Workbook::create();
+    StyleColumn(wb, Sheet::kMaxCols - 1U, FillXf(wb));
+    StyleRow(wb, 2U, FillXf(wb));
+    ExpectOk(wb.insert_cols(0U, 0U, 1U));
+    EXPECT_TRUE(wb.sheet(0).layout().columns.empty());
+    ASSERT_NE(find_row_override(wb.sheet(0).layout(), 2U), nullptr);
+    EXPECT_TRUE(find_row_override(wb.sheet(0).layout(), 2U)->has_style);
+  }
+  {
+    Workbook wb = Workbook::create();
+    StyleRow(wb, Sheet::kMaxRows - 1U, FillXf(wb));
+    StyleColumn(wb, 0U, FillXf(wb));
+    ExpectOk(wb.insert_rows(0U, 0U, 1U));
+    EXPECT_EQ(find_row_override(wb.sheet(0).layout(), Sheet::kMaxRows - 1U), nullptr);
+    ASSERT_EQ(wb.sheet(0).layout().columns.size(), 1U);
+    EXPECT_EQ(wb.sheet(0).layout().columns.front().first, 0U);
+  }
 }
 
 TEST(InsertDeleteCells, InsertRowsRefusesPushingAValueOffTheGrid) {
