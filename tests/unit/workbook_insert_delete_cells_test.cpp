@@ -27,6 +27,7 @@
 #include "pivot/pivot_types.h"
 #include "sheet.h"
 #include "sheet_metadata.h"
+#include "styles.h"
 #include "table.h"
 #include "utils/a1_ref.h"
 #include "utils/error.h"
@@ -516,16 +517,89 @@ TEST(InsertDeleteCells, DeleteNearTheGridEndPullsTheLastCellsBack) {
   }
 }
 
-TEST(InsertDeleteCells, InsertDropsFormatNoteAndHyperlinkPushedOffTheGrid) {
+// Gives the strip cell (C1048576 on the last row, XFD3 on the last column) a
+// cell format built by `edit`.
+template <typename Edit>
+void StyleCell(Workbook& wb, bool last_row, Edit&& edit) {
+  CellXf xf;
+  edit(xf);
+  const std::uint32_t index = intern_cell_xf(wb.mutable_styles(), xf);
+  wb.sheet(0).set_cell_xf_index(last_row ? Sheet::kMaxRows - 1U : 2U, last_row ? 2U : Sheet::kMaxCols - 1U, index);
+}
+
+// A note, a fill or border, or a merge pushed off the grid blocks an insert
+// as a value does, on the last row and on the last column.
+TEST(InsertDeleteCells, InsertRefusesPushingANoteFormatOrMergeOffTheGrid) {
+  struct Blocker {
+    const char* name;
+    void (*place)(Workbook& wb, bool last_row);
+  };
+  const Blocker blockers[] = {
+      {"note", [](Workbook& wb, bool last_row) { AddNote(wb, last_row ? "C1048576" : "XFD3", "pushed"); }},
+      {"fill",
+       [](Workbook& wb, bool last_row) {
+         FillRecord fill;
+         fill.pattern = 1U;
+         fill.fg_argb = 0xFFFFFF00U;
+         StyleCell(wb, last_row, [&wb, &fill](CellXf& xf) {
+           wb.mutable_styles().fills.push_back(fill);
+           xf.fill_index = static_cast<std::uint32_t>(wb.styles().fills.size() - 1U);
+         });
+       }},
+      {"border",
+       [](Workbook& wb, bool last_row) {
+         BorderRecord border;
+         border.bottom.style = 1U;
+         StyleCell(wb, last_row, [&wb, &border](CellXf& xf) {
+           wb.mutable_styles().borders.push_back(border);
+           xf.border_index = static_cast<std::uint32_t>(wb.styles().borders.size() - 1U);
+         });
+       }},
+      {"merge",
+       [](Workbook& wb, bool last_row) {
+         ExpectOk(wb.add_merge(0, last_row ? Rect("B1048575:C1048576") : Rect("XFC3:XFD4")));
+       }},
+  };
+  for (const Blocker& blocker : blockers) {
+    for (const bool last_row : {true, false}) {
+      SCOPED_TRACE(std::string(blocker.name) + (last_row ? " last row" : " last column"));
+      Workbook wb = Workbook::create();
+      blocker.place(wb, last_row);
+      SetNumber(wb, "B3", 2.0);
+      ExpectRefused(Edit(wb, "B3:C4", last_row ? CellShift::kDown : CellShift::kRight));
+      EXPECT_EQ(At(wb, "B3"), Value::number(2.0));
+      ExpectRefused(last_row ? wb.insert_rows(0U, 2U, 1U) : wb.insert_cols(0U, 1U, 1U));
+      EXPECT_EQ(At(wb, "B3"), Value::number(2.0));
+    }
+  }
   Workbook wb = Workbook::create();
-  wb.sheet(0).set_cell_xf_index(Sheet::kMaxRows - 1U, 1U, 7U);  // B1048576, style only
-  AddNote(wb, "C1048575", "pushed");
+  AddNote(wb, "C1048576", "kept");
+  ExpectRefused(Edit(wb, "B3:C4", CellShift::kDown));
+  EXPECT_EQ(NoteAt(wb, "kept"), "C1048576");
+}
+
+// A cell format that draws nothing, a bold font or a number format, is
+// dropped instead of blocking.
+TEST(InsertDeleteCells, InsertDropsAFontOrNumberFormatPushedOffTheGrid) {
+  for (const bool last_row : {true, false}) {
+    SCOPED_TRACE(last_row ? "last row" : "last column");
+    Workbook wb = Workbook::create();
+    StyleCell(wb, last_row, [&wb](CellXf& xf) {
+      FontRecord bold = wb.styles().fonts.front();
+      bold.bold = true;
+      wb.mutable_styles().fonts.push_back(bold);
+      xf.font_index = static_cast<std::uint32_t>(wb.styles().fonts.size() - 1U);
+      xf.num_fmt_id = 2U;
+    });
+    ExpectOk(Edit(wb, "B3:C4", last_row ? CellShift::kDown : CellShift::kRight));
+  }
+}
+
+TEST(InsertDeleteCells, InsertDropsAHyperlinkPushedOffTheGrid) {
+  Workbook wb = Workbook::create();
   AddLink(wb, "B1048576", "https://pushed.example");
   ExpectOk(Edit(wb, "B3:C4", CellShift::kDown));
-  EXPECT_EQ(NoteAt(wb, "pushed"), "");
   EXPECT_EQ(LinkAt(wb, "https://pushed.example"), "");
-  const Cell* last = wb.sheet(0).cell_at(Sheet::kMaxRows - 1U, 1U);
-  EXPECT_TRUE(last == nullptr || last->xf_index != 7U);
 }
 
 TEST(InsertDeleteCells, InsertRowsRefusesPushingAValueOffTheGrid) {
@@ -540,14 +614,6 @@ TEST(InsertDeleteCells, InsertColsRefusesPushingAValueOffTheGrid) {
   SetFormula(wb, "XFD1", "=1");
   ExpectRefused(wb.insert_cols(0U, 1U, 1U));
   EXPECT_EQ(FormulaAt(wb, "XFD1"), "=1");
-}
-
-TEST(InsertDeleteCells, InsertRowsStillDropsAStyleOnlyCellPushedOffTheGrid) {
-  Workbook wb = Workbook::create();
-  wb.sheet(0).set_cell_xf_index(Sheet::kMaxRows - 1U, 0U, 7U);
-  ExpectOk(wb.insert_rows(0U, 2U, 1U));
-  const Cell* last = wb.sheet(0).cell_at(Sheet::kMaxRows - 1U, 0U);
-  EXPECT_TRUE(last == nullptr || last->xf_index != 7U);
 }
 
 // ---------------------------------------------------------------------------

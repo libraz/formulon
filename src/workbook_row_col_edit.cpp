@@ -33,6 +33,7 @@
 #include "sheet_metadata.h"
 #include "sheet_name.h"
 #include "sheet_passthrough.h"
+#include "styles.h"
 #include "table.h"
 #include "utils/a1_ref.h"
 #include "utils/arena.h"
@@ -454,28 +455,81 @@ std::vector<std::string> update_tables_for_row_col_edit(const Workbook& wb, std:
   return changed;
 }
 
-// Whether an insert would push a value or formula past the grid's edge.
-// Formatting alone, notes and hyperlinks are dropped there instead.
-bool insert_pushes_content_off(const Sheet& sheet, const StructuralEdit& edit) {
-  if (edit.is_delete) {
+// Whether cell format `xf_index` draws something: a fill or a border. Fill
+// records 0 and 1 are the reserved none / gray125 entries no cell shows.
+bool xf_is_visible(const StylesTable& styles, std::uint32_t xf_index) {
+  if (xf_index == 0U || xf_index >= styles.cell_xfs.size()) {
     return false;
+  }
+  const CellXf& xf = styles.cell_xfs[xf_index];
+  if (xf.fill_index > 1U && xf.fill_index < styles.fills.size()) {
+    const FillRecord& fill = styles.fills[xf.fill_index];
+    if (fill.has_gradient || fill.pattern != 0U) {
+      return true;
+    }
+  }
+  if (xf.border_index < styles.borders.size()) {
+    const BorderRecord& border = styles.borders[xf.border_index];
+    const bool diagonal = (border.diagonal_up || border.diagonal_down) && border.diagonal.style != 0U;
+    if (border.left.style != 0U || border.right.style != 0U || border.top.style != 0U || border.bottom.style != 0U ||
+        diagonal) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// What an insert would push past the grid's edge that blocks it, or null: a
+// value or formula, a note, a fill or border, or a merge, as Excel refuses to
+// shift non-empty cells off the sheet. A cell format that draws nothing (a
+// font or number format), row and column formats, hyperlinks, validations and
+// conditional formats are dropped there instead.
+const char* insert_pushes_content_off(const Sheet& sheet, const StylesTable& styles, const StructuralEdit& edit) {
+  if (edit.is_delete) {
+    return nullptr;
   }
   const std::uint32_t bound = a1::axis_extent(edit.row_axis);
   const std::uint32_t first_lost = std::max(edit.index, edit.count >= bound ? 0U : bound - edit.count);
   const std::uint32_t across_first = edit.band.has_value() ? edit.band->first : 0U;
   const std::uint32_t across_last = edit.band.has_value() ? edit.band->last : a1::axis_extent(!edit.row_axis) - 1U;
-  const auto holds_content = [](const RowCells::EntryRange& entries) {
-    return std::any_of(entries.begin(), entries.end(), [](const RowCells::Entry& entry) {
-      return !entry.cell.formula_text.empty() || !entry.cell.cached_value.is_blank();
-    });
+  // The strip that falls off the grid, as an inclusive rectangle.
+  const MergeRange lost = edit.row_axis ? MergeRange{first_lost, across_first, bound - 1U, across_last}
+                                        : MergeRange{across_first, first_lost, across_last, bound - 1U};
+  const auto in_lost = [&lost](std::uint32_t row, std::uint32_t col) {
+    return lost.first_row <= row && row <= lost.last_row && lost.first_col <= col && col <= lost.last_col;
   };
+  bool formatted = false;
   for (const auto& [row, cells] : sheet.rows()) {
-    if (edit.row_axis ? row >= first_lost && holds_content(cells.entries_in(across_first, across_last + 1ULL))
-                      : row >= across_first && row <= across_last && holds_content(cells.entries_from(first_lost))) {
-      return true;
+    if (row < lost.first_row || row > lost.last_row) {
+      continue;
+    }
+    for (const RowCells::Entry& entry : cells.entries_in(lost.first_col, lost.last_col + 1ULL)) {
+      if (!entry.cell.formula_text.empty() || !entry.cell.cached_value.is_blank()) {
+        return "a value or formula";
+      }
+      formatted = formatted || xf_is_visible(styles, entry.cell.xf_index);
     }
   }
-  return false;
+  for (const CellComment& comment : sheet.comments()) {
+    if (in_lost(comment.row, comment.col)) {
+      return "a note";
+    }
+  }
+  for (const ThreadedComment& thread : sheet.threaded_comments()) {
+    if (in_lost(thread.row, thread.col)) {
+      return "a note";
+    }
+  }
+  if (formatted) {
+    return "a fill or border";
+  }
+  for (const MergeRange& merge : sheet.merges()) {
+    if (merge.first_row <= lost.last_row && lost.first_row <= merge.last_row && merge.first_col <= lost.last_col &&
+        lost.first_col <= merge.last_col) {
+      return "a merge";
+    }
+  }
+  return nullptr;
 }
 
 // The structure-intersection preflight every row/column edit passes before
@@ -581,8 +635,8 @@ Expected<void, Error> check_structure_edit(const Workbook& wb, std::size_t sheet
       return refuse(cut, "a table");
     }
   }
-  if (insert_pushes_content_off(sheet, edit)) {
-    return refuse(StructureEditCut::kPushesOff, "a value or formula");
+  if (const char* blocker = insert_pushes_content_off(sheet, wb.styles(), edit); blocker != nullptr) {
+    return refuse(StructureEditCut::kPushesOff, blocker);
   }
   return Expected<void, Error>::Ok();
 }

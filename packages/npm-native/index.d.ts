@@ -7347,8 +7347,9 @@ export interface Sheet {
    *  cross-workbook references to follow the shift. `first > last` fails with `StatusCode.InvalidArgument`.
    *  Fails with `StatusCode.PreconditionFailed` when the edit cuts into a data table, legacy
    *  array block or PivotTable, or would push one of them or a table past
-   *  the sheet bound, or when it would push a cell holding a value or formula past the last row; the workbook is
-   *  unchanged. */
+   *  the sheet bound, or when it would push a value, formula, note, fill, border or merge past the last row (a
+   *  font or number format, hyperlink, validation, conditional format or row format pushed off is dropped); the
+   *  workbook is unchanged. */
   insertRows(first: number, last: number): void;
   /** `insertRows` over the rows of the A1 row span `span` (`"3"`, `"3:5"`). */
   insertRows(span: string): void;
@@ -7365,8 +7366,9 @@ export interface Sheet {
    *  `StatusCode.InvalidArgument`.
    *  Fails with `StatusCode.PreconditionFailed` when the edit cuts into a data table, legacy
    *  array block or PivotTable, or would push one of them or a table past
-   *  the sheet bound, or when it would push a cell holding a value or formula past the last column; the workbook
-   *  is unchanged. */
+   *  the sheet bound, or when it would push a value, formula, note, fill, border or merge past the last column (a
+   *  font or number format, hyperlink, validation, conditional format or column format pushed off is dropped); the
+   *  workbook is unchanged. */
   insertColumns(first: number, last: number): void;
   /** `insertColumns` over the columns of the A1 column span `span` (`"B"`, `"B:D"`). */
   insertColumns(span: string): void;
@@ -7394,7 +7396,8 @@ export interface Sheet {
    *  (whole-row with `Right`). `StatusCode.PreconditionFailed` when the shifted region meets a table, a multi-cell
    *  array formula or a data table that extends beyond the band; a PivotTable that straddles the region or lies inside
    *  the range (one whose full width the band covers, and that is not inside the range, moves as one block; one outside
-   *  the region stays); when the insert would push a cell holding a value or formula off the grid; or when Excel
+   *  the region stays); when the insert would push a value, formula, note, fill, border or merge off the grid (a
+   *  font or number format, hyperlink, validation or conditional format pushed off is dropped); or when Excel
    *  returns success without changing anything. The workbook is unchanged on failure. */
   insertCells(range: CellRect | string, shift: CellShift): void;
   /** Deletes the cells of `range` and moves the cells beyond `CellShift.Up` or `CellShift.Left` into the gap; a
@@ -8244,8 +8247,8 @@ export interface Table {
    *
    *  A `first` past the data-row count, or a `last` below `first`, fails with `StatusCode.InvalidArgument`. It
    *  fails with `StatusCode.PreconditionFailed`, changing nothing, when a PivotTable lies in the shift path, a
-   *  multi-cell array formula or data table is cut by the band, or a value, formula or the table itself would be
-   *  pushed past the last sheet row.
+   *  multi-cell array formula or data table is cut by the band, or a value, formula, note, fill, border, merge or
+   *  the table itself would be pushed past the last sheet row.
    *  @param first The 0-based data-row position of the first new row; the data-row count appends. Defaults to the
    *    data-row count.
    *  @param last The 0-based data-row position of the last new row, not below `first`; the span is inclusive.

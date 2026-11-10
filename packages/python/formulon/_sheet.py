@@ -2491,9 +2491,10 @@ class Sheet(_NoCopy):
           InvalidArgumentError: when ``first`` is past ``last`` or ``last`` is past the sheet bound.
           FormulonError: with ``StatusCode.PRECONDITION_FAILED`` when the edit cuts into
             a data table, legacy array block or PivotTable, or would push one
-            of them, a table, or a value or formula cell past the sheet bound
-            (a format-only cell, note or hyperlink pushed off is dropped); the
-            workbook is unchanged.
+            of them, a table, or a value, formula, note, fill, border or merge
+            past the sheet bound (a font or number format, hyperlink,
+            validation, conditional format or row or column format pushed off
+            is dropped); the workbook is unchanged.
         """
         first, last = self._span_args("insert_rows", args, kwargs, ("first", "last"))
         sheet = self._index()
@@ -2555,9 +2556,10 @@ class Sheet(_NoCopy):
           InvalidArgumentError: when ``first`` is past ``last`` or ``last`` is past the sheet bound.
           FormulonError: with ``StatusCode.PRECONDITION_FAILED`` when the edit cuts into
             a data table, legacy array block or PivotTable, or would push one
-            of them, a table, or a value or formula cell past the sheet bound
-            (a format-only cell, note or hyperlink pushed off is dropped); the
-            workbook is unchanged.
+            of them, a table, or a value, formula, note, fill, border or merge
+            past the sheet bound (a font or number format, hyperlink,
+            validation, conditional format or row or column format pushed off
+            is dropped); the workbook is unchanged.
         """
         first, last = self._span_args("insert_columns", args, kwargs, ("first", "last"))
         sheet = self._index()
@@ -2625,8 +2627,9 @@ class Sheet(_NoCopy):
           FormulonError: with ``StatusCode.PRECONDITION_FAILED``, leaving the workbook unchanged, when
             the moving area meets a table, multi-cell array formula or data table whose perpendicular
             extent the band does not cover; meets a PivotTable, unless the band covers its whole
-            perpendicular extent and ``range`` does not lie inside it; the insert would push a value or
-            formula cell past the grid (a format-only cell, note or hyperlink pushed off is dropped); or
+            perpendicular extent and ``range`` does not lie inside it; the insert would push a value,
+            formula, note, fill, border or merge past the grid (a font or number format, hyperlink,
+            validation or conditional format pushed off is dropped); or
             Excel would accept the edit without changing anything (an insert inside a PivotTable).
         """
         self._shift_cells(LIB.fm_sheet_insert_cells, range, shift)

@@ -1054,11 +1054,12 @@ FM_API fm_status_t fm_workbook_set_defined_name(fm_workbook_t* wb, const fm_defi
 /**
  * @brief Inserts the inclusive row span `[first, last]` on `sheet_index`:
  *        `last - first + 1` blank rows open at `first`. Cells at `first` and
- *        beyond shift forward. An insert that would push a value or formula
- *        cell past the sheet bound is refused; a format-only cell, note or
- *        hyperlink pushed off is dropped. References across the workbook are
- *        rewritten to track the new positions; references that would land
- *        past the sheet bound collapse to `#REF!`.
+ *        beyond shift forward. An insert that would push a value, formula,
+ *        note, fill, border or merge past the sheet bound is refused; a font
+ *        or number format, hyperlink, validation or conditional format pushed
+ *        off is dropped, as are row and column formats. References across the
+ *        workbook are rewritten to track the new positions; references that
+ *        would land past the sheet bound collapse to `#REF!`.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`;
@@ -1146,8 +1147,9 @@ typedef enum {
  *   * a PivotTable intersecting the moving area, unless the deleted rectangle
  *     contains it, or the band covers its whole perpendicular extent and the
  *     range does not lie inside it;
- *   * an insert that would push a value or formula cell past the grid (a
- *     format-only cell, note or hyperlink pushed off is dropped);
+ *   * an insert that would push a value, formula, note, fill, border or merge
+ *     past the grid (a font or number format, hyperlink, validation or
+ *     conditional format pushed off is dropped);
  *   * an edit Excel accepts without changing anything (a delete over part of
  *     a table, an insert inside a PivotTable).
  */
@@ -2667,8 +2669,9 @@ FM_API fm_status_t fm_sheet_rename_table_column(fm_workbook_t* wb, size_t sheet_
  *         count, `last` is below `first`, or the span reaches past the last row;
  *         `FM_STATUS_PRECONDITION_FAILED` (9) when a PivotTable lies in the
  *         shift path, a multi-cell array formula or data table is cut by the
- *         band, or a value, formula or the table itself would be pushed past
- *         the sheet bound; the workbook is unchanged.
+ *         band, or a value, formula, note, fill, border, merge or the table
+ *         itself would be pushed past the sheet bound; the workbook is
+ *         unchanged.
  */
 FM_API fm_status_t fm_sheet_insert_table_rows(fm_workbook_t* wb, size_t sheet_index, size_t table_index, uint32_t first,
                                               uint32_t last);

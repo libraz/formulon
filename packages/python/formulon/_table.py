@@ -412,9 +412,9 @@ class Table(_NoCopy):
             negative, or the span reaches past the last sheet row.
           FormulonError: with ``StatusCode.PRECONDITION_FAILED`` when a
             PivotTable lies in the shift path, a multi-cell array formula or
-            data table is cut by the band, or a value, formula or the table
-            itself would be pushed past the last sheet row; the workbook is
-            unchanged.
+            data table is cut by the band, or a value, formula, note, fill,
+            border, merge or the table itself would be pushed past the last
+            sheet row; the workbook is unchanged.
           NotFoundError: when the table was removed.
         """
         h, sheet, index = self._locate()

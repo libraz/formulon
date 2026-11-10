@@ -264,16 +264,17 @@ Read [Every binding](#every-binding) first, then the section for your binding. [
   `ws.insertRows(3, 5)` inserts three rows, and `first > last` is
   `InvalidArgument`.
 - **C ABI, JavaScript, Python:** `insertRows` and `insertColumns` fail with
-  `PreconditionFailed` and change nothing when they would push a cell that
-  holds a value or formula past the last row or column of the grid; they used
-  to drop it.
+  `PreconditionFailed` and change nothing when they would push a value,
+  formula, note, fill, border or merge past the last row or column of the grid;
+  they used to drop it. A font or number format, hyperlink, validation,
+  conditional format or row or column format pushed off is still dropped.
 - **C ABI, JavaScript, Python:** `Sheet.insertCells(range, shift)` and
   `deleteCells(range, shift)` fail with `PreconditionFailed` and change nothing
   when the shifted region meets a table, a multi-cell array formula or a data
   table that extends beyond the band, a PivotTable edge or inside, or when a
-  value or formula would be pushed off the grid; `InvalidArgument` for a wrong
-  shift direction or a whole-column range shifted down (whole-row shifted
-  right).
+  value, formula, note, fill, border or merge would be pushed off the grid;
+  `InvalidArgument` for a wrong shift direction or a whole-column range
+  shifted down (whole-row shifted right).
 - **C ABI, JavaScript, Python:** `PivotAxis.Col` is `PivotAxis.Column`
   (`FM_PIVOT_AXIS_COL` is `FM_PIVOT_AXIS_COLUMN`; Python `PivotAxis.COLUMN`),
   and `ChartBarDirection.Col` is `ChartBarDirection.Column`. The

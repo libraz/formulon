@@ -562,11 +562,11 @@ TEST(WorkbookRowColEdits, InsertDropsOffGridRangesAndKeepsPartialOverhangConsist
 
     // The first range is wholly pushed off-grid. The second starts at the
     // insertion point and overhangs by one coordinate; it must remain as a
-    // valid clipped range. The third is below the edit and is unchanged.
+    // valid clipped range. The third is below the edit and is unchanged. A
+    // merge there would refuse the insert, so only dropped kinds are placed.
     const MergeRange off_grid = make_range(bound - 2U, bound - 1U);
     const MergeRange partial = make_range(insert_at, bound - 2U);
     const MergeRange untouched = make_range(0U, 1U);
-    s.mutable_merges() = {off_grid, partial, untouched};
     s.mutable_hyperlinks() = {make_hyperlink(off_grid, "https://off-grid"), make_hyperlink(partial, "https://partial"),
                               make_hyperlink(untouched, "https://untouched")};
     DataValidation validation;
@@ -582,16 +582,6 @@ TEST(WorkbookRowColEdits, InsertDropsOffGridRangesAndKeepsPartialOverhangConsist
 
     const MergeRange expected_partial = make_range(bound - 2U, bound - 1U);
     const MergeRange expected_untouched = untouched;
-    ASSERT_EQ(s.merges().size(), 2U);
-    EXPECT_EQ(s.merges()[0].first_row, expected_partial.first_row);
-    EXPECT_EQ(s.merges()[0].first_col, expected_partial.first_col);
-    EXPECT_EQ(s.merges()[0].last_row, expected_partial.last_row);
-    EXPECT_EQ(s.merges()[0].last_col, expected_partial.last_col);
-    EXPECT_EQ(s.merges()[1].first_row, expected_untouched.first_row);
-    EXPECT_EQ(s.merges()[1].first_col, expected_untouched.first_col);
-    EXPECT_EQ(s.merges()[1].last_row, expected_untouched.last_row);
-    EXPECT_EQ(s.merges()[1].last_col, expected_untouched.last_col);
-
     ASSERT_EQ(s.hyperlinks().size(), 2U);
     EXPECT_EQ(s.hyperlinks()[0].row, expected_partial.first_row);
     EXPECT_EQ(s.hyperlinks()[0].col, expected_partial.first_col);
@@ -634,7 +624,6 @@ TEST(WorkbookRowColEdits, InsertMaxCountDropsWhollyOffGridRangesWithoutWraparoun
     Workbook wb = Workbook::create();
     Sheet& s = wb.sheet(0);
     const MergeRange range = rows ? MergeRange{0U, 0U, 0U, 1U} : MergeRange{0U, 0U, 1U, 0U};
-    s.mutable_merges().push_back(range);
     Hyperlink hyperlink;
     hyperlink.row = range.first_row;
     hyperlink.col = range.first_col;
@@ -649,7 +638,6 @@ TEST(WorkbookRowColEdits, InsertMaxCountDropsWhollyOffGridRangesWithoutWraparoun
     const auto edited = rows ? wb.insert_rows(0U, 0U, std::numeric_limits<std::uint32_t>::max())
                              : wb.insert_cols(0U, 0U, std::numeric_limits<std::uint32_t>::max());
     ASSERT_TRUE(static_cast<bool>(edited));
-    EXPECT_TRUE(s.merges().empty());
     EXPECT_TRUE(s.hyperlinks().empty());
     EXPECT_TRUE(s.validations().empty());
   }

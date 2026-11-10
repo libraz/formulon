@@ -54,8 +54,9 @@ Upgrading from 0.18: see [Upgrading from 0.18 to 0.19](docs/releases/upgrading-0
   charts, shapes and slicers. Chart series are keyed by `seriesId`.
 - `insertRows`, `deleteRows`, `insertColumns` and `deleteColumns` take
   `(first, last)` instead of `(start, count)`: `ws.insertRows(3, 5)` inserts
-  three rows. An insert that would push a cell off the grid fails with
-  `PreconditionFailed` instead of dropping it.
+  three rows. An insert that would push a value, formula, note, fill, border
+  or merge off the grid fails with `PreconditionFailed` instead of dropping
+  it.
 - `addMerge` refuses a range overlapping a merge, table, pivot, array formula
   or data table, and named collections refuse a name equal to an existing one
   under Excel's text comparison (case, width and kana folded).

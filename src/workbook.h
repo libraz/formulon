@@ -1650,7 +1650,8 @@ class Workbook {
   ///     edge or lies wholly inside one, when the shift path holds a
   ///     PivotTable at all, when the band cuts into a table without spanning
   ///     exactly the table's columns (`kDown`) or rows (`kRight`), totals row
-  ///     included, or when a value or formula would be pushed off the grid.
+  ///     included, or when a value, formula, note, fill, border or merge would
+  ///     be pushed off the grid.
   Expected<void, Error> insert_cells(std::size_t sheet_index, const MergeRange& range, CellShift shift);
 
   /// Deletes the cells of `range` on `sheet_index` (Delete Cells), shifting

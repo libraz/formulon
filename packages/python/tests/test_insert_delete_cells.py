@@ -84,6 +84,20 @@ class InsertDeleteCellsTests(unittest.TestCase):
         self.assertEqual(table.get_properties().range.rect, before)
         self.assertEqual(self.ws.get_value("B3"), "b")
 
+    def test_note_fill_or_merge_pushed_off_the_grid_refuses(self) -> None:
+        shift = formulon.CellShift
+        refused = StatusCode.PRECONDITION_FAILED
+        self.ws.set_comment("XFD3", formulon.CommentInput(text="last column"))
+        self.assertCode(lambda: self.ws.insert_cells("B3", shift.RIGHT), refused)
+        self.assertEqual(self.ws.get_comment("XFD3").text, "last column")
+        self.ws.set_comment("XFD3", None)
+        self.ws.update_cell_format("XFD5", fill={"foreground": "#FFFF00"})
+        self.assertCode(lambda: self.ws.insert_cells("B5", shift.RIGHT), refused)
+        self.ws.update_cell_format("XFD7", number_format="0.00")
+        self.ws.insert_cells("B7", shift.RIGHT)
+        self.ws.add_merge("B1048575:C1048576")
+        self.assertCode(lambda: self.ws.insert_cells("B3", shift.DOWN), refused)
+
     def test_wrong_direction_invalid_argument(self) -> None:
         shift = formulon.CellShift
         invalid = StatusCode.INVALID_ARGUMENT

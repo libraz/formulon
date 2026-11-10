@@ -149,6 +149,26 @@ test('a refusal is a FormulonError PreconditionFailed and leaves the workbook un
   });
 });
 
+test('a note, a fill or a merge pushed off the grid refuses the insert; a bold font does not', async () => {
+  await withWorkbook((wb, f) => {
+    const { StatusCode, CellShift } = f;
+    const ws = wb.sheet(0);
+    ws.setComment('XFD3', { text: 'last column' });
+    rejectsWith(() => ws.insertCells('B3', CellShift.Right), StatusCode.PreconditionFailed, 'note, last column');
+    assert.equal(ws.getComment('XFD3').text, 'last column');
+    ws.setComment('XFD3', null);
+    ws.setComment('C1048576', { text: 'last row' });
+    rejectsWith(() => ws.insertRows(2, 2), StatusCode.PreconditionFailed, 'note, last row');
+    ws.setComment('C1048576', null);
+    ws.updateCellFormat('XFD5', { fill: { foreground: '#FFFF00' } });
+    rejectsWith(() => ws.insertCells('B5', CellShift.Right), StatusCode.PreconditionFailed, 'fill, last column');
+    ws.updateCellFormat('XFD7', { font: { bold: true } });
+    ws.insertCells('B7', CellShift.Right);
+    ws.addMerge('B1048575:C1048576');
+    rejectsWith(() => ws.insertCells('B3', CellShift.Down), StatusCode.PreconditionFailed, 'merge, last row');
+  });
+});
+
 test('wrong direction, zero shift on delete, whole-column Down and unknown ordinals are InvalidArgument', async () => {
   await withWorkbook((wb, f) => {
     const { StatusCode, CellShift } = f;
