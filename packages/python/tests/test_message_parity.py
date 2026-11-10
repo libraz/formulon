@@ -58,6 +58,15 @@ CASES: Dict[str, Callable[[Workbook, Any], Any]] = {
         [Value(kind=ValueKind.TEXT, text="a"), 5], formulon.CollationStrength.DYNAMIC, "win-365-en_US"
     ),
     "toNative of a non-Value": lambda wb, ws: formulon.to_native(5),
+    "table insertRows last without first": lambda wb, ws: ws.add_table(
+        TableInput(range="A1:B3", name="T", columns=["a", "b"])
+    ).insert_rows(None, 1),
+    "table insertRows first past the end": lambda wb, ws: ws.add_table(
+        TableInput(range="A1:B3", name="T", columns=["a", "b"])
+    ).insert_rows(3),
+    "table insertColumns last below first": lambda wb, ws: ws.add_table(
+        TableInput(range="A1:B3", name="T", columns=["a", "b"])
+    ).insert_columns(2, 1),
 }
 
 

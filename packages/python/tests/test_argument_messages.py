@@ -7,6 +7,7 @@ names, no ``formulon:`` prefix, no punctuation after the call.
 
 from __future__ import annotations
 
+import re
 import unittest
 from typing import Any, Callable
 
@@ -62,6 +63,8 @@ class _MessageCase(unittest.TestCase):
             self.assertNotIn(token, message)
         self.assertNotRegex(message, r"\b\w+_op\b")
         self.assertNotRegex(message, r"^[\w.]+: ")
+        # Only the leading `Class.method` names the call; one inside the body is a relabelled word.
+        self.assertNotRegex(re.sub(r"^[A-Za-z]\w*\.\w+ ", "", message), r"\b[A-Z]\w*\.[a-z_]\w* ")
 
 
 class EngineProseMessageTests(_MessageCase):
@@ -77,6 +80,14 @@ class EngineProseMessageTests(_MessageCase):
             )
             self.assertEqual(message, "Sheet.add_table input.name is not a valid table name")
             self.assert_public_words(message)
+
+    def test_a_parameter_name_inside_a_message_body_is_not_relabelled(self) -> None:
+        with Workbook.create_default() as wb:
+            table = wb.sheet(0).add_table(TableInput(range="A1:B3", name="T", columns=["a", "b"]))
+            message = _raised(InvalidArgumentError, lambda: table.insert_rows(2, 1))
+            self.assertEqual(message, "Table.insert_rows last 1 is before first 2")
+            message = _raised(InvalidArgumentError, lambda: table.insert_rows(None, 1))
+            self.assertEqual(message, "Table.insert_rows last needs first")
 
 
 class IterativeTests(_MessageCase):

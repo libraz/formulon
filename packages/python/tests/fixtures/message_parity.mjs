@@ -20,6 +20,12 @@ const CASES = {
   'getCollationClasses element that is not a Value': () =>
     f.getCollationClasses([{ kind: f.ValueKind.Text, text: 'a' }, 5], f.CollationStrength.Dynamic, 'win-365-en_US'),
   'toNative of a non-Value': () => f.toNative(5),
+  'table insertRows last without first': (wb, ws) =>
+    ws.addTable({ range: 'A1:B3', name: 'T', columns: ['a', 'b'] }).insertRows(undefined, 1),
+  'table insertRows first past the end': (wb, ws) =>
+    ws.addTable({ range: 'A1:B3', name: 'T', columns: ['a', 'b'] }).insertRows(3),
+  'table insertColumns last below first': (wb, ws) =>
+    ws.addTable({ range: 'A1:B3', name: 'T', columns: ['a', 'b'] }).insertColumns(2, 1),
 };
 
 const { createFormulon } = await import(process.argv[2]);

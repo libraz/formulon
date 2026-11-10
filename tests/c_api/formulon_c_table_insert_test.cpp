@@ -174,12 +174,22 @@ TEST(CApiTableInsert, ArgumentErrors) {
   EXPECT_EQ(fm_sheet_insert_table_rows(wb.handle, 0, 1, 0, 0), FM_STATUS_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(fm_sheet_insert_table_columns(wb.handle, 0, 1, 0, 0), FM_STATUS_INDEX_OUT_OF_RANGE);
   // first past the count, last below first, span past the grid.
+  const auto message = [] {
+    const char* text = fm_get_last_error_message();
+    return text == nullptr ? std::string() : std::string(text);
+  };
   EXPECT_EQ(fm_sheet_insert_table_rows(wb.handle, 0, 0, 3, 3), FM_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(message(), "first 3 is out of range (2 rows)");
   EXPECT_EQ(fm_sheet_insert_table_rows(wb.handle, 0, 0, 2, 1), FM_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(message(), "last 1 is before first 2");
   EXPECT_EQ(fm_sheet_insert_table_rows(wb.handle, 0, 0, 2, 1048576U), FM_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(message(), "last 1048576 is outside the grid");
   EXPECT_EQ(fm_sheet_insert_table_columns(wb.handle, 0, 0, 4, 4), FM_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(message(), "first 4 is out of range (3 columns)");
   EXPECT_EQ(fm_sheet_insert_table_columns(wb.handle, 0, 0, 3, 2), FM_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(message(), "last 2 is before first 3");
   EXPECT_EQ(fm_sheet_insert_table_columns(wb.handle, 0, 0, 3, 16384U), FM_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(message(), "last 16384 is outside the grid");
   EXPECT_EQ(Info(wb, 0, 0).range.last_row, 2U);
   EXPECT_EQ(Info(wb, 0, 0).range.last_col, 2U);
 }
@@ -189,6 +199,7 @@ TEST(CApiTableInsert, ContentPushedOffTheGridIsRefused) {
   BuildSales(wb);
   ASSERT_EQ(fm_sheet_set_number(wb.handle, 0, 1048575, 1, 1), 0);
   EXPECT_EQ(fm_sheet_insert_table_rows(wb.handle, 0, 0, 2, 2), FM_STATUS_PRECONDITION_FAILED);
+  EXPECT_STREQ(fm_get_last_error_message(), "Cannot shift a value or formula off the sheet");
   EXPECT_EQ(Info(wb, 0, 0).range.last_row, 2U);
   ASSERT_EQ(fm_sheet_set_number(wb.handle, 0, 1, 16383, 1), 0);
   EXPECT_EQ(fm_sheet_insert_table_columns(wb.handle, 0, 0, 3, 3), FM_STATUS_PRECONDITION_FAILED);

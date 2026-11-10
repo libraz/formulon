@@ -53,22 +53,25 @@ Expected<MergeRange, Error> table_extent(const Workbook& wb, std::size_t sheet_i
 /// cells into an axis of `axis_extent` and pushes the table's far edge,
 /// `table_last`, along by the span's length. Returns the span's length.
 Expected<std::uint64_t, Error> check_insert_span(std::uint32_t first, std::uint32_t last, std::uint64_t count,
-                                                 std::uint64_t start, std::uint64_t table_last,
+                                                 const char* noun, std::uint64_t start, std::uint64_t table_last,
                                                  std::uint64_t axis_extent) {
   if (first > count) {
-    return invalid_argument("first is past the end of the table", "first=" + std::to_string(first));
+    return invalid_argument("first " + std::to_string(first) + " is out of range (" + std::to_string(count) + " " +
+                                noun + (count == 1U ? ")" : "s)"),
+                            "first=" + std::to_string(first));
   }
   if (last < first) {
-    return invalid_argument("last is before first", "first=" + std::to_string(first) + " last=" + std::to_string(last));
+    return invalid_argument("last " + std::to_string(last) + " is before first " + std::to_string(first),
+                            "first=" + std::to_string(first) + " last=" + std::to_string(last));
   }
   const std::uint64_t length = static_cast<std::uint64_t>(last) - first + 1U;
   // An append against the grid's edge has no cell to start in: content would go off the grid.
   if (start >= axis_extent) {
     return make_error(FormulonErrorCode::kPreconditionFailed,
-                      "first is past the grid: the table ends on its last row or column");
+                      "first " + std::to_string(first) + " is outside the grid");
   }
   if (start + length > axis_extent) {
-    return invalid_argument("last reaches past the grid", "last=" + std::to_string(last));
+    return invalid_argument("last " + std::to_string(last) + " is outside the grid", "last=" + std::to_string(last));
   }
   if (table_last + length >= axis_extent) {
     return make_error(FormulonErrorCode::kPreconditionFailed, "last would push the table off the grid");
@@ -96,7 +99,7 @@ Expected<void, Error> Workbook::insert_table_rows(std::size_t sheet_index, std::
   const std::uint64_t data_rows = end_data - first_data;
   const std::uint64_t start = first_data + first;
   const Expected<std::uint64_t, Error> span =
-      check_insert_span(first, last, data_rows, start, rect.last_row, Sheet::kMaxRows);
+      check_insert_span(first, last, data_rows, "row", start, rect.last_row, Sheet::kMaxRows);
   if (!span.has_value()) {
     return span.error();
   }
@@ -133,7 +136,7 @@ Expected<void, Error> Workbook::insert_table_columns(std::size_t sheet_index, st
   const std::uint64_t width = static_cast<std::uint64_t>(rect.last_col) - rect.first_col + 1U;
   const std::uint64_t start = static_cast<std::uint64_t>(rect.first_col) + first;
   const Expected<std::uint64_t, Error> span =
-      check_insert_span(first, last, width, start, rect.last_col, Sheet::kMaxCols);
+      check_insert_span(first, last, width, "column", start, rect.last_col, Sheet::kMaxCols);
   if (!span.has_value()) {
     return span.error();
   }

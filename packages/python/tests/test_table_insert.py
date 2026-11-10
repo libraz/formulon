@@ -163,6 +163,19 @@ class InsertErrorTests(unittest.TestCase):
                     for args in ((-1,), (None, 1), (4,), (2, 1)):
                         with self.assertRaises(InvalidArgumentError):
                             method(*args)
+                    name = method.__name__
+                    noun = "2 rows" if name == "insert_rows" else "3 columns"
+                    for args, message in (
+                        ((None, 1), f"Table.{name} last needs first"),
+                        ((4,), f"Table.{name} first 4 is out of range ({noun})"),
+                        ((2, 1), f"Table.{name} last 1 is before first 2"),
+                    ):
+                        with self.assertRaises(InvalidArgumentError) as caught:
+                            method(*args)
+                        self.assertEqual(caught.exception.message, message)
+                    with self.assertRaises(TypeError) as caught_type:
+                        method(1.5)  # type: ignore[arg-type]
+                    self.assertEqual(str(caught_type.exception), f"Table.{name} first must be an integer")
             self.assertEqual(last_row(table), 2)
             self.assertEqual(last_col(table), 2)
 

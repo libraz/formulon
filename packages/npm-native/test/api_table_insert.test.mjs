@@ -16,12 +16,13 @@ async function withWorkbook(fn, profile) {
   }
 }
 
-function rejectsWith(fn, code, label) {
+function rejectsWith(fn, code, label, message) {
   assert.throws(
     fn,
     (e) => {
       assert.equal(e.name, 'FormulonError', `${label}: expected a FormulonError, got ${e}`);
       assert.equal(e.code, code, `${label}: code ${e.code}`);
+      if (message !== undefined) assert.equal(e.message, message, label);
       return true;
     },
     label,
@@ -145,9 +146,26 @@ test('the argument forms are validated like the sheet-level inserts', async () =
       assert.throws(() => table[method](2 ** 32), RangeError, `${method} above 32 bits`);
       assert.throws(() => table[method]('1'), TypeError, `${method} string`);
       rejectsWith(() => table[method](-1), f.StatusCode.InvalidArgument, `${method} negative`);
-      rejectsWith(() => table[method](undefined, 1), f.StatusCode.InvalidArgument, `${method} last without first`);
-      rejectsWith(() => table[method](4), f.StatusCode.InvalidArgument, `${method} first past the count`);
-      rejectsWith(() => table[method](2, 1), f.StatusCode.InvalidArgument, `${method} last below first`);
+      rejectsWith(
+        () => table[method](undefined, 1),
+        f.StatusCode.InvalidArgument,
+        `${method} last without first`,
+        `Table.${method} last needs first`,
+      );
+      rejectsWith(
+        () => table[method](4),
+        f.StatusCode.InvalidArgument,
+        `${method} first past the count`,
+        `Table.${method} first 4 is out of range (${method === 'insertRows' ? '2 rows' : '3 columns'})`,
+      );
+      rejectsWith(
+        () => table[method](2, 1),
+        f.StatusCode.InvalidArgument,
+        `${method} last below first`,
+        `Table.${method} last 1 is before first 2`,
+      );
+      assert.throws(() => table[method](1.5), { message: `Table.${method} first must be an integer` });
+      assert.throws(() => table[method](0, 1.5), { message: `Table.${method} last must be an integer` });
     }
     assert.equal(lastRow(table), 2);
     assert.equal(lastCol(table), 2);
@@ -158,8 +176,18 @@ test('a span past the grid and content pushed off it are refused', async () => {
   await withWorkbook((wb, f) => {
     const ws = wb.sheet(0);
     const table = salesTable(ws);
-    rejectsWith(() => table.insertRows(0, 1048576), f.StatusCode.InvalidArgument, 'span past the last row');
-    rejectsWith(() => table.insertColumns(0, 16384), f.StatusCode.InvalidArgument, 'span past the last column');
+    rejectsWith(
+      () => table.insertRows(0, 1048576),
+      f.StatusCode.InvalidArgument,
+      'span past the last row',
+      'Table.insertRows last 1048576 is outside the grid',
+    );
+    rejectsWith(
+      () => table.insertColumns(0, 16384),
+      f.StatusCode.InvalidArgument,
+      'span past the last column',
+      'Table.insertColumns last 16384 is outside the grid',
+    );
     ws.setValue('B1048576', 1);
     rejectsWith(() => table.insertRows(), f.StatusCode.PreconditionFailed, 'value pushed off the grid');
     assert.equal(lastRow(table), 2);

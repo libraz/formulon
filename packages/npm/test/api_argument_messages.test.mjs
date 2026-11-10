@@ -56,6 +56,8 @@ const BANNED = [
 
 function assertPublicWords(message) {
   for (const banned of BANNED) assert.doesNotMatch(message, banned, message);
+  // Only the leading `Class.method` names the call; one inside the body is a relabelled word.
+  assert.doesNotMatch(message.replace(/^[A-Z]\w*\.\w+ /, ''), /\b[A-Z]\w*\.[a-z]\w* /, message);
 }
 
 /** `fn` throws `ctor` (TypeError / RangeError) with exactly `message`. */
@@ -215,6 +217,14 @@ test('engine refusals name the public field', async () => {
       invalid,
       'Workbook.updateIterative patch.maxIterations must be in 1..32767',
     );
+  });
+});
+
+test('a parameter name inside a message body is not relabelled', async () => {
+  await withWorkbook((wb, f) => {
+    const { table } = makeHandles(f, wb);
+    failsWith(() => table.insertRows(1, 0), f.StatusCode.InvalidArgument, 'Table.insertRows last 0 is before first 1');
+    failsWith(() => table.insertRows(undefined, 1), f.StatusCode.InvalidArgument, 'Table.insertRows last needs first');
   });
 });
 

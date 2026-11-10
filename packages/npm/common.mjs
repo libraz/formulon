@@ -4829,7 +4829,7 @@ function insertSpan(where, first, last, count) {
     if (given(last)) {
       throw new FormulonError(
         StatusCode.InvalidArgument,
-        `${argLabel(where, 1)} needs ${argLabel(where, 0)}`,
+        `${argLabel(where, 1)} needs ${argumentPath(where, 0)}`,
         `last=${last}`,
       );
     }
