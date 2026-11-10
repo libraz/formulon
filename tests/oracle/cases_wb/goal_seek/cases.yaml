@@ -1,0 +1,32 @@
+# Goal Seek (Range.GoalSeek) oracle cases.
+#
+# Each case seeks `goal` in B1 (= `formula`, a function of A1) by changing A1,
+# starting from `x0`, with Application.MaxChange = `max_change` (the stop
+# tolerance; MaxIterations has no effect on Goal Seek). The golden records
+# Excel's return flag and the bit-exact final A1 and B1.
+#
+# `pending: true` marks cases whose search path the engine is not expected to
+# reproduce yet; the runner skips them.
+suite: goal_seek
+functions:
+  cubic: "=A1^3-2*A1-5"
+  exp: "=EXP(A1)"
+  step: "=IF(A1<3,0,10)"
+  noroot: "=A1^2+1"
+  linear: "=3*A1+1"
+  sqrt: "=SQRT(A1)"
+  sin: "=SIN(A1)"
+goals:
+  cubic: 0
+  exp: 10
+  step: 5
+  noroot: 0
+  linear: 7
+  sqrt: 3
+  sin: 0.5
+starts: [0, 1.0e-6, 0.5, 1, 2, 10, 1000, -1, -10]
+max_change_variants:
+  - {function: cubic, x0: 2, max_change: [1.0e-6, 0.1]}
+  - {function: exp, x0: 0, max_change: [1.0e-6, 0.1]}
+# `pending` lists case-id patterns the runner skips; every case is modelled.
+pending: []

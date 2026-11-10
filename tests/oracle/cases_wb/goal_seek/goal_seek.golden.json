@@ -1,0 +1,341 @@
+{
+ "suite": "goal_seek",
+ "environment": {
+  "target": "mac-365-ja_JP",
+  "excel_version": "16.114.4"
+ },
+ "cases": {
+  "cubic:0": {
+   "result": "failed",
+   "x": "bfed1eb851eb8539",
+   "y": "c00f77f4128bf3c2"
+  },
+  "cubic:1e-06": {
+   "result": "failed",
+   "x": "bfead7f0518ca514",
+   "y": "c00f4cf3a4e5e79d"
+  },
+  "cubic:0.5": {
+   "result": "failed",
+   "x": "c2c9999999999a21",
+   "y": "c880624dd2f1ab00"
+  },
+  "cubic:1": {
+   "result": "converged",
+   "x": "4000c1a2b13e7932",
+   "y": "bf00e8429c780000"
+  },
+  "cubic:2": {
+   "result": "converged",
+   "x": "4000c1a3f9ef959b",
+   "y": "bed49cbfa4d00000"
+  },
+  "cubic:10": {
+   "result": "converged",
+   "x": "4000c1a464e5b535",
+   "y": "3ed0b1ff2a900000"
+  },
+  "cubic:1000": {
+   "result": "converged",
+   "x": "4000c1a7675ef328",
+   "y": "3f11d6efddf60000"
+  },
+  "cubic:-1": {
+   "result": "converged",
+   "x": "4000c19fe4f802e4",
+   "y": "bf18116f93800000"
+  },
+  "cubic:-10": {
+   "result": "converged",
+   "x": "4000c19b489fdf3e",
+   "y": "bf28e64185890000"
+  },
+  "exp:0": {
+   "result": "converged",
+   "x": "40026bad11b18f9c",
+   "y": "4023fff456f9f879"
+  },
+  "exp:1e-06": {
+   "result": "converged",
+   "x": "40026bb17064e564",
+   "y": "4023ffff43b6ec3b"
+  },
+  "exp:0.5": {
+   "result": "converged",
+   "x": "40026bba0f2e03fc",
+   "y": "40240014d0b88a32"
+  },
+  "exp:1": {
+   "result": "converged",
+   "x": "40026bb15d7e07c3",
+   "y": "4023ffff1475c41d"
+  },
+  "exp:2": {
+   "result": "converged",
+   "x": "40026bb00d66b9b7",
+   "y": "4023fffbcc3bec98"
+  },
+  "exp:10": {
+   "result": "converged",
+   "x": "40026bba3bc6d26b",
+   "y": "4024001540370388"
+  },
+  "exp:1000": {
+   "result": "refused",
+   "x": "408f400000000000"
+  },
+  "exp:-1": {
+   "result": "converged",
+   "x": "40026bc0588b0b39",
+   "y": "402400248837a497"
+  },
+  "exp:-10": {
+   "result": "converged",
+   "x": "40026bc111f33473",
+   "y": "4024002657bf6f4d"
+  },
+  "step:0": {
+   "result": "failed",
+   "x": "40147ae147a3d70a",
+   "y": "4024000000000000"
+  },
+  "step:1e-06": {
+   "result": "failed",
+   "x": "bfd5798ab072a40d",
+   "y": "0000000000000000"
+  },
+  "step:0.5": {
+   "result": "failed",
+   "x": "40087ae147a3d70a",
+   "y": "4024000000000000"
+  },
+  "step:1": {
+   "result": "failed",
+   "x": "400c7ae147accccd",
+   "y": "4024000000000000"
+  },
+  "step:2": {
+   "result": "failed",
+   "x": "400a3d70a3d70001",
+   "y": "4024000000000000"
+  },
+  "step:10": {
+   "result": "failed",
+   "x": "425999999998e667",
+   "y": "4024000000000000"
+  },
+  "step:1000": {
+   "result": "failed",
+   "x": "42c3ffffffff7400",
+   "y": "4024000000000000"
+  },
+  "step:-1": {
+   "result": "failed",
+   "x": "c2047ae1478d1eb8",
+   "y": "0000000000000000"
+  },
+  "step:-10": {
+   "result": "failed",
+   "x": "c2399999998a0000",
+   "y": "0000000000000000"
+  },
+  "noroot:0": {
+   "result": "failed",
+   "x": "c1147ae147ae147b",
+   "y": "423a36e2eb1d432d"
+  },
+  "noroot:1e-06": {
+   "result": "failed",
+   "x": "c17ad7f29abcaf67",
+   "y": "4306849b86a12bd6"
+  },
+  "noroot:0.5": {
+   "result": "failed",
+   "x": "c2a99999999999b6",
+   "y": "45647ae147ae14a8"
+  },
+  "noroot:1": {
+   "result": "failed",
+   "x": "c2b99999999999b7",
+   "y": "45847ae147ae14aa"
+  },
+  "noroot:2": {
+   "result": "failed",
+   "x": "c2d5d19b459717a4",
+   "y": "45bdc0f185097ed6"
+  },
+  "noroot:10": {
+   "result": "failed",
+   "x": "bfc20bafde0aa3e5",
+   "y": "3ff0516950f3d952"
+  },
+  "noroot:1000": {
+   "result": "failed",
+   "x": "c26c058f833a5a30",
+   "y": "44e889bc1d02bf04"
+  },
+  "noroot:-1": {
+   "result": "failed",
+   "x": "42b99999999999b7",
+   "y": "45847ae147ae14aa"
+  },
+  "noroot:-10": {
+   "result": "failed",
+   "x": "3fc20bafde0aa3e5",
+   "y": "3ff0516950f3d952"
+  },
+  "linear:0": {
+   "result": "converged",
+   "x": "3fffffffffffffff",
+   "y": "401bffffffffffff"
+  },
+  "linear:1e-06": {
+   "result": "converged",
+   "x": "4000000000000000",
+   "y": "401c000000000000"
+  },
+  "linear:0.5": {
+   "result": "converged",
+   "x": "4000000000000000",
+   "y": "401c000000000000"
+  },
+  "linear:1": {
+   "result": "converged",
+   "x": "4000000000000000",
+   "y": "401c000000000000"
+  },
+  "linear:2": {
+   "result": "converged",
+   "x": "4000000000000000",
+   "y": "401c000000000000"
+  },
+  "linear:10": {
+   "result": "converged",
+   "x": "4000000000000000",
+   "y": "401c000000000000"
+  },
+  "linear:1000": {
+   "result": "converged",
+   "x": "4000000000000000",
+   "y": "401c000000000000"
+  },
+  "linear:-1": {
+   "result": "converged",
+   "x": "4000000000000001",
+   "y": "401c000000000002"
+  },
+  "linear:-10": {
+   "result": "converged",
+   "x": "3ffffffffffffffc",
+   "y": "401bfffffffffffd"
+  },
+  "sqrt:0": {
+   "result": "converged",
+   "x": "4021ff903bdce6ae",
+   "y": "4007ffb57cca43d2"
+  },
+  "sqrt:1e-06": {
+   "result": "converged",
+   "x": "4021ffc5882cb91d",
+   "y": "4007ffd905537eba"
+  },
+  "sqrt:0.5": {
+   "result": "converged",
+   "x": "4021ffd70740b617",
+   "y": "4007ffe4af70ee3d"
+  },
+  "sqrt:1": {
+   "result": "converged",
+   "x": "4021fff0d0bd5056",
+   "y": "4007fff5e07c1303"
+  },
+  "sqrt:2": {
+   "result": "converged",
+   "x": "4021fe8cac58525f",
+   "y": "4007ff086de8a5a8"
+  },
+  "sqrt:10": {
+   "result": "converged",
+   "x": "4022004c0ece847c",
+   "y": "40080032b4541dfe"
+  },
+  "sqrt:1000": {
+   "result": "converged",
+   "x": "4021ffb045f0b88d",
+   "y": "4007ffcad9104a42"
+  },
+  "sqrt:-1": {
+   "result": "refused",
+   "x": "bff0000000000000"
+  },
+  "sqrt:-10": {
+   "result": "refused",
+   "x": "c024000000000000"
+  },
+  "sin:0": {
+   "result": "converged",
+   "x": "3fe0bb8f18b56f05",
+   "y": "3fdff6047e5a06e2"
+  },
+  "sin:1e-06": {
+   "result": "converged",
+   "x": "3fe0bfe14c397586",
+   "y": "3fdffd80f9f7f229"
+  },
+  "sin:0.5": {
+   "result": "converged",
+   "x": "3fe0c0521267fbcc",
+   "y": "3fdffe4452e45c91"
+  },
+  "sin:1": {
+   "result": "converged",
+   "x": "3fe0c16b2d8f2e32",
+   "y": "3fe000159d591052"
+  },
+  "sin:2": {
+   "result": "converged",
+   "x": "4004f0fc7345b26d",
+   "y": "3fe0024df6e16c6f"
+  },
+  "sin:10": {
+   "result": "converged",
+   "x": "4021cd58640b0fa7",
+   "y": "3fe000cf63161234"
+  },
+  "sin:1000": {
+   "result": "converged",
+   "x": "408f4d29e53966da",
+   "y": "3fdff1d221c65e67"
+  },
+  "sin:-1": {
+   "result": "converged",
+   "x": "3fe0c146ff5b656e",
+   "y": "3fdfffec901f071e"
+  },
+  "sin:-10": {
+   "result": "converged",
+   "x": "c023e5f06a28a7a5",
+   "y": "3fe0052105fcdb31"
+  },
+  "cubic:2:mc1e-06": {
+   "result": "converged",
+   "x": "4000c1a43509aaf9",
+   "y": "3e017cb200000000"
+  },
+  "cubic:2:mc0.1": {
+   "result": "converged",
+   "x": "4000ca5d11267abd",
+   "y": "3fa8656e19846780"
+  },
+  "exp:0:mc1e-06": {
+   "result": "converged",
+   "x": "40026bb1bc4dea6c",
+   "y": "40240000017d7558"
+  },
+  "exp:0:mc0.1": {
+   "result": "converged",
+   "x": "400269a6647c485a",
+   "y": "4023fae44d0dbfff"
+  }
+ }
+}
