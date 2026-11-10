@@ -883,6 +883,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and `PivotFieldInput.custom_name` is `None` when omitted.
   `Sheet.set_comment` takes a `CommentInput(text, author="")`, as JavaScript
   takes `CommentInput`; a `Comment` read back is still accepted.
+- **Python:** `Mention` / `MentionInput` and `PhoneticRun` spans are code-point
+  offsets into the Python `str`, as `len` and slicing count, instead of UTF-16
+  code units; a character outside the BMP counts 1. JavaScript keeps UTF-16
+  offsets, and length limits stay in UTF-16 code units on every surface.
 - **JavaScript, Python:** `ThreadedCommentInput.id` is optional (the engine
   generates one) and `personId` is required. Python `ChartCategories.format_code`
   is `number_format`.

@@ -20,6 +20,8 @@
 # sentence when no argument is at fault) and the bindings print it as `<Class.method> <public path>
 # <constraint>`; one that describes file content (kIo*, kSecurity*, out of memory) reads
 # `<part or record>: <problem>` (check: binding_drift engine-messages).
+# Text positions: C and JS index strings in UTF-16 code units; Python in code points, converted
+# at the binding boundary. Length limits are UTF-16 code units on every surface.
 schema: 1
 collections:
   sheet: { key: index, access: handles, plural: sheets, ops: [sheet.add, sheet.copy, sheet.get_count, sheet.move, sheet.remove, sheet.rename, sheet_index.get, sheet_name.get] }

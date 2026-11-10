@@ -2326,9 +2326,24 @@ class ValidationOutcome:
     error_style: Optional[ValidationErrorStyle]
 
 
+def _utf16_offset(text: str, index: int) -> int:
+    """The engine's UTF-16 offset of code-point offset ``index`` into ``text``; past the end counts one unit each."""
+    return index + sum(1 for ch in text[:index] if ord(ch) > 0xFFFF)
+
+
+def _code_point_offset(text: str, offset: int) -> int:
+    """The code-point offset into ``text`` of the engine's UTF-16 offset ``offset``; past the end counts one each."""
+    units = 0
+    for index, ch in enumerate(text):
+        if units >= offset:
+            return index
+        units += 2 if ord(ch) > 0xFFFF else 1
+    return len(text) + max(0, offset - units)
+
+
 @dataclass(frozen=True)
 class Mention:
-    """One ``@person`` mention covering the half-open span ``[start, end)`` of the text, in UTF-16 code units."""
+    """One ``@person`` mention covering the half-open span ``[start, end)`` of the text, in code points."""
 
     person_id: str
     mention_id: str
@@ -2339,7 +2354,8 @@ class Mention:
 @dataclass
 class MentionInput:
     """A mention of a new or updated threaded comment; an omitted ``mention_id`` is generated
-    (``{XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX}``). A :class:`Mention` read back is accepted in its place.
+    (``{XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX}``). ``start`` / ``end`` are code points into the comment
+    text. A :class:`Mention` read back is accepted in its place.
     """
 
     person_id: str
@@ -4447,11 +4463,10 @@ class Color:
 
 @dataclass(frozen=True)
 class PhoneticRun:
-    """One ``<rPh>`` block: ``text`` reads the half-open span ``[start, end)``.
+    """One ``<rPh>`` block: ``text`` reads the half-open span ``[start, end)`` of the cell text.
 
-    Offsets are UTF-16 code units, which is how Excel indexes string
-    positions. A whole-cell reading is the single run
-    ``PhoneticRun(0, <length of the cell text>, kana)``.
+    Offsets are code points into the cell's ``str``. A whole-cell reading is
+    the single run ``PhoneticRun(0, len(<cell text>), kana)``.
     """
 
     start: int = 0
@@ -7044,8 +7059,8 @@ def _write_value_input(value: Value, value_ptr: int, scope: _ArgScope) -> None:
     LIB.write_bytes(value_ptr, struct.pack("<i", value.kind) + b"\x00" * 4 + payload)
 
 
-def _pack_mentions(mentions: Sequence[Union[MentionInput, Mention]], scope: _ArgScope) -> int:
-    """Pack ``mentions`` into a contiguous mention struct array (0 when empty).
+def _pack_mentions(mentions: Sequence[Union[MentionInput, Mention]], text: str, scope: _ArgScope) -> int:
+    """Pack ``mentions`` of the comment ``text`` into a contiguous mention struct array (0 when empty).
 
     A ``None`` or empty ``mention_id`` is left ``NULL`` and takes an engine-generated id.
     """
@@ -7056,21 +7071,24 @@ def _pack_mentions(mentions: Sequence[Union[MentionInput, Mention]], scope: _Arg
         if not isinstance(m, (MentionInput, Mention)):
             raise TypeError(f"expected a MentionInput, got {type(m).__name__}")
         ptr = base + i * S.MENTION.size
-        S.MENTION.pack(LIB, ptr, {"start": _uint(m.start, "start"), "end": _uint(m.end, "end")})
+        start = _utf16_offset(text, _uint(m.start, "start"))
+        end = _utf16_offset(text, _uint(m.end, "end"))
+        S.MENTION.pack(LIB, ptr, {"start": _uint(start, "start"), "end": _uint(end, "end")})
         S.write_str_field(LIB, ptr, S.MENTION, "person_id", m.person_id, scope)
         S.write_str_field(LIB, ptr, S.MENTION, "mention_id", m.mention_id, scope)
     return base
 
 
 def _write_mentions(
-    struct_ptr: int, layout: S.Struct, mentions: Sequence[Union[MentionInput, Mention]], scope: _ArgScope
+    struct_ptr: int, layout: S.Struct, mentions: Sequence[Union[MentionInput, Mention]], text: str, scope: _ArgScope
 ) -> None:
-    """Store a mention array and its count into the ``mentions`` / ``mentions_count`` fields."""
-    LIB.write_bytes(struct_ptr + layout.offsets["mentions"][1], struct.pack("<I", _pack_mentions(mentions, scope)))
+    """Store the mention array of the comment ``text`` and its count into ``mentions`` / ``mentions_count``."""
+    packed = _pack_mentions(mentions, text, scope)
+    LIB.write_bytes(struct_ptr + layout.offsets["mentions"][1], struct.pack("<I", packed))
     LIB.write_bytes(struct_ptr + layout.offsets["mentions_count"][1], struct.pack("<I", len(mentions)))
 
 
-def _decode_mentions(base: int, count: int) -> List[Mention]:
+def _decode_mentions(base: int, count: int, text: str) -> List[Mention]:
     out: List[Mention] = []
     for i in range(count):
         d = S.MENTION.unpack(LIB, base + i * S.MENTION.size)
@@ -7078,8 +7096,8 @@ def _decode_mentions(base: int, count: int) -> List[Mention]:
             Mention(
                 person_id=LIB.read_cstr(d["person_id"]),
                 mention_id=LIB.read_cstr(d["mention_id"]),
-                start=d["start"],
-                end=d["end"],
+                start=_code_point_offset(text, d["start"]),
+                end=_code_point_offset(text, d["end"]),
             )
         )
     return out
@@ -7136,15 +7154,16 @@ def _format_created(value: Optional[Union[datetime.datetime, datetime.date]]) ->
 
 
 def _threaded_comment_from(d: Dict[str, Any]) -> ThreadedComment:
+    text = LIB.read_cstr(d["text"])
     return ThreadedComment(
         id=LIB.read_cstr(d["id"]),
         cell=CellAddress(row=d["row"], col=d["col"]),
         person_id=LIB.read_cstr(d["person_id"]),
         created=_parse_created(LIB.read_cstr(d["created"])),
-        text=LIB.read_cstr(d["text"]),
+        text=text,
         parent_id=LIB.read_cstr(d["parent_id"]) or None,
         done=bool(d["done"]),
-        mentions=_decode_mentions(d["mentions"], d["mentions_count"]),
+        mentions=_decode_mentions(d["mentions"], d["mentions_count"], text),
     )
 
 
@@ -7486,8 +7505,8 @@ def _decode_auto_filter(ptr: int) -> AutoFilter:
     )
 
 
-def _pack_phonetic_run_array(runs: Sequence[PhoneticRun], scope: _ArgScope) -> int:
-    """Pack a list of ``PhoneticRun`` into a contiguous engine-memory array.
+def _pack_phonetic_run_array(runs: Sequence[PhoneticRun], text: str, scope: _ArgScope) -> int:
+    """Pack a list of ``PhoneticRun`` over the cell ``text`` into a contiguous engine-memory array.
 
     Returns the array pointer (0 when empty). Every buffer allocated here --
     the array and each run's kana string -- goes through ``scope``.
@@ -7498,7 +7517,9 @@ def _pack_phonetic_run_array(runs: Sequence[PhoneticRun], scope: _ArgScope) -> i
     ptr = scope.alloc(size * len(runs))
     for i, run in enumerate(runs):
         slot = ptr + i * size
-        S.PHONETIC_RUN.pack(LIB, slot, {"start": _uint(run.start, "start"), "end": _uint(run.end, "end")})
+        start = _utf16_offset(text, _uint(run.start, "start"))
+        end = _utf16_offset(text, _uint(run.end, "end"))
+        S.PHONETIC_RUN.pack(LIB, slot, {"start": _uint(start, "start"), "end": _uint(end, "end")})
         S.write_str_field(LIB, slot, S.PHONETIC_RUN, "text", run.text, scope, allow_empty=True)
     return ptr
 

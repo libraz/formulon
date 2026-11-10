@@ -206,6 +206,7 @@ from ._workbook import (
     _cf_match_from,
     _check,
     _check_value,
+    _code_point_offset,
     _decode_auto_filter,
     _decode_cell_rect_array,
     _decode_cell_rect_at,
@@ -1840,6 +1841,11 @@ class Sheet(_NoCopy):
             )
             _check(status)
 
+    def _cell_text(self, row: int, col: int) -> str:
+        """The text a cell's phonetic runs index: its string value, else ``""``."""
+        value = self.get_value(row, col)
+        return value if isinstance(value, str) else ""
+
     @overload
     @_coordinate_form
     def set_cell_phonetic_runs(self, row: int, col: int, runs: Optional[Sequence[PhoneticRun]]) -> None: ...
@@ -1863,7 +1869,7 @@ class Sheet(_NoCopy):
         h = self._workbook._require()
         runs = [] if runs is None else runs
         with _ArgScope() as scope:
-            ptr = _pack_phonetic_run_array(runs, scope)
+            ptr = _pack_phonetic_run_array(runs, self._cell_text(row, col) if runs else "", scope)
             status = LIB.fm_sheet_set_cell_phonetic_runs(
                 h,
                 _uint(sheet, "sheet_index", role="sheet"),
@@ -1898,6 +1904,7 @@ class Sheet(_NoCopy):
             _uint(col, "col", role="coordinate"),
         )
         runs: List[PhoneticRun] = []
+        text = self._cell_text(row, col) if count else ""
         with _ArgScope() as scope:
             run_ptr = scope.struct(S.PHONETIC_RUN)
             for run_index in range(count):
@@ -1915,8 +1922,8 @@ class Sheet(_NoCopy):
                 fields = S.PHONETIC_RUN.unpack(LIB, run_ptr)
                 runs.append(
                     PhoneticRun(
-                        start=fields["start"],
-                        end=fields["end"],
+                        start=_code_point_offset(text, fields["start"]),
+                        end=_code_point_offset(text, fields["end"]),
                         text=LIB.read_cstr(fields["text"]) if fields["text"] else "",
                     )
                 )
@@ -4110,7 +4117,7 @@ class Sheet(_NoCopy):
                 S.write_str_field(LIB, ptr, S.THREADED_COMMENT, fld, text, scope)
             # An empty parent id reaches the engine, which refuses it.
             S.write_str_field(LIB, ptr, S.THREADED_COMMENT, "parent_id", comment.parent_id, scope, allow_empty=True)
-            _write_mentions(ptr, S.THREADED_COMMENT, comment.mentions, scope)
+            _write_mentions(ptr, S.THREADED_COMMENT, comment.mentions, comment.text, scope)
             out = scope.out_ptr()
             _check(LIB.fm_sheet_add_threaded_comment(h, _uint(sheet, "sheet_index", role="sheet"), ptr, out))
             return LIB.read_cstr(LIB.read_u32(out))
@@ -4148,8 +4155,14 @@ class Sheet(_NoCopy):
                 values["text_op"] = _PATCH_SET
                 values["text"] = scope.cstr(text)
             if mentions is not UNCHANGED:
+                # Mention spans index the text the comment carries after the update.
+                if text is UNCHANGED:
+                    current = self.get_threaded_comment(id)
+                    mention_text = "" if current is None else current.text
+                else:
+                    mention_text = text
                 values["mentions_op"] = _PATCH_SET
-                values["mentions"] = _pack_mentions(mentions, scope)
+                values["mentions"] = _pack_mentions(mentions, mention_text, scope)
                 values["mentions_count"] = _uint(len(mentions), "mentions_count")
             ptr = scope.struct(S.THREADED_COMMENT_PATCH)
             S.THREADED_COMMENT_PATCH.pack(LIB, ptr, values)
