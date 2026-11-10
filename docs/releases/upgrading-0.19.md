@@ -719,8 +719,8 @@ Read [Every binding](#every-binding) first, then the section for your binding. [
   row turns it off and clears every column's totals settings.
 - **JavaScript, Python:** `Table.update({ headerRow: false })`
   (`update(header_row=False)`) deletes the header cells, shrinks the range by
-  its top row, drops the AutoFilter and keeps the column names; it used to
-  flip the flag only. While it is off `Tbl[#Headers]` evaluates to `#REF!`.
+  its top row, drops the AutoFilter with its criteria, shows the rows they hid
+  and keeps the column names; it used to flip the flag only. While it is off `Tbl[#Headers]` evaluates to `#REF!`.
   `headerRow: true` writes the names into the row above the data and grows the
   range up when that row is empty in the table's columns, and otherwise shifts
   the table's columns down one row as `insertCells` with `CellShift.Down`

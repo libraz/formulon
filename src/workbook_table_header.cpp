@@ -10,6 +10,7 @@
 
 #include "auto_filter.h"
 #include "cell.h"
+#include "cf/auto_filter_eval.h"
 #include "eval/recalc_engine.h"
 #include "io/auto_filter_xml.h"
 #include "io/xml_escape.h"
@@ -78,28 +79,46 @@ Expected<void, Error> Workbook::set_table_header_row(std::size_t index, bool sho
     return Expected<void, Error>::Ok();
   }
   const std::size_t sheet_index = tables_[index].sheet_index;
+  // OFF drops the filter with its criteria and shows the rows they hid; a filter without criteria hid none.
+  std::optional<AutoFilter> shown_rows;
+  if (!shown) {
+    const AutoFilter* filter = tables_[index].auto_filter_xml.get();
+    if (filter != nullptr && filter->has_criteria()) {
+      shown_rows.emplace();
+      shown_rows->range = filter->range;
+    }
+  }
+  RETURN_IF_ERROR(set_table_header_row_cells(index, shown, *rect));
+  if (shown_rows.has_value()) {
+    return apply_auto_filter(*this, sheet_index, *shown_rows);
+  }
+  return Expected<void, Error>::Ok();
+}
+
+Expected<void, Error> Workbook::set_table_header_row_cells(std::size_t index, bool shown, const MergeRange& rect) {
+  const std::size_t sheet_index = tables_[index].sheet_index;
   // Cell writes, the optional insert and the range change are one edit under a single hold of the engine mutex.
   std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
-  const TableShape current{*rect, tables_[index].header_row, tables_[index].totals_row};
+  const TableShape current{rect, tables_[index].header_row, tables_[index].totals_row};
   ASSIGN_OR_RETURN(const std::optional<PendingShift> shift, check_table_header_row(index, shown, current, {}));
-  MergeRange next = *rect;
+  MergeRange next = rect;
   if (!shown) {
     // The header cells go outright, formats included, and nothing moves.
-    for (std::uint32_t col = rect->first_col; col <= rect->last_col; ++col) {
-      if (sheets_[sheet_index].cell_at(rect->first_row, col) != nullptr) {
-        put_cell_value_locked(sheet_index, rect->first_row, col, Value::blank());
-        sheets_[sheet_index].erase_cell(rect->first_row, col);
+    for (std::uint32_t col = rect.first_col; col <= rect.last_col; ++col) {
+      if (sheets_[sheet_index].cell_at(rect.first_row, col) != nullptr) {
+        put_cell_value_locked(sheet_index, rect.first_row, col, Value::blank());
+        sheets_[sheet_index].erase_cell(rect.first_row, col);
       }
     }
-    next.first_row = rect->first_row + 1U;
+    next.first_row = rect.first_row + 1U;
   } else if (shift.has_value()) {
     // The insert moves the whole table down one row; the header takes the vacated first data row.
     const Expected<void, Error> inserted = apply_band_edit_locked(sheet_index, shift->range, shift->shift, false);
     assert(inserted.has_value());
     RETURN_IF_ERROR(inserted);
-    next.last_row = rect->last_row + 1U;
+    next.last_row = rect.last_row + 1U;
   } else {
-    next.first_row = rect->first_row - 1U;
+    next.first_row = rect.first_row - 1U;
   }
   TableMetadata& table = tables_[index];
   table.ref.clear();

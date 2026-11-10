@@ -921,8 +921,8 @@ class Workbook {
 
   /// Shows or hides the header row of table `index`. Hiding it deletes the
   /// header cells outright (values and formats), moves `ref`'s first row
-  /// down by one without shifting anything and removes the AutoFilter; the
-  /// column names are kept. Showing it writes the column names into the row
+  /// down by one without shifting anything and removes the AutoFilter, showing
+  /// the body rows when it carried criteria; the column names are kept. Showing it writes the column names into the row
   /// above the data and grows `ref` up by that row when the row holds
   /// nothing within the table's columns and the grown range passes
   /// `check_table_resize`'s overlap checks; otherwise it inserts one row of
@@ -1854,6 +1854,8 @@ class Workbook {
   // The `put_cell_*` writes for a caller already holding the engine mutex.
   void put_cell_value_locked(std::size_t sheet_index, std::uint32_t row, std::uint32_t col, Value value);
   void put_cell_text_locked(std::size_t sheet_index, std::uint32_t row, std::uint32_t col, std::string_view text);
+  // `set_table_header_row` after its argument checks, without the row visibility the filter left behind.
+  Expected<void, Error> set_table_header_row_cells(std::size_t index, bool shown, const MergeRange& rect);
   void put_cell_formula_locked(std::size_t sheet_index, std::uint32_t row, std::uint32_t col, std::string formula,
                                FormulaSource source, std::uint32_t block_rows, std::uint32_t block_cols);
   // `write_table_totals_cell` for a caller already holding the engine mutex.

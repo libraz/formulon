@@ -193,7 +193,7 @@ class Table(_NoCopy):
         change the style with :meth:`update_style_options`.
 
         Turning ``header_row`` off deletes the header cells, shrinks the range by its top row, drops the AutoFilter
-        and keeps the column names; while it is off a ``[#Headers]`` reference evaluates to ``#REF!``. Turning it
+        with its criteria, shows the rows they hid and keeps the column names; while it is off a ``[#Headers]`` reference evaluates to ``#REF!``. Turning it
         on writes the names into the row above the data and grows the range up when that row is empty in the
         table's columns; when it is occupied the table's columns shift down one row (as
         :meth:`Sheet.insert_cells` with ``DOWN``) and the names go into the freed row.

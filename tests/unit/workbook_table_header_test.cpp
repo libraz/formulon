@@ -9,6 +9,7 @@
 
 #include "auto_filter.h"
 #include "cell.h"
+#include "cf/auto_filter_eval.h"
 #include "eval/function_registry.h"
 #include "eval/recalc_engine.h"
 #include "excel_profile.h"
@@ -213,6 +214,60 @@ TEST(WorkbookTableHeaderToggle, HidingDeletesTheHeaderCellsAndShrinksTheRangeWit
   // A second hide changes nothing.
   ASSERT_TRUE(wb.set_table_header_row(0, false).has_value());
   EXPECT_EQ(wb.tables()[0].ref, "B3:D5");
+}
+
+bool RowHidden(const Workbook& wb, std::uint32_t row) {
+  for (const RowLayout& r : wb.sheet(0).layout().row_overrides) {
+    if (r.row == row) {
+      return r.hidden;
+    }
+  }
+  return false;
+}
+
+TEST(WorkbookTableHeaderToggle, HidingDropsTheFilterCriteriaAndShowsTheRowsTheyHid) {
+  Workbook wb = Book();
+  AddS(wb, "B3:D8");
+  const double sales[] = {50.0, 150.0, 80.0, 200.0, 120.0};
+  for (std::uint32_t i = 0; i < 5U; ++i) {
+    ASSERT_TRUE(wb.set_cell_value(0, 3U + i, 2U, Value::number(sales[i])).has_value());
+  }
+  const AutoFilter filter = io::auto_filter_from_xml(
+      "<autoFilter ref=\"B3:D8\"><filterColumn colId=\"1\"><customFilters>"
+      "<customFilter operator=\"greaterThan\" val=\"100\"/></customFilters></filterColumn></autoFilter>");
+  ASSERT_TRUE(wb.set_table_auto_filter(0, filter).has_value());
+  ASSERT_TRUE(apply_auto_filter(wb, 0, filter).has_value());
+  PutFormula(wb, "F1", "=SUBTOTAL(103,B4:B8)");
+  Recalc(wb);
+  ASSERT_TRUE(RowHidden(wb, 3U));
+  ASSERT_TRUE(RowHidden(wb, 5U));
+  ASSERT_EQ(At(wb, "F1"), Value::number(3.0));
+
+  ASSERT_TRUE(wb.set_table_header_row(0, false).has_value());
+  EXPECT_EQ(wb.tables()[0].ref, "B4:D8");
+  EXPECT_TRUE(wb.tables()[0].auto_filter_xml.empty());
+  for (std::uint32_t row = 3U; row <= 7U; ++row) {
+    EXPECT_FALSE(RowHidden(wb, row)) << "row " << row + 1U;
+  }
+  Recalc(wb);
+  EXPECT_EQ(At(wb, "F1"), Value::number(5.0));
+
+  // The criteria do not come back with the header.
+  ASSERT_TRUE(wb.set_table_header_row(0, true).has_value());
+  EXPECT_EQ(wb.tables()[0].ref, "B3:D8");
+  EXPECT_EQ(FilterXml(wb), "<autoFilter ref=\"B3:D8\"/>");
+  EXPECT_FALSE(RowHidden(wb, 3U));
+}
+
+TEST(WorkbookTableHeaderToggle, HidingWithoutFilterCriteriaKeepsRowsHiddenByHand) {
+  Workbook wb = Book();
+  AddS(wb, "B3:D8");
+  RowLayout hidden;
+  hidden.row = 4U;
+  hidden.hidden = true;
+  wb.sheet(0).mutable_layout().row_overrides.push_back(hidden);
+  ASSERT_TRUE(wb.set_table_header_row(0, false).has_value());
+  EXPECT_TRUE(RowHidden(wb, 4U));
 }
 
 TEST(WorkbookTableHeaderToggle, ShowingIntoAnEmptyRowAboveGrowsTheRangeUp) {

@@ -8275,8 +8275,8 @@ export interface Table {
   /** Partially updates the table's range and header / totals rows; omitted fields keep their current values. A
    *  supplied `range` must keep the table's existing column count.
    *
-   *  Header row off: the header cells are deleted, the range shrinks by its top row, the AutoFilter is dropped and the
-   *  column names are kept; while it is off `[#Headers]` references evaluate to `#REF!`. Off on a table without data
+   *  Header row off: the header cells are deleted, the range shrinks by its top row, the AutoFilter is dropped with its
+   *  criteria, the rows they hid are shown again, and the column names are kept; while it is off `[#Headers]` references evaluate to `#REF!`. Off on a table without data
    *  rows fails with `StatusCode.PreconditionFailed`. Header row on: when the row above the data is empty in the
    *  table's columns the names are written there and the range grows up by one row; when it is occupied (or is the
    *  first sheet row) the table's columns move down one row from the first data row, as `insertCells` with

@@ -2508,8 +2508,9 @@ typedef struct {
  *        before anything changes.
  *
  * Header row off: the header cells are deleted (value and style), the range
- * shrinks by its top row, nothing shifts, the table's AutoFilter is dropped and
- * the column names are kept; while it is off a `[#Headers]` reference
+ * shrinks by its top row, nothing shifts, the table's AutoFilter is dropped with
+ * its criteria, the rows those criteria hid are shown again, and the column
+ * names are kept; while it is off a `[#Headers]` reference
  * evaluates to `#REF!`. Header row on: when the row above the data is empty in
  * the table's columns, the names are written there and the range grows up by
  * one row; when it is occupied (or is the sheet's first row), the table's

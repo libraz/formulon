@@ -265,7 +265,8 @@ Upgrading from 0.18: see [Upgrading from 0.18 to 0.19](docs/releases/upgrading-0
 - `addTable` numbers blank and repeated column names (`Column1`, `Qty2`)
   instead of refusing them.
 - `Table.update({ headerRow })` deletes the header cells and the AutoFilter
-  when turned off (names kept, `[#Headers]` is `#REF!`) and writes the names
+  when turned off (names kept, `[#Headers]` is `#REF!`, rows the filter's
+  criteria hid shown again) and writes the names
   back when turned on, growing up into an empty row or shifting the table's
   columns down.
 - `Table.update` with `range` and a toggle applies the toggle first and checks
