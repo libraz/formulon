@@ -309,7 +309,7 @@ Napi::Value Workbook::PivotFieldAt(const Napi::CallbackInfo& info) {
   out.Set("sourceName", JsString(env, field.source_name));
   out.Set("customName", JsStringOrNull(env, field.custom_name));
   out.Set("axis", field.axis == FM_PIVOT_AXIS_ABSENT ? env.Null() : Napi::Value(Napi::Number::New(env, field.axis)));
-  out.Set("subtotalTop", Napi::Boolean::New(env, field.subtotal_top != 0));
+  out.Set("subtotalTop", Napi::Boolean::New(env, field.subtotal_top == FM_TRISTATE_TRUE));
   out.Set("numberFormat", JsStringOrNull(env, field.number_format));
   out.Set("cacheFieldIndex", JsNumberOrNull(env, field.has_cache_field_index, field.cache_field_index));
   out.Set("sortOrder", Napi::Number::New(env, field.sort_order));

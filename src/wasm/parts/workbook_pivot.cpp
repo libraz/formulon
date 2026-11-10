@@ -295,7 +295,7 @@ emscripten::val JsWorkbook::pivotFieldAt(uint32_t sheet, uint32_t pivotIndex, ui
   js_set_cstr(o, "sourceName", info.source_name);
   js_set_cstr_or_null(o, "customName", info.custom_name);
   js_set_present_or_null(o, "axis", info.axis != FM_PIVOT_AXIS_ABSENT ? 1 : 0, static_cast<int32_t>(info.axis));
-  o.set("subtotalTop", info.subtotal_top != 0);
+  o.set("subtotalTop", info.subtotal_top == FM_TRISTATE_TRUE);
   js_set_cstr_or_null(o, "numberFormat", info.number_format);
   js_set_present_or_null(o, "cacheFieldIndex", info.has_cache_field_index, info.cache_field_index);
   o.set("sortOrder", info.sort_order);
