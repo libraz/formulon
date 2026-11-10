@@ -504,6 +504,17 @@ extern "C" fm_status_t fm_sheet_update_pivot_field_item(fm_workbook_t* wb, std::
   return edit.commit();
 }
 
+namespace {
+
+// Excel lays out a field with no stated sort in its items order, so listing items sets that order.
+void follow_items_order(formulon::pivot::PivotField& field) {
+  if (!field.sort.stated && field.sort.by_field.empty()) {
+    field.sort.manual = true;
+  }
+}
+
+}  // namespace
+
 extern "C" fm_status_t fm_sheet_add_pivot_field_item(fm_workbook_t* wb, std::size_t sheet_index,
                                                      std::size_t pivot_index, std::size_t field_index,
                                                      const char* utf8_name, std::int32_t visible,
@@ -550,6 +561,7 @@ extern "C" fm_status_t fm_sheet_add_pivot_field_item(fm_workbook_t* wb, std::siz
   }
   PivotEdit edit(wb->workbook(), sheet_index, pivot_index, *table);
   field->items.push_back(std::move(item));
+  follow_items_order(*field);
   const std::size_t added = field->items.size() - 1U;
   const fm_status_t status = edit.commit();
   if (status == 0) {
@@ -595,6 +607,7 @@ extern "C" fm_status_t fm_sheet_add_pivot_field_item_by_cache_index(fm_workbook_
         item.has_cache_index = true;
         item.cache_index = cache_index;
         field.items.push_back(std::move(item));
+        follow_items_order(field);
         added = field.items.size() - 1U;
       });
   if (status == 0) {

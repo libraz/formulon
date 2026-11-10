@@ -709,6 +709,30 @@ TEST(FormulonCApiPivot, AFieldJoiningAnAxisListsItsItemsInDisplayOrder) {
   }
 }
 
+TEST(FormulonCApiPivot, ItemsAddedAfterClearingSetTheLayoutOrder) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  std::uint32_t cache_id = 0;
+  std::size_t pivot_index = 0;
+  ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_index), 0) << fm_get_last_error_message();
+  ASSERT_EQ(RowLabels(wb.handle, pivot_index), (std::vector<std::string>{"North", "South"}));
+
+  // With no sort stated the report follows the items order, as Excel does for a field without sortType.
+  ASSERT_EQ(fm_sheet_clear_pivot_field_items(wb.handle, 0, pivot_index, 0), 0);
+  ASSERT_EQ(fm_sheet_add_pivot_field_item_by_cache_index(wb.handle, 0, pivot_index, 0, 1U, 1, ignored_index()), 0);
+  ASSERT_EQ(fm_sheet_add_pivot_field_item_by_cache_index(wb.handle, 0, pivot_index, 0, 0U, 1, ignored_index()), 0);
+  EXPECT_EQ(RowLabels(wb.handle, pivot_index), (std::vector<std::string>{"South", "North"}));
+  EXPECT_EQ(SavedPivotXml(wb.handle).find("sortType"), std::string::npos);
+
+  // A stated sort still wins over the items order.
+  ASSERT_EQ(SetPivotFieldSort(wb.handle, 0, pivot_index, 0, FM_PIVOT_SORT_ORDER_ASCENDING, nullptr), 0);
+  EXPECT_EQ(RowLabels(wb.handle, pivot_index), (std::vector<std::string>{"North", "South"}));
+  ASSERT_EQ(fm_sheet_clear_pivot_field_items(wb.handle, 0, pivot_index, 0), 0);
+  ASSERT_EQ(fm_sheet_add_pivot_field_item(wb.handle, 0, pivot_index, 0, "South", 1, ignored_index()), 0);
+  ASSERT_EQ(fm_sheet_add_pivot_field_item(wb.handle, 0, pivot_index, 0, "North", 1, ignored_index()), 0);
+  EXPECT_EQ(RowLabels(wb.handle, pivot_index), (std::vector<std::string>{"North", "South"}));
+}
+
 TEST(FormulonCApiPivot, ListedItemsRefuseDuplicatesAndClearingAllowsACustomOrder) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
