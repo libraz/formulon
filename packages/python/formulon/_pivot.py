@@ -833,8 +833,9 @@ class Pivot(_NoCopy):
         anything but dates raises ``FormulonError``.
 
         ``None`` removes the grouping: the group fields leave every pivot on the
-        cache and the field returns to the axis position they held; a field that
-        is not grouped is left as it is.
+        cache and the field returns to the axis position they held. The group
+        fields, which must be the last fields of the cache, are removed from the
+        cache. A field that is not grouped is left as it is.
 
         Raises:
           TypeError: when ``group`` is neither ``None`` nor a :class:`PivotDateGroupInput`.

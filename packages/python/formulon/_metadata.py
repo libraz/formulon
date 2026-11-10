@@ -88,6 +88,8 @@ def convert_civil_to_serial(date: Union[datetime.date, datetime.datetime], *, da
     ``=DATE(y,m,d)+TIME(h,mi,s)``. A ``datetime`` is rounded to the nearest
     second (half up); a plain ``date`` is midnight. The 1900 date system
     accepts only years 1900 to 9999 and the 1904 system only 1904 to 9999.
+    The 1900 system's 1900-02-29 (serial 60) cannot be passed, because
+    ``datetime`` cannot hold it; JavaScript and C accept it.
 
     Args:
       date: a naive ``datetime.datetime`` or a ``datetime.date``.

@@ -280,7 +280,11 @@ def _sint(value: int, name: str, bits: int = 32) -> int:
 
 
 class ParseErrorCode(IntEnum):
-    """Mirror of ``fm_parse_error_code_t`` in ``formulon_c.h``."""
+    """Why a formula failed to parse; mirror of ``fm_parse_error_code_t`` in ``formulon_c.h``.
+
+    Values are fixed and new codes are only appended. The ``ENTRY_*`` codes are
+    refusals of formula entry that Excel applies on top of the grammar.
+    """
 
     LEXER_INVALID_CHARACTER = 0
     LEXER_UNTERMINATED_STRING = 1
@@ -311,13 +315,21 @@ class ParseErrorCode(IntEnum):
     LAMBDA_INVALID_PARAM = 26
     LAMBDA_EMPTY = 27
     LAMBDA_DUPLICATE_PARAM = 28
+    #: A built-in called with an argument count it refuses.
     ENTRY_WRONG_ARITY = 29
+    #: A reference-only parameter given a non-reference.
     ENTRY_REFERENCE_REQUIRED = 30
+    #: A built-in name typed with a sheet or book qualifier.
     ENTRY_QUALIFIED_BUILTIN = 31
+    #: A tab, a carriage return, or a gap before a call's ``(``.
     ENTRY_REFUSED_WHITESPACE = 32
+    #: ``_xlpm.`` typed before a cell-shaped name.
     ENTRY_PARAM_SHAPED_NAME = 33
+    #: A second leading ``=``.
     ENTRY_DOUBLE_EQUALS = 34
+    #: A leading byte-order mark.
     ENTRY_BOM_NOT_SUPPORTED = 35
+    #: A malformed structured reference.
     STRUCTURED_REF_INVALID = 36
 
 

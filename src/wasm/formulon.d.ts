@@ -185,13 +185,21 @@ export const ParseErrorCode: Readonly<{
   LambdaInvalidParam: 26;
   LambdaEmpty: 27;
   LambdaDuplicateParam: 28;
+  /** A built-in called with an argument count it refuses. */
   EntryWrongArity: 29;
+  /** A reference-only parameter given a non-reference. */
   EntryReferenceRequired: 30;
+  /** A built-in name typed with a sheet or book qualifier. */
   EntryQualifiedBuiltin: 31;
+  /** A tab, a carriage return, or a gap before a call's `(`. */
   EntryRefusedWhitespace: 32;
+  /** `_xlpm.` typed before a cell-shaped name. */
   EntryParamShapedName: 33;
+  /** A second leading `=`. */
   EntryDoubleEquals: 34;
+  /** A leading byte-order mark. */
   EntryBomNotSupported: 35;
+  /** A malformed structured reference. */
   StructuredRefInvalid: 36;
 }>;
 /** Union of the {@link ParseErrorCode} ordinals. */
@@ -7150,8 +7158,9 @@ export interface Pivot {
    *
    *  A `group` of `null` removes the date grouping of pivot field `fieldIndex` (a source field, or one of its
    *  group fields) from every pivot on its cache; the field returns to the axis position its group fields held.
-   *  A field that is not grouped is left as it is. `StatusCode.PreconditionFailed` when the group fields are not
-   *  the last fields of the cache. */
+   *  Its group fields, which must be the last fields of the cache, are removed from the cache. A field that is not
+   *  grouped is left as it is. `StatusCode.PreconditionFailed` when the group fields are not the last fields of the
+   *  cache. */
   setFieldDateGroup(fieldIndex: PivotFieldRef, group: PivotDateGroupInput | null): void;
   /** Reads the row-axis field order (the list `setRowFieldOrder` takes). */
   getRowFieldOrder(): readonly number[];
@@ -7321,7 +7330,16 @@ export interface Chart extends Drawing {
    *  other {@link ChartPlotType} fails with `StatusCode.InvalidArgument`). `options.barDirection` is for `Bar`
    *  only (`Column` when omitted; on another type it throws `TypeError`); `options.grouping` (default `Clustered`)
    *  applies to bar, line and area. `getProperties().plots[plot]` passes as `type`, `barDirection` and
-   *  `grouping`. */
+   *  `grouping`.
+   *
+   *  Formatting carries over as Excel carries it. Between bar, column and area each series keeps its fill, theme
+   *  colours, gradients and patterns included; a change to or from line or scatter re-derives the series colour. A
+   *  chart without chart style parts (as `addChart` creates one) keeps its series and point formatting, pie and
+   *  doughnut included: a line plot drops every line when the series line is hidden and then shows no markers, and
+   *  a scatter plot hides every line (2 pt wide when the series line, or a point's own line, was visible with a
+   *  width, 3 pt otherwise) and keeps only shown markers. A change between category and value axes (scatter to or
+   *  from bar, line or area) converts the axes in place, each keeping its id, direction, gridlines, title, ticks
+   *  and formatting; every type change drops a category axis's label and mark intervals. */
   setType(
     plot: number,
     type: ChartPlotType,

@@ -553,6 +553,20 @@ class Chart(_Snapshotable):
         ``bar_direction`` (default ``COLUMN``) applies to ``BAR`` only; ``grouping``
         applies to bar, line and area plots.
 
+        Formatting carries over as Excel carries it. Between bar, column and
+        area each series keeps its fill, theme colours, gradients and patterns
+        included; a change to or from line or scatter re-derives the series
+        colour. A chart without chart style parts (as ``add_chart`` creates
+        one) keeps its series and point formatting, pie and doughnut included:
+        a line plot drops every line when the series line is hidden and then
+        shows no markers, and a scatter plot hides every line (2 pt wide when
+        the series line, or a point's own line, was visible with a width, 3 pt
+        otherwise) and keeps only shown markers. A change between category and
+        value axes (scatter to or from bar, line or area) converts the axes in
+        place, each keeping its id, direction, gridlines, title, ticks and
+        formatting; every type change drops a category axis's label and mark
+        intervals.
+
         Raises:
           TypeError: for a ``bar_direction`` on a type other than ``BAR``.
           InvalidArgumentError: for a ``type`` that cannot be written.
