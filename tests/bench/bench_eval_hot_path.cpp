@@ -174,8 +174,8 @@ int main(int argc, char* argv[]) {
   RunScenario(bench, "VLOOKUP D2 against D1:E5", "=VLOOKUP(2,D1:E5,2,FALSE)", ctx);
   RunScenario(bench, "SUMIFS A1:A1000 by B>1500", "=SUMIFS(A1:A1000,B1:B1000,\">1500\")", ctx);
 
-  RunScenario(bench, "TEXT(A1:A1000,\"yyyy-mm-dd\")", "=TEXT(A1:A1000,\"yyyy-mm-dd\")", ctx);
-  RunScenario(bench, "TEXT(A1:A1000,\"#,##0.00\")", "=TEXT(A1:A1000,\"#,##0.00\")", ctx);
+  RunScenario(bench, "TEXT date format over A1:A1000", "=TEXT(A1:A1000,\"yyyy-mm-dd\")", ctx);
+  RunScenario(bench, "TEXT number format over A1:A1000", "=TEXT(A1:A1000,\"#,##0.00\")", ctx);
 
   RunScenario(bench, "XLOOKUP ascii text over F1:F1000", "=XLOOKUP(\"item999\",F1:F1000,A1:A1000)", ctx);
   RunScenario(bench, "XLOOKUP kana text over G1:G1000", "=XLOOKUP(\"かな999\",G1:G1000,A1:A1000)", ctx);
