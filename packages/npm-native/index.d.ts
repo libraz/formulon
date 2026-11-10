@@ -1235,7 +1235,8 @@ export type PivotFieldPatch = Patch<
 
 /** Element of `Pivot.getFieldItem(...)` and `Pivot.listFieldItems(...)`. */
 export interface PivotItem {
-  /** The item's own label; `null` for an item bound only by cache index. */
+  /** The item's label: the one it was added with, else its shared item's value; `null` for the blank item or an item
+   *  bound to nothing. A loaded item reads the same. */
   readonly name: string | null;
   /** The index into the bound cache field's shared items, `null` for an item bound by label only. */
   readonly cacheIndex: number | null;

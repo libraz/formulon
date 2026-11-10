@@ -1166,10 +1166,10 @@ class PivotDefinitionReadBackTests(unittest.TestCase):
         eq((region.insert_blank_row, region.fill_down_labels), (False, False))
 
         eq(len(wb.sheet(0).pivot(pivot).list_field_items(f.region)), 2)
-        # A joined item is bound to its shared item without a caption; a saved item carries its label.
+        # A joined item reads its shared item's label, before a save and after a load alike.
         for index, label in enumerate(("East", "West")):
             item = wb.sheet(0).pivot(pivot).get_field_item(f.region, index)
-            eq((item.name, item.cache_index, item.visible), (label if saved else None, index, True))
+            eq((item.name, item.cache_index, item.visible), (label, index, True))
 
         eq(len(wb.sheet(0).pivot(pivot).list_data_fields()), 1)
         data_field = wb.sheet(0).pivot(pivot).list_data_fields()[0]

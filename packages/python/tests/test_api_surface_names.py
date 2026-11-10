@@ -1160,7 +1160,7 @@ class PivotFieldItemTests(SurfaceTestCase):
             index = pivot.add_field_item(0, cache_index=1)
             item = pivot.get_field_item(0, index)
             self.assertEqual(item.cache_index, 1)
-            self.assertIsNone(item.name)
+            self.assertEqual(item.name, "West")
 
     def test_add_field_item_requires_exactly_one_of_name_and_cache_index(self) -> None:
         with Workbook.create_default() as wb:

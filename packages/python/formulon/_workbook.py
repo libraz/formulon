@@ -6319,7 +6319,8 @@ class PivotField:
 class PivotItem:
     """One pivot-field item, as read by :meth:`Pivot.get_field_item`."""
 
-    #: The item's own label; ``None`` for an item bound only by cache index.
+    #: The item's label: the one it was added with, else its shared item's value;
+    #: ``None`` for the blank item or an item bound to nothing. A loaded item reads the same.
     name: Optional[str]
     #: The index into the bound cache field's shared items, ``None`` for an item bound by label only.
     cache_index: Optional[int]

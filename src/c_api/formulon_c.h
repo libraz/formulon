@@ -7121,7 +7121,8 @@ typedef struct {
  */
 typedef struct {
   uint32_t struct_size;
-  /** The item's own label; `NULL` for an item bound only by cache index. */
+  /** The item's label: the one it was added with, else its shared item's value; `NULL` for the blank item or an item
+   *  bound to nothing. A loaded item reads the same. */
   const char* name;
   /** 1 when `cache_index` is set; 0 means the item is bound by label only. */
   int32_t has_cache_index;

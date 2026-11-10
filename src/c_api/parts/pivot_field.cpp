@@ -35,6 +35,7 @@ using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::find_cache;
 using formulon::c_api::parts::finish_status;
+using formulon::c_api::parts::fresh_read_scratch;
 using formulon::c_api::parts::invalid_argument;
 using formulon::c_api::parts::mark_cache_pivots_pending;
 using formulon::c_api::parts::null_argument;
@@ -55,6 +56,7 @@ using formulon::c_api::parts::resolve_pivot_checked;
 using formulon::c_api::parts::resolve_pivot_mut;
 using formulon::c_api::parts::set_last_error;
 using formulon::c_api::parts::set_values_position;
+using formulon::c_api::parts::store_cstr;
 using formulon::c_api::parts::text_or_null;
 
 namespace {
@@ -875,8 +877,9 @@ extern "C" fm_status_t fm_sheet_get_pivot_field_item_at(const fm_workbook_t* wb,
   if (wb == nullptr || out == nullptr) {
     return null_argument();
   }
+  const formulon::pivot::PivotTable* table = nullptr;
   const formulon::pivot::PivotField* field = nullptr;
-  if (auto rc = lookup_pivot_field(wb, sheet_index, pivot_index, field_index, nullptr, &field); rc != 0) {
+  if (auto rc = lookup_pivot_field(wb, sheet_index, pivot_index, field_index, &table, &field); rc != 0) {
     return rc;
   }
   if (auto rc = check_index(item_index, field->items.size(), "item_index"); rc != 0) {
@@ -886,9 +889,14 @@ extern "C" fm_status_t fm_sheet_get_pivot_field_item_at(const fm_workbook_t* wb,
     return rc;
   }
   const formulon::pivot::PivotItem& item = field->items[item_index];
+  // The label reads the same before a save and after a load, which resolves it from the shared item.
+  const formulon::pivot::PivotCache* cache = find_cache(wb->workbook(), table->pivot_cache_id());
+  const std::string label = cache != nullptr && field_index < cache->fields().size()
+                                ? formulon::pivot::pivot_item_label(*cache, field_index, item)
+                                : item.name;
   fm_pivot_item_info_t result{};
   result.struct_size = out->struct_size;
-  result.name = text_or_null(item.name.c_str());
+  result.name = label.empty() ? nullptr : store_cstr(fresh_read_scratch(wb), label);
   result.has_cache_index = item.has_cache_index ? 1 : 0;
   result.cache_index = item.has_cache_index ? item.cache_index : 0U;
   result.visible = item.visible ? 1 : 0;

@@ -1381,6 +1381,10 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
   `id` and the `dT` attribute). `addThreadedComment` returns the id.
 - A slicer's fallback shape in the drawing carries the frame's id and name,
   as Excel writes them.
+- A pivot item's `name` reads its label: the label it was added with, else its
+  shared item's value. An item bound only by cache index read `null` until the
+  workbook was saved and loaded again; it now reads the label at once. `null`
+  is left for the blank item and for an item bound to nothing.
 - The anchor of a drawing object merges per key: `Drawing.update({ anchor })`
   keeps every key it leaves out, and an omitted `kind` keeps the object's
   kind. A kind left out of an add is the operation's default (one-cell for a
