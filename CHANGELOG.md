@@ -1530,6 +1530,13 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
 - A reference text that does not parse is `ParserInvalidReference`, and a font
   size of zero or less is `InvalidArgument` in every binding, with no
   `RangeError`.
+- Clearing a cell-font attribute follows one rule. `sizePt` / `size_pt` and
+  `name`, which a font always carries, take the workbook's Normal-style font
+  value when set to `null` / `None` or left out of a new font, where JavaScript
+  used to write 11 pt and Python refused the call. `color` can be cleared too
+  and then means Excel's automatic colour. In C, a cell font with
+  `has_size_pt == 0` or a `NULL` `name` takes the Normal font's value, and
+  `size_pt` is range-checked only when stated.
 
 ### Name migration
 
@@ -4182,6 +4189,8 @@ order.
 
 - Saving a new workbook with an inserted image or chart as `.xlsb` no longer
   fails with `IoContentTypeInvalid`.
+- `PivotField.subtotalTop` reads `false` after it is set to `false` in
+  JavaScript. It used to read `true` whatever was set.
 - A reference deleted by a structural edit is spelled as Excel spells it. A
   row or column deletion keeps the qualifier the reference was written with
   (`=Sheet3!#REF!*2`, `='Data 1'!#REF!`, a defined name `Sheet3!#REF!`), and
