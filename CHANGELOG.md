@@ -13,692 +13,277 @@ Upgrading from 0.18: see [Upgrading from 0.18 to 0.19](docs/releases/upgrading-0
 
 ### BREAKING
 
-- The C ABI, JavaScript and Python interfaces are reworked into one design; the [upgrade guide](docs/releases/upgrading-0.19.md) lists every change by binding.
+- Names follow one convention in C, JavaScript and Python, and the former
+  names are removed with no aliases
+  ([name migration](docs/releases/upgrading-0.19.md#name-migration)).
+- Sheet-scoped calls move to a `Sheet` handle (`wb.sheet(key)`), and `Table`,
+  `Pivot`, `PivotCache` and `Drawing` are handle classes that `list*` calls
+  return ([sheet handles](docs/releases/upgrading-0.19.md#sheet-handles)).
+- Failures throw `FormulonError` in JavaScript (no `{ status }` envelopes) and
+  raise `FormulonError` or a subclass in Python. A position past the end is
+  `IndexOutOfRange`, a bad coordinate or quantity `InvalidArgument`, a taken
+  name `AlreadyExists`, a state conflict `PreconditionFailed` and an unknown
+  id `NotFound`. Match on the class and `code`, not the message text.
+- `SheetIndexOutOfRange`, `InvalidSheetName` and `SheetCountLimitExceeded`
+  move from 5050, 5051 and 5053 to 10, 11 and 12; 5050 to 5053 and 9006 are
+  retired.
+- `fm_cell_rect_t` (`CellRect`) replaces the per-feature range records, and
+  conditional-format, validation, protected and print ranges take `CellRect`
+  arrays instead of A1 text. An absent value reads `NULL`, `null` or `None`.
+- Units are named by suffix: row heights in points (`heightPt`), column widths
+  in characters (`widthChars`), margins in inches (`leftIn`), print scale as a
+  percentage (`scalePct`).
+- `update<X>(patch)` merges the keys it names and `set<X>(record)` replaces the
+  whole value; a single record is removed with `set<X>(null)`, and `reset<X>`
+  replaces the former `clear` names. Hyperlinks (`setHyperlink`) and page
+  breaks (`setRowBreak`, `setColumnBreak`) follow this shape.
+- Tables live on `Sheet` with sheet-local indices, and table and pivot styles
+  use `getStyleOptions()` / `updateStyleOptions(patch)`.
+- Sheet protection has no `enabled` field, and each `allow*` flag is the
+  inverse of the 0.18.0 field it replaces: negate a carried value.
+- Several enums are merged or renumbered (`ComparisonOperator`, `DatePeriod`,
+  `BlanksAs`; `AnchorKind` and `AnchorEditAs` gain `Default` at 0), strings
+  for closed sets are enums, and `PivotAxis.Col` is `PivotAxis.Column`
+  ([enums](docs/releases/upgrading-0.19.md#enums)).
+- A drawing has one nested `anchor` (input `DrawingAnchorInput`), and
+  `Drawing.update(patch)` replaces `rename` and `setAnchor` on pictures,
+  charts, shapes and slicers. Chart series are keyed by `seriesId`.
+- `insertRows`, `deleteRows`, `insertColumns` and `deleteColumns` take
+  `(first, last)` instead of `(start, count)`: `ws.insertRows(3, 5)` inserts
+  three rows. An insert that would push a cell off the grid fails with
+  `PreconditionFailed` instead of dropping it.
+- `addMerge` refuses a range overlapping a merge, table, pivot, array formula
+  or data table, and named collections refuse a name equal to an existing one
+  under Excel's text comparison (case, width and kana folded).
+- Conditional-format rules are addressed by id and protected ranges by name;
+  validations and sparkline groups have ids. `addChart` refuses a title of
+  `''`, and the theme script font takes `scheme` in place of `major`.
+- Some calls keep their name but behave differently: formula text reads back
+  with a leading `=`, validation booleans default to true, an absent sparkline
+  `displayEmptyCellsAs` reads as zero, a new table takes the workbook's default
+  style, and setters refuse values beyond Excel's limits
+  ([details](docs/releases/upgrading-0.19.md#behaviour-changes-under-an-unchanged-name)).
+- C ABI: sheet functions take `size_t sheet_index`, counts are written through
+  `size_t* out_count`, input records are `const` pointers, and every record
+  starts with `struct_size` (`FM_STRUCT_INIT(T)`). Recompile
+  ([C ABI changes](docs/releases/upgrading-0.19.md#c-abi-changes)).
+- C ABI: `fm_color_t` replaces `fm_cf_color_t` and the `*_argb` fields, and
+  the shape fields `fill_rgb` / `line_rgb` are `fill` / `line`.
+- C ABI: `fm_compare_text` and `fm_get_collation_classes` take the strength
+  before the profile id, and a stale call still compiles.
+- C ABI: `fm_workbook_save` takes the format (`fm_workbook_save_as` is gone),
+  `fm_sheet_set_pivot_field_date_group` takes a period mask,
+  `fm_sheet_update_chart_display` takes a patch, formula entry fails with
+  parser statuses 1000 to 1014, and enum constants start with their type name
+  ([C ABI callers](docs/releases/upgrading-0.19.md#c-abi-callers)).
+- JavaScript and Python: one `list*` method replaces each count and index
+  pair; `addChart` takes a `ChartPlotType`, pivot filters `value` /
+  `valueHigh`, AutoFilter custom filters `conditions`, and `CfMatch` is a
+  union told apart by `kind`. A `Date` input is read through its local
+  getters, where `setValue(Date)` used UTC
+  ([details](docs/releases/upgrading-0.19.md#javascript-and-python-callers)).
+- JavaScript: `createFormulon()` resolves to the `Formulon` object in both
+  packages, `saveAs(format)` is `save(format)`, a value is a union on `kind`,
+  `getValue` and the block reads return native values, and `setValue` reads a
+  string starting with `=` as a formula (use `setText` for untrusted text).
+  An unknown key or a `null` on a non-clearable key throws `TypeError`
+  ([details](docs/releases/upgrading-0.19.md#javascript-and-typescript-callers)).
+- Python: failures raise one `FormulonError` subclass per status range, and
+  `FormulaSyntaxError` is no longer an `InvalidArgumentError`. Tuple results
+  are frozen dataclasses, nine signatures take a record in place of keywords,
+  and Python 3.10 or later is required
+  ([details](docs/releases/upgrading-0.19.md#python-callers)).
+- Command line: `dump` takes `--view`, `paginate` prints new keys, a usage
+  error exits 64 and a formula syntax error 65
+  ([details](docs/releases/upgrading-0.19.md#command-line-users)).
 
 ### Added
 
-- `Sheet.insertCells(range, shift)` and `deleteCells(range, shift)` (Python
-  `insert_cells`, `delete_cells`; C `fm_sheet_insert_cells`,
-  `fm_sheet_delete_cells`) shift the cells of a band down or right (insert) or
-  up or left (delete), with `CellShift` naming the direction. A reference moves
-  only when its extent across the band lies wholly inside it; a range crossing
-  the band and a whole-row or whole-column reference stay, and a range wholly
-  deleted becomes `#REF!`. Conditional-format and validation ranges are split
-  across the band, and a merge that only partly meets it is unmerged.
-- Lookups and lists: `Workbook.sheetCount` and `hasSheet(ref)` (Python
-  `len(wb)` and `ref in wb`), `formulon.listProfileIds()` (Python
-  `list_profile_ids()`, 28 ids), `Workbook.listThemeScriptFonts(scheme)` with
-  the `ThemeScriptFontKey` type for `getThemeScriptFont`, and
-  `PivotCache.getRecordValue(recordIndex, fieldIndex)` (`get_record_value`).
-  `Pivot.getField(i)`, `getDataField(i)` and `getFilter(i)` read one element
-  of the list at that position (`IndexOutOfRange` past the end), and
-  `Pivot.getProperties()` returns `{ name, cacheId, reportLayout, grandTotals,
-  styleOptions }`, the definition of the pivot.
-- `Sheet.updateValidation(ref, patch)` and `updateCfRule(ref, patch)` (Python
-  keyword-only `update_validation`, `update_cf_rule`) change part of a rule.
-  `ooxml.setFill`, `setBorder`, `setCellXf` and `setDxf` replace the record at an
-  index, as `setFont` does.
-- Reference types: `ValidationRef`, `SparklineGroupRef`, `PivotCacheRef` (a
-  number or a `PivotCache`: `pivotCache`, `removePivotCache` and
-  `PivotInput.cacheId` take it), `PivotFieldRef`, `ChartAxisRef` (an axis id, or
-  `{ kind, plot? }`: `updateAxis(axis, patch)` finds the axis of that kind).
-  Python exports the same aliases.
-- `Sheet.getVisibility()` and `setVisibility(visibility)`, and the C
-  functions of the same names.
-- `DrawingAnchorInput`, `DrawingAnchorPatch` and `DrawingPlacementInput`
-  (JavaScript and Python); `DrawingProperties.hidden` and `description` for every
-  kind, written as the `hidden` and `descr` attributes of the drawing's
-  `cNvPr`. `Drawing.name` reads the object's current name.
-  `addSlicer(table, column, spec)` takes the column by name as well as by
-  number.
-- Chart parts are named and read-only: `ChartCategories`, `ChartAxisTitleText`,
-  `ChartUnresolved` and `ChartSeriesRanges`.
-- Conditional-format payloads: `CfColorScale`, `CfDataBar` and `CfIconSet` are
-  the records a read returns, with `CfColorScaleInput`, `CfDataBarInput` and
-  `CfIconSetInput` for input (they replace Python's `ColorScale`, `DataBar` and
-  `IconSet`), and `CfExpressionRuleInput`,
-  `CfCellIsRuleInput`, `CfColorScaleRuleInput`, `CfDataBarRuleInput`,
-  `CfIconSetRuleInput`, `CfTop10RuleInput`, `CfAboveAverageRuleInput`,
-  `CfTextRuleInput`, `CfTimePeriodRuleInput` and `CfPlainRuleInput` are the
-  inputs of `addCfRule` (Python dataclasses of the same names, with
-  `ConditionalFormatInput` the union).
-- `EffectiveBorders` (`left`, `right`, `top`, `bottom`, `diagonal`) is the
-  type of `EffectiveStyle.borders` in both bindings. `PrintOptionsInput`,
-  `HeaderFooterInput` and their patches are exported, and
-  `toNative` and `mergeFunctionMetadata` are named exports of every entry
-  point. `getImageInfo`, `addPicture` and `restoreDrawing` accept the byte
-  inputs `load` accepts. Python `Pivot` has a `repr`, `Workbook.ooxml` is typed,
-  and iterating a `Sheet` or testing `in` raises `TypeError` that names
-  `iter_rows()`.
-- C: `fm_sheet_set_value`, `fm_get_profile_id_count`, `fm_get_profile_id_at`,
-  `fm_sheet_get_sparkline_group` and `fm_sheet_get_validation`; see [C ABI
-  changes](docs/releases/upgrading-0.19.md#c-abi-changes).
-- Input types: `FontInput`, `FillInput` (`GradientFillInput`,
-  `GradientStopInput`), `BorderInput` (`BorderSideInput`), `CellXfInput`,
-  `DxfInput`, `CellStyleInput`, `TableStyleInput` (`TableStyleElementInput`),
-  `CommentInput`, `PersonInput`, `ArrayFormulaInput`, `WorkbookProtectionInput`,
-  `ProtectedRangeInput`, `SparklineInput`, `PrintTitlesInput`,
-  `AutoFilterConditionInput`, `ChartFilterInput` and `DateSystemOptions`; read
-  records `AutoFilterCondition`, `ChartSource`, `ChartFilter`, `CfValueObject`,
-  `CfIcon`, `CfMatchBar` and `CfMatchIcon`. Python has the dataclass
-  counterparts (`ChartInput`, `ChartSourceInput`, `ChartFilter`,
-  `PivotWorksheetSourceInput`, `PivotDateGroupInput`, `SheetSelectionInput`,
-  `TableColumnTotalsInput`, `ThemeColorsInput`, `WorkbookProtectionInput`,
-  `ProtectedRangeInput`, `PrintTitlesInput`, `SparklineInput`,
-  `SparklineGroupInput`, `AutoFilterInput`, `AutoFilterCondition`), each also
-  accepting the record its getter returns.
-- `ChartAxisPatch` gains `minorUnit`, `minorGridlines`, `position` and
-  `sourceLinked`, `ChartLabelsPatch` gains `sourceLinked` and `deleted`, and
-  `ChartDisplayPatch` gains `style` (1 to 48); `PivotField.showDetail` and
-  `PivotFieldPatch.sortOrder`, `sortByField` and `showDetail` are new, as are
-  the matching C fields.
-- C: `fm_sheet_update_pivot_field` and `fm_sheet_update_pivot_field_item` merge
-  an `fm_pivot_field_patch_t` / `fm_pivot_item_patch_t`;
-  `fm_pivot_field_info_t` gains `show_detail`.
-
-- A trailing argument with an obvious default can be left out:
-  `getPrecedents(cell)` / `getDependents(cell)` follow one level,
-  `recalcParallel()` picks the thread count itself (at most 8), `copySheet(index)` appends
-  the copy, and `evaluateCfRange(range)` evaluates time-period rules against
-  today (the pinned date when the workbook has one). Python takes the same
-  defaults. An argument beyond the ones a method declares throws `TypeError`
-  naming the method and how many arguments it takes.
-- `fm_get_last_parse_error` (`FormulonError.parseError`,
-  `FormulaSyntaxError.parse_error`) reports where a formula failed to parse:
-  a `ParseErrorCode` (eight codes added for formula entry: argument count,
-  reference required, qualified built-in, refused whitespace,
-  parameter-shaped name, leading `==`, byte order mark and invalid structured
-  reference), UTF-16 start and end offsets, line and column. The same error
-  carries the parser statuses 1000 to 1014.
-- `fm_sheet_get_tab_color` / `fm_sheet_set_tab_color` (`getTabColor` /
-  `setTabColor`, `get_tab_color` / `set_tab_color`); `null` / `None` clears
-  the colour.
+- `Sheet.insertCells(range, shift)` and `deleteCells(range, shift)` shift a
+  band of cells in a `CellShift` direction; a reference moves only when its
+  extent across the band lies wholly inside it.
+- Lookups and accessors: `Workbook.sheetCount`, `hasSheet`,
+  `formulon.listProfileIds()`, `listThemeScriptFonts`, `activeSheet()`,
+  `getDefaultFont()`, `PivotCache.getRecordValue`, `Pivot.getField`,
+  `getDataField`, `getFilter`, `Pivot.getProperties()`, `listRowBreaks()`,
+  `listColumnBreaks()`, `getVisibility()` / `setVisibility()` and
+  `getTabColor` / `setTabColor`.
+- `updateValidation`, `updateCfRule`, `updateSheetProtection` and
+  `Table.rename`; `ooxml.setFill`, `setBorder`, `setCellXf` and `setDxf`
+  replace the record at an index.
+- Named types: `*Input` records for every setter (`FontInput`, `CellXfInput`,
+  `CommentInput` and the rest), each also accepting the record its getter
+  returns; reference types such as `ValidationRef` and `ChartAxisRef`; chart
+  parts; `EffectiveBorders`; and `CfColorScale`, `CfDataBar` and `CfIconSet`,
+  which replace Python's `ColorScale`, `DataBar` and `IconSet`.
+- Drawings: `hidden` and `description` for every kind, `Drawing.name`,
+  `Drawing.update({ name })`, `Shape.setZOrder`, `Shape.snapshot`,
+  `Slicer.setZOrder`, and `addSlicer` by column name. Default object ids count
+  per sheet from 2, and default names use the workbook locale's word.
+- Chart patch keys `minorUnit`, `minorGridlines`, `position`, `sourceLinked`,
+  `deleted` and `style` (1 to 48), `ChartExtendedLayout`, and "Show #N/A as an
+  empty cell" (`naAsBlank`).
+- Optional trailing arguments (`getPrecedents(cell)` follows one level,
+  `recalcParallel()` picks the thread count); an extra argument throws
+  `TypeError`.
+- `fm_get_last_parse_error` (`FormulonError.parseError`) reports the
+  `ParseErrorCode`, UTF-16 offsets, line and column of a parse failure.
 - `getTypedValue`, `getTypedValues`, `getDate`, `getUsedRange`, `iterRows`,
-  `evaluateTypedFormula`, `evaluateTypedFormulaArray`, `enumName` and the
-  `ExcelError` class in JavaScript; `get_typed_value`, `get_typed_values`,
-  `get_date`, `get_used_range`, `iter_rows`, `list_cells`, `set_values`,
-  `evaluate_typed_formula` and `enum_name` in Python. A `Workbook` iterates
-  its sheets, `Workbook.load` accepts an `ArrayBuffer` or typed array, and
-  `getMemoryUsage` is on the WebAssembly package as on the native one.
+  `evaluateTypedFormula`, `enumName` and `ExcelError`, with Python
+  counterparts. A `Workbook` iterates its sheets, `Workbook.load`,
+  `getImageInfo`, `addPicture` and `restoreDrawing` accept any byte input
+  `load` does, and `getMemoryUsage` is on both packages. `toNative` and
+  `mergeFunctionMetadata` are named exports. Python `Pivot` has a `repr`, and
+  iterating a `Sheet` raises `TypeError` naming `iter_rows()`.
 - Enum tables for `CfRuleType`, `ComparisonOperator`, `DatePeriod`,
   `CfValueObjectType`, `IconSetName`, `ValidationType` and `ParseErrorCode`.
-- Record fields that hold a cell or a range accept A1 text (`'B2'`,
-  `'A1:C3'`) in JavaScript and Python, including `PivotInput.anchor`,
-  validation and conditional-format ranges.
-- `fm_get_image_info` reads picture properties from bytes without a workbook.
-- `GROUPBY` and `PIVOTBY` accept `total_depth` beyond plus or minus 2 (nested
-  subtotals for every key prefix), and `relative_to` follows the parent key
-  prefix at any depth.
-
-- Pictures and charts are written to `.xlsb` and read back as model drawings,
-  so `listDrawings` and `ws.chart(id)` work after an XLSB round trip. A
-  drawing holding other graphic frames (slicers, SmartArt) is not written and
-  counts in `deferredFeatureCount`.
-- `FM_VERSION_MAJOR`, `FM_VERSION_MINOR` and `FM_VERSION_PATCH` in
-  `formulon_c.h` give the library version at compile time. The header opens
-  with a quick start, the five pointer lifetime classes, the last-error
-  contract and the rule that public structs gain no fields from 1.0 on.
-- `fm_workbook_get_defined_name` and `fm_workbook_remove_defined_name` look up
-  and remove a defined name by name and scope.
-
-- A workbook file name: `fm_workbook_set_file_name` / `fm_workbook_get_file_name`
-  (`setFileName` / `getFileName`, `set_file_name` / `get_file_name`). When it is
-  set, every function that returns formula text, and `FORMULATEXT`, shows a
-  reference to this workbook's own names as the formula bar does
-  (`=Book.xlsx!Rate`, `='My Book.xlsx'!Rate`) instead of the stored
-  `[0]!Rate`. The same spelling, and `[Book.xlsx]Sheet1!A1`, can be entered
-  and refer to this workbook; no external link is created. The name must end
-  in a workbook extension. The command-line tools set it from the input
-  file.
-
-- Date grouping works the way Excel's Group command does. Seconds, minutes,
-  hours, days (with an interval), months, quarters and years each become a
-  group field in the pivot cache, so a grouped workbook loads, evaluates and
-  saves in Excel's own form. Labels and field names follow the 14 UI locales,
-  years can follow the Japanese calendar, and ungrouping removes the trailing
-  group fields.
-- Pivot field and item labels that hold dates or numbers are drawn in the
-  field's number format.
-- Pivot report options: per field `defaultSubtotal`, `insertBlankRow`,
-  `fillDownLabels` and `showDetail` (`Pivot.updateField` keys and
-  `fm_pivot_field_patch_t` members), and the grand total caption and autofit flag in `fm_pivot_options_t`. The layout
-  draws the grand total caption, blank rows, repeated labels and collapsed
-  items as Excel does, and loaded files keep them.
-- The `caption` member of `fm_pivot_item_patch_t` renames an item without
-  changing the value it stands for, and `show_detail` expands or collapses one
-  item (`Pivot.updateFieldItem` keys `caption` and `showDetail`). `fm_pivot_item_info_t` reports both. A
-  caption is at most 255 UTF-16 units and may not repeat another item's label
-  in the field.
-- The Values level ("Σ Values") appears in the row and column field orders as
-  `FM_PIVOT_VALUES_FIELD` (-2 in JavaScript and Python), at its position
-  among the fields. Listing it in `fm_sheet_set_pivot_row_field_order` or
-  `_set_column_field_order` moves it to that axis. It needs two or more data
-  fields, and the axis that holds it must keep listing it.
-- `fm_sheet_show_pivot_details` (`Pivot.showDetails`, `Pivot.show_details`)
-  runs Show Details on a data, subtotal or grand total cell: it adds a sheet
-  with the matching source rows in a table, before the pivot's sheet, and
-  makes it the active sheet. Sheets from the pivot's sheet onward move up by
-  one.
-- `Drawing.update({ name })` renames a picture, chart or shape. Default
-  object ids now count per sheet from 2 and are shared by pictures, charts,
-  shapes and slicers, and default chart, picture and table names use the
-  workbook locale's word.
-
-- `fm_workbook_get_pivot_cache_field_shared_item_value`
-  (`PivotCache.listFieldSharedItems`, `PivotCache.list_field_shared_items`)
-  reads the shared items of a pivot cache field, so a refresh can keep the
-  existing item order.
-- Pivot cache dates: `fm_workbook_add_pivot_cache_field_shared_item_date`
-  and `fm_workbook_set_pivot_cache_record_date` store a serial as a date
-  (`<d>`) rather than a number, and
-  `fm_workbook_is_pivot_cache_field_shared_item_date` reads the mark back. In
-  JavaScript and Python a `Date` (`date` or `datetime`) passed to
-  `PivotCache.addFieldSharedItem` or `setRecordValue` is a date item, and
-  `listFieldSharedItems` reports the mark as `isDate` (`is_date`). A date outside the workbook's
-  date system is refused. Date filters, date grouping and the saved field
-  hints treat these values as they treat dates loaded from a file.
-- `fm_sheet_set_row_auto_height` (`setRowAutoHeight`, `set_row_auto_height`)
-  stores the automatic height of the rows `first` to `last` of a sheet
-  without marking them custom, so a refreshed height is saved as `ht` alone
-  and the rows keep following their content and font.
-- `fm_sheet_get_range_xf_bases_excluding` (`getRangeXfBasesExcluding`,
-  `get_range_xf_bases_excluding`) lists the XFs a selection resolves to while
-  leaving out given cells, for hosts that resolve those cells' style
-  themselves.
-- `fm_sheet_get_array_formula` / `fm_sheet_set_array_formula`
-  (`getArrayFormula` / `setArrayFormula`, `get_array_formula` /
-  `set_array_formula`) read and enter legacy (Ctrl+Shift+Enter) array
-  formulas. The getter reports the block's range and formula from any of its
-  cells. The setter refuses a rectangle that partly overlaps another block or
-  intersects a merge, a data table or a PivotTable.
-
-- Calculated fields: `fm_workbook_add_pivot_cache_calculated_field`,
-  `_calculated_field_set_formula`, `_calculated_field_remove` and
-  `fm_workbook_get_pivot_cache_field_formula` (`PivotCache.addCalculatedField`,
-  `PivotCache.add_calculated_field`, and so on). A calculated field shows its
-  formula over the Sums of the fields it names, totals included, and is saved
-  in Excel's form.
-- Calculated items: `fm_workbook_add_pivot_cache_calculated_item`, `_count`,
-  `_at` (`fm_pivot_calculated_item_info_t`), `_set_formula`, `_move` and `_remove`
-  (`PivotCache.addCalculatedItem`, `PivotCache.add_calculated_item`, and so
-  on). Items are evaluated in the context of each cell, the field's totals
-  include them, and where items meet the one later in solve order wins. A data
-  field cannot use Average, StdDev, StdDevP, Var or VarP beside them.
-- PivotTable options in one struct: `fm_sheet_get_pivot_options` /
-  `fm_sheet_update_pivot_options` with `fm_pivot_options_t`
-  (`Pivot.getOptions` / `Pivot.updateOptions`, `Pivot.get_options` /
-  `Pivot.update_options`): error and empty-cell captions, field headers, classic
-  grid layout, empty rows and columns, report filter wrapping, merged labels,
-  compact indent, print titles, alternative text and the rest of the options
-  dialog. The layout draws those that change the report.
-- Pivot cache options: `fm_workbook_get_pivot_cache_options` /
-  `fm_workbook_update_pivot_cache_options` with `fm_pivot_cache_options_t` (`PivotCache.getOptions`,
-  `PivotCache.get_options`): saving the source records, the missing-items
-  limit and refresh on open. A cache saved without records writes no records
-  part.
-- The `customName` key of `Pivot.updateField` (`fm_pivot_field_patch_t`)
-  renames a pivot field in the report, and the `showAll` key lists its items
-  without data.
-- `fm_sheet_get_pivot_data_field_default_name` (`Pivot.getDataFieldDefaultName`,
-  `Pivot.get_data_field_default_name`) reads the name a new data field would get,
-  without adding one.
-- `fm_sheet_project_pivot` (`Pivot.project`) writes a
-  pivot's report into its cells now, and `fm_sheet_is_pivot_projection_pending`
-  (`Pivot.isProjectionPending`, `Pivot.is_projection_pending`) tells whether a cache
-  change left them stale.
-- Charts read and write "Show #N/A as an empty cell" (`c16r3:dispNaAsBlank`):
-  `na_as_blank` in `fm_chart_info_t` (`naAsBlank`, `na_as_blank`), the
-  `na_as_blank` field of the display patch, and a preview override. Turning it
-  off removes the extension, as Excel writes it.
-- `fm_sheet_get_spill` (`getSpill`, `get_spill`) reports a spill that is
-  blocked with `#SPILL!`: at the anchor, `blocked` is 1 and the anchor, rows
-  and columns give the range the spill tried to fill, so a host can outline
-  it as Excel does.
-- `fm_workbook_parse_reference` (`parseReference`, `parse_reference`) reads a
-  reference string with the grammar `INDIRECT` uses under the workbook's
-  profile, A1 or R1C1, into a sheet name and a 0-based rectangle;
-  `fm_workbook_format_reference` (`formatReference`, `format_reference`)
-  writes a rectangle back as A1 text, quoting the sheet name as a formula
-  does.
-
-- `fm_sheet_rename_table_column` (`Table.renameColumn`,
-  `Table.rename_column`) renames a table column as typing over its header
-  does, and returns the final name. An empty name takes the locale's word
-  with the lowest unused number (`Column1`, `列1`, `Spalte1`), and a name
-  another column already has gets the lowest unused number from 2 appended
-  (`Amount2` becomes `Amount22`). Structured references to the column follow
-  in cell formulas on every sheet, totals-row formulas, defined names and
-  chart series. A column added inside a table is named with the same locale
-  word.
-- `Shape.setZOrder` and `Shape.snapshot`, and `Slicer.setZOrder` (Python
-  `set_z_order`, `snapshot` and `Slicer.set_z_order`). A snapshot restores the shape, picture fill and
-  hyperlink included. A slicer inside an
-  `mc:AlternateContent` block can be moved in z-order; a slicer still cannot
-  be removed, anchored or renamed through them.
-- `Formulon.convertCivilToSerial` and `Formulon.convertSerialToCivil`
-  (Python `convert_civil_to_serial`, `convert_serial_to_civil`; C
-  `fm_convert_civil_to_serial`, `fm_convert_serial_to_civil`) convert between
-  a calendar date and time and a serial number for the 1900 or 1904 date
-  system. Civil input is checked, not normalised: month 13 is
-  `InvalidArgument`. In the 1900 system `1900-02-29` is accepted and is
-  serial 60, as in Excel; the 1904 system refuses it and refuses years before
-  1904. A serial in `[60, 61)` converts back to `1900-02-29` in C and
-  JavaScript, and Python raises `ValueError` because `datetime` cannot hold
-  it. A fractional second rounds to the nearest second, and a serial outside
-  `[1, max)` (`[0, max)` for 1904) is `InvalidArgument`. Python takes a
-  `date` or a naive `datetime`, and a `datetime` with a time zone raises
-  `ValueError`.
-- `FormulonOptions.wasm` takes the module as bytes (`BufferSource`) or a
-  compiled `WebAssembly.Module`, for hosts that cannot fetch it by URL. The
-  native package ignores it.
-- `Workbook.dispose()` deletes the raw handle at once. A WASM workbook that is
-  dropped without `dispose()` is released when it is garbage collected, on a
-  best-effort basis: do not rely on it for timing, and call `dispose()` (or
-  `using`) when memory matters.
-- `make npm-typecheck` type-checks the README examples and the public
-  declarations with TypeScript.
-
-- `Workbook.getDefaultFont()` beside `setDefaultFont`, `ws.updateSheetProtection(patch)`,
-  `getStyleOptions()` / `updateStyleOptions(patch)` on `Table` and `Pivot`,
-  `Table.rename(name)`, `listRowBreaks()` / `listColumnBreaks()` with
-  `RowBreak` and `ColumnBreak` records, `Pivot.updateFieldItem`,
-  `activeSheet()`, and `ChartExtendedLayout` with `extendedLayout` /
-  `isExtended` on chart plots. C adds `fm_tristate_t`, `fm_row_break_t`,
-  `fm_column_break_t`, `fm_table_style_options_t`,
-  `fm_pivot_style_options_t` and `fm_sheet_add_pivot_field_item_by_cache_index`.
+- Record fields holding a cell or range accept A1 text (`'B2'`, `'A1:C3'`).
+- `GROUPBY` and `PIVOTBY` accept `total_depth` beyond plus or minus 2, with
+  `relative_to` at any depth.
+- Pictures and charts are written to `.xlsb` and read back as drawings.
+- C: `fm_sheet_set_value`, `fm_get_image_info`, `fm_get_profile_id_at`,
+  `fm_sheet_get_validation`, `fm_sheet_get_sparkline_group`,
+  `fm_sheet_update_pivot_field`, `fm_workbook_get_defined_name`,
+  `fm_workbook_remove_defined_name`, `fm_tristate_t` and the
+  `FM_VERSION_MAJOR` macros; the header opens with a quick start and the
+  pointer lifetime rules.
+- A workbook file name (`setFileName`): formula text shows references to the
+  workbook's own names as the formula bar does (`=Book.xlsx!Rate`), and that
+  spelling can be entered. The command-line tools set it from the input file.
+- Pivot date grouping as Excel's Group command does it, with labels in the 14
+  UI locales and the Japanese calendar.
+- Pivot report options: per-field subtotals, blank rows, repeated labels,
+  `showDetail`, sorting, `customName` and `showAll`; item `caption`; the grand
+  total caption; and the Values level in field orders
+  (`FM_PIVOT_VALUES_FIELD`). Labels use the field's number format.
+- `Pivot.showDetails` adds a sheet with the source rows behind a cell.
+- Pivot caches: shared item reads, date items (`isDate`), calculated fields
+  and items, `getOptions` / `updateOptions`, `Pivot.getDataFieldDefaultName`,
+  `Pivot.project` and `Pivot.isProjectionPending`.
+- `setRowAutoHeight`, `getRangeXfBasesExcluding`, and `getArrayFormula` /
+  `setArrayFormula` for legacy (Ctrl+Shift+Enter) array formulas.
+- `getSpill` reports a spill blocked with `#SPILL!` and its intended range.
+- `parseReference` and `formatReference` convert between reference text and a
+  sheet name with a 0-based rectangle.
+- `Table.renameColumn` renames a column as typing over its header does.
+- `convertCivilToSerial` and `convertSerialToCivil` for the 1900 and 1904 date
+  systems.
+- `FormulonOptions.wasm` takes the module as bytes or a compiled module, and
+  `Workbook.dispose()` releases a handle at once.
+- `make npm-typecheck` type-checks the README examples and the declarations.
 - `getCellFormat` reports `source`, and a conditional-format input accepts
-  `format: CellFormatPatch`, which is resolved to a differential format;
-  `dxfIndex` stays as the low-level alternative.
+  `format: CellFormatPatch` in place of a `dxfIndex`.
 
 ### Changed
 
-- Chart fill, line and data-label font colours and shape fill and outline
-  colours accept and return theme references (`ColorKind.Theme`, `theme` 0..11
-  numbered as in a cell colour, `tint` in -1..1). A scheme colour whose only
-  adjustments are luminance and alpha reads as Theme; the tint is stored as
-  `lumMod` / `lumOff` and quantised to 1e-5. Indexed and automatic colours are
-  rejected with `FM_STATUS_INVALID_ARGUMENT`. A colour with any other
-  transform reads as before: its rendered RGB on a chart, `Other` on a shape.
-- Changing a chart between bar, column and area types keeps each series' fill
-  as it is, theme colours with their transforms, gradients and patterns
-  included, instead of only an RGB colour. A change to or from a line or
-  scatter type re-derives the series colour, an RGB one included, as Excel
-  does; previously an RGB colour was carried to the scatter markers.
-- A chart without chart style parts, as `addChart` creates and as many
-  non-Excel writers save, keeps its series and point formatting through a
-  type change, pie and doughnut included, as Excel does for such a chart: a
-  line plot drops every line when the series line is hidden and shows no
-  markers, and a scatter plot hides every line (2 pt wide when the series
-  line, and for a point its own line too, was visible with a width, 3 pt
-  otherwise) and keeps only shown markers. Previously such a chart was
-  restyled as a chart with style parts is.
-- A chart type change between category and value axes (scatter to or from
-  column, bar, line or area) converts the existing axes in place, as Excel
-  does, instead of replacing them with new default axes: each axis keeps its
-  id, direction, gridlines, title, ticks and formatting, and a kept value axis
-  its bounds and units. A category axis's label and mark intervals become the
-  major and minor units of the value axis; an axis turned into a category
-  axis drops its bounds and units (its log base too on a bar plot) and is not
-  multi-level. A converted axis links its number format to the category data
-  (General for text). A date axis stays as it is over a column, bar, line or
-  area plot and becomes a value axis, keeping its units and dropping its time
-  units and bounds, over a scatter plot; a scatter plot whose X values are
-  dates becomes a plot over a date axis. Every type change drops a category axis's label and
-  mark intervals, as Excel does.
-- A chart type change to or from pie or doughnut follows Excel's: pie points
-  become points in the series colour that keep their outline; a series line
-  reaches the slices less what the old type's style draws by default; new
-  axes have outside tick marks and the default crossing (a bar chart lists
-  its value axis first, and a scatter chart's axes have no outline and its
-  horizontal axis no gridlines or number format); and a new bar plot takes a
-  gap width of 100.
-- A chart added over categories that are all dates (blanks aside) gets a
-  date axis, as Excel makes one; a single plain number or text among them
-  keeps a category axis. A date axis's base unit, whether made by adding a
-  chart or by a type change, follows the smallest gap between the sorted
-  dates: days under 28 days, months under 365, years otherwise. Each axis of
-  a new chart links to the number format of its data's first cell (the
-  category axis is General when a category is text, and a percent-stacked
-  value axis stays 0%) instead of always General.
-- Changing a chart's data range re-links its axes as Excel does: an automatic
-  category axis becomes a date axis over date categories and turns back over
-  text, a date axis already in place keeps its base unit, a manual axis keeps
-  its kind, and linked axis number formats follow the new first cells.
-- A shape fill or outline colour is no longer dropped silently: given without
-  its kind it fails with a `TypeError` in JavaScript and Python, and given with
-  a kind other than solid it fails with `FM_STATUS_INVALID_ARGUMENT`.
-- Number-format codes (`fm_workbook_add_number_format`, `fm_workbook_get_number_format`
-  and their JavaScript and Python forms) use the vocabulary of the workbook's
-  Excel profile, as the pivot `number_format` field does. Built-in id 14 is
-  `m/d/yy` under en-US and `yyyy/m/d` under ja-JP, so adding that code
-  returns 14, and the ECMA-376 spelling `mm-dd-yy` is stored as a custom
-  format. `get(add(code))` returns `code`.
-- `evaluate_cf_range` with `today` omitted evaluates time-period rules against
-  the pinned clock, else the local date, instead of disabling them, and the
-  JavaScript `evaluateCfRange(range, { today })` takes the date as an option
-  that may be left out.
-- `fm_get_function_metadata` (`getFunctionMetadata`, `function_metadata`) reports the
-  argument counts formula entry accepts for every built-in, including the
-  functions it used to report as `0` with no upper bound (`IF` 2 to 3,
-  `XLOOKUP` 3 to 6, `SUMIFS` 3 or more, `LET` 3 to 253, `LAMBDA` 1 to 254).
-- A conditional formatting rule added without an id gets one in the form
-  Excel uses, `{00000000-000E-0000-<sheet>-0000<priority>}`, in place of the
-  `{FC000000-…}` form.
-- `fm_sheet_get_cell_at`, `fm_workbook_get_defined_name_at` and the validation,
-  table and pivot field formula views are documented as valid until the next
-  read that uses the handle's scratch buffer, like the other text getters. A
-  view now points into scratch storage when a file name is set and the text
-  needs the workbook name spelled out.
-
-- A pivot table's report is kept in the sheet cells, as Excel keeps it. Every
-  pivot table edit writes the report into its range with Excel's cell formats,
-  and formulas that read the range see it; deleting a pivot table clears its
-  range. An edit or a new pivot table whose report would overlap another
-  pivot table, a table, a data table, an array formula or a merge now fails
-  with `FM_STATUS_PRECONDITION_FAILED` and changes nothing. A cache edit leaves the
-  cells stale until the pivot's next edit, `fm_sheet_project_pivot` or a
-  save, which writes them first.
-- A data field named by the engine takes a number after the name, as Excel
-  does, when the name is already taken by another data field or a field
-  ("Sum of Amt2").
-- A pivot table created through the API starts with the options Excel gives a
-  new pivot: item print titles on, compact indent 0 and one filter per field.
-- Loaded pivot filters of every type are listed by `fm_sheet_get_pivot_filter_at`
-  and removed by `fm_sheet_clear_pivot_filters`.
-
-- Functions that return formula text spell structured references as the
-  formula bar does: `[#This Row]` is written `@`, a reference from inside the
-  table to one of its own columns drops the table name (`=[@Qty]`,
-  `=SUM([Qty])`; `=tblSales[@Qty]` from outside), and `tblSales[]` reads
-  `tblSales`. `FORMULATEXT` shows the same form at the target cell, with
-  `#All`, `#Data`, `#Headers` and `#Totals` and the item separator inside the
-  brackets in the workbook's locale (`[[#Kopfzeilen];[Qty]]`). Formula
-  setters accept this form and store Excel's long form; a bare table name is
-  stored as `tblSales[]`.
-- Writing a value into a table's header cell (`fm_sheet_set_text`,
-  `_set_number`, `_set_bool`, `_set_error`, `_set_blank`) renames the column
-  as `fm_sheet_rename_table_column` does. Clearing it gives the default
-  name instead of an empty header.
-- `Table.update` takes a `TablePatch` and moves the table with `range`, given
-  as A1 text or a `SheetRect` on the table's sheet. `getCellRectPt` and
-  `getWidthModel` (Python `get_cell_rect_pt`, `get_width_model`) use the
-  Display geometry mode when none is given.
-- `fm_sheet_update_protected_range` leaves the stored ranges alone when
-  `ranges` is `NULL` and `range_count` is 0, so a read-modify-write does not
-  lose a range the engine cannot parse.
-
-- The record-taking C functions accept the new record layouts and
-  `size_t` indexes; each line below is a break for a stale caller.
-  `fm_sheet_add_hyperlink`, `fm_sheet_add_validation`,
-  `fm_sheet_add_merge`, `fm_sheet_remove_merge` and `fm_workbook_add_person`
-  take their records as `const` pointers and under renamed types
-  (`fm_hyperlink_t`, `fm_data_validation_t`, `fm_cell_rect_t`,
-  `fm_person_t`); `fm_sheet_add_threaded_comment` takes `fm_threaded_comment_t`.
-  `fm_sheet_get_auto_filter` and `fm_sheet_set_auto_filter` use
-  `fm_auto_filter_t`, `fm_sheet_get_effective_style` uses
-  `fm_effective_style_info_t`, `fm_sheet_get_format_defaults` uses
-  `fm_sheet_format_defaults_t`,
-  `fm_sheet_validate_value` uses `fm_validation_outcome_info_t`,
-  `fm_workbook_recalc_parallel` uses `fm_parallel_recalc_stats_info_t`,
-  `fm_workbook_get_theme_colors` / `fm_workbook_set_theme_colors` use
-  `fm_theme_colors_t`, and `fm_workbook_get_theme_fonts` /
-  `fm_workbook_set_theme_fonts` use `fm_theme_fonts_t`.
-  `fm_workbook_resolve_color` takes a `const fm_color_t*` in place of an
-  `fm_color_spec` by value.
-- The sheet-scoped list and edit functions take `size_t sheet_index` and
-  `size_t` positions: `fm_sheet_clear_hyperlinks`, `fm_sheet_clear_merges`,
-  `fm_sheet_clear_validations`, `fm_sheet_get_hyperlink_at`,
-  `fm_sheet_get_hyperlink_count`, `fm_sheet_get_merge_at`,
-  `fm_sheet_get_merge_count`, `fm_sheet_get_validation_count`,
-  `fm_sheet_remove_hyperlink`, `fm_sheet_remove_hyperlink_at`,
-  `fm_sheet_remove_merge_at`, and the sheet operations
-  `fm_workbook_move_sheet`, `fm_workbook_remove_sheet` and
-  `fm_workbook_rename_sheet`. The count getters write through
-  `size_t* out_count`.
-- `fm_sheet_get_picture` takes `int32_t* out_present` before its outputs. A
-  cell with no picture is `FM_STATUS_OK` with `*out_present = 0`; it was
-  `FM_STATUS_INVALID_ARGUMENT`.
-- `fm_sheet_get_print_area` and `fm_sheet_set_print_area` read and take
-  `fm_cell_rect_t` ranges with a count instead of A1 text.
-- Python: the package runs one WebAssembly instance per process, so calls are
-  serialised and memory it grew is not returned. The Python README lists the
-  limits.
-- `GROUPBY` and `PIVOTBY` with `total_depth` of 2 or more over a single key
-  column return `#VALUE!`. `TEXTBEFORE` and `TEXTAFTER` return `#N/A` on a
-  miss when `if_not_found` is omitted (they returned `0`). A union that holds
-  a 3-D reference is `#NAME?`, and a union of areas on different sheets is
-  `#VALUE!`. A list validation whose source is a range compares the proposed
-  number exactly, so `0.1+0.2` matches its own list entry.
-
-- `addTable` (Python `add_table`, C `fm_sheet_add_table`) numbers blank and
-  repeated column names as Excel does instead of refusing them; previously a
-  duplicate name failed with "column name is duplicated" and an empty name in
-  `columns` was rejected. A blank name takes the profile's column word and the
-  smallest free number from 1 (`Column1`, `列1`); a name equal to one on its
-  left by name identity (case, width and kana folded) keeps its own spelling
-  and takes the smallest free number from 2 in ASCII digits (`QTY`, `ＱＴＹ`
-  become `QTY`, `ＱＴＹ2`), with names later in the row reserved (`Qty`, `qty`,
-  `QTY`, `Qty2` become `Qty`, `qty3`, `QTY4`, `Qty2`). The renamed header cells are
-  written.
+- Chart and shape colours accept and return theme references
+  (`ColorKind.Theme`); indexed and automatic colours are rejected.
+- Chart type changes follow Excel: bar, column and area keep series fills,
+  line and scatter re-derive the series colour, charts without style parts
+  keep their formatting, pie and doughnut restyle as Excel does, and axes
+  convert in place between category and value kinds.
+- A new chart over date categories gets a date axis, and axes link to their
+  data's number format; changing the data range re-links them.
+- A shape colour without its kind, or of a kind other than solid, fails
+  instead of being dropped.
+- Number-format codes use the workbook profile's vocabulary (id 14 is
+  `m/d/yy` under en-US).
+- `evaluateCfRange` without `today` uses the pinned clock or the local date
+  instead of disabling time-period rules.
+- `getFunctionMetadata` reports the argument counts entry accepts for every
+  built-in.
+- A conditional formatting rule added without an id gets one in Excel's form.
+- A pivot table's report is kept in the sheet cells, and an edit whose report
+  would overlap another object fails. New data fields are numbered when their
+  name is taken ("Sum of Amt2"), API-created pivots start with Excel's
+  new-pivot options, and loaded filters of every type are listed.
+- Formula text spells structured references as the formula bar does (`@`,
+  locale specifiers), and setters accept that form.
+- Writing into a table header cell renames the column.
+- `Table.update` moves the table with `range`; `getCellRectPt` and
+  `getWidthModel` default to the Display geometry mode.
+- C: `fm_sheet_get_picture` reports a cell with no picture as `FM_STATUS_OK`
+  with `*out_present = 0`, `fm_sheet_update_protected_range` keeps the stored
+  ranges when `ranges` is `NULL`, and formula text views stay valid until the
+  next read through the handle's scratch buffer.
+- Python runs one WebAssembly instance per process, so calls are serialised.
+- `TEXTBEFORE` and `TEXTAFTER` return `#N/A` on a miss without
+  `if_not_found` (they returned `0`); `GROUPBY` / `PIVOTBY` with `total_depth`
+  of 2 or more over one key column, and a union across sheets, are `#VALUE!`;
+  a union holding a 3-D reference is `#NAME?`. A range-sourced list
+  validation compares numbers exactly.
+- `addTable` numbers blank and repeated column names (`Column1`, `Qty2`)
+  instead of refusing them.
 
 ### Removed
 
-- `fm_cf_color_t` and the `*_argb` fields of the chart and shape records
-  (see `fm_color_t` under BREAKING), `CfColor`, the `*Argb` keys of
-  JavaScript colour patches, `fillRgb` / `lineRgb`, and `EvalArrayResult`.
+- `fm_cf_color_t`, the `*_argb` fields, `CfColor`, the `*Argb` keys of
+  JavaScript colour patches, `fillRgb` / `lineRgb` and `EvalArrayResult`.
 - `kCliInvalidArgs`, `kCliFileNotFound` and `kCliOutputFailed` (7005 to 7007).
-- `fm_workbook_evaluate_formula_array_cell`: `fm_sheet_evaluate_formula_array`
-  returns an owned `fm_value_array_t` read with `fm_value_array_get_value_at`.
-- `fm_sheet_set_tab_hidden`, `fm_workbook_set_defined_name_scoped`,
-  `fm_workbook_set_iterative_enabled`, `fm_sheet_set_fit_to_page` and
-  `fm_sheet_set_thread_resolved`; the replacements are in the table under
-  [C ABI changes](docs/releases/upgrading-0.19.md#c-abi-changes).
-- `fm_workbook_probe_image`: use `fm_get_image_info`, which takes no workbook.
-- The former names of the renamed C functions (the `removed` rows of the
-  migration table), with no aliases.
-- The singleton `remove*` / `clear*` methods (`removeAutoFilter`,
-  `clearPinnedNow`, `removeSheetRowBreak`, `removeSheetColBreak`, and the
-  table AutoFilter equivalent), replaced by `set<X>(null)`; `addHyperlink`,
-  `addHyperlinkRange`, `addSheetRowBreak` and `addSheetColBreak`, replaced by
-  `setHyperlink`, `setRowBreak` and `setColumnBreak`;
-  `pivotFieldAddItemAt`, replaced by `addFieldItem(field, { cacheIndex })`;
-  the `enabled` field of sheet protection; `DrawingObject.mediaPath`, whose
-  role `format` covers; and the `fm_sheet_remove_auto_filter`,
-  `fm_sheet_remove_row_break`, `fm_sheet_remove_col_break` and
-  `fm_workbook_clear_pinned_now` C functions.
-- `fm_workbook_evaluate_formula`, which returned the top-left cell of a
-  result: use `fm_sheet_evaluate_formula_array`. `FilterOperator`,
-  `ChartBlanksAs`, `SparklineEmptyCells` and `PivotFilterValueKind` in the
-  bindings, with the C typedefs they mirrored where the tables merged (see
-  [Enums](docs/releases/upgrading-0.19.md#enums)); `Value.to_python()`; the `valueKind`, `valueInt`,
-  `valueDouble`, `valueText` and `valueHigh*` keys of a pivot filter; the `todaySerial` argument of `evaluateCfRange`.
+- `fm_workbook_evaluate_formula`, `fm_workbook_evaluate_formula_array_cell`,
+  `fm_workbook_probe_image` and other replaced C functions
+  ([C ABI changes](docs/releases/upgrading-0.19.md#c-abi-changes)).
+- The singleton `remove*` / `clear*` methods, `addHyperlink`,
+  `addHyperlinkRange`, `addSheetRowBreak`, `addSheetColBreak` and
+  `pivotFieldAddItemAt`, the `enabled` field of sheet protection and
+  `DrawingObject.mediaPath`.
+- `FilterOperator`, `ChartBlanksAs`, `SparklineEmptyCells`,
+  `PivotFilterValueKind`, `Value.to_python()`, the `valueKind` family of
+  pivot filter keys and the `todaySerial` argument of `evaluateCfRange`.
 
 ### Performance
 
-- The threads WebAssembly build skips Binaryen's memory packing, which trades
-  raw module size for a smaller Brotli size.
-- Both WebAssembly builds are smaller, from shared argument readers in the
-  JavaScript binding layer and shared helpers in the engine. Behaviour is
-  unchanged.
+- The threads build skips Binaryen's memory packing for a smaller Brotli size.
+- Both WebAssembly builds are smaller from shared helpers.
 
 ### Fixed
 
-- Saving a new workbook with an inserted image or chart as `.xlsb` no longer
-  fails with `IoContentTypeInvalid`.
-- `PivotField.subtotalTop` reads `false` after it is set to `false` in
-  JavaScript. It used to read `true` whatever was set.
-- A cell font with no colour is saved with no `<color>` element, so it reads
-  back as automatic. It used to be saved as explicit black.
-- Refreshing a pivot cache names a source column with a blank header in the
-  workbook's locale (`フィールド1` in Japanese, `Feld1` in German) instead
-  of always in English.
-- A reference deleted by a structural edit is spelled as Excel spells it. A
-  row or column deletion keeps the qualifier the reference was written with
-  (`=Sheet3!#REF!*2`, `='Data 1'!#REF!`, a defined name `Sheet3!#REF!`), and
-  that qualifier follows a later sheet rename. A sheet deletion keeps the
-  address in the formula bar (`=#REF!A1`, `=SUM(#REF!A:A)`, `#REF!#REF!` for
-  an already-deleted reference) while the saved formula stays bare `#REF!`;
-  copying a sheet that one end of a 3-D reference names spells it the same
-  way. Removing an end sheet of a 3-D span that leaves one sheet gives the
-  single-sheet reference (`=SUM(Sheet2!A1:B2)`). The parser accepts all of
-  these spellings, including `#REF!A:A` and `#REF!1:3`.
-- Inserting or deleting rows or columns recalculates formulas that read a
-  whole column, a whole row or a large range across the edited band, such as
-  `=SUM(Sheet3!A:A)` after a row of Sheet3 is deleted; they kept their old
-  value before.
-- A spill reference whose anchor a structural edit deletes keeps its `#`, as
-  in Excel: `=SUM(Sheet3!#REF!#)` and `=SUM(#REF!#)` after a row deletion,
-  `=SUM(#REF!D5#)` after a sheet deletion, saved as
-  `_xlfn.ANCHORARRAY(#REF!)`. It evaluates to `#REF!` (it gave `#VALUE!`),
-  and `#REF!#` can be typed and read back.
-- Deleting a sheet keeps its sheet-scoped names that other sheets still use:
-  a name referenced as `Sheet2!Rate` becomes workbook-scoped and the
-  reference becomes `[0]!Rate`, or binds to an existing workbook-scoped name
-  of the same name. Names nothing else references are dropped as before.
-  A reference from another surviving name, from a chart series or from a
-  LAMBDA call (`=Sheet2!Fn(3)` becomes `=[0]!Fn(3)`, not `#REF!`) keeps the
-  name too, and a kept name keeps the names its body reaches through
-  `Sheet2!Name`. An unqualified name in its body does not keep that name.
-- Deleting a sheet sends structured references to the tables on it to
-  `#REF!` (`=SUM(#REF!)`); they kept naming the deleted table before.
-- Conditional formatting formulas read from a file drop a qualifier naming
-  their own sheet (`Sheet3!$A$1>0` on Sheet3 is `$A$1>0`), as Excel does on
-  load, so a later row deletion gives `#REF!>0`. The same applies to color
-  scale, data bar and icon set thresholds, to data validation formulas, and
-  to a 3-D reference whose both ends are the own sheet
-  (`Sheet3:Sheet3!$A$1`). A sheet-scoped name keeps its qualifier.
-- Conditional formatting rules and data validations that reference another
-  sheet are read from the x14 extension of an Excel file (`.xlsx`) and from
-  its 2010 records (`.xlsb`). Before, they were missing from the model: they
-  were not evaluated, not listed, and not updated by structural edits. They
-  are written back the same way, so a rule that references another sheet no
-  longer goes into the base element, and it stays in the extension after
-  the sheet it references is deleted.
-- In `.xlsb` conditional formatting and data validation formulas, a relative
-  reference to another sheet is stored as an offset from the rule's first
-  cell, as Excel stores it. Excel read the old form as a different column
-  (`Sheet1!A:A` on G1:G3 came back as `Sheet1!G:G`).
-- XLSB stores a qualified or deleted-sheet `#REF!` the way Excel does (a
-  sheet-bound reference error, or the address through a deleted-sheet
-  entry), and reads those forms back with their sheet or address: an Excel
-  `.xlsb` shows `=Sheet3!#REF!*2` and `=#REF!A1` again. A reference to a
-  deleted sheet in an Excel `.xlsb` no longer reads back as a plain `A1` on
-  the formula's own sheet.
-- PivotTable cache dates are read and written as Excel spells them: a serial
-  counts days from 1899-12-30 in the 1900 date system (so serials 1 to 60
-  name the day before their cell display) and from 1904-01-01 in the 1904
-  system. Dates before 1900-03-01 and every date in a 1904 workbook were off
-  before.
-- A PivotTable cache built in memory saves the `<sharedItems>` content hints
-  Excel writes for its values, so Excel opens it without a repair prompt:
-  date fields get `containsDate` and `minDate` / `maxDate` (omitted when dates
-  mix with numbers), number fields mixed with text get `minValue` /
-  `maxValue`, and numeric fields off every axis get their full numeric hints
-  in place of a bare `containsNumber`.
-- A PivotTable label filter on numeric items orders numbers before a text
-  bound, as Excel does: `less than "abc"` keeps every number, and `not
-  between "2" and "abc"` keeps only the items below 2.
-- A PivotTable with column fields but no row or data fields starts at its
-  anchor column and is two rows tall. Outline and tabular forms caption the
-  column area with the field name.
-- With the classic drag-and-drop layout (`gridDropZones`) and no row fields,
-  a PivotTable keeps its row-label column. It labels the value row with the
-  locale's total word, puts a lone data field's name in the top-left corner,
-  and writes the matching `firstDataCol` / `firstHeaderRow` offsets.
-- A PivotTable read from a file and then edited (a filter, a field, a cache
-  change) saves the range of its new layout. Before, it kept the range the file
-  described whenever the report got smaller.
-- `INDIRECT` reads an unquoted sheet name with non-ASCII characters or a dot
-  (`INDIRECT("売上!A1")`, `INDIRECT("Sheet.1!A1")`) instead of returning
-  `#REF!`, following the rule formulas use for sheet names.
-- Writing a number, text or blank into a pivot cache record, or clearing a
-  field's shared items, no longer leaves the cell saved as a date or as a
-  shared-item index.
-- A data bar without an x14 extension (the Excel 2007 form) is drawn as Excel
-  draws it: no axis, and every bar, negative ones included, grows from the
-  left edge in proportion to the minimum-to-maximum span. A data bar with an
-  automatic axis, the default for one added through the API, now writes its
-  x14 extension, so Excel keeps the axis after a save instead of showing the
-  2007 form.
-- A structured reference to one cell (`[@Qty]`, or `[#Headers]` or
-  `[#Totals]` with one column) in a legacy formula loaded without a
-  dynamic-array mark no longer gains an implicit-intersection `@`.
-- Formulas with structured references in a loaded workbook recalculate when
-  the table changes; totals, `SUBTOTAL`, `[#Totals]` and `[#Headers]` results
-  kept their loaded values before. A `[#This Row]` reference now depends on
-  its own row.
-- A column name containing `,` or `:` is read as one name in a structured
-  reference (`t[a,b]`, `t[a:b]`), as Excel stores it, and `'` escapes are
-  read the same way in formulas, files and table edits.
-- Formula entry refuses an argument Excel refuses for a parameter that takes
-  only a reference: an empty or constant argument, an operator, or a function
-  that never returns a reference, as in `=SUBTOTAL(9,)`, `=SUMIF(,1)` or
-  `=COUNTIF(1,1)`. The parameters are those of `SUMIF`, `COUNTIF`, the
-  `*IFS` and database functions, `SUBTOTAL`, `OFFSET`, `CELL`, `RANK`, `ROW`,
-  `COLUMN`, `AREAS`, `COUNTBLANK`, `FORMULATEXT`, `ISFORMULA` and
-  `PHONETIC`. Empty value arguments such as `=SUM(,)` are still accepted.
-- Formula entry refuses an argument count Excel refuses: too few or too many
-  arguments (`=ROWS()`, `=ABS(1,2)`, `=SUM()`, `=IF(1)`), an incomplete pair
-  for the functions that take arguments in pairs (`=COUNTIFS(A1,1,A1)`,
-  `=SUMIFS(A1,A1,1,A1)`, `IFS`, `SORTBY`, `GETPIVOTDATA`), and more than 255
-  arguments to any function. An omitted argument counts, so `=ABS(1,)` is
-  refused. A workbook that already holds such a formula still loads and
-  calculates it.
-- `LARGE`, `SMALL`, `PERCENTILE`, `QUARTILE` (and their `.INC` / `.EXC`
-  forms), `TRIMMEAN` and `FVSCHEDULE` take exactly two arguments, and
-  `TRANSLATE` takes one to three, as in Excel.
-- `GROUPBY` and `PIVOTBY` call a function passed by name with the group values
-  and the whole value column when its minimum is two arguments, so `XIRR` and
-  `FORECAST.ETS.SEASONALITY` give Excel's results.
-- Adding or updating a slicer with an ascending sort order (`fm_sheet_add_slicer`,
-  `fm_sheet_update_slicer`, `addSlicer`, `Slicer.update`) failed with
-  `InvalidArgument`; it is accepted and stored.
-- A `GROUPBY` / `PIVOTBY` function that returns an array, of any shape and
-  one cell included, gives `#VALUE!` in that value cell as Excel does (it was
-  `#CALC!`); one that returns a `LAMBDA` stays `#CALC!`. `IF` passed by name is
-  `#VALUE!` in every value cell.
-- A scalar function lifted over an array argument returns an array even when
-  that array is one cell (`=TYPE(ABS({1}))`, `=TYPE(ROUND(1.5,{0}))` and
-  `=TYPE(ISNUMBER({1}))` are 64, through `LET` and `LAMBDA` too), so
-  `=GROUPBY({"a"},{1},ABS,,0)` is `#VALUE!`. A one-cell reference reads as that
-  cell: a one-cell spill (`=TYPE(C1#)` is 1), a name over one cell, and `TAKE`
-  / `DROP` over a range. `ISREF` is `TRUE` for a spill reference and for `TAKE`
-  / `DROP` over a range.
+- Saving a new workbook with an image or chart as `.xlsb` failed with
+  `IoContentTypeInvalid`.
+- `PivotField.subtotalTop` and several Python flags read true when false was
+  stored.
+- A cell font with no colour was saved as explicit black.
+- A pivot cache refresh named blank-header columns in English in every locale.
+- Structural edits: deleted references are spelled as Excel spells them
+  (`=Sheet3!#REF!*2`, `=#REF!A1`), a deleted spill anchor is `#REF!` (it
+  gave `#VALUE!`), formulas over a whole column or large range across the edit
+  recalculate, and deleting a sheet keeps the sheet-scoped names other sheets
+  use and sends its tables' references to `#REF!`.
+- Conditional formatting and validations referencing another sheet were
+  missing when read from `.xlsx` or `.xlsb`, and `.xlsb` stored their
+  relative references in a form Excel read as another column. A qualifier
+  naming the rule's own sheet is dropped on load, as Excel does.
+- `.xlsb` lost the sheet or address of a qualified or deleted-sheet `#REF!`.
+- Pivot cache dates before 1900-03-01 and in 1904 workbooks were off, and
+  in-memory caches lacked the `<sharedItems>` hints, so Excel asked to repair.
+  Writing a number, text or blank into a record could leave it saved as a
+  date or a shared-item index.
+- Pivot layout for numeric label filters, column-only pivots, the classic
+  layout without row fields and a shrinking report now matches Excel.
+- `INDIRECT` returned `#REF!` for an unquoted non-ASCII or dotted sheet name.
+- A data bar without an x14 extension is drawn as Excel 2007 draws it, and
+  one with an automatic axis writes its x14 extension.
+- Structured references in loaded workbooks recalculate when the table
+  changes, a one-cell one in a legacy formula gains no implicit `@`, and a
+  column name with `,` or `:` reads as one name.
+- Formula entry refuses the arguments and argument counts Excel refuses
+  (`=COUNTIF(1,1)`, `=ABS(1,2)`), including the fixed counts of `LARGE`,
+  `SMALL`, `PERCENTILE`, `QUARTILE`, `TRIMMEAN`, `FVSCHEDULE` and `TRANSLATE`;
+  existing such formulas still load.
+- `GROUPBY` and `PIVOTBY` give `#VALUE!` for an array-returning function (it
+  was `#CALC!`) and pass the whole value column where `XIRR` needs it.
+- An ascending slicer sort order failed with `InvalidArgument`.
+- A scalar function over a one-cell array now returns an array.
 - `formulon paginate` exits with the library status when reading page breaks
-  fails, as its other failures do.
-- Text comparison, sorting and lookups under the Mac ja-JP profile treat a
-  prolonged sound mark as Excel does: after a kana it keeps that kana's width,
-  and after a half-width voiced mark it counts as half-width. A voiced or
-  semi-voiced combining mark composes with its base kana on the Mac profiles.
-- A threaded comment's `created` stamp is saved in UTC. A trailing `Z` in a
-  file is accepted, and a stamp with a UTC offset or an unparseable stamp reads
-  as absent (`null`) on load; the attribute text used to be kept as it was
-  read.
-- Engine error messages a call reports lead with the parameter or field they
-  are about (`name is not a valid defined name`, `shift must be down or
-  right`), or are a sentence when no argument is at fault (`Cannot change part
-  of an array`). They used to lead with a prose word or an operation prefix
-  (`insert_cells: ...`), which the bindings turned into a path that does not
-  exist (`Workbook.setDefinedName definedName.invalid name`) or showed in its
-  C spelling. Every engine error now carries the call's label
-  (`Sheet.setValue Cannot change part of an array`), whatever its status, and
-  a leading C path becomes the public path only when it names one of the call's
-  arguments. File diagnostics keep their `<part>: <problem>` form.
-- An out-of-range index reads alike in every binding:
-  `Workbook.sheet key 5 is out of range (1 sheet)`, with the noun singular for
-  a count of one. Python labels its sheet lookups as JavaScript does.
-- Python: a number parameter given a string, `None` or a `bool` raises
-  `TypeError` (`Sheet.set_number value must be a number`) instead of
-  converting the string or failing with an unlabelled error.
-- Python: page breaks, validation flags, the protection select flags, a
-  colour-scale threshold's `gte`, table-style `pivot` / `table` and a pivot
-  field's `subtotal_top` read `False` when the stored value is false; they used
-  to read `True`.
-- Every cell of a legacy array formula reads the block's formula from
-  `getFormula`, `listCells` and `getCellsInRange`, as Excel's `Range.Formula`
-  does; only the top-left cell did. `getSpill` returns `null` on every cell of
-  a legacy array block, which is not a spill. A spill child still reads no
-  formula.
+  fails.
+- Mac ja-JP text comparison of prolonged sound and voiced marks now matches
+  Excel.
+- A threaded comment's `created` stamp is saved in UTC.
+- Error messages lead with the parameter they are about and carry the call's
+  label, and out-of-range indexes read alike in every binding. Python raises
+  `TypeError` for a string, `None` or `bool` given as a number.
+- Every cell of a legacy array formula reads the block's formula, and
+  `getSpill` returns `null` there.
 
 ## [0.18.0] - 2026-10-26
 
