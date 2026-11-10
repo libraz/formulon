@@ -12,6 +12,7 @@ import dataclasses
 import datetime
 import decimal
 import inspect
+import itertools
 import math
 import numbers
 import struct
@@ -898,8 +899,15 @@ def _geometry_mode(mode: Any) -> int:
         ) from None
 
 
-def _cell_input(value: Any) -> Tuple[str, Tuple[Any, ...]]:
+def _is_array(value: Any) -> bool:
+    """Whether ``value`` is a sequence the bindings take as an array: a ``str`` or ``bytes`` is not."""
+    return isinstance(value, Sequence) and not isinstance(value, (str, bytes))
+
+
+def _cell_input(value: Any, path: str = "value") -> Tuple[str, Tuple[Any, ...]]:
     """The setter :meth:`Sheet.set_value` calls for ``value`` and the arguments after the cell.
+
+    ``path`` names the value in a refusal.
 
     Raises:
       TypeError: for a type no cell holds (a ``timedelta`` included), or a
@@ -921,7 +929,7 @@ def _cell_input(value: Any) -> Tuple[str, Tuple[Any, ...]]:
         elif kind is ValueKind.ERROR:
             return "set_error", (value.error_code,)
         else:
-            raise TypeError(_argument_message("value", f"of kind {kind.name} cannot be stored in a cell"))
+            raise TypeError(_argument_message(path, f"of kind {kind.name} cannot be stored in a cell"))
     if value is None:
         return "set_blank", ()
     if isinstance(value, bool):
@@ -932,9 +940,9 @@ def _cell_input(value: Any) -> Tuple[str, Tuple[Any, ...]]:
         try:
             number = float(value)
         except OverflowError as exc:
-            raise ValueError(_argument_message("value", "is too large")) from exc
+            raise ValueError(_argument_message(path, "is too large")) from exc
         if not math.isfinite(number):
-            raise FormulonError(StatusCode.INVALID_ARGUMENT, _argument_message("value", "must be finite"), "")
+            raise FormulonError(StatusCode.INVALID_ARGUMENT, _argument_message(path, "must be finite"), "")
         return "set_number", (number,)
     if isinstance(value, str):
         return ("set_formula" if value.startswith("=") else "set_text"), (value,)
@@ -942,9 +950,9 @@ def _cell_input(value: Any) -> Tuple[str, Tuple[Any, ...]]:
         return "set_error", (value.code,)
     if isinstance(value, (datetime.date, datetime.time)):
         if getattr(value, "tzinfo", None) is not None:
-            raise ValueError(_argument_message("value", f"must be a naive {type(value).__name__}"))
+            raise ValueError(_argument_message(path, f"must be a naive {type(value).__name__}"))
         return "_set_date", (value,)
-    raise TypeError(_argument_message("value", "must be a cell value"))
+    raise TypeError(_argument_message(path, "must be a cell value"))
 
 
 def _value_of_input(value: Any, *, date1904: bool) -> Value:
@@ -2180,14 +2188,17 @@ class Sheet(_NoCopy):
             return []
         rows = rect.last_row - rect.first_row + 1
         cols = rect.last_col - rect.first_col + 1
-        if rows <= 0 or cols <= 0 or rows * cols > _GET_VALUES_CELL_CAP:
+        if rows * cols > _GET_VALUES_CELL_CAP:
             raise FormulonError(
                 StatusCode.INVALID_ARGUMENT,
-                _argument_message("range", f"must hold at most {_GET_VALUES_CELL_CAP} cells, got {rows}x{cols}"),
-                "",
+                _argument_message("range", f"must name at most {_GET_VALUES_CELL_CAP} cells"),
+                f"cells={rows * cols}",
             )
+        cells = self._typed_cells(rect)
+        # The first page is read before the grid is allocated, so a rectangle the engine refuses allocates nothing.
+        first = next(cells, None)
         grid = [[_BLANK] * cols for _ in builtins.range(rows)]  # `range` is the parameter here
-        for row, col, _, value in self._typed_cells(rect):
+        for row, col, _, value in itertools.chain(() if first is None else (first,), cells):
             grid[row - rect.first_row][col - rect.first_col] = value
         return grid
 
@@ -2295,18 +2306,23 @@ class Sheet(_NoCopy):
             ws.set_values("A1", [["Item", "Qty"], ["Apple", 3]])
         """
         row, col, values = self._cell_args("set_values", args, kwargs, ("values",))
-        if isinstance(values, (str, bytes)):
-            raise TypeError(_argument_message("values", "must be an array of rows"))
+        if not _is_array(values):
+            raise TypeError(_argument_message("values", "must be an array"))
+        width = None
         grid = []
-        for line in values:
-            if isinstance(line, (str, bytes)):
-                raise TypeError(_argument_message("values", "must be an array of rows of cell values"))
-            grid.append([_cell_input(value) for value in line])
-        width = len(grid[0]) if grid else 0
-        if any(len(line) != width for line in grid):
-            raise FormulonError(
-                StatusCode.INVALID_ARGUMENT, _argument_message("values", "must have rows of one length"), ""
-            )
+        for i, line in enumerate(values):
+            if not _is_array(line):
+                raise TypeError(_argument_message(f"values[{i}]", "must be an array"))
+            if width is None:
+                width = len(line)
+            elif len(line) != width:
+                raise FormulonError(
+                    StatusCode.INVALID_ARGUMENT,
+                    _argument_message(f"values[{i}]", f"must have {width} elements"),
+                    f"row={i}",
+                )
+            grid.append([_cell_input(value, f"values[{i}][{j}]") for j, value in enumerate(line)])
+        width = width or 0
         if width == 0:
             return
         if row + len(grid) - 1 > _LAST_ROW or col + width - 1 > _LAST_COL:
@@ -3817,9 +3833,13 @@ class Sheet(_NoCopy):
     def get_formula(self, *args: Any, **kwargs: Any) -> Optional[str]:
         """Return the stored A1 formula (leading ``=`` included), or ``None`` for a non-formula cell.
 
-        A data table's result cell reads the table's formula,
-        ``=TABLE(row_input,col_input)``, with an absent input left empty
-        (``=TABLE(,B3)``) and a deleted one as ``#REF!``.
+        The text is re-spelled from the parsed formula, so literals read
+        normalised (``=1.50`` reads ``=1.5``); a formula loaded from a file
+        shows book names, not ``[N]`` indexes. A data table's result cell reads
+        the table's formula, ``=TABLE(row_input,col_input)``, with an absent
+        input left empty (``=TABLE(,B3)``) and a deleted one as ``#REF!``.
+        Every cell of a legacy array block reads the block's formula; a spill
+        child of a dynamic array reads ``None``.
         """
         row, col = self._cell_args("get_formula", args, kwargs, ())
         sheet = self._index()
@@ -6954,7 +6974,11 @@ class Sheet(_NoCopy):
     def get_spill(self, *args: Any, **kwargs: Any) -> Optional[Spill]:
         """Return the spill region ``(row, col)`` belongs to, or ``None`` when it is in no spill.
 
-        A blocked anchor reads as a :class:`Spill` with ``blocked`` set and the footprint it attempted.
+        The region covers the anchor and every spilled cell; their values are
+        read with :meth:`get_value`, which is already spill-aware. A blocked
+        anchor reads as a :class:`Spill` with ``blocked`` set and the footprint
+        it attempted. Every cell of a legacy array block reads ``None``: the
+        block is not a spill.
         """
         row, col = self._cell_args("get_spill", args, kwargs, ())
         sheet = self._index()

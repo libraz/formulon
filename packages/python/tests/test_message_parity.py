@@ -16,7 +16,7 @@ import unittest
 from pathlib import Path
 from typing import Any, Callable, Dict
 
-from formulon import ArrayFormula, DefinedNameInput, FormulonError, TableInput, Workbook
+from formulon import ArrayFormula, CellRect, DefinedNameInput, FormulonError, TableInput, Workbook
 
 HERE = Path(__file__).resolve().parent
 REPO_ROOT = HERE.parents[2]
@@ -38,6 +38,12 @@ CASES: Dict[str, Callable[[Workbook, Any], Any]] = {
         ws.get_value("E2"),
         ws.set_value("E2", 5),
     ),
+    "setValues given a non-array": lambda wb, ws: ws.set_values(0, 0, "ab"),
+    "setValues row that is not an array": lambda wb, ws: ws.set_values(0, 0, [[1], "x"]),
+    "setValues rows of unequal length": lambda wb, ws: ws.set_values(0, 0, [[1, 2], [3]]),
+    "setValues element that is not a cell value": lambda wb, ws: ws.set_values(0, 0, [[1, object()]]),
+    "setValues non-finite number": lambda wb, ws: ws.set_values(0, 0, [[1], [float("nan")]]),
+    "getValues past the cell cap": lambda wb, ws: ws.get_values(CellRect(0, 0, 1048575, 16383)),
 }
 
 

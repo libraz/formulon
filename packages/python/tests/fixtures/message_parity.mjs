@@ -10,6 +10,13 @@ const CASES = {
     ws.getValue('E2');
     ws.setValue('E2', 5);
   },
+  'setValues given a non-array': (wb, ws) => ws.setValues(0, 0, 'ab'),
+  'setValues row that is not an array': (wb, ws) => ws.setValues(0, 0, [[1], 'x']),
+  'setValues rows of unequal length': (wb, ws) => ws.setValues(0, 0, [[1, 2], [3]]),
+  'setValues element that is not a cell value': (wb, ws) => ws.setValues(0, 0, [[1, {}]]),
+  'setValues non-finite number': (wb, ws) => ws.setValues(0, 0, [[1], [Number.NaN]]),
+  'getValues past the cell cap': (wb, ws) =>
+    ws.getValues({ firstRow: 0, firstCol: 0, lastRow: 1048575, lastCol: 16383 }),
 };
 
 const { createFormulon } = await import(process.argv[2]);
