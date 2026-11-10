@@ -922,6 +922,7 @@ extern "C" fm_status_t fm_sheet_get_spill(const fm_workbook_t* wb, std::size_t s
       // A footprint past the edge is clipped to the grid.
       const std::uint32_t rows = std::min(blocked->rows, formulon::Sheet::kMaxRows - blocked->anchor_row);
       const std::uint32_t cols = std::min(blocked->cols, formulon::Sheet::kMaxCols - blocked->anchor_col);
+      out->anchor = fm_cell_address_t{blocked->anchor_row, blocked->anchor_col};
       out->rect = cell_rect_from_extent(blocked->anchor_row, blocked->anchor_col, rows, cols);
       out->blocked = 1;
       out->cause = to_c(blocked->cause);
@@ -940,6 +941,7 @@ extern "C" fm_status_t fm_sheet_get_spill(const fm_workbook_t* wb, std::size_t s
     }
     return 0;
   }
+  out->anchor = fm_cell_address_t{region->anchor_row, region->anchor_col};
   out->rect = cell_rect_from_extent(region->anchor_row, region->anchor_col, region->rows, region->cols);
   *out_present = 1;
   return 0;

@@ -400,8 +400,8 @@ Read [Every binding](#every-binding) first, then the section for your binding. [
   whose old value was `ABSENT` and set the others; `ABSENT` as a set value is
   now `FM_STATUS_INVALID_ARGUMENT`. `fm_chart_info_t` gains `na_as_blank`,
   `fm_chart_preview_overrides_spec_t` gains `na_as_blank_op` / `na_as_blank`, and
-  `fm_spill_info_t` gains `blocked` and `cause`, each at its end. A caller
-  compiled against an earlier header must be recompiled.
+  `fm_spill_info_t` gains `anchor` (right after `struct_size`), `blocked` and
+  `cause`. A caller compiled against an earlier header must be recompiled.
 - **C ABI:** every input and output record starts with `uint32_t struct_size`.
   Set it with `FM_STRUCT_INIT(T)` (`{.struct_size = sizeof(T)}` in C,
   `fm_struct_init<T>()` in C++) before passing the record; a size below the
@@ -1524,6 +1524,9 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
   whatever lies inside the grid. It is `null` (`None`, `FM_SPILL_CAUSE_ABSENT`)
   when `blocked` is false. `getSpill` now reports a formula spill blocked past
   the sheet edge (it returned `null`), with the range clipped to the grid.
+- `Spill.anchor` (C `fm_spill_info_t.anchor`) is the cell holding the
+  dynamic-array formula, or a PivotTable's anchor cell, which a report with page
+  fields places below the page rows its range includes.
 - Saved files carry Excel's rich error values. A `#SPILL!`, a `#CALC!` or a
   `#VALUE!` with a reason was written as a plain `#VALUE!`, which Excel showed
   until it recalculated and which a blocked pivot report's anchor kept for
@@ -3642,6 +3645,7 @@ A caller compiled against an earlier header must be recompiled.
 | (none) | `fm_sheet_get_table_runtime_id` / `fm_workbook_resolve_table_runtime_id` and `fm_sheet_get_pivot_runtime_id` / `fm_sheet_resolve_pivot_runtime_id` map a table or pivot index to an id that survives other tables or pivots being added or removed, and back |
 | (none) | `fm_sheet_get_pivot_spill` reads the range a pivot report covers, or needs when blocked, into an `fm_spill_info_t`, and `fm_sheet_get_spill` reports the same at the report's anchor |
 | (none) | `fm_spill_info_t.cause`, an `fm_spill_cause_t` (`FM_SPILL_CAUSE_ABSENT` -1, `FM_SPILL_CAUSE_OCCUPIED` 0, `FM_SPILL_CAUSE_MERGED` 1, `FM_SPILL_CAUSE_BEYOND_EDGE` 2), says what blocks a spill or a report; a range past the sheet edge is reported, clipped to the grid |
+| (none) | `fm_spill_info_t.anchor`, an `fm_cell_address_t`, is the cell holding the formula or the report's anchor cell (below the page rows `rect` includes); `Spill.anchor` in JavaScript and Python |
 | a pivot `number_format` (`fm_pivot_field_spec_t`, the data-field spec and the pivot field setters) given as the text of a number-format id | `number_format` is a format code (`0.00%`). A digits-only string is read as a format code, so a call written for the old form silently selects a different format |
 | `fm_sheet_set_page_setup`, `_set_page_margins`, `_set_print_options`, `_set_header_footer`, `_set_format_defaults`, `fm_styles_set_table_style_defaults` | the same names with `update` (`fm_sheet_update_page_setup` and so on) and `fm_workbook_update_table_style_defaults`; a field of the patch record that is unset keeps the stored value |
 | `fm_workbook_pivot_set_grand_totals`, `fm_workbook_pivot_set_style_info`, `fm_sheet_set_chart_axis`, `_set_chart_display`, `_set_chart_series`, `_set_chart_plot` | `fm_sheet_update_pivot_grand_totals`, `fm_sheet_update_pivot_style_options`, `fm_sheet_update_chart_axis`, `_update_chart_display`, `_update_chart_series`, `_update_chart_plot` |

@@ -138,6 +138,7 @@ fm_status_t resolve_pivot_checked(const fm_workbook_t* wb, std::initializer_list
 }
 
 bool pivot_spill_info(const formulon::pivot::PivotTable& table, fm_spill_info_t* out) {
+  out->anchor = fm_cell_address_t{table.anchor_row(), table.anchor_col()};
   const std::optional<formulon::pivot::BlockedReport>& state = table.blocked();
   if (state.has_value()) {
     const std::uint32_t above = std::min(state->rows_above, table.anchor_row());

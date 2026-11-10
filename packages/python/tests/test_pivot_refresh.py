@@ -92,21 +92,26 @@ class PivotCacheRefreshTests(unittest.TestCase):
             cache, pivot = _build(wb)
             ws = wb.sheet(0)
             # The report fills E1:F4; North makes it one row longer, into E5.
-            self.assertEqual(pivot.get_spill(), Spill(blocked=False, cause=None, range=CellRect(0, 4, 3, 5)))
+            self.assertEqual(
+                pivot.get_spill(),
+                Spill(anchor=CellAddress(0, 4), blocked=False, cause=None, range=CellRect(0, 4, 3, 5)),
+            )
             for row in range(4, 9):
                 ws.set_text(row, 4, "keep")
             ws.set_text("A4", "North")
             self.assertIsNone(cache.refresh())
             self.assertEqual(_shared(cache, "Region"), ["East", "West", "North"])
             self.assertFalse(pivot.is_projection_pending())
-            needed = Spill(blocked=True, cause=SpillCause.OCCUPIED, range=CellRect(0, 4, 4, 5))
+            needed = Spill(
+                anchor=CellAddress(0, 4), blocked=True, cause=SpillCause.OCCUPIED, range=CellRect(0, 4, 4, 5)
+            )
             self.assertEqual(pivot.get_spill(), needed)
             self.assertEqual(ws.get_spill("E1"), needed)
             self.assertIsNone(ws.get_spill("F2"))
             self.assertEqual(ws.get_value(4, 4), "keep")
             for row in range(4, 9):
                 ws.set_blank(row, 4)
-            drawn = Spill(blocked=False, cause=None, range=CellRect(0, 4, 4, 5))
+            drawn = Spill(anchor=CellAddress(0, 4), blocked=False, cause=None, range=CellRect(0, 4, 4, 5))
             self.assertEqual(pivot.get_spill(), drawn)
             self.assertEqual(ws.get_spill("E1"), drawn)
             self.assertIsNone(ws.get_spill("F2"))

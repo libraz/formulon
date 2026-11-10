@@ -9311,6 +9311,9 @@ typedef enum {
  */
 typedef struct {
   uint32_t struct_size;
+  /** The cell holding the dynamic-array formula, or the PivotTable's anchor cell (below the page-field rows that `rect`
+   *  includes). */
+  fm_cell_address_t anchor;
   /** The region including its anchor, whose top-left cell holds the dynamic-array formula or is a PivotTable's anchor;
    *  a PivotTable report's region also takes the page-field rows above its anchor. A blocked region running past the
    *  sheet edge is clipped to the grid. */

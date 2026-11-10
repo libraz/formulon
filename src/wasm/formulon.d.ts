@@ -2854,6 +2854,9 @@ export type SpillCause = 0 | 1 | 2;
 /** Spill region info returned by `Sheet.getSpill(row, col)`, which returns `null` when the cell is neither
  *  part of a spill, a blocked anchor nor a PivotTable report's anchor, and by `Pivot.getSpill()`. */
 export interface Spill {
+  /** The cell holding the dynamic-array formula, or the PivotTable's anchor cell (below the page-field rows that
+   *  `range` includes). */
+  readonly anchor: CellAddress;
   /** `true` when the cell is the anchor of a spill refused with `#SPILL!`, or of a blocked PivotTable report; the
    *  region is then the rectangle it attempted. `false` for a drawn spill or report. */
   readonly blocked: boolean;

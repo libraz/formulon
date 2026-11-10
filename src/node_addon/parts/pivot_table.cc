@@ -610,6 +610,10 @@ Napi::Value Workbook::GetPivotSpill(const Napi::CallbackInfo& info) {
     return OptionalOrNull(env, rc, 0, env.Null());
   }
   Napi::Object out = Napi::Object::New(env);
+  Napi::Object anchor = Napi::Object::New(env);
+  anchor.Set("row", Napi::Number::New(env, spill.anchor.row));
+  anchor.Set("col", Napi::Number::New(env, spill.anchor.col));
+  out.Set("anchor", anchor);
   out.Set("rect", RangeToJs(env, spill.rect));
   out.Set("blocked", Napi::Boolean::New(env, spill.blocked != 0));
   out.Set("cause",

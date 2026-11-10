@@ -33,7 +33,7 @@ function withSheet(body) {
 }
 
 const rect = (firstRow, firstCol, lastRow, lastCol) => ({ firstRow, firstCol, lastRow, lastCol });
-const plain = (spill) => (spill === null ? null : { ...spill, range: { ...spill.range } });
+const plain = (spill) => (spill === null ? null : { ...spill, anchor: { ...spill.anchor }, range: { ...spill.range } });
 
 /** A pivot summing Amount by Region at E1, drawn over E1:F4; `grow()` makes it one row longer, into E5. */
 function buildPivot(ws, wb) {
@@ -72,7 +72,7 @@ describe('Spill.cause on a formula', () => {
   it('a drawn spill reads blocked false and no cause, at its anchor and its phantoms', () => {
     withSheet((ws) => {
       ws.setFormula('A1', '=SEQUENCE(3)');
-      const drawn = { blocked: false, cause: null, range: rect(0, 0, 2, 0) };
+      const drawn = { anchor: { row: 0, col: 0 }, blocked: false, cause: null, range: rect(0, 0, 2, 0) };
       assert.deepEqual(plain(ws.getSpill('A1')), drawn);
       assert.deepEqual(plain(ws.getSpill('A3')), drawn);
     });
@@ -85,11 +85,17 @@ describe('Spill.cause on a formula', () => {
       ws.addMerge('D2:E2');
       ws.setFormula('D1', '=SEQUENCE(3)');
       assert.deepEqual(plain(ws.getSpill('C1')), {
+        anchor: { row: 0, col: 2 },
         blocked: true,
         cause: SpillCause.Occupied,
         range: rect(0, 2, 2, 2),
       });
-      assert.deepEqual(plain(ws.getSpill('D1')), { blocked: true, cause: SpillCause.Merged, range: rect(0, 3, 2, 3) });
+      assert.deepEqual(plain(ws.getSpill('D1')), {
+        anchor: { row: 0, col: 3 },
+        blocked: true,
+        cause: SpillCause.Merged,
+        range: rect(0, 3, 2, 3),
+      });
       assert.equal(ws.getSpill('C2'), null);
     });
   });
@@ -99,15 +105,24 @@ describe('Spill.cause on a formula', () => {
       ws.setFormula(LAST_ROW - 1, 0, '=SEQUENCE(5)');
       ws.setFormula(0, LAST_COL - 1, '=SEQUENCE(1,5)');
       assert.deepEqual(plain(ws.getSpill(LAST_ROW - 1, 0)), {
+        anchor: { row: LAST_ROW - 1, col: 0 },
         blocked: true,
         cause: SpillCause.BeyondEdge,
         range: rect(LAST_ROW - 1, 0, LAST_ROW, 0),
       });
       assert.deepEqual(plain(ws.getSpill(0, LAST_COL - 1)), {
+        anchor: { row: 0, col: LAST_COL - 1 },
         blocked: true,
         cause: SpillCause.BeyondEdge,
         range: rect(0, LAST_COL - 1, 0, LAST_COL),
       });
+    });
+  });
+
+  it('a phantom cell reports the region anchor', () => {
+    withSheet((ws) => {
+      ws.setFormula('B2', '=SEQUENCE(3)');
+      assert.deepEqual({ ...ws.getSpill('B4').anchor }, { row: 1, col: 1 });
     });
   });
 
@@ -123,7 +138,7 @@ describe('Spill.cause on a PivotTable report', () => {
   it('a drawn report reads its extent at its anchor, and its body cells read null', () => {
     withSheet((ws, wb) => {
       const { pivot } = buildPivot(ws, wb);
-      const drawn = { blocked: false, cause: null, range: rect(0, 4, 3, 5) };
+      const drawn = { anchor: { row: 0, col: 4 }, blocked: false, cause: null, range: rect(0, 4, 3, 5) };
       assert.deepEqual(plain(pivot.getSpill()), drawn);
       assert.deepEqual(plain(ws.getSpill('E1')), drawn);
       assert.equal(ws.getSpill('E2'), null);
@@ -136,7 +151,12 @@ describe('Spill.cause on a PivotTable report', () => {
       const { pivot, grow } = buildPivot(ws, wb);
       ws.setText('E5', 'x');
       grow();
-      const blocked = { blocked: true, cause: SpillCause.Occupied, range: rect(0, 4, 4, 5) };
+      const blocked = {
+        anchor: { row: 0, col: 4 },
+        blocked: true,
+        cause: SpillCause.Occupied,
+        range: rect(0, 4, 4, 5),
+      };
       assert.deepEqual(plain(pivot.getSpill()), blocked);
       assert.deepEqual(plain(ws.getSpill('E1')), blocked);
     });
@@ -147,7 +167,12 @@ describe('Spill.cause on a PivotTable report', () => {
       const { pivot, grow } = buildPivot(ws, wb);
       ws.addMerge('E5:F5');
       grow();
-      assert.deepEqual(plain(pivot.getSpill()), { blocked: true, cause: SpillCause.Merged, range: rect(0, 4, 4, 5) });
+      assert.deepEqual(plain(pivot.getSpill()), {
+        anchor: { row: 0, col: 4 },
+        blocked: true,
+        cause: SpillCause.Merged,
+        range: rect(0, 4, 4, 5),
+      });
     });
   });
 
@@ -156,7 +181,12 @@ describe('Spill.cause on a PivotTable report', () => {
       const { pivot, grow } = buildPivot(ws, wb);
       pivot.setAnchor({ row: LAST_ROW - 3, col: 4 });
       grow();
-      const blocked = { blocked: true, cause: SpillCause.BeyondEdge, range: rect(LAST_ROW - 3, 4, LAST_ROW, 5) };
+      const blocked = {
+        anchor: { row: LAST_ROW - 3, col: 4 },
+        blocked: true,
+        cause: SpillCause.BeyondEdge,
+        range: rect(LAST_ROW - 3, 4, LAST_ROW, 5),
+      };
       assert.deepEqual(plain(pivot.getSpill()), blocked);
       assert.deepEqual(plain(ws.getSpill(LAST_ROW - 3, 4)), blocked);
     });
@@ -167,7 +197,7 @@ describe('Spill.cause on a PivotTable report', () => {
       buildPivot(ws, wb);
       const loaded = f.Workbook.load(wb.save());
       try {
-        const drawn = { blocked: false, cause: null, range: rect(0, 4, 3, 5) };
+        const drawn = { anchor: { row: 0, col: 4 }, blocked: false, cause: null, range: rect(0, 4, 3, 5) };
         assert.deepEqual(plain(loaded.sheet(0).pivot(0).getSpill()), drawn);
         assert.deepEqual(plain(loaded.sheet(0).getSpill('E1')), drawn);
         assert.equal(loaded.sheet(0).getSpill('E2'), null);

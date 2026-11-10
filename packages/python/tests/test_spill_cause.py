@@ -61,7 +61,7 @@ class FormulaSpillCauseTests(unittest.TestCase):
         with Workbook.create_default() as wb:
             ws = wb.sheet(0)
             ws.set_formula("A1", "=SEQUENCE(3)")
-            drawn = Spill(blocked=False, cause=None, range=CellRect(0, 0, 2, 0))
+            drawn = Spill(anchor=CellAddress(0, 0), blocked=False, cause=None, range=CellRect(0, 0, 2, 0))
             self.assertEqual(ws.get_spill("A1"), drawn)
             self.assertEqual(ws.get_spill("A3"), drawn)
 
@@ -73,10 +73,12 @@ class FormulaSpillCauseTests(unittest.TestCase):
             ws.add_merge("D2:E2")
             ws.set_formula("D1", "=SEQUENCE(3)")
             self.assertEqual(
-                ws.get_spill("C1"), Spill(blocked=True, cause=SpillCause.OCCUPIED, range=CellRect(0, 2, 2, 2))
+                ws.get_spill("C1"),
+                Spill(anchor=CellAddress(0, 2), blocked=True, cause=SpillCause.OCCUPIED, range=CellRect(0, 2, 2, 2)),
             )
             self.assertEqual(
-                ws.get_spill("D1"), Spill(blocked=True, cause=SpillCause.MERGED, range=CellRect(0, 3, 2, 3))
+                ws.get_spill("D1"),
+                Spill(anchor=CellAddress(0, 3), blocked=True, cause=SpillCause.MERGED, range=CellRect(0, 3, 2, 3)),
             )
             self.assertIsNone(ws.get_spill("C2"))
 
@@ -87,11 +89,21 @@ class FormulaSpillCauseTests(unittest.TestCase):
             ws.set_formula(0, LAST_COL - 1, "=SEQUENCE(1,5)")
             self.assertEqual(
                 ws.get_spill(LAST_ROW - 1, 0),
-                Spill(blocked=True, cause=SpillCause.BEYOND_EDGE, range=CellRect(LAST_ROW - 1, 0, LAST_ROW, 0)),
+                Spill(
+                    anchor=CellAddress(LAST_ROW - 1, 0),
+                    blocked=True,
+                    cause=SpillCause.BEYOND_EDGE,
+                    range=CellRect(LAST_ROW - 1, 0, LAST_ROW, 0),
+                ),
             )
             self.assertEqual(
                 ws.get_spill(0, LAST_COL - 1),
-                Spill(blocked=True, cause=SpillCause.BEYOND_EDGE, range=CellRect(0, LAST_COL - 1, 0, LAST_COL)),
+                Spill(
+                    anchor=CellAddress(0, LAST_COL - 1),
+                    blocked=True,
+                    cause=SpillCause.BEYOND_EDGE,
+                    range=CellRect(0, LAST_COL - 1, 0, LAST_COL),
+                ),
             )
 
     def test_a_cell_in_no_spill_reads_none(self) -> None:
@@ -105,7 +117,7 @@ class PivotSpillCauseTests(unittest.TestCase):
         with Workbook.create_default() as wb:
             pivot, _ = _build_pivot(wb)
             ws = wb.sheet(0)
-            drawn = Spill(blocked=False, cause=None, range=CellRect(0, 4, 3, 5))
+            drawn = Spill(anchor=CellAddress(0, 4), blocked=False, cause=None, range=CellRect(0, 4, 3, 5))
             self.assertEqual(pivot.get_spill(), drawn)
             self.assertEqual(ws.get_spill("E1"), drawn)
             self.assertIsNone(ws.get_spill("E2"))
@@ -116,7 +128,9 @@ class PivotSpillCauseTests(unittest.TestCase):
             pivot, grow = _build_pivot(wb)
             wb.sheet(0).set_text("E5", "x")
             grow()
-            blocked = Spill(blocked=True, cause=SpillCause.OCCUPIED, range=CellRect(0, 4, 4, 5))
+            blocked = Spill(
+                anchor=CellAddress(0, 4), blocked=True, cause=SpillCause.OCCUPIED, range=CellRect(0, 4, 4, 5)
+            )
             self.assertEqual(pivot.get_spill(), blocked)
             self.assertEqual(wb.sheet(0).get_spill("E1"), blocked)
 
@@ -126,7 +140,8 @@ class PivotSpillCauseTests(unittest.TestCase):
             wb.sheet(0).add_merge("E5:F5")
             grow()
             self.assertEqual(
-                pivot.get_spill(), Spill(blocked=True, cause=SpillCause.MERGED, range=CellRect(0, 4, 4, 5))
+                pivot.get_spill(),
+                Spill(anchor=CellAddress(0, 4), blocked=True, cause=SpillCause.MERGED, range=CellRect(0, 4, 4, 5)),
             )
 
     def test_past_the_edge_is_beyond_edge_clipped_to_the_grid(self) -> None:
@@ -134,7 +149,12 @@ class PivotSpillCauseTests(unittest.TestCase):
             pivot, grow = _build_pivot(wb)
             pivot.set_anchor(CellAddress(LAST_ROW - 3, 4))
             grow()
-            blocked = Spill(blocked=True, cause=SpillCause.BEYOND_EDGE, range=CellRect(LAST_ROW - 3, 4, LAST_ROW, 5))
+            blocked = Spill(
+                anchor=CellAddress(LAST_ROW - 3, 4),
+                blocked=True,
+                cause=SpillCause.BEYOND_EDGE,
+                range=CellRect(LAST_ROW - 3, 4, LAST_ROW, 5),
+            )
             self.assertEqual(pivot.get_spill(), blocked)
             self.assertEqual(wb.sheet(0).get_spill(LAST_ROW - 3, 4), blocked)
 
@@ -142,7 +162,7 @@ class PivotSpillCauseTests(unittest.TestCase):
         with Workbook.create_default() as wb:
             _build_pivot(wb)
             with Workbook.load(wb.save()) as loaded:
-                drawn = Spill(blocked=False, cause=None, range=CellRect(0, 4, 3, 5))
+                drawn = Spill(anchor=CellAddress(0, 4), blocked=False, cause=None, range=CellRect(0, 4, 3, 5))
                 self.assertEqual(loaded.sheet(0).pivot(0).get_spill(), drawn)
                 self.assertEqual(loaded.sheet(0).get_spill("E1"), drawn)
                 self.assertIsNone(loaded.sheet(0).get_spill("E2"))

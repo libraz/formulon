@@ -40,8 +40,12 @@ SpillRead PivotSpill(const fm_workbook_t* wb) {
   return read;
 }
 
-void ExpectSpill(const SpillRead& read, std::int32_t blocked, std::int32_t cause, const fm_cell_rect_t& rect) {
+// The anchor is the region's top-left unless `anchor` says otherwise (a report with page fields).
+void ExpectSpill(const SpillRead& read, std::int32_t blocked, std::int32_t cause, const fm_cell_rect_t& rect,
+                 const fm_cell_address_t* anchor = nullptr) {
   EXPECT_EQ(read.present, 1);
+  EXPECT_EQ(read.info.anchor.row, anchor != nullptr ? anchor->row : rect.first_row);
+  EXPECT_EQ(read.info.anchor.col, anchor != nullptr ? anchor->col : rect.first_col);
   EXPECT_EQ(read.info.blocked, blocked);
   EXPECT_EQ(read.info.cause, cause);
   EXPECT_EQ(read.info.rect.first_row, rect.first_row);
@@ -108,6 +112,21 @@ TEST(FormulonCApiSpillCause, DrawnFormulaSpillHasNoCause) {
   ExpectSpill(CellSpill(wb.handle, 2U, 0U), 0, FM_SPILL_CAUSE_ABSENT, drawn);
 }
 
+TEST(FormulonCApiSpillCause, AnchorIsTheFormulaCellAtAnchorAndPhantom) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0U, 1U, 2U, "=SEQUENCE(3,2)"), 0);  // C2:D4
+  const fm_cell_rect_t drawn{1U, 2U, 3U, 3U};
+  const fm_cell_address_t anchor{1U, 2U};
+  ExpectSpill(CellSpill(wb.handle, 1U, 2U), 0, FM_SPILL_CAUSE_ABSENT, drawn, &anchor);
+  ExpectSpill(CellSpill(wb.handle, 3U, 3U), 0, FM_SPILL_CAUSE_ABSENT, drawn, &anchor);
+  ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0U, 6U, 4U, "=SEQUENCE(3)"), 0);  // E7 meets E9
+  ASSERT_EQ(fm_sheet_set_text(wb.handle, 0U, 8U, 4U, "x"), 0);
+  const fm_cell_address_t blocked_anchor{6U, 4U};
+  ExpectSpill(CellSpill(wb.handle, 6U, 4U), 1, FM_SPILL_CAUSE_OCCUPIED, fm_cell_rect_t{6U, 4U, 8U, 4U},
+              &blocked_anchor);
+}
+
 TEST(FormulonCApiSpillCause, OccupiedAndMergedFormulaSpills) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
@@ -169,6 +188,55 @@ TEST(FormulonCApiSpillCause, DrawnPivotAnchorReportsItsExtent) {
   ExpectSpill(PivotSpill(wb.handle), 0, FM_SPILL_CAUSE_ABSENT, kDrawn);
   ASSERT_EQ(fm_sheet_project_pivot(wb.handle, 0U, 0U), 0) << fm_get_last_error_message();
   ExpectSpill(PivotSpill(wb.handle), 0, FM_SPILL_CAUSE_ABSENT, kGrown);
+}
+
+// A report with a page field draws its page rows above the anchor; `rect` includes them, `anchor` does not.
+TEST(FormulonCApiSpillCause, PivotWithPageFieldAnchorsBelowThePageRows) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  std::uint32_t cache = 0;
+  ASSERT_EQ(fm_workbook_add_pivot_cache(wb.handle, 0, &cache), 0);
+  ASSERT_EQ(SetPivotCacheWorksheetSource(wb.handle, cache, 1, "A1:C3", "Sheet1", nullptr), 0);
+  std::size_t fields[3] = {99, 99, 99};
+  const char* const names[3] = {"Region", "Kind", "Amount"};
+  for (std::size_t i = 0; i < 3U; ++i) {
+    ASSERT_EQ(fm_workbook_add_pivot_cache_field(wb.handle, cache, names[i], &fields[i]), 0);
+  }
+  ASSERT_EQ(fm_workbook_add_pivot_cache_field_shared_item_text(wb.handle, cache, fields[0], "North", ignored_index()),
+            0);
+  ASSERT_EQ(fm_workbook_add_pivot_cache_field_shared_item_text(wb.handle, cache, fields[1], "A", ignored_index()), 0);
+  ASSERT_EQ(fm_workbook_add_pivot_cache_field_shared_item_text(wb.handle, cache, fields[1], "B", ignored_index()), 0);
+  for (std::size_t i = 0; i < 2U; ++i) {
+    std::size_t record = 99;
+    ASSERT_EQ(fm_workbook_add_pivot_cache_record(wb.handle, cache, &record), 0);
+    ASSERT_EQ(fm_workbook_set_pivot_cache_record_number(wb.handle, cache, record, fields[0], 0.0), 0);
+    ASSERT_EQ(fm_workbook_set_pivot_cache_record_number(wb.handle, cache, record, fields[1], static_cast<double>(i)),
+              0);
+    ASSERT_EQ(fm_workbook_set_pivot_cache_record_number(wb.handle, cache, record, fields[2], 10.0), 0);
+  }
+  std::size_t pivot = 99;
+  ASSERT_EQ(AddPivot(wb.handle, 0, "PT", cache, /*anchor_row=*/4U, /*anchor_col=*/3U, &pivot), 0);
+  ASSERT_EQ(fm_sheet_set_pivot_field_axis(wb.handle, 0U, pivot, fields[1], FM_PIVOT_AXIS_ROW), 0);
+  ASSERT_EQ(fm_sheet_set_pivot_field_axis(wb.handle, 0U, pivot, fields[2], FM_PIVOT_AXIS_VALUE), 0);
+  fm_pivot_data_field_t sum = FM_STRUCT_INIT(fm_pivot_data_field_t);
+  sum.name = "Sum of Amount";
+  sum.field_index = static_cast<std::uint32_t>(fields[2]);
+  sum.aggregation = FM_PIVOT_AGGREGATION_SUM;
+  sum.number_format = "";
+  sum.show_as = FM_PIVOT_SHOW_VALUES_AS_NORMAL;
+  ASSERT_EQ(fm_sheet_add_pivot_data_field(wb.handle, 0U, pivot, &sum, ignored_index()), 0);
+  ASSERT_EQ(fm_sheet_set_pivot_field_axis(wb.handle, 0U, pivot, fields[0], FM_PIVOT_AXIS_PAGE), 0)
+      << fm_get_last_error_message();
+
+  const SpillRead read = PivotSpill(wb.handle);
+  EXPECT_EQ(read.present, 1);
+  EXPECT_EQ(read.info.anchor.row, 4U);
+  EXPECT_EQ(read.info.anchor.col, 3U);
+  EXPECT_LT(read.info.rect.first_row, 4U);
+  const SpillRead at_anchor = CellSpill(wb.handle, 4U, 3U);
+  EXPECT_EQ(at_anchor.present, 1);
+  EXPECT_EQ(at_anchor.info.anchor.row, 4U);
+  EXPECT_EQ(at_anchor.info.rect.first_row, read.info.rect.first_row);
 }
 
 TEST(FormulonCApiSpillCause, OccupiedPivot) {

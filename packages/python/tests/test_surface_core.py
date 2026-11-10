@@ -66,7 +66,7 @@ class StructLayoutTests(unittest.TestCase):
         "TABLE_STYLE": 24,
         "READ_DIAGNOSTICS": 24,
         "SAVE_DIAGNOSTICS": 24,
-        "SPILL_INFO": 28,
+        "SPILL_INFO": 36,
         "ARRAY_FORMULA": 24,
         "FUNCTION_METADATA": 32,
         "LOCALE_FACTS": 60,

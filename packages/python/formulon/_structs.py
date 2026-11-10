@@ -1049,6 +1049,7 @@ SAVE_DIAGNOSTICS = Struct(
 SPILL_INFO = Struct(
     "fm_spill_info_t",
     [
+        ("anchor", nested(CELL_ADDRESS)),
         ("rect", nested(CELL_RECT)),
         ("blocked", I32),
         ("cause", I32),

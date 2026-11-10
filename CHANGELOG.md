@@ -129,7 +129,9 @@ Upgrading from 0.18: see [Upgrading from 0.18 to 0.19](docs/releases/upgrading-0
 - `Spill.cause` (C `fm_spill_info_t.cause`) says what blocks a spill or a pivot
   report: `SpillCause.Occupied`, `Merged` or `BeyondEdge`, and `null` when
   nothing does. A spill or report blocked past the sheet edge is reported, with
-  its range clipped to the grid.
+  its range clipped to the grid. `Spill.anchor` (C `fm_spill_info_t.anchor`) is
+  the cell holding the formula, or the report's anchor cell, which a report
+  with page fields places below the page rows its range includes.
 - Saved `.xlsx` and `.xlsb` files carry Excel's rich error values: a `#SPILL!`,
   a `#CALC!` or a `#VALUE!` with a reason is stored as Excel stores it, so Excel
   shows the error itself rather than `#VALUE!` before it recalculates. Loading

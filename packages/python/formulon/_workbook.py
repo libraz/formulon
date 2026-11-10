@@ -5060,6 +5060,9 @@ class CellNode:
 class Spill:
     """Dynamic-array spill region info for a cell, or the range of a PivotTable report."""
 
+    #: The cell holding the dynamic-array formula, or the PivotTable's anchor cell (below the page-field rows that
+    #: ``range`` includes).
+    anchor: CellAddress
     #: ``True`` when the cell is the anchor of a spill refused with ``#SPILL!``, or of a blocked PivotTable report;
     #: the region is then the rectangle it attempted. ``False`` for a drawn spill or report.
     blocked: bool
@@ -8242,7 +8245,10 @@ def _cell_rect_from(d: Dict[str, int]) -> CellRect:
 
 def _spill_from(d: Dict[str, Any]) -> Spill:
     return Spill(
-        blocked=bool(d["blocked"]), cause=_enum_or_none(SpillCause, d["cause"]), range=_cell_rect_from(d["rect"])
+        anchor=CellAddress(row=d["anchor"]["row"], col=d["anchor"]["col"]),
+        blocked=bool(d["blocked"]),
+        cause=_enum_or_none(SpillCause, d["cause"]),
+        range=_cell_rect_from(d["rect"]),
     )
 
 
