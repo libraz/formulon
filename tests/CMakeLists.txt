@@ -42,6 +42,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/threaded_comment_ids_test.cpp
   unit/collection_name_formula_fold_test.cpp
   unit/workbook_table_column_rename_test.cpp
+  unit/workbook_table_insert_test.cpp
   unit/derived_guid_test.cpp
   unit/workbook_external_bind_test.cpp
   unit/auto_filter_eval_test.cpp

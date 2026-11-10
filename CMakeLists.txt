@@ -153,6 +153,7 @@ set(FORMULON_CORE_SOURCES
   src/workbook_pivot_projection.cpp
   src/workbook_pivot_refresh.cpp
   src/workbook_tables.cpp
+  src/workbook_table_insert.cpp
   src/workbook_formula_index.cpp
   src/workbook_ref_rewrite.cpp
   src/workbook_data_table.cpp

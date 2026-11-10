@@ -860,6 +860,41 @@ class Workbook {
   /// `index` or `column`, or a range that is not a single area.
   Expected<void, Error> write_table_totals_cell(std::size_t index, std::size_t column);
 
+  /// Inserts data rows into table `table_index` of `sheet_index`, as
+  /// `ListRows.Add` does: the cells of the table's columns from the first new
+  /// row downwards move down by the span's length, the cells of other columns
+  /// stay, and the table grows by the span. `first` and `last` are 0-based
+  /// data-row positions, inclusive; `first` equal to the data-row count
+  /// appends, above the totals row when there is one. Every calculated
+  /// column's formula is written into the new rows (relative references moved
+  /// with the row); other columns stay blank.
+  ///
+  /// Errors, each leaving the workbook unchanged:
+  ///   * `kInvalidArgument` for an out-of-range sheet or table index, a table
+  ///     not on `sheet_index`, `first` past the data-row count, `last` below
+  ///     `first`, or a span reaching past the grid.
+  ///   * `kPreconditionFailed` as `insert_cells` for the band below the
+  ///     inserted rows' columns (a PivotTable in the shift path, a multi-cell
+  ///     array formula or data table cut by the band, a value or formula, or
+  ///     the table itself, pushed off the grid).
+  Expected<void, Error> insert_table_rows(std::size_t sheet_index, std::size_t table_index, std::uint32_t first,
+                                          std::uint32_t last);
+
+  /// Inserts columns into table `table_index` of `sheet_index`, as
+  /// `ListColumns.Add` does: the cells of the table's rows (header through
+  /// totals row) from the first new column rightwards move right by the span's
+  /// length, the cells of other rows stay, and the table grows by the span.
+  /// `first` and `last` are 0-based table-column positions, inclusive; `first`
+  /// equal to the column count appends after the last column. Each new column
+  /// is named from its left neighbour (`Q2` gives `Q3`; a name without
+  /// trailing digits, or no left neighbour, takes the profile's column word
+  /// plus the lowest free number), the name is written to the header cell when
+  /// the table has a header row, and the data and totals cells stay blank.
+  ///
+  /// Errors as `insert_table_rows`, with the band being the table's rows.
+  Expected<void, Error> insert_table_columns(std::size_t sheet_index, std::size_t table_index, std::uint32_t first,
+                                             std::uint32_t last);
+
   /// Smallest N >= 1 such that `<word><N>` is not the name or display name
   /// of any table nor a defined name (`sheet_names::write_collides`), as
   /// `add_table` checks.
@@ -1612,8 +1647,10 @@ class Workbook {
   ///   * `kPreconditionFailed` when the moving region meets a table, a
   ///     multi-cell array formula or a data table its band does not wholly
   ///     cover, when the edit cuts into a PivotTable, meets one across a band
-  ///     edge or lies wholly inside one, or when a value or formula would be
-  ///     pushed off the grid.
+  ///     edge or lies wholly inside one, when the shift path holds a
+  ///     PivotTable at all, when the band cuts into a table without spanning
+  ///     exactly the table's columns (`kDown`) or rows (`kRight`), totals row
+  ///     included, or when a value or formula would be pushed off the grid.
   Expected<void, Error> insert_cells(std::size_t sheet_index, const MergeRange& range, CellShift shift);
 
   /// Deletes the cells of `range` on `sheet_index` (Delete Cells), shifting
