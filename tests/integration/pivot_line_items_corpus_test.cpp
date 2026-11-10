@@ -61,31 +61,17 @@ namespace {
 
 /// Axes of the fixture tree (pivot_refresh cases excluded) encoded
 /// byte-equal to the element Excel wrote: at least this many.
-constexpr std::size_t kEncodedFloor = 659;
+constexpr std::size_t kEncodedFloor = 676;
 
 /// Axes whose shape the projection declines to encode, as "<file>#s<sheet>p<pivot>:<axis>".
 const std::set<std::string>& PinnedRefused() {
   static const std::set<std::string> kRefused = {
-      "pivot_line_shapes/M1a_values_above_two_rows_compact.xlsx#s0p0:rows",
-      "pivot_line_shapes/M1b_values_above_two_rows_outline.xlsx#s0p0:rows",
-      "pivot_line_shapes/M1c_values_above_two_rows_tabular.xlsx#s0p0:rows",
-      "pivot_line_shapes/M2b_collapsed_outer_mid_values_below.xlsx#s0p0:rows",
-      "pivot_line_shapes/M2c_collapsed_outer_mid_values_below_outline.xlsx#s0p0:rows",
-      "pivot_line_shapes/M3_collapsed_inner_tabular.xlsx#s0p0:rows",
-      "pivot_line_shapes/M4a_custom_subtotals_outer_values_below.xlsx#s0p0:rows",
-      "pivot_line_shapes/M4b_custom_subtotals_outer_values_below_tabular.xlsx#s0p0:rows",
-      "pivot_line_shapes/M5_custom_subtotals_col_field.xlsx#s0p0:cols",
-      "pivot_line_shapes/M5b_custom_subtotals_col_field_with_rows.xlsx#s0p0:cols",
       "pivot_line_shapes/M6a_page_field_only.xlsx#s0p0:cols",
       "pivot_line_shapes/M6a_page_field_only.xlsx#s0p0:rows",
       "pivot_line_shapes/M6b_completely_empty.xlsx#s0p0:cols",
       "pivot_line_shapes/M6b_completely_empty.xlsx#s0p0:rows",
-      "pivot_line_shapes/M7a_outer_outline_inner_compact.xlsx#s0p0:rows",
       "pivot_line_shapes/M7b_outer_tabular_inner_outline.xlsx#s0p0:rows",
       "pivot_options/collapse_item_outer_column.xlsx#s0p0:cols",
-      "pivot_options/op_emptycol_show_all.xlsx#s0p0:cols",
-      "pivot_options/op_emptyrow_show_all.xlsx#s0p0:rows",
-      "pivot_options/op_showall_only.xlsx#s0p0:rows",
       "pivot_refresh/hdr_dup/after.xlsx#s0p0:cols",
       "pivot_refresh/hdr_dup/after.xlsx#s0p0:rows",
       "pivot_refresh/hdr_dup_suffix_collision/after.xlsx#s0p0:cols",
@@ -106,9 +92,6 @@ const std::set<std::string>& PinnedRefused() {
       "pivot_refresh/type_dates_inline/after.xlsx#s0p0:rows",
       "pivot_refresh/type_dates_inline/before.xlsx#s0p0:cols",
       "pivot_refresh/type_dates_inline/before.xlsx#s0p0:rows",
-      "xlsb_pivot_twins/B04_rowgrand_off.xlsx#s0p0:cols",
-      "xlsb_pivot_twins/C01_subtotal_bottom.xlsx#s0p0:rows",
-      "xlsb_pivot_twins/C04_show_all.xlsx#s0p0:rows",
   };
   return kRefused;
 }

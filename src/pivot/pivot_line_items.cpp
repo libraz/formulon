@@ -73,11 +73,12 @@ Error refuse(const AxisView& axis, const char* shape) {
                     std::string("axis=") + axis.name);
 }
 
-bool has_form_override(const PivotField& field) {
+/// Whether a row field's own `outline` departs from the axis form. Its own
+/// `compact` alone moves labels between columns, not lines.
+bool has_form_override(const PivotField& field, bool group_rows) {
   for (const auto& attr : field.passthrough_attrs) {
-    if (attr.first == "compact" || attr.first == "outline" || attr.first == "compactData" ||
-        attr.first == "outlineData") {
-      return true;
+    if (attr.first == "outline") {
+      return (attr.second != "0" && attr.second != "false") != group_rows;
     }
   }
   return false;
@@ -103,8 +104,8 @@ std::optional<Error> axis_refusal(const LayoutPlan& plan, const AxisView& axis, 
     return refuse(axis, "a stored Values position the layout places no Values level at");
   }
   const AxisShape& shape = *axis.shape;
-  if (shape.values_at.has_value() && shape.depth >= *shape.values_at + 2) {
-    return refuse(axis, "a real field with children below the Values level");
+  if (shape.values_at.has_value() && shape.depth >= *shape.values_at + 2 && (!rows || *shape.values_at > 0)) {
+    return refuse(axis, "a real field with children below a Values level that is not the outermost row level");
   }
   for (std::size_t depth = 0; depth < shape.depth; ++depth) {
     const PivotField* field = depth < shape.fields.size() ? shape.fields[depth] : nullptr;
@@ -112,33 +113,25 @@ std::optional<Error> axis_refusal(const LayoutPlan& plan, const AxisView& axis, 
       continue;
     }
     const bool subtotalled = depth + 1 < shape.depth && !shape.subtotal_fns[depth].empty();
-    if (subtotalled && !rows) {
-      return refuse(axis, "custom subtotal functions on the column axis");
+    if (subtotalled && !rows && shape.values_at.has_value() && *shape.values_at > depth) {
+      return refuse(axis, "custom subtotal functions on the column axis with the Values level below the field");
     }
-    if (subtotalled && shape.values_at.has_value() && *shape.values_at > depth) {
-      return refuse(axis, "custom subtotal functions with the Values level below the field");
+    if (rows && has_form_override(*field, axis.group_rows)) {
+      return refuse(axis, "a row field whose outline form differs from the table's");
     }
-    if (rows && has_form_override(*field)) {
-      return refuse(axis, "a row field whose form differs from the table's");
-    }
-    if (field->show_all) {
-      return refuse(axis, "a field listing items without data");
+    if (field->show_all && depth + 1 < shape.depth) {
+      return refuse(axis, "an outer field listing items without data");
     }
   }
-  if (!rows && !plan.table.grand_totals_rows()) {
-    return refuse(axis, "column grand totals turned off");
-  }
+  // A collapsed item's skipped levels have a line encoding only on group rows with the Values level innermost.
+  const bool collapsed_values_encodable = axis.group_rows && shape.values_at == shape.depth;
   for (const AxisEntry& entry : *axis.entries) {
     if (entry.kind == EntryKind::Subtotal && entry.heads_group && !entry.nodes.empty() &&
-        entry.nodes.back() == nullptr) {
+        entry.nodes.back() == nullptr && !collapsed_values_encodable) {
       return refuse(axis, "a collapsed item with the Values level below it");
     }
-    if (!axis.group_rows && entry.kind == EntryKind::Subtotal && entry.heads_group && real_node_count(entry) >= 2) {
-      return refuse(axis, "a collapsed inner item in tabular form or on the column axis");
-    }
-    if (axis.group_rows && entry.kind == EntryKind::Subtotal && !entry.heads_group && !entry.custom_fn.has_value() &&
-        entry.subtotal_label.empty()) {
-      return refuse(axis, "a subtotal below its group in compact or outline form");
+    if (!rows && entry.kind == EntryKind::Subtotal && entry.heads_group && real_node_count(entry) >= 2) {
+      return refuse(axis, "a collapsed inner item on the column axis");
     }
     if (axis.group_rows && entry.kind == EntryKind::Blank && real_node_count(entry) >= 2) {
       return refuse(axis, "a blank row after an inner field in compact or outline form");
@@ -189,6 +182,8 @@ std::vector<PivotLine> axis_lines(const AxisView& axis) {
     return lines;
   }
   const AxisEntry* prev_leaf = nullptr;
+  // First subtotal of the labelled run closing the current group.
+  const AxisEntry* subtotal_run = nullptr;
   for (const AxisEntry& entry : *axis.entries) {
     PivotLine line;
     line.i = static_cast<std::uint32_t>(entry.data_field.value_or(0));
@@ -198,7 +193,20 @@ std::vector<PivotLine> axis_lines(const AxisView& axis) {
     if (entry.kind == EntryKind::Blank) {
       line.type = PivotLineType::kBlank;
     } else if (!plain) {
-      line.type = entry.custom_fn.has_value() ? line_type_for(*entry.custom_fn) : PivotLineType::kDefault;
+      std::optional<SubtotalFn> fn = entry.custom_fn;
+      if (!fn.has_value() && !entry.subtotal_label.empty()) {
+        // A group above the Values level lists its functions function-major,
+        // one subtotal per data field, so the offset into the run picks the function.
+        if (subtotal_run == nullptr || subtotal_run->nodes.back() != entry.nodes.back()) {
+          subtotal_run = &entry;
+        }
+        const std::vector<SubtotalFn>& fns = axis.shape->subtotal_fns[last];
+        const std::size_t offset = entry.subtotal_index - subtotal_run->subtotal_index;
+        if (offset < fns.size()) {
+          fn = fns[offset];
+        }
+      }
+      line.type = fn.has_value() ? line_type_for(*fn) : PivotLineType::kDefault;
     }
     std::size_t first = last;
     if (plain && !axis.group_rows) {

@@ -518,12 +518,302 @@ TEST(PivotLineItems, CollapsedItemOfTheOnlyRowFieldChangesNothing) {
 }
 
 // ---------------------------------------------------------------------------
+// Shapes measured on the Excel-saved reports of
+// tests/fixtures/excel/pivot_line_shapes and xlsb_pivot_twins: same records,
+// fields and item order, so each expected body is the element Excel wrote.
+// ---------------------------------------------------------------------------
+
+PivotCache build_line_shapes_cache() {
+  PivotCache cache;
+  cache.set_cache_id(kCacheId);
+  for (const char* name : {"Region", "Product", "Date", "Amt", "Qty"}) {
+    cache.mutable_fields().push_back(PivotCacheField{name, {}});
+  }
+  auto add = [&](const char* region, const char* product, double date, double amt, double qty) {
+    PivotCacheRecord rec;
+    rec.cells.push_back(owned_text(cache, region));
+    rec.cells.push_back(owned_text(cache, product));
+    rec.cells.push_back(Value::number(date));
+    rec.cells.push_back(Value::number(amt));
+    rec.cells.push_back(Value::number(qty));
+    cache.mutable_records().push_back(std::move(rec));
+  };
+  add("East", "Apple", 45296, 10, 1);
+  add("West", "Apple", 45328, 20, 2);
+  add("North", "Apple", 45358, 30, 3);
+  add("East", "Pear", 45390, 40, 4);
+  add("West", "Pear", 45421, 50, 1);
+  add("North", "Pear", 45453, 60, 2);
+  add("East", "Apple", 45484, 70, 3);
+  add("West", "Apple", 45516, 80, 4);
+  add("North", "Apple", 45548, 90, 1);
+  add("East", "Pear", 45579, 100, 2);
+  add("West", "Pear", 45611, 110, 3);
+  add("North", "Pear", 45642, 120, 4);
+  return cache;
+}
+
+/// Region items as the fixtures wrote them (East, North, West), Product (Apple, Pear), Qty (1..4).
+const WrittenItems kLineShapesItems = {{"East", "North", "West"}, {"Apple", "Pear"}, {}, {}, {"1", "2", "3", "4"}};
+
+/// The fixtures' report: `rows` on the rows, Sum of Amt and Sum of Qty as data fields.
+PivotTable build_line_shapes_table(PivotLayout layout, std::vector<std::uint32_t> rows) {
+  PivotTable table;
+  table.set_name("PivotTable1");
+  table.set_pivot_cache_id(kCacheId);
+  table.set_anchor(2, 0, 1, 1);
+  for (const char* name : {"Region", "Product", "Date", "Amt", "Qty"}) {
+    PivotField field;
+    field.source_name = name;
+    field.axis = PivotAxis::None;
+    table.mutable_fields().push_back(std::move(field));
+  }
+  for (const char* name : {"East", "North", "West"}) {
+    PivotItem item;
+    item.name = name;
+    table.mutable_fields()[0].items.push_back(std::move(item));
+  }
+  for (const char* name : {"Apple", "Pear"}) {
+    PivotItem item;
+    item.name = name;
+    table.mutable_fields()[1].items.push_back(std::move(item));
+  }
+  for (const std::uint32_t field : rows) {
+    table.mutable_fields()[field].axis = PivotAxis::Row;
+  }
+  table.mutable_row_field_order() = std::move(rows);
+  for (const auto& [name, field_index] :
+       {std::pair<const char*, std::uint32_t>{"Sum of Amt", 3U}, {"Sum of Qty", 4U}}) {
+    PivotDataField data;
+    data.name = name;
+    data.field_index = field_index;
+    data.aggregation = Aggregation::Sum;
+    table.mutable_data_fields().push_back(std::move(data));
+  }
+  table.set_layout(layout);
+  return table;
+}
+
+// M1a, M1b: compact and outline write the same lines.
+TEST(PivotLineItems, ValuesAboveTwoRowFieldsInCompactAndOutline) {
+  const PivotCache cache = build_line_shapes_cache();
+  for (const PivotLayout form : {PivotLayout::Compact, PivotLayout::Outline}) {
+    PivotTable table = build_line_shapes_table(form, {0, 1});
+    table.set_row_values_position(0);
+    auto p = project(table, cache);
+    ASSERT_NE(p, nullptr);
+    EXPECT_FALSE(p->items.row_refusal.has_value());
+    EXPECT_EQ(encode(p->items.rows, kLineShapesItems),
+              "<i><x/></i><i r=\"1\"><x/></i><i r=\"2\"><x/></i><i r=\"2\"><x v=\"1\"/></i><i r=\"1\"><x v=\"1\"/></i>"
+              "<i r=\"2\"><x/></i><i r=\"2\"><x v=\"1\"/></i><i r=\"1\"><x v=\"2\"/></i><i r=\"2\"><x/></i>"
+              "<i r=\"2\"><x v=\"1\"/></i><i i=\"1\"><x v=\"1\"/></i><i r=\"1\" i=\"1\"><x/></i>"
+              "<i r=\"2\" i=\"1\"><x/></i><i r=\"2\" i=\"1\"><x v=\"1\"/></i><i r=\"1\" i=\"1\"><x v=\"1\"/></i>"
+              "<i r=\"2\" i=\"1\"><x/></i><i r=\"2\" i=\"1\"><x v=\"1\"/></i><i r=\"1\" i=\"1\"><x v=\"2\"/></i>"
+              "<i r=\"2\" i=\"1\"><x/></i><i r=\"2\" i=\"1\"><x v=\"1\"/></i><i t=\"grand\"><x/></i>"
+              "<i t=\"grand\" i=\"1\"><x/></i>");
+    EXPECT_EQ(encode(p->items.cols, kLineShapesItems), "<i/>");
+  }
+}
+
+// M1c.
+TEST(PivotLineItems, ValuesAboveTwoRowFieldsInTabular) {
+  const PivotCache cache = build_line_shapes_cache();
+  PivotTable table = build_line_shapes_table(PivotLayout::Tabular, {0, 1});
+  table.set_row_values_position(0);
+  auto p = project(table, cache);
+  ASSERT_NE(p, nullptr);
+  EXPECT_FALSE(p->items.row_refusal.has_value());
+  EXPECT_EQ(encode(p->items.rows, kLineShapesItems),
+            "<i><x/><x/><x/></i><i r=\"2\"><x v=\"1\"/></i><i t=\"default\" r=\"1\"><x/></i>"
+            "<i r=\"1\"><x v=\"1\"/><x/></i><i r=\"2\"><x v=\"1\"/></i><i t=\"default\" r=\"1\"><x v=\"1\"/></i>"
+            "<i r=\"1\"><x v=\"2\"/><x/></i><i r=\"2\"><x v=\"1\"/></i><i t=\"default\" r=\"1\"><x v=\"2\"/></i>"
+            "<i i=\"1\"><x v=\"1\"/><x/><x/></i><i r=\"2\" i=\"1\"><x v=\"1\"/></i>"
+            "<i t=\"default\" r=\"1\" i=\"1\"><x/></i><i r=\"1\" i=\"1\"><x v=\"1\"/><x/></i>"
+            "<i r=\"2\" i=\"1\"><x v=\"1\"/></i><i t=\"default\" r=\"1\" i=\"1\"><x v=\"1\"/></i>"
+            "<i r=\"1\" i=\"1\"><x v=\"2\"/><x/></i><i r=\"2\" i=\"1\"><x v=\"1\"/></i>"
+            "<i t=\"default\" r=\"1\" i=\"1\"><x v=\"2\"/></i><i t=\"grand\"><x/></i><i t=\"grand\" i=\"1\"><x/></i>");
+  EXPECT_EQ(encode(p->items.cols, kLineShapesItems), "<i/>");
+}
+
+// M2b, M2c: the collapsed item's data lines skip its hidden level, with no subtotal lines of its own.
+TEST(PivotLineItems, CollapsedOuterItemWithValuesInnermostKeepsItsDataLines) {
+  const PivotCache cache = build_line_shapes_cache();
+  for (const PivotLayout form : {PivotLayout::Compact, PivotLayout::Outline}) {
+    PivotTable table = build_line_shapes_table(form, {0, 1});
+    table.set_row_values_position(2);
+    table.mutable_fields()[0].items[0].show_detail = false;
+    auto p = project(table, cache);
+    ASSERT_NE(p, nullptr);
+    EXPECT_FALSE(p->items.row_refusal.has_value());
+    EXPECT_EQ(encode(p->items.rows, kLineShapesItems),
+              "<i><x/></i><i r=\"2\"><x/></i><i r=\"2\" i=\"1\"><x v=\"1\"/></i><i><x v=\"1\"/></i>"
+              "<i r=\"1\"><x/></i><i r=\"2\"><x/></i><i r=\"2\" i=\"1\"><x v=\"1\"/></i><i r=\"1\"><x v=\"1\"/></i>"
+              "<i r=\"2\"><x/></i><i r=\"2\" i=\"1\"><x v=\"1\"/></i><i t=\"default\"><x v=\"1\"/></i>"
+              "<i t=\"default\" i=\"1\"><x v=\"1\"/></i><i><x v=\"2\"/></i><i r=\"1\"><x/></i><i r=\"2\"><x/></i>"
+              "<i r=\"2\" i=\"1\"><x v=\"1\"/></i><i r=\"1\"><x v=\"1\"/></i><i r=\"2\"><x/></i>"
+              "<i r=\"2\" i=\"1\"><x v=\"1\"/></i><i t=\"default\"><x v=\"2\"/></i>"
+              "<i t=\"default\" i=\"1\"><x v=\"2\"/></i><i t=\"grand\"><x/></i><i t=\"grand\" i=\"1\"><x/></i>");
+    EXPECT_EQ(encode(p->items.cols, kLineShapesItems), "<i/>");
+  }
+}
+
+// M3: the collapsed inner item lists the path down to its own level, and has no subtotal line.
+TEST(PivotLineItems, CollapsedInnerItemInTabularStopsAtItsLevel) {
+  const PivotCache cache = build_line_shapes_cache();
+  PivotTable table = build_line_shapes_table(PivotLayout::Tabular, {0, 1, 4});
+  table.mutable_fields()[1].items[0].show_detail = false;
+  auto p = project(table, cache);
+  ASSERT_NE(p, nullptr);
+  EXPECT_FALSE(p->items.row_refusal.has_value());
+  EXPECT_EQ(
+      encode(p->items.rows, kLineShapesItems),
+      "<i><x/><x/></i><i r=\"1\"><x v=\"1\"/><x v=\"1\"/></i><i r=\"2\"><x v=\"3\"/></i>"
+      "<i t=\"default\" r=\"1\"><x v=\"1\"/></i><i t=\"default\"><x/></i><i><x v=\"1\"/><x/></i>"
+      "<i r=\"1\"><x v=\"1\"/><x v=\"1\"/></i><i r=\"2\"><x v=\"3\"/></i><i t=\"default\" r=\"1\"><x v=\"1\"/></i>"
+      "<i t=\"default\"><x v=\"1\"/></i><i><x v=\"2\"/><x/></i><i r=\"1\"><x v=\"1\"/><x/></i>"
+      "<i r=\"2\"><x v=\"2\"/></i><i t=\"default\" r=\"1\"><x v=\"1\"/></i><i t=\"default\"><x v=\"2\"/></i>"
+      "<i t=\"grand\"><x/></i>");
+  EXPECT_EQ(encode(p->items.cols, kLineShapesItems), kTwoDataFieldCols);
+}
+
+// M4a: each function closes the group once per data field, function-major.
+TEST(PivotLineItems, CustomSubtotalsAboveTheValuesLevelRepeatPerDataField) {
+  const PivotCache cache = build_line_shapes_cache();
+  PivotTable table = build_line_shapes_table(PivotLayout::Compact, {0, 1});
+  table.set_row_values_position(2);
+  table.mutable_fields()[0].subtotal_fns = {SubtotalFn::Sum, SubtotalFn::Count};
+  auto p = project(table, cache);
+  ASSERT_NE(p, nullptr);
+  EXPECT_FALSE(p->items.row_refusal.has_value());
+  EXPECT_EQ(encode(p->items.rows, kLineShapesItems),
+            "<i><x/></i><i r=\"1\"><x/></i><i r=\"2\"><x/></i><i r=\"2\" i=\"1\"><x v=\"1\"/></i>"
+            "<i r=\"1\"><x v=\"1\"/></i><i r=\"2\"><x/></i><i r=\"2\" i=\"1\"><x v=\"1\"/></i><i t=\"sum\"><x/></i>"
+            "<i t=\"sum\" i=\"1\"><x/></i><i t=\"countA\"><x/></i><i t=\"countA\" i=\"1\"><x/></i><i><x v=\"1\"/></i>"
+            "<i r=\"1\"><x/></i><i r=\"2\"><x/></i><i r=\"2\" i=\"1\"><x v=\"1\"/></i><i r=\"1\"><x v=\"1\"/></i>"
+            "<i r=\"2\"><x/></i><i r=\"2\" i=\"1\"><x v=\"1\"/></i><i t=\"sum\"><x v=\"1\"/></i>"
+            "<i t=\"sum\" i=\"1\"><x v=\"1\"/></i><i t=\"countA\"><x v=\"1\"/></i>"
+            "<i t=\"countA\" i=\"1\"><x v=\"1\"/></i><i><x v=\"2\"/></i><i r=\"1\"><x/></i><i r=\"2\"><x/></i>"
+            "<i r=\"2\" i=\"1\"><x v=\"1\"/></i><i r=\"1\"><x v=\"1\"/></i><i r=\"2\"><x/></i>"
+            "<i r=\"2\" i=\"1\"><x v=\"1\"/></i><i t=\"sum\"><x v=\"2\"/></i><i t=\"sum\" i=\"1\"><x v=\"2\"/></i>"
+            "<i t=\"countA\"><x v=\"2\"/></i><i t=\"countA\" i=\"1\"><x v=\"2\"/></i><i t=\"grand\"><x/></i>"
+            "<i t=\"grand\" i=\"1\"><x/></i>");
+}
+
+// M4b.
+TEST(PivotLineItems, CustomSubtotalsAboveTheValuesLevelInTabular) {
+  const PivotCache cache = build_line_shapes_cache();
+  PivotTable table = build_line_shapes_table(PivotLayout::Tabular, {0, 1});
+  table.set_row_values_position(2);
+  table.mutable_fields()[0].subtotal_fns = {SubtotalFn::Sum, SubtotalFn::Count};
+  auto p = project(table, cache);
+  ASSERT_NE(p, nullptr);
+  EXPECT_FALSE(p->items.row_refusal.has_value());
+  EXPECT_EQ(encode(p->items.rows, kLineShapesItems),
+            "<i><x/><x/><x/></i><i r=\"2\" i=\"1\"><x v=\"1\"/></i><i r=\"1\"><x v=\"1\"/><x/></i>"
+            "<i r=\"2\" i=\"1\"><x v=\"1\"/></i><i t=\"sum\"><x/></i><i t=\"sum\" i=\"1\"><x/></i>"
+            "<i t=\"countA\"><x/></i><i t=\"countA\" i=\"1\"><x/></i><i><x v=\"1\"/><x/><x/></i>"
+            "<i r=\"2\" i=\"1\"><x v=\"1\"/></i><i r=\"1\"><x v=\"1\"/><x/></i><i r=\"2\" i=\"1\"><x v=\"1\"/></i>"
+            "<i t=\"sum\"><x v=\"1\"/></i><i t=\"sum\" i=\"1\"><x v=\"1\"/></i><i t=\"countA\"><x v=\"1\"/></i>"
+            "<i t=\"countA\" i=\"1\"><x v=\"1\"/></i><i><x v=\"2\"/><x/><x/></i><i r=\"2\" i=\"1\"><x v=\"1\"/></i>"
+            "<i r=\"1\"><x v=\"1\"/><x/></i><i r=\"2\" i=\"1\"><x v=\"1\"/></i><i t=\"sum\"><x v=\"2\"/></i>"
+            "<i t=\"sum\" i=\"1\"><x v=\"2\"/></i><i t=\"countA\"><x v=\"2\"/></i>"
+            "<i t=\"countA\" i=\"1\"><x v=\"2\"/></i><i t=\"grand\"><x/></i><i t=\"grand\" i=\"1\"><x/></i>");
+}
+
+// M5 (no row fields), M5b (Qty on the rows).
+TEST(PivotLineItems, CustomSubtotalsOnAColumnField) {
+  const PivotCache cache = build_line_shapes_cache();
+  const char* const kCols =
+      "<i><x/><x/></i><i r=\"1\"><x v=\"1\"/></i><i t=\"sum\"><x/></i><i t=\"countA\"><x/></i>"
+      "<i><x v=\"1\"/><x/></i><i r=\"1\"><x v=\"1\"/></i><i t=\"sum\"><x v=\"1\"/></i>"
+      "<i t=\"countA\"><x v=\"1\"/></i><i><x v=\"2\"/><x/></i><i r=\"1\"><x v=\"1\"/></i>"
+      "<i t=\"sum\"><x v=\"2\"/></i><i t=\"countA\"><x v=\"2\"/></i><i t=\"grand\"><x/></i>";
+  const std::pair<std::vector<std::uint32_t>, const char*> cases[] = {
+      {{}, "<i/>"},
+      {{4}, "<i><x/></i><i><x v=\"1\"/></i><i><x v=\"2\"/></i><i><x v=\"3\"/></i><i t=\"grand\"><x/></i>"},
+  };
+  for (const auto& [rows, want_rows] : cases) {
+    PivotTable table = build_line_shapes_table(PivotLayout::Compact, rows);
+    move_to_columns(table, {0, 1});
+    table.mutable_data_fields().pop_back();
+    table.mutable_fields()[0].subtotal_fns = {SubtotalFn::Sum, SubtotalFn::Count};
+    auto p = project(table, cache);
+    ASSERT_NE(p, nullptr);
+    EXPECT_FALSE(p->items.col_refusal.has_value());
+    EXPECT_EQ(encode(p->items.cols, kLineShapesItems), kCols);
+    EXPECT_EQ(encode(p->items.rows, kLineShapesItems), want_rows);
+  }
+}
+
+// M7a: an inner field's own `compact` moves its labels, not its lines.
+TEST(PivotLineItems, CompactInnerFieldInAnOutlineTableKeepsTheGroupLines) {
+  const PivotCache cache = build_line_shapes_cache();
+  PivotTable table = build_line_shapes_table(PivotLayout::Outline, {0, 1});
+  table.mutable_fields()[1].passthrough_attrs = {{"compact", "1"}, {"outline", "1"}};
+  auto p = project(table, cache);
+  ASSERT_NE(p, nullptr);
+  EXPECT_FALSE(p->items.row_refusal.has_value());
+  EXPECT_EQ(encode(p->items.rows, kLineShapesItems),
+            "<i><x/></i><i r=\"1\"><x/></i><i r=\"1\"><x v=\"1\"/></i><i><x v=\"1\"/></i><i r=\"1\"><x/></i>"
+            "<i r=\"1\"><x v=\"1\"/></i><i><x v=\"2\"/></i><i r=\"1\"><x/></i><i r=\"1\"><x v=\"1\"/></i>"
+            "<i t=\"grand\"><x/></i>");
+  EXPECT_EQ(encode(p->items.cols, kLineShapesItems), kTwoDataFieldCols);
+}
+
+// C01: compact measured; compact and outline lines agree everywhere else measured (M1a/M1b, M2b/M2c).
+TEST(PivotLineItems, SubtotalBelowItsGroupInCompactAndOutline) {
+  const PivotCache cache = build_line_shapes_cache();
+  for (const PivotLayout form : {PivotLayout::Compact, PivotLayout::Outline}) {
+    PivotTable table = build_line_shapes_table(form, {0, 1});
+    table.mutable_fields()[0].subtotal_top = false;
+    table.mutable_fields()[1].subtotal_top = false;
+    auto p = project(table, cache);
+    ASSERT_NE(p, nullptr);
+    EXPECT_FALSE(p->items.row_refusal.has_value());
+    EXPECT_EQ(encode(p->items.rows, kLineShapesItems),
+              "<i><x/></i><i r=\"1\"><x/></i><i r=\"1\"><x v=\"1\"/></i><i t=\"default\"><x/></i><i><x v=\"1\"/></i>"
+              "<i r=\"1\"><x/></i><i r=\"1\"><x v=\"1\"/></i><i t=\"default\"><x v=\"1\"/></i><i><x v=\"2\"/></i>"
+              "<i r=\"1\"><x/></i><i r=\"1\"><x v=\"1\"/></i><i t=\"default\"><x v=\"2\"/></i>"
+              "<i t=\"grand\"><x/></i>");
+    EXPECT_EQ(encode(p->items.cols, kLineShapesItems), kTwoDataFieldCols);
+  }
+}
+
+// C04: items without data would be plain lines like any other.
+TEST(PivotLineItems, ShowAllOnTheInnermostFieldIsOneLinePerItem) {
+  const PivotCache cache = build_line_shapes_cache();
+  PivotTable table = build_line_shapes_table(PivotLayout::Compact, {0});
+  table.mutable_fields()[0].show_all = true;
+  auto p = project(table, cache);
+  ASSERT_NE(p, nullptr);
+  EXPECT_FALSE(p->items.row_refusal.has_value());
+  EXPECT_EQ(encode(p->items.rows, kLineShapesItems), kRegionRows);
+  EXPECT_EQ(encode(p->items.cols, kLineShapesItems), kTwoDataFieldCols);
+}
+
+// B04: `colGrandTotals="0"` drops the column grand lines, the rows keep theirs.
+TEST(PivotLineItems, ColumnGrandTotalsOffDropsTheColumnGrandLines) {
+  const PivotCache cache = build_line_shapes_cache();
+  PivotTable table = build_line_shapes_table(PivotLayout::Compact, {0});
+  move_to_columns(table, {1});
+  table.set_col_values_position(0);
+  table.set_grand_totals(/*rows=*/false, /*cols=*/true);
+  auto p = project(table, cache);
+  ASSERT_NE(p, nullptr);
+  EXPECT_FALSE(p->items.col_refusal.has_value());
+  EXPECT_EQ(encode(p->items.cols, kLineShapesItems),
+            "<i><x/><x/></i><i r=\"1\"><x v=\"1\"/></i><i i=\"1\"><x v=\"1\"/><x/></i>"
+            "<i r=\"1\" i=\"1\"><x v=\"1\"/></i>");
+  EXPECT_EQ(encode(p->items.rows, kLineShapesItems), kRegionRows);
+}
+
+// ---------------------------------------------------------------------------
 // Refused shapes: the axis is refused, the other axis is still produced
 // ---------------------------------------------------------------------------
 
-TEST(PivotLineItems, RefusesACollapsedRowItemWithValuesBelow) {
+TEST(PivotLineItems, RefusesACollapsedTabularRowItemWithValuesBelow) {
   const PivotCache cache = build_region_product_cache();
-  PivotTable table = build_region_product_table(PivotLayout::Outline);
+  PivotTable table = build_region_product_table(PivotLayout::Tabular);
   table.set_row_values_position(2);
   table.mutable_fields()[0].items[0].show_detail = false;
   auto p = project(table, cache);
@@ -532,6 +822,17 @@ TEST(PivotLineItems, RefusesACollapsedRowItemWithValuesBelow) {
   EXPECT_TRUE(p->items.rows.empty());
   EXPECT_FALSE(p->items.col_refusal.has_value());
   EXPECT_EQ(encode(p->items.cols, kRegionProductItems), "<i/>");
+}
+
+TEST(PivotLineItems, RefusesACollapsedRowItemWithAFieldBelowTheValuesLevel) {
+  const PivotCache cache = build_region_product_cache();
+  PivotTable table = build_region_product_table(PivotLayout::Outline, {0, 1, 3});
+  table.set_row_values_position(2);
+  table.mutable_fields()[0].items[0].show_detail = false;
+  auto p = project(table, cache);
+  ASSERT_NE(p, nullptr);
+  expect_refused(p->items.row_refusal);
+  EXPECT_FALSE(p->items.col_refusal.has_value());
 }
 
 TEST(PivotLineItems, RefusesACollapsedColumnItemWithValuesBelow) {
@@ -547,43 +848,12 @@ TEST(PivotLineItems, RefusesACollapsedColumnItemWithValuesBelow) {
   EXPECT_EQ(encode(p->items.rows, kRegionProductItems), "<i/>");
 }
 
-TEST(PivotLineItems, RefusesACollapsedInnerItemInTabular) {
-  const PivotCache cache = build_region_product_cache();
-  PivotTable table = build_region_product_table(PivotLayout::Tabular, {0, 1, 3});
-  table.mutable_fields()[1].items[0].show_detail = false;
-  auto p = project(table, cache);
-  ASSERT_NE(p, nullptr);
-  expect_refused(p->items.row_refusal);
-  EXPECT_EQ(encode(p->items.cols, kRegionProductItems), kTwoDataFieldCols);
-}
-
-TEST(PivotLineItems, RefusesRealFieldsWithChildrenBelowTheValuesLevel) {
-  const PivotCache cache = build_region_product_cache();
-  PivotTable table = build_region_product_table(PivotLayout::Outline);
-  table.set_row_values_position(0);
-  auto p = project(table, cache);
-  ASSERT_NE(p, nullptr);
-  expect_refused(p->items.row_refusal);
-  EXPECT_EQ(encode(p->items.cols, kRegionProductItems), "<i/>");
-}
-
-TEST(PivotLineItems, RefusesCustomSubtotalsWithValuesBelow) {
-  const PivotCache cache = build_region_product_cache();
-  PivotTable table = build_region_product_table(PivotLayout::Outline);
-  table.set_row_values_position(2);
-  table.mutable_fields()[0].subtotal_fns = {SubtotalFn::Sum, SubtotalFn::Average};
-  auto p = project(table, cache);
-  ASSERT_NE(p, nullptr);
-  expect_refused(p->items.row_refusal);
-  EXPECT_EQ(encode(p->items.cols, kRegionProductItems), "<i/>");
-}
-
-TEST(PivotLineItems, RefusesCustomSubtotalsOnTheColumnAxis) {
+TEST(PivotLineItems, RefusesACollapsedInnerColumnItem) {
   const PivotCache cache = build_region_product_cache();
   PivotTable table = build_region_product_table(PivotLayout::Outline, {});
-  move_to_columns(table, {0, 1});
+  move_to_columns(table, {0, 1, 3});
   table.mutable_data_fields().pop_back();
-  table.mutable_fields()[0].subtotal_fns = {SubtotalFn::Max};
+  table.mutable_fields()[1].items[0].show_detail = false;
   auto p = project(table, cache);
   ASSERT_NE(p, nullptr);
   expect_refused(p->items.col_refusal);
@@ -591,10 +861,41 @@ TEST(PivotLineItems, RefusesCustomSubtotalsOnTheColumnAxis) {
   EXPECT_EQ(encode(p->items.rows, kRegionProductItems), "<i/>");
 }
 
-TEST(PivotLineItems, RefusesARowFieldWithItsOwnForm) {
+TEST(PivotLineItems, RefusesRealFieldsWithChildrenBelowAnInnerOrColumnValuesLevel) {
+  const PivotCache cache = build_region_product_cache();
+  PivotTable rows = build_region_product_table(PivotLayout::Outline, {0, 1, 3});
+  rows.set_row_values_position(1);
+  auto p = project(rows, cache);
+  ASSERT_NE(p, nullptr);
+  expect_refused(p->items.row_refusal);
+  EXPECT_EQ(encode(p->items.cols, kRegionProductItems), "<i/>");
+
+  PivotTable cols = build_region_product_table(PivotLayout::Outline, {});
+  move_to_columns(cols, {0, 1});
+  cols.set_col_values_position(0);
+  auto q = project(cols, cache);
+  ASSERT_NE(q, nullptr);
+  expect_refused(q->items.col_refusal);
+  EXPECT_EQ(encode(q->items.rows, kRegionProductItems), "<i/>");
+}
+
+TEST(PivotLineItems, RefusesColumnCustomSubtotalsWithValuesBelow) {
+  const PivotCache cache = build_region_product_cache();
+  PivotTable table = build_region_product_table(PivotLayout::Outline, {});
+  move_to_columns(table, {0, 1});
+  table.set_col_values_position(2);
+  table.mutable_fields()[0].subtotal_fns = {SubtotalFn::Sum, SubtotalFn::Average};
+  auto p = project(table, cache);
+  ASSERT_NE(p, nullptr);
+  expect_refused(p->items.col_refusal);
+  EXPECT_FALSE(p->items.row_refusal.has_value());
+  EXPECT_EQ(encode(p->items.rows, kRegionProductItems), "<i/>");
+}
+
+TEST(PivotLineItems, RefusesARowFieldWithItsOwnOutlineForm) {
   const PivotCache cache = build_region_product_cache();
   PivotTable table = build_region_product_table(PivotLayout::Compact);
-  table.mutable_fields()[0].passthrough_attrs.emplace_back("compact", "0");
+  table.mutable_fields()[0].passthrough_attrs = {{"compact", "0"}, {"outline", "0"}};
   auto p = project(table, cache);
   ASSERT_NE(p, nullptr);
   expect_refused(p->items.row_refusal);
@@ -644,18 +945,6 @@ TEST(PivotLineItems, RefusesTheLegacyProjection) {
   expect_refused(p->items.col_refusal);
 }
 
-TEST(PivotLineItems, RefusesASubtotalBelowItsGroupInCompactAndOutline) {
-  const PivotCache cache = build_region_product_cache();
-  for (const PivotLayout form : {PivotLayout::Compact, PivotLayout::Outline}) {
-    PivotTable table = build_region_product_table(form);
-    table.mutable_fields()[0].subtotal_top = false;
-    auto p = project(table, cache);
-    ASSERT_NE(p, nullptr);
-    expect_refused(p->items.row_refusal);
-    EXPECT_EQ(encode(p->items.cols, kRegionProductItems), kTwoDataFieldCols);
-  }
-}
-
 TEST(PivotLineItems, RefusesAnInnerBlankRowInCompactAndOutline) {
   const PivotCache cache = build_region_product_cache();
   for (const PivotLayout form : {PivotLayout::Compact, PivotLayout::Outline}) {
@@ -668,26 +957,15 @@ TEST(PivotLineItems, RefusesAnInnerBlankRowInCompactAndOutline) {
   }
 }
 
-TEST(PivotLineItems, RefusesAFieldListingItemsWithoutData) {
+TEST(PivotLineItems, RefusesAnOuterFieldListingItemsWithoutData) {
   const PivotCache cache = build_region_product_cache();
   PivotTable table = build_region_product_table(PivotLayout::Outline);
-  table.mutable_fields()[1].show_all = true;
+  table.mutable_fields()[0].show_all = true;
   auto p = project(table, cache);
   ASSERT_NE(p, nullptr);
   expect_refused(p->items.row_refusal);
   EXPECT_FALSE(p->items.col_refusal.has_value());
   EXPECT_EQ(encode(p->items.cols, kRegionProductItems), kTwoDataFieldCols);
-}
-
-TEST(PivotLineItems, RefusesColumnGrandTotalsOff) {
-  const PivotCache cache = build_region_product_cache();
-  PivotTable table = build_region_product_table(PivotLayout::Outline);
-  table.set_grand_totals(/*rows=*/false, /*cols=*/true);
-  auto p = project(table, cache);
-  ASSERT_NE(p, nullptr);
-  expect_refused(p->items.col_refusal);
-  EXPECT_FALSE(p->items.row_refusal.has_value());
-  EXPECT_EQ(encode(p->items.rows, kRegionProductItems), kOutlineTwoRows);
 }
 
 // ---------------------------------------------------------------------------
