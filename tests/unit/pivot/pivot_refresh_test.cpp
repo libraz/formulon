@@ -14,6 +14,8 @@
 #include "eval/function_registry.h"
 #include "excel_profile.h"
 #include "gtest/gtest.h"
+#include "io/ooxml_reader.h"
+#include "io/ooxml_writer.h"
 #include "merge_range.h"
 #include "pivot/field_remap.h"
 #include "pivot/pivot_cache.h"
@@ -284,6 +286,41 @@ bool ReportShows(Workbook& wb, std::size_t pivot_index, double value) {
 // ===========================================================================
 // Rules: the measured header, typing, item and reconciliation rules
 // ===========================================================================
+
+// Saves `wb` as .xlsx and reads it back.
+Workbook SaveAndReload(const Workbook& wb) {
+  auto bytes = io::write_ooxml(wb);
+  EXPECT_TRUE(static_cast<bool>(bytes));
+  auto read = io::read_ooxml(io::ByteSpan{bytes.value().data(), bytes.value().size()});
+  EXPECT_TRUE(static_cast<bool>(read));
+  return std::move(read.value().workbook);
+}
+
+TEST(PivotRefresh, SaveHandFilledCacheAsksExcelToRefreshOnLoad) {
+  Workbook wb = Book();
+  Workbook saved = SaveAndReload(wb);
+  EXPECT_TRUE(saved.pivot_caches().front()->refresh_on_load());
+  // The built table still saves the lines of its projected report.
+  EXPECT_NE(saved.sheet(kPivotSheet).pivot_tables().front()->raw_passthrough_after_row_fields().find("<rowItems"),
+            std::string::npos);
+}
+
+TEST(PivotRefresh, SaveRefreshedCacheNeedsNoRefreshOnLoad) {
+  Workbook wb = Book();
+  ASSERT_TRUE(static_cast<bool>(Refresh(wb)));
+  ASSERT_TRUE(CacheOf(wb).records_from_source());
+  Workbook saved = SaveAndReload(wb);
+  EXPECT_FALSE(saved.pivot_caches().front()->refresh_on_load());
+  EXPECT_NE(saved.sheet(kPivotSheet).pivot_tables().front()->raw_passthrough_after_row_fields().find("<rowItems"),
+            std::string::npos);
+}
+
+TEST(PivotRefresh, EditingARefreshedCacheMakesItHandFilled) {
+  Workbook wb = Book();
+  ASSERT_TRUE(static_cast<bool>(Refresh(wb)));
+  CacheOf(wb).mutable_records().front().cells[2] = Value::number(1.0);
+  EXPECT_FALSE(CacheOf(wb).records_from_source());
+}
 
 TEST(PivotRefresh, RulesBlankHeaderTakesLocaleWordAfterLiterals) {
   EXPECT_EQ(pivot::refreshed_field_names({"", "フィールド1"}, "フィールド"),

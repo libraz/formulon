@@ -282,10 +282,22 @@ class PivotCache {
   void set_cache_id(std::uint32_t id) { cache_id_ = id; }
 
   const std::vector<PivotCacheField>& fields() const { return fields_; }
-  std::vector<PivotCacheField>& mutable_fields() { return fields_; }
+  std::vector<PivotCacheField>& mutable_fields() {
+    records_from_source_ = false;
+    return fields_;
+  }
 
   const std::vector<PivotCacheRecord>& records() const { return records_; }
-  std::vector<PivotCacheRecord>& mutable_records() { return records_; }
+  std::vector<PivotCacheRecord>& mutable_records() {
+    records_from_source_ = false;
+    return records_;
+  }
+
+  /// True while the fields and records are exactly what a refresh read from
+  /// the worksheet source: set by the refresh, cleared by any edit to them or
+  /// to the source.
+  bool records_from_source() const { return records_from_source_; }
+  void mark_records_from_source() { records_from_source_ = true; }
 
   /// Unmodelled `<pivotCacheDefinition>` root attributes (`refreshedBy`,
   /// `refreshedDate`, `createdVersion`, ...), captured as
@@ -319,6 +331,7 @@ class PivotCache {
   /// was edited rather than how much data it holds. One storage slot per
   /// written coordinate bounds the store by the cells that exist.
   bool set_record_text(std::size_t record_idx, std::size_t field_idx, std::string_view utf8) {
+    records_from_source_ = false;
     if (record_idx >= records_.size()) {
       return false;
     }
@@ -346,7 +359,10 @@ class PivotCache {
   /// The `<worksheetSource>` reference under `<cacheSource>`. Preserved so
   /// Excel's Refresh can locate the source range / defined name.
   const WorksheetSource& worksheet_source() const { return worksheet_source_; }
-  WorksheetSource& mutable_worksheet_source() { return worksheet_source_; }
+  WorksheetSource& mutable_worksheet_source() {
+    records_from_source_ = false;
+    return worksheet_source_;
+  }
 
   /// Every `<cacheSource>` attribute (`type`, `connectionId`) as read; empty
   /// for a cache built in memory, which is written as a worksheet source.
@@ -412,6 +428,7 @@ class PivotCache {
   std::uint32_t cache_id_ = 0;
   std::vector<PivotCacheField> fields_;
   std::vector<PivotCacheRecord> records_;
+  bool records_from_source_ = false;
   std::deque<std::string> text_storage_;
   WorksheetSource worksheet_source_;
   std::vector<std::pair<std::string, std::string>> passthrough_attrs_;

@@ -297,6 +297,33 @@ TEST(PivotCacheWritePlan, InMemoryCacheRefreshesOnLoad) {
   EXPECT_TRUE(Contains(write_pivot_cache_definition(cache, &plan), " refreshOnLoad=\"1\""));
 }
 
+TEST(PivotCacheWritePlan, InMemoryCacheCarriesExcelsVersionAttributes) {
+  const eval::ScopedEvalProfile scope(default_excel_profile());
+  pivot::PivotCache cache;
+  AddField(cache, "Amt");
+  AddRecord(cache, {Value::number(1)});
+  const PivotCacheWritePlan plan = build_pivot_cache_write_plan(cache, {});
+  const std::string xml = write_pivot_cache_definition(cache, &plan);
+  EXPECT_TRUE(Contains(xml, " createdVersion=\"8\" refreshedVersion=\"8\" minRefreshableVersion=\"3\"")) << xml;
+  EXPECT_FALSE(Contains(xml, "refreshedBy")) << xml;
+  EXPECT_FALSE(Contains(xml, "refreshedDate")) << xml;
+}
+
+TEST(PivotCacheWritePlan, InMemoryCacheARefreshFilledDoesNotRefreshOnLoad) {
+  const eval::ScopedEvalProfile scope(default_excel_profile());
+  pivot::PivotCache cache;
+  AddField(cache, "Amt");
+  AddRecord(cache, {Value::number(1)});
+  cache.mark_records_from_source();
+  const PivotCacheWritePlan plan = build_pivot_cache_write_plan(cache, {});
+  EXPECT_FALSE(plan.refresh_on_load);
+  EXPECT_FALSE(Contains(write_pivot_cache_definition(cache, &plan), "refreshOnLoad")) << "refreshed records";
+
+  // Editing a record afterwards puts it back in the hand-filled case.
+  cache.mutable_records().front().cells[0] = Value::number(2);
+  EXPECT_TRUE(build_pivot_cache_write_plan(cache, {}).refresh_on_load);
+}
+
 // An in-memory date field grouped by months: serials 45306.75 (2024-01-15
 // 18:00) and 45495 (2024-07-22).
 pivot::PivotCache InMemoryMonthGroupedCache() {

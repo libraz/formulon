@@ -79,7 +79,8 @@ struct PivotCacheWritePlan {
 /// after the latest, both at midnight), and its records are written as `<d>`.
 ///
 /// `refresh_on_load` is set for a cache built in memory (no captured root
-/// attributes); the saver adds the caches whose edited tables get no items.
+/// attributes) whose records no refresh filled; the saver adds the caches
+/// whose built or edited tables get no items.
 ///
 /// `date1904` is the workbook's date system.
 ///

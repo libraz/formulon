@@ -97,7 +97,7 @@ struct ProjectedPivot {
   std::optional<PivotRenderedSpan> span;
   /// `<rowItems>` / `<colItems>` generated for an edited table.
   std::optional<PivotItemsXml> items;
-  /// The table was edited, so the items read with it no longer describe it.
+  /// The table was built in memory or edited, so no items read with it describe it.
   bool needs_items = false;
 };
 
@@ -117,7 +117,7 @@ struct ProjectedPivot {
 /// workbook's own profile is what makes the emitted `ref` agree with the
 /// grid Excel renders.
 ///
-/// Lines are generated only for an edited table whose definition was not read
+/// Lines are generated only for a built or edited table whose definition was not read
 /// from .xlsb (that reader decodes it in part) and whose projection is not
 /// pending, from the same projection while its result is alive; a refused
 /// shape or an item the written `<items>` lack leaves them out. `plan` is the
@@ -129,7 +129,8 @@ struct ProjectedPivot {
 /// fail to save because one pivot could not be evaluated.
 ProjectedPivot ProjectPivot(const Workbook& wb, const pivot::PivotTable& table, const PivotCacheWritePlan* plan) {
   ProjectedPivot out;
-  out.needs_items = table.layout_dirty();
+  // A table built in memory has no items read with it; an edited one has stale ones.
+  out.needs_items = table.layout_dirty() || table.definition_source() == pivot::PivotDefinitionSource::kBuilt;
   const pivot::PivotLayoutOptions options = pivot::pivot_layout_options_for(wb.excel_profile());
   const pivot::PivotCache* cache = wb.find_pivot_cache(table.pivot_cache_id());
   // Reuse the result a host evaluation left behind; otherwise evaluate

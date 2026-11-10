@@ -331,6 +331,7 @@ Expected<void, Error> Workbook::refresh_pivot_cache(std::uint32_t cache_id, cons
 
   // Phase 2: swap the cache and the definitions in, then project every report.
   pivot_caches_[slot] = std::make_unique<pivot::PivotCache>(std::move(plan.cache));
+  pivot_caches_[slot]->mark_records_from_source();
   for (Planned& entry : planned) {
     pivot::PivotTable& table = *sheets_[entry.sheet].mutable_pivot_tables()[entry.pivot];
     // The copy is a clone, whose runtime id is zero; the table stays the same pivot.
