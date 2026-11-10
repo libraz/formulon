@@ -31,7 +31,7 @@ import re
 import subprocess
 import sys
 from pathlib import Path
-from typing import Dict, Iterable, Iterator, List, Set, Tuple
+from typing import Dict, Iterable, Iterator, List, Optional, Set, Tuple
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 CHANGELOG = REPO_ROOT / "CHANGELOG.md"
@@ -181,10 +181,10 @@ def misses(text: str, current: Set[str], released: Set[str]) -> List[Tuple[int, 
     return out
 
 
-def main() -> int:
+def main(argv: Optional[List[str]] = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--snapshot", metavar="TAG", help="write tools/api/released/<version>.txt from a release tag")
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     if args.snapshot:
         write_snapshot(args.snapshot)
         return 0
