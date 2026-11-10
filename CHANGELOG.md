@@ -76,6 +76,10 @@ Upgrading from 0.18: see [Upgrading from 0.18 to 0.19](docs/releases/upgrading-0
   `fm_sheet_update_chart_display` takes a patch, formula entry fails with
   parser statuses 1000 to 1014, and enum constants start with their type name
   ([C ABI callers](docs/releases/upgrading-0.19.md#c-abi-callers)).
+- C ABI: `fm_sheet_set_cell_phonetic_runs`, `fm_sheet_add_threaded_comment`
+  and `fm_sheet_update_threaded_comment` take an `fm_text_offset_unit_t`
+  before the record, and phonetic runs and mentions carry their span in UTF-16
+  units and in code points.
 - JavaScript and Python: one `list*` method replaces each count and index
   pair; `addChart` takes a `ChartPlotType`, pivot filters `value` /
   `valueHigh`, AutoFilter custom filters `conditions`, and `CfMatch` is a
@@ -127,7 +131,8 @@ Upgrading from 0.18: see [Upgrading from 0.18 to 0.19](docs/releases/upgrading-0
   `recalcParallel()` picks the thread count); an extra argument throws
   `TypeError`.
 - `fm_get_last_parse_error` (`FormulonError.parseError`) reports the
-  `ParseErrorCode`, UTF-16 offsets, line and column of a parse failure.
+  `ParseErrorCode`, offsets, line and column of a parse failure, in UTF-16
+  units and in code points.
 - `getTypedValue`, `getTypedValues`, `getDate`, `getUsedRange`, `iterRows`,
   `evaluateTypedFormula`, `enumName` and `ExcelError`, with Python
   counterparts. A `Workbook` iterates its sheets, `Workbook.load`,
