@@ -1,0 +1,337 @@
+{
+ "meta": {
+  "case": "hdr_date",
+  "description": "Header row edited after the cache was built; field naming on Refresh.",
+  "excel_version": "16.114.4",
+  "expect": "ok",
+  "target": "mac-365-ja_JP",
+  "trigger": "refresh"
+ },
+ "projection": {
+  "caches": [
+   {
+    "definition": [
+     "pivotCacheDefinition",
+     {
+      "recordCount": "3"
+     },
+     [
+      [
+       "cacheSource",
+       {
+        "type": "worksheet"
+       },
+       [
+        [
+         "worksheetSource",
+         {
+          "ref": "A1:C4",
+          "sheet": "Sheet1"
+         },
+         []
+        ]
+       ]
+      ],
+      [
+       "cacheFields",
+       {
+        "count": "3"
+       },
+       [
+        [
+         "cacheField",
+         {
+          "name": "2026/1/2",
+          "numFmtId": "0"
+         },
+         [
+          [
+           "sharedItems",
+           {},
+           []
+          ]
+         ]
+        ],
+        [
+         "cacheField",
+         {
+          "name": "Amt",
+          "numFmtId": "0"
+         },
+         [
+          [
+           "sharedItems",
+           {
+            "containsInteger": "1",
+            "containsNumber": "1",
+            "containsSemiMixedTypes": "0",
+            "containsString": "0",
+            "maxValue": "3",
+            "minValue": "1"
+           },
+           []
+          ]
+         ]
+        ],
+        [
+         "cacheField",
+         {
+          "name": "Qty",
+          "numFmtId": "0"
+         },
+         [
+          [
+           "sharedItems",
+           {
+            "containsInteger": "1",
+            "containsNumber": "1",
+            "containsSemiMixedTypes": "0",
+            "containsString": "0",
+            "maxValue": "30",
+            "minValue": "10"
+           },
+           []
+          ]
+         ]
+        ]
+       ]
+      ]
+     ]
+    ],
+    "records": [
+     [
+      [
+       "s",
+       "x"
+      ],
+      [
+       "n",
+       "1"
+      ],
+      [
+       "n",
+       "10"
+      ]
+     ],
+     [
+      [
+       "s",
+       "y"
+      ],
+      [
+       "n",
+       "2"
+      ],
+      [
+       "n",
+       "20"
+      ]
+     ],
+     [
+      [
+       "s",
+       "x"
+      ],
+      [
+       "n",
+       "3"
+      ],
+      [
+       "n",
+       "30"
+      ]
+     ]
+    ]
+   }
+  ],
+  "formula_cells": {},
+  "pivots": [
+   {
+    "cache": 0,
+    "cells": {
+     "A3": [
+      "s",
+      "Sum of Amt"
+     ],
+     "A4": [
+      "n",
+      6.0
+     ],
+     "B3": [
+      "s",
+      "Sum of Qty"
+     ],
+     "B4": [
+      "n",
+      60.0
+     ]
+    },
+    "definition": [
+     "pivotTableDefinition",
+     {
+      "applyAlignmentFormats": "0",
+      "applyBorderFormats": "0",
+      "applyFontFormats": "0",
+      "applyNumberFormats": "0",
+      "applyPatternFormats": "0",
+      "applyWidthHeightFormats": "1",
+      "dataCaption": "Values",
+      "indent": "0",
+      "itemPrintTitles": "1",
+      "multipleFieldFilters": "0",
+      "name": "PivotTable1",
+      "outline": "1",
+      "outlineData": "1",
+      "useAutoFormatting": "1"
+     },
+     [
+      [
+       "location",
+       {
+        "firstDataCol": "0",
+        "firstDataRow": "1",
+        "firstHeaderRow": "0",
+        "ref": "A3:B4"
+       },
+       []
+      ],
+      [
+       "pivotFields",
+       {
+        "count": "3"
+       },
+       [
+        [
+         "pivotField",
+         {
+          "showAll": "0"
+         },
+         []
+        ],
+        [
+         "pivotField",
+         {
+          "dataField": "1",
+          "showAll": "0"
+         },
+         []
+        ],
+        [
+         "pivotField",
+         {
+          "dataField": "1",
+          "showAll": "0"
+         },
+         []
+        ]
+       ]
+      ],
+      [
+       "rowItems",
+       {
+        "count": "1"
+       },
+       [
+        [
+         "i",
+         {},
+         []
+        ]
+       ]
+      ],
+      [
+       "colFields",
+       {
+        "count": "1"
+       },
+       [
+        [
+         "field",
+         {
+          "x": "-2"
+         },
+         []
+        ]
+       ]
+      ],
+      [
+       "colItems",
+       {
+        "count": "2"
+       },
+       [
+        [
+         "i",
+         {},
+         [
+          [
+           "x",
+           {},
+           []
+          ]
+         ]
+        ],
+        [
+         "i",
+         {
+          "i": "1"
+         },
+         [
+          [
+           "x",
+           {
+            "v": "1"
+           },
+           []
+          ]
+         ]
+        ]
+       ]
+      ],
+      [
+       "dataFields",
+       {
+        "count": "2"
+       },
+       [
+        [
+         "dataField",
+         {
+          "baseField": "0",
+          "baseItem": "0",
+          "fld": "1",
+          "name": "Sum of Amt"
+         },
+         []
+        ],
+        [
+         "dataField",
+         {
+          "baseField": "0",
+          "baseItem": "0",
+          "fld": "2",
+          "name": "Sum of Qty"
+         },
+         []
+        ]
+       ]
+      ],
+      [
+       "pivotTableStyleInfo",
+       {
+        "name": "PivotStyleLight16",
+        "showColHeaders": "1",
+        "showColStripes": "0",
+        "showLastColumn": "1",
+        "showRowHeaders": "1",
+        "showRowStripes": "0"
+       },
+       []
+      ]
+     ]
+    ],
+    "sheet": "Sheet2"
+   }
+  ]
+ }
+}

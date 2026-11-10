@@ -1,0 +1,29 @@
+{
+ "_comment": "Cases the engine does not match yet (cause: engine-gap). `run` reports a listed case as a CTest skip while it still differs and fails once it matches, so the entry is removed together with the fix.",
+ "gaps": {
+  "c4_calcfield_ref_renamed": "calculated field whose referenced source field was renamed: Excel drops the data field and re-lays out the pivot; the engine keeps it",
+  "d3_getpivotdata": "GETPIVOTDATA cells over the refreshed pivot keep pre-refresh values / #REF! instead of Excel's refreshed results",
+  "d4_two_pivots_one_cache": "second pivot sharing the refreshed cache is not re-rendered; stale cells A5:A8 remain",
+  "en_hdr_blank": "cacheField for a blank or empty-string source header is written without Excel's caption attribute",
+  "f05_insert_cols_inside": "cacheField for a blank or empty-string source header is written without Excel's caption attribute",
+  "g1_dategroup_out_of_range": "date grouping with values outside the group range: Excel writes the field as shared items with x indices, the engine writes inline dates",
+  "hdr_blank": "cacheField for a blank or empty-string source header is written without Excel's caption attribute",
+  "hdr_blank_col3": "header naming on refresh (blank / duplicate / fold-equal headers): Excel renames and keeps the pivot body, the engine's cache names or rendered body differ",
+  "hdr_blank_vs_literal": "header naming on refresh (blank / duplicate / fold-equal headers): Excel renames and keeps the pivot body, the engine's cache names or rendered body differ",
+  "hdr_dup": "header naming on refresh (blank / duplicate / fold-equal headers): Excel renames and keeps the pivot body, the engine's cache names or rendered body differ",
+  "hdr_dup3": "header naming on refresh (blank / duplicate / fold-equal headers): Excel renames and keeps the pivot body, the engine's cache names or rendered body differ",
+  "hdr_dup_suffix_collision": "header naming on refresh (blank / duplicate / fold-equal headers): Excel renames and keeps the pivot body, the engine's cache names or rendered body differ",
+  "hdr_empty_string_formula": "cacheField for a blank or empty-string source header is written without Excel's caption attribute",
+  "hdr_kana_dup": "header naming on refresh (blank / duplicate / fold-equal headers): Excel renames and keeps the pivot body, the engine's cache names or rendered body differ",
+  "hdr_trailing_space_dup": "header naming on refresh (blank / duplicate / fold-equal headers): Excel renames and keeps the pivot body, the engine's cache names or rendered body differ",
+  "hdr_two_blank": "header naming on refresh (blank / duplicate / fold-equal headers): Excel renames and keeps the pivot body, the engine's cache names or rendered body differ",
+  "hdr_width_dup": "header naming on refresh (blank / duplicate / fold-equal headers): Excel renames and keeps the pivot body, the engine's cache names or rendered body differ",
+  "r08_blank_header": "cacheField for a blank or empty-string source header is written without Excel's caption attribute",
+  "type_basic_inline": "pivot whose cache had inline records: Excel renders A3:A4, the engine renders the full body A3:C20",
+  "type_basic_rows": "sharedItems type flags for a mixed column (containsMixedTypes vs containsSemiMixedTypes/containsString) and refreshOnLoad written on the cache",
+  "type_date_number_bytes": "pivot whose cache had inline records: Excel renders A3:A4, the engine renders the full body A3:C20",
+  "type_dates_inline": "pivot whose cache had inline records: Excel renders A3:A4, the engine renders the full body A3:C20",
+  "type_dates_rows": "sharedItems type flags for a mixed column (containsMixedTypes vs containsSemiMixedTypes/containsString) and refreshOnLoad written on the cache",
+  "x2_source_header_only": "source reduced to its header row: Excel keeps the previous records (recordCount 5), the engine empties the cache"
+ }
+}

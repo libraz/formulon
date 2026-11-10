@@ -1,0 +1,3397 @@
+{
+ "meta": {
+  "case": "type_dates_rows",
+  "description": "Source values replaced; record typing and sharedItems flags on Refresh.",
+  "excel_version": "16.114.4",
+  "expect": "ok",
+  "target": "mac-365-ja_JP",
+  "trigger": "refresh"
+ },
+ "projection": {
+  "caches": [
+   {
+    "definition": [
+     "pivotCacheDefinition",
+     {
+      "recordCount": "2"
+     },
+     [
+      [
+       "cacheSource",
+       {
+        "type": "worksheet"
+       },
+       [
+        [
+         "worksheetSource",
+         {
+          "ref": "A1:W3",
+          "sheet": "Sheet1"
+         },
+         []
+        ]
+       ]
+      ],
+      [
+       "cacheFields",
+       {
+        "count": "23"
+       },
+       [
+        [
+         "cacheField",
+         {
+          "name": "Key",
+          "numFmtId": "0"
+         },
+         [
+          [
+           "sharedItems",
+           {
+            "count": "3"
+           },
+           [
+            [
+             "s",
+             {
+              "v": "x"
+             },
+             []
+            ],
+            [
+             "s",
+             {
+              "v": "y"
+             },
+             []
+            ],
+            [
+             "s",
+             {
+              "u": "1",
+              "v": "p"
+             },
+             []
+            ]
+           ]
+          ]
+         ]
+        ],
+        [
+         "cacheField",
+         {
+          "name": "DInt",
+          "numFmtId": "179"
+         },
+         [
+          [
+           "sharedItems",
+           {
+            "containsDate": "1",
+            "containsMixedTypes": "1",
+            "containsNonDate": "0",
+            "count": "3",
+            "maxDate": "2026-01-06T00:00:00",
+            "minDate": "2026-01-01T00:00:00"
+           },
+           [
+            [
+             "d",
+             {
+              "v": "2026-01-01T00:00:00"
+             },
+             []
+            ],
+            [
+             "d",
+             {
+              "v": "2026-01-05T00:00:00"
+             },
+             []
+            ],
+            [
+             "s",
+             {
+              "u": "1",
+              "v": "p"
+             },
+             []
+            ]
+           ]
+          ]
+         ]
+        ],
+        [
+         "cacheField",
+         {
+          "name": "DFracMax",
+          "numFmtId": "180"
+         },
+         [
+          [
+           "sharedItems",
+           {
+            "containsDate": "1",
+            "containsMixedTypes": "1",
+            "containsNonDate": "0",
+            "count": "3",
+            "maxDate": "2026-01-05T06:00:00",
+            "minDate": "2026-01-01T00:00:00"
+           },
+           [
+            [
+             "d",
+             {
+              "v": "2026-01-01T00:00:00"
+             },
+             []
+            ],
+            [
+             "d",
+             {
+              "v": "2026-01-05T06:00:00"
+             },
+             []
+            ],
+            [
+             "s",
+             {
+              "u": "1",
+              "v": "p"
+             },
+             []
+            ]
+           ]
+          ]
+         ]
+        ],
+        [
+         "cacheField",
+         {
+          "name": "DIntMaxFracMin",
+          "numFmtId": "180"
+         },
+         [
+          [
+           "sharedItems",
+           {
+            "containsDate": "1",
+            "containsMixedTypes": "1",
+            "containsNonDate": "0",
+            "count": "3",
+            "maxDate": "2026-01-06T00:00:00",
+            "minDate": "2026-01-01T06:00:00"
+           },
+           [
+            [
+             "d",
+             {
+              "v": "2026-01-01T06:00:00"
+             },
+             []
+            ],
+            [
+             "d",
+             {
+              "v": "2026-01-05T00:00:00"
+             },
+             []
+            ],
+            [
+             "s",
+             {
+              "u": "1",
+              "v": "p"
+             },
+             []
+            ]
+           ]
+          ]
+         ]
+        ],
+        [
+         "cacheField",
+         {
+          "name": "DSingle",
+          "numFmtId": "179"
+         },
+         [
+          [
+           "sharedItems",
+           {
+            "containsDate": "1",
+            "containsMixedTypes": "1",
+            "containsNonDate": "0",
+            "count": "2",
+            "maxDate": "2026-01-06T00:00:00",
+            "minDate": "2026-01-05T00:00:00"
+           },
+           [
+            [
+             "d",
+             {
+              "v": "2026-01-05T00:00:00"
+             },
+             []
+            ],
+            [
+             "s",
+             {
+              "u": "1",
+              "v": "p"
+             },
+             []
+            ]
+           ]
+          ]
+         ]
+        ],
+        [
+         "cacheField",
+         {
+          "name": "TimeOne",
+          "numFmtId": "20"
+         },
+         [
+          [
+           "sharedItems",
+           {
+            "containsDate": "1",
+            "containsMixedTypes": "1",
+            "containsNonDate": "0",
+            "count": "3",
+            "maxDate": "1900-01-01T00:00:00",
+            "minDate": "1899-12-30T06:00:00"
+           },
+           [
+            [
+             "d",
+             {
+              "v": "1899-12-30T06:00:00"
+             },
+             []
+            ],
+            [
+             "d",
+             {
+              "v": "1899-12-31T00:00:00"
+             },
+             []
+            ],
+            [
+             "s",
+             {
+              "u": "1",
+              "v": "p"
+             },
+             []
+            ]
+           ]
+          ]
+         ]
+        ],
+        [
+         "cacheField",
+         {
+          "name": "DNM1",
+          "numFmtId": "0"
+         },
+         [
+          [
+           "sharedItems",
+           {
+            "containsDate": "1",
+            "containsMixedTypes": "1",
+            "count": "3",
+            "maxDate": "1899-12-31T00:21:04",
+            "minDate": "2026-01-01T00:00:00"
+           },
+           [
+            [
+             "d",
+             {
+              "v": "2026-01-01T00:00:00"
+             },
+             []
+            ],
+            [
+             "n",
+             {
+              "v": "5"
+             },
+             []
+            ],
+            [
+             "s",
+             {
+              "u": "1",
+              "v": "p"
+             },
+             []
+            ]
+           ]
+          ]
+         ]
+        ],
+        [
+         "cacheField",
+         {
+          "name": "DNM2",
+          "numFmtId": "0"
+         },
+         [
+          [
+           "sharedItems",
+           {
+            "containsDate": "1",
+            "containsMixedTypes": "1",
+            "count": "3",
+            "maxDate": "1899-12-31T00:35:04",
+            "minDate": "2026-01-01T00:00:00"
+           },
+           [
+            [
+             "d",
+             {
+              "v": "2026-01-01T00:00:00"
+             },
+             []
+            ],
+            [
+             "n",
+             {
+              "v": "9"
+             },
+             []
+            ],
+            [
+             "s",
+             {
+              "u": "1",
+              "v": "p"
+             },
+             []
+            ]
+           ]
+          ]
+         ]
+        ],
+        [
+         "cacheField",
+         {
+          "name": "DNM3",
+          "numFmtId": "0"
+         },
+         [
+          [
+           "sharedItems",
+           {
+            "containsDate": "1",
+            "containsMixedTypes": "1",
+            "count": "3",
+            "maxDate": "2026-01-02T00:00:00",
+            "minDate": "1899-12-31T00:21:04"
+           },
+           [
+            [
+             "n",
+             {
+              "v": "5"
+             },
+             []
+            ],
+            [
+             "d",
+             {
+              "v": "2026-01-01T00:00:00"
+             },
+             []
+            ],
+            [
+             "s",
+             {
+              "u": "1",
+              "v": "p"
+             },
+             []
+            ]
+           ]
+          ]
+         ]
+        ],
+        [
+         "cacheField",
+         {
+          "name": "DNM4",
+          "numFmtId": "0"
+         },
+         [
+          [
+           "sharedItems",
+           {
+            "containsDate": "1",
+            "containsMixedTypes": "1",
+            "count": "3",
+            "maxDate": "1900-01-05T03:51:04",
+            "minDate": "2026-01-01T00:00:00"
+           },
+           [
+            [
+             "d",
+             {
+              "v": "2026-01-01T00:00:00"
+             },
+             []
+            ],
+            [
+             "n",
+             {
+              "v": "46023"
+             },
+             []
+            ],
+            [
+             "s",
+             {
+              "u": "1",
+              "v": "p"
+             },
+             []
+            ]
+           ]
+          ]
+         ]
+        ],
+        [
+         "cacheField",
+         {
+          "name": "DNM5",
+          "numFmtId": "0"
+         },
+         [
+          [
+           "sharedItems",
+           {
+            "containsDate": "1",
+            "containsMixedTypes": "1",
+            "count": "3",
+            "maxDate": "1899-12-31T03:45:03",
+            "minDate": "2026-01-01T00:00:00"
+           },
+           [
+            [
+             "d",
+             {
+              "v": "2026-01-01T00:00:00"
+             },
+             []
+            ],
+            [
+             "n",
+             {
+              "v": "0.5"
+             },
+             []
+            ],
+            [
+             "s",
+             {
+              "u": "1",
+              "v": "p"
+             },
+             []
+            ]
+           ]
+          ]
+         ]
+        ],
+        [
+         "cacheField",
+         {
+          "name": "DNM6",
+          "numFmtId": "0"
+         },
+         [
+          [
+           "sharedItems",
+           {
+            "containsDate": "1",
+            "containsMixedTypes": "1",
+            "count": "3",
+            "maxDate": "1900-01-04T14:09:04",
+            "minDate": "2026-01-01T00:00:00"
+           },
+           [
+            [
+             "d",
+             {
+              "v": "2026-01-01T00:00:00"
+             },
+             []
+            ],
+            [
+             "n",
+             {
+              "v": "100000"
+             },
+             []
+            ],
+            [
+             "s",
+             {
+              "u": "1",
+              "v": "p"
+             },
+             []
+            ]
+           ]
+          ]
+         ]
+        ],
+        [
+         "cacheField",
+         {
+          "name": "DText",
+          "numFmtId": "0"
+         },
+         [
+          [
+           "sharedItems",
+           {
+            "containsDate": "1",
+            "containsMixedTypes": "1",
+            "count": "3",
+            "maxDate": "2026-01-02T00:00:00",
+            "minDate": "2026-01-01T00:00:00"
+           },
+           [
+            [
+             "d",
+             {
+              "v": "2026-01-01T00:00:00"
+             },
+             []
+            ],
+            [
+             "s",
+             {
+              "v": "a"
+             },
+             []
+            ],
+            [
+             "s",
+             {
+              "u": "1",
+              "v": "p"
+             },
+             []
+            ]
+           ]
+          ]
+         ]
+        ],
+        [
+         "cacheField",
+         {
+          "name": "DBlank",
+          "numFmtId": "0"
+         },
+         [
+          [
+           "sharedItems",
+           {
+            "containsBlank": "1",
+            "containsDate": "1",
+            "containsMixedTypes": "1",
+            "containsNonDate": "0",
+            "count": "3",
+            "maxDate": "2026-01-02T00:00:00",
+            "minDate": "2026-01-01T00:00:00"
+           },
+           [
+            [
+             "d",
+             {
+              "v": "2026-01-01T00:00:00"
+             },
+             []
+            ],
+            [
+             "m",
+             {},
+             []
+            ],
+            [
+             "s",
+             {
+              "u": "1",
+              "v": "p"
+             },
+             []
+            ]
+           ]
+          ]
+         ]
+        ],
+        [
+         "cacheField",
+         {
+          "name": "D1900",
+          "numFmtId": "179"
+         },
+         [
+          [
+           "sharedItems",
+           {
+            "containsDate": "1",
+            "containsMixedTypes": "1",
+            "containsNonDate": "0",
+            "count": "3",
+            "maxDate": "1900-03-16T00:00:00",
+            "minDate": "1900-01-14T00:00:00"
+           },
+           [
+            [
+             "d",
+             {
+              "v": "1900-01-14T00:00:00"
+             },
+             []
+            ],
+            [
+             "d",
+             {
+              "v": "1900-03-15T00:00:00"
+             },
+             []
+            ],
+            [
+             "s",
+             {
+              "u": "1",
+              "v": "p"
+             },
+             []
+            ]
+           ]
+          ]
+         ]
+        ],
+        [
+         "cacheField",
+         {
+          "name": "DBool",
+          "numFmtId": "0"
+         },
+         [
+          [
+           "sharedItems",
+           {
+            "containsDate": "1",
+            "containsMixedTypes": "1",
+            "count": "3",
+            "maxDate": "2026-01-02T00:00:00",
+            "minDate": "2026-01-01T00:00:00"
+           },
+           [
+            [
+             "d",
+             {
+              "v": "2026-01-01T00:00:00"
+             },
+             []
+            ],
+            [
+             "b",
+             {
+              "v": "1"
+             },
+             []
+            ],
+            [
+             "s",
+             {
+              "u": "1",
+              "v": "p"
+             },
+             []
+            ]
+           ]
+          ]
+         ]
+        ],
+        [
+         "cacheField",
+         {
+          "name": "ErrOnly",
+          "numFmtId": "0"
+         },
+         [
+          [
+           "sharedItems",
+           {
+            "count": "3"
+           },
+           [
+            [
+             "e",
+             {
+              "v": "#N/A"
+             },
+             []
+            ],
+            [
+             "e",
+             {
+              "v": "#DIV/0!"
+             },
+             []
+            ],
+            [
+             "s",
+             {
+              "u": "1",
+              "v": "p"
+             },
+             []
+            ]
+           ]
+          ]
+         ]
+        ],
+        [
+         "cacheField",
+         {
+          "name": "BoolOnly",
+          "numFmtId": "0"
+         },
+         [
+          [
+           "sharedItems",
+           {
+            "count": "2"
+           },
+           [
+            [
+             "b",
+             {
+              "v": "1"
+             },
+             []
+            ],
+            [
+             "s",
+             {
+              "u": "1",
+              "v": "p"
+             },
+             []
+            ]
+           ]
+          ]
+         ]
+        ],
+        [
+         "cacheField",
+         {
+          "name": "Long255",
+          "numFmtId": "0"
+         },
+         [
+          [
+           "sharedItems",
+           {
+            "count": "3"
+           },
+           [
+            [
+             "s",
+             {
+              "v": "MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM"
+             },
+             []
+            ],
+            [
+             "s",
+             {
+              "v": "a"
+             },
+             []
+            ],
+            [
+             "s",
+             {
+              "u": "1",
+              "v": "p"
+             },
+             []
+            ]
+           ]
+          ]
+         ]
+        ],
+        [
+         "cacheField",
+         {
+          "name": "Long256",
+          "numFmtId": "0"
+         },
+         [
+          [
+           "sharedItems",
+           {
+            "count": "3",
+            "longText": "1"
+           },
+           [
+            [
+             "s",
+             {
+              "v": "NNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNN"
+             },
+             []
+            ],
+            [
+             "s",
+             {
+              "v": "a"
+             },
+             []
+            ],
+            [
+             "s",
+             {
+              "u": "1",
+              "v": "p"
+             },
+             []
+            ]
+           ]
+          ]
+         ]
+        ],
+        [
+         "cacheField",
+         {
+          "name": "FmtMix",
+          "numFmtId": "0"
+         },
+         [
+          [
+           "sharedItems",
+           {
+            "containsInteger": "1",
+            "containsMixedTypes": "1",
+            "containsNumber": "1",
+            "count": "3",
+            "maxValue": "2",
+            "minValue": "1"
+           },
+           [
+            [
+             "n",
+             {
+              "v": "1"
+             },
+             []
+            ],
+            [
+             "n",
+             {
+              "v": "2"
+             },
+             []
+            ],
+            [
+             "s",
+             {
+              "u": "1",
+              "v": "p"
+             },
+             []
+            ]
+           ]
+          ]
+         ]
+        ],
+        [
+         "cacheField",
+         {
+          "name": "FmtGenFirst",
+          "numFmtId": "0"
+         },
+         [
+          [
+           "sharedItems",
+           {
+            "containsInteger": "1",
+            "containsMixedTypes": "1",
+            "containsNumber": "1",
+            "count": "3",
+            "maxValue": "2",
+            "minValue": "1"
+           },
+           [
+            [
+             "n",
+             {
+              "v": "1"
+             },
+             []
+            ],
+            [
+             "n",
+             {
+              "v": "2"
+             },
+             []
+            ],
+            [
+             "s",
+             {
+              "u": "1",
+              "v": "p"
+             },
+             []
+            ]
+           ]
+          ]
+         ]
+        ],
+        [
+         "cacheField",
+         {
+          "name": "NumTxtSame",
+          "numFmtId": "0"
+         },
+         [
+          [
+           "sharedItems",
+           {
+            "containsInteger": "1",
+            "containsMixedTypes": "1",
+            "containsNumber": "1",
+            "count": "3",
+            "maxValue": "1",
+            "minValue": "1"
+           },
+           [
+            [
+             "n",
+             {
+              "v": "1"
+             },
+             []
+            ],
+            [
+             "s",
+             {
+              "v": "1"
+             },
+             []
+            ],
+            [
+             "s",
+             {
+              "u": "1",
+              "v": "p"
+             },
+             []
+            ]
+           ]
+          ]
+         ]
+        ]
+       ]
+      ]
+     ]
+    ],
+    "records": [
+     [
+      [
+       "x",
+       "0"
+      ],
+      [
+       "x",
+       "0"
+      ],
+      [
+       "x",
+       "0"
+      ],
+      [
+       "x",
+       "0"
+      ],
+      [
+       "x",
+       "0"
+      ],
+      [
+       "x",
+       "0"
+      ],
+      [
+       "x",
+       "0"
+      ],
+      [
+       "x",
+       "0"
+      ],
+      [
+       "x",
+       "0"
+      ],
+      [
+       "x",
+       "0"
+      ],
+      [
+       "x",
+       "0"
+      ],
+      [
+       "x",
+       "0"
+      ],
+      [
+       "x",
+       "0"
+      ],
+      [
+       "x",
+       "0"
+      ],
+      [
+       "x",
+       "0"
+      ],
+      [
+       "x",
+       "0"
+      ],
+      [
+       "x",
+       "0"
+      ],
+      [
+       "x",
+       "0"
+      ],
+      [
+       "x",
+       "0"
+      ],
+      [
+       "x",
+       "0"
+      ],
+      [
+       "x",
+       "0"
+      ],
+      [
+       "x",
+       "0"
+      ],
+      [
+       "x",
+       "0"
+      ]
+     ],
+     [
+      [
+       "x",
+       "1"
+      ],
+      [
+       "x",
+       "1"
+      ],
+      [
+       "x",
+       "1"
+      ],
+      [
+       "x",
+       "1"
+      ],
+      [
+       "x",
+       "0"
+      ],
+      [
+       "x",
+       "1"
+      ],
+      [
+       "x",
+       "1"
+      ],
+      [
+       "x",
+       "1"
+      ],
+      [
+       "x",
+       "1"
+      ],
+      [
+       "x",
+       "1"
+      ],
+      [
+       "x",
+       "1"
+      ],
+      [
+       "x",
+       "1"
+      ],
+      [
+       "x",
+       "1"
+      ],
+      [
+       "x",
+       "1"
+      ],
+      [
+       "x",
+       "1"
+      ],
+      [
+       "x",
+       "1"
+      ],
+      [
+       "x",
+       "1"
+      ],
+      [
+       "x",
+       "0"
+      ],
+      [
+       "x",
+       "1"
+      ],
+      [
+       "x",
+       "1"
+      ],
+      [
+       "x",
+       "1"
+      ],
+      [
+       "x",
+       "1"
+      ],
+      [
+       "x",
+       "1"
+      ]
+     ]
+    ]
+   }
+  ],
+  "formula_cells": {
+   "Sheet1!Q2": [
+    "e",
+    "#N/A"
+   ],
+   "Sheet1!Q3": [
+    "e",
+    "#DIV/0!"
+   ]
+  },
+  "pivots": [
+   {
+    "cache": 0,
+    "cells": {
+     "A10": [
+      "n",
+      46023.0
+     ],
+     "A11": [
+      "n",
+      46023.0
+     ],
+     "A12": [
+      "n",
+      5.0
+     ],
+     "A13": [
+      "n",
+      46023.0
+     ],
+     "A14": [
+      "n",
+      46023.0
+     ],
+     "A15": [
+      "n",
+      46023.0
+     ],
+     "A16": [
+      "n",
+      46023.0
+     ],
+     "A17": [
+      "n",
+      46023.0
+     ],
+     "A18": [
+      "n",
+      15.0
+     ],
+     "A19": [
+      "n",
+      46023.0
+     ],
+     "A20": [
+      "s",
+      "#N/A"
+     ],
+     "A21": [
+      "s",
+      "TRUE"
+     ],
+     "A22": [
+      "s",
+      "MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM"
+     ],
+     "A23": [
+      "s",
+      "NNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNN"
+     ],
+     "A24": [
+      "n",
+      1.0
+     ],
+     "A25": [
+      "n",
+      1.0
+     ],
+     "A26": [
+      "n",
+      1.0
+     ],
+     "A27": [
+      "s",
+      "y"
+     ],
+     "A28": [
+      "n",
+      46027.0
+     ],
+     "A29": [
+      "n",
+      46027.25
+     ],
+     "A3": [
+      "s",
+      "行ラベル"
+     ],
+     "A30": [
+      "n",
+      46027.0
+     ],
+     "A31": [
+      "n",
+      46027.0
+     ],
+     "A32": [
+      "n",
+      1.0
+     ],
+     "A33": [
+      "n",
+      5.0
+     ],
+     "A34": [
+      "n",
+      9.0
+     ],
+     "A35": [
+      "n",
+      46023.0
+     ],
+     "A36": [
+      "n",
+      46023.0
+     ],
+     "A37": [
+      "n",
+      0.5
+     ],
+     "A38": [
+      "n",
+      100000.0
+     ],
+     "A39": [
+      "s",
+      "a"
+     ],
+     "A4": [
+      "s",
+      "x"
+     ],
+     "A40": [
+      "s",
+      "(空白)"
+     ],
+     "A41": [
+      "n",
+      75.0
+     ],
+     "A42": [
+      "s",
+      "TRUE"
+     ],
+     "A43": [
+      "s",
+      "#DIV/0!"
+     ],
+     "A44": [
+      "s",
+      "TRUE"
+     ],
+     "A45": [
+      "s",
+      "a"
+     ],
+     "A46": [
+      "s",
+      "a"
+     ],
+     "A47": [
+      "n",
+      2.0
+     ],
+     "A48": [
+      "n",
+      2.0
+     ],
+     "A49": [
+      "s",
+      "1"
+     ],
+     "A5": [
+      "n",
+      46023.0
+     ],
+     "A50": [
+      "s",
+      "総計"
+     ],
+     "A6": [
+      "n",
+      46023.0
+     ],
+     "A7": [
+      "n",
+      46023.25
+     ],
+     "A8": [
+      "n",
+      46027.0
+     ],
+     "A9": [
+      "n",
+      0.25
+     ]
+    },
+    "definition": [
+     "pivotTableDefinition",
+     {
+      "applyAlignmentFormats": "0",
+      "applyBorderFormats": "0",
+      "applyFontFormats": "0",
+      "applyNumberFormats": "0",
+      "applyPatternFormats": "0",
+      "applyWidthHeightFormats": "1",
+      "dataCaption": "Values",
+      "indent": "0",
+      "itemPrintTitles": "1",
+      "multipleFieldFilters": "0",
+      "name": "PivotTable1",
+      "outline": "1",
+      "outlineData": "1",
+      "useAutoFormatting": "1"
+     },
+     [
+      [
+       "location",
+       {
+        "firstDataCol": "1",
+        "firstDataRow": "1",
+        "firstHeaderRow": "1",
+        "ref": "A3:A50"
+       },
+       []
+      ],
+      [
+       "pivotFields",
+       {
+        "count": "23"
+       },
+       [
+        [
+         "pivotField",
+         {
+          "axis": "axisRow",
+          "showAll": "0"
+         },
+         [
+          [
+           "items",
+           {
+            "count": "4"
+           },
+           [
+            [
+             "item",
+             {
+              "m": "1",
+              "x": "2"
+             },
+             []
+            ],
+            [
+             "item",
+             {
+              "x": "0"
+             },
+             []
+            ],
+            [
+             "item",
+             {
+              "x": "1"
+             },
+             []
+            ],
+            [
+             "item",
+             {
+              "t": "default"
+             },
+             []
+            ]
+           ]
+          ]
+         ]
+        ],
+        [
+         "pivotField",
+         {
+          "axis": "axisRow",
+          "showAll": "0"
+         },
+         [
+          [
+           "items",
+           {
+            "count": "4"
+           },
+           [
+            [
+             "item",
+             {
+              "m": "1",
+              "x": "2"
+             },
+             []
+            ],
+            [
+             "item",
+             {
+              "x": "0"
+             },
+             []
+            ],
+            [
+             "item",
+             {
+              "x": "1"
+             },
+             []
+            ],
+            [
+             "item",
+             {
+              "t": "default"
+             },
+             []
+            ]
+           ]
+          ]
+         ]
+        ],
+        [
+         "pivotField",
+         {
+          "axis": "axisRow",
+          "showAll": "0"
+         },
+         [
+          [
+           "items",
+           {
+            "count": "4"
+           },
+           [
+            [
+             "item",
+             {
+              "m": "1",
+              "x": "2"
+             },
+             []
+            ],
+            [
+             "item",
+             {
+              "x": "0"
+             },
+             []
+            ],
+            [
+             "item",
+             {
+              "x": "1"
+             },
+             []
+            ],
+            [
+             "item",
+             {
+              "t": "default"
+             },
+             []
+            ]
+           ]
+          ]
+         ]
+        ],
+        [
+         "pivotField",
+         {
+          "axis": "axisRow",
+          "showAll": "0"
+         },
+         [
+          [
+           "items",
+           {
+            "count": "4"
+           },
+           [
+            [
+             "item",
+             {
+              "m": "1",
+              "x": "2"
+             },
+             []
+            ],
+            [
+             "item",
+             {
+              "x": "0"
+             },
+             []
+            ],
+            [
+             "item",
+             {
+              "x": "1"
+             },
+             []
+            ],
+            [
+             "item",
+             {
+              "t": "default"
+             },
+             []
+            ]
+           ]
+          ]
+         ]
+        ],
+        [
+         "pivotField",
+         {
+          "axis": "axisRow",
+          "showAll": "0"
+         },
+         [
+          [
+           "items",
+           {
+            "count": "3"
+           },
+           [
+            [
+             "item",
+             {
+              "m": "1",
+              "x": "1"
+             },
+             []
+            ],
+            [
+             "item",
+             {
+              "x": "0"
+             },
+             []
+            ],
+            [
+             "item",
+             {
+              "t": "default"
+             },
+             []
+            ]
+           ]
+          ]
+         ]
+        ],
+        [
+         "pivotField",
+         {
+          "axis": "axisRow",
+          "showAll": "0"
+         },
+         [
+          [
+           "items",
+           {
+            "count": "4"
+           },
+           [
+            [
+             "item",
+             {
+              "m": "1",
+              "x": "2"
+             },
+             []
+            ],
+            [
+             "item",
+             {
+              "x": "0"
+             },
+             []
+            ],
+            [
+             "item",
+             {
+              "x": "1"
+             },
+             []
+            ],
+            [
+             "item",
+             {
+              "t": "default"
+             },
+             []
+            ]
+           ]
+          ]
+         ]
+        ],
+        [
+         "pivotField",
+         {
+          "axis": "axisRow",
+          "showAll": "0"
+         },
+         [
+          [
+           "items",
+           {
+            "count": "4"
+           },
+           [
+            [
+             "item",
+             {
+              "m": "1",
+              "x": "2"
+             },
+             []
+            ],
+            [
+             "item",
+             {
+              "x": "0"
+             },
+             []
+            ],
+            [
+             "item",
+             {
+              "x": "1"
+             },
+             []
+            ],
+            [
+             "item",
+             {
+              "t": "default"
+             },
+             []
+            ]
+           ]
+          ]
+         ]
+        ],
+        [
+         "pivotField",
+         {
+          "axis": "axisRow",
+          "showAll": "0"
+         },
+         [
+          [
+           "items",
+           {
+            "count": "4"
+           },
+           [
+            [
+             "item",
+             {
+              "m": "1",
+              "x": "2"
+             },
+             []
+            ],
+            [
+             "item",
+             {
+              "x": "0"
+             },
+             []
+            ],
+            [
+             "item",
+             {
+              "x": "1"
+             },
+             []
+            ],
+            [
+             "item",
+             {
+              "t": "default"
+             },
+             []
+            ]
+           ]
+          ]
+         ]
+        ],
+        [
+         "pivotField",
+         {
+          "axis": "axisRow",
+          "showAll": "0"
+         },
+         [
+          [
+           "items",
+           {
+            "count": "4"
+           },
+           [
+            [
+             "item",
+             {
+              "m": "1",
+              "x": "2"
+             },
+             []
+            ],
+            [
+             "item",
+             {
+              "x": "0"
+             },
+             []
+            ],
+            [
+             "item",
+             {
+              "x": "1"
+             },
+             []
+            ],
+            [
+             "item",
+             {
+              "t": "default"
+             },
+             []
+            ]
+           ]
+          ]
+         ]
+        ],
+        [
+         "pivotField",
+         {
+          "axis": "axisRow",
+          "showAll": "0"
+         },
+         [
+          [
+           "items",
+           {
+            "count": "4"
+           },
+           [
+            [
+             "item",
+             {
+              "m": "1",
+              "x": "2"
+             },
+             []
+            ],
+            [
+             "item",
+             {
+              "x": "0"
+             },
+             []
+            ],
+            [
+             "item",
+             {
+              "x": "1"
+             },
+             []
+            ],
+            [
+             "item",
+             {
+              "t": "default"
+             },
+             []
+            ]
+           ]
+          ]
+         ]
+        ],
+        [
+         "pivotField",
+         {
+          "axis": "axisRow",
+          "showAll": "0"
+         },
+         [
+          [
+           "items",
+           {
+            "count": "4"
+           },
+           [
+            [
+             "item",
+             {
+              "m": "1",
+              "x": "2"
+             },
+             []
+            ],
+            [
+             "item",
+             {
+              "x": "0"
+             },
+             []
+            ],
+            [
+             "item",
+             {
+              "x": "1"
+             },
+             []
+            ],
+            [
+             "item",
+             {
+              "t": "default"
+             },
+             []
+            ]
+           ]
+          ]
+         ]
+        ],
+        [
+         "pivotField",
+         {
+          "axis": "axisRow",
+          "showAll": "0"
+         },
+         [
+          [
+           "items",
+           {
+            "count": "4"
+           },
+           [
+            [
+             "item",
+             {
+              "m": "1",
+              "x": "2"
+             },
+             []
+            ],
+            [
+             "item",
+             {
+              "x": "0"
+             },
+             []
+            ],
+            [
+             "item",
+             {
+              "x": "1"
+             },
+             []
+            ],
+            [
+             "item",
+             {
+              "t": "default"
+             },
+             []
+            ]
+           ]
+          ]
+         ]
+        ],
+        [
+         "pivotField",
+         {
+          "axis": "axisRow",
+          "showAll": "0"
+         },
+         [
+          [
+           "items",
+           {
+            "count": "4"
+           },
+           [
+            [
+             "item",
+             {
+              "m": "1",
+              "x": "2"
+             },
+             []
+            ],
+            [
+             "item",
+             {
+              "x": "0"
+             },
+             []
+            ],
+            [
+             "item",
+             {
+              "x": "1"
+             },
+             []
+            ],
+            [
+             "item",
+             {
+              "t": "default"
+             },
+             []
+            ]
+           ]
+          ]
+         ]
+        ],
+        [
+         "pivotField",
+         {
+          "axis": "axisRow",
+          "showAll": "0"
+         },
+         [
+          [
+           "items",
+           {
+            "count": "4"
+           },
+           [
+            [
+             "item",
+             {
+              "m": "1",
+              "x": "2"
+             },
+             []
+            ],
+            [
+             "item",
+             {
+              "x": "0"
+             },
+             []
+            ],
+            [
+             "item",
+             {
+              "x": "1"
+             },
+             []
+            ],
+            [
+             "item",
+             {
+              "t": "default"
+             },
+             []
+            ]
+           ]
+          ]
+         ]
+        ],
+        [
+         "pivotField",
+         {
+          "axis": "axisRow",
+          "showAll": "0"
+         },
+         [
+          [
+           "items",
+           {
+            "count": "4"
+           },
+           [
+            [
+             "item",
+             {
+              "m": "1",
+              "x": "2"
+             },
+             []
+            ],
+            [
+             "item",
+             {
+              "x": "0"
+             },
+             []
+            ],
+            [
+             "item",
+             {
+              "x": "1"
+             },
+             []
+            ],
+            [
+             "item",
+             {
+              "t": "default"
+             },
+             []
+            ]
+           ]
+          ]
+         ]
+        ],
+        [
+         "pivotField",
+         {
+          "axis": "axisRow",
+          "showAll": "0"
+         },
+         [
+          [
+           "items",
+           {
+            "count": "4"
+           },
+           [
+            [
+             "item",
+             {
+              "m": "1",
+              "x": "2"
+             },
+             []
+            ],
+            [
+             "item",
+             {
+              "x": "0"
+             },
+             []
+            ],
+            [
+             "item",
+             {
+              "x": "1"
+             },
+             []
+            ],
+            [
+             "item",
+             {
+              "t": "default"
+             },
+             []
+            ]
+           ]
+          ]
+         ]
+        ],
+        [
+         "pivotField",
+         {
+          "axis": "axisRow",
+          "showAll": "0"
+         },
+         [
+          [
+           "items",
+           {
+            "count": "4"
+           },
+           [
+            [
+             "item",
+             {
+              "m": "1",
+              "x": "2"
+             },
+             []
+            ],
+            [
+             "item",
+             {
+              "x": "0"
+             },
+             []
+            ],
+            [
+             "item",
+             {
+              "x": "1"
+             },
+             []
+            ],
+            [
+             "item",
+             {
+              "t": "default"
+             },
+             []
+            ]
+           ]
+          ]
+         ]
+        ],
+        [
+         "pivotField",
+         {
+          "axis": "axisRow",
+          "showAll": "0"
+         },
+         [
+          [
+           "items",
+           {
+            "count": "3"
+           },
+           [
+            [
+             "item",
+             {
+              "m": "1",
+              "x": "1"
+             },
+             []
+            ],
+            [
+             "item",
+             {
+              "x": "0"
+             },
+             []
+            ],
+            [
+             "item",
+             {
+              "t": "default"
+             },
+             []
+            ]
+           ]
+          ]
+         ]
+        ],
+        [
+         "pivotField",
+         {
+          "axis": "axisRow",
+          "showAll": "0"
+         },
+         [
+          [
+           "items",
+           {
+            "count": "4"
+           },
+           [
+            [
+             "item",
+             {
+              "m": "1",
+              "x": "2"
+             },
+             []
+            ],
+            [
+             "item",
+             {
+              "x": "0"
+             },
+             []
+            ],
+            [
+             "item",
+             {
+              "x": "1"
+             },
+             []
+            ],
+            [
+             "item",
+             {
+              "t": "default"
+             },
+             []
+            ]
+           ]
+          ]
+         ]
+        ],
+        [
+         "pivotField",
+         {
+          "axis": "axisRow",
+          "showAll": "0"
+         },
+         [
+          [
+           "items",
+           {
+            "count": "4"
+           },
+           [
+            [
+             "item",
+             {
+              "m": "1",
+              "x": "2"
+             },
+             []
+            ],
+            [
+             "item",
+             {
+              "x": "0"
+             },
+             []
+            ],
+            [
+             "item",
+             {
+              "x": "1"
+             },
+             []
+            ],
+            [
+             "item",
+             {
+              "t": "default"
+             },
+             []
+            ]
+           ]
+          ]
+         ]
+        ],
+        [
+         "pivotField",
+         {
+          "axis": "axisRow",
+          "showAll": "0"
+         },
+         [
+          [
+           "items",
+           {
+            "count": "4"
+           },
+           [
+            [
+             "item",
+             {
+              "m": "1",
+              "x": "2"
+             },
+             []
+            ],
+            [
+             "item",
+             {
+              "x": "0"
+             },
+             []
+            ],
+            [
+             "item",
+             {
+              "x": "1"
+             },
+             []
+            ],
+            [
+             "item",
+             {
+              "t": "default"
+             },
+             []
+            ]
+           ]
+          ]
+         ]
+        ],
+        [
+         "pivotField",
+         {
+          "axis": "axisRow",
+          "showAll": "0"
+         },
+         [
+          [
+           "items",
+           {
+            "count": "4"
+           },
+           [
+            [
+             "item",
+             {
+              "m": "1",
+              "x": "2"
+             },
+             []
+            ],
+            [
+             "item",
+             {
+              "x": "0"
+             },
+             []
+            ],
+            [
+             "item",
+             {
+              "x": "1"
+             },
+             []
+            ],
+            [
+             "item",
+             {
+              "t": "default"
+             },
+             []
+            ]
+           ]
+          ]
+         ]
+        ],
+        [
+         "pivotField",
+         {
+          "axis": "axisRow",
+          "showAll": "0"
+         },
+         [
+          [
+           "items",
+           {
+            "count": "4"
+           },
+           [
+            [
+             "item",
+             {
+              "m": "1",
+              "x": "2"
+             },
+             []
+            ],
+            [
+             "item",
+             {
+              "x": "0"
+             },
+             []
+            ],
+            [
+             "item",
+             {
+              "x": "1"
+             },
+             []
+            ],
+            [
+             "item",
+             {
+              "t": "default"
+             },
+             []
+            ]
+           ]
+          ]
+         ]
+        ]
+       ]
+      ],
+      [
+       "rowFields",
+       {
+        "count": "23"
+       },
+       [
+        [
+         "field",
+         {
+          "x": "0"
+         },
+         []
+        ],
+        [
+         "field",
+         {
+          "x": "1"
+         },
+         []
+        ],
+        [
+         "field",
+         {
+          "x": "2"
+         },
+         []
+        ],
+        [
+         "field",
+         {
+          "x": "3"
+         },
+         []
+        ],
+        [
+         "field",
+         {
+          "x": "4"
+         },
+         []
+        ],
+        [
+         "field",
+         {
+          "x": "5"
+         },
+         []
+        ],
+        [
+         "field",
+         {
+          "x": "6"
+         },
+         []
+        ],
+        [
+         "field",
+         {
+          "x": "7"
+         },
+         []
+        ],
+        [
+         "field",
+         {
+          "x": "8"
+         },
+         []
+        ],
+        [
+         "field",
+         {
+          "x": "9"
+         },
+         []
+        ],
+        [
+         "field",
+         {
+          "x": "10"
+         },
+         []
+        ],
+        [
+         "field",
+         {
+          "x": "11"
+         },
+         []
+        ],
+        [
+         "field",
+         {
+          "x": "12"
+         },
+         []
+        ],
+        [
+         "field",
+         {
+          "x": "13"
+         },
+         []
+        ],
+        [
+         "field",
+         {
+          "x": "14"
+         },
+         []
+        ],
+        [
+         "field",
+         {
+          "x": "15"
+         },
+         []
+        ],
+        [
+         "field",
+         {
+          "x": "16"
+         },
+         []
+        ],
+        [
+         "field",
+         {
+          "x": "17"
+         },
+         []
+        ],
+        [
+         "field",
+         {
+          "x": "18"
+         },
+         []
+        ],
+        [
+         "field",
+         {
+          "x": "19"
+         },
+         []
+        ],
+        [
+         "field",
+         {
+          "x": "20"
+         },
+         []
+        ],
+        [
+         "field",
+         {
+          "x": "21"
+         },
+         []
+        ],
+        [
+         "field",
+         {
+          "x": "22"
+         },
+         []
+        ]
+       ]
+      ],
+      [
+       "rowItems",
+       {
+        "count": "47"
+       },
+       [
+        [
+         "i",
+         {},
+         [
+          [
+           "x",
+           {
+            "v": "1"
+           },
+           []
+          ]
+         ]
+        ],
+        [
+         "i",
+         {
+          "r": "1"
+         },
+         [
+          [
+           "x",
+           {
+            "v": "1"
+           },
+           []
+          ]
+         ]
+        ],
+        [
+         "i",
+         {
+          "r": "2"
+         },
+         [
+          [
+           "x",
+           {
+            "v": "1"
+           },
+           []
+          ]
+         ]
+        ],
+        [
+         "i",
+         {
+          "r": "3"
+         },
+         [
+          [
+           "x",
+           {
+            "v": "1"
+           },
+           []
+          ]
+         ]
+        ],
+        [
+         "i",
+         {
+          "r": "4"
+         },
+         [
+          [
+           "x",
+           {
+            "v": "1"
+           },
+           []
+          ]
+         ]
+        ],
+        [
+         "i",
+         {
+          "r": "5"
+         },
+         [
+          [
+           "x",
+           {
+            "v": "1"
+           },
+           []
+          ]
+         ]
+        ],
+        [
+         "i",
+         {
+          "r": "6"
+         },
+         [
+          [
+           "x",
+           {
+            "v": "1"
+           },
+           []
+          ]
+         ]
+        ],
+        [
+         "i",
+         {
+          "r": "7"
+         },
+         [
+          [
+           "x",
+           {
+            "v": "1"
+           },
+           []
+          ]
+         ]
+        ],
+        [
+         "i",
+         {
+          "r": "8"
+         },
+         [
+          [
+           "x",
+           {
+            "v": "1"
+           },
+           []
+          ]
+         ]
+        ],
+        [
+         "i",
+         {
+          "r": "9"
+         },
+         [
+          [
+           "x",
+           {
+            "v": "1"
+           },
+           []
+          ]
+         ]
+        ],
+        [
+         "i",
+         {
+          "r": "10"
+         },
+         [
+          [
+           "x",
+           {
+            "v": "1"
+           },
+           []
+          ]
+         ]
+        ],
+        [
+         "i",
+         {
+          "r": "11"
+         },
+         [
+          [
+           "x",
+           {
+            "v": "1"
+           },
+           []
+          ]
+         ]
+        ],
+        [
+         "i",
+         {
+          "r": "12"
+         },
+         [
+          [
+           "x",
+           {
+            "v": "1"
+           },
+           []
+          ]
+         ]
+        ],
+        [
+         "i",
+         {
+          "r": "13"
+         },
+         [
+          [
+           "x",
+           {
+            "v": "1"
+           },
+           []
+          ]
+         ]
+        ],
+        [
+         "i",
+         {
+          "r": "14"
+         },
+         [
+          [
+           "x",
+           {
+            "v": "1"
+           },
+           []
+          ]
+         ]
+        ],
+        [
+         "i",
+         {
+          "r": "15"
+         },
+         [
+          [
+           "x",
+           {
+            "v": "1"
+           },
+           []
+          ]
+         ]
+        ],
+        [
+         "i",
+         {
+          "r": "16"
+         },
+         [
+          [
+           "x",
+           {
+            "v": "1"
+           },
+           []
+          ]
+         ]
+        ],
+        [
+         "i",
+         {
+          "r": "17"
+         },
+         [
+          [
+           "x",
+           {
+            "v": "1"
+           },
+           []
+          ]
+         ]
+        ],
+        [
+         "i",
+         {
+          "r": "18"
+         },
+         [
+          [
+           "x",
+           {
+            "v": "1"
+           },
+           []
+          ]
+         ]
+        ],
+        [
+         "i",
+         {
+          "r": "19"
+         },
+         [
+          [
+           "x",
+           {
+            "v": "1"
+           },
+           []
+          ]
+         ]
+        ],
+        [
+         "i",
+         {
+          "r": "20"
+         },
+         [
+          [
+           "x",
+           {
+            "v": "1"
+           },
+           []
+          ]
+         ]
+        ],
+        [
+         "i",
+         {
+          "r": "21"
+         },
+         [
+          [
+           "x",
+           {
+            "v": "1"
+           },
+           []
+          ]
+         ]
+        ],
+        [
+         "i",
+         {
+          "r": "22"
+         },
+         [
+          [
+           "x",
+           {
+            "v": "1"
+           },
+           []
+          ]
+         ]
+        ],
+        [
+         "i",
+         {},
+         [
+          [
+           "x",
+           {
+            "v": "2"
+           },
+           []
+          ]
+         ]
+        ],
+        [
+         "i",
+         {
+          "r": "1"
+         },
+         [
+          [
+           "x",
+           {
+            "v": "2"
+           },
+           []
+          ]
+         ]
+        ],
+        [
+         "i",
+         {
+          "r": "2"
+         },
+         [
+          [
+           "x",
+           {
+            "v": "2"
+           },
+           []
+          ]
+         ]
+        ],
+        [
+         "i",
+         {
+          "r": "3"
+         },
+         [
+          [
+           "x",
+           {
+            "v": "2"
+           },
+           []
+          ]
+         ]
+        ],
+        [
+         "i",
+         {
+          "r": "4"
+         },
+         [
+          [
+           "x",
+           {
+            "v": "1"
+           },
+           []
+          ]
+         ]
+        ],
+        [
+         "i",
+         {
+          "r": "5"
+         },
+         [
+          [
+           "x",
+           {
+            "v": "2"
+           },
+           []
+          ]
+         ]
+        ],
+        [
+         "i",
+         {
+          "r": "6"
+         },
+         [
+          [
+           "x",
+           {
+            "v": "2"
+           },
+           []
+          ]
+         ]
+        ],
+        [
+         "i",
+         {
+          "r": "7"
+         },
+         [
+          [
+           "x",
+           {
+            "v": "2"
+           },
+           []
+          ]
+         ]
+        ],
+        [
+         "i",
+         {
+          "r": "8"
+         },
+         [
+          [
+           "x",
+           {
+            "v": "2"
+           },
+           []
+          ]
+         ]
+        ],
+        [
+         "i",
+         {
+          "r": "9"
+         },
+         [
+          [
+           "x",
+           {
+            "v": "2"
+           },
+           []
+          ]
+         ]
+        ],
+        [
+         "i",
+         {
+          "r": "10"
+         },
+         [
+          [
+           "x",
+           {
+            "v": "2"
+           },
+           []
+          ]
+         ]
+        ],
+        [
+         "i",
+         {
+          "r": "11"
+         },
+         [
+          [
+           "x",
+           {
+            "v": "2"
+           },
+           []
+          ]
+         ]
+        ],
+        [
+         "i",
+         {
+          "r": "12"
+         },
+         [
+          [
+           "x",
+           {
+            "v": "2"
+           },
+           []
+          ]
+         ]
+        ],
+        [
+         "i",
+         {
+          "r": "13"
+         },
+         [
+          [
+           "x",
+           {
+            "v": "2"
+           },
+           []
+          ]
+         ]
+        ],
+        [
+         "i",
+         {
+          "r": "14"
+         },
+         [
+          [
+           "x",
+           {
+            "v": "2"
+           },
+           []
+          ]
+         ]
+        ],
+        [
+         "i",
+         {
+          "r": "15"
+         },
+         [
+          [
+           "x",
+           {
+            "v": "2"
+           },
+           []
+          ]
+         ]
+        ],
+        [
+         "i",
+         {
+          "r": "16"
+         },
+         [
+          [
+           "x",
+           {
+            "v": "2"
+           },
+           []
+          ]
+         ]
+        ],
+        [
+         "i",
+         {
+          "r": "17"
+         },
+         [
+          [
+           "x",
+           {
+            "v": "1"
+           },
+           []
+          ]
+         ]
+        ],
+        [
+         "i",
+         {
+          "r": "18"
+         },
+         [
+          [
+           "x",
+           {
+            "v": "2"
+           },
+           []
+          ]
+         ]
+        ],
+        [
+         "i",
+         {
+          "r": "19"
+         },
+         [
+          [
+           "x",
+           {
+            "v": "2"
+           },
+           []
+          ]
+         ]
+        ],
+        [
+         "i",
+         {
+          "r": "20"
+         },
+         [
+          [
+           "x",
+           {
+            "v": "2"
+           },
+           []
+          ]
+         ]
+        ],
+        [
+         "i",
+         {
+          "r": "21"
+         },
+         [
+          [
+           "x",
+           {
+            "v": "2"
+           },
+           []
+          ]
+         ]
+        ],
+        [
+         "i",
+         {
+          "r": "22"
+         },
+         [
+          [
+           "x",
+           {
+            "v": "2"
+           },
+           []
+          ]
+         ]
+        ],
+        [
+         "i",
+         {
+          "t": "grand"
+         },
+         [
+          [
+           "x",
+           {},
+           []
+          ]
+         ]
+        ]
+       ]
+      ],
+      [
+       "colItems",
+       {
+        "count": "1"
+       },
+       [
+        [
+         "i",
+         {},
+         []
+        ]
+       ]
+      ],
+      [
+       "pivotTableStyleInfo",
+       {
+        "name": "PivotStyleLight16",
+        "showColHeaders": "1",
+        "showColStripes": "0",
+        "showLastColumn": "1",
+        "showRowHeaders": "1",
+        "showRowStripes": "0"
+       },
+       []
+      ]
+     ]
+    ],
+    "sheet": "Sheet2"
+   }
+  ]
+ }
+}

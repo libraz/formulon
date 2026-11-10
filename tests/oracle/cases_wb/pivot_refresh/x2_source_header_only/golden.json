@@ -1,0 +1,584 @@
+{
+ "meta": {
+  "case": "x2_source_header_only",
+  "description": "Source error or degenerate source.",
+  "excel_version": "16.114.4",
+  "expect": "ok",
+  "target": "mac-365-ja_JP",
+  "trigger": "refresh"
+ },
+ "projection": {
+  "caches": [
+   {
+    "definition": [
+     "pivotCacheDefinition",
+     {
+      "recordCount": "1"
+     },
+     [
+      [
+       "cacheSource",
+       {
+        "type": "worksheet"
+       },
+       [
+        [
+         "worksheetSource",
+         {
+          "ref": "A1:D6",
+          "sheet": "Sheet1"
+         },
+         []
+        ]
+       ]
+      ],
+      [
+       "cacheFields",
+       {
+        "count": "4"
+       },
+       [
+        [
+         "cacheField",
+         {
+          "name": "Region",
+          "numFmtId": "0"
+         },
+         [
+          [
+           "sharedItems",
+           {
+            "containsBlank": "1",
+            "containsNonDate": "0",
+            "count": "4"
+           },
+           [
+            [
+             "m",
+             {},
+             []
+            ],
+            [
+             "s",
+             {
+              "u": "1",
+              "v": "North"
+             },
+             []
+            ],
+            [
+             "s",
+             {
+              "u": "1",
+              "v": "South"
+             },
+             []
+            ],
+            [
+             "s",
+             {
+              "u": "1",
+              "v": "East"
+             },
+             []
+            ]
+           ]
+          ]
+         ]
+        ],
+        [
+         "cacheField",
+         {
+          "name": "Product",
+          "numFmtId": "0"
+         },
+         [
+          [
+           "sharedItems",
+           {
+            "containsBlank": "1",
+            "containsNonDate": "0",
+            "count": "3"
+           },
+           [
+            [
+             "m",
+             {},
+             []
+            ],
+            [
+             "s",
+             {
+              "u": "1",
+              "v": "A"
+             },
+             []
+            ],
+            [
+             "s",
+             {
+              "u": "1",
+              "v": "B"
+             },
+             []
+            ]
+           ]
+          ]
+         ]
+        ],
+        [
+         "cacheField",
+         {
+          "name": "Amt",
+          "numFmtId": "0"
+         },
+         [
+          [
+           "sharedItems",
+           {
+            "containsBlank": "1",
+            "containsNonDate": "0",
+            "containsString": "0"
+           },
+           []
+          ]
+         ]
+        ],
+        [
+         "cacheField",
+         {
+          "name": "Qty",
+          "numFmtId": "0"
+         },
+         [
+          [
+           "sharedItems",
+           {
+            "containsBlank": "1",
+            "containsNonDate": "0",
+            "containsString": "0"
+           },
+           []
+          ]
+         ]
+        ]
+       ]
+      ]
+     ]
+    ],
+    "records": [
+     [
+      [
+       "x",
+       "0"
+      ],
+      [
+       "x",
+       "0"
+      ],
+      [
+       "m",
+       null
+      ],
+      [
+       "m",
+       null
+      ]
+     ]
+    ]
+   }
+  ],
+  "formula_cells": {},
+  "pivots": [
+   {
+    "cache": 0,
+    "cells": {
+     "A5": [
+      "s",
+      "行ラベル"
+     ],
+     "A6": [
+      "s",
+      "(空白)"
+     ],
+     "A7": [
+      "s",
+      "総計"
+     ],
+     "B3": [
+      "s",
+      "列ラベル"
+     ],
+     "B4": [
+      "s",
+      "Sum of Amt"
+     ],
+     "B5": [
+      "s",
+      "(空白)"
+     ],
+     "C4": [
+      "s",
+      "Sum of Qty"
+     ],
+     "C5": [
+      "s",
+      "(空白)"
+     ],
+     "D4": [
+      "s",
+      "全体の Sum of Amt"
+     ],
+     "E4": [
+      "s",
+      "全体の Sum of Qty"
+     ]
+    },
+    "definition": [
+     "pivotTableDefinition",
+     {
+      "applyAlignmentFormats": "0",
+      "applyBorderFormats": "0",
+      "applyFontFormats": "0",
+      "applyNumberFormats": "0",
+      "applyPatternFormats": "0",
+      "applyWidthHeightFormats": "1",
+      "dataCaption": "Values",
+      "indent": "0",
+      "itemPrintTitles": "1",
+      "multipleFieldFilters": "0",
+      "name": "PivotTable1",
+      "outline": "1",
+      "outlineData": "1",
+      "useAutoFormatting": "1"
+     },
+     [
+      [
+       "location",
+       {
+        "firstDataCol": "1",
+        "firstDataRow": "3",
+        "firstHeaderRow": "1",
+        "ref": "A3:E7"
+       },
+       []
+      ],
+      [
+       "pivotFields",
+       {
+        "count": "4"
+       },
+       [
+        [
+         "pivotField",
+         {
+          "axis": "axisRow",
+          "showAll": "0"
+         },
+         [
+          [
+           "items",
+           {
+            "count": "5"
+           },
+           [
+            [
+             "item",
+             {
+              "m": "1",
+              "x": "3"
+             },
+             []
+            ],
+            [
+             "item",
+             {
+              "m": "1",
+              "x": "1"
+             },
+             []
+            ],
+            [
+             "item",
+             {
+              "m": "1",
+              "x": "2"
+             },
+             []
+            ],
+            [
+             "item",
+             {
+              "x": "0"
+             },
+             []
+            ],
+            [
+             "item",
+             {
+              "t": "default"
+             },
+             []
+            ]
+           ]
+          ]
+         ]
+        ],
+        [
+         "pivotField",
+         {
+          "axis": "axisCol",
+          "showAll": "0"
+         },
+         [
+          [
+           "items",
+           {
+            "count": "4"
+           },
+           [
+            [
+             "item",
+             {
+              "m": "1",
+              "x": "1"
+             },
+             []
+            ],
+            [
+             "item",
+             {
+              "m": "1",
+              "x": "2"
+             },
+             []
+            ],
+            [
+             "item",
+             {
+              "x": "0"
+             },
+             []
+            ],
+            [
+             "item",
+             {
+              "t": "default"
+             },
+             []
+            ]
+           ]
+          ]
+         ]
+        ],
+        [
+         "pivotField",
+         {
+          "dataField": "1",
+          "showAll": "0"
+         },
+         []
+        ],
+        [
+         "pivotField",
+         {
+          "dataField": "1",
+          "showAll": "0"
+         },
+         []
+        ]
+       ]
+      ],
+      [
+       "rowFields",
+       {
+        "count": "1"
+       },
+       [
+        [
+         "field",
+         {
+          "x": "0"
+         },
+         []
+        ]
+       ]
+      ],
+      [
+       "rowItems",
+       {
+        "count": "2"
+       },
+       [
+        [
+         "i",
+         {},
+         [
+          [
+           "x",
+           {
+            "v": "3"
+           },
+           []
+          ]
+         ]
+        ],
+        [
+         "i",
+         {
+          "t": "grand"
+         },
+         [
+          [
+           "x",
+           {},
+           []
+          ]
+         ]
+        ]
+       ]
+      ],
+      [
+       "colFields",
+       {
+        "count": "2"
+       },
+       [
+        [
+         "field",
+         {
+          "x": "-2"
+         },
+         []
+        ],
+        [
+         "field",
+         {
+          "x": "1"
+         },
+         []
+        ]
+       ]
+      ],
+      [
+       "colItems",
+       {
+        "count": "4"
+       },
+       [
+        [
+         "i",
+         {},
+         [
+          [
+           "x",
+           {},
+           []
+          ],
+          [
+           "x",
+           {
+            "v": "2"
+           },
+           []
+          ]
+         ]
+        ],
+        [
+         "i",
+         {
+          "i": "1"
+         },
+         [
+          [
+           "x",
+           {
+            "v": "1"
+           },
+           []
+          ],
+          [
+           "x",
+           {
+            "v": "2"
+           },
+           []
+          ]
+         ]
+        ],
+        [
+         "i",
+         {
+          "t": "grand"
+         },
+         [
+          [
+           "x",
+           {},
+           []
+          ]
+         ]
+        ],
+        [
+         "i",
+         {
+          "i": "1",
+          "t": "grand"
+         },
+         [
+          [
+           "x",
+           {},
+           []
+          ]
+         ]
+        ]
+       ]
+      ],
+      [
+       "dataFields",
+       {
+        "count": "2"
+       },
+       [
+        [
+         "dataField",
+         {
+          "baseField": "0",
+          "baseItem": "0",
+          "fld": "2",
+          "name": "Sum of Amt"
+         },
+         []
+        ],
+        [
+         "dataField",
+         {
+          "baseField": "0",
+          "baseItem": "0",
+          "fld": "3",
+          "name": "Sum of Qty"
+         },
+         []
+        ]
+       ]
+      ],
+      [
+       "pivotTableStyleInfo",
+       {
+        "name": "PivotStyleLight16",
+        "showColHeaders": "1",
+        "showColStripes": "0",
+        "showLastColumn": "1",
+        "showRowHeaders": "1",
+        "showRowStripes": "0"
+       },
+       []
+      ]
+     ]
+    ],
+    "sheet": "Sheet2"
+   }
+  ]
+ }
+}

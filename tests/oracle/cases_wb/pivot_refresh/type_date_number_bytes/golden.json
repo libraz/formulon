@@ -1,0 +1,754 @@
+{
+ "meta": {
+  "case": "type_date_number_bytes",
+  "description": "Source values replaced; record typing and sharedItems flags on Refresh.",
+  "excel_version": "16.114.4",
+  "expect": "ok",
+  "target": "mac-365-ja_JP",
+  "trigger": "refresh"
+ },
+ "projection": {
+  "caches": [
+   {
+    "definition": [
+     "pivotCacheDefinition",
+     {
+      "recordCount": "2"
+     },
+     [
+      [
+       "cacheSource",
+       {
+        "type": "worksheet"
+       },
+       [
+        [
+         "worksheetSource",
+         {
+          "ref": "A1:R3",
+          "sheet": "Sheet1"
+         },
+         []
+        ]
+       ]
+      ],
+      [
+       "cacheFields",
+       {
+        "count": "18"
+       },
+       [
+        [
+         "cacheField",
+         {
+          "name": "Key",
+          "numFmtId": "0"
+         },
+         [
+          [
+           "sharedItems",
+           {},
+           []
+          ]
+         ]
+        ],
+        [
+         "cacheField",
+         {
+          "name": "y2026a",
+          "numFmtId": "0"
+         },
+         [
+          [
+           "sharedItems",
+           {
+            "containsDate": "1",
+            "containsMixedTypes": "1",
+            "containsSemiMixedTypes": "0",
+            "containsString": "0",
+            "maxDate": "2026-01-01T00:01:04",
+            "minDate": "2026-01-01T00:00:00"
+           },
+           []
+          ]
+         ]
+        ],
+        [
+         "cacheField",
+         {
+          "name": "y2026b",
+          "numFmtId": "0"
+         },
+         [
+          [
+           "sharedItems",
+           {
+            "containsDate": "1",
+            "containsMixedTypes": "1",
+            "containsSemiMixedTypes": "0",
+            "containsString": "0",
+            "maxDate": "2047-04-30T00:01:04",
+            "minDate": "2026-01-01T00:00:00"
+           },
+           []
+          ]
+         ]
+        ],
+        [
+         "cacheField",
+         {
+          "name": "y1899",
+          "numFmtId": "0"
+         },
+         [
+          [
+           "sharedItems",
+           {
+            "containsDate": "1",
+            "containsMixedTypes": "1",
+            "containsSemiMixedTypes": "0",
+            "containsString": "0",
+            "maxDate": "1899-12-31T00:01:04",
+            "minDate": "2026-01-01T00:00:00"
+           },
+           []
+          ]
+         ]
+        ],
+        [
+         "cacheField",
+         {
+          "name": "y1900",
+          "numFmtId": "0"
+         },
+         [
+          [
+           "sharedItems",
+           {
+            "containsDate": "1",
+            "containsMixedTypes": "1",
+            "containsSemiMixedTypes": "0",
+            "containsString": "0",
+            "maxDate": "1899-12-31T00:01:04",
+            "minDate": "2026-01-01T00:00:00"
+           },
+           []
+          ]
+         ]
+        ],
+        [
+         "cacheField",
+         {
+          "name": "y1901",
+          "numFmtId": "0"
+         },
+         [
+          [
+           "sharedItems",
+           {
+            "containsDate": "1",
+            "containsMixedTypes": "1",
+            "containsSemiMixedTypes": "0",
+            "containsString": "0",
+            "maxDate": "1901-01-01T00:01:04",
+            "minDate": "2026-01-01T00:00:00"
+           },
+           []
+          ]
+         ]
+        ],
+        [
+         "cacheField",
+         {
+          "name": "y2026m0",
+          "numFmtId": "0"
+         },
+         [
+          [
+           "sharedItems",
+           {
+            "containsDate": "1",
+            "containsMixedTypes": "1",
+            "containsSemiMixedTypes": "0",
+            "containsString": "0",
+            "maxDate": "2025-12-01T00:01:04",
+            "minDate": "2026-01-01T00:00:00"
+           },
+           []
+          ]
+         ]
+        ],
+        [
+         "cacheField",
+         {
+          "name": "y2026d0",
+          "numFmtId": "0"
+         },
+         [
+          [
+           "sharedItems",
+           {
+            "containsDate": "1",
+            "containsMixedTypes": "1",
+            "containsSemiMixedTypes": "0",
+            "containsString": "0",
+            "maxDate": "2025-12-31T00:01:04",
+            "minDate": "2026-01-01T00:00:00"
+           },
+           []
+          ]
+         ]
+        ],
+        [
+         "cacheField",
+         {
+          "name": "y2026m13",
+          "numFmtId": "0"
+         },
+         [
+          [
+           "sharedItems",
+           {
+            "containsDate": "1",
+            "containsMixedTypes": "1",
+            "containsSemiMixedTypes": "0",
+            "containsString": "0",
+            "maxDate": "2027-01-01T00:01:04",
+            "minDate": "2026-01-01T00:00:00"
+           },
+           []
+          ]
+         ]
+        ],
+        [
+         "cacheField",
+         {
+          "name": "y2026d40",
+          "numFmtId": "0"
+         },
+         [
+          [
+           "sharedItems",
+           {
+            "containsDate": "1",
+            "containsMixedTypes": "1",
+            "containsSemiMixedTypes": "0",
+            "containsString": "0",
+            "maxDate": "2026-02-09T00:01:04",
+            "minDate": "2026-01-01T00:00:00"
+           },
+           []
+          ]
+         ]
+        ],
+        [
+         "cacheField",
+         {
+          "name": "p01",
+          "numFmtId": "0"
+         },
+         [
+          [
+           "sharedItems",
+           {
+            "containsDate": "1",
+            "containsMixedTypes": "1",
+            "containsSemiMixedTypes": "0",
+            "containsString": "0",
+            "maxDate": "1900-01-06T12:06:03",
+            "minDate": "2026-01-01T00:00:00"
+           },
+           []
+          ]
+         ]
+        ],
+        [
+         "cacheField",
+         {
+          "name": "p13",
+          "numFmtId": "0"
+         },
+         [
+          [
+           "sharedItems",
+           {
+            "containsDate": "1",
+            "containsMixedTypes": "1",
+            "containsSemiMixedTypes": "0",
+            "containsString": "0",
+            "maxDate": "1899-12-30T00:00:00",
+            "minDate": "2026-01-01T00:00:00"
+           },
+           []
+          ]
+         ]
+        ],
+        [
+         "cacheField",
+         {
+          "name": "p1e300",
+          "numFmtId": "0"
+         },
+         [
+          [
+           "sharedItems",
+           {
+            "containsDate": "1",
+            "containsMixedTypes": "1",
+            "containsSemiMixedTypes": "0",
+            "containsString": "0",
+            "maxDate": "1899-12-30T00:00:00",
+            "minDate": "2026-01-01T00:00:00"
+           },
+           []
+          ]
+         ]
+        ],
+        [
+         "cacheField",
+         {
+          "name": "y9999",
+          "numFmtId": "0"
+         },
+         [
+          [
+           "sharedItems",
+           {
+            "containsDate": "1",
+            "containsMixedTypes": "1",
+            "containsSemiMixedTypes": "0",
+            "containsString": "0",
+            "maxDate": "9999-01-01T00:01:04",
+            "minDate": "2026-01-01T00:00:00"
+           },
+           []
+          ]
+         ]
+        ],
+        [
+         "cacheField",
+         {
+          "name": "y10000",
+          "numFmtId": "0"
+         },
+         [
+          [
+           "sharedItems",
+           {
+            "containsDate": "1",
+            "containsMixedTypes": "1",
+            "containsSemiMixedTypes": "0",
+            "containsString": "0",
+            "maxDate": "1899-12-30T00:00:00",
+            "minDate": "2026-01-01T00:00:00"
+           },
+           []
+          ]
+         ]
+        ],
+        [
+         "cacheField",
+         {
+          "name": "b5",
+          "numFmtId": "0"
+         },
+         [
+          [
+           "sharedItems",
+           {
+            "containsDate": "1",
+            "containsMixedTypes": "1",
+            "containsSemiMixedTypes": "0",
+            "containsString": "0",
+            "maxDate": "1899-12-31T01:01:04",
+            "minDate": "2026-01-01T00:00:00"
+           },
+           []
+          ]
+         ]
+        ],
+        [
+         "cacheField",
+         {
+          "name": "b6",
+          "numFmtId": "0"
+         },
+         [
+          [
+           "sharedItems",
+           {
+            "containsDate": "1",
+            "containsMixedTypes": "1",
+            "containsSemiMixedTypes": "0",
+            "containsString": "0",
+            "maxDate": "1899-12-31T00:02:04",
+            "minDate": "2026-01-01T00:00:00"
+           },
+           []
+          ]
+         ]
+        ],
+        [
+         "cacheField",
+         {
+          "name": "neg5_first",
+          "numFmtId": "0"
+         },
+         [
+          [
+           "sharedItems",
+           {
+            "containsDate": "1",
+            "containsMixedTypes": "1",
+            "containsSemiMixedTypes": "0",
+            "containsString": "0",
+            "maxDate": "2026-01-02T00:00:00",
+            "minDate": "1899-12-31T00:23:12"
+           },
+           []
+          ]
+         ]
+        ]
+       ]
+      ]
+     ]
+    ],
+    "records": [
+     [
+      [
+       "s",
+       "x"
+      ],
+      [
+       "d",
+       "2026-01-01T00:00:00"
+      ],
+      [
+       "d",
+       "2026-01-01T00:00:00"
+      ],
+      [
+       "d",
+       "2026-01-01T00:00:00"
+      ],
+      [
+       "d",
+       "2026-01-01T00:00:00"
+      ],
+      [
+       "d",
+       "2026-01-01T00:00:00"
+      ],
+      [
+       "d",
+       "2026-01-01T00:00:00"
+      ],
+      [
+       "d",
+       "2026-01-01T00:00:00"
+      ],
+      [
+       "d",
+       "2026-01-01T00:00:00"
+      ],
+      [
+       "d",
+       "2026-01-01T00:00:00"
+      ],
+      [
+       "d",
+       "2026-01-01T00:00:00"
+      ],
+      [
+       "d",
+       "2026-01-01T00:00:00"
+      ],
+      [
+       "d",
+       "2026-01-01T00:00:00"
+      ],
+      [
+       "d",
+       "2026-01-01T00:00:00"
+      ],
+      [
+       "d",
+       "2026-01-01T00:00:00"
+      ],
+      [
+       "d",
+       "2026-01-01T00:00:00"
+      ],
+      [
+       "d",
+       "2026-01-01T00:00:00"
+      ],
+      [
+       "n",
+       "-5"
+      ]
+     ],
+     [
+      [
+       "s",
+       "y"
+      ],
+      [
+       "n",
+       "2.0000019073786364"
+      ],
+      [
+       "n",
+       "2.0000000074805842"
+      ],
+      [
+       "n",
+       "2.00000190737858"
+      ],
+      [
+       "n",
+       "2.0000019073785804"
+      ],
+      [
+       "n",
+       "2.0000019073785809"
+      ],
+      [
+       "n",
+       "2.0000019073495325"
+      ],
+      [
+       "n",
+       "2.0000000000300036"
+      ],
+      [
+       "n",
+       "2.0000019077278823"
+      ],
+      [
+       "n",
+       "2.0000762939753161"
+      ],
+      [
+       "n",
+       "0.1"
+      ],
+      [
+       "n",
+       "0.33333333333333331"
+      ],
+      [
+       "n",
+       "1.0000000000000001E+300"
+      ],
+      [
+       "n",
+       "2.0000019073821771"
+      ],
+      [
+       "n",
+       "2.0000019073821775"
+      ],
+      [
+       "n",
+       "2.00048828125"
+      ],
+      [
+       "n",
+       "2.125"
+      ],
+      [
+       "d",
+       "2026-01-01T00:00:00"
+      ]
+     ]
+    ]
+   }
+  ],
+  "formula_cells": {},
+  "pivots": [
+   {
+    "cache": 0,
+    "cells": {},
+    "definition": [
+     "pivotTableDefinition",
+     {
+      "applyAlignmentFormats": "0",
+      "applyBorderFormats": "0",
+      "applyFontFormats": "0",
+      "applyNumberFormats": "0",
+      "applyPatternFormats": "0",
+      "applyWidthHeightFormats": "1",
+      "dataCaption": "Values",
+      "indent": "0",
+      "itemPrintTitles": "1",
+      "multipleFieldFilters": "0",
+      "name": "PivotTable1",
+      "outline": "1",
+      "outlineData": "1",
+      "useAutoFormatting": "1"
+     },
+     [
+      [
+       "location",
+       {
+        "firstDataCol": "0",
+        "firstDataRow": "1",
+        "firstHeaderRow": "1",
+        "ref": "A3:C20"
+       },
+       []
+      ],
+      [
+       "pivotFields",
+       {
+        "count": "18"
+       },
+       [
+        [
+         "pivotField",
+         {
+          "showAll": "0"
+         },
+         []
+        ],
+        [
+         "pivotField",
+         {
+          "showAll": "0"
+         },
+         []
+        ],
+        [
+         "pivotField",
+         {
+          "showAll": "0"
+         },
+         []
+        ],
+        [
+         "pivotField",
+         {
+          "showAll": "0"
+         },
+         []
+        ],
+        [
+         "pivotField",
+         {
+          "showAll": "0"
+         },
+         []
+        ],
+        [
+         "pivotField",
+         {
+          "showAll": "0"
+         },
+         []
+        ],
+        [
+         "pivotField",
+         {
+          "showAll": "0"
+         },
+         []
+        ],
+        [
+         "pivotField",
+         {
+          "showAll": "0"
+         },
+         []
+        ],
+        [
+         "pivotField",
+         {
+          "showAll": "0"
+         },
+         []
+        ],
+        [
+         "pivotField",
+         {
+          "showAll": "0"
+         },
+         []
+        ],
+        [
+         "pivotField",
+         {
+          "showAll": "0"
+         },
+         []
+        ],
+        [
+         "pivotField",
+         {
+          "showAll": "0"
+         },
+         []
+        ],
+        [
+         "pivotField",
+         {
+          "showAll": "0"
+         },
+         []
+        ],
+        [
+         "pivotField",
+         {
+          "showAll": "0"
+         },
+         []
+        ],
+        [
+         "pivotField",
+         {
+          "showAll": "0"
+         },
+         []
+        ],
+        [
+         "pivotField",
+         {
+          "showAll": "0"
+         },
+         []
+        ],
+        [
+         "pivotField",
+         {
+          "showAll": "0"
+         },
+         []
+        ],
+        [
+         "pivotField",
+         {
+          "showAll": "0"
+         },
+         []
+        ]
+       ]
+      ],
+      [
+       "pivotTableStyleInfo",
+       {
+        "name": "PivotStyleLight16",
+        "showColHeaders": "1",
+        "showColStripes": "0",
+        "showLastColumn": "1",
+        "showRowHeaders": "1",
+        "showRowStripes": "0"
+       },
+       []
+      ]
+     ]
+    ],
+    "sheet": "Sheet2"
+   }
+  ]
+ }
+}

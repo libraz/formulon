@@ -1,0 +1,1308 @@
+{
+ "meta": {
+  "case": "type_basic_inline",
+  "description": "Source values replaced; record typing and sharedItems flags on Refresh.",
+  "excel_version": "16.114.4",
+  "expect": "ok",
+  "target": "mac-365-ja_JP",
+  "trigger": "refresh"
+ },
+ "projection": {
+  "caches": [
+   {
+    "definition": [
+     "pivotCacheDefinition",
+     {
+      "recordCount": "6"
+     },
+     [
+      [
+       "cacheSource",
+       {
+        "type": "worksheet"
+       },
+       [
+        [
+         "worksheetSource",
+         {
+          "ref": "A1:W7",
+          "sheet": "Sheet1"
+         },
+         []
+        ]
+       ]
+      ],
+      [
+       "cacheFields",
+       {
+        "count": "23"
+       },
+       [
+        [
+         "cacheField",
+         {
+          "name": "Key",
+          "numFmtId": "0"
+         },
+         [
+          [
+           "sharedItems",
+           {},
+           []
+          ]
+         ]
+        ],
+        [
+         "cacheField",
+         {
+          "name": "NumInt",
+          "numFmtId": "0"
+         },
+         [
+          [
+           "sharedItems",
+           {
+            "containsInteger": "1",
+            "containsNumber": "1",
+            "containsSemiMixedTypes": "0",
+            "containsString": "0",
+            "maxValue": "6",
+            "minValue": "1"
+           },
+           []
+          ]
+         ]
+        ],
+        [
+         "cacheField",
+         {
+          "name": "NumFloat",
+          "numFmtId": "0"
+         },
+         [
+          [
+           "sharedItems",
+           {
+            "containsNumber": "1",
+            "containsSemiMixedTypes": "0",
+            "containsString": "0",
+            "maxValue": "10000000000",
+            "minValue": "-3"
+           },
+           []
+          ]
+         ]
+        ],
+        [
+         "cacheField",
+         {
+          "name": "Text",
+          "numFmtId": "0"
+         },
+         [
+          [
+           "sharedItems",
+           {},
+           []
+          ]
+         ]
+        ],
+        [
+         "cacheField",
+         {
+          "name": "Date",
+          "numFmtId": "179"
+         },
+         [
+          [
+           "sharedItems",
+           {
+            "containsDate": "1",
+            "containsNonDate": "0",
+            "containsSemiMixedTypes": "0",
+            "containsString": "0",
+            "maxDate": "2026-03-02T00:00:00",
+            "minDate": "2025-12-31T00:00:00"
+           },
+           []
+          ]
+         ]
+        ],
+        [
+         "cacheField",
+         {
+          "name": "DateTime",
+          "numFmtId": "180"
+         },
+         [
+          [
+           "sharedItems",
+           {
+            "containsDate": "1",
+            "containsNonDate": "0",
+            "containsSemiMixedTypes": "0",
+            "containsString": "0",
+            "maxDate": "2026-01-03T00:00:00",
+            "minDate": "2026-01-01T12:30:00"
+           },
+           []
+          ]
+         ]
+        ],
+        [
+         "cacheField",
+         {
+          "name": "Time",
+          "numFmtId": "20"
+         },
+         [
+          [
+           "sharedItems",
+           {
+            "containsDate": "1",
+            "containsNonDate": "0",
+            "containsSemiMixedTypes": "0",
+            "containsString": "0",
+            "maxDate": "1899-12-30T18:00:00",
+            "minDate": "1899-12-30T06:00:00"
+           },
+           []
+          ]
+         ]
+        ],
+        [
+         "cacheField",
+         {
+          "name": "DateNumMix",
+          "numFmtId": "0"
+         },
+         [
+          [
+           "sharedItems",
+           {
+            "containsDate": "1",
+            "containsMixedTypes": "1",
+            "containsSemiMixedTypes": "0",
+            "containsString": "0",
+            "maxDate": "1899-12-31T00:35:04",
+            "minDate": "2026-01-01T00:00:00"
+           },
+           []
+          ]
+         ]
+        ],
+        [
+         "cacheField",
+         {
+          "name": "Bool",
+          "numFmtId": "0"
+         },
+         [
+          [
+           "sharedItems",
+           {},
+           []
+          ]
+         ]
+        ],
+        [
+         "cacheField",
+         {
+          "name": "Err",
+          "numFmtId": "0"
+         },
+         [
+          [
+           "sharedItems",
+           {
+            "containsInteger": "1",
+            "containsMixedTypes": "1",
+            "containsNumber": "1",
+            "maxValue": "3",
+            "minValue": "1"
+           },
+           []
+          ]
+         ]
+        ],
+        [
+         "cacheField",
+         {
+          "name": "BlankText",
+          "numFmtId": "0"
+         },
+         [
+          [
+           "sharedItems",
+           {
+            "containsBlank": "1"
+           },
+           []
+          ]
+         ]
+        ],
+        [
+         "cacheField",
+         {
+          "name": "BlankNum",
+          "numFmtId": "0"
+         },
+         [
+          [
+           "sharedItems",
+           {
+            "containsBlank": "1",
+            "containsInteger": "1",
+            "containsNumber": "1",
+            "containsString": "0",
+            "maxValue": "4",
+            "minValue": "1"
+           },
+           []
+          ]
+         ]
+        ],
+        [
+         "cacheField",
+         {
+          "name": "AllBlank",
+          "numFmtId": "0"
+         },
+         [
+          [
+           "sharedItems",
+           {
+            "containsBlank": "1",
+            "containsNonDate": "0",
+            "containsString": "0"
+           },
+           []
+          ]
+         ]
+        ],
+        [
+         "cacheField",
+         {
+          "name": "NumText",
+          "numFmtId": "0"
+         },
+         [
+          [
+           "sharedItems",
+           {},
+           []
+          ]
+         ]
+        ],
+        [
+         "cacheField",
+         {
+          "name": "FormNum",
+          "numFmtId": "0"
+         },
+         [
+          [
+           "sharedItems",
+           {
+            "containsNumber": "1",
+            "containsSemiMixedTypes": "0",
+            "containsString": "0",
+            "maxValue": "6",
+            "minValue": "-1"
+           },
+           []
+          ]
+         ]
+        ],
+        [
+         "cacheField",
+         {
+          "name": "FormText",
+          "numFmtId": "0"
+         },
+         [
+          [
+           "sharedItems",
+           {},
+           []
+          ]
+         ]
+        ],
+        [
+         "cacheField",
+         {
+          "name": "LongText",
+          "numFmtId": "0"
+         },
+         [
+          [
+           "sharedItems",
+           {
+            "longText": "1"
+           },
+           []
+          ]
+         ]
+        ],
+        [
+         "cacheField",
+         {
+          "name": "TextNumMix",
+          "numFmtId": "0"
+         },
+         [
+          [
+           "sharedItems",
+           {
+            "containsMixedTypes": "1",
+            "containsNumber": "1",
+            "maxValue": "2.5",
+            "minValue": "1"
+           },
+           []
+          ]
+         ]
+        ],
+        [
+         "cacheField",
+         {
+          "name": "BoolNumMix",
+          "numFmtId": "0"
+         },
+         [
+          [
+           "sharedItems",
+           {
+            "containsInteger": "1",
+            "containsMixedTypes": "1",
+            "containsNumber": "1",
+            "maxValue": "2",
+            "minValue": "0"
+           },
+           []
+          ]
+         ]
+        ],
+        [
+         "cacheField",
+         {
+          "name": "PctNum",
+          "numFmtId": "9"
+         },
+         [
+          [
+           "sharedItems",
+           {
+            "containsNumber": "1",
+            "containsSemiMixedTypes": "0",
+            "containsString": "0",
+            "maxValue": "0.6",
+            "minValue": "0.1"
+           },
+           []
+          ]
+         ]
+        ],
+        [
+         "cacheField",
+         {
+          "name": "Negative",
+          "numFmtId": "0"
+         },
+         [
+          [
+           "sharedItems",
+           {
+            "containsNumber": "1",
+            "containsSemiMixedTypes": "0",
+            "containsString": "0",
+            "maxValue": "-1",
+            "minValue": "-100"
+           },
+           []
+          ]
+         ]
+        ],
+        [
+         "cacheField",
+         {
+          "name": "Width",
+          "numFmtId": "0"
+         },
+         [
+          [
+           "sharedItems",
+           {},
+           []
+          ]
+         ]
+        ],
+        [
+         "cacheField",
+         {
+          "name": "Trail",
+          "numFmtId": "0"
+         },
+         [
+          [
+           "sharedItems",
+           {},
+           []
+          ]
+         ]
+        ]
+       ]
+      ]
+     ]
+    ],
+    "records": [
+     [
+      [
+       "s",
+       "x"
+      ],
+      [
+       "n",
+       "1"
+      ],
+      [
+       "n",
+       "1.5"
+      ],
+      [
+       "s",
+       "a"
+      ],
+      [
+       "d",
+       "2026-01-01T00:00:00"
+      ],
+      [
+       "d",
+       "2026-01-01T12:30:00"
+      ],
+      [
+       "d",
+       "1899-12-30T12:00:00"
+      ],
+      [
+       "d",
+       "2026-01-01T00:00:00"
+      ],
+      [
+       "b",
+       "1"
+      ],
+      [
+       "e",
+       "#N/A"
+      ],
+      [
+       "s",
+       "a"
+      ],
+      [
+       "n",
+       "1"
+      ],
+      [
+       "m",
+       null
+      ],
+      [
+       "s",
+       "123"
+      ],
+      [
+       "n",
+       "2"
+      ],
+      [
+       "s",
+       "ab"
+      ],
+      [
+       "s",
+       "LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL"
+      ],
+      [
+       "s",
+       "a"
+      ],
+      [
+       "b",
+       "1"
+      ],
+      [
+       "n",
+       "0.1"
+      ],
+      [
+       "n",
+       "-1"
+      ],
+      [
+       "s",
+       "ａ"
+      ],
+      [
+       "s",
+       "a"
+      ]
+     ],
+     [
+      [
+       "s",
+       "y"
+      ],
+      [
+       "n",
+       "2"
+      ],
+      [
+       "n",
+       "2"
+      ],
+      [
+       "s",
+       "b"
+      ],
+      [
+       "d",
+       "2026-02-01T00:00:00"
+      ],
+      [
+       "d",
+       "2026-01-01T12:30:00"
+      ],
+      [
+       "d",
+       "1899-12-30T06:00:00"
+      ],
+      [
+       "n",
+       "5"
+      ],
+      [
+       "b",
+       "0"
+      ],
+      [
+       "e",
+       "#DIV/0!"
+      ],
+      [
+       "m",
+       null
+      ],
+      [
+       "m",
+       null
+      ],
+      [
+       "m",
+       null
+      ],
+      [
+       "s",
+       "45"
+      ],
+      [
+       "n",
+       "6"
+      ],
+      [
+       "s",
+       "c"
+      ],
+      [
+       "s",
+       "short"
+      ],
+      [
+       "n",
+       "1"
+      ],
+      [
+       "n",
+       "1"
+      ],
+      [
+       "n",
+       "0.2"
+      ],
+      [
+       "n",
+       "-2"
+      ],
+      [
+       "s",
+       "a"
+      ],
+      [
+       "s",
+       "a "
+      ]
+     ],
+     [
+      [
+       "s",
+       "x"
+      ],
+      [
+       "n",
+       "3"
+      ],
+      [
+       "n",
+       "-3"
+      ],
+      [
+       "s",
+       "c"
+      ],
+      [
+       "d",
+       "2025-12-31T00:00:00"
+      ],
+      [
+       "d",
+       "2026-01-01T12:30:00"
+      ],
+      [
+       "d",
+       "1899-12-30T18:00:00"
+      ],
+      [
+       "d",
+       "2026-01-03T00:00:00"
+      ],
+      [
+       "b",
+       "1"
+      ],
+      [
+       "n",
+       "1"
+      ],
+      [
+       "s",
+       "b"
+      ],
+      [
+       "n",
+       "2"
+      ],
+      [
+       "m",
+       null
+      ],
+      [
+       "s",
+       "123"
+      ],
+      [
+       "n",
+       "2.5"
+      ],
+      [
+       "s",
+       "ab"
+      ],
+      [
+       "s",
+       "MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM"
+      ],
+      [
+       "s",
+       "b"
+      ],
+      [
+       "b",
+       "0"
+      ],
+      [
+       "n",
+       "0.3"
+      ],
+      [
+       "n",
+       "-3.5"
+      ],
+      [
+       "s",
+       "a"
+      ],
+      [
+       "s",
+       "a"
+      ]
+     ],
+     [
+      [
+       "s",
+       "y"
+      ],
+      [
+       "n",
+       "4"
+      ],
+      [
+       "n",
+       "0"
+      ],
+      [
+       "s",
+       "a"
+      ],
+      [
+       "d",
+       "2026-01-01T00:00:00"
+      ],
+      [
+       "d",
+       "2026-01-02T00:00:00"
+      ],
+      [
+       "d",
+       "1899-12-30T12:00:00"
+      ],
+      [
+       "n",
+       "7"
+      ],
+      [
+       "b",
+       "1"
+      ],
+      [
+       "n",
+       "2"
+      ],
+      [
+       "s",
+       "a"
+      ],
+      [
+       "n",
+       "3"
+      ],
+      [
+       "m",
+       null
+      ],
+      [
+       "s",
+       "x7"
+      ],
+      [
+       "n",
+       "2"
+      ],
+      [
+       "s",
+       "d"
+      ],
+      [
+       "s",
+       "NNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNN"
+      ],
+      [
+       "n",
+       "2.5"
+      ],
+      [
+       "n",
+       "0"
+      ],
+      [
+       "n",
+       "0.1"
+      ],
+      [
+       "n",
+       "-1"
+      ],
+      [
+       "s",
+       "ｱ"
+      ],
+      [
+       "s",
+       "b"
+      ]
+     ],
+     [
+      [
+       "s",
+       "x"
+      ],
+      [
+       "n",
+       "5"
+      ],
+      [
+       "n",
+       "10000000000"
+      ],
+      [
+       "s",
+       "b"
+      ],
+      [
+       "d",
+       "2026-03-01T00:00:00"
+      ],
+      [
+       "d",
+       "2026-01-02T00:00:00"
+      ],
+      [
+       "d",
+       "1899-12-30T06:00:00"
+      ],
+      [
+       "n",
+       "8"
+      ],
+      [
+       "b",
+       "0"
+      ],
+      [
+       "e",
+       "#N/A"
+      ],
+      [
+       "m",
+       null
+      ],
+      [
+       "m",
+       null
+      ],
+      [
+       "m",
+       null
+      ],
+      [
+       "s",
+       "0"
+      ],
+      [
+       "n",
+       "0"
+      ],
+      [
+       "s",
+       "e"
+      ],
+      [
+       "s",
+       "short"
+      ],
+      [
+       "s",
+       "a"
+      ],
+      [
+       "b",
+       "1"
+      ],
+      [
+       "n",
+       "0.5"
+      ],
+      [
+       "n",
+       "-2"
+      ],
+      [
+       "s",
+       "ア"
+      ],
+      [
+       "s",
+       " a"
+      ]
+     ],
+     [
+      [
+       "s",
+       "y"
+      ],
+      [
+       "n",
+       "6"
+      ],
+      [
+       "n",
+       "0.25"
+      ],
+      [
+       "s",
+       "a"
+      ],
+      [
+       "d",
+       "2026-01-02T00:00:00"
+      ],
+      [
+       "d",
+       "2026-01-02T00:00:00"
+      ],
+      [
+       "d",
+       "1899-12-30T18:00:00"
+      ],
+      [
+       "n",
+       "9"
+      ],
+      [
+       "b",
+       "0"
+      ],
+      [
+       "n",
+       "3"
+      ],
+      [
+       "s",
+       "c"
+      ],
+      [
+       "n",
+       "4"
+      ],
+      [
+       "m",
+       null
+      ],
+      [
+       "s",
+       "45"
+      ],
+      [
+       "n",
+       "-1"
+      ],
+      [
+       "s",
+       "c"
+      ],
+      [
+       "s",
+       "x"
+      ],
+      [
+       "n",
+       "1"
+      ],
+      [
+       "n",
+       "2"
+      ],
+      [
+       "n",
+       "0.6"
+      ],
+      [
+       "n",
+       "-100"
+      ],
+      [
+       "s",
+       "あ"
+      ],
+      [
+       "s",
+       "b"
+      ]
+     ]
+    ]
+   }
+  ],
+  "formula_cells": {
+   "Sheet1!J2": [
+    "e",
+    "#N/A"
+   ],
+   "Sheet1!J3": [
+    "e",
+    "#DIV/0!"
+   ],
+   "Sheet1!J6": [
+    "e",
+    "#N/A"
+   ],
+   "Sheet1!O2": [
+    "n",
+    2.0
+   ],
+   "Sheet1!O3": [
+    "n",
+    6.0
+   ],
+   "Sheet1!O4": [
+    "n",
+    2.5
+   ],
+   "Sheet1!O5": [
+    "n",
+    2.0
+   ],
+   "Sheet1!O6": [
+    "n",
+    0.0
+   ],
+   "Sheet1!O7": [
+    "n",
+    -1.0
+   ],
+   "Sheet1!P2": [
+    "s",
+    "ab"
+   ],
+   "Sheet1!P3": [
+    "s",
+    "c"
+   ],
+   "Sheet1!P4": [
+    "s",
+    "ab"
+   ],
+   "Sheet1!P5": [
+    "s",
+    "d"
+   ],
+   "Sheet1!P6": [
+    "s",
+    "e"
+   ],
+   "Sheet1!P7": [
+    "s",
+    "c"
+   ]
+  },
+  "pivots": [
+   {
+    "cache": 0,
+    "cells": {},
+    "definition": [
+     "pivotTableDefinition",
+     {
+      "applyAlignmentFormats": "0",
+      "applyBorderFormats": "0",
+      "applyFontFormats": "0",
+      "applyNumberFormats": "0",
+      "applyPatternFormats": "0",
+      "applyWidthHeightFormats": "1",
+      "dataCaption": "Values",
+      "indent": "0",
+      "itemPrintTitles": "1",
+      "multipleFieldFilters": "0",
+      "name": "PivotTable1",
+      "outline": "1",
+      "outlineData": "1",
+      "useAutoFormatting": "1"
+     },
+     [
+      [
+       "location",
+       {
+        "firstDataCol": "0",
+        "firstDataRow": "1",
+        "firstHeaderRow": "1",
+        "ref": "A3:C20"
+       },
+       []
+      ],
+      [
+       "pivotFields",
+       {
+        "count": "23"
+       },
+       [
+        [
+         "pivotField",
+         {
+          "showAll": "0"
+         },
+         []
+        ],
+        [
+         "pivotField",
+         {
+          "showAll": "0"
+         },
+         []
+        ],
+        [
+         "pivotField",
+         {
+          "showAll": "0"
+         },
+         []
+        ],
+        [
+         "pivotField",
+         {
+          "showAll": "0"
+         },
+         []
+        ],
+        [
+         "pivotField",
+         {
+          "showAll": "0"
+         },
+         []
+        ],
+        [
+         "pivotField",
+         {
+          "showAll": "0"
+         },
+         []
+        ],
+        [
+         "pivotField",
+         {
+          "showAll": "0"
+         },
+         []
+        ],
+        [
+         "pivotField",
+         {
+          "showAll": "0"
+         },
+         []
+        ],
+        [
+         "pivotField",
+         {
+          "showAll": "0"
+         },
+         []
+        ],
+        [
+         "pivotField",
+         {
+          "showAll": "0"
+         },
+         []
+        ],
+        [
+         "pivotField",
+         {
+          "showAll": "0"
+         },
+         []
+        ],
+        [
+         "pivotField",
+         {
+          "showAll": "0"
+         },
+         []
+        ],
+        [
+         "pivotField",
+         {
+          "showAll": "0"
+         },
+         []
+        ],
+        [
+         "pivotField",
+         {
+          "showAll": "0"
+         },
+         []
+        ],
+        [
+         "pivotField",
+         {
+          "showAll": "0"
+         },
+         []
+        ],
+        [
+         "pivotField",
+         {
+          "showAll": "0"
+         },
+         []
+        ],
+        [
+         "pivotField",
+         {
+          "showAll": "0"
+         },
+         []
+        ],
+        [
+         "pivotField",
+         {
+          "showAll": "0"
+         },
+         []
+        ],
+        [
+         "pivotField",
+         {
+          "showAll": "0"
+         },
+         []
+        ],
+        [
+         "pivotField",
+         {
+          "showAll": "0"
+         },
+         []
+        ],
+        [
+         "pivotField",
+         {
+          "showAll": "0"
+         },
+         []
+        ],
+        [
+         "pivotField",
+         {
+          "showAll": "0"
+         },
+         []
+        ],
+        [
+         "pivotField",
+         {
+          "showAll": "0"
+         },
+         []
+        ]
+       ]
+      ],
+      [
+       "pivotTableStyleInfo",
+       {
+        "name": "PivotStyleLight16",
+        "showColHeaders": "1",
+        "showColStripes": "0",
+        "showLastColumn": "1",
+        "showRowHeaders": "1",
+        "showRowStripes": "0"
+       },
+       []
+      ]
+     ]
+    ],
+    "sheet": "Sheet2"
+   }
+  ]
+ }
+}

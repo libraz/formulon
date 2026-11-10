@@ -934,4 +934,35 @@ if(Python3_Interpreter_FOUND)
   # xlwings) instead -- so those cases skip here and are covered by
   # `make python-test`, which runs on an interpreter that has the binding.
   formulon_add_oracle_unittest(formulon_print_roundtrip_fixture tools.oracle.print_roundtrip_test)
+  formulon_add_oracle_unittest(formulon_pivot_refresh_golden_unit tools.oracle.pivot_refresh_golden_test)
+endif()
+
+# ---------------------------------------------------------------------------
+# Pivot-refresh oracle: Excel-saved before/after pairs under
+# cases_wb/pivot_refresh/<case>/. The apply tool refreshes before.xlsx through
+# the engine; pivot_refresh_golden.py compares its output with golden.json.
+add_executable(formulon_pivot_refresh_apply pivot_refresh_apply.cpp)
+target_link_libraries(formulon_pivot_refresh_apply PRIVATE formulon_static)
+target_include_directories(formulon_pivot_refresh_apply PRIVATE ${CMAKE_SOURCE_DIR}/src)
+formulon_apply_warnings(formulon_pivot_refresh_apply)
+if(DEFINED _FORMULON_BEHAVIOR_PY)
+  file(GLOB _pivot_refresh_cases LIST_DIRECTORIES true "${CMAKE_CURRENT_SOURCE_DIR}/cases_wb/pivot_refresh/*")
+  foreach(_case_dir IN LISTS _pivot_refresh_cases)
+    if(EXISTS "${_case_dir}/golden.json")
+      get_filename_component(_case "${_case_dir}" NAME)
+      add_test(
+        NAME pivot_refresh_${_case}
+        COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/oracle/pivot_refresh_golden.py run
+                --apply $<TARGET_FILE:formulon_pivot_refresh_apply> ${_case_dir}
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+      )
+      set_tests_properties(pivot_refresh_${_case} PROPERTIES LABELS "oracle" SKIP_RETURN_CODE 77)
+    endif()
+  endforeach()
+  add_test(
+    NAME pivot_refresh_golden_integrity
+    COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/oracle/pivot_refresh_golden.py check
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  )
+  set_tests_properties(pivot_refresh_golden_integrity PROPERTIES LABELS "oracle;oracle-metadata")
 endif()
