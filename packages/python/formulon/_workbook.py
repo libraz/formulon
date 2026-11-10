@@ -2095,6 +2095,17 @@ class HyperlinkInput:
     range: Union[CellRect, str, None] = None
 
 
+@dataclass
+class CommentInput:
+    """The note :meth:`Sheet.set_comment` writes; an omitted ``author`` is ``""``.
+
+    A :class:`Comment` read back is accepted in its place.
+    """
+
+    text: str
+    author: str = ""
+
+
 @dataclass(frozen=True)
 class Comment:
     """A cell comment; an omitted ``author`` is the empty string."""

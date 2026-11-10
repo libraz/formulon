@@ -10,6 +10,7 @@ from formulon import (
     CellAddress,
     CellRect,
     Comment,
+    CommentInput,
     FormulonError,
     HyperlinkInput,
     StatusCode,
@@ -49,6 +50,20 @@ class NoteTests(_Base):
         self.assertTrue(self.ws.get_cell_phonetic_properties("A1").stated)
         self.ws.set_cell_phonetic_properties("A1", None)  # type: ignore[arg-type]
         self.assertFalse(self.ws.get_cell_phonetic_properties("A1").stated)
+
+    def test_set_comment_takes_comment_input_and_a_read_comment(self) -> None:
+        self.ws.set_comment("A1", CommentInput("plain"))
+        self.assertEqual(self.ws.get_comment("A1"), Comment("plain", author=""))
+        self.ws.set_comment(0, 1, CommentInput("signed", "ann"))
+        self.assertEqual(self.ws.get_comment(0, 1), Comment("signed", author="ann"))
+        read = self.ws.get_comment(0, 1)
+        assert read is not None
+        self.ws.set_comment("C1", read)
+        self.assertEqual(self.ws.get_comment("C1"), read)
+
+    def test_set_comment_rejects_another_record(self) -> None:
+        with self.assertRaisesRegex(TypeError, r"must be a CommentInput, a Comment or null"):
+            self.ws.set_comment("A1", HyperlinkInput(target="https://example.test/"))  # type: ignore[arg-type]
 
     def test_list_comments_cell(self) -> None:
         self.ws.set_comment("B2", Comment("hi", author="ann"))

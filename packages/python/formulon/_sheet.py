@@ -103,6 +103,7 @@ from ._workbook import (
     ColumnBreak,
     ColumnLayout,
     Comment,
+    CommentInput,
     ComparisonOperator,
     ConditionalFormat,
     ConditionalFormatInput,
@@ -2872,10 +2873,10 @@ class Sheet(_NoCopy):
 
     @overload
     @_coordinate_form
-    def set_comment(self, row: int, col: int, comment: Optional[Comment]) -> None: ...
+    def set_comment(self, row: int, col: int, comment: Union[CommentInput, Comment, None]) -> None: ...
 
     @overload
-    def set_comment(self, a1: str, comment: Optional[Comment]) -> None: ...
+    def set_comment(self, a1: str, comment: Union[CommentInput, Comment, None]) -> None: ...
 
     def set_comment(self, *args: Any, **kwargs: Any) -> None:
         """Insert or replace the comment (note) at ``(row, col)``; ``None`` removes it.
@@ -2890,8 +2891,8 @@ class Sheet(_NoCopy):
             carries a note or a thread, never both.
         """
         row, col, comment = self._cell_args("set_comment", args, kwargs, ("comment",))
-        if comment is not None and not isinstance(comment, Comment):
-            raise TypeError(_argument_message("comment", "must be a Comment or null"))
+        if comment is not None and not isinstance(comment, (CommentInput, Comment)):
+            raise TypeError(_argument_message("comment", "must be a CommentInput, a Comment or null"))
         sheet = self._index()
         h = self._workbook._require()
         with _ArgScope() as scope:

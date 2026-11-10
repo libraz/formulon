@@ -270,7 +270,8 @@ entries:
     kind: record
     role: input
     js: CommentInput
-    surfaces: [wasm, native]
+    py: CommentInput
+    surfaces: [wasm, native, py]
   record.workbook_protection:
     kind: record
     role: result

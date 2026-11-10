@@ -881,6 +881,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   names its second argument as JavaScript does and requires it.
   `PivotDataFieldInput(field_index, name=None, ...)` takes the field first,
   and `PivotFieldInput.custom_name` is `None` when omitted.
+  `Sheet.set_comment` takes a `CommentInput(text, author="")`, as JavaScript
+  takes `CommentInput`; a `Comment` read back is still accepted.
 - **JavaScript, Python:** `ThreadedCommentInput.id` is optional (the engine
   generates one) and `personId` is required. Python `ChartCategories.format_code`
   is `number_format`.
