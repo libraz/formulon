@@ -1,0 +1,2473 @@
+suite: error_args_paired_stats
+description: >
+  Which error a paired-array statistic reports when an argument is a referenced cell or a range
+  holding a plain #VALUE!, #N/A or #DIV/0!, with the other arguments valid, plus a valid control.
+tolerance: { abs: 0, rel: 0 }
+locale: ja-JP
+cases:
+  - id: correl_control
+    setup:
+      B1: 1
+      B2: 2
+      B3: 4
+      C1: 2
+      C2: 3
+      C3: 7
+    formula: '=CORREL(B1:B3,C1:C3)'
+  - id: correl_p1_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      C1: 2
+      C2: 3
+      C3: 7
+    formula: '=CORREL(A1,C1:C3)'
+  - id: correl_p1_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      C1: 2
+      C2: 3
+      C3: 7
+    formula: '=CORREL(A2,C1:C3)'
+  - id: correl_p1_rng_v
+    setup:
+      C1: 2
+      C2: 3
+      C3: 7
+      E1: '="a"+1'
+      E2: 2
+      E3: 5
+    formula: '=CORREL(E1:E3,C1:C3)'
+  - id: correl_p1_rng_na
+    setup:
+      C1: 2
+      C2: 3
+      C3: 7
+      F1: '=NA()'
+      F2: 2
+      F3: 5
+    formula: '=CORREL(F1:F3,C1:C3)'
+  - id: correl_p2_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+    formula: '=CORREL(B1:B3,A1)'
+  - id: correl_p2_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+    formula: '=CORREL(B1:B3,A2)'
+  - id: correl_p2_rng_v
+    setup:
+      B1: 1
+      B2: 2
+      B3: 4
+      E1: '="a"+1'
+      E2: 2
+      E3: 5
+    formula: '=CORREL(B1:B3,E1:E3)'
+  - id: correl_p2_rng_na
+    setup:
+      B1: 1
+      B2: 2
+      B3: 4
+      F1: '=NA()'
+      F2: 2
+      F3: 5
+    formula: '=CORREL(B1:B3,F1:F3)'
+  - id: covar_control
+    setup:
+      B1: 1
+      B2: 2
+      B3: 4
+      C1: 2
+      C2: 3
+      C3: 7
+    formula: '=COVAR(B1:B3,C1:C3)'
+  - id: covar_p1_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      C1: 2
+      C2: 3
+      C3: 7
+    formula: '=COVAR(A1,C1:C3)'
+  - id: covar_p1_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      C1: 2
+      C2: 3
+      C3: 7
+    formula: '=COVAR(A2,C1:C3)'
+  - id: covar_p1_rng_v
+    setup:
+      C1: 2
+      C2: 3
+      C3: 7
+      E1: '="a"+1'
+      E2: 2
+      E3: 5
+    formula: '=COVAR(E1:E3,C1:C3)'
+  - id: covar_p1_rng_na
+    setup:
+      C1: 2
+      C2: 3
+      C3: 7
+      F1: '=NA()'
+      F2: 2
+      F3: 5
+    formula: '=COVAR(F1:F3,C1:C3)'
+  - id: covar_p2_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+    formula: '=COVAR(B1:B3,A1)'
+  - id: covar_p2_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+    formula: '=COVAR(B1:B3,A2)'
+  - id: covar_p2_rng_v
+    setup:
+      B1: 1
+      B2: 2
+      B3: 4
+      E1: '="a"+1'
+      E2: 2
+      E3: 5
+    formula: '=COVAR(B1:B3,E1:E3)'
+  - id: covar_p2_rng_na
+    setup:
+      B1: 1
+      B2: 2
+      B3: 4
+      F1: '=NA()'
+      F2: 2
+      F3: 5
+    formula: '=COVAR(B1:B3,F1:F3)'
+  - id: covariance_p_control
+    setup:
+      B1: 1
+      B2: 2
+      B3: 4
+      C1: 2
+      C2: 3
+      C3: 7
+    formula: '=COVARIANCE.P(B1:B3,C1:C3)'
+  - id: covariance_p_p1_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      C1: 2
+      C2: 3
+      C3: 7
+    formula: '=COVARIANCE.P(A1,C1:C3)'
+  - id: covariance_p_p1_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      C1: 2
+      C2: 3
+      C3: 7
+    formula: '=COVARIANCE.P(A2,C1:C3)'
+  - id: covariance_p_p1_rng_v
+    setup:
+      C1: 2
+      C2: 3
+      C3: 7
+      E1: '="a"+1'
+      E2: 2
+      E3: 5
+    formula: '=COVARIANCE.P(E1:E3,C1:C3)'
+  - id: covariance_p_p1_rng_na
+    setup:
+      C1: 2
+      C2: 3
+      C3: 7
+      F1: '=NA()'
+      F2: 2
+      F3: 5
+    formula: '=COVARIANCE.P(F1:F3,C1:C3)'
+  - id: covariance_p_p2_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+    formula: '=COVARIANCE.P(B1:B3,A1)'
+  - id: covariance_p_p2_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+    formula: '=COVARIANCE.P(B1:B3,A2)'
+  - id: covariance_p_p2_rng_v
+    setup:
+      B1: 1
+      B2: 2
+      B3: 4
+      E1: '="a"+1'
+      E2: 2
+      E3: 5
+    formula: '=COVARIANCE.P(B1:B3,E1:E3)'
+  - id: covariance_p_p2_rng_na
+    setup:
+      B1: 1
+      B2: 2
+      B3: 4
+      F1: '=NA()'
+      F2: 2
+      F3: 5
+    formula: '=COVARIANCE.P(B1:B3,F1:F3)'
+  - id: covariance_s_control
+    setup:
+      B1: 1
+      B2: 2
+      B3: 4
+      C1: 2
+      C2: 3
+      C3: 7
+    formula: '=COVARIANCE.S(B1:B3,C1:C3)'
+  - id: covariance_s_p1_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      C1: 2
+      C2: 3
+      C3: 7
+    formula: '=COVARIANCE.S(A1,C1:C3)'
+  - id: covariance_s_p1_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      C1: 2
+      C2: 3
+      C3: 7
+    formula: '=COVARIANCE.S(A2,C1:C3)'
+  - id: covariance_s_p1_rng_v
+    setup:
+      C1: 2
+      C2: 3
+      C3: 7
+      E1: '="a"+1'
+      E2: 2
+      E3: 5
+    formula: '=COVARIANCE.S(E1:E3,C1:C3)'
+  - id: covariance_s_p1_rng_na
+    setup:
+      C1: 2
+      C2: 3
+      C3: 7
+      F1: '=NA()'
+      F2: 2
+      F3: 5
+    formula: '=COVARIANCE.S(F1:F3,C1:C3)'
+  - id: covariance_s_p2_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+    formula: '=COVARIANCE.S(B1:B3,A1)'
+  - id: covariance_s_p2_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+    formula: '=COVARIANCE.S(B1:B3,A2)'
+  - id: covariance_s_p2_rng_v
+    setup:
+      B1: 1
+      B2: 2
+      B3: 4
+      E1: '="a"+1'
+      E2: 2
+      E3: 5
+    formula: '=COVARIANCE.S(B1:B3,E1:E3)'
+  - id: covariance_s_p2_rng_na
+    setup:
+      B1: 1
+      B2: 2
+      B3: 4
+      F1: '=NA()'
+      F2: 2
+      F3: 5
+    formula: '=COVARIANCE.S(B1:B3,F1:F3)'
+  - id: pearson_control
+    setup:
+      B1: 1
+      B2: 2
+      B3: 4
+      C1: 2
+      C2: 3
+      C3: 7
+    formula: '=PEARSON(B1:B3,C1:C3)'
+  - id: pearson_p1_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      C1: 2
+      C2: 3
+      C3: 7
+    formula: '=PEARSON(A1,C1:C3)'
+  - id: pearson_p1_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      C1: 2
+      C2: 3
+      C3: 7
+    formula: '=PEARSON(A2,C1:C3)'
+  - id: pearson_p1_rng_v
+    setup:
+      C1: 2
+      C2: 3
+      C3: 7
+      E1: '="a"+1'
+      E2: 2
+      E3: 5
+    formula: '=PEARSON(E1:E3,C1:C3)'
+  - id: pearson_p1_rng_na
+    setup:
+      C1: 2
+      C2: 3
+      C3: 7
+      F1: '=NA()'
+      F2: 2
+      F3: 5
+    formula: '=PEARSON(F1:F3,C1:C3)'
+  - id: pearson_p2_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+    formula: '=PEARSON(B1:B3,A1)'
+  - id: pearson_p2_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+    formula: '=PEARSON(B1:B3,A2)'
+  - id: pearson_p2_rng_v
+    setup:
+      B1: 1
+      B2: 2
+      B3: 4
+      E1: '="a"+1'
+      E2: 2
+      E3: 5
+    formula: '=PEARSON(B1:B3,E1:E3)'
+  - id: pearson_p2_rng_na
+    setup:
+      B1: 1
+      B2: 2
+      B3: 4
+      F1: '=NA()'
+      F2: 2
+      F3: 5
+    formula: '=PEARSON(B1:B3,F1:F3)'
+  - id: rsq_control
+    setup:
+      B1: 1
+      B2: 2
+      B3: 4
+      C1: 2
+      C2: 3
+      C3: 7
+    formula: '=RSQ(B1:B3,C1:C3)'
+  - id: rsq_p1_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      C1: 2
+      C2: 3
+      C3: 7
+    formula: '=RSQ(A1,C1:C3)'
+  - id: rsq_p1_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      C1: 2
+      C2: 3
+      C3: 7
+    formula: '=RSQ(A2,C1:C3)'
+  - id: rsq_p1_rng_v
+    setup:
+      C1: 2
+      C2: 3
+      C3: 7
+      E1: '="a"+1'
+      E2: 2
+      E3: 5
+    formula: '=RSQ(E1:E3,C1:C3)'
+  - id: rsq_p1_rng_na
+    setup:
+      C1: 2
+      C2: 3
+      C3: 7
+      F1: '=NA()'
+      F2: 2
+      F3: 5
+    formula: '=RSQ(F1:F3,C1:C3)'
+  - id: rsq_p2_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+    formula: '=RSQ(B1:B3,A1)'
+  - id: rsq_p2_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+    formula: '=RSQ(B1:B3,A2)'
+  - id: rsq_p2_rng_v
+    setup:
+      B1: 1
+      B2: 2
+      B3: 4
+      E1: '="a"+1'
+      E2: 2
+      E3: 5
+    formula: '=RSQ(B1:B3,E1:E3)'
+  - id: rsq_p2_rng_na
+    setup:
+      B1: 1
+      B2: 2
+      B3: 4
+      F1: '=NA()'
+      F2: 2
+      F3: 5
+    formula: '=RSQ(B1:B3,F1:F3)'
+  - id: slope_control
+    setup:
+      B1: 1
+      B2: 2
+      B3: 4
+      C1: 2
+      C2: 3
+      C3: 7
+    formula: '=SLOPE(B1:B3,C1:C3)'
+  - id: slope_p1_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      C1: 2
+      C2: 3
+      C3: 7
+    formula: '=SLOPE(A1,C1:C3)'
+  - id: slope_p1_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      C1: 2
+      C2: 3
+      C3: 7
+    formula: '=SLOPE(A2,C1:C3)'
+  - id: slope_p1_rng_v
+    setup:
+      C1: 2
+      C2: 3
+      C3: 7
+      E1: '="a"+1'
+      E2: 2
+      E3: 5
+    formula: '=SLOPE(E1:E3,C1:C3)'
+  - id: slope_p1_rng_na
+    setup:
+      C1: 2
+      C2: 3
+      C3: 7
+      F1: '=NA()'
+      F2: 2
+      F3: 5
+    formula: '=SLOPE(F1:F3,C1:C3)'
+  - id: slope_p2_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+    formula: '=SLOPE(B1:B3,A1)'
+  - id: slope_p2_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+    formula: '=SLOPE(B1:B3,A2)'
+  - id: slope_p2_rng_v
+    setup:
+      B1: 1
+      B2: 2
+      B3: 4
+      E1: '="a"+1'
+      E2: 2
+      E3: 5
+    formula: '=SLOPE(B1:B3,E1:E3)'
+  - id: slope_p2_rng_na
+    setup:
+      B1: 1
+      B2: 2
+      B3: 4
+      F1: '=NA()'
+      F2: 2
+      F3: 5
+    formula: '=SLOPE(B1:B3,F1:F3)'
+  - id: intercept_control
+    setup:
+      B1: 1
+      B2: 2
+      B3: 4
+      C1: 2
+      C2: 3
+      C3: 7
+    formula: '=INTERCEPT(B1:B3,C1:C3)'
+  - id: intercept_p1_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      C1: 2
+      C2: 3
+      C3: 7
+    formula: '=INTERCEPT(A1,C1:C3)'
+  - id: intercept_p1_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      C1: 2
+      C2: 3
+      C3: 7
+    formula: '=INTERCEPT(A2,C1:C3)'
+  - id: intercept_p1_rng_v
+    setup:
+      C1: 2
+      C2: 3
+      C3: 7
+      E1: '="a"+1'
+      E2: 2
+      E3: 5
+    formula: '=INTERCEPT(E1:E3,C1:C3)'
+  - id: intercept_p1_rng_na
+    setup:
+      C1: 2
+      C2: 3
+      C3: 7
+      F1: '=NA()'
+      F2: 2
+      F3: 5
+    formula: '=INTERCEPT(F1:F3,C1:C3)'
+  - id: intercept_p2_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+    formula: '=INTERCEPT(B1:B3,A1)'
+  - id: intercept_p2_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+    formula: '=INTERCEPT(B1:B3,A2)'
+  - id: intercept_p2_rng_v
+    setup:
+      B1: 1
+      B2: 2
+      B3: 4
+      E1: '="a"+1'
+      E2: 2
+      E3: 5
+    formula: '=INTERCEPT(B1:B3,E1:E3)'
+  - id: intercept_p2_rng_na
+    setup:
+      B1: 1
+      B2: 2
+      B3: 4
+      F1: '=NA()'
+      F2: 2
+      F3: 5
+    formula: '=INTERCEPT(B1:B3,F1:F3)'
+  - id: steyx_control
+    setup:
+      B1: 1
+      B2: 2
+      B3: 4
+      C1: 2
+      C2: 3
+      C3: 7
+    formula: '=STEYX(B1:B3,C1:C3)'
+  - id: steyx_p1_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      C1: 2
+      C2: 3
+      C3: 7
+    formula: '=STEYX(A1,C1:C3)'
+  - id: steyx_p1_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      C1: 2
+      C2: 3
+      C3: 7
+    formula: '=STEYX(A2,C1:C3)'
+  - id: steyx_p1_rng_v
+    setup:
+      C1: 2
+      C2: 3
+      C3: 7
+      E1: '="a"+1'
+      E2: 2
+      E3: 5
+    formula: '=STEYX(E1:E3,C1:C3)'
+  - id: steyx_p1_rng_na
+    setup:
+      C1: 2
+      C2: 3
+      C3: 7
+      F1: '=NA()'
+      F2: 2
+      F3: 5
+    formula: '=STEYX(F1:F3,C1:C3)'
+  - id: steyx_p2_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+    formula: '=STEYX(B1:B3,A1)'
+  - id: steyx_p2_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+    formula: '=STEYX(B1:B3,A2)'
+  - id: steyx_p2_rng_v
+    setup:
+      B1: 1
+      B2: 2
+      B3: 4
+      E1: '="a"+1'
+      E2: 2
+      E3: 5
+    formula: '=STEYX(B1:B3,E1:E3)'
+  - id: steyx_p2_rng_na
+    setup:
+      B1: 1
+      B2: 2
+      B3: 4
+      F1: '=NA()'
+      F2: 2
+      F3: 5
+    formula: '=STEYX(B1:B3,F1:F3)'
+  - id: sumx2my2_control
+    setup:
+      B1: 1
+      B2: 2
+      B3: 4
+      C1: 2
+      C2: 3
+      C3: 7
+    formula: '=SUMX2MY2(B1:B3,C1:C3)'
+  - id: sumx2my2_p1_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      C1: 2
+      C2: 3
+      C3: 7
+    formula: '=SUMX2MY2(A1,C1:C3)'
+  - id: sumx2my2_p1_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      C1: 2
+      C2: 3
+      C3: 7
+    formula: '=SUMX2MY2(A2,C1:C3)'
+  - id: sumx2my2_p1_rng_v
+    setup:
+      C1: 2
+      C2: 3
+      C3: 7
+      E1: '="a"+1'
+      E2: 2
+      E3: 5
+    formula: '=SUMX2MY2(E1:E3,C1:C3)'
+  - id: sumx2my2_p1_rng_na
+    setup:
+      C1: 2
+      C2: 3
+      C3: 7
+      F1: '=NA()'
+      F2: 2
+      F3: 5
+    formula: '=SUMX2MY2(F1:F3,C1:C3)'
+  - id: sumx2my2_p2_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+    formula: '=SUMX2MY2(B1:B3,A1)'
+  - id: sumx2my2_p2_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+    formula: '=SUMX2MY2(B1:B3,A2)'
+  - id: sumx2my2_p2_rng_v
+    setup:
+      B1: 1
+      B2: 2
+      B3: 4
+      E1: '="a"+1'
+      E2: 2
+      E3: 5
+    formula: '=SUMX2MY2(B1:B3,E1:E3)'
+  - id: sumx2my2_p2_rng_na
+    setup:
+      B1: 1
+      B2: 2
+      B3: 4
+      F1: '=NA()'
+      F2: 2
+      F3: 5
+    formula: '=SUMX2MY2(B1:B3,F1:F3)'
+  - id: sumx2py2_control
+    setup:
+      B1: 1
+      B2: 2
+      B3: 4
+      C1: 2
+      C2: 3
+      C3: 7
+    formula: '=SUMX2PY2(B1:B3,C1:C3)'
+  - id: sumx2py2_p1_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      C1: 2
+      C2: 3
+      C3: 7
+    formula: '=SUMX2PY2(A1,C1:C3)'
+  - id: sumx2py2_p1_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      C1: 2
+      C2: 3
+      C3: 7
+    formula: '=SUMX2PY2(A2,C1:C3)'
+  - id: sumx2py2_p1_rng_v
+    setup:
+      C1: 2
+      C2: 3
+      C3: 7
+      E1: '="a"+1'
+      E2: 2
+      E3: 5
+    formula: '=SUMX2PY2(E1:E3,C1:C3)'
+  - id: sumx2py2_p1_rng_na
+    setup:
+      C1: 2
+      C2: 3
+      C3: 7
+      F1: '=NA()'
+      F2: 2
+      F3: 5
+    formula: '=SUMX2PY2(F1:F3,C1:C3)'
+  - id: sumx2py2_p2_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+    formula: '=SUMX2PY2(B1:B3,A1)'
+  - id: sumx2py2_p2_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+    formula: '=SUMX2PY2(B1:B3,A2)'
+  - id: sumx2py2_p2_rng_v
+    setup:
+      B1: 1
+      B2: 2
+      B3: 4
+      E1: '="a"+1'
+      E2: 2
+      E3: 5
+    formula: '=SUMX2PY2(B1:B3,E1:E3)'
+  - id: sumx2py2_p2_rng_na
+    setup:
+      B1: 1
+      B2: 2
+      B3: 4
+      F1: '=NA()'
+      F2: 2
+      F3: 5
+    formula: '=SUMX2PY2(B1:B3,F1:F3)'
+  - id: sumxmy2_control
+    setup:
+      B1: 1
+      B2: 2
+      B3: 4
+      C1: 2
+      C2: 3
+      C3: 7
+    formula: '=SUMXMY2(B1:B3,C1:C3)'
+  - id: sumxmy2_p1_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      C1: 2
+      C2: 3
+      C3: 7
+    formula: '=SUMXMY2(A1,C1:C3)'
+  - id: sumxmy2_p1_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      C1: 2
+      C2: 3
+      C3: 7
+    formula: '=SUMXMY2(A2,C1:C3)'
+  - id: sumxmy2_p1_rng_v
+    setup:
+      C1: 2
+      C2: 3
+      C3: 7
+      E1: '="a"+1'
+      E2: 2
+      E3: 5
+    formula: '=SUMXMY2(E1:E3,C1:C3)'
+  - id: sumxmy2_p1_rng_na
+    setup:
+      C1: 2
+      C2: 3
+      C3: 7
+      F1: '=NA()'
+      F2: 2
+      F3: 5
+    formula: '=SUMXMY2(F1:F3,C1:C3)'
+  - id: sumxmy2_p2_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+    formula: '=SUMXMY2(B1:B3,A1)'
+  - id: sumxmy2_p2_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+    formula: '=SUMXMY2(B1:B3,A2)'
+  - id: sumxmy2_p2_rng_v
+    setup:
+      B1: 1
+      B2: 2
+      B3: 4
+      E1: '="a"+1'
+      E2: 2
+      E3: 5
+    formula: '=SUMXMY2(B1:B3,E1:E3)'
+  - id: sumxmy2_p2_rng_na
+    setup:
+      B1: 1
+      B2: 2
+      B3: 4
+      F1: '=NA()'
+      F2: 2
+      F3: 5
+    formula: '=SUMXMY2(B1:B3,F1:F3)'
+  - id: chisq_test_control
+    setup:
+      B1: 1
+      B2: 2
+      B3: 4
+      C1: 2
+      C2: 3
+      C3: 7
+    formula: '=CHISQ.TEST(B1:B3,C1:C3)'
+  - id: chisq_test_p1_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      C1: 2
+      C2: 3
+      C3: 7
+    formula: '=CHISQ.TEST(A1,C1:C3)'
+  - id: chisq_test_p1_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      C1: 2
+      C2: 3
+      C3: 7
+    formula: '=CHISQ.TEST(A2,C1:C3)'
+  - id: chisq_test_p1_rng_v
+    setup:
+      C1: 2
+      C2: 3
+      C3: 7
+      E1: '="a"+1'
+      E2: 2
+      E3: 5
+    formula: '=CHISQ.TEST(E1:E3,C1:C3)'
+  - id: chisq_test_p1_rng_na
+    setup:
+      C1: 2
+      C2: 3
+      C3: 7
+      F1: '=NA()'
+      F2: 2
+      F3: 5
+    formula: '=CHISQ.TEST(F1:F3,C1:C3)'
+  - id: chisq_test_p2_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+    formula: '=CHISQ.TEST(B1:B3,A1)'
+  - id: chisq_test_p2_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+    formula: '=CHISQ.TEST(B1:B3,A2)'
+  - id: chisq_test_p2_rng_v
+    setup:
+      B1: 1
+      B2: 2
+      B3: 4
+      E1: '="a"+1'
+      E2: 2
+      E3: 5
+    formula: '=CHISQ.TEST(B1:B3,E1:E3)'
+  - id: chisq_test_p2_rng_na
+    setup:
+      B1: 1
+      B2: 2
+      B3: 4
+      F1: '=NA()'
+      F2: 2
+      F3: 5
+    formula: '=CHISQ.TEST(B1:B3,F1:F3)'
+  - id: chitest_control
+    setup:
+      B1: 1
+      B2: 2
+      B3: 4
+      C1: 2
+      C2: 3
+      C3: 7
+    formula: '=CHITEST(B1:B3,C1:C3)'
+  - id: chitest_p1_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      C1: 2
+      C2: 3
+      C3: 7
+    formula: '=CHITEST(A1,C1:C3)'
+  - id: chitest_p1_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      C1: 2
+      C2: 3
+      C3: 7
+    formula: '=CHITEST(A2,C1:C3)'
+  - id: chitest_p1_rng_v
+    setup:
+      C1: 2
+      C2: 3
+      C3: 7
+      E1: '="a"+1'
+      E2: 2
+      E3: 5
+    formula: '=CHITEST(E1:E3,C1:C3)'
+  - id: chitest_p1_rng_na
+    setup:
+      C1: 2
+      C2: 3
+      C3: 7
+      F1: '=NA()'
+      F2: 2
+      F3: 5
+    formula: '=CHITEST(F1:F3,C1:C3)'
+  - id: chitest_p2_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+    formula: '=CHITEST(B1:B3,A1)'
+  - id: chitest_p2_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+    formula: '=CHITEST(B1:B3,A2)'
+  - id: chitest_p2_rng_v
+    setup:
+      B1: 1
+      B2: 2
+      B3: 4
+      E1: '="a"+1'
+      E2: 2
+      E3: 5
+    formula: '=CHITEST(B1:B3,E1:E3)'
+  - id: chitest_p2_rng_na
+    setup:
+      B1: 1
+      B2: 2
+      B3: 4
+      F1: '=NA()'
+      F2: 2
+      F3: 5
+    formula: '=CHITEST(B1:B3,F1:F3)'
+  - id: f_test_control
+    setup:
+      B1: 1
+      B2: 2
+      B3: 4
+      C1: 2
+      C2: 3
+      C3: 7
+    formula: '=F.TEST(B1:B3,C1:C3)'
+  - id: f_test_p1_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      C1: 2
+      C2: 3
+      C3: 7
+    formula: '=F.TEST(A1,C1:C3)'
+  - id: f_test_p1_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      C1: 2
+      C2: 3
+      C3: 7
+    formula: '=F.TEST(A2,C1:C3)'
+  - id: f_test_p1_rng_v
+    setup:
+      C1: 2
+      C2: 3
+      C3: 7
+      E1: '="a"+1'
+      E2: 2
+      E3: 5
+    formula: '=F.TEST(E1:E3,C1:C3)'
+  - id: f_test_p1_rng_na
+    setup:
+      C1: 2
+      C2: 3
+      C3: 7
+      F1: '=NA()'
+      F2: 2
+      F3: 5
+    formula: '=F.TEST(F1:F3,C1:C3)'
+  - id: f_test_p2_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+    formula: '=F.TEST(B1:B3,A1)'
+  - id: f_test_p2_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+    formula: '=F.TEST(B1:B3,A2)'
+  - id: f_test_p2_rng_v
+    setup:
+      B1: 1
+      B2: 2
+      B3: 4
+      E1: '="a"+1'
+      E2: 2
+      E3: 5
+    formula: '=F.TEST(B1:B3,E1:E3)'
+  - id: f_test_p2_rng_na
+    setup:
+      B1: 1
+      B2: 2
+      B3: 4
+      F1: '=NA()'
+      F2: 2
+      F3: 5
+    formula: '=F.TEST(B1:B3,F1:F3)'
+  - id: ftest_control
+    setup:
+      B1: 1
+      B2: 2
+      B3: 4
+      C1: 2
+      C2: 3
+      C3: 7
+    formula: '=FTEST(B1:B3,C1:C3)'
+  - id: ftest_p1_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      C1: 2
+      C2: 3
+      C3: 7
+    formula: '=FTEST(A1,C1:C3)'
+  - id: ftest_p1_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      C1: 2
+      C2: 3
+      C3: 7
+    formula: '=FTEST(A2,C1:C3)'
+  - id: ftest_p1_rng_v
+    setup:
+      C1: 2
+      C2: 3
+      C3: 7
+      E1: '="a"+1'
+      E2: 2
+      E3: 5
+    formula: '=FTEST(E1:E3,C1:C3)'
+  - id: ftest_p1_rng_na
+    setup:
+      C1: 2
+      C2: 3
+      C3: 7
+      F1: '=NA()'
+      F2: 2
+      F3: 5
+    formula: '=FTEST(F1:F3,C1:C3)'
+  - id: ftest_p2_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+    formula: '=FTEST(B1:B3,A1)'
+  - id: ftest_p2_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+    formula: '=FTEST(B1:B3,A2)'
+  - id: ftest_p2_rng_v
+    setup:
+      B1: 1
+      B2: 2
+      B3: 4
+      E1: '="a"+1'
+      E2: 2
+      E3: 5
+    formula: '=FTEST(B1:B3,E1:E3)'
+  - id: ftest_p2_rng_na
+    setup:
+      B1: 1
+      B2: 2
+      B3: 4
+      F1: '=NA()'
+      F2: 2
+      F3: 5
+    formula: '=FTEST(B1:B3,F1:F3)'
+  - id: t_test_control
+    setup:
+      B1: 1
+      B2: 2
+      B3: 4
+      C1: 2
+      C2: 3
+      C3: 7
+    formula: '=T.TEST(B1:B3,C1:C3,2,1)'
+  - id: t_test_p1_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      C1: 2
+      C2: 3
+      C3: 7
+    formula: '=T.TEST(A1,C1:C3,2,1)'
+  - id: t_test_p1_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      C1: 2
+      C2: 3
+      C3: 7
+    formula: '=T.TEST(A2,C1:C3,2,1)'
+  - id: t_test_p1_rng_v
+    setup:
+      C1: 2
+      C2: 3
+      C3: 7
+      E1: '="a"+1'
+      E2: 2
+      E3: 5
+    formula: '=T.TEST(E1:E3,C1:C3,2,1)'
+  - id: t_test_p1_rng_na
+    setup:
+      C1: 2
+      C2: 3
+      C3: 7
+      F1: '=NA()'
+      F2: 2
+      F3: 5
+    formula: '=T.TEST(F1:F3,C1:C3,2,1)'
+  - id: t_test_p2_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+    formula: '=T.TEST(B1:B3,A1,2,1)'
+  - id: t_test_p2_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+    formula: '=T.TEST(B1:B3,A2,2,1)'
+  - id: t_test_p2_rng_v
+    setup:
+      B1: 1
+      B2: 2
+      B3: 4
+      E1: '="a"+1'
+      E2: 2
+      E3: 5
+    formula: '=T.TEST(B1:B3,E1:E3,2,1)'
+  - id: t_test_p2_rng_na
+    setup:
+      B1: 1
+      B2: 2
+      B3: 4
+      F1: '=NA()'
+      F2: 2
+      F3: 5
+    formula: '=T.TEST(B1:B3,F1:F3,2,1)'
+  - id: t_test_p3_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+      C1: 2
+      C2: 3
+      C3: 7
+    formula: '=T.TEST(B1:B3,C1:C3,A1,1)'
+  - id: t_test_p3_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+      C1: 2
+      C2: 3
+      C3: 7
+    formula: '=T.TEST(B1:B3,C1:C3,A2,1)'
+  - id: t_test_p4_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+      C1: 2
+      C2: 3
+      C3: 7
+    formula: '=T.TEST(B1:B3,C1:C3,2,A1)'
+  - id: t_test_p4_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+      C1: 2
+      C2: 3
+      C3: 7
+    formula: '=T.TEST(B1:B3,C1:C3,2,A2)'
+  - id: ttest_control
+    setup:
+      B1: 1
+      B2: 2
+      B3: 4
+      C1: 2
+      C2: 3
+      C3: 7
+    formula: '=TTEST(B1:B3,C1:C3,2,1)'
+  - id: ttest_p1_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      C1: 2
+      C2: 3
+      C3: 7
+    formula: '=TTEST(A1,C1:C3,2,1)'
+  - id: ttest_p1_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      C1: 2
+      C2: 3
+      C3: 7
+    formula: '=TTEST(A2,C1:C3,2,1)'
+  - id: ttest_p1_rng_v
+    setup:
+      C1: 2
+      C2: 3
+      C3: 7
+      E1: '="a"+1'
+      E2: 2
+      E3: 5
+    formula: '=TTEST(E1:E3,C1:C3,2,1)'
+  - id: ttest_p1_rng_na
+    setup:
+      C1: 2
+      C2: 3
+      C3: 7
+      F1: '=NA()'
+      F2: 2
+      F3: 5
+    formula: '=TTEST(F1:F3,C1:C3,2,1)'
+  - id: ttest_p2_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+    formula: '=TTEST(B1:B3,A1,2,1)'
+  - id: ttest_p2_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+    formula: '=TTEST(B1:B3,A2,2,1)'
+  - id: ttest_p2_rng_v
+    setup:
+      B1: 1
+      B2: 2
+      B3: 4
+      E1: '="a"+1'
+      E2: 2
+      E3: 5
+    formula: '=TTEST(B1:B3,E1:E3,2,1)'
+  - id: ttest_p2_rng_na
+    setup:
+      B1: 1
+      B2: 2
+      B3: 4
+      F1: '=NA()'
+      F2: 2
+      F3: 5
+    formula: '=TTEST(B1:B3,F1:F3,2,1)'
+  - id: ttest_p3_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+      C1: 2
+      C2: 3
+      C3: 7
+    formula: '=TTEST(B1:B3,C1:C3,A1,1)'
+  - id: ttest_p3_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+      C1: 2
+      C2: 3
+      C3: 7
+    formula: '=TTEST(B1:B3,C1:C3,A2,1)'
+  - id: ttest_p4_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+      C1: 2
+      C2: 3
+      C3: 7
+    formula: '=TTEST(B1:B3,C1:C3,2,A1)'
+  - id: ttest_p4_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+      C1: 2
+      C2: 3
+      C3: 7
+    formula: '=TTEST(B1:B3,C1:C3,2,A2)'
+  - id: forecast_control
+    setup:
+      B1: 1
+      B2: 2
+      B3: 4
+      C1: 2
+      C2: 3
+      C3: 7
+    formula: '=FORECAST(4,B1:B3,C1:C3)'
+  - id: forecast_p1_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+      C1: 2
+      C2: 3
+      C3: 7
+    formula: '=FORECAST(A1,B1:B3,C1:C3)'
+  - id: forecast_p1_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+      C1: 2
+      C2: 3
+      C3: 7
+    formula: '=FORECAST(A2,B1:B3,C1:C3)'
+  - id: forecast_p2_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      C1: 2
+      C2: 3
+      C3: 7
+    formula: '=FORECAST(4,A1,C1:C3)'
+  - id: forecast_p2_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      C1: 2
+      C2: 3
+      C3: 7
+    formula: '=FORECAST(4,A2,C1:C3)'
+  - id: forecast_p2_rng_v
+    setup:
+      C1: 2
+      C2: 3
+      C3: 7
+      E1: '="a"+1'
+      E2: 2
+      E3: 5
+    formula: '=FORECAST(4,E1:E3,C1:C3)'
+  - id: forecast_p2_rng_na
+    setup:
+      C1: 2
+      C2: 3
+      C3: 7
+      F1: '=NA()'
+      F2: 2
+      F3: 5
+    formula: '=FORECAST(4,F1:F3,C1:C3)'
+  - id: forecast_p3_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+    formula: '=FORECAST(4,B1:B3,A1)'
+  - id: forecast_p3_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+    formula: '=FORECAST(4,B1:B3,A2)'
+  - id: forecast_p3_rng_v
+    setup:
+      B1: 1
+      B2: 2
+      B3: 4
+      E1: '="a"+1'
+      E2: 2
+      E3: 5
+    formula: '=FORECAST(4,B1:B3,E1:E3)'
+  - id: forecast_p3_rng_na
+    setup:
+      B1: 1
+      B2: 2
+      B3: 4
+      F1: '=NA()'
+      F2: 2
+      F3: 5
+    formula: '=FORECAST(4,B1:B3,F1:F3)'
+  - id: forecast_linear_control
+    setup:
+      B1: 1
+      B2: 2
+      B3: 4
+      C1: 2
+      C2: 3
+      C3: 7
+    formula: '=FORECAST.LINEAR(4,B1:B3,C1:C3)'
+  - id: forecast_linear_p1_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+      C1: 2
+      C2: 3
+      C3: 7
+    formula: '=FORECAST.LINEAR(A1,B1:B3,C1:C3)'
+  - id: forecast_linear_p1_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+      C1: 2
+      C2: 3
+      C3: 7
+    formula: '=FORECAST.LINEAR(A2,B1:B3,C1:C3)'
+  - id: forecast_linear_p2_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      C1: 2
+      C2: 3
+      C3: 7
+    formula: '=FORECAST.LINEAR(4,A1,C1:C3)'
+  - id: forecast_linear_p2_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      C1: 2
+      C2: 3
+      C3: 7
+    formula: '=FORECAST.LINEAR(4,A2,C1:C3)'
+  - id: forecast_linear_p2_rng_v
+    setup:
+      C1: 2
+      C2: 3
+      C3: 7
+      E1: '="a"+1'
+      E2: 2
+      E3: 5
+    formula: '=FORECAST.LINEAR(4,E1:E3,C1:C3)'
+  - id: forecast_linear_p2_rng_na
+    setup:
+      C1: 2
+      C2: 3
+      C3: 7
+      F1: '=NA()'
+      F2: 2
+      F3: 5
+    formula: '=FORECAST.LINEAR(4,F1:F3,C1:C3)'
+  - id: forecast_linear_p3_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+    formula: '=FORECAST.LINEAR(4,B1:B3,A1)'
+  - id: forecast_linear_p3_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+    formula: '=FORECAST.LINEAR(4,B1:B3,A2)'
+  - id: forecast_linear_p3_rng_v
+    setup:
+      B1: 1
+      B2: 2
+      B3: 4
+      E1: '="a"+1'
+      E2: 2
+      E3: 5
+    formula: '=FORECAST.LINEAR(4,B1:B3,E1:E3)'
+  - id: forecast_linear_p3_rng_na
+    setup:
+      B1: 1
+      B2: 2
+      B3: 4
+      F1: '=NA()'
+      F2: 2
+      F3: 5
+    formula: '=FORECAST.LINEAR(4,B1:B3,F1:F3)'
+  - id: prob_control
+    setup:
+      B1: 1
+      B2: 2
+      B3: 4
+      H1: 0.2
+      H2: 0.3
+      H3: 0.5
+    formula: '=PROB(B1:B3,H1:H3,2,4)'
+  - id: prob_p1_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      H1: 0.2
+      H2: 0.3
+      H3: 0.5
+    formula: '=PROB(A1,H1:H3,2,4)'
+  - id: prob_p1_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      H1: 0.2
+      H2: 0.3
+      H3: 0.5
+    formula: '=PROB(A2,H1:H3,2,4)'
+  - id: prob_p1_rng_v
+    setup:
+      E1: '="a"+1'
+      E2: 2
+      E3: 5
+      H1: 0.2
+      H2: 0.3
+      H3: 0.5
+    formula: '=PROB(E1:E3,H1:H3,2,4)'
+  - id: prob_p1_rng_na
+    setup:
+      F1: '=NA()'
+      F2: 2
+      F3: 5
+      H1: 0.2
+      H2: 0.3
+      H3: 0.5
+    formula: '=PROB(F1:F3,H1:H3,2,4)'
+  - id: prob_p2_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+    formula: '=PROB(B1:B3,A1,2,4)'
+  - id: prob_p2_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+    formula: '=PROB(B1:B3,A2,2,4)'
+  - id: prob_p2_rng_v
+    setup:
+      B1: 1
+      B2: 2
+      B3: 4
+      E1: '="a"+1'
+      E2: 2
+      E3: 5
+    formula: '=PROB(B1:B3,E1:E3,2,4)'
+  - id: prob_p2_rng_na
+    setup:
+      B1: 1
+      B2: 2
+      B3: 4
+      F1: '=NA()'
+      F2: 2
+      F3: 5
+    formula: '=PROB(B1:B3,F1:F3,2,4)'
+  - id: prob_p3_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+      H1: 0.2
+      H2: 0.3
+      H3: 0.5
+    formula: '=PROB(B1:B3,H1:H3,A1,4)'
+  - id: prob_p3_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+      H1: 0.2
+      H2: 0.3
+      H3: 0.5
+    formula: '=PROB(B1:B3,H1:H3,A2,4)'
+  - id: prob_p4_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+      H1: 0.2
+      H2: 0.3
+      H3: 0.5
+    formula: '=PROB(B1:B3,H1:H3,2,A1)'
+  - id: prob_p4_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+      H1: 0.2
+      H2: 0.3
+      H3: 0.5
+    formula: '=PROB(B1:B3,H1:H3,2,A2)'
+  - id: z_test_control
+    setup:
+      B1: 1
+      B2: 2
+      B3: 4
+    formula: '=Z.TEST(B1:B3,2,1)'
+  - id: z_test_p1_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=Z.TEST(A1,2,1)'
+  - id: z_test_p1_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=Z.TEST(A2,2,1)'
+  - id: z_test_p1_rng_v
+    setup:
+      E1: '="a"+1'
+      E2: 2
+      E3: 5
+    formula: '=Z.TEST(E1:E3,2,1)'
+  - id: z_test_p1_rng_na
+    setup:
+      F1: '=NA()'
+      F2: 2
+      F3: 5
+    formula: '=Z.TEST(F1:F3,2,1)'
+  - id: z_test_p2_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+    formula: '=Z.TEST(B1:B3,A1,1)'
+  - id: z_test_p2_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+    formula: '=Z.TEST(B1:B3,A2,1)'
+  - id: z_test_p3_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+    formula: '=Z.TEST(B1:B3,2,A1)'
+  - id: z_test_p3_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+    formula: '=Z.TEST(B1:B3,2,A2)'
+  - id: ztest_control
+    setup:
+      B1: 1
+      B2: 2
+      B3: 4
+    formula: '=ZTEST(B1:B3,2,1)'
+  - id: ztest_p1_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=ZTEST(A1,2,1)'
+  - id: ztest_p1_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=ZTEST(A2,2,1)'
+  - id: ztest_p1_rng_v
+    setup:
+      E1: '="a"+1'
+      E2: 2
+      E3: 5
+    formula: '=ZTEST(E1:E3,2,1)'
+  - id: ztest_p1_rng_na
+    setup:
+      F1: '=NA()'
+      F2: 2
+      F3: 5
+    formula: '=ZTEST(F1:F3,2,1)'
+  - id: ztest_p2_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+    formula: '=ZTEST(B1:B3,A1,1)'
+  - id: ztest_p2_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+    formula: '=ZTEST(B1:B3,A2,1)'
+  - id: ztest_p3_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+    formula: '=ZTEST(B1:B3,2,A1)'
+  - id: ztest_p3_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+    formula: '=ZTEST(B1:B3,2,A2)'
+  - id: frequency_control
+    setup:
+      B1: 1
+      B2: 2
+      B3: 4
+      C1: 2
+      C2: 3
+      C3: 7
+    formula: '=FREQUENCY(B1:B3,C1:C3)'
+  - id: frequency_p1_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      C1: 2
+      C2: 3
+      C3: 7
+    formula: '=FREQUENCY(A1,C1:C3)'
+  - id: frequency_p1_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      C1: 2
+      C2: 3
+      C3: 7
+    formula: '=FREQUENCY(A2,C1:C3)'
+  - id: frequency_p1_rng_v
+    setup:
+      C1: 2
+      C2: 3
+      C3: 7
+      E1: '="a"+1'
+      E2: 2
+      E3: 5
+    formula: '=FREQUENCY(E1:E3,C1:C3)'
+  - id: frequency_p1_rng_na
+    setup:
+      C1: 2
+      C2: 3
+      C3: 7
+      F1: '=NA()'
+      F2: 2
+      F3: 5
+    formula: '=FREQUENCY(F1:F3,C1:C3)'
+  - id: frequency_p2_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+    formula: '=FREQUENCY(B1:B3,A1)'
+  - id: frequency_p2_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+    formula: '=FREQUENCY(B1:B3,A2)'
+  - id: frequency_p2_rng_v
+    setup:
+      B1: 1
+      B2: 2
+      B3: 4
+      E1: '="a"+1'
+      E2: 2
+      E3: 5
+    formula: '=FREQUENCY(B1:B3,E1:E3)'
+  - id: frequency_p2_rng_na
+    setup:
+      B1: 1
+      B2: 2
+      B3: 4
+      F1: '=NA()'
+      F2: 2
+      F3: 5
+    formula: '=FREQUENCY(B1:B3,F1:F3)'
+  - id: correl_scalars_p1_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=CORREL(A1,1)'
+  - id: correl_scalars_p2_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=CORREL(1,A1)'
+  - id: correl_scalars_p1_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=CORREL(A2,1)'
+  - id: correl_scalars_p2_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=CORREL(1,A2)'
+  - id: covar_scalars_p1_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=COVAR(A1,1)'
+  - id: covar_scalars_p2_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=COVAR(1,A1)'
+  - id: covar_scalars_p1_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=COVAR(A2,1)'
+  - id: covar_scalars_p2_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=COVAR(1,A2)'
+  - id: covariance_p_scalars_p1_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=COVARIANCE.P(A1,1)'
+  - id: covariance_p_scalars_p2_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=COVARIANCE.P(1,A1)'
+  - id: covariance_p_scalars_p1_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=COVARIANCE.P(A2,1)'
+  - id: covariance_p_scalars_p2_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=COVARIANCE.P(1,A2)'
+  - id: covariance_s_scalars_p1_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=COVARIANCE.S(A1,1)'
+  - id: covariance_s_scalars_p2_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=COVARIANCE.S(1,A1)'
+  - id: covariance_s_scalars_p1_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=COVARIANCE.S(A2,1)'
+  - id: covariance_s_scalars_p2_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=COVARIANCE.S(1,A2)'
+  - id: pearson_scalars_p1_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=PEARSON(A1,1)'
+  - id: pearson_scalars_p2_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=PEARSON(1,A1)'
+  - id: pearson_scalars_p1_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=PEARSON(A2,1)'
+  - id: pearson_scalars_p2_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=PEARSON(1,A2)'
+  - id: rsq_scalars_p1_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=RSQ(A1,1)'
+  - id: rsq_scalars_p2_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=RSQ(1,A1)'
+  - id: rsq_scalars_p1_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=RSQ(A2,1)'
+  - id: rsq_scalars_p2_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=RSQ(1,A2)'
+  - id: slope_scalars_p1_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=SLOPE(A1,1)'
+  - id: slope_scalars_p2_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=SLOPE(1,A1)'
+  - id: slope_scalars_p1_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=SLOPE(A2,1)'
+  - id: slope_scalars_p2_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=SLOPE(1,A2)'
+  - id: intercept_scalars_p1_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=INTERCEPT(A1,1)'
+  - id: intercept_scalars_p2_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=INTERCEPT(1,A1)'
+  - id: intercept_scalars_p1_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=INTERCEPT(A2,1)'
+  - id: intercept_scalars_p2_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=INTERCEPT(1,A2)'
+  - id: steyx_scalars_p1_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=STEYX(A1,1)'
+  - id: steyx_scalars_p2_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=STEYX(1,A1)'
+  - id: steyx_scalars_p1_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=STEYX(A2,1)'
+  - id: steyx_scalars_p2_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=STEYX(1,A2)'
+  - id: sumx2my2_scalars_p1_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=SUMX2MY2(A1,1)'
+  - id: sumx2my2_scalars_p2_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=SUMX2MY2(1,A1)'
+  - id: sumx2my2_scalars_p1_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=SUMX2MY2(A2,1)'
+  - id: sumx2my2_scalars_p2_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=SUMX2MY2(1,A2)'
+  - id: sumx2py2_scalars_p1_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=SUMX2PY2(A1,1)'
+  - id: sumx2py2_scalars_p2_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=SUMX2PY2(1,A1)'
+  - id: sumx2py2_scalars_p1_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=SUMX2PY2(A2,1)'
+  - id: sumx2py2_scalars_p2_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=SUMX2PY2(1,A2)'
+  - id: sumxmy2_scalars_p1_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=SUMXMY2(A1,1)'
+  - id: sumxmy2_scalars_p2_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=SUMXMY2(1,A1)'
+  - id: sumxmy2_scalars_p1_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=SUMXMY2(A2,1)'
+  - id: sumxmy2_scalars_p2_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=SUMXMY2(1,A2)'
+  - id: chisq_test_scalars_p1_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=CHISQ.TEST(A1,1)'
+  - id: chisq_test_scalars_p2_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=CHISQ.TEST(1,A1)'
+  - id: chisq_test_scalars_p1_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=CHISQ.TEST(A2,1)'
+  - id: chisq_test_scalars_p2_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=CHISQ.TEST(1,A2)'
+  - id: chitest_scalars_p1_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=CHITEST(A1,1)'
+  - id: chitest_scalars_p2_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=CHITEST(1,A1)'
+  - id: chitest_scalars_p1_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=CHITEST(A2,1)'
+  - id: chitest_scalars_p2_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=CHITEST(1,A2)'
+  - id: frequency_scalars_p1_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=FREQUENCY(A1,1)'
+  - id: frequency_scalars_p2_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=FREQUENCY(1,A1)'
+  - id: frequency_scalars_p1_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=FREQUENCY(A2,1)'
+  - id: frequency_scalars_p2_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=FREQUENCY(1,A2)'

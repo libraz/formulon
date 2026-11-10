@@ -1,0 +1,2093 @@
+{
+  "suite": "error_args_finance_date",
+  "description": "Which error the COUP* family and WORKDAY.INTL report when an argument is a referenced cell holding a plain #VALUE!, #N/A or #DIV/0!, with the other arguments valid, plus a valid control.\n",
+  "environment": {
+    "excel_version": "16.114.4",
+    "excel_locale": "ja-JP",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-11-10T22:29:12Z"
+  },
+  "tolerance": {
+    "abs": 0.0,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "coupdaybs_control",
+      "formula": "=COUPDAYBS(DATE(2024,1,15),DATE(2026,11,15),2,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 60.0
+      }
+    },
+    {
+      "id": "coupdaybs_p1_cell_v",
+      "formula": "=COUPDAYBS(A1,DATE(2026,11,15),2,0)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "coupdaybs_p1_cell_na",
+      "formula": "=COUPDAYBS(A2,DATE(2026,11,15),2,0)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "coupdaybs_p1_cell_d0",
+      "formula": "=COUPDAYBS(A3,DATE(2026,11,15),2,0)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "coupdaybs_p2_cell_v",
+      "formula": "=COUPDAYBS(DATE(2024,1,15),A1,2,0)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "coupdaybs_p2_cell_na",
+      "formula": "=COUPDAYBS(DATE(2024,1,15),A2,2,0)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "coupdaybs_p2_cell_d0",
+      "formula": "=COUPDAYBS(DATE(2024,1,15),A3,2,0)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "coupdaybs_p3_cell_v",
+      "formula": "=COUPDAYBS(DATE(2024,1,15),DATE(2026,11,15),A1,0)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "coupdaybs_p3_cell_na",
+      "formula": "=COUPDAYBS(DATE(2024,1,15),DATE(2026,11,15),A2,0)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "coupdaybs_p3_cell_d0",
+      "formula": "=COUPDAYBS(DATE(2024,1,15),DATE(2026,11,15),A3,0)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "coupdaybs_p4_cell_v",
+      "formula": "=COUPDAYBS(DATE(2024,1,15),DATE(2026,11,15),2,A1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "coupdaybs_p4_cell_na",
+      "formula": "=COUPDAYBS(DATE(2024,1,15),DATE(2026,11,15),2,A2)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "coupdaybs_p4_cell_d0",
+      "formula": "=COUPDAYBS(DATE(2024,1,15),DATE(2026,11,15),2,A3)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "coupdays_control",
+      "formula": "=COUPDAYS(DATE(2024,1,15),DATE(2026,11,15),2,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 180.0
+      }
+    },
+    {
+      "id": "coupdays_p1_cell_v",
+      "formula": "=COUPDAYS(A1,DATE(2026,11,15),2,0)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "coupdays_p1_cell_na",
+      "formula": "=COUPDAYS(A2,DATE(2026,11,15),2,0)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "coupdays_p1_cell_d0",
+      "formula": "=COUPDAYS(A3,DATE(2026,11,15),2,0)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "coupdays_p2_cell_v",
+      "formula": "=COUPDAYS(DATE(2024,1,15),A1,2,0)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "coupdays_p2_cell_na",
+      "formula": "=COUPDAYS(DATE(2024,1,15),A2,2,0)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "coupdays_p2_cell_d0",
+      "formula": "=COUPDAYS(DATE(2024,1,15),A3,2,0)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "coupdays_p3_cell_v",
+      "formula": "=COUPDAYS(DATE(2024,1,15),DATE(2026,11,15),A1,0)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "coupdays_p3_cell_na",
+      "formula": "=COUPDAYS(DATE(2024,1,15),DATE(2026,11,15),A2,0)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "coupdays_p3_cell_d0",
+      "formula": "=COUPDAYS(DATE(2024,1,15),DATE(2026,11,15),A3,0)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "coupdays_p4_cell_v",
+      "formula": "=COUPDAYS(DATE(2024,1,15),DATE(2026,11,15),2,A1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "coupdays_p4_cell_na",
+      "formula": "=COUPDAYS(DATE(2024,1,15),DATE(2026,11,15),2,A2)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "coupdays_p4_cell_d0",
+      "formula": "=COUPDAYS(DATE(2024,1,15),DATE(2026,11,15),2,A3)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "coupdaysnc_control",
+      "formula": "=COUPDAYSNC(DATE(2024,1,15),DATE(2026,11,15),2,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 120.0
+      }
+    },
+    {
+      "id": "coupdaysnc_p1_cell_v",
+      "formula": "=COUPDAYSNC(A1,DATE(2026,11,15),2,0)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "coupdaysnc_p1_cell_na",
+      "formula": "=COUPDAYSNC(A2,DATE(2026,11,15),2,0)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "coupdaysnc_p1_cell_d0",
+      "formula": "=COUPDAYSNC(A3,DATE(2026,11,15),2,0)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "coupdaysnc_p2_cell_v",
+      "formula": "=COUPDAYSNC(DATE(2024,1,15),A1,2,0)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "coupdaysnc_p2_cell_na",
+      "formula": "=COUPDAYSNC(DATE(2024,1,15),A2,2,0)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "coupdaysnc_p2_cell_d0",
+      "formula": "=COUPDAYSNC(DATE(2024,1,15),A3,2,0)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "coupdaysnc_p3_cell_v",
+      "formula": "=COUPDAYSNC(DATE(2024,1,15),DATE(2026,11,15),A1,0)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "coupdaysnc_p3_cell_na",
+      "formula": "=COUPDAYSNC(DATE(2024,1,15),DATE(2026,11,15),A2,0)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "coupdaysnc_p3_cell_d0",
+      "formula": "=COUPDAYSNC(DATE(2024,1,15),DATE(2026,11,15),A3,0)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "coupdaysnc_p4_cell_v",
+      "formula": "=COUPDAYSNC(DATE(2024,1,15),DATE(2026,11,15),2,A1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "coupdaysnc_p4_cell_na",
+      "formula": "=COUPDAYSNC(DATE(2024,1,15),DATE(2026,11,15),2,A2)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "coupdaysnc_p4_cell_d0",
+      "formula": "=COUPDAYSNC(DATE(2024,1,15),DATE(2026,11,15),2,A3)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "coupncd_control",
+      "formula": "=COUPNCD(DATE(2024,1,15),DATE(2026,11,15),2,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45427.0
+      }
+    },
+    {
+      "id": "coupncd_p1_cell_v",
+      "formula": "=COUPNCD(A1,DATE(2026,11,15),2,0)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "coupncd_p1_cell_na",
+      "formula": "=COUPNCD(A2,DATE(2026,11,15),2,0)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "coupncd_p1_cell_d0",
+      "formula": "=COUPNCD(A3,DATE(2026,11,15),2,0)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "coupncd_p2_cell_v",
+      "formula": "=COUPNCD(DATE(2024,1,15),A1,2,0)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "coupncd_p2_cell_na",
+      "formula": "=COUPNCD(DATE(2024,1,15),A2,2,0)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "coupncd_p2_cell_d0",
+      "formula": "=COUPNCD(DATE(2024,1,15),A3,2,0)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "coupncd_p3_cell_v",
+      "formula": "=COUPNCD(DATE(2024,1,15),DATE(2026,11,15),A1,0)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "coupncd_p3_cell_na",
+      "formula": "=COUPNCD(DATE(2024,1,15),DATE(2026,11,15),A2,0)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "coupncd_p3_cell_d0",
+      "formula": "=COUPNCD(DATE(2024,1,15),DATE(2026,11,15),A3,0)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "coupncd_p4_cell_v",
+      "formula": "=COUPNCD(DATE(2024,1,15),DATE(2026,11,15),2,A1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "coupncd_p4_cell_na",
+      "formula": "=COUPNCD(DATE(2024,1,15),DATE(2026,11,15),2,A2)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "coupncd_p4_cell_d0",
+      "formula": "=COUPNCD(DATE(2024,1,15),DATE(2026,11,15),2,A3)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "coupnum_control",
+      "formula": "=COUPNUM(DATE(2024,1,15),DATE(2026,11,15),2,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
+    },
+    {
+      "id": "coupnum_p1_cell_v",
+      "formula": "=COUPNUM(A1,DATE(2026,11,15),2,0)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "coupnum_p1_cell_na",
+      "formula": "=COUPNUM(A2,DATE(2026,11,15),2,0)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "coupnum_p1_cell_d0",
+      "formula": "=COUPNUM(A3,DATE(2026,11,15),2,0)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "coupnum_p2_cell_v",
+      "formula": "=COUPNUM(DATE(2024,1,15),A1,2,0)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "coupnum_p2_cell_na",
+      "formula": "=COUPNUM(DATE(2024,1,15),A2,2,0)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "coupnum_p2_cell_d0",
+      "formula": "=COUPNUM(DATE(2024,1,15),A3,2,0)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "coupnum_p3_cell_v",
+      "formula": "=COUPNUM(DATE(2024,1,15),DATE(2026,11,15),A1,0)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "coupnum_p3_cell_na",
+      "formula": "=COUPNUM(DATE(2024,1,15),DATE(2026,11,15),A2,0)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "coupnum_p3_cell_d0",
+      "formula": "=COUPNUM(DATE(2024,1,15),DATE(2026,11,15),A3,0)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "coupnum_p4_cell_v",
+      "formula": "=COUPNUM(DATE(2024,1,15),DATE(2026,11,15),2,A1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "coupnum_p4_cell_na",
+      "formula": "=COUPNUM(DATE(2024,1,15),DATE(2026,11,15),2,A2)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "coupnum_p4_cell_d0",
+      "formula": "=COUPNUM(DATE(2024,1,15),DATE(2026,11,15),2,A3)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "couppcd_control",
+      "formula": "=COUPPCD(DATE(2024,1,15),DATE(2026,11,15),2,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45245.0
+      }
+    },
+    {
+      "id": "couppcd_p1_cell_v",
+      "formula": "=COUPPCD(A1,DATE(2026,11,15),2,0)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "couppcd_p1_cell_na",
+      "formula": "=COUPPCD(A2,DATE(2026,11,15),2,0)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "couppcd_p1_cell_d0",
+      "formula": "=COUPPCD(A3,DATE(2026,11,15),2,0)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "couppcd_p2_cell_v",
+      "formula": "=COUPPCD(DATE(2024,1,15),A1,2,0)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "couppcd_p2_cell_na",
+      "formula": "=COUPPCD(DATE(2024,1,15),A2,2,0)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "couppcd_p2_cell_d0",
+      "formula": "=COUPPCD(DATE(2024,1,15),A3,2,0)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "couppcd_p3_cell_v",
+      "formula": "=COUPPCD(DATE(2024,1,15),DATE(2026,11,15),A1,0)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "couppcd_p3_cell_na",
+      "formula": "=COUPPCD(DATE(2024,1,15),DATE(2026,11,15),A2,0)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "couppcd_p3_cell_d0",
+      "formula": "=COUPPCD(DATE(2024,1,15),DATE(2026,11,15),A3,0)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "couppcd_p4_cell_v",
+      "formula": "=COUPPCD(DATE(2024,1,15),DATE(2026,11,15),2,A1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "couppcd_p4_cell_na",
+      "formula": "=COUPPCD(DATE(2024,1,15),DATE(2026,11,15),2,A2)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "couppcd_p4_cell_d0",
+      "formula": "=COUPPCD(DATE(2024,1,15),DATE(2026,11,15),2,A3)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "workday_intl_control",
+      "formula": "=WORKDAY.INTL(DATE(2024,1,15),5,1,D1:D3)",
+      "setup": {
+        "D1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "D3": {
+          "kind": "number",
+          "value": 8.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 45313.0
+      }
+    },
+    {
+      "id": "workday_intl_p1_cell_v",
+      "formula": "=WORKDAY.INTL(A1,5,1,D1:D3)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "D1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "D3": {
+          "kind": "number",
+          "value": 8.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "workday_intl_p1_cell_na",
+      "formula": "=WORKDAY.INTL(A2,5,1,D1:D3)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "D1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "D3": {
+          "kind": "number",
+          "value": 8.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "workday_intl_p1_cell_d0",
+      "formula": "=WORKDAY.INTL(A3,5,1,D1:D3)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "D1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "D3": {
+          "kind": "number",
+          "value": 8.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "workday_intl_p2_cell_v",
+      "formula": "=WORKDAY.INTL(DATE(2024,1,15),A1,1,D1:D3)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "D1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "D3": {
+          "kind": "number",
+          "value": 8.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "workday_intl_p2_cell_na",
+      "formula": "=WORKDAY.INTL(DATE(2024,1,15),A2,1,D1:D3)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "D1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "D3": {
+          "kind": "number",
+          "value": 8.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "workday_intl_p2_cell_d0",
+      "formula": "=WORKDAY.INTL(DATE(2024,1,15),A3,1,D1:D3)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "D1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "D3": {
+          "kind": "number",
+          "value": 8.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "workday_intl_p3_cell_v",
+      "formula": "=WORKDAY.INTL(DATE(2024,1,15),5,A1,D1:D3)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "D1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "D3": {
+          "kind": "number",
+          "value": 8.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "workday_intl_p3_cell_na",
+      "formula": "=WORKDAY.INTL(DATE(2024,1,15),5,A2,D1:D3)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "D1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "D3": {
+          "kind": "number",
+          "value": 8.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "workday_intl_p3_cell_d0",
+      "formula": "=WORKDAY.INTL(DATE(2024,1,15),5,A3,D1:D3)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "D1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "D3": {
+          "kind": "number",
+          "value": 8.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "workday_intl_p4_cell_v",
+      "formula": "=WORKDAY.INTL(DATE(2024,1,15),5,1,A1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "workday_intl_p4_cell_na",
+      "formula": "=WORKDAY.INTL(DATE(2024,1,15),5,1,A2)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "workday_intl_p4_cell_d0",
+      "formula": "=WORKDAY.INTL(DATE(2024,1,15),5,1,A3)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "workday_intl_p4_rng_v",
+      "formula": "=WORKDAY.INTL(DATE(2024,1,15),5,1,E1:E3)",
+      "setup": {
+        "E1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "E2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "workday_intl_p4_rng_na",
+      "formula": "=WORKDAY.INTL(DATE(2024,1,15),5,1,F1:F3)",
+      "setup": {
+        "F1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "F2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "F3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    }
+  ]
+}

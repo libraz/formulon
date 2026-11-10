@@ -236,9 +236,7 @@ Value eval_textsplit_lazy(const parser::AstNode& call, Arena& arena, const Funct
   Value pad = Value::error(ErrorCode::NA);
   if (arity == 6U) {
     const Value pad_v = eval_node(call.as_call_arg(5), arena, registry, ctx);
-    if (pad_v.is_error()) {
-      return pad_v;
-    }
+    // An error pad fills the padded cells like any other value.
     if (pad_v.is_array()) {
       const ArrayValue* pa = pad_v.as_array();
       if (pa->rows == 0U || pa->cols == 0U) {
@@ -248,6 +246,11 @@ Value eval_textsplit_lazy(const parser::AstNode& call, Arena& arena, const Funct
     } else {
       pad = pad_v;
     }
+  }
+
+  // An empty source text is #VALUE! unless ignore_empty turns it into the empty-grid #CALC!.
+  if (text.empty() && !ignore_empty) {
+    return Value::error(ErrorCode::Value);
   }
 
   // Fold effective delimiters once after every argument has been evaluated.

@@ -59,10 +59,7 @@ bool resolve_pad_arg(const parser::AstNode* node, Arena& arena, const FunctionRe
   Value value = Value::error(ErrorCode::NA);
   if (node != nullptr) {
     const Value pad_v = eval_node(*node, arena, registry, ctx);
-    if (pad_v.is_error()) {
-      error_out = pad_v;
-      return false;
-    }
+    // An error pad fills the generated cells like any other value.
     if (pad_v.is_array()) {
       const ArrayValue* pa = pad_v.as_array();
       if (pa->rows == 0U || pa->cols == 0U) {

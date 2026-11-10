@@ -1,0 +1,834 @@
+{
+  "suite": "value_fix_misc",
+  "description": "Cases for blocked spills, filter arrays that exclude every row, runaway LAMBDA recursion and empty TEXTSPLIT results, each next to a control.\n",
+  "environment": {
+    "excel_version": "16.114.4",
+    "excel_locale": "ja-JP",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-11-10T23:08:34Z"
+  },
+  "tolerance": {
+    "abs": 0.0,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "groupby_lambda_filter_all_false",
+      "formula": "=GROUPBY(B1:B3,C1:C3,LAMBDA(x,SUM(x)),0,1,,I1:I3)",
+      "setup": {
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "D1": {
+          "kind": "text",
+          "value": "x"
+        },
+        "D2": {
+          "kind": "text",
+          "value": "y"
+        },
+        "D3": {
+          "kind": "text",
+          "value": "x"
+        },
+        "I1": {
+          "kind": "formula",
+          "formula": "=1=2"
+        },
+        "I2": {
+          "kind": "formula",
+          "formula": "=1=2"
+        },
+        "I3": {
+          "kind": "formula",
+          "formula": "=1=2"
+        },
+        "J1": {
+          "kind": "formula",
+          "formula": "=1=1"
+        },
+        "J2": {
+          "kind": "formula",
+          "formula": "=1=1"
+        },
+        "J3": {
+          "kind": "formula",
+          "formula": "=1=1"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "groupby_lambda_filter_all_true",
+      "formula": "=GROUPBY(B1:B3,C1:C3,LAMBDA(x,SUM(x)),0,1,,J1:J3)",
+      "setup": {
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "D1": {
+          "kind": "text",
+          "value": "x"
+        },
+        "D2": {
+          "kind": "text",
+          "value": "y"
+        },
+        "D3": {
+          "kind": "text",
+          "value": "x"
+        },
+        "I1": {
+          "kind": "formula",
+          "formula": "=1=2"
+        },
+        "I2": {
+          "kind": "formula",
+          "formula": "=1=2"
+        },
+        "I3": {
+          "kind": "formula",
+          "formula": "=1=2"
+        },
+        "J1": {
+          "kind": "formula",
+          "formula": "=1=1"
+        },
+        "J2": {
+          "kind": "formula",
+          "formula": "=1=1"
+        },
+        "J3": {
+          "kind": "formula",
+          "formula": "=1=1"
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          40.0,
+          2.0,
+          20.0,
+          "合計",
+          60.0
+        ],
+        "shape": [
+          3,
+          2
+        ]
+      }
+    },
+    {
+      "id": "groupby_lambda_no_filter",
+      "formula": "=GROUPBY(B1:B3,C1:C3,LAMBDA(x,SUM(x)))",
+      "setup": {
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "D1": {
+          "kind": "text",
+          "value": "x"
+        },
+        "D2": {
+          "kind": "text",
+          "value": "y"
+        },
+        "D3": {
+          "kind": "text",
+          "value": "x"
+        },
+        "I1": {
+          "kind": "formula",
+          "formula": "=1=2"
+        },
+        "I2": {
+          "kind": "formula",
+          "formula": "=1=2"
+        },
+        "I3": {
+          "kind": "formula",
+          "formula": "=1=2"
+        },
+        "J1": {
+          "kind": "formula",
+          "formula": "=1=1"
+        },
+        "J2": {
+          "kind": "formula",
+          "formula": "=1=1"
+        },
+        "J3": {
+          "kind": "formula",
+          "formula": "=1=1"
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          40.0,
+          2.0,
+          20.0,
+          "合計",
+          60.0
+        ],
+        "shape": [
+          3,
+          2
+        ]
+      }
+    },
+    {
+      "id": "pivotby_lambda_filter_all_false",
+      "formula": "=PIVOTBY(B1:B3,D1:D3,C1:C3,LAMBDA(x,SUM(x)),0,1,,1,,I1:I3)",
+      "setup": {
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "D1": {
+          "kind": "text",
+          "value": "x"
+        },
+        "D2": {
+          "kind": "text",
+          "value": "y"
+        },
+        "D3": {
+          "kind": "text",
+          "value": "x"
+        },
+        "I1": {
+          "kind": "formula",
+          "formula": "=1=2"
+        },
+        "I2": {
+          "kind": "formula",
+          "formula": "=1=2"
+        },
+        "I3": {
+          "kind": "formula",
+          "formula": "=1=2"
+        },
+        "J1": {
+          "kind": "formula",
+          "formula": "=1=1"
+        },
+        "J2": {
+          "kind": "formula",
+          "formula": "=1=1"
+        },
+        "J3": {
+          "kind": "formula",
+          "formula": "=1=1"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "pivotby_lambda_filter_all_true",
+      "formula": "=PIVOTBY(B1:B3,D1:D3,C1:C3,LAMBDA(x,SUM(x)),0,1,,1,,J1:J3)",
+      "setup": {
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "D1": {
+          "kind": "text",
+          "value": "x"
+        },
+        "D2": {
+          "kind": "text",
+          "value": "y"
+        },
+        "D3": {
+          "kind": "text",
+          "value": "x"
+        },
+        "I1": {
+          "kind": "formula",
+          "formula": "=1=2"
+        },
+        "I2": {
+          "kind": "formula",
+          "formula": "=1=2"
+        },
+        "I3": {
+          "kind": "formula",
+          "formula": "=1=2"
+        },
+        "J1": {
+          "kind": "formula",
+          "formula": "=1=1"
+        },
+        "J2": {
+          "kind": "formula",
+          "formula": "=1=1"
+        },
+        "J3": {
+          "kind": "formula",
+          "formula": "=1=1"
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          "",
+          "x",
+          "y",
+          "合計",
+          1.0,
+          40.0,
+          "",
+          40.0,
+          2.0,
+          "",
+          20.0,
+          20.0,
+          "合計",
+          40.0,
+          20.0,
+          60.0
+        ],
+        "shape": [
+          4,
+          4
+        ]
+      }
+    },
+    {
+      "id": "pivotby_lambda_no_filter",
+      "formula": "=PIVOTBY(B1:B3,D1:D3,C1:C3,LAMBDA(x,SUM(x)))",
+      "setup": {
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "D1": {
+          "kind": "text",
+          "value": "x"
+        },
+        "D2": {
+          "kind": "text",
+          "value": "y"
+        },
+        "D3": {
+          "kind": "text",
+          "value": "x"
+        },
+        "I1": {
+          "kind": "formula",
+          "formula": "=1=2"
+        },
+        "I2": {
+          "kind": "formula",
+          "formula": "=1=2"
+        },
+        "I3": {
+          "kind": "formula",
+          "formula": "=1=2"
+        },
+        "J1": {
+          "kind": "formula",
+          "formula": "=1=1"
+        },
+        "J2": {
+          "kind": "formula",
+          "formula": "=1=1"
+        },
+        "J3": {
+          "kind": "formula",
+          "formula": "=1=1"
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          "",
+          "x",
+          "y",
+          "合計",
+          1.0,
+          40.0,
+          "",
+          40.0,
+          2.0,
+          "",
+          20.0,
+          20.0,
+          "合計",
+          40.0,
+          20.0,
+          60.0
+        ],
+        "shape": [
+          4,
+          4
+        ]
+      }
+    },
+    {
+      "id": "lambda_self_application_depth",
+      "formula": "=LET(f,LAMBDA(g,n,g(g,n+1)),f(f,1))",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "lambda_self_application_bounded",
+      "formula": "=LET(f,LAMBDA(g,n,IF(n>10,n,g(g,n+1))),f(f,1))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 11.0
+      }
+    },
+    {
+      "id": "textsplit_empty_text",
+      "formula": "=TEXTSPLIT(\"\",\",\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "textsplit_ignore_empty_all_empty",
+      "formula": "=TEXTSPLIT(\",\",\",\",,TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#CALC!"
+      }
+    },
+    {
+      "id": "textsplit_control",
+      "formula": "=TEXTSPLIT(\"a,b\",\",\")",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "a",
+          "b"
+        ],
+        "shape": [
+          1,
+          2
+        ]
+      }
+    },
+    {
+      "id": "index_spill_blocked",
+      "formula": "=INDEX(C1#,1)",
+      "setup": {
+        "C1": {
+          "kind": "formula",
+          "formula": "=SEQUENCE(3)"
+        },
+        "C2": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#SPILL!"
+      }
+    },
+    {
+      "id": "index_spill_control",
+      "formula": "=INDEX(C1#,1)",
+      "setup": {
+        "C1": {
+          "kind": "formula",
+          "formula": "=SEQUENCE(3)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "groupby_non_lambda_function_argument",
+      "formula": "=GROUPBY(AZ1:AZ3,BA1:BA3,1)",
+      "setup": {
+        "AZ1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "AZ2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "AZ3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "BA1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "BA2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "BA3": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "correl_of_groupby_error_cell",
+      "formula": "=CORREL(C5,1)",
+      "setup": {
+        "AZ1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "AZ2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "AZ3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "BA1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "BA2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "BA3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "C5": {
+          "kind": "formula",
+          "formula": "=GROUPBY(AZ1:AZ3,BA1:BA3,1)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "wraprows_pad_expression_na",
+      "formula": "=WRAPROWS({1,2,3},2,NA())",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0,
+          3.0,
+          {
+            "kind": "error",
+            "code": "#N/A"
+          }
+        ],
+        "shape": [
+          2,
+          2
+        ]
+      }
+    },
+    {
+      "id": "wraprows_pad_ref_na",
+      "formula": "=WRAPROWS({1,2,3},2,A2)",
+      "setup": {
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0,
+          3.0,
+          {
+            "kind": "error",
+            "code": "#N/A"
+          }
+        ],
+        "shape": [
+          2,
+          2
+        ]
+      }
+    },
+    {
+      "id": "textsplit_pad_expression_na",
+      "formula": "=TEXTSPLIT(\"a,b;c\",\",\",\";\",,,NA())",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "a",
+          "b",
+          "c",
+          {
+            "kind": "error",
+            "code": "#N/A"
+          }
+        ],
+        "shape": [
+          2,
+          2
+        ]
+      }
+    },
+    {
+      "id": "textsplit_pad_ref_na",
+      "formula": "=TEXTSPLIT(\"a,b;c\",\",\",\";\",,,A2)",
+      "setup": {
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          "a",
+          "b",
+          "c",
+          {
+            "kind": "error",
+            "code": "#N/A"
+          }
+        ],
+        "shape": [
+          2,
+          2
+        ]
+      }
+    },
+    {
+      "id": "frequency_bins_literal_error",
+      "formula": "=FREQUENCY({1,2,3},{#DIV/0!})",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          0.0,
+          3.0
+        ],
+        "shape": [
+          2,
+          1
+        ]
+      }
+    },
+    {
+      "id": "frequency_bins_ref_error",
+      "formula": "=FREQUENCY({1,2,3},A3)",
+      "setup": {
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          0.0,
+          3.0
+        ],
+        "shape": [
+          2,
+          1
+        ]
+      }
+    },
+    {
+      "id": "getpivotdata_data_field_expression_error",
+      "formula": "=GETPIVOTDATA(1/0,A1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "getpivotdata_data_field_ref_error",
+      "formula": "=GETPIVOTDATA(A3,A1)",
+      "setup": {
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#REF!"
+      }
+    },
+    {
+      "id": "phonetic_ref_bool",
+      "formula": "=PHONETIC(A4)",
+      "setup": {
+        "A4": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": ""
+      }
+    },
+    {
+      "id": "percentof_range_literal_error",
+      "formula": "=PERCENTOF(2,{1,#DIV/0!,3})",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    }
+  ]
+}

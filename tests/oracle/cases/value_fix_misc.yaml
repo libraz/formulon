@@ -1,0 +1,183 @@
+suite: value_fix_misc
+description: >
+  Cases for blocked spills, filter arrays that exclude every row, runaway LAMBDA recursion and
+  empty TEXTSPLIT results, each next to a control.
+tolerance: { abs: 0, rel: 0 }
+locale: ja-JP
+cases:
+  - id: groupby_lambda_filter_all_false
+    setup:
+      B1: 1
+      B2: 2
+      B3: 1
+      C1: 10
+      C2: 20
+      C3: 30
+      D1: 'x'
+      D2: 'y'
+      D3: 'x'
+      I1: '=1=2'
+      I2: '=1=2'
+      I3: '=1=2'
+      J1: '=1=1'
+      J2: '=1=1'
+      J3: '=1=1'
+    formula: '=GROUPBY(B1:B3,C1:C3,LAMBDA(x,SUM(x)),0,1,,I1:I3)'
+  - id: groupby_lambda_filter_all_true
+    setup:
+      B1: 1
+      B2: 2
+      B3: 1
+      C1: 10
+      C2: 20
+      C3: 30
+      D1: 'x'
+      D2: 'y'
+      D3: 'x'
+      I1: '=1=2'
+      I2: '=1=2'
+      I3: '=1=2'
+      J1: '=1=1'
+      J2: '=1=1'
+      J3: '=1=1'
+    formula: '=GROUPBY(B1:B3,C1:C3,LAMBDA(x,SUM(x)),0,1,,J1:J3)'
+  - id: groupby_lambda_no_filter
+    setup:
+      B1: 1
+      B2: 2
+      B3: 1
+      C1: 10
+      C2: 20
+      C3: 30
+      D1: 'x'
+      D2: 'y'
+      D3: 'x'
+      I1: '=1=2'
+      I2: '=1=2'
+      I3: '=1=2'
+      J1: '=1=1'
+      J2: '=1=1'
+      J3: '=1=1'
+    formula: '=GROUPBY(B1:B3,C1:C3,LAMBDA(x,SUM(x)))'
+  - id: pivotby_lambda_filter_all_false
+    setup:
+      B1: 1
+      B2: 2
+      B3: 1
+      C1: 10
+      C2: 20
+      C3: 30
+      D1: 'x'
+      D2: 'y'
+      D3: 'x'
+      I1: '=1=2'
+      I2: '=1=2'
+      I3: '=1=2'
+      J1: '=1=1'
+      J2: '=1=1'
+      J3: '=1=1'
+    formula: '=PIVOTBY(B1:B3,D1:D3,C1:C3,LAMBDA(x,SUM(x)),0,1,,1,,I1:I3)'
+  - id: pivotby_lambda_filter_all_true
+    setup:
+      B1: 1
+      B2: 2
+      B3: 1
+      C1: 10
+      C2: 20
+      C3: 30
+      D1: 'x'
+      D2: 'y'
+      D3: 'x'
+      I1: '=1=2'
+      I2: '=1=2'
+      I3: '=1=2'
+      J1: '=1=1'
+      J2: '=1=1'
+      J3: '=1=1'
+    formula: '=PIVOTBY(B1:B3,D1:D3,C1:C3,LAMBDA(x,SUM(x)),0,1,,1,,J1:J3)'
+  - id: pivotby_lambda_no_filter
+    setup:
+      B1: 1
+      B2: 2
+      B3: 1
+      C1: 10
+      C2: 20
+      C3: 30
+      D1: 'x'
+      D2: 'y'
+      D3: 'x'
+      I1: '=1=2'
+      I2: '=1=2'
+      I3: '=1=2'
+      J1: '=1=1'
+      J2: '=1=1'
+      J3: '=1=1'
+    formula: '=PIVOTBY(B1:B3,D1:D3,C1:C3,LAMBDA(x,SUM(x)))'
+  - id: lambda_self_application_depth
+    formula: '=LET(f,LAMBDA(g,n,g(g,n+1)),f(f,1))'
+  - id: lambda_self_application_bounded
+    formula: '=LET(f,LAMBDA(g,n,IF(n>10,n,g(g,n+1))),f(f,1))'
+  - id: textsplit_empty_text
+    formula: '=TEXTSPLIT("",",")'
+  - id: textsplit_ignore_empty_all_empty
+    formula: '=TEXTSPLIT(",",",",,TRUE)'
+  - id: textsplit_control
+    formula: '=TEXTSPLIT("a,b",",")'
+  - id: index_spill_blocked
+    setup:
+      C1: '=SEQUENCE(3)'
+      C2: 5
+    formula: '=INDEX(C1#,1)'
+  - id: index_spill_control
+    setup:
+      C1: '=SEQUENCE(3)'
+    formula: '=INDEX(C1#,1)'
+  - id: groupby_non_lambda_function_argument
+    setup:
+      AZ1: 1
+      AZ2: 2
+      AZ3: 3
+      BA1: 10
+      BA2: 20
+      BA3: 30
+    formula: =GROUPBY(AZ1:AZ3,BA1:BA3,1)
+  - id: correl_of_groupby_error_cell
+    setup:
+      AZ1: 1
+      AZ2: 2
+      AZ3: 3
+      BA1: 10
+      BA2: 20
+      BA3: 30
+      C5: =GROUPBY(AZ1:AZ3,BA1:BA3,1)
+    formula: =CORREL(C5,1)
+  - id: wraprows_pad_expression_na
+    formula: =WRAPROWS({1,2,3},2,NA())
+  - id: wraprows_pad_ref_na
+    setup:
+      A2: =NA()
+    formula: =WRAPROWS({1,2,3},2,A2)
+  - id: textsplit_pad_expression_na
+    formula: =TEXTSPLIT("a,b;c",",",";",,,NA())
+  - id: textsplit_pad_ref_na
+    setup:
+      A2: =NA()
+    formula: =TEXTSPLIT("a,b;c",",",";",,,A2)
+  - id: frequency_bins_literal_error
+    formula: =FREQUENCY({1,2,3},{#DIV/0!})
+  - id: frequency_bins_ref_error
+    setup:
+      A3: =1/0
+    formula: =FREQUENCY({1,2,3},A3)
+  - id: getpivotdata_data_field_expression_error
+    formula: =GETPIVOTDATA(1/0,A1)
+  - id: getpivotdata_data_field_ref_error
+    setup:
+      A3: =1/0
+    formula: =GETPIVOTDATA(A3,A1)
+  - id: phonetic_ref_bool
+    setup:
+      A4: true
+    formula: =PHONETIC(A4)
+  - id: percentof_range_literal_error
+    formula: =PERCENTOF(2,{1,#DIV/0!,3})

@@ -359,12 +359,21 @@ Value eval_frequency_lazy(const parser::AstNode& call, Arena& arena, const Funct
     return Value::error(ErrorCode::Value);
   }
 
-  auto data_resolved = resolve_array_arg_na(call.as_call_arg(0), arena, registry, ctx);
+  // A scalar data_array reads as a one-element array; a scalar bins_array is
+  // refused with #N/A once the data cells are known to hold no error.
+  const auto resolve = [&](const parser::AstNode& arg) -> Expected<RangeResult, ErrorCode> {
+    auto r = resolve_range_arg(arg, arena, registry, ctx);
+    if (!r) {
+      return r.error() == ErrorCode::Value ? ErrorCode::NA : r.error();
+    }
+    return std::move(r.value());
+  };
+  auto data_resolved = resolve(call.as_call_arg(0));
   if (!data_resolved) {
     return Value::error(data_resolved.error());
   }
   RangeResult data_arr = std::move(data_resolved.value());
-  auto bins_resolved = resolve_array_arg_na(call.as_call_arg(1), arena, registry, ctx);
+  auto bins_resolved = resolve(call.as_call_arg(1));
   if (!bins_resolved) {
     return Value::error(bins_resolved.error());
   }
@@ -378,6 +387,9 @@ Value eval_frequency_lazy(const parser::AstNode& call, Arena& arena, const Funct
   // [2] with count<=2 in slot 0).
   if (const Value* error_cell = first_error(data_arr.cells)) {
     return *error_cell;
+  }
+  if (bins_arr.from_scalar && !bins_arr.cells.empty() && !bins_arr.cells.front().is_error()) {
+    return Value::error(ErrorCode::NA);
   }
 
   // Distil bins_array into a flat numeric vector.
@@ -393,6 +405,24 @@ Value eval_frequency_lazy(const parser::AstNode& call, Arena& arena, const Funct
   }
   std::sort(bins.begin(), bins.end());
   const std::size_t n_bins = bins.size();
+
+  // A bins_array cell holding an error leaves an empty first slot
+  // ahead of the total.
+  if (n_bins == 0U && !bins_arr.cells.empty() &&
+      std::all_of(bins_arr.cells.begin(), bins_arr.cells.end(), [](const Value& v) { return v.is_error(); })) {
+    std::size_t total = 0;
+    for (const Value& v : data_arr.cells) {
+      total += v.is_number() ? 1U : 0U;
+    }
+    Value* two = nullptr;
+    ArrayValue* arr2 = allocate_derived_array_value(2U, 1U, arena, two);
+    if (arr2 == nullptr) {
+      return Value::error(ErrorCode::Num);
+    }
+    two[0] = Value::number(0.0);
+    two[1] = Value::number(static_cast<double>(total));
+    return Value::array(arr2);
+  }
 
   if (bins_arr.cells.empty()) {
     return Value::blank();

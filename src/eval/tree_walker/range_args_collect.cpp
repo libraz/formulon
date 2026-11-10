@@ -21,6 +21,7 @@
 #include "eval/range_args.h"
 #include "eval/range_expanders.h"
 #include "eval/range_resolvers.h"
+#include "eval/spill_anchor.h"
 #include "eval/tail_array.h"
 #include "eval/tree_walker/broadcast.h"
 #include "eval/tree_walker/dispatch.h"
@@ -249,7 +250,8 @@ RangeArgOutcome collect_range_arg(const FunctionDef& def, const parser::AstNode&
     // region they came from.
     std::vector<Value> region_cells;
     if (!ctx.read_spill_region(*target, anchor_row, anchor_col, arena, region_cells, nullptr, nullptr)) {
-      return absorb_error_outcome(def, Value::error(ErrorCode::Ref), values, result);
+      return absorb_error_outcome(def, Value::error(spill_read_failure_code(*target, anchor_row, anchor_col)), values,
+                                  result);
     }
     return append_sourced_outcome(def, region_cells.data(), region_cells.size(), values, result);
   }

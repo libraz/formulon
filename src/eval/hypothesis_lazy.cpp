@@ -177,25 +177,27 @@ Value eval_chisq_test_lazy(const parser::AstNode& call, Arena& arena, const Func
   if (call.as_call_arity() != 2U) {
     return Value::error(ErrorCode::Value);
   }
-  auto actual_resolved = resolve_array_arg_na(call.as_call_arg(0), arena, registry, ctx);
+  // Resolved without the scalar rejection so an error argument propagates
+  // before the shape check.
+  auto actual_resolved = resolve_range_arg(call.as_call_arg(0), arena, registry, ctx);
   if (!actual_resolved) {
-    return Value::error(actual_resolved.error());
+    return Value::error(actual_resolved.error() == ErrorCode::Value ? ErrorCode::NA : actual_resolved.error());
   }
   RangeResult actual = std::move(actual_resolved.value());
-  auto expected_resolved = resolve_array_arg_na(call.as_call_arg(1), arena, registry, ctx);
+  auto expected_resolved = resolve_range_arg(call.as_call_arg(1), arena, registry, ctx);
   if (!expected_resolved) {
-    return Value::error(expected_resolved.error());
+    return Value::error(expected_resolved.error() == ErrorCode::Value ? ErrorCode::NA : expected_resolved.error());
   }
   RangeResult expected = std::move(expected_resolved.value());
-  if (actual.rows != expected.rows || actual.cols != expected.cols) {
-    return Value::error(ErrorCode::NA);
-  }
   // Errors propagate, left-to-right (actual first).
   if (const Value* error_cell = first_error(actual.cells)) {
     return *error_cell;
   }
   if (const Value* error_cell = first_error(expected.cells)) {
     return *error_cell;
+  }
+  if (actual.from_scalar || expected.from_scalar || actual.rows != expected.rows || actual.cols != expected.cols) {
+    return Value::error(ErrorCode::NA);
   }
   // Degrees of freedom: (r-1)(c-1) for a true 2-D contingency table;
   // `n - 1` for a 1-D sequence (a single row or a single column). Fewer

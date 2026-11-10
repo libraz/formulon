@@ -253,6 +253,11 @@ Value eval_sortby_lazy(const parser::AstNode& call, Arena& arena, const Function
   if (array == nullptr) {
     return err;
   }
+  // A one-cell error argument is the error itself, not an array to shape-check.
+  const auto lone_error = [](const ArrayValue& a) { return a.rows == 1U && a.cols == 1U && a.cells[0].is_error(); };
+  if (lone_error(*array)) {
+    return array->cells[0];
+  }
 
   // Axis inference + per-key collection. The first by_array picks the axis;
   // subsequent ones must agree on shape. We hold borrowed pointers to the
@@ -278,6 +283,9 @@ Value eval_sortby_lazy(const parser::AstNode& call, Arena& arena, const Function
       return Value::error(ErrorCode::Value);
     }
     const ArrayValue* by = by_v.as_array();
+    if (lone_error(*by)) {
+      return by->cells[0];
+    }
 
     // Decide axis from the first key, then enforce match on the rest.
     if (!axis_decided) {

@@ -361,9 +361,12 @@ bool sum_arg_for_percentof(const parser::AstNode& raw_arg, Arena& arena, const F
     }
     double total = 0.0;
     for (const Value& v : resolved.value().cells) {
-      if (!add_number(v, total)) {
+      // An error cell of a reference reads as #NUM!; literal errors keep their code.
+      if (v.is_error()) {
+        *out_err = Value::error(ErrorCode::Num);
         return false;
       }
+      add_number(v, total);
     }
     return finish_total(total);
   }
@@ -377,9 +380,12 @@ bool sum_arg_for_percentof(const parser::AstNode& raw_arg, Arena& arena, const F
     for (std::uint32_t r = 0; r < rows; ++r) {
       for (std::uint32_t c = 0; c < cols; ++c) {
         const Value v = eval_node(arg_node.as_array_element(r, c), arena, registry, ctx);
-        if (!add_number(v, total)) {
+        // An error element reads as #NUM!, like an error cell.
+        if (v.is_error()) {
+          *out_err = Value::error(ErrorCode::Num);
           return false;
         }
+        add_number(v, total);
       }
     }
     return finish_total(total);

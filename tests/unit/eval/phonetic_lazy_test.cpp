@@ -253,41 +253,39 @@ TEST(BuiltinsPhoneticLazy, BlankCellReturnsEmpty) {
   EXPECT_EQ(v.as_text(), "");
 }
 
-TEST(BuiltinsPhoneticLazy, NumberCellReturnsNA) {
-  // A cell holding a number with no <rPh> annotation surfaces #N/A.
-  // (PHONETIC's strict-text rule applies on the value-passthrough arm.)
+TEST(BuiltinsPhoneticLazy, NumberCellReturnsEmptyText) {
+  // A cell holding a number with no <rPh> annotation reads as the empty text.
   Workbook wb = MakeSingleSheetWorkbook();
   wb.sheet(0).set_cell_value(0, 0, Value::number(42.0));
 
   EvalState state;
   const EvalContext ctx(wb, wb.sheet(0), state);
   const Value v = EvalWith("=PHONETIC(A1)", ctx);
-  ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::NA);
+  ASSERT_TRUE(v.is_text());
+  EXPECT_EQ(v.as_text(), "");
 }
 
-TEST(BuiltinsPhoneticLazy, BooleanCellReturnsNA) {
+TEST(BuiltinsPhoneticLazy, BooleanCellReturnsEmptyText) {
   Workbook wb = MakeSingleSheetWorkbook();
   wb.sheet(0).set_cell_value(0, 0, Value::boolean(true));
 
   EvalState state;
   const EvalContext ctx(wb, wb.sheet(0), state);
   const Value v = EvalWith("=PHONETIC(A1)", ctx);
-  ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::NA);
+  ASSERT_TRUE(v.is_text());
+  EXPECT_EQ(v.as_text(), "");
 }
 
-TEST(BuiltinsPhoneticLazy, ErrorCellPropagates) {
-  // A cell holding a stored error propagates that error rather than
-  // surfacing #N/A.
+TEST(BuiltinsPhoneticLazy, ErrorCellReturnsEmptyText) {
+  // A cell holding a stored error does not propagate it.
   Workbook wb = MakeSingleSheetWorkbook();
   wb.sheet(0).set_cell_value(0, 0, Value::error(ErrorCode::Div0));
 
   EvalState state;
   const EvalContext ctx(wb, wb.sheet(0), state);
   const Value v = EvalWith("=PHONETIC(A1)", ctx);
-  ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Div0);
+  ASSERT_TRUE(v.is_text());
+  EXPECT_EQ(v.as_text(), "");
 }
 
 // Edge case: annotation is present even on a non-text cell (e.g. a

@@ -105,24 +105,24 @@ struct ParseAndEval {
 // per recursion, so a deep `n` reliably grows the lambda-depth counter.
 //
 // `g(g, 300)` recurses 301 times before terminating. The cap is 256, so
-// the inner-most invocations short-circuit to `#CALC!`, and the IF
+// the inner-most invocations short-circuit to `#NUM!`, and the IF
 // cascade propagates that error all the way back to the caller.
 TEST(EvalRecursionDepth, LambdaSelfRecursionRejectedAtDepthCap) {
   ParseAndEval pe("=LET(g, LAMBDA(self, n, IF(n>0, self(self, n-1), 0)), g(g, 300))");
   ASSERT_TRUE(pe.p.errors().empty()) << "unexpected parse errors";
   const Value v = pe.run();
-  ASSERT_TRUE(v.is_error()) << "expected #CALC!, got value of kind " << static_cast<int>(v.kind());
-  EXPECT_EQ(v.as_error(), ErrorCode::Calc);
+  ASSERT_TRUE(v.is_error()) << "expected #NUM!, got value of kind " << static_cast<int>(v.kind());
+  EXPECT_EQ(v.as_error(), ErrorCode::Num);
 }
 
 // `g(g, 0)` would never terminate (the body always recurses) without a
-// cap; the lambda guard catches it and surfaces `#CALC!`.
+// cap; the lambda guard catches it and surfaces `#NUM!`.
 TEST(EvalRecursionDepth, LambdaInfiniteRecursionRejected) {
   ParseAndEval pe("=LET(g, LAMBDA(self, n, self(self, n+1)), g(g, 0))");
   ASSERT_TRUE(pe.p.errors().empty()) << "unexpected parse errors";
   const Value v = pe.run();
   ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Calc);
+  EXPECT_EQ(v.as_error(), ErrorCode::Num);
 }
 
 // `g(g, 100)` recurses 101 times and is well below the 256 cap; it must

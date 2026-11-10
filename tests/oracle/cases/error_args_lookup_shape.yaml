@@ -1,0 +1,1702 @@
+suite: error_args_lookup_shape
+description: >
+  Which error lookup, array-shape, text and reference functions report when an argument is a
+  referenced cell or a range holding a plain #VALUE!, #N/A or #DIV/0!, with the other arguments
+  valid, plus a valid control. GETPIVOTDATA has no pivot behind it, so its control reports the
+  no-pivot failure.
+tolerance: { abs: 0, rel: 0 }
+locale: ja-JP
+cases:
+  - id: vlookup_control
+    setup:
+      B1: 1
+      B2: 2
+      B3: 4
+      C1: 2
+      C2: 3
+      C3: 7
+    formula: '=VLOOKUP(2,B1:C3,2,FALSE)'
+  - id: vlookup_p1_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+      C1: 2
+      C2: 3
+      C3: 7
+    formula: '=VLOOKUP(A1,B1:C3,2,FALSE)'
+  - id: vlookup_p1_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+      C1: 2
+      C2: 3
+      C3: 7
+    formula: '=VLOOKUP(A2,B1:C3,2,FALSE)'
+  - id: vlookup_p1_cell_d0
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+      C1: 2
+      C2: 3
+      C3: 7
+    formula: '=VLOOKUP(A3,B1:C3,2,FALSE)'
+  - id: vlookup_p2_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=VLOOKUP(2,A1,2,FALSE)'
+  - id: vlookup_p2_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=VLOOKUP(2,A2,2,FALSE)'
+  - id: vlookup_p2_cell_d0
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=VLOOKUP(2,A3,2,FALSE)'
+  - id: vlookup_p2_rng_v
+    setup:
+      E1: '="a"+1'
+      E2: 2
+      E3: 5
+    formula: '=VLOOKUP(2,E1:E3,2,FALSE)'
+  - id: vlookup_p2_rng_na
+    setup:
+      F1: '=NA()'
+      F2: 2
+      F3: 5
+    formula: '=VLOOKUP(2,F1:F3,2,FALSE)'
+  - id: vlookup_p3_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+      C1: 2
+      C2: 3
+      C3: 7
+    formula: '=VLOOKUP(2,B1:C3,A1,FALSE)'
+  - id: vlookup_p3_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+      C1: 2
+      C2: 3
+      C3: 7
+    formula: '=VLOOKUP(2,B1:C3,A2,FALSE)'
+  - id: vlookup_p3_cell_d0
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+      C1: 2
+      C2: 3
+      C3: 7
+    formula: '=VLOOKUP(2,B1:C3,A3,FALSE)'
+  - id: vlookup_p4_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+      C1: 2
+      C2: 3
+      C3: 7
+    formula: '=VLOOKUP(2,B1:C3,2,A1)'
+  - id: vlookup_p4_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+      C1: 2
+      C2: 3
+      C3: 7
+    formula: '=VLOOKUP(2,B1:C3,2,A2)'
+  - id: vlookup_p4_cell_d0
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+      C1: 2
+      C2: 3
+      C3: 7
+    formula: '=VLOOKUP(2,B1:C3,2,A3)'
+  - id: hlookup_control
+    setup:
+      B1: 1
+      B2: 2
+      B3: 4
+      D1: 3
+      D2: 5
+      D3: 8
+    formula: '=HLOOKUP(2,B1:D3,2,FALSE)'
+  - id: hlookup_p1_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+      D1: 3
+      D2: 5
+      D3: 8
+    formula: '=HLOOKUP(A1,B1:D3,2,FALSE)'
+  - id: hlookup_p1_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+      D1: 3
+      D2: 5
+      D3: 8
+    formula: '=HLOOKUP(A2,B1:D3,2,FALSE)'
+  - id: hlookup_p1_cell_d0
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+      D1: 3
+      D2: 5
+      D3: 8
+    formula: '=HLOOKUP(A3,B1:D3,2,FALSE)'
+  - id: hlookup_p2_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=HLOOKUP(2,A1,2,FALSE)'
+  - id: hlookup_p2_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=HLOOKUP(2,A2,2,FALSE)'
+  - id: hlookup_p2_cell_d0
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=HLOOKUP(2,A3,2,FALSE)'
+  - id: hlookup_p2_rng_v
+    setup:
+      E1: '="a"+1'
+      E2: 2
+      E3: 5
+    formula: '=HLOOKUP(2,E1:E3,2,FALSE)'
+  - id: hlookup_p2_rng_na
+    setup:
+      F1: '=NA()'
+      F2: 2
+      F3: 5
+    formula: '=HLOOKUP(2,F1:F3,2,FALSE)'
+  - id: hlookup_p3_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+      D1: 3
+      D2: 5
+      D3: 8
+    formula: '=HLOOKUP(2,B1:D3,A1,FALSE)'
+  - id: hlookup_p3_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+      D1: 3
+      D2: 5
+      D3: 8
+    formula: '=HLOOKUP(2,B1:D3,A2,FALSE)'
+  - id: hlookup_p3_cell_d0
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+      D1: 3
+      D2: 5
+      D3: 8
+    formula: '=HLOOKUP(2,B1:D3,A3,FALSE)'
+  - id: hlookup_p4_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+      D1: 3
+      D2: 5
+      D3: 8
+    formula: '=HLOOKUP(2,B1:D3,2,A1)'
+  - id: hlookup_p4_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+      D1: 3
+      D2: 5
+      D3: 8
+    formula: '=HLOOKUP(2,B1:D3,2,A2)'
+  - id: hlookup_p4_cell_d0
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+      D1: 3
+      D2: 5
+      D3: 8
+    formula: '=HLOOKUP(2,B1:D3,2,A3)'
+  - id: match_control
+    setup:
+      B1: 1
+      B2: 2
+      B3: 4
+    formula: '=MATCH(2,B1:B3,0)'
+  - id: match_p1_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+    formula: '=MATCH(A1,B1:B3,0)'
+  - id: match_p1_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+    formula: '=MATCH(A2,B1:B3,0)'
+  - id: match_p1_cell_d0
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+    formula: '=MATCH(A3,B1:B3,0)'
+  - id: match_p2_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=MATCH(2,A1,0)'
+  - id: match_p2_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=MATCH(2,A2,0)'
+  - id: match_p2_cell_d0
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=MATCH(2,A3,0)'
+  - id: match_p2_rng_v
+    setup:
+      E1: '="a"+1'
+      E2: 2
+      E3: 5
+    formula: '=MATCH(2,E1:E3,0)'
+  - id: match_p2_rng_na
+    setup:
+      F1: '=NA()'
+      F2: 2
+      F3: 5
+    formula: '=MATCH(2,F1:F3,0)'
+  - id: match_p3_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+    formula: '=MATCH(2,B1:B3,A1)'
+  - id: match_p3_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+    formula: '=MATCH(2,B1:B3,A2)'
+  - id: match_p3_cell_d0
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+    formula: '=MATCH(2,B1:B3,A3)'
+  - id: indirect_control
+    setup:
+      B1: 1
+      B2: 2
+      B3: 4
+    formula: '=INDIRECT("B1",TRUE)'
+  - id: indirect_p1_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=INDIRECT(A1,TRUE)'
+  - id: indirect_p1_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=INDIRECT(A2,TRUE)'
+  - id: indirect_p1_cell_d0
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=INDIRECT(A3,TRUE)'
+  - id: indirect_p2_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+    formula: '=INDIRECT("B1",A1)'
+  - id: indirect_p2_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+    formula: '=INDIRECT("B1",A2)'
+  - id: indirect_p2_cell_d0
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+    formula: '=INDIRECT("B1",A3)'
+  - id: getpivotdata_control
+    setup:
+      B1: 1
+      B2: 2
+      B3: 4
+    formula: '=GETPIVOTDATA("Sum",B1,"f","v")'
+  - id: getpivotdata_p1_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+    formula: '=GETPIVOTDATA(A1,B1,"f","v")'
+  - id: getpivotdata_p1_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+    formula: '=GETPIVOTDATA(A2,B1,"f","v")'
+  - id: getpivotdata_p1_cell_d0
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+    formula: '=GETPIVOTDATA(A3,B1,"f","v")'
+  - id: getpivotdata_p2_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=GETPIVOTDATA("Sum",A1,"f","v")'
+  - id: getpivotdata_p2_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=GETPIVOTDATA("Sum",A2,"f","v")'
+  - id: getpivotdata_p2_cell_d0
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=GETPIVOTDATA("Sum",A3,"f","v")'
+  - id: getpivotdata_p3_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+    formula: '=GETPIVOTDATA("Sum",B1,A1,"v")'
+  - id: getpivotdata_p3_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+    formula: '=GETPIVOTDATA("Sum",B1,A2,"v")'
+  - id: getpivotdata_p3_cell_d0
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+    formula: '=GETPIVOTDATA("Sum",B1,A3,"v")'
+  - id: getpivotdata_p4_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+    formula: '=GETPIVOTDATA("Sum",B1,"f",A1)'
+  - id: getpivotdata_p4_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+    formula: '=GETPIVOTDATA("Sum",B1,"f",A2)'
+  - id: getpivotdata_p4_cell_d0
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+    formula: '=GETPIVOTDATA("Sum",B1,"f",A3)'
+  - id: sortby_control
+    setup:
+      B1: 1
+      B2: 2
+      B3: 4
+      C1: 2
+      C2: 3
+      C3: 7
+      D1: 3
+      D2: 5
+      D3: 8
+    formula: '=SORTBY(B1:B3,C1:C3,1,D1:D3,1)'
+  - id: sortby_p1_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      C1: 2
+      C2: 3
+      C3: 7
+      D1: 3
+      D2: 5
+      D3: 8
+    formula: '=SORTBY(A1,C1:C3,1,D1:D3,1)'
+  - id: sortby_p1_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      C1: 2
+      C2: 3
+      C3: 7
+      D1: 3
+      D2: 5
+      D3: 8
+    formula: '=SORTBY(A2,C1:C3,1,D1:D3,1)'
+  - id: sortby_p1_cell_d0
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      C1: 2
+      C2: 3
+      C3: 7
+      D1: 3
+      D2: 5
+      D3: 8
+    formula: '=SORTBY(A3,C1:C3,1,D1:D3,1)'
+  - id: sortby_p1_rng_v
+    setup:
+      C1: 2
+      C2: 3
+      C3: 7
+      D1: 3
+      D2: 5
+      D3: 8
+      E1: '="a"+1'
+      E2: 2
+      E3: 5
+    formula: '=SORTBY(E1:E3,C1:C3,1,D1:D3,1)'
+  - id: sortby_p1_rng_na
+    setup:
+      C1: 2
+      C2: 3
+      C3: 7
+      D1: 3
+      D2: 5
+      D3: 8
+      F1: '=NA()'
+      F2: 2
+      F3: 5
+    formula: '=SORTBY(F1:F3,C1:C3,1,D1:D3,1)'
+  - id: sortby_p2_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+      D1: 3
+      D2: 5
+      D3: 8
+    formula: '=SORTBY(B1:B3,A1,1,D1:D3,1)'
+  - id: sortby_p2_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+      D1: 3
+      D2: 5
+      D3: 8
+    formula: '=SORTBY(B1:B3,A2,1,D1:D3,1)'
+  - id: sortby_p2_cell_d0
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+      D1: 3
+      D2: 5
+      D3: 8
+    formula: '=SORTBY(B1:B3,A3,1,D1:D3,1)'
+  - id: sortby_p2_rng_v
+    setup:
+      B1: 1
+      B2: 2
+      B3: 4
+      D1: 3
+      D2: 5
+      D3: 8
+      E1: '="a"+1'
+      E2: 2
+      E3: 5
+    formula: '=SORTBY(B1:B3,E1:E3,1,D1:D3,1)'
+  - id: sortby_p2_rng_na
+    setup:
+      B1: 1
+      B2: 2
+      B3: 4
+      D1: 3
+      D2: 5
+      D3: 8
+      F1: '=NA()'
+      F2: 2
+      F3: 5
+    formula: '=SORTBY(B1:B3,F1:F3,1,D1:D3,1)'
+  - id: sortby_p3_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+      C1: 2
+      C2: 3
+      C3: 7
+      D1: 3
+      D2: 5
+      D3: 8
+    formula: '=SORTBY(B1:B3,C1:C3,A1,D1:D3,1)'
+  - id: sortby_p3_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+      C1: 2
+      C2: 3
+      C3: 7
+      D1: 3
+      D2: 5
+      D3: 8
+    formula: '=SORTBY(B1:B3,C1:C3,A2,D1:D3,1)'
+  - id: sortby_p3_cell_d0
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+      C1: 2
+      C2: 3
+      C3: 7
+      D1: 3
+      D2: 5
+      D3: 8
+    formula: '=SORTBY(B1:B3,C1:C3,A3,D1:D3,1)'
+  - id: sortby_p4_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+      C1: 2
+      C2: 3
+      C3: 7
+    formula: '=SORTBY(B1:B3,C1:C3,1,A1,1)'
+  - id: sortby_p4_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+      C1: 2
+      C2: 3
+      C3: 7
+    formula: '=SORTBY(B1:B3,C1:C3,1,A2,1)'
+  - id: sortby_p4_cell_d0
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+      C1: 2
+      C2: 3
+      C3: 7
+    formula: '=SORTBY(B1:B3,C1:C3,1,A3,1)'
+  - id: sortby_p4_rng_v
+    setup:
+      B1: 1
+      B2: 2
+      B3: 4
+      C1: 2
+      C2: 3
+      C3: 7
+      E1: '="a"+1'
+      E2: 2
+      E3: 5
+    formula: '=SORTBY(B1:B3,C1:C3,1,E1:E3,1)'
+  - id: sortby_p4_rng_na
+    setup:
+      B1: 1
+      B2: 2
+      B3: 4
+      C1: 2
+      C2: 3
+      C3: 7
+      F1: '=NA()'
+      F2: 2
+      F3: 5
+    formula: '=SORTBY(B1:B3,C1:C3,1,F1:F3,1)'
+  - id: sortby_p5_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+      C1: 2
+      C2: 3
+      C3: 7
+      D1: 3
+      D2: 5
+      D3: 8
+    formula: '=SORTBY(B1:B3,C1:C3,1,D1:D3,A1)'
+  - id: sortby_p5_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+      C1: 2
+      C2: 3
+      C3: 7
+      D1: 3
+      D2: 5
+      D3: 8
+    formula: '=SORTBY(B1:B3,C1:C3,1,D1:D3,A2)'
+  - id: sortby_p5_cell_d0
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+      C1: 2
+      C2: 3
+      C3: 7
+      D1: 3
+      D2: 5
+      D3: 8
+    formula: '=SORTBY(B1:B3,C1:C3,1,D1:D3,A3)'
+  - id: expand_control
+    setup:
+      B1: 1
+      B2: 2
+      B3: 4
+    formula: '=EXPAND(B1:B3,5,2,0)'
+  - id: expand_p1_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=EXPAND(A1,5,2,0)'
+  - id: expand_p1_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=EXPAND(A2,5,2,0)'
+  - id: expand_p1_cell_d0
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=EXPAND(A3,5,2,0)'
+  - id: expand_p1_rng_v
+    setup:
+      E1: '="a"+1'
+      E2: 2
+      E3: 5
+    formula: '=EXPAND(E1:E3,5,2,0)'
+  - id: expand_p1_rng_na
+    setup:
+      F1: '=NA()'
+      F2: 2
+      F3: 5
+    formula: '=EXPAND(F1:F3,5,2,0)'
+  - id: expand_p2_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+    formula: '=EXPAND(B1:B3,A1,2,0)'
+  - id: expand_p2_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+    formula: '=EXPAND(B1:B3,A2,2,0)'
+  - id: expand_p2_cell_d0
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+    formula: '=EXPAND(B1:B3,A3,2,0)'
+  - id: expand_p3_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+    formula: '=EXPAND(B1:B3,5,A1,0)'
+  - id: expand_p3_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+    formula: '=EXPAND(B1:B3,5,A2,0)'
+  - id: expand_p3_cell_d0
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+    formula: '=EXPAND(B1:B3,5,A3,0)'
+  - id: expand_p4_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+    formula: '=EXPAND(B1:B3,5,2,A1)'
+  - id: expand_p4_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+    formula: '=EXPAND(B1:B3,5,2,A2)'
+  - id: expand_p4_cell_d0
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+    formula: '=EXPAND(B1:B3,5,2,A3)'
+  - id: wrapcols_control
+    setup:
+      B1: 1
+      B2: 2
+      B3: 4
+    formula: '=WRAPCOLS(B1:B3,2,0)'
+  - id: wrapcols_p1_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=WRAPCOLS(A1,2,0)'
+  - id: wrapcols_p1_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=WRAPCOLS(A2,2,0)'
+  - id: wrapcols_p1_cell_d0
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=WRAPCOLS(A3,2,0)'
+  - id: wrapcols_p1_rng_v
+    setup:
+      E1: '="a"+1'
+      E2: 2
+      E3: 5
+    formula: '=WRAPCOLS(E1:E3,2,0)'
+  - id: wrapcols_p1_rng_na
+    setup:
+      F1: '=NA()'
+      F2: 2
+      F3: 5
+    formula: '=WRAPCOLS(F1:F3,2,0)'
+  - id: wrapcols_p2_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+    formula: '=WRAPCOLS(B1:B3,A1,0)'
+  - id: wrapcols_p2_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+    formula: '=WRAPCOLS(B1:B3,A2,0)'
+  - id: wrapcols_p2_cell_d0
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+    formula: '=WRAPCOLS(B1:B3,A3,0)'
+  - id: wrapcols_p3_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+    formula: '=WRAPCOLS(B1:B3,2,A1)'
+  - id: wrapcols_p3_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+    formula: '=WRAPCOLS(B1:B3,2,A2)'
+  - id: wrapcols_p3_cell_d0
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+    formula: '=WRAPCOLS(B1:B3,2,A3)'
+  - id: wraprows_control
+    setup:
+      B1: 1
+      B2: 2
+      B3: 4
+    formula: '=WRAPROWS(B1:B3,2,0)'
+  - id: wraprows_p1_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=WRAPROWS(A1,2,0)'
+  - id: wraprows_p1_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=WRAPROWS(A2,2,0)'
+  - id: wraprows_p1_cell_d0
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=WRAPROWS(A3,2,0)'
+  - id: wraprows_p1_rng_v
+    setup:
+      E1: '="a"+1'
+      E2: 2
+      E3: 5
+    formula: '=WRAPROWS(E1:E3,2,0)'
+  - id: wraprows_p1_rng_na
+    setup:
+      F1: '=NA()'
+      F2: 2
+      F3: 5
+    formula: '=WRAPROWS(F1:F3,2,0)'
+  - id: wraprows_p2_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+    formula: '=WRAPROWS(B1:B3,A1,0)'
+  - id: wraprows_p2_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+    formula: '=WRAPROWS(B1:B3,A2,0)'
+  - id: wraprows_p2_cell_d0
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+    formula: '=WRAPROWS(B1:B3,A3,0)'
+  - id: wraprows_p3_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+    formula: '=WRAPROWS(B1:B3,2,A1)'
+  - id: wraprows_p3_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+    formula: '=WRAPROWS(B1:B3,2,A2)'
+  - id: wraprows_p3_cell_d0
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+    formula: '=WRAPROWS(B1:B3,2,A3)'
+  - id: drop_control
+    setup:
+      B1: 1
+      B2: 2
+      B3: 4
+      D1: 3
+      D2: 5
+      D3: 8
+    formula: '=DROP(B1:D3,1,1)'
+  - id: drop_p1_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=DROP(A1,1,1)'
+  - id: drop_p1_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=DROP(A2,1,1)'
+  - id: drop_p1_cell_d0
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=DROP(A3,1,1)'
+  - id: drop_p1_rng_v
+    setup:
+      E1: '="a"+1'
+      E2: 2
+      E3: 5
+    formula: '=DROP(E1:E3,1,1)'
+  - id: drop_p1_rng_na
+    setup:
+      F1: '=NA()'
+      F2: 2
+      F3: 5
+    formula: '=DROP(F1:F3,1,1)'
+  - id: drop_p2_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+      D1: 3
+      D2: 5
+      D3: 8
+    formula: '=DROP(B1:D3,A1,1)'
+  - id: drop_p2_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+      D1: 3
+      D2: 5
+      D3: 8
+    formula: '=DROP(B1:D3,A2,1)'
+  - id: drop_p2_cell_d0
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+      D1: 3
+      D2: 5
+      D3: 8
+    formula: '=DROP(B1:D3,A3,1)'
+  - id: drop_p3_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+      D1: 3
+      D2: 5
+      D3: 8
+    formula: '=DROP(B1:D3,1,A1)'
+  - id: drop_p3_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+      D1: 3
+      D2: 5
+      D3: 8
+    formula: '=DROP(B1:D3,1,A2)'
+  - id: drop_p3_cell_d0
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+      D1: 3
+      D2: 5
+      D3: 8
+    formula: '=DROP(B1:D3,1,A3)'
+  - id: byrow_control
+    setup:
+      B1: 1
+      B2: 2
+      B3: 4
+      D1: 3
+      D2: 5
+      D3: 8
+    formula: '=BYROW(B1:D3,LAMBDA(r,SUM(r)))'
+  - id: byrow_p1_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=BYROW(A1,LAMBDA(r,SUM(r)))'
+  - id: byrow_p1_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=BYROW(A2,LAMBDA(r,SUM(r)))'
+  - id: byrow_p1_cell_d0
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=BYROW(A3,LAMBDA(r,SUM(r)))'
+  - id: byrow_p1_rng_v
+    setup:
+      E1: '="a"+1'
+      E2: 2
+      E3: 5
+    formula: '=BYROW(E1:E3,LAMBDA(r,SUM(r)))'
+  - id: byrow_p1_rng_na
+    setup:
+      F1: '=NA()'
+      F2: 2
+      F3: 5
+    formula: '=BYROW(F1:F3,LAMBDA(r,SUM(r)))'
+  - id: byrow_p2_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+      D1: 3
+      D2: 5
+      D3: 8
+    formula: '=BYROW(B1:D3,A1)'
+  - id: byrow_p2_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+      D1: 3
+      D2: 5
+      D3: 8
+    formula: '=BYROW(B1:D3,A2)'
+  - id: byrow_p2_cell_d0
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+      D1: 3
+      D2: 5
+      D3: 8
+    formula: '=BYROW(B1:D3,A3)'
+  - id: bycol_control
+    setup:
+      B1: 1
+      B2: 2
+      B3: 4
+      D1: 3
+      D2: 5
+      D3: 8
+    formula: '=BYCOL(B1:D3,LAMBDA(r,SUM(r)))'
+  - id: bycol_p1_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=BYCOL(A1,LAMBDA(r,SUM(r)))'
+  - id: bycol_p1_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=BYCOL(A2,LAMBDA(r,SUM(r)))'
+  - id: bycol_p1_cell_d0
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=BYCOL(A3,LAMBDA(r,SUM(r)))'
+  - id: bycol_p1_rng_v
+    setup:
+      E1: '="a"+1'
+      E2: 2
+      E3: 5
+    formula: '=BYCOL(E1:E3,LAMBDA(r,SUM(r)))'
+  - id: bycol_p1_rng_na
+    setup:
+      F1: '=NA()'
+      F2: 2
+      F3: 5
+    formula: '=BYCOL(F1:F3,LAMBDA(r,SUM(r)))'
+  - id: bycol_p2_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+      D1: 3
+      D2: 5
+      D3: 8
+    formula: '=BYCOL(B1:D3,A1)'
+  - id: bycol_p2_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+      D1: 3
+      D2: 5
+      D3: 8
+    formula: '=BYCOL(B1:D3,A2)'
+  - id: bycol_p2_cell_d0
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+      D1: 3
+      D2: 5
+      D3: 8
+    formula: '=BYCOL(B1:D3,A3)'
+  - id: textsplit_control
+    formula: '=TEXTSPLIT("a,b;c,d",",",";",FALSE,0,"x")'
+  - id: textsplit_p1_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=TEXTSPLIT(A1,",",";",FALSE,0,"x")'
+  - id: textsplit_p1_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=TEXTSPLIT(A2,",",";",FALSE,0,"x")'
+  - id: textsplit_p1_cell_d0
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=TEXTSPLIT(A3,",",";",FALSE,0,"x")'
+  - id: textsplit_p2_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=TEXTSPLIT("a,b;c,d",A1,";",FALSE,0,"x")'
+  - id: textsplit_p2_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=TEXTSPLIT("a,b;c,d",A2,";",FALSE,0,"x")'
+  - id: textsplit_p2_cell_d0
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=TEXTSPLIT("a,b;c,d",A3,";",FALSE,0,"x")'
+  - id: textsplit_p3_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=TEXTSPLIT("a,b;c,d",",",A1,FALSE,0,"x")'
+  - id: textsplit_p3_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=TEXTSPLIT("a,b;c,d",",",A2,FALSE,0,"x")'
+  - id: textsplit_p3_cell_d0
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=TEXTSPLIT("a,b;c,d",",",A3,FALSE,0,"x")'
+  - id: textsplit_p4_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=TEXTSPLIT("a,b;c,d",",",";",A1,0,"x")'
+  - id: textsplit_p4_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=TEXTSPLIT("a,b;c,d",",",";",A2,0,"x")'
+  - id: textsplit_p4_cell_d0
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=TEXTSPLIT("a,b;c,d",",",";",A3,0,"x")'
+  - id: textsplit_p5_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=TEXTSPLIT("a,b;c,d",",",";",FALSE,A1,"x")'
+  - id: textsplit_p5_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=TEXTSPLIT("a,b;c,d",",",";",FALSE,A2,"x")'
+  - id: textsplit_p5_cell_d0
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=TEXTSPLIT("a,b;c,d",",",";",FALSE,A3,"x")'
+  - id: textsplit_p6_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=TEXTSPLIT("a,b;c,d",",",";",FALSE,0,A1)'
+  - id: textsplit_p6_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=TEXTSPLIT("a,b;c,d",",",";",FALSE,0,A2)'
+  - id: textsplit_p6_cell_d0
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=TEXTSPLIT("a,b;c,d",",",";",FALSE,0,A3)'
+  - id: percentof_control
+    setup:
+      B1: 1
+      B2: 2
+      B3: 4
+      C1: 2
+      C2: 3
+      C3: 7
+    formula: '=PERCENTOF(B1:B3,C1:C3)'
+  - id: percentof_p1_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      C1: 2
+      C2: 3
+      C3: 7
+    formula: '=PERCENTOF(A1,C1:C3)'
+  - id: percentof_p1_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      C1: 2
+      C2: 3
+      C3: 7
+    formula: '=PERCENTOF(A2,C1:C3)'
+  - id: percentof_p1_cell_d0
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      C1: 2
+      C2: 3
+      C3: 7
+    formula: '=PERCENTOF(A3,C1:C3)'
+  - id: percentof_p1_rng_v
+    setup:
+      C1: 2
+      C2: 3
+      C3: 7
+      E1: '="a"+1'
+      E2: 2
+      E3: 5
+    formula: '=PERCENTOF(E1:E3,C1:C3)'
+  - id: percentof_p1_rng_na
+    setup:
+      C1: 2
+      C2: 3
+      C3: 7
+      F1: '=NA()'
+      F2: 2
+      F3: 5
+    formula: '=PERCENTOF(F1:F3,C1:C3)'
+  - id: percentof_p2_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+    formula: '=PERCENTOF(B1:B3,A1)'
+  - id: percentof_p2_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+    formula: '=PERCENTOF(B1:B3,A2)'
+  - id: percentof_p2_cell_d0
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      B1: 1
+      B2: 2
+      B3: 4
+    formula: '=PERCENTOF(B1:B3,A3)'
+  - id: percentof_p2_rng_v
+    setup:
+      B1: 1
+      B2: 2
+      B3: 4
+      E1: '="a"+1'
+      E2: 2
+      E3: 5
+    formula: '=PERCENTOF(B1:B3,E1:E3)'
+  - id: percentof_p2_rng_na
+    setup:
+      B1: 1
+      B2: 2
+      B3: 4
+      F1: '=NA()'
+      F2: 2
+      F3: 5
+    formula: '=PERCENTOF(B1:B3,F1:F3)'
+  - id: floor_precise_control
+    formula: '=FLOOR.PRECISE(2.5,1)'
+  - id: floor_precise_p1_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=FLOOR.PRECISE(A1,1)'
+  - id: floor_precise_p1_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=FLOOR.PRECISE(A2,1)'
+  - id: floor_precise_p1_cell_d0
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=FLOOR.PRECISE(A3,1)'
+  - id: floor_precise_p2_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=FLOOR.PRECISE(2.5,A1)'
+  - id: floor_precise_p2_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=FLOOR.PRECISE(2.5,A2)'
+  - id: floor_precise_p2_cell_d0
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=FLOOR.PRECISE(2.5,A3)'
+  - id: formulatext_control
+    setup:
+      P1: '=1+1'
+    formula: '=FORMULATEXT(P1)'
+  - id: formulatext_p1_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=FORMULATEXT(A1)'
+  - id: formulatext_p1_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=FORMULATEXT(A2)'
+  - id: formulatext_p1_cell_d0
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=FORMULATEXT(A3)'
+  - id: phonetic_control
+    setup:
+      B1: 1
+      B2: 2
+      B3: 4
+    formula: '=PHONETIC(B1)'
+  - id: phonetic_p1_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=PHONETIC(A1)'
+  - id: phonetic_p1_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=PHONETIC(A2)'
+  - id: phonetic_p1_cell_d0
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=PHONETIC(A3)'
+  - id: dbcs_control
+    formula: '=DBCS("abc")'
+  - id: dbcs_p1_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=DBCS(A1)'
+  - id: dbcs_p1_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=DBCS(A2)'
+  - id: dbcs_p1_cell_d0
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=DBCS(A3)'

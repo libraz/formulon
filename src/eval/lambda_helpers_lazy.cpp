@@ -219,7 +219,8 @@ Value byrow_or_bycol(const parser::AstNode& call, bool by_row, Arena& arena, con
   }
   const LambdaValue* lv = resolve_callable(call.as_call_arg(1), /*call_arity=*/1U, arena, registry, ctx, &err);
   if (lv == nullptr) {
-    return err;
+    // A cell holding an error is no function: #VALUE!, not the error itself.
+    return call.as_call_arg(1).kind() == parser::NodeKind::Ref && err.is_error() ? Value::error(ErrorCode::Value) : err;
   }
   const SourceOrigin origin = source_origin(call.as_call_arg(0), in, arena, registry, ctx);
   if (in->rows == 0U || in->cols == 0U) {

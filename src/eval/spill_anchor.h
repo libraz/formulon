@@ -17,9 +17,17 @@
 #include "value.h"
 
 namespace formulon {
+
+class Sheet;
+
 namespace eval {
 
 class EvalContext;
+
+// The error a spill reference reports when no spill region is readable at
+// (`sheet`, `row`, `col`): `#SPILL!` when the cell is a blocked spill anchor,
+// `#REF!` when it is no anchor at all.
+ErrorCode spill_read_failure_code(const Sheet& sheet, std::uint32_t row, std::uint32_t col);
 
 // Resolves the spill region anchored at (`sheet`, `row`, `col`) and
 // copies it into a fresh `ArrayValue` allocated from `arena`. An empty

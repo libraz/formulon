@@ -24,6 +24,7 @@
 #include "eval/range_expanders.h"
 #include "eval/range_resolvers.h"
 #include "eval/special_forms_lazy.h"
+#include "eval/spill_anchor.h"
 #include "parser/ast.h"
 #include "parser/reference.h"
 #include "sheet.h"
@@ -341,7 +342,7 @@ bool resolve_range_arg_into(const parser::AstNode& raw_arg, Arena& arena, const 
     // payload into `arena` while the sheet lock is held.
     out_cells->clear();
     if (!ctx.read_spill_region(*target, anchor_row, anchor_col, arena, *out_cells, &out_rows, &out_cols)) {
-      *out_err_code = ErrorCode::Ref;
+      *out_err_code = spill_read_failure_code(*target, anchor_row, anchor_col);
       return false;
     }
     return true;

@@ -254,23 +254,39 @@ Value eval_table_lookup_lazy(const parser::AstNode& call, Arena& arena, const Fu
     return fail_lookup(lookup, arena, Value::error(ErrorCode::Ref));
   }
 
+  // A one-cell table holding an error is no table at all.
+  if (rows == 1U && cols == 1U) {
+    const Value only =
+        (by_reference && by_reference.value()) ? read_table_cell(table, 0U, 0U, arena, registry, ctx) : cells.front();
+    if (only.is_error()) {
+      return fail_lookup(lookup, arena, Value::error(ErrorCode::NA));
+    }
+  }
+
+  // An error read from a cell does not propagate: it reads as an index the
+  // table cannot serve, which is #REF! once the lookup finds a row. An error
+  // from any other expression propagates.
   const Value index_val = eval_node(call.as_call_arg(2), arena, registry, ctx);
-  if (index_val.is_error()) {
+  const bool index_unusable = index_val.is_error() && call.as_call_arg(2).kind() == parser::NodeKind::Ref;
+  if (index_val.is_error() && !index_unusable) {
     return fail_lookup(lookup, arena, index_val);
   }
-  auto index_num = coerce_to_number(index_val);
-  if (!index_num) {
-    return fail_lookup(lookup, arena, Value::error(index_num.error()));
+  std::uint32_t result_index = 0U;
+  if (!index_unusable) {
+    auto index_num = coerce_to_number(index_val);
+    if (!index_num) {
+      return fail_lookup(lookup, arena, Value::error(index_num.error()));
+    }
+    if (truncate_index(index_num.value()) < 1.0 && snap_near_integer(index_num.value()) < 1.0) {
+      return fail_lookup(lookup, arena, Value::error(ErrorCode::Value));
+    }
+    const double index_raw = truncate_index(snap_near_integer(index_num.value()));
+    const std::uint32_t result_extent = axis == LookupAxis::Column ? cols : rows;
+    if (index_raw > static_cast<double>(result_extent)) {
+      return fail_lookup(lookup, arena, Value::error(ErrorCode::Ref));
+    }
+    result_index = static_cast<std::uint32_t>(index_raw);
   }
-  if (truncate_index(index_num.value()) < 1.0 && snap_near_integer(index_num.value()) < 1.0) {
-    return fail_lookup(lookup, arena, Value::error(ErrorCode::Value));
-  }
-  const double index_raw = truncate_index(snap_near_integer(index_num.value()));
-  const std::uint32_t result_extent = axis == LookupAxis::Column ? cols : rows;
-  if (index_raw > static_cast<double>(result_extent)) {
-    return fail_lookup(lookup, arena, Value::error(ErrorCode::Ref));
-  }
-  const auto result_index = static_cast<std::uint32_t>(index_raw);
 
   bool approximate = true;
   if (arity == 4) {
@@ -308,6 +324,9 @@ Value eval_table_lookup_lazy(const parser::AstNode& call, Arena& arena, const Fu
     scan_cols = axis == LookupAxis::Column ? 1U : walked.cols();
   }
   const auto fetch = [&](std::size_t off) -> Value {
+    if (index_unusable) {
+      return Value::error(ErrorCode::Ref);
+    }
     if (read_by_reference) {
       if (result_index == 1U) {
         return scan_line[off];
@@ -440,7 +459,7 @@ Value eval_match_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
   if (arity == 3) {
     const Value mt_val = eval_node(call.as_call_arg(2), arena, registry, ctx);
     if (mt_val.is_error()) {
-      return fail_lookup(lookup, arena, mt_val);
+      return fail_lookup(lookup, arena, Value::error(ErrorCode::Ref));
     }
     auto mt_index = coerce_to_index_number(mt_val);
     if (!mt_index) {

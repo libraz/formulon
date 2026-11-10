@@ -122,6 +122,23 @@ TEST(ErrorDetail, PropagatedThroughAReference) {
   ExpectDetail(wb, 11U, kE, ErrorCode::Spill, Shape::kPropagated);
 }
 
+TEST(ErrorDetail, SpillReferenceToBlockedAnchorIsSpill) {
+  Workbook wb = Book();
+  Set(wb, 9U, kC, "=SEQUENCE(3)");
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_text(0U, 10U, kC, "x")));
+  Set(wb, 9U, kE, "=INDEX(C10#,1)");
+  Set(wb, 10U, kE, "=SUM(C10#)");
+  Set(wb, 11U, kE, "=C10#");
+  // C20 is no anchor at all.
+  Set(wb, 12U, kE, "=INDEX(C20#,1)");
+  Recalc(wb);
+
+  EXPECT_EQ(ErrorAt(wb, 9U, kE), ErrorCode::Spill);
+  EXPECT_EQ(ErrorAt(wb, 10U, kE), ErrorCode::Spill);
+  EXPECT_EQ(ErrorAt(wb, 11U, kE), ErrorCode::Spill);
+  EXPECT_EQ(ErrorAt(wb, 12U, kE), ErrorCode::Ref);
+}
+
 TEST(ErrorDetail, EmptyFilterIsCalcSubTypeThree) {
   Workbook wb = Book();
   const char* formulas[] = {

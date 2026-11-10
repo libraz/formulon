@@ -1,0 +1,9350 @@
+{
+  "suite": "error_args_paired_stats",
+  "description": "Which error a paired-array statistic reports when an argument is a referenced cell or a range holding a plain #VALUE!, #N/A or #DIV/0!, with the other arguments valid, plus a valid control.\n",
+  "environment": {
+    "excel_version": "16.114.4",
+    "excel_locale": "ja-JP",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-11-10T22:37:39Z"
+  },
+  "tolerance": {
+    "abs": 0.0,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "correl_control",
+      "formula": "=CORREL(B1:B3,C1:C3)",
+      "setup": {
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.989743318610787
+      }
+    },
+    {
+      "id": "correl_p1_cell_v",
+      "formula": "=CORREL(A1,C1:C3)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "correl_p1_cell_na",
+      "formula": "=CORREL(A2,C1:C3)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "correl_p1_rng_v",
+      "formula": "=CORREL(E1:E3,C1:C3)",
+      "setup": {
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "E1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "E2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "correl_p1_rng_na",
+      "formula": "=CORREL(F1:F3,C1:C3)",
+      "setup": {
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "F1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "F2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "F3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "correl_p2_cell_v",
+      "formula": "=CORREL(B1:B3,A1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "correl_p2_cell_na",
+      "formula": "=CORREL(B1:B3,A2)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "correl_p2_rng_v",
+      "formula": "=CORREL(B1:B3,E1:E3)",
+      "setup": {
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "E1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "E2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "correl_p2_rng_na",
+      "formula": "=CORREL(B1:B3,F1:F3)",
+      "setup": {
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "F1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "F2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "F3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "covar_control",
+      "formula": "=COVAR(B1:B3,C1:C3)",
+      "setup": {
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.6666666666666665
+      }
+    },
+    {
+      "id": "covar_p1_cell_v",
+      "formula": "=COVAR(A1,C1:C3)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "covar_p1_cell_na",
+      "formula": "=COVAR(A2,C1:C3)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "covar_p1_rng_v",
+      "formula": "=COVAR(E1:E3,C1:C3)",
+      "setup": {
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "E1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "E2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "covar_p1_rng_na",
+      "formula": "=COVAR(F1:F3,C1:C3)",
+      "setup": {
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "F1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "F2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "F3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "covar_p2_cell_v",
+      "formula": "=COVAR(B1:B3,A1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "covar_p2_cell_na",
+      "formula": "=COVAR(B1:B3,A2)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "covar_p2_rng_v",
+      "formula": "=COVAR(B1:B3,E1:E3)",
+      "setup": {
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "E1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "E2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "covar_p2_rng_na",
+      "formula": "=COVAR(B1:B3,F1:F3)",
+      "setup": {
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "F1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "F2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "F3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "covariance_p_control",
+      "formula": "=COVARIANCE.P(B1:B3,C1:C3)",
+      "setup": {
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.6666666666666665
+      }
+    },
+    {
+      "id": "covariance_p_p1_cell_v",
+      "formula": "=COVARIANCE.P(A1,C1:C3)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "covariance_p_p1_cell_na",
+      "formula": "=COVARIANCE.P(A2,C1:C3)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "covariance_p_p1_rng_v",
+      "formula": "=COVARIANCE.P(E1:E3,C1:C3)",
+      "setup": {
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "E1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "E2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "covariance_p_p1_rng_na",
+      "formula": "=COVARIANCE.P(F1:F3,C1:C3)",
+      "setup": {
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "F1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "F2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "F3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "covariance_p_p2_cell_v",
+      "formula": "=COVARIANCE.P(B1:B3,A1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "covariance_p_p2_cell_na",
+      "formula": "=COVARIANCE.P(B1:B3,A2)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "covariance_p_p2_rng_v",
+      "formula": "=COVARIANCE.P(B1:B3,E1:E3)",
+      "setup": {
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "E1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "E2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "covariance_p_p2_rng_na",
+      "formula": "=COVARIANCE.P(B1:B3,F1:F3)",
+      "setup": {
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "F1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "F2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "F3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "covariance_s_control",
+      "formula": "=COVARIANCE.S(B1:B3,C1:C3)",
+      "setup": {
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "covariance_s_p1_cell_v",
+      "formula": "=COVARIANCE.S(A1,C1:C3)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "covariance_s_p1_cell_na",
+      "formula": "=COVARIANCE.S(A2,C1:C3)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "covariance_s_p1_rng_v",
+      "formula": "=COVARIANCE.S(E1:E3,C1:C3)",
+      "setup": {
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "E1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "E2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "covariance_s_p1_rng_na",
+      "formula": "=COVARIANCE.S(F1:F3,C1:C3)",
+      "setup": {
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "F1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "F2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "F3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "covariance_s_p2_cell_v",
+      "formula": "=COVARIANCE.S(B1:B3,A1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "covariance_s_p2_cell_na",
+      "formula": "=COVARIANCE.S(B1:B3,A2)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "covariance_s_p2_rng_v",
+      "formula": "=COVARIANCE.S(B1:B3,E1:E3)",
+      "setup": {
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "E1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "E2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "covariance_s_p2_rng_na",
+      "formula": "=COVARIANCE.S(B1:B3,F1:F3)",
+      "setup": {
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "F1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "F2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "F3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "pearson_control",
+      "formula": "=PEARSON(B1:B3,C1:C3)",
+      "setup": {
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.989743318610787
+      }
+    },
+    {
+      "id": "pearson_p1_cell_v",
+      "formula": "=PEARSON(A1,C1:C3)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "pearson_p1_cell_na",
+      "formula": "=PEARSON(A2,C1:C3)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "pearson_p1_rng_v",
+      "formula": "=PEARSON(E1:E3,C1:C3)",
+      "setup": {
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "E1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "E2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "pearson_p1_rng_na",
+      "formula": "=PEARSON(F1:F3,C1:C3)",
+      "setup": {
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "F1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "F2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "F3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "pearson_p2_cell_v",
+      "formula": "=PEARSON(B1:B3,A1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "pearson_p2_cell_na",
+      "formula": "=PEARSON(B1:B3,A2)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "pearson_p2_rng_v",
+      "formula": "=PEARSON(B1:B3,E1:E3)",
+      "setup": {
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "E1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "E2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "pearson_p2_rng_na",
+      "formula": "=PEARSON(B1:B3,F1:F3)",
+      "setup": {
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "F1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "F2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "F3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "rsq_control",
+      "formula": "=RSQ(B1:B3,C1:C3)",
+      "setup": {
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.9795918367346939
+      }
+    },
+    {
+      "id": "rsq_p1_cell_v",
+      "formula": "=RSQ(A1,C1:C3)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "rsq_p1_cell_na",
+      "formula": "=RSQ(A2,C1:C3)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "rsq_p1_rng_v",
+      "formula": "=RSQ(E1:E3,C1:C3)",
+      "setup": {
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "E1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "E2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "rsq_p1_rng_na",
+      "formula": "=RSQ(F1:F3,C1:C3)",
+      "setup": {
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "F1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "F2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "F3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "rsq_p2_cell_v",
+      "formula": "=RSQ(B1:B3,A1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "rsq_p2_cell_na",
+      "formula": "=RSQ(B1:B3,A2)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "rsq_p2_rng_v",
+      "formula": "=RSQ(B1:B3,E1:E3)",
+      "setup": {
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "E1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "E2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "rsq_p2_rng_na",
+      "formula": "=RSQ(B1:B3,F1:F3)",
+      "setup": {
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "F1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "F2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "F3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "slope_control",
+      "formula": "=SLOPE(B1:B3,C1:C3)",
+      "setup": {
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.5714285714285714
+      }
+    },
+    {
+      "id": "slope_p1_cell_v",
+      "formula": "=SLOPE(A1,C1:C3)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "slope_p1_cell_na",
+      "formula": "=SLOPE(A2,C1:C3)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "slope_p1_rng_v",
+      "formula": "=SLOPE(E1:E3,C1:C3)",
+      "setup": {
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "E1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "E2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "slope_p1_rng_na",
+      "formula": "=SLOPE(F1:F3,C1:C3)",
+      "setup": {
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "F1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "F2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "F3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "slope_p2_cell_v",
+      "formula": "=SLOPE(B1:B3,A1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "slope_p2_cell_na",
+      "formula": "=SLOPE(B1:B3,A2)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "slope_p2_rng_v",
+      "formula": "=SLOPE(B1:B3,E1:E3)",
+      "setup": {
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "E1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "E2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "slope_p2_rng_na",
+      "formula": "=SLOPE(B1:B3,F1:F3)",
+      "setup": {
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "F1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "F2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "F3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "intercept_control",
+      "formula": "=INTERCEPT(B1:B3,C1:C3)",
+      "setup": {
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.047619047619047894
+      }
+    },
+    {
+      "id": "intercept_p1_cell_v",
+      "formula": "=INTERCEPT(A1,C1:C3)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "intercept_p1_cell_na",
+      "formula": "=INTERCEPT(A2,C1:C3)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "intercept_p1_rng_v",
+      "formula": "=INTERCEPT(E1:E3,C1:C3)",
+      "setup": {
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "E1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "E2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "intercept_p1_rng_na",
+      "formula": "=INTERCEPT(F1:F3,C1:C3)",
+      "setup": {
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "F1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "F2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "F3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "intercept_p2_cell_v",
+      "formula": "=INTERCEPT(B1:B3,A1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "intercept_p2_cell_na",
+      "formula": "=INTERCEPT(B1:B3,A2)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "intercept_p2_rng_v",
+      "formula": "=INTERCEPT(B1:B3,E1:E3)",
+      "setup": {
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "E1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "E2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "intercept_p2_rng_na",
+      "formula": "=INTERCEPT(B1:B3,F1:F3)",
+      "setup": {
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "F1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "F2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "F3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "steyx_control",
+      "formula": "=STEYX(B1:B3,C1:C3)",
+      "setup": {
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.30860669992418327
+      }
+    },
+    {
+      "id": "steyx_p1_cell_v",
+      "formula": "=STEYX(A1,C1:C3)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "steyx_p1_cell_na",
+      "formula": "=STEYX(A2,C1:C3)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "steyx_p1_rng_v",
+      "formula": "=STEYX(E1:E3,C1:C3)",
+      "setup": {
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "E1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "E2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "steyx_p1_rng_na",
+      "formula": "=STEYX(F1:F3,C1:C3)",
+      "setup": {
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "F1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "F2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "F3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "steyx_p2_cell_v",
+      "formula": "=STEYX(B1:B3,A1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "steyx_p2_cell_na",
+      "formula": "=STEYX(B1:B3,A2)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "steyx_p2_rng_v",
+      "formula": "=STEYX(B1:B3,E1:E3)",
+      "setup": {
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "E1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "E2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "steyx_p2_rng_na",
+      "formula": "=STEYX(B1:B3,F1:F3)",
+      "setup": {
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "F1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "F2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "F3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "sumx2my2_control",
+      "formula": "=SUMX2MY2(B1:B3,C1:C3)",
+      "setup": {
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -41.0
+      }
+    },
+    {
+      "id": "sumx2my2_p1_cell_v",
+      "formula": "=SUMX2MY2(A1,C1:C3)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "sumx2my2_p1_cell_na",
+      "formula": "=SUMX2MY2(A2,C1:C3)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "sumx2my2_p1_rng_v",
+      "formula": "=SUMX2MY2(E1:E3,C1:C3)",
+      "setup": {
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "E1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "E2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "sumx2my2_p1_rng_na",
+      "formula": "=SUMX2MY2(F1:F3,C1:C3)",
+      "setup": {
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "F1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "F2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "F3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "sumx2my2_p2_cell_v",
+      "formula": "=SUMX2MY2(B1:B3,A1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "sumx2my2_p2_cell_na",
+      "formula": "=SUMX2MY2(B1:B3,A2)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "sumx2my2_p2_rng_v",
+      "formula": "=SUMX2MY2(B1:B3,E1:E3)",
+      "setup": {
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "E1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "E2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "sumx2my2_p2_rng_na",
+      "formula": "=SUMX2MY2(B1:B3,F1:F3)",
+      "setup": {
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "F1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "F2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "F3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "sumx2py2_control",
+      "formula": "=SUMX2PY2(B1:B3,C1:C3)",
+      "setup": {
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 83.0
+      }
+    },
+    {
+      "id": "sumx2py2_p1_cell_v",
+      "formula": "=SUMX2PY2(A1,C1:C3)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "sumx2py2_p1_cell_na",
+      "formula": "=SUMX2PY2(A2,C1:C3)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "sumx2py2_p1_rng_v",
+      "formula": "=SUMX2PY2(E1:E3,C1:C3)",
+      "setup": {
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "E1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "E2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "sumx2py2_p1_rng_na",
+      "formula": "=SUMX2PY2(F1:F3,C1:C3)",
+      "setup": {
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "F1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "F2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "F3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "sumx2py2_p2_cell_v",
+      "formula": "=SUMX2PY2(B1:B3,A1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "sumx2py2_p2_cell_na",
+      "formula": "=SUMX2PY2(B1:B3,A2)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "sumx2py2_p2_rng_v",
+      "formula": "=SUMX2PY2(B1:B3,E1:E3)",
+      "setup": {
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "E1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "E2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "sumx2py2_p2_rng_na",
+      "formula": "=SUMX2PY2(B1:B3,F1:F3)",
+      "setup": {
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "F1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "F2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "F3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "sumxmy2_control",
+      "formula": "=SUMXMY2(B1:B3,C1:C3)",
+      "setup": {
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 11.0
+      }
+    },
+    {
+      "id": "sumxmy2_p1_cell_v",
+      "formula": "=SUMXMY2(A1,C1:C3)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "sumxmy2_p1_cell_na",
+      "formula": "=SUMXMY2(A2,C1:C3)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "sumxmy2_p1_rng_v",
+      "formula": "=SUMXMY2(E1:E3,C1:C3)",
+      "setup": {
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "E1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "E2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "sumxmy2_p1_rng_na",
+      "formula": "=SUMXMY2(F1:F3,C1:C3)",
+      "setup": {
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "F1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "F2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "F3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "sumxmy2_p2_cell_v",
+      "formula": "=SUMXMY2(B1:B3,A1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "sumxmy2_p2_cell_na",
+      "formula": "=SUMXMY2(B1:B3,A2)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "sumxmy2_p2_rng_v",
+      "formula": "=SUMXMY2(B1:B3,E1:E3)",
+      "setup": {
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "E1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "E2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "sumxmy2_p2_rng_na",
+      "formula": "=SUMXMY2(B1:B3,F1:F3)",
+      "setup": {
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "F1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "F2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "F3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "chisq_test_control",
+      "formula": "=CHISQ.TEST(B1:B3,C1:C3)",
+      "setup": {
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.3466208285742974
+      }
+    },
+    {
+      "id": "chisq_test_p1_cell_v",
+      "formula": "=CHISQ.TEST(A1,C1:C3)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "chisq_test_p1_cell_na",
+      "formula": "=CHISQ.TEST(A2,C1:C3)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "chisq_test_p1_rng_v",
+      "formula": "=CHISQ.TEST(E1:E3,C1:C3)",
+      "setup": {
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "E1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "E2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "chisq_test_p1_rng_na",
+      "formula": "=CHISQ.TEST(F1:F3,C1:C3)",
+      "setup": {
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "F1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "F2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "F3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "chisq_test_p2_cell_v",
+      "formula": "=CHISQ.TEST(B1:B3,A1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "chisq_test_p2_cell_na",
+      "formula": "=CHISQ.TEST(B1:B3,A2)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "chisq_test_p2_rng_v",
+      "formula": "=CHISQ.TEST(B1:B3,E1:E3)",
+      "setup": {
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "E1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "E2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "chisq_test_p2_rng_na",
+      "formula": "=CHISQ.TEST(B1:B3,F1:F3)",
+      "setup": {
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "F1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "F2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "F3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "chitest_control",
+      "formula": "=CHITEST(B1:B3,C1:C3)",
+      "setup": {
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.3466208285742974
+      }
+    },
+    {
+      "id": "chitest_p1_cell_v",
+      "formula": "=CHITEST(A1,C1:C3)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "chitest_p1_cell_na",
+      "formula": "=CHITEST(A2,C1:C3)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "chitest_p1_rng_v",
+      "formula": "=CHITEST(E1:E3,C1:C3)",
+      "setup": {
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "E1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "E2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "chitest_p1_rng_na",
+      "formula": "=CHITEST(F1:F3,C1:C3)",
+      "setup": {
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "F1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "F2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "F3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "chitest_p2_cell_v",
+      "formula": "=CHITEST(B1:B3,A1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "chitest_p2_cell_na",
+      "formula": "=CHITEST(B1:B3,A2)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "chitest_p2_rng_v",
+      "formula": "=CHITEST(B1:B3,E1:E3)",
+      "setup": {
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "E1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "E2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "chitest_p2_rng_na",
+      "formula": "=CHITEST(B1:B3,F1:F3)",
+      "setup": {
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "F1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "F2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "F3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "f_test_control",
+      "formula": "=F.TEST(B1:B3,C1:C3)",
+      "setup": {
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.5
+      }
+    },
+    {
+      "id": "f_test_p1_cell_v",
+      "formula": "=F.TEST(A1,C1:C3)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "f_test_p1_cell_na",
+      "formula": "=F.TEST(A2,C1:C3)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "f_test_p1_rng_v",
+      "formula": "=F.TEST(E1:E3,C1:C3)",
+      "setup": {
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "E1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "E2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "f_test_p1_rng_na",
+      "formula": "=F.TEST(F1:F3,C1:C3)",
+      "setup": {
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "F1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "F2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "F3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "f_test_p2_cell_v",
+      "formula": "=F.TEST(B1:B3,A1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "f_test_p2_cell_na",
+      "formula": "=F.TEST(B1:B3,A2)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "f_test_p2_rng_v",
+      "formula": "=F.TEST(B1:B3,E1:E3)",
+      "setup": {
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "E1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "E2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "f_test_p2_rng_na",
+      "formula": "=F.TEST(B1:B3,F1:F3)",
+      "setup": {
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "F1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "F2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "F3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "ftest_control",
+      "formula": "=FTEST(B1:B3,C1:C3)",
+      "setup": {
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.5
+      }
+    },
+    {
+      "id": "ftest_p1_cell_v",
+      "formula": "=FTEST(A1,C1:C3)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "ftest_p1_cell_na",
+      "formula": "=FTEST(A2,C1:C3)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "ftest_p1_rng_v",
+      "formula": "=FTEST(E1:E3,C1:C3)",
+      "setup": {
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "E1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "E2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "ftest_p1_rng_na",
+      "formula": "=FTEST(F1:F3,C1:C3)",
+      "setup": {
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "F1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "F2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "F3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "ftest_p2_cell_v",
+      "formula": "=FTEST(B1:B3,A1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "ftest_p2_cell_na",
+      "formula": "=FTEST(B1:B3,A2)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "ftest_p2_rng_v",
+      "formula": "=FTEST(B1:B3,E1:E3)",
+      "setup": {
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "E1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "E2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "ftest_p2_rng_na",
+      "formula": "=FTEST(B1:B3,F1:F3)",
+      "setup": {
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "F1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "F2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "F3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "t_test_control",
+      "formula": "=T.TEST(B1:B3,C1:C3,2,1)",
+      "setup": {
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.1296117202215108
+      }
+    },
+    {
+      "id": "t_test_p1_cell_v",
+      "formula": "=T.TEST(A1,C1:C3,2,1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "t_test_p1_cell_na",
+      "formula": "=T.TEST(A2,C1:C3,2,1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "t_test_p1_rng_v",
+      "formula": "=T.TEST(E1:E3,C1:C3,2,1)",
+      "setup": {
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "E1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "E2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "t_test_p1_rng_na",
+      "formula": "=T.TEST(F1:F3,C1:C3,2,1)",
+      "setup": {
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "F1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "F2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "F3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "t_test_p2_cell_v",
+      "formula": "=T.TEST(B1:B3,A1,2,1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "t_test_p2_cell_na",
+      "formula": "=T.TEST(B1:B3,A2,2,1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "t_test_p2_rng_v",
+      "formula": "=T.TEST(B1:B3,E1:E3,2,1)",
+      "setup": {
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "E1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "E2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "t_test_p2_rng_na",
+      "formula": "=T.TEST(B1:B3,F1:F3,2,1)",
+      "setup": {
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "F1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "F2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "F3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "t_test_p3_cell_v",
+      "formula": "=T.TEST(B1:B3,C1:C3,A1,1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "t_test_p3_cell_na",
+      "formula": "=T.TEST(B1:B3,C1:C3,A2,1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "t_test_p4_cell_v",
+      "formula": "=T.TEST(B1:B3,C1:C3,2,A1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "t_test_p4_cell_na",
+      "formula": "=T.TEST(B1:B3,C1:C3,2,A2)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "ttest_control",
+      "formula": "=TTEST(B1:B3,C1:C3,2,1)",
+      "setup": {
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.1296117202215108
+      }
+    },
+    {
+      "id": "ttest_p1_cell_v",
+      "formula": "=TTEST(A1,C1:C3,2,1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "ttest_p1_cell_na",
+      "formula": "=TTEST(A2,C1:C3,2,1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "ttest_p1_rng_v",
+      "formula": "=TTEST(E1:E3,C1:C3,2,1)",
+      "setup": {
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "E1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "E2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "ttest_p1_rng_na",
+      "formula": "=TTEST(F1:F3,C1:C3,2,1)",
+      "setup": {
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "F1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "F2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "F3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "ttest_p2_cell_v",
+      "formula": "=TTEST(B1:B3,A1,2,1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "ttest_p2_cell_na",
+      "formula": "=TTEST(B1:B3,A2,2,1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "ttest_p2_rng_v",
+      "formula": "=TTEST(B1:B3,E1:E3,2,1)",
+      "setup": {
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "E1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "E2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "ttest_p2_rng_na",
+      "formula": "=TTEST(B1:B3,F1:F3,2,1)",
+      "setup": {
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "F1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "F2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "F3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "ttest_p3_cell_v",
+      "formula": "=TTEST(B1:B3,C1:C3,A1,1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "ttest_p3_cell_na",
+      "formula": "=TTEST(B1:B3,C1:C3,A2,1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "ttest_p4_cell_v",
+      "formula": "=TTEST(B1:B3,C1:C3,2,A1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "ttest_p4_cell_na",
+      "formula": "=TTEST(B1:B3,C1:C3,2,A2)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "forecast_control",
+      "formula": "=FORECAST(4,B1:B3,C1:C3)",
+      "setup": {
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.3333333333333335
+      }
+    },
+    {
+      "id": "forecast_p1_cell_v",
+      "formula": "=FORECAST(A1,B1:B3,C1:C3)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "forecast_p1_cell_na",
+      "formula": "=FORECAST(A2,B1:B3,C1:C3)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "forecast_p2_cell_v",
+      "formula": "=FORECAST(4,A1,C1:C3)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "forecast_p2_cell_na",
+      "formula": "=FORECAST(4,A2,C1:C3)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "forecast_p2_rng_v",
+      "formula": "=FORECAST(4,E1:E3,C1:C3)",
+      "setup": {
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "E1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "E2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "forecast_p2_rng_na",
+      "formula": "=FORECAST(4,F1:F3,C1:C3)",
+      "setup": {
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "F1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "F2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "F3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "forecast_p3_cell_v",
+      "formula": "=FORECAST(4,B1:B3,A1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "forecast_p3_cell_na",
+      "formula": "=FORECAST(4,B1:B3,A2)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "forecast_p3_rng_v",
+      "formula": "=FORECAST(4,B1:B3,E1:E3)",
+      "setup": {
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "E1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "E2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "forecast_p3_rng_na",
+      "formula": "=FORECAST(4,B1:B3,F1:F3)",
+      "setup": {
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "F1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "F2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "F3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "forecast_linear_control",
+      "formula": "=FORECAST.LINEAR(4,B1:B3,C1:C3)",
+      "setup": {
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.3333333333333335
+      }
+    },
+    {
+      "id": "forecast_linear_p1_cell_v",
+      "formula": "=FORECAST.LINEAR(A1,B1:B3,C1:C3)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "forecast_linear_p1_cell_na",
+      "formula": "=FORECAST.LINEAR(A2,B1:B3,C1:C3)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "forecast_linear_p2_cell_v",
+      "formula": "=FORECAST.LINEAR(4,A1,C1:C3)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "forecast_linear_p2_cell_na",
+      "formula": "=FORECAST.LINEAR(4,A2,C1:C3)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "forecast_linear_p2_rng_v",
+      "formula": "=FORECAST.LINEAR(4,E1:E3,C1:C3)",
+      "setup": {
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "E1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "E2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "forecast_linear_p2_rng_na",
+      "formula": "=FORECAST.LINEAR(4,F1:F3,C1:C3)",
+      "setup": {
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "F1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "F2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "F3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "forecast_linear_p3_cell_v",
+      "formula": "=FORECAST.LINEAR(4,B1:B3,A1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "forecast_linear_p3_cell_na",
+      "formula": "=FORECAST.LINEAR(4,B1:B3,A2)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "forecast_linear_p3_rng_v",
+      "formula": "=FORECAST.LINEAR(4,B1:B3,E1:E3)",
+      "setup": {
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "E1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "E2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "forecast_linear_p3_rng_na",
+      "formula": "=FORECAST.LINEAR(4,B1:B3,F1:F3)",
+      "setup": {
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "F1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "F2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "F3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "prob_control",
+      "formula": "=PROB(B1:B3,H1:H3,2,4)",
+      "setup": {
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "H1": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "H2": {
+          "kind": "number",
+          "value": 0.3
+        },
+        "H3": {
+          "kind": "number",
+          "value": 0.5
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.8
+      }
+    },
+    {
+      "id": "prob_p1_cell_v",
+      "formula": "=PROB(A1,H1:H3,2,4)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "H1": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "H2": {
+          "kind": "number",
+          "value": 0.3
+        },
+        "H3": {
+          "kind": "number",
+          "value": 0.5
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "prob_p1_cell_na",
+      "formula": "=PROB(A2,H1:H3,2,4)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "H1": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "H2": {
+          "kind": "number",
+          "value": 0.3
+        },
+        "H3": {
+          "kind": "number",
+          "value": 0.5
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "prob_p1_rng_v",
+      "formula": "=PROB(E1:E3,H1:H3,2,4)",
+      "setup": {
+        "E1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "E2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "H1": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "H2": {
+          "kind": "number",
+          "value": 0.3
+        },
+        "H3": {
+          "kind": "number",
+          "value": 0.5
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "prob_p1_rng_na",
+      "formula": "=PROB(F1:F3,H1:H3,2,4)",
+      "setup": {
+        "F1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "F2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "F3": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "H1": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "H2": {
+          "kind": "number",
+          "value": 0.3
+        },
+        "H3": {
+          "kind": "number",
+          "value": 0.5
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "prob_p2_cell_v",
+      "formula": "=PROB(B1:B3,A1,2,4)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "prob_p2_cell_na",
+      "formula": "=PROB(B1:B3,A2,2,4)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "prob_p2_rng_v",
+      "formula": "=PROB(B1:B3,E1:E3,2,4)",
+      "setup": {
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "E1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "E2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "prob_p2_rng_na",
+      "formula": "=PROB(B1:B3,F1:F3,2,4)",
+      "setup": {
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "F1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "F2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "F3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "prob_p3_cell_v",
+      "formula": "=PROB(B1:B3,H1:H3,A1,4)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "H1": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "H2": {
+          "kind": "number",
+          "value": 0.3
+        },
+        "H3": {
+          "kind": "number",
+          "value": 0.5
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "prob_p3_cell_na",
+      "formula": "=PROB(B1:B3,H1:H3,A2,4)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "H1": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "H2": {
+          "kind": "number",
+          "value": 0.3
+        },
+        "H3": {
+          "kind": "number",
+          "value": 0.5
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "prob_p4_cell_v",
+      "formula": "=PROB(B1:B3,H1:H3,2,A1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "H1": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "H2": {
+          "kind": "number",
+          "value": 0.3
+        },
+        "H3": {
+          "kind": "number",
+          "value": 0.5
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "prob_p4_cell_na",
+      "formula": "=PROB(B1:B3,H1:H3,2,A2)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "H1": {
+          "kind": "number",
+          "value": 0.2
+        },
+        "H2": {
+          "kind": "number",
+          "value": 0.3
+        },
+        "H3": {
+          "kind": "number",
+          "value": 0.5
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "z_test_control",
+      "formula": "=Z.TEST(B1:B3,2,1)",
+      "setup": {
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.28185143082538644
+      }
+    },
+    {
+      "id": "z_test_p1_cell_v",
+      "formula": "=Z.TEST(A1,2,1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "z_test_p1_cell_na",
+      "formula": "=Z.TEST(A2,2,1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "z_test_p1_rng_v",
+      "formula": "=Z.TEST(E1:E3,2,1)",
+      "setup": {
+        "E1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "E2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "z_test_p1_rng_na",
+      "formula": "=Z.TEST(F1:F3,2,1)",
+      "setup": {
+        "F1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "F2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "F3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "z_test_p2_cell_v",
+      "formula": "=Z.TEST(B1:B3,A1,1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "z_test_p2_cell_na",
+      "formula": "=Z.TEST(B1:B3,A2,1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "z_test_p3_cell_v",
+      "formula": "=Z.TEST(B1:B3,2,A1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "z_test_p3_cell_na",
+      "formula": "=Z.TEST(B1:B3,2,A2)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "ztest_control",
+      "formula": "=ZTEST(B1:B3,2,1)",
+      "setup": {
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.28185143082538644
+      }
+    },
+    {
+      "id": "ztest_p1_cell_v",
+      "formula": "=ZTEST(A1,2,1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "ztest_p1_cell_na",
+      "formula": "=ZTEST(A2,2,1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "ztest_p1_rng_v",
+      "formula": "=ZTEST(E1:E3,2,1)",
+      "setup": {
+        "E1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "E2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "ztest_p1_rng_na",
+      "formula": "=ZTEST(F1:F3,2,1)",
+      "setup": {
+        "F1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "F2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "F3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "ztest_p2_cell_v",
+      "formula": "=ZTEST(B1:B3,A1,1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "ztest_p2_cell_na",
+      "formula": "=ZTEST(B1:B3,A2,1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "ztest_p3_cell_v",
+      "formula": "=ZTEST(B1:B3,2,A1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "ztest_p3_cell_na",
+      "formula": "=ZTEST(B1:B3,2,A2)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "frequency_control",
+      "formula": "=FREQUENCY(B1:B3,C1:C3)",
+      "setup": {
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          2.0,
+          0.0,
+          1.0,
+          0.0
+        ],
+        "shape": [
+          4,
+          1
+        ]
+      }
+    },
+    {
+      "id": "frequency_p1_cell_v",
+      "formula": "=FREQUENCY(A1,C1:C3)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "frequency_p1_cell_na",
+      "formula": "=FREQUENCY(A2,C1:C3)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "frequency_p1_rng_v",
+      "formula": "=FREQUENCY(E1:E3,C1:C3)",
+      "setup": {
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "E1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "E2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "frequency_p1_rng_na",
+      "formula": "=FREQUENCY(F1:F3,C1:C3)",
+      "setup": {
+        "C1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "F1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "F2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "F3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "frequency_p2_cell_v",
+      "formula": "=FREQUENCY(B1:B3,A1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          0.0,
+          3.0
+        ],
+        "shape": [
+          2,
+          1
+        ]
+      }
+    },
+    {
+      "id": "frequency_p2_cell_na",
+      "formula": "=FREQUENCY(B1:B3,A2)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          0.0,
+          3.0
+        ],
+        "shape": [
+          2,
+          1
+        ]
+      }
+    },
+    {
+      "id": "frequency_p2_rng_v",
+      "formula": "=FREQUENCY(B1:B3,E1:E3)",
+      "setup": {
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "E1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "E2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          2.0,
+          1.0,
+          0.0
+        ],
+        "shape": [
+          3,
+          1
+        ]
+      }
+    },
+    {
+      "id": "frequency_p2_rng_na",
+      "formula": "=FREQUENCY(B1:B3,F1:F3)",
+      "setup": {
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "F1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "F2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "F3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          2.0,
+          1.0,
+          0.0
+        ],
+        "shape": [
+          3,
+          1
+        ]
+      }
+    },
+    {
+      "id": "correl_scalars_p1_v",
+      "formula": "=CORREL(A1,1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "correl_scalars_p2_v",
+      "formula": "=CORREL(1,A1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "correl_scalars_p1_na",
+      "formula": "=CORREL(A2,1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "correl_scalars_p2_na",
+      "formula": "=CORREL(1,A2)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "covar_scalars_p1_v",
+      "formula": "=COVAR(A1,1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "covar_scalars_p2_v",
+      "formula": "=COVAR(1,A1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "covar_scalars_p1_na",
+      "formula": "=COVAR(A2,1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "covar_scalars_p2_na",
+      "formula": "=COVAR(1,A2)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "covariance_p_scalars_p1_v",
+      "formula": "=COVARIANCE.P(A1,1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "covariance_p_scalars_p2_v",
+      "formula": "=COVARIANCE.P(1,A1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "covariance_p_scalars_p1_na",
+      "formula": "=COVARIANCE.P(A2,1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "covariance_p_scalars_p2_na",
+      "formula": "=COVARIANCE.P(1,A2)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "covariance_s_scalars_p1_v",
+      "formula": "=COVARIANCE.S(A1,1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "covariance_s_scalars_p2_v",
+      "formula": "=COVARIANCE.S(1,A1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "covariance_s_scalars_p1_na",
+      "formula": "=COVARIANCE.S(A2,1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "covariance_s_scalars_p2_na",
+      "formula": "=COVARIANCE.S(1,A2)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "pearson_scalars_p1_v",
+      "formula": "=PEARSON(A1,1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "pearson_scalars_p2_v",
+      "formula": "=PEARSON(1,A1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "pearson_scalars_p1_na",
+      "formula": "=PEARSON(A2,1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "pearson_scalars_p2_na",
+      "formula": "=PEARSON(1,A2)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "rsq_scalars_p1_v",
+      "formula": "=RSQ(A1,1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "rsq_scalars_p2_v",
+      "formula": "=RSQ(1,A1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "rsq_scalars_p1_na",
+      "formula": "=RSQ(A2,1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "rsq_scalars_p2_na",
+      "formula": "=RSQ(1,A2)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "slope_scalars_p1_v",
+      "formula": "=SLOPE(A1,1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "slope_scalars_p2_v",
+      "formula": "=SLOPE(1,A1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "slope_scalars_p1_na",
+      "formula": "=SLOPE(A2,1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "slope_scalars_p2_na",
+      "formula": "=SLOPE(1,A2)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "intercept_scalars_p1_v",
+      "formula": "=INTERCEPT(A1,1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "intercept_scalars_p2_v",
+      "formula": "=INTERCEPT(1,A1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "intercept_scalars_p1_na",
+      "formula": "=INTERCEPT(A2,1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "intercept_scalars_p2_na",
+      "formula": "=INTERCEPT(1,A2)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "steyx_scalars_p1_v",
+      "formula": "=STEYX(A1,1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "steyx_scalars_p2_v",
+      "formula": "=STEYX(1,A1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "steyx_scalars_p1_na",
+      "formula": "=STEYX(A2,1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "steyx_scalars_p2_na",
+      "formula": "=STEYX(1,A2)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "sumx2my2_scalars_p1_v",
+      "formula": "=SUMX2MY2(A1,1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "sumx2my2_scalars_p2_v",
+      "formula": "=SUMX2MY2(1,A1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "sumx2my2_scalars_p1_na",
+      "formula": "=SUMX2MY2(A2,1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "sumx2my2_scalars_p2_na",
+      "formula": "=SUMX2MY2(1,A2)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "sumx2py2_scalars_p1_v",
+      "formula": "=SUMX2PY2(A1,1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "sumx2py2_scalars_p2_v",
+      "formula": "=SUMX2PY2(1,A1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "sumx2py2_scalars_p1_na",
+      "formula": "=SUMX2PY2(A2,1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "sumx2py2_scalars_p2_na",
+      "formula": "=SUMX2PY2(1,A2)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "sumxmy2_scalars_p1_v",
+      "formula": "=SUMXMY2(A1,1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "sumxmy2_scalars_p2_v",
+      "formula": "=SUMXMY2(1,A1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "sumxmy2_scalars_p1_na",
+      "formula": "=SUMXMY2(A2,1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "sumxmy2_scalars_p2_na",
+      "formula": "=SUMXMY2(1,A2)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "chisq_test_scalars_p1_v",
+      "formula": "=CHISQ.TEST(A1,1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "chisq_test_scalars_p2_v",
+      "formula": "=CHISQ.TEST(1,A1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "chisq_test_scalars_p1_na",
+      "formula": "=CHISQ.TEST(A2,1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "chisq_test_scalars_p2_na",
+      "formula": "=CHISQ.TEST(1,A2)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "chitest_scalars_p1_v",
+      "formula": "=CHITEST(A1,1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "chitest_scalars_p2_v",
+      "formula": "=CHITEST(1,A1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "chitest_scalars_p1_na",
+      "formula": "=CHITEST(A2,1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "chitest_scalars_p2_na",
+      "formula": "=CHITEST(1,A2)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "frequency_scalars_p1_v",
+      "formula": "=FREQUENCY(A1,1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "frequency_scalars_p2_v",
+      "formula": "=FREQUENCY(1,A1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          0.0,
+          1.0
+        ],
+        "shape": [
+          2,
+          1
+        ]
+      }
+    },
+    {
+      "id": "frequency_scalars_p1_na",
+      "formula": "=FREQUENCY(A2,1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "frequency_scalars_p2_na",
+      "formula": "=FREQUENCY(1,A2)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"a\"+1"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "A3": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          0.0,
+          1.0
+        ],
+        "shape": [
+          2,
+          1
+        ]
+      }
+    }
+  ]
+}

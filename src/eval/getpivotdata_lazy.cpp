@@ -270,10 +270,11 @@ Value eval_getpivotdata_lazy(const parser::AstNode& call, Arena& arena, const Fu
     return Value::error(kPivotRefError);
   }
 
-  // 1. Evaluate data field name (eager). Errors propagate.
+  // 1. Evaluate data field name (eager). An error read from a cell names no
+  // data field; an error from any other expression propagates.
   const Value data_field_v = eval_node(call.as_call_arg(0), arena, registry, ctx);
   if (data_field_v.is_error()) {
-    return data_field_v;
+    return call.as_call_arg(0).kind() == parser::NodeKind::Ref ? Value::error(kPivotRefError) : data_field_v;
   }
   Expected<std::string, ErrorCode> data_field_text = coerce_to_text(data_field_v);
   if (!data_field_text) {
@@ -308,6 +309,14 @@ Value eval_getpivotdata_lazy(const parser::AstNode& call, Arena& arena, const Fu
       return Value::error(kPivotRefError);
     }
     sheet_name = ctx.current_sheet()->name();
+  }
+
+  // An error in a field name propagates ahead of the pivot lookup.
+  for (std::uint32_t i = 2U; i < arity; i += 2U) {
+    const Value field = eval_node(call.as_call_arg(i), arena, registry, ctx);
+    if (field.is_error()) {
+      return field;
+    }
   }
 
   // 3. Locate the pivot table covering (sheet, row, col).

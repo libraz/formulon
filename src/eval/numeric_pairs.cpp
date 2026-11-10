@@ -15,24 +15,18 @@ std::variant<Value, NumericPairs> collect_numeric_pairs(const parser::AstNode& f
                                                         const parser::AstNode& second_arg, Arena& arena,
                                                         const FunctionRegistry& registry, const EvalContext& ctx,
                                                         bool allow_transpose) {
-  auto first_resolved = resolve_array_arg_na(first_arg, arena, registry, ctx);
+  // Resolved without the scalar rejection so an error argument propagates
+  // before any shape check, as Excel does.
+  auto first_resolved = resolve_range_arg(first_arg, arena, registry, ctx);
   if (!first_resolved) {
-    return Value{Value::error(first_resolved.error())};
+    return Value{Value::error(first_resolved.error() == ErrorCode::Value ? ErrorCode::NA : first_resolved.error())};
   }
   RangeResult first_arr = std::move(first_resolved.value());
-  auto second_resolved = resolve_array_arg_na(second_arg, arena, registry, ctx);
+  auto second_resolved = resolve_range_arg(second_arg, arena, registry, ctx);
   if (!second_resolved) {
-    return Value{Value::error(second_resolved.error())};
+    return Value{Value::error(second_resolved.error() == ErrorCode::Value ? ErrorCode::NA : second_resolved.error())};
   }
   RangeResult second_arr = std::move(second_resolved.value());
-
-  // Shape mismatch is `#N/A` here, unlike SUMPRODUCT's `#VALUE!`.
-  const bool shape_ok = allow_transpose ? (static_cast<std::size_t>(first_arr.rows) * first_arr.cols ==
-                                           static_cast<std::size_t>(second_arr.rows) * second_arr.cols)
-                                        : (first_arr.rows == second_arr.rows && first_arr.cols == second_arr.cols);
-  if (!shape_ok) {
-    return Value{Value::error(ErrorCode::NA)};
-  }
 
   // Error propagation runs over every cell in both arrays, even cells that
   // the numeric-pair rule would drop. Scan the first argument first so the
@@ -46,6 +40,15 @@ std::variant<Value, NumericPairs> collect_numeric_pairs(const parser::AstNode& f
     if (cell.is_error()) {
       return cell;
     }
+  }
+
+  // Shape mismatch (and a scalar argument) is `#N/A` here, unlike SUMPRODUCT's `#VALUE!`.
+  const bool shape_ok = !first_arr.from_scalar && !second_arr.from_scalar &&
+                        (allow_transpose ? (static_cast<std::size_t>(first_arr.rows) * first_arr.cols ==
+                                            static_cast<std::size_t>(second_arr.rows) * second_arr.cols)
+                                         : (first_arr.rows == second_arr.rows && first_arr.cols == second_arr.cols));
+  if (!shape_ok) {
+    return Value{Value::error(ErrorCode::NA)};
   }
 
   NumericPairs pairs;

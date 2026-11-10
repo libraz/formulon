@@ -807,7 +807,7 @@ TEST(BuiltinsWraprows, HugeWrapCountsClipToVectorLength) {
   }
 }
 
-TEST(BuiltinsWraprows, HugeWrapCountStillPropagatesNaPad) {
+TEST(BuiltinsWraprows, HugeWrapCountWithErrorPadClipsToVectorLength) {
   Workbook wb = Workbook::create();
   Sheet& sheet = wb.sheet(0);
   sheet.set_cell_value(0, 0, Value::number(1));
@@ -817,8 +817,11 @@ TEST(BuiltinsWraprows, HugeWrapCountStillPropagatesNaPad) {
   Arena eval_arena;
 
   const Value v = EvalUnder("=WRAPROWS(A1:A1,1E100,NA())", &parse_arena, &eval_arena, ctx);
-  ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::NA);
+  // The error pad is a value; a wrap count past the vector clips, so no pad cell is used.
+  ASSERT_TRUE(v.is_array());
+  EXPECT_EQ(v.as_array_rows(), 1U);
+  EXPECT_EQ(v.as_array_cols(), 1U);
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[0].as_number(), 1.0);
 }
 
 TEST(BuiltinsWraprows, ExplicitPadValueIsUsed) {
@@ -987,7 +990,7 @@ TEST(BuiltinsWrapcols, HugeWrapCountsClipToVectorLength) {
   }
 }
 
-TEST(BuiltinsWrapcols, HugeWrapCountStillPropagatesNaPad) {
+TEST(BuiltinsWrapcols, HugeWrapCountWithErrorPadClipsToVectorLength) {
   Workbook wb = Workbook::create();
   Sheet& sheet = wb.sheet(0);
   sheet.set_cell_value(0, 0, Value::number(1));
@@ -997,8 +1000,11 @@ TEST(BuiltinsWrapcols, HugeWrapCountStillPropagatesNaPad) {
   Arena eval_arena;
 
   const Value v = EvalUnder("=WRAPCOLS(A1:A1,1E100,NA())", &parse_arena, &eval_arena, ctx);
-  ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::NA);
+  // The error pad is a value; a wrap count past the vector clips, so no pad cell is used.
+  ASSERT_TRUE(v.is_array());
+  EXPECT_EQ(v.as_array_rows(), 1U);
+  EXPECT_EQ(v.as_array_cols(), 1U);
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[0].as_number(), 1.0);
 }
 
 TEST(BuiltinsWrapcols, TwoDimensionalSourceReturnsValue) {

@@ -1,0 +1,568 @@
+suite: error_args_finance_date
+description: >
+  Which error the COUP* family and WORKDAY.INTL report when an argument is a referenced cell
+  holding a plain #VALUE!, #N/A or #DIV/0!, with the other arguments valid, plus a valid control.
+tolerance: { abs: 0, rel: 0 }
+locale: ja-JP
+cases:
+  - id: coupdaybs_control
+    formula: '=COUPDAYBS(DATE(2024,1,15),DATE(2026,11,15),2,0)'
+  - id: coupdaybs_p1_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=COUPDAYBS(A1,DATE(2026,11,15),2,0)'
+  - id: coupdaybs_p1_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=COUPDAYBS(A2,DATE(2026,11,15),2,0)'
+  - id: coupdaybs_p1_cell_d0
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=COUPDAYBS(A3,DATE(2026,11,15),2,0)'
+  - id: coupdaybs_p2_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=COUPDAYBS(DATE(2024,1,15),A1,2,0)'
+  - id: coupdaybs_p2_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=COUPDAYBS(DATE(2024,1,15),A2,2,0)'
+  - id: coupdaybs_p2_cell_d0
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=COUPDAYBS(DATE(2024,1,15),A3,2,0)'
+  - id: coupdaybs_p3_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=COUPDAYBS(DATE(2024,1,15),DATE(2026,11,15),A1,0)'
+  - id: coupdaybs_p3_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=COUPDAYBS(DATE(2024,1,15),DATE(2026,11,15),A2,0)'
+  - id: coupdaybs_p3_cell_d0
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=COUPDAYBS(DATE(2024,1,15),DATE(2026,11,15),A3,0)'
+  - id: coupdaybs_p4_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=COUPDAYBS(DATE(2024,1,15),DATE(2026,11,15),2,A1)'
+  - id: coupdaybs_p4_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=COUPDAYBS(DATE(2024,1,15),DATE(2026,11,15),2,A2)'
+  - id: coupdaybs_p4_cell_d0
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=COUPDAYBS(DATE(2024,1,15),DATE(2026,11,15),2,A3)'
+  - id: coupdays_control
+    formula: '=COUPDAYS(DATE(2024,1,15),DATE(2026,11,15),2,0)'
+  - id: coupdays_p1_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=COUPDAYS(A1,DATE(2026,11,15),2,0)'
+  - id: coupdays_p1_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=COUPDAYS(A2,DATE(2026,11,15),2,0)'
+  - id: coupdays_p1_cell_d0
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=COUPDAYS(A3,DATE(2026,11,15),2,0)'
+  - id: coupdays_p2_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=COUPDAYS(DATE(2024,1,15),A1,2,0)'
+  - id: coupdays_p2_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=COUPDAYS(DATE(2024,1,15),A2,2,0)'
+  - id: coupdays_p2_cell_d0
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=COUPDAYS(DATE(2024,1,15),A3,2,0)'
+  - id: coupdays_p3_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=COUPDAYS(DATE(2024,1,15),DATE(2026,11,15),A1,0)'
+  - id: coupdays_p3_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=COUPDAYS(DATE(2024,1,15),DATE(2026,11,15),A2,0)'
+  - id: coupdays_p3_cell_d0
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=COUPDAYS(DATE(2024,1,15),DATE(2026,11,15),A3,0)'
+  - id: coupdays_p4_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=COUPDAYS(DATE(2024,1,15),DATE(2026,11,15),2,A1)'
+  - id: coupdays_p4_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=COUPDAYS(DATE(2024,1,15),DATE(2026,11,15),2,A2)'
+  - id: coupdays_p4_cell_d0
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=COUPDAYS(DATE(2024,1,15),DATE(2026,11,15),2,A3)'
+  - id: coupdaysnc_control
+    formula: '=COUPDAYSNC(DATE(2024,1,15),DATE(2026,11,15),2,0)'
+  - id: coupdaysnc_p1_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=COUPDAYSNC(A1,DATE(2026,11,15),2,0)'
+  - id: coupdaysnc_p1_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=COUPDAYSNC(A2,DATE(2026,11,15),2,0)'
+  - id: coupdaysnc_p1_cell_d0
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=COUPDAYSNC(A3,DATE(2026,11,15),2,0)'
+  - id: coupdaysnc_p2_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=COUPDAYSNC(DATE(2024,1,15),A1,2,0)'
+  - id: coupdaysnc_p2_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=COUPDAYSNC(DATE(2024,1,15),A2,2,0)'
+  - id: coupdaysnc_p2_cell_d0
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=COUPDAYSNC(DATE(2024,1,15),A3,2,0)'
+  - id: coupdaysnc_p3_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=COUPDAYSNC(DATE(2024,1,15),DATE(2026,11,15),A1,0)'
+  - id: coupdaysnc_p3_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=COUPDAYSNC(DATE(2024,1,15),DATE(2026,11,15),A2,0)'
+  - id: coupdaysnc_p3_cell_d0
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=COUPDAYSNC(DATE(2024,1,15),DATE(2026,11,15),A3,0)'
+  - id: coupdaysnc_p4_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=COUPDAYSNC(DATE(2024,1,15),DATE(2026,11,15),2,A1)'
+  - id: coupdaysnc_p4_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=COUPDAYSNC(DATE(2024,1,15),DATE(2026,11,15),2,A2)'
+  - id: coupdaysnc_p4_cell_d0
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=COUPDAYSNC(DATE(2024,1,15),DATE(2026,11,15),2,A3)'
+  - id: coupncd_control
+    formula: '=COUPNCD(DATE(2024,1,15),DATE(2026,11,15),2,0)'
+  - id: coupncd_p1_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=COUPNCD(A1,DATE(2026,11,15),2,0)'
+  - id: coupncd_p1_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=COUPNCD(A2,DATE(2026,11,15),2,0)'
+  - id: coupncd_p1_cell_d0
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=COUPNCD(A3,DATE(2026,11,15),2,0)'
+  - id: coupncd_p2_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=COUPNCD(DATE(2024,1,15),A1,2,0)'
+  - id: coupncd_p2_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=COUPNCD(DATE(2024,1,15),A2,2,0)'
+  - id: coupncd_p2_cell_d0
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=COUPNCD(DATE(2024,1,15),A3,2,0)'
+  - id: coupncd_p3_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=COUPNCD(DATE(2024,1,15),DATE(2026,11,15),A1,0)'
+  - id: coupncd_p3_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=COUPNCD(DATE(2024,1,15),DATE(2026,11,15),A2,0)'
+  - id: coupncd_p3_cell_d0
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=COUPNCD(DATE(2024,1,15),DATE(2026,11,15),A3,0)'
+  - id: coupncd_p4_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=COUPNCD(DATE(2024,1,15),DATE(2026,11,15),2,A1)'
+  - id: coupncd_p4_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=COUPNCD(DATE(2024,1,15),DATE(2026,11,15),2,A2)'
+  - id: coupncd_p4_cell_d0
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=COUPNCD(DATE(2024,1,15),DATE(2026,11,15),2,A3)'
+  - id: coupnum_control
+    formula: '=COUPNUM(DATE(2024,1,15),DATE(2026,11,15),2,0)'
+  - id: coupnum_p1_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=COUPNUM(A1,DATE(2026,11,15),2,0)'
+  - id: coupnum_p1_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=COUPNUM(A2,DATE(2026,11,15),2,0)'
+  - id: coupnum_p1_cell_d0
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=COUPNUM(A3,DATE(2026,11,15),2,0)'
+  - id: coupnum_p2_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=COUPNUM(DATE(2024,1,15),A1,2,0)'
+  - id: coupnum_p2_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=COUPNUM(DATE(2024,1,15),A2,2,0)'
+  - id: coupnum_p2_cell_d0
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=COUPNUM(DATE(2024,1,15),A3,2,0)'
+  - id: coupnum_p3_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=COUPNUM(DATE(2024,1,15),DATE(2026,11,15),A1,0)'
+  - id: coupnum_p3_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=COUPNUM(DATE(2024,1,15),DATE(2026,11,15),A2,0)'
+  - id: coupnum_p3_cell_d0
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=COUPNUM(DATE(2024,1,15),DATE(2026,11,15),A3,0)'
+  - id: coupnum_p4_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=COUPNUM(DATE(2024,1,15),DATE(2026,11,15),2,A1)'
+  - id: coupnum_p4_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=COUPNUM(DATE(2024,1,15),DATE(2026,11,15),2,A2)'
+  - id: coupnum_p4_cell_d0
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=COUPNUM(DATE(2024,1,15),DATE(2026,11,15),2,A3)'
+  - id: couppcd_control
+    formula: '=COUPPCD(DATE(2024,1,15),DATE(2026,11,15),2,0)'
+  - id: couppcd_p1_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=COUPPCD(A1,DATE(2026,11,15),2,0)'
+  - id: couppcd_p1_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=COUPPCD(A2,DATE(2026,11,15),2,0)'
+  - id: couppcd_p1_cell_d0
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=COUPPCD(A3,DATE(2026,11,15),2,0)'
+  - id: couppcd_p2_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=COUPPCD(DATE(2024,1,15),A1,2,0)'
+  - id: couppcd_p2_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=COUPPCD(DATE(2024,1,15),A2,2,0)'
+  - id: couppcd_p2_cell_d0
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=COUPPCD(DATE(2024,1,15),A3,2,0)'
+  - id: couppcd_p3_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=COUPPCD(DATE(2024,1,15),DATE(2026,11,15),A1,0)'
+  - id: couppcd_p3_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=COUPPCD(DATE(2024,1,15),DATE(2026,11,15),A2,0)'
+  - id: couppcd_p3_cell_d0
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=COUPPCD(DATE(2024,1,15),DATE(2026,11,15),A3,0)'
+  - id: couppcd_p4_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=COUPPCD(DATE(2024,1,15),DATE(2026,11,15),2,A1)'
+  - id: couppcd_p4_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=COUPPCD(DATE(2024,1,15),DATE(2026,11,15),2,A2)'
+  - id: couppcd_p4_cell_d0
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=COUPPCD(DATE(2024,1,15),DATE(2026,11,15),2,A3)'
+  - id: workday_intl_control
+    setup:
+      D1: 3
+      D2: 5
+      D3: 8
+    formula: '=WORKDAY.INTL(DATE(2024,1,15),5,1,D1:D3)'
+  - id: workday_intl_p1_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      D1: 3
+      D2: 5
+      D3: 8
+    formula: '=WORKDAY.INTL(A1,5,1,D1:D3)'
+  - id: workday_intl_p1_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      D1: 3
+      D2: 5
+      D3: 8
+    formula: '=WORKDAY.INTL(A2,5,1,D1:D3)'
+  - id: workday_intl_p1_cell_d0
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      D1: 3
+      D2: 5
+      D3: 8
+    formula: '=WORKDAY.INTL(A3,5,1,D1:D3)'
+  - id: workday_intl_p2_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      D1: 3
+      D2: 5
+      D3: 8
+    formula: '=WORKDAY.INTL(DATE(2024,1,15),A1,1,D1:D3)'
+  - id: workday_intl_p2_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      D1: 3
+      D2: 5
+      D3: 8
+    formula: '=WORKDAY.INTL(DATE(2024,1,15),A2,1,D1:D3)'
+  - id: workday_intl_p2_cell_d0
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      D1: 3
+      D2: 5
+      D3: 8
+    formula: '=WORKDAY.INTL(DATE(2024,1,15),A3,1,D1:D3)'
+  - id: workday_intl_p3_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      D1: 3
+      D2: 5
+      D3: 8
+    formula: '=WORKDAY.INTL(DATE(2024,1,15),5,A1,D1:D3)'
+  - id: workday_intl_p3_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      D1: 3
+      D2: 5
+      D3: 8
+    formula: '=WORKDAY.INTL(DATE(2024,1,15),5,A2,D1:D3)'
+  - id: workday_intl_p3_cell_d0
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+      D1: 3
+      D2: 5
+      D3: 8
+    formula: '=WORKDAY.INTL(DATE(2024,1,15),5,A3,D1:D3)'
+  - id: workday_intl_p4_cell_v
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=WORKDAY.INTL(DATE(2024,1,15),5,1,A1)'
+  - id: workday_intl_p4_cell_na
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=WORKDAY.INTL(DATE(2024,1,15),5,1,A2)'
+  - id: workday_intl_p4_cell_d0
+    setup:
+      A1: '="a"+1'
+      A2: '=NA()'
+      A3: '=1/0'
+    formula: '=WORKDAY.INTL(DATE(2024,1,15),5,1,A3)'
+  - id: workday_intl_p4_rng_v
+    setup:
+      E1: '="a"+1'
+      E2: 2
+      E3: 5
+    formula: '=WORKDAY.INTL(DATE(2024,1,15),5,1,E1:E3)'
+  - id: workday_intl_p4_rng_na
+    setup:
+      F1: '=NA()'
+      F2: 2
+      F3: 5
+    formula: '=WORKDAY.INTL(DATE(2024,1,15),5,1,F1:F3)'

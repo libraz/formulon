@@ -16,6 +16,10 @@
 namespace formulon {
 namespace eval {
 
+ErrorCode spill_read_failure_code(const Sheet& sheet, std::uint32_t row, std::uint32_t col) {
+  return sheet.blocked_spill_footprint_at(row, col).has_value() ? ErrorCode::Spill : ErrorCode::Ref;
+}
+
 ArrayValue* project_spill_at_anchor(std::string_view sheet, std::uint32_t row, std::uint32_t col, Arena& arena,
                                     const EvalContext& ctx, ErrorCode* out_err) {
   const Sheet* current = ctx.current_sheet();
@@ -47,7 +51,7 @@ ArrayValue* project_spill_at_anchor(std::string_view sheet, std::uint32_t row, s
   std::uint32_t rows = 0;
   std::uint32_t cols = 0;
   if (!ctx.read_spill_region(*target, row, col, arena, cells, &rows, &cols)) {
-    *out_err = ErrorCode::Ref;
+    *out_err = spill_read_failure_code(*target, row, col);
     return nullptr;
   }
   ArrayValue* arr = array_from_values(rows, cols, cells.data(), cells.size(), arena);

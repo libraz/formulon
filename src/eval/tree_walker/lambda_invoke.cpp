@@ -93,7 +93,7 @@ class LambdaCall {
     }
     if (guard_.exceeded()) {
       note_unknown_error_origin();
-      error_ = ErrorCode::Calc;
+      error_ = ErrorCode::Num;
       return;
     }
     lv_ = at_arity(lv, arity, arena);

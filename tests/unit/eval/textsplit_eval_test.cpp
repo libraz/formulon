@@ -75,12 +75,10 @@ TEST(BuiltinsTextSplit, NoMatchYieldsSingleCellArray) {
   EXPECT_EQ(v.as_array_cells()[0].as_text(), "abc");
 }
 
-TEST(BuiltinsTextSplit, EmptyTextYieldsSingleEmptyCell) {
+TEST(BuiltinsTextSplit, EmptyTextIsValueError) {
   const Value v = EvalSrc("=TEXTSPLIT(\"\", \",\")");
-  ASSERT_TRUE(v.is_array());
-  EXPECT_EQ(v.as_array_rows(), 1U);
-  EXPECT_EQ(v.as_array_cols(), 1U);
-  EXPECT_EQ(v.as_array_cells()[0].as_text(), "");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
 TEST(BuiltinsTextSplit, EmptyDelimiterIsNoOp) {

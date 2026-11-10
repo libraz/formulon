@@ -143,6 +143,10 @@ Value eval_phonetic_lazy(const parser::AstNode& call, Arena& arena, const Functi
     // is required to be a literal Ref; the resolve does not need to
     // re-evaluate a formula cell, only to read its cached value.
     Value resolved = text_ctx.resolve_ref(r);
+    // A number, boolean or error in the cell has no phonetic reading: the empty text.
+    if (resolved.is_number() || resolved.is_error() || resolved.is_boolean()) {
+      return Value::text(arena.intern(""));
+    }
     return apply_passthrough_surface(resolved, arena);
   }
 

@@ -194,14 +194,14 @@ TEST(BuiltinsPercentof, RangeSkipsTextAndBool) {
 }
 
 TEST(BuiltinsPercentof, ErrorInRangePropagates) {
-  // A1=3, A2=#DIV/0!, A3=5 -> error in data_all propagates.
+  // A1=3, A2=#DIV/0!, A3=5 -> an error cell in data_all reads as #NUM!.
   Workbook wb = Workbook::create();
   wb.sheet(0).set_cell_value(0, 0, Value::number(3.0));
   wb.sheet(0).set_cell_value(1, 0, Value::error(ErrorCode::Div0));
   wb.sheet(0).set_cell_value(2, 0, Value::number(5.0));
   const Value v = EvalSourceIn("=PERCENTOF(2, A1:A3)", wb, wb.sheet(0));
   ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Div0);
+  EXPECT_EQ(v.as_error(), ErrorCode::Num);
 }
 
 }  // namespace

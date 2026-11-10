@@ -682,7 +682,7 @@ TEST(DefinedNameResolve, NamedLambdaSupportsNamedRecursion) {
   EXPECT_DOUBLE_EQ(v.as_number(), 120.0);
 }
 
-TEST(DefinedNameResolve, NamedLambdaRunawayRecursionHitsCalcCap) {
+TEST(DefinedNameResolve, NamedLambdaRunawayRecursionHitsNumCap) {
   Workbook wb = Workbook::create_empty();
   Sheet& s = wb.sheet(wb.add_sheet("Sheet1"));
   wb.set_defined_names({
@@ -693,7 +693,7 @@ TEST(DefinedNameResolve, NamedLambdaRunawayRecursionHitsCalcCap) {
   Arena a;
   const Value v = EvalOrDie("=loopfn(0)", a, ctx);
   ASSERT_TRUE(v.is_error()) << v.debug_to_string();
-  EXPECT_EQ(v.as_error(), ErrorCode::Calc);
+  EXPECT_EQ(v.as_error(), ErrorCode::Num);
 }
 
 TEST(DefinedNameResolve, HiddenMutationWaitsForConcurrentWorkbookMutation) {
