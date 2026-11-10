@@ -7167,9 +7167,9 @@ typedef struct {
   int32_t show_data_tips;
   /** Whether the classic layout with drop zones drawn on the grid is used. */
   int32_t grid_drop_zones;
-  /** Whether items without data show on rows; the layout follows each field's own show-all setting. */
+  /** Whether items without data show on rows (`showEmptyRow`); the layout follows each field's show-all setting. */
   int32_t show_empty_row;
-  /** Whether items without data show on columns; the layout follows each field's own show-all setting. */
+  /** Whether items without data show on columns (`showEmptyCol`); the layout follows each field's show-all setting. */
   int32_t show_empty_column;
   /** Whether the field drop-down buttons show. */
   int32_t show_data_drop_down;
