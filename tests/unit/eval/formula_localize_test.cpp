@@ -223,6 +223,10 @@ TEST(FormulaLocalize, EnglishRewriteIsIdentityOnGoldenFormulas) {
       continue;
     }
     for (const auto& file : std::filesystem::directory_iterator(golden)) {
+      // That suite enters deliberately non-canonical spellings to pin Excel's re-spelling.
+      if (file.path().filename() == "entry_canonical.golden.json") {
+        continue;
+      }
       std::ifstream in(file.path());
       std::stringstream buffer;
       buffer << in.rdbuf();
