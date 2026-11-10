@@ -1447,7 +1447,7 @@ import {
   type SparklineGroupInput,
   type SparklineInput,
   type TableColumn,
-  type TableColumnTotalsInput,
+  type TableColumnPatch,
   type TableStyle,
   type TableStyleInput,
   type ThreadedComment,
@@ -1512,11 +1512,11 @@ export function readRecordsPassBackAsInput(): void {
   const asField: PivotFieldPatch = pivotField;
   const asDataField: PivotDataFieldInput = dataField;
   const asWorksheetSource: PivotWorksheetSourceInput = worksheetSource;
-  const asTotals: TableColumnTotalsInput = tableColumn;
+  const asColumn: TableColumnPatch = tableColumn;
   const asAutoFilterCondition: AutoFilterConditionInput = autoFilterColumn.conditions[0];
   void [asFont, asFill, asBorder, asXf, asPerson, asComment, asProtected, asProtection, asTableStyle, asCellStyle];
   void [asArray, asTitles, asSelection, asView, asThread, asSparkline, asGroup, asTable, asName, asSource, asFilter];
-  void [asField, asDataField, asWorksheetSource, asTotals, asAutoFilterCondition];
+  void [asField, asDataField, asWorksheetSource, asColumn, asAutoFilterCondition];
   wb.ooxml.addFont(font);
   wb.ooxml.addFill(fill);
   wb.ooxml.addBorder(border);
