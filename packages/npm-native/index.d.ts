@@ -367,7 +367,7 @@ export type NativeValue = null | number | boolean | string | ExcelError | readon
  */
 export interface SaveDiagnostics {
   /** The written workbook. */
-  readonly bytes: Uint8Array;
+  readonly bytes: Uint8Array<ArrayBuffer>;
   /** Formula cells emitted as cached literals. Always zero for XLSX. */
   readonly downgradedFormulaCount: number;
   /** Sheet features not lowered to records. Always zero for XLSX. */
@@ -4246,7 +4246,7 @@ export interface ImageInfo {
 
 /** Return type of `Picture.getProperties()`: the picture's format, pixel size and a copy of its media bytes. */
 export interface PictureProperties extends ImageInfo {
-  readonly bytes: Uint8Array;
+  readonly bytes: Uint8Array<ArrayBuffer>;
 }
 
 /** Return type of `Drawing.getDrawingProperties()`: the fields every anchored object of a sheet's drawing has,
@@ -5469,15 +5469,16 @@ export interface Workbook {
   /** Serialises the workbook to an in-memory byte stream in `format` (default `WorkbookFormat.Xlsx`). Dirty
    *  cells are computed first unless the mode is `CalcMode.Manual` with `calcOnSave` off, which writes the
    *  cached values. An archive or writer failure throws with one of the `StatusCode.Io*` codes; an unknown `format`
-   *  value with `StatusCode.InvalidArgument`.
+   *  value with `StatusCode.InvalidArgument`. Saving fails with `StatusCode.IoWriteFailed` while a pivot uses a
+   *  cache without a worksheet source (see `addPivotCache`); a cache no pivot or slicer uses is not written.
    *
    *  @example
    *  ```ts
    *  const xlsx = wb.save(); // Uint8Array; write it to a file or upload it
    *  const xlsb = wb.save(formulon.WorkbookFormat.Xlsb);
    *  ``` */
-  save(format?: WorkbookFormat): Uint8Array;
-  /** Serialises like `save` and reports the loss / defer counters of the write. */
+  save(format?: WorkbookFormat): Uint8Array<ArrayBuffer>;
+  /** Serialises like `save`, failing in the same cases, and reports the loss / defer counters of the write. */
   saveWithDiagnostics(format?: WorkbookFormat): SaveDiagnostics;
   /** Returns the loss counters captured when this handle was loaded. */
   getDiagnostics(): ReadDiagnostics;
@@ -5707,8 +5708,9 @@ export interface Workbook {
   pivotCache(cacheId: PivotCacheRef): PivotCache;
   /** Creates a new empty pivot cache and returns its handle; its id is `requestedId` when given, else one the
    *  engine assigns. A cache id is never 0: an explicit 0 fails with `StatusCode.InvalidArgument`, and omission
-   *  or `null` asks the engine to assign one; an id already in use fails with `StatusCode.AlreadyExists`. A new cache has no worksheet source, and a workbook containing one cannot be saved: call
-   *  `PivotCache.setWorksheetSource` before saving. */
+   *  or `null` asks the engine to assign one; an id already in use fails with `StatusCode.AlreadyExists`. A new cache has no worksheet source: call
+   *  `PivotCache.setWorksheetSource` before a pivot uses it. Saving fails while a pivot uses a cache without a
+   *  worksheet source. A cache no pivot or slicer uses is not written. */
   addPivotCache(requestedId?: number | null): PivotCache;
   /** Removes the pivot cache `cacheId`; its handle then fails with `StatusCode.NotFound` until a cache with the
    *  same id is added. Fails with `StatusCode.PreconditionFailed` if any pivot table still references it. */
@@ -6914,7 +6916,7 @@ export interface SheetOoxml {
   remapRangeXfs(range: CellRect | string, mapping: ReadonlyMap<number, number>): void;
   /** Captures the XF state of a selection (covered column or row XFs and every stored cell's XF) as opaque,
    *  versioned bytes for `restoreRangeXfs`; use it to undo a `remapRangeXfs`. */
-  snapshotRangeXfs(range: CellRect | string): Uint8Array;
+  snapshotRangeXfs(range: CellRect | string): Uint8Array<ArrayBuffer>;
   /** Puts a `snapshotRangeXfs` capture back exactly. Values, formulas, phonetic runs and comments are not
    *  touched; nothing changes when it throws. */
   restoreRangeXfs(bytes: Uint8Array): void;
@@ -7286,7 +7288,7 @@ export interface Picture extends Drawing {
   setZOrder(zOrderIndex: number): void;
   /** Captures the picture with its list position, element and dependent parts as opaque bytes for
    *  `Sheet.restoreDrawing`. */
-  snapshot(): Uint8Array;
+  snapshot(): Uint8Array<ArrayBuffer>;
 }
 
 /** A chart of a sheet's drawing; also has the members of {@link Drawing}. Add one with `Sheet.addChart`. */
@@ -7298,7 +7300,7 @@ export interface Chart extends Drawing {
   setZOrder(zOrderIndex: number): void;
   /** Captures the chart with its list position, element and dependent parts as opaque bytes for
    *  `Sheet.restoreDrawing`. */
-  snapshot(): Uint8Array;
+  snapshot(): Uint8Array<ArrayBuffer>;
   /** Resolves the chart's series against the current cell values. */
   getData(): ChartData;
   /** Resolves the series as if `overrides` were applied to the chart; the workbook is not changed. */
@@ -7363,7 +7365,7 @@ export interface Shape extends Drawing {
    *  back). */
   setZOrder(zOrderIndex: number): void;
   /** Captures the shape with its list position and element as opaque bytes for `Sheet.restoreDrawing`. */
-  snapshot(): Uint8Array;
+  snapshot(): Uint8Array<ArrayBuffer>;
 }
 
 /** A table slicer, through its drawing frame; also has the members of {@link Drawing}. Add one with

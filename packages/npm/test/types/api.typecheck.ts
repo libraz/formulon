@@ -1826,6 +1826,13 @@ export function keyedSheetReads(): void {
   void [rule, byRuleId, validation, range, group, required];
 }
 
+export function returnedBytesAreBlobParts(): void {
+  // Returned bytes sit on a plain ArrayBuffer, so they are a `BlobPart` (a `SharedArrayBuffer` view is not).
+  void new Blob([wb.save()]);
+  void new Blob([wb.saveWithDiagnostics().bytes]);
+  void new Blob([sheet.ooxml.snapshotRangeXfs('A1:B2')]);
+}
+
 export function workbookFormatAndStyleTables(): void {
   const xlsx: 0 = WorkbookFormat.Xlsx;
   const xlsb: 1 = WorkbookFormat.Xlsb;

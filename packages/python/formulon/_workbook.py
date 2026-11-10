@@ -8254,6 +8254,9 @@ class Workbook(_NoCopy):
           ValueError: when ``format`` is not a :class:`WorkbookFormat` value,
             or is omitted for a path that ends in neither ``.xlsx`` nor ``.xlsb``.
           InvalidArgumentError: for a ``format`` that contradicts a ``.xlsx`` / ``.xlsb`` extension of ``dest``.
+          IoError: when the write fails, including while a pivot uses a cache
+            without a worksheet source (see :meth:`add_pivot_cache`); a cache
+            no pivot or slicer uses is not written.
           TypeError: when ``dest`` is none of the above.
           OSError: when writing ``dest`` fails.
 
@@ -8283,6 +8286,7 @@ class Workbook(_NoCopy):
           ValueError: when ``format`` is not a :class:`WorkbookFormat` value,
             or is omitted for a path that ends in neither ``.xlsx`` nor ``.xlsb``.
           InvalidArgumentError: for a ``format`` that contradicts a ``.xlsx`` / ``.xlsb`` extension of ``dest``.
+          IoError: in the cases :meth:`save` raises it.
           TypeError: when ``dest`` is none of the accepted kinds.
           OSError: when writing ``dest`` fails.
         """
@@ -9382,9 +9386,10 @@ class Workbook(_NoCopy):
         """Create a new empty pivot cache and return its handle.
 
         Its id is ``requested_id``, else one the engine assigns; a cache id is never 0.
-        A new cache has no worksheet source, and a workbook containing one
-        cannot be saved: call :meth:`PivotCache.set_worksheet_source` before
-        saving.
+        A new cache has no worksheet source: call
+        :meth:`PivotCache.set_worksheet_source` before a pivot uses it. Saving
+        fails while a pivot uses a cache without a worksheet source. A cache no
+        pivot or slicer uses is not written.
 
         Raises:
           InvalidArgumentError: when ``requested_id`` is 0.
