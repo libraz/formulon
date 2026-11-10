@@ -300,13 +300,14 @@ Expected<RefreshPlan, Error> build_refreshed_cache(const PivotCache& old, const 
     }
   }
 
-  // Shared items stay on axis fields, discrete group bases and fields with calculated items.
+  // Shared items stay on axis fields, discrete and numeric group bases and fields with calculated items.
   std::vector<bool> shared(old_count, false);
   for (std::size_t i = 0; i < old_count; ++i) {
     shared[i] = shared[i] || flag_at(context.axis_fields, i) || any_set(old_fields[i].shared_item_is_calculated);
     const std::optional<FieldGroup>& group = old_fields[i].field_group;
-    if (group.has_value() && group->kind == GroupKind::Discrete && group->base.has_value() &&
-        *group->base < old_count) {
+    const bool keeps_base_items = group.has_value() && (group->kind == GroupKind::Discrete ||
+                                                        (group->kind == GroupKind::Range && !group->range.is_date));
+    if (keeps_base_items && group->base.has_value() && *group->base < old_count) {
       shared[*group->base] = true;
     }
   }

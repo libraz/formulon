@@ -316,6 +316,21 @@ TEST(PivotRefresh, SaveRefreshedCacheNeedsNoRefreshOnLoad) {
             std::string::npos);
 }
 
+TEST(PivotRefresh, AFieldLeftWithoutSharedItemsListsNoItems) {
+  Workbook wb = Book();
+  PivotTable& table = PivotAt(wb);
+  // Product sits on no axis, so a refresh drops its shared items.
+  table.mutable_fields()[1].items = {Item(0U), Item(1U)};
+  pivot::PivotMarkerItem marker;
+  marker.type = "default";
+  marker.after_items = 2U;
+  table.mutable_fields()[1].marker_items.push_back(marker);
+  ASSERT_TRUE(static_cast<bool>(Refresh(wb)));
+  ASSERT_TRUE(CacheOf(wb).fields()[1].shared_items.empty());
+  EXPECT_TRUE(PivotAt(wb).fields()[1].items.empty());
+  EXPECT_TRUE(PivotAt(wb).fields()[1].marker_items.empty());
+}
+
 TEST(PivotRefresh, EditingARefreshedCacheMakesItHandFilled) {
   Workbook wb = Book();
   ASSERT_TRUE(static_cast<bool>(Refresh(wb)));

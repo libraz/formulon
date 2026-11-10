@@ -228,6 +228,11 @@ void remap_table(PivotTable& table, const PivotCache& cache, const FieldRemap& r
     if (i < remap.items.size() && !remap.items[i].empty()) {
       remap_items(field, remap.items[i], cache.fields()[target], positions[i]);
     }
+    // A field left with no shared items lists no items, its subtotal marker included.
+    if (cache.fields()[target].shared_items.empty() && !is_group_field(cache.fields()[target])) {
+      field.items.clear();
+      field.marker_items.clear();
+    }
     placed[target] = std::move(field);
   }
   std::vector<PivotField> new_fields;
