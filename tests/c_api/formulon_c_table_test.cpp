@@ -952,6 +952,23 @@ TEST(FormulonCApiTable, RenameRejectsTheNameOfAVerbatimXlsbTable) {
   EXPECT_EQ(fm_sheet_rename_table(wb.handle, 0, index, "Fresh2"), 0);
 }
 
+TEST(FormulonCApiTable, ACellReferenceShapedNameIsRefusedOnAddAndRename) {
+  WorkbookGuard wb;
+  CreateSalesTable(wb);
+  const char* columns[] = {"A", "B"};
+  // Excel's Table Name box refuses a name that reads as a cell reference in either notation.
+  for (const char* name : {"T1", "A1", "R1C1", "XFD1", "xfd1048576", "r1"}) {
+    SCOPED_TRACE(name);
+    std::size_t index = 0;
+    EXPECT_EQ(AddTable(wb.handle, 0, record_arg(fm_cell_rect_t{0, 4, 2, 5}), name, columns, 2, nullptr, 1, 0, &index),
+              kInvalidArgument);
+    EXPECT_EQ(fm_sheet_rename_table(wb.handle, 0, 0, name), kInvalidArgument);
+  }
+  EXPECT_EQ(count_of(fm_sheet_get_table_count, wb.handle, std::size_t{0}), 1U);
+  // Past the grid the same letters are an ordinary name.
+  EXPECT_EQ(fm_sheet_rename_table(wb.handle, 0, 0, "XFE1"), 0);
+}
+
 TEST(FormulonCApiTable, AddUpdateAndRenameRefuseWhatExcelRefuses) {
   WorkbookGuard wb;
   CreateSalesTable(wb);
