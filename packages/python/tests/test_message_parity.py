@@ -16,7 +16,17 @@ import unittest
 from pathlib import Path
 from typing import Any, Callable, Dict
 
-from formulon import ArrayFormula, CellRect, DefinedNameInput, FormulonError, TableInput, Workbook
+import formulon
+from formulon import (
+    ArrayFormula,
+    CellRect,
+    DefinedNameInput,
+    FormulonError,
+    TableInput,
+    Value,
+    ValueKind,
+    Workbook,
+)
 
 HERE = Path(__file__).resolve().parent
 REPO_ROOT = HERE.parents[2]
@@ -44,10 +54,16 @@ CASES: Dict[str, Callable[[Workbook, Any], Any]] = {
     "setValues element that is not a cell value": lambda wb, ws: ws.set_values(0, 0, [[1, object()]]),
     "setValues non-finite number": lambda wb, ws: ws.set_values(0, 0, [[1], [float("nan")]]),
     "getValues past the cell cap": lambda wb, ws: ws.get_values(CellRect(0, 0, 1048575, 16383)),
+    "getCollationClasses element that is not a Value": lambda wb, ws: formulon.get_collation_classes(
+        [Value(kind=ValueKind.TEXT, text="a"), 5], formulon.CollationStrength.DYNAMIC, "win-365-en_US"
+    ),
+    "toNative of a non-Value": lambda wb, ws: formulon.to_native(5),
 }
 
 
 def _snake(text: str) -> str:
+    # The JS namespace object `Formulon` is the Python module `formulon`.
+    text = re.sub(r"^Formulon\.", "formulon.", text)
     return re.sub(r"(?<=[a-z0-9])([A-Z])", lambda m: "_" + m.group(1).lower(), text)
 
 

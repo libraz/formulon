@@ -773,8 +773,6 @@ export function enumName(enumType, value) {
   return null;
 }
 
-const NOT_A_VALUE = 'Formulon.toNative value must be a Value';
-
 /**
  * Maps a `Value` to its native JS value: Blank to `null`, Number to a number, Bool to a boolean, Text to a
  * string, Error to an `ExcelError` and an `ArrayValue` to its rows. A `RefValue` or `LambdaValue`, which no
@@ -784,20 +782,40 @@ const NOT_A_VALUE = 'Formulon.toNative value must be a Value';
  * @returns {null | number | boolean | string | ExcelError | Array} The native value.
  */
 export function toNative(value) {
-  if (!isObject(value)) throw new TypeError(NOT_A_VALUE);
+  return nativeOfValue(requireValue(value, 'Formulon.toNative value'));
+}
+
+/** `toNative` of a value `requireValue` accepted. */
+function nativeOfValue(value) {
   switch (value.kind) {
     case ValueKind.Blank:
       return null;
     case ValueKind.Array: {
       const { rows, cols, cells } = value;
-      if (!Number.isInteger(rows) || !Number.isInteger(cols) || !Array.isArray(cells)) throw new TypeError(NOT_A_VALUE);
-      if (cells.length !== rows * cols) throw new TypeError(NOT_A_VALUE);
-      return Array.from({ length: rows }, (_, r) => cells.slice(r * cols, (r + 1) * cols).map(toNative));
+      return Array.from({ length: rows }, (_, r) => cells.slice(r * cols, (r + 1) * cols).map(nativeOfValue));
     }
   }
+  return value.kind === ValueKind.Error ? new ExcelError(value.errorCode) : value[SCALAR_VALUE_FIELDS[value.kind][0]];
+}
+
+/**
+ * `value` when it is a `Value` of a kind a read returns, its payload of the kind's type (an `ArrayValue` with
+ * `rows * cols` such cells); otherwise a `TypeError` "`<label> must be a Value`".
+ */
+function requireValue(value, label) {
+  if (!isObject(value)) throw new TypeError(`${label} must be a Value`);
+  if (value.kind === ValueKind.Blank) return value;
+  if (value.kind === ValueKind.Array) {
+    const { rows, cols, cells } = value;
+    if (!Number.isInteger(rows) || !Number.isInteger(cols) || !Array.isArray(cells) || cells.length !== rows * cols) {
+      throw new TypeError(`${label} must be a Value`);
+    }
+    for (const [i, cell] of cells.entries()) requireValue(cell, `${label}.cells[${i}]`);
+    return value;
+  }
   const [field, type] = SCALAR_VALUE_FIELDS[value.kind] ?? [];
-  if (field === undefined || typeof value[field] !== type) throw new TypeError(NOT_A_VALUE);
-  return value.kind === ValueKind.Error ? new ExcelError(value.errorCode) : value[field];
+  if (field === undefined || typeof value[field] !== type) throw new TypeError(`${label} must be a Value`);
+  return value;
 }
 
 /**
@@ -969,7 +987,6 @@ const RUNTIME_MEMBERS = new Set([
   'getLocaleFacts',
   'listProfileIds',
   'compareText',
-  'getCollationClasses',
   'getImageInfo',
 ]);
 
@@ -1024,6 +1041,16 @@ const RUNTIME_WRAPPERS = Object.freeze({
         const where = 'Formulon.convertCivilToSerial';
         const civil = toCivil(date, where, argumentPath(where, 0));
         return convert(civil, dateSystem(options, where));
+      },
+  ],
+  getCollationClasses: [
+    'getCollationClasses',
+    (classify) =>
+      function getCollationClasses(values, strength, profileId) {
+        const label = argLabel('Formulon.getCollationClasses', 0);
+        requireArray(values, label);
+        for (const [i, value] of values.entries()) requireValue(value, `${label}[${i}]`);
+        return classify(values, strength, profileId);
       },
   ],
   getImageInfo: [

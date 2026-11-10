@@ -206,7 +206,6 @@ from ._workbook import (
     _cell_rect_from,
     _cf_match_from,
     _check,
-    _check_value,
     _code_point_offset,
     _decode_auto_filter,
     _decode_cell_rect_array,
@@ -4002,7 +4001,7 @@ class Sheet(_NoCopy):
         row, col, value = self._cell_args("validate_value", args, kwargs, ("value",))
         sheet = self._index()
         h = self._workbook._require()
-        value = _check_value(_value_of_input(value, date1904=self._workbook.get_date1904()))
+        value = _value_of_input(value, date1904=self._workbook.get_date1904())
         with _ArgScope() as scope:
             value_ptr = scope.alloc(fm_value_t_size)
             ptr = scope.struct(S.VALIDATION_OUTCOME)

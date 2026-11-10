@@ -1,4 +1,4 @@
-"""Input normalisation shared by the facade: colours, A1 text in records and dates.
+"""Input normalisation shared by the facade: values, colours, A1 text in records and dates.
 
 Every helper here turns one accepted input form into the shape the packers
 write, so an entry point that takes a ``ColorInput``, an A1 string inside a
@@ -14,9 +14,9 @@ import numbers
 import re
 from typing import Any, Dict, Optional, Tuple
 
-from ._c import FormulonError
+from ._c import FormulonError, _argument_message
 from ._status import StatusCode
-from ._workbook import CellAddress, CellRect, Color, ColorKind, SheetRect, Workbook
+from ._workbook import CellAddress, CellRect, Color, ColorKind, SheetRect, Value, Workbook
 
 __all__ = [
     "RECORD_RANGE_FIELDS",
@@ -67,6 +67,18 @@ _COLOR_TEXT = re.compile(r"#(?:[0-9a-fA-F]{6}|[0-9a-fA-F]{8})")
 
 def _invalid(message: str) -> FormulonError:
     return FormulonError(StatusCode.INVALID_ARGUMENT, message, "")
+
+
+# ---------------------------------------------------------------------------
+# Values
+# ---------------------------------------------------------------------------
+
+
+def value_input(value: Any, path: str) -> Value:
+    """``value`` when it is a :class:`Value`, whose constructor validated its payload; else a ``TypeError``."""
+    if not isinstance(value, Value):
+        raise TypeError(_argument_message(path, "must be a Value"))
+    return value
 
 
 # ---------------------------------------------------------------------------

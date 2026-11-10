@@ -17,6 +17,9 @@ const CASES = {
   'setValues non-finite number': (wb, ws) => ws.setValues(0, 0, [[1], [Number.NaN]]),
   'getValues past the cell cap': (wb, ws) =>
     ws.getValues({ firstRow: 0, firstCol: 0, lastRow: 1048575, lastCol: 16383 }),
+  'getCollationClasses element that is not a Value': () =>
+    f.getCollationClasses([{ kind: f.ValueKind.Text, text: 'a' }, 5], f.CollationStrength.Dynamic, 'win-365-en_US'),
+  'toNative of a non-Value': () => f.toNative(5),
 };
 
 const { createFormulon } = await import(process.argv[2]);

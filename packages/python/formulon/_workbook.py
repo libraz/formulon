@@ -758,8 +758,11 @@ def to_native(value: Value) -> NativeValue:
     - ``ERROR`` -> :class:`ExcelError` (Excel cell errors are values,
       not Python exceptions)
     - ``ARRAY`` -> a list of rows, each a list of the cells' native values
+
+    Raises:
+      TypeError: when ``value`` is not a :class:`Value`.
     """
-    kind = value.kind
+    kind = value_input(value, "value").kind
     if kind is ValueKind.BLANK:
         return None
     if kind is ValueKind.NUMBER:
@@ -7037,17 +7040,10 @@ def _decode_cell_rect_array(ptr: int, count: int) -> List[CellRect]:
     return [_decode_cell_rect_at(ptr + i * size) for i in range(count)]
 
 
-def _check_value(value: Value) -> Value:
-    """Reject anything but a :class:`Value`, whose constructor validated its payload."""
-    if not isinstance(value, Value):
-        raise TypeError(f"expected a Value, got {type(value).__name__}")
-    return value
-
-
 def _write_value_input(value: Value, value_ptr: int, scope: _ArgScope) -> None:
     """Write ``value`` as a value struct at ``value_ptr``.
 
-    ``value`` has passed :func:`_check_value`, so its payload matches its
+    ``value`` is a :class:`Value`, so its payload matches its
     kind. A text payload's buffer is allocated through ``scope``.
     """
     payload = b"\x00" * 8
@@ -8943,7 +8939,6 @@ class Workbook(_NoCopy):
         # The date system is read only for a date, so a value of the wrong type is refused before any call.
         date1904 = self.get_date1904() if isinstance(value, (datetime.date, datetime.time)) else False
         value = _value_of_input(value, date1904=date1904)
-        _check_value(value)
         with _ArgScope() as scope:
             value_ptr = scope.alloc(fm_value_t_size)
             text_ptr = scope.out_ptr()
@@ -10198,12 +10193,25 @@ def get_collation_classes(
     * Sort: stable-sort by id; reverse for descending, keeping blanks last.
     * Re-applying a saved selection: classify the saved values plus the
       column values in one call and select the matching ids.
+    * Feed it kind-preserving values (:meth:`Sheet.get_typed_values`), which
+      keep a blank distinct from 0.
 
     Raises:
+      TypeError: when ``values`` is not a sequence or an element is not a
+        :class:`Value`.
       FormulonError: on an unknown ``profile_id``, an out-of-range
         ``strength``, a non-finite number or an out-of-range error code.
+
+    Example::
+
+        column = [v for row in ws.get_typed_values("A2:A100") for v in row]
+        ids = formulon.get_collation_classes(column, formulon.CollationStrength.DYNAMIC, "win-365-en_US").class_ids
+        seen = set()
+        distinct = [v for v, i in zip(column, ids) if i not in seen and not seen.add(i)]
     """
-    values = [_check_value(v) for v in values]
+    if isinstance(values, (str, bytes)) or not isinstance(values, Sequence):
+        raise TypeError(_argument_message("values", "must be an array"))
+    values = [value_input(v, f"values[{i}]") for i, v in enumerate(values)]
     n = len(values)
     with _ArgScope() as scope:
         pid_ptr = scope.cstr(profile_id)
@@ -10223,7 +10231,7 @@ def get_collation_classes(
 
 # Imported last: these modules import this one, and the annotations above name their classes, which
 # `typing.get_type_hints` resolves from this module's globals.
-from ._inputs import cell_rect, civil_datetime, color_input  # noqa: E402
+from ._inputs import cell_rect, civil_datetime, color_input, value_input  # noqa: E402
 from ._pivot import Pivot  # noqa: E402
 from ._pivot_cache import PivotCache  # noqa: E402
 from ._sheet import CellValueInput, Sheet  # noqa: E402

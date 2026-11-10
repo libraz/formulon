@@ -7662,8 +7662,9 @@ export interface Formulon {
    *  errors by value, blanks always equal), and ids ascend in SORT order
    *  (numbers < texts < booleans < errors < blanks), dense from 0.
    *  Ids are meaningful only within one call; never store or compare them
-   *  across calls. Every element must be an object carrying `kind`
-   *  (a missing `kind` throws `TypeError`, it is not read as a blank).
+   *  across calls. Every element must be a `Value`; anything else, a
+   *  missing `kind` included, throws `TypeError` naming its index (it is not
+   *  read as a blank).
    *
    *  Typical use:
    *  - Dedupe or checklist order: take the first position of each id and
@@ -7675,7 +7676,16 @@ export interface Formulon {
    *    tuples.
    *  - Feed it kind-preserving values (`getTypedValue`, `getTypedValues`);
    *    `evaluateTypedFormulaArray` returns range blanks as 0, losing the
-   *    blank/zero distinction. */
+   *    blank/zero distinction.
+   *
+   *  @example
+   *  ```ts
+   *  // Kind-preserving values keep a blank distinct from 0.
+   *  const column = ws.getTypedValues('A2:A100').flat();
+   *  const { classIds } = formulon.getCollationClasses(column, formulon.CollationStrength.Dynamic, 'win-365-en_US');
+   *  const seen = new Set();
+   *  const distinct = column.filter((_, i) => !seen.has(classIds[i]) && seen.add(classIds[i]));
+   *  ``` */
   getCollationClasses(values: readonly Value[], strength: CollationStrength, profileId: ProfileId): CollationClasses;
 
   /** Every {@link ProfileId} the engine knows, in a fixed order. */
