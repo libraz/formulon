@@ -796,11 +796,12 @@ const PIVOT_MUTATORS = [
           ['East', 'Pear', 5, 45658],
           ['North', 'Pear', 7, 45689],
         ];
-        rows.forEach((row, r) =>
-          row.forEach((v, c) =>
-            typeof v === 'number' ? b.wb.sheet(0).setNumber(r, c, v) : b.wb.sheet(0).setText(r, c, v),
-          ),
-        );
+        for (const [r, row] of rows.entries()) {
+          for (const [c, v] of row.entries()) {
+            if (typeof v === 'number') b.wb.sheet(0).setNumber(r, c, v);
+            else b.wb.sheet(0).setText(r, c, v);
+          }
+        }
       },
       act: (b) => b.wb.pivotCache(b.cacheId).refresh(),
       expect: (b) =>
