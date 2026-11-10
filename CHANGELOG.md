@@ -590,6 +590,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `ws.updateSheetProtection(patch)`. There is no `enabled` field: a record
   means protected and `null` means unprotected. The `allow*` flags carry
   Excel's dialog defaults and the engine stores them without enforcing locks.
+  Each `allow*` flag is the inverse of the 0.18.0 field it replaces, which
+  mirrored the OOXML attribute: `formatCells: 1` prevented formatting, and
+  `allowFormatCells: true` permits it (Python `format_cells` and
+  `allow_format_cells`; C `format_cells` and `allow_format_cells`). Code that
+  carried a value across must negate it.
 - **C ABI, JavaScript, Python:** page breaks are `RowBreak { row, first, last,
   manual }` and `ColumnBreak { col, first, last, manual }` (`first` and `last`
   are the span the break covers). `setRowBreak(row, { first?, last?, manual? }
@@ -2733,7 +2738,7 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
 | `PivotDataFieldResult` | `PivotDataField` |
 | `pivotDataFieldSet()` | `ws.pivot(...).setDataField()` |
 | `PivotDataFieldSpec` | `PivotDataFieldInput` |
-| `pivotFieldAdd()` | `ws.pivot(...).pivotFieldAdd()` |
+| `pivotFieldAdd()` | removed |
 | `pivotFieldAddItem()` | `ws.pivot(...).addFieldItem()` |
 | `pivotFieldAddItemAt()` | removed |
 | `pivotFieldAddSubtotalFn()` | removed; use `ws.pivot(...).setFieldSubtotalFunctions()` |
@@ -2904,22 +2909,22 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
 | `SheetPrintTitlesResult` | removed |
 | `SheetPrintXmlResult.xml` | `value` |
 | `SheetPrintXmlResult` | removed |
-| `SheetProtection.autoFilter` | `SheetProtection.allowAutoFilter` |
-| `SheetProtection.deleteColumns` | `SheetProtection.allowDeleteColumns` |
-| `SheetProtection.deleteRows` | `SheetProtection.allowDeleteRows` |
-| `SheetProtection.formatCells` | `SheetProtection.allowFormatCells` |
-| `SheetProtection.formatColumns` | `SheetProtection.allowFormatColumns` |
-| `SheetProtection.formatRows` | `SheetProtection.allowFormatRows` |
-| `SheetProtection.insertColumns` | `SheetProtection.allowInsertColumns` |
-| `SheetProtection.insertHyperlinks` | `SheetProtection.allowInsertHyperlinks` |
-| `SheetProtection.insertRows` | `SheetProtection.allowInsertRows` |
+| `SheetProtection.autoFilter` | `SheetProtection.allowAutoFilter`; inverted: `true` allows what the former flag prevented |
+| `SheetProtection.deleteColumns` | `SheetProtection.allowDeleteColumns`; inverted: `true` allows what the former flag prevented |
+| `SheetProtection.deleteRows` | `SheetProtection.allowDeleteRows`; inverted: `true` allows what the former flag prevented |
+| `SheetProtection.formatCells` | `SheetProtection.allowFormatCells`; inverted: `true` allows what the former flag prevented |
+| `SheetProtection.formatColumns` | `SheetProtection.allowFormatColumns`; inverted: `true` allows what the former flag prevented |
+| `SheetProtection.formatRows` | `SheetProtection.allowFormatRows`; inverted: `true` allows what the former flag prevented |
+| `SheetProtection.insertColumns` | `SheetProtection.allowInsertColumns`; inverted: `true` allows what the former flag prevented |
+| `SheetProtection.insertHyperlinks` | `SheetProtection.allowInsertHyperlinks`; inverted: `true` allows what the former flag prevented |
+| `SheetProtection.insertRows` | `SheetProtection.allowInsertRows`; inverted: `true` allows what the former flag prevented |
 | `SheetProtection.legacyPassword` | `SheetProtection.legacyPasswordHash` |
-| `SheetProtection.objects` | `SheetProtection.allowEditObjects` |
-| `SheetProtection.pivotTables` | `SheetProtection.allowPivotTables` |
-| `SheetProtection.scenarios` | `SheetProtection.allowEditScenarios` |
-| `SheetProtection.selectLockedCells` | `SheetProtection.allowSelectLockedCells` |
-| `SheetProtection.selectUnlockedCells` | `SheetProtection.allowSelectUnlockedCells` |
-| `SheetProtection.sort` | `SheetProtection.allowSort` |
+| `SheetProtection.objects` | `SheetProtection.allowEditObjects`; inverted: `true` allows what the former flag prevented |
+| `SheetProtection.pivotTables` | `SheetProtection.allowPivotTables`; inverted: `true` allows what the former flag prevented |
+| `SheetProtection.scenarios` | `SheetProtection.allowEditScenarios`; inverted: `true` allows what the former flag prevented |
+| `SheetProtection.selectLockedCells` | `SheetProtection.allowSelectLockedCells`; inverted: `true` allows what the former flag prevented |
+| `SheetProtection.selectUnlockedCells` | `SheetProtection.allowSelectUnlockedCells`; inverted: `true` allows what the former flag prevented |
+| `SheetProtection.sort` | `SheetProtection.allowSort`; inverted: `true` allows what the former flag prevented |
 | `SheetProtectionResult` | removed |
 | `SheetSelection.activeRow` | `SheetSelection.active` |
 | `SheetSelectionResult` | folded into `SheetSelection` |
@@ -3243,7 +3248,7 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
 | `pivot_data_field_clear()` | `ws.pivot(...).clear_data_fields()` |
 | `pivot_data_field_count()` | removed; use `ws.pivot(...).list_data_fields()` |
 | `pivot_data_field_set()` | `ws.pivot(...).set_data_field()` |
-| `pivot_field_add()` | `ws.pivot(...).pivot_field_add()` |
+| `pivot_field_add()` | removed |
 | `pivot_field_add_item()` | `ws.pivot(...).add_field_item()` |
 | `pivot_field_add_item_at()` | removed |
 | `pivot_field_add_subtotal_fn()` | removed; use `ws.pivot(...).set_field_subtotal_functions()` |
@@ -3386,22 +3391,22 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
 | `SheetFormatDefaults.default_row_height` | `SheetFormatDefaults.default_row_height_pt` |
 | `SheetFormatDefaults.effective_default_col_width` | `SheetFormatDefaults.effective_default_column_width_chars` |
 | `SheetFormatDefaults.effective_default_row_height` | `SheetFormatDefaults.effective_default_row_height_pt` |
-| `SheetProtection.auto_filter` | `SheetProtection.allow_auto_filter` |
-| `SheetProtection.delete_columns` | `SheetProtection.allow_delete_columns` |
-| `SheetProtection.delete_rows` | `SheetProtection.allow_delete_rows` |
-| `SheetProtection.format_cells` | `SheetProtection.allow_format_cells` |
-| `SheetProtection.format_columns` | `SheetProtection.allow_format_columns` |
-| `SheetProtection.format_rows` | `SheetProtection.allow_format_rows` |
-| `SheetProtection.insert_columns` | `SheetProtection.allow_insert_columns` |
-| `SheetProtection.insert_hyperlinks` | `SheetProtection.allow_insert_hyperlinks` |
-| `SheetProtection.insert_rows` | `SheetProtection.allow_insert_rows` |
+| `SheetProtection.auto_filter` | `SheetProtection.allow_auto_filter`; inverted: `true` allows what the former flag prevented |
+| `SheetProtection.delete_columns` | `SheetProtection.allow_delete_columns`; inverted: `true` allows what the former flag prevented |
+| `SheetProtection.delete_rows` | `SheetProtection.allow_delete_rows`; inverted: `true` allows what the former flag prevented |
+| `SheetProtection.format_cells` | `SheetProtection.allow_format_cells`; inverted: `true` allows what the former flag prevented |
+| `SheetProtection.format_columns` | `SheetProtection.allow_format_columns`; inverted: `true` allows what the former flag prevented |
+| `SheetProtection.format_rows` | `SheetProtection.allow_format_rows`; inverted: `true` allows what the former flag prevented |
+| `SheetProtection.insert_columns` | `SheetProtection.allow_insert_columns`; inverted: `true` allows what the former flag prevented |
+| `SheetProtection.insert_hyperlinks` | `SheetProtection.allow_insert_hyperlinks`; inverted: `true` allows what the former flag prevented |
+| `SheetProtection.insert_rows` | `SheetProtection.allow_insert_rows`; inverted: `true` allows what the former flag prevented |
 | `SheetProtection.legacy_password` | `SheetProtection.legacy_password_hash` |
-| `SheetProtection.objects` | `SheetProtection.allow_edit_objects` |
-| `SheetProtection.pivot_tables` | `SheetProtection.allow_pivot_tables` |
-| `SheetProtection.scenarios` | `SheetProtection.allow_edit_scenarios` |
-| `SheetProtection.select_locked_cells` | `SheetProtection.allow_select_locked_cells` |
-| `SheetProtection.select_unlocked_cells` | `SheetProtection.allow_select_unlocked_cells` |
-| `SheetProtection.sort` | `SheetProtection.allow_sort` |
+| `SheetProtection.objects` | `SheetProtection.allow_edit_objects`; inverted: `true` allows what the former flag prevented |
+| `SheetProtection.pivot_tables` | `SheetProtection.allow_pivot_tables`; inverted: `true` allows what the former flag prevented |
+| `SheetProtection.scenarios` | `SheetProtection.allow_edit_scenarios`; inverted: `true` allows what the former flag prevented |
+| `SheetProtection.select_locked_cells` | `SheetProtection.allow_select_locked_cells`; inverted: `true` allows what the former flag prevented |
+| `SheetProtection.select_unlocked_cells` | `SheetProtection.allow_select_unlocked_cells`; inverted: `true` allows what the former flag prevented |
+| `SheetProtection.sort` | `SheetProtection.allow_sort`; inverted: `true` allows what the former flag prevented |
 | `SheetSelection.active_row` | `SheetSelection.active` |
 | `SheetView.pane_top_left_row` | `SheetView.pane_top_left` |
 | `SheetView.show_row_col_headers` | `SheetView.show_row_column_headers` |

@@ -103,7 +103,7 @@ FIELDS = frozenset(
         "params", "surfaces", "exception", "replaced_by", "closes", "was", "drop", "flag", "sheet_arg", "total",
         "missing", "facade", "review", "note", "cell_args", "rect_args", "ref_args", "ref_exempt", "patch",
         "patch_record", "patch_reason", "patch_nested", "span_args", "internal", "handle", "reads_values", "resolved",
-        "color", "namespace", "a1_exempt", "add_returns", "clearable", "read_only_keys",
+        "color", "namespace", "a1_exempt", "add_returns", "clearable", "read_only_keys", "was_semantics",
     }
 )  # fmt: skip
 HANDLE_FIELDS = frozenset({"class", "js", "py", "supplies", "property"})
@@ -234,6 +234,8 @@ def check_schema(data) -> List[str]:
             problems.append(f"{where}: review is `true` or absent")
         if "note" in entry and (not isinstance(entry["note"], str) or not entry["note"].strip()):
             problems.append(f"{where}: note must be a non-empty string")
+        if "was_semantics" in entry and (entry["was_semantics"] != "inverted" or not entry.get("was")):
+            problems.append(f"{where}: was_semantics is `inverted`, on an entry with `was`")
         slots = {}
         for param, spec in (entry.get("params") or {}).items():
             if isinstance(spec, dict):

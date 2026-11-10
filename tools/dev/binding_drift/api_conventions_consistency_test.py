@@ -588,6 +588,27 @@ class MigrationTableTest(unittest.TestCase):
         self.assertIn(("`Legend.overlap`", "`ChartLegend.overlay`"), table["js"])
         self.assertIn(("`Legend`", "`ChartLegend`"), table["js"])
 
+    def test_an_inverted_flag_says_so(self) -> None:
+        ledger = {
+            "schema": 1,
+            "collections": {},
+            "entries": {
+                "record.protection": {"kind": "record", "js": "Protection", "surfaces": ["wasm"]},
+                "field.protection_allow_sort": {"kind": "field", "record": "record.protection", "js": "allowSort",
+                                                "surfaces": ["wasm"], "was": {"js": "sort"},
+                                                "was_semantics": "inverted"},
+            },
+        }  # fmt: skip
+        ((before, after),) = _tool("api", "gen_migration_table").rows(ledger)["js"]
+        self.assertEqual(before, "`Protection.sort`")
+        self.assertTrue(after.startswith("`Protection.allowSort`; inverted:"), after)
+
+    def test_render_keeps_only_rows_whose_former_name_shipped(self) -> None:
+        gen = _tool("api", "gen_migration_table")
+        rendered = gen.render(ENUM_LEDGER, released={"Legend", "overlap", "SortDirection"})
+        self.assertIn("| `Legend.overlap` | `ChartLegend.overlay` |", rendered)
+        self.assertNotIn("Asc", rendered)
+
 
 class PatchClearCasesTest(unittest.TestCase):
     DTS = (

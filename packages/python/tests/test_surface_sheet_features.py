@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import io
+import re
 import unittest
+import zipfile
 
 import formulon
 from formulon import (
@@ -264,6 +267,19 @@ class SheetViewProtectionTests(unittest.TestCase):
             self.assertTrue(got.allow_select_locked_cells)
             wb.sheet(0).set_sheet_protection(None)
             self.assertIsNone(wb.sheet(0).get_sheet_protection())
+
+    def test_protection_allow_flags_are_the_inverse_of_the_stored_attributes(self) -> None:
+        # OOXML stores what is protected: an allowed action is `="0"`, a forbidden selection `="1"`.
+        with Workbook.create_default() as wb:
+            wb.sheet(0).set_sheet_protection(
+                SheetProtectionInput(allow_format_cells=True, allow_select_locked_cells=False)
+            )
+            with zipfile.ZipFile(io.BytesIO(wb.save())) as package:
+                sheet_xml = package.read("xl/worksheets/sheet1.xml").decode("utf-8")
+        element = re.search(r"<sheetProtection [^>]*>", sheet_xml).group(0)
+        self.assertIn('formatCells="0"', element)
+        self.assertIn('selectLockedCells="1"', element)
+        self.assertNotIn("formatColumns", element)
 
 
 if __name__ == "__main__":

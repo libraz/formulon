@@ -11,6 +11,8 @@ and what replaces it:
 * an op a handle class now publishes (``handle:``): the former name and the
   handle method reached through its parent's lookup
   (``addPivotField()`` -> ``ws.pivot(...).addField()``);
+* a field with ``was_semantics: inverted`` says so after its new name (a flag
+  whose ``true`` now means the opposite);
 * a ``drop`` name, whether or not it was also renamed: removed, pointing at the
   ``list`` entry that absorbs it, at the op that replaces it, or at the entry it
   was an alias of, when the ledger names one; a ``drop.note`` replaces that pointer;
@@ -186,7 +188,10 @@ def rows(data: dict) -> Dict[str, List[Row]]:
                 before_owner, after_owner = _owner_names(entries, str(entry.get("record")), field)
                 new = entry.get(field)
                 if isinstance(new, str) and new != old:
-                    out[field].append((f"`{before_owner}{old}`", f"`{after_owner}{new}`"))
+                    after = f"`{after_owner}{new}`"
+                    if entry.get("was_semantics") == "inverted":
+                        after += "; inverted: `true` allows what the former flag prevented"
+                    out[field].append((f"`{before_owner}{old}`", after))
                 continue
             # An op or list a facade member took over keeps its C function unless the ledger drops it.
             replaced = "replaced_by" in entry and not (
@@ -209,7 +214,9 @@ def rows(data: dict) -> Dict[str, List[Row]]:
                 continue
             if entry.get("internal") is True and field != "c":
                 continue
-            handled = _handle_call(data, entry, field)
+            # A dropped op with no name left has no handle method either.
+            dropped = isinstance(drop.get(field), str) and not isinstance(entry.get(field), str)
+            handled = None if dropped else _handle_call(data, entry, field)
             if handled:
                 out[field].append((_call(old, field, kind), handled))
                 continue

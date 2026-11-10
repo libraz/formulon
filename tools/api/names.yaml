@@ -20,6 +20,7 @@
 # sentence when no argument is at fault) and the bindings print it as `<Class.method> <public path>
 # <constraint>`; one that describes file content (kIo*, kSecurity*, out of memory) reads
 # `<part or record>: <problem>` (check: binding_drift engine-messages).
+# `was_semantics: inverted` marks a renamed field whose `true` means the opposite of the former one's.
 # Text positions: C and JS index strings in UTF-16 code units; Python in code points, converted
 # at the binding boundary. Length limits are UTF-16 code units on every surface.
 # Cleared cell-font attributes: one with no absent state (`size_pt`, `name`) takes the Normal
@@ -14979,6 +14980,7 @@ entries:
     surfaces: [c, wasm, native, py]
     closes: R41.bool.polarity
     was: { js: objects, py: objects }
+    was_semantics: inverted
   field.sheet_protection_allow_edit_scenarios:
     kind: field
     record: record.sheet_protection
@@ -14987,6 +14989,7 @@ entries:
     surfaces: [c, wasm, native, py]
     closes: R41.bool.polarity
     was: { js: scenarios, py: scenarios }
+    was_semantics: inverted
   field.sheet_protection_allow_format_cells:
     kind: field
     record: record.sheet_protection
@@ -14995,6 +14998,7 @@ entries:
     surfaces: [c, wasm, native, py]
     closes: R41.bool.polarity
     was: { js: formatCells, py: format_cells }
+    was_semantics: inverted
   field.sheet_protection_allow_format_columns:
     kind: field
     record: record.sheet_protection
@@ -15003,6 +15007,7 @@ entries:
     surfaces: [c, wasm, native, py]
     closes: R41.bool.polarity
     was: { js: formatColumns, py: format_columns }
+    was_semantics: inverted
   field.sheet_protection_allow_format_rows:
     kind: field
     record: record.sheet_protection
@@ -15011,6 +15016,7 @@ entries:
     surfaces: [c, wasm, native, py]
     closes: R41.bool.polarity
     was: { js: formatRows, py: format_rows }
+    was_semantics: inverted
   field.sheet_protection_allow_insert_columns:
     kind: field
     record: record.sheet_protection
@@ -15019,6 +15025,7 @@ entries:
     surfaces: [c, wasm, native, py]
     closes: R41.bool.polarity
     was: { js: insertColumns, py: insert_columns }
+    was_semantics: inverted
   field.sheet_protection_allow_insert_rows:
     kind: field
     record: record.sheet_protection
@@ -15027,6 +15034,7 @@ entries:
     surfaces: [c, wasm, native, py]
     closes: R41.bool.polarity
     was: { js: insertRows, py: insert_rows }
+    was_semantics: inverted
   field.sheet_protection_allow_insert_hyperlinks:
     kind: field
     record: record.sheet_protection
@@ -15035,6 +15043,7 @@ entries:
     surfaces: [c, wasm, native, py]
     closes: R41.bool.polarity
     was: { js: insertHyperlinks, py: insert_hyperlinks }
+    was_semantics: inverted
   field.sheet_protection_allow_delete_columns:
     kind: field
     record: record.sheet_protection
@@ -15043,6 +15052,7 @@ entries:
     surfaces: [c, wasm, native, py]
     closes: R41.bool.polarity
     was: { js: deleteColumns, py: delete_columns }
+    was_semantics: inverted
   field.sheet_protection_allow_delete_rows:
     kind: field
     record: record.sheet_protection
@@ -15051,6 +15061,7 @@ entries:
     surfaces: [c, wasm, native, py]
     closes: R41.bool.polarity
     was: { js: deleteRows, py: delete_rows }
+    was_semantics: inverted
   field.sheet_protection_allow_select_locked_cells:
     kind: field
     record: record.sheet_protection
@@ -15059,6 +15070,7 @@ entries:
     surfaces: [c, wasm, native, py]
     closes: R41.bool.polarity
     was: { js: selectLockedCells, py: select_locked_cells }
+    was_semantics: inverted
   field.sheet_protection_allow_select_unlocked_cells:
     kind: field
     record: record.sheet_protection
@@ -15067,6 +15079,7 @@ entries:
     surfaces: [c, wasm, native, py]
     closes: R41.bool.polarity
     was: { js: selectUnlockedCells, py: select_unlocked_cells }
+    was_semantics: inverted
   field.sheet_protection_allow_sort:
     kind: field
     record: record.sheet_protection
@@ -15075,6 +15088,7 @@ entries:
     surfaces: [c, wasm, native, py]
     closes: R41.bool.polarity
     was: { js: sort, py: sort }
+    was_semantics: inverted
   field.sheet_protection_allow_auto_filter:
     kind: field
     record: record.sheet_protection
@@ -15083,6 +15097,7 @@ entries:
     surfaces: [c, wasm, native, py]
     closes: R41.bool.polarity
     was: { js: autoFilter, py: auto_filter }
+    was_semantics: inverted
   field.sheet_protection_allow_pivot_tables:
     kind: field
     record: record.sheet_protection
@@ -15091,6 +15106,7 @@ entries:
     surfaces: [c, wasm, native, py]
     closes: R41.bool.polarity
     was: { js: pivotTables, py: pivot_tables }
+    was_semantics: inverted
   field.workbook_protection_workbook_legacy_password_hash:
     kind: field
     record: record.workbook_protection
