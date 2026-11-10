@@ -890,6 +890,259 @@ entries:
     first_noted: 2026-10-24
     last_verified_excel_version: "16.114.1"
 
+  # entry_canonical: the stored spelling of a formula after entry, read
+  # back through FORMULATEXT. The engine stores formula text as typed, so
+  # each case below is entry re-spelling the engine owes; an entry is
+  # deleted with the fix that makes its case pass.
+  - id: fn_empty_parens_space
+    applies_to: [mac-365-de_DE, mac-365-en_US, mac-365-es_ES, mac-365-es_MX, mac-365-fr_FR, mac-365-ja_JP, mac-365-ko_KR, mac-365-nl_NL, mac-365-pt_BR, mac-365-th_TH, mac-365-zh_CN, mac-365-zh_TW]
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "Excel upper-cases a known function name on entry (a typed _xlfn. prefix is not shown); the engine stores the typed spelling. Expected spellings are in tests/oracle/targets/mac-365-ja_JP/golden/entry_canonical.golden.json."
+    prefer: mac-excel-365
+    first_noted: 2026-11-10
+    last_verified_excel_version: "16.114.4"
+  - id: fn_future_lower
+    applies_to: [mac-365-en_US, mac-365-ja_JP, mac-365-ko_KR, mac-365-th_TH, mac-365-zh_CN, mac-365-zh_TW]
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "Excel upper-cases a known function name on entry (a typed _xlfn. prefix is not shown); the engine stores the typed spelling. Expected spellings are in tests/oracle/targets/mac-365-ja_JP/golden/entry_canonical.golden.json."
+    prefer: mac-excel-365
+    first_noted: 2026-11-10
+    last_verified_excel_version: "16.114.4"
+  - id: fn_future_prefixed
+    applies_to: [mac-365-en_US, mac-365-ja_JP, mac-365-ko_KR, mac-365-th_TH, mac-365-zh_CN, mac-365-zh_TW]
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "Excel upper-cases a known function name on entry (a typed _xlfn. prefix is not shown); the engine stores the typed spelling. Expected spellings are in tests/oracle/targets/mac-365-ja_JP/golden/entry_canonical.golden.json."
+    prefer: mac-excel-365
+    first_noted: 2026-11-10
+    last_verified_excel_version: "16.114.4"
+  - id: fn_lower
+    applies_to: [mac-365-en_US, mac-365-ja_JP, mac-365-ko_KR, mac-365-th_TH, mac-365-zh_CN, mac-365-zh_TW]
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "Excel upper-cases a known function name on entry (a typed _xlfn. prefix is not shown); the engine stores the typed spelling. Expected spellings are in tests/oracle/targets/mac-365-ja_JP/golden/entry_canonical.golden.json."
+    prefer: mac-excel-365
+    first_noted: 2026-11-10
+    last_verified_excel_version: "16.114.4"
+  - id: fn_mixed
+    applies_to: [mac-365-en_US, mac-365-ja_JP, mac-365-ko_KR, mac-365-th_TH, mac-365-zh_CN, mac-365-zh_TW]
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "Excel upper-cases a known function name on entry (a typed _xlfn. prefix is not shown); the engine stores the typed spelling. Expected spellings are in tests/oracle/targets/mac-365-ja_JP/golden/entry_canonical.golden.json."
+    prefer: mac-excel-365
+    first_noted: 2026-11-10
+    last_verified_excel_version: "16.114.4"
+  - id: fn_unknown_mixed_case_folds_to_first
+    applies_to: all
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "Excel folds every spelling of an unknown function name to its first occurrence; the engine keeps each typed spelling. Expected spellings are in tests/oracle/targets/mac-365-ja_JP/golden/entry_canonical.golden.json."
+    prefer: mac-excel-365
+    first_noted: 2026-11-10
+    last_verified_excel_version: "16.114.4"
+  - id: lambda_param_first_spelling_wins
+    applies_to: all
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "Excel re-spells every LET/LAMBDA parameter occurrence to its first spelling on entry; the engine keeps each typed spelling. Expected spellings are in tests/oracle/targets/mac-365-ja_JP/golden/entry_canonical.golden.json."
+    prefer: mac-excel-365
+    first_noted: 2026-11-10
+    last_verified_excel_version: "16.114.4"
+  - id: let_param_first_spelling_wins
+    applies_to: all
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "Excel re-spells every LET/LAMBDA parameter occurrence to its first spelling on entry; the engine keeps each typed spelling. Expected spellings are in tests/oracle/targets/mac-365-ja_JP/golden/entry_canonical.golden.json."
+    prefer: mac-excel-365
+    first_noted: 2026-11-10
+    last_verified_excel_version: "16.114.4"
+  - id: let_param_lower_first
+    applies_to: all
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "Excel re-spells every LET/LAMBDA parameter occurrence to its first spelling on entry; the engine keeps each typed spelling. Expected spellings are in tests/oracle/targets/mac-365-ja_JP/golden/entry_canonical.golden.json."
+    prefer: mac-excel-365
+    first_noted: 2026-11-10
+    last_verified_excel_version: "16.114.4"
+  - id: lit_bool_function_form
+    applies_to: [mac-365-en_US, mac-365-ja_JP, mac-365-ko_KR, mac-365-th_TH, mac-365-zh_CN, mac-365-zh_TW]
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "Excel re-spells a boolean function form (false()) on entry; the engine stores the typed spelling. Expected spellings are in tests/oracle/targets/mac-365-ja_JP/golden/entry_canonical.golden.json."
+    prefer: mac-excel-365
+    first_noted: 2026-11-10
+    last_verified_excel_version: "16.114.4"
+  - id: lit_error_lower
+    applies_to: [mac-365-en_US, mac-365-ja_JP, mac-365-ko_KR, mac-365-th_TH, mac-365-zh_CN, mac-365-zh_TW]
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "Excel upper-cases an error literal on entry; the engine stores the typed case. Expected spellings are in tests/oracle/targets/mac-365-ja_JP/golden/entry_canonical.golden.json."
+    prefer: mac-excel-365
+    first_noted: 2026-11-10
+    last_verified_excel_version: "16.114.4"
+  - id: lit_string_untouched
+    applies_to: [mac-365-en_US, mac-365-fr_FR, mac-365-ja_JP, mac-365-ko_KR, mac-365-nl_NL, mac-365-th_TH, mac-365-zh_CN, mac-365-zh_TW]
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "Excel keeps string literals but re-spells the function names around them on entry; the engine stores the typed function spelling. Expected spellings are in tests/oracle/targets/mac-365-ja_JP/golden/entry_canonical.golden.json."
+    prefer: mac-excel-365
+    first_noted: 2026-11-10
+    last_verified_excel_version: "16.114.4"
+  - id: num_leading_dot
+    applies_to: all
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "Excel re-renders number literals on entry (leading 0, trailing zeros, unary plus); the engine stores the typed text. Expected spellings are in tests/oracle/targets/mac-365-ja_JP/golden/entry_canonical.golden.json."
+    prefer: mac-excel-365
+    first_noted: 2026-11-10
+    last_verified_excel_version: "16.114.4"
+  - id: num_trailing_zeros
+    applies_to: all
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "Excel re-renders number literals on entry (leading 0, trailing zeros, unary plus); the engine stores the typed text. Expected spellings are in tests/oracle/targets/mac-365-ja_JP/golden/entry_canonical.golden.json."
+    prefer: mac-excel-365
+    first_noted: 2026-11-10
+    last_verified_excel_version: "16.114.4"
+  - id: num_unary_plus_dropped
+    applies_to: all
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "Excel re-renders number literals on entry (leading 0, trailing zeros, unary plus); the engine stores the typed text. Expected spellings are in tests/oracle/targets/mac-365-ja_JP/golden/entry_canonical.golden.json."
+    prefer: mac-excel-365
+    first_noted: 2026-11-10
+    last_verified_excel_version: "16.114.4"
+  - id: ref_cells_and_ranges
+    applies_to: all
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "Excel upper-cases cell, range, row, column and R1C1-shaped references on entry; the engine stores the typed case. Expected spellings are in tests/oracle/targets/mac-365-ja_JP/golden/entry_canonical.golden.json."
+    prefer: mac-excel-365
+    first_noted: 2026-11-10
+    last_verified_excel_version: "16.114.4"
+  - id: ref_intersection_space
+    applies_to: all
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "Excel upper-cases cell, range, row, column and R1C1-shaped references on entry; the engine stores the typed case. Expected spellings are in tests/oracle/targets/mac-365-ja_JP/golden/entry_canonical.golden.json."
+    prefer: mac-excel-365
+    first_noted: 2026-11-10
+    last_verified_excel_version: "16.114.4"
+  - id: ref_mixed_absolute
+    applies_to: all
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "Excel upper-cases cell, range, row, column and R1C1-shaped references on entry; the engine stores the typed case. Expected spellings are in tests/oracle/targets/mac-365-ja_JP/golden/entry_canonical.golden.json."
+    prefer: mac-excel-365
+    first_noted: 2026-11-10
+    last_verified_excel_version: "16.114.4"
+  - id: ref_mixed_case_range
+    applies_to: all
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "Excel upper-cases cell, range, row, column and R1C1-shaped references on entry; the engine stores the typed case. Expected spellings are in tests/oracle/targets/mac-365-ja_JP/golden/entry_canonical.golden.json."
+    prefer: mac-excel-365
+    first_noted: 2026-11-10
+    last_verified_excel_version: "16.114.4"
+  - id: ref_r1c1_shaped_name_falls_back
+    applies_to: all
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "Excel re-parses an A1 entry that fails as R1C1 (=r2c1 is stored as =$A$2); the engine stores the typed text. Expected spellings are in tests/oracle/targets/mac-365-ja_JP/golden/entry_canonical.golden.json."
+    prefer: mac-excel-365
+    first_noted: 2026-11-10
+    last_verified_excel_version: "16.114.4"
+  - id: ref_union_parens
+    applies_to: all
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "Excel upper-cases cell, range, row, column and R1C1-shaped references on entry; the engine stores the typed case. Expected spellings are in tests/oracle/targets/mac-365-ja_JP/golden/entry_canonical.golden.json."
+    prefer: mac-excel-365
+    first_noted: 2026-11-10
+    last_verified_excel_version: "16.114.4"
+  - id: ref_whole_column
+    applies_to: all
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "Excel upper-cases cell, range, row, column and R1C1-shaped references on entry; the engine stores the typed case. Expected spellings are in tests/oracle/targets/mac-365-ja_JP/golden/entry_canonical.golden.json."
+    prefer: mac-excel-365
+    first_noted: 2026-11-10
+    last_verified_excel_version: "16.114.4"
+  - id: ref_whole_row
+    applies_to: [mac-365-en_US, mac-365-ja_JP, mac-365-ko_KR, mac-365-th_TH, mac-365-zh_CN, mac-365-zh_TW]
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "Excel upper-cases cell, range, row, column and R1C1-shaped references on entry; the engine stores the typed case. Expected spellings are in tests/oracle/targets/mac-365-ja_JP/golden/entry_canonical.golden.json."
+    prefer: mac-excel-365
+    first_noted: 2026-11-10
+    last_verified_excel_version: "16.114.4"
+  - id: sheet_3d_range
+    applies_to: all
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "Excel re-spells a sheet qualifier to the sheet's own name and drops needless quotes on entry; the engine stores the typed qualifier. Expected spellings are in tests/oracle/targets/mac-365-ja_JP/golden/entry_canonical.golden.json."
+    prefer: mac-excel-365
+    first_noted: 2026-11-10
+    last_verified_excel_version: "16.114.4"
+  - id: sheet_lower_unquoted
+    applies_to: all
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "Excel re-spells a sheet qualifier to the sheet's own name and drops needless quotes on entry; the engine stores the typed qualifier. Expected spellings are in tests/oracle/targets/mac-365-ja_JP/golden/entry_canonical.golden.json."
+    prefer: mac-excel-365
+    first_noted: 2026-11-10
+    last_verified_excel_version: "16.114.4"
+  - id: sheet_needless_quotes_dropped
+    applies_to: all
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "Excel re-spells a sheet qualifier to the sheet's own name and drops needless quotes on entry; the engine stores the typed qualifier. Expected spellings are in tests/oracle/targets/mac-365-ja_JP/golden/entry_canonical.golden.json."
+    prefer: mac-excel-365
+    first_noted: 2026-11-10
+    last_verified_excel_version: "16.114.4"
+  - id: sheet_own_qualified_absolute
+    applies_to: all
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "Excel re-spells a sheet qualifier to the sheet's own name and drops needless quotes on entry; the engine stores the typed qualifier. Expected spellings are in tests/oracle/targets/mac-365-ja_JP/golden/entry_canonical.golden.json."
+    prefer: mac-excel-365
+    first_noted: 2026-11-10
+    last_verified_excel_version: "16.114.4"
+  - id: sheet_upper_unquoted
+    applies_to: all
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "Excel re-spells a sheet qualifier to the sheet's own name and drops needless quotes on entry; the engine stores the typed qualifier. Expected spellings are in tests/oracle/targets/mac-365-ja_JP/golden/entry_canonical.golden.json."
+    prefer: mac-excel-365
+    first_noted: 2026-11-10
+    last_verified_excel_version: "16.114.4"
+  - id: ws_after_comma_only
+    applies_to: all
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "Excel drops whitespace before an argument separator (keeping it after) and upper-cases the function name on entry; the engine stores the typed text. Expected spellings are in tests/oracle/targets/mac-365-ja_JP/golden/entry_canonical.golden.json."
+    prefer: mac-excel-365
+    first_noted: 2026-11-10
+    last_verified_excel_version: "16.114.4"
+  - id: ws_around_args
+    applies_to: all
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "Excel drops whitespace before an argument separator (keeping it after) and upper-cases the function name on entry; the engine stores the typed text. Expected spellings are in tests/oracle/targets/mac-365-ja_JP/golden/entry_canonical.golden.json."
+    prefer: mac-excel-365
+    first_noted: 2026-11-10
+    last_verified_excel_version: "16.114.4"
+  - id: ws_line_break
+    applies_to: [mac-365-en_US, mac-365-ja_JP, mac-365-ko_KR, mac-365-th_TH, mac-365-zh_CN, mac-365-zh_TW]
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "Excel upper-cases a known function name on entry (a typed _xlfn. prefix is not shown); the engine stores the typed spelling. Expected spellings are in tests/oracle/targets/mac-365-ja_JP/golden/entry_canonical.golden.json."
+    prefer: mac-excel-365
+    first_noted: 2026-11-10
+    last_verified_excel_version: "16.114.4"
+
 
 # -- How to add ------------------------------------------------------------
 # 1. Run `make oracle-gen` on a Mac. If a case fails the verifier, inspect

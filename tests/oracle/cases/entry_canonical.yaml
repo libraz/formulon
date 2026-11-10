@@ -1,0 +1,138 @@
+suite: entry_canonical
+description: >
+  How Excel re-spells a formula on entry. Setup writes the formula into B1
+  exactly as typed (lower or mixed case, odd spacing, unnormalised numbers);
+  the probe reads the stored spelling back through FORMULATEXT. Function
+  names, references, sheet qualifiers, error literals and booleans are
+  upper-cased or re-spelled; string literals, LET/LAMBDA parameter spellings
+  (first occurrence wins), unknown function names (folded to lower case) and
+  most whitespace are kept; number literals are re-rendered.
+tolerance: { abs: 0, rel: 0 }
+locale: ja-JP
+cases:
+  # Function names
+  - id: fn_lower
+    setup: { B1: "=sum(1,2)" }
+    formula: "=FORMULATEXT(B1)"
+  - id: fn_mixed
+    setup: { B1: "=Sum(1,2)" }
+    formula: "=FORMULATEXT(B1)"
+  - id: fn_future_lower
+    setup: { B1: "=xlookup(1,{1},{2})" }
+    formula: "=FORMULATEXT(B1)"
+  - id: fn_future_prefixed
+    setup: { B1: "=_xlfn.xlookup(1,{1},{2})" }
+    formula: "=FORMULATEXT(B1)"
+  - id: fn_unknown_lower
+    setup: { B1: "=IFERROR(foo(1),0)" }
+    formula: "=FORMULATEXT(B1)"
+  - id: fn_unknown_mixed_case_folds_to_first
+    setup: { B1: "=IFERROR(FOO(1)+fOo(2),0)" }
+    formula: "=FORMULATEXT(B1)"
+  - id: fn_empty_parens_space
+    setup: { B1: "=pi( )" }
+    formula: "=FORMULATEXT(B1)"
+  # References
+  - id: ref_cells_and_ranges
+    setup: { B1: "=sum(a2,$c$2:d3)" }
+    formula: "=FORMULATEXT(B1)"
+  - id: ref_mixed_case_range
+    setup: { B1: "=sum(a2:A3)" }
+    formula: "=FORMULATEXT(B1)"
+  - id: ref_whole_column
+    setup: { B1: "=sum(c:c)" }
+    formula: "=FORMULATEXT(B1)"
+  - id: ref_whole_row
+    setup: { B1: "=sum(3:3)" }
+    formula: "=FORMULATEXT(B1)"
+  - id: ref_mixed_absolute
+    setup: { B1: "=a$2+$a3" }
+    formula: "=FORMULATEXT(B1)"
+  - id: ref_intersection_space
+    setup: { B1: "=IFERROR(a2:c3 b2:d4,0)" }
+    formula: "=FORMULATEXT(B1)"
+  - id: ref_union_parens
+    setup: { B1: "=sum((a2,a3))" }
+    formula: "=FORMULATEXT(B1)"
+  - id: ref_r1c1_shaped_name_falls_back
+    setup: { B1: "=r2c1" }
+    formula: "=FORMULATEXT(B1)"
+  # Sheet qualifiers
+  - id: sheet_lower_unquoted
+    setup: { "Sheet2!A1": 5, B1: "=sheet2!a1" }
+    formula: "=FORMULATEXT(B1)"
+  - id: sheet_upper_unquoted
+    setup: { "Sheet2!A1": 5, B1: "=SHEET2!a1" }
+    formula: "=FORMULATEXT(B1)"
+  - id: sheet_needless_quotes_dropped
+    setup: { "Sheet2!A1": 5, B1: "='sheet2'!a1" }
+    formula: "=FORMULATEXT(B1)"
+  - id: sheet_3d_range
+    setup: { "Sheet2!A2": 5, B1: "=sum(SHEET1:sheet2!a2)" }
+    formula: "=FORMULATEXT(B1)"
+  - id: sheet_own_qualified_absolute
+    setup: { B1: "=sheet1!$a$2" }
+    formula: "=FORMULATEXT(B1)"
+  # Literals
+  - id: lit_error_lower
+    setup: { B1: "=iserror(#div/0!)" }
+    formula: "=FORMULATEXT(B1)"
+  - id: lit_na_lower
+    setup: { B1: "=ISNA(#n/a)" }
+    formula: "=FORMULATEXT(B1)"
+  - id: lit_bool_lower
+    setup: { B1: "=true" }
+    formula: "=FORMULATEXT(B1)"
+  - id: lit_bool_function_form
+    setup: { B1: "=false()" }
+    formula: "=FORMULATEXT(B1)"
+  - id: lit_string_untouched
+    setup: { B1: "=\"abc\"&\"Def\"&indirect(\"a2\")" }
+    formula: "=FORMULATEXT(B1)"
+  - id: num_exponent
+    setup: { B1: "=1e3+1E+3" }
+    formula: "=FORMULATEXT(B1)"
+  - id: num_leading_dot
+    setup: { B1: "=.5" }
+    formula: "=FORMULATEXT(B1)"
+  - id: num_trailing_zeros
+    setup: { B1: "=1.0+1.50" }
+    formula: "=FORMULATEXT(B1)"
+  - id: num_small_exponent
+    setup: { B1: "=0.1e-1" }
+    formula: "=FORMULATEXT(B1)"
+  - id: num_unary_plus_dropped
+    setup: { B1: "=+1" }
+    formula: "=FORMULATEXT(B1)"
+  - id: num_parens_kept
+    setup: { B1: "=(1)" }
+    formula: "=FORMULATEXT(B1)"
+  # LET / LAMBDA parameter spelling
+  - id: let_param_first_spelling_wins
+    setup: { B1: "=let(Xy,1,xY+1)" }
+    formula: "=FORMULATEXT(B1)"
+  - id: let_param_lower_first
+    setup: { B1: "=let(x,1,X+1)" }
+    formula: "=FORMULATEXT(B1)"
+  - id: lambda_param_first_spelling_wins
+    setup: { B1: "=lambda(Ab,aB+1)(2)" }
+    formula: "=FORMULATEXT(B1)"
+  # Whitespace
+  - id: ws_around_args
+    setup: { B1: "=sum( 1 , 2 )" }
+    formula: "=FORMULATEXT(B1)"
+  - id: ws_after_equals
+    setup: { B1: "= 1+1" }
+    formula: "=FORMULATEXT(B1)"
+  - id: ws_around_operators
+    setup: { B1: "=1  +  2" }
+    formula: "=FORMULATEXT(B1)"
+  - id: ws_after_unary_minus
+    setup: { B1: "=-  1" }
+    formula: "=FORMULATEXT(B1)"
+  - id: ws_after_comma_only
+    setup: { B1: "=concat(\"a\" , \"b\")" }
+    formula: "=FORMULATEXT(B1)"
+  - id: ws_line_break
+    setup: { B1: "=sum(1,\n2)" }
+    formula: "=FORMULATEXT(B1)"

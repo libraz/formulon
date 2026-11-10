@@ -1,0 +1,593 @@
+{
+  "suite": "entry_canonical",
+  "description": "How Excel re-spells a formula on entry. Setup writes the formula into B1 exactly as typed (lower or mixed case, odd spacing, unnormalised numbers); the probe reads the stored spelling back through FORMULATEXT. Function names, references, sheet qualifiers, error literals and booleans are upper-cased or re-spelled; string literals, LET/LAMBDA parameter spellings (first occurrence wins), unknown function names (folded to lower case) and most whitespace are kept; number literals are re-rendered.\n",
+  "environment": {
+    "excel_version": "16.114.4",
+    "excel_locale": "th-TH",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-11-10T01:15:07Z"
+  },
+  "tolerance": {
+    "abs": 0.0,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "fn_lower",
+      "formula": "=FORMULATEXT(B1)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=sum(1,2)"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=SUM(1,2)"
+      }
+    },
+    {
+      "id": "fn_mixed",
+      "formula": "=FORMULATEXT(B1)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=Sum(1,2)"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=SUM(1,2)"
+      }
+    },
+    {
+      "id": "fn_future_lower",
+      "formula": "=FORMULATEXT(B1)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=xlookup(1,{1},{2})"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=XLOOKUP(1,{1},{2})"
+      }
+    },
+    {
+      "id": "fn_future_prefixed",
+      "formula": "=FORMULATEXT(B1)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=_xlfn.xlookup(1,{1},{2})"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=XLOOKUP(1,{1},{2})"
+      }
+    },
+    {
+      "id": "fn_unknown_lower",
+      "formula": "=FORMULATEXT(B1)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=IFERROR(foo(1),0)"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=IFERROR(foo(1),0)"
+      }
+    },
+    {
+      "id": "fn_unknown_mixed_case_folds_to_first",
+      "formula": "=FORMULATEXT(B1)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=IFERROR(FOO(1)+fOo(2),0)"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=IFERROR(FOO(1)+FOO(2),0)"
+      }
+    },
+    {
+      "id": "fn_empty_parens_space",
+      "formula": "=FORMULATEXT(B1)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=pi( )"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=PI( )"
+      }
+    },
+    {
+      "id": "ref_cells_and_ranges",
+      "formula": "=FORMULATEXT(B1)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=sum(a2,$c$2:d3)"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=SUM(A2,$C$2:D3)"
+      }
+    },
+    {
+      "id": "ref_mixed_case_range",
+      "formula": "=FORMULATEXT(B1)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=sum(a2:A3)"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=SUM(A2:A3)"
+      }
+    },
+    {
+      "id": "ref_whole_column",
+      "formula": "=FORMULATEXT(B1)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=sum(c:c)"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=SUM(C:C)"
+      }
+    },
+    {
+      "id": "ref_whole_row",
+      "formula": "=FORMULATEXT(B1)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=sum(3:3)"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=SUM(3:3)"
+      }
+    },
+    {
+      "id": "ref_mixed_absolute",
+      "formula": "=FORMULATEXT(B1)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=a$2+$a3"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=A$2+$A3"
+      }
+    },
+    {
+      "id": "ref_intersection_space",
+      "formula": "=FORMULATEXT(B1)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=IFERROR(a2:c3 b2:d4,0)"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=IFERROR(A2:C3 B2:D4,0)"
+      }
+    },
+    {
+      "id": "ref_union_parens",
+      "formula": "=FORMULATEXT(B1)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=sum((a2,a3))"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=SUM((A2,A3))"
+      }
+    },
+    {
+      "id": "ref_r1c1_shaped_name_falls_back",
+      "formula": "=FORMULATEXT(B1)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=r2c1"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=$A$2"
+      }
+    },
+    {
+      "id": "sheet_lower_unquoted",
+      "formula": "=FORMULATEXT(B1)",
+      "setup": {
+        "Sheet2!A1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B1": {
+          "kind": "formula",
+          "formula": "=sheet2!a1"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=Sheet2!A1"
+      }
+    },
+    {
+      "id": "sheet_upper_unquoted",
+      "formula": "=FORMULATEXT(B1)",
+      "setup": {
+        "Sheet2!A1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B1": {
+          "kind": "formula",
+          "formula": "=SHEET2!a1"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=Sheet2!A1"
+      }
+    },
+    {
+      "id": "sheet_needless_quotes_dropped",
+      "formula": "=FORMULATEXT(B1)",
+      "setup": {
+        "Sheet2!A1": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B1": {
+          "kind": "formula",
+          "formula": "='sheet2'!a1"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=Sheet2!A1"
+      }
+    },
+    {
+      "id": "sheet_3d_range",
+      "formula": "=FORMULATEXT(B1)",
+      "setup": {
+        "Sheet2!A2": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "B1": {
+          "kind": "formula",
+          "formula": "=sum(SHEET1:sheet2!a2)"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=SUM(Sheet1:Sheet2!A2)"
+      }
+    },
+    {
+      "id": "sheet_own_qualified_absolute",
+      "formula": "=FORMULATEXT(B1)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=sheet1!$a$2"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=Sheet1!$A$2"
+      }
+    },
+    {
+      "id": "lit_error_lower",
+      "formula": "=FORMULATEXT(B1)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=iserror(#div/0!)"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=ISERROR(#DIV/0!)"
+      }
+    },
+    {
+      "id": "lit_na_lower",
+      "formula": "=FORMULATEXT(B1)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=ISNA(#n/a)"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=ISNA(#N/A)"
+      }
+    },
+    {
+      "id": "lit_bool_lower",
+      "formula": "=FORMULATEXT(B1)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=true"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=TRUE"
+      }
+    },
+    {
+      "id": "lit_bool_function_form",
+      "formula": "=FORMULATEXT(B1)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=false()"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=FALSE()"
+      }
+    },
+    {
+      "id": "lit_string_untouched",
+      "formula": "=FORMULATEXT(B1)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=\"abc\"&\"Def\"&indirect(\"a2\")"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=\"abc\"&\"Def\"&INDIRECT(\"a2\")"
+      }
+    },
+    {
+      "id": "num_exponent",
+      "formula": "=FORMULATEXT(B1)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=1e3+1E+3"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=1000+1000"
+      }
+    },
+    {
+      "id": "num_leading_dot",
+      "formula": "=FORMULATEXT(B1)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=.5"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=0.5"
+      }
+    },
+    {
+      "id": "num_trailing_zeros",
+      "formula": "=FORMULATEXT(B1)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=1.0+1.50"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=1+1.5"
+      }
+    },
+    {
+      "id": "num_small_exponent",
+      "formula": "=FORMULATEXT(B1)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=0.1e-1"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=0.01"
+      }
+    },
+    {
+      "id": "num_unary_plus_dropped",
+      "formula": "=FORMULATEXT(B1)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=+1"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=1"
+      }
+    },
+    {
+      "id": "num_parens_kept",
+      "formula": "=FORMULATEXT(B1)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=(1)"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=(1)"
+      }
+    },
+    {
+      "id": "let_param_first_spelling_wins",
+      "formula": "=FORMULATEXT(B1)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=let(Xy,1,xY+1)"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=LET(Xy,1,Xy+1)"
+      }
+    },
+    {
+      "id": "let_param_lower_first",
+      "formula": "=FORMULATEXT(B1)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=let(x,1,X+1)"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=LET(x,1,x+1)"
+      }
+    },
+    {
+      "id": "lambda_param_first_spelling_wins",
+      "formula": "=FORMULATEXT(B1)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=lambda(Ab,aB+1)(2)"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=LAMBDA(Ab,Ab+1)(2)"
+      }
+    },
+    {
+      "id": "ws_around_args",
+      "formula": "=FORMULATEXT(B1)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=sum( 1 , 2 )"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=SUM( 1, 2 )"
+      }
+    },
+    {
+      "id": "ws_after_equals",
+      "formula": "=FORMULATEXT(B1)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "= 1+1"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "= 1+1"
+      }
+    },
+    {
+      "id": "ws_around_operators",
+      "formula": "=FORMULATEXT(B1)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=1  +  2"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=1  +  2"
+      }
+    },
+    {
+      "id": "ws_after_unary_minus",
+      "formula": "=FORMULATEXT(B1)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=-  1"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=-  1"
+      }
+    },
+    {
+      "id": "ws_after_comma_only",
+      "formula": "=FORMULATEXT(B1)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=concat(\"a\" , \"b\")"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=CONCAT(\"a\", \"b\")"
+      }
+    },
+    {
+      "id": "ws_line_break",
+      "formula": "=FORMULATEXT(B1)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=sum(1,\n2)"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=SUM(1,\n2)"
+      }
+    }
+  ]
+}
