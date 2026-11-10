@@ -428,6 +428,56 @@ class LedgerRenameChainTest(unittest.TestCase):
             "b": {"kind": "op", "c": "fm_sheet_get_x_at", "surfaces": [surface], "was": {"c": "fm_sheet_get_x_idx"}},
         }
 
+    def test_a_type_filed_once_per_binding_is_split(self) -> None:
+        validate = self._validate_names()
+        entries = {
+            "record.x_result": {"kind": "record", "js": "X", "surfaces": ["wasm", "native"]},
+            "record.x": {"kind": "record", "py": "X", "c": "fm_x_info_t", "surfaces": ["c", "py"]},
+            "type.alias": {"kind": "typedef", "js": "Alias", "surfaces": ["wasm", "native"]},
+            "constant.alias": {"kind": "constant", "py": "Alias", "surfaces": ["py"]},
+        }
+        problems = validate.check_split_types(entries)
+        self.assertEqual(len(problems), 2, problems)
+        self.assertTrue(all("split across entries" in p for p in problems), problems)
+
+    def test_one_entry_per_type_and_enum_members_are_not_split(self) -> None:
+        validate = self._validate_names()
+        entries = {
+            "record.x": {"kind": "record", "js": "X", "py": "X", "surfaces": ["wasm", "native", "py"]},
+            "constant.a_left": {"kind": "constant", "enum": "enum.a", "js": "Left", "py": "LEFT"},
+            "constant.b_left": {"kind": "constant", "enum": "enum.b", "js": "Left", "py": "LEFT"},
+            "record.gone": {"kind": "record", "py": "X", "drop": ["py"]},
+        }
+        self.assertEqual(validate.check_split_types(entries), [])
+
+    def test_a_c_struct_filed_apart_from_its_record_is_split_only_when_one_to_one(self) -> None:
+        validate = self._validate_names()
+        from unittest import mock
+
+        import check_field_docs
+
+        def field(surface, record, name):
+            return check_field_docs.Field(surface, "src/x", 1, record, name, "doc")
+
+        fields = [
+            field("c", "fm_fill_t", "color"), field("c", "fm_fill_t", "has_color"), field("c", "fm_fill_t", "none"),
+            field("dts", "Fill", "color"), field("dts", "Fill", "none"),
+            field("c", "fm_totals_t", "rows"), field("c", "fm_totals_t", "columns"),
+            field("dts", "Totals", "rows"), field("dts", "Totals", "columns"),
+            field("dts", "TitlesInput", "rows"), field("dts", "TitlesInput", "columns"),
+        ]  # fmt: skip
+        entries = {
+            "record.fill_c": {"kind": "record", "c": "fm_fill_t", "surfaces": ["c"]},
+            "record.fill": {"kind": "record", "js": "Fill", "py": "Fill", "surfaces": ["wasm", "py"]},
+            "record.totals_c": {"kind": "record", "c": "fm_totals_t", "surfaces": ["c"]},
+            "record.totals": {"kind": "record", "js": "Totals", "surfaces": ["wasm"]},
+            "record.titles_input": {"kind": "record", "js": "TitlesInput", "surfaces": ["wasm"]},
+        }
+        with mock.patch.object(check_field_docs, "all_fields", return_value=fields):
+            problems = validate.check_split_c_records(entries)
+        self.assertEqual(len(problems), 1, problems)
+        self.assertIn("fm_fill_t", problems[0])
+
     def test_c_name_handed_over_with_other_parameters_is_allowed(self) -> None:
         validate = self._validate_names()
         surfaces = self._surfaces(fm_sheet_get_x_at=5, fm_sheet_get_x_idx=4)

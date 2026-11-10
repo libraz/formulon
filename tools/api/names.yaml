@@ -186,9 +186,10 @@ entries:
     kind: record
     role: result
     c: fm_read_diagnostics_info_t
+    js: ReadDiagnostics
     py: ReadDiagnostics
-    surfaces: [c, py]
-    was: { c: fm_read_diagnostics_t, py: ReadDiagnostics }
+    surfaces: [c, wasm, native, py]
+    was: { c: fm_read_diagnostics_t, js: ReadDiagnosticsResult, py: ReadDiagnostics }
   enum.workbook_format:
     kind: enum
     c: fm_workbook_format_t
@@ -200,9 +201,10 @@ entries:
     kind: record
     role: result
     c: fm_save_diagnostics_info_t
+    js: SaveDiagnostics
     py: SaveDiagnostics
-    surfaces: [c, py]
-    was: { c: fm_save_diagnostics_t, py: SaveDiagnostics }
+    surfaces: [c, wasm, native, py]
+    was: { c: fm_save_diagnostics_t, js: SaveDiagnosticsResult, py: SaveDiagnostics }
   record.phonetic_run:
     kind: record
     role: result
@@ -237,12 +239,6 @@ entries:
     c: fm_table_info_t
     surfaces: [c]
     was: { c: fm_table_info_t }
-  record.table_column_info:
-    kind: record
-    role: result
-    c: fm_table_column_info_t
-    surfaces: [c]
-    was: { c: fm_table_column_info_t }
   record.merge_range:
     kind: record
     role: result
@@ -339,9 +335,10 @@ entries:
     kind: record
     role: result
     c: fm_validation_outcome_info_t
+    js: ValidationOutcome
     py: ValidationOutcome
-    surfaces: [c, py]
-    was: { c: fm_validation_outcome, py: ValidationOutcome }
+    surfaces: [c, wasm, native, py]
+    was: { c: fm_validation_outcome, js: ValidationOutcomeResult, py: ValidationOutcome }
   record.mention:
     kind: record
     role: result
@@ -548,22 +545,6 @@ entries:
     py: RectPt
     surfaces: [c, wasm, native, py]
     was: { c: fm_rect_pt, js: RectPt, py: RectPt }
-  record.paper_info:
-    kind: record
-    role: result
-    c: fm_paper_info_t
-    py: PaginationPaper
-    surfaces: [c, py]
-    was: { c: fm_paper_info, py: PaperInfo }
-    exception: "Python takes the JS record name; the C typedef keeps the layout noun"
-  record.margins_pt:
-    kind: record
-    role: result
-    c: fm_margins_pt_info_t
-    py: PaginationMargins
-    surfaces: [c, py]
-    was: { c: fm_margins_pt, py: MarginsPt }
-    exception: "Python takes the JS record name; the C typedef keeps the layout noun"
   record.print_titles:
     kind: record
     role: both
@@ -584,14 +565,6 @@ entries:
     js: Span
     py: Span
     surfaces: [wasm, native, py]
-  record.page_layout:
-    kind: record
-    role: result
-    c: fm_page_layout_info_t
-    py: PaginationPage
-    surfaces: [c, py]
-    was: { c: fm_page_layout, py: PageLayout }
-    exception: "Python takes the JS record name; the C typedef keeps the layout noun"
   record.page_break_input:
     kind: record
     role: input
@@ -800,10 +773,11 @@ entries:
   record.pivot_layout:
     kind: record
     role: result
+    js: PivotLayout
     py: PivotLayout
-    surfaces: [py]
+    surfaces: [wasm, native, py]
+    was: { js: PivotLayoutResult, py: PivotLayout }
     exception: "cells of a pivot layout; C returns them through the fm_pivot_cells_t handle"
-    was: { py: PivotLayout }
   enum.pivot_filter_value_kind:
     kind: enum
     c: fm_pivot_filter_operand_kind_t
@@ -930,8 +904,9 @@ entries:
     kind: record
     role: result
     c: fm_pivot_calculated_item_info_t
+    js: PivotCalculatedItem
     py: PivotCalculatedItem
-    surfaces: [c, py]
+    surfaces: [c, wasm, native, py]
   record.spill_info:
     kind: record
     role: result
@@ -1121,9 +1096,10 @@ entries:
     kind: record
     role: result
     c: fm_width_model_info_t
+    js: WidthModel
     py: WidthModel
-    surfaces: [c, py]
-    was: { c: fm_width_model, py: WidthModel }
+    surfaces: [c, wasm, native, py]
+    was: { c: fm_width_model, js: WidthModelResult, py: WidthModel }
   enum.log_level:
     kind: enum
     c: fm_log_level_t
@@ -1328,10 +1304,11 @@ entries:
     kind: record
     role: result
     c: fm_effective_style_info_t
+    js: EffectiveStyle
     py: EffectiveStyle
+    surfaces: [c, wasm, native, py]
+    was: { c: fm_effective_style, js: EffectiveStyleResult, py: EffectiveStyle }
     color: resolved
-    surfaces: [c, py]
-    was: { c: fm_effective_style, py: EffectiveStyle }
   record.external_link_record:
     kind: record
     role: result
@@ -1935,34 +1912,22 @@ entries:
     surfaces: [wasm, native, py]
     was: { js: rect, py: rect }
     closes: R8.js
-  field.pivot_layout_result_range:
-    kind: field
-    record: record.pivot_layout_result
-    js: range
-    surfaces: [wasm, native]
-    was: { js: rect }
-    closes: R8.js
   field.pivot_layout_range:
     kind: field
     record: record.pivot_layout
+    js: range
     py: range
-    surfaces: [py]
-    was: { py: rect }
+    surfaces: [wasm, native, py]
+    was: { js: rect, py: rect }
     closes: R8.py
   field.pagination_page_range:
     kind: field
     record: record.pagination_page
     js: range
-    surfaces: [wasm, native]
-    was: { js: rect }
-    closes: R8.js
-  field.page_layout_range:
-    kind: field
-    record: record.page_layout
     py: range
-    surfaces: [py]
-    was: { py: rect }
-    closes: R8.py
+    surfaces: [wasm, native, py]
+    was: { js: rect, py: rect }
+    closes: R8.js
   field.auto_filter_sort_condition_range:
     kind: field
     record: record.auto_filter_sort_condition
@@ -2382,26 +2347,34 @@ entries:
     kind: record
     role: result
     c: fm_chart_fill_t
-    surfaces: [c]
-    was: { c: fm_chart_fill_t }
+    js: ChartFill
+    py: ChartFill
+    surfaces: [c, wasm, native, py]
+    was: { c: fm_chart_fill_t, js: ChartFillInfo, py: ChartFillInfo }
   record.chart_line:
     kind: record
     role: result
     c: fm_chart_line_t
-    surfaces: [c]
-    was: { c: fm_chart_line_t }
+    js: ChartLine
+    py: ChartLine
+    surfaces: [c, wasm, native, py]
+    was: { c: fm_chart_line_t, js: ChartLineInfo, py: ChartLineInfo }
   record.chart_marker:
     kind: record
     role: result
     c: fm_chart_marker_t
-    surfaces: [c]
-    was: { c: fm_chart_marker_t }
+    js: ChartMarker
+    py: ChartMarker
+    surfaces: [c, wasm, native, py]
+    was: { c: fm_chart_marker_t, js: ChartMarkerInfo, py: ChartMarkerInfo }
   record.chart_labels:
     kind: record
     role: result
     c: fm_chart_labels_t
-    surfaces: [c]
-    was: { c: fm_chart_labels_t }
+    js: ChartLabels
+    py: ChartLabels
+    surfaces: [c, wasm, native, py]
+    was: { c: fm_chart_labels_t, js: ChartLabelsInfo, py: ChartLabelsInfo }
   record.chart_info:
     kind: record
     role: result
@@ -2414,8 +2387,10 @@ entries:
     kind: record
     role: result
     c: fm_chart_plot_info_t
-    surfaces: [c]
-    was: { c: fm_chart_plot_t }
+    js: ChartPlot
+    py: ChartPlot
+    surfaces: [c, wasm, native, py]
+    was: { c: fm_chart_plot_t, js: ChartPlotInfo, py: ChartPlotInfo }
   enum.chart_source_kind:
     kind: enum
     c: fm_chart_source_kind_t
@@ -2452,14 +2427,18 @@ entries:
     kind: record
     role: result
     c: fm_chart_point_info_t
-    surfaces: [c]
-    was: { c: fm_chart_point_t }
+    js: ChartPoint
+    py: ChartPoint
+    surfaces: [c, wasm, native, py]
+    was: { c: fm_chart_point_t, js: ChartPointInfo, py: ChartPointInfo }
   record.chart_axis:
     kind: record
     role: result
     c: fm_chart_axis_info_t
-    surfaces: [c]
-    was: { c: fm_chart_axis_t }
+    js: ChartAxis
+    py: ChartAxis
+    surfaces: [c, wasm, native, py]
+    was: { c: fm_chart_axis_t, js: ChartAxisInfo, py: ChartAxisInfo }
   type.chart_data:
     kind: typedef
     c: fm_chart_data_t
@@ -2800,13 +2779,6 @@ entries:
     js: CfValueObjectInput
     surfaces: [wasm, native]
     was: { js: CfValueObjectInput }
-  record.chart_axis_info:
-    kind: record
-    role: result
-    js: ChartAxis
-    py: ChartAxis
-    surfaces: [wasm, native, py]
-    was: { js: ChartAxisInfo, py: ChartAxisInfo }
   record.chart_data_result:
     kind: record
     role: result
@@ -2814,48 +2786,6 @@ entries:
     surfaces: [wasm, native]
     was: { js: ChartDataResult }
     drop: { js: ChartDataResult, closes: R8.js }
-  record.chart_fill_info:
-    kind: record
-    role: result
-    js: ChartFill
-    py: ChartFill
-    surfaces: [wasm, native, py]
-    was: { js: ChartFillInfo, py: ChartFillInfo }
-  record.chart_labels_info:
-    kind: record
-    role: result
-    js: ChartLabels
-    py: ChartLabels
-    surfaces: [wasm, native, py]
-    was: { js: ChartLabelsInfo, py: ChartLabelsInfo }
-  record.chart_line_info:
-    kind: record
-    role: result
-    js: ChartLine
-    py: ChartLine
-    surfaces: [wasm, native, py]
-    was: { js: ChartLineInfo, py: ChartLineInfo }
-  record.chart_marker_info:
-    kind: record
-    role: result
-    js: ChartMarker
-    py: ChartMarker
-    surfaces: [wasm, native, py]
-    was: { js: ChartMarkerInfo, py: ChartMarkerInfo }
-  record.chart_plot_info:
-    kind: record
-    role: result
-    js: ChartPlot
-    py: ChartPlot
-    surfaces: [wasm, native, py]
-    was: { js: ChartPlotInfo, py: ChartPlotInfo }
-  record.chart_point_info:
-    kind: record
-    role: result
-    js: ChartPoint
-    py: ChartPoint
-    surfaces: [wasm, native, py]
-    was: { js: ChartPointInfo, py: ChartPointInfo }
   record.chart_result:
     kind: record
     role: result
@@ -2870,12 +2800,6 @@ entries:
     py: ChartSeries
     surfaces: [wasm, native, py]
     was: { js: ChartSeriesInfo, py: ChartSeriesInfo }
-  record.collation_classes_result:
-    kind: record
-    role: result
-    js: CollationClasses
-    surfaces: [wasm, native]
-    was: { js: CollationClassesResult }
   record.columns_result:
     kind: record
     role: result
@@ -2959,12 +2883,6 @@ entries:
     surfaces: [wasm, native]
     was: { js: DxfResult }
     drop: { js: DxfResult, closes: R8.js }
-  record.effective_style_result:
-    kind: record
-    role: result
-    js: EffectiveStyle
-    surfaces: [wasm, native]
-    was: { js: EffectiveStyleResult }
   enum.effective_style_source:
     kind: enum
     js: EffectiveStyleSource
@@ -3052,8 +2970,9 @@ entries:
   type.function_metadata_provider:
     kind: typedef
     js: FunctionMetadataProvider
-    surfaces: [wasm, native]
-    was: { js: FunctionMetadataProvider }
+    py: FunctionMetadataProvider
+    surfaces: [wasm, native, py]
+    was: { js: FunctionMetadataProvider, py: FunctionMetadataProvider }
   record.function_metadata_result:
     kind: record
     role: result
@@ -3120,12 +3039,6 @@ entries:
     js: IterativeProgressCallback
     surfaces: [wasm, native]
     was: { js: IterativeProgressCallback }
-  record.iterative_settings_result:
-    kind: record
-    role: result
-    js: IterativeSettings
-    surfaces: [wasm, native]
-    was: { js: IterativeSettingsResult }
   record.lambda_text_result:
     kind: record
     role: result
@@ -3191,8 +3104,9 @@ entries:
     kind: record
     role: result
     js: LocaleErrorName
-    surfaces: [wasm, native]
-    was: { js: LocaleErrorName }
+    py: LocaleErrorName
+    surfaces: [wasm, native, py]
+    was: { js: LocaleErrorName, py: ErrorName }
   record.locale_facts_result:
     kind: record
     role: result
@@ -3240,21 +3154,30 @@ entries:
   record.pagination_margins:
     kind: record
     role: result
+    c: fm_margins_pt_info_t
     js: PaginationMargins
-    surfaces: [wasm, native]
-    was: { js: PaginationMargins }
+    py: PaginationMargins
+    surfaces: [c, wasm, native, py]
+    was: { c: fm_margins_pt, js: PaginationMargins, py: MarginsPt }
+    exception: "Python takes the JS record name; the C typedef keeps the layout noun"
   record.pagination_page:
     kind: record
     role: result
+    c: fm_page_layout_info_t
     js: PaginationPage
-    surfaces: [wasm, native]
-    was: { js: PaginationPage }
+    py: PaginationPage
+    surfaces: [c, wasm, native, py]
+    was: { c: fm_page_layout, js: PaginationPage, py: PageLayout }
+    exception: "Python takes the JS record name; the C typedef keeps the layout noun"
   record.pagination_paper:
     kind: record
     role: result
+    c: fm_paper_info_t
     js: PaginationPaper
-    surfaces: [wasm, native]
-    was: { js: PaginationPaper }
+    py: PaginationPaper
+    surfaces: [c, wasm, native, py]
+    was: { c: fm_paper_info, js: PaginationPaper, py: PaperInfo }
+    exception: "Python takes the JS record name; the C typedef keeps the layout noun"
   record.pagination_print_titles:
     kind: record
     js: PaginationPrintTitles
@@ -3324,11 +3247,6 @@ entries:
     js: PivotCacheOptionsResult
     surfaces: [wasm, native]
     drop: { js: PivotCacheOptionsResult, closes: R8.js }
-  record.pivot_calculated_item_result:
-    kind: record
-    role: result
-    js: PivotCalculatedItem
-    surfaces: [wasm, native]
   record.pivot_data_field_result:
     kind: record
     role: result
@@ -3367,13 +3285,6 @@ entries:
     py: PivotFilter
     surfaces: [wasm, native, py]
     was: { js: PivotFilterResult }
-  record.pivot_grand_totals_result:
-    kind: record
-    role: result
-    js: PivotGrandTotals
-    py: PivotGrandTotals
-    surfaces: [wasm, native, py]
-    was: { js: PivotGrandTotalsResult }
   record.pivot_grand_totals_patch:
     kind: record
     role: patch
@@ -3389,12 +3300,6 @@ entries:
     was: { js: PivotItemResult }
     replaced_by: record.pivot_item_info
     closes: R21.name
-  record.pivot_layout_result:
-    kind: record
-    role: result
-    js: PivotLayout
-    surfaces: [wasm, native]
-    was: { js: PivotLayoutResult }
   record.pivot_options_result:
     kind: record
     role: result
@@ -3484,12 +3389,6 @@ entries:
     surfaces: [wasm, native]
     was: { js: RangeStyleSnapshotResult }
     drop: { js: RangeStyleSnapshotResult, closes: R8.js }
-  record.read_diagnostics_result:
-    kind: record
-    role: result
-    js: ReadDiagnostics
-    surfaces: [wasm, native]
-    was: { js: ReadDiagnosticsResult }
   record.resolved_color:
     kind: record
     role: result
@@ -3517,12 +3416,6 @@ entries:
     surfaces: [wasm, native]
     was: { js: RowsResult }
     drop: { js: RowsResult, closes: R8.js }
-  record.save_diagnostics_result:
-    kind: record
-    role: result
-    js: SaveDiagnostics
-    surfaces: [wasm, native]
-    was: { js: SaveDiagnosticsResult }
   record.save_result:
     kind: record
     role: result
@@ -3717,12 +3610,6 @@ entries:
     py: TableInput
     surfaces: [c, wasm, native, py]
     was: { js: TableInput }
-  record.table_style_defaults_result:
-    kind: record
-    role: result
-    js: TableStyleDefaults
-    surfaces: [wasm, native]
-    was: { js: TableStyleDefaultsResult }
   record.table_style_defaults_patch:
     kind: record
     role: patch
@@ -3834,18 +3721,6 @@ entries:
     replaced_by: record.data_validation
     closes: R0.coverage
     was: { js: ValidationEntry }
-  record.validation_outcome_result:
-    kind: record
-    role: result
-    js: ValidationOutcome
-    surfaces: [wasm, native]
-    was: { js: ValidationOutcomeResult }
-  record.width_model_result:
-    kind: record
-    role: result
-    js: WidthModel
-    surfaces: [wasm, native]
-    was: { js: WidthModelResult }
   type.workbook_ctor:
     kind: typedef
     js: WorkbookCtor
@@ -3940,9 +3815,10 @@ entries:
   record.collation_classes:
     kind: record
     role: result
+    js: CollationClasses
     py: CollationClasses
-    surfaces: [py]
-    was: { py: CollationClasses }
+    surfaces: [wasm, native, py]
+    was: { js: CollationClassesResult, py: CollationClasses }
   record.color_scale:
     kind: record
     role: both
@@ -3979,12 +3855,6 @@ entries:
     replaced_by: record.dxf_record
     closes: R5.derive
     was: { py: DifferentialFormat }
-  record.error_name:
-    kind: record
-    role: result
-    py: LocaleErrorName
-    surfaces: [py]
-    was: { py: ErrorName }
   type.formulon_error:
     kind: typedef
     js: FormulonError
@@ -4046,15 +3916,18 @@ entries:
     kind: record
     role: result
     c: fm_iterative_settings_info_t
+    js: IterativeSettings
     py: IterativeSettings
-    surfaces: [c, py]
-    was: { py: IterativeSettings }
+    surfaces: [c, wasm, native, py]
+    was: { js: IterativeSettingsResult, py: IterativeSettings }
   record.pivot_grand_totals:
     kind: record
     role: result
     c: fm_pivot_grand_totals_t
-    surfaces: [c]
-    exception: "C read record of the grand-total toggles; the bindings read them as PivotOptions fields"
+    js: PivotGrandTotals
+    py: PivotGrandTotals
+    surfaces: [c, wasm, native, py]
+    was: { js: PivotGrandTotalsResult }
   record.sheet_print_titles:
     kind: record
     role: result
@@ -4065,8 +3938,10 @@ entries:
     kind: record
     role: result
     c: fm_table_style_defaults_t
+    js: TableStyleDefaults
     py: TableStyleDefaults
-    surfaces: [c, py]
+    surfaces: [c, wasm, native, py]
+    was: { js: TableStyleDefaultsResult }
   record.merged_function_metadata:
     kind: record
     role: result
@@ -4099,10 +3974,11 @@ entries:
   record.table_column:
     kind: record
     role: result
+    c: fm_table_column_info_t
     js: TableColumn
     py: TableColumn
-    surfaces: [wasm, native, py]
-    was: { js: TableColumnEntry, py: TableColumn }
+    surfaces: [c, wasm, native, py]
+    was: { c: fm_table_column_info_t, js: TableColumnEntry, py: TableColumn }
   record.theme:
     kind: record
     role: result
@@ -14326,11 +14202,6 @@ entries:
     kind: constant
     c: FM_VERSION_NUMBER
     surfaces: [c]
-  constant.functionmetadataprovider:
-    kind: constant
-    py: FunctionMetadataProvider
-    surfaces: [py]
-    was: { py: FunctionMetadataProvider }
   constant.__version__:
     kind: constant
     py: __version__
@@ -14437,18 +14308,12 @@ entries:
     was: { js: formula }
   field.pivot_grand_totals_columns:
     kind: field
-    record: record.pivot_grand_totals_result
-    js: columns
-    surfaces: [wasm, native]
-    was: { js: cols }
-    closes: R8.js
-  field.pivot_grand_totals_columns_py:
-    kind: field
     record: record.pivot_grand_totals
+    js: columns
     py: columns
-    surfaces: [py]
-    was: { py: cols }
-    closes: R8.py
+    surfaces: [wasm, native, py]
+    was: { js: cols, py: cols }
+    closes: R8.js
   field.table_properties_header_row:
     kind: field
     record: record.table
@@ -15333,16 +15198,10 @@ entries:
     kind: field
     record: record.pagination_margins
     js: leftIn
-    surfaces: [wasm, native]
-    closes: R42.unit.suffix
-    was: { js: left }
-  field.margins_pt_left_in:
-    kind: field
-    record: record.margins_pt
     py: left_in
-    surfaces: [c, py]
+    surfaces: [c, wasm, native, py]
+    was: { js: left, py: left }
     closes: R42.unit.suffix
-    was: { py: left }
   field.page_margins_right_in:
     kind: field
     record: record.page_margins
@@ -15371,16 +15230,10 @@ entries:
     kind: field
     record: record.pagination_margins
     js: rightIn
-    surfaces: [wasm, native]
-    closes: R42.unit.suffix
-    was: { js: right }
-  field.margins_pt_right_in:
-    kind: field
-    record: record.margins_pt
     py: right_in
-    surfaces: [c, py]
+    surfaces: [c, wasm, native, py]
+    was: { js: right, py: right }
     closes: R42.unit.suffix
-    was: { py: right }
   field.page_margins_top_in:
     kind: field
     record: record.page_margins
@@ -15409,16 +15262,10 @@ entries:
     kind: field
     record: record.pagination_margins
     js: topIn
-    surfaces: [wasm, native]
-    closes: R42.unit.suffix
-    was: { js: top }
-  field.margins_pt_top_in:
-    kind: field
-    record: record.margins_pt
     py: top_in
-    surfaces: [c, py]
+    surfaces: [c, wasm, native, py]
+    was: { js: top, py: top }
     closes: R42.unit.suffix
-    was: { py: top }
   field.page_margins_bottom_in:
     kind: field
     record: record.page_margins
@@ -15447,16 +15294,10 @@ entries:
     kind: field
     record: record.pagination_margins
     js: bottomIn
-    surfaces: [wasm, native]
-    closes: R42.unit.suffix
-    was: { js: bottom }
-  field.margins_pt_bottom_in:
-    kind: field
-    record: record.margins_pt
     py: bottom_in
-    surfaces: [c, py]
+    surfaces: [c, wasm, native, py]
+    was: { js: bottom, py: bottom }
     closes: R42.unit.suffix
-    was: { py: bottom }
   field.page_margins_header_in:
     kind: field
     record: record.page_margins
@@ -15485,16 +15326,10 @@ entries:
     kind: field
     record: record.pagination_margins
     js: headerIn
-    surfaces: [wasm, native]
-    closes: R42.unit.suffix
-    was: { js: header }
-  field.margins_pt_header_in:
-    kind: field
-    record: record.margins_pt
     py: header_in
-    surfaces: [c, py]
+    surfaces: [c, wasm, native, py]
+    was: { js: header, py: header }
     closes: R42.unit.suffix
-    was: { py: header }
   field.page_margins_footer_in:
     kind: field
     record: record.page_margins
@@ -15523,16 +15358,10 @@ entries:
     kind: field
     record: record.pagination_margins
     js: footerIn
-    surfaces: [wasm, native]
-    closes: R42.unit.suffix
-    was: { js: footer }
-  field.margins_pt_footer_in:
-    kind: field
-    record: record.margins_pt
     py: footer_in
-    surfaces: [c, py]
+    surfaces: [c, wasm, native, py]
+    was: { js: footer, py: footer }
     closes: R42.unit.suffix
-    was: { py: footer }
   field.page_setup_scale_pct:
     kind: field
     record: record.page_setup
@@ -15739,17 +15568,11 @@ entries:
   field.width_model_normal_font_size_pt:
     kind: field
     record: record.width_model
-    py: normal_font_size_pt
-    surfaces: [c, py]
-    closes: R42.unit.suffix
-    was: { py: normal_font_size }
-  field.width_model_result_normal_font_size_pt:
-    kind: field
-    record: record.width_model_result
     js: normalFontSizePt
-    surfaces: [wasm, native]
+    py: normal_font_size_pt
+    surfaces: [c, wasm, native, py]
+    was: { js: normalFontSize, py: normal_font_size }
     closes: R42.unit.suffix
-    was: { js: normalFontSize }
   field.font_record_size_pt:
     kind: field
     record: record.font_record
@@ -15773,21 +15596,15 @@ entries:
     surfaces: [wasm, native, py]
     closes: R42.unit.suffix
     was: { js: size, py: size }
-  field.chart_marker_info_size_pt:
-    kind: field
-    record: record.chart_marker_info
-    js: sizePt
-    py: size_pt
-    surfaces: [wasm, native, py]
-    closes: R42.unit.suffix
-    was: { js: size, py: size }
   field.chart_marker_size_pt:
     kind: field
     record: record.chart_marker
     c: size_pt
-    surfaces: [c]
+    js: sizePt
+    py: size_pt
+    surfaces: [c, wasm, native, py]
+    was: { c: size, js: size, py: size }
     closes: R42.unit.suffix
-    was: { c: size }
   field.chart_marker_has_size_pt:
     kind: field
     record: record.chart_marker
@@ -15910,7 +15727,7 @@ entries:
     was: { js: newId }
   field.chart_fill_info_transparency_pct:
     kind: field
-    record: record.chart_fill_info
+    record: record.chart_fill
     js: transparencyPct
     py: transparency_pct
     surfaces: [wasm, native, py]
@@ -15918,7 +15735,7 @@ entries:
     was: { js: transparency, py: transparency }
   field.chart_line_info_transparency_pct:
     kind: field
-    record: record.chart_line_info
+    record: record.chart_line
     js: transparencyPct
     py: transparency_pct
     surfaces: [wasm, native, py]
@@ -15961,22 +15778,6 @@ entries:
     surfaces: [c]
     closes: R42.unit.suffix
     was: { c: width_op }
-  field.chart_plot_info_first_slice_angle_deg:
-    kind: field
-    record: record.chart_plot_info
-    js: firstSliceAngleDeg
-    py: first_slice_angle_deg
-    surfaces: [wasm, native, py]
-    closes: R42.unit.suffix
-    was: { js: firstSliceAngle, py: first_slice_angle }
-  field.chart_plot_info_gap_width_pct:
-    kind: field
-    record: record.chart_plot_info
-    js: gapWidthPct
-    py: gap_width_pct
-    surfaces: [wasm, native, py]
-    closes: R42.unit.suffix
-    was: { js: gapWidth, py: gap_width }
   field.chart_plot_patch_first_slice_angle_deg:
     kind: field
     record: record.chart_plot_patch
@@ -15997,16 +15798,20 @@ entries:
     kind: field
     record: record.chart_plot
     c: first_slice_angle_deg
-    surfaces: [c]
+    js: firstSliceAngleDeg
+    py: first_slice_angle_deg
+    surfaces: [c, wasm, native, py]
+    was: { c: first_slice_angle, js: firstSliceAngle, py: first_slice_angle }
     closes: R42.unit.suffix
-    was: { c: first_slice_angle }
   field.chart_plot_gap_width_pct:
     kind: field
     record: record.chart_plot
     c: gap_width_pct
-    surfaces: [c]
+    js: gapWidthPct
+    py: gap_width_pct
+    surfaces: [c, wasm, native, py]
+    was: { c: gap_width, js: gapWidth, py: gap_width }
     closes: R42.unit.suffix
-    was: { c: gap_width }
   field.chart_plot_has_first_slice_angle_deg:
     kind: field
     record: record.chart_plot
@@ -16035,20 +15840,14 @@ entries:
     surfaces: [c]
     closes: R42.unit.suffix
     was: { c: gap_width_op }
-  field.chart_axis_info_visible:
-    kind: field
-    record: record.chart_axis_info
-    js: visible
-    surfaces: [wasm, native, py]
-    closes: R8.js
-    was: { js: deleted }
   field.chart_axis_visible:
     kind: field
     record: record.chart_axis
     c: visible
-    surfaces: [c]
+    js: visible
+    surfaces: [c, wasm, native, py]
+    was: { c: deleted, js: deleted }
     closes: R8.c
-    was: { c: deleted }
   field.chart_plot_bar_direction:
     kind: field
     record: record.chart_plot
@@ -17100,63 +16899,37 @@ entries:
     surfaces: [c, wasm, native, py]
     closes: R8.js
     was: { js: rgb }
-  field.effective_style_result_font_color:
-    kind: field
-    record: record.effective_style_result
-    js: fontColor
-    surfaces: [wasm, native]
-    closes: R8.js
-    was: { js: font }
   field.effective_style_font_color:
     kind: field
     record: record.effective_style
+    js: fontColor
     py: font_color
-    surfaces: [py]
+    surfaces: [wasm, native, py]
+    was: { js: font, py: font }
     closes: R8.py
-    was: { py: font }
-  field.effective_style_result_number_format:
-    kind: field
-    record: record.effective_style_result
-    js: numberFormat
-    surfaces: [wasm, native]
-    closes: R8.js
-    was: { js: numFmtCode }
   field.effective_style_number_format:
     kind: field
     record: record.effective_style
     c: number_format
+    js: numberFormat
     py: number_format
-    surfaces: [c, py]
-    was: { c: num_fmt_code, py: num_fmt_code }
+    surfaces: [c, wasm, native, py]
+    was: { c: num_fmt_code, js: numFmtCode, py: num_fmt_code }
     closes: R8.py
-  field.effective_style_result_locked:
-    kind: field
-    record: record.effective_style_result
-    surfaces: [wasm, native]
-    closes: R8.js
-    drop: { js: locked, closes: R8.js }
-    was: { js: locked }
-  field.effective_style_result_hidden:
-    kind: field
-    record: record.effective_style_result
-    surfaces: [wasm, native]
-    closes: R8.js
-    drop: { js: hidden, closes: R8.js }
-    was: { js: hidden }
   field.effective_style_locked:
     kind: field
     record: record.effective_style
-    surfaces: [py]
+    surfaces: [wasm, native, py]
+    was: { js: locked, py: locked }
     closes: R8.py
-    drop: { py: locked, closes: R8.py }
-    was: { py: locked }
+    drop: { js: locked, py: locked, closes: R8.py }
   field.effective_style_hidden:
     kind: field
     record: record.effective_style
-    surfaces: [py]
+    surfaces: [wasm, native, py]
+    was: { js: hidden, py: hidden }
     closes: R8.py
-    drop: { py: hidden, closes: R8.py }
-    was: { py: hidden }
+    drop: { js: hidden, py: hidden, closes: R8.py }
   field.dxf_record_number_format:
     kind: field
     record: record.dxf_record
@@ -17323,21 +17096,15 @@ entries:
     surfaces: [c, wasm, native, py]
     closes: R8.js
     was: { js: isChartex, py: is_chartex }
-  field.chart_plot_info_extended_layout:
-    kind: field
-    record: record.chart_plot_info
-    js: extendedLayout
-    py: extended_layout
-    surfaces: [wasm, native, py]
-    closes: R8.js
-    was: { js: chartexLayout, py: chartex_layout }
   field.chart_plot_extended_layout:
     kind: field
     record: record.chart_plot
     c: extended_layout
-    surfaces: [c]
+    js: extendedLayout
+    py: extended_layout
+    surfaces: [c, wasm, native, py]
+    was: { c: chartex_layout, js: chartexLayout, py: chartex_layout }
     closes: R8.c
-    was: { c: chartex_layout }
   field.table_style_name:
     kind: field
     record: record.table
@@ -18691,7 +18458,7 @@ entries:
     closes: R8.c
   field.table_style_defaults_table_style_name:
     kind: field
-    record: record.table_style_defaults_result
+    record: record.table_style_defaults
     c: table_style_name
     js: tableStyleName
     py: table_style_name
@@ -18700,7 +18467,7 @@ entries:
     closes: R8.js
   field.table_style_defaults_pivot_style_name:
     kind: field
-    record: record.table_style_defaults_result
+    record: record.table_style_defaults
     c: pivot_style_name
     js: pivotStyleName
     py: pivot_style_name
@@ -18821,8 +18588,10 @@ entries:
     kind: field
     record: record.chart_plot
     c: overlap_pct
-    surfaces: [c]
-    was: { c: overlap }
+    js: overlapPct
+    py: overlap_pct
+    surfaces: [c, wasm, native, py]
+    was: { c: overlap, js: overlap, py: overlap }
     closes: R42.unit.suffix
   field.chart_plot_has_overlap_pct:
     kind: field
@@ -18835,8 +18604,10 @@ entries:
     kind: field
     record: record.chart_plot
     c: hole_size_pct
-    surfaces: [c]
-    was: { c: hole_size }
+    js: holeSizePct
+    py: hole_size_pct
+    surfaces: [c, wasm, native, py]
+    was: { c: hole_size, js: holeSize, py: hole_size }
     closes: R42.unit.suffix
   field.chart_plot_has_hole_size_pct:
     kind: field
@@ -18844,22 +18615,6 @@ entries:
     c: has_hole_size_pct
     surfaces: [c]
     was: { c: has_hole_size }
-    closes: R42.unit.suffix
-  field.chart_plot_info_overlap_pct:
-    kind: field
-    record: record.chart_plot_info
-    js: overlapPct
-    py: overlap_pct
-    surfaces: [wasm, native, py]
-    was: { js: overlap, py: overlap }
-    closes: R42.unit.suffix
-  field.chart_plot_info_hole_size_pct:
-    kind: field
-    record: record.chart_plot_info
-    js: holeSizePct
-    py: hole_size_pct
-    surfaces: [wasm, native, py]
-    was: { js: holeSize, py: hole_size }
     closes: R42.unit.suffix
   field.chart_plot_patch_overlap_pct:
     kind: field

@@ -3115,7 +3115,6 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
 | `clear_table_auto_filter()` | `ws.table(...).clear_auto_filter_criteria()` |
 | `ColorScale` | removed; use CfColorScaleInput to write and CfColorScale to read |
 | `ColorSpec` | `Color` |
-| `cols` | `columns` |
 | `column_chars_to_pt()` | `convert_column_chars_to_pt()` |
 | `column_pt_to_chars()` | `convert_column_pt_to_chars()` |
 | `ColumnLayout.width` | `ColumnLayout.width_chars` |

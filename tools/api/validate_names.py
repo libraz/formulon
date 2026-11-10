@@ -763,6 +763,83 @@ def _list_js(py_name: str) -> str:
     return py_name.split("_")[0] + "".join(w[:1].upper() + w[1:] for w in py_name.split("_")[1:])
 
 
+_TYPE_KINDS = frozenset({"record", "typedef", "enum"})
+
+
+def check_split_types(entries: Dict[str, dict]) -> List[str]:
+    """One public type is one entry: a type name the JavaScript bindings and Python share is never filed once
+    under each.
+
+    A record, typedef or enum (or a module-level constant, which a Python type alias may be) whose `js` name is
+    another such entry's `py` name splits one type across two entries, so a joined symbol index lists it twice.
+    Two entries that take the same name on one surface are `check_chains`' concern.
+    """
+    by_name: Dict[str, Dict[str, set]] = defaultdict(lambda: {"js": set(), "py": set()})
+    for key, entry in entries.items():
+        if not isinstance(entry, dict) or "drop" in entry or "replaced_by" in entry:
+            continue
+        kind = entry.get("kind")
+        if kind not in _TYPE_KINDS and not (kind == "constant" and "enum" not in entry):
+            continue
+        for name_field in ("js", "py"):
+            name = entry.get(name_field)
+            if isinstance(name, str):
+                by_name[name][name_field].add(key)
+    problems = []
+    for name, sides in sorted(by_name.items()):
+        keys = sides["js"] | sides["py"]
+        if len(keys) > 1 and sides["js"] and sides["py"] and sides["js"] != sides["py"]:
+            problems.append(
+                f"public type {name} is split across entries: js in {', '.join(sorted(sides['js']))}, "
+                f"py in {', '.join(sorted(sides['py']))}; fold them into one entry"
+            )
+    return problems
+
+
+def check_split_c_records(entries: Dict[str, dict]) -> List[str]:
+    """A C struct is not filed apart from the JavaScript / Python record it mirrors.
+
+    A record entry with only a C name whose struct members (less `has_*` presence flags and `*_count` lengths)
+    are the snake-case fields of exactly one record entry with no C name is the same record under two keys.
+    """
+    import check_field_docs
+
+    fields: Dict[tuple, set] = defaultdict(set)
+    for field in check_field_docs.all_fields():
+        if field.surface in ("c", "dts") and not field.path.startswith("packages/"):
+            fields[(field.surface, field.record)].add(field.name)
+    c_only, bound = {}, {}
+    for key, entry in entries.items():
+        if not isinstance(entry, dict) or entry.get("kind") != "record" or "drop" in entry or "replaced_by" in entry:
+            continue
+        if entry.get("c") and not entry.get("js") and not entry.get("py"):
+            members = {
+                m for m in fields.get(("c", entry["c"]), ()) if not m.startswith("has_") and not m.endswith("_count")
+            }
+            if members:
+                c_only[key] = members
+        elif entry.get("js") and not entry.get("c"):
+            names = {_snake_case(n) for n in fields.get(("dts", entry["js"]), ())}
+            if names:
+                bound[key] = names
+    matches = [(c_key, key) for c_key, members in c_only.items() for key, names in bound.items() if members == names]
+    c_hits = defaultdict(int)
+    hits = defaultdict(int)
+    for c_key, key in matches:
+        c_hits[c_key] += 1
+        hits[key] += 1
+    problems = []
+    # Only a one-to-one match is reported: a small field set (`rows` / `columns`) or a C struct that serves an
+    # input and a result record matches several, and the shape alone cannot tell which is the same record.
+    for c_key, key in sorted(matches):
+        if c_hits[c_key] == 1 and hits[key] == 1:
+            problems.append(
+                f"record {entries[key]['js']} is split from its C struct {entries[c_key]['c']}: "
+                f"{key} and {c_key} have the same fields; fold them into one entry"
+            )
+    return problems
+
+
 def check_rules(entries: Dict[str, dict], collections: Optional[Dict[str, dict]] = None) -> List[str]:
     """R1 / R2 on C function names, R5 on binding names, `derive_type` on type names.
 
@@ -1072,9 +1149,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         entries = data["entries"]
         surfaces = None if args.ledger_only else extract_names.scan()
         problems += check_chains(entries, surfaces, data["collections"])
+        problems += check_split_types(entries)
         problems += check_ledger_index(data, surfaces)
         problems += check_rules(entries, data["collections"])
         if surfaces is not None:
+            problems += check_split_c_records(entries)
             problems += check_typed_slots(entries, surfaces)
             dts_text = WASM_DTS.read_text(encoding="utf-8")
             problems += check_address_args(entries, dts_text, data["collections"])
