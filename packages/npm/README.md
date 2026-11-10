@@ -154,6 +154,8 @@ A handle of a removed object throws `FormulonError` with `StatusCode.NotFound`. 
 
 Bundler settings for Vite, webpack and esbuild are in [Bundler requirements](https://formulon.libraz.net/runtimes/wasm#bundler-requirements).
 
+Vite may warn that `node:module` "has been externalized for browser compatibility" when it bundles `@libraz/formulon`. The warning is expected and harmless: the import runs only after the loader has detected Node, so a browser never reaches it.
+
 ## Non-goals
 
 VBA execution, legacy `.xls`, chart rendering, Power Query / DAX, pivot cache refresh from source data, live external connections, and a spreadsheet UI are permanently out of scope. See [Non-goals](https://formulon.libraz.net/compatibility/non-goals).

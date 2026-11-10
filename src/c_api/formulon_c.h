@@ -7534,9 +7534,13 @@ typedef struct {
 } fm_pivot_spec_t;
 
 /**
- * @brief Creates a new empty pivot table on `sheet_index`, with the options
+ * @brief Creates a new pivot table on `sheet_index`, with the options
  *        Excel gives a new pivot. `spec->cache_id` must reference an existing
  *        cache. The new table's flat index is written to `*out_pivot_index`.
+ *
+ * The pivot starts with one field per cache field and none on an axis. Place
+ * them with `fm_sheet_set_pivot_field_axis` (or the row / column field order
+ * setters) and add values with `fm_sheet_add_pivot_data_field`.
  *
  * The pivot takes the workbook's PivotTable style default
  * (`fm_workbook_get_table_style_defaults`), else `PivotStyleLight16`, with

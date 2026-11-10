@@ -6749,10 +6749,12 @@ class Sheet(_NoCopy):
         return self._pivot_at(pivot_index)
 
     def add_pivot(self, input: PivotInput) -> Pivot:
-        """Create the empty pivot table ``input`` describes and return its handle.
+        """Create the pivot table ``input`` describes and return its handle.
 
         ``input.anchor`` is the top-left cell, a :class:`CellAddress` or one A1 cell; ``input.cache_id`` is a
-        cache id or a :class:`PivotCache` of this workbook.
+        cache id or a :class:`PivotCache` of this workbook. The pivot starts with one field per cache field and none
+        on an axis. Place them with :meth:`Pivot.set_field_axis` (or :meth:`Pivot.set_row_field_order` /
+        :meth:`Pivot.set_column_field_order`) and add values with :meth:`Pivot.add_data_field`.
 
         Raises:
           InvalidArgumentError: when ``input.cache_id`` is a :class:`PivotCache` of another workbook.
@@ -6760,7 +6762,10 @@ class Sheet(_NoCopy):
         Example::
 
             cache = wb.add_pivot_cache()
+            # ... bind the cache to its source and add fields ...
             pivot = ws.add_pivot(PivotInput(name="Sales", cache_id=cache, anchor="E1"))
+            pivot.set_field_axis("Region", PivotAxis.ROW)
+            pivot.add_data_field(PivotDataFieldInput(field_index="Amount", aggregation=PivotAggregation.SUM))
         """
         if not isinstance(input, PivotInput):
             raise TypeError(_argument_message("input", "must be a PivotInput"))

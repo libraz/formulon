@@ -1155,9 +1155,10 @@ export interface PivotItem {
  *  have no cleared form. */
 export type PivotItemPatch = Patch<Pick<PivotItem, 'visible' | 'showDetail' | 'caption'>, 'caption'>;
 
-/** Argument of `Sheet.addPivot`: a new empty pivot named `name`, drawing from cache `cacheId` (a
+/** Argument of `Sheet.addPivot`: a new pivot named `name`, drawing from cache `cacheId` (a
  *  {@link PivotCacheRef}), with its top-left cell at `anchor` (a {@link CellAddress} or an A1 cell, `'C3'`). The pivot takes the workbook's PivotTable style default (`getTableStyleDefaults().pivotStyleName`),
- *  else `PivotStyleLight16`. */
+ *  else `PivotStyleLight16`. The pivot starts with one field per cache field and none on an axis. Place them with
+ *  `Pivot.setFieldAxis` (or `setRowFieldOrder` / `setColumnFieldOrder`) and add values with `addDataField`. */
 export interface PivotInput {
   name: string;
   cacheId: PivotCacheRef;
@@ -1412,10 +1413,12 @@ export interface DateSystemOptions {
 }
 
 /** A date-time input: a {@link CivilTimeInput} (`hour`, `minute` and `second` are 0 when omitted) or a `Date`. A
- *  `Date` is read through its local getters (year through seconds, milliseconds dropped), as Python reads a naive
- *  `datetime`, except in `ThreadedCommentInput.created`, which reads its UTC getters and takes its civil fields as
- *  UTC; a pinned clock (`setPinnedNow`) keeps the local reading; an Invalid Date is a
- *  `RangeError`. */
+ *  `Date` is read as year through seconds, milliseconds dropped; a pinned clock (`setPinnedNow`) keeps the local
+ *  reading; an Invalid Date is a `RangeError`.
+ *
+ *  @remarks A `Date` is read through its local getters, as Python reads a naive `datetime`. The one exception is
+ *  `ThreadedCommentInput.created`, which reads the UTC getters and takes civil fields as UTC, because threaded
+ *  comments store their stamp in UTC. */
 export type DateInput = CivilTimeInput | Date;
 
 /** The kind of a conditional-format rule (`<cfRule type>`). */
@@ -6320,13 +6323,17 @@ export interface Sheet {
   /** The handle of the pivot table `pivot`. A name no pivot has fails with `StatusCode.NotFound`, an index past
    *  the last pivot with `StatusCode.IndexOutOfRange`. */
   pivot(pivot: PivotRef): Pivot;
-  /** Creates a new empty pivot table and returns its handle.
+  /** Creates a pivot table and returns its handle. The pivot starts with one field per cache field and none on an
+   *  axis. Place them with `Pivot.setFieldAxis` (or `setRowFieldOrder` / `setColumnFieldOrder`) and add values with
+   *  `addDataField`.
    *
    *  @example
    *  ```ts
    *  const cache = wb.addPivotCache();
    *  // ... bind the cache to its source and add fields ...
    *  const pivot = ws.addPivot({ name: 'ByItem', cacheId: cache.cacheId, anchor: 'E1' });
+   *  pivot.setFieldAxis('Region', formulon.PivotAxis.Row);
+   *  pivot.addDataField({ fieldIndex: 'Amount', aggregation: formulon.PivotAggregation.Sum });
    *  ``` */
   addPivot(input: PivotInput): Pivot;
   /** Removes the pivot table `pivot`; its handle then fails with `StatusCode.NotFound`. */
