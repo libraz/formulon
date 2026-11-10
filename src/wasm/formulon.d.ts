@@ -7868,8 +7868,9 @@ export interface Sheet {
   /** Removes the protected range `protectedRange`. */
   removeProtectedRange(protectedRange: ProtectedRangeRef): void;
 
-  /** Sets the hyperlink anchored at the cell `(row, col)`, replacing the one anchored there, or with `null` removes
-   *  it (doing nothing when there is none). For an in-workbook link, pass a `null` `target` and the A1 destination
+  /** Sets a hyperlink anchored at the cell `(row, col)`: one covering exactly the same range is replaced in place,
+   *  otherwise the link is appended and those already anchored there are kept. `null` removes every link anchored
+   *  there (doing nothing when there is none). For an in-workbook link, pass a `null` `target` and the A1 destination
    *  as `location`; `link.range` widens the link to cover more cells from `(row, col)`. `display` is the
    *  hyperlink's stored display attribute; the cell value is not written, so call `setText(cell, display)` to
    *  show it. */
@@ -7880,7 +7881,8 @@ export interface Sheet {
   clearHyperlinks(): void;
   /** Returns every hyperlink on the sheet. */
   listHyperlinks(): readonly Hyperlink[];
-  /** Reads the hyperlink whose range starts at `(row, col)`; `null` when none does. */
+  /** Reads the hyperlink whose range starts at `(row, col)`, the first in list order when several do; `null` when
+   *  none does. */
   getHyperlink(row: number, col: number): Hyperlink | null;
   /** `getHyperlink` at the A1 address `a1`. */
   getHyperlink(a1: string): Hyperlink | null;
@@ -8189,8 +8191,8 @@ export interface SheetOoxml {
   /** `getEffectiveStyle` at the A1 address `a1`. */
   getEffectiveStyle(a1: string): EffectiveStyle;
 
-  /** Returns the cell XF index of the cell at `(row, col)`; `null` when the cell has no XF of its own (an
-   *  explicit index 0 reads 0). */
+  /** Returns the cell XF index of the cell at `(row, col)`; `null` when no cell is stored at the address. A stored
+   *  cell without a style of its own reads 0. */
   getCellXfIndex(row: number, col: number): number | null;
   /** `getCellXfIndex` at the A1 address `a1`. */
   getCellXfIndex(a1: string): number | null;

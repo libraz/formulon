@@ -608,7 +608,7 @@ class SingletonRemovalTests(SurfaceTestCase):
             wb.reset_theme()
             self.assertEqual(wb.get_theme_colors().source, ThemeSource.DEFAULT)
 
-    def test_set_hyperlink_none_removes_and_a_second_link_replaces_the_first(self) -> None:
+    def test_set_hyperlink_none_removes_and_a_same_range_link_replaces_the_first(self) -> None:
         with Workbook.create_default() as wb:
             ws = wb.sheet(0)
             cell = CellRect(0, 0, 0, 0)
@@ -627,8 +627,23 @@ class SingletonRemovalTests(SurfaceTestCase):
             link = ws.get_hyperlink("A1")
             assert link is not None
             self.assertEqual(link.target, "https://example.com/b")
+            # A link over a different range from the same cell is appended.
+            ws.set_hyperlink(
+                "A1",
+                formulon.Hyperlink(
+                    range=CellRect(0, 0, 1, 1),
+                    target="https://example.com/c",
+                    location=None,
+                    display=None,
+                    tooltip=None,
+                ),
+            )
+            self.assertEqual(
+                [h.target for h in ws.list_hyperlinks()], ["https://example.com/b", "https://example.com/c"]
+            )
             ws.set_hyperlink("A1", None)
             self.assertIsNone(ws.get_hyperlink("A1"))
+            self.assertEqual(ws.list_hyperlinks(), [])
             ws.set_hyperlink("A1", None)
 
 

@@ -142,6 +142,45 @@ TEST(FormulonCApiNaturalKey, HyperlinkByAnchorCell) {
   EXPECT_EQ(fm_sheet_get_hyperlink(wb.handle, 9, 1U, 1U, &present, &out), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
 }
 
+// A second link on the same cell is appended unless it covers exactly the same
+// range, which replaces in place; NULL removes every link anchored there.
+TEST(FormulonCApiNaturalKey, HyperlinkAddKeepsOtherRangesAtTheAnchor) {
+  WorkbookGuard wb;
+  CreateDefault(wb);
+  fm_hyperlink_t jump = FM_STRUCT_INIT(fm_hyperlink_t);
+  jump.rect = fm_cell_rect_t{40U, 2U, 41U, 3U};
+  jump.location = "Sheet1!A1";
+  jump.display = "Jump";
+  ASSERT_EQ(fm_sheet_set_hyperlink(wb.handle, 0, 40U, 2U, &jump), 0);
+  fm_hyperlink_t alt = FM_STRUCT_INIT(fm_hyperlink_t);
+  alt.rect = fm_cell_rect_t{40U, 2U, 40U, 2U};
+  alt.target = "https://example.com/";
+  alt.display = "Alt";
+  ASSERT_EQ(fm_sheet_set_hyperlink(wb.handle, 0, 40U, 2U, &alt), 0);
+
+  std::size_t count = 0;
+  ASSERT_EQ(fm_sheet_get_hyperlink_count(wb.handle, 0, &count), 0);
+  ASSERT_EQ(count, 2U);
+  fm_hyperlink_t out = FM_STRUCT_INIT(fm_hyperlink_t);
+  ASSERT_EQ(fm_sheet_get_hyperlink_at(wb.handle, 0, 0, &out), 0);
+  EXPECT_STREQ(out.display, "Jump");
+  EXPECT_EQ(out.rect.last_row, 41U);
+  ASSERT_EQ(fm_sheet_get_hyperlink_at(wb.handle, 0, 1, &out), 0);
+  EXPECT_STREQ(out.display, "Alt");
+
+  // The same range again replaces that link in place.
+  jump.display = "Jump again";
+  ASSERT_EQ(fm_sheet_set_hyperlink(wb.handle, 0, 40U, 2U, &jump), 0);
+  ASSERT_EQ(fm_sheet_get_hyperlink_count(wb.handle, 0, &count), 0);
+  ASSERT_EQ(count, 2U);
+  ASSERT_EQ(fm_sheet_get_hyperlink_at(wb.handle, 0, 0, &out), 0);
+  EXPECT_STREQ(out.display, "Jump again");
+
+  ASSERT_EQ(fm_sheet_set_hyperlink(wb.handle, 0, 40U, 2U, nullptr), 0);
+  ASSERT_EQ(fm_sheet_get_hyperlink_count(wb.handle, 0, &count), 0);
+  EXPECT_EQ(count, 0U);
+}
+
 TEST(FormulonCApiNaturalKey, PersonAndThreadedCommentById) {
   WorkbookGuard wb;
   CreateDefault(wb);

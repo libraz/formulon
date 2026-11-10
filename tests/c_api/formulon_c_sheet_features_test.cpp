@@ -149,7 +149,7 @@ TEST_F(FormulonCApiSheetFeatures, HyperlinkNullStringFieldsReadBackNull) {
   EXPECT_EQ(got.tooltip, nullptr);
 }
 
-TEST_F(FormulonCApiSheetFeatures, HyperlinkSetAtAnchoredCellReplacesTheExistingLink) {
+TEST_F(FormulonCApiSheetFeatures, HyperlinkSetAtAnchoredCellReplacesOnlyTheSameRange) {
   fm_hyperlink_t first = FM_STRUCT_INIT(fm_hyperlink_t);
   first.rect = fm_cell_rect_t{2U, 3U, 2U, 3U};
   first.target = "https://first.example";
@@ -159,14 +159,23 @@ TEST_F(FormulonCApiSheetFeatures, HyperlinkSetAtAnchoredCellReplacesTheExistingL
   ASSERT_EQ(fm_sheet_set_hyperlink(wb_, 0, 2U, 3U, &first), 0);
   ASSERT_EQ(fm_sheet_set_hyperlink(wb_, 0, 2U, 3U, &second), 0);
 
+  // A different range from the same cell is appended; the cell reads the first.
   std::size_t count = 0;
   ASSERT_EQ(fm_sheet_get_hyperlink_count(wb_, 0, &count), 0);
-  EXPECT_EQ(count, 1U);
+  EXPECT_EQ(count, 2U);
   int32_t present = 0;
   fm_hyperlink_t got = FM_STRUCT_INIT(fm_hyperlink_t);
   ASSERT_EQ(fm_sheet_get_hyperlink(wb_, 0, 2U, 3U, &present, &got), 0);
   ASSERT_EQ(present, 1);
-  EXPECT_STREQ(got.target, "https://second.example");
+  EXPECT_STREQ(got.target, "https://first.example");
+
+  // The same range again replaces that link in place.
+  second.target = "https://third.example";
+  ASSERT_EQ(fm_sheet_set_hyperlink(wb_, 0, 2U, 3U, &second), 0);
+  ASSERT_EQ(fm_sheet_get_hyperlink_count(wb_, 0, &count), 0);
+  EXPECT_EQ(count, 2U);
+  ASSERT_EQ(fm_sheet_get_hyperlink_at(wb_, 0, 1, &got), 0);
+  EXPECT_STREQ(got.target, "https://third.example");
   EXPECT_EQ(got.rect.last_row, 4U);
   EXPECT_EQ(got.rect.last_col, 5U);
 }

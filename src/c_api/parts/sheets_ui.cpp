@@ -141,13 +141,17 @@ extern "C" fm_status_t fm_sheet_set_hyperlink(fm_workbook_t* wb, std::size_t she
   out.display = text_or_empty(hl->display);
   out.tooltip = text_or_empty(hl->tooltip);
   // rid stays empty; the writer mints a fresh rIdN on save.
-  const auto existing = std::find_if(hls.begin(), hls.end(), anchored);
+  // As Excel adds a link: one covering exactly the same range is replaced, any other is kept.
+  const auto same_range = [&out](const formulon::Hyperlink& h) {
+    return h.row == out.row && h.col == out.col && h.last_row == out.last_row && h.last_col == out.last_col;
+  };
+  const auto existing = std::find_if(hls.begin(), hls.end(), same_range);
   if (existing == hls.end()) {
     hls.push_back(std::move(out));
   } else {
     *existing = std::move(out);
-    // A repeated anchor from a loaded file would otherwise survive the replacement.
-    hls.erase(std::remove_if(existing + 1, hls.end(), anchored), hls.end());
+    // A repeated range from a loaded file would otherwise survive the replacement.
+    hls.erase(std::remove_if(existing + 1, hls.end(), same_range), hls.end());
   }
   return 0;
 }

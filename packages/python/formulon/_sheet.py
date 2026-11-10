@@ -2764,7 +2764,11 @@ class Sheet(_NoCopy):
     def set_hyperlink(self, a1: str, link: Union[HyperlinkInput, Hyperlink, None]) -> None: ...
 
     def set_hyperlink(self, *args: Any, **kwargs: Any) -> None:
-        """Set the hyperlink anchored at the cell ``(row, col)``, replacing the one there; ``None`` removes it.
+        """Set a hyperlink anchored at the cell ``(row, col)``; ``None`` removes every link anchored there.
+
+        A link covering exactly the same range is replaced in place;
+        otherwise the link is appended and those already anchored there are
+        kept.
 
         ``link.target`` is the external address (URL, file path); ``None``
         makes a link inside the workbook, which then needs ``link.location``
@@ -2849,7 +2853,7 @@ class Sheet(_NoCopy):
     def get_hyperlink(self, a1: str) -> Optional[Hyperlink]: ...
 
     def get_hyperlink(self, *args: Any, **kwargs: Any) -> Optional[Hyperlink]:
-        """Return the hyperlink whose range starts at ``(row, col)``, or ``None``."""
+        """Return the hyperlink whose range starts at ``(row, col)`` (the first when several do), or ``None``."""
         row, col = self._cell_args("get_hyperlink", args, kwargs, ())
         sheet = self._index()
         return self._workbook._lookup(
@@ -7594,7 +7598,10 @@ class SheetOoxml(_NoCopy):
     def get_cell_xf_index(self, a1: str) -> Optional[int]: ...
 
     def get_cell_xf_index(self, *args: Any, **kwargs: Any) -> Optional[int]:
-        """Return the xf (style record) index attached to a cell, or ``None`` when the cell has none of its own."""
+        """Return the xf (style record) index of a cell; ``None`` when no cell is stored at the address.
+
+        A stored cell without a style of its own reads 0.
+        """
         row, col = self._sheet._cell_args("get_cell_xf_index", args, kwargs, ())
         sheet = self._sheet._index()
         h = self._sheet._workbook._require()

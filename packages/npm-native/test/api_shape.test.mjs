@@ -1272,6 +1272,26 @@ test('an in-workbook hyperlink reads a null target', async () => {
   });
 });
 
+test('a second hyperlink on a cell is appended unless it covers the same range', async () => {
+  await withWorkbook((wb) => {
+    const ws = wb.sheet(0);
+    const range = { firstRow: 40, firstCol: 2, lastRow: 41, lastCol: 3 };
+    ws.setHyperlink(40, 2, { target: null, location: 'Sheet1!A1', display: 'Jump', range });
+    ws.setHyperlink(40, 2, { target: 'https://example.com', display: 'Alt' });
+    assert.deepEqual(
+      ws.listHyperlinks().map((h) => h.display),
+      ['Jump', 'Alt'],
+    );
+    ws.setHyperlink(40, 2, { target: null, location: 'Sheet1!B2', display: 'Jump again', range });
+    assert.deepEqual(
+      ws.listHyperlinks().map((h) => h.display),
+      ['Jump again', 'Alt'],
+    );
+    ws.setHyperlink(40, 2, null);
+    assert.equal(ws.listHyperlinks().length, 0);
+  });
+});
+
 // A one-pivot workbook: Region on rows, Sum of Amount as the data field.
 function pivotWorkbook(formulon) {
   const wb = formulon.Workbook.createDefault();

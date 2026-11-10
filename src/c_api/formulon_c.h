@@ -2817,9 +2817,10 @@ typedef struct {
  *        `sheet_index`.
  *
  * A non-`NULL` `hl` covers the inclusive rectangle `hl->rect`, whose top-left
- * corner must be `(row, col)`; it replaces the hyperlink already anchored
- * there, if any. `hl == NULL` removes the hyperlink anchored there and is a
- * no-op when there is none.
+ * corner must be `(row, col)`. A hyperlink covering exactly that rectangle is
+ * replaced in place; otherwise the new one is appended and the hyperlinks
+ * already anchored there are kept. `hl == NULL` removes every hyperlink
+ * anchored there and is a no-op when there is none.
  *
  * `display` is the hyperlink's stored display attribute; the cell value is
  * not written. Call `fm_sheet_set_text` with the same text to show it.
@@ -2977,7 +2978,8 @@ FM_API fm_status_t fm_sheet_get_hyperlink_at(const fm_workbook_t* wb, size_t she
  * @brief Reads the hyperlink anchored at `(row, col)` — the top-left cell of
  *        its range, the cell `fm_sheet_set_hyperlink` keys on — on
  *        `sheet_index`. `*out_present` is `1` and `*out` filled when there is
- *        one, else `0` and `*out` zeroed (still `FM_STATUS_OK` (0)).
+ *        one, else `0` and `*out` zeroed (still `FM_STATUS_OK` (0)). With
+ *        several anchored there, the first in list order is read.
  *
  * String fields in `out` are model-backed views (see `fm_hyperlink_t`).
  *

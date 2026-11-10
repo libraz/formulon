@@ -288,6 +288,9 @@ Upgrading from 0.18: see [Upgrading from 0.18 to 0.19](docs/releases/upgrading-0
   a load; an item bound only by cache index no longer reads `null`.
 - In JavaScript an in-workbook hyperlink reads `target: null`, as the native
   addon and Python already did; it read `""`.
+- `setHyperlink` on a cell that already has a link keeps it unless the new
+  link covers exactly the same range, which replaces it in place; `null`
+  removes every link anchored there.
 - Saving a new workbook with an image or chart as `.xlsb` failed with
   `IoContentTypeInvalid`.
 - `PivotField.subtotalTop` and several Python flags read true when false was

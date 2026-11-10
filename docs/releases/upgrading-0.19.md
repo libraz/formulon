@@ -69,7 +69,8 @@ Read [Every binding](#every-binding) first, then the section for your binding. [
 - **C ABI, JavaScript, Python:** "absent" is one thing on every read: `NULL` in
   C, `null` in JavaScript and `None` in Python, never `""`, `0`, `-1` or a
   presence flag in the record. `getSpill` returns `Spill | null`,
-  `getCellXfIndex` is `null` for a cell with no XF of its own,
+  `getCellXfIndex` is `null` when no cell is stored at the address (a stored
+  cell without a style of its own reads 0),
   `PivotCell.fieldName`, `FunctionMetadata.signature` and `description`,
   `AutoFilterColumn.dxfIndex` and the sparkline group colours read `null`, and
   `PageSetup.orientationStated` is gone (`orientation === null` says it).
@@ -1079,7 +1080,7 @@ argument is a keyword-only argument list there (see
 | `setComment(sheet, row, col, author, text)` (empty text removed the comment) | `ws.setComment(row, col, { text, author? })` writes the comment, empty text included (an omitted `author` means none); `ws.setComment(row, col, null)` removes it and does nothing when the cell has none |
 | `setWorkbookProtection(p)` / `setSheetProtection(sheet, p)` (an all-zero record cleared them) | `wb.setWorkbookProtection(null)` and `ws.setSheetProtection(null)` remove them; an all-zero workbook-protection record still does. Sheet protection is described under [Behaviour changes](#behaviour-changes-under-an-unchanged-name) |
 | `setCellPhoneticRuns(sheet, row, col, runs)` | `ws.setCellPhoneticRuns(row, col, runs)`; `null` and `[]` clear |
-| `addHyperlink(sheet, row, col, target, display, tooltip, location)` | `ws.setHyperlink(row, col, { target, location?, display?, tooltip? })` sets or replaces the cell's link and `null` removes it; a `null` target is an in-workbook link and requires `location`. the range the link covers is `range` in the record |
+| `addHyperlink(sheet, row, col, target, display, tooltip, location)` | `ws.setHyperlink(row, col, { target, location?, display?, tooltip? })` adds a link at the cell, replacing one only when it covers exactly the same range, and `null` removes every link anchored there; a `null` target is an in-workbook link and requires `location`. The range the link covers is `range` in the record |
 | `setThemeScriptFont(major, script, typeface)` | `setThemeScriptFont({ scheme, script, typeface })`, with `scheme` a `FontScheme` (`Major` or `Minor`) |
 | `editThreadedComment(sheet, id, text, mentions)` | `ws.updateThreadedComment(id, { text?, mentions? })` |
 | `addThreadedComment(sheet, partial)` | `ws.addThreadedComment(input)` with `ThreadedCommentInput` |
