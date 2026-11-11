@@ -435,8 +435,8 @@ struct StylesTable {
 /// value, and the flags themselves are left as they are. `cell_xfs` and
 /// `cell_style_xfs` are never compacted, so every xf index stays valid.
 ///
-/// Returns `kInvalidArgument` when no style has that name or when it is the
-/// Normal style (`builtin_id == 0`).
+/// Returns `kNotFound` when no style has that name and `kInvalidArgument`
+/// when it is the Normal style (`builtin_id == 0`).
 Expected<void, Error> remove_cell_style(StylesTable& styles, std::string_view name);
 
 /// Replaces `cell_style_xfs[index]` with `record`, keeping the index. Returns

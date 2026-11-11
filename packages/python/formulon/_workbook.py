@@ -10326,7 +10326,8 @@ class Workbook(_NoCopy):
         """Remove the named cell style ``name``.
 
         Cell xfs inheriting from it are repointed at Normal; no xf index
-        shifts. The Normal style and unknown names raise ``FormulonError``.
+        shifts. An unknown name raises ``NotFoundError`` and the Normal
+        style ``InvalidArgumentError``.
         """
         h = self._require()
         with _ArgScope() as scope:

@@ -35,7 +35,6 @@ using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::finish_status;
 using formulon::c_api::parts::invalid_argument;
-using formulon::c_api::parts::not_found;
 using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::null_field;
 using formulon::c_api::parts::num_fmt_id_known;
@@ -662,10 +661,6 @@ extern "C" fm_status_t fm_workbook_remove_cell_style(fm_workbook_t* wb, const ch
   }
   if (auto rc = check_utf8({name}); rc != 0) {
     return rc;
-  }
-  if (formulon::sheet_names::resolve_named(wb->workbook().styles().cell_styles, name) ==
-      formulon::sheet_names::kNotFound) {
-    return not_found(("name " + std::string(name) + " names no cell style").c_str(), "name=" + std::string(name));
   }
   return finish_status(formulon::remove_cell_style(wb->workbook().mutable_styles(), name));
 }

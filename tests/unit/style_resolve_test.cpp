@@ -346,8 +346,12 @@ TEST(StylesCellStyleRemoval, KeepsXfsWhileAnotherStyleSharesTheRecord) {
 
 TEST(StylesCellStyleRemoval, RejectsNormalAndUnknownNames) {
   StylesTable t = BuildDeletionTable();
-  EXPECT_FALSE(static_cast<bool>(remove_cell_style(t, "Normal")));
-  EXPECT_FALSE(static_cast<bool>(remove_cell_style(t, "NoSuchStyle")));
+  const auto normal = remove_cell_style(t, "Normal");
+  ASSERT_FALSE(static_cast<bool>(normal));
+  EXPECT_EQ(normal.error().code, FormulonErrorCode::kInvalidArgument);
+  const auto unknown = remove_cell_style(t, "NoSuchStyle");
+  ASSERT_FALSE(static_cast<bool>(unknown));
+  EXPECT_EQ(unknown.error().code, FormulonErrorCode::kNotFound);
   EXPECT_EQ(t.cell_styles.size(), 2U);
   EXPECT_EQ(t.cell_xfs[1].xf_id, 1U);
 }

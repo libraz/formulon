@@ -230,8 +230,7 @@ constexpr std::array<const char*, 164> kBuiltinNumFmts = {
 Expected<void, Error> remove_cell_style(StylesTable& styles, std::string_view name) {
   const std::size_t pos = sheet_names::resolve_named(styles.cell_styles, name);
   if (pos == sheet_names::kNotFound) {
-    return make_error(FormulonErrorCode::kInvalidArgument, "name does not name a cell style",
-                      "name=" + std::string(name));
+    return make_error(FormulonErrorCode::kNotFound, "name names no cell style", "name=" + std::string(name));
   }
   if (styles.cell_styles[pos].builtin_id == 0U) {
     return make_error(FormulonErrorCode::kInvalidArgument, "Normal style cannot be removed",
