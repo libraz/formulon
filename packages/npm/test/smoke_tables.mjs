@@ -224,6 +224,8 @@ test('custom table styles round-trip and a table can use one', async () => {
     reloaded.removeTableStyle('corporate');
     assert.equal(reloaded.listTableStyles().length, 0);
     assert.equal(reloaded.getTableStyleDefaults().tableStyleName, 'TableStyleMedium2');
+    // The table that used the removed style takes the reset default.
+    assert.equal(reloaded.sheet(0).listTables()[0].getStyleOptions().styleName, 'TableStyleMedium2');
   } finally {
     release(reloaded);
   }

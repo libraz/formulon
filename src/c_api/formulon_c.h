@@ -12435,12 +12435,14 @@ FM_API fm_status_t fm_workbook_set_table_style(fm_workbook_t* wb, const fm_table
 /**
  * @brief Removes the custom table style `name` (Unicode simple case folding).
  *
- * A default naming it reverts to the built-in default. Tables and pivots
- * naming it keep the name, which the desktop application then renders
- * unstyled.
+ * Tables using it take the default table style and PivotTables using it
+ * take the default PivotTable style, each only when the style's `table` /
+ * `pivot` flag allows that kind. A default naming it first reverts to the
+ * built-in default (`TableStyleMedium2` / `PivotStyleLight16`).
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any argument is `NULL`;
+ *         `FM_STATUS_BINDING_UTF8ENCODING_ERROR` (7002) if `name` is not well-formed UTF-8;
  *         `FM_STATUS_NOT_FOUND` (6) when no custom style has that name.
  */
 FM_API fm_status_t fm_workbook_remove_table_style(fm_workbook_t* wb, const char* name);

@@ -350,6 +350,11 @@ struct CustomTableStyle {
   std::string extra_attrs;
 };
 
+/// The built-in defaults the desktop application uses when `<tableStyles>`
+/// names none, and resets a removed default to.
+inline constexpr std::string_view kBuiltinDefaultTableStyle = "TableStyleMedium2";
+inline constexpr std::string_view kBuiltinDefaultPivotStyle = "PivotStyleLight16";
+
 /// `<tableStyles>`: the custom styles plus the workbook's default table and
 /// PivotTable style names (empty when the attribute is absent).
 struct TableStylesSection {
@@ -358,6 +363,14 @@ struct TableStylesSection {
   std::string default_pivot_style;
   std::vector<CustomTableStyle> styles;
   std::string extra_attrs;
+
+  /// The default table / PivotTable style in effect: the named one, else the built-in.
+  std::string_view effective_table_default() const noexcept {
+    return default_table_style.empty() ? kBuiltinDefaultTableStyle : std::string_view(default_table_style);
+  }
+  std::string_view effective_pivot_default() const noexcept {
+    return default_pivot_style.empty() ? kBuiltinDefaultPivotStyle : std::string_view(default_pivot_style);
+  }
 };
 
 /// Flat in-memory representation of the parsed `xl/styles.xml`.

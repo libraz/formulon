@@ -164,6 +164,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `IndexOutOfRange` (C `FM_STATUS_INDEX_OUT_OF_RANGE`, Python
   `IndexOutOfRangeError`) instead of `InvalidArgument`, like `setRangeXfIndex`;
   a repeated source XF stays `InvalidArgument`.
+- `removeTableStyle` (Python `remove_table_style`, C
+  `fm_workbook_remove_table_style`) re-points the tables and PivotTables that
+  used the style to the default table / PivotTable style, per the style's
+  `table` / `pivot` flags, instead of leaving them naming a style that no
+  longer exists.
 
 ## [0.19.0] - 2026-11-10
 

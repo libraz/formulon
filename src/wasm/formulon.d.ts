@@ -7055,8 +7055,11 @@ export interface Workbook {
    *  must name an existing differential format. A first style also sets the
    *  defaults to `TableStyleMedium2` / `PivotStyleLight16`. */
   setTableStyle(style: TableStyleInput): void;
-  /** Removes the custom table style `name`. A default naming it reverts to
-   *  the built-in default; tables and pivots naming it keep the name. */
+  /** Removes the custom table style `name` (by name identity, see {@link Workbook}).
+   *  Tables using it take the default table style and PivotTables using it
+   *  take the default PivotTable style, each only when the style's `table` /
+   *  `pivot` flag allows that kind. A default naming it first reverts to the
+   *  built-in default (`TableStyleMedium2` / `PivotStyleLight16`). */
   removeTableStyle(name: string): void;
   /** Reads the default table and PivotTable style names. */
   getTableStyleDefaults(): TableStyleDefaults;

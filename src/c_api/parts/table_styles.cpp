@@ -28,11 +28,11 @@ using formulon::c_api::parts::check_patch_op;
 using formulon::c_api::parts::check_record_size;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
+using formulon::c_api::parts::finish_status;
 using formulon::c_api::parts::fresh_arena;
 using formulon::c_api::parts::fresh_read_scratch;
 using formulon::c_api::parts::invalid_argument;
 using formulon::c_api::parts::kTableStyleElementTypeTokens;
-using formulon::c_api::parts::not_found;
 using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::null_field;
 using formulon::c_api::parts::ordinal_of;
@@ -83,22 +83,16 @@ std::size_t find_style(const formulon::TableStylesSection& section, std::string_
   return found == formulon::sheet_names::kNotFound ? section.styles.size() : found;
 }
 
-/// Built-in defaults the desktop application writes into a new workbook.
-constexpr std::string_view kDefaultTableStyle = "TableStyleMedium2";
-constexpr std::string_view kDefaultPivotStyle = "PivotStyleLight16";
-
 }  // namespace
 
 namespace formulon::c_api::parts {
 
 std::string_view default_table_style_name(const formulon::Workbook& book) {
-  const std::string& name = book.styles().table_styles.default_table_style;
-  return name.empty() ? kDefaultTableStyle : std::string_view(name);
+  return book.styles().table_styles.effective_table_default();
 }
 
 std::string_view default_pivot_style_name(const formulon::Workbook& book) {
-  const std::string& name = book.styles().table_styles.default_pivot_style;
-  return name.empty() ? kDefaultPivotStyle : std::string_view(name);
+  return book.styles().table_styles.effective_pivot_default();
 }
 
 }  // namespace formulon::c_api::parts
@@ -240,8 +234,8 @@ extern "C" fm_status_t fm_workbook_set_table_style(fm_workbook_t* wb, const fm_t
   formulon::TableStylesSection& section = styles.table_styles;
   if (!section.present) {
     section.present = true;
-    section.default_table_style = std::string(kDefaultTableStyle);
-    section.default_pivot_style = std::string(kDefaultPivotStyle);
+    section.default_table_style = std::string(formulon::kBuiltinDefaultTableStyle);
+    section.default_pivot_style = std::string(formulon::kBuiltinDefaultPivotStyle);
   }
   const std::size_t existing = find_style(section, name);
   if (existing < section.styles.size()) {
@@ -266,23 +260,7 @@ extern "C" fm_status_t fm_workbook_remove_table_style(fm_workbook_t* wb, const c
   if (auto rc = check_utf8({name}); rc != 0) {
     return rc;
   }
-  formulon::TableStylesSection& section = wb->workbook().mutable_styles().table_styles;
-  const std::size_t index = find_style(section, name);
-  if (index >= section.styles.size()) {
-    return not_found(("name " + std::string(name) + " names no custom table style").c_str(),
-                     "name=" + std::string(name));
-  }
-  // A default naming the removed style falls back to the built-in one.
-  const bool table_default = find_style(section, section.default_table_style) == index;
-  const bool pivot_default = find_style(section, section.default_pivot_style) == index;
-  section.styles.erase(section.styles.begin() + static_cast<std::ptrdiff_t>(index));
-  if (table_default) {
-    section.default_table_style = std::string(kDefaultTableStyle);
-  }
-  if (pivot_default) {
-    section.default_pivot_style = std::string(kDefaultPivotStyle);
-  }
-  return 0;
+  return finish_status(wb->workbook().remove_table_style(name));
 }
 
 extern "C" fm_status_t fm_workbook_get_table_style_defaults(const fm_workbook_t* wb, fm_table_style_defaults_t* out) {

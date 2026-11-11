@@ -730,6 +730,11 @@ class WasmOnlyCapabilityTests(unittest.TestCase):
                 reloaded.remove_table_style("corporate")
                 self.assertEqual(reloaded.list_table_styles(), [])
                 self.assertEqual(reloaded.get_table_style_defaults().table_style_name, "TableStyleMedium2")
+                # The table that used the removed style takes the reset default.
+                self.assertEqual(
+                    reloaded.sheet(0).list_tables()[table.index].get_style_options().style_name,
+                    "TableStyleMedium2",
+                )
 
     def test_table_update_none_style_name_removes_the_name_and_keeps_the_toggles(self) -> None:
         with Workbook.create_default() as wb:

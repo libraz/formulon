@@ -869,6 +869,76 @@ TEST(FormulonCApiTableStyles, DefaultsAndRemove) {
   EXPECT_NE(styles_xml.find("<tableStyles count=\"0\" defaultTableStyle=\"TableStyleMedium2\"/>"), std::string::npos);
 }
 
+namespace {
+
+/// The sales table (A1:B3) and the scratch pivot (D1) on one sheet, both
+/// naming `style`, which is a custom style with the given kind flags.
+void TableAndPivotUsing(WorkbookGuard& wb, const char* style, int32_t pivot, int32_t table) {
+  CreateSalesTable(wb);
+  ASSERT_EQ(BuildScratchPivot(wb.handle, nullptr, nullptr), 0) << fm_get_last_error_message();
+  fm_table_style_t custom = MakeTableStyle(style, pivot, table, nullptr, 0U);
+  ASSERT_EQ(fm_workbook_set_table_style(wb.handle, &custom), 0);
+  ASSERT_EQ(SetTableStyleName(wb.handle, 0U, style), 0);
+  fm_pivot_style_options_patch_t patch = FM_STRUCT_INIT(fm_pivot_style_options_patch_t);
+  patch.style_name_op = FM_PATCH_OP_SET;
+  patch.style_name = style;
+  ASSERT_EQ(fm_sheet_update_pivot_style_options(wb.handle, 0, 0, &patch), 0) << fm_get_last_error_message();
+}
+
+std::string TableStyleOf(fm_workbook_t* wb) {
+  const fm_table_info_t info = Info(wb);
+  return info.style_name != nullptr ? info.style_name : "";
+}
+
+std::string PivotStyleOf(const fm_workbook_t* wb) {
+  fm_pivot_style_options_t style = FM_STRUCT_INIT(fm_pivot_style_options_t);
+  int32_t present = 0;
+  EXPECT_EQ(fm_sheet_get_pivot_style_options(wb, 0, 0, &present, &style), 0);
+  return style.style_name != nullptr ? style.style_name : "";
+}
+
+}  // namespace
+
+// Users of a removed style take their kind's default, as the desktop application re-points them.
+TEST(FormulonCApiTableStyles, RemoveRepointsTablesAndPivotsToTheirDefaults) {
+  WorkbookGuard wb;
+  TableAndPivotUsing(wb, "Mine", 1, 1);
+  ASSERT_EQ(UpdateStyleDefaults(wb.handle, "TableStyleLight9", "PivotStyleMedium4"), 0);
+  ASSERT_EQ(fm_workbook_remove_table_style(wb.handle, "MINE"), 0);
+  EXPECT_EQ(TableStyleOf(wb.handle), "TableStyleLight9");
+  EXPECT_EQ(PivotStyleOf(wb.handle), "PivotStyleMedium4");
+}
+
+// A style flagged for one kind leaves the other kind's users naming it.
+TEST(FormulonCApiTableStyles, RemoveRepointsOnlyTheKindsTheStyleAppliesTo) {
+  WorkbookGuard pivot_only;
+  TableAndPivotUsing(pivot_only, "PivotOnly", 1, 0);
+  ASSERT_EQ(fm_workbook_remove_table_style(pivot_only.handle, "PivotOnly"), 0);
+  EXPECT_EQ(TableStyleOf(pivot_only.handle), "PivotOnly");
+  EXPECT_EQ(PivotStyleOf(pivot_only.handle), "PivotStyleLight16");
+
+  WorkbookGuard table_only;
+  TableAndPivotUsing(table_only, "TableOnly", 0, 1);
+  ASSERT_EQ(fm_workbook_remove_table_style(table_only.handle, "TableOnly"), 0);
+  EXPECT_EQ(TableStyleOf(table_only.handle), "TableStyleMedium2");
+  EXPECT_EQ(PivotStyleOf(table_only.handle), "TableOnly");
+}
+
+// Removing the style that is the default of both kinds resets both defaults, and users take them.
+TEST(FormulonCApiTableStyles, RemovingTheDefaultResetsItAndUsersTakeTheBuiltIn) {
+  WorkbookGuard wb;
+  TableAndPivotUsing(wb, "Both", 1, 1);
+  ASSERT_EQ(UpdateStyleDefaults(wb.handle, "Both", "Both"), 0);
+  ASSERT_EQ(fm_workbook_remove_table_style(wb.handle, "Both"), 0);
+  fm_table_style_defaults_t defaults = FM_STRUCT_INIT(fm_table_style_defaults_t);
+  ASSERT_EQ(fm_workbook_get_table_style_defaults(wb.handle, &defaults), 0);
+  EXPECT_STREQ(defaults.table_style_name, "TableStyleMedium2");
+  EXPECT_STREQ(defaults.pivot_style_name, "PivotStyleLight16");
+  EXPECT_EQ(TableStyleOf(wb.handle), "TableStyleMedium2");
+  EXPECT_EQ(PivotStyleOf(wb.handle), "PivotStyleLight16");
+  EXPECT_EQ(fm_workbook_remove_table_style(wb.handle, "Both"), FM_STATUS_NOT_FOUND);
+}
+
 TEST(FormulonCApiTableStyles, DefaultsPatchRefusesABadOpAndChangesNothing) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);

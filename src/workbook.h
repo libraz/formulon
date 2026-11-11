@@ -1768,6 +1768,13 @@ class Workbook {
   /// through this accessor instead of round-tripping the whole table.
   StylesTable& mutable_styles() noexcept { return styles_; }
 
+  /// Removes the custom table style `name` (resolved like any style name).
+  /// Tables using it take the default table style and pivots using it the
+  /// default PivotTable style, each only when the style's `table` / `pivot`
+  /// flag allows that kind. A default naming it first reverts to the
+  /// built-in default. Returns `kNotFound` when no custom style has that name.
+  Expected<void, Error> remove_table_style(std::string_view name);
+
   // ---------------------------------------------------------------------------
   // Text storage (workbook-lifetime backing for `Value::text` views)
   // ---------------------------------------------------------------------------

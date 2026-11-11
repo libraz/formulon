@@ -1199,4 +1199,53 @@ bool cell_is_occupied(const Sheet& sheet, std::uint32_t row, std::uint32_t col) 
 
 }  // namespace detail
 
+Expected<void, Error> Workbook::remove_table_style(std::string_view name) {
+  TableStylesSection& section = styles_.table_styles;
+  const std::size_t index = sheet_names::resolve_named(section.styles, name);
+  if (index == sheet_names::kNotFound) {
+    return make_error(FormulonErrorCode::kNotFound, "name names no custom table style", "name=" + std::string(name));
+  }
+  const auto names_removed = [&](std::string_view used) {
+    return !used.empty() && sheet_names::resolve_named(section.styles, used) == index;
+  };
+  const bool table_kind = section.styles[index].table;
+  const bool pivot_kind = section.styles[index].pivot;
+  std::vector<std::size_t> tables_using;
+  if (table_kind) {
+    for (std::size_t t = 0; t < tables_.size(); ++t) {
+      if (names_removed(tables_[t].style_info.name)) {
+        tables_using.push_back(t);
+      }
+    }
+  }
+  std::vector<pivot::PivotTable*> pivots_using;
+  if (pivot_kind) {
+    for (Sheet& sheet : sheets_) {
+      for (const std::unique_ptr<pivot::PivotTable>& pt : sheet.mutable_pivot_tables()) {
+        if (pt->style_info().has_value() && names_removed(pt->style_info()->name)) {
+          pivots_using.push_back(pt.get());
+        }
+      }
+    }
+  }
+  if (names_removed(section.default_table_style)) {
+    section.default_table_style = std::string(kBuiltinDefaultTableStyle);
+  }
+  if (names_removed(section.default_pivot_style)) {
+    section.default_pivot_style = std::string(kBuiltinDefaultPivotStyle);
+  }
+  section.styles.erase(section.styles.begin() + static_cast<std::ptrdiff_t>(index));
+  const std::string table_default(section.effective_table_default());
+  const std::string pivot_default(section.effective_pivot_default());
+  for (const std::size_t t : tables_using) {
+    tables_[t].style_info.name = table_default;
+  }
+  for (pivot::PivotTable* pt : pivots_using) {
+    pivot::PivotStyleInfo info = *pt->style_info();
+    info.name = pivot_default;
+    pt->set_style_info(std::move(info));
+  }
+  return Expected<void, Error>::Ok();
+}
+
 }  // namespace formulon

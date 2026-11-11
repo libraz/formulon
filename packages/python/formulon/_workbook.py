@@ -10400,10 +10400,13 @@ class Workbook(_NoCopy):
             _check(LIB.fm_workbook_set_table_style(h, ptr))
 
     def remove_table_style(self, name: str) -> None:
-        """Remove the custom table style ``name``.
+        """Remove the custom table style ``name`` (Unicode simple case folding).
 
-        A default naming it reverts to the built-in default; tables and
-        pivots naming it keep the name.
+        Tables using it take the default table style and PivotTables using
+        it take the default PivotTable style, each only when the style's
+        ``table`` / ``pivot`` flag allows that kind. A default naming it
+        first reverts to the built-in default (``TableStyleMedium2`` /
+        ``PivotStyleLight16``).
         """
         h = self._require()
         with _ArgScope() as scope:

@@ -164,8 +164,8 @@ std::uint32_t ReportDeferredSheetFeatures(const Workbook& workbook) {
   // default style names other than Excel's own.
   const TableStylesSection& table_styles = workbook.styles().table_styles;
   const bool custom_defaults =
-      (!table_styles.default_table_style.empty() && table_styles.default_table_style != "TableStyleMedium2") ||
-      (!table_styles.default_pivot_style.empty() && table_styles.default_pivot_style != "PivotStyleLight16");
+      (!table_styles.default_table_style.empty() && table_styles.default_table_style != kBuiltinDefaultTableStyle) ||
+      (!table_styles.default_pivot_style.empty() && table_styles.default_pivot_style != kBuiltinDefaultPivotStyle);
   ReportDeferred(&count, "table_styles", !table_styles.styles.empty() || custom_defaults ? 1U : 0U, 0U);
   return count;
 }
