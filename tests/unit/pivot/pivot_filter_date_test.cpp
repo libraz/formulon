@@ -49,6 +49,14 @@ void ExpectWindow(FilterType period, const date_time::CivilTime& now, int low_y,
   EXPECT_DOUBLE_EQ(window.high, Serial(high_y, high_m, high_d));
 }
 
+// Marks every value of `field` as a date, as a source column with a date number format reads.
+void mark_date_field(PivotCache& cache, std::size_t field) {
+  for (PivotCacheRecord& record : cache.mutable_records()) {
+    record.cell_is_date.resize(record.cells.size(), false);
+    record.cell_is_date[field] = true;
+  }
+}
+
 }  // namespace
 
 PivotCache build_label_date_filter_cache() {
@@ -60,6 +68,7 @@ PivotCache build_label_date_filter_cache() {
     PivotCacheRecord rec;
     rec.cells.push_back(Value::number(serial));
     rec.cells.push_back(Value::number(amount));
+    rec.cell_is_date = {true, false};
     cache.mutable_records().push_back(std::move(rec));
   };
   add(formulon::date_time::serial_from_ymd(2024, 1, 1), 10.0);
@@ -190,6 +199,7 @@ TEST(RelativePeriod, TheWeekWindowFollowsTheWorkbookEpoch) {
 
 TEST(PivotEvaluator, RecurringMonthFilterKeepsEveryYearsMatchingMonth) {
   PivotCache cache = build_basic_cache();
+  mark_date_field(cache, 2U);
   PivotTable table = build_sum_amount_table(/*row=*/{0}, /*col=*/{});
   // A caption or date filter acts only on a field placed on an axis.
   table.set_field_axis(2, PivotAxis::Page);
@@ -210,6 +220,7 @@ TEST(PivotEvaluator, RecurringMonthFilterKeepsEveryYearsMatchingMonth) {
 
 TEST(PivotEvaluator, ARecurringQuarterSpansItsThreeMonths) {
   PivotCache cache = build_basic_cache();
+  mark_date_field(cache, 2U);
   PivotTable table = build_sum_amount_table(/*row=*/{0}, /*col=*/{});
   // A caption or date filter acts only on a field placed on an axis.
   table.set_field_axis(2, PivotAxis::Page);
@@ -229,6 +240,7 @@ TEST(PivotEvaluator, ARecurringFilterIsIndependentOfTheClock) {
   // The whole point of the family: the same table evaluated against two
   // very different readings selects the same records.
   PivotCache cache = build_basic_cache();
+  mark_date_field(cache, 2U);
   PivotTable table = build_sum_amount_table(/*row=*/{0}, /*col=*/{});
   // A caption or date filter acts only on a field placed on an axis.
   table.set_field_axis(2, PivotAxis::Page);
@@ -249,6 +261,7 @@ TEST(PivotEvaluator, ARecurringFilterIsIndependentOfTheClock) {
 
 TEST(PivotEvaluator, AuthoredPeriodFilterPrunesRecordsAgainstThePinnedClock) {
   PivotCache cache = build_basic_cache();
+  mark_date_field(cache, 2U);
   PivotTable table = build_sum_amount_table(/*row=*/{0}, /*col=*/{});
   // A caption or date filter acts only on a field placed on an axis.
   table.set_field_axis(2, PivotAxis::Page);
@@ -275,6 +288,7 @@ TEST(PivotEvaluator, MovingThePinnedClockMovesWhichRecordsSurvive) {
   // Same filter, a quarter later: the window becomes serials 92..181,
   // which admits North's 100 alone and still excludes South.
   PivotCache cache = build_basic_cache();
+  mark_date_field(cache, 2U);
   PivotTable table = build_sum_amount_table(/*row=*/{0}, /*col=*/{});
   // A caption or date filter acts only on a field placed on an axis.
   table.set_field_axis(2, PivotAxis::Page);
@@ -308,6 +322,7 @@ TEST(PivotEvaluator, APeriodFilterOnAnOutOfRangeFieldIsInert) {
 
 TEST(PivotEvaluator, AuthoredDateFilterWithNoUpperBoundIsInert) {
   PivotCache cache = build_basic_cache();
+  mark_date_field(cache, 2U);
   PivotTable table = build_sum_amount_table(/*row=*/{0}, /*col=*/{});
   table.set_grand_totals(/*rows=*/false, /*cols=*/false);
   table.mutable_active_filters().push_back(decoded_filter(2, FilterType::LabelDate, 1000.0));
@@ -508,6 +523,7 @@ TEST(PivotEvaluator, ValueFiltersRetainNonFiniteComparisonSemantics) {
 
 TEST(PivotEvaluator, AuthoredDateFilterPrunesRecordsByTheirSerial) {
   PivotCache cache = build_basic_cache();
+  mark_date_field(cache, 2U);
   PivotTable table = build_sum_amount_table(/*row=*/{0}, /*col=*/{});
   // A caption or date filter acts only on a field placed on an axis.
   table.set_field_axis(2, PivotAxis::Page);
@@ -525,6 +541,7 @@ TEST(PivotEvaluator, AuthoredDateFilterPrunesRecordsByTheirSerial) {
 
 TEST(PivotEvaluator, ADateFilterOnAFieldOffEveryAxisFiltersNothing) {
   PivotCache cache = build_basic_cache();
+  mark_date_field(cache, 2U);
   PivotTable table = build_sum_amount_table(/*row=*/{0}, /*col=*/{});
   table.set_grand_totals(/*rows=*/false, /*cols=*/false);
   // Field 2 is only a data field: the filter is kept but drops no record.
@@ -546,6 +563,7 @@ double SurvivingDateTotal(const std::vector<std::pair<double, double>>& records,
   for (const auto& [serial, amount] : records) {
     PivotCacheRecord rec;
     rec.cells = {Value::number(serial), Value::number(amount)};
+    rec.cell_is_date = {true, false};
     cache.mutable_records().push_back(std::move(rec));
   }
   PivotTable table = build_label_date_filter_table();

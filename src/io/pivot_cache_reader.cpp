@@ -188,6 +188,11 @@ Expected<pivot::FieldGroup, Error> ReadFieldGroup(const pugi::xml_node& node, st
     r.is_date = start_date || end_date;
     r.start_date = start_date.as_string();
     r.end_date = end_date.as_string();
+    // A date period with no usable bound is not a grouping Excel opens.
+    if (r.by != pivot::GroupBy::Range && !pivot::group_date_serial(r.start_date, date1904).has_value() &&
+        !pivot::group_date_serial(r.end_date, date1904).has_value()) {
+      return make_error(FormulonErrorCode::kIoSheetCorrupt, "date group has no usable bounds");
+    }
   } else if (pugi::xml_node discrete = node.child("discretePr"); discrete) {
     group.kind = pivot::GroupKind::Discrete;
     for (pugi::xml_node x = discrete.child("x"); x; x = x.next_sibling("x")) {

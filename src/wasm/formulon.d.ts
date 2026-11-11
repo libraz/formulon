@@ -8572,8 +8572,11 @@ export interface Pivot {
    *  mask, an `intervalDays` of 0 or above 1 with a period other than days, an invalid bound or a start after the end
    *  is `StatusCode.InvalidArgument`; a field that is calculated or holds a blank, a value that is not a date, or no
    *  value is `StatusCode.PreconditionFailed`, as is a grouped field whose group fields are not the last fields. A
-   *  refusal changes nothing. A report that cannot be placed (occupied range, sheet edge) is blocked with `#SPILL!`
-   *  at its anchor and the call succeeds.
+   *  refusal changes nothing. The field must hold only dates (values from date-formatted cells, or record values
+   *  given as a {@link DateInput}): a plain number is a value that is not a date even when it is a valid serial.
+   *  Excel's object model silently groups such a field by 1 numerically instead, which is `setFieldNumericGroup`
+   *  with an `interval` of 1. A report that cannot be placed (occupied range,
+   *  sheet edge) is blocked with `#SPILL!` at its anchor and the call succeeds.
    *
    *  A `group` of `null` removes the date grouping of pivot field `fieldIndex` (a source field, or one of its
    *  group fields) from every pivot on its cache; the field returns to the axis position its group fields held.

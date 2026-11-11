@@ -302,7 +302,7 @@ class PivotNumericGroupTests(unittest.TestCase):
                 pivot.set_field_numeric_group("Region", PivotNumericGroupInput(interval=10))
             self.assertEqual(raised.exception.code, StatusCode.PRECONDITION_FAILED)
             with self.assertRaises(FormulonError) as raised:
-                pivot.set_field_date_group("Region", PivotDateGroupInput(periods=PivotDatePeriod.YEARS))
+                pivot.set_field_date_group("Amount", PivotDateGroupInput(periods=PivotDatePeriod.YEARS))
             self.assertEqual(raised.exception.code, StatusCode.PRECONDITION_FAILED)
             self.assertIsNone(pivot.get_field_numeric_group("Region"))
             self.assertEqual(len(pivot.list_fields()), 2)

@@ -76,9 +76,22 @@ GroupBounds resolve_bounds(const PivotCache& cache, std::size_t base, const Rang
   const std::optional<double> start = group_date_serial(range.start_date, date1904);
   const std::optional<double> end = group_date_serial(range.end_date, date1904);
   SerialRange data_range;
+  const PivotCacheField& base_field = cache.fields()[base];
   for (const PivotCacheRecord& record : cache.records()) {
     const Value v = cell_value(cache, record, base);
     if (!v.is_number() || !is_valid_date_serial(v.as_number(), date1904)) {
+      continue;
+    }
+    // Only date-flagged values take part: a plain number is no date.
+    bool is_date = base < record.cell_is_date.size() && record.cell_is_date[base];
+    if (cell_is_shared_index(record, base_field, base) && base < record.cells.size() &&
+        record.cells[base].is_number()) {
+      const std::optional<std::size_t> item =
+          index_from_double(record.cells[base].as_number(), base_field.shared_items.size());
+      is_date =
+          item.has_value() && *item < base_field.shared_item_is_date.size() && base_field.shared_item_is_date[*item];
+    }
+    if (!is_date) {
       continue;
     }
     data_range.add(v.as_number());
@@ -442,18 +455,9 @@ Expected<GroupBounds, Error> resolve_date_group_bounds(const PivotCache& cache, 
     return group_error(FormulonErrorCode::kPreconditionFailed, "date grouping needs a database field",
                        "field=" + std::to_string(base));
   }
-  // A field read from a file states its types, and a date mark declares one;
-  // a value not spelled as a date is then a number.
-  bool typed = field.shared_items_hints.present;
-  for (std::size_t i = 0; i < field.shared_item_is_date.size() && !typed; ++i) {
-    typed = field.shared_item_is_date[i];
-  }
-  for (const PivotCacheRecord& record : cache.records()) {
-    typed = typed || flag_at(record.cell_is_date, base);
-  }
   SerialRange range;
   for (const BaseValue& v : base_values(cache, base)) {
-    if (!v.value.is_number() || !is_valid_date_serial(v.value.as_number(), date1904) || (typed && !v.is_date)) {
+    if (!v.value.is_number() || !is_valid_date_serial(v.value.as_number(), date1904) || !v.is_date) {
       return group_error(FormulonErrorCode::kPreconditionFailed,
                          "only a field holding nothing but dates can be grouped", "field=" + field.name);
     }

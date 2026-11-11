@@ -39,7 +39,10 @@ function buildPivot(mod) {
     [1, 1, 7, 45689],
   ]) {
     const rec = wb.pivotCache(cacheId).addRecord();
-    for (const [field, v] of values.entries()) wb.pivotCache(cacheId).setRecordValue(rec, field, v);
+    for (const [field, v] of values.entries()) {
+      const value = field === 3 ? new Date(1899, 11, 30 + v) : v;
+      wb.pivotCache(cacheId).setRecordValue(rec, field, value);
+    }
   }
   const pivot = wb.sheet(0).addPivot({ name: 'Pivot1', cacheId: cacheId, anchor: { row: 0, col: 6 } });
   const region = 0;

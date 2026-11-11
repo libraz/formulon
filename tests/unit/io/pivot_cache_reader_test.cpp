@@ -704,5 +704,45 @@ TEST(PivotCacheReader, RecordAndGroupItemDatesFollowTheDateSystem) {
   EXPECT_EQ(cache.records()[0].cell_is_date, (std::vector<bool>{true, false}));
 }
 
+// ---------------------------------------------------------------------------
+// Definition: a date period needs at least one usable bound
+// ---------------------------------------------------------------------------
+
+std::string DateGroupDefinition(std::string_view range_pr_attrs) {
+  std::string xml(kXmlDecl);
+  xml.append("<pivotCacheDefinition")
+      .append(kPivotNs)
+      .append("><cacheSource type=\"worksheet\"/><cacheFields count=\"2\">");
+  xml.append(
+      "<cacheField name=\"D\"><sharedItems containsSemiMixedTypes=\"0\" containsNonDate=\"0\" "
+      "containsDate=\"1\" containsString=\"0\"/></cacheField>");
+  xml.append("<cacheField name=\"M\" databaseField=\"0\"><fieldGroup base=\"0\"><rangePr groupBy=\"months\" ");
+  xml.append(range_pr_attrs);
+  xml.append(
+      "/><groupItems count=\"1\"><s v=\"x\"/></groupItems></fieldGroup></cacheField></cacheFields>"
+      "</pivotCacheDefinition>");
+  return xml;
+}
+
+TEST(PivotCacheReader, DateGroupWithNoUsableBoundIsRefused) {
+  for (const std::string_view attrs :
+       {std::string_view{""}, std::string_view{"startDate=\"notadate\" endDate=\"2023-13-45T99:00:00\""},
+        std::string_view{"autoStart=\"0\" autoEnd=\"0\""}}) {
+    auto cache_or = read_pivot_cache_definition(Bytes(DateGroupDefinition(attrs)));
+    ASSERT_FALSE(static_cast<bool>(cache_or)) << attrs;
+    EXPECT_EQ(cache_or.error().code, FormulonErrorCode::kIoSheetCorrupt) << attrs;
+    EXPECT_EQ(cache_or.error().message, "date group has no usable bounds") << attrs;
+  }
+}
+
+TEST(PivotCacheReader, DateGroupWithOneUsableBoundLoads) {
+  for (const std::string_view attrs :
+       {std::string_view{"startDate=\"2024-01-15T00:00:00\""}, std::string_view{"endDate=\"2024-07-23T00:00:00\""},
+        std::string_view{"startDate=\"notadate\" endDate=\"2024-07-23T00:00:00\""}}) {
+    auto cache_or = read_pivot_cache_definition(Bytes(DateGroupDefinition(attrs)));
+    EXPECT_TRUE(static_cast<bool>(cache_or)) << attrs;
+  }
+}
+
 }  // namespace
 }  // namespace formulon::io

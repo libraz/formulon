@@ -69,7 +69,7 @@ if (process.env[CHILD] !== '1') {
     rows.forEach(([region, date]) => {
       const record = cache.addRecord();
       cache.setRecordValue(record, 0, region === 'East' ? 0 : 1);
-      cache.setRecordValue(record, 1, date);
+      cache.setRecordValue(record, 1, new Date(1899, 11, 30 + date));
     });
     const pivot = ws.addPivot({ name: 'Pivot1', cacheId: cache.cacheId, anchor: { row: 0, col: 4 } });
     pivot.setFieldAxis('Region', f.PivotAxis.Row);

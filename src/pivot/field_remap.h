@@ -51,6 +51,10 @@ struct FieldRemap {
 /// Sorting collates under the caller's `eval::ScopedEvalProfile`.
 void remap_table(PivotTable& table, const PivotCache& cache, const FieldRemap& remap);
 
+/// Removes the date filters of `table` on a cache field that does not hold nothing but dates (a mixed or
+/// numeric field, whose filter Excel drops at refresh). Filters on group fields stay.
+void discard_date_filters_on_non_date_fields(PivotTable& table, const PivotCache& cache);
+
 /// The table entry of cache field `field` on no axis. A calculated field's
 /// entry cannot be dragged to an axis.
 PivotField unplaced_pivot_field(const PivotCacheField& field);

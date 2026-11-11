@@ -344,7 +344,7 @@ describe('Pivot numeric grouping', () => {
       const { pivot } = build(ws, wb, NUMBERS);
       expectCode(() => pivot.setFieldNumericGroup('Region', { interval: 10 }), StatusCode.PreconditionFailed);
       const years = { periods: f.PivotDatePeriod.Years };
-      expectCode(() => pivot.setFieldDateGroup('Region', years), StatusCode.PreconditionFailed);
+      expectCode(() => pivot.setFieldDateGroup('Amount', years), StatusCode.PreconditionFailed);
       assert.equal(pivot.getFieldNumericGroup('Region'), null);
       assert.equal(pivot.listFields().length, 2);
     });

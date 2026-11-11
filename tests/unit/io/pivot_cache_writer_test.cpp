@@ -577,7 +577,8 @@ TEST(PivotCacheWriter, GroupedFieldExcludedFromRecordsAndFieldGroupSurvives) {
       "xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\" recordCount=\"2\">"
       "<cacheSource type=\"worksheet\"/><cacheFields count=\"2\">"
       "<cacheField name=\"Date\"><sharedItems containsNumber=\"1\" minValue=\"1\" maxValue=\"9\"/></cacheField>"
-      "<cacheField name=\"Years\" databaseField=\"0\"><fieldGroup par=\"0\"><rangePr groupBy=\"years\"/>"
+      "<cacheField name=\"Years\" databaseField=\"0\"><fieldGroup par=\"0\"><rangePr groupBy=\"years\" "
+      "startDate=\"2024-01-01T00:00:00\" endDate=\"2025-01-01T00:00:00\"/>"
       "<groupItems count=\"1\"><s v=\"2024\"/></groupItems></fieldGroup></cacheField>"
       "</cacheFields></pivotCacheDefinition>";
   auto def_or = read_pivot_cache_definition(Bytes(def));

@@ -650,7 +650,7 @@ void BuildDatePivot(fm_workbook_t* wb, bool date1904, std::uint32_t* out_cache_i
   for (std::size_t record = 0; record < std::size(dates); ++record) {
     std::size_t record_index = 99;
     ASSERT_EQ(fm_workbook_add_pivot_cache_record(wb, cache_id, &record_index), 0) << fm_get_last_error_message();
-    ASSERT_EQ(fm_workbook_set_pivot_cache_record_number(wb, cache_id, record_index, date_cache_field, dates[record]), 0)
+    ASSERT_EQ(fm_workbook_set_pivot_cache_record_date(wb, cache_id, record_index, date_cache_field, dates[record]), 0)
         << fm_get_last_error_message();
     ASSERT_EQ(
         fm_workbook_set_pivot_cache_record_number(wb, cache_id, record_index, amount_cache_field, amounts[record]), 0)

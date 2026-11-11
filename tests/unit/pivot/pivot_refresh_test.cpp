@@ -6,6 +6,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <tuple>
 #include <utility>
 #include <vector>
 
@@ -882,6 +883,103 @@ TEST(PivotRefresh, RemapDateGroupBoundsAndBoundaryLabelsFollowTheData) {
   EXPECT_EQ(group.range.end_date, "2026-03-02T00:00:00");
   EXPECT_EQ(group.group_items.front().as_text(), "<2026/1/1");
   EXPECT_EQ(group.group_items.back().as_text(), ">2026/3/2");
+}
+
+PivotCache MonthGroupedDateCache(const char* start, const char* end, bool auto_start, bool auto_end) {
+  PivotCache old;
+  old.set_cache_id(kCacheId);
+  old.mutable_fields().push_back(PivotCacheField{"Date", {}});
+  PivotCacheField months;
+  months.name = "Months";
+  months.is_database_field = false;
+  months.field_group = pivot::FieldGroup{};
+  months.field_group->base = 0U;
+  months.field_group->kind = pivot::GroupKind::Range;
+  months.field_group->range.by = pivot::GroupBy::Months;
+  months.field_group->range.is_date = true;
+  months.field_group->range.auto_start = auto_start;
+  months.field_group->range.auto_end = auto_end;
+  months.field_group->range.start_date = start;
+  months.field_group->range.end_date = end;
+  for (const char* label : {"<2025/1/1", "1月", ">2025/1/2"}) {
+    months.field_group->group_items.push_back(Value::text(label));
+  }
+  old.mutable_fields().push_back(std::move(months));
+  return old;
+}
+
+TEST(PivotRefresh, RefreshDeletesADateGroupWhoseBaseIsNoLongerAllDates) {
+  const eval::ScopedEvalProfile scope(mac_365_ja_jp_profile());
+  const PivotCache old = MonthGroupedDateCache("2025-01-01T00:00:00", "2025-01-02T00:00:00", true, true);
+  // Plain numbers, and numbers beside one date, are no dates.
+  const RefreshPlan numbers =
+      Build(old, Source({"Date"}, {{Value::number(kJan1)}, {Value::number(kMar1)}}), Context({false, true}));
+  ASSERT_EQ(numbers.cache.fields().size(), 1U);
+  EXPECT_EQ(numbers.remap.fields, (std::vector<std::optional<std::uint32_t>>{At(0U), std::nullopt}));
+  const RefreshPlan mixed =
+      Build(old, Source({"Date"}, {{Value::number(kJan1)}, {Value::number(kMar1)}}, {{true}, {false}}),
+            Context({false, true}));
+  EXPECT_EQ(mixed.cache.fields().size(), 1U);
+  const RefreshPlan dates =
+      Build(old, Source({"Date"}, {{Value::number(kJan1)}, {Value::number(kMar1)}}, {{true}, {true}}),
+            Context({false, true}));
+  EXPECT_EQ(dates.cache.fields().size(), 2U);
+}
+
+TEST(PivotRefresh, RefreshRecomputesAMissingOrUnreadableDateGroupBound) {
+  const eval::ScopedEvalProfile scope(mac_365_ja_jp_profile());
+  struct Case {
+    const char* start;
+    const char* end;
+    const char* want_start;
+    const char* want_end;
+  };
+  for (const Case& c : {Case{"notadate", "2025-01-02T00:00:00", "2026-01-01T00:00:00", "2025-01-02T00:00:00"},
+                        Case{"2025-01-01T00:00:00", "", "2025-01-01T00:00:00", "2026-03-02T00:00:00"}}) {
+    const PivotCache old = MonthGroupedDateCache(c.start, c.end, false, false);
+    const RefreshPlan plan =
+        Build(old, Source({"Date"}, {{Value::number(kJan1)}, {Value::number(kMar1)}}, {{true}, {true}}),
+              Context({false, true}));
+    const pivot::FieldGroup& group = *plan.cache.fields()[1].field_group;
+    EXPECT_EQ(group.range.start_date, c.want_start);
+    EXPECT_EQ(group.range.end_date, c.want_end);
+  }
+}
+
+TEST(PivotRefresh, RefreshDiscardsDateFiltersOnAFieldThatIsNotAllDates) {
+  const eval::ScopedEvalProfile scope(mac_365_ja_jp_profile());
+  const auto cache_with = [](bool first_is_date, bool second_is_date) {
+    PivotCache cache;
+    cache.set_cache_id(kCacheId);
+    cache.mutable_fields().push_back(PivotCacheField{"Amt", {}});
+    const std::pair<double, bool> rows[] = {{45000.0, first_is_date}, {45001.0, second_is_date}};
+    for (const auto& [serial, is_date] : rows) {
+      pivot::PivotCacheRecord record;
+      record.cells = {Value::number(serial)};
+      record.cell_is_date = {is_date};
+      cache.mutable_records().push_back(std::move(record));
+    }
+    return cache;
+  };
+  const auto table_with_filters = [] {
+    PivotTable table;
+    table.mutable_fields() = {Field("Amt", PivotAxis::Row)};
+    pivot::PivotFilter date;
+    date.field_name = "Amt";
+    date.type = pivot::FilterType::DateEqual;
+    pivot::PivotFilter label = date;
+    label.type = pivot::FilterType::LabelContains;
+    table.mutable_active_filters() = {date, label};
+    return table;
+  };
+  for (const auto& [first, second, kept] :
+       {std::tuple<bool, bool, std::size_t>{false, false, 1U}, std::tuple<bool, bool, std::size_t>{true, false, 1U},
+        std::tuple<bool, bool, std::size_t>{true, true, 2U}}) {
+    PivotTable table = table_with_filters();
+    pivot::discard_date_filters_on_non_date_fields(table, cache_with(first, second));
+    EXPECT_EQ(table.active_filters().size(), kept) << first << second;
+    EXPECT_EQ(table.active_filters().back().type, pivot::FilterType::LabelContains);
+  }
 }
 
 TEST(PivotRefresh, RemapDiscreteGroupMapGivesNewItemsTheirOwnGroup) {

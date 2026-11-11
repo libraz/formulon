@@ -72,7 +72,9 @@ std::vector<std::uint8_t> BuildFilterPackage(std::string_view region_field_attrs
       "</cacheSource><cacheFields count=\"3\">"
       "<cacheField name=\"Region\"><sharedItems count=\"3\"><s v=\"North\"/><s v=\"South\"/><s v=\"East\"/>"
       "</sharedItems></cacheField>"
-      "<cacheField name=\"Date\"><sharedItems containsNumber=\"1\"/></cacheField>"
+      "<cacheField name=\"Date\" numFmtId=\"14\"><sharedItems containsSemiMixedTypes=\"0\" containsNonDate=\"0\" "
+      "containsDate=\"1\" containsString=\"0\" minDate=\"2024-01-09T00:00:00\" maxDate=\"2024-07-28T00:00:00\"/>"
+      "</cacheField>"
       "<cacheField name=\"Amount\"><sharedItems containsNumber=\"1\"/></cacheField>"
       "</cacheFields></pivotCacheDefinition>";
   const std::string cache_rels =
@@ -84,10 +86,10 @@ std::vector<std::uint8_t> BuildFilterPackage(std::string_view region_field_attrs
   const std::string cache_records =
       "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n"
       "<pivotCacheRecords xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" count=\"4\">"
-      "<r><x v=\"0\"/><n v=\"45300\"/><n v=\"100\"/></r>"
-      "<r><x v=\"1\"/><n v=\"45400\"/><n v=\"200\"/></r>"
-      "<r><x v=\"2\"/><n v=\"45500\"/><n v=\"50\"/></r>"
-      "<r><x v=\"0\"/><n v=\"45310\"/><n v=\"300\"/></r>"
+      "<r><x v=\"0\"/><d v=\"2024-01-09T00:00:00\"/><n v=\"100\"/></r>"
+      "<r><x v=\"1\"/><d v=\"2024-04-18T00:00:00\"/><n v=\"200\"/></r>"
+      "<r><x v=\"2\"/><d v=\"2024-07-27T00:00:00\"/><n v=\"50\"/></r>"
+      "<r><x v=\"0\"/><d v=\"2024-01-19T00:00:00\"/><n v=\"300\"/></r>"
       "</pivotCacheRecords>";
   std::string table_def =
       "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n"

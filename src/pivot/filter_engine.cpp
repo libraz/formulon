@@ -401,10 +401,10 @@ bool PreparedRecordFilter::caption_passes(const ResolvedFilter& f, const Value& 
   }
 }
 
-bool PreparedRecordFilter::date_passes(const ResolvedFilter& f, const Value& v) const {
-  // Cells outside the date domain (text, blanks, errors) skip a date filter
+bool PreparedRecordFilter::date_passes(const ResolvedFilter& f, const Value& v, bool is_date) const {
+  // Cells that are no date (text, blanks, errors, plain numbers) skip a date filter
   // rather than being dropped.
-  if (!v.is_number() || !is_valid_date_serial(v.as_number(), date1904_)) {
+  if (!is_date || !v.is_number() || !is_valid_date_serial(v.as_number(), date1904_)) {
     return true;
   }
   const double serial = v.as_number();
@@ -473,8 +473,9 @@ bool PreparedRecordFilter::passes(const PivotCacheRecord& record) const {
   }
   for (const ResolvedFilter& f : filters_) {
     const Value v = cell_value(cache, record, f.field_index);
-    const bool kept =
-        is_caption_filter_type(f.type) ? caption_passes(f, label_value(cache, f.field_index, v)) : date_passes(f, v);
+    const bool kept = is_caption_filter_type(f.type)
+                          ? caption_passes(f, label_value(cache, f.field_index, v))
+                          : date_passes(f, v, cell_is_date_value(cache, record, f.field_index));
     if (!kept) {
       return false;
     }

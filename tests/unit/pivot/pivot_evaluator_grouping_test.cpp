@@ -52,6 +52,7 @@ PivotCache build_date_cache() {
     PivotCacheRecord rec;
     rec.cells.push_back(Value::number(serial));
     rec.cells.push_back(Value::number(amount));
+    rec.cell_is_date = {true, false};
     cache.mutable_records().push_back(std::move(rec));
   };
   add(43465.0, 10.0);
@@ -99,10 +100,16 @@ void push_record(PivotCache& cache, double serial, double amount) {
   rec.cells.push_back(Value::number(amount));
   cache.mutable_records().push_back(std::move(rec));
 }
+
+// A record whose first cell is an inline date.
+void push_date_record(PivotCache& cache, double serial, double amount) {
+  push_record(cache, serial, amount);
+  cache.mutable_records().back().cell_is_date = {true, false};
+}
 PivotCache build_days_interval_cache() {
   PivotCache cache = build_two_field_cache();
   for (double serial = 0.0; serial <= 70.0; serial += 1.0) {
-    push_record(cache, serial, 1.0);
+    push_date_record(cache, serial, 1.0);
   }
   return cache;
 }
@@ -376,8 +383,8 @@ TEST(PivotEvaluator, DateGroupingRefusesValuesOutsideTheDateDomain) {
   for (const double raw : {-std::numeric_limits<double>::infinity(), std::numeric_limits<double>::infinity(),
                            std::numeric_limits<double>::quiet_NaN(), std::numeric_limits<double>::max(), -1.0}) {
     PivotCache cache = build_two_field_cache();
-    push_record(cache, 0.0, 5.0);
-    push_record(cache, raw, 1.0);
+    push_date_record(cache, 0.0, 5.0);
+    push_date_record(cache, raw, 1.0);
     const Expected<PivotTable, Error> table = group_date_rows(cache, days_spec(/*start=*/5.0, 1U, /*end=*/5.0));
     ASSERT_FALSE(static_cast<bool>(table)) << raw;
     // The base data, not a setting, is what is refused.
@@ -402,7 +409,7 @@ TEST(PivotEvaluator, DateGroupingLastDayWithATimeEndsTheRangeInEitherEpoch) {
   for (const bool date1904 : {false, true}) {
     const double last_valid = date_time::serial_from_ymd(9999, 12U, 31U, date1904);
     PivotCache cache = build_two_field_cache();
-    push_record(cache, last_valid + 0.75, 1.0);
+    push_date_record(cache, last_valid + 0.75, 1.0);
     Expected<PivotTable, Error> table = group_date_rows(cache, days_spec(std::nullopt), date1904);
     ASSERT_TRUE(static_cast<bool>(table)) << table.error().message;
     // A maximum with a time of day is the end itself.
@@ -416,7 +423,7 @@ TEST(PivotEvaluator, DateGroupingLastDayWithATimeEndsTheRangeInEitherEpoch) {
 
     // The day after the last date is no date.
     PivotCache past = build_two_field_cache();
-    push_record(past, last_valid + 1.0, 1.0);
+    push_date_record(past, last_valid + 1.0, 1.0);
     const Expected<PivotTable, Error> refused = group_date_rows(past, days_spec(std::nullopt), date1904);
     ASSERT_FALSE(static_cast<bool>(refused)) << date1904;
     EXPECT_EQ(refused.error().code, FormulonErrorCode::kPreconditionFailed);

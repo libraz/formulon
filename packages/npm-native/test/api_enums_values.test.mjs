@@ -92,7 +92,7 @@ function buildPivot(wb) {
     const rec = cache.addRecord();
     cache.setRecordValue(rec, 0, region === 'East' ? 0 : 1);
     cache.setRecordValue(rec, 1, amount);
-    cache.setRecordValue(rec, 2, date);
+    cache.setRecordValue(rec, 2, new Date(1899, 11, 30 + date));
   });
   const pivot = ws.addPivot({ name: 'Pivot1', cacheId: cache.cacheId, anchor: { row: 0, col: 6 } });
   pivot.setFieldAxis('Region', f.PivotAxis.Row);
@@ -833,11 +833,11 @@ describe('numbers that were bare become enum members', () => {
     });
   });
 
-  it('a pivot date group over a text field is PreconditionFailed', () => {
+  it('a pivot date group over a field holding plain numbers is PreconditionFailed', () => {
     withSheet((_ws, wb) => {
       const { pivot } = buildPivot(wb);
       assert.throws(
-        () => pivot.setFieldDateGroup(0, { periods: f.PivotDatePeriod.Months }),
+        () => pivot.setFieldDateGroup(1, { periods: f.PivotDatePeriod.Months }),
         (e) => e.name === 'FormulonError' && e.code === f.StatusCode.PreconditionFailed,
       );
     });

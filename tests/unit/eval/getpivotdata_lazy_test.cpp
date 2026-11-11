@@ -294,6 +294,7 @@ Workbook BuildGroupedDateWorkbook(std::uint32_t periods = pivot::date_period_bit
   auto add = [&](int year, unsigned month, unsigned day, double amount) {
     pivot::PivotCacheRecord record;
     record.cells = {Value::number(date_time::serial_from_ymd(year, month, day, false)), Value::number(amount)};
+    record.cell_is_date = {true, false};
     cache->mutable_records().push_back(std::move(record));
   };
   add(2024, 1U, 1U, 10.0);

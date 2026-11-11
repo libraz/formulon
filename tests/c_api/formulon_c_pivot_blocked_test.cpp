@@ -366,7 +366,7 @@ struct Book {
       ASSERT_EQ(fm_sheet_set_text(wb.handle, kSourceSheet, row, 4U, kind), 0);
       std::size_t record = 0;
       ASSERT_EQ(fm_workbook_add_pivot_cache_record(wb.handle, cache, &record), 0);
-      ASSERT_EQ(fm_workbook_set_pivot_cache_record_number(wb.handle, cache, record, kDateField, date), 0);
+      ASSERT_EQ(fm_workbook_set_pivot_cache_record_date(wb.handle, cache, record, kDateField, date), 0);
       ASSERT_EQ(fm_workbook_set_pivot_cache_record_text(wb.handle, cache, record, kRegionField, region), 0);
       ASSERT_EQ(fm_workbook_set_pivot_cache_record_number(wb.handle, cache, record, kAmountField, amount), 0);
       ASSERT_EQ(fm_workbook_set_pivot_cache_record_text(wb.handle, cache, record, kItemField, item.c_str()), 0);

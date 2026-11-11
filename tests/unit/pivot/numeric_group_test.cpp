@@ -660,6 +660,7 @@ PivotCache DateCache() {
   for (const double serial : {Day(2024, 1U, 15U), Day(2024, 3U, 10U)}) {
     PivotCacheRecord record;
     record.cells = {Value::number(serial)};
+    record.cell_is_date = {true};
     cache.mutable_records().push_back(std::move(record));
   }
   return cache;

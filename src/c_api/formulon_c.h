@@ -8797,6 +8797,11 @@ typedef struct {
  * needs `periods == FM_PIVOT_PERIOD_DAYS`.
  * `FM_PIVOT_CALENDAR_JAPANESE` groups the years period by era year.
  *
+ * The field must hold only dates (values from date-formatted cells, or record values stored as
+ * dates). A plain number is refused with `FM_STATUS_PRECONDITION_FAILED` even when it is a valid
+ * serial; Excel's object model silently groups such a field by 1 numerically instead, which is
+ * `fm_sheet_set_pivot_field_numeric_group` with an interval of 1.
+ *
  * With `group == NULL` the grouping is removed from every pivot on the
  * cache and the field returns to the axis position its group fields held;
  * a field that is not grouped is left as it is.
@@ -8811,8 +8816,8 @@ typedef struct {
  *         outside `fm_tristate_t`, a NaN or infinite bound with its `auto_*` false, a bound that is
  *         not a valid date serial, or a start after the end;
  *         `FM_STATUS_PRECONDITION_FAILED` (9) when the field holds a blank, a value that is not a
- *         date, or no value, is a calculated field, or is grouped and its group fields are not
- *         the last fields of the cache.
+ *         date (a plain number included), or no value, is a calculated field, or is grouped and its group fields are
+ * not the last fields of the cache.
  */
 FM_API fm_status_t fm_sheet_set_pivot_field_date_group(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
                                                        size_t field_index, const fm_pivot_date_group_t* group);

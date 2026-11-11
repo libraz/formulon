@@ -206,6 +206,17 @@ Upgrading from 0.18: see [Upgrading from 0.18 to 0.19](docs/releases/upgrading-0
   (`false`). A non-finite interval or
   bound is `InvalidArgument`; a field holding data of the wrong type is
   `PreconditionFailed`.
+- A date group needs a field holding only dates (values from date-formatted
+  cells, or given as `Date` / `datetime`); plain numbers are
+  `PreconditionFailed` even when they are valid serials, where Excel's object
+  model groups them by 1 numerically. `setFieldNumericGroup` does that.
+- Refreshing a pivot cache follows Excel's date typing: a date filter on a
+  field that is not all dates (plain numbers, or a mix) is discarded and every
+  row shows; a date group whose base is no longer all dates is removed with its
+  group fields and their axis placements; a missing or unreadable date-group
+  bound is recomputed to the automatic one. Loading a workbook whose date
+  group (a range grouped by a date period) has neither a usable start nor a
+  usable end date fails with `kIoSheetCorrupt`.
 - `Sheet.getDate` returns the `Date` whose local wall-clock fields equal the
   serial's calendar fields; a local time that does not exist (a daylight-saving
   gap) resolves as the `Date` constructor does, and a time that exists is

@@ -320,6 +320,18 @@ class PivotInputTests(unittest.TestCase):
             with self.assertRaises(formulon.FormulonError) as err:
                 pivot.set_field_date_group(0, formulon.PivotDateGroupInput(periods=formulon.PivotDatePeriod.YEARS))
             self.assertEqual(err.exception.code, formulon.StatusCode.PRECONDITION_FAILED)
+        with Workbook.create_default() as wb:
+            sheet = wb.sheet(0)
+            cache = wb.add_pivot_cache()
+            cache.add_field("Serial")
+            for serial in (45292.0, 45323.0):
+                cache.set_record_value(cache.add_record(), 0, serial)
+            pivot = sheet.pivot(
+                sheet.add_pivot(PivotInput(name="P", cache_id=cache.cache_id, anchor=CellAddress(0, 4)))
+            )
+            with self.assertRaises(formulon.FormulonError) as err:
+                pivot.set_field_date_group(0, formulon.PivotDateGroupInput(periods=formulon.PivotDatePeriod.YEARS))
+            self.assertEqual(err.exception.code, formulon.StatusCode.PRECONDITION_FAILED)
 
     def test_date_group_record_defaults(self) -> None:
         group = formulon.PivotDateGroupInput(periods=formulon.PivotDatePeriod.YEARS)

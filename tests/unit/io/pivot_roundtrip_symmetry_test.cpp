@@ -56,7 +56,8 @@ TEST(PivotSymmetry, CacheDefinitionAttributesAndHintsSurvive) {
                                  "minValue=\"1\" maxValue=\"9\"/></cacheField>"
                                  // Grouped (non-database) field carrying a <fieldGroup>.
                                  "<cacheField name=\"Years\" databaseField=\"0\"><fieldGroup par=\"0\">"
-                                 "<rangePr groupBy=\"years\"/><groupItems count=\"1\"><s v=\"2024\"/></groupItems>"
+                                 "<rangePr groupBy=\"years\" startDate=\"2024-01-01T00:00:00\" "
+                                 "endDate=\"2025-01-01T00:00:00\"/><groupItems count=\"1\"><s v=\"2024\"/></groupItems>"
                                  "</fieldGroup></cacheField>"
                                  "</cacheFields></pivotCacheDefinition>";
   auto cache = io::read_pivot_cache_definition(Bytes(before_str));

@@ -126,8 +126,8 @@ class PivotTests(unittest.TestCase):
 
 
 class _PivotFixture:
-    """Region / Product carry shared items their records index; Amount and
-    Date are plain numbers. Only Region is laid out."""
+    """Region / Product carry shared items their records index; Amount is
+    a plain number and Date holds dates. Only Region is laid out."""
 
     def __init__(self, wb: Workbook) -> None:
         self.wb = wb
@@ -143,6 +143,8 @@ class _PivotFixture:
         for values in ((0, 0, 10, 45292), (1, 0, 30, 45323), (0, 1, 5, 45658), (1, 1, 7, 45689)):
             rec = wb.pivot_cache(self.cache).add_record()
             for field, value in enumerate(values):
+                if field == 3:
+                    value = datetime.date(1899, 12, 30) + datetime.timedelta(days=value)
                 wb.pivot_cache(self.cache).set_record_value(rec, field, value)
         self.pivot = wb.sheet(0).add_pivot(PivotInput(name="Pivot1", cache_id=self.cache, anchor=CellAddress(0, 6)))
         wb.sheet(0).pivot(self.pivot).set_field_axis("Region", PivotAxis.ROW)

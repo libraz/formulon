@@ -239,7 +239,7 @@ class PreparedRecordFilter {
   };
 
   bool caption_passes(const ResolvedFilter& f, const Value& v) const;
-  bool date_passes(const ResolvedFilter& f, const Value& v) const;
+  bool date_passes(const ResolvedFilter& f, const Value& v, bool is_date) const;
 
   const PivotCache* cache_ = nullptr;
   /// The workbook epoch, kept because a calendar-position selector reads a

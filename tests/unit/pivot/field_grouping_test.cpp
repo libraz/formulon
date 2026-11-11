@@ -284,6 +284,7 @@ TEST(FieldGrouping, MaterializeResolvesUnstatedDateBoundsFromTheData) {
   for (const double serial : {Day(2024, 1U, 10U) + 0.5, Day(2024, 1U, 17U), Day(2024, 1U, 30U)}) {
     PivotCacheRecord record;
     record.cells = {Value::number(serial)};
+    record.cell_is_date = {true};
     cache.mutable_records().push_back(std::move(record));
   }
 
@@ -293,6 +294,31 @@ TEST(FieldGrouping, MaterializeResolvesUnstatedDateBoundsFromTheData) {
   EXPECT_EQ(cell_value(cache, cache.records()[0], 1U).as_number(), 1.0);
   EXPECT_EQ(cell_value(cache, cache.records()[1], 1U).as_number(), 2.0);
   EXPECT_EQ(cell_value(cache, cache.records()[2], 1U).as_number(), 3.0);
+}
+
+TEST(FieldGrouping, MaterializeFallbackBoundsReadOnlyDateMarkedValues) {
+  PivotCache cache;
+  cache.mutable_fields().push_back(PivotCacheField{"Date", {}});
+  FieldGroup week;
+  week.base = 0U;
+  week.kind = GroupKind::Range;
+  week.range = DateRange(GroupBy::Days, "", "", 7.0);
+  week.group_items.assign(6U, Value::text("w"));
+  cache.mutable_fields().push_back(GroupField("Week", week));
+  // 1/1 is a plain number: it must not pull the start before the first date (1/10).
+  const std::pair<double, bool> rows[] = {
+      {Day(2024, 1U, 1U), false}, {Day(2024, 1U, 10U), true}, {Day(2024, 1U, 17U), true}};
+  for (const auto& [serial, is_date] : rows) {
+    PivotCacheRecord record;
+    record.cells = {Value::number(serial)};
+    record.cell_is_date = {is_date};
+    cache.mutable_records().push_back(std::move(record));
+  }
+
+  materialize_group_fields(cache, /*date1904=*/false);
+
+  EXPECT_EQ(cell_value(cache, cache.records()[1], 1U).as_number(), 1.0);
+  EXPECT_EQ(cell_value(cache, cache.records()[2], 1U).as_number(), 2.0);
 }
 
 TEST(FieldGrouping, MaterializeHonoursTheDateEpoch) {
@@ -420,6 +446,7 @@ PivotCache DateCache(const std::vector<double>& dates, bool as_saved) {
                     as_saved ? Value::number(static_cast<double>(i)) : Value::number(dates[i]),
                     Value::number(10.0 * static_cast<double>(i + 1U))};
     record.cell_is_index = {false, false, as_saved, false};
+    record.cell_is_date = {false, false, !as_saved, false};
     cache.mutable_records().push_back(std::move(record));
   }
   return cache;
@@ -1114,16 +1141,21 @@ TEST(FieldGrouping, GroupDateIsoSaturatesAtTheLastInstant) {
   EXPECT_EQ(group_date_iso(2957003.99999, true), "9999-12-31T23:59:59");
 }
 
-// A date mark declares the field typed, so a plain number beside it refuses
-// the grouping whether or not hints were captured; an unmarked field groups.
-TEST(FieldGrouping, MarkedDateBesideAPlainNumberRefusesGrouping) {
+// Every value must carry the date mark: plain numbers are refused even when they are valid serials,
+// alone or beside marked dates.
+TEST(FieldGrouping, UnmarkedNumbersRefuseGroupingEvenAsValidSerials) {
   const std::vector<double> dates = {Day(2024, 1U, 15U), Day(2024, 2U, 1U), Day(2024, 3U, 10U)};
   PivotCache plain = DateCache(dates, /*as_saved=*/false);
-  EXPECT_TRUE(static_cast<bool>(
-      group_cache_by_date(plain, kDateField, Periods(kMonths), /*date1904=*/false, mac_365_ja_jp_profile())));
+  for (PivotCacheRecord& record : plain.mutable_records()) {
+    record.cell_is_date = {false, false, false, false};
+  }
+  const Expected<std::size_t, Error> plain_refused =
+      group_cache_by_date(plain, kDateField, Periods(kMonths), /*date1904=*/false, mac_365_ja_jp_profile());
+  ASSERT_FALSE(static_cast<bool>(plain_refused));
+  EXPECT_EQ(plain_refused.error().code, FormulonErrorCode::kPreconditionFailed);
 
   PivotCache mixed = DateCache(dates, /*as_saved=*/false);
-  mixed.mutable_records()[0].cell_is_date = {false, false, true, false};
+  mixed.mutable_records()[0].cell_is_date = {false, false, false, false};
   const Expected<std::size_t, Error> refused =
       group_cache_by_date(mixed, kDateField, Periods(kMonths), /*date1904=*/false, mac_365_ja_jp_profile());
   ASSERT_FALSE(static_cast<bool>(refused));

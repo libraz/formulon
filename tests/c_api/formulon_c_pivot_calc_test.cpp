@@ -731,7 +731,7 @@ TEST(FormulonCApiPivotCalc, CalculatedItemPlacementPreconditions) {
   for (const double serial : {45306.0, 45340.0, 45400.0}) {
     std::size_t record = 99;
     ASSERT_EQ(fm_workbook_add_pivot_cache_record(dated.handle, dated_cache, &record), 0);
-    ASSERT_EQ(fm_workbook_set_pivot_cache_record_number(dated.handle, dated_cache, record, 0U, serial), 0);
+    ASSERT_EQ(fm_workbook_set_pivot_cache_record_date(dated.handle, dated_cache, record, 0U, serial), 0);
     ASSERT_EQ(fm_workbook_set_pivot_cache_record_number(dated.handle, dated_cache, record, 1U, 1.0), 0);
   }
   std::size_t pivot = 99;

@@ -232,6 +232,7 @@ Expected<void, Error> Workbook::refresh_pivot_cache(std::uint32_t cache_id, cons
       if (tables[p] != nullptr && tables[p]->pivot_cache_id() == cache_id) {
         std::unique_ptr<pivot::PivotTable> copy = tables[p]->clone();
         pivot::remap_table(*copy, plan.cache, plan.remap);
+        pivot::discard_date_filters_on_non_date_fields(*copy, plan.cache);
         pivot::clear_derived_state(*copy);
         planned.push_back(Planned{s, p, std::move(copy)});
       }

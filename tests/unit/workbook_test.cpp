@@ -229,6 +229,7 @@ std::unique_ptr<pivot::PivotCache> BuildClockPivotCache() {
     pivot::PivotCacheRecord record;
     record.cells.push_back(Value::number(date));
     record.cells.push_back(Value::number(amount));
+    record.cell_is_date = {true, false};
     cache->mutable_records().push_back(std::move(record));
   }
   return cache;

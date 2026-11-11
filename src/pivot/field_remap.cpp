@@ -20,6 +20,7 @@
 #include "pivot/pivot_cache.h"
 #include "pivot/pivot_table.h"
 #include "pivot/pivot_types.h"
+#include "pivot/record_access.h"
 #include "pivot/value_order.h"
 #include "utils/index_sort.h"
 #include "value.h"
@@ -274,6 +275,27 @@ void remap_table(PivotTable& table, const PivotCache& cache, const FieldRemap& r
     pages.push_back(std::move(page));
   }
   table.mutable_page_fields() = std::move(pages);
+}
+
+void discard_date_filters_on_non_date_fields(PivotTable& table, const PivotCache& cache) {
+  // A date filter survives only on a field holding nothing but dates.
+  std::vector<PivotFilter>& active = table.mutable_active_filters();
+  active.erase(std::remove_if(active.begin(), active.end(),
+                              [&](const PivotFilter& filter) {
+                                if (is_caption_filter_type(filter.type) || is_value_filter_type(filter.type)) {
+                                  return false;
+                                }
+                                std::optional<std::size_t> field;
+                                if (!filter.field_name.empty()) {
+                                  field = resolve_field_by_any_name(table, filter.field_name);
+                                } else if (filter.source.has_value()) {
+                                  field = filter.source->field_index;
+                                }
+                                return field.has_value() && *field < cache.fields().size() &&
+                                       !is_group_field(cache.fields()[*field]) &&
+                                       !field_holds_only_dates(cache, *field);
+                              }),
+               active.end());
 }
 
 PivotField unplaced_pivot_field(const PivotCacheField& field) {

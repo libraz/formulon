@@ -110,7 +110,9 @@ std::string short_date_text(double serial, const RefreshContext& context) {
 Expected<void, Error> refresh_date_bounds(PivotCache& cache, FieldGroup& group, const std::vector<Value>& base,
                                           const std::vector<bool>& base_is_date, const RefreshContext& context) {
   RangeGroup& range = group.range;
-  if (!range.auto_start && !range.auto_end) {
+  // Fixed bounds stay unless one is missing or unreadable, which refresh recomputes.
+  if (!range.auto_start && !range.auto_end && group_date_serial(range.start_date, context.date1904).has_value() &&
+      group_date_serial(range.end_date, context.date1904).has_value()) {
     return Expected<void, Error>::Ok();
   }
   std::optional<double> lo;
@@ -307,12 +309,25 @@ Expected<RefreshPlan, Error> build_refreshed_cache(const PivotCache& old, const 
   for (std::size_t i = 0; i < old_count; ++i) {
     keep[i] = is_source_field(i) ? field_map[i].has_value() : old_fields[i].formula.has_value();
   }
+  // A source column holding anything but dates (blanks aside) no longer carries a date group.
+  const auto column_holds_only_dates = [&](std::uint32_t c) {
+    for (std::size_t r = 0; r < source.rows; ++r) {
+      const std::size_t at = r * columns + c;
+      const bool blank = at >= source.cells.size() || source.cells[at].is_blank();
+      if (!blank && !(source.cells[at].is_number() && flag_at(source.cell_is_date, at))) {
+        return false;
+      }
+    }
+    return true;
+  };
   for (bool grew = true; grew;) {
     grew = false;
     for (std::size_t i = 0; i < old_count; ++i) {
       const std::optional<FieldGroup>& group = old_fields[i].field_group;
       if (!keep[i] && !is_source_field(i) && group.has_value() && group->base.has_value() && *group->base < old_count &&
-          *group->base != i && keep[*group->base]) {
+          *group->base != i && keep[*group->base] &&
+          !(is_date_range(*group) && field_map[*group->base].has_value() &&
+            !column_holds_only_dates(static_cast<std::uint32_t>(*field_map[*group->base])))) {
         keep[i] = true;
         grew = true;
       }

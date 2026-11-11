@@ -476,7 +476,7 @@ fm_status_t BuildDatePivot(fm_workbook_t* wb) {
   for (int day = 0; day < kDayCount; ++day) {
     std::size_t record = 99;
     if ((st = fm_workbook_add_pivot_cache_record(wb, cache_id, &record)) != 0 ||
-        (st = fm_workbook_set_pivot_cache_record_number(wb, cache_id, record, date_index, kFirstDay + day)) != 0 ||
+        (st = fm_workbook_set_pivot_cache_record_date(wb, cache_id, record, date_index, kFirstDay + day)) != 0 ||
         (st = fm_workbook_set_pivot_cache_record_number(wb, cache_id, record, amount_index, 1.0)) != 0) {
       return st;
     }
@@ -691,6 +691,19 @@ TEST(FormulonCApiPivotPatch, DateGroupOfAFieldHoldingTextIsAPrecondition) {
 
   // A blank is refused the same way.
   ASSERT_EQ(fm_workbook_set_pivot_cache_record_blank(wb.handle, cache_id, 3U, 0U), FM_STATUS_OK);
+  EXPECT_EQ(fm_sheet_set_pivot_field_date_group(wb.handle, 0, kPivot, 0, &group), FM_STATUS_PRECONDITION_FAILED);
+  EXPECT_EQ(DatePeriods(wb.handle), 0U);
+}
+
+TEST(FormulonCApiPivotPatch, DateGroupOfAFieldHoldingPlainNumbersIsAPrecondition) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), FM_STATUS_OK);
+  ASSERT_EQ(BuildDatePivot(wb.handle), FM_STATUS_OK) << fm_get_last_error_message();
+  std::uint32_t cache_id = 0;
+  ASSERT_EQ(fm_sheet_get_pivot_cache_id(wb.handle, 0, kPivot, &cache_id), FM_STATUS_OK);
+  // A valid serial written as a number is not a date.
+  ASSERT_EQ(fm_workbook_set_pivot_cache_record_number(wb.handle, cache_id, 3U, 0U, 45292.0), FM_STATUS_OK);
+  const fm_pivot_date_group_t group = WeekGroup();
   EXPECT_EQ(fm_sheet_set_pivot_field_date_group(wb.handle, 0, kPivot, 0, &group), FM_STATUS_PRECONDITION_FAILED);
   EXPECT_EQ(DatePeriods(wb.handle), 0U);
 }

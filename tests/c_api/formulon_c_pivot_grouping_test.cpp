@@ -40,7 +40,7 @@ fm_status_t BuildDaysGroupedPivot(fm_workbook_t* wb, double start_serial, std::s
     if (st != 0) {
       return st;
     }
-    st = fm_workbook_set_pivot_cache_record_number(wb, cache_id, rec_index, date_index, serial);
+    st = fm_workbook_set_pivot_cache_record_date(wb, cache_id, rec_index, date_index, serial);
     if (st != 0) {
       return st;
     }
@@ -783,7 +783,7 @@ TEST(FormulonCApiPivot, AHandFilledFieldJoiningRowsSharesItsValuesAndRecordWrite
   EXPECT_EQ(f.SharedCount(0U), 4U);
 }
 
-TEST(FormulonCApiPivot, ADateGroupBaseSharedFromNumbersSavesItsItemsAsDates) {
+TEST(FormulonCApiPivot, ADateGroupBaseSharedFromDatesSavesItsItemsAsDates) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   ASSERT_EQ(fm_workbook_set_profile_id(wb.handle, "win-365-ja_JP"), 0);
@@ -825,7 +825,7 @@ TEST(FormulonCApiPivot, AGroupedReportThatCannotBePlacedIsBlocked) {
   for (std::size_t i = 0; i < 3U; ++i) {
     std::size_t record = 0;
     ASSERT_EQ(fm_workbook_add_pivot_cache_record(wb.handle, cache_id, &record), 0);
-    ASSERT_EQ(fm_workbook_set_pivot_cache_record_number(wb.handle, cache_id, record, 0U, serials[i]), 0);
+    ASSERT_EQ(fm_workbook_set_pivot_cache_record_date(wb.handle, cache_id, record, 0U, serials[i]), 0);
     ASSERT_EQ(fm_workbook_set_pivot_cache_record_number(wb.handle, cache_id, record, 1U, 1.0), 0);
   }
   std::size_t pivot_index = 0;

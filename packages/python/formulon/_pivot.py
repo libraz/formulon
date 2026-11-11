@@ -890,6 +890,10 @@ class Pivot(_NoCopy):
         (the midnight after it for a date without a time). The :class:`PivotDateGroup`
         that :meth:`get_field_date_group` returned is accepted as it is; an ``auto_start`` /
         ``auto_end`` of true makes that bound follow the data whatever ``start`` / ``end`` hold.
+        The field must hold only dates (values from date-formatted cells, or record values given as
+        ``date`` / ``datetime``): a plain number is a value that is not a date even when it is a
+        valid serial. Excel's object model silently groups such a field by 1 numerically instead,
+        which is :meth:`set_field_numeric_group` with an ``interval`` of 1.
         A report that cannot be placed (occupied range, sheet edge) is blocked with ``#SPILL!``
         at its anchor and the call succeeds; a refusal changes nothing.
 
@@ -904,8 +908,8 @@ class Pivot(_NoCopy):
           FormulonError: with ``code == StatusCode.INVALID_ARGUMENT`` for an empty or unknown
             mask, an ``interval_days`` of 0 or above 1 with a period other than days, an invalid
             bound or a start after the end; with ``PRECONDITION_FAILED`` when the field is
-            calculated or holds a blank, a value that is not a date, or no value, when it is
-            grouped and its group fields are not the last fields of the cache, or when ``group``
+            calculated or holds a blank, a value that is not a date (a plain number included), or no
+            value, when it is grouped and its group fields are not the last fields of the cache, or when ``group``
             is ``None`` and the group fields are not the last fields.
         """
         if group is not None and not isinstance(group, (PivotDateGroupInput, PivotDateGroup)):
