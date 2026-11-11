@@ -1013,7 +1013,11 @@ typedef struct {
  * with the `=`. `fm_workbook_remove_defined_name`
  * removes a name. A new name follows `fm_sheet_add_table`'s display-name
  * syntax, refuses `\` followed by one character, and may not be a table's
- * name; replacing an existing entry does not re-check it.
+ * name; replacing an existing entry does not re-check it. A new name that is,
+ * or starts with, a reference in the profile locale's R1C1 letters (de
+ * `Z1S1`) is refused; redefining an existing name stays allowed. The check
+ * uses the profile at the time of the call, so a loaded name is never
+ * re-checked.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb`, `name`, `name->name` or
@@ -1022,7 +1026,7 @@ typedef struct {
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `local_sheet_id` is neither
  *         `FM_DEFINED_NAME_SCOPE_WORKBOOK` nor a sheet of the workbook;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when `name` or `formula` is empty, or a new `name`
- *         breaks the name syntax;
+ *         breaks the name syntax or opens with an R1C1 reference in the profile locale's letters;
  *         `FM_STATUS_ALREADY_EXISTS` (7) when a new `name` is a table's name;
  *         a parser status (1000-1014; `fm_get_last_parse_error` gives the code and position) when `formula` does not
  * parse.
@@ -1531,7 +1535,9 @@ FM_API fm_status_t fm_sheet_set_blank(fm_workbook_t* wb, size_t sheet_index, uin
  * and `[@Qty]` store as `T[Qty]` and `T[[#This Row],[Qty]]`; anywhere,
  * `T[@Qty]` stores as `T[[#This Row],[Qty]]` and a bare table name `T` not
  * hidden by a defined name as `T[]`. An unqualified `[Qty]` outside every
- * table does not parse.
+ * table does not parse. A typed structured reference to a table whose name
+ * is, or starts with, a reference in the profile locale's R1C1 letters is
+ * `FM_STATUS_PARSER_INVALID_REFERENCE`.
  *
  * @return `FM_STATUS_OK` (0) on success, or a common cell-mutation failure;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
@@ -2394,7 +2400,8 @@ typedef struct {
  * attribute follows it. It follows Excel's name syntax (a letter, `_` or `\`
  * first; letters, digits, `_`, `.`, `?` and `\` after; at most 255 UTF-16
  * units; not TRUE / FALSE, an A1 cell such as `T1`, or a name opening with an
- * R1C1 reference such as `R2D2`) and may not be used by another table or by a
+ * R1C1 reference in the profile locale's R1C1 letters (`R2D2` in en, `Z1S1` in
+ * de)) and may not be used by another table or by a
  * defined name of any scope (case-insensitive). The range may not overlap
  * another table, a PivotTable, a data table, an array formula or a merged
  * range on the sheet.
@@ -2727,7 +2734,9 @@ FM_API fm_status_t fm_sheet_update_table_style_options(fm_workbook_t* wb, size_t
 /**
  * @brief Renames table `table_index` to `name`.
  *
- * `name` follows `fm_sheet_add_table`'s rules, unique case-insensitively
+ * `name` follows `fm_sheet_add_table`'s rules (including the profile locale's
+ * R1C1 letters, `R2D2` in en and `Z1S1` in de; renaming to the table's own
+ * name in another case stays allowed), unique case-insensitively
  * against every other table and every defined name. Structured references
  * naming the old name are rewritten to the new one wherever formulas live:
  * cells, defined names, conditional formats, data validations,

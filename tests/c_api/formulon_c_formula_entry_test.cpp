@@ -241,6 +241,83 @@ TEST(FormulonCApiFormulaEntry, DefinedNameOpeningWithLocaleR1C1TokenIsRefused) {
   }
 }
 
+TEST(FormulonCApiFormulaEntry, NewDefinedNameOpeningWithProfileR1C1ReferenceIsRefusedOnlyUnderThatProfile) {
+  WorkbookGuard de;
+  MakeProfileWorkbook(&de, "win-365-de_DE");
+  WorkbookGuard en;
+  MakeProfileWorkbook(&en, "win-365-en_US");
+  for (const char* name : {"Z1S1x", "z1s1"}) {
+    SCOPED_TRACE(name);
+    EXPECT_EQ(SetDefinedName(de.handle, name, "Sheet1!$A$1"), static_cast<fm_status_t>(2));
+    EXPECT_EQ(SetDefinedName(en.handle, name, "Sheet1!$A$1"), 0) << fm_get_last_error_message();
+  }
+  EXPECT_EQ(count_of(fm_workbook_get_defined_name_count, de.handle), 0U);
+  for (const char* name : {"Zeile", "Zone"}) {
+    SCOPED_TRACE(name);
+    EXPECT_EQ(SetDefinedName(de.handle, name, "Sheet1!$A$1"), 0) << fm_get_last_error_message();
+  }
+}
+
+TEST(FormulonCApiFormulaEntry, RedefiningNameByCaseAfterProfileSwitchReplacesIt) {
+  WorkbookGuard wb;
+  MakeProfileWorkbook(&wb, "win-365-en_US");
+  ASSERT_EQ(SetDefinedName(wb.handle, "Z1S1x", "Sheet1!$A$1"), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_workbook_set_profile_id(wb.handle, "win-365-de_DE"), 0) << fm_get_last_error_message();
+  ASSERT_EQ(SetDefinedName(wb.handle, "z1s1X", "Sheet1!$A$2"), 0) << fm_get_last_error_message();
+  ASSERT_EQ(count_of(fm_workbook_get_defined_name_count, wb.handle), 1U);
+  fm_defined_name_t out = FM_STRUCT_INIT(fm_defined_name_t);
+  ASSERT_EQ(fm_workbook_get_defined_name_at(wb.handle, 0, &out), 0);
+  EXPECT_STREQ(out.name, "z1s1X");
+}
+
+TEST(FormulonCApiFormulaEntry, ScopedDefinedNameIsCheckedPerScope) {
+  WorkbookGuard wb;
+  MakeProfileWorkbook(&wb, "win-365-en_US");
+  ASSERT_EQ(SetDefinedName(wb.handle, "Z1S1x", "Sheet1!$A$1", 0), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_workbook_set_profile_id(wb.handle, "win-365-de_DE"), 0) << fm_get_last_error_message();
+  // The sheet-scoped entry exists, so it may be redefined; the workbook scope has none, so it is a new name.
+  EXPECT_EQ(SetDefinedName(wb.handle, "z1s1x", "Sheet1!$A$2", 0), 0) << fm_get_last_error_message();
+  EXPECT_EQ(SetDefinedName(wb.handle, "Z1S1x", "Sheet1!$A$1", -1), static_cast<fm_status_t>(2));
+  EXPECT_EQ(count_of(fm_workbook_get_defined_name_count, wb.handle), 1U);
+}
+
+TEST(FormulonCApiFormulaEntry, TableNamesOpeningWithProfileR1C1ReferenceAreRefused) {
+  WorkbookGuard wb;
+  MakeProfileWorkbook(&wb, "win-365-de_DE");
+  ASSERT_EQ(fm_sheet_set_text(wb.handle, 0, 0, 0, "Col"), 0);
+  ASSERT_EQ(fm_sheet_set_number(wb.handle, 0, 1, 0, 1.0), 0);
+  const char* columns[] = {"Col"};
+  std::size_t index = 0;
+  EXPECT_EQ(AddTable(wb.handle, 0, record_arg(fm_cell_rect_t{0, 0, 1, 0}), "Z1S1T", columns, 1, "", 1, 0, &index),
+            static_cast<fm_status_t>(2));
+  ASSERT_EQ(AddTable(wb.handle, 0, record_arg(fm_cell_rect_t{0, 0, 1, 0}), "Sales", columns, 1, "", 1, 0, &index), 0)
+      << fm_get_last_error_message();
+  EXPECT_EQ(fm_sheet_rename_table(wb.handle, 0, index, "Z1S1T"), static_cast<fm_status_t>(2));
+  EXPECT_EQ(wb.handle->workbook().tables()[index].name, "Sales");
+}
+
+// A table over A1:A3 named `table_name` (header Col, data 1 and 2), created under en-US and then
+// read under `profile`, since a new table name opening with the profile's R1C1 letters is refused.
+void MakeTableWorkbook(WorkbookGuard* wb, const char* profile, const char* table_name) {
+  MakeProfileWorkbook(wb, "win-365-en_US");
+  ASSERT_EQ(fm_sheet_set_text(wb->handle, 0, 0, 0, "Col"), 0);
+  ASSERT_EQ(fm_sheet_set_number(wb->handle, 0, 1, 0, 1.0), 0);
+  ASSERT_EQ(fm_sheet_set_number(wb->handle, 0, 2, 0, 2.0), 0);
+  const char* columns[] = {"Col"};
+  std::size_t index = 0;
+  ASSERT_EQ(AddTable(wb->handle, 0, record_arg(fm_cell_rect_t{0, 0, 2, 0}), table_name, columns, 1, "", 1, 0, &index),
+            0)
+      << fm_get_last_error_message();
+  ASSERT_EQ(fm_workbook_set_profile_id(wb->handle, profile), 0) << fm_get_last_error_message();
+}
+
+TEST(FormulonCApiFormulaEntry, TableMayBeRenamedByCaseUnderProfileWhoseR1C1LettersItOpensWith) {
+  WorkbookGuard wb;
+  MakeTableWorkbook(&wb, "win-365-de_DE", "Z1S1T");
+  EXPECT_EQ(fm_sheet_rename_table(wb.handle, 0, 0, "z1s1t"), 0) << fm_get_last_error_message();
+  EXPECT_EQ(fm_sheet_rename_table(wb.handle, 0, 0, "Z1S1U"), static_cast<fm_status_t>(2));
+}
+
 TEST(FormulonCApiFormulaEntry, DefinedNameLocaleR1C1TokenIsAcceptedUnderOtherProfiles) {
   struct Case {
     const char* profile;
@@ -293,20 +370,7 @@ TEST(FormulonCApiFormulaEntry, LoadedDefinedNameOpeningWithLocaleR1C1TokenIsKept
   EXPECT_EQ(count_of(fm_workbook_get_defined_name_count, loaded.handle), 1U);
 }
 
-// A table over A1:A3 named `table_name` (header Col, data 1 and 2).
-void MakeTableWorkbook(WorkbookGuard* wb, const char* profile, const char* table_name) {
-  MakeProfileWorkbook(wb, profile);
-  ASSERT_EQ(fm_sheet_set_text(wb->handle, 0, 0, 0, "Col"), 0);
-  ASSERT_EQ(fm_sheet_set_number(wb->handle, 0, 1, 0, 1.0), 0);
-  ASSERT_EQ(fm_sheet_set_number(wb->handle, 0, 2, 0, 2.0), 0);
-  const char* columns[] = {"Col"};
-  std::size_t index = 0;
-  ASSERT_EQ(AddTable(wb->handle, 0, record_arg(fm_cell_rect_t{0, 0, 2, 0}), table_name, columns, 1, "", 1, 0, &index),
-            0)
-      << fm_get_last_error_message();
-}
-
-TEST(FormulonCApiFormulaEntry, TableNamedLikeLocaleR1C1TokenIsCreatedButItsReferenceIsRefusedOnEntry) {
+TEST(FormulonCApiFormulaEntry, TableNamedLikeLocaleR1C1TokenRefusesItsReferenceOnEntry) {
   struct Case {
     const char* profile;
     const char* table;
@@ -335,7 +399,7 @@ TEST(FormulonCApiFormulaEntry, TableReferenceInStoredFormulaFieldsIsRefusedUnder
 
 TEST(FormulonCApiFormulaEntry, ThisRowReferenceInsideTableNamedLikeLocaleR1C1TokenIsAccepted) {
   WorkbookGuard wb;
-  MakeProfileWorkbook(&wb, "win-365-es_ES");
+  MakeProfileWorkbook(&wb, "win-365-en_US");
   ASSERT_EQ(fm_sheet_set_text(wb.handle, 0, 0, 0, "Col"), 0);
   ASSERT_EQ(fm_sheet_set_text(wb.handle, 0, 0, 1, "Other"), 0);
   ASSERT_EQ(fm_sheet_set_number(wb.handle, 0, 1, 0, 1.0), 0);
@@ -344,6 +408,7 @@ TEST(FormulonCApiFormulaEntry, ThisRowReferenceInsideTableNamedLikeLocaleR1C1Tok
   std::size_t index = 0;
   ASSERT_EQ(AddTable(wb.handle, 0, record_arg(fm_cell_rect_t{0, 0, 2, 1}), "F", columns, 2, "", 1, 0, &index), 0)
       << fm_get_last_error_message();
+  ASSERT_EQ(fm_workbook_set_profile_id(wb.handle, "win-365-es_ES"), 0) << fm_get_last_error_message();
   EXPECT_EQ(fm_sheet_set_formula(wb.handle, 0, 1, 1, "=[@Col]"), 0) << fm_get_last_error_message();
 }
 

@@ -988,7 +988,8 @@ class TableInput:
     #: The cells the table covers, header row included, as a ``CellRect`` or an unqualified A1 range on the receiving
     #: sheet.
     range: Union[CellRect, str]
-    #: The new table's name; it must not be one another table already uses.
+    #: The new table's name; it must not be one another table already uses, nor be or start with a reference in the
+    #: profile locale's R1C1 letters (de ``Z1S1``).
     name: str
     #: One name per column of the range; each non-empty header cell must already hold its name and an empty one receives
     #: it. When omitted the names come from the header cells, an empty one named as Excel does (``Column1``, ...). Blank
@@ -9635,7 +9636,10 @@ class Workbook(_NoCopy):
 
         Raises:
           InvalidArgumentError: when ``formula`` is empty (remove a name with
-            :meth:`remove_defined_name`), or the name is malformed.
+            :meth:`remove_defined_name`), or the name is malformed. A new name that is,
+            or starts with, a reference in the profile locale's R1C1 letters (de ``Z1S1``) is
+            refused; redefining an existing name stays allowed. The check uses the profile
+            at the time of the call, so a loaded name is never re-checked.
           AlreadyExistsError: when the name equals a table's name.
           IndexOutOfRangeError: when ``scope`` is a sheet index past the sheet count.
         """

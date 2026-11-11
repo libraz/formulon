@@ -22,7 +22,6 @@
 #include "c_api/parts/struct_v1_sizes.h"
 #include "eval/function_registry.h"
 #include "eval/recalc_engine.h"
-#include "excel_locale.h"
 #include "io/format_detect.h"
 #include "io/ooxml_reader.h"
 #include "io/ooxml_writer.h"
@@ -32,7 +31,6 @@
 #include "sheet.h"
 #include "sheet_name.h"
 #include "utils/error.h"
-#include "utils/name_syntax.h"
 #include "value.h"
 
 using formulon::c_api::parts::c_str_or_null;
@@ -578,16 +576,6 @@ extern "C" fm_status_t fm_workbook_set_defined_name(fm_workbook_t* wb, const fm_
     return invalid_argument("formula must not be empty", "name=" + std::string(input->name));
   }
   auto& book = wb->workbook();
-  const formulon::LocaleFacts& locale = formulon::locale_facts(book.excel_profile());
-  const std::string_view new_name(input->name);
-  const auto holds_name = [&](const formulon::DefinedName& entry) {
-    return entry.name == new_name && entry.local_sheet_id == input->local_sheet_id;
-  };
-  const std::vector<formulon::DefinedName>& existing = book.defined_names();
-  if (formulon::opens_with_r1c1(new_name, locale.r1c1_row, locale.r1c1_col) &&
-      std::none_of(existing.begin(), existing.end(), holds_name)) {
-    return invalid_argument("name is not a valid defined name", "name=" + std::string(input->name));
-  }
   const std::int32_t scope = input->local_sheet_id;
   if (auto result = book.set_defined_name_scoped(std::string(input->name), std::move(stored), scope); !result) {
     return finish_status(std::move(result));

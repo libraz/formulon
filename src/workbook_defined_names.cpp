@@ -15,6 +15,7 @@
 
 #include "defined_name.h"
 #include "eval/recalc_engine.h"
+#include "excel_locale.h"
 #include "io/xlsb/table_records.h"
 #include "parser/ast.h"
 #include "parser/external_book_spelling.h"
@@ -170,7 +171,8 @@ Expected<void, Error> Workbook::set_defined_name_scoped(std::string name, std::s
     return entry.local_sheet_id == local_sheet_id && sheet_names::write_collides(entry.name, name);
   };
   const std::vector<io::xlsb::XlsbRetainedTable> retained = io::xlsb::xlsb_retained_tables(*this);
-  if (!is_valid_defined_name(name)) {
+  const LocaleFacts& locale = locale_facts(excel_profile_);
+  if (!is_valid_defined_name(name) || opens_with_r1c1(name, locale.r1c1_row, locale.r1c1_col)) {
     return make_error(FormulonErrorCode::kInvalidArgument, "name is not a valid defined name", "name=" + name);
   }
   if (std::any_of(tables_.begin(), tables_.end(), table_named) ||

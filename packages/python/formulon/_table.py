@@ -311,7 +311,9 @@ class Table(_NoCopy):
 
         A name another table already has (compared case-insensitively) raises
         ``AlreadyExistsError``, an empty or malformed one
-        ``InvalidArgumentError``. Structured references to the old name are
+        ``InvalidArgumentError``. A new name that is, or starts with, a reference in the
+        profile locale's R1C1 letters (de ``Z1S1``) is refused the same way; renaming to the
+        table's own name stays allowed, so a case-only rename works. Structured references to the old name are
         rewritten in cell, defined-name, conditional-format, validation and
         chart formulas (a bare table name used as a reference is not).
         """

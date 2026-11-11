@@ -20,6 +20,7 @@
 #include "eval/dep_graph.h"
 #include "eval/recalc_engine.h"
 #include "eval/text_format/display_text.h"
+#include "excel_locale.h"
 #include "io/auto_filter_xml.h"
 #include "io/xlsb/table_records.h"
 #include "io/xml_escape.h"
@@ -95,6 +96,14 @@ bool name_in_use(const std::vector<TableMetadata>& tables, const std::vector<io:
 Expected<void, Error> check_table_identity(const Workbook& wb, std::string_view name, std::string_view display_name,
                                            std::optional<std::size_t> self) {
   if (name.empty() || !is_valid_table_name(display_name)) {
+    return invalid_table("name is not a valid table name",
+                         "name=" + std::string(name) + " display_name=" + std::string(display_name));
+  }
+  const LocaleFacts& locale = locale_facts(wb.excel_profile());
+  const bool keeps_own_name = self.has_value() && (sheet_names::write_collides(wb.tables()[*self].name, name) ||
+                                                   sheet_names::write_collides(wb.tables()[*self].display_name, name));
+  if (!keeps_own_name && (opens_with_r1c1(name, locale.r1c1_row, locale.r1c1_col) ||
+                          opens_with_r1c1(display_name, locale.r1c1_row, locale.r1c1_col))) {
     return invalid_table("name is not a valid table name",
                          "name=" + std::string(name) + " display_name=" + std::string(display_name));
   }

@@ -463,3 +463,52 @@ test('a view patch mixing a freeze and a split is InvalidArgument', async () => 
     );
   });
 });
+
+// ---- Names opening with the profile's R1C1 letters ----
+
+test('a new defined name opening with the profile locale R1C1 letters is refused', async () => {
+  await withWorkbook((wb, { StatusCode }) => {
+    wb.setProfileId('win-365-de_DE');
+    for (const name of ['Z1S1x', 'z1s1']) {
+      rejectsWith(() => wb.setDefinedName({ name, formula: 'Sheet1!$A$1' }), StatusCode.InvalidArgument, name);
+    }
+    wb.setDefinedName({ name: 'Zeile', formula: 'Sheet1!$A$1' });
+    wb.setDefinedName({ name: 'Zone', formula: 'Sheet1!$A$1' });
+    assert.equal(wb.listDefinedNames().length, 2);
+  });
+});
+
+test('the same defined name is accepted under en-US, and a case change replaces an existing one after a switch', async () => {
+  await withWorkbook((wb) => {
+    wb.setProfileId('win-365-en_US');
+    wb.setDefinedName({ name: 'Z1S1x', formula: 'Sheet1!$A$1' });
+    wb.setProfileId('win-365-de_DE');
+    wb.setDefinedName({ name: 'z1s1X', formula: 'Sheet1!$A$2' });
+    const names = wb.listDefinedNames();
+    assert.equal(names.length, 1);
+    assert.equal(names[0].name, 'z1s1X');
+  });
+});
+
+test('a new table name opening with the profile locale R1C1 letters is refused; a case-only rename stays allowed', async () => {
+  await withWorkbook((wb, { StatusCode }) => {
+    const ws = wb.sheet(0);
+    ws.setValues('A1', [['Item'], ['East']]);
+    wb.setProfileId('win-365-de_DE');
+    rejectsWith(() => ws.addTable({ name: 'Z1S1T', range: 'A1:A2' }), StatusCode.InvalidArgument, 'add');
+    const table = ws.addTable({ name: 'Sales', range: 'A1:A2' });
+    rejectsWith(() => table.rename('Z1S1T'), StatusCode.InvalidArgument, 'rename');
+    assert.equal(table.getProperties().name, 'Sales');
+  });
+});
+
+test('a table created under en-US keeps working after a switch to de-DE and renames by case', async () => {
+  await withWorkbook((wb) => {
+    const ws = wb.sheet(0);
+    ws.setValues('A1', [['Item'], ['East']]);
+    const table = ws.addTable({ name: 'Z1S1T', range: 'A1:A2' });
+    wb.setProfileId('win-365-de_DE');
+    table.rename('z1s1t');
+    assert.equal(table.getProperties().name, 'z1s1t');
+  });
+});

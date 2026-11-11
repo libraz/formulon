@@ -532,7 +532,7 @@ export interface TableInput {
   /** The cells the table covers, header row included, as a `CellRect` or an A1 range on the receiving sheet. */
   range: CellRect | string;
   /** The new table's name; a name another table already uses (by name identity, see {@link Workbook}) fails with
-   *  `StatusCode.AlreadyExists`. */
+   *  `StatusCode.AlreadyExists`. A name that is, or starts with, a reference in the profile locale's R1C1 letters (de `Z1S1`) fails with `StatusCode.InvalidArgument`. */
   name: string;
   /** One name per column of the range; each non-empty header cell must already hold its name (otherwise
    *  `StatusCode.InvalidArgument`) and an empty one receives it. When omitted the names come from the header cells, and
@@ -6943,7 +6943,8 @@ export interface Workbook {
    *  `hidden` returns to its default. An empty `formula` fails with `StatusCode.InvalidArgument`, and one that does
    *  not parse with a parser status (1000-1014; `FormulonError.parseError` gives the position). A name that matches
    *  a table fails with `StatusCode.AlreadyExists`, a malformed one with `StatusCode.InvalidArgument`, and a
-   *  `scope` past the last sheet with `StatusCode.SheetIndexOutOfRange`; `removeDefinedName` removes a name. */
+   *  `scope` past the last sheet with `StatusCode.SheetIndexOutOfRange`; `removeDefinedName` removes a name.
+   *  A new name that is, or starts with, a reference in the profile locale's R1C1 letters (de `Z1S1`) is refused; redefining or renaming to an existing name stays allowed. The check uses the profile at the time of the call, so a loaded name is never re-checked. */
   setDefinedName(definedName: DefinedNameInput): void;
   /** The handle of the table named `name` on any sheet, resolved by name identity (see {@link Workbook}); the one
    *  workbook-wide table lookup (tables are added, listed and removed on their `Sheet`). A name no table has fails with
@@ -7653,7 +7654,7 @@ export interface Sheet {
   table(table: TableRef): Table;
   /** Creates a worksheet table on this sheet and returns its handle. See {@link TableInput} for the defaults; a
    *  name another table already uses fails with `StatusCode.AlreadyExists`, and a range that overlaps a table,
-   *  pivot table, data table, array formula or merged range with `StatusCode.PreconditionFailed`.
+   *  pivot table, data table, array formula or merged range with `StatusCode.PreconditionFailed`. A new name that is, or starts with, a reference in the profile locale's R1C1 letters (de `Z1S1`) is refused with `StatusCode.InvalidArgument`.
    *
    *  Column names are numbered as Excel numbers them. A blank one takes the profile's column word and the smallest
    *  free number from 1 (`Column1`, `列1`); one equal to a name on its left by name identity (see {@link Workbook}:
@@ -8345,7 +8346,7 @@ export interface Table {
    *  cells imply, and fills the blank cells of a marked one in the added rows. */
   update(patch: TablePatch): void;
   /** Renames the table. A name another table already uses (by name identity, see {@link Workbook}) fails with
-   *  `StatusCode.AlreadyExists`, an empty or malformed one with `StatusCode.InvalidArgument`. Structured
+   *  `StatusCode.AlreadyExists`, an empty or malformed one with `StatusCode.InvalidArgument`. A new name that is, or starts with, a reference in the profile locale's R1C1 letters (de `Z1S1`) is refused likewise; renaming to the table's own name stays allowed, so a case-only rename works. Structured
    *  references to the old name are rewritten in cell, defined-name, conditional-format, validation and chart
    *  formulas; a bare table name used as a reference is not rewritten. */
   rename(name: string): void;

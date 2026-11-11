@@ -190,7 +190,7 @@ std::size_t Count(const std::string& text, const std::string& needle) {
   return count;
 }
 
-// "S" on A1:C5: Region (text) / Sales / Units (numbers), four data rows.
+// "Sales" on A1:C5: Region (text) / Sales / Units (numbers), four data rows.
 void AddSales(Workbook& wb) {
   PutText(wb, "A1", "Region");
   PutText(wb, "B1", "Sales");
@@ -202,7 +202,7 @@ void AddSales(Workbook& wb) {
     PutNumber(wb, ("B" + row).c_str(), 100.0 + i);
     PutNumber(wb, ("C" + row).c_str(), 10.0 + i);
   }
-  AddTable(wb, MakeTable("S", "A1:C5", {"Region", "Sales", "Units"}));
+  AddTable(wb, MakeTable("Sales", "A1:C5", {"Region", "Sales", "Units"}));
 }
 
 // `AddSales` with the totals row shown and Sales switched to max, as a user would set it up.
@@ -240,7 +240,7 @@ TEST(WorkbookTableTotalsDefaults, TheLabelIsTheProfileLocaleWord) {
       EXPECT_EQ(table.columns[2].totals_function, "sum");
       EXPECT_EQ(TextAt(wb, "A6"), c.label);
       EXPECT_EQ(FormulaAt(wb, "B6"), "");
-      EXPECT_EQ(FormulaAt(wb, "C6"), "=SUBTOTAL(109,S[Units])");
+      EXPECT_EQ(FormulaAt(wb, "C6"), "=SUBTOTAL(109,Sales[Units])");
     }
   }
 }
@@ -321,11 +321,11 @@ TEST(WorkbookTableTotalsDefaults, TheLastColumnSumsOnlyNumbersNotShownAsDates) {
     PutText(wb, "A4", "c");
     c.fill(wb);
     Recalc(wb);
-    AddTable(wb, MakeTable("S", "A1:B4", {"Label", "Val"}));
+    AddTable(wb, MakeTable("Sales", "A1:B4", {"Label", "Val"}));
     ASSERT_TRUE(wb.set_table_totals_row(0, true).has_value());
     EXPECT_EQ(wb.tables()[0].columns[1].totals_function, c.function);
     EXPECT_EQ(FormulaAt(wb, "B5"),
-              std::string("=SUBTOTAL(") + (std::string(c.function) == "sum" ? "109" : "103") + ",S[Val])");
+              std::string("=SUBTOTAL(") + (std::string(c.function) == "sum" ? "109" : "103") + ",Sales[Val])");
     EXPECT_EQ(TextAt(wb, "A5"), "集計");
   }
 }
@@ -335,11 +335,11 @@ TEST(WorkbookTableTotalsDefaults, AOneColumnTableTakesTheFunctionAlone) {
   PutText(wb, "A1", "Val");
   PutNumber(wb, "A2", 1.0);
   PutNumber(wb, "A3", 2.0);
-  AddTable(wb, MakeTable("S", "A1:A3", {"Val"}));
+  AddTable(wb, MakeTable("Sales", "A1:A3", {"Val"}));
   ASSERT_TRUE(wb.set_table_totals_row(0, true).has_value());
   EXPECT_TRUE(wb.tables()[0].columns[0].totals_label.empty());
   EXPECT_EQ(wb.tables()[0].columns[0].totals_function, "sum");
-  EXPECT_EQ(FormulaAt(wb, "A4"), "=SUBTOTAL(109,S[Val])");
+  EXPECT_EQ(FormulaAt(wb, "A4"), "=SUBTOTAL(109,Sales[Val])");
 }
 
 TEST(WorkbookTableTotalsDefaults, ANewTableSavesTotalsRowShownZeroAndShowingDropsIt) {
@@ -392,16 +392,16 @@ TEST(WorkbookTableTotalsDefaults, TogglingOffKeepsEachColumnsSettingsAcrossASave
   for (Workbook* book : {&wb}) {
     ASSERT_TRUE(book->set_table_totals_row(0, true).has_value());
     EXPECT_EQ(TextAt(*book, "A6"), "集計");
-    EXPECT_EQ(FormulaAt(*book, "B6"), "=SUBTOTAL(104,S[Sales])");
-    EXPECT_EQ(FormulaAt(*book, "C6"), "=SUBTOTAL(109,S[Units])");
+    EXPECT_EQ(FormulaAt(*book, "B6"), "=SUBTOTAL(104,Sales[Sales])");
+    EXPECT_EQ(FormulaAt(*book, "C6"), "=SUBTOTAL(109,Sales[Units])");
   }
   Workbook reloaded = LoadXlsx(saved);
   ASSERT_EQ(reloaded.tables().size(), 1U);
   EXPECT_EQ(reloaded.tables()[0].columns[1].totals_function, "max");
   ASSERT_TRUE(reloaded.set_table_totals_row(0, true).has_value());
   EXPECT_EQ(TextAt(reloaded, "A6"), "集計");
-  EXPECT_EQ(FormulaAt(reloaded, "B6"), "=SUBTOTAL(104,S[Sales])");
-  EXPECT_EQ(FormulaAt(reloaded, "C6"), "=SUBTOTAL(109,S[Units])");
+  EXPECT_EQ(FormulaAt(reloaded, "B6"), "=SUBTOTAL(104,Sales[Sales])");
+  EXPECT_EQ(FormulaAt(reloaded, "C6"), "=SUBTOTAL(109,Sales[Units])");
 }
 
 TEST(WorkbookTableTotalsDefaults, ATableCreatedWithItsTotalsRowStartsFromTheDefaults) {
@@ -467,7 +467,7 @@ void ExpectDefaultsOnShow(Workbook& wb) {
   EXPECT_EQ(wb.tables()[0].columns[2].totals_function, "sum");
   EXPECT_EQ(TextAt(wb, "A6"), "集計");
   EXPECT_EQ(FormulaAt(wb, "B6"), "");
-  EXPECT_EQ(FormulaAt(wb, "C6"), "=SUBTOTAL(109,S[Units])");
+  EXPECT_EQ(FormulaAt(wb, "C6"), "=SUBTOTAL(109,Sales[Units])");
 }
 
 TEST(WorkbookTableStructuralDelete, DeletingTheTotalsRowTurnsItOffAndClearsEveryColumn) {
@@ -543,7 +543,7 @@ TEST(WorkbookTableStructuralDelete, AColumnDeleteTakingAHeaderCellIsAnOrdinaryCo
   EXPECT_EQ(wb.tables()[0].columns[1].name, "Units");
 }
 
-// "S" on A1:C5 with e2..e6 in E2:E6, G1 =E2, G2 =E6 and G3 =A3, all entered before the table.
+// "Sales" on A1:C5 with e2..e6 in E2:E6, G1 =E2, G2 =E6 and G3 =A3, all entered before the table.
 Workbook EveryDataRowBook() {
   Workbook wb = Book();
   for (int r = 2; r <= 6; ++r) {
@@ -631,7 +631,7 @@ TEST(WorkbookTableStructuralDelete, ATableDeletedAlongsideMustLieWhollyBelowTheK
 
 TEST(WorkbookTableStructuralDelete, AHeaderlessTableWhoseRowsAllGoIsRemoved) {
   Workbook wb = Book();
-  TableMetadata table = MakeTable("S", "A1:B3", {"P", "Q"});
+  TableMetadata table = MakeTable("Sales", "A1:B3", {"P", "Q"});
   table.header_row = false;
   AddTable(wb, std::move(table));
   ASSERT_TRUE(wb.delete_rows(0, 0U, 3U).has_value());
@@ -729,7 +729,7 @@ TEST(WorkbookTableHeaderOnly, AHeaderOnlyRangeTakesABlankDataRow) {
     for (const Put& put : c.before) {
       Write(wb, put);
     }
-    const Expected<std::size_t, Error> added = wb.add_table(MakeTable("S", c.range, c.names));
+    const Expected<std::size_t, Error> added = wb.add_table(MakeTable("Sales", c.range, c.names));
     if (c.ref == nullptr) {
       ASSERT_FALSE(added.has_value());
       EXPECT_EQ(added.error().code, FormulonErrorCode::kPreconditionFailed);
@@ -753,7 +753,7 @@ TEST(WorkbookTableHeaderOnly, AHeaderOnlyRangeTakesABlankDataRow) {
 
 TEST(WorkbookTableHeaderOnly, AHeaderAndATotalsRowOnOneRowAreAnInvalidArgument) {
   Workbook wb = Book();
-  TableMetadata table = MakeTable("S", "B1:D1", {"H1", "H2", "H3"});
+  TableMetadata table = MakeTable("Sales", "B1:D1", {"H1", "H2", "H3"});
   table.totals_row = true;
   const Expected<std::size_t, Error> added = wb.add_table(std::move(table));
   ASSERT_FALSE(added.has_value());
@@ -767,7 +767,7 @@ Workbook ShiftedHeaderOnlyBook() {
   for (const Put& put : {Txt("B1", "H1"), Txt("C1", "H2"), Txt("D1", "H3"), Num("C2", 7)}) {
     Write(wb, put);
   }
-  AddTable(wb, MakeTable("S", "B1:D1", {"H1", "H2", "H3"}));
+  AddTable(wb, MakeTable("Sales", "B1:D1", {"H1", "H2", "H3"}));
   return wb;
 }
 
@@ -789,7 +789,7 @@ TEST(WorkbookTableHeaderOnly, BothMarksRoundTripThroughXlsxAndXlsb) {
 TEST(WorkbookTableHeaderOnly, AResizeEndsThePlaceholderRow) {
   Workbook wb = Book();
   PutText(wb, "A1", "H1");
-  AddTable(wb, MakeTable("S", "A1:C1", {"H1", "H2", "H3"}));
+  AddTable(wb, MakeTable("Sales", "A1:C1", {"H1", "H2", "H3"}));
   ASSERT_TRUE(wb.resize_table(0, Rect("A1:C3")).has_value());
   EXPECT_EQ(wb.tables()[0].ref, "A1:C3");
   EXPECT_FALSE(wb.tables()[0].insert_row);
@@ -797,7 +797,7 @@ TEST(WorkbookTableHeaderOnly, AResizeEndsThePlaceholderRow) {
 
 TEST(WorkbookTableHeaderOnly, InsertingCellsAtThePlaceholderRowLeavesTheRange) {
   Workbook wb = Book();
-  AddTable(wb, MakeTable("S", "A1:C1", {"H1", "H2", "H3"}));
+  AddTable(wb, MakeTable("Sales", "A1:C1", {"H1", "H2", "H3"}));
   PutText(wb, "A3", "x");
   PutText(wb, "D2", "out");
   PutFormula(wb, "F1", "=A3");
@@ -818,7 +818,7 @@ TEST(WorkbookTableHeaderOnly, InsertingCellsAtThePlaceholderRowLeavesTheRange) {
 TEST(WorkbookTableHeaderOnly, AStructuralEditEndsBothMarks) {
   {
     Workbook wb = Book();
-    AddTable(wb, MakeTable("S", "A1:C1", {"H1", "H2", "H3"}));
+    AddTable(wb, MakeTable("Sales", "A1:C1", {"H1", "H2", "H3"}));
     ASSERT_TRUE(wb.insert_cells(0, Rect("A2:C2"), CellShift::kDown).has_value());
     EXPECT_FALSE(wb.tables()[0].insert_row);
   }
@@ -831,7 +831,7 @@ TEST(WorkbookTableHeaderOnly, AStructuralEditEndsBothMarks) {
   }
   {
     Workbook wb = Book();
-    AddTable(wb, MakeTable("S", "A1:C1", {"H1", "H2", "H3"}));
+    AddTable(wb, MakeTable("Sales", "A1:C1", {"H1", "H2", "H3"}));
     ASSERT_TRUE(wb.set_table_totals_row(0, true).has_value());
     EXPECT_FALSE(wb.tables()[0].insert_row);
   }
@@ -870,7 +870,7 @@ TEST(WorkbookTableHeaderOnly, WritingThePlaceholderRowEndsOnlyThePlaceholderMark
     ASSERT_EQ(fm_sheet_set_number(wb, 0, 1U, 2U, 7.0), 0);
     fm_table_spec_t spec = FM_STRUCT_INIT(fm_table_spec_t);
     spec.range = fm_cell_rect_t{0U, 1U, 0U, 3U};
-    spec.name = "S";
+    spec.name = "Sales";
     std::size_t index = 0;
     ASSERT_EQ(fm_sheet_add_table(wb, 0, &spec, &index), 0);
     ASSERT_EQ(c.write(wb), 0);
@@ -913,7 +913,7 @@ void ExpectTotalsCheckAgrees(Workbook& wb, bool shown, std::optional<CellShift> 
 TEST(WorkbookTableChecks, TheTotalsRowCheckAnswersAsTheToggle) {
   struct Case {
     const char* name;
-    std::function<void(Workbook&)> setup;  // after "S" A1:C5
+    std::function<void(Workbook&)> setup;  // after "Sales" A1:C5
     bool shown;
     std::optional<CellShift> shift;  // when accepted
   };
@@ -952,13 +952,13 @@ TEST(WorkbookTableChecks, TheTotalsRowCheckAnswersAsTheToggle) {
   {
     SCOPED_TRACE("last grid row");
     Workbook wb = Book();
-    AddTable(wb, MakeTable("S", "A1048574:B1048576", {"P", "Q"}));
+    AddTable(wb, MakeTable("Sales", "A1048574:B1048576", {"P", "Q"}));
     ExpectTotalsCheckAgrees(wb, true, std::nullopt);
   }
   {
     SCOPED_TRACE("hide with no data row");
     Workbook wb = Book();
-    TableMetadata table = MakeTable("S", "A1:B2", {"P", "Q"});
+    TableMetadata table = MakeTable("Sales", "A1:B2", {"P", "Q"});
     table.totals_row = true;
     AddTable(wb, std::move(table));
     ExpectTotalsCheckAgrees(wb, false, std::nullopt);
@@ -1001,7 +1001,7 @@ TEST(WorkbookTableChecks, TheBandEditCheckAnswersAsTheEdit) {
 
 TEST(WorkbookTableChecks, TheResizeCheckReadsStructuresWhereAPendingShiftMovesThem) {
   Workbook wb = Book();
-  AddTable(wb, MakeTable("S", "A1:B3", {"P", "Q"}));
+  AddTable(wb, MakeTable("Sales", "A1:B3", {"P", "Q"}));
   ASSERT_TRUE(wb.add_merge(0, Rect("A5:B5")).has_value());  // inside the columns: moves down
   ASSERT_TRUE(wb.add_merge(0, Rect("B7:C7")).has_value());  // across the band edge: unmerged
   const std::vector<PendingShift> pending{PendingShift{0U, Rect("A4:B4"), CellShift::kDown}};
@@ -1017,7 +1017,7 @@ TEST(WorkbookTableChecks, TheResizeCheckReadsStructuresWhereAPendingShiftMovesTh
 
 TEST(WorkbookTableChecks, TheTotalsRowCheckReadsCellsWhereAPendingShiftMovesThem) {
   Workbook wb = Book();
-  AddTable(wb, MakeTable("S", "A1:B3", {"P", "Q"}));
+  AddTable(wb, MakeTable("Sales", "A1:B3", {"P", "Q"}));
   PutText(wb, "A4", "x");
   ASSERT_TRUE(wb.add_merge(0, Rect("B8:C8")).has_value());
   const TableShape shape = ShapeOf(wb, 0);

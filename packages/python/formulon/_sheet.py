@@ -7004,7 +7004,9 @@ class Sheet(_NoCopy):
         """Create the worksheet table ``input`` describes on this sheet and return its handle.
 
         A ``name`` another table already has (compared case-insensitively)
-        raises ``AlreadyExistsError``. See :class:`TableInput` for the defaults.
+        raises ``AlreadyExistsError``. A new name that is, or starts with, a reference in the
+        profile locale's R1C1 letters (de ``Z1S1``) raises ``InvalidArgumentError``. See
+        :class:`TableInput` for the defaults.
 
         A one-row ``range`` with a header row creates the header plus one empty data row below it, shifting
         occupied cells of the table's columns down; it is refused on the last grid row, and ``header_row``
