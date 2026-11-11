@@ -39,17 +39,14 @@ BIOME ?= npx --yes @biomejs/biome@2
 # editable .mjs / .d.ts files and excludes the staged dist/ copies).
 BIOME_PATHS := packages/npm packages/npm-native tests/wasm src/wasm
 
-# Default test parallelism. Override with `make test CTEST_JOBS=N`. CTest
-# infers a reasonable number when the variable is empty (`-j 0` lets it
-# pick), but defaulting to the host CPU count keeps the fast loop near
-# 2 minutes on a modern workstation rather than the 10-15 minute serial
-# walk through the ~10k oracle parametric tests.
-CTEST_JOBS ?= 0
+# Build parallelism for every `cmake --build` recipe, bounded so a local run
+# leaves a shared host usable; CI passes `JOBS` explicitly for full width.
+# Never empty: a bare `--parallel` under the Unix Makefiles generator is
+# unbounded and exhausts a runner's memory. Never derived from the CPU count.
+JOBS ?= 3
 
-# Build parallelism for every `cmake --build` recipe; `make wasm JOBS=2`
-# caps a build on a shared host. Never empty: a bare `--parallel` under the
-# Unix Makefiles generator is unbounded and exhausts a CI runner's memory.
-JOBS ?= $(shell getconf _NPROCESSORS_ONLN 2>/dev/null || echo 2)
+# Test parallelism, `make test CTEST_JOBS=N`; follows `JOBS` by default.
+CTEST_JOBS ?= $(JOBS)
 
 SRC_DIRS := src tests
 CPP_GLOB := $(shell find $(SRC_DIRS) -type f \( -name '*.cpp' -o -name '*.h' \) 2>/dev/null)

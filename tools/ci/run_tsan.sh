@@ -99,7 +99,7 @@ if ! "${CMAKE}" "$@" > "${CONFIG_LOG}" 2>&1; then
 fi
 
 echo "${PROG}: building concurrency tests (target: formulon_concurrency_tsan_tests)..."
-if ! ${CMAKE} --build "${BUILD_DIR}" --target formulon_concurrency_tsan_tests --parallel \
+if ! ${CMAKE} --build "${BUILD_DIR}" --target formulon_concurrency_tsan_tests --parallel "${JOBS:-3}" \
     > "${BUILD_LOG}" 2>&1; then
   echo "${PROG}: build failed; see ${BUILD_LOG}" >&2
   tail -100 "${BUILD_LOG}" >&2 || true

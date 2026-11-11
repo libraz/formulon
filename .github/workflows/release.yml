@@ -38,6 +38,11 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false
 
+# Build parallelism for make recipes and tools/ scripts; the local default is
+# bounded, so a runner asks for its full width here.
+env:
+  JOBS: 4
+
 jobs:
   publish-npm:
     name: Publish npm + create GitHub Release

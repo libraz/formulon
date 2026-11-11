@@ -99,7 +99,7 @@ fi
 # cf-oracle, ...). Skipping any of them under-counts coverage for
 # whatever sources their test driver alone exercises.
 echo "${PROG}: building all test executables..."
-if ! "${CMAKE}" --build "${BUILD_DIR}" --parallel > "${BUILD_LOG}" 2>&1; then
+if ! "${CMAKE}" --build "${BUILD_DIR}" --parallel "${JOBS:-3}" > "${BUILD_LOG}" 2>&1; then
   echo "${PROG}: build failed; see ${BUILD_LOG}" >&2
   tail -100 "${BUILD_LOG}" >&2 || true
   exit 2

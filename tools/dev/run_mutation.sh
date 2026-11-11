@@ -127,7 +127,7 @@ if ! "${CMAKE}" --preset mutation > "${CONFIG_LOG}" 2>&1; then
 fi
 
 echo "${PROG}: building target ${TARGET_BIN}..."
-if ! "${CMAKE}" --build "${BUILD_DIR}" --parallel --target "${TARGET_BIN}" > "${BUILD_LOG}" 2>&1; then
+if ! "${CMAKE}" --build "${BUILD_DIR}" --parallel "${JOBS:-3}" --target "${TARGET_BIN}" > "${BUILD_LOG}" 2>&1; then
   echo "${PROG}: build failed; see ${BUILD_LOG}" >&2
   tail -100 "${BUILD_LOG}" >&2 || true
   exit 2
