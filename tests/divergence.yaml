@@ -149,6 +149,36 @@ entries:
     prefer: formulon
     first_noted: 2026-07-03
     last_verified_excel_version: "16.111.2"
+  # -- ftp hyperlink target with a space -------------------------------------
+  # Mac Excel saves the relationship Target of an ftp link whose path holds a
+  # space as the literal `NULL`, which loses the link. Formulon writes the
+  # space as `%20`, as it does for https. No oracle case exists for hyperlink
+  # storage; the entry documents the intent.
+  - id: hyperlink_ftp_target_space_saved_as_null
+    applies_to: [mac]
+    cause: accepted-divergence
+    mode: skip-oracle
+    scope: api-contract
+    evidence: [tests/unit/io/hyperlink_roundtrip_test.cpp]
+    reason: "A link set with target `ftp://e.x/a b` is saved with Target `ftp://e.x/a%20b`; Mac Excel writes the literal string `NULL`, so the target is lost in its file. Deliberately not reproduced."
+    prefer: formulon
+    first_noted: 2026-11-11
+    last_verified_excel_version: "16.114.4"
+  # -- hyperlink cell text on Mac Excel ---------------------------------------
+  # Mac Excel derives the text it writes into an empty cell from a link target
+  # as if the target were a path whenever it is not a plain lowercase
+  # hierarchical URL. Formulon writes the stored address instead. No oracle
+  # case exists for hyperlink storage; the entry documents the intent.
+  - id: hyperlink_mac_cell_text_path_quirk
+    applies_to: [mac]
+    cause: accepted-divergence
+    mode: skip-oracle
+    scope: api-contract
+    evidence: [tests/c_api/formulon_c_hyperlink_style_test.cpp]
+    reason: "Hyperlinks.Add on Mac Excel writes `file:///mailto/a@b.c` for `mailto:a@b.c`, `file:///news/x` for `news:x` and `file:///HTTP/:..:E.X/8080` for `HTTP://E.X:8080` into an empty cell, with the normalised address stored as the link's display attribute. Formulon writes the normalised address (`mailto:a@b.c`, `news:x`, `http://e.x:8080/`) as the cell text and stores no display attribute for it."
+    prefer: formulon
+    first_noted: 2026-11-11
+    last_verified_excel_version: "16.114.4"
   # -- ISFORMULA over a non-reference argument -----------------------------
   # ISFORMULA's argument is reference-typed, and Excel enforces that when
   # the formula is entered rather than when it is evaluated: `=ISFORMULA(42)`,

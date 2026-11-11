@@ -183,6 +183,28 @@ TEST(HyperlinkRoundTrip, DuplicateAndOverlappingRefsSurviveSaveInListOrder) {
   EXPECT_EQ(loaded.value().workbook.sheet(0).hyperlink_at(1, 1)->target, "https://one.example/");
 }
 
+TEST(HyperlinkRoundTrip, SavedExternalTargetEncodesSpacesWhileTheModelKeepsThem) {
+  Workbook wb = Workbook::create();
+  Hyperlink link;
+  link.target = "https://e.x/a b";
+  ASSERT_TRUE(static_cast<bool>(wb.set_hyperlink(0, link)));
+  EXPECT_EQ(wb.sheet(0).hyperlinks()[0].target, "https://e.x/a b");
+
+  auto saved = write_ooxml(wb);
+  ASSERT_TRUE(static_cast<bool>(saved)) << saved.error().message;
+  auto loaded = read_ooxml(ByteSpan{saved.value().data(), saved.value().size()});
+  ASSERT_TRUE(static_cast<bool>(loaded)) << loaded.error().message;
+  ASSERT_EQ(loaded.value().workbook.sheet(0).hyperlinks().size(), 1U);
+  EXPECT_EQ(loaded.value().workbook.sheet(0).hyperlinks()[0].target, "https://e.x/a%20b");
+
+  // A target that already holds %20 is written as it is.
+  auto resaved = write_ooxml(loaded.value().workbook);
+  ASSERT_TRUE(static_cast<bool>(resaved)) << resaved.error().message;
+  auto reloaded = read_ooxml(ByteSpan{resaved.value().data(), resaved.value().size()});
+  ASSERT_TRUE(static_cast<bool>(reloaded)) << reloaded.error().message;
+  EXPECT_EQ(reloaded.value().workbook.sheet(0).hyperlinks()[0].target, "https://e.x/a%20b");
+}
+
 }  // namespace
 }  // namespace io
 }  // namespace formulon

@@ -2943,8 +2943,16 @@ typedef struct {
  * format, border, alignment, protection and quote prefix are kept. Blank and
  * merge-covered cells are formatted; a rectangle spanning every row (or
  * column) formats the column (or row). An empty top-left cell receives
- * `display`, else `target`, else `location`, as text; a cell that holds a
+ * `display`, else the normalised address (`<address> - <fragment>` when a
+ * fragment was split off), else `location`, as text; a cell that holds a
  * value keeps it.
+ *
+ * An http, https or ftp target without userinfo is stored the way Excel stores it: scheme and host lowercased, an
+ * empty path becomes `/`, percent-escapes of unreserved characters decoded, and a `#fragment` split off into
+ * `location` (a given `location` is kept). A mailto: target has only its scheme lowercased; an absolute POSIX path
+ * becomes a `file:///` URL and a UNC path `file:////server/share/...`; any other target is stored as written. With no
+ * `display`, a top-left cell that holds other text gets the stored target as `display`, and a location-only link gets
+ * its location. A space in an external target is written as `%20` in a saved file.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `hl` is `NULL`;
@@ -2965,8 +2973,9 @@ FM_API fm_status_t fm_sheet_set_hyperlink(fm_workbook_t* wb, size_t sheet_index,
  * `index` is a position in the order `fm_sheet_get_hyperlink_at` enumerates;
  * `index == count` appends. Edits the list only: no cell values or formats
  * are written or reset, so a caller undoing `fm_sheet_remove_hyperlink`
- * restores the cell formats itself. Pairs with `fm_sheet_remove_hyperlink_at`
- * for a lossless undo of the list.
+ * restores the cell formats itself. The target, location and display
+ * are stored verbatim, with no normalisation. Pairs with
+ * `fm_sheet_remove_hyperlink_at` for a lossless undo of the list.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `hl` is `NULL`;

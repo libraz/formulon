@@ -2383,8 +2383,8 @@ export interface Hyperlink {
   readonly tooltip: string | null;
 }
 
-/** Argument of `Sheet.setHyperlink` and `Sheet.insertHyperlinkAt`. A `null` `display` or `tooltip` is the same as omitting it, so a read
- *  `Hyperlink` can be passed back. */
+/** Argument of `Sheet.setHyperlink` and `Sheet.insertHyperlinkAt`. A `null` `display` or `tooltip` is the same as
+ *  omitting it, so a read `Hyperlink` can be passed back. */
 export interface HyperlinkInput {
   /** The absolute or relative target (URL, email address, file); `null` makes an in-workbook link, which needs
    *  `location`. */
@@ -7928,8 +7928,16 @@ export interface Sheet {
   /** Sets the hyperlink covering exactly `link.range`: a link on that same range is replaced in place, otherwise
    *  `link` is appended. Links on other ranges are kept, overlapping ones included. For an in-workbook link, pass a
    *  `null` `target` and the A1 destination as `location`. `display` is the hyperlink's stored display attribute.
-   *  An empty top-left cell of `link.range` receives `link.display`, else `link.target`, else `link.location` as
-   *  text; a cell that holds a value keeps it. Every cell of the range takes Excel's Hyperlink cell style: its font
+   *  An empty top-left cell of `link.range` receives `link.display`, else the normalised address
+   *  (`<address> - <fragment>` when a fragment was split off), else `link.location` as text; a cell that holds a
+   *  value keeps it.
+   *  An http, https or ftp target without userinfo is stored the way Excel stores it: scheme and host lowercased, an
+   *  empty path becomes `/`, percent-escapes of unreserved characters decoded, and a `#fragment` split off into
+   *  `location` (a given `location` is kept). A mailto: target has only its scheme lowercased; an absolute POSIX path
+   *  becomes a `file:///` URL and a UNC path `file:////server/share/...`; any other target is stored as written. With
+   *  no `display`, a top-left cell that holds other text gets the stored target as `display`, and a location-only
+   *  link gets its location. A space in an external target is written as `%20` in a saved file.
+   *  Every cell of the range takes Excel's Hyperlink cell style: its font
    *  is replaced (Normal font, underlined, theme colour 10) and fill, number format, border, alignment and
    *  protection are kept; blank and merged-away cells are formatted too, and a whole-column range formats the
    *  column. Text for the top-left cell over 32,767 characters fails with `StatusCode.InvalidArgument`; more than
@@ -7946,8 +7954,9 @@ export interface Sheet {
   /** Inserts `link` at position `hyperlinkIndex` of the list `listHyperlinks()` returns. Nothing is replaced: a
    *  link on the same range is kept (unlike `setHyperlink`). `hyperlinkIndex` equal to the count appends; above it
    *  fails with `StatusCode.IndexOutOfRange` and changes nothing. A missing `link.range` is a `TypeError`. Edits
-   *  the list only: no cell values or formats are written or reset, so a caller undoing
-   *  {@link Sheet.removeHyperlink} restores the cell formats itself. Pairs with {@link Sheet.removeHyperlinkAt} for a lossless undo. */
+   *  the list only: no cell values or formats are written or reset, and the target is stored verbatim, without the
+   *  normalisation `setHyperlink` applies, so a caller undoing {@link Sheet.removeHyperlink} restores the cell
+   *  formats itself. Pairs with {@link Sheet.removeHyperlinkAt} for a lossless undo. */
   insertHyperlinkAt(hyperlinkIndex: number, link: HyperlinkInput): void;
   /** Removes every hyperlink whose range intersects `range` (inclusive), each one whole; `StatusCode.NotFound` when
    *  none does. Resets every cell of each removed hyperlink's range to the default format, including cells another

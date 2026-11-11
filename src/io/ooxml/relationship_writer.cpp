@@ -109,6 +109,19 @@ void AppendRelationship(std::string& out, std::uint32_t rid, std::string_view ty
   AppendRelationship(out, "rId" + std::to_string(rid), type, target, target_external, escape_target);
 }
 
+std::string EncodeTargetSpaces(std::string_view target) {
+  std::string out;
+  out.reserve(target.size());
+  for (const char c : target) {
+    if (c == ' ') {
+      out.append("%20");
+    } else {
+      out.push_back(c);
+    }
+  }
+  return out;
+}
+
 void RecordDroppedRelationship(std::string_view event, std::string_view type, std::string_view target,
                                WriteDiagnostics* diagnostics) {
   StructuredLog(event)

@@ -4927,7 +4927,7 @@ entries:
     py: insert_hyperlink_at
     surfaces: [c, wasm, native, py]
     facade: handwritten
-    exception: "Positional insert into an ordered list that keeps duplicates, so the verb is insert (add refuses clashes), paired with removeHyperlinkAt; returns void because the position is the argument; no style side effects (setHyperlink and removeHyperlink format cells)"
+    exception: "Positional insert into an ordered list that keeps duplicates, so the verb is insert (add refuses clashes), paired with removeHyperlinkAt; returns void because the position is the argument; no style side effects (setHyperlink and removeHyperlink format cells) and no target normalisation (setHyperlink normalises), so a removed link re-inserts unchanged"
   hyperlink.remove_at:
     kind: op
     scope: sheet

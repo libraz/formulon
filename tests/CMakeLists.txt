@@ -25,6 +25,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/sheet_test.cpp
   unit/sheet_clone_test.cpp
   unit/sheet_hyperlinks_test.cpp
+  unit/hyperlink_address_test.cpp
   unit/sheet_copy_names_test.cpp
   unit/sheet_spill_test.cpp
   unit/sheet_spill_cause_test.cpp

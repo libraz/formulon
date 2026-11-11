@@ -47,6 +47,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `setHyperlink`, `removeHyperlink` and `clearHyperlinks` fail with
   `PreconditionFailed`, changing nothing, when a range to format exceeds
   1,048,576 cells and is not a whole column or row.
+- `setHyperlink` stores a target the way Excel does: an http, https or ftp URL
+  without userinfo gets a lowercase scheme and host, `/` for an empty path,
+  decoded unreserved percent-escapes and its `#fragment` moved to `location`;
+  a mailto: target has its scheme lowercased, a POSIX path becomes `file:///...`
+  and a UNC path `file:////server/...`. A space in an external target is saved
+  as `%20`. Loading a file changes no target. With no display given, a top-left
+  cell that holds other text gets the stored address as the link's display, and
+  a location-only link gets its location. `insertHyperlinkAt` stays verbatim: no
+  normalisation and no cell text.
 - C ABI: `fm_sheet_set_hyperlink(wb, sheet_index, hl)` has no cell arguments and
   no `NULL` form, and `fm_sheet_remove_hyperlink(wb, sheet_index, range)` takes
   a rectangle, a signature change against 0.18

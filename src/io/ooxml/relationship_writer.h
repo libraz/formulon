@@ -87,6 +87,10 @@ void AppendRelationship(std::string& out, std::string_view id, std::string_view 
 void AppendRelationship(std::string& out, std::uint32_t rid, std::string_view type, std::string_view target,
                         bool target_external = false, bool escape_target = false);
 
+/// `target` with each literal space written as `%20`, the form Excel saves an
+/// external hyperlink target in. Existing escapes are left alone.
+std::string EncodeTargetSpaces(std::string_view target);
+
 /// Logs `event` for an internal relationship whose target part is not in the
 /// package and counts it in `diagnostics` (when non-null) as dropped.
 void RecordDroppedRelationship(std::string_view event, std::string_view type, std::string_view target,

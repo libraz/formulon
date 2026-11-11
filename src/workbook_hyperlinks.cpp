@@ -15,6 +15,7 @@
 #include "column_width.h"
 #include "eval/coerce.h"
 #include "eval/recalc_engine.h"
+#include "hyperlink_address.h"
 #include "new_workbook_defaults.h"
 #include "sheet.h"
 #include "style_region.h"
@@ -151,12 +152,12 @@ struct LinkText {
   const char* over_cap;
 };
 
-LinkText link_text(const Hyperlink& link) {
+LinkText link_text(const Hyperlink& link, const std::string& derived) {
   if (!link.display.empty()) {
     return {link.display, "display must be at most 32767 UTF-16 units"};
   }
-  if (!link.target.empty()) {
-    return {link.target, "target must be at most 32767 UTF-16 units"};
+  if (!derived.empty()) {
+    return {derived, "target must be at most 32767 UTF-16 units"};
   }
   return {link.location, "location must be at most 32767 UTF-16 units"};
 }
@@ -169,7 +170,23 @@ Expected<void, Error> Workbook::set_hyperlink(std::size_t sheet_index, Hyperlink
       link.col > link.last_col) {
     return make_error(FormulonErrorCode::kInvalidArgument, "rect is inverted or outside the grid");
   }
-  const LinkText chosen = link_text(link);
+  Sheet& sheet = sheets_[sheet_index];
+  // Excel's own text for a target: `<target> - <fragment>` when a fragment was
+  // split off, the stored target otherwise.
+  const std::string derived = normalize_hyperlink(link);
+  const bool cell_free = takes_link_text(sheet, link.row, link.col);
+  if (link.display.empty()) {
+    if (!link.target.empty() && !cell_free) {
+      // The cell keeps its own text; the link remembers the address instead.
+      const Value shown = sheet.resolve_cell_value(link.row, link.col);
+      if (!shown.is_blank() && !(shown.is_text() && shown.as_text() == link.target)) {
+        link.display = link.target;
+      }
+    } else if (link.target.empty()) {
+      link.display = link.location;
+    }
+  }
+  const LinkText chosen = link_text(link, derived);
   const std::string_view text = chosen.text;
   if (text.size() > eval::kExcelTextCapUnits && utf16_units_in(text) > eval::kExcelTextCapUnits) {
     return make_error(FormulonErrorCode::kInvalidArgument, chosen.over_cap);
@@ -177,8 +194,7 @@ Expected<void, Error> Workbook::set_hyperlink(std::size_t sheet_index, Hyperlink
   const StyleRect rect = rect_of(link);
   RETURN_IF_ERROR(check_restyle_area(rect));
 
-  Sheet& sheet = sheets_[sheet_index];
-  const bool write_text = !text.empty() && takes_link_text(sheet, link.row, link.col);
+  const bool write_text = !text.empty() && cell_free;
   if (write_text) {
     RETURN_IF_ERROR(set_cell_text(sheet_index, link.row, link.col, text));
   }

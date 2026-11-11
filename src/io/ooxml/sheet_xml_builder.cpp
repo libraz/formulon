@@ -825,7 +825,7 @@ SheetRelsResult BuildSheetRels(const Sheet& sheet, const std::vector<EmissionPla
     }
     hyperlink_targets.emplace(rid, h.target);
     res.hyperlink_rids.push_back(rid);
-    add_rel(rid, kRelHyperlink, h.target, /*target_external=*/true, /*escape_target=*/true);
+    add_rel(rid, kRelHyperlink, EncodeTargetSpaces(h.target), /*target_external=*/true, /*escape_target=*/true);
   }
   const SheetPrintSettings& print = sheet.print_settings();
   if (!print.printer_settings_path.empty()) {

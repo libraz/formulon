@@ -420,7 +420,7 @@ std::string BuildSheetRels(const Sheet& sheet, const EmissionPlan& plan, const s
     if (!emitted_hyperlink_rids.insert(hyperlink_rids[i]).second) {
       continue;
     }
-    AppendRelationship(entries, hyperlink_rids[i], kRelHyperlink, hyperlink.target,
+    AppendRelationship(entries, hyperlink_rids[i], kRelHyperlink, EncodeTargetSpaces(hyperlink.target),
                        /*target_external=*/true, /*escape_target=*/true);
   }
   for (const XlsbTablePart& table : tables) {

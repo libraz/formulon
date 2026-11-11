@@ -285,9 +285,9 @@ TEST_F(HyperlinkStyle, SetWritesTheTextOfAnEmptyTopLeftCell) {
   };
   const Row rows[] = {
       {"https://example.com", nullptr, "Shown", "Shown"},
-      {"https://example.com", nullptr, nullptr, "https://example.com"},
+      {"https://example.com", nullptr, nullptr, "https://example.com/"},
       {nullptr, "Sheet1!B2", nullptr, "Sheet1!B2"},
-      {"https://example.com", "Sheet1!B2", nullptr, "https://example.com"},
+      {"https://example.com", "Sheet1!B2", nullptr, "https://example.com/"},
   };
   std::uint32_t row_index = 0;
   for (const Row& row : rows) {
@@ -313,6 +313,131 @@ TEST_F(HyperlinkStyle, SetKeepsTheValueOfANonEmptyTopLeftCell) {
   EXPECT_EQ(v.u.number, 42.0);
   EXPECT_NE(XfOf(0, 0), 0U);
   EXPECT_NE(XfOf(1, 0), 0U);
+}
+
+TEST_F(HyperlinkStyle, SetStoresTheTargetTheWayExcelDoes) {
+  struct Row {
+    const char* in;
+    const char* target;
+    const char* location;
+    const char* text;
+  };
+  const Row rows[] = {
+      {"HTTPS://E.X/Path", "https://e.x/Path", "", "https://e.x/Path"},
+      {"https://e.x?q=1", "https://e.x/?q=1", "", "https://e.x/?q=1"},
+      {"https://e.x/b#frag", "https://e.x/b", "frag", "https://e.x/b - frag"},
+      {"MAILTO:A@B.C", "mailto:A@B.C", "", "mailto:A@B.C"},
+      {"/Users/me/f.xlsx", "file:///Users/me/f.xlsx", "", "file:///Users/me/f.xlsx"},
+      {"\\\\server\\share\\f.xlsx", "file:////server/share/f.xlsx", "", "file:////server/share/f.xlsx"},
+      {"docs/a.xlsx", "docs/a.xlsx", "", "docs/a.xlsx"},
+  };
+  std::uint32_t row_index = 0;
+  for (const Row& row : rows) {
+    const fm_hyperlink_t hl = Link({row_index, 0U, row_index, 0U}, row.in);
+    ASSERT_EQ(fm_sheet_set_hyperlink(wb(), 0, &hl), 0) << row.in;
+    int32_t present = 0;
+    fm_hyperlink_t out = FM_STRUCT_INIT(fm_hyperlink_t);
+    ASSERT_EQ(fm_sheet_get_hyperlink(wb(), 0, row_index, 0, &present, &out), 0);
+    ASSERT_EQ(present, 1);
+    EXPECT_STREQ(out.target, row.target) << row.in;
+    EXPECT_STREQ(out.location != nullptr ? out.location : "", row.location) << row.in;
+    EXPECT_EQ(TextAt(row_index, 0), row.text) << row.in;
+    ++row_index;
+  }
+}
+
+TEST_F(HyperlinkStyle, PositionalInsertStoresTheTargetVerbatimAndWritesNoText) {
+  const fm_hyperlink_t hl = Link({0U, 0U, 0U, 0U}, "HTTPS://E.X/b#frag");
+  ASSERT_EQ(fm_sheet_insert_hyperlink_at(wb(), 0, 0, &hl), 0);
+  fm_hyperlink_t out = FM_STRUCT_INIT(fm_hyperlink_t);
+  ASSERT_EQ(fm_sheet_get_hyperlink_at(wb(), 0, 0, &out), 0);
+  EXPECT_STREQ(out.target, "HTTPS://E.X/b#frag");
+  EXPECT_EQ(out.location, nullptr);
+  EXPECT_EQ(out.display, nullptr);
+  EXPECT_EQ(TextAt(0, 0), "<none>");
+}
+
+TEST_F(HyperlinkStyle, RemoveAtThenInsertAtOfALoadedUnnormalisedLinkChangesNothing) {
+  // A positional insert keeps an address Excel would not store; a save and load carries it into the loaded book.
+  const fm_hyperlink_t seed = Link({0U, 0U, 0U, 0U}, "https://E.X", "Shown");
+  ASSERT_EQ(fm_sheet_insert_hyperlink_at(wb(), 0, 0, &seed), 0);
+  const auto save = [](fm_workbook_t* book, BufferGuard& bytes) {
+    ASSERT_EQ(fm_workbook_save(book, FM_WORKBOOK_FORMAT_XLSX, &bytes.data, &bytes.len), 0);
+  };
+  BufferGuard first;
+  save(wb(), first);
+  WorkbookGuard loaded;
+  ASSERT_EQ(fm_workbook_load(first.data, first.len, &loaded.handle), 0);
+
+  fm_hyperlink_t got = FM_STRUCT_INIT(fm_hyperlink_t);
+  ASSERT_EQ(fm_sheet_get_hyperlink_at(loaded.handle, 0, 0, &got), 0);
+  const std::string target = got.target != nullptr ? got.target : "<null>";
+  const std::string location = got.location != nullptr ? got.location : "<null>";
+  const std::string display = got.display != nullptr ? got.display : "<null>";
+  EXPECT_EQ(target, "https://E.X");
+
+  fm_hyperlink_t again = FM_STRUCT_INIT(fm_hyperlink_t);
+  again.rect = got.rect;
+  again.target = target == "<null>" ? nullptr : target.c_str();
+  again.location = location == "<null>" ? nullptr : location.c_str();
+  again.display = display == "<null>" ? nullptr : display.c_str();
+  ASSERT_EQ(fm_sheet_remove_hyperlink_at(loaded.handle, 0, 0), 0);
+  ASSERT_EQ(fm_sheet_insert_hyperlink_at(loaded.handle, 0, 0, &again), 0);
+
+  fm_hyperlink_t back = FM_STRUCT_INIT(fm_hyperlink_t);
+  ASSERT_EQ(fm_sheet_get_hyperlink_at(loaded.handle, 0, 0, &back), 0);
+  EXPECT_STREQ(back.target, target.c_str());
+  EXPECT_EQ(back.location != nullptr ? std::string(back.location) : std::string("<null>"), location);
+  EXPECT_EQ(back.display != nullptr ? std::string(back.display) : std::string("<null>"), display);
+
+  // The saved relationship Target is the loaded one: reading it again gives the same address.
+  BufferGuard second;
+  save(loaded.handle, second);
+  WorkbookGuard reloaded;
+  ASSERT_EQ(fm_workbook_load(second.data, second.len, &reloaded.handle), 0);
+  fm_hyperlink_t final_link = FM_STRUCT_INIT(fm_hyperlink_t);
+  ASSERT_EQ(fm_sheet_get_hyperlink_at(reloaded.handle, 0, 0, &final_link), 0);
+  EXPECT_STREQ(final_link.target, target.c_str());
+}
+
+TEST_F(HyperlinkStyle, SetKeepsACallerLocationOverAFragment) {
+  fm_hyperlink_t hl = Link({0U, 0U, 0U, 0U}, "https://e.x/b#frag");
+  hl.location = "Sheet1!A1";
+  ASSERT_EQ(fm_sheet_set_hyperlink(wb(), 0, &hl), 0);
+  int32_t present = 0;
+  fm_hyperlink_t out = FM_STRUCT_INIT(fm_hyperlink_t);
+  ASSERT_EQ(fm_sheet_get_hyperlink(wb(), 0, 0, 0, &present, &out), 0);
+  EXPECT_STREQ(out.target, "https://e.x/b");
+  EXPECT_STREQ(out.location, "Sheet1!A1");
+}
+
+TEST_F(HyperlinkStyle, SetOverATextCellRecordsTheTargetAsDisplayUnlessTheyMatch) {
+  ASSERT_EQ(fm_sheet_set_text(wb(), 0, 0, 0, "already"), 0);
+  ASSERT_EQ(fm_sheet_set_text(wb(), 0, 1, 0, "https://e.x/d5"), 0);
+  ASSERT_EQ(fm_sheet_set_text(wb(), 0, 2, 0, "https://e.x/d6/"), 0);
+  ASSERT_EQ(fm_sheet_set_text(wb(), 0, 3, 0, "kept"), 0);
+  ASSERT_EQ(Set({0U, 0U, 0U, 0U}, "https://e.x/d1"), 0);
+  ASSERT_EQ(Set({1U, 0U, 1U, 0U}, "https://e.x/d5"), 0);
+  ASSERT_EQ(Set({2U, 0U, 2U, 0U}, "https://e.x/d6"), 0);
+  ASSERT_EQ(Set({3U, 0U, 3U, 0U}, "https://e.x/d7", "given"), 0);
+  const char* const expected[] = {"https://e.x/d1", "", "https://e.x/d6", "given"};
+  for (std::uint32_t r = 0; r < 4U; ++r) {
+    int32_t present = 0;
+    fm_hyperlink_t out = FM_STRUCT_INIT(fm_hyperlink_t);
+    ASSERT_EQ(fm_sheet_get_hyperlink(wb(), 0, r, 0, &present, &out), 0);
+    EXPECT_STREQ(out.display != nullptr ? out.display : "", expected[r]) << r;
+  }
+  EXPECT_EQ(TextAt(0, 0), "already");
+}
+
+TEST_F(HyperlinkStyle, SetOfALocationOnlyLinkGivesItTheLocationAsDisplay) {
+  fm_hyperlink_t hl = Link({0U, 0U, 0U, 0U}, nullptr);
+  hl.location = "Sheet1!A1";
+  ASSERT_EQ(fm_sheet_set_hyperlink(wb(), 0, &hl), 0);
+  int32_t present = 0;
+  fm_hyperlink_t out = FM_STRUCT_INIT(fm_hyperlink_t);
+  ASSERT_EQ(fm_sheet_get_hyperlink(wb(), 0, 0, 0, &present, &out), 0);
+  EXPECT_STREQ(out.display, "Sheet1!A1");
 }
 
 TEST_F(HyperlinkStyle, SetRefusesOverlongTextBeforeChangingAnything) {
@@ -356,7 +481,7 @@ TEST_F(HyperlinkStyle, RemoveResetsTheWholeRangeEvenCellsAnotherLinkStillCovers)
   fm_hyperlink_t got = FM_STRUCT_INIT(fm_hyperlink_t);
   ASSERT_EQ(fm_sheet_get_hyperlink(wb(), 0, 1, 1, &present, &got), 0);
   ASSERT_EQ(present, 1);
-  EXPECT_STREQ(got.target, "https://narrow.example");
+  EXPECT_STREQ(got.target, "https://narrow.example/");
 
   // Every cell of A1:C3 is back to xf 0, B2 included although its link survives.
   for (std::uint32_t row = 0; row <= 2U; ++row) {

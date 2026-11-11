@@ -113,8 +113,28 @@ class MergeCommentHyperlinkTests(unittest.TestCase):
             links = wb.sheet(0).list_hyperlinks()
             self.assertEqual(len(links), 1)
             self.assertEqual(links[0].range, CellRect(2, 3, 2, 3))
-            self.assertEqual(links[0].target, "https://example.com")
+            self.assertEqual(links[0].target, "https://example.com/")
             self.assertEqual(links[0].display, "Example")
+
+    def test_set_hyperlink_normalises_and_insert_hyperlink_at_is_verbatim(self) -> None:
+        with Workbook.create_default() as wb:
+            ws = wb.sheet(0)
+            ws.set_hyperlink(HyperlinkInput(range="A1", target="HTTP://Example.COM#Frag"))
+            ws.set_hyperlink(HyperlinkInput(range="A2", target="/tmp/a b.xlsx"))
+            first = ws.get_hyperlink("A1")
+            assert first is not None
+            self.assertEqual(first.target, "http://example.com/")
+            self.assertEqual(first.location, "Frag")
+            self.assertEqual(ws.get_value("A1"), "http://example.com/ - Frag")
+            second = ws.get_hyperlink("A2")
+            assert second is not None
+            self.assertEqual(second.target, "file:///tmp/a b.xlsx")
+            self.assertEqual(ws.get_value("A2"), "file:///tmp/a b.xlsx")
+            ws.insert_hyperlink_at(2, HyperlinkInput(range="C3", target="HTTP://Example.COM#Frag"))
+            verbatim = ws.get_hyperlink("C3")
+            assert verbatim is not None
+            self.assertEqual(verbatim.target, "HTTP://Example.COM#Frag")
+            self.assertIsNone(ws.get_value("C3"))
 
     def test_inverted_or_off_grid_rect_is_invalid_argument(self) -> None:
         with Workbook.create_default() as wb:

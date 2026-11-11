@@ -84,7 +84,8 @@ test('setHyperlink upserts on its range and removeHyperlink removes every link i
   const links = wb.sheet(0).listHyperlinks();
   assert.equal(links.length, 1);
   assert.equal(links[0].target, 'https://example.com/b');
-  assert.equal(links[0].display, null);
+  // The cell already holds the first link's text, so the target is kept as the display.
+  assert.equal(links[0].display, 'https://example.com/b');
 
   wb.sheet(0).setHyperlink({
     target: 'https://example.com/range',
@@ -102,6 +103,23 @@ test('setHyperlink upserts on its range and removeHyperlink removes every link i
     (e) => isFormulonError(e, mod.StatusCode.NotFound),
   );
   assert.equal(wb.sheet(0).listHyperlinks().length, 0);
+});
+
+test('setHyperlink normalises the target and insertHyperlinkAt stores it verbatim', async () => {
+  const mod = await getModule();
+  const wb = mod.Workbook.createDefault();
+  const ws = wb.sheet(0);
+  ws.setHyperlink({ target: 'HTTP://Example.COM#Frag', range: 'A1' });
+  ws.setHyperlink({ target: '/tmp/a b.xlsx', range: 'A2' });
+  assert.equal(ws.getHyperlink('A1').target, 'http://example.com/');
+  assert.equal(ws.getHyperlink('A1').location, 'Frag');
+  assert.equal(ws.getValue('A1'), 'http://example.com/ - Frag');
+  assert.equal(ws.getHyperlink('A2').target, 'file:///tmp/a b.xlsx');
+  assert.equal(ws.getValue('A2'), 'file:///tmp/a b.xlsx');
+
+  ws.insertHyperlinkAt(2, { target: 'HTTP://Example.COM#Frag', range: 'C3' });
+  assert.equal(ws.getHyperlink('C3').target, 'HTTP://Example.COM#Frag');
+  assert.equal(ws.getValue('C3'), null);
 });
 
 test('removeHyperlink / clearHyperlinks surface on an empty sheet', async () => {

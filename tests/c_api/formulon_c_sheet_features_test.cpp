@@ -95,7 +95,7 @@ TEST_F(FormulonCApiSheetFeatures, HyperlinkAddAndIterate) {
   EXPECT_EQ(out.rect.last_row, 1U);
   EXPECT_EQ(out.rect.last_col, 2U);
   ASSERT_NE(out.target, nullptr);
-  EXPECT_STREQ(out.target, "https://example.com");
+  EXPECT_STREQ(out.target, "https://example.com/");
   EXPECT_STREQ(out.display, "Click");
   EXPECT_STREQ(out.tooltip, "Open site");
 }
@@ -115,7 +115,7 @@ TEST_F(FormulonCApiSheetFeatures, HyperlinkRangeAddAndIterate) {
   EXPECT_EQ(out.rect.first_col, 8U);
   EXPECT_EQ(out.rect.last_row, 9U);
   EXPECT_EQ(out.rect.last_col, 10U);
-  EXPECT_STREQ(out.target, "https://range.example");
+  EXPECT_STREQ(out.target, "https://range.example/");
 }
 
 TEST_F(FormulonCApiSheetFeatures, HyperlinkRejectsInvertedRectangleAtomically) {
@@ -168,7 +168,7 @@ TEST_F(FormulonCApiSheetFeatures, HyperlinkSetReplacesOnlyTheSameRange) {
   fm_hyperlink_t got = FM_STRUCT_INIT(fm_hyperlink_t);
   ASSERT_EQ(fm_sheet_get_hyperlink(wb_, 0, 2U, 3U, &present, &got), 0);
   ASSERT_EQ(present, 1);
-  EXPECT_STREQ(got.target, "https://first.example");
+  EXPECT_STREQ(got.target, "https://first.example/");
 
   // The same range again replaces that link in place.
   second.target = "https://third.example";
@@ -176,7 +176,7 @@ TEST_F(FormulonCApiSheetFeatures, HyperlinkSetReplacesOnlyTheSameRange) {
   ASSERT_EQ(fm_sheet_get_hyperlink_count(wb_, 0, &count), 0);
   EXPECT_EQ(count, 2U);
   ASSERT_EQ(fm_sheet_get_hyperlink_at(wb_, 0, 1, &got), 0);
-  EXPECT_STREQ(got.target, "https://third.example");
+  EXPECT_STREQ(got.target, "https://third.example/");
   EXPECT_EQ(got.rect.last_row, 4U);
   EXPECT_EQ(got.rect.last_col, 5U);
 }
@@ -630,7 +630,7 @@ TEST_F(FormulonCApiSheetFeatures, RemoveHyperlinkByRangeKeepsNonIntersecting) {
   ASSERT_EQ(fm_sheet_get_hyperlink_at(wb_, 0, 0, &got), 0);
   EXPECT_EQ(got.rect.first_row, 3U);
   EXPECT_EQ(got.rect.first_col, 4U);
-  EXPECT_STREQ(got.target, "https://b.example");
+  EXPECT_STREQ(got.target, "https://b.example/");
 }
 
 TEST_F(FormulonCApiSheetFeatures, RemoveHyperlinkByRangeNoMatchIsNotFound) {
@@ -671,7 +671,7 @@ TEST_F(FormulonCApiSheetFeatures, RemoveHyperlinkAtValid) {
   ASSERT_EQ(fm_sheet_get_hyperlink_at(wb_, 0, 0, &got), 0);
   EXPECT_EQ(got.rect.first_row, 2U);
   EXPECT_EQ(got.rect.first_col, 2U);
-  EXPECT_STREQ(got.target, "https://b.example");
+  EXPECT_STREQ(got.target, "https://b.example/");
 }
 
 TEST_F(FormulonCApiSheetFeatures, RemoveHyperlinkAtOutOfRange) {

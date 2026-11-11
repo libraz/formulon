@@ -2825,9 +2825,23 @@ class Sheet(_NoCopy):
         (a reference such as ``"Sheet2!A1"`` or a defined name). A
         ``location`` beside a ``target`` is the fragment within it.
 
-        An empty top-left cell of the range receives ``display``, else
-        ``target``, else ``location`` as text; a cell that holds a value keeps
-        it. Every cell of the range takes Excel's Hyperlink cell style: the
+        An empty top-left cell of the range receives ``display``, else the
+        normalised address (``"<address> - <fragment>"`` when a fragment was
+        split off), else ``location`` as text; a cell that holds a value keeps
+        it.
+
+        An http, https or ftp target without userinfo is stored the way Excel
+        stores it: scheme and host lowercased, an empty path becomes ``/``,
+        percent-escapes of unreserved characters decoded, and a ``#fragment``
+        split off into ``location`` (a given ``location`` is kept). A mailto:
+        target has only its scheme lowercased; an absolute POSIX path becomes a
+        ``file:///`` URL and a UNC path ``file:////server/share/...``; any other
+        target is stored as written. With no ``display``, a top-left cell that
+        holds other text gets the stored target as ``display``, and a
+        location-only link gets its location. A space in an external target is
+        written as ``%20`` in a saved file.
+
+        Every cell of the range takes Excel's Hyperlink cell style: the
         font is replaced (the Normal font, underlined, theme colour 10) and
         fill, number format, border, alignment and protection are kept; blank
         and merged-away cells are formatted too, and a whole-column range
@@ -2877,7 +2891,8 @@ class Sheet(_NoCopy):
 
         Edits the list only: no cell values or formats are written or reset,
         so a caller undoing :meth:`remove_hyperlink` restores the cell formats
-        itself.
+        itself. The target is stored verbatim, without the normalisation
+        :meth:`set_hyperlink` applies.
 
         Raises:
           TypeError: when ``link`` is neither a :class:`HyperlinkInput` nor a :class:`Hyperlink`,
