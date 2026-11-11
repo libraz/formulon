@@ -900,7 +900,7 @@ test('A1: a value the workbook does not hold reads as null', async () => {
       scope: null,
       comment: null,
     });
-    ws.setHyperlink(9, 1, { target: 'https://example.com/' });
+    ws.setHyperlink({ target: 'https://example.com/', range: 'B10' });
     const link = ws.getHyperlink(9, 1);
     assert.deepEqual([link.location, link.display, link.tooltip], [null, null, null]);
 
@@ -1227,9 +1227,9 @@ test('O1 / O2: an input or a patch refuses unknown keys and undefined is omitted
     wb.updateIterative({ maxIterations: undefined, maxChange: undefined });
     assert.equal(wb.getIterative().maxIterations, 9);
     const ws = wb.sheet(0);
-    assert.throws(() => ws.setHyperlink(0, 0, { target: 'https://example.com/', unknown: 1 }), TypeError);
+    assert.throws(() => ws.setHyperlink({ target: 'https://example.com/', range: 'A1', unknown: 1 }), TypeError);
     assert.equal(ws.getHyperlink(0, 0), null);
-    ws.setHyperlink(0, 0, { target: 'https://example.com/', display: undefined });
+    ws.setHyperlink({ target: 'https://example.com/', display: undefined, range: 'A1' });
     assert.equal(ws.getHyperlink(0, 0).display, null);
     assert.throws(() => wb.updateIterative({ extra: 1 }), TypeError);
   });
@@ -1240,8 +1240,11 @@ test('O3: a missing required field is a TypeError and writes nothing', async () 
     const ws = wb.sheet(0);
     assert.throws(() => ws.setComment(0, 0, { author: 'Ann' }), TypeError);
     assert.equal(ws.getComment(0, 0), null);
-    assert.throws(() => ws.setHyperlink(0, 0, { target: null }), TypeError);
-    assert.throws(() => ws.setHyperlink(0, 0, {}), TypeError);
+    assert.throws(() => ws.setHyperlink({ target: null, range: 'A1' }), TypeError);
+    assert.throws(() => ws.setHyperlink({ range: 'A1' }), TypeError);
+    assert.throws(() => ws.setHyperlink({ target: 'https://example.com/' }), TypeError);
+    assert.throws(() => ws.setHyperlink({}), TypeError);
+    assert.throws(() => ws.setHyperlink(null), TypeError);
     assert.equal(ws.getHyperlink(0, 0), null);
     assert.throws(() => ws.addThreadedComment({ id: '{00000000-0000-4000-8000-000000000001}' }), TypeError);
     assert.deepEqual(ws.listThreadedComments(), []);
@@ -1258,7 +1261,7 @@ test('T1: non-ASCII text round-trips and a lone surrogate becomes U+FFFD', async
     assert.equal(ws.getComment(0, 0).text, '確認😀');
     ws.setComment(1, 0, { author: 'a', text: 'x\uD800y' });
     assert.equal(ws.getComment(1, 0).text, 'x\uFFFDy');
-    ws.setHyperlink(2, 0, { location: 'Sheet1!A1', target: null, display: '表示\uDC00' });
+    ws.setHyperlink({ location: 'Sheet1!A1', target: null, display: '表示\uDC00', range: 'A3' });
     assert.equal(ws.getHyperlink(2, 0).display, '表示\uFFFD');
   });
 });
@@ -1266,29 +1269,226 @@ test('T1: non-ASCII text round-trips and a lone surrogate becomes U+FFFD', async
 test('an in-workbook hyperlink reads a null target', async () => {
   await withWorkbook((wb) => {
     const ws = wb.sheet(0);
-    ws.setHyperlink(0, 0, { location: 'Sheet1!B2', target: null });
+    ws.setHyperlink({ location: 'Sheet1!B2', target: null, range: 'A1' });
     assert.equal(ws.getHyperlink(0, 0).target, null);
     assert.equal(ws.listHyperlinks()[0].target, null);
   });
 });
 
-test('a second hyperlink on a cell is appended unless it covers the same range', async () => {
+// ---- Hyperlink model: ranges, containment, whole removal, cell formats ------
+
+const LINK_URL = 'https://example.com/';
+const linkOn = (range, extra = {}) => ({ target: LINK_URL, range, ...extra });
+const linkDisplays = (ws) => ws.listHyperlinks().map((h) => h.display);
+const linkRanges = (ws) => ws.listHyperlinks().map((h) => ({ ...h.range }));
+const xfOf = (ws, a1) => ws.ooxml.getCellXfIndex(a1) ?? 0;
+
+test('setHyperlink appends a new range and replaces an equal range in place', async () => {
   await withWorkbook((wb) => {
     const ws = wb.sheet(0);
-    const range = { firstRow: 40, firstCol: 2, lastRow: 41, lastCol: 3 };
-    ws.setHyperlink(40, 2, { target: null, location: 'Sheet1!A1', display: 'Jump', range });
-    ws.setHyperlink(40, 2, { target: 'https://example.com', display: 'Alt' });
-    assert.deepEqual(
-      ws.listHyperlinks().map((h) => h.display),
-      ['Jump', 'Alt'],
-    );
-    ws.setHyperlink(40, 2, { target: null, location: 'Sheet1!B2', display: 'Jump again', range });
-    assert.deepEqual(
-      ws.listHyperlinks().map((h) => h.display),
-      ['Jump again', 'Alt'],
-    );
-    ws.setHyperlink(40, 2, null);
+    ws.setHyperlink(linkOn('A1', { display: 'one' }));
+    ws.setHyperlink(linkOn('B1:C1', { display: 'two' }));
+    ws.setHyperlink(linkOn('A1', { display: 'one again', tooltip: 'tip' }));
+    assert.deepEqual(linkDisplays(ws), ['one again', 'two']);
+    assert.equal(ws.listHyperlinks()[0].tooltip, 'tip');
+    assert.deepEqual(linkRanges(ws), [
+      { firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 },
+      { firstRow: 0, firstCol: 1, lastRow: 0, lastCol: 2 },
+    ]);
+  });
+});
+
+test('overlapping hyperlink ranges coexist in insertion order and nothing is split', async () => {
+  await withWorkbook((wb) => {
+    const ws = wb.sheet(0);
+    ws.setHyperlink(linkOn('A1:C3', { display: 'wide' }));
+    ws.setHyperlink(linkOn('B2', { display: 'cell' }));
+    ws.setHyperlink(linkOn('B2:B3', { display: 'sub' }));
+    ws.setHyperlink(linkOn('C3:D4', { display: 'partial' }));
+    assert.deepEqual(linkDisplays(ws), ['wide', 'cell', 'sub', 'partial']);
+    assert.deepEqual(linkRanges(ws)[0], { firstRow: 0, firstCol: 0, lastRow: 2, lastCol: 2 });
+    assert.deepEqual(linkRanges(ws)[3], { firstRow: 2, firstCol: 2, lastRow: 3, lastCol: 3 });
+  });
+});
+
+test('setHyperlink(getHyperlink(cell)) and setHyperlink(list[i]) leave the list unchanged', async () => {
+  await withWorkbook((wb) => {
+    const ws = wb.sheet(0);
+    ws.setText('A1', 'seed');
+    ws.setText('E5', 'seed');
+    ws.setHyperlink(linkOn('A1:B2', { display: 'd', tooltip: 't' }));
+    ws.setHyperlink(linkOn({ firstRow: 4, firstCol: 4, lastRow: 4, lastCol: 4 }, { location: 'Sheet1!A1' }));
+    const before = ws.listHyperlinks();
+    ws.setHyperlink(ws.getHyperlink('A1'));
+    ws.setHyperlink(ws.getHyperlink(4, 4));
+    ws.setHyperlink(before[1]);
+    assert.deepEqual(ws.listHyperlinks(), before);
+  });
+});
+
+test('setHyperlink refuses a missing range, a null link and a bad range, and changes nothing', async () => {
+  await withWorkbook((wb, formulon) => {
+    const ws = wb.sheet(0);
+    assert.throws(() => ws.setHyperlink({ target: LINK_URL }), /Sheet\.setHyperlink link\.range is required/);
+    assert.throws(() => ws.setHyperlink({ target: LINK_URL, range: null }), TypeError);
+    assert.throws(() => ws.setHyperlink(null), TypeError);
+    assert.throws(() => ws.setHyperlink('A1', linkOn('A1')), TypeError);
+    const inverted = { firstRow: 2, firstCol: 2, lastRow: 0, lastCol: 0 };
+    const offGrid = { firstRow: 1048576, firstCol: 0, lastRow: 1048576, lastCol: 0 };
+    for (const range of [inverted, offGrid]) {
+      expectFormulonError(() => ws.setHyperlink(linkOn(range)), formulon.StatusCode.InvalidArgument);
+    }
+    for (const range of ['A1048577', 'not a range']) {
+      expectFormulonError(() => ws.setHyperlink(linkOn(range)), formulon.StatusCode.ParserInvalidReference);
+    }
     assert.equal(ws.listHyperlinks().length, 0);
+  });
+});
+
+test('setHyperlink stores U+FFFD for a lone surrogate in every text field', async () => {
+  await withWorkbook((wb) => {
+    const ws = wb.sheet(0);
+    for (const field of ['target', 'location', 'display', 'tooltip']) {
+      ws.clearHyperlinks();
+      ws.setHyperlink({ target: LINK_URL, range: 'A1', [field]: 'x\uD800' });
+      assert.equal(ws.getHyperlink('A1')[field], 'x\uFFFD', field);
+    }
+  });
+});
+
+test('getHyperlink reads the earliest link that contains the cell', async () => {
+  await withWorkbook((wb, formulon) => {
+    const ws = wb.sheet(0);
+    ws.setHyperlink(linkOn('A1:C3', { display: 'wide' }));
+    ws.setHyperlink(linkOn('B2', { display: 'cell' }));
+    assert.equal(ws.getHyperlink('B2').display, 'wide');
+    assert.equal(ws.getHyperlink(1, 1).display, 'wide');
+    for (const a1 of ['A1', 'C1', 'A3', 'C3']) assert.equal(ws.getHyperlink(a1).display, 'wide');
+    assert.equal(ws.getHyperlink('D4'), null);
+    ws.clearHyperlinks();
+    ws.setHyperlink(linkOn('B2', { display: 'cell' }));
+    ws.setHyperlink(linkOn('A1:C3', { display: 'wide' }));
+    assert.equal(ws.getHyperlink('B2').display, 'cell');
+    assert.equal(ws.getHyperlink('A1').display, 'wide');
+    expectFormulonError(() => ws.getHyperlink(1048576, 0), formulon.StatusCode.InvalidArgument);
+    assert.equal(ws.getHyperlink(1048575, 16383), null);
+  });
+});
+
+test('removeHyperlink removes every intersecting link whole and is NotFound when none intersects', async () => {
+  await withWorkbook((wb, formulon) => {
+    const ws = wb.sheet(0);
+    ws.setHyperlink(linkOn('A1:C3', { display: 'wide' }));
+    ws.setHyperlink(linkOn('B2', { display: 'cell' }));
+    ws.setHyperlink(linkOn('E5', { display: 'far' }));
+    ws.removeHyperlink('B2');
+    assert.deepEqual(linkDisplays(ws), ['far']);
+    expectFormulonError(() => ws.removeHyperlink('B2'), formulon.StatusCode.NotFound);
+    ws.setHyperlink(linkOn('A1:C3', { display: 'wide' }));
+    ws.removeHyperlink({ firstRow: 2, firstCol: 2, lastRow: 6, lastCol: 6 });
+    assert.deepEqual(linkDisplays(ws), []);
+    expectFormulonError(
+      () => ws.removeHyperlink({ firstRow: 2, firstCol: 2, lastRow: 0, lastCol: 0 }),
+      formulon.StatusCode.InvalidArgument,
+    );
+    expectFormulonError(() => ws.removeHyperlink('A1048577'), formulon.StatusCode.ParserInvalidReference);
+  });
+});
+
+test('removeHyperlinkAt removes only that entry; past the end is IndexOutOfRange and negative InvalidArgument', async () => {
+  await withWorkbook((wb, formulon) => {
+    const ws = wb.sheet(0);
+    ws.setHyperlink(linkOn('A1:C3', { display: 'wide' }));
+    ws.setHyperlink(linkOn('B2', { display: 'cell' }));
+    ws.removeHyperlinkAt(0);
+    assert.deepEqual(linkDisplays(ws), ['cell']);
+    expectFormulonError(() => ws.removeHyperlinkAt(1), formulon.StatusCode.IndexOutOfRange);
+    expectFormulonError(() => ws.removeHyperlinkAt(-1), formulon.StatusCode.InvalidArgument);
+    assert.deepEqual(linkDisplays(ws), ['cell']);
+  });
+});
+
+test('insertHyperlinkAt keeps an equal range, appends at the count and returns nothing', async () => {
+  await withWorkbook((wb, formulon) => {
+    const ws = wb.sheet(0);
+    assert.equal(ws.insertHyperlinkAt(0, linkOn('A1', { display: 'b' })), undefined);
+    ws.insertHyperlinkAt(0, linkOn('A1', { display: 'a' }));
+    ws.insertHyperlinkAt(1, linkOn('A1', { display: 'mid' }));
+    ws.insertHyperlinkAt(3, linkOn('A1', { display: 'end' }));
+    assert.deepEqual(linkDisplays(ws), ['a', 'mid', 'b', 'end']);
+    expectFormulonError(() => ws.insertHyperlinkAt(5, linkOn('A1')), formulon.StatusCode.IndexOutOfRange);
+    expectFormulonError(() => ws.insertHyperlinkAt(0, linkOn('A1048577')), formulon.StatusCode.ParserInvalidReference);
+    assert.throws(
+      () => ws.insertHyperlinkAt(0, { target: LINK_URL }),
+      /Sheet\.insertHyperlinkAt link\.range is required/,
+    );
+    assert.equal(ws.listHyperlinks().length, 4);
+  });
+});
+
+test('clearHyperlinks empties the list and is a no-op when it is already empty', async () => {
+  await withWorkbook((wb) => {
+    const ws = wb.sheet(0);
+    ws.clearHyperlinks();
+    ws.setHyperlink(linkOn('A1'));
+    ws.setHyperlink(linkOn('B2'));
+    ws.clearHyperlinks();
+    assert.equal(ws.listHyperlinks().length, 0);
+    ws.clearHyperlinks();
+  });
+});
+
+test('setHyperlink writes text into an empty top-left cell only', async () => {
+  await withWorkbook((wb) => {
+    const ws = wb.sheet(0);
+    ws.setText('B1', 'kept');
+    ws.setHyperlink(linkOn('A1', { display: 'shown' }));
+    ws.setHyperlink(linkOn('B1', { display: 'ignored' }));
+    ws.setHyperlink(linkOn('C1'));
+    ws.setHyperlink({ location: 'Sheet1!A1', target: null, range: 'D1' });
+    assert.equal(ws.getValue('A1'), 'shown');
+    assert.equal(ws.getValue('B1'), 'kept');
+    assert.equal(ws.getValue('C1'), LINK_URL);
+    assert.equal(ws.getValue('D1'), 'Sheet1!A1');
+  });
+});
+
+test('setHyperlink formats the range and removeHyperlink resets it to the default format', async () => {
+  await withWorkbook((wb) => {
+    const ws = wb.sheet(0);
+    ws.setHyperlink(linkOn('A1:C3'));
+    for (const a1 of ['A1', 'B2', 'C3', 'C1']) assert.notEqual(xfOf(ws, a1), 0, a1);
+    assert.equal(xfOf(ws, 'D4'), 0);
+    ws.removeHyperlink('B2');
+    for (const a1 of ['A1', 'B2', 'C3']) assert.equal(xfOf(ws, a1), 0, a1);
+    assert.equal(ws.listHyperlinks().length, 0);
+  });
+});
+
+test('removing a link resets cells that a remaining link still covers', async () => {
+  await withWorkbook((wb) => {
+    const ws = wb.sheet(0);
+    ws.setHyperlink(linkOn('A1:C3', { display: 'wide' }));
+    ws.setHyperlink(linkOn('B2', { display: 'cell' }));
+    ws.removeHyperlink('A1');
+    assert.deepEqual(linkDisplays(ws), ['cell']);
+    assert.equal(ws.getHyperlink('B2').display, 'cell');
+    assert.equal(xfOf(ws, 'B2'), 0);
+    assert.equal(xfOf(ws, 'A1'), 0);
+  });
+});
+
+test('insertHyperlinkAt and removeHyperlinkAt leave cell formats unchanged', async () => {
+  await withWorkbook((wb) => {
+    const ws = wb.sheet(0);
+    ws.setHyperlink(linkOn('A1:B2'));
+    const formats = () => ['A1', 'B2', 'C3'].map((a1) => xfOf(ws, a1));
+    const before = formats();
+    ws.insertHyperlinkAt(1, linkOn('C3'));
+    assert.deepEqual(formats(), before);
+    ws.removeHyperlinkAt(0);
+    assert.deepEqual(formats(), before);
+    assert.notEqual(before[0], 0);
   });
 });
 
@@ -1316,10 +1516,7 @@ test('removeHyperlinkAt then insertHyperlinkAt at the same index restores a list
       formulon.StatusCode.IndexOutOfRange,
     );
     expectFormulonError(() => ws.removeHyperlinkAt(4), formulon.StatusCode.IndexOutOfRange);
-    expectFormulonError(
-      () => ws.insertHyperlinkAt(0, { target: 'https://x.example' }),
-      formulon.StatusCode.InvalidArgument,
-    );
+    assert.throws(() => ws.insertHyperlinkAt(0, { target: 'https://x.example' }), TypeError);
     assert.equal(ws.listHyperlinks().length, 4);
   });
 });

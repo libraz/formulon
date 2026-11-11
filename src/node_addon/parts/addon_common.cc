@@ -113,6 +113,10 @@ void CheckedSpecReader::FailNull(const char* key) {
   ReportFailure<Napi::TypeError>(key, "must not be null");
 }
 
+void CheckedSpecReader::FailRequired(const char* key) {
+  ReportFailure<Napi::TypeError>(key, "is required");
+}
+
 void CheckedSpecReader::ReportNegative(const char* key) {
   if (failed_ || env_.IsExceptionPending()) {
     failed_ = true;

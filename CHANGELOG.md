@@ -35,6 +35,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `TypeError` in every binding (`Sheet.listShowPhoneticCells(5)`:
   `Sheet.listShowPhoneticCells range must be a CellRect or an A1 string`;
   Python `Sheet.get_values range must be a CellRect or an A1 string`).
+- `setHyperlink` applies Excel's Hyperlink cell style to every cell of the
+  range: the font is replaced by the Normal font underlined in theme colour 10,
+  while fill, number format, border, alignment and protection are kept; blank
+  and merge-covered cells are formatted, and a whole-column range formats the
+  column. An empty top-left cell receives `display`, else `target`, else
+  `location`, as text.
+- `removeHyperlink(range)` and `clearHyperlinks` reset the whole range of each
+  removed link to the default format (cell format 0), including cells a remaining
+  link covers. `insertHyperlinkAt` and `removeHyperlinkAt` edit the list only.
+- `setHyperlink`, `removeHyperlink` and `clearHyperlinks` fail with
+  `PreconditionFailed`, changing nothing, when a range to format exceeds
+  1,048,576 cells and is not a whole column or row.
+- C ABI: `fm_sheet_set_hyperlink(wb, sheet_index, hl)` has no cell arguments and
+  no `NULL` form, and `fm_sheet_remove_hyperlink(wb, sheet_index, range)` takes
+  a rectangle, a signature change against 0.18
+  ([C ABI changes](docs/releases/upgrading-0.19.md#c-abi-changes)).
 
 ## [0.19.0] - 2026-11-10
 
@@ -74,8 +90,8 @@ Upgrading from 0.18: see [Upgrading from 0.18 to 0.19](docs/releases/upgrading-0
   percentage (`scalePct`).
 - `update<X>(patch)` merges the keys it names and `set<X>(record)` replaces the
   whole value; a single record is removed with `set<X>(null)`, and `reset<X>`
-  replaces the former `clear` names. Hyperlinks (`setHyperlink`) and page
-  breaks (`setRowBreak`, `setColumnBreak`) follow this shape.
+  replaces the former `clear` names. Page breaks (`setRowBreak`,
+  `setColumnBreak`) follow this shape.
 - Tables live on `Sheet` with sheet-local indices, and table and pivot styles
   use `getStyleOptions()` / `updateStyleOptions(patch)`.
 - Sheet protection has no `enabled` field, and each `allow*` flag is the
@@ -144,10 +160,12 @@ Upgrading from 0.18: see [Upgrading from 0.18 to 0.19](docs/releases/upgrading-0
 
 ### Added
 
-- `Sheet.insertHyperlinkAt(index, link)` (`fm_sheet_insert_hyperlink_at`, Python
-  `insert_hyperlink_at`) inserts a hyperlink at a list position without replacing
-  one on the same range; `removeHyperlinkAt` / `remove_hyperlink_at` is published
-  beside it for a lossless undo.
+- `Sheet.insertHyperlinkAt(hyperlinkIndex, link)` (`fm_sheet_insert_hyperlink_at`,
+  Python `insert_hyperlink_at`) inserts a hyperlink at a list position without
+  replacing one on the same range; `removeHyperlinkAt` / `remove_hyperlink_at` is
+  published beside it for a lossless undo, and `removeHyperlink(range)`
+  (`fm_sheet_remove_hyperlink`, Python `remove_hyperlink`) removes every
+  hyperlink that intersects a range.
 - `Sheet.ooxml.listCellXfIndices(range?)` (`fm_sheet_get_cell_xf_indices`, Python
   `list_cell_xf_indices`) lists the stored cells with a non-default cell XF,
   styled blanks included, which `listCells` leaves out. The C function takes a
@@ -411,9 +429,14 @@ Upgrading from 0.18: see [Upgrading from 0.18 to 0.19](docs/releases/upgrading-0
   a load; an item bound only by cache index no longer reads `null`.
 - In JavaScript an in-workbook hyperlink reads `target: null`, as the native
   addon and Python already did; it read `""`.
-- `setHyperlink` on a cell that already has a link keeps it unless the new
-  link covers exactly the same range, which replaces it in place; `null`
-  removes every link anchored there.
+- `setHyperlink(link)` takes the hyperlink with its required `range`
+  (`HyperlinkInput.range`): a link on exactly that range is replaced in place,
+  any other is appended and overlapping ones coexist, as in Excel.
+  `getHyperlink(cell)` reads the earliest-added link that covers the cell,
+  `listHyperlinks()` is in the order added (file order after a load, repeated
+  ranges kept), and `setHyperlink(cell, null)` is gone for
+  `removeHyperlink(range)`, which removes every link intersecting the range,
+  each whole.
 - Saving a new workbook with an image or chart as `.xlsb` failed with
   `IoContentTypeInvalid`.
 - `PivotField.subtotalTop` and several Python flags read true when false was

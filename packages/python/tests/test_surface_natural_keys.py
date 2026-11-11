@@ -50,8 +50,9 @@ class NaturalKeyLookupTests(unittest.TestCase):
 
     def test_hyperlinks_people_and_threaded_comments_are_read_by_key(self) -> None:
         with Workbook.create_default() as wb:
-            wb.sheet(0).set_hyperlink(2, 1, HyperlinkInput(target="https://example.com/"))
+            wb.sheet(0).set_hyperlink(HyperlinkInput(range=CellRect(2, 1, 3, 1), target="https://example.com/"))
             link = wb.sheet(0).get_hyperlink(2, 1)
+            self.assertIsNotNone(wb.sheet(0).get_hyperlink(3, 1))
             self.assertIsNotNone(link)
             assert link is not None
             self.assertEqual(link.target, "https://example.com/")

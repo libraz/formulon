@@ -62,6 +62,28 @@ TEST(FormulonCApiErrorText, FontIndexOutOfRangeNamesTheFieldTheIndexAndTheCount)
   ExpectNoInternalNames(Context());
 }
 
+TEST(FormulonCApiErrorText, HyperlinkInsertPastTheEndReportsTheRealCount) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  fm_hyperlink_t link = FM_STRUCT_INIT(fm_hyperlink_t);
+  link.rect = fm_cell_rect_t{0U, 0U, 0U, 0U};
+  link.target = "https://example.com";
+  ASSERT_EQ(fm_sheet_insert_hyperlink_at(wb.handle, 0, 0, &link), 0);
+
+  // One link: position 1 appends, position 2 is the first refused one.
+  ASSERT_EQ(fm_sheet_insert_hyperlink_at(wb.handle, 0, 2, &link), FM_STATUS_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(Message(), "index 2 is out of range (1 item)");
+  EXPECT_EQ(Context(), "index=2 count=1");
+  ExpectNoInternalNames(Message());
+  ExpectNoInternalNames(Context());
+
+  ASSERT_EQ(fm_sheet_remove_hyperlink_at(wb.handle, 0, 1), FM_STATUS_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(Context(), "index=1 count=1");
+  std::size_t count = 0;
+  ASSERT_EQ(fm_sheet_get_hyperlink_count(wb.handle, 0, &count), 0);
+  EXPECT_EQ(count, 1U);
+}
+
 TEST(FormulonCApiErrorText, NullArgumentMessagesNameTheArgument) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);

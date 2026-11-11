@@ -30,6 +30,7 @@ set(FORMULON_C_API_TEST_SOURCES
   formulon_c_entry_r1c1_test.cpp
   formulon_c_function_metadata_test.cpp
   formulon_c_input_records_test.cpp
+  formulon_c_hyperlink_style_test.cpp
   formulon_c_input_validation_test.cpp
   formulon_c_lambda_text_test.cpp
   formulon_c_locale_test.cpp

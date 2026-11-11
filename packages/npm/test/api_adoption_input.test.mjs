@@ -669,12 +669,13 @@ const DRIVERS = {
   },
   hyperlink: {
     make: (ws) => {
-      ws.setHyperlink('A1', { target: 'https://example.com/', display: 'Example' });
+      ws.setText('A1', 'Example');
+      ws.setHyperlink({ target: 'https://example.com/', display: 'Example', range: 'A1' });
       return ws;
     },
     get: (ws) => ws.getHyperlink('A1'),
-    // A read link carries its range, which starts at its own cell, so it goes back there.
-    put: (ws, record) => ws.setHyperlink('A1', record),
+    // A read link carries its range, which is the key it is set on.
+    put: (ws, record) => ws.setHyperlink(record),
     again: (ws) => ws.getHyperlink('A1'),
   },
   validation_update: {

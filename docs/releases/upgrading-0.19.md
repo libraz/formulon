@@ -175,11 +175,14 @@ Read [Every binding](#every-binding) first, then the section for your binding. [
   `Pagination.rowBreaks` / `columnBreaks` hold the records. C has
   `fm_sheet_set_row_break(wb, sheet_index, row, const fm_row_break_t* or
   NULL)` and `fm_sheet_set_column_break`.
-- **C ABI, JavaScript, Python:** a cell has at most one hyperlink, so
-  `ws.setHyperlink(cell, link | null)` replaces `addHyperlink` and
-  `addHyperlinkRange`; the range the link covers is `range` in the
-  `HyperlinkInput` record (omitted or `null` is the key cell alone, and a range
-  that does not start at the key cell is `InvalidArgument`).
+- **C ABI, JavaScript, Python:** `ws.setHyperlink(link)` replaces `addHyperlink`
+  and `addHyperlinkRange`; the range the link covers is the required `range` of
+  the `HyperlinkInput` record. A link on exactly that range is replaced in place,
+  any other is appended, and overlapping links coexist as in Excel.
+  `getHyperlink(cell)` reads the earliest-added link covering the cell, and
+  `removeHyperlink(range)` removes every link intersecting the range. Setting
+  applies the Hyperlink cell style to the range and removing resets it to the
+  default format.
 - **C ABI, JavaScript, Python:** `Pivot.addFieldItem(field, name | {
   cacheIndex }, options)` takes either a label or a cache index (Python
   `add_field_item(field, name=None, *, cache_index=None, ...)` with exactly
@@ -1129,7 +1132,7 @@ argument is a keyword-only argument list there (see
 | `setComment(sheet, row, col, author, text)` (empty text removed the comment) | `ws.setComment(row, col, { text, author? })` writes the comment, empty text included (an omitted `author` means none); `ws.setComment(row, col, null)` removes it and does nothing when the cell has none |
 | `setWorkbookProtection(p)` / `setSheetProtection(sheet, p)` (an all-zero record cleared them) | `wb.setWorkbookProtection(null)` and `ws.setSheetProtection(null)` remove them; an all-zero workbook-protection record still does. Sheet protection is described under [Behaviour changes](#behaviour-changes-under-an-unchanged-name) |
 | `setCellPhoneticRuns(sheet, row, col, runs)` | `ws.setCellPhoneticRuns(row, col, runs)`; `null` and `[]` clear |
-| `addHyperlink(sheet, row, col, target, display, tooltip, location)` | `ws.setHyperlink(row, col, { target, location?, display?, tooltip? })` adds a link at the cell, replacing one only when it covers exactly the same range, and `null` removes every link anchored there; a `null` target is an in-workbook link and requires `location`. The range the link covers is `range` in the record |
+| `addHyperlink(sheet, row, col, target, display, tooltip, location)` | `ws.setHyperlink({ range, target, location?, display?, tooltip? })` adds a link on `range`, replacing one only when it covers exactly the same range; a `null` target is an in-workbook link and requires `location`. `removeHyperlink(range)` removes every link intersecting a range |
 | `setThemeScriptFont(major, script, typeface)` | `setThemeScriptFont({ scheme, script, typeface })`, with `scheme` a `FontScheme` (`Major` or `Minor`) |
 | `editThreadedComment(sheet, id, text, mentions)` | `ws.updateThreadedComment(id, { text?, mentions? })` |
 | `addThreadedComment(sheet, partial)` | `ws.addThreadedComment(input)` with `ThreadedCommentInput` |
@@ -1290,7 +1293,7 @@ These parameters can no longer be passed by position.
 
 | Method | Keyword-only parameters |
 |---|---|
-| `HyperlinkInput` | `target`, `location`, `display`, `tooltip`, `range` (a dataclass passed to `Sheet.set_hyperlink`) |
+| `HyperlinkInput` | `range` (required), `target`, `location`, `display`, `tooltip` (a dataclass passed to `Sheet.set_hyperlink`) |
 | `Sheet.add_picture` | `name`, `description`, `anchor` |
 | `Sheet.add_shape`, `Shape.update` | `anchor`, `preset_geometry` and the other shape fields |
 | `Sheet.add_slicer`, `Slicer.update` | `anchor`, `row_height_pt` and the other slicer fields |
@@ -1386,10 +1389,11 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
   and `has_phonetic_properties` are removed (`PhoneticProperties.stated`
   replaces the last).
 - **JavaScript, Python:** `removeMergeAt` is removed in favour of
-  `removeMerge(range)`. `removeHyperlink(cell)` is removed in favour of
-  `setHyperlink(cell, null)`, which clears every link anchored at the cell.
-  `removeHyperlinkAt(index)` and `insertHyperlinkAt(index, link)` are public,
-  where `index` is the position in `listHyperlinks()` order. `getDefinedName` and
+  `removeMerge(range)`. `removeHyperlink(range)` removes every link
+  intersecting the range, each whole, and resets the removed links' ranges to the
+  default format. `removeHyperlinkAt(hyperlinkIndex)` and
+  `insertHyperlinkAt(hyperlinkIndex, link)` are public and edit the list only,
+  where `hyperlinkIndex` is the position in `listHyperlinks()` order. `getDefinedName` and
   `removeDefinedName` take an optional `scope`, `getThemeScriptFont` and
   `setThemeScriptFont` take `{ scheme, script }`, `Chart.setType` takes
   `{ barDirection, grouping }` options, and `Pivot.addFieldItem` takes an
@@ -2255,7 +2259,6 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
 | `fm_sheet_remap_range_style` | `fm_sheet_remap_range_xfs` |
 | `fm_sheet_remove_auto_filter` | removed; use `fm_sheet_set_auto_filter` |
 | `fm_sheet_remove_col_break` | removed |
-| `fm_sheet_remove_hyperlink` | removed; use `fm_sheet_set_hyperlink` |
 | `fm_sheet_remove_row_break` | removed |
 | `fm_sheet_remove_shape` | removed |
 | `fm_sheet_remove_slicer` | removed |
@@ -2990,7 +2993,6 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
 | `removeAutoFilter()` | removed; use `setAutoFilter()` |
 | `removeChartSeries()` | `ws.chart(...).removeSeries()` |
 | `removeConditionalFormatAt()` | `removeCfRule()` |
-| `removeHyperlink()` | removed; use `setHyperlink()` |
 | `removeMergeAt()` | removed |
 | `removeShape()` | `removeDrawing()` |
 | `removeSheetColBreak()` | removed |
@@ -3488,7 +3490,6 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
 | `remove_chart_series()` | `ws.chart(...).remove_series()` |
 | `remove_col_break()` | removed |
 | `remove_conditional_format_at()` | `remove_cf_rule()` |
-| `remove_hyperlink()` | removed; use `set_hyperlink()` |
 | `remove_merge_at()` | removed |
 | `remove_row_break()` | removed |
 | `remove_shape()` | `remove_drawing()` |
@@ -3658,7 +3659,8 @@ A caller compiled against an earlier header must be recompiled.
 | `fm_workbook_pivot_set_grand_totals`, `fm_workbook_pivot_set_style_info`, `fm_sheet_set_chart_axis`, `_set_chart_display`, `_set_chart_series`, `_set_chart_plot` | `fm_sheet_update_pivot_grand_totals`, `fm_sheet_update_pivot_style_options`, `fm_sheet_update_chart_axis`, `_update_chart_display`, `_update_chart_series`, `_update_chart_plot` |
 | (none) | `fm_sheet_update_view`, `fm_sheet_update_chart_legend` and `fm_sheet_update_chart_point` merge a patch; `fm_sheet_set_chart_legend(..., const fm_chart_legend_t* or NULL)` replaces or removes the legend |
 | `fm_sheet_remove_auto_filter`, `fm_sheet_remove_row_break`, `fm_sheet_remove_col_break`, `fm_workbook_clear_pinned_now` | removed; `fm_sheet_set_auto_filter(wb, sheet_index, NULL)`, `fm_sheet_set_row_break(..., NULL)`, `fm_sheet_set_column_break(..., NULL)` and `fm_workbook_set_pinned_now(wb, NULL)` remove, and removing what is not there is a no-op |
-| `fm_sheet_add_hyperlink` | `fm_sheet_set_hyperlink`; it replaces the link of the cell and a `NULL` link removes it |
+| `fm_sheet_add_hyperlink` | `fm_sheet_set_hyperlink(wb, sheet_index, hl)`; it replaces the link on exactly its rectangle, there are no cell arguments and no `NULL` form |
+| `fm_sheet_remove_hyperlink(wb, sheet_index, row, col)` | `fm_sheet_remove_hyperlink(wb, sheet_index, const fm_cell_rect_t* range)` removes every link intersecting the rectangle, `FM_STATUS_NOT_FOUND` when none does |
 | `fm_sheet_clear_row_height`, `fm_sheet_clear_column_width`, `fm_sheet_clear_column_style`, `fm_sheet_clear_row_style` | `fm_sheet_reset_row_height`, `fm_sheet_reset_column_width`, `fm_sheet_reset_column_xf_index`, `fm_sheet_reset_row_xf_index` |
 | `fm_sheet_clear_auto_filter`, `fm_table_clear_auto_filter` | `fm_sheet_clear_auto_filter_criteria`, `fm_sheet_clear_table_auto_filter_criteria` |
 | the `fm_workbook_*table*` functions | `fm_sheet_*table*` with a sheet-local `table_index`; `fm_workbook_find_table` is unchanged |

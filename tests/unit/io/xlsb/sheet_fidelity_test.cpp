@@ -326,6 +326,44 @@ TEST(XlsbSheetFidelity, IsoRangeProtectionWithoutItsCompanionIsRetained) {
   EXPECT_FALSE(loaded.sheet(0).xlsb_tail().empty());
 }
 
+// A repeated ref and overlapping refs are kept as the list holds them: the
+// writer emits one record per entry in order and the reader keeps each one.
+TEST(XlsbSheetFidelity, DuplicateAndOverlappingHyperlinkRefsKeepListOrder) {
+  Workbook wb = Workbook::create_empty();
+  wb.add_sheet("Links");
+  const auto make = [](std::uint32_t row, std::uint32_t col, std::uint32_t last_row, std::uint32_t last_col,
+                       const char* target, const char* location) {
+    Hyperlink link;
+    link.row = row;
+    link.col = col;
+    link.last_row = last_row;
+    link.last_col = last_col;
+    link.target = target;
+    link.location = location;
+    return link;
+  };
+  auto& list = wb.sheet(0).mutable_hyperlinks();
+  list.push_back(make(1, 1, 1, 1, "https://one.example/", ""));
+  list.push_back(make(0, 0, 2, 2, "", "Links!D4"));
+  list.push_back(make(1, 1, 1, 1, "https://three.example/", ""));
+  list.push_back(make(1, 1, 3, 3, "https://four.example/", ""));
+
+  const Workbook back = RoundTrip(wb);
+  const auto& links = back.sheet(0).hyperlinks();
+  ASSERT_EQ(links.size(), 4U);
+  EXPECT_EQ(links[0].target, "https://one.example/");
+  EXPECT_EQ(links[1].location, "Links!D4");
+  EXPECT_TRUE(links[1].target.empty());
+  EXPECT_EQ(links[2].target, "https://three.example/");
+  EXPECT_EQ(links[3].target, "https://four.example/");
+  EXPECT_TRUE(links[0].same_range(links[2]));
+  EXPECT_EQ(links[1].last_row, 2U);
+  EXPECT_EQ(links[1].last_col, 2U);
+  EXPECT_EQ(links[3].last_row, 3U);
+  EXPECT_EQ(links[3].last_col, 3U);
+  EXPECT_EQ(back.sheet(0).hyperlink_at(1, 1)->target, "https://one.example/");
+}
+
 }  // namespace
 }  // namespace xlsb
 }  // namespace io

@@ -337,7 +337,12 @@ TEST(FormulonCApiStyles, NullInputRecordRejected) {
   EXPECT_EQ(fm_workbook_add_dxf(wb.handle, nullptr, &xf_idx), kNull);
   EXPECT_EQ(fm_workbook_resolve_color(wb.handle, nullptr, 0, &argb, &resolution), kNull);
   EXPECT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, nullptr, ignored_id()), kNull);
-  EXPECT_EQ(fm_sheet_set_hyperlink(nullptr, 0, 0, 0, nullptr), kNull);
+  fm_hyperlink_t hyperlink = FM_STRUCT_INIT(fm_hyperlink_t);
+  const fm_cell_rect_t cell{0U, 0U, 0U, 0U};
+  EXPECT_EQ(fm_sheet_set_hyperlink(nullptr, 0, &hyperlink), kNull);
+  EXPECT_EQ(fm_sheet_set_hyperlink(wb.handle, 0, nullptr), kNull);
+  EXPECT_EQ(fm_sheet_remove_hyperlink(nullptr, 0, &cell), kNull);
+  EXPECT_EQ(fm_sheet_remove_hyperlink(wb.handle, 0, nullptr), kNull);
   EXPECT_EQ(fm_sheet_add_merge(wb.handle, 0, nullptr, nullptr), kNull);
   EXPECT_EQ(fm_sheet_remove_merge(wb.handle, 0, nullptr), kNull);
   EXPECT_EQ(fm_sheet_get_merges_in_range(wb.handle, 0, nullptr, nullptr, 0, &merges_found), kNull);

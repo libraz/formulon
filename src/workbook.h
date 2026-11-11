@@ -585,6 +585,35 @@ class Workbook {
   Expected<void, Error> clear_merges(std::size_t sheet_index);
 
   // ---------------------------------------------------------------------------
+  // Hyperlinks
+  // ---------------------------------------------------------------------------
+
+  /// Sets `link` the way Excel adds a hyperlink: one on exactly the same range
+  /// is replaced in place, otherwise `link` is appended. Every cell of the
+  /// range takes the built-in Hyperlink cell style (found by builtin id 8,
+  /// created when absent): the font becomes the Normal font underlined in
+  /// theme colour 10 and the rest of the cell format is kept; blank and
+  /// merge-covered cells are formatted, a range spanning every row (column)
+  /// styles the column (row). An empty top-left cell (no value, formula or
+  /// spilled value, not hidden by a merge) receives `display`, else `target`,
+  /// else `location`, as text. `kInvalidArgument` for a bad sheet or range or
+  /// that text over 32,767 UTF-16 units; `kPreconditionFailed` when more than
+  /// `kMaxStyledRangeCells` cells that are not a whole column or row would be
+  /// formatted. Nothing changes on failure. File readers do not come here.
+  Expected<void, Error> set_hyperlink(std::size_t sheet_index, Hyperlink link);
+
+  /// Removes every hyperlink intersecting `range`, each whole, and resets every
+  /// cell of each removed link's range to cell format 0, cells another link
+  /// still covers included. Returns how many were removed (0 changes nothing).
+  /// `kPreconditionFailed`, nothing removed, when a removed link that is not a
+  /// whole column or row covers more than `kMaxStyledRangeCells` cells.
+  Expected<std::size_t, Error> remove_hyperlinks_intersecting(std::size_t sheet_index, MergeRange range);
+
+  /// Removes every hyperlink on the sheet with the reset of
+  /// `remove_hyperlinks_intersecting`.
+  Expected<void, Error> clear_hyperlinks(std::size_t sheet_index);
+
+  // ---------------------------------------------------------------------------
   // What-If data tables
   // ---------------------------------------------------------------------------
 
@@ -1933,6 +1962,10 @@ class Workbook {
   Expected<void, Error> apply_row_delete_locked(std::size_t sheet_index, const StructuralEdit& edit);
   // Replaces the totals settings of table `index`'s columns with the defaults of a never-shown totals row.
   void apply_totals_defaults(std::size_t index);
+  // Resets every cell of each rect to cell format 0 (explicit), the format a
+  // removed hyperlink leaves behind.
+  Expected<void, Error> reset_hyperlink_ranges(std::size_t sheet_index, const std::vector<StyleRect>& rects);
+
   // `add_merge` without the overlap refusals, for a PivotTable writing its
   // own report; `merge` must be normalized and inside the grid.
   void put_merge(std::size_t sheet_index, const MergeRange& merge);

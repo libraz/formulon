@@ -41,7 +41,6 @@ class NoteTests(_Base):
 
     def test_removed_members_are_gone(self) -> None:
         self.assertFalse(hasattr(self.ws, "remove_comment"))
-        self.assertFalse(hasattr(self.ws, "remove_hyperlink"))
         self.assertFalse(hasattr(self.ws, "set_hyperlink_range"))
 
     def test_set_cell_phonetic_properties_none_resets(self) -> None:
@@ -63,7 +62,7 @@ class NoteTests(_Base):
 
     def test_set_comment_rejects_another_record(self) -> None:
         with self.assertRaisesRegex(TypeError, r"must be a CommentInput, a Comment or None"):
-            self.ws.set_comment("A1", HyperlinkInput(target="https://example.test/"))  # type: ignore[arg-type]
+            self.ws.set_comment("A1", HyperlinkInput(range="A1", target="https://example.test/"))  # type: ignore[arg-type]
 
     def test_list_comments_cell(self) -> None:
         self.ws.set_comment("B2", Comment("hi", author="ann"))
@@ -75,24 +74,32 @@ class NoteTests(_Base):
 
 class HyperlinkTests(_Base):
     def test_range_kept(self) -> None:
-        self.ws.set_hyperlink("A1", HyperlinkInput(target="https://example.com/", range="A1:B2"))
+        self.ws.set_value("A1", "seed")
+        self.ws.set_hyperlink(HyperlinkInput(range="A1:B2", target="https://example.com/"))
         link = self.ws.get_hyperlink("A1")
         self.assertEqual(link.range, CellRect(0, 0, 1, 1))
-        self.ws.set_hyperlink("A1", link)
+        self.ws.set_hyperlink(link)
+        self.assertEqual(len(self.ws.list_hyperlinks()), 1)
         self.assertEqual(self.ws.get_hyperlink("A1").range, CellRect(0, 0, 1, 1))
-        self.ws.set_hyperlink("D4", HyperlinkInput(target="https://example.com/"))
+        self.ws.set_hyperlink(HyperlinkInput(range="D4", target="https://example.com/"))
         self.assertEqual(self.ws.get_hyperlink("D4").range, CellRect(3, 3, 3, 3))
 
-    def test_range_not_at_key_invalid(self) -> None:
+    def test_missing_range_is_type_error_and_bad_range_invalid(self) -> None:
+        with self.assertRaisesRegex(TypeError, r"Sheet\.set_hyperlink link\.range is required"):
+            self.ws.set_hyperlink(HyperlinkInput(range=None, target="https://example.com/"))  # type: ignore[arg-type]
+        with self.assertRaises(TypeError):
+            self.ws.set_hyperlink(None)  # type: ignore[arg-type]
         with self.assertRaises(FormulonError) as caught:
-            self.ws.set_hyperlink("A1", HyperlinkInput(target="https://example.com/", range="B2:C3"))
+            self.ws.set_hyperlink(HyperlinkInput(range=CellRect(2, 2, 0, 0), target="https://example.com/"))
         self.assertEqual(caught.exception.code, StatusCode.INVALID_ARGUMENT)
-        self.assertIsNone(self.ws.get_hyperlink("A1"))
+        self.assertEqual(self.ws.list_hyperlinks(), [])
 
-    def test_none_removes(self) -> None:
-        self.ws.set_hyperlink("A1", HyperlinkInput(target="https://example.com/"))
-        self.ws.set_hyperlink("A1", None)  # type: ignore[arg-type]
+    def test_remove_by_range(self) -> None:
+        self.ws.set_hyperlink(HyperlinkInput(range="A1", target="https://example.com/"))
+        self.ws.remove_hyperlink("A1")
         self.assertIsNone(self.ws.get_hyperlink("A1"))
+        with self.assertRaises(formulon.NotFoundError):
+            self.ws.remove_hyperlink("A1")
 
 
 class PeopleTests(_Base):

@@ -235,7 +235,7 @@ describe('A1 text stands for a rectangle wherever a record holds one', () => {
 
   it('a hyperlink, a spill and a parsed reference carry range, not rect', () => {
     withSheet((ws, wb) => {
-      ws.setHyperlink('A1', { target: 'https://example.com' });
+      ws.setHyperlink({ target: 'https://example.com', range: 'A1' });
       assert.deepEqual(plain(ws.getHyperlink('A1').range), rect(0, 0, 0, 0));
       assert.equal(ws.getHyperlink('A1').rect, undefined);
       ws.setFormula('C1', '=SEQUENCE(2)');

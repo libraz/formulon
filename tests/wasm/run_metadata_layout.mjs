@@ -121,10 +121,17 @@ export function registerMetadataLayout(Module, test) {
     try {
       assert.equal(wb.listHyperlinks(0).length, 0);
       // Three entries with progressively more optional fields populated.
-      wb.setHyperlink(0, 1, 2, { target: 'https://example.com/' });
-      wb.setHyperlink(0, 3, 4, { target: 'mailto:hello@example.com', display: 'Hello' });
-      wb.setHyperlink(0, 5, 6, { target: null, display: 'See X', tooltip: 'Internal link', location: 'Sheet1!A1' });
-      wb.setHyperlink(0, 7, 8, {
+      const cell = (row, col) => ({ firstRow: row, firstCol: col, lastRow: row, lastCol: col });
+      wb.setHyperlink(0, { target: 'https://example.com/', range: cell(1, 2) });
+      wb.setHyperlink(0, { target: 'mailto:hello@example.com', display: 'Hello', range: cell(3, 4) });
+      wb.setHyperlink(0, {
+        target: null,
+        display: 'See X',
+        tooltip: 'Internal link',
+        location: 'Sheet1!A1',
+        range: cell(5, 6),
+      });
+      wb.setHyperlink(0, {
         target: 'https://example.com/range',
         display: 'Range',
         tooltip: 'Range tip',
@@ -157,7 +164,17 @@ export function registerMetadataLayout(Module, test) {
         },
       );
       // Sheet-out-of-range is rejected.
-      expectFailure(() => wb.setHyperlink(999, 0, 0, { target: 'https://x/' }));
+      expectFailure(() => wb.setHyperlink(999, { target: 'https://x/', range: cell(0, 0) }));
+      // A missing range or link is a TypeError.
+      assert.throws(() => wb.setHyperlink(0, { target: 'https://x/' }), {
+        name: 'TypeError',
+        message: / link\.range is required$/,
+      });
+      assert.throws(() => wb.insertHyperlinkAt(0, 0, { target: 'https://x/', range: null }), {
+        name: 'TypeError',
+        message: / link\.range is required$/,
+      });
+      assert.throws(() => wb.setHyperlink(0, null), TypeError);
       // clearHyperlinks drops everything.
       wb.clearHyperlinks(0);
       assert.equal(wb.listHyperlinks(0).length, 0);
@@ -169,13 +186,14 @@ export function registerMetadataLayout(Module, test) {
   test('removeHyperlink / removeHyperlinkAt / clearHyperlinks surface on an empty sheet', () => {
     const wb = Module.Workbook.createDefault();
     try {
-      // Clearing an empty list succeeds; removing a hyperlink that is not there is a no-op.
+      const cell = { firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 };
+      // Clearing an empty list succeeds; removing a hyperlink that is not there is NotFound.
       wb.clearHyperlinks(0);
-      wb.setHyperlink(0, 0, 0, null);
+      expectFailure(() => wb.removeHyperlink(0, cell), StatusCode.NotFound);
       // Out-of-range index is rejected.
       expectFailure(() => wb.removeHyperlinkAt(0, 0), StatusCode.IndexOutOfRange);
       // Sheet-index-out-of-range is rejected on every variant.
-      expectFailure(() => wb.setHyperlink(999, 0, 0, null));
+      expectFailure(() => wb.removeHyperlink(999, cell), StatusCode.SheetIndexOutOfRange);
       expectFailure(() => wb.removeHyperlinkAt(999, 0));
       expectFailure(() => wb.clearHyperlinks(999));
       // Final list still matches the post-save+load read.

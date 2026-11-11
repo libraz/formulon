@@ -106,7 +106,9 @@ class MergeCommentHyperlinkTests(unittest.TestCase):
     def test_hyperlink_roundtrip(self) -> None:
         with Workbook.create_default() as wb:
             wb.sheet(0).set_hyperlink(
-                2, 3, HyperlinkInput(target="https://example.com", display="Example", tooltip="tip")
+                HyperlinkInput(
+                    range=CellRect(2, 3, 2, 3), target="https://example.com", display="Example", tooltip="tip"
+                )
             )
             links = wb.sheet(0).list_hyperlinks()
             self.assertEqual(len(links), 1)
@@ -128,8 +130,6 @@ class MergeCommentHyperlinkTests(unittest.TestCase):
     def test_hyperlink_range_roundtrip_at_nonzero_coordinate(self) -> None:
         with Workbook.create_default() as wb:
             wb.sheet(0).set_hyperlink(
-                4,
-                6,
                 HyperlinkInput(
                     target="https://example.com", display="Range", tooltip="tip", range=CellRect(4, 6, 7, 9)
                 ),

@@ -135,7 +135,6 @@ class ReferenceFormattingTests(unittest.TestCase):
         with Workbook.create_default() as wb:
             ws = wb.sheet(0)
             ws.set_hyperlink(
-                "A1",
                 formulon.Hyperlink(
                     range=CellRect(0, 0, 0, 0), target="https://example.com", location=None, display=None, tooltip=None
                 ),

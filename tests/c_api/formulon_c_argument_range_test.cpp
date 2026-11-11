@@ -323,7 +323,12 @@ TEST(FormulonCApiArgumentRange, CellGettersRejectAnOutOfGridCoordinate) {
     EXPECT_EQ(fm_sheet_get_data_table(wb.handle, 0, row, col, &flag, &table), kInvalidArgument);
     EXPECT_EQ(fm_sheet_remove_data_table(wb.handle, 0, row, col), kInvalidArgument);
     EXPECT_EQ(fm_sheet_get_hyperlink(wb.handle, 0, row, col, &flag, &link), kInvalidArgument);
-    EXPECT_EQ(fm_sheet_set_hyperlink(wb.handle, 0, row, col, nullptr), kInvalidArgument);
+    fm_hyperlink_t cell_link = FM_STRUCT_INIT(fm_hyperlink_t);
+    cell_link.rect = fm_cell_rect_t{row, col, row, col};
+    cell_link.target = "https://example.com";
+    const fm_cell_rect_t cell_range{row, col, row, col};
+    EXPECT_EQ(fm_sheet_set_hyperlink(wb.handle, 0, &cell_link), kInvalidArgument);
+    EXPECT_EQ(fm_sheet_remove_hyperlink(wb.handle, 0, &cell_range), kInvalidArgument);
     EXPECT_EQ(fm_sheet_get_comment(wb.handle, 0, row, col, &flag, &comment), kInvalidArgument);
     EXPECT_EQ(fm_sheet_set_comment(wb.handle, 0, row, col, nullptr), kInvalidArgument);
     std::int32_t visible = 0;
@@ -368,7 +373,6 @@ TEST(FormulonCApiArgumentRange, CellGettersAcceptTheLastGridCell) {
   EXPECT_EQ(fm_sheet_get_data_table(wb.handle, 0, kLastRow, kLastCol, &flag, &table), 0);
   EXPECT_EQ(fm_sheet_remove_data_table(wb.handle, 0, kLastRow, kLastCol), FM_STATUS_NOT_FOUND);
   EXPECT_EQ(fm_sheet_get_hyperlink(wb.handle, 0, kLastRow, kLastCol, &flag, &link), 0);
-  EXPECT_EQ(fm_sheet_set_hyperlink(wb.handle, 0, kLastRow, kLastCol, nullptr), 0);
   EXPECT_EQ(fm_sheet_get_comment(wb.handle, 0, kLastRow, kLastCol, &flag, &comment), 0);
   EXPECT_EQ(fm_sheet_set_comment(wb.handle, 0, kLastRow, kLastCol, nullptr), 0);
   std::int32_t visible = 0;
@@ -378,6 +382,12 @@ TEST(FormulonCApiArgumentRange, CellGettersAcceptTheLastGridCell) {
   EXPECT_EQ(fm_sheet_get_cell_xf_index(wb.handle, 0, kLastRow, kLastCol, &flag, &xf), 0);
   EXPECT_EQ(flag, 0);
   EXPECT_EQ(fm_sheet_reset_cell_xf_index(wb.handle, 0, kLastRow, kLastCol), 0);
+  // Setting a link formats its cell, so it runs after the cell-format reads above.
+  fm_hyperlink_t last_link = FM_STRUCT_INIT(fm_hyperlink_t);
+  last_link.rect = fm_cell_rect_t{kLastRow, kLastCol, kLastRow, kLastCol};
+  last_link.target = "https://example.com";
+  EXPECT_EQ(fm_sheet_set_hyperlink(wb.handle, 0, &last_link), 0);
+  EXPECT_EQ(fm_sheet_remove_hyperlink(wb.handle, 0, &last_link.rect), 0);
   fm_cell_nodes_t* nodes = nullptr;
   ASSERT_EQ(fm_sheet_get_precedents(wb.handle, 0, kLastRow, kLastCol, 1U, &nodes), 0);
   fm_cell_nodes_destroy(nodes);

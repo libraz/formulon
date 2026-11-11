@@ -79,7 +79,7 @@ removed fm_pagination_vertical_break_is_manual :: read manual from the fm_column
 removed fm_pivot_cells_at :: renamed to fm_pivot_report_get_cell_at, on the fm_pivot_report_t handle
 removed fm_pivot_cells_bounds :: renamed to fm_pivot_report_get_bounds, on the fm_pivot_report_t handle
 removed fm_pivot_cells_count :: renamed to fm_pivot_report_get_cell_count, on the fm_pivot_report_t handle
-removed fm_sheet_add_hyperlink :: replaced by fm_sheet_set_hyperlink(wb, sheet_index, row, col, const fm_hyperlink_t*), which replaces the hyperlink anchored at the cell and removes it with NULL
+removed fm_sheet_add_hyperlink :: replaced by fm_sheet_set_hyperlink(wb, sheet_index, const fm_hyperlink_t*), which replaces the hyperlink on exactly hl->rect and appends otherwise
 signature fm_sheet_add_threaded_comment :: parameter type renamed (fm_threaded_comment -> fm_threaded_comment_t); returns the comment's id, given or generated, through const char** out_id; an int32_t offset_unit (fm_text_offset_unit_t) before the record picks which offset pair of each fm_mention_t is read
 signature fm_sheet_add_validation :: parameter type renamed (fm_data_validation -> fm_data_validation_t); sheet index widened to size_t sheet_index; record passed as const pointer; returns the new rule's id through const char** out_validation_id
 removed fm_sheet_add_col_break :: replaced by fm_sheet_set_column_break(wb, sheet_index, col, const fm_column_break_t*), which upserts the break with its span and removes it with NULL
@@ -295,7 +295,7 @@ signature fm_sheet_get_hyperlink_count :: sheet index widened to size_t sheet_in
 signature fm_sheet_get_merge_at :: sheet index widened to size_t sheet_index, index widened to size_t, handle is const; parameter type renamed (fm_merge_range -> fm_cell_rect_t)
 signature fm_sheet_get_merge_count :: sheet index widened to size_t sheet_index, count written through size_t* out_count, handle is const
 signature fm_sheet_get_validation_count :: sheet index widened to size_t sheet_index, count written through size_t* out_count, handle is const
-removed fm_sheet_remove_hyperlink :: fm_sheet_set_hyperlink with NULL removes the hyperlink anchored at the cell, and is a no-op when there is none
+signature fm_sheet_remove_hyperlink :: sheet index widened to size_t sheet_index; the cell is replaced by const fm_cell_rect_t* range, and every hyperlink intersecting it is removed, NOT_FOUND when none
 signature fm_sheet_remove_hyperlink_at :: sheet index widened to size_t sheet_index, index widened to size_t
 signature fm_sheet_remove_merge :: sheet index widened to size_t sheet_index; range passed as const pointer; parameter type renamed (fm_merge_range -> fm_cell_rect_t)
 signature fm_sheet_remove_merge_at :: sheet index widened to size_t sheet_index, index widened to size_t

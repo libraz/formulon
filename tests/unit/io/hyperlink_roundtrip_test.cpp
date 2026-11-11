@@ -2,14 +2,18 @@
 // Reader-side tests for `<hyperlinks>` and the rid-to-target join. The
 // writer side is exercised by `tests/integration/sheet_features_roundtrip_test.cpp`.
 
+#include <cstdint>
 #include <string>
 #include <unordered_map>
 #include <vector>
 
 #include "gtest/gtest.h"
+#include "io/ooxml_reader.h"
+#include "io/ooxml_writer.h"
 #include "io/sheet_overlay_reader.h"
 #include "pugixml.hpp"
 #include "sheet.h"
+#include "workbook.h"
 
 namespace formulon {
 namespace io {
@@ -114,6 +118,69 @@ TEST(HyperlinkRoundTrip, MalformedRefSkipsOnlyThatEntry) {
   EXPECT_EQ(out.value()[0].row, 2U);
   EXPECT_EQ(out.value()[0].col, 2U);
   EXPECT_EQ(out.value()[0].location, "Sheet2!A3");
+}
+
+// Identity of a link is its exact ref, but a file may hold the same ref twice
+// and overlapping refs: the reader keeps every entry in file order.
+TEST(HyperlinkRoundTrip, DuplicateAndOverlappingRefsKeepFileOrder) {
+  pugi::xml_document doc;
+  auto ws = ParseWorksheet(doc,
+                           "<hyperlinks>"
+                           "<hyperlink ref=\"B2\" location=\"Sheet2!A1\"/>"
+                           "<hyperlink ref=\"A1:C3\" location=\"Sheet2!A2\"/>"
+                           "<hyperlink ref=\"B2\" location=\"Sheet2!A3\"/>"
+                           "<hyperlink ref=\"B2:D4\" location=\"Sheet2!A4\"/>"
+                           "</hyperlinks>");
+  auto out = read_hyperlinks(ws);
+  ASSERT_TRUE(static_cast<bool>(out)) << out.error().message;
+  ASSERT_EQ(out.value().size(), 4U);
+  const std::vector<std::string> locations{"Sheet2!A1", "Sheet2!A2", "Sheet2!A3", "Sheet2!A4"};
+  for (std::size_t i = 0; i < locations.size(); ++i) {
+    EXPECT_EQ(out.value()[i].location, locations[i]) << i;
+  }
+  EXPECT_TRUE(out.value()[0].same_range(out.value()[2]));
+  EXPECT_FALSE(out.value()[0].same_range(out.value()[1]));
+  EXPECT_EQ(out.value()[1].last_row, 2U);
+  EXPECT_EQ(out.value()[3].row, 1U);
+}
+
+TEST(HyperlinkRoundTrip, DuplicateAndOverlappingRefsSurviveSaveInListOrder) {
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  const auto make = [](std::uint32_t row, std::uint32_t col, std::uint32_t last_row, std::uint32_t last_col,
+                       const char* target, const char* display) {
+    Hyperlink link;
+    link.row = row;
+    link.col = col;
+    link.last_row = last_row;
+    link.last_col = last_col;
+    link.target = target;
+    link.display = display;
+    return link;
+  };
+  sheet.mutable_hyperlinks().push_back(make(1, 1, 1, 1, "https://one.example/", "one"));
+  sheet.mutable_hyperlinks().push_back(make(0, 0, 2, 2, "https://two.example/", "two"));
+  sheet.mutable_hyperlinks().push_back(make(1, 1, 1, 1, "https://three.example/", "three"));
+  sheet.mutable_hyperlinks().push_back(make(1, 1, 3, 3, "https://four.example/", "four"));
+
+  auto saved = write_ooxml(wb);
+  ASSERT_TRUE(static_cast<bool>(saved)) << saved.error().message;
+  auto loaded = read_ooxml(ByteSpan{saved.value().data(), saved.value().size()});
+  ASSERT_TRUE(static_cast<bool>(loaded)) << loaded.error().message;
+  const auto& links = loaded.value().workbook.sheet(0).hyperlinks();
+  ASSERT_EQ(links.size(), 4U);
+  const std::vector<std::string> targets{"https://one.example/", "https://two.example/", "https://three.example/",
+                                         "https://four.example/"};
+  const std::vector<std::string> displays{"one", "two", "three", "four"};
+  for (std::size_t i = 0; i < links.size(); ++i) {
+    EXPECT_EQ(links[i].target, targets[i]) << i;
+    EXPECT_EQ(links[i].display, displays[i]) << i;
+  }
+  EXPECT_TRUE(links[0].same_range(links[2]));
+  EXPECT_EQ(links[1].last_col, 2U);
+  EXPECT_EQ(links[3].last_row, 3U);
+  // The first entry of the pair is the one a read of the shared cell returns.
+  EXPECT_EQ(loaded.value().workbook.sheet(0).hyperlink_at(1, 1)->target, "https://one.example/");
 }
 
 }  // namespace

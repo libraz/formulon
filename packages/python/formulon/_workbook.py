@@ -2176,11 +2176,14 @@ class Hyperlink:
 
 @dataclass
 class HyperlinkInput:
-    """A hyperlink :meth:`Sheet.set_hyperlink` sets.
+    """A hyperlink :meth:`Sheet.set_hyperlink` and :meth:`Sheet.insert_hyperlink_at` take.
 
-    A :class:`Hyperlink` read back is accepted in its place and keeps its extent.
+    A :class:`Hyperlink` read back is accepted in its place.
     """
 
+    #: The cells the link covers, a ``CellRect`` or an A1 range (``"B2"`` for one cell). Required: it is the key
+    #: :meth:`Sheet.set_hyperlink` replaces on.
+    range: Union[CellRect, str]
     #: The absolute or relative target (URL, email address, file); ``None`` makes an in-workbook link, which needs
     #: ``location``.
     target: Optional[str]
@@ -2190,9 +2193,6 @@ class HyperlinkInput:
     display: Optional[str] = None
     #: The tooltip text; omitted or ``None`` is none.
     tooltip: Optional[str] = None
-    #: The cells the link covers, a ``CellRect`` or an A1 range starting at the key cell; ``None`` covers the key cell
-    #: alone.
-    range: Union[CellRect, str, None] = None
 
 
 @dataclass

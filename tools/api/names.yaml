@@ -57,7 +57,7 @@ collections:
   comment: { key: natural, by: cell, plural: comments, ops: [comment.get, comment.get_at, comment.get_count, comment.set, comment_visible.get] }
   threaded_comment: { key: natural, by: id, plural: threaded_comments, ops: [threaded_comment.add, threaded_comment.get, threaded_comment.get_at, threaded_comment.get_count, threaded_comment.remove, threaded_comment.update] }
   person: { key: natural, by: id, plural: people, ops: [person.add, person.get, person.get_at, person.get_count, person.remove] }
-  hyperlink: { key: natural, by: cell, plural: hyperlinks, ops: [hyperlink.set, hyperlink.get, hyperlink.get_at, hyperlink.get_count, hyperlink.insert_at, hyperlink.remove_at] }
+  hyperlink: { key: natural, by: rect, plural: hyperlinks, ops: [hyperlink.set, hyperlink.get, hyperlink.get_at, hyperlink.get_count, hyperlink.insert_at, hyperlink.remove, hyperlink.remove_at] }
   auto_filter_column: { key: natural, by: column_offset, plural: auto_filter_columns, ops: [auto_filter.clear], no_getter: "the columns are read and written as the AutoFilter record's columns; clearing every criterion is the one call of its own" }
   table_auto_filter_column: { key: natural, by: column_offset, plural: table_auto_filter_columns, ops: [table_auto_filter.clear], no_getter: "the columns are read and written as the table AutoFilter record's columns; clearing every criterion is the one call of its own" }
   merge: { key: natural, by: rect, plural: merges, ops: [merge.add, merge.get_at, merge.get_count, merge.remove, merge.remove_at], no_getter: "the element is its rectangle; a lookup by key returns nothing more" }
@@ -4897,7 +4897,6 @@ entries:
     c: fm_sheet_set_hyperlink
     js: setHyperlink
     py: set_hyperlink
-    cell_args: [[0, 1]]
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_add_hyperlink, js: addHyperlink, py: add_hyperlink }
     facade: handwritten
@@ -4914,10 +4913,11 @@ entries:
     kind: op
     scope: sheet
     noun: hyperlink
+    c: fm_sheet_remove_hyperlink
+    js: removeHyperlink
+    py: remove_hyperlink
+    rect_args: [0]
     surfaces: [c, wasm, native, py]
-    was: { c: fm_sheet_remove_hyperlink, js: removeHyperlink, py: remove_hyperlink }
-    drop: { c: fm_sheet_remove_hyperlink, js: removeHyperlink, py: remove_hyperlink, closes: R44.singleton.null }
-    replaced_by: hyperlink.set
   hyperlink.insert_at:
     kind: op
     scope: sheet
@@ -4927,6 +4927,7 @@ entries:
     py: insert_hyperlink_at
     surfaces: [c, wasm, native, py]
     facade: handwritten
+    exception: "Positional insert into an ordered list that keeps duplicates, so the verb is insert (add refuses clashes), paired with removeHyperlinkAt; returns void because the position is the argument; no style side effects (setHyperlink and removeHyperlink format cells)"
   hyperlink.remove_at:
     kind: op
     scope: sheet
@@ -4936,6 +4937,7 @@ entries:
     py: remove_hyperlink_at
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_remove_hyperlink_at, js: removeHyperlinkAt, py: remove_hyperlink_at }
+    exception: "Positional raw removal, the undo pair of insertHyperlinkAt: no style side effects, unlike removeHyperlink"
   hyperlinks.clear:
     kind: op
     scope: sheet

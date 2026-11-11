@@ -721,7 +721,12 @@ class IndexRangeTests(unittest.TestCase):
             with self.assertRaises(TypeError):
                 wb.sheet(0).get_value(1.0, 0)
             with self.assertRaises(TypeError):
-                wb.sheet(0).set_hyperlink(1.5, 0, formulon.HyperlinkInput(target="https://example.test"))
+                wb.sheet(0).remove_hyperlink_at(1.5)  # type: ignore[arg-type]
+            with self.assertRaises(TypeError):
+                wb.sheet(0).insert_hyperlink_at(
+                    1.5,
+                    formulon.HyperlinkInput(range="A1", target="https://example.test"),  # type: ignore[arg-type]
+                )
             wb.update_iterative(enabled=True, max_iterations=100, max_change=0.001)
 
     def test_wrapping_row_does_not_overwrite_the_aliased_cell(self) -> None:
@@ -790,8 +795,15 @@ class IndexRangeTests(unittest.TestCase):
         # ``struct.error`` that no caller guarding on ``ValueError`` sees.
         with Workbook.create_default() as wb:
             with self.assertRaises(ValueError) as ctx:
-                wb.sheet(0).set_hyperlink(2**32 + 5, 0, formulon.HyperlinkInput(target="http://example.invalid"))
-            self.assertIn("row", ctx.exception.context)
+                wb.sheet(0).remove_hyperlink_at(2**32 + 5)
+            self.assertIn("hyperlink_index", str(ctx.exception))
+            with self.assertRaises(formulon.InvalidArgumentError):
+                wb.sheet(0).set_hyperlink(
+                    formulon.HyperlinkInput(
+                        range=formulon.CellRect(2**32 + 5, 0, 2**32 + 5, 0), target="http://example.invalid"
+                    )
+                )
+            self.assertEqual(wb.sheet(0).list_hyperlinks(), [])
 
             with self.assertRaises(formulon.InvalidArgumentError) as ctx:
                 wb.sheet(0).add_merge(formulon.CellRect(first_row=-1, first_col=0, last_row=1, last_col=1))

@@ -456,6 +456,7 @@ SHEET_METHODS = (
     "remove_cf_rule",
     "remove_data_table",
     "remove_drawing",
+    "remove_hyperlink",
     "remove_hyperlink_at",
     "remove_merge",
     "remove_pivot",
@@ -712,7 +713,6 @@ CELL_ARGS = {
     "Sheet.set_comment_visible": ((0, 1),),
     "Sheet.set_error": ((0, 1),),
     "Sheet.set_formula": ((0, 1),),
-    "Sheet.set_hyperlink": ((0, 1),),
     "Sheet.set_number": ((0, 1),),
     "Sheet.set_text": ((0, 1),),
     "Sheet.set_value": ((0, 1),),
@@ -737,6 +737,7 @@ RECT_ARGS = {
     "Sheet.list_show_phonetic_cells": (0,),
     "Sheet.recalc_viewport": (0,),
     "Sheet.remap_range_xfs": (0,),
+    "Sheet.remove_hyperlink": (0,),
     "Sheet.remove_merge": (0,),
     "Sheet.set_print_area": (0,),
     "Sheet.set_range_xf_index": (0,),
@@ -2813,38 +2814,40 @@ class Sheet(_NoCopy):
         return out
 
     # -- Hyperlinks --------------------------------------------------------
-    @overload
-    @_coordinate_form
-    def set_hyperlink(self, row: int, col: int, link: Union[HyperlinkInput, Hyperlink, None]) -> None: ...
+    def set_hyperlink(self, link: Union[HyperlinkInput, Hyperlink]) -> None:
+        """Set the hyperlink covering exactly ``link.range``.
 
-    @overload
-    def set_hyperlink(self, a1: str, link: Union[HyperlinkInput, Hyperlink, None]) -> None: ...
-
-    def set_hyperlink(self, *args: Any, **kwargs: Any) -> None:
-        """Set a hyperlink anchored at the cell ``(row, col)``; ``None`` removes every link anchored there.
-
-        A link covering exactly the same range is replaced in place;
-        otherwise the link is appended and those already anchored there are
-        kept.
+        A link on that same range is replaced in place; otherwise ``link`` is
+        appended. Links on other ranges are kept, overlapping ones included.
 
         ``link.target`` is the external address (URL, file path); ``None``
         makes a link inside the workbook, which then needs ``link.location``
         (a reference such as ``"Sheet2!A1"`` or a defined name). A
         ``location`` beside a ``target`` is the fragment within it.
-        ``display`` is the hyperlink's stored display attribute; the cell
-        value is not written, so call :meth:`set_text` with the same text to
-        show it. ``link.range`` is the extent the link covers and must start
-        at ``(row, col)``; ``None`` covers the key cell alone, and a
-        :class:`Hyperlink` read back keeps its extent. Removing a cell that
-        has no hyperlink does nothing.
+
+        An empty top-left cell of the range receives ``display``, else
+        ``target``, else ``location`` as text; a cell that holds a value keeps
+        it. Every cell of the range takes Excel's Hyperlink cell style: the
+        font is replaced (the Normal font, underlined, theme colour 10) and
+        fill, number format, border, alignment and protection are kept; blank
+        and merged-away cells are formatted too, and a whole-column range
+        formats the column.
 
         Raises:
-          TypeError: when ``link`` is neither a :class:`HyperlinkInput`, a :class:`Hyperlink` nor ``None``,
-            or its ``target`` and ``location`` are both ``None``.
-          InvalidArgumentError: when ``link.range`` does not start at ``(row, col)``.
+          TypeError: when ``link`` is neither a :class:`HyperlinkInput` nor a :class:`Hyperlink`,
+            its ``range`` is ``None``, or its ``target`` and ``location`` are both ``None``.
+          InvalidArgumentError: when ``link.range`` lies outside the grid or is not a valid A1 range,
+            or the text for the top-left cell exceeds 32,767 characters; nothing changes.
+          PreconditionFailedError: when more than 1,048,576 cells that are not a whole column or row
+            would be formatted; nothing changes.
         """
-        row, col, link = self._cell_args("set_hyperlink", args, kwargs, ("link",))
-        self._set_hyperlink(row, col, link)
+        self._check_hyperlink(link)
+        rect = self._rect(link.range, "link.range")
+        sheet = self._index()
+        h = self._workbook._require()
+        with _ArgScope() as scope:
+            ptr = self._pack_hyperlink(scope, link, rect)
+            _check(LIB.fm_sheet_set_hyperlink(h, _uint(sheet, "sheet_index", role="sheet"), ptr))
 
     def _pack_hyperlink(self, scope: _ArgScope, link: Union[HyperlinkInput, Hyperlink], rect: CellRect) -> int:
         ptr = scope.struct(S.HYPERLINK)
@@ -2858,49 +2861,31 @@ class Sheet(_NoCopy):
     @staticmethod
     def _check_hyperlink(link: object) -> None:
         if not isinstance(link, (HyperlinkInput, Hyperlink)):
-            raise TypeError(_argument_message("link", "must be a HyperlinkInput, a Hyperlink or None"))
+            raise TypeError(_argument_message("link", "must be a HyperlinkInput or a Hyperlink"))
+        if link.range is None:
+            raise TypeError(_argument_message("link.range", "is required"))
         if link.target is None and link.location is None:
             raise TypeError(_argument_message("link", "needs a target or a location"))
 
-    def _set_hyperlink(self, row: int, col: int, link: Union[HyperlinkInput, Hyperlink, None]) -> None:
-        rect = CellRect(row, col, row, col)
-        if link is not None:
-            self._check_hyperlink(link)
-            if link.range is not None:
-                rect = self._rect(link.range, "link.range")
-        sheet = self._index()
-        h = self._workbook._require()
-        with _ArgScope() as scope:
-            ptr = 0 if link is None else self._pack_hyperlink(scope, link, rect)
-            _check(
-                LIB.fm_sheet_set_hyperlink(
-                    h,
-                    _uint(sheet, "sheet_index", role="sheet"),
-                    _uint(row, "row", role="coordinate"),
-                    _uint(col, "col", role="coordinate"),
-                    ptr,
-                )
-            )
-
-    def insert_hyperlink_at(self, index: int, link: Union[HyperlinkInput, Hyperlink]) -> None:
-        """Insert ``link`` at position ``index`` of :meth:`list_hyperlinks`, replacing nothing.
+    def insert_hyperlink_at(self, hyperlink_index: int, link: Union[HyperlinkInput, Hyperlink]) -> None:
+        """Insert ``link`` at position ``hyperlink_index`` of :meth:`list_hyperlinks`, replacing nothing.
 
         A link covering the same range is kept (unlike :meth:`set_hyperlink`).
-        ``index`` is a position in the order :meth:`list_hyperlinks` returns, so
-        a host can map a list entry to its index; ``index == len(list_hyperlinks())``
-        appends. There is no anchor argument, so ``link.range`` is required and
-        its top-left cell is the anchor. Pairs with :meth:`remove_hyperlink_at`
-        for a lossless undo.
+        ``hyperlink_index`` is a position in the order :meth:`list_hyperlinks`
+        returns; ``hyperlink_index == len(list_hyperlinks())`` appends. Pairs
+        with :meth:`remove_hyperlink_at` for a lossless undo.
+
+        Edits the list only: no cell values or formats are written or reset,
+        so a caller undoing :meth:`remove_hyperlink` restores the cell formats
+        itself.
 
         Raises:
           TypeError: when ``link`` is neither a :class:`HyperlinkInput` nor a :class:`Hyperlink`,
-            or its ``target`` and ``location`` are both ``None``.
-          InvalidArgumentError: when ``link.range`` is ``None`` or lies outside the grid.
-          IndexOutOfRangeError: when ``index`` is above the number of hyperlinks; nothing changes.
+            its ``range`` is ``None``, or its ``target`` and ``location`` are both ``None``.
+          InvalidArgumentError: when ``link.range`` lies outside the grid or is not a valid A1 range.
+          IndexOutOfRangeError: when ``hyperlink_index`` is above the number of hyperlinks; nothing changes.
         """
         self._check_hyperlink(link)
-        if link.range is None:
-            raise FormulonError(StatusCode.INVALID_ARGUMENT, _argument_message("link.range", "is required"), "")
         rect = self._rect(link.range, "link.range")
         sheet = self._index()
         h = self._workbook._require()
@@ -2908,35 +2893,70 @@ class Sheet(_NoCopy):
             ptr = self._pack_hyperlink(scope, link, rect)
             _check(
                 LIB.fm_sheet_insert_hyperlink_at(
-                    h, _uint(sheet, "sheet_index", role="sheet"), _uint(index, "index", role="position"), ptr
+                    h,
+                    _uint(sheet, "sheet_index", role="sheet"),
+                    _uint(hyperlink_index, "hyperlink_index", role="position"),
+                    ptr,
                 )
             )
 
-    def remove_hyperlink_at(self, index: int) -> None:
-        """Remove the hyperlink at position ``index`` of :meth:`list_hyperlinks`.
+    def remove_hyperlink(self, range: Union[CellRect, str]) -> None:
+        """Remove every hyperlink on the sheet whose range intersects ``range``, each one whole.
 
-        ``index`` is a position in the order :meth:`list_hyperlinks` returns, so
-        a host can map a list entry to its index.
+        Resets every cell of each removed hyperlink's range to the default
+        format, including cells another remaining hyperlink still covers;
+        values stay. Formatting added before or after the link is lost.
 
         Raises:
-          IndexOutOfRangeError: when ``index`` is not below the number of hyperlinks.
+          NotFoundError: when no hyperlink intersects ``range``.
+          InvalidArgumentError: when ``range`` lies outside the grid or is not a valid A1 range.
+          PreconditionFailedError: when a removed link covers more than 1,048,576 cells and is not a
+            whole column or row; nothing is removed.
+        """
+        rect = self._rect(range)
+        sheet = self._index()
+        h = self._workbook._require()
+        with _ArgScope() as scope:
+            ptr = _pack_cell_rect_array([rect], scope)
+            _check(LIB.fm_sheet_remove_hyperlink(h, _uint(sheet, "sheet_index", role="sheet"), ptr))
+
+    def remove_hyperlink_at(self, hyperlink_index: int) -> None:
+        """Remove the hyperlink at position ``hyperlink_index`` of :meth:`list_hyperlinks`.
+
+        Edits the list only: no cell values or formats are written or reset,
+        so a caller undoing :meth:`remove_hyperlink` restores the cell formats
+        itself.
+
+        Raises:
+          IndexOutOfRangeError: when ``hyperlink_index`` is not below the number of hyperlinks.
         """
         sheet = self._index()
         h = self._workbook._require()
         _check(
             LIB.fm_sheet_remove_hyperlink_at(
-                h, _uint(sheet, "sheet_index", role="sheet"), _uint(index, "index", role="position")
+                h,
+                _uint(sheet, "sheet_index", role="sheet"),
+                _uint(hyperlink_index, "hyperlink_index", role="position"),
             )
         )
 
     def clear_hyperlinks(self) -> None:
-        """Drop every hyperlink on the sheet."""
+        """Drop every hyperlink on the sheet.
+
+        Resets every cell of each removed hyperlink's range to the default
+        format, including cells another remaining hyperlink still covers;
+        values stay. Formatting added before or after the link is lost.
+
+        Raises:
+          PreconditionFailedError: when a link covers more than 1,048,576 cells and is not a whole
+            column or row; nothing is removed.
+        """
         sheet = self._index()
         h = self._workbook._require()
         _check(LIB.fm_sheet_clear_hyperlinks(h, _uint(sheet, "sheet", role="sheet")))
 
     def list_hyperlinks(self) -> List[Hyperlink]:
-        """Return every hyperlink on the sheet."""
+        """Return every hyperlink on the sheet, in the order added (file order after a load)."""
         sheet = self._index()
         h = self._workbook._require()
         n = _read_count(LIB.fm_sheet_get_hyperlink_count, h, _uint(sheet, "sheet", role="sheet"))
@@ -2963,7 +2983,7 @@ class Sheet(_NoCopy):
     def get_hyperlink(self, a1: str) -> Optional[Hyperlink]: ...
 
     def get_hyperlink(self, *args: Any, **kwargs: Any) -> Optional[Hyperlink]:
-        """Return the hyperlink whose range starts at ``(row, col)`` (the first when several do), or ``None``."""
+        """Return the earliest-added hyperlink whose range contains ``(row, col)``, or ``None``."""
         row, col = self._cell_args("get_hyperlink", args, kwargs, ())
         sheet = self._index()
         return self._workbook._lookup(

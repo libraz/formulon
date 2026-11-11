@@ -672,6 +672,44 @@ std::vector<MergeRange> Sheet::remove_merges_intersecting(MergeRange range) {
   return removed;
 }
 
+void Sheet::set_hyperlink(Hyperlink link) {
+  const auto same = [&link](const Hyperlink& h) { return h.same_range(link); };
+  const auto existing = std::find_if(hyperlinks_.begin(), hyperlinks_.end(), same);
+  if (existing == hyperlinks_.end()) {
+    hyperlinks_.push_back(std::move(link));
+    return;
+  }
+  // A repeated range from a loaded file would otherwise survive the replacement.
+  hyperlinks_.erase(std::remove_if(existing + 1, hyperlinks_.end(), same), hyperlinks_.end());
+  *existing = std::move(link);
+}
+
+const Hyperlink* Sheet::hyperlink_at(std::uint32_t row, std::uint32_t col) const noexcept {
+  for (const Hyperlink& link : hyperlinks_) {
+    if (link.covers(row, col)) {
+      return &link;
+    }
+  }
+  return nullptr;
+}
+
+std::vector<Hyperlink> Sheet::remove_hyperlinks_intersecting(MergeRange range) {
+  std::vector<Hyperlink> removed;
+  auto write = hyperlinks_.begin();
+  for (auto read = hyperlinks_.begin(); read != hyperlinks_.end(); ++read) {
+    if (!read->intersects(range.first_row, range.first_col, range.last_row, range.last_col)) {
+      if (write != read) {
+        *write = std::move(*read);
+      }
+      ++write;
+      continue;
+    }
+    removed.push_back(std::move(*read));
+  }
+  hyperlinks_.erase(write, hyperlinks_.end());
+  return removed;
+}
+
 bool Sheet::remove_merge_at(std::size_t index, MergeRange* removed) {
   const std::lock_guard<std::mutex> guard(*spill_mutex_);
   if (index >= merges_.size()) {

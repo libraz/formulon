@@ -81,10 +81,10 @@ fm_status_t remove_sheet_item_at(fm_workbook_t* wb, std::size_t sheet_index, std
 
 /// Validates a hyperlink record (rect inside the grid, utf8 strings) and converts it to the model type.
 fm_status_t convert_hyperlink(const fm_hyperlink_t& hl, formulon::Hyperlink* out) {
-  if (auto rc = check_sheet_rect(hl.rect); rc != 0) {
+  if (auto rc = check_utf8({hl.target, hl.location, hl.display, hl.tooltip}); rc != 0) {
     return rc;
   }
-  if (auto rc = check_utf8({hl.target, hl.location, hl.display, hl.tooltip}); rc != 0) {
+  if (auto rc = check_sheet_rect(hl.rect); rc != 0) {
     return rc;
   }
   out->row = hl.rect.first_row;
@@ -97,6 +97,14 @@ fm_status_t convert_hyperlink(const fm_hyperlink_t& hl, formulon::Hyperlink* out
   out->tooltip = text_or_empty(hl.tooltip);
   // rid stays empty; the writer mints a fresh rIdN on save.
   return 0;
+}
+
+void fill_hyperlink(const formulon::Hyperlink& h, fm_hyperlink_t* out) {
+  out->rect = fm_cell_rect_t{h.row, h.col, h.last_row, h.last_col};
+  out->target = c_str_or_null(h.target);
+  out->location = c_str_or_null(h.location);
+  out->display = c_str_or_null(h.display);
+  out->tooltip = c_str_or_null(h.tooltip);
 }
 
 void fill_comment(const formulon::CellComment& c, fm_comment_t* out) {
@@ -122,69 +130,77 @@ bool tristate_to_bool(std::int32_t value) {
 // Hyperlinks
 // ---------------------------------------------------------------------------
 
-extern "C" fm_status_t fm_sheet_set_hyperlink(fm_workbook_t* wb, std::size_t sheet_index, std::uint32_t row,
-                                              std::uint32_t col, const fm_hyperlink_t* hl) {
+extern "C" fm_status_t fm_sheet_set_hyperlink(fm_workbook_t* wb, std::size_t sheet_index, const fm_hyperlink_t* hl) {
   clear_last_error();
-  if (hl != nullptr) {
-    if (auto rc = check_record_size(*hl); rc != 0) {
-      return rc;
-    }
+  if (wb == nullptr) {
+    return null_argument("wb");
+  }
+  if (hl == nullptr) {
+    return null_argument("hl");
   }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
-  if (auto rc = check_cell_coord(row, col); rc != 0) {
+  if (auto rc = check_record_size(*hl); rc != 0) {
     return rc;
   }
-  auto& hls = wb->workbook().sheet(sheet_index).mutable_hyperlinks();
-  const auto anchored = [&](const formulon::Hyperlink& h) { return h.row == row && h.col == col; };
-  if (hl == nullptr) {
-    hls.erase(std::remove_if(hls.begin(), hls.end(), anchored), hls.end());
-    return 0;
-  }
-  formulon::Hyperlink out;
-  if (auto rc = convert_hyperlink(*hl, &out); rc != 0) {
+  formulon::Hyperlink link;
+  if (auto rc = convert_hyperlink(*hl, &link); rc != 0) {
     return rc;
   }
-  if (out.row != row || out.col != col) {
-    return formulon::c_api::parts::invalid_argument("hyperlink.rect must start at row and col");
-  }
-  // As Excel adds a link: one covering exactly the same range is replaced, any other is kept.
-  const auto same_range = [&out](const formulon::Hyperlink& h) {
-    return h.row == out.row && h.col == out.col && h.last_row == out.last_row && h.last_col == out.last_col;
-  };
-  const auto existing = std::find_if(hls.begin(), hls.end(), same_range);
-  if (existing == hls.end()) {
-    hls.push_back(std::move(out));
-  } else {
-    *existing = std::move(out);
-    // A repeated range from a loaded file would otherwise survive the replacement.
-    hls.erase(std::remove_if(existing + 1, hls.end(), same_range), hls.end());
-  }
-  return 0;
+  return finish_status(wb->workbook().set_hyperlink(sheet_index, std::move(link)));
 }
 
 extern "C" fm_status_t fm_sheet_insert_hyperlink_at(fm_workbook_t* wb, std::size_t sheet_index, std::size_t index,
                                                     const fm_hyperlink_t* hl) {
   clear_last_error();
+  if (wb == nullptr) {
+    return null_argument("wb");
+  }
   if (hl == nullptr) {
     return null_argument("hl");
-  }
-  if (auto rc = check_record_size(*hl); rc != 0) {
-    return rc;
   }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
+  if (auto rc = check_record_size(*hl); rc != 0) {
+    return rc;
+  }
+  formulon::Hyperlink link;
+  if (auto rc = convert_hyperlink(*hl, &link); rc != 0) {
+    return rc;
+  }
   auto& hls = wb->workbook().sheet(sheet_index).mutable_hyperlinks();
-  if (auto rc = check_index(index, hls.size() + 1, "index"); rc != 0) {
+  // `index == count` appends; the refusal reports the real count.
+  if (index > hls.size()) {
+    return check_index(index, hls.size(), "index");
+  }
+  hls.insert(hls.begin() + static_cast<std::ptrdiff_t>(index), std::move(link));
+  return 0;
+}
+
+extern "C" fm_status_t fm_sheet_remove_hyperlink(fm_workbook_t* wb, std::size_t sheet_index,
+                                                 const fm_cell_rect_t* range) {
+  clear_last_error();
+  if (wb == nullptr) {
+    return null_argument("wb");
+  }
+  if (range == nullptr) {
+    return null_argument("range");
+  }
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
-  formulon::Hyperlink out;
-  if (auto rc = convert_hyperlink(*hl, &out); rc != 0) {
+  if (auto rc = check_sheet_rect(*range); rc != 0) {
     return rc;
   }
-  hls.insert(hls.begin() + static_cast<std::ptrdiff_t>(index), std::move(out));
+  auto removed = wb->workbook().remove_hyperlinks_intersecting(sheet_index, to_merge_range(*range));
+  if (!removed) {
+    return set_last_error(removed.error());
+  }
+  if (removed.value() == 0U) {
+    return not_found("no hyperlink intersects that range");
+  }
   return 0;
 }
 
@@ -199,8 +215,7 @@ extern "C" fm_status_t fm_sheet_clear_hyperlinks(fm_workbook_t* wb, std::size_t 
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
-  wb->workbook().sheet(sheet_index).mutable_hyperlinks().clear();
-  return 0;
+  return finish_status(wb->workbook().clear_hyperlinks(sheet_index));
 }
 
 extern "C" fm_status_t fm_sheet_get_hyperlink_at(const fm_workbook_t* wb, std::size_t sheet_index, std::size_t index,
@@ -219,12 +234,7 @@ extern "C" fm_status_t fm_sheet_get_hyperlink_at(const fm_workbook_t* wb, std::s
   if (auto rc = check_index(index, hls.size(), "index"); rc != 0) {
     return rc;
   }
-  const formulon::Hyperlink& h = hls[index];
-  out->rect = fm_cell_rect_t{h.row, h.col, h.last_row, h.last_col};
-  out->target = c_str_or_null(h.target);
-  out->location = c_str_or_null(h.location);
-  out->display = c_str_or_null(h.display);
-  out->tooltip = c_str_or_null(h.tooltip);
+  fill_hyperlink(hls[index], out);
   return 0;
 }
 
@@ -249,12 +259,9 @@ extern "C" fm_status_t fm_sheet_get_hyperlink(const fm_workbook_t* wb, std::size
     *out = fm_hyperlink_t{};
     out->struct_size = struct_size;
   }
-  const auto& hls = wb->workbook().sheet(sheet_index).hyperlinks();
-  for (std::size_t i = 0; i < hls.size(); ++i) {
-    if (hls[i].row == row && hls[i].col == col) {
-      *out_present = 1;
-      return fm_sheet_get_hyperlink_at(wb, sheet_index, i, out);
-    }
+  if (const formulon::Hyperlink* link = wb->workbook().sheet(sheet_index).hyperlink_at(row, col)) {
+    *out_present = 1;
+    fill_hyperlink(*link, out);
   }
   return 0;
 }

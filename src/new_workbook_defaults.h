@@ -50,6 +50,8 @@ struct NewWorkbookDefaults {
   const char* table_word;    ///< Default table name word.
   const char* column_word;   ///< Default table column name word ("Column1").
   const char* totals_label;  ///< Table totals row label a never-shown totals row starts with.
+  /// Name of the built-in Hyperlink cell style (builtin id 8) when the engine adds it.
+  const char* hyperlink_style_name;
 };
 
 /// The table row for `locale`.

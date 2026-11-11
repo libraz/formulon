@@ -84,7 +84,7 @@ TEST_F(FormulonCApiSheetFeatures, HyperlinkAddAndIterate) {
   hl.target = "https://example.com";
   hl.display = "Click";
   hl.tooltip = "Open site";
-  ASSERT_EQ(fm_sheet_set_hyperlink(wb_, 0, 1, 2, &hl), 0);
+  ASSERT_EQ(fm_sheet_set_hyperlink(wb_, 0, &hl), 0);
   std::size_t count = 0;
   ASSERT_EQ(fm_sheet_get_hyperlink_count(wb_, 0, &count), 0);
   ASSERT_EQ(count, 1U);
@@ -107,7 +107,7 @@ TEST_F(FormulonCApiSheetFeatures, HyperlinkRangeAddAndIterate) {
   hl.rect.last_row = 9U;
   hl.rect.last_col = 10U;
   hl.target = "https://range.example";
-  ASSERT_EQ(fm_sheet_set_hyperlink(wb_, 0U, 7U, 8U, &hl), 0);
+  ASSERT_EQ(fm_sheet_set_hyperlink(wb_, 0U, &hl), 0);
 
   fm_hyperlink_t out = FM_STRUCT_INIT(fm_hyperlink_t);
   ASSERT_EQ(fm_sheet_get_hyperlink_at(wb_, 0U, 0U, &out), 0);
@@ -126,7 +126,7 @@ TEST_F(FormulonCApiSheetFeatures, HyperlinkRejectsInvertedRectangleAtomically) {
   hl.rect.last_row = 7U;
   hl.rect.last_col = 10U;
   hl.target = "https://invalid.example";
-  EXPECT_EQ(fm_sheet_set_hyperlink(wb_, 0U, 9U, 8U, &hl), invalid);
+  EXPECT_EQ(fm_sheet_set_hyperlink(wb_, 0U, &hl), invalid);
 
   std::size_t count = 99U;
   ASSERT_EQ(fm_sheet_get_hyperlink_count(wb_, 0U, &count), 0);
@@ -141,7 +141,7 @@ TEST_F(FormulonCApiSheetFeatures, HyperlinkNullStringFieldsReadBackNull) {
   hl.rect.last_col = 0;
   // NULL and "" both mean absent; an absent string reads NULL.
   hl.display = "";
-  ASSERT_EQ(fm_sheet_set_hyperlink(wb_, 0, 0, 0, &hl), 0);
+  ASSERT_EQ(fm_sheet_set_hyperlink(wb_, 0, &hl), 0);
   fm_hyperlink_t got = FM_STRUCT_INIT(fm_hyperlink_t);
   ASSERT_EQ(fm_sheet_get_hyperlink_at(wb_, 0, 0, &got), 0);
   EXPECT_EQ(got.target, nullptr);
@@ -150,17 +150,17 @@ TEST_F(FormulonCApiSheetFeatures, HyperlinkNullStringFieldsReadBackNull) {
   EXPECT_EQ(got.tooltip, nullptr);
 }
 
-TEST_F(FormulonCApiSheetFeatures, HyperlinkSetAtAnchoredCellReplacesOnlyTheSameRange) {
+TEST_F(FormulonCApiSheetFeatures, HyperlinkSetReplacesOnlyTheSameRange) {
   fm_hyperlink_t first = FM_STRUCT_INIT(fm_hyperlink_t);
   first.rect = fm_cell_rect_t{2U, 3U, 2U, 3U};
   first.target = "https://first.example";
   fm_hyperlink_t second = FM_STRUCT_INIT(fm_hyperlink_t);
   second.rect = fm_cell_rect_t{2U, 3U, 4U, 5U};
   second.target = "https://second.example";
-  ASSERT_EQ(fm_sheet_set_hyperlink(wb_, 0, 2U, 3U, &first), 0);
-  ASSERT_EQ(fm_sheet_set_hyperlink(wb_, 0, 2U, 3U, &second), 0);
+  ASSERT_EQ(fm_sheet_set_hyperlink(wb_, 0, &first), 0);
+  ASSERT_EQ(fm_sheet_set_hyperlink(wb_, 0, &second), 0);
 
-  // A different range from the same cell is appended; the cell reads the first.
+  // A different range from the same top-left cell is appended; the cell reads the first.
   std::size_t count = 0;
   ASSERT_EQ(fm_sheet_get_hyperlink_count(wb_, 0, &count), 0);
   EXPECT_EQ(count, 2U);
@@ -172,7 +172,7 @@ TEST_F(FormulonCApiSheetFeatures, HyperlinkSetAtAnchoredCellReplacesOnlyTheSameR
 
   // The same range again replaces that link in place.
   second.target = "https://third.example";
-  ASSERT_EQ(fm_sheet_set_hyperlink(wb_, 0, 2U, 3U, &second), 0);
+  ASSERT_EQ(fm_sheet_set_hyperlink(wb_, 0, &second), 0);
   ASSERT_EQ(fm_sheet_get_hyperlink_count(wb_, 0, &count), 0);
   EXPECT_EQ(count, 2U);
   ASSERT_EQ(fm_sheet_get_hyperlink_at(wb_, 0, 1, &got), 0);
@@ -181,17 +181,18 @@ TEST_F(FormulonCApiSheetFeatures, HyperlinkSetAtAnchoredCellReplacesOnlyTheSameR
   EXPECT_EQ(got.rect.last_col, 5U);
 }
 
-TEST_F(FormulonCApiSheetFeatures, HyperlinkSetWithNullRemovesTheLinkAnchoredThere) {
+TEST_F(FormulonCApiSheetFeatures, HyperlinkRemoveDeletesTheIntersectingLink) {
   fm_hyperlink_t keep = FM_STRUCT_INIT(fm_hyperlink_t);
   keep.rect = fm_cell_rect_t{0U, 0U, 0U, 0U};
   keep.target = "https://keep.example";
   fm_hyperlink_t drop = FM_STRUCT_INIT(fm_hyperlink_t);
   drop.rect = fm_cell_rect_t{5U, 5U, 5U, 6U};
   drop.target = "https://drop.example";
-  ASSERT_EQ(fm_sheet_set_hyperlink(wb_, 0, 0U, 0U, &keep), 0);
-  ASSERT_EQ(fm_sheet_set_hyperlink(wb_, 0, 5U, 5U, &drop), 0);
+  ASSERT_EQ(fm_sheet_set_hyperlink(wb_, 0, &keep), 0);
+  ASSERT_EQ(fm_sheet_set_hyperlink(wb_, 0, &drop), 0);
 
-  EXPECT_EQ(fm_sheet_set_hyperlink(wb_, 0, 5U, 5U, nullptr), 0);
+  const fm_cell_rect_t cell{5U, 6U, 5U, 6U};
+  EXPECT_EQ(fm_sheet_remove_hyperlink(wb_, 0, &cell), 0);
   std::size_t count = 0;
   ASSERT_EQ(fm_sheet_get_hyperlink_count(wb_, 0, &count), 0);
   EXPECT_EQ(count, 1U);
@@ -201,27 +202,33 @@ TEST_F(FormulonCApiSheetFeatures, HyperlinkSetWithNullRemovesTheLinkAnchoredTher
   EXPECT_EQ(present, 0);
 }
 
-TEST_F(FormulonCApiSheetFeatures, HyperlinkSetWithNullIsANoOpWhenAbsent) {
-  EXPECT_EQ(fm_sheet_set_hyperlink(wb_, 0, 9U, 9U, nullptr), 0);
+TEST_F(FormulonCApiSheetFeatures, HyperlinkRemoveWithNoIntersectionIsNotFound) {
+  const fm_cell_rect_t cell{9U, 9U, 9U, 9U};
+  EXPECT_EQ(fm_sheet_remove_hyperlink(wb_, 0, &cell), FM_STATUS_NOT_FOUND);
   std::size_t count = 9;
   ASSERT_EQ(fm_sheet_get_hyperlink_count(wb_, 0, &count), 0);
   EXPECT_EQ(count, 0U);
 }
 
-TEST_F(FormulonCApiSheetFeatures, HyperlinkRectangleMustBeAnchoredAtTheGivenCell) {
+TEST_F(FormulonCApiSheetFeatures, HyperlinkSetRefusesBadRectSheetAndHandle) {
   const fm_status_t invalid = static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
   fm_hyperlink_t hl = FM_STRUCT_INIT(fm_hyperlink_t);
-  hl.rect = fm_cell_rect_t{1U, 1U, 2U, 2U};
   hl.target = "https://anchor.example";
-  EXPECT_EQ(fm_sheet_set_hyperlink(wb_, 0, 1U, 2U, &hl), invalid);
-  EXPECT_EQ(fm_sheet_set_hyperlink(wb_, 0, 2U, 1U, &hl), invalid);
-  EXPECT_EQ(fm_sheet_set_hyperlink(wb_, 0, 2000000U, 1U, &hl), invalid);
+  hl.rect = fm_cell_rect_t{2U, 2U, 1U, 2U};
+  EXPECT_EQ(fm_sheet_set_hyperlink(wb_, 0, &hl), invalid);
+  hl.rect = fm_cell_rect_t{2U, 2U, 2U, 1U};
+  EXPECT_EQ(fm_sheet_set_hyperlink(wb_, 0, &hl), invalid);
+  hl.rect = fm_cell_rect_t{2000000U, 1U, 2000000U, 1U};
+  EXPECT_EQ(fm_sheet_set_hyperlink(wb_, 0, &hl), invalid);
   std::size_t count = 9;
   ASSERT_EQ(fm_sheet_get_hyperlink_count(wb_, 0, &count), 0);
   EXPECT_EQ(count, 0U);
-  EXPECT_EQ(fm_sheet_set_hyperlink(wb_, 7, 1U, 1U, &hl),
+  hl.rect = fm_cell_rect_t{1U, 1U, 1U, 1U};
+  EXPECT_EQ(fm_sheet_set_hyperlink(wb_, 7, &hl),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kSheetIndexOutOfRange));
-  EXPECT_EQ(fm_sheet_set_hyperlink(nullptr, 0, 1U, 1U, &hl),
+  EXPECT_EQ(fm_sheet_set_hyperlink(nullptr, 0, &hl),
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
+  EXPECT_EQ(fm_sheet_set_hyperlink(wb_, 0, nullptr),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
 }
 
@@ -588,7 +595,7 @@ TEST_F(FormulonCApiSheetFeatures, MergeRemovalSheetIndexOutOfRange) {
   EXPECT_NE(fm_sheet_clear_merges(wb_, 999), 0);
 }
 
-TEST_F(FormulonCApiSheetFeatures, RemoveHyperlinkByRowCol) {
+TEST_F(FormulonCApiSheetFeatures, RemoveHyperlinkByRangeKeepsNonIntersecting) {
   fm_hyperlink_t a = FM_STRUCT_INIT(fm_hyperlink_t);
   a.rect.first_row = 1;
   a.rect.first_col = 2;
@@ -607,12 +614,16 @@ TEST_F(FormulonCApiSheetFeatures, RemoveHyperlinkByRowCol) {
   c.rect.last_row = 1;
   c.rect.last_col = 2;
   c.target = "https://dup.example";
-  ASSERT_EQ(fm_sheet_set_hyperlink(wb_, 0, 1, 2, &a), 0);
-  ASSERT_EQ(fm_sheet_set_hyperlink(wb_, 0, 3, 4, &b), 0);
-  ASSERT_EQ(fm_sheet_set_hyperlink(wb_, 0, 1, 2, &c), 0);
-  // A NULL link removes the entry anchored at (1, 2); leaves the (3, 4) entry.
-  ASSERT_EQ(fm_sheet_set_hyperlink(wb_, 0, 1, 2, nullptr), 0);
+  ASSERT_EQ(fm_sheet_set_hyperlink(wb_, 0, &a), 0);
+  ASSERT_EQ(fm_sheet_set_hyperlink(wb_, 0, &b), 0);
+  ASSERT_EQ(fm_sheet_set_hyperlink(wb_, 0, &c), 0);
+  // `c` shares `a`'s rectangle, so it replaced `a` in place.
   std::size_t count = 0;
+  ASSERT_EQ(fm_sheet_get_hyperlink_count(wb_, 0, &count), 0);
+  ASSERT_EQ(count, 2U);
+  // Removing by range deletes the entry over (1, 2) and leaves the (3, 4) entry.
+  const fm_cell_rect_t over_c{1U, 2U, 1U, 2U};
+  ASSERT_EQ(fm_sheet_remove_hyperlink(wb_, 0, &over_c), 0);
   ASSERT_EQ(fm_sheet_get_hyperlink_count(wb_, 0, &count), 0);
   ASSERT_EQ(count, 1U);
   fm_hyperlink_t got = FM_STRUCT_INIT(fm_hyperlink_t);
@@ -622,16 +633,16 @@ TEST_F(FormulonCApiSheetFeatures, RemoveHyperlinkByRowCol) {
   EXPECT_STREQ(got.target, "https://b.example");
 }
 
-TEST_F(FormulonCApiSheetFeatures, RemoveHyperlinkByRowColNoMatchIsNoOp) {
+TEST_F(FormulonCApiSheetFeatures, RemoveHyperlinkByRangeNoMatchIsNotFound) {
   fm_hyperlink_t a = FM_STRUCT_INIT(fm_hyperlink_t);
   a.rect.first_row = 1;
   a.rect.first_col = 2;
   a.rect.last_row = 1;
   a.rect.last_col = 2;
   a.target = "https://a.example";
-  ASSERT_EQ(fm_sheet_set_hyperlink(wb_, 0, 1, 2, &a), 0);
-  // No hyperlink anchored at (5, 5).
-  ASSERT_EQ(fm_sheet_set_hyperlink(wb_, 0, 5, 5, nullptr), 0);
+  ASSERT_EQ(fm_sheet_set_hyperlink(wb_, 0, &a), 0);
+  const fm_cell_rect_t elsewhere{5U, 5U, 5U, 5U};
+  ASSERT_EQ(fm_sheet_remove_hyperlink(wb_, 0, &elsewhere), FM_STATUS_NOT_FOUND);
   std::size_t count = 0;
   ASSERT_EQ(fm_sheet_get_hyperlink_count(wb_, 0, &count), 0);
   EXPECT_EQ(count, 1U);
@@ -650,8 +661,8 @@ TEST_F(FormulonCApiSheetFeatures, RemoveHyperlinkAtValid) {
   b.rect.last_row = 2;
   b.rect.last_col = 2;
   b.target = "https://b.example";
-  ASSERT_EQ(fm_sheet_set_hyperlink(wb_, 0, 1, 1, &a), 0);
-  ASSERT_EQ(fm_sheet_set_hyperlink(wb_, 0, 2, 2, &b), 0);
+  ASSERT_EQ(fm_sheet_set_hyperlink(wb_, 0, &a), 0);
+  ASSERT_EQ(fm_sheet_set_hyperlink(wb_, 0, &b), 0);
   ASSERT_EQ(fm_sheet_remove_hyperlink_at(wb_, 0, 0), 0);
   std::size_t count = 0;
   ASSERT_EQ(fm_sheet_get_hyperlink_count(wb_, 0, &count), 0);
@@ -670,7 +681,7 @@ TEST_F(FormulonCApiSheetFeatures, RemoveHyperlinkAtOutOfRange) {
   a.rect.last_row = 0;
   a.rect.last_col = 0;
   a.target = "https://a.example";
-  ASSERT_EQ(fm_sheet_set_hyperlink(wb_, 0, 0, 0, &a), 0);
+  ASSERT_EQ(fm_sheet_set_hyperlink(wb_, 0, &a), 0);
   EXPECT_NE(fm_sheet_remove_hyperlink_at(wb_, 0, 99), 0);
   std::size_t count = 0;
   ASSERT_EQ(fm_sheet_get_hyperlink_count(wb_, 0, &count), 0);
@@ -696,9 +707,9 @@ TEST_F(FormulonCApiSheetFeatures, ClearHyperlinks) {
   c.rect.last_row = 2;
   c.rect.last_col = 2;
   c.target = "https://c.example";
-  ASSERT_EQ(fm_sheet_set_hyperlink(wb_, 0, 0, 0, &a), 0);
-  ASSERT_EQ(fm_sheet_set_hyperlink(wb_, 0, 1, 1, &b), 0);
-  ASSERT_EQ(fm_sheet_set_hyperlink(wb_, 0, 2, 2, &c), 0);
+  ASSERT_EQ(fm_sheet_set_hyperlink(wb_, 0, &a), 0);
+  ASSERT_EQ(fm_sheet_set_hyperlink(wb_, 0, &b), 0);
+  ASSERT_EQ(fm_sheet_set_hyperlink(wb_, 0, &c), 0);
   ASSERT_EQ(fm_sheet_clear_hyperlinks(wb_, 0), 0);
   std::size_t count = 0;
   ASSERT_EQ(fm_sheet_get_hyperlink_count(wb_, 0, &count), 0);
@@ -708,9 +719,310 @@ TEST_F(FormulonCApiSheetFeatures, ClearHyperlinks) {
 }
 
 TEST_F(FormulonCApiSheetFeatures, HyperlinkRemovalSheetIndexOutOfRange) {
-  EXPECT_NE(fm_sheet_set_hyperlink(wb_, 999, 0, 0, nullptr), 0);
+  const fm_cell_rect_t cell{0U, 0U, 0U, 0U};
+  EXPECT_EQ(fm_sheet_remove_hyperlink(wb_, 999, &cell), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
   EXPECT_NE(fm_sheet_remove_hyperlink_at(wb_, 999, 0), 0);
   EXPECT_NE(fm_sheet_clear_hyperlinks(wb_, 999), 0);
+}
+
+// ---- Hyperlink model: identity, order, reads, removal, positional edits ----
+
+namespace {
+
+// A link with only a target; the rectangle is the identity the model keys on.
+fm_hyperlink_t RectLink(fm_cell_rect_t rect, const char* target) {
+  fm_hyperlink_t hl = FM_STRUCT_INIT(fm_hyperlink_t);
+  hl.rect = rect;
+  hl.target = target;
+  return hl;
+}
+
+// Every hyperlink as "r1c1:r2c2=target", in list order.
+std::vector<std::string> LinkLines(const fm_workbook_t* wb) {
+  std::size_t count = 0;
+  EXPECT_EQ(fm_sheet_get_hyperlink_count(wb, 0, &count), 0);
+  std::vector<std::string> out;
+  for (std::size_t i = 0; i < count; ++i) {
+    fm_hyperlink_t got = FM_STRUCT_INIT(fm_hyperlink_t);
+    EXPECT_EQ(fm_sheet_get_hyperlink_at(wb, 0, i, &got), 0);
+    out.push_back(std::to_string(got.rect.first_row) + "," + std::to_string(got.rect.first_col) + ":" +
+                  std::to_string(got.rect.last_row) + "," + std::to_string(got.rect.last_col) + "=" +
+                  (got.target != nullptr ? got.target : ""));
+  }
+  return out;
+}
+
+constexpr fm_cell_rect_t kA1ToC3{0U, 0U, 2U, 2U};
+constexpr fm_cell_rect_t kB2{1U, 1U, 1U, 1U};
+
+}  // namespace
+
+TEST_F(FormulonCApiSheetFeatures, HyperlinkSetKeepsOverlappingRangesWholeInInsertionOrder) {
+  const fm_hyperlink_t wide = RectLink(kA1ToC3, "wide");
+  const fm_hyperlink_t cell = RectLink(kB2, "cell");
+  const fm_hyperlink_t partial = RectLink({1U, 1U, 3U, 3U}, "partial");
+  const fm_hyperlink_t sub = RectLink({0U, 0U, 1U, 1U}, "sub");
+  ASSERT_EQ(fm_sheet_set_hyperlink(wb_, 0, &wide), 0);
+  ASSERT_EQ(fm_sheet_set_hyperlink(wb_, 0, &cell), 0);
+  ASSERT_EQ(fm_sheet_set_hyperlink(wb_, 0, &partial), 0);
+  ASSERT_EQ(fm_sheet_set_hyperlink(wb_, 0, &sub), 0);
+  // Nothing is split or trimmed: four entries, each with its own rectangle.
+  EXPECT_EQ(LinkLines(wb_),
+            (std::vector<std::string>{"0,0:2,2=wide", "1,1:1,1=cell", "1,1:3,3=partial", "0,0:1,1=sub"}));
+}
+
+TEST_F(FormulonCApiSheetFeatures, HyperlinkSetOnTheSameRangeReplacesInPlaceAndKeepsNeighbours) {
+  const fm_hyperlink_t a = RectLink({0U, 0U, 0U, 0U}, "a");
+  const fm_hyperlink_t b = RectLink({1U, 0U, 1U, 0U}, "b");
+  const fm_hyperlink_t c = RectLink({2U, 0U, 2U, 0U}, "c");
+  ASSERT_EQ(fm_sheet_set_hyperlink(wb_, 0, &a), 0);
+  ASSERT_EQ(fm_sheet_set_hyperlink(wb_, 0, &b), 0);
+  ASSERT_EQ(fm_sheet_set_hyperlink(wb_, 0, &c), 0);
+  fm_hyperlink_t replacement = RectLink({1U, 0U, 1U, 0U}, nullptr);
+  replacement.location = "Sheet1!Z9";
+  replacement.tooltip = "tip";
+  ASSERT_EQ(fm_sheet_set_hyperlink(wb_, 0, &replacement), 0);
+
+  EXPECT_EQ(LinkLines(wb_), (std::vector<std::string>{"0,0:0,0=a", "1,0:1,0=", "2,0:2,0=c"}));
+  fm_hyperlink_t got = FM_STRUCT_INIT(fm_hyperlink_t);
+  ASSERT_EQ(fm_sheet_get_hyperlink_at(wb_, 0, 1, &got), 0);
+  EXPECT_EQ(got.target, nullptr);
+  EXPECT_STREQ(got.location, "Sheet1!Z9");
+  EXPECT_STREQ(got.tooltip, "tip");
+}
+
+TEST_F(FormulonCApiSheetFeatures, HyperlinkSetOverADuplicatePairReplacesTheFirstAndDropsTheLater) {
+  const fm_hyperlink_t first = RectLink({0U, 0U, 0U, 0U}, "dup1");
+  const fm_hyperlink_t middle = RectLink({5U, 5U, 5U, 5U}, "middle");
+  const fm_hyperlink_t second = RectLink({0U, 0U, 0U, 0U}, "dup2");
+  ASSERT_EQ(fm_sheet_insert_hyperlink_at(wb_, 0, 0, &first), 0);
+  ASSERT_EQ(fm_sheet_insert_hyperlink_at(wb_, 0, 1, &middle), 0);
+  ASSERT_EQ(fm_sheet_insert_hyperlink_at(wb_, 0, 2, &second), 0);
+  ASSERT_EQ(LinkLines(wb_).size(), 3U);
+
+  const fm_hyperlink_t replacement = RectLink({0U, 0U, 0U, 0U}, "new");
+  ASSERT_EQ(fm_sheet_set_hyperlink(wb_, 0, &replacement), 0);
+  EXPECT_EQ(LinkLines(wb_), (std::vector<std::string>{"0,0:0,0=new", "5,5:5,5=middle"}));
+}
+
+TEST_F(FormulonCApiSheetFeatures, HyperlinkSetOfAReadLinkLeavesTheListUnchanged) {
+  // A cell holding a value keeps it, so the write-back is a pure replace.
+  ASSERT_EQ(fm_sheet_set_number(wb_, 0, 0, 0, 1.0), 0);
+  ASSERT_EQ(fm_sheet_set_number(wb_, 0, 4, 4, 1.0), 0);
+  fm_hyperlink_t wide = RectLink(kA1ToC3, "wide");
+  wide.display = "Wide";
+  wide.tooltip = "tip";
+  const fm_hyperlink_t other = RectLink({4U, 4U, 4U, 4U}, "other");
+  ASSERT_EQ(fm_sheet_set_hyperlink(wb_, 0, &wide), 0);
+  ASSERT_EQ(fm_sheet_set_hyperlink(wb_, 0, &other), 0);
+  const std::vector<std::string> before = LinkLines(wb_);
+
+  int32_t present = 0;
+  fm_hyperlink_t got = FM_STRUCT_INIT(fm_hyperlink_t);
+  ASSERT_EQ(fm_sheet_get_hyperlink(wb_, 0, 0, 0, &present, &got), 0);
+  ASSERT_EQ(present, 1);
+  ASSERT_EQ(fm_sheet_set_hyperlink(wb_, 0, &got), 0);
+  ASSERT_EQ(fm_sheet_get_hyperlink_at(wb_, 0, 1, &got), 0);
+  ASSERT_EQ(fm_sheet_set_hyperlink(wb_, 0, &got), 0);
+
+  EXPECT_EQ(LinkLines(wb_), before);
+  ASSERT_EQ(fm_sheet_get_hyperlink_at(wb_, 0, 0, &got), 0);
+  EXPECT_STREQ(got.display, "Wide");
+  EXPECT_STREQ(got.tooltip, "tip");
+}
+
+TEST_F(FormulonCApiSheetFeatures, HyperlinkStringsMustBeWellFormedUtf8) {
+  const fm_status_t bad_utf8 = static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingUtf8EncodingError);
+  const fm_hyperlink_t keep = RectLink({9U, 9U, 9U, 9U}, "keep");
+  ASSERT_EQ(fm_sheet_set_hyperlink(wb_, 0, &keep), 0);
+  const std::vector<std::string> before = LinkLines(wb_);
+  const auto field_slot = [](fm_hyperlink_t& hl, int field) -> const char** {
+    switch (field) {
+      case 0:
+        return &hl.target;
+      case 1:
+        return &hl.location;
+      case 2:
+        return &hl.display;
+      default:
+        return &hl.tooltip;
+    }
+  };
+  for (int field = 0; field < 4; ++field) {
+    fm_hyperlink_t hl = RectLink({0U, 0U, 0U, 0U}, nullptr);
+    *field_slot(hl, field) = "\xC3";
+    EXPECT_EQ(fm_sheet_set_hyperlink(wb_, 0, &hl), bad_utf8) << field;
+    EXPECT_EQ(fm_sheet_insert_hyperlink_at(wb_, 0, 0, &hl), bad_utf8) << field;
+    EXPECT_EQ(LinkLines(wb_), before) << field;
+  }
+}
+
+TEST_F(FormulonCApiSheetFeatures, HyperlinkSetAndInsertRefuseAShortStruct) {
+  const fm_status_t invalid = static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
+  fm_hyperlink_t hl = RectLink({0U, 0U, 0U, 0U}, "x");
+  hl.struct_size = 0U;
+  EXPECT_EQ(fm_sheet_set_hyperlink(wb_, 0, &hl), invalid);
+  EXPECT_EQ(fm_sheet_insert_hyperlink_at(wb_, 0, 0, &hl), invalid);
+  hl.struct_size = static_cast<std::uint32_t>(sizeof(std::uint32_t));
+  EXPECT_EQ(fm_sheet_set_hyperlink(wb_, 0, &hl), invalid);
+  EXPECT_EQ(fm_sheet_insert_hyperlink_at(wb_, 0, 0, &hl), invalid);
+  EXPECT_TRUE(LinkLines(wb_).empty());
+}
+
+TEST_F(FormulonCApiSheetFeatures, HyperlinkGetReadsTheEarliestLinkContainingTheCell) {
+  const fm_hyperlink_t wide = RectLink(kA1ToC3, "wide");
+  const fm_hyperlink_t cell = RectLink(kB2, "cell");
+  int32_t present = 0;
+  fm_hyperlink_t got = FM_STRUCT_INIT(fm_hyperlink_t);
+
+  // Wide first: every cell of A1:C3, B2 included, reads the wide link.
+  ASSERT_EQ(fm_sheet_set_hyperlink(wb_, 0, &wide), 0);
+  ASSERT_EQ(fm_sheet_set_hyperlink(wb_, 0, &cell), 0);
+  for (std::uint32_t row = 0; row <= 2U; ++row) {
+    for (std::uint32_t col = 0; col <= 2U; ++col) {
+      ASSERT_EQ(fm_sheet_get_hyperlink(wb_, 0, row, col, &present, &got), 0);
+      ASSERT_EQ(present, 1) << row << "," << col;
+      EXPECT_STREQ(got.target, "wide") << row << "," << col;
+    }
+  }
+
+  // Remove both by position and add in the other order: B2 now reads its own link.
+  ASSERT_EQ(fm_sheet_remove_hyperlink_at(wb_, 0, 1), 0);
+  ASSERT_EQ(fm_sheet_remove_hyperlink_at(wb_, 0, 0), 0);
+  ASSERT_EQ(fm_sheet_set_hyperlink(wb_, 0, &cell), 0);
+  ASSERT_EQ(fm_sheet_set_hyperlink(wb_, 0, &wide), 0);
+  ASSERT_EQ(fm_sheet_get_hyperlink(wb_, 0, 1, 1, &present, &got), 0);
+  ASSERT_EQ(present, 1);
+  EXPECT_STREQ(got.target, "cell");
+  ASSERT_EQ(fm_sheet_get_hyperlink(wb_, 0, 2, 2, &present, &got), 0);
+  EXPECT_STREQ(got.target, "wide");
+}
+
+TEST_F(FormulonCApiSheetFeatures, HyperlinkGetOfAnUncoveredCellIsAbsentWithAZeroedRecord) {
+  const fm_hyperlink_t wide = RectLink(kA1ToC3, "wide");
+  ASSERT_EQ(fm_sheet_set_hyperlink(wb_, 0, &wide), 0);
+  int32_t present = 7;
+  fm_hyperlink_t got = FM_STRUCT_INIT(fm_hyperlink_t);
+  got.target = "stale";
+  got.rect = fm_cell_rect_t{9U, 9U, 9U, 9U};
+  ASSERT_EQ(fm_sheet_get_hyperlink(wb_, 0, 3, 3, &present, &got), 0);
+  EXPECT_EQ(present, 0);
+  EXPECT_EQ(got.target, nullptr);
+  EXPECT_EQ(got.location, nullptr);
+  EXPECT_EQ(got.display, nullptr);
+  EXPECT_EQ(got.tooltip, nullptr);
+  EXPECT_EQ(got.rect.first_row, 0U);
+  EXPECT_EQ(got.rect.last_col, 0U);
+}
+
+TEST_F(FormulonCApiSheetFeatures, HyperlinkGetRefusesBadArguments) {
+  int32_t present = 0;
+  fm_hyperlink_t got = FM_STRUCT_INIT(fm_hyperlink_t);
+  const fm_status_t null_pointer = static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer);
+  EXPECT_EQ(fm_sheet_get_hyperlink(wb_, 0, formulon::Sheet::kMaxRows, 0, &present, &got),
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
+  EXPECT_EQ(fm_sheet_get_hyperlink(wb_, 0, 0, formulon::Sheet::kMaxCols, &present, &got),
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
+  EXPECT_EQ(fm_sheet_get_hyperlink(wb_, 5, 0, 0, &present, &got),
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kSheetIndexOutOfRange));
+  EXPECT_EQ(fm_sheet_get_hyperlink(nullptr, 0, 0, 0, &present, &got), null_pointer);
+  EXPECT_EQ(fm_sheet_get_hyperlink(wb_, 0, 0, 0, nullptr, &got), null_pointer);
+  EXPECT_EQ(fm_sheet_get_hyperlink(wb_, 0, 0, 0, &present, nullptr), null_pointer);
+}
+
+TEST_F(FormulonCApiSheetFeatures, HyperlinkRemoveByARangeDeletesEveryIntersectingLinkWhole) {
+  const fm_hyperlink_t wide = RectLink(kA1ToC3, "wide");
+  const fm_hyperlink_t cell = RectLink(kB2, "cell");
+  const fm_hyperlink_t far = RectLink({10U, 10U, 10U, 10U}, "far");
+  ASSERT_EQ(fm_sheet_set_hyperlink(wb_, 0, &wide), 0);
+  ASSERT_EQ(fm_sheet_set_hyperlink(wb_, 0, &cell), 0);
+  ASSERT_EQ(fm_sheet_set_hyperlink(wb_, 0, &far), 0);
+
+  // B2 lies inside both A1:C3 and B2: both go, the far link stays.
+  fm_cell_rect_t range = kB2;
+  ASSERT_EQ(fm_sheet_remove_hyperlink(wb_, 0, &range), 0);
+  EXPECT_EQ(LinkLines(wb_), (std::vector<std::string>{"10,10:10,10=far"}));
+}
+
+TEST_F(FormulonCApiSheetFeatures, HyperlinkRemoveByARangeThatTouchesOneLinkKeepsTheOther) {
+  const fm_hyperlink_t wide = RectLink(kA1ToC3, "wide");
+  const fm_hyperlink_t cell = RectLink(kB2, "cell");
+  ASSERT_EQ(fm_sheet_set_hyperlink(wb_, 0, &wide), 0);
+  ASSERT_EQ(fm_sheet_set_hyperlink(wb_, 0, &cell), 0);
+
+  // A1 is in the wide link only; the link goes whole although B2 is outside the range.
+  fm_cell_rect_t range{0U, 0U, 0U, 0U};
+  ASSERT_EQ(fm_sheet_remove_hyperlink(wb_, 0, &range), 0);
+  EXPECT_EQ(LinkLines(wb_), (std::vector<std::string>{"1,1:1,1=cell"}));
+}
+
+TEST_F(FormulonCApiSheetFeatures, HyperlinkRemoveOfALinkOnlyPartlyInsideTheRangeRemovesItWhole) {
+  const fm_hyperlink_t wide = RectLink(kA1ToC3, "wide");
+  ASSERT_EQ(fm_sheet_set_hyperlink(wb_, 0, &wide), 0);
+  fm_cell_rect_t range{2U, 2U, 6U, 6U};
+  ASSERT_EQ(fm_sheet_remove_hyperlink(wb_, 0, &range), 0);
+  EXPECT_TRUE(LinkLines(wb_).empty());
+}
+
+TEST_F(FormulonCApiSheetFeatures, HyperlinkRemoveRefusesBadArgumentsAndChangesNothing) {
+  const fm_hyperlink_t wide = RectLink(kA1ToC3, "wide");
+  ASSERT_EQ(fm_sheet_set_hyperlink(wb_, 0, &wide), 0);
+  const fm_status_t invalid = static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
+  const fm_status_t null_pointer = static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer);
+  fm_cell_rect_t inverted{2U, 2U, 0U, 0U};
+  fm_cell_rect_t past_row{0U, 0U, formulon::Sheet::kMaxRows, 0U};
+  fm_cell_rect_t past_col{0U, 0U, 0U, formulon::Sheet::kMaxCols};
+  EXPECT_EQ(fm_sheet_remove_hyperlink(wb_, 0, &inverted), invalid);
+  EXPECT_EQ(fm_sheet_remove_hyperlink(wb_, 0, &past_row), invalid);
+  EXPECT_EQ(fm_sheet_remove_hyperlink(wb_, 0, &past_col), invalid);
+  EXPECT_EQ(fm_sheet_remove_hyperlink(nullptr, 0, &inverted), null_pointer);
+  EXPECT_EQ(fm_sheet_remove_hyperlink(wb_, 0, nullptr), null_pointer);
+  EXPECT_EQ(LinkLines(wb_).size(), 1U);
+}
+
+TEST_F(FormulonCApiSheetFeatures, HyperlinkRemoveAtDeletesOnlyThatEntry) {
+  const fm_hyperlink_t wide = RectLink(kA1ToC3, "wide");
+  const fm_hyperlink_t cell = RectLink(kB2, "cell");
+  ASSERT_EQ(fm_sheet_set_hyperlink(wb_, 0, &wide), 0);
+  ASSERT_EQ(fm_sheet_set_hyperlink(wb_, 0, &cell), 0);
+  ASSERT_EQ(fm_sheet_remove_hyperlink_at(wb_, 0, 0), 0);
+  EXPECT_EQ(LinkLines(wb_), (std::vector<std::string>{"1,1:1,1=cell"}));
+  EXPECT_EQ(fm_sheet_remove_hyperlink_at(wb_, 0, 1), FM_STATUS_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(LinkLines(wb_).size(), 1U);
+}
+
+TEST_F(FormulonCApiSheetFeatures, HyperlinkInsertAtKeepsAnEqualRectangleBesideTheExistingLink) {
+  const fm_hyperlink_t first = RectLink(kB2, "first");
+  const fm_hyperlink_t second = RectLink(kB2, "second");
+  ASSERT_EQ(fm_sheet_insert_hyperlink_at(wb_, 0, 0, &first), 0);
+  ASSERT_EQ(fm_sheet_insert_hyperlink_at(wb_, 0, 0, &second), 0);
+  EXPECT_EQ(LinkLines(wb_), (std::vector<std::string>{"1,1:1,1=second", "1,1:1,1=first"}));
+  // The earlier list position wins the read.
+  int32_t present = 0;
+  fm_hyperlink_t got = FM_STRUCT_INIT(fm_hyperlink_t);
+  ASSERT_EQ(fm_sheet_get_hyperlink(wb_, 0, 1, 1, &present, &got), 0);
+  EXPECT_STREQ(got.target, "second");
+}
+
+TEST_F(FormulonCApiSheetFeatures, HyperlinkInsertAtRefusesPastTheEndAndNullArguments) {
+  const fm_hyperlink_t link = RectLink(kB2, "x");
+  const fm_status_t null_pointer = static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer);
+  EXPECT_EQ(fm_sheet_insert_hyperlink_at(wb_, 0, 1, &link), FM_STATUS_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(fm_sheet_insert_hyperlink_at(nullptr, 0, 0, &link), null_pointer);
+  EXPECT_EQ(fm_sheet_insert_hyperlink_at(wb_, 0, 0, nullptr), null_pointer);
+  EXPECT_TRUE(LinkLines(wb_).empty());
+  // Appending at the count of an empty list is fine.
+  EXPECT_EQ(fm_sheet_insert_hyperlink_at(wb_, 0, 0, &link), 0);
+}
+
+TEST_F(FormulonCApiSheetFeatures, HyperlinkClearEmptiesAListOfOverlappingLinks) {
+  const fm_hyperlink_t wide = RectLink(kA1ToC3, "wide");
+  const fm_hyperlink_t cell = RectLink(kB2, "cell");
+  ASSERT_EQ(fm_sheet_set_hyperlink(wb_, 0, &wide), 0);
+  ASSERT_EQ(fm_sheet_set_hyperlink(wb_, 0, &cell), 0);
+  ASSERT_EQ(fm_sheet_clear_hyperlinks(wb_, 0), 0);
+  EXPECT_TRUE(LinkLines(wb_).empty());
+  EXPECT_EQ(fm_sheet_clear_hyperlinks(wb_, 0), 0);
 }
 
 // ---- Data validations ------------------------------------------------------
@@ -981,7 +1293,7 @@ TEST_F(FormulonCApiSheetFeatures, MutatorsRejectOutOfGridCoordinatesBeforeMutati
   hyperlink.rect.first_col = formulon::Sheet::kMaxCols;
   hyperlink.rect.last_row = 0U;
   hyperlink.rect.last_col = formulon::Sheet::kMaxCols;
-  EXPECT_EQ(fm_sheet_set_hyperlink(wb_, 0U, 0U, formulon::Sheet::kMaxCols, &hyperlink), invalid);
+  EXPECT_EQ(fm_sheet_set_hyperlink(wb_, 0U, &hyperlink), invalid);
   std::size_t count = 99U;
   ASSERT_EQ(fm_sheet_get_hyperlink_count(wb_, 0U, &count), 0);
   EXPECT_EQ(count, 0U);

@@ -44,8 +44,12 @@ test('defined names are read and removed by name and scope', async () => {
 test('hyperlinks, people and threaded comments are read by key', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
-  wb.sheet(0).setHyperlink(2, 1, { target: 'https://example.com/' });
+  wb.sheet(0).setHyperlink({
+    target: 'https://example.com/',
+    range: { firstRow: 2, firstCol: 1, lastRow: 3, lastCol: 1 },
+  });
   assert.equal(found(wb.sheet(0).getHyperlink(2, 1)).target, 'https://example.com/');
+  assert.equal(found(wb.sheet(0).getHyperlink(3, 1)).target, 'https://example.com/');
   missing(wb.sheet(0).getHyperlink(2, 2));
   assert.throws(() => wb.sheet(9).getHyperlink(2, 1), isFormulonError);
 

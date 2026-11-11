@@ -326,6 +326,8 @@ class CheckedSpecReader final {
   void FailType(const char* key, const char* expected);
   /// Records a TypeError for `key`: "must not be null".
   void FailNull(const char* key);
+  /// Records a TypeError for `key`: "is required".
+  void FailRequired(const char* key);
   /// Records the refusal of the number `number` read for the integer field `key`: a non-integral value is a
   /// RangeError "must be an integer"; a negative one for a field whose smallest value is `min_value >= 0` is an
   /// InvalidArgument FormulonError "must not be negative"; any other value is a RangeError "is too large".

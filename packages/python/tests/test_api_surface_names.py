@@ -248,7 +248,14 @@ class RenamedMemberTests(SurfaceTestCase):
             ws = wb.sheet(0)
             self.assertHasMembers(
                 ws,
-                ("set_hyperlink", "insert_hyperlink_at", "remove_hyperlink_at", "set_row_break", "set_column_break"),
+                (
+                    "set_hyperlink",
+                    "insert_hyperlink_at",
+                    "remove_hyperlink",
+                    "remove_hyperlink_at",
+                    "set_row_break",
+                    "set_column_break",
+                ),
             )
             self.assertLacksMembers(
                 ws,
@@ -611,18 +618,16 @@ class SingletonRemovalTests(SurfaceTestCase):
             wb.reset_theme()
             self.assertEqual(wb.get_theme_colors().source, ThemeSource.DEFAULT)
 
-    def test_set_hyperlink_none_removes_and_a_same_range_link_replaces_the_first(self) -> None:
+    def test_set_hyperlink_replaces_a_same_range_link_and_remove_hyperlink_removes_by_range(self) -> None:
         with Workbook.create_default() as wb:
             ws = wb.sheet(0)
             cell = CellRect(0, 0, 0, 0)
             ws.set_hyperlink(
-                "A1",
                 formulon.Hyperlink(
                     range=cell, target="https://example.com/a", location=None, display=None, tooltip=None
                 ),
             )
             ws.set_hyperlink(
-                "A1",
                 formulon.Hyperlink(
                     range=cell, target="https://example.com/b", location=None, display=None, tooltip=None
                 ),
@@ -630,9 +635,8 @@ class SingletonRemovalTests(SurfaceTestCase):
             link = ws.get_hyperlink("A1")
             assert link is not None
             self.assertEqual(link.target, "https://example.com/b")
-            # A link over a different range from the same cell is appended.
+            # A link over a different range is appended.
             ws.set_hyperlink(
-                "A1",
                 formulon.Hyperlink(
                     range=CellRect(0, 0, 1, 1),
                     target="https://example.com/c",
@@ -644,10 +648,11 @@ class SingletonRemovalTests(SurfaceTestCase):
             self.assertEqual(
                 [h.target for h in ws.list_hyperlinks()], ["https://example.com/b", "https://example.com/c"]
             )
-            ws.set_hyperlink("A1", None)
+            ws.remove_hyperlink("A1")
             self.assertIsNone(ws.get_hyperlink("A1"))
             self.assertEqual(ws.list_hyperlinks(), [])
-            ws.set_hyperlink("A1", None)
+            with self.assertRaises(formulon.NotFoundError):
+                ws.remove_hyperlink("A1")
 
     def test_remove_then_insert_hyperlink_at_restores_a_list_with_duplicates(self) -> None:
         with Workbook.create_default() as wb:
@@ -675,8 +680,8 @@ class SingletonRemovalTests(SurfaceTestCase):
                 ws.insert_hyperlink_at(5, formulon.HyperlinkInput(target="https://x.example", range=cell))
             with self.assertRaises(formulon.IndexOutOfRangeError):
                 ws.remove_hyperlink_at(4)
-            with self.assertRaises(formulon.InvalidArgumentError):
-                ws.insert_hyperlink_at(0, formulon.HyperlinkInput(target="https://x.example"))
+            with self.assertRaises(TypeError):
+                ws.insert_hyperlink_at(0, formulon.HyperlinkInput(range=None, target="https://x.example"))  # type: ignore[arg-type]
             self.assertEqual(len(ws.list_hyperlinks()), 4)
 
 

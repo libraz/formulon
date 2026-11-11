@@ -879,17 +879,23 @@ export function pageBreaks(): void {
 }
 
 export function hyperlinks(): void {
-  sheet.setHyperlink('A1', { target: 'https://example.com' });
-  sheet.setHyperlink(0, 0, { target: null, location: 'Sheet2!A1' });
-  sheet.setHyperlink('A1', null);
-  sheet.setHyperlink('A1', { target: 'https://example.com', range: 'A1:B2' });
-  sheet.setHyperlink(0, 0, { target: 'https://example.com', range: null });
+  sheet.setHyperlink({ target: 'https://example.com', range: 'A1' });
+  sheet.setHyperlink({ target: null, location: 'Sheet2!A1', range: { firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 } });
+  sheet.setHyperlink({ target: 'https://example.com', range: 'A1:B2' });
+  sheet.insertHyperlinkAt(0, { target: 'https://example.com', range: 'A1' });
+  sheet.removeHyperlink('A1:B2');
+  // @ts-expect-error `range` is required
+  sheet.setHyperlink({ target: 'https://example.com' });
+  // @ts-expect-error `range` is not nullable
+  sheet.setHyperlink({ target: 'https://example.com', range: null });
+  // @ts-expect-error a hyperlink is no longer set at an A1 address
+  sheet.setHyperlink('A1', { target: 'https://example.com', range: 'A1' });
+  // @ts-expect-error a hyperlink is no longer set at a cell coordinate
+  sheet.setHyperlink(0, 0, { target: 'https://example.com', range: 'A1' });
   // @ts-expect-error a hyperlink is set with `setHyperlink`
-  sheet.addHyperlink('A1', { target: 'https://example.com' });
+  sheet.addHyperlink({ target: 'https://example.com', range: 'A1' });
   // @ts-expect-error a hyperlink range is the `range` key of `setHyperlink`
   sheet.setHyperlinkRange('A1:B2', { target: 'https://example.com' });
-  // @ts-expect-error `setHyperlink(..., null)` removes a hyperlink
-  sheet.removeHyperlink('A1');
 }
 
 export function updateMembers(): void {

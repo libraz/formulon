@@ -160,28 +160,32 @@ test('addValidation defaults every omitted boolean to true and keeps an explicit
   }
 });
 
-test('setHyperlink upserts one link per cell and a null link removes it', async () => {
+test('setHyperlink upserts on its range and removeHyperlink removes every link it intersects', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
-  wb.sheet(0).setHyperlink(1, 1, { target: 'https://example.com/a', display: 'A' });
-  wb.sheet(0).setHyperlink(1, 1, { target: 'https://example.com/b' });
+  const cell = { firstRow: 1, firstCol: 1, lastRow: 1, lastCol: 1 };
+  wb.sheet(0).setHyperlink({ target: 'https://example.com/a', display: 'A', range: cell });
+  wb.sheet(0).setHyperlink({ target: 'https://example.com/b', range: cell });
   const links = wb.sheet(0).listHyperlinks();
   assert.equal(links.length, 1);
   assert.equal(links[0].target, 'https://example.com/b');
   assert.equal(links[0].display, null);
 
-  wb.sheet(0).setHyperlink(3, 0, {
+  wb.sheet(0).setHyperlink({
     target: 'https://example.com/range',
     range: { firstRow: 3, firstCol: 0, lastRow: 4, lastCol: 1 },
   });
   assert.equal(wb.sheet(0).listHyperlinks().length, 2);
-  wb.sheet(0).setHyperlink(3, 0, null);
+  wb.sheet(0).removeHyperlink({ firstRow: 4, firstCol: 1, lastRow: 4, lastCol: 1 });
   assert.equal(wb.sheet(0).listHyperlinks().length, 1);
 
-  wb.sheet(0).setHyperlink(1, 1, null);
+  wb.sheet(0).removeHyperlink(cell);
   assert.equal(wb.sheet(0).getHyperlink(1, 1), null);
-  // Removing a link that is not there is a no-op.
-  wb.sheet(0).setHyperlink(1, 1, null);
+  // Removing a link that is not there is NotFound.
+  assert.throws(
+    () => wb.sheet(0).removeHyperlink(cell),
+    (e) => e.name === 'FormulonError' && e.code === mod.StatusCode.NotFound,
+  );
   assert.equal(wb.sheet(0).listHyperlinks().length, 0);
 });
 
@@ -193,7 +197,7 @@ test('merges, comments and hyperlinks round-trip through save and load', async (
     wb.sheet(0).setText(0, 0, '見出し');
     wb.sheet(0).addMerge({ firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 3 });
     wb.sheet(0).setComment(2, 1, { author: '校閲者', text: '要確認' });
-    wb.sheet(0).setHyperlink(3, 0, { target: 'https://example.com/', display: '例', tooltip: 'ツールチップ' });
+    wb.sheet(0).setHyperlink({ target: 'https://example.com/', display: '例', tooltip: 'ツールチップ', range: 'A4' });
 
     const merges = wb.sheet(0).listMerges();
     assert.equal(merges.length, 1);

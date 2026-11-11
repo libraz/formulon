@@ -1055,15 +1055,26 @@ class Sheet {
   // Hyperlinks
   // ---------------------------------------------------------------------------
 
-  /// Read-only access to the hyperlinks attached to this sheet. Populated
-  /// by the OOXML reader; empty until the corresponding format support
-  /// lands.
+  /// The sheet's hyperlinks in the order they were added (file order after a
+  /// load). Several may cover the same cells, a repeated range from a file
+  /// included.
   const std::vector<Hyperlink>& hyperlinks() const noexcept { return hyperlinks_; }
 
-  /// Mutable access to the hyperlink list. Exposed so the OOXML reader
-  /// and future editing API can append, replace, or reorder entries
-  /// without an extra accessor pair per field.
+  /// The list itself, for the file readers and the positional insert, which
+  /// keep every entry as given. Edits here write no cell format.
   std::vector<Hyperlink>& mutable_hyperlinks() noexcept { return hyperlinks_; }
+
+  /// Replaces the first hyperlink on exactly `link`'s range in place, dropping
+  /// any later one on that range, or appends `link` when there is none.
+  void set_hyperlink(Hyperlink link);
+
+  /// The first hyperlink in list order whose range contains `(row, col)`, or
+  /// `nullptr`.
+  const Hyperlink* hyperlink_at(std::uint32_t row, std::uint32_t col) const noexcept;
+
+  /// Removes every hyperlink intersecting `range`, each whole, and returns
+  /// copies of the removed ones in list order.
+  std::vector<Hyperlink> remove_hyperlinks_intersecting(MergeRange range);
 
   // ---------------------------------------------------------------------------
   // Cell comments

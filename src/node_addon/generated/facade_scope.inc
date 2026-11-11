@@ -179,6 +179,7 @@ constexpr const char* kSheetMethods[] = {
     "removeDataTable",
     "removeDrawing",
     "removeDrawingObject",
+    "removeHyperlink",
     "removeHyperlinkAt",
     "removeMerge",
     "removeMergeAt",

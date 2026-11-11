@@ -448,6 +448,10 @@ void JsNarrowNumericReader::fail_null(const char* field) {
   reject_with(field, "must not be null", kArgumentErrorType);
 }
 
+void JsNarrowNumericReader::fail_required(const char* field) {
+  reject_with(field, "is required", kArgumentErrorType);
+}
+
 uint32_t JsNarrowNumericReader::required_u32(const emscripten::val& owner, const char* key, const char* field) {
   bool fetched = false;
   const emscripten::val value = fetch(owner, key, field, &fetched);

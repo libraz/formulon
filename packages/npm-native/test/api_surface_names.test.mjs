@@ -219,7 +219,16 @@ describe('method names', () => {
 
   it('Sheet break and hyperlink upserts are set* and the add*/remove* spellings are gone', () => {
     withSheet((ws) => {
-      present(ws, ['setRowBreak', 'setColumnBreak', 'listRowBreaks', 'listColumnBreaks', 'setHyperlink']);
+      present(ws, [
+        'setRowBreak',
+        'setColumnBreak',
+        'listRowBreaks',
+        'listColumnBreaks',
+        'setHyperlink',
+        'insertHyperlinkAt',
+        'removeHyperlink',
+        'removeHyperlinkAt',
+      ]);
       absent(ws, [
         'addRowBreak',
         'addColumnBreak',
@@ -483,25 +492,29 @@ describe('update merges and set(null) removes a singleton', () => {
     });
   });
 
-  it('setHyperlink upserts one link per cell and setHyperlink(cell, null) removes it', () => {
+  it('setHyperlink upserts on its range and removeHyperlink(range) removes it', () => {
     withSheet((ws) => {
-      ws.setHyperlink('A1', { target: 'https://example.com/a', display: 'A' });
-      ws.setHyperlink('A1', { target: 'https://example.com/b', display: 'B' });
+      ws.setHyperlink({ target: 'https://example.com/a', display: 'A', range: 'A1' });
+      ws.setHyperlink({ target: 'https://example.com/b', display: 'B', range: 'A1' });
       assert.equal(ws.listHyperlinks().length, 1);
       assert.equal(ws.getHyperlink('A1').target, 'https://example.com/b');
-      ws.setHyperlink('A1', null);
+      ws.removeHyperlink('A1');
       assert.equal(ws.getHyperlink('A1'), null);
-      ws.setHyperlink('A1', null);
+      assert.throws(
+        () => ws.removeHyperlink('A1'),
+        (e) => e.name === 'FormulonError',
+      );
       assert.equal(ws.listHyperlinks().length, 0);
     });
   });
 
-  it('setHyperlink with a range links the range from its top-left cell and null removes it', () => {
+  it('setHyperlink with a range links every cell of it and removeHyperlink on any cell removes it whole', () => {
     withSheet((ws) => {
-      ws.setHyperlink('B1', { target: 'https://example.com/r', range: 'B1:B2' });
+      ws.setHyperlink({ target: 'https://example.com/r', range: 'B1:B2' });
       assert.deepEqual({ ...ws.getHyperlink('B1').range }, { firstRow: 0, firstCol: 1, lastRow: 1, lastCol: 1 });
-      assert.equal(ws.getHyperlink('B2'), null);
-      ws.setHyperlink('B1', null);
+      assert.deepEqual({ ...ws.getHyperlink('B2').range }, { firstRow: 0, firstCol: 1, lastRow: 1, lastCol: 1 });
+      assert.equal(ws.getHyperlink('B3'), null);
+      ws.removeHyperlink('B2');
       assert.equal(ws.listHyperlinks().length, 0);
     });
   });

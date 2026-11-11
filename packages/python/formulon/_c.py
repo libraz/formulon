@@ -709,6 +709,7 @@ _STATUS_RETURNING_EXPORT_NAMES = (
     "fm_sheet_remove_chart_series",
     "fm_sheet_remove_data_table",
     "fm_sheet_remove_drawing",
+    "fm_sheet_remove_hyperlink",
     "fm_sheet_remove_hyperlink_at",
     "fm_sheet_remove_merge",
     "fm_sheet_remove_merge_at",

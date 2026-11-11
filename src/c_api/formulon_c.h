@@ -80,12 +80,14 @@
  * (`FM_STRUCT_INIT`) is a successful no-op.
  *
  * Verbs: `remove` deletes one element and returns `FM_STATUS_NOT_FOUND` when
- * it is absent; `clear` empties a collection and is a no-op when it is
+ * it is absent; keyed by a range (`fm_sheet_remove_merge`,
+ * `fm_sheet_remove_hyperlink`) it deletes every element that intersects the
+ * range. `clear` empties a collection and is a no-op when it is
  * already empty; `reset` returns one property to its default. A singleton
  * part (a sheet's protection or AutoFilter, a chart legend, the pinned clock)
  * is replaced by `set_<x>` with a record and removed by `set_<x>` with
  * `NULL`, which is a no-op when the part is absent; `update_<x>` merges a
- * `_patch_t` into it (Patches, above). A per-key singleton (a hyperlink at a cell, a page break at a row or
+ * `_patch_t` into it (Patches, above). A per-key singleton (a page break at a row or
  * column) takes the key beside the record: `NULL` removes the element at
  * that key, a no-op when there is none.
  *
@@ -2889,10 +2891,14 @@ FM_API fm_status_t fm_workbook_has_passthrough(const fm_workbook_t* wb, const ch
  *        list or until the handle is destroyed. Reads do not invalidate
  *        them. `target`, `location`, `display` and `tooltip` are each
  *        optional: on input `NULL` and `""` both mean absent.
+ *
+ * A sheet may hold several hyperlinks over the same cells; they are kept in
+ * the order they were added (file order after a load), duplicates of one
+ * rectangle from a file included.
  */
 typedef struct {
   uint32_t struct_size;
-  /** The cells the hyperlink covers. */
+  /** The cells the hyperlink covers; the key `fm_sheet_set_hyperlink` replaces on. */
   fm_cell_rect_t rect;
   /** The absolute or relative target (URL, email address, file); `NULL` for an in-workbook link or when the hyperlink
    *  carries none. */
@@ -2926,50 +2932,79 @@ typedef struct {
 } fm_comment_t;
 
 /**
- * @brief Sets or removes the hyperlink anchored at `(row, col)` on
- *        `sheet_index`.
+ * @brief Sets the hyperlink covering exactly `hl->rect` on `sheet_index`.
  *
- * A non-`NULL` `hl` covers the inclusive rectangle `hl->rect`, whose top-left
- * corner must be `(row, col)`. A hyperlink covering exactly that rectangle is
- * replaced in place; otherwise the new one is appended and the hyperlinks
- * already anchored there are kept. `hl == NULL` removes every hyperlink
- * anchored there and is a no-op when there is none.
+ * A hyperlink on that same rectangle is replaced in place (a repeated one
+ * from a loaded file is dropped); otherwise `hl` is appended. Hyperlinks on
+ * any other rectangle are kept, overlapping ones included.
  *
- * `display` is the hyperlink's stored display attribute; the cell value is
- * not written. Call `fm_sheet_set_text` with the same text to show it.
- *
- * @return `FM_STATUS_OK` (0) on success;
- *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` is `NULL`;
- *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) when `(row, col)` is outside the grid, or
- *         the hyperlink rectangle is inverted, outside the grid or not anchored
- *         at `(row, col)`.
- */
-FM_API fm_status_t fm_sheet_set_hyperlink(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
-                                          const fm_hyperlink_t* hl);
-
-/**
- * @brief Inserts `hl` at list position `index` of the hyperlinks on
- *        `sheet_index`, replacing nothing (duplicates are allowed).
- *
- * `index` is a position in the order `fm_sheet_get_hyperlink_at` enumerates;
- * `index == count` appends. The rectangle's top-left cell is the anchor. `hl`
- * is validated as in `fm_sheet_set_hyperlink`. Pairs with
- * `fm_sheet_remove_hyperlink_at` for a lossless undo.
+ * Every cell of `hl->rect` takes the built-in Hyperlink cell style: the font
+ * is replaced by the Normal font underlined in theme colour 10; fill, number
+ * format, border, alignment, protection and quote prefix are kept. Blank and
+ * merge-covered cells are formatted; a rectangle spanning every row (or
+ * column) formats the column (or row). An empty top-left cell receives
+ * `display`, else `target`, else `location`, as text; a cell that holds a
+ * value keeps it.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `hl` is `NULL`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `struct_size` is below the v1 size, `hl->rect` is
+ *         inverted or outside the grid, or the text for the top-left cell is over 32,767 UTF-16 units;
+ *         `FM_STATUS_BINDING_UTF8ENCODING_ERROR` (7002) when a string is not well-formed UTF-8;
+ *         `FM_STATUS_PRECONDITION_FAILED` (9) when more than 1,048,576 cells that are not a whole
+ *         column or row would be formatted. Nothing changes on failure.
+ */
+FM_API fm_status_t fm_sheet_set_hyperlink(fm_workbook_t* wb, size_t sheet_index, const fm_hyperlink_t* hl);
+
+/**
+ * @brief Inserts `hl` at list position `index` of the hyperlinks on
+ *        `sheet_index`, replacing nothing (a hyperlink on the same rectangle
+ *        is kept).
+ *
+ * `index` is a position in the order `fm_sheet_get_hyperlink_at` enumerates;
+ * `index == count` appends. Edits the list only: no cell values or formats
+ * are written or reset, so a caller undoing `fm_sheet_remove_hyperlink`
+ * restores the cell formats itself. Pairs with `fm_sheet_remove_hyperlink_at`
+ * for a lossless undo of the list.
+ *
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `hl` is `NULL`;
+ *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `struct_size` is below the v1 size, or the rectangle is
+ *         inverted or outside the grid;
  *         `FM_STATUS_INDEX_OUT_OF_RANGE` (13) when `index` is above the count (nothing changes);
- *         `FM_STATUS_INVALID_ARGUMENT` (2) when the rectangle is inverted or outside the grid, or
- *         a string is not valid UTF-8.
+ *         `FM_STATUS_BINDING_UTF8ENCODING_ERROR` (7002) when a string is not well-formed UTF-8.
  */
 FM_API fm_status_t fm_sheet_insert_hyperlink_at(fm_workbook_t* wb, size_t sheet_index, size_t index,
                                                 const fm_hyperlink_t* hl);
 
 /**
+ * @brief Removes every hyperlink on `sheet_index` whose rectangle intersects
+ *        `range` (inclusive), each one whole: a hyperlink is not split or
+ *        trimmed, and one only partly inside `range` goes entirely.
+ *
+ * Resets every cell of each removed hyperlink's rectangle to the default
+ * format (cell format 0), including cells another remaining hyperlink still
+ * covers; values stay. Formatting added before or after the hyperlink is
+ * lost.
+ *
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `range` is `NULL`;
+ *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `range` is inverted or outside the grid;
+ *         `FM_STATUS_NOT_FOUND` (6) when no hyperlink intersects `range`;
+ *         `FM_STATUS_PRECONDITION_FAILED` (9), nothing removed, when a removed hyperlink covers more
+ *         than 1,048,576 cells and is not a whole column or row.
+ */
+FM_API fm_status_t fm_sheet_remove_hyperlink(fm_workbook_t* wb, size_t sheet_index, const fm_cell_rect_t* range);
+
+/**
  * @brief Removes the hyperlink at `index` on `sheet_index`. `index` is a
  *        position in the order `fm_sheet_get_hyperlink_at` enumerates.
+ *
+ * Edits the list only: no cell values or formats are written or reset
+ * (nothing else changes).
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`;
@@ -2982,9 +3017,14 @@ FM_API fm_status_t fm_sheet_remove_hyperlink_at(fm_workbook_t* wb, size_t sheet_
  * @brief Drops every hyperlink on `sheet_index`. No-op when the sheet
  *        already has no hyperlinks.
  *
+ * Resets every cell of each removed hyperlink's rectangle to the default
+ * format (cell format 0), as `fm_sheet_remove_hyperlink` does; values stay.
+ *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`;
- *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range.
+ *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
+ *         `FM_STATUS_PRECONDITION_FAILED` (9), nothing removed, when a hyperlink covers more than
+ *         1,048,576 cells and is not a whole column or row.
  */
 FM_API fm_status_t fm_sheet_clear_hyperlinks(fm_workbook_t* wb, size_t sheet_index);
 
@@ -3092,7 +3132,8 @@ FM_API fm_status_t fm_sheet_get_comment_at(const fm_workbook_t* wb, size_t sheet
                                            fm_comment_t* out);
 
 /**
- * @brief Reads the `index`-th hyperlink on `sheet_index` into `out`.
+ * @brief Reads the `index`-th hyperlink on `sheet_index` into `out`, in the
+ *        order the hyperlinks were added (file order after a load).
  *
  * String fields in `out` are model-backed views (see `fm_hyperlink_t`).
  *
@@ -3107,11 +3148,11 @@ FM_API fm_status_t fm_sheet_get_hyperlink_at(const fm_workbook_t* wb, size_t she
                                              fm_hyperlink_t* out);
 
 /**
- * @brief Reads the hyperlink anchored at `(row, col)` — the top-left cell of
- *        its range, the cell `fm_sheet_set_hyperlink` keys on — on
- *        `sheet_index`. `*out_present` is `1` and `*out` filled when there is
- *        one, else `0` and `*out` zeroed (still `FM_STATUS_OK` (0)). With
- *        several anchored there, the first in list order is read.
+ * @brief Reads the earliest-added hyperlink whose rectangle contains
+ *        `(row, col)` on `sheet_index`. `*out_present` is `1` and `*out`
+ *        filled when there is one, else `0` and `*out` zeroed (still
+ *        `FM_STATUS_OK` (0)). "Earliest" is list order: the lowest position
+ *        `fm_sheet_get_hyperlink_at` enumerates.
  *
  * String fields in `out` are model-backed views (see `fm_hyperlink_t`).
  *
@@ -3119,13 +3160,15 @@ FM_API fm_status_t fm_sheet_get_hyperlink_at(const fm_workbook_t* wb, size_t she
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
- *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range.
+ *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `(row, col)` is outside the grid.
  */
 FM_API fm_status_t fm_sheet_get_hyperlink(const fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
                                           int32_t* out_present, fm_hyperlink_t* out);
 
 /**
- * @brief Returns the number of hyperlinks attached to `sheet_index`.
+ * @brief Returns the number of hyperlinks attached to `sheet_index`, the
+ *        positions `fm_sheet_get_hyperlink_at` enumerates.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;

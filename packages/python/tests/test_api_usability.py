@@ -105,6 +105,10 @@ def _merged(wb: Workbook, ws: Sheet) -> None:
     ws.add_merge(CellRect(1, 1, 2, 2))
 
 
+def _linked(wb: Workbook, ws: Sheet) -> None:
+    ws.set_hyperlink(formulon.HyperlinkInput(range=CellRect(1, 1, 2, 2), target="https://example.com"))
+
+
 class Case:
     """How to call one method: ``lead`` before the address, ``tail`` after it, ``kw`` as keywords."""
 
@@ -129,14 +133,9 @@ def _runs() -> Tuple[Any, ...]:
     return ([formulon.PhoneticRun(0, 1, "kana")],)
 
 
-def _hyperlink() -> Tuple[Any, ...]:
-    return (formulon.HyperlinkInput(target="https://example.com"),)
-
-
 # Methods that no longer take a coordinate pair or whose pair moved into a record are listed as ``None``: the
 # conformance loop skips them and ``test_non_coordinate_methods`` pins their new shape instead.
 CELL_TABLE: Dict[str, Optional[Case]] = {
-    "Sheet.set_hyperlink": Case(tail=_hyperlink),
     "Sheet.add_pivot": None,
     "Sheet.reset_cell_xf_index": Case(),
     "Sheet.evaluate_cf_formula": Case(tail=lambda: ("=TRUE",)),
@@ -208,6 +207,7 @@ RECT_TABLE: Dict[str, Case] = {
     "Sheet.list_show_phonetic_cells": Case(),
     "Sheet.recalc_viewport": Case(),
     "Sheet.remap_range_xfs": Case(tail=lambda: ({0: 0},)),
+    "Sheet.remove_hyperlink": Case(setup=_linked),
     "Sheet.remove_merge": Case(setup=_merged),
     "Pivot.set_anchor": Case(setup=_pivot_book, recv=lambda ws: ws.pivot("Pivot1")),
     "Sheet.update_cell_format": Case(kw=lambda: {"number_format": "0.00"}),
@@ -399,6 +399,8 @@ class CellArgumentsTests(unittest.TestCase):
             self.assertFalse(hasattr(Sheet, name), name)
         params = inspect.signature(Sheet.add_pivot).parameters
         self.assertEqual([p for p in params if p != "self"], ["input"])
+        link = inspect.signature(Sheet.set_hyperlink).parameters
+        self.assertEqual([p for p in link if p != "self"], ["link"])
 
 
 class RectArgumentsTests(unittest.TestCase):
@@ -772,6 +774,7 @@ class NoCountNamesTests(unittest.TestCase):
         self.assertFalse(hasattr(Sheet, "remove_merge_at"))
         self.assertTrue(hasattr(Sheet, "remove_hyperlink_at"))
         self.assertTrue(hasattr(Sheet, "insert_hyperlink_at"))
+        self.assertTrue(hasattr(Sheet, "remove_hyperlink"))
         self.assertTrue(hasattr(Sheet, "evaluate_formula"))
         self.assertFalse(hasattr(formulon, "get_status_name"))
         self.assertIn("scheme", {f.name for f in dataclasses.fields(formulon.ThemeScriptFont)})

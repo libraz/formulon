@@ -2374,7 +2374,7 @@ export interface Hyperlink {
   readonly tooltip: string | null;
 }
 
-/** Argument of `Sheet.setHyperlink`. A `null` `display` or `tooltip` is the same as omitting it, so a read
+/** Argument of `Sheet.setHyperlink` and `Sheet.insertHyperlinkAt`. A `null` `display` or `tooltip` is the same as omitting it, so a read
  *  `Hyperlink` can be passed back. */
 export interface HyperlinkInput {
   /** The absolute or relative target (URL, email address, file); `null` makes an in-workbook link, which needs
@@ -2386,9 +2386,9 @@ export interface HyperlinkInput {
   display?: string | null;
   /** The tooltip text; omitted or `null` is none. */
   tooltip?: string | null;
-  /** The cells the link covers, a `CellRect` or an A1 range starting at the key cell; a range that does not start there
-   *  fails with `StatusCode.InvalidArgument`. Omitted or `null` covers the key cell alone. */
-  range?: CellRect | string | null;
+  /** The cells the link covers, a `CellRect` or an A1 range (`'B2'` for one cell). Required: it is the key
+   *  `Sheet.setHyperlink` replaces on; omitted or `null` is a `TypeError`. */
+  range: CellRect | string;
 }
 
 /** Cell comment entry returned by `Sheet.getComment(row, col)`. */
@@ -7914,35 +7914,45 @@ export interface Sheet {
   /** Removes the protected range `protectedRange`. */
   removeProtectedRange(protectedRange: ProtectedRangeRef): void;
 
-  /** Sets a hyperlink anchored at the cell `(row, col)`: one covering exactly the same range is replaced in place,
-   *  otherwise the link is appended and those already anchored there are kept. `null` removes every link anchored
-   *  there (doing nothing when there is none). For an in-workbook link, pass a `null` `target` and the A1 destination
-   *  as `location`; `link.range` widens the link to cover more cells from `(row, col)`. `display` is the
-   *  hyperlink's stored display attribute; the cell value is not written, so call `setText(cell, display)` to
-   *  show it. */
-  setHyperlink(row: number, col: number, link: HyperlinkInput | null): void;
-  /** `setHyperlink` at the A1 address `a1`. */
-  setHyperlink(a1: string, link: HyperlinkInput | null): void;
-  /** Drops every hyperlink on the sheet. */
-  clearHyperlinks(): void;
-  /** Returns every hyperlink on the sheet. */
-  listHyperlinks(): readonly Hyperlink[];
-  /** Inserts `link` at position `index` of the list `listHyperlinks()` returns, in that same order so a host can
-   *  map a list entry to its index, replacing nothing: a link covering the same range is kept (unlike
-   *  `setHyperlink`). `index` equal to the count appends; above it fails with `StatusCode.IndexOutOfRange` and
-   *  changes nothing. There is no anchor argument, so `link.range` is
-   *  required (a `CellRect` or an A1 range; its top-left cell is the anchor); a missing one fails with
-   *  `StatusCode.InvalidArgument`. Pairs with {@link Sheet.removeHyperlinkAt} for a lossless undo. */
-  insertHyperlinkAt(index: number, link: HyperlinkInput): void;
-  /** Removes the hyperlink at position `index` of the list `listHyperlinks()` returns, in that same order, so a
-   *  host can map a list entry to its index. An `index` at or above the count fails with
-   *  `StatusCode.IndexOutOfRange`. */
-  removeHyperlinkAt(index: number): void;
-  /** Reads the hyperlink whose range starts at `(row, col)`, the first in list order when several do; `null` when
-   *  none does. */
+  /** Sets the hyperlink covering exactly `link.range`: a link on that same range is replaced in place, otherwise
+   *  `link` is appended. Links on other ranges are kept, overlapping ones included. For an in-workbook link, pass a
+   *  `null` `target` and the A1 destination as `location`. `display` is the hyperlink's stored display attribute.
+   *  An empty top-left cell of `link.range` receives `link.display`, else `link.target`, else `link.location` as
+   *  text; a cell that holds a value keeps it. Every cell of the range takes Excel's Hyperlink cell style: its font
+   *  is replaced (Normal font, underlined, theme colour 10) and fill, number format, border, alignment and
+   *  protection are kept; blank and merged-away cells are formatted too, and a whole-column range formats the
+   *  column. Text for the top-left cell over 32,767 characters fails with `StatusCode.InvalidArgument`; more than
+   *  1,048,576 formatted cells that are not a whole column or row fail with `StatusCode.PreconditionFailed`. Either
+   *  refusal changes nothing. */
+  setHyperlink(link: HyperlinkInput): void;
+  /** Reads the earliest-added hyperlink whose range contains the cell `(row, col)`; `null` when none does. */
   getHyperlink(row: number, col: number): Hyperlink | null;
   /** `getHyperlink` at the A1 address `a1`. */
   getHyperlink(a1: string): Hyperlink | null;
+  /** Returns every hyperlink on the sheet in the order they were added (file order after a load); a link's place in
+   *  this list is its `hyperlinkIndex` for `insertHyperlinkAt` and `removeHyperlinkAt`. */
+  listHyperlinks(): readonly Hyperlink[];
+  /** Inserts `link` at position `hyperlinkIndex` of the list `listHyperlinks()` returns. Nothing is replaced: a
+   *  link on the same range is kept (unlike `setHyperlink`). `hyperlinkIndex` equal to the count appends; above it
+   *  fails with `StatusCode.IndexOutOfRange` and changes nothing. A missing `link.range` is a `TypeError`. Edits
+   *  the list only: no cell values or formats are written or reset, so a caller undoing
+   *  {@link Sheet.removeHyperlink} restores the cell formats itself. Pairs with {@link Sheet.removeHyperlinkAt} for a lossless undo. */
+  insertHyperlinkAt(hyperlinkIndex: number, link: HyperlinkInput): void;
+  /** Removes every hyperlink whose range intersects `range` (inclusive), each one whole; `StatusCode.NotFound` when
+   *  none does. Resets every cell of each removed hyperlink's range to the default format, including cells another
+   *  remaining hyperlink still covers; values stay. Formatting added before or after the link is lost. Fails with
+   *  `StatusCode.PreconditionFailed`, nothing removed, when a removed link covers more than 1,048,576 cells and is
+   *  not a whole column or row. */
+  removeHyperlink(range: CellRect | string): void;
+  /** Removes the hyperlink at position `hyperlinkIndex` of the list `listHyperlinks()` returns. A position at or
+   *  above the count fails with `StatusCode.IndexOutOfRange`. Edits the list only: no cell values or formats are
+   *  written or reset, so a caller undoing {@link Sheet.removeHyperlink} restores the cell formats itself. */
+  removeHyperlinkAt(hyperlinkIndex: number): void;
+  /** Drops every hyperlink on the sheet. Resets every cell of each removed hyperlink's range to the default format,
+   *  including cells another remaining hyperlink still covers; values stay. Formatting added before or after the
+   *  link is lost. Fails with `StatusCode.PreconditionFailed`, nothing removed, when a removed link covers more than
+   *  1,048,576 cells and is not a whole column or row. */
+  clearHyperlinks(): void;
   /** Lists the sheet's data-validation rules; a rule's place in this list is its position, its `id` the stable key. */
   listValidations(): readonly DataValidation[];
   /** Reads the rule `validation`; `null` when the sheet has none. */

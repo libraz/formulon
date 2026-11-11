@@ -1115,7 +1115,9 @@ class CollectionReaderAllocationTests(unittest.TestCase):
     def test_get_hyperlinks_allocation_count_is_flat(self) -> None:
         self._assert_flat_in_item_count(
             lambda wb, n: [
-                wb.sheet(0).set_hyperlink(r, 8, formulon.HyperlinkInput(target="https://example.com/"))
+                wb.sheet(0).set_hyperlink(
+                    formulon.HyperlinkInput(range=formulon.CellRect(r, 8, r, 8), target="https://example.com/")
+                )
                 for r in range(n)
             ],
             lambda wb: wb.sheet(0).list_hyperlinks(),

@@ -1420,6 +1420,7 @@ const SHEET_METHODS = Object.freeze([
   'removeCfRule',
   'removeDataTable',
   'removeDrawing',
+  'removeHyperlink',
   'removeHyperlinkAt',
   'removeMerge',
   'removePivot',
@@ -1811,7 +1812,6 @@ const CELL_ARGS = Object.freeze({
   'Sheet.setCommentVisible': [[0, 1]],
   'Sheet.setError': [[0, 1]],
   'Sheet.setFormula': [[0, 1]],
-  'Sheet.setHyperlink': [[0, 1]],
   'Sheet.setNumber': [[0, 1]],
   'Sheet.setText': [[0, 1]],
   'Sheet.setValue': [[0, 1]],
@@ -1836,6 +1836,7 @@ const RECT_ARGS = Object.freeze({
   'Sheet.listShowPhoneticCells': [0],
   'Sheet.recalcViewport': [0],
   'Sheet.remapRangeXfs': [0],
+  'Sheet.removeHyperlink': [0],
   'Sheet.removeMerge': [0],
   'Sheet.setPrintArea': [0],
   'Sheet.setRangeXfIndex': [0],
@@ -2623,7 +2624,7 @@ const INPUT_KEYS = Object.freeze({
   'Sheet.setCellPhoneticProperties': [2, ['alignment', 'fontIndex', 'stated', 'type']],
   'Sheet.setColumnBreak': [1, ['col', 'first', 'last', 'manual', 'row']],
   'Sheet.setComment': [2, ['author', 'text']],
-  'Sheet.setHyperlink': [2, ['display', 'location', 'range', 'target', 'tooltip']],
+  'Sheet.setHyperlink': [0, ['display', 'location', 'range', 'target', 'tooltip']],
   'Sheet.setPrintTitles': [0, ['columns', 'rows']],
   'Sheet.setRowBreak': [1, ['col', 'first', 'last', 'manual', 'row']],
   'Sheet.setSelection': [0, ['active', 'ranges']],
@@ -3613,6 +3614,7 @@ const METHOD_ARITY = Object.freeze({
   'Sheet.removeCfRule': 1,
   'Sheet.removeDataTable': 2,
   'Sheet.removeDrawing': 1,
+  'Sheet.removeHyperlink': 1,
   'Sheet.removeHyperlinkAt': 1,
   'Sheet.removeMerge': 1,
   'Sheet.removePivot': 1,
@@ -3650,7 +3652,7 @@ const METHOD_ARITY = Object.freeze({
   'Sheet.setError': 3,
   'Sheet.setFormula': 3,
   'Sheet.setHeaderFooterXml': 1,
-  'Sheet.setHyperlink': 3,
+  'Sheet.setHyperlink': 1,
   'Sheet.setNumber': 3,
   'Sheet.setPageMarginsXml': 1,
   'Sheet.setPageSetupXml': 1,
@@ -3838,10 +3840,7 @@ const TYPED_ARGS = Object.freeze({
   'Sheet.insertHyperlinkAt': [[1, 'HyperlinkInput']],
   'Sheet.setArrayFormula': [[0, 'ArrayFormulaInput']],
   'Sheet.setAutoFilter': [[0, 'AutoFilterInput']],
-  'Sheet.setHyperlink': [
-    [1, 'HyperlinkInput'],
-    [2, 'HyperlinkInput'],
-  ],
+  'Sheet.setHyperlink': [[0, 'HyperlinkInput']],
   'Sheet.setPrintArea': [[0, 'CellRect[]']],
   'Sheet.setSelection': [[0, 'SheetSelectionInput']],
   'Table.setAutoFilter': [[0, 'AutoFilterInput']],
@@ -3999,7 +3998,6 @@ const ARG_ROLES = Object.freeze({
     [0, 'coordinate'],
     [1, 'coordinate'],
   ],
-  'Sheet.removeHyperlinkAt': [[0, 'position']],
   'Sheet.resetCellXfIndex': [
     [0, 'coordinate'],
     [1, 'coordinate'],
@@ -4285,7 +4283,7 @@ const PARAM_NAMES = Object.freeze({
   'Sheet.getWidthModel': ['mode'],
   'Sheet.insertCells': ['range', 'shift'],
   'Sheet.insertColumns': ['first', 'last'],
-  'Sheet.insertHyperlinkAt': ['index', 'link'],
+  'Sheet.insertHyperlinkAt': ['hyperlinkIndex', 'link'],
   'Sheet.insertRows': ['first', 'last'],
   'Sheet.iterRows': ['range'],
   'Sheet.listCells': ['range'],
@@ -4297,7 +4295,8 @@ const PARAM_NAMES = Object.freeze({
   'Sheet.removeCfRule': ['cfRule'],
   'Sheet.removeDataTable': ['row', 'col'],
   'Sheet.removeDrawing': ['objectId'],
-  'Sheet.removeHyperlinkAt': ['index'],
+  'Sheet.removeHyperlink': ['range'],
+  'Sheet.removeHyperlinkAt': ['hyperlinkIndex'],
   'Sheet.removeMerge': ['range'],
   'Sheet.removePivot': ['pivot'],
   'Sheet.removeProtectedRange': ['protectedRange'],
@@ -4326,7 +4325,7 @@ const PARAM_NAMES = Object.freeze({
   'Sheet.setCommentVisible': ['row', 'col', 'visible'],
   'Sheet.setError': ['row', 'col', 'error'],
   'Sheet.setFormula': ['row', 'col', 'formula'],
-  'Sheet.setHyperlink': ['row', 'col', 'link'],
+  'Sheet.setHyperlink': ['link'],
   'Sheet.setNumber': ['row', 'col', 'value'],
   'Sheet.setPrintArea': ['ranges'],
   'Sheet.setPrintTitles': ['titles'],
@@ -8086,28 +8085,19 @@ function makeFacade(Raw, registry, runtime) {
       raw.setComment(sheet, row, col, { author, text });
     }
 
-    // `null` removes the hyperlink anchored at the cell and does nothing when there is none.
-    setHyperlink(row, col, link) {
+    setHyperlink(link) {
       const raw = rawOf(this.#workbook);
       const sheet = this.#current();
-      raw.setHyperlink(sheet, row, col, link === null ? null : hyperlinkInput(raw, link, 'Sheet.setHyperlink', 2));
+      raw.setHyperlink(sheet, hyperlinkInput(raw, link, 'Sheet.setHyperlink', 0));
     }
 
-    // Replaces nothing; the anchor is the top-left of `link.range`, which is therefore required.
+    // Replaces nothing; `link.range` is required.
     insertHyperlinkAt(index, link) {
       const where = 'Sheet.insertHyperlinkAt';
       const raw = rawOf(this.#workbook);
       const sheet = this.#current();
       const at = requireIndex(index, argLabel(where, 0), 'position');
-      const input = hyperlinkInput(raw, link, where, 1);
-      if (!present(input.range)) {
-        throw new FormulonError(
-          StatusCode.InvalidArgument,
-          `${argLabel(where, 1)}.range is required`,
-          'link.range=undefined',
-        );
-      }
-      raw.insertHyperlinkAt(sheet, at, input);
+      raw.insertHyperlinkAt(sheet, at, hyperlinkInput(raw, link, where, 1));
     }
 
     insertCells(range, shift) {
@@ -8344,7 +8334,7 @@ function makeFacade(Raw, registry, runtime) {
     }
   }
 
-  // The raw record of a hyperlink: the text fields checked, an A1 `range` as a `CellRect`.
+  // The raw record of a hyperlink: the text fields checked, an A1 `range` (required) as a `CellRect`.
   function hyperlinkInput(raw, link, where, position) {
     const label = argLabel(where, position);
     requireObject(link, label);
@@ -8354,7 +8344,7 @@ function makeFacade(Raw, registry, runtime) {
     if (!present(link.target) && !present(link.location)) {
       throw new TypeError(`${label}.location is required when target is null`);
     }
-    if (link.range === undefined || link.range === null) return link;
+    if (link.range === undefined || link.range === null) throw new TypeError(`${label}.range is required`);
     return { ...link, range: normalizeAddress(raw, 'CellRect', link.range, undefined, `${label}.range`) };
   }
 

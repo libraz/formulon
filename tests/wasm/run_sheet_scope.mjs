@@ -179,18 +179,48 @@ export function registerSheetScope(Module, test) {
     });
   });
 
-  test('setHyperlink replaces the link anchored at the cell', () => {
+  test('setHyperlink replaces the link on exactly its range and removeHyperlink removes by intersection', () => {
     withWorkbook(Module, (wb) => {
-      wb.setHyperlink(0, 1, 1, { target: 'https://example.com/a' });
-      wb.setHyperlink(0, 1, 1, { target: 'https://example.com/b', display: 'B' });
+      wb.setHyperlink(0, { target: 'https://example.com/a', range: rect(1, 1, 1, 1) });
+      wb.setHyperlink(0, { target: 'https://example.com/b', display: 'B', range: rect(1, 1, 1, 1) });
       const links = wb.listHyperlinks(0);
       assert.equal(links.length, 1);
       assert.equal(links[0].target, 'https://example.com/b');
       assert.equal(links[0].display, 'B');
 
-      wb.setHyperlink(0, 1, 1, { target: 'https://example.com/c', range: rect(1, 1, 2, 2) });
+      // A wider range over the same cell is a second link; the earliest one containing the cell is read.
+      wb.setHyperlink(0, { target: 'https://example.com/c', range: rect(1, 1, 2, 2) });
+      assert.equal(wb.listHyperlinks(0).length, 2);
+      assert.deepEqual(wb.listHyperlinks(0)[1].rect, rect(1, 1, 2, 2));
+      assert.equal(wb.getHyperlink(0, 1, 1).display, 'B');
+      assert.equal(wb.getHyperlink(0, 2, 2).target, 'https://example.com/c');
+      assert.equal(wb.getHyperlink(0, 3, 3), null);
+
+      // Removal takes every link the range touches, each whole.
+      wb.removeHyperlink(0, rect(2, 2, 2, 2));
       assert.equal(wb.listHyperlinks(0).length, 1);
-      assert.deepEqual(wb.listHyperlinks(0)[0].rect, rect(1, 1, 2, 2));
+      expectFailure(() => wb.removeHyperlink(0, rect(2, 2, 2, 2)), StatusCode.NotFound);
+      expectFailure(() => wb.removeHyperlink(0, rect(2, 2, 0, 0)), StatusCode.InvalidArgument);
+      wb.removeHyperlink(0, rect(1, 1, 1, 1));
+      assert.equal(wb.listHyperlinks(0).length, 0);
+    });
+  });
+
+  test('insertHyperlinkAt places a link by position, keeps an equal range and returns nothing', () => {
+    withWorkbook(Module, (wb) => {
+      assert.equal(wb.insertHyperlinkAt(0, 0, { target: 'https://example.com/b', range: rect(1, 1, 1, 1) }), undefined);
+      wb.insertHyperlinkAt(0, 0, { target: 'https://example.com/a', range: rect(1, 1, 1, 1) });
+      assert.deepEqual(
+        wb.listHyperlinks(0).map((h) => h.target),
+        ['https://example.com/a', 'https://example.com/b'],
+      );
+      expectFailure(
+        () => wb.insertHyperlinkAt(0, 3, { target: 'https://example.com/x', range: rect(1, 1, 1, 1) }),
+        StatusCode.IndexOutOfRange,
+      );
+      assert.throws(() => wb.insertHyperlinkAt(0, 0, { target: 'https://example.com/x' }), TypeError);
+      wb.removeHyperlinkAt(0, 0);
+      assert.equal(wb.listHyperlinks(0).length, 1);
     });
   });
 

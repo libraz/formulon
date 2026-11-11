@@ -201,3 +201,18 @@ test('a positional CellRect that is not an object is a TypeError naming the para
     assert.match(missing.message, /range\.firstRow is required$/);
   });
 });
+
+test('a raw hyperlink write without link.range is a TypeError naming the field', () => {
+  withWorkbook((wb) => {
+    for (const range of [undefined, null]) {
+      for (const call of [
+        () => wb.setHyperlink(0, { target: 'https://example.com/', range }),
+        () => wb.insertHyperlinkAt(0, 0, { target: 'https://example.com/', range }),
+      ]) {
+        const error = thrown(call);
+        assert.ok(error instanceof TypeError, String(error));
+        assert.match(error.message, / link\.range is required$/);
+      }
+    }
+  });
+});

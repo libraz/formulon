@@ -51,7 +51,6 @@ test('setComment null removes the note and is a no-op when absent', async () => 
     ws.setComment(5, 5, null);
     assert.equal(ws.getComment(5, 5), null);
     assert.equal(ws.removeComment, undefined);
-    assert.equal(ws.removeHyperlink, undefined);
   });
 });
 
@@ -82,27 +81,38 @@ test('listComments elements carry cell', async () => {
 test('setHyperlink keeps a read link extent', async () => {
   await withWorkbook((wb) => {
     const ws = wb.sheet(0);
-    ws.setHyperlink('A1', { target: 'https://example.com/', range: 'A1:B2' });
+    ws.setText('A1', 'seed');
+    ws.setHyperlink({ target: 'https://example.com/', range: 'A1:B2' });
     const read = ws.getHyperlink('A1');
     assert.deepEqual({ ...read.range }, { firstRow: 0, firstCol: 0, lastRow: 1, lastCol: 1 });
-    ws.setHyperlink('A1', read);
+    ws.setHyperlink(read);
+    assert.equal(ws.listHyperlinks().length, 1);
     assert.deepEqual({ ...ws.getHyperlink('A1').range }, { firstRow: 0, firstCol: 0, lastRow: 1, lastCol: 1 });
-    ws.setHyperlink('D4', { target: 'https://example.com/' });
+    ws.setHyperlink({ target: 'https://example.com/', range: 'D4' });
     assert.deepEqual({ ...ws.getHyperlink('D4').range }, { firstRow: 3, firstCol: 3, lastRow: 3, lastCol: 3 });
     assert.equal(ws.setHyperlinkRange, undefined);
-    ws.setHyperlink('A1', null);
+    ws.removeHyperlink('A1');
     assert.equal(ws.getHyperlink('A1'), null);
+    assert.equal(ws.listHyperlinks().length, 1);
   });
 });
 
-test('setHyperlink range not at the key cell is InvalidArgument', async () => {
+test('setHyperlink without a range is a TypeError and an inverted range is InvalidArgument', async () => {
   await withWorkbook((wb, f) => {
     const ws = wb.sheet(0);
+    assert.throws(() => ws.setHyperlink({ target: 'https://example.com/' }), TypeError);
+    assert.throws(() => ws.setHyperlink({ target: 'https://example.com/', range: null }), TypeError);
+    assert.throws(() => ws.setHyperlink(null), TypeError);
     assert.throws(
-      () => ws.setHyperlink('A1', { target: 'https://example.com/', range: 'B2:C3' }),
+      () =>
+        ws.setHyperlink({
+          target: 'https://example.com/',
+          range: { firstRow: 2, firstCol: 2, lastRow: 0, lastCol: 0 },
+        }),
       (e) => e.name === 'FormulonError' && e.code === f.StatusCode.InvalidArgument,
     );
     assert.equal(ws.getHyperlink('A1'), null);
+    assert.equal(ws.listHyperlinks().length, 0);
   });
 });
 

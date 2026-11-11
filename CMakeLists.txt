@@ -166,6 +166,7 @@ set(FORMULON_CORE_SOURCES
   src/workbook_table_loss.cpp
   src/workbook_external_links.cpp
   src/workbook_defined_names.cpp
+  src/workbook_hyperlinks.cpp
   src/workbook_merges_arrays.cpp
   src/io/auto_filter_xml.cpp
   src/io/cell_parser.cpp

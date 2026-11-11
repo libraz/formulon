@@ -401,8 +401,8 @@ Napi::Value Workbook::RemoveProtectedRange(const Napi::CallbackInfo& info) {
 
 namespace {
 
-// Reads a `HyperlinkInput` into `hl`; `text` backs the borrowed string views. `hl->rect` keeps its value when
-// `in` has no `range`, which the result reports.
+// Reads a `HyperlinkInput` into `hl`; `text` backs the borrowed string views. `range` is required: absent or `null`
+// is a type error. Returns false once `reader` has recorded an error.
 bool ReadHyperlinkInput(CheckedSpecReader& reader, const Napi::Object& in, std::string (&text)[4], fm_hyperlink_t* hl) {
   const auto optional = [&](const char* key, std::string* store) {
     return reader.String(in, key, store) ? store->c_str() : nullptr;
@@ -411,64 +411,70 @@ bool ReadHyperlinkInput(CheckedSpecReader& reader, const Napi::Object& in, std::
   hl->location = optional("location", &text[1]);
   hl->display = optional("display", &text[2]);
   hl->tooltip = optional("tooltip", &text[3]);
+  const Napi::Value value = reader.Get(in, "range");
+  if (!reader.ok()) {
+    return false;
+  }
+  if (value.IsUndefined() || value.IsNull()) {
+    reader.FailRequired("range");
+    return false;
+  }
   Napi::Object range;
-  if (!reader.Object(in, "range", &range)) {
+  if (!reader.Object(value, "range", &range)) {
     return false;
   }
   (void)ReadCellRect(reader, range, &hl->rect);
-  return true;
+  return reader.ok();
+}
+
+// Reads the `(sheet, link)` arguments, the `link` at `link_arg`, and hands them to `call`.
+template <typename Call>
+Napi::Value InvokeHyperlinkWrite(const Napi::CallbackInfo& info, fm_workbook_t* const& handle, size_t link_arg,
+                                 Call call) {
+  Napi::Env env = info.Env();
+  if (handle == nullptr) {
+    return ThrowInvalidHandle(env);
+  }
+  CheckedSpecReader reader(env);
+  Napi::Object in;
+  // The std::string buffers keep the borrowed `const char*` views of `fm_hyperlink_t` alive across the C call.
+  std::string text[4];
+  fm_hyperlink_t hl = FM_STRUCT_INIT(fm_hyperlink_t);
+  if (!reader.Object(info[link_arg], "link", &in)) {
+    if (reader.ok()) {
+      reader.FailType("link", "an object");
+    }
+    return env.Undefined();
+  }
+  if (!ReadHyperlinkInput(reader, in, text, &hl)) {
+    return env.Undefined();
+  }
+  return call(handle, &hl);
 }
 
 }  // namespace
 
-// `(sheet, row, col, link)`: `link` is a `HyperlinkInput` whose `range` (a `CellRect`, or omitted / `null` for the
-// key cell) must start at `(row, col)`; `null` removes the hyperlink anchored there and does nothing when there
-// is none. A missing or `null` string is no stored value.
+// `(sheet, link)`: `link` is a `HyperlinkInput` whose `range` (a `CellRect`) is required. A missing or `null`
+// string is no stored value.
 Napi::Value Workbook::SetHyperlink(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return ThrowInvalidHandle(env);
-  }
-  const uint32_t sheet = ArgU32(info, 0);
-  const uint32_t row = ArgU32(info, 1);
-  const uint32_t col = ArgU32(info, 2);
-  CheckedSpecReader reader(env);
-  Napi::Object in;
-  if (!reader.Object(info[3], "", &in)) {
-    return reader.ok() ? ValueOrThrow(env, fm_sheet_set_hyperlink(handle_, sheet, row, col, nullptr), env.Undefined())
-                       : env.Undefined();
-  }
-  // The std::string buffers keep the borrowed `const char*` views of `fm_hyperlink_t` alive across the C call.
-  std::string text[4];
-  fm_hyperlink_t hl = FM_STRUCT_INIT(fm_hyperlink_t);
-  hl.rect = fm_cell_rect_t{row, col, row, col};
-  (void)ReadHyperlinkInput(reader, in, text, &hl);
-  if (!reader.ok()) {
-    return env.Undefined();
-  }
-  return ValueOrThrow(env, fm_sheet_set_hyperlink(handle_, sheet, row, col, &hl), env.Undefined());
+  return InvokeHyperlinkWrite(info, handle_, 1, [&](fm_workbook_t* handle, const fm_hyperlink_t* hl) {
+    return ValueOrThrow(info.Env(), fm_sheet_set_hyperlink(handle, ArgU32(info, 0), hl), info.Env().Undefined());
+  });
 }
 
-// `(sheet, index, link)`: `link.range` is required; its top-left cell is the anchor.
+// `(sheet, index, link)`: `link.range` is required.
 Napi::Value Workbook::InsertHyperlinkAt(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return ThrowInvalidHandle(env);
-  }
-  const uint32_t sheet = ArgU32(info, 0);
-  const uint32_t index = ArgU32(info, 1);
-  CheckedSpecReader reader(env);
-  Napi::Object in;
-  std::string text[4];
-  fm_hyperlink_t hl = FM_STRUCT_INIT(fm_hyperlink_t);
-  const bool has_range = reader.Object(info[2], "", &in) && ReadHyperlinkInput(reader, in, text, &hl);
-  if (!reader.ok()) {
-    return env.Undefined();
-  }
-  if (!has_range) {
-    return ThrowBindingStatus(env, FM_STATUS_INVALID_ARGUMENT, "link.range is required");
-  }
-  return ValueOrThrow(env, fm_sheet_insert_hyperlink_at(handle_, sheet, index, &hl), env.Undefined());
+  return InvokeHyperlinkWrite(info, handle_, 2, [&](fm_workbook_t* handle, const fm_hyperlink_t* hl) {
+    return ValueOrThrow(info.Env(), fm_sheet_insert_hyperlink_at(handle, ArgU32(info, 0), ArgU32(info, 1), hl),
+                        info.Env().Undefined());
+  });
+}
+
+// `(sheet, range)`: removes every hyperlink whose range intersects `range`.
+Napi::Value Workbook::RemoveHyperlink(const Napi::CallbackInfo& info) {
+  return InvokeMergeEdit(info, handle_, [&](fm_workbook_t* handle, uint32_t sheet, const fm_cell_rect_t& range) {
+    return ValueOrThrow(info.Env(), fm_sheet_remove_hyperlink(handle, sheet, &range), info.Env().Undefined());
+  });
 }
 
 namespace {

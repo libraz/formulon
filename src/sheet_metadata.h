@@ -168,6 +168,20 @@ struct Hyperlink {
   std::string display;   ///< Optional `display="..."` attribute.
   std::string tooltip;   ///< Optional `tooltip="..."` attribute.
   std::string rid;       ///< Reader populates from sheet rels; empty for fresh entries.
+
+  /// Whether the link's cells include `(r, c)`.
+  bool covers(std::uint32_t r, std::uint32_t c) const noexcept {
+    return row <= r && r <= last_row && col <= c && c <= last_col;
+  }
+  /// Whether `other` covers exactly the same cells, the identity of a link.
+  bool same_range(const Hyperlink& other) const noexcept {
+    return row == other.row && col == other.col && last_row == other.last_row && last_col == other.last_col;
+  }
+  /// Whether the link shares a cell with the inclusive rectangle given.
+  bool intersects(std::uint32_t first_r, std::uint32_t first_c, std::uint32_t last_r,
+                  std::uint32_t last_c) const noexcept {
+    return row <= last_r && first_r <= last_row && col <= last_c && first_c <= last_col;
+  }
 };
 
 /// One per-cell text comment (`<comment ref="A1" authorId="N"><text>...</text></comment>`).

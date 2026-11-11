@@ -199,8 +199,21 @@ TEST_F(FormulonCApiRemoveMissingKey, AnUnknownFunctionNameIsNotFound) {
   EXPECT_EQ(fm_localize_function_name("SUM", "xx-365-zz_ZZ", &out), FM_STATUS_INVALID_ARGUMENT);
 }
 
+TEST_F(FormulonCApiRemoveMissingKey, AHyperlinkRangeThatIntersectsNothingIsNotFound) {
+  fm_hyperlink_t link = FM_STRUCT_INIT(fm_hyperlink_t);
+  link.rect = fm_cell_rect_t{0U, 0U, 1U, 1U};
+  link.target = "https://example.com";
+  ASSERT_EQ(fm_sheet_set_hyperlink(wb(), 0, &link), 0);
+  const fm_cell_rect_t elsewhere{5U, 5U, 6U, 6U};
+  ExpectNotFound(fm_sheet_remove_hyperlink(wb(), 0, &elsewhere), "hyperlink");
+  std::size_t count = 0;
+  ASSERT_EQ(fm_sheet_get_hyperlink_count(wb(), 0, &count), 0);
+  EXPECT_EQ(count, 1U);
+}
+
 TEST_F(FormulonCApiRemoveMissingKey, AnAbsentSheetIsStillASheetIndexError) {
-  EXPECT_EQ(fm_sheet_set_hyperlink(wb(), 9, 0, 0, nullptr), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
+  const fm_cell_rect_t cell{0U, 0U, 0U, 0U};
+  EXPECT_EQ(fm_sheet_remove_hyperlink(wb(), 9, &cell), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(fm_sheet_set_row_break(wb(), 9, 7, nullptr), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(fm_sheet_remove_data_table(wb(), 9, 0, 0), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
 }

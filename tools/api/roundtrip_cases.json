@@ -734,13 +734,7 @@
       "set": {
         "op": "hyperlink.set",
         "js": "setHyperlink",
-        "py": "set_hyperlink",
-        "cell_args": [
-          [
-            0,
-            1
-          ]
-        ]
+        "py": "set_hyperlink"
       },
       "create": [],
       "surfaces": [

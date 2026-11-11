@@ -67,7 +67,6 @@ const ADDRESS = JSON.parse(readFileSync(path.join(repoRoot, 'tools/api/address_a
 // Cell B3 is (2, 1); the second pair of two-cell methods is A1 (0, 0).
 const CELL_ROW = 2;
 const CELL_COL = 1;
-const HYPERLINK = { target: 'https://example.com/' };
 
 function pivotWorkbook(wb, formulon) {
   const ws = wb.sheet(0);
@@ -99,7 +98,6 @@ function pivotWorkbook(wb, formulon) {
 // One entry per JSON method. `args` is the coordinate form; the A1 form is derived from the JSON
 // positions. `setup` may return context for `args`.
 const CELL_METHODS = {
-  'Sheet.setHyperlink': { args: () => [CELL_ROW, CELL_COL, HYPERLINK] },
   'Sheet.resetCellXfIndex': { args: () => [CELL_ROW, CELL_COL] },
   'Sheet.evaluateCfFormula': { args: () => [CELL_ROW, CELL_COL, 0, 0, '=TRUE'] },
   'Sheet.evaluateFormula': { args: () => [CELL_ROW, CELL_COL, '=1+1'] },
@@ -392,6 +390,10 @@ const RECT_METHODS = {
   'Sheet.listCells': { args: (r) => [r], pre: (ws) => ws.setNumber(2, 2, 9) },
   'Sheet.recalcViewport': { args: (r) => [r] },
   'Sheet.remapRangeXfs': { args: (r) => [r, [0], [0]] },
+  'Sheet.removeHyperlink': {
+    args: (r) => [r],
+    pre: (ws) => ws.setHyperlink({ target: 'https://example.com/', range: R }),
+  },
   'Sheet.removeMerge': { args: (r) => [r], pre: (ws) => ws.addMerge(R) },
   'Sheet.updateCellFormat': { args: (r) => [r, { font: { bold: true } }], mutates: true },
   'Sheet.setPrintArea': { args: (r) => [[r]], mutates: true },
@@ -1350,6 +1352,7 @@ test('criterion 13: removeMergeAt is gone and removeHyperlinkAt takes a list pos
     assert.equal('removeMergeAt' in wb.sheet(0), false);
     assert.equal(typeof wb.sheet(0).removeHyperlinkAt, 'function');
     assert.equal(typeof wb.sheet(0).insertHyperlinkAt, 'function');
+    assert.equal(typeof wb.sheet(0).removeHyperlink, 'function');
   });
 });
 

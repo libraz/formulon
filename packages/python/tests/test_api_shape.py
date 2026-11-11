@@ -1021,7 +1021,7 @@ class AbsentValueTests(unittest.TestCase):
         ws = wb.sheet(0)
         ws.set_text(0, 0, "Region")
         ws.set_text(0, 1, "Amount")
-        ws.set_hyperlink(10, 0, formulon.HyperlinkInput(target="https://example.test/"))
+        ws.set_hyperlink(formulon.HyperlinkInput(range=formulon.CellRect(10, 0, 10, 0), target="https://example.test/"))
         ws.add_validation(formulon.DataValidationInput(ranges=[formulon.CellRect(11, 0, 11, 0)], type=1, formula1="1"))
         table = ws.add_table(
             formulon.TableInput(range=formulon.CellRect(20, 0, 22, 1), name="T", columns=["A", "B"], styled=False)
@@ -1220,7 +1220,7 @@ class PatchBoundaryTests(unittest.TestCase):
         with self.assertRaises(TypeError):
             self.wb.update_iterative(enabeld=True)  # type: ignore[call-arg]
         with self.assertRaises(TypeError):
-            self.wb.sheet(0).set_hyperlink(0, 0, bogus=1)
+            self.wb.sheet(0).set_hyperlink(range="A1", bogus=1)  # type: ignore[call-arg]
         with self.assertRaises(TypeError):
             formulon.Comment(author="Ann")  # type: ignore[call-arg]
 
