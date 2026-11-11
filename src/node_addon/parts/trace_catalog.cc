@@ -69,7 +69,7 @@ Napi::Value MapProfileText(const Napi::CallbackInfo& info, ProfileTextMapFn fn) 
 }
 
 // Shared bridge for `localizeFormula` / `canonicalizeFormula`: `(formula, profileId, options?)` -> text.
-using FormulaTextMapFn = fm_status_t (*)(const char*, const char*, const fm_formula_notation_spec_t*, const char**);
+using FormulaTextMapFn = fm_status_t (*)(const char*, const char*, const fm_reference_notation_spec_t*, const char**);
 
 Napi::Value MapFormulaText(const Napi::CallbackInfo& info, FormulaTextMapFn fn) {
   NotationOptions notation;
@@ -78,7 +78,7 @@ Napi::Value MapFormulaText(const Napi::CallbackInfo& info, FormulaTextMapFn fn) 
   }
   const std::string formula = Workbook::ArgString(info, 0);
   const std::string profile_id = Workbook::ArgString(info, 1);
-  const fm_formula_notation_spec_t spec = NotationSpec<fm_formula_notation_spec_t>(notation);
+  const fm_reference_notation_spec_t spec = NotationSpec(notation);
   const char* out = nullptr;
   const fm_status_t rc = fn(formula.c_str(), profile_id.c_str(), &spec, &out);
   return ValueOrThrow(info.Env(), rc, JsString(info.Env(), out));

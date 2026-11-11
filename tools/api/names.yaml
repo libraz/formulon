@@ -2926,11 +2926,6 @@ entries:
     kind: typedef
     js: FormatReferenceOptions
     surfaces: [wasm, native]
-  type.formula_notation_options:
-    kind: typedef
-    js: FormulaNotationOptions
-    a1_exempt: { fields: [baseRow, baseCol], reason: "the base cell R1C1 relative references are measured from" }
-    surfaces: [wasm, native]
   record.formula_result:
     kind: record
     role: result
@@ -3196,11 +3191,6 @@ entries:
     surfaces: [wasm, native]
     was: { js: ParallelRecalcResult }
     drop: { js: ParallelRecalcResult, closes: R8.js }
-  type.parse_reference_options:
-    kind: typedef
-    js: ParseReferenceOptions
-    a1_exempt: { fields: [baseRow, baseCol], reason: "the base cell of the A1 parser itself, which resolves relative references" }
-    surfaces: [wasm, native]
   record.partial_recalc_result:
     kind: record
     role: result
@@ -13939,16 +13929,14 @@ entries:
     js: PivotInput
     py: PivotInput
     surfaces: [c, wasm, native, py]
-  record.parse_reference_spec:
+  record.reference_notation_spec:
     kind: record
     role: input
-    c: fm_parse_reference_spec_t
-    surfaces: [c]
-  record.formula_notation_spec:
-    kind: record
-    role: input
-    c: fm_formula_notation_spec_t
-    surfaces: [c]
+    c: fm_reference_notation_spec_t
+    js: ReferenceNotationOptions
+    a1_exempt: { fields: [baseRow, baseCol], reason: "the base cell R1C1 relative axes are measured from" }
+    exception: "the JavaScript name says Options like every options group; the C record is a spec because it is input only; Python takes the fields as keyword arguments, so it has no type"
+    surfaces: [c, wasm, native]
   record.pivot_summary:
     kind: record
     role: result

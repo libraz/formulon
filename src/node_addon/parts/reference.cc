@@ -61,7 +61,7 @@ Napi::Value Workbook::ParseReference(const Napi::CallbackInfo& info) {
   }
   const std::string text = ArgString(info, 0);
   fm_parsed_reference_info_t ref = FM_STRUCT_INIT(fm_parsed_reference_info_t);
-  const fm_parse_reference_spec_t spec = NotationSpec<fm_parse_reference_spec_t>(notation);
+  const fm_reference_notation_spec_t spec = NotationSpec(notation);
   const fm_status_t rc = fm_workbook_parse_reference(handle_, text.c_str(), &spec, &ref);
   if (rc != 0) {
     return ThrowStatus(env, rc);

@@ -865,10 +865,9 @@ struct JsNotationOptions {
 /// `r1c1`, a coordinate that is not a uint32, or one base coordinate without the other.
 bool read_notation_options(const emscripten::val& options, const char* call, JsNotationOptions* out);
 
-/// `options` as the C record `Spec` (`fm_parse_reference_spec_t`, `fm_formula_notation_spec_t`).
-template <typename Spec>
-Spec notation_spec(const JsNotationOptions& options) {
-  Spec spec = FM_STRUCT_INIT(Spec);
+/// `options` as the C record `fm_reference_notation_spec_t`.
+inline fm_reference_notation_spec_t notation_spec(const JsNotationOptions& options) {
+  fm_reference_notation_spec_t spec = FM_STRUCT_INIT(fm_reference_notation_spec_t);
   spec.r1c1 = options.r1c1 ? FM_TRISTATE_TRUE : FM_TRISTATE_FALSE;
   spec.has_base = options.has_base ? 1 : 0;
   spec.base_row = options.base_row;

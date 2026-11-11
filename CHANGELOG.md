@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The reference notation options are one type: `ReferenceNotationOptions` (C
+  `fm_reference_notation_spec_t`) serves `parseReference`, `localizeFormula`
+  and `canonicalizeFormula`.
 - A 3-D span is recognised in Excel's shapes: `Data:Mid!A1`, `'Data':Mid!A1`
   and `'Data:My Sheet'!A1` are spans, while a separately quoted second sheet
   (`Data:'My Sheet'!A1`, `'Data':'My Sheet'!A1`) ranges the name `Data` with
@@ -239,7 +242,7 @@ Upgrading from 0.18: see [Upgrading from 0.18 to 0.19](docs/releases/upgrading-0
 - `parseReference` and `formatReference` convert between reference text and a
   sheet name with a 0-based rectangle.
 - `localizeFormula` and `canonicalizeFormula` take `{ r1c1, baseRow, baseCol }`
-  (Python `r1c1=`, `base_row=`, `base_col=`; C `fm_formula_notation_spec_t`)
+  (Python `r1c1=`, `base_row=`, `base_col=`; C `fm_reference_notation_spec_t`)
   and convert between the stored A1 text and the profile's R1C1 spelling, with
   its row and column letters (de `Z(-1)S(1)`, es `F[-1]C[1]`) and relative
   references measured from the base cell.

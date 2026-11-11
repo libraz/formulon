@@ -1865,18 +1865,23 @@ typedef struct {
   fm_cell_rect_t rect;
 } fm_parsed_reference_info_t;
 
-/** @brief Options of `fm_workbook_parse_reference`. */
+/**
+ * @brief The reference notation of `fm_workbook_parse_reference`,
+ *        `fm_localize_formula` and `fm_canonicalize_formula`.
+ */
 typedef struct {
   uint32_t struct_size;
-  /** The notation, an `fm_tristate_t`: default and false parse A1, true parses R1C1. */
+  /** The notation, an `fm_tristate_t`: default and false use A1, true uses R1C1 with the letters and brackets of
+   *  the profile's locale. */
   int32_t r1c1; /* fm_tristate_t */
-  /** 1 when `base_row` and `base_col` are set; 0 means no base. Ignored when A1 is parsed. */
+  /** 1 when `base_row` and `base_col` are set; 0 means no base. A1 does not use the base, but one outside the grid
+   *  is refused in either notation. */
   int32_t has_base;
   /** The 0-based row that R1C1 relative axes are measured from. */
   uint32_t base_row;
   /** The 0-based column that R1C1 relative axes are measured from. */
   uint32_t base_col;
-} fm_parse_reference_spec_t;
+} fm_reference_notation_spec_t;
 
 /**
  * @brief Parses `text` as `INDIRECT` reads a reference under the workbook's
@@ -1904,7 +1909,8 @@ typedef struct {
  *         `has_base` is not 0/1, or `has_base` is 1 with the base outside the grid.
  */
 FM_API fm_status_t fm_workbook_parse_reference(const fm_workbook_t* wb, const char* text,
-                                               const fm_parse_reference_spec_t* spec, fm_parsed_reference_info_t* out);
+                                               const fm_reference_notation_spec_t* spec,
+                                               fm_parsed_reference_info_t* out);
 
 /**
  * @brief Formats the rectangle `range` as A1 reference text, the inverse of
@@ -9605,20 +9611,6 @@ FM_API fm_status_t fm_localize_function_name(const char* canonical_name, const c
 FM_API fm_status_t fm_canonicalize_function_name(const char* localized_name, const char* profile_id,
                                                  const char** out_canonical);
 
-/** @brief Options of `fm_localize_formula` and `fm_canonicalize_formula`. */
-typedef struct {
-  uint32_t struct_size;
-  /** The reference notation of the profile-spelled side, an `fm_tristate_t`: default and false use A1, true uses
-   *  R1C1 with the letters and brackets of the profile's locale. */
-  int32_t r1c1; /* fm_tristate_t */
-  /** 1 when `base_row` and `base_col` are set; 0 means no base. Ignored when A1 is used. */
-  int32_t has_base;
-  /** The 0-based row that R1C1 relative references are measured from. */
-  uint32_t base_row;
-  /** The 0-based column that R1C1 relative references are measured from. */
-  uint32_t base_col;
-} fm_formula_notation_spec_t;
-
 /**
  * @brief Rewrites stored (en-invariant) formula text into `profile_id`'s
  *        spelling.
@@ -9656,7 +9648,7 @@ typedef struct {
  *           `formula` does not parse, or when an R1C1 relative reference has no base.
  */
 FM_API fm_status_t fm_localize_formula(const char* formula, const char* profile_id,
-                                       const fm_formula_notation_spec_t* spec, const char** out_formula);
+                                       const fm_reference_notation_spec_t* spec, const char** out_formula);
 
 /**
  * @brief Rewrites `profile_id`-spelled formula text into the en-invariant
@@ -9683,7 +9675,7 @@ FM_API fm_status_t fm_localize_formula(const char* formula, const char* profile_
  *           `formula` does not parse.
  */
 FM_API fm_status_t fm_canonicalize_formula(const char* formula, const char* profile_id,
-                                           const fm_formula_notation_spec_t* spec, const char** out_formula);
+                                           const fm_reference_notation_spec_t* spec, const char** out_formula);
 
 /** @brief Order in which a locale writes day, month and year. */
 typedef enum { FM_DATE_ORDER_MDY = 0, FM_DATE_ORDER_YMD = 1, FM_DATE_ORDER_DMY = 2 } fm_date_order_t;

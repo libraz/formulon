@@ -2877,25 +2877,16 @@ export interface ParsedReference {
   readonly range: CellRect;
 }
 
-/** Options for `parseReference`. `baseRow` and `baseCol` anchor R1C1 relative axes and are given together. */
-export interface ParseReferenceOptions {
-  /** Parses the text as R1C1 when `true`; omitted parses A1. */
+/** Options for `parseReference`, `localizeFormula` and `canonicalizeFormula`. `baseRow` and `baseCol` anchor R1C1
+ *  relative axes and are given together. A1 does not use them, but a base outside the grid is refused in either
+ *  notation. */
+export interface ReferenceNotationOptions {
+  /** Reads (`parseReference`) or spells (`localizeFormula`, `canonicalizeFormula`) references in R1C1, with the
+   *  profile's row / column letters and brackets (de `Z(-1)S(1)`, es `F[-1]C[1]`), when `true`; omitted uses A1. */
   r1c1?: boolean;
   /** The 0-based row that R1C1 relative axes are measured from; given together with `baseCol`. */
   baseRow?: number;
   /** The 0-based column that R1C1 relative axes are measured from; given together with `baseRow`. */
-  baseCol?: number;
-}
-
-/** Options for `localizeFormula` and `canonicalizeFormula`. `baseRow` and `baseCol` anchor R1C1 relative references
- *  and are given together. */
-export interface FormulaNotationOptions {
-  /** Spells references on the profile side in R1C1, with the profile's row / column letters and brackets
-   *  (de `Z(-1)S(1)`, es `F[-1]C[1]`), when `true`; omitted keeps A1. */
-  r1c1?: boolean;
-  /** The 0-based row that R1C1 relative references are measured from; given together with `baseCol`. */
-  baseRow?: number;
-  /** The 0-based column that R1C1 relative references are measured from; given together with `baseRow`. */
   baseCol?: number;
 }
 
@@ -7074,7 +7065,7 @@ export interface Workbook {
    *  without a base) fails with `StatusCode.ParserInvalidReference`, its `parseError` covering the whole text.
    *  Throws `TypeError` when only one of `baseRow` / `baseCol` is given; a base outside the grid fails with
    *  `StatusCode.InvalidArgument`. */
-  parseReference(text: string, options?: ParseReferenceOptions): ParsedReference;
+  parseReference(text: string, options?: ReferenceNotationOptions): ParsedReference;
   /** Writes the inclusive rectangle as A1 reference text: `A1`, `$A$1:$B$2`, `B:D` (every row), `2:11`
    *  (every column), with the sheet name quoted as a stored formula quotes it. A coordinate outside the
    *  grid or an unordered rectangle fails with `StatusCode.InvalidArgument`. `range` is an A1 range, a
@@ -9198,18 +9189,30 @@ export interface Formulon {
    *  with no base fails with `StatusCode.ParserInvalidReference` over that
    *  reference. The canonical `formula` must parse: a syntax error fails with
    *  a parser status and `FormulonError.parseError`, whose offsets (UTF-16)
-   *  index into `formula`. An unknown `profileId` fails with
-   *  `StatusCode.InvalidArgument`.
+   *  index into `formula`.
+   *  @throws FormulonError with `StatusCode.InvalidArgument` when `profileId` is not a
+   *  documented profile or the base is outside the grid; a parser status with
+   *  `FormulonError.parseError` when `formula` does not parse;
+   *  `StatusCode.ParserInvalidReference` when an R1C1 relative reference has no base.
+   *  @throws TypeError when `options.r1c1` is not a boolean or only one of
+   *  `baseRow` / `baseCol` is given.
    *  @example
    *  formulon.localizeFormula('=SUM(C3,$B$2)', 'mac-365-de_DE', { r1c1: true, baseRow: 4, baseCol: 4 });
    *  // '=SUMME(Z(-2)S(-2);Z2S2)' */
-  localizeFormula(formula: string, profileId: ProfileId, options?: FormulaNotationOptions): string;
+  localizeFormula(formula: string, profileId: ProfileId, options?: ReferenceNotationOptions): string;
   /** Inverse of `localizeFormula`: rewrites `profileId`-spelled formula text
    *  into the en-invariant form, reading R1C1 references back into A1 with
    *  `options.r1c1`. A syntax error fails with a parser status and
    *  `FormulonError.parseError`, whose offsets (UTF-16) index into the localized
-   *  `formula` as passed. */
-  canonicalizeFormula(formula: string, profileId: ProfileId, options?: FormulaNotationOptions): string;
+   *  `formula` as passed.
+   *  @throws FormulonError with `StatusCode.InvalidArgument` when `profileId` is not a
+   *  documented profile or the base is outside the grid; a parser status with
+   *  `FormulonError.parseError` when the formula does not parse;
+   *  `StatusCode.ParserInvalidReference` when an R1C1 reference is malformed or
+   *  relative with no base.
+   *  @throws TypeError when `options.r1c1` is not a boolean or only one of
+   *  `baseRow` / `baseCol` is given. */
+  canonicalizeFormula(formula: string, profileId: ProfileId, options?: ReferenceNotationOptions): string;
   /** Returns the locale facts (separators, boolean names, date order,
    *  currency, error names) of `profileId`. */
   getLocaleFacts(profileId: ProfileId): LocaleFacts;

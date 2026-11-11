@@ -48,8 +48,8 @@ removed fm_cf_results_cell_count :: renamed to fm_cf_results_get_cell_count
 removed fm_cf_results_match_at :: renamed to fm_cf_results_get_match_at
 removed fm_collation_classes :: renamed to fm_get_collation_classes
 removed fm_error_display_name :: renamed to fm_get_error_display_name
-removed fm_formula_canonicalize :: renamed to fm_canonicalize_formula
-removed fm_formula_localize :: renamed to fm_localize_formula
+removed fm_formula_canonicalize :: renamed to fm_canonicalize_formula, which takes a const fm_reference_notation_spec_t* spec before out_formula
+removed fm_formula_localize :: renamed to fm_localize_formula, which takes a const fm_reference_notation_spec_t* spec before out_formula
 removed fm_function_canonicalize :: renamed to fm_canonicalize_function_name
 removed fm_function_count :: renamed to fm_get_function_count
 removed fm_function_localize :: renamed to fm_localize_function_name

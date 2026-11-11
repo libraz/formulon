@@ -10587,14 +10587,15 @@ class Workbook(_NoCopy):
 
         Raises:
           FormulaSyntaxError: with ``StatusCode.PARSER_INVALID_REFERENCE`` when ``text`` is not a reference.
-          TypeError: when only one of ``base_row`` and ``base_col`` is given.
+          InvalidArgumentError: when the base is outside the grid.
+          TypeError: when ``r1c1`` is not a bool, or only one of ``base_row`` and ``base_col`` is given.
         """
         fields = _notation_fields(r1c1=r1c1, base_row=base_row, base_col=base_col)
         h = self._require()
         with _ArgScope() as scope:
             ptr = scope.struct(S.REFERENCE)
-            spec = scope.struct(S.PARSE_REFERENCE_SPEC)
-            S.PARSE_REFERENCE_SPEC.pack(LIB, spec, fields)
+            spec = scope.struct(S.REFERENCE_NOTATION_SPEC)
+            S.REFERENCE_NOTATION_SPEC.pack(LIB, spec, fields)
             _check(LIB.fm_workbook_parse_reference(h, scope.cstr(text), spec, ptr))
             d = S.REFERENCE.unpack(LIB, ptr)
             return ParsedReference(
@@ -11154,13 +11155,13 @@ def _map_profile_text(fn_name: str, text: str, profile_id: str) -> str:
 
 
 def _notation_fields(*, r1c1: bool, base_row: Optional[int], base_col: Optional[int]) -> Dict[str, int]:
-    """The fields of an ``fm_parse_reference_spec_t`` / ``fm_formula_notation_spec_t`` from the keyword arguments.
+    """The fields of an ``fm_reference_notation_spec_t`` from the keyword arguments.
 
     Raises:
       TypeError: when ``r1c1`` is not a boolean, or only one of ``base_row`` and ``base_col`` is given.
     """
     if (base_row is None) != (base_col is None):
-        raise TypeError("base_row and base_col must be given together")
+        raise TypeError(_argument_message("base_row and base_col", "must be given together"))
     return {
         "r1c1": _tristate_default(_require_bool(r1c1, "r1c1")),
         "has_base": 0 if base_row is None else 1,
@@ -11177,8 +11178,8 @@ def _map_formula_text(
     with _ArgScope() as scope:
         text_ptr = scope.cstr(formula)
         pid_ptr = scope.cstr(profile_id)
-        spec = scope.struct(S.FORMULA_NOTATION_SPEC)
-        S.FORMULA_NOTATION_SPEC.pack(LIB, spec, fields)
+        spec = scope.struct(S.REFERENCE_NOTATION_SPEC)
+        S.REFERENCE_NOTATION_SPEC.pack(LIB, spec, fields)
         return _read_cstr_out(getattr(LIB, fn_name), text_ptr, pid_ptr, spec)
 
 

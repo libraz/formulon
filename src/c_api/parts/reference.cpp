@@ -38,7 +38,7 @@ using formulon::c_api::parts::publish_scratch;
 using formulon::c_api::parts::store_cstr;
 
 extern "C" fm_status_t fm_workbook_parse_reference(const fm_workbook_t* wb, const char* text,
-                                                   const fm_parse_reference_spec_t* spec,
+                                                   const fm_reference_notation_spec_t* spec,
                                                    fm_parsed_reference_info_t* out) {
   clear_last_error();
   if (wb == nullptr || text == nullptr || out == nullptr) {
@@ -50,7 +50,7 @@ extern "C" fm_status_t fm_workbook_parse_reference(const fm_workbook_t* wb, cons
   if (auto rc = check_utf8({text}); rc != 0) {
     return rc;
   }
-  fm_parse_reference_spec_t plain = FM_STRUCT_INIT(fm_parse_reference_spec_t);
+  fm_reference_notation_spec_t plain = FM_STRUCT_INIT(fm_reference_notation_spec_t);
   if (spec == nullptr) {
     spec = &plain;
   } else if (auto rc = check_record_size(*spec); rc != 0) {

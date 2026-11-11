@@ -38,7 +38,7 @@ struct Parsed {
 // Calls the parser with an explicit spec; `r1c1` is an fm_tristate_t value.
 fm_status_t ParseSpec(const fm_workbook_t* wb, const char* text, int32_t r1c1, int32_t has_base, uint32_t base_row,
                       uint32_t base_col, fm_parsed_reference_info_t* out) {
-  const fm_parse_reference_spec_t spec{sizeof(fm_parse_reference_spec_t), r1c1, has_base, base_row, base_col};
+  const fm_reference_notation_spec_t spec{sizeof(fm_reference_notation_spec_t), r1c1, has_base, base_row, base_col};
   return fm_workbook_parse_reference(wb, text, &spec, out);
 }
 

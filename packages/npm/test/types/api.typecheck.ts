@@ -1928,9 +1928,15 @@ import {
   type LogLevel,
   type LogEvent,
   type PageOptions,
+  type ReferenceNotationOptions,
   // @ts-expect-error the formatted range is a ParsedReference, a CellRect or an A1 string
   type ReferenceRangeInput,
 } from '@libraz/formulon';
+
+// @ts-expect-error the notation options are one type, ReferenceNotationOptions
+import type { ParseReferenceOptions } from '@libraz/formulon';
+// @ts-expect-error the notation options are one type, ReferenceNotationOptions
+import type { FormulaNotationOptions } from '@libraz/formulon';
 
 declare const pictureProps: PictureProperties;
 
@@ -2062,6 +2068,14 @@ export function inputsAndOptions(): void {
   wb.formatReference('A1:B2', formatOptions);
   wb.formatReference(rect);
   wb.formatReference(wb.parseReference('Sheet1!A1:B2'), { absolute: true });
+
+  const notation: ReferenceNotationOptions = { r1c1: true, baseRow: 4, baseCol: 4 };
+  wb.parseReference('R[1]C[1]', notation);
+  formulon.localizeFormula('=SUM(C3)', 'mac-365-de_DE', notation);
+  formulon.canonicalizeFormula('=SUMME(Z(-2)S(-2))', 'mac-365-de_DE', notation);
+  // @ts-expect-error the base is a pair of numbers, not a cell address
+  const badNotation: ReferenceNotationOptions = { base: 'E5' };
+  void badNotation;
   // @ts-expect-error the range is not an object with a `range` key
   wb.formatReference({ range: 'A1', sheetName: 'S' });
 

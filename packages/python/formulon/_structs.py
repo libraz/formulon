@@ -104,7 +104,6 @@ RECORD_NAMES = frozenset(
         "fm_drawing_placement_spec_t",
         "fm_effective_style_info_t",
         "fm_external_link_info_t",
-        "fm_formula_notation_spec_t",
         "fm_function_metadata_info_t",
         "fm_header_footer_patch_t",
         "fm_header_footer_t",
@@ -123,7 +122,6 @@ RECORD_NAMES = frozenset(
         "fm_paper_info_t",
         "fm_parallel_recalc_stats_info_t",
         "fm_parse_error_info_t",
-        "fm_parse_reference_spec_t",
         "fm_parsed_reference_info_t",
         "fm_person_t",
         "fm_phonetic_properties_t",
@@ -155,6 +153,7 @@ RECORD_NAMES = frozenset(
         "fm_protected_range_t",
         "fm_read_diagnostics_info_t",
         "fm_rect_pt_info_t",
+        "fm_reference_notation_spec_t",
         "fm_row_break_t",
         "fm_row_layout_info_t",
         "fm_save_diagnostics_info_t",
@@ -1057,13 +1056,8 @@ SPILL_INFO = Struct(
     ],
 )
 
-PARSE_REFERENCE_SPEC = Struct(
-    "fm_parse_reference_spec_t",
-    [("r1c1", I32), ("has_base", I32), ("base_row", U32), ("base_col", U32)],
-)
-
-FORMULA_NOTATION_SPEC = Struct(
-    "fm_formula_notation_spec_t",
+REFERENCE_NOTATION_SPEC = Struct(
+    "fm_reference_notation_spec_t",
     [("r1c1", I32), ("has_base", I32), ("base_row", U32), ("base_col", U32)],
 )
 

@@ -282,6 +282,33 @@ test('boolean arguments and fields refuse non-booleans', async () => {
   });
 });
 
+test('the notation options are refused alike by parseReference, localizeFormula and canonicalizeFormula', async () => {
+  await withWorkbook((wb, f) => {
+    const together = 'options.baseRow and options.baseCol must be given together';
+    const calls = [
+      ['Workbook.parseReference', (options) => wb.parseReference('A1', options)],
+      ['Formulon.localizeFormula', (options) => f.localizeFormula('=1', 'mac-365-de_DE', options)],
+      ['Formulon.canonicalizeFormula', (options) => f.canonicalizeFormula('=1', 'mac-365-de_DE', options)],
+    ];
+    for (const [label, run] of calls) {
+      refusesWith(() => run({ r1c1: true, baseRow: 1 }), TypeError, `${label} ${together}`);
+      refusesWith(() => run({ r1c1: 1 }), TypeError, `${label} options.r1c1 must be a boolean`);
+      // A1 does not use the base, but a base outside the grid is refused in either notation.
+      for (const r1c1 of [true, undefined]) {
+        const outside = thrownBy(() => run({ r1c1, baseRow: 1048576, baseCol: 0 }));
+        assert.equal(outside.name, 'FormulonError', outside.message);
+        assert.equal(outside.code, f.StatusCode.InvalidArgument, outside.message);
+      }
+    }
+    for (const convert of [f.localizeFormula, f.canonicalizeFormula]) {
+      const unknown = thrownBy(() => convert('=1', 'nope', { r1c1: true }));
+      assert.equal(unknown.code, f.StatusCode.InvalidArgument, unknown.message);
+    }
+    const noBase = thrownBy(() => f.localizeFormula('=A1', 'mac-365-en_US', { r1c1: true }));
+    assert.equal(noBase.code, f.StatusCode.ParserInvalidReference, noBase.message);
+  });
+});
+
 test('an engine message that leads with no argument keeps its wording under the call label', async () => {
   await withWorkbook((wb, f) => {
     const invalid = f.StatusCode.InvalidArgument;

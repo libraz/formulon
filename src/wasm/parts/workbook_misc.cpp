@@ -128,7 +128,7 @@ std::string canonicalize_function_name(const std::string& localized_name, const 
 
 namespace {
 
-using FormulaTextMapFn = fm_status_t (*)(const char*, const char*, const fm_formula_notation_spec_t*, const char**);
+using FormulaTextMapFn = fm_status_t (*)(const char*, const char*, const fm_reference_notation_spec_t*, const char**);
 
 std::string map_formula_text(FormulaTextMapFn fn, const char* call, const std::string& formula,
                              const std::string& profile_id, const emscripten::val& options) {
@@ -136,7 +136,7 @@ std::string map_formula_text(FormulaTextMapFn fn, const char* call, const std::s
   if (!read_notation_options(options, call, &notation)) {
     return std::string();
   }
-  const fm_formula_notation_spec_t spec = notation_spec<fm_formula_notation_spec_t>(notation);
+  const fm_reference_notation_spec_t spec = notation_spec(notation);
   const char* out = nullptr;
   if (!succeeded(fn(formula.c_str(), profile_id.c_str(), &spec, &out))) {
     return std::string();

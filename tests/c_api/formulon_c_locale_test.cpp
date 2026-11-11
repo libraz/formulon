@@ -171,8 +171,9 @@ TEST(FormulonCApiLocale, FormulaConversionRejectsBadArguments) {
 constexpr uint32_t kLastRow = 1048575U;
 constexpr uint32_t kLastCol = 16383U;
 
-fm_formula_notation_spec_t Notation(int32_t r1c1, int32_t has_base = 0, uint32_t base_row = 0, uint32_t base_col = 0) {
-  fm_formula_notation_spec_t spec = FM_STRUCT_INIT(fm_formula_notation_spec_t);
+fm_reference_notation_spec_t Notation(int32_t r1c1, int32_t has_base = 0, uint32_t base_row = 0,
+                                      uint32_t base_col = 0) {
+  fm_reference_notation_spec_t spec = FM_STRUCT_INIT(fm_reference_notation_spec_t);
   spec.r1c1 = r1c1;
   spec.has_base = has_base;
   spec.base_row = base_row;
@@ -180,13 +181,13 @@ fm_formula_notation_spec_t Notation(int32_t r1c1, int32_t has_base = 0, uint32_t
   return spec;
 }
 
-std::string localize_with(const char* formula, const char* profile, const fm_formula_notation_spec_t& spec) {
+std::string localize_with(const char* formula, const char* profile, const fm_reference_notation_spec_t& spec) {
   const char* out = nullptr;
   EXPECT_EQ(fm_localize_formula(formula, profile, &spec, &out), 0) << profile << ": " << fm_get_last_error_message();
   return out != nullptr ? out : "<null>";
 }
 
-std::string canonicalize_with(const char* formula, const char* profile, const fm_formula_notation_spec_t& spec) {
+std::string canonicalize_with(const char* formula, const char* profile, const fm_reference_notation_spec_t& spec) {
   const char* out = nullptr;
   EXPECT_EQ(fm_canonicalize_formula(formula, profile, &spec, &out), 0)
       << profile << ": " << fm_get_last_error_message();
@@ -205,15 +206,36 @@ void ExpectInvalidReference(fm_status_t rc, uint32_t start, uint32_t end) {
   EXPECT_EQ(error.end, end);
 }
 
+TEST(FormulonCApiLocale, OneNotationSpecServesParseLocalizeAndCanonicalize) {
+  fm_workbook_t* wb = nullptr;
+  ASSERT_EQ(fm_workbook_create_default(&wb), 0);
+  const char* out = nullptr;
+  fm_parsed_reference_info_t parsed = FM_STRUCT_INIT(fm_parsed_reference_info_t);
+  const auto expect_all = [&](const fm_reference_notation_spec_t& spec, fm_status_t want) {
+    const char* text = spec.r1c1 == FM_TRISTATE_TRUE ? "R[1]C[1]" : "A1";
+    EXPECT_EQ(fm_workbook_parse_reference(wb, text, &spec, &parsed), want);
+    EXPECT_EQ(fm_localize_formula("=1", "mac-365-de_DE", &spec, &out), want);
+    EXPECT_EQ(fm_canonicalize_formula("=1", "mac-365-de_DE", &spec, &out), want);
+  };
+  expect_all(Notation(FM_TRISTATE_TRUE, 1, 4, 4), 0);
+  expect_all(Notation(FM_TRISTATE_DEFAULT, 2), kInvalid);
+  expect_all(Notation(FM_TRISTATE_DEFAULT, 1, kLastRow + 1U, 0), kInvalid);
+  expect_all(Notation(FM_TRISTATE_TRUE, 1, 0, kLastCol + 1U), kInvalid);
+  fm_reference_notation_spec_t small = Notation(FM_TRISTATE_DEFAULT);
+  small.struct_size = 4U;
+  expect_all(small, kInvalid);
+  fm_workbook_destroy(wb);
+}
+
 TEST(FormulonCApiLocale, NotationSpecIsValidatedLikeParseReference) {
   const char* de = "mac-365-de_DE";
   const char* out = nullptr;
   for (const bool localize_side : {true, false}) {
-    const auto call = [&](const fm_formula_notation_spec_t& spec) {
+    const auto call = [&](const fm_reference_notation_spec_t& spec) {
       return localize_side ? fm_localize_formula("=1", de, &spec, &out)
                            : fm_canonicalize_formula("=1", de, &spec, &out);
     };
-    fm_formula_notation_spec_t small = Notation(FM_TRISTATE_DEFAULT);
+    fm_reference_notation_spec_t small = Notation(FM_TRISTATE_DEFAULT);
     small.struct_size = 4U;
     EXPECT_EQ(call(small), kInvalid) << localize_side;
     EXPECT_EQ(call(Notation(3)), kInvalid) << localize_side;
@@ -228,7 +250,7 @@ TEST(FormulonCApiLocale, NotationSpecIsValidatedLikeParseReference) {
     EXPECT_EQ(call(Notation(FM_TRISTATE_TRUE, 1, kLastRow, kLastCol)), 0) << localize_side;
   }
   // The profile is checked before the record.
-  fm_formula_notation_spec_t small = Notation(FM_TRISTATE_DEFAULT);
+  fm_reference_notation_spec_t small = Notation(FM_TRISTATE_DEFAULT);
   small.struct_size = 0U;
   EXPECT_EQ(fm_localize_formula("=1", "nope", &small, &out), kInvalid);
   EXPECT_STREQ(fm_get_last_error_context(), "profile_id=nope");
@@ -260,23 +282,23 @@ TEST(FormulonCApiLocale, R1C1RoundTripsWithABase) {
       {"mac-365-de_DE", "=IF($A$1>0,$B$1,\"x;y\")", "=WENN(Z1S1>0;Z1S2;\"x;y\")"},
       {"mac-365-es_ES", "=IF($A$1>0,$B$1,\"x;y\")", "=SI(F1C1>0;F1C2;\"x;y\")"},
   };
-  const fm_formula_notation_spec_t at_e5 = Notation(FM_TRISTATE_TRUE, 1, 4, 4);
+  const fm_reference_notation_spec_t at_e5 = Notation(FM_TRISTATE_TRUE, 1, 4, 4);
   for (const Case& c : cases) {
     EXPECT_EQ(localize_with(c.a1, c.profile, at_e5), c.local) << c.profile;
     EXPECT_EQ(canonicalize_with(c.local, c.profile, at_e5), c.a1) << c.profile;
   }
   // Absolute references need no base.
-  const fm_formula_notation_spec_t no_base = Notation(FM_TRISTATE_TRUE);
+  const fm_reference_notation_spec_t no_base = Notation(FM_TRISTATE_TRUE);
   EXPECT_EQ(localize_with("=$A$1+SUM($1:$2)", "mac-365-de_DE", no_base), "=Z1S1+SUMME(Z1:Z2)");
   EXPECT_EQ(canonicalize_with("=Z1S1+SUMME(Z1:Z2)", "mac-365-de_DE", no_base), "=$A$1+SUM($1:$2)");
 }
 
 TEST(FormulonCApiLocale, R1C1FailuresPointIntoTheTextPassed) {
   const char* out = nullptr;
-  const fm_formula_notation_spec_t no_base = Notation(FM_TRISTATE_TRUE);
+  const fm_reference_notation_spec_t no_base = Notation(FM_TRISTATE_TRUE);
   ExpectInvalidReference(fm_localize_formula("=SUM(A1,$B$2)", "mac-365-en_US", &no_base, &out), 5U, 7U);
   ExpectInvalidReference(fm_canonicalize_formula("=1+Z(-1)S", "mac-365-de_DE", &no_base, &out), 3U, 9U);
-  const fm_formula_notation_spec_t at_e5 = Notation(FM_TRISTATE_TRUE, 1, 4, 4);
+  const fm_reference_notation_spec_t at_e5 = Notation(FM_TRISTATE_TRUE, 1, 4, 4);
   ExpectInvalidReference(fm_canonicalize_formula("=SUMME(Z(x)S;1)", "mac-365-de_DE", &at_e5, &out), 7U, 11U);
 
   // A syntax error is still a parser status placed in the text passed.

@@ -78,8 +78,8 @@ fm_status_t check_parses(std::string_view text, std::string_view caller_text, Pl
 }
 
 // Reads `spec` (NULL = A1, no base) into `*out` after the checks of `fm_workbook_parse_reference`.
-fm_status_t read_notation(const fm_formula_notation_spec_t* spec, formulon::eval::FormulaNotation* out) {
-  const fm_formula_notation_spec_t plain = FM_STRUCT_INIT(fm_formula_notation_spec_t);
+fm_status_t read_notation(const fm_reference_notation_spec_t* spec, formulon::eval::FormulaNotation* out) {
+  const fm_reference_notation_spec_t plain = FM_STRUCT_INIT(fm_reference_notation_spec_t);
   if (spec == nullptr) {
     spec = &plain;
   } else if (auto rc = check_record_size(*spec); rc != 0) {
@@ -104,7 +104,7 @@ fm_status_t read_notation(const fm_formula_notation_spec_t* spec, formulon::eval
 }
 
 // Shared body of `fm_localize_formula` / `fm_canonicalize_formula`.
-fm_status_t convert_formula(const char* formula, const char* profile_id, const fm_formula_notation_spec_t* spec,
+fm_status_t convert_formula(const char* formula, const char* profile_id, const fm_reference_notation_spec_t* spec,
                             bool localize, const char** out_formula) {
   clear_last_error();
   if (formula == nullptr || profile_id == nullptr || out_formula == nullptr) {
@@ -149,12 +149,12 @@ fm_status_t convert_formula(const char* formula, const char* profile_id, const f
 }  // namespace
 
 extern "C" fm_status_t fm_localize_formula(const char* formula, const char* profile_id,
-                                           const fm_formula_notation_spec_t* spec, const char** out_formula) {
+                                           const fm_reference_notation_spec_t* spec, const char** out_formula) {
   return convert_formula(formula, profile_id, spec, /*localize=*/true, out_formula);
 }
 
 extern "C" fm_status_t fm_canonicalize_formula(const char* formula, const char* profile_id,
-                                               const fm_formula_notation_spec_t* spec, const char** out_formula) {
+                                               const fm_reference_notation_spec_t* spec, const char** out_formula) {
   return convert_formula(formula, profile_id, spec, /*localize=*/false, out_formula);
 }
 

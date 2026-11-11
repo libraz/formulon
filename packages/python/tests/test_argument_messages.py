@@ -11,6 +11,7 @@ import re
 import unittest
 from typing import Any, Callable
 
+import formulon
 from formulon import (
     AnchorKind,
     CellAddress,
@@ -140,6 +141,40 @@ class BooleanTests(_MessageCase):
             wb.sheet(0).update_view(show_grid_lines=False)
             wb.parse_reference("R1C1", r1c1=True)
             self.assertEqual(wb.format_reference("A1", absolute=True), "$A$1")
+
+
+class ReferenceNotationTests(_MessageCase):
+    """The notation keywords read the same on ``parse_reference``, ``localize_formula`` and ``canonicalize_formula``."""
+
+    def test_a_lone_base_coordinate_is_refused_alike(self) -> None:
+        together = "base_row and base_col must be given together"
+        with Workbook.create_default() as wb:
+            with self.assertRaises(TypeError) as caught:
+                wb.parse_reference("R1C1", r1c1=True, base_row=1)
+            self.assertEqual(str(caught.exception), f"Workbook.parse_reference {together}")
+        for name in ("localize_formula", "canonicalize_formula"):
+            with self.subTest(name=name):
+                with self.assertRaises(TypeError) as caught:
+                    getattr(formulon, name)("=1", "mac-365-de_DE", r1c1=True, base_row=1)
+                self.assertEqual(str(caught.exception), f"formulon.{name} {together}")
+                with self.assertRaises(TypeError) as caught:
+                    getattr(formulon, name)("=1", "mac-365-de_DE", r1c1=1)  # type: ignore[arg-type]
+                self.assertEqual(str(caught.exception), f"formulon.{name} r1c1 must be a boolean")
+
+    def test_a_base_outside_the_grid_and_an_unknown_profile_are_invalid_arguments(self) -> None:
+        with Workbook.create_default() as wb:
+            _raised(InvalidArgumentError, lambda: wb.parse_reference("R1C1", r1c1=True, base_row=1048576, base_col=0))
+            # A1 does not use the base, but a base outside the grid is refused in either notation.
+            _raised(InvalidArgumentError, lambda: wb.parse_reference("A1", base_row=1048576, base_col=0))
+        for name in ("localize_formula", "canonicalize_formula"):
+            with self.subTest(name=name):
+                convert = getattr(formulon, name)
+                _raised(
+                    InvalidArgumentError,
+                    lambda: convert("=1", "mac-365-de_DE", r1c1=True, base_row=1048576, base_col=0),
+                )
+                _raised(InvalidArgumentError, lambda: convert("=1", "mac-365-de_DE", base_row=1048576, base_col=0))
+                _raised(InvalidArgumentError, lambda: convert("=1", "nope", r1c1=True))
 
 
 class ArgumentMessageTests(_MessageCase):
