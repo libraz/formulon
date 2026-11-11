@@ -48,7 +48,7 @@ cases:
     setup: { A1: true }
     formula: "=CONVERT(A1,\"m\",\"cm\")"
 
-  # -- Analysis-ToolPak arguments and near-integer snap, round 2 ---
+  # -- Analysis-ToolPak arguments and near-integer snap, further cases ---
   - id: opt_convert_omit_unit
     formula: "=CONVERT(1,,\"cm\")"
 

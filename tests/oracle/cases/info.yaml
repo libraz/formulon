@@ -459,6 +459,6 @@ cases:
     setup: { A1: true }
     formula: "=ISODD(A1)"
 
-  # -- Analysis-ToolPak arguments and near-integer snap, round 2 ---
+  # -- Analysis-ToolPak arguments and near-integer snap, further cases ---
   - id: opt_iseven_arr_bool
     formula: "=ISEVEN({TRUE})"

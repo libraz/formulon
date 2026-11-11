@@ -432,7 +432,7 @@ cases:
     setup: { A1: true }
     formula: "=GESTEP(A1,1)"
 
-  # -- Analysis-ToolPak arguments and near-integer snap, round 2 ---
+  # -- Analysis-ToolPak arguments and near-integer snap, further cases ---
   - id: a4_bin2oct_bool
     formula: "=BIN2OCT(TRUE)"
 

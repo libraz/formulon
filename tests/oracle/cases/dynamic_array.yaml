@@ -262,7 +262,7 @@ cases:
   - id: pf_sequence
     formula: "=ROWS(SEQUENCE(2.9999999))"
 
-  # -- Analysis-ToolPak arguments and near-integer snap, round 2 ---
+  # -- Analysis-ToolPak arguments and near-integer snap, further cases ---
   - id: snap_sequence_cols
     formula: "=COLUMNS(SEQUENCE(1,2.9999999))"
 

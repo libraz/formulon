@@ -922,7 +922,7 @@ cases:
   - id: near_left
     formula: "=LEN(LEFT(\"abcdef\",2.9999999))"
 
-  # -- Analysis-ToolPak arguments and near-integer snap, round 2 ---
+  # -- Analysis-ToolPak arguments and near-integer snap, further cases ---
   - id: snap_search
     formula: "=SEARCH(\"b\",\"abcb\",2.9999999)"
 

@@ -221,7 +221,7 @@ cases:
     setup: { A1: true }
     formula: "=NOMINAL(A1,2)"
 
-  # -- Analysis-ToolPak arguments and near-integer snap, round 2 ---
+  # -- Analysis-ToolPak arguments and near-integer snap, further cases ---
   - id: a4_dollarfr_bool
     formula: "=DOLLARFR(TRUE,2)"
 

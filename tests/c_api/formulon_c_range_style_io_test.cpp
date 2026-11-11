@@ -232,7 +232,7 @@ Bytes PackageWith(const std::string& cols, const std::string& sheet_data) {
 
 }  // namespace
 
-// Excel's own load of the authored file (README §A): bare and `s="0"` blanks
+// Excel's own load of the authored file: bare and `s="0"` blanks
 // under a column or row format are explicit defaults, the ones with no axis
 // format are dropped, and the save writes the same `<c>` set Excel saved.
 TEST(FormulonCApiRangeStyleIo, ExcelBlankSlotFileLoadsAndResavesExcelsCellSet) {
@@ -275,8 +275,8 @@ TEST(FormulonCApiRangeStyleIo, ExcelBlankSlotXlsbLoadsAndResavesItsBlankRecords)
 }
 
 // A run of xf-0 blanks crossing a column-format boundary keeps only the
-// covered columns (README M-3); those cover every styled column, three of
-// them, so the save writes the row as an xf-0 row format with no cells.
+// covered columns, as Excel's load does; those cover every styled column,
+// three of them, so the save writes the row as an xf-0 row format with no cells.
 TEST(FormulonCApiRangeStyleIo, PartlyCoveredExplicitDefaultsKeepOnlyTheCoveredColumns) {
   WorkbookGuard loaded;
   Load(ReadFixture("blankslot_partial_authored.xlsx"), loaded);
@@ -295,7 +295,7 @@ TEST(FormulonCApiRangeStyleIo, PartlyCoveredExplicitDefaultsKeepOnlyTheCoveredCo
 }
 
 // A row format of xf 0 shadows the column formats under it, so a bare blank
-// in that row overrides nothing and is dropped (README M-2).
+// in that row overrides nothing and is dropped, as Excel drops it.
 TEST(FormulonCApiRangeStyleIo, ExplicitDefaultUnderARowDefaultFormatIsDropped) {
   WorkbookGuard loaded;
   Load(ReadFixture("blankslot_row_default_authored.xlsx"), loaded);
@@ -451,7 +451,7 @@ TEST(FormulonCApiRangeStyleIo, DimensionIncludesARunOnlyExtremity) {
   EXPECT_EQ(*bin.dim, (std::vector<std::uint32_t>{0U, 9U, 0U, 7U}));
 }
 
-// R1 on both read paths: bare and `s="0"` blanks are explicit defaults under a
+// On both read paths, bare and `s="0"` blanks are explicit defaults under a
 // column format and under a row format, nothing without one; a styled blank is
 // a run of its xf. The DOM path applies row formats after the cells, SAX before.
 TEST(FormulonCApiRangeStyleIo, LoadedBlanksResolveTheSameOnTheDomAndSaxPaths) {
@@ -544,8 +544,8 @@ TEST(FormulonCApiRangeStyleIo, PhoneticBlankWithAnExplicitDefaultReloadsAsAStore
 
 namespace {
 
-// One sheet of the styled-row x styled-column dimension cases (Excel 16.115,
-// blankslot D1-D5 and M-2).
+// One sheet of styled rows and styled columns, and the dimension Excel writes
+// for it.
 struct AxisDimensionCase {
   const char* name;
   std::vector<std::vector<std::uint32_t>> columns;  // {first, last, xf}
@@ -581,19 +581,45 @@ TEST_P(FormulonCApiAxisDimension, CoversStyledRowAndColumnIntersections) {
 INSTANTIATE_TEST_SUITE_P(
     Cases, FormulonCApiAxisDimension,
     ::testing::Values(
-        AxisDimensionCase{"D1", {{2, 3, 1}}, {{2, 2}}, false, "C3:D3", std::vector<std::uint32_t>{2, 2, 2, 3}},
-        AxisDimensionCase{"D2", {{2, 3, 1}}, {{2, 1}}, false, "C3:D3", std::vector<std::uint32_t>{2, 2, 2, 3}},
-        AxisDimensionCase{"D3", {{7, 7, 1}}, {{19, 0}}, true, "A1:H20", std::vector<std::uint32_t>{0, 19, 0, 7}},
-        AxisDimensionCase{"D4", {{2, 3, 1}}, {{2, 0}, {6, 0}}, false, "C3:D7", std::vector<std::uint32_t>{2, 6, 2, 3}},
+        AxisDimensionCase{"RowFormatOverStyledColumns",
+                          {{2, 3, 1}},
+                          {{2, 2}},
+                          false,
+                          "C3:D3",
+                          std::vector<std::uint32_t>{2, 2, 2, 3}},
+        AxisDimensionCase{"RowFormatEqualToColumnFormat",
+                          {{2, 3, 1}},
+                          {{2, 1}},
+                          false,
+                          "C3:D3",
+                          std::vector<std::uint32_t>{2, 2, 2, 3}},
+        AxisDimensionCase{"DefaultRowFarBelowTextInA1",
+                          {{7, 7, 1}},
+                          {{19, 0}},
+                          true,
+                          "A1:H20",
+                          std::vector<std::uint32_t>{0, 19, 0, 7}},
         AxisDimensionCase{
-            "D5", {{2, 3, 1}, {10, 10, 2}}, {{2, 0}}, false, "C3:K3", std::vector<std::uint32_t>{2, 2, 2, 10}},
-        AxisDimensionCase{"M2", {{2, 3, 1}}, {{2, 0}}, false, "C3:D3", std::vector<std::uint32_t>{2, 2, 2, 3}},
-        // R10c: styled columns with no written row span row 1.
+            "TwoDefaultRows", {{2, 3, 1}}, {{2, 0}, {6, 0}}, false, "C3:D7", std::vector<std::uint32_t>{2, 6, 2, 3}},
+        AxisDimensionCase{"RowAcrossTwoColumnGroups",
+                          {{2, 3, 1}, {10, 10, 2}},
+                          {{2, 0}},
+                          false,
+                          "C3:K3",
+                          std::vector<std::uint32_t>{2, 2, 2, 10}},
+        AxisDimensionCase{"DefaultRowOverStyledColumns",
+                          {{2, 3, 1}},
+                          {{2, 0}},
+                          false,
+                          "C3:D3",
+                          std::vector<std::uint32_t>{2, 2, 2, 3}},
+        // Styled columns with no written row span row 1.
         AxisDimensionCase{"ColumnsOnly", {{2, 3, 1}}, {}, false, "C1:D1", std::vector<std::uint32_t>{0, 0, 2, 3}},
         // A written row with no styled column spans column A.
         AxisDimensionCase{"RowOnly", {}, {{2, 1}}, false, "A3", std::vector<std::uint32_t>{2, 2, 0, 0}},
-        // R19 / R20: a column style widens the column span only.
-        AxisDimensionCase{"R19", {{7, 7, 1}}, {}, true, "A1:H1", std::vector<std::uint32_t>{0, 0, 0, 7}},
+        // A column style widens the column span only.
+        AxisDimensionCase{
+            "ColumnStyleBesideTextInA1", {{7, 7, 1}}, {}, true, "A1:H1", std::vector<std::uint32_t>{0, 0, 0, 7}},
         AxisDimensionCase{"Empty", {}, {}, false, "A1", std::vector<std::uint32_t>{0, 0, 0, 0}}),
     [](const ::testing::TestParamInfo<AxisDimensionCase>& info) { return std::string(info.param.name); });
 
@@ -612,8 +638,8 @@ void Blanks(WorkbookGuard& wb, std::uint32_t row, std::uint32_t first, std::uint
   }
 }
 
-// One emit-plan case (Excel 16.115, blankslot rounds 1-3): the cells and the
-// row-3 element each format writes, and the dimension.
+// One emit-plan case: the cells and the row-3 element Excel writes in each
+// format, and the dimension.
 struct EmitPlanCase {
   const char* name;
   Setup setup;
@@ -623,7 +649,7 @@ struct EmitPlanCase {
   std::optional<std::pair<std::uint32_t, bool>> xlsb_row3;  // BrtRowHdr ixfe, fGhostDirty
   const char* dimension;
   // False where the save drops state that decided the plan, so the reload
-  // plans differently (X6: the explicit default outside any axis format).
+  // plans differently (an explicit default left outside any axis format).
   bool stable = true;
 };
 
@@ -696,7 +722,7 @@ const char* const kPlainTag = "<row r=\"3\">";
 
 INSTANTIATE_TEST_SUITE_P(
     Cases, FormulonCApiRowEmitPlan,
-    ::testing::Values(EmitPlanCase{"X1",
+    ::testing::Values(EmitPlanCase{"OneOfThreeStyledColumnsCovered",
                                    [](WorkbookGuard& wb) {
                                      StyleColumns(wb, 3, 5);
                                      Blanks(wb, 2, 3, 3);
@@ -706,7 +732,7 @@ INSTANTIATE_TEST_SUITE_P(
                                    {"D3"},
                                    kPlainRow,
                                    "D3:F3"},
-                      EmitPlanCase{"X2",
+                      EmitPlanCase{"TwoOfThreeStyledColumnsCovered",
                                    [](WorkbookGuard& wb) {
                                      StyleColumns(wb, 3, 5);
                                      Blanks(wb, 2, 3, 4);
@@ -716,7 +742,7 @@ INSTANTIATE_TEST_SUITE_P(
                                    {"D3", "E3"},
                                    kPlainRow,
                                    "D3:F3"},
-                      EmitPlanCase{"X3",
+                      EmitPlanCase{"TwoStyledColumnsCovered",
                                    [](WorkbookGuard& wb) {
                                      StyleColumns(wb, 3, 4);
                                      Blanks(wb, 2, 3, 4);
@@ -726,7 +752,7 @@ INSTANTIATE_TEST_SUITE_P(
                                    {"D3", "E3"},
                                    kPlainRow,
                                    "D3:E3"},
-                      EmitPlanCase{"X4",
+                      EmitPlanCase{"OneStyledColumnCovered",
                                    [](WorkbookGuard& wb) {
                                      StyleColumns(wb, 3, 3);
                                      Blanks(wb, 2, 3, 3);
@@ -736,7 +762,7 @@ INSTANTIATE_TEST_SUITE_P(
                                    {"D3"},
                                    kPlainRow,
                                    "D3"},
-                      EmitPlanCase{"X5",
+                      EmitPlanCase{"ValueInTheRowBlocksConversion",
                                    [](WorkbookGuard& wb) {
                                      StyleColumns(wb, 3, 5);
                                      Blanks(wb, 2, 3, 5);
@@ -749,7 +775,7 @@ INSTANTIATE_TEST_SUITE_P(
                                    "A3:F3"},
                       // An explicit default left behind when its column format was removed
                       // still blocks the conversion, and is itself not written.
-                      EmitPlanCase{"X6",
+                      EmitPlanCase{"LeftoverExplicitDefaultBlocksConversion",
                                    [](WorkbookGuard& wb) {
                                      StyleColumns(wb, 1, 1);
                                      Blanks(wb, 2, 1, 1);
@@ -763,7 +789,7 @@ INSTANTIATE_TEST_SUITE_P(
                                    kPlainRow,
                                    "D3:F3",
                                    false},
-                      EmitPlanCase{"X7",
+                      EmitPlanCase{"MixedColumnFormatsAllCovered",
                                    [](WorkbookGuard& wb) {
                                      StyleColumns(wb, 3, 3, 1);
                                      StyleColumns(wb, 4, 4, 2);
@@ -775,7 +801,7 @@ INSTANTIATE_TEST_SUITE_P(
                                    {},
                                    kConvertedRow,
                                    "D3:F3"},
-                      EmitPlanCase{"X8",
+                      EmitPlanCase{"NonDefaultBlanksAreWritten",
                                    [](WorkbookGuard& wb) {
                                      StyleColumns(wb, 3, 5);
                                      Blanks(wb, 2, 3, 5, 2);
@@ -785,7 +811,7 @@ INSTANTIATE_TEST_SUITE_P(
                                    {"D3", "E3", "F3"},
                                    kPlainRow,
                                    "D3:F3"},
-                      EmitPlanCase{"X9",
+                      EmitPlanCase{"NonDefaultAndDefaultBlanks",
                                    [](WorkbookGuard& wb) {
                                      StyleColumns(wb, 3, 5);
                                      Blanks(wb, 2, 3, 4, 2);
@@ -796,7 +822,7 @@ INSTANTIATE_TEST_SUITE_P(
                                    {"D3", "E3", "F3"},
                                    kPlainRow,
                                    "D3:F3"},
-                      EmitPlanCase{"X10",
+                      EmitPlanCase{"TwoCoveredRows",
                                    [](WorkbookGuard& wb) {
                                      StyleColumns(wb, 3, 5);
                                      Blanks(wb, 2, 3, 5);
@@ -808,7 +834,7 @@ INSTANTIATE_TEST_SUITE_P(
                                    kConvertedRow,
                                    "D3:F4"},
                       // A styled span to the last column is only partly covered.
-                      EmitPlanCase{"X11",
+                      EmitPlanCase{"StyledSpanToLastColumnPartlyCovered",
                                    [](WorkbookGuard& wb) {
                                      StyleColumns(wb, 3, 16383);
                                      Blanks(wb, 2, 3, 5);
@@ -818,7 +844,7 @@ INSTANTIATE_TEST_SUITE_P(
                                    {"D3", "E3", "F3"},
                                    kPlainRow,
                                    "D3:XFD3"},
-                      EmitPlanCase{"X12",
+                      EmitPlanCase{"ThreeStyledColumnsCovered",
                                    [](WorkbookGuard& wb) {
                                      StyleColumns(wb, 3, 5);
                                      Blanks(wb, 2, 3, 5);
@@ -828,7 +854,7 @@ INSTANTIATE_TEST_SUITE_P(
                                    {},
                                    kConvertedRow,
                                    "D3:F3"},
-                      EmitPlanCase{"X13",
+                      EmitPlanCase{"FourStyledColumnsCovered",
                                    [](WorkbookGuard& wb) {
                                      StyleColumns(wb, 3, 6);
                                      Blanks(wb, 2, 3, 6);
@@ -838,7 +864,7 @@ INSTANTIATE_TEST_SUITE_P(
                                    {},
                                    kConvertedRow,
                                    "D3:G3"},
-                      EmitPlanCase{"R6",
+                      EmitPlanCase{"TwoSeparateStyledColumns",
                                    [](WorkbookGuard& wb) {
                                      StyleColumns(wb, 3, 3);
                                      StyleColumns(wb, 5, 5);
@@ -850,7 +876,7 @@ INSTANTIATE_TEST_SUITE_P(
                                    {"D3", "F3"},
                                    kPlainRow,
                                    "D3:F3"},
-                      EmitPlanCase{"R7",
+                      EmitPlanCase{"ThreeSeparateStyledColumns",
                                    [](WorkbookGuard& wb) {
                                      for (const std::uint32_t col : {3U, 5U, 7U}) {
                                        StyleColumns(wb, col, col);
@@ -862,7 +888,7 @@ INSTANTIATE_TEST_SUITE_P(
                                    {},
                                    kConvertedRow,
                                    "D3:H3"},
-                      EmitPlanCase{"R8",
+                      EmitPlanCase{"TwoStyledColumnsTwoRows",
                                    [](WorkbookGuard& wb) {
                                      StyleColumns(wb, 3, 4);
                                      Blanks(wb, 2, 3, 4);
@@ -873,7 +899,7 @@ INSTANTIATE_TEST_SUITE_P(
                                    {"D3", "E3", "D4", "E4"},
                                    kPlainRow,
                                    "D3:E4"},
-                      EmitPlanCase{"R9a",
+                      EmitPlanCase{"RangeDefaultOverStyledColumns",
                                    [](WorkbookGuard& wb) {
                                      StyleColumns(wb, 3, 5);
                                      const fm_cell_rect_t rect{2U, 3U, 2U, 5U};
@@ -887,7 +913,7 @@ INSTANTIATE_TEST_SUITE_P(
                       // Blanks of the columns' own xf are redundant and are not written; a
                       // row left with nothing is not written either, and the styled
                       // columns span row 1.
-                      EmitPlanCase{"R10",
+                      EmitPlanCase{"BlanksOfTheColumnFormatAreRedundant",
                                    [](WorkbookGuard& wb) {
                                      StyleColumns(wb, 3, 5);
                                      Blanks(wb, 2, 3, 5, 1);
@@ -897,7 +923,7 @@ INSTANTIATE_TEST_SUITE_P(
                                    {},
                                    std::nullopt,
                                    "D1:F1"},
-                      EmitPlanCase{"R13",
+                      EmitPlanCase{"BlanksUnderANonDefaultRowFormat",
                                    [](WorkbookGuard& wb) {
                                      StyleColumns(wb, 3, 5);
                                      ASSERT_EQ(fm_sheet_set_row_xf_index(wb.handle, 0, 2U, 2U, 2U), 0);
@@ -908,7 +934,7 @@ INSTANTIATE_TEST_SUITE_P(
                                    {"D3", "E3", "F3"},
                                    std::make_pair(2U, true),
                                    "D3:F3"},
-                      EmitPlanCase{"R14",
+                      EmitPlanCase{"BlanksUnderADefaultRowFormat",
                                    [](WorkbookGuard& wb) {
                                      StyleColumns(wb, 3, 5);
                                      Blanks(wb, 2, 3, 5);
@@ -923,7 +949,7 @@ INSTANTIATE_TEST_SUITE_P(
 
 namespace {
 
-// One dimension case of Excel 16.115 round 5 (R20-R24) and earlier (M4).
+// One dimension case, with the dimension Excel writes.
 struct DimensionCase {
   const char* name;
   Setup setup;
@@ -949,34 +975,34 @@ TEST_P(FormulonCApiSheetDimension, IsWrittenRowsByCellAndStyledColumns) {
 INSTANTIATE_TEST_SUITE_P(
     Cases, FormulonCApiSheetDimension,
     ::testing::Values(
-        DimensionCase{"R20",
+        DimensionCase{"TextRowAndStyledColumn",
                       [](WorkbookGuard& wb) {
                         ASSERT_EQ(fm_sheet_set_text(wb.handle, 0, 4U, 0U, "x"), 0);
                         StyleColumns(wb, 7, 7);
                       },
                       "A5:H5", std::vector<std::uint32_t>{4, 4, 0, 7}},
-        DimensionCase{"R21",
+        DimensionCase{"HeightOnlyRow",
                       [](WorkbookGuard& wb) { ASSERT_EQ(fm_sheet_set_row_height(wb.handle, 0, 2U, 2U, 30.0), 0); },
                       "A3", std::vector<std::uint32_t>{2, 2, 0, 0}},
-        DimensionCase{"R22",
+        DimensionCase{"TextAndHeightOnlyRow",
                       [](WorkbookGuard& wb) {
                         ASSERT_EQ(fm_sheet_set_text(wb.handle, 0, 0U, 0U, "x"), 0);
                         ASSERT_EQ(fm_sheet_set_row_height(wb.handle, 0, 4U, 4U, 30.0), 0);
                       },
                       "A1:A5", std::vector<std::uint32_t>{0, 4, 0, 0}},
         // Width-only columns do not count: A1, and BrtWsDim 0..0 / 0..0 as Excel writes.
-        DimensionCase{"R23",
+        DimensionCase{"WidthOnlyColumns",
                       [](WorkbookGuard& wb) { ASSERT_EQ(fm_sheet_set_column_width(wb.handle, 0, 3U, 5U, 20.0), 0); },
                       "A1", std::vector<std::uint32_t>{0, 0, 0, 0}},
-        // A fresh sheet still carries BrtWsDim (R16b).
+        // A fresh sheet still carries BrtWsDim.
         DimensionCase{"FreshSheet", [](WorkbookGuard&) {}, "A1", std::vector<std::uint32_t>{0, 0, 0, 0}},
-        DimensionCase{"R24",
+        DimensionCase{"StyledAndWidthOnlyColumns",
                       [](WorkbookGuard& wb) {
                         StyleColumns(wb, 3, 5);
                         ASSERT_EQ(fm_sheet_set_column_width(wb.handle, 0, 7U, 7U, 20.0), 0);
                       },
                       "D1:F1", std::vector<std::uint32_t>{0, 0, 3, 5}},
-        DimensionCase{"M4",
+        DimensionCase{"TextAndStyledColumnBlank",
                       [](WorkbookGuard& wb) {
                         ASSERT_EQ(fm_sheet_set_text(wb.handle, 0, 0U, 0U, "x"), 0);
                         StyleColumns(wb, 7, 7);

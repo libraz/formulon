@@ -270,7 +270,7 @@ cases:
     setup: { A1: true }
     formula: "=XNPV(A1,{1,2},{1,2})"
 
-  # -- Analysis-ToolPak arguments and near-integer snap, round 2 ---
+  # -- Analysis-ToolPak arguments and near-integer snap, further cases ---
   - id: a4_xirr_bool
     formula: "=XIRR({-100,110},{TRUE,400})"
 

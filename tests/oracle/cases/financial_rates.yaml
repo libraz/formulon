@@ -273,7 +273,7 @@ cases:
     setup: { A1: true }
     formula: "=TBILLPRICE(A1,100,0.1)"
 
-  # -- Analysis-ToolPak arguments and near-integer snap, round 2 ---
+  # -- Analysis-ToolPak arguments and near-integer snap, further cases ---
   - id: a4_intrate_bool
     formula: "=INTRATE(TRUE,DATE(2030,1,15),1000,1100)"
 

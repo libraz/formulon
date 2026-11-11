@@ -246,7 +246,7 @@ cases:
   - id: pf_address
     formula: "=ADDRESS(1.9999999,1)"
 
-  # -- Analysis-ToolPak arguments and near-integer snap, round 2 ---
+  # -- Analysis-ToolPak arguments and near-integer snap, further cases ---
   - id: snap_address_col
     formula: "=ADDRESS(1,1.9999999)"
 

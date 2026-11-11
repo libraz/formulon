@@ -345,7 +345,7 @@ cases:
   # scaled), A4 portrait, FitToPages OFF, all rows default 15pt (NO 80pt
   # rows that contaminate zoom_* cases).
   # Variable: (scale, row_count) in {50, 75} x {1 row, 30 rows}.
-  # Disambiguates a residual question round 1 left open:
+  # Disambiguates a question the earlier print cases left open:
   #   print_fit.scale_50_shrinks_breaks (A1:H1, scale 50) -> Excel
   #     pages=2 (auto-col-pages reported under scale<100)
   #   print_matrix.zoom_75_dense_fit_off (A1:H30 with 80pt rows, scale 75)

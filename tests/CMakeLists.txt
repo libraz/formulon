@@ -811,6 +811,12 @@ if(DEFINED _FORMULON_BEHAVIOR_PY)
     COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/dev/check_source_seams.py layers
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
   )
+  # Tracked files must not cite the gitignored corpus or measurement notes.
+  add_test(
+    NAME InternalRefsInTrackedFiles
+    COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/dev/check_internal_refs.py
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  )
   add_test(
     NAME OracleGeneratorDivergenceMetadata
     COMMAND ${_FORMULON_BEHAVIOR_PY} -m tools.oracle.oracle_gen_metadata_test

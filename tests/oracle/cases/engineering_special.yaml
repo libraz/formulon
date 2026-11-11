@@ -313,7 +313,7 @@ cases:
     formula: "=BESSELJ(A1,1)"
     tolerance: { abs: 0, rel: 0 }
 
-  # -- Analysis-ToolPak arguments and near-integer snap, round 2 ---
+  # -- Analysis-ToolPak arguments and near-integer snap, further cases ---
   - id: a4_erfc_bool
     formula: "=ERFC(TRUE)"
 

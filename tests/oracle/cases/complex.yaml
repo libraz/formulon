@@ -724,7 +724,7 @@ cases:
     setup: { A1: true }
     formula: "=COMPLEX(A1,1)"
 
-  # -- Analysis-ToolPak arguments and near-integer snap, round 2 ---
+  # -- Analysis-ToolPak arguments and near-integer snap, further cases ---
   - id: a4_imreal_bool
     formula: "=IMREAL(TRUE)"
 

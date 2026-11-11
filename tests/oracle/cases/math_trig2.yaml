@@ -359,6 +359,6 @@ cases:
     setup: { A1: true }
     formula: "=QUOTIENT(A1,1)"
 
-  # -- Analysis-ToolPak arguments and near-integer snap, round 2 ---
+  # -- Analysis-ToolPak arguments and near-integer snap, further cases ---
   - id: opt_quotient_arr_bool
     formula: "=QUOTIENT({TRUE},1)"

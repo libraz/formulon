@@ -177,7 +177,7 @@ cases:
     setup: { A1: true }
     formula: "=ACCRINTM(A1,40000,0.1,1000)"
 
-  # -- Analysis-ToolPak arguments and near-integer snap, round 2 ---
+  # -- Analysis-ToolPak arguments and near-integer snap, further cases ---
   - id: a4_accrint_bool
     formula: "=ACCRINT(TRUE,DATE(2024,1,15),DATE(2030,1,15),0.1,1000,2)"
 
